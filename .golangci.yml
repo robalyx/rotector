@@ -1,0 +1,35 @@
+run:
+  concurrency: 0
+  allow-parallel-runners: true
+  allow-serial-runners: true
+  tests: false
+  go: '1.23'
+
+linters:
+  enable-all: true
+  disable:
+    - goimports # Not needed 
+    - depguard # Not needed
+    - gci # Encountering issues
+    - gofmt # Replaced by gofumpt
+    - nlreturn # Not needed
+    - wsl # Too strict
+    - wrapcheck # Not needed 
+    - ireturn # Configuration is bugged
+    - bodyclose # Lots of false positives
+    - forcetypeassert # Not needed
+    - mnd # Not needed
+    - exhaustruct # Not needed
+    - cyclop # Not needed
+    - dupl # Not needed
+    - varnamelen # Not needed
+    - gomnd # Deprecated
+    - exportloopref # Deprecated
+    - execinquery # Deprecated
+
+linters-settings:
+  lll:
+    line-length: 170
+  funlen:
+    lines: 120
+    statements: 50

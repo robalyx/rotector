@@ -1,0 +1,27 @@
+[logging]
+level = "info"
+max_logs_to_keep = 10
+
+[database]
+host = "127.0.0.1"
+port = 5432
+user = "postgres"
+password = "postgres"
+db_name = "postgres"
+
+[redis]
+host = "127.0.0.1"
+port = 6379
+username = ""
+password = ""
+
+[roblox]
+cookies_file = ""
+proxies_file = ""
+
+[openai]
+api_key = ""
+
+[discord]
+token = ""
+
