@@ -1,10 +1,12 @@
 package reviewer
 
 import (
+	"bytes"
 	"strings"
 
 	"github.com/disgoorg/disgo/discord"
 	"github.com/disgoorg/disgo/events"
+	"github.com/rotector/rotector/assets"
 	"github.com/rotector/rotector/internal/bot/session"
 	"go.uber.org/zap"
 )
@@ -51,11 +53,24 @@ func (r *ReviewMenu) ShowReviewMenu(event *events.ComponentInteractionCreate, s 
 		AddReviewButtons().
 		Build()
 
-	// Send the response
-	r.handler.respond(event, NewResponseBuilder().
+	// Create response builder
+	responseBuilder := NewResponseBuilder().
 		SetContent(message).
 		SetEmbeds(embed).
-		SetComponents(components...))
+		SetComponents(components...)
+
+	// Add placeholder image if thumbnail URL is empty
+	if user.ThumbnailURL == "" {
+		placeholderImage, err := assets.Images.ReadFile("images/content_deleted.png")
+		if err != nil {
+			r.handler.logger.Error("Failed to read placeholder image", zap.Error(err))
+		} else {
+			responseBuilder.AddFile(discord.NewFile("content_deleted.png", "", bytes.NewReader(placeholderImage)))
+		}
+	}
+
+	// Send the response
+	r.handler.respond(event, responseBuilder)
 }
 
 // ShowReviewMenuAndFetchUser displays the review menu and fetches a new user.

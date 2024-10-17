@@ -62,6 +62,7 @@ func (m *MainMenu) ShowMainMenu(client bot.Client, applicationID snowflake.ID, t
 		SetContent("").
 		AddEmbeds(embed).
 		SetContainerComponents(components...).
+		RetainAttachments().
 		Build())
 	if err != nil {
 		m.handler.logger.Error("Failed to update message with review", zap.Error(err))

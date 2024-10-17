@@ -27,7 +27,7 @@ func NewReviewEmbedBuilder(user *database.PendingUser) *ReviewEmbedBuilder {
 
 // Build constructs and returns the discord.Embed.
 func (b *ReviewEmbedBuilder) Build() discord.Embed {
-	return discord.NewEmbedBuilder().
+	embedBuilder := discord.NewEmbedBuilder().
 		AddField("ID", fmt.Sprintf("[%d](https://www.roblox.com/users/%d/profile)", b.user.ID, b.user.ID), true).
 		AddField("Name", b.user.Name, true).
 		AddField("Display Name", b.user.DisplayName, true).
@@ -41,9 +41,16 @@ func (b *ReviewEmbedBuilder) Build() discord.Embed {
 		AddField(b.getFlaggedType(), b.getFlaggedContent(), false).
 		AddField("Last Updated", fmt.Sprintf("<t:%d:R>", b.user.LastUpdated.Unix()), true).
 		AddField("Last Reviewed", b.getLastReviewed(), true).
-		SetThumbnail(b.user.ThumbnailURL).
-		SetColor(0x312D2B).
-		Build()
+		SetColor(0x312D2B)
+
+	// Set thumbnail URL or use placeholder image
+	if b.user.ThumbnailURL != "" {
+		embedBuilder.SetThumbnail(b.user.ThumbnailURL)
+	} else {
+		embedBuilder.SetThumbnail("attachment://content_deleted.png")
+	}
+
+	return embedBuilder.Build()
 }
 
 // getDescription returns the description field for the embed.
