@@ -22,7 +22,7 @@ func NewGroupChecker(db *database.Database, logger *zap.Logger) *GroupChecker {
 }
 
 // CheckUserGroups checks if a user belongs to any flagged groups and returns the result.
-func (gc *GroupChecker) CheckUserGroups(userInfo Info) (database.User, bool, error) {
+func (gc *GroupChecker) CheckUserGroups(userInfo *Info) (*database.User, bool, error) {
 	// Get group IDs
 	groupIDs := make([]uint64, len(userInfo.Groups))
 	for i, group := range userInfo.Groups {
@@ -33,7 +33,7 @@ func (gc *GroupChecker) CheckUserGroups(userInfo Info) (database.User, bool, err
 	flaggedGroupIDs, err := gc.db.Groups().CheckFlaggedGroups(groupIDs)
 	if err != nil {
 		gc.logger.Error("Error checking flagged groups", zap.Error(err), zap.Uint64("userID", userInfo.ID))
-		return database.User{}, false, err
+		return nil, false, err
 	}
 
 	if len(flaggedGroupIDs) >= 3 {
@@ -54,8 +54,8 @@ func (gc *GroupChecker) CheckUserGroups(userInfo Info) (database.User, bool, err
 			zap.Uint64("userID", userInfo.ID),
 			zap.Uint64s("flaggedGroupIDs", flaggedGroupIDs))
 
-		return user, true, nil
+		return &user, true, nil
 	}
 
-	return database.User{}, false, nil
+	return nil, false, nil
 }

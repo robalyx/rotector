@@ -65,7 +65,7 @@ func (w *GroupWorker) Start() {
 // processGroup handles the processing of a single group.
 func (w *GroupWorker) processGroup(groupID uint64) {
 	cursor := ""
-	var userInfos []fetcher.Info
+	var userInfos []*fetcher.Info
 	w.logger.Info("Processing group", zap.Uint64("groupID", groupID))
 
 	for {
@@ -125,11 +125,11 @@ func (w *GroupWorker) processGroup(groupID uint64) {
 }
 
 // processUsers handles the processing of a batch of users.
-func (w *GroupWorker) processUsers(userInfos []fetcher.Info) {
+func (w *GroupWorker) processUsers(userInfos []*fetcher.Info) {
 	w.logger.Info("Processing users", zap.Int("userInfos", len(userInfos)))
 
-	var flaggedUsers []database.User
-	var usersForAICheck []fetcher.Info
+	var flaggedUsers []*database.User
+	var usersForAICheck []*fetcher.Info
 
 	// Check if users belong to any flagged groups
 	for _, userInfo := range userInfos {

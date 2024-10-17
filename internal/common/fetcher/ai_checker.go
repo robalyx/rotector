@@ -97,7 +97,7 @@ func NewAIChecker(openAIClient *openai.Client, logger *zap.Logger) *AIChecker {
 }
 
 // CheckUsers sends user information to the AI for analysis.
-func (a *AIChecker) CheckUsers(userInfos []Info) ([]database.User, error) {
+func (a *AIChecker) CheckUsers(userInfos []*Info) ([]*database.User, error) {
 	// Create a new slice with user info without IDs
 	userInfosWithoutID := make([]struct {
 		Name        string `json:"name"`
@@ -177,14 +177,14 @@ func (a *AIChecker) CheckUsers(userInfos []Info) ([]database.User, error) {
 }
 
 // validateFlaggedUsers validates the flagged users against the original user info.
-func (a *AIChecker) validateFlaggedUsers(flaggedUsers FlaggedUsers, userInfos []Info) []database.User {
+func (a *AIChecker) validateFlaggedUsers(flaggedUsers FlaggedUsers, userInfos []*Info) []*database.User {
 	// Map user infos to lower case names
-	userMap := make(map[string]Info)
+	userMap := make(map[string]*Info)
 	for _, userInfo := range userInfos {
 		userMap[utils.NormalizeString(userInfo.Name)] = userInfo
 	}
 
-	var validatedUsers []database.User
+	var validatedUsers []*database.User
 	for _, flaggedUser := range flaggedUsers.Users {
 		// Check if the flagged user name is in the map
 		if userInfo, ok := userMap[utils.NormalizeString(flaggedUser.Name)]; ok {
@@ -207,7 +207,7 @@ func (a *AIChecker) validateFlaggedUsers(flaggedUsers FlaggedUsers, userInfos []
 
 			// If the flagged user is correct, add it to the validated users
 			if isValid {
-				validatedUsers = append(validatedUsers, database.User{
+				validatedUsers = append(validatedUsers, &database.User{
 					ID:             userInfo.ID,
 					Name:           userInfo.Name,
 					DisplayName:    userInfo.DisplayName,

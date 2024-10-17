@@ -101,11 +101,11 @@ func (w *FriendWorker) processFriendsBatch(friendIDs []uint64) ([]uint64, error)
 }
 
 // processUsers handles the processing of a batch of users.
-func (w *FriendWorker) processUsers(userInfos []fetcher.Info) {
+func (w *FriendWorker) processUsers(userInfos []*fetcher.Info) {
 	w.logger.Info("Processing users", zap.Int("userInfos", len(userInfos)))
 
-	var flaggedUsers []database.User
-	var usersForAICheck []fetcher.Info
+	var flaggedUsers []*database.User
+	var usersForAICheck []*fetcher.Info
 
 	// Check if users belong to any flagged groups
 	for _, userInfo := range userInfos {

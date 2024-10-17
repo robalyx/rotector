@@ -26,7 +26,7 @@ func NewThumbnailFetcher(roAPI *api.API, logger *zap.Logger) *ThumbnailFetcher {
 }
 
 // AddImageURLs fetches thumbnails for a batch of users and adds them to the users.
-func (t *ThumbnailFetcher) AddImageURLs(users []database.User) []database.User {
+func (t *ThumbnailFetcher) AddImageURLs(users []*database.User) []*database.User {
 	thumbnailURLs := make(map[uint64]string)
 
 	// Fetch thumbnails in batches of 100

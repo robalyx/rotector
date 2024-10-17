@@ -24,7 +24,7 @@ func NewFriendFetcher(roAPI *api.API, logger *zap.Logger) *FriendFetcher {
 }
 
 // AddFriends fetches friends for a batch of users and adds them to the users.
-func (f *FriendFetcher) AddFriends(users []database.User) []database.User {
+func (f *FriendFetcher) AddFriends(users []*database.User) []*database.User {
 	var wg sync.WaitGroup
 	var mu sync.Mutex
 	semaphore := make(chan struct{}, 100) // Limit concurrent requests to 100
@@ -47,8 +47,6 @@ func (f *FriendFetcher) AddFriends(users []database.User) []database.User {
 			mu.Lock()
 			users[i].Friends = friends
 			mu.Unlock()
-
-			f.logger.Info("Fetched friends for user", zap.Uint64("userID", user.ID), zap.Int("friendCount", len(friends)))
 		}(i)
 	}
 

@@ -104,7 +104,7 @@ func (r *UserRepository) GetNextFlaggedUser() (*FlaggedUser, error) {
 }
 
 // SavePendingUsers saves or updates the provided flagged users in the database.
-func (r *UserRepository) SavePendingUsers(flaggedUsers []User) {
+func (r *UserRepository) SavePendingUsers(flaggedUsers []*User) {
 	r.logger.Info("Saving flagged users", zap.Int("count", len(flaggedUsers)))
 
 	for _, flaggedUser := range flaggedUsers {

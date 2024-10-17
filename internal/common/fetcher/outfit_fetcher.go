@@ -24,7 +24,7 @@ func NewOutfitFetcher(roAPI *api.API, logger *zap.Logger) *OutfitFetcher {
 }
 
 // AddOutfits fetches outfits for a batch of users and adds them to the users.
-func (o *OutfitFetcher) AddOutfits(users []database.User) []database.User {
+func (o *OutfitFetcher) AddOutfits(users []*database.User) []*database.User {
 	for i, user := range users {
 		builder := avatar.NewUserOutfitsBuilder(user.ID).WithItemsPerPage(1000).WithIsEditable(true)
 		outfits, err := o.roAPI.Avatar().GetUserOutfits(context.Background(), builder.Build())
