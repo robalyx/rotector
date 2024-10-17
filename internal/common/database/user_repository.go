@@ -212,9 +212,17 @@ func (r *UserRepository) SavePendingUsers(flaggedUsers []*User) {
 // AcceptUser moves a user from pending to flagged status.
 func (r *UserRepository) AcceptUser(user *PendingUser) error {
 	_, err := r.db.Exec(`
-		INSERT INTO flagged_users (id, name, description, reason, flagged_content, confidence, last_scanned, last_updated, thumbnail_url, verified_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
-	`, user.ID, user.Name, user.Description, user.Reason, user.FlaggedContent, user.Confidence, user.LastScanned, user.LastUpdated, user.ThumbnailURL)
+		INSERT INTO flagged_users (
+			id, name, display_name, description, created_at, reason,
+			groups, outfits, friends, flagged_content, flagged_groups,
+			confidence, last_scanned, last_updated, last_reviewed, thumbnail_url,
+			verified_at
+		)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), ?, NOW())
+	`, user.ID, user.Name, user.DisplayName, user.Description, user.CreatedAt,
+		user.Reason, user.Groups, user.Outfits, user.Friends, user.FlaggedContent,
+		user.FlaggedGroups, user.Confidence, user.LastScanned, user.LastUpdated,
+		user.ThumbnailURL)
 	if err != nil {
 		r.logger.Error("Failed to insert user into flagged_users", zap.Error(err), zap.Uint64("userID", user.ID))
 		return err
