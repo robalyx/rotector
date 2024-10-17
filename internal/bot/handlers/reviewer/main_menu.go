@@ -4,10 +4,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/disgoorg/disgo/bot"
 	"github.com/disgoorg/disgo/discord"
 	"github.com/disgoorg/disgo/events"
-	"github.com/disgoorg/snowflake/v2"
+	"github.com/rotector/rotector/internal/bot/interfaces"
 	"github.com/rotector/rotector/internal/bot/session"
 	"github.com/rotector/rotector/internal/common/database"
 	"go.uber.org/zap"
@@ -29,7 +28,7 @@ func NewMainMenu(h *Handler) *MainMenu {
 }
 
 // ShowMainMenu displays the main menu.
-func (m *MainMenu) ShowMainMenu(client bot.Client, applicationID snowflake.ID, token string) {
+func (m *MainMenu) ShowMainMenu(event interfaces.CommonEvent) {
 	// Fetch pending and flagged user counts
 	pendingCount, err := m.handler.db.Users().GetPendingUsersCount()
 	if err != nil {
@@ -58,7 +57,7 @@ func (m *MainMenu) ShowMainMenu(client bot.Client, applicationID snowflake.ID, t
 	}
 
 	// Update the interaction response with the main menu
-	_, err = client.Rest().UpdateInteractionResponse(applicationID, token, discord.NewMessageUpdateBuilder().
+	_, err = event.Client().Rest().UpdateInteractionResponse(event.ApplicationID(), event.Token(), discord.NewMessageUpdateBuilder().
 		SetContent("").
 		AddEmbeds(embed).
 		SetContainerComponents(components...).

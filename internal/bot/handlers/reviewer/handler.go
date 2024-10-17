@@ -3,11 +3,10 @@ package reviewer
 import (
 	"strings"
 
-	"github.com/disgoorg/disgo/bot"
 	"github.com/disgoorg/disgo/events"
-	"github.com/disgoorg/snowflake/v2"
 	"github.com/jaxron/roapi.go/pkg/api"
 	"github.com/rotector/rotector/internal/bot/handlers/reviewer/builders"
+	"github.com/rotector/rotector/internal/bot/interfaces"
 	"github.com/rotector/rotector/internal/bot/session"
 	"github.com/rotector/rotector/internal/common/database"
 	"go.uber.org/zap"
@@ -41,8 +40,8 @@ func New(db *database.Database, logger *zap.Logger, roAPI *api.API) *Handler {
 }
 
 // ShowMainMenu displays the main menu.
-func (h *Handler) ShowMainMenu(client bot.Client, applicationID snowflake.ID, token string) {
-	h.mainMenu.ShowMainMenu(client, applicationID, token)
+func (h *Handler) ShowMainMenu(event interfaces.CommonEvent) {
+	h.mainMenu.ShowMainMenu(event)
 }
 
 // HandleComponentInteraction processes component interactions.
@@ -61,8 +60,20 @@ func (h *Handler) HandleComponentInteraction(event *events.ComponentInteractionC
 	}
 }
 
+// HandleModalSubmit handles modal submit interactions.
+func (h *Handler) HandleModalSubmit(event *events.ModalSubmitInteractionCreate) {
+	session := h.sessionManager.GetOrCreateSession(event.User().ID)
+
+	switch {
+	case strings.HasPrefix(event.Data.CustomID, ReviewProcessPrefix+BanWithReasonModalCustomID):
+		h.reviewMenu.handleBanWithReasonModalSubmit(event, session)
+	default:
+		h.logger.Warn("Unknown modal submit interaction", zap.String("customID", event.Data.CustomID))
+	}
+}
+
 // Update the respond method.
-func (h *Handler) respond(event *events.ComponentInteractionCreate, builder *builders.Response) {
+func (h *Handler) respond(event interfaces.CommonEvent, builder *builders.Response) {
 	_, err := event.Client().Rest().UpdateInteractionResponse(event.ApplicationID(), event.Token(), builder.Build())
 	if err != nil {
 		h.logger.Error("Failed to send response", zap.Error(err))
@@ -70,7 +81,7 @@ func (h *Handler) respond(event *events.ComponentInteractionCreate, builder *bui
 }
 
 // Update the respondWithError method.
-func (h *Handler) respondWithError(event *events.ComponentInteractionCreate, message string) {
+func (h *Handler) respondWithError(event interfaces.CommonEvent, message string) {
 	builder := builders.NewResponse().
 		SetContent("Fatal error: " + message).
 		SetEphemeral(true)

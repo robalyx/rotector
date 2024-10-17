@@ -8,6 +8,7 @@ import (
 	"github.com/disgoorg/disgo/events"
 	"github.com/rotector/rotector/assets"
 	"github.com/rotector/rotector/internal/bot/handlers/reviewer/builders"
+	"github.com/rotector/rotector/internal/bot/interfaces"
 	"github.com/rotector/rotector/internal/bot/session"
 	"github.com/rotector/rotector/internal/common/database"
 	"github.com/rotector/rotector/internal/common/translator"
@@ -20,7 +21,8 @@ const (
 	SortSelectMenuCustomID   = "sort_select_menu"
 	ActionSelectMenuCustomID = "action_select_menu"
 
-	BanWithReasonButtonCustomID   = "ban_with_reason"
+	BanWithReasonButtonCustomID   = "ban_with_reason_modal"
+	BanWithReasonModalCustomID    = "ban_with_reason_modal"
 	OpenGroupViewerButtonCustomID = "open_group_viewer"
 
 	BackButtonCustomID  = "back"
@@ -44,7 +46,7 @@ func NewReviewMenu(h *Handler) *ReviewMenu {
 }
 
 // ShowReviewMenu displays the review menu.
-func (r *ReviewMenu) ShowReviewMenu(event *events.ComponentInteractionCreate, s *session.Session, message string) {
+func (r *ReviewMenu) ShowReviewMenu(event interfaces.CommonEvent, s *session.Session, message string) {
 	// Get the user from the session
 	user := s.GetPendingUser(session.KeyTarget)
 	if user == nil {
@@ -105,7 +107,7 @@ func (r *ReviewMenu) ShowReviewMenu(event *events.ComponentInteractionCreate, s 
 }
 
 // ShowReviewMenuAndFetchUser displays the review menu and fetches a new user.
-func (r *ReviewMenu) ShowReviewMenuAndFetchUser(event *events.ComponentInteractionCreate, s *session.Session, message string) {
+func (r *ReviewMenu) ShowReviewMenuAndFetchUser(event interfaces.CommonEvent, s *session.Session, message string) {
 	// Fetch a new user
 	sortBy := s.GetString(session.KeySortBy)
 	user, err := r.handler.db.Users().GetRandomPendingUser(sortBy)
@@ -154,7 +156,7 @@ func (r *ReviewMenu) handleReviewButtonInteraction(event *events.ComponentIntera
 	action := parts[1]
 	switch action {
 	case BackButtonCustomID:
-		r.handler.mainMenu.ShowMainMenu(event.Client(), event.ApplicationID(), event.Token())
+		r.handler.ShowMainMenu(event)
 	case BanButtonCustomID:
 		// Accept the user
 		if err := r.handler.db.Users().AcceptUser(user); err != nil {
@@ -209,10 +211,73 @@ func (r *ReviewMenu) handleReviewSelectMenuInteraction(event *events.ComponentIn
 		r.ShowReviewMenuAndFetchUser(event, s, "Changed sort order.")
 	case ActionSelectMenuCustomID:
 		// Determine the button that was pressed
-		if value == OpenOutfitsMenuButtonCustomID {
+		switch value {
+		case BanWithReasonButtonCustomID:
+			r.handleBanWithReason(event, s)
+		case OpenOutfitsMenuButtonCustomID:
 			r.handler.outfitsMenu.ShowOutfitsMenu(event, s, 0)
-		} else if value == OpenFriendsMenuButtonCustomID {
+		case OpenFriendsMenuButtonCustomID:
 			r.handler.friendsMenu.ShowFriendsMenu(event, s, 0)
+		case OpenGroupViewerButtonCustomID:
+			// Implement group viewer logic here
 		}
 	}
+}
+
+// handleBanWithReason processes the ban with reason button interaction.
+func (r *ReviewMenu) handleBanWithReason(event *events.ComponentInteractionCreate, s *session.Session) {
+	// Get the user from the session
+	user := s.GetPendingUser(session.KeyTarget)
+	if user == nil {
+		r.handler.respondWithError(event, "Bot lost track of the user. Please try again.")
+		return
+	}
+
+	// Create the modal
+	modal := discord.NewModalCreateBuilder().
+		SetCustomID(ReviewProcessPrefix + BanWithReasonModalCustomID).
+		SetTitle("Ban User with Reason").
+		AddActionRow(
+			discord.NewTextInput("ban_reason", discord.TextInputStyleParagraph, "Ban Reason").
+				WithRequired(true).
+				WithPlaceholder("Enter the reason for banning this user...").
+				WithValue(user.Reason), // Pre-fill with the original reason if available
+		).
+		Build()
+
+	// Send the modal
+	if err := event.Modal(modal); err != nil {
+		r.handler.logger.Error("Failed to create modal", zap.Error(err))
+		r.handler.respondWithError(event, "Failed to open the ban reason form. Please try again.")
+	}
+}
+
+// handleBanWithReasonModalSubmit processes the modal submit interaction.
+func (r *ReviewMenu) handleBanWithReasonModalSubmit(event *events.ModalSubmitInteractionCreate, s *session.Session) {
+	// Get the user from the session
+	user := s.GetPendingUser(session.KeyTarget)
+	if user == nil {
+		r.handler.respondWithError(event, "Bot lost track of the user. Please try again.")
+		return
+	}
+
+	// Get the ban reason from the modal
+	reason := event.Data.Text("ban_reason")
+	if reason == "" {
+		r.handler.respondWithError(event, "Ban reason cannot be empty. Please try again.")
+		return
+	}
+
+	// Update the user's reason
+	user.Reason = reason
+
+	// Perform the ban
+	if err := r.handler.db.Users().AcceptUser(user); err != nil {
+		r.handler.logger.Error("Failed to accept user", zap.Error(err))
+		r.handler.respondWithError(event, "Failed to ban the user. Please try again.")
+		return
+	}
+
+	// Show the review menu and fetch a new user
+	r.ShowReviewMenuAndFetchUser(event, s, "User banned.")
 }
