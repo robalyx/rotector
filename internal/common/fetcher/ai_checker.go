@@ -214,6 +214,7 @@ func (a *AIChecker) validateFlaggedUsers(flaggedUsers FlaggedUsers, userInfos []
 					Description:    userInfo.Description,
 					CreatedAt:      userInfo.CreatedAt,
 					Reason:         flaggedUser.Reason,
+					Groups:         userInfo.Groups,
 					FlaggedContent: flaggedUser.FlaggedContent,
 					Confidence:     flaggedUser.Confidence,
 				})
