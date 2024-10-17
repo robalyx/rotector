@@ -1,12 +1,14 @@
 package reviewer
 
 import (
+	"context"
 	"fmt"
 	"regexp"
 	"strings"
 
 	"github.com/disgoorg/disgo/discord"
 	"github.com/rotector/rotector/internal/common/database"
+	"github.com/rotector/rotector/internal/common/translator"
 )
 
 const (
@@ -17,12 +19,13 @@ var multipleNewlinesRegex = regexp.MustCompile(`\n{4,}`)
 
 // ReviewEmbedBuilder builds the embed for the review message.
 type ReviewEmbedBuilder struct {
-	user *database.PendingUser
+	user       *database.PendingUser
+	translator *translator.Translator
 }
 
 // NewReviewEmbedBuilder creates a new ReviewEmbedBuilder.
-func NewReviewEmbedBuilder(user *database.PendingUser) *ReviewEmbedBuilder {
-	return &ReviewEmbedBuilder{user: user}
+func NewReviewEmbedBuilder(user *database.PendingUser, translator *translator.Translator) *ReviewEmbedBuilder {
+	return &ReviewEmbedBuilder{user: user, translator: translator}
 }
 
 // Build constructs and returns the discord.Embed.
@@ -59,8 +62,9 @@ func (b *ReviewEmbedBuilder) getDescription() string {
 
 	// Check if description is empty
 	if description == "" {
-		description = NotApplicable
+		return NotApplicable
 	}
+
 	// Trim leading and trailing whitespace
 	description = strings.TrimSpace(description)
 	// Replace multiple newlines with a single newline
@@ -69,6 +73,12 @@ func (b *ReviewEmbedBuilder) getDescription() string {
 	description = strings.ReplaceAll(description, "`", "")
 	// Enclose in markdown
 	description = fmt.Sprintf("```\n%s\n```", description)
+
+	// Translate the description
+	translatedDescription, err := b.translator.Translate(context.Background(), description, "auto", "en")
+	if err == nil && translatedDescription != description {
+		description = fmt.Sprintf("%s\n%s", description, translatedDescription)
+	}
 
 	return description
 }

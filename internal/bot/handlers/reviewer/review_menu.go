@@ -8,6 +8,7 @@ import (
 	"github.com/disgoorg/disgo/events"
 	"github.com/rotector/rotector/assets"
 	"github.com/rotector/rotector/internal/bot/session"
+	"github.com/rotector/rotector/internal/common/translator"
 	"go.uber.org/zap"
 )
 
@@ -28,12 +29,16 @@ const (
 
 // ReviewMenu handles the review process for flagged users.
 type ReviewMenu struct {
-	handler *Handler
+	handler    *Handler
+	translator *translator.Translator
 }
 
 // NewReviewMenu creates a new ReviewMenu instance.
 func NewReviewMenu(h *Handler) *ReviewMenu {
-	return &ReviewMenu{handler: h}
+	return &ReviewMenu{
+		handler:    h,
+		translator: translator.New(h.roAPI.GetClient()),
+	}
 }
 
 // ShowReviewMenu displays the review menu.
@@ -46,7 +51,7 @@ func (r *ReviewMenu) ShowReviewMenu(event *events.ComponentInteractionCreate, s 
 	}
 
 	// Create the embed and components
-	embed := NewReviewEmbedBuilder(user).Build()
+	embed := NewReviewEmbedBuilder(user, r.translator).Build()
 	components := NewComponentBuilder().
 		AddSortSelectMenu(s.GetString(session.KeySortBy)).
 		AddActionSelectMenu().
