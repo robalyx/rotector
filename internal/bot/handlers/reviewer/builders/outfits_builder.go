@@ -1,4 +1,4 @@
-package reviewer
+package builders
 
 import (
 	"fmt"
@@ -8,8 +8,8 @@ import (
 	"github.com/rotector/rotector/internal/common/database"
 )
 
-// OutfitsEmbedBuilder builds the embed for the outfit viewer message.
-type OutfitsEmbedBuilder struct {
+// OutfitsEmbed builds the embed for the outfit viewer message.
+type OutfitsEmbed struct {
 	user       *database.PendingUser
 	outfits    []types.OutfitData
 	start      int
@@ -18,9 +18,9 @@ type OutfitsEmbedBuilder struct {
 	fileName   string
 }
 
-// NewOutfitsEmbedBuilder creates a new OutfitsEmbedBuilder.
-func NewOutfitsEmbedBuilder(user *database.PendingUser, outfits []types.OutfitData, start, page, totalPages int, fileName string) *OutfitsEmbedBuilder {
-	return &OutfitsEmbedBuilder{
+// NewOutfitsEmbed creates a new OutfitsEmbed.
+func NewOutfitsEmbed(user *database.PendingUser, outfits []types.OutfitData, start, page, totalPages int, fileName string) *OutfitsEmbed {
+	return &OutfitsEmbed{
 		user:       user,
 		outfits:    outfits,
 		start:      start,
@@ -31,7 +31,7 @@ func NewOutfitsEmbedBuilder(user *database.PendingUser, outfits []types.OutfitDa
 }
 
 // Build constructs and returns the discord.Embed.
-func (b *OutfitsEmbedBuilder) Build() discord.Embed {
+func (b *OutfitsEmbed) Build() discord.Embed {
 	embed := discord.NewEmbedBuilder().
 		SetTitle(fmt.Sprintf("User Outfits (Page %d/%d)", b.page+1, b.totalPages)).
 		SetDescription(fmt.Sprintf("```%s (%d)```", b.user.Name, b.user.ID)).

@@ -11,6 +11,7 @@ import (
 	"github.com/disgoorg/disgo/events"
 	"github.com/jaxron/roapi.go/pkg/api/resources/thumbnails"
 	"github.com/jaxron/roapi.go/pkg/api/types"
+	"github.com/rotector/rotector/internal/bot/handlers/reviewer/builders"
 	"github.com/rotector/rotector/internal/bot/session"
 	"go.uber.org/zap"
 )
@@ -88,14 +89,21 @@ func (f *FriendsMenu) ShowFriendsMenu(event *events.ComponentInteractionCreate, 
 	totalPages := (len(friends) + FriendsPerPage - 1) / FriendsPerPage
 
 	// Create embed for friends list
-	embed := NewFriendsEmbedBuilder(user, pageFriends, start, page, totalPages, fileName).Build()
+	embed := builders.NewFriendsEmbed(user, pageFriends, start, page, totalPages, fileName).Build()
 
 	// Create components for navigation
-	components := NewComponentBuilder().
-		AddFriendsMenuButtons(page, totalPages).
-		Build()
+	components := []discord.ContainerComponent{
+		discord.NewActionRow(
+			discord.NewSecondaryButton("◀️", FriendsMenuPrefix+string(ViewerBackToReview)),
+			discord.NewSecondaryButton("⏮️", FriendsMenuPrefix+string(ViewerFirstPage)).WithDisabled(page == 0),
+			discord.NewSecondaryButton("◀️", FriendsMenuPrefix+string(ViewerPrevPage)).WithDisabled(page == 0),
+			discord.NewSecondaryButton("▶️", FriendsMenuPrefix+string(ViewerNextPage)).WithDisabled(page == totalPages-1),
+			discord.NewSecondaryButton("⏭️", FriendsMenuPrefix+string(ViewerLastPage)).WithDisabled(page == totalPages-1),
+		),
+	}
 
-	builder := NewResponseBuilder().
+	// Create response builder
+	builder := builders.NewResponse().
 		SetEmbeds(embed).
 		SetComponents(components...).
 		AddFile(file)

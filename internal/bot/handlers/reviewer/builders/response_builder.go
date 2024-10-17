@@ -1,12 +1,12 @@
-package reviewer
+package builders
 
 import (
 	"github.com/disgoorg/disgo/discord"
 	"github.com/rotector/rotector/internal/common/utils"
 )
 
-// ResponseBuilder is a helper struct for building responses.
-type ResponseBuilder struct {
+// Response is a helper struct for building responses.
+type Response struct {
 	content    string
 	embeds     []discord.Embed
 	components []discord.ContainerComponent
@@ -14,37 +14,37 @@ type ResponseBuilder struct {
 	flags      discord.MessageFlags
 }
 
-// NewResponseBuilder creates a new ResponseBuilder.
-func NewResponseBuilder() *ResponseBuilder {
-	return &ResponseBuilder{}
+// NewResponse creates a new Response.
+func NewResponse() *Response {
+	return &Response{}
 }
 
 // SetContent sets the content of the response.
-func (rb *ResponseBuilder) SetContent(content string) *ResponseBuilder {
+func (rb *Response) SetContent(content string) *Response {
 	rb.content = utils.GetTimestampedSubtext(content)
 	return rb
 }
 
 // SetEmbeds sets the embeds of the response.
-func (rb *ResponseBuilder) SetEmbeds(embeds ...discord.Embed) *ResponseBuilder {
+func (rb *Response) SetEmbeds(embeds ...discord.Embed) *Response {
 	rb.embeds = embeds
 	return rb
 }
 
 // SetComponents sets the components of the response.
-func (rb *ResponseBuilder) SetComponents(components ...discord.ContainerComponent) *ResponseBuilder {
+func (rb *Response) SetComponents(components ...discord.ContainerComponent) *Response {
 	rb.components = components
 	return rb
 }
 
 // AddFile adds a file to the response.
-func (rb *ResponseBuilder) AddFile(file *discord.File) *ResponseBuilder {
+func (rb *Response) AddFile(file *discord.File) *Response {
 	rb.files = append(rb.files, file)
 	return rb
 }
 
 // SetEphemeral sets the ephemeral flag of the response.
-func (rb *ResponseBuilder) SetEphemeral(ephemeral bool) *ResponseBuilder {
+func (rb *Response) SetEphemeral(ephemeral bool) *Response {
 	if ephemeral {
 		rb.flags |= discord.MessageFlagEphemeral
 	} else {
@@ -54,7 +54,7 @@ func (rb *ResponseBuilder) SetEphemeral(ephemeral bool) *ResponseBuilder {
 }
 
 // Build builds the discord.MessageUpdate.
-func (rb *ResponseBuilder) Build() discord.MessageUpdate {
+func (rb *Response) Build() discord.MessageUpdate {
 	return discord.NewMessageUpdateBuilder().
 		SetContent(rb.content).
 		SetEmbeds(rb.embeds...).

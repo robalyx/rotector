@@ -10,6 +10,7 @@ import (
 	"github.com/disgoorg/disgo/events"
 	"github.com/jaxron/roapi.go/pkg/api/resources/thumbnails"
 	"github.com/jaxron/roapi.go/pkg/api/types"
+	"github.com/rotector/rotector/internal/bot/handlers/reviewer/builders"
 	"github.com/rotector/rotector/internal/bot/session"
 	"go.uber.org/zap"
 )
@@ -81,13 +82,19 @@ func (o *OutfitsMenu) ShowOutfitsMenu(event *events.ComponentInteractionCreate, 
 	fileName := fmt.Sprintf("outfits_%d_%d.png", user.ID, page)
 	file := discord.NewFile(fileName, "", bytes.NewReader(buf.Bytes()))
 
-	embed := NewOutfitsEmbedBuilder(user, pageOutfits, start, page, totalPages, fileName).Build()
-	components := NewComponentBuilder().
-		AddOutfitsMenuButtons(page, totalPages).
-		Build()
+	embed := builders.NewOutfitsEmbed(user, pageOutfits, start, page, totalPages, fileName).Build()
+	components := []discord.ContainerComponent{
+		discord.NewActionRow(
+			discord.NewSecondaryButton("◀️", OutfitsMenuPrefix+string(ViewerBackToReview)),
+			discord.NewSecondaryButton("⏮️", OutfitsMenuPrefix+string(ViewerFirstPage)).WithDisabled(page == 0),
+			discord.NewSecondaryButton("◀️", OutfitsMenuPrefix+string(ViewerPrevPage)).WithDisabled(page == 0),
+			discord.NewSecondaryButton("▶️", OutfitsMenuPrefix+string(ViewerNextPage)).WithDisabled(page == totalPages-1),
+			discord.NewSecondaryButton("⏭️", OutfitsMenuPrefix+string(ViewerLastPage)).WithDisabled(page == totalPages-1),
+		),
+	}
 
 	// Update the interaction response with the outfit viewer page
-	o.handler.respond(event, NewResponseBuilder().
+	o.handler.respond(event, builders.NewResponse().
 		SetEmbeds(embed).
 		SetComponents(components...).
 		AddFile(file))

@@ -7,6 +7,7 @@ import (
 	"github.com/disgoorg/disgo/events"
 	"github.com/disgoorg/snowflake/v2"
 	"github.com/jaxron/roapi.go/pkg/api"
+	"github.com/rotector/rotector/internal/bot/handlers/reviewer/builders"
 	"github.com/rotector/rotector/internal/bot/session"
 	"github.com/rotector/rotector/internal/common/database"
 	"go.uber.org/zap"
@@ -61,7 +62,7 @@ func (h *Handler) HandleComponentInteraction(event *events.ComponentInteractionC
 }
 
 // Update the respond method.
-func (h *Handler) respond(event *events.ComponentInteractionCreate, builder *ResponseBuilder) {
+func (h *Handler) respond(event *events.ComponentInteractionCreate, builder *builders.Response) {
 	_, err := event.Client().Rest().UpdateInteractionResponse(event.ApplicationID(), event.Token(), builder.Build())
 	if err != nil {
 		h.logger.Error("Failed to send response", zap.Error(err))
@@ -70,7 +71,7 @@ func (h *Handler) respond(event *events.ComponentInteractionCreate, builder *Res
 
 // Update the respondWithError method.
 func (h *Handler) respondWithError(event *events.ComponentInteractionCreate, message string) {
-	builder := NewResponseBuilder().
+	builder := builders.NewResponse().
 		SetContent("Fatal error: " + message).
 		SetEphemeral(true)
 	h.respond(event, builder)

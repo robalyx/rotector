@@ -1,4 +1,4 @@
-package reviewer
+package builders
 
 import (
 	"context"
@@ -17,19 +17,19 @@ const (
 
 var multipleNewlinesRegex = regexp.MustCompile(`\n{4,}`)
 
-// ReviewEmbedBuilder builds the embed for the review message.
-type ReviewEmbedBuilder struct {
+// ReviewEmbed builds the embed for the review message.
+type ReviewEmbed struct {
 	user       *database.PendingUser
 	translator *translator.Translator
 }
 
-// NewReviewEmbedBuilder creates a new ReviewEmbedBuilder.
-func NewReviewEmbedBuilder(user *database.PendingUser, translator *translator.Translator) *ReviewEmbedBuilder {
-	return &ReviewEmbedBuilder{user: user, translator: translator}
+// NewReviewEmbed creates a new ReviewEmbed.
+func NewReviewEmbed(user *database.PendingUser, translator *translator.Translator) *ReviewEmbed {
+	return &ReviewEmbed{user: user, translator: translator}
 }
 
 // Build constructs and returns the discord.Embed.
-func (b *ReviewEmbedBuilder) Build() discord.Embed {
+func (b *ReviewEmbed) Build() discord.Embed {
 	embedBuilder := discord.NewEmbedBuilder().
 		AddField("ID", fmt.Sprintf("[%d](https://www.roblox.com/users/%d/profile)", b.user.ID, b.user.ID), true).
 		AddField("Name", b.user.Name, true).
@@ -57,7 +57,7 @@ func (b *ReviewEmbedBuilder) Build() discord.Embed {
 }
 
 // getDescription returns the description field for the embed.
-func (b *ReviewEmbedBuilder) getDescription() string {
+func (b *ReviewEmbed) getDescription() string {
 	description := b.user.Description
 
 	// Check if description is empty
@@ -84,7 +84,7 @@ func (b *ReviewEmbedBuilder) getDescription() string {
 }
 
 // getGroups returns the groups field for the embed.
-func (b *ReviewEmbedBuilder) getGroups() string {
+func (b *ReviewEmbed) getGroups() string {
 	groups := []string{}
 	for i, group := range b.user.Groups {
 		if i >= 10 {
@@ -102,7 +102,7 @@ func (b *ReviewEmbedBuilder) getGroups() string {
 }
 
 // getFriends returns the friends field for the embed.
-func (b *ReviewEmbedBuilder) getFriends() string {
+func (b *ReviewEmbed) getFriends() string {
 	friends := []string{}
 	for i, friend := range b.user.Friends {
 		if i >= 10 {
@@ -120,7 +120,7 @@ func (b *ReviewEmbedBuilder) getFriends() string {
 }
 
 // getOutfits returns the outfits field for the embed.
-func (b *ReviewEmbedBuilder) getOutfits() string {
+func (b *ReviewEmbed) getOutfits() string {
 	outfits := []string{}
 	for i, outfit := range b.user.Outfits {
 		if i >= 10 {
@@ -138,7 +138,7 @@ func (b *ReviewEmbedBuilder) getOutfits() string {
 }
 
 // getFlaggedType returns the flagged type field for the embed.
-func (b *ReviewEmbedBuilder) getFlaggedType() string {
+func (b *ReviewEmbed) getFlaggedType() string {
 	if len(b.user.FlaggedGroups) > 0 {
 		return "Flagged Groups"
 	}
@@ -146,7 +146,7 @@ func (b *ReviewEmbedBuilder) getFlaggedType() string {
 }
 
 // getFlaggedContent returns the flagged content field for the embed.
-func (b *ReviewEmbedBuilder) getFlaggedContent() string {
+func (b *ReviewEmbed) getFlaggedContent() string {
 	if len(b.user.FlaggedGroups) > 0 {
 		var content strings.Builder
 		for _, flaggedGroupID := range b.user.FlaggedGroups {
@@ -173,7 +173,7 @@ func (b *ReviewEmbedBuilder) getFlaggedContent() string {
 }
 
 // getLastReviewed returns the last reviewed field for the embed.
-func (b *ReviewEmbedBuilder) getLastReviewed() string {
+func (b *ReviewEmbed) getLastReviewed() string {
 	if b.user.LastReviewed.IsZero() {
 		return "Never Reviewed"
 	}

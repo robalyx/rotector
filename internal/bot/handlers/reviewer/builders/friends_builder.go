@@ -1,4 +1,4 @@
-package reviewer
+package builders
 
 import (
 	"fmt"
@@ -8,8 +8,8 @@ import (
 	"github.com/rotector/rotector/internal/common/database"
 )
 
-// FriendsEmbedBuilder builds the embed for the friends viewer message.
-type FriendsEmbedBuilder struct {
+// FriendsEmbed builds the embed for the friends viewer message.
+type FriendsEmbed struct {
 	user     *database.PendingUser
 	friends  []types.UserResponse
 	start    int
@@ -18,9 +18,9 @@ type FriendsEmbedBuilder struct {
 	fileName string
 }
 
-// NewFriendsEmbedBuilder creates a new FriendsEmbedBuilder.
-func NewFriendsEmbedBuilder(user *database.PendingUser, friends []types.UserResponse, start, current, total int, fileName string) *FriendsEmbedBuilder {
-	return &FriendsEmbedBuilder{
+// NewFriendsEmbed creates a new FriendsEmbed.
+func NewFriendsEmbed(user *database.PendingUser, friends []types.UserResponse, start, current, total int, fileName string) *FriendsEmbed {
+	return &FriendsEmbed{
 		user:     user,
 		friends:  friends,
 		start:    start,
@@ -31,7 +31,7 @@ func NewFriendsEmbedBuilder(user *database.PendingUser, friends []types.UserResp
 }
 
 // Build constructs and returns the discord.Embed.
-func (b *FriendsEmbedBuilder) Build() discord.Embed {
+func (b *FriendsEmbed) Build() discord.Embed {
 	embed := discord.NewEmbedBuilder().
 		SetTitle(fmt.Sprintf("User Friends (Page %d/%d)", b.current+1, b.total)).
 		SetDescription(fmt.Sprintf("```%s (%d)```", b.user.Name, b.user.ID)).

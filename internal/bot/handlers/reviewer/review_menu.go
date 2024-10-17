@@ -7,7 +7,9 @@ import (
 	"github.com/disgoorg/disgo/discord"
 	"github.com/disgoorg/disgo/events"
 	"github.com/rotector/rotector/assets"
+	"github.com/rotector/rotector/internal/bot/handlers/reviewer/builders"
 	"github.com/rotector/rotector/internal/bot/session"
+	"github.com/rotector/rotector/internal/common/database"
 	"github.com/rotector/rotector/internal/common/translator"
 	"go.uber.org/zap"
 )
@@ -51,15 +53,39 @@ func (r *ReviewMenu) ShowReviewMenu(event *events.ComponentInteractionCreate, s 
 	}
 
 	// Create the embed and components
-	embed := NewReviewEmbedBuilder(user, r.translator).Build()
-	components := NewComponentBuilder().
-		AddSortSelectMenu(s.GetString(session.KeySortBy)).
-		AddActionSelectMenu().
-		AddReviewButtons().
-		Build()
+	embed := builders.NewReviewEmbed(user, r.translator).Build()
+	components := []discord.ContainerComponent{
+		discord.NewActionRow(
+			discord.NewStringSelectMenu(ReviewProcessPrefix+SortSelectMenuCustomID, "Sorting",
+				discord.NewStringSelectMenuOption("Selected by random", database.SortByRandom).
+					WithDefault(s.GetString(session.KeySortBy) == database.SortByRandom).
+					WithEmoji(discord.ComponentEmoji{Name: "🔀"}),
+				discord.NewStringSelectMenuOption("Selected by confidence", database.SortByConfidence).
+					WithDefault(s.GetString(session.KeySortBy) == database.SortByConfidence).
+					WithEmoji(discord.ComponentEmoji{Name: "🔮"}),
+				discord.NewStringSelectMenuOption("Selected by last updated time", database.SortByLastUpdated).
+					WithDefault(s.GetString(session.KeySortBy) == database.SortByLastUpdated).
+					WithEmoji(discord.ComponentEmoji{Name: "📅"}),
+			),
+		),
+		discord.NewActionRow(
+			discord.NewStringSelectMenu(ReviewProcessPrefix+ActionSelectMenuCustomID, "Actions",
+				discord.NewStringSelectMenuOption("Ban with reason", BanWithReasonButtonCustomID),
+				discord.NewStringSelectMenuOption("Open outfit viewer", OpenOutfitsMenuButtonCustomID),
+				discord.NewStringSelectMenuOption("Open friends viewer", OpenFriendsMenuButtonCustomID),
+				discord.NewStringSelectMenuOption("Open group viewer", OpenGroupViewerButtonCustomID),
+			),
+		),
+		discord.NewActionRow(
+			discord.NewSecondaryButton("◀️", ReviewProcessPrefix+BackButtonCustomID),
+			discord.NewDangerButton("Ban", ReviewProcessPrefix+BanButtonCustomID),
+			discord.NewSuccessButton("Clear", ReviewProcessPrefix+ClearButtonCustomID),
+			discord.NewSecondaryButton("Skip", ReviewProcessPrefix+SkipButtonCustomID),
+		),
+	}
 
 	// Create response builder
-	responseBuilder := NewResponseBuilder().
+	responseBuilder := builders.NewResponse().
 		SetContent(message).
 		SetEmbeds(embed).
 		SetComponents(components...)
