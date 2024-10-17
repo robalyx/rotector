@@ -25,6 +25,7 @@ type GroupWorker struct {
 	thumbnailFetcher *fetcher.ThumbnailFetcher
 	outfitFetcher    *fetcher.OutfitFetcher
 	friendFetcher    *fetcher.FriendFetcher
+	groupChecker     *fetcher.GroupChecker
 	logger           *zap.Logger
 }
 
@@ -38,6 +39,7 @@ func NewGroupWorker(db *database.Database, openaiClient *openai.Client, roAPI *a
 		thumbnailFetcher: fetcher.NewThumbnailFetcher(roAPI, logger),
 		outfitFetcher:    fetcher.NewOutfitFetcher(roAPI, logger),
 		friendFetcher:    fetcher.NewFriendFetcher(roAPI, logger),
+		groupChecker:     fetcher.NewGroupChecker(db, logger),
 		logger:           logger,
 	}
 }
@@ -126,11 +128,32 @@ func (w *GroupWorker) processGroup(groupID uint64) {
 func (w *GroupWorker) processUsers(userInfos []fetcher.Info) {
 	w.logger.Info("Processing users", zap.Int("userInfos", len(userInfos)))
 
-	// Process users with AI
-	flaggedUsers, err := w.aiChecker.CheckUsers(userInfos)
-	if err != nil {
-		w.logger.Error("Error checking users with AI", zap.Error(err))
-		return
+	var flaggedUsers []database.User
+	var usersForAICheck []fetcher.Info
+
+	// Check if users belong to any flagged groups
+	for _, userInfo := range userInfos {
+		user, autoFlagged, err := w.groupChecker.CheckUserGroups(userInfo)
+		if err != nil {
+			w.logger.Error("Error checking user groups", zap.Error(err), zap.Uint64("userID", userInfo.ID))
+			continue
+		}
+
+		if autoFlagged {
+			flaggedUsers = append(flaggedUsers, user)
+		} else {
+			usersForAICheck = append(usersForAICheck, userInfo)
+		}
+	}
+
+	// Process remaining users with AI
+	if len(usersForAICheck) > 0 {
+		aiFlaggedUsers, err := w.aiChecker.CheckUsers(usersForAICheck)
+		if err != nil {
+			w.logger.Error("Error checking users with AI", zap.Error(err))
+		} else {
+			flaggedUsers = append(flaggedUsers, aiFlaggedUsers...)
+		}
 	}
 
 	// Fetch necessary data for flagged users

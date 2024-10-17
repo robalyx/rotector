@@ -25,6 +25,7 @@ type FriendWorker struct {
 	thumbnailFetcher *fetcher.ThumbnailFetcher
 	friendFetcher    *fetcher.FriendFetcher
 	logger           *zap.Logger
+	groupChecker     *fetcher.GroupChecker
 }
 
 // NewFriendWorker creates a new friend worker instance.
@@ -38,6 +39,7 @@ func NewFriendWorker(db *database.Database, openaiClient *openai.Client, roAPI *
 		thumbnailFetcher: fetcher.NewThumbnailFetcher(roAPI, logger),
 		friendFetcher:    fetcher.NewFriendFetcher(roAPI, logger),
 		logger:           logger,
+		groupChecker:     fetcher.NewGroupChecker(db, logger),
 	}
 }
 
@@ -105,37 +107,17 @@ func (w *FriendWorker) processUsers(userInfos []fetcher.Info) {
 	var flaggedUsers []database.User
 	var usersForAICheck []fetcher.Info
 
+	// Check if users belong to any flagged groups
 	for _, userInfo := range userInfos {
-		// Get group IDs
-		groupIDs := make([]uint64, len(userInfo.Groups))
-		for i, group := range userInfo.Groups {
-			groupIDs[i] = group.Group.ID
-		}
-
-		// Check if user belongs to any flagged groups
-		flaggedGroupIDs, err := w.db.Groups().CheckFlaggedGroups(groupIDs)
+		user, autoFlagged, err := w.groupChecker.CheckUserGroups(userInfo)
 		if err != nil {
-			w.logger.Error("Error checking flagged groups", zap.Error(err), zap.Uint64("userID", userInfo.ID))
+			w.logger.Error("Error checking user groups", zap.Error(err), zap.Uint64("userID", userInfo.ID))
 			continue
 		}
 
-		if len(flaggedGroupIDs) > 0 {
-			// User belongs to flagged groups
-			flaggedUsers = append(flaggedUsers, database.User{
-				ID:            userInfo.ID,
-				Name:          userInfo.Name,
-				Description:   userInfo.Description,
-				Reason:        "Member of flagged group(s)",
-				Groups:        userInfo.Groups,
-				FlaggedGroups: flaggedGroupIDs,
-				Confidence:    float64(len(flaggedGroupIDs)) / float64(len(userInfo.Groups)),
-			})
-
-			w.logger.Info("User in flagged group",
-				zap.Uint64("userID", userInfo.ID),
-				zap.Uint64s("flaggedGroupIDs", flaggedGroupIDs))
+		if autoFlagged {
+			flaggedUsers = append(flaggedUsers, user)
 		} else {
-			// User not in flagged groups, add to AI check list
 			usersForAICheck = append(usersForAICheck, userInfo)
 		}
 	}
@@ -161,6 +143,6 @@ func (w *FriendWorker) processUsers(userInfos []fetcher.Info) {
 	w.logger.Info("Finished processing users",
 		zap.Int("totalProcessed", len(userInfos)),
 		zap.Int("flaggedUsers", len(flaggedUsers)),
-		zap.Int("groupFlagged", len(userInfos)-len(usersForAICheck)),
+		zap.Int("autoFlagged", len(flaggedUsers)-len(usersForAICheck)),
 		zap.Int("aiFlagged", len(flaggedUsers)-(len(userInfos)-len(usersForAICheck))))
 }
