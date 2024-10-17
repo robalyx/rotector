@@ -113,7 +113,7 @@ func (b *Bot) handleComponentInteraction(event *events.ComponentInteractionCreat
 	b.logger.Debug("Component interaction", zap.String("customID", event.Data.CustomID()))
 
 	// Create a new message update builder
-	updateBuilder := discord.NewMessageUpdateBuilder().SetContent(utils.GetTimestampedMessage("Processing..."))
+	updateBuilder := discord.NewMessageUpdateBuilder().SetContent(utils.GetTimestampedSubtext("Processing..."))
 
 	// Grey out all buttons and remove other components in the message
 	for _, component := range event.Message.Components {

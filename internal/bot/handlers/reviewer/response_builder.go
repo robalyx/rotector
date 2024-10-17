@@ -21,7 +21,7 @@ func NewResponseBuilder() *ResponseBuilder {
 
 // SetContent sets the content of the response.
 func (rb *ResponseBuilder) SetContent(content string) *ResponseBuilder {
-	rb.content = utils.GetTimestampedMessage(content)
+	rb.content = utils.GetTimestampedSubtext(content)
 	return rb
 }
 

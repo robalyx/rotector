@@ -35,10 +35,10 @@ func GenerateSchema[T any]() interface{} {
 	return schema
 }
 
-// GetTimestampedMessage returns a timestamped message.
-func GetTimestampedMessage(message string) string {
+// GetTimestampedSubtext returns a timestamped subtext message.
+func GetTimestampedSubtext(message string) string {
 	if message != "" {
-		return fmt.Sprintf("`%s` <t:%d:R>", message, time.Now().Unix())
+		return fmt.Sprintf("-# `%s` <t:%d:R>", message, time.Now().Unix())
 	}
 	return ""
 }
