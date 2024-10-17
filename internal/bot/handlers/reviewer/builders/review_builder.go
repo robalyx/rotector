@@ -147,9 +147,10 @@ func (b *ReviewEmbed) getFlaggedType() string {
 
 // getFlaggedContent returns the flagged content field for the embed.
 func (b *ReviewEmbed) getFlaggedContent() string {
-	if len(b.user.FlaggedGroups) > 0 {
+	flaggedGroups := b.user.FlaggedGroups
+	if len(flaggedGroups) > 0 {
 		var content strings.Builder
-		for _, flaggedGroupID := range b.user.FlaggedGroups {
+		for _, flaggedGroupID := range flaggedGroups {
 			for _, group := range b.user.Groups {
 				if group.Group.ID == flaggedGroupID {
 					content.WriteString(fmt.Sprintf("- [%s](https://www.roblox.com/groups/%d) (%s)\n",
@@ -164,7 +165,9 @@ func (b *ReviewEmbed) getFlaggedContent() string {
 	flaggedContent := b.user.FlaggedContent
 	if len(flaggedContent) > 0 {
 		for i := range flaggedContent {
+			// Remove all newlines and backticks
 			flaggedContent[i] = strings.ReplaceAll(flaggedContent[i], "\n", " ")
+			flaggedContent[i] = strings.ReplaceAll(flaggedContent[i], "`", "")
 		}
 		return fmt.Sprintf("- `%s`", strings.Join(flaggedContent, "`\n- `"))
 	}
