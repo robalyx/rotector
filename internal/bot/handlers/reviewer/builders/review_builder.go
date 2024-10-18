@@ -19,13 +19,18 @@ var multipleNewlinesRegex = regexp.MustCompile(`\n{4,}`)
 
 // ReviewEmbed builds the embed for the review message.
 type ReviewEmbed struct {
-	user       *database.PendingUser
-	translator *translator.Translator
+	user           *database.PendingUser
+	translator     *translator.Translator
+	flaggedFriends map[uint64]string
 }
 
 // NewReviewEmbed creates a new ReviewEmbed.
-func NewReviewEmbed(user *database.PendingUser, translator *translator.Translator) *ReviewEmbed {
-	return &ReviewEmbed{user: user, translator: translator}
+func NewReviewEmbed(user *database.PendingUser, translator *translator.Translator, flaggedFriends map[uint64]string) *ReviewEmbed {
+	return &ReviewEmbed{
+		user:           user,
+		translator:     translator,
+		flaggedFriends: flaggedFriends,
+	}
 }
 
 // Build constructs and returns the discord.Embed.
@@ -39,7 +44,7 @@ func (b *ReviewEmbed) Build() discord.Embed {
 		AddField("Reason", b.user.Reason, false).
 		AddField("Description", b.getDescription(), false).
 		AddField("Groups", b.getGroups(), false).
-		AddField("Friends", b.getFriends(), false).
+		AddField(b.getFriendsField(), b.getFriends(), false).
 		AddField("Outfits", b.getOutfits(), false).
 		AddField(b.getFlaggedType(), b.getFlaggedContent(), false).
 		AddField("Last Updated", fmt.Sprintf("<t:%d:R>", b.user.LastUpdated.Unix()), true).
@@ -85,6 +90,7 @@ func (b *ReviewEmbed) getDescription() string {
 
 // getGroups returns the groups field for the embed.
 func (b *ReviewEmbed) getGroups() string {
+	// Get the first 10 groups
 	groups := []string{}
 	for i, group := range b.user.Groups {
 		if i >= 10 {
@@ -94,6 +100,7 @@ func (b *ReviewEmbed) getGroups() string {
 		groups = append(groups, fmt.Sprintf("[%s](https://www.roblox.com/groups/%d)", group.Group.Name, group.Group.ID))
 	}
 
+	// If no groups are found, return NotApplicable
 	if len(groups) == 0 {
 		return NotApplicable
 	}
@@ -101,8 +108,17 @@ func (b *ReviewEmbed) getGroups() string {
 	return strings.Join(groups, ", ")
 }
 
+// getFriendsField returns the friends field name for the embed.
+func (b *ReviewEmbed) getFriendsField() string {
+	if len(b.flaggedFriends) > 0 {
+		return "Friends ⚠️"
+	}
+	return "Friends"
+}
+
 // getFriends returns the friends field for the embed.
 func (b *ReviewEmbed) getFriends() string {
+	// Get the first 10 friends
 	friends := []string{}
 	for i, friend := range b.user.Friends {
 		if i >= 10 {
@@ -112,6 +128,22 @@ func (b *ReviewEmbed) getFriends() string {
 		friends = append(friends, fmt.Sprintf("[%s](https://www.roblox.com/users/%d/profile)", friend.Name, friend.ID))
 	}
 
+	// Add flagged or pending status if needed
+	if len(b.flaggedFriends) > 0 {
+		flaggedCount := 0
+		pendingCount := 0
+		for _, friend := range b.flaggedFriends {
+			if friend == "flagged" {
+				flaggedCount++
+			} else if friend == "pending" {
+				pendingCount++
+			}
+		}
+
+		friends = append(friends, fmt.Sprintf(" (%d flagged, %d pending)", flaggedCount, pendingCount))
+	}
+
+	// If no friends are found, return NotApplicable
 	if len(friends) == 0 {
 		return NotApplicable
 	}
@@ -121,6 +153,7 @@ func (b *ReviewEmbed) getFriends() string {
 
 // getOutfits returns the outfits field for the embed.
 func (b *ReviewEmbed) getOutfits() string {
+	// Get the first 10 outfits
 	outfits := []string{}
 	for i, outfit := range b.user.Outfits {
 		if i >= 10 {
@@ -129,7 +162,7 @@ func (b *ReviewEmbed) getOutfits() string {
 		}
 		outfits = append(outfits, outfit.Name)
 	}
-
+	// If no outfits are found, return NotApplicable
 	if len(outfits) == 0 {
 		return NotApplicable
 	}

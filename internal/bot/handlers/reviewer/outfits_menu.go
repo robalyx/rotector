@@ -42,6 +42,8 @@ func (o *OutfitsMenu) ShowOutfitsMenu(event *events.ComponentInteractionCreate, 
 		o.handler.respondWithError(event, "Bot lost track of the user. Please try again.")
 		return
 	}
+
+	// Check if the user has outfits
 	if len(user.Outfits) == 0 {
 		o.handler.reviewMenu.ShowReviewMenu(event, s, "No outfits found for this user.")
 		return
@@ -72,8 +74,6 @@ func (o *OutfitsMenu) ShowOutfitsMenu(event *events.ComponentInteractionCreate, 
 		o.handler.respondWithError(event, "Failed to process outfit images. Please try again.")
 		return
 	}
-
-	// Create file attachment
 
 	// Calculate total pages
 	totalPages := (len(outfits) + OutfitsPerPage - 1) / OutfitsPerPage

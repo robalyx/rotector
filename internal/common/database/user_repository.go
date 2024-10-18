@@ -282,3 +282,34 @@ func (r *UserRepository) GetPendingUsersCount() (int, error) {
 	}
 	return count, nil
 }
+
+// CheckExistingUsers checks which of the provided user IDs exist in the database.
+func (r *UserRepository) CheckExistingUsers(userIDs []uint64) (map[uint64]string, error) {
+	result := make(map[uint64]string)
+
+	var users []struct {
+		ID     uint64
+		Status string
+	}
+
+	_, err := r.db.Query(&users, `
+		SELECT id, 'flagged' AS status FROM flagged_users WHERE id = ANY(?)
+		UNION ALL
+		SELECT id, 'pending' AS status FROM pending_users WHERE id = ANY(?)
+	`, pg.Array(userIDs), pg.Array(userIDs))
+
+	if err != nil && !errors.Is(err, pg.ErrNoRows) {
+		r.logger.Error("Failed to check existing users", zap.Error(err))
+		return nil, err
+	}
+
+	for _, user := range users {
+		result[user.ID] = user.Status
+	}
+
+	r.logger.Info("Checked existing users",
+		zap.Int("total", len(userIDs)),
+		zap.Int("existing", len(result)))
+
+	return result, nil
+}

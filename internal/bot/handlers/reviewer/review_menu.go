@@ -54,8 +54,20 @@ func (r *ReviewMenu) ShowReviewMenu(event interfaces.CommonEvent, s *session.Ses
 		return
 	}
 
+	// Check which friends are flagged
+	friendIDs := make([]uint64, len(user.Friends))
+	for i, friend := range user.Friends {
+		friendIDs[i] = friend.ID
+	}
+
+	flaggedFriends, err := r.handler.db.Users().CheckExistingUsers(friendIDs)
+	if err != nil {
+		r.handler.logger.Error("Failed to check existing friends", zap.Error(err))
+		return
+	}
+
 	// Create the embed and components
-	embed := builders.NewReviewEmbed(user, r.translator).Build()
+	embed := builders.NewReviewEmbed(user, r.translator, flaggedFriends).Build()
 	components := []discord.ContainerComponent{
 		discord.NewActionRow(
 			discord.NewStringSelectMenu(ReviewProcessPrefix+SortSelectMenuCustomID, "Sorting",

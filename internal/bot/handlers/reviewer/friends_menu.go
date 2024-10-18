@@ -37,16 +37,18 @@ func NewFriendsMenu(h *Handler) *FriendsMenu {
 
 // ShowFriendsMenu displays the friends viewer page.
 func (f *FriendsMenu) ShowFriendsMenu(event *events.ComponentInteractionCreate, s *session.Session, page int) {
+	// Get the user from the session
 	user := s.GetPendingUser(session.KeyTarget)
 	if user == nil {
 		f.handler.respondWithError(event, "Bot lost track of the user. Please try again.")
 		return
 	}
+
+	// Check if the user has friends
 	if len(user.Friends) == 0 {
 		f.handler.respondWithError(event, "No friends found for this user.")
 		return
 	}
-
 	friends := user.Friends
 
 	// Get friends for the current page
@@ -56,6 +58,19 @@ func (f *FriendsMenu) ShowFriendsMenu(event *events.ComponentInteractionCreate, 
 		end = len(friends)
 	}
 	pageFriends := friends[start:end]
+
+	// Check which friends are flagged
+	friendIDs := make([]uint64, len(pageFriends))
+	for i, friend := range pageFriends {
+		friendIDs[i] = friend.ID
+	}
+
+	flaggedFriends, err := f.handler.db.Users().CheckExistingUsers(friendIDs)
+	if err != nil {
+		f.handler.logger.Error("Failed to check existing friends", zap.Error(err))
+		f.handler.respondWithError(event, "Failed to check existing friends. Please try again.")
+		return
+	}
 
 	// Fetch thumbnails for the page friends
 	friendsThumbnailURLs, err := f.fetchFriendsThumbnails(pageFriends)
@@ -89,7 +104,7 @@ func (f *FriendsMenu) ShowFriendsMenu(event *events.ComponentInteractionCreate, 
 	totalPages := (len(friends) + FriendsPerPage - 1) / FriendsPerPage
 
 	// Create embed for friends list
-	embed := builders.NewFriendsEmbed(user, pageFriends, start, page, totalPages, fileName).Build()
+	embed := builders.NewFriendsEmbed(user, pageFriends, flaggedFriends, start, page, totalPages, fileName).Build()
 
 	// Create components for navigation
 	components := []discord.ContainerComponent{

@@ -10,23 +10,25 @@ import (
 
 // FriendsEmbed builds the embed for the friends viewer message.
 type FriendsEmbed struct {
-	user     *database.PendingUser
-	friends  []types.UserResponse
-	start    int
-	current  int
-	total    int
-	fileName string
+	user           *database.PendingUser
+	friends        []types.UserResponse
+	flaggedFriends map[uint64]string
+	start          int
+	current        int
+	total          int
+	fileName       string
 }
 
 // NewFriendsEmbed creates a new FriendsEmbed.
-func NewFriendsEmbed(user *database.PendingUser, friends []types.UserResponse, start, current, total int, fileName string) *FriendsEmbed {
+func NewFriendsEmbed(user *database.PendingUser, friends []types.UserResponse, flaggedFriends map[uint64]string, start, current, total int, fileName string) *FriendsEmbed {
 	return &FriendsEmbed{
-		user:     user,
-		friends:  friends,
-		start:    start,
-		current:  current,
-		total:    total,
-		fileName: fileName,
+		user:           user,
+		friends:        friends,
+		flaggedFriends: flaggedFriends,
+		start:          start,
+		current:        current,
+		total:          total,
+		fileName:       fileName,
 	}
 }
 
@@ -39,11 +41,19 @@ func (b *FriendsEmbed) Build() discord.Embed {
 		SetColor(0x312D2B)
 
 	for i, friend := range b.friends {
-		embed.AddField(
-			fmt.Sprintf("Friend %d", b.start+i+1),
-			fmt.Sprintf("[%s](https://www.roblox.com/users/%d/profile)", friend.Name, friend.ID),
-			true,
-		)
+		fieldName := fmt.Sprintf("Friend %d", b.start+i+1)
+		fieldValue := fmt.Sprintf("[%s](https://www.roblox.com/users/%d/profile)", friend.Name, friend.ID)
+
+		// Add flagged or pending status if needed
+		if flagged, ok := b.flaggedFriends[friend.ID]; ok {
+			if flagged == "flagged" {
+				fieldName += " ⚠️"
+			} else if flagged == "pending" {
+				fieldName += " ⏳"
+			}
+		}
+
+		embed.AddField(fieldName, fieldValue, true)
 	}
 
 	return embed.Build()
