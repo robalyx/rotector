@@ -37,7 +37,7 @@ func InitializeApp(logDir string) (*AppSetup, error) {
 	}
 
 	// Initialize database connection
-	db, err := database.NewConnection(cfg.Database, dbLogger)
+	db, err := database.NewConnection(cfg.PostgreSQL, dbLogger)
 	if err != nil {
 		logger.Fatal("Failed to connect to database", zap.Error(err))
 		return nil, err

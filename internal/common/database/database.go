@@ -69,7 +69,7 @@ type Database struct {
 }
 
 // NewConnection establishes a new database connection and returns a Database instance.
-func NewConnection(dbConfig config.Database, logger *zap.Logger) (*Database, error) {
+func NewConnection(dbConfig config.PostgreSQL, logger *zap.Logger) (*Database, error) {
 	db := pg.Connect(&pg.Options{
 		Addr:     fmt.Sprintf("%s:%d", dbConfig.Host, dbConfig.Port),
 		User:     dbConfig.User,

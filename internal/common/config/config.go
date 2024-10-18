@@ -6,12 +6,12 @@ import (
 
 // Config represents the entire application configuration.
 type Config struct {
-	Logging  Logging
-	Database Database
-	Redis    Redis
-	Roblox   Roblox
-	OpenAI   OpenAI
-	Discord  Discord
+	Logging    Logging
+	PostgreSQL PostgreSQL
+	Redis      Redis
+	Roblox     Roblox
+	OpenAI     OpenAI
+	Discord    Discord
 }
 
 // Logging contains logging-related configuration.
@@ -20,8 +20,8 @@ type Logging struct {
 	MaxLogsToKeep int `mapstructure:"max_logs_to_keep"`
 }
 
-// Database contains database connection configuration.
-type Database struct {
+// PostgreSQL contains database connection configuration.
+type PostgreSQL struct {
 	Host     string
 	Port     int
 	User     string
