@@ -9,7 +9,9 @@ require (
 	github.com/go-pg/pg/v10 v10.13.0
 	github.com/invopop/jsonschema v0.12.0
 	github.com/jaxron/axonet v0.0.0-20241012053513-7cd721aecbdc
+	github.com/jaxron/axonet/middleware/circuitbreaker v0.0.0-20241012053513-7cd721aecbdc
 	github.com/jaxron/axonet/middleware/proxy v0.0.0-20241012053513-7cd721aecbdc
+	github.com/jaxron/axonet/middleware/ratelimit v0.0.0-20241012053513-7cd721aecbdc
 	github.com/jaxron/axonet/middleware/rediscache v0.0.0-20241012053513-7cd721aecbdc
 	github.com/jaxron/axonet/middleware/retry v0.0.0-20241012053513-7cd721aecbdc
 	github.com/jaxron/axonet/middleware/singleflight v0.0.0-20241012053513-7cd721aecbdc
@@ -53,6 +55,7 @@ require (
 	github.com/sagikazarmark/locafero v0.6.0 // indirect
 	github.com/sagikazarmark/slog-shim v0.1.0 // indirect
 	github.com/sasha-s/go-csync v0.0.0-20240107134140-fcbab37b09ad // indirect
+	github.com/sony/gobreaker v1.0.0 // indirect
 	github.com/sourcegraph/conc v0.3.0 // indirect
 	github.com/spf13/afero v1.11.0 // indirect
 	github.com/spf13/cast v1.7.0 // indirect
@@ -77,6 +80,7 @@ require (
 	golang.org/x/net v0.30.0 // indirect
 	golang.org/x/sync v0.8.0 // indirect
 	golang.org/x/sys v0.26.0 // indirect
+	golang.org/x/time v0.7.0 // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	mellium.im/sasl v0.3.2 // indirect

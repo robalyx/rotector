@@ -9,7 +9,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jaxron/axonet/middleware/circuitbreaker"
 	"github.com/jaxron/axonet/middleware/proxy"
+	"github.com/jaxron/axonet/middleware/ratelimit"
 	"github.com/jaxron/axonet/middleware/rediscache"
 	"github.com/jaxron/axonet/middleware/retry"
 	"github.com/jaxron/axonet/middleware/singleflight"
@@ -21,7 +23,7 @@ import (
 )
 
 // GetRoAPIClient creates a new RoAPI client with the given configuration.
-func GetRoAPIClient(cfg config.Roblox, redis config.Redis, logger *zap.Logger) *api.API {
+func GetRoAPIClient(cfg *config.Config, redis config.Redis, logger *zap.Logger) *api.API {
 	// Read the cookies and proxies
 	cookies := readCookies(cfg, logger)
 	proxies := readProxies(cfg, logger)
@@ -41,6 +43,8 @@ func GetRoAPIClient(cfg config.Roblox, redis config.Redis, logger *zap.Logger) *
 		client.WithLogger(NewLogger(logger)),
 		client.WithTimeout(10*time.Second),
 		client.WithMiddleware(cache),
+		client.WithMiddleware(circuitbreaker.New(cfg.CircuitBreaker.MaxFailures, cfg.CircuitBreaker.FailureThreshold, cfg.CircuitBreaker.RecoveryTimeout)),
+		client.WithMiddleware(ratelimit.New(cfg.RateLimit.RequestsPerSecond, cfg.RateLimit.BurstSize)),
 		client.WithMiddleware(retry.New(5, 500*time.Millisecond, 1000*time.Millisecond)),
 		client.WithMiddleware(singleflight.New()),
 		client.WithMiddleware(proxy.New(proxies)),
@@ -48,9 +52,9 @@ func GetRoAPIClient(cfg config.Roblox, redis config.Redis, logger *zap.Logger) *
 }
 
 // readProxies reads the proxies from the given configuration file.
-func readProxies(cfg config.Roblox, logger *zap.Logger) []*url.URL {
+func readProxies(cfg *config.Config, logger *zap.Logger) []*url.URL {
 	// If no proxies file is set, return an empty list
-	if cfg.ProxiesFile == "" {
+	if cfg.Roblox.ProxiesFile == "" {
 		logger.Warn("No proxies file set")
 		return []*url.URL{}
 	}
@@ -58,7 +62,7 @@ func readProxies(cfg config.Roblox, logger *zap.Logger) []*url.URL {
 	var proxies []*url.URL
 
 	// Open the file
-	file, err := os.Open(cfg.ProxiesFile)
+	file, err := os.Open(cfg.Roblox.ProxiesFile)
 	if err != nil {
 		logger.Fatal("failed to open proxy file", zap.Error(err))
 		return nil
@@ -105,9 +109,9 @@ func readProxies(cfg config.Roblox, logger *zap.Logger) []*url.URL {
 }
 
 // readCookies reads the cookies from the given configuration file.
-func readCookies(cfg config.Roblox, logger *zap.Logger) []string {
+func readCookies(cfg *config.Config, logger *zap.Logger) []string {
 	// If no cookies file is set, return an empty list
-	if cfg.CookiesFile == "" {
+	if cfg.Roblox.CookiesFile == "" {
 		logger.Warn("No cookies file set")
 		return []string{}
 	}
@@ -115,7 +119,7 @@ func readCookies(cfg config.Roblox, logger *zap.Logger) []string {
 	var cookies []string
 
 	// Open the file
-	file, err := os.Open(cfg.CookiesFile)
+	file, err := os.Open(cfg.Roblox.CookiesFile)
 	if err != nil {
 		logger.Fatal("failed to open cookie file", zap.Error(err))
 		return nil

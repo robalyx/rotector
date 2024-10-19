@@ -2,6 +2,15 @@
 level = "info"
 max_logs_to_keep = 10
 
+[ratelimit]
+requests_per_second = 100.0
+burst_size = 100
+
+[circuitbreaker]
+max_failures = 10
+failure_threshold = 500
+recovery_timeout = 1000
+
 [postgresql]
 host = "127.0.0.1"
 port = 5432

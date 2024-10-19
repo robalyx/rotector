@@ -1,23 +1,40 @@
 package config
 
 import (
+	"time"
+
 	"github.com/spf13/viper"
 )
 
 // Config represents the entire application configuration.
 type Config struct {
-	Logging    Logging
-	PostgreSQL PostgreSQL
-	Redis      Redis
-	Roblox     Roblox
-	OpenAI     OpenAI
-	Discord    Discord
+	Logging        Logging
+	RateLimit      RateLimit
+	CircuitBreaker CircuitBreaker
+	PostgreSQL     PostgreSQL
+	Redis          Redis
+	Roblox         Roblox
+	OpenAI         OpenAI
+	Discord        Discord
 }
 
 // Logging contains logging-related configuration.
 type Logging struct {
 	Level         string
 	MaxLogsToKeep int `mapstructure:"max_logs_to_keep"`
+}
+
+// RateLimit contains rate limit configuration.
+type RateLimit struct {
+	RequestsPerSecond float64 `mapstructure:"requests_per_second"`
+	BurstSize         int     `mapstructure:"burst_size"`
+}
+
+// CircuitBreaker contains circuit breaker configuration.
+type CircuitBreaker struct {
+	MaxFailures      uint32        `mapstructure:"max_failures"`
+	FailureThreshold time.Duration `mapstructure:"failure_threshold"`
+	RecoveryTimeout  time.Duration `mapstructure:"recovery_timeout"`
 }
 
 // PostgreSQL contains database connection configuration.

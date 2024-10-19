@@ -49,7 +49,7 @@ func InitializeApp(logDir string) (*AppSetup, error) {
 	)
 
 	// Initialize Roblox API client
-	roAPI := GetRoAPIClient(cfg.Roblox, cfg.Redis, logger)
+	roAPI := GetRoAPIClient(cfg, cfg.Redis, logger)
 	return &AppSetup{
 		Config:       cfg,
 		Logger:       logger,
