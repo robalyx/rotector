@@ -29,8 +29,8 @@ Instructions:
 9. Consider both explicit and implied meanings.
 
 Confidence levels:
-- High (0.7-1.0): Explicit content or clear violation. (e.g., sexual terms, obvious NSFW emojis)
-- Medium (0.4-0.6): Suggestive or innuendo-based, somewhat ambiguous but still inappropriate. (e.g., suggestive phrases, unclear emoji combos)
+- High (0.8-1.0): Explicit content or clear violation. (e.g., sexual terms, obvious NSFW emojis)
+- Medium (0.4-0.7): Suggestive or innuendo-based, somewhat ambiguous but still inappropriate. (e.g., suggestive phrases, unclear emoji combos)
 - Low (0.0-0.3): Ambiguous, subtle hints, or content that could be innocent. (e.g., vague innuendos, unclear references)
 
 Flag content containing:
@@ -54,11 +54,15 @@ Flag content containing:
 18. Animal/zoophilia references
 19. References to sex toys or suggestive mentions
 20. Sexual blackmail or harassment terms or innuendos
+21. Phrases like "studio only" (may refer to ERP in Roblox Studio)
+22. "Top" or "bottom" preferences (imply dominance/submission)
+23. "I trade" when used to imply illegal content (note: may refer to Roblox trading if appropriate)
 
 Exclude:
 - General mentions of sexual orientation or gender identity that are not in an inappropriate context.
 - Non-suggestive language or general friendship references (e.g., "looking for friends").
-- General profanity or non-sexual content.`
+- General profanity or non-sexual content.
+- Legitimate uses of "I trade" for Roblox trading.`
 )
 
 // FlaggedUsers is a list of flagged users.
