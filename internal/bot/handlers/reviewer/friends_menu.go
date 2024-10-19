@@ -33,7 +33,7 @@ func NewFriendsMenu(h *Handler) *FriendsMenu {
 		Data: make(map[string]interface{}),
 		Message: func(data map[string]interface{}) *discord.MessageUpdateBuilder {
 			user := data["user"].(*database.PendingUser)
-			friends := data["friends"].([]types.UserResponse)
+			friends := data["friends"].([]types.Friend)
 			flaggedFriends := data["flaggedFriends"].(map[uint64]string)
 			start := data["start"].(int)
 			page := data["page"].(int)
@@ -158,7 +158,7 @@ func (f *FriendsMenu) handlePageNavigation(event *events.ComponentInteractionCre
 }
 
 // fetchFriendsThumbnails fetches thumbnails for the given friends.
-func (f *FriendsMenu) fetchFriendsThumbnails(friends []types.UserResponse) (map[uint64]string, error) {
+func (f *FriendsMenu) fetchFriendsThumbnails(friends []types.Friend) (map[uint64]string, error) {
 	thumbnailURLs := make(map[uint64]string)
 
 	// Create thumbnail requests for each friend
@@ -169,7 +169,7 @@ func (f *FriendsMenu) fetchFriendsThumbnails(friends []types.UserResponse) (map[
 			TargetID:  user.ID,
 			RequestID: strconv.FormatUint(user.ID, 10),
 			Size:      types.Size150x150,
-			Format:    "webp",
+			Format:    types.WEBP,
 		})
 	}
 

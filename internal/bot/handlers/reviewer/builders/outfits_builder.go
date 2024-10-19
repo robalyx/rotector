@@ -11,7 +11,7 @@ import (
 // OutfitsEmbed builds the embed for the outfit viewer message.
 type OutfitsEmbed struct {
 	user     *database.PendingUser
-	outfits  []types.OutfitData
+	outfits  []types.Outfit
 	start    int
 	page     int
 	total    int
@@ -20,7 +20,7 @@ type OutfitsEmbed struct {
 }
 
 // NewOutfitsEmbed creates a new OutfitsEmbed.
-func NewOutfitsEmbed(user *database.PendingUser, outfits []types.OutfitData, start, page, total int, file *discord.File, fileName string) *OutfitsEmbed {
+func NewOutfitsEmbed(user *database.PendingUser, outfits []types.Outfit, start, page, total int, file *discord.File, fileName string) *OutfitsEmbed {
 	return &OutfitsEmbed{
 		user:     user,
 		outfits:  outfits,

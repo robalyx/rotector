@@ -13,12 +13,12 @@ import (
 
 // Info represents the information about a user to be checked by the AI.
 type Info struct {
-	ID          uint64                         `json:"id"`
-	Name        string                         `json:"name"`
-	DisplayName string                         `json:"displayName"`
-	Description string                         `json:"description"`
-	CreatedAt   time.Time                      `json:"createdAt"`
-	Groups      []types.UserGroupRolesResponse `json:"groupIds"`
+	ID          uint64                 `json:"id"`
+	Name        string                 `json:"name"`
+	DisplayName string                 `json:"displayName"`
+	Description string                 `json:"description"`
+	CreatedAt   time.Time              `json:"createdAt"`
+	Groups      []types.UserGroupRoles `json:"groupIds"`
 }
 
 // UserFetcher handles fetching of user information.

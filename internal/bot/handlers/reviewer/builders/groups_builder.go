@@ -11,7 +11,7 @@ import (
 // GroupsEmbed builds the embed for the groups viewer message.
 type GroupsEmbed struct {
 	user          *database.PendingUser
-	groups        []types.UserGroupRolesResponse
+	groups        []types.UserGroupRoles
 	flaggedGroups map[uint64]bool
 	start         int
 	page          int
@@ -21,7 +21,7 @@ type GroupsEmbed struct {
 }
 
 // NewGroupsEmbed creates a new GroupsEmbed.
-func NewGroupsEmbed(user *database.PendingUser, groups []types.UserGroupRolesResponse, flaggedGroups map[uint64]bool, start, page, total int, file *discord.File, fileName string) *GroupsEmbed {
+func NewGroupsEmbed(user *database.PendingUser, groups []types.UserGroupRoles, flaggedGroups map[uint64]bool, start, page, total int, file *discord.File, fileName string) *GroupsEmbed {
 	return &GroupsEmbed{
 		user:          user,
 		groups:        groups,

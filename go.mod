@@ -13,8 +13,8 @@ require (
 	github.com/jaxron/axonet/middleware/rediscache v0.0.0-20241012053513-7cd721aecbdc
 	github.com/jaxron/axonet/middleware/retry v0.0.0-20241012053513-7cd721aecbdc
 	github.com/jaxron/axonet/middleware/singleflight v0.0.0-20241012053513-7cd721aecbdc
-	github.com/jaxron/roapi.go v0.0.0-20241012003032-3eb1c55d9296
-	github.com/openai/openai-go v0.1.0-alpha.27
+	github.com/jaxron/roapi.go v0.0.0-20241019073506-b6affac87d8e
+	github.com/openai/openai-go v0.1.0-alpha.29
 	github.com/ozankasikci/go-image-merge v0.3.1
 	github.com/redis/rueidis v1.0.47
 	github.com/spf13/cobra v1.8.1

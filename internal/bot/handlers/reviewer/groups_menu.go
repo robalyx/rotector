@@ -33,7 +33,7 @@ func NewGroupsMenu(h *Handler) *GroupsMenu {
 		Data: make(map[string]interface{}),
 		Message: func(data map[string]interface{}) *discord.MessageUpdateBuilder {
 			user := data["user"].(*database.PendingUser)
-			groups := data["groups"].([]types.UserGroupRolesResponse)
+			groups := data["groups"].([]types.UserGroupRoles)
 			flaggedGroups := data["flaggedGroups"].(map[uint64]bool)
 			start := data["start"].(int)
 			page := data["page"].(int)
@@ -163,7 +163,7 @@ func (g *GroupsMenu) handlePageNavigation(event *events.ComponentInteractionCrea
 }
 
 // fetchGroupsThumbnails fetches thumbnails for the given groups.
-func (g *GroupsMenu) fetchGroupsThumbnails(groups []types.UserGroupRolesResponse) (map[uint64]string, error) {
+func (g *GroupsMenu) fetchGroupsThumbnails(groups []types.UserGroupRoles) (map[uint64]string, error) {
 	thumbnailURLs := make(map[uint64]string)
 
 	// Create thumbnail requests for each group
@@ -174,7 +174,7 @@ func (g *GroupsMenu) fetchGroupsThumbnails(groups []types.UserGroupRolesResponse
 			TargetID:  group.Group.ID,
 			RequestID: strconv.FormatUint(group.Group.ID, 10),
 			Size:      types.Size150x150,
-			Format:    "webp",
+			Format:    types.WEBP,
 		})
 	}
 

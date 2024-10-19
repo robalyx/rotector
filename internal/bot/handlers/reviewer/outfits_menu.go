@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"strconv"
 
 	"github.com/disgoorg/disgo/discord"
 	"github.com/disgoorg/disgo/events"
@@ -32,7 +33,7 @@ func NewOutfitsMenu(h *Handler) *OutfitsMenu {
 		Data: make(map[string]interface{}),
 		Message: func(data map[string]interface{}) *discord.MessageUpdateBuilder {
 			user := data["user"].(*database.PendingUser)
-			outfits := data["outfits"].([]types.OutfitData)
+			outfits := data["outfits"].([]types.Outfit)
 			start := data["start"].(int)
 			page := data["page"].(int)
 			total := data["total"].(int)
@@ -135,7 +136,7 @@ func (o *OutfitsMenu) handlePageNavigation(event *events.ComponentInteractionCre
 }
 
 // fetchOutfitThumbnails fetches thumbnails for the given outfits.
-func (o *OutfitsMenu) fetchOutfitThumbnails(outfits []types.OutfitData) ([]string, error) {
+func (o *OutfitsMenu) fetchOutfitThumbnails(outfits []types.Outfit) ([]string, error) {
 	thumbnailURLs := make([]string, constants.OutfitsPerPage)
 
 	// Create thumbnail requests for each outfit
@@ -146,11 +147,11 @@ func (o *OutfitsMenu) fetchOutfitThumbnails(outfits []types.OutfitData) ([]strin
 		}
 
 		requests.AddRequest(types.ThumbnailRequest{
-			Type:      "Outfit",
+			Type:      types.OutfitType,
 			Size:      types.Size150x150,
-			RequestID: fmt.Sprintf("%d:undefined:Outfit:150x150:webp:regular", outfit.ID),
+			RequestID: strconv.FormatUint(outfit.ID, 10),
 			TargetID:  outfit.ID,
-			Format:    "webp",
+			Format:    types.WEBP,
 		})
 	}
 

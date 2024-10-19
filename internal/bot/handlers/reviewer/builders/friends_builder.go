@@ -11,7 +11,7 @@ import (
 // FriendsEmbed builds the embed for the friends viewer message.
 type FriendsEmbed struct {
 	user           *database.PendingUser
-	friends        []types.UserResponse
+	friends        []types.Friend
 	flaggedFriends map[uint64]string
 	start          int
 	page           int
@@ -21,7 +21,7 @@ type FriendsEmbed struct {
 }
 
 // NewFriendsEmbed creates a new FriendsEmbed.
-func NewFriendsEmbed(user *database.PendingUser, friends []types.UserResponse, flaggedFriends map[uint64]string, start, page, total int, file *discord.File, fileName string) *FriendsEmbed {
+func NewFriendsEmbed(user *database.PendingUser, friends []types.Friend, flaggedFriends map[uint64]string, start, page, total int, file *discord.File, fileName string) *FriendsEmbed {
 	return &FriendsEmbed{
 		user:           user,
 		friends:        friends,

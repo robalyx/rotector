@@ -31,22 +31,22 @@ type FlaggedGroup struct {
 
 // User represents a user in the database.
 type User struct {
-	ID             uint64                         `json:"id"             pg:"id,pk"`
-	Name           string                         `json:"name"           pg:"name"`
-	DisplayName    string                         `json:"displayName"    pg:"display_name"`
-	Description    string                         `json:"description"    pg:"description"`
-	CreatedAt      time.Time                      `json:"createdAt"      pg:"created_at"`
-	Reason         string                         `json:"reason"         pg:"reason"`
-	Groups         []types.UserGroupRolesResponse `json:"groups"         pg:"groups"`
-	Outfits        []types.OutfitData             `json:"outfits"        pg:"outfits"`
-	Friends        []types.UserResponse           `json:"friends"        pg:"friends"`
-	FlaggedContent []string                       `json:"flaggedContent" pg:"flagged_content"`
-	FlaggedGroups  []uint64                       `json:"flaggedGroups"  pg:"flagged_groups"`
-	Confidence     float64                        `json:"confidence"     pg:"confidence"`
-	LastScanned    time.Time                      `json:"lastScanned"    pg:"last_scanned"`
-	LastUpdated    time.Time                      `json:"lastUpdated"    pg:"last_updated"`
-	LastReviewed   time.Time                      `json:"lastReviewed"   pg:"last_reviewed"`
-	ThumbnailURL   string                         `json:"thumbnailUrl"   pg:"thumbnail_url"`
+	ID             uint64                 `json:"id"             pg:"id,pk"`
+	Name           string                 `json:"name"           pg:"name"`
+	DisplayName    string                 `json:"displayName"    pg:"display_name"`
+	Description    string                 `json:"description"    pg:"description"`
+	CreatedAt      time.Time              `json:"createdAt"      pg:"created_at"`
+	Reason         string                 `json:"reason"         pg:"reason"`
+	Groups         []types.UserGroupRoles `json:"groups"         pg:"groups"`
+	Outfits        []types.Outfit         `json:"outfits"        pg:"outfits"`
+	Friends        []types.Friend         `json:"friends"        pg:"friends"`
+	FlaggedContent []string               `json:"flaggedContent" pg:"flagged_content"`
+	FlaggedGroups  []uint64               `json:"flaggedGroups"  pg:"flagged_groups"`
+	Confidence     float64                `json:"confidence"     pg:"confidence"`
+	LastScanned    time.Time              `json:"lastScanned"    pg:"last_scanned"`
+	LastUpdated    time.Time              `json:"lastUpdated"    pg:"last_updated"`
+	LastReviewed   time.Time              `json:"lastReviewed"   pg:"last_reviewed"`
+	ThumbnailURL   string                 `json:"thumbnailUrl"   pg:"thumbnail_url"`
 }
 
 // PendingUser represents a user that is pending review.
