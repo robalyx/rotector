@@ -1,25 +1,29 @@
 package database
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"time"
 
 	"github.com/bytedance/sonic"
 	"github.com/go-pg/pg/v10"
+	"github.com/rotector/rotector/internal/common/statistics"
 	"go.uber.org/zap"
 )
 
 // UserRepository handles user-related database operations.
 type UserRepository struct {
 	db     *pg.DB
+	stats  *statistics.Statistics
 	logger *zap.Logger
 }
 
 // NewUserRepository creates a new UserRepository instance.
-func NewUserRepository(db *pg.DB, logger *zap.Logger) *UserRepository {
+func NewUserRepository(db *pg.DB, stats *statistics.Statistics, logger *zap.Logger) *UserRepository {
 	return &UserRepository{
 		db:     db,
+		stats:  stats,
 		logger: logger,
 	}
 }
@@ -204,6 +208,11 @@ func (r *UserRepository) SavePendingUsers(flaggedUsers []*User) {
 			zap.Float64("confidence", flaggedUser.Confidence),
 			zap.Time("last_updated", time.Now()),
 			zap.String("thumbnail_url", flaggedUser.ThumbnailURL))
+
+		// Increment the users_pending statistic
+		if err := r.stats.IncrementUsersPending(context.Background()); err != nil {
+			r.logger.Error("Failed to increment users_pending statistic", zap.Error(err))
+		}
 	}
 
 	r.logger.Info("Finished saving flagged users")
@@ -235,6 +244,12 @@ func (r *UserRepository) AcceptUser(user *PendingUser) error {
 	}
 
 	r.logger.Info("User accepted and moved to flagged_users", zap.Uint64("userID", user.ID))
+
+	// Increment the users_banned statistic
+	if err := r.stats.IncrementUsersBanned(context.Background()); err != nil {
+		r.logger.Error("Failed to increment users_banned statistic", zap.Error(err))
+	}
+
 	return nil
 }
 
@@ -246,6 +261,12 @@ func (r *UserRepository) RejectUser(user *PendingUser) error {
 		return err
 	}
 	r.logger.Info("User rejected and removed from pending_users", zap.Uint64("userID", user.ID))
+
+	// Increment the users_cleared statistic
+	if err := r.stats.IncrementUsersCleared(context.Background()); err != nil {
+		r.logger.Error("Failed to increment users_cleared statistic", zap.Error(err))
+	}
+
 	return nil
 }
 

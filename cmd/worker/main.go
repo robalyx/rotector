@@ -8,6 +8,7 @@ import (
 
 	"github.com/rotector/rotector/internal/common/logging"
 	"github.com/rotector/rotector/internal/common/setup"
+	"github.com/rotector/rotector/internal/worker/stats"
 	"github.com/rotector/rotector/internal/worker/user"
 	"github.com/spf13/cobra"
 	"go.uber.org/zap"
@@ -19,7 +20,11 @@ const (
 	UserWorker           = "user"
 	UserWorkerTypeGroup  = "group"
 	UserWorkerTypeFriend = "friend"
-	GroupWorker          = "group"
+
+	GroupWorker = "group"
+
+	StatsWorker           = "stats"
+	StatsWorkerTypeUpload = "upload"
 )
 
 func main() {
@@ -38,6 +43,7 @@ func newRootCmd() *cobra.Command {
 	rootCmd.PersistentFlags().IntP("workers", "w", 1, "Number of workers to start")
 	rootCmd.AddCommand(newUserCmd())
 	rootCmd.AddCommand(newGroupCmd())
+	rootCmd.AddCommand(newStatsCmd())
 
 	return rootCmd
 }
@@ -83,6 +89,17 @@ func newGroupCmd() *cobra.Command {
 	}
 }
 
+// newStatsCmd creates a new statistics worker command.
+func newStatsCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "stats",
+		Short: "Start statistics worker",
+		Run: func(_ *cobra.Command, _ []string) {
+			runWorkers(StatsWorker, StatsWorkerTypeUpload, 1)
+		},
+	}
+}
+
 // runWorkers starts the specified number of workers of the given type.
 func runWorkers(workerType, subType string, count int) {
 	setup, err := setup.InitializeApp(WorkerLogDir)
@@ -112,6 +129,8 @@ func runWorkers(workerType, subType string, count int) {
 				w = user.NewGroupWorker(setup.DB, setup.OpenAIClient, setup.RoAPI, workerLogger)
 			case workerType == UserWorker && subType == UserWorkerTypeFriend:
 				w = user.NewFriendWorker(setup.DB, setup.OpenAIClient, setup.RoAPI, workerLogger)
+			case workerType == StatsWorker:
+				w = stats.NewStatisticsWorker(setup, workerLogger)
 			default:
 				log.Fatalf("Invalid worker type: %s %s", workerType, subType)
 			}

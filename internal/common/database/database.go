@@ -9,6 +9,7 @@ import (
 	"github.com/go-pg/pg/v10/orm"
 	"github.com/jaxron/roapi.go/pkg/api/types"
 	"github.com/rotector/rotector/internal/common/config"
+	"github.com/rotector/rotector/internal/common/statistics"
 	"go.uber.org/zap"
 )
 
@@ -60,28 +61,40 @@ type FlaggedUser struct {
 	VerifiedAt time.Time `json:"verifiedAt" pg:"verified_at"`
 }
 
+// DailyStatistics represents daily statistics.
+type DailyStatistics struct {
+	Date         time.Time `pg:"date,pk"`
+	UsersBanned  int64     `pg:"users_banned"`
+	UsersCleared int64     `pg:"users_cleared"`
+	UsersPending int64     `pg:"users_pending"`
+}
+
 // Database represents the database connection and operations.
 type Database struct {
 	db     *pg.DB
 	logger *zap.Logger
 	users  *UserRepository
 	groups *GroupRepository
+	stats  *StatsRepository
 }
 
 // NewConnection establishes a new database connection and returns a Database instance.
-func NewConnection(dbConfig config.PostgreSQL, logger *zap.Logger) (*Database, error) {
+func NewConnection(config *config.Config, stats *statistics.Statistics, logger *zap.Logger) (*Database, error) {
+	// Initialize database connection
 	db := pg.Connect(&pg.Options{
-		Addr:     fmt.Sprintf("%s:%d", dbConfig.Host, dbConfig.Port),
-		User:     dbConfig.User,
-		Password: dbConfig.Password,
-		Database: dbConfig.DBName,
+		Addr:     fmt.Sprintf("%s:%d", config.PostgreSQL.Host, config.PostgreSQL.Port),
+		User:     config.PostgreSQL.User,
+		Password: config.PostgreSQL.Password,
+		Database: config.PostgreSQL.DBName,
 	})
 
+	// Create database instance
 	database := &Database{
 		db:     db,
 		logger: logger,
-		users:  NewUserRepository(db, logger),
+		users:  NewUserRepository(db, stats, logger),
 		groups: NewGroupRepository(db, logger),
+		stats:  NewStatsRepository(db, stats.Client, logger),
 	}
 
 	err := database.createSchema()
@@ -99,6 +112,7 @@ func (d *Database) createSchema() error {
 		(*FlaggedGroup)(nil),
 		(*PendingUser)(nil),
 		(*FlaggedUser)(nil),
+		(*DailyStatistics)(nil),
 	}
 
 	for _, model := range models {
@@ -134,4 +148,9 @@ func (d *Database) Users() *UserRepository {
 // Groups returns the GroupRepository.
 func (d *Database) Groups() *GroupRepository {
 	return d.groups
+}
+
+// Stats returns the StatsRepository.
+func (d *Database) Stats() *StatsRepository {
+	return d.stats
 }
