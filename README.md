@@ -20,8 +20,11 @@
 
 ---
 
-> [!IMPORTANT]
-> Roblox is a registered trademark of Roblox Corporation. This project is a community-driven initiative and is not affiliated with, endorsed by, or sponsored by Roblox Corporation. This tool is provided as-is, without any guarantees or warranty. The authors are not responsible for any damage or data loss incurred with its use. Users should use this software at their own risk and ensure they comply with all applicable terms of service and legal requirements. More details in the [LICENSE](LICENSE).
+> [!NOTE]
+> This project is a community-driven initiative and is not affiliated with, endorsed by, or sponsored by Roblox Corporation. More details in the [Disclaimer](#%EF%B8%8F-disclaimer) section.
+
+> [!WARNING]
+> **A message to predators:** Rotector exists for one reason: to protect children from you. If you're on Roblox to exploit or harm kids, know that we will find you.
 
 ---
 
@@ -33,8 +36,10 @@
 - [🛠 Installation](#-installation)
 - [🚀 Usage](#-usage)
 - [❓ FAQ](#-faq)
+- [🎯 Accuracy](#-accuracy)
 - [🙏 Special Thanks](#-special-thanks)
 - [📄 License](#-license)
+- [⚠️ Disclaimer](#%EF%B8%8F-disclaimer)
 
 ## 🚀 Features
 
@@ -105,6 +110,10 @@ Before installing Rotector, ensure you have the following:
    go build -o worker cmd/worker/main.go
    ```
 
+   ```bash
+   go build -o bot cmd/bot/main.go
+   ```
+
 ## 🚀 Usage
 
 Rotector uses a flexible CLI for running different types of workers. Here are some example commands:
@@ -115,7 +124,7 @@ Rotector uses a flexible CLI for running different types of workers. Here are so
    ./worker user friend -w 3
    ```
 
-   This command starts 3 user friend workers.
+   This command starts 3 user friend workers, which will process friends of flagged users.
 
 2. Start user group workers:
 
@@ -123,7 +132,7 @@ Rotector uses a flexible CLI for running different types of workers. Here are so
    ./worker user group -w 5
    ```
 
-   This command starts 5 user group workers.
+   This command starts 5 user group workers, which will process members of flagged groups.
 
 3. View available commands:
 
@@ -133,9 +142,37 @@ Rotector uses a flexible CLI for running different types of workers. Here are so
 
    This will display all available commands and options.
 
-4. The workers will automatically start scanning Roblox accounts based on the configuration.
+4. The workers will automatically start scanning Roblox accounts based on the configuration and previously flagged users/groups.
 
-5. Use the Discord bot commands to review and moderate flagged accounts.
+5. Start the Discord bot:
+
+   ```bash
+   ./bot
+   ```
+
+6. Use the `/review` command in Discord to review flagged accounts.
+
+## 🎯 Accuracy
+
+Rotector's AI processor is designed to identify potentially inappropriate content while minimizing false positives. Here's an overview of its capabilities.
+
+### Detection Capabilities
+
+Rotector flags a wide range of inappropriate content, including but not limited to sexual content, explicit language, and potential predatory behavior. The system is continuously refined to improve its accuracy in detecting nuanced and evolving forms of inappropriate content.
+
+### What it Does Not Detect
+
+To maintain focus and reduce false positives, Rotector is designed to avoid flagging:
+
+- Users solely based on their friends list, followers, or following
+- General mentions of friendship or relationships
+- Non-sexual emojis or common internet slang
+- Artistic content without explicit sexual themes
+- Discussions about gender identity or sexual orientation
+- References to non-sexual role-playing games
+- General profanity or non-sexual insults
+
+It's important to note that all flagged accounts have to undergo human review. This ensures that context and nuance are considered in the final decision-making process.
 
 ## ❓ FAQ
 
@@ -169,15 +206,25 @@ No, Rotector is an independent, community-driven project. Roblox is not paying u
 </details>
 
 <details>
-<summary>How does Rotector detect inappropriate accounts?</summary>
+<summary>How is the detection process like?</summary>
 
-Rotector does recursive scanning of user accounts combined with AI-driven content analysis. It analyzes user data—such as friend lists, group memberships, and profile information—to spot patterns and content that can point to inappropriate activity.
-</details>
+Rotector uses a multi-step process to detect potentially inappropriate accounts. There are multiple workers that are responsible for different tasks. For this example, we will focus on the user friend worker.
 
-<details>
-<summary>How accurate is Rotector in detecting inappropriate accounts?</summary>
+1. **Initial Flagging**: The system starts with known flagged users or groups, either manually input or identified through previous scans.
 
-Rotector's AI-powered analysis makes use of GPT 4o Mini, which offers a high level of accuracy in identifying possibly inappropriate accounts. The accuracy depends on various factors, such as the quality of the training set and the particular patterns intended for identification. Although this automatic approach can be highly effective in identifying accounts that are inappropriate, it is not flawless. False positives can occur, which is why human review of detected accounts is a crucial part of the process. To improve accuracy, we are always updating and fine-tuning the AI model.
+2. **Recursive Scanning**: For each flagged user, it fetches their friends list.
+
+3. **Data Collection**: For each fetched user from the friends list, Rotector collects necessary data to perform an accurate analysis.
+
+4. **AI Analysis**: The collected data is processed by an AI model (GPT-4o Mini) trained to identify patterns indicative of inappropriate content or behavior.
+
+5. **Confidence Scoring**: The AI assigns a confidence score to each analyzed account, indicating the likelihood of it being inappropriate.
+
+6. **Database Storage**: Accounts flagged by the AI are stored in a PostgreSQL database for further review.
+
+7. **Human Review**: Through a Discord bot interface, human moderators can review the flagged accounts, confirming or dismissing the AI's findings.
+
+This multi-layered approach allows Rotector to cast a wide net while using AI to filter out likely false positives, ultimately requiring human judgment for final decisions.
 </details>
 
 <details>
@@ -189,15 +236,20 @@ Although the Discord bot is essential for the easy review and moderation of dete
 <details>
 <summary>Are proxies and cookies necessary to use Rotector?</summary>
 
-No, cookies and proxies are not required. However, they can be helpful for distributed requests and authorized Roblox API access. Cookies can give access to more specific account information, while proxies can help avoid IP blocks when making many requests. You can configure these in the `config.toml` file if needed, but Rotector will function without them, albeit potentially with some limitations.
+No, cookies and proxies are not required. However, they can be helpful for distributed requests and authorized Roblox API access. Cookies can give access to more specific account information, while proxies can help avoid IP blocks when making many requests.
+
+You can configure these in the `config.toml` file if needed. This configuration file also includes a rate limiter setting, which allows you to control the frequency of requests to the Roblox API.
 </details>
 
 <details>
-<summary>Is Rotector legal and compliant with Roblox's terms of service?</summary>
+<summary>How did "Rotector" get its name?</summary>
 
-Rotector is designed to process only publicly available information from Roblox profiles. Since the information gathered is already available to the general public, the program does not encrypt the data it stores. Nonetheless, Rotector users need to understand their obligations with regard to data handling and security. This means following the relevant regulations and laws, such as the CCPA or GDPR, which may call for the removal of data upon request or after a predetermined amount of time.
+The name "Rotector" is a combination of two words: "protector" and "detector", which reflects the purpose of the tool:
 
-Users of the tool are responsible for putting in place suitable data retention and deletion policies in accordance with any applicable regulatory requirements. While Rotector is designed with good intentions, it's also important to understand that making too much requests to Roblox's platform can be against their terms of service.
+1. **Protector**: Aims to protect the Roblox community, especially younger players, from inappropriate content and potential predators.
+2. **Detector**: Designed to detect and identify potentially inappropriate accounts on the platform.
+
+Additionally, the "Ro-" prefix is a nod to "Roblox", the platform it's designed to work with. This blend of meanings represents the tool's primary function: to detect threats and protect users within the Roblox ecosystem.
 </details>
 
 ## 🙏 Special Thanks
@@ -213,3 +265,11 @@ These projects and individuals were more than simply inspirations; they were the
 ## 📄 License
 
 This project is licensed under the GNU General Public License v2.0 - see the [LICENSE](LICENSE) file for details.
+
+## ⚠️ Disclaimer
+
+Roblox is a registered trademark of Roblox Corporation. This tool is provided as-is, without any guarantees or warranty. The authors are not responsible for any damage or data loss incurred with its use. Users should use this software at their own risk and ensure they comply with all applicable terms of service and legal requirements.
+
+Rotector is designed to process only publicly available information from Roblox profiles. Users of the tool are responsible for implementing appropriate data retention and deletion policies in accordance with applicable regulatory requirements, such as CCPA or GDPR. While Rotector is designed with good intentions, it's important to understand that making excessive requests to Roblox's platform may violate their terms of service.
+
+For more details, please refer to the [LICENSE](LICENSE) file.
