@@ -182,7 +182,7 @@ func (f *FriendsMenu) fetchFriendsThumbnails(friends []types.Friend) (map[uint64
 
 	// Process thumbnail responses
 	for _, response := range thumbnailResponses {
-		if response.State == "Completed" && response.ImageURL != nil {
+		if response.State == types.ThumbnailStateCompleted && response.ImageURL != nil {
 			thumbnailURLs[response.TargetID] = *response.ImageURL
 		} else {
 			thumbnailURLs[response.TargetID] = "-"

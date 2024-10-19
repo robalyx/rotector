@@ -61,7 +61,7 @@ func (t *ThumbnailFetcher) AddImageURLs(users []*database.User) []*database.User
 
 		// Process the thumbnail responses
 		for _, response := range thumbnailResponses {
-			if response.State == "Completed" && response.ImageURL != nil {
+			if response.State == types.ThumbnailStateCompleted && response.ImageURL != nil {
 				thumbnailURLs[response.TargetID] = *response.ImageURL
 			}
 		}

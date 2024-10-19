@@ -163,7 +163,7 @@ func (o *OutfitsMenu) fetchOutfitThumbnails(outfits []types.Outfit) ([]string, e
 
 	// Process thumbnail responses
 	for i, response := range thumbnailResponses {
-		if response.State == "Completed" && response.ImageURL != nil {
+		if response.State == types.ThumbnailStateCompleted && response.ImageURL != nil {
 			thumbnailURLs[i] = *response.ImageURL
 		} else {
 			thumbnailURLs[i] = "-"

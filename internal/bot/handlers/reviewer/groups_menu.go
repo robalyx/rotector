@@ -187,7 +187,7 @@ func (g *GroupsMenu) fetchGroupsThumbnails(groups []types.UserGroupRoles) (map[u
 
 	// Process thumbnail responses
 	for _, response := range thumbnailResponses {
-		if response.State == "Completed" && response.ImageURL != nil {
+		if response.State == types.ThumbnailStateCompleted && response.ImageURL != nil {
 			thumbnailURLs[response.TargetID] = *response.ImageURL
 		} else {
 			thumbnailURLs[response.TargetID] = "-"
