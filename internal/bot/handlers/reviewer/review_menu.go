@@ -47,8 +47,8 @@ func NewReviewMenu(h *Handler) *ReviewMenu {
 					h.outfitsMenu.ShowOutfitsMenu(event, s, 0)
 				case constants.OpenFriendsMenuButtonCustomID:
 					h.friendsMenu.ShowFriendsMenu(event, s, 0)
-				case constants.OpenGroupViewerButtonCustomID:
-					// Implement group viewer logic here
+				case constants.OpenGroupsMenuButtonCustomID:
+					h.groupsMenu.ShowGroupsMenu(event, s, 0)
 				}
 			}
 		},

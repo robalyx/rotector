@@ -16,7 +16,7 @@ const (
 	BanWithReasonButtonCustomID   = "ban_with_reason_modal"
 	OpenOutfitsMenuButtonCustomID = "open_outfits_menu"
 	OpenFriendsMenuButtonCustomID = "open_friends_menu"
-	OpenGroupViewerButtonCustomID = "open_group_viewer"
+	OpenGroupsMenuButtonCustomID  = "open_groups_menu"
 
 	BackButtonCustomID  = "back"
 	BanButtonCustomID   = "ban"
@@ -32,4 +32,9 @@ const (
 	OutfitsPerPage    = 15
 	OutfitGridColumns = 3
 	OutfitGridRows    = 5
+
+	// Groups Menu.
+	GroupsPerPage     = 15
+	GroupsGridColumns = 3
+	GroupsGridRows    = 5
 )

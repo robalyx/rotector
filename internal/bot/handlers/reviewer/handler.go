@@ -23,6 +23,7 @@ type Handler struct {
 	friendsMenu       *FriendsMenu
 	mainMenu          *MainMenu
 	paginationManager *pagination.Manager
+	groupsMenu        *GroupsMenu
 }
 
 // New creates a new Handler instance.
@@ -40,6 +41,7 @@ func New(db *database.Database, logger *zap.Logger, roAPI *api.API) *Handler {
 	h.reviewMenu = NewReviewMenu(h)
 	h.outfitsMenu = NewOutfitsMenu(h)
 	h.friendsMenu = NewFriendsMenu(h)
+	h.groupsMenu = NewGroupsMenu(h)
 	h.mainMenu = NewMainMenu(h)
 
 	// Add pages to the pagination manager
@@ -47,6 +49,7 @@ func New(db *database.Database, logger *zap.Logger, roAPI *api.API) *Handler {
 	paginationManager.AddPage(h.reviewMenu.page)
 	paginationManager.AddPage(h.outfitsMenu.page)
 	paginationManager.AddPage(h.friendsMenu.page)
+	paginationManager.AddPage(h.groupsMenu.page)
 
 	return h
 }

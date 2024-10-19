@@ -71,7 +71,7 @@ func (b *ReviewEmbed) Build() *discord.MessageUpdateBuilder {
 				discord.NewStringSelectMenuOption("Ban with reason", constants.BanWithReasonButtonCustomID),
 				discord.NewStringSelectMenuOption("Open outfit viewer", constants.OpenOutfitsMenuButtonCustomID),
 				discord.NewStringSelectMenuOption("Open friends viewer", constants.OpenFriendsMenuButtonCustomID),
-				discord.NewStringSelectMenuOption("Open group viewer", constants.OpenGroupViewerButtonCustomID),
+				discord.NewStringSelectMenuOption("Open group viewer", constants.OpenGroupsMenuButtonCustomID),
 			),
 		),
 		discord.NewActionRow(
