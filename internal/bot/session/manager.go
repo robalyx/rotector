@@ -36,12 +36,12 @@ func (m *Manager) GetOrCreateSession(userID snowflake.ID) *Session {
 
 	// Check if the session already exists
 	if session, exists := m.sessions[userID]; exists {
-		session.UpdateLastActivity()
+		session.lastActivity = time.Now()
 		return session
 	}
 
 	// Otherwise, create a new session
-	session := NewSession(m.db, userID)
+	session := NewSession(m.db)
 	m.sessions[userID] = session
 	return session
 }
@@ -63,7 +63,7 @@ func (m *Manager) cleanupSessions() {
 	for range ticker.C {
 		m.mu.Lock()
 		for userID, session := range m.sessions {
-			if time.Since(session.LastActivity()) > SessionTimeout {
+			if time.Since(session.lastActivity) > SessionTimeout {
 				delete(m.sessions, userID)
 			}
 		}

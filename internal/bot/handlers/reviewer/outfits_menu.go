@@ -4,44 +4,59 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"strings"
 
 	"github.com/disgoorg/disgo/discord"
 	"github.com/disgoorg/disgo/events"
 	"github.com/jaxron/roapi.go/pkg/api/resources/thumbnails"
 	"github.com/jaxron/roapi.go/pkg/api/types"
 	"github.com/rotector/rotector/internal/bot/handlers/reviewer/builders"
+	"github.com/rotector/rotector/internal/bot/handlers/reviewer/constants"
+	"github.com/rotector/rotector/internal/bot/pagination"
 	"github.com/rotector/rotector/internal/bot/session"
+	"github.com/rotector/rotector/internal/common/database"
+	"github.com/rotector/rotector/internal/common/utils"
 	"go.uber.org/zap"
-)
-
-const (
-	OutfitsPerPage    = 15
-	OutfitGridColumns = 3
-	OutfitGridRows    = 5
-
-	OutfitsMenuPrefix             = "outfit_viewer:"
-	OpenOutfitsMenuButtonCustomID = "open_outfit_viewer"
 )
 
 // OutfitsMenu represents the outfit viewer handler.
 type OutfitsMenu struct {
 	handler *Handler
+	page    *pagination.Page
 }
 
 // NewOutfitsMenu returns a new outfit viewer handler.
 func NewOutfitsMenu(h *Handler) *OutfitsMenu {
-	return &OutfitsMenu{handler: h}
+	o := OutfitsMenu{handler: h}
+	o.page = &pagination.Page{
+		Name: "Outfits Menu",
+		Data: make(map[string]interface{}),
+		Message: func(data map[string]interface{}) *discord.MessageUpdateBuilder {
+			user := data["user"].(*database.PendingUser)
+			outfits := data["outfits"].([]types.OutfitData)
+			start := data["start"].(int)
+			page := data["page"].(int)
+			total := data["total"].(int)
+			file := data["file"].(*discord.File)
+			fileName := data["fileName"].(string)
+
+			return builders.NewOutfitsEmbed(user, outfits, start, page, total, file, fileName).Build()
+		},
+		ButtonHandlerFunc: func(event *events.ComponentInteractionCreate, s *session.Session, customID string) {
+			switch customID {
+			case string(builders.ViewerFirstPage), string(builders.ViewerPrevPage), string(builders.ViewerNextPage), string(builders.ViewerLastPage):
+				o.handlePageNavigation(event, s, builders.ViewerAction(customID))
+			case string(builders.ViewerBackToReview):
+				o.handler.reviewMenu.ShowReviewMenu(event, s, "")
+			}
+		},
+	}
+
+	return &o
 }
 
-// ShowOutfitsMenu displays the outfit viewer page.
+// ShowOutfitsMenu shows the outfits menu for the given page.
 func (o *OutfitsMenu) ShowOutfitsMenu(event *events.ComponentInteractionCreate, s *session.Session, page int) {
-	// Get the user from the session
 	user := s.GetPendingUser(session.KeyTarget)
-	if user == nil {
-		o.handler.respondWithError(event, "Bot lost track of the user. Please try again.")
-		return
-	}
 
 	// Check if the user has outfits
 	if len(user.Outfits) == 0 {
@@ -52,8 +67,8 @@ func (o *OutfitsMenu) ShowOutfitsMenu(event *events.ComponentInteractionCreate, 
 	outfits := user.Outfits
 
 	// Get outfits for the current page
-	start := page * OutfitsPerPage
-	end := start + OutfitsPerPage
+	start := page * constants.OutfitsPerPage
+	end := start + constants.OutfitsPerPage
 	if end > len(outfits) {
 		end = len(outfits)
 	}
@@ -68,7 +83,7 @@ func (o *OutfitsMenu) ShowOutfitsMenu(event *events.ComponentInteractionCreate, 
 	}
 
 	// Download and merge outfit images
-	buf, err := o.handler.mergeImages(thumbnailURLs, OutfitGridColumns, OutfitGridRows, OutfitsPerPage)
+	buf, err := utils.MergeImages(o.handler.roAPI.GetClient(), thumbnailURLs, constants.OutfitGridColumns, constants.OutfitGridRows, constants.OutfitsPerPage)
 	if err != nil {
 		o.handler.logger.Error("Failed to merge outfit images", zap.Error(err))
 		o.handler.respondWithError(event, "Failed to process outfit images. Please try again.")
@@ -76,61 +91,42 @@ func (o *OutfitsMenu) ShowOutfitsMenu(event *events.ComponentInteractionCreate, 
 	}
 
 	// Calculate total pages
-	totalPages := (len(outfits) + OutfitsPerPage - 1) / OutfitsPerPage
+	total := (len(outfits) + constants.OutfitsPerPage - 1) / constants.OutfitsPerPage
 
 	// Create necessary embed and components
 	fileName := fmt.Sprintf("outfits_%d_%d.png", user.ID, page)
 	file := discord.NewFile(fileName, "", bytes.NewReader(buf.Bytes()))
 
-	embed := builders.NewOutfitsEmbed(user, pageOutfits, start, page, totalPages, fileName).Build()
-	components := []discord.ContainerComponent{
-		discord.NewActionRow(
-			discord.NewSecondaryButton("◀️", OutfitsMenuPrefix+string(ViewerBackToReview)),
-			discord.NewSecondaryButton("⏮️", OutfitsMenuPrefix+string(ViewerFirstPage)).WithDisabled(page == 0),
-			discord.NewSecondaryButton("◀️", OutfitsMenuPrefix+string(ViewerPrevPage)).WithDisabled(page == 0),
-			discord.NewSecondaryButton("▶️", OutfitsMenuPrefix+string(ViewerNextPage)).WithDisabled(page == totalPages-1),
-			discord.NewSecondaryButton("⏭️", OutfitsMenuPrefix+string(ViewerLastPage)).WithDisabled(page == totalPages-1),
-		),
-	}
+	// Set the data for the page
+	o.page.Data["user"] = user
+	o.page.Data["outfits"] = pageOutfits
+	o.page.Data["start"] = start
+	o.page.Data["page"] = page
+	o.page.Data["total"] = total
+	o.page.Data["file"] = file
+	o.page.Data["fileName"] = fileName
 
-	// Update the interaction response with the outfit viewer page
-	o.handler.respond(event, builders.NewResponse().
-		SetEmbeds(embed).
-		SetComponents(components...).
-		AddFile(file))
+	// Navigate to the outfits menu and update the message
+	o.handler.paginationManager.NavigateTo(o.page.Name, s)
+	o.handler.paginationManager.UpdateMessage(event, s, o.page, "")
 }
 
-// HandleOutfitsMenu processes the outfit viewer interaction.
-func (o *OutfitsMenu) HandleOutfitsMenu(event *events.ComponentInteractionCreate, s *session.Session) {
-	// Parse the custom ID
-	parts := strings.Split(event.Data.CustomID(), ":")
-	if len(parts) < 2 {
-		o.handler.logger.Warn("Invalid outfit viewer custom ID format", zap.String("customID", event.Data.CustomID()))
-		o.handler.respondWithError(event, "Invalid interaction.")
-		return
-	}
-
-	// Determine the action based on the custom ID
-	action := ViewerAction(parts[1])
+// handlePageNavigation handles the page navigation for the outfits menu.
+func (o *OutfitsMenu) handlePageNavigation(event *events.ComponentInteractionCreate, s *session.Session, action builders.ViewerAction) {
 	switch action {
-	case ViewerFirstPage, ViewerPrevPage, ViewerNextPage, ViewerLastPage:
-		// Get the user from the session
+	case builders.ViewerFirstPage, builders.ViewerPrevPage, builders.ViewerNextPage, builders.ViewerLastPage:
 		user := s.GetPendingUser(session.KeyTarget)
-		if user == nil {
-			o.handler.respondWithError(event, "Bot lost track of the user. Please try again.")
-			return
-		}
 
-		// Get the page number for the action
-		maxPage := (len(user.Outfits) - 1) / OutfitsPerPage
-		page, ok := o.handler.parsePageAction(s, action, maxPage)
+		// Get the page numbers for the action
+		maxPage := (len(user.Outfits) - 1) / constants.OutfitsPerPage
+		page, ok := action.ParsePageAction(s, action, maxPage)
 		if !ok {
 			o.handler.respondWithError(event, "Invalid interaction.")
 			return
 		}
 
 		o.ShowOutfitsMenu(event, s, page)
-	case ViewerBackToReview:
+	case builders.ViewerBackToReview:
 		o.handler.reviewMenu.ShowReviewMenu(event, s, "")
 	default:
 		o.handler.logger.Warn("Invalid outfit viewer action", zap.String("action", string(action)))
@@ -140,12 +136,12 @@ func (o *OutfitsMenu) HandleOutfitsMenu(event *events.ComponentInteractionCreate
 
 // fetchOutfitThumbnails fetches thumbnails for the given outfits.
 func (o *OutfitsMenu) fetchOutfitThumbnails(outfits []types.OutfitData) ([]string, error) {
-	thumbnailURLs := make([]string, OutfitsPerPage)
+	thumbnailURLs := make([]string, constants.OutfitsPerPage)
 
 	// Create thumbnail requests for each outfit
 	requests := thumbnails.NewBatchThumbnailsBuilder()
 	for i, outfit := range outfits {
-		if i >= OutfitsPerPage {
+		if i >= constants.OutfitsPerPage {
 			break
 		}
 

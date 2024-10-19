@@ -1,18 +1,17 @@
 package builders
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"regexp"
 	"strings"
 
 	"github.com/disgoorg/disgo/discord"
+	"github.com/rotector/rotector/assets"
+	"github.com/rotector/rotector/internal/bot/handlers/reviewer/constants"
 	"github.com/rotector/rotector/internal/common/database"
 	"github.com/rotector/rotector/internal/common/translator"
-)
-
-const (
-	NotApplicable = "N/A"
 )
 
 var multipleNewlinesRegex = regexp.MustCompile(`\n{4,}`)
@@ -22,19 +21,21 @@ type ReviewEmbed struct {
 	user           *database.PendingUser
 	translator     *translator.Translator
 	flaggedFriends map[uint64]string
+	sortBy         string
 }
 
 // NewReviewEmbed creates a new ReviewEmbed.
-func NewReviewEmbed(user *database.PendingUser, translator *translator.Translator, flaggedFriends map[uint64]string) *ReviewEmbed {
+func NewReviewEmbed(user *database.PendingUser, translator *translator.Translator, flaggedFriends map[uint64]string, sortBy string) *ReviewEmbed {
 	return &ReviewEmbed{
 		user:           user,
 		translator:     translator,
 		flaggedFriends: flaggedFriends,
+		sortBy:         sortBy,
 	}
 }
 
 // Build constructs and returns the discord.Embed.
-func (b *ReviewEmbed) Build() discord.Embed {
+func (b *ReviewEmbed) Build() *discord.MessageUpdateBuilder {
 	embedBuilder := discord.NewEmbedBuilder().
 		AddField("ID", fmt.Sprintf("[%d](https://www.roblox.com/users/%d/profile)", b.user.ID, b.user.ID), true).
 		AddField("Name", b.user.Name, true).
@@ -51,6 +52,36 @@ func (b *ReviewEmbed) Build() discord.Embed {
 		AddField("Last Reviewed", b.getLastReviewed(), true).
 		SetColor(0x312D2B)
 
+	components := []discord.ContainerComponent{
+		discord.NewActionRow(
+			discord.NewStringSelectMenu(constants.SortOrderSelectMenuCustomID, "Sorting",
+				discord.NewStringSelectMenuOption("Selected by random", database.SortByRandom).
+					WithDefault(b.sortBy == database.SortByRandom).
+					WithEmoji(discord.ComponentEmoji{Name: "🔀"}),
+				discord.NewStringSelectMenuOption("Selected by confidence", database.SortByConfidence).
+					WithDefault(b.sortBy == database.SortByConfidence).
+					WithEmoji(discord.ComponentEmoji{Name: "🔮"}),
+				discord.NewStringSelectMenuOption("Selected by last updated time", database.SortByLastUpdated).
+					WithDefault(b.sortBy == database.SortByLastUpdated).
+					WithEmoji(discord.ComponentEmoji{Name: "📅"}),
+			),
+		),
+		discord.NewActionRow(
+			discord.NewStringSelectMenu(constants.ActionSelectMenuCustomID, "Actions",
+				discord.NewStringSelectMenuOption("Ban with reason", constants.BanWithReasonButtonCustomID),
+				discord.NewStringSelectMenuOption("Open outfit viewer", constants.OpenOutfitsMenuButtonCustomID),
+				discord.NewStringSelectMenuOption("Open friends viewer", constants.OpenFriendsMenuButtonCustomID),
+				discord.NewStringSelectMenuOption("Open group viewer", constants.OpenGroupViewerButtonCustomID),
+			),
+		),
+		discord.NewActionRow(
+			discord.NewSecondaryButton("◀️", constants.BackButtonCustomID),
+			discord.NewDangerButton("Ban", constants.BanButtonCustomID),
+			discord.NewSuccessButton("Clear", constants.ClearButtonCustomID),
+			discord.NewSecondaryButton("Skip", constants.SkipButtonCustomID),
+		),
+	}
+
 	// Set thumbnail URL or use placeholder image
 	if b.user.ThumbnailURL != "" {
 		embedBuilder.SetThumbnail(b.user.ThumbnailURL)
@@ -58,7 +89,20 @@ func (b *ReviewEmbed) Build() discord.Embed {
 		embedBuilder.SetThumbnail("attachment://content_deleted.png")
 	}
 
-	return embedBuilder.Build()
+	// Create the message update builder
+	builder := discord.NewMessageUpdateBuilder().
+		SetEmbeds(embedBuilder.Build()).
+		AddContainerComponents(components...)
+
+	// Add placeholder image if thumbnail URL is empty
+	if b.user.ThumbnailURL == "" {
+		placeholderImage, err := assets.Images.ReadFile("images/content_deleted.png")
+		if err == nil {
+			builder.SetFiles(discord.NewFile("content_deleted.png", "", bytes.NewReader(placeholderImage)))
+		}
+	}
+
+	return builder
 }
 
 // getDescription returns the description field for the embed.
@@ -67,7 +111,7 @@ func (b *ReviewEmbed) getDescription() string {
 
 	// Check if description is empty
 	if description == "" {
-		return NotApplicable
+		return constants.NotApplicable
 	}
 
 	// Trim leading and trailing whitespace
@@ -102,7 +146,7 @@ func (b *ReviewEmbed) getGroups() string {
 
 	// If no groups are found, return NotApplicable
 	if len(groups) == 0 {
-		return NotApplicable
+		return constants.NotApplicable
 	}
 
 	return strings.Join(groups, ", ")
@@ -145,7 +189,7 @@ func (b *ReviewEmbed) getFriends() string {
 
 	// If no friends are found, return NotApplicable
 	if len(friends) == 0 {
-		return NotApplicable
+		return constants.NotApplicable
 	}
 
 	return strings.Join(friends, ", ")
@@ -164,7 +208,7 @@ func (b *ReviewEmbed) getOutfits() string {
 	}
 	// If no outfits are found, return NotApplicable
 	if len(outfits) == 0 {
-		return NotApplicable
+		return constants.NotApplicable
 	}
 
 	return strings.Join(outfits, ", ")
@@ -205,7 +249,7 @@ func (b *ReviewEmbed) getFlaggedContent() string {
 		return fmt.Sprintf("- `%s`", strings.Join(flaggedContent, "`\n- `"))
 	}
 
-	return NotApplicable
+	return constants.NotApplicable
 }
 
 // getLastReviewed returns the last reviewed field for the embed.

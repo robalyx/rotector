@@ -4,49 +4,33 @@ import (
 	"sync"
 	"time"
 
-	"github.com/disgoorg/snowflake/v2"
 	"github.com/rotector/rotector/internal/common/database"
 )
 
 const (
+	KeyMessageID      = "messageID"
 	KeyTarget         = "target"
 	KeySortBy         = "sortBy"
 	KeyPaginationPage = "paginationPage"
+	KeyCurrentPage    = "currentPage"
 )
 
 // Session represents a user's session.
 type Session struct {
 	db           *database.Database
-	userID       snowflake.ID
 	lastActivity time.Time
 	data         map[string]interface{}
 	mu           sync.RWMutex
 }
 
 // NewSession creates a new session for the given user.
-func NewSession(db *database.Database, userID snowflake.ID) *Session {
+func NewSession(db *database.Database) *Session {
 	return &Session{
 		db:           db,
-		userID:       userID,
 		lastActivity: time.Now(),
 		data:         make(map[string]interface{}),
 		mu:           sync.RWMutex{},
 	}
-}
-
-// UserID returns the session's user ID.
-func (s *Session) UserID() snowflake.ID {
-	return s.userID
-}
-
-// LastActivity returns the session's last activity time.
-func (s *Session) LastActivity() time.Time {
-	return s.lastActivity
-}
-
-// UpdateLastActivity updates the session's last activity time.
-func (s *Session) UpdateLastActivity() {
-	s.lastActivity = time.Now()
 }
 
 // Get returns the value for the given key.

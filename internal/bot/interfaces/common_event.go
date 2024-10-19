@@ -2,6 +2,7 @@ package interfaces
 
 import (
 	"github.com/disgoorg/disgo/bot"
+	"github.com/disgoorg/disgo/discord"
 	"github.com/disgoorg/disgo/events"
 	"github.com/disgoorg/snowflake/v2"
 )
@@ -11,6 +12,7 @@ type CommonEvent interface {
 	Client() bot.Client
 	ApplicationID() snowflake.ID
 	Token() string
+	User() discord.User
 }
 
 // Ensure that all event types implement the CommonEvent interface.

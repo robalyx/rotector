@@ -1,88 +1,66 @@
 package reviewer
 
 import (
-	"strconv"
-	"strings"
-
 	"github.com/disgoorg/disgo/discord"
 	"github.com/disgoorg/disgo/events"
+	"github.com/rotector/rotector/internal/bot/handlers/reviewer/builders"
+	"github.com/rotector/rotector/internal/bot/handlers/reviewer/constants"
 	"github.com/rotector/rotector/internal/bot/interfaces"
+	"github.com/rotector/rotector/internal/bot/pagination"
 	"github.com/rotector/rotector/internal/bot/session"
-	"github.com/rotector/rotector/internal/common/database"
 	"go.uber.org/zap"
-)
-
-const (
-	MainMenuPrefix           = "main_menu:"
-	ReviewSelectMenuCustomID = "review_select"
 )
 
 // MainMenu handles the main menu functionality.
 type MainMenu struct {
 	handler *Handler
+	page    *pagination.Page
 }
 
 // NewMainMenu creates a new MainMenu instance.
 func NewMainMenu(h *Handler) *MainMenu {
-	return &MainMenu{handler: h}
+	m := MainMenu{
+		handler: h,
+		page: &pagination.Page{
+			Name: "Main Menu",
+			Data: make(map[string]interface{}),
+			Message: func(data map[string]interface{}) *discord.MessageUpdateBuilder {
+				pendingCount := data["pendingCount"].(int)
+				flaggedCount := data["flaggedCount"].(int)
+
+				return builders.NewMainBuilder(pendingCount, flaggedCount).Build()
+			},
+			SelectHandlerFunc: func(event *events.ComponentInteractionCreate, s *session.Session, customID string, option string) {
+				if customID == constants.ActionSelectMenuCustomID && option == constants.StartReviewCustomID {
+					s.Set(session.KeySortBy, "random")
+					h.reviewMenu.ShowReviewMenuAndFetchUser(event, s, "")
+				}
+			},
+		},
+	}
+	return &m
 }
 
 // ShowMainMenu displays the main menu.
 func (m *MainMenu) ShowMainMenu(event interfaces.CommonEvent) {
-	// Fetch pending and flagged user counts
+	s := m.handler.sessionManager.GetOrCreateSession(event.User().ID)
+
+	// Get pending and flagged users count
 	pendingCount, err := m.handler.db.Users().GetPendingUsersCount()
 	if err != nil {
-		m.handler.logger.Error("Failed to get pending user counts", zap.Error(err))
-		return
+		m.handler.logger.Error("Failed to get pending users count", zap.Error(err))
 	}
 
 	flaggedCount, err := m.handler.db.Users().GetFlaggedUsersCount()
 	if err != nil {
-		m.handler.logger.Error("Failed to get flagged user counts", zap.Error(err))
-		return
+		m.handler.logger.Error("Failed to get flagged users count", zap.Error(err))
 	}
 
-	// Create necessary embed and components
-	embed := discord.NewEmbedBuilder().
-		AddField("Pending Users", strconv.Itoa(pendingCount), true).
-		AddField("Flagged Users", strconv.Itoa(flaggedCount), true).
-		SetColor(0x312D2B).
-		Build()
-	components := []discord.ContainerComponent{
-		discord.NewActionRow(
-			discord.NewStringSelectMenu(MainMenuPrefix+ReviewSelectMenuCustomID, "Select an action",
-				discord.NewStringSelectMenuOption("Start reviewing flagged players", database.SortByRandom),
-			),
-		),
-	}
+	// Set data for the main menu
+	m.page.Data["pendingCount"] = pendingCount
+	m.page.Data["flaggedCount"] = flaggedCount
 
-	// Update the interaction response with the main menu
-	_, err = event.Client().Rest().UpdateInteractionResponse(event.ApplicationID(), event.Token(), discord.NewMessageUpdateBuilder().
-		SetContent("").
-		AddEmbeds(embed).
-		SetContainerComponents(components...).
-		RetainAttachments().
-		Build())
-	if err != nil {
-		m.handler.logger.Error("Failed to update message with review", zap.Error(err))
-	}
-}
-
-// HandleMainMenu processes the main menu dropdown selection.
-func (m *MainMenu) HandleMainMenu(event *events.ComponentInteractionCreate, s *session.Session) {
-	// Parse the custom ID
-	parts := strings.Split(event.Data.CustomID(), ":")
-	if len(parts) != 2 {
-		m.handler.logger.Warn("Invalid custom ID format", zap.String("customID", event.Data.CustomID()))
-		m.handler.respondWithError(event, "Invalid button interaction.")
-		return
-	}
-
-	// Determine the action based on the custom ID
-	action := parts[1]
-	if action == ReviewSelectMenuCustomID {
-		// Start the review process
-		s.Set(session.KeySortBy, database.SortByRandom)
-		m.handler.reviewMenu.ShowReviewMenuAndFetchUser(event, s, "")
-	}
+	// Navigate to the main menu and update the message
+	m.handler.paginationManager.NavigateTo(m.page.Name, s)
+	m.handler.paginationManager.UpdateMessage(event, s, m.page, "")
 }

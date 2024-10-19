@@ -5,55 +5,71 @@ import (
 	"context"
 	"fmt"
 	"strconv"
-	"strings"
 
 	"github.com/disgoorg/disgo/discord"
 	"github.com/disgoorg/disgo/events"
 	"github.com/jaxron/roapi.go/pkg/api/resources/thumbnails"
 	"github.com/jaxron/roapi.go/pkg/api/types"
 	"github.com/rotector/rotector/internal/bot/handlers/reviewer/builders"
+	"github.com/rotector/rotector/internal/bot/handlers/reviewer/constants"
+	"github.com/rotector/rotector/internal/bot/pagination"
 	"github.com/rotector/rotector/internal/bot/session"
+	"github.com/rotector/rotector/internal/common/database"
+	"github.com/rotector/rotector/internal/common/utils"
 	"go.uber.org/zap"
-)
-
-const (
-	FriendsPerPage     = 21
-	FriendsGridColumns = 3
-	FriendsGridRows    = 7
-
-	FriendsMenuPrefix             = "friends_viewer:"
-	OpenFriendsMenuButtonCustomID = "open_friends_viewer"
 )
 
 // FriendsMenu handles the friends viewer functionality.
 type FriendsMenu struct {
 	handler *Handler
+	page    *pagination.Page
 }
 
 // NewFriendsMenu creates a new FriendsMenu instance.
 func NewFriendsMenu(h *Handler) *FriendsMenu {
-	return &FriendsMenu{handler: h}
+	f := FriendsMenu{handler: h}
+	f.page = &pagination.Page{
+		Name: "Friends Menu",
+		Data: make(map[string]interface{}),
+		Message: func(data map[string]interface{}) *discord.MessageUpdateBuilder {
+			user := data["user"].(*database.PendingUser)
+			friends := data["friends"].([]types.UserResponse)
+			flaggedFriends := data["flaggedFriends"].(map[uint64]string)
+			start := data["start"].(int)
+			page := data["page"].(int)
+			total := data["total"].(int)
+			file := data["file"].(*discord.File)
+			fileName := data["fileName"].(string)
+
+			return builders.NewFriendsEmbed(user, friends, flaggedFriends, start, page, total, file, fileName).Build()
+		},
+		ButtonHandlerFunc: func(event *events.ComponentInteractionCreate, s *session.Session, option string) {
+			switch option {
+			case string(builders.ViewerFirstPage), string(builders.ViewerPrevPage), string(builders.ViewerNextPage), string(builders.ViewerLastPage):
+				f.handlePageNavigation(event, s, builders.ViewerAction(option))
+			case string(builders.ViewerBackToReview):
+				h.reviewMenu.ShowReviewMenu(event, s, "")
+			}
+		},
+	}
+
+	return &f
 }
 
-// ShowFriendsMenu displays the friends viewer page.
+// ShowFriendsMenu shows the friends menu for the given page.
 func (f *FriendsMenu) ShowFriendsMenu(event *events.ComponentInteractionCreate, s *session.Session, page int) {
-	// Get the user from the session
 	user := s.GetPendingUser(session.KeyTarget)
-	if user == nil {
-		f.handler.respondWithError(event, "Bot lost track of the user. Please try again.")
-		return
-	}
 
 	// Check if the user has friends
 	if len(user.Friends) == 0 {
-		f.handler.respondWithError(event, "No friends found for this user.")
+		f.handler.reviewMenu.ShowReviewMenu(event, s, "No friends found for this user.")
 		return
 	}
 	friends := user.Friends
 
 	// Get friends for the current page
-	start := page * FriendsPerPage
-	end := start + FriendsPerPage
+	start := page * constants.FriendsPerPage
+	end := start + constants.FriendsPerPage
 	if end > len(friends) {
 		end = len(friends)
 	}
@@ -89,7 +105,7 @@ func (f *FriendsMenu) ShowFriendsMenu(event *events.ComponentInteractionCreate, 
 	}
 
 	// Download and merge friend images
-	buf, err := f.handler.mergeImages(pageThumbnailURLs, FriendsGridColumns, FriendsGridRows, FriendsPerPage)
+	buf, err := utils.MergeImages(f.handler.roAPI.GetClient(), pageThumbnailURLs, constants.FriendsGridColumns, constants.FriendsGridRows, constants.FriendsPerPage)
 	if err != nil {
 		f.handler.logger.Error("Failed to merge friend images", zap.Error(err))
 		f.handler.respondWithError(event, "Failed to process friend images. Please try again.")
@@ -101,60 +117,39 @@ func (f *FriendsMenu) ShowFriendsMenu(event *events.ComponentInteractionCreate, 
 	file := discord.NewFile(fileName, "", bytes.NewReader(buf.Bytes()))
 
 	// Calculate total pages
-	totalPages := (len(friends) + FriendsPerPage - 1) / FriendsPerPage
+	total := (len(friends) + constants.FriendsPerPage - 1) / constants.FriendsPerPage
 
-	// Create embed for friends list
-	embed := builders.NewFriendsEmbed(user, pageFriends, flaggedFriends, start, page, totalPages, fileName).Build()
+	// Set the data for the page
+	f.page.Data["user"] = user
+	f.page.Data["friends"] = pageFriends
+	f.page.Data["flaggedFriends"] = flaggedFriends
+	f.page.Data["start"] = start
+	f.page.Data["page"] = page
+	f.page.Data["total"] = total
+	f.page.Data["file"] = file
+	f.page.Data["fileName"] = fileName
 
-	// Create components for navigation
-	components := []discord.ContainerComponent{
-		discord.NewActionRow(
-			discord.NewSecondaryButton("◀️", FriendsMenuPrefix+string(ViewerBackToReview)),
-			discord.NewSecondaryButton("⏮️", FriendsMenuPrefix+string(ViewerFirstPage)).WithDisabled(page == 0),
-			discord.NewSecondaryButton("◀️", FriendsMenuPrefix+string(ViewerPrevPage)).WithDisabled(page == 0),
-			discord.NewSecondaryButton("▶️", FriendsMenuPrefix+string(ViewerNextPage)).WithDisabled(page == totalPages-1),
-			discord.NewSecondaryButton("⏭️", FriendsMenuPrefix+string(ViewerLastPage)).WithDisabled(page == totalPages-1),
-		),
-	}
-
-	// Create response builder
-	builder := builders.NewResponse().
-		SetEmbeds(embed).
-		SetComponents(components...).
-		AddFile(file)
-
-	f.handler.respond(event, builder)
+	// Navigate to the friends menu and update the message
+	f.handler.paginationManager.NavigateTo(f.page.Name, s)
+	f.handler.paginationManager.UpdateMessage(event, s, f.page, "")
 }
 
-// HandleFriendsMenu processes friends viewer interactions.
-func (f *FriendsMenu) HandleFriendsMenu(event *events.ComponentInteractionCreate, s *session.Session) {
-	parts := strings.Split(event.Data.CustomID(), ":")
-	if len(parts) < 2 {
-		f.handler.logger.Warn("Invalid friends viewer custom ID format", zap.String("customID", event.Data.CustomID()))
-		f.handler.respondWithError(event, "Invalid interaction.")
-		return
-	}
-
-	action := ViewerAction(parts[1])
+// handlePageNavigation handles the page navigation for the friends menu.
+func (f *FriendsMenu) handlePageNavigation(event *events.ComponentInteractionCreate, s *session.Session, action builders.ViewerAction) {
 	switch action {
-	case ViewerFirstPage, ViewerPrevPage, ViewerNextPage, ViewerLastPage:
-		// Get the user from the session
+	case builders.ViewerFirstPage, builders.ViewerPrevPage, builders.ViewerNextPage, builders.ViewerLastPage:
 		user := s.GetPendingUser(session.KeyTarget)
-		if user == nil {
-			f.handler.respondWithError(event, "Bot lost track of the user. Please try again.")
-			return
-		}
 
 		// Get the page number for the action
-		maxPage := (len(user.Friends) - 1) / FriendsPerPage
-		page, ok := f.handler.parsePageAction(s, action, maxPage)
+		maxPage := (len(user.Friends) - 1) / constants.FriendsPerPage
+		page, ok := action.ParsePageAction(s, action, maxPage)
 		if !ok {
 			f.handler.respondWithError(event, "Invalid interaction.")
 			return
 		}
 
 		f.ShowFriendsMenu(event, s, page)
-	case ViewerBackToReview:
+	case builders.ViewerBackToReview:
 		f.handler.reviewMenu.ShowReviewMenu(event, s, "")
 	default:
 		f.handler.logger.Warn("Invalid friends viewer action", zap.String("action", string(action)))
