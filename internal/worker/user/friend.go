@@ -47,29 +47,31 @@ func NewFriendWorker(db *database.Database, openaiClient *openai.Client, roAPI *
 }
 
 // Start begins the friend worker's main loop.
-func (w *FriendWorker) Start() {
-	w.logger.Info("Friend Worker started")
-	w.bar.SetTotal(100)
+func (f *FriendWorker) Start() {
+	f.logger.Info("Friend Worker started")
+	f.bar.SetTotal(100)
 
 	var oldFriendIDs []uint64
 	for {
-		w.bar.Reset()
+		f.bar.Reset()
 
 		// Step 1: Process friends batch (20%)
-		friendIDs, err := w.processFriendsBatch(oldFriendIDs)
+		f.bar.SetStepMessage("Processing friends batch")
+		friendIDs, err := f.processFriendsBatch(oldFriendIDs)
 		if err != nil {
-			w.logger.Error("Error processing friends batch", zap.Error(err))
+			f.logger.Error("Error processing friends batch", zap.Error(err))
 			time.Sleep(5 * time.Minute) // Wait before trying again
 			continue
 		}
-		w.bar.Increment(20)
+		f.bar.Increment(20)
 
 		// Step 2: Fetch user info (20%)
-		userInfos := w.userFetcher.FetchInfos(friendIDs[:FriendUsersToProcess])
-		w.bar.Increment(20)
+		f.bar.SetStepMessage("Fetching user info")
+		userInfos := f.userFetcher.FetchInfos(friendIDs[:FriendUsersToProcess])
+		f.bar.Increment(20)
 
 		// Step 3: Process users (60%)
-		w.processUsers(userInfos[:FriendUsersToProcess])
+		f.processUsers(userInfos)
 
 		// Step 4: Prepare for next batch
 		oldFriendIDs = friendIDs[FriendUsersToProcess:]
@@ -80,18 +82,18 @@ func (w *FriendWorker) Start() {
 }
 
 // processFriendsBatch processes a batch of friends and returns the remaining friend IDs.
-func (w *FriendWorker) processFriendsBatch(friendIDs []uint64) ([]uint64, error) {
+func (f *FriendWorker) processFriendsBatch(friendIDs []uint64) ([]uint64, error) {
 	for len(friendIDs) < FriendUsersToProcess {
 		// Get the next flagged user
-		user, err := w.db.Users().GetNextFlaggedUser()
+		user, err := f.db.Users().GetNextFlaggedUser()
 		if err != nil {
 			return nil, err
 		}
 
 		// Fetch friends for the user
-		friends, err := w.roAPI.Friends().GetFriends(context.Background(), user.ID)
+		friends, err := f.roAPI.Friends().GetFriends(context.Background(), user.ID)
 		if err != nil {
-			w.logger.Error("Error fetching friends", zap.Error(err), zap.Uint64("userID", user.ID))
+			f.logger.Error("Error fetching friends", zap.Error(err), zap.Uint64("userID", user.ID))
 			continue
 		}
 
@@ -102,7 +104,7 @@ func (w *FriendWorker) processFriendsBatch(friendIDs []uint64) ([]uint64, error)
 			}
 		}
 
-		w.logger.Info("Fetched friends", zap.Int("friendIDs", len(friends)), zap.Uint64("userID", user.ID))
+		f.logger.Info("Fetched friends", zap.Int("friendIDs", len(friends)), zap.Uint64("userID", user.ID))
 
 		// If we have enough friends, break out of the loop
 		if len(friendIDs) >= FriendUsersToProcess {
@@ -114,17 +116,18 @@ func (w *FriendWorker) processFriendsBatch(friendIDs []uint64) ([]uint64, error)
 }
 
 // processUsers handles the processing of a batch of users.
-func (w *FriendWorker) processUsers(userInfos []*fetcher.Info) {
-	w.logger.Info("Processing users", zap.Int("userInfos", len(userInfos)))
+func (f *FriendWorker) processUsers(userInfos []*fetcher.Info) {
+	f.logger.Info("Processing users", zap.Int("userInfos", len(userInfos)))
 
 	var flaggedUsers []*database.User
 	var usersForAICheck []*fetcher.Info
 
 	// Check if users belong to any flagged groups
+	f.bar.SetStepMessage("Checking user groups")
 	for _, userInfo := range userInfos {
-		user, autoFlagged, err := w.groupChecker.CheckUserGroups(userInfo)
+		user, autoFlagged, err := f.groupChecker.CheckUserGroups(userInfo)
 		if err != nil {
-			w.logger.Error("Error checking user groups", zap.Error(err), zap.Uint64("userID", userInfo.ID))
+			f.logger.Error("Error checking user groups", zap.Error(err), zap.Uint64("userID", userInfo.ID))
 			continue
 		}
 
@@ -134,32 +137,39 @@ func (w *FriendWorker) processUsers(userInfos []*fetcher.Info) {
 			usersForAICheck = append(usersForAICheck, userInfo)
 		}
 	}
-	w.bar.Increment(10)
+	f.bar.Increment(10)
 
 	// Process remaining users with AI
+	f.bar.SetStepMessage("Checking users with AI")
 	if len(usersForAICheck) > 0 {
-		aiFlaggedUsers, err := w.aiChecker.CheckUsers(usersForAICheck)
+		aiFlaggedUsers, err := f.aiChecker.CheckUsers(usersForAICheck)
 		if err != nil {
-			w.logger.Error("Error checking users with AI", zap.Error(err))
+			f.logger.Error("Error checking users with AI", zap.Error(err))
 		} else {
 			flaggedUsers = append(flaggedUsers, aiFlaggedUsers...)
 		}
 	}
-	w.bar.Increment(10)
+	f.bar.Increment(10)
 
 	// Fetch necessary data for flagged users
-	flaggedUsers = w.thumbnailFetcher.AddImageURLs(flaggedUsers)
-	w.bar.Increment(10)
-	flaggedUsers = w.outfitFetcher.AddOutfits(flaggedUsers)
-	w.bar.Increment(10)
-	flaggedUsers = w.friendFetcher.AddFriends(flaggedUsers)
-	w.bar.Increment(10)
+	f.bar.SetStepMessage("Adding image URLs")
+	flaggedUsers = f.thumbnailFetcher.AddImageURLs(flaggedUsers)
+	f.bar.Increment(10)
+
+	f.bar.SetStepMessage("Adding outfits")
+	flaggedUsers = f.outfitFetcher.AddOutfits(flaggedUsers)
+	f.bar.Increment(10)
+
+	f.bar.SetStepMessage("Adding friends")
+	flaggedUsers = f.friendFetcher.AddFriends(flaggedUsers)
+	f.bar.Increment(10)
 
 	// Save all flagged users
-	w.db.Users().SavePendingUsers(flaggedUsers)
-	w.bar.Increment(10)
+	f.bar.SetStepMessage("Saving flagged users")
+	f.db.Users().SavePendingUsers(flaggedUsers)
+	f.bar.Increment(10)
 
-	w.logger.Info("Finished processing users",
+	f.logger.Info("Finished processing users",
 		zap.Int("totalProcessed", len(userInfos)),
 		zap.Int("flaggedUsers", len(flaggedUsers)),
 		zap.Int("autoFlagged", len(flaggedUsers)-len(usersForAICheck)),

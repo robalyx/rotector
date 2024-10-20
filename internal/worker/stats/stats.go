@@ -2,6 +2,7 @@ package stats
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/rotector/rotector/internal/common/database"
@@ -26,11 +27,11 @@ func NewStatisticsWorker(db *database.Database, bar *progress.Bar, logger *zap.L
 }
 
 // Start begins the statistics worker's main loop.
-func (w *StatisticsWorker) Start() {
-	w.logger.Info("Statistics Worker started")
+func (s *StatisticsWorker) Start() {
+	s.logger.Info("Statistics Worker started")
 
 	for {
-		w.bar.Reset()
+		s.bar.Reset()
 
 		// Calculate the next run time
 		now := time.Now()
@@ -39,25 +40,27 @@ func (w *StatisticsWorker) Start() {
 		totalDuration := nextRun.Sub(startOfDay)
 		elapsedDuration := now.Sub(startOfDay)
 
-		w.logger.Info("Next statistics upload will run at", zap.Time("nextRun", nextRun))
+		s.logger.Info("Next statistics upload will run at", zap.Time("nextRun", nextRun))
 
 		// Set the values for the progress bar
-		w.bar.SetTotal(int64(totalDuration.Seconds()))
-		w.bar.SetCurrent(int64(elapsedDuration.Seconds()))
+		s.bar.SetTotal(int64(totalDuration.Seconds()))
+		s.bar.SetCurrent(int64(elapsedDuration.Seconds()))
 
 		// Update the progress bar every second
 		ticker := time.NewTicker(1 * time.Second)
 		for remaining := time.Until(nextRun); remaining > 0; remaining = time.Until(nextRun) {
 			<-ticker.C
-			w.bar.Increment(1)
+			s.bar.Increment(1)
+			s.bar.SetStepMessage(fmt.Sprintf("Waiting for next upload (%s remaining)", remaining.Round(time.Second)))
 		}
 		ticker.Stop()
 
 		// Upload the daily statistics to the database
-		if err := w.db.Stats().UploadDailyStatsToDB(context.Background()); err != nil {
-			w.logger.Error("Failed to upload daily statistics", zap.Error(err))
+		s.bar.SetStepMessage("Uploading daily statistics")
+		if err := s.db.Stats().UploadDailyStatsToDB(context.Background()); err != nil {
+			s.logger.Error("Failed to upload daily statistics", zap.Error(err))
 		} else {
-			w.logger.Info("Successfully uploaded daily statistics to PostgreSQL")
+			s.logger.Info("Successfully uploaded daily statistics to PostgreSQL")
 		}
 
 		// Short pause before next iteration
