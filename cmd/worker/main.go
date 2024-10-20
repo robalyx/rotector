@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/rotector/rotector/internal/common/logging"
+	"github.com/rotector/rotector/internal/common/progress"
 	"github.com/rotector/rotector/internal/common/setup"
 	"github.com/rotector/rotector/internal/worker/stats"
 	"github.com/rotector/rotector/internal/worker/user"
@@ -111,6 +112,16 @@ func runWorkers(workerType, subType string, count int) {
 	var wg sync.WaitGroup
 	logLevel := setup.Config.Logging.Level
 
+	// Initialize progress bars
+	bars := make([]*progress.Bar, count)
+	for i := range count {
+		bars[i] = progress.NewBar(100, 25, fmt.Sprintf("Worker %d", i))
+	}
+
+	// Create and start the renderer
+	renderer := progress.NewRenderer(bars)
+	go renderer.Render()
+
 	// Start workers
 	for i := range count {
 		wg.Add(1)
@@ -123,14 +134,17 @@ func runWorkers(workerType, subType string, count int) {
 				logLevel,
 			)
 
+			// Get progress bar for this worker
+			bar := bars[workerID]
+
 			var w interface{ Start() }
 			switch {
 			case workerType == UserWorker && subType == UserWorkerTypeGroup:
-				w = user.NewGroupWorker(setup.DB, setup.OpenAIClient, setup.RoAPI, workerLogger)
+				w = user.NewGroupWorker(setup.DB, setup.OpenAIClient, setup.RoAPI, bar, workerLogger)
 			case workerType == UserWorker && subType == UserWorkerTypeFriend:
-				w = user.NewFriendWorker(setup.DB, setup.OpenAIClient, setup.RoAPI, workerLogger)
+				w = user.NewFriendWorker(setup.DB, setup.OpenAIClient, setup.RoAPI, bar, workerLogger)
 			case workerType == StatsWorker:
-				w = stats.NewStatisticsWorker(setup, workerLogger)
+				w = stats.NewStatisticsWorker(setup.DB, bar, workerLogger)
 			default:
 				log.Fatalf("Invalid worker type: %s %s", workerType, subType)
 			}
@@ -143,6 +157,9 @@ func runWorkers(workerType, subType string, count int) {
 
 	// Wait for all workers to finish
 	wg.Wait()
+
+	// Stop the renderer
+	renderer.Stop()
 
 	log.Println("All workers have finished. Exiting.")
 }

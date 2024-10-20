@@ -9,6 +9,7 @@ import (
 	"github.com/openai/openai-go"
 	"github.com/rotector/rotector/internal/common/database"
 	"github.com/rotector/rotector/internal/common/fetcher"
+	"github.com/rotector/rotector/internal/common/progress"
 	"go.uber.org/zap"
 )
 
@@ -20,6 +21,7 @@ const (
 type GroupWorker struct {
 	db               *database.Database
 	roAPI            *api.API
+	bar              *progress.Bar
 	aiChecker        *fetcher.AIChecker
 	userFetcher      *fetcher.UserFetcher
 	thumbnailFetcher *fetcher.ThumbnailFetcher
@@ -30,10 +32,11 @@ type GroupWorker struct {
 }
 
 // NewGroupWorker creates a new group worker instance.
-func NewGroupWorker(db *database.Database, openaiClient *openai.Client, roAPI *api.API, logger *zap.Logger) *GroupWorker {
+func NewGroupWorker(db *database.Database, openaiClient *openai.Client, roAPI *api.API, bar *progress.Bar, logger *zap.Logger) *GroupWorker {
 	return &GroupWorker{
 		db:               db,
 		roAPI:            roAPI,
+		bar:              bar,
 		aiChecker:        fetcher.NewAIChecker(openaiClient, logger),
 		userFetcher:      fetcher.NewUserFetcher(roAPI, logger),
 		thumbnailFetcher: fetcher.NewThumbnailFetcher(roAPI, logger),
@@ -47,81 +50,77 @@ func NewGroupWorker(db *database.Database, openaiClient *openai.Client, roAPI *a
 // Start begins the group worker's main loop.
 func (w *GroupWorker) Start() {
 	w.logger.Info("Group Worker started")
+	w.bar.SetTotal(100)
 
+	var oldUserInfos []*fetcher.Info
 	for {
-		// Get the next flagged group to process and update its last_scanned time
+		w.bar.Reset()
+
+		// Step 1: Get next flagged group (20%)
 		group, err := w.db.Groups().GetNextFlaggedGroup()
 		if err != nil {
 			w.logger.Error("Error getting next flagged group", zap.Error(err))
 			time.Sleep(5 * time.Minute) // Wait before trying again
 			continue
 		}
+		w.bar.Increment(20)
 
-		// Process the group
-		w.processGroup(group.ID)
+		// Step 2: Get group users (20%)
+		userInfos, err := w.processGroup(group.ID, oldUserInfos)
+		if err != nil {
+			w.logger.Error("Error processing group", zap.Error(err), zap.Uint64("groupID", group.ID))
+			time.Sleep(5 * time.Minute) // Wait before trying again
+			continue
+		}
+		w.bar.Increment(20)
+
+		// Step 3: Process users (60%)
+		w.processUsers(userInfos[:GroupUsersToProcess])
+
+		// Step 4: Prepare for next batch
+		oldUserInfos = userInfos[GroupUsersToProcess:]
+
+		// Short pause before next iteration
+		time.Sleep(1 * time.Second)
 	}
 }
 
 // processGroup handles the processing of a single group.
-func (w *GroupWorker) processGroup(groupID uint64) {
-	cursor := ""
-	var userInfos []*fetcher.Info
+func (w *GroupWorker) processGroup(groupID uint64, userInfos []*fetcher.Info) ([]*fetcher.Info, error) {
 	w.logger.Info("Processing group", zap.Uint64("groupID", groupID))
 
-	for {
-		// Fetch group users until we have at least GroupUsersToProcess or reach the end
-		for len(userInfos) < GroupUsersToProcess {
-			// Build the request for fetching group users
-			builder := groups.NewGroupUsersBuilder(groupID).
-				WithLimit(100).
-				WithCursor(cursor)
+	// Step 2: Fetch group users
+	cursor := ""
+	for len(userInfos) < GroupUsersToProcess {
+		builder := groups.NewGroupUsersBuilder(groupID).
+			WithLimit(100).
+			WithCursor(cursor)
 
-			// Make the API call to fetch group users
-			groupUsers, err := w.roAPI.Groups().GetGroupUsers(context.Background(), builder.Build())
-			if err != nil {
-				w.logger.Error("Error fetching group members", zap.Error(err))
-				return
-			}
-
-			// Fetch user info for this batch
-			userIDs := make([]uint64, len(groupUsers.Data))
-			for i, groupUser := range groupUsers.Data {
-				userIDs[i] = groupUser.User.UserID
-			}
-			batchUserInfos := w.userFetcher.FetchInfos(userIDs)
-			userInfos = append(userInfos, batchUserInfos...)
-
-			w.logger.Info("Fetched group users",
-				zap.Uint64("groupID", groupID),
-				zap.String("cursor", cursor),
-				zap.Int("userInfos", len(userInfos)))
-
-			// Stop if we've reached the end of the group
-			if groupUsers.NextPageCursor == nil {
-				cursor = ""
-				break
-			}
-			cursor = *groupUsers.NextPageCursor
+		groupUsers, err := w.roAPI.Groups().GetGroupUsers(context.Background(), builder.Build())
+		if err != nil {
+			w.logger.Error("Error fetching group members", zap.Error(err))
+			return nil, err
 		}
 
-		// Handle case where we have fewer than GroupUsersToProcess users
-		usersToProcess := GroupUsersToProcess
-		if len(userInfos) < GroupUsersToProcess {
-			usersToProcess = len(userInfos)
+		userIDs := make([]uint64, len(groupUsers.Data))
+		for i, groupUser := range groupUsers.Data {
+			userIDs[i] = groupUser.User.UserID
 		}
+		batchUserInfos := w.userFetcher.FetchInfos(userIDs)
+		userInfos = append(userInfos, batchUserInfos...)
 
-		w.processUsers(userInfos[:usersToProcess])
+		w.logger.Info("Fetched group users",
+			zap.Uint64("groupID", groupID),
+			zap.String("cursor", cursor),
+			zap.Int("userInfos", len(userInfos)))
 
-		// Remove the processed users
-		userInfos = userInfos[usersToProcess:]
-
-		// If we've reached the end of the group, exit the loop
-		if cursor == "" {
+		if groupUsers.NextPageCursor == nil {
 			break
 		}
+		cursor = *groupUsers.NextPageCursor
 	}
 
-	w.logger.Info("Finished processing group", zap.Uint64("groupID", groupID))
+	return userInfos, nil
 }
 
 // processUsers handles the processing of a batch of users.
@@ -145,6 +144,7 @@ func (w *GroupWorker) processUsers(userInfos []*fetcher.Info) {
 			usersForAICheck = append(usersForAICheck, userInfo)
 		}
 	}
+	w.bar.Increment(10)
 
 	// Process remaining users with AI
 	if len(usersForAICheck) > 0 {
@@ -155,14 +155,19 @@ func (w *GroupWorker) processUsers(userInfos []*fetcher.Info) {
 			flaggedUsers = append(flaggedUsers, aiFlaggedUsers...)
 		}
 	}
+	w.bar.Increment(10)
 
 	// Fetch necessary data for flagged users
 	flaggedUsers = w.thumbnailFetcher.AddImageURLs(flaggedUsers)
+	w.bar.Increment(10)
 	flaggedUsers = w.outfitFetcher.AddOutfits(flaggedUsers)
+	w.bar.Increment(10)
 	flaggedUsers = w.friendFetcher.AddFriends(flaggedUsers)
+	w.bar.Increment(10)
 
 	// Save all flagged users
 	w.db.Users().SavePendingUsers(flaggedUsers)
+	w.bar.Increment(10)
 
 	w.logger.Info("Finished processing users",
 		zap.Int("initialFlaggedUsers", len(flaggedUsers)),

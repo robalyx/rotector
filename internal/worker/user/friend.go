@@ -8,6 +8,7 @@ import (
 	"github.com/openai/openai-go"
 	"github.com/rotector/rotector/internal/common/database"
 	"github.com/rotector/rotector/internal/common/fetcher"
+	"github.com/rotector/rotector/internal/common/progress"
 	"go.uber.org/zap"
 )
 
@@ -19,6 +20,7 @@ const (
 type FriendWorker struct {
 	db               *database.Database
 	roAPI            *api.API
+	bar              *progress.Bar
 	aiChecker        *fetcher.AIChecker
 	userFetcher      *fetcher.UserFetcher
 	outfitFetcher    *fetcher.OutfitFetcher
@@ -29,10 +31,11 @@ type FriendWorker struct {
 }
 
 // NewFriendWorker creates a new friend worker instance.
-func NewFriendWorker(db *database.Database, openaiClient *openai.Client, roAPI *api.API, logger *zap.Logger) *FriendWorker {
+func NewFriendWorker(db *database.Database, openaiClient *openai.Client, roAPI *api.API, bar *progress.Bar, logger *zap.Logger) *FriendWorker {
 	return &FriendWorker{
 		db:               db,
 		roAPI:            roAPI,
+		bar:              bar,
 		aiChecker:        fetcher.NewAIChecker(openaiClient, logger),
 		userFetcher:      fetcher.NewUserFetcher(roAPI, logger),
 		outfitFetcher:    fetcher.NewOutfitFetcher(roAPI, logger),
@@ -46,17 +49,33 @@ func NewFriendWorker(db *database.Database, openaiClient *openai.Client, roAPI *
 // Start begins the friend worker's main loop.
 func (w *FriendWorker) Start() {
 	w.logger.Info("Friend Worker started")
+	w.bar.SetTotal(100)
 
-	var remainingFriendIDs []uint64
-
+	var oldFriendIDs []uint64
 	for {
-		// Process friends in batches
-		var err error
-		remainingFriendIDs, err = w.processFriendsBatch(remainingFriendIDs)
+		w.bar.Reset()
+
+		// Step 1: Process friends batch (20%)
+		friendIDs, err := w.processFriendsBatch(oldFriendIDs)
 		if err != nil {
 			w.logger.Error("Error processing friends batch", zap.Error(err))
 			time.Sleep(5 * time.Minute) // Wait before trying again
+			continue
 		}
+		w.bar.Increment(20)
+
+		// Step 2: Fetch user info (20%)
+		userInfos := w.userFetcher.FetchInfos(friendIDs[:FriendUsersToProcess])
+		w.bar.Increment(20)
+
+		// Step 3: Process users (60%)
+		w.processUsers(userInfos[:FriendUsersToProcess])
+
+		// Step 4: Prepare for next batch
+		oldFriendIDs = friendIDs[FriendUsersToProcess:]
+
+		// Short pause before next iteration
+		time.Sleep(1 * time.Second)
 	}
 }
 
@@ -91,13 +110,7 @@ func (w *FriendWorker) processFriendsBatch(friendIDs []uint64) ([]uint64, error)
 		}
 	}
 
-	// Fetch user info for all collected friend IDs
-	userInfos := w.userFetcher.FetchInfos(friendIDs[:FriendUsersToProcess])
-
-	// Process the collected user infos
-	w.processUsers(userInfos)
-
-	return friendIDs[FriendUsersToProcess:], nil
+	return friendIDs, nil
 }
 
 // processUsers handles the processing of a batch of users.
@@ -121,6 +134,7 @@ func (w *FriendWorker) processUsers(userInfos []*fetcher.Info) {
 			usersForAICheck = append(usersForAICheck, userInfo)
 		}
 	}
+	w.bar.Increment(10)
 
 	// Process remaining users with AI
 	if len(usersForAICheck) > 0 {
@@ -131,14 +145,19 @@ func (w *FriendWorker) processUsers(userInfos []*fetcher.Info) {
 			flaggedUsers = append(flaggedUsers, aiFlaggedUsers...)
 		}
 	}
+	w.bar.Increment(10)
 
 	// Fetch necessary data for flagged users
 	flaggedUsers = w.thumbnailFetcher.AddImageURLs(flaggedUsers)
+	w.bar.Increment(10)
 	flaggedUsers = w.outfitFetcher.AddOutfits(flaggedUsers)
+	w.bar.Increment(10)
 	flaggedUsers = w.friendFetcher.AddFriends(flaggedUsers)
+	w.bar.Increment(10)
 
 	// Save all flagged users
 	w.db.Users().SavePendingUsers(flaggedUsers)
+	w.bar.Increment(10)
 
 	w.logger.Info("Finished processing users",
 		zap.Int("totalProcessed", len(userInfos)),
