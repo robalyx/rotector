@@ -38,7 +38,7 @@ func NewUserFetcher(roAPI *api.API, logger *zap.Logger) *UserFetcher {
 // FetchInfos fetches user information for a batch of user IDs.
 func (u *UserFetcher) FetchInfos(userIDs []uint64) []*Info {
 	var wg sync.WaitGroup
-	userInfoChan := make(chan Info, len(userIDs))
+	userInfoChan := make(chan *Info, len(userIDs))
 	semaphore := make(chan struct{}, 100) // Limit concurrent requests to 100
 
 	for _, userID := range userIDs {
@@ -70,7 +70,7 @@ func (u *UserFetcher) FetchInfos(userIDs []uint64) []*Info {
 			}
 
 			// Send the user info to the channel
-			userInfoChan <- Info{
+			userInfoChan <- &Info{
 				ID:          userInfo.ID,
 				Name:        userInfo.Name,
 				DisplayName: userInfo.DisplayName,
@@ -90,7 +90,9 @@ func (u *UserFetcher) FetchInfos(userIDs []uint64) []*Info {
 	// Collect results from the channel
 	userInfos := make([]*Info, 0, len(userIDs))
 	for userInfo := range userInfoChan {
-		userInfos = append(userInfos, &userInfo)
+		if userInfo != nil {
+			userInfos = append(userInfos, userInfo)
+		}
 	}
 
 	return userInfos
