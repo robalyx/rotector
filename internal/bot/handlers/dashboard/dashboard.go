@@ -1,48 +1,48 @@
-package reviewer
+package dashboard
 
 import (
 	"github.com/disgoorg/disgo/discord"
 	"github.com/disgoorg/disgo/events"
-	"github.com/rotector/rotector/internal/bot/handlers/reviewer/builders"
-	"github.com/rotector/rotector/internal/bot/handlers/reviewer/constants"
+	"github.com/rotector/rotector/internal/bot/constants"
+	"github.com/rotector/rotector/internal/bot/handlers/dashboard/builders"
 	"github.com/rotector/rotector/internal/bot/interfaces"
 	"github.com/rotector/rotector/internal/bot/pagination"
 	"github.com/rotector/rotector/internal/bot/session"
 	"go.uber.org/zap"
 )
 
-// MainMenu handles the main menu functionality.
-type MainMenu struct {
+// Dashboard represents the dashboard.
+type Dashboard struct {
 	handler *Handler
 	page    *pagination.Page
 }
 
-// NewMainMenu creates a new MainMenu instance.
-func NewMainMenu(h *Handler) *MainMenu {
-	m := MainMenu{
+// NewDashboard creates a new Dashboard instance.
+func NewDashboard(h *Handler) *Dashboard {
+	m := &Dashboard{
 		handler: h,
 		page: &pagination.Page{
-			Name: "Main Menu",
+			Name: "Dashboard",
 			Data: make(map[string]interface{}),
 			Message: func(data map[string]interface{}) *discord.MessageUpdateBuilder {
 				pendingCount := data["pendingCount"].(int)
 				flaggedCount := data["flaggedCount"].(int)
 
-				return builders.NewMainBuilder(pendingCount, flaggedCount).Build()
+				return builders.NewDashboardBuilder(pendingCount, flaggedCount).Build()
 			},
 			SelectHandlerFunc: func(event *events.ComponentInteractionCreate, s *session.Session, customID string, option string) {
 				if customID == constants.ActionSelectMenuCustomID && option == constants.StartReviewCustomID {
 					s.Set(session.KeySortBy, "random")
-					h.reviewMenu.ShowReviewMenuAndFetchUser(event, s, "")
+					h.reviewHandler.ShowReviewMenuAndFetchUser(event, s, "")
 				}
 			},
 		},
 	}
-	return &m
+	return m
 }
 
-// ShowMainMenu displays the main menu.
-func (m *MainMenu) ShowMainMenu(event interfaces.CommonEvent) {
+// ShowDashboard displays the dashboard.
+func (m *Dashboard) ShowDashboard(event interfaces.CommonEvent) {
 	s := m.handler.sessionManager.GetOrCreateSession(event.User().ID)
 
 	// Get pending and flagged users count

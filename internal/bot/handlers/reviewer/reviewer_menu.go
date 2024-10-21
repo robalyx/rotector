@@ -3,8 +3,8 @@ package reviewer
 import (
 	"github.com/disgoorg/disgo/discord"
 	"github.com/disgoorg/disgo/events"
+	"github.com/rotector/rotector/internal/bot/constants"
 	"github.com/rotector/rotector/internal/bot/handlers/reviewer/builders"
-	"github.com/rotector/rotector/internal/bot/handlers/reviewer/constants"
 	"github.com/rotector/rotector/internal/bot/interfaces"
 	"github.com/rotector/rotector/internal/bot/pagination"
 	"github.com/rotector/rotector/internal/bot/session"
@@ -32,7 +32,7 @@ func NewReviewMenu(h *Handler) *ReviewMenu {
 			sortBy := data["sortBy"].(string)
 			flaggedFriends := data["flaggedFriends"].(map[uint64]string)
 
-			return builders.NewReviewEmbed(user, translator, flaggedFriends, sortBy).Build()
+			return builders.NewReviewerEmbed(user, translator, flaggedFriends, sortBy).Build()
 		},
 		SelectHandlerFunc: func(event *events.ComponentInteractionCreate, s *session.Session, customID string, option string) {
 			switch customID {
@@ -55,7 +55,7 @@ func NewReviewMenu(h *Handler) *ReviewMenu {
 		ButtonHandlerFunc: func(event *events.ComponentInteractionCreate, s *session.Session, option string) {
 			switch option {
 			case constants.BackButtonCustomID:
-				h.mainMenu.ShowMainMenu(event)
+				r.handler.dashboardHandler.ShowDashboard(event)
 			case constants.BanButtonCustomID:
 				r.handleBanUser(event, s)
 			case constants.ClearButtonCustomID:

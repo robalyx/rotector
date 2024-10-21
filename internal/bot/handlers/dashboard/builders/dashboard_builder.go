@@ -4,25 +4,25 @@ import (
 	"strconv"
 
 	"github.com/disgoorg/disgo/discord"
-	"github.com/rotector/rotector/internal/bot/handlers/reviewer/constants"
+	"github.com/rotector/rotector/internal/bot/constants"
 )
 
-// MainBuilder is the builder for the main menu.
-type MainBuilder struct {
+// DashboardBuilder is the builder for the dashboard.
+type DashboardBuilder struct {
 	pendingCount int
 	flaggedCount int
 }
 
-// NewMainBuilder creates a new MainBuilder.
-func NewMainBuilder(pendingCount, flaggedCount int) *MainBuilder {
-	return &MainBuilder{
+// NewDashboardBuilder creates a new DashboardBuilder.
+func NewDashboardBuilder(pendingCount, flaggedCount int) *DashboardBuilder {
+	return &DashboardBuilder{
 		pendingCount: pendingCount,
 		flaggedCount: flaggedCount,
 	}
 }
 
-// Build builds the main menu.
-func (b *MainBuilder) Build() *discord.MessageUpdateBuilder {
+// Build builds the dashboard.
+func (b *DashboardBuilder) Build() *discord.MessageUpdateBuilder {
 	embed := discord.NewEmbedBuilder().
 		AddField("Pending Users", strconv.Itoa(b.pendingCount), true).
 		AddField("Flagged Users", strconv.Itoa(b.flaggedCount), true).

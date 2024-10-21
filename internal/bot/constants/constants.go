@@ -1,6 +1,8 @@
 package constants
 
 const (
+	// Commands.
+	DashboardCommandName = "dashboard"
 	// Common.
 	NotApplicable            = "N/A"
 	ActionSelectMenuCustomID = "action"

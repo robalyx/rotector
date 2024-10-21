@@ -9,24 +9,24 @@ import (
 
 	"github.com/disgoorg/disgo/discord"
 	"github.com/rotector/rotector/assets"
-	"github.com/rotector/rotector/internal/bot/handlers/reviewer/constants"
+	"github.com/rotector/rotector/internal/bot/constants"
 	"github.com/rotector/rotector/internal/common/database"
 	"github.com/rotector/rotector/internal/common/translator"
 )
 
 var multipleNewlinesRegex = regexp.MustCompile(`\n{4,}`)
 
-// ReviewEmbed builds the embed for the review message.
-type ReviewEmbed struct {
+// ReviewerEmbed builds the embed for the review message.
+type ReviewerEmbed struct {
 	user           *database.PendingUser
 	translator     *translator.Translator
 	flaggedFriends map[uint64]string
 	sortBy         string
 }
 
-// NewReviewEmbed creates a new ReviewEmbed.
-func NewReviewEmbed(user *database.PendingUser, translator *translator.Translator, flaggedFriends map[uint64]string, sortBy string) *ReviewEmbed {
-	return &ReviewEmbed{
+// NewReviewerEmbed creates a new ReviewerEmbed.
+func NewReviewerEmbed(user *database.PendingUser, translator *translator.Translator, flaggedFriends map[uint64]string, sortBy string) *ReviewerEmbed {
+	return &ReviewerEmbed{
 		user:           user,
 		translator:     translator,
 		flaggedFriends: flaggedFriends,
@@ -35,7 +35,7 @@ func NewReviewEmbed(user *database.PendingUser, translator *translator.Translato
 }
 
 // Build constructs and returns the discord.Embed.
-func (b *ReviewEmbed) Build() *discord.MessageUpdateBuilder {
+func (b *ReviewerEmbed) Build() *discord.MessageUpdateBuilder {
 	embedBuilder := discord.NewEmbedBuilder().
 		AddField("ID", fmt.Sprintf("[%d](https://www.roblox.com/users/%d/profile)", b.user.ID, b.user.ID), true).
 		AddField("Name", b.user.Name, true).
@@ -68,10 +68,14 @@ func (b *ReviewEmbed) Build() *discord.MessageUpdateBuilder {
 		),
 		discord.NewActionRow(
 			discord.NewStringSelectMenu(constants.ActionSelectMenuCustomID, "Actions",
-				discord.NewStringSelectMenuOption("Ban with reason", constants.BanWithReasonButtonCustomID),
-				discord.NewStringSelectMenuOption("Open outfit viewer", constants.OpenOutfitsMenuButtonCustomID),
-				discord.NewStringSelectMenuOption("Open friends viewer", constants.OpenFriendsMenuButtonCustomID),
-				discord.NewStringSelectMenuOption("Open group viewer", constants.OpenGroupsMenuButtonCustomID),
+				discord.NewStringSelectMenuOption("Ban with reason", constants.BanWithReasonButtonCustomID).
+					WithEmoji(discord.ComponentEmoji{Name: "🚫"}),
+				discord.NewStringSelectMenuOption("Open outfit viewer", constants.OpenOutfitsMenuButtonCustomID).
+					WithEmoji(discord.ComponentEmoji{Name: "👕"}),
+				discord.NewStringSelectMenuOption("Open friends viewer", constants.OpenFriendsMenuButtonCustomID).
+					WithEmoji(discord.ComponentEmoji{Name: "👫"}),
+				discord.NewStringSelectMenuOption("Open group viewer", constants.OpenGroupsMenuButtonCustomID).
+					WithEmoji(discord.ComponentEmoji{Name: "🌐"}),
 			),
 		),
 		discord.NewActionRow(
@@ -106,7 +110,7 @@ func (b *ReviewEmbed) Build() *discord.MessageUpdateBuilder {
 }
 
 // getDescription returns the description field for the embed.
-func (b *ReviewEmbed) getDescription() string {
+func (b *ReviewerEmbed) getDescription() string {
 	description := b.user.Description
 
 	// Check if description is empty
@@ -133,7 +137,7 @@ func (b *ReviewEmbed) getDescription() string {
 }
 
 // getGroups returns the groups field for the embed.
-func (b *ReviewEmbed) getGroups() string {
+func (b *ReviewerEmbed) getGroups() string {
 	// Get the first 10 groups
 	groups := []string{}
 	for i, group := range b.user.Groups {
@@ -153,7 +157,7 @@ func (b *ReviewEmbed) getGroups() string {
 }
 
 // getFriendsField returns the friends field name for the embed.
-func (b *ReviewEmbed) getFriendsField() string {
+func (b *ReviewerEmbed) getFriendsField() string {
 	if len(b.flaggedFriends) > 0 {
 		return "Friends ⚠️"
 	}
@@ -161,7 +165,7 @@ func (b *ReviewEmbed) getFriendsField() string {
 }
 
 // getFriends returns the friends field for the embed.
-func (b *ReviewEmbed) getFriends() string {
+func (b *ReviewerEmbed) getFriends() string {
 	// Get the first 10 friends
 	friends := []string{}
 	for i, friend := range b.user.Friends {
@@ -196,7 +200,7 @@ func (b *ReviewEmbed) getFriends() string {
 }
 
 // getOutfits returns the outfits field for the embed.
-func (b *ReviewEmbed) getOutfits() string {
+func (b *ReviewerEmbed) getOutfits() string {
 	// Get the first 10 outfits
 	outfits := []string{}
 	for i, outfit := range b.user.Outfits {
@@ -215,7 +219,7 @@ func (b *ReviewEmbed) getOutfits() string {
 }
 
 // getFlaggedType returns the flagged type field for the embed.
-func (b *ReviewEmbed) getFlaggedType() string {
+func (b *ReviewerEmbed) getFlaggedType() string {
 	if len(b.user.FlaggedGroups) > 0 {
 		return "Flagged Groups"
 	}
@@ -223,7 +227,7 @@ func (b *ReviewEmbed) getFlaggedType() string {
 }
 
 // getFlaggedContent returns the flagged content field for the embed.
-func (b *ReviewEmbed) getFlaggedContent() string {
+func (b *ReviewerEmbed) getFlaggedContent() string {
 	flaggedGroups := b.user.FlaggedGroups
 	if len(flaggedGroups) > 0 {
 		var content strings.Builder
@@ -253,7 +257,7 @@ func (b *ReviewEmbed) getFlaggedContent() string {
 }
 
 // getLastReviewed returns the last reviewed field for the embed.
-func (b *ReviewEmbed) getLastReviewed() string {
+func (b *ReviewerEmbed) getLastReviewed() string {
 	if b.user.LastReviewed.IsZero() {
 		return "Never Reviewed"
 	}

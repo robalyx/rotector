@@ -13,31 +13,46 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/jaxron/roapi.go/pkg/api"
+	"github.com/rotector/rotector/internal/bot/constants"
+	"github.com/rotector/rotector/internal/bot/handlers/dashboard"
 	"github.com/rotector/rotector/internal/bot/handlers/reviewer"
+	"github.com/rotector/rotector/internal/bot/pagination"
+	"github.com/rotector/rotector/internal/bot/session"
 	"github.com/rotector/rotector/internal/common/database"
 	"github.com/rotector/rotector/internal/common/utils"
 )
 
-const (
-	ReviewCommandName = "review"
-)
-
 // Bot represents the Discord bot.
 type Bot struct {
-	client          bot.Client
-	reviewerHandler *reviewer.Handler
-	logger          *zap.Logger
+	client            bot.Client
+	reviewerHandler   *reviewer.Handler
+	logger            *zap.Logger
+	sessionManager    *session.Manager
+	paginationManager *pagination.Manager
+	dashboardHandler  *dashboard.Handler
 }
 
 // New creates a new Bot instance.
 func New(token string, db *database.Database, roAPI *api.API, logger *zap.Logger) (*Bot, error) {
-	reviewerHandler := reviewer.New(db, logger, roAPI)
+	sessionManager := session.NewManager(db)
+	paginationManager := pagination.NewManager(logger)
 
+	// Initialize the handlers
+	dashboardHandler := dashboard.New(db, logger, sessionManager, paginationManager)
+	reviewerHandler := reviewer.New(db, logger, roAPI, sessionManager, paginationManager, dashboardHandler)
+
+	dashboardHandler.SetReviewHandler(reviewerHandler)
+
+	// Initialize the bot
 	b := &Bot{
-		reviewerHandler: reviewerHandler,
-		logger:          logger,
+		reviewerHandler:   reviewerHandler,
+		logger:            logger,
+		sessionManager:    sessionManager,
+		paginationManager: paginationManager,
+		dashboardHandler:  dashboardHandler,
 	}
 
+	// Initialize the Discord client
 	client, err := disgo.New(token,
 		bot.WithGatewayConfigOpts(
 			gateway.WithIntents(
@@ -60,21 +75,17 @@ func New(token string, db *database.Database, roAPI *api.API, logger *zap.Logger
 	return b, nil
 }
 
-// registerCommands registers the bot's slash commands.
-func (b *Bot) registerCommands() error {
-	_, err := b.client.Rest().SetGlobalCommands(b.client.ApplicationID(), []discord.ApplicationCommandCreate{
-		discord.SlashCommandCreate{
-			Name:        "review",
-			Description: "Review a flagged user account",
-		},
-	})
-	return err
-}
-
 // Start initializes and starts the bot.
 func (b *Bot) Start() error {
 	b.logger.Info("Registering commands")
-	if err := b.registerCommands(); err != nil {
+
+	_, err := b.client.Rest().SetGlobalCommands(b.client.ApplicationID(), []discord.ApplicationCommandCreate{
+		discord.SlashCommandCreate{
+			Name:        constants.DashboardCommandName,
+			Description: "View the dashboard",
+		},
+	})
+	if err != nil {
 		return fmt.Errorf("failed to register commands: %w", err)
 	}
 
@@ -90,7 +101,7 @@ func (b *Bot) Close() {
 
 // handleApplicationCommandInteraction processes application command interactions.
 func (b *Bot) handleApplicationCommandInteraction(event *events.ApplicationCommandInteractionCreate) {
-	if event.Data.CommandName() != ReviewCommandName {
+	if event.SlashCommandInteractionData().CommandName() != constants.DashboardCommandName {
 		return
 	}
 
@@ -106,7 +117,7 @@ func (b *Bot) handleApplicationCommandInteraction(event *events.ApplicationComma
 				b.logger.Error("Panic in application command interaction handler", zap.Any("panic", r))
 			}
 		}()
-		b.reviewerHandler.HandleApplicationCommandInteraction(event)
+		b.dashboardHandler.ShowDashboard(event)
 	}()
 }
 
@@ -116,7 +127,8 @@ func (b *Bot) handleComponentInteraction(event *events.ComponentInteractionCreat
 
 	// WORKAROUND:
 	// Check if the interaction is something other than opening a modal so that we can defer the message update.
-	// If it is a modal and we try to defer, there will be an error that the interaction is already responded to.
+	// If we are opening a modal and we try to defer, there will be an error that the interaction is already responded to.
+	// Please open a PR if you have a better solution or a fix for this.
 	isModal := false
 	stringSelectData, ok := event.Data.(discord.StringSelectMenuInteractionData)
 	if ok && strings.HasSuffix(stringSelectData.Values[0], "modal") {
