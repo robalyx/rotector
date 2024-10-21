@@ -218,8 +218,8 @@ func (r *UserRepository) SavePendingUsers(flaggedUsers []*User) {
 	r.logger.Info("Finished saving flagged users")
 }
 
-// AcceptUser moves a user from pending to flagged status.
-func (r *UserRepository) AcceptUser(user *PendingUser) error {
+// BanUser moves a user from pending to flagged status.
+func (r *UserRepository) BanUser(user *PendingUser) error {
 	_, err := r.db.Exec(`
 		INSERT INTO flagged_users (
 			id, name, display_name, description, created_at, reason,
@@ -253,8 +253,8 @@ func (r *UserRepository) AcceptUser(user *PendingUser) error {
 	return nil
 }
 
-// RejectUser removes a user from the pending users list.
-func (r *UserRepository) RejectUser(user *PendingUser) error {
+// ClearUser removes a user from the pending users list.
+func (r *UserRepository) ClearUser(user *PendingUser) error {
 	_, err := r.db.Exec("DELETE FROM pending_users WHERE id = ?", user.ID)
 	if err != nil {
 		r.logger.Error("Failed to delete user from pending_users", zap.Error(err), zap.Uint64("userID", user.ID))

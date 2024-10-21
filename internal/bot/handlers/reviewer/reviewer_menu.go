@@ -117,7 +117,7 @@ func (r *ReviewMenu) handleBanUser(event interfaces.CommonEvent, s *session.Sess
 	user := s.GetPendingUser(session.KeyTarget)
 
 	// Perform the ban
-	if err := r.handler.db.Users().AcceptUser(user); err != nil {
+	if err := r.handler.db.Users().BanUser(user); err != nil {
 		r.handler.logger.Error("Failed to accept user", zap.Error(err))
 		r.handler.respondWithError(event, "Failed to accept the user. Please try again.")
 		return
@@ -130,7 +130,7 @@ func (r *ReviewMenu) handleClearUser(event interfaces.CommonEvent, s *session.Se
 	user := s.GetPendingUser(session.KeyTarget)
 
 	// Clear the user
-	if err := r.handler.db.Users().RejectUser(user); err != nil {
+	if err := r.handler.db.Users().ClearUser(user); err != nil {
 		r.handler.logger.Error("Failed to reject user", zap.Error(err))
 		r.handler.respondWithError(event, "Failed to reject the user. Please try again.")
 		return
@@ -177,7 +177,7 @@ func (r *ReviewMenu) handleBanWithReasonModalSubmit(event *events.ModalSubmitInt
 	user.Reason = reason
 
 	// Perform the ban
-	if err := r.handler.db.Users().AcceptUser(user); err != nil {
+	if err := r.handler.db.Users().BanUser(user); err != nil {
 		r.handler.logger.Error("Failed to accept user", zap.Error(err))
 		r.handler.respondWithError(event, "Failed to ban the user. Please try again.")
 		return
