@@ -27,14 +27,11 @@ func NewFriendFetcher(roAPI *api.API, logger *zap.Logger) *FriendFetcher {
 func (f *FriendFetcher) AddFriends(users []*database.User) []*database.User {
 	var wg sync.WaitGroup
 	var mu sync.Mutex
-	semaphore := make(chan struct{}, 100) // Limit concurrent requests to 100
 
 	for i, user := range users {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
-			semaphore <- struct{}{}        // Acquire semaphore
-			defer func() { <-semaphore }() // Release semaphore
 
 			// Fetch friends for the user
 			friends, err := f.roAPI.Friends().GetFriends(context.Background(), user.ID)

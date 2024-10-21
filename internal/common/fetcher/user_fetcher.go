@@ -39,15 +39,11 @@ func NewUserFetcher(roAPI *api.API, logger *zap.Logger) *UserFetcher {
 func (u *UserFetcher) FetchInfos(userIDs []uint64) []*Info {
 	var wg sync.WaitGroup
 	userInfoChan := make(chan *Info, len(userIDs))
-	semaphore := make(chan struct{}, 100) // Limit concurrent requests to 100
 
 	for _, userID := range userIDs {
 		wg.Add(1)
 		go func(id uint64) {
 			defer wg.Done()
-
-			semaphore <- struct{}{}        // Acquire semaphore
-			defer func() { <-semaphore }() // Release semaphore
 
 			// Fetch the user info
 			userInfo, err := u.roAPI.Users().GetUserByID(context.Background(), id)
