@@ -22,6 +22,8 @@ const (
 	UserWorkerTypeGroup  = "group"
 	UserWorkerTypeFriend = "friend"
 
+	PurgeWorker = "purge"
+
 	GroupWorker = "group"
 
 	StatsWorker           = "stats"
@@ -54,7 +56,7 @@ func newUserCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   UserWorker,
 		Short: "Start user workers",
-		Long:  `Start user workers, which can be either friend or group workers.`,
+		Long:  `Start user workers, which can be friend, group, or purge workers.`,
 	}
 
 	cmd.AddCommand(
@@ -72,6 +74,14 @@ func newUserCmd() *cobra.Command {
 			Run: func(cmd *cobra.Command, _ []string) {
 				count, _ := cmd.Flags().GetInt("workers")
 				runWorkers(UserWorker, UserWorkerTypeGroup, count)
+			},
+		},
+		&cobra.Command{
+			Use:   PurgeWorker,
+			Short: "Start purge workers",
+			Run: func(cmd *cobra.Command, _ []string) {
+				count, _ := cmd.Flags().GetInt("workers")
+				runWorkers(UserWorker, PurgeWorker, count)
 			},
 		},
 	)
@@ -143,6 +153,8 @@ func runWorkers(workerType, subType string, count int) {
 				w = user.NewGroupWorker(setup.DB, setup.OpenAIClient, setup.RoAPI, bar, workerLogger)
 			case workerType == UserWorker && subType == UserWorkerTypeFriend:
 				w = user.NewFriendWorker(setup.DB, setup.OpenAIClient, setup.RoAPI, bar, workerLogger)
+			case workerType == UserWorker && subType == PurgeWorker:
+				w = user.NewPurgeWorker(setup.DB, setup.RoAPI, bar, workerLogger)
 			case workerType == StatsWorker:
 				w = stats.NewStatisticsWorker(setup.DB, bar, workerLogger)
 			default:

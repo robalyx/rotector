@@ -208,11 +208,11 @@ func (r *UserRepository) SavePendingUsers(flaggedUsers []*User) {
 			zap.Float64("confidence", flaggedUser.Confidence),
 			zap.Time("last_updated", time.Now()),
 			zap.String("thumbnail_url", flaggedUser.ThumbnailURL))
+	}
 
-		// Increment the users_pending statistic
-		if err := r.stats.IncrementUsersPending(context.Background()); err != nil {
-			r.logger.Error("Failed to increment users_pending statistic", zap.Error(err))
-		}
+	// Increment the users_pending statistic
+	if err := r.stats.IncrementUsersPending(context.Background(), len(flaggedUsers)); err != nil {
+		r.logger.Error("Failed to increment users_pending statistic", zap.Error(err))
 	}
 
 	r.logger.Info("Finished saving flagged users")
@@ -246,7 +246,7 @@ func (r *UserRepository) AcceptUser(user *PendingUser) error {
 	r.logger.Info("User accepted and moved to flagged_users", zap.Uint64("userID", user.ID))
 
 	// Increment the users_banned statistic
-	if err := r.stats.IncrementUsersBanned(context.Background()); err != nil {
+	if err := r.stats.IncrementUsersBanned(context.Background(), 1); err != nil {
 		r.logger.Error("Failed to increment users_banned statistic", zap.Error(err))
 	}
 
@@ -263,7 +263,7 @@ func (r *UserRepository) RejectUser(user *PendingUser) error {
 	r.logger.Info("User rejected and removed from pending_users", zap.Uint64("userID", user.ID))
 
 	// Increment the users_cleared statistic
-	if err := r.stats.IncrementUsersCleared(context.Background()); err != nil {
+	if err := r.stats.IncrementUsersCleared(context.Background(), 1); err != nil {
 		r.logger.Error("Failed to increment users_cleared statistic", zap.Error(err))
 	}
 
@@ -333,4 +333,67 @@ func (r *UserRepository) CheckExistingUsers(userIDs []uint64) (map[uint64]string
 		zap.Int("existing", len(result)))
 
 	return result, nil
+}
+
+// GetUsersToCheck retrieves a batch of users to check for banned status and updates their last_purge_check.
+func (r *UserRepository) GetUsersToCheck(limit int) ([]uint64, error) {
+	var userIDs []uint64
+
+	// Select the users to check
+	_, err := r.db.Query(&userIDs, `
+		SELECT id FROM (
+			SELECT id FROM flagged_users
+			WHERE last_purge_check IS NULL OR last_purge_check < NOW() - INTERVAL '8 hours'
+			UNION ALL
+			SELECT id FROM pending_users
+			WHERE last_purge_check IS NULL OR last_purge_check < NOW() - INTERVAL '8 hours'
+		) AS users
+		ORDER BY RANDOM()
+		LIMIT ?
+	`, limit)
+	if err != nil {
+		r.logger.Error("Failed to get users to check", zap.Error(err))
+		return nil, err
+	}
+
+	// If we have users to check, update their last_purge_check
+	if len(userIDs) > 0 {
+		_, err = r.db.Exec(`
+			UPDATE flagged_users
+			SET last_purge_check = NOW()
+			WHERE id = ANY(?);
+
+			UPDATE pending_users
+			SET last_purge_check = NOW()
+			WHERE id = ANY(?);
+		`, pg.Array(userIDs), pg.Array(userIDs))
+		if err != nil {
+			r.logger.Error("Failed to update last_purge_check", zap.Error(err))
+			return nil, err
+		}
+	}
+
+	r.logger.Info("Retrieved and updated users to check", zap.Int("count", len(userIDs)))
+	return userIDs, nil
+}
+
+// RemoveBannedUsers removes the specified banned users from flagged and pending tables.
+func (r *UserRepository) RemoveBannedUsers(userIDs []uint64) error {
+	_, err := r.db.Exec(`
+		DELETE FROM flagged_users WHERE id = ANY(?);
+		DELETE FROM pending_users WHERE id = ANY(?);
+	`, pg.Array(userIDs), pg.Array(userIDs))
+	if err != nil {
+		r.logger.Error("Failed to remove banned users", zap.Error(err))
+		return err
+	}
+
+	// Increment the users_purged statistic
+	if err := r.stats.IncrementUsersPurged(context.Background(), len(userIDs)); err != nil {
+		r.logger.Error("Failed to increment users_purged statistic", zap.Error(err))
+	}
+
+	r.logger.Info("Removed banned users", zap.Int("count", len(userIDs)))
+
+	return nil
 }

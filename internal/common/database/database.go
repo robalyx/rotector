@@ -47,6 +47,7 @@ type User struct {
 	LastScanned    time.Time              `json:"lastScanned"    pg:"last_scanned"`
 	LastUpdated    time.Time              `json:"lastUpdated"    pg:"last_updated"`
 	LastReviewed   time.Time              `json:"lastReviewed"   pg:"last_reviewed"`
+	LastPurgeCheck time.Time              `json:"lastPurgeCheck" pg:"last_purge_check"`
 	ThumbnailURL   string                 `json:"thumbnailUrl"   pg:"thumbnail_url"`
 }
 
@@ -67,6 +68,7 @@ type DailyStatistics struct {
 	UsersBanned  int64     `pg:"users_banned"`
 	UsersCleared int64     `pg:"users_cleared"`
 	UsersPending int64     `pg:"users_pending"`
+	UsersPurged  int64     `pg:"users_purged"`
 }
 
 // Database represents the database connection and operations.

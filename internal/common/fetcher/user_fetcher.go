@@ -93,3 +93,35 @@ func (u *UserFetcher) FetchInfos(userIDs []uint64) []*Info {
 
 	return userInfos
 }
+
+// FetchBannedUsers fetches banned users for a batch of user IDs.
+func (u *UserFetcher) FetchBannedUsers(userIDs []uint64) ([]uint64, error) {
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+	bannedUserIDs := []uint64{}
+
+	for _, userID := range userIDs {
+		wg.Add(1)
+		go func(id uint64) {
+			defer wg.Done()
+
+			// Fetch the user info
+			userInfo, err := u.roAPI.Users().GetUserByID(context.Background(), id)
+			if err != nil {
+				u.logger.Warn("Error fetching user info", zap.Uint64("userID", id), zap.Error(err))
+				return
+			}
+
+			// Save the banned user ID
+			if userInfo.IsBanned {
+				mu.Lock()
+				bannedUserIDs = append(bannedUserIDs, userInfo.ID)
+				mu.Unlock()
+			}
+		}(userID)
+	}
+
+	wg.Wait()
+
+	return bannedUserIDs, nil
+}

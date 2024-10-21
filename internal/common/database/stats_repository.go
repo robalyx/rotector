@@ -29,7 +29,7 @@ func NewStatsRepository(db *pg.DB, redis rueidis.Client, logger *zap.Logger) *St
 // UploadDailyStatsToDB uploads daily statistics from Redis to PostgreSQL.
 func (r *StatsRepository) UploadDailyStatsToDB(ctx context.Context) error {
 	// Get the Redis key for yesterday's statistics
-	date := time.Now().Add(-1 * time.Minute).Format("2006-01-02") // Subtract 1 minute to ensure the date is yesterday
+	date := time.Now().Add(-24 * time.Hour).Format("2006-01-02")
 	key := "daily_statistics:" + date
 
 	// Get the daily statistics from Redis
@@ -54,6 +54,7 @@ func (r *StatsRepository) UploadDailyStatsToDB(ctx context.Context) error {
 		UsersBanned:  result["users_banned"],
 		UsersCleared: result["users_cleared"],
 		UsersPending: result["users_pending"],
+		UsersPurged:  result["users_purged"],
 	}
 
 	// Insert the daily statistics into PostgreSQL
