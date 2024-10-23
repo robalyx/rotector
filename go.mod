@@ -8,17 +8,17 @@ require (
 	github.com/disgoorg/snowflake/v2 v2.0.3
 	github.com/go-pg/pg/v10 v10.13.0
 	github.com/invopop/jsonschema v0.12.0
-	github.com/jaxron/axonet v0.0.0-20241012053513-7cd721aecbdc
-	github.com/jaxron/axonet/middleware/circuitbreaker v0.0.0-20241012053513-7cd721aecbdc
-	github.com/jaxron/axonet/middleware/proxy v0.0.0-20241012053513-7cd721aecbdc
-	github.com/jaxron/axonet/middleware/ratelimit v0.0.0-20241012053513-7cd721aecbdc
-	github.com/jaxron/axonet/middleware/rediscache v0.0.0-20241012053513-7cd721aecbdc
-	github.com/jaxron/axonet/middleware/retry v0.0.0-20241012053513-7cd721aecbdc
-	github.com/jaxron/axonet/middleware/singleflight v0.0.0-20241012053513-7cd721aecbdc
-	github.com/jaxron/roapi.go v0.0.0-20241019073506-b6affac87d8e
-	github.com/openai/openai-go v0.1.0-alpha.29
+	github.com/jaxron/axonet v0.0.0-20241023122609-a8b5cc17bf74
+	github.com/jaxron/axonet/middleware/circuitbreaker v0.0.0-20241023122609-a8b5cc17bf74
+	github.com/jaxron/axonet/middleware/proxy v0.0.0-20241023122609-a8b5cc17bf74
+	github.com/jaxron/axonet/middleware/ratelimit v0.0.0-20241023122609-a8b5cc17bf74
+	github.com/jaxron/axonet/middleware/rediscache v0.0.0-20241023122609-a8b5cc17bf74
+	github.com/jaxron/axonet/middleware/retry v0.0.0-20241023122609-a8b5cc17bf74
+	github.com/jaxron/axonet/middleware/singleflight v0.0.0-20241023122609-a8b5cc17bf74
+	github.com/jaxron/roapi.go v0.0.0-20241023130833-ad8750c2385e
+	github.com/openai/openai-go v0.1.0-alpha.30
 	github.com/ozankasikci/go-image-merge v0.3.1
-	github.com/redis/rueidis v1.0.47
+	github.com/redis/rueidis v1.0.48
 	github.com/spf13/cobra v1.8.1
 	github.com/spf13/viper v1.19.0
 	github.com/tdewolff/minify/v2 v2.21.0
@@ -30,7 +30,7 @@ require (
 require (
 	github.com/bahlo/generic-list-go v0.2.0 // indirect
 	github.com/buger/jsonparser v1.1.1 // indirect
-	github.com/bytedance/sonic/loader v0.2.0 // indirect
+	github.com/bytedance/sonic/loader v0.2.1 // indirect
 	github.com/cenkalti/backoff/v4 v4.3.0 // indirect
 	github.com/cespare/xxhash v1.1.0 // indirect
 	github.com/cloudwego/base64x v0.1.4 // indirect

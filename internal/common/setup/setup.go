@@ -127,13 +127,13 @@ func (s *AppSetup) getRoAPIClient() *api.API {
 
 	return api.New(cookies,
 		client.WithLogger(NewLogger(s.Logger)),
-		client.WithTimeout(20*time.Second),
-		client.WithMiddleware(cache),
-		client.WithMiddleware(circuitbreaker.New(s.Config.CircuitBreaker.MaxFailures, s.Config.CircuitBreaker.FailureThreshold, s.Config.CircuitBreaker.RecoveryTimeout)),
-		client.WithMiddleware(ratelimit.New(s.Config.RateLimit.RequestsPerSecond, s.Config.RateLimit.BurstSize)),
-		client.WithMiddleware(retry.New(5, 500*time.Millisecond, 1000*time.Millisecond)),
-		client.WithMiddleware(singleflight.New()),
-		client.WithMiddleware(proxy.New(proxies)),
+		client.WithTimeout(10*time.Second),
+		client.WithMiddleware(6, circuitbreaker.New(s.Config.CircuitBreaker.MaxFailures, s.Config.CircuitBreaker.FailureThreshold, s.Config.CircuitBreaker.RecoveryTimeout)),
+		client.WithMiddleware(5, retry.New(5, 500*time.Millisecond, 1000*time.Millisecond)),
+		client.WithMiddleware(4, singleflight.New()),
+		client.WithMiddleware(3, cache),
+		client.WithMiddleware(2, ratelimit.New(s.Config.RateLimit.RequestsPerSecond, s.Config.RateLimit.BurstSize)),
+		client.WithMiddleware(1, proxy.New(proxies)),
 	)
 }
 
