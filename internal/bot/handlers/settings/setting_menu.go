@@ -25,15 +25,9 @@ func NewSettingMenu(h *Handler) *SettingMenu {
 	m := &SettingMenu{handler: h}
 	m.page = &pagination.Page{
 		Name: "Setting Change Menu",
-		Data: make(map[string]interface{}),
-		Message: func(data map[string]interface{}) *discord.MessageUpdateBuilder {
-			settingName := data["settingName"].(string)
-			settingType := data["settingType"].(string)
-			currentValueFunc := data["currentValueFunc"].(func() string)
-			customID := data["customID"].(string)
-			options := data["options"].([]discord.StringSelectMenuOption)
-
-			return builders.NewSettingChangeBuilder(settingName, settingType, currentValueFunc(), customID).
+		Message: func(s *session.Session) *discord.MessageUpdateBuilder {
+			options := s.Get(constants.SessionKeyOptions).([]discord.StringSelectMenuOption)
+			return builders.NewSettingChangeBuilder(s).
 				AddOptions(options...).
 				Build()
 		},
@@ -45,11 +39,11 @@ func NewSettingMenu(h *Handler) *SettingMenu {
 
 // ShowMenu displays the setting change menu.
 func (m *SettingMenu) ShowMenu(event interfaces.CommonEvent, s *session.Session, settingName, settingType, customID string, currentValueFunc func() string, options []discord.StringSelectMenuOption) {
-	m.page.Data["settingName"] = settingName
-	m.page.Data["settingType"] = settingType
-	m.page.Data["currentValueFunc"] = currentValueFunc
-	m.page.Data["customID"] = customID
-	m.page.Data["options"] = options
+	s.Set(constants.SessionKeySettingName, settingName)
+	s.Set(constants.SessionKeySettingType, settingType)
+	s.Set(constants.SessionKeyCurrentValueFunc, currentValueFunc)
+	s.Set(constants.SessionKeyCustomID, customID)
+	s.Set(constants.SessionKeyOptions, options)
 
 	m.handler.paginationManager.NavigateTo(m.page.Name, s)
 	m.handler.paginationManager.UpdateMessage(event, s, m.page, "")
@@ -57,14 +51,14 @@ func (m *SettingMenu) ShowMenu(event interfaces.CommonEvent, s *session.Session,
 
 // handleSettingChange handles the select menu for the setting change menu.
 func (m *SettingMenu) handleSettingChange(event *events.ComponentInteractionCreate, s *session.Session, customID string, option string) {
-	settingType := m.page.Data["settingType"].(string)
-	currentValueFunc := m.page.Data["currentValueFunc"].(func() string)
+	settingType := s.GetString(constants.SessionKeySettingType)
+	currentValueFunc := s.Get(constants.SessionKeyCurrentValueFunc).(func() string)
 
 	// Save the setting immediately
 	m.saveSetting(event, settingType, customID, option)
 
 	// Update the current value and show the updated setting
-	m.page.Data["currentValue"] = currentValueFunc()
+	s.Set(constants.SessionKeyCurrentValue, currentValueFunc())
 	m.handler.paginationManager.UpdateMessage(event, s, m.page, "Setting updated successfully.")
 }
 

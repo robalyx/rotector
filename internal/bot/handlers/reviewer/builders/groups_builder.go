@@ -5,6 +5,8 @@ import (
 
 	"github.com/disgoorg/disgo/discord"
 	"github.com/jaxron/roapi.go/pkg/api/types"
+	"github.com/rotector/rotector/internal/bot/constants"
+	"github.com/rotector/rotector/internal/bot/session"
 	"github.com/rotector/rotector/internal/bot/utils"
 	"github.com/rotector/rotector/internal/common/database"
 )
@@ -23,17 +25,17 @@ type GroupsEmbed struct {
 }
 
 // NewGroupsEmbed creates a new GroupsEmbed.
-func NewGroupsEmbed(user *database.PendingUser, groups []types.UserGroupRoles, flaggedGroups map[uint64]bool, start, page, total int, file *discord.File, fileName string, streamerMode bool) *GroupsEmbed {
+func NewGroupsEmbed(s *session.Session) *GroupsEmbed {
 	return &GroupsEmbed{
-		user:          user,
-		groups:        groups,
-		flaggedGroups: flaggedGroups,
-		start:         start,
-		page:          page,
-		total:         total,
-		file:          file,
-		fileName:      fileName,
-		streamerMode:  streamerMode,
+		user:          s.GetPendingUser(constants.KeyTarget),
+		groups:        s.Get(constants.SessionKeyGroups).([]types.UserGroupRoles),
+		flaggedGroups: s.Get(constants.SessionKeyFlaggedGroups).(map[uint64]bool),
+		start:         s.GetInt(constants.SessionKeyStart),
+		page:          s.GetInt(constants.SessionKeyPage),
+		total:         s.GetInt(constants.SessionKeyTotal),
+		file:          s.Get(constants.SessionKeyFile).(*discord.File),
+		fileName:      s.GetString(constants.SessionKeyFileName),
+		streamerMode:  s.GetBool(constants.SessionKeyStreamerMode),
 	}
 }
 

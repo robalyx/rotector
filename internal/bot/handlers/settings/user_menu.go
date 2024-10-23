@@ -25,10 +25,8 @@ func NewUserMenu(h *Handler) *UserMenu {
 	u := &UserMenu{handler: h}
 	u.page = &pagination.Page{
 		Name: "User Settings Menu",
-		Data: make(map[string]interface{}),
-		Message: func(data map[string]interface{}) *discord.MessageUpdateBuilder {
-			preferences := data["preferences"].(*database.UserPreference)
-			return builders.NewUserSettingsEmbed(preferences).Build()
+		Message: func(s *session.Session) *discord.MessageUpdateBuilder {
+			return builders.NewUserSettingsEmbed(s).Build()
 		},
 		SelectHandlerFunc: u.handleUserSettingSelection,
 		ButtonHandlerFunc: u.handleUserSettingButton,
@@ -38,7 +36,7 @@ func NewUserMenu(h *Handler) *UserMenu {
 
 // ShowMenu displays the user settings menu.
 func (u *UserMenu) ShowMenu(event interfaces.CommonEvent, s *session.Session) {
-	u.page.Data["preferences"] = u.getUserPreferences(event)
+	s.Set(constants.SessionKeyUserSettings, u.getUserSettings(event))
 
 	u.handler.paginationManager.NavigateTo(u.page.Name, s)
 	u.handler.paginationManager.UpdateMessage(event, s, u.page, "")
@@ -55,8 +53,8 @@ func (u *UserMenu) handleUserSettingSelection(event *events.ComponentInteraction
 		settingName = "Streamer Mode"
 		settingType = constants.UserSettingPrefix
 		currentValueFunc = func() string {
-			preferences := u.getUserPreferences(event)
-			return strconv.FormatBool(preferences.StreamerMode)
+			settings := u.getUserSettings(event)
+			return strconv.FormatBool(settings.StreamerMode)
 		}
 		options = []discord.StringSelectMenuOption{
 			discord.NewStringSelectMenuOption("Enable", "true"),
@@ -66,8 +64,8 @@ func (u *UserMenu) handleUserSettingSelection(event *events.ComponentInteraction
 		settingName = "Default Sort"
 		settingType = constants.UserSettingPrefix
 		currentValueFunc = func() string {
-			preferences := u.getUserPreferences(event)
-			return preferences.DefaultSort
+			settings := u.getUserSettings(event)
+			return settings.DefaultSort
 		}
 		options = []discord.StringSelectMenuOption{
 			discord.NewStringSelectMenuOption("Random", database.SortByRandom),
@@ -86,12 +84,12 @@ func (u *UserMenu) handleUserSettingButton(event *events.ComponentInteractionCre
 	}
 }
 
-// getUserPreferences fetches the user preferences from the database.
-func (u *UserMenu) getUserPreferences(event interfaces.CommonEvent) *database.UserPreference {
-	preferences, err := u.handler.db.Settings().GetUserPreferences(uint64(event.User().ID))
+// getUserSettings fetches the user settings from the database.
+func (u *UserMenu) getUserSettings(event interfaces.CommonEvent) *database.UserPreference {
+	settings, err := u.handler.db.Settings().GetUserPreferences(uint64(event.User().ID))
 	if err != nil {
-		u.handler.logger.Error("Failed to fetch user preferences", zap.Error(err))
+		u.handler.logger.Error("Failed to fetch user settings", zap.Error(err))
 		return nil
 	}
-	return preferences
+	return settings
 }

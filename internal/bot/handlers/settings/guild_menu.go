@@ -9,6 +9,7 @@ import (
 	"github.com/rotector/rotector/internal/bot/pagination"
 	"github.com/rotector/rotector/internal/bot/session"
 	"github.com/rotector/rotector/internal/bot/utils"
+	"github.com/rotector/rotector/internal/common/database"
 	"go.uber.org/zap"
 )
 
@@ -23,12 +24,8 @@ func NewGuildMenu(h *Handler) *GuildMenu {
 	g := &GuildMenu{handler: h}
 	g.page = &pagination.Page{
 		Name: "Guild Settings Menu",
-		Data: make(map[string]interface{}),
-		Message: func(data map[string]interface{}) *discord.MessageUpdateBuilder {
-			roles := data["roles"].([]discord.Role)
-			currentValueFunc := data["currentValueFunc"].(func() string)
-
-			return builders.NewGuildSettingsEmbed(currentValueFunc(), roles).Build()
+		Message: func(s *session.Session) *discord.MessageUpdateBuilder {
+			return builders.NewGuildSettingsEmbed(s).Build()
 		},
 		SelectHandlerFunc: g.handleGuildSettingSelection,
 		ButtonHandlerFunc: g.handleGuildSettingButton,
@@ -45,20 +42,8 @@ func (g *GuildMenu) ShowMenu(event interfaces.CommonEvent, s *session.Session) {
 		return
 	}
 
-	// Fetch current value for the setting
-	currentValueFunc := func() string {
-		// Fetch guild settings from the database
-		settings, err := g.handler.db.Settings().GetGuildSettings(uint64(*event.GuildID()))
-		if err != nil {
-			g.handler.logger.Error("Failed to fetch guild settings", zap.Error(err))
-			return ""
-		}
-
-		return utils.FormatWhitelistedRoles(settings.WhitelistedRoles, roles)
-	}
-
-	g.page.Data["roles"] = roles
-	g.page.Data["currentValueFunc"] = currentValueFunc
+	s.Set(constants.SessionKeyGuildSettings, g.getGuildSettings(event))
+	s.Set(constants.SessionKeyRoles, roles)
 
 	g.handler.paginationManager.NavigateTo(g.page.Name, s)
 	g.handler.paginationManager.UpdateMessage(event, s, g.page, "")
@@ -66,11 +51,22 @@ func (g *GuildMenu) ShowMenu(event interfaces.CommonEvent, s *session.Session) {
 
 // handleGuildSettingSelection handles the select menu for the guild settings menu.
 func (g *GuildMenu) handleGuildSettingSelection(event *events.ComponentInteractionCreate, s *session.Session, _ string, option string) {
-	roles := g.page.Data["roles"].([]discord.Role)
-	currentValueFunc := g.page.Data["currentValueFunc"].(func() string)
+	roles := s.Get(constants.SessionKeyRoles).([]discord.Role)
 
 	switch option {
 	case constants.WhitelistedRolesOption:
+		// Fetch current value for the setting
+		currentValueFunc := func() string {
+			// Fetch guild settings from the database
+			settings, err := g.handler.db.Settings().GetGuildSettings(uint64(*event.GuildID()))
+			if err != nil {
+				g.handler.logger.Error("Failed to fetch guild settings", zap.Error(err))
+				return ""
+			}
+
+			return utils.FormatWhitelistedRoles(settings.WhitelistedRoles, roles)
+		}
+
 		// Create options for each role
 		options := make([]discord.StringSelectMenuOption, 0, len(roles))
 		for _, role := range roles {
@@ -86,4 +82,14 @@ func (g *GuildMenu) handleGuildSettingButton(event *events.ComponentInteractionC
 	if customID == constants.BackButtonCustomID {
 		g.handler.dashboardHandler.ShowDashboard(event)
 	}
+}
+
+// getGuildSettings fetches the guild settings from the database.
+func (g *GuildMenu) getGuildSettings(event interfaces.CommonEvent) *database.GuildSetting {
+	settings, err := g.handler.db.Settings().GetGuildSettings(uint64(*event.GuildID()))
+	if err != nil {
+		g.handler.logger.Error("Failed to fetch guild settings", zap.Error(err))
+		return nil
+	}
+	return settings
 }

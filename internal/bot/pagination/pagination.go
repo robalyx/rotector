@@ -3,6 +3,7 @@ package pagination
 import (
 	"github.com/disgoorg/disgo/discord"
 	"github.com/disgoorg/disgo/events"
+	"github.com/rotector/rotector/internal/bot/constants"
 	"github.com/rotector/rotector/internal/bot/interfaces"
 	"github.com/rotector/rotector/internal/bot/session"
 	"github.com/rotector/rotector/internal/bot/utils"
@@ -12,10 +13,7 @@ import (
 // Page represents a single page in the pagination system.
 type Page struct {
 	Name    string
-	Data    map[string]interface{}
-	Message func(
-		data map[string]interface{},
-	) *discord.MessageUpdateBuilder
+	Message func(s *session.Session) *discord.MessageUpdateBuilder
 
 	SelectHandlerFunc func(
 		event *events.ComponentInteractionCreate,
@@ -61,7 +59,7 @@ func (m *Manager) GetPage(name string) *Page {
 
 // HandleInteraction processes interactions and updates the session.
 func (m *Manager) HandleInteraction(event interfaces.CommonEvent, s *session.Session) {
-	currentPage := s.GetString(session.KeyCurrentPage)
+	currentPage := s.GetString(constants.KeyCurrentPage)
 	page := m.GetPage(currentPage)
 
 	if page == nil {
@@ -89,7 +87,7 @@ func (m *Manager) HandleInteraction(event interfaces.CommonEvent, s *session.Ses
 
 // UpdateMessage updates the message with the current page content.
 func (m *Manager) UpdateMessage(event interfaces.CommonEvent, s *session.Session, page *Page, content string) {
-	messageUpdate := page.Message(page.Data).
+	messageUpdate := page.Message(s).
 		SetContent(utils.GetTimestampedSubtext(content)).
 		RetainAttachments().
 		Build()
@@ -99,10 +97,10 @@ func (m *Manager) UpdateMessage(event interfaces.CommonEvent, s *session.Session
 		m.logger.Error("Failed to update interaction response", zap.Error(err))
 	}
 
-	s.Set(session.KeyMessageID, message.ID.String())
+	s.Set(constants.KeyMessageID, message.ID.String())
 }
 
 // NavigateTo navigates to a specific page.
 func (m *Manager) NavigateTo(pageName string, s *session.Session) {
-	s.Set(session.KeyCurrentPage, pageName)
+	s.Set(constants.KeyCurrentPage, pageName)
 }

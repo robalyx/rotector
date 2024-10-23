@@ -1,6 +1,9 @@
 package builders
 
-import "github.com/rotector/rotector/internal/bot/session"
+import (
+	"github.com/rotector/rotector/internal/bot/constants"
+	"github.com/rotector/rotector/internal/bot/session"
+)
 
 type ViewerAction string
 
@@ -17,29 +20,29 @@ func (h *ViewerAction) ParsePageAction(s *session.Session, action ViewerAction, 
 	switch action {
 	case ViewerFirstPage:
 		// Reset to first page
-		s.Set(session.KeyPaginationPage, 0)
+		s.Set(constants.KeyPaginationPage, 0)
 		return 0, true
 	case ViewerPrevPage:
 		// Move to previous page
-		prevPage := s.GetInt(session.KeyPaginationPage) - 1
+		prevPage := s.GetInt(constants.KeyPaginationPage) - 1
 		if prevPage < 0 {
 			prevPage = 0
 		}
 
-		s.Set(session.KeyPaginationPage, prevPage)
+		s.Set(constants.KeyPaginationPage, prevPage)
 		return prevPage, true
 	case ViewerNextPage:
 		// Move to next page
-		nextPage := s.GetInt(session.KeyPaginationPage) + 1
+		nextPage := s.GetInt(constants.KeyPaginationPage) + 1
 		if nextPage > maxPage {
 			nextPage = maxPage
 		}
 
-		s.Set(session.KeyPaginationPage, nextPage)
+		s.Set(constants.KeyPaginationPage, nextPage)
 		return nextPage, true
 	case ViewerLastPage:
 		// Move to last page
-		s.Set(session.KeyPaginationPage, maxPage)
+		s.Set(constants.KeyPaginationPage, maxPage)
 		return maxPage, true
 	default:
 		return 0, false

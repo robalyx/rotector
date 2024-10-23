@@ -6,6 +6,8 @@ import (
 
 	"github.com/disgoorg/disgo/discord"
 	"github.com/rotector/rotector/internal/bot/constants"
+	"github.com/rotector/rotector/internal/bot/session"
+	"github.com/rotector/rotector/internal/bot/utils"
 	"github.com/rotector/rotector/internal/common/database"
 )
 
@@ -15,9 +17,9 @@ type UserSettingsEmbed struct {
 }
 
 // NewUserSettingsEmbed creates a new UserSettingsEmbed.
-func NewUserSettingsEmbed(preferences *database.UserPreference) *UserSettingsEmbed {
+func NewUserSettingsEmbed(s *session.Session) *UserSettingsEmbed {
 	return &UserSettingsEmbed{
-		preferences: preferences,
+		preferences: s.Get(constants.SessionKeyUserSettings).(*database.UserPreference),
 	}
 }
 
@@ -48,15 +50,15 @@ func (b *UserSettingsEmbed) Build() *discord.MessageUpdateBuilder {
 
 // GuildSettingsEmbed builds the embed and components for the guild settings menu.
 type GuildSettingsEmbed struct {
-	currentValue string
-	roles        []discord.Role
+	settings *database.GuildSetting
+	roles    []discord.Role
 }
 
 // NewGuildSettingsEmbed creates a new GuildSettingsEmbed.
-func NewGuildSettingsEmbed(currentValue string, roles []discord.Role) *GuildSettingsEmbed {
+func NewGuildSettingsEmbed(s *session.Session) *GuildSettingsEmbed {
 	return &GuildSettingsEmbed{
-		currentValue: currentValue,
-		roles:        roles,
+		settings: s.Get(constants.SessionKeyGuildSettings).(*database.GuildSetting),
+		roles:    s.Get(constants.SessionKeyRoles).([]discord.Role),
 	}
 }
 
@@ -64,7 +66,7 @@ func NewGuildSettingsEmbed(currentValue string, roles []discord.Role) *GuildSett
 func (b *GuildSettingsEmbed) Build() *discord.MessageUpdateBuilder {
 	embed := discord.NewEmbedBuilder().
 		SetTitle("Guild Settings").
-		AddField("Whitelisted Roles", b.currentValue, false).
+		AddField("Whitelisted Roles", utils.FormatWhitelistedRoles(b.settings.WhitelistedRoles, b.roles), false).
 		SetColor(constants.DefaultEmbedColor)
 
 	components := []discord.ContainerComponent{
@@ -93,12 +95,12 @@ type SettingChangeBuilder struct {
 }
 
 // NewSettingChangeBuilder creates a new SettingChangeBuilder.
-func NewSettingChangeBuilder(settingName, settingType, currentValue, customID string) *SettingChangeBuilder {
+func NewSettingChangeBuilder(s *session.Session) *SettingChangeBuilder {
 	return &SettingChangeBuilder{
-		settingName:  settingName,
-		settingType:  settingType,
-		currentValue: currentValue,
-		customID:     customID,
+		settingName:  s.GetString(constants.SessionKeySettingName),
+		settingType:  s.GetString(constants.SessionKeySettingType),
+		currentValue: s.Get(constants.SessionKeyCurrentValueFunc).(func() string)(),
+		customID:     s.GetString(constants.SessionKeyCustomID),
 	}
 }
 

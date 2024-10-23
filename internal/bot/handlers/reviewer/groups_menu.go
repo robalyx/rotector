@@ -15,7 +15,6 @@ import (
 	"github.com/rotector/rotector/internal/bot/pagination"
 	"github.com/rotector/rotector/internal/bot/session"
 	"github.com/rotector/rotector/internal/bot/utils"
-	"github.com/rotector/rotector/internal/common/database"
 	"go.uber.org/zap"
 )
 
@@ -30,19 +29,8 @@ func NewGroupsMenu(h *Handler) *GroupsMenu {
 	m := GroupsMenu{handler: h}
 	m.page = &pagination.Page{
 		Name: "Groups Menu",
-		Data: make(map[string]interface{}),
-		Message: func(data map[string]interface{}) *discord.MessageUpdateBuilder {
-			user := data["user"].(*database.PendingUser)
-			groups := data["groups"].([]types.UserGroupRoles)
-			flaggedGroups := data["flaggedGroups"].(map[uint64]bool)
-			start := data["start"].(int)
-			page := data["page"].(int)
-			total := data["total"].(int)
-			file := data["file"].(*discord.File)
-			fileName := data["fileName"].(string)
-			streamerMode := data["streamerMode"].(bool)
-
-			return builders.NewGroupsEmbed(user, groups, flaggedGroups, start, page, total, file, fileName, streamerMode).Build()
+		Message: func(s *session.Session) *discord.MessageUpdateBuilder {
+			return builders.NewGroupsEmbed(s).Build()
 		},
 		ButtonHandlerFunc: m.handlePageNavigation,
 	}
@@ -51,7 +39,7 @@ func NewGroupsMenu(h *Handler) *GroupsMenu {
 
 // ShowGroupsMenu shows the groups menu for the given page.
 func (m *GroupsMenu) ShowGroupsMenu(event *events.ComponentInteractionCreate, s *session.Session, page int) {
-	user := s.GetPendingUser(session.KeyTarget)
+	user := s.GetPendingUser(constants.KeyTarget)
 
 	// Check if the user has groups
 	if len(user.Groups) == 0 {
@@ -116,15 +104,15 @@ func (m *GroupsMenu) ShowGroupsMenu(event *events.ComponentInteractionCreate, s 
 	}
 
 	// Set the data for the page
-	m.page.Data["user"] = user
-	m.page.Data["groups"] = pageGroups
-	m.page.Data["flaggedGroups"] = flaggedGroups
-	m.page.Data["start"] = start
-	m.page.Data["page"] = page
-	m.page.Data["total"] = total
-	m.page.Data["file"] = file
-	m.page.Data["fileName"] = fileName
-	m.page.Data["streamerMode"] = preferences.StreamerMode
+	s.Set(constants.KeyTarget, user)
+	s.Set(constants.SessionKeyGroups, pageGroups)
+	s.Set(constants.SessionKeyFlaggedGroups, flaggedGroups)
+	s.Set(constants.SessionKeyStart, start)
+	s.Set(constants.SessionKeyPage, page)
+	s.Set(constants.SessionKeyTotal, total)
+	s.Set(constants.SessionKeyFile, file)
+	s.Set(constants.SessionKeyFileName, fileName)
+	s.Set(constants.SessionKeyStreamerMode, preferences.StreamerMode)
 
 	// Navigate to the groups menu and update the message
 	m.handler.paginationManager.NavigateTo(m.page.Name, s)
@@ -156,7 +144,7 @@ func (m *GroupsMenu) handlePageNavigation(event *events.ComponentInteractionCrea
 	action := builders.ViewerAction(customID)
 	switch action {
 	case builders.ViewerFirstPage, builders.ViewerPrevPage, builders.ViewerNextPage, builders.ViewerLastPage:
-		user := s.GetPendingUser(session.KeyTarget)
+		user := s.GetPendingUser(constants.KeyTarget)
 
 		// Get the page number for the action
 		maxPage := (len(user.Groups) - 1) / constants.GroupsPerPage

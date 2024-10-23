@@ -30,18 +30,8 @@ func NewOutfitsMenu(h *Handler) *OutfitsMenu {
 	m := OutfitsMenu{handler: h}
 	m.page = &pagination.Page{
 		Name: "Outfits Menu",
-		Data: make(map[string]interface{}),
-		Message: func(data map[string]interface{}) *discord.MessageUpdateBuilder {
-			user := data["user"].(*database.PendingUser)
-			outfits := data["outfits"].([]types.Outfit)
-			start := data["start"].(int)
-			page := data["page"].(int)
-			total := data["total"].(int)
-			file := data["file"].(*discord.File)
-			fileName := data["fileName"].(string)
-			streamerMode := data["streamerMode"].(bool)
-
-			return builders.NewOutfitsEmbed(user, outfits, start, page, total, file, fileName, streamerMode).Build()
+		Message: func(s *session.Session) *discord.MessageUpdateBuilder {
+			return builders.NewOutfitsEmbed(s).Build()
 		},
 		ButtonHandlerFunc: m.handlePageNavigation,
 	}
@@ -50,7 +40,7 @@ func NewOutfitsMenu(h *Handler) *OutfitsMenu {
 
 // ShowOutfitsMenu shows the outfits menu for the given page.
 func (m *OutfitsMenu) ShowOutfitsMenu(event *events.ComponentInteractionCreate, s *session.Session, page int) {
-	user := s.GetPendingUser(session.KeyTarget)
+	user := s.GetPendingUser(constants.KeyTarget)
 
 	// Check if the user has outfits
 	if len(user.Outfits) == 0 {
@@ -98,15 +88,14 @@ func (m *OutfitsMenu) ShowOutfitsMenu(event *events.ComponentInteractionCreate, 
 		preferences = &database.UserPreference{StreamerMode: false} // Default to false if there's an error
 	}
 
-	// Set the data for the page
-	m.page.Data["user"] = user
-	m.page.Data["outfits"] = pageOutfits
-	m.page.Data["start"] = start
-	m.page.Data["page"] = page
-	m.page.Data["total"] = total
-	m.page.Data["file"] = file
-	m.page.Data["fileName"] = fileName
-	m.page.Data["streamerMode"] = preferences.StreamerMode
+	s.Set(constants.SessionKeyUser, user)
+	s.Set(constants.SessionKeyOutfits, pageOutfits)
+	s.Set(constants.SessionKeyStart, start)
+	s.Set(constants.SessionKeyPage, page)
+	s.Set(constants.SessionKeyTotal, total)
+	s.Set(constants.SessionKeyFile, file)
+	s.Set(constants.SessionKeyFileName, fileName)
+	s.Set(constants.SessionKeyStreamerMode, preferences.StreamerMode)
 
 	// Navigate to the outfits menu and update the message
 	m.handler.paginationManager.NavigateTo(m.page.Name, s)
@@ -118,7 +107,7 @@ func (m *OutfitsMenu) handlePageNavigation(event *events.ComponentInteractionCre
 	action := builders.ViewerAction(customID)
 	switch action {
 	case builders.ViewerFirstPage, builders.ViewerPrevPage, builders.ViewerNextPage, builders.ViewerLastPage:
-		user := s.GetPendingUser(session.KeyTarget)
+		user := s.GetPendingUser(constants.KeyTarget)
 
 		// Get the page numbers for the action
 		maxPage := (len(user.Outfits) - 1) / constants.OutfitsPerPage

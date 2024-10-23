@@ -5,6 +5,8 @@ import (
 
 	"github.com/disgoorg/disgo/discord"
 	"github.com/jaxron/roapi.go/pkg/api/types"
+	"github.com/rotector/rotector/internal/bot/constants"
+	"github.com/rotector/rotector/internal/bot/session"
 	"github.com/rotector/rotector/internal/bot/utils"
 	"github.com/rotector/rotector/internal/common/database"
 )
@@ -23,17 +25,17 @@ type FriendsEmbed struct {
 }
 
 // NewFriendsEmbed creates a new FriendsEmbed.
-func NewFriendsEmbed(user *database.PendingUser, friends []types.Friend, flaggedFriends map[uint64]string, start, page, total int, file *discord.File, fileName string, streamerMode bool) *FriendsEmbed {
+func NewFriendsEmbed(s *session.Session) *FriendsEmbed {
 	return &FriendsEmbed{
-		user:           user,
-		friends:        friends,
-		flaggedFriends: flaggedFriends,
-		start:          start,
-		page:           page,
-		total:          total,
-		file:           file,
-		fileName:       fileName,
-		streamerMode:   streamerMode,
+		user:           s.GetPendingUser(constants.KeyTarget),
+		friends:        s.Get(constants.SessionKeyFriends).([]types.Friend),
+		flaggedFriends: s.Get(constants.SessionKeyFlaggedFriends).(map[uint64]string),
+		start:          s.GetInt(constants.SessionKeyStart),
+		page:           s.GetInt(constants.SessionKeyPage),
+		total:          s.GetInt(constants.SessionKeyTotal),
+		file:           s.Get(constants.SessionKeyFile).(*discord.File),
+		fileName:       s.GetString(constants.SessionKeyFileName),
+		streamerMode:   s.GetBool(constants.SessionKeyStreamerMode),
 	}
 }
 

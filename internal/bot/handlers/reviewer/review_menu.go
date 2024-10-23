@@ -9,7 +9,6 @@ import (
 	"github.com/rotector/rotector/internal/bot/pagination"
 	"github.com/rotector/rotector/internal/bot/session"
 	"github.com/rotector/rotector/internal/bot/utils"
-	"github.com/rotector/rotector/internal/common/database"
 	"github.com/rotector/rotector/internal/common/translator"
 	"go.uber.org/zap"
 )
@@ -27,14 +26,8 @@ func NewReviewMenu(h *Handler) *ReviewMenu {
 	m := ReviewMenu{handler: h}
 	m.page = &pagination.Page{
 		Name: "Review Menu",
-		Data: make(map[string]interface{}),
-		Message: func(data map[string]interface{}) *discord.MessageUpdateBuilder {
-			user := data["user"].(*database.PendingUser)
-			sortBy := data["sortBy"].(string)
-			flaggedFriends := data["flaggedFriends"].(map[uint64]string)
-			streamerMode := data["streamerMode"].(bool)
-
-			return builders.NewReviewEmbed(user, translator, flaggedFriends, sortBy, streamerMode).Build()
+		Message: func(s *session.Session) *discord.MessageUpdateBuilder {
+			return builders.NewReviewEmbed(s, translator).Build()
 		},
 		SelectHandlerFunc: m.handleSelectMenu,
 		ButtonHandlerFunc: m.handleButton,
@@ -46,14 +39,14 @@ func NewReviewMenu(h *Handler) *ReviewMenu {
 // ShowReviewMenuAndFetchUser displays the review menu and fetches a new user.
 func (m *ReviewMenu) ShowReviewMenuAndFetchUser(event interfaces.CommonEvent, s *session.Session, content string) {
 	// Fetch a new user
-	sortBy := s.GetString(session.KeySortBy)
+	sortBy := s.GetString(constants.KeySortBy)
 	user, err := m.handler.db.Users().GetRandomPendingUser(sortBy)
 	if err != nil {
 		m.handler.logger.Error("Failed to fetch a new user", zap.Error(err))
 		utils.RespondWithError(event, "Failed to fetch a new user. Please try again.")
 		return
 	}
-	s.Set(session.KeyTarget, user)
+	s.Set(constants.KeyTarget, user)
 
 	// Display the review menu
 	m.ShowReviewMenu(event, s, content)
@@ -61,7 +54,7 @@ func (m *ReviewMenu) ShowReviewMenuAndFetchUser(event interfaces.CommonEvent, s 
 
 // ShowReviewMenu displays the review menu.
 func (m *ReviewMenu) ShowReviewMenu(event interfaces.CommonEvent, s *session.Session, content string) {
-	user := s.GetPendingUser(session.KeyTarget)
+	user := s.GetPendingUser(constants.KeyTarget)
 
 	// Check which friends are flagged
 	friendIDs := make([]uint64, len(user.Friends))
@@ -83,10 +76,9 @@ func (m *ReviewMenu) ShowReviewMenu(event interfaces.CommonEvent, s *session.Ses
 		return
 	}
 
-	m.page.Data["user"] = user
-	m.page.Data["sortBy"] = s.GetString(session.KeySortBy)
-	m.page.Data["flaggedFriends"] = flaggedFriends
-	m.page.Data["streamerMode"] = preferences.StreamerMode
+	s.Set(constants.SessionKeyUser, user)
+	s.Set(constants.SessionKeyFlaggedFriends, flaggedFriends)
+	s.Set(constants.SessionKeyStreamerMode, preferences.StreamerMode)
 
 	m.handler.paginationManager.NavigateTo(m.page.Name, s)
 	m.handler.paginationManager.UpdateMessage(event, s, m.page, content)
@@ -96,7 +88,7 @@ func (m *ReviewMenu) ShowReviewMenu(event interfaces.CommonEvent, s *session.Ses
 func (m *ReviewMenu) handleSelectMenu(event *events.ComponentInteractionCreate, s *session.Session, customID string, option string) {
 	switch customID {
 	case constants.SortOrderSelectMenuCustomID:
-		s.Set(session.KeySortBy, option)
+		s.Set(constants.KeySortBy, option)
 		m.ShowReviewMenuAndFetchUser(event, s, "Changed sort order")
 	case constants.ActionSelectMenuCustomID:
 		switch option {
@@ -135,7 +127,7 @@ func (m *ReviewMenu) handleModal(event *events.ModalSubmitInteractionCreate, s *
 
 // handleBanUser handles the ban user button interaction.
 func (m *ReviewMenu) handleBanUser(event interfaces.CommonEvent, s *session.Session) {
-	user := s.GetPendingUser(session.KeyTarget)
+	user := s.GetPendingUser(constants.KeyTarget)
 
 	// Perform the ban
 	if err := m.handler.db.Users().BanUser(user); err != nil {
@@ -149,7 +141,7 @@ func (m *ReviewMenu) handleBanUser(event interfaces.CommonEvent, s *session.Sess
 
 // handleClearUser handles the clear user button interaction.
 func (m *ReviewMenu) handleClearUser(event interfaces.CommonEvent, s *session.Session) {
-	user := s.GetPendingUser(session.KeyTarget)
+	user := s.GetPendingUser(constants.KeyTarget)
 
 	// Clear the user
 	if err := m.handler.db.Users().ClearUser(user); err != nil {
@@ -163,7 +155,7 @@ func (m *ReviewMenu) handleClearUser(event interfaces.CommonEvent, s *session.Se
 
 // handleBanWithReason processes the ban with a modal for a custom reason.
 func (m *ReviewMenu) handleBanWithReason(event *events.ComponentInteractionCreate, s *session.Session) {
-	user := s.GetPendingUser(session.KeyTarget)
+	user := s.GetPendingUser(constants.KeyTarget)
 
 	// Create the modal
 	modal := discord.NewModalCreateBuilder().
@@ -186,7 +178,7 @@ func (m *ReviewMenu) handleBanWithReason(event *events.ComponentInteractionCreat
 
 // handleBanWithReasonModalSubmit processes the modal submit interaction.
 func (m *ReviewMenu) handleBanWithReasonModalSubmit(event *events.ModalSubmitInteractionCreate, s *session.Session) {
-	user := s.GetPendingUser(session.KeyTarget)
+	user := s.GetPendingUser(constants.KeyTarget)
 
 	// Get the ban reason from the modal
 	reason := event.Data.Text("ban_reason")

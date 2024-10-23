@@ -11,6 +11,7 @@ import (
 	"github.com/disgoorg/disgo/discord"
 	"github.com/rotector/rotector/assets"
 	"github.com/rotector/rotector/internal/bot/constants"
+	"github.com/rotector/rotector/internal/bot/session"
 	"github.com/rotector/rotector/internal/bot/utils"
 	"github.com/rotector/rotector/internal/common/database"
 	"github.com/rotector/rotector/internal/common/translator"
@@ -28,13 +29,13 @@ type ReviewEmbed struct {
 }
 
 // NewReviewEmbed creates a new ReviewEmbed.
-func NewReviewEmbed(user *database.PendingUser, translator *translator.Translator, flaggedFriends map[uint64]string, sortBy string, streamerMode bool) *ReviewEmbed {
+func NewReviewEmbed(s *session.Session, translator *translator.Translator) *ReviewEmbed {
 	return &ReviewEmbed{
-		user:           user,
+		user:           s.GetPendingUser(constants.KeyTarget),
 		translator:     translator,
-		flaggedFriends: flaggedFriends,
-		sortBy:         sortBy,
-		streamerMode:   streamerMode,
+		flaggedFriends: s.Get(constants.SessionKeyFlaggedFriends).(map[uint64]string),
+		sortBy:         s.GetString(constants.KeySortBy),
+		streamerMode:   s.GetBool(constants.SessionKeyStreamerMode),
 	}
 }
 

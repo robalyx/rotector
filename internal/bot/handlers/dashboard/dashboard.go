@@ -22,10 +22,9 @@ func NewDashboard(h *Handler) *Dashboard {
 	m := Dashboard{handler: h}
 	m.page = &pagination.Page{
 		Name: "Dashboard",
-		Data: make(map[string]interface{}),
-		Message: func(data map[string]interface{}) *discord.MessageUpdateBuilder {
-			pendingCount := data["pendingCount"].(int)
-			flaggedCount := data["flaggedCount"].(int)
+		Message: func(s *session.Session) *discord.MessageUpdateBuilder {
+			pendingCount := s.Get(constants.SessionKeyPendingCount).(int)
+			flaggedCount := s.Get(constants.SessionKeyFlaggedCount).(int)
 
 			return builders.NewDashboardBuilder(pendingCount, flaggedCount).Build()
 		},
@@ -50,8 +49,8 @@ func (m *Dashboard) ShowDashboard(event interfaces.CommonEvent) {
 	}
 
 	// Set data for the main menu
-	m.page.Data["pendingCount"] = pendingCount
-	m.page.Data["flaggedCount"] = flaggedCount
+	s.Set(constants.SessionKeyPendingCount, pendingCount)
+	s.Set(constants.SessionKeyFlaggedCount, flaggedCount)
 
 	// Navigate to the main menu and update the message
 	m.handler.paginationManager.NavigateTo(m.page.Name, s)
@@ -71,7 +70,7 @@ func (m *Dashboard) handleSelectMenu(event *events.ComponentInteractionCreate, s
 		if err != nil {
 			m.handler.logger.Error("Failed to get user preferences", zap.Error(err))
 		}
-		s.Set(session.KeySortBy, preferences.DefaultSort)
+		s.Set(constants.KeySortBy, preferences.DefaultSort)
 
 		m.handler.reviewHandler.ShowReviewMenuAndFetchUser(event, s, "")
 	case constants.UserPreferencesCustomID:

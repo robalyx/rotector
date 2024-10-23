@@ -15,7 +15,6 @@ import (
 	"github.com/rotector/rotector/internal/bot/pagination"
 	"github.com/rotector/rotector/internal/bot/session"
 	"github.com/rotector/rotector/internal/bot/utils"
-	"github.com/rotector/rotector/internal/common/database"
 	"go.uber.org/zap"
 )
 
@@ -30,19 +29,8 @@ func NewFriendsMenu(h *Handler) *FriendsMenu {
 	m := FriendsMenu{handler: h}
 	m.page = &pagination.Page{
 		Name: "Friends Menu",
-		Data: make(map[string]interface{}),
-		Message: func(data map[string]interface{}) *discord.MessageUpdateBuilder {
-			user := data["user"].(*database.PendingUser)
-			friends := data["friends"].([]types.Friend)
-			flaggedFriends := data["flaggedFriends"].(map[uint64]string)
-			start := data["start"].(int)
-			page := data["page"].(int)
-			total := data["total"].(int)
-			file := data["file"].(*discord.File)
-			fileName := data["fileName"].(string)
-			streamerMode := data["streamerMode"].(bool)
-
-			return builders.NewFriendsEmbed(user, friends, flaggedFriends, start, page, total, file, fileName, streamerMode).Build()
+		Message: func(s *session.Session) *discord.MessageUpdateBuilder {
+			return builders.NewFriendsEmbed(s).Build()
 		},
 		ButtonHandlerFunc: m.handlePageNavigation,
 	}
@@ -51,7 +39,7 @@ func NewFriendsMenu(h *Handler) *FriendsMenu {
 
 // ShowFriendsMenu shows the friends menu for the given page.
 func (m *FriendsMenu) ShowFriendsMenu(event *events.ComponentInteractionCreate, s *session.Session, page int) {
-	user := s.GetPendingUser(session.KeyTarget)
+	user := s.GetPendingUser(constants.KeyTarget)
 
 	// Check if the user has friends
 	if len(user.Friends) == 0 {
@@ -116,15 +104,15 @@ func (m *FriendsMenu) ShowFriendsMenu(event *events.ComponentInteractionCreate, 
 	}
 
 	// Set the data for the page
-	m.page.Data["user"] = user
-	m.page.Data["friends"] = pageFriends
-	m.page.Data["flaggedFriends"] = flaggedFriends
-	m.page.Data["start"] = start
-	m.page.Data["page"] = page
-	m.page.Data["total"] = total
-	m.page.Data["file"] = file
-	m.page.Data["fileName"] = fileName
-	m.page.Data["streamerMode"] = preferences.StreamerMode
+	s.Set(constants.KeyTarget, user)
+	s.Set(constants.SessionKeyFriends, pageFriends)
+	s.Set(constants.SessionKeyFlaggedFriends, flaggedFriends)
+	s.Set(constants.SessionKeyStart, start)
+	s.Set(constants.SessionKeyPage, page)
+	s.Set(constants.SessionKeyTotal, total)
+	s.Set(constants.SessionKeyFile, file)
+	s.Set(constants.SessionKeyFileName, fileName)
+	s.Set(constants.SessionKeyStreamerMode, preferences.StreamerMode)
 
 	// Navigate to the friends menu and update the message
 	m.handler.paginationManager.NavigateTo(m.page.Name, s)
@@ -151,7 +139,7 @@ func (m *FriendsMenu) handlePageNavigation(event *events.ComponentInteractionCre
 	action := builders.ViewerAction(customID)
 	switch action {
 	case builders.ViewerFirstPage, builders.ViewerPrevPage, builders.ViewerNextPage, builders.ViewerLastPage:
-		user := s.GetPendingUser(session.KeyTarget)
+		user := s.GetPendingUser(constants.KeyTarget)
 
 		// Get the page number for the action
 		maxPage := (len(user.Friends) - 1) / constants.FriendsPerPage

@@ -5,6 +5,8 @@ import (
 
 	"github.com/disgoorg/disgo/discord"
 	"github.com/jaxron/roapi.go/pkg/api/types"
+	"github.com/rotector/rotector/internal/bot/constants"
+	"github.com/rotector/rotector/internal/bot/session"
 	"github.com/rotector/rotector/internal/bot/utils"
 	"github.com/rotector/rotector/internal/common/database"
 )
@@ -22,16 +24,16 @@ type OutfitsEmbed struct {
 }
 
 // NewOutfitsEmbed creates a new OutfitsEmbed.
-func NewOutfitsEmbed(user *database.PendingUser, outfits []types.Outfit, start, page, total int, file *discord.File, fileName string, streamerMode bool) *OutfitsEmbed {
+func NewOutfitsEmbed(s *session.Session) *OutfitsEmbed {
 	return &OutfitsEmbed{
-		user:         user,
-		outfits:      outfits,
-		start:        start,
-		page:         page,
-		total:        total,
-		file:         file,
-		fileName:     fileName,
-		streamerMode: streamerMode,
+		user:         s.GetPendingUser(constants.KeyTarget),
+		outfits:      s.Get(constants.SessionKeyOutfits).([]types.Outfit),
+		start:        s.GetInt(constants.SessionKeyStart),
+		page:         s.GetInt(constants.SessionKeyPage),
+		total:        s.GetInt(constants.SessionKeyTotal),
+		file:         s.Get(constants.SessionKeyFile).(*discord.File),
+		fileName:     s.GetString(constants.SessionKeyFileName),
+		streamerMode: s.GetBool(constants.SessionKeyStreamerMode),
 	}
 }
 

@@ -164,7 +164,7 @@ func (b *Bot) handleComponentInteraction(event *events.ComponentInteractionCreat
 		s := b.sessionManager.GetOrCreateSession(event.User().ID)
 
 		// Ensure the interaction is for the latest message
-		if event.Message.ID.String() != s.GetString(session.KeyMessageID) {
+		if event.Message.ID.String() != s.GetString(constants.KeyMessageID) {
 			utils.RespondWithError(event, "This interaction is outdated. Please use the latest interaction.")
 			return
 		}

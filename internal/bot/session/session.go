@@ -7,14 +7,6 @@ import (
 	"github.com/rotector/rotector/internal/common/database"
 )
 
-const (
-	KeyMessageID      = "messageID"
-	KeyTarget         = "target"
-	KeySortBy         = "sortBy"
-	KeyPaginationPage = "paginationPage"
-	KeyCurrentPage    = "currentPage"
-)
-
 // Session represents a user's session.
 type Session struct {
 	db           *database.Database
