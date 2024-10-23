@@ -41,7 +41,7 @@ func GetRoAPIClient(cfg *config.Config, redis config.Redis, logger *zap.Logger) 
 
 	return api.New(cookies,
 		client.WithLogger(NewLogger(logger)),
-		client.WithTimeout(10*time.Second),
+		client.WithTimeout(20*time.Second),
 		client.WithMiddleware(cache),
 		client.WithMiddleware(circuitbreaker.New(cfg.CircuitBreaker.MaxFailures, cfg.CircuitBreaker.FailureThreshold, cfg.CircuitBreaker.RecoveryTimeout)),
 		client.WithMiddleware(ratelimit.New(cfg.RateLimit.RequestsPerSecond, cfg.RateLimit.BurstSize)),
