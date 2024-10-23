@@ -18,8 +18,8 @@ import (
 
 var multipleNewlinesRegex = regexp.MustCompile(`\n{4,}`)
 
-// ReviewerEmbed builds the embed for the review message.
-type ReviewerEmbed struct {
+// ReviewEmbed builds the embed for the review message.
+type ReviewEmbed struct {
 	user           *database.PendingUser
 	translator     *translator.Translator
 	flaggedFriends map[uint64]string
@@ -27,9 +27,9 @@ type ReviewerEmbed struct {
 	streamerMode   bool
 }
 
-// NewReviewerEmbed creates a new ReviewerEmbed.
-func NewReviewerEmbed(user *database.PendingUser, translator *translator.Translator, flaggedFriends map[uint64]string, sortBy string, streamerMode bool) *ReviewerEmbed {
-	return &ReviewerEmbed{
+// NewReviewEmbed creates a new ReviewEmbed.
+func NewReviewEmbed(user *database.PendingUser, translator *translator.Translator, flaggedFriends map[uint64]string, sortBy string, streamerMode bool) *ReviewEmbed {
+	return &ReviewEmbed{
 		user:           user,
 		translator:     translator,
 		flaggedFriends: flaggedFriends,
@@ -39,7 +39,7 @@ func NewReviewerEmbed(user *database.PendingUser, translator *translator.Transla
 }
 
 // Build constructs and returns the discord.Embed.
-func (b *ReviewerEmbed) Build() *discord.MessageUpdateBuilder {
+func (b *ReviewEmbed) Build() *discord.MessageUpdateBuilder {
 	embed := discord.NewEmbedBuilder().
 		AddField("ID", fmt.Sprintf("[%s](https://www.roblox.com/users/%d/profile)", utils.CensorString(strconv.FormatUint(b.user.ID, 10), b.streamerMode), b.user.ID), true).
 		AddField("Name", utils.CensorString(b.user.Name, b.streamerMode), true).
@@ -114,7 +114,7 @@ func (b *ReviewerEmbed) Build() *discord.MessageUpdateBuilder {
 }
 
 // getDescription returns the description field for the embed.
-func (b *ReviewerEmbed) getDescription() string {
+func (b *ReviewEmbed) getDescription() string {
 	description := b.user.Description
 
 	// Check if description is empty
@@ -141,7 +141,7 @@ func (b *ReviewerEmbed) getDescription() string {
 }
 
 // getGroups returns the groups field for the embed.
-func (b *ReviewerEmbed) getGroups() string {
+func (b *ReviewEmbed) getGroups() string {
 	// Get the first 10 groups
 	groups := []string{}
 	for i, group := range b.user.Groups {
@@ -161,7 +161,7 @@ func (b *ReviewerEmbed) getGroups() string {
 }
 
 // getFriendsField returns the friends field name for the embed.
-func (b *ReviewerEmbed) getFriendsField() string {
+func (b *ReviewEmbed) getFriendsField() string {
 	if len(b.flaggedFriends) > 0 {
 		return "Friends ⚠️"
 	}
@@ -169,7 +169,7 @@ func (b *ReviewerEmbed) getFriendsField() string {
 }
 
 // getFriends returns the friends field for the embed.
-func (b *ReviewerEmbed) getFriends() string {
+func (b *ReviewEmbed) getFriends() string {
 	// Get the first 10 friends
 	friends := []string{}
 	for i, friend := range b.user.Friends {
@@ -204,7 +204,7 @@ func (b *ReviewerEmbed) getFriends() string {
 }
 
 // getOutfits returns the outfits field for the embed.
-func (b *ReviewerEmbed) getOutfits() string {
+func (b *ReviewEmbed) getOutfits() string {
 	// Get the first 10 outfits
 	outfits := []string{}
 	for i, outfit := range b.user.Outfits {
@@ -223,7 +223,7 @@ func (b *ReviewerEmbed) getOutfits() string {
 }
 
 // getFlaggedType returns the flagged type field for the embed.
-func (b *ReviewerEmbed) getFlaggedType() string {
+func (b *ReviewEmbed) getFlaggedType() string {
 	if len(b.user.FlaggedGroups) > 0 {
 		return "Flagged Groups"
 	}
@@ -231,7 +231,7 @@ func (b *ReviewerEmbed) getFlaggedType() string {
 }
 
 // getFlaggedContent returns the flagged content field for the embed.
-func (b *ReviewerEmbed) getFlaggedContent() string {
+func (b *ReviewEmbed) getFlaggedContent() string {
 	flaggedGroups := b.user.FlaggedGroups
 	if len(flaggedGroups) > 0 {
 		var content strings.Builder
@@ -261,7 +261,7 @@ func (b *ReviewerEmbed) getFlaggedContent() string {
 }
 
 // getLastReviewed returns the last reviewed field for the embed.
-func (b *ReviewerEmbed) getLastReviewed() string {
+func (b *ReviewEmbed) getLastReviewed() string {
 	if b.user.LastReviewed.IsZero() {
 		return "Never Reviewed"
 	}

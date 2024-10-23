@@ -34,7 +34,7 @@ func NewReviewMenu(h *Handler) *ReviewMenu {
 			flaggedFriends := data["flaggedFriends"].(map[uint64]string)
 			streamerMode := data["streamerMode"].(bool)
 
-			return builders.NewReviewerEmbed(user, translator, flaggedFriends, sortBy, streamerMode).Build()
+			return builders.NewReviewEmbed(user, translator, flaggedFriends, sortBy, streamerMode).Build()
 		},
 		SelectHandlerFunc: m.handleSelectMenu,
 		ButtonHandlerFunc: m.handleButton,
