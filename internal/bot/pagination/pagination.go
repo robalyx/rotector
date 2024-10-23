@@ -5,7 +5,7 @@ import (
 	"github.com/disgoorg/disgo/events"
 	"github.com/rotector/rotector/internal/bot/interfaces"
 	"github.com/rotector/rotector/internal/bot/session"
-	"github.com/rotector/rotector/internal/common/utils"
+	"github.com/rotector/rotector/internal/bot/utils"
 	"go.uber.org/zap"
 )
 

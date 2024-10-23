@@ -16,10 +16,11 @@ import (
 	"github.com/rotector/rotector/internal/bot/constants"
 	"github.com/rotector/rotector/internal/bot/handlers/dashboard"
 	"github.com/rotector/rotector/internal/bot/handlers/reviewer"
+	"github.com/rotector/rotector/internal/bot/handlers/settings"
 	"github.com/rotector/rotector/internal/bot/pagination"
 	"github.com/rotector/rotector/internal/bot/session"
+	"github.com/rotector/rotector/internal/bot/utils"
 	"github.com/rotector/rotector/internal/common/database"
-	"github.com/rotector/rotector/internal/common/utils"
 )
 
 // Bot represents the Discord bot.
@@ -30,6 +31,7 @@ type Bot struct {
 	sessionManager    *session.Manager
 	paginationManager *pagination.Manager
 	dashboardHandler  *dashboard.Handler
+	settingsHandler   *settings.Handler
 }
 
 // New creates a new Bot instance.
@@ -40,8 +42,10 @@ func New(token string, db *database.Database, roAPI *api.API, logger *zap.Logger
 	// Initialize the handlers
 	dashboardHandler := dashboard.New(db, logger, sessionManager, paginationManager)
 	reviewerHandler := reviewer.New(db, logger, roAPI, sessionManager, paginationManager, dashboardHandler)
+	settingsHandler := settings.New(db, logger, sessionManager, paginationManager, dashboardHandler)
 
 	dashboardHandler.SetReviewHandler(reviewerHandler)
+	dashboardHandler.SetSettingsHandler(settingsHandler)
 
 	// Initialize the bot
 	b := &Bot{
@@ -50,6 +54,7 @@ func New(token string, db *database.Database, roAPI *api.API, logger *zap.Logger
 		sessionManager:    sessionManager,
 		paginationManager: paginationManager,
 		dashboardHandler:  dashboardHandler,
+		settingsHandler:   settingsHandler,
 	}
 
 	// Initialize the Discord client
@@ -155,7 +160,16 @@ func (b *Bot) handleComponentInteraction(event *events.ComponentInteractionCreat
 				b.logger.Error("Panic in component interaction handler", zap.Any("panic", r))
 			}
 		}()
-		b.reviewerHandler.HandleComponentInteraction(event)
+
+		s := b.sessionManager.GetOrCreateSession(event.User().ID)
+
+		// Ensure the interaction is for the latest message
+		if event.Message.ID.String() != s.GetString(session.KeyMessageID) {
+			utils.RespondWithError(event, "This interaction is outdated. Please use the latest interaction.")
+			return
+		}
+
+		b.paginationManager.HandleInteraction(event, s)
 	}()
 }
 
@@ -181,6 +195,8 @@ func (b *Bot) handleModalSubmit(event *events.ModalSubmitInteractionCreate) {
 				b.logger.Error("Panic in modal submit interaction handler", zap.Any("panic", r))
 			}
 		}()
-		b.reviewerHandler.HandleModalSubmit(event)
+
+		s := b.sessionManager.GetOrCreateSession(event.User().ID)
+		b.paginationManager.HandleInteraction(event, s)
 	}()
 }

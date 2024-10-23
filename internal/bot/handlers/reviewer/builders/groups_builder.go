@@ -5,6 +5,7 @@ import (
 
 	"github.com/disgoorg/disgo/discord"
 	"github.com/jaxron/roapi.go/pkg/api/types"
+	"github.com/rotector/rotector/internal/bot/utils"
 	"github.com/rotector/rotector/internal/common/database"
 )
 
@@ -18,10 +19,11 @@ type GroupsEmbed struct {
 	total         int
 	file          *discord.File
 	fileName      string
+	streamerMode  bool
 }
 
 // NewGroupsEmbed creates a new GroupsEmbed.
-func NewGroupsEmbed(user *database.PendingUser, groups []types.UserGroupRoles, flaggedGroups map[uint64]bool, start, page, total int, file *discord.File, fileName string) *GroupsEmbed {
+func NewGroupsEmbed(user *database.PendingUser, groups []types.UserGroupRoles, flaggedGroups map[uint64]bool, start, page, total int, file *discord.File, fileName string, streamerMode bool) *GroupsEmbed {
 	return &GroupsEmbed{
 		user:          user,
 		groups:        groups,
@@ -31,6 +33,7 @@ func NewGroupsEmbed(user *database.PendingUser, groups []types.UserGroupRoles, f
 		total:         total,
 		file:          file,
 		fileName:      fileName,
+		streamerMode:  streamerMode,
 	}
 }
 
@@ -38,9 +41,9 @@ func NewGroupsEmbed(user *database.PendingUser, groups []types.UserGroupRoles, f
 func (b *GroupsEmbed) Build() *discord.MessageUpdateBuilder {
 	embed := discord.NewEmbedBuilder().
 		SetTitle(fmt.Sprintf("User Groups (Page %d/%d)", b.page+1, b.total)).
-		SetDescription(fmt.Sprintf("```%s (%d)```", b.user.Name, b.user.ID)).
+		SetDescription(fmt.Sprintf("```%s (%d)```", utils.CensorString(b.user.Name, b.streamerMode), b.user.ID)).
 		SetImage("attachment://" + b.fileName).
-		SetColor(0x312D2B)
+		SetColor(utils.GetMessageEmbedColor(b.streamerMode))
 
 	components := []discord.ContainerComponent{
 		discord.NewActionRow(
@@ -54,7 +57,7 @@ func (b *GroupsEmbed) Build() *discord.MessageUpdateBuilder {
 
 	for i, group := range b.groups {
 		fieldName := fmt.Sprintf("Group %d", b.start+i+1)
-		fieldValue := fmt.Sprintf("[%s](https://www.roblox.com/groups/%d)\n(%s)", group.Group.Name, group.Group.ID, group.Role.Name)
+		fieldValue := fmt.Sprintf("[%s](https://www.roblox.com/groups/%d)\n(%s)", utils.CensorString(group.Group.Name, b.streamerMode), group.Group.ID, group.Role.Name)
 
 		// Add flagged status if needed
 		if b.flaggedGroups[group.Group.ID] {

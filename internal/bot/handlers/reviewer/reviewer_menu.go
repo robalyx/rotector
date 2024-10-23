@@ -8,6 +8,7 @@ import (
 	"github.com/rotector/rotector/internal/bot/interfaces"
 	"github.com/rotector/rotector/internal/bot/pagination"
 	"github.com/rotector/rotector/internal/bot/session"
+	"github.com/rotector/rotector/internal/bot/utils"
 	"github.com/rotector/rotector/internal/common/database"
 	"github.com/rotector/rotector/internal/common/translator"
 	"go.uber.org/zap"
@@ -23,74 +24,43 @@ type ReviewMenu struct {
 func NewReviewMenu(h *Handler) *ReviewMenu {
 	translator := translator.New(h.roAPI.GetClient())
 
-	r := ReviewMenu{handler: h}
-	r.page = &pagination.Page{
+	m := ReviewMenu{handler: h}
+	m.page = &pagination.Page{
 		Name: "Review Menu",
 		Data: make(map[string]interface{}),
 		Message: func(data map[string]interface{}) *discord.MessageUpdateBuilder {
 			user := data["user"].(*database.PendingUser)
 			sortBy := data["sortBy"].(string)
 			flaggedFriends := data["flaggedFriends"].(map[uint64]string)
+			streamerMode := data["streamerMode"].(bool)
 
-			return builders.NewReviewerEmbed(user, translator, flaggedFriends, sortBy).Build()
+			return builders.NewReviewerEmbed(user, translator, flaggedFriends, sortBy, streamerMode).Build()
 		},
-		SelectHandlerFunc: func(event *events.ComponentInteractionCreate, s *session.Session, customID string, option string) {
-			switch customID {
-			case constants.SortOrderSelectMenuCustomID:
-				s.Set(session.KeySortBy, option)
-				r.ShowReviewMenuAndFetchUser(event, s, "Changed sort order")
-			case constants.ActionSelectMenuCustomID:
-				switch option {
-				case constants.BanWithReasonButtonCustomID:
-					r.handleBanWithReason(event, s)
-				case constants.OpenOutfitsMenuButtonCustomID:
-					h.outfitsMenu.ShowOutfitsMenu(event, s, 0)
-				case constants.OpenFriendsMenuButtonCustomID:
-					h.friendsMenu.ShowFriendsMenu(event, s, 0)
-				case constants.OpenGroupsMenuButtonCustomID:
-					h.groupsMenu.ShowGroupsMenu(event, s, 0)
-				}
-			}
-		},
-		ButtonHandlerFunc: func(event *events.ComponentInteractionCreate, s *session.Session, option string) {
-			switch option {
-			case constants.BackButtonCustomID:
-				r.handler.dashboardHandler.ShowDashboard(event)
-			case constants.BanButtonCustomID:
-				r.handleBanUser(event, s)
-			case constants.ClearButtonCustomID:
-				r.handleClearUser(event, s)
-			case constants.SkipButtonCustomID:
-				r.ShowReviewMenuAndFetchUser(event, s, "Skipped user.")
-			}
-		},
-		ModalHandlerFunc: func(event *events.ModalSubmitInteractionCreate, s *session.Session) {
-			if event.Data.CustomID == constants.BanWithReasonModalCustomID {
-				r.handleBanWithReasonModalSubmit(event, s)
-			}
-		},
+		SelectHandlerFunc: m.handleSelectMenu,
+		ButtonHandlerFunc: m.handleButton,
+		ModalHandlerFunc:  m.handleModal,
 	}
-
-	return &r
+	return &m
 }
 
 // ShowReviewMenuAndFetchUser displays the review menu and fetches a new user.
-func (r *ReviewMenu) ShowReviewMenuAndFetchUser(event interfaces.CommonEvent, s *session.Session, content string) {
+func (m *ReviewMenu) ShowReviewMenuAndFetchUser(event interfaces.CommonEvent, s *session.Session, content string) {
 	// Fetch a new user
 	sortBy := s.GetString(session.KeySortBy)
-	user, err := r.handler.db.Users().GetRandomPendingUser(sortBy)
+	user, err := m.handler.db.Users().GetRandomPendingUser(sortBy)
 	if err != nil {
-		r.handler.logger.Error("Failed to fetch a new user", zap.Error(err))
-		r.handler.respondWithError(event, "Failed to fetch a new user. Please try again.")
+		m.handler.logger.Error("Failed to fetch a new user", zap.Error(err))
+		utils.RespondWithError(event, "Failed to fetch a new user. Please try again.")
 		return
 	}
 	s.Set(session.KeyTarget, user)
 
 	// Display the review menu
-	r.ShowReviewMenu(event, s, content)
+	m.ShowReviewMenu(event, s, content)
 }
 
-func (r *ReviewMenu) ShowReviewMenu(event interfaces.CommonEvent, s *session.Session, content string) {
+// ShowReviewMenu displays the review menu.
+func (m *ReviewMenu) ShowReviewMenu(event interfaces.CommonEvent, s *session.Session, content string) {
 	user := s.GetPendingUser(session.KeyTarget)
 
 	// Check which friends are flagged
@@ -99,48 +69,100 @@ func (r *ReviewMenu) ShowReviewMenu(event interfaces.CommonEvent, s *session.Ses
 		friendIDs[i] = friend.ID
 	}
 
-	flaggedFriends, err := r.handler.db.Users().CheckExistingUsers(friendIDs)
+	flaggedFriends, err := m.handler.db.Users().CheckExistingUsers(friendIDs)
 	if err != nil {
-		r.handler.logger.Error("Failed to check existing friends", zap.Error(err))
+		m.handler.logger.Error("Failed to check existing friends", zap.Error(err))
 		return
 	}
 
-	r.page.Data["user"] = user
-	r.page.Data["sortBy"] = s.GetString(session.KeySortBy)
-	r.page.Data["flaggedFriends"] = flaggedFriends
+	// Get user preferences
+	preferences, err := m.handler.db.Settings().GetUserPreferences(uint64(event.User().ID))
+	if err != nil {
+		m.handler.logger.Error("Failed to get user preferences", zap.Error(err))
+		utils.RespondWithError(event, "Failed to get user preferences. Please try again.")
+		return
+	}
 
-	r.handler.paginationManager.NavigateTo(r.page.Name, s)
-	r.handler.paginationManager.UpdateMessage(event, s, r.page, content)
+	m.page.Data["user"] = user
+	m.page.Data["sortBy"] = s.GetString(session.KeySortBy)
+	m.page.Data["flaggedFriends"] = flaggedFriends
+	m.page.Data["streamerMode"] = preferences.StreamerMode
+
+	m.handler.paginationManager.NavigateTo(m.page.Name, s)
+	m.handler.paginationManager.UpdateMessage(event, s, m.page, content)
 }
 
-func (r *ReviewMenu) handleBanUser(event interfaces.CommonEvent, s *session.Session) {
+// handleSelectMenu handles the select menu for the review menu.
+func (m *ReviewMenu) handleSelectMenu(event *events.ComponentInteractionCreate, s *session.Session, customID string, option string) {
+	switch customID {
+	case constants.SortOrderSelectMenuCustomID:
+		s.Set(session.KeySortBy, option)
+		m.ShowReviewMenuAndFetchUser(event, s, "Changed sort order")
+	case constants.ActionSelectMenuCustomID:
+		switch option {
+		case constants.BanWithReasonButtonCustomID:
+			m.handleBanWithReason(event, s)
+		case constants.OpenOutfitsMenuButtonCustomID:
+			m.handler.outfitsMenu.ShowOutfitsMenu(event, s, 0)
+		case constants.OpenFriendsMenuButtonCustomID:
+			m.handler.friendsMenu.ShowFriendsMenu(event, s, 0)
+		case constants.OpenGroupsMenuButtonCustomID:
+			m.handler.groupsMenu.ShowGroupsMenu(event, s, 0)
+		}
+	}
+}
+
+// handleButton handles the buttons for the review menu.
+func (m *ReviewMenu) handleButton(event *events.ComponentInteractionCreate, s *session.Session, customID string) {
+	switch customID {
+	case constants.BackButtonCustomID:
+		m.handler.dashboardHandler.ShowDashboard(event)
+	case constants.BanButtonCustomID:
+		m.handleBanUser(event, s)
+	case constants.ClearButtonCustomID:
+		m.handleClearUser(event, s)
+	case constants.SkipButtonCustomID:
+		m.ShowReviewMenuAndFetchUser(event, s, "Skipped user.")
+	}
+}
+
+// handleModal handles the modal for the review menu.
+func (m *ReviewMenu) handleModal(event *events.ModalSubmitInteractionCreate, s *session.Session) {
+	if event.Data.CustomID == constants.BanWithReasonModalCustomID {
+		m.handleBanWithReasonModalSubmit(event, s)
+	}
+}
+
+// handleBanUser handles the ban user button interaction.
+func (m *ReviewMenu) handleBanUser(event interfaces.CommonEvent, s *session.Session) {
 	user := s.GetPendingUser(session.KeyTarget)
 
 	// Perform the ban
-	if err := r.handler.db.Users().BanUser(user); err != nil {
-		r.handler.logger.Error("Failed to accept user", zap.Error(err))
-		r.handler.respondWithError(event, "Failed to accept the user. Please try again.")
+	if err := m.handler.db.Users().BanUser(user); err != nil {
+		m.handler.logger.Error("Failed to accept user", zap.Error(err))
+		utils.RespondWithError(event, "Failed to accept the user. Please try again.")
 		return
 	}
 
-	r.ShowReviewMenuAndFetchUser(event, s, "User banned.")
+	m.ShowReviewMenuAndFetchUser(event, s, "User banned.")
 }
 
-func (r *ReviewMenu) handleClearUser(event interfaces.CommonEvent, s *session.Session) {
+// handleClearUser handles the clear user button interaction.
+func (m *ReviewMenu) handleClearUser(event interfaces.CommonEvent, s *session.Session) {
 	user := s.GetPendingUser(session.KeyTarget)
 
 	// Clear the user
-	if err := r.handler.db.Users().ClearUser(user); err != nil {
-		r.handler.logger.Error("Failed to reject user", zap.Error(err))
-		r.handler.respondWithError(event, "Failed to reject the user. Please try again.")
+	if err := m.handler.db.Users().ClearUser(user); err != nil {
+		m.handler.logger.Error("Failed to reject user", zap.Error(err))
+		utils.RespondWithError(event, "Failed to reject the user. Please try again.")
 		return
 	}
 
-	r.ShowReviewMenuAndFetchUser(event, s, "User cleared.")
+	m.ShowReviewMenuAndFetchUser(event, s, "User cleared.")
 }
 
-// handleBanWithReason processes the ban with reason button interaction.
-func (r *ReviewMenu) handleBanWithReason(event *events.ComponentInteractionCreate, s *session.Session) {
+// handleBanWithReason processes the ban with a modal for a custom reason.
+func (m *ReviewMenu) handleBanWithReason(event *events.ComponentInteractionCreate, s *session.Session) {
 	user := s.GetPendingUser(session.KeyTarget)
 
 	// Create the modal
@@ -157,19 +179,19 @@ func (r *ReviewMenu) handleBanWithReason(event *events.ComponentInteractionCreat
 
 	// Send the modal
 	if err := event.Modal(modal); err != nil {
-		r.handler.logger.Error("Failed to create modal", zap.Error(err))
-		r.handler.respondWithError(event, "Failed to open the ban reason form. Please try again.")
+		m.handler.logger.Error("Failed to create modal", zap.Error(err))
+		utils.RespondWithError(event, "Failed to open the ban reason form. Please try again.")
 	}
 }
 
 // handleBanWithReasonModalSubmit processes the modal submit interaction.
-func (r *ReviewMenu) handleBanWithReasonModalSubmit(event *events.ModalSubmitInteractionCreate, s *session.Session) {
+func (m *ReviewMenu) handleBanWithReasonModalSubmit(event *events.ModalSubmitInteractionCreate, s *session.Session) {
 	user := s.GetPendingUser(session.KeyTarget)
 
 	// Get the ban reason from the modal
 	reason := event.Data.Text("ban_reason")
 	if reason == "" {
-		r.handler.respondWithError(event, "Ban reason cannot be empty. Please try again.")
+		utils.RespondWithError(event, "Ban reason cannot be empty. Please try again.")
 		return
 	}
 
@@ -177,12 +199,12 @@ func (r *ReviewMenu) handleBanWithReasonModalSubmit(event *events.ModalSubmitInt
 	user.Reason = reason
 
 	// Perform the ban
-	if err := r.handler.db.Users().BanUser(user); err != nil {
-		r.handler.logger.Error("Failed to accept user", zap.Error(err))
-		r.handler.respondWithError(event, "Failed to ban the user. Please try again.")
+	if err := m.handler.db.Users().BanUser(user); err != nil {
+		m.handler.logger.Error("Failed to accept user", zap.Error(err))
+		utils.RespondWithError(event, "Failed to ban the user. Please try again.")
 		return
 	}
 
 	// Show the review menu and fetch a new user
-	r.ShowReviewMenuAndFetchUser(event, s, "User banned.")
+	m.ShowReviewMenuAndFetchUser(event, s, "User banned.")
 }

@@ -71,13 +71,27 @@ type DailyStatistics struct {
 	UsersPurged  int64     `pg:"users_purged"`
 }
 
+// UserPreference represents user-specific preferences.
+type UserPreference struct {
+	UserID       uint64 `pg:"user_id,pk"`
+	StreamerMode bool   `pg:"streamer_mode"`
+	DefaultSort  string `pg:"default_sort"`
+}
+
+// GuildSetting represents guild-wide settings.
+type GuildSetting struct {
+	GuildID          uint64   `pg:"guild_id,pk"`
+	WhitelistedRoles []uint64 `pg:"whitelisted_roles,array"`
+}
+
 // Database represents the database connection and operations.
 type Database struct {
-	db     *pg.DB
-	logger *zap.Logger
-	users  *UserRepository
-	groups *GroupRepository
-	stats  *StatsRepository
+	db       *pg.DB
+	logger   *zap.Logger
+	users    *UserRepository
+	groups   *GroupRepository
+	stats    *StatsRepository
+	settings *SettingRepository
 }
 
 // NewConnection establishes a new database connection and returns a Database instance.
@@ -92,11 +106,12 @@ func NewConnection(config *config.Config, stats *statistics.Statistics, logger *
 
 	// Create database instance
 	database := &Database{
-		db:     db,
-		logger: logger,
-		users:  NewUserRepository(db, stats, logger),
-		groups: NewGroupRepository(db, logger),
-		stats:  NewStatsRepository(db, stats.Client, logger),
+		db:       db,
+		logger:   logger,
+		users:    NewUserRepository(db, stats, logger),
+		groups:   NewGroupRepository(db, logger),
+		stats:    NewStatsRepository(db, stats.Client, logger),
+		settings: NewSettingRepository(db, logger),
 	}
 
 	err := database.createSchema()
@@ -115,6 +130,8 @@ func (d *Database) createSchema() error {
 		(*PendingUser)(nil),
 		(*FlaggedUser)(nil),
 		(*DailyStatistics)(nil),
+		(*UserPreference)(nil),
+		(*GuildSetting)(nil),
 	}
 
 	for _, model := range models {
@@ -155,4 +172,9 @@ func (d *Database) Groups() *GroupRepository {
 // Stats returns the StatsRepository.
 func (d *Database) Stats() *StatsRepository {
 	return d.stats
+}
+
+// Settings returns the SettingRepository.
+func (d *Database) Settings() *SettingRepository {
+	return d.settings
 }

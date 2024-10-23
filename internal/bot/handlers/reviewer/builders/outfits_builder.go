@@ -5,30 +5,33 @@ import (
 
 	"github.com/disgoorg/disgo/discord"
 	"github.com/jaxron/roapi.go/pkg/api/types"
+	"github.com/rotector/rotector/internal/bot/utils"
 	"github.com/rotector/rotector/internal/common/database"
 )
 
 // OutfitsEmbed builds the embed for the outfit viewer message.
 type OutfitsEmbed struct {
-	user     *database.PendingUser
-	outfits  []types.Outfit
-	start    int
-	page     int
-	total    int
-	file     *discord.File
-	fileName string
+	user         *database.PendingUser
+	outfits      []types.Outfit
+	start        int
+	page         int
+	total        int
+	file         *discord.File
+	fileName     string
+	streamerMode bool
 }
 
 // NewOutfitsEmbed creates a new OutfitsEmbed.
-func NewOutfitsEmbed(user *database.PendingUser, outfits []types.Outfit, start, page, total int, file *discord.File, fileName string) *OutfitsEmbed {
+func NewOutfitsEmbed(user *database.PendingUser, outfits []types.Outfit, start, page, total int, file *discord.File, fileName string, streamerMode bool) *OutfitsEmbed {
 	return &OutfitsEmbed{
-		user:     user,
-		outfits:  outfits,
-		start:    start,
-		page:     page,
-		total:    total,
-		file:     file,
-		fileName: fileName,
+		user:         user,
+		outfits:      outfits,
+		start:        start,
+		page:         page,
+		total:        total,
+		file:         file,
+		fileName:     fileName,
+		streamerMode: streamerMode,
 	}
 }
 
@@ -38,7 +41,7 @@ func (b *OutfitsEmbed) Build() *discord.MessageUpdateBuilder {
 		SetTitle(fmt.Sprintf("User Outfits (Page %d/%d)", b.page+1, b.total)).
 		SetDescription(fmt.Sprintf("```%s (%d)```", b.user.Name, b.user.ID)).
 		SetImage("attachment://" + b.fileName).
-		SetColor(0x312D2B)
+		SetColor(utils.GetMessageEmbedColor(b.streamerMode))
 
 	for i, outfit := range b.outfits {
 		embed.AddField(fmt.Sprintf("Outfit %d", b.start+i+1), outfit.Name, true)

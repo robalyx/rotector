@@ -26,13 +26,15 @@ func (b *DashboardBuilder) Build() *discord.MessageUpdateBuilder {
 	embed := discord.NewEmbedBuilder().
 		AddField("Pending Users", strconv.Itoa(b.pendingCount), true).
 		AddField("Flagged Users", strconv.Itoa(b.flaggedCount), true).
-		SetColor(0x312D2B).
+		SetColor(constants.DefaultEmbedColor).
 		Build()
 
 	components := []discord.ContainerComponent{
 		discord.NewActionRow(
 			discord.NewStringSelectMenu(constants.ActionSelectMenuCustomID, "Select an action",
-				discord.NewStringSelectMenuOption("Start reviewing flagged players", constants.StartReviewCustomID),
+				discord.NewStringSelectMenuOption("Review Pending Users", constants.StartReviewCustomID),
+				discord.NewStringSelectMenuOption("User Preferences", constants.UserPreferencesCustomID),
+				discord.NewStringSelectMenuOption("Guild Settings", constants.GuildSettingsCustomID),
 			),
 		),
 	}

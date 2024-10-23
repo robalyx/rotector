@@ -13,6 +13,7 @@ type CommonEvent interface {
 	ApplicationID() snowflake.ID
 	Token() string
 	User() discord.User
+	GuildID() *snowflake.ID
 }
 
 // Ensure that all event types implement the CommonEvent interface.

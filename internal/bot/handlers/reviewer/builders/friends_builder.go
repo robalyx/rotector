@@ -5,6 +5,7 @@ import (
 
 	"github.com/disgoorg/disgo/discord"
 	"github.com/jaxron/roapi.go/pkg/api/types"
+	"github.com/rotector/rotector/internal/bot/utils"
 	"github.com/rotector/rotector/internal/common/database"
 )
 
@@ -18,10 +19,11 @@ type FriendsEmbed struct {
 	total          int
 	file           *discord.File
 	fileName       string
+	streamerMode   bool
 }
 
 // NewFriendsEmbed creates a new FriendsEmbed.
-func NewFriendsEmbed(user *database.PendingUser, friends []types.Friend, flaggedFriends map[uint64]string, start, page, total int, file *discord.File, fileName string) *FriendsEmbed {
+func NewFriendsEmbed(user *database.PendingUser, friends []types.Friend, flaggedFriends map[uint64]string, start, page, total int, file *discord.File, fileName string, streamerMode bool) *FriendsEmbed {
 	return &FriendsEmbed{
 		user:           user,
 		friends:        friends,
@@ -31,6 +33,7 @@ func NewFriendsEmbed(user *database.PendingUser, friends []types.Friend, flagged
 		total:          total,
 		file:           file,
 		fileName:       fileName,
+		streamerMode:   streamerMode,
 	}
 }
 
@@ -38,9 +41,9 @@ func NewFriendsEmbed(user *database.PendingUser, friends []types.Friend, flagged
 func (b *FriendsEmbed) Build() *discord.MessageUpdateBuilder {
 	embed := discord.NewEmbedBuilder().
 		SetTitle(fmt.Sprintf("User Friends (Page %d/%d)", b.page+1, b.total)).
-		SetDescription(fmt.Sprintf("```%s (%d)```", b.user.Name, b.user.ID)).
+		SetDescription(fmt.Sprintf("```%s (%d)```", utils.CensorString(b.user.Name, b.streamerMode), b.user.ID)).
 		SetImage("attachment://" + b.fileName).
-		SetColor(0x312D2B)
+		SetColor(utils.GetMessageEmbedColor(b.streamerMode))
 
 	components := []discord.ContainerComponent{
 		discord.NewActionRow(
@@ -54,7 +57,7 @@ func (b *FriendsEmbed) Build() *discord.MessageUpdateBuilder {
 
 	for i, friend := range b.friends {
 		fieldName := fmt.Sprintf("Friend %d", b.start+i+1)
-		fieldValue := fmt.Sprintf("[%s](https://www.roblox.com/users/%d/profile)", friend.Name, friend.ID)
+		fieldValue := fmt.Sprintf("[%s](https://www.roblox.com/users/%d/profile)", utils.CensorString(friend.Name, b.streamerMode), friend.ID)
 
 		// Add flagged or pending status if needed
 		if flagged, ok := b.flaggedFriends[friend.ID]; ok {

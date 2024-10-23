@@ -1,7 +1,6 @@
 package dashboard
 
 import (
-	"github.com/rotector/rotector/internal/bot/handlers/reviewer"
 	"github.com/rotector/rotector/internal/bot/interfaces"
 	"github.com/rotector/rotector/internal/bot/pagination"
 	"github.com/rotector/rotector/internal/bot/session"
@@ -16,6 +15,7 @@ type Handler struct {
 	sessionManager    *session.Manager
 	paginationManager *pagination.Manager
 	reviewHandler     interfaces.ReviewHandler
+	settingsHandler   interfaces.SettingsHandler
 	dashboard         *Dashboard
 }
 
@@ -38,8 +38,13 @@ func New(db *database.Database, logger *zap.Logger, sessionManager *session.Mana
 }
 
 // SetReviewHandler sets the review handler.
-func (h *Handler) SetReviewHandler(reviewHandler *reviewer.Handler) {
+func (h *Handler) SetReviewHandler(reviewHandler interfaces.ReviewHandler) {
 	h.reviewHandler = reviewHandler
+}
+
+// SetSettingsHandler sets the settings handler.
+func (h *Handler) SetSettingsHandler(settingsHandler interfaces.SettingsHandler) {
+	h.settingsHandler = settingsHandler
 }
 
 // ShowDashboard shows the dashboard.

@@ -3,12 +3,17 @@ package constants
 const (
 	// Commands.
 	DashboardCommandName = "dashboard"
+
 	// Common.
 	NotApplicable            = "N/A"
 	ActionSelectMenuCustomID = "action"
+	DefaultEmbedColor        = 0x312D2B
+	StreamerModeEmbedColor   = 0x3E3769
 
-	// Main Menu.
-	StartReviewCustomID = "start_review"
+	// Dashboard Menu.
+	StartReviewCustomID     = "start_review"
+	UserPreferencesCustomID = "user_preferences"
+	GuildSettingsCustomID   = "guild_settings"
 
 	// Review Menu.
 	SortOrderSelectMenuCustomID = "sort_order"
@@ -39,4 +44,15 @@ const (
 	GroupsPerPage     = 15
 	GroupsGridColumns = 3
 	GroupsGridRows    = 5
+
+	// User Settings.
+	UserSettingPrefix   = "user"
+	UserSettingSelectID = "user_setting_select"
+	StreamerModeOption  = "streamer_mode"
+	DefaultSortOption   = "default_sort"
+
+	// Guild Settings.
+	GuildSettingPrefix     = "guild"
+	GuildSettingSelectID   = "guild_setting_select"
+	WhitelistedRolesOption = "whitelisted_roles"
 )

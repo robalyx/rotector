@@ -14,8 +14,8 @@ import (
 	"github.com/rotector/rotector/internal/bot/handlers/reviewer/builders"
 	"github.com/rotector/rotector/internal/bot/pagination"
 	"github.com/rotector/rotector/internal/bot/session"
+	"github.com/rotector/rotector/internal/bot/utils"
 	"github.com/rotector/rotector/internal/common/database"
-	"github.com/rotector/rotector/internal/common/utils"
 	"go.uber.org/zap"
 )
 
@@ -27,8 +27,8 @@ type OutfitsMenu struct {
 
 // NewOutfitsMenu returns a new outfit viewer handler.
 func NewOutfitsMenu(h *Handler) *OutfitsMenu {
-	o := OutfitsMenu{handler: h}
-	o.page = &pagination.Page{
+	m := OutfitsMenu{handler: h}
+	m.page = &pagination.Page{
 		Name: "Outfits Menu",
 		Data: make(map[string]interface{}),
 		Message: func(data map[string]interface{}) *discord.MessageUpdateBuilder {
@@ -39,29 +39,22 @@ func NewOutfitsMenu(h *Handler) *OutfitsMenu {
 			total := data["total"].(int)
 			file := data["file"].(*discord.File)
 			fileName := data["fileName"].(string)
+			streamerMode := data["streamerMode"].(bool)
 
-			return builders.NewOutfitsEmbed(user, outfits, start, page, total, file, fileName).Build()
+			return builders.NewOutfitsEmbed(user, outfits, start, page, total, file, fileName, streamerMode).Build()
 		},
-		ButtonHandlerFunc: func(event *events.ComponentInteractionCreate, s *session.Session, customID string) {
-			switch customID {
-			case string(builders.ViewerFirstPage), string(builders.ViewerPrevPage), string(builders.ViewerNextPage), string(builders.ViewerLastPage):
-				o.handlePageNavigation(event, s, builders.ViewerAction(customID))
-			case string(builders.ViewerBackToReview):
-				o.handler.reviewMenu.ShowReviewMenu(event, s, "")
-			}
-		},
+		ButtonHandlerFunc: m.handlePageNavigation,
 	}
-
-	return &o
+	return &m
 }
 
 // ShowOutfitsMenu shows the outfits menu for the given page.
-func (o *OutfitsMenu) ShowOutfitsMenu(event *events.ComponentInteractionCreate, s *session.Session, page int) {
+func (m *OutfitsMenu) ShowOutfitsMenu(event *events.ComponentInteractionCreate, s *session.Session, page int) {
 	user := s.GetPendingUser(session.KeyTarget)
 
 	// Check if the user has outfits
 	if len(user.Outfits) == 0 {
-		o.handler.reviewMenu.ShowReviewMenu(event, s, "No outfits found for this user.")
+		m.handler.reviewMenu.ShowReviewMenu(event, s, "No outfits found for this user.")
 		return
 	}
 
@@ -76,18 +69,18 @@ func (o *OutfitsMenu) ShowOutfitsMenu(event *events.ComponentInteractionCreate, 
 	pageOutfits := outfits[start:end]
 
 	// Fetch thumbnails for the outfits
-	thumbnailURLs, err := o.fetchOutfitThumbnails(pageOutfits)
+	thumbnailURLs, err := m.fetchOutfitThumbnails(pageOutfits)
 	if err != nil {
-		o.handler.logger.Error("Failed to fetch outfit thumbnails", zap.Error(err))
-		o.handler.respondWithError(event, "Failed to fetch outfit thumbnails. Please try again.")
+		m.handler.logger.Error("Failed to fetch outfit thumbnails", zap.Error(err))
+		utils.RespondWithError(event, "Failed to fetch outfit thumbnails. Please try again.")
 		return
 	}
 
 	// Download and merge outfit images
-	buf, err := utils.MergeImages(o.handler.roAPI.GetClient(), thumbnailURLs, constants.OutfitGridColumns, constants.OutfitGridRows, constants.OutfitsPerPage)
+	buf, err := utils.MergeImages(m.handler.roAPI.GetClient(), thumbnailURLs, constants.OutfitGridColumns, constants.OutfitGridRows, constants.OutfitsPerPage)
 	if err != nil {
-		o.handler.logger.Error("Failed to merge outfit images", zap.Error(err))
-		o.handler.respondWithError(event, "Failed to process outfit images. Please try again.")
+		m.handler.logger.Error("Failed to merge outfit images", zap.Error(err))
+		utils.RespondWithError(event, "Failed to process outfit images. Please try again.")
 		return
 	}
 
@@ -98,22 +91,31 @@ func (o *OutfitsMenu) ShowOutfitsMenu(event *events.ComponentInteractionCreate, 
 	fileName := fmt.Sprintf("outfits_%d_%d.png", user.ID, page)
 	file := discord.NewFile(fileName, "", bytes.NewReader(buf.Bytes()))
 
+	// Get user preferences
+	preferences, err := m.handler.db.Settings().GetUserPreferences(uint64(event.User().ID))
+	if err != nil {
+		m.handler.logger.Error("Failed to get user preferences", zap.Error(err))
+		preferences = &database.UserPreference{StreamerMode: false} // Default to false if there's an error
+	}
+
 	// Set the data for the page
-	o.page.Data["user"] = user
-	o.page.Data["outfits"] = pageOutfits
-	o.page.Data["start"] = start
-	o.page.Data["page"] = page
-	o.page.Data["total"] = total
-	o.page.Data["file"] = file
-	o.page.Data["fileName"] = fileName
+	m.page.Data["user"] = user
+	m.page.Data["outfits"] = pageOutfits
+	m.page.Data["start"] = start
+	m.page.Data["page"] = page
+	m.page.Data["total"] = total
+	m.page.Data["file"] = file
+	m.page.Data["fileName"] = fileName
+	m.page.Data["streamerMode"] = preferences.StreamerMode
 
 	// Navigate to the outfits menu and update the message
-	o.handler.paginationManager.NavigateTo(o.page.Name, s)
-	o.handler.paginationManager.UpdateMessage(event, s, o.page, "")
+	m.handler.paginationManager.NavigateTo(m.page.Name, s)
+	m.handler.paginationManager.UpdateMessage(event, s, m.page, "")
 }
 
 // handlePageNavigation handles the page navigation for the outfits menu.
-func (o *OutfitsMenu) handlePageNavigation(event *events.ComponentInteractionCreate, s *session.Session, action builders.ViewerAction) {
+func (m *OutfitsMenu) handlePageNavigation(event *events.ComponentInteractionCreate, s *session.Session, customID string) {
+	action := builders.ViewerAction(customID)
 	switch action {
 	case builders.ViewerFirstPage, builders.ViewerPrevPage, builders.ViewerNextPage, builders.ViewerLastPage:
 		user := s.GetPendingUser(session.KeyTarget)
@@ -122,21 +124,21 @@ func (o *OutfitsMenu) handlePageNavigation(event *events.ComponentInteractionCre
 		maxPage := (len(user.Outfits) - 1) / constants.OutfitsPerPage
 		page, ok := action.ParsePageAction(s, action, maxPage)
 		if !ok {
-			o.handler.respondWithError(event, "Invalid interaction.")
+			utils.RespondWithError(event, "Invalid interaction.")
 			return
 		}
 
-		o.ShowOutfitsMenu(event, s, page)
+		m.ShowOutfitsMenu(event, s, page)
 	case builders.ViewerBackToReview:
-		o.handler.reviewMenu.ShowReviewMenu(event, s, "")
+		m.handler.reviewMenu.ShowReviewMenu(event, s, "")
 	default:
-		o.handler.logger.Warn("Invalid outfit viewer action", zap.String("action", string(action)))
-		o.handler.respondWithError(event, "Invalid interaction.")
+		m.handler.logger.Warn("Invalid outfits viewer action", zap.String("action", string(action)))
+		utils.RespondWithError(event, "Invalid interaction.")
 	}
 }
 
 // fetchOutfitThumbnails fetches thumbnails for the given outfits.
-func (o *OutfitsMenu) fetchOutfitThumbnails(outfits []types.Outfit) ([]string, error) {
+func (m *OutfitsMenu) fetchOutfitThumbnails(outfits []types.Outfit) ([]string, error) {
 	thumbnailURLs := make([]string, constants.OutfitsPerPage)
 
 	// Create thumbnail requests for each outfit
@@ -156,7 +158,7 @@ func (o *OutfitsMenu) fetchOutfitThumbnails(outfits []types.Outfit) ([]string, e
 	}
 
 	// Fetch batch thumbnails
-	thumbnailResponses, err := o.handler.roAPI.Thumbnails().GetBatchThumbnails(context.Background(), requests.Build())
+	thumbnailResponses, err := m.handler.roAPI.Thumbnails().GetBatchThumbnails(context.Background(), requests.Build())
 	if err != nil {
 		return thumbnailURLs, err
 	}
@@ -170,7 +172,7 @@ func (o *OutfitsMenu) fetchOutfitThumbnails(outfits []types.Outfit) ([]string, e
 		}
 	}
 
-	o.handler.logger.Info("Fetched thumbnail URLs", zap.Strings("urls", thumbnailURLs))
+	m.handler.logger.Info("Fetched thumbnail URLs", zap.Strings("urls", thumbnailURLs))
 
 	return thumbnailURLs, nil
 }

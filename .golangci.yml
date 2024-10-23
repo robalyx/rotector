@@ -29,7 +29,10 @@ linters:
 
 linters-settings:
   lll:
-    line-length: 200
+    line-length: 210
   funlen:
     lines: 120
     statements: 50
+  gocritic:
+    disabled-checks:
+      - singleCaseSwitch

@@ -14,8 +14,8 @@ import (
 	"github.com/rotector/rotector/internal/bot/handlers/reviewer/builders"
 	"github.com/rotector/rotector/internal/bot/pagination"
 	"github.com/rotector/rotector/internal/bot/session"
+	"github.com/rotector/rotector/internal/bot/utils"
 	"github.com/rotector/rotector/internal/common/database"
-	"github.com/rotector/rotector/internal/common/utils"
 	"go.uber.org/zap"
 )
 
@@ -27,8 +27,8 @@ type GroupsMenu struct {
 
 // NewGroupsMenu creates a new GroupsMenu instance.
 func NewGroupsMenu(h *Handler) *GroupsMenu {
-	g := GroupsMenu{handler: h}
-	g.page = &pagination.Page{
+	m := GroupsMenu{handler: h}
+	m.page = &pagination.Page{
 		Name: "Groups Menu",
 		Data: make(map[string]interface{}),
 		Message: func(data map[string]interface{}) *discord.MessageUpdateBuilder {
@@ -40,29 +40,22 @@ func NewGroupsMenu(h *Handler) *GroupsMenu {
 			total := data["total"].(int)
 			file := data["file"].(*discord.File)
 			fileName := data["fileName"].(string)
+			streamerMode := data["streamerMode"].(bool)
 
-			return builders.NewGroupsEmbed(user, groups, flaggedGroups, start, page, total, file, fileName).Build()
+			return builders.NewGroupsEmbed(user, groups, flaggedGroups, start, page, total, file, fileName, streamerMode).Build()
 		},
-		ButtonHandlerFunc: func(event *events.ComponentInteractionCreate, s *session.Session, option string) {
-			switch option {
-			case string(builders.ViewerFirstPage), string(builders.ViewerPrevPage), string(builders.ViewerNextPage), string(builders.ViewerLastPage):
-				g.handlePageNavigation(event, s, builders.ViewerAction(option))
-			case string(builders.ViewerBackToReview):
-				h.reviewMenu.ShowReviewMenu(event, s, "")
-			}
-		},
+		ButtonHandlerFunc: m.handlePageNavigation,
 	}
-
-	return &g
+	return &m
 }
 
 // ShowGroupsMenu shows the groups menu for the given page.
-func (g *GroupsMenu) ShowGroupsMenu(event *events.ComponentInteractionCreate, s *session.Session, page int) {
+func (m *GroupsMenu) ShowGroupsMenu(event *events.ComponentInteractionCreate, s *session.Session, page int) {
 	user := s.GetPendingUser(session.KeyTarget)
 
 	// Check if the user has groups
 	if len(user.Groups) == 0 {
-		g.handler.reviewMenu.ShowReviewMenu(event, s, "No groups found for this user.")
+		m.handler.reviewMenu.ShowReviewMenu(event, s, "No groups found for this user.")
 		return
 	}
 	groups := user.Groups
@@ -76,28 +69,18 @@ func (g *GroupsMenu) ShowGroupsMenu(event *events.ComponentInteractionCreate, s 
 	pageGroups := groups[start:end]
 
 	// Check which groups are flagged
-	groupIDs := make([]uint64, len(pageGroups))
-	for i, group := range pageGroups {
-		groupIDs[i] = group.Group.ID
-	}
-
-	flaggedGroups, err := g.handler.db.Groups().CheckFlaggedGroups(groupIDs)
+	flaggedGroups, err := m.getFlaggedGroups(pageGroups)
 	if err != nil {
-		g.handler.logger.Error("Failed to check flagged groups", zap.Error(err))
-		g.handler.respondWithError(event, "Failed to check flagged groups. Please try again.")
+		m.handler.logger.Error("Failed to get flagged groups", zap.Error(err))
+		utils.RespondWithError(event, "Failed to get flagged groups. Please try again.")
 		return
 	}
 
-	flaggedGroupsMap := make(map[uint64]bool)
-	for _, id := range flaggedGroups {
-		flaggedGroupsMap[id] = true
-	}
-
 	// Fetch thumbnails for the page groups
-	groupsThumbnailURLs, err := g.fetchGroupsThumbnails(pageGroups)
+	groupsThumbnailURLs, err := m.fetchGroupsThumbnails(pageGroups)
 	if err != nil {
-		g.handler.logger.Error("Failed to fetch groups thumbnails", zap.Error(err))
-		g.handler.respondWithError(event, "Failed to fetch groups thumbnails. Please try again.")
+		m.handler.logger.Error("Failed to fetch groups thumbnails", zap.Error(err))
+		utils.RespondWithError(event, "Failed to fetch groups thumbnails. Please try again.")
 		return
 	}
 
@@ -110,10 +93,10 @@ func (g *GroupsMenu) ShowGroupsMenu(event *events.ComponentInteractionCreate, s 
 	}
 
 	// Download and merge group images
-	buf, err := utils.MergeImages(g.handler.roAPI.GetClient(), pageThumbnailURLs, constants.GroupsGridColumns, constants.GroupsGridRows, constants.GroupsPerPage)
+	buf, err := utils.MergeImages(m.handler.roAPI.GetClient(), pageThumbnailURLs, constants.GroupsGridColumns, constants.GroupsGridRows, constants.GroupsPerPage)
 	if err != nil {
-		g.handler.logger.Error("Failed to merge group images", zap.Error(err))
-		g.handler.respondWithError(event, "Failed to process group images. Please try again.")
+		m.handler.logger.Error("Failed to merge group images", zap.Error(err))
+		utils.RespondWithError(event, "Failed to process group images. Please try again.")
 		return
 	}
 
@@ -124,23 +107,53 @@ func (g *GroupsMenu) ShowGroupsMenu(event *events.ComponentInteractionCreate, s 
 	// Calculate total pages
 	total := (len(groups) + constants.GroupsPerPage - 1) / constants.GroupsPerPage
 
+	// Get user preferences
+	preferences, err := m.handler.db.Settings().GetUserPreferences(uint64(event.User().ID))
+	if err != nil {
+		m.handler.logger.Error("Failed to get user preferences", zap.Error(err))
+		utils.RespondWithError(event, "Failed to get user preferences. Please try again.")
+		return
+	}
+
 	// Set the data for the page
-	g.page.Data["user"] = user
-	g.page.Data["groups"] = pageGroups
-	g.page.Data["flaggedGroups"] = flaggedGroupsMap
-	g.page.Data["start"] = start
-	g.page.Data["page"] = page
-	g.page.Data["total"] = total
-	g.page.Data["file"] = file
-	g.page.Data["fileName"] = fileName
+	m.page.Data["user"] = user
+	m.page.Data["groups"] = pageGroups
+	m.page.Data["flaggedGroups"] = flaggedGroups
+	m.page.Data["start"] = start
+	m.page.Data["page"] = page
+	m.page.Data["total"] = total
+	m.page.Data["file"] = file
+	m.page.Data["fileName"] = fileName
+	m.page.Data["streamerMode"] = preferences.StreamerMode
 
 	// Navigate to the groups menu and update the message
-	g.handler.paginationManager.NavigateTo(g.page.Name, s)
-	g.handler.paginationManager.UpdateMessage(event, s, g.page, "")
+	m.handler.paginationManager.NavigateTo(m.page.Name, s)
+	m.handler.paginationManager.UpdateMessage(event, s, m.page, "")
+}
+
+// getFlaggedGroups fetches the flagged groups for the given user.
+func (m *GroupsMenu) getFlaggedGroups(groups []types.UserGroupRoles) (map[uint64]bool, error) {
+	groupIDs := make([]uint64, len(groups))
+	for i, group := range groups {
+		groupIDs[i] = group.Group.ID
+	}
+
+	flaggedGroups, err := m.handler.db.Groups().CheckFlaggedGroups(groupIDs)
+	if err != nil {
+		return nil, err
+	}
+
+	flaggedGroupsMap := make(map[uint64]bool)
+	for _, id := range flaggedGroups {
+		flaggedGroupsMap[id] = true
+	}
+
+	return flaggedGroupsMap, nil
 }
 
 // handlePageNavigation handles the page navigation for the groups menu.
-func (g *GroupsMenu) handlePageNavigation(event *events.ComponentInteractionCreate, s *session.Session, action builders.ViewerAction) {
+func (m *GroupsMenu) handlePageNavigation(event *events.ComponentInteractionCreate, s *session.Session, customID string) {
+	action := builders.ViewerAction(customID)
 	switch action {
 	case builders.ViewerFirstPage, builders.ViewerPrevPage, builders.ViewerNextPage, builders.ViewerLastPage:
 		user := s.GetPendingUser(session.KeyTarget)
@@ -149,21 +162,21 @@ func (g *GroupsMenu) handlePageNavigation(event *events.ComponentInteractionCrea
 		maxPage := (len(user.Groups) - 1) / constants.GroupsPerPage
 		page, ok := action.ParsePageAction(s, action, maxPage)
 		if !ok {
-			g.handler.respondWithError(event, "Invalid interaction.")
+			utils.RespondWithError(event, "Invalid interaction.")
 			return
 		}
 
-		g.ShowGroupsMenu(event, s, page)
+		m.ShowGroupsMenu(event, s, page)
 	case builders.ViewerBackToReview:
-		g.handler.reviewMenu.ShowReviewMenu(event, s, "")
+		m.handler.reviewMenu.ShowReviewMenu(event, s, "")
 	default:
-		g.handler.logger.Warn("Invalid groups viewer action", zap.String("action", string(action)))
-		g.handler.respondWithError(event, "Invalid interaction.")
+		m.handler.logger.Warn("Invalid groups viewer action", zap.String("action", string(action)))
+		utils.RespondWithError(event, "Invalid interaction.")
 	}
 }
 
 // fetchGroupsThumbnails fetches thumbnails for the given groups.
-func (g *GroupsMenu) fetchGroupsThumbnails(groups []types.UserGroupRoles) (map[uint64]string, error) {
+func (m *GroupsMenu) fetchGroupsThumbnails(groups []types.UserGroupRoles) (map[uint64]string, error) {
 	thumbnailURLs := make(map[uint64]string)
 
 	// Create thumbnail requests for each group
@@ -179,9 +192,9 @@ func (g *GroupsMenu) fetchGroupsThumbnails(groups []types.UserGroupRoles) (map[u
 	}
 
 	// Fetch batch thumbnails
-	thumbnailResponses, err := g.handler.roAPI.Thumbnails().GetBatchThumbnails(context.Background(), requests.Build())
+	thumbnailResponses, err := m.handler.roAPI.Thumbnails().GetBatchThumbnails(context.Background(), requests.Build())
 	if err != nil {
-		g.handler.logger.Error("Error fetching batch thumbnails", zap.Error(err))
+		m.handler.logger.Error("Error fetching batch thumbnails", zap.Error(err))
 		return thumbnailURLs, err
 	}
 
@@ -194,7 +207,7 @@ func (g *GroupsMenu) fetchGroupsThumbnails(groups []types.UserGroupRoles) (map[u
 		}
 	}
 
-	g.handler.logger.Info("Fetched batch thumbnails",
+	m.handler.logger.Info("Fetched batch thumbnails",
 		zap.Int("groups", len(groups)),
 		zap.Int("fetchedThumbnails", len(thumbnailResponses)))
 

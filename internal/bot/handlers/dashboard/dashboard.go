@@ -19,26 +19,19 @@ type Dashboard struct {
 
 // NewDashboard creates a new Dashboard instance.
 func NewDashboard(h *Handler) *Dashboard {
-	m := &Dashboard{
-		handler: h,
-		page: &pagination.Page{
-			Name: "Dashboard",
-			Data: make(map[string]interface{}),
-			Message: func(data map[string]interface{}) *discord.MessageUpdateBuilder {
-				pendingCount := data["pendingCount"].(int)
-				flaggedCount := data["flaggedCount"].(int)
+	m := Dashboard{handler: h}
+	m.page = &pagination.Page{
+		Name: "Dashboard",
+		Data: make(map[string]interface{}),
+		Message: func(data map[string]interface{}) *discord.MessageUpdateBuilder {
+			pendingCount := data["pendingCount"].(int)
+			flaggedCount := data["flaggedCount"].(int)
 
-				return builders.NewDashboardBuilder(pendingCount, flaggedCount).Build()
-			},
-			SelectHandlerFunc: func(event *events.ComponentInteractionCreate, s *session.Session, customID string, option string) {
-				if customID == constants.ActionSelectMenuCustomID && option == constants.StartReviewCustomID {
-					s.Set(session.KeySortBy, "random")
-					h.reviewHandler.ShowReviewMenuAndFetchUser(event, s, "")
-				}
-			},
+			return builders.NewDashboardBuilder(pendingCount, flaggedCount).Build()
 		},
+		SelectHandlerFunc: m.handleSelectMenu,
 	}
-	return m
+	return &m
 }
 
 // ShowDashboard displays the dashboard.
@@ -63,4 +56,27 @@ func (m *Dashboard) ShowDashboard(event interfaces.CommonEvent) {
 	// Navigate to the main menu and update the message
 	m.handler.paginationManager.NavigateTo(m.page.Name, s)
 	m.handler.paginationManager.UpdateMessage(event, s, m.page, "")
+}
+
+// handleSelectMenu handles the select menu interaction.
+func (m *Dashboard) handleSelectMenu(event *events.ComponentInteractionCreate, s *session.Session, customID string, option string) {
+	if customID != constants.ActionSelectMenuCustomID {
+		return
+	}
+
+	switch option {
+	case constants.StartReviewCustomID:
+		// Get user's default sort
+		preferences, err := m.handler.db.Settings().GetUserPreferences(uint64(event.User().ID))
+		if err != nil {
+			m.handler.logger.Error("Failed to get user preferences", zap.Error(err))
+		}
+		s.Set(session.KeySortBy, preferences.DefaultSort)
+
+		m.handler.reviewHandler.ShowReviewMenuAndFetchUser(event, s, "")
+	case constants.UserPreferencesCustomID:
+		m.handler.settingsHandler.ShowUserSettings(event, s)
+	case constants.GuildSettingsCustomID:
+		m.handler.settingsHandler.ShowGuildSettings(event, s)
+	}
 }

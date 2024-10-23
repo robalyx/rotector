@@ -5,11 +5,13 @@ import (
 	"context"
 	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/disgoorg/disgo/discord"
 	"github.com/rotector/rotector/assets"
 	"github.com/rotector/rotector/internal/bot/constants"
+	"github.com/rotector/rotector/internal/bot/utils"
 	"github.com/rotector/rotector/internal/common/database"
 	"github.com/rotector/rotector/internal/common/translator"
 )
@@ -22,24 +24,26 @@ type ReviewerEmbed struct {
 	translator     *translator.Translator
 	flaggedFriends map[uint64]string
 	sortBy         string
+	streamerMode   bool
 }
 
 // NewReviewerEmbed creates a new ReviewerEmbed.
-func NewReviewerEmbed(user *database.PendingUser, translator *translator.Translator, flaggedFriends map[uint64]string, sortBy string) *ReviewerEmbed {
+func NewReviewerEmbed(user *database.PendingUser, translator *translator.Translator, flaggedFriends map[uint64]string, sortBy string, streamerMode bool) *ReviewerEmbed {
 	return &ReviewerEmbed{
 		user:           user,
 		translator:     translator,
 		flaggedFriends: flaggedFriends,
 		sortBy:         sortBy,
+		streamerMode:   streamerMode,
 	}
 }
 
 // Build constructs and returns the discord.Embed.
 func (b *ReviewerEmbed) Build() *discord.MessageUpdateBuilder {
-	embedBuilder := discord.NewEmbedBuilder().
-		AddField("ID", fmt.Sprintf("[%d](https://www.roblox.com/users/%d/profile)", b.user.ID, b.user.ID), true).
-		AddField("Name", b.user.Name, true).
-		AddField("Display Name", b.user.DisplayName, true).
+	embed := discord.NewEmbedBuilder().
+		AddField("ID", fmt.Sprintf("[%s](https://www.roblox.com/users/%d/profile)", utils.CensorString(strconv.FormatUint(b.user.ID, 10), b.streamerMode), b.user.ID), true).
+		AddField("Name", utils.CensorString(b.user.Name, b.streamerMode), true).
+		AddField("Display Name", utils.CensorString(b.user.DisplayName, b.streamerMode), true).
 		AddField("Created At", fmt.Sprintf("<t:%d:R>", b.user.CreatedAt.Unix()), true).
 		AddField("Confidence", fmt.Sprintf("%.2f", b.user.Confidence), true).
 		AddField("Reason", b.user.Reason, false).
@@ -50,7 +54,7 @@ func (b *ReviewerEmbed) Build() *discord.MessageUpdateBuilder {
 		AddField(b.getFlaggedType(), b.getFlaggedContent(), false).
 		AddField("Last Updated", fmt.Sprintf("<t:%d:R>", b.user.LastUpdated.Unix()), true).
 		AddField("Last Reviewed", b.getLastReviewed(), true).
-		SetColor(0x312D2B)
+		SetColor(utils.GetMessageEmbedColor(b.streamerMode))
 
 	components := []discord.ContainerComponent{
 		discord.NewActionRow(
@@ -88,14 +92,14 @@ func (b *ReviewerEmbed) Build() *discord.MessageUpdateBuilder {
 
 	// Set thumbnail URL or use placeholder image
 	if b.user.ThumbnailURL != "" {
-		embedBuilder.SetThumbnail(b.user.ThumbnailURL)
+		embed.SetThumbnail(b.user.ThumbnailURL)
 	} else {
-		embedBuilder.SetThumbnail("attachment://content_deleted.png")
+		embed.SetThumbnail("attachment://content_deleted.png")
 	}
 
 	// Create the message update builder
 	builder := discord.NewMessageUpdateBuilder().
-		SetEmbeds(embedBuilder.Build()).
+		SetEmbeds(embed.Build()).
 		AddContainerComponents(components...)
 
 	// Add placeholder image if thumbnail URL is empty
@@ -145,7 +149,7 @@ func (b *ReviewerEmbed) getGroups() string {
 			groups = append(groups, fmt.Sprintf("... and %d more", len(b.user.Groups)-10))
 			break
 		}
-		groups = append(groups, fmt.Sprintf("[%s](https://www.roblox.com/groups/%d)", group.Group.Name, group.Group.ID))
+		groups = append(groups, fmt.Sprintf("[%s](https://www.roblox.com/groups/%d)", utils.CensorString(group.Group.Name, b.streamerMode), group.Group.ID))
 	}
 
 	// If no groups are found, return NotApplicable
@@ -173,7 +177,7 @@ func (b *ReviewerEmbed) getFriends() string {
 			friends = append(friends, fmt.Sprintf("... and %d more", len(b.user.Friends)-10))
 			break
 		}
-		friends = append(friends, fmt.Sprintf("[%s](https://www.roblox.com/users/%d/profile)", friend.Name, friend.ID))
+		friends = append(friends, fmt.Sprintf("[%s](https://www.roblox.com/users/%d/profile)", utils.CensorString(friend.Name, b.streamerMode), friend.ID))
 	}
 
 	// Add flagged or pending status if needed
