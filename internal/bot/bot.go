@@ -25,12 +25,13 @@ import (
 
 // Bot represents the Discord bot.
 type Bot struct {
+	db                *database.Database
 	client            bot.Client
-	reviewerHandler   *reviewer.Handler
 	logger            *zap.Logger
 	sessionManager    *session.Manager
 	paginationManager *pagination.Manager
 	dashboardHandler  *dashboard.Handler
+	reviewerHandler   *reviewer.Handler
 	settingsHandler   *settings.Handler
 }
 
@@ -49,11 +50,12 @@ func New(token string, db *database.Database, roAPI *api.API, logger *zap.Logger
 
 	// Initialize the bot
 	b := &Bot{
-		reviewerHandler:   reviewerHandler,
+		db:                db,
 		logger:            logger,
 		sessionManager:    sessionManager,
 		paginationManager: paginationManager,
 		dashboardHandler:  dashboardHandler,
+		reviewerHandler:   reviewerHandler,
 		settingsHandler:   settingsHandler,
 	}
 
@@ -106,12 +108,28 @@ func (b *Bot) Close() {
 
 // handleApplicationCommandInteraction processes application command interactions.
 func (b *Bot) handleApplicationCommandInteraction(event *events.ApplicationCommandInteractionCreate) {
-	if event.SlashCommandInteractionData().CommandName() != constants.DashboardCommandName {
+	// Defer the response
+	if err := event.DeferCreateMessage(true); err != nil {
+		b.logger.Error("Failed to defer create message", zap.Error(err))
 		return
 	}
 
-	if err := event.DeferCreateMessage(true); err != nil {
-		b.logger.Error("Failed to defer create message", zap.Error(err))
+	// Respond with an error if the command is not the dashboard command
+	if event.SlashCommandInteractionData().CommandName() != constants.DashboardCommandName {
+		utils.RespondWithError(event, "This command is not available.")
+		return
+	}
+
+	// Get the guild settings
+	guildSettings, err := b.db.Settings().GetGuildSettings(uint64(*event.GuildID()))
+	if err != nil {
+		b.logger.Error("Failed to get guild settings", zap.Error(err))
+		return
+	}
+
+	// Respond with an error if the user is not in the whitelisted roles
+	if !guildSettings.HasAnyRole(event.Member().RoleIDs) {
+		utils.RespondWithError(event, "You are not authorized to use this command.")
 		return
 	}
 

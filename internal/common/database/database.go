@@ -3,8 +3,10 @@ package database
 import (
 	"errors"
 	"fmt"
+	"slices"
 	"time"
 
+	"github.com/disgoorg/snowflake/v2"
 	"github.com/go-pg/pg/v10"
 	"github.com/go-pg/pg/v10/orm"
 	"github.com/jaxron/roapi.go/pkg/api/types"
@@ -82,6 +84,15 @@ type UserSetting struct {
 type GuildSetting struct {
 	GuildID          uint64   `pg:"guild_id,pk"`
 	WhitelistedRoles []uint64 `pg:"whitelisted_roles,array"`
+}
+
+func (s *GuildSetting) HasAnyRole(roleIDs []snowflake.ID) bool {
+	for _, roleID := range roleIDs {
+		if slices.Contains(s.WhitelistedRoles, uint64(roleID)) {
+			return true
+		}
+	}
+	return false
 }
 
 // Database represents the database connection and operations.
