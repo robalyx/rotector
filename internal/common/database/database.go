@@ -86,6 +86,20 @@ type GuildSetting struct {
 	WhitelistedRoles []uint64 `pg:"whitelisted_roles,array"`
 }
 
+// GroupMemberTracking represents the tracking of confirmed users in a group.
+type GroupMemberTracking struct {
+	GroupID        uint64    `pg:"group_id,pk"`
+	ConfirmedUsers []uint64  `pg:"confirmed_users,array"`
+	LastAppended   time.Time `pg:"last_appended,notnull"`
+}
+
+// UserAffiliateTracking represents the tracking of confirmed users in a user's friend list.
+type UserAffiliateTracking struct {
+	UserID         uint64    `pg:"user_id,pk"`
+	ConfirmedUsers []uint64  `pg:"confirmed_users,array"`
+	LastAppended   time.Time `pg:"last_appended,notnull"`
+}
+
 func (s *GuildSetting) HasAnyRole(roleIDs []snowflake.ID) bool {
 	for _, roleID := range roleIDs {
 		if slices.Contains(s.WhitelistedRoles, uint64(roleID)) {
@@ -116,21 +130,21 @@ func NewConnection(config *config.Config, stats *statistics.Statistics, logger *
 	})
 
 	// Create database instance
+	tracking := NewTrackingRepository(db, logger)
 	database := &Database{
 		db:       db,
 		logger:   logger,
-		users:    NewUserRepository(db, stats, logger),
+		users:    NewUserRepository(db, stats, tracking, logger),
 		groups:   NewGroupRepository(db, logger),
 		stats:    NewStatsRepository(db, stats.Client, logger),
 		settings: NewSettingRepository(db, logger),
 	}
 
-	err := database.createSchema()
-	if err != nil {
+	if err := database.createSchema(); err != nil {
 		return nil, fmt.Errorf("failed to create schema: %w", err)
 	}
 
-	logger.Info("Database connection established and schema created")
+	logger.Info("Database connection established and setup completed")
 	return database, nil
 }
 
@@ -143,6 +157,8 @@ func (d *Database) createSchema() error {
 		(*DailyStatistics)(nil),
 		(*UserSetting)(nil),
 		(*GuildSetting)(nil),
+		(*GroupMemberTracking)(nil),
+		(*UserAffiliateTracking)(nil),
 	}
 
 	for _, model := range models {

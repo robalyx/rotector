@@ -14,17 +14,19 @@ import (
 
 // UserRepository handles user-related database operations.
 type UserRepository struct {
-	db     *pg.DB
-	stats  *statistics.Statistics
-	logger *zap.Logger
+	db       *pg.DB
+	stats    *statistics.Statistics
+	tracking *TrackingRepository
+	logger   *zap.Logger
 }
 
 // NewUserRepository creates a new UserRepository instance.
-func NewUserRepository(db *pg.DB, stats *statistics.Statistics, logger *zap.Logger) *UserRepository {
+func NewUserRepository(db *pg.DB, stats *statistics.Statistics, tracking *TrackingRepository, logger *zap.Logger) *UserRepository {
 	return &UserRepository{
-		db:     db,
-		stats:  stats,
-		logger: logger,
+		db:       db,
+		stats:    stats,
+		tracking: tracking,
+		logger:   logger,
 	}
 }
 
@@ -218,32 +220,73 @@ func (r *UserRepository) SaveFlaggedUsers(flaggedUsers []*User) {
 	r.logger.Info("Finished saving flagged users")
 }
 
-// BanUser moves a user from flagged to confirmedstatus.
+// BanUser moves a user from flagged to confirmed status.
 func (r *UserRepository) BanUser(user *FlaggedUser) error {
-	_, err := r.db.Exec(`
-		INSERT INTO confirmed_users (
-			id, name, display_name, description, created_at, reason,
-			groups, outfits, friends, flagged_content, flagged_groups,
-			confidence, last_scanned, last_updated, last_reviewed, thumbnail_url,
-			verified_at
-		)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), ?, NOW())
-	`, user.ID, user.Name, user.DisplayName, user.Description, user.CreatedAt,
-		user.Reason, user.Groups, user.Outfits, user.Friends, user.FlaggedContent,
-		user.FlaggedGroups, user.Confidence, user.LastScanned, user.LastUpdated,
-		user.ThumbnailURL)
+	// Start a transaction
+	tx, err := r.db.Begin()
 	if err != nil {
-		r.logger.Error("Failed to insert user into confirmed_users", zap.Error(err), zap.Uint64("userID", user.ID))
+		r.logger.Error("Failed to start transaction", zap.Error(err))
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	// Insert or update in confirmed_users
+	_, err = tx.Model(&ConfirmedUser{
+		User:       user.User,
+		VerifiedAt: time.Now(),
+	}).OnConflict("(id) DO UPDATE").
+		Set("name = EXCLUDED.name").
+		Set("display_name = EXCLUDED.display_name").
+		Set("description = EXCLUDED.description").
+		Set("created_at = EXCLUDED.created_at").
+		Set("reason = EXCLUDED.reason").
+		Set("groups = EXCLUDED.groups").
+		Set("outfits = EXCLUDED.outfits").
+		Set("friends = EXCLUDED.friends").
+		Set("flagged_content = EXCLUDED.flagged_content").
+		Set("flagged_groups = EXCLUDED.flagged_groups").
+		Set("confidence = EXCLUDED.confidence").
+		Set("last_scanned = EXCLUDED.last_scanned").
+		Set("last_updated = EXCLUDED.last_updated").
+		Set("last_reviewed = EXCLUDED.last_reviewed").
+		Set("last_purge_check = EXCLUDED.last_purge_check").
+		Set("thumbnail_url = EXCLUDED.thumbnail_url").
+		Set("verified_at = EXCLUDED.verified_at").
+		Insert()
+	if err != nil {
+		r.logger.Error("Failed to insert or update user in confirmed_users", zap.Error(err), zap.Uint64("userID", user.ID))
 		return err
 	}
 
-	_, err = r.db.Exec("DELETE FROM flagged_users WHERE id = ?", user.ID)
-	if err != nil {
+	// Delete from flagged_users
+	if _, err = tx.Model((*FlaggedUser)(nil)).Where("id = ?", user.ID).Delete(); err != nil {
 		r.logger.Error("Failed to delete user from flagged_users", zap.Error(err), zap.Uint64("userID", user.ID))
 		return err
 	}
 
-	r.logger.Info("User accepted and moved to confirmed_users", zap.Uint64("userID", user.ID))
+	// Add user to group tracking for each group they're in
+	for _, group := range user.Groups {
+		if err = r.tracking.AddUserToGroupTracking(group.Group.ID, user.ID); err != nil {
+			r.logger.Error("Failed to add user to group tracking", zap.Error(err), zap.Uint64("groupID", group.Group.ID), zap.Uint64("userID", user.ID))
+			return err
+		}
+	}
+
+	// Add user to affiliate tracking for each friend
+	for _, friend := range user.Friends {
+		if err = r.tracking.AddUserToAffiliateTracking(friend.ID, user.ID); err != nil {
+			r.logger.Error("Failed to add user to affiliate tracking", zap.Error(err), zap.Uint64("friendID", friend.ID), zap.Uint64("userID", user.ID))
+			return err
+		}
+	}
+
+	// Commit the transaction
+	if err = tx.Commit(); err != nil {
+		r.logger.Error("Failed to commit transaction", zap.Error(err))
+		return err
+	}
+
+	r.logger.Info("User banned and moved to confirmed_users", zap.Uint64("userID", user.ID))
 
 	// Increment the users_banned statistic
 	if err := r.stats.IncrementUsersBanned(context.Background(), 1); err != nil {
