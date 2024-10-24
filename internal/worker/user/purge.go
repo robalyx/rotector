@@ -14,7 +14,7 @@ const (
 	PurgeUsersToProcess = 200
 )
 
-// PurgeWorker represents a purge worker that removes banned users from flagged or pending users.
+// PurgeWorker represents a purge worker that removes banned users from confirmed or flagged users.
 type PurgeWorker struct {
 	db          *database.Database
 	roAPI       *api.API

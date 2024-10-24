@@ -21,7 +21,7 @@ var multipleNewlinesRegex = regexp.MustCompile(`\n{4,}`)
 
 // ReviewEmbed builds the embed for the review message.
 type ReviewEmbed struct {
-	user           *database.PendingUser
+	user           *database.FlaggedUser
 	translator     *translator.Translator
 	flaggedFriends map[uint64]string
 	sortBy         string
@@ -31,7 +31,7 @@ type ReviewEmbed struct {
 // NewReviewEmbed creates a new ReviewEmbed.
 func NewReviewEmbed(s *session.Session, translator *translator.Translator) *ReviewEmbed {
 	return &ReviewEmbed{
-		user:           s.GetPendingUser(constants.KeyTarget),
+		user:           s.GetFlaggedUser(constants.KeyTarget),
 		translator:     translator,
 		flaggedFriends: s.Get(constants.SessionKeyFlaggedFriends).(map[uint64]string),
 		sortBy:         s.GetString(constants.KeySortBy),
@@ -181,19 +181,19 @@ func (b *ReviewEmbed) getFriends() string {
 		friends = append(friends, fmt.Sprintf("[%s](https://www.roblox.com/users/%d/profile)", utils.CensorString(friend.Name, b.streamerMode), friend.ID))
 	}
 
-	// Add flagged or pending status if needed
+	// Add confirmed or flagged status if needed
 	if len(b.flaggedFriends) > 0 {
+		confirmedCount := 0
 		flaggedCount := 0
-		pendingCount := 0
 		for _, friend := range b.flaggedFriends {
-			if friend == "flagged" {
+			if friend == "confirmed" {
+				confirmedCount++
+			} else if friend == "flagged" {
 				flaggedCount++
-			} else if friend == "pending" {
-				pendingCount++
 			}
 		}
 
-		friends = append(friends, fmt.Sprintf(" (%d flagged, %d pending)", flaggedCount, pendingCount))
+		friends = append(friends, fmt.Sprintf(" (%d confirmed, %d flagged)", confirmedCount, flaggedCount))
 	}
 
 	// If no friends are found, return NotApplicable

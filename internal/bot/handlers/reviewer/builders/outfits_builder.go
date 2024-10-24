@@ -13,7 +13,7 @@ import (
 
 // OutfitsEmbed builds the embed for the outfit viewer message.
 type OutfitsEmbed struct {
-	user         *database.PendingUser
+	user         *database.FlaggedUser
 	outfits      []types.Outfit
 	start        int
 	page         int
@@ -26,7 +26,7 @@ type OutfitsEmbed struct {
 // NewOutfitsEmbed creates a new OutfitsEmbed.
 func NewOutfitsEmbed(s *session.Session) *OutfitsEmbed {
 	return &OutfitsEmbed{
-		user:         s.GetPendingUser(constants.KeyTarget),
+		user:         s.GetFlaggedUser(constants.KeyTarget),
 		outfits:      s.Get(constants.SessionKeyOutfits).([]types.Outfit),
 		start:        s.GetInt(constants.SessionKeyStart),
 		page:         s.GetInt(constants.SessionKeyPage),

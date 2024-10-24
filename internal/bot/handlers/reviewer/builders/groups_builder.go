@@ -13,7 +13,7 @@ import (
 
 // GroupsEmbed builds the embed for the groups viewer message.
 type GroupsEmbed struct {
-	user          *database.PendingUser
+	user          *database.FlaggedUser
 	groups        []types.UserGroupRoles
 	flaggedGroups map[uint64]bool
 	start         int
@@ -27,7 +27,7 @@ type GroupsEmbed struct {
 // NewGroupsEmbed creates a new GroupsEmbed.
 func NewGroupsEmbed(s *session.Session) *GroupsEmbed {
 	return &GroupsEmbed{
-		user:          s.GetPendingUser(constants.KeyTarget),
+		user:          s.GetFlaggedUser(constants.KeyTarget),
 		groups:        s.Get(constants.SessionKeyGroups).([]types.UserGroupRoles),
 		flaggedGroups: s.Get(constants.SessionKeyFlaggedGroups).(map[uint64]bool),
 		start:         s.GetInt(constants.SessionKeyStart),

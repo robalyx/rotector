@@ -84,9 +84,10 @@ func (f *FriendWorker) Start() {
 // processFriendsBatch processes a batch of friends and returns the remaining friend IDs.
 func (f *FriendWorker) processFriendsBatch(friendIDs []uint64) ([]uint64, error) {
 	for len(friendIDs) < FriendUsersToProcess {
-		// Get the next flagged user
-		user, err := f.db.Users().GetNextFlaggedUser()
+		// Get the next confirmed user
+		user, err := f.db.Users().GetNextConfirmedUser()
 		if err != nil {
+			f.logger.Error("Error getting next confirmed user", zap.Error(err))
 			return nil, err
 		}
 
@@ -166,7 +167,7 @@ func (f *FriendWorker) processUsers(userInfos []*fetcher.Info) {
 
 	// Save all flagged users
 	f.bar.SetStepMessage("Saving flagged users")
-	f.db.Users().SavePendingUsers(flaggedUsers)
+	f.db.Users().SaveFlaggedUsers(flaggedUsers)
 	f.bar.Increment(10)
 
 	f.logger.Info("Finished processing users",

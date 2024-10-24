@@ -23,8 +23,8 @@ const (
 
 var ErrInvalidSortBy = errors.New("invalid sortBy value")
 
-// FlaggedGroup represents a group that is considered flagged.
-type FlaggedGroup struct {
+// ConfirmedGroup represents a group that is considered flagged.
+type ConfirmedGroup struct {
 	ID          uint64    `pg:"id,pk"`
 	Name        string    `pg:"name"`
 	Description string    `pg:"description"`
@@ -53,13 +53,13 @@ type User struct {
 	ThumbnailURL   string                 `json:"thumbnailUrl"   pg:"thumbnail_url"`
 }
 
-// PendingUser represents a user that is pending review.
-type PendingUser struct {
+// FlaggedUser represents a user that is flagged for review.
+type FlaggedUser struct {
 	User
 }
 
-// FlaggedUser represents a user that is considered flagged.
-type FlaggedUser struct {
+// ConfirmedUser represents a user that is considered confirmed.
+type ConfirmedUser struct {
 	User
 	VerifiedAt time.Time `json:"verifiedAt" pg:"verified_at"`
 }
@@ -69,7 +69,7 @@ type DailyStatistics struct {
 	Date         time.Time `pg:"date,pk"`
 	UsersBanned  int64     `pg:"users_banned"`
 	UsersCleared int64     `pg:"users_cleared"`
-	UsersPending int64     `pg:"users_pending"`
+	UsersFlagged int64     `pg:"users_flagged"`
 	UsersPurged  int64     `pg:"users_purged"`
 }
 
@@ -137,9 +137,9 @@ func NewConnection(config *config.Config, stats *statistics.Statistics, logger *
 // createSchema creates the necessary database tables if they don't exist.
 func (d *Database) createSchema() error {
 	models := []interface{}{
-		(*FlaggedGroup)(nil),
-		(*PendingUser)(nil),
+		(*ConfirmedGroup)(nil),
 		(*FlaggedUser)(nil),
+		(*ConfirmedUser)(nil),
 		(*DailyStatistics)(nil),
 		(*UserSetting)(nil),
 		(*GuildSetting)(nil),

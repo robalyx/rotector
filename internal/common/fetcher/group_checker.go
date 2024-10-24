@@ -30,7 +30,7 @@ func (gc *GroupChecker) CheckUserGroups(userInfo *Info) (*database.User, bool, e
 	}
 
 	// Check if user belongs to any flagged groups
-	flaggedGroupIDs, err := gc.db.Groups().CheckFlaggedGroups(groupIDs)
+	flaggedGroupIDs, err := gc.db.Groups().CheckConfirmedGroups(groupIDs)
 	if err != nil {
 		gc.logger.Error("Error checking flagged groups", zap.Error(err), zap.Uint64("userID", userInfo.ID))
 		return nil, false, err

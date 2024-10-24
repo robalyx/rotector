@@ -13,7 +13,7 @@ import (
 
 // FriendsEmbed builds the embed for the friends viewer message.
 type FriendsEmbed struct {
-	user           *database.PendingUser
+	user           *database.FlaggedUser
 	friends        []types.Friend
 	flaggedFriends map[uint64]string
 	start          int
@@ -27,7 +27,7 @@ type FriendsEmbed struct {
 // NewFriendsEmbed creates a new FriendsEmbed.
 func NewFriendsEmbed(s *session.Session) *FriendsEmbed {
 	return &FriendsEmbed{
-		user:           s.GetPendingUser(constants.KeyTarget),
+		user:           s.GetFlaggedUser(constants.KeyTarget),
 		friends:        s.Get(constants.SessionKeyFriends).([]types.Friend),
 		flaggedFriends: s.Get(constants.SessionKeyFlaggedFriends).(map[uint64]string),
 		start:          s.GetInt(constants.SessionKeyStart),
@@ -61,11 +61,11 @@ func (b *FriendsEmbed) Build() *discord.MessageUpdateBuilder {
 		fieldName := fmt.Sprintf("Friend %d", b.start+i+1)
 		fieldValue := fmt.Sprintf("[%s](https://www.roblox.com/users/%d/profile)", utils.CensorString(friend.Name, b.streamerMode), friend.ID)
 
-		// Add flagged or pending status if needed
+		// Add confirmed or flagged status if needed
 		if flagged, ok := b.flaggedFriends[friend.ID]; ok {
-			if flagged == "flagged" {
+			if flagged == "confirmed" {
 				fieldName += " ⚠️"
-			} else if flagged == "pending" {
+			} else if flagged == "flagged" {
 				fieldName += " ⏳"
 			}
 		}

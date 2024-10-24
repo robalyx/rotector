@@ -21,15 +21,15 @@ func NewGroupRepository(db *pg.DB, logger *zap.Logger) *GroupRepository {
 	}
 }
 
-// GetNextFlaggedGroup retrieves the next flagged group to be processed.
-func (r *GroupRepository) GetNextFlaggedGroup() (*FlaggedGroup, error) {
-	var group FlaggedGroup
+// GetNextConfirmedGroup retrieves the next confirmed group to be processed.
+func (r *GroupRepository) GetNextConfirmedGroup() (*ConfirmedGroup, error) {
+	var group ConfirmedGroup
 	_, err := r.db.QueryOne(&group, `
-		UPDATE flagged_groups
+		UPDATE confirmed_groups
 		SET last_scanned = NOW() 
 		WHERE id = (
 			SELECT id 
-			FROM flagged_groups
+			FROM confirmed_groups
 			WHERE last_scanned IS NULL OR last_scanned < NOW() - INTERVAL '1 day'
 			ORDER BY last_scanned ASC NULLS FIRST
 			LIMIT 1
@@ -37,19 +37,19 @@ func (r *GroupRepository) GetNextFlaggedGroup() (*FlaggedGroup, error) {
 		RETURNING *
 	`)
 	if err != nil {
-		r.logger.Error("Failed to get next flagged group", zap.Error(err))
+		r.logger.Error("Failed to get next confirmed group", zap.Error(err))
 		return nil, err
 	}
-	r.logger.Info("Retrieved next flagged group", zap.Uint64("groupID", group.ID), zap.Time("lastScanned", group.LastScanned))
+	r.logger.Info("Retrieved next confirmed group", zap.Uint64("groupID", group.ID), zap.Time("lastScanned", group.LastScanned))
 	return &group, nil
 }
 
-// CheckFlaggedGroups checks if any of the provided group IDs are flagged.
-func (r *GroupRepository) CheckFlaggedGroups(groupIDs []uint64) ([]uint64, error) {
-	var flaggedGroupIDs []uint64
-	_, err := r.db.Query(&flaggedGroupIDs, `
+// CheckConfirmedGroups checks if any of the provided group IDs are confirmed.
+func (r *GroupRepository) CheckConfirmedGroups(groupIDs []uint64) ([]uint64, error) {
+	var confirmedGroupIDs []uint64
+	_, err := r.db.Query(&confirmedGroupIDs, `
 		SELECT id
-		FROM flagged_groups
+		FROM confirmed_groups
 		WHERE id = ANY(?)
 	`, pg.Array(groupIDs))
 
@@ -59,5 +59,5 @@ func (r *GroupRepository) CheckFlaggedGroups(groupIDs []uint64) ([]uint64, error
 		return nil, err
 	}
 
-	return flaggedGroupIDs, nil
+	return confirmedGroupIDs, nil
 }

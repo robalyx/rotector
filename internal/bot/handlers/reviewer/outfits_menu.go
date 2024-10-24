@@ -39,7 +39,7 @@ func NewOutfitsMenu(h *Handler) *OutfitsMenu {
 
 // ShowOutfitsMenu shows the outfits menu for the given page.
 func (m *OutfitsMenu) ShowOutfitsMenu(event *events.ComponentInteractionCreate, s *session.Session, page int) {
-	user := s.GetPendingUser(constants.KeyTarget)
+	user := s.GetFlaggedUser(constants.KeyTarget)
 
 	// Check if the user has outfits
 	if len(user.Outfits) == 0 {
@@ -107,7 +107,7 @@ func (m *OutfitsMenu) handlePageNavigation(event *events.ComponentInteractionCre
 	action := builders.ViewerAction(customID)
 	switch action {
 	case builders.ViewerFirstPage, builders.ViewerPrevPage, builders.ViewerNextPage, builders.ViewerLastPage:
-		user := s.GetPendingUser(constants.KeyTarget)
+		user := s.GetFlaggedUser(constants.KeyTarget)
 
 		// Get the page numbers for the action
 		maxPage := (len(user.Outfits) - 1) / constants.OutfitsPerPage

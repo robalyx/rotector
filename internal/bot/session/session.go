@@ -81,9 +81,9 @@ func (s *Session) GetBool(key string) bool {
 	return false
 }
 
-// GetPendingUser returns the pending user for the given key.
-func (s *Session) GetPendingUser(key string) *database.PendingUser {
-	if value, ok := s.Get(key).(*database.PendingUser); ok {
+// GetFlaggedUser returns the flagged user for the given key.
+func (s *Session) GetFlaggedUser(key string) *database.FlaggedUser {
+	if value, ok := s.Get(key).(*database.FlaggedUser); ok {
 		return value
 	}
 	return nil

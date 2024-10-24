@@ -9,30 +9,30 @@ import (
 
 // DashboardBuilder is the builder for the dashboard.
 type DashboardBuilder struct {
-	pendingCount int
-	flaggedCount int
+	flaggedCount   int
+	confirmedCount int
 }
 
 // NewDashboardBuilder creates a new DashboardBuilder.
-func NewDashboardBuilder(pendingCount, flaggedCount int) *DashboardBuilder {
+func NewDashboardBuilder(flaggedCount, confirmedCount int) *DashboardBuilder {
 	return &DashboardBuilder{
-		pendingCount: pendingCount,
-		flaggedCount: flaggedCount,
+		flaggedCount:   flaggedCount,
+		confirmedCount: confirmedCount,
 	}
 }
 
 // Build builds the dashboard.
 func (b *DashboardBuilder) Build() *discord.MessageUpdateBuilder {
 	embed := discord.NewEmbedBuilder().
-		AddField("Pending Users", strconv.Itoa(b.pendingCount), true).
 		AddField("Flagged Users", strconv.Itoa(b.flaggedCount), true).
+		AddField("Confirmed Users", strconv.Itoa(b.confirmedCount), true).
 		SetColor(constants.DefaultEmbedColor).
 		Build()
 
 	components := []discord.ContainerComponent{
 		discord.NewActionRow(
 			discord.NewStringSelectMenu(constants.ActionSelectMenuCustomID, "Select an action",
-				discord.NewStringSelectMenuOption("Review Pending Users", constants.StartReviewCustomID),
+				discord.NewStringSelectMenuOption("Review Flagged Users", constants.StartReviewCustomID),
 				discord.NewStringSelectMenuOption("User Settings", constants.UserSettingsCustomID),
 				discord.NewStringSelectMenuOption("Guild Settings", constants.GuildSettingsCustomID),
 			),

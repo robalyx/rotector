@@ -56,11 +56,11 @@ func (g *GroupWorker) Start() {
 	for {
 		g.bar.Reset()
 
-		// Step 1: Get next flagged group (20%)
-		g.bar.SetStepMessage("Fetching next flagged group")
-		group, err := g.db.Groups().GetNextFlaggedGroup()
+		// Step 1: Get next confirmed group (20%)
+		g.bar.SetStepMessage("Fetching next confirmed group")
+		group, err := g.db.Groups().GetNextConfirmedGroup()
 		if err != nil {
-			g.logger.Error("Error getting next flagged group", zap.Error(err))
+			g.logger.Error("Error getting next confirmed group", zap.Error(err))
 			time.Sleep(5 * time.Minute) // Wait before trying again
 			continue
 		}
@@ -176,7 +176,7 @@ func (g *GroupWorker) processUsers(userInfos []*fetcher.Info) {
 
 	// Save all flagged users
 	g.bar.SetStepMessage("Saving flagged users")
-	g.db.Users().SavePendingUsers(flaggedUsers)
+	g.db.Users().SaveFlaggedUsers(flaggedUsers)
 	g.bar.Increment(10)
 
 	g.logger.Info("Finished processing users",

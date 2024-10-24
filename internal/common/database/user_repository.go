@@ -28,17 +28,17 @@ func NewUserRepository(db *pg.DB, stats *statistics.Statistics, logger *zap.Logg
 	}
 }
 
-// GetRandomPendingUser retrieves a random pending user based on the specified sorting criteria.
-func (r *UserRepository) GetRandomPendingUser(sortBy string) (*PendingUser, error) {
+// GetRandomFlaggedUser retrieves a random flagged user based on the specified sorting criteria.
+func (r *UserRepository) GetRandomFlaggedUser(sortBy string) (*FlaggedUser, error) {
 	var user struct {
-		PendingUser
+		FlaggedUser
 		OldLastReviewed time.Time `pg:"old_last_reviewed"`
 	}
 
 	query := `
         WITH sampled_users AS (
             SELECT id, last_reviewed
-            FROM pending_users
+            FROM flagged_users
             WHERE last_reviewed IS NULL OR last_reviewed < NOW() - INTERVAL '5 minutes'
         ),
         selected_user AS (
@@ -47,9 +47,9 @@ func (r *UserRepository) GetRandomPendingUser(sortBy string) (*PendingUser, erro
     `
 	switch sortBy {
 	case SortByConfidence:
-		query += "ORDER BY (SELECT confidence FROM pending_users WHERE id = sampled_users.id) DESC"
+		query += "ORDER BY (SELECT confidence FROM flagged_users WHERE id = sampled_users.id) DESC"
 	case SortByLastUpdated:
-		query += "ORDER BY (SELECT last_updated FROM pending_users WHERE id = sampled_users.id) DESC"
+		query += "ORDER BY (SELECT last_updated FROM flagged_users WHERE id = sampled_users.id) DESC"
 	case SortByRandom:
 		query += "ORDER BY RANDOM()"
 	default:
@@ -58,7 +58,7 @@ func (r *UserRepository) GetRandomPendingUser(sortBy string) (*PendingUser, erro
 	query += `
             LIMIT 1
         )
-        UPDATE pending_users
+        UPDATE flagged_users
         SET last_reviewed = NOW()
         WHERE id = (SELECT id FROM selected_user)
         RETURNING *, (SELECT last_reviewed FROM selected_user) AS old_last_reviewed
@@ -66,33 +66,33 @@ func (r *UserRepository) GetRandomPendingUser(sortBy string) (*PendingUser, erro
 
 	if _, err := r.db.QueryOne(&user, query); err != nil {
 		if errors.Is(err, pg.ErrNoRows) {
-			r.logger.Info("No pending users available for review")
+			r.logger.Info("No flagged users available for review")
 			return nil, err
 		}
-		r.logger.Error("Failed to get random pending user", zap.Error(err))
+		r.logger.Error("Failed to get random flagged user", zap.Error(err))
 		return nil, err
 	}
 
-	r.logger.Info("Retrieved random pending user",
+	r.logger.Info("Retrieved random flagged user",
 		zap.Uint64("userID", user.ID),
 		zap.String("sortBy", sortBy),
 		zap.Time("oldLastReviewed", user.OldLastReviewed))
 
 	// Replace the LastReviewed value with the old value
-	user.PendingUser.LastReviewed = user.OldLastReviewed
+	user.FlaggedUser.LastReviewed = user.OldLastReviewed
 
-	return &user.PendingUser, nil
+	return &user.FlaggedUser, nil
 }
 
-// GetNextFlaggedUser retrieves the next flagged user to be processed.
-func (r *UserRepository) GetNextFlaggedUser() (*FlaggedUser, error) {
-	var user FlaggedUser
+// GetNextConfirmedUser retrieves the next confirmed user to be processed.
+func (r *UserRepository) GetNextConfirmedUser() (*ConfirmedUser, error) {
+	var user ConfirmedUser
 	_, err := r.db.QueryOne(&user, `
-		UPDATE flagged_users
+		UPDATE confirmed_users
 		SET last_scanned = NOW()
 		WHERE id = (
 			SELECT id
-			FROM flagged_users
+			FROM confirmed_users
 			WHERE last_scanned IS NULL OR last_scanned < NOW() - INTERVAL '1 day'
 			ORDER BY last_scanned ASC NULLS FIRST
 			LIMIT 1
@@ -100,15 +100,15 @@ func (r *UserRepository) GetNextFlaggedUser() (*FlaggedUser, error) {
 		RETURNING *
 	`)
 	if err != nil {
-		r.logger.Error("Failed to get next flagged user", zap.Error(err))
+		r.logger.Error("Failed to get next confirmed user", zap.Error(err))
 		return nil, err
 	}
-	r.logger.Info("Retrieved next flagged user", zap.Uint64("userID", user.ID))
+	r.logger.Info("Retrieved next confirmed user", zap.Uint64("userID", user.ID))
 	return &user, nil
 }
 
-// SavePendingUsers saves or updates the provided flagged users in the database.
-func (r *UserRepository) SavePendingUsers(flaggedUsers []*User) {
+// SaveFlaggedUsers saves or updates the provided flagged users in the database.
+func (r *UserRepository) SaveFlaggedUsers(flaggedUsers []*User) {
 	r.logger.Info("Saving flagged users", zap.Int("count", len(flaggedUsers)))
 
 	for _, flaggedUser := range flaggedUsers {
@@ -159,11 +159,11 @@ func (r *UserRepository) SavePendingUsers(flaggedUsers []*User) {
 
 		_, err = r.db.Exec(`
 			WITH user_check AS (
-				SELECT id FROM flagged_users WHERE id = ?
+				SELECT id FROM confirmed_users WHERE id = ?
 			)
-			INSERT INTO pending_users (
+			INSERT INTO flagged_users (
 				id, name, display_name, description, created_at, reason,
-				groups, outfits, friends, flagged_content, flagged_groups,
+				groups, outfits, friends, flagged_content, confirmed_groups,
 				confidence, last_updated, thumbnail_url
 			)
 			SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), ?
@@ -178,7 +178,7 @@ func (r *UserRepository) SavePendingUsers(flaggedUsers []*User) {
 				outfits = EXCLUDED.outfits,
 				friends = EXCLUDED.friends,
 				flagged_content = EXCLUDED.flagged_content,
-				flagged_groups = EXCLUDED.flagged_groups,
+				confirmed_groups = EXCLUDED.confirmed_groups,
 				confidence = EXCLUDED.confidence,
 				last_updated = NOW(),
 				thumbnail_url = EXCLUDED.thumbnail_url
@@ -204,24 +204,24 @@ func (r *UserRepository) SavePendingUsers(flaggedUsers []*User) {
 			zap.String("reason", flaggedUser.Reason),
 			zap.Int("groups_count", len(flaggedUser.Groups)),
 			zap.Strings("flagged_content", flaggedUser.FlaggedContent),
-			zap.Uint64s("flagged_groups", flaggedUser.FlaggedGroups),
+			zap.Uint64s("confirmed_groups", flaggedUser.FlaggedGroups),
 			zap.Float64("confidence", flaggedUser.Confidence),
 			zap.Time("last_updated", time.Now()),
 			zap.String("thumbnail_url", flaggedUser.ThumbnailURL))
 	}
 
-	// Increment the users_pending statistic
-	if err := r.stats.IncrementUsersPending(context.Background(), len(flaggedUsers)); err != nil {
-		r.logger.Error("Failed to increment users_pending statistic", zap.Error(err))
+	// Increment the users_flagged statistic
+	if err := r.stats.IncrementUsersFlagged(context.Background(), len(flaggedUsers)); err != nil {
+		r.logger.Error("Failed to increment users_flagged statistic", zap.Error(err))
 	}
 
 	r.logger.Info("Finished saving flagged users")
 }
 
-// BanUser moves a user from pending to flagged status.
-func (r *UserRepository) BanUser(user *PendingUser) error {
+// BanUser moves a user from flagged to confirmedstatus.
+func (r *UserRepository) BanUser(user *FlaggedUser) error {
 	_, err := r.db.Exec(`
-		INSERT INTO flagged_users (
+		INSERT INTO confirmed_users (
 			id, name, display_name, description, created_at, reason,
 			groups, outfits, friends, flagged_content, flagged_groups,
 			confidence, last_scanned, last_updated, last_reviewed, thumbnail_url,
@@ -233,17 +233,17 @@ func (r *UserRepository) BanUser(user *PendingUser) error {
 		user.FlaggedGroups, user.Confidence, user.LastScanned, user.LastUpdated,
 		user.ThumbnailURL)
 	if err != nil {
-		r.logger.Error("Failed to insert user into flagged_users", zap.Error(err), zap.Uint64("userID", user.ID))
+		r.logger.Error("Failed to insert user into confirmed_users", zap.Error(err), zap.Uint64("userID", user.ID))
 		return err
 	}
 
-	_, err = r.db.Exec("DELETE FROM pending_users WHERE id = ?", user.ID)
+	_, err = r.db.Exec("DELETE FROM flagged_users WHERE id = ?", user.ID)
 	if err != nil {
-		r.logger.Error("Failed to delete user from pending_users", zap.Error(err), zap.Uint64("userID", user.ID))
+		r.logger.Error("Failed to delete user from flagged_users", zap.Error(err), zap.Uint64("userID", user.ID))
 		return err
 	}
 
-	r.logger.Info("User accepted and moved to flagged_users", zap.Uint64("userID", user.ID))
+	r.logger.Info("User accepted and moved to confirmed_users", zap.Uint64("userID", user.ID))
 
 	// Increment the users_banned statistic
 	if err := r.stats.IncrementUsersBanned(context.Background(), 1); err != nil {
@@ -253,14 +253,14 @@ func (r *UserRepository) BanUser(user *PendingUser) error {
 	return nil
 }
 
-// ClearUser removes a user from the pending users list.
-func (r *UserRepository) ClearUser(user *PendingUser) error {
-	_, err := r.db.Exec("DELETE FROM pending_users WHERE id = ?", user.ID)
+// ClearUser removes a user from the flagged users list.
+func (r *UserRepository) ClearUser(user *FlaggedUser) error {
+	_, err := r.db.Exec("DELETE FROM flagged_users WHERE id = ?", user.ID)
 	if err != nil {
-		r.logger.Error("Failed to delete user from pending_users", zap.Error(err), zap.Uint64("userID", user.ID))
+		r.logger.Error("Failed to delete user from flagged_users", zap.Error(err), zap.Uint64("userID", user.ID))
 		return err
 	}
-	r.logger.Info("User rejected and removed from pending_users", zap.Uint64("userID", user.ID))
+	r.logger.Info("User rejected and removed from flagged_users", zap.Uint64("userID", user.ID))
 
 	// Increment the users_cleared statistic
 	if err := r.stats.IncrementUsersCleared(context.Background(), 1); err != nil {
@@ -270,16 +270,27 @@ func (r *UserRepository) ClearUser(user *PendingUser) error {
 	return nil
 }
 
-// GetPendingUserByID retrieves a pending user by their ID.
-func (r *UserRepository) GetPendingUserByID(id uint64) (*PendingUser, error) {
-	var user PendingUser
+// GetFlaggedUserByID retrieves a flagged user by their ID.
+func (r *UserRepository) GetFlaggedUserByID(id uint64) (*FlaggedUser, error) {
+	var user FlaggedUser
 	err := r.db.Model(&user).Where("id = ?", id).Select()
 	if err != nil {
-		r.logger.Error("Failed to get pending user by ID", zap.Error(err), zap.Uint64("userID", id))
+		r.logger.Error("Failed to get flagged user by ID", zap.Error(err), zap.Uint64("userID", id))
 		return nil, err
 	}
-	r.logger.Info("Retrieved pending user by ID", zap.Uint64("userID", id))
+	r.logger.Info("Retrieved flagged user by ID", zap.Uint64("userID", id))
 	return &user, nil
+}
+
+// GetConfirmedUsersCount returns the number of users in the confirmed_users table.
+func (r *UserRepository) GetConfirmedUsersCount() (int, error) {
+	var count int
+	_, err := r.db.QueryOne(pg.Scan(&count), "SELECT COUNT(*) FROM confirmed_users")
+	if err != nil {
+		r.logger.Error("Failed to get confirmed users count", zap.Error(err))
+		return 0, err
+	}
+	return count, nil
 }
 
 // GetFlaggedUsersCount returns the number of users in the flagged_users table.
@@ -288,17 +299,6 @@ func (r *UserRepository) GetFlaggedUsersCount() (int, error) {
 	_, err := r.db.QueryOne(pg.Scan(&count), "SELECT COUNT(*) FROM flagged_users")
 	if err != nil {
 		r.logger.Error("Failed to get flagged users count", zap.Error(err))
-		return 0, err
-	}
-	return count, nil
-}
-
-// GetPendingUsersCount returns the number of users in the pending_users table.
-func (r *UserRepository) GetPendingUsersCount() (int, error) {
-	var count int
-	_, err := r.db.QueryOne(pg.Scan(&count), "SELECT COUNT(*) FROM pending_users")
-	if err != nil {
-		r.logger.Error("Failed to get pending users count", zap.Error(err))
 		return 0, err
 	}
 	return count, nil
@@ -314,9 +314,9 @@ func (r *UserRepository) CheckExistingUsers(userIDs []uint64) (map[uint64]string
 	}
 
 	_, err := r.db.Query(&users, `
-		SELECT id, 'flagged' AS status FROM flagged_users WHERE id = ANY(?)
+		SELECT id, 'confirmed' AS status FROM confirmed_users WHERE id = ANY(?)
 		UNION ALL
-		SELECT id, 'pending' AS status FROM pending_users WHERE id = ANY(?)
+		SELECT id, 'flagged' AS status FROM flagged_users WHERE id = ANY(?)
 	`, pg.Array(userIDs), pg.Array(userIDs))
 
 	if err != nil && !errors.Is(err, pg.ErrNoRows) {
@@ -342,10 +342,10 @@ func (r *UserRepository) GetUsersToCheck(limit int) ([]uint64, error) {
 	// Select the users to check
 	_, err := r.db.Query(&userIDs, `
 		SELECT id FROM (
-			SELECT id FROM flagged_users
+			SELECT id FROM confirmed_users
 			WHERE last_purge_check IS NULL OR last_purge_check < NOW() - INTERVAL '8 hours'
 			UNION ALL
-			SELECT id FROM pending_users
+			SELECT id FROM flagged_users
 			WHERE last_purge_check IS NULL OR last_purge_check < NOW() - INTERVAL '8 hours'
 		) AS users
 		ORDER BY RANDOM()
@@ -359,11 +359,11 @@ func (r *UserRepository) GetUsersToCheck(limit int) ([]uint64, error) {
 	// If we have users to check, update their last_purge_check
 	if len(userIDs) > 0 {
 		_, err = r.db.Exec(`
-			UPDATE flagged_users
+			UPDATE confirmed_users
 			SET last_purge_check = NOW()
 			WHERE id = ANY(?);
 
-			UPDATE pending_users
+			UPDATE flagged_users
 			SET last_purge_check = NOW()
 			WHERE id = ANY(?);
 		`, pg.Array(userIDs), pg.Array(userIDs))
@@ -377,11 +377,11 @@ func (r *UserRepository) GetUsersToCheck(limit int) ([]uint64, error) {
 	return userIDs, nil
 }
 
-// RemoveBannedUsers removes the specified banned users from flagged and pending tables.
+// RemoveBannedUsers removes the specified banned users from confirmed and flagged tables.
 func (r *UserRepository) RemoveBannedUsers(userIDs []uint64) error {
 	_, err := r.db.Exec(`
+		DELETE FROM confirmed_users WHERE id = ANY(?);
 		DELETE FROM flagged_users WHERE id = ANY(?);
-		DELETE FROM pending_users WHERE id = ANY(?);
 	`, pg.Array(userIDs), pg.Array(userIDs))
 	if err != nil {
 		r.logger.Error("Failed to remove banned users", zap.Error(err))

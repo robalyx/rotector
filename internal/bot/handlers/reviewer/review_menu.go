@@ -13,7 +13,7 @@ import (
 	"go.uber.org/zap"
 )
 
-// ReviewMenu handles the review process for flagged users.
+// ReviewMenu handles the review process for users.
 type ReviewMenu struct {
 	handler *Handler
 	page    *pagination.Page
@@ -40,7 +40,7 @@ func NewReviewMenu(h *Handler) *ReviewMenu {
 func (m *ReviewMenu) ShowReviewMenuAndFetchUser(event interfaces.CommonEvent, s *session.Session, content string) {
 	// Fetch a new user
 	sortBy := s.GetString(constants.KeySortBy)
-	user, err := m.handler.db.Users().GetRandomPendingUser(sortBy)
+	user, err := m.handler.db.Users().GetRandomFlaggedUser(sortBy)
 	if err != nil {
 		m.handler.logger.Error("Failed to fetch a new user", zap.Error(err))
 		utils.RespondWithError(event, "Failed to fetch a new user. Please try again.")
@@ -54,7 +54,7 @@ func (m *ReviewMenu) ShowReviewMenuAndFetchUser(event interfaces.CommonEvent, s 
 
 // ShowReviewMenu displays the review menu.
 func (m *ReviewMenu) ShowReviewMenu(event interfaces.CommonEvent, s *session.Session, content string) {
-	user := s.GetPendingUser(constants.KeyTarget)
+	user := s.GetFlaggedUser(constants.KeyTarget)
 
 	// Check which friends are flagged
 	friendIDs := make([]uint64, len(user.Friends))
@@ -127,12 +127,12 @@ func (m *ReviewMenu) handleModal(event *events.ModalSubmitInteractionCreate, s *
 
 // handleBanUser handles the ban user button interaction.
 func (m *ReviewMenu) handleBanUser(event interfaces.CommonEvent, s *session.Session) {
-	user := s.GetPendingUser(constants.KeyTarget)
+	user := s.GetFlaggedUser(constants.KeyTarget)
 
 	// Perform the ban
 	if err := m.handler.db.Users().BanUser(user); err != nil {
-		m.handler.logger.Error("Failed to accept user", zap.Error(err))
-		utils.RespondWithError(event, "Failed to accept the user. Please try again.")
+		m.handler.logger.Error("Failed to ban user", zap.Error(err))
+		utils.RespondWithError(event, "Failed to ban the user. Please try again.")
 		return
 	}
 
@@ -141,7 +141,7 @@ func (m *ReviewMenu) handleBanUser(event interfaces.CommonEvent, s *session.Sess
 
 // handleClearUser handles the clear user button interaction.
 func (m *ReviewMenu) handleClearUser(event interfaces.CommonEvent, s *session.Session) {
-	user := s.GetPendingUser(constants.KeyTarget)
+	user := s.GetFlaggedUser(constants.KeyTarget)
 
 	// Clear the user
 	if err := m.handler.db.Users().ClearUser(user); err != nil {
@@ -155,7 +155,7 @@ func (m *ReviewMenu) handleClearUser(event interfaces.CommonEvent, s *session.Se
 
 // handleBanWithReason processes the ban with a modal for a custom reason.
 func (m *ReviewMenu) handleBanWithReason(event *events.ComponentInteractionCreate, s *session.Session) {
-	user := s.GetPendingUser(constants.KeyTarget)
+	user := s.GetFlaggedUser(constants.KeyTarget)
 
 	// Create the modal
 	modal := discord.NewModalCreateBuilder().
@@ -178,7 +178,7 @@ func (m *ReviewMenu) handleBanWithReason(event *events.ComponentInteractionCreat
 
 // handleBanWithReasonModalSubmit processes the modal submit interaction.
 func (m *ReviewMenu) handleBanWithReasonModalSubmit(event *events.ModalSubmitInteractionCreate, s *session.Session) {
-	user := s.GetPendingUser(constants.KeyTarget)
+	user := s.GetFlaggedUser(constants.KeyTarget)
 
 	// Get the ban reason from the modal
 	reason := event.Data.Text("ban_reason")
@@ -192,7 +192,7 @@ func (m *ReviewMenu) handleBanWithReasonModalSubmit(event *events.ModalSubmitInt
 
 	// Perform the ban
 	if err := m.handler.db.Users().BanUser(user); err != nil {
-		m.handler.logger.Error("Failed to accept user", zap.Error(err))
+		m.handler.logger.Error("Failed to ban user", zap.Error(err))
 		utils.RespondWithError(event, "Failed to ban the user. Please try again.")
 		return
 	}

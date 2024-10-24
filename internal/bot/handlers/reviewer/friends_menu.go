@@ -39,7 +39,7 @@ func NewFriendsMenu(h *Handler) *FriendsMenu {
 
 // ShowFriendsMenu shows the friends menu for the given page.
 func (m *FriendsMenu) ShowFriendsMenu(event *events.ComponentInteractionCreate, s *session.Session, page int) {
-	user := s.GetPendingUser(constants.KeyTarget)
+	user := s.GetFlaggedUser(constants.KeyTarget)
 
 	// Check if the user has friends
 	if len(user.Friends) == 0 {
@@ -139,7 +139,7 @@ func (m *FriendsMenu) handlePageNavigation(event *events.ComponentInteractionCre
 	action := builders.ViewerAction(customID)
 	switch action {
 	case builders.ViewerFirstPage, builders.ViewerPrevPage, builders.ViewerNextPage, builders.ViewerLastPage:
-		user := s.GetPendingUser(constants.KeyTarget)
+		user := s.GetFlaggedUser(constants.KeyTarget)
 
 		// Get the page number for the action
 		maxPage := (len(user.Friends) - 1) / constants.FriendsPerPage

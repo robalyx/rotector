@@ -39,7 +39,7 @@ func NewGroupsMenu(h *Handler) *GroupsMenu {
 
 // ShowGroupsMenu shows the groups menu for the given page.
 func (m *GroupsMenu) ShowGroupsMenu(event *events.ComponentInteractionCreate, s *session.Session, page int) {
-	user := s.GetPendingUser(constants.KeyTarget)
+	user := s.GetFlaggedUser(constants.KeyTarget)
 
 	// Check if the user has groups
 	if len(user.Groups) == 0 {
@@ -126,7 +126,7 @@ func (m *GroupsMenu) getFlaggedGroups(groups []types.UserGroupRoles) (map[uint64
 		groupIDs[i] = group.Group.ID
 	}
 
-	flaggedGroups, err := m.handler.db.Groups().CheckFlaggedGroups(groupIDs)
+	flaggedGroups, err := m.handler.db.Groups().CheckConfirmedGroups(groupIDs)
 	if err != nil {
 		return nil, err
 	}
@@ -144,7 +144,7 @@ func (m *GroupsMenu) handlePageNavigation(event *events.ComponentInteractionCrea
 	action := builders.ViewerAction(customID)
 	switch action {
 	case builders.ViewerFirstPage, builders.ViewerPrevPage, builders.ViewerNextPage, builders.ViewerLastPage:
-		user := s.GetPendingUser(constants.KeyTarget)
+		user := s.GetFlaggedUser(constants.KeyTarget)
 
 		// Get the page number for the action
 		maxPage := (len(user.Groups) - 1) / constants.GroupsPerPage

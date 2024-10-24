@@ -53,7 +53,7 @@ func (r *StatsRepository) UploadDailyStatsToDB(ctx context.Context) error {
 		Date:         time.Now().AddDate(0, 0, -1),
 		UsersBanned:  result["users_banned"],
 		UsersCleared: result["users_cleared"],
-		UsersPending: result["users_pending"],
+		UsersFlagged: result["users_flagged"],
 		UsersPurged:  result["users_purged"],
 	}
 

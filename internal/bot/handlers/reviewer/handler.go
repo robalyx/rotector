@@ -9,7 +9,7 @@ import (
 	"go.uber.org/zap"
 )
 
-// Handler manages the review process for flagged users.
+// Handler manages the review process for users.
 type Handler struct {
 	db                *database.Database
 	roAPI             *api.API

@@ -42,9 +42,9 @@ func (s *Statistics) IncrementUsersCleared(ctx context.Context, amount int) erro
 	return s.Increment(ctx, "users_cleared", amount)
 }
 
-// IncrementUsersPending increments the users_pending statistic.
-func (s *Statistics) IncrementUsersPending(ctx context.Context, amount int) error {
-	return s.Increment(ctx, "users_pending", amount)
+// IncrementUsersFlagged increments the users_flagged statistic.
+func (s *Statistics) IncrementUsersFlagged(ctx context.Context, amount int) error {
+	return s.Increment(ctx, "users_flagged", amount)
 }
 
 // IncrementUsersPurged increments the users_purged statistic.
