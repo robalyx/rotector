@@ -68,17 +68,17 @@ func (m *ReviewMenu) ShowReviewMenu(event interfaces.CommonEvent, s *session.Ses
 		return
 	}
 
-	// Get user preferences
-	preferences, err := m.handler.db.Settings().GetUserPreferences(uint64(event.User().ID))
+	// Get user settings
+	settings, err := m.handler.db.Settings().GetUserSettings(uint64(event.User().ID))
 	if err != nil {
-		m.handler.logger.Error("Failed to get user preferences", zap.Error(err))
-		utils.RespondWithError(event, "Failed to get user preferences. Please try again.")
+		m.handler.logger.Error("Failed to get user settings", zap.Error(err))
+		utils.RespondWithError(event, "Failed to get user settings. Please try again.")
 		return
 	}
 
 	s.Set(constants.SessionKeyUser, user)
 	s.Set(constants.SessionKeyFlaggedFriends, flaggedFriends)
-	s.Set(constants.SessionKeyStreamerMode, preferences.StreamerMode)
+	s.Set(constants.SessionKeyStreamerMode, settings.StreamerMode)
 
 	m.handler.paginationManager.NavigateTo(m.page.Name, s)
 	m.handler.paginationManager.UpdateMessage(event, s, m.page, content)

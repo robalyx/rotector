@@ -71,8 +71,8 @@ type DailyStatistics struct {
 	UsersPurged  int64     `pg:"users_purged"`
 }
 
-// UserPreference represents user-specific preferences.
-type UserPreference struct {
+// UserSetting represents user-specific settings.
+type UserSetting struct {
 	UserID       uint64 `pg:"user_id,pk"`
 	StreamerMode bool   `pg:"streamer_mode"`
 	DefaultSort  string `pg:"default_sort"`
@@ -130,7 +130,7 @@ func (d *Database) createSchema() error {
 		(*PendingUser)(nil),
 		(*FlaggedUser)(nil),
 		(*DailyStatistics)(nil),
-		(*UserPreference)(nil),
+		(*UserSetting)(nil),
 		(*GuildSetting)(nil),
 	}
 

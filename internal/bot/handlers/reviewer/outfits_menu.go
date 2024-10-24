@@ -15,7 +15,6 @@ import (
 	"github.com/rotector/rotector/internal/bot/pagination"
 	"github.com/rotector/rotector/internal/bot/session"
 	"github.com/rotector/rotector/internal/bot/utils"
-	"github.com/rotector/rotector/internal/common/database"
 	"go.uber.org/zap"
 )
 
@@ -81,11 +80,12 @@ func (m *OutfitsMenu) ShowOutfitsMenu(event *events.ComponentInteractionCreate, 
 	fileName := fmt.Sprintf("outfits_%d_%d.png", user.ID, page)
 	file := discord.NewFile(fileName, "", bytes.NewReader(buf.Bytes()))
 
-	// Get user preferences
-	preferences, err := m.handler.db.Settings().GetUserPreferences(uint64(event.User().ID))
+	// Get user settings
+	settings, err := m.handler.db.Settings().GetUserSettings(uint64(event.User().ID))
 	if err != nil {
-		m.handler.logger.Error("Failed to get user preferences", zap.Error(err))
-		preferences = &database.UserPreference{StreamerMode: false} // Default to false if there's an error
+		m.handler.logger.Error("Failed to get user settings", zap.Error(err))
+		utils.RespondWithError(event, "Failed to get user settings. Please try again.")
+		return
 	}
 
 	s.Set(constants.SessionKeyUser, user)
@@ -95,7 +95,7 @@ func (m *OutfitsMenu) ShowOutfitsMenu(event *events.ComponentInteractionCreate, 
 	s.Set(constants.SessionKeyTotal, total)
 	s.Set(constants.SessionKeyFile, file)
 	s.Set(constants.SessionKeyFileName, fileName)
-	s.Set(constants.SessionKeyStreamerMode, preferences.StreamerMode)
+	s.Set(constants.SessionKeyStreamerMode, settings.StreamerMode)
 
 	// Navigate to the outfits menu and update the message
 	m.handler.paginationManager.NavigateTo(m.page.Name, s)

@@ -85,8 +85,8 @@ func (u *UserMenu) handleUserSettingButton(event *events.ComponentInteractionCre
 }
 
 // getUserSettings fetches the user settings from the database.
-func (u *UserMenu) getUserSettings(event interfaces.CommonEvent) *database.UserPreference {
-	settings, err := u.handler.db.Settings().GetUserPreferences(uint64(event.User().ID))
+func (u *UserMenu) getUserSettings(event interfaces.CommonEvent) *database.UserSetting {
+	settings, err := u.handler.db.Settings().GetUserSettings(uint64(event.User().ID))
 	if err != nil {
 		u.handler.logger.Error("Failed to fetch user settings", zap.Error(err))
 		return nil

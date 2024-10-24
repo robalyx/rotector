@@ -90,28 +90,28 @@ func (m *SettingMenu) saveSetting(event interfaces.CommonEvent, settingType, cus
 
 // saveUserSetting saves a user-specific setting.
 func (m *SettingMenu) saveUserSetting(event interfaces.CommonEvent, customID, option string) {
-	preferences, err := m.handler.db.Settings().GetUserPreferences(uint64(event.User().ID))
+	settings, err := m.handler.db.Settings().GetUserSettings(uint64(event.User().ID))
 	if err != nil {
-		m.handler.logger.Error("failed to get user preferences", zap.Error(err))
+		m.handler.logger.Error("failed to get user settings", zap.Error(err))
 		return
 	}
 
 	switch customID {
 	case constants.StreamerModeOption:
-		if preferences.StreamerMode, err = strconv.ParseBool(option); err != nil {
+		if settings.StreamerMode, err = strconv.ParseBool(option); err != nil {
 			m.handler.logger.Error("failed to parse streamer mode", zap.Error(err))
 			return
 		}
 	case constants.DefaultSortOption:
-		preferences.DefaultSort = option
+		settings.DefaultSort = option
 	default:
 		m.handler.logger.Warn("unknown user setting", zap.String("customID", customID), zap.String("option", option))
 		return
 	}
 
-	// Save the user preferences
-	if err := m.handler.db.Settings().SaveUserPreferences(preferences); err != nil {
-		m.handler.logger.Error("failed to save user preferences", zap.Error(err))
+	// Save the user settings
+	if err := m.handler.db.Settings().SaveUserSettings(settings); err != nil {
+		m.handler.logger.Error("failed to save user settings", zap.Error(err))
 	}
 }
 

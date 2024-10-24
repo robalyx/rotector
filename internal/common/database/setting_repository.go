@@ -21,23 +21,23 @@ func NewSettingRepository(db *pg.DB, logger *zap.Logger) *SettingRepository {
 	}
 }
 
-// GetUserPreferences retrieves user preferences from the database.
-func (r *SettingRepository) GetUserPreferences(userID uint64) (*UserPreference, error) {
-	preferences := &UserPreference{UserID: userID}
-	err := r.db.Model(preferences).WherePK().Select()
+// GetUserSettings retrieves user settings from the database.
+func (r *SettingRepository) GetUserSettings(userID uint64) (*UserSetting, error) {
+	settings := &UserSetting{UserID: userID}
+	err := r.db.Model(settings).WherePK().Select()
 	if err != nil {
 		if errors.Is(err, pg.ErrNoRows) {
-			// If no preferences found, return default preferences
-			return &UserPreference{
+			// If no settings found, return default settings
+			return &UserSetting{
 				UserID:       userID,
 				StreamerMode: false,
 				DefaultSort:  SortByRandom,
 			}, nil
 		}
-		r.logger.Error("Failed to get user preferences", zap.Error(err), zap.Uint64("userID", userID))
+		r.logger.Error("Failed to get user settings", zap.Error(err), zap.Uint64("userID", userID))
 		return nil, err
 	}
-	return preferences, nil
+	return settings, nil
 }
 
 // GetGuildSettings retrieves guild settings from the database.
@@ -55,15 +55,15 @@ func (r *SettingRepository) GetGuildSettings(guildID uint64) (*GuildSetting, err
 	return settings, nil
 }
 
-// SaveUserPreferences saves user preferences to the database.
-func (r *SettingRepository) SaveUserPreferences(preferences *UserPreference) error {
-	_, err := r.db.Model(preferences).
+// SaveUserSettings saves user settings to the database.
+func (r *SettingRepository) SaveUserSettings(settings *UserSetting) error {
+	_, err := r.db.Model(settings).
 		OnConflict("(user_id) DO UPDATE").
 		Set("streamer_mode = EXCLUDED.streamer_mode").
 		Set("default_sort = EXCLUDED.default_sort").
 		Insert()
 	if err != nil {
-		r.logger.Error("Failed to save user preferences", zap.Error(err), zap.Uint64("userID", preferences.UserID))
+		r.logger.Error("Failed to save user settings", zap.Error(err), zap.Uint64("userID", settings.UserID))
 		return err
 	}
 	return nil

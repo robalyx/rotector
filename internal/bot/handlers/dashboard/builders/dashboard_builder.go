@@ -33,7 +33,7 @@ func (b *DashboardBuilder) Build() *discord.MessageUpdateBuilder {
 		discord.NewActionRow(
 			discord.NewStringSelectMenu(constants.ActionSelectMenuCustomID, "Select an action",
 				discord.NewStringSelectMenuOption("Review Pending Users", constants.StartReviewCustomID),
-				discord.NewStringSelectMenuOption("User Preferences", constants.UserPreferencesCustomID),
+				discord.NewStringSelectMenuOption("User Settings", constants.UserSettingsCustomID),
 				discord.NewStringSelectMenuOption("Guild Settings", constants.GuildSettingsCustomID),
 			),
 		),

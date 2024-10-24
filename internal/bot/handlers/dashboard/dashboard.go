@@ -66,14 +66,14 @@ func (m *Dashboard) handleSelectMenu(event *events.ComponentInteractionCreate, s
 	switch option {
 	case constants.StartReviewCustomID:
 		// Get user's default sort
-		preferences, err := m.handler.db.Settings().GetUserPreferences(uint64(event.User().ID))
+		settings, err := m.handler.db.Settings().GetUserSettings(uint64(event.User().ID))
 		if err != nil {
-			m.handler.logger.Error("Failed to get user preferences", zap.Error(err))
+			m.handler.logger.Error("Failed to get user settings", zap.Error(err))
 		}
-		s.Set(constants.KeySortBy, preferences.DefaultSort)
+		s.Set(constants.KeySortBy, settings.DefaultSort)
 
 		m.handler.reviewHandler.ShowReviewMenuAndFetchUser(event, s, "")
-	case constants.UserPreferencesCustomID:
+	case constants.UserSettingsCustomID:
 		m.handler.settingsHandler.ShowUserSettings(event, s)
 	case constants.GuildSettingsCustomID:
 		m.handler.settingsHandler.ShowGuildSettings(event, s)

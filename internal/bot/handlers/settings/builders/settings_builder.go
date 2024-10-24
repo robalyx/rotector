@@ -13,22 +13,22 @@ import (
 
 // UserSettingsEmbed builds the embed and components for the user settings menu.
 type UserSettingsEmbed struct {
-	preferences *database.UserPreference
+	settings *database.UserSetting
 }
 
 // NewUserSettingsEmbed creates a new UserSettingsEmbed.
 func NewUserSettingsEmbed(s *session.Session) *UserSettingsEmbed {
 	return &UserSettingsEmbed{
-		preferences: s.Get(constants.SessionKeyUserSettings).(*database.UserPreference),
+		settings: s.Get(constants.SessionKeyUserSettings).(*database.UserSetting),
 	}
 }
 
 // Build constructs and returns the discord.MessageUpdateBuilder for user settings.
 func (b *UserSettingsEmbed) Build() *discord.MessageUpdateBuilder {
 	embed := discord.NewEmbedBuilder().
-		SetTitle("User Preferences").
-		AddField("Streamer Mode", strconv.FormatBool(b.preferences.StreamerMode), true).
-		AddField("Default Sort", b.preferences.DefaultSort, true).
+		SetTitle("User Settings").
+		AddField("Streamer Mode", strconv.FormatBool(b.settings.StreamerMode), true).
+		AddField("Default Sort", b.settings.DefaultSort, true).
 		SetColor(constants.DefaultEmbedColor)
 
 	components := []discord.ContainerComponent{

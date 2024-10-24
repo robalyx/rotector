@@ -95,11 +95,11 @@ func (m *FriendsMenu) ShowFriendsMenu(event *events.ComponentInteractionCreate, 
 	// Calculate total pages
 	total := (len(friends) + constants.FriendsPerPage - 1) / constants.FriendsPerPage
 
-	// Get user preferences
-	preferences, err := m.handler.db.Settings().GetUserPreferences(uint64(event.User().ID))
+	// Get user settings
+	settings, err := m.handler.db.Settings().GetUserSettings(uint64(event.User().ID))
 	if err != nil {
-		m.handler.logger.Error("Failed to get user preferences", zap.Error(err))
-		utils.RespondWithError(event, "Failed to get user preferences. Please try again.")
+		m.handler.logger.Error("Failed to get user settings", zap.Error(err))
+		utils.RespondWithError(event, "Failed to get user settings. Please try again.")
 		return
 	}
 
@@ -112,7 +112,7 @@ func (m *FriendsMenu) ShowFriendsMenu(event *events.ComponentInteractionCreate, 
 	s.Set(constants.SessionKeyTotal, total)
 	s.Set(constants.SessionKeyFile, file)
 	s.Set(constants.SessionKeyFileName, fileName)
-	s.Set(constants.SessionKeyStreamerMode, preferences.StreamerMode)
+	s.Set(constants.SessionKeyStreamerMode, settings.StreamerMode)
 
 	// Navigate to the friends menu and update the message
 	m.handler.paginationManager.NavigateTo(m.page.Name, s)

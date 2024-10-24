@@ -11,9 +11,9 @@ const (
 	StreamerModeEmbedColor   = 0x3E3769
 
 	// Dashboard Menu.
-	StartReviewCustomID     = "start_review"
-	UserPreferencesCustomID = "user_preferences"
-	GuildSettingsCustomID   = "guild_settings"
+	StartReviewCustomID   = "start_review"
+	UserSettingsCustomID  = "user_settings"
+	GuildSettingsCustomID = "guild_settings"
 
 	// Review Menu.
 	SortOrderSelectMenuCustomID = "sort_order"
