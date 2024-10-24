@@ -10,6 +10,7 @@ import (
 	"github.com/rotector/rotector/internal/common/progress"
 	"github.com/rotector/rotector/internal/common/setup"
 	"github.com/rotector/rotector/internal/worker/stats"
+	"github.com/rotector/rotector/internal/worker/tracking"
 	"github.com/rotector/rotector/internal/worker/user"
 	"github.com/spf13/cobra"
 	"go.uber.org/zap"
@@ -21,13 +22,15 @@ const (
 	UserWorker           = "user"
 	UserWorkerTypeGroup  = "group"
 	UserWorkerTypeFriend = "friend"
-
-	PurgeWorker = "purge"
+	UserWorkerTypePurge  = "purge"
 
 	GroupWorker = "group"
 
 	StatsWorker           = "stats"
 	StatsWorkerTypeUpload = "upload"
+
+	TrackingWorker          = "tracking"
+	TrackingWorkerTypePurge = "purge"
 )
 
 func main() {
@@ -41,12 +44,13 @@ func newRootCmd() *cobra.Command {
 	rootCmd := &cobra.Command{
 		Use:   "worker",
 		Short: "Start the rotector worker",
-		Long:  `This command starts the rotector worker, which can be either a group worker or a user worker.`,
+		Long:  `This command starts the rotector worker, which can be either a group worker, user worker, stats worker, or tracking worker.`,
 	}
 	rootCmd.PersistentFlags().IntP("workers", "w", 1, "Number of workers to start")
 	rootCmd.AddCommand(newUserCmd())
 	rootCmd.AddCommand(newGroupCmd())
 	rootCmd.AddCommand(newStatsCmd())
+	rootCmd.AddCommand(newTrackingCmd())
 
 	return rootCmd
 }
@@ -77,11 +81,11 @@ func newUserCmd() *cobra.Command {
 			},
 		},
 		&cobra.Command{
-			Use:   PurgeWorker,
+			Use:   UserWorkerTypePurge,
 			Short: "Start purge workers",
 			Run: func(cmd *cobra.Command, _ []string) {
 				count, _ := cmd.Flags().GetInt("workers")
-				runWorkers(UserWorker, PurgeWorker, count)
+				runWorkers(UserWorker, UserWorkerTypePurge, count)
 			},
 		},
 	)
@@ -109,6 +113,28 @@ func newStatsCmd() *cobra.Command {
 			runWorkers(StatsWorker, StatsWorkerTypeUpload, 1)
 		},
 	}
+}
+
+// newTrackingCmd creates a new tracking worker command.
+func newTrackingCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "tracking",
+		Short: "Start tracking workers",
+		Long:  `Start tracking workers, which can be purge workers.`,
+	}
+
+	cmd.AddCommand(
+		&cobra.Command{
+			Use:   TrackingWorkerTypePurge,
+			Short: "Start tracking purge workers",
+			Run: func(cmd *cobra.Command, _ []string) {
+				count, _ := cmd.Flags().GetInt("workers")
+				runWorkers(TrackingWorker, TrackingWorkerTypePurge, count)
+			},
+		},
+	)
+
+	return cmd
 }
 
 // runWorkers starts the specified number of workers of the given type.
@@ -153,8 +179,10 @@ func runWorkers(workerType, subType string, count int) {
 				w = user.NewGroupWorker(setup.DB, setup.OpenAIClient, setup.RoAPI, bar, workerLogger)
 			case workerType == UserWorker && subType == UserWorkerTypeFriend:
 				w = user.NewFriendWorker(setup.DB, setup.OpenAIClient, setup.RoAPI, bar, workerLogger)
-			case workerType == UserWorker && subType == PurgeWorker:
+			case workerType == UserWorker && subType == UserWorkerTypePurge:
 				w = user.NewPurgeWorker(setup.DB, setup.RoAPI, bar, workerLogger)
+			case workerType == TrackingWorker && subType == TrackingWorkerTypePurge:
+				w = tracking.NewPurgeWorker(setup.DB, bar, workerLogger)
 			case workerType == StatsWorker:
 				w = stats.NewStatisticsWorker(setup.DB, bar, workerLogger)
 			default:

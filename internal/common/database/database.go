@@ -117,6 +117,7 @@ type Database struct {
 	groups   *GroupRepository
 	stats    *StatsRepository
 	settings *SettingRepository
+	tracking *TrackingRepository
 }
 
 // NewConnection establishes a new database connection and returns a Database instance.
@@ -138,6 +139,7 @@ func NewConnection(config *config.Config, stats *statistics.Statistics, logger *
 		groups:   NewGroupRepository(db, logger),
 		stats:    NewStatsRepository(db, stats.Client, logger),
 		settings: NewSettingRepository(db, logger),
+		tracking: tracking,
 	}
 
 	if err := database.createSchema(); err != nil {
@@ -172,6 +174,16 @@ func (d *Database) createSchema() error {
 		d.logger.Info("Table created or already exists", zap.String("model", fmt.Sprintf("%T", model)))
 	}
 
+	// Add indexes
+	if _, err := d.db.Exec(`
+		CREATE INDEX IF NOT EXISTS idx_group_member_trackings_last_appended ON group_member_trackings (last_appended);
+		CREATE INDEX IF NOT EXISTS idx_user_affiliate_trackings_last_appended ON user_affiliate_trackings (last_appended);
+	`); err != nil {
+		d.logger.Error("Failed to create indexes", zap.Error(err))
+		return err
+	}
+	d.logger.Info("Indexes created or already exist")
+
 	return nil
 }
 
@@ -204,4 +216,9 @@ func (d *Database) Stats() *StatsRepository {
 // Settings returns the SettingRepository.
 func (d *Database) Settings() *SettingRepository {
 	return d.settings
+}
+
+// Tracking returns the TrackingRepository.
+func (d *Database) Tracking() *TrackingRepository {
+	return d.tracking
 }

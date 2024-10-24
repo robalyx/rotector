@@ -1,6 +1,8 @@
 package database
 
 import (
+	"time"
+
 	"github.com/go-pg/pg/v10"
 	"go.uber.org/zap"
 )
@@ -53,4 +55,40 @@ func (r *TrackingRepository) AddUserToAffiliateTracking(userID, affiliateID uint
 	}
 
 	return nil
+}
+
+// PurgeOldGroupMemberTrackings removes old entries from group_member_trackings.
+func (r *TrackingRepository) PurgeOldGroupMemberTrackings(cutoffDate time.Time, batchSize int) (int, error) {
+	result, err := r.db.Exec(`
+		DELETE FROM group_member_trackings
+		WHERE group_id IN (
+			SELECT group_id
+			FROM group_member_trackings
+			WHERE last_appended < ?
+			LIMIT ?
+		)
+	`, cutoffDate, batchSize)
+	if err != nil {
+		return 0, err
+	}
+
+	return result.RowsAffected(), nil
+}
+
+// PurgeOldUserAffiliateTrackings removes old entries from user_affiliate_trackings.
+func (r *TrackingRepository) PurgeOldUserAffiliateTrackings(cutoffDate time.Time, batchSize int) (int, error) {
+	result, err := r.db.Exec(`
+		DELETE FROM user_affiliate_trackings
+		WHERE user_id IN (
+			SELECT user_id
+			FROM user_affiliate_trackings
+			WHERE last_appended < ?
+			LIMIT ?
+		)
+	`, cutoffDate, batchSize)
+	if err != nil {
+		return 0, err
+	}
+
+	return result.RowsAffected(), nil
 }
