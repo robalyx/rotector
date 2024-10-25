@@ -1,6 +1,8 @@
 package reviewer
 
 import (
+	"time"
+
 	"github.com/disgoorg/disgo/discord"
 	"github.com/disgoorg/disgo/events"
 	"github.com/rotector/rotector/internal/bot/constants"
@@ -9,6 +11,7 @@ import (
 	"github.com/rotector/rotector/internal/bot/pagination"
 	"github.com/rotector/rotector/internal/bot/session"
 	"github.com/rotector/rotector/internal/bot/utils"
+	"github.com/rotector/rotector/internal/common/database"
 	"github.com/rotector/rotector/internal/common/translator"
 	"go.uber.org/zap"
 )
@@ -39,14 +42,23 @@ func NewReviewMenu(h *Handler) *ReviewMenu {
 // ShowReviewMenuAndFetchUser displays the review menu and fetches a new user.
 func (m *ReviewMenu) ShowReviewMenuAndFetchUser(event interfaces.CommonEvent, s *session.Session, content string) {
 	// Fetch a new user
-	sortBy := s.GetString(constants.KeySortBy)
+	sortBy := s.GetString(constants.SessionKeySortBy)
 	user, err := m.handler.db.Users().GetRandomFlaggedUser(sortBy)
 	if err != nil {
 		m.handler.logger.Error("Failed to fetch a new user", zap.Error(err))
 		utils.RespondWithError(event, "Failed to fetch a new user. Please try again.")
 		return
 	}
-	s.Set(constants.KeyTarget, user)
+	s.Set(constants.SessionKeyTarget, user)
+
+	// Log the activity
+	m.handler.db.UserActivity().LogActivity(&database.UserActivityLog{
+		UserID:            user.ID,
+		ReviewerID:        uint64(event.User().ID),
+		ActivityType:      database.ActivityTypeReviewed,
+		ActivityTimestamp: time.Now(),
+		Details:           map[string]interface{}{},
+	})
 
 	// Display the review menu
 	m.ShowReviewMenu(event, s, content)
@@ -54,7 +66,7 @@ func (m *ReviewMenu) ShowReviewMenuAndFetchUser(event interfaces.CommonEvent, s 
 
 // ShowReviewMenu displays the review menu.
 func (m *ReviewMenu) ShowReviewMenu(event interfaces.CommonEvent, s *session.Session, content string) {
-	user := s.GetFlaggedUser(constants.KeyTarget)
+	user := s.GetFlaggedUser(constants.SessionKeyTarget)
 
 	// Check which friends are flagged
 	friendIDs := make([]uint64, len(user.Friends))
@@ -76,7 +88,7 @@ func (m *ReviewMenu) ShowReviewMenu(event interfaces.CommonEvent, s *session.Ses
 		return
 	}
 
-	s.Set(constants.SessionKeyUser, user)
+	// Set the data for the page
 	s.Set(constants.SessionKeyFlaggedFriends, flaggedFriends)
 	s.Set(constants.SessionKeyStreamerMode, settings.StreamerMode)
 
@@ -88,7 +100,7 @@ func (m *ReviewMenu) ShowReviewMenu(event interfaces.CommonEvent, s *session.Ses
 func (m *ReviewMenu) handleSelectMenu(event *events.ComponentInteractionCreate, s *session.Session, customID string, option string) {
 	switch customID {
 	case constants.SortOrderSelectMenuCustomID:
-		s.Set(constants.KeySortBy, option)
+		s.Set(constants.SessionKeySortBy, option)
 		m.ShowReviewMenuAndFetchUser(event, s, "Changed sort order")
 	case constants.ActionSelectMenuCustomID:
 		switch option {
@@ -114,7 +126,7 @@ func (m *ReviewMenu) handleButton(event *events.ComponentInteractionCreate, s *s
 	case constants.ClearButtonCustomID:
 		m.handleClearUser(event, s)
 	case constants.SkipButtonCustomID:
-		m.ShowReviewMenuAndFetchUser(event, s, "Skipped user.")
+		m.handleSkipUser(event, s)
 	}
 }
 
@@ -127,7 +139,7 @@ func (m *ReviewMenu) handleModal(event *events.ModalSubmitInteractionCreate, s *
 
 // handleBanUser handles the ban user button interaction.
 func (m *ReviewMenu) handleBanUser(event interfaces.CommonEvent, s *session.Session) {
-	user := s.GetFlaggedUser(constants.KeyTarget)
+	user := s.GetFlaggedUser(constants.SessionKeyTarget)
 
 	// Perform the ban
 	if err := m.handler.db.Users().BanUser(user); err != nil {
@@ -136,12 +148,21 @@ func (m *ReviewMenu) handleBanUser(event interfaces.CommonEvent, s *session.Sess
 		return
 	}
 
+	// Log the activity
+	m.handler.db.UserActivity().LogActivity(&database.UserActivityLog{
+		UserID:            user.ID,
+		ReviewerID:        uint64(event.User().ID),
+		ActivityType:      database.ActivityTypeBanned,
+		ActivityTimestamp: time.Now(),
+		Details:           map[string]interface{}{"reason": user.Reason},
+	})
+
 	m.ShowReviewMenuAndFetchUser(event, s, "User banned.")
 }
 
 // handleClearUser handles the clear user button interaction.
 func (m *ReviewMenu) handleClearUser(event interfaces.CommonEvent, s *session.Session) {
-	user := s.GetFlaggedUser(constants.KeyTarget)
+	user := s.GetFlaggedUser(constants.SessionKeyTarget)
 
 	// Clear the user
 	if err := m.handler.db.Users().ClearUser(user); err != nil {
@@ -150,12 +171,38 @@ func (m *ReviewMenu) handleClearUser(event interfaces.CommonEvent, s *session.Se
 		return
 	}
 
+	// Log the activity
+	m.handler.db.UserActivity().LogActivity(&database.UserActivityLog{
+		UserID:            user.ID,
+		ReviewerID:        uint64(event.User().ID),
+		ActivityType:      database.ActivityTypeCleared,
+		ActivityTimestamp: time.Now(),
+		Details:           make(map[string]interface{}),
+	})
+
 	m.ShowReviewMenuAndFetchUser(event, s, "User cleared.")
+}
+
+// handleSkipUser handles the skip user button interaction.
+func (m *ReviewMenu) handleSkipUser(event interfaces.CommonEvent, s *session.Session) {
+	user := s.GetFlaggedUser(constants.SessionKeyTarget)
+
+	// Show the review menu and fetch a new user
+	m.ShowReviewMenuAndFetchUser(event, s, "Skipped user.")
+
+	// Log the activity
+	m.handler.db.UserActivity().LogActivity(&database.UserActivityLog{
+		UserID:            user.ID,
+		ReviewerID:        uint64(event.User().ID),
+		ActivityType:      database.ActivityTypeSkipped,
+		ActivityTimestamp: time.Now(),
+		Details:           make(map[string]interface{}),
+	})
 }
 
 // handleBanWithReason processes the ban with a modal for a custom reason.
 func (m *ReviewMenu) handleBanWithReason(event *events.ComponentInteractionCreate, s *session.Session) {
-	user := s.GetFlaggedUser(constants.KeyTarget)
+	user := s.GetFlaggedUser(constants.SessionKeyTarget)
 
 	// Create the modal
 	modal := discord.NewModalCreateBuilder().
@@ -178,7 +225,7 @@ func (m *ReviewMenu) handleBanWithReason(event *events.ComponentInteractionCreat
 
 // handleBanWithReasonModalSubmit processes the modal submit interaction.
 func (m *ReviewMenu) handleBanWithReasonModalSubmit(event *events.ModalSubmitInteractionCreate, s *session.Session) {
-	user := s.GetFlaggedUser(constants.KeyTarget)
+	user := s.GetFlaggedUser(constants.SessionKeyTarget)
 
 	// Get the ban reason from the modal
 	reason := event.Data.Text("ban_reason")
@@ -196,6 +243,15 @@ func (m *ReviewMenu) handleBanWithReasonModalSubmit(event *events.ModalSubmitInt
 		utils.RespondWithError(event, "Failed to ban the user. Please try again.")
 		return
 	}
+
+	// Log the activity
+	m.handler.db.UserActivity().LogActivity(&database.UserActivityLog{
+		UserID:            user.ID,
+		ReviewerID:        uint64(event.User().ID),
+		ActivityType:      database.ActivityTypeBannedCustom,
+		ActivityTimestamp: time.Now(),
+		Details:           map[string]interface{}{"reason": user.Reason},
+	})
 
 	// Show the review menu and fetch a new user
 	m.ShowReviewMenuAndFetchUser(event, s, "User banned.")

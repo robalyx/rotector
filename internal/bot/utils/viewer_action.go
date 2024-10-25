@@ -1,4 +1,4 @@
-package builders
+package utils
 
 import (
 	"github.com/rotector/rotector/internal/bot/constants"
@@ -8,11 +8,10 @@ import (
 type ViewerAction string
 
 const (
-	ViewerFirstPage    ViewerAction = "first_page"
-	ViewerPrevPage     ViewerAction = "prev_page"
-	ViewerNextPage     ViewerAction = "next_page"
-	ViewerLastPage     ViewerAction = "last_page"
-	ViewerBackToReview ViewerAction = "back_to_review"
+	ViewerFirstPage ViewerAction = "first_page"
+	ViewerPrevPage  ViewerAction = "prev_page"
+	ViewerNextPage  ViewerAction = "next_page"
+	ViewerLastPage  ViewerAction = "last_page"
 )
 
 // ParsePageAction parses the page type from the custom ID.
@@ -20,29 +19,29 @@ func (h *ViewerAction) ParsePageAction(s *session.Session, action ViewerAction, 
 	switch action {
 	case ViewerFirstPage:
 		// Reset to first page
-		s.Set(constants.KeyPaginationPage, 0)
+		s.Set(constants.SessionKeyPaginationPage, 0)
 		return 0, true
 	case ViewerPrevPage:
 		// Move to previous page
-		prevPage := s.GetInt(constants.KeyPaginationPage) - 1
+		prevPage := s.GetInt(constants.SessionKeyPaginationPage) - 1
 		if prevPage < 0 {
 			prevPage = 0
 		}
 
-		s.Set(constants.KeyPaginationPage, prevPage)
+		s.Set(constants.SessionKeyPaginationPage, prevPage)
 		return prevPage, true
 	case ViewerNextPage:
 		// Move to next page
-		nextPage := s.GetInt(constants.KeyPaginationPage) + 1
+		nextPage := s.GetInt(constants.SessionKeyPaginationPage) + 1
 		if nextPage > maxPage {
 			nextPage = maxPage
 		}
 
-		s.Set(constants.KeyPaginationPage, nextPage)
+		s.Set(constants.SessionKeyPaginationPage, nextPage)
 		return nextPage, true
 	case ViewerLastPage:
 		// Move to last page
-		s.Set(constants.KeyPaginationPage, maxPage)
+		s.Set(constants.SessionKeyPaginationPage, maxPage)
 		return maxPage, true
 	default:
 		return 0, false

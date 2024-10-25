@@ -56,33 +56,50 @@ const (
 	GuildSettingSelectID   = "guild_setting_select"
 	WhitelistedRolesOption = "whitelisted_roles"
 
+	// Logs Menu.
+	LogsPerPage                         = 10
+	LogQueryBrowserCustomID             = "log_query_browser"
+	LogsQueryUserIDOption               = "query_user_id_modal"
+	LogsQueryReviewerIDOption           = "query_reviewer_id_modal"
+	LogsQueryIDInputCustomID            = "query_id_input"
+	LogsQueryActivityTypeFilterCustomID = "activity_type_filter"
+
 	// Session keys.
-	KeyMessageID               = "messageID"
-	KeyTarget                  = "target"
-	KeySortBy                  = "sortBy"
-	KeyPaginationPage          = "paginationPage"
-	KeyCurrentPage             = "currentPage"
-	SessionKeyFlaggedCount     = "flaggedCount"
-	SessionKeyConfirmedCount   = "confirmedCount"
-	SessionKeyUser             = "user"
-	SessionKeyUserSettings     = "userSettings"
-	SessionKeyGuildSettings    = "guildSettings"
-	SessionKeyRoles            = "roles"
-	SessionKeyCurrentValue     = "currentValue"
-	SessionKeyFriends          = "friends"
-	SessionKeyFlaggedFriends   = "flaggedFriends"
-	SessionKeyGroups           = "groups"
-	SessionKeyFlaggedGroups    = "flaggedGroups"
-	SessionKeyOutfits          = "outfits"
-	SessionKeyStart            = "start"
-	SessionKeyPage             = "page"
-	SessionKeyTotal            = "total"
-	SessionKeyFile             = "file"
-	SessionKeyFileName         = "fileName"
-	SessionKeyStreamerMode     = "streamerMode"
+	SessionKeyMessageID   = "messageID"
+	SessionKeyTarget      = "target"
+	SessionKeySortBy      = "sortBy"
+	SessionKeyCurrentPage = "currentPage"
+
+	SessionKeyFile         = "file"
+	SessionKeyFileName     = "fileName"
+	SessionKeyStreamerMode = "streamerMode"
+
+	SessionKeyPaginationPage = "paginationPage"
+	SessionKeyStart          = "start"
+	SessionKeyTotalItems     = "totalItems"
+
+	SessionKeyFlaggedCount   = "flaggedCount"
+	SessionKeyConfirmedCount = "confirmedCount"
+
 	SessionKeySettingName      = "settingName"
 	SessionKeySettingType      = "settingType"
+	SessionKeyUserSettings     = "userSettings"
+	SessionKeyGuildSettings    = "guildSettings"
 	SessionKeyCurrentValueFunc = "currentValueFunc"
 	SessionKeyCustomID         = "customID"
 	SessionKeyOptions          = "options"
+	SessionKeyRoles            = "roles"
+
+	SessionKeyFriends        = "friends"
+	SessionKeyFlaggedFriends = "flaggedFriends"
+
+	SessionKeyGroups        = "groups"
+	SessionKeyFlaggedGroups = "flaggedGroups"
+
+	SessionKeyOutfits = "outfits"
+
+	SessionKeyLogs               = "logs"
+	SessionKeyQueryType          = "queryType"
+	SessionKeyQueryID            = "queryID"
+	SessionKeyActivityTypeFilter = "activityTypeFilter"
 )

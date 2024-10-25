@@ -39,7 +39,7 @@ func NewGroupsMenu(h *Handler) *GroupsMenu {
 
 // ShowGroupsMenu shows the groups menu for the given page.
 func (m *GroupsMenu) ShowGroupsMenu(event *events.ComponentInteractionCreate, s *session.Session, page int) {
-	user := s.GetFlaggedUser(constants.KeyTarget)
+	user := s.GetFlaggedUser(constants.SessionKeyTarget)
 
 	// Check if the user has groups
 	if len(user.Groups) == 0 {
@@ -92,9 +92,6 @@ func (m *GroupsMenu) ShowGroupsMenu(event *events.ComponentInteractionCreate, s 
 	fileName := fmt.Sprintf("groups_%d_%d.png", user.ID, page)
 	file := discord.NewFile(fileName, "", bytes.NewReader(buf.Bytes()))
 
-	// Calculate total pages
-	total := (len(groups) + constants.GroupsPerPage - 1) / constants.GroupsPerPage
-
 	// Get user settings
 	settings, err := m.handler.db.Settings().GetUserSettings(uint64(event.User().ID))
 	if err != nil {
@@ -104,12 +101,11 @@ func (m *GroupsMenu) ShowGroupsMenu(event *events.ComponentInteractionCreate, s 
 	}
 
 	// Set the data for the page
-	s.Set(constants.KeyTarget, user)
 	s.Set(constants.SessionKeyGroups, pageGroups)
 	s.Set(constants.SessionKeyFlaggedGroups, flaggedGroups)
 	s.Set(constants.SessionKeyStart, start)
-	s.Set(constants.SessionKeyPage, page)
-	s.Set(constants.SessionKeyTotal, total)
+	s.Set(constants.SessionKeyPaginationPage, page)
+	s.Set(constants.SessionKeyTotalItems, len(groups))
 	s.Set(constants.SessionKeyFile, file)
 	s.Set(constants.SessionKeyFileName, fileName)
 	s.Set(constants.SessionKeyStreamerMode, settings.StreamerMode)
@@ -141,10 +137,10 @@ func (m *GroupsMenu) getFlaggedGroups(groups []types.UserGroupRoles) (map[uint64
 
 // handlePageNavigation handles the page navigation for the groups menu.
 func (m *GroupsMenu) handlePageNavigation(event *events.ComponentInteractionCreate, s *session.Session, customID string) {
-	action := builders.ViewerAction(customID)
+	action := utils.ViewerAction(customID)
 	switch action {
-	case builders.ViewerFirstPage, builders.ViewerPrevPage, builders.ViewerNextPage, builders.ViewerLastPage:
-		user := s.GetFlaggedUser(constants.KeyTarget)
+	case utils.ViewerFirstPage, utils.ViewerPrevPage, utils.ViewerNextPage, utils.ViewerLastPage:
+		user := s.GetFlaggedUser(constants.SessionKeyTarget)
 
 		// Get the page number for the action
 		maxPage := (len(user.Groups) - 1) / constants.GroupsPerPage
@@ -155,7 +151,7 @@ func (m *GroupsMenu) handlePageNavigation(event *events.ComponentInteractionCrea
 		}
 
 		m.ShowGroupsMenu(event, s, page)
-	case builders.ViewerBackToReview:
+	case constants.BackButtonCustomID:
 		m.handler.reviewMenu.ShowReviewMenu(event, s, "")
 	default:
 		m.handler.logger.Warn("Invalid groups viewer action", zap.String("action", string(action)))

@@ -70,12 +70,14 @@ func (m *Dashboard) handleSelectMenu(event *events.ComponentInteractionCreate, s
 		if err != nil {
 			m.handler.logger.Error("Failed to get user settings", zap.Error(err))
 		}
-		s.Set(constants.KeySortBy, settings.DefaultSort)
+		s.Set(constants.SessionKeySortBy, settings.DefaultSort)
 
 		m.handler.reviewHandler.ShowReviewMenuAndFetchUser(event, s, "")
 	case constants.UserSettingsCustomID:
 		m.handler.settingsHandler.ShowUserSettings(event, s)
 	case constants.GuildSettingsCustomID:
 		m.handler.settingsHandler.ShowGuildSettings(event, s)
+	case constants.LogQueryBrowserCustomID:
+		m.handler.logsHandler.ShowLogMenu(event, s)
 	}
 }

@@ -31,10 +31,10 @@ type ReviewEmbed struct {
 // NewReviewEmbed creates a new ReviewEmbed.
 func NewReviewEmbed(s *session.Session, translator *translator.Translator) *ReviewEmbed {
 	return &ReviewEmbed{
-		user:           s.GetFlaggedUser(constants.KeyTarget),
+		user:           s.GetFlaggedUser(constants.SessionKeyTarget),
 		translator:     translator,
 		flaggedFriends: s.Get(constants.SessionKeyFlaggedFriends).(map[uint64]string),
-		sortBy:         s.GetString(constants.KeySortBy),
+		sortBy:         s.GetString(constants.SessionKeySortBy),
 		streamerMode:   s.GetBool(constants.SessionKeyStreamerMode),
 	}
 }
@@ -252,8 +252,7 @@ func (b *ReviewEmbed) getFlaggedContent() string {
 	if len(flaggedContent) > 0 {
 		for i := range flaggedContent {
 			// Remove all newlines and backticks
-			flaggedContent[i] = strings.ReplaceAll(flaggedContent[i], "\n", " ")
-			flaggedContent[i] = strings.ReplaceAll(flaggedContent[i], "`", "")
+			flaggedContent[i] = utils.NormalizeString(flaggedContent[i])
 		}
 		return fmt.Sprintf("- `%s`", strings.Join(flaggedContent, "`\n- `"))
 	}

@@ -39,7 +39,7 @@ func NewOutfitsMenu(h *Handler) *OutfitsMenu {
 
 // ShowOutfitsMenu shows the outfits menu for the given page.
 func (m *OutfitsMenu) ShowOutfitsMenu(event *events.ComponentInteractionCreate, s *session.Session, page int) {
-	user := s.GetFlaggedUser(constants.KeyTarget)
+	user := s.GetFlaggedUser(constants.SessionKeyTarget)
 
 	// Check if the user has outfits
 	if len(user.Outfits) == 0 {
@@ -73,9 +73,6 @@ func (m *OutfitsMenu) ShowOutfitsMenu(event *events.ComponentInteractionCreate, 
 		return
 	}
 
-	// Calculate total pages
-	total := (len(outfits) + constants.OutfitsPerPage - 1) / constants.OutfitsPerPage
-
 	// Create necessary embed and components
 	fileName := fmt.Sprintf("outfits_%d_%d.png", user.ID, page)
 	file := discord.NewFile(fileName, "", bytes.NewReader(buf.Bytes()))
@@ -88,11 +85,11 @@ func (m *OutfitsMenu) ShowOutfitsMenu(event *events.ComponentInteractionCreate, 
 		return
 	}
 
-	s.Set(constants.SessionKeyUser, user)
+	// Set the data for the page
 	s.Set(constants.SessionKeyOutfits, pageOutfits)
 	s.Set(constants.SessionKeyStart, start)
-	s.Set(constants.SessionKeyPage, page)
-	s.Set(constants.SessionKeyTotal, total)
+	s.Set(constants.SessionKeyPaginationPage, page)
+	s.Set(constants.SessionKeyTotalItems, len(outfits))
 	s.Set(constants.SessionKeyFile, file)
 	s.Set(constants.SessionKeyFileName, fileName)
 	s.Set(constants.SessionKeyStreamerMode, settings.StreamerMode)
@@ -104,10 +101,10 @@ func (m *OutfitsMenu) ShowOutfitsMenu(event *events.ComponentInteractionCreate, 
 
 // handlePageNavigation handles the page navigation for the outfits menu.
 func (m *OutfitsMenu) handlePageNavigation(event *events.ComponentInteractionCreate, s *session.Session, customID string) {
-	action := builders.ViewerAction(customID)
+	action := utils.ViewerAction(customID)
 	switch action {
-	case builders.ViewerFirstPage, builders.ViewerPrevPage, builders.ViewerNextPage, builders.ViewerLastPage:
-		user := s.GetFlaggedUser(constants.KeyTarget)
+	case utils.ViewerFirstPage, utils.ViewerPrevPage, utils.ViewerNextPage, utils.ViewerLastPage:
+		user := s.GetFlaggedUser(constants.SessionKeyTarget)
 
 		// Get the page numbers for the action
 		maxPage := (len(user.Outfits) - 1) / constants.OutfitsPerPage
@@ -118,7 +115,7 @@ func (m *OutfitsMenu) handlePageNavigation(event *events.ComponentInteractionCre
 		}
 
 		m.ShowOutfitsMenu(event, s, page)
-	case builders.ViewerBackToReview:
+	case constants.BackButtonCustomID:
 		m.handler.reviewMenu.ShowReviewMenu(event, s, "")
 	default:
 		m.handler.logger.Warn("Invalid outfits viewer action", zap.String("action", string(action)))

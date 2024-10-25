@@ -37,6 +37,11 @@ func FormatWhitelistedRoles(whitelistedRoles []uint64, roles []discord.Role) str
 	return strings.Join(roleNames, ", ")
 }
 
+// NormalizeString normalizes a string by removing all newlines and backticks.
+func NormalizeString(s string) string {
+	return strings.ReplaceAll(strings.ReplaceAll(s, "\n", " "), "`", "")
+}
+
 // GetTimestampedSubtext returns a timestamped subtext message.
 func GetTimestampedSubtext(message string) string {
 	if message != "" {

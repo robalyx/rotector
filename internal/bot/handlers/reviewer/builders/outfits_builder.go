@@ -26,11 +26,11 @@ type OutfitsEmbed struct {
 // NewOutfitsEmbed creates a new OutfitsEmbed.
 func NewOutfitsEmbed(s *session.Session) *OutfitsEmbed {
 	return &OutfitsEmbed{
-		user:         s.GetFlaggedUser(constants.KeyTarget),
+		user:         s.GetFlaggedUser(constants.SessionKeyTarget),
 		outfits:      s.Get(constants.SessionKeyOutfits).([]types.Outfit),
 		start:        s.GetInt(constants.SessionKeyStart),
-		page:         s.GetInt(constants.SessionKeyPage),
-		total:        s.GetInt(constants.SessionKeyTotal),
+		page:         s.GetInt(constants.SessionKeyPaginationPage),
+		total:        s.GetInt(constants.SessionKeyTotalItems),
 		file:         s.Get(constants.SessionKeyFile).(*discord.File),
 		fileName:     s.GetString(constants.SessionKeyFileName),
 		streamerMode: s.GetBool(constants.SessionKeyStreamerMode),
@@ -39,8 +39,10 @@ func NewOutfitsEmbed(s *session.Session) *OutfitsEmbed {
 
 // Build constructs and returns the discord.Embed.
 func (b *OutfitsEmbed) Build() *discord.MessageUpdateBuilder {
+	totalPages := (b.total + constants.OutfitsPerPage - 1) / constants.OutfitsPerPage
+
 	embed := discord.NewEmbedBuilder().
-		SetTitle(fmt.Sprintf("User Outfits (Page %d/%d)", b.page+1, b.total)).
+		SetTitle(fmt.Sprintf("User Outfits (Page %d/%d)", b.page+1, totalPages)).
 		SetDescription(fmt.Sprintf("```%s (%d)```", b.user.Name, b.user.ID)).
 		SetImage("attachment://" + b.fileName).
 		SetColor(utils.GetMessageEmbedColor(b.streamerMode))
@@ -51,11 +53,11 @@ func (b *OutfitsEmbed) Build() *discord.MessageUpdateBuilder {
 
 	components := []discord.ContainerComponent{
 		discord.NewActionRow(
-			discord.NewSecondaryButton("◀️", string(ViewerBackToReview)),
-			discord.NewSecondaryButton("⏮️", string(ViewerFirstPage)).WithDisabled(b.page == 0),
-			discord.NewSecondaryButton("◀️", string(ViewerPrevPage)).WithDisabled(b.page == 0),
-			discord.NewSecondaryButton("▶️", string(ViewerNextPage)).WithDisabled(b.page == b.total-1),
-			discord.NewSecondaryButton("⏭️", string(ViewerLastPage)).WithDisabled(b.page == b.total-1),
+			discord.NewSecondaryButton("◀️", string(constants.BackButtonCustomID)),
+			discord.NewSecondaryButton("⏮️", string(utils.ViewerFirstPage)).WithDisabled(b.page == 0),
+			discord.NewSecondaryButton("◀️", string(utils.ViewerPrevPage)).WithDisabled(b.page == 0),
+			discord.NewSecondaryButton("▶️", string(utils.ViewerNextPage)).WithDisabled(b.page == totalPages-1),
+			discord.NewSecondaryButton("⏭️", string(utils.ViewerLastPage)).WithDisabled(b.page == totalPages-1),
 		),
 	}
 

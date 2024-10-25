@@ -32,9 +32,10 @@ func (b *DashboardBuilder) Build() *discord.MessageUpdateBuilder {
 	components := []discord.ContainerComponent{
 		discord.NewActionRow(
 			discord.NewStringSelectMenu(constants.ActionSelectMenuCustomID, "Select an action",
-				discord.NewStringSelectMenuOption("Review Flagged Users", constants.StartReviewCustomID),
-				discord.NewStringSelectMenuOption("User Settings", constants.UserSettingsCustomID),
-				discord.NewStringSelectMenuOption("Guild Settings", constants.GuildSettingsCustomID),
+				discord.NewStringSelectMenuOption("Review Flagged Users", constants.StartReviewCustomID).WithEmoji(discord.ComponentEmoji{Name: "🔍"}),
+				discord.NewStringSelectMenuOption("Log Query Browser", constants.LogQueryBrowserCustomID).WithEmoji(discord.ComponentEmoji{Name: "📜"}),
+				discord.NewStringSelectMenuOption("User Settings", constants.UserSettingsCustomID).WithEmoji(discord.ComponentEmoji{Name: "👤"}),
+				discord.NewStringSelectMenuOption("Guild Settings", constants.GuildSettingsCustomID).WithEmoji(discord.ComponentEmoji{Name: "⚙️"}),
 			),
 		),
 	}

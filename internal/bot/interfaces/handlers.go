@@ -19,3 +19,8 @@ type SettingsHandler interface {
 	ShowUserSettings(event CommonEvent, s *session.Session)
 	ShowGuildSettings(event CommonEvent, s *session.Session)
 }
+
+// LogsHandler defines the interface for handling logs-related actions.
+type LogsHandler interface {
+	ShowLogMenu(event CommonEvent, s *session.Session)
+}

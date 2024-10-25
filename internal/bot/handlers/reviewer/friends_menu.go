@@ -39,7 +39,7 @@ func NewFriendsMenu(h *Handler) *FriendsMenu {
 
 // ShowFriendsMenu shows the friends menu for the given page.
 func (m *FriendsMenu) ShowFriendsMenu(event *events.ComponentInteractionCreate, s *session.Session, page int) {
-	user := s.GetFlaggedUser(constants.KeyTarget)
+	user := s.GetFlaggedUser(constants.SessionKeyTarget)
 
 	// Check if the user has friends
 	if len(user.Friends) == 0 {
@@ -92,9 +92,6 @@ func (m *FriendsMenu) ShowFriendsMenu(event *events.ComponentInteractionCreate, 
 	fileName := fmt.Sprintf("friends_%d_%d.png", user.ID, page)
 	file := discord.NewFile(fileName, "", bytes.NewReader(buf.Bytes()))
 
-	// Calculate total pages
-	total := (len(friends) + constants.FriendsPerPage - 1) / constants.FriendsPerPage
-
 	// Get user settings
 	settings, err := m.handler.db.Settings().GetUserSettings(uint64(event.User().ID))
 	if err != nil {
@@ -104,12 +101,11 @@ func (m *FriendsMenu) ShowFriendsMenu(event *events.ComponentInteractionCreate, 
 	}
 
 	// Set the data for the page
-	s.Set(constants.KeyTarget, user)
 	s.Set(constants.SessionKeyFriends, pageFriends)
 	s.Set(constants.SessionKeyFlaggedFriends, flaggedFriends)
 	s.Set(constants.SessionKeyStart, start)
-	s.Set(constants.SessionKeyPage, page)
-	s.Set(constants.SessionKeyTotal, total)
+	s.Set(constants.SessionKeyPaginationPage, page)
+	s.Set(constants.SessionKeyTotalItems, len(friends))
 	s.Set(constants.SessionKeyFile, file)
 	s.Set(constants.SessionKeyFileName, fileName)
 	s.Set(constants.SessionKeyStreamerMode, settings.StreamerMode)
@@ -136,10 +132,10 @@ func (m *FriendsMenu) getFlaggedFriends(friends []types.Friend) (map[uint64]stri
 
 // handlePageNavigation handles the page navigation for the friends menu.
 func (m *FriendsMenu) handlePageNavigation(event *events.ComponentInteractionCreate, s *session.Session, customID string) {
-	action := builders.ViewerAction(customID)
+	action := utils.ViewerAction(customID)
 	switch action {
-	case builders.ViewerFirstPage, builders.ViewerPrevPage, builders.ViewerNextPage, builders.ViewerLastPage:
-		user := s.GetFlaggedUser(constants.KeyTarget)
+	case utils.ViewerFirstPage, utils.ViewerPrevPage, utils.ViewerNextPage, utils.ViewerLastPage:
+		user := s.GetFlaggedUser(constants.SessionKeyTarget)
 
 		// Get the page number for the action
 		maxPage := (len(user.Friends) - 1) / constants.FriendsPerPage
@@ -150,7 +146,7 @@ func (m *FriendsMenu) handlePageNavigation(event *events.ComponentInteractionCre
 		}
 
 		m.ShowFriendsMenu(event, s, page)
-	case builders.ViewerBackToReview:
+	case constants.BackButtonCustomID:
 		m.handler.reviewMenu.ShowReviewMenu(event, s, "")
 	default:
 		m.handler.logger.Warn("Invalid friends viewer action", zap.String("action", string(action)))

@@ -15,6 +15,7 @@ import (
 	"github.com/jaxron/roapi.go/pkg/api"
 	"github.com/rotector/rotector/internal/bot/constants"
 	"github.com/rotector/rotector/internal/bot/handlers/dashboard"
+	"github.com/rotector/rotector/internal/bot/handlers/logs"
 	"github.com/rotector/rotector/internal/bot/handlers/reviewer"
 	"github.com/rotector/rotector/internal/bot/handlers/settings"
 	"github.com/rotector/rotector/internal/bot/pagination"
@@ -33,6 +34,7 @@ type Bot struct {
 	dashboardHandler  *dashboard.Handler
 	reviewerHandler   *reviewer.Handler
 	settingsHandler   *settings.Handler
+	logsHandler       *logs.Handler
 }
 
 // New creates a new Bot instance.
@@ -44,9 +46,11 @@ func New(token string, db *database.Database, roAPI *api.API, logger *zap.Logger
 	dashboardHandler := dashboard.New(db, logger, sessionManager, paginationManager)
 	reviewerHandler := reviewer.New(db, logger, roAPI, sessionManager, paginationManager, dashboardHandler)
 	settingsHandler := settings.New(db, logger, sessionManager, paginationManager, dashboardHandler)
+	logsHandler := logs.New(db, sessionManager, paginationManager, dashboardHandler, logger)
 
 	dashboardHandler.SetReviewHandler(reviewerHandler)
 	dashboardHandler.SetSettingsHandler(settingsHandler)
+	dashboardHandler.SetLogsHandler(logsHandler)
 
 	// Initialize the bot
 	b := &Bot{
@@ -57,6 +61,7 @@ func New(token string, db *database.Database, roAPI *api.API, logger *zap.Logger
 		dashboardHandler:  dashboardHandler,
 		reviewerHandler:   reviewerHandler,
 		settingsHandler:   settingsHandler,
+		logsHandler:       logsHandler,
 	}
 
 	// Initialize the Discord client
@@ -146,8 +151,6 @@ func (b *Bot) handleApplicationCommandInteraction(event *events.ApplicationComma
 
 // handleComponentInteraction processes component interactions.
 func (b *Bot) handleComponentInteraction(event *events.ComponentInteractionCreate) {
-	b.logger.Debug("Component interaction", zap.String("customID", event.Data.CustomID()))
-
 	// WORKAROUND:
 	// Check if the interaction is something other than opening a modal so that we can defer the message update.
 	// If we are opening a modal and we try to defer, there will be an error that the interaction is already responded to.
@@ -182,7 +185,7 @@ func (b *Bot) handleComponentInteraction(event *events.ComponentInteractionCreat
 		s := b.sessionManager.GetOrCreateSession(event.User().ID)
 
 		// Ensure the interaction is for the latest message
-		if event.Message.ID.String() != s.GetString(constants.KeyMessageID) {
+		if event.Message.ID.String() != s.GetString(constants.SessionKeyMessageID) {
 			utils.RespondWithError(event, "This interaction is outdated. Please use the latest interaction.")
 			return
 		}
@@ -193,8 +196,6 @@ func (b *Bot) handleComponentInteraction(event *events.ComponentInteractionCreat
 
 // handleModalSubmit processes modal submit interactions.
 func (b *Bot) handleModalSubmit(event *events.ModalSubmitInteractionCreate) {
-	b.logger.Debug("Modal submit interaction", zap.String("customID", event.Data.CustomID))
-
 	// Create a new message update builder
 	updateBuilder := discord.NewMessageUpdateBuilder().
 		SetContent(utils.GetTimestampedSubtext("Processing...")).

@@ -51,14 +51,10 @@ func (m *SettingMenu) ShowMenu(event interfaces.CommonEvent, s *session.Session,
 
 // handleSettingChange handles the select menu for the setting change menu.
 func (m *SettingMenu) handleSettingChange(event *events.ComponentInteractionCreate, s *session.Session, customID string, option string) {
-	settingType := s.GetString(constants.SessionKeySettingType)
-	currentValueFunc := s.Get(constants.SessionKeyCurrentValueFunc).(func() string)
-
 	// Save the setting immediately
+	settingType := s.GetString(constants.SessionKeySettingType)
 	m.saveSetting(event, settingType, customID, option)
 
-	// Update the current value and show the updated setting
-	s.Set(constants.SessionKeyCurrentValue, currentValueFunc())
 	m.handler.paginationManager.UpdateMessage(event, s, m.page, "Setting updated successfully.")
 }
 

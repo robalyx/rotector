@@ -16,6 +16,7 @@ type Handler struct {
 	paginationManager *pagination.Manager
 	reviewHandler     interfaces.ReviewHandler
 	settingsHandler   interfaces.SettingsHandler
+	logsHandler       interfaces.LogsHandler
 	dashboard         *Dashboard
 }
 
@@ -45,6 +46,11 @@ func (h *Handler) SetReviewHandler(reviewHandler interfaces.ReviewHandler) {
 // SetSettingsHandler sets the settings handler.
 func (h *Handler) SetSettingsHandler(settingsHandler interfaces.SettingsHandler) {
 	h.settingsHandler = settingsHandler
+}
+
+// SetLogsHandler sets the logs handler.
+func (h *Handler) SetLogsHandler(logsHandler interfaces.LogsHandler) {
+	h.logsHandler = logsHandler
 }
 
 // ShowDashboard shows the dashboard.

@@ -111,13 +111,14 @@ func (s *GuildSetting) HasAnyRole(roleIDs []snowflake.ID) bool {
 
 // Database represents the database connection and operations.
 type Database struct {
-	db       *pg.DB
-	logger   *zap.Logger
-	users    *UserRepository
-	groups   *GroupRepository
-	stats    *StatsRepository
-	settings *SettingRepository
-	tracking *TrackingRepository
+	db           *pg.DB
+	logger       *zap.Logger
+	users        *UserRepository
+	groups       *GroupRepository
+	stats        *StatsRepository
+	settings     *SettingRepository
+	userActivity *UserActivityRepository
+	tracking     *TrackingRepository
 }
 
 // NewConnection establishes a new database connection and returns a Database instance.
@@ -133,17 +134,22 @@ func NewConnection(config *config.Config, stats *statistics.Statistics, logger *
 	// Create database instance
 	tracking := NewTrackingRepository(db, logger)
 	database := &Database{
-		db:       db,
-		logger:   logger,
-		users:    NewUserRepository(db, stats, tracking, logger),
-		groups:   NewGroupRepository(db, logger),
-		stats:    NewStatsRepository(db, stats.Client, logger),
-		settings: NewSettingRepository(db, logger),
-		tracking: tracking,
+		db:           db,
+		logger:       logger,
+		users:        NewUserRepository(db, stats, tracking, logger),
+		groups:       NewGroupRepository(db, logger),
+		stats:        NewStatsRepository(db, stats.Client, logger),
+		settings:     NewSettingRepository(db, logger),
+		userActivity: NewUserActivityRepository(db, logger),
+		tracking:     tracking,
 	}
 
 	if err := database.createSchema(); err != nil {
 		return nil, fmt.Errorf("failed to create schema: %w", err)
+	}
+
+	if err := database.setupTimescaleDB(); err != nil {
+		return nil, fmt.Errorf("failed to setup TimescaleDB: %w", err)
 	}
 
 	logger.Info("Database connection established and setup completed")
@@ -159,6 +165,7 @@ func (d *Database) createSchema() error {
 		(*DailyStatistics)(nil),
 		(*UserSetting)(nil),
 		(*GuildSetting)(nil),
+		(*UserActivityLog)(nil),
 		(*GroupMemberTracking)(nil),
 		(*UserAffiliateTracking)(nil),
 	}
@@ -178,11 +185,51 @@ func (d *Database) createSchema() error {
 	if _, err := d.db.Exec(`
 		CREATE INDEX IF NOT EXISTS idx_group_member_trackings_last_appended ON group_member_trackings (last_appended);
 		CREATE INDEX IF NOT EXISTS idx_user_affiliate_trackings_last_appended ON user_affiliate_trackings (last_appended);
+
+		CREATE INDEX IF NOT EXISTS idx_user_activity_logs_user_id ON user_activity_logs (user_id);
+		CREATE INDEX IF NOT EXISTS idx_user_activity_logs_reviewer_id ON user_activity_logs (reviewer_id);
 	`); err != nil {
 		d.logger.Error("Failed to create indexes", zap.Error(err))
 		return err
 	}
 	d.logger.Info("Indexes created or already exist")
+
+	return nil
+}
+
+// setupTimescaleDB sets up the TimescaleDB extension and creates the hypertable for user_activity_logs.
+func (d *Database) setupTimescaleDB() error {
+	// Check if TimescaleDB extension is already created
+	var exists bool
+	_, err := d.db.QueryOne(pg.Scan(&exists), `
+		SELECT EXISTS (
+			SELECT 1
+			FROM pg_extension
+			WHERE extname = 'timescaledb'
+		)
+	`)
+	if err != nil {
+		return fmt.Errorf("failed to check TimescaleDB extension: %w", err)
+	}
+
+	// Create TimescaleDB extension if it doesn't exist
+	if !exists {
+		_, err = d.db.Exec(`CREATE EXTENSION IF NOT EXISTS timescaledb`)
+		if err != nil {
+			return fmt.Errorf("failed to create TimescaleDB extension: %w", err)
+		}
+		d.logger.Info("TimescaleDB extension created")
+	} else {
+		d.logger.Info("TimescaleDB extension already exists")
+	}
+
+	// Create hypertable
+	_, err = d.db.Exec(`
+		SELECT create_hypertable('user_activity_logs', 'activity_timestamp', if_not_exists => TRUE)
+	`)
+	if err != nil {
+		return fmt.Errorf("failed to create hypertable: %w", err)
+	}
 
 	return nil
 }
@@ -221,4 +268,9 @@ func (d *Database) Settings() *SettingRepository {
 // Tracking returns the TrackingRepository.
 func (d *Database) Tracking() *TrackingRepository {
 	return d.tracking
+}
+
+// UserActivity returns the UserActivityRepository.
+func (d *Database) UserActivity() *UserActivityRepository {
+	return d.userActivity
 }

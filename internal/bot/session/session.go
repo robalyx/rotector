@@ -65,6 +65,14 @@ func (s *Session) GetInt(key string) int {
 	return 0
 }
 
+// GetUint64 returns the uint64 value for the given key.
+func (s *Session) GetUint64(key string) uint64 {
+	if value, ok := s.Get(key).(uint64); ok {
+		return value
+	}
+	return 0
+}
+
 // GetFloat64 returns the float64 value for the given key.
 func (s *Session) GetFloat64(key string) float64 {
 	if value, ok := s.Get(key).(float64); ok {

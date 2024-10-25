@@ -1,2 +1,3 @@
 .git
-logs/
+logs/bot_logs
+logs/worker_logs
