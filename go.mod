@@ -8,20 +8,20 @@ require (
 	github.com/disgoorg/snowflake/v2 v2.0.3
 	github.com/go-pg/pg/v10 v10.13.0
 	github.com/invopop/jsonschema v0.12.0
-	github.com/jaxron/axonet v0.0.0-20241023122609-a8b5cc17bf74
-	github.com/jaxron/axonet/middleware/circuitbreaker v0.0.0-20241023122609-a8b5cc17bf74
-	github.com/jaxron/axonet/middleware/proxy v0.0.0-20241023122609-a8b5cc17bf74
-	github.com/jaxron/axonet/middleware/ratelimit v0.0.0-20241023122609-a8b5cc17bf74
-	github.com/jaxron/axonet/middleware/rediscache v0.0.0-20241023122609-a8b5cc17bf74
-	github.com/jaxron/axonet/middleware/retry v0.0.0-20241023122609-a8b5cc17bf74
-	github.com/jaxron/axonet/middleware/singleflight v0.0.0-20241023122609-a8b5cc17bf74
+	github.com/jaxron/axonet v0.0.0-20241025054147-6c298c86aa64
+	github.com/jaxron/axonet/middleware/circuitbreaker v0.0.0-20241025054147-6c298c86aa64
+	github.com/jaxron/axonet/middleware/proxy v0.0.0-20241025054147-6c298c86aa64
+	github.com/jaxron/axonet/middleware/ratelimit v0.0.0-20241025054147-6c298c86aa64
+	github.com/jaxron/axonet/middleware/redis v0.0.0-20241025054147-6c298c86aa64
+	github.com/jaxron/axonet/middleware/retry v0.0.0-20241025054147-6c298c86aa64
+	github.com/jaxron/axonet/middleware/singleflight v0.0.0-20241025054147-6c298c86aa64
 	github.com/jaxron/roapi.go v0.0.0-20241023130833-ad8750c2385e
-	github.com/openai/openai-go v0.1.0-alpha.30
+	github.com/openai/openai-go v0.1.0-alpha.31
 	github.com/ozankasikci/go-image-merge v0.3.1
 	github.com/redis/rueidis v1.0.48
 	github.com/spf13/cobra v1.8.1
 	github.com/spf13/viper v1.19.0
-	github.com/tdewolff/minify/v2 v2.21.0
+	github.com/tdewolff/minify/v2 v2.21.1
 	go.uber.org/zap v1.27.0
 	golang.org/x/image v0.21.0
 	golang.org/x/text v0.19.0
@@ -61,7 +61,7 @@ require (
 	github.com/spf13/cast v1.7.0 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/subosito/gotenv v1.6.0 // indirect
-	github.com/tdewolff/parse/v2 v2.7.18 // indirect
+	github.com/tdewolff/parse/v2 v2.7.19 // indirect
 	github.com/tidwall/gjson v1.18.0 // indirect
 	github.com/tidwall/match v1.1.1 // indirect
 	github.com/tidwall/pretty v1.2.1 // indirect

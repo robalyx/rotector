@@ -13,7 +13,7 @@ import (
 	"github.com/jaxron/axonet/middleware/circuitbreaker"
 	"github.com/jaxron/axonet/middleware/proxy"
 	"github.com/jaxron/axonet/middleware/ratelimit"
-	"github.com/jaxron/axonet/middleware/rediscache"
+	"github.com/jaxron/axonet/middleware/redis"
 	"github.com/jaxron/axonet/middleware/retry"
 	"github.com/jaxron/axonet/middleware/singleflight"
 	"github.com/jaxron/axonet/pkg/client"
@@ -89,7 +89,14 @@ func InitializeApp(logDir string) (*AppSetup, error) {
 		RedisClient:  redisClient,
 		OpenAIClient: openaiClient,
 	}
-	setup.RoAPI = setup.getRoAPIClient()
+
+	// Initialize RoAPI client
+	roAPI, err := setup.getRoAPIClient()
+	if err != nil {
+		logger.Fatal("failed to create RoAPI client", zap.Error(err))
+		return nil, err
+	}
+	setup.RoAPI = roAPI
 
 	return setup, nil
 }
@@ -109,20 +116,19 @@ func (s *AppSetup) CleanupApp() {
 }
 
 // getRoAPIClient creates a new RoAPI client with the given configuration.
-func (s *AppSetup) getRoAPIClient() *api.API {
+func (s *AppSetup) getRoAPIClient() (*api.API, error) {
 	// Read the cookies and proxies
 	cookies := s.readCookies()
 	proxies := s.readProxies()
 
 	// Initialize Redis cache
-	cache, err := rediscache.New(rueidis.ClientOption{
+	redisClient, err := rueidis.NewClient(rueidis.ClientOption{
 		InitAddress: []string{fmt.Sprintf("%s:%d", s.Config.Redis.Host, s.Config.Redis.Port)},
 		Username:    s.Config.Redis.Username,
 		Password:    s.Config.Redis.Password,
-	}, 5*time.Minute)
+	})
 	if err != nil {
-		s.Logger.Fatal("failed to create Redis cache", zap.Error(err))
-		return nil
+		return nil, err
 	}
 
 	return api.New(cookies,
@@ -131,10 +137,10 @@ func (s *AppSetup) getRoAPIClient() *api.API {
 		client.WithMiddleware(6, circuitbreaker.New(s.Config.CircuitBreaker.MaxFailures, s.Config.CircuitBreaker.FailureThreshold, s.Config.CircuitBreaker.RecoveryTimeout)),
 		client.WithMiddleware(5, retry.New(5, 500*time.Millisecond, 1000*time.Millisecond)),
 		client.WithMiddleware(4, singleflight.New()),
-		client.WithMiddleware(3, cache),
+		client.WithMiddleware(3, redis.New(redisClient, 10*time.Minute)),
 		client.WithMiddleware(2, ratelimit.New(s.Config.RateLimit.RequestsPerSecond, s.Config.RateLimit.BurstSize)),
 		client.WithMiddleware(1, proxy.New(proxies)),
-	)
+	), nil
 }
 
 // readProxies reads the proxies from the given configuration file.
