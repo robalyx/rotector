@@ -165,7 +165,7 @@ func (r *UserRepository) SaveFlaggedUsers(flaggedUsers []*User) {
 			)
 			INSERT INTO flagged_users (
 				id, name, display_name, description, created_at, reason,
-				groups, outfits, friends, flagged_content, confirmed_groups,
+				groups, outfits, friends, flagged_content, flagged_groups,
 				confidence, last_updated, thumbnail_url
 			)
 			SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), ?
@@ -180,7 +180,7 @@ func (r *UserRepository) SaveFlaggedUsers(flaggedUsers []*User) {
 				outfits = EXCLUDED.outfits,
 				friends = EXCLUDED.friends,
 				flagged_content = EXCLUDED.flagged_content,
-				confirmed_groups = EXCLUDED.confirmed_groups,
+				flagged_groups = EXCLUDED.flagged_groups,
 				confidence = EXCLUDED.confidence,
 				last_updated = NOW(),
 				thumbnail_url = EXCLUDED.thumbnail_url
@@ -206,7 +206,7 @@ func (r *UserRepository) SaveFlaggedUsers(flaggedUsers []*User) {
 			zap.String("reason", flaggedUser.Reason),
 			zap.Int("groups_count", len(flaggedUser.Groups)),
 			zap.Strings("flagged_content", flaggedUser.FlaggedContent),
-			zap.Uint64s("confirmed_groups", flaggedUser.FlaggedGroups),
+			zap.Uint64s("flagged_groups", flaggedUser.FlaggedGroups),
 			zap.Float64("confidence", flaggedUser.Confidence),
 			zap.Time("last_updated", time.Now()),
 			zap.String("thumbnail_url", flaggedUser.ThumbnailURL))
