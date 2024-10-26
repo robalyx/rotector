@@ -188,6 +188,7 @@ func (d *Database) createSchema() error {
 
 		CREATE INDEX IF NOT EXISTS idx_user_activity_logs_user_id ON user_activity_logs (user_id);
 		CREATE INDEX IF NOT EXISTS idx_user_activity_logs_reviewer_id ON user_activity_logs (reviewer_id);
+		CREATE INDEX IF NOT EXISTS idx_user_activity_logs_activity_timestamp ON user_activity_logs (activity_timestamp);
 	`); err != nil {
 		d.logger.Error("Failed to create indexes", zap.Error(err))
 		return err

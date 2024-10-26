@@ -3,6 +3,7 @@ package utils
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"image"
 	"image/png"
@@ -17,6 +18,13 @@ import (
 	"github.com/rotector/rotector/assets"
 	"github.com/rotector/rotector/internal/bot/constants"
 	"golang.org/x/image/webp"
+)
+
+var (
+	ErrInvalidDateRangeFormat = errors.New("invalid date range format")
+	ErrInvalidStartDate       = errors.New("invalid start date")
+	ErrInvalidEndDate         = errors.New("invalid end date")
+	ErrEndDateBeforeStartDate = errors.New("end date cannot be before start date")
 )
 
 // FormatWhitelistedRoles formats the whitelisted roles.
@@ -174,4 +182,44 @@ func GetMessageEmbedColor(streamerMode bool) int {
 		return constants.StreamerModeEmbedColor
 	}
 	return constants.DefaultEmbedColor
+}
+
+// ParseDateRange parses a date range string in the format "YYYY-MM-DD to YYYY-MM-DD".
+func ParseDateRange(dateRangeStr string) (time.Time, time.Time, error) {
+	// Split the date range string into start and end parts
+	parts := strings.Split(dateRangeStr, "to")
+	if len(parts) != 2 {
+		return time.Time{}, time.Time{}, ErrInvalidDateRangeFormat
+	}
+
+	// Trim spaces from the start and end parts
+	startStr := strings.TrimSpace(parts[0])
+	endStr := strings.TrimSpace(parts[1])
+
+	// Parse the start date
+	startDate, err := time.Parse("2006-01-02", startStr)
+	if err != nil {
+		return time.Time{}, time.Time{}, fmt.Errorf("%w: %w", ErrInvalidStartDate, err)
+	}
+
+	// Parse the end date
+	endDate, err := time.Parse("2006-01-02", endStr)
+	if err != nil {
+		return time.Time{}, time.Time{}, fmt.Errorf("%w: %w", ErrInvalidEndDate, err)
+	}
+
+	// If the end date is before the start date, return an error
+	if endDate.Before(startDate) {
+		return time.Time{}, time.Time{}, ErrEndDateBeforeStartDate
+	}
+
+	// If the dates are the same, set the end date to the end of the day
+	if startDate.Equal(endDate) {
+		endDate = endDate.Add(23*time.Hour + 59*time.Minute + 59*time.Second)
+	} else {
+		// Otherwise, set the end date to the end of the day
+		endDate = endDate.Add(24*time.Hour - 1*time.Second)
+	}
+
+	return startDate, endDate, nil
 }

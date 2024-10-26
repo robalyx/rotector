@@ -59,9 +59,10 @@ const (
 	// Logs Menu.
 	LogsPerPage                         = 10
 	LogQueryBrowserCustomID             = "log_query_browser"
+	LogsQueryInputCustomID              = "query_input"
 	LogsQueryUserIDOption               = "query_user_id_modal"
 	LogsQueryReviewerIDOption           = "query_reviewer_id_modal"
-	LogsQueryIDInputCustomID            = "query_id_input"
+	LogsQueryDateRangeOption            = "query_date_range_modal"
 	LogsQueryActivityTypeFilterCustomID = "activity_type_filter"
 
 	// Session keys.
@@ -99,7 +100,9 @@ const (
 	SessionKeyOutfits = "outfits"
 
 	SessionKeyLogs               = "logs"
-	SessionKeyQueryType          = "queryType"
-	SessionKeyQueryID            = "queryID"
+	SessionKeyUserID             = "userID"
+	SessionKeyReviewerID         = "reviewerID"
 	SessionKeyActivityTypeFilter = "activityTypeFilter"
+	SessionKeyDateRangeStart     = "dateRangeStart"
+	SessionKeyDateRangeEnd       = "dateRangeEnd"
 )

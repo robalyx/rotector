@@ -3,6 +3,7 @@ package builders
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/disgoorg/disgo/discord"
 	"github.com/rotector/rotector/internal/bot/constants"
@@ -14,9 +15,11 @@ import (
 // LogEmbed builds the embed for the log viewer message.
 type LogEmbed struct {
 	logs               []*database.UserActivityLog
-	queryType          string
-	queryID            uint64
+	userID             uint64
+	reviewerID         uint64
 	activityTypeFilter string
+	startDate          time.Time
+	endDate            time.Time
 	start              int
 	page               int
 	total              int
@@ -27,9 +30,11 @@ type LogEmbed struct {
 func NewLogEmbed(s *session.Session) *LogEmbed {
 	return &LogEmbed{
 		logs:               s.Get(constants.SessionKeyLogs).([]*database.UserActivityLog),
-		queryType:          s.GetString(constants.SessionKeyQueryType),
-		queryID:            s.GetUint64(constants.SessionKeyQueryID),
+		userID:             s.GetUint64(constants.SessionKeyUserID),
+		reviewerID:         s.GetUint64(constants.SessionKeyReviewerID),
 		activityTypeFilter: s.GetString(constants.SessionKeyActivityTypeFilter),
+		startDate:          s.Get(constants.SessionKeyDateRangeStart).(time.Time),
+		endDate:            s.Get(constants.SessionKeyDateRangeEnd).(time.Time),
 		start:              s.GetInt(constants.SessionKeyStart),
 		page:               s.GetInt(constants.SessionKeyPaginationPage),
 		total:              s.GetInt(constants.SessionKeyTotalItems),
@@ -45,16 +50,18 @@ func (b *LogEmbed) Build() *discord.MessageUpdateBuilder {
 
 	totalPages := (b.total + b.logsPerPage - 1) / b.logsPerPage
 
-	if b.queryType != "" {
-		queryType := strings.Replace(b.queryType, "_modal", "", 1)
-		embed.AddField("Query Type", fmt.Sprintf("`%s`", queryType), true)
-		embed.AddField("Query ID", fmt.Sprintf("`%d`", b.queryID), true)
-	} else {
-		embed.SetDescription("Select a query type to view logs")
+	// Add fields for each active query condition
+	if b.userID != 0 {
+		embed.AddField("User ID", fmt.Sprintf("`%d`", b.userID), true)
 	}
-
-	if b.activityTypeFilter != "" {
-		embed.AddField("Activity Type Filter", fmt.Sprintf("`%s`", b.activityTypeFilter), true)
+	if b.reviewerID != 0 {
+		embed.AddField("Reviewer ID", fmt.Sprintf("`%d`", b.reviewerID), true)
+	}
+	if b.activityTypeFilter != "" && b.activityTypeFilter != string(database.ActivityTypeAll) {
+		embed.AddField("Activity Type", fmt.Sprintf("`%s`", b.activityTypeFilter), true)
+	}
+	if !b.startDate.IsZero() && !b.endDate.IsZero() {
+		embed.AddField("Date Range", fmt.Sprintf("`%s` to `%s`", b.startDate.Format("2006-01-02"), b.endDate.Format("2006-01-02")), true)
 	}
 
 	if len(b.logs) > 0 {
@@ -74,15 +81,16 @@ func (b *LogEmbed) Build() *discord.MessageUpdateBuilder {
 			)
 		}
 		embed.SetFooterText(fmt.Sprintf("Page %d/%d | Total Logs: %d", b.page+1, totalPages, b.total))
-	} else if b.queryType != "" {
+	} else {
 		embed.AddField("No Results", "No log entries found for the given query", false)
 	}
 
 	components := []discord.ContainerComponent{
 		discord.NewActionRow(
-			discord.NewStringSelectMenu(constants.ActionSelectMenuCustomID, "Actions",
+			discord.NewStringSelectMenu(constants.ActionSelectMenuCustomID, "Set Query Condition",
 				discord.NewStringSelectMenuOption("Query User ID", constants.LogsQueryUserIDOption),
 				discord.NewStringSelectMenuOption("Query Reviewer ID", constants.LogsQueryReviewerIDOption),
+				discord.NewStringSelectMenuOption("Query Date Range", constants.LogsQueryDateRangeOption),
 			),
 		),
 		discord.NewActionRow(

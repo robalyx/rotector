@@ -4,7 +4,6 @@ import (
 	"time"
 
 	"github.com/go-pg/pg/v10"
-	"github.com/rotector/rotector/internal/bot/constants"
 	"go.uber.org/zap"
 )
 
@@ -51,15 +50,21 @@ func (r *UserActivityRepository) LogActivity(log *UserActivityLog) {
 }
 
 // GetLogs retrieves logs based on the given parameters.
-func (r *UserActivityRepository) GetLogs(queryType string, queryID uint64, activityTypeFilter string, page, perPage int) ([]*UserActivityLog, int, error) {
+func (r *UserActivityRepository) GetLogs(userID, reviewerID uint64, activityTypeFilter string, startDate, endDate time.Time, page, perPage int) ([]*UserActivityLog, int, error) {
 	var logs []*UserActivityLog
 
 	query := r.db.Model(&UserActivityLog{})
 
-	if queryType == constants.LogsQueryUserIDOption {
-		query = query.Where("user_id = ?", queryID)
-	} else if queryType == constants.LogsQueryReviewerIDOption {
-		query = query.Where("reviewer_id = ?", queryID)
+	if userID != 0 {
+		query = query.Where("user_id = ?", userID)
+	}
+
+	if reviewerID != 0 {
+		query = query.Where("reviewer_id = ?", reviewerID)
+	}
+
+	if !startDate.IsZero() && !endDate.IsZero() {
+		query = query.Where("activity_timestamp BETWEEN ? AND ?", startDate, endDate)
 	}
 
 	if activityTypeFilter != "" && activityTypeFilter != string(ActivityTypeAll) {
@@ -81,9 +86,11 @@ func (r *UserActivityRepository) GetLogs(queryType string, queryID uint64, activ
 	}
 
 	r.logger.Info("Retrieved logs",
-		zap.String("query_type", queryType),
-		zap.Uint64("query_id", queryID),
+		zap.Uint64("user_id", userID),
+		zap.Uint64("reviewer_id", reviewerID),
 		zap.String("activity_type_filter", activityTypeFilter),
+		zap.Time("start_date", startDate),
+		zap.Time("end_date", endDate),
 		zap.Int("total_logs", totalLogs),
 		zap.Int("page", page),
 		zap.Int("per_page", perPage),
