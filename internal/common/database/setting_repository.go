@@ -82,26 +82,30 @@ func (r *SettingRepository) SaveGuildSettings(settings *GuildSetting) error {
 	return nil
 }
 
-// Add a new function to toggle a role in the whitelist.
+// ToggleWhitelistedRole toggles a role in the whitelist.
 func (r *SettingRepository) ToggleWhitelistedRole(guildID uint64, roleID uint64) error {
-	settings, err := r.GetGuildSettings(guildID)
-	if err != nil {
-		return err
-	}
-
-	index := -1
-	for i, id := range settings.WhitelistedRoles {
-		if id == roleID {
-			index = i
-			break
+	return r.db.RunInTransaction(r.db.Context(), func(tx *pg.Tx) error {
+		settings := &GuildSetting{GuildID: guildID}
+		err := tx.Model(settings).WherePK().Select()
+		if err != nil {
+			return err
 		}
-	}
 
-	if index == -1 {
-		settings.WhitelistedRoles = append(settings.WhitelistedRoles, roleID)
-	} else {
-		settings.WhitelistedRoles = append(settings.WhitelistedRoles[:index], settings.WhitelistedRoles[index+1:]...)
-	}
+		index := -1
+		for i, id := range settings.WhitelistedRoles {
+			if id == roleID {
+				index = i
+				break
+			}
+		}
 
-	return r.SaveGuildSettings(settings)
+		if index == -1 {
+			settings.WhitelistedRoles = append(settings.WhitelistedRoles, roleID)
+		} else {
+			settings.WhitelistedRoles = append(settings.WhitelistedRoles[:index], settings.WhitelistedRoles[index+1:]...)
+		}
+
+		_, err = tx.Model(settings).WherePK().Update()
+		return err
+	})
 }

@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/bytedance/sonic"
 	"github.com/go-pg/pg/v10"
 	"github.com/rotector/rotector/internal/common/statistics"
 	"go.uber.org/zap"
@@ -32,79 +31,91 @@ func NewUserRepository(db *pg.DB, stats *statistics.Statistics, tracking *Tracki
 
 // GetRandomFlaggedUser retrieves a random flagged user based on the specified sorting criteria.
 func (r *UserRepository) GetRandomFlaggedUser(sortBy string) (*FlaggedUser, error) {
-	var user struct {
-		FlaggedUser
-		OldLastReviewed time.Time `pg:"old_last_reviewed"`
-	}
+	var user FlaggedUser
+	err := r.db.RunInTransaction(r.db.Context(), func(tx *pg.Tx) error {
+		query := tx.Model(&FlaggedUser{}).
+			Where("last_reviewed IS NULL OR last_reviewed < NOW() - INTERVAL '5 minutes'")
 
-	query := `
-        WITH sampled_users AS (
-            SELECT id, last_reviewed
-            FROM flagged_users
-            WHERE last_reviewed IS NULL OR last_reviewed < NOW() - INTERVAL '5 minutes'
-        ),
-        selected_user AS (
-            SELECT id, last_reviewed
-            FROM sampled_users
-    `
-	switch sortBy {
-	case SortByConfidence:
-		query += "ORDER BY (SELECT confidence FROM flagged_users WHERE id = sampled_users.id) DESC"
-	case SortByLastUpdated:
-		query += "ORDER BY (SELECT last_updated FROM flagged_users WHERE id = sampled_users.id) DESC"
-	case SortByRandom:
-		query += "ORDER BY RANDOM()"
-	default:
-		return nil, fmt.Errorf("%w: %s", ErrInvalidSortBy, sortBy)
-	}
-	query += `
-            LIMIT 1
-        )
-        UPDATE flagged_users
-        SET last_reviewed = NOW()
-        WHERE id = (SELECT id FROM selected_user)
-        RETURNING *, (SELECT last_reviewed FROM selected_user) AS old_last_reviewed
-    `
-
-	if _, err := r.db.QueryOne(&user, query); err != nil {
-		if errors.Is(err, pg.ErrNoRows) {
-			r.logger.Info("No flagged users available for review")
-			return nil, err
+		switch sortBy {
+		case SortByConfidence:
+			query = query.Order("confidence DESC")
+		case SortByLastUpdated:
+			query = query.Order("last_updated DESC")
+		case SortByRandom:
+			query = query.OrderExpr("RANDOM()")
+		default:
+			return fmt.Errorf("%w: %s", ErrInvalidSortBy, sortBy)
 		}
-		r.logger.Error("Failed to get random flagged user", zap.Error(err))
+
+		err := query.Limit(1).
+			For("UPDATE SKIP LOCKED").
+			Select(&user)
+		if err != nil {
+			if errors.Is(err, pg.ErrNoRows) {
+				r.logger.Info("No flagged users available for review")
+				return err
+			}
+			r.logger.Error("Failed to get random flagged user", zap.Error(err))
+			return err
+		}
+
+		_, err = tx.Model(&user).
+			Set("last_reviewed = ?", time.Now()).
+			Where("id = ?", user.ID).
+			Update()
+		if err != nil {
+			r.logger.Error("Failed to update last_reviewed", zap.Error(err))
+			return err
+		}
+
+		return nil
+	})
+	if err != nil {
 		return nil, err
 	}
 
 	r.logger.Info("Retrieved random flagged user",
 		zap.Uint64("userID", user.ID),
 		zap.String("sortBy", sortBy),
-		zap.Time("oldLastReviewed", user.OldLastReviewed))
+		zap.Time("lastReviewed", user.LastReviewed))
 
-	// Replace the LastReviewed value with the old value
-	user.FlaggedUser.LastReviewed = user.OldLastReviewed
-
-	return &user.FlaggedUser, nil
+	return &user, nil
 }
 
 // GetNextConfirmedUser retrieves the next confirmed user to be processed.
 func (r *UserRepository) GetNextConfirmedUser() (*ConfirmedUser, error) {
 	var user ConfirmedUser
-	_, err := r.db.QueryOne(&user, `
-		UPDATE confirmed_users
-		SET last_scanned = NOW()
-		WHERE id = (
-			SELECT id
-			FROM confirmed_users
-			WHERE last_scanned IS NULL OR last_scanned < NOW() - INTERVAL '1 day'
-			ORDER BY last_scanned ASC NULLS FIRST
-			LIMIT 1
-		)
-		RETURNING *
-	`)
+	err := r.db.RunInTransaction(r.db.Context(), func(tx *pg.Tx) error {
+		err := tx.Model(&user).
+			Where("last_scanned IS NULL OR last_scanned < NOW() - INTERVAL '1 day'").
+			Order("last_scanned ASC NULLS FIRST").
+			Limit(1).
+			For("UPDATE SKIP LOCKED").
+			Select()
+		if err != nil {
+			if errors.Is(err, pg.ErrNoRows) {
+				r.logger.Info("No confirmed users available for processing")
+				return err
+			}
+			r.logger.Error("Failed to get next confirmed user", zap.Error(err))
+			return err
+		}
+
+		_, err = tx.Model(&user).
+			Set("last_scanned = ?", time.Now()).
+			Where("id = ?", user.ID).
+			Update()
+		if err != nil {
+			r.logger.Error("Failed to update last_scanned", zap.Error(err))
+			return err
+		}
+
+		return nil
+	})
 	if err != nil {
-		r.logger.Error("Failed to get next confirmed user", zap.Error(err))
 		return nil, err
 	}
+
 	r.logger.Info("Retrieved next confirmed user", zap.Uint64("userID", user.ID))
 	return &user, nil
 }
@@ -114,82 +125,22 @@ func (r *UserRepository) SaveFlaggedUsers(flaggedUsers []*User) {
 	r.logger.Info("Saving flagged users", zap.Int("count", len(flaggedUsers)))
 
 	for _, flaggedUser := range flaggedUsers {
-		flaggedContentJSON, err := sonic.Marshal(flaggedUser.FlaggedContent)
-		if err != nil {
-			r.logger.Error("Error marshaling flagged content",
-				zap.Uint64("userID", flaggedUser.ID),
-				zap.String("username", flaggedUser.Name),
-				zap.Error(err))
-			continue
-		}
-
-		flaggedGroupJSON, err := sonic.Marshal(flaggedUser.FlaggedGroups)
-		if err != nil {
-			r.logger.Error("Error marshaling flagged groups",
-				zap.Uint64("userID", flaggedUser.ID),
-				zap.String("username", flaggedUser.Name),
-				zap.Error(err))
-			continue
-		}
-
-		groupsJSON, err := sonic.Marshal(flaggedUser.Groups)
-		if err != nil {
-			r.logger.Error("Error marshaling user groups",
-				zap.Uint64("userID", flaggedUser.ID),
-				zap.String("username", flaggedUser.Name),
-				zap.Error(err))
-			continue
-		}
-
-		outfitsJSON, err := sonic.Marshal(flaggedUser.Outfits)
-		if err != nil {
-			r.logger.Error("Error marshaling user outfits",
-				zap.Uint64("userID", flaggedUser.ID),
-				zap.String("username", flaggedUser.Name),
-				zap.Error(err))
-			continue
-		}
-
-		friendsJSON, err := sonic.Marshal(flaggedUser.Friends)
-		if err != nil {
-			r.logger.Error("Error marshaling user friends",
-				zap.Uint64("userID", flaggedUser.ID),
-				zap.String("username", flaggedUser.Name),
-				zap.Error(err))
-			continue
-		}
-
-		_, err = r.db.Exec(`
-			WITH user_check AS (
-				SELECT id FROM confirmed_users WHERE id = ?
-			)
-			INSERT INTO flagged_users (
-				id, name, display_name, description, created_at, reason,
-				groups, outfits, friends, flagged_content, flagged_groups,
-				confidence, last_updated, thumbnail_url
-			)
-			SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), ?
-			WHERE NOT EXISTS (SELECT 1 FROM user_check)
-			ON CONFLICT (id) DO UPDATE 
-			SET name = EXCLUDED.name,
-				display_name = EXCLUDED.display_name,
-				description = EXCLUDED.description,
-				created_at = EXCLUDED.created_at,
-				reason = EXCLUDED.reason,
-				groups = EXCLUDED.groups,
-				outfits = EXCLUDED.outfits,
-				friends = EXCLUDED.friends,
-				flagged_content = EXCLUDED.flagged_content,
-				flagged_groups = EXCLUDED.flagged_groups,
-				confidence = EXCLUDED.confidence,
-				last_updated = NOW(),
-				thumbnail_url = EXCLUDED.thumbnail_url
-		`,
-			flaggedUser.ID, flaggedUser.ID, flaggedUser.Name, flaggedUser.DisplayName,
-			flaggedUser.Description, flaggedUser.CreatedAt, flaggedUser.Reason,
-			string(groupsJSON), string(outfitsJSON), string(friendsJSON),
-			string(flaggedContentJSON), string(flaggedGroupJSON),
-			flaggedUser.Confidence, flaggedUser.ThumbnailURL)
+		_, err := r.db.Model(&FlaggedUser{User: *flaggedUser}).
+			OnConflict("(id) DO UPDATE").
+			Set("name = EXCLUDED.name").
+			Set("display_name = EXCLUDED.display_name").
+			Set("description = EXCLUDED.description").
+			Set("created_at = EXCLUDED.created_at").
+			Set("reason = EXCLUDED.reason").
+			Set("groups = EXCLUDED.groups").
+			Set("outfits = EXCLUDED.outfits").
+			Set("friends = EXCLUDED.friends").
+			Set("flagged_content = EXCLUDED.flagged_content").
+			Set("flagged_groups = EXCLUDED.flagged_groups").
+			Set("confidence = EXCLUDED.confidence").
+			Set("last_updated = NOW()").
+			Set("thumbnail_url = EXCLUDED.thumbnail_url").
+			Insert()
 		if err != nil {
 			r.logger.Error("Error saving flagged user",
 				zap.Uint64("userID", flaggedUser.ID),
@@ -222,78 +173,59 @@ func (r *UserRepository) SaveFlaggedUsers(flaggedUsers []*User) {
 
 // ConfirmUser moves a user from flagged to confirmed status.
 func (r *UserRepository) ConfirmUser(user *FlaggedUser) error {
-	// Start a transaction
-	tx, err := r.db.Begin()
-	if err != nil {
-		r.logger.Error("Failed to start transaction", zap.Error(err))
-		return err
-	}
-	defer func() { _ = tx.Rollback() }()
+	return r.db.RunInTransaction(r.db.Context(), func(tx *pg.Tx) error {
+		confirmedUser := &ConfirmedUser{
+			User:       user.User,
+			VerifiedAt: time.Now(),
+		}
 
-	// Insert or update in confirmed_users
-	_, err = tx.Model(&ConfirmedUser{
-		User:       user.User,
-		VerifiedAt: time.Now(),
-	}).OnConflict("(id) DO UPDATE").
-		Set("name = EXCLUDED.name").
-		Set("display_name = EXCLUDED.display_name").
-		Set("description = EXCLUDED.description").
-		Set("created_at = EXCLUDED.created_at").
-		Set("reason = EXCLUDED.reason").
-		Set("groups = EXCLUDED.groups").
-		Set("outfits = EXCLUDED.outfits").
-		Set("friends = EXCLUDED.friends").
-		Set("flagged_content = EXCLUDED.flagged_content").
-		Set("flagged_groups = EXCLUDED.flagged_groups").
-		Set("confidence = EXCLUDED.confidence").
-		Set("last_scanned = EXCLUDED.last_scanned").
-		Set("last_updated = EXCLUDED.last_updated").
-		Set("last_reviewed = EXCLUDED.last_reviewed").
-		Set("last_purge_check = EXCLUDED.last_purge_check").
-		Set("thumbnail_url = EXCLUDED.thumbnail_url").
-		Set("verified_at = EXCLUDED.verified_at").
-		Insert()
-	if err != nil {
-		r.logger.Error("Failed to insert or update user in confirmed_users", zap.Error(err), zap.Uint64("userID", user.ID))
-		return err
-	}
-
-	// Delete from flagged_users
-	if _, err = tx.Model((*FlaggedUser)(nil)).Where("id = ?", user.ID).Delete(); err != nil {
-		r.logger.Error("Failed to delete user from flagged_users", zap.Error(err), zap.Uint64("userID", user.ID))
-		return err
-	}
-
-	// Add user to group tracking for each group they're in
-	for _, group := range user.Groups {
-		if err = r.tracking.AddUserToGroupTracking(group.Group.ID, user.ID); err != nil {
-			r.logger.Error("Failed to add user to group tracking", zap.Error(err), zap.Uint64("groupID", group.Group.ID), zap.Uint64("userID", user.ID))
+		_, err := tx.Model(confirmedUser).
+			OnConflict("(id) DO UPDATE").
+			Set("name = EXCLUDED.name").
+			Set("display_name = EXCLUDED.display_name").
+			Set("description = EXCLUDED.description").
+			Set("created_at = EXCLUDED.created_at").
+			Set("reason = EXCLUDED.reason").
+			Set("groups = EXCLUDED.groups").
+			Set("outfits = EXCLUDED.outfits").
+			Set("friends = EXCLUDED.friends").
+			Set("flagged_content = EXCLUDED.flagged_content").
+			Set("flagged_groups = EXCLUDED.flagged_groups").
+			Set("confidence = EXCLUDED.confidence").
+			Set("last_scanned = EXCLUDED.last_scanned").
+			Set("last_updated = EXCLUDED.last_updated").
+			Set("last_reviewed = EXCLUDED.last_reviewed").
+			Set("last_purge_check = EXCLUDED.last_purge_check").
+			Set("thumbnail_url = EXCLUDED.thumbnail_url").
+			Set("verified_at = EXCLUDED.verified_at").
+			Insert()
+		if err != nil {
+			r.logger.Error("Failed to insert or update user in confirmed_users", zap.Error(err), zap.Uint64("userID", user.ID))
 			return err
 		}
-	}
 
-	// Add user to affiliate tracking for each friend
-	for _, friend := range user.Friends {
-		if err = r.tracking.AddUserToAffiliateTracking(friend.ID, user.ID); err != nil {
-			r.logger.Error("Failed to add user to affiliate tracking", zap.Error(err), zap.Uint64("friendID", friend.ID), zap.Uint64("userID", user.ID))
+		_, err = tx.Model((*FlaggedUser)(nil)).Where("id = ?", user.ID).Delete()
+		if err != nil {
+			r.logger.Error("Failed to delete user from flagged_users", zap.Error(err), zap.Uint64("userID", user.ID))
 			return err
 		}
-	}
 
-	// Commit the transaction
-	if err = tx.Commit(); err != nil {
-		r.logger.Error("Failed to commit transaction", zap.Error(err))
-		return err
-	}
+		for _, group := range user.Groups {
+			if err = r.tracking.AddUserToGroupTracking(group.Group.ID, user.ID); err != nil {
+				r.logger.Error("Failed to add user to group tracking", zap.Error(err), zap.Uint64("groupID", group.Group.ID), zap.Uint64("userID", user.ID))
+				return err
+			}
+		}
 
-	r.logger.Info("User banned and moved to confirmed_users", zap.Uint64("userID", user.ID))
+		for _, friend := range user.Friends {
+			if err = r.tracking.AddUserToAffiliateTracking(friend.ID, user.ID); err != nil {
+				r.logger.Error("Failed to add user to affiliate tracking", zap.Error(err), zap.Uint64("friendID", friend.ID), zap.Uint64("userID", user.ID))
+				return err
+			}
+		}
 
-	// Increment the users_banned statistic
-	if err := r.stats.IncrementUsersBanned(context.Background(), 1); err != nil {
-		r.logger.Error("Failed to increment users_banned statistic", zap.Error(err))
-	}
-
-	return nil
+		return nil
+	})
 }
 
 // ClearUser removes a user from the flagged users list.
@@ -349,24 +281,30 @@ func (r *UserRepository) GetFlaggedUsersCount() (int, error) {
 
 // CheckExistingUsers checks which of the provided user IDs exist in the database.
 func (r *UserRepository) CheckExistingUsers(userIDs []uint64) (map[uint64]string, error) {
-	result := make(map[uint64]string)
-
 	var users []struct {
 		ID     uint64
 		Status string
 	}
 
-	_, err := r.db.Query(&users, `
-		SELECT id, 'confirmed' AS status FROM confirmed_users WHERE id = ANY(?)
-		UNION ALL
-		SELECT id, 'flagged' AS status FROM flagged_users WHERE id = ANY(?)
-	`, pg.Array(userIDs), pg.Array(userIDs))
-
-	if err != nil && !errors.Is(err, pg.ErrNoRows) {
+	err := r.db.RunInTransaction(r.db.Context(), func(tx *pg.Tx) error {
+		return tx.Model((*ConfirmedUser)(nil)).
+			Column("id").
+			ColumnExpr("'confirmed' AS status").
+			Where("id IN (?)", pg.In(userIDs)).
+			Union(
+				tx.Model((*FlaggedUser)(nil)).
+					Column("id").
+					ColumnExpr("'flagged' AS status").
+					Where("id IN (?)", pg.In(userIDs)),
+			).
+			Select(&users)
+	})
+	if err != nil {
 		r.logger.Error("Failed to check existing users", zap.Error(err))
 		return nil, err
 	}
 
+	result := make(map[uint64]string, len(users))
 	for _, user := range users {
 		result[user.ID] = user.Status
 	}
@@ -382,38 +320,50 @@ func (r *UserRepository) CheckExistingUsers(userIDs []uint64) (map[uint64]string
 func (r *UserRepository) GetUsersToCheck(limit int) ([]uint64, error) {
 	var userIDs []uint64
 
-	// Select the users to check
-	_, err := r.db.Query(&userIDs, `
-		SELECT id FROM (
-			SELECT id FROM confirmed_users
-			WHERE last_purge_check IS NULL OR last_purge_check < NOW() - INTERVAL '8 hours'
-			UNION ALL
-			SELECT id FROM flagged_users
-			WHERE last_purge_check IS NULL OR last_purge_check < NOW() - INTERVAL '8 hours'
-		) AS users
-		ORDER BY RANDOM()
-		LIMIT ?
-	`, limit)
-	if err != nil {
-		r.logger.Error("Failed to get users to check", zap.Error(err))
-		return nil, err
-	}
-
-	// If we have users to check, update their last_purge_check
-	if len(userIDs) > 0 {
-		_, err = r.db.Exec(`
-			UPDATE confirmed_users
-			SET last_purge_check = NOW()
-			WHERE id = ANY(?);
-
-			UPDATE flagged_users
-			SET last_purge_check = NOW()
-			WHERE id = ANY(?);
-		`, pg.Array(userIDs), pg.Array(userIDs))
+	err := r.db.RunInTransaction(r.db.Context(), func(tx *pg.Tx) error {
+		// Select the users to check
+		err := tx.Model((*ConfirmedUser)(nil)).
+			Column("id").
+			Where("last_purge_check IS NULL OR last_purge_check < NOW() - INTERVAL '8 hours'").
+			Union(
+				tx.Model((*FlaggedUser)(nil)).
+					Column("id").
+					Where("last_purge_check IS NULL OR last_purge_check < NOW() - INTERVAL '8 hours'"),
+			).
+			OrderExpr("RANDOM()").
+			Limit(limit).
+			For("UPDATE SKIP LOCKED").
+			Select(&userIDs)
 		if err != nil {
-			r.logger.Error("Failed to update last_purge_check", zap.Error(err))
-			return nil, err
+			r.logger.Error("Failed to get users to check", zap.Error(err))
+			return err
 		}
+
+		// If we have users to check, update their last_purge_check
+		if len(userIDs) > 0 {
+			_, err = tx.Model((*ConfirmedUser)(nil)).
+				Set("last_purge_check = ?", time.Now()).
+				Where("id IN (?)", pg.In(userIDs)).
+				Update()
+			if err != nil {
+				r.logger.Error("Failed to update last_purge_check for confirmed users", zap.Error(err))
+				return err
+			}
+
+			_, err = tx.Model((*FlaggedUser)(nil)).
+				Set("last_purge_check = ?", time.Now()).
+				Where("id IN (?)", pg.In(userIDs)).
+				Update()
+			if err != nil {
+				r.logger.Error("Failed to update last_purge_check for flagged users", zap.Error(err))
+				return err
+			}
+		}
+
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
 
 	r.logger.Info("Retrieved and updated users to check", zap.Int("count", len(userIDs)))
@@ -422,21 +372,30 @@ func (r *UserRepository) GetUsersToCheck(limit int) ([]uint64, error) {
 
 // RemoveBannedUsers removes the specified banned users from confirmed and flagged tables.
 func (r *UserRepository) RemoveBannedUsers(userIDs []uint64) error {
-	_, err := r.db.Exec(`
-		DELETE FROM confirmed_users WHERE id = ANY(?);
-		DELETE FROM flagged_users WHERE id = ANY(?);
-	`, pg.Array(userIDs), pg.Array(userIDs))
-	if err != nil {
-		r.logger.Error("Failed to remove banned users", zap.Error(err))
-		return err
-	}
+	return r.db.RunInTransaction(r.db.Context(), func(tx *pg.Tx) error {
+		_, err := tx.Model((*ConfirmedUser)(nil)).
+			Where("id IN (?)", pg.In(userIDs)).
+			Delete()
+		if err != nil {
+			r.logger.Error("Failed to remove banned users from confirmed_users", zap.Error(err))
+			return err
+		}
 
-	// Increment the users_purged statistic
-	if err := r.stats.IncrementUsersPurged(context.Background(), len(userIDs)); err != nil {
-		r.logger.Error("Failed to increment users_purged statistic", zap.Error(err))
-	}
+		_, err = tx.Model((*FlaggedUser)(nil)).
+			Where("id IN (?)", pg.In(userIDs)).
+			Delete()
+		if err != nil {
+			r.logger.Error("Failed to remove banned users from flagged_users", zap.Error(err))
+			return err
+		}
 
-	r.logger.Info("Removed banned users", zap.Int("count", len(userIDs)))
+		// Increment the users_purged statistic
+		if err := r.stats.IncrementUsersPurged(tx.Context(), len(userIDs)); err != nil {
+			r.logger.Error("Failed to increment users_purged statistic", zap.Error(err))
+			return err
+		}
 
-	return nil
+		r.logger.Info("Removed banned users", zap.Int("count", len(userIDs)))
+		return nil
+	})
 }
