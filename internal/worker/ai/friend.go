@@ -26,8 +26,8 @@ type FriendWorker struct {
 	outfitFetcher    *fetcher.OutfitFetcher
 	thumbnailFetcher *fetcher.ThumbnailFetcher
 	friendFetcher    *fetcher.FriendFetcher
-	logger           *zap.Logger
 	groupChecker     *fetcher.GroupChecker
+	logger           *zap.Logger
 }
 
 // NewFriendWorker creates a new friend worker instance.
@@ -41,8 +41,8 @@ func NewFriendWorker(db *database.Database, openaiClient *openai.Client, roAPI *
 		outfitFetcher:    fetcher.NewOutfitFetcher(roAPI, logger),
 		thumbnailFetcher: fetcher.NewThumbnailFetcher(roAPI, logger),
 		friendFetcher:    fetcher.NewFriendFetcher(roAPI, logger),
-		logger:           logger,
 		groupChecker:     fetcher.NewGroupChecker(db, logger),
+		logger:           logger,
 	}
 }
 
@@ -98,14 +98,32 @@ func (f *FriendWorker) processFriendsBatch(friendIDs []uint64) ([]uint64, error)
 			continue
 		}
 
-		// Add friend IDs to the slice
+		// Extract friend IDs
+		newFriendIDs := make([]uint64, 0, len(friends))
 		for _, friend := range friends {
 			if !friend.IsBanned && !friend.IsDeleted {
-				friendIDs = append(friendIDs, friend.ID)
+				newFriendIDs = append(newFriendIDs, friend.ID)
 			}
 		}
 
-		f.logger.Info("Fetched friends", zap.Int("friendIDs", len(friends)), zap.Uint64("userID", user.ID))
+		// Check which users already exist in the database
+		existingUsers, err := f.db.Users().CheckExistingUsers(newFriendIDs)
+		if err != nil {
+			f.logger.Error("Error checking existing users", zap.Error(err))
+			continue
+		}
+
+		// Add only new users to the friendIDs slice
+		for _, friendID := range newFriendIDs {
+			if _, exists := existingUsers[friendID]; !exists {
+				friendIDs = append(friendIDs, friendID)
+			}
+		}
+
+		f.logger.Info("Fetched friends",
+			zap.Int("totalFriends", len(friends)),
+			zap.Int("newFriends", len(friendIDs)-len(existingUsers)),
+			zap.Uint64("userID", user.ID))
 
 		// If we have enough friends, break out of the loop
 		if len(friendIDs) >= FriendUsersToProcess {
@@ -172,7 +190,5 @@ func (f *FriendWorker) processUsers(userInfos []*fetcher.Info) {
 
 	f.logger.Info("Finished processing users",
 		zap.Int("totalProcessed", len(userInfos)),
-		zap.Int("flaggedUsers", len(flaggedUsers)),
-		zap.Int("autoFlagged", len(flaggedUsers)-len(usersForAICheck)),
-		zap.Int("aiFlagged", len(flaggedUsers)-(len(userInfos)-len(usersForAICheck))))
+		zap.Int("flaggedUsers", len(flaggedUsers)))
 }

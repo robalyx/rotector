@@ -52,11 +52,11 @@ func (g *MemberWorker) Start() {
 	g.logger.Info("Group Worker started")
 	g.bar.SetTotal(100)
 
-	var oldUserInfos []*fetcher.Info
+	var oldUserIDs []uint64
 	for {
 		g.bar.Reset()
 
-		// Step 1: Get next confirmed group (20%)
+		// Step 1: Get next confirmed group (10%)
 		g.bar.SetStepMessage("Fetching next confirmed group")
 		group, err := g.db.Groups().GetNextConfirmedGroup()
 		if err != nil {
@@ -64,23 +64,28 @@ func (g *MemberWorker) Start() {
 			time.Sleep(5 * time.Minute) // Wait before trying again
 			continue
 		}
-		g.bar.Increment(20)
+		g.bar.Increment(10)
 
-		// Step 2: Get group users (20%)
+		// Step 2: Get group users (15%)
 		g.bar.SetStepMessage("Processing group users")
-		userInfos, err := g.processGroup(group.ID, oldUserInfos)
+		userIDs, err := g.processGroup(group.ID, oldUserIDs)
 		if err != nil {
 			g.logger.Error("Error processing group", zap.Error(err), zap.Uint64("groupID", group.ID))
 			time.Sleep(5 * time.Minute) // Wait before trying again
 			continue
 		}
-		g.bar.Increment(20)
+		g.bar.Increment(15)
 
-		// Step 3: Process users (60%)
-		g.processUsers(userInfos[:GroupUsersToProcess])
+		// Step 3: Fetch user info (15%)
+		g.bar.SetStepMessage("Fetching user info")
+		userInfos := g.userFetcher.FetchInfos(userIDs[:GroupUsersToProcess])
+		g.bar.Increment(15)
 
-		// Step 4: Prepare for next batch
-		oldUserInfos = userInfos[GroupUsersToProcess:]
+		// Step 4: Process users (60%)
+		g.processUsers(userInfos)
+
+		// Step 5: Prepare for next batch
+		oldUserIDs = userIDs[GroupUsersToProcess:]
 
 		// Short pause before next iteration
 		time.Sleep(1 * time.Second)
@@ -88,12 +93,11 @@ func (g *MemberWorker) Start() {
 }
 
 // processGroup handles the processing of a single group.
-func (g *MemberWorker) processGroup(groupID uint64, userInfos []*fetcher.Info) ([]*fetcher.Info, error) {
+func (g *MemberWorker) processGroup(groupID uint64, userIDs []uint64) ([]uint64, error) {
 	g.logger.Info("Processing group", zap.Uint64("groupID", groupID))
 
-	// Step 2: Fetch group users
 	cursor := ""
-	for len(userInfos) < GroupUsersToProcess {
+	for len(userIDs) < GroupUsersToProcess {
 		builder := groups.NewGroupUsersBuilder(groupID).
 			WithLimit(100).
 			WithCursor(cursor)
@@ -104,17 +108,32 @@ func (g *MemberWorker) processGroup(groupID uint64, userInfos []*fetcher.Info) (
 			return nil, err
 		}
 
-		userIDs := make([]uint64, len(groupUsers.Data))
+		// Extract user IDs
+		newUserIDs := make([]uint64, len(groupUsers.Data))
 		for i, groupUser := range groupUsers.Data {
-			userIDs[i] = groupUser.User.UserID
+			newUserIDs[i] = groupUser.User.UserID
 		}
-		batchUserInfos := g.userFetcher.FetchInfos(userIDs)
-		userInfos = append(userInfos, batchUserInfos...)
+
+		// Check which users already exist in the database
+		existingUsers, err := g.db.Users().CheckExistingUsers(newUserIDs)
+		if err != nil {
+			g.logger.Error("Error checking existing users", zap.Error(err))
+			continue
+		}
+
+		// Add only new users to the userIDs slice
+		for _, userID := range newUserIDs {
+			if _, exists := existingUsers[userID]; !exists {
+				userIDs = append(userIDs, userID)
+			}
+		}
 
 		g.logger.Info("Fetched group users",
 			zap.Uint64("groupID", groupID),
 			zap.String("cursor", cursor),
-			zap.Int("userInfos", len(userInfos)))
+			zap.Int("totalUsers", len(groupUsers.Data)),
+			zap.Int("newUsers", len(newUserIDs)-len(existingUsers)),
+			zap.Int("userIDs", len(userIDs)))
 
 		if groupUsers.NextPageCursor == nil {
 			break
@@ -122,7 +141,7 @@ func (g *MemberWorker) processGroup(groupID uint64, userInfos []*fetcher.Info) (
 		cursor = *groupUsers.NextPageCursor
 	}
 
-	return userInfos, nil
+	return userIDs, nil
 }
 
 // processUsers handles the processing of a batch of users.
@@ -180,6 +199,6 @@ func (g *MemberWorker) processUsers(userInfos []*fetcher.Info) {
 	g.bar.Increment(10)
 
 	g.logger.Info("Finished processing users",
-		zap.Int("initialFlaggedUsers", len(flaggedUsers)),
-		zap.Int("validatedFlaggedUsers", len(flaggedUsers)))
+		zap.Int("totalProcessed", len(userInfos)),
+		zap.Int("flaggedUsers", len(flaggedUsers)))
 }
