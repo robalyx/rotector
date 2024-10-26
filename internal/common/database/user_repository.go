@@ -138,7 +138,7 @@ func (r *UserRepository) SaveFlaggedUsers(flaggedUsers []*User) {
 			Set("flagged_content = EXCLUDED.flagged_content").
 			Set("flagged_groups = EXCLUDED.flagged_groups").
 			Set("confidence = EXCLUDED.confidence").
-			Set("last_updated = NOW()").
+			Set("last_updated = EXCLUDED.last_updated").
 			Set("thumbnail_url = EXCLUDED.thumbnail_url").
 			Insert()
 		if err != nil {

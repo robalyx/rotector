@@ -268,6 +268,7 @@ func (a *AIChecker) validateFlaggedUsers(flaggedUsers FlaggedUsers, userInfos []
 					Groups:         userInfo.Groups,
 					FlaggedContent: flaggedUser.FlaggedContent,
 					Confidence:     flaggedUser.Confidence,
+					LastUpdated:    userInfo.LastUpdated,
 				})
 			} else {
 				a.logger.Warn("AI flagged content did not pass validation",

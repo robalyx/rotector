@@ -19,6 +19,7 @@ type Info struct {
 	Description string                 `json:"description"`
 	CreatedAt   time.Time              `json:"createdAt"`
 	Groups      []types.UserGroupRoles `json:"groupIds"`
+	LastUpdated time.Time              `json:"lastUpdated"`
 }
 
 // UserFetcher handles fetching of user information.
@@ -73,6 +74,7 @@ func (u *UserFetcher) FetchInfos(userIDs []uint64) []*Info {
 				Description: userInfo.Description,
 				CreatedAt:   userInfo.Created,
 				Groups:      groups,
+				LastUpdated: time.Now(),
 			}
 		}(userID)
 	}

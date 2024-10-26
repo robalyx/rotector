@@ -53,6 +53,7 @@ func (gc *GroupChecker) CheckUserGroups(userInfo *Info) (*database.User, bool, e
 			Groups:        userInfo.Groups,
 			FlaggedGroups: flaggedGroupIDs,
 			Confidence:    float64(len(flaggedGroupIDs)) / float64(len(userInfo.Groups)),
+			LastUpdated:   userInfo.LastUpdated,
 		}
 
 		gc.logger.Info("User automatically flagged",
