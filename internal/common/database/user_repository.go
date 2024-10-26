@@ -370,10 +370,59 @@ func (r *UserRepository) GetUsersToCheck(limit int) ([]uint64, error) {
 	return userIDs, nil
 }
 
-// RemoveBannedUsers removes the specified banned users from confirmed and flagged tables.
+// RemoveBannedUsers moves the specified banned users from confirmed and flagged tables to the banned_users table.
 func (r *UserRepository) RemoveBannedUsers(userIDs []uint64) error {
 	return r.db.RunInTransaction(r.db.Context(), func(tx *pg.Tx) error {
-		_, err := tx.Model((*ConfirmedUser)(nil)).
+		// Move users from confirmed_users to banned_users
+		var confirmedUsers []ConfirmedUser
+		err := tx.Model(&confirmedUsers).
+			Where("id IN (?)", pg.In(userIDs)).
+			Select()
+		if err != nil {
+			r.logger.Error("Failed to select confirmed users for banning", zap.Error(err))
+			return err
+		}
+
+		for _, user := range confirmedUsers {
+			bannedUser := &BannedUser{
+				User:     user.User,
+				PurgedAt: time.Now(),
+			}
+			_, err = tx.Model(bannedUser).
+				OnConflict("(id) DO UPDATE").
+				Insert()
+			if err != nil {
+				r.logger.Error("Failed to insert banned user from confirmed_users", zap.Error(err), zap.Uint64("userID", user.ID))
+				return err
+			}
+		}
+
+		// Move users from flagged_users to banned_users
+		var flaggedUsers []FlaggedUser
+		err = tx.Model(&flaggedUsers).
+			Where("id IN (?)", pg.In(userIDs)).
+			Select()
+		if err != nil {
+			r.logger.Error("Failed to select flagged users for banning", zap.Error(err))
+			return err
+		}
+
+		for _, user := range flaggedUsers {
+			bannedUser := &BannedUser{
+				User:     user.User,
+				PurgedAt: time.Now(),
+			}
+			_, err = tx.Model(bannedUser).
+				OnConflict("(id) DO UPDATE").
+				Insert()
+			if err != nil {
+				r.logger.Error("Failed to insert banned user from flagged_users", zap.Error(err), zap.Uint64("userID", user.ID))
+				return err
+			}
+		}
+
+		// Remove users from confirmed_users
+		_, err = tx.Model((*ConfirmedUser)(nil)).
 			Where("id IN (?)", pg.In(userIDs)).
 			Delete()
 		if err != nil {
@@ -381,6 +430,7 @@ func (r *UserRepository) RemoveBannedUsers(userIDs []uint64) error {
 			return err
 		}
 
+		// Remove users from flagged_users
 		_, err = tx.Model((*FlaggedUser)(nil)).
 			Where("id IN (?)", pg.In(userIDs)).
 			Delete()
@@ -395,7 +445,7 @@ func (r *UserRepository) RemoveBannedUsers(userIDs []uint64) error {
 			return err
 		}
 
-		r.logger.Info("Removed banned users", zap.Int("count", len(userIDs)))
+		r.logger.Info("Moved banned users to banned_users", zap.Int("count", len(userIDs)))
 		return nil
 	})
 }

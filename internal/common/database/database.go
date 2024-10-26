@@ -64,6 +64,12 @@ type ConfirmedUser struct {
 	VerifiedAt time.Time `json:"verifiedAt" pg:"verified_at"`
 }
 
+// BannedUser represents a user that has been banned and removed from confirmed or flagged users.
+type BannedUser struct {
+	User
+	PurgedAt time.Time `json:"purgedAt" pg:"purged_at"`
+}
+
 // DailyStatistics represents daily statistics.
 type DailyStatistics struct {
 	Date         time.Time `pg:"date,pk"`
@@ -162,6 +168,7 @@ func (d *Database) createSchema() error {
 		(*ConfirmedGroup)(nil),
 		(*FlaggedUser)(nil),
 		(*ConfirmedUser)(nil),
+		(*BannedUser)(nil),
 		(*DailyStatistics)(nil),
 		(*UserSetting)(nil),
 		(*GuildSetting)(nil),
