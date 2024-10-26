@@ -9,9 +9,9 @@ import (
 	"github.com/rotector/rotector/internal/common/logging"
 	"github.com/rotector/rotector/internal/common/progress"
 	"github.com/rotector/rotector/internal/common/setup"
+	"github.com/rotector/rotector/internal/worker/ai"
+	"github.com/rotector/rotector/internal/worker/purge"
 	"github.com/rotector/rotector/internal/worker/stats"
-	"github.com/rotector/rotector/internal/worker/tracking"
-	"github.com/rotector/rotector/internal/worker/user"
 	"github.com/spf13/cobra"
 	"go.uber.org/zap"
 )
@@ -19,18 +19,16 @@ import (
 const (
 	WorkerLogDir = "logs/worker_logs"
 
-	UserWorker           = "user"
-	UserWorkerTypeGroup  = "group"
-	UserWorkerTypeFriend = "friend"
-	UserWorkerTypePurge  = "purge"
+	AIWorker           = "ai"
+	AIWorkerTypeFriend = "friend"
+	AIWorkerTypeGroup  = "group"
 
-	GroupWorker = "group"
+	PurgeWorker             = "purge"
+	PurgeWorkerTypeUser     = "user"
+	PurgeWorkerTypeTracking = "tracking"
 
 	StatsWorker           = "stats"
 	StatsWorkerTypeUpload = "upload"
-
-	TrackingWorker          = "tracking"
-	TrackingWorkerTypePurge = "purge"
 )
 
 func main() {
@@ -47,45 +45,36 @@ func newRootCmd() *cobra.Command {
 		Long:  `This command starts the rotector worker, which can be either a group worker, user worker, stats worker, or tracking worker.`,
 	}
 	rootCmd.PersistentFlags().IntP("workers", "w", 1, "Number of workers to start")
-	rootCmd.AddCommand(newUserCmd())
-	rootCmd.AddCommand(newGroupCmd())
-	rootCmd.AddCommand(newStatsCmd())
-	rootCmd.AddCommand(newTrackingCmd())
+	rootCmd.AddCommand(newAIWorkerCmd())
+	rootCmd.AddCommand(newPurgeWorkerCmd())
+	rootCmd.AddCommand(newStatsWorkerCmd())
 
 	return rootCmd
 }
 
-// newUserCmd creates a new user worker command.
-func newUserCmd() *cobra.Command {
+// newAIWorkerCmd creates a new AI worker command.
+func newAIWorkerCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   UserWorker,
-		Short: "Start user workers",
-		Long:  `Start user workers, which can be friend, group, or purge workers.`,
+		Use:   AIWorker,
+		Short: "Start AI workers",
+		Long:  `Start AI workers, which can be friend or group workers.`,
 	}
 
 	cmd.AddCommand(
 		&cobra.Command{
-			Use:   UserWorkerTypeFriend,
+			Use:   AIWorkerTypeFriend,
 			Short: "Start friend workers",
 			Run: func(cmd *cobra.Command, _ []string) {
 				count, _ := cmd.Flags().GetInt("workers")
-				runWorkers(UserWorker, UserWorkerTypeFriend, count)
+				runWorkers(AIWorker, AIWorkerTypeFriend, count)
 			},
 		},
 		&cobra.Command{
-			Use:   UserWorkerTypeGroup,
+			Use:   AIWorkerTypeGroup,
 			Short: "Start group workers",
 			Run: func(cmd *cobra.Command, _ []string) {
 				count, _ := cmd.Flags().GetInt("workers")
-				runWorkers(UserWorker, UserWorkerTypeGroup, count)
-			},
-		},
-		&cobra.Command{
-			Use:   UserWorkerTypePurge,
-			Short: "Start purge workers",
-			Run: func(cmd *cobra.Command, _ []string) {
-				count, _ := cmd.Flags().GetInt("workers")
-				runWorkers(UserWorker, UserWorkerTypePurge, count)
+				runWorkers(AIWorker, AIWorkerTypeGroup, count)
 			},
 		},
 	)
@@ -93,48 +82,45 @@ func newUserCmd() *cobra.Command {
 	return cmd
 }
 
-// newGroupCmd creates a new group worker command.
-func newGroupCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   GroupWorker,
-		Short: "Start group workers",
-		Run: func(_ *cobra.Command, _ []string) {
-			log.Println("Group worker functionality not implemented yet.")
-		},
+// newPurgeWorkerCmd creates a new purge worker command.
+func newPurgeWorkerCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   PurgeWorker,
+		Short: "Start purge workers",
+		Long:  `Start purge workers, which can be user or tracking workers.`,
 	}
+
+	cmd.AddCommand(
+		&cobra.Command{
+			Use:   PurgeWorkerTypeUser,
+			Short: "Start user purge workers",
+			Run: func(cmd *cobra.Command, _ []string) {
+				count, _ := cmd.Flags().GetInt("workers")
+				runWorkers(PurgeWorker, PurgeWorkerTypeUser, count)
+			},
+		},
+		&cobra.Command{
+			Use:   PurgeWorkerTypeTracking,
+			Short: "Start tracking purge workers",
+			Run: func(cmd *cobra.Command, _ []string) {
+				count, _ := cmd.Flags().GetInt("workers")
+				runWorkers(PurgeWorker, PurgeWorkerTypeTracking, count)
+			},
+		},
+	)
+
+	return cmd
 }
 
-// newStatsCmd creates a new statistics worker command.
-func newStatsCmd() *cobra.Command {
+// newStatsWorkerCmd creates a new statistics worker command.
+func newStatsWorkerCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "stats",
+		Use:   StatsWorker,
 		Short: "Start statistics worker",
 		Run: func(_ *cobra.Command, _ []string) {
 			runWorkers(StatsWorker, StatsWorkerTypeUpload, 1)
 		},
 	}
-}
-
-// newTrackingCmd creates a new tracking worker command.
-func newTrackingCmd() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "tracking",
-		Short: "Start tracking workers",
-		Long:  `Start tracking workers, which can be purge workers.`,
-	}
-
-	cmd.AddCommand(
-		&cobra.Command{
-			Use:   TrackingWorkerTypePurge,
-			Short: "Start tracking purge workers",
-			Run: func(cmd *cobra.Command, _ []string) {
-				count, _ := cmd.Flags().GetInt("workers")
-				runWorkers(TrackingWorker, TrackingWorkerTypePurge, count)
-			},
-		},
-	)
-
-	return cmd
 }
 
 // runWorkers starts the specified number of workers of the given type.
@@ -175,14 +161,14 @@ func runWorkers(workerType, subType string, count int) {
 
 			var w interface{ Start() }
 			switch {
-			case workerType == UserWorker && subType == UserWorkerTypeGroup:
-				w = user.NewGroupWorker(setup.DB, setup.OpenAIClient, setup.RoAPI, bar, workerLogger)
-			case workerType == UserWorker && subType == UserWorkerTypeFriend:
-				w = user.NewFriendWorker(setup.DB, setup.OpenAIClient, setup.RoAPI, bar, workerLogger)
-			case workerType == UserWorker && subType == UserWorkerTypePurge:
-				w = user.NewPurgeWorker(setup.DB, setup.RoAPI, bar, workerLogger)
-			case workerType == TrackingWorker && subType == TrackingWorkerTypePurge:
-				w = tracking.NewPurgeWorker(setup.DB, bar, workerLogger)
+			case workerType == AIWorker && subType == AIWorkerTypeGroup:
+				w = ai.NewGroupWorker(setup.DB, setup.OpenAIClient, setup.RoAPI, bar, workerLogger)
+			case workerType == AIWorker && subType == AIWorkerTypeFriend:
+				w = ai.NewFriendWorker(setup.DB, setup.OpenAIClient, setup.RoAPI, bar, workerLogger)
+			case workerType == PurgeWorker && subType == PurgeWorkerTypeUser:
+				w = purge.NewUserWorker(setup.DB, setup.RoAPI, bar, workerLogger)
+			case workerType == PurgeWorker && subType == PurgeWorkerTypeTracking:
+				w = purge.NewTrackingWorker(setup.DB, bar, workerLogger)
 			case workerType == StatsWorker:
 				w = stats.NewStatisticsWorker(setup.DB, bar, workerLogger)
 			default:

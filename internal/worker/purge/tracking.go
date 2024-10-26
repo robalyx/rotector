@@ -1,4 +1,4 @@
-package tracking
+package purge
 
 import (
 	"fmt"
@@ -15,16 +15,16 @@ const (
 	PurgeInterval    = 1 * time.Hour
 )
 
-// PurgeWorker represents a purge worker that removes old tracking entries.
-type PurgeWorker struct {
+// TrackingWorker represents a purge worker that removes old tracking entries.
+type TrackingWorker struct {
 	db     *database.Database
 	bar    *progress.Bar
 	logger *zap.Logger
 }
 
-// NewPurgeWorker creates a new purge worker instance.
-func NewPurgeWorker(db *database.Database, bar *progress.Bar, logger *zap.Logger) *PurgeWorker {
-	return &PurgeWorker{
+// NewTrackingWorker creates a new purge worker instance.
+func NewTrackingWorker(db *database.Database, bar *progress.Bar, logger *zap.Logger) *TrackingWorker {
+	return &TrackingWorker{
 		db:     db,
 		bar:    bar,
 		logger: logger,
@@ -32,7 +32,7 @@ func NewPurgeWorker(db *database.Database, bar *progress.Bar, logger *zap.Logger
 }
 
 // Start begins the purge worker's main loop.
-func (p *PurgeWorker) Start() {
+func (p *TrackingWorker) Start() {
 	p.logger.Info("Tracking Purge Worker started")
 
 	for {
@@ -47,7 +47,7 @@ func (p *PurgeWorker) Start() {
 }
 
 // performPurge executes the purge operations for group member and user affiliate trackings.
-func (p *PurgeWorker) performPurge() {
+func (p *TrackingWorker) performPurge() {
 	p.bar.SetTotal(100)
 	p.bar.Reset()
 
@@ -67,7 +67,7 @@ func (p *PurgeWorker) performPurge() {
 }
 
 // updateProgressUntilNextRun updates the progress bar until the next run time.
-func (p *PurgeWorker) updateProgressUntilNextRun(nextRun time.Time) {
+func (p *TrackingWorker) updateProgressUntilNextRun(nextRun time.Time) {
 	p.bar.Reset()
 	totalDuration := PurgeInterval
 	p.bar.SetTotal(int64(totalDuration.Seconds()))
@@ -84,7 +84,7 @@ func (p *PurgeWorker) updateProgressUntilNextRun(nextRun time.Time) {
 }
 
 // purgeGroupMemberTrackings removes old entries from group_member_trackings.
-func (p *PurgeWorker) purgeGroupMemberTrackings() error {
+func (p *TrackingWorker) purgeGroupMemberTrackings() error {
 	// Calculate the cutoff date
 	cutoffDate := time.Now().AddDate(0, 0, -DefaultPurgeDays)
 
@@ -107,7 +107,7 @@ func (p *PurgeWorker) purgeGroupMemberTrackings() error {
 }
 
 // purgeUserAffiliateTrackings removes old entries from user_affiliate_trackings.
-func (p *PurgeWorker) purgeUserAffiliateTrackings() error {
+func (p *TrackingWorker) purgeUserAffiliateTrackings() error {
 	// Calculate the cutoff date
 	cutoffDate := time.Now().AddDate(0, 0, -DefaultPurgeDays)
 

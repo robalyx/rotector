@@ -1,4 +1,4 @@
-package user
+package purge
 
 import (
 	"time"
@@ -14,8 +14,8 @@ const (
 	PurgeUsersToProcess = 200
 )
 
-// PurgeWorker represents a purge worker that removes banned users from confirmed or flagged users.
-type PurgeWorker struct {
+// UserWorker represents a purge worker that removes banned users from confirmed or flagged users.
+type UserWorker struct {
 	db          *database.Database
 	roAPI       *api.API
 	bar         *progress.Bar
@@ -23,9 +23,9 @@ type PurgeWorker struct {
 	logger      *zap.Logger
 }
 
-// NewPurgeWorker creates a new purge worker instance.
-func NewPurgeWorker(db *database.Database, roAPI *api.API, bar *progress.Bar, logger *zap.Logger) *PurgeWorker {
-	return &PurgeWorker{
+// NewUserWorker creates a new purge worker instance.
+func NewUserWorker(db *database.Database, roAPI *api.API, bar *progress.Bar, logger *zap.Logger) *UserWorker {
+	return &UserWorker{
 		db:          db,
 		roAPI:       roAPI,
 		bar:         bar,
@@ -35,7 +35,7 @@ func NewPurgeWorker(db *database.Database, roAPI *api.API, bar *progress.Bar, lo
 }
 
 // Start begins the purge worker's main loop.
-func (p *PurgeWorker) Start() {
+func (p *UserWorker) Start() {
 	p.logger.Info("Purge Worker started")
 	p.bar.SetTotal(100)
 
@@ -80,7 +80,7 @@ func (p *PurgeWorker) Start() {
 }
 
 // processUsers handles the processing of a batch of users.
-func (p *PurgeWorker) processUsers(bannedUserIDs []uint64) {
+func (p *UserWorker) processUsers(bannedUserIDs []uint64) {
 	p.logger.Info("Processing users", zap.Any("bannedUserIDs", bannedUserIDs))
 
 	p.bar.SetStepMessage("Removing banned users")

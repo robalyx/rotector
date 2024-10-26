@@ -1,4 +1,4 @@
-package user
+package ai
 
 import (
 	"context"
@@ -123,7 +123,7 @@ func (f *FriendWorker) processUsers(userInfos []*fetcher.Info) {
 	var flaggedUsers []*database.User
 	var usersForAICheck []*fetcher.Info
 
-	// Check if users belong to any flagged groups
+	// Check if users belong to a certain number of flagged groups
 	f.bar.SetStepMessage("Checking user groups")
 	for _, userInfo := range userInfos {
 		user, autoFlagged, err := f.groupChecker.CheckUserGroups(userInfo)
