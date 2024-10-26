@@ -220,8 +220,8 @@ func (r *UserRepository) SaveFlaggedUsers(flaggedUsers []*User) {
 	r.logger.Info("Finished saving flagged users")
 }
 
-// BanUser moves a user from flagged to confirmed status.
-func (r *UserRepository) BanUser(user *FlaggedUser) error {
+// ConfirmUser moves a user from flagged to confirmed status.
+func (r *UserRepository) ConfirmUser(user *FlaggedUser) error {
 	// Start a transaction
 	tx, err := r.db.Begin()
 	if err != nil {

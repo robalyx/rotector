@@ -139,9 +139,9 @@ func (m *ReviewMenu) handleModal(event *events.ModalSubmitInteractionCreate, s *
 func (m *ReviewMenu) handleBanUser(event interfaces.CommonEvent, s *session.Session) {
 	user := s.GetFlaggedUser(constants.SessionKeyTarget)
 
-	// Perform the ban
-	if err := m.handler.db.Users().BanUser(user); err != nil {
-		m.handler.logger.Error("Failed to ban user", zap.Error(err))
+	// Move the user to confirmed
+	if err := m.handler.db.Users().ConfirmUser(user); err != nil {
+		m.handler.logger.Error("Failed to confirm user", zap.Error(err))
 		m.handler.paginationManager.RespondWithError(event, "Failed to ban the user. Please try again.")
 		return
 	}
@@ -235,10 +235,10 @@ func (m *ReviewMenu) handleBanWithReasonModalSubmit(event *events.ModalSubmitInt
 	// Update the user's reason with the custom input
 	user.Reason = reason
 
-	// Perform the ban
-	if err := m.handler.db.Users().BanUser(user); err != nil {
-		m.handler.logger.Error("Failed to ban user", zap.Error(err))
-		m.handler.paginationManager.RespondWithError(event, "Failed to ban the user. Please try again.")
+	// Move the user to confirmed
+	if err := m.handler.db.Users().ConfirmUser(user); err != nil {
+		m.handler.logger.Error("Failed to confirm user", zap.Error(err))
+		m.handler.paginationManager.RespondWithError(event, "Failed to confirm the user. Please try again.")
 		return
 	}
 
