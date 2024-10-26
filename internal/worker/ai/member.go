@@ -17,8 +17,8 @@ const (
 	GroupUsersToProcess = 200
 )
 
-// GroupWorker represents a group worker that processes flagged groups.
-type GroupWorker struct {
+// MemberWorker represents a group worker that processes group members.
+type MemberWorker struct {
 	db               *database.Database
 	roAPI            *api.API
 	bar              *progress.Bar
@@ -31,9 +31,9 @@ type GroupWorker struct {
 	logger           *zap.Logger
 }
 
-// NewGroupWorker creates a new group worker instance.
-func NewGroupWorker(db *database.Database, openaiClient *openai.Client, roAPI *api.API, bar *progress.Bar, logger *zap.Logger) *GroupWorker {
-	return &GroupWorker{
+// NewMemberWorker creates a new group worker instance.
+func NewMemberWorker(db *database.Database, openaiClient *openai.Client, roAPI *api.API, bar *progress.Bar, logger *zap.Logger) *MemberWorker {
+	return &MemberWorker{
 		db:               db,
 		roAPI:            roAPI,
 		bar:              bar,
@@ -48,7 +48,7 @@ func NewGroupWorker(db *database.Database, openaiClient *openai.Client, roAPI *a
 }
 
 // Start begins the group worker's main loop.
-func (g *GroupWorker) Start() {
+func (g *MemberWorker) Start() {
 	g.logger.Info("Group Worker started")
 	g.bar.SetTotal(100)
 
@@ -88,7 +88,7 @@ func (g *GroupWorker) Start() {
 }
 
 // processGroup handles the processing of a single group.
-func (g *GroupWorker) processGroup(groupID uint64, userInfos []*fetcher.Info) ([]*fetcher.Info, error) {
+func (g *MemberWorker) processGroup(groupID uint64, userInfos []*fetcher.Info) ([]*fetcher.Info, error) {
 	g.logger.Info("Processing group", zap.Uint64("groupID", groupID))
 
 	// Step 2: Fetch group users
@@ -126,7 +126,7 @@ func (g *GroupWorker) processGroup(groupID uint64, userInfos []*fetcher.Info) ([
 }
 
 // processUsers handles the processing of a batch of users.
-func (g *GroupWorker) processUsers(userInfos []*fetcher.Info) {
+func (g *MemberWorker) processUsers(userInfos []*fetcher.Info) {
 	g.logger.Info("Processing users", zap.Int("userInfos", len(userInfos)))
 
 	var flaggedUsers []*database.User

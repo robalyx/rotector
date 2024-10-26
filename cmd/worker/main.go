@@ -21,7 +21,7 @@ const (
 
 	AIWorker           = "ai"
 	AIWorkerTypeFriend = "friend"
-	AIWorkerTypeGroup  = "group"
+	AIWorkerTypeMember = "member"
 
 	PurgeWorker             = "purge"
 	PurgeWorkerTypeUser     = "user"
@@ -63,18 +63,18 @@ func newAIWorkerCmd() *cobra.Command {
 	cmd.AddCommand(
 		&cobra.Command{
 			Use:   AIWorkerTypeFriend,
-			Short: "Start friend workers",
+			Short: "Start user friend workers",
 			Run: func(cmd *cobra.Command, _ []string) {
 				count, _ := cmd.Flags().GetInt("workers")
 				runWorkers(AIWorker, AIWorkerTypeFriend, count)
 			},
 		},
 		&cobra.Command{
-			Use:   AIWorkerTypeGroup,
-			Short: "Start group workers",
+			Use:   AIWorkerTypeMember,
+			Short: "Start group member workers",
 			Run: func(cmd *cobra.Command, _ []string) {
 				count, _ := cmd.Flags().GetInt("workers")
-				runWorkers(AIWorker, AIWorkerTypeGroup, count)
+				runWorkers(AIWorker, AIWorkerTypeMember, count)
 			},
 		},
 	)
@@ -161,8 +161,8 @@ func runWorkers(workerType, subType string, count int) {
 
 			var w interface{ Start() }
 			switch {
-			case workerType == AIWorker && subType == AIWorkerTypeGroup:
-				w = ai.NewGroupWorker(setup.DB, setup.OpenAIClient, setup.RoAPI, bar, workerLogger)
+			case workerType == AIWorker && subType == AIWorkerTypeMember:
+				w = ai.NewMemberWorker(setup.DB, setup.OpenAIClient, setup.RoAPI, bar, workerLogger)
 			case workerType == AIWorker && subType == AIWorkerTypeFriend:
 				w = ai.NewFriendWorker(setup.DB, setup.OpenAIClient, setup.RoAPI, bar, workerLogger)
 			case workerType == PurgeWorker && subType == PurgeWorkerTypeUser:
