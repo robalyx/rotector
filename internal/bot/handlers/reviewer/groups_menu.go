@@ -60,7 +60,7 @@ func (m *GroupsMenu) ShowGroupsMenu(event *events.ComponentInteractionCreate, s 
 	flaggedGroups, err := m.getFlaggedGroups(pageGroups)
 	if err != nil {
 		m.handler.logger.Error("Failed to get flagged groups", zap.Error(err))
-		utils.RespondWithError(event, "Failed to get flagged groups. Please try again.")
+		m.handler.paginationManager.RespondWithError(event, "Failed to get flagged groups. Please try again.")
 		return
 	}
 
@@ -68,7 +68,7 @@ func (m *GroupsMenu) ShowGroupsMenu(event *events.ComponentInteractionCreate, s 
 	groupsThumbnailURLs, err := m.fetchGroupsThumbnails(pageGroups)
 	if err != nil {
 		m.handler.logger.Error("Failed to fetch groups thumbnails", zap.Error(err))
-		utils.RespondWithError(event, "Failed to fetch groups thumbnails. Please try again.")
+		m.handler.paginationManager.RespondWithError(event, "Failed to fetch groups thumbnails. Please try again.")
 		return
 	}
 
@@ -84,7 +84,7 @@ func (m *GroupsMenu) ShowGroupsMenu(event *events.ComponentInteractionCreate, s 
 	buf, err := utils.MergeImages(m.handler.roAPI.GetClient(), pageThumbnailURLs, constants.GroupsGridColumns, constants.GroupsGridRows, constants.GroupsPerPage)
 	if err != nil {
 		m.handler.logger.Error("Failed to merge group images", zap.Error(err))
-		utils.RespondWithError(event, "Failed to process group images. Please try again.")
+		m.handler.paginationManager.RespondWithError(event, "Failed to process group images. Please try again.")
 		return
 	}
 
@@ -96,7 +96,7 @@ func (m *GroupsMenu) ShowGroupsMenu(event *events.ComponentInteractionCreate, s 
 	settings, err := m.handler.db.Settings().GetUserSettings(uint64(event.User().ID))
 	if err != nil {
 		m.handler.logger.Error("Failed to get user settings", zap.Error(err))
-		utils.RespondWithError(event, "Failed to get user settings. Please try again.")
+		m.handler.paginationManager.RespondWithError(event, "Failed to get user settings. Please try again.")
 		return
 	}
 
@@ -146,7 +146,7 @@ func (m *GroupsMenu) handlePageNavigation(event *events.ComponentInteractionCrea
 		maxPage := (len(user.Groups) - 1) / constants.GroupsPerPage
 		page, ok := action.ParsePageAction(s, action, maxPage)
 		if !ok {
-			utils.RespondWithError(event, "Invalid interaction.")
+			m.handler.paginationManager.RespondWithError(event, "Invalid interaction.")
 			return
 		}
 
@@ -155,7 +155,7 @@ func (m *GroupsMenu) handlePageNavigation(event *events.ComponentInteractionCrea
 		m.handler.reviewMenu.ShowReviewMenu(event, s, "")
 	default:
 		m.handler.logger.Warn("Invalid groups viewer action", zap.String("action", string(action)))
-		utils.RespondWithError(event, "Invalid interaction.")
+		m.handler.paginationManager.RespondWithError(event, "Invalid interaction.")
 	}
 }
 

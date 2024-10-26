@@ -10,7 +10,6 @@ import (
 	"github.com/rotector/rotector/internal/bot/interfaces"
 	"github.com/rotector/rotector/internal/bot/pagination"
 	"github.com/rotector/rotector/internal/bot/session"
-	"github.com/rotector/rotector/internal/bot/utils"
 	"github.com/rotector/rotector/internal/common/database"
 	"github.com/rotector/rotector/internal/common/translator"
 	"go.uber.org/zap"
@@ -46,7 +45,7 @@ func (m *ReviewMenu) ShowReviewMenuAndFetchUser(event interfaces.CommonEvent, s 
 	user, err := m.handler.db.Users().GetRandomFlaggedUser(sortBy)
 	if err != nil {
 		m.handler.logger.Error("Failed to fetch a new user", zap.Error(err))
-		utils.RespondWithError(event, "Failed to fetch a new user. Please try again.")
+		m.handler.paginationManager.RespondWithError(event, "Failed to fetch a new user. Please try again.")
 		return
 	}
 	s.Set(constants.SessionKeyTarget, user)
@@ -84,7 +83,7 @@ func (m *ReviewMenu) ShowReviewMenu(event interfaces.CommonEvent, s *session.Ses
 	settings, err := m.handler.db.Settings().GetUserSettings(uint64(event.User().ID))
 	if err != nil {
 		m.handler.logger.Error("Failed to get user settings", zap.Error(err))
-		utils.RespondWithError(event, "Failed to get user settings. Please try again.")
+		m.handler.paginationManager.RespondWithError(event, "Failed to get user settings. Please try again.")
 		return
 	}
 
@@ -144,7 +143,7 @@ func (m *ReviewMenu) handleBanUser(event interfaces.CommonEvent, s *session.Sess
 	// Perform the ban
 	if err := m.handler.db.Users().BanUser(user); err != nil {
 		m.handler.logger.Error("Failed to ban user", zap.Error(err))
-		utils.RespondWithError(event, "Failed to ban the user. Please try again.")
+		m.handler.paginationManager.RespondWithError(event, "Failed to ban the user. Please try again.")
 		return
 	}
 
@@ -167,7 +166,7 @@ func (m *ReviewMenu) handleClearUser(event interfaces.CommonEvent, s *session.Se
 	// Clear the user
 	if err := m.handler.db.Users().ClearUser(user); err != nil {
 		m.handler.logger.Error("Failed to reject user", zap.Error(err))
-		utils.RespondWithError(event, "Failed to reject the user. Please try again.")
+		m.handler.paginationManager.RespondWithError(event, "Failed to reject the user. Please try again.")
 		return
 	}
 
@@ -219,7 +218,7 @@ func (m *ReviewMenu) handleBanWithReason(event *events.ComponentInteractionCreat
 	// Send the modal
 	if err := event.Modal(modal); err != nil {
 		m.handler.logger.Error("Failed to create modal", zap.Error(err))
-		utils.RespondWithError(event, "Failed to open the ban reason form. Please try again.")
+		m.handler.paginationManager.RespondWithError(event, "Failed to open the ban reason form. Please try again.")
 	}
 }
 
@@ -230,7 +229,7 @@ func (m *ReviewMenu) handleBanWithReasonModalSubmit(event *events.ModalSubmitInt
 	// Get the ban reason from the modal
 	reason := event.Data.Text("ban_reason")
 	if reason == "" {
-		utils.RespondWithError(event, "Ban reason cannot be empty. Please try again.")
+		m.handler.paginationManager.RespondWithError(event, "Ban reason cannot be empty. Please try again.")
 		return
 	}
 
@@ -240,7 +239,7 @@ func (m *ReviewMenu) handleBanWithReasonModalSubmit(event *events.ModalSubmitInt
 	// Perform the ban
 	if err := m.handler.db.Users().BanUser(user); err != nil {
 		m.handler.logger.Error("Failed to ban user", zap.Error(err))
-		utils.RespondWithError(event, "Failed to ban the user. Please try again.")
+		m.handler.paginationManager.RespondWithError(event, "Failed to ban the user. Please try again.")
 		return
 	}
 

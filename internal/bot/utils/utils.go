@@ -16,7 +16,6 @@ import (
 	gim "github.com/ozankasikci/go-image-merge"
 	"github.com/rotector/rotector/assets"
 	"github.com/rotector/rotector/internal/bot/constants"
-	"github.com/rotector/rotector/internal/bot/interfaces"
 	"golang.org/x/image/webp"
 )
 
@@ -48,18 +47,6 @@ func GetTimestampedSubtext(message string) string {
 		return fmt.Sprintf("-# `%s` <t:%d:R>", message, time.Now().Unix())
 	}
 	return ""
-}
-
-// RespondWithError sends an error response to the user.
-func RespondWithError(event interfaces.CommonEvent, message string) {
-	messageUpdate := discord.NewMessageUpdateBuilder().
-		SetContent(GetTimestampedSubtext("Fatal error: " + message)).
-		ClearEmbeds().
-		ClearFiles().
-		ClearContainerComponents().
-		Build()
-
-	_, _ = event.Client().Rest().UpdateInteractionResponse(event.ApplicationID(), event.Token(), messageUpdate)
 }
 
 // MergeImages merges images from thumbnail URLs.

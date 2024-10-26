@@ -129,7 +129,7 @@ func (m *LogMenu) handlePagination(event *events.ComponentInteractionCreate, s *
 	newPage, ok := action.ParsePageAction(s, action, maxPage)
 	if !ok {
 		m.handler.logger.Warn("Invalid pagination action", zap.String("action", string(action)))
-		utils.RespondWithError(event, "Invalid interaction.")
+		m.handler.paginationManager.RespondWithError(event, "Invalid interaction.")
 		return
 	}
 

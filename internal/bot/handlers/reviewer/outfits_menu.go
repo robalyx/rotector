@@ -61,7 +61,7 @@ func (m *OutfitsMenu) ShowOutfitsMenu(event *events.ComponentInteractionCreate, 
 	thumbnailURLs, err := m.fetchOutfitThumbnails(pageOutfits)
 	if err != nil {
 		m.handler.logger.Error("Failed to fetch outfit thumbnails", zap.Error(err))
-		utils.RespondWithError(event, "Failed to fetch outfit thumbnails. Please try again.")
+		m.handler.paginationManager.RespondWithError(event, "Failed to fetch outfit thumbnails. Please try again.")
 		return
 	}
 
@@ -69,7 +69,7 @@ func (m *OutfitsMenu) ShowOutfitsMenu(event *events.ComponentInteractionCreate, 
 	buf, err := utils.MergeImages(m.handler.roAPI.GetClient(), thumbnailURLs, constants.OutfitGridColumns, constants.OutfitGridRows, constants.OutfitsPerPage)
 	if err != nil {
 		m.handler.logger.Error("Failed to merge outfit images", zap.Error(err))
-		utils.RespondWithError(event, "Failed to process outfit images. Please try again.")
+		m.handler.paginationManager.RespondWithError(event, "Failed to process outfit images. Please try again.")
 		return
 	}
 
@@ -81,7 +81,7 @@ func (m *OutfitsMenu) ShowOutfitsMenu(event *events.ComponentInteractionCreate, 
 	settings, err := m.handler.db.Settings().GetUserSettings(uint64(event.User().ID))
 	if err != nil {
 		m.handler.logger.Error("Failed to get user settings", zap.Error(err))
-		utils.RespondWithError(event, "Failed to get user settings. Please try again.")
+		m.handler.paginationManager.RespondWithError(event, "Failed to get user settings. Please try again.")
 		return
 	}
 
@@ -110,7 +110,7 @@ func (m *OutfitsMenu) handlePageNavigation(event *events.ComponentInteractionCre
 		maxPage := (len(user.Outfits) - 1) / constants.OutfitsPerPage
 		page, ok := action.ParsePageAction(s, action, maxPage)
 		if !ok {
-			utils.RespondWithError(event, "Invalid interaction.")
+			m.handler.paginationManager.RespondWithError(event, "Invalid interaction.")
 			return
 		}
 
@@ -119,7 +119,7 @@ func (m *OutfitsMenu) handlePageNavigation(event *events.ComponentInteractionCre
 		m.handler.reviewMenu.ShowReviewMenu(event, s, "")
 	default:
 		m.handler.logger.Warn("Invalid outfits viewer action", zap.String("action", string(action)))
-		utils.RespondWithError(event, "Invalid interaction.")
+		m.handler.paginationManager.RespondWithError(event, "Invalid interaction.")
 	}
 }
 

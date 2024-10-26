@@ -121,7 +121,7 @@ func (b *Bot) handleApplicationCommandInteraction(event *events.ApplicationComma
 
 	// Respond with an error if the command is not the dashboard command
 	if event.SlashCommandInteractionData().CommandName() != constants.DashboardCommandName {
-		utils.RespondWithError(event, "This command is not available.")
+		b.paginationManager.RespondWithError(event, "This command is not available.")
 		return
 	}
 
@@ -134,7 +134,7 @@ func (b *Bot) handleApplicationCommandInteraction(event *events.ApplicationComma
 
 	// Respond with an error if the user is not in the whitelisted roles
 	if !guildSettings.HasAnyRole(event.Member().RoleIDs) {
-		utils.RespondWithError(event, "You are not authorized to use this command.")
+		b.paginationManager.RespondWithError(event, "You are not authorized to use this command.")
 		return
 	}
 
@@ -186,7 +186,7 @@ func (b *Bot) handleComponentInteraction(event *events.ComponentInteractionCreat
 
 		// Ensure the interaction is for the latest message
 		if event.Message.ID.String() != s.GetString(constants.SessionKeyMessageID) {
-			utils.RespondWithError(event, "This interaction is outdated. Please use the latest interaction.")
+			b.paginationManager.RespondWithError(event, "This interaction is outdated. Please use the latest interaction.")
 			return
 		}
 

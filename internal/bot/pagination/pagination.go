@@ -105,6 +105,18 @@ func (m *Manager) UpdateMessage(event interfaces.CommonEvent, s *session.Session
 	s.Set(constants.SessionKeyMessageID, message.ID.String())
 }
 
+// RespondWithError sends an error response to the user.
+func (m *Manager) RespondWithError(event interfaces.CommonEvent, message string) {
+	messageUpdate := discord.NewMessageUpdateBuilder().
+		SetContent(utils.GetTimestampedSubtext("Fatal error: " + message)).
+		ClearEmbeds().
+		ClearFiles().
+		ClearContainerComponents().
+		Build()
+
+	_, _ = event.Client().Rest().UpdateInteractionResponse(event.ApplicationID(), event.Token(), messageUpdate)
+}
+
 // NavigateTo navigates to a specific page.
 func (m *Manager) NavigateTo(pageName string, s *session.Session) {
 	s.Set(constants.SessionKeyCurrentPage, pageName)

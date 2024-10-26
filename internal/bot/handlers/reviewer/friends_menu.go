@@ -60,7 +60,7 @@ func (m *FriendsMenu) ShowFriendsMenu(event *events.ComponentInteractionCreate, 
 	flaggedFriends, err := m.getFlaggedFriends(pageFriends)
 	if err != nil {
 		m.handler.logger.Error("Failed to get flagged friends", zap.Error(err))
-		utils.RespondWithError(event, "Failed to get flagged friends. Please try again.")
+		m.handler.paginationManager.RespondWithError(event, "Failed to get flagged friends. Please try again.")
 		return
 	}
 
@@ -68,7 +68,7 @@ func (m *FriendsMenu) ShowFriendsMenu(event *events.ComponentInteractionCreate, 
 	friendsThumbnailURLs, err := m.fetchFriendsThumbnails(pageFriends)
 	if err != nil {
 		m.handler.logger.Error("Failed to fetch friends thumbnails", zap.Error(err))
-		utils.RespondWithError(event, "Failed to fetch friends thumbnails. Please try again.")
+		m.handler.paginationManager.RespondWithError(event, "Failed to fetch friends thumbnails. Please try again.")
 		return
 	}
 
@@ -84,7 +84,7 @@ func (m *FriendsMenu) ShowFriendsMenu(event *events.ComponentInteractionCreate, 
 	buf, err := utils.MergeImages(m.handler.roAPI.GetClient(), pageThumbnailURLs, constants.FriendsGridColumns, constants.FriendsGridRows, constants.FriendsPerPage)
 	if err != nil {
 		m.handler.logger.Error("Failed to merge friend images", zap.Error(err))
-		utils.RespondWithError(event, "Failed to process friend images. Please try again.")
+		m.handler.paginationManager.RespondWithError(event, "Failed to process friend images. Please try again.")
 		return
 	}
 
@@ -96,7 +96,7 @@ func (m *FriendsMenu) ShowFriendsMenu(event *events.ComponentInteractionCreate, 
 	settings, err := m.handler.db.Settings().GetUserSettings(uint64(event.User().ID))
 	if err != nil {
 		m.handler.logger.Error("Failed to get user settings", zap.Error(err))
-		utils.RespondWithError(event, "Failed to get user settings. Please try again.")
+		m.handler.paginationManager.RespondWithError(event, "Failed to get user settings. Please try again.")
 		return
 	}
 
@@ -141,7 +141,7 @@ func (m *FriendsMenu) handlePageNavigation(event *events.ComponentInteractionCre
 		maxPage := (len(user.Friends) - 1) / constants.FriendsPerPage
 		page, ok := action.ParsePageAction(s, action, maxPage)
 		if !ok {
-			utils.RespondWithError(event, "Invalid interaction.")
+			m.handler.paginationManager.RespondWithError(event, "Invalid interaction.")
 			return
 		}
 
@@ -150,7 +150,7 @@ func (m *FriendsMenu) handlePageNavigation(event *events.ComponentInteractionCre
 		m.handler.reviewMenu.ShowReviewMenu(event, s, "")
 	default:
 		m.handler.logger.Warn("Invalid friends viewer action", zap.String("action", string(action)))
-		utils.RespondWithError(event, "Invalid interaction.")
+		m.handler.paginationManager.RespondWithError(event, "Invalid interaction.")
 	}
 }
 
