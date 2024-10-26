@@ -110,9 +110,7 @@ func (m *GroupsMenu) ShowGroupsMenu(event *events.ComponentInteractionCreate, s 
 	s.Set(constants.SessionKeyFileName, fileName)
 	s.Set(constants.SessionKeyStreamerMode, settings.StreamerMode)
 
-	// Navigate to the groups menu and update the message
-	m.handler.paginationManager.NavigateTo(m.page.Name, s)
-	m.handler.paginationManager.UpdateMessage(event, s, m.page, "")
+	m.handler.paginationManager.NavigateTo(event, s, m.page, "")
 }
 
 // getFlaggedGroups fetches the flagged groups for the given user.

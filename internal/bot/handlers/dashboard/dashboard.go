@@ -52,9 +52,7 @@ func (m *Dashboard) ShowDashboard(event interfaces.CommonEvent) {
 	s.Set(constants.SessionKeyFlaggedCount, flaggedCount)
 	s.Set(constants.SessionKeyConfirmedCount, confirmedCount)
 
-	// Navigate to the main menu and update the message
-	m.handler.paginationManager.NavigateTo(m.page.Name, s)
-	m.handler.paginationManager.UpdateMessage(event, s, m.page, "")
+	m.handler.paginationManager.NavigateTo(event, s, m.page, "")
 }
 
 // handleSelectMenu handles the select menu interaction.

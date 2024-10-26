@@ -42,11 +42,11 @@ func (g *GuildMenu) ShowMenu(event interfaces.CommonEvent, s *session.Session) {
 		return
 	}
 
+	// Set the data for the page
 	s.Set(constants.SessionKeyGuildSettings, g.getGuildSettings(event))
 	s.Set(constants.SessionKeyRoles, roles)
 
-	g.handler.paginationManager.NavigateTo(g.page.Name, s)
-	g.handler.paginationManager.UpdateMessage(event, s, g.page, "")
+	g.handler.paginationManager.NavigateTo(event, s, g.page, "")
 }
 
 // handleGuildSettingSelection handles the select menu for the guild settings menu.

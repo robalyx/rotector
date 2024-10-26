@@ -37,9 +37,7 @@ func NewUserMenu(h *Handler) *UserMenu {
 // ShowMenu displays the user settings menu.
 func (u *UserMenu) ShowMenu(event interfaces.CommonEvent, s *session.Session) {
 	s.Set(constants.SessionKeyUserSettings, u.getUserSettings(event))
-
-	u.handler.paginationManager.NavigateTo(u.page.Name, s)
-	u.handler.paginationManager.UpdateMessage(event, s, u.page, "")
+	u.handler.paginationManager.NavigateTo(event, s, u.page, "")
 }
 
 // handleUserSettingSelection handles the select menu for the user settings menu.

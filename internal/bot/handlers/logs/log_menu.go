@@ -47,8 +47,7 @@ func (m *LogMenu) ShowLogMenu(event interfaces.CommonEvent, s *session.Session) 
 	s.Set(constants.SessionKeyStart, 0)
 	s.Set(constants.SessionKeyPaginationPage, 0)
 
-	m.handler.paginationManager.NavigateTo(m.page.Name, s)
-	m.handler.paginationManager.UpdateMessage(event, s, m.page, "")
+	m.handler.paginationManager.NavigateTo(event, s, m.page, "")
 }
 
 // handleSelectMenu handles the select menu interactions for the log menu.
@@ -110,7 +109,7 @@ func (m *LogMenu) handleQueryModalSubmit(event *events.ModalSubmitInteractionCre
 	idStr := event.Data.Text(constants.LogsQueryIDInputCustomID)
 	id, err := strconv.ParseUint(idStr, 10, 64)
 	if err != nil {
-		m.handler.paginationManager.UpdateMessage(event, s, m.page, "Invalid ID provided. Please enter a valid numeric ID.")
+		m.handler.paginationManager.NavigateTo(event, s, m.page, "Invalid ID provided. Please enter a valid numeric ID.")
 		return
 	}
 
@@ -145,7 +144,7 @@ func (m *LogMenu) updateLogData(event interfaces.CommonEvent, s *session.Session
 	logs, totalLogs, err := m.handler.db.UserActivity().GetLogs(queryType, queryID, activityTypeFilter, page, constants.LogsPerPage)
 	if err != nil {
 		m.handler.logger.Error("Failed to get logs", zap.Error(err))
-		m.handler.paginationManager.UpdateMessage(event, s, m.page, "Failed to retrieve log data. Please try again.")
+		m.handler.paginationManager.NavigateTo(event, s, m.page, "Failed to retrieve log data. Please try again.")
 		return
 	}
 
@@ -153,5 +152,5 @@ func (m *LogMenu) updateLogData(event interfaces.CommonEvent, s *session.Session
 	s.Set(constants.SessionKeyTotalItems, totalLogs)
 	s.Set(constants.SessionKeyStart, page*constants.LogsPerPage)
 
-	m.handler.paginationManager.UpdateMessage(event, s, m.page, "")
+	m.handler.paginationManager.NavigateTo(event, s, m.page, "")
 }

@@ -91,8 +91,7 @@ func (m *ReviewMenu) ShowReviewMenu(event interfaces.CommonEvent, s *session.Ses
 	s.Set(constants.SessionKeyFlaggedFriends, flaggedFriends)
 	s.Set(constants.SessionKeyStreamerMode, settings.StreamerMode)
 
-	m.handler.paginationManager.NavigateTo(m.page.Name, s)
-	m.handler.paginationManager.UpdateMessage(event, s, m.page, content)
+	m.handler.paginationManager.NavigateTo(event, s, m.page, content)
 }
 
 // handleSelectMenu handles the select menu for the review menu.

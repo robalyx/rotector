@@ -90,8 +90,8 @@ func (m *Manager) HandleInteraction(event interfaces.CommonEvent, s *session.Ses
 	}
 }
 
-// UpdateMessage updates the message with the current page content.
-func (m *Manager) UpdateMessage(event interfaces.CommonEvent, s *session.Session, page *Page, content string) {
+// NavigateTo updates the message with the current page content.
+func (m *Manager) NavigateTo(event interfaces.CommonEvent, s *session.Session, page *Page, content string) {
 	messageUpdate := page.Message(s).
 		SetContent(utils.GetTimestampedSubtext(content)).
 		RetainAttachments().
@@ -103,6 +103,9 @@ func (m *Manager) UpdateMessage(event interfaces.CommonEvent, s *session.Session
 	}
 
 	s.Set(constants.SessionKeyMessageID, message.ID.String())
+	s.Set(constants.SessionKeyCurrentPage, page.Name)
+
+	m.logger.Debug("Updated message", zap.String("page", page.Name))
 }
 
 // RespondWithError sends an error response to the user.
@@ -115,10 +118,4 @@ func (m *Manager) RespondWithError(event interfaces.CommonEvent, message string)
 		Build()
 
 	_, _ = event.Client().Rest().UpdateInteractionResponse(event.ApplicationID(), event.Token(), messageUpdate)
-}
-
-// NavigateTo navigates to a specific page.
-func (m *Manager) NavigateTo(pageName string, s *session.Session) {
-	s.Set(constants.SessionKeyCurrentPage, pageName)
-	m.logger.Debug("Navigating to page", zap.String("page", pageName))
 }

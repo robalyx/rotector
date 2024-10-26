@@ -110,9 +110,7 @@ func (m *FriendsMenu) ShowFriendsMenu(event *events.ComponentInteractionCreate, 
 	s.Set(constants.SessionKeyFileName, fileName)
 	s.Set(constants.SessionKeyStreamerMode, settings.StreamerMode)
 
-	// Navigate to the friends menu and update the message
-	m.handler.paginationManager.NavigateTo(m.page.Name, s)
-	m.handler.paginationManager.UpdateMessage(event, s, m.page, "")
+	m.handler.paginationManager.NavigateTo(event, s, m.page, "")
 }
 
 // getFlaggedFriends gets the flagged friends for the given friends.

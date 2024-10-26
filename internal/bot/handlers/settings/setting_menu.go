@@ -45,8 +45,7 @@ func (m *SettingMenu) ShowMenu(event interfaces.CommonEvent, s *session.Session,
 	s.Set(constants.SessionKeyCustomID, customID)
 	s.Set(constants.SessionKeyOptions, options)
 
-	m.handler.paginationManager.NavigateTo(m.page.Name, s)
-	m.handler.paginationManager.UpdateMessage(event, s, m.page, "")
+	m.handler.paginationManager.NavigateTo(event, s, m.page, "")
 }
 
 // handleSettingChange handles the select menu for the setting change menu.
@@ -55,7 +54,7 @@ func (m *SettingMenu) handleSettingChange(event *events.ComponentInteractionCrea
 	settingType := s.GetString(constants.SessionKeySettingType)
 	m.saveSetting(event, settingType, customID, option)
 
-	m.handler.paginationManager.UpdateMessage(event, s, m.page, "Setting updated successfully.")
+	m.handler.paginationManager.NavigateTo(event, s, m.page, "Setting updated successfully.")
 }
 
 // handleSettingButton handles the buttons for the setting change menu.
