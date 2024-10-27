@@ -57,9 +57,9 @@ func (m *ReviewMenu) ShowReviewMenuAndFetchUser(event interfaces.CommonEvent, s 
 	m.handler.db.UserActivity().LogActivity(&database.UserActivityLog{
 		UserID:            user.ID,
 		ReviewerID:        uint64(event.User().ID),
-		ActivityType:      database.ActivityTypeReviewed,
+		ActivityType:      database.ActivityTypeViewed,
 		ActivityTimestamp: time.Now(),
-		Details:           map[string]interface{}{},
+		Details:           make(map[string]interface{}),
 	})
 }
 

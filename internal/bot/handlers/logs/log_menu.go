@@ -44,14 +44,14 @@ func (m *LogMenu) ShowLogMenu(event interfaces.CommonEvent, s *session.Session) 
 	s.Set(constants.SessionKeyLogs, []*database.UserActivityLog{})
 	s.Set(constants.SessionKeyUserID, uint64(0))
 	s.Set(constants.SessionKeyReviewerID, uint64(0))
-	s.Set(constants.SessionKeyActivityTypeFilter, "")
+	s.Set(constants.SessionKeyActivityTypeFilter, database.ActivityTypeAll)
 	s.Set(constants.SessionKeyDateRangeStart, time.Time{})
 	s.Set(constants.SessionKeyDateRangeEnd, time.Time{})
 	s.Set(constants.SessionKeyTotalItems, 0)
 	s.Set(constants.SessionKeyStart, 0)
 	s.Set(constants.SessionKeyPaginationPage, 0)
 
-	m.handler.paginationManager.NavigateTo(event, s, m.page, "")
+	m.updateLogData(event, s, 0)
 }
 
 // handleSelectMenu handles the select menu interactions for the log menu.
@@ -67,7 +67,14 @@ func (m *LogMenu) handleSelectMenu(event *events.ComponentInteractionCreate, s *
 			m.showQueryModal(event, constants.LogsQueryDateRangeOption, "Date Range", "Date Range", "YYYY-MM-DD to YYYY-MM-DD")
 		}
 	case constants.LogsQueryActivityTypeFilterCustomID:
-		s.Set(constants.SessionKeyActivityTypeFilter, option)
+		optionInt, err := strconv.Atoi(option)
+		if err != nil {
+			m.handler.logger.Error("Failed to convert activity type option to int", zap.Error(err))
+			m.handler.paginationManager.RespondWithError(event, "Invalid activity type option.")
+			return
+		}
+
+		s.Set(constants.SessionKeyActivityTypeFilter, database.ActivityType(optionInt))
 		s.Set(constants.SessionKeyStart, 0)
 		s.Set(constants.SessionKeyPaginationPage, 0)
 		m.updateLogData(event, s, 0)
@@ -166,7 +173,7 @@ func (m *LogMenu) handlePagination(event *events.ComponentInteractionCreate, s *
 func (m *LogMenu) updateLogData(event interfaces.CommonEvent, s *session.Session, page int) {
 	userID := s.GetUint64(constants.SessionKeyUserID)
 	reviewerID := s.GetUint64(constants.SessionKeyReviewerID)
-	activityTypeFilter := s.GetString(constants.SessionKeyActivityTypeFilter)
+	activityTypeFilter := s.Get(constants.SessionKeyActivityTypeFilter).(database.ActivityType)
 	startDate := s.Get(constants.SessionKeyDateRangeStart).(time.Time)
 	endDate := s.Get(constants.SessionKeyDateRangeEnd).(time.Time)
 

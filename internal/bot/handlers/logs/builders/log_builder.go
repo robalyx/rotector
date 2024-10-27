@@ -17,7 +17,7 @@ type LogEmbed struct {
 	logs               []*database.UserActivityLog
 	userID             uint64
 	reviewerID         uint64
-	activityTypeFilter string
+	activityTypeFilter database.ActivityType
 	startDate          time.Time
 	endDate            time.Time
 	start              int
@@ -32,7 +32,7 @@ func NewLogEmbed(s *session.Session) *LogEmbed {
 		logs:               s.Get(constants.SessionKeyLogs).([]*database.UserActivityLog),
 		userID:             s.GetUint64(constants.SessionKeyUserID),
 		reviewerID:         s.GetUint64(constants.SessionKeyReviewerID),
-		activityTypeFilter: s.GetString(constants.SessionKeyActivityTypeFilter),
+		activityTypeFilter: s.Get(constants.SessionKeyActivityTypeFilter).(database.ActivityType),
 		startDate:          s.Get(constants.SessionKeyDateRangeStart).(time.Time),
 		endDate:            s.Get(constants.SessionKeyDateRangeEnd).(time.Time),
 		start:              s.GetInt(constants.SessionKeyStart),
@@ -57,7 +57,7 @@ func (b *LogEmbed) Build() *discord.MessageUpdateBuilder {
 	if b.reviewerID != 0 {
 		embed.AddField("Reviewer ID", fmt.Sprintf("`%d`", b.reviewerID), true)
 	}
-	if b.activityTypeFilter != "" && b.activityTypeFilter != string(database.ActivityTypeAll) {
+	if b.activityTypeFilter != database.ActivityTypeAll {
 		embed.AddField("Activity Type", fmt.Sprintf("`%s`", b.activityTypeFilter), true)
 	}
 	if !b.startDate.IsZero() && !b.endDate.IsZero() {
@@ -95,12 +95,12 @@ func (b *LogEmbed) Build() *discord.MessageUpdateBuilder {
 		),
 		discord.NewActionRow(
 			discord.NewStringSelectMenu(constants.LogsQueryActivityTypeFilterCustomID, "Filter Activity Type",
-				discord.NewStringSelectMenuOption("All", string(database.ActivityTypeAll)).WithDefault(b.activityTypeFilter == string(database.ActivityTypeAll)),
-				discord.NewStringSelectMenuOption("Reviewed", string(database.ActivityTypeReviewed)).WithDefault(b.activityTypeFilter == string(database.ActivityTypeReviewed)),
-				discord.NewStringSelectMenuOption("Banned", string(database.ActivityTypeBanned)).WithDefault(b.activityTypeFilter == string(database.ActivityTypeBanned)),
-				discord.NewStringSelectMenuOption("Banned (Custom)", string(database.ActivityTypeBannedCustom)).WithDefault(b.activityTypeFilter == string(database.ActivityTypeBannedCustom)),
-				discord.NewStringSelectMenuOption("Cleared", string(database.ActivityTypeCleared)).WithDefault(b.activityTypeFilter == string(database.ActivityTypeCleared)),
-				discord.NewStringSelectMenuOption("Skipped", string(database.ActivityTypeSkipped)).WithDefault(b.activityTypeFilter == string(database.ActivityTypeSkipped)),
+				discord.NewStringSelectMenuOption("All", database.ActivityTypeAll.String()).WithDefault(b.activityTypeFilter == database.ActivityTypeAll),
+				discord.NewStringSelectMenuOption("Reviewed", database.ActivityTypeViewed.String()).WithDefault(b.activityTypeFilter == database.ActivityTypeViewed),
+				discord.NewStringSelectMenuOption("Banned", database.ActivityTypeBanned.String()).WithDefault(b.activityTypeFilter == database.ActivityTypeBanned),
+				discord.NewStringSelectMenuOption("Banned (Custom)", database.ActivityTypeBannedCustom.String()).WithDefault(b.activityTypeFilter == database.ActivityTypeBannedCustom),
+				discord.NewStringSelectMenuOption("Cleared", database.ActivityTypeCleared.String()).WithDefault(b.activityTypeFilter == database.ActivityTypeCleared),
+				discord.NewStringSelectMenuOption("Skipped", database.ActivityTypeSkipped.String()).WithDefault(b.activityTypeFilter == database.ActivityTypeSkipped),
 			),
 		),
 		discord.NewActionRow(

@@ -8,16 +8,21 @@ import (
 )
 
 // ActivityType represents the type of user activity.
-type ActivityType string
+type ActivityType int
 
 const (
-	ActivityTypeAll          ActivityType = "ALL"
-	ActivityTypeReviewed     ActivityType = "REVIEWED"
-	ActivityTypeBanned       ActivityType = "BANNED"
-	ActivityTypeBannedCustom ActivityType = "BANNED_CUSTOM"
-	ActivityTypeCleared      ActivityType = "CLEARED"
-	ActivityTypeSkipped      ActivityType = "SKIPPED"
+	ActivityTypeAll ActivityType = iota
+	ActivityTypeViewed
+	ActivityTypeBanned
+	ActivityTypeBannedCustom
+	ActivityTypeCleared
+	ActivityTypeSkipped
 )
+
+// String returns the string representation of an ActivityType.
+func (a ActivityType) String() string {
+	return [...]string{"ALL", "VIEWED", "BANNED", "BANNED_CUSTOM", "CLEARED", "SKIPPED"}[a]
+}
 
 // UserActivityLog represents a log entry for user activity.
 type UserActivityLog struct {
@@ -50,7 +55,7 @@ func (r *UserActivityRepository) LogActivity(log *UserActivityLog) {
 }
 
 // GetLogs retrieves logs based on the given parameters.
-func (r *UserActivityRepository) GetLogs(userID, reviewerID uint64, activityTypeFilter string, startDate, endDate time.Time, page, perPage int) ([]*UserActivityLog, int, error) {
+func (r *UserActivityRepository) GetLogs(userID, reviewerID uint64, activityTypeFilter ActivityType, startDate, endDate time.Time, page, perPage int) ([]*UserActivityLog, int, error) {
 	var logs []*UserActivityLog
 
 	query := r.db.Model(&UserActivityLog{})
@@ -67,7 +72,7 @@ func (r *UserActivityRepository) GetLogs(userID, reviewerID uint64, activityType
 		query = query.Where("activity_timestamp BETWEEN ? AND ?", startDate, endDate)
 	}
 
-	if activityTypeFilter != "" && activityTypeFilter != string(ActivityTypeAll) {
+	if activityTypeFilter != ActivityTypeAll {
 		query = query.Where("activity_type = ?", activityTypeFilter)
 	}
 
@@ -88,7 +93,7 @@ func (r *UserActivityRepository) GetLogs(userID, reviewerID uint64, activityType
 	r.logger.Info("Retrieved logs",
 		zap.Uint64("user_id", userID),
 		zap.Uint64("reviewer_id", reviewerID),
-		zap.String("activity_type_filter", activityTypeFilter),
+		zap.String("activity_type_filter", activityTypeFilter.String()),
 		zap.Time("start_date", startDate),
 		zap.Time("end_date", endDate),
 		zap.Int("total_logs", totalLogs),
