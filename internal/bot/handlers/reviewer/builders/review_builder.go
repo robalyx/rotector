@@ -17,7 +17,10 @@ import (
 	"github.com/rotector/rotector/internal/common/translator"
 )
 
-const ReviewHistoryLimit = 5
+const (
+	FriendsLimit       = 10
+	ReviewHistoryLimit = 5
+)
 
 var multipleNewlinesRegex = regexp.MustCompile(`\n{4,}`)
 
@@ -175,7 +178,17 @@ func (b *ReviewEmbed) getGroups() string {
 // getFriendsField returns the friends field name for the embed.
 func (b *ReviewEmbed) getFriendsField() string {
 	if len(b.flaggedFriends) > 0 {
-		return "Friends ⚠️"
+		confirmedCount := 0
+		flaggedCount := 0
+		for _, status := range b.flaggedFriends {
+			if status == database.UserTypeConfirmed {
+				confirmedCount++
+			} else if status == database.UserTypeFlagged {
+				flaggedCount++
+			}
+		}
+
+		return fmt.Sprintf("Friends (%d ⚠️, %d ⏳)", confirmedCount, flaggedCount)
 	}
 	return "Friends"
 }
@@ -183,28 +196,12 @@ func (b *ReviewEmbed) getFriendsField() string {
 // getFriends returns the friends field for the embed.
 func (b *ReviewEmbed) getFriends() string {
 	// Get the first 10 friends
-	friends := []string{}
+	friends := make([]string, 0, FriendsLimit)
 	for i, friend := range b.user.Friends {
-		if i >= 10 {
-			friends = append(friends, fmt.Sprintf("... and %d more", len(b.user.Friends)-10))
+		if i >= FriendsLimit {
 			break
 		}
 		friends = append(friends, fmt.Sprintf("[%s](https://www.roblox.com/users/%d/profile)", utils.CensorString(friend.Name, b.streamerMode), friend.ID))
-	}
-
-	// Add confirmed or flagged status if needed
-	if len(b.flaggedFriends) > 0 {
-		confirmedCount := 0
-		flaggedCount := 0
-		for _, friend := range b.flaggedFriends {
-			if friend == database.UserTypeConfirmed {
-				confirmedCount++
-			} else if friend == database.UserTypeFlagged {
-				flaggedCount++
-			}
-		}
-
-		friends = append(friends, fmt.Sprintf(" (%d confirmed, %d flagged)", confirmedCount, flaggedCount))
 	}
 
 	// If no friends are found, return NotApplicable
@@ -212,7 +209,13 @@ func (b *ReviewEmbed) getFriends() string {
 		return constants.NotApplicable
 	}
 
-	return strings.Join(friends, ", ")
+	// Add "and more" if there are more friends
+	result := strings.Join(friends, ", ")
+	if len(b.user.Friends) > FriendsLimit {
+		result += fmt.Sprintf(" ... and %d more", len(b.user.Friends)-FriendsLimit)
+	}
+
+	return result
 }
 
 // getOutfits returns the outfits field for the embed.
