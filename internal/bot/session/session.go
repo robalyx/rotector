@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/rotector/rotector/internal/common/database"
+	"go.uber.org/zap"
 )
 
 // Session represents a user's session.
@@ -12,15 +13,17 @@ type Session struct {
 	db           *database.Database
 	lastActivity time.Time
 	data         map[string]interface{}
+	logger       *zap.Logger
 	mu           sync.RWMutex
 }
 
 // NewSession creates a new session for the given user.
-func NewSession(db *database.Database) *Session {
+func NewSession(db *database.Database, logger *zap.Logger) *Session {
 	return &Session{
 		db:           db,
 		lastActivity: time.Now(),
 		data:         make(map[string]interface{}),
+		logger:       logger,
 		mu:           sync.RWMutex{},
 	}
 }
@@ -30,7 +33,12 @@ func (s *Session) Get(key string) interface{} {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	return s.data[key]
+	if value, ok := s.data[key]; ok {
+		return value
+	}
+
+	s.logger.Warn("Session key not found", zap.String("key", key))
+	return nil
 }
 
 // Set sets the value for the given key.
@@ -39,6 +47,7 @@ func (s *Session) Set(key string, value interface{}) {
 	defer s.mu.Unlock()
 
 	s.data[key] = value
+	s.logger.Debug("Session key set", zap.String("key", key), zap.Any("value", value))
 }
 
 // Delete deletes the value for the given key.
@@ -47,6 +56,7 @@ func (s *Session) Delete(key string) {
 	defer s.mu.Unlock()
 
 	delete(s.data, key)
+	s.logger.Debug("Session key deleted", zap.String("key", key))
 }
 
 // GetString returns the string value for the given key.

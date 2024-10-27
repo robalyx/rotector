@@ -39,7 +39,7 @@ type Bot struct {
 
 // New creates a new Bot instance.
 func New(token string, db *database.Database, roAPI *api.API, logger *zap.Logger) (*Bot, error) {
-	sessionManager := session.NewManager(db)
+	sessionManager := session.NewManager(db, logger)
 	paginationManager := pagination.NewManager(logger)
 
 	// Initialize the handlers

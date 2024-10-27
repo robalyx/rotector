@@ -6,6 +6,7 @@ import (
 
 	"github.com/disgoorg/snowflake/v2"
 	"github.com/rotector/rotector/internal/common/database"
+	"go.uber.org/zap"
 )
 
 const (
@@ -16,14 +17,16 @@ const (
 type Manager struct {
 	db       *database.Database
 	sessions map[snowflake.ID]*Session
+	logger   *zap.Logger
 	mu       sync.RWMutex
 }
 
 // NewManager creates a new session manager.
-func NewManager(db *database.Database) *Manager {
+func NewManager(db *database.Database, logger *zap.Logger) *Manager {
 	manager := &Manager{
 		db:       db,
 		sessions: make(map[snowflake.ID]*Session),
+		logger:   logger,
 	}
 	go manager.cleanupSessions()
 	return manager
@@ -41,7 +44,7 @@ func (m *Manager) GetOrCreateSession(userID snowflake.ID) *Session {
 	}
 
 	// Otherwise, create a new session
-	session := NewSession(m.db)
+	session := NewSession(m.db, m.logger)
 	m.sessions[userID] = session
 	return session
 }
