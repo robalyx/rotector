@@ -1,9 +1,10 @@
-package fetcher
+package checker
 
 import (
 	"fmt"
 
 	"github.com/rotector/rotector/internal/common/database"
+	"github.com/rotector/rotector/internal/common/fetcher"
 	"go.uber.org/zap"
 )
 
@@ -21,8 +22,8 @@ func NewGroupChecker(db *database.Database, logger *zap.Logger) *GroupChecker {
 	}
 }
 
-// CheckUserGroups checks if a user belongs to any flagged groups and returns the result.
-func (gc *GroupChecker) CheckUserGroups(userInfo *Info) (*database.User, bool, error) {
+// ProcessUserGroups checks if a user belongs to any flagged groups and returns the result.
+func (gc *GroupChecker) ProcessUserGroups(userInfo *fetcher.Info) (*database.User, bool, error) {
 	// If user has no groups, return immediately
 	if len(userInfo.Groups) == 0 {
 		return nil, false, nil

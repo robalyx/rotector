@@ -7,6 +7,7 @@ import (
 	"github.com/jaxron/roapi.go/pkg/api"
 	"github.com/jaxron/roapi.go/pkg/api/resources/groups"
 	"github.com/openai/openai-go"
+	"github.com/rotector/rotector/internal/common/checker"
 	"github.com/rotector/rotector/internal/common/database"
 	"github.com/rotector/rotector/internal/common/fetcher"
 	"github.com/rotector/rotector/internal/common/progress"
@@ -19,31 +20,26 @@ const (
 
 // MemberWorker represents a group worker that processes group members.
 type MemberWorker struct {
-	db               *database.Database
-	roAPI            *api.API
-	bar              *progress.Bar
-	aiChecker        *fetcher.AIChecker
-	userFetcher      *fetcher.UserFetcher
-	thumbnailFetcher *fetcher.ThumbnailFetcher
-	outfitFetcher    *fetcher.OutfitFetcher
-	friendFetcher    *fetcher.FriendFetcher
-	groupChecker     *fetcher.GroupChecker
-	logger           *zap.Logger
+	db          *database.Database
+	roAPI       *api.API
+	bar         *progress.Bar
+	userFetcher *fetcher.UserFetcher
+	userChecker *checker.UserChecker
+	logger      *zap.Logger
 }
 
 // NewMemberWorker creates a new group worker instance.
 func NewMemberWorker(db *database.Database, openaiClient *openai.Client, roAPI *api.API, bar *progress.Bar, logger *zap.Logger) *MemberWorker {
+	userFetcher := fetcher.NewUserFetcher(roAPI, logger)
+	userChecker := checker.NewUserChecker(db, bar, roAPI, openaiClient, userFetcher, logger)
+
 	return &MemberWorker{
-		db:               db,
-		roAPI:            roAPI,
-		bar:              bar,
-		aiChecker:        fetcher.NewAIChecker(openaiClient, logger),
-		userFetcher:      fetcher.NewUserFetcher(roAPI, logger),
-		thumbnailFetcher: fetcher.NewThumbnailFetcher(roAPI, logger),
-		outfitFetcher:    fetcher.NewOutfitFetcher(roAPI, logger),
-		friendFetcher:    fetcher.NewFriendFetcher(roAPI, logger),
-		groupChecker:     fetcher.NewGroupChecker(db, logger),
-		logger:           logger,
+		db:          db,
+		roAPI:       roAPI,
+		bar:         bar,
+		userFetcher: userFetcher,
+		userChecker: userChecker,
+		logger:      logger,
 	}
 }
 
@@ -82,7 +78,7 @@ func (g *MemberWorker) Start() {
 		g.bar.Increment(15)
 
 		// Step 4: Process users (60%)
-		g.processUsers(userInfos)
+		g.userChecker.ProcessUsers(userInfos)
 
 		// Step 5: Prepare for next batch
 		oldUserIDs = userIDs[GroupUsersToProcess:]
@@ -142,63 +138,4 @@ func (g *MemberWorker) processGroup(groupID uint64, userIDs []uint64) ([]uint64,
 	}
 
 	return userIDs, nil
-}
-
-// processUsers handles the processing of a batch of users.
-func (g *MemberWorker) processUsers(userInfos []*fetcher.Info) {
-	g.logger.Info("Processing users", zap.Int("userInfos", len(userInfos)))
-
-	var flaggedUsers []*database.User
-	var usersForAICheck []*fetcher.Info
-
-	// Check if users belong to a certain number of flagged groups
-	g.bar.SetStepMessage("Checking user groups")
-	for _, userInfo := range userInfos {
-		user, autoFlagged, err := g.groupChecker.CheckUserGroups(userInfo)
-		if err != nil {
-			g.logger.Error("Error checking user groups", zap.Error(err), zap.Uint64("userID", userInfo.ID))
-			continue
-		}
-
-		if autoFlagged {
-			flaggedUsers = append(flaggedUsers, user)
-		} else {
-			usersForAICheck = append(usersForAICheck, userInfo)
-		}
-	}
-	g.bar.Increment(10)
-
-	// Process remaining users with AI
-	g.bar.SetStepMessage("Checking users with AI")
-	if len(usersForAICheck) > 0 {
-		aiFlaggedUsers, err := g.aiChecker.CheckUsers(usersForAICheck)
-		if err != nil {
-			g.logger.Error("Error checking users with AI", zap.Error(err))
-		} else {
-			flaggedUsers = append(flaggedUsers, aiFlaggedUsers...)
-		}
-	}
-	g.bar.Increment(10)
-
-	// Fetch necessary data for flagged users
-	g.bar.SetStepMessage("Adding image URLs")
-	flaggedUsers = g.thumbnailFetcher.AddImageURLs(flaggedUsers)
-	g.bar.Increment(10)
-
-	g.bar.SetStepMessage("Adding outfits")
-	flaggedUsers = g.outfitFetcher.AddOutfits(flaggedUsers)
-	g.bar.Increment(10)
-
-	g.bar.SetStepMessage("Adding friends")
-	flaggedUsers = g.friendFetcher.AddFriends(flaggedUsers)
-	g.bar.Increment(10)
-
-	// Save all flagged users
-	g.bar.SetStepMessage("Saving flagged users")
-	g.db.Users().SaveFlaggedUsers(flaggedUsers)
-	g.bar.Increment(10)
-
-	g.logger.Info("Finished processing users",
-		zap.Int("totalProcessed", len(userInfos)),
-		zap.Int("flaggedUsers", len(flaggedUsers)))
 }

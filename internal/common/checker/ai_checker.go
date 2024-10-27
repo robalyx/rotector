@@ -1,4 +1,4 @@
-package fetcher
+package checker
 
 import (
 	"context"
@@ -8,6 +8,7 @@ import (
 	"github.com/bytedance/sonic"
 	"github.com/openai/openai-go"
 	"github.com/rotector/rotector/internal/common/database"
+	"github.com/rotector/rotector/internal/common/fetcher"
 	"github.com/rotector/rotector/internal/common/utils"
 	"github.com/tdewolff/minify/v2"
 	"github.com/tdewolff/minify/v2/json"
@@ -147,8 +148,8 @@ func NewAIChecker(openAIClient *openai.Client, logger *zap.Logger) *AIChecker {
 	}
 }
 
-// CheckUsers sends user information to the AI for analysis.
-func (a *AIChecker) CheckUsers(userInfos []*Info) ([]*database.User, error) {
+// ProcessUsers sends user information to the AI for analysis.
+func (a *AIChecker) ProcessUsers(userInfos []*fetcher.Info) ([]*database.User, error) {
 	// Create a new slice with user info without IDs
 	userInfosWithoutID := make([]struct {
 		Name        string `json:"name"`
@@ -202,7 +203,8 @@ func (a *AIChecker) CheckUsers(userInfos []*Info) ([]*database.User, error) {
 				JSONSchema: openai.F(schemaParam),
 			},
 		),
-		Model: openai.F(openai.ChatModelGPT4oMini2024_07_18),
+		Model:       openai.F(openai.ChatModelGPT4oMini2024_07_18),
+		Temperature: openai.F(0.0),
 	})
 	if err != nil {
 		a.logger.Error("Error calling OpenAI API", zap.Error(err))
@@ -228,9 +230,9 @@ func (a *AIChecker) CheckUsers(userInfos []*Info) ([]*database.User, error) {
 }
 
 // validateFlaggedUsers validates the flagged users against the original user info.
-func (a *AIChecker) validateFlaggedUsers(flaggedUsers FlaggedUsers, userInfos []*Info) []*database.User {
+func (a *AIChecker) validateFlaggedUsers(flaggedUsers FlaggedUsers, userInfos []*fetcher.Info) []*database.User {
 	// Map user infos to lower case names
-	userMap := make(map[string]*Info)
+	userMap := make(map[string]*fetcher.Info)
 	for _, userInfo := range userInfos {
 		userMap[utils.NormalizeString(userInfo.Name)] = userInfo
 	}

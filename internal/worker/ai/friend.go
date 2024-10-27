@@ -6,6 +6,7 @@ import (
 
 	"github.com/jaxron/roapi.go/pkg/api"
 	"github.com/openai/openai-go"
+	"github.com/rotector/rotector/internal/common/checker"
 	"github.com/rotector/rotector/internal/common/database"
 	"github.com/rotector/rotector/internal/common/fetcher"
 	"github.com/rotector/rotector/internal/common/progress"
@@ -18,31 +19,26 @@ const (
 
 // FriendWorker represents a friend worker that processes user friends.
 type FriendWorker struct {
-	db               *database.Database
-	roAPI            *api.API
-	bar              *progress.Bar
-	aiChecker        *fetcher.AIChecker
-	userFetcher      *fetcher.UserFetcher
-	outfitFetcher    *fetcher.OutfitFetcher
-	thumbnailFetcher *fetcher.ThumbnailFetcher
-	friendFetcher    *fetcher.FriendFetcher
-	groupChecker     *fetcher.GroupChecker
-	logger           *zap.Logger
+	db          *database.Database
+	roAPI       *api.API
+	bar         *progress.Bar
+	userFetcher *fetcher.UserFetcher
+	userChecker *checker.UserChecker
+	logger      *zap.Logger
 }
 
 // NewFriendWorker creates a new friend worker instance.
 func NewFriendWorker(db *database.Database, openaiClient *openai.Client, roAPI *api.API, bar *progress.Bar, logger *zap.Logger) *FriendWorker {
+	userFetcher := fetcher.NewUserFetcher(roAPI, logger)
+	userChecker := checker.NewUserChecker(db, bar, roAPI, openaiClient, userFetcher, logger)
+
 	return &FriendWorker{
-		db:               db,
-		roAPI:            roAPI,
-		bar:              bar,
-		aiChecker:        fetcher.NewAIChecker(openaiClient, logger),
-		userFetcher:      fetcher.NewUserFetcher(roAPI, logger),
-		outfitFetcher:    fetcher.NewOutfitFetcher(roAPI, logger),
-		thumbnailFetcher: fetcher.NewThumbnailFetcher(roAPI, logger),
-		friendFetcher:    fetcher.NewFriendFetcher(roAPI, logger),
-		groupChecker:     fetcher.NewGroupChecker(db, logger),
-		logger:           logger,
+		db:          db,
+		roAPI:       roAPI,
+		bar:         bar,
+		userFetcher: userFetcher,
+		userChecker: userChecker,
+		logger:      logger,
 	}
 }
 
@@ -71,7 +67,7 @@ func (f *FriendWorker) Start() {
 		f.bar.Increment(20)
 
 		// Step 3: Process users (60%)
-		f.processUsers(userInfos)
+		f.userChecker.ProcessUsers(userInfos)
 
 		// Step 4: Prepare for next batch
 		oldFriendIDs = friendIDs[FriendUsersToProcess:]
@@ -122,7 +118,7 @@ func (f *FriendWorker) processFriendsBatch(friendIDs []uint64) ([]uint64, error)
 
 		f.logger.Info("Fetched friends",
 			zap.Int("totalFriends", len(friends)),
-			zap.Int("newFriends", len(friendIDs)-len(existingUsers)),
+			zap.Int("newFriends", len(newFriendIDs)-len(existingUsers)),
 			zap.Uint64("userID", user.ID))
 
 		// If we have enough friends, break out of the loop
@@ -132,63 +128,4 @@ func (f *FriendWorker) processFriendsBatch(friendIDs []uint64) ([]uint64, error)
 	}
 
 	return friendIDs, nil
-}
-
-// processUsers handles the processing of a batch of users.
-func (f *FriendWorker) processUsers(userInfos []*fetcher.Info) {
-	f.logger.Info("Processing users", zap.Int("userInfos", len(userInfos)))
-
-	var flaggedUsers []*database.User
-	var usersForAICheck []*fetcher.Info
-
-	// Check if users belong to a certain number of flagged groups
-	f.bar.SetStepMessage("Checking user groups")
-	for _, userInfo := range userInfos {
-		user, autoFlagged, err := f.groupChecker.CheckUserGroups(userInfo)
-		if err != nil {
-			f.logger.Error("Error checking user groups", zap.Error(err), zap.Uint64("userID", userInfo.ID))
-			continue
-		}
-
-		if autoFlagged {
-			flaggedUsers = append(flaggedUsers, user)
-		} else {
-			usersForAICheck = append(usersForAICheck, userInfo)
-		}
-	}
-	f.bar.Increment(10)
-
-	// Process remaining users with AI
-	f.bar.SetStepMessage("Checking users with AI")
-	if len(usersForAICheck) > 0 {
-		aiFlaggedUsers, err := f.aiChecker.CheckUsers(usersForAICheck)
-		if err != nil {
-			f.logger.Error("Error checking users with AI", zap.Error(err))
-		} else {
-			flaggedUsers = append(flaggedUsers, aiFlaggedUsers...)
-		}
-	}
-	f.bar.Increment(10)
-
-	// Fetch necessary data for flagged users
-	f.bar.SetStepMessage("Adding image URLs")
-	flaggedUsers = f.thumbnailFetcher.AddImageURLs(flaggedUsers)
-	f.bar.Increment(10)
-
-	f.bar.SetStepMessage("Adding outfits")
-	flaggedUsers = f.outfitFetcher.AddOutfits(flaggedUsers)
-	f.bar.Increment(10)
-
-	f.bar.SetStepMessage("Adding friends")
-	flaggedUsers = f.friendFetcher.AddFriends(flaggedUsers)
-	f.bar.Increment(10)
-
-	// Save all flagged users
-	f.bar.SetStepMessage("Saving flagged users")
-	f.db.Users().SaveFlaggedUsers(flaggedUsers)
-	f.bar.Increment(10)
-
-	f.logger.Info("Finished processing users",
-		zap.Int("totalProcessed", len(userInfos)),
-		zap.Int("flaggedUsers", len(flaggedUsers)))
 }
