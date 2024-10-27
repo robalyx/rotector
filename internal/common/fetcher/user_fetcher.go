@@ -59,20 +59,8 @@ func (u *UserFetcher) FetchInfos(userIDs []uint64) []*Info {
 				return
 			}
 
-			// Fetch user's groups
-			builder := groups.NewUserGroupRolesBuilder(userID)
-			groups, err := u.roAPI.Groups().GetUserGroupRoles(context.Background(), builder.Build())
-			if err != nil {
-				u.logger.Warn("Error fetching user groups", zap.Uint64("userID", id), zap.Error(err))
-				return
-			}
-
-			// Fetch user's friends
-			friends, err := u.roAPI.Friends().GetFriends(context.Background(), id)
-			if err != nil {
-				u.logger.Warn("Error fetching user friends", zap.Uint64("userID", id), zap.Error(err))
-				return
-			}
+			// Fetch groups and friends concurrently
+			groups, friends := u.fetchGroupsAndFriends(id)
 
 			// Send the user info to the channel
 			userInfoChan <- &Info{
@@ -103,6 +91,42 @@ func (u *UserFetcher) FetchInfos(userIDs []uint64) []*Info {
 	}
 
 	return userInfos
+}
+
+// fetchGroupsAndFriends fetches user's groups and friends concurrently.
+func (u *UserFetcher) fetchGroupsAndFriends(userID uint64) ([]types.UserGroupRoles, []types.Friend) {
+	var wg sync.WaitGroup
+	var groupRoles []types.UserGroupRoles
+	var friends []types.Friend
+
+	wg.Add(2)
+
+	// Fetch user's groups
+	go func() {
+		defer wg.Done()
+		builder := groups.NewUserGroupRolesBuilder(userID)
+		fetchedGroups, err := u.roAPI.Groups().GetUserGroupRoles(context.Background(), builder.Build())
+		if err != nil {
+			u.logger.Warn("Error fetching user groups", zap.Uint64("userID", userID), zap.Error(err))
+			return
+		}
+		groupRoles = fetchedGroups
+	}()
+
+	// Fetch user's friends
+	go func() {
+		defer wg.Done()
+		fetchedFriends, err := u.roAPI.Friends().GetFriends(context.Background(), userID)
+		if err != nil {
+			u.logger.Warn("Error fetching user friends", zap.Uint64("userID", userID), zap.Error(err))
+			return
+		}
+		friends = fetchedFriends
+	}()
+
+	wg.Wait()
+
+	return groupRoles, friends
 }
 
 // FetchBannedUsers fetches banned users for a batch of user IDs.
