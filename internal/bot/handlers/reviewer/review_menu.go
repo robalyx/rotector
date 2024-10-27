@@ -50,6 +50,9 @@ func (m *ReviewMenu) ShowReviewMenuAndFetchUser(event interfaces.CommonEvent, s 
 	}
 	s.Set(constants.SessionKeyTarget, user)
 
+	// Display the review menu
+	m.ShowReviewMenu(event, s, content)
+
 	// Log the activity
 	m.handler.db.UserActivity().LogActivity(&database.UserActivityLog{
 		UserID:            user.ID,
@@ -58,9 +61,6 @@ func (m *ReviewMenu) ShowReviewMenuAndFetchUser(event interfaces.CommonEvent, s 
 		ActivityTimestamp: time.Now(),
 		Details:           map[string]interface{}{},
 	})
-
-	// Display the review menu
-	m.ShowReviewMenu(event, s, content)
 }
 
 // ShowReviewMenu displays the review menu.
