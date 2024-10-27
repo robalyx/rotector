@@ -94,14 +94,17 @@ func (g *MemberWorker) processGroup(groupID uint64, userIDs []uint64) ([]uint64,
 
 	cursor := ""
 	for len(userIDs) < GroupUsersToProcess {
-		builder := groups.NewGroupUsersBuilder(groupID).
-			WithLimit(100).
-			WithCursor(cursor)
-
+		// Fetch group users
+		builder := groups.NewGroupUsersBuilder(groupID).WithLimit(100).WithCursor(cursor)
 		groupUsers, err := g.roAPI.Groups().GetGroupUsers(context.Background(), builder.Build())
 		if err != nil {
 			g.logger.Error("Error fetching group members", zap.Error(err))
 			return nil, err
+		}
+
+		// If the group has no users, skip it
+		if len(groupUsers.Data) == 0 {
+			break
 		}
 
 		// Extract user IDs

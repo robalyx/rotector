@@ -94,6 +94,11 @@ func (f *FriendWorker) processFriendsBatch(friendIDs []uint64) ([]uint64, error)
 			continue
 		}
 
+		// If the user has no friends, skip them
+		if len(friends) == 0 {
+			continue
+		}
+
 		// Extract friend IDs
 		newFriendIDs := make([]uint64, 0, len(friends))
 		for _, friend := range friends {
