@@ -19,6 +19,7 @@ type Info struct {
 	Description string                 `json:"description"`
 	CreatedAt   time.Time              `json:"createdAt"`
 	Groups      []types.UserGroupRoles `json:"groupIds"`
+	Friends     []types.Friend         `json:"friends"`
 	LastUpdated time.Time              `json:"lastUpdated"`
 }
 
@@ -66,6 +67,13 @@ func (u *UserFetcher) FetchInfos(userIDs []uint64) []*Info {
 				return
 			}
 
+			// Fetch user's friends
+			friends, err := u.roAPI.Friends().GetFriends(context.Background(), id)
+			if err != nil {
+				u.logger.Warn("Error fetching user friends", zap.Uint64("userID", id), zap.Error(err))
+				return
+			}
+
 			// Send the user info to the channel
 			userInfoChan <- &Info{
 				ID:          userInfo.ID,
@@ -74,6 +82,7 @@ func (u *UserFetcher) FetchInfos(userIDs []uint64) []*Info {
 				Description: userInfo.Description,
 				CreatedAt:   userInfo.Created,
 				Groups:      groups,
+				Friends:     friends,
 				LastUpdated: time.Now(),
 			}
 		}(userID)
