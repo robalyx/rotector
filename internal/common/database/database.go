@@ -48,7 +48,7 @@ type User struct {
 	Confidence     float64                `json:"confidence"     pg:"confidence,notnull"`
 	LastScanned    time.Time              `json:"lastScanned"    pg:"last_scanned"`
 	LastUpdated    time.Time              `json:"lastUpdated"    pg:"last_updated,notnull"`
-	LastReviewed   time.Time              `json:"lastReviewed"   pg:"last_reviewed"`
+	LastViewed     time.Time              `json:"lastViewed"     pg:"last_viewed"`
 	LastPurgeCheck time.Time              `json:"lastPurgeCheck" pg:"last_purge_check"`
 	ThumbnailURL   string                 `json:"thumbnailUrl"   pg:"thumbnail_url"`
 }
@@ -62,6 +62,12 @@ type FlaggedUser struct {
 type ConfirmedUser struct {
 	User
 	VerifiedAt time.Time `json:"verifiedAt" pg:"verified_at,notnull"`
+}
+
+// ClearedUser represents a user that has been cleared from the flagged list.
+type ClearedUser struct {
+	User
+	ClearedAt time.Time `json:"clearedAt" pg:"cleared_at,notnull"`
 }
 
 // BannedUser represents a user that has been banned and removed from confirmed or flagged users.
@@ -168,6 +174,7 @@ func (d *Database) createSchema() error {
 		(*ConfirmedGroup)(nil),
 		(*FlaggedUser)(nil),
 		(*ConfirmedUser)(nil),
+		(*ClearedUser)(nil),
 		(*BannedUser)(nil),
 		(*DailyStatistics)(nil),
 		(*UserSetting)(nil),

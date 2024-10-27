@@ -6,6 +6,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/disgoorg/disgo/discord"
 	"github.com/rotector/rotector/assets"
@@ -16,6 +17,8 @@ import (
 	"github.com/rotector/rotector/internal/common/translator"
 )
 
+const ReviewHistoryLimit = 5
+
 var multipleNewlinesRegex = regexp.MustCompile(`\n{4,}`)
 
 // ReviewEmbed builds the embed for the review message.
@@ -25,16 +28,18 @@ type ReviewEmbed struct {
 	flaggedFriends map[uint64]string
 	sortBy         string
 	streamerMode   bool
+	db             *database.Database
 }
 
 // NewReviewEmbed creates a new ReviewEmbed.
-func NewReviewEmbed(s *session.Session, translator *translator.Translator) *ReviewEmbed {
+func NewReviewEmbed(s *session.Session, translator *translator.Translator, db *database.Database) *ReviewEmbed {
 	return &ReviewEmbed{
 		user:           s.GetFlaggedUser(constants.SessionKeyTarget),
 		translator:     translator,
 		flaggedFriends: s.Get(constants.SessionKeyFlaggedFriends).(map[uint64]string),
 		sortBy:         s.GetString(constants.SessionKeySortBy),
 		streamerMode:   s.GetBool(constants.SessionKeyStreamerMode),
+		db:             db,
 	}
 }
 
@@ -45,15 +50,16 @@ func (b *ReviewEmbed) Build() *discord.MessageUpdateBuilder {
 		AddField("Name", utils.CensorString(b.user.Name, b.streamerMode), true).
 		AddField("Display Name", utils.CensorString(b.user.DisplayName, b.streamerMode), true).
 		AddField("Created At", fmt.Sprintf("<t:%d:R>", b.user.CreatedAt.Unix()), true).
+		AddField("Last Updated", fmt.Sprintf("<t:%d:R>", b.user.LastUpdated.Unix()), true).
+		AddField("Last Viewed", b.getLastViewed(), true).
+		AddField("Reason", b.user.Reason, true).
 		AddField("Confidence", fmt.Sprintf("%.2f", b.user.Confidence), true).
-		AddField("Reason", b.user.Reason, false).
 		AddField("Description", b.getDescription(), false).
 		AddField("Groups", b.getGroups(), false).
 		AddField(b.getFriendsField(), b.getFriends(), false).
 		AddField("Outfits", b.getOutfits(), false).
 		AddField(b.getFlaggedType(), b.getFlaggedContent(), false).
-		AddField("Last Updated", fmt.Sprintf("<t:%d:R>", b.user.LastUpdated.Unix()), true).
-		AddField("Last Reviewed", b.getLastReviewed(), true).
+		AddField("Review History", b.getReviewHistory(), false).
 		SetColor(utils.GetMessageEmbedColor(b.streamerMode))
 
 	components := []discord.ContainerComponent{
@@ -109,6 +115,14 @@ func (b *ReviewEmbed) Build() *discord.MessageUpdateBuilder {
 	return builder.
 		SetEmbeds(embed.Build()).
 		AddContainerComponents(components...)
+}
+
+// getLastViewed returns the last viewed field for the embed.
+func (b *ReviewEmbed) getLastViewed() string {
+	if b.user.LastViewed.IsZero() {
+		return "Never Viewed"
+	}
+	return fmt.Sprintf("<t:%d:R>", b.user.LastViewed.Unix())
 }
 
 // getDescription returns the description field for the embed.
@@ -257,10 +271,25 @@ func (b *ReviewEmbed) getFlaggedContent() string {
 	return constants.NotApplicable
 }
 
-// getLastReviewed returns the last reviewed field for the embed.
-func (b *ReviewEmbed) getLastReviewed() string {
-	if b.user.LastReviewed.IsZero() {
-		return "Never Reviewed"
+// getReviewHistory returns the review history field for the embed.
+func (b *ReviewEmbed) getReviewHistory() string {
+	logs, total, err := b.db.UserActivity().GetLogs(b.user.ID, 0, string(database.ActivityTypeAll), time.Time{}, time.Time{}, 0, ReviewHistoryLimit)
+	if err != nil {
+		return "Failed to fetch review history"
 	}
-	return fmt.Sprintf("<t:%d:R>", b.user.LastReviewed.Unix())
+
+	if len(logs) == 0 {
+		return constants.NotApplicable
+	}
+
+	history := make([]string, 0, len(logs))
+	for _, log := range logs {
+		history = append(history, fmt.Sprintf("- <@%d> (%s) - <t:%d:R>", log.ReviewerID, log.ActivityType, log.ActivityTimestamp.Unix()))
+	}
+
+	if total > ReviewHistoryLimit {
+		history = append(history, fmt.Sprintf("... and %d more", total-ReviewHistoryLimit))
+	}
+
+	return strings.Join(history, "\n")
 }

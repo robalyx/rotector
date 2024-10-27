@@ -29,7 +29,7 @@ func NewReviewMenu(h *Handler) *ReviewMenu {
 	m.page = &pagination.Page{
 		Name: "Review Menu",
 		Message: func(s *session.Session) *discord.MessageUpdateBuilder {
-			return builders.NewReviewEmbed(s, translator).Build()
+			return builders.NewReviewEmbed(s, translator, h.db).Build()
 		},
 		SelectHandlerFunc: m.handleSelectMenu,
 		ButtonHandlerFunc: m.handleButton,
@@ -42,7 +42,7 @@ func NewReviewMenu(h *Handler) *ReviewMenu {
 func (m *ReviewMenu) ShowReviewMenuAndFetchUser(event interfaces.CommonEvent, s *session.Session, content string) {
 	// Fetch a new user
 	sortBy := s.GetString(constants.SessionKeySortBy)
-	user, err := m.handler.db.Users().GetRandomFlaggedUser(sortBy)
+	user, err := m.handler.db.Users().GetFlaggedUserToReview(sortBy)
 	if err != nil {
 		m.handler.logger.Error("Failed to fetch a new user", zap.Error(err))
 		m.handler.paginationManager.RespondWithError(event, "Failed to fetch a new user. Please try again.")
@@ -185,9 +185,6 @@ func (m *ReviewMenu) handleClearUser(event interfaces.CommonEvent, s *session.Se
 func (m *ReviewMenu) handleSkipUser(event interfaces.CommonEvent, s *session.Session) {
 	user := s.GetFlaggedUser(constants.SessionKeyTarget)
 
-	// Show the review menu and fetch a new user
-	m.ShowReviewMenuAndFetchUser(event, s, "Skipped user.")
-
 	// Log the activity
 	m.handler.db.UserActivity().LogActivity(&database.UserActivityLog{
 		UserID:            user.ID,
@@ -196,6 +193,8 @@ func (m *ReviewMenu) handleSkipUser(event interfaces.CommonEvent, s *session.Ses
 		ActivityTimestamp: time.Now(),
 		Details:           make(map[string]interface{}),
 	})
+
+	m.ShowReviewMenuAndFetchUser(event, s, "Skipped user.")
 }
 
 // handleBanWithReason processes the ban with a modal for a custom reason.
