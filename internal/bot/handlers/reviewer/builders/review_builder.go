@@ -1,7 +1,6 @@
 package builders
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"regexp"
@@ -91,27 +90,25 @@ func (b *ReviewEmbed) Build() *discord.MessageUpdateBuilder {
 		),
 	}
 
+	// Create the message update builder
+	builder := discord.NewMessageUpdateBuilder()
+
 	// Set thumbnail URL or use placeholder image
 	if b.user.ThumbnailURL != "" {
 		embed.SetThumbnail(b.user.ThumbnailURL)
 	} else {
+		placeholderImage, err := assets.Images.Open("images/content_deleted.png")
+		if err == nil {
+			builder.SetFiles(discord.NewFile("content_deleted.png", "", placeholderImage))
+			_ = placeholderImage.Close()
+		}
+
 		embed.SetThumbnail("attachment://content_deleted.png")
 	}
 
-	// Create the message update builder
-	builder := discord.NewMessageUpdateBuilder().
+	return builder.
 		SetEmbeds(embed.Build()).
 		AddContainerComponents(components...)
-
-	// Add placeholder image if thumbnail URL is empty
-	if b.user.ThumbnailURL == "" {
-		placeholderImage, err := assets.Images.ReadFile("images/content_deleted.png")
-		if err == nil {
-			builder.SetFiles(discord.NewFile("content_deleted.png", "", bytes.NewReader(placeholderImage)))
-		}
-	}
-
-	return builder
 }
 
 // getDescription returns the description field for the embed.
@@ -186,9 +183,9 @@ func (b *ReviewEmbed) getFriends() string {
 		confirmedCount := 0
 		flaggedCount := 0
 		for _, friend := range b.flaggedFriends {
-			if friend == "confirmed" {
+			if friend == database.UserTypeConfirmed {
 				confirmedCount++
-			} else if friend == "flagged" {
+			} else if friend == database.UserTypeFlagged {
 				flaggedCount++
 			}
 		}

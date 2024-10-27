@@ -11,6 +11,11 @@ import (
 	"go.uber.org/zap"
 )
 
+const (
+	UserTypeConfirmed = "confirmed"
+	UserTypeFlagged   = "flagged"
+)
+
 // UserRepository handles user-related database operations.
 type UserRepository struct {
 	db       *pg.DB
@@ -289,12 +294,12 @@ func (r *UserRepository) CheckExistingUsers(userIDs []uint64) (map[uint64]string
 	err := r.db.RunInTransaction(r.db.Context(), func(tx *pg.Tx) error {
 		return tx.Model((*ConfirmedUser)(nil)).
 			Column("id").
-			ColumnExpr("'confirmed' AS status").
+			ColumnExpr("? AS status", UserTypeConfirmed).
 			Where("id IN (?)", pg.In(userIDs)).
 			Union(
 				tx.Model((*FlaggedUser)(nil)).
 					Column("id").
-					ColumnExpr("'flagged' AS status").
+					ColumnExpr("? AS status", UserTypeFlagged).
 					Where("id IN (?)", pg.In(userIDs)),
 			).
 			Select(&users)

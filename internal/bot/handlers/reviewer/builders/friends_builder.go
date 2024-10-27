@@ -65,9 +65,9 @@ func (b *FriendsEmbed) Build() *discord.MessageUpdateBuilder {
 
 		// Add confirmed or flagged status if needed
 		if flagged, ok := b.flaggedFriends[friend.ID]; ok {
-			if flagged == "confirmed" {
-				fieldName += " ⚠️"
-			} else if flagged == "flagged" {
+			if flagged == database.UserTypeConfirmed {
+				fieldName += " ✅"
+			} else if flagged == database.UserTypeFlagged {
 				fieldName += " ⏳"
 			}
 		}
