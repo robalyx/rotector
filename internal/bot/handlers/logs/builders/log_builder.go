@@ -95,12 +95,12 @@ func (b *LogEmbed) Build() *discord.MessageUpdateBuilder {
 		),
 		discord.NewActionRow(
 			discord.NewStringSelectMenu(constants.LogsQueryActivityTypeFilterCustomID, "Filter Activity Type",
-				discord.NewStringSelectMenuOption("All", database.ActivityTypeAll.String()).WithDefault(b.activityTypeFilter == database.ActivityTypeAll),
-				discord.NewStringSelectMenuOption("Reviewed", database.ActivityTypeViewed.String()).WithDefault(b.activityTypeFilter == database.ActivityTypeViewed),
-				discord.NewStringSelectMenuOption("Banned", database.ActivityTypeBanned.String()).WithDefault(b.activityTypeFilter == database.ActivityTypeBanned),
-				discord.NewStringSelectMenuOption("Banned (Custom)", database.ActivityTypeBannedCustom.String()).WithDefault(b.activityTypeFilter == database.ActivityTypeBannedCustom),
-				discord.NewStringSelectMenuOption("Cleared", database.ActivityTypeCleared.String()).WithDefault(b.activityTypeFilter == database.ActivityTypeCleared),
-				discord.NewStringSelectMenuOption("Skipped", database.ActivityTypeSkipped.String()).WithDefault(b.activityTypeFilter == database.ActivityTypeSkipped),
+				discord.NewStringSelectMenuOption("All", fmt.Sprintf("%d", database.ActivityTypeAll)).WithDefault(b.activityTypeFilter == database.ActivityTypeAll),
+				discord.NewStringSelectMenuOption("Viewed", fmt.Sprintf("%d", database.ActivityTypeViewed)).WithDefault(b.activityTypeFilter == database.ActivityTypeViewed),
+				discord.NewStringSelectMenuOption("Banned", fmt.Sprintf("%d", database.ActivityTypeBanned)).WithDefault(b.activityTypeFilter == database.ActivityTypeBanned),
+				discord.NewStringSelectMenuOption("Banned (Custom)", fmt.Sprintf("%d", database.ActivityTypeBannedCustom)).WithDefault(b.activityTypeFilter == database.ActivityTypeBannedCustom),
+				discord.NewStringSelectMenuOption("Cleared", fmt.Sprintf("%d", database.ActivityTypeCleared)).WithDefault(b.activityTypeFilter == database.ActivityTypeCleared),
+				discord.NewStringSelectMenuOption("Skipped", fmt.Sprintf("%d", database.ActivityTypeSkipped)).WithDefault(b.activityTypeFilter == database.ActivityTypeSkipped),
 			),
 		),
 		discord.NewActionRow(
