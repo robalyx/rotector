@@ -106,8 +106,8 @@ func (c *UserChecker) checkUserFriends(userInfos []*fetcher.Info) ([]*database.U
 	var remainingUsers []*fetcher.Info
 
 	for _, userInfo := range userInfos {
-		// If the user has no friends, skip them
-		if len(userInfo.Friends) == 0 {
+		// If the user has less than 10 friends, skip them
+		if len(userInfo.Friends) < 10 {
 			remainingUsers = append(remainingUsers, userInfo)
 			continue
 		}
