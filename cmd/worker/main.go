@@ -168,7 +168,7 @@ func runWorkers(workerType, subType string, count int) {
 			case workerType == PurgeWorker && subType == PurgeWorkerTypeUser:
 				w = purge.NewUserWorker(setup.DB, setup.RoAPI, bar, workerLogger)
 			case workerType == PurgeWorker && subType == PurgeWorkerTypeTracking:
-				w = purge.NewTrackingWorker(setup.DB, bar, workerLogger)
+				w = purge.NewTrackingWorker(setup.DB, setup.RoAPI, bar, workerLogger)
 			case workerType == StatsWorker:
 				w = stats.NewStatisticsWorker(setup.DB, bar, workerLogger)
 			default:

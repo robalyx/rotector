@@ -80,3 +80,43 @@ func (t *ThumbnailFetcher) AddImageURLs(users []*database.User) []*database.User
 
 	return users
 }
+
+// AddGroupImageURLs fetches thumbnails for a batch of groups and adds them to the groups.
+func (t *ThumbnailFetcher) AddGroupImageURLs(groups []*database.FlaggedGroup) []*database.FlaggedGroup {
+	thumbnailURLs := make(map[uint64]string)
+
+	// Create a new batch request
+	requests := thumbnails.NewBatchThumbnailsBuilder()
+	for _, group := range groups {
+		requests.AddRequest(types.ThumbnailRequest{
+			Type:      types.GroupIconType,
+			TargetID:  group.ID,
+			RequestID: strconv.FormatUint(group.ID, 10),
+			Size:      types.Size420x420,
+			Format:    types.PNG,
+		})
+	}
+
+	// Fetch the batch thumbnails
+	thumbnailResponses, err := t.roAPI.Thumbnails().GetBatchThumbnails(context.Background(), requests.Build())
+	if err != nil {
+		t.logger.Error("Error fetching batch group thumbnails", zap.Error(err))
+		return groups
+	}
+
+	// Process the thumbnail responses
+	for _, response := range thumbnailResponses {
+		if response.State == types.ThumbnailStateCompleted && response.ImageURL != nil {
+			thumbnailURLs[response.TargetID] = *response.ImageURL
+		}
+	}
+
+	// Add thumbnail URLs to groups
+	for i, group := range groups {
+		if thumbnailURL, ok := thumbnailURLs[group.ID]; ok {
+			groups[i].ThumbnailURL = thumbnailURL
+		}
+	}
+
+	return groups
+}

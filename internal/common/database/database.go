@@ -23,11 +23,23 @@ const (
 
 var ErrInvalidSortBy = errors.New("invalid sortBy value")
 
-// ConfirmedGroup represents a group that is considered flagged.
+// FlaggedGroup represents a group that has been flagged for review.
+type FlaggedGroup struct {
+	ID           uint64    `pg:"id,pk"`
+	Name         string    `pg:"name,notnull"`
+	Description  string    `pg:"description,notnull"`
+	Owner        uint64    `pg:"owner"`
+	Reason       string    `pg:"reason"`
+	Confidence   float64   `pg:"confidence,notnull"`
+	LastUpdated  time.Time `pg:"last_updated,notnull"`
+	ThumbnailURL string    `pg:"thumbnail_url"`
+}
+
+// ConfirmedGroup represents a group that is considered confirmed.
 type ConfirmedGroup struct {
 	ID          uint64    `pg:"id,pk"`
-	Name        string    `pg:"name"`
-	Description string    `pg:"description"`
+	Name        string    `pg:"name,notnull"`
+	Description string    `pg:"description,notnull"`
 	Owner       uint64    `pg:"owner"`
 	LastScanned time.Time `pg:"last_scanned"`
 }
@@ -105,8 +117,8 @@ type GroupMemberTracking struct {
 	LastAppended   time.Time `pg:"last_appended,notnull"`
 }
 
-// UserAffiliateTracking represents the tracking of confirmed users in a user's friend list.
-type UserAffiliateTracking struct {
+// UserNetworkTracking represents the tracking of confirmed users in a user's friend list.
+type UserNetworkTracking struct {
 	UserID         uint64    `pg:"user_id,pk"`
 	ConfirmedUsers []uint64  `pg:"confirmed_users,array"`
 	LastAppended   time.Time `pg:"last_appended,notnull"`
@@ -171,6 +183,7 @@ func NewConnection(config *config.Config, stats *statistics.Statistics, logger *
 // createSchema creates the necessary database tables and indexes.
 func (d *Database) createSchema() error {
 	models := []interface{}{
+		(*FlaggedGroup)(nil),
 		(*ConfirmedGroup)(nil),
 		(*FlaggedUser)(nil),
 		(*ConfirmedUser)(nil),
@@ -181,7 +194,7 @@ func (d *Database) createSchema() error {
 		(*GuildSetting)(nil),
 		(*UserActivityLog)(nil),
 		(*GroupMemberTracking)(nil),
-		(*UserAffiliateTracking)(nil),
+		(*UserNetworkTracking)(nil),
 	}
 
 	for _, model := range models {
@@ -197,15 +210,17 @@ func (d *Database) createSchema() error {
 
 	// Add indexes
 	if _, err := d.db.Exec(`
-		CREATE INDEX IF NOT EXISTS idx_group_member_trackings_last_appended ON group_member_trackings (last_appended);
-		CREATE INDEX IF NOT EXISTS idx_user_affiliate_trackings_last_appended ON user_affiliate_trackings (last_appended);
-
 		CREATE INDEX IF NOT EXISTS idx_user_activity_logs_user_id ON user_activity_logs (user_id);
 		CREATE INDEX IF NOT EXISTS idx_user_activity_logs_reviewer_id ON user_activity_logs (reviewer_id);
 		CREATE INDEX IF NOT EXISTS idx_user_activity_logs_activity_timestamp ON user_activity_logs (activity_timestamp);
 
-		CREATE INDEX IF NOT EXISTS idx_user_affiliate_trackings_last_appended ON user_affiliate_trackings (last_appended);
 		CREATE INDEX IF NOT EXISTS idx_group_member_trackings_last_appended ON group_member_trackings (last_appended);
+		CREATE INDEX IF NOT EXISTS idx_group_member_trackings_group_id_array_length 
+		ON group_member_trackings USING btree (group_id, array_length(confirmed_users, 1));
+		
+		CREATE INDEX IF NOT EXISTS idx_user_network_trackings_last_appended ON user_network_trackings (last_appended);
+		CREATE INDEX IF NOT EXISTS idx_user_network_trackings_user_id_array_length 
+		ON user_network_trackings USING btree (user_id, array_length(confirmed_users, 1));
 	`); err != nil {
 		d.logger.Error("Failed to create indexes", zap.Error(err))
 		return err

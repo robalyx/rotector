@@ -72,3 +72,34 @@ func (r *GroupRepository) CheckConfirmedGroups(groupIDs []uint64) ([]uint64, err
 
 	return confirmedGroupIDs, nil
 }
+
+// SaveFlaggedGroups saves or updates the provided flagged groups in the database.
+func (r *GroupRepository) SaveFlaggedGroups(flaggedGroups []*FlaggedGroup) {
+	r.logger.Info("Saving flagged groups", zap.Int("count", len(flaggedGroups)))
+
+	for _, flaggedGroup := range flaggedGroups {
+		_, err := r.db.Model(flaggedGroup).
+			OnConflict("(id) DO UPDATE").
+			Set("name = EXCLUDED.name").
+			Set("description = EXCLUDED.description").
+			Set("owner = EXCLUDED.owner").
+			Set("reason = EXCLUDED.reason").
+			Set("confidence = EXCLUDED.confidence").
+			Set("last_updated = EXCLUDED.last_updated").
+			Set("thumbnail_url = EXCLUDED.thumbnail_url").
+			Insert()
+		if err != nil {
+			r.logger.Error("Failed to save flagged group",
+				zap.Error(err),
+				zap.Uint64("groupID", flaggedGroup.ID),
+				zap.String("name", flaggedGroup.Name))
+			continue
+		}
+
+		r.logger.Info("Saved flagged group",
+			zap.Uint64("groupID", flaggedGroup.ID),
+			zap.String("name", flaggedGroup.Name))
+	}
+
+	r.logger.Info("Finished saving flagged groups", zap.Int("count", len(flaggedGroups)))
+}

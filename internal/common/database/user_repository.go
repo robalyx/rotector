@@ -213,8 +213,8 @@ func (r *UserRepository) ConfirmUser(user *FlaggedUser) error {
 		}
 
 		for _, friend := range user.Friends {
-			if err = r.tracking.AddUserToAffiliateTracking(friend.ID, user.ID); err != nil {
-				r.logger.Error("Failed to add user to affiliate tracking", zap.Error(err), zap.Uint64("friendID", friend.ID), zap.Uint64("userID", user.ID))
+			if err = r.tracking.AddUserToNetworkTracking(friend.ID, user.ID); err != nil {
+				r.logger.Error("Failed to add user to network tracking", zap.Error(err), zap.Uint64("friendID", friend.ID), zap.Uint64("userID", user.ID))
 				return err
 			}
 		}

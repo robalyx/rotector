@@ -4,30 +4,38 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/jaxron/roapi.go/pkg/api"
+	"github.com/rotector/rotector/internal/common/checker"
 	"github.com/rotector/rotector/internal/common/database"
+	"github.com/rotector/rotector/internal/common/fetcher"
 	"github.com/rotector/rotector/internal/common/progress"
 	"go.uber.org/zap"
 )
 
 const (
-	DefaultPurgeCutoffDays = 3
+	DefaultPurgeCutoffDays = 14
 	BatchSize              = 1000
 	PurgeInterval          = 1 * time.Hour
 )
 
 // TrackingWorker represents a purge worker that removes old tracking entries.
 type TrackingWorker struct {
-	db     *database.Database
-	bar    *progress.Bar
-	logger *zap.Logger
+	db              *database.Database
+	bar             *progress.Bar
+	trackingChecker *checker.TrackingChecker
+	logger          *zap.Logger
 }
 
 // NewTrackingWorker creates a new purge worker instance.
-func NewTrackingWorker(db *database.Database, bar *progress.Bar, logger *zap.Logger) *TrackingWorker {
+func NewTrackingWorker(db *database.Database, roAPI *api.API, bar *progress.Bar, logger *zap.Logger) *TrackingWorker {
+	thumbnailFetcher := fetcher.NewThumbnailFetcher(roAPI, logger)
+	trackingChecker := checker.NewTrackingChecker(db, roAPI, thumbnailFetcher, logger)
+
 	return &TrackingWorker{
-		db:     db,
-		bar:    bar,
-		logger: logger,
+		db:              db,
+		bar:             bar,
+		trackingChecker: trackingChecker,
+		logger:          logger,
 	}
 }
 
@@ -46,24 +54,38 @@ func (p *TrackingWorker) Start() {
 	}
 }
 
-// performPurge executes the purge operations for group member and user affiliate trackings.
+// performPurge executes the purge operations for group member and user network trackings.
 func (p *TrackingWorker) performPurge() {
 	p.bar.SetTotal(100)
 	p.bar.Reset()
 
-	// Step 1: Purge old group member trackings (50%)
+	// Step 1: Check group trackings (25%)
+	p.bar.SetStepMessage("Checking group trackings")
+	if err := p.trackingChecker.CheckGroupTrackings(); err != nil {
+		p.logger.Error("Failed to check group trackings", zap.Error(err))
+	}
+	p.bar.Increment(25)
+
+	// Step 2: Check user trackings (25%)
+	p.bar.SetStepMessage("Checking user trackings")
+	if err := p.trackingChecker.CheckUserTrackings(); err != nil {
+		p.logger.Error("Failed to check user trackings", zap.Error(err))
+	}
+	p.bar.Increment(25)
+
+	// Step 3: Purge old group member trackings (25%)
 	p.bar.SetStepMessage("Purging old group member trackings")
 	if err := p.purgeGroupMemberTrackings(); err != nil {
 		p.logger.Error("Failed to purge group member trackings", zap.Error(err))
 	}
-	p.bar.Increment(50)
+	p.bar.Increment(25)
 
-	// Step 2: Purge old user affiliate trackings (50%)
-	p.bar.SetStepMessage("Purging old user affiliate trackings")
-	if err := p.purgeUserAffiliateTrackings(); err != nil {
-		p.logger.Error("Failed to purge user affiliate trackings", zap.Error(err))
+	// Step 4: Purge old user network trackings (25%)
+	p.bar.SetStepMessage("Purging old user network trackings")
+	if err := p.purgeUserNetworkTrackings(); err != nil {
+		p.logger.Error("Failed to purge user network trackings", zap.Error(err))
 	}
-	p.bar.Increment(50)
+	p.bar.Increment(25)
 }
 
 // updateProgressUntilNextRun updates the progress bar until the next run time.
@@ -111,19 +133,19 @@ func (p *TrackingWorker) purgeGroupMemberTrackings() error {
 	return nil
 }
 
-// purgeUserAffiliateTrackings removes old entries from user_affiliate_trackings.
-func (p *TrackingWorker) purgeUserAffiliateTrackings() error {
+// purgeUserNetworkTrackings removes old entries from user_network_trackings.
+func (p *TrackingWorker) purgeUserNetworkTrackings() error {
 	// Calculate the cutoff date
 	cutoffDate := time.Now().AddDate(0, 0, -DefaultPurgeCutoffDays)
 
 	for {
-		// Purge old user affiliate trackings in batches
-		affected, err := p.db.Tracking().PurgeOldUserAffiliateTrackings(cutoffDate, BatchSize)
+		// Purge old user network trackings in batches
+		affected, err := p.db.Tracking().PurgeOldUserNetworkTrackings(cutoffDate, BatchSize)
 		if err != nil {
 			return err
 		}
 
-		p.logger.Info("Purged user affiliate trackings batch",
+		p.logger.Info("Purged user network trackings batch",
 			zap.Int("count", affected),
 			zap.Time("cutoff_date", cutoffDate))
 
