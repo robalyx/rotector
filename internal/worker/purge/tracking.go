@@ -10,9 +10,9 @@ import (
 )
 
 const (
-	DefaultPurgeDays = 3
-	BatchSize        = 1000
-	PurgeInterval    = 1 * time.Hour
+	DefaultPurgeCutoffDays = 3
+	BatchSize              = 1000
+	PurgeInterval          = 1 * time.Hour
 )
 
 // TrackingWorker represents a purge worker that removes old tracking entries.
@@ -86,7 +86,7 @@ func (p *TrackingWorker) updateProgressUntilNextRun(nextRun time.Time) {
 // purgeGroupMemberTrackings removes old entries from group_member_trackings.
 func (p *TrackingWorker) purgeGroupMemberTrackings() error {
 	// Calculate the cutoff date
-	cutoffDate := time.Now().AddDate(0, 0, -DefaultPurgeDays)
+	cutoffDate := time.Now().AddDate(0, 0, -DefaultPurgeCutoffDays)
 
 	for {
 		// Purge old group member trackings in batches
@@ -95,12 +95,17 @@ func (p *TrackingWorker) purgeGroupMemberTrackings() error {
 			return err
 		}
 
-		p.logger.Info("Purged group member trackings", zap.Int("count", affected))
+		p.logger.Info("Purged group member trackings batch",
+			zap.Int("count", affected),
+			zap.Time("cutoff_date", cutoffDate))
 
 		// If less than BatchSize rows were affected, we're done
 		if affected < BatchSize {
 			break
 		}
+
+		// Add a small delay between batches to reduce database load
+		time.Sleep(100 * time.Millisecond)
 	}
 
 	return nil
@@ -109,7 +114,7 @@ func (p *TrackingWorker) purgeGroupMemberTrackings() error {
 // purgeUserAffiliateTrackings removes old entries from user_affiliate_trackings.
 func (p *TrackingWorker) purgeUserAffiliateTrackings() error {
 	// Calculate the cutoff date
-	cutoffDate := time.Now().AddDate(0, 0, -DefaultPurgeDays)
+	cutoffDate := time.Now().AddDate(0, 0, -DefaultPurgeCutoffDays)
 
 	for {
 		// Purge old user affiliate trackings in batches
@@ -118,12 +123,17 @@ func (p *TrackingWorker) purgeUserAffiliateTrackings() error {
 			return err
 		}
 
-		p.logger.Info("Purged user affiliate trackings", zap.Int("count", affected))
+		p.logger.Info("Purged user affiliate trackings batch",
+			zap.Int("count", affected),
+			zap.Time("cutoff_date", cutoffDate))
 
 		// If less than BatchSize rows were affected, we're done
 		if affected < BatchSize {
 			break
 		}
+
+		// Add a small delay between batches to reduce database load
+		time.Sleep(100 * time.Millisecond)
 	}
 
 	return nil

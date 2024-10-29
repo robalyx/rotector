@@ -63,36 +63,72 @@ func (r *TrackingRepository) AddUserToAffiliateTracking(userID, affiliateID uint
 
 // PurgeOldGroupMemberTrackings removes old entries from group_member_trackings.
 func (r *TrackingRepository) PurgeOldGroupMemberTrackings(cutoffDate time.Time, batchSize int) (int, error) {
-	var result pg.Result
+	var affected int
 	err := r.db.RunInTransaction(r.db.Context(), func(tx *pg.Tx) error {
-		var err error
-		result, err = tx.Model((*GroupMemberTracking)(nil)).
+		// Select the IDs to delete
+		var groupIDs []uint64
+		err := tx.Model((*GroupMemberTracking)(nil)).
+			Column("group_id").
 			Where("last_appended < ?", cutoffDate).
+			Order("last_appended ASC").
 			Limit(batchSize).
-			Delete()
-		return err
-	})
-	if err != nil {
-		return 0, err
-	}
+			For("UPDATE SKIP LOCKED").
+			Select(&groupIDs)
+		if err != nil {
+			return err
+		}
 
-	return result.RowsAffected(), nil
+		if len(groupIDs) == 0 {
+			return nil
+		}
+
+		// Delete the selected records
+		result, err := tx.Model((*GroupMemberTracking)(nil)).
+			Where("group_id IN (?)", pg.In(groupIDs)).
+			Delete()
+		if err != nil {
+			return err
+		}
+
+		affected = result.RowsAffected()
+		return nil
+	})
+
+	return affected, err
 }
 
 // PurgeOldUserAffiliateTrackings removes old entries from user_affiliate_trackings.
 func (r *TrackingRepository) PurgeOldUserAffiliateTrackings(cutoffDate time.Time, batchSize int) (int, error) {
-	var result pg.Result
+	var affected int
 	err := r.db.RunInTransaction(r.db.Context(), func(tx *pg.Tx) error {
-		var err error
-		result, err = tx.Model((*UserAffiliateTracking)(nil)).
+		// Select the IDs to delete
+		var userIDs []uint64
+		err := tx.Model((*UserAffiliateTracking)(nil)).
+			Column("user_id").
 			Where("last_appended < ?", cutoffDate).
+			Order("last_appended ASC").
 			Limit(batchSize).
-			Delete()
-		return err
-	})
-	if err != nil {
-		return 0, err
-	}
+			For("UPDATE SKIP LOCKED").
+			Select(&userIDs)
+		if err != nil {
+			return err
+		}
 
-	return result.RowsAffected(), nil
+		if len(userIDs) == 0 {
+			return nil
+		}
+
+		// Delete the selected records
+		result, err := tx.Model((*UserAffiliateTracking)(nil)).
+			Where("user_id IN (?)", pg.In(userIDs)).
+			Delete()
+		if err != nil {
+			return err
+		}
+
+		affected = result.RowsAffected()
+		return nil
+	})
+
+	return affected, err
 }

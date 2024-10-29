@@ -168,7 +168,7 @@ func NewConnection(config *config.Config, stats *statistics.Statistics, logger *
 	return database, nil
 }
 
-// createSchema creates the necessary database tables if they don't exist.
+// createSchema creates the necessary database tables and indexes.
 func (d *Database) createSchema() error {
 	models := []interface{}{
 		(*ConfirmedGroup)(nil),
@@ -203,6 +203,9 @@ func (d *Database) createSchema() error {
 		CREATE INDEX IF NOT EXISTS idx_user_activity_logs_user_id ON user_activity_logs (user_id);
 		CREATE INDEX IF NOT EXISTS idx_user_activity_logs_reviewer_id ON user_activity_logs (reviewer_id);
 		CREATE INDEX IF NOT EXISTS idx_user_activity_logs_activity_timestamp ON user_activity_logs (activity_timestamp);
+
+		CREATE INDEX IF NOT EXISTS idx_user_affiliate_trackings_last_appended ON user_affiliate_trackings (last_appended);
+		CREATE INDEX IF NOT EXISTS idx_group_member_trackings_last_appended ON group_member_trackings (last_appended);
 	`); err != nil {
 		d.logger.Error("Failed to create indexes", zap.Error(err))
 		return err
