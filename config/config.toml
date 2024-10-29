@@ -24,10 +24,6 @@ port = 6379
 username = ""
 password = ""
 
-[roblox]
-cookies_file = ""
-proxies_file = ""
-
 [openai]
 api_key = ""
 

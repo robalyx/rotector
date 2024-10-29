@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -25,6 +26,7 @@ import (
 	"github.com/rotector/rotector/internal/common/database"
 	"github.com/rotector/rotector/internal/common/logging"
 	"github.com/rotector/rotector/internal/common/statistics"
+	"github.com/spf13/viper"
 	"go.uber.org/zap"
 )
 
@@ -137,7 +139,7 @@ func (s *AppSetup) getRoAPIClient() (*api.API, error) {
 		client.WithMiddleware(6, circuitbreaker.New(s.Config.CircuitBreaker.MaxFailures, s.Config.CircuitBreaker.FailureThreshold, s.Config.CircuitBreaker.RecoveryTimeout)),
 		client.WithMiddleware(5, retry.New(5, 500*time.Millisecond, 1000*time.Millisecond)),
 		client.WithMiddleware(4, singleflight.New()),
-		client.WithMiddleware(3, redis.New(redisClient, 10*time.Minute)),
+		client.WithMiddleware(3, redis.New(redisClient, 1*time.Hour)),
 		client.WithMiddleware(2, ratelimit.New(s.Config.RateLimit.RequestsPerSecond, s.Config.RateLimit.BurstSize)),
 		client.WithMiddleware(1, proxy.New(proxies)),
 	), nil
@@ -145,16 +147,11 @@ func (s *AppSetup) getRoAPIClient() (*api.API, error) {
 
 // readProxies reads the proxies from the given configuration file.
 func (s *AppSetup) readProxies() []*url.URL {
-	// If no proxies file is set, return an empty list
-	if s.Config.Roblox.ProxiesFile == "" {
-		s.Logger.Warn("No proxies file set")
-		return []*url.URL{}
-	}
-
 	var proxies []*url.URL
 
 	// Open the file
-	file, err := os.Open(s.Config.Roblox.ProxiesFile)
+	proxiesFile := filepath.Dir(viper.GetViper().ConfigFileUsed()) + "/credentials/proxies"
+	file, err := os.Open(proxiesFile)
 	if err != nil {
 		s.Logger.Fatal("failed to open proxy file", zap.Error(err))
 		return nil
@@ -202,16 +199,11 @@ func (s *AppSetup) readProxies() []*url.URL {
 
 // readCookies reads the cookies from the given configuration file.
 func (s *AppSetup) readCookies() []string {
-	// If no cookies file is set, return an empty list
-	if s.Config.Roblox.CookiesFile == "" {
-		s.Logger.Warn("No cookies file set")
-		return []string{}
-	}
-
 	var cookies []string
 
 	// Open the file
-	file, err := os.Open(s.Config.Roblox.CookiesFile)
+	cookiesFile := filepath.Dir(viper.GetViper().ConfigFileUsed()) + "/credentials/cookies"
+	file, err := os.Open(cookiesFile)
 	if err != nil {
 		s.Logger.Fatal("failed to open cookie file", zap.Error(err))
 		return nil

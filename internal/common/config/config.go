@@ -13,7 +13,6 @@ type Config struct {
 	CircuitBreaker CircuitBreaker
 	PostgreSQL     PostgreSQL
 	Redis          Redis
-	Roblox         Roblox
 	OpenAI         OpenAI
 	Discord        Discord
 }
@@ -54,12 +53,6 @@ type Redis struct {
 	Password string
 }
 
-// Roblox contains Roblox-specific configuration.
-type Roblox struct {
-	CookiesFile string `mapstructure:"cookies_file"`
-	ProxiesFile string `mapstructure:"proxies_file"`
-}
-
 // OpenAI contains OpenAI API configuration.
 type OpenAI struct {
 	APIKey string `mapstructure:"api_key"`
@@ -76,8 +69,10 @@ func LoadConfig() (*Config, error) {
 	viper.SetConfigType("toml")
 
 	// Add default search paths
-	viper.AddConfigPath("$HOME/.rotector")
-	viper.AddConfigPath("/etc/rotector")
+	viper.AddConfigPath("$HOME/.rotector/config")
+	viper.AddConfigPath("/etc/rotector/config")
+	viper.AddConfigPath("/app/config")
+	viper.AddConfigPath("/config")
 	viper.AddConfigPath(".")
 
 	if err := viper.ReadInConfig(); err != nil {
