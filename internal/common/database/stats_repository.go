@@ -7,6 +7,7 @@ import (
 
 	"github.com/go-pg/pg/v10"
 	"github.com/redis/rueidis"
+	"github.com/rotector/rotector/internal/common/statistics"
 	"go.uber.org/zap"
 )
 
@@ -50,11 +51,13 @@ func (r *StatsRepository) UploadDailyStatsToDB(ctx context.Context) error {
 
 	// Create a new DailyStatistics instance
 	stats := &DailyStatistics{
-		Date:         time.Now().AddDate(0, 0, -1),
-		UsersBanned:  result["users_banned"],
-		UsersCleared: result["users_cleared"],
-		UsersFlagged: result["users_flagged"],
-		UsersPurged:  result["users_purged"],
+		Date:               time.Now().AddDate(0, 0, -1),
+		UsersConfirmed:     result[statistics.FieldUsersConfirmed],
+		UsersFlagged:       result[statistics.FieldUsersFlagged],
+		UsersCleared:       result[statistics.FieldUsersCleared],
+		BannedUsersPurged:  result[statistics.FieldBannedUsersPurged],
+		FlaggedUsersPurged: result[statistics.FieldFlaggedUsersPurged],
+		ClearedUsersPurged: result[statistics.FieldClearedUsersPurged],
 	}
 
 	// Insert the daily statistics into PostgreSQL

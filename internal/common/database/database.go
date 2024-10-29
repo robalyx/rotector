@@ -90,11 +90,13 @@ type BannedUser struct {
 
 // DailyStatistics represents daily statistics.
 type DailyStatistics struct {
-	Date         time.Time `pg:"date,pk"`
-	UsersBanned  int64     `pg:"users_banned"`
-	UsersCleared int64     `pg:"users_cleared"`
-	UsersFlagged int64     `pg:"users_flagged"`
-	UsersPurged  int64     `pg:"users_purged"`
+	Date               time.Time `pg:"date,pk"`
+	UsersConfirmed     int64     `pg:"users_confirmed"`
+	UsersFlagged       int64     `pg:"users_flagged"`
+	UsersCleared       int64     `pg:"users_cleared"`
+	BannedUsersPurged  int64     `pg:"banned_users_purged"`
+	FlaggedUsersPurged int64     `pg:"flagged_users_purged"`
+	ClearedUsersPurged int64     `pg:"cleared_users_purged"`
 }
 
 // UserSetting represents user-specific settings.
@@ -221,6 +223,8 @@ func (d *Database) createSchema() error {
 		CREATE INDEX IF NOT EXISTS idx_user_network_trackings_last_appended ON user_network_trackings (last_appended);
 		CREATE INDEX IF NOT EXISTS idx_user_network_trackings_user_id_array_length 
 		ON user_network_trackings USING btree (user_id, array_length(confirmed_users, 1));
+
+		CREATE INDEX IF NOT EXISTS idx_cleared_users_cleared_at ON cleared_users (cleared_at);
 	`); err != nil {
 		d.logger.Error("Failed to create indexes", zap.Error(err))
 		return err

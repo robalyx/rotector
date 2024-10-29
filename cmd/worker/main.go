@@ -24,7 +24,8 @@ const (
 	AIWorkerTypeMember = "member"
 
 	PurgeWorker             = "purge"
-	PurgeWorkerTypeUser     = "user"
+	PurgeWorkerTypeBanned   = "banned"
+	PurgeWorkerTypeCleared  = "cleared"
 	PurgeWorkerTypeTracking = "tracking"
 
 	StatsWorker           = "stats"
@@ -87,16 +88,24 @@ func newPurgeWorkerCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   PurgeWorker,
 		Short: "Start purge workers",
-		Long:  `Start purge workers, which can be user or tracking workers.`,
+		Long:  `Start purge workers, which can be banned, cleared, or tracking workers.`,
 	}
 
 	cmd.AddCommand(
 		&cobra.Command{
-			Use:   PurgeWorkerTypeUser,
-			Short: "Start user purge workers",
+			Use:   PurgeWorkerTypeBanned,
+			Short: "Start banned user purge workers",
 			Run: func(cmd *cobra.Command, _ []string) {
 				count, _ := cmd.Flags().GetInt("workers")
-				runWorkers(PurgeWorker, PurgeWorkerTypeUser, count)
+				runWorkers(PurgeWorker, PurgeWorkerTypeBanned, count)
+			},
+		},
+		&cobra.Command{
+			Use:   PurgeWorkerTypeCleared,
+			Short: "Start cleared user purge workers",
+			Run: func(cmd *cobra.Command, _ []string) {
+				count, _ := cmd.Flags().GetInt("workers")
+				runWorkers(PurgeWorker, PurgeWorkerTypeCleared, count)
 			},
 		},
 		&cobra.Command{
@@ -165,8 +174,10 @@ func runWorkers(workerType, subType string, count int) {
 				w = ai.NewMemberWorker(setup.DB, setup.OpenAIClient, setup.RoAPI, bar, workerLogger)
 			case workerType == AIWorker && subType == AIWorkerTypeFriend:
 				w = ai.NewFriendWorker(setup.DB, setup.OpenAIClient, setup.RoAPI, bar, workerLogger)
-			case workerType == PurgeWorker && subType == PurgeWorkerTypeUser:
-				w = purge.NewUserWorker(setup.DB, setup.RoAPI, bar, workerLogger)
+			case workerType == PurgeWorker && subType == PurgeWorkerTypeBanned:
+				w = purge.NewBannedWorker(setup.DB, setup.RoAPI, bar, workerLogger)
+			case workerType == PurgeWorker && subType == PurgeWorkerTypeCleared:
+				w = purge.NewClearedWorker(setup.DB, setup.RoAPI, bar, workerLogger)
 			case workerType == PurgeWorker && subType == PurgeWorkerTypeTracking:
 				w = purge.NewTrackingWorker(setup.DB, setup.RoAPI, bar, workerLogger)
 			case workerType == StatsWorker:

@@ -161,7 +161,7 @@ func (r *UserRepository) SaveFlaggedUsers(flaggedUsers []*User) {
 	}
 
 	// Increment the users_flagged statistic
-	if err := r.stats.IncrementUsersFlagged(context.Background(), len(flaggedUsers)); err != nil {
+	if err := r.stats.IncrementField(context.Background(), statistics.FieldUsersFlagged, len(flaggedUsers)); err != nil {
 		r.logger.Error("Failed to increment users_flagged statistic", zap.Error(err))
 	}
 
@@ -220,6 +220,12 @@ func (r *UserRepository) ConfirmUser(user *FlaggedUser) error {
 			}
 		}
 
+		// Increment the users_confirmed statistic
+		if err := r.stats.IncrementField(tx.Context(), statistics.FieldUsersConfirmed, 1); err != nil {
+			r.logger.Error("Failed to increment users_confirmed statistic", zap.Error(err))
+			return err
+		}
+
 		return nil
 	})
 }
@@ -265,7 +271,7 @@ func (r *UserRepository) ClearUser(user *FlaggedUser) error {
 		r.logger.Info("User cleared and moved to cleared_users", zap.Uint64("userID", user.ID))
 
 		// Increment the users_cleared statistic
-		if err := r.stats.IncrementUsersCleared(tx.Context(), 1); err != nil {
+		if err := r.stats.IncrementField(tx.Context(), statistics.FieldUsersCleared, 1); err != nil {
 			r.logger.Error("Failed to increment users_cleared statistic", zap.Error(err))
 			return err
 		}
@@ -498,12 +504,67 @@ func (r *UserRepository) RemoveBannedUsers(userIDs []uint64) error {
 		}
 
 		// Increment the users_purged statistic
-		if err := r.stats.IncrementUsersPurged(tx.Context(), len(userIDs)); err != nil {
-			r.logger.Error("Failed to increment users_purged statistic", zap.Error(err))
+		if err := r.stats.IncrementField(tx.Context(), statistics.FieldBannedUsersPurged, len(userIDs)); err != nil {
+			r.logger.Error("Failed to increment banned_users_purged statistic", zap.Error(err))
 			return err
 		}
 
 		r.logger.Info("Moved banned users to banned_users", zap.Int("count", len(userIDs)))
 		return nil
 	})
+}
+
+// PurgeOldClearedUsers retrieves and removes cleared users that are older than the cutoff date.
+func (r *UserRepository) PurgeOldClearedUsers(cutoffDate time.Time, limit int) (int, error) {
+	var affected int
+
+	err := r.db.RunInTransaction(r.db.Context(), func(tx *pg.Tx) error {
+		// Select the users to purge
+		var userIDs []uint64
+		err := tx.Model((*ClearedUser)(nil)).
+			Column("id").
+			Where("cleared_at < ?", cutoffDate).
+			Order("cleared_at ASC").
+			Limit(limit).
+			For("UPDATE SKIP LOCKED").
+			Select(&userIDs)
+		if err != nil {
+			r.logger.Error("Failed to get cleared users to purge",
+				zap.Error(err),
+				zap.Time("cutoffDate", cutoffDate))
+			return err
+		}
+
+		// Skip if no users to purge
+		if len(userIDs) == 0 {
+			return nil
+		}
+
+		// Delete the selected users
+		result, err := tx.Model((*ClearedUser)(nil)).
+			Where("id IN (?)", pg.In(userIDs)).
+			Delete()
+		if err != nil {
+			r.logger.Error("Failed to delete users from cleared_users",
+				zap.Error(err),
+				zap.Uint64s("userIDs", userIDs))
+			return err
+		}
+
+		affected = result.RowsAffected()
+
+		r.logger.Info("Purged cleared users from database",
+			zap.Int("count", affected),
+			zap.Uint64s("userIDs", userIDs))
+
+		// Increment the cleared_users_purged statistic
+		if err := r.stats.IncrementField(tx.Context(), statistics.FieldClearedUsersPurged, affected); err != nil {
+			r.logger.Error("Failed to increment cleared_users_purged statistic", zap.Error(err))
+			return err
+		}
+
+		return nil
+	})
+
+	return affected, err
 }

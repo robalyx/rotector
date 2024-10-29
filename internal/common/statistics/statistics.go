@@ -11,6 +11,13 @@ import (
 const (
 	StatisticsKey = "daily_statistics"
 	DBIndex       = 1
+
+	FieldUsersConfirmed     = "users_confirmed"
+	FieldUsersFlagged       = "users_flagged"
+	FieldUsersCleared       = "users_cleared"
+	FieldBannedUsersPurged  = "banned_users_purged"
+	FieldFlaggedUsersPurged = "flagged_users_purged"
+	FieldClearedUsersPurged = "cleared_users_purged"
 )
 
 // Statistics is a struct that contains a Redis client.
@@ -23,31 +30,11 @@ func NewStatistics(client rueidis.Client) *Statistics {
 	return &Statistics{Client: client}
 }
 
-// Increment increments a statistic in Redis.
-func (s *Statistics) Increment(ctx context.Context, field string, amount int) error {
+// IncrementField increments a statistic field in Redis.
+func (s *Statistics) IncrementField(ctx context.Context, field string, amount int) error {
 	date := time.Now().Format("2006-01-02")
 	key := fmt.Sprintf("%s:%s", StatisticsKey, date)
 
 	cmd := s.Client.B().Hincrby().Key(key).Field(field).Increment(int64(amount)).Build()
 	return s.Client.Do(ctx, cmd).Error()
-}
-
-// IncrementUsersBanned increments the users_banned statistic.
-func (s *Statistics) IncrementUsersBanned(ctx context.Context, amount int) error {
-	return s.Increment(ctx, "users_banned", amount)
-}
-
-// IncrementUsersCleared increments the users_cleared statistic.
-func (s *Statistics) IncrementUsersCleared(ctx context.Context, amount int) error {
-	return s.Increment(ctx, "users_cleared", amount)
-}
-
-// IncrementUsersFlagged increments the users_flagged statistic.
-func (s *Statistics) IncrementUsersFlagged(ctx context.Context, amount int) error {
-	return s.Increment(ctx, "users_flagged", amount)
-}
-
-// IncrementUsersPurged increments the users_purged statistic.
-func (s *Statistics) IncrementUsersPurged(ctx context.Context, amount int) error {
-	return s.Increment(ctx, "users_purged", amount)
 }
