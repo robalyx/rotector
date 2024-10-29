@@ -23,6 +23,12 @@ RUN CGO_ENABLED=1 GOOS=linux go build -o /app/bin/worker cmd/worker/main.go
 # Final stage
 FROM alpine:latest
 
+# Set default environment variables
+ENV RUN_TYPE=bot \
+    WORKER_TYPE=ai \
+    WORKER_SUBTYPE=friend \
+    WORKERS_COUNT=1
+
 # Install runtime dependencies
 RUN apk add --no-cache ca-certificates tzdata
 
@@ -36,7 +42,7 @@ COPY --from=builder /app/bin/worker /app/bin/worker
 # Set working directory
 WORKDIR /app
 
-# Create entrypoint script
+# Copy entrypoint script
 COPY docker-entrypoint.sh /app/
 RUN chmod +x /app/docker-entrypoint.sh
 
