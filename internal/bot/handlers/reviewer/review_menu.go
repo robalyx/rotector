@@ -67,16 +67,25 @@ func (m *ReviewMenu) ShowReviewMenuAndFetchUser(event interfaces.CommonEvent, s 
 func (m *ReviewMenu) ShowReviewMenu(event interfaces.CommonEvent, s *session.Session, content string) {
 	user := s.GetFlaggedUser(constants.SessionKeyTarget)
 
-	// Check which friends are flagged
+	// Extract friend IDs
 	friendIDs := make([]uint64, len(user.Friends))
 	for i, friend := range user.Friends {
 		friendIDs[i] = friend.ID
 	}
 
-	flaggedFriends, err := m.handler.db.Users().CheckExistingUsers(friendIDs)
+	// Check which users already exist in the database
+	existingUsers, err := m.handler.db.Users().CheckExistingUsers(friendIDs)
 	if err != nil {
 		m.handler.logger.Error("Failed to check existing friends", zap.Error(err))
 		return
+	}
+
+	// Get flagged friends
+	flaggedFriends := make(map[uint64]string)
+	for friendID, status := range existingUsers {
+		if status == database.UserTypeConfirmed || status == database.UserTypeFlagged {
+			flaggedFriends[friendID] = status
+		}
 	}
 
 	// Get user settings

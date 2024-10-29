@@ -13,6 +13,7 @@ import (
 const (
 	UserTypeConfirmed = "confirmed"
 	UserTypeFlagged   = "flagged"
+	UserTypeCleared   = "cleared"
 )
 
 // UserRepository handles user-related database operations.
@@ -351,7 +352,7 @@ func (r *UserRepository) CheckExistingUsers(userIDs []uint64) (map[uint64]string
 			Union(
 				tx.Model((*ClearedUser)(nil)).
 					Column("id").
-					ColumnExpr("'cleared' AS status").
+					ColumnExpr("? AS status", UserTypeCleared).
 					Where("id IN (?)", pg.In(userIDs)),
 			).
 			Select(&users)

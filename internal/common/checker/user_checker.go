@@ -118,7 +118,7 @@ func (c *UserChecker) checkUserFriends(userInfos []*fetcher.Info) ([]*database.U
 			friendIDs[i] = friend.ID
 		}
 
-		// Check if friends already exist in the database
+		// Check which users already exist in the database
 		existingUsers, err := c.db.Users().CheckExistingUsers(friendIDs)
 		if err != nil {
 			c.logger.Error("Error checking existing users", zap.Error(err), zap.Uint64("userID", userInfo.ID))
@@ -126,8 +126,15 @@ func (c *UserChecker) checkUserFriends(userInfos []*fetcher.Info) ([]*database.U
 			continue
 		}
 
+		// Count flagged friends
+		flaggedCount := 0
+		for _, status := range existingUsers {
+			if status == database.UserTypeConfirmed || status == database.UserTypeFlagged {
+				flaggedCount++
+			}
+		}
+
 		// If the user has 8 or more flagged friends, or 50% or more of their friends are flagged, flag the user
-		flaggedCount := len(existingUsers)
 		flaggedRatio := float64(flaggedCount) / float64(len(userInfo.Friends))
 		if flaggedCount >= 8 || flaggedRatio >= 0.5 {
 			flaggedUser := &database.User{
