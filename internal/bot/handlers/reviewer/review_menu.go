@@ -54,7 +54,7 @@ func (m *ReviewMenu) ShowReviewMenuAndFetchUser(event interfaces.CommonEvent, s 
 	m.ShowReviewMenu(event, s, content)
 
 	// Log the activity
-	m.handler.db.UserActivity().LogActivity(&database.UserActivityLog{
+	go m.handler.db.UserActivity().LogActivity(&database.UserActivityLog{
 		UserID:            user.ID,
 		ReviewerID:        uint64(event.User().ID),
 		ActivityType:      database.ActivityTypeViewed,
@@ -159,7 +159,7 @@ func (m *ReviewMenu) handleBanUser(event interfaces.CommonEvent, s *session.Sess
 	}
 
 	// Log the activity
-	m.handler.db.UserActivity().LogActivity(&database.UserActivityLog{
+	go m.handler.db.UserActivity().LogActivity(&database.UserActivityLog{
 		UserID:            user.ID,
 		ReviewerID:        uint64(event.User().ID),
 		ActivityType:      database.ActivityTypeBanned,
@@ -182,7 +182,7 @@ func (m *ReviewMenu) handleClearUser(event interfaces.CommonEvent, s *session.Se
 	}
 
 	// Log the activity
-	m.handler.db.UserActivity().LogActivity(&database.UserActivityLog{
+	go m.handler.db.UserActivity().LogActivity(&database.UserActivityLog{
 		UserID:            user.ID,
 		ReviewerID:        uint64(event.User().ID),
 		ActivityType:      database.ActivityTypeCleared,
@@ -198,7 +198,7 @@ func (m *ReviewMenu) handleSkipUser(event interfaces.CommonEvent, s *session.Ses
 	user := s.GetFlaggedUser(constants.SessionKeyTarget)
 
 	// Log the activity
-	m.handler.db.UserActivity().LogActivity(&database.UserActivityLog{
+	go m.handler.db.UserActivity().LogActivity(&database.UserActivityLog{
 		UserID:            user.ID,
 		ReviewerID:        uint64(event.User().ID),
 		ActivityType:      database.ActivityTypeSkipped,
@@ -254,7 +254,7 @@ func (m *ReviewMenu) handleBanWithReasonModalSubmit(event *events.ModalSubmitInt
 	}
 
 	// Log the activity
-	m.handler.db.UserActivity().LogActivity(&database.UserActivityLog{
+	go m.handler.db.UserActivity().LogActivity(&database.UserActivityLog{
 		UserID:            user.ID,
 		ReviewerID:        uint64(event.User().ID),
 		ActivityType:      database.ActivityTypeBannedCustom,
