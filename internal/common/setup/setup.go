@@ -14,18 +14,18 @@ import (
 	"github.com/jaxron/axonet/middleware/circuitbreaker"
 	"github.com/jaxron/axonet/middleware/proxy"
 	"github.com/jaxron/axonet/middleware/ratelimit"
-	"github.com/jaxron/axonet/middleware/redis"
+	axonetRedis "github.com/jaxron/axonet/middleware/redis"
 	"github.com/jaxron/axonet/middleware/retry"
 	"github.com/jaxron/axonet/middleware/singleflight"
 	"github.com/jaxron/axonet/pkg/client"
 	"github.com/jaxron/roapi.go/pkg/api"
 	"github.com/openai/openai-go"
 	"github.com/openai/openai-go/option"
-	"github.com/redis/rueidis"
 	"github.com/rotector/rotector/internal/common/config"
 	"github.com/rotector/rotector/internal/common/database"
 	"github.com/rotector/rotector/internal/common/logging"
 	"github.com/rotector/rotector/internal/common/queue"
+	"github.com/rotector/rotector/internal/common/redis"
 	"github.com/rotector/rotector/internal/common/statistics"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
@@ -40,9 +40,7 @@ type AppSetup struct {
 	OpenAIClient *openai.Client
 	RoAPI        *api.API
 	Queue        *queue.Manager
-	StatsRedis   rueidis.Client
-	RoAPIRedis   rueidis.Client
-	QueueRedis   rueidis.Client
+	RedisManager *redis.Manager
 }
 
 // InitializeApp performs common setup tasks and returns an AppSetup.
@@ -59,12 +57,16 @@ func InitializeApp(logDir string) (*AppSetup, error) {
 		return nil, err
 	}
 
+	// Initialize Redis manager
+	redisManager := redis.NewManager(cfg, logger)
+
 	// Initialize statistics client
-	stats, statsRedis, err := getStats(cfg, logger)
+	statsRedis, err := redisManager.GetClient(statistics.DBIndex)
 	if err != nil {
-		logger.Fatal("Failed to create statistics client", zap.Error(err))
+		logger.Fatal("Failed to create statistics Redis client", zap.Error(err))
 		return nil, err
 	}
+	stats := statistics.NewStatistics(statsRedis)
 
 	// Initialize database connection
 	db, err := database.NewConnection(cfg, stats, dbLogger)
@@ -79,18 +81,19 @@ func InitializeApp(logDir string) (*AppSetup, error) {
 	)
 
 	// Initialize RoAPI client
-	roAPI, roAPIRedis, err := getRoAPIClient(cfg, logger)
+	roAPI, err := getRoAPIClient(cfg, redisManager, logger)
 	if err != nil {
-		logger.Fatal("failed to create RoAPI client", zap.Error(err))
+		logger.Fatal("Failed to create RoAPI client", zap.Error(err))
 		return nil, err
 	}
 
-	// Initialize Queue
-	queue, queueRedis, err := getQueueManager(cfg, logger)
+	// Initialize Queue manager
+	queueRedis, err := redisManager.GetClient(queue.QueueDBIndex)
 	if err != nil {
-		logger.Fatal("failed to create queue manager", zap.Error(err))
+		logger.Fatal("Failed to create queue Redis client", zap.Error(err))
 		return nil, err
 	}
+	queueManager := queue.NewManager(queueRedis, logger)
 
 	// Initialize AppSetup
 	return &AppSetup{
@@ -100,10 +103,8 @@ func InitializeApp(logDir string) (*AppSetup, error) {
 		DB:           db,
 		OpenAIClient: openaiClient,
 		RoAPI:        roAPI,
-		Queue:        queue,
-		StatsRedis:   statsRedis,
-		RoAPIRedis:   roAPIRedis,
-		QueueRedis:   queueRedis,
+		Queue:        queueManager,
+		RedisManager: redisManager,
 	}, nil
 }
 
@@ -118,60 +119,19 @@ func (s *AppSetup) CleanupApp() {
 	if err := s.DB.Close(); err != nil {
 		log.Printf("Failed to close database connection: %v", err)
 	}
-	s.StatsRedis.Close()
-	s.RoAPIRedis.Close()
-}
-
-// getStats creates a new statistics client with the given configuration.
-func getStats(cfg *config.Config, logger *zap.Logger) (*statistics.Statistics, rueidis.Client, error) {
-	// Initialize Redis client
-	redisClient, err := rueidis.NewClient(rueidis.ClientOption{
-		InitAddress: []string{fmt.Sprintf("%s:%d", cfg.Redis.Host, cfg.Redis.Port)},
-		Username:    cfg.Redis.Username,
-		Password:    cfg.Redis.Password,
-		SelectDB:    statistics.DBIndex,
-	})
-	if err != nil {
-		logger.Fatal("Failed to connect to Redis", zap.Error(err))
-		return nil, nil, err
-	}
-
-	// Initialize Statistics
-	return statistics.NewStatistics(redisClient), redisClient, nil
-}
-
-// getQueueManager creates a new queue manager with the given configuration.
-func getQueueManager(cfg *config.Config, logger *zap.Logger) (*queue.Manager, rueidis.Client, error) {
-	// Initialize Redis client
-	redisClient, err := rueidis.NewClient(rueidis.ClientOption{
-		InitAddress: []string{fmt.Sprintf("%s:%d", cfg.Redis.Host, cfg.Redis.Port)},
-		Username:    cfg.Redis.Username,
-		Password:    cfg.Redis.Password,
-		SelectDB:    queue.QueueDBIndex,
-	})
-	if err != nil {
-		logger.Fatal("Failed to connect to Redis", zap.Error(err))
-		return nil, nil, err
-	}
-
-	// Initialize Queue
-	return queue.NewManager(redisClient, logger), redisClient, nil
+	s.RedisManager.Close()
 }
 
 // getRoAPIClient creates a new RoAPI client with the given configuration.
-func getRoAPIClient(cfg *config.Config, logger *zap.Logger) (*api.API, rueidis.Client, error) {
+func getRoAPIClient(cfg *config.Config, redisManager *redis.Manager, logger *zap.Logger) (*api.API, error) {
 	// Read the cookies and proxies
 	cookies := readCookies(logger)
 	proxies := readProxies(logger)
 
 	// Initialize Redis cache
-	redisClient, err := rueidis.NewClient(rueidis.ClientOption{
-		InitAddress: []string{fmt.Sprintf("%s:%d", cfg.Redis.Host, cfg.Redis.Port)},
-		Username:    cfg.Redis.Username,
-		Password:    cfg.Redis.Password,
-	})
+	redisClient, err := redisManager.GetClient(0)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	return api.New(cookies,
@@ -180,10 +140,10 @@ func getRoAPIClient(cfg *config.Config, logger *zap.Logger) (*api.API, rueidis.C
 		client.WithMiddleware(6, circuitbreaker.New(cfg.CircuitBreaker.MaxFailures, cfg.CircuitBreaker.FailureThreshold, cfg.CircuitBreaker.RecoveryTimeout)),
 		client.WithMiddleware(5, retry.New(5, 500*time.Millisecond, 1000*time.Millisecond)),
 		client.WithMiddleware(4, singleflight.New()),
-		client.WithMiddleware(3, redis.New(redisClient, 1*time.Hour)),
+		client.WithMiddleware(3, axonetRedis.New(redisClient, 1*time.Hour)),
 		client.WithMiddleware(2, ratelimit.New(cfg.RateLimit.RequestsPerSecond, cfg.RateLimit.BurstSize)),
 		client.WithMiddleware(1, proxy.New(proxies)),
-	), redisClient, nil
+	), nil
 }
 
 // readProxies reads the proxies from the given configuration file.
