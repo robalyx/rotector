@@ -1,6 +1,9 @@
 package dashboard
 
 import (
+	"bytes"
+	"context"
+
 	"github.com/disgoorg/disgo/discord"
 	"github.com/disgoorg/disgo/events"
 	"github.com/rotector/rotector/internal/bot/constants"
@@ -23,10 +26,12 @@ func NewMenu(h *Handler) *Menu {
 	m.page = &pagination.Page{
 		Name: "Dashboard",
 		Message: func(s *session.Session) *discord.MessageUpdateBuilder {
-			flaggedCount := s.Get(constants.SessionKeyFlaggedCount).(int)
 			confirmedCount := s.Get(constants.SessionKeyConfirmedCount).(int)
+			flaggedCount := s.Get(constants.SessionKeyFlaggedCount).(int)
+			clearedCount := s.Get(constants.SessionKeyClearedCount).(int)
+			statsChart := s.Get(constants.SessionKeyStatsChart).(*bytes.Buffer)
 
-			return builders.NewDashboardBuilder(flaggedCount, confirmedCount).Build()
+			return builders.NewDashboardBuilder(confirmedCount, flaggedCount, clearedCount, statsChart).Build()
 		},
 		SelectHandlerFunc: m.handleSelectMenu,
 		ButtonHandlerFunc: m.handleButton,
@@ -36,20 +41,39 @@ func NewMenu(h *Handler) *Menu {
 
 // ShowMenu displays the dashboard.
 func (m *Menu) ShowDashboard(event interfaces.CommonEvent, s *session.Session) {
-	// Get flagged and confirmed users count
-	flaggedCount, err := m.handler.db.Users().GetFlaggedUsersCount()
-	if err != nil {
-		m.handler.logger.Error("Failed to get flagged users count", zap.Error(err))
-	}
-
+	// Get current counts
 	confirmedCount, err := m.handler.db.Users().GetConfirmedUsersCount()
 	if err != nil {
 		m.handler.logger.Error("Failed to get confirmed users count", zap.Error(err))
 	}
 
+	flaggedCount, err := m.handler.db.Users().GetFlaggedUsersCount()
+	if err != nil {
+		m.handler.logger.Error("Failed to get flagged users count", zap.Error(err))
+	}
+
+	clearedCount, err := m.handler.db.Users().GetClearedUsersCount()
+	if err != nil {
+		m.handler.logger.Error("Failed to get cleared users count", zap.Error(err))
+	}
+
+	// Get hourly stats
+	hourlyStats, err := m.handler.stats.GetHourlyStats(context.Background())
+	if err != nil {
+		m.handler.logger.Error("Failed to get hourly stats", zap.Error(err))
+	}
+
+	// Build stats chart
+	statsChart, err := builders.NewChartBuilder(hourlyStats).Build()
+	if err != nil {
+		m.handler.logger.Error("Failed to build stats chart", zap.Error(err))
+	}
+
 	// Set data for the main menu
-	s.Set(constants.SessionKeyFlaggedCount, flaggedCount)
 	s.Set(constants.SessionKeyConfirmedCount, confirmedCount)
+	s.Set(constants.SessionKeyFlaggedCount, flaggedCount)
+	s.Set(constants.SessionKeyClearedCount, clearedCount)
+	s.Set(constants.SessionKeyStatsChart, statsChart)
 
 	m.handler.paginationManager.NavigateTo(event, s, m.page, "")
 }

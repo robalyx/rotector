@@ -1,6 +1,7 @@
 package builders
 
 import (
+	"bytes"
 	"strconv"
 
 	"github.com/disgoorg/disgo/discord"
@@ -9,25 +10,34 @@ import (
 
 // DashboardBuilder is the builder for the dashboard.
 type DashboardBuilder struct {
-	flaggedCount   int
 	confirmedCount int
+	flaggedCount   int
+	clearedCount   int
+	statsChart     *bytes.Buffer
 }
 
 // NewDashboardBuilder creates a new DashboardBuilder.
-func NewDashboardBuilder(flaggedCount, confirmedCount int) *DashboardBuilder {
+func NewDashboardBuilder(confirmedCount, flaggedCount, clearedCount int, statsChart *bytes.Buffer) *DashboardBuilder {
 	return &DashboardBuilder{
-		flaggedCount:   flaggedCount,
 		confirmedCount: confirmedCount,
+		flaggedCount:   flaggedCount,
+		clearedCount:   clearedCount,
+		statsChart:     statsChart,
 	}
 }
 
 // Build builds the dashboard.
 func (b *DashboardBuilder) Build() *discord.MessageUpdateBuilder {
 	embed := discord.NewEmbedBuilder().
-		AddField("Flagged Users", strconv.Itoa(b.flaggedCount), true).
 		AddField("Confirmed Users", strconv.Itoa(b.confirmedCount), true).
-		SetColor(constants.DefaultEmbedColor).
-		Build()
+		AddField("Flagged Users", strconv.Itoa(b.flaggedCount), true).
+		AddField("Cleared Users", strconv.Itoa(b.clearedCount), true).
+		SetColor(constants.DefaultEmbedColor)
+
+	// Add stats chart if available
+	if b.statsChart != nil {
+		embed.SetImage("attachment://stats_chart.png")
+	}
 
 	components := []discord.ContainerComponent{
 		discord.NewActionRow(
@@ -44,7 +54,14 @@ func (b *DashboardBuilder) Build() *discord.MessageUpdateBuilder {
 		),
 	}
 
-	return discord.NewMessageUpdateBuilder().
-		SetEmbeds(embed).
+	builder := discord.NewMessageUpdateBuilder().
+		SetEmbeds(embed.Build()).
 		AddContainerComponents(components...)
+
+	// Attach stats chart if available
+	if b.statsChart != nil {
+		builder.SetFiles(discord.NewFile("stats_chart.png", "", b.statsChart))
+	}
+
+	return builder
 }

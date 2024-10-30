@@ -5,12 +5,14 @@ import (
 	"github.com/rotector/rotector/internal/bot/pagination"
 	"github.com/rotector/rotector/internal/bot/session"
 	"github.com/rotector/rotector/internal/common/database"
+	"github.com/rotector/rotector/internal/common/statistics"
 	"go.uber.org/zap"
 )
 
 // Handler handles the dashboard functionality.
 type Handler struct {
 	db                *database.Database
+	stats             *statistics.Statistics
 	sessionManager    *session.Manager
 	paginationManager *pagination.Manager
 	dashboard         *Menu
@@ -22,9 +24,10 @@ type Handler struct {
 }
 
 // New creates a new Handler instance.
-func New(db *database.Database, logger *zap.Logger, sessionManager *session.Manager, paginationManager *pagination.Manager) *Handler {
+func New(db *database.Database, stats *statistics.Statistics, logger *zap.Logger, sessionManager *session.Manager, paginationManager *pagination.Manager) *Handler {
 	h := &Handler{
 		db:                db,
+		stats:             stats,
 		logger:            logger,
 		sessionManager:    sessionManager,
 		paginationManager: paginationManager,

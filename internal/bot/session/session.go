@@ -47,7 +47,7 @@ func (s *Session) Set(key string, value interface{}) {
 	defer s.mu.Unlock()
 
 	s.data[key] = value
-	s.logger.Debug("Session key set", zap.String("key", key), zap.Any("value", value))
+	s.logger.Debug("Session key set", zap.String("key", key))
 }
 
 // Delete deletes the value for the given key.

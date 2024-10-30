@@ -38,6 +38,7 @@ type AppSetup struct {
 	DBLogger     *zap.Logger
 	DB           *database.Database
 	OpenAIClient *openai.Client
+	Stats        *statistics.Statistics
 	RoAPI        *api.API
 	Queue        *queue.Manager
 	RedisManager *redis.Manager
@@ -66,7 +67,7 @@ func InitializeApp(logDir string) (*AppSetup, error) {
 		logger.Fatal("Failed to create statistics Redis client", zap.Error(err))
 		return nil, err
 	}
-	stats := statistics.NewStatistics(statsRedis)
+	stats := statistics.NewStatistics(statsRedis, logger)
 
 	// Initialize database connection
 	db, err := database.NewConnection(cfg, stats, dbLogger)
@@ -102,6 +103,7 @@ func InitializeApp(logDir string) (*AppSetup, error) {
 		DBLogger:     dbLogger,
 		DB:           db,
 		OpenAIClient: openaiClient,
+		Stats:        stats,
 		RoAPI:        roAPI,
 		Queue:        queueManager,
 		RedisManager: redisManager,

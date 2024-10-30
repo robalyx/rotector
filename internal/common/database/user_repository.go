@@ -160,9 +160,14 @@ func (r *UserRepository) SaveFlaggedUsers(flaggedUsers []*User) {
 			zap.String("thumbnail_url", flaggedUser.ThumbnailURL))
 	}
 
-	// Increment the users_flagged statistic
-	if err := r.stats.IncrementField(context.Background(), statistics.FieldUsersFlagged, len(flaggedUsers)); err != nil {
+	// Increment statistic
+	if err := r.stats.IncrementDailyStat(context.Background(), statistics.FieldUsersFlagged, len(flaggedUsers)); err != nil {
 		r.logger.Error("Failed to increment users_flagged statistic", zap.Error(err))
+	}
+
+	// Increment hourly stat
+	if err := r.stats.IncrementHourlyStat(context.Background(), statistics.HourlyStatFlagged); err != nil {
+		r.logger.Error("Failed to increment hourly flagged stat", zap.Error(err))
 	}
 
 	r.logger.Info("Finished saving flagged users")
@@ -220,10 +225,15 @@ func (r *UserRepository) ConfirmUser(user *FlaggedUser) error {
 			}
 		}
 
-		// Increment the users_confirmed statistic
-		if err := r.stats.IncrementField(tx.Context(), statistics.FieldUsersConfirmed, 1); err != nil {
+		// Increment statistic
+		if err := r.stats.IncrementDailyStat(tx.Context(), statistics.FieldUsersConfirmed, 1); err != nil {
 			r.logger.Error("Failed to increment users_confirmed statistic", zap.Error(err))
 			return err
+		}
+
+		// Increment hourly stat
+		if err := r.stats.IncrementHourlyStat(tx.Context(), statistics.HourlyStatConfirmed); err != nil {
+			r.logger.Error("Failed to increment hourly confirmed stat", zap.Error(err))
 		}
 
 		return nil
@@ -270,10 +280,15 @@ func (r *UserRepository) ClearUser(user *FlaggedUser) error {
 
 		r.logger.Info("User cleared and moved to cleared_users", zap.Uint64("userID", user.ID))
 
-		// Increment the users_cleared statistic
-		if err := r.stats.IncrementField(tx.Context(), statistics.FieldUsersCleared, 1); err != nil {
+		// Increment statistic
+		if err := r.stats.IncrementDailyStat(tx.Context(), statistics.FieldUsersCleared, 1); err != nil {
 			r.logger.Error("Failed to increment users_cleared statistic", zap.Error(err))
 			return err
+		}
+
+		// Increment hourly stat
+		if err := r.stats.IncrementHourlyStat(tx.Context(), statistics.HourlyStatCleared); err != nil {
+			r.logger.Error("Failed to increment hourly cleared stat", zap.Error(err))
 		}
 
 		return nil
@@ -503,8 +518,8 @@ func (r *UserRepository) RemoveBannedUsers(userIDs []uint64) error {
 			return err
 		}
 
-		// Increment the users_purged statistic
-		if err := r.stats.IncrementField(tx.Context(), statistics.FieldBannedUsersPurged, len(userIDs)); err != nil {
+		// Increment statistic
+		if err := r.stats.IncrementDailyStat(tx.Context(), statistics.FieldBannedUsersPurged, len(userIDs)); err != nil {
 			r.logger.Error("Failed to increment banned_users_purged statistic", zap.Error(err))
 			return err
 		}
@@ -557,8 +572,8 @@ func (r *UserRepository) PurgeOldClearedUsers(cutoffDate time.Time, limit int) (
 			zap.Int("count", affected),
 			zap.Uint64s("userIDs", userIDs))
 
-		// Increment the cleared_users_purged statistic
-		if err := r.stats.IncrementField(tx.Context(), statistics.FieldClearedUsersPurged, affected); err != nil {
+		// Increment statistic
+		if err := r.stats.IncrementDailyStat(tx.Context(), statistics.FieldClearedUsersPurged, affected); err != nil {
 			r.logger.Error("Failed to increment cleared_users_purged statistic", zap.Error(err))
 			return err
 		}

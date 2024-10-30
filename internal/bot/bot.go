@@ -24,6 +24,7 @@ import (
 	"github.com/rotector/rotector/internal/bot/utils"
 	"github.com/rotector/rotector/internal/common/database"
 	queueManager "github.com/rotector/rotector/internal/common/queue"
+	"github.com/rotector/rotector/internal/common/statistics"
 )
 
 // Bot represents the Discord bot.
@@ -40,12 +41,12 @@ type Bot struct {
 }
 
 // New creates a new Bot instance.
-func New(token string, db *database.Database, roAPI *api.API, queueManager *queueManager.Manager, logger *zap.Logger) (*Bot, error) {
+func New(token string, db *database.Database, stats *statistics.Statistics, roAPI *api.API, queueManager *queueManager.Manager, logger *zap.Logger) (*Bot, error) {
 	sessionManager := session.NewManager(db, logger)
 	paginationManager := pagination.NewManager(logger)
 
 	// Initialize the handlers
-	dashboardHandler := dashboard.New(db, logger, sessionManager, paginationManager)
+	dashboardHandler := dashboard.New(db, stats, logger, sessionManager, paginationManager)
 	reviewHandler := review.New(db, logger, roAPI, sessionManager, paginationManager, dashboardHandler)
 	settingHandler := setting.New(db, logger, sessionManager, paginationManager, dashboardHandler)
 	logHandler := log.New(db, sessionManager, paginationManager, dashboardHandler, logger)

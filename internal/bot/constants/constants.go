@@ -89,8 +89,10 @@ const (
 	SessionKeyStart          = "start"
 	SessionKeyTotalItems     = "totalItems"
 
-	SessionKeyFlaggedCount   = "flaggedCount"
 	SessionKeyConfirmedCount = "confirmedCount"
+	SessionKeyFlaggedCount   = "flaggedCount"
+	SessionKeyClearedCount   = "clearedCount"
+	SessionKeyStatsChart     = "statsChart"
 
 	SessionKeySettingName      = "settingName"
 	SessionKeySettingType      = "settingType"
