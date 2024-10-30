@@ -26,10 +26,11 @@ func NewMenu(h *Handler) *Menu {
 	m := Menu{handler: h}
 	m.page = &pagination.Page{
 		Name: "Queue Menu",
-		Message: func(_ *session.Session) *discord.MessageUpdateBuilder {
-			highCount := h.queueManager.GetQueueLength(queue.HighPriority)
-			normalCount := h.queueManager.GetQueueLength(queue.NormalPriority)
-			lowCount := h.queueManager.GetQueueLength(queue.LowPriority)
+		Message: func(s *session.Session) *discord.MessageUpdateBuilder {
+			highCount := s.GetInt(constants.SessionKeyQueueHighCount)
+			normalCount := s.GetInt(constants.SessionKeyQueueNormalCount)
+			lowCount := s.GetInt(constants.SessionKeyQueueLowCount)
+
 			return builders.NewQueueBuilder(highCount, normalCount, lowCount).Build()
 		},
 		SelectHandlerFunc: m.handleSelectMenu,
@@ -41,6 +42,10 @@ func NewMenu(h *Handler) *Menu {
 
 // ShowQueueMenu displays the queue management menu.
 func (m *Menu) ShowQueueMenu(event interfaces.CommonEvent, s *session.Session) {
+	s.Set(constants.SessionKeyQueueHighCount, m.handler.queueManager.GetQueueLength(queue.HighPriority))
+	s.Set(constants.SessionKeyQueueNormalCount, m.handler.queueManager.GetQueueLength(queue.NormalPriority))
+	s.Set(constants.SessionKeyQueueLowCount, m.handler.queueManager.GetQueueLength(queue.LowPriority))
+
 	m.handler.paginationManager.NavigateTo(event, s, m.page, "")
 }
 
@@ -75,9 +80,12 @@ func (m *Menu) handleSelectMenu(event *events.ComponentInteractionCreate, s *ses
 }
 
 // handleButton handles button interactions.
-func (m *Menu) handleButton(event *events.ComponentInteractionCreate, _ *session.Session, customID string) {
-	if customID == constants.BackButtonCustomID {
-		m.handler.dashboardHandler.ShowDashboard(event)
+func (m *Menu) handleButton(event *events.ComponentInteractionCreate, s *session.Session, customID string) {
+	switch customID {
+	case constants.BackButtonCustomID:
+		m.handler.dashboardHandler.ShowDashboard(event, s)
+	case constants.RefreshButtonCustomID:
+		m.ShowQueueMenu(event, s)
 	}
 }
 

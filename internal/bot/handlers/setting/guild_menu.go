@@ -78,9 +78,9 @@ func (g *GuildMenu) handleGuildSettingSelection(event *events.ComponentInteracti
 }
 
 // handleGuildSettingButton handles the buttons for the guild settings menu.
-func (g *GuildMenu) handleGuildSettingButton(event *events.ComponentInteractionCreate, _ *session.Session, customID string) {
+func (g *GuildMenu) handleGuildSettingButton(event *events.ComponentInteractionCreate, s *session.Session, customID string) {
 	if customID == constants.BackButtonCustomID {
-		g.handler.dashboardHandler.ShowDashboard(event)
+		g.handler.dashboardHandler.ShowDashboard(event, s)
 	}
 }
 

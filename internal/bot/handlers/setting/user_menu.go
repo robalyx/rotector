@@ -76,9 +76,9 @@ func (u *UserMenu) handleUserSettingSelection(event *events.ComponentInteraction
 }
 
 // handleUserSettingButton handles the buttons for the user settings menu.
-func (u *UserMenu) handleUserSettingButton(event *events.ComponentInteractionCreate, _ *session.Session, customID string) {
+func (u *UserMenu) handleUserSettingButton(event *events.ComponentInteractionCreate, s *session.Session, customID string) {
 	if customID == constants.BackButtonCustomID {
-		u.handler.dashboardHandler.ShowDashboard(event)
+		u.handler.dashboardHandler.ShowDashboard(event, s)
 	}
 }
 

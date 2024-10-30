@@ -39,6 +39,9 @@ func (b *DashboardBuilder) Build() *discord.MessageUpdateBuilder {
 				discord.NewStringSelectMenuOption("Guild Settings", constants.GuildSettingsCustomID).WithEmoji(discord.ComponentEmoji{Name: "⚙️"}),
 			),
 		),
+		discord.NewActionRow(
+			discord.NewSecondaryButton("🔄", string(constants.RefreshButtonCustomID)),
+		),
 	}
 
 	return discord.NewMessageUpdateBuilder().

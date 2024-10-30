@@ -57,6 +57,6 @@ func (h *Handler) SetQueueHandler(queueHandler interfaces.QueueHandler) {
 }
 
 // ShowDashboard shows the dashboard.
-func (h *Handler) ShowDashboard(event interfaces.CommonEvent) {
-	h.dashboard.ShowDashboard(event)
+func (h *Handler) ShowDashboard(event interfaces.CommonEvent, s *session.Session) {
+	h.dashboard.ShowDashboard(event, s)
 }

@@ -7,6 +7,8 @@ const (
 	// Common.
 	NotApplicable            = "N/A"
 	ActionSelectMenuCustomID = "action"
+	RefreshButtonCustomID    = "refresh"
+	BackButtonCustomID       = "back"
 	DefaultEmbedColor        = 0x312D2B
 	StreamerModeEmbedColor   = 0x3E3769
 
@@ -25,7 +27,6 @@ const (
 	OpenFriendsMenuButtonCustomID = "open_friends_menu"
 	OpenGroupsMenuButtonCustomID  = "open_groups_menu"
 
-	BackButtonCustomID  = "back"
 	BanButtonCustomID   = "ban"
 	ClearButtonCustomID = "clear"
 	SkipButtonCustomID  = "skip"
@@ -115,5 +116,8 @@ const (
 	SessionKeyDateRangeStart     = "dateRangeStart"
 	SessionKeyDateRangeEnd       = "dateRangeEnd"
 
-	SessionKeyQueuePriority = "queuePriority"
+	SessionKeyQueuePriority    = "queuePriority"
+	SessionKeyQueueHighCount   = "queueHighCount"
+	SessionKeyQueueNormalCount = "queueNormalCount"
+	SessionKeyQueueLowCount    = "queueLowCount"
 )

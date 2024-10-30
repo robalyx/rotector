@@ -29,14 +29,13 @@ func NewMenu(h *Handler) *Menu {
 			return builders.NewDashboardBuilder(flaggedCount, confirmedCount).Build()
 		},
 		SelectHandlerFunc: m.handleSelectMenu,
+		ButtonHandlerFunc: m.handleButton,
 	}
 	return &m
 }
 
 // ShowMenu displays the dashboard.
-func (m *Menu) ShowDashboard(event interfaces.CommonEvent) {
-	s := m.handler.sessionManager.GetOrCreateSession(event.User().ID)
-
+func (m *Menu) ShowDashboard(event interfaces.CommonEvent, s *session.Session) {
 	// Get flagged and confirmed users count
 	flaggedCount, err := m.handler.db.Users().GetFlaggedUsersCount()
 	if err != nil {
@@ -79,5 +78,12 @@ func (m *Menu) handleSelectMenu(event *events.ComponentInteractionCreate, s *ses
 		m.handler.logsHandler.ShowLogMenu(event, s)
 	case constants.QueueManagerCustomID:
 		m.handler.queueHandler.ShowQueueMenu(event, s)
+	}
+}
+
+// handleButton handles button interactions.
+func (m *Menu) handleButton(event *events.ComponentInteractionCreate, s *session.Session, customID string) {
+	if customID == constants.RefreshButtonCustomID {
+		m.ShowDashboard(event, s)
 	}
 }

@@ -6,7 +6,7 @@ import (
 
 // DashboardHandler defines the interface for handling dashboard-related actions.
 type DashboardHandler interface {
-	ShowDashboard(event CommonEvent)
+	ShowDashboard(event CommonEvent, s *session.Session)
 }
 
 // ReviewHandler defines the interface for handling review-related actions.

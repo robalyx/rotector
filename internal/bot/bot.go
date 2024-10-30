@@ -149,7 +149,9 @@ func (b *Bot) handleApplicationCommandInteraction(event *events.ApplicationComma
 				b.logger.Error("Panic in application command interaction handler", zap.Any("panic", r))
 			}
 		}()
-		b.dashboardHandler.ShowDashboard(event)
+
+		s := b.sessionManager.GetOrCreateSession(event.User().ID)
+		b.dashboardHandler.ShowDashboard(event, s)
 	}()
 }
 

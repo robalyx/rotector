@@ -46,6 +46,7 @@ func (b *QueueBuilder) Build() *discord.MessageUpdateBuilder {
 		),
 		discord.NewActionRow(
 			discord.NewSecondaryButton("◀️", string(constants.BackButtonCustomID)),
+			discord.NewSecondaryButton("🔄", string(constants.RefreshButtonCustomID)),
 		),
 	}
 
