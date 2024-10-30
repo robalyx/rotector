@@ -42,7 +42,7 @@ func (b *ChartBuilder) Build() (*bytes.Buffer, error) {
 	gridLines, ticks := b.prepareGridLinesAndTicks()
 
 	graph := &chart.Chart{
-		Title:      "User Statistics (Past 24 Hours)",
+		Title:      "User Statistics",
 		TitleStyle: b.getTitleStyle(),
 		Background: b.getBackgroundStyle(),
 		XAxis:      b.getXAxis(gridLines, ticks),
@@ -91,9 +91,17 @@ func (b *ChartBuilder) prepareGridLinesAndTicks() ([]chart.GridLine, []chart.Tic
 	ticks := make([]chart.Tick, len(b.stats))
 	for i := range b.stats {
 		gridLines[i] = chart.GridLine{Value: float64(i)}
+
+		// Format as hours ago
+		hoursAgo := len(b.stats) - 1 - i
+		label := "now"
+		if hoursAgo > 0 {
+			label = fmt.Sprintf("%dh ago", hoursAgo)
+		}
+
 		ticks[i] = chart.Tick{
 			Value: float64(i),
-			Label: b.stats[i].Timestamp.Format("15:04"),
+			Label: label,
 		}
 	}
 	return gridLines, ticks

@@ -53,7 +53,7 @@ func NewStatistics(client rueidis.Client, logger *zap.Logger) *Statistics {
 
 // IncrementDailyStat increments a statistic for the current day.
 func (s *Statistics) IncrementDailyStat(ctx context.Context, field string, amount int) error {
-	date := time.Now().Format("2006-01-02")
+	date := time.Now().UTC().Format("2006-01-02")
 	key := fmt.Sprintf("%s:%s", DailyStatsKeyPrefix, date)
 
 	cmd := s.Client.B().Hincrby().Key(key).Field(field).Increment(int64(amount)).Build()
@@ -62,7 +62,7 @@ func (s *Statistics) IncrementDailyStat(ctx context.Context, field string, amoun
 
 // IncrementHourlyStat increments a statistic for the current hour.
 func (s *Statistics) IncrementHourlyStat(ctx context.Context, statType string) error {
-	currentTime := time.Now()
+	currentTime := time.Now().UTC()
 	key := fmt.Sprintf("%s:%s:%s", HourlyStatsKeyPrefix, statType, currentTime.Format("2006-01-02-15"))
 
 	// Increment the counter
@@ -78,7 +78,7 @@ func (s *Statistics) IncrementHourlyStat(ctx context.Context, statType string) e
 
 // GetHourlyStats retrieves statistics for the past 24 hours.
 func (s *Statistics) GetHourlyStats(ctx context.Context) ([]HourlyStats, error) {
-	currentTime := time.Now()
+	currentTime := time.Now().UTC()
 	stats := make([]HourlyStats, 24)
 
 	// Initialize stats array with timestamps
@@ -119,6 +119,7 @@ func (s *Statistics) GetHourlyStats(ctx context.Context) ([]HourlyStats, error) 
 
 		s.logger.Debug("Retrieved hourly stats",
 			zap.String("hour", hourFormat),
+			zap.Time("timestamp_utc", stat.Timestamp),
 			zap.Int64("confirmed", stats[i].Confirmed),
 			zap.Int64("flagged", stats[i].Flagged),
 			zap.Int64("cleared", stats[i].Cleared))
