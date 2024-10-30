@@ -1,4 +1,4 @@
-package settings
+package setting
 
 import (
 	"strconv"
@@ -7,22 +7,22 @@ import (
 	"github.com/disgoorg/disgo/discord"
 	"github.com/disgoorg/disgo/events"
 	"github.com/rotector/rotector/internal/bot/constants"
-	"github.com/rotector/rotector/internal/bot/handlers/settings/builders"
+	"github.com/rotector/rotector/internal/bot/handlers/setting/builders"
 	"github.com/rotector/rotector/internal/bot/interfaces"
 	"github.com/rotector/rotector/internal/bot/pagination"
 	"github.com/rotector/rotector/internal/bot/session"
 	"go.uber.org/zap"
 )
 
-// SettingMenu is the handler for the setting change menu.
-type SettingMenu struct {
+// Menu is the handler for the setting change menu.
+type Menu struct {
 	handler *Handler
 	page    *pagination.Page
 }
 
-// NewSettingMenu creates a new SettingMenu instance.
-func NewSettingMenu(h *Handler) *SettingMenu {
-	m := &SettingMenu{handler: h}
+// NewMenu creates a new Menu instance.
+func NewMenu(h *Handler) *Menu {
+	m := &Menu{handler: h}
 	m.page = &pagination.Page{
 		Name: "Setting Change Menu",
 		Message: func(s *session.Session) *discord.MessageUpdateBuilder {
@@ -38,7 +38,7 @@ func NewSettingMenu(h *Handler) *SettingMenu {
 }
 
 // ShowMenu displays the setting change menu.
-func (m *SettingMenu) ShowMenu(event interfaces.CommonEvent, s *session.Session, settingName, settingType, customID string, currentValueFunc func() string, options []discord.StringSelectMenuOption) {
+func (m *Menu) ShowMenu(event interfaces.CommonEvent, s *session.Session, settingName, settingType, customID string, currentValueFunc func() string, options []discord.StringSelectMenuOption) {
 	s.Set(constants.SessionKeySettingName, settingName)
 	s.Set(constants.SessionKeySettingType, settingType)
 	s.Set(constants.SessionKeyCurrentValueFunc, currentValueFunc)
@@ -49,7 +49,7 @@ func (m *SettingMenu) ShowMenu(event interfaces.CommonEvent, s *session.Session,
 }
 
 // handleSettingChange handles the select menu for the setting change menu.
-func (m *SettingMenu) handleSettingChange(event *events.ComponentInteractionCreate, s *session.Session, customID string, option string) {
+func (m *Menu) handleSettingChange(event *events.ComponentInteractionCreate, s *session.Session, customID string, option string) {
 	// Save the setting immediately
 	settingType := s.GetString(constants.SessionKeySettingType)
 	m.saveSetting(event, settingType, customID, option)
@@ -58,7 +58,7 @@ func (m *SettingMenu) handleSettingChange(event *events.ComponentInteractionCrea
 }
 
 // handleSettingButton handles the buttons for the setting change menu.
-func (m *SettingMenu) handleSettingButton(event *events.ComponentInteractionCreate, s *session.Session, customID string) {
+func (m *Menu) handleSettingButton(event *events.ComponentInteractionCreate, s *session.Session, customID string) {
 	split := strings.Split(customID, "_")
 	if len(split) > 1 && split[1] == constants.BackButtonCustomID {
 		// Back to the main menu
@@ -72,7 +72,7 @@ func (m *SettingMenu) handleSettingButton(event *events.ComponentInteractionCrea
 }
 
 // saveSetting saves the given setting to the database.
-func (m *SettingMenu) saveSetting(event interfaces.CommonEvent, settingType, customID, option string) {
+func (m *Menu) saveSetting(event interfaces.CommonEvent, settingType, customID, option string) {
 	switch settingType {
 	case constants.UserSettingPrefix:
 		m.saveUserSetting(event, customID, option)
@@ -84,7 +84,7 @@ func (m *SettingMenu) saveSetting(event interfaces.CommonEvent, settingType, cus
 }
 
 // saveUserSetting saves a user-specific setting.
-func (m *SettingMenu) saveUserSetting(event interfaces.CommonEvent, customID, option string) {
+func (m *Menu) saveUserSetting(event interfaces.CommonEvent, customID, option string) {
 	settings, err := m.handler.db.Settings().GetUserSettings(uint64(event.User().ID))
 	if err != nil {
 		m.handler.logger.Error("failed to get user settings", zap.Error(err))
@@ -111,7 +111,7 @@ func (m *SettingMenu) saveUserSetting(event interfaces.CommonEvent, customID, op
 }
 
 // saveGuildSetting saves a guild-specific setting.
-func (m *SettingMenu) saveGuildSetting(event interfaces.CommonEvent, customID, option string) {
+func (m *Menu) saveGuildSetting(event interfaces.CommonEvent, customID, option string) {
 	guildID := uint64(*event.GuildID())
 
 	switch customID {

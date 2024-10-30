@@ -1,4 +1,4 @@
-package settings
+package setting
 
 import (
 	"strconv"
@@ -6,7 +6,7 @@ import (
 	"github.com/disgoorg/disgo/discord"
 	"github.com/disgoorg/disgo/events"
 	"github.com/rotector/rotector/internal/bot/constants"
-	"github.com/rotector/rotector/internal/bot/handlers/settings/builders"
+	"github.com/rotector/rotector/internal/bot/handlers/setting/builders"
 	"github.com/rotector/rotector/internal/bot/interfaces"
 	"github.com/rotector/rotector/internal/bot/pagination"
 	"github.com/rotector/rotector/internal/bot/session"

@@ -1,4 +1,4 @@
-package logs
+package log
 
 import (
 	"github.com/rotector/rotector/internal/bot/interfaces"
@@ -13,9 +13,9 @@ type Handler struct {
 	db                *database.Database
 	sessionManager    *session.Manager
 	paginationManager *pagination.Manager
-	dashboardHandler  interfaces.DashboardHandler
-	logMenu           *LogMenu
+	logMenu           *Menu
 	logger            *zap.Logger
+	dashboardHandler  interfaces.DashboardHandler
 }
 
 // New creates a new Handler instance.
@@ -28,7 +28,7 @@ func New(db *database.Database, sessionManager *session.Manager, paginationManag
 		logger:            logger,
 	}
 
-	h.logMenu = NewLogMenu(h)
+	h.logMenu = NewMenu(h)
 	paginationManager.AddPage(h.logMenu.page)
 
 	return h

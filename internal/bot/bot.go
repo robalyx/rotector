@@ -15,10 +15,10 @@ import (
 	"github.com/jaxron/roapi.go/pkg/api"
 	"github.com/rotector/rotector/internal/bot/constants"
 	"github.com/rotector/rotector/internal/bot/handlers/dashboard"
-	"github.com/rotector/rotector/internal/bot/handlers/logs"
+	"github.com/rotector/rotector/internal/bot/handlers/log"
 	"github.com/rotector/rotector/internal/bot/handlers/queue"
-	"github.com/rotector/rotector/internal/bot/handlers/reviewer"
-	"github.com/rotector/rotector/internal/bot/handlers/settings"
+	"github.com/rotector/rotector/internal/bot/handlers/review"
+	"github.com/rotector/rotector/internal/bot/handlers/setting"
 	"github.com/rotector/rotector/internal/bot/pagination"
 	"github.com/rotector/rotector/internal/bot/session"
 	"github.com/rotector/rotector/internal/bot/utils"
@@ -34,9 +34,9 @@ type Bot struct {
 	sessionManager    *session.Manager
 	paginationManager *pagination.Manager
 	dashboardHandler  *dashboard.Handler
-	reviewerHandler   *reviewer.Handler
-	settingsHandler   *settings.Handler
-	logsHandler       *logs.Handler
+	reviewHandler     *review.Handler
+	settingHandler    *setting.Handler
+	logHandler        *log.Handler
 }
 
 // New creates a new Bot instance.
@@ -46,14 +46,14 @@ func New(token string, db *database.Database, roAPI *api.API, queueManager *queu
 
 	// Initialize the handlers
 	dashboardHandler := dashboard.New(db, logger, sessionManager, paginationManager)
-	reviewerHandler := reviewer.New(db, logger, roAPI, sessionManager, paginationManager, dashboardHandler)
-	settingsHandler := settings.New(db, logger, sessionManager, paginationManager, dashboardHandler)
-	logsHandler := logs.New(db, sessionManager, paginationManager, dashboardHandler, logger)
+	reviewHandler := review.New(db, logger, roAPI, sessionManager, paginationManager, dashboardHandler)
+	settingHandler := setting.New(db, logger, sessionManager, paginationManager, dashboardHandler)
+	logHandler := log.New(db, sessionManager, paginationManager, dashboardHandler, logger)
 	queueHandler := queue.New(db, logger, sessionManager, paginationManager, queueManager, dashboardHandler)
 
-	dashboardHandler.SetReviewHandler(reviewerHandler)
-	dashboardHandler.SetSettingsHandler(settingsHandler)
-	dashboardHandler.SetLogsHandler(logsHandler)
+	dashboardHandler.SetReviewHandler(reviewHandler)
+	dashboardHandler.SetSettingsHandler(settingHandler)
+	dashboardHandler.SetLogsHandler(logHandler)
 	dashboardHandler.SetQueueHandler(queueHandler)
 
 	// Initialize the bot
@@ -63,9 +63,9 @@ func New(token string, db *database.Database, roAPI *api.API, queueManager *queu
 		sessionManager:    sessionManager,
 		paginationManager: paginationManager,
 		dashboardHandler:  dashboardHandler,
-		reviewerHandler:   reviewerHandler,
-		settingsHandler:   settingsHandler,
-		logsHandler:       logsHandler,
+		reviewHandler:     reviewHandler,
+		settingHandler:    settingHandler,
+		logHandler:        logHandler,
 	}
 
 	// Initialize the Discord client

@@ -15,18 +15,18 @@ import (
 	"go.uber.org/zap"
 )
 
-// QueueMenu handles the queue management menu.
-type QueueMenu struct {
+// Menu handles the queue management menu.
+type Menu struct {
 	handler *Handler
 	page    *pagination.Page
 }
 
-// NewQueueMenu creates a new QueueMenu instance.
-func NewQueueMenu(h *Handler) *QueueMenu {
-	m := QueueMenu{handler: h}
+// NewMenu creates a new Menu instance.
+func NewMenu(h *Handler) *Menu {
+	m := Menu{handler: h}
 	m.page = &pagination.Page{
 		Name: "Queue Menu",
-		Message: func(s *session.Session) *discord.MessageUpdateBuilder {
+		Message: func(_ *session.Session) *discord.MessageUpdateBuilder {
 			highCount := h.queueManager.GetQueueLength(queue.HighPriority)
 			normalCount := h.queueManager.GetQueueLength(queue.NormalPriority)
 			lowCount := h.queueManager.GetQueueLength(queue.LowPriority)
@@ -40,12 +40,12 @@ func NewQueueMenu(h *Handler) *QueueMenu {
 }
 
 // ShowQueueMenu displays the queue management menu.
-func (m *QueueMenu) ShowQueueMenu(event interfaces.CommonEvent, s *session.Session) {
+func (m *Menu) ShowQueueMenu(event interfaces.CommonEvent, s *session.Session) {
 	m.handler.paginationManager.NavigateTo(event, s, m.page, "")
 }
 
 // handleSelectMenu handles the select menu interactions.
-func (m *QueueMenu) handleSelectMenu(event *events.ComponentInteractionCreate, s *session.Session, customID string, option string) {
+func (m *Menu) handleSelectMenu(event *events.ComponentInteractionCreate, s *session.Session, customID string, option string) {
 	if customID != constants.ActionSelectMenuCustomID {
 		return
 	}
@@ -75,14 +75,14 @@ func (m *QueueMenu) handleSelectMenu(event *events.ComponentInteractionCreate, s
 }
 
 // handleButton handles button interactions.
-func (m *QueueMenu) handleButton(event *events.ComponentInteractionCreate, s *session.Session, customID string) {
+func (m *Menu) handleButton(event *events.ComponentInteractionCreate, _ *session.Session, customID string) {
 	if customID == constants.BackButtonCustomID {
 		m.handler.dashboardHandler.ShowDashboard(event)
 	}
 }
 
 // handleModal handles modal submit interactions.
-func (m *QueueMenu) handleModal(event *events.ModalSubmitInteractionCreate, s *session.Session) {
+func (m *Menu) handleModal(event *events.ModalSubmitInteractionCreate, s *session.Session) {
 	if event.Data.CustomID != constants.AddToQueueModalCustomID {
 		return
 	}

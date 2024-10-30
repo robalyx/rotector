@@ -3,6 +3,7 @@ package queue
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/bytedance/sonic"
@@ -100,7 +101,7 @@ func GetPriorityFromCustomID(customID string) string {
 // GetQueueItems gets items from a queue with the given key and batch size.
 func (m *Manager) GetQueueItems(key string, batchSize int) ([]string, error) {
 	result, err := m.client.Do(context.Background(),
-		m.client.B().Zrange().Key(key).Min("0").Max(fmt.Sprintf("%d", batchSize-1)).Build(),
+		m.client.B().Zrange().Key(key).Min("0").Max(strconv.Itoa(batchSize-1)).Build(),
 	).AsStrSlice()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get items from queue: %w", err)

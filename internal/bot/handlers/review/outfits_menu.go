@@ -1,4 +1,4 @@
-package reviewer
+package review
 
 import (
 	"bytes"
@@ -11,7 +11,7 @@ import (
 	"github.com/jaxron/roapi.go/pkg/api/resources/thumbnails"
 	"github.com/jaxron/roapi.go/pkg/api/types"
 	"github.com/rotector/rotector/internal/bot/constants"
-	"github.com/rotector/rotector/internal/bot/handlers/reviewer/builders"
+	"github.com/rotector/rotector/internal/bot/handlers/review/builders"
 	"github.com/rotector/rotector/internal/bot/pagination"
 	"github.com/rotector/rotector/internal/bot/session"
 	"github.com/rotector/rotector/internal/bot/utils"

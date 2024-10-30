@@ -11,15 +11,15 @@ import (
 	"go.uber.org/zap"
 )
 
-// Dashboard represents the dashboard.
-type Dashboard struct {
+// Menu represents the dashboard.
+type Menu struct {
 	handler *Handler
 	page    *pagination.Page
 }
 
-// NewDashboard creates a new Dashboard instance.
-func NewDashboard(h *Handler) *Dashboard {
-	m := Dashboard{handler: h}
+// NewMenu creates a new Menu instance.
+func NewMenu(h *Handler) *Menu {
+	m := Menu{handler: h}
 	m.page = &pagination.Page{
 		Name: "Dashboard",
 		Message: func(s *session.Session) *discord.MessageUpdateBuilder {
@@ -33,8 +33,8 @@ func NewDashboard(h *Handler) *Dashboard {
 	return &m
 }
 
-// ShowDashboard displays the dashboard.
-func (m *Dashboard) ShowDashboard(event interfaces.CommonEvent) {
+// ShowMenu displays the dashboard.
+func (m *Menu) ShowDashboard(event interfaces.CommonEvent) {
 	s := m.handler.sessionManager.GetOrCreateSession(event.User().ID)
 
 	// Get flagged and confirmed users count
@@ -56,7 +56,7 @@ func (m *Dashboard) ShowDashboard(event interfaces.CommonEvent) {
 }
 
 // handleSelectMenu handles the select menu interaction.
-func (m *Dashboard) handleSelectMenu(event *events.ComponentInteractionCreate, s *session.Session, customID string, option string) {
+func (m *Menu) handleSelectMenu(event *events.ComponentInteractionCreate, s *session.Session, customID string, option string) {
 	if customID != constants.ActionSelectMenuCustomID {
 		return
 	}

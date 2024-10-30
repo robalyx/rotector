@@ -1,4 +1,4 @@
-package reviewer
+package review
 
 import (
 	"time"
@@ -6,7 +6,7 @@ import (
 	"github.com/disgoorg/disgo/discord"
 	"github.com/disgoorg/disgo/events"
 	"github.com/rotector/rotector/internal/bot/constants"
-	"github.com/rotector/rotector/internal/bot/handlers/reviewer/builders"
+	"github.com/rotector/rotector/internal/bot/handlers/review/builders"
 	"github.com/rotector/rotector/internal/bot/interfaces"
 	"github.com/rotector/rotector/internal/bot/pagination"
 	"github.com/rotector/rotector/internal/bot/session"
@@ -15,17 +15,17 @@ import (
 	"go.uber.org/zap"
 )
 
-// ReviewMenu handles the review process for users.
-type ReviewMenu struct {
+// Menu handles the review process for users.
+type Menu struct {
 	handler *Handler
 	page    *pagination.Page
 }
 
-// NewReviewMenu creates a new ReviewMenu instance.
-func NewReviewMenu(h *Handler) *ReviewMenu {
+// NewMenu creates a new Menu instance.
+func NewMenu(h *Handler) *Menu {
 	translator := translator.New(h.roAPI.GetClient())
 
-	m := ReviewMenu{handler: h}
+	m := Menu{handler: h}
 	m.page = &pagination.Page{
 		Name: "Review Menu",
 		Message: func(s *session.Session) *discord.MessageUpdateBuilder {
@@ -39,7 +39,7 @@ func NewReviewMenu(h *Handler) *ReviewMenu {
 }
 
 // ShowReviewMenuAndFetchUser displays the review menu and fetches a new user.
-func (m *ReviewMenu) ShowReviewMenuAndFetchUser(event interfaces.CommonEvent, s *session.Session, content string) {
+func (m *Menu) ShowReviewMenuAndFetchUser(event interfaces.CommonEvent, s *session.Session, content string) {
 	// Fetch a new user
 	sortBy := s.GetString(constants.SessionKeySortBy)
 	user, err := m.handler.db.Users().GetFlaggedUserToReview(sortBy)
@@ -64,7 +64,7 @@ func (m *ReviewMenu) ShowReviewMenuAndFetchUser(event interfaces.CommonEvent, s 
 }
 
 // ShowReviewMenu displays the review menu.
-func (m *ReviewMenu) ShowReviewMenu(event interfaces.CommonEvent, s *session.Session, content string) {
+func (m *Menu) ShowReviewMenu(event interfaces.CommonEvent, s *session.Session, content string) {
 	user := s.GetFlaggedUser(constants.SessionKeyTarget)
 
 	// Get flagged friends
@@ -107,7 +107,7 @@ func (m *ReviewMenu) ShowReviewMenu(event interfaces.CommonEvent, s *session.Ses
 }
 
 // handleSelectMenu handles the select menu for the review menu.
-func (m *ReviewMenu) handleSelectMenu(event *events.ComponentInteractionCreate, s *session.Session, customID string, option string) {
+func (m *Menu) handleSelectMenu(event *events.ComponentInteractionCreate, s *session.Session, customID string, option string) {
 	switch customID {
 	case constants.SortOrderSelectMenuCustomID:
 		s.Set(constants.SessionKeySortBy, option)
@@ -127,7 +127,7 @@ func (m *ReviewMenu) handleSelectMenu(event *events.ComponentInteractionCreate, 
 }
 
 // handleButton handles the buttons for the review menu.
-func (m *ReviewMenu) handleButton(event *events.ComponentInteractionCreate, s *session.Session, customID string) {
+func (m *Menu) handleButton(event *events.ComponentInteractionCreate, s *session.Session, customID string) {
 	switch customID {
 	case constants.BackButtonCustomID:
 		m.handler.dashboardHandler.ShowDashboard(event)
@@ -141,14 +141,14 @@ func (m *ReviewMenu) handleButton(event *events.ComponentInteractionCreate, s *s
 }
 
 // handleModal handles the modal for the review menu.
-func (m *ReviewMenu) handleModal(event *events.ModalSubmitInteractionCreate, s *session.Session) {
+func (m *Menu) handleModal(event *events.ModalSubmitInteractionCreate, s *session.Session) {
 	if event.Data.CustomID == constants.BanWithReasonModalCustomID {
 		m.handleBanWithReasonModalSubmit(event, s)
 	}
 }
 
 // handleBanUser handles the ban user button interaction.
-func (m *ReviewMenu) handleBanUser(event interfaces.CommonEvent, s *session.Session) {
+func (m *Menu) handleBanUser(event interfaces.CommonEvent, s *session.Session) {
 	user := s.GetFlaggedUser(constants.SessionKeyTarget)
 
 	// Move the user to confirmed
@@ -171,7 +171,7 @@ func (m *ReviewMenu) handleBanUser(event interfaces.CommonEvent, s *session.Sess
 }
 
 // handleClearUser handles the clear user button interaction.
-func (m *ReviewMenu) handleClearUser(event interfaces.CommonEvent, s *session.Session) {
+func (m *Menu) handleClearUser(event interfaces.CommonEvent, s *session.Session) {
 	user := s.GetFlaggedUser(constants.SessionKeyTarget)
 
 	// Clear the user
@@ -194,7 +194,7 @@ func (m *ReviewMenu) handleClearUser(event interfaces.CommonEvent, s *session.Se
 }
 
 // handleSkipUser handles the skip user button interaction.
-func (m *ReviewMenu) handleSkipUser(event interfaces.CommonEvent, s *session.Session) {
+func (m *Menu) handleSkipUser(event interfaces.CommonEvent, s *session.Session) {
 	user := s.GetFlaggedUser(constants.SessionKeyTarget)
 
 	// Log the activity
@@ -210,7 +210,7 @@ func (m *ReviewMenu) handleSkipUser(event interfaces.CommonEvent, s *session.Ses
 }
 
 // handleBanWithReason processes the ban with a modal for a custom reason.
-func (m *ReviewMenu) handleBanWithReason(event *events.ComponentInteractionCreate, s *session.Session) {
+func (m *Menu) handleBanWithReason(event *events.ComponentInteractionCreate, s *session.Session) {
 	user := s.GetFlaggedUser(constants.SessionKeyTarget)
 
 	// Create the modal
@@ -233,7 +233,7 @@ func (m *ReviewMenu) handleBanWithReason(event *events.ComponentInteractionCreat
 }
 
 // handleBanWithReasonModalSubmit processes the modal submit interaction.
-func (m *ReviewMenu) handleBanWithReasonModalSubmit(event *events.ModalSubmitInteractionCreate, s *session.Session) {
+func (m *Menu) handleBanWithReasonModalSubmit(event *events.ModalSubmitInteractionCreate, s *session.Session) {
 	user := s.GetFlaggedUser(constants.SessionKeyTarget)
 
 	// Get the ban reason from the modal

@@ -16,8 +16,8 @@ type Handler struct {
 	sessionManager    *session.Manager
 	paginationManager *pagination.Manager
 	queueManager      *queue.Manager
+	queueMenu         *Menu
 	dashboardHandler  interfaces.DashboardHandler
-	queueMenu         *QueueMenu
 }
 
 // New creates a new Handler instance.
@@ -31,7 +31,7 @@ func New(db *database.Database, logger *zap.Logger, sessionManager *session.Mana
 		dashboardHandler:  dashboardHandler,
 	}
 
-	h.queueMenu = NewQueueMenu(h)
+	h.queueMenu = NewMenu(h)
 	paginationManager.AddPage(h.queueMenu.page)
 
 	return h

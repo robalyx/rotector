@@ -11,14 +11,14 @@ import (
 // Handler handles the dashboard functionality.
 type Handler struct {
 	db                *database.Database
-	logger            *zap.Logger
 	sessionManager    *session.Manager
 	paginationManager *pagination.Manager
+	dashboard         *Menu
+	logger            *zap.Logger
 	reviewHandler     interfaces.ReviewHandler
 	settingsHandler   interfaces.SettingsHandler
 	logsHandler       interfaces.LogsHandler
 	queueHandler      interfaces.QueueHandler
-	dashboard         *Dashboard
 }
 
 // New creates a new Handler instance.
@@ -30,10 +30,7 @@ func New(db *database.Database, logger *zap.Logger, sessionManager *session.Mana
 		paginationManager: paginationManager,
 	}
 
-	// Add necessary menus
-	h.dashboard = NewDashboard(h)
-
-	// Add pages to the pagination manager
+	h.dashboard = NewMenu(h)
 	paginationManager.AddPage(h.dashboard.page)
 
 	return h

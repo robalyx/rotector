@@ -1,4 +1,4 @@
-package reviewer
+package review
 
 import (
 	"github.com/jaxron/roapi.go/pkg/api"
@@ -14,12 +14,12 @@ type Handler struct {
 	db                *database.Database
 	roAPI             *api.API
 	sessionManager    *session.Manager
-	logger            *zap.Logger
-	reviewMenu        *ReviewMenu
+	paginationManager *pagination.Manager
+	reviewMenu        *Menu
 	outfitsMenu       *OutfitsMenu
 	friendsMenu       *FriendsMenu
-	paginationManager *pagination.Manager
 	groupsMenu        *GroupsMenu
+	logger            *zap.Logger
 	dashboardHandler  interfaces.DashboardHandler
 }
 
@@ -34,13 +34,11 @@ func New(db *database.Database, logger *zap.Logger, roAPI *api.API, sessionManag
 		dashboardHandler:  dashboardHandler,
 	}
 
-	// Add necessary menus
-	h.reviewMenu = NewReviewMenu(h)
+	h.reviewMenu = NewMenu(h)
 	h.outfitsMenu = NewOutfitsMenu(h)
 	h.friendsMenu = NewFriendsMenu(h)
 	h.groupsMenu = NewGroupsMenu(h)
 
-	// Add pages to the pagination manager
 	paginationManager.AddPage(h.reviewMenu.page)
 	paginationManager.AddPage(h.outfitsMenu.page)
 	paginationManager.AddPage(h.friendsMenu.page)

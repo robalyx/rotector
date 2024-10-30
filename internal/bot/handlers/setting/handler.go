@@ -1,4 +1,4 @@
-package settings
+package setting
 
 import (
 	"github.com/rotector/rotector/internal/bot/interfaces"
@@ -11,12 +11,12 @@ import (
 // Handler manages the settings menu.
 type Handler struct {
 	db                *database.Database
-	logger            *zap.Logger
 	sessionManager    *session.Manager
 	paginationManager *pagination.Manager
+	settingMenu       *Menu
 	userMenu          *UserMenu
 	guildMenu         *GuildMenu
-	settingMenu       *SettingMenu
+	logger            *zap.Logger
 	dashboardHandler  interfaces.DashboardHandler
 }
 
@@ -30,9 +30,9 @@ func New(db *database.Database, logger *zap.Logger, sessionManager *session.Mana
 		dashboardHandler:  dashboardHandler,
 	}
 
+	h.settingMenu = NewMenu(h)
 	h.userMenu = NewUserMenu(h)
 	h.guildMenu = NewGuildMenu(h)
-	h.settingMenu = NewSettingMenu(h)
 
 	paginationManager.AddPage(h.userMenu.page)
 	paginationManager.AddPage(h.guildMenu.page)

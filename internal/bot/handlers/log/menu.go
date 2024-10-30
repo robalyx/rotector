@@ -1,4 +1,4 @@
-package logs
+package log
 
 import (
 	"fmt"
@@ -8,7 +8,7 @@ import (
 	"github.com/disgoorg/disgo/discord"
 	"github.com/disgoorg/disgo/events"
 	"github.com/rotector/rotector/internal/bot/constants"
-	"github.com/rotector/rotector/internal/bot/handlers/logs/builders"
+	"github.com/rotector/rotector/internal/bot/handlers/log/builders"
 	"github.com/rotector/rotector/internal/bot/interfaces"
 	"github.com/rotector/rotector/internal/bot/pagination"
 	"github.com/rotector/rotector/internal/bot/session"
@@ -17,15 +17,15 @@ import (
 	"go.uber.org/zap"
 )
 
-// LogMenu handles the log querying functionality.
-type LogMenu struct {
+// Menu handles the log querying functionality.
+type Menu struct {
 	handler *Handler
 	page    *pagination.Page
 }
 
-// NewLogMenu creates a new LogMenu instance.
-func NewLogMenu(h *Handler) *LogMenu {
-	m := &LogMenu{handler: h}
+// NewMenu creates a new Menu instance.
+func NewMenu(h *Handler) *Menu {
+	m := &Menu{handler: h}
 	m.page = &pagination.Page{
 		Name: "Log Menu",
 		Message: func(s *session.Session) *discord.MessageUpdateBuilder {
@@ -39,7 +39,7 @@ func NewLogMenu(h *Handler) *LogMenu {
 }
 
 // ShowLogMenu displays the log querying menu.
-func (m *LogMenu) ShowLogMenu(event interfaces.CommonEvent, s *session.Session) {
+func (m *Menu) ShowLogMenu(event interfaces.CommonEvent, s *session.Session) {
 	// Initialize or reset session data for the log menu
 	s.Set(constants.SessionKeyLogs, []*database.UserActivityLog{})
 	s.Set(constants.SessionKeyUserID, uint64(0))
@@ -55,7 +55,7 @@ func (m *LogMenu) ShowLogMenu(event interfaces.CommonEvent, s *session.Session) 
 }
 
 // handleSelectMenu handles the select menu interactions for the log menu.
-func (m *LogMenu) handleSelectMenu(event *events.ComponentInteractionCreate, s *session.Session, customID string, option string) {
+func (m *Menu) handleSelectMenu(event *events.ComponentInteractionCreate, s *session.Session, customID string, option string) {
 	switch customID {
 	case constants.ActionSelectMenuCustomID:
 		switch option {
@@ -82,7 +82,7 @@ func (m *LogMenu) handleSelectMenu(event *events.ComponentInteractionCreate, s *
 }
 
 // handleButton handles the button interactions for the log menu.
-func (m *LogMenu) handleButton(event *events.ComponentInteractionCreate, s *session.Session, customID string) {
+func (m *Menu) handleButton(event *events.ComponentInteractionCreate, s *session.Session, customID string) {
 	switch customID {
 	case string(constants.BackButtonCustomID):
 		m.handler.dashboardHandler.ShowDashboard(event)
@@ -92,7 +92,7 @@ func (m *LogMenu) handleButton(event *events.ComponentInteractionCreate, s *sess
 }
 
 // handleModal handles the modal submit interactions for the log menu.
-func (m *LogMenu) handleModal(event *events.ModalSubmitInteractionCreate, s *session.Session) {
+func (m *Menu) handleModal(event *events.ModalSubmitInteractionCreate, s *session.Session) {
 	customID := event.Data.CustomID
 	switch customID {
 	case constants.LogsQueryUserIDOption, constants.LogsQueryReviewerIDOption:
@@ -103,7 +103,7 @@ func (m *LogMenu) handleModal(event *events.ModalSubmitInteractionCreate, s *ses
 }
 
 // showQueryModal displays a modal for querying user or reviewer ID.
-func (m *LogMenu) showQueryModal(event *events.ComponentInteractionCreate, option, title, label, placeholder string) {
+func (m *Menu) showQueryModal(event *events.ComponentInteractionCreate, option, title, label, placeholder string) {
 	modal := discord.NewModalCreateBuilder().
 		SetCustomID(option).
 		SetTitle(title).
@@ -120,7 +120,7 @@ func (m *LogMenu) showQueryModal(event *events.ComponentInteractionCreate, optio
 }
 
 // handleIDModalSubmit processes the query modal submission.
-func (m *LogMenu) handleIDModalSubmit(event *events.ModalSubmitInteractionCreate, s *session.Session, queryType string) {
+func (m *Menu) handleIDModalSubmit(event *events.ModalSubmitInteractionCreate, s *session.Session, queryType string) {
 	idStr := event.Data.Text(constants.LogsQueryInputCustomID)
 	id, err := strconv.ParseUint(idStr, 10, 64)
 	if err != nil {
@@ -139,7 +139,7 @@ func (m *LogMenu) handleIDModalSubmit(event *events.ModalSubmitInteractionCreate
 }
 
 // handleDateRangeModalSubmit processes the date range modal submission.
-func (m *LogMenu) handleDateRangeModalSubmit(event *events.ModalSubmitInteractionCreate, s *session.Session) {
+func (m *Menu) handleDateRangeModalSubmit(event *events.ModalSubmitInteractionCreate, s *session.Session) {
 	dateRangeStr := event.Data.Text(constants.LogsQueryInputCustomID)
 	startDate, endDate, err := utils.ParseDateRange(dateRangeStr)
 	if err != nil {
@@ -155,7 +155,7 @@ func (m *LogMenu) handleDateRangeModalSubmit(event *events.ModalSubmitInteractio
 }
 
 // handlePagination handles the pagination for the log menu.
-func (m *LogMenu) handlePagination(event *events.ComponentInteractionCreate, s *session.Session, action utils.ViewerAction) {
+func (m *Menu) handlePagination(event *events.ComponentInteractionCreate, s *session.Session, action utils.ViewerAction) {
 	totalItems := s.GetInt(constants.SessionKeyTotalItems)
 	maxPage := (totalItems - 1) / constants.LogsPerPage
 
@@ -170,7 +170,7 @@ func (m *LogMenu) handlePagination(event *events.ComponentInteractionCreate, s *
 }
 
 // updateLogData fetches and updates the log data based on the current query parameters.
-func (m *LogMenu) updateLogData(event interfaces.CommonEvent, s *session.Session, page int) {
+func (m *Menu) updateLogData(event interfaces.CommonEvent, s *session.Session, page int) {
 	userID := s.GetUint64(constants.SessionKeyUserID)
 	reviewerID := s.GetUint64(constants.SessionKeyReviewerID)
 	activityTypeFilter := s.Get(constants.SessionKeyActivityTypeFilter).(database.ActivityType)
