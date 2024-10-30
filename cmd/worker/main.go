@@ -11,6 +11,7 @@ import (
 	"github.com/rotector/rotector/internal/common/setup"
 	"github.com/rotector/rotector/internal/worker/ai"
 	"github.com/rotector/rotector/internal/worker/purge"
+	"github.com/rotector/rotector/internal/worker/queue"
 	"github.com/rotector/rotector/internal/worker/stats"
 	"github.com/spf13/cobra"
 	"go.uber.org/zap"
@@ -30,6 +31,9 @@ const (
 
 	StatsWorker           = "stats"
 	StatsWorkerTypeUpload = "upload"
+
+	QueueWorker            = "queue"
+	QueueWorkerTypeProcess = "process"
 )
 
 func main() {
@@ -49,6 +53,7 @@ func newRootCmd() *cobra.Command {
 	rootCmd.AddCommand(newAIWorkerCmd())
 	rootCmd.AddCommand(newPurgeWorkerCmd())
 	rootCmd.AddCommand(newStatsWorkerCmd())
+	rootCmd.AddCommand(newQueueWorkerCmd())
 
 	return rootCmd
 }
@@ -132,6 +137,18 @@ func newStatsWorkerCmd() *cobra.Command {
 	}
 }
 
+// newQueueWorkerCmd creates a new queue worker command.
+func newQueueWorkerCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   QueueWorker,
+		Short: "Start queue process worker",
+		Run: func(cmd *cobra.Command, _ []string) {
+			count, _ := cmd.Flags().GetInt("workers")
+			runWorkers(QueueWorker, QueueWorkerTypeProcess, count)
+		},
+	}
+}
+
 // runWorkers starts the specified number of workers of the given type.
 func runWorkers(workerType, subType string, count int) {
 	setup, err := setup.InitializeApp(WorkerLogDir)
@@ -182,6 +199,8 @@ func runWorkers(workerType, subType string, count int) {
 				w = purge.NewTrackingWorker(setup.DB, setup.RoAPI, bar, workerLogger)
 			case workerType == StatsWorker:
 				w = stats.NewStatisticsWorker(setup.DB, bar, workerLogger)
+			case workerType == QueueWorker:
+				w = queue.NewProcessWorker(setup.DB, setup.OpenAIClient, setup.RoAPI, setup.Queue, bar, workerLogger)
 			default:
 				log.Fatalf("Invalid worker type: %s %s", workerType, subType)
 			}

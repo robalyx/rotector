@@ -65,6 +65,15 @@ const (
 	LogsQueryDateRangeOption            = "query_date_range_modal"
 	LogsQueryActivityTypeFilterCustomID = "activity_type_filter"
 
+	// Queue Menu.
+	QueueManagerCustomID        = "queue_manager"
+	QueueHighPriorityCustomID   = "queue_high_priority_modal"
+	QueueNormalPriorityCustomID = "queue_normal_priority_modal"
+	QueueLowPriorityCustomID    = "queue_low_priority_modal"
+	AddToQueueModalCustomID     = "add_to_queue_modal"
+	UserIDInputCustomID         = "user_id_input"
+	ReasonInputCustomID         = "reason_input"
+
 	// Session keys.
 	SessionKeyMessageID   = "messageID"
 	SessionKeyTarget      = "target"
@@ -105,4 +114,6 @@ const (
 	SessionKeyActivityTypeFilter = "activityTypeFilter"
 	SessionKeyDateRangeStart     = "dateRangeStart"
 	SessionKeyDateRangeEnd       = "dateRangeEnd"
+
+	SessionKeyQueuePriority = "queuePriority"
 )

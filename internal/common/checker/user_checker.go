@@ -106,6 +106,11 @@ func (c *UserChecker) checkUserFriends(userInfos []*fetcher.Info) ([]*database.U
 	var remainingUsers []*fetcher.Info
 
 	for _, userInfo := range userInfos {
+		if len(userInfo.Friends) == 0 {
+			remainingUsers = append(remainingUsers, userInfo)
+			continue
+		}
+
 		// Extract friend IDs
 		friendIDs := make([]uint64, len(userInfo.Friends))
 		for i, friend := range userInfo.Friends {

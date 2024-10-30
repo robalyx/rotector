@@ -23,7 +23,7 @@ func main() {
 	defer setup.CleanupApp()
 
 	// Initialize bot
-	discordBot, err := bot.New(setup.Config.Discord.Token, setup.DB, setup.RoAPI, setup.Logger)
+	discordBot, err := bot.New(setup.Config.Discord.Token, setup.DB, setup.RoAPI, setup.Queue, setup.Logger)
 	if err != nil {
 		log.Printf("Failed to create bot: %v", err)
 		return

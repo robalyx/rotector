@@ -24,3 +24,8 @@ type SettingsHandler interface {
 type LogsHandler interface {
 	ShowLogMenu(event CommonEvent, s *session.Session)
 }
+
+// QueueHandler defines the interface for handling queue-related actions.
+type QueueHandler interface {
+	ShowQueueMenu(event CommonEvent, s *session.Session)
+}

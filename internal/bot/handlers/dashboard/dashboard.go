@@ -77,5 +77,7 @@ func (m *Dashboard) handleSelectMenu(event *events.ComponentInteractionCreate, s
 		m.handler.settingsHandler.ShowGuildSettings(event, s)
 	case constants.LogQueryBrowserCustomID:
 		m.handler.logsHandler.ShowLogMenu(event, s)
+	case constants.QueueManagerCustomID:
+		m.handler.queueHandler.ShowQueueMenu(event, s)
 	}
 }

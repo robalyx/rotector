@@ -17,6 +17,7 @@ type Handler struct {
 	reviewHandler     interfaces.ReviewHandler
 	settingsHandler   interfaces.SettingsHandler
 	logsHandler       interfaces.LogsHandler
+	queueHandler      interfaces.QueueHandler
 	dashboard         *Dashboard
 }
 
@@ -51,6 +52,11 @@ func (h *Handler) SetSettingsHandler(settingsHandler interfaces.SettingsHandler)
 // SetLogsHandler sets the logs handler.
 func (h *Handler) SetLogsHandler(logsHandler interfaces.LogsHandler) {
 	h.logsHandler = logsHandler
+}
+
+// SetQueueHandler sets the queue handler.
+func (h *Handler) SetQueueHandler(queueHandler interfaces.QueueHandler) {
+	h.queueHandler = queueHandler
 }
 
 // ShowDashboard shows the dashboard.
