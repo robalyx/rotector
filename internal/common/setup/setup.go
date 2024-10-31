@@ -62,7 +62,7 @@ func InitializeApp(logDir string) (*AppSetup, error) {
 	redisManager := redis.NewManager(cfg, logger)
 
 	// Initialize statistics client
-	statsRedis, err := redisManager.GetClient(statistics.DBIndex)
+	statsRedis, err := redisManager.GetClient(redis.StatsDBIndex)
 	if err != nil {
 		logger.Fatal("Failed to create statistics Redis client", zap.Error(err))
 		return nil, err
@@ -89,7 +89,7 @@ func InitializeApp(logDir string) (*AppSetup, error) {
 	}
 
 	// Initialize Queue manager
-	queueRedis, err := redisManager.GetClient(queue.QueueDBIndex)
+	queueRedis, err := redisManager.GetClient(redis.QueueDBIndex)
 	if err != nil {
 		logger.Fatal("Failed to create queue Redis client", zap.Error(err))
 		return nil, err
@@ -131,7 +131,7 @@ func getRoAPIClient(cfg *config.Config, redisManager *redis.Manager, logger *zap
 	proxies := readProxies(logger)
 
 	// Initialize Redis cache
-	redisClient, err := redisManager.GetClient(0)
+	redisClient, err := redisManager.GetClient(redis.CacheDBIndex)
 	if err != nil {
 		return nil, err
 	}

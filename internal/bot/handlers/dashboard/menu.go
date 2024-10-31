@@ -72,7 +72,7 @@ func (m *Menu) ShowDashboard(event interfaces.CommonEvent, s *session.Session) {
 	}
 
 	// Get active users
-	activeUsers := m.handler.sessionManager.GetActiveUsers()
+	activeUsers := m.handler.sessionManager.GetActiveUsers(context.Background())
 
 	// Set data for the main menu
 	s.Set(constants.SessionKeyConfirmedCount, confirmedCount)

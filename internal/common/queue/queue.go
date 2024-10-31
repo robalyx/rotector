@@ -23,9 +23,6 @@ const (
 	StatusRunning  = "running"
 	StatusComplete = "complete"
 	StatusFailed   = "failed"
-
-	// Redis DB index for queue.
-	QueueDBIndex = 2
 )
 
 // Item represents a queue item.

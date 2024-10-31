@@ -24,6 +24,7 @@ import (
 	"github.com/rotector/rotector/internal/bot/utils"
 	"github.com/rotector/rotector/internal/common/database"
 	queueManager "github.com/rotector/rotector/internal/common/queue"
+	"github.com/rotector/rotector/internal/common/redis"
 	"github.com/rotector/rotector/internal/common/statistics"
 )
 
@@ -41,8 +42,11 @@ type Bot struct {
 }
 
 // New creates a new Bot instance.
-func New(token string, db *database.Database, stats *statistics.Statistics, roAPI *api.API, queueManager *queueManager.Manager, logger *zap.Logger) (*Bot, error) {
-	sessionManager := session.NewManager(db, logger)
+func New(token string, db *database.Database, stats *statistics.Statistics, roAPI *api.API, queueManager *queueManager.Manager, redisManager *redis.Manager, logger *zap.Logger) (*Bot, error) {
+	sessionManager, err := session.NewManager(db, redisManager, logger)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create session manager: %w", err)
+	}
 	paginationManager := pagination.NewManager(logger)
 
 	// Initialize the handlers
@@ -113,6 +117,7 @@ func (b *Bot) Start() error {
 // Close gracefully shuts down the bot.
 func (b *Bot) Close() {
 	b.logger.Info("Closing bot")
+	b.sessionManager.Close()
 	b.client.Close(context.Background())
 }
 
@@ -151,7 +156,7 @@ func (b *Bot) handleApplicationCommandInteraction(event *events.ApplicationComma
 			}
 		}()
 
-		s := b.sessionManager.GetOrCreateSession(event.User().ID)
+		s := b.sessionManager.GetOrCreateSession(context.Background(), event.User().ID)
 		b.dashboardHandler.ShowDashboard(event, s)
 	}()
 }
@@ -189,7 +194,7 @@ func (b *Bot) handleComponentInteraction(event *events.ComponentInteractionCreat
 			}
 		}()
 
-		s := b.sessionManager.GetOrCreateSession(event.User().ID)
+		s := b.sessionManager.GetOrCreateSession(context.Background(), event.User().ID)
 
 		// Ensure the interaction is for the latest message
 		if event.Message.ID.String() != s.GetString(constants.SessionKeyMessageID) {
@@ -222,7 +227,7 @@ func (b *Bot) handleModalSubmit(event *events.ModalSubmitInteractionCreate) {
 			}
 		}()
 
-		s := b.sessionManager.GetOrCreateSession(event.User().ID)
+		s := b.sessionManager.GetOrCreateSession(context.Background(), event.User().ID)
 		b.paginationManager.HandleInteraction(event, s)
 	}()
 }

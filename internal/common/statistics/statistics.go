@@ -10,8 +10,6 @@ import (
 )
 
 const (
-	DBIndex = 1
-
 	// Daily stats.
 	DailyStatsKeyPrefix     = "daily_stats"
 	FieldUsersConfirmed     = "users_confirmed"

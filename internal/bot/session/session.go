@@ -1,60 +1,69 @@
 package session
 
 import (
-	"sync"
-	"time"
+	"context"
 
+	"github.com/bytedance/sonic"
+	"github.com/redis/rueidis"
 	"github.com/rotector/rotector/internal/common/database"
 	"go.uber.org/zap"
 )
 
 // Session represents a user's session.
 type Session struct {
-	db           *database.Database
-	lastActivity time.Time
-	data         map[string]interface{}
-	logger       *zap.Logger
-	mu           sync.RWMutex
+	db     *database.Database
+	redis  rueidis.Client
+	key    string
+	data   map[string]interface{}
+	logger *zap.Logger
 }
 
 // NewSession creates a new session for the given user.
-func NewSession(db *database.Database, logger *zap.Logger) *Session {
+func NewSession(db *database.Database, redis rueidis.Client, key string, logger *zap.Logger) *Session {
 	return &Session{
-		db:           db,
-		lastActivity: time.Now(),
-		data:         make(map[string]interface{}),
-		logger:       logger,
-		mu:           sync.RWMutex{},
+		db:     db,
+		redis:  redis,
+		key:    key,
+		data:   make(map[string]interface{}),
+		logger: logger,
+	}
+}
+
+// Touch updates the session's expiration time.
+func (s *Session) Touch(ctx context.Context) {
+	// Serialize session data
+	data, err := sonic.Marshal(s.data)
+	if err != nil {
+		s.logger.Error("Failed to marshal session data", zap.Error(err))
+		return
+	}
+
+	// Set data with expiration in Redis
+	err = s.redis.Do(ctx,
+		s.redis.B().Set().Key(s.key).Value(string(data)).Ex(SessionTimeout).Build(),
+	).Error()
+	if err != nil {
+		s.logger.Error("Failed to update session in Redis", zap.Error(err))
 	}
 }
 
 // Get returns the value for the given key.
 func (s *Session) Get(key string) interface{} {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
 	if value, ok := s.data[key]; ok {
 		return value
 	}
-
 	s.logger.Warn("Session key not found", zap.String("key", key))
 	return nil
 }
 
 // Set sets the value for the given key.
 func (s *Session) Set(key string, value interface{}) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
 	s.data[key] = value
 	s.logger.Debug("Session key set", zap.String("key", key))
 }
 
 // Delete deletes the value for the given key.
 func (s *Session) Delete(key string) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
 	delete(s.data, key)
 	s.logger.Debug("Session key deleted", zap.String("key", key))
 }

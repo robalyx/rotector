@@ -9,6 +9,13 @@ import (
 	"go.uber.org/zap"
 )
 
+const (
+	CacheDBIndex   = 0
+	StatsDBIndex   = 1
+	QueueDBIndex   = 2
+	SessionDBIndex = 3
+)
+
 // Manager handles Redis client management.
 type Manager struct {
 	clients map[int]rueidis.Client
