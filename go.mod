@@ -16,12 +16,13 @@ require (
 	github.com/jaxron/axonet/middleware/retry v0.0.0-20241025054147-6c298c86aa64
 	github.com/jaxron/axonet/middleware/singleflight v0.0.0-20241025054147-6c298c86aa64
 	github.com/jaxron/roapi.go v0.0.0-20241023130833-ad8750c2385e
-	github.com/openai/openai-go v0.1.0-alpha.31
+	github.com/openai/openai-go v0.1.0-alpha.32
 	github.com/ozankasikci/go-image-merge v0.3.1
 	github.com/redis/rueidis v1.0.48
 	github.com/spf13/cobra v1.8.1
 	github.com/spf13/viper v1.19.0
 	github.com/tdewolff/minify/v2 v2.21.1
+	github.com/wcharczuk/go-chart/v2 v2.1.0
 	go.uber.org/zap v1.27.0
 	golang.org/x/image v0.21.0
 	golang.org/x/text v0.19.0
@@ -36,7 +37,6 @@ require (
 	github.com/cloudwego/base64x v0.1.4 // indirect
 	github.com/cloudwego/iasm v0.2.0 // indirect
 	github.com/disgoorg/json v1.2.0 // indirect
-	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/fsnotify/fsnotify v1.7.0 // indirect
 	github.com/gabriel-vasile/mimetype v1.4.6 // indirect
 	github.com/go-pg/zerochecker v0.2.0 // indirect
@@ -70,12 +70,10 @@ require (
 	github.com/tidwall/sjson v1.2.5 // indirect
 	github.com/tmthrgd/go-hex v0.0.0-20190904060850-447a3041c3bc // indirect
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
-	github.com/vicanso/go-charts/v2 v2.6.10 // indirect
 	github.com/vmihailenco/bufpool v0.1.11 // indirect
 	github.com/vmihailenco/msgpack/v5 v5.4.1 // indirect
 	github.com/vmihailenco/tagparser v0.1.2 // indirect
 	github.com/vmihailenco/tagparser/v2 v2.0.0 // indirect
-	github.com/wcharczuk/go-chart/v2 v2.1.0 // indirect
 	github.com/wk8/go-ordered-map/v2 v2.1.8 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	golang.org/x/arch v0.11.0 // indirect
