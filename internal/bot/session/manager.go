@@ -73,3 +73,20 @@ func (m *Manager) cleanupSessions() {
 		m.mu.Unlock()
 	}
 }
+
+// GetActiveUsers returns a list of user IDs with active sessions.
+func (m *Manager) GetActiveUsers() []snowflake.ID {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	activeUsers := make([]snowflake.ID, 0, len(m.sessions))
+	now := time.Now()
+
+	for userID, session := range m.sessions {
+		if now.Sub(session.lastActivity) <= SessionTimeout {
+			activeUsers = append(activeUsers, userID)
+		}
+	}
+
+	return activeUsers
+}

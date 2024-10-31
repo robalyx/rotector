@@ -48,9 +48,9 @@ func (b *ChartBuilder) Build() (*bytes.Buffer, error) {
 		XAxis:      b.getXAxis(gridLines, ticks),
 		YAxis:      b.getYAxis(),
 		Series: []chart.Series{
-			b.createSeries("Confirmed", xValues, confirmedSeries, chart.ColorGreen),
+			b.createSeries("Confirmed", xValues, confirmedSeries, chart.ColorBlue),
 			b.createSeries("Flagged", xValues, flaggedSeries, chart.ColorRed),
-			b.createSeries("Cleared", xValues, clearedSeries, chart.ColorBlue),
+			b.createSeries("Cleared", xValues, clearedSeries, chart.ColorGreen),
 		},
 	}
 

@@ -6,6 +6,7 @@ import (
 
 	"github.com/disgoorg/disgo/discord"
 	"github.com/disgoorg/disgo/events"
+	"github.com/disgoorg/snowflake/v2"
 	"github.com/rotector/rotector/internal/bot/constants"
 	"github.com/rotector/rotector/internal/bot/handlers/dashboard/builders"
 	"github.com/rotector/rotector/internal/bot/interfaces"
@@ -30,8 +31,9 @@ func NewMenu(h *Handler) *Menu {
 			flaggedCount := s.Get(constants.SessionKeyFlaggedCount).(int)
 			clearedCount := s.Get(constants.SessionKeyClearedCount).(int)
 			statsChart := s.Get(constants.SessionKeyStatsChart).(*bytes.Buffer)
+			activeUsers := s.Get(constants.SessionKeyActiveUsers).([]snowflake.ID)
 
-			return builders.NewDashboardBuilder(confirmedCount, flaggedCount, clearedCount, statsChart).Build()
+			return builders.NewDashboardBuilder(confirmedCount, flaggedCount, clearedCount, statsChart, activeUsers).Build()
 		},
 		SelectHandlerFunc: m.handleSelectMenu,
 		ButtonHandlerFunc: m.handleButton,
@@ -69,11 +71,15 @@ func (m *Menu) ShowDashboard(event interfaces.CommonEvent, s *session.Session) {
 		m.handler.logger.Error("Failed to build stats chart", zap.Error(err))
 	}
 
+	// Get active users
+	activeUsers := m.handler.sessionManager.GetActiveUsers()
+
 	// Set data for the main menu
 	s.Set(constants.SessionKeyConfirmedCount, confirmedCount)
 	s.Set(constants.SessionKeyFlaggedCount, flaggedCount)
 	s.Set(constants.SessionKeyClearedCount, clearedCount)
 	s.Set(constants.SessionKeyStatsChart, statsChart)
+	s.Set(constants.SessionKeyActiveUsers, activeUsers)
 
 	m.handler.paginationManager.NavigateTo(event, s, m.page, "")
 }

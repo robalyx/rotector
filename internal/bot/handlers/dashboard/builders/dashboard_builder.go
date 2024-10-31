@@ -2,9 +2,12 @@ package builders
 
 import (
 	"bytes"
+	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/disgoorg/disgo/discord"
+	"github.com/disgoorg/snowflake/v2"
 	"github.com/rotector/rotector/internal/bot/constants"
 )
 
@@ -14,15 +17,17 @@ type DashboardBuilder struct {
 	flaggedCount   int
 	clearedCount   int
 	statsChart     *bytes.Buffer
+	activeUsers    []snowflake.ID
 }
 
 // NewDashboardBuilder creates a new DashboardBuilder.
-func NewDashboardBuilder(confirmedCount, flaggedCount, clearedCount int, statsChart *bytes.Buffer) *DashboardBuilder {
+func NewDashboardBuilder(confirmedCount, flaggedCount, clearedCount int, statsChart *bytes.Buffer, activeUsers []snowflake.ID) *DashboardBuilder {
 	return &DashboardBuilder{
 		confirmedCount: confirmedCount,
 		flaggedCount:   flaggedCount,
 		clearedCount:   clearedCount,
 		statsChart:     statsChart,
+		activeUsers:    activeUsers,
 	}
 }
 
@@ -33,6 +38,15 @@ func (b *DashboardBuilder) Build() *discord.MessageUpdateBuilder {
 		AddField("Flagged Users", strconv.Itoa(b.flaggedCount), true).
 		AddField("Cleared Users", strconv.Itoa(b.clearedCount), true).
 		SetColor(constants.DefaultEmbedColor)
+
+	// Add active users field
+	if len(b.activeUsers) > 0 {
+		activeUserMentions := make([]string, len(b.activeUsers))
+		for i, userID := range b.activeUsers {
+			activeUserMentions[i] = fmt.Sprintf("<@%d>", userID)
+		}
+		embed.AddField("Active Reviewers", strings.Join(activeUserMentions, ", "), false)
+	}
 
 	// Add stats chart if available
 	if b.statsChart != nil {
