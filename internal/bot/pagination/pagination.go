@@ -115,6 +115,7 @@ func (m *Manager) RespondWithError(event interfaces.CommonEvent, message string)
 		ClearEmbeds().
 		ClearFiles().
 		ClearContainerComponents().
+		RetainAttachments().
 		Build()
 
 	_, _ = event.Client().Rest().UpdateInteractionResponse(event.ApplicationID(), event.Token(), messageUpdate)
