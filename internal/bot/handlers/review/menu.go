@@ -142,7 +142,7 @@ func (m *Menu) handleButton(event *events.ComponentInteractionCreate, s *session
 
 	switch customID {
 	case constants.BackButtonCustomID:
-		m.handler.dashboardHandler.ShowDashboard(event, s)
+		m.handler.dashboardHandler.ShowDashboard(event, s, "")
 	case constants.RecheckButtonCustomID:
 		m.handleRecheck(event, s)
 	case constants.BanButtonCustomID:

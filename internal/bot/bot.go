@@ -165,7 +165,7 @@ func (b *Bot) handleApplicationCommandInteraction(event *events.ApplicationComma
 		}()
 
 		s := b.sessionManager.GetOrCreateSession(context.Background(), event.User().ID)
-		b.dashboardHandler.ShowDashboard(event, s)
+		b.dashboardHandler.ShowDashboard(event, s, "")
 	}()
 }
 

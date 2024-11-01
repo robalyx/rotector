@@ -85,7 +85,7 @@ func (m *Menu) handleSelectMenu(event *events.ComponentInteractionCreate, s *ses
 func (m *Menu) handleButton(event *events.ComponentInteractionCreate, s *session.Session, customID string) {
 	switch customID {
 	case string(constants.BackButtonCustomID):
-		m.handler.dashboardHandler.ShowDashboard(event, s)
+		m.handler.dashboardHandler.ShowDashboard(event, s, "")
 	case string(utils.ViewerFirstPage), string(utils.ViewerPrevPage), string(utils.ViewerNextPage), string(utils.ViewerLastPage):
 		m.handlePagination(event, s, utils.ViewerAction(customID))
 	}

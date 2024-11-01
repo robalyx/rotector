@@ -42,7 +42,7 @@ func NewMenu(h *Handler) *Menu {
 }
 
 // ShowMenu displays the dashboard.
-func (m *Menu) ShowDashboard(event interfaces.CommonEvent, s *session.Session) {
+func (m *Menu) ShowDashboard(event interfaces.CommonEvent, s *session.Session, content string) {
 	// Get current counts
 	confirmedCount, err := m.handler.db.Users().GetConfirmedUsersCount()
 	if err != nil {
@@ -81,7 +81,7 @@ func (m *Menu) ShowDashboard(event interfaces.CommonEvent, s *session.Session) {
 	s.Set(constants.SessionKeyStatsChart, statsChart)
 	s.Set(constants.SessionKeyActiveUsers, activeUsers)
 
-	m.handler.paginationManager.NavigateTo(event, s, m.page, "")
+	m.handler.paginationManager.NavigateTo(event, s, m.page, content)
 }
 
 // handleSelectMenu handles the select menu interaction.
@@ -114,6 +114,6 @@ func (m *Menu) handleSelectMenu(event *events.ComponentInteractionCreate, s *ses
 // handleButton handles button interactions.
 func (m *Menu) handleButton(event *events.ComponentInteractionCreate, s *session.Session, customID string) {
 	if customID == constants.RefreshButtonCustomID {
-		m.ShowDashboard(event, s)
+		m.ShowDashboard(event, s, "Refreshed dashboard.")
 	}
 }

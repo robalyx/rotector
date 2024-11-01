@@ -1,8 +1,6 @@
 package review
 
 import (
-	"time"
-
 	"github.com/disgoorg/disgo/discord"
 	"github.com/disgoorg/disgo/events"
 	"github.com/rotector/rotector/internal/bot/constants"
@@ -35,11 +33,6 @@ func NewStatusMenu(h *Handler) *StatusMenu {
 
 // ShowStatusMenu displays the status menu.
 func (m *StatusMenu) ShowStatusMenu(event interfaces.CommonEvent, s *session.Session) {
-	// Check for timeout first
-	if m.checkReviewTimeout(event, s) {
-		return
-	}
-
 	// Update queue counts
 	s.Set(constants.SessionKeyQueueHighCount, m.handler.queueManager.GetQueueLength(queue.HighPriority))
 	s.Set(constants.SessionKeyQueueNormalCount, m.handler.queueManager.GetQueueLength(queue.NormalPriority))
@@ -53,8 +46,8 @@ func (m *StatusMenu) ShowStatusMenu(event interfaces.CommonEvent, s *session.Ses
 		flaggedUser, err := m.handler.db.Users().GetFlaggedUserByID(userID)
 		if err != nil {
 			// User was not flagged by AI, show new user
-			m.handler.reviewMenu.ShowReviewMenuAndFetchUser(event, s,
-				"Previous user was not flagged by AI after recheck. Showing new user.")
+			m.handler.dashboardHandler.ShowDashboard(event, s,
+				"Previous user was not flagged by AI after recheck.")
 			return
 		}
 
@@ -77,14 +70,9 @@ func (m *StatusMenu) ShowStatusMenu(event interfaces.CommonEvent, s *session.Ses
 
 // handleButton handles button interactions.
 func (m *StatusMenu) handleButton(event *events.ComponentInteractionCreate, s *session.Session, customID string) {
-	// Check for timeout first
-	if m.checkReviewTimeout(event, s) {
-		return
-	}
-
 	switch customID {
 	case constants.BackButtonCustomID:
-		m.handler.reviewMenu.ShowReviewMenuAndFetchUser(event, s, "The previous user was queued. Showing new user.")
+		m.handler.dashboardHandler.ShowDashboard(event, s, "The previous user was queued.")
 	case constants.RefreshButtonCustomID:
 		m.ShowStatusMenu(event, s)
 	case constants.AbortButtonCustomID:
@@ -111,15 +99,5 @@ func (m *StatusMenu) handleAbort(event *events.ComponentInteractionCreate, s *se
 	// Note: We don't need to explicitly remove from queue here
 	// The worker will handle that when it sees the aborted flag
 
-	m.handler.reviewMenu.ShowReviewMenu(event, s, "Recheck aborted")
-}
-
-// checkReviewTimeout checks if the review session has expired.
-func (m *StatusMenu) checkReviewTimeout(event interfaces.CommonEvent, s *session.Session) bool {
-	user := s.GetFlaggedUser(constants.SessionKeyTarget)
-	if time.Since(user.LastViewed) > 10*time.Minute {
-		m.handler.reviewMenu.ShowReviewMenuAndFetchUser(event, s, "Previous review session expired (10 minutes). Showing new user.")
-		return true
-	}
-	return false
+	m.handler.dashboardHandler.ShowDashboard(event, s, "Recheck aborted")
 }

@@ -84,7 +84,7 @@ func (m *Menu) handleSelectMenu(event *events.ComponentInteractionCreate, s *ses
 func (m *Menu) handleButton(event *events.ComponentInteractionCreate, s *session.Session, customID string) {
 	switch customID {
 	case constants.BackButtonCustomID:
-		m.handler.dashboardHandler.ShowDashboard(event, s)
+		m.handler.dashboardHandler.ShowDashboard(event, s, "")
 	case constants.RefreshButtonCustomID:
 		m.ShowQueueMenu(event, s)
 	}
