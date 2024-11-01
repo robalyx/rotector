@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/disgoorg/disgo"
 	"github.com/disgoorg/disgo/bot"
@@ -158,10 +159,15 @@ func (b *Bot) handleApplicationCommandInteraction(event *events.ApplicationComma
 
 	// Handle the interaction in a goroutine
 	go func() {
+		start := time.Now()
 		defer func() {
 			if r := recover(); r != nil {
 				b.logger.Error("Panic in application command interaction handler", zap.Any("panic", r))
 			}
+			duration := time.Since(start)
+			b.logger.Debug("Application command interaction handled",
+				zap.String("command", event.SlashCommandInteractionData().CommandName()),
+				zap.Duration("duration", duration))
 		}()
 
 		s := b.sessionManager.GetOrCreateSession(context.Background(), event.User().ID)
@@ -196,10 +202,15 @@ func (b *Bot) handleComponentInteraction(event *events.ComponentInteractionCreat
 
 	// Handle the interaction in a goroutine
 	go func() {
+		start := time.Now()
 		defer func() {
 			if r := recover(); r != nil {
 				b.logger.Error("Panic in component interaction handler", zap.Any("panic", r))
 			}
+			duration := time.Since(start)
+			b.logger.Debug("Component interaction handled",
+				zap.String("custom_id", event.Data.CustomID()),
+				zap.Duration("duration", duration))
 		}()
 
 		s := b.sessionManager.GetOrCreateSession(context.Background(), event.User().ID)
@@ -229,10 +240,15 @@ func (b *Bot) handleModalSubmit(event *events.ModalSubmitInteractionCreate) {
 
 	// Handle the interaction in a goroutine
 	go func() {
+		start := time.Now()
 		defer func() {
 			if r := recover(); r != nil {
 				b.logger.Error("Panic in modal submit interaction handler", zap.Any("panic", r))
 			}
+			duration := time.Since(start)
+			b.logger.Debug("Modal submit interaction handled",
+				zap.String("custom_id", event.Data.CustomID),
+				zap.Duration("duration", duration))
 		}()
 
 		s := b.sessionManager.GetOrCreateSession(context.Background(), event.User().ID)
