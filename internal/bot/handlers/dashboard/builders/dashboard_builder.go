@@ -34,6 +34,7 @@ func NewDashboardBuilder(confirmedCount, flaggedCount, clearedCount int, statsCh
 // Build builds the dashboard.
 func (b *DashboardBuilder) Build() *discord.MessageUpdateBuilder {
 	embed := discord.NewEmbedBuilder().
+		SetTitle("Welcome to Rotector 👋").
 		AddField("Confirmed Users", strconv.Itoa(b.confirmedCount), true).
 		AddField("Flagged Users", strconv.Itoa(b.flaggedCount), true).
 		AddField("Cleared Users", strconv.Itoa(b.clearedCount), true).

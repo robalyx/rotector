@@ -27,9 +27,11 @@ const (
 	OpenFriendsMenuButtonCustomID = "open_friends_menu"
 	OpenGroupsMenuButtonCustomID  = "open_groups_menu"
 
-	BanButtonCustomID   = "ban"
-	ClearButtonCustomID = "clear"
-	SkipButtonCustomID  = "skip"
+	BanButtonCustomID     = "ban"
+	ClearButtonCustomID   = "clear"
+	SkipButtonCustomID    = "skip"
+	RecheckButtonCustomID = "recheck"
+	AbortButtonCustomID   = "abort"
 
 	// Friends Menu.
 	FriendsPerPage     = 21
@@ -119,6 +121,7 @@ const (
 	SessionKeyDateRangeStart     = "dateRangeStart"
 	SessionKeyDateRangeEnd       = "dateRangeEnd"
 
+	SessionKeyQueueUser        = "queueUser"
 	SessionKeyQueuePriority    = "queuePriority"
 	SessionKeyQueueHighCount   = "queueHighCount"
 	SessionKeyQueueNormalCount = "queueNormalCount"

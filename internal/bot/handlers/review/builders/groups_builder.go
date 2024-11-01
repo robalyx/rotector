@@ -61,7 +61,12 @@ func (b *GroupsEmbed) Build() *discord.MessageUpdateBuilder {
 
 	for i, group := range b.groups {
 		fieldName := fmt.Sprintf("Group %d", b.start+i+1)
-		fieldValue := fmt.Sprintf("[%s](https://www.roblox.com/groups/%d)\n(%s)", utils.CensorString(group.Group.Name, b.streamerMode), group.Group.ID, group.Role.Name)
+		fieldValue := fmt.Sprintf(
+			"[%s](https://www.roblox.com/groups/%d)\n(%s)",
+			utils.CensorString(group.Group.Name, b.streamerMode),
+			group.Group.ID,
+			group.Role.Name,
+		)
 
 		// Add flagged status if needed
 		if b.flaggedGroups[group.Group.ID] {

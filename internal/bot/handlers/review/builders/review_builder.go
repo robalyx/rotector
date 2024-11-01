@@ -49,14 +49,17 @@ func NewReviewEmbed(s *session.Session, translator *translator.Translator, db *d
 // Build constructs and returns the discord.Embed.
 func (b *ReviewEmbed) Build() *discord.MessageUpdateBuilder {
 	embed := discord.NewEmbedBuilder().
-		AddField("ID", fmt.Sprintf("[%s](https://www.roblox.com/users/%d/profile)", utils.CensorString(strconv.FormatUint(b.user.ID, 10), b.streamerMode), b.user.ID), true).
+		AddField("ID", fmt.Sprintf(
+			"[%s](https://www.roblox.com/users/%d/profile)",
+			utils.CensorString(strconv.FormatUint(b.user.ID, 10), b.streamerMode),
+			b.user.ID,
+		), true).
 		AddField("Name", utils.CensorString(b.user.Name, b.streamerMode), true).
 		AddField("Display Name", utils.CensorString(b.user.DisplayName, b.streamerMode), true).
 		AddField("Created At", fmt.Sprintf("<t:%d:R>", b.user.CreatedAt.Unix()), true).
 		AddField("Last Updated", fmt.Sprintf("<t:%d:R>", b.user.LastUpdated.Unix()), true).
-		AddField("Last Viewed", b.getLastViewed(), true).
-		AddField("Reason", b.user.Reason, true).
 		AddField("Confidence", fmt.Sprintf("%.2f", b.user.Confidence), true).
+		AddField("Reason", b.user.Reason, true).
 		AddField("Description", b.getDescription(), false).
 		AddField("Groups", b.getGroups(), false).
 		AddField(b.getFriendsField(), b.getFriends(), false).
@@ -93,6 +96,7 @@ func (b *ReviewEmbed) Build() *discord.MessageUpdateBuilder {
 		),
 		discord.NewActionRow(
 			discord.NewSecondaryButton("◀️", constants.BackButtonCustomID),
+			discord.NewSecondaryButton("🔄", constants.RecheckButtonCustomID),
 			discord.NewDangerButton("Ban", constants.BanButtonCustomID),
 			discord.NewSuccessButton("Clear", constants.ClearButtonCustomID),
 			discord.NewSecondaryButton("Skip", constants.SkipButtonCustomID),
@@ -118,14 +122,6 @@ func (b *ReviewEmbed) Build() *discord.MessageUpdateBuilder {
 	return builder.
 		SetEmbeds(embed.Build()).
 		AddContainerComponents(components...)
-}
-
-// getLastViewed returns the last viewed field for the embed.
-func (b *ReviewEmbed) getLastViewed() string {
-	if b.user.LastViewed.IsZero() {
-		return "Never Viewed"
-	}
-	return fmt.Sprintf("<t:%d:R>", b.user.LastViewed.Unix())
 }
 
 // getDescription returns the description field for the embed.

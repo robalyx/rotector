@@ -39,7 +39,7 @@ func (r *UserRepository) GetFlaggedUserToReview(sortBy string) (*FlaggedUser, er
 	var user FlaggedUser
 	err := r.db.RunInTransaction(r.db.Context(), func(tx *pg.Tx) error {
 		query := tx.Model(&FlaggedUser{}).
-			Where("last_viewed IS NULL OR last_viewed < NOW() - INTERVAL '5 minutes'")
+			Where("last_viewed IS NULL OR last_viewed < NOW() - INTERVAL '10 minutes'")
 
 		switch sortBy {
 		case SortByConfidence:
@@ -68,6 +68,7 @@ func (r *UserRepository) GetFlaggedUserToReview(sortBy string) (*FlaggedUser, er
 			r.logger.Error("Failed to update last_viewed", zap.Error(err))
 			return err
 		}
+		user.LastViewed = time.Now()
 
 		return nil
 	})

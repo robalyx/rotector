@@ -25,7 +25,14 @@ type UserChecker struct {
 }
 
 // NewUserChecker creates a new UserChecker instance.
-func NewUserChecker(db *database.Database, bar *progress.Bar, roAPI *api.API, openaiClient *openai.Client, userFetcher *fetcher.UserFetcher, logger *zap.Logger) *UserChecker {
+func NewUserChecker(
+	db *database.Database,
+	bar *progress.Bar,
+	roAPI *api.API,
+	openaiClient *openai.Client,
+	userFetcher *fetcher.UserFetcher,
+	logger *zap.Logger,
+) *UserChecker {
 	return &UserChecker{
 		db:               db,
 		bar:              bar,

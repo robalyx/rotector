@@ -1,6 +1,7 @@
 package review
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/disgoorg/disgo/discord"
@@ -11,6 +12,7 @@ import (
 	"github.com/rotector/rotector/internal/bot/pagination"
 	"github.com/rotector/rotector/internal/bot/session"
 	"github.com/rotector/rotector/internal/common/database"
+	"github.com/rotector/rotector/internal/common/queue"
 	"github.com/rotector/rotector/internal/common/translator"
 	"go.uber.org/zap"
 )
@@ -108,6 +110,11 @@ func (m *Menu) ShowReviewMenu(event interfaces.CommonEvent, s *session.Session, 
 
 // handleSelectMenu handles the select menu for the review menu.
 func (m *Menu) handleSelectMenu(event *events.ComponentInteractionCreate, s *session.Session, customID string, option string) {
+	// Check for timeout first
+	if m.checkReviewTimeout(event, s) {
+		return
+	}
+
 	switch customID {
 	case constants.SortOrderSelectMenuCustomID:
 		s.Set(constants.SessionKeySortBy, option)
@@ -128,9 +135,16 @@ func (m *Menu) handleSelectMenu(event *events.ComponentInteractionCreate, s *ses
 
 // handleButton handles the buttons for the review menu.
 func (m *Menu) handleButton(event *events.ComponentInteractionCreate, s *session.Session, customID string) {
+	// Check for timeout first
+	if m.checkReviewTimeout(event, s) {
+		return
+	}
+
 	switch customID {
 	case constants.BackButtonCustomID:
 		m.handler.dashboardHandler.ShowDashboard(event, s)
+	case constants.RecheckButtonCustomID:
+		m.handleRecheck(event, s)
 	case constants.BanButtonCustomID:
 		m.handleBanUser(event, s)
 	case constants.ClearButtonCustomID:
@@ -142,9 +156,58 @@ func (m *Menu) handleButton(event *events.ComponentInteractionCreate, s *session
 
 // handleModal handles the modal for the review menu.
 func (m *Menu) handleModal(event *events.ModalSubmitInteractionCreate, s *session.Session) {
+	// Check for timeout first
+	if m.checkReviewTimeout(event, s) {
+		return
+	}
+
 	if event.Data.CustomID == constants.BanWithReasonModalCustomID {
 		m.handleBanWithReasonModalSubmit(event, s)
 	}
+}
+
+// handleRecheck handles the recheck button interaction.
+func (m *Menu) handleRecheck(event *events.ComponentInteractionCreate, s *session.Session) {
+	user := s.GetFlaggedUser(constants.SessionKeyTarget)
+	s.Set(constants.SessionKeyQueueUser, user.ID)
+
+	// Check if user is already in queue
+	status, _, _, err := m.handler.queueManager.GetQueueInfo(user.ID)
+	if err == nil && status != "" {
+		// User is already in queue, show status menu
+		m.handler.statusMenu.ShowStatusMenu(event, s)
+		return
+	}
+
+	// Add to high priority queue
+	err = m.handler.queueManager.AddToQueue(&queue.Item{
+		UserID:      user.ID,
+		Priority:    queue.HighPriority,
+		Reason:      fmt.Sprintf("Re-queue requested by reviewer %d", event.User().ID),
+		AddedBy:     uint64(event.User().ID),
+		AddedAt:     time.Now(),
+		Status:      queue.StatusPending,
+		CheckExists: true,
+	})
+	if err != nil {
+		m.handler.paginationManager.RespondWithError(event, "Failed to add user to queue")
+		return
+	}
+
+	// Update queue info
+	err = m.handler.queueManager.SetQueueInfo(
+		user.ID,
+		queue.StatusPending,
+		queue.HighPriority,
+		m.handler.queueManager.GetQueueLength(queue.HighPriority),
+	)
+	if err != nil {
+		m.handler.paginationManager.RespondWithError(event, "Failed to update queue info")
+		return
+	}
+
+	// Show status menu
+	m.handler.statusMenu.ShowStatusMenu(event, s)
 }
 
 // handleBanUser handles the ban user button interaction.
@@ -264,4 +327,14 @@ func (m *Menu) handleBanWithReasonModalSubmit(event *events.ModalSubmitInteracti
 
 	// Show the review menu and fetch a new user
 	m.ShowReviewMenuAndFetchUser(event, s, "User banned.")
+}
+
+// Add this helper method to Menu.
+func (m *Menu) checkReviewTimeout(event interfaces.CommonEvent, s *session.Session) bool {
+	user := s.GetFlaggedUser(constants.SessionKeyTarget)
+	if time.Since(user.LastViewed) > 10*time.Minute {
+		m.ShowReviewMenuAndFetchUser(event, s, "Previous review session expired (10 minutes). Showing new user.")
+		return true
+	}
+	return false
 }

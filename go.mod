@@ -16,6 +16,7 @@ require (
 	github.com/jaxron/axonet/middleware/retry v0.0.0-20241025054147-6c298c86aa64
 	github.com/jaxron/axonet/middleware/singleflight v0.0.0-20241025054147-6c298c86aa64
 	github.com/jaxron/roapi.go v0.0.0-20241023130833-ad8750c2385e
+	github.com/maypok86/otter v1.2.3
 	github.com/openai/openai-go v0.1.0-alpha.32
 	github.com/ozankasikci/go-image-merge v0.3.1
 	github.com/redis/rueidis v1.0.48
@@ -54,7 +55,6 @@ require (
 	github.com/leodido/go-urn v1.4.0 // indirect
 	github.com/magiconair/properties v1.8.7 // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect
-	github.com/maypok86/otter v1.2.3 // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
 	github.com/pelletier/go-toml/v2 v2.2.3 // indirect
 	github.com/sagikazarmark/locafero v0.6.0 // indirect

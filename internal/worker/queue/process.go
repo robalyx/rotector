@@ -16,6 +16,9 @@ import (
 )
 
 const (
+	// SkipRecentlyUpdatedUserDuration is the duration to skip a user that was recently updated.
+	SkipRecentlyUpdatedUserDuration = 5 * time.Minute
+
 	// BatchSize is the number of items to process in each batch.
 	BatchSize = 10
 
@@ -37,7 +40,14 @@ type ProcessWorker struct {
 }
 
 // NewProcessWorker creates a new process worker instance.
-func NewProcessWorker(db *database.Database, openaiClient *openai.Client, roAPI *api.API, queue *queue.Manager, bar *progress.Bar, logger *zap.Logger) *ProcessWorker {
+func NewProcessWorker(
+	db *database.Database,
+	openaiClient *openai.Client,
+	roAPI *api.API,
+	queue *queue.Manager,
+	bar *progress.Bar,
+	logger *zap.Logger,
+) *ProcessWorker {
 	userFetcher := fetcher.NewUserFetcher(roAPI, logger)
 	userChecker := checker.NewUserChecker(db, bar, roAPI, openaiClient, userFetcher, logger)
 
@@ -77,6 +87,15 @@ func (w *ProcessWorker) Start() {
 			continue
 		}
 
+		// Update status to "Processing" for all items
+		for _, item := range items {
+			if err := w.queue.SetQueueInfo(item.UserID, queue.StatusProcessing, item.Priority, 0); err != nil {
+				w.logger.Error("Failed to update queue status to processing",
+					zap.Error(err),
+					zap.Uint64("userID", item.UserID))
+			}
+		}
+
 		// Step 2: Fetch user info (25%)
 		w.bar.SetStepMessage("Fetching user info")
 		userIDs := make([]uint64, len(items))
@@ -91,9 +110,24 @@ func (w *ProcessWorker) Start() {
 		w.userChecker.ProcessUsers(userInfos)
 		w.bar.Increment(25)
 
-		// Step 4: Remove processed items from queue (25%)
+		// Step 4: Update status and cleanup (25%)
 		w.bar.SetStepMessage("Cleaning up queue")
-		w.removeProcessedItems(items)
+		for _, item := range items {
+			// Set status to Complete
+			if err := w.queue.SetQueueInfo(item.UserID, queue.StatusComplete, item.Priority, 0); err != nil {
+				w.logger.Error("Failed to update queue status to complete",
+					zap.Error(err),
+					zap.Uint64("userID", item.UserID))
+			}
+
+			// Remove from queue
+			key := fmt.Sprintf("queue:%s_priority", item.Priority)
+			if err := w.queue.RemoveQueueItem(key, item); err != nil {
+				w.logger.Error("Failed to remove item from queue",
+					zap.Error(err),
+					zap.Uint64("userID", item.UserID))
+			}
+		}
 		w.bar.Increment(25)
 
 		// Wait before next iteration
@@ -136,6 +170,36 @@ func (w *ProcessWorker) getItemsFromQueues() ([]*queue.Item, error) {
 				w.logger.Error("Failed to unmarshal queue item", zap.Error(err))
 				continue
 			}
+
+			// Skip if item has been aborted
+			if w.queue.IsAborted(item.UserID) {
+				// Remove from queue since it's aborted
+				if err := w.queue.RemoveQueueItem(key, &item); err != nil {
+					w.logger.Error("Failed to remove aborted item from queue",
+						zap.Error(err),
+						zap.Uint64("userID", item.UserID))
+				}
+				continue
+			}
+
+			// Update queue position for this item
+			if err := w.queue.SetQueueInfo(item.UserID, queue.StatusPending, item.Priority, len(allItems)+1); err != nil {
+				w.logger.Error("Failed to update queue position",
+					zap.Error(err),
+					zap.Uint64("userID", item.UserID))
+			}
+
+			// Check if user was recently updated
+			if item.CheckExists {
+				skip, err := w.checkRecentlyUpdated(key, &item)
+				if err != nil {
+					return nil, fmt.Errorf("failed to check if user was recently updated: %w", err)
+				}
+				if skip {
+					continue
+				}
+			}
+
 			allItems = append(allItems, &item)
 		}
 	}
@@ -143,15 +207,31 @@ func (w *ProcessWorker) getItemsFromQueues() ([]*queue.Item, error) {
 	return allItems, nil
 }
 
-// removeProcessedItems removes all processed items from their respective queues.
-func (w *ProcessWorker) removeProcessedItems(items []*queue.Item) {
-	for _, item := range items {
-		key := fmt.Sprintf("queue:%s_priority", item.Priority)
-
+// checkRecentlyUpdated checks if a user was recently updated and removes them from the queue if so.
+func (w *ProcessWorker) checkRecentlyUpdated(key string, item *queue.Item) (bool, error) {
+	flaggedUser, err := w.db.Users().GetFlaggedUserByID(item.UserID)
+	if err == nil && time.Since(flaggedUser.LastUpdated) < SkipRecentlyUpdatedUserDuration {
+		// User was recently updated, remove from queue and skip
 		if err := w.queue.RemoveQueueItem(key, item); err != nil {
-			w.logger.Error("Failed to remove processed item from queue",
+			w.logger.Error("Failed to remove recently updated item from queue",
 				zap.Error(err),
 				zap.Uint64("userID", item.UserID))
+			return false, err
 		}
+
+		// Set status to Skipped
+		if err := w.queue.SetQueueInfo(item.UserID, queue.StatusSkipped, item.Priority, 0); err != nil {
+			w.logger.Error("Failed to update queue status to skipped",
+				zap.Error(err),
+				zap.Uint64("userID", item.UserID))
+			return false, err
+		}
+
+		w.logger.Info("Skipped recently updated user",
+			zap.Uint64("userID", item.UserID),
+			zap.Time("lastUpdated", flaggedUser.LastUpdated))
+		return true, nil
 	}
+
+	return false, nil
 }

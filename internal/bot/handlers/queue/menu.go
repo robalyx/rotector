@@ -11,6 +11,7 @@ import (
 	"github.com/rotector/rotector/internal/bot/interfaces"
 	"github.com/rotector/rotector/internal/bot/pagination"
 	"github.com/rotector/rotector/internal/bot/session"
+	"github.com/rotector/rotector/internal/bot/utils"
 	"github.com/rotector/rotector/internal/common/queue"
 	"go.uber.org/zap"
 )
@@ -106,23 +107,45 @@ func (m *Menu) handleModal(event *events.ModalSubmitInteractionCreate, s *sessio
 		return
 	}
 
-	// Get the selected priority
-	priority := s.GetString(constants.SessionKeyQueuePriority)
+	// Store the user ID in the session
+	s.Set(constants.SessionKeyQueueUser, userID)
+
+	// Check if user is already in queue
+	status, _, _, err := m.handler.queueManager.GetQueueInfo(userID)
+	if err == nil && status != "" {
+		// User is already in queue, show status menu
+		m.handler.reviewHandler.ShowStatusMenu(event, s)
+		return
+	}
 
 	// Add to queue
+	priority := s.GetString(constants.SessionKeyQueuePriority)
 	err = m.handler.queueManager.AddToQueue(&queue.Item{
-		UserID:   userID,
-		Priority: queue.GetPriorityFromCustomID(priority),
-		Reason:   reason,
-		AddedBy:  uint64(event.User().ID),
-		AddedAt:  time.Now(),
-		Status:   queue.StatusPending,
+		UserID:      userID,
+		Priority:    utils.GetPriorityFromCustomID(priority),
+		Reason:      reason,
+		AddedBy:     uint64(event.User().ID),
+		AddedAt:     time.Now(),
+		Status:      queue.StatusPending,
+		CheckExists: false,
 	})
 	if err != nil {
 		m.handler.paginationManager.RespondWithError(event, "Failed to add user to queue")
 		return
 	}
 
-	// Show updated queue menu
-	m.ShowQueueMenu(event, s)
+	// Update queue info
+	err = m.handler.queueManager.SetQueueInfo(
+		userID,
+		queue.StatusPending,
+		queue.HighPriority,
+		m.handler.queueManager.GetQueueLength(queue.HighPriority),
+	)
+	if err != nil {
+		m.handler.paginationManager.RespondWithError(event, "Failed to update queue info")
+		return
+	}
+
+	// Show status menu
+	m.handler.reviewHandler.ShowStatusMenu(event, s)
 }

@@ -66,7 +66,13 @@ func (m *OutfitsMenu) ShowOutfitsMenu(event *events.ComponentInteractionCreate, 
 	}
 
 	// Download and merge outfit images
-	buf, err := utils.MergeImages(m.handler.roAPI.GetClient(), thumbnailURLs, constants.OutfitGridColumns, constants.OutfitGridRows, constants.OutfitsPerPage)
+	buf, err := utils.MergeImages(
+		m.handler.roAPI.GetClient(),
+		thumbnailURLs,
+		constants.OutfitGridColumns,
+		constants.OutfitGridRows,
+		constants.OutfitsPerPage,
+	)
 	if err != nil {
 		m.handler.logger.Error("Failed to merge outfit images", zap.Error(err))
 		m.handler.paginationManager.RespondWithError(event, "Failed to process outfit images. Please try again.")

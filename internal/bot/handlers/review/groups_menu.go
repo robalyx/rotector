@@ -81,7 +81,13 @@ func (m *GroupsMenu) ShowGroupsMenu(event *events.ComponentInteractionCreate, s 
 	}
 
 	// Download and merge group images
-	buf, err := utils.MergeImages(m.handler.roAPI.GetClient(), pageThumbnailURLs, constants.GroupsGridColumns, constants.GroupsGridRows, constants.GroupsPerPage)
+	buf, err := utils.MergeImages(
+		m.handler.roAPI.GetClient(),
+		pageThumbnailURLs,
+		constants.GroupsGridColumns,
+		constants.GroupsGridRows,
+		constants.GroupsPerPage,
+	)
 	if err != nil {
 		m.handler.logger.Error("Failed to merge group images", zap.Error(err))
 		m.handler.paginationManager.RespondWithError(event, "Failed to process group images. Please try again.")

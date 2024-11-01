@@ -81,7 +81,13 @@ func (m *FriendsMenu) ShowFriendsMenu(event *events.ComponentInteractionCreate, 
 	}
 
 	// Download and merge friend images
-	buf, err := utils.MergeImages(m.handler.roAPI.GetClient(), pageThumbnailURLs, constants.FriendsGridColumns, constants.FriendsGridRows, constants.FriendsPerPage)
+	buf, err := utils.MergeImages(
+		m.handler.roAPI.GetClient(),
+		pageThumbnailURLs,
+		constants.FriendsGridColumns,
+		constants.FriendsGridRows,
+		constants.FriendsPerPage,
+	)
 	if err != nil {
 		m.handler.logger.Error("Failed to merge friend images", zap.Error(err))
 		m.handler.paginationManager.RespondWithError(event, "Failed to process friend images. Please try again.")

@@ -94,7 +94,7 @@ func InitializeApp(logDir string) (*AppSetup, error) {
 		logger.Fatal("Failed to create queue Redis client", zap.Error(err))
 		return nil, err
 	}
-	queueManager := queue.NewManager(queueRedis, logger)
+	queueManager := queue.NewManager(db, queueRedis, logger)
 
 	// Initialize AppSetup
 	return &AppSetup{
@@ -139,7 +139,13 @@ func getRoAPIClient(cfg *config.Config, redisManager *redis.Manager, logger *zap
 	return api.New(cookies,
 		client.WithLogger(NewLogger(logger)),
 		client.WithTimeout(10*time.Second),
-		client.WithMiddleware(6, circuitbreaker.New(cfg.CircuitBreaker.MaxFailures, cfg.CircuitBreaker.FailureThreshold, cfg.CircuitBreaker.RecoveryTimeout)),
+		client.WithMiddleware(6,
+			circuitbreaker.New(
+				cfg.CircuitBreaker.MaxFailures,
+				cfg.CircuitBreaker.FailureThreshold,
+				cfg.CircuitBreaker.RecoveryTimeout,
+			),
+		),
 		client.WithMiddleware(5, retry.New(5, 500*time.Millisecond, 1000*time.Millisecond)),
 		client.WithMiddleware(4, singleflight.New()),
 		client.WithMiddleware(3, axonetRedis.New(redisClient, 1*time.Hour)),

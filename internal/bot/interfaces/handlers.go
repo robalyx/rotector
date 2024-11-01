@@ -12,6 +12,7 @@ type DashboardHandler interface {
 // ReviewHandler defines the interface for handling review-related actions.
 type ReviewHandler interface {
 	ShowReviewMenuAndFetchUser(event CommonEvent, s *session.Session, content string)
+	ShowStatusMenu(event CommonEvent, s *session.Session)
 }
 
 // SettingsHandler defines the interface for handling settings-related actions.

@@ -42,7 +42,15 @@ type Bot struct {
 }
 
 // New creates a new Bot instance.
-func New(token string, db *database.Database, stats *statistics.Statistics, roAPI *api.API, queueManager *queueManager.Manager, redisManager *redis.Manager, logger *zap.Logger) (*Bot, error) {
+func New(
+	token string,
+	db *database.Database,
+	stats *statistics.Statistics,
+	roAPI *api.API,
+	queueManager *queueManager.Manager,
+	redisManager *redis.Manager,
+	logger *zap.Logger,
+) (*Bot, error) {
 	sessionManager, err := session.NewManager(db, redisManager, logger)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create session manager: %w", err)
@@ -51,10 +59,10 @@ func New(token string, db *database.Database, stats *statistics.Statistics, roAP
 
 	// Initialize the handlers
 	dashboardHandler := dashboard.New(db, stats, logger, sessionManager, paginationManager)
-	reviewHandler := review.New(db, logger, roAPI, sessionManager, paginationManager, dashboardHandler)
+	reviewHandler := review.New(db, logger, roAPI, sessionManager, paginationManager, queueManager, dashboardHandler)
 	settingHandler := setting.New(db, logger, sessionManager, paginationManager, dashboardHandler)
 	logHandler := log.New(db, sessionManager, paginationManager, dashboardHandler, logger)
-	queueHandler := queue.New(db, logger, sessionManager, paginationManager, queueManager, dashboardHandler)
+	queueHandler := queue.New(db, logger, sessionManager, paginationManager, queueManager, dashboardHandler, reviewHandler)
 
 	dashboardHandler.SetReviewHandler(reviewHandler)
 	dashboardHandler.SetSettingsHandler(settingHandler)

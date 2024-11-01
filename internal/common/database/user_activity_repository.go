@@ -17,11 +17,12 @@ const (
 	ActivityTypeBannedCustom
 	ActivityTypeCleared
 	ActivityTypeSkipped
+	ActivityTypeRechecked
 )
 
 // String returns the string representation of an ActivityType.
 func (a ActivityType) String() string {
-	return [...]string{"ALL", "VIEWED", "BANNED", "BANNED_CUSTOM", "CLEARED", "SKIPPED"}[a]
+	return [...]string{"ALL", "VIEWED", "BANNED", "BANNED_CUSTOM", "CLEARED", "SKIPPED", "RECHECKED"}[a]
 }
 
 // UserActivityLog represents a log entry for user activity.

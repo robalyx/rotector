@@ -17,6 +17,7 @@ import (
 	gim "github.com/ozankasikci/go-image-merge"
 	"github.com/rotector/rotector/assets"
 	"github.com/rotector/rotector/internal/bot/constants"
+	"github.com/rotector/rotector/internal/common/queue"
 	"golang.org/x/image/webp"
 )
 
@@ -222,4 +223,18 @@ func ParseDateRange(dateRangeStr string) (time.Time, time.Time, error) {
 	}
 
 	return startDate, endDate, nil
+}
+
+// GetPriorityFromCustomID converts a custom ID to a priority string.
+func GetPriorityFromCustomID(customID string) string {
+	switch customID {
+	case constants.QueueHighPriorityCustomID:
+		return queue.HighPriority
+	case constants.QueueNormalPriorityCustomID:
+		return queue.NormalPriority
+	case constants.QueueLowPriorityCustomID:
+		return queue.LowPriority
+	default:
+		return queue.NormalPriority
+	}
 }

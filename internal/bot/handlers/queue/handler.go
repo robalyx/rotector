@@ -18,10 +18,19 @@ type Handler struct {
 	queueManager      *queue.Manager
 	queueMenu         *Menu
 	dashboardHandler  interfaces.DashboardHandler
+	reviewHandler     interfaces.ReviewHandler
 }
 
 // New creates a new Handler instance.
-func New(db *database.Database, logger *zap.Logger, sessionManager *session.Manager, paginationManager *pagination.Manager, queueManager *queue.Manager, dashboardHandler interfaces.DashboardHandler) *Handler {
+func New(
+	db *database.Database,
+	logger *zap.Logger,
+	sessionManager *session.Manager,
+	paginationManager *pagination.Manager,
+	queueManager *queue.Manager,
+	dashboardHandler interfaces.DashboardHandler,
+	reviewHandler interfaces.ReviewHandler,
+) *Handler {
 	h := &Handler{
 		db:                db,
 		logger:            logger,
@@ -29,6 +38,7 @@ func New(db *database.Database, logger *zap.Logger, sessionManager *session.Mana
 		paginationManager: paginationManager,
 		queueManager:      queueManager,
 		dashboardHandler:  dashboardHandler,
+		reviewHandler:     reviewHandler,
 	}
 
 	h.queueMenu = NewMenu(h)

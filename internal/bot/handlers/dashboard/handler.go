@@ -24,7 +24,13 @@ type Handler struct {
 }
 
 // New creates a new Handler instance.
-func New(db *database.Database, stats *statistics.Statistics, logger *zap.Logger, sessionManager *session.Manager, paginationManager *pagination.Manager) *Handler {
+func New(
+	db *database.Database,
+	stats *statistics.Statistics,
+	logger *zap.Logger,
+	sessionManager *session.Manager,
+	paginationManager *pagination.Manager,
+) *Handler {
 	h := &Handler{
 		db:                db,
 		stats:             stats,
