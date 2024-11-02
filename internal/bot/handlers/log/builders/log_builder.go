@@ -2,6 +2,7 @@ package builders
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -24,6 +25,7 @@ type LogEmbed struct {
 	page               int
 	total              int
 	logsPerPage        int
+	streamerMode       bool
 }
 
 // NewLogEmbed creates a new LogEmbed.
@@ -48,6 +50,7 @@ func NewLogEmbed(s *session.Session) *LogEmbed {
 		page:               s.GetInt(constants.SessionKeyPaginationPage),
 		total:              s.GetInt(constants.SessionKeyTotalItems),
 		logsPerPage:        constants.LogsPerPage,
+		streamerMode:       s.GetBool(constants.SessionKeyStreamerMode),
 	}
 }
 
@@ -55,13 +58,13 @@ func NewLogEmbed(s *session.Session) *LogEmbed {
 func (b *LogEmbed) Build() *discord.MessageUpdateBuilder {
 	embed := discord.NewEmbedBuilder().
 		SetTitle("Log Query Results").
-		SetColor(constants.DefaultEmbedColor)
+		SetColor(utils.GetMessageEmbedColor(b.streamerMode))
 
 	totalPages := (b.total + b.logsPerPage - 1) / b.logsPerPage
 
 	// Add fields for each active query condition
 	if b.userID != 0 {
-		embed.AddField("User ID", fmt.Sprintf("`%d`", b.userID), true)
+		embed.AddField("User ID", fmt.Sprintf("`%s`", utils.CensorString(strconv.FormatUint(b.userID, 10), b.streamerMode)), true)
 	}
 	if b.reviewerID != 0 {
 		embed.AddField("Reviewer ID", fmt.Sprintf("`%d`", b.reviewerID), true)
@@ -85,7 +88,13 @@ func (b *LogEmbed) Build() *discord.MessageUpdateBuilder {
 
 			embed.AddField(
 				fmt.Sprintf("%d. <t:%d:F>", b.start+i+1, log.ActivityTimestamp.Unix()),
-				fmt.Sprintf("Activity: `%s`\nUser: [%d](https://www.roblox.com/users/%d/profile)\nReviewer: <@%d>%s", log.ActivityType, log.UserID, log.UserID, log.ReviewerID, details),
+				fmt.Sprintf("Activity: `%s`\nUser: [%s](https://www.roblox.com/users/%d/profile)\nReviewer: <@%d>%s",
+					log.ActivityType,
+					utils.CensorString(strconv.FormatUint(log.UserID, 10), b.streamerMode),
+					log.UserID,
+					log.ReviewerID,
+					details,
+				),
 				false,
 			)
 		}

@@ -40,6 +40,14 @@ func NewMenu(h *Handler) *Menu {
 
 // ShowLogMenu displays the log querying menu.
 func (m *Menu) ShowLogMenu(event interfaces.CommonEvent, s *session.Session) {
+	// Get user settings
+	settings, err := m.handler.db.Settings().GetUserSettings(uint64(event.User().ID))
+	if err != nil {
+		m.handler.logger.Error("Failed to get user settings", zap.Error(err))
+		m.handler.paginationManager.RespondWithError(event, "Failed to get user settings. Please try again.")
+		return
+	}
+
 	// Initialize or reset session data for the log menu
 	s.Set(constants.SessionKeyLogs, []*database.UserActivityLog{})
 	s.Set(constants.SessionKeyUserID, uint64(0))
@@ -50,6 +58,7 @@ func (m *Menu) ShowLogMenu(event interfaces.CommonEvent, s *session.Session) {
 	s.Set(constants.SessionKeyTotalItems, 0)
 	s.Set(constants.SessionKeyStart, 0)
 	s.Set(constants.SessionKeyPaginationPage, 0)
+	s.Set(constants.SessionKeyStreamerMode, settings.StreamerMode)
 
 	m.updateLogData(event, s, 0)
 }
