@@ -94,14 +94,6 @@ func (m *GroupsMenu) ShowGroupsMenu(event *events.ComponentInteractionCreate, s 
 		return
 	}
 
-	// Get user settings
-	settings, err := m.handler.db.Settings().GetUserSettings(uint64(event.User().ID))
-	if err != nil {
-		m.handler.logger.Error("Failed to get user settings", zap.Error(err))
-		m.handler.paginationManager.RespondWithError(event, "Failed to get user settings. Please try again.")
-		return
-	}
-
 	// Set the data for the page
 	s.Set(constants.SessionKeyGroups, pageGroups)
 	s.Set(constants.SessionKeyFlaggedGroups, flaggedGroups)
@@ -109,7 +101,6 @@ func (m *GroupsMenu) ShowGroupsMenu(event *events.ComponentInteractionCreate, s 
 	s.Set(constants.SessionKeyPaginationPage, page)
 	s.Set(constants.SessionKeyTotalItems, len(groups))
 	s.SetBuffer(constants.SessionKeyFile, buf)
-	s.Set(constants.SessionKeyStreamerMode, settings.StreamerMode)
 
 	m.handler.paginationManager.NavigateTo(event, s, m.page, "")
 }

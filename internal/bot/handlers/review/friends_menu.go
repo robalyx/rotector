@@ -94,14 +94,6 @@ func (m *FriendsMenu) ShowFriendsMenu(event *events.ComponentInteractionCreate, 
 		return
 	}
 
-	// Get user settings
-	settings, err := m.handler.db.Settings().GetUserSettings(uint64(event.User().ID))
-	if err != nil {
-		m.handler.logger.Error("Failed to get user settings", zap.Error(err))
-		m.handler.paginationManager.RespondWithError(event, "Failed to get user settings. Please try again.")
-		return
-	}
-
 	// Set the data for the page
 	s.Set(constants.SessionKeyFriends, pageFriends)
 	s.Set(constants.SessionKeyFlaggedFriends, flaggedFriends)
@@ -109,7 +101,6 @@ func (m *FriendsMenu) ShowFriendsMenu(event *events.ComponentInteractionCreate, 
 	s.Set(constants.SessionKeyPaginationPage, page)
 	s.Set(constants.SessionKeyTotalItems, len(friends))
 	s.SetBuffer(constants.SessionKeyFile, buf)
-	s.Set(constants.SessionKeyStreamerMode, settings.StreamerMode)
 
 	m.handler.paginationManager.NavigateTo(event, s, m.page, "")
 }

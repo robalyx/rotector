@@ -8,8 +8,6 @@ import (
 	"github.com/rotector/rotector/internal/bot/interfaces"
 	"github.com/rotector/rotector/internal/bot/pagination"
 	"github.com/rotector/rotector/internal/bot/session"
-	"github.com/rotector/rotector/internal/common/database"
-	"go.uber.org/zap"
 )
 
 // UserMenu is the handler for the user settings menu.
@@ -34,7 +32,6 @@ func NewUserMenu(h *Handler) *UserMenu {
 
 // ShowMenu displays the user settings menu.
 func (u *UserMenu) ShowMenu(event interfaces.CommonEvent, s *session.Session) {
-	s.Set(constants.SessionKeyUserSettings, u.getUserSettings(event))
 	u.handler.paginationManager.NavigateTo(event, s, u.page, "")
 }
 
@@ -57,14 +54,4 @@ func (u *UserMenu) handleUserSettingButton(event *events.ComponentInteractionCre
 	if customID == constants.BackButtonCustomID {
 		u.handler.dashboardHandler.ShowDashboard(event, s, "")
 	}
-}
-
-// getUserSettings fetches the user settings from the database.
-func (u *UserMenu) getUserSettings(event interfaces.CommonEvent) *database.UserSetting {
-	settings, err := u.handler.db.Settings().GetUserSettings(uint64(event.User().ID))
-	if err != nil {
-		u.handler.logger.Error("Failed to fetch user settings", zap.Error(err))
-		return nil
-	}
-	return settings
 }

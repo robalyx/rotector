@@ -53,14 +53,18 @@ func (m *Menu) ShowMenu(event interfaces.CommonEvent, s *session.Session, settin
 
 	switch customID {
 	case constants.StreamerModeOption:
-		settings := m.handler.userMenu.getUserSettings(event)
+		var settings *database.UserSetting
+		s.GetInterface(constants.SessionKeyUserSettings, &settings)
+
 		currentValue = strconv.FormatBool(settings.StreamerMode)
 		options = []discord.StringSelectMenuOption{
 			discord.NewStringSelectMenuOption("Enable", "true"),
 			discord.NewStringSelectMenuOption("Disable", "false"),
 		}
 	case constants.DefaultSortOption:
-		settings := m.handler.userMenu.getUserSettings(event)
+		var settings *database.UserSetting
+		s.GetInterface(constants.SessionKeyUserSettings, &settings)
+
 		currentValue = settings.DefaultSort
 		options = []discord.StringSelectMenuOption{
 			discord.NewStringSelectMenuOption("Random", database.SortByRandom),
@@ -92,7 +96,7 @@ func (m *Menu) handleSettingChange(event *events.ComponentInteractionCreate, s *
 	// Save the setting immediately
 	settingName := s.GetString(constants.SessionKeySettingName)
 	settingType := s.GetString(constants.SessionKeySettingType)
-	m.saveSetting(event, settingType, customID, option)
+	m.saveSetting(event, s, settingType, customID, option)
 
 	m.ShowMenu(event, s, settingName, settingType, customID)
 }
@@ -112,10 +116,10 @@ func (m *Menu) handleSettingButton(event *events.ComponentInteractionCreate, s *
 }
 
 // saveSetting saves the given setting to the database.
-func (m *Menu) saveSetting(event interfaces.CommonEvent, settingType, customID, option string) {
+func (m *Menu) saveSetting(event interfaces.CommonEvent, s *session.Session, settingType, customID, option string) {
 	switch settingType {
 	case constants.UserSettingPrefix:
-		m.saveUserSetting(event, customID, option)
+		m.saveUserSetting(s, customID, option)
 	case constants.GuildSettingPrefix:
 		m.saveGuildSetting(event, customID, option)
 	default:
@@ -124,30 +128,32 @@ func (m *Menu) saveSetting(event interfaces.CommonEvent, settingType, customID, 
 }
 
 // saveUserSetting saves a user-specific setting.
-func (m *Menu) saveUserSetting(event interfaces.CommonEvent, customID, option string) {
-	settings, err := m.handler.db.Settings().GetUserSettings(uint64(event.User().ID))
-	if err != nil {
-		m.handler.logger.Error("failed to get user settings", zap.Error(err))
-		return
-	}
+func (m *Menu) saveUserSetting(s *session.Session, customID, option string) {
+	var settings *database.UserSetting
+	s.GetInterface(constants.SessionKeyUserSettings, &settings)
 
 	switch customID {
 	case constants.StreamerModeOption:
+		var err error
 		if settings.StreamerMode, err = strconv.ParseBool(option); err != nil {
-			m.handler.logger.Error("failed to parse streamer mode", zap.Error(err))
+			m.handler.logger.Error("Failed to parse streamer mode", zap.Error(err))
 			return
 		}
 	case constants.DefaultSortOption:
 		settings.DefaultSort = option
 	default:
-		m.handler.logger.Warn("unknown user setting", zap.String("customID", customID), zap.String("option", option))
+		m.handler.logger.Warn("Unknown user setting", zap.String("customID", customID), zap.String("option", option))
 		return
 	}
 
 	// Save the user settings
 	if err := m.handler.db.Settings().SaveUserSettings(settings); err != nil {
-		m.handler.logger.Error("failed to save user settings", zap.Error(err))
+		m.handler.logger.Error("Failed to save user settings", zap.Error(err))
+		return
 	}
+
+	// Update settings in session
+	s.Set(constants.SessionKeyUserSettings, settings)
 }
 
 // saveGuildSetting saves a guild-specific setting.

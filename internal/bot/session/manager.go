@@ -2,12 +2,14 @@ package session
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/bytedance/sonic"
 	"github.com/disgoorg/snowflake/v2"
 	"github.com/redis/rueidis"
+	"github.com/rotector/rotector/internal/bot/constants"
 	"github.com/rotector/rotector/internal/common/database"
 	"github.com/rotector/rotector/internal/common/redis"
 	"go.uber.org/zap"
@@ -47,28 +49,40 @@ func NewManager(db *database.Database, redisManager *redis.Manager, logger *zap.
 func (m *Manager) GetOrCreateSession(ctx context.Context, userID snowflake.ID) (*Session, error) {
 	key := fmt.Sprintf("%s%s", SessionPrefix, userID)
 
-	// Try to get existing session from Redis
-	result := m.redis.Do(ctx, m.redis.B().Get().Key(key).Build())
-	if result.Error() == nil {
-		// Session exists, deserialize it
-		data, err := result.AsBytes()
-		if err != nil {
-			m.logger.Error("Failed to get session data as bytes", zap.Error(err))
-			return nil, err
-		}
-
-		var sessionData map[string]string
-		if err := sonic.Unmarshal(data, &sessionData); err != nil {
-			m.logger.Error("Failed to unmarshal session data", zap.Error(err))
-			return nil, err
-		}
-
-		session := NewSession(m.db, m.redis, key, sessionData, m.logger)
-		return session, nil
+	// Load user settings
+	settings, err := m.db.Settings().GetUserSettings(uint64(userID))
+	if err != nil {
+		return nil, fmt.Errorf("failed to load user settings: %w", err)
 	}
 
-	// Create new session if it doesn't exist
-	session := NewSession(m.db, m.redis, key, make(map[string]string), m.logger)
+	// Try to get existing session from Redis
+	result := m.redis.Do(ctx, m.redis.B().Get().Key(key).Build())
+	if err := result.Error(); err != nil {
+		if errors.Is(err, rueidis.Nil) {
+			// Session doesn't exist, create new one with user settings
+			sessionData := make(map[string]string)
+			session := NewSession(m.db, m.redis, key, sessionData, m.logger)
+			session.Set(constants.SessionKeyUserSettings, settings)
+
+			return session, nil
+		}
+		return nil, fmt.Errorf("failed to query Redis: %w", err)
+	}
+
+	// Session exists, deserialize it
+	data, err := result.AsBytes()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get session data as bytes: %w", err)
+	}
+
+	var sessionData map[string]string
+	if err := sonic.Unmarshal(data, &sessionData); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal session data: %w", err)
+	}
+
+	// Return existing session with user settings
+	session := NewSession(m.db, m.redis, key, sessionData, m.logger)
+	session.Set(constants.SessionKeyUserSettings, settings)
 	return session, nil
 }
 
