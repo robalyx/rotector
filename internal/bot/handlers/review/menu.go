@@ -41,35 +41,21 @@ func NewMenu(h *Handler) *Menu {
 	return &m
 }
 
-// ShowReviewMenuAndFetchUser displays the review menu and fetches a new user.
-func (m *Menu) ShowReviewMenuAndFetchUser(event interfaces.CommonEvent, s *session.Session, content string) {
-	// Fetch a new user
-	sortBy := s.GetString(constants.SessionKeySortBy)
-	user, err := m.handler.db.Users().GetFlaggedUserToReview(sortBy)
-	if err != nil {
-		m.handler.logger.Error("Failed to fetch a new user", zap.Error(err))
-		m.handler.paginationManager.RespondWithError(event, "Failed to fetch a new user. Please try again.")
-		return
-	}
-	s.Set(constants.SessionKeyTarget, user)
-
-	// Display the review menu
-	m.ShowReviewMenu(event, s, content)
-
-	// Log the activity
-	go m.handler.db.UserActivity().LogActivity(&database.UserActivityLog{
-		UserID:            user.ID,
-		ReviewerID:        uint64(event.User().ID),
-		ActivityType:      database.ActivityTypeViewed,
-		ActivityTimestamp: time.Now(),
-		Details:           make(map[string]interface{}),
-	})
-}
-
 // ShowReviewMenu displays the review menu.
 func (m *Menu) ShowReviewMenu(event interfaces.CommonEvent, s *session.Session, content string) {
 	var user *database.FlaggedUser
 	s.GetInterface(constants.SessionKeyTarget, &user)
+
+	// If no user is set in session, fetch a new one
+	if user == nil {
+		var err error
+		user, err = m.fetchNewTarget(s, uint64(event.User().ID))
+		if err != nil {
+			m.handler.logger.Error("Failed to fetch a new user", zap.Error(err))
+			m.handler.paginationManager.RespondWithError(event, "Failed to fetch a new user. Please try again.")
+			return
+		}
+	}
 
 	// Get flagged friends
 	flaggedFriends := make(map[uint64]string)
@@ -115,7 +101,7 @@ func (m *Menu) handleSelectMenu(event *events.ComponentInteractionCreate, s *ses
 	switch customID {
 	case constants.SortOrderSelectMenuCustomID:
 		s.Set(constants.SessionKeySortBy, option)
-		m.ShowReviewMenuAndFetchUser(event, s, "Changed sort order")
+		m.ShowReviewMenu(event, s, "Changed sort order")
 	case constants.ActionSelectMenuCustomID:
 		switch option {
 		case constants.BanWithReasonButtonCustomID:
@@ -222,7 +208,8 @@ func (m *Menu) handleBanUser(event interfaces.CommonEvent, s *session.Session) {
 		Details:           map[string]interface{}{"reason": user.Reason},
 	})
 
-	m.ShowReviewMenuAndFetchUser(event, s, "User banned.")
+	// Show review menu
+	m.ShowReviewMenu(event, s, "User banned.")
 }
 
 // handleClearUser handles the clear user button interaction.
@@ -246,7 +233,8 @@ func (m *Menu) handleClearUser(event interfaces.CommonEvent, s *session.Session)
 		Details:           make(map[string]interface{}),
 	})
 
-	m.ShowReviewMenuAndFetchUser(event, s, "User cleared.")
+	// Show review menu
+	m.ShowReviewMenu(event, s, "User cleared.")
 }
 
 // handleSkipUser handles the skip user button interaction.
@@ -263,7 +251,8 @@ func (m *Menu) handleSkipUser(event interfaces.CommonEvent, s *session.Session) 
 		Details:           make(map[string]interface{}),
 	})
 
-	m.ShowReviewMenuAndFetchUser(event, s, "Skipped user.")
+	// Show review menu
+	m.ShowReviewMenu(event, s, "Skipped user.")
 }
 
 // handleBanWithReason processes the ban with a modal for a custom reason.
@@ -321,6 +310,29 @@ func (m *Menu) handleBanWithReasonModalSubmit(event *events.ModalSubmitInteracti
 		Details:           map[string]interface{}{"reason": user.Reason},
 	})
 
-	// Show the review menu and fetch a new user
-	m.ShowReviewMenuAndFetchUser(event, s, "User banned.")
+	// Show review menu
+	m.ShowReviewMenu(event, s, "User banned.")
+}
+
+// fetchNewTarget gets a new user to review and stores it in the session.
+func (m *Menu) fetchNewTarget(s *session.Session, reviewerID uint64) (*database.FlaggedUser, error) {
+	sortBy := s.GetString(constants.SessionKeySortBy)
+	user, err := m.handler.db.Users().GetFlaggedUserToReview(sortBy)
+	if err != nil {
+		return nil, err
+	}
+
+	// Store the user in session
+	s.Set(constants.SessionKeyTarget, user)
+
+	// Log the activity
+	go m.handler.db.UserActivity().LogActivity(&database.UserActivityLog{
+		UserID:            user.ID,
+		ReviewerID:        reviewerID,
+		ActivityType:      database.ActivityTypeViewed,
+		ActivityTimestamp: time.Now(),
+		Details:           make(map[string]interface{}),
+	})
+
+	return user, nil
 }

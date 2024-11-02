@@ -100,7 +100,7 @@ func (m *Menu) handleSelectMenu(event *events.ComponentInteractionCreate, s *ses
 		}
 		s.Set(constants.SessionKeySortBy, settings.DefaultSort)
 
-		m.handler.reviewHandler.ShowReviewMenuAndFetchUser(event, s, "")
+		m.handler.reviewHandler.ShowReviewMenu(event, s)
 	case constants.UserSettingsCustomID:
 		m.handler.settingsHandler.ShowUserSettings(event, s)
 	case constants.GuildSettingsCustomID:

@@ -61,9 +61,9 @@ func New(
 	return h
 }
 
-// ShowReviewMenuAndFetchUser displays the review menu and fetches a new user.
-func (h *Handler) ShowReviewMenuAndFetchUser(event interfaces.CommonEvent, s *session.Session, content string) {
-	h.reviewMenu.ShowReviewMenuAndFetchUser(event, s, content)
+// ShowReviewMenu displays the review menu.
+func (h *Handler) ShowReviewMenu(event interfaces.CommonEvent, s *session.Session) {
+	h.reviewMenu.ShowReviewMenu(event, s, "")
 }
 
 // ShowStatusMenu shows the status menu.
