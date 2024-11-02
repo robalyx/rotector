@@ -208,7 +208,8 @@ func (m *Menu) handleBanUser(event interfaces.CommonEvent, s *session.Session) {
 		Details:           map[string]interface{}{"reason": user.Reason},
 	})
 
-	// Show review menu
+	// Show review menu (which will fetch a new user)
+	s.Delete(constants.SessionKeyTarget)
 	m.ShowReviewMenu(event, s, "User banned.")
 }
 
@@ -233,7 +234,8 @@ func (m *Menu) handleClearUser(event interfaces.CommonEvent, s *session.Session)
 		Details:           make(map[string]interface{}),
 	})
 
-	// Show review menu
+	// Show review menu (which will fetch a new user)
+	s.Delete(constants.SessionKeyTarget)
 	m.ShowReviewMenu(event, s, "User cleared.")
 }
 
@@ -251,7 +253,8 @@ func (m *Menu) handleSkipUser(event interfaces.CommonEvent, s *session.Session) 
 		Details:           make(map[string]interface{}),
 	})
 
-	// Show review menu
+	// Show review menu (which will fetch a new user)
+	s.Delete(constants.SessionKeyTarget)
 	m.ShowReviewMenu(event, s, "Skipped user.")
 }
 
@@ -310,7 +313,8 @@ func (m *Menu) handleBanWithReasonModalSubmit(event *events.ModalSubmitInteracti
 		Details:           map[string]interface{}{"reason": user.Reason},
 	})
 
-	// Show review menu
+	// Show review menu (which will fetch a new user)
+	s.Delete(constants.SessionKeyTarget)
 	m.ShowReviewMenu(event, s, "User banned.")
 }
 
