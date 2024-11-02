@@ -88,6 +88,13 @@ func (c *UserChecker) ProcessUsers(userInfos []*fetcher.Info) {
 	}
 	c.bar.Increment(10)
 
+	// If no flagged users, stop here
+	if len(flaggedUsers) == 0 {
+		c.logger.Info("No flagged users found", zap.Int("userInfos", len(userInfos)))
+		c.bar.Increment(30)
+		return
+	}
+
 	// Fetch necessary data for flagged users
 	c.bar.SetStepMessage("Adding image URLs")
 	flaggedUsers = c.thumbnailFetcher.AddImageURLs(flaggedUsers)

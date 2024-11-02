@@ -1,6 +1,8 @@
 package review
 
 import (
+	"context"
+
 	"github.com/disgoorg/disgo/discord"
 	"github.com/disgoorg/disgo/events"
 	"github.com/rotector/rotector/internal/bot/constants"
@@ -34,14 +36,21 @@ func NewStatusMenu(h *Handler) *StatusMenu {
 // ShowStatusMenu displays the status menu.
 func (m *StatusMenu) ShowStatusMenu(event interfaces.CommonEvent, s *session.Session) {
 	// Update queue counts
-	s.Set(constants.SessionKeyQueueHighCount, m.handler.queueManager.GetQueueLength(queue.HighPriority))
-	s.Set(constants.SessionKeyQueueNormalCount, m.handler.queueManager.GetQueueLength(queue.NormalPriority))
-	s.Set(constants.SessionKeyQueueLowCount, m.handler.queueManager.GetQueueLength(queue.LowPriority))
+	s.Set(constants.SessionKeyQueueHighCount, m.handler.queueManager.GetQueueLength(context.Background(), queue.HighPriority))
+	s.Set(constants.SessionKeyQueueNormalCount, m.handler.queueManager.GetQueueLength(context.Background(), queue.NormalPriority))
+	s.Set(constants.SessionKeyQueueLowCount, m.handler.queueManager.GetQueueLength(context.Background(), queue.LowPriority))
 
 	// Check if processing is complete
 	userID := s.GetUint64(constants.SessionKeyQueueUser)
-	status, _, _, err := m.handler.queueManager.GetQueueInfo(userID)
+	status, _, _, err := m.handler.queueManager.GetQueueInfo(context.Background(), userID)
 	if err == nil && (status == queue.StatusComplete || status == queue.StatusSkipped) {
+		// Clear queue info
+		if err := m.handler.queueManager.ClearQueueInfo(context.Background(), userID); err != nil {
+			m.handler.logger.Error("Failed to clear queue info",
+				zap.Error(err),
+				zap.Uint64("userID", userID))
+		}
+
 		// Try to get the flagged user from the database
 		flaggedUser, err := m.handler.db.Users().GetFlaggedUserByID(userID)
 		if err != nil {
@@ -49,13 +58,6 @@ func (m *StatusMenu) ShowStatusMenu(event interfaces.CommonEvent, s *session.Ses
 			m.handler.dashboardHandler.ShowDashboard(event, s,
 				"Previous user was not flagged by AI after recheck.")
 			return
-		}
-
-		// Clear queue info
-		if err := m.handler.queueManager.ClearQueueInfo(flaggedUser.ID); err != nil {
-			m.handler.logger.Error("Failed to clear queue info",
-				zap.Error(err),
-				zap.Uint64("userID", flaggedUser.ID))
 		}
 
 		// User is still flagged, show updated user
@@ -82,16 +84,16 @@ func (m *StatusMenu) handleButton(event *events.ComponentInteractionCreate, s *s
 
 // handleAbort handles the abort button interaction.
 func (m *StatusMenu) handleAbort(event *events.ComponentInteractionCreate, s *session.Session) {
-	user := s.GetFlaggedUser(constants.SessionKeyTarget)
+	userID := s.GetUint64(constants.SessionKeyQueueUser)
 
 	// Mark as aborted (will be cleaned up after 24 hours)
-	if err := m.handler.queueManager.MarkAsAborted(user.ID); err != nil {
+	if err := m.handler.queueManager.MarkAsAborted(context.Background(), userID); err != nil {
 		m.handler.paginationManager.RespondWithError(event, "Failed to mark user as aborted")
 		return
 	}
 
 	// Clear queue info
-	if err := m.handler.queueManager.ClearQueueInfo(user.ID); err != nil {
+	if err := m.handler.queueManager.ClearQueueInfo(context.Background(), userID); err != nil {
 		m.handler.paginationManager.RespondWithError(event, "Failed to clear queue info")
 		return
 	}

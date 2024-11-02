@@ -1,8 +1,6 @@
 package setting
 
 import (
-	"strconv"
-
 	"github.com/disgoorg/disgo/discord"
 	"github.com/disgoorg/disgo/events"
 	"github.com/rotector/rotector/internal/bot/constants"
@@ -42,37 +40,16 @@ func (u *UserMenu) ShowMenu(event interfaces.CommonEvent, s *session.Session) {
 
 // handleUserSettingSelection handles the select menu for the user settings menu.
 func (u *UserMenu) handleUserSettingSelection(event *events.ComponentInteractionCreate, s *session.Session, _ string, option string) {
-	var settingName, settingType string
-	var currentValueFunc func() string
-	var options []discord.StringSelectMenuOption
+	var settingName string
 
 	switch option {
 	case constants.StreamerModeOption:
 		settingName = "Streamer Mode"
-		settingType = constants.UserSettingPrefix
-		currentValueFunc = func() string {
-			settings := u.getUserSettings(event)
-			return strconv.FormatBool(settings.StreamerMode)
-		}
-		options = []discord.StringSelectMenuOption{
-			discord.NewStringSelectMenuOption("Enable", "true"),
-			discord.NewStringSelectMenuOption("Disable", "false"),
-		}
 	case constants.DefaultSortOption:
 		settingName = "Default Sort"
-		settingType = constants.UserSettingPrefix
-		currentValueFunc = func() string {
-			settings := u.getUserSettings(event)
-			return settings.DefaultSort
-		}
-		options = []discord.StringSelectMenuOption{
-			discord.NewStringSelectMenuOption("Random", database.SortByRandom),
-			discord.NewStringSelectMenuOption("Confidence", database.SortByConfidence),
-			discord.NewStringSelectMenuOption("Last Updated", database.SortByLastUpdated),
-		}
 	}
 
-	u.handler.settingMenu.ShowMenu(event, s, settingName, settingType, option, currentValueFunc, options)
+	u.handler.settingMenu.ShowMenu(event, s, settingName, constants.UserSettingPrefix, option)
 }
 
 // handleUserSettingButton handles the buttons for the user settings menu.

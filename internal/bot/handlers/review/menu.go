@@ -1,6 +1,7 @@
 package review
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -67,7 +68,8 @@ func (m *Menu) ShowReviewMenuAndFetchUser(event interfaces.CommonEvent, s *sessi
 
 // ShowReviewMenu displays the review menu.
 func (m *Menu) ShowReviewMenu(event interfaces.CommonEvent, s *session.Session, content string) {
-	user := s.GetFlaggedUser(constants.SessionKeyTarget)
+	var user *database.FlaggedUser
+	s.GetInterface(constants.SessionKeyTarget, &user)
 
 	// Get flagged friends
 	flaggedFriends := make(map[uint64]string)
@@ -110,11 +112,6 @@ func (m *Menu) ShowReviewMenu(event interfaces.CommonEvent, s *session.Session, 
 
 // handleSelectMenu handles the select menu for the review menu.
 func (m *Menu) handleSelectMenu(event *events.ComponentInteractionCreate, s *session.Session, customID string, option string) {
-	// Check for timeout first
-	if m.checkReviewTimeout(event, s) {
-		return
-	}
-
 	switch customID {
 	case constants.SortOrderSelectMenuCustomID:
 		s.Set(constants.SessionKeySortBy, option)
@@ -135,11 +132,6 @@ func (m *Menu) handleSelectMenu(event *events.ComponentInteractionCreate, s *ses
 
 // handleButton handles the buttons for the review menu.
 func (m *Menu) handleButton(event *events.ComponentInteractionCreate, s *session.Session, customID string) {
-	// Check for timeout first
-	if m.checkReviewTimeout(event, s) {
-		return
-	}
-
 	switch customID {
 	case constants.BackButtonCustomID:
 		m.handler.dashboardHandler.ShowDashboard(event, s, "")
@@ -156,11 +148,6 @@ func (m *Menu) handleButton(event *events.ComponentInteractionCreate, s *session
 
 // handleModal handles the modal for the review menu.
 func (m *Menu) handleModal(event *events.ModalSubmitInteractionCreate, s *session.Session) {
-	// Check for timeout first
-	if m.checkReviewTimeout(event, s) {
-		return
-	}
-
 	if event.Data.CustomID == constants.BanWithReasonModalCustomID {
 		m.handleBanWithReasonModalSubmit(event, s)
 	}
@@ -168,11 +155,11 @@ func (m *Menu) handleModal(event *events.ModalSubmitInteractionCreate, s *sessio
 
 // handleRecheck handles the recheck button interaction.
 func (m *Menu) handleRecheck(event *events.ComponentInteractionCreate, s *session.Session) {
-	user := s.GetFlaggedUser(constants.SessionKeyTarget)
-	s.Set(constants.SessionKeyQueueUser, user.ID)
+	var user *database.FlaggedUser
+	s.GetInterface(constants.SessionKeyTarget, &user)
 
 	// Check if user is already in queue
-	status, _, _, err := m.handler.queueManager.GetQueueInfo(user.ID)
+	status, _, _, err := m.handler.queueManager.GetQueueInfo(context.Background(), user.ID)
 	if err == nil && status != "" {
 		// User is already in queue, show status menu
 		m.handler.statusMenu.ShowStatusMenu(event, s)
@@ -180,7 +167,7 @@ func (m *Menu) handleRecheck(event *events.ComponentInteractionCreate, s *sessio
 	}
 
 	// Add to high priority queue
-	err = m.handler.queueManager.AddToQueue(&queue.Item{
+	err = m.handler.queueManager.AddToQueue(context.Background(), &queue.Item{
 		UserID:      user.ID,
 		Priority:    queue.HighPriority,
 		Reason:      fmt.Sprintf("Re-queue requested by reviewer %d", event.User().ID),
@@ -196,15 +183,19 @@ func (m *Menu) handleRecheck(event *events.ComponentInteractionCreate, s *sessio
 
 	// Update queue info
 	err = m.handler.queueManager.SetQueueInfo(
+		context.Background(),
 		user.ID,
 		queue.StatusPending,
 		queue.HighPriority,
-		m.handler.queueManager.GetQueueLength(queue.HighPriority),
+		m.handler.queueManager.GetQueueLength(context.Background(), queue.HighPriority),
 	)
 	if err != nil {
 		m.handler.paginationManager.RespondWithError(event, "Failed to update queue info")
 		return
 	}
+
+	// Set the queue user in the session
+	s.Set(constants.SessionKeyQueueUser, user.ID)
 
 	// Show status menu
 	m.handler.statusMenu.ShowStatusMenu(event, s)
@@ -212,7 +203,8 @@ func (m *Menu) handleRecheck(event *events.ComponentInteractionCreate, s *sessio
 
 // handleBanUser handles the ban user button interaction.
 func (m *Menu) handleBanUser(event interfaces.CommonEvent, s *session.Session) {
-	user := s.GetFlaggedUser(constants.SessionKeyTarget)
+	var user *database.FlaggedUser
+	s.GetInterface(constants.SessionKeyTarget, &user)
 
 	// Move the user to confirmed
 	if err := m.handler.db.Users().ConfirmUser(user); err != nil {
@@ -235,7 +227,8 @@ func (m *Menu) handleBanUser(event interfaces.CommonEvent, s *session.Session) {
 
 // handleClearUser handles the clear user button interaction.
 func (m *Menu) handleClearUser(event interfaces.CommonEvent, s *session.Session) {
-	user := s.GetFlaggedUser(constants.SessionKeyTarget)
+	var user *database.FlaggedUser
+	s.GetInterface(constants.SessionKeyTarget, &user)
 
 	// Clear the user
 	if err := m.handler.db.Users().ClearUser(user); err != nil {
@@ -258,7 +251,8 @@ func (m *Menu) handleClearUser(event interfaces.CommonEvent, s *session.Session)
 
 // handleSkipUser handles the skip user button interaction.
 func (m *Menu) handleSkipUser(event interfaces.CommonEvent, s *session.Session) {
-	user := s.GetFlaggedUser(constants.SessionKeyTarget)
+	var user *database.FlaggedUser
+	s.GetInterface(constants.SessionKeyTarget, &user)
 
 	// Log the activity
 	go m.handler.db.UserActivity().LogActivity(&database.UserActivityLog{
@@ -274,7 +268,8 @@ func (m *Menu) handleSkipUser(event interfaces.CommonEvent, s *session.Session) 
 
 // handleBanWithReason processes the ban with a modal for a custom reason.
 func (m *Menu) handleBanWithReason(event *events.ComponentInteractionCreate, s *session.Session) {
-	user := s.GetFlaggedUser(constants.SessionKeyTarget)
+	var user *database.FlaggedUser
+	s.GetInterface(constants.SessionKeyTarget, &user)
 
 	// Create the modal
 	modal := discord.NewModalCreateBuilder().
@@ -297,7 +292,8 @@ func (m *Menu) handleBanWithReason(event *events.ComponentInteractionCreate, s *
 
 // handleBanWithReasonModalSubmit processes the modal submit interaction.
 func (m *Menu) handleBanWithReasonModalSubmit(event *events.ModalSubmitInteractionCreate, s *session.Session) {
-	user := s.GetFlaggedUser(constants.SessionKeyTarget)
+	var user *database.FlaggedUser
+	s.GetInterface(constants.SessionKeyTarget, &user)
 
 	// Get the ban reason from the modal
 	reason := event.Data.Text("ban_reason")
@@ -327,14 +323,4 @@ func (m *Menu) handleBanWithReasonModalSubmit(event *events.ModalSubmitInteracti
 
 	// Show the review menu and fetch a new user
 	m.ShowReviewMenuAndFetchUser(event, s, "User banned.")
-}
-
-// Add this helper method to Menu.
-func (m *Menu) checkReviewTimeout(event interfaces.CommonEvent, s *session.Session) bool {
-	user := s.GetFlaggedUser(constants.SessionKeyTarget)
-	if time.Since(user.LastViewed) > 10*time.Minute {
-		m.ShowReviewMenuAndFetchUser(event, s, "Previous review session expired (10 minutes). Showing new user.")
-		return true
-	}
-	return false
 }

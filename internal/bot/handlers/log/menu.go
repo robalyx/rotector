@@ -171,12 +171,18 @@ func (m *Menu) handlePagination(event *events.ComponentInteractionCreate, s *ses
 
 // updateLogData fetches and updates the log data based on the current query parameters.
 func (m *Menu) updateLogData(event interfaces.CommonEvent, s *session.Session, page int) {
+	// Get parameters from session
+	var activityTypeFilter database.ActivityType
+	s.GetInterface(constants.SessionKeyActivityTypeFilter, &activityTypeFilter)
+	var startDate time.Time
+	s.GetInterface(constants.SessionKeyDateRangeStart, &startDate)
+	var endDate time.Time
+	s.GetInterface(constants.SessionKeyDateRangeEnd, &endDate)
+
 	userID := s.GetUint64(constants.SessionKeyUserID)
 	reviewerID := s.GetUint64(constants.SessionKeyReviewerID)
-	activityTypeFilter := s.Get(constants.SessionKeyActivityTypeFilter).(database.ActivityType)
-	startDate := s.Get(constants.SessionKeyDateRangeStart).(time.Time)
-	endDate := s.Get(constants.SessionKeyDateRangeEnd).(time.Time)
 
+	// Fetch logs from database
 	logs, totalLogs, err := m.handler.db.UserActivity().GetLogs(userID, reviewerID, activityTypeFilter, startDate, endDate, page, constants.LogsPerPage)
 	if err != nil {
 		m.handler.logger.Error("Failed to get logs", zap.Error(err))
@@ -184,9 +190,11 @@ func (m *Menu) updateLogData(event interfaces.CommonEvent, s *session.Session, p
 		return
 	}
 
+	// Set session data
 	s.Set(constants.SessionKeyLogs, logs)
 	s.Set(constants.SessionKeyTotalItems, totalLogs)
 	s.Set(constants.SessionKeyStart, page*constants.LogsPerPage)
 
+	// Navigate to the next page
 	m.handler.paginationManager.NavigateTo(event, s, m.page, "")
 }

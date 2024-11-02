@@ -8,7 +8,6 @@ import (
 	"github.com/rotector/rotector/internal/bot/interfaces"
 	"github.com/rotector/rotector/internal/bot/pagination"
 	"github.com/rotector/rotector/internal/bot/session"
-	"github.com/rotector/rotector/internal/bot/utils"
 	"github.com/rotector/rotector/internal/common/database"
 	"go.uber.org/zap"
 )
@@ -51,29 +50,9 @@ func (g *GuildMenu) ShowMenu(event interfaces.CommonEvent, s *session.Session) {
 
 // handleGuildSettingSelection handles the select menu for the guild settings menu.
 func (g *GuildMenu) handleGuildSettingSelection(event *events.ComponentInteractionCreate, s *session.Session, _ string, option string) {
-	roles := s.Get(constants.SessionKeyRoles).([]discord.Role)
-
 	switch option {
 	case constants.WhitelistedRolesOption:
-		// Fetch current value for the setting
-		currentValueFunc := func() string {
-			// Fetch guild settings from the database
-			settings, err := g.handler.db.Settings().GetGuildSettings(uint64(*event.GuildID()))
-			if err != nil {
-				g.handler.logger.Error("Failed to fetch guild settings", zap.Error(err))
-				return ""
-			}
-
-			return utils.FormatWhitelistedRoles(settings.WhitelistedRoles, roles)
-		}
-
-		// Create options for each role
-		options := make([]discord.StringSelectMenuOption, 0, len(roles))
-		for _, role := range roles {
-			options = append(options, discord.NewStringSelectMenuOption(role.Name, role.ID.String()))
-		}
-
-		g.handler.settingMenu.ShowMenu(event, s, "Whitelisted Roles", constants.GuildSettingPrefix, option, currentValueFunc, options)
+		g.handler.settingMenu.ShowMenu(event, s, "Whitelisted Roles", constants.GuildSettingPrefix, option)
 	}
 }
 

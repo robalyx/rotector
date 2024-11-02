@@ -84,7 +84,6 @@ const (
 	SessionKeyCurrentPage = "currentPage"
 
 	SessionKeyFile         = "file"
-	SessionKeyFileName     = "fileName"
 	SessionKeyStreamerMode = "streamerMode"
 
 	SessionKeyPaginationPage = "paginationPage"
@@ -97,14 +96,14 @@ const (
 	SessionKeyStatsChart     = "statsChart"
 	SessionKeyActiveUsers    = "activeUsers"
 
-	SessionKeySettingName      = "settingName"
-	SessionKeySettingType      = "settingType"
-	SessionKeyUserSettings     = "userSettings"
-	SessionKeyGuildSettings    = "guildSettings"
-	SessionKeyCurrentValueFunc = "currentValueFunc"
-	SessionKeyCustomID         = "customID"
-	SessionKeyOptions          = "options"
-	SessionKeyRoles            = "roles"
+	SessionKeySettingName   = "settingName"
+	SessionKeySettingType   = "settingType"
+	SessionKeyUserSettings  = "userSettings"
+	SessionKeyGuildSettings = "guildSettings"
+	SessionKeyCurrentValue  = "currentValue"
+	SessionKeyCustomID      = "customID"
+	SessionKeyOptions       = "options"
+	SessionKeyRoles         = "roles"
 
 	SessionKeyFriends        = "friends"
 	SessionKeyFlaggedFriends = "flaggedFriends"

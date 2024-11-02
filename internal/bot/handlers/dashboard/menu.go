@@ -1,7 +1,6 @@
 package dashboard
 
 import (
-	"bytes"
 	"context"
 
 	"github.com/disgoorg/disgo/discord"
@@ -27,11 +26,13 @@ func NewMenu(h *Handler) *Menu {
 	m.page = &pagination.Page{
 		Name: "Dashboard",
 		Message: func(s *session.Session) *discord.MessageUpdateBuilder {
-			confirmedCount := s.Get(constants.SessionKeyConfirmedCount).(int)
-			flaggedCount := s.Get(constants.SessionKeyFlaggedCount).(int)
-			clearedCount := s.Get(constants.SessionKeyClearedCount).(int)
-			statsChart := s.Get(constants.SessionKeyStatsChart).(*bytes.Buffer)
-			activeUsers := s.Get(constants.SessionKeyActiveUsers).([]snowflake.ID)
+			var activeUsers []snowflake.ID
+			s.GetInterface(constants.SessionKeyActiveUsers, &activeUsers)
+
+			confirmedCount := s.GetInt(constants.SessionKeyConfirmedCount)
+			flaggedCount := s.GetInt(constants.SessionKeyFlaggedCount)
+			clearedCount := s.GetInt(constants.SessionKeyClearedCount)
+			statsChart := s.GetBuffer(constants.SessionKeyStatsChart)
 
 			return builders.NewDashboardBuilder(confirmedCount, flaggedCount, clearedCount, statsChart, activeUsers).Build()
 		},
@@ -78,7 +79,7 @@ func (m *Menu) ShowDashboard(event interfaces.CommonEvent, s *session.Session, c
 	s.Set(constants.SessionKeyConfirmedCount, confirmedCount)
 	s.Set(constants.SessionKeyFlaggedCount, flaggedCount)
 	s.Set(constants.SessionKeyClearedCount, clearedCount)
-	s.Set(constants.SessionKeyStatsChart, statsChart)
+	s.SetBuffer(constants.SessionKeyStatsChart, statsChart)
 	s.Set(constants.SessionKeyActiveUsers, activeUsers)
 
 	m.handler.paginationManager.NavigateTo(event, s, m.page, content)

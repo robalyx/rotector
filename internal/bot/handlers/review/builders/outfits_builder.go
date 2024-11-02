@@ -1,6 +1,7 @@
 package builders
 
 import (
+	"bytes"
 	"fmt"
 
 	"github.com/disgoorg/disgo/discord"
@@ -18,21 +19,24 @@ type OutfitsEmbed struct {
 	start        int
 	page         int
 	total        int
-	file         *discord.File
-	fileName     string
+	file         *bytes.Buffer
 	streamerMode bool
 }
 
 // NewOutfitsEmbed creates a new OutfitsEmbed.
 func NewOutfitsEmbed(s *session.Session) *OutfitsEmbed {
+	var user *database.FlaggedUser
+	s.GetInterface(constants.SessionKeyTarget, &user)
+	var outfits []types.Outfit
+	s.GetInterface(constants.SessionKeyOutfits, &outfits)
+
 	return &OutfitsEmbed{
-		user:         s.GetFlaggedUser(constants.SessionKeyTarget),
-		outfits:      s.Get(constants.SessionKeyOutfits).([]types.Outfit),
+		user:         user,
+		outfits:      outfits,
 		start:        s.GetInt(constants.SessionKeyStart),
 		page:         s.GetInt(constants.SessionKeyPaginationPage),
 		total:        s.GetInt(constants.SessionKeyTotalItems),
-		file:         s.Get(constants.SessionKeyFile).(*discord.File),
-		fileName:     s.GetString(constants.SessionKeyFileName),
+		file:         s.GetBuffer(constants.SessionKeyFile),
 		streamerMode: s.GetBool(constants.SessionKeyStreamerMode),
 	}
 }
@@ -41,10 +45,13 @@ func NewOutfitsEmbed(s *session.Session) *OutfitsEmbed {
 func (b *OutfitsEmbed) Build() *discord.MessageUpdateBuilder {
 	totalPages := (b.total + constants.OutfitsPerPage - 1) / constants.OutfitsPerPage
 
+	fileName := fmt.Sprintf("outfits_%d_%d.png", b.user.ID, b.page)
+	file := discord.NewFile(fileName, "", bytes.NewReader(b.file.Bytes()))
+
 	embed := discord.NewEmbedBuilder().
 		SetTitle(fmt.Sprintf("User Outfits (Page %d/%d)", b.page+1, totalPages)).
 		SetDescription(fmt.Sprintf("```%s (%d)```", b.user.Name, b.user.ID)).
-		SetImage("attachment://" + b.fileName).
+		SetImage("attachment://" + fileName).
 		SetColor(utils.GetMessageEmbedColor(b.streamerMode))
 
 	for i, outfit := range b.outfits {
@@ -63,6 +70,6 @@ func (b *OutfitsEmbed) Build() *discord.MessageUpdateBuilder {
 
 	return discord.NewMessageUpdateBuilder().
 		SetEmbeds(embed.Build()).
-		SetFiles(b.file).
+		SetFiles(file).
 		AddContainerComponents(components...)
 }

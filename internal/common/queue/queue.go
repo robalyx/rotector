@@ -33,8 +33,8 @@ const (
 	QueuePositionPrefix = "queue_position:"
 	QueuePriorityPrefix = "queue_priority:"
 
-	// Redis key prefixes for aborted items.
-	abortedPrefix = "aborted:"
+	// Aborted prefix.
+	AbortedPrefix = "aborted:"
 )
 
 // Item represents a queue item.
@@ -65,9 +65,9 @@ func NewManager(db *database.Database, client rueidis.Client, logger *zap.Logger
 }
 
 // GetQueueLength returns the length of a queue.
-func (m *Manager) GetQueueLength(priority string) int {
+func (m *Manager) GetQueueLength(ctx context.Context, priority string) int {
 	key := fmt.Sprintf("queue:%s_priority", priority)
-	count, err := m.client.Do(context.Background(), m.client.B().Zcard().Key(key).Build()).ToInt64()
+	count, err := m.client.Do(ctx, m.client.B().Zcard().Key(key).Build()).ToInt64()
 	if err != nil {
 		m.logger.Error("Failed to get queue length", zap.Error(err))
 		return 0
@@ -76,11 +76,11 @@ func (m *Manager) GetQueueLength(priority string) int {
 }
 
 // AddToQueue adds an item to the queue.
-func (m *Manager) AddToQueue(item *Item) error {
+func (m *Manager) AddToQueue(ctx context.Context, item *Item) error {
 	// If user was previously aborted, remove the abort status
 	// This allows the user to be requeued by another reviewer
-	if m.IsAborted(item.UserID) {
-		if err := m.ClearAborted(item.UserID); err != nil {
+	if m.IsAborted(ctx, item.UserID) {
+		if err := m.ClearAborted(ctx, item.UserID); err != nil {
 			return err
 		}
 	}
@@ -94,7 +94,7 @@ func (m *Manager) AddToQueue(item *Item) error {
 
 	// Add to sorted set with score as timestamp
 	key := fmt.Sprintf("queue:%s_priority", item.Priority)
-	err = m.client.Do(context.Background(),
+	err = m.client.Do(ctx,
 		m.client.B().Zadd().Key(key).ScoreMember().ScoreMember(float64(item.AddedAt.Unix()), string(itemJSON)).Build(),
 	).Error()
 	if err != nil {
@@ -115,8 +115,8 @@ func (m *Manager) AddToQueue(item *Item) error {
 }
 
 // GetQueueItems gets items from a queue with the given key and batch size.
-func (m *Manager) GetQueueItems(key string, batchSize int) ([]string, error) {
-	result, err := m.client.Do(context.Background(),
+func (m *Manager) GetQueueItems(ctx context.Context, key string, batchSize int) ([]string, error) {
+	result, err := m.client.Do(ctx,
 		m.client.B().Zrange().Key(key).Min("0").Max(strconv.Itoa(batchSize-1)).Build(),
 	).AsStrSlice()
 	if err != nil {
@@ -128,16 +128,14 @@ func (m *Manager) GetQueueItems(key string, batchSize int) ([]string, error) {
 }
 
 // RemoveQueueItem removes an item from a queue.
-func (m *Manager) RemoveQueueItem(key string, item *Item) error {
+func (m *Manager) RemoveQueueItem(ctx context.Context, key string, item *Item) error {
 	itemJSON, err := sonic.Marshal(item)
 	if err != nil {
 		m.logger.Error("Failed to marshal queue item", zap.Error(err))
 		return err
 	}
 
-	err = m.client.Do(context.Background(),
-		m.client.B().Zrem().Key(key).Member(string(itemJSON)).Build(),
-	).Error()
+	err = m.client.Do(ctx, m.client.B().Zrem().Key(key).Member(string(itemJSON)).Build()).Error()
 	if err != nil {
 		m.logger.Error("Failed to remove item from queue", zap.Error(err))
 		return err
@@ -147,16 +145,15 @@ func (m *Manager) RemoveQueueItem(key string, item *Item) error {
 }
 
 // UpdateQueueItem updates an item in a queue with a new score.
-func (m *Manager) UpdateQueueItem(key string, score float64, item *Item) error {
+func (m *Manager) UpdateQueueItem(ctx context.Context, key string, score float64, item *Item) error {
 	itemJSON, err := sonic.Marshal(item)
 	if err != nil {
 		m.logger.Error("Failed to marshal queue item", zap.Error(err))
 		return err
 	}
 
-	err = m.client.Do(context.Background(),
-		m.client.B().Zadd().Key(key).ScoreMember().
-			ScoreMember(score, string(itemJSON)).Build(),
+	err = m.client.Do(ctx, m.client.B().Zadd().Key(key).ScoreMember().
+		ScoreMember(score, string(itemJSON)).Build(),
 	).Error()
 	if err != nil {
 		m.logger.Error("Failed to update item in queue", zap.Error(err))
@@ -167,9 +164,7 @@ func (m *Manager) UpdateQueueItem(key string, score float64, item *Item) error {
 }
 
 // GetQueueInfo returns the queue status, position, and priority for a user.
-func (m *Manager) GetQueueInfo(userID uint64) (status, priority string, position int, err error) {
-	ctx := context.Background()
-
+func (m *Manager) GetQueueInfo(ctx context.Context, userID uint64) (status, priority string, position int, err error) {
 	// Get status
 	statusCmd := m.client.Do(ctx, m.client.B().Get().Key(fmt.Sprintf("%s%d", QueueStatusPrefix, userID)).Build())
 	if statusCmd.Error() == nil {
@@ -193,9 +188,7 @@ func (m *Manager) GetQueueInfo(userID uint64) (status, priority string, position
 }
 
 // SetQueueInfo sets the queue status, position, and priority for a user with expiry.
-func (m *Manager) SetQueueInfo(userID uint64, status, priority string, position int) error {
-	ctx := context.Background()
-
+func (m *Manager) SetQueueInfo(ctx context.Context, userID uint64, status, priority string, position int) error {
 	// Set status with expiry
 	if err := m.client.Do(ctx, m.client.B().Set().Key(
 		fmt.Sprintf("%s%d", QueueStatusPrefix, userID)).
@@ -227,9 +220,7 @@ func (m *Manager) SetQueueInfo(userID uint64, status, priority string, position 
 }
 
 // ClearQueueInfo removes all queue info for a user.
-func (m *Manager) ClearQueueInfo(userID uint64) error {
-	ctx := context.Background()
-
+func (m *Manager) ClearQueueInfo(ctx context.Context, userID uint64) error {
 	// Delete status
 	if err := m.client.Do(ctx, m.client.B().Del().Key(
 		fmt.Sprintf("%s%d", QueueStatusPrefix, userID)).Build()).Error(); err != nil {
@@ -252,12 +243,10 @@ func (m *Manager) ClearQueueInfo(userID uint64) error {
 }
 
 // MarkAsAborted marks a user ID as aborted.
-func (m *Manager) MarkAsAborted(userID uint64) error {
-	ctx := context.Background()
-
+func (m *Manager) MarkAsAborted(ctx context.Context, userID uint64) error {
 	// Set aborted flag with 24 hour expiry (cleanup)
 	err := m.client.Do(ctx, m.client.B().Set().
-		Key(fmt.Sprintf("%s%d", abortedPrefix, userID)).
+		Key(fmt.Sprintf("%s%d", AbortedPrefix, userID)).
 		Value("1").
 		Ex(AbortedExpiry).
 		Build()).Error()
@@ -269,22 +258,18 @@ func (m *Manager) MarkAsAborted(userID uint64) error {
 }
 
 // IsAborted checks if a user ID has been marked as aborted.
-func (m *Manager) IsAborted(userID uint64) bool {
-	ctx := context.Background()
-
+func (m *Manager) IsAborted(ctx context.Context, userID uint64) bool {
 	result := m.client.Do(ctx, m.client.B().Get().
-		Key(fmt.Sprintf("%s%d", abortedPrefix, userID)).
+		Key(fmt.Sprintf("%s%d", AbortedPrefix, userID)).
 		Build())
 
 	return result.Error() == nil
 }
 
 // ClearAborted removes the aborted status for a user ID.
-func (m *Manager) ClearAborted(userID uint64) error {
-	ctx := context.Background()
-
+func (m *Manager) ClearAborted(ctx context.Context, userID uint64) error {
 	err := m.client.Do(ctx, m.client.B().Del().
-		Key(fmt.Sprintf("%s%d", abortedPrefix, userID)).
+		Key(fmt.Sprintf("%s%d", AbortedPrefix, userID)).
 		Build()).Error()
 	if err != nil {
 		return fmt.Errorf("failed to clear aborted status: %w", err)

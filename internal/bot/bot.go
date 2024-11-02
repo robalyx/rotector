@@ -126,7 +126,6 @@ func (b *Bot) Start() error {
 // Close gracefully shuts down the bot.
 func (b *Bot) Close() {
 	b.logger.Info("Closing bot")
-	b.sessionManager.Close()
 	b.client.Close(context.Background())
 }
 
@@ -170,8 +169,17 @@ func (b *Bot) handleApplicationCommandInteraction(event *events.ApplicationComma
 				zap.Duration("duration", duration))
 		}()
 
-		s := b.sessionManager.GetOrCreateSession(context.Background(), event.User().ID)
+		// Get or create a session for the user
+		s, err := b.sessionManager.GetOrCreateSession(context.Background(), event.User().ID)
+		if err != nil {
+			b.logger.Error("Failed to get or create session", zap.Error(err))
+			b.paginationManager.RespondWithError(event, "Failed to get or create session.")
+			return
+		}
+
+		// Save session data after handling the interaction
 		b.dashboardHandler.ShowDashboard(event, s, "")
+		s.Touch(context.Background())
 	}()
 }
 
@@ -213,15 +221,26 @@ func (b *Bot) handleComponentInteraction(event *events.ComponentInteractionCreat
 				zap.Duration("duration", duration))
 		}()
 
-		s := b.sessionManager.GetOrCreateSession(context.Background(), event.User().ID)
+		// Get or create a session for the user
+		s, err := b.sessionManager.GetOrCreateSession(context.Background(), event.User().ID)
+		if err != nil {
+			b.logger.Error("Failed to get or create session", zap.Error(err))
+			b.paginationManager.RespondWithError(event, "Failed to get or create session.")
+			return
+		}
 
 		// Ensure the interaction is for the latest message
-		if event.Message.ID.String() != s.GetString(constants.SessionKeyMessageID) {
+		if s.GetUint64(constants.SessionKeyMessageID) != uint64(event.Message.ID) {
+			b.logger.Debug("Interaction is outdated",
+				zap.Uint64("session_message_id", s.GetUint64(constants.SessionKeyMessageID)),
+				zap.Uint64("event_message_id", uint64(event.Message.ID)))
 			b.paginationManager.RespondWithError(event, "This interaction is outdated. Please use the latest interaction.")
 			return
 		}
 
+		// Save session data after handling the interaction
 		b.paginationManager.HandleInteraction(event, s)
+		s.Touch(context.Background())
 	}()
 }
 
@@ -251,7 +270,16 @@ func (b *Bot) handleModalSubmit(event *events.ModalSubmitInteractionCreate) {
 				zap.Duration("duration", duration))
 		}()
 
-		s := b.sessionManager.GetOrCreateSession(context.Background(), event.User().ID)
+		// Get or create a session for the user
+		s, err := b.sessionManager.GetOrCreateSession(context.Background(), event.User().ID)
+		if err != nil {
+			b.logger.Error("Failed to get or create session", zap.Error(err))
+			b.paginationManager.RespondWithError(event, "Failed to get or create session.")
+			return
+		}
+
+		// Save session data after handling the interaction
 		b.paginationManager.HandleInteraction(event, s)
+		s.Touch(context.Background())
 	}()
 }

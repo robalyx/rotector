@@ -49,5 +49,5 @@ func New(
 
 // ShowQueueMenu shows the queue menu.
 func (h *Handler) ShowQueueMenu(event interfaces.CommonEvent, s *session.Session) {
-	h.queueMenu.ShowQueueMenu(event, s)
+	h.queueMenu.ShowQueueMenu(event, s, "")
 }

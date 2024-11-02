@@ -97,6 +97,10 @@ func (c *TrackingChecker) CheckUserTrackings() error {
 
 	// Fetch user information
 	userInfos := c.userFetcher.FetchInfos(userIDs)
+	if len(userInfos) == 0 {
+		c.logger.Info("No user infos found", zap.Int("user_ids", len(userIDs)))
+		return nil
+	}
 
 	// Process each user
 	flaggedUsers := make([]*database.User, 0, len(userInfos))

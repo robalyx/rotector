@@ -1,6 +1,7 @@
 package builders
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/rotector/rotector/internal/bot/constants"
@@ -34,7 +35,7 @@ func NewStatusEmbed(queueManager *queue.Manager, s *session.Session) *StatusEmbe
 func (b *StatusEmbed) Build() *discord.MessageUpdateBuilder {
 	// Get queue status info
 	queueInfo := "Not in queue"
-	status, priority, position, err := b.queueManager.GetQueueInfo(b.userID)
+	status, priority, position, err := b.queueManager.GetQueueInfo(context.Background(), b.userID)
 	if err == nil && status != "" {
 		if position > 0 {
 			queueInfo = fmt.Sprintf("%s (Position: %d in %s queue)",

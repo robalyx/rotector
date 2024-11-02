@@ -1,6 +1,7 @@
 package queue
 
 import (
+	"context"
 	"strconv"
 	"time"
 
@@ -42,12 +43,12 @@ func NewMenu(h *Handler) *Menu {
 }
 
 // ShowQueueMenu displays the queue management menu.
-func (m *Menu) ShowQueueMenu(event interfaces.CommonEvent, s *session.Session) {
-	s.Set(constants.SessionKeyQueueHighCount, m.handler.queueManager.GetQueueLength(queue.HighPriority))
-	s.Set(constants.SessionKeyQueueNormalCount, m.handler.queueManager.GetQueueLength(queue.NormalPriority))
-	s.Set(constants.SessionKeyQueueLowCount, m.handler.queueManager.GetQueueLength(queue.LowPriority))
+func (m *Menu) ShowQueueMenu(event interfaces.CommonEvent, s *session.Session, content string) {
+	s.Set(constants.SessionKeyQueueHighCount, m.handler.queueManager.GetQueueLength(context.Background(), queue.HighPriority))
+	s.Set(constants.SessionKeyQueueNormalCount, m.handler.queueManager.GetQueueLength(context.Background(), queue.NormalPriority))
+	s.Set(constants.SessionKeyQueueLowCount, m.handler.queueManager.GetQueueLength(context.Background(), queue.LowPriority))
 
-	m.handler.paginationManager.NavigateTo(event, s, m.page, "")
+	m.handler.paginationManager.NavigateTo(event, s, m.page, content)
 }
 
 // handleSelectMenu handles the select menu interactions.
@@ -86,7 +87,7 @@ func (m *Menu) handleButton(event *events.ComponentInteractionCreate, s *session
 	case constants.BackButtonCustomID:
 		m.handler.dashboardHandler.ShowDashboard(event, s, "")
 	case constants.RefreshButtonCustomID:
-		m.ShowQueueMenu(event, s)
+		m.ShowQueueMenu(event, s, "")
 	}
 }
 
@@ -103,7 +104,7 @@ func (m *Menu) handleModal(event *events.ModalSubmitInteractionCreate, s *sessio
 	// Parse the user ID
 	userID, err := strconv.ParseUint(userIDStr, 10, 64)
 	if err != nil {
-		m.handler.paginationManager.RespondWithError(event, "Invalid user ID format")
+		m.ShowQueueMenu(event, s, "Invalid user ID format.")
 		return
 	}
 
@@ -111,7 +112,7 @@ func (m *Menu) handleModal(event *events.ModalSubmitInteractionCreate, s *sessio
 	s.Set(constants.SessionKeyQueueUser, userID)
 
 	// Check if user is already in queue
-	status, _, _, err := m.handler.queueManager.GetQueueInfo(userID)
+	status, _, _, err := m.handler.queueManager.GetQueueInfo(context.Background(), userID)
 	if err == nil && status != "" {
 		// User is already in queue, show status menu
 		m.handler.reviewHandler.ShowStatusMenu(event, s)
@@ -120,7 +121,7 @@ func (m *Menu) handleModal(event *events.ModalSubmitInteractionCreate, s *sessio
 
 	// Add to queue
 	priority := s.GetString(constants.SessionKeyQueuePriority)
-	err = m.handler.queueManager.AddToQueue(&queue.Item{
+	err = m.handler.queueManager.AddToQueue(context.Background(), &queue.Item{
 		UserID:      userID,
 		Priority:    utils.GetPriorityFromCustomID(priority),
 		Reason:      reason,
@@ -136,10 +137,11 @@ func (m *Menu) handleModal(event *events.ModalSubmitInteractionCreate, s *sessio
 
 	// Update queue info
 	err = m.handler.queueManager.SetQueueInfo(
+		context.Background(),
 		userID,
 		queue.StatusPending,
 		queue.HighPriority,
-		m.handler.queueManager.GetQueueLength(queue.HighPriority),
+		m.handler.queueManager.GetQueueLength(context.Background(), queue.HighPriority),
 	)
 	if err != nil {
 		m.handler.paginationManager.RespondWithError(event, "Failed to update queue info")

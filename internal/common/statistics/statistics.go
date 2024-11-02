@@ -59,7 +59,7 @@ func (s *Statistics) IncrementDailyStat(ctx context.Context, field string, amoun
 }
 
 // IncrementHourlyStat increments a statistic for the current hour.
-func (s *Statistics) IncrementHourlyStat(ctx context.Context, statType string) error {
+func (s *Statistics) IncrementHourlyStat(ctx context.Context, statType string, amount int) error {
 	currentTime := time.Now().UTC()
 	key := fmt.Sprintf("%s:%s:%s", HourlyStatsKeyPrefix, statType, currentTime.Format("2006-01-02-15"))
 

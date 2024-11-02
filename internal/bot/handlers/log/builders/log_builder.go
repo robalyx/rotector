@@ -28,13 +28,22 @@ type LogEmbed struct {
 
 // NewLogEmbed creates a new LogEmbed.
 func NewLogEmbed(s *session.Session) *LogEmbed {
+	var logs []*database.UserActivityLog
+	s.GetInterface(constants.SessionKeyLogs, &logs)
+	var activityTypeFilter database.ActivityType
+	s.GetInterface(constants.SessionKeyActivityTypeFilter, &activityTypeFilter)
+	var startDate time.Time
+	s.GetInterface(constants.SessionKeyDateRangeStart, &startDate)
+	var endDate time.Time
+	s.GetInterface(constants.SessionKeyDateRangeEnd, &endDate)
+
 	return &LogEmbed{
-		logs:               s.Get(constants.SessionKeyLogs).([]*database.UserActivityLog),
+		logs:               logs,
 		userID:             s.GetUint64(constants.SessionKeyUserID),
 		reviewerID:         s.GetUint64(constants.SessionKeyReviewerID),
-		activityTypeFilter: s.Get(constants.SessionKeyActivityTypeFilter).(database.ActivityType),
-		startDate:          s.Get(constants.SessionKeyDateRangeStart).(time.Time),
-		endDate:            s.Get(constants.SessionKeyDateRangeEnd).(time.Time),
+		activityTypeFilter: activityTypeFilter,
+		startDate:          startDate,
+		endDate:            endDate,
 		start:              s.GetInt(constants.SessionKeyStart),
 		page:               s.GetInt(constants.SessionKeyPaginationPage),
 		total:              s.GetInt(constants.SessionKeyTotalItems),
@@ -101,6 +110,7 @@ func (b *LogEmbed) Build() *discord.MessageUpdateBuilder {
 				discord.NewStringSelectMenuOption("Banned (Custom)", fmt.Sprintf("%d", database.ActivityTypeBannedCustom)).WithDefault(b.activityTypeFilter == database.ActivityTypeBannedCustom),
 				discord.NewStringSelectMenuOption("Cleared", fmt.Sprintf("%d", database.ActivityTypeCleared)).WithDefault(b.activityTypeFilter == database.ActivityTypeCleared),
 				discord.NewStringSelectMenuOption("Skipped", fmt.Sprintf("%d", database.ActivityTypeSkipped)).WithDefault(b.activityTypeFilter == database.ActivityTypeSkipped),
+				discord.NewStringSelectMenuOption("Rechecked", fmt.Sprintf("%d", database.ActivityTypeRechecked)).WithDefault(b.activityTypeFilter == database.ActivityTypeRechecked),
 			),
 		),
 		discord.NewActionRow(

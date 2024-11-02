@@ -16,7 +16,6 @@ require (
 	github.com/jaxron/axonet/middleware/retry v0.0.0-20241025054147-6c298c86aa64
 	github.com/jaxron/axonet/middleware/singleflight v0.0.0-20241025054147-6c298c86aa64
 	github.com/jaxron/roapi.go v0.0.0-20241023130833-ad8750c2385e
-	github.com/maypok86/otter v1.2.3
 	github.com/openai/openai-go v0.1.0-alpha.32
 	github.com/ozankasikci/go-image-merge v0.3.1
 	github.com/redis/rueidis v1.0.48
@@ -38,10 +37,8 @@ require (
 	github.com/cloudwego/base64x v0.1.4 // indirect
 	github.com/cloudwego/iasm v0.2.0 // indirect
 	github.com/disgoorg/json v1.2.0 // indirect
-	github.com/dolthub/maphash v0.1.0 // indirect
 	github.com/fsnotify/fsnotify v1.7.0 // indirect
 	github.com/gabriel-vasile/mimetype v1.4.6 // indirect
-	github.com/gammazero/deque v0.2.1 // indirect
 	github.com/go-pg/zerochecker v0.2.0 // indirect
 	github.com/go-playground/locales v0.14.1 // indirect
 	github.com/go-playground/universal-translator v0.18.1 // indirect

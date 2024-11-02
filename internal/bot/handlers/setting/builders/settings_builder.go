@@ -18,8 +18,11 @@ type UserSettingsEmbed struct {
 
 // NewUserSettingsEmbed creates a new UserSettingsEmbed.
 func NewUserSettingsEmbed(s *session.Session) *UserSettingsEmbed {
+	var settings *database.UserSetting
+	s.GetInterface(constants.SessionKeyUserSettings, &settings)
+
 	return &UserSettingsEmbed{
-		settings: s.Get(constants.SessionKeyUserSettings).(*database.UserSetting),
+		settings: settings,
 	}
 }
 
@@ -56,9 +59,14 @@ type GuildSettingsEmbed struct {
 
 // NewGuildSettingsEmbed creates a new GuildSettingsEmbed.
 func NewGuildSettingsEmbed(s *session.Session) *GuildSettingsEmbed {
+	var settings *database.GuildSetting
+	s.GetInterface(constants.SessionKeyGuildSettings, &settings)
+	var roles []discord.Role
+	s.GetInterface(constants.SessionKeyRoles, &roles)
+
 	return &GuildSettingsEmbed{
-		settings: s.Get(constants.SessionKeyGuildSettings).(*database.GuildSetting),
-		roles:    s.Get(constants.SessionKeyRoles).([]discord.Role),
+		settings: settings,
+		roles:    roles,
 	}
 }
 
@@ -99,7 +107,7 @@ func NewSettingChangeBuilder(s *session.Session) *SettingChangeBuilder {
 	return &SettingChangeBuilder{
 		settingName:  s.GetString(constants.SessionKeySettingName),
 		settingType:  s.GetString(constants.SessionKeySettingType),
-		currentValue: s.Get(constants.SessionKeyCurrentValueFunc).(func() string)(),
+		currentValue: s.GetString(constants.SessionKeyCurrentValue),
 		customID:     s.GetString(constants.SessionKeyCustomID),
 	}
 }

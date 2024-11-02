@@ -1,6 +1,7 @@
 package builders
 
 import (
+	"bytes"
 	"fmt"
 
 	"github.com/disgoorg/disgo/discord"
@@ -19,22 +20,27 @@ type GroupsEmbed struct {
 	start         int
 	page          int
 	total         int
-	file          *discord.File
-	fileName      string
+	file          *bytes.Buffer
 	streamerMode  bool
 }
 
 // NewGroupsEmbed creates a new GroupsEmbed.
 func NewGroupsEmbed(s *session.Session) *GroupsEmbed {
+	var user *database.FlaggedUser
+	s.GetInterface(constants.SessionKeyTarget, &user)
+	var groups []types.UserGroupRoles
+	s.GetInterface(constants.SessionKeyGroups, &groups)
+	var flaggedGroups map[uint64]bool
+	s.GetInterface(constants.SessionKeyFlaggedGroups, &flaggedGroups)
+
 	return &GroupsEmbed{
-		user:          s.GetFlaggedUser(constants.SessionKeyTarget),
-		groups:        s.Get(constants.SessionKeyGroups).([]types.UserGroupRoles),
-		flaggedGroups: s.Get(constants.SessionKeyFlaggedGroups).(map[uint64]bool),
+		user:          user,
+		groups:        groups,
+		flaggedGroups: flaggedGroups,
 		start:         s.GetInt(constants.SessionKeyStart),
 		page:          s.GetInt(constants.SessionKeyPaginationPage),
 		total:         s.GetInt(constants.SessionKeyTotalItems),
-		file:          s.Get(constants.SessionKeyFile).(*discord.File),
-		fileName:      s.GetString(constants.SessionKeyFileName),
+		file:          s.GetBuffer(constants.SessionKeyFile),
 		streamerMode:  s.GetBool(constants.SessionKeyStreamerMode),
 	}
 }
@@ -43,10 +49,13 @@ func NewGroupsEmbed(s *session.Session) *GroupsEmbed {
 func (b *GroupsEmbed) Build() *discord.MessageUpdateBuilder {
 	totalPages := (b.total + constants.GroupsPerPage - 1) / constants.GroupsPerPage
 
+	fileName := fmt.Sprintf("groups_%d_%d.png", b.user.ID, b.page)
+	file := discord.NewFile(fileName, "", bytes.NewReader(b.file.Bytes()))
+
 	embed := discord.NewEmbedBuilder().
 		SetTitle(fmt.Sprintf("User Groups (Page %d/%d)", b.page+1, totalPages)).
 		SetDescription(fmt.Sprintf("```%s (%d)```", utils.CensorString(b.user.Name, b.streamerMode), b.user.ID)).
-		SetImage("attachment://" + b.fileName).
+		SetImage("attachment://" + fileName).
 		SetColor(utils.GetMessageEmbedColor(b.streamerMode))
 
 	components := []discord.ContainerComponent{
@@ -79,5 +88,5 @@ func (b *GroupsEmbed) Build() *discord.MessageUpdateBuilder {
 	return discord.NewMessageUpdateBuilder().
 		SetEmbeds(embed.Build()).
 		AddContainerComponents(components...).
-		SetFiles(b.file)
+		SetFiles(file)
 }

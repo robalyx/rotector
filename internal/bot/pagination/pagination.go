@@ -102,7 +102,7 @@ func (m *Manager) NavigateTo(event interfaces.CommonEvent, s *session.Session, p
 		m.logger.Error("Failed to update interaction response", zap.Error(err))
 	}
 
-	s.Set(constants.SessionKeyMessageID, message.ID.String())
+	s.Set(constants.SessionKeyMessageID, uint64(message.ID))
 	s.Set(constants.SessionKeyCurrentPage, page.Name)
 
 	m.logger.Debug("Updated message", zap.String("page", page.Name))

@@ -45,7 +45,7 @@ func (r *UserRepository) GetFlaggedUserToReview(sortBy string) (*FlaggedUser, er
 		case SortByConfidence:
 			query = query.Order("confidence DESC")
 		case SortByLastUpdated:
-			query = query.Order("last_updated DESC")
+			query = query.Order("last_updated ASC")
 		case SortByRandom:
 			query = query.OrderExpr("RANDOM()")
 		default:
@@ -167,7 +167,7 @@ func (r *UserRepository) SaveFlaggedUsers(flaggedUsers []*User) {
 	}
 
 	// Increment hourly stat
-	if err := r.stats.IncrementHourlyStat(context.Background(), statistics.HourlyStatFlagged); err != nil {
+	if err := r.stats.IncrementHourlyStat(context.Background(), statistics.HourlyStatFlagged, len(flaggedUsers)); err != nil {
 		r.logger.Error("Failed to increment hourly flagged stat", zap.Error(err))
 	}
 
@@ -233,7 +233,7 @@ func (r *UserRepository) ConfirmUser(user *FlaggedUser) error {
 		}
 
 		// Increment hourly stat
-		if err := r.stats.IncrementHourlyStat(tx.Context(), statistics.HourlyStatConfirmed); err != nil {
+		if err := r.stats.IncrementHourlyStat(tx.Context(), statistics.HourlyStatConfirmed, 1); err != nil {
 			r.logger.Error("Failed to increment hourly confirmed stat", zap.Error(err))
 		}
 
@@ -288,7 +288,7 @@ func (r *UserRepository) ClearUser(user *FlaggedUser) error {
 		}
 
 		// Increment hourly stat
-		if err := r.stats.IncrementHourlyStat(tx.Context(), statistics.HourlyStatCleared); err != nil {
+		if err := r.stats.IncrementHourlyStat(tx.Context(), statistics.HourlyStatCleared, 1); err != nil {
 			r.logger.Error("Failed to increment hourly cleared stat", zap.Error(err))
 		}
 

@@ -1,9 +1,7 @@
 package review
 
 import (
-	"bytes"
 	"context"
-	"fmt"
 	"strconv"
 
 	"github.com/disgoorg/disgo/discord"
@@ -15,6 +13,7 @@ import (
 	"github.com/rotector/rotector/internal/bot/pagination"
 	"github.com/rotector/rotector/internal/bot/session"
 	"github.com/rotector/rotector/internal/bot/utils"
+	"github.com/rotector/rotector/internal/common/database"
 	"go.uber.org/zap"
 )
 
@@ -39,7 +38,8 @@ func NewOutfitsMenu(h *Handler) *OutfitsMenu {
 
 // ShowOutfitsMenu shows the outfits menu for the given page.
 func (m *OutfitsMenu) ShowOutfitsMenu(event *events.ComponentInteractionCreate, s *session.Session, page int) {
-	user := s.GetFlaggedUser(constants.SessionKeyTarget)
+	var user *database.FlaggedUser
+	s.GetInterface(constants.SessionKeyTarget, &user)
 
 	// Check if the user has outfits
 	if len(user.Outfits) == 0 {
@@ -79,10 +79,6 @@ func (m *OutfitsMenu) ShowOutfitsMenu(event *events.ComponentInteractionCreate, 
 		return
 	}
 
-	// Create necessary embed and components
-	fileName := fmt.Sprintf("outfits_%d_%d.png", user.ID, page)
-	file := discord.NewFile(fileName, "", bytes.NewReader(buf.Bytes()))
-
 	// Get user settings
 	settings, err := m.handler.db.Settings().GetUserSettings(uint64(event.User().ID))
 	if err != nil {
@@ -96,8 +92,7 @@ func (m *OutfitsMenu) ShowOutfitsMenu(event *events.ComponentInteractionCreate, 
 	s.Set(constants.SessionKeyStart, start)
 	s.Set(constants.SessionKeyPaginationPage, page)
 	s.Set(constants.SessionKeyTotalItems, len(outfits))
-	s.Set(constants.SessionKeyFile, file)
-	s.Set(constants.SessionKeyFileName, fileName)
+	s.SetBuffer(constants.SessionKeyFile, buf)
 	s.Set(constants.SessionKeyStreamerMode, settings.StreamerMode)
 
 	m.handler.paginationManager.NavigateTo(event, s, m.page, "")
@@ -108,7 +103,8 @@ func (m *OutfitsMenu) handlePageNavigation(event *events.ComponentInteractionCre
 	action := utils.ViewerAction(customID)
 	switch action {
 	case utils.ViewerFirstPage, utils.ViewerPrevPage, utils.ViewerNextPage, utils.ViewerLastPage:
-		user := s.GetFlaggedUser(constants.SessionKeyTarget)
+		var user *database.FlaggedUser
+		s.GetInterface(constants.SessionKeyTarget, &user)
 
 		// Get the page numbers for the action
 		maxPage := (len(user.Outfits) - 1) / constants.OutfitsPerPage

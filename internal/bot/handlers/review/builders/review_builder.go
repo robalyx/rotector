@@ -36,10 +36,15 @@ type ReviewEmbed struct {
 
 // NewReviewEmbed creates a new ReviewEmbed.
 func NewReviewEmbed(s *session.Session, translator *translator.Translator, db *database.Database) *ReviewEmbed {
+	var user *database.FlaggedUser
+	s.GetInterface(constants.SessionKeyTarget, &user)
+	var flaggedFriends map[uint64]string
+	s.GetInterface(constants.SessionKeyFlaggedFriends, &flaggedFriends)
+
 	return &ReviewEmbed{
-		user:           s.GetFlaggedUser(constants.SessionKeyTarget),
+		user:           user,
 		translator:     translator,
-		flaggedFriends: s.Get(constants.SessionKeyFlaggedFriends).(map[uint64]string),
+		flaggedFriends: flaggedFriends,
 		sortBy:         s.GetString(constants.SessionKeySortBy),
 		streamerMode:   s.GetBool(constants.SessionKeyStreamerMode),
 		db:             db,
