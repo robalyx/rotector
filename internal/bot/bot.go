@@ -177,8 +177,18 @@ func (b *Bot) handleApplicationCommandInteraction(event *events.ApplicationComma
 			return
 		}
 
-		// Save session data after handling the interaction
-		b.dashboardHandler.ShowDashboard(event, s, "")
+		// Get the current page from session
+		currentPage := s.GetString(constants.SessionKeyCurrentPage)
+		page := b.paginationManager.GetPage(currentPage)
+
+		// If no valid page exists in session, show dashboard
+		if page == nil {
+			b.dashboardHandler.ShowDashboard(event, s, "")
+		} else {
+			// Otherwise, navigate to the stored page
+			b.paginationManager.NavigateTo(event, s, page, "")
+		}
+
 		s.Touch(context.Background())
 	}()
 }
