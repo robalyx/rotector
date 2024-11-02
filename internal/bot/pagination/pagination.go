@@ -102,6 +102,11 @@ func (m *Manager) NavigateTo(event interfaces.CommonEvent, s *session.Session, p
 		m.logger.Error("Failed to update interaction response", zap.Error(err))
 	}
 
+	currentPage := s.GetString(constants.SessionKeyCurrentPage)
+	if page.Name != currentPage {
+		s.Set(constants.SessionKeyPreviousPage, currentPage)
+	}
+
 	s.Set(constants.SessionKeyMessageID, uint64(message.ID))
 	s.Set(constants.SessionKeyCurrentPage, page.Name)
 

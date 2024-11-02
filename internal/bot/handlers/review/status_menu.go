@@ -55,15 +55,13 @@ func (m *StatusMenu) ShowStatusMenu(event interfaces.CommonEvent, s *session.Ses
 		flaggedUser, err := m.handler.db.Users().GetFlaggedUserByID(userID)
 		if err != nil {
 			// User was not flagged by AI, show new user
-			m.handler.dashboardHandler.ShowDashboard(event, s,
-				"Previous user was not flagged by AI after recheck.")
+			m.returnToPreviousPage(event, s, "User was not flagged by AI after recheck.")
 			return
 		}
 
 		// User is still flagged, show updated user
 		s.Set(constants.SessionKeyTarget, flaggedUser)
-		m.handler.reviewMenu.ShowReviewMenu(event, s,
-			"User has been rechecked. Showing updated information.")
+		m.handler.reviewMenu.ShowReviewMenu(event, s, "User has been rechecked. Showing updated information.")
 		return
 	}
 
@@ -73,8 +71,6 @@ func (m *StatusMenu) ShowStatusMenu(event interfaces.CommonEvent, s *session.Ses
 // handleButton handles button interactions.
 func (m *StatusMenu) handleButton(event *events.ComponentInteractionCreate, s *session.Session, customID string) {
 	switch customID {
-	case constants.BackButtonCustomID:
-		m.handler.dashboardHandler.ShowDashboard(event, s, "The previous user was queued.")
 	case constants.RefreshButtonCustomID:
 		m.ShowStatusMenu(event, s)
 	case constants.AbortButtonCustomID:
@@ -101,5 +97,12 @@ func (m *StatusMenu) handleAbort(event *events.ComponentInteractionCreate, s *se
 	// Note: We don't need to explicitly remove from queue here
 	// The worker will handle that when it sees the aborted flag
 
-	m.handler.dashboardHandler.ShowDashboard(event, s, "Recheck aborted")
+	m.returnToPreviousPage(event, s, "Recheck aborted")
+}
+
+// returnToPreviousPage returns to the previous page the user was on.
+func (m *StatusMenu) returnToPreviousPage(event interfaces.CommonEvent, s *session.Session, content string) {
+	previousPage := s.GetString(constants.SessionKeyPreviousPage)
+	page := m.handler.paginationManager.GetPage(previousPage)
+	m.handler.paginationManager.NavigateTo(event, s, page, content)
 }

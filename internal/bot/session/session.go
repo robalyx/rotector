@@ -86,7 +86,7 @@ func (s *Session) SetBuffer(key string, buf *bytes.Buffer) {
 	s.logger.Debug("Session key set with base64 encoded buffer", zap.String("key", key))
 }
 
-// Delete deletes the value for the given key.
+// Delete removes the value for the given key.
 func (s *Session) Delete(key string) {
 	delete(s.data, key)
 	s.logger.Debug("Session key deleted", zap.String("key", key))

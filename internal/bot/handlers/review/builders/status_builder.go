@@ -56,7 +56,6 @@ func (b *StatusEmbed) Build() *discord.MessageUpdateBuilder {
 
 	components := []discord.ContainerComponent{
 		discord.NewActionRow(
-			discord.NewSecondaryButton("◀️", constants.BackButtonCustomID),
 			discord.NewSecondaryButton("🔄", constants.RefreshButtonCustomID),
 			discord.NewDangerButton("Abort", constants.AbortButtonCustomID),
 		),

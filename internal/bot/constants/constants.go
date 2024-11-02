@@ -78,10 +78,11 @@ const (
 	ReasonInputCustomID         = "reason_input"
 
 	// Session keys.
-	SessionKeyMessageID   = "messageID"
-	SessionKeyTarget      = "target"
-	SessionKeySortBy      = "sortBy"
-	SessionKeyCurrentPage = "currentPage"
+	SessionKeyMessageID    = "messageID"
+	SessionKeyTarget       = "target"
+	SessionKeySortBy       = "sortBy"
+	SessionKeyCurrentPage  = "currentPage"
+	SessionKeyPreviousPage = "previousPage"
 
 	SessionKeyFile         = "file"
 	SessionKeyStreamerMode = "streamerMode"
