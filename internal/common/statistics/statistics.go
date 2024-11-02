@@ -64,7 +64,7 @@ func (s *Statistics) IncrementHourlyStat(ctx context.Context, statType string, a
 	key := fmt.Sprintf("%s:%s:%s", HourlyStatsKeyPrefix, statType, currentTime.Format("2006-01-02-15"))
 
 	// Increment the counter
-	incrCmd := s.Client.B().Incr().Key(key).Build()
+	incrCmd := s.Client.B().Incrby().Key(key).Increment(int64(amount)).Build()
 	if err := s.Client.Do(ctx, incrCmd).Error(); err != nil {
 		return err
 	}
