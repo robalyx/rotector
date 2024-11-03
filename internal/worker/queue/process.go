@@ -2,10 +2,10 @@ package queue
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"time"
 
+	"github.com/bytedance/sonic"
 	"github.com/jaxron/roapi.go/pkg/api"
 	"github.com/openai/openai-go"
 	"github.com/rotector/rotector/internal/common/checker"
@@ -166,7 +166,7 @@ func (w *ProcessWorker) getItemsFromQueues() ([]*queue.Item, error) {
 		// Parse items
 		for _, itemJSON := range result {
 			var item queue.Item
-			if err := json.Unmarshal([]byte(itemJSON), &item); err != nil {
+			if err := sonic.Unmarshal([]byte(itemJSON), &item); err != nil {
 				w.logger.Error("Failed to unmarshal queue item", zap.Error(err))
 				continue
 			}
