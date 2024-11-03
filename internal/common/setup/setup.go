@@ -23,7 +23,6 @@ import (
 	"github.com/openai/openai-go/option"
 	"github.com/rotector/rotector/internal/common/config"
 	"github.com/rotector/rotector/internal/common/database"
-	"github.com/rotector/rotector/internal/common/logging"
 	"github.com/rotector/rotector/internal/common/queue"
 	"github.com/rotector/rotector/internal/common/redis"
 	"github.com/rotector/rotector/internal/common/statistics"
@@ -53,7 +52,7 @@ func InitializeApp(logDir string) (*AppSetup, error) {
 	}
 
 	// Initialize logging
-	logger, dbLogger, err := logging.SetupLogging(logDir, cfg.Logging.Level, cfg.Logging.MaxLogsToKeep)
+	logger, dbLogger, err := GetLoggers(logDir, cfg.Logging.Level, cfg.Logging.MaxLogsToKeep)
 	if err != nil {
 		return nil, err
 	}

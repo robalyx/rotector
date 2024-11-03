@@ -6,7 +6,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/rotector/rotector/internal/common/logging"
 	"github.com/rotector/rotector/internal/common/progress"
 	"github.com/rotector/rotector/internal/common/setup"
 	"github.com/rotector/rotector/internal/worker/ai"
@@ -151,14 +150,14 @@ func newQueueWorkerCmd() *cobra.Command {
 
 // runWorkers starts the specified number of workers of the given type.
 func runWorkers(workerType, subType string, count int) {
-	setup, err := setup.InitializeApp(WorkerLogDir)
+	app, err := setup.InitializeApp(WorkerLogDir)
 	if err != nil {
 		log.Fatalf("Failed to initialize application: %v", err)
 	}
-	defer setup.CleanupApp()
+	defer app.CleanupApp()
 
 	var wg sync.WaitGroup
-	logLevel := setup.Config.Logging.Level
+	logLevel := app.Config.Logging.Level
 
 	// Initialize progress bars
 	bars := make([]*progress.Bar, count)
@@ -176,7 +175,7 @@ func runWorkers(workerType, subType string, count int) {
 		go func(workerID int) {
 			defer wg.Done()
 
-			workerLogger := logging.GetWorkerLogger(
+			workerLogger := setup.GetWorkerLogger(
 				fmt.Sprintf("%s_%s_worker_%d", workerType, subType, workerID),
 				WorkerLogDir,
 				logLevel,
@@ -188,19 +187,19 @@ func runWorkers(workerType, subType string, count int) {
 			var w interface{ Start() }
 			switch {
 			case workerType == AIWorker && subType == AIWorkerTypeMember:
-				w = ai.NewMemberWorker(setup.DB, setup.OpenAIClient, setup.RoAPI, bar, workerLogger)
+				w = ai.NewMemberWorker(app.DB, app.OpenAIClient, app.RoAPI, bar, workerLogger)
 			case workerType == AIWorker && subType == AIWorkerTypeFriend:
-				w = ai.NewFriendWorker(setup.DB, setup.OpenAIClient, setup.RoAPI, bar, workerLogger)
+				w = ai.NewFriendWorker(app.DB, app.OpenAIClient, app.RoAPI, bar, workerLogger)
 			case workerType == PurgeWorker && subType == PurgeWorkerTypeBanned:
-				w = purge.NewBannedWorker(setup.DB, setup.RoAPI, bar, workerLogger)
+				w = purge.NewBannedWorker(app.DB, app.RoAPI, bar, workerLogger)
 			case workerType == PurgeWorker && subType == PurgeWorkerTypeCleared:
-				w = purge.NewClearedWorker(setup.DB, setup.RoAPI, bar, workerLogger)
+				w = purge.NewClearedWorker(app.DB, app.RoAPI, bar, workerLogger)
 			case workerType == PurgeWorker && subType == PurgeWorkerTypeTracking:
-				w = purge.NewTrackingWorker(setup.DB, setup.RoAPI, bar, workerLogger)
+				w = purge.NewTrackingWorker(app.DB, app.RoAPI, bar, workerLogger)
 			case workerType == StatsWorker:
-				w = stats.NewStatisticsWorker(setup.DB, bar, workerLogger)
+				w = stats.NewStatisticsWorker(app.DB, bar, workerLogger)
 			case workerType == QueueWorker:
-				w = queue.NewProcessWorker(setup.DB, setup.OpenAIClient, setup.RoAPI, setup.Queue, bar, workerLogger)
+				w = queue.NewProcessWorker(app.DB, app.OpenAIClient, app.RoAPI, app.Queue, bar, workerLogger)
 			default:
 				log.Fatalf("Invalid worker type: %s %s", workerType, subType)
 			}
