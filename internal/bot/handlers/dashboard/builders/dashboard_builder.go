@@ -16,17 +16,17 @@ type DashboardBuilder struct {
 	confirmedCount int
 	flaggedCount   int
 	clearedCount   int
-	statsChart     *bytes.Buffer
+	imageBuffer    *bytes.Buffer
 	activeUsers    []snowflake.ID
 }
 
 // NewDashboardBuilder creates a new DashboardBuilder.
-func NewDashboardBuilder(confirmedCount, flaggedCount, clearedCount int, statsChart *bytes.Buffer, activeUsers []snowflake.ID) *DashboardBuilder {
+func NewDashboardBuilder(confirmedCount, flaggedCount, clearedCount int, imageBuffer *bytes.Buffer, activeUsers []snowflake.ID) *DashboardBuilder {
 	return &DashboardBuilder{
 		confirmedCount: confirmedCount,
 		flaggedCount:   flaggedCount,
 		clearedCount:   clearedCount,
-		statsChart:     statsChart,
+		imageBuffer:    imageBuffer,
 		activeUsers:    activeUsers,
 	}
 }
@@ -50,7 +50,7 @@ func (b *DashboardBuilder) Build() *discord.MessageUpdateBuilder {
 	}
 
 	// Add stats chart if available
-	if b.statsChart != nil {
+	if b.imageBuffer != nil {
 		embed.SetImage("attachment://stats_chart.png")
 	}
 
@@ -74,8 +74,8 @@ func (b *DashboardBuilder) Build() *discord.MessageUpdateBuilder {
 		AddContainerComponents(components...)
 
 	// Attach stats chart if available
-	if b.statsChart != nil {
-		builder.SetFiles(discord.NewFile("stats_chart.png", "", b.statsChart))
+	if b.imageBuffer != nil {
+		builder.SetFiles(discord.NewFile("stats_chart.png", "", b.imageBuffer))
 	}
 
 	return builder

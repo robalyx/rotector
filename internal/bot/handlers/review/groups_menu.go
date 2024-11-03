@@ -100,7 +100,7 @@ func (m *GroupsMenu) ShowGroupsMenu(event *events.ComponentInteractionCreate, s 
 	s.Set(constants.SessionKeyStart, start)
 	s.Set(constants.SessionKeyPaginationPage, page)
 	s.Set(constants.SessionKeyTotalItems, len(groups))
-	s.SetBuffer(constants.SessionKeyFile, buf)
+	s.SetBuffer(constants.SessionKeyImageBuffer, buf)
 
 	m.handler.paginationManager.NavigateTo(event, s, m.page, "")
 }

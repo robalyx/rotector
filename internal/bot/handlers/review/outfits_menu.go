@@ -84,7 +84,7 @@ func (m *OutfitsMenu) ShowOutfitsMenu(event *events.ComponentInteractionCreate, 
 	s.Set(constants.SessionKeyStart, start)
 	s.Set(constants.SessionKeyPaginationPage, page)
 	s.Set(constants.SessionKeyTotalItems, len(outfits))
-	s.SetBuffer(constants.SessionKeyFile, buf)
+	s.SetBuffer(constants.SessionKeyImageBuffer, buf)
 
 	m.handler.paginationManager.NavigateTo(event, s, m.page, "")
 }

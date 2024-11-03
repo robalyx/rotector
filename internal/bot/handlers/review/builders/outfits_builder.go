@@ -19,7 +19,7 @@ type OutfitsEmbed struct {
 	start        int
 	page         int
 	total        int
-	file         *bytes.Buffer
+	imageBuffer  *bytes.Buffer
 	streamerMode bool
 }
 
@@ -36,7 +36,7 @@ func NewOutfitsEmbed(s *session.Session) *OutfitsEmbed {
 		start:        s.GetInt(constants.SessionKeyStart),
 		page:         s.GetInt(constants.SessionKeyPaginationPage),
 		total:        s.GetInt(constants.SessionKeyTotalItems),
-		file:         s.GetBuffer(constants.SessionKeyFile),
+		imageBuffer:  s.GetBuffer(constants.SessionKeyImageBuffer),
 		streamerMode: s.GetBool(constants.SessionKeyStreamerMode),
 	}
 }
@@ -46,7 +46,7 @@ func (b *OutfitsEmbed) Build() *discord.MessageUpdateBuilder {
 	totalPages := (b.total + constants.OutfitsPerPage - 1) / constants.OutfitsPerPage
 
 	fileName := fmt.Sprintf("outfits_%d_%d.png", b.user.ID, b.page)
-	file := discord.NewFile(fileName, "", bytes.NewReader(b.file.Bytes()))
+	file := discord.NewFile(fileName, "", b.imageBuffer)
 
 	embed := discord.NewEmbedBuilder().
 		SetTitle(fmt.Sprintf("User Outfits (Page %d/%d)", b.page+1, totalPages)).

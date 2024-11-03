@@ -32,9 +32,9 @@ func NewMenu(h *Handler) *Menu {
 			confirmedCount := s.GetInt(constants.SessionKeyConfirmedCount)
 			flaggedCount := s.GetInt(constants.SessionKeyFlaggedCount)
 			clearedCount := s.GetInt(constants.SessionKeyClearedCount)
-			statsChart := s.GetBuffer(constants.SessionKeyStatsChart)
+			imageBuffer := s.GetBuffer(constants.SessionKeyImageBuffer)
 
-			return builders.NewDashboardBuilder(confirmedCount, flaggedCount, clearedCount, statsChart, activeUsers).Build()
+			return builders.NewDashboardBuilder(confirmedCount, flaggedCount, clearedCount, imageBuffer, activeUsers).Build()
 		},
 		SelectHandlerFunc: m.handleSelectMenu,
 		ButtonHandlerFunc: m.handleButton,
@@ -79,7 +79,7 @@ func (m *Menu) ShowDashboard(event interfaces.CommonEvent, s *session.Session, c
 	s.Set(constants.SessionKeyConfirmedCount, confirmedCount)
 	s.Set(constants.SessionKeyFlaggedCount, flaggedCount)
 	s.Set(constants.SessionKeyClearedCount, clearedCount)
-	s.SetBuffer(constants.SessionKeyStatsChart, statsChart)
+	s.SetBuffer(constants.SessionKeyImageBuffer, statsChart)
 	s.Set(constants.SessionKeyActiveUsers, activeUsers)
 
 	m.handler.paginationManager.NavigateTo(event, s, m.page, content)

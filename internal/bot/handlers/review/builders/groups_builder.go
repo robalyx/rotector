@@ -20,7 +20,7 @@ type GroupsEmbed struct {
 	start         int
 	page          int
 	total         int
-	file          *bytes.Buffer
+	imageBuffer   *bytes.Buffer
 	streamerMode  bool
 }
 
@@ -40,7 +40,7 @@ func NewGroupsEmbed(s *session.Session) *GroupsEmbed {
 		start:         s.GetInt(constants.SessionKeyStart),
 		page:          s.GetInt(constants.SessionKeyPaginationPage),
 		total:         s.GetInt(constants.SessionKeyTotalItems),
-		file:          s.GetBuffer(constants.SessionKeyFile),
+		imageBuffer:   s.GetBuffer(constants.SessionKeyImageBuffer),
 		streamerMode:  s.GetBool(constants.SessionKeyStreamerMode),
 	}
 }
@@ -50,7 +50,7 @@ func (b *GroupsEmbed) Build() *discord.MessageUpdateBuilder {
 	totalPages := (b.total + constants.GroupsPerPage - 1) / constants.GroupsPerPage
 
 	fileName := fmt.Sprintf("groups_%d_%d.png", b.user.ID, b.page)
-	file := discord.NewFile(fileName, "", bytes.NewReader(b.file.Bytes()))
+	file := discord.NewFile(fileName, "", b.imageBuffer)
 
 	embed := discord.NewEmbedBuilder().
 		SetTitle(fmt.Sprintf("User Groups (Page %d/%d)", b.page+1, totalPages)).

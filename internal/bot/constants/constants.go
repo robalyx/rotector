@@ -84,7 +84,7 @@ const (
 	SessionKeyCurrentPage  = "currentPage"
 	SessionKeyPreviousPage = "previousPage"
 
-	SessionKeyFile         = "file"
+	SessionKeyImageBuffer  = "imageBuffer"
 	SessionKeyStreamerMode = "streamerMode"
 
 	SessionKeyPaginationPage = "paginationPage"
@@ -94,7 +94,6 @@ const (
 	SessionKeyConfirmedCount = "confirmedCount"
 	SessionKeyFlaggedCount   = "flaggedCount"
 	SessionKeyClearedCount   = "clearedCount"
-	SessionKeyStatsChart     = "statsChart"
 	SessionKeyActiveUsers    = "activeUsers"
 
 	SessionKeySettingName   = "settingName"

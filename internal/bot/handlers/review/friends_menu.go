@@ -100,7 +100,7 @@ func (m *FriendsMenu) ShowFriendsMenu(event *events.ComponentInteractionCreate, 
 	s.Set(constants.SessionKeyStart, start)
 	s.Set(constants.SessionKeyPaginationPage, page)
 	s.Set(constants.SessionKeyTotalItems, len(friends))
-	s.SetBuffer(constants.SessionKeyFile, buf)
+	s.SetBuffer(constants.SessionKeyImageBuffer, buf)
 
 	m.handler.paginationManager.NavigateTo(event, s, m.page, "")
 }

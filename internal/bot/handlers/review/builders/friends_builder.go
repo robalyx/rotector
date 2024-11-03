@@ -20,7 +20,7 @@ type FriendsEmbed struct {
 	start          int
 	page           int
 	total          int
-	file           *bytes.Buffer
+	imageBuffer    *bytes.Buffer
 	streamerMode   bool
 }
 
@@ -40,7 +40,7 @@ func NewFriendsEmbed(s *session.Session) *FriendsEmbed {
 		start:          s.GetInt(constants.SessionKeyStart),
 		page:           s.GetInt(constants.SessionKeyPaginationPage),
 		total:          s.GetInt(constants.SessionKeyTotalItems),
-		file:           s.GetBuffer(constants.SessionKeyFile),
+		imageBuffer:    s.GetBuffer(constants.SessionKeyImageBuffer),
 		streamerMode:   s.GetBool(constants.SessionKeyStreamerMode),
 	}
 }
@@ -50,7 +50,7 @@ func (b *FriendsEmbed) Build() *discord.MessageUpdateBuilder {
 	totalPages := (b.total + constants.FriendsPerPage - 1) / constants.FriendsPerPage
 
 	fileName := fmt.Sprintf("friends_%d_%d.png", b.user.ID, b.page)
-	file := discord.NewFile(fileName, "", bytes.NewReader(b.file.Bytes()))
+	file := discord.NewFile(fileName, "", b.imageBuffer)
 
 	embed := discord.NewEmbedBuilder().
 		SetTitle(fmt.Sprintf("User Friends (Page %d/%d)", b.page+1, totalPages)).
