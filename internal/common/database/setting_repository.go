@@ -7,13 +7,14 @@ import (
 	"go.uber.org/zap"
 )
 
-// SettingRepository handles setting-related database operations.
+// SettingRepository handles database operations for user and guild settings.
 type SettingRepository struct {
 	db     *pg.DB
 	logger *zap.Logger
 }
 
-// NewSettingRepository creates a new SettingRepository instance.
+// NewSettingRepository creates a SettingRepository with database access for
+// storing and retrieving settings.
 func NewSettingRepository(db *pg.DB, logger *zap.Logger) *SettingRepository {
 	return &SettingRepository{
 		db:     db,
@@ -21,41 +22,35 @@ func NewSettingRepository(db *pg.DB, logger *zap.Logger) *SettingRepository {
 	}
 }
 
-// GetUserSettings retrieves user settings from the database.
+// GetUserSettings retrieves settings for a specific user.
+// If no settings exist, it creates default settings.
 func (r *SettingRepository) GetUserSettings(userID uint64) (*UserSetting, error) {
-	settings := &UserSetting{UserID: userID}
-	err := r.db.Model(settings).WherePK().Select()
+	settings := &UserSetting{
+		UserID:      userID,
+		DefaultSort: SortByRandom,
+	}
+
+	err := r.db.Model(settings).
+		WherePK().
+		Select()
 	if err != nil {
 		if errors.Is(err, pg.ErrNoRows) {
-			// If no settings found, return default settings
-			return &UserSetting{
-				UserID:       userID,
-				StreamerMode: false,
-				DefaultSort:  SortByRandom,
-			}, nil
+			// Create default settings if none exist
+			_, err = r.db.Model(settings).Insert()
+			if err != nil {
+				r.logger.Error("Failed to create user settings", zap.Error(err), zap.Uint64("userID", userID))
+				return nil, err
+			}
+		} else {
+			r.logger.Error("Failed to get user settings", zap.Error(err), zap.Uint64("userID", userID))
+			return nil, err
 		}
-		r.logger.Error("Failed to get user settings", zap.Error(err), zap.Uint64("userID", userID))
-		return nil, err
 	}
+
 	return settings, nil
 }
 
-// GetGuildSettings retrieves guild settings from the database.
-func (r *SettingRepository) GetGuildSettings(guildID uint64) (*GuildSetting, error) {
-	settings := &GuildSetting{GuildID: guildID}
-	err := r.db.Model(settings).WherePK().Select()
-	if err != nil {
-		if errors.Is(err, pg.ErrNoRows) {
-			// If no settings found, return default settings
-			return &GuildSetting{GuildID: guildID}, nil
-		}
-		r.logger.Error("Failed to get guild settings", zap.Error(err), zap.Uint64("guildID", guildID))
-		return nil, err
-	}
-	return settings, nil
-}
-
-// SaveUserSettings saves user settings to the database.
+// SaveUserSettings updates or creates user settings in the database.
 func (r *SettingRepository) SaveUserSettings(settings *UserSetting) error {
 	_, err := r.db.Model(settings).
 		OnConflict("(user_id) DO UPDATE").
@@ -63,9 +58,12 @@ func (r *SettingRepository) SaveUserSettings(settings *UserSetting) error {
 		Set("default_sort = EXCLUDED.default_sort").
 		Insert()
 	if err != nil {
-		r.logger.Error("Failed to save user settings", zap.Error(err), zap.Uint64("userID", settings.UserID))
+		r.logger.Error("Failed to save user settings",
+			zap.Error(err),
+			zap.Uint64("userID", settings.UserID))
 		return err
 	}
+
 	return nil
 }
 
@@ -82,30 +80,71 @@ func (r *SettingRepository) SaveGuildSettings(settings *GuildSetting) error {
 	return nil
 }
 
-// ToggleWhitelistedRole toggles a role in the whitelist.
-func (r *SettingRepository) ToggleWhitelistedRole(guildID uint64, roleID uint64) error {
-	return r.db.RunInTransaction(r.db.Context(), func(tx *pg.Tx) error {
-		settings := &GuildSetting{GuildID: guildID}
-		err := tx.Model(settings).WherePK().Select()
-		if err != nil {
-			return err
-		}
+// GetGuildSettings retrieves settings for a specific guild.
+// If no settings exist, it creates default settings.
+func (r *SettingRepository) GetGuildSettings(guildID uint64) (*GuildSetting, error) {
+	settings := &GuildSetting{
+		GuildID:          guildID,
+		WhitelistedRoles: []uint64{},
+	}
 
-		index := -1
-		for i, id := range settings.WhitelistedRoles {
-			if id == roleID {
-				index = i
-				break
+	err := r.db.Model(settings).
+		WherePK().
+		Select()
+	if err != nil {
+		if errors.Is(err, pg.ErrNoRows) {
+			// Create default settings if none exist
+			_, err = r.db.Model(settings).Insert()
+			if err != nil {
+				r.logger.Error("Failed to create guild settings", zap.Error(err), zap.Uint64("guildID", guildID))
+				return nil, err
 			}
-		}
-
-		if index == -1 {
-			settings.WhitelistedRoles = append(settings.WhitelistedRoles, roleID)
 		} else {
-			settings.WhitelistedRoles = append(settings.WhitelistedRoles[:index], settings.WhitelistedRoles[index+1:]...)
+			r.logger.Error("Failed to get guild settings", zap.Error(err), zap.Uint64("guildID", guildID))
+			return nil, err
 		}
+	}
 
-		_, err = tx.Model(settings).WherePK().Update()
+	return settings, nil
+}
+
+// ToggleWhitelistedRole adds or removes a role from a guild's whitelist.
+// The role is removed if it exists, or added if it doesn't.
+func (r *SettingRepository) ToggleWhitelistedRole(guildID, roleID uint64) error {
+	settings, err := r.GetGuildSettings(guildID)
+	if err != nil {
 		return err
-	})
+	}
+
+	// Remove role if it exists, add if it doesn't
+	roleExists := false
+	for i, existingRoleID := range settings.WhitelistedRoles {
+		if existingRoleID == roleID {
+			settings.WhitelistedRoles = append(
+				settings.WhitelistedRoles[:i],
+				settings.WhitelistedRoles[i+1:]...,
+			)
+			roleExists = true
+			break
+		}
+	}
+
+	if !roleExists {
+		settings.WhitelistedRoles = append(settings.WhitelistedRoles, roleID)
+	}
+
+	// Save updated settings
+	_, err = r.db.Model(settings).
+		OnConflict("(guild_id) DO UPDATE").
+		Set("whitelisted_roles = EXCLUDED.whitelisted_roles").
+		Insert()
+	if err != nil {
+		r.logger.Error("Failed to toggle whitelisted role",
+			zap.Error(err),
+			zap.Uint64("guildID", guildID),
+			zap.Uint64("roleID", roleID))
+		return err
+	}
+
+	return nil
 }

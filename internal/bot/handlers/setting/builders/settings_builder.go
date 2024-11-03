@@ -11,12 +11,13 @@ import (
 	"github.com/rotector/rotector/internal/common/database"
 )
 
-// UserSettingsEmbed builds the embed and components for the user settings menu.
+// UserSettingsEmbed creates the visual layout for user preferences.
 type UserSettingsEmbed struct {
 	settings *database.UserSetting
 }
 
-// NewUserSettingsEmbed creates a new UserSettingsEmbed.
+// NewUserSettingsEmbed loads user settings from the session state to create
+// a new embed builder.
 func NewUserSettingsEmbed(s *session.Session) *UserSettingsEmbed {
 	var settings *database.UserSetting
 	s.GetInterface(constants.SessionKeyUserSettings, &settings)
@@ -26,14 +27,17 @@ func NewUserSettingsEmbed(s *session.Session) *UserSettingsEmbed {
 	}
 }
 
-// Build constructs and returns the discord.MessageUpdateBuilder for user settings.
+// Build creates a Discord message with the current settings displayed in an embed
+// and adds select menus for changing each setting.
 func (b *UserSettingsEmbed) Build() *discord.MessageUpdateBuilder {
+	// Create embed with current settings values
 	embed := discord.NewEmbedBuilder().
 		SetTitle("User Settings").
 		AddField("Streamer Mode", strconv.FormatBool(b.settings.StreamerMode), true).
 		AddField("Default Sort", b.settings.DefaultSort, true).
 		SetColor(constants.DefaultEmbedColor)
 
+	// Add interactive components for changing settings
 	components := []discord.ContainerComponent{
 		discord.NewActionRow(
 			discord.NewStringSelectMenu(constants.UserSettingSelectID, "Select a setting to change",
@@ -51,13 +55,14 @@ func (b *UserSettingsEmbed) Build() *discord.MessageUpdateBuilder {
 		AddContainerComponents(components...)
 }
 
-// GuildSettingsEmbed builds the embed and components for the guild settings menu.
+// GuildSettingsEmbed creates the visual layout for server settings.
 type GuildSettingsEmbed struct {
 	settings *database.GuildSetting
 	roles    []discord.Role
 }
 
-// NewGuildSettingsEmbed creates a new GuildSettingsEmbed.
+// NewGuildSettingsEmbed loads guild settings and roles from the session state
+// to create a new embed builder.
 func NewGuildSettingsEmbed(s *session.Session) *GuildSettingsEmbed {
 	var settings *database.GuildSetting
 	s.GetInterface(constants.SessionKeyGuildSettings, &settings)
@@ -70,13 +75,16 @@ func NewGuildSettingsEmbed(s *session.Session) *GuildSettingsEmbed {
 	}
 }
 
-// Build constructs and returns the discord.MessageUpdateBuilder for guild settings.
+// Build creates a Discord message with the current guild settings displayed in an embed
+// and adds select menus for changing each setting.
 func (b *GuildSettingsEmbed) Build() *discord.MessageUpdateBuilder {
+	// Create embed with current whitelisted roles
 	embed := discord.NewEmbedBuilder().
 		SetTitle("Guild Settings").
 		AddField("Whitelisted Roles", utils.FormatWhitelistedRoles(b.settings.WhitelistedRoles, b.roles), false).
 		SetColor(constants.DefaultEmbedColor)
 
+	// Add interactive components for changing settings
 	components := []discord.ContainerComponent{
 		discord.NewActionRow(
 			discord.NewStringSelectMenu(constants.GuildSettingSelectID, "Select roles to whitelist",
@@ -93,7 +101,7 @@ func (b *GuildSettingsEmbed) Build() *discord.MessageUpdateBuilder {
 		AddContainerComponents(components...)
 }
 
-// SettingChangeBuilder builds the embed and components for changing a specific setting.
+// SettingChangeBuilder creates a generic settings change menu.
 type SettingChangeBuilder struct {
 	settingName  string
 	settingType  string
@@ -102,7 +110,8 @@ type SettingChangeBuilder struct {
 	options      []discord.StringSelectMenuOption
 }
 
-// NewSettingChangeBuilder creates a new SettingChangeBuilder.
+// NewSettingChangeBuilder loads setting information from the session state
+// to create a new change menu builder.
 func NewSettingChangeBuilder(s *session.Session) *SettingChangeBuilder {
 	return &SettingChangeBuilder{
 		settingName:  s.GetString(constants.SessionKeySettingName),
@@ -112,19 +121,22 @@ func NewSettingChangeBuilder(s *session.Session) *SettingChangeBuilder {
 	}
 }
 
-// AddOption adds an option to the setting change menu.
+// AddOptions adds selectable choices to the settings change menu.
 func (b *SettingChangeBuilder) AddOptions(options ...discord.StringSelectMenuOption) *SettingChangeBuilder {
 	b.options = append(b.options, options...)
 	return b
 }
 
-// Build constructs and returns the discord.MessageUpdateBuilder for changing a setting.
+// Build creates a Discord message showing the current setting value and
+// providing a select menu with available options.
 func (b *SettingChangeBuilder) Build() *discord.MessageUpdateBuilder {
+	// Create embed showing current value
 	embed := discord.NewEmbedBuilder().
 		SetTitle("Change " + b.settingName).
 		SetDescription("Current value: " + b.currentValue).
 		SetColor(constants.DefaultEmbedColor)
 
+	// Add select menu with options and back button
 	components := []discord.ContainerComponent{
 		discord.NewActionRow(
 			discord.NewStringSelectMenu(b.customID, "Select new value", b.options...),

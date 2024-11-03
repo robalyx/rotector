@@ -13,7 +13,7 @@ import (
 	"github.com/rotector/rotector/internal/common/database"
 )
 
-// LogEmbed builds the embed for the log viewer message.
+// LogEmbed creates the visual layout for viewing activity logs.
 type LogEmbed struct {
 	logs               []*database.UserActivityLog
 	userID             uint64
@@ -28,7 +28,8 @@ type LogEmbed struct {
 	streamerMode       bool
 }
 
-// NewLogEmbed creates a new LogEmbed.
+// NewLogEmbed loads log data and filter settings from the session state
+// to create a new embed builder.
 func NewLogEmbed(s *session.Session) *LogEmbed {
 	var logs []*database.UserActivityLog
 	s.GetInterface(constants.SessionKeyLogs, &logs)
@@ -54,7 +55,10 @@ func NewLogEmbed(s *session.Session) *LogEmbed {
 	}
 }
 
-// Build constructs and returns the discord.Embed.
+// Build creates a Discord message showing:
+// - Current filter settings (user ID, reviewer ID, activity type, date range)
+// - List of log entries with timestamps and details
+// - Filter menus and navigation buttons.
 func (b *LogEmbed) Build() *discord.MessageUpdateBuilder {
 	embed := discord.NewEmbedBuilder().
 		SetTitle("Log Query Results").
@@ -76,6 +80,7 @@ func (b *LogEmbed) Build() *discord.MessageUpdateBuilder {
 		embed.AddField("Date Range", fmt.Sprintf("`%s` to `%s`", b.startDate.Format("2006-01-02"), b.endDate.Format("2006-01-02")), true)
 	}
 
+	// Add log entries with details
 	if len(b.logs) > 0 {
 		for i, log := range b.logs {
 			details := ""
@@ -89,7 +94,7 @@ func (b *LogEmbed) Build() *discord.MessageUpdateBuilder {
 			embed.AddField(
 				fmt.Sprintf("%d. <t:%d:F>", b.start+i+1, log.ActivityTimestamp.Unix()),
 				fmt.Sprintf("Activity: `%s`\nUser: [%s](https://www.roblox.com/users/%d/profile)\nReviewer: <@%d>%s",
-					log.ActivityType,
+					log.ActivityType.String(),
 					utils.CensorString(strconv.FormatUint(log.UserID, 10), b.streamerMode),
 					log.UserID,
 					log.ReviewerID,
@@ -103,7 +108,9 @@ func (b *LogEmbed) Build() *discord.MessageUpdateBuilder {
 		embed.AddField("No Results", "No log entries found for the given query", false)
 	}
 
+	// Add filter menus and navigation buttons
 	components := []discord.ContainerComponent{
+		// Query condition selection menu
 		discord.NewActionRow(
 			discord.NewStringSelectMenu(constants.ActionSelectMenuCustomID, "Set Query Condition",
 				discord.NewStringSelectMenuOption("Query User ID", constants.LogsQueryUserIDOption),
@@ -111,17 +118,19 @@ func (b *LogEmbed) Build() *discord.MessageUpdateBuilder {
 				discord.NewStringSelectMenuOption("Query Date Range", constants.LogsQueryDateRangeOption),
 			),
 		),
+		// Activity type filter menu
 		discord.NewActionRow(
 			discord.NewStringSelectMenu(constants.LogsQueryActivityTypeFilterCustomID, "Filter Activity Type",
-				discord.NewStringSelectMenuOption("All", fmt.Sprintf("%d", database.ActivityTypeAll)).WithDefault(b.activityTypeFilter == database.ActivityTypeAll),
-				discord.NewStringSelectMenuOption("Viewed", fmt.Sprintf("%d", database.ActivityTypeViewed)).WithDefault(b.activityTypeFilter == database.ActivityTypeViewed),
-				discord.NewStringSelectMenuOption("Banned", fmt.Sprintf("%d", database.ActivityTypeBanned)).WithDefault(b.activityTypeFilter == database.ActivityTypeBanned),
-				discord.NewStringSelectMenuOption("Banned (Custom)", fmt.Sprintf("%d", database.ActivityTypeBannedCustom)).WithDefault(b.activityTypeFilter == database.ActivityTypeBannedCustom),
-				discord.NewStringSelectMenuOption("Cleared", fmt.Sprintf("%d", database.ActivityTypeCleared)).WithDefault(b.activityTypeFilter == database.ActivityTypeCleared),
-				discord.NewStringSelectMenuOption("Skipped", fmt.Sprintf("%d", database.ActivityTypeSkipped)).WithDefault(b.activityTypeFilter == database.ActivityTypeSkipped),
-				discord.NewStringSelectMenuOption("Rechecked", fmt.Sprintf("%d", database.ActivityTypeRechecked)).WithDefault(b.activityTypeFilter == database.ActivityTypeRechecked),
+				discord.NewStringSelectMenuOption("All", strconv.Itoa(database.ActivityTypeAll)).WithDefault(b.activityTypeFilter == database.ActivityTypeAll),
+				discord.NewStringSelectMenuOption("Viewed", strconv.Itoa(database.ActivityTypeViewed)).WithDefault(b.activityTypeFilter == database.ActivityTypeViewed),
+				discord.NewStringSelectMenuOption("Banned", strconv.Itoa(database.ActivityTypeBanned)).WithDefault(b.activityTypeFilter == database.ActivityTypeBanned),
+				discord.NewStringSelectMenuOption("Banned (Custom)", strconv.Itoa(database.ActivityTypeBannedCustom)).WithDefault(b.activityTypeFilter == database.ActivityTypeBannedCustom),
+				discord.NewStringSelectMenuOption("Cleared", strconv.Itoa(database.ActivityTypeCleared)).WithDefault(b.activityTypeFilter == database.ActivityTypeCleared),
+				discord.NewStringSelectMenuOption("Skipped", strconv.Itoa(database.ActivityTypeSkipped)).WithDefault(b.activityTypeFilter == database.ActivityTypeSkipped),
+				discord.NewStringSelectMenuOption("Rechecked", strconv.Itoa(database.ActivityTypeRechecked)).WithDefault(b.activityTypeFilter == database.ActivityTypeRechecked),
 			),
 		),
+		// Navigation buttons
 		discord.NewActionRow(
 			discord.NewSecondaryButton("◀️", string(constants.BackButtonCustomID)),
 			discord.NewSecondaryButton("⏮️", string(utils.ViewerFirstPage)).WithDisabled(b.page == 0 || b.total == 0),

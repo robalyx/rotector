@@ -14,7 +14,8 @@ import (
 	"go.uber.org/zap"
 )
 
-// Session represents a user's session.
+// Session maintains user state through a Redis-backed key-value store where values are
+// serialized as JSON strings. The session automatically expires after a configured timeout.
 type Session struct {
 	db     *database.Database
 	redis  rueidis.Client
@@ -34,16 +35,17 @@ func NewSession(db *database.Database, redis rueidis.Client, key string, data ma
 	}
 }
 
-// Touch updates the session's expiration time.
+// Touch serializes the session data to JSON and updates the TTL in Redis to prevent expiration.
+// If serialization fails, the error is logged but the session continues.
 func (s *Session) Touch(ctx context.Context) {
-	// Serialize session data
+	// Serialize session data to JSON
 	data, err := sonic.MarshalString(s.data)
 	if err != nil {
 		s.logger.Error("Failed to marshal session data", zap.Error(err))
 		return
 	}
 
-	// Set data with expiration in Redis
+	// Update Redis with new data and expiration
 	err = s.redis.Do(ctx,
 		s.redis.B().Set().Key(s.key).Value(data).Ex(SessionTimeout).Build(),
 	).Error()
@@ -52,7 +54,8 @@ func (s *Session) Touch(ctx context.Context) {
 	}
 }
 
-// Get returns the raw interface{} value for the given key.
+// Get retrieves a raw string value from the in-memory session cache.
+// Returns empty string if key doesn't exist.
 func (s *Session) Get(key string) interface{} {
 	if value, ok := s.data[key]; ok {
 		return value
@@ -119,7 +122,8 @@ func (s *Session) Set(key string, value interface{}) {
 	s.logger.Debug("Session key set", zap.String("key", key))
 }
 
-// SetBuffer stores a buffer in the session after base64 encoding it.
+// SetBuffer stores binary data by base64 encoding it first.
+// This allows binary data to be safely stored as strings in the session.
 func (s *Session) SetBuffer(key string, buf *bytes.Buffer) {
 	if buf == nil {
 		s.logger.Warn("Attempted to set nil buffer", zap.String("key", key))
@@ -132,13 +136,13 @@ func (s *Session) SetBuffer(key string, buf *bytes.Buffer) {
 	s.logger.Debug("Session key set with base64 encoded buffer", zap.String("key", key))
 }
 
-// Delete removes the value for the given key.
+// Delete removes a key from the session data.
 func (s *Session) Delete(key string) {
 	delete(s.data, key)
 	s.logger.Debug("Session key deleted", zap.String("key", key))
 }
 
-// GetString returns the string value for the given key.
+// GetString retrieves a string value from the session.
 func (s *Session) GetString(key string) string {
 	if value := s.Get(key); value != nil {
 		if str, ok := value.(string); ok {
@@ -148,7 +152,7 @@ func (s *Session) GetString(key string) string {
 	return ""
 }
 
-// GetInt returns the integer value for the given key.
+// GetInt retrieves an integer value from the session.
 func (s *Session) GetInt(key string) int {
 	if value := s.Get(key); value != nil {
 		return cast.ToInt(value)
@@ -156,7 +160,7 @@ func (s *Session) GetInt(key string) int {
 	return 0
 }
 
-// GetUint64 returns the uint64 value for the given key.
+// GetUint64 retrieves an unsigned 64-bit integer value from the session.
 func (s *Session) GetUint64(key string) uint64 {
 	if value := s.Get(key); value != nil {
 		return cast.ToUint64(value)
@@ -164,7 +168,7 @@ func (s *Session) GetUint64(key string) uint64 {
 	return 0
 }
 
-// GetFloat64 returns the float64 value for the given key.
+// GetFloat64 retrieves a float64 value from the session.
 func (s *Session) GetFloat64(key string) float64 {
 	if value := s.Get(key); value != nil {
 		return cast.ToFloat64(value)
@@ -172,7 +176,7 @@ func (s *Session) GetFloat64(key string) float64 {
 	return 0
 }
 
-// GetBool returns the boolean value for the given key.
+// GetBool retrieves a boolean value from the session.
 func (s *Session) GetBool(key string) bool {
 	if value := s.Get(key); value != nil {
 		return cast.ToBool(value)

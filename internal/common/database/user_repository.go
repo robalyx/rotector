@@ -11,21 +11,25 @@ import (
 )
 
 const (
+	// UserTypeConfirmed indicates a user has been reviewed and confirmed as inappropriate.
 	UserTypeConfirmed = "confirmed"
-	UserTypeFlagged   = "flagged"
-	UserTypeCleared   = "cleared"
+	// UserTypeFlagged indicates a user needs review for potential violations.
+	UserTypeFlagged = "flagged"
+	// UserTypeCleared indicates a user was reviewed and found to be appropriate.
+	UserTypeCleared = "cleared"
 )
 
-// UserRepository handles user-related database operations.
+// UserRepository handles database operations for user records.
 type UserRepository struct {
 	db       *pg.DB
-	stats    *statistics.Statistics
+	stats    *statistics.Client
 	tracking *TrackingRepository
 	logger   *zap.Logger
 }
 
-// NewUserRepository creates a new UserRepository instance.
-func NewUserRepository(db *pg.DB, stats *statistics.Statistics, tracking *TrackingRepository, logger *zap.Logger) *UserRepository {
+// NewUserRepository creates a UserRepository with references to the statistics
+// and tracking systems for updating related data during user operations.
+func NewUserRepository(db *pg.DB, stats *statistics.Client, tracking *TrackingRepository, logger *zap.Logger) *UserRepository {
 	return &UserRepository{
 		db:       db,
 		stats:    stats,
@@ -34,7 +38,10 @@ func NewUserRepository(db *pg.DB, stats *statistics.Statistics, tracking *Tracki
 	}
 }
 
-// GetFlaggedUserToReview retrieves a flagged user based on the specified sorting criteria.
+// GetFlaggedUserToReview finds a user to review based on the sort method:
+// - random: selects any unviewed user randomly
+// - confidence: selects the user with highest confidence score
+// - last_updated: selects the oldest updated user.
 func (r *UserRepository) GetFlaggedUserToReview(sortBy string) (*FlaggedUser, error) {
 	var user FlaggedUser
 	err := r.db.RunInTransaction(r.db.Context(), func(tx *pg.Tx) error {
@@ -84,7 +91,7 @@ func (r *UserRepository) GetFlaggedUserToReview(sortBy string) (*FlaggedUser, er
 	return &user, nil
 }
 
-// GetNextConfirmedUser retrieves the next confirmed user to be processed.
+// GetNextConfirmedUser finds the next confirmed user that needs scanning.
 func (r *UserRepository) GetNextConfirmedUser() (*ConfirmedUser, error) {
 	var user ConfirmedUser
 	err := r.db.RunInTransaction(r.db.Context(), func(tx *pg.Tx) error {
@@ -118,7 +125,9 @@ func (r *UserRepository) GetNextConfirmedUser() (*ConfirmedUser, error) {
 	return &user, nil
 }
 
-// SaveFlaggedUsers saves or updates the provided flagged users in the database.
+// SaveFlaggedUsers adds or updates users in the flagged_users table.
+// For each user, it updates all fields if the user already exists,
+// or inserts a new record if they don't.
 func (r *UserRepository) SaveFlaggedUsers(flaggedUsers []*User) {
 	r.logger.Info("Saving flagged users", zap.Int("count", len(flaggedUsers)))
 
@@ -161,20 +170,21 @@ func (r *UserRepository) SaveFlaggedUsers(flaggedUsers []*User) {
 			zap.String("thumbnail_url", flaggedUser.ThumbnailURL))
 	}
 
-	// Increment statistic
+	// Update statistics
 	if err := r.stats.IncrementDailyStat(context.Background(), statistics.FieldUsersFlagged, len(flaggedUsers)); err != nil {
 		r.logger.Error("Failed to increment users_flagged statistic", zap.Error(err))
 	}
 
-	// Increment hourly stat
-	if err := r.stats.IncrementHourlyStat(context.Background(), statistics.HourlyStatFlagged, len(flaggedUsers)); err != nil {
+	if err := r.stats.IncrementHourlyStat(context.Background(), statistics.FieldUsersFlagged, len(flaggedUsers)); err != nil {
 		r.logger.Error("Failed to increment hourly flagged stat", zap.Error(err))
 	}
 
 	r.logger.Info("Finished saving flagged users")
 }
 
-// ConfirmUser moves a user from flagged to confirmed status.
+// ConfirmUser moves a user from flagged_users to confirmed_users.
+// This happens when a moderator confirms that a user is inappropriate.
+// The user's groups and friends are tracked to help identify related users.
 func (r *UserRepository) ConfirmUser(user *FlaggedUser) error {
 	return r.db.RunInTransaction(r.db.Context(), func(tx *pg.Tx) error {
 		confirmedUser := &ConfirmedUser{
@@ -212,6 +222,7 @@ func (r *UserRepository) ConfirmUser(user *FlaggedUser) error {
 			return err
 		}
 
+		// Track groups and friends for affiliation analysis
 		for _, group := range user.Groups {
 			if err = r.tracking.AddUserToGroupTracking(group.Group.ID, user.ID); err != nil {
 				r.logger.Error("Failed to add user to group tracking", zap.Error(err), zap.Uint64("groupID", group.Group.ID), zap.Uint64("userID", user.ID))
@@ -226,14 +237,13 @@ func (r *UserRepository) ConfirmUser(user *FlaggedUser) error {
 			}
 		}
 
-		// Increment statistic
+		// Update statistics
 		if err := r.stats.IncrementDailyStat(tx.Context(), statistics.FieldUsersConfirmed, 1); err != nil {
 			r.logger.Error("Failed to increment users_confirmed statistic", zap.Error(err))
 			return err
 		}
 
-		// Increment hourly stat
-		if err := r.stats.IncrementHourlyStat(tx.Context(), statistics.HourlyStatConfirmed, 1); err != nil {
+		if err := r.stats.IncrementHourlyStat(tx.Context(), statistics.FieldUsersConfirmed, 1); err != nil {
 			r.logger.Error("Failed to increment hourly confirmed stat", zap.Error(err))
 		}
 
@@ -241,7 +251,8 @@ func (r *UserRepository) ConfirmUser(user *FlaggedUser) error {
 	})
 }
 
-// ClearUser moves a user from flagged to cleared status.
+// ClearUser moves a user from flagged_users to cleared_users.
+// This happens when a moderator determines that a user was incorrectly flagged.
 func (r *UserRepository) ClearUser(user *FlaggedUser) error {
 	return r.db.RunInTransaction(r.db.Context(), func(tx *pg.Tx) error {
 		clearedUser := &ClearedUser{
@@ -281,14 +292,13 @@ func (r *UserRepository) ClearUser(user *FlaggedUser) error {
 
 		r.logger.Info("User cleared and moved to cleared_users", zap.Uint64("userID", user.ID))
 
-		// Increment statistic
+		// Update statistics
 		if err := r.stats.IncrementDailyStat(tx.Context(), statistics.FieldUsersCleared, 1); err != nil {
 			r.logger.Error("Failed to increment users_cleared statistic", zap.Error(err))
 			return err
 		}
 
-		// Increment hourly stat
-		if err := r.stats.IncrementHourlyStat(tx.Context(), statistics.HourlyStatCleared, 1); err != nil {
+		if err := r.stats.IncrementHourlyStat(tx.Context(), statistics.FieldUsersCleared, 1); err != nil {
 			r.logger.Error("Failed to increment hourly cleared stat", zap.Error(err))
 		}
 
@@ -296,7 +306,7 @@ func (r *UserRepository) ClearUser(user *FlaggedUser) error {
 	})
 }
 
-// GetFlaggedUserByID retrieves a flagged user by their ID.
+// GetFlaggedUserByID finds a user in the flagged_users table by their ID.
 func (r *UserRepository) GetFlaggedUserByID(id uint64) (*FlaggedUser, error) {
 	var user FlaggedUser
 	err := r.db.Model(&user).Where("id = ?", id).Select()
@@ -308,7 +318,7 @@ func (r *UserRepository) GetFlaggedUserByID(id uint64) (*FlaggedUser, error) {
 	return &user, nil
 }
 
-// GetClearedUserByID retrieves a cleared user by their ID.
+// GetClearedUserByID finds a user in the cleared_users table by their ID.
 func (r *UserRepository) GetClearedUserByID(id uint64) (*ClearedUser, error) {
 	var user ClearedUser
 	err := r.db.Model(&user).Where("id = ?", id).Select()
@@ -320,7 +330,7 @@ func (r *UserRepository) GetClearedUserByID(id uint64) (*ClearedUser, error) {
 	return &user, nil
 }
 
-// GetConfirmedUsersCount returns the number of users in the confirmed_users table.
+// GetConfirmedUsersCount returns the total number of users in confirmed_users.
 func (r *UserRepository) GetConfirmedUsersCount() (int, error) {
 	var count int
 	_, err := r.db.QueryOne(pg.Scan(&count), "SELECT COUNT(*) FROM confirmed_users")
@@ -331,7 +341,7 @@ func (r *UserRepository) GetConfirmedUsersCount() (int, error) {
 	return count, nil
 }
 
-// GetFlaggedUsersCount returns the number of users in the flagged_users table.
+// GetFlaggedUsersCount returns the total number of users in flagged_users.
 func (r *UserRepository) GetFlaggedUsersCount() (int, error) {
 	var count int
 	_, err := r.db.QueryOne(pg.Scan(&count), "SELECT COUNT(*) FROM flagged_users")
@@ -342,7 +352,7 @@ func (r *UserRepository) GetFlaggedUsersCount() (int, error) {
 	return count, nil
 }
 
-// GetClearedUsersCount returns the number of users in the cleared_users table.
+// GetClearedUsersCount returns the total number of users in cleared_users.
 func (r *UserRepository) GetClearedUsersCount() (int, error) {
 	var count int
 	_, err := r.db.QueryOne(pg.Scan(&count), "SELECT COUNT(*) FROM cleared_users")
@@ -353,7 +363,8 @@ func (r *UserRepository) GetClearedUsersCount() (int, error) {
 	return count, nil
 }
 
-// CheckExistingUsers checks which of the provided user IDs exist in the database.
+// CheckExistingUsers finds which users from a list of IDs exist in any user table.
+// Returns a map of user IDs to their status (confirmed, flagged, cleared).
 func (r *UserRepository) CheckExistingUsers(userIDs []uint64) (map[uint64]string, error) {
 	var users []struct {
 		ID     uint64
@@ -396,30 +407,41 @@ func (r *UserRepository) CheckExistingUsers(userIDs []uint64) (map[uint64]string
 	return result, nil
 }
 
-// GetUsersToCheck retrieves a batch of users to check for banned status and updates their last_purge_check.
+// GetUsersToCheck finds users that haven't been checked for banned status recently.
+// Returns a batch of user IDs and updates their last_purge_check timestamp.
 func (r *UserRepository) GetUsersToCheck(limit int) ([]uint64, error) {
 	var userIDs []uint64
 
 	err := r.db.RunInTransaction(r.db.Context(), func(tx *pg.Tx) error {
-		// Select the users to check
-		err := tx.Model((*ConfirmedUser)(nil)).
-			Column("id").
-			Where("last_purge_check IS NULL OR last_purge_check < NOW() - INTERVAL '8 hours'").
-			Union(
-				tx.Model((*FlaggedUser)(nil)).
-					Column("id").
-					Where("last_purge_check IS NULL OR last_purge_check < NOW() - INTERVAL '8 hours'"),
-			).
-			OrderExpr("RANDOM()").
-			Limit(limit).
-			For("UPDATE SKIP LOCKED").
-			Select(&userIDs)
+		// Use CTE to select users
+		_, err := tx.Query(&userIDs, `
+			WITH selected_users AS (
+				(
+					SELECT id, 'confirmed' as type
+					FROM confirmed_users
+					WHERE last_purge_check IS NULL 
+						OR last_purge_check < NOW() - INTERVAL '8 hours'
+					ORDER BY RANDOM()
+					LIMIT ?
+				)
+				UNION ALL
+				(
+					SELECT id, 'flagged' as type
+					FROM flagged_users
+					WHERE last_purge_check IS NULL 
+						OR last_purge_check < NOW() - INTERVAL '8 hours'
+					ORDER BY RANDOM()
+					LIMIT ?
+				)
+			)
+			SELECT id FROM selected_users
+		`, limit/2, limit/2)
 		if err != nil {
 			r.logger.Error("Failed to get users to check", zap.Error(err))
 			return err
 		}
 
-		// If we have users to check, update their last_purge_check
+		// Update last_purge_check for selected users
 		if len(userIDs) > 0 {
 			_, err = tx.Model((*ConfirmedUser)(nil)).
 				Set("last_purge_check = ?", time.Now()).
@@ -450,10 +472,11 @@ func (r *UserRepository) GetUsersToCheck(limit int) ([]uint64, error) {
 	return userIDs, nil
 }
 
-// RemoveBannedUsers moves the specified banned users from confirmed and flagged tables to the banned_users table.
+// RemoveBannedUsers moves users from confirmed_users and flagged_users to banned_users.
+// This happens when users are found to be banned by Roblox.
 func (r *UserRepository) RemoveBannedUsers(userIDs []uint64) error {
 	return r.db.RunInTransaction(r.db.Context(), func(tx *pg.Tx) error {
-		// Move users from confirmed_users to banned_users
+		// Move confirmed users to banned_users
 		var confirmedUsers []ConfirmedUser
 		err := tx.Model(&confirmedUsers).
 			Where("id IN (?)", pg.In(userIDs)).
@@ -477,7 +500,7 @@ func (r *UserRepository) RemoveBannedUsers(userIDs []uint64) error {
 			}
 		}
 
-		// Move users from flagged_users to banned_users
+		// Move flagged users to banned_users
 		var flaggedUsers []FlaggedUser
 		err = tx.Model(&flaggedUsers).
 			Where("id IN (?)", pg.In(userIDs)).
@@ -519,7 +542,7 @@ func (r *UserRepository) RemoveBannedUsers(userIDs []uint64) error {
 			return err
 		}
 
-		// Increment statistic
+		// Update statistics
 		if err := r.stats.IncrementDailyStat(tx.Context(), statistics.FieldBannedUsersPurged, len(userIDs)); err != nil {
 			r.logger.Error("Failed to increment banned_users_purged statistic", zap.Error(err))
 			return err
@@ -530,12 +553,13 @@ func (r *UserRepository) RemoveBannedUsers(userIDs []uint64) error {
 	})
 }
 
-// PurgeOldClearedUsers retrieves and removes cleared users that are older than the cutoff date.
+// PurgeOldClearedUsers removes cleared users older than the cutoff date.
+// This helps maintain database size by removing users that were cleared long ago.
 func (r *UserRepository) PurgeOldClearedUsers(cutoffDate time.Time, limit int) (int, error) {
 	var affected int
 
 	err := r.db.RunInTransaction(r.db.Context(), func(tx *pg.Tx) error {
-		// Select the users to purge
+		// Select users to purge
 		var userIDs []uint64
 		err := tx.Model((*ClearedUser)(nil)).
 			Column("id").
@@ -556,7 +580,7 @@ func (r *UserRepository) PurgeOldClearedUsers(cutoffDate time.Time, limit int) (
 			return nil
 		}
 
-		// Delete the selected users
+		// Delete selected users
 		result, err := tx.Model((*ClearedUser)(nil)).
 			Where("id IN (?)", pg.In(userIDs)).
 			Delete()
@@ -573,7 +597,7 @@ func (r *UserRepository) PurgeOldClearedUsers(cutoffDate time.Time, limit int) (
 			zap.Int("count", affected),
 			zap.Uint64s("userIDs", userIDs))
 
-		// Increment statistic
+		// Update statistics
 		if err := r.stats.IncrementDailyStat(tx.Context(), statistics.FieldClearedUsersPurged, affected); err != nil {
 			r.logger.Error("Failed to increment cleared_users_purged statistic", zap.Error(err))
 			return err

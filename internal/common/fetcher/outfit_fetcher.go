@@ -9,13 +9,13 @@ import (
 	"go.uber.org/zap"
 )
 
-// OutfitFetcher handles fetching of user outfits.
+// OutfitFetcher handles retrieval of user outfit information from the Roblox API.
 type OutfitFetcher struct {
 	roAPI  *api.API
 	logger *zap.Logger
 }
 
-// NewOutfitFetcher creates a new OutfitFetcher instance.
+// NewOutfitFetcher creates an OutfitFetcher with the provided API client and logger.
 func NewOutfitFetcher(roAPI *api.API, logger *zap.Logger) *OutfitFetcher {
 	return &OutfitFetcher{
 		roAPI:  roAPI,
@@ -23,7 +23,7 @@ func NewOutfitFetcher(roAPI *api.API, logger *zap.Logger) *OutfitFetcher {
 	}
 }
 
-// AddOutfits fetches outfits for a batch of users and adds them to the users.
+// AddOutfits fetches outfits for a batch of users and adds them to the user records.
 func (o *OutfitFetcher) AddOutfits(users []*database.User) []*database.User {
 	for i, user := range users {
 		builder := avatar.NewUserOutfitsBuilder(user.ID).WithItemsPerPage(1000).WithIsEditable(true)

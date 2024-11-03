@@ -9,7 +9,9 @@ import (
 	"go.uber.org/zap"
 )
 
-// Handler handles the queue functionality.
+// Handler coordinates queue management operations and their interactions.
+// It maintains references to the database, queue manager, and other handlers
+// needed for processing queue operations.
 type Handler struct {
 	db                *database.Database
 	logger            *zap.Logger
@@ -21,7 +23,8 @@ type Handler struct {
 	reviewHandler     interfaces.ReviewHandler
 }
 
-// New creates a new Handler instance.
+// New creates a Handler by initializing the queue menu and registering its
+// page with the pagination manager.
 func New(
 	db *database.Database,
 	logger *zap.Logger,
@@ -41,13 +44,15 @@ func New(
 		reviewHandler:     reviewHandler,
 	}
 
+	// Initialize menu and register its page
 	h.queueMenu = NewMenu(h)
 	paginationManager.AddPage(h.queueMenu.page)
 
 	return h
 }
 
-// ShowQueueMenu shows the queue menu.
+// ShowQueueMenu prepares and displays the queue interface by loading
+// current queue lengths into the session.
 func (h *Handler) ShowQueueMenu(event interfaces.CommonEvent, s *session.Session) {
 	h.queueMenu.ShowQueueMenu(event, s, "")
 }

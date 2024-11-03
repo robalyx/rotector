@@ -7,13 +7,15 @@ import (
 	"go.uber.org/zap"
 )
 
-// TrackingRepository handles operations for group member and user network tracking.
+// TrackingRepository handles database operations for monitoring relationships
+// between users and groups.
 type TrackingRepository struct {
 	db     *pg.DB
 	logger *zap.Logger
 }
 
-// NewTrackingRepository creates a new TrackingRepository instance.
+// NewTrackingRepository creates a TrackingRepository with database access for
+// storing and retrieving tracking information.
 func NewTrackingRepository(db *pg.DB, logger *zap.Logger) *TrackingRepository {
 	return &TrackingRepository{
 		db:     db,
@@ -21,216 +23,151 @@ func NewTrackingRepository(db *pg.DB, logger *zap.Logger) *TrackingRepository {
 	}
 }
 
-// AddUserToGroupTracking adds a confirmed user to the group member tracking.
+// AddUserToGroupTracking adds a confirmed user to a group's tracking list.
+// The LastAppended field is updated to help with cleanup of old tracking data.
 func (r *TrackingRepository) AddUserToGroupTracking(groupID, userID uint64) error {
-	return r.db.RunInTransaction(r.db.Context(), func(tx *pg.Tx) error {
-		_, err := tx.Exec(`
-			INSERT INTO group_member_trackings (group_id, confirmed_users, last_appended)
-			VALUES (?, ARRAY[?], NOW())
-			ON CONFLICT (group_id) DO UPDATE
-			SET confirmed_users = array_append(group_member_trackings.confirmed_users, EXCLUDED.confirmed_users[1]),
-				last_appended = NOW()
-			WHERE NOT EXCLUDED.confirmed_users[1] = ANY(group_member_trackings.confirmed_users)
-		`, groupID, userID)
-		if err != nil {
-			r.logger.Error("Failed to add user to group tracking", zap.Error(err), zap.Uint64("groupID", groupID), zap.Uint64("userID", userID))
-			return err
-		}
+	_, err := r.db.Model(&GroupMemberTracking{
+		GroupID:        groupID,
+		ConfirmedUsers: []uint64{userID},
+		LastAppended:   time.Now(),
+	}).OnConflict("(group_id) DO UPDATE").
+		Set("confirmed_users = array_append(EXCLUDED.confirmed_users, ?)", userID).
+		Set("last_appended = EXCLUDED.last_appended").
+		Insert()
+	if err != nil {
+		r.logger.Error("Failed to add user to group tracking",
+			zap.Error(err),
+			zap.Uint64("groupID", groupID),
+			zap.Uint64("userID", userID))
+		return err
+	}
 
-		return nil
-	})
+	return nil
 }
 
-// AddUserToNetworkTracking adds a confirmed user to the user network tracking.
-func (r *TrackingRepository) AddUserToNetworkTracking(userID, networkUserID uint64) error {
-	return r.db.RunInTransaction(r.db.Context(), func(tx *pg.Tx) error {
-		_, err := tx.Exec(`
-			INSERT INTO user_network_trackings (user_id, confirmed_users, last_appended)
-			VALUES (?, ARRAY[?], NOW())
-			ON CONFLICT (user_id) DO UPDATE
-			SET confirmed_users = array_append(user_network_trackings.confirmed_users, EXCLUDED.confirmed_users[1]),
-				last_appended = NOW()
-			WHERE NOT EXCLUDED.confirmed_users[1] = ANY(user_network_trackings.confirmed_users)
-		`, userID, networkUserID)
-		if err != nil {
-			r.logger.Error("Failed to add user to network tracking", zap.Error(err), zap.Uint64("userID", userID), zap.Uint64("networkUserID", networkUserID))
-			return err
-		}
+// AddUserToNetworkTracking adds a confirmed user to another user's tracking list.
+// The LastAppended field is updated to help with cleanup of old tracking data.
+func (r *TrackingRepository) AddUserToNetworkTracking(userID, confirmedUserID uint64) error {
+	_, err := r.db.Model(&UserNetworkTracking{
+		UserID:         userID,
+		ConfirmedUsers: []uint64{confirmedUserID},
+		LastAppended:   time.Now(),
+	}).OnConflict("(user_id) DO UPDATE").
+		Set("confirmed_users = array_append(EXCLUDED.confirmed_users, ?)", confirmedUserID).
+		Set("last_appended = EXCLUDED.last_appended").
+		Insert()
+	if err != nil {
+		r.logger.Error("Failed to add user to network tracking",
+			zap.Error(err),
+			zap.Uint64("userID", userID),
+			zap.Uint64("confirmedUserID", confirmedUserID))
+		return err
+	}
 
-		return nil
-	})
+	return nil
 }
 
-// PurgeOldGroupMemberTrackings removes old entries from group_member_trackings.
-func (r *TrackingRepository) PurgeOldGroupMemberTrackings(cutoffDate time.Time, batchSize int) (int, error) {
-	var affected int
-	err := r.db.RunInTransaction(r.db.Context(), func(tx *pg.Tx) error {
-		// Select the IDs to delete
-		var groupIDs []uint64
-		err := tx.Model((*GroupMemberTracking)(nil)).
-			Column("group_id").
-			Where("last_appended < ?", cutoffDate).
-			Order("last_appended ASC").
-			Limit(batchSize).
-			For("UPDATE SKIP LOCKED").
-			Select(&groupIDs)
-		if err != nil {
-			return err
-		}
+// PurgeOldTrackings removes tracking entries that haven't been updated recently.
+// This helps maintain database size by removing stale tracking data.
+func (r *TrackingRepository) PurgeOldTrackings(cutoffDate time.Time) (int, error) {
+	// Remove old group trackings
+	groupRes, err := r.db.Model((*GroupMemberTracking)(nil)).
+		Where("last_appended < ?", cutoffDate).
+		Delete()
+	if err != nil {
+		r.logger.Error("Failed to purge old group trackings", zap.Error(err))
+		return 0, err
+	}
 
-		if len(groupIDs) == 0 {
-			return nil
-		}
+	// Remove old user trackings
+	userRes, err := r.db.Model((*UserNetworkTracking)(nil)).
+		Where("last_appended < ?", cutoffDate).
+		Delete()
+	if err != nil {
+		r.logger.Error("Failed to purge old user trackings", zap.Error(err))
+		return 0, err
+	}
 
-		// Delete the selected records
-		result, err := tx.Model((*GroupMemberTracking)(nil)).
+	rowsAffected := groupRes.RowsAffected() + userRes.RowsAffected()
+	return rowsAffected, nil
+}
+
+// GetAndRemoveQualifiedGroupTrackings finds groups with enough confirmed users
+// to warrant flagging. Groups are removed from tracking after being returned.
+func (r *TrackingRepository) GetAndRemoveQualifiedGroupTrackings(minConfirmedUsers int) (map[uint64]int, error) {
+	var trackings []GroupMemberTracking
+
+	// Find groups with enough confirmed users
+	err := r.db.Model(&trackings).
+		Where("array_length(confirmed_users, 1) >= ?", minConfirmedUsers).
+		Select()
+	if err != nil {
+		r.logger.Error("Failed to get qualified group trackings", zap.Error(err))
+		return nil, err
+	}
+
+	// Extract group IDs for deletion
+	groupIDs := make([]uint64, len(trackings))
+	for i, tracking := range trackings {
+		groupIDs[i] = tracking.GroupID
+	}
+
+	// Remove found groups from tracking
+	if len(groupIDs) > 0 {
+		_, err = r.db.Model((*GroupMemberTracking)(nil)).
 			Where("group_id IN (?)", pg.In(groupIDs)).
 			Delete()
 		if err != nil {
-			return err
+			r.logger.Error("Failed to delete group trackings", zap.Error(err))
+			return nil, err
 		}
+	}
 
-		affected = result.RowsAffected()
-		return nil
-	})
+	// Map group IDs to their confirmed user counts
+	result := make(map[uint64]int)
+	for _, tracking := range trackings {
+		result[tracking.GroupID] = len(tracking.ConfirmedUsers)
+	}
 
-	return affected, err
+	return result, nil
 }
 
-// PurgeOldUserNetworkTrackings removes old entries from user_network_trackings.
-func (r *TrackingRepository) PurgeOldUserNetworkTrackings(cutoffDate time.Time, batchSize int) (int, error) {
-	var affected int
-	err := r.db.RunInTransaction(r.db.Context(), func(tx *pg.Tx) error {
-		// Select the IDs to delete
-		var userIDs []uint64
-		err := tx.Model((*UserNetworkTracking)(nil)).
-			Column("user_id").
-			Where("last_appended < ?", cutoffDate).
-			Order("last_appended ASC").
-			Limit(batchSize).
-			For("UPDATE SKIP LOCKED").
-			Select(&userIDs)
-		if err != nil {
-			return err
-		}
+// GetAndRemoveQualifiedUserTrackings finds users with enough confirmed connections
+// to warrant flagging. Users are removed from tracking after being returned.
+func (r *TrackingRepository) GetAndRemoveQualifiedUserTrackings(minConfirmedUsers int) (map[uint64]int, error) {
+	var trackings []UserNetworkTracking
 
-		if len(userIDs) == 0 {
-			return nil
-		}
+	// Find users with enough confirmed connections
+	err := r.db.Model(&trackings).
+		Where("array_length(confirmed_users, 1) >= ?", minConfirmedUsers).
+		Select()
+	if err != nil {
+		r.logger.Error("Failed to get qualified user trackings", zap.Error(err))
+		return nil, err
+	}
 
-		// Delete the selected records
-		result, err := tx.Model((*UserNetworkTracking)(nil)).
+	// Extract user IDs for deletion
+	userIDs := make([]uint64, len(trackings))
+	for i, tracking := range trackings {
+		userIDs[i] = tracking.UserID
+	}
+
+	// Remove found users from tracking
+	if len(userIDs) > 0 {
+		_, err = r.db.Model((*UserNetworkTracking)(nil)).
 			Where("user_id IN (?)", pg.In(userIDs)).
 			Delete()
 		if err != nil {
-			return err
+			r.logger.Error("Failed to delete user trackings", zap.Error(err))
+			return nil, err
 		}
+	}
 
-		affected = result.RowsAffected()
-		return nil
-	})
+	// Map user IDs to their confirmed connection counts
+	result := make(map[uint64]int)
+	for _, tracking := range trackings {
+		result[tracking.UserID] = len(tracking.ConfirmedUsers)
+	}
 
-	return affected, err
-}
-
-// GetAndRemoveQualifiedGroupTrackings retrieves and removes groups that have sufficient confirmed users.
-func (r *TrackingRepository) GetAndRemoveQualifiedGroupTrackings(minUsers int) (map[uint64]int, error) {
-	groupsMap := make(map[uint64]int)
-
-	err := r.db.RunInTransaction(r.db.Context(), func(tx *pg.Tx) error {
-		var groups []struct {
-			GroupID uint64 `pg:"group_id"`
-			Count   int    `pg:"count"`
-		}
-
-		// Select the qualified groups
-		err := tx.Model((*GroupMemberTracking)(nil)).
-			Column("group_id").
-			ColumnExpr("array_length(confirmed_users, 1) as count").
-			Where("array_length(confirmed_users, 1) >= ?", minUsers).
-			For("UPDATE").
-			Select(&groups)
-		if err != nil {
-			r.logger.Error("Failed to get groups with confirmed users",
-				zap.Error(err),
-				zap.Int("minUsers", minUsers))
-			return err
-		}
-
-		// Skip if no qualified groups
-		if len(groups) == 0 {
-			return nil
-		}
-
-		// Build the map and list of group IDs
-		groupIDs := make([]uint64, len(groups))
-		for i, group := range groups {
-			groupsMap[group.GroupID] = group.Count
-			groupIDs[i] = group.GroupID
-		}
-
-		// Delete the selected records
-		_, err = tx.Model((*GroupMemberTracking)(nil)).
-			Where("group_id IN (?)", pg.In(groupIDs)).
-			Delete()
-		if err != nil {
-			r.logger.Error("Failed to delete qualified group trackings", zap.Error(err))
-			return err
-		}
-
-		return nil
-	})
-
-	return groupsMap, err
-}
-
-// GetAndRemoveQualifiedUserTrackings retrieves and removes users that have sufficient confirmed network users.
-func (r *TrackingRepository) GetAndRemoveQualifiedUserTrackings(minUsers int) (map[uint64]int, error) {
-	usersMap := make(map[uint64]int)
-
-	err := r.db.RunInTransaction(r.db.Context(), func(tx *pg.Tx) error {
-		var users []struct {
-			UserID uint64 `pg:"user_id"`
-			Count  int    `pg:"count"`
-		}
-
-		// Select the qualified users
-		err := tx.Model((*UserNetworkTracking)(nil)).
-			Column("user_id").
-			ColumnExpr("array_length(confirmed_users, 1) as count").
-			Where("array_length(confirmed_users, 1) >= ?", minUsers).
-			For("UPDATE").
-			Select(&users)
-		if err != nil {
-			r.logger.Error("Failed to get users with confirmed network users",
-				zap.Error(err),
-				zap.Int("minUsers", minUsers))
-			return err
-		}
-
-		// Skip if no qualified users
-		if len(users) == 0 {
-			return nil
-		}
-
-		// Build the map and list of user IDs
-		userIDs := make([]uint64, len(users))
-		for i, user := range users {
-			usersMap[user.UserID] = user.Count
-			userIDs[i] = user.UserID
-		}
-
-		// Delete the selected records
-		_, err = tx.Model((*UserNetworkTracking)(nil)).
-			Where("user_id IN (?)", pg.In(userIDs)).
-			Delete()
-		if err != nil {
-			r.logger.Error("Failed to delete qualified user trackings", zap.Error(err))
-			return err
-		}
-
-		return nil
-	})
-
-	return usersMap, err
+	return result, nil
 }

@@ -10,7 +10,9 @@ import (
 	"go.uber.org/zap"
 )
 
-// Handler manages the review process for users.
+// Handler coordinates all review-related menus and their interactions.
+// It maintains references to the API clients, database, and managers needed
+// for processing user reviews and queue operations.
 type Handler struct {
 	db                *database.Database
 	roAPI             *api.API
@@ -26,7 +28,8 @@ type Handler struct {
 	dashboardHandler  interfaces.DashboardHandler
 }
 
-// New creates a new Handler instance.
+// New creates a Handler by initializing all review menus and registering their
+// pages with the pagination manager.
 func New(
 	db *database.Database,
 	logger *zap.Logger,
@@ -46,12 +49,14 @@ func New(
 		dashboardHandler:  dashboardHandler,
 	}
 
+	// Initialize all menus with references to this handler
 	h.reviewMenu = NewMenu(h)
 	h.outfitsMenu = NewOutfitsMenu(h)
 	h.friendsMenu = NewFriendsMenu(h)
 	h.groupsMenu = NewGroupsMenu(h)
 	h.statusMenu = NewStatusMenu(h)
 
+	// Register menu pages with the pagination manager
 	paginationManager.AddPage(h.reviewMenu.page)
 	paginationManager.AddPage(h.outfitsMenu.page)
 	paginationManager.AddPage(h.friendsMenu.page)
@@ -61,12 +66,14 @@ func New(
 	return h
 }
 
-// ShowReviewMenu displays the review menu.
+// ShowReviewMenu prepares and displays the review interface by loading
+// user data and friend status information into the session.
 func (h *Handler) ShowReviewMenu(event interfaces.CommonEvent, s *session.Session) {
 	h.reviewMenu.ShowReviewMenu(event, s, "")
 }
 
-// ShowStatusMenu shows the status menu.
+// ShowStatusMenu prepares and displays the status interface by loading
+// current queue counts and position information into the session.
 func (h *Handler) ShowStatusMenu(event interfaces.CommonEvent, s *session.Session) {
 	h.statusMenu.ShowStatusMenu(event, s)
 }

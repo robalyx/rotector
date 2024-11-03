@@ -11,7 +11,7 @@ import (
 	"go.uber.org/zap"
 )
 
-// Info represents the information about a user to be checked by the AI.
+// Info combines user profile data with their group memberships and friend list.
 type Info struct {
 	ID          uint64                 `json:"id"`
 	Name        string                 `json:"name"`
@@ -23,13 +23,13 @@ type Info struct {
 	LastUpdated time.Time              `json:"lastUpdated"`
 }
 
-// UserFetcher handles fetching of user information.
+// UserFetcher handles concurrent retrieval of user information from the Roblox API.
 type UserFetcher struct {
 	roAPI  *api.API
 	logger *zap.Logger
 }
 
-// NewUserFetcher creates a new UserFetcher instance.
+// NewUserFetcher creates a UserFetcher with the provided API client and logger.
 func NewUserFetcher(roAPI *api.API, logger *zap.Logger) *UserFetcher {
 	return &UserFetcher{
 		roAPI:  roAPI,
@@ -37,7 +37,8 @@ func NewUserFetcher(roAPI *api.API, logger *zap.Logger) *UserFetcher {
 	}
 }
 
-// FetchInfos fetches user information for a batch of user IDs.
+// FetchInfos retrieves complete user information for a batch of user IDs.
+// It skips banned users and fetches groups/friends concurrently for each user.
 func (u *UserFetcher) FetchInfos(userIDs []uint64) []*Info {
 	var wg sync.WaitGroup
 	userInfoChan := make(chan *Info, len(userIDs))
@@ -54,7 +55,7 @@ func (u *UserFetcher) FetchInfos(userIDs []uint64) []*Info {
 				return
 			}
 
-			// If the user is banned, skip it
+			// Skip banned users
 			if userInfo.IsBanned {
 				return
 			}
@@ -93,7 +94,8 @@ func (u *UserFetcher) FetchInfos(userIDs []uint64) []*Info {
 	return userInfos
 }
 
-// fetchGroupsAndFriends fetches user's groups and friends concurrently.
+// fetchGroupsAndFriends retrieves a user's group memberships and friend list
+// concurrently. Returns empty slices if all requests fail.
 func (u *UserFetcher) fetchGroupsAndFriends(userID uint64) ([]types.UserGroupRoles, []types.Friend) {
 	var wg sync.WaitGroup
 	var groupRoles []types.UserGroupRoles
@@ -129,7 +131,8 @@ func (u *UserFetcher) fetchGroupsAndFriends(userID uint64) ([]types.UserGroupRol
 	return groupRoles, friends
 }
 
-// FetchBannedUsers fetches banned users for a batch of user IDs.
+// FetchBannedUsers checks which users from a batch of IDs are currently banned.
+// Returns a slice of banned user IDs.
 func (u *UserFetcher) FetchBannedUsers(userIDs []uint64) ([]uint64, error) {
 	var wg sync.WaitGroup
 	var mu sync.Mutex

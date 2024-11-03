@@ -16,6 +16,8 @@ import (
 )
 
 const (
+	// SystemPrompt provides detailed instructions to the AI model for analyzing user content.
+	// It defines violation types, confidence scoring rules, and specific patterns to look for.
 	SystemPrompt = `You are a Roblox moderator. Your job is to analyze user data for inappropriate sexual or suggestive content.
 
 Instructions:
@@ -113,12 +115,14 @@ Exclude:
 - Legitimate trading references`
 )
 
-// FlaggedUsers is a list of flagged users.
+// FlaggedUsers holds a list of users that the AI has identified as inappropriate.
+// The JSON schema is used to ensure consistent responses from the AI.
 type FlaggedUsers struct {
 	Users []FlaggedUser `json:"users" jsonschema_description:"List of flagged users"`
 }
 
-// FlaggedUser is a user that was flagged by the AI.
+// FlaggedUser contains the AI's analysis results for a single user.
+// The confidence score and flagged content help moderators make decisions.
 type FlaggedUser struct {
 	Name           string   `json:"name"           jsonschema_description:"Exact username of the flagged user"`
 	Reason         string   `json:"reason"         jsonschema_description:"Clear explanation of why the user was flagged"`
@@ -126,17 +130,19 @@ type FlaggedUser struct {
 	Confidence     float64  `json:"confidence"     jsonschema_description:"Confidence level of the AI's assessment"`
 }
 
-// AIChecker handles AI-based checking of user content.
+// AIChecker handles AI-based content analysis by sending user data to OpenAI
+// and validating the responses. It uses minification to reduce API costs.
 type AIChecker struct {
 	openAIClient *openai.Client
 	minify       *minify.M
 	logger       *zap.Logger
 }
 
-// Generate the JSON schema at initialization time.
+// Generate the JSON schema at initialization time to avoid repeated generation.
 var flaggedUsersSchema = utils.GenerateSchema[FlaggedUsers]() //nolint:gochecknoglobals
 
-// NewAIChecker creates a new AIChecker instance.
+// NewAIChecker creates an AIChecker with a minifier for JSON optimization
+// and the provided OpenAI client and logger.
 func NewAIChecker(openAIClient *openai.Client, logger *zap.Logger) *AIChecker {
 	m := minify.New()
 	m.AddFunc("application/json", json.Minify)
@@ -148,9 +154,13 @@ func NewAIChecker(openAIClient *openai.Client, logger *zap.Logger) *AIChecker {
 	}
 }
 
-// ProcessUsers sends user information to the AI for analysis.
+// ProcessUsers sends user information to OpenAI for analysis. It:
+// 1. Strips necessary data from the user info
+// 2. Minifies JSON to reduce token usage
+// 3. Enforces response schema for consistent results
+// 4. Validates AI responses against original content.
 func (a *AIChecker) ProcessUsers(userInfos []*fetcher.Info) ([]*database.User, error) {
-	// Create a new slice with user info without IDs
+	// Remove IDs from user info to prevent leakage
 	userInfosWithoutID := make([]struct {
 		Name        string `json:"name"`
 		Description string `json:"description"`
@@ -166,7 +176,7 @@ func (a *AIChecker) ProcessUsers(userInfos []*fetcher.Info) ([]*database.User, e
 		}
 	}
 
-	// Marshal user info to JSON and minify it
+	// Minify JSON to reduce token usage
 	userInfoJSON, err := sonic.Marshal(userInfosWithoutID)
 	if err != nil {
 		a.logger.Error("Error marshaling user info", zap.Error(err))
@@ -181,7 +191,7 @@ func (a *AIChecker) ProcessUsers(userInfos []*fetcher.Info) ([]*database.User, e
 
 	a.logger.Info("Sending user info to AI for analysis")
 
-	// Call OpenAI API with structured response
+	// Configure OpenAI request with schema enforcement
 	schemaParam := openai.ResponseFormatJSONSchemaJSONSchemaParam{
 		Name:        openai.F("flaggedUsers"),
 		Description: openai.F("List of flagged users"),
@@ -189,9 +199,11 @@ func (a *AIChecker) ProcessUsers(userInfos []*fetcher.Info) ([]*database.User, e
 		Strict:      openai.Bool(true),
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	// Set timeout for API request
+	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Second)
 	defer cancel()
 
+	// Send request to OpenAI
 	chatCompletion, err := a.openAIClient.Chat.Completions.New(ctx, openai.ChatCompletionNewParams{
 		Messages: openai.F([]openai.ChatCompletionMessageParamUnion{
 			openai.SystemMessage(SystemPrompt),
@@ -211,7 +223,7 @@ func (a *AIChecker) ProcessUsers(userInfos []*fetcher.Info) ([]*database.User, e
 		return nil, err
 	}
 
-	// Unmarshal flagged users from AI response
+	// Parse AI response
 	var flaggedUsers FlaggedUsers
 	err = sonic.Unmarshal([]byte(chatCompletion.Choices[0].Message.Content), &flaggedUsers)
 	if err != nil {
@@ -223,7 +235,7 @@ func (a *AIChecker) ProcessUsers(userInfos []*fetcher.Info) ([]*database.User, e
 		zap.Int("totalUsers", len(userInfos)),
 		zap.Int("flaggedUsers", len(flaggedUsers.Users)))
 
-	// Ensure flagged users are validated
+	// Validate AI responses against original content
 	validatedUsers := a.validateFlaggedUsers(flaggedUsers, userInfos)
 
 	return validatedUsers, nil

@@ -11,7 +11,7 @@ import (
 	"github.com/rotector/rotector/internal/bot/constants"
 )
 
-// DashboardBuilder is the builder for the dashboard.
+// DashboardBuilder creates the visual layout for the main dashboard.
 type DashboardBuilder struct {
 	confirmedCount int
 	flaggedCount   int
@@ -20,7 +20,8 @@ type DashboardBuilder struct {
 	activeUsers    []snowflake.ID
 }
 
-// NewDashboardBuilder creates a new DashboardBuilder.
+// NewDashboardBuilder loads current statistics and active user information
+// to create a new builder.
 func NewDashboardBuilder(confirmedCount, flaggedCount, clearedCount int, imageBuffer *bytes.Buffer, activeUsers []snowflake.ID) *DashboardBuilder {
 	return &DashboardBuilder{
 		confirmedCount: confirmedCount,
@@ -31,8 +32,13 @@ func NewDashboardBuilder(confirmedCount, flaggedCount, clearedCount int, imageBu
 	}
 }
 
-// Build builds the dashboard.
+// Build creates a Discord message showing:
+// - Current user counts (confirmed, flagged, cleared)
+// - List of active reviewers with mentions
+// - Statistics chart (if available)
+// - Navigation menu to different sections.
 func (b *DashboardBuilder) Build() *discord.MessageUpdateBuilder {
+	// Create embed with user statistics
 	embed := discord.NewEmbedBuilder().
 		SetTitle("Welcome to Rotector 👋").
 		AddField("Confirmed Users", strconv.Itoa(b.confirmedCount), true).
@@ -40,7 +46,7 @@ func (b *DashboardBuilder) Build() *discord.MessageUpdateBuilder {
 		AddField("Cleared Users", strconv.Itoa(b.clearedCount), true).
 		SetColor(constants.DefaultEmbedColor)
 
-	// Add active users field
+	// Add active reviewers field if any are online
 	if len(b.activeUsers) > 0 {
 		activeUserMentions := make([]string, len(b.activeUsers))
 		for i, userID := range b.activeUsers {
@@ -49,11 +55,12 @@ func (b *DashboardBuilder) Build() *discord.MessageUpdateBuilder {
 		embed.AddField("Active Reviewers", strings.Join(activeUserMentions, ", "), false)
 	}
 
-	// Add stats chart if available
+	// Add statistics chart if available
 	if b.imageBuffer != nil {
 		embed.SetImage("attachment://stats_chart.png")
 	}
 
+	// Add navigation menu and refresh button
 	components := []discord.ContainerComponent{
 		discord.NewActionRow(
 			discord.NewStringSelectMenu(constants.ActionSelectMenuCustomID, "Select an action",
@@ -69,11 +76,12 @@ func (b *DashboardBuilder) Build() *discord.MessageUpdateBuilder {
 		),
 	}
 
+	// Create message builder and attach components
 	builder := discord.NewMessageUpdateBuilder().
 		SetEmbeds(embed.Build()).
 		AddContainerComponents(components...)
 
-	// Attach stats chart if available
+	// Attach statistics chart if available
 	if b.imageBuffer != nil {
 		builder.SetFiles(discord.NewFile("stats_chart.png", "", b.imageBuffer))
 	}

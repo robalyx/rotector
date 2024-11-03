@@ -12,12 +12,14 @@ import (
 	"go.uber.org/zap/zapcore"
 )
 
-// Logger wraps the zap.Logger to implement the logger.Logger interface.
+// Logger adapts zap.Logger to implement the axonet logger.Logger interface,
+// allowing it to be used with the axonet HTTP client.
 type Logger struct {
 	zap *zap.Logger
 }
 
-// NewLogger creates a new Logger that uses the provided zap.Logger.
+// NewLogger wraps a zap.Logger instance to provide the axonet logging interface.
+// All log methods are delegated directly to the underlying zap logger.
 func NewLogger(zapLogger *zap.Logger) logger.Logger {
 	return &Logger{
 		zap: zapLogger,
@@ -32,6 +34,9 @@ func (l *Logger) Debugf(format string, args ...interface{}) { l.zap.Sugar().Debu
 func (l *Logger) Infof(format string, args ...interface{})  { l.zap.Sugar().Infof(format, args...) }
 func (l *Logger) Warnf(format string, args ...interface{})  { l.zap.Sugar().Warnf(format, args...) }
 func (l *Logger) Errorf(format string, args ...interface{}) { l.zap.Sugar().Errorf(format, args...) }
+
+// WithFields creates a new logger with additional context fields by wrapping
+// the underlying zap logger's With method. Converts axonet fields to zap fields.
 func (l *Logger) WithFields(fields ...logger.Field) logger.Logger {
 	zapFields := make([]zap.Field, len(fields))
 	for i, f := range fields {
@@ -42,34 +47,34 @@ func (l *Logger) WithFields(fields ...logger.Field) logger.Logger {
 	}
 }
 
-// GetLoggers initializes the logging system.
+// GetLoggers sets up the logging infrastructure by creating timestamped log
+// directories and initializing separate loggers for main application and database logging.
 func GetLoggers(logDir string, level string, maxLogsToKeep int) (*zap.Logger, *zap.Logger, error) {
-	// Create logs directory if it doesn't exist
+	// Ensure log directory exists
 	err := os.MkdirAll(logDir, os.ModePerm)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create logs directory: %w", err)
 	}
 
-	// Rotate log sessions
+	// Clean up old log sessions before creating new ones
 	err = rotateLogSessions(logDir, maxLogsToKeep)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to rotate log sessions: %w", err)
 	}
 
-	// Create a new session directory
+	// Create timestamped directory for this session's logs
 	sessionDir := filepath.Join(logDir, time.Now().Format("2006-01-02_15-04-05"))
 	err = os.MkdirAll(sessionDir, os.ModePerm)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create session directory: %w", err)
 	}
 
-	// Initialize main logger
+	// Initialize separate loggers for different concerns
 	mainLogger, err := initLogger(filepath.Join(sessionDir, "main.log"), level)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to initialize main logger: %w", err)
 	}
 
-	// Initialize database logger
 	dbLogger, err := initLogger(filepath.Join(sessionDir, "database.log"), level)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to initialize database logger: %w", err)
@@ -78,20 +83,18 @@ func GetLoggers(logDir string, level string, maxLogsToKeep int) (*zap.Logger, *z
 	return mainLogger, dbLogger, nil
 }
 
-// initLogger creates a new logger instance.
+// initLogger creates a zap logger instance with development settings and file output.
+// Uses atomic level control to allow log level changes.
 func initLogger(logPath string, level string) (*zap.Logger, error) {
-	// Parse the log level
 	zapLevel, err := zapcore.ParseLevel(level)
 	if err != nil {
 		return nil, fmt.Errorf("invalid log level: %w", err)
 	}
 
-	// Create a new logger with the development config
 	config := zap.NewDevelopmentConfig()
 	config.OutputPaths = []string{logPath}
 	config.Level = zap.NewAtomicLevelAt(zapLevel)
 
-	// Build the logger
 	logger, err := config.Build()
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize logger: %w", err)
@@ -100,7 +103,8 @@ func initLogger(logPath string, level string) (*zap.Logger, error) {
 	return logger, nil
 }
 
-// GetWorkerLogger creates a logger for a specific worker.
+// GetWorkerLogger creates a logger for background workers by placing their logs
+// in the latest session directory. Falls back to no-op logger on errors.
 func GetWorkerLogger(name string, logDir string, level string) *zap.Logger {
 	// Parse the log level
 	zapLevel, err := zapcore.ParseLevel(level)
@@ -127,7 +131,9 @@ func GetWorkerLogger(name string, logDir string, level string) *zap.Logger {
 	return logger
 }
 
-// rotateLogSessions keeps only the most recent log sessions.
+// rotateLogSessions maintains the log directory by removing oldest sessions
+// when the total number exceeds maxLogsToKeep. Uses file modification time
+// to determine age.
 func rotateLogSessions(logDir string, maxLogsToKeep int) error {
 	// Get all the sessions in the log directory
 	sessions, err := filepath.Glob(filepath.Join(logDir, "*"))
@@ -140,14 +146,14 @@ func rotateLogSessions(logDir string, maxLogsToKeep int) error {
 		return nil
 	}
 
-	// Sort sessions by modification time (oldest first)
+	// Sort by modification time to identify oldest sessions
 	sort.Slice(sessions, func(i, j int) bool {
 		iInfo, _ := os.Stat(sessions[i])
 		jInfo, _ := os.Stat(sessions[j])
 		return iInfo.ModTime().Before(jInfo.ModTime())
 	})
 
-	// Remove oldest sessions
+	// Remove oldest sessions to maintain limit
 	for i := range len(sessions) - maxLogsToKeep {
 		err := os.RemoveAll(sessions[i])
 		if err != nil {
@@ -158,15 +164,14 @@ func rotateLogSessions(logDir string, maxLogsToKeep int) error {
 	return nil
 }
 
-// getLatestSessionDir returns the path to the most recent session directory.
+// getLatestSessionDir finds the most recent log session by sorting directory
+// modification times. Falls back to main log directory if no sessions exist.
 func getLatestSessionDir(logDir string) string {
-	// Get all the sessions in the log directory
 	sessions, err := filepath.Glob(filepath.Join(logDir, "*"))
 	if err != nil || len(sessions) == 0 {
-		return logDir // Fallback to main log directory if we can't find sessions
+		return logDir
 	}
 
-	// Sort sessions by modification time (newest first)
 	sort.Slice(sessions, func(i, j int) bool {
 		iInfo, _ := os.Stat(sessions[i])
 		jInfo, _ := os.Stat(sessions[j])

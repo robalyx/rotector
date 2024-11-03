@@ -14,10 +14,12 @@ import (
 )
 
 const (
+	// FriendUsersToProcess sets how many users to process in each batch.
 	FriendUsersToProcess = 100
 )
 
-// FriendWorker represents a friend worker that processes user friends.
+// FriendWorker processes user friend networks by checking each friend's
+// status and analyzing their profiles for inappropriate content.
 type FriendWorker struct {
 	db          *database.Database
 	roAPI       *api.API
@@ -27,7 +29,7 @@ type FriendWorker struct {
 	logger      *zap.Logger
 }
 
-// NewFriendWorker creates a new friend worker instance.
+// NewFriendWorker creates a FriendWorker.
 func NewFriendWorker(db *database.Database, openaiClient *openai.Client, roAPI *api.API, bar *progress.Bar, logger *zap.Logger) *FriendWorker {
 	userFetcher := fetcher.NewUserFetcher(roAPI, logger)
 	userChecker := checker.NewUserChecker(db, bar, roAPI, openaiClient, userFetcher, logger)
@@ -42,7 +44,11 @@ func NewFriendWorker(db *database.Database, openaiClient *openai.Client, roAPI *
 	}
 }
 
-// Start begins the friend worker's main loop.
+// Start begins the friend worker's main loop:
+// 1. Gets a batch of users to process
+// 2. Fetches friend lists for each user
+// 3. Checks friends for inappropriate content
+// 4. Repeats until stopped.
 func (f *FriendWorker) Start() {
 	f.logger.Info("Friend Worker started")
 	f.bar.SetTotal(100)
@@ -77,7 +83,11 @@ func (f *FriendWorker) Start() {
 	}
 }
 
-// processFriendsBatch processes a batch of friends and returns the remaining friend IDs.
+// processFriendsBatch builds a list of friend IDs to check by:
+// 1. Getting confirmed users from the database
+// 2. Fetching their friend lists
+// 3. Filtering out already processed users
+// 4. Collecting enough IDs to fill a batch.
 func (f *FriendWorker) processFriendsBatch(friendIDs []uint64) ([]uint64, error) {
 	for len(friendIDs) < FriendUsersToProcess {
 		// Get the next confirmed user

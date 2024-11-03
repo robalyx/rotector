@@ -12,36 +12,47 @@ import (
 	"go.uber.org/zap"
 )
 
-// Page represents a single page in the pagination system.
+// Page holds the structure for a single interactive page, containing handlers for different
+// types of Discord interactions (select menus, buttons, modals) and a message builder function.
+// The handlers are optional - a page may only use some interaction types.
 type Page struct {
 	Name    string
 	Message func(s *session.Session) *discord.MessageUpdateBuilder
 
+	// SelectHandlerFunc processes select menu interactions by taking the selected option
+	// and custom ID to determine what action to take
 	SelectHandlerFunc func(
 		event *events.ComponentInteractionCreate,
 		s *session.Session,
 		customID string,
 		option string,
 	)
+	// ButtonHandlerFunc processes button clicks by using the button's custom ID
+	// to determine what action to take
 	ButtonHandlerFunc func(
 		event *events.ComponentInteractionCreate,
 		s *session.Session,
 		customID string,
 	)
+	// ModalHandlerFunc processes form submissions from Discord modals
+	// by reading the submitted values
 	ModalHandlerFunc func(
 		event *events.ModalSubmitInteractionCreate,
 		s *session.Session,
 	)
+	// BackHandlerFunc is called when navigating away from this page
 	BackHandlerFunc func()
 }
 
-// Manager handles the pagination system.
+// Manager maintains a map of pages indexed by their names and handles
+// the routing of Discord interactions to the appropriate page handlers.
 type Manager struct {
 	pages  map[string]*Page
 	logger *zap.Logger
 }
 
-// NewManager creates a new Manager.
+// NewManager initializes a new Manager with an empty pages map
+// and the provided logger for debugging interaction handling.
 func NewManager(logger *zap.Logger) *Manager {
 	return &Manager{
 		pages:  make(map[string]*Page),
@@ -49,17 +60,19 @@ func NewManager(logger *zap.Logger) *Manager {
 	}
 }
 
-// AddPage adds a new page to the Manager.
+// AddPage stores a page in the manager's pages map using the page's name as the key.
 func (m *Manager) AddPage(page *Page) {
 	m.pages[page.Name] = page
 }
 
-// GetPage retrieves a page by its name.
+// GetPage retrieves a page from the manager's pages map using the provided name.
 func (m *Manager) GetPage(name string) *Page {
 	return m.pages[name]
 }
 
-// HandleInteraction processes interactions and updates the session.
+// HandleInteraction routes Discord interactions to the appropriate handler function
+// based on the interaction type (select menu, button, or modal) and the current page.
+// If no handler is found for an interaction, a warning is logged.
 func (m *Manager) HandleInteraction(event interfaces.CommonEvent, s *session.Session) {
 	currentPage := s.GetString(constants.SessionKeyCurrentPage)
 	page := m.GetPage(currentPage)
@@ -92,7 +105,9 @@ func (m *Manager) HandleInteraction(event interfaces.CommonEvent, s *session.Ses
 	}
 }
 
-// NavigateTo updates the message with the current page content.
+// NavigateTo updates the Discord message with new content and components for the target page.
+// It stores the previous page and message ID in the session, allowing for navigation history.
+// The content parameter adds a timestamped message above the page content.
 func (m *Manager) NavigateTo(event interfaces.CommonEvent, s *session.Session, page *Page, content string) {
 	messageUpdate := page.Message(s).
 		SetContent(utils.GetTimestampedSubtext(content)).
@@ -117,7 +132,9 @@ func (m *Manager) NavigateTo(event interfaces.CommonEvent, s *session.Session, p
 		zap.Uint64("message_id", uint64(message.ID)))
 }
 
-// RespondWithError sends an error response to the user.
+// RespondWithError clears all message components and embeds, replacing them with
+// a timestamped error message. This is used when an unrecoverable error occurs
+// during interaction handling.
 func (m *Manager) RespondWithError(event interfaces.CommonEvent, message string) {
 	messageUpdate := discord.NewMessageUpdateBuilder().
 		SetContent(utils.GetTimestampedSubtext("Fatal error: " + message)).

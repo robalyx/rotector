@@ -16,13 +16,15 @@ import (
 	"go.uber.org/zap"
 )
 
-// Menu is the handler for the setting change menu.
+// Menu handles the interface for changing individual settings.
+// It works with both user and guild settings through a common interface.
 type Menu struct {
 	handler *Handler
 	page    *pagination.Page
 }
 
-// NewMenu creates a new Menu instance.
+// NewMenu creates a Menu and sets up its page with message builders and
+// interaction handlers for changing settings.
 func NewMenu(h *Handler) *Menu {
 	m := &Menu{handler: h}
 	m.page = &pagination.Page{
@@ -41,18 +43,21 @@ func NewMenu(h *Handler) *Menu {
 	return m
 }
 
-// ShowMenu displays the setting change menu.
+// ShowMenu prepares and displays the settings change interface by loading
+// the current value and available options for the selected setting.
 func (m *Menu) ShowMenu(event interfaces.CommonEvent, s *session.Session, settingName, settingType, customID string) {
+	// Store setting information in session for the message builder
 	s.Set(constants.SessionKeySettingName, settingName)
 	s.Set(constants.SessionKeySettingType, settingType)
 	s.Set(constants.SessionKeyCustomID, customID)
 
-	// Get current value and options based on setting type
+	// Load current value and options based on setting type
 	var currentValue string
 	var options []discord.StringSelectMenuOption
 
 	switch customID {
 	case constants.StreamerModeOption:
+		// Load user settings for streamer mode toggle
 		var settings *database.UserSetting
 		s.GetInterface(constants.SessionKeyUserSettings, &settings)
 
@@ -61,7 +66,9 @@ func (m *Menu) ShowMenu(event interfaces.CommonEvent, s *session.Session, settin
 			discord.NewStringSelectMenuOption("Enable", "true"),
 			discord.NewStringSelectMenuOption("Disable", "false"),
 		}
+
 	case constants.DefaultSortOption:
+		// Load user settings for sort preference
 		var settings *database.UserSetting
 		s.GetInterface(constants.SessionKeyUserSettings, &settings)
 
@@ -71,7 +78,9 @@ func (m *Menu) ShowMenu(event interfaces.CommonEvent, s *session.Session, settin
 			discord.NewStringSelectMenuOption("Confidence", database.SortByConfidence),
 			discord.NewStringSelectMenuOption("Last Updated", database.SortByLastUpdated),
 		}
+
 	case constants.WhitelistedRolesOption:
+		// Load guild settings and available roles for role whitelist
 		settings := m.handler.guildMenu.getGuildSettings(event)
 		roles, err := event.Client().Rest().GetRoles(*event.GuildID())
 		if err != nil {
@@ -85,15 +94,16 @@ func (m *Menu) ShowMenu(event interfaces.CommonEvent, s *session.Session, settin
 		}
 	}
 
+	// Store values in session for the message builder
 	s.Set(constants.SessionKeyCurrentValue, currentValue)
 	s.Set(constants.SessionKeyOptions, options)
 
 	m.handler.paginationManager.NavigateTo(event, s, m.page, "")
 }
 
-// handleSettingChange handles the select menu for the setting change menu.
+// handleSettingChange processes select menu interactions by saving the new value
+// and refreshing the settings display.
 func (m *Menu) handleSettingChange(event *events.ComponentInteractionCreate, s *session.Session, customID string, option string) {
-	// Save the setting immediately
 	settingName := s.GetString(constants.SessionKeySettingName)
 	settingType := s.GetString(constants.SessionKeySettingType)
 	m.saveSetting(event, s, settingType, customID, option)
@@ -101,11 +111,11 @@ func (m *Menu) handleSettingChange(event *events.ComponentInteractionCreate, s *
 	m.ShowMenu(event, s, settingName, settingType, customID)
 }
 
-// handleSettingButton handles the buttons for the setting change menu.
+// handleSettingButton processes button interactions.
 func (m *Menu) handleSettingButton(event *events.ComponentInteractionCreate, s *session.Session, customID string) {
 	split := strings.Split(customID, "_")
 	if len(split) > 1 && split[1] == constants.BackButtonCustomID {
-		// Back to the main menu
+		// Return to the appropriate settings menu based on setting type
 		settingType := split[0]
 		if strings.HasPrefix(settingType, constants.UserSettingPrefix) {
 			m.handler.userMenu.ShowMenu(event, s)
@@ -115,7 +125,8 @@ func (m *Menu) handleSettingButton(event *events.ComponentInteractionCreate, s *
 	}
 }
 
-// saveSetting saves the given setting to the database.
+// saveSetting routes the setting change to the appropriate save function
+// based on whether it's a user or guild setting.
 func (m *Menu) saveSetting(event interfaces.CommonEvent, s *session.Session, settingType, customID, option string) {
 	switch settingType {
 	case constants.UserSettingPrefix:
@@ -123,57 +134,62 @@ func (m *Menu) saveSetting(event interfaces.CommonEvent, s *session.Session, set
 	case constants.GuildSettingPrefix:
 		m.saveGuildSetting(event, customID, option)
 	default:
-		m.handler.logger.Warn("unknown setting type", zap.String("settingType", settingType), zap.String("customID", customID), zap.String("option", option))
+		m.handler.logger.Warn("unknown setting type", zap.String("settingType", settingType))
 	}
 }
 
-// saveUserSetting saves a user-specific setting.
+// saveUserSetting updates user-specific settings in both the database and session.
+// It handles different setting types and validates the input before saving.
 func (m *Menu) saveUserSetting(s *session.Session, customID, option string) {
 	var settings *database.UserSetting
 	s.GetInterface(constants.SessionKeyUserSettings, &settings)
 
 	switch customID {
 	case constants.StreamerModeOption:
+		// Parse and save streamer mode toggle
 		var err error
 		if settings.StreamerMode, err = strconv.ParseBool(option); err != nil {
 			m.handler.logger.Error("Failed to parse streamer mode", zap.Error(err))
 			return
 		}
+
 	case constants.DefaultSortOption:
+		// Save sort preference directly
 		settings.DefaultSort = option
+
 	default:
-		m.handler.logger.Warn("Unknown user setting", zap.String("customID", customID), zap.String("option", option))
+		m.handler.logger.Warn("Unknown user setting", zap.String("customID", customID))
 		return
 	}
 
-	// Save the user settings
+	// Save to database and update session
 	if err := m.handler.db.Settings().SaveUserSettings(settings); err != nil {
 		m.handler.logger.Error("Failed to save user settings", zap.Error(err))
 		return
 	}
 
-	// Update settings in session
 	s.Set(constants.SessionKeyUserSettings, settings)
 }
 
-// saveGuildSetting saves a guild-specific setting.
+// saveGuildSetting updates guild-specific settings in the database.
+// It handles role whitelist changes through the toggle mechanism.
 func (m *Menu) saveGuildSetting(event interfaces.CommonEvent, customID, option string) {
 	guildID := uint64(*event.GuildID())
 
 	switch customID {
 	case constants.WhitelistedRolesOption:
-		// Parse the role ID
+		// Parse and toggle the selected role
 		roleID, err := strconv.ParseUint(option, 10, 64)
 		if err != nil {
 			m.handler.logger.Error("failed to parse role ID", zap.Error(err))
 			return
 		}
 
-		// Toggle the whitelisted role
 		if err := m.handler.db.Settings().ToggleWhitelistedRole(guildID, roleID); err != nil {
 			m.handler.logger.Error("failed to toggle whitelisted role", zap.Error(err))
 		}
+
 	default:
-		m.handler.logger.Warn("unknown guild setting", zap.String("customID", customID), zap.String("option", option))
+		m.handler.logger.Warn("unknown guild setting", zap.String("customID", customID))
 	}
 }

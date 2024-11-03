@@ -1,7 +1,6 @@
 package purge
 
 import (
-	"fmt"
 	"time"
 
 	"github.com/jaxron/roapi.go/pkg/api"
@@ -11,12 +10,13 @@ import (
 )
 
 const (
-	DefaultClearedPurgeDays = 30
-	ClearedPurgeInterval    = 1 * time.Hour
-	ClearedPurgeBatchSize   = 100
+	// ClearedUsersToProcess sets how many users to process in each batch.
+	// This helps control memory usage and database load.
+	ClearedUsersToProcess = 200
 )
 
-// ClearedWorker represents a purge worker that removes old cleared users.
+// ClearedWorker removes old cleared users from the database.
+// It helps maintain database size by removing users that were cleared long ago.
 type ClearedWorker struct {
 	db     *database.Database
 	roAPI  *api.API
@@ -24,7 +24,7 @@ type ClearedWorker struct {
 	logger *zap.Logger
 }
 
-// NewClearedWorker creates a new cleared user purge worker instance.
+// NewClearedWorker creates a ClearedWorker.
 func NewClearedWorker(db *database.Database, roAPI *api.API, bar *progress.Bar, logger *zap.Logger) *ClearedWorker {
 	return &ClearedWorker{
 		db:     db,
@@ -34,69 +34,46 @@ func NewClearedWorker(db *database.Database, roAPI *api.API, bar *progress.Bar, 
 	}
 }
 
-// Start begins the cleared user purge worker's main loop.
+// Start begins the purge worker's main loop:
+// 1. Finds users cleared more than 30 days ago
+// 2. Removes them from the database in batches
+// 3. Updates statistics
+// 4. Repeats until stopped.
 func (p *ClearedWorker) Start() {
-	p.logger.Info("Cleared User Purge Worker started")
-
-	for {
-		nextRun := time.Now().Add(ClearedPurgeInterval)
-
-		// Perform the purge operations
-		p.performPurge()
-
-		// Update progress bar until next run
-		p.updateProgressUntilNextRun(nextRun)
-	}
-}
-
-// performPurge executes the purge operation for cleared users.
-func (p *ClearedWorker) performPurge() {
+	p.logger.Info("Cleared Worker started")
 	p.bar.SetTotal(100)
-	p.bar.Reset()
 
-	// Calculate the cutoff date for cleared users
-	cutoffDate := time.Now().AddDate(0, 0, -DefaultClearedPurgeDays)
-
-	// Get and purge old cleared users in batches
 	for {
-		p.bar.SetStepMessage("Purging old cleared users")
+		p.bar.Reset()
 
-		// Get and purge a batch of cleared users
-		affected, err := p.db.Users().PurgeOldClearedUsers(cutoffDate, ClearedPurgeBatchSize)
+		// Step 1: Calculate cutoff date (40%)
+		p.bar.SetStepMessage("Calculating cutoff date")
+		cutoffDate := time.Now().AddDate(0, 0, -30)
+		p.bar.Increment(40)
+
+		// Step 2: Process users (60%)
+		p.bar.SetStepMessage("Processing users")
+		affected, err := p.db.Users().PurgeOldClearedUsers(cutoffDate, ClearedUsersToProcess)
 		if err != nil {
-			p.logger.Error("Failed to purge cleared users", zap.Error(err))
-			break
+			p.logger.Error("Error purging old cleared users", zap.Error(err))
+			time.Sleep(5 * time.Minute) // Wait before trying again
+			continue
+		}
+		p.bar.Increment(60)
+
+		if affected == 0 {
+			p.bar.SetStepMessage("No old cleared users to purge, waiting")
+			p.logger.Info("No old cleared users to purge, waiting", zap.Time("cutoffDate", cutoffDate))
+			time.Sleep(1 * time.Second)
+			continue
 		}
 
-		// If less than batch size was affected, we're done
-		if affected < ClearedPurgeBatchSize {
-			break
-		}
+		// Log results
+		p.logger.Info("Purged old cleared users",
+			zap.Int("affected", affected),
+			zap.Time("cutoffDate", cutoffDate))
 
-		p.logger.Info("Purged batch of cleared users",
-			zap.Int("count", affected),
-			zap.Time("cutoff_date", cutoffDate))
-
-		// Add a small delay between batches to reduce database load
-		time.Sleep(100 * time.Millisecond)
-	}
-
-	p.bar.SetCurrent(100)
-}
-
-// updateProgressUntilNextRun updates the progress bar until the next run time.
-func (p *ClearedWorker) updateProgressUntilNextRun(nextRun time.Time) {
-	p.bar.Reset()
-	totalDuration := ClearedPurgeInterval
-	p.bar.SetTotal(int64(totalDuration.Seconds()))
-
-	ticker := time.NewTicker(1 * time.Second)
-	defer ticker.Stop()
-
-	for remaining := time.Until(nextRun); remaining > 0; remaining = time.Until(nextRun) {
-		<-ticker.C
-		elapsed := totalDuration - remaining
-		p.bar.SetCurrent(int64(elapsed.Seconds()))
-		p.bar.SetStepMessage(fmt.Sprintf("Next purge in %s", remaining.Round(time.Second)))
+		// Short pause before next iteration
+		time.Sleep(1 * time.Second)
 	}
 }

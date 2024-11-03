@@ -17,20 +17,25 @@ import (
 )
 
 const (
+	// WorkerLogDir specifies where worker log files are stored.
 	WorkerLogDir = "logs/worker_logs"
 
+	// AIWorker processes user content through AI analysis.
 	AIWorker           = "ai"
 	AIWorkerTypeFriend = "friend"
 	AIWorkerTypeMember = "member"
 
+	// PurgeWorker removes outdated or banned data from the system.
 	PurgeWorker             = "purge"
 	PurgeWorkerTypeBanned   = "banned"
 	PurgeWorkerTypeCleared  = "cleared"
 	PurgeWorkerTypeTracking = "tracking"
 
+	// StatsWorker handles statistics aggregation and storage.
 	StatsWorker           = "stats"
 	StatsWorkerTypeUpload = "upload"
 
+	// QueueWorker manages the processing queue for user checks.
 	QueueWorker            = "queue"
 	QueueWorkerTypeProcess = "process"
 )
@@ -41,7 +46,8 @@ func main() {
 	}
 }
 
-// newRootCmd creates a new root command.
+// newRootCmd creates the root command with subcommands for each worker type.
+// The workers flag controls how many instances of each worker to start.
 func newRootCmd() *cobra.Command {
 	rootCmd := &cobra.Command{
 		Use:   "worker",
@@ -57,7 +63,9 @@ func newRootCmd() *cobra.Command {
 	return rootCmd
 }
 
-// newAIWorkerCmd creates a new AI worker command.
+// newAIWorkerCmd creates subcommands for AI-based content analysis:
+// - friend: analyzes user friend networks
+// - member: analyzes group members.
 func newAIWorkerCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   AIWorker,
@@ -87,7 +95,10 @@ func newAIWorkerCmd() *cobra.Command {
 	return cmd
 }
 
-// newPurgeWorkerCmd creates a new purge worker command.
+// newPurgeWorkerCmd creates subcommands for data cleanup:
+// - banned: removes banned users
+// - cleared: removes old cleared users
+// - tracking: removes stale tracking data.
 func newPurgeWorkerCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   PurgeWorker,
@@ -125,7 +136,8 @@ func newPurgeWorkerCmd() *cobra.Command {
 	return cmd
 }
 
-// newStatsWorkerCmd creates a new statistics worker command.
+// newStatsWorkerCmd creates a command for statistics management.
+// Only one stats worker is needed to handle all statistics operations.
 func newStatsWorkerCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   StatsWorker,
@@ -136,7 +148,8 @@ func newStatsWorkerCmd() *cobra.Command {
 	}
 }
 
-// newQueueWorkerCmd creates a new queue worker command.
+// newQueueWorkerCmd creates a command for queue processing.
+// Multiple workers can process the queue concurrently.
 func newQueueWorkerCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   QueueWorker,
@@ -148,7 +161,11 @@ func newQueueWorkerCmd() *cobra.Command {
 	}
 }
 
-// runWorkers starts the specified number of workers of the given type.
+// runWorkers starts multiple instances of a worker type:
+// 1. Initializes the application and creates progress bars
+// 2. Starts the renderer to show progress
+// 3. Launches workers in goroutines
+// 4. Waits for all workers to finish.
 func runWorkers(workerType, subType string, count int) {
 	app, err := setup.InitializeApp(WorkerLogDir)
 	if err != nil {
@@ -219,7 +236,10 @@ func runWorkers(workerType, subType string, count int) {
 	log.Println("All workers have finished. Exiting.")
 }
 
-// runWorker runs a worker in a loop, restarting it if it stops unexpectedly.
+// runWorker runs a single worker in a loop with error recovery:
+// 1. Catches panics to prevent worker crashes
+// 2. Restarts the worker after a delay if it stops
+// 3. Logs any errors that occur.
 func runWorker(w interface{ Start() }, logger *zap.Logger) {
 	defer func() {
 		if r := recover(); r != nil {

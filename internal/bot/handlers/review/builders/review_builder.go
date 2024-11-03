@@ -18,13 +18,19 @@ import (
 )
 
 const (
-	FriendsLimit       = 10
+	// FriendsLimit caps the number of friends shown in the main review embed
+	// to prevent the embed from becoming too long.
+	FriendsLimit = 10
+
+	// ReviewHistoryLimit caps the number of review history entries shown
+	// to keep the embed focused on recent activity.
 	ReviewHistoryLimit = 5
 )
 
+// Regular expression to clean up excessive newlines in descriptions.
 var multipleNewlinesRegex = regexp.MustCompile(`\n{4,}`)
 
-// ReviewEmbed builds the embed for the review message.
+// ReviewEmbed creates the visual layout for reviewing a flagged user.
 type ReviewEmbed struct {
 	user           *database.FlaggedUser
 	translator     *translator.Translator
@@ -34,7 +40,8 @@ type ReviewEmbed struct {
 	db             *database.Database
 }
 
-// NewReviewEmbed creates a new ReviewEmbed.
+// NewReviewEmbed loads user data and settings from the session state to create
+// a new embed builder. The translator is used for description localization.
 func NewReviewEmbed(s *session.Session, translator *translator.Translator, db *database.Database) *ReviewEmbed {
 	var user *database.FlaggedUser
 	s.GetInterface(constants.SessionKeyTarget, &user)
@@ -51,8 +58,14 @@ func NewReviewEmbed(s *session.Session, translator *translator.Translator, db *d
 	}
 }
 
-// Build constructs and returns the discord.Embed.
+// Build creates a Discord message with user information in an embed and adds
+// interactive components for reviewing the user. The embed includes:
+// - Basic user info (ID, name, creation date)
+// - User description (translated if non-English)
+// - Lists of groups, friends, and outfits
+// - Review history from the database.
 func (b *ReviewEmbed) Build() *discord.MessageUpdateBuilder {
+	// Create embed with user information fields
 	embed := discord.NewEmbedBuilder().
 		AddField("ID", fmt.Sprintf(
 			"[%s](https://www.roblox.com/users/%d/profile)",
@@ -73,7 +86,9 @@ func (b *ReviewEmbed) Build() *discord.MessageUpdateBuilder {
 		AddField("Review History", b.getReviewHistory(), false).
 		SetColor(utils.GetMessageEmbedColor(b.streamerMode))
 
+	// Add interactive components for sorting and actions
 	components := []discord.ContainerComponent{
+		// Sorting options menu
 		discord.NewActionRow(
 			discord.NewStringSelectMenu(constants.SortOrderSelectMenuCustomID, "Sorting",
 				discord.NewStringSelectMenuOption("Selected by random", database.SortByRandom).
@@ -87,6 +102,7 @@ func (b *ReviewEmbed) Build() *discord.MessageUpdateBuilder {
 					WithEmoji(discord.ComponentEmoji{Name: "📅"}),
 			),
 		),
+		// Action options menu
 		discord.NewActionRow(
 			discord.NewStringSelectMenu(constants.ActionSelectMenuCustomID, "Actions",
 				discord.NewStringSelectMenuOption("Ban with reason", constants.BanWithReasonButtonCustomID).
@@ -99,6 +115,7 @@ func (b *ReviewEmbed) Build() *discord.MessageUpdateBuilder {
 					WithEmoji(discord.ComponentEmoji{Name: "🌐"}),
 			),
 		),
+		// Quick action buttons
 		discord.NewActionRow(
 			discord.NewSecondaryButton("◀️", constants.BackButtonCustomID),
 			discord.NewSecondaryButton("🔄", constants.RecheckButtonCustomID),
@@ -108,13 +125,14 @@ func (b *ReviewEmbed) Build() *discord.MessageUpdateBuilder {
 		),
 	}
 
-	// Create the message update builder
+	// Create the message builder
 	builder := discord.NewMessageUpdateBuilder()
 
-	// Set thumbnail URL or use placeholder image
+	// Add user thumbnail or placeholder image
 	if b.user.ThumbnailURL != "" {
 		embed.SetThumbnail(b.user.ThumbnailURL)
 	} else {
+		// Load and attach placeholder image
 		placeholderImage, err := assets.Images.Open("images/content_deleted.png")
 		if err == nil {
 			builder.SetFiles(discord.NewFile("content_deleted.png", "", placeholderImage))
@@ -288,7 +306,8 @@ func (b *ReviewEmbed) getReviewHistory() string {
 
 	history := make([]string, 0, len(logs))
 	for _, log := range logs {
-		history = append(history, fmt.Sprintf("- <@%d> (%s) - <t:%d:R>", log.ReviewerID, log.ActivityType, log.ActivityTimestamp.Unix()))
+		history = append(history, fmt.Sprintf("- <@%d> (%s) - <t:%d:R>",
+			log.ReviewerID, log.ActivityType.String(), log.ActivityTimestamp.Unix()))
 	}
 
 	if total > ReviewHistoryLimit {

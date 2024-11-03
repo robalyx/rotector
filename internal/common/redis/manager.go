@@ -10,21 +10,34 @@ import (
 )
 
 const (
-	CacheDBIndex   = 0
-	StatsDBIndex   = 1
-	QueueDBIndex   = 2
+	// CacheDBIndex stores temporary data like API responses and computation results
+	// in database 0 to keep it separate from other Redis data.
+	CacheDBIndex = 0
+
+	// StatsDBIndex dedicates database 1 for tracking metrics and counters
+	// to allow independent management of statistics data.
+	StatsDBIndex = 1
+
+	// QueueDBIndex reserves database 2 for job queues and task management
+	// to isolate queue operations from other operations.
+	QueueDBIndex = 2
+
+	// SessionDBIndex uses database 3 for user session storage
+	// to prevent session data from interfering with other operations.
 	SessionDBIndex = 3
 )
 
-// Manager handles Redis client management.
+// Manager maintains a thread-safe mapping of database indices to Redis clients.
+// Each database index gets its own dedicated connection pool through rueidis.
 type Manager struct {
 	clients map[int]rueidis.Client
 	config  *config.Config
 	logger  *zap.Logger
-	mu      sync.RWMutex
+	mu      sync.RWMutex // Protects concurrent access to the clients map
 }
 
-// NewManager creates a new Redis manager instance.
+// NewManager initializes the Redis connection manager with an empty client pool.
+// Actual client connections are created lazily when first requested.
 func NewManager(config *config.Config, logger *zap.Logger) *Manager {
 	return &Manager{
 		clients: make(map[int]rueidis.Client),
@@ -33,17 +46,18 @@ func NewManager(config *config.Config, logger *zap.Logger) *Manager {
 	}
 }
 
-// GetClient returns a Redis client for the given database index.
-// If the client doesn't exist, it creates a new one.
+// GetClient retrieves or creates a Redis client for the specified database index.
+// Uses a mutex to safely handle concurrent client creation.
 func (m *Manager) GetClient(dbIndex int) (rueidis.Client, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
+	// Check if client already exists
 	if client, exists := m.clients[dbIndex]; exists {
 		return client, nil
 	}
 
-	// Create new client if it doesn't exist
+	// Create new client with database selection
 	client, err := rueidis.NewClient(rueidis.ClientOption{
 		InitAddress: []string{fmt.Sprintf("%s:%d", m.config.Redis.Host, m.config.Redis.Port)},
 		Username:    m.config.Redis.Username,
@@ -59,7 +73,8 @@ func (m *Manager) GetClient(dbIndex int) (rueidis.Client, error) {
 	return client, nil
 }
 
-// Close closes all Redis clients.
+// Close gracefully shuts down all active Redis clients in the pool.
+// Safe to call multiple times as it cleans up only existing connections.
 func (m *Manager) Close() {
 	m.mu.Lock()
 	defer m.mu.Unlock()

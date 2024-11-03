@@ -13,49 +13,72 @@ import (
 )
 
 const (
-	// QueueInfoExpiry is how long queue info should be kept.
-	QueueInfoExpiry = 24 * time.Hour
-	AbortedExpiry   = 24 * time.Hour
+	// QueueInfoExpiry controls how long queue metadata (status, position, priority)
+	// remains valid in Redis before automatic cleanup.
+	QueueInfoExpiry = 1 * time.Hour
 
-	// Queue priorities.
-	HighPriority   = "high"
+	// AbortedExpiry defines the TTL for aborted status flags in Redis,
+	// allowing automatic cleanup of stale abort markers.
+	AbortedExpiry = 1 * time.Hour
+
+	// HighPriority items are processed first through a dedicated Redis sorted set.
+	// Used for urgent operations that need immediate attention.
+	HighPriority = "high"
+	// NormalPriority items are processed after high priority items.
+	// Represents the default processing tier for standard operations.
 	NormalPriority = "normal"
-	LowPriority    = "low"
+	// LowPriority items are processed last, allowing higher priority items to skip ahead.
+	// Suitable for background tasks that can tolerate delays.
+	LowPriority = "low"
 
-	// Queue status.
-	StatusPending    = "Pending"
+	// StatusPending indicates an item is waiting in the queue.
+	// Initial state for all newly added items before processing begins.
+	StatusPending = "Pending"
+	// StatusProcessing indicates an item is currently being handled.
+	// Prevents multiple workers from processing the same item simultaneously.
 	StatusProcessing = "Processing"
-	StatusComplete   = "Complete"
-	StatusSkipped    = "Skipped"
+	// StatusComplete indicates successful processing of an item.
+	// Terminal state for items that finished their queue lifecycle normally.
+	StatusComplete = "Complete"
+	// StatusSkipped indicates an item was intentionally not processed.
+	// Terminal state for items that were removed from the queue without processing.
+	StatusSkipped = "Skipped"
 
-	// Redis key prefixes.
-	QueueStatusPrefix   = "queue_status:"
+	// QueueStatusPrefix namespaces Redis keys storing item processing states.
+	// Keys are formatted as "queue_status:{userID}".
+	QueueStatusPrefix = "queue_status:"
+	// QueuePositionPrefix namespaces Redis keys tracking item positions.
+	// Keys are formatted as "queue_position:{userID}" .
 	QueuePositionPrefix = "queue_position:"
+	// QueuePriorityPrefix namespaces Redis keys mapping items to priority levels.
+	// Keys are formatted as "queue_priority:{userID}".
 	QueuePriorityPrefix = "queue_priority:"
-
-	// Aborted prefix.
+	// AbortedPrefix namespaces Redis keys marking manually cancelled items.
+	// Keys are formatted as "aborted:{userID}".
 	AbortedPrefix = "aborted:"
 )
 
-// Item represents a queue item.
+// Item encapsulates all metadata needed to process a queued task.
 type Item struct {
-	UserID      uint64    `json:"userId"`
-	Priority    string    `json:"priority"`
-	Reason      string    `json:"reason"`
-	AddedBy     uint64    `json:"addedBy"`
-	AddedAt     time.Time `json:"addedAt"`
-	Status      string    `json:"status"`
-	CheckExists bool      `json:"checkExists"`
+	UserID      uint64    `json:"userId"`      // Target user for the queued operation
+	Priority    string    `json:"priority"`    // Processing priority level
+	Reason      string    `json:"reason"`      // Why the item was queued
+	AddedBy     uint64    `json:"addedBy"`     // User ID who initiated the queue operation
+	AddedAt     time.Time `json:"addedAt"`     // Timestamp for FIFO ordering within priority
+	Status      string    `json:"status"`      // Current processing status
+	CheckExists bool      `json:"checkExists"` // Whether to verify user exists before processing
 }
 
-// Manager handles queue operations.
+// Manager orchestrates queue operations using Redis sorted sets for priority queues
+// and separate keys for metadata storage. Thread-safe through Redis transactions.
 type Manager struct {
-	db     *database.Database
-	client rueidis.Client
-	logger *zap.Logger
+	db     *database.Database // For persistent storage and activity logging
+	client rueidis.Client     // Redis client for queue operations
+	logger *zap.Logger        // Structured logging
 }
 
-// NewManager creates a new queue manager.
+// NewManager initializes a queue manager with its required dependencies.
+// The manager uses Redis sorted sets for queue storage and regular keys for metadata.
 func NewManager(db *database.Database, client rueidis.Client, logger *zap.Logger) *Manager {
 	return &Manager{
 		db:     db,

@@ -15,10 +15,12 @@ import (
 )
 
 const (
-	GroupUsersToProcess = 200
+	// GroupUsersToProcess sets how many users to process in each batch.
+	GroupUsersToProcess = 100
 )
 
-// MemberWorker represents a group worker that processes group members.
+// MemberWorker processes group member lists by checking each member's
+// status and analyzing their profiles for inappropriate content.
 type MemberWorker struct {
 	db          *database.Database
 	roAPI       *api.API
@@ -28,7 +30,7 @@ type MemberWorker struct {
 	logger      *zap.Logger
 }
 
-// NewMemberWorker creates a new group worker instance.
+// NewMemberWorker creates a MemberWorker.
 func NewMemberWorker(db *database.Database, openaiClient *openai.Client, roAPI *api.API, bar *progress.Bar, logger *zap.Logger) *MemberWorker {
 	userFetcher := fetcher.NewUserFetcher(roAPI, logger)
 	userChecker := checker.NewUserChecker(db, bar, roAPI, openaiClient, userFetcher, logger)
@@ -43,7 +45,11 @@ func NewMemberWorker(db *database.Database, openaiClient *openai.Client, roAPI *
 	}
 }
 
-// Start begins the group worker's main loop.
+// Start begins the group worker's main loop:
+// 1. Gets a confirmed group to process
+// 2. Fetches member lists in batches
+// 3. Checks members for inappropriate content
+// 4. Repeats until stopped.
 func (g *MemberWorker) Start() {
 	g.logger.Info("Group Worker started")
 	g.bar.SetTotal(100)
@@ -88,13 +94,16 @@ func (g *MemberWorker) Start() {
 	}
 }
 
-// processGroup handles the processing of a single group.
+// processGroup builds a list of member IDs to check by:
+// 1. Fetching member lists in batches using cursor pagination
+// 2. Filtering out already processed users
+// 3. Collecting enough IDs to fill a batch.
 func (g *MemberWorker) processGroup(groupID uint64, userIDs []uint64) ([]uint64, error) {
 	g.logger.Info("Processing group", zap.Uint64("groupID", groupID))
 
 	cursor := ""
 	for len(userIDs) < GroupUsersToProcess {
-		// Fetch group users
+		// Fetch group users with cursor pagination
 		builder := groups.NewGroupUsersBuilder(groupID).WithLimit(100).WithCursor(cursor)
 		groupUsers, err := g.roAPI.Groups().GetGroupUsers(context.Background(), builder.Build())
 		if err != nil {
@@ -107,7 +116,7 @@ func (g *MemberWorker) processGroup(groupID uint64, userIDs []uint64) ([]uint64,
 			break
 		}
 
-		// Extract user IDs
+		// Extract user IDs from member list
 		newUserIDs := make([]uint64, len(groupUsers.Data))
 		for i, groupUser := range groupUsers.Data {
 			newUserIDs[i] = groupUser.User.UserID
@@ -134,6 +143,7 @@ func (g *MemberWorker) processGroup(groupID uint64, userIDs []uint64) ([]uint64,
 			zap.Int("newUsers", len(newUserIDs)-len(existingUsers)),
 			zap.Int("userIDs", len(userIDs)))
 
+		// Move to next page if available
 		if groupUsers.NextPageCursor == nil {
 			break
 		}

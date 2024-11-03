@@ -8,7 +8,9 @@ import (
 	"go.uber.org/zap"
 )
 
-// Handler manages the log querying process.
+// Handler coordinates log viewing operations and their interactions.
+// It maintains references to the database, session manager, and other handlers
+// needed for processing log queries.
 type Handler struct {
 	db                *database.Database
 	sessionManager    *session.Manager
@@ -18,7 +20,8 @@ type Handler struct {
 	dashboardHandler  interfaces.DashboardHandler
 }
 
-// New creates a new Handler instance.
+// New creates a Handler by initializing the log menu and registering its
+// page with the pagination manager.
 func New(
 	db *database.Database,
 	sessionManager *session.Manager,
@@ -34,13 +37,15 @@ func New(
 		logger:            logger,
 	}
 
+	// Initialize menu and register its page
 	h.logMenu = NewMenu(h)
 	paginationManager.AddPage(h.logMenu.page)
 
 	return h
 }
 
-// ShowLogMenu displays the log querying menu.
+// ShowLogMenu prepares and displays the log interface by initializing
+// session data with default values and loading user preferences.
 func (h *Handler) ShowLogMenu(event interfaces.CommonEvent, s *session.Session) {
 	h.logMenu.ShowLogMenu(event, s)
 }

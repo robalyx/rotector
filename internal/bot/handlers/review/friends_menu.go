@@ -17,13 +17,17 @@ import (
 	"go.uber.org/zap"
 )
 
-// FriendsMenu handles the friends viewer functionality.
+// FriendsMenu handles the display and interaction logic for viewing a user's friends.
+// It works with the friends builder to create paginated views of friend avatars
+// and manages friend status indicators.
 type FriendsMenu struct {
 	handler *Handler
 	page    *pagination.Page
 }
 
-// NewFriendsMenu creates a new FriendsMenu instance.
+// NewFriendsMenu creates a FriendsMenu and sets up its page with message builders
+// and interaction handlers. The page is configured to show friend information
+// and handle navigation.
 func NewFriendsMenu(h *Handler) *FriendsMenu {
 	m := FriendsMenu{handler: h}
 	m.page = &pagination.Page{
@@ -36,19 +40,20 @@ func NewFriendsMenu(h *Handler) *FriendsMenu {
 	return &m
 }
 
-// ShowFriendsMenu shows the friends menu for the given page.
+// ShowFriendsMenu prepares and displays the friends interface for a specific page.
+// It loads friend data, checks their status, and creates a grid of avatars.
 func (m *FriendsMenu) ShowFriendsMenu(event *events.ComponentInteractionCreate, s *session.Session, page int) {
 	var user *database.FlaggedUser
 	s.GetInterface(constants.SessionKeyTarget, &user)
 
-	// Check if the user has friends
+	// Return to review menu if user has no friends
 	if len(user.Friends) == 0 {
 		m.handler.reviewMenu.ShowReviewMenu(event, s, "No friends found for this user.")
 		return
 	}
 	friends := user.Friends
 
-	// Get friends for the current page
+	// Calculate page boundaries and get subset of friends
 	start := page * constants.FriendsPerPage
 	end := start + constants.FriendsPerPage
 	if end > len(friends) {
@@ -56,7 +61,7 @@ func (m *FriendsMenu) ShowFriendsMenu(event *events.ComponentInteractionCreate, 
 	}
 	pageFriends := friends[start:end]
 
-	// Check which friends are flagged
+	// Check database for flagged/confirmed status
 	flaggedFriends, err := m.getFlaggedFriends(pageFriends)
 	if err != nil {
 		m.handler.logger.Error("Failed to get flagged friends", zap.Error(err))
@@ -64,7 +69,7 @@ func (m *FriendsMenu) ShowFriendsMenu(event *events.ComponentInteractionCreate, 
 		return
 	}
 
-	// Fetch thumbnails for the page friends
+	// Download and process friend avatars
 	friendsThumbnailURLs, err := m.fetchFriendsThumbnails(pageFriends)
 	if err != nil {
 		m.handler.logger.Error("Failed to fetch friends thumbnails", zap.Error(err))
@@ -72,7 +77,7 @@ func (m *FriendsMenu) ShowFriendsMenu(event *events.ComponentInteractionCreate, 
 		return
 	}
 
-	// Get thumbnail URLs for the page friends
+	// Extract URLs in page order for grid creation
 	pageThumbnailURLs := make([]string, len(pageFriends))
 	for i, friend := range pageFriends {
 		if url, ok := friendsThumbnailURLs[friend.ID]; ok {
@@ -80,7 +85,7 @@ func (m *FriendsMenu) ShowFriendsMenu(event *events.ComponentInteractionCreate, 
 		}
 	}
 
-	// Download and merge friend images
+	// Create grid image from avatars
 	buf, err := utils.MergeImages(
 		m.handler.roAPI.GetClient(),
 		pageThumbnailURLs,
@@ -94,7 +99,7 @@ func (m *FriendsMenu) ShowFriendsMenu(event *events.ComponentInteractionCreate, 
 		return
 	}
 
-	// Set the data for the page
+	// Store data in session for the message builder
 	s.Set(constants.SessionKeyFriends, pageFriends)
 	s.Set(constants.SessionKeyFlaggedFriends, flaggedFriends)
 	s.Set(constants.SessionKeyStart, start)
@@ -105,7 +110,8 @@ func (m *FriendsMenu) ShowFriendsMenu(event *events.ComponentInteractionCreate, 
 	m.handler.paginationManager.NavigateTo(event, s, m.page, "")
 }
 
-// getFlaggedFriends gets the flagged friends for the given friends.
+// getFlaggedFriends checks the database to find which friends are flagged or confirmed.
+// Returns a map of friend IDs to their status (flagged/confirmed).
 func (m *FriendsMenu) getFlaggedFriends(friends []types.Friend) (map[uint64]string, error) {
 	friendIDs := make([]uint64, len(friends))
 	for i, friend := range friends {
@@ -120,7 +126,8 @@ func (m *FriendsMenu) getFlaggedFriends(friends []types.Friend) (map[uint64]stri
 	return flaggedFriends, nil
 }
 
-// handlePageNavigation handles the page navigation for the friends menu.
+// handlePageNavigation processes navigation button clicks by calculating
+// the target page number and refreshing the display.
 func (m *FriendsMenu) handlePageNavigation(event *events.ComponentInteractionCreate, s *session.Session, customID string) {
 	action := utils.ViewerAction(customID)
 	switch action {
@@ -128,7 +135,7 @@ func (m *FriendsMenu) handlePageNavigation(event *events.ComponentInteractionCre
 		var user *database.FlaggedUser
 		s.GetInterface(constants.SessionKeyTarget, &user)
 
-		// Get the page number for the action
+		// Calculate max page and validate navigation action
 		maxPage := (len(user.Friends) - 1) / constants.FriendsPerPage
 		page, ok := action.ParsePageAction(s, action, maxPage)
 		if !ok {
@@ -137,19 +144,22 @@ func (m *FriendsMenu) handlePageNavigation(event *events.ComponentInteractionCre
 		}
 
 		m.ShowFriendsMenu(event, s, page)
+
 	case constants.BackButtonCustomID:
 		m.handler.reviewMenu.ShowReviewMenu(event, s, "")
+
 	default:
 		m.handler.logger.Warn("Invalid friends viewer action", zap.String("action", string(action)))
 		m.handler.paginationManager.RespondWithError(event, "Invalid interaction.")
 	}
 }
 
-// fetchFriendsThumbnails fetches thumbnails for the given friends.
+// fetchFriendsThumbnails downloads avatar images for a batch of friends.
+// Returns a map of friend IDs to their avatar URLs.
 func (m *FriendsMenu) fetchFriendsThumbnails(friends []types.Friend) (map[uint64]string, error) {
 	thumbnailURLs := make(map[uint64]string)
 
-	// Create thumbnail requests for each friend
+	// Create batch request for all friend avatars
 	requests := thumbnails.NewBatchThumbnailsBuilder()
 	for _, user := range friends {
 		requests.AddRequest(types.ThumbnailRequest{
@@ -161,14 +171,14 @@ func (m *FriendsMenu) fetchFriendsThumbnails(friends []types.Friend) (map[uint64
 		})
 	}
 
-	// Fetch batch thumbnails
+	// Send batch request to Roblox API
 	thumbnailResponses, err := m.handler.roAPI.Thumbnails().GetBatchThumbnails(context.Background(), requests.Build())
 	if err != nil {
 		m.handler.logger.Error("Error fetching batch thumbnails", zap.Error(err))
 		return thumbnailURLs, err
 	}
 
-	// Process thumbnail responses
+	// Process responses and store URLs
 	for _, response := range thumbnailResponses {
 		if response.State == types.ThumbnailStateCompleted && response.ImageURL != nil {
 			thumbnailURLs[response.TargetID] = *response.ImageURL

@@ -22,13 +22,18 @@ import (
 )
 
 var (
+	// ErrInvalidDateRangeFormat indicates that the date range string is not in the format "YYYY-MM-DD to YYYY-MM-DD".
 	ErrInvalidDateRangeFormat = errors.New("invalid date range format")
-	ErrInvalidStartDate       = errors.New("invalid start date")
-	ErrInvalidEndDate         = errors.New("invalid end date")
+	// ErrInvalidStartDate indicates that the start date could not be parsed from the provided string.
+	ErrInvalidStartDate = errors.New("invalid start date")
+	// ErrInvalidEndDate indicates that the end date could not be parsed from the provided string.
+	ErrInvalidEndDate = errors.New("invalid end date")
+	// ErrEndDateBeforeStartDate indicates that the end date occurs before the start date.
 	ErrEndDateBeforeStartDate = errors.New("end date cannot be before start date")
 )
 
-// FormatWhitelistedRoles formats the whitelisted roles.
+// FormatWhitelistedRoles converts role IDs to their corresponding names by looking up each ID
+// in the provided roles slice. Returns a comma-separated string of role names.
 func FormatWhitelistedRoles(whitelistedRoles []uint64, roles []discord.Role) string {
 	var roleNames []string
 	for _, roleID := range whitelistedRoles {
@@ -45,12 +50,14 @@ func FormatWhitelistedRoles(whitelistedRoles []uint64, roles []discord.Role) str
 	return strings.Join(roleNames, ", ")
 }
 
-// NormalizeString normalizes a string by removing all newlines and backticks.
+// NormalizeString sanitizes text by replacing newlines with spaces and removing backticks
+// to prevent Discord markdown formatting issues.
 func NormalizeString(s string) string {
 	return strings.ReplaceAll(strings.ReplaceAll(s, "\n", " "), "`", "")
 }
 
-// GetTimestampedSubtext returns a timestamped subtext message.
+// GetTimestampedSubtext formats a message with a Discord timestamp and prefix.
+// The timestamp shows relative time (e.g., "2 minutes ago") using Discord's timestamp format.
 func GetTimestampedSubtext(message string) string {
 	if message != "" {
 		return fmt.Sprintf("-# `%s` <t:%d:R>", message, time.Now().Unix())
@@ -58,9 +65,11 @@ func GetTimestampedSubtext(message string) string {
 	return ""
 }
 
-// MergeImages merges images from thumbnail URLs.
+// MergeImages combines multiple outfit thumbnails into a single grid image.
+// It downloads images concurrently and uses a placeholder for missing or failed downloads.
+// The grid dimensions are determined by the columns and rows parameters.
 func MergeImages(client *client.Client, thumbnailURLs []string, columns, rows, perPage int) (*bytes.Buffer, error) {
-	// Load placeholder image
+	// Load placeholder image for missing or failed thumbnails
 	imageFile, err := assets.Images.Open("images/content_deleted.png")
 	if err != nil {
 		return nil, err
@@ -72,15 +81,14 @@ func MergeImages(client *client.Client, thumbnailURLs []string, columns, rows, p
 		return nil, err
 	}
 
-	// Load grids with empty image
+	// Initialize grid with empty images
 	emptyImg := image.NewRGBA(image.Rect(0, 0, 150, 150))
-
 	grids := make([]*gim.Grid, perPage)
 	for i := range grids {
 		grids[i] = &gim.Grid{Image: emptyImg}
 	}
 
-	// Download and process outfit images concurrently
+	// Download and process outfit images concurrently using goroutines
 	var wg sync.WaitGroup
 	var mu sync.Mutex
 
@@ -107,7 +115,7 @@ func MergeImages(client *client.Client, thumbnailURLs []string, columns, rows, p
 
 			var img image.Image
 
-			// Download image
+			// Download and decode WebP image, use placeholder on failure
 			resp, err := client.NewRequest().URL(imageURL).Do(context.Background())
 			if err != nil {
 				img = placeholderImg
@@ -121,7 +129,7 @@ func MergeImages(client *client.Client, thumbnailURLs []string, columns, rows, p
 				}
 			}
 
-			// Safely update the grids slice
+			// Thread-safe update of the grids slice
 			mu.Lock()
 			grids[index] = &gim.Grid{Image: img}
 			mu.Unlock()
@@ -130,13 +138,13 @@ func MergeImages(client *client.Client, thumbnailURLs []string, columns, rows, p
 
 	wg.Wait()
 
-	// Merge images
+	// Merge all images into a single grid
 	mergedImage, err := gim.New(grids, columns, rows).Merge()
 	if err != nil {
 		return nil, err
 	}
 
-	// Encode the merged image to PNG
+	// Encode the final image as PNG
 	var buf bytes.Buffer
 	if err := png.Encode(&buf, mergedImage); err != nil {
 		return nil, err
@@ -145,7 +153,9 @@ func MergeImages(client *client.Client, thumbnailURLs []string, columns, rows, p
 	return &buf, nil
 }
 
-// CensorString censors a string based on streamer mode.
+// CensorString partially obscures text by replacing middle characters with 'X'.
+// The amount censored is 30% of the string length, centered in the middle.
+// Strings of 2 characters or less are fully censored.
 func CensorString(s string, streamerMode bool) string {
 	// If streamer mode is off, return the original string
 	if !streamerMode {
@@ -177,7 +187,8 @@ func CensorString(s string, streamerMode bool) string {
 	return string(runes)
 }
 
-// GetMessageEmbedColor returns the color of the message embed based on streamer mode.
+// GetMessageEmbedColor returns the appropriate embed color based on streamer mode.
+// This helps visually distinguish when streamer mode is active.
 func GetMessageEmbedColor(streamerMode bool) int {
 	if streamerMode {
 		return constants.StreamerModeEmbedColor
@@ -185,7 +196,9 @@ func GetMessageEmbedColor(streamerMode bool) int {
 	return constants.DefaultEmbedColor
 }
 
-// ParseDateRange parses a date range string in the format "YYYY-MM-DD to YYYY-MM-DD".
+// ParseDateRange converts a date range string into start and end time.Time values.
+// The input format must be "YYYY-MM-DD to YYYY-MM-DD".
+// The end date is automatically set to the end of the day (23:59:59).
 func ParseDateRange(dateRangeStr string) (time.Time, time.Time, error) {
 	// Split the date range string into start and end parts
 	parts := strings.Split(dateRangeStr, "to")
@@ -225,7 +238,8 @@ func ParseDateRange(dateRangeStr string) (time.Time, time.Time, error) {
 	return startDate, endDate, nil
 }
 
-// GetPriorityFromCustomID converts a custom ID to a priority string.
+// GetPriorityFromCustomID maps Discord component custom IDs to queue priority levels.
+// Returns NormalPriority if the custom ID is not recognized.
 func GetPriorityFromCustomID(customID string) string {
 	switch customID {
 	case constants.QueueHighPriorityCustomID:

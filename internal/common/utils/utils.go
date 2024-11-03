@@ -12,7 +12,13 @@ import (
 	"golang.org/x/text/unicode/norm"
 )
 
-// normalizer is a transform.Transformer that normalizes a string.
+// normalizer combines multiple transformers to clean up text:
+// 1. NFKC converts compatibility characters to their canonical forms
+// 2. NFD separates characters and their diacritical marks
+// 3. Remove diacritical marks (Mn category)
+// 4. Remove spaces
+// 5. Convert to lowercase
+// 6. NFC recombines characters into their canonical forms.
 var normalizer = transform.Chain( //nolint:gochecknoglobals
 	norm.NFKC,
 	norm.NFD,
@@ -22,7 +28,11 @@ var normalizer = transform.Chain( //nolint:gochecknoglobals
 	norm.NFC,
 )
 
-// GenerateSchema generates a JSON schema for the given type.
+// GenerateSchema creates a JSON schema for validating data structures.
+// It uses reflection to analyze the type T and build a schema that:
+// - Disallows additional properties
+// - Includes all fields directly (no references)
+// - Adds descriptions from jsonschema tags.
 func GenerateSchema[T any]() interface{} {
 	reflector := jsonschema.Reflector{
 		AllowAdditionalProperties: false,
@@ -33,13 +43,19 @@ func GenerateSchema[T any]() interface{} {
 	return schema
 }
 
-// NormalizeString removes diacritics, spaces, and converts to lowercase.
+// NormalizeString cleans up text by:
+// 1. Removing diacritical marks (é -> e)
+// 2. Removing all spaces
+// 3. Converting to lowercase.
 func NormalizeString(s string) string {
 	result, _, _ := transform.String(normalizer, s)
 	return result
 }
 
-// ContainsNormalized checks if substr is in s, after normalizing both.
+// ContainsNormalized checks if substr exists within s by:
+// 1. Normalizing both strings
+// 2. Using strings.Contains for comparison
+// Empty strings always return false.
 func ContainsNormalized(s, substr string) bool {
 	if s == "" || substr == "" {
 		return false

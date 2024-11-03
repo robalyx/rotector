@@ -1,7 +1,6 @@
 package purge
 
 import (
-	"fmt"
 	"time"
 
 	"github.com/jaxron/roapi.go/pkg/api"
@@ -12,151 +11,77 @@ import (
 	"go.uber.org/zap"
 )
 
-const (
-	DefaultPurgeCutoffDays = 14
-	BatchSize              = 1000
-	PurgeInterval          = 1 * time.Hour
-)
-
-// TrackingWorker represents a purge worker that removes old tracking entries.
+// TrackingWorker removes old tracking data to maintain database size.
+// It periodically checks for and removes stale group and user tracking entries.
 type TrackingWorker struct {
 	db              *database.Database
-	bar             *progress.Bar
 	trackingChecker *checker.TrackingChecker
+	bar             *progress.Bar
 	logger          *zap.Logger
 }
 
-// NewTrackingWorker creates a new purge worker instance.
+// NewTrackingWorker creates a TrackingWorker with database access for
+// cleaning up old tracking data.
 func NewTrackingWorker(db *database.Database, roAPI *api.API, bar *progress.Bar, logger *zap.Logger) *TrackingWorker {
 	thumbnailFetcher := fetcher.NewThumbnailFetcher(roAPI, logger)
 	trackingChecker := checker.NewTrackingChecker(db, roAPI, thumbnailFetcher, logger)
 
 	return &TrackingWorker{
 		db:              db,
-		bar:             bar,
 		trackingChecker: trackingChecker,
+		bar:             bar,
 		logger:          logger,
 	}
 }
 
-// Start begins the purge worker's main loop.
-func (p *TrackingWorker) Start() {
-	p.logger.Info("Tracking Purge Worker started")
+// Start begins the tracking worker's main loop:
+// 1. Checks for groups with enough confirmed users to flag
+// 2. Checks for users with enough confirmed connections to flag
+// 3. Removes tracking data older than 30 days
+// 4. Repeats every hour.
+func (t *TrackingWorker) Start() {
+	t.logger.Info("Tracking Worker started")
+	t.bar.SetTotal(100)
 
 	for {
-		nextRun := time.Now().Add(PurgeInterval)
+		t.bar.Reset()
 
-		// Perform the purge operations
-		p.performPurge()
+		// Step 1: Check group trackings (30%)
+		t.bar.SetStepMessage("Checking group trackings")
+		if err := t.trackingChecker.CheckGroupTrackings(); err != nil {
+			t.logger.Error("Error checking group trackings", zap.Error(err))
+		}
+		t.bar.Increment(30)
 
-		// Update progress bar until next run
-		p.updateProgressUntilNextRun(nextRun)
-	}
-}
+		// Step 2: Check user trackings (30%)
+		t.bar.SetStepMessage("Checking user trackings")
+		if err := t.trackingChecker.CheckUserTrackings(); err != nil {
+			t.logger.Error("Error checking user trackings", zap.Error(err))
+		}
+		t.bar.Increment(30)
 
-// performPurge executes the purge operations for group member and user network trackings.
-func (p *TrackingWorker) performPurge() {
-	p.bar.SetTotal(100)
-	p.bar.Reset()
-
-	// Step 1: Check group trackings (25%)
-	p.bar.SetStepMessage("Checking group trackings")
-	if err := p.trackingChecker.CheckGroupTrackings(); err != nil {
-		p.logger.Error("Failed to check group trackings", zap.Error(err))
-	}
-	p.bar.Increment(25)
-
-	// Step 2: Check user trackings (25%)
-	p.bar.SetStepMessage("Checking user trackings")
-	if err := p.trackingChecker.CheckUserTrackings(); err != nil {
-		p.logger.Error("Failed to check user trackings", zap.Error(err))
-	}
-	p.bar.Increment(25)
-
-	// Step 3: Purge old group member trackings (25%)
-	p.bar.SetStepMessage("Purging old group member trackings")
-	if err := p.purgeGroupMemberTrackings(); err != nil {
-		p.logger.Error("Failed to purge group member trackings", zap.Error(err))
-	}
-	p.bar.Increment(25)
-
-	// Step 4: Purge old user network trackings (25%)
-	p.bar.SetStepMessage("Purging old user network trackings")
-	if err := p.purgeUserNetworkTrackings(); err != nil {
-		p.logger.Error("Failed to purge user network trackings", zap.Error(err))
-	}
-	p.bar.Increment(25)
-}
-
-// updateProgressUntilNextRun updates the progress bar until the next run time.
-func (p *TrackingWorker) updateProgressUntilNextRun(nextRun time.Time) {
-	p.bar.Reset()
-	totalDuration := PurgeInterval
-	p.bar.SetTotal(int64(totalDuration.Seconds()))
-
-	ticker := time.NewTicker(1 * time.Second)
-	defer ticker.Stop()
-
-	for remaining := time.Until(nextRun); remaining > 0; remaining = time.Until(nextRun) {
-		<-ticker.C
-		elapsed := totalDuration - remaining
-		p.bar.SetCurrent(int64(elapsed.Seconds()))
-		p.bar.SetStepMessage(fmt.Sprintf("Next purge in %s", remaining.Round(time.Second)))
-	}
-}
-
-// purgeGroupMemberTrackings removes old entries from group_member_trackings.
-func (p *TrackingWorker) purgeGroupMemberTrackings() error {
-	// Calculate the cutoff date
-	cutoffDate := time.Now().AddDate(0, 0, -DefaultPurgeCutoffDays)
-
-	for {
-		// Purge old group member trackings in batches
-		affected, err := p.db.Tracking().PurgeOldGroupMemberTrackings(cutoffDate, BatchSize)
+		// Step 3: Purge old trackings (40%)
+		t.bar.SetStepMessage("Purging old trackings")
+		cutoffDate := time.Now().AddDate(0, 0, -30) // 30 days ago
+		affected, err := t.db.Tracking().PurgeOldTrackings(cutoffDate)
 		if err != nil {
-			return err
+			t.logger.Error("Error purging old trackings", zap.Error(err))
+		}
+		t.bar.Increment(40)
+
+		if affected == 0 {
+			t.bar.SetStepMessage("No old trackings to purge, waiting")
+			t.logger.Info("No old trackings to purge, waiting", zap.Time("cutoffDate", cutoffDate))
+			time.Sleep(1 * time.Hour)
+			continue
 		}
 
-		p.logger.Info("Purged group member trackings batch",
-			zap.Int("count", affected),
-			zap.Time("cutoff_date", cutoffDate))
+		// Log results
+		t.logger.Info("Purged old trackings",
+			zap.Int("affected", affected),
+			zap.Time("cutoffDate", cutoffDate))
 
-		// If less than BatchSize rows were affected, we're done
-		if affected < BatchSize {
-			break
-		}
-
-		// Add a small delay between batches to reduce database load
-		time.Sleep(100 * time.Millisecond)
+		// Short pause before next iteration
+		time.Sleep(1 * time.Second)
 	}
-
-	return nil
-}
-
-// purgeUserNetworkTrackings removes old entries from user_network_trackings.
-func (p *TrackingWorker) purgeUserNetworkTrackings() error {
-	// Calculate the cutoff date
-	cutoffDate := time.Now().AddDate(0, 0, -DefaultPurgeCutoffDays)
-
-	for {
-		// Purge old user network trackings in batches
-		affected, err := p.db.Tracking().PurgeOldUserNetworkTrackings(cutoffDate, BatchSize)
-		if err != nil {
-			return err
-		}
-
-		p.logger.Info("Purged user network trackings batch",
-			zap.Int("count", affected),
-			zap.Time("cutoff_date", cutoffDate))
-
-		// If less than BatchSize rows were affected, we're done
-		if affected < BatchSize {
-			break
-		}
-
-		// Add a small delay between batches to reduce database load
-		time.Sleep(100 * time.Millisecond)
-	}
-
-	return nil
 }

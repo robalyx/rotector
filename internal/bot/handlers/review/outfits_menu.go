@@ -17,13 +17,16 @@ import (
 	"go.uber.org/zap"
 )
 
-// OutfitsMenu represents the outfit viewer handler.
+// OutfitsMenu handles the display and interaction logic for viewing a user's outfits.
+// It works with the outfits builder to create paginated views of outfit thumbnails.
 type OutfitsMenu struct {
 	handler *Handler
 	page    *pagination.Page
 }
 
-// NewOutfitsMenu returns a new outfit viewer handler.
+// NewOutfitsMenu creates an OutfitsMenu and sets up its page with message builders
+// and interaction handlers. The page is configured to show outfit information
+// and handle navigation.
 func NewOutfitsMenu(h *Handler) *OutfitsMenu {
 	m := OutfitsMenu{handler: h}
 	m.page = &pagination.Page{
@@ -36,12 +39,13 @@ func NewOutfitsMenu(h *Handler) *OutfitsMenu {
 	return &m
 }
 
-// ShowOutfitsMenu shows the outfits menu for the given page.
+// ShowOutfitsMenu prepares and displays the outfits interface for a specific page.
+// It loads outfit data and creates a grid of thumbnails.
 func (m *OutfitsMenu) ShowOutfitsMenu(event *events.ComponentInteractionCreate, s *session.Session, page int) {
 	var user *database.FlaggedUser
 	s.GetInterface(constants.SessionKeyTarget, &user)
 
-	// Check if the user has outfits
+	// Return to review menu if user has no outfits
 	if len(user.Outfits) == 0 {
 		m.handler.reviewMenu.ShowReviewMenu(event, s, "No outfits found for this user.")
 		return
@@ -49,7 +53,7 @@ func (m *OutfitsMenu) ShowOutfitsMenu(event *events.ComponentInteractionCreate, 
 
 	outfits := user.Outfits
 
-	// Get outfits for the current page
+	// Calculate page boundaries and get subset of outfits
 	start := page * constants.OutfitsPerPage
 	end := start + constants.OutfitsPerPage
 	if end > len(outfits) {
@@ -57,7 +61,7 @@ func (m *OutfitsMenu) ShowOutfitsMenu(event *events.ComponentInteractionCreate, 
 	}
 	pageOutfits := outfits[start:end]
 
-	// Fetch thumbnails for the outfits
+	// Download and process outfit thumbnails
 	thumbnailURLs, err := m.fetchOutfitThumbnails(pageOutfits)
 	if err != nil {
 		m.handler.logger.Error("Failed to fetch outfit thumbnails", zap.Error(err))
@@ -65,7 +69,7 @@ func (m *OutfitsMenu) ShowOutfitsMenu(event *events.ComponentInteractionCreate, 
 		return
 	}
 
-	// Download and merge outfit images
+	// Create grid image from thumbnails
 	buf, err := utils.MergeImages(
 		m.handler.roAPI.GetClient(),
 		thumbnailURLs,
@@ -79,7 +83,7 @@ func (m *OutfitsMenu) ShowOutfitsMenu(event *events.ComponentInteractionCreate, 
 		return
 	}
 
-	// Set the data for the page
+	// Store data in session for the message builder
 	s.Set(constants.SessionKeyOutfits, pageOutfits)
 	s.Set(constants.SessionKeyStart, start)
 	s.Set(constants.SessionKeyPaginationPage, page)
@@ -89,7 +93,8 @@ func (m *OutfitsMenu) ShowOutfitsMenu(event *events.ComponentInteractionCreate, 
 	m.handler.paginationManager.NavigateTo(event, s, m.page, "")
 }
 
-// handlePageNavigation handles the page navigation for the outfits menu.
+// handlePageNavigation processes navigation button clicks by calculating
+// the target page number and refreshing the display.
 func (m *OutfitsMenu) handlePageNavigation(event *events.ComponentInteractionCreate, s *session.Session, customID string) {
 	action := utils.ViewerAction(customID)
 	switch action {
@@ -97,7 +102,7 @@ func (m *OutfitsMenu) handlePageNavigation(event *events.ComponentInteractionCre
 		var user *database.FlaggedUser
 		s.GetInterface(constants.SessionKeyTarget, &user)
 
-		// Get the page numbers for the action
+		// Calculate max page and validate navigation action
 		maxPage := (len(user.Outfits) - 1) / constants.OutfitsPerPage
 		page, ok := action.ParsePageAction(s, action, maxPage)
 		if !ok {
@@ -106,19 +111,22 @@ func (m *OutfitsMenu) handlePageNavigation(event *events.ComponentInteractionCre
 		}
 
 		m.ShowOutfitsMenu(event, s, page)
+
 	case constants.BackButtonCustomID:
 		m.handler.reviewMenu.ShowReviewMenu(event, s, "")
+
 	default:
 		m.handler.logger.Warn("Invalid outfits viewer action", zap.String("action", string(action)))
 		m.handler.paginationManager.RespondWithError(event, "Invalid interaction.")
 	}
 }
 
-// fetchOutfitThumbnails fetches thumbnails for the given outfits.
+// fetchOutfitThumbnails downloads thumbnail images for a batch of outfits.
+// Returns a slice of thumbnail URLs in the same order as the input outfits.
 func (m *OutfitsMenu) fetchOutfitThumbnails(outfits []types.Outfit) ([]string, error) {
 	thumbnailURLs := make([]string, constants.OutfitsPerPage)
 
-	// Create thumbnail requests for each outfit
+	// Create batch request for all outfit thumbnails
 	requests := thumbnails.NewBatchThumbnailsBuilder()
 	for i, outfit := range outfits {
 		if i >= constants.OutfitsPerPage {
@@ -134,13 +142,13 @@ func (m *OutfitsMenu) fetchOutfitThumbnails(outfits []types.Outfit) ([]string, e
 		})
 	}
 
-	// Fetch batch thumbnails
+	// Send batch request to Roblox API
 	thumbnailResponses, err := m.handler.roAPI.Thumbnails().GetBatchThumbnails(context.Background(), requests.Build())
 	if err != nil {
 		return thumbnailURLs, err
 	}
 
-	// Process thumbnail responses
+	// Process responses and store URLs
 	for i, response := range thumbnailResponses {
 		if response.State == types.ThumbnailStateCompleted && response.ImageURL != nil {
 			thumbnailURLs[i] = *response.ImageURL

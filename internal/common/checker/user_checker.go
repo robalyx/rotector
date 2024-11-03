@@ -12,7 +12,8 @@ import (
 	"go.uber.org/zap"
 )
 
-// UserChecker handles the common user checking logic for workers.
+// UserChecker coordinates the checking process by combining results from
+// multiple checking methods (AI, groups, friends) and managing the progress bar.
 type UserChecker struct {
 	db               *database.Database
 	bar              *progress.Bar
@@ -24,7 +25,7 @@ type UserChecker struct {
 	logger           *zap.Logger
 }
 
-// NewUserChecker creates a new UserChecker instance.
+// NewUserChecker creates a UserChecker with all required dependencies.
 func NewUserChecker(
 	db *database.Database,
 	bar *progress.Bar,
@@ -45,14 +46,18 @@ func NewUserChecker(
 	}
 }
 
-// ProcessUsers handles the processing of a batch of users.
+// ProcessUsers runs users through multiple checking stages:
+// 1. Group checking - flags users in multiple flagged groups
+// 2. Friend checking - flags users with many flagged friends
+// 3. AI checking - analyzes user content for violations
+// After flagging, it loads additional data (outfits, thumbnails) for flagged users.
 func (c *UserChecker) ProcessUsers(userInfos []*fetcher.Info) {
 	c.logger.Info("Processing users", zap.Int("userInfos", len(userInfos)))
 
 	var flaggedUsers []*database.User
 	var usersForAICheck []*fetcher.Info
 
-	// Check if users belong to a certain number of flagged groups
+	// Check if users belong to flagged groups
 	c.bar.SetStepMessage("Checking user groups")
 	for _, userInfo := range userInfos {
 		user, autoFlagged, err := c.groupChecker.ProcessUserGroups(userInfo)
@@ -88,14 +93,14 @@ func (c *UserChecker) ProcessUsers(userInfos []*fetcher.Info) {
 	}
 	c.bar.Increment(10)
 
-	// If no flagged users, stop here
+	// Stop if no users were flagged
 	if len(flaggedUsers) == 0 {
 		c.logger.Info("No flagged users found", zap.Int("userInfos", len(userInfos)))
 		c.bar.Increment(30)
 		return
 	}
 
-	// Fetch necessary data for flagged users
+	// Load additional data for flagged users
 	c.bar.SetStepMessage("Adding image URLs")
 	flaggedUsers = c.thumbnailFetcher.AddImageURLs(flaggedUsers)
 	c.bar.Increment(10)
@@ -104,7 +109,7 @@ func (c *UserChecker) ProcessUsers(userInfos []*fetcher.Info) {
 	flaggedUsers = c.outfitFetcher.AddOutfits(flaggedUsers)
 	c.bar.Increment(10)
 
-	// Save all flagged users
+	// Save flagged users to database
 	c.bar.SetStepMessage("Saving flagged users")
 	c.db.Users().SaveFlaggedUsers(flaggedUsers)
 	c.bar.Increment(10)

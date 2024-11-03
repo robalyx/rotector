@@ -14,21 +14,27 @@ import (
 	"go.uber.org/zap"
 )
 
-// Menu represents the dashboard.
+// Menu handles the display and interaction logic for the main dashboard.
+// It works with the dashboard builder to show statistics and provide
+// navigation to different sections of the bot.
 type Menu struct {
 	handler *Handler
 	page    *pagination.Page
 }
 
-// NewMenu creates a new Menu instance.
+// NewMenu creates a Menu and sets up its page with message builders and
+// interaction handlers. The page is configured to show statistics and
+// handle navigation to other sections.
 func NewMenu(h *Handler) *Menu {
 	m := Menu{handler: h}
 	m.page = &pagination.Page{
 		Name: "Dashboard",
 		Message: func(s *session.Session) *discord.MessageUpdateBuilder {
+			// Load active users for display
 			var activeUsers []snowflake.ID
 			s.GetInterface(constants.SessionKeyActiveUsers, &activeUsers)
 
+			// Load statistics from session
 			confirmedCount := s.GetInt(constants.SessionKeyConfirmedCount)
 			flaggedCount := s.GetInt(constants.SessionKeyFlaggedCount)
 			clearedCount := s.GetInt(constants.SessionKeyClearedCount)
@@ -42,9 +48,10 @@ func NewMenu(h *Handler) *Menu {
 	return &m
 }
 
-// ShowMenu displays the dashboard.
+// ShowDashboard prepares and displays the dashboard interface by loading
+// current statistics and active user information into the session.
 func (m *Menu) ShowDashboard(event interfaces.CommonEvent, s *session.Session, content string) {
-	// Get current counts
+	// Load current user counts from database
 	confirmedCount, err := m.handler.db.Users().GetConfirmedUsersCount()
 	if err != nil {
 		m.handler.logger.Error("Failed to get confirmed users count", zap.Error(err))
@@ -60,22 +67,21 @@ func (m *Menu) ShowDashboard(event interfaces.CommonEvent, s *session.Session, c
 		m.handler.logger.Error("Failed to get cleared users count", zap.Error(err))
 	}
 
-	// Get hourly stats
+	// Generate statistics chart
 	hourlyStats, err := m.handler.stats.GetHourlyStats(context.Background())
 	if err != nil {
 		m.handler.logger.Error("Failed to get hourly stats", zap.Error(err))
 	}
 
-	// Build stats chart
 	statsChart, err := builders.NewChartBuilder(hourlyStats).Build()
 	if err != nil {
 		m.handler.logger.Error("Failed to build stats chart", zap.Error(err))
 	}
 
-	// Get active users
+	// Get list of currently active reviewers
 	activeUsers := m.handler.sessionManager.GetActiveUsers(context.Background())
 
-	// Set data for the main menu
+	// Store data in session for the message builder
 	s.Set(constants.SessionKeyConfirmedCount, confirmedCount)
 	s.Set(constants.SessionKeyFlaggedCount, flaggedCount)
 	s.Set(constants.SessionKeyClearedCount, clearedCount)
@@ -85,7 +91,8 @@ func (m *Menu) ShowDashboard(event interfaces.CommonEvent, s *session.Session, c
 	m.handler.paginationManager.NavigateTo(event, s, m.page, content)
 }
 
-// handleSelectMenu handles the select menu interaction.
+// handleSelectMenu processes select menu interactions by routing to the
+// appropriate section based on the selected option.
 func (m *Menu) handleSelectMenu(event *events.ComponentInteractionCreate, s *session.Session, customID string, option string) {
 	if customID != constants.ActionSelectMenuCustomID {
 		return
@@ -93,7 +100,7 @@ func (m *Menu) handleSelectMenu(event *events.ComponentInteractionCreate, s *ses
 
 	switch option {
 	case constants.StartReviewCustomID:
-		// Get user's default sort
+		// Load user's default sort preference before showing review menu
 		settings, err := m.handler.db.Settings().GetUserSettings(uint64(event.User().ID))
 		if err != nil {
 			m.handler.logger.Error("Failed to get user settings", zap.Error(err))
@@ -112,7 +119,8 @@ func (m *Menu) handleSelectMenu(event *events.ComponentInteractionCreate, s *ses
 	}
 }
 
-// handleButton handles button interactions.
+// handleButton processes button interactions, mainly handling refresh requests
+// to update the dashboard statistics.
 func (m *Menu) handleButton(event *events.ComponentInteractionCreate, s *session.Session, customID string) {
 	if customID == constants.RefreshButtonCustomID {
 		m.ShowDashboard(event, s, "Refreshed dashboard.")

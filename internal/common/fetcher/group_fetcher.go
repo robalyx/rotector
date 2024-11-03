@@ -9,13 +9,13 @@ import (
 	"go.uber.org/zap"
 )
 
-// GroupFetcher handles fetching of group information.
+// GroupFetcher handles concurrent retrieval of group information from the Roblox API.
 type GroupFetcher struct {
 	roAPI  *api.API
 	logger *zap.Logger
 }
 
-// NewGroupFetcher creates a new GroupFetcher instance.
+// NewGroupFetcher creates a GroupFetcher with the provided API client and logger.
 func NewGroupFetcher(roAPI *api.API, logger *zap.Logger) *GroupFetcher {
 	return &GroupFetcher{
 		roAPI:  roAPI,
@@ -23,7 +23,9 @@ func NewGroupFetcher(roAPI *api.API, logger *zap.Logger) *GroupFetcher {
 	}
 }
 
-// FetchGroupInfos fetches group information for a batch of group IDs.
+// FetchGroupInfos retrieves complete group information for a batch of group IDs.
+// It spawns a goroutine for each group and collects results through a channel.
+// Failed requests are logged and skipped in the final results.
 func (g *GroupFetcher) FetchGroupInfos(groupIDs []uint64) []*types.GroupResponse {
 	var wg sync.WaitGroup
 	groupInfoChan := make(chan *types.GroupResponse, len(groupIDs))

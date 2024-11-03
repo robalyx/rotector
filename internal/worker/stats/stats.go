@@ -2,7 +2,6 @@ package stats
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/rotector/rotector/internal/common/database"
@@ -10,14 +9,15 @@ import (
 	"go.uber.org/zap"
 )
 
-// StatisticsWorker is responsible for uploading daily statistics to the database.
+// StatisticsWorker handles the daily upload of statistics from Redis to PostgreSQL.
 type StatisticsWorker struct {
 	db     *database.Database
 	bar    *progress.Bar
 	logger *zap.Logger
 }
 
-// NewStatisticsWorker creates a new StatisticsWorker instance.
+// NewStatisticsWorker creates a StatisticsWorker with database access for
+// storing aggregated statistics.
 func NewStatisticsWorker(db *database.Database, bar *progress.Bar, logger *zap.Logger) *StatisticsWorker {
 	return &StatisticsWorker{
 		db:     db,
@@ -26,44 +26,49 @@ func NewStatisticsWorker(db *database.Database, bar *progress.Bar, logger *zap.L
 	}
 }
 
-// Start begins the statistics worker's main loop.
+// Start begins the statistics worker's main loop:
+// 1. Waits until 1 AM to ensure all daily stats are complete
+// 2. Uploads yesterday's statistics from Redis to PostgreSQL
+// 3. Cleans up Redis data after successful upload
+// 4. Repeats every 24 hours.
 func (s *StatisticsWorker) Start() {
 	s.logger.Info("Statistics Worker started")
+	s.bar.SetTotal(100)
 
 	for {
 		s.bar.Reset()
 
-		// Calculate the next run time
-		now := time.Now()
-		startOfDay := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
-		nextRun := startOfDay.Add(24 * time.Hour)
-		totalDuration := nextRun.Sub(startOfDay)
-		elapsedDuration := now.Sub(startOfDay)
+		// Step 1: Wait until 1 AM (20%)
+		s.bar.SetStepMessage("Waiting for next upload window")
+		nextRun := s.calculateNextRun()
+		time.Sleep(time.Until(nextRun))
+		s.bar.Increment(20)
 
-		s.logger.Info("Next statistics upload will run at", zap.Time("nextRun", nextRun))
-
-		// Set the values for the progress bar
-		s.bar.SetTotal(int64(totalDuration.Seconds()))
-		s.bar.SetCurrent(int64(elapsedDuration.Seconds()))
-
-		// Update the progress bar every second
-		ticker := time.NewTicker(1 * time.Second)
-		for remaining := time.Until(nextRun); remaining > 0; remaining = time.Until(nextRun) {
-			<-ticker.C
-			s.bar.Increment(1)
-			s.bar.SetStepMessage(fmt.Sprintf("Waiting for next upload (%s remaining)", remaining.Round(time.Second)))
-		}
-		ticker.Stop()
-
-		// Upload the daily statistics to the database
+		// Step 2: Upload statistics (60%)
 		s.bar.SetStepMessage("Uploading daily statistics")
 		if err := s.db.Stats().UploadDailyStatsToDB(context.Background()); err != nil {
 			s.logger.Error("Failed to upload daily statistics", zap.Error(err))
-		} else {
-			s.logger.Info("Successfully uploaded daily statistics to PostgreSQL")
 		}
+		s.bar.Increment(60)
 
-		// Short pause before next iteration
-		time.Sleep(1 * time.Second)
+		// Step 3: Wait for next day (20%)
+		s.bar.SetStepMessage("Waiting for next day")
+		s.bar.Increment(20)
+
+		// Wait 23 hours before checking again
+		// This ensures we don't miss the 1 AM window
+		time.Sleep(23 * time.Hour)
 	}
+}
+
+// calculateNextRun determines when to run the next upload by:
+// 1. Finding the next 1 AM timestamp
+// 2. Adding a day if it's already past 1 AM.
+func (s *StatisticsWorker) calculateNextRun() time.Time {
+	now := time.Now()
+	nextRun := time.Date(now.Year(), now.Month(), now.Day(), 1, 0, 0, 0, now.Location())
+	if now.After(nextRun) {
+		nextRun = nextRun.Add(24 * time.Hour)
+	}
+	return nextRun
 }

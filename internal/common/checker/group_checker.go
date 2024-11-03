@@ -8,13 +8,15 @@ import (
 	"go.uber.org/zap"
 )
 
-// GroupChecker handles checking of user groups.
+// GroupChecker handles the checking of user groups by comparing them against
+// a database of known inappropriate groups.
 type GroupChecker struct {
 	db     *database.Database
 	logger *zap.Logger
 }
 
-// NewGroupChecker creates a new GroupChecker instance.
+// NewGroupChecker creates a GroupChecker with database access for looking up
+// flagged group information.
 func NewGroupChecker(db *database.Database, logger *zap.Logger) *GroupChecker {
 	return &GroupChecker{
 		db:     db,
@@ -22,27 +24,29 @@ func NewGroupChecker(db *database.Database, logger *zap.Logger) *GroupChecker {
 	}
 }
 
-// ProcessUserGroups checks if a user belongs to any flagged groups and returns the result.
+// ProcessUserGroups checks if a user belongs to multiple flagged groups.
+// The confidence score increases with the number of flagged groups relative
+// to total group membership.
 func (gc *GroupChecker) ProcessUserGroups(userInfo *fetcher.Info) (*database.User, bool, error) {
-	// If user has no groups, return immediately
+	// Skip users with no group memberships
 	if len(userInfo.Groups) == 0 {
 		return nil, false, nil
 	}
 
-	// Get group IDs
+	// Extract group IDs for batch lookup
 	groupIDs := make([]uint64, len(userInfo.Groups))
 	for i, group := range userInfo.Groups {
 		groupIDs[i] = group.Group.ID
 	}
 
-	// Check if user belongs to any flagged groups
+	// Check database for flagged groups
 	flaggedGroupIDs, err := gc.db.Groups().CheckConfirmedGroups(groupIDs)
 	if err != nil {
 		gc.logger.Error("Error checking flagged groups", zap.Error(err), zap.Uint64("userID", userInfo.ID))
 		return nil, false, err
 	}
 
-	// If user belongs to 2 or more flagged groups, flag automatically
+	// Auto-flag users in 2 or more flagged groups
 	if len(flaggedGroupIDs) >= 2 {
 		user := &database.User{
 			ID:            userInfo.ID,

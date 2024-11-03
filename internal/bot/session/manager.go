@@ -16,23 +16,29 @@ import (
 )
 
 const (
+	// SessionTimeout defines how long a session remains valid before expiring.
+	// After this duration, Redis will automatically delete the session data.
 	SessionTimeout = 10 * time.Minute
-	SessionPrefix  = "session:"
 
-	LocalCacheSize = 10000
-	ScanBatchSize  = 1000
+	// SessionPrefix is prepended to all session keys in Redis to namespace them
+	// and avoid conflicts with other data stored in the same Redis instance.
+	SessionPrefix = "session:"
+
+	// ScanBatchSize controls how many Redis keys are retrieved in each SCAN operation
+	// when listing active sessions. This helps balance memory usage and performance.
+	ScanBatchSize = 1000
 )
 
-// Manager manages the sessions for the bot.
+// Manager manages the session lifecycle using Redis as the backing store.
+// Sessions are prefixed and stored with automatic expiration.
 type Manager struct {
 	db     *database.Database
 	redis  rueidis.Client
 	logger *zap.Logger
 }
 
-// NewManager creates a new session manager.
+// NewManager creates a new session manager that uses Redis as the backing store.
 func NewManager(db *database.Database, redisManager *redis.Manager, logger *zap.Logger) (*Manager, error) {
-	// Get Redis client for sessions
 	redisClient, err := redisManager.GetClient(redis.SessionDBIndex)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get Redis client: %w", err)
@@ -45,7 +51,9 @@ func NewManager(db *database.Database, redisManager *redis.Manager, logger *zap.
 	}, nil
 }
 
-// GetOrCreateSession gets the session for the given user ID, or creates a new one if it doesn't exist.
+// GetOrCreateSession loads or initializes a session for a given user.
+// New sessions are populated with user settings from the database.
+// Existing sessions are refreshed with the latest user settings.
 func (m *Manager) GetOrCreateSession(ctx context.Context, userID snowflake.ID) (*Session, error) {
 	key := fmt.Sprintf("%s%s", SessionPrefix, userID)
 
@@ -55,21 +63,20 @@ func (m *Manager) GetOrCreateSession(ctx context.Context, userID snowflake.ID) (
 		return nil, fmt.Errorf("failed to load user settings: %w", err)
 	}
 
-	// Try to get existing session from Redis
+	// Try loading existing session
 	result := m.redis.Do(ctx, m.redis.B().Get().Key(key).Build())
 	if err := result.Error(); err != nil {
 		if errors.Is(err, rueidis.Nil) {
-			// Session doesn't exist, create new one with user settings
+			// Initialize new session with fresh settings
 			sessionData := make(map[string]interface{})
 			session := NewSession(m.db, m.redis, key, sessionData, m.logger)
 			session.Set(constants.SessionKeyUserSettings, settings)
-
 			return session, nil
 		}
 		return nil, fmt.Errorf("failed to query Redis: %w", err)
 	}
 
-	// Session exists, deserialize it
+	// Deserialize existing session
 	data, err := result.AsBytes()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get session data as bytes: %w", err)
@@ -80,23 +87,23 @@ func (m *Manager) GetOrCreateSession(ctx context.Context, userID snowflake.ID) (
 		return nil, fmt.Errorf("failed to unmarshal session data: %w", err)
 	}
 
-	// Return existing session with user settings
+	// Update existing session with latest settings
 	session := NewSession(m.db, m.redis, key, sessionData, m.logger)
 	session.Set(constants.SessionKeyUserSettings, settings)
 	return session, nil
 }
 
-// CloseSession closes the session for the given user ID.
+// CloseSession removes a user's session from Redis immediately rather than
+// waiting for expiration.
 func (m *Manager) CloseSession(ctx context.Context, userID snowflake.ID) {
 	key := fmt.Sprintf("%s%s", SessionPrefix, userID)
-
-	// Remove from Redis
 	if err := m.redis.Do(ctx, m.redis.B().Del().Key(key).Build()).Error(); err != nil {
 		m.logger.Error("Failed to delete session", zap.Error(err))
 	}
 }
 
-// GetActiveUsers returns a list of user IDs with active sessions.
+// GetActiveUsers scans Redis for all session keys and extracts the user IDs.
+// Uses cursor-based scanning to handle large numbers of sessions.
 func (m *Manager) GetActiveUsers(ctx context.Context) []snowflake.ID {
 	pattern := SessionPrefix + "*"
 	var activeUsers []snowflake.ID
@@ -116,7 +123,7 @@ func (m *Manager) GetActiveUsers(ctx context.Context) []snowflake.ID {
 			return nil
 		}
 
-		// Process each key from the scan batch
+		// Extract user IDs from key names
 		for _, key := range keys.Elements {
 			userIDStr := key[len(SessionPrefix):]
 			if userID, err := snowflake.Parse(userIDStr); err == nil {

@@ -11,7 +11,8 @@ import (
 	"github.com/disgoorg/disgo/discord"
 )
 
-// StatusEmbed builds the embed for the status menu.
+// StatusEmbed creates the visual layout for viewing queue status information.
+// It combines queue position, status, and queue lengths into a Discord embed.
 type StatusEmbed struct {
 	queueManager        *queue.Manager
 	userID              uint64
@@ -20,7 +21,8 @@ type StatusEmbed struct {
 	lowPriorityCount    int
 }
 
-// NewStatusEmbed creates a new StatusEmbed.
+// NewStatusEmbed loads queue information from the session state to create
+// a new embed builder.
 func NewStatusEmbed(queueManager *queue.Manager, s *session.Session) *StatusEmbed {
 	return &StatusEmbed{
 		queueManager:        queueManager,
@@ -31,9 +33,12 @@ func NewStatusEmbed(queueManager *queue.Manager, s *session.Session) *StatusEmbe
 	}
 }
 
-// Build constructs and returns the discord.Embed.
+// Build creates a Discord message showing:
+// - Current user's queue status and position
+// - Number of items in each priority queue
+// - Refresh and abort buttons for queue management.
 func (b *StatusEmbed) Build() *discord.MessageUpdateBuilder {
-	// Get queue status info
+	// Get current queue status and position
 	queueInfo := "Not in queue"
 	status, priority, position, err := b.queueManager.GetQueueInfo(context.Background(), b.userID)
 	if err == nil && status != "" {
@@ -45,6 +50,7 @@ func (b *StatusEmbed) Build() *discord.MessageUpdateBuilder {
 		}
 	}
 
+	// Create embed with queue information
 	embed := discord.NewEmbedBuilder().
 		SetTitle("Recheck Status").
 		AddField("Current User", fmt.Sprintf("[%d](https://roblox.com/users/%d/profile)", b.userID, b.userID), true).
@@ -54,6 +60,7 @@ func (b *StatusEmbed) Build() *discord.MessageUpdateBuilder {
 		AddField("Low Priority Queue", fmt.Sprintf("%d items", b.lowPriorityCount), true).
 		SetColor(constants.DefaultEmbedColor)
 
+	// Add queue management buttons
 	components := []discord.ContainerComponent{
 		discord.NewActionRow(
 			discord.NewSecondaryButton("🔄", constants.RefreshButtonCustomID),

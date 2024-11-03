@@ -11,13 +11,13 @@ import (
 	"go.uber.org/zap"
 )
 
-// ThumbnailFetcher handles fetching of user thumbnails.
+// ThumbnailFetcher handles retrieval of user and group thumbnails from the Roblox API.
 type ThumbnailFetcher struct {
 	roAPI  *api.API
 	logger *zap.Logger
 }
 
-// NewThumbnailFetcher creates a new ThumbnailFetcher instance.
+// NewThumbnailFetcher creates a ThumbnailFetcher with the provided API client and logger.
 func NewThumbnailFetcher(roAPI *api.API, logger *zap.Logger) *ThumbnailFetcher {
 	return &ThumbnailFetcher{
 		roAPI:  roAPI,
@@ -25,22 +25,21 @@ func NewThumbnailFetcher(roAPI *api.API, logger *zap.Logger) *ThumbnailFetcher {
 	}
 }
 
-// AddImageURLs fetches thumbnails for a batch of users and adds them to the users.
+// AddImageURLs fetches thumbnails for a batch of users and adds them to the user records.
 func (t *ThumbnailFetcher) AddImageURLs(users []*database.User) []*database.User {
 	thumbnailURLs := make(map[uint64]string)
 
-	// Fetch thumbnails in batches of 100
+	// Process users in batches of 100
 	batchSize := 100
 	for i := 0; i < len(users); i += batchSize {
-		// Get the batch of users
+		// Get the current batch of users
 		end := i + batchSize
 		if end > len(users) {
 			end = len(users)
 		}
-
 		batch := users[i:end]
 
-		// Create a new batch request
+		// Create batch request for headshots
 		requests := thumbnails.NewBatchThumbnailsBuilder()
 		for _, user := range batch {
 			requests.AddRequest(types.ThumbnailRequest{
@@ -52,14 +51,14 @@ func (t *ThumbnailFetcher) AddImageURLs(users []*database.User) []*database.User
 			})
 		}
 
-		// Fetch the batch thumbnails
+		// Send batch request to Roblox API
 		thumbnailResponses, err := t.roAPI.Thumbnails().GetBatchThumbnails(context.Background(), requests.Build())
 		if err != nil {
 			t.logger.Error("Error fetching batch thumbnails", zap.Error(err))
 			continue
 		}
 
-		// Process the thumbnail responses
+		// Process responses and store URLs
 		for _, response := range thumbnailResponses {
 			if response.State == types.ThumbnailStateCompleted && response.ImageURL != nil {
 				thumbnailURLs[response.TargetID] = *response.ImageURL
@@ -81,11 +80,11 @@ func (t *ThumbnailFetcher) AddImageURLs(users []*database.User) []*database.User
 	return users
 }
 
-// AddGroupImageURLs fetches thumbnails for a batch of groups and adds them to the groups.
+// AddGroupImageURLs fetches thumbnails for a batch of groups and adds them to the group records.
 func (t *ThumbnailFetcher) AddGroupImageURLs(groups []*database.FlaggedGroup) []*database.FlaggedGroup {
 	thumbnailURLs := make(map[uint64]string)
 
-	// Create a new batch request
+	// Create batch request for group icons
 	requests := thumbnails.NewBatchThumbnailsBuilder()
 	for _, group := range groups {
 		requests.AddRequest(types.ThumbnailRequest{
@@ -97,14 +96,14 @@ func (t *ThumbnailFetcher) AddGroupImageURLs(groups []*database.FlaggedGroup) []
 		})
 	}
 
-	// Fetch the batch thumbnails
+	// Send batch request to Roblox API
 	thumbnailResponses, err := t.roAPI.Thumbnails().GetBatchThumbnails(context.Background(), requests.Build())
 	if err != nil {
 		t.logger.Error("Error fetching batch group thumbnails", zap.Error(err))
 		return groups
 	}
 
-	// Process the thumbnail responses
+	// Process responses and store URLs
 	for _, response := range thumbnailResponses {
 		if response.State == types.ThumbnailStateCompleted && response.ImageURL != nil {
 			thumbnailURLs[response.TargetID] = *response.ImageURL

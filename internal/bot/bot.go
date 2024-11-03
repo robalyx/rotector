@@ -29,7 +29,9 @@ import (
 	"github.com/rotector/rotector/internal/common/statistics"
 )
 
-// Bot represents the Discord bot.
+// Bot coordinates all the handlers and managers needed for Discord interaction.
+// It maintains connections to the database, Discord client, and various handlers
+// while processing user interactions through the session and pagination managers.
 type Bot struct {
 	db                *database.Database
 	client            bot.Client
@@ -42,35 +44,40 @@ type Bot struct {
 	logHandler        *log.Handler
 }
 
-// New creates a new Bot instance.
+// New initializes a Bot instance by creating all required managers and handlers.
+// It establishes connections between handlers through dependency injection and
+// configures the Discord client with necessary gateway intents and event listeners.
 func New(
 	token string,
 	db *database.Database,
-	stats *statistics.Statistics,
+	stats *statistics.Client,
 	roAPI *api.API,
 	queueManager *queueManager.Manager,
 	redisManager *redis.Manager,
 	logger *zap.Logger,
 ) (*Bot, error) {
+	// Initialize session manager for persistent storage
 	sessionManager, err := session.NewManager(db, redisManager, logger)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create session manager: %w", err)
 	}
 	paginationManager := pagination.NewManager(logger)
 
-	// Initialize the handlers
+	// Create handlers with their dependencies
+	// Each handler receives references to managers it needs to function
 	dashboardHandler := dashboard.New(db, stats, logger, sessionManager, paginationManager)
 	reviewHandler := review.New(db, logger, roAPI, sessionManager, paginationManager, queueManager, dashboardHandler)
 	settingHandler := setting.New(db, logger, sessionManager, paginationManager, dashboardHandler)
 	logHandler := log.New(db, sessionManager, paginationManager, dashboardHandler, logger)
 	queueHandler := queue.New(db, logger, sessionManager, paginationManager, queueManager, dashboardHandler, reviewHandler)
 
+	// Cross-link handlers to enable navigation between different sections
 	dashboardHandler.SetReviewHandler(reviewHandler)
 	dashboardHandler.SetSettingsHandler(settingHandler)
 	dashboardHandler.SetLogsHandler(logHandler)
 	dashboardHandler.SetQueueHandler(queueHandler)
 
-	// Initialize the bot
+	// Initialize bot structure with all components
 	b := &Bot{
 		db:                db,
 		logger:            logger,
@@ -82,7 +89,7 @@ func New(
 		logHandler:        logHandler,
 	}
 
-	// Initialize the Discord client
+	// Configure Discord client with required gateway intents and event handlers
 	client, err := disgo.New(token,
 		bot.WithGatewayConfigOpts(
 			gateway.WithIntents(
@@ -105,10 +112,13 @@ func New(
 	return b, nil
 }
 
-// Start initializes and starts the bot.
+// Start registers global commands with Discord and opens the gateway connection.
+// It first ensures the dashboard command is registered globally before starting
+// the bot's gateway connection to receive events.
 func (b *Bot) Start() error {
 	b.logger.Info("Registering commands")
 
+	// Register the dashboard command globally for all guilds
 	_, err := b.client.Rest().SetGlobalCommands(b.client.ApplicationID(), []discord.ApplicationCommandCreate{
 		discord.SlashCommandCreate{
 			Name:        constants.DashboardCommandName,
@@ -123,40 +133,43 @@ func (b *Bot) Start() error {
 	return b.client.OpenGateway(context.Background())
 }
 
-// Close gracefully shuts down the bot.
+// Close gracefully shuts down the Discord gateway connection.
+// This ensures all pending events are processed before shutdown.
 func (b *Bot) Close() {
 	b.logger.Info("Closing bot")
 	b.client.Close(context.Background())
 }
 
-// handleApplicationCommandInteraction processes application command interactions.
+// handleApplicationCommandInteraction processes slash commands by first deferring the response,
+// then validating guild settings and user permissions before handling the command in a goroutine.
+// The goroutine approach allows for concurrent processing of commands.
 func (b *Bot) handleApplicationCommandInteraction(event *events.ApplicationCommandInteractionCreate) {
-	// Defer the response
+	// Defer response to prevent Discord timeout while processing
 	if err := event.DeferCreateMessage(true); err != nil {
 		b.logger.Error("Failed to defer create message", zap.Error(err))
 		return
 	}
 
-	// Respond with an error if the command is not the dashboard command
+	// Only handle dashboard command - respond with error for unknown commands
 	if event.SlashCommandInteractionData().CommandName() != constants.DashboardCommandName {
 		b.paginationManager.RespondWithError(event, "This command is not available.")
 		return
 	}
 
-	// Get the guild settings
+	// Verify guild settings and user permissions
 	guildSettings, err := b.db.Settings().GetGuildSettings(uint64(*event.GuildID()))
 	if err != nil {
 		b.logger.Error("Failed to get guild settings", zap.Error(err))
 		return
 	}
 
-	// Respond with an error if the user is not in the whitelisted roles
+	// Check if user has required roles
 	if !guildSettings.HasAnyRole(event.Member().RoleIDs) {
 		b.paginationManager.RespondWithError(event, "You are not authorized to use this command.")
 		return
 	}
 
-	// Handle the interaction in a goroutine
+	// Process command in goroutine to allow for concurrent processing
 	go func() {
 		start := time.Now()
 		defer func() {
@@ -169,7 +182,7 @@ func (b *Bot) handleApplicationCommandInteraction(event *events.ApplicationComma
 				zap.Duration("duration", duration))
 		}()
 
-		// Get or create a session for the user
+		// Get or create user session
 		s, err := b.sessionManager.GetOrCreateSession(context.Background(), event.User().ID)
 		if err != nil {
 			b.logger.Error("Failed to get or create session", zap.Error(err))
@@ -177,15 +190,13 @@ func (b *Bot) handleApplicationCommandInteraction(event *events.ApplicationComma
 			return
 		}
 
-		// Get the current page from session
+		// Navigate to stored page or show dashboard
 		currentPage := s.GetString(constants.SessionKeyCurrentPage)
 		page := b.paginationManager.GetPage(currentPage)
 
-		// If no valid page exists in session, show dashboard
 		if page == nil {
 			b.dashboardHandler.ShowDashboard(event, s, "")
 		} else {
-			// Otherwise, navigate to the stored page
 			b.paginationManager.NavigateTo(event, s, page, "")
 		}
 
@@ -193,10 +204,12 @@ func (b *Bot) handleApplicationCommandInteraction(event *events.ApplicationComma
 	}()
 }
 
-// handleComponentInteraction processes component interactions.
+// handleComponentInteraction processes button clicks and select menu choices.
+// It first updates the message to show "Processing..." and removes interactive components
+// to prevent double-clicks, then processes the interaction in a goroutine.
 func (b *Bot) handleComponentInteraction(event *events.ComponentInteractionCreate) {
 	// WORKAROUND:
-	// Check if the interaction is something other than opening a modal so that we can defer the message update.
+	// Special handling for modal interactions to prevent response conflicts.
 	// If we are opening a modal and we try to defer, there will be an error that the interaction is already responded to.
 	// Please open a PR if you have a better solution or a fix for this.
 	isModal := false
@@ -205,20 +218,19 @@ func (b *Bot) handleComponentInteraction(event *events.ComponentInteractionCreat
 		isModal = true
 	}
 
+	// Update message to prevent double-clicks (skip for modals)
 	if !isModal {
-		// Create a new message update builder
 		updateBuilder := discord.NewMessageUpdateBuilder().
 			SetContent(utils.GetTimestampedSubtext("Processing...")).
 			ClearContainerComponents()
 
-		// Update the message without interactable components
 		if err := event.UpdateMessage(updateBuilder.Build()); err != nil {
 			b.logger.Error("Failed to update message", zap.Error(err))
 			return
 		}
 	}
 
-	// Handle the interaction in a goroutine
+	// Process interaction in goroutine
 	go func() {
 		start := time.Now()
 		defer func() {
@@ -231,7 +243,7 @@ func (b *Bot) handleComponentInteraction(event *events.ComponentInteractionCreat
 				zap.Duration("duration", duration))
 		}()
 
-		// Get or create a session for the user
+		// Get or create user session
 		s, err := b.sessionManager.GetOrCreateSession(context.Background(), event.User().ID)
 		if err != nil {
 			b.logger.Error("Failed to get or create session", zap.Error(err))
@@ -239,7 +251,7 @@ func (b *Bot) handleComponentInteraction(event *events.ComponentInteractionCreat
 			return
 		}
 
-		// Ensure the interaction is for the latest message
+		// Verify interaction is for latest message
 		sessionMessageID := s.GetUint64(constants.SessionKeyMessageID)
 		if sessionMessageID != uint64(event.Message.ID) {
 			b.logger.Debug("Interaction is outdated",
@@ -249,26 +261,27 @@ func (b *Bot) handleComponentInteraction(event *events.ComponentInteractionCreat
 			return
 		}
 
-		// Save session data after handling the interaction
+		// Handle interaction and update session
 		b.paginationManager.HandleInteraction(event, s)
 		s.Touch(context.Background())
 	}()
 }
 
-// handleModalSubmit processes modal submit interactions.
+// handleModalSubmit processes form submissions similarly to component interactions.
+// It updates the message to show "Processing..." and removes interactive components,
+// then processes the submission in a goroutine.
 func (b *Bot) handleModalSubmit(event *events.ModalSubmitInteractionCreate) {
-	// Create a new message update builder
+	// Update message to prevent double-submissions
 	updateBuilder := discord.NewMessageUpdateBuilder().
 		SetContent(utils.GetTimestampedSubtext("Processing...")).
 		ClearContainerComponents()
 
-	// Update the message without interactable components
 	if err := event.UpdateMessage(updateBuilder.Build()); err != nil {
 		b.logger.Error("Failed to update message", zap.Error(err))
 		return
 	}
 
-	// Handle the interaction in a goroutine
+	// Process submission in goroutine
 	go func() {
 		start := time.Now()
 		defer func() {
@@ -281,7 +294,7 @@ func (b *Bot) handleModalSubmit(event *events.ModalSubmitInteractionCreate) {
 				zap.Duration("duration", duration))
 		}()
 
-		// Get or create a session for the user
+		// Get or create user session
 		s, err := b.sessionManager.GetOrCreateSession(context.Background(), event.User().ID)
 		if err != nil {
 			b.logger.Error("Failed to get or create session", zap.Error(err))
@@ -289,7 +302,7 @@ func (b *Bot) handleModalSubmit(event *events.ModalSubmitInteractionCreate) {
 			return
 		}
 
-		// Save session data after handling the interaction
+		// Handle submission and update session
 		b.paginationManager.HandleInteraction(event, s)
 		s.Touch(context.Background())
 	}()

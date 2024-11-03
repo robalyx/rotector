@@ -14,13 +14,16 @@ import (
 	"go.uber.org/zap"
 )
 
-// StatusMenu handles the recheck status menu.
+// StatusMenu handles the display and interaction logic for viewing queue status.
+// It works with the status builder to show queue position and processing progress.
 type StatusMenu struct {
 	handler *Handler
 	page    *pagination.Page
 }
 
-// NewStatusMenu creates a new StatusMenu instance.
+// NewStatusMenu creates a StatusMenu and sets up its page with message builders
+// and interaction handlers. The page is configured to show queue information
+// and handle refresh/abort actions.
 func NewStatusMenu(h *Handler) *StatusMenu {
 	m := StatusMenu{handler: h}
 	m.page = &pagination.Page{
@@ -33,9 +36,10 @@ func NewStatusMenu(h *Handler) *StatusMenu {
 	return &m
 }
 
-// ShowStatusMenu displays the status menu.
+// ShowStatusMenu prepares and displays the status interface by loading
+// current queue counts and position information into the session.
 func (m *StatusMenu) ShowStatusMenu(event interfaces.CommonEvent, s *session.Session) {
-	// Update queue counts
+	// Update queue counts for each priority level
 	s.Set(constants.SessionKeyQueueHighCount, m.handler.queueManager.GetQueueLength(context.Background(), queue.HighPriority))
 	s.Set(constants.SessionKeyQueueNormalCount, m.handler.queueManager.GetQueueLength(context.Background(), queue.NormalPriority))
 	s.Set(constants.SessionKeyQueueLowCount, m.handler.queueManager.GetQueueLength(context.Background(), queue.LowPriority))
@@ -44,22 +48,22 @@ func (m *StatusMenu) ShowStatusMenu(event interfaces.CommonEvent, s *session.Ses
 	userID := s.GetUint64(constants.SessionKeyQueueUser)
 	status, _, _, err := m.handler.queueManager.GetQueueInfo(context.Background(), userID)
 	if err == nil && (status == queue.StatusComplete || status == queue.StatusSkipped) {
-		// Clear queue info
+		// Clean up queue info
 		if err := m.handler.queueManager.ClearQueueInfo(context.Background(), userID); err != nil {
 			m.handler.logger.Error("Failed to clear queue info",
 				zap.Error(err),
 				zap.Uint64("userID", userID))
 		}
 
-		// Try to get the flagged user from the database
+		// Check if user was flagged after recheck
 		flaggedUser, err := m.handler.db.Users().GetFlaggedUserByID(userID)
 		if err != nil {
-			// User was not flagged by AI, show new user
+			// User was not flagged by AI, return to previous page
 			m.returnToPreviousPage(event, s, "User was not flagged by AI after recheck.")
 			return
 		}
 
-		// User is still flagged, show updated user
+		// User is still flagged, show updated information
 		s.Set(constants.SessionKeyTarget, flaggedUser)
 		m.handler.reviewMenu.ShowReviewMenu(event, s, "User has been rechecked. Showing updated information.")
 		return
@@ -68,7 +72,7 @@ func (m *StatusMenu) ShowStatusMenu(event interfaces.CommonEvent, s *session.Ses
 	m.handler.paginationManager.NavigateTo(event, s, m.page, "")
 }
 
-// handleButton handles button interactions.
+// handleButton processes refresh and abort button clicks.
 func (m *StatusMenu) handleButton(event *events.ComponentInteractionCreate, s *session.Session, customID string) {
 	switch customID {
 	case constants.RefreshButtonCustomID:
@@ -78,7 +82,8 @@ func (m *StatusMenu) handleButton(event *events.ComponentInteractionCreate, s *s
 	}
 }
 
-// handleAbort handles the abort button interaction.
+// handleAbort marks a queued user as aborted and cleans up queue information.
+// The worker will handle removing the user from the queue when it sees the abort flag.
 func (m *StatusMenu) handleAbort(event *events.ComponentInteractionCreate, s *session.Session) {
 	userID := s.GetUint64(constants.SessionKeyQueueUser)
 
@@ -88,19 +93,16 @@ func (m *StatusMenu) handleAbort(event *events.ComponentInteractionCreate, s *se
 		return
 	}
 
-	// Clear queue info
+	// Clean up queue info
 	if err := m.handler.queueManager.ClearQueueInfo(context.Background(), userID); err != nil {
 		m.handler.paginationManager.RespondWithError(event, "Failed to clear queue info")
 		return
 	}
 
-	// Note: We don't need to explicitly remove from queue here
-	// The worker will handle that when it sees the aborted flag
-
 	m.returnToPreviousPage(event, s, "Recheck aborted")
 }
 
-// returnToPreviousPage returns to the previous page the user was on.
+// returnToPreviousPage navigates back to the page stored in session history.
 func (m *StatusMenu) returnToPreviousPage(event interfaces.CommonEvent, s *session.Session, content string) {
 	previousPage := s.GetString(constants.SessionKeyPreviousPage)
 	page := m.handler.paginationManager.GetPage(previousPage)

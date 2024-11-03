@@ -18,14 +18,18 @@ import (
 	"go.uber.org/zap"
 )
 
-// Menu handles the review process for users.
+// Menu handles the main review interface where moderators can view and take
+// action on flagged users.
 type Menu struct {
 	handler *Handler
 	page    *pagination.Page
 }
 
-// NewMenu creates a new Menu instance.
+// NewMenu creates a Menu and sets up its page with message builders and
+// interaction handlers. The page is configured to show user information
+// and handle review actions.
 func NewMenu(h *Handler) *Menu {
+	// Create translator for handling non-English descriptions
 	translator := translator.New(h.roAPI.GetClient())
 
 	m := Menu{handler: h}
@@ -41,7 +45,7 @@ func NewMenu(h *Handler) *Menu {
 	return &m
 }
 
-// ShowReviewMenu displays the review menu.
+// ShowReviewMenu prepares and displays the review interface.
 func (m *Menu) ShowReviewMenu(event interfaces.CommonEvent, s *session.Session, content string) {
 	var user *database.FlaggedUser
 	s.GetInterface(constants.SessionKeyTarget, &user)
@@ -57,10 +61,10 @@ func (m *Menu) ShowReviewMenu(event interfaces.CommonEvent, s *session.Session, 
 		}
 	}
 
-	// Get flagged friends
+	// Check friend status by looking up each friend in the database
 	flaggedFriends := make(map[uint64]string)
 	if len(user.Friends) > 0 {
-		// Extract friend IDs
+		// Extract friend IDs for batch lookup
 		friendIDs := make([]uint64, len(user.Friends))
 		for i, friend := range user.Friends {
 			friendIDs[i] = friend.ID
@@ -73,7 +77,7 @@ func (m *Menu) ShowReviewMenu(event interfaces.CommonEvent, s *session.Session, 
 			return
 		}
 
-		// Get flagged friends
+		// Store confirmed and flagged friends
 		for friendID, status := range existingUsers {
 			if status == database.UserTypeConfirmed || status == database.UserTypeFlagged {
 				flaggedFriends[friendID] = status
@@ -81,7 +85,7 @@ func (m *Menu) ShowReviewMenu(event interfaces.CommonEvent, s *session.Session, 
 		}
 	}
 
-	// Get user settings
+	// Load user settings for display preferences
 	settings, err := m.handler.db.Settings().GetUserSettings(uint64(event.User().ID))
 	if err != nil {
 		m.handler.logger.Error("Failed to get user settings", zap.Error(err))
@@ -89,7 +93,7 @@ func (m *Menu) ShowReviewMenu(event interfaces.CommonEvent, s *session.Session, 
 		return
 	}
 
-	// Set the data for the page
+	// Store data in session for the message builder
 	s.Set(constants.SessionKeyFlaggedFriends, flaggedFriends)
 	s.Set(constants.SessionKeyStreamerMode, settings.StreamerMode)
 
@@ -139,20 +143,20 @@ func (m *Menu) handleModal(event *events.ModalSubmitInteractionCreate, s *sessio
 	}
 }
 
-// handleRecheck handles the recheck button interaction.
+// handleRecheck adds the user to the high priority queue for re-processing.
+// If the user is already in queue, it shows the status menu instead.
 func (m *Menu) handleRecheck(event *events.ComponentInteractionCreate, s *session.Session) {
 	var user *database.FlaggedUser
 	s.GetInterface(constants.SessionKeyTarget, &user)
 
-	// Check if user is already in queue
+	// Check if user is already in queue to prevent duplicate entries
 	status, _, _, err := m.handler.queueManager.GetQueueInfo(context.Background(), user.ID)
 	if err == nil && status != "" {
-		// User is already in queue, show status menu
 		m.handler.statusMenu.ShowStatusMenu(event, s)
 		return
 	}
 
-	// Add to high priority queue
+	// Add to high priority queue with reviewer information
 	err = m.handler.queueManager.AddToQueue(context.Background(), &queue.Item{
 		UserID:      user.ID,
 		Priority:    queue.HighPriority,
@@ -167,7 +171,7 @@ func (m *Menu) handleRecheck(event *events.ComponentInteractionCreate, s *sessio
 		return
 	}
 
-	// Update queue info
+	// Store queue position information for status display
 	err = m.handler.queueManager.SetQueueInfo(
 		context.Background(),
 		user.ID,
@@ -180,26 +184,26 @@ func (m *Menu) handleRecheck(event *events.ComponentInteractionCreate, s *sessio
 		return
 	}
 
-	// Set the queue user in the session
+	// Track the queued user in session for status updates
 	s.Set(constants.SessionKeyQueueUser, user.ID)
 
-	// Show status menu
 	m.handler.statusMenu.ShowStatusMenu(event, s)
 }
 
-// handleBanUser handles the ban user button interaction.
+// handleBanUser moves a user to the confirmed state and logs the action.
+// After banning, it loads a new user for review.
 func (m *Menu) handleBanUser(event interfaces.CommonEvent, s *session.Session) {
 	var user *database.FlaggedUser
 	s.GetInterface(constants.SessionKeyTarget, &user)
 
-	// Move the user to confirmed
+	// Update user status in database
 	if err := m.handler.db.Users().ConfirmUser(user); err != nil {
 		m.handler.logger.Error("Failed to confirm user", zap.Error(err))
 		m.handler.paginationManager.RespondWithError(event, "Failed to ban the user. Please try again.")
 		return
 	}
 
-	// Log the activity
+	// Log the ban action asynchronously
 	go m.handler.db.UserActivity().LogActivity(&database.UserActivityLog{
 		UserID:            user.ID,
 		ReviewerID:        uint64(event.User().ID),
@@ -208,24 +212,25 @@ func (m *Menu) handleBanUser(event interfaces.CommonEvent, s *session.Session) {
 		Details:           map[string]interface{}{"reason": user.Reason},
 	})
 
-	// Show review menu (which will fetch a new user)
+	// Clear current user and load next one
 	s.Delete(constants.SessionKeyTarget)
 	m.ShowReviewMenu(event, s, "User banned.")
 }
 
-// handleClearUser handles the clear user button interaction.
+// handleClearUser removes a user from the flagged state and logs the action.
+// After clearing, it loads a new user for review.
 func (m *Menu) handleClearUser(event interfaces.CommonEvent, s *session.Session) {
 	var user *database.FlaggedUser
 	s.GetInterface(constants.SessionKeyTarget, &user)
 
-	// Clear the user
+	// Update user status in database
 	if err := m.handler.db.Users().ClearUser(user); err != nil {
 		m.handler.logger.Error("Failed to reject user", zap.Error(err))
 		m.handler.paginationManager.RespondWithError(event, "Failed to reject the user. Please try again.")
 		return
 	}
 
-	// Log the activity
+	// Log the clear action asynchronously
 	go m.handler.db.UserActivity().LogActivity(&database.UserActivityLog{
 		UserID:            user.ID,
 		ReviewerID:        uint64(event.User().ID),
@@ -234,17 +239,18 @@ func (m *Menu) handleClearUser(event interfaces.CommonEvent, s *session.Session)
 		Details:           make(map[string]interface{}),
 	})
 
-	// Show review menu (which will fetch a new user)
+	// Clear current user and load next one
 	s.Delete(constants.SessionKeyTarget)
 	m.ShowReviewMenu(event, s, "User cleared.")
 }
 
-// handleSkipUser handles the skip user button interaction.
+// handleSkipUser logs the skip action and moves to the next user without
+// changing the current user's status.
 func (m *Menu) handleSkipUser(event interfaces.CommonEvent, s *session.Session) {
 	var user *database.FlaggedUser
 	s.GetInterface(constants.SessionKeyTarget, &user)
 
-	// Log the activity
+	// Log the skip action asynchronously
 	go m.handler.db.UserActivity().LogActivity(&database.UserActivityLog{
 		UserID:            user.ID,
 		ReviewerID:        uint64(event.User().ID),
@@ -253,17 +259,18 @@ func (m *Menu) handleSkipUser(event interfaces.CommonEvent, s *session.Session) 
 		Details:           make(map[string]interface{}),
 	})
 
-	// Show review menu (which will fetch a new user)
+	// Clear current user and load next one
 	s.Delete(constants.SessionKeyTarget)
 	m.ShowReviewMenu(event, s, "Skipped user.")
 }
 
-// handleBanWithReason processes the ban with a modal for a custom reason.
+// handleBanWithReason opens a modal for entering a custom ban reason.
+// The modal pre-fills with the current reason if one exists.
 func (m *Menu) handleBanWithReason(event *events.ComponentInteractionCreate, s *session.Session) {
 	var user *database.FlaggedUser
 	s.GetInterface(constants.SessionKeyTarget, &user)
 
-	// Create the modal
+	// Create modal with pre-filled reason field
 	modal := discord.NewModalCreateBuilder().
 		SetCustomID(constants.BanWithReasonModalCustomID).
 		SetTitle("Ban User with Reason").
@@ -271,40 +278,41 @@ func (m *Menu) handleBanWithReason(event *events.ComponentInteractionCreate, s *
 			discord.NewTextInput("ban_reason", discord.TextInputStyleParagraph, "Ban Reason").
 				WithRequired(true).
 				WithPlaceholder("Enter the reason for banning this user...").
-				WithValue(user.Reason), // Pre-fill with the original reason if available
+				WithValue(user.Reason),
 		).
 		Build()
 
-	// Send the modal
+	// Show modal to user
 	if err := event.Modal(modal); err != nil {
 		m.handler.logger.Error("Failed to create modal", zap.Error(err))
 		m.handler.paginationManager.RespondWithError(event, "Failed to open the ban reason form. Please try again.")
 	}
 }
 
-// handleBanWithReasonModalSubmit processes the modal submit interaction.
+// handleBanWithReasonModalSubmit processes the custom ban reason from the modal
+// and performs the ban with the provided reason.
 func (m *Menu) handleBanWithReasonModalSubmit(event *events.ModalSubmitInteractionCreate, s *session.Session) {
 	var user *database.FlaggedUser
 	s.GetInterface(constants.SessionKeyTarget, &user)
 
-	// Get the ban reason from the modal
+	// Get and validate the ban reason
 	reason := event.Data.Text("ban_reason")
 	if reason == "" {
 		m.handler.paginationManager.RespondWithError(event, "Ban reason cannot be empty. Please try again.")
 		return
 	}
 
-	// Update the user's reason with the custom input
+	// Update user's reason with the custom input
 	user.Reason = reason
 
-	// Move the user to confirmed
+	// Update user status in database
 	if err := m.handler.db.Users().ConfirmUser(user); err != nil {
 		m.handler.logger.Error("Failed to confirm user", zap.Error(err))
 		m.handler.paginationManager.RespondWithError(event, "Failed to confirm the user. Please try again.")
 		return
 	}
 
-	// Log the activity
+	// Log the custom ban action asynchronously
 	go m.handler.db.UserActivity().LogActivity(&database.UserActivityLog{
 		UserID:            user.ID,
 		ReviewerID:        uint64(event.User().ID),
@@ -313,12 +321,13 @@ func (m *Menu) handleBanWithReasonModalSubmit(event *events.ModalSubmitInteracti
 		Details:           map[string]interface{}{"reason": user.Reason},
 	})
 
-	// Show review menu (which will fetch a new user)
+	// Clear current user and load next one
 	s.Delete(constants.SessionKeyTarget)
 	m.ShowReviewMenu(event, s, "User banned.")
 }
 
-// fetchNewTarget gets a new user to review and stores it in the session.
+// fetchNewTarget gets a new user to review based on the current sort order.
+// It logs the view action and stores the user in the session.
 func (m *Menu) fetchNewTarget(s *session.Session, reviewerID uint64) (*database.FlaggedUser, error) {
 	sortBy := s.GetString(constants.SessionKeySortBy)
 	user, err := m.handler.db.Users().GetFlaggedUserToReview(sortBy)
@@ -326,10 +335,10 @@ func (m *Menu) fetchNewTarget(s *session.Session, reviewerID uint64) (*database.
 		return nil, err
 	}
 
-	// Store the user in session
+	// Store the user in session for the message builder
 	s.Set(constants.SessionKeyTarget, user)
 
-	// Log the activity
+	// Log the view action asynchronously
 	go m.handler.db.UserActivity().LogActivity(&database.UserActivityLog{
 		UserID:            user.ID,
 		ReviewerID:        reviewerID,

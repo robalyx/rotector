@@ -7,14 +7,17 @@ import (
 	"github.com/rotector/rotector/internal/bot/constants"
 )
 
-// QueueBuilder builds the queue management menu.
+// QueueBuilder creates the visual layout for managing queue operations.
+// It shows current queue lengths and provides options for adding users
+// to different priority queues.
 type QueueBuilder struct {
 	highPriorityCount   int
 	normalPriorityCount int
 	lowPriorityCount    int
 }
 
-// NewQueueBuilder creates a new QueueBuilder.
+// NewQueueBuilder loads current queue lengths to create a new builder.
+// The counts are used to show queue status in the interface.
 func NewQueueBuilder(highCount, normalCount, lowCount int) *QueueBuilder {
 	return &QueueBuilder{
 		highPriorityCount:   highCount,
@@ -23,8 +26,12 @@ func NewQueueBuilder(highCount, normalCount, lowCount int) *QueueBuilder {
 	}
 }
 
-// Build constructs the queue management menu.
+// Build creates a Discord message showing:
+// - Current number of items in each priority queue
+// - Select menu for adding users to different priority queues
+// - Navigation and refresh buttons.
 func (b *QueueBuilder) Build() *discord.MessageUpdateBuilder {
+	// Create embed showing queue lengths
 	embed := discord.NewEmbedBuilder().
 		SetTitle("Queue Manager").
 		AddField("High Priority Queue", fmt.Sprintf("%d items", b.highPriorityCount), true).
@@ -33,7 +40,9 @@ func (b *QueueBuilder) Build() *discord.MessageUpdateBuilder {
 		SetColor(constants.DefaultEmbedColor).
 		Build()
 
+	// Add queue management components
 	components := []discord.ContainerComponent{
+		// Priority selection menu
 		discord.NewActionRow(
 			discord.NewStringSelectMenu(constants.ActionSelectMenuCustomID, "Add to queue",
 				discord.NewStringSelectMenuOption("Add to High Priority", constants.QueueHighPriorityCustomID).
@@ -44,6 +53,7 @@ func (b *QueueBuilder) Build() *discord.MessageUpdateBuilder {
 					WithEmoji(discord.ComponentEmoji{Name: "🟢"}),
 			),
 		),
+		// Navigation and refresh buttons
 		discord.NewActionRow(
 			discord.NewSecondaryButton("◀️", string(constants.BackButtonCustomID)),
 			discord.NewSecondaryButton("🔄", string(constants.RefreshButtonCustomID)),

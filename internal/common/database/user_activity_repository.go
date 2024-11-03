@@ -7,16 +7,23 @@ import (
 	"go.uber.org/zap"
 )
 
-// ActivityType represents the type of user activity.
+// ActivityType represents different kinds of user actions in the system.
 type ActivityType int
 
 const (
-	ActivityTypeAll ActivityType = iota
+	// ActivityTypeAll matches any activity type in database queries.
+	ActivityTypeAll = iota
+	// ActivityTypeViewed tracks when a moderator opens a user's profile.
 	ActivityTypeViewed
+	// ActivityTypeBanned tracks when a moderator confirms a user as inappropriate.
 	ActivityTypeBanned
+	// ActivityTypeBannedCustom tracks bans with custom moderator-provided reasons.
 	ActivityTypeBannedCustom
+	// ActivityTypeCleared tracks when a moderator marks a user as appropriate.
 	ActivityTypeCleared
+	// ActivityTypeSkipped tracks when a moderator skips reviewing a user.
 	ActivityTypeSkipped
+	// ActivityTypeRechecked tracks when a moderator requests an AI recheck.
 	ActivityTypeRechecked
 )
 
@@ -25,7 +32,7 @@ func (a ActivityType) String() string {
 	return [...]string{"ALL", "VIEWED", "BANNED", "BANNED_CUSTOM", "CLEARED", "SKIPPED", "RECHECKED"}[a]
 }
 
-// UserActivityLog represents a log entry for user activity.
+// UserActivityLog stores information about moderator actions.
 type UserActivityLog struct {
 	UserID            uint64                 `pg:"user_id,notnull"`
 	ReviewerID        uint64                 `pg:"reviewer_id,notnull"`
@@ -34,13 +41,14 @@ type UserActivityLog struct {
 	Details           map[string]interface{} `pg:"details,type:jsonb"`
 }
 
-// UserActivityRepository handles user activity logging operations.
+// UserActivityRepository handles database operations for moderator action logs.
 type UserActivityRepository struct {
 	db     *pg.DB
 	logger *zap.Logger
 }
 
-// NewUserActivityRepository creates a new UserActivityRepository instance.
+// NewUserActivityRepository creates a repository with database access for
+// storing and retrieving moderator action logs.
 func NewUserActivityRepository(db *pg.DB, logger *zap.Logger) *UserActivityRepository {
 	return &UserActivityRepository{
 		db:     db,
@@ -48,59 +56,78 @@ func NewUserActivityRepository(db *pg.DB, logger *zap.Logger) *UserActivityRepos
 	}
 }
 
-// LogActivity logs a user activity.
+// LogActivity stores a moderator action in the database.
 func (r *UserActivityRepository) LogActivity(log *UserActivityLog) {
-	if _, err := r.db.Model(log).Insert(); err != nil {
-		r.logger.Error("Failed to log user activity", zap.Error(err))
+	_, err := r.db.Model(log).Insert()
+	if err != nil {
+		r.logger.Error("Failed to log user activity",
+			zap.Error(err),
+			zap.Uint64("userID", log.UserID),
+			zap.Uint64("reviewerID", log.ReviewerID),
+			zap.String("activityType", log.ActivityType.String()))
+		return
 	}
+
+	r.logger.Info("Logged user activity",
+		zap.Uint64("userID", log.UserID),
+		zap.Uint64("reviewerID", log.ReviewerID),
+		zap.String("activityType", log.ActivityType.String()))
 }
 
-// GetLogs retrieves logs based on the given parameters.
-func (r *UserActivityRepository) GetLogs(userID, reviewerID uint64, activityTypeFilter ActivityType, startDate, endDate time.Time, page, perPage int) ([]*UserActivityLog, int, error) {
+// GetLogs retrieves activity logs based on filter criteria:
+// - User ID filters logs for a specific user
+// - Reviewer ID filters logs by a specific moderator
+// - Activity type filters by action type
+// - Date range filters by when the action occurred
+// - Page and limit control result pagination.
+func (r *UserActivityRepository) GetLogs(
+	userID uint64,
+	reviewerID uint64,
+	activityType ActivityType,
+	startDate time.Time,
+	endDate time.Time,
+	page int,
+	limit int,
+) ([]*UserActivityLog, int, error) {
 	var logs []*UserActivityLog
+	query := r.db.Model(&logs)
 
-	query := r.db.Model(&UserActivityLog{})
-
+	// Apply filters if provided
 	if userID != 0 {
 		query = query.Where("user_id = ?", userID)
 	}
-
 	if reviewerID != 0 {
 		query = query.Where("reviewer_id = ?", reviewerID)
 	}
-
+	if activityType != ActivityTypeAll {
+		query = query.Where("activity_type = ?", activityType)
+	}
 	if !startDate.IsZero() && !endDate.IsZero() {
 		query = query.Where("activity_timestamp BETWEEN ? AND ?", startDate, endDate)
 	}
 
-	if activityTypeFilter != ActivityTypeAll {
-		query = query.Where("activity_type = ?", activityTypeFilter)
-	}
-
-	totalLogs, err := query.Count()
+	// Get total count before pagination
+	total, err := query.Clone().Count()
 	if err != nil {
+		r.logger.Error("Failed to get total log count", zap.Error(err))
 		return nil, 0, err
 	}
 
+	// Apply pagination and fetch results
 	err = query.
 		Order("activity_timestamp DESC").
-		Offset(page * perPage).
-		Limit(perPage).
-		Select(&logs)
+		Limit(limit).
+		Offset(page * limit).
+		Select()
 	if err != nil {
+		r.logger.Error("Failed to get logs", zap.Error(err))
 		return nil, 0, err
 	}
 
 	r.logger.Info("Retrieved logs",
-		zap.Uint64("user_id", userID),
-		zap.Uint64("reviewer_id", reviewerID),
-		zap.String("activity_type_filter", activityTypeFilter.String()),
-		zap.Time("start_date", startDate),
-		zap.Time("end_date", endDate),
-		zap.Int("total_logs", totalLogs),
+		zap.Int("total", total),
 		zap.Int("page", page),
-		zap.Int("per_page", perPage),
-	)
+		zap.Int("limit", limit))
 
-	return logs, totalLogs, nil
+	return logs, total, nil
 }

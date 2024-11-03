@@ -10,17 +10,20 @@ import (
 	"github.com/jaxron/axonet/pkg/client"
 )
 
-// Translator is a translator that translates text from one language to another.
+// Translator handles text translation between languages by making requests
+// to the Google Translate API through a HTTP client.
 type Translator struct {
 	client *client.Client
 }
 
-// New creates a new Translator.
+// New creates a Translator with the provided HTTP client for making
+// translation requests.
 func New(client *client.Client) *Translator {
 	return &Translator{client: client}
 }
 
-// Translate translates the given text from the source language to the target language.
+// Translate sends text to Google Translate API for translation.
+// The response is parsed to extract just the translated text.
 func (t *Translator) Translate(ctx context.Context, text, sourceLang, targetLang string) (string, error) {
 	// Send request to Google Translate API
 	resp, err := t.client.NewRequest().
@@ -50,7 +53,7 @@ func (t *Translator) Translate(ctx context.Context, text, sourceLang, targetLang
 		return "", err
 	}
 
-	// Build the translated text
+	// Build the translated text from response segments
 	var translatedText strings.Builder
 	for _, slice := range result[0].([]interface{}) {
 		translatedText.WriteString(slice.([]interface{})[0].(string))

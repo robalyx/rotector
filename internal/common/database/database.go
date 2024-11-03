@@ -16,14 +16,19 @@ import (
 )
 
 const (
-	SortByRandom      = "random"
-	SortByConfidence  = "confidence"
+	// SortByRandom orders users randomly to ensure even distribution of reviews.
+	SortByRandom = "random"
+	// SortByConfidence orders users by their confidence score from highest to lowest.
+	SortByConfidence = "confidence"
+	// SortByLastUpdated orders users by their last update time from oldest to newest.
 	SortByLastUpdated = "last_updated"
 )
 
+// ErrInvalidSortBy indicates that the provided sort method is not supported.
 var ErrInvalidSortBy = errors.New("invalid sortBy value")
 
-// FlaggedGroup represents a group that has been flagged for review.
+// FlaggedGroup stores information about a group that needs review.
+// The confidence score helps prioritize which groups to review first.
 type FlaggedGroup struct {
 	ID           uint64    `pg:"id,pk"`
 	Name         string    `pg:"name,notnull"`
@@ -35,7 +40,8 @@ type FlaggedGroup struct {
 	ThumbnailURL string    `pg:"thumbnail_url"`
 }
 
-// ConfirmedGroup represents a group that is considered confirmed.
+// ConfirmedGroup stores information about a group that has been reviewed and confirmed.
+// The last_scanned field helps track when to re-check the group's members.
 type ConfirmedGroup struct {
 	ID          uint64    `pg:"id,pk"`
 	Name        string    `pg:"name,notnull"`
@@ -44,7 +50,8 @@ type ConfirmedGroup struct {
 	LastScanned time.Time `pg:"last_scanned"`
 }
 
-// User represents a user in the database.
+// User combines all the information needed to review a user.
+// This base structure is embedded in other user types (Flagged, Confirmed).
 type User struct {
 	ID             uint64                 `json:"id"             pg:"id,pk,notnull"`
 	Name           string                 `json:"name"           pg:"name,notnull"`
@@ -65,30 +72,35 @@ type User struct {
 	ThumbnailURL   string                 `json:"thumbnailUrl"   pg:"thumbnail_url"`
 }
 
-// FlaggedUser represents a user that is flagged for review.
+// FlaggedUser extends User to track users that need review.
+// The base User structure contains all the fields needed for review.
 type FlaggedUser struct {
 	User
 }
 
-// ConfirmedUser represents a user that is considered confirmed.
+// ConfirmedUser extends User to track users that have been reviewed and confirmed.
+// The VerifiedAt field shows when the user was confirmed by a moderator.
 type ConfirmedUser struct {
 	User
 	VerifiedAt time.Time `json:"verifiedAt" pg:"verified_at,notnull"`
 }
 
-// ClearedUser represents a user that has been cleared from the flagged list.
+// ClearedUser extends User to track users that were cleared during review.
+// The ClearedAt field shows when the user was cleared by a moderator.
 type ClearedUser struct {
 	User
 	ClearedAt time.Time `json:"clearedAt" pg:"cleared_at,notnull"`
 }
 
-// BannedUser represents a user that has been banned and removed from confirmed or flagged users.
+// BannedUser extends User to track users that were banned and removed.
+// The PurgedAt field shows when the user was removed from the system.
 type BannedUser struct {
 	User
 	PurgedAt time.Time `json:"purgedAt" pg:"purged_at,notnull"`
 }
 
-// DailyStatistics represents daily statistics.
+// DailyStatistics tracks daily counts of activities and purges.
+// The date field serves as the primary key for grouping statistics.
 type DailyStatistics struct {
 	Date               time.Time `pg:"date,pk"`
 	UsersConfirmed     int64     `pg:"users_confirmed"`
@@ -99,33 +111,37 @@ type DailyStatistics struct {
 	ClearedUsersPurged int64     `pg:"cleared_users_purged"`
 }
 
-// UserSetting represents user-specific settings.
+// UserSetting stores user-specific preferences.
 type UserSetting struct {
 	UserID       uint64 `pg:"user_id,pk"`
 	StreamerMode bool   `pg:"streamer_mode"`
 	DefaultSort  string `pg:"default_sort"`
 }
 
-// GuildSetting represents guild-wide settings.
+// GuildSetting stores server-wide configuration options.
 type GuildSetting struct {
 	GuildID          uint64   `pg:"guild_id,pk"`
 	WhitelistedRoles []uint64 `pg:"whitelisted_roles,array"`
 }
 
-// GroupMemberTracking represents the tracking of confirmed users in a group.
+// GroupMemberTracking monitors confirmed users within groups.
+// The LastAppended field helps determine when to purge old tracking data.
 type GroupMemberTracking struct {
 	GroupID        uint64    `pg:"group_id,pk"`
 	ConfirmedUsers []uint64  `pg:"confirmed_users,array"`
 	LastAppended   time.Time `pg:"last_appended,notnull"`
 }
 
-// UserNetworkTracking represents the tracking of confirmed users in a user's friend list.
+// UserNetworkTracking monitors confirmed users within friend networks.
+// The LastAppended field helps determine when to purge old tracking data.
 type UserNetworkTracking struct {
 	UserID         uint64    `pg:"user_id,pk"`
 	ConfirmedUsers []uint64  `pg:"confirmed_users,array"`
 	LastAppended   time.Time `pg:"last_appended,notnull"`
 }
 
+// HasAnyRole checks if any of the provided role IDs match the whitelisted roles.
+// Returns true if there is at least one match, false otherwise.
 func (s *GuildSetting) HasAnyRole(roleIDs []snowflake.ID) bool {
 	for _, roleID := range roleIDs {
 		if slices.Contains(s.WhitelistedRoles, uint64(roleID)) {
@@ -136,6 +152,7 @@ func (s *GuildSetting) HasAnyRole(roleIDs []snowflake.ID) bool {
 }
 
 // Database represents the database connection and operations.
+// It manages access to different repositories that handle specific data types.
 type Database struct {
 	db           *pg.DB
 	logger       *zap.Logger
@@ -148,8 +165,9 @@ type Database struct {
 }
 
 // NewConnection establishes a new database connection and returns a Database instance.
-func NewConnection(config *config.Config, stats *statistics.Statistics, logger *zap.Logger) (*Database, error) {
-	// Initialize database connection
+// It initializes all repositories and creates necessary tables and indexes.
+func NewConnection(config *config.Config, stats *statistics.Client, logger *zap.Logger) (*Database, error) {
+	// Initialize database connection with config values
 	db := pg.Connect(&pg.Options{
 		Addr:     fmt.Sprintf("%s:%d", config.PostgreSQL.Host, config.PostgreSQL.Port),
 		User:     config.PostgreSQL.User,
@@ -157,19 +175,20 @@ func NewConnection(config *config.Config, stats *statistics.Statistics, logger *
 		Database: config.PostgreSQL.DBName,
 	})
 
-	// Create database instance
+	// Create repositories
 	tracking := NewTrackingRepository(db, logger)
 	database := &Database{
 		db:           db,
 		logger:       logger,
 		users:        NewUserRepository(db, stats, tracking, logger),
 		groups:       NewGroupRepository(db, logger),
-		stats:        NewStatsRepository(db, stats.Client, logger),
+		stats:        NewStatsRepository(db, stats, logger),
 		settings:     NewSettingRepository(db, logger),
 		userActivity: NewUserActivityRepository(db, logger),
 		tracking:     tracking,
 	}
 
+	// Initialize database schema and TimescaleDB extension
 	if err := database.createSchema(); err != nil {
 		return nil, fmt.Errorf("failed to create schema: %w", err)
 	}
@@ -182,7 +201,7 @@ func NewConnection(config *config.Config, stats *statistics.Statistics, logger *
 	return database, nil
 }
 
-// createSchema creates the necessary database tables and indexes.
+// createSchema creates all required database tables and indexes.
 func (d *Database) createSchema() error {
 	models := []interface{}{
 		(*FlaggedGroup)(nil),
@@ -199,6 +218,7 @@ func (d *Database) createSchema() error {
 		(*UserNetworkTracking)(nil),
 	}
 
+	// Create tables if they don't exist
 	for _, model := range models {
 		err := d.db.Model(model).CreateTable(&orm.CreateTableOptions{
 			IfNotExists: true,
@@ -210,7 +230,7 @@ func (d *Database) createSchema() error {
 		d.logger.Info("Table created or already exists", zap.String("model", fmt.Sprintf("%T", model)))
 	}
 
-	// Add indexes
+	// Create indexes for efficient querying
 	if _, err := d.db.Exec(`
 		CREATE INDEX IF NOT EXISTS idx_user_activity_logs_user_id ON user_activity_logs (user_id);
 		CREATE INDEX IF NOT EXISTS idx_user_activity_logs_reviewer_id ON user_activity_logs (reviewer_id);
@@ -234,9 +254,10 @@ func (d *Database) createSchema() error {
 	return nil
 }
 
-// setupTimescaleDB sets up the TimescaleDB extension and creates the hypertable for user_activity_logs.
+// setupTimescaleDB initializes the TimescaleDB extension and creates hypertables
+// for time-series data. This enables efficient querying of historical data.
 func (d *Database) setupTimescaleDB() error {
-	// Check if TimescaleDB extension is already created
+	// Check if TimescaleDB extension exists
 	var exists bool
 	_, err := d.db.QueryOne(pg.Scan(&exists), `
 		SELECT EXISTS (
@@ -249,7 +270,7 @@ func (d *Database) setupTimescaleDB() error {
 		return fmt.Errorf("failed to check TimescaleDB extension: %w", err)
 	}
 
-	// Create TimescaleDB extension if it doesn't exist
+	// Create extension if needed
 	if !exists {
 		_, err = d.db.Exec(`CREATE EXTENSION IF NOT EXISTS timescaledb`)
 		if err != nil {
@@ -260,7 +281,7 @@ func (d *Database) setupTimescaleDB() error {
 		d.logger.Info("TimescaleDB extension already exists")
 	}
 
-	// Create hypertable
+	// Create hypertable for time-series data
 	_, err = d.db.Exec(`
 		SELECT create_hypertable('user_activity_logs', 'activity_timestamp', if_not_exists => TRUE)
 	`)
@@ -271,7 +292,8 @@ func (d *Database) setupTimescaleDB() error {
 	return nil
 }
 
-// Close closes the database connection.
+// Close gracefully shuts down the database connection.
+// It logs any errors that occur during shutdown.
 func (d *Database) Close() error {
 	err := d.db.Close()
 	if err != nil {
@@ -282,32 +304,32 @@ func (d *Database) Close() error {
 	return nil
 }
 
-// Users returns the UserRepository.
+// Users returns the repository for user-related operations.
 func (d *Database) Users() *UserRepository {
 	return d.users
 }
 
-// Groups returns the GroupRepository.
+// Groups returns the repository for group-related operations.
 func (d *Database) Groups() *GroupRepository {
 	return d.groups
 }
 
-// Stats returns the StatsRepository.
+// Stats returns the repository for statistics operations.
 func (d *Database) Stats() *StatsRepository {
 	return d.stats
 }
 
-// Settings returns the SettingRepository.
+// Settings returns the repository for user and guild settings.
 func (d *Database) Settings() *SettingRepository {
 	return d.settings
 }
 
-// Tracking returns the TrackingRepository.
+// Tracking returns the repository for tracking user and group relationships.
 func (d *Database) Tracking() *TrackingRepository {
 	return d.tracking
 }
 
-// UserActivity returns the UserActivityRepository.
+// UserActivity returns the repository for logging user actions.
 func (d *Database) UserActivity() *UserActivityRepository {
 	return d.userActivity
 }

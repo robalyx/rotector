@@ -7,13 +7,14 @@ import (
 	"go.uber.org/zap"
 )
 
-// GroupRepository handles group-related database operations.
+// GroupRepository handles database operations for group records.
 type GroupRepository struct {
 	db     *pg.DB
 	logger *zap.Logger
 }
 
-// NewGroupRepository creates a new GroupRepository instance.
+// NewGroupRepository creates a GroupRepository with database access for
+// storing and retrieving group information.
 func NewGroupRepository(db *pg.DB, logger *zap.Logger) *GroupRepository {
 	return &GroupRepository{
 		db:     db,
@@ -55,10 +56,12 @@ func (r *GroupRepository) GetNextConfirmedGroup() (*ConfirmedGroup, error) {
 	r.logger.Info("Retrieved and updated next confirmed group",
 		zap.Uint64("groupID", group.ID),
 		zap.Time("lastScanned", group.LastScanned))
+
 	return &group, nil
 }
 
-// CheckConfirmedGroups checks if any of the provided group IDs are confirmed.
+// CheckConfirmedGroups finds which groups from a list of IDs exist in confirmed_groups.
+// Returns a slice of confirmed group IDs.
 func (r *GroupRepository) CheckConfirmedGroups(groupIDs []uint64) ([]uint64, error) {
 	var confirmedGroupIDs []uint64
 	err := r.db.Model((*ConfirmedGroup)(nil)).
@@ -66,14 +69,20 @@ func (r *GroupRepository) CheckConfirmedGroups(groupIDs []uint64) ([]uint64, err
 		Where("id IN (?)", pg.In(groupIDs)).
 		Select(&confirmedGroupIDs)
 	if err != nil {
-		r.logger.Error("Failed to check confirmed groups", zap.Error(err), zap.Uint64s("groupIDs", groupIDs))
+		r.logger.Error("Failed to check confirmed groups", zap.Error(err))
 		return nil, err
 	}
+
+	r.logger.Info("Checked confirmed groups",
+		zap.Int("total", len(groupIDs)),
+		zap.Int("confirmed", len(confirmedGroupIDs)))
 
 	return confirmedGroupIDs, nil
 }
 
-// SaveFlaggedGroups saves or updates the provided flagged groups in the database.
+// SaveFlaggedGroups adds or updates groups in the flagged_groups table.
+// For each group, it updates all fields if the group already exists,
+// or inserts a new record if they don't.
 func (r *GroupRepository) SaveFlaggedGroups(flaggedGroups []*FlaggedGroup) {
 	r.logger.Info("Saving flagged groups", zap.Int("count", len(flaggedGroups)))
 
@@ -89,17 +98,55 @@ func (r *GroupRepository) SaveFlaggedGroups(flaggedGroups []*FlaggedGroup) {
 			Set("thumbnail_url = EXCLUDED.thumbnail_url").
 			Insert()
 		if err != nil {
-			r.logger.Error("Failed to save flagged group",
-				zap.Error(err),
+			r.logger.Error("Error saving flagged group",
 				zap.Uint64("groupID", flaggedGroup.ID),
-				zap.String("name", flaggedGroup.Name))
+				zap.String("name", flaggedGroup.Name),
+				zap.String("reason", flaggedGroup.Reason),
+				zap.Float64("confidence", flaggedGroup.Confidence),
+				zap.Error(err))
 			continue
 		}
 
 		r.logger.Info("Saved flagged group",
 			zap.Uint64("groupID", flaggedGroup.ID),
-			zap.String("name", flaggedGroup.Name))
+			zap.String("name", flaggedGroup.Name),
+			zap.String("reason", flaggedGroup.Reason),
+			zap.Float64("confidence", flaggedGroup.Confidence),
+			zap.Time("last_updated", time.Now()),
+			zap.String("thumbnail_url", flaggedGroup.ThumbnailURL))
 	}
 
-	r.logger.Info("Finished saving flagged groups", zap.Int("count", len(flaggedGroups)))
+	r.logger.Info("Finished saving flagged groups")
+}
+
+// ConfirmGroup moves a group from flagged_groups to confirmed_groups.
+// This happens when a moderator confirms that a group is inappropriate.
+func (r *GroupRepository) ConfirmGroup(group *FlaggedGroup) error {
+	return r.db.RunInTransaction(r.db.Context(), func(tx *pg.Tx) error {
+		confirmedGroup := &ConfirmedGroup{
+			ID:          group.ID,
+			Name:        group.Name,
+			Description: group.Description,
+			Owner:       group.Owner,
+		}
+
+		_, err := tx.Model(confirmedGroup).
+			OnConflict("(id) DO UPDATE").
+			Set("name = EXCLUDED.name").
+			Set("description = EXCLUDED.description").
+			Set("owner = EXCLUDED.owner").
+			Insert()
+		if err != nil {
+			r.logger.Error("Failed to insert or update group in confirmed_groups", zap.Error(err), zap.Uint64("groupID", group.ID))
+			return err
+		}
+
+		_, err = tx.Model((*FlaggedGroup)(nil)).Where("id = ?", group.ID).Delete()
+		if err != nil {
+			r.logger.Error("Failed to delete group from flagged_groups", zap.Error(err), zap.Uint64("groupID", group.ID))
+			return err
+		}
+
+		return nil
+	})
 }

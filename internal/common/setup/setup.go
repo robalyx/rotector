@@ -30,64 +30,66 @@ import (
 	"go.uber.org/zap"
 )
 
-// AppSetup contains all the common setup components.
+// AppSetup bundles all core dependencies and services needed by the application.
+// Each field represents a major subsystem that needs initialization and cleanup.
 type AppSetup struct {
-	Config       *config.Config
-	Logger       *zap.Logger
-	DBLogger     *zap.Logger
-	DB           *database.Database
-	OpenAIClient *openai.Client
-	Stats        *statistics.Statistics
-	RoAPI        *api.API
-	Queue        *queue.Manager
-	RedisManager *redis.Manager
+	Config       *config.Config     // Application configuration
+	Logger       *zap.Logger        // Main application logger
+	DBLogger     *zap.Logger        // Database-specific logger
+	DB           *database.Database // Database connection pool
+	OpenAIClient *openai.Client     // OpenAI API client
+	Stats        *statistics.Client // Statistics tracking
+	RoAPI        *api.API           // RoAPI HTTP client
+	Queue        *queue.Manager     // Background job queue
+	RedisManager *redis.Manager     // Redis connection manager
 }
 
-// InitializeApp performs common setup tasks and returns an AppSetup.
+// InitializeApp bootstraps all application dependencies in the correct order,
+// ensuring each component has its required dependencies available.
 func InitializeApp(logDir string) (*AppSetup, error) {
-	// Load configuration
+	// Configuration must be loaded first as other components depend on it
 	cfg, err := config.LoadConfig()
 	if err != nil {
 		return nil, err
 	}
 
-	// Initialize logging
+	// Logging system is initialized next to capture setup issues
 	logger, dbLogger, err := GetLoggers(logDir, cfg.Logging.Level, cfg.Logging.MaxLogsToKeep)
 	if err != nil {
 		return nil, err
 	}
 
-	// Initialize Redis manager
+	// Redis manager provides connection pools for various subsystems
 	redisManager := redis.NewManager(cfg, logger)
 
-	// Initialize statistics client
+	// Statistics tracking requires its own Redis database
 	statsRedis, err := redisManager.GetClient(redis.StatsDBIndex)
 	if err != nil {
 		logger.Fatal("Failed to create statistics Redis client", zap.Error(err))
 		return nil, err
 	}
-	stats := statistics.NewStatistics(statsRedis, logger)
+	stats := statistics.NewClient(statsRedis, logger)
 
-	// Initialize database connection
+	// Database connection pool is created with statistics tracking
 	db, err := database.NewConnection(cfg, stats, dbLogger)
 	if err != nil {
 		logger.Fatal("Failed to connect to database", zap.Error(err))
 		return nil, err
 	}
 
-	// Initialize OpenAI client
+	// OpenAI client is configured with API key from config
 	openaiClient := openai.NewClient(
 		option.WithAPIKey(cfg.OpenAI.APIKey),
 	)
 
-	// Initialize RoAPI client
+	// RoAPI client is configured with middleware chain
 	roAPI, err := getRoAPIClient(cfg, redisManager, logger)
 	if err != nil {
 		logger.Fatal("Failed to create RoAPI client", zap.Error(err))
 		return nil, err
 	}
 
-	// Initialize Queue manager
+	// Queue manager creates its own Redis database for job storage
 	queueRedis, err := redisManager.GetClient(redis.QueueDBIndex)
 	if err != nil {
 		logger.Fatal("Failed to create queue Redis client", zap.Error(err))
@@ -95,7 +97,7 @@ func InitializeApp(logDir string) (*AppSetup, error) {
 	}
 	queueManager := queue.NewManager(db, queueRedis, logger)
 
-	// Initialize AppSetup
+	// Bundle all initialized components
 	return &AppSetup{
 		Config:       cfg,
 		Logger:       logger,
@@ -109,32 +111,46 @@ func InitializeApp(logDir string) (*AppSetup, error) {
 	}, nil
 }
 
-// CleanupApp performs cleanup tasks.
+// CleanupApp ensures graceful shutdown of all components in reverse initialization order.
+// Logs but does not fail on cleanup errors to ensure all components get cleanup attempts.
 func (s *AppSetup) CleanupApp() {
+	// Sync buffered logs before shutdown
 	if err := s.Logger.Sync(); err != nil {
 		log.Printf("Failed to sync logger: %v", err)
 	}
 	if err := s.DBLogger.Sync(); err != nil {
 		log.Printf("Failed to sync DB logger: %v", err)
 	}
+
+	// Close database connections
 	if err := s.DB.Close(); err != nil {
 		log.Printf("Failed to close database connection: %v", err)
 	}
+
+	// Close Redis connections last as other components might need it during cleanup
 	s.RedisManager.Close()
 }
 
-// getRoAPIClient creates a new RoAPI client with the given configuration.
+// getRoAPIClient constructs an HTTP client with a middleware chain for reliability and performance.
+// Middleware order is important - each layer wraps the next in specified priority.
 func getRoAPIClient(cfg *config.Config, redisManager *redis.Manager, logger *zap.Logger) (*api.API, error) {
-	// Read the cookies and proxies
+	// Load authentication and proxy configuration
 	cookies := readCookies(logger)
 	proxies := readProxies(logger)
 
-	// Initialize Redis cache
+	// Cache layer requires its own Redis database
 	redisClient, err := redisManager.GetClient(redis.CacheDBIndex)
 	if err != nil {
 		return nil, err
 	}
 
+	// Build client with middleware chain in priority order:
+	// 6. Circuit breaker prevents cascading failures
+	// 5. Retry handles transient failures
+	// 4. Single flight deduplicates concurrent requests
+	// 3. Redis caching reduces API load
+	// 2. Rate limiting prevents API abuse
+	// 1. Proxy routing distributes requests
 	return api.New(cookies,
 		client.WithLogger(NewLogger(logger)),
 		client.WithTimeout(10*time.Second),
@@ -153,11 +169,12 @@ func getRoAPIClient(cfg *config.Config, redisManager *redis.Manager, logger *zap
 	), nil
 }
 
-// readProxies reads the proxies from the given configuration file.
+// readProxies parses proxy configuration from a file in IP:Port:Username:Password format.
+// Each line represents one proxy server. Invalid formats trigger fatal errors.
 func readProxies(logger *zap.Logger) []*url.URL {
 	var proxies []*url.URL
 
-	// Open the file
+	// Load proxy configuration file
 	proxiesFile := filepath.Dir(viper.GetViper().ConfigFileUsed()) + "/credentials/proxies"
 	file, err := os.Open(proxiesFile)
 	if err != nil {
@@ -166,7 +183,7 @@ func readProxies(logger *zap.Logger) []*url.URL {
 	}
 	defer file.Close()
 
-	// Read the file line by line
+	// Process each proxy line
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
 		// Split the line into parts (IP:Port:Username:Password)
@@ -176,13 +193,8 @@ func readProxies(logger *zap.Logger) []*url.URL {
 			return nil
 		}
 
-		// Extract proxy components
-		ip := parts[0]
-		port := parts[1]
-		username := parts[2]
-		password := parts[3]
-
-		// Construct the proxy URL
+		// Build proxy URL with authentication
+		ip, port, username, password := parts[0], parts[1], parts[2], parts[3]
 		proxyURL := fmt.Sprintf("http://%s:%s@%s", username, password, net.JoinHostPort(ip, port))
 
 		// Parse the proxy URL
@@ -205,11 +217,12 @@ func readProxies(logger *zap.Logger) []*url.URL {
 	return proxies
 }
 
-// readCookies reads the cookies from the given configuration file.
+// readCookies loads authentication cookies from a file, one cookie per line.
+// Returns empty slice and logs error if file cannot be read.
 func readCookies(logger *zap.Logger) []string {
 	var cookies []string
 
-	// Open the file
+	// Load cookie file
 	cookiesFile := filepath.Dir(viper.GetViper().ConfigFileUsed()) + "/credentials/cookies"
 	file, err := os.Open(cookiesFile)
 	if err != nil {
@@ -218,7 +231,7 @@ func readCookies(logger *zap.Logger) []string {
 	}
 	defer file.Close()
 
-	// Read the file line by line
+	// Read cookies line by line
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
 		cookies = append(cookies, scanner.Text())

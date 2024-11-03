@@ -9,38 +9,58 @@ import (
 	"github.com/wcharczuk/go-chart/v2/drawing"
 )
 
+// Chart dimensions and styling constants control the visual appearance
+// of the statistics chart.
 const (
-	// Chart dimensions and styling.
-	titleFontSize   = 12.0
-	xAxisFontSize   = 10.0
-	yAxisFontSize   = 12.0
-	xAxisRotation   = 45.0
-	gridLineWidth   = 1.0
+	// titleFontSize sets the size of the chart title text.
+	titleFontSize = 12.0
+	// xAxisFontSize sets the size of x-axis labels.
+	xAxisFontSize = 10.0
+	// yAxisFontSize sets the size of y-axis labels.
+	yAxisFontSize = 12.0
+	// xAxisRotation angles x-axis labels to prevent overlap.
+	xAxisRotation = 45.0
+	// gridLineWidth controls the thickness of grid lines.
+	gridLineWidth = 1.0
+	// seriesLineWidth controls the thickness of data lines.
 	seriesLineWidth = 3.0
-	seriesDotWidth  = 4.0
-	paddingTop      = 30
-	paddingBottom   = 30
-	paddingLeft     = 20
-	paddingRight    = 20
+	// seriesDotWidth controls the size of data points.
+	seriesDotWidth = 4.0
+	// paddingTop adds space above the chart.
+	paddingTop = 30
+	// paddingBottom adds space below the chart.
+	paddingBottom = 30
+	// paddingLeft adds space to the left of the chart.
+	paddingLeft = 20
+	// paddingRight adds space to the right of the chart.
+	paddingRight = 20
 )
 
-// ChartBuilder builds charts for the dashboard.
+// ChartBuilder creates statistical charts for the dashboard by combining
+// hourly data points into line graphs.
 type ChartBuilder struct {
-	stats []statistics.HourlyStats
+	stats statistics.HourlyStats
 }
 
-// NewChartBuilder creates a new ChartBuilder.
-func NewChartBuilder(stats []statistics.HourlyStats) *ChartBuilder {
+// NewChartBuilder loads hourly statistics to create a new chart builder.
+func NewChartBuilder(stats statistics.HourlyStats) *ChartBuilder {
 	return &ChartBuilder{
 		stats: stats,
 	}
 }
 
-// Build creates the chart image.
+// Build creates a PNG image showing:
+// - Three line series (confirmed, flagged, cleared users)
+// - Grid lines for easier reading
+// - Hour labels on x-axis
+// - Count labels on y-axis
+// - Legend identifying each line.
 func (b *ChartBuilder) Build() (*bytes.Buffer, error) {
+	// Extract data points for each series
 	xValues, confirmedSeries, flaggedSeries, clearedSeries := b.prepareDataSeries()
 	gridLines, ticks := b.prepareGridLinesAndTicks()
 
+	// Configure and create the chart
 	graph := &chart.Chart{
 		Title:      "User Statistics",
 		TitleStyle: b.getTitleStyle(),
@@ -54,12 +74,12 @@ func (b *ChartBuilder) Build() (*bytes.Buffer, error) {
 		},
 	}
 
-	// Add legend
+	// Add legend below the chart
 	graph.Elements = []chart.Renderable{
 		chart.Legend(graph),
 	}
 
-	// Render to buffer
+	// Render chart to PNG format
 	buf := new(bytes.Buffer)
 	if err := graph.Render(chart.PNG, buf); err != nil {
 		return nil, err
@@ -68,7 +88,8 @@ func (b *ChartBuilder) Build() (*bytes.Buffer, error) {
 	return buf, nil
 }
 
-// prepareDataSeries prepares the data series for the chart.
+// prepareDataSeries extracts data points from hourly statistics into
+// separate slices for x-axis values and each data series.
 func (b *ChartBuilder) prepareDataSeries() ([]float64, []float64, []float64, []float64) {
 	xValues := make([]float64, len(b.stats))
 	confirmedSeries := make([]float64, len(b.stats))
@@ -85,7 +106,8 @@ func (b *ChartBuilder) prepareDataSeries() ([]float64, []float64, []float64, []f
 	return xValues, confirmedSeries, flaggedSeries, clearedSeries
 }
 
-// prepareGridLinesAndTicks prepares the grid lines and ticks for the chart.
+// prepareGridLinesAndTicks creates grid lines and x-axis labels showing
+// how many hours ago each data point represents.
 func (b *ChartBuilder) prepareGridLinesAndTicks() ([]chart.GridLine, []chart.Tick) {
 	gridLines := make([]chart.GridLine, len(b.stats))
 	ticks := make([]chart.Tick, len(b.stats))
@@ -107,14 +129,15 @@ func (b *ChartBuilder) prepareGridLinesAndTicks() ([]chart.GridLine, []chart.Tic
 	return gridLines, ticks
 }
 
-// getTitleStyle returns the style for the chart title.
+// getTitleStyle returns styling for the chart title.
 func (b *ChartBuilder) getTitleStyle() chart.Style {
 	return chart.Style{
 		FontSize: titleFontSize,
 	}
 }
 
-// getBackgroundStyle returns the style for the chart background.
+// getBackgroundStyle returns styling for the chart background,
+// including padding around all edges.
 func (b *ChartBuilder) getBackgroundStyle() chart.Style {
 	return chart.Style{
 		Padding: chart.Box{
@@ -126,7 +149,10 @@ func (b *ChartBuilder) getBackgroundStyle() chart.Style {
 	}
 }
 
-// getXAxis returns the configuration for the X axis.
+// getXAxis returns configuration for the x-axis including:
+// - Rotated labels to prevent overlap
+// - Grid lines for easier reading
+// - Custom tick marks and labels.
 func (b *ChartBuilder) getXAxis(gridLines []chart.GridLine, ticks []chart.Tick) chart.XAxis {
 	return chart.XAxis{
 		Style: chart.Style{
@@ -143,7 +169,9 @@ func (b *ChartBuilder) getXAxis(gridLines []chart.GridLine, ticks []chart.Tick) 
 	}
 }
 
-// getYAxis returns the configuration for the Y axis.
+// getYAxis returns configuration for the y-axis including:
+// - Grid lines for easier reading
+// - Number formatting for count labels.
 func (b *ChartBuilder) getYAxis() chart.YAxis {
 	return chart.YAxis{
 		Style: chart.Style{
@@ -163,7 +191,11 @@ func (b *ChartBuilder) getYAxis() chart.YAxis {
 	}
 }
 
-// createSeries creates a new series for the chart.
+// createSeries builds a line series for the chart with:
+// - Custom name for the legend
+// - Data points from x and y values
+// - Specified line color and thickness
+// - Dots at each data point.
 func (b *ChartBuilder) createSeries(name string, xValues, yValues []float64, color drawing.Color) chart.Series {
 	return chart.ContinuousSeries{
 		Name:    name,

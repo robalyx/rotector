@@ -10,11 +10,12 @@ import (
 	"go.uber.org/zap"
 )
 
-const (
-	MinConfirmedUsersForFlag = 20
-)
+// MinConfirmedUsersForFlag sets the threshold for how many confirmed users
+// must be found before flagging a group or user.
+const MinConfirmedUsersForFlag = 20
 
-// TrackingChecker handles checking of tracking data for flagging groups and users.
+// TrackingChecker handles the analysis of user and group relationships by
+// tracking affiliations between confirmed users.
 type TrackingChecker struct {
 	db               *database.Database
 	roAPI            *api.API
@@ -24,7 +25,8 @@ type TrackingChecker struct {
 	logger           *zap.Logger
 }
 
-// NewTrackingChecker creates a new TrackingChecker instance.
+// NewTrackingChecker creates a TrackingChecker with all required fetchers
+// for loading user and group information.
 func NewTrackingChecker(db *database.Database, roAPI *api.API, thumbnailFetcher *fetcher.ThumbnailFetcher, logger *zap.Logger) *TrackingChecker {
 	return &TrackingChecker{
 		db:               db,
@@ -36,28 +38,30 @@ func NewTrackingChecker(db *database.Database, roAPI *api.API, thumbnailFetcher 
 	}
 }
 
-// CheckGroupTrackings checks group member trackings and flags groups with sufficient confirmed users.
+// CheckGroupTrackings analyzes group member lists to find groups with many
+// confirmed users. Groups exceeding the threshold are flagged with a confidence
+// score based on the ratio of confirmed members.
 func (c *TrackingChecker) CheckGroupTrackings() error {
-	// Find and remove groups with sufficient confirmed users
+	// Find groups with enough confirmed members
 	groups, err := c.db.Tracking().GetAndRemoveQualifiedGroupTrackings(MinConfirmedUsersForFlag)
 	if err != nil {
 		c.logger.Error("Error getting and removing qualified groups", zap.Error(err))
 		return err
 	}
 
-	// Extract group IDs
+	// Extract group IDs for batch lookup
 	groupIDs := make([]uint64, 0, len(groups))
 	for groupID := range groups {
 		groupIDs = append(groupIDs, groupID)
 	}
 
-	// Fetch group information
+	// Load group information from API
 	groupInfos := c.groupFetcher.FetchGroupInfos(groupIDs)
 	if len(groupInfos) == 0 {
 		return nil
 	}
 
-	// Process each group
+	// Create flagged group entries with confidence scores
 	flaggedGroups := make([]*database.FlaggedGroup, 0, len(groupInfos))
 	for _, groupInfo := range groupInfos {
 		flaggedGroups = append(flaggedGroups, &database.FlaggedGroup{
@@ -71,38 +75,37 @@ func (c *TrackingChecker) CheckGroupTrackings() error {
 		})
 	}
 
-	// Add thumbnail URLs
+	// Add thumbnails and save to database
 	flaggedGroups = c.thumbnailFetcher.AddGroupImageURLs(flaggedGroups)
-
-	// Save flagged groups
 	c.db.Groups().SaveFlaggedGroups(flaggedGroups)
 
 	c.logger.Info("Checked group trackings", zap.Int("flagged_groups", len(flaggedGroups)))
 	return nil
 }
 
-// CheckUserTrackings checks user network trackings and flags users with sufficient confirmed users.
+// CheckUserTrackings analyzes user friend networks to find users connected to
+// many confirmed users. Users exceeding the threshold are flagged with a confidence
+// score based on the ratio of confirmed friends.
 func (c *TrackingChecker) CheckUserTrackings() error {
-	// Find and remove users with sufficient confirmed users
+	// Find users with enough confirmed connections
 	users, err := c.db.Tracking().GetAndRemoveQualifiedUserTrackings(MinConfirmedUsersForFlag)
 	if err != nil {
 		return fmt.Errorf("failed to query and remove qualified user network trackings: %w", err)
 	}
 
-	// Extract user IDs
+	// Extract user IDs for batch lookup
 	userIDs := make([]uint64, 0, len(users))
 	for userID := range users {
 		userIDs = append(userIDs, userID)
 	}
 
-	// Fetch user information
+	// Load user information from API
 	userInfos := c.userFetcher.FetchInfos(userIDs)
 	if len(userInfos) == 0 {
-		c.logger.Info("No user infos found", zap.Int("user_ids", len(userIDs)))
 		return nil
 	}
 
-	// Process each user
+	// Create flagged user entries with confidence scores
 	flaggedUsers := make([]*database.User, 0, len(userInfos))
 	for _, userInfo := range userInfos {
 		flaggedUsers = append(flaggedUsers, &database.User{
@@ -117,10 +120,8 @@ func (c *TrackingChecker) CheckUserTrackings() error {
 		})
 	}
 
-	// Add thumbnail URLs
+	// Add thumbnails and save to database
 	flaggedUsers = c.thumbnailFetcher.AddImageURLs(flaggedUsers)
-
-	// Save flagged users
 	c.db.Users().SaveFlaggedUsers(flaggedUsers)
 
 	c.logger.Info("Checked user trackings", zap.Int("flagged_users", len(flaggedUsers)))
