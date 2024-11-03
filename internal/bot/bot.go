@@ -240,9 +240,10 @@ func (b *Bot) handleComponentInteraction(event *events.ComponentInteractionCreat
 		}
 
 		// Ensure the interaction is for the latest message
-		if s.GetUint64(constants.SessionKeyMessageID) != uint64(event.Message.ID) {
+		sessionMessageID := s.GetUint64(constants.SessionKeyMessageID)
+		if sessionMessageID != uint64(event.Message.ID) {
 			b.logger.Debug("Interaction is outdated",
-				zap.Uint64("session_message_id", s.GetUint64(constants.SessionKeyMessageID)),
+				zap.Uint64("session_message_id", sessionMessageID),
 				zap.Uint64("event_message_id", uint64(event.Message.ID)))
 			b.paginationManager.RespondWithError(event, "This interaction is outdated. Please use the latest interaction.")
 			return

@@ -60,7 +60,7 @@ func (m *Manager) GetOrCreateSession(ctx context.Context, userID snowflake.ID) (
 	if err := result.Error(); err != nil {
 		if errors.Is(err, rueidis.Nil) {
 			// Session doesn't exist, create new one with user settings
-			sessionData := make(map[string]string)
+			sessionData := make(map[string]interface{})
 			session := NewSession(m.db, m.redis, key, sessionData, m.logger)
 			session.Set(constants.SessionKeyUserSettings, settings)
 
@@ -75,7 +75,7 @@ func (m *Manager) GetOrCreateSession(ctx context.Context, userID snowflake.ID) (
 		return nil, fmt.Errorf("failed to get session data as bytes: %w", err)
 	}
 
-	var sessionData map[string]string
+	var sessionData map[string]interface{}
 	if err := sonic.Unmarshal(data, &sessionData); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal session data: %w", err)
 	}

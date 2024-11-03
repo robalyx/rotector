@@ -7,10 +7,10 @@ import (
 	"fmt"
 
 	"github.com/redis/rueidis"
+	"github.com/spf13/cast"
 
 	"github.com/bytedance/sonic"
 	"github.com/rotector/rotector/internal/common/database"
-
 	"go.uber.org/zap"
 )
 
@@ -19,12 +19,12 @@ type Session struct {
 	db     *database.Database
 	redis  rueidis.Client
 	key    string
-	data   map[string]string
+	data   map[string]interface{}
 	logger *zap.Logger
 }
 
 // NewSession creates a new session for the given user.
-func NewSession(db *database.Database, redis rueidis.Client, key string, data map[string]string, logger *zap.Logger) *Session {
+func NewSession(db *database.Database, redis rueidis.Client, key string, data map[string]interface{}, logger *zap.Logger) *Session {
 	return &Session{
 		db:     db,
 		redis:  redis,
@@ -52,24 +52,70 @@ func (s *Session) Touch(ctx context.Context) {
 	}
 }
 
-// Get returns the raw string value for the given key.
-func (s *Session) Get(key string) string {
+// Get returns the raw interface{} value for the given key.
+func (s *Session) Get(key string) interface{} {
 	if value, ok := s.data[key]; ok {
 		return value
 	}
-	s.logger.Warn("Session key not found", zap.String("key", key))
-	return ""
+	s.logger.Debug("Session key not found", zap.String("key", key))
+	return nil
+}
+
+// GetInterface unmarshals the stored value into the provided interface.
+func (s *Session) GetInterface(key string, v interface{}) {
+	value := s.Get(key)
+	if value == nil {
+		return
+	}
+
+	// Marshal the value back to JSON
+	jsonBytes, err := sonic.Marshal(value)
+	if err != nil {
+		s.logger.Error("Failed to marshal interface",
+			zap.Error(err),
+			zap.String("key", key),
+			zap.Any("value", value))
+		return
+	}
+
+	// Unmarshal into the target interface
+	if err := sonic.Unmarshal(jsonBytes, v); err != nil {
+		s.logger.Error("Failed to unmarshal interface",
+			zap.Error(err),
+			zap.String("key", key),
+			zap.String("json", string(jsonBytes)),
+			zap.String("type", fmt.Sprintf("%T", v)))
+		return
+	}
+}
+
+// GetBuffer retrieves and decodes a base64 encoded buffer from the session.
+func (s *Session) GetBuffer(key string) *bytes.Buffer {
+	value := s.Get(key)
+	if value == nil {
+		return nil
+	}
+
+	str, ok := value.(string)
+	if !ok {
+		return nil
+	}
+
+	// Try to decode base64
+	decoded, err := base64.StdEncoding.DecodeString(str)
+	if err != nil {
+		s.logger.Error("Failed to decode base64 buffer",
+			zap.Error(err),
+			zap.String("key", key))
+		return nil
+	}
+
+	return bytes.NewBuffer(decoded)
 }
 
 // Set sets the value for the given key.
 func (s *Session) Set(key string, value interface{}) {
-	// Convert value to JSON string
-	jsonStr, err := sonic.MarshalString(value)
-	if err != nil {
-		s.logger.Error("Failed to marshal value", zap.Error(err), zap.String("key", key))
-		return
-	}
-	s.data[key] = jsonStr
+	s.data[key] = value
 	s.logger.Debug("Session key set", zap.String("key", key))
 }
 
@@ -94,73 +140,42 @@ func (s *Session) Delete(key string) {
 
 // GetString returns the string value for the given key.
 func (s *Session) GetString(key string) string {
-	var value string
-	s.GetInterface(key, &value)
-	return value
+	if value := s.Get(key); value != nil {
+		if str, ok := value.(string); ok {
+			return str
+		}
+	}
+	return ""
 }
 
 // GetInt returns the integer value for the given key.
 func (s *Session) GetInt(key string) int {
-	var value int
-	s.GetInterface(key, &value)
-	return value
+	if value := s.Get(key); value != nil {
+		return cast.ToInt(value)
+	}
+	return 0
 }
 
 // GetUint64 returns the uint64 value for the given key.
 func (s *Session) GetUint64(key string) uint64 {
-	var value uint64
-	s.GetInterface(key, &value)
-	return value
+	if value := s.Get(key); value != nil {
+		return cast.ToUint64(value)
+	}
+	return 0
 }
 
 // GetFloat64 returns the float64 value for the given key.
 func (s *Session) GetFloat64(key string) float64 {
-	var value float64
-	s.GetInterface(key, &value)
-	return value
+	if value := s.Get(key); value != nil {
+		return cast.ToFloat64(value)
+	}
+	return 0
 }
 
 // GetBool returns the boolean value for the given key.
 func (s *Session) GetBool(key string) bool {
-	var value bool
-	s.GetInterface(key, &value)
-	return value
-}
-
-// GetInterface unmarshals the stored JSON string into the provided interface.
-func (s *Session) GetInterface(key string, v interface{}) {
-	jsonStr := s.Get(key)
-	if jsonStr == "" {
-		s.logger.Warn("Session key empty", zap.String("key", key))
-		return
+	if value := s.Get(key); value != nil {
+		return cast.ToBool(value)
 	}
-
-	if err := sonic.UnmarshalString(jsonStr, v); err != nil {
-		s.logger.Error("Failed to unmarshal interface",
-			zap.Error(err),
-			zap.String("key", key),
-			zap.String("json", jsonStr),
-			zap.String("type", fmt.Sprintf("%T", v)))
-		return
-	}
-	s.logger.Debug("Session key value", zap.String("key", key), zap.Any("value", v))
-}
-
-// GetBuffer retrieves and decodes a base64 encoded buffer from the session.
-func (s *Session) GetBuffer(key string) *bytes.Buffer {
-	str := s.Get(key)
-	if str == "" {
-		return nil
-	}
-
-	// Try to decode base64
-	decoded, err := base64.StdEncoding.DecodeString(str)
-	if err != nil {
-		s.logger.Error("Failed to decode base64 buffer",
-			zap.Error(err),
-			zap.String("key", key))
-		return nil
-	}
-
-	return bytes.NewBuffer(decoded)
+	return false
 }

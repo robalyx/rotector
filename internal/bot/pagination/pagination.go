@@ -1,6 +1,8 @@
 package pagination
 
 import (
+	"strconv"
+
 	"github.com/disgoorg/disgo/discord"
 	"github.com/disgoorg/disgo/events"
 	"github.com/rotector/rotector/internal/bot/constants"
@@ -107,10 +109,12 @@ func (m *Manager) NavigateTo(event interfaces.CommonEvent, s *session.Session, p
 		s.Set(constants.SessionKeyPreviousPage, currentPage)
 	}
 
-	s.Set(constants.SessionKeyMessageID, uint64(message.ID))
+	s.Set(constants.SessionKeyMessageID, strconv.FormatUint(uint64(message.ID), 10))
 	s.Set(constants.SessionKeyCurrentPage, page.Name)
 
-	m.logger.Debug("Updated message", zap.String("page", page.Name))
+	m.logger.Debug("Updated message",
+		zap.String("page", page.Name),
+		zap.Uint64("message_id", uint64(message.ID)))
 }
 
 // RespondWithError sends an error response to the user.
