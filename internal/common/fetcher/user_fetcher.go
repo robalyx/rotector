@@ -41,8 +41,10 @@ func NewUserFetcher(roAPI *api.API, logger *zap.Logger) *UserFetcher {
 // It skips banned users and fetches groups/friends concurrently for each user.
 func (u *UserFetcher) FetchInfos(userIDs []uint64) []*Info {
 	var wg sync.WaitGroup
-	userInfoChan := make(chan *Info, len(userIDs))
+	resultChan := make(chan *Info, len(userIDs))
+	results := make([]*Info, 0, len(userIDs))
 
+	// Process each user concurrently
 	for _, userID := range userIDs {
 		wg.Add(1)
 		go func(id uint64) {
@@ -51,7 +53,9 @@ func (u *UserFetcher) FetchInfos(userIDs []uint64) []*Info {
 			// Fetch the user info
 			userInfo, err := u.roAPI.Users().GetUserByID(context.Background(), id)
 			if err != nil {
-				u.logger.Warn("Error fetching user info", zap.Uint64("userID", id), zap.Error(err))
+				u.logger.Warn("Error fetching user info",
+					zap.Uint64("userID", id),
+					zap.Error(err))
 				return
 			}
 
@@ -64,7 +68,7 @@ func (u *UserFetcher) FetchInfos(userIDs []uint64) []*Info {
 			groups, friends := u.fetchGroupsAndFriends(id)
 
 			// Send the user info to the channel
-			userInfoChan <- &Info{
+			resultChan <- &Info{
 				ID:          userInfo.ID,
 				Name:        userInfo.Name,
 				DisplayName: userInfo.DisplayName,
@@ -77,89 +81,118 @@ func (u *UserFetcher) FetchInfos(userIDs []uint64) []*Info {
 		}(userID)
 	}
 
-	// Close the channel when all goroutines are done
+	// Use a separate goroutine to close the channel
 	go func() {
 		wg.Wait()
-		close(userInfoChan)
+		close(resultChan)
 	}()
 
-	// Collect results from the channel
-	userInfos := make([]*Info, 0, len(userIDs))
-	for userInfo := range userInfoChan {
-		if userInfo != nil {
-			userInfos = append(userInfos, userInfo)
-		}
+	// Collect results as they arrive
+	for info := range resultChan {
+		results = append(results, info)
 	}
 
-	return userInfos
+	u.logger.Info("Finished fetching user information",
+		zap.Int("totalRequested", len(userIDs)),
+		zap.Int("successfulFetches", len(results)))
+
+	return results
 }
 
 // fetchGroupsAndFriends retrieves a user's group memberships and friend list
 // concurrently. Returns empty slices if all requests fail.
 func (u *UserFetcher) fetchGroupsAndFriends(userID uint64) ([]types.UserGroupRoles, []types.Friend) {
-	var wg sync.WaitGroup
-	var groupRoles []types.UserGroupRoles
-	var friends []types.Friend
+	type result struct {
+		groups  []types.UserGroupRoles
+		friends []types.Friend
+		err     error
+	}
 
-	wg.Add(2)
+	var wg sync.WaitGroup
+	groupChan := make(chan result, 1)
+	friendChan := make(chan result, 1)
 
 	// Fetch user's groups
+	wg.Add(1)
 	go func() {
 		defer wg.Done()
 		builder := groups.NewUserGroupRolesBuilder(userID)
 		fetchedGroups, err := u.roAPI.Groups().GetUserGroupRoles(context.Background(), builder.Build())
-		if err != nil {
-			u.logger.Warn("Error fetching user groups", zap.Uint64("userID", userID), zap.Error(err))
-			return
-		}
-		groupRoles = fetchedGroups
+		groupChan <- result{groups: fetchedGroups, err: err}
 	}()
 
 	// Fetch user's friends
+	wg.Add(1)
 	go func() {
 		defer wg.Done()
 		fetchedFriends, err := u.roAPI.Friends().GetFriends(context.Background(), userID)
-		if err != nil {
-			u.logger.Warn("Error fetching user friends", zap.Uint64("userID", userID), zap.Error(err))
-			return
-		}
-		friends = fetchedFriends
+		friendChan <- result{friends: fetchedFriends, err: err}
 	}()
 
-	wg.Wait()
+	// Wait for both goroutines and close channels
+	go func() {
+		wg.Wait()
+		close(groupChan)
+		close(friendChan)
+	}()
 
-	return groupRoles, friends
+	// Get results
+	groupResult := <-groupChan
+	friendResult := <-friendChan
+
+	if groupResult.err != nil {
+		u.logger.Warn("Error fetching user groups",
+			zap.Uint64("userID", userID),
+			zap.Error(groupResult.err))
+	}
+
+	if friendResult.err != nil {
+		u.logger.Warn("Error fetching user friends",
+			zap.Uint64("userID", userID),
+			zap.Error(friendResult.err))
+	}
+
+	return groupResult.groups, friendResult.friends
 }
 
 // FetchBannedUsers checks which users from a batch of IDs are currently banned.
 // Returns a slice of banned user IDs.
 func (u *UserFetcher) FetchBannedUsers(userIDs []uint64) ([]uint64, error) {
 	var wg sync.WaitGroup
-	var mu sync.Mutex
-	bannedUserIDs := []uint64{}
+	results := make([]uint64, 0, len(userIDs))
+	userChan := make(chan uint64, len(userIDs))
 
 	for _, userID := range userIDs {
 		wg.Add(1)
 		go func(id uint64) {
 			defer wg.Done()
 
-			// Fetch the user info
 			userInfo, err := u.roAPI.Users().GetUserByID(context.Background(), id)
 			if err != nil {
-				u.logger.Warn("Error fetching user info", zap.Uint64("userID", id), zap.Error(err))
+				u.logger.Warn("Error fetching user info",
+					zap.Uint64("userID", id),
+					zap.Error(err))
 				return
 			}
 
-			// Save the banned user ID
 			if userInfo.IsBanned {
-				mu.Lock()
-				bannedUserIDs = append(bannedUserIDs, userInfo.ID)
-				mu.Unlock()
+				userChan <- userInfo.ID
 			}
 		}(userID)
 	}
 
-	wg.Wait()
+	go func() {
+		wg.Wait()
+		close(userChan)
+	}()
 
-	return bannedUserIDs, nil
+	for id := range userChan {
+		results = append(results, id)
+	}
+
+	u.logger.Info("Finished checking banned users",
+		zap.Int("totalChecked", len(userIDs)),
+		zap.Int("bannedUsers", len(results)))
+
+	return results, nil
 }

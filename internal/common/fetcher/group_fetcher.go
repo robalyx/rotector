@@ -29,6 +29,7 @@ func NewGroupFetcher(roAPI *api.API, logger *zap.Logger) *GroupFetcher {
 func (g *GroupFetcher) FetchGroupInfos(groupIDs []uint64) []*types.GroupResponse {
 	var wg sync.WaitGroup
 	groupInfoChan := make(chan *types.GroupResponse, len(groupIDs))
+	groupInfos := make([]*types.GroupResponse, 0, len(groupIDs))
 
 	for _, groupID := range groupIDs {
 		wg.Add(1)
@@ -38,7 +39,9 @@ func (g *GroupFetcher) FetchGroupInfos(groupIDs []uint64) []*types.GroupResponse
 			// Fetch the group info
 			groupInfo, err := g.roAPI.Groups().GetGroupInfo(context.Background(), id)
 			if err != nil {
-				g.logger.Warn("Error fetching group info", zap.Uint64("groupID", id), zap.Error(err))
+				g.logger.Warn("Error fetching group info",
+					zap.Uint64("groupID", id),
+					zap.Error(err))
 				return
 			}
 
@@ -54,12 +57,13 @@ func (g *GroupFetcher) FetchGroupInfos(groupIDs []uint64) []*types.GroupResponse
 	}()
 
 	// Collect results from the channel
-	groupInfos := make([]*types.GroupResponse, 0, len(groupIDs))
 	for groupInfo := range groupInfoChan {
-		if groupInfo != nil {
-			groupInfos = append(groupInfos, groupInfo)
-		}
+		groupInfos = append(groupInfos, groupInfo)
 	}
+
+	g.logger.Info("Finished fetching group information",
+		zap.Int("totalRequested", len(groupIDs)),
+		zap.Int("successfulFetches", len(groupInfos)))
 
 	return groupInfos
 }
