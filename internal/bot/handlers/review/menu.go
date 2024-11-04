@@ -212,9 +212,15 @@ func (m *Menu) handleBanUser(event interfaces.CommonEvent, s *session.Session) {
 		Details:           map[string]interface{}{"reason": user.Reason},
 	})
 
+	// Get the number of flagged users left to review
+	flaggedCount, err := m.handler.db.Users().GetFlaggedUsersCount()
+	if err != nil {
+		m.handler.logger.Error("Failed to get flagged users count", zap.Error(err))
+	}
+
 	// Clear current user and load next one
 	s.Delete(constants.SessionKeyTarget)
-	m.ShowReviewMenu(event, s, "User banned.")
+	m.ShowReviewMenu(event, s, fmt.Sprintf("User banned. %d users left to review.", flaggedCount))
 }
 
 // handleClearUser removes a user from the flagged state and logs the action.
@@ -239,9 +245,15 @@ func (m *Menu) handleClearUser(event interfaces.CommonEvent, s *session.Session)
 		Details:           make(map[string]interface{}),
 	})
 
+	// Get the number of flagged users left to review
+	flaggedCount, err := m.handler.db.Users().GetFlaggedUsersCount()
+	if err != nil {
+		m.handler.logger.Error("Failed to get flagged users count", zap.Error(err))
+	}
+
 	// Clear current user and load next one
 	s.Delete(constants.SessionKeyTarget)
-	m.ShowReviewMenu(event, s, "User cleared.")
+	m.ShowReviewMenu(event, s, fmt.Sprintf("User cleared. %d users left to review.", flaggedCount))
 }
 
 // handleSkipUser logs the skip action and moves to the next user without
@@ -259,9 +271,15 @@ func (m *Menu) handleSkipUser(event interfaces.CommonEvent, s *session.Session) 
 		Details:           make(map[string]interface{}),
 	})
 
+	// Get the number of flagged users left to review
+	flaggedCount, err := m.handler.db.Users().GetFlaggedUsersCount()
+	if err != nil {
+		m.handler.logger.Error("Failed to get flagged users count", zap.Error(err))
+	}
+
 	// Clear current user and load next one
 	s.Delete(constants.SessionKeyTarget)
-	m.ShowReviewMenu(event, s, "Skipped user.")
+	m.ShowReviewMenu(event, s, fmt.Sprintf("Skipped user. %d users left to review.", flaggedCount))
 }
 
 // handleBanWithReason opens a modal for entering a custom ban reason.
