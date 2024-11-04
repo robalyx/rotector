@@ -42,6 +42,7 @@ type AppSetup struct {
 	RoAPI        *api.API           // RoAPI HTTP client
 	Queue        *queue.Manager     // Background job queue
 	RedisManager *redis.Manager     // Redis connection manager
+	LogManager   *LogManager        // Log management system
 }
 
 // InitializeApp bootstraps all application dependencies in the correct order,
@@ -54,7 +55,8 @@ func InitializeApp(logDir string) (*AppSetup, error) {
 	}
 
 	// Logging system is initialized next to capture setup issues
-	logger, dbLogger, err := GetLoggers(logDir, cfg.Logging.Level, cfg.Logging.MaxLogsToKeep)
+	logManager := NewLogManager(logDir, cfg.Logging.Level, cfg.Logging.MaxLogsToKeep)
+	logger, dbLogger, err := logManager.GetLoggers()
 	if err != nil {
 		return nil, err
 	}
@@ -108,6 +110,7 @@ func InitializeApp(logDir string) (*AppSetup, error) {
 		RoAPI:        roAPI,
 		Queue:        queueManager,
 		RedisManager: redisManager,
+		LogManager:   logManager,
 	}, nil
 }
 

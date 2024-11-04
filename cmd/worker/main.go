@@ -174,7 +174,6 @@ func runWorkers(workerType, subType string, count int) {
 	defer app.CleanupApp()
 
 	var wg sync.WaitGroup
-	logLevel := app.Config.Logging.Level
 
 	// Initialize progress bars
 	bars := make([]*progress.Bar, count)
@@ -192,10 +191,8 @@ func runWorkers(workerType, subType string, count int) {
 		go func(workerID int) {
 			defer wg.Done()
 
-			workerLogger := setup.GetWorkerLogger(
+			workerLogger := app.LogManager.GetWorkerLogger(
 				fmt.Sprintf("%s_%s_worker_%d", workerType, subType, workerID),
-				WorkerLogDir,
-				logLevel,
 			)
 
 			// Get progress bar for this worker
