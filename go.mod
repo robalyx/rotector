@@ -15,7 +15,7 @@ require (
 	github.com/jaxron/axonet/middleware/redis v0.0.0-20241025054147-6c298c86aa64
 	github.com/jaxron/axonet/middleware/retry v0.0.0-20241025054147-6c298c86aa64
 	github.com/jaxron/axonet/middleware/singleflight v0.0.0-20241025054147-6c298c86aa64
-	github.com/jaxron/roapi.go v0.0.0-20241023130833-ad8750c2385e
+	github.com/jaxron/roapi.go v0.0.0-20241103000542-2a127a62c66d
 	github.com/openai/openai-go v0.1.0-alpha.32
 	github.com/ozankasikci/go-image-merge v0.3.1
 	github.com/redis/rueidis v1.0.48

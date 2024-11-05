@@ -72,8 +72,8 @@ github.com/jaxron/axonet/middleware/retry v0.0.0-20241025054147-6c298c86aa64 h1:
 github.com/jaxron/axonet/middleware/retry v0.0.0-20241025054147-6c298c86aa64/go.mod h1:zXiRNoI5Fb76FNNLwoHF50fAPUApoXVQe4NVH0NX0Ng=
 github.com/jaxron/axonet/middleware/singleflight v0.0.0-20241025054147-6c298c86aa64 h1:CZUXR/DkfLariT/7jVAFJhYUV4azYb8BiqH+vD2dfQM=
 github.com/jaxron/axonet/middleware/singleflight v0.0.0-20241025054147-6c298c86aa64/go.mod h1:G5Z8xIfdiEF6lMtxQyMelOhqtx4XN6xumLJJojZK49k=
-github.com/jaxron/roapi.go v0.0.0-20241023130833-ad8750c2385e h1:+N2yMoy8DQIJO60F08M0bKetq342ne1Nfl2ecUZ4zx8=
-github.com/jaxron/roapi.go v0.0.0-20241023130833-ad8750c2385e/go.mod h1:y0ZsjfvXyWn54hPVz7Ul7tslSbbFVOhQDNc6w8ByVOQ=
+github.com/jaxron/roapi.go v0.0.0-20241103000542-2a127a62c66d h1:sBAwzh+f3fSwXQt4I2SVeVaPeD63rLYUqwIC4423L20=
+github.com/jaxron/roapi.go v0.0.0-20241103000542-2a127a62c66d/go.mod h1:y0ZsjfvXyWn54hPVz7Ul7tslSbbFVOhQDNc6w8ByVOQ=
 github.com/jinzhu/inflection v1.0.0 h1:K317FqzuhWc8YvSVlFMCCUb36O/S9MCKRDI7QkRKD/E=
 github.com/jinzhu/inflection v1.0.0/go.mod h1:h+uFLlag+Qp1Va5pdKtLDYj+kHp5pxUVkryuEj+Srlc=
 github.com/josharian/intern v1.0.0/go.mod h1:5DoeVV0s6jJacbCEi61lwdGj/aVlrQvzHFFd8Hwg//Y=

@@ -45,6 +45,11 @@ func (g *GroupFetcher) FetchGroupInfos(groupIDs []uint64) []*types.GroupResponse
 				return
 			}
 
+			// Skip locked groups
+			if groupInfo.IsLocked != nil && *groupInfo.IsLocked {
+				return
+			}
+
 			// Send the group info to the channel
 			groupInfoChan <- groupInfo
 		}(groupID)
