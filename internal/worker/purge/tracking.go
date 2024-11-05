@@ -36,9 +36,8 @@ func NewTrackingWorker(db *database.Database, roAPI *api.API, bar *progress.Bar,
 
 // Start begins the tracking worker's main loop:
 // 1. Checks for groups with enough confirmed users to flag
-// 2. Checks for users with enough confirmed connections to flag
-// 3. Removes tracking data older than 30 days
-// 4. Repeats every hour.
+// 2. Removes tracking data older than 30 days
+// 3. Repeats every hour.
 func (t *TrackingWorker) Start() {
 	t.logger.Info("Tracking Worker started")
 	t.bar.SetTotal(100)
@@ -46,28 +45,21 @@ func (t *TrackingWorker) Start() {
 	for {
 		t.bar.Reset()
 
-		// Step 1: Check group trackings (30%)
+		// Step 1: Check group trackings (50%)
 		t.bar.SetStepMessage("Checking group trackings")
 		if err := t.trackingChecker.CheckGroupTrackings(); err != nil {
 			t.logger.Error("Error checking group trackings", zap.Error(err))
 		}
-		t.bar.Increment(30)
+		t.bar.Increment(50)
 
-		// Step 2: Check user trackings (30%)
-		t.bar.SetStepMessage("Checking user trackings")
-		if err := t.trackingChecker.CheckUserTrackings(); err != nil {
-			t.logger.Error("Error checking user trackings", zap.Error(err))
-		}
-		t.bar.Increment(30)
-
-		// Step 3: Purge old trackings (40%)
+		// Step 3: Purge old trackings (50%)
 		t.bar.SetStepMessage("Purging old trackings")
 		cutoffDate := time.Now().AddDate(0, 0, -30) // 30 days ago
 		affected, err := t.db.Tracking().PurgeOldTrackings(cutoffDate)
 		if err != nil {
 			t.logger.Error("Error purging old trackings", zap.Error(err))
 		}
-		t.bar.Increment(40)
+		t.bar.Increment(50)
 
 		if affected == 0 {
 			t.bar.SetStepMessage("No old trackings to purge, waiting")

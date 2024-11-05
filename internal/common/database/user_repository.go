@@ -222,17 +222,10 @@ func (r *UserRepository) ConfirmUser(user *FlaggedUser) error {
 			return err
 		}
 
-		// Track groups and friends for affiliation analysis
+		// Track groups for affiliation analysis
 		for _, group := range user.Groups {
 			if err = r.tracking.AddUserToGroupTracking(group.Group.ID, user.ID); err != nil {
 				r.logger.Error("Failed to add user to group tracking", zap.Error(err), zap.Uint64("groupID", group.Group.ID), zap.Uint64("userID", user.ID))
-				return err
-			}
-		}
-
-		for _, friend := range user.Friends {
-			if err = r.tracking.AddUserToNetworkTracking(friend.ID, user.ID); err != nil {
-				r.logger.Error("Failed to add user to network tracking", zap.Error(err), zap.Uint64("friendID", friend.ID), zap.Uint64("userID", user.ID))
 				return err
 			}
 		}
@@ -400,7 +393,7 @@ func (r *UserRepository) CheckExistingUsers(userIDs []uint64) (map[uint64]string
 		result[user.ID] = user.Status
 	}
 
-	r.logger.Info("Checked existing users",
+	r.logger.Debug("Checked existing users",
 		zap.Int("total", len(userIDs)),
 		zap.Int("existing", len(result)))
 

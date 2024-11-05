@@ -132,14 +132,6 @@ type GroupMemberTracking struct {
 	LastAppended   time.Time `pg:"last_appended,notnull"`
 }
 
-// UserNetworkTracking monitors confirmed users within friend networks.
-// The LastAppended field helps determine when to purge old tracking data.
-type UserNetworkTracking struct {
-	UserID         uint64    `pg:"user_id,pk"`
-	ConfirmedUsers []uint64  `pg:"confirmed_users,array"`
-	LastAppended   time.Time `pg:"last_appended,notnull"`
-}
-
 // HasAnyRole checks if any of the provided role IDs match the whitelisted roles.
 // Returns true if there is at least one match, false otherwise.
 func (s *GuildSetting) HasAnyRole(roleIDs []snowflake.ID) bool {
@@ -215,7 +207,6 @@ func (d *Database) createSchema() error {
 		(*GuildSetting)(nil),
 		(*UserActivityLog)(nil),
 		(*GroupMemberTracking)(nil),
-		(*UserNetworkTracking)(nil),
 	}
 
 	// Create tables if they don't exist
@@ -239,10 +230,6 @@ func (d *Database) createSchema() error {
 		CREATE INDEX IF NOT EXISTS idx_group_member_trackings_last_appended ON group_member_trackings (last_appended);
 		CREATE INDEX IF NOT EXISTS idx_group_member_trackings_group_id_array_length 
 		ON group_member_trackings USING btree (group_id, array_length(confirmed_users, 1));
-		
-		CREATE INDEX IF NOT EXISTS idx_user_network_trackings_last_appended ON user_network_trackings (last_appended);
-		CREATE INDEX IF NOT EXISTS idx_user_network_trackings_user_id_array_length 
-		ON user_network_trackings USING btree (user_id, array_length(confirmed_users, 1));
 
 		CREATE INDEX IF NOT EXISTS idx_cleared_users_cleared_at ON cleared_users (cleared_at);
 	`); err != nil {

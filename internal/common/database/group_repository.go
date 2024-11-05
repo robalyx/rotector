@@ -73,7 +73,7 @@ func (r *GroupRepository) CheckConfirmedGroups(groupIDs []uint64) ([]uint64, err
 		return nil, err
 	}
 
-	r.logger.Info("Checked confirmed groups",
+	r.logger.Debug("Checked confirmed groups",
 		zap.Int("total", len(groupIDs)),
 		zap.Int("confirmed", len(confirmedGroupIDs)))
 
