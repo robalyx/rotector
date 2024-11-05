@@ -154,12 +154,9 @@ func NewAIChecker(openAIClient *openai.Client, logger *zap.Logger) *AIChecker {
 	}
 }
 
-// ProcessUsers sends user information to OpenAI for analysis. It:
-// 1. Strips necessary data from the user info
-// 2. Minifies JSON to reduce token usage
-// 3. Enforces response schema for consistent results
-// 4. Validates AI responses against original content.
-func (a *AIChecker) ProcessUsers(userInfos []*fetcher.Info) ([]*database.User, error) {
+// ProcessUsers sends user information to OpenAI for analysis and returns both validated users
+// and IDs of users that failed validation for retry.
+func (a *AIChecker) ProcessUsers(userInfos []*fetcher.Info) ([]*database.User, []uint64, error) {
 	// Remove IDs from user info to prevent leakage
 	userInfosWithoutID := make([]struct {
 		Name        string `json:"name"`
@@ -180,13 +177,13 @@ func (a *AIChecker) ProcessUsers(userInfos []*fetcher.Info) ([]*database.User, e
 	userInfoJSON, err := sonic.Marshal(userInfosWithoutID)
 	if err != nil {
 		a.logger.Error("Error marshaling user info", zap.Error(err))
-		return nil, err
+		return nil, nil, err
 	}
 
 	userInfoJSON, err = a.minify.Bytes("application/json", userInfoJSON)
 	if err != nil {
 		a.logger.Error("Error minifying user info", zap.Error(err))
-		return nil, err
+		return nil, nil, err
 	}
 
 	a.logger.Info("Sending user info to AI for analysis")
@@ -220,7 +217,7 @@ func (a *AIChecker) ProcessUsers(userInfos []*fetcher.Info) ([]*database.User, e
 	})
 	if err != nil {
 		a.logger.Error("Error calling OpenAI API", zap.Error(err))
-		return nil, err
+		return nil, nil, err
 	}
 
 	// Parse AI response
@@ -228,7 +225,7 @@ func (a *AIChecker) ProcessUsers(userInfos []*fetcher.Info) ([]*database.User, e
 	err = sonic.Unmarshal([]byte(chatCompletion.Choices[0].Message.Content), &flaggedUsers)
 	if err != nil {
 		a.logger.Error("Error unmarshaling flagged users", zap.Error(err))
-		return nil, err
+		return nil, nil, err
 	}
 
 	a.logger.Info("Received AI response",
@@ -236,13 +233,14 @@ func (a *AIChecker) ProcessUsers(userInfos []*fetcher.Info) ([]*database.User, e
 		zap.Int("flaggedUsers", len(flaggedUsers.Users)))
 
 	// Validate AI responses against original content
-	validatedUsers := a.validateFlaggedUsers(flaggedUsers, userInfos)
+	validatedUsers, failedValidationIDs := a.validateFlaggedUsers(flaggedUsers, userInfos)
 
-	return validatedUsers, nil
+	return validatedUsers, failedValidationIDs, nil
 }
 
 // validateFlaggedUsers validates the flagged users against the original user info.
-func (a *AIChecker) validateFlaggedUsers(flaggedUsers FlaggedUsers, userInfos []*fetcher.Info) []*database.User {
+// Returns both validated users and IDs of users that failed validation.
+func (a *AIChecker) validateFlaggedUsers(flaggedUsers FlaggedUsers, userInfos []*fetcher.Info) ([]*database.User, []uint64) {
 	// Map user infos to lower case names
 	userMap := make(map[string]*fetcher.Info)
 	for _, userInfo := range userInfos {
@@ -250,6 +248,7 @@ func (a *AIChecker) validateFlaggedUsers(flaggedUsers FlaggedUsers, userInfos []
 	}
 
 	var validatedUsers []*database.User
+	var failedValidationIDs []uint64
 	for _, flaggedUser := range flaggedUsers.Users {
 		// Check if the flagged user name is in the map
 		if userInfo, ok := userMap[utils.NormalizeString(flaggedUser.Name)]; ok {
@@ -285,6 +284,7 @@ func (a *AIChecker) validateFlaggedUsers(flaggedUsers FlaggedUsers, userInfos []
 					LastUpdated:    userInfo.LastUpdated,
 				})
 			} else {
+				failedValidationIDs = append(failedValidationIDs, userInfo.ID)
 				a.logger.Warn("AI flagged content did not pass validation",
 					zap.Uint64("userID", userInfo.ID),
 					zap.String("flaggedUsername", flaggedUser.Name),
@@ -298,5 +298,5 @@ func (a *AIChecker) validateFlaggedUsers(flaggedUsers FlaggedUsers, userInfos []
 		}
 	}
 
-	return validatedUsers
+	return validatedUsers, failedValidationIDs
 }

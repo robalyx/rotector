@@ -173,7 +173,24 @@ func (p *ProcessWorker) processItems(items []*queue.Item) {
 		// Fetch and process user
 		userInfos := p.userFetcher.FetchInfos([]uint64{item.UserID})
 		if len(userInfos) > 0 {
-			p.userChecker.ProcessUsers(userInfos)
+			failedValidationIDs := p.userChecker.ProcessUsers(userInfos)
+
+			// If validation failed, update status back to pending
+			if len(failedValidationIDs) > 0 {
+				// Update status back to pending
+				if err := p.queue.SetQueueInfo(
+					ctx,
+					item.UserID,
+					queue.StatusPending,
+					item.Priority,
+					p.queue.GetQueueLength(ctx, item.Priority),
+				); err != nil {
+					p.logger.Error("Failed to update queue info",
+						zap.Error(err),
+						zap.Uint64("userID", item.UserID))
+				}
+				continue
+			}
 		}
 
 		// Update final status and remove from queue

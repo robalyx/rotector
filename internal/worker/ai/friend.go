@@ -73,10 +73,17 @@ func (f *FriendWorker) Start() {
 		f.bar.Increment(20)
 
 		// Step 3: Process users (60%)
-		f.userChecker.ProcessUsers(userInfos)
+		failedValidationIDs := f.userChecker.ProcessUsers(userInfos)
+
+		// Add failed validation IDs back to the queue for retry
+		if len(failedValidationIDs) > 0 {
+			oldFriendIDs = append(oldFriendIDs, failedValidationIDs...)
+			f.logger.Info("Added failed validation IDs for retry",
+				zap.Int("failedCount", len(failedValidationIDs)))
+		}
 
 		// Step 4: Prepare for next batch
-		oldFriendIDs = friendIDs[FriendUsersToProcess:]
+		oldFriendIDs = append(oldFriendIDs, friendIDs[FriendUsersToProcess:]...)
 
 		// Short pause before next iteration
 		time.Sleep(1 * time.Second)

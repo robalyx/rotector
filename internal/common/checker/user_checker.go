@@ -51,11 +51,13 @@ func NewUserChecker(
 // 2. Friend checking - flags users with many flagged friends
 // 3. AI checking - analyzes user content for violations
 // After flagging, it loads additional data (outfits, thumbnails) for flagged users.
-func (c *UserChecker) ProcessUsers(userInfos []*fetcher.Info) {
+// Returns IDs of users that failed AI validation for retry.
+func (c *UserChecker) ProcessUsers(userInfos []*fetcher.Info) []uint64 {
 	c.logger.Info("Processing users", zap.Int("userInfos", len(userInfos)))
 
 	var flaggedUsers []*database.User
 	var usersForAICheck []*fetcher.Info
+	var failedValidationIDs []uint64
 
 	// Check if users belong to flagged groups
 	c.bar.SetStepMessage("Checking user groups")
@@ -84,11 +86,12 @@ func (c *UserChecker) ProcessUsers(userInfos []*fetcher.Info) {
 	// Process remaining users with AI
 	c.bar.SetStepMessage("Checking users with AI")
 	if len(usersForAICheck) > 0 {
-		aiFlaggedUsers, err := c.aiChecker.ProcessUsers(usersForAICheck)
+		aiFlaggedUsers, failedIDs, err := c.aiChecker.ProcessUsers(usersForAICheck)
 		if err != nil {
 			c.logger.Error("Error checking users with AI", zap.Error(err))
 		} else {
 			flaggedUsers = append(flaggedUsers, aiFlaggedUsers...)
+			failedValidationIDs = append(failedValidationIDs, failedIDs...)
 		}
 	}
 	c.bar.Increment(10)
@@ -97,7 +100,7 @@ func (c *UserChecker) ProcessUsers(userInfos []*fetcher.Info) {
 	if len(flaggedUsers) == 0 {
 		c.logger.Info("No flagged users found", zap.Int("userInfos", len(userInfos)))
 		c.bar.Increment(30)
-		return
+		return failedValidationIDs
 	}
 
 	// Load additional data for flagged users
@@ -117,6 +120,8 @@ func (c *UserChecker) ProcessUsers(userInfos []*fetcher.Info) {
 	c.logger.Info("Finished processing users",
 		zap.Int("totalProcessed", len(userInfos)),
 		zap.Int("flaggedUsers", len(flaggedUsers)))
+
+	return failedValidationIDs
 }
 
 // checkUserFriends checks if a user should be flagged based on their friends.
