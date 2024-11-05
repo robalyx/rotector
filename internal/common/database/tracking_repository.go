@@ -23,25 +23,44 @@ func NewTrackingRepository(db *pg.DB, logger *zap.Logger) *TrackingRepository {
 }
 
 // AddUserToGroupTracking adds a confirmed user to a group's tracking list.
-// The LastAppended field is updated to help with cleanup of old tracking data.
+// It ensures no duplicate user IDs are added to the confirmed_users array.
 func (r *TrackingRepository) AddUserToGroupTracking(groupID, userID uint64) error {
-	_, err := r.db.Model(&GroupMemberTracking{
-		GroupID:        groupID,
-		ConfirmedUsers: []uint64{userID},
-		LastAppended:   time.Now(),
-	}).OnConflict("(group_id) DO UPDATE").
-		Set("confirmed_users = array_append(EXCLUDED.confirmed_users, ?)", userID).
-		Set("last_appended = EXCLUDED.last_appended").
-		Insert()
-	if err != nil {
-		r.logger.Error("Failed to add user to group tracking",
-			zap.Error(err),
-			zap.Uint64("groupID", groupID),
-			zap.Uint64("userID", userID))
-		return err
-	}
+	return r.db.RunInTransaction(r.db.Context(), func(tx *pg.Tx) error {
+		// Check if group is already confirmed
+		exists, err := tx.Model((*ConfirmedGroup)(nil)).
+			Where("id = ?", groupID).
+			Exists()
+		if err != nil {
+			r.logger.Error("Failed to check confirmed group",
+				zap.Error(err),
+				zap.Uint64("groupID", groupID))
+			return err
+		}
+		if exists {
+			r.logger.Debug("Skipping tracking for confirmed group",
+				zap.Uint64("groupID", groupID),
+				zap.Uint64("userID", userID))
+			return nil
+		}
 
-	return nil
+		// Add user to group tracking
+		_, err = tx.Model(&GroupMemberTracking{
+			GroupID:      groupID,
+			LastAppended: time.Now(),
+		}).OnConflict("(group_id) DO UPDATE").
+			Set("confirmed_users = array_append(array_remove(group_member_tracking.confirmed_users, ?), ?)", userID, userID).
+			Set("last_appended = EXCLUDED.last_appended").
+			Insert()
+		if err != nil {
+			r.logger.Error("Failed to add user to group tracking",
+				zap.Error(err),
+				zap.Uint64("groupID", groupID),
+				zap.Uint64("userID", userID))
+			return err
+		}
+
+		return nil
+	})
 }
 
 // PurgeOldTrackings removes tracking entries that haven't been updated recently.
