@@ -121,13 +121,13 @@ func (b *LogEmbed) Build() *discord.MessageUpdateBuilder {
 		// Activity type filter menu
 		discord.NewActionRow(
 			discord.NewStringSelectMenu(constants.LogsQueryActivityTypeFilterCustomID, "Filter Activity Type",
-				discord.NewStringSelectMenuOption("All", strconv.Itoa(database.ActivityTypeAll)).WithDefault(b.activityTypeFilter == database.ActivityTypeAll),
-				discord.NewStringSelectMenuOption("Viewed", strconv.Itoa(database.ActivityTypeViewed)).WithDefault(b.activityTypeFilter == database.ActivityTypeViewed),
-				discord.NewStringSelectMenuOption("Banned", strconv.Itoa(database.ActivityTypeBanned)).WithDefault(b.activityTypeFilter == database.ActivityTypeBanned),
-				discord.NewStringSelectMenuOption("Banned (Custom)", strconv.Itoa(database.ActivityTypeBannedCustom)).WithDefault(b.activityTypeFilter == database.ActivityTypeBannedCustom),
-				discord.NewStringSelectMenuOption("Cleared", strconv.Itoa(database.ActivityTypeCleared)).WithDefault(b.activityTypeFilter == database.ActivityTypeCleared),
-				discord.NewStringSelectMenuOption("Skipped", strconv.Itoa(database.ActivityTypeSkipped)).WithDefault(b.activityTypeFilter == database.ActivityTypeSkipped),
-				discord.NewStringSelectMenuOption("Rechecked", strconv.Itoa(database.ActivityTypeRechecked)).WithDefault(b.activityTypeFilter == database.ActivityTypeRechecked),
+				discord.NewStringSelectMenuOption("All", strconv.Itoa(int(database.ActivityTypeAll))).WithDefault(b.activityTypeFilter == database.ActivityTypeAll),
+				discord.NewStringSelectMenuOption("Viewed", strconv.Itoa(int(database.ActivityTypeViewed))).WithDefault(b.activityTypeFilter == database.ActivityTypeViewed),
+				discord.NewStringSelectMenuOption("Banned", strconv.Itoa(int(database.ActivityTypeBanned))).WithDefault(b.activityTypeFilter == database.ActivityTypeBanned),
+				discord.NewStringSelectMenuOption("Banned (Custom)", strconv.Itoa(int(database.ActivityTypeBannedCustom))).WithDefault(b.activityTypeFilter == database.ActivityTypeBannedCustom),
+				discord.NewStringSelectMenuOption("Cleared", strconv.Itoa(int(database.ActivityTypeCleared))).WithDefault(b.activityTypeFilter == database.ActivityTypeCleared),
+				discord.NewStringSelectMenuOption("Skipped", strconv.Itoa(int(database.ActivityTypeSkipped))).WithDefault(b.activityTypeFilter == database.ActivityTypeSkipped),
+				discord.NewStringSelectMenuOption("Rechecked", strconv.Itoa(int(database.ActivityTypeRechecked))).WithDefault(b.activityTypeFilter == database.ActivityTypeRechecked),
 			),
 		),
 		// Navigation buttons

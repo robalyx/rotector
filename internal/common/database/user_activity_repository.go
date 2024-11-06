@@ -8,29 +8,26 @@ import (
 )
 
 // ActivityType represents different kinds of user actions in the system.
+//
+//go:generate stringer -type=ActivityType -linecomment
 type ActivityType int
 
 const (
 	// ActivityTypeAll matches any activity type in database queries.
-	ActivityTypeAll = iota
+	ActivityTypeAll ActivityType = iota // ALL
 	// ActivityTypeViewed tracks when a moderator opens a user's profile.
-	ActivityTypeViewed
+	ActivityTypeViewed // VIEWED
 	// ActivityTypeBanned tracks when a moderator confirms a user as inappropriate.
-	ActivityTypeBanned
+	ActivityTypeBanned // BANNED
 	// ActivityTypeBannedCustom tracks bans with custom moderator-provided reasons.
-	ActivityTypeBannedCustom
+	ActivityTypeBannedCustom // BANNED_CUSTOM
 	// ActivityTypeCleared tracks when a moderator marks a user as appropriate.
-	ActivityTypeCleared
+	ActivityTypeCleared // CLEARED
 	// ActivityTypeSkipped tracks when a moderator skips reviewing a user.
-	ActivityTypeSkipped
+	ActivityTypeSkipped // SKIPPED
 	// ActivityTypeRechecked tracks when a moderator requests an AI recheck.
-	ActivityTypeRechecked
+	ActivityTypeRechecked // RECHECKED
 )
-
-// String returns the string representation of an ActivityType.
-func (a ActivityType) String() string {
-	return [...]string{"ALL", "VIEWED", "BANNED", "BANNED_CUSTOM", "CLEARED", "SKIPPED", "RECHECKED"}[a]
-}
 
 // UserActivityLog stores information about moderator actions.
 type UserActivityLog struct {
