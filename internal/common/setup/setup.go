@@ -164,7 +164,7 @@ func getRoAPIClient(cfg *config.Config, redisManager *redis.Manager, logger *zap
 				cfg.CircuitBreaker.RecoveryTimeout,
 			),
 		),
-		client.WithMiddleware(5, retry.New(5, 500*time.Millisecond, 1000*time.Millisecond)),
+		client.WithMiddleware(5, retry.New(5, 1*time.Second, 5*time.Second)),
 		client.WithMiddleware(4, singleflight.New()),
 		client.WithMiddleware(3, axonetRedis.New(redisClient, 1*time.Hour)),
 		client.WithMiddleware(2, ratelimit.New(cfg.RateLimit.RequestsPerSecond, cfg.RateLimit.BurstSize)),

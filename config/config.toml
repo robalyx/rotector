@@ -4,7 +4,7 @@ max_logs_to_keep = 10
 
 [ratelimit]
 requests_per_second = 100.0
-burst_size = 100
+burst_size = 1
 
 [circuitbreaker]
 max_failures = 10

@@ -130,7 +130,7 @@ func (c *UserChecker) checkUserFriends(userInfos []*fetcher.Info) ([]*database.U
 	var remainingUsers []*fetcher.Info
 
 	for _, userInfo := range userInfos {
-		if len(userInfo.Friends) == 0 {
+		if len(userInfo.Friends) < 3 {
 			remainingUsers = append(remainingUsers, userInfo)
 			continue
 		}
