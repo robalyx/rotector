@@ -86,15 +86,15 @@ func (g *MemberWorker) Start() {
 		// Step 4: Process users (60%)
 		failedValidationIDs := g.userChecker.ProcessUsers(userInfos)
 
+		// Step 5: Prepare for next batch
+		oldUserIDs = userIDs[GroupUsersToProcess:]
+
 		// Add failed validation IDs back to the queue for retry
 		if len(failedValidationIDs) > 0 {
 			oldUserIDs = append(oldUserIDs, failedValidationIDs...)
 			g.logger.Info("Added failed validation IDs for retry",
 				zap.Int("failedCount", len(failedValidationIDs)))
 		}
-
-		// Step 5: Prepare for next batch
-		oldUserIDs = append(oldUserIDs, userIDs[GroupUsersToProcess:]...)
 
 		// Short pause before next iteration
 		time.Sleep(1 * time.Second)
