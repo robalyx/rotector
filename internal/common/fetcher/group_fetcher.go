@@ -2,12 +2,16 @@ package fetcher
 
 import (
 	"context"
+	"errors"
 	"sync"
 
 	"github.com/jaxron/roapi.go/pkg/api"
 	"github.com/jaxron/roapi.go/pkg/api/types"
 	"go.uber.org/zap"
 )
+
+// ErrGroupLocked indicates that the group is locked.
+var ErrGroupLocked = errors.New("group is locked")
 
 // GroupFetcher handles concurrent retrieval of group information from the Roblox API.
 type GroupFetcher struct {
@@ -23,14 +27,22 @@ func NewGroupFetcher(roAPI *api.API, logger *zap.Logger) *GroupFetcher {
 	}
 }
 
+// GroupFetchResult contains the result of fetching a group's information.
+type GroupFetchResult struct {
+	GroupInfo *types.GroupResponse
+	Error     error
+}
+
 // FetchGroupInfos retrieves complete group information for a batch of group IDs.
 // It spawns a goroutine for each group and collects results through a channel.
-// Failed requests are logged and skipped in the final results.
 func (g *GroupFetcher) FetchGroupInfos(groupIDs []uint64) []*types.GroupResponse {
 	var wg sync.WaitGroup
-	groupInfoChan := make(chan *types.GroupResponse, len(groupIDs))
-	groupInfos := make([]*types.GroupResponse, 0, len(groupIDs))
+	resultsChan := make(chan struct {
+		GroupID uint64
+		Result  *GroupFetchResult
+	}, len(groupIDs))
 
+	// Spawn a goroutine for each group
 	for _, groupID := range groupIDs {
 		wg.Add(1)
 		go func(id uint64) {
@@ -39,36 +51,74 @@ func (g *GroupFetcher) FetchGroupInfos(groupIDs []uint64) []*types.GroupResponse
 			// Fetch the group info
 			groupInfo, err := g.roAPI.Groups().GetGroupInfo(context.Background(), id)
 			if err != nil {
-				g.logger.Warn("Error fetching group info",
-					zap.Uint64("groupID", id),
-					zap.Error(err))
+				resultsChan <- struct {
+					GroupID uint64
+					Result  *GroupFetchResult
+				}{
+					GroupID: id,
+					Result: &GroupFetchResult{
+						Error: err,
+					},
+				}
 				return
 			}
 
-			// Skip locked groups
+			// Check for locked groups
 			if groupInfo.IsLocked != nil && *groupInfo.IsLocked {
+				resultsChan <- struct {
+					GroupID uint64
+					Result  *GroupFetchResult
+				}{
+					GroupID: id,
+					Result: &GroupFetchResult{
+						Error: ErrGroupLocked,
+					},
+				}
 				return
 			}
 
-			// Send the group info to the channel
-			groupInfoChan <- groupInfo
+			resultsChan <- struct {
+				GroupID uint64
+				Result  *GroupFetchResult
+			}{
+				GroupID: id,
+				Result: &GroupFetchResult{
+					GroupInfo: groupInfo,
+				},
+			}
 		}(groupID)
 	}
 
 	// Close the channel when all goroutines are done
 	go func() {
 		wg.Wait()
-		close(groupInfoChan)
+		close(resultsChan)
 	}()
 
 	// Collect results from the channel
-	for groupInfo := range groupInfoChan {
-		groupInfos = append(groupInfos, groupInfo)
+	results := make(map[uint64]*GroupFetchResult)
+	for result := range resultsChan {
+		results[result.GroupID] = result.Result
+	}
+
+	// Process results and filter out errors
+	validGroups := make([]*types.GroupResponse, 0, len(results))
+	for groupID, result := range results {
+		if result.Error != nil {
+			if !errors.Is(result.Error, ErrGroupLocked) {
+				g.logger.Warn("Error fetching group info",
+					zap.Uint64("groupID", groupID),
+					zap.Error(result.Error))
+			}
+			continue
+		}
+
+		validGroups = append(validGroups, result.GroupInfo)
 	}
 
 	g.logger.Info("Finished fetching group information",
 		zap.Int("totalRequested", len(groupIDs)),
-		zap.Int("successfulFetches", len(groupInfos)))
+		zap.Int("successfulFetches", len(validGroups)))
 
-	return groupInfos
+	return validGroups
 }

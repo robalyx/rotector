@@ -12,6 +12,12 @@ import (
 	"go.uber.org/zap"
 )
 
+// ThumbnailFetchResult contains the result of fetching thumbnails.
+type ThumbnailFetchResult struct {
+	URLs  map[uint64]string
+	Error error
+}
+
 // ThumbnailFetcher handles retrieval of user and group thumbnails from the Roblox API.
 type ThumbnailFetcher struct {
 	roAPI  *api.API
@@ -29,8 +35,10 @@ func NewThumbnailFetcher(roAPI *api.API, logger *zap.Logger) *ThumbnailFetcher {
 // AddImageURLs fetches thumbnails for a batch of users and adds them to the user records.
 func (t *ThumbnailFetcher) AddImageURLs(users []*database.User) []*database.User {
 	var wg sync.WaitGroup
-	var mu sync.Mutex
-	thumbnailURLs := make(map[uint64]string)
+	resultsChan := make(chan struct {
+		BatchStart int
+		Result     *ThumbnailFetchResult
+	}, (len(users)+99)/100) // Ceiling division for batch count
 
 	// Process users in batches of 100
 	batchSize := 100
@@ -59,38 +67,66 @@ func (t *ThumbnailFetcher) AddImageURLs(users []*database.User) []*database.User
 			}
 
 			// Process the batch
-			batchURLs := t.processBatchThumbnails(requests)
-
-			// Merge results with thread-safety
-			mu.Lock()
-			for id, url := range batchURLs {
-				thumbnailURLs[id] = url
+			thumbnailURLs, err := t.processBatchThumbnails(requests)
+			resultsChan <- struct {
+				BatchStart int
+				Result     *ThumbnailFetchResult
+			}{
+				BatchStart: start,
+				Result: &ThumbnailFetchResult{
+					URLs:  thumbnailURLs,
+					Error: err,
+				},
 			}
-			mu.Unlock()
 		}(i)
 	}
 
-	wg.Wait()
+	// Close channel when all goroutines complete
+	go func() {
+		wg.Wait()
+		close(resultsChan)
+	}()
+
+	// Collect results from the channel
+	results := make(map[uint64]string)
+	for result := range resultsChan {
+		if result.Result.Error != nil {
+			t.logger.Error("Error fetching batch thumbnails",
+				zap.Error(result.Result.Error),
+				zap.Int("batchStart", result.BatchStart))
+			continue
+		}
+
+		// Merge URLs from successful batches
+		for id, url := range result.Result.URLs {
+			results[id] = url
+		}
+	}
 
 	// Add thumbnail URLs to users
-	for i, user := range users {
-		if thumbnailURL, ok := thumbnailURLs[user.ID]; ok {
-			users[i].ThumbnailURL = thumbnailURL
+	updatedUsers := make([]*database.User, 0, len(users))
+	for _, user := range users {
+		if thumbnailURL, ok := results[user.ID]; ok {
+			user.ThumbnailURL = thumbnailURL
+			updatedUsers = append(updatedUsers, user)
 		}
 	}
 
 	t.logger.Info("Finished fetching user thumbnails",
 		zap.Int("totalUsers", len(users)),
-		zap.Int("successfulFetches", len(thumbnailURLs)))
+		zap.Int("successfulFetches", len(updatedUsers)))
 
-	return users
+	return updatedUsers
 }
 
-// AddGroupImageURLs fetches thumbnails for a batch of groups and adds them to the group records.
+// AddImageURLs fetches thumbnails for users in batches of 100 and adds them to the user records.
+// Failed batches are logged and skipped.
 func (t *ThumbnailFetcher) AddGroupImageURLs(groups []*database.FlaggedGroup) []*database.FlaggedGroup {
 	var wg sync.WaitGroup
-	var mu sync.Mutex
-	thumbnailURLs := make(map[uint64]string)
+	resultsChan := make(chan struct {
+		BatchStart int
+		Result     *ThumbnailFetchResult
+	}, (len(groups)+99)/100) // Ceiling division for batch count
 
 	// Process groups in batches of 100
 	batchSize := 100
@@ -119,42 +155,66 @@ func (t *ThumbnailFetcher) AddGroupImageURLs(groups []*database.FlaggedGroup) []
 			}
 
 			// Process the batch
-			batchURLs := t.processBatchThumbnails(requests)
-
-			// Merge results with thread-safety
-			mu.Lock()
-			for id, url := range batchURLs {
-				thumbnailURLs[id] = url
+			thumbnailURLs, err := t.processBatchThumbnails(requests)
+			resultsChan <- struct {
+				BatchStart int
+				Result     *ThumbnailFetchResult
+			}{
+				BatchStart: start,
+				Result: &ThumbnailFetchResult{
+					URLs:  thumbnailURLs,
+					Error: err,
+				},
 			}
-			mu.Unlock()
 		}(i)
 	}
 
-	wg.Wait()
+	// Close channel when all goroutines complete
+	go func() {
+		wg.Wait()
+		close(resultsChan)
+	}()
+
+	// Collect results from the channel
+	results := make(map[uint64]string)
+	for result := range resultsChan {
+		if result.Result.Error != nil {
+			t.logger.Error("Error fetching batch thumbnails",
+				zap.Error(result.Result.Error),
+				zap.Int("batchStart", result.BatchStart))
+			continue
+		}
+
+		// Merge URLs from successful batches
+		for id, url := range result.Result.URLs {
+			results[id] = url
+		}
+	}
 
 	// Add thumbnail URLs to groups
-	for i, group := range groups {
-		if thumbnailURL, ok := thumbnailURLs[group.ID]; ok {
-			groups[i].ThumbnailURL = thumbnailURL
+	updatedGroups := make([]*database.FlaggedGroup, 0, len(groups))
+	for _, group := range groups {
+		if thumbnailURL, ok := results[group.ID]; ok {
+			group.ThumbnailURL = thumbnailURL
+			updatedGroups = append(updatedGroups, group)
 		}
 	}
 
 	t.logger.Info("Finished fetching group thumbnails",
 		zap.Int("totalGroups", len(groups)),
-		zap.Int("successfulFetches", len(thumbnailURLs)))
+		zap.Int("successfulFetches", len(updatedGroups)))
 
-	return groups
+	return updatedGroups
 }
 
 // processBatchThumbnails handles a single batch of thumbnail requests.
-func (t *ThumbnailFetcher) processBatchThumbnails(requests *thumbnails.BatchThumbnailsBuilder) map[uint64]string {
+func (t *ThumbnailFetcher) processBatchThumbnails(requests *thumbnails.BatchThumbnailsBuilder) (map[uint64]string, error) {
 	thumbnailURLs := make(map[uint64]string)
 
 	// Send batch request to Roblox API
 	thumbnailResponses, err := t.roAPI.Thumbnails().GetBatchThumbnails(context.Background(), requests.Build())
 	if err != nil {
-		t.logger.Error("Error fetching batch thumbnails", zap.Error(err))
-		return thumbnailURLs
+		return nil, err
 	}
 
 	// Process responses and store URLs
@@ -164,5 +224,5 @@ func (t *ThumbnailFetcher) processBatchThumbnails(requests *thumbnails.BatchThum
 		}
 	}
 
-	return thumbnailURLs
+	return thumbnailURLs, nil
 }

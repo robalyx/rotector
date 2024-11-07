@@ -6,9 +6,16 @@ import (
 
 	"github.com/jaxron/roapi.go/pkg/api"
 	"github.com/jaxron/roapi.go/pkg/api/resources/avatar"
+	"github.com/jaxron/roapi.go/pkg/api/types"
 	"github.com/rotector/rotector/internal/common/database"
 	"go.uber.org/zap"
 )
+
+// OutfitFetchResult contains the result of fetching a user's outfits.
+type OutfitFetchResult struct {
+	Outfits []types.Outfit
+	Error   error
+}
 
 // OutfitFetcher handles retrieval of user outfit information from the Roblox API.
 type OutfitFetcher struct {
@@ -27,7 +34,10 @@ func NewOutfitFetcher(roAPI *api.API, logger *zap.Logger) *OutfitFetcher {
 // AddOutfits fetches outfits for a batch of users and adds them to the user records.
 func (o *OutfitFetcher) AddOutfits(users []*database.User) []*database.User {
 	var wg sync.WaitGroup
-	userChan := make(chan *database.User, len(users))
+	resultsChan := make(chan struct {
+		UserID uint64
+		Result *OutfitFetchResult
+	}, len(users))
 
 	// Create a map to maintain order of users
 	userMap := make(map[uint64]*database.User)
@@ -43,38 +53,43 @@ func (o *OutfitFetcher) AddOutfits(users []*database.User) []*database.User {
 
 			builder := avatar.NewUserOutfitsBuilder(u.ID).WithItemsPerPage(1000).WithIsEditable(true)
 			outfits, err := o.roAPI.Avatar().GetUserOutfits(context.Background(), builder.Build())
-			if err != nil {
-				o.logger.Error("Failed to fetch user outfits",
-					zap.Error(err),
-					zap.Uint64("userID", u.ID))
-				return
+			resultsChan <- struct {
+				UserID uint64
+				Result *OutfitFetchResult
+			}{
+				UserID: u.ID,
+				Result: &OutfitFetchResult{
+					Outfits: outfits,
+					Error:   err,
+				},
 			}
-
-			// Update the outfits directly on the user pointer
-			u.Outfits = outfits
-			userChan <- u
 		}(user)
 	}
 
 	// Close channel when all goroutines complete
 	go func() {
 		wg.Wait()
-		close(userChan)
+		close(resultsChan)
 	}()
 
-	// Collect results and maintain original order
-	updatedUsers := make([]*database.User, 0, len(users))
-	for user := range userChan {
-		if user != nil {
-			userMap[user.ID] = user
-		}
+	// Collect results from the channel
+	results := make(map[uint64]*OutfitFetchResult)
+	for result := range resultsChan {
+		results[result.UserID] = result.Result
 	}
 
-	// Reconstruct slice in original order
+	// Process results and maintain original order
+	updatedUsers := make([]*database.User, 0, len(users))
 	for _, user := range users {
-		if updatedUser, ok := userMap[user.ID]; ok {
-			updatedUsers = append(updatedUsers, updatedUser)
+		result := results[user.ID]
+		if result.Error != nil {
+			o.logger.Error("Failed to fetch user outfits",
+				zap.Error(result.Error),
+				zap.Uint64("userID", user.ID))
+			continue
 		}
+		user.Outfits = result.Outfits
+		updatedUsers = append(updatedUsers, user)
 	}
 
 	o.logger.Info("Finished fetching user outfits",

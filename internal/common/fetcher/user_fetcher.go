@@ -2,6 +2,7 @@ package fetcher
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"time"
 
@@ -10,6 +11,9 @@ import (
 	"github.com/jaxron/roapi.go/pkg/api/types"
 	"go.uber.org/zap"
 )
+
+// ErrUserBanned indicates that the user is banned from Roblox.
+var ErrUserBanned = errors.New("user is banned")
 
 // Info combines user profile data with their group memberships and friend list.
 type Info struct {
@@ -21,6 +25,24 @@ type Info struct {
 	Groups      []types.UserGroupRoles `json:"groupIds"`
 	Friends     []types.Friend         `json:"friends"`
 	LastUpdated time.Time              `json:"lastUpdated"`
+}
+
+// UserFetchResult contains the result of fetching a user's information.
+type UserFetchResult struct {
+	Info  *Info
+	Error error
+}
+
+// FriendFetchResult contains the result of fetching a user's friends.
+type FriendFetchResult struct {
+	Friends []types.Friend
+	Error   error
+}
+
+// UserGroupFetchResult contains the result of fetching a user's groups.
+type UserGroupFetchResult struct {
+	Groups []types.UserGroupRoles
+	Error  error
 }
 
 // UserFetcher handles concurrent retrieval of user information from the Roblox API.
@@ -41,8 +63,10 @@ func NewUserFetcher(roAPI *api.API, logger *zap.Logger) *UserFetcher {
 // It skips banned users and fetches groups/friends concurrently for each user.
 func (u *UserFetcher) FetchInfos(userIDs []uint64) []*Info {
 	var wg sync.WaitGroup
-	resultChan := make(chan *Info, len(userIDs))
-	results := make([]*Info, 0, len(userIDs))
+	resultsChan := make(chan struct {
+		UserID uint64
+		Result *UserFetchResult
+	}, len(userIDs))
 
 	// Process each user concurrently
 	for _, userID := range userIDs {
@@ -53,14 +77,25 @@ func (u *UserFetcher) FetchInfos(userIDs []uint64) []*Info {
 			// Fetch the user info
 			userInfo, err := u.roAPI.Users().GetUserByID(context.Background(), id)
 			if err != nil {
-				u.logger.Warn("Error fetching user info",
-					zap.Uint64("userID", id),
-					zap.Error(err))
+				resultsChan <- struct {
+					UserID uint64
+					Result *UserFetchResult
+				}{
+					UserID: id,
+					Result: &UserFetchResult{Error: err},
+				}
 				return
 			}
 
 			// Skip banned users
 			if userInfo.IsBanned {
+				resultsChan <- struct {
+					UserID uint64
+					Result *UserFetchResult
+				}{
+					UserID: id,
+					Result: &UserFetchResult{Error: ErrUserBanned},
+				}
 				return
 			}
 
@@ -68,49 +103,68 @@ func (u *UserFetcher) FetchInfos(userIDs []uint64) []*Info {
 			groups, friends := u.fetchGroupsAndFriends(id)
 
 			// Send the user info to the channel
-			resultChan <- &Info{
-				ID:          userInfo.ID,
-				Name:        userInfo.Name,
-				DisplayName: userInfo.DisplayName,
-				Description: userInfo.Description,
-				CreatedAt:   userInfo.Created,
-				Groups:      groups,
-				Friends:     friends,
-				LastUpdated: time.Now(),
+			resultsChan <- struct {
+				UserID uint64
+				Result *UserFetchResult
+			}{
+				UserID: id,
+				Result: &UserFetchResult{
+					Info: &Info{
+						ID:          userInfo.ID,
+						Name:        userInfo.Name,
+						DisplayName: userInfo.DisplayName,
+						Description: userInfo.Description,
+						CreatedAt:   userInfo.Created,
+						Groups:      groups,
+						Friends:     friends,
+						LastUpdated: time.Now(),
+					},
+				},
 			}
 		}(userID)
 	}
 
-	// Use a separate goroutine to close the channel
+	// Close channel when all goroutines complete
 	go func() {
 		wg.Wait()
-		close(resultChan)
+		close(resultsChan)
 	}()
 
-	// Collect results as they arrive
-	for info := range resultChan {
-		results = append(results, info)
+	// Collect results from the channel
+	results := make(map[uint64]*UserFetchResult)
+	for result := range resultsChan {
+		results[result.UserID] = result.Result
+	}
+
+	// Process results and filter out errors
+	validUsers := make([]*Info, 0, len(userIDs))
+	for userID, result := range results {
+		if result.Error != nil {
+			if !errors.Is(result.Error, ErrUserBanned) {
+				u.logger.Warn("Error fetching user info",
+					zap.Uint64("userID", userID),
+					zap.Error(result.Error))
+			}
+			continue
+		}
+
+		if result.Info != nil {
+			validUsers = append(validUsers, result.Info)
+		}
 	}
 
 	u.logger.Info("Finished fetching user information",
 		zap.Int("totalRequested", len(userIDs)),
-		zap.Int("successfulFetches", len(results)))
+		zap.Int("successfulFetches", len(validUsers)))
 
-	return results
+	return validUsers
 }
 
-// fetchGroupsAndFriends retrieves a user's group memberships and friend list
-// concurrently. Returns empty slices if all requests fail.
+// fetchGroupsAndFriends retrieves a user's group memberships and friend list concurrently.
 func (u *UserFetcher) fetchGroupsAndFriends(userID uint64) ([]types.UserGroupRoles, []types.Friend) {
-	type result struct {
-		groups  []types.UserGroupRoles
-		friends []types.Friend
-		err     error
-	}
-
 	var wg sync.WaitGroup
-	groupChan := make(chan result, 1)
-	friendChan := make(chan result, 1)
+	groupChan := make(chan *UserGroupFetchResult, 1)
+	friendChan := make(chan *FriendFetchResult, 1)
 
 	// Fetch user's groups
 	wg.Add(1)
@@ -118,7 +172,10 @@ func (u *UserFetcher) fetchGroupsAndFriends(userID uint64) ([]types.UserGroupRol
 		defer wg.Done()
 		builder := groups.NewUserGroupRolesBuilder(userID)
 		fetchedGroups, err := u.roAPI.Groups().GetUserGroupRoles(context.Background(), builder.Build())
-		groupChan <- result{groups: fetchedGroups, err: err}
+		groupChan <- &UserGroupFetchResult{
+			Groups: fetchedGroups,
+			Error:  err,
+		}
 	}()
 
 	// Fetch user's friends
@@ -126,7 +183,10 @@ func (u *UserFetcher) fetchGroupsAndFriends(userID uint64) ([]types.UserGroupRol
 	go func() {
 		defer wg.Done()
 		fetchedFriends, err := u.roAPI.Friends().GetFriends(context.Background(), userID)
-		friendChan <- result{friends: fetchedFriends, err: err}
+		friendChan <- &FriendFetchResult{
+			Friends: fetchedFriends,
+			Error:   err,
+		}
 	}()
 
 	// Wait for both goroutines and close channels
@@ -140,19 +200,19 @@ func (u *UserFetcher) fetchGroupsAndFriends(userID uint64) ([]types.UserGroupRol
 	groupResult := <-groupChan
 	friendResult := <-friendChan
 
-	if groupResult.err != nil {
+	if groupResult.Error != nil {
 		u.logger.Warn("Error fetching user groups",
 			zap.Uint64("userID", userID),
-			zap.Error(groupResult.err))
+			zap.Error(groupResult.Error))
 	}
 
-	if friendResult.err != nil {
+	if friendResult.Error != nil {
 		u.logger.Warn("Error fetching user friends",
 			zap.Uint64("userID", userID),
-			zap.Error(friendResult.err))
+			zap.Error(friendResult.Error))
 	}
 
-	return groupResult.groups, friendResult.friends
+	return groupResult.Groups, friendResult.Friends
 }
 
 // FetchBannedUsers checks which users from a batch of IDs are currently banned.
