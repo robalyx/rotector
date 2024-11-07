@@ -173,8 +173,6 @@ func runWorkers(workerType, subType string, count int) {
 	}
 	defer app.CleanupApp()
 
-	var wg sync.WaitGroup
-
 	// Initialize progress bars
 	bars := make([]*progress.Bar, count)
 	for i := range count {
@@ -186,6 +184,7 @@ func runWorkers(workerType, subType string, count int) {
 	go renderer.Render()
 
 	// Start workers
+	var wg sync.WaitGroup
 	for i := range count {
 		wg.Add(1)
 		go func(workerID int) {

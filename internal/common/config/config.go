@@ -8,7 +8,7 @@ import (
 
 // Config represents the entire application configuration.
 type Config struct {
-	Logging        Logging
+	Debug          Debug
 	RateLimit      RateLimit
 	CircuitBreaker CircuitBreaker
 	PostgreSQL     PostgreSQL
@@ -17,10 +17,12 @@ type Config struct {
 	Discord        Discord
 }
 
-// Logging contains logging-related configuration.
-type Logging struct {
-	Level         string
-	MaxLogsToKeep int `mapstructure:"max_logs_to_keep"`
+// Debug contains debug-related configuration.
+type Debug struct {
+	LogLevel      string `mapstructure:"log_level"`
+	MaxLogsToKeep int    `mapstructure:"max_logs_to_keep"`
+	EnablePprof   bool   `mapstructure:"enable_pprof"`
+	PprofPort     int    `mapstructure:"pprof_port"`
 }
 
 // RateLimit contains rate limit configuration.

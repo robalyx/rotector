@@ -1,5 +1,7 @@
-[logging]
-level = "info"
+[debug]
+enable_pprof = false
+pprof_port = 6060
+log_level = "info"
 max_logs_to_keep = 10
 
 [ratelimit]
