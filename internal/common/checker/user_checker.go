@@ -1,9 +1,6 @@
 package checker
 
 import (
-	"fmt"
-	"math"
-
 	"github.com/jaxron/roapi.go/pkg/api"
 	"github.com/openai/openai-go"
 	"github.com/rotector/rotector/internal/common/database"
@@ -22,6 +19,7 @@ type UserChecker struct {
 	thumbnailFetcher *fetcher.ThumbnailFetcher
 	aiChecker        *AIChecker
 	groupChecker     *GroupChecker
+	friendChecker    *FriendChecker
 	logger           *zap.Logger
 }
 
@@ -42,6 +40,7 @@ func NewUserChecker(
 		thumbnailFetcher: fetcher.NewThumbnailFetcher(roAPI, logger),
 		aiChecker:        NewAIChecker(openaiClient, logger),
 		groupChecker:     NewGroupChecker(db, logger),
+		friendChecker:    NewFriendChecker(db, logger),
 		logger:           logger,
 	}
 }
@@ -61,24 +60,14 @@ func (c *UserChecker) ProcessUsers(userInfos []*fetcher.Info) []uint64 {
 
 	// Check if users belong to flagged groups
 	c.bar.SetStepMessage("Checking user groups")
-	for _, userInfo := range userInfos {
-		user, autoFlagged, err := c.groupChecker.ProcessUserGroups(userInfo)
-		if err != nil {
-			c.logger.Error("Error checking user groups", zap.Error(err), zap.Uint64("userID", userInfo.ID))
-			continue
-		}
-
-		if autoFlagged {
-			flaggedUsers = append(flaggedUsers, user)
-		} else {
-			usersForAICheck = append(usersForAICheck, userInfo)
-		}
-	}
+	flaggedUsersFromGroups, remainingUsers := c.groupChecker.ProcessUsers(userInfos)
+	flaggedUsers = append(flaggedUsers, flaggedUsersFromGroups...)
+	usersForAICheck = remainingUsers
 	c.bar.Increment(10)
 
 	// Check users based on their friends
 	c.bar.SetStepMessage("Checking user friends")
-	flaggedUsersFromFriends, remainingUsers := c.checkUserFriends(usersForAICheck)
+	flaggedUsersFromFriends, remainingUsers := c.friendChecker.ProcessUsers(usersForAICheck)
 	flaggedUsers = append(flaggedUsers, flaggedUsersFromFriends...)
 	usersForAICheck = remainingUsers
 	c.bar.Increment(10)
@@ -122,61 +111,4 @@ func (c *UserChecker) ProcessUsers(userInfos []*fetcher.Info) []uint64 {
 		zap.Int("flaggedUsers", len(flaggedUsers)))
 
 	return failedValidationIDs
-}
-
-// checkUserFriends checks if a user should be flagged based on their friends.
-func (c *UserChecker) checkUserFriends(userInfos []*fetcher.Info) ([]*database.User, []*fetcher.Info) {
-	var flaggedUsers []*database.User
-	var remainingUsers []*fetcher.Info
-
-	for _, userInfo := range userInfos {
-		if len(userInfo.Friends) < 3 {
-			remainingUsers = append(remainingUsers, userInfo)
-			continue
-		}
-
-		// Extract friend IDs
-		friendIDs := make([]uint64, len(userInfo.Friends))
-		for i, friend := range userInfo.Friends {
-			friendIDs[i] = friend.ID
-		}
-
-		// Check which users already exist in the database
-		existingUsers, err := c.db.Users().CheckExistingUsers(friendIDs)
-		if err != nil {
-			c.logger.Error("Error checking existing users", zap.Error(err), zap.Uint64("userID", userInfo.ID))
-			remainingUsers = append(remainingUsers, userInfo)
-			continue
-		}
-
-		// Count flagged friends
-		flaggedCount := 0
-		for _, status := range existingUsers {
-			if status == database.UserTypeConfirmed || status == database.UserTypeFlagged {
-				flaggedCount++
-			}
-		}
-
-		// If the user has 8 or more flagged friends, or 50% or more of their friends are flagged, flag the user
-		flaggedRatio := float64(flaggedCount) / float64(len(userInfo.Friends))
-		if flaggedCount >= 8 || flaggedRatio >= 0.5 {
-			flaggedUser := &database.User{
-				ID:          userInfo.ID,
-				Name:        userInfo.Name,
-				DisplayName: userInfo.DisplayName,
-				Description: userInfo.Description,
-				CreatedAt:   userInfo.CreatedAt,
-				Reason:      fmt.Sprintf("User has %d flagged friends (%.2f%%)", flaggedCount, flaggedRatio*100),
-				Groups:      userInfo.Groups,
-				Friends:     userInfo.Friends,
-				Confidence:  math.Round(flaggedRatio*100) / 100, // Round to 2 decimal places
-				LastUpdated: userInfo.LastUpdated,
-			}
-			flaggedUsers = append(flaggedUsers, flaggedUser)
-		} else {
-			remainingUsers = append(remainingUsers, userInfo)
-		}
-	}
-
-	return flaggedUsers, remainingUsers
 }
