@@ -47,18 +47,34 @@ func GenerateSchema[T any]() interface{} {
 // 1. Removing diacritical marks (é -> e)
 // 2. Removing all spaces
 // 3. Converting to lowercase.
+// Returns empty string if normalization fails.
 func NormalizeString(s string) string {
-	result, _, _ := transform.String(normalizer, s)
+	if s == "" {
+		return ""
+	}
+
+	result, _, err := transform.String(normalizer, s)
+	if err != nil {
+		return ""
+	}
 	return result
 }
 
 // ContainsNormalized checks if substr exists within s by:
 // 1. Normalizing both strings
 // 2. Using strings.Contains for comparison
-// Empty strings always return false.
+// Empty strings or normalization failures return false.
 func ContainsNormalized(s, substr string) bool {
 	if s == "" || substr == "" {
 		return false
 	}
-	return strings.Contains(NormalizeString(s), NormalizeString(substr))
+
+	normalizedS := NormalizeString(s)
+	normalizedSubstr := NormalizeString(substr)
+
+	if normalizedS == "" || normalizedSubstr == "" {
+		return false
+	}
+
+	return strings.Contains(normalizedS, normalizedSubstr)
 }
