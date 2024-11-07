@@ -82,6 +82,7 @@ func InitializeApp(logDir string) (*AppSetup, error) {
 	// OpenAI client is configured with API key from config
 	openaiClient := openai.NewClient(
 		option.WithAPIKey(cfg.OpenAI.APIKey),
+		option.WithRequestTimeout(30*time.Second),
 	)
 
 	// RoAPI client is configured with middleware chain

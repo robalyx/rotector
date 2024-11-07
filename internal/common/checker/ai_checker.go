@@ -3,7 +3,6 @@ package checker
 import (
 	"context"
 	"strings"
-	"time"
 
 	"github.com/bytedance/sonic"
 	"github.com/openai/openai-go"
@@ -196,12 +195,8 @@ func (a *AIChecker) ProcessUsers(userInfos []*fetcher.Info) ([]*database.User, [
 		Strict:      openai.Bool(true),
 	}
 
-	// Set timeout for API request
-	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Second)
-	defer cancel()
-
 	// Send request to OpenAI
-	chatCompletion, err := a.openAIClient.Chat.Completions.New(ctx, openai.ChatCompletionNewParams{
+	chatCompletion, err := a.openAIClient.Chat.Completions.New(context.Background(), openai.ChatCompletionNewParams{
 		Messages: openai.F([]openai.ChatCompletionMessageParamUnion{
 			openai.SystemMessage(SystemPrompt),
 			openai.UserMessage(string(userInfoJSON)),
