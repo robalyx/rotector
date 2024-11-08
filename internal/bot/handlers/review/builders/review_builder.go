@@ -168,7 +168,7 @@ func (b *ReviewEmbed) getDescription() string {
 	// Translate the description
 	translatedDescription, err := b.translator.Translate(context.Background(), description, "auto", "en")
 	if err == nil && translatedDescription != description {
-		description = fmt.Sprintf("%s\n%s", description, translatedDescription)
+		return "(translated)\n" + translatedDescription
 	}
 
 	return description
