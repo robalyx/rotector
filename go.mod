@@ -25,8 +25,8 @@ require (
 	github.com/tdewolff/minify/v2 v2.21.1
 	github.com/wcharczuk/go-chart/v2 v2.1.2
 	go.uber.org/zap v1.27.0
-	golang.org/x/image v0.21.0
-	golang.org/x/text v0.19.0
+	golang.org/x/image v0.22.0
+	golang.org/x/text v0.20.0
 )
 
 require (
@@ -80,7 +80,7 @@ require (
 	golang.org/x/crypto v0.28.0 // indirect
 	golang.org/x/exp v0.0.0-20241009180824-f66d83c29e7c // indirect
 	golang.org/x/net v0.30.0 // indirect
-	golang.org/x/sync v0.8.0 // indirect
+	golang.org/x/sync v0.9.0 // indirect
 	golang.org/x/sys v0.26.0 // indirect
 	golang.org/x/time v0.7.0 // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect
