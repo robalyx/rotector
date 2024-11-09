@@ -1,6 +1,6 @@
 <h1 align="center">
   <picture>
-    <img width="350" alt="Rotector" src="./assets/images/rotector_logo.png">
+    <img width="800" alt="Rotector" src="./assets/images/banner.png">
   </picture>
   <br>
   <a href="https://github.com/rotector/rotector/blob/main/LICENSE">
