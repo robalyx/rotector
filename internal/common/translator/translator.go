@@ -41,9 +41,71 @@ func New(client *client.Client) *Translator {
 	}
 }
 
+// Translate automatically detects and translates mixed content in the input string.
+// It first attempts to translate any morse code or binary segments, then performs
+// a single language translation on the entire resulting text if languages are specified.
+func (t *Translator) Translate(ctx context.Context, input, sourceLang, targetLang string) (string, error) {
+	// Skip translation for simple content
+	if shouldSkipTranslation(input) {
+		return input, nil
+	}
+
+	// Split input into lines
+	lines := strings.Split(strings.TrimSpace(input), "\n")
+	var result strings.Builder
+
+	// First pass: translate morse and binary segments
+	for i, line := range lines {
+		if i > 0 {
+			result.WriteString("\n")
+		}
+
+		// Split line into segments based on format boundaries
+		segments := t.splitIntoSegments(line)
+
+		// Translate each segment
+		for j, segment := range segments {
+			if j > 0 {
+				result.WriteString(" ")
+			}
+
+			// Translate morse and binary segments
+			segment = strings.TrimSpace(segment)
+			if segment == "" {
+				continue
+			}
+
+			if isMorseFormat(segment) {
+				result.WriteString(t.TranslateMorse(segment))
+				continue
+			}
+
+			if isBinaryFormat(segment) {
+				if translated, err := t.TranslateBinary(segment); err == nil {
+					result.WriteString(translated)
+					continue
+				}
+			}
+
+			result.WriteString(segment)
+		}
+	}
+
+	// Second pass: translate the entire text if language translation is requested
+	if sourceLang != "" && targetLang != "" {
+		translated, err := t.TranslateLanguage(ctx, result.String(), sourceLang, targetLang)
+		if err != nil {
+			return "", err
+		}
+		return translated, nil
+	}
+
+	return result.String(), nil
+}
+
 // TranslateLanguage translates text between natural languages using Google Translate API.
 // sourceLang and targetLang should be ISO 639-1 language codes (e.g., "en" for English).
-// Returns the translated text and any error encountered during translation.
+// Returns the original text for simple content, otherwise returns the translated text.
 func (t *Translator) TranslateLanguage(ctx context.Context, text, sourceLang, targetLang string) (string, error) {
 	// Send request to Google Translate API
 	resp, err := t.client.NewRequest().
@@ -136,63 +198,6 @@ func (t *Translator) TranslateBinary(binary string) (string, error) {
 	return result.String(), nil
 }
 
-// Translate automatically detects and translates mixed content in the input string.
-// It first attempts to translate any morse code or binary segments, then performs
-// a single language translation on the entire resulting text if languages are specified.
-func (t *Translator) Translate(ctx context.Context, input, sourceLang, targetLang string) (string, error) {
-	// Split input into lines
-	lines := strings.Split(strings.TrimSpace(input), "\n")
-	var result strings.Builder
-
-	// First pass: translate morse and binary segments
-	for i, line := range lines {
-		if i > 0 {
-			result.WriteString("\n")
-		}
-
-		// Split line into segments based on format boundaries
-		segments := t.splitIntoSegments(line)
-
-		// Translate each segment
-		for j, segment := range segments {
-			if j > 0 {
-				result.WriteString(" ")
-			}
-
-			// Translate morse and binary segments
-			segment = strings.TrimSpace(segment)
-			if segment == "" {
-				continue
-			}
-
-			if isMorseFormat(segment) {
-				result.WriteString(t.TranslateMorse(segment))
-				continue
-			}
-
-			if isBinaryFormat(segment) {
-				if translated, err := t.TranslateBinary(segment); err == nil {
-					result.WriteString(translated)
-					continue
-				}
-			}
-
-			result.WriteString(segment)
-		}
-	}
-
-	// Second pass: translate the entire text if language translation is requested
-	if sourceLang != "" && targetLang != "" {
-		translated, err := t.TranslateLanguage(ctx, result.String(), sourceLang, targetLang)
-		if err != nil {
-			return "", err
-		}
-		return translated, nil
-	}
-
-	return result.String(), nil
-}
-
 // splitIntoSegments splits a line into segments based on format boundaries.
 // Spaces between segments are preserved in the output.
 func (t *Translator) splitIntoSegments(line string) []string {
@@ -253,4 +258,37 @@ func isBinaryFormat(text string) bool {
 	return strings.IndexFunc(cleaned, func(r rune) bool {
 		return r != '0' && r != '1'
 	}) == -1
+}
+
+// shouldSkipTranslation checks if the content is too simple or formatted in a way
+// that doesn't require translation.
+// Returns true for content with 3 or fewer characters, "[ Content Deleted ]",
+// or content with repeated characters (e.g., "####" or "----").
+func shouldSkipTranslation(text string) bool {
+	// Skip short content
+	if len(text) <= 3 {
+		return true
+	}
+
+	// Skip deleted content
+	if text == "[ Content Deleted ]" {
+		return true
+	}
+
+	// Skip repeated characters
+	if len(text) > 0 {
+		firstChar := text[0]
+		allSame := true
+		for i := 1; i < len(text); i++ {
+			if text[i] != firstChar {
+				allSame = false
+				break
+			}
+		}
+		if allSame {
+			return true
+		}
+	}
+
+	return false
 }
