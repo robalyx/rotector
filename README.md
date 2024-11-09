@@ -51,7 +51,7 @@
 |                                                                                                                                                         Streamer Mode                                                                                                                                                         |                                                                                                                                            User Log Browser                                                                                                                                            |
 | <p align="center"><img src="assets/images/03.gif" width="450"></p><p align="center">Streamer mode provides additional privacy by censoring sensitive user information in the review menu. This feature is particularly useful for content creators and streamers who want to showcase the tool while maintaining privacy.</p> | <p align="center"><img src="assets/images/04.gif" width="450"></p><p align="center">The log browser enables detailed querying of moderation actions. Administrators can search through logs based on specific users, actions, or date ranges, providing detailed audit trails. No more sabotaging!</p> |
 |                                                                                                                                                   Multi-format Translation                                                                                                                                                    |                                                                                                                                       Session State Preservation                                                                                                                                       |
-|               <p align="center"><img src="assets/images/05.gif" width="450"></p><p align="center">The review menu features comprehensive translation capabilities, supporting natural languages, morse code, and binary. This ensures effective review of content across different languages and encodings.</p>               |                                    <p align="center"><img src="assets/images/06.gif" width="450"></p><p align="center">Review sessions are preserved across channels and servers, allowing moderators to seamlessly resume their work from where they left off.</p>                                    |
+|                      <p align="center"><img src="assets/images/05.gif" width="450"></p><p align="center">The review menu features translation capabilities, supporting natural languages, morse code, and binary. This ensures effective review of content across different languages and encodings.</p>                      |                                    <p align="center"><img src="assets/images/06.gif" width="450"></p><p align="center">Review sessions are preserved across channels and servers, allowing moderators to seamlessly resume their work from where they left off.</p>                                    |
 |                                                                                                                                                   Live Statistics Dashboard                                                                                                                                                   |                                                                                                                                         Priority Queue System                                                                                                                                          |
 |                                                   <p align="center"><img src="assets/images/07.gif" width="450"></p><p align="center">The dashboard displays live hourly statistics showing active reviewers and various statistics for real-time performance tracking.</p>                                                   |                        <p align="center"><img src="assets/images/08.gif" width="450"></p><p align="center">Users can be added to priority queues for immediate processing. Workers automatically process these queues to check for potential violations using AI analysis.</p>                         |
 |                                                                                                                                             Real-time Worker Progress Monitoring                                                                                                                                              |                                                                                                                                                                                                                                                                                                        |
@@ -113,7 +113,7 @@ Rotector offers key features for efficient moderation:
 - [Go](https://go.dev/) 1.23.2
 - [PostgreSQL](https://www.postgresql.org/) 17.0 (with [TimescaleDB](https://www.timescale.com/) 2.17.1 extension)
 - [DragonflyDB](https://dragonflydb.io/) 1.24.0 or [Redis](https://redis.io/) 7.4.1
-- OpenAI API key
+- OpenAI API key (uses [gpt-4o-mini](https://platform.openai.com/docs/models/gpt-4o-mini#gpt-4o-mini))
 - Discord Bot token
 
 ### Optional
@@ -127,11 +127,16 @@ Rotector is designed to identify potentially inappropriate content while minimiz
 
 ### Detection Capabilities
 
-Rotector uses a conservative flagging approach to minimize false positives as the AI only raises flags when there is evidence of a violation, which means some borderline cases may be missed in favor of accuracy.
+Rotector uses a multi-layered approach to identify inappropriate content while maintaining high accuracy:
 
-The AI friend worker stands as our most effective scanning method. It systematically goes through friend lists of flagged accounts which has proven particularly effective in uncovering hidden networks of inappropriate accounts.
+1. **Analysis Algorithm**:
+   The system uses a weighted scoring system that considers multiple factors including friend relationships and account information to identify inappropriate accounts. The weighting system is carefully tuned to detect both obvious and subtle patterns while minimizing false positives.
 
-To prevent AI hallucination, the system implements strict validation measures as all AI-generated content are cross-checked against actual user profile data, ensuring that flagged content actually exists.
+2. **AI Detection**:
+   The system uses a conservative flagging approach to minimize false positives, where AI only raises flags when there is clear evidence of violations. While this means some borderline cases may be missed in favor of accuracy, it ensures high confidence in flagged accounts. The AI friend worker systematically analyzes friend lists of flagged accounts which has proven to be very effective.
+
+3. **Validation Measures**:
+   To prevent AI hallucination, the system implements strict validation measures. All AI-generated content is cross-checked against actual user profile data, ensuring that flagged content actually exists on the profile. This double-verification process maintains the system's high accuracy and reliability.
 
 > [!TIP]
 > For detailed performance metrics and test results, see the [Efficiency](#-efficiency) section.
@@ -220,32 +225,54 @@ This roadmap shows our major upcoming features, but we've got even more in the w
 
 - 📊 **Dashboard Features**
 
-  - Real-time worker status monitoring
-  - More statistical overview
+  - [ ] Real-time worker status monitoring
+  - [ ] More statistical overview
 
 - 👥 **Moderation Tools**
 
-  - Session transfer between moderators
-  - Appeal process system
-  - Group reviewing
-  - Inventory inspection
+  - [ ] Session transfer between moderators
+  - [ ] Appeal process system
+  - [ ] Group reviewing
+  - [ ] Inventory inspection
 
 - 🌟 **Community Review System**
 
-  - Community members can vote flagged accounts
-  - Reputation-based user review system
-  - High vote count accounts are reviewed first
+  - [ ] Community members can vote flagged accounts
+  - [ ] Reputation-based user review system
+  - [ ] High vote count accounts are reviewed first
 
 - 🔍 **Scanning Capabilities**
 
-  - Group content detection (wall posts, names, descriptions)
-  - Cryptographic content detection
+  - [ ] Group content detection (wall posts, names, descriptions)
+  - [x] Cryptographic content detection
 
 - 🌐 **Public API** (Available in Beta)
-  - REST API for developers to integrate with
-  - Script for Roblox game developers to integrate with
+  - [ ] REST API for developers to integrate with
+  - [ ] Script for Roblox game developers to integrate with
 
 ## ❓ FAQ
+
+<details>
+<summary>How do I set this up myself?</summary>
+
+Detailed setup instructions will be available during the beta phase when the codebase is more stable. During alpha, we're focusing on making frequent changes, which makes maintaining documentation difficult.
+
+If you'd like to attempt setting up Rotector anyway, you can examine:
+
+- Configuration files in [`/config`](/config)
+- Worker implementation in [`/cmd/worker`](/cmd/worker)
+- Bot implementation in [`/cmd/bot`](/cmd/bot)
+- Docker setup in [`Dockerfile`](/Dockerfile)
+
+Note that setting up Rotector requires:
+
+1. **Technical Expertise**: Experience with Go, PostgreSQL, and distributed systems
+2. **Infrastructure**: Proper server setup and resource management
+3. **Maintenance Knowledge**: Understanding of the codebase to handle updates and issues
+
+⚠️ We recommend waiting for the beta release for a better setup process with documentation.
+
+</details>
 
 <details>
 <summary>What's the story behind Rotector?</summary>
@@ -266,21 +293,6 @@ By automating the detection process, Rotector aims to simplify this process and 
 We believe in transparency and the power of open source. By making our code public, anyone can understand how the tool works. This project also serves as a learning resource for those interested in online safety and moderation technologies.
 
 While we welcome feedback and suggestions, please note that this open-source release is primarily for informational and educational purposes.
-
-</details>
-
-<details>
-<summary>Why don't you provide setup instructions for Rotector?</summary>
-
-We deliberately don't provide detailed setup instructions for Rotector due to several important reasons:
-
-1. **Complex Setup**: Setting up and maintaining Rotector is a complex process that requires professional expertise and is not designed for casual use or inexperienced users.
-
-2. **Preventing Misuse**: We hope to prevent potential misuse of the tool. This is due to the fact that providing easy instructions could allow the very groups we're trying to combat (such as ERPers) to exploit or circumvent the system.
-
-3. **Resource Intensiveness**: Rotector requires computational resources and infrastructure to run effectively, which may not be simple for individual users or small organizations.
-
-If you represent a business, organization or you are a developer that needs to set up and use Rotector for legitimate purposes, please contact us directly.
 
 </details>
 
