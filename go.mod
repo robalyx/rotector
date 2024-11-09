@@ -18,7 +18,7 @@ require (
 	github.com/jaxron/roapi.go v0.0.0-20241103000542-2a127a62c66d
 	github.com/openai/openai-go v0.1.0-alpha.33
 	github.com/ozankasikci/go-image-merge v0.3.1
-	github.com/redis/rueidis v1.0.48
+	github.com/redis/rueidis v1.0.49
 	github.com/spf13/cast v1.7.0
 	github.com/spf13/cobra v1.8.1
 	github.com/spf13/viper v1.19.0
