@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 	"sync"
+	"time"
 
 	"github.com/rotector/rotector/internal/common/database"
 	"github.com/rotector/rotector/internal/common/fetcher"
@@ -106,6 +107,7 @@ func (fc *FriendChecker) ProcessUsers(userInfos []*fetcher.Info) ([]*database.Us
 
 // processUserFriends checks if a user should be flagged based on their friends.
 func (fc *FriendChecker) processUserFriends(userInfo *fetcher.Info) (*database.User, bool, error) {
+	// Skip users with very few friends to avoid false positives
 	if len(userInfo.Friends) < 3 {
 		return nil, false, nil
 	}
@@ -122,37 +124,114 @@ func (fc *FriendChecker) processUserFriends(userInfo *fetcher.Info) (*database.U
 		return nil, false, err
 	}
 
-	// Count flagged friends
+	// Count different types of friends
+	confirmedCount := 0
 	flaggedCount := 0
 	for _, status := range existingUsers {
-		if status == database.UserTypeConfirmed || status == database.UserTypeFlagged {
+		switch status {
+		case database.UserTypeConfirmed:
+			confirmedCount++
+		case database.UserTypeFlagged:
 			flaggedCount++
 		}
 	}
 
-	// If the user has 8 or more flagged friends, or 50% or more of their friends are flagged, flag the user
-	flaggedRatio := float64(flaggedCount) / float64(len(userInfo.Friends))
-	if flaggedCount >= 8 || flaggedRatio >= 0.5 {
+	// Calculate confidence score
+	confidence := fc.calculateConfidence(confirmedCount, flaggedCount, len(userInfo.Friends), userInfo.CreatedAt)
+
+	// Flag user if confidence exceeds threshold
+	if confidence >= 0.4 {
+		accountAge := time.Since(userInfo.CreatedAt)
 		user := &database.User{
 			ID:          userInfo.ID,
 			Name:        userInfo.Name,
 			DisplayName: userInfo.DisplayName,
 			Description: userInfo.Description,
 			CreatedAt:   userInfo.CreatedAt,
-			Reason:      fmt.Sprintf("User has %d flagged friends (%.2f%%)", flaggedCount, flaggedRatio*100),
+			Reason: fmt.Sprintf(
+				"User has %d confirmed and %d flagged friends (%.1f%% total).",
+				confirmedCount,
+				flaggedCount,
+				float64(confirmedCount+flaggedCount)/float64(len(userInfo.Friends))*100,
+			),
 			Groups:      userInfo.Groups,
 			Friends:     userInfo.Friends,
-			Confidence:  math.Round(flaggedRatio*100) / 100, // Round to 2 decimal places
+			Confidence:  math.Round(confidence*100) / 100, // Round to 2 decimal places
 			LastUpdated: userInfo.LastUpdated,
 		}
 
 		fc.logger.Info("User automatically flagged",
 			zap.Uint64("userID", userInfo.ID),
+			zap.Int("confirmedFriends", confirmedCount),
 			zap.Int("flaggedFriends", flaggedCount),
-			zap.Float64("flaggedRatio", flaggedRatio))
+			zap.Float64("confidence", confidence),
+			zap.Int("accountAgeDays", int(accountAge.Hours()/24)))
 
 		return user, true, nil
 	}
 
 	return nil, false, nil
+}
+
+// calculateConfidence computes a weighted confidence score based on friend relationships and account age.
+// The score prioritizes absolute numbers while still considering ratios as a secondary factor.
+func (fc *FriendChecker) calculateConfidence(confirmedCount, flaggedCount int, totalFriends int, createdAt time.Time) float64 {
+	var confidence float64
+
+	// Factor 1: Absolute number of inappropriate friends - 50% weight
+	inappropriateWeight := fc.calculateInappropriateWeight(confirmedCount, flaggedCount)
+	confidence += inappropriateWeight * 0.50
+
+	// Factor 2: Ratio of inappropriate friends - 40% weight
+	// This helps catch users with a high concentration of inappropriate friends
+	// even if they don't meet the absolute number thresholds
+	if totalFriends > 0 {
+		totalInappropriate := float64(confirmedCount) + (float64(flaggedCount) * 0.5)
+		ratioWeight := math.Min(totalInappropriate/float64(totalFriends), 1.0)
+		confidence += ratioWeight * 0.40
+	}
+
+	// Factor 3: Account age weight - 10% weight
+	accountAge := time.Since(createdAt)
+	ageWeight := fc.calculateAgeWeight(accountAge)
+	confidence += ageWeight * 0.10
+
+	return confidence
+}
+
+// calculateInappropriateWeight returns a weight based on the total number of inappropriate friends.
+// Confirmed friends are weighted more heavily than flagged friends.
+func (fc *FriendChecker) calculateInappropriateWeight(confirmedCount, flaggedCount int) float64 {
+	totalWeight := float64(confirmedCount) + (float64(flaggedCount) * 0.5)
+
+	switch {
+	case confirmedCount >= 8 || totalWeight >= 12:
+		return 1.0
+	case confirmedCount >= 6 || totalWeight >= 9:
+		return 0.8
+	case confirmedCount >= 4 || totalWeight >= 6:
+		return 0.6
+	case confirmedCount >= 2 || totalWeight >= 3:
+		return 0.4
+	case confirmedCount >= 1 || totalWeight >= 1:
+		return 0.2
+	default:
+		return 0.0
+	}
+}
+
+// calculateAgeWeight returns a weight between 0 and 1 based on account age.
+func (fc *FriendChecker) calculateAgeWeight(accountAge time.Duration) float64 {
+	switch {
+	case accountAge < 30*24*time.Hour: // Less than 1 month
+		return 1.0
+	case accountAge < 180*24*time.Hour: // 1-6 months
+		return 0.8
+	case accountAge < 365*24*time.Hour: // 6-12 months
+		return 0.6
+	case accountAge < 2*365*24*time.Hour: // 1-2 years
+		return 0.4
+	default: // 2+ years
+		return 0.2
+	}
 }
