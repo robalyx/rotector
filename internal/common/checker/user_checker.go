@@ -6,6 +6,7 @@ import (
 	"github.com/rotector/rotector/internal/common/database"
 	"github.com/rotector/rotector/internal/common/fetcher"
 	"github.com/rotector/rotector/internal/common/progress"
+	"github.com/rotector/rotector/internal/common/translator"
 	"go.uber.org/zap"
 )
 
@@ -32,13 +33,14 @@ func NewUserChecker(
 	userFetcher *fetcher.UserFetcher,
 	logger *zap.Logger,
 ) *UserChecker {
+	translator := translator.New(roAPI.GetClient())
 	return &UserChecker{
 		db:               db,
 		bar:              bar,
 		userFetcher:      userFetcher,
 		outfitFetcher:    fetcher.NewOutfitFetcher(roAPI, logger),
 		thumbnailFetcher: fetcher.NewThumbnailFetcher(roAPI, logger),
-		aiChecker:        NewAIChecker(openaiClient, logger),
+		aiChecker:        NewAIChecker(openaiClient, translator, logger),
 		groupChecker:     NewGroupChecker(db, logger),
 		friendChecker:    NewFriendChecker(db, logger),
 		logger:           logger,
