@@ -3,6 +3,7 @@ package builders
 import (
 	"bytes"
 	"fmt"
+	"strconv"
 
 	"github.com/disgoorg/disgo/discord"
 	"github.com/jaxron/roapi.go/pkg/api/types"
@@ -66,7 +67,11 @@ func (b *FriendsEmbed) Build() *discord.MessageUpdateBuilder {
 	// Build embed with user info and avatars
 	embed := discord.NewEmbedBuilder().
 		SetTitle(fmt.Sprintf("User Friends (Page %d/%d)", b.page+1, totalPages)).
-		SetDescription(fmt.Sprintf("```%s (%d)```", utils.CensorString(b.user.Name, b.settings.StreamerMode), b.user.ID)).
+		SetDescription(fmt.Sprintf(
+			"```%s (%s)```",
+			utils.CensorString(b.user.Name, b.settings.StreamerMode),
+			utils.CensorString(strconv.FormatUint(b.user.ID, 10), b.settings.StreamerMode),
+		)).
 		SetImage("attachment://" + fileName).
 		SetColor(utils.GetMessageEmbedColor(b.settings.StreamerMode))
 
@@ -84,8 +89,11 @@ func (b *FriendsEmbed) Build() *discord.MessageUpdateBuilder {
 	// Add fields for each friend on the current page
 	for i, friend := range b.friends {
 		fieldName := fmt.Sprintf("Friend %d", b.start+i+1)
-		fieldValue := fmt.Sprintf("[%s](https://www.roblox.com/users/%d/profile)",
-			utils.CensorString(friend.Name, b.settings.StreamerMode), friend.ID)
+		fieldValue := fmt.Sprintf(
+			"[%s](https://www.roblox.com/users/%d/profile)",
+			utils.CensorString(friend.Name, b.settings.StreamerMode),
+			friend.ID,
+		)
 
 		// Add status indicators for flagged/confirmed friends
 		if flagged, ok := b.flaggedFriends[friend.ID]; ok {

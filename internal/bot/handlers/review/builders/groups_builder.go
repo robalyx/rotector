@@ -3,6 +3,7 @@ package builders
 import (
 	"bytes"
 	"fmt"
+	"strconv"
 
 	"github.com/disgoorg/disgo/discord"
 	"github.com/jaxron/roapi.go/pkg/api/types"
@@ -66,7 +67,11 @@ func (b *GroupsEmbed) Build() *discord.MessageUpdateBuilder {
 	// Build embed with user info and thumbnails
 	embed := discord.NewEmbedBuilder().
 		SetTitle(fmt.Sprintf("User Groups (Page %d/%d)", b.page+1, totalPages)).
-		SetDescription(fmt.Sprintf("```%s (%d)```", utils.CensorString(b.user.Name, b.settings.StreamerMode), b.user.ID)).
+		SetDescription(fmt.Sprintf(
+			"```%s (%s)```",
+			utils.CensorString(b.user.Name, b.settings.StreamerMode),
+			utils.CensorString(strconv.FormatUint(b.user.ID, 10), b.settings.StreamerMode),
+		)).
 		SetImage("attachment://" + fileName).
 		SetColor(utils.GetMessageEmbedColor(b.settings.StreamerMode))
 
