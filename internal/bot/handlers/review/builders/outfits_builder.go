@@ -16,31 +16,33 @@ import (
 // It combines outfit information with thumbnails and supports pagination
 // through a grid of outfit previews.
 type OutfitsEmbed struct {
-	user         *database.FlaggedUser
-	outfits      []types.Outfit
-	start        int
-	page         int
-	total        int
-	imageBuffer  *bytes.Buffer
-	streamerMode bool
+	settings    *database.UserSetting
+	user        *database.FlaggedUser
+	outfits     []types.Outfit
+	start       int
+	page        int
+	total       int
+	imageBuffer *bytes.Buffer
 }
 
 // NewOutfitsEmbed loads outfit data and settings from the session state
 // to create a new embed builder.
 func NewOutfitsEmbed(s *session.Session) *OutfitsEmbed {
+	var settings *database.UserSetting
+	s.GetInterface(constants.SessionKeyUserSettings, &settings)
 	var user *database.FlaggedUser
 	s.GetInterface(constants.SessionKeyTarget, &user)
 	var outfits []types.Outfit
 	s.GetInterface(constants.SessionKeyOutfits, &outfits)
 
 	return &OutfitsEmbed{
-		user:         user,
-		outfits:      outfits,
-		start:        s.GetInt(constants.SessionKeyStart),
-		page:         s.GetInt(constants.SessionKeyPaginationPage),
-		total:        s.GetInt(constants.SessionKeyTotalItems),
-		imageBuffer:  s.GetBuffer(constants.SessionKeyImageBuffer),
-		streamerMode: s.GetBool(constants.SessionKeyStreamerMode),
+		settings:    settings,
+		user:        user,
+		outfits:     outfits,
+		start:       s.GetInt(constants.SessionKeyStart),
+		page:        s.GetInt(constants.SessionKeyPaginationPage),
+		total:       s.GetInt(constants.SessionKeyTotalItems),
+		imageBuffer: s.GetBuffer(constants.SessionKeyImageBuffer),
 	}
 }
 
@@ -61,7 +63,7 @@ func (b *OutfitsEmbed) Build() *discord.MessageUpdateBuilder {
 		SetTitle(fmt.Sprintf("User Outfits (Page %d/%d)", b.page+1, totalPages)).
 		SetDescription(fmt.Sprintf("```%s (%d)```", b.user.Name, b.user.ID)).
 		SetImage("attachment://" + fileName).
-		SetColor(utils.GetMessageEmbedColor(b.streamerMode))
+		SetColor(utils.GetMessageEmbedColor(b.settings.StreamerMode))
 
 	// Add fields for each outfit on the current page
 	for i, outfit := range b.outfits {

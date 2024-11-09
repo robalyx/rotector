@@ -15,6 +15,7 @@ import (
 
 // LogEmbed creates the visual layout for viewing activity logs.
 type LogEmbed struct {
+	settings           *database.UserSetting
 	logs               []*database.UserActivityLog
 	userID             uint64
 	reviewerID         uint64
@@ -25,12 +26,13 @@ type LogEmbed struct {
 	page               int
 	total              int
 	logsPerPage        int
-	streamerMode       bool
 }
 
 // NewLogEmbed loads log data and filter settings from the session state
 // to create a new embed builder.
 func NewLogEmbed(s *session.Session) *LogEmbed {
+	var settings *database.UserSetting
+	s.GetInterface(constants.SessionKeyUserSettings, &settings)
 	var logs []*database.UserActivityLog
 	s.GetInterface(constants.SessionKeyLogs, &logs)
 	var activityTypeFilter database.ActivityType
@@ -41,6 +43,7 @@ func NewLogEmbed(s *session.Session) *LogEmbed {
 	s.GetInterface(constants.SessionKeyDateRangeEnd, &endDate)
 
 	return &LogEmbed{
+		settings:           settings,
 		logs:               logs,
 		userID:             s.GetUint64(constants.SessionKeyUserID),
 		reviewerID:         s.GetUint64(constants.SessionKeyReviewerID),
@@ -51,7 +54,6 @@ func NewLogEmbed(s *session.Session) *LogEmbed {
 		page:               s.GetInt(constants.SessionKeyPaginationPage),
 		total:              s.GetInt(constants.SessionKeyTotalItems),
 		logsPerPage:        constants.LogsPerPage,
-		streamerMode:       s.GetBool(constants.SessionKeyStreamerMode),
 	}
 }
 
@@ -62,13 +64,13 @@ func NewLogEmbed(s *session.Session) *LogEmbed {
 func (b *LogEmbed) Build() *discord.MessageUpdateBuilder {
 	embed := discord.NewEmbedBuilder().
 		SetTitle("Log Query Results").
-		SetColor(utils.GetMessageEmbedColor(b.streamerMode))
+		SetColor(utils.GetMessageEmbedColor(b.settings.StreamerMode))
 
 	totalPages := (b.total + b.logsPerPage - 1) / b.logsPerPage
 
 	// Add fields for each active query condition
 	if b.userID != 0 {
-		embed.AddField("User ID", fmt.Sprintf("`%s`", utils.CensorString(strconv.FormatUint(b.userID, 10), b.streamerMode)), true)
+		embed.AddField("User ID", fmt.Sprintf("`%s`", utils.CensorString(strconv.FormatUint(b.userID, 10), b.settings.StreamerMode)), true)
 	}
 	if b.reviewerID != 0 {
 		embed.AddField("Reviewer ID", fmt.Sprintf("`%d`", b.reviewerID), true)
@@ -95,7 +97,7 @@ func (b *LogEmbed) Build() *discord.MessageUpdateBuilder {
 				fmt.Sprintf("%d. <t:%d:F>", b.start+i+1, log.ActivityTimestamp.Unix()),
 				fmt.Sprintf("Activity: `%s`\nUser: [%s](https://www.roblox.com/users/%d/profile)\nReviewer: <@%d>%s",
 					log.ActivityType.String(),
-					utils.CensorString(strconv.FormatUint(log.UserID, 10), b.streamerMode),
+					utils.CensorString(strconv.FormatUint(log.UserID, 10), b.settings.StreamerMode),
 					log.UserID,
 					log.ReviewerID,
 					details,

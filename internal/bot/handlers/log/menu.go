@@ -45,14 +45,6 @@ func NewMenu(h *Handler) *Menu {
 // ShowLogMenu prepares and displays the log interface by initializing
 // session data with default values and loading user preferences.
 func (m *Menu) ShowLogMenu(event interfaces.CommonEvent, s *session.Session) {
-	// Load user settings for display preferences
-	settings, err := m.handler.db.Settings().GetUserSettings(uint64(event.User().ID))
-	if err != nil {
-		m.handler.logger.Error("Failed to get user settings", zap.Error(err))
-		m.handler.paginationManager.RespondWithError(event, "Failed to get user settings. Please try again.")
-		return
-	}
-
 	// Initialize session data with default values
 	s.Set(constants.SessionKeyLogs, []*database.UserActivityLog{})
 	s.Set(constants.SessionKeyUserID, uint64(0))
@@ -63,7 +55,6 @@ func (m *Menu) ShowLogMenu(event interfaces.CommonEvent, s *session.Session) {
 	s.Set(constants.SessionKeyTotalItems, 0)
 	s.Set(constants.SessionKeyStart, 0)
 	s.Set(constants.SessionKeyPaginationPage, 0)
-	s.Set(constants.SessionKeyStreamerMode, settings.StreamerMode)
 
 	m.updateLogData(event, s, 0)
 }

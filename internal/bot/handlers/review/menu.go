@@ -85,17 +85,8 @@ func (m *Menu) ShowReviewMenu(event interfaces.CommonEvent, s *session.Session, 
 		}
 	}
 
-	// Load user settings for display preferences
-	settings, err := m.handler.db.Settings().GetUserSettings(uint64(event.User().ID))
-	if err != nil {
-		m.handler.logger.Error("Failed to get user settings", zap.Error(err))
-		m.handler.paginationManager.RespondWithError(event, "Failed to get user settings. Please try again.")
-		return
-	}
-
 	// Store data in session for the message builder
 	s.Set(constants.SessionKeyFlaggedFriends, flaggedFriends)
-	s.Set(constants.SessionKeyStreamerMode, settings.StreamerMode)
 
 	m.handler.paginationManager.NavigateTo(event, s, m.page, content)
 }
@@ -104,8 +95,19 @@ func (m *Menu) ShowReviewMenu(event interfaces.CommonEvent, s *session.Session, 
 func (m *Menu) handleSelectMenu(event *events.ComponentInteractionCreate, s *session.Session, customID string, option string) {
 	switch customID {
 	case constants.SortOrderSelectMenuCustomID:
-		s.Set(constants.SessionKeySortBy, option)
-		m.ShowReviewMenu(event, s, "Changed sort order")
+		// Retrieve user settings from session
+		var settings *database.UserSetting
+		s.GetInterface(constants.SessionKeyUserSettings, &settings)
+
+		// Update user's default sort preference
+		settings.DefaultSort = option
+		if err := m.handler.db.Settings().SaveUserSettings(settings); err != nil {
+			m.handler.logger.Error("Failed to save user settings", zap.Error(err))
+			m.handler.paginationManager.RespondWithError(event, "Failed to save sort order. Please try again.")
+			return
+		}
+
+		m.ShowReviewMenu(event, s, "Changed sort order. Will take effect for the next user.")
 	case constants.ActionSelectMenuCustomID:
 		switch option {
 		case constants.BanWithReasonButtonCustomID:
@@ -347,7 +349,14 @@ func (m *Menu) handleBanWithReasonModalSubmit(event *events.ModalSubmitInteracti
 // fetchNewTarget gets a new user to review based on the current sort order.
 // It logs the view action and stores the user in the session.
 func (m *Menu) fetchNewTarget(s *session.Session, reviewerID uint64) (*database.FlaggedUser, error) {
-	sortBy := s.GetString(constants.SessionKeySortBy)
+	// Retrieve user settings from session
+	var settings *database.UserSetting
+	s.GetInterface(constants.SessionKeyUserSettings, &settings)
+
+	// Get the sort order from user settings
+	sortBy := settings.DefaultSort
+
+	// Get the next user to review
 	user, err := m.handler.db.Users().GetFlaggedUserToReview(sortBy)
 	if err != nil {
 		return nil, err

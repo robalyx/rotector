@@ -32,29 +32,29 @@ var multipleNewlinesRegex = regexp.MustCompile(`\n{4,}`)
 
 // ReviewEmbed creates the visual layout for reviewing a flagged user.
 type ReviewEmbed struct {
+	db             *database.Database
+	settings       *database.UserSetting
 	user           *database.FlaggedUser
 	translator     *translator.Translator
 	flaggedFriends map[uint64]string
-	sortBy         string
-	streamerMode   bool
-	db             *database.Database
 }
 
 // NewReviewEmbed loads user data and settings from the session state to create
 // a new embed builder. The translator is used for description localization.
 func NewReviewEmbed(s *session.Session, translator *translator.Translator, db *database.Database) *ReviewEmbed {
+	var settings *database.UserSetting
+	s.GetInterface(constants.SessionKeyUserSettings, &settings)
 	var user *database.FlaggedUser
 	s.GetInterface(constants.SessionKeyTarget, &user)
 	var flaggedFriends map[uint64]string
 	s.GetInterface(constants.SessionKeyFlaggedFriends, &flaggedFriends)
 
 	return &ReviewEmbed{
+		db:             db,
+		settings:       settings,
 		user:           user,
 		translator:     translator,
 		flaggedFriends: flaggedFriends,
-		sortBy:         s.GetString(constants.SessionKeySortBy),
-		streamerMode:   s.GetBool(constants.SessionKeyStreamerMode),
-		db:             db,
 	}
 }
 
@@ -69,11 +69,11 @@ func (b *ReviewEmbed) Build() *discord.MessageUpdateBuilder {
 	embed := discord.NewEmbedBuilder().
 		AddField("ID", fmt.Sprintf(
 			"[%s](https://www.roblox.com/users/%d/profile)",
-			utils.CensorString(strconv.FormatUint(b.user.ID, 10), b.streamerMode),
+			utils.CensorString(strconv.FormatUint(b.user.ID, 10), b.settings.StreamerMode),
 			b.user.ID,
 		), true).
-		AddField("Name", utils.CensorString(b.user.Name, b.streamerMode), true).
-		AddField("Display Name", utils.CensorString(b.user.DisplayName, b.streamerMode), true).
+		AddField("Name", utils.CensorString(b.user.Name, b.settings.StreamerMode), true).
+		AddField("Display Name", utils.CensorString(b.user.DisplayName, b.settings.StreamerMode), true).
 		AddField("Created At", fmt.Sprintf("<t:%d:R>", b.user.CreatedAt.Unix()), true).
 		AddField("Last Updated", fmt.Sprintf("<t:%d:R>", b.user.LastUpdated.Unix()), true).
 		AddField("Confidence", fmt.Sprintf("%.2f", b.user.Confidence), true).
@@ -84,7 +84,7 @@ func (b *ReviewEmbed) Build() *discord.MessageUpdateBuilder {
 		AddField("Outfits", b.getOutfits(), false).
 		AddField(b.getFlaggedType(), b.getFlaggedContent(), false).
 		AddField("Review History", b.getReviewHistory(), false).
-		SetColor(utils.GetMessageEmbedColor(b.streamerMode))
+		SetColor(utils.GetMessageEmbedColor(b.settings.StreamerMode))
 
 	// Add interactive components for sorting and actions
 	components := []discord.ContainerComponent{
@@ -92,13 +92,13 @@ func (b *ReviewEmbed) Build() *discord.MessageUpdateBuilder {
 		discord.NewActionRow(
 			discord.NewStringSelectMenu(constants.SortOrderSelectMenuCustomID, "Sorting",
 				discord.NewStringSelectMenuOption("Selected by random", database.SortByRandom).
-					WithDefault(b.sortBy == database.SortByRandom).
+					WithDefault(b.settings.DefaultSort == database.SortByRandom).
 					WithEmoji(discord.ComponentEmoji{Name: "🔀"}),
 				discord.NewStringSelectMenuOption("Selected by confidence", database.SortByConfidence).
-					WithDefault(b.sortBy == database.SortByConfidence).
+					WithDefault(b.settings.DefaultSort == database.SortByConfidence).
 					WithEmoji(discord.ComponentEmoji{Name: "🔮"}),
 				discord.NewStringSelectMenuOption("Selected by last updated time", database.SortByLastUpdated).
-					WithDefault(b.sortBy == database.SortByLastUpdated).
+					WithDefault(b.settings.DefaultSort == database.SortByLastUpdated).
 					WithEmoji(discord.ComponentEmoji{Name: "📅"}),
 			),
 		),
@@ -183,7 +183,11 @@ func (b *ReviewEmbed) getGroups() string {
 			groups = append(groups, fmt.Sprintf("... and %d more", len(b.user.Groups)-10))
 			break
 		}
-		groups = append(groups, fmt.Sprintf("[%s](https://www.roblox.com/groups/%d)", utils.CensorString(group.Group.Name, b.streamerMode), group.Group.ID))
+		groups = append(groups, fmt.Sprintf(
+			"[%s](https://www.roblox.com/groups/%d)",
+			utils.CensorString(group.Group.Name, b.settings.StreamerMode),
+			group.Group.ID,
+		))
 	}
 
 	// If no groups are found, return NotApplicable
@@ -220,7 +224,11 @@ func (b *ReviewEmbed) getFriends() string {
 		if i >= FriendsLimit {
 			break
 		}
-		friends = append(friends, fmt.Sprintf("[%s](https://www.roblox.com/users/%d/profile)", utils.CensorString(friend.Name, b.streamerMode), friend.ID))
+		friends = append(friends, fmt.Sprintf(
+			"[%s](https://www.roblox.com/users/%d/profile)",
+			utils.CensorString(friend.Name, b.settings.StreamerMode),
+			friend.ID,
+		))
 	}
 
 	// If no friends are found, return NotApplicable

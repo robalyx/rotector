@@ -100,13 +100,6 @@ func (m *Menu) handleSelectMenu(event *events.ComponentInteractionCreate, s *ses
 
 	switch option {
 	case constants.StartReviewCustomID:
-		// Load user's default sort preference before showing review menu
-		settings, err := m.handler.db.Settings().GetUserSettings(uint64(event.User().ID))
-		if err != nil {
-			m.handler.logger.Error("Failed to get user settings", zap.Error(err))
-		}
-		s.Set(constants.SessionKeySortBy, settings.DefaultSort)
-
 		m.handler.reviewHandler.ShowReviewMenu(event, s)
 	case constants.UserSettingsCustomID:
 		m.handler.settingsHandler.ShowUserSettings(event, s)

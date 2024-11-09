@@ -80,12 +80,10 @@ const (
 	// Session keys.
 	SessionKeyMessageID    = "messageID"
 	SessionKeyTarget       = "target"
-	SessionKeySortBy       = "sortBy"
 	SessionKeyCurrentPage  = "currentPage"
 	SessionKeyPreviousPage = "previousPage"
 
-	SessionKeyImageBuffer  = "imageBuffer"
-	SessionKeyStreamerMode = "streamerMode"
+	SessionKeyImageBuffer = "imageBuffer"
 
 	SessionKeyPaginationPage = "paginationPage"
 	SessionKeyStart          = "start"

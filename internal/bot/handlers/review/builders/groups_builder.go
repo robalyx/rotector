@@ -16,6 +16,7 @@ import (
 // It combines group information with flagged status indicators and
 // supports pagination through a grid of group thumbnails.
 type GroupsEmbed struct {
+	settings      *database.UserSetting
 	user          *database.FlaggedUser
 	groups        []types.UserGroupRoles
 	flaggedGroups map[uint64]bool
@@ -23,12 +24,13 @@ type GroupsEmbed struct {
 	page          int
 	total         int
 	imageBuffer   *bytes.Buffer
-	streamerMode  bool
 }
 
 // NewGroupsEmbed loads group data and settings from the session state
 // to create a new embed builder.
 func NewGroupsEmbed(s *session.Session) *GroupsEmbed {
+	var settings *database.UserSetting
+	s.GetInterface(constants.SessionKeyUserSettings, &settings)
 	var user *database.FlaggedUser
 	s.GetInterface(constants.SessionKeyTarget, &user)
 	var groups []types.UserGroupRoles
@@ -37,6 +39,7 @@ func NewGroupsEmbed(s *session.Session) *GroupsEmbed {
 	s.GetInterface(constants.SessionKeyFlaggedGroups, &flaggedGroups)
 
 	return &GroupsEmbed{
+		settings:      settings,
 		user:          user,
 		groups:        groups,
 		flaggedGroups: flaggedGroups,
@@ -44,7 +47,6 @@ func NewGroupsEmbed(s *session.Session) *GroupsEmbed {
 		page:          s.GetInt(constants.SessionKeyPaginationPage),
 		total:         s.GetInt(constants.SessionKeyTotalItems),
 		imageBuffer:   s.GetBuffer(constants.SessionKeyImageBuffer),
-		streamerMode:  s.GetBool(constants.SessionKeyStreamerMode),
 	}
 }
 
@@ -64,9 +66,9 @@ func (b *GroupsEmbed) Build() *discord.MessageUpdateBuilder {
 	// Build embed with user info and thumbnails
 	embed := discord.NewEmbedBuilder().
 		SetTitle(fmt.Sprintf("User Groups (Page %d/%d)", b.page+1, totalPages)).
-		SetDescription(fmt.Sprintf("```%s (%d)```", utils.CensorString(b.user.Name, b.streamerMode), b.user.ID)).
+		SetDescription(fmt.Sprintf("```%s (%d)```", utils.CensorString(b.user.Name, b.settings.StreamerMode), b.user.ID)).
 		SetImage("attachment://" + fileName).
-		SetColor(utils.GetMessageEmbedColor(b.streamerMode))
+		SetColor(utils.GetMessageEmbedColor(b.settings.StreamerMode))
 
 	// Add navigation buttons with proper disabled states
 	components := []discord.ContainerComponent{
@@ -84,7 +86,7 @@ func (b *GroupsEmbed) Build() *discord.MessageUpdateBuilder {
 		fieldName := fmt.Sprintf("Group %d", b.start+i+1)
 		fieldValue := fmt.Sprintf(
 			"[%s](https://www.roblox.com/groups/%d)\n(%s)",
-			utils.CensorString(group.Group.Name, b.streamerMode),
+			utils.CensorString(group.Group.Name, b.settings.StreamerMode),
 			group.Group.ID,
 			group.Role.Name,
 		)

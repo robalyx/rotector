@@ -16,6 +16,7 @@ import (
 // It combines friend information with flagged/confirmed status indicators and
 // supports pagination through a grid of friend avatars.
 type FriendsEmbed struct {
+	settings       *database.UserSetting
 	user           *database.FlaggedUser
 	friends        []types.Friend
 	flaggedFriends map[uint64]string
@@ -23,12 +24,13 @@ type FriendsEmbed struct {
 	page           int
 	total          int
 	imageBuffer    *bytes.Buffer
-	streamerMode   bool
 }
 
 // NewFriendsEmbed loads friend data and settings from the session state
 // to create a new embed builder.
 func NewFriendsEmbed(s *session.Session) *FriendsEmbed {
+	var settings *database.UserSetting
+	s.GetInterface(constants.SessionKeyUserSettings, &settings)
 	var user *database.FlaggedUser
 	s.GetInterface(constants.SessionKeyTarget, &user)
 	var friends []types.Friend
@@ -37,6 +39,7 @@ func NewFriendsEmbed(s *session.Session) *FriendsEmbed {
 	s.GetInterface(constants.SessionKeyFlaggedFriends, &flaggedFriends)
 
 	return &FriendsEmbed{
+		settings:       settings,
 		user:           user,
 		friends:        friends,
 		flaggedFriends: flaggedFriends,
@@ -44,7 +47,6 @@ func NewFriendsEmbed(s *session.Session) *FriendsEmbed {
 		page:           s.GetInt(constants.SessionKeyPaginationPage),
 		total:          s.GetInt(constants.SessionKeyTotalItems),
 		imageBuffer:    s.GetBuffer(constants.SessionKeyImageBuffer),
-		streamerMode:   s.GetBool(constants.SessionKeyStreamerMode),
 	}
 }
 
@@ -64,9 +66,9 @@ func (b *FriendsEmbed) Build() *discord.MessageUpdateBuilder {
 	// Build embed with user info and avatars
 	embed := discord.NewEmbedBuilder().
 		SetTitle(fmt.Sprintf("User Friends (Page %d/%d)", b.page+1, totalPages)).
-		SetDescription(fmt.Sprintf("```%s (%d)```", utils.CensorString(b.user.Name, b.streamerMode), b.user.ID)).
+		SetDescription(fmt.Sprintf("```%s (%d)```", utils.CensorString(b.user.Name, b.settings.StreamerMode), b.user.ID)).
 		SetImage("attachment://" + fileName).
-		SetColor(utils.GetMessageEmbedColor(b.streamerMode))
+		SetColor(utils.GetMessageEmbedColor(b.settings.StreamerMode))
 
 	// Add navigation buttons with proper disabled states
 	components := []discord.ContainerComponent{
@@ -83,7 +85,7 @@ func (b *FriendsEmbed) Build() *discord.MessageUpdateBuilder {
 	for i, friend := range b.friends {
 		fieldName := fmt.Sprintf("Friend %d", b.start+i+1)
 		fieldValue := fmt.Sprintf("[%s](https://www.roblox.com/users/%d/profile)",
-			utils.CensorString(friend.Name, b.streamerMode), friend.ID)
+			utils.CensorString(friend.Name, b.settings.StreamerMode), friend.ID)
 
 		// Add status indicators for flagged/confirmed friends
 		if flagged, ok := b.flaggedFriends[friend.ID]; ok {
