@@ -11,6 +11,7 @@ import (
 	"github.com/disgoorg/disgo/discord"
 	"github.com/disgoorg/disgo/events"
 	"github.com/disgoorg/disgo/gateway"
+	"github.com/disgoorg/snowflake/v2"
 	"go.uber.org/zap"
 
 	"github.com/jaxron/roapi.go/pkg/api"
@@ -20,6 +21,7 @@ import (
 	"github.com/rotector/rotector/internal/bot/handlers/queue"
 	"github.com/rotector/rotector/internal/bot/handlers/review"
 	"github.com/rotector/rotector/internal/bot/handlers/setting"
+	"github.com/rotector/rotector/internal/bot/interfaces"
 	"github.com/rotector/rotector/internal/bot/pagination"
 	"github.com/rotector/rotector/internal/bot/session"
 	"github.com/rotector/rotector/internal/bot/utils"
@@ -182,23 +184,16 @@ func (b *Bot) handleApplicationCommandInteraction(event *events.ApplicationComma
 				zap.Duration("duration", duration))
 		}()
 
-		// Get or create user session
-		s, err := b.sessionManager.GetOrCreateSession(context.Background(), event.User().ID)
-		if err != nil {
-			b.logger.Error("Failed to get or create session", zap.Error(err))
-			b.paginationManager.RespondWithError(event, "Failed to get or create session.")
+		// Validate session but return early if session creation failed or session expired
+		s, ok := b.validateAndGetSession(event, event.User().ID)
+		if !ok {
 			return
 		}
 
 		// Navigate to stored page or show dashboard
 		currentPage := s.GetString(constants.SessionKeyCurrentPage)
 		page := b.paginationManager.GetPage(currentPage)
-
-		if page == nil {
-			b.dashboardHandler.ShowDashboard(event, s, "")
-		} else {
-			b.paginationManager.NavigateTo(event, s, page, "")
-		}
+		b.paginationManager.NavigateTo(event, s, page, "")
 
 		s.Touch(context.Background())
 	}()
@@ -243,11 +238,9 @@ func (b *Bot) handleComponentInteraction(event *events.ComponentInteractionCreat
 				zap.Duration("duration", duration))
 		}()
 
-		// Get or create user session
-		s, err := b.sessionManager.GetOrCreateSession(context.Background(), event.User().ID)
-		if err != nil {
-			b.logger.Error("Failed to get or create session", zap.Error(err))
-			b.paginationManager.RespondWithError(event, "Failed to get or create session.")
+		// Validate session but return early if session creation failed or session expired
+		s, ok := b.validateAndGetSession(event, event.User().ID)
+		if !ok {
 			return
 		}
 
@@ -294,11 +287,9 @@ func (b *Bot) handleModalSubmit(event *events.ModalSubmitInteractionCreate) {
 				zap.Duration("duration", duration))
 		}()
 
-		// Get or create user session
-		s, err := b.sessionManager.GetOrCreateSession(context.Background(), event.User().ID)
-		if err != nil {
-			b.logger.Error("Failed to get or create session", zap.Error(err))
-			b.paginationManager.RespondWithError(event, "Failed to get or create session.")
+		// Validate session but return early if session creation failed or session expired
+		s, ok := b.validateAndGetSession(event, event.User().ID)
+		if !ok {
 			return
 		}
 
@@ -306,4 +297,27 @@ func (b *Bot) handleModalSubmit(event *events.ModalSubmitInteractionCreate) {
 		b.paginationManager.HandleInteraction(event, s)
 		s.Touch(context.Background())
 	}()
+}
+
+// validateAndGetSession retrieves or creates a session for the given user and validates its state.
+func (b *Bot) validateAndGetSession(event interfaces.CommonEvent, userID snowflake.ID) (*session.Session, bool) {
+	// Get or create user session
+	s, err := b.sessionManager.GetOrCreateSession(context.Background(), userID)
+	if err != nil {
+		b.logger.Error("Failed to get or create session", zap.Error(err))
+		b.paginationManager.RespondWithError(event, "Failed to get or create session.")
+		return nil, false
+	}
+
+	// Check if the session has a valid current page
+	currentPage := s.GetString(constants.SessionKeyCurrentPage)
+	page := b.paginationManager.GetPage(currentPage)
+	if page == nil {
+		// If no valid page exists, reset to dashboard
+		b.dashboardHandler.ShowDashboard(event, s, "New session created.")
+		s.Touch(context.Background())
+		return s, false
+	}
+
+	return s, true
 }
