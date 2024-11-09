@@ -1,6 +1,6 @@
 <h1 align="center">
   <picture>
-    <img width="800" alt="Rotector" src="./assets/images/banner.png">
+    <img width="800" alt="Rotector" src="./assets/images/banner.gif">
   </picture>
   <br>
   <a href="https://github.com/rotector/rotector/blob/main/LICENSE">
@@ -232,8 +232,8 @@ This roadmap shows our major upcoming features, but we've got even more in the w
 
   - [ ] Session transfer between moderators
   - [ ] Appeal process system
-  - [ ] Group reviewing
   - [ ] Inventory inspection
+  - [ ] Group flagging and reviewing
 
 - 🌟 **Community Review System**
 
