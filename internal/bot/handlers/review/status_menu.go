@@ -59,7 +59,7 @@ func (m *StatusMenu) ShowStatusMenu(event interfaces.CommonEvent, s *session.Ses
 		flaggedUser, err := m.handler.db.Users().GetFlaggedUserByID(userID)
 		if err != nil {
 			// User was not flagged by AI, return to previous page
-			m.returnToPreviousPage(event, s, "User was not flagged by AI after recheck.")
+			m.handler.paginationManager.NavigateBack(event, s, "User was not flagged by AI after recheck.")
 			return
 		}
 
@@ -99,12 +99,5 @@ func (m *StatusMenu) handleAbort(event *events.ComponentInteractionCreate, s *se
 		return
 	}
 
-	m.returnToPreviousPage(event, s, "Recheck aborted")
-}
-
-// returnToPreviousPage navigates back to the page stored in session history.
-func (m *StatusMenu) returnToPreviousPage(event interfaces.CommonEvent, s *session.Session, content string) {
-	previousPage := s.GetString(constants.SessionKeyPreviousPage)
-	page := m.handler.paginationManager.GetPage(previousPage)
-	m.handler.paginationManager.NavigateTo(event, s, page, content)
+	m.handler.paginationManager.NavigateBack(event, s, "Recheck aborted")
 }

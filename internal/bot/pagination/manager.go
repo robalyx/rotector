@@ -132,6 +132,13 @@ func (m *Manager) NavigateTo(event interfaces.CommonEvent, s *session.Session, p
 		zap.Uint64("message_id", uint64(message.ID)))
 }
 
+// NavigateBack navigates back to the previous page.
+func (m *Manager) NavigateBack(event interfaces.CommonEvent, s *session.Session, content string) {
+	previousPage := s.GetString(constants.SessionKeyPreviousPage)
+	page := m.GetPage(previousPage)
+	m.NavigateTo(event, s, page, content)
+}
+
 // RespondWithError clears all message components and embeds, replacing them with
 // a timestamped error message. This is used when an unrecoverable error occurs
 // during interaction handling.
