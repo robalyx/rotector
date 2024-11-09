@@ -3,9 +3,12 @@ package builders
 import (
 	"context"
 	"fmt"
+	"strconv"
 
 	"github.com/rotector/rotector/internal/bot/constants"
 	"github.com/rotector/rotector/internal/bot/session"
+	"github.com/rotector/rotector/internal/bot/utils"
+	"github.com/rotector/rotector/internal/common/database"
 	"github.com/rotector/rotector/internal/common/queue"
 
 	"github.com/disgoorg/disgo/discord"
@@ -14,6 +17,7 @@ import (
 // StatusEmbed creates the visual layout for viewing queue status information.
 // It combines queue position, status, and queue lengths into a Discord embed.
 type StatusEmbed struct {
+	settings            *database.UserSetting
 	queueManager        *queue.Manager
 	userID              uint64
 	highPriorityCount   int
@@ -24,7 +28,11 @@ type StatusEmbed struct {
 // NewStatusEmbed loads queue information from the session state to create
 // a new embed builder.
 func NewStatusEmbed(queueManager *queue.Manager, s *session.Session) *StatusEmbed {
+	var settings *database.UserSetting
+	s.GetInterface(constants.SessionKeyUserSettings, &settings)
+
 	return &StatusEmbed{
+		settings:            settings,
 		queueManager:        queueManager,
 		userID:              s.GetUint64(constants.SessionKeyQueueUser),
 		highPriorityCount:   s.GetInt(constants.SessionKeyQueueHighCount),
@@ -53,12 +61,16 @@ func (b *StatusEmbed) Build() *discord.MessageUpdateBuilder {
 	// Create embed with queue information
 	embed := discord.NewEmbedBuilder().
 		SetTitle("Recheck Status").
-		AddField("Current User", fmt.Sprintf("[%d](https://roblox.com/users/%d/profile)", b.userID, b.userID), true).
+		AddField("Current User", fmt.Sprintf(
+			"[%s](https://roblox.com/users/%d/profile)",
+			utils.CensorString(strconv.FormatUint(b.userID, 10), b.settings.StreamerMode),
+			b.userID,
+		), true).
 		AddField("Status", queueInfo, false).
 		AddField("High Priority Queue", fmt.Sprintf("%d items", b.highPriorityCount), true).
 		AddField("Normal Priority Queue", fmt.Sprintf("%d items", b.normalPriorityCount), true).
 		AddField("Low Priority Queue", fmt.Sprintf("%d items", b.lowPriorityCount), true).
-		SetColor(constants.DefaultEmbedColor)
+		SetColor(utils.GetMessageEmbedColor(b.settings.StreamerMode))
 
 	// Add queue management buttons
 	components := []discord.ContainerComponent{
