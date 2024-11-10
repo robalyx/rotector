@@ -51,23 +51,19 @@ func (m *FriendsMenu) ShowFriendsMenu(event *events.ComponentInteractionCreate, 
 		m.handler.reviewMenu.ShowReviewMenu(event, s, "No friends found for this user.")
 		return
 	}
-	friends := user.Friends
+
+	// Get friend types from session and sort friends by status
+	var friendTypes map[uint64]string
+	s.GetInterface(constants.SessionKeyFriendTypes, &friendTypes)
+	sortedFriends := m.sortFriendsByStatus(user.Friends, friendTypes)
 
 	// Calculate page boundaries and get subset of friends
 	start := page * constants.FriendsPerPage
 	end := start + constants.FriendsPerPage
-	if end > len(friends) {
-		end = len(friends)
+	if end > len(sortedFriends) {
+		end = len(sortedFriends)
 	}
-	pageFriends := friends[start:end]
-
-	// Check database for flagged/confirmed status
-	flaggedFriends, err := m.getFlaggedFriends(pageFriends)
-	if err != nil {
-		m.handler.logger.Error("Failed to get flagged friends", zap.Error(err))
-		m.handler.paginationManager.RespondWithError(event, "Failed to get flagged friends. Please try again.")
-		return
-	}
+	pageFriends := sortedFriends[start:end]
 
 	// Download and process friend avatars
 	friendsThumbnailURLs, err := m.fetchFriendsThumbnails(pageFriends)
@@ -101,29 +97,12 @@ func (m *FriendsMenu) ShowFriendsMenu(event *events.ComponentInteractionCreate, 
 
 	// Store data in session for the message builder
 	s.Set(constants.SessionKeyFriends, pageFriends)
-	s.Set(constants.SessionKeyFlaggedFriends, flaggedFriends)
 	s.Set(constants.SessionKeyStart, start)
 	s.Set(constants.SessionKeyPaginationPage, page)
-	s.Set(constants.SessionKeyTotalItems, len(friends))
+	s.Set(constants.SessionKeyTotalItems, len(sortedFriends))
 	s.SetBuffer(constants.SessionKeyImageBuffer, buf)
 
 	m.handler.paginationManager.NavigateTo(event, s, m.page, "")
-}
-
-// getFlaggedFriends checks the database to find which friends are flagged or confirmed.
-// Returns a map of friend IDs to their status (flagged/confirmed).
-func (m *FriendsMenu) getFlaggedFriends(friends []types.Friend) (map[uint64]string, error) {
-	friendIDs := make([]uint64, len(friends))
-	for i, friend := range friends {
-		friendIDs[i] = friend.ID
-	}
-
-	flaggedFriends, err := m.handler.db.Users().CheckExistingUsers(friendIDs)
-	if err != nil {
-		return nil, err
-	}
-
-	return flaggedFriends, nil
 }
 
 // handlePageNavigation processes navigation button clicks by calculating
@@ -192,4 +171,34 @@ func (m *FriendsMenu) fetchFriendsThumbnails(friends []types.Friend) (map[uint64
 		zap.Int("fetchedThumbnails", len(thumbnailResponses)))
 
 	return thumbnailURLs, nil
+}
+
+// sortFriendsByStatus sorts friends into three categories based on their status:
+// 1. Confirmed friends (⚠️) - Users that have been reviewed and confirmed
+// 2. Flagged friends (⏳) - Users that are currently flagged for review
+// 3. Unflagged friends - Users with no current flags or status
+// Returns a new slice with friends sorted in this priority order.
+func (m *FriendsMenu) sortFriendsByStatus(friends []types.Friend, friendTypes map[uint64]string) []types.Friend {
+	// Create three slices for different status types
+	var confirmedFriends, flaggedFriends, unflaggedFriends []types.Friend
+
+	// Categorize friends based on their status
+	for _, friend := range friends {
+		switch friendTypes[friend.ID] {
+		case database.UserTypeConfirmed:
+			confirmedFriends = append(confirmedFriends, friend)
+		case database.UserTypeFlagged:
+			flaggedFriends = append(flaggedFriends, friend)
+		default:
+			unflaggedFriends = append(unflaggedFriends, friend)
+		}
+	}
+
+	// Combine slices in priority order (confirmed -> flagged -> unflagged)
+	sortedFriends := make([]types.Friend, 0, len(friends))
+	sortedFriends = append(sortedFriends, confirmedFriends...)
+	sortedFriends = append(sortedFriends, flaggedFriends...)
+	sortedFriends = append(sortedFriends, unflaggedFriends...)
+
+	return sortedFriends
 }

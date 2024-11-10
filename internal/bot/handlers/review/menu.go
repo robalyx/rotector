@@ -61,8 +61,9 @@ func (m *Menu) ShowReviewMenu(event interfaces.CommonEvent, s *session.Session, 
 		}
 	}
 
-	// Check friend status by looking up each friend in the database
-	flaggedFriends := make(map[uint64]string)
+	// Check friend status and get friend data by looking up each friend in the database
+	flaggedFriends := make(map[uint64]*database.User)
+	friendTypes := make(map[uint64]string)
 	if len(user.Friends) > 0 {
 		// Extract friend IDs for batch lookup
 		friendIDs := make([]uint64, len(user.Friends))
@@ -70,23 +71,18 @@ func (m *Menu) ShowReviewMenu(event interfaces.CommonEvent, s *session.Session, 
 			friendIDs[i] = friend.ID
 		}
 
-		// Check which users already exist in the database
-		existingUsers, err := m.handler.db.Users().CheckExistingUsers(friendIDs)
+		// Get full user data and types for friends that exist in the database
+		var err error
+		flaggedFriends, friendTypes, err = m.handler.db.Users().GetUsersByIDs(friendIDs)
 		if err != nil {
-			m.handler.logger.Error("Failed to check existing friends", zap.Error(err))
+			m.handler.logger.Error("Failed to get friend data", zap.Error(err))
 			return
-		}
-
-		// Store confirmed and flagged friends
-		for friendID, status := range existingUsers {
-			if status == database.UserTypeConfirmed || status == database.UserTypeFlagged {
-				flaggedFriends[friendID] = status
-			}
 		}
 	}
 
 	// Store data in session for the message builder
 	s.Set(constants.SessionKeyFlaggedFriends, flaggedFriends)
+	s.Set(constants.SessionKeyFriendTypes, friendTypes)
 
 	m.handler.paginationManager.NavigateTo(event, s, m.page, content)
 }

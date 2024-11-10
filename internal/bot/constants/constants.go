@@ -34,9 +34,9 @@ const (
 	AbortButtonCustomID   = "abort"
 
 	// Friends Menu.
-	FriendsPerPage     = 21
+	FriendsPerPage     = 12
 	FriendsGridColumns = 3
-	FriendsGridRows    = 7
+	FriendsGridRows    = 4
 
 	// Outfits Menu.
 	OutfitsPerPage    = 15
@@ -105,6 +105,7 @@ const (
 
 	SessionKeyFriends        = "friends"
 	SessionKeyFlaggedFriends = "flaggedFriends"
+	SessionKeyFriendTypes    = "friendTypes"
 
 	SessionKeyGroups        = "groups"
 	SessionKeyFlaggedGroups = "flaggedGroups"

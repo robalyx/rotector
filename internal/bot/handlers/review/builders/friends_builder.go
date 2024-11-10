@@ -20,7 +20,8 @@ type FriendsEmbed struct {
 	settings       *database.UserSetting
 	user           *database.FlaggedUser
 	friends        []types.Friend
-	flaggedFriends map[uint64]string
+	flaggedFriends map[uint64]*database.User
+	friendTypes    map[uint64]string
 	start          int
 	page           int
 	total          int
@@ -36,14 +37,17 @@ func NewFriendsEmbed(s *session.Session) *FriendsEmbed {
 	s.GetInterface(constants.SessionKeyTarget, &user)
 	var friends []types.Friend
 	s.GetInterface(constants.SessionKeyFriends, &friends)
-	var flaggedFriends map[uint64]string
+	var flaggedFriends map[uint64]*database.User
 	s.GetInterface(constants.SessionKeyFlaggedFriends, &flaggedFriends)
+	var friendTypes map[uint64]string
+	s.GetInterface(constants.SessionKeyFriendTypes, &friendTypes)
 
 	return &FriendsEmbed{
 		settings:       settings,
 		user:           user,
 		friends:        friends,
 		flaggedFriends: flaggedFriends,
+		friendTypes:    friendTypes,
 		start:          s.GetInt(constants.SessionKeyStart),
 		page:           s.GetInt(constants.SessionKeyPaginationPage),
 		total:          s.GetInt(constants.SessionKeyTotalItems),
@@ -95,13 +99,22 @@ func (b *FriendsEmbed) Build() *discord.MessageUpdateBuilder {
 			friend.ID,
 		)
 
-		// Add status indicators for flagged/confirmed friends
-		if flagged, ok := b.flaggedFriends[friend.ID]; ok {
-			if flagged == database.UserTypeConfirmed {
-				fieldName += " ⚠️"
-			} else if flagged == database.UserTypeFlagged {
-				fieldName += " ⏳"
+		if flaggedFriend, ok := b.flaggedFriends[friend.ID]; ok {
+			// Add emoji based on friend type
+			if friendType, ok := b.friendTypes[friend.ID]; ok {
+				switch friendType {
+				case database.UserTypeConfirmed:
+					fieldName += " ⚠️"
+				case database.UserTypeFlagged:
+					fieldName += " ⏳"
+				}
 			}
+
+			// Add reason and confidence for flagged friend
+			if flaggedFriend.Confidence > 0 {
+				fieldValue += fmt.Sprintf(" (%.2f)", flaggedFriend.Confidence)
+			}
+			fieldValue += fmt.Sprintf("\n```%s```", flaggedFriend.Reason)
 		}
 
 		embed.AddField(fieldName, fieldValue, true)

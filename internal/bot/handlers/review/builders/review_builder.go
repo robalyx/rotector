@@ -32,11 +32,11 @@ var multipleNewlinesRegex = regexp.MustCompile(`\n{4,}`)
 
 // ReviewEmbed creates the visual layout for reviewing a flagged user.
 type ReviewEmbed struct {
-	db             *database.Database
-	settings       *database.UserSetting
-	user           *database.FlaggedUser
-	translator     *translator.Translator
-	flaggedFriends map[uint64]string
+	db          *database.Database
+	settings    *database.UserSetting
+	user        *database.FlaggedUser
+	translator  *translator.Translator
+	friendTypes map[uint64]string
 }
 
 // NewReviewEmbed loads user data and settings from the session state to create
@@ -46,15 +46,15 @@ func NewReviewEmbed(s *session.Session, translator *translator.Translator, db *d
 	s.GetInterface(constants.SessionKeyUserSettings, &settings)
 	var user *database.FlaggedUser
 	s.GetInterface(constants.SessionKeyTarget, &user)
-	var flaggedFriends map[uint64]string
-	s.GetInterface(constants.SessionKeyFlaggedFriends, &flaggedFriends)
+	var friendTypes map[uint64]string
+	s.GetInterface(constants.SessionKeyFriendTypes, &friendTypes)
 
 	return &ReviewEmbed{
-		db:             db,
-		settings:       settings,
-		user:           user,
-		translator:     translator,
-		flaggedFriends: flaggedFriends,
+		db:          db,
+		settings:    settings,
+		user:        user,
+		translator:  translator,
+		friendTypes: friendTypes,
 	}
 }
 
@@ -200,13 +200,13 @@ func (b *ReviewEmbed) getGroups() string {
 
 // getFriendsField returns the friends field name for the embed.
 func (b *ReviewEmbed) getFriendsField() string {
-	if len(b.flaggedFriends) > 0 {
+	if len(b.friendTypes) > 0 {
 		confirmedCount := 0
 		flaggedCount := 0
-		for _, status := range b.flaggedFriends {
-			if status == database.UserTypeConfirmed {
+		for _, friendType := range b.friendTypes {
+			if friendType == database.UserTypeConfirmed {
 				confirmedCount++
-			} else if status == database.UserTypeFlagged {
+			} else if friendType == database.UserTypeFlagged {
 				flaggedCount++
 			}
 		}
