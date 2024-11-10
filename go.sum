@@ -64,6 +64,8 @@ github.com/invopop/jsonschema v0.12.0 h1:6ovsNSuvn9wEQVOyc72aycBMVQFKz7cPdMJn10C
 github.com/invopop/jsonschema v0.12.0/go.mod h1:ffZ5Km5SWWRAIN6wbDXItl95euhFz2uON45H2qjYt+0=
 github.com/jaxron/axonet v0.0.0-20241025054147-6c298c86aa64 h1:+3d8drc7Dejp5ZtCNU2KD7s0HKYGVYBXjmbEc3HulxQ=
 github.com/jaxron/axonet v0.0.0-20241025054147-6c298c86aa64/go.mod h1:92DgyJvbzpypIYiDDCbdEQiyDKQ6vUJN/i948GmChhI=
+github.com/jaxron/axonet v0.0.0-20241110114112-10fce0f238e1 h1:nFrN0D/tZCt34RGSVzZWx36Y5EMokMyaeBC6+cT5RsE=
+github.com/jaxron/axonet v0.0.0-20241110114112-10fce0f238e1/go.mod h1:92DgyJvbzpypIYiDDCbdEQiyDKQ6vUJN/i948GmChhI=
 github.com/jaxron/axonet/middleware/circuitbreaker v0.0.0-20241025054147-6c298c86aa64 h1:ow7CAEVR2yTRGPSbTq1mcmBI1y+gMpIjr/h8O1dWxtw=
 github.com/jaxron/axonet/middleware/circuitbreaker v0.0.0-20241025054147-6c298c86aa64/go.mod h1:jDL54cSgGhcfdIhs7Z5wKI12LDWkKEZHzvxvdl/wZ+g=
 github.com/jaxron/axonet/middleware/proxy v0.0.0-20241025054147-6c298c86aa64 h1:EM5UKFabpG0uGEkxCBhjueZR2kDAldmorxGbL7IQnko=

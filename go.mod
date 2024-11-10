@@ -8,7 +8,7 @@ require (
 	github.com/disgoorg/snowflake/v2 v2.0.3
 	github.com/go-pg/pg/v10 v10.13.0
 	github.com/invopop/jsonschema v0.12.0
-	github.com/jaxron/axonet v0.0.0-20241025054147-6c298c86aa64
+	github.com/jaxron/axonet v0.0.0-20241110114112-10fce0f238e1
 	github.com/jaxron/axonet/middleware/circuitbreaker v0.0.0-20241025054147-6c298c86aa64
 	github.com/jaxron/axonet/middleware/proxy v0.0.0-20241025054147-6c298c86aa64
 	github.com/jaxron/axonet/middleware/ratelimit v0.0.0-20241025054147-6c298c86aa64

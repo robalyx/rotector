@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/bytedance/sonic"
 	"github.com/jaxron/axonet/middleware/circuitbreaker"
 	"github.com/jaxron/axonet/middleware/proxy"
 	"github.com/jaxron/axonet/middleware/ratelimit"
@@ -45,6 +46,8 @@ func getRoAPIClient(cfg *config.Config, redisManager *redis.Manager, logger *zap
 	// 2. Rate limiting prevents API abuse
 	// 1. Proxy routing distributes requests
 	return api.New(cookies,
+		client.WithMarshalFunc(sonic.Marshal),
+		client.WithUnmarshalFunc(sonic.Unmarshal),
 		client.WithLogger(NewLogger(logger)),
 		client.WithTimeout(10*time.Second),
 		client.WithMiddleware(6,
