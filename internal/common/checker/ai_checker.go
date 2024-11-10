@@ -2,11 +2,13 @@ package checker
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"sync"
 
 	"github.com/bytedance/sonic"
 	"github.com/openai/openai-go"
+	"github.com/pkoukk/tiktoken-go"
 	"github.com/rotector/rotector/internal/common/database"
 	"github.com/rotector/rotector/internal/common/fetcher"
 	"github.com/rotector/rotector/internal/common/translator"
@@ -16,102 +18,35 @@ import (
 	"go.uber.org/zap"
 )
 
+//nolint:lll
 const (
-	// SystemPrompt provides detailed instructions to the AI model for analyzing user content.
-	// It defines violation types, confidence scoring rules, and specific patterns to look for.
-	SystemPrompt = `You are a Roblox moderator. Your job is to analyze user data for inappropriate sexual or suggestive content.
+	// ReviewSystemPrompt provides detailed instructions to the AI model for analyzing user content.
+	ReviewSystemPrompt = `You are a Roblox moderator analyzing user data for inappropriate sexual or suggestive content. Flag violations by considering explicit content, suggestive language, and combinations of phrases, symbols, and emojis. Use exact strings for 'flaggedContent'.
 
-Instructions:
-1. Flag violations (explicit, suggestive, ambiguous)
-2. Consider both clear sexual content and suggestive/innuendo language
-3. Analyze phrase, symbol, and emoji combinations
-4. Use exact strings for 'flaggedContent'
+Calculate confidence starting at 0: +0.6 for explicit violations, +0.4 for clear suggestive content, +0.2 for subtle hints, +0.1 for each additional same-type violation, and +0.2 for each different violation type. High confidence (0.8-1.0) indicates explicit content or multiple violations, medium (0.4-0.7) shows clear patterns or coded language, and low (0.0-0.3) suggests subtle or ambiguous content.
 
-Confidence Scoring:
-Base starts at 0, calculate total:
-+0.6: Explicit violations
-+0.4: Clear suggestive content
-+0.2: Subtle hints
-+0.1: Each additional same-type violation
-+0.2: Each different violation type or suspicious combination
+Flag content with: explicit sexual terms, innuendos, body part references, hookup solicitation, porn references, suggestive emojis, NSFW content, ERP terms, fetish mentions, and grooming language (age questions, photo requests, off-platform chat, personal info seeking, gift offers, secret keeping). Also flag coded sexual language (number substitutions, misspellings, hidden meanings), sexualized roleplay, non-consensual references, exploitation, harassment, predatory behavior (love bombing, isolation, manipulation), suspicious requests (camera/mic usage, private games, social media), and adult industry references (OnlyFans, modeling scams, compensation offers).
 
-Final Confidence Levels:
-High (0.8-1.0): Explicit content, multiple violations, grooming, illegal content
-Medium (0.4-0.7): Single clear violation, multiple subtle ones, coded language
-Low (0.0-0.3): Single subtle reference, ambiguous patterns
+Exclude non-suggestive orientation/gender identity, general friendship, non-sexual profanity, legitimate trading, and social/cultural discussions.`
 
-Flag content containing:
-1. Explicit sexual terms/slang
-2. Sexual innuendos/suggestions
-3. Sexual acts/body parts references
-4. Sexual solicitation/hookups/"dating"
-5. Porn/adult content references
-6. Suggestive emoji combinations
-7. NSFW references/innuendos
-8. Erotic Roleplay (ERP) terms
-9. Fetish/kink mentions
-10. Grooming language:
-    - Age-related questions
-    - Requests for photos/videos
-    - Attempts to move chat off-platform
-    - Personal questions about location/school
-    - Offers of gifts/money
-    - "Secret" keeping
-    - "Mature for your age" type phrases
-11. Illegal sexual content
-12. Coded sexual language:
-    - Number substitutions
-    - Deliberately misspelled words
-    - Hidden meanings in seemingly innocent phrases
-    - Unicode character substitutions
-13. NSFW acronyms/abbreviations
-14. Sexualized roleplay
-15. Non-consensual references
-16. Incest/taboo relationships
-17. Sexual exploitation/objectification
-18. Zoophilia references
-19. Sex toy references
-20. Sexual harassment/blackmail
-21. "studio only" (potential ERP)
-22. "top"/"bottom" preferences (dominance/submission)
-23. "I trade" (when implying illegal content)
-24. Predatory behavior patterns:
-    - Love bombing
-    - Isolation attempts
-    - Trust building/manipulation
-    - Privacy invasion
-25. Suspicious activity requests:
-    - Camera/mic usage
-    - Private game invites
-    - Discord/social media requests
-26. Sexual content disguised as:
-    - Modeling offers
-    - Casting calls
-    - Photoshoots
-27. Adult industry references:
-    - OnlyFans mentions
-    - Cam site references
-    - Adult content creation
-28. Compensation offers:
-    - Robux for inappropriate acts
-    - Real money solicitation
-    - Gift cards/digital goods
-29. Inappropriate relationship dynamics:
-    - Power imbalances
-    - Authority abuse
-    - Age gap references
-30. Content hinting at:
-    - Substance use with sexual context
-    - Meeting in person
-    - Private chat requests
+	// FriendSystemPrompt provides detailed instructions to the AI model for analyzing friend networks.
+	FriendSystemPrompt = `You are a content moderation assistant analyzing user friend networks for inappropriate patterns. Examine common violation themes, content severity, and network concentration. Generate a clear, short, factual 1 sentence reason highlighting the most serious violations and patterns.
 
-Exclude:
-- Non-suggestive orientation/gender identity
-- General friendship references
-- Non-sexual profanity
-- Legitimate Roblox item trading
-- Political/religious content
-- Social/cultural discussions`
+Calculate confidence starting at 0: +0.6 for multiple confirmed friends with serious violations, +0.4 for multiple flagged friends with clear patterns, +0.2 for mixed confirmed/flagged friends, +0.1 for each additional same-type violation, and +0.2 for each different violation type. High confidence (0.8-1.0) indicates strong confirmed networks, medium (0.4-0.7) shows clear patterns with mixed status, and low (0.0-0.3) suggests limited connections.
+
+Note: Leave the flaggedContent field empty.`
+
+	FriendUserPrompt = `User: %s
+Friend data: %s`
+
+	// MaxFriendDataTokens is the maximum number of tokens allowed for friend data.
+	MaxFriendDataTokens = 400
+)
+
+// Generate the JSON schema at initialization time to avoid repeated generation.
+var (
+	flaggedUsersSchema = utils.GenerateSchema[FlaggedUsers]() //nolint:gochecknoglobals
+	flaggedUserSchema  = utils.GenerateSchema[FlaggedUser]()  //nolint:gochecknoglobals
 )
 
 // FlaggedUsers holds a list of users that the AI has identified as inappropriate.
@@ -125,7 +60,7 @@ type FlaggedUsers struct {
 type FlaggedUser struct {
 	Name           string   `json:"name"           jsonschema_description:"Exact username of the flagged user"`
 	Reason         string   `json:"reason"         jsonschema_description:"Clear explanation of why the user was flagged"`
-	FlaggedContent []string `json:"flaggedContent" jsonschema_description:"Exact content that was flagged without alterations"`
+	FlaggedContent []string `json:"flaggedContent" jsonschema_description:"Exact content that was flagged"`
 	Confidence     float64  `json:"confidence"     jsonschema_description:"Confidence level of the AI's assessment"`
 }
 
@@ -140,12 +75,10 @@ type TranslationResult struct {
 type AIChecker struct {
 	openAIClient *openai.Client
 	minify       *minify.M
+	tke          *tiktoken.Tiktoken
 	translator   *translator.Translator
 	logger       *zap.Logger
 }
-
-// Generate the JSON schema at initialization time to avoid repeated generation.
-var flaggedUsersSchema = utils.GenerateSchema[FlaggedUsers]() //nolint:gochecknoglobals
 
 // NewAIChecker creates an AIChecker with a minifier for JSON optimization,
 // translator for handling non-English content, and the provided OpenAI client and logger.
@@ -153,9 +86,15 @@ func NewAIChecker(openAIClient *openai.Client, translator *translator.Translator
 	m := minify.New()
 	m.AddFunc("application/json", json.Minify)
 
+	tke, err := tiktoken.GetEncoding("cl100k_base")
+	if err != nil {
+		logger.Fatal("Failed to get tiktoken encoding", zap.Error(err))
+	}
+
 	return &AIChecker{
 		openAIClient: openAIClient,
 		minify:       m,
+		tke:          tke,
 		translator:   translator,
 		logger:       logger,
 	}
@@ -169,20 +108,19 @@ func NewAIChecker(openAIClient *openai.Client, translator *translator.Translator
 // 3. Validating AI responses against translated content
 // 4. Creating validated users with original descriptions.
 func (a *AIChecker) ProcessUsers(userInfos []*fetcher.Info) ([]*database.User, []uint64, error) {
+	// Create a struct for user summaries for AI analysis
+	type UserSummary struct {
+		Name        string `json:"name"`
+		Description string `json:"description"`
+	}
+
 	// Translate all descriptions concurrently
 	translatedInfos, originalInfos := a.prepareUserInfos(userInfos)
 
 	// Convert map to slice for OpenAI request
-	userInfosWithoutID := make([]struct {
-		Name        string `json:"name"`
-		Description string `json:"description"`
-	}, 0, len(translatedInfos))
-
+	userInfosWithoutID := make([]UserSummary, 0, len(translatedInfos))
 	for _, userInfo := range translatedInfos {
-		userInfosWithoutID = append(userInfosWithoutID, struct {
-			Name        string `json:"name"`
-			Description string `json:"description"`
-		}{
+		userInfosWithoutID = append(userInfosWithoutID, UserSummary{
 			Name:        userInfo.Name,
 			Description: userInfo.Description,
 		})
@@ -214,7 +152,7 @@ func (a *AIChecker) ProcessUsers(userInfos []*fetcher.Info) ([]*database.User, [
 	// Send request to OpenAI
 	chatCompletion, err := a.openAIClient.Chat.Completions.New(context.Background(), openai.ChatCompletionNewParams{
 		Messages: openai.F([]openai.ChatCompletionMessageParamUnion{
-			openai.SystemMessage(SystemPrompt),
+			openai.SystemMessage(ReviewSystemPrompt),
 			openai.UserMessage(string(userInfoJSON)),
 		}),
 		ResponseFormat: openai.F[openai.ChatCompletionNewParamsResponseFormatUnion](
@@ -224,7 +162,7 @@ func (a *AIChecker) ProcessUsers(userInfos []*fetcher.Info) ([]*database.User, [
 			},
 		),
 		Model:       openai.F(openai.ChatModelGPT4oMini2024_07_18),
-		Temperature: openai.F(0.0),
+		Temperature: openai.F(0.2),
 	})
 	if err != nil {
 		a.logger.Error("Error calling OpenAI API", zap.Error(err))
@@ -247,6 +185,127 @@ func (a *AIChecker) ProcessUsers(userInfos []*fetcher.Info) ([]*database.User, [
 	validatedUsers, failedValidationIDs := a.validateFlaggedUsers(flaggedUsers, translatedInfos, originalInfos)
 
 	return validatedUsers, failedValidationIDs, nil
+}
+
+// GenerateFriendReason uses AI to analyze a user's friend list and generate a detailed reason
+// for flagging based on the patterns found in their friends' reasons.
+func (a *AIChecker) GenerateFriendReason(userInfo *fetcher.Info, confirmedFriends, flaggedFriends map[uint64]*database.User) (string, error) {
+	// Create a summary of friend data for AI analysis
+	type FriendSummary struct {
+		Name   string `json:"name"`
+		Reason string `json:"reason"`
+		Type   string `json:"type"`
+	}
+
+	// Collect friend summaries with token counting
+	friendSummaries := make([]FriendSummary, 0, len(confirmedFriends)+len(flaggedFriends))
+	currentTokens := 0
+
+	// Helper function to add friend if within token limit
+	addFriend := func(friend *database.User, friendType string) bool {
+		summary := FriendSummary{
+			Name:   friend.Name,
+			Reason: friend.Reason,
+			Type:   friendType,
+		}
+
+		// Convert to JSON to count tokens accurately
+		summaryJSON, err := sonic.Marshal(summary)
+		if err != nil {
+			a.logger.Warn("Failed to marshal friend summary",
+				zap.String("username", friend.Name),
+				zap.Error(err))
+			return false
+		}
+
+		tokens := a.tke.Encode(string(summaryJSON), nil, nil)
+		tokenCount := len(tokens)
+
+		if currentTokens+tokenCount > MaxFriendDataTokens {
+			return false
+		}
+
+		friendSummaries = append(friendSummaries, summary)
+		currentTokens += tokenCount
+		return true
+	}
+
+	// Add confirmed friends first (they're usually more important)
+	for _, friend := range confirmedFriends {
+		if !addFriend(friend, database.UserTypeConfirmed) {
+			a.logger.Debug("Reached token limit while adding confirmed friends",
+				zap.Int("currentTokens", currentTokens),
+				zap.Int("totalConfirmed", len(confirmedFriends)))
+			break
+		}
+	}
+
+	// Add flagged friends if there's room
+	for _, friend := range flaggedFriends {
+		if !addFriend(friend, database.UserTypeFlagged) {
+			a.logger.Debug("Reached token limit while adding flagged friends",
+				zap.Int("currentTokens", currentTokens),
+				zap.Int("totalFlagged", len(flaggedFriends)))
+			break
+		}
+	}
+
+	// Convert to JSON for the AI request
+	friendDataJSON, err := sonic.Marshal(friendSummaries)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal friend data: %w", err)
+	}
+
+	// Minify JSON to reduce token usage
+	friendDataJSON, err = a.minify.Bytes("application/json", friendDataJSON)
+	if err != nil {
+		return "", fmt.Errorf("failed to minify friend data: %w", err)
+	}
+
+	// Configure OpenAI request with schema enforcement
+	schemaParam := openai.ResponseFormatJSONSchemaJSONSchemaParam{
+		Name:        openai.F("flaggedUser"),
+		Description: openai.F("Flagged user information"),
+		Schema:      openai.F(flaggedUserSchema),
+		Strict:      openai.Bool(true),
+	}
+
+	// Send request to OpenAI
+	chatCompletion, err := a.openAIClient.Chat.Completions.New(context.Background(), openai.ChatCompletionNewParams{
+		Messages: openai.F([]openai.ChatCompletionMessageParamUnion{
+			openai.SystemMessage(FriendSystemPrompt),
+			openai.UserMessage(fmt.Sprintf(FriendUserPrompt, userInfo.Name, string(friendDataJSON))),
+		}),
+		ResponseFormat: openai.F[openai.ChatCompletionNewParamsResponseFormatUnion](
+			openai.ResponseFormatJSONSchemaParam{
+				Type:       openai.F(openai.ResponseFormatJSONSchemaTypeJSONSchema),
+				JSONSchema: openai.F(schemaParam),
+			},
+		),
+		Model:       openai.F(openai.ChatModelGPT4oMini2024_07_18),
+		Temperature: openai.F(0.0),
+	})
+	if err != nil {
+		return "", fmt.Errorf("OpenAI API error: %w", err)
+	}
+
+	// Parse AI response
+	var flaggedUser FlaggedUser
+	err = sonic.Unmarshal([]byte(chatCompletion.Choices[0].Message.Content), &flaggedUser)
+	if err != nil {
+		return "", fmt.Errorf("failed to unmarshal AI response: %w", err)
+	}
+
+	reason := flaggedUser.Reason
+	a.logger.Debug("Generated friend network reason",
+		zap.String("username", userInfo.Name),
+		zap.Int("confirmedFriends", len(confirmedFriends)),
+		zap.Int("flaggedFriends", len(flaggedFriends)),
+		zap.Int("includedFriends", len(friendSummaries)),
+		zap.Int("totalTokens", currentTokens),
+		zap.String("generatedReason", reason))
+
+	return reason, nil
 }
 
 // validateFlaggedUsers validates the flagged users against the translated content
@@ -291,6 +350,7 @@ func (a *AIChecker) validateFlaggedUsers(flaggedUsers FlaggedUsers, translatedIn
 					CreatedAt:      originalInfo.CreatedAt,
 					Reason:         flaggedUser.Reason,
 					Groups:         originalInfo.Groups,
+					Friends:        originalInfo.Friends,
 					FlaggedContent: flaggedUser.FlaggedContent,
 					Confidence:     flaggedUser.Confidence,
 					LastUpdated:    originalInfo.LastUpdated,

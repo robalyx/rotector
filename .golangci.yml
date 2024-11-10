@@ -32,7 +32,7 @@ linters-settings:
   lll:
     line-length: 200
   funlen:
-    lines: 120
+    lines: 130
     statements: 50
   gocritic:
     disabled-checks:

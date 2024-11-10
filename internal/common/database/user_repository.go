@@ -400,6 +400,45 @@ func (r *UserRepository) CheckExistingUsers(userIDs []uint64) (map[uint64]string
 	return result, nil
 }
 
+// GetUsersByIDs retrieves full user information for a list of user IDs.
+// Returns a map of user IDs to user data and a separate map for their types.
+func (r *UserRepository) GetUsersByIDs(userIDs []uint64) (map[uint64]*User, map[uint64]string, error) {
+	users := make(map[uint64]*User)
+	userTypes := make(map[uint64]string)
+
+	// Query confirmed users
+	var confirmedUsers []ConfirmedUser
+	err := r.db.Model(&confirmedUsers).
+		Where("id IN (?)", pg.In(userIDs)).
+		Select()
+	if err != nil {
+		return nil, nil, err
+	}
+	for _, user := range confirmedUsers {
+		users[user.ID] = &user.User
+		userTypes[user.ID] = UserTypeConfirmed
+	}
+
+	// Query flagged users
+	var flaggedUsers []FlaggedUser
+	err = r.db.Model(&flaggedUsers).
+		Where("id IN (?)", pg.In(userIDs)).
+		Select()
+	if err != nil {
+		return nil, nil, err
+	}
+	for _, user := range flaggedUsers {
+		users[user.ID] = &user.User
+		userTypes[user.ID] = UserTypeFlagged
+	}
+
+	r.logger.Debug("Retrieved users by IDs",
+		zap.Int("requestedCount", len(userIDs)),
+		zap.Int("foundCount", len(users)))
+
+	return users, userTypes, nil
+}
+
 // GetUsersToCheck finds users that haven't been checked for banned status recently.
 // Returns a batch of user IDs and updates their last_purge_check timestamp.
 func (r *UserRepository) GetUsersToCheck(limit int) ([]uint64, error) {

@@ -14,8 +14,9 @@ import (
 // FriendChecker handles the analysis of user friend relationships to identify
 // users connected to multiple flagged accounts.
 type FriendChecker struct {
-	db     *database.Database
-	logger *zap.Logger
+	db        *database.Database
+	aiChecker *AIChecker
+	logger    *zap.Logger
 }
 
 // FriendCheckResult contains the result of checking a user's friends.
@@ -26,10 +27,11 @@ type FriendCheckResult struct {
 }
 
 // NewFriendChecker creates a FriendChecker.
-func NewFriendChecker(db *database.Database, logger *zap.Logger) *FriendChecker {
+func NewFriendChecker(db *database.Database, aiChecker *AIChecker, logger *zap.Logger) *FriendChecker {
 	return &FriendChecker{
-		db:     db,
-		logger: logger,
+		db:        db,
+		aiChecker: aiChecker,
+		logger:    logger,
 	}
 }
 
@@ -119,20 +121,25 @@ func (fc *FriendChecker) processUserFriends(userInfo *fetcher.Info) (*database.U
 	}
 
 	// Check which users already exist in the database
-	existingUsers, err := fc.db.Users().CheckExistingUsers(friendIDs)
+	existingUsers, userTypes, err := fc.db.Users().GetUsersByIDs(friendIDs)
 	if err != nil {
 		return nil, false, err
 	}
 
-	// Count different types of friends
+	// Separate friends by type and count them
+	confirmedFriends := make(map[uint64]*database.User)
+	flaggedFriends := make(map[uint64]*database.User)
 	confirmedCount := 0
 	flaggedCount := 0
-	for _, status := range existingUsers {
-		switch status {
+
+	for id, user := range existingUsers {
+		switch userTypes[id] {
 		case database.UserTypeConfirmed:
 			confirmedCount++
+			confirmedFriends[id] = user
 		case database.UserTypeFlagged:
 			flaggedCount++
+			flaggedFriends[id] = user
 		}
 	}
 
@@ -142,18 +149,30 @@ func (fc *FriendChecker) processUserFriends(userInfo *fetcher.Info) (*database.U
 	// Flag user if confidence exceeds threshold
 	if confidence >= 0.4 {
 		accountAge := time.Since(userInfo.CreatedAt)
+
+		// Generate AI-based reason using friend list analysis
+		reason, err := fc.aiChecker.GenerateFriendReason(userInfo, confirmedFriends, flaggedFriends)
+		if err != nil {
+			fc.logger.Error("Failed to generate AI reason, falling back to default",
+				zap.Error(err),
+				zap.Uint64("userID", userInfo.ID))
+
+			// Fallback to default reason format
+			reason = fmt.Sprintf(
+				"User has %d confirmed and %d flagged friends (%.1f%% total).",
+				confirmedCount,
+				flaggedCount,
+				float64(confirmedCount+flaggedCount)/float64(len(userInfo.Friends))*100,
+			)
+		}
+
 		user := &database.User{
 			ID:          userInfo.ID,
 			Name:        userInfo.Name,
 			DisplayName: userInfo.DisplayName,
 			Description: userInfo.Description,
 			CreatedAt:   userInfo.CreatedAt,
-			Reason: fmt.Sprintf(
-				"User has %d confirmed and %d flagged friends (%.1f%% total).",
-				confirmedCount,
-				flaggedCount,
-				float64(confirmedCount+flaggedCount)/float64(len(userInfo.Friends))*100,
-			),
+			Reason:      reason,
 			Groups:      userInfo.Groups,
 			Friends:     userInfo.Friends,
 			Confidence:  math.Round(confidence*100) / 100, // Round to 2 decimal places
@@ -165,7 +184,8 @@ func (fc *FriendChecker) processUserFriends(userInfo *fetcher.Info) (*database.U
 			zap.Int("confirmedFriends", confirmedCount),
 			zap.Int("flaggedFriends", flaggedCount),
 			zap.Float64("confidence", confidence),
-			zap.Int("accountAgeDays", int(accountAge.Hours()/24)))
+			zap.Int("accountAgeDays", int(accountAge.Hours()/24)),
+			zap.String("reason", reason))
 
 		return user, true, nil
 	}

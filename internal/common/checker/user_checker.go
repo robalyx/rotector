@@ -34,15 +34,16 @@ func NewUserChecker(
 	logger *zap.Logger,
 ) *UserChecker {
 	translator := translator.New(roAPI.GetClient())
+	aiChecker := NewAIChecker(openaiClient, translator, logger)
 	return &UserChecker{
 		db:               db,
 		bar:              bar,
 		userFetcher:      userFetcher,
 		outfitFetcher:    fetcher.NewOutfitFetcher(roAPI, logger),
 		thumbnailFetcher: fetcher.NewThumbnailFetcher(roAPI, logger),
-		aiChecker:        NewAIChecker(openaiClient, translator, logger),
+		aiChecker:        aiChecker,
 		groupChecker:     NewGroupChecker(db, logger),
-		friendChecker:    NewFriendChecker(db, logger),
+		friendChecker:    NewFriendChecker(db, aiChecker, logger),
 		logger:           logger,
 	}
 }
