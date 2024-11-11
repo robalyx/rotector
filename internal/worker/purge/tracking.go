@@ -1,6 +1,7 @@
 package purge
 
 import (
+	"context"
 	"time"
 
 	"github.com/jaxron/roapi.go/pkg/api"
@@ -55,7 +56,7 @@ func (t *TrackingWorker) Start() {
 		// Step 3: Purge old trackings (50%)
 		t.bar.SetStepMessage("Purging old trackings")
 		cutoffDate := time.Now().AddDate(0, 0, -30) // 30 days ago
-		affected, err := t.db.Tracking().PurgeOldTrackings(cutoffDate)
+		affected, err := t.db.Tracking().PurgeOldTrackings(context.Background(), cutoffDate)
 		if err != nil {
 			t.logger.Error("Error purging old trackings", zap.Error(err))
 		}

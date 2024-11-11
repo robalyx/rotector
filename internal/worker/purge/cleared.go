@@ -1,6 +1,7 @@
 package purge
 
 import (
+	"context"
 	"time"
 
 	"github.com/jaxron/roapi.go/pkg/api"
@@ -53,7 +54,7 @@ func (p *ClearedWorker) Start() {
 
 		// Step 2: Process users (60%)
 		p.bar.SetStepMessage("Processing users")
-		affected, err := p.db.Users().PurgeOldClearedUsers(cutoffDate, ClearedUsersToProcess)
+		affected, err := p.db.Users().PurgeOldClearedUsers(context.Background(), cutoffDate, ClearedUsersToProcess)
 		if err != nil {
 			p.logger.Error("Error purging old cleared users", zap.Error(err))
 			time.Sleep(5 * time.Minute) // Wait before trying again

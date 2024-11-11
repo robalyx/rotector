@@ -126,7 +126,7 @@ func (m *Manager) AddToQueue(ctx context.Context, item *Item) error {
 	}
 
 	// Log the activity
-	go m.db.UserActivity().LogActivity(&database.UserActivityLog{
+	go m.db.UserActivity().LogActivity(ctx, &database.UserActivityLog{
 		UserID:            item.UserID,
 		ReviewerID:        item.AddedBy,
 		ActivityType:      database.ActivityTypeRechecked,

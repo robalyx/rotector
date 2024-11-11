@@ -1,6 +1,7 @@
 package checker
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -42,7 +43,7 @@ func NewTrackingChecker(db *database.Database, roAPI *api.API, thumbnailFetcher 
 // score based on the ratio of confirmed members.
 func (c *TrackingChecker) CheckGroupTrackings() error {
 	// Find groups with enough confirmed members
-	groups, err := c.db.Tracking().GetAndRemoveQualifiedGroupTrackings(MinConfirmedUsersForFlag)
+	groups, err := c.db.Tracking().GetAndRemoveQualifiedGroupTrackings(context.Background(), MinConfirmedUsersForFlag)
 	if err != nil {
 		c.logger.Error("Error getting and removing qualified groups", zap.Error(err))
 		return err
@@ -76,7 +77,7 @@ func (c *TrackingChecker) CheckGroupTrackings() error {
 
 	// Add thumbnails and save to database
 	flaggedGroups = c.thumbnailFetcher.AddGroupImageURLs(flaggedGroups)
-	c.db.Groups().SaveFlaggedGroups(flaggedGroups)
+	c.db.Groups().SaveFlaggedGroups(context.Background(), flaggedGroups)
 
 	c.logger.Info("Checked group trackings", zap.Int("flagged_groups", len(flaggedGroups)))
 	return nil

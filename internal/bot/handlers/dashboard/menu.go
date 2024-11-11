@@ -52,17 +52,17 @@ func NewMenu(h *Handler) *Menu {
 // current statistics and active user information into the session.
 func (m *Menu) ShowDashboard(event interfaces.CommonEvent, s *session.Session, content string) {
 	// Load current user counts from database
-	confirmedCount, err := m.handler.db.Users().GetConfirmedUsersCount()
+	confirmedCount, err := m.handler.db.Users().GetConfirmedUsersCount(context.Background())
 	if err != nil {
 		m.handler.logger.Error("Failed to get confirmed users count", zap.Error(err))
 	}
 
-	flaggedCount, err := m.handler.db.Users().GetFlaggedUsersCount()
+	flaggedCount, err := m.handler.db.Users().GetFlaggedUsersCount(context.Background())
 	if err != nil {
 		m.handler.logger.Error("Failed to get flagged users count", zap.Error(err))
 	}
 
-	clearedCount, err := m.handler.db.Users().GetClearedUsersCount()
+	clearedCount, err := m.handler.db.Users().GetClearedUsersCount(context.Background())
 	if err != nil {
 		m.handler.logger.Error("Failed to get cleared users count", zap.Error(err))
 	}

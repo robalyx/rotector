@@ -1,6 +1,7 @@
 package checker
 
 import (
+	"context"
 	"fmt"
 	"math"
 	"sync"
@@ -121,7 +122,7 @@ func (fc *FriendChecker) processUserFriends(userInfo *fetcher.Info) (*database.U
 	}
 
 	// Check which users already exist in the database
-	existingUsers, userTypes, err := fc.db.Users().GetUsersByIDs(friendIDs)
+	existingUsers, userTypes, err := fc.db.Users().GetUsersByIDs(context.Background(), friendIDs)
 	if err != nil {
 		return nil, false, err
 	}

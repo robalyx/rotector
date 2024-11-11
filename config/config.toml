@@ -1,8 +1,9 @@
 [debug]
-enable_pprof = false
-pprof_port = 6060
 log_level = "info"
 max_logs_to_keep = 10
+query_logging = true
+enable_pprof = false
+pprof_port = 6060
 
 [ratelimit]
 requests_per_second = 100.0

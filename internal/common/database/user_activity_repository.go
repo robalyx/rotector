@@ -1,9 +1,10 @@
 package database
 
 import (
+	"context"
 	"time"
 
-	"github.com/go-pg/pg/v10"
+	"github.com/uptrace/bun"
 	"go.uber.org/zap"
 )
 
@@ -31,22 +32,22 @@ const (
 
 // UserActivityLog stores information about moderator actions.
 type UserActivityLog struct {
-	UserID            uint64                 `pg:"user_id,notnull"`
-	ReviewerID        uint64                 `pg:"reviewer_id,notnull"`
-	ActivityType      ActivityType           `pg:"activity_type,notnull"`
-	ActivityTimestamp time.Time              `pg:"activity_timestamp,notnull"`
-	Details           map[string]interface{} `pg:"details,type:jsonb"`
+	UserID            uint64                 `bun:",notnull"`
+	ReviewerID        uint64                 `bun:",notnull"`
+	ActivityType      ActivityType           `bun:",notnull"`
+	ActivityTimestamp time.Time              `bun:",notnull"`
+	Details           map[string]interface{} `bun:"type:jsonb"`
 }
 
 // UserActivityRepository handles database operations for moderator action logs.
 type UserActivityRepository struct {
-	db     *pg.DB
+	db     *bun.DB
 	logger *zap.Logger
 }
 
 // NewUserActivityRepository creates a repository with database access for
 // storing and retrieving moderator action logs.
-func NewUserActivityRepository(db *pg.DB, logger *zap.Logger) *UserActivityRepository {
+func NewUserActivityRepository(db *bun.DB, logger *zap.Logger) *UserActivityRepository {
 	return &UserActivityRepository{
 		db:     db,
 		logger: logger,
@@ -54,8 +55,8 @@ func NewUserActivityRepository(db *pg.DB, logger *zap.Logger) *UserActivityRepos
 }
 
 // LogActivity stores a moderator action in the database.
-func (r *UserActivityRepository) LogActivity(log *UserActivityLog) {
-	_, err := r.db.Model(log).Insert()
+func (r *UserActivityRepository) LogActivity(ctx context.Context, log *UserActivityLog) {
+	_, err := r.db.NewInsert().Model(log).Exec(ctx)
 	if err != nil {
 		r.logger.Error("Failed to log user activity",
 			zap.Error(err),
@@ -78,6 +79,7 @@ func (r *UserActivityRepository) LogActivity(log *UserActivityLog) {
 // - Date range filters by when the action occurred
 // - Page and limit control result pagination.
 func (r *UserActivityRepository) GetLogs(
+	ctx context.Context,
 	userID uint64,
 	reviewerID uint64,
 	activityType ActivityType,
@@ -87,35 +89,40 @@ func (r *UserActivityRepository) GetLogs(
 	limit int,
 ) ([]*UserActivityLog, int, error) {
 	var logs []*UserActivityLog
-	query := r.db.Model(&logs)
 
-	// Apply filters if provided
-	if userID != 0 {
-		query = query.Where("user_id = ?", userID)
-	}
-	if reviewerID != 0 {
-		query = query.Where("reviewer_id = ?", reviewerID)
-	}
-	if activityType != ActivityTypeAll {
-		query = query.Where("activity_type = ?", activityType)
-	}
-	if !startDate.IsZero() && !endDate.IsZero() {
-		query = query.Where("activity_timestamp BETWEEN ? AND ?", startDate, endDate)
+	// Build base query conditions
+	baseQuery := func(q *bun.SelectQuery) *bun.SelectQuery {
+		if userID != 0 {
+			q = q.Where("user_id = ?", userID)
+		}
+		if reviewerID != 0 {
+			q = q.Where("reviewer_id = ?", reviewerID)
+		}
+		if activityType != ActivityTypeAll {
+			q = q.Where("activity_type = ?", activityType)
+		}
+		if !startDate.IsZero() && !endDate.IsZero() {
+			q = q.Where("activity_timestamp BETWEEN ? AND ?", startDate, endDate)
+		}
+		return q
 	}
 
-	// Get total count before pagination
-	total, err := query.Clone().Count()
+	// Get total count
+	total, err := baseQuery(
+		r.db.NewSelect().Model((*UserActivityLog)(nil)),
+	).Count(ctx)
 	if err != nil {
 		r.logger.Error("Failed to get total log count", zap.Error(err))
 		return nil, 0, err
 	}
 
-	// Apply pagination and fetch results
-	err = query.
-		Order("activity_timestamp DESC").
+	// Get paginated results
+	err = baseQuery(
+		r.db.NewSelect().Model(&logs),
+	).Order("activity_timestamp DESC").
 		Limit(limit).
 		Offset(page * limit).
-		Select()
+		Scan(ctx)
 	if err != nil {
 		r.logger.Error("Failed to get logs", zap.Error(err))
 		return nil, 0, err

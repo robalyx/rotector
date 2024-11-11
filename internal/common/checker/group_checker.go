@@ -1,6 +1,7 @@
 package checker
 
 import (
+	"context"
 	"fmt"
 	"sync"
 
@@ -120,7 +121,7 @@ func (gc *GroupChecker) processUserGroups(userInfo *fetcher.Info) (*database.Use
 	}
 
 	// Check database for flagged groups
-	flaggedGroupIDs, err := gc.db.Groups().CheckConfirmedGroups(groupIDs)
+	flaggedGroupIDs, err := gc.db.Groups().CheckConfirmedGroups(context.Background(), groupIDs)
 	if err != nil {
 		return nil, false, err
 	}

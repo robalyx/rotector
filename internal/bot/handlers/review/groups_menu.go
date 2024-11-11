@@ -118,7 +118,7 @@ func (m *GroupsMenu) getFlaggedGroups(groups []types.UserGroupRoles) (map[uint64
 		groupIDs[i] = group.Group.ID
 	}
 
-	flaggedGroups, err := m.handler.db.Groups().CheckConfirmedGroups(groupIDs)
+	flaggedGroups, err := m.handler.db.Groups().CheckConfirmedGroups(context.Background(), groupIDs)
 	if err != nil {
 		return nil, err
 	}

@@ -1,6 +1,8 @@
 package checker
 
 import (
+	"context"
+
 	"github.com/jaxron/roapi.go/pkg/api"
 	"github.com/openai/openai-go"
 	"github.com/rotector/rotector/internal/common/database"
@@ -106,7 +108,7 @@ func (c *UserChecker) ProcessUsers(userInfos []*fetcher.Info) []uint64 {
 
 	// Save flagged users to database
 	c.bar.SetStepMessage("Saving flagged users")
-	c.db.Users().SaveFlaggedUsers(flaggedUsers)
+	c.db.Users().SaveFlaggedUsers(context.Background(), flaggedUsers)
 	c.bar.Increment(10)
 
 	c.logger.Info("Finished processing users",

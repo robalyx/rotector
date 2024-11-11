@@ -159,7 +159,7 @@ func (b *Bot) handleApplicationCommandInteraction(event *events.ApplicationComma
 	}
 
 	// Verify guild settings and user permissions
-	guildSettings, err := b.db.Settings().GetGuildSettings(uint64(*event.GuildID()))
+	guildSettings, err := b.db.Settings().GetGuildSettings(context.Background(), uint64(*event.GuildID()))
 	if err != nil {
 		b.logger.Error("Failed to get guild settings", zap.Error(err))
 		return

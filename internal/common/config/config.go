@@ -21,6 +21,7 @@ type Config struct {
 type Debug struct {
 	LogLevel      string `mapstructure:"log_level"`
 	MaxLogsToKeep int    `mapstructure:"max_logs_to_keep"`
+	QueryLogging  bool   `mapstructure:"query_logging"`
 	EnablePprof   bool   `mapstructure:"enable_pprof"`
 	PprofPort     int    `mapstructure:"pprof_port"`
 }

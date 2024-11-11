@@ -73,7 +73,7 @@ func (m *Menu) ShowReviewMenu(event interfaces.CommonEvent, s *session.Session, 
 
 		// Get full user data and types for friends that exist in the database
 		var err error
-		flaggedFriends, friendTypes, err = m.handler.db.Users().GetUsersByIDs(friendIDs)
+		flaggedFriends, friendTypes, err = m.handler.db.Users().GetUsersByIDs(context.Background(), friendIDs)
 		if err != nil {
 			m.handler.logger.Error("Failed to get friend data", zap.Error(err))
 			return
@@ -97,7 +97,7 @@ func (m *Menu) handleSelectMenu(event *events.ComponentInteractionCreate, s *ses
 
 		// Update user's default sort preference
 		settings.DefaultSort = option
-		if err := m.handler.db.Settings().SaveUserSettings(settings); err != nil {
+		if err := m.handler.db.Settings().SaveUserSettings(context.Background(), settings); err != nil {
 			m.handler.logger.Error("Failed to save user settings", zap.Error(err))
 			m.handler.paginationManager.RespondWithError(event, "Failed to save sort order. Please try again.")
 			return
@@ -195,14 +195,14 @@ func (m *Menu) handleBanUser(event interfaces.CommonEvent, s *session.Session) {
 	s.GetInterface(constants.SessionKeyTarget, &user)
 
 	// Update user status in database
-	if err := m.handler.db.Users().ConfirmUser(user); err != nil {
+	if err := m.handler.db.Users().ConfirmUser(context.Background(), user); err != nil {
 		m.handler.logger.Error("Failed to confirm user", zap.Error(err))
 		m.handler.paginationManager.RespondWithError(event, "Failed to ban the user. Please try again.")
 		return
 	}
 
 	// Log the ban action asynchronously
-	go m.handler.db.UserActivity().LogActivity(&database.UserActivityLog{
+	go m.handler.db.UserActivity().LogActivity(context.Background(), &database.UserActivityLog{
 		UserID:            user.ID,
 		ReviewerID:        uint64(event.User().ID),
 		ActivityType:      database.ActivityTypeBanned,
@@ -211,7 +211,7 @@ func (m *Menu) handleBanUser(event interfaces.CommonEvent, s *session.Session) {
 	})
 
 	// Get the number of flagged users left to review
-	flaggedCount, err := m.handler.db.Users().GetFlaggedUsersCount()
+	flaggedCount, err := m.handler.db.Users().GetFlaggedUsersCount(context.Background())
 	if err != nil {
 		m.handler.logger.Error("Failed to get flagged users count", zap.Error(err))
 	}
@@ -228,14 +228,14 @@ func (m *Menu) handleClearUser(event interfaces.CommonEvent, s *session.Session)
 	s.GetInterface(constants.SessionKeyTarget, &user)
 
 	// Update user status in database
-	if err := m.handler.db.Users().ClearUser(user); err != nil {
+	if err := m.handler.db.Users().ClearUser(context.Background(), user); err != nil {
 		m.handler.logger.Error("Failed to reject user", zap.Error(err))
 		m.handler.paginationManager.RespondWithError(event, "Failed to reject the user. Please try again.")
 		return
 	}
 
 	// Log the clear action asynchronously
-	go m.handler.db.UserActivity().LogActivity(&database.UserActivityLog{
+	go m.handler.db.UserActivity().LogActivity(context.Background(), &database.UserActivityLog{
 		UserID:            user.ID,
 		ReviewerID:        uint64(event.User().ID),
 		ActivityType:      database.ActivityTypeCleared,
@@ -244,7 +244,7 @@ func (m *Menu) handleClearUser(event interfaces.CommonEvent, s *session.Session)
 	})
 
 	// Get the number of flagged users left to review
-	flaggedCount, err := m.handler.db.Users().GetFlaggedUsersCount()
+	flaggedCount, err := m.handler.db.Users().GetFlaggedUsersCount(context.Background())
 	if err != nil {
 		m.handler.logger.Error("Failed to get flagged users count", zap.Error(err))
 	}
@@ -261,7 +261,7 @@ func (m *Menu) handleSkipUser(event interfaces.CommonEvent, s *session.Session) 
 	s.GetInterface(constants.SessionKeyTarget, &user)
 
 	// Log the skip action asynchronously
-	go m.handler.db.UserActivity().LogActivity(&database.UserActivityLog{
+	go m.handler.db.UserActivity().LogActivity(context.Background(), &database.UserActivityLog{
 		UserID:            user.ID,
 		ReviewerID:        uint64(event.User().ID),
 		ActivityType:      database.ActivityTypeSkipped,
@@ -270,7 +270,7 @@ func (m *Menu) handleSkipUser(event interfaces.CommonEvent, s *session.Session) 
 	})
 
 	// Get the number of flagged users left to review
-	flaggedCount, err := m.handler.db.Users().GetFlaggedUsersCount()
+	flaggedCount, err := m.handler.db.Users().GetFlaggedUsersCount(context.Background())
 	if err != nil {
 		m.handler.logger.Error("Failed to get flagged users count", zap.Error(err))
 	}
@@ -322,14 +322,14 @@ func (m *Menu) handleBanWithReasonModalSubmit(event *events.ModalSubmitInteracti
 	user.Reason = reason
 
 	// Update user status in database
-	if err := m.handler.db.Users().ConfirmUser(user); err != nil {
+	if err := m.handler.db.Users().ConfirmUser(context.Background(), user); err != nil {
 		m.handler.logger.Error("Failed to confirm user", zap.Error(err))
 		m.handler.paginationManager.RespondWithError(event, "Failed to confirm the user. Please try again.")
 		return
 	}
 
 	// Log the custom ban action asynchronously
-	go m.handler.db.UserActivity().LogActivity(&database.UserActivityLog{
+	go m.handler.db.UserActivity().LogActivity(context.Background(), &database.UserActivityLog{
 		UserID:            user.ID,
 		ReviewerID:        uint64(event.User().ID),
 		ActivityType:      database.ActivityTypeBannedCustom,
@@ -353,7 +353,7 @@ func (m *Menu) fetchNewTarget(s *session.Session, reviewerID uint64) (*database.
 	sortBy := settings.DefaultSort
 
 	// Get the next user to review
-	user, err := m.handler.db.Users().GetFlaggedUserToReview(sortBy)
+	user, err := m.handler.db.Users().GetFlaggedUserToReview(context.Background(), sortBy)
 	if err != nil {
 		return nil, err
 	}
@@ -362,7 +362,7 @@ func (m *Menu) fetchNewTarget(s *session.Session, reviewerID uint64) (*database.
 	s.Set(constants.SessionKeyTarget, user)
 
 	// Log the view action asynchronously
-	go m.handler.db.UserActivity().LogActivity(&database.UserActivityLog{
+	go m.handler.db.UserActivity().LogActivity(context.Background(), &database.UserActivityLog{
 		UserID:            user.ID,
 		ReviewerID:        reviewerID,
 		ActivityType:      database.ActivityTypeViewed,

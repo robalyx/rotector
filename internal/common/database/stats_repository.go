@@ -5,21 +5,20 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/go-pg/pg/v10"
 	"github.com/rotector/rotector/internal/common/statistics"
+	"github.com/uptrace/bun"
 	"go.uber.org/zap"
 )
 
 // StatsRepository handles database operations for daily and hourly statistics.
 type StatsRepository struct {
-	db     *pg.DB
+	db     *bun.DB
 	client *statistics.Client
 	logger *zap.Logger
 }
 
-// NewStatsRepository creates a StatsRepository with references to the statistics
-// client for updating counters and the logger for tracking operations.
-func NewStatsRepository(db *pg.DB, client *statistics.Client, logger *zap.Logger) *StatsRepository {
+// NewStatsRepository creates a StatsRepository.
+func NewStatsRepository(db *bun.DB, client *statistics.Client, logger *zap.Logger) *StatsRepository {
 	return &StatsRepository{
 		db:     db,
 		client: client,
@@ -28,13 +27,12 @@ func NewStatsRepository(db *pg.DB, client *statistics.Client, logger *zap.Logger
 }
 
 // GetDailyStats retrieves statistics for a specific date range.
-// The results are ordered by date to show trends over time.
-func (r *StatsRepository) GetDailyStats(startDate, endDate time.Time) ([]*DailyStatistics, error) {
+func (r *StatsRepository) GetDailyStats(ctx context.Context, startDate, endDate time.Time) ([]*DailyStatistics, error) {
 	var stats []*DailyStatistics
-	err := r.db.Model(&stats).
+	err := r.db.NewSelect().Model(&stats).
 		Where("date >= ? AND date <= ?", startDate, endDate).
 		Order("date ASC").
-		Select()
+		Scan(ctx)
 	if err != nil {
 		r.logger.Error("Failed to get daily stats", zap.Error(err))
 		return nil, err
@@ -43,12 +41,11 @@ func (r *StatsRepository) GetDailyStats(startDate, endDate time.Time) ([]*DailyS
 }
 
 // GetDailyStat retrieves statistics for a single day.
-// Returns zero values if no statistics exist for that day.
-func (r *StatsRepository) GetDailyStat(date time.Time) (*DailyStatistics, error) {
+func (r *StatsRepository) GetDailyStat(ctx context.Context, date time.Time) (*DailyStatistics, error) {
 	var stat DailyStatistics
-	err := r.db.Model(&stat).
+	err := r.db.NewSelect().Model(&stat).
 		Where("date = ?", date).
-		Select()
+		Scan(ctx)
 	if err != nil {
 		r.logger.Error("Failed to get daily stat", zap.Error(err))
 		return nil, err
@@ -57,14 +54,13 @@ func (r *StatsRepository) GetDailyStat(date time.Time) (*DailyStatistics, error)
 }
 
 // IncrementDailyStat increases a specific counter in today's statistics.
-// If no record exists for today, it creates one with the initial count.
-func (r *StatsRepository) IncrementDailyStat(field string, count int) error {
+func (r *StatsRepository) IncrementDailyStat(ctx context.Context, field string, count int) error {
 	today := time.Now().UTC().Truncate(24 * time.Hour)
 
-	_, err := r.db.Model(&DailyStatistics{}).
+	_, err := r.db.NewUpdate().Model(&DailyStatistics{}).
 		Set(fmt.Sprintf("%s = %s + ?", field, field), count).
 		Where("date = ?", today).
-		Update()
+		Exec(ctx)
 	if err != nil {
 		r.logger.Error("Failed to increment daily stat", zap.Error(err))
 		return err
@@ -74,8 +70,6 @@ func (r *StatsRepository) IncrementDailyStat(field string, count int) error {
 }
 
 // UploadDailyStatsToDB moves yesterday's statistics from Redis to PostgreSQL.
-// It fetches all fields from Redis, creates a database record, and cleans up
-// the Redis key after a successful upload.
 func (r *StatsRepository) UploadDailyStatsToDB(ctx context.Context) error {
 	// Get the Redis key for yesterday's statistics
 	date := time.Now().Add(-24 * time.Hour).Format("2006-01-02")
@@ -106,7 +100,9 @@ func (r *StatsRepository) UploadDailyStatsToDB(ctx context.Context) error {
 	}
 
 	// Insert or update the daily statistics in PostgreSQL
-	_, err = r.db.Model(stats).OnConflict("(date) DO UPDATE").Insert()
+	_, err = r.db.NewInsert().Model(stats).
+		On("CONFLICT (date) DO UPDATE").
+		Exec(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to insert daily stats into PostgreSQL: %w", err)
 	}

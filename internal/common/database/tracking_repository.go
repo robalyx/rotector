@@ -1,35 +1,36 @@
 package database
 
 import (
+	"context"
 	"time"
 
-	"github.com/go-pg/pg/v10"
+	"github.com/uptrace/bun"
 	"go.uber.org/zap"
 )
 
 // TrackingRepository handles database operations for monitoring affiliations
 // between users and groups.
 type TrackingRepository struct {
-	db     *pg.DB
+	db     *bun.DB
 	logger *zap.Logger
 }
 
 // NewTrackingRepository creates a TrackingRepository for tracking group members.
-func NewTrackingRepository(db *pg.DB, logger *zap.Logger) *TrackingRepository {
+func NewTrackingRepository(db *bun.DB, logger *zap.Logger) *TrackingRepository {
 	return &TrackingRepository{
 		db:     db,
 		logger: logger,
 	}
 }
 
-// AddUserToGroupTracking adds a confirmed user to a group's tracking list.
-// It ensures no duplicate user IDs are added to the confirmed_users array.
-func (r *TrackingRepository) AddUserToGroupTracking(groupID, userID uint64) error {
-	return r.db.RunInTransaction(r.db.Context(), func(tx *pg.Tx) error {
+// AddUserToGroupTracking adds a user ID to a group's tracking list.
+// If the group doesn't exist, it creates a new tracking entry.
+func (r *TrackingRepository) AddUserToGroupTracking(ctx context.Context, groupID, userID uint64) error {
+	return r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
 		// Check if group is already confirmed
-		exists, err := tx.Model((*ConfirmedGroup)(nil)).
+		exists, err := tx.NewSelect().Model((*ConfirmedGroup)(nil)).
 			Where("id = ?", groupID).
-			Exists()
+			Exists(ctx)
 		if err != nil {
 			r.logger.Error("Failed to check confirmed group",
 				zap.Error(err),
@@ -44,13 +45,14 @@ func (r *TrackingRepository) AddUserToGroupTracking(groupID, userID uint64) erro
 		}
 
 		// Add user to group tracking
-		_, err = tx.Model(&GroupMemberTracking{
-			GroupID:      groupID,
-			LastAppended: time.Now(),
-		}).OnConflict("(group_id) DO UPDATE").
+		_, err = r.db.NewInsert().Model(&GroupMemberTracking{
+			GroupID:        groupID,
+			ConfirmedUsers: []uint64{userID},
+			LastAppended:   time.Now(),
+		}).On("CONFLICT (group_id) DO UPDATE").
 			Set("confirmed_users = array_append(array_remove(group_member_tracking.confirmed_users, ?), ?)", userID, userID).
 			Set("last_appended = EXCLUDED.last_appended").
-			Insert()
+			Exec(ctx)
 		if err != nil {
 			r.logger.Error("Failed to add user to group tracking",
 				zap.Error(err),
@@ -64,30 +66,32 @@ func (r *TrackingRepository) AddUserToGroupTracking(groupID, userID uint64) erro
 }
 
 // PurgeOldTrackings removes tracking entries that haven't been updated recently.
-// This helps maintain database size by removing stale tracking data.
-func (r *TrackingRepository) PurgeOldTrackings(cutoffDate time.Time) (int, error) {
-	// Remove old group trackings
-	groupRes, err := r.db.Model((*GroupMemberTracking)(nil)).
+func (r *TrackingRepository) PurgeOldTrackings(ctx context.Context, cutoffDate time.Time) (int, error) {
+	result, err := r.db.NewDelete().Model((*GroupMemberTracking)(nil)).
 		Where("last_appended < ?", cutoffDate).
-		Delete()
+		Exec(ctx)
 	if err != nil {
 		r.logger.Error("Failed to purge old group trackings", zap.Error(err))
 		return 0, err
 	}
 
-	rowsAffected := groupRes.RowsAffected()
-	return rowsAffected, nil
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		r.logger.Error("Failed to get rows affected", zap.Error(err))
+		return 0, err
+	}
+
+	return int(rowsAffected), nil
 }
 
-// GetAndRemoveQualifiedGroupTrackings finds groups with enough confirmed users
-// to warrant flagging. Groups are removed from tracking after being returned.
-func (r *TrackingRepository) GetAndRemoveQualifiedGroupTrackings(minConfirmedUsers int) (map[uint64]int, error) {
+// GetAndRemoveQualifiedGroupTrackings finds groups with enough confirmed users.
+func (r *TrackingRepository) GetAndRemoveQualifiedGroupTrackings(ctx context.Context, minConfirmedUsers int) (map[uint64]int, error) {
 	var trackings []GroupMemberTracking
 
 	// Find groups with enough confirmed users
-	err := r.db.Model(&trackings).
+	err := r.db.NewSelect().Model(&trackings).
 		Where("array_length(confirmed_users, 1) >= ?", minConfirmedUsers).
-		Select()
+		Scan(ctx)
 	if err != nil {
 		r.logger.Error("Failed to get qualified group trackings", zap.Error(err))
 		return nil, err
@@ -101,9 +105,9 @@ func (r *TrackingRepository) GetAndRemoveQualifiedGroupTrackings(minConfirmedUse
 
 	// Remove found groups from tracking
 	if len(groupIDs) > 0 {
-		_, err = r.db.Model((*GroupMemberTracking)(nil)).
-			Where("group_id IN (?)", pg.In(groupIDs)).
-			Delete()
+		_, err = r.db.NewDelete().Model((*GroupMemberTracking)(nil)).
+			Where("group_id IN (?)", bun.In(groupIDs)).
+			Exec(ctx)
 		if err != nil {
 			r.logger.Error("Failed to delete group trackings", zap.Error(err))
 			return nil, err

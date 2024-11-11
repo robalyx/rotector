@@ -1,6 +1,7 @@
 package log
 
 import (
+	"context"
 	"fmt"
 	"strconv"
 	"time"
@@ -199,7 +200,7 @@ func (m *Menu) updateLogData(event interfaces.CommonEvent, s *session.Session, p
 	reviewerID := s.GetUint64(constants.SessionKeyReviewerID)
 
 	// Fetch filtered logs from database
-	logs, totalLogs, err := m.handler.db.UserActivity().GetLogs(userID, reviewerID, activityTypeFilter, startDate, endDate, page, constants.LogsPerPage)
+	logs, totalLogs, err := m.handler.db.UserActivity().GetLogs(context.Background(), userID, reviewerID, activityTypeFilter, startDate, endDate, page, constants.LogsPerPage)
 	if err != nil {
 		m.handler.logger.Error("Failed to get logs", zap.Error(err))
 		m.handler.paginationManager.NavigateTo(event, s, m.page, "Failed to retrieve log data. Please try again.")

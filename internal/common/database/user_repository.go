@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/go-pg/pg/v10"
 	"github.com/rotector/rotector/internal/common/statistics"
+	"github.com/uptrace/bun"
 	"go.uber.org/zap"
 )
 
@@ -21,7 +21,7 @@ const (
 
 // UserRepository handles database operations for user records.
 type UserRepository struct {
-	db       *pg.DB
+	db       *bun.DB
 	stats    *statistics.Client
 	tracking *TrackingRepository
 	logger   *zap.Logger
@@ -29,7 +29,7 @@ type UserRepository struct {
 
 // NewUserRepository creates a UserRepository with references to the statistics
 // and tracking systems for updating related data during user operations.
-func NewUserRepository(db *pg.DB, stats *statistics.Client, tracking *TrackingRepository, logger *zap.Logger) *UserRepository {
+func NewUserRepository(db *bun.DB, stats *statistics.Client, tracking *TrackingRepository, logger *zap.Logger) *UserRepository {
 	return &UserRepository{
 		db:       db,
 		stats:    stats,
@@ -42,40 +42,42 @@ func NewUserRepository(db *pg.DB, stats *statistics.Client, tracking *TrackingRe
 // - random: selects any unviewed user randomly
 // - confidence: selects the user with highest confidence score
 // - last_updated: selects the oldest updated user.
-func (r *UserRepository) GetFlaggedUserToReview(sortBy string) (*FlaggedUser, error) {
+func (r *UserRepository) GetFlaggedUserToReview(ctx context.Context, sortBy string) (*FlaggedUser, error) {
 	var user FlaggedUser
-	err := r.db.RunInTransaction(r.db.Context(), func(tx *pg.Tx) error {
-		query := tx.Model(&FlaggedUser{}).
+	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+		query := tx.NewSelect().Model(&user).
 			Where("last_viewed IS NULL OR last_viewed < NOW() - INTERVAL '10 minutes'")
 
 		switch sortBy {
 		case SortByConfidence:
-			query = query.Order("confidence DESC")
+			query.Order("confidence DESC")
 		case SortByLastUpdated:
-			query = query.Order("last_updated ASC")
+			query.Order("last_updated ASC")
 		case SortByRandom:
-			query = query.OrderExpr("RANDOM()")
+			query.OrderExpr("RANDOM()")
 		default:
 			return fmt.Errorf("%w: %s", ErrInvalidSortBy, sortBy)
 		}
 
 		err := query.Limit(1).
 			For("UPDATE SKIP LOCKED").
-			Select(&user)
+			Scan(ctx)
 		if err != nil {
 			r.logger.Error("Failed to get flagged user to review", zap.Error(err))
 			return err
 		}
 
-		_, err = tx.Model(&user).
-			Set("last_viewed = ?", time.Now()).
+		// Update last_viewed
+		now := time.Now()
+		_, err = tx.NewUpdate().Model(&user).
+			Set("last_viewed = ?", now).
 			Where("id = ?", user.ID).
-			Update()
+			Exec(ctx)
 		if err != nil {
 			r.logger.Error("Failed to update last_viewed", zap.Error(err))
 			return err
 		}
-		user.LastViewed = time.Now()
+		user.LastViewed = now
 
 		return nil
 	})
@@ -92,24 +94,24 @@ func (r *UserRepository) GetFlaggedUserToReview(sortBy string) (*FlaggedUser, er
 }
 
 // GetNextConfirmedUser finds the next confirmed user that needs scanning.
-func (r *UserRepository) GetNextConfirmedUser() (*ConfirmedUser, error) {
+func (r *UserRepository) GetNextConfirmedUser(ctx context.Context) (*ConfirmedUser, error) {
 	var user ConfirmedUser
-	err := r.db.RunInTransaction(r.db.Context(), func(tx *pg.Tx) error {
-		err := tx.Model(&user).
+	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+		err := tx.NewSelect().Model(&user).
 			Where("last_scanned IS NULL OR last_scanned < NOW() - INTERVAL '1 day'").
 			Order("last_scanned ASC NULLS FIRST").
 			Limit(1).
 			For("UPDATE SKIP LOCKED").
-			Select()
+			Scan(ctx)
 		if err != nil {
 			r.logger.Error("Failed to get next confirmed user", zap.Error(err))
 			return err
 		}
 
-		_, err = tx.Model(&user).
+		_, err = tx.NewUpdate().Model(&user).
 			Set("last_scanned = ?", time.Now()).
 			Where("id = ?", user.ID).
-			Update()
+			Exec(ctx)
 		if err != nil {
 			r.logger.Error("Failed to update last_scanned", zap.Error(err))
 			return err
@@ -128,12 +130,12 @@ func (r *UserRepository) GetNextConfirmedUser() (*ConfirmedUser, error) {
 // SaveFlaggedUsers adds or updates users in the flagged_users table.
 // For each user, it updates all fields if the user already exists,
 // or inserts a new record if they don't.
-func (r *UserRepository) SaveFlaggedUsers(flaggedUsers []*User) {
+func (r *UserRepository) SaveFlaggedUsers(ctx context.Context, flaggedUsers []*User) {
 	r.logger.Info("Saving flagged users", zap.Int("count", len(flaggedUsers)))
 
 	for _, flaggedUser := range flaggedUsers {
-		_, err := r.db.Model(&FlaggedUser{User: *flaggedUser}).
-			OnConflict("(id) DO UPDATE").
+		_, err := r.db.NewInsert().Model(&FlaggedUser{User: *flaggedUser}).
+			On("CONFLICT (id) DO UPDATE").
 			Set("name = EXCLUDED.name").
 			Set("display_name = EXCLUDED.display_name").
 			Set("description = EXCLUDED.description").
@@ -147,7 +149,7 @@ func (r *UserRepository) SaveFlaggedUsers(flaggedUsers []*User) {
 			Set("confidence = EXCLUDED.confidence").
 			Set("last_updated = EXCLUDED.last_updated").
 			Set("thumbnail_url = EXCLUDED.thumbnail_url").
-			Insert()
+			Exec(ctx)
 		if err != nil {
 			r.logger.Error("Error saving flagged user",
 				zap.Uint64("userID", flaggedUser.ID),
@@ -171,11 +173,11 @@ func (r *UserRepository) SaveFlaggedUsers(flaggedUsers []*User) {
 	}
 
 	// Update statistics
-	if err := r.stats.IncrementDailyStat(context.Background(), statistics.FieldUsersFlagged, len(flaggedUsers)); err != nil {
+	if err := r.stats.IncrementDailyStat(ctx, statistics.FieldUsersFlagged, len(flaggedUsers)); err != nil {
 		r.logger.Error("Failed to increment users_flagged statistic", zap.Error(err))
 	}
 
-	if err := r.stats.IncrementHourlyStat(context.Background(), statistics.FieldUsersFlagged, len(flaggedUsers)); err != nil {
+	if err := r.stats.IncrementHourlyStat(ctx, statistics.FieldUsersFlagged, len(flaggedUsers)); err != nil {
 		r.logger.Error("Failed to increment hourly flagged stat", zap.Error(err))
 	}
 
@@ -185,15 +187,15 @@ func (r *UserRepository) SaveFlaggedUsers(flaggedUsers []*User) {
 // ConfirmUser moves a user from flagged_users to confirmed_users.
 // This happens when a moderator confirms that a user is inappropriate.
 // The user's groups and friends are tracked to help identify related users.
-func (r *UserRepository) ConfirmUser(user *FlaggedUser) error {
-	return r.db.RunInTransaction(r.db.Context(), func(tx *pg.Tx) error {
+func (r *UserRepository) ConfirmUser(ctx context.Context, user *FlaggedUser) error {
+	return r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
 		confirmedUser := &ConfirmedUser{
 			User:       user.User,
 			VerifiedAt: time.Now(),
 		}
 
-		_, err := tx.Model(confirmedUser).
-			OnConflict("(id) DO UPDATE").
+		_, err := tx.NewInsert().Model(confirmedUser).
+			On("CONFLICT (id) DO UPDATE").
 			Set("name = EXCLUDED.name").
 			Set("display_name = EXCLUDED.display_name").
 			Set("description = EXCLUDED.description").
@@ -207,16 +209,17 @@ func (r *UserRepository) ConfirmUser(user *FlaggedUser) error {
 			Set("confidence = EXCLUDED.confidence").
 			Set("last_scanned = EXCLUDED.last_scanned").
 			Set("last_updated = EXCLUDED.last_updated").
+			Set("last_viewed = EXCLUDED.last_viewed").
 			Set("last_purge_check = EXCLUDED.last_purge_check").
 			Set("thumbnail_url = EXCLUDED.thumbnail_url").
 			Set("verified_at = EXCLUDED.verified_at").
-			Insert()
+			Exec(ctx)
 		if err != nil {
 			r.logger.Error("Failed to insert or update user in confirmed_users", zap.Error(err), zap.Uint64("userID", user.ID))
 			return err
 		}
 
-		_, err = tx.Model((*FlaggedUser)(nil)).Where("id = ?", user.ID).Delete()
+		_, err = tx.NewDelete().Model((*FlaggedUser)(nil)).Where("id = ?", user.ID).Exec(ctx)
 		if err != nil {
 			r.logger.Error("Failed to delete user from flagged_users", zap.Error(err), zap.Uint64("userID", user.ID))
 			return err
@@ -224,19 +227,19 @@ func (r *UserRepository) ConfirmUser(user *FlaggedUser) error {
 
 		// Track groups for affiliation analysis
 		for _, group := range user.Groups {
-			if err = r.tracking.AddUserToGroupTracking(group.Group.ID, user.ID); err != nil {
+			if err = r.tracking.AddUserToGroupTracking(ctx, group.Group.ID, user.ID); err != nil {
 				r.logger.Error("Failed to add user to group tracking", zap.Error(err), zap.Uint64("groupID", group.Group.ID), zap.Uint64("userID", user.ID))
 				return err
 			}
 		}
 
 		// Update statistics
-		if err := r.stats.IncrementDailyStat(tx.Context(), statistics.FieldUsersConfirmed, 1); err != nil {
+		if err := r.stats.IncrementDailyStat(ctx, statistics.FieldUsersConfirmed, 1); err != nil {
 			r.logger.Error("Failed to increment users_confirmed statistic", zap.Error(err))
 			return err
 		}
 
-		if err := r.stats.IncrementHourlyStat(tx.Context(), statistics.FieldUsersConfirmed, 1); err != nil {
+		if err := r.stats.IncrementHourlyStat(ctx, statistics.FieldUsersConfirmed, 1); err != nil {
 			r.logger.Error("Failed to increment hourly confirmed stat", zap.Error(err))
 		}
 
@@ -246,15 +249,15 @@ func (r *UserRepository) ConfirmUser(user *FlaggedUser) error {
 
 // ClearUser moves a user from flagged_users to cleared_users.
 // This happens when a moderator determines that a user was incorrectly flagged.
-func (r *UserRepository) ClearUser(user *FlaggedUser) error {
-	return r.db.RunInTransaction(r.db.Context(), func(tx *pg.Tx) error {
+func (r *UserRepository) ClearUser(ctx context.Context, user *FlaggedUser) error {
+	return r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
 		clearedUser := &ClearedUser{
 			User:      user.User,
 			ClearedAt: time.Now(),
 		}
 
-		_, err := tx.Model(clearedUser).
-			OnConflict("(id) DO UPDATE").
+		_, err := tx.NewInsert().Model(clearedUser).
+			On("CONFLICT (id) DO UPDATE").
 			Set("name = EXCLUDED.name").
 			Set("display_name = EXCLUDED.display_name").
 			Set("description = EXCLUDED.description").
@@ -268,16 +271,17 @@ func (r *UserRepository) ClearUser(user *FlaggedUser) error {
 			Set("confidence = EXCLUDED.confidence").
 			Set("last_scanned = EXCLUDED.last_scanned").
 			Set("last_updated = EXCLUDED.last_updated").
+			Set("last_viewed = EXCLUDED.last_viewed").
 			Set("last_purge_check = EXCLUDED.last_purge_check").
 			Set("thumbnail_url = EXCLUDED.thumbnail_url").
 			Set("cleared_at = EXCLUDED.cleared_at").
-			Insert()
+			Exec(ctx)
 		if err != nil {
 			r.logger.Error("Failed to insert or update user in cleared_users", zap.Error(err), zap.Uint64("userID", user.ID))
 			return err
 		}
 
-		_, err = tx.Model((*FlaggedUser)(nil)).Where("id = ?", user.ID).Delete()
+		_, err = tx.NewDelete().Model((*FlaggedUser)(nil)).Where("id = ?", user.ID).Exec(ctx)
 		if err != nil {
 			r.logger.Error("Failed to delete user from flagged_users", zap.Error(err), zap.Uint64("userID", user.ID))
 			return err
@@ -286,12 +290,12 @@ func (r *UserRepository) ClearUser(user *FlaggedUser) error {
 		r.logger.Info("User cleared and moved to cleared_users", zap.Uint64("userID", user.ID))
 
 		// Update statistics
-		if err := r.stats.IncrementDailyStat(tx.Context(), statistics.FieldUsersCleared, 1); err != nil {
+		if err := r.stats.IncrementDailyStat(ctx, statistics.FieldUsersCleared, 1); err != nil {
 			r.logger.Error("Failed to increment users_cleared statistic", zap.Error(err))
 			return err
 		}
 
-		if err := r.stats.IncrementHourlyStat(tx.Context(), statistics.FieldUsersCleared, 1); err != nil {
+		if err := r.stats.IncrementHourlyStat(ctx, statistics.FieldUsersCleared, 1); err != nil {
 			r.logger.Error("Failed to increment hourly cleared stat", zap.Error(err))
 		}
 
@@ -299,22 +303,58 @@ func (r *UserRepository) ClearUser(user *FlaggedUser) error {
 	})
 }
 
-// GetFlaggedUserByID finds a user in the flagged_users table by their ID.
-func (r *UserRepository) GetFlaggedUserByID(id uint64) (*FlaggedUser, error) {
+// GetFlaggedUserByIDToReview finds a user in the flagged_users table by their ID
+// and updates their last_viewed timestamp.
+func (r *UserRepository) GetFlaggedUserByIDToReview(ctx context.Context, id uint64) (*FlaggedUser, error) {
 	var user FlaggedUser
-	err := r.db.Model(&user).Where("id = ?", id).Select()
+	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+		// Get the user with row lock
+		err := tx.NewSelect().
+			Model(&user).
+			Where("id = ?", id).
+			For("UPDATE SKIP LOCKED").
+			Scan(ctx)
+		if err != nil {
+			r.logger.Error("Failed to get flagged user by ID",
+				zap.Error(err),
+				zap.Uint64("userID", id))
+			return err
+		}
+
+		// Update last_viewed
+		now := time.Now()
+		_, err = tx.NewUpdate().
+			Model(&user).
+			Set("last_viewed = ?", now).
+			Where("id = ?", id).
+			Exec(ctx)
+		if err != nil {
+			r.logger.Error("Failed to update last_viewed",
+				zap.Error(err),
+				zap.Uint64("userID", id))
+			return err
+		}
+		user.LastViewed = now
+
+		return nil
+	})
 	if err != nil {
-		r.logger.Error("Failed to get flagged user by ID", zap.Error(err), zap.Uint64("userID", id))
 		return nil, err
 	}
-	r.logger.Info("Retrieved flagged user by ID", zap.Uint64("userID", id))
+
+	r.logger.Info("Retrieved and updated flagged user by ID",
+		zap.Uint64("userID", id),
+		zap.Time("lastViewed", user.LastViewed))
 	return &user, nil
 }
 
 // GetClearedUserByID finds a user in the cleared_users table by their ID.
-func (r *UserRepository) GetClearedUserByID(id uint64) (*ClearedUser, error) {
+func (r *UserRepository) GetClearedUserByID(ctx context.Context, id uint64) (*ClearedUser, error) {
 	var user ClearedUser
-	err := r.db.Model(&user).Where("id = ?", id).Select()
+	err := r.db.NewSelect().
+		Model(&user).
+		Where("id = ?", id).
+		Scan(ctx)
 	if err != nil {
 		r.logger.Error("Failed to get cleared user by ID", zap.Error(err), zap.Uint64("userID", id))
 		return nil, err
@@ -324,9 +364,10 @@ func (r *UserRepository) GetClearedUserByID(id uint64) (*ClearedUser, error) {
 }
 
 // GetConfirmedUsersCount returns the total number of users in confirmed_users.
-func (r *UserRepository) GetConfirmedUsersCount() (int, error) {
-	var count int
-	_, err := r.db.QueryOne(pg.Scan(&count), "SELECT COUNT(*) FROM confirmed_users")
+func (r *UserRepository) GetConfirmedUsersCount(ctx context.Context) (int, error) {
+	count, err := r.db.NewSelect().
+		Model((*ConfirmedUser)(nil)).
+		Count(ctx)
 	if err != nil {
 		r.logger.Error("Failed to get confirmed users count", zap.Error(err))
 		return 0, err
@@ -335,9 +376,10 @@ func (r *UserRepository) GetConfirmedUsersCount() (int, error) {
 }
 
 // GetFlaggedUsersCount returns the total number of users in flagged_users.
-func (r *UserRepository) GetFlaggedUsersCount() (int, error) {
-	var count int
-	_, err := r.db.QueryOne(pg.Scan(&count), "SELECT COUNT(*) FROM flagged_users")
+func (r *UserRepository) GetFlaggedUsersCount(ctx context.Context) (int, error) {
+	count, err := r.db.NewSelect().
+		Model((*FlaggedUser)(nil)).
+		Count(ctx)
 	if err != nil {
 		r.logger.Error("Failed to get flagged users count", zap.Error(err))
 		return 0, err
@@ -346,9 +388,10 @@ func (r *UserRepository) GetFlaggedUsersCount() (int, error) {
 }
 
 // GetClearedUsersCount returns the total number of users in cleared_users.
-func (r *UserRepository) GetClearedUsersCount() (int, error) {
-	var count int
-	_, err := r.db.QueryOne(pg.Scan(&count), "SELECT COUNT(*) FROM cleared_users")
+func (r *UserRepository) GetClearedUsersCount(ctx context.Context) (int, error) {
+	count, err := r.db.NewSelect().
+		Model((*ClearedUser)(nil)).
+		Count(ctx)
 	if err != nil {
 		r.logger.Error("Failed to get cleared users count", zap.Error(err))
 		return 0, err
@@ -358,30 +401,31 @@ func (r *UserRepository) GetClearedUsersCount() (int, error) {
 
 // CheckExistingUsers finds which users from a list of IDs exist in any user table.
 // Returns a map of user IDs to their status (confirmed, flagged, cleared).
-func (r *UserRepository) CheckExistingUsers(userIDs []uint64) (map[uint64]string, error) {
+func (r *UserRepository) CheckExistingUsers(ctx context.Context, userIDs []uint64) (map[uint64]string, error) {
 	var users []struct {
 		ID     uint64
 		Status string
 	}
 
-	err := r.db.RunInTransaction(r.db.Context(), func(tx *pg.Tx) error {
-		return tx.Model((*ConfirmedUser)(nil)).
+	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+		err := tx.NewSelect().Model((*ConfirmedUser)(nil)).
 			Column("id").
 			ColumnExpr("? AS status", UserTypeConfirmed).
-			Where("id IN (?)", pg.In(userIDs)).
+			Where("id IN (?)", bun.In(userIDs)).
 			Union(
-				tx.Model((*FlaggedUser)(nil)).
+				tx.NewSelect().Model((*FlaggedUser)(nil)).
 					Column("id").
 					ColumnExpr("? AS status", UserTypeFlagged).
-					Where("id IN (?)", pg.In(userIDs)),
+					Where("id IN (?)", bun.In(userIDs)),
 			).
 			Union(
-				tx.Model((*ClearedUser)(nil)).
+				tx.NewSelect().Model((*ClearedUser)(nil)).
 					Column("id").
 					ColumnExpr("? AS status", UserTypeCleared).
-					Where("id IN (?)", pg.In(userIDs)),
+					Where("id IN (?)", bun.In(userIDs)),
 			).
-			Select(&users)
+			Scan(ctx, &users)
+		return err
 	})
 	if err != nil {
 		r.logger.Error("Failed to check existing users", zap.Error(err))
@@ -402,15 +446,16 @@ func (r *UserRepository) CheckExistingUsers(userIDs []uint64) (map[uint64]string
 
 // GetUsersByIDs retrieves full user information for a list of user IDs.
 // Returns a map of user IDs to user data and a separate map for their types.
-func (r *UserRepository) GetUsersByIDs(userIDs []uint64) (map[uint64]*User, map[uint64]string, error) {
+func (r *UserRepository) GetUsersByIDs(ctx context.Context, userIDs []uint64) (map[uint64]*User, map[uint64]string, error) {
 	users := make(map[uint64]*User)
 	userTypes := make(map[uint64]string)
 
 	// Query confirmed users
 	var confirmedUsers []ConfirmedUser
-	err := r.db.Model(&confirmedUsers).
-		Where("id IN (?)", pg.In(userIDs)).
-		Select()
+	err := r.db.NewSelect().
+		Model(&confirmedUsers).
+		Where("id IN (?)", bun.In(userIDs)).
+		Scan(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -421,9 +466,10 @@ func (r *UserRepository) GetUsersByIDs(userIDs []uint64) (map[uint64]*User, map[
 
 	// Query flagged users
 	var flaggedUsers []FlaggedUser
-	err = r.db.Model(&flaggedUsers).
-		Where("id IN (?)", pg.In(userIDs)).
-		Select()
+	err = r.db.NewSelect().
+		Model(&flaggedUsers).
+		Where("id IN (?)", bun.In(userIDs)).
+		Scan(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -441,12 +487,12 @@ func (r *UserRepository) GetUsersByIDs(userIDs []uint64) (map[uint64]*User, map[
 
 // GetUsersToCheck finds users that haven't been checked for banned status recently.
 // Returns a batch of user IDs and updates their last_purge_check timestamp.
-func (r *UserRepository) GetUsersToCheck(limit int) ([]uint64, error) {
+func (r *UserRepository) GetUsersToCheck(ctx context.Context, limit int) ([]uint64, error) {
 	var userIDs []uint64
 
-	err := r.db.RunInTransaction(r.db.Context(), func(tx *pg.Tx) error {
+	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
 		// Use CTE to select users
-		_, err := tx.Query(&userIDs, `
+		err := tx.NewRaw(`
 			WITH selected_users AS (
 				(
 					SELECT id, 'confirmed' as type
@@ -467,7 +513,7 @@ func (r *UserRepository) GetUsersToCheck(limit int) ([]uint64, error) {
 				)
 			)
 			SELECT id FROM selected_users
-		`, limit/2, limit/2)
+		`, limit/2, limit/2).Scan(ctx, &userIDs)
 		if err != nil {
 			r.logger.Error("Failed to get users to check", zap.Error(err))
 			return err
@@ -475,19 +521,19 @@ func (r *UserRepository) GetUsersToCheck(limit int) ([]uint64, error) {
 
 		// Update last_purge_check for selected users
 		if len(userIDs) > 0 {
-			_, err = tx.Model((*ConfirmedUser)(nil)).
+			_, err = tx.NewUpdate().Model((*ConfirmedUser)(nil)).
 				Set("last_purge_check = ?", time.Now()).
-				Where("id IN (?)", pg.In(userIDs)).
-				Update()
+				Where("id IN (?)", bun.In(userIDs)).
+				Exec(ctx)
 			if err != nil {
 				r.logger.Error("Failed to update last_purge_check for confirmed users", zap.Error(err))
 				return err
 			}
 
-			_, err = tx.Model((*FlaggedUser)(nil)).
+			_, err = tx.NewUpdate().Model((*FlaggedUser)(nil)).
 				Set("last_purge_check = ?", time.Now()).
-				Where("id IN (?)", pg.In(userIDs)).
-				Update()
+				Where("id IN (?)", bun.In(userIDs)).
+				Exec(ctx)
 			if err != nil {
 				r.logger.Error("Failed to update last_purge_check for flagged users", zap.Error(err))
 				return err
@@ -506,13 +552,13 @@ func (r *UserRepository) GetUsersToCheck(limit int) ([]uint64, error) {
 
 // RemoveBannedUsers moves users from confirmed_users and flagged_users to banned_users.
 // This happens when users are found to be banned by Roblox.
-func (r *UserRepository) RemoveBannedUsers(userIDs []uint64) error {
-	return r.db.RunInTransaction(r.db.Context(), func(tx *pg.Tx) error {
+func (r *UserRepository) RemoveBannedUsers(ctx context.Context, userIDs []uint64) error {
+	return r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
 		// Move confirmed users to banned_users
 		var confirmedUsers []ConfirmedUser
-		err := tx.Model(&confirmedUsers).
-			Where("id IN (?)", pg.In(userIDs)).
-			Select()
+		err := tx.NewSelect().Model(&confirmedUsers).
+			Where("id IN (?)", bun.In(userIDs)).
+			Scan(ctx)
 		if err != nil {
 			r.logger.Error("Failed to select confirmed users for banning", zap.Error(err))
 			return err
@@ -523,9 +569,9 @@ func (r *UserRepository) RemoveBannedUsers(userIDs []uint64) error {
 				User:     user.User,
 				PurgedAt: time.Now(),
 			}
-			_, err = tx.Model(bannedUser).
-				OnConflict("(id) DO UPDATE").
-				Insert()
+			_, err = tx.NewInsert().Model(bannedUser).
+				On("CONFLICT (id) DO UPDATE").
+				Exec(ctx)
 			if err != nil {
 				r.logger.Error("Failed to insert banned user from confirmed_users", zap.Error(err), zap.Uint64("userID", user.ID))
 				return err
@@ -534,9 +580,9 @@ func (r *UserRepository) RemoveBannedUsers(userIDs []uint64) error {
 
 		// Move flagged users to banned_users
 		var flaggedUsers []FlaggedUser
-		err = tx.Model(&flaggedUsers).
-			Where("id IN (?)", pg.In(userIDs)).
-			Select()
+		err = tx.NewSelect().Model(&flaggedUsers).
+			Where("id IN (?)", bun.In(userIDs)).
+			Scan(ctx)
 		if err != nil {
 			r.logger.Error("Failed to select flagged users for banning", zap.Error(err))
 			return err
@@ -547,9 +593,9 @@ func (r *UserRepository) RemoveBannedUsers(userIDs []uint64) error {
 				User:     user.User,
 				PurgedAt: time.Now(),
 			}
-			_, err = tx.Model(bannedUser).
-				OnConflict("(id) DO UPDATE").
-				Insert()
+			_, err = tx.NewInsert().Model(bannedUser).
+				On("CONFLICT (id) DO UPDATE").
+				Exec(ctx)
 			if err != nil {
 				r.logger.Error("Failed to insert banned user from flagged_users", zap.Error(err), zap.Uint64("userID", user.ID))
 				return err
@@ -557,25 +603,25 @@ func (r *UserRepository) RemoveBannedUsers(userIDs []uint64) error {
 		}
 
 		// Remove users from confirmed_users
-		_, err = tx.Model((*ConfirmedUser)(nil)).
-			Where("id IN (?)", pg.In(userIDs)).
-			Delete()
+		_, err = tx.NewDelete().Model((*ConfirmedUser)(nil)).
+			Where("id IN (?)", bun.In(userIDs)).
+			Exec(ctx)
 		if err != nil {
 			r.logger.Error("Failed to remove banned users from confirmed_users", zap.Error(err))
 			return err
 		}
 
 		// Remove users from flagged_users
-		_, err = tx.Model((*FlaggedUser)(nil)).
-			Where("id IN (?)", pg.In(userIDs)).
-			Delete()
+		_, err = tx.NewDelete().Model((*FlaggedUser)(nil)).
+			Where("id IN (?)", bun.In(userIDs)).
+			Exec(ctx)
 		if err != nil {
 			r.logger.Error("Failed to remove banned users from flagged_users", zap.Error(err))
 			return err
 		}
 
 		// Update statistics
-		if err := r.stats.IncrementDailyStat(tx.Context(), statistics.FieldBannedUsersPurged, len(userIDs)); err != nil {
+		if err := r.stats.IncrementDailyStat(ctx, statistics.FieldBannedUsersPurged, len(userIDs)); err != nil {
 			r.logger.Error("Failed to increment banned_users_purged statistic", zap.Error(err))
 			return err
 		}
@@ -587,19 +633,19 @@ func (r *UserRepository) RemoveBannedUsers(userIDs []uint64) error {
 
 // PurgeOldClearedUsers removes cleared users older than the cutoff date.
 // This helps maintain database size by removing users that were cleared long ago.
-func (r *UserRepository) PurgeOldClearedUsers(cutoffDate time.Time, limit int) (int, error) {
+func (r *UserRepository) PurgeOldClearedUsers(ctx context.Context, cutoffDate time.Time, limit int) (int, error) {
 	var affected int
 
-	err := r.db.RunInTransaction(r.db.Context(), func(tx *pg.Tx) error {
+	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
 		// Select users to purge
 		var userIDs []uint64
-		err := tx.Model((*ClearedUser)(nil)).
+		err := tx.NewSelect().Model((*ClearedUser)(nil)).
 			Column("id").
 			Where("cleared_at < ?", cutoffDate).
 			Order("cleared_at ASC").
 			Limit(limit).
 			For("UPDATE SKIP LOCKED").
-			Select(&userIDs)
+			Scan(ctx, &userIDs)
 		if err != nil {
 			r.logger.Error("Failed to get cleared users to purge",
 				zap.Error(err),
@@ -613,9 +659,9 @@ func (r *UserRepository) PurgeOldClearedUsers(cutoffDate time.Time, limit int) (
 		}
 
 		// Delete selected users
-		result, err := tx.Model((*ClearedUser)(nil)).
-			Where("id IN (?)", pg.In(userIDs)).
-			Delete()
+		result, err := tx.NewDelete().Model((*ClearedUser)(nil)).
+			Where("id IN (?)", bun.In(userIDs)).
+			Exec(ctx)
 		if err != nil {
 			r.logger.Error("Failed to delete users from cleared_users",
 				zap.Error(err),
@@ -623,14 +669,19 @@ func (r *UserRepository) PurgeOldClearedUsers(cutoffDate time.Time, limit int) (
 			return err
 		}
 
-		affected = result.RowsAffected()
+		rowsAffected, err := result.RowsAffected()
+		if err != nil {
+			r.logger.Error("Failed to get rows affected", zap.Error(err))
+			return err
+		}
+		affected = int(rowsAffected)
 
 		r.logger.Info("Purged cleared users from database",
 			zap.Int("count", affected),
 			zap.Uint64s("userIDs", userIDs))
 
 		// Update statistics
-		if err := r.stats.IncrementDailyStat(tx.Context(), statistics.FieldClearedUsersPurged, affected); err != nil {
+		if err := r.stats.IncrementDailyStat(ctx, statistics.FieldClearedUsersPurged, affected); err != nil {
 			r.logger.Error("Failed to increment cleared_users_purged statistic", zap.Error(err))
 			return err
 		}

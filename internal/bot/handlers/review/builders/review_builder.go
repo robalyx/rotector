@@ -303,7 +303,7 @@ func (b *ReviewEmbed) getFlaggedContent() string {
 
 // getReviewHistory returns the review history field for the embed.
 func (b *ReviewEmbed) getReviewHistory() string {
-	logs, total, err := b.db.UserActivity().GetLogs(b.user.ID, 0, database.ActivityTypeAll, time.Time{}, time.Time{}, 0, ReviewHistoryLimit)
+	logs, total, err := b.db.UserActivity().GetLogs(context.Background(), b.user.ID, 0, database.ActivityTypeAll, time.Time{}, time.Time{}, 0, ReviewHistoryLimit)
 	if err != nil {
 		return "Failed to fetch review history"
 	}

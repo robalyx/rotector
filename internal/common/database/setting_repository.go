@@ -1,21 +1,22 @@
 package database
 
 import (
+	"context"
+	"database/sql"
 	"errors"
 
-	"github.com/go-pg/pg/v10"
+	"github.com/uptrace/bun"
 	"go.uber.org/zap"
 )
 
 // SettingRepository handles database operations for user and guild settings.
 type SettingRepository struct {
-	db     *pg.DB
+	db     *bun.DB
 	logger *zap.Logger
 }
 
-// NewSettingRepository creates a SettingRepository with database access for
-// storing and retrieving settings.
-func NewSettingRepository(db *pg.DB, logger *zap.Logger) *SettingRepository {
+// NewSettingRepository creates a SettingRepository with database access.
+func NewSettingRepository(db *bun.DB, logger *zap.Logger) *SettingRepository {
 	return &SettingRepository{
 		db:     db,
 		logger: logger,
@@ -23,20 +24,19 @@ func NewSettingRepository(db *pg.DB, logger *zap.Logger) *SettingRepository {
 }
 
 // GetUserSettings retrieves settings for a specific user.
-// If no settings exist, it creates default settings.
-func (r *SettingRepository) GetUserSettings(userID uint64) (*UserSetting, error) {
+func (r *SettingRepository) GetUserSettings(ctx context.Context, userID uint64) (*UserSetting, error) {
 	settings := &UserSetting{
 		UserID:      userID,
 		DefaultSort: SortByRandom,
 	}
 
-	err := r.db.Model(settings).
+	err := r.db.NewSelect().Model(settings).
 		WherePK().
-		Select()
+		Scan(ctx)
 	if err != nil {
-		if errors.Is(err, pg.ErrNoRows) {
+		if errors.Is(err, sql.ErrNoRows) {
 			// Create default settings if none exist
-			_, err = r.db.Model(settings).Insert()
+			_, err = r.db.NewInsert().Model(settings).Exec(ctx)
 			if err != nil {
 				r.logger.Error("Failed to create user settings", zap.Error(err), zap.Uint64("userID", userID))
 				return nil, err
@@ -50,13 +50,13 @@ func (r *SettingRepository) GetUserSettings(userID uint64) (*UserSetting, error)
 	return settings, nil
 }
 
-// SaveUserSettings updates or creates user settings in the database.
-func (r *SettingRepository) SaveUserSettings(settings *UserSetting) error {
-	_, err := r.db.Model(settings).
-		OnConflict("(user_id) DO UPDATE").
+// SaveUserSettings updates or creates user settings.
+func (r *SettingRepository) SaveUserSettings(ctx context.Context, settings *UserSetting) error {
+	_, err := r.db.NewInsert().Model(settings).
+		On("CONFLICT (user_id) DO UPDATE").
 		Set("streamer_mode = EXCLUDED.streamer_mode").
 		Set("default_sort = EXCLUDED.default_sort").
-		Insert()
+		Exec(ctx)
 	if err != nil {
 		r.logger.Error("Failed to save user settings",
 			zap.Error(err),
@@ -68,11 +68,11 @@ func (r *SettingRepository) SaveUserSettings(settings *UserSetting) error {
 }
 
 // SaveGuildSettings saves guild settings to the database.
-func (r *SettingRepository) SaveGuildSettings(settings *GuildSetting) error {
-	_, err := r.db.Model(settings).
-		OnConflict("(guild_id) DO UPDATE").
+func (r *SettingRepository) SaveGuildSettings(ctx context.Context, settings *GuildSetting) error {
+	_, err := r.db.NewInsert().Model(settings).
+		On("CONFLICT (guild_id) DO UPDATE").
 		Set("whitelisted_roles = EXCLUDED.whitelisted_roles").
-		Insert()
+		Exec(ctx)
 	if err != nil {
 		r.logger.Error("Failed to save guild settings", zap.Error(err), zap.Uint64("guildID", settings.GuildID))
 		return err
@@ -81,20 +81,19 @@ func (r *SettingRepository) SaveGuildSettings(settings *GuildSetting) error {
 }
 
 // GetGuildSettings retrieves settings for a specific guild.
-// If no settings exist, it creates default settings.
-func (r *SettingRepository) GetGuildSettings(guildID uint64) (*GuildSetting, error) {
+func (r *SettingRepository) GetGuildSettings(ctx context.Context, guildID uint64) (*GuildSetting, error) {
 	settings := &GuildSetting{
 		GuildID:          guildID,
 		WhitelistedRoles: []uint64{},
 	}
 
-	err := r.db.Model(settings).
+	err := r.db.NewSelect().Model(settings).
 		WherePK().
-		Select()
+		Scan(ctx)
 	if err != nil {
-		if errors.Is(err, pg.ErrNoRows) {
+		if errors.Is(err, sql.ErrNoRows) {
 			// Create default settings if none exist
-			_, err = r.db.Model(settings).Insert()
+			_, err = r.db.NewInsert().Model(settings).Exec(ctx)
 			if err != nil {
 				r.logger.Error("Failed to create guild settings", zap.Error(err), zap.Uint64("guildID", guildID))
 				return nil, err
@@ -109,9 +108,8 @@ func (r *SettingRepository) GetGuildSettings(guildID uint64) (*GuildSetting, err
 }
 
 // ToggleWhitelistedRole adds or removes a role from a guild's whitelist.
-// The role is removed if it exists, or added if it doesn't.
-func (r *SettingRepository) ToggleWhitelistedRole(guildID, roleID uint64) error {
-	settings, err := r.GetGuildSettings(guildID)
+func (r *SettingRepository) ToggleWhitelistedRole(ctx context.Context, guildID, roleID uint64) error {
+	settings, err := r.GetGuildSettings(ctx, guildID)
 	if err != nil {
 		return err
 	}
@@ -134,10 +132,10 @@ func (r *SettingRepository) ToggleWhitelistedRole(guildID, roleID uint64) error 
 	}
 
 	// Save updated settings
-	_, err = r.db.Model(settings).
-		OnConflict("(guild_id) DO UPDATE").
+	_, err = r.db.NewInsert().Model(settings).
+		On("CONFLICT (guild_id) DO UPDATE").
 		Set("whitelisted_roles = EXCLUDED.whitelisted_roles").
-		Insert()
+		Exec(ctx)
 	if err != nil {
 		r.logger.Error("Failed to toggle whitelisted role",
 			zap.Error(err),

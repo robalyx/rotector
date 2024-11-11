@@ -1,6 +1,8 @@
 package setting
 
 import (
+	"context"
+
 	"github.com/disgoorg/disgo/discord"
 	"github.com/disgoorg/disgo/events"
 	"github.com/rotector/rotector/internal/bot/constants"
@@ -69,7 +71,7 @@ func (g *GuildMenu) handleGuildSettingButton(event *events.ComponentInteractionC
 
 // getGuildSettings loads guild settings from the database.
 func (g *GuildMenu) getGuildSettings(event interfaces.CommonEvent) *database.GuildSetting {
-	settings, err := g.handler.db.Settings().GetGuildSettings(uint64(*event.GuildID()))
+	settings, err := g.handler.db.Settings().GetGuildSettings(context.Background(), uint64(*event.GuildID()))
 	if err != nil {
 		g.handler.logger.Error("Failed to fetch guild settings", zap.Error(err))
 		return nil

@@ -60,7 +60,7 @@ func (g *MemberWorker) Start() {
 
 		// Step 1: Get next confirmed group (10%)
 		g.bar.SetStepMessage("Fetching next confirmed group")
-		group, err := g.db.Groups().GetNextConfirmedGroup()
+		group, err := g.db.Groups().GetNextConfirmedGroup(context.Background())
 		if err != nil {
 			g.logger.Error("Error getting next confirmed group", zap.Error(err))
 			time.Sleep(5 * time.Minute) // Wait before trying again
@@ -130,7 +130,7 @@ func (g *MemberWorker) processGroup(groupID uint64, userIDs []uint64) ([]uint64,
 		}
 
 		// Check which users already exist in the database
-		existingUsers, err := g.db.Users().CheckExistingUsers(newUserIDs)
+		existingUsers, err := g.db.Users().CheckExistingUsers(context.Background(), newUserIDs)
 		if err != nil {
 			g.logger.Error("Error checking existing users", zap.Error(err))
 			continue

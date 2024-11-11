@@ -98,7 +98,7 @@ func (f *FriendWorker) Start() {
 func (f *FriendWorker) processFriendsBatch(friendIDs []uint64) ([]uint64, error) {
 	for len(friendIDs) < FriendUsersToProcess {
 		// Get the next confirmed user
-		user, err := f.db.Users().GetNextConfirmedUser()
+		user, err := f.db.Users().GetNextConfirmedUser(context.Background())
 		if err != nil {
 			f.logger.Error("Error getting next confirmed user", zap.Error(err))
 			return nil, err
@@ -125,7 +125,7 @@ func (f *FriendWorker) processFriendsBatch(friendIDs []uint64) ([]uint64, error)
 		}
 
 		// Check which users already exist in the database
-		existingUsers, err := f.db.Users().CheckExistingUsers(newFriendIDs)
+		existingUsers, err := f.db.Users().CheckExistingUsers(context.Background(), newFriendIDs)
 		if err != nil {
 			f.logger.Error("Error checking existing users", zap.Error(err))
 			continue

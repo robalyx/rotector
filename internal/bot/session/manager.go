@@ -58,7 +58,7 @@ func (m *Manager) GetOrCreateSession(ctx context.Context, userID snowflake.ID) (
 	key := fmt.Sprintf("%s%s", SessionPrefix, userID)
 
 	// Load user settings
-	settings, err := m.db.Settings().GetUserSettings(uint64(userID))
+	settings, err := m.db.Settings().GetUserSettings(ctx, uint64(userID))
 	if err != nil {
 		return nil, fmt.Errorf("failed to load user settings: %w", err)
 	}

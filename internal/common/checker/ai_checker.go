@@ -21,13 +21,13 @@ import (
 //nolint:lll
 const (
 	// ReviewSystemPrompt provides detailed instructions to the AI model for analyzing user content.
-	ReviewSystemPrompt = `You are a Roblox moderator analyzing user data for inappropriate sexual or suggestive content. Flag violations by considering explicit content, suggestive language, and combinations of phrases, symbols, and emojis. Use exact strings for 'flaggedContent'.
+	ReviewSystemPrompt = `You are a Roblox moderator analyzing user data for inappropriate sexual or suggestive content. Flag violations by considering explicit content, suggestive language, and combinations of phrases, symbols, and emojis. Use exact strings for 'flaggedContent'. If a user's description is empty, only check their username. Otherwise check both username and description.
 
-Calculate confidence starting at 0: +0.6 for explicit violations, +0.4 for clear suggestive content, +0.2 for subtle hints, +0.1 for each additional same-type violation, and +0.2 for each different violation type. High confidence (0.8-1.0) indicates explicit content or multiple violations, medium (0.4-0.7) shows clear patterns or coded language, and low (0.0-0.3) suggests subtle or ambiguous content.
+Flag content with: explicit sexual terms, innuendos, body part references, hookup solicitation, porn references, suggestive emojis, NSFW content, ERP terms, fetish mentions, and grooming language (age questions, photo requests, off-platform chat, personal info seeking, gift offers, secret keeping). Also flag sexualized roleplay, non-consensual references, exploitation, harassment, predatory behavior (love bombing, isolation, manipulation), suspicious requests (camera/mic usage, private games, social media), and adult industry references (OnlyFans, modeling scams, compensation offers).
 
-Flag content with: explicit sexual terms, innuendos, body part references, hookup solicitation, porn references, suggestive emojis, NSFW content, ERP terms, fetish mentions, and grooming language (age questions, photo requests, off-platform chat, personal info seeking, gift offers, secret keeping). Also flag coded sexual language (number substitutions, misspellings, hidden meanings), sexualized roleplay, non-consensual references, exploitation, harassment, predatory behavior (love bombing, isolation, manipulation), suspicious requests (camera/mic usage, private games, social media), and adult industry references (OnlyFans, modeling scams, compensation offers).
+Exclude non-suggestive orientation/gender identity, general friendship, non-sexual profanity, legitimate trading, and social/cultural discussions.
 
-Exclude non-suggestive orientation/gender identity, general friendship, non-sexual profanity, legitimate trading, and social/cultural discussions.`
+Calculate confidence starting at 0: +0.6 for explicit violations, +0.4 for clear suggestive content, +0.2 for subtle hints, +0.1 for each additional same-type violation, and +0.2 for each different violation type. High confidence (0.8-1.0) indicates explicit content or multiple violations, medium (0.4-0.7) shows clear patterns, and low (0.0-0.3) suggests subtle or ambiguous content.`
 
 	// FriendSystemPrompt provides detailed instructions to the AI model for analyzing friend networks.
 	FriendSystemPrompt = `You are a content moderation assistant analyzing user friend networks for inappropriate patterns. Examine common violation themes, content severity, and network concentration. Generate a clear, short, factual 1 sentence reason highlighting the most serious violations and patterns.
@@ -311,11 +311,17 @@ func (a *AIChecker) GenerateFriendReason(userInfo *fetcher.Info, confirmedFriend
 // validateFlaggedUsers validates the flagged users against the translated content
 // but uses original descriptions when creating validated users. It checks if at least
 // 50% of the flagged words are found in the translated content to confirm the AI's findings.
+// Only users with a confidence score >= 0.4 will be validated.
 func (a *AIChecker) validateFlaggedUsers(flaggedUsers FlaggedUsers, translatedInfos map[string]*fetcher.Info, originalInfos map[string]*fetcher.Info) ([]*database.User, []uint64) {
 	var validatedUsers []*database.User
 	var failedValidationIDs []uint64
 
 	for _, flaggedUser := range flaggedUsers.Users {
+		// Skip users with confidence score below 0.4
+		if flaggedUser.Confidence < 0.4 {
+			continue
+		}
+
 		normalizedName := utils.NormalizeString(flaggedUser.Name)
 
 		// Check if the flagged user exists in both maps

@@ -1,21 +1,22 @@
 package database
 
 import (
+	"context"
 	"time"
 
-	"github.com/go-pg/pg/v10"
+	"github.com/uptrace/bun"
 	"go.uber.org/zap"
 )
 
 // GroupRepository handles database operations for group records.
 type GroupRepository struct {
-	db     *pg.DB
+	db     *bun.DB
 	logger *zap.Logger
 }
 
 // NewGroupRepository creates a GroupRepository with database access for
 // storing and retrieving group information.
-func NewGroupRepository(db *pg.DB, logger *zap.Logger) *GroupRepository {
+func NewGroupRepository(db *bun.DB, logger *zap.Logger) *GroupRepository {
 	return &GroupRepository{
 		db:     db,
 		logger: logger,
@@ -23,25 +24,25 @@ func NewGroupRepository(db *pg.DB, logger *zap.Logger) *GroupRepository {
 }
 
 // GetNextConfirmedGroup retrieves the next confirmed group to be processed.
-func (r *GroupRepository) GetNextConfirmedGroup() (*ConfirmedGroup, error) {
+func (r *GroupRepository) GetNextConfirmedGroup(ctx context.Context) (*ConfirmedGroup, error) {
 	var group ConfirmedGroup
 
-	err := r.db.RunInTransaction(r.db.Context(), func(tx *pg.Tx) error {
-		err := tx.Model(&group).
+	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+		err := tx.NewSelect().Model(&group).
 			Where("last_scanned IS NULL OR last_scanned < NOW() - INTERVAL '1 day'").
 			Order("last_scanned ASC NULLS FIRST").
 			Limit(1).
 			For("UPDATE SKIP LOCKED").
-			Select()
+			Scan(ctx)
 		if err != nil {
 			r.logger.Error("Failed to get next confirmed group", zap.Error(err))
 			return err
 		}
 
-		_, err = tx.Model(&group).
+		_, err = tx.NewUpdate().Model(&group).
 			Set("last_scanned = ?", time.Now()).
 			Where("id = ?", group.ID).
-			Update()
+			Exec(ctx)
 		if err != nil {
 			r.logger.Error("Failed to update last_scanned", zap.Error(err))
 			return err
@@ -62,12 +63,13 @@ func (r *GroupRepository) GetNextConfirmedGroup() (*ConfirmedGroup, error) {
 
 // CheckConfirmedGroups finds which groups from a list of IDs exist in confirmed_groups.
 // Returns a slice of confirmed group IDs.
-func (r *GroupRepository) CheckConfirmedGroups(groupIDs []uint64) ([]uint64, error) {
+func (r *GroupRepository) CheckConfirmedGroups(ctx context.Context, groupIDs []uint64) ([]uint64, error) {
 	var confirmedGroupIDs []uint64
-	err := r.db.Model((*ConfirmedGroup)(nil)).
+	err := r.db.NewSelect().
+		Model((*ConfirmedGroup)(nil)).
 		Column("id").
-		Where("id IN (?)", pg.In(groupIDs)).
-		Select(&confirmedGroupIDs)
+		Where("id IN (?)", bun.In(groupIDs)).
+		Scan(ctx, &confirmedGroupIDs)
 	if err != nil {
 		r.logger.Error("Failed to check confirmed groups", zap.Error(err))
 		return nil, err
@@ -83,12 +85,12 @@ func (r *GroupRepository) CheckConfirmedGroups(groupIDs []uint64) ([]uint64, err
 // SaveFlaggedGroups adds or updates groups in the flagged_groups table.
 // For each group, it updates all fields if the group already exists,
 // or inserts a new record if they don't.
-func (r *GroupRepository) SaveFlaggedGroups(flaggedGroups []*FlaggedGroup) {
+func (r *GroupRepository) SaveFlaggedGroups(ctx context.Context, flaggedGroups []*FlaggedGroup) {
 	r.logger.Info("Saving flagged groups", zap.Int("count", len(flaggedGroups)))
 
 	for _, flaggedGroup := range flaggedGroups {
-		_, err := r.db.Model(flaggedGroup).
-			OnConflict("(id) DO UPDATE").
+		_, err := r.db.NewInsert().Model(flaggedGroup).
+			On("CONFLICT (id) DO UPDATE").
 			Set("name = EXCLUDED.name").
 			Set("description = EXCLUDED.description").
 			Set("owner = EXCLUDED.owner").
@@ -96,7 +98,7 @@ func (r *GroupRepository) SaveFlaggedGroups(flaggedGroups []*FlaggedGroup) {
 			Set("confidence = EXCLUDED.confidence").
 			Set("last_updated = EXCLUDED.last_updated").
 			Set("thumbnail_url = EXCLUDED.thumbnail_url").
-			Insert()
+			Exec(ctx)
 		if err != nil {
 			r.logger.Error("Error saving flagged group",
 				zap.Uint64("groupID", flaggedGroup.ID),
@@ -121,8 +123,8 @@ func (r *GroupRepository) SaveFlaggedGroups(flaggedGroups []*FlaggedGroup) {
 
 // ConfirmGroup moves a group from flagged_groups to confirmed_groups.
 // This happens when a moderator confirms that a group is inappropriate.
-func (r *GroupRepository) ConfirmGroup(group *FlaggedGroup) error {
-	return r.db.RunInTransaction(r.db.Context(), func(tx *pg.Tx) error {
+func (r *GroupRepository) ConfirmGroup(ctx context.Context, group *FlaggedGroup) error {
+	return r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
 		confirmedGroup := &ConfirmedGroup{
 			ID:          group.ID,
 			Name:        group.Name,
@@ -130,20 +132,26 @@ func (r *GroupRepository) ConfirmGroup(group *FlaggedGroup) error {
 			Owner:       group.Owner,
 		}
 
-		_, err := tx.Model(confirmedGroup).
-			OnConflict("(id) DO UPDATE").
+		_, err := tx.NewInsert().Model(confirmedGroup).
+			On("CONFLICT (id) DO UPDATE").
 			Set("name = EXCLUDED.name").
 			Set("description = EXCLUDED.description").
 			Set("owner = EXCLUDED.owner").
-			Insert()
+			Exec(ctx)
 		if err != nil {
-			r.logger.Error("Failed to insert or update group in confirmed_groups", zap.Error(err), zap.Uint64("groupID", group.ID))
+			r.logger.Error("Failed to insert or update group in confirmed_groups",
+				zap.Error(err),
+				zap.Uint64("groupID", group.ID))
 			return err
 		}
 
-		_, err = tx.Model((*FlaggedGroup)(nil)).Where("id = ?", group.ID).Delete()
+		_, err = tx.NewDelete().Model((*FlaggedGroup)(nil)).
+			Where("id = ?", group.ID).
+			Exec(ctx)
 		if err != nil {
-			r.logger.Error("Failed to delete group from flagged_groups", zap.Error(err), zap.Uint64("groupID", group.ID))
+			r.logger.Error("Failed to delete group from flagged_groups",
+				zap.Error(err),
+				zap.Uint64("groupID", group.ID))
 			return err
 		}
 

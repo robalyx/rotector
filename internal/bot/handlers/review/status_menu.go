@@ -2,6 +2,7 @@ package review
 
 import (
 	"context"
+	"time"
 
 	"github.com/disgoorg/disgo/discord"
 	"github.com/disgoorg/disgo/events"
@@ -10,6 +11,7 @@ import (
 	"github.com/rotector/rotector/internal/bot/interfaces"
 	"github.com/rotector/rotector/internal/bot/pagination"
 	"github.com/rotector/rotector/internal/bot/session"
+	"github.com/rotector/rotector/internal/common/database"
 	"github.com/rotector/rotector/internal/common/queue"
 	"go.uber.org/zap"
 )
@@ -56,7 +58,7 @@ func (m *StatusMenu) ShowStatusMenu(event interfaces.CommonEvent, s *session.Ses
 		}
 
 		// Check if user was flagged after recheck
-		flaggedUser, err := m.handler.db.Users().GetFlaggedUserByID(userID)
+		flaggedUser, err := m.handler.db.Users().GetFlaggedUserByIDToReview(context.Background(), userID)
 		if err != nil {
 			// User was not flagged by AI, return to previous page
 			m.handler.paginationManager.NavigateBack(event, s, "User was not flagged by AI after recheck.")
@@ -65,6 +67,16 @@ func (m *StatusMenu) ShowStatusMenu(event interfaces.CommonEvent, s *session.Ses
 
 		// User is still flagged, show updated information
 		s.Set(constants.SessionKeyTarget, flaggedUser)
+
+		// Log the view action asynchronously
+		go m.handler.db.UserActivity().LogActivity(context.Background(), &database.UserActivityLog{
+			UserID:            flaggedUser.ID,
+			ReviewerID:        uint64(event.User().ID),
+			ActivityType:      database.ActivityTypeViewed,
+			ActivityTimestamp: time.Now(),
+			Details:           make(map[string]interface{}),
+		})
+
 		m.handler.reviewMenu.ShowReviewMenu(event, s, "User has been rechecked. Showing updated information.")
 		return
 	}

@@ -1,6 +1,7 @@
 package purge
 
 import (
+	"context"
 	"time"
 
 	"github.com/jaxron/roapi.go/pkg/api"
@@ -50,7 +51,7 @@ func (p *BannedWorker) Start() {
 
 		// Step 1: Get batch of users to check (20%)
 		p.bar.SetStepMessage("Fetching users to check")
-		users, err := p.db.Users().GetUsersToCheck(PurgeUsersToProcess)
+		users, err := p.db.Users().GetUsersToCheck(context.Background(), PurgeUsersToProcess)
 		if err != nil {
 			p.logger.Error("Error getting users to check", zap.Error(err))
 			time.Sleep(5 * time.Minute) // Wait before trying again
@@ -92,7 +93,7 @@ func (p *BannedWorker) processUsers(bannedUserIDs []uint64) {
 	p.logger.Info("Processing users", zap.Any("bannedUserIDs", bannedUserIDs))
 
 	p.bar.SetStepMessage("Removing banned users")
-	err := p.db.Users().RemoveBannedUsers(bannedUserIDs)
+	err := p.db.Users().RemoveBannedUsers(context.Background(), bannedUserIDs)
 	if err != nil {
 		p.logger.Error("Error removing banned users", zap.Error(err))
 	}

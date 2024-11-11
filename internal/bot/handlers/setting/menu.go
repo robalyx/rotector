@@ -1,6 +1,7 @@
 package setting
 
 import (
+	"context"
 	"strconv"
 	"strings"
 
@@ -163,7 +164,7 @@ func (m *Menu) saveUserSetting(s *session.Session, customID, option string) {
 	}
 
 	// Save to database and update session
-	if err := m.handler.db.Settings().SaveUserSettings(settings); err != nil {
+	if err := m.handler.db.Settings().SaveUserSettings(context.Background(), settings); err != nil {
 		m.handler.logger.Error("Failed to save user settings", zap.Error(err))
 		return
 	}
@@ -185,7 +186,7 @@ func (m *Menu) saveGuildSetting(event interfaces.CommonEvent, customID, option s
 			return
 		}
 
-		if err := m.handler.db.Settings().ToggleWhitelistedRole(guildID, roleID); err != nil {
+		if err := m.handler.db.Settings().ToggleWhitelistedRole(context.Background(), guildID, roleID); err != nil {
 			m.handler.logger.Error("failed to toggle whitelisted role", zap.Error(err))
 		}
 
