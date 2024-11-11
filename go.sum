@@ -97,8 +97,8 @@ github.com/niemeyer/pretty v0.0.0-20200227124842-a10e7caefd8e h1:fD57ERR4JtEqsWb
 github.com/niemeyer/pretty v0.0.0-20200227124842-a10e7caefd8e/go.mod h1:zD1mROLANZcx1PVRCS0qkT7pwLkGfwJo4zjcN/Tysno=
 github.com/onsi/gomega v1.34.1 h1:EUMJIKUjM8sKjYbtxQI9A4z2o+rruxnzNvpknOXie6k=
 github.com/onsi/gomega v1.34.1/go.mod h1:kU1QgUvBDLXBJq618Xvm2LUX6rSAfRaFRTcdOeDLwwY=
-github.com/openai/openai-go v0.1.0-alpha.33 h1:H1k1eXprytUbjk0tBUKgxcCV7O39wAw3v62xVcOqKcc=
-github.com/openai/openai-go v0.1.0-alpha.33/go.mod h1:3SdE6BffOX9HPEQv8IL/fi3LYZ5TUpRYaqGQZbyk11A=
+github.com/openai/openai-go v0.1.0-alpha.35 h1:GZRy9b6gKe6Fa58Fd/CSefxtAjuyuLnSiOGN9H7747o=
+github.com/openai/openai-go v0.1.0-alpha.35/go.mod h1:3SdE6BffOX9HPEQv8IL/fi3LYZ5TUpRYaqGQZbyk11A=
 github.com/ozankasikci/go-image-merge v0.3.1 h1:R25/9jeZ2wMaTcPT1ZQI7S8axlcvGkJu0jrUA2TIhSs=
 github.com/ozankasikci/go-image-merge v0.3.1/go.mod h1:NQ2aN0b21buFx3p+5x4dZrKuPSLh2uBukK7F30BrYTo=
 github.com/pelletier/go-toml/v2 v2.2.3 h1:YmeHyLY8mFWbdkNWwpr+qIL2bEqT0o95WSdkNHvL12M=
