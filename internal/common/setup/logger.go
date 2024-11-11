@@ -138,9 +138,10 @@ func (lm *LogManager) setupLogDirectories() error {
 
 	// Setup latest directory (remove old and create new)
 	latestDir := filepath.Join(lm.logDir, "latest")
-	if err := os.RemoveAll(latestDir); err != nil {
-		return fmt.Errorf("failed to remove old latest directory: %w", err)
-	}
+	// Ignore errors when removing old latest directory
+	// since it may be written to by another process
+	_ = os.RemoveAll(latestDir)
+
 	if err := os.MkdirAll(latestDir, os.ModePerm); err != nil {
 		return fmt.Errorf("failed to create latest directory: %w", err)
 	}
