@@ -20,6 +20,7 @@ type FriendsEmbed struct {
 	settings       *database.UserSetting
 	user           *database.FlaggedUser
 	friends        []types.Friend
+	presences      map[uint64]types.UserPresence
 	flaggedFriends map[uint64]*database.User
 	friendTypes    map[uint64]string
 	start          int
@@ -37,6 +38,8 @@ func NewFriendsEmbed(s *session.Session) *FriendsEmbed {
 	s.GetInterface(constants.SessionKeyTarget, &user)
 	var friends []types.Friend
 	s.GetInterface(constants.SessionKeyFriends, &friends)
+	var presences map[uint64]types.UserPresence
+	s.GetInterface(constants.SessionKeyPresences, &presences)
 	var flaggedFriends map[uint64]*database.User
 	s.GetInterface(constants.SessionKeyFlaggedFriends, &flaggedFriends)
 	var friendTypes map[uint64]string
@@ -46,6 +49,7 @@ func NewFriendsEmbed(s *session.Session) *FriendsEmbed {
 		settings:       settings,
 		user:           user,
 		friends:        friends,
+		presences:      presences,
 		flaggedFriends: flaggedFriends,
 		friendTypes:    friendTypes,
 		start:          s.GetInt(constants.SessionKeyStart),
@@ -93,24 +97,48 @@ func (b *FriendsEmbed) Build() *discord.MessageUpdateBuilder {
 	// Add fields for each friend on the current page
 	for i, friend := range b.friends {
 		fieldName := fmt.Sprintf("Friend %d", b.start+i+1)
+
+		// Add presence indicator emoji
+		if presence, ok := b.presences[friend.ID]; ok {
+			switch presence.UserPresenceType {
+			case types.Website:
+				fieldName += " 🌐" // Website
+			case types.InGame:
+				fieldName += " 🎮" // In Game
+			case types.InStudio:
+				fieldName += " 🔨" // In Studio
+			case types.Offline:
+				fieldName += " 💤" // Offline
+			}
+		}
+
+		// Add status indicators (⚠️ or ⏳)
+		if friendType, ok := b.friendTypes[friend.ID]; ok {
+			switch friendType {
+			case database.UserTypeConfirmed:
+				fieldName += " ⚠️"
+			case database.UserTypeFlagged:
+				fieldName += " ⏳"
+			}
+		}
+
 		fieldValue := fmt.Sprintf(
 			"[%s](https://www.roblox.com/users/%d/profile)",
 			utils.CensorString(friend.Name, b.settings.StreamerMode),
 			friend.ID,
 		)
 
-		if flaggedFriend, ok := b.flaggedFriends[friend.ID]; ok {
-			// Add emoji based on friend type
-			if friendType, ok := b.friendTypes[friend.ID]; ok {
-				switch friendType {
-				case database.UserTypeConfirmed:
-					fieldName += " ⚠️"
-				case database.UserTypeFlagged:
-					fieldName += " ⏳"
-				}
+		// Add presence details if available
+		if presence, ok := b.presences[friend.ID]; ok {
+			if presence.UserPresenceType != types.Offline {
+				fieldValue += "\n" + presence.LastLocation
+			} else {
+				fieldValue += fmt.Sprintf("\nLast Online: <t:%d:R>", presence.LastOnline.Unix())
 			}
+		}
 
-			// Add reason and confidence for flagged friend
+		// Add flagged friend info if available
+		if flaggedFriend, ok := b.flaggedFriends[friend.ID]; ok {
 			if flaggedFriend.Confidence > 0 {
 				fieldValue += fmt.Sprintf(" (%.2f)", flaggedFriend.Confidence)
 			}

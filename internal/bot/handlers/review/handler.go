@@ -6,6 +6,7 @@ import (
 	"github.com/rotector/rotector/internal/bot/pagination"
 	"github.com/rotector/rotector/internal/bot/session"
 	"github.com/rotector/rotector/internal/common/database"
+	"github.com/rotector/rotector/internal/common/fetcher"
 	"github.com/rotector/rotector/internal/common/queue"
 	"go.uber.org/zap"
 )
@@ -26,6 +27,8 @@ type Handler struct {
 	statusMenu        *StatusMenu
 	logger            *zap.Logger
 	dashboardHandler  interfaces.DashboardHandler
+	thumbnailFetcher  *fetcher.ThumbnailFetcher
+	presenceFetcher   *fetcher.PresenceFetcher
 }
 
 // New creates a Handler by initializing all review menus and registering their
@@ -47,6 +50,8 @@ func New(
 		queueManager:      queueManager,
 		logger:            logger,
 		dashboardHandler:  dashboardHandler,
+		thumbnailFetcher:  fetcher.NewThumbnailFetcher(roAPI, logger),
+		presenceFetcher:   fetcher.NewPresenceFetcher(roAPI, logger),
 	}
 
 	// Initialize all menus with references to this handler

@@ -1,7 +1,6 @@
 package review
 
 import (
-	"context"
 	"strconv"
 
 	"github.com/disgoorg/disgo/discord"
@@ -62,11 +61,14 @@ func (m *OutfitsMenu) ShowOutfitsMenu(event *events.ComponentInteractionCreate, 
 	pageOutfits := outfits[start:end]
 
 	// Download and process outfit thumbnails
-	thumbnailURLs, err := m.fetchOutfitThumbnails(pageOutfits)
-	if err != nil {
-		m.handler.logger.Error("Failed to fetch outfit thumbnails", zap.Error(err))
-		m.handler.paginationManager.RespondWithError(event, "Failed to fetch outfit thumbnails. Please try again.")
-		return
+	thumbnailMap := m.fetchOutfitThumbnails(outfits)
+
+	// Extract URLs for current page
+	thumbnailURLs := make([]string, len(pageOutfits))
+	for i, outfit := range pageOutfits {
+		if url, ok := thumbnailMap[outfit.ID]; ok {
+			thumbnailURLs[i] = url
+		}
 	}
 
 	// Create grid image from thumbnails
@@ -121,18 +123,12 @@ func (m *OutfitsMenu) handlePageNavigation(event *events.ComponentInteractionCre
 	}
 }
 
-// fetchOutfitThumbnails downloads thumbnail images for a batch of outfits.
-// Returns a slice of thumbnail URLs in the same order as the input outfits.
-func (m *OutfitsMenu) fetchOutfitThumbnails(outfits []types.Outfit) ([]string, error) {
-	thumbnailURLs := make([]string, constants.OutfitsPerPage)
-
+// fetchOutfitThumbnails downloads thumbnail images for all outfits.
+// Returns a map of outfit IDs to their thumbnail URLs.
+func (m *OutfitsMenu) fetchOutfitThumbnails(outfits []types.Outfit) map[uint64]string {
 	// Create batch request for all outfit thumbnails
 	requests := thumbnails.NewBatchThumbnailsBuilder()
-	for i, outfit := range outfits {
-		if i >= constants.OutfitsPerPage {
-			break
-		}
-
+	for _, outfit := range outfits {
 		requests.AddRequest(types.ThumbnailRequest{
 			Type:      types.OutfitType,
 			Size:      types.Size150x150,
@@ -142,22 +138,5 @@ func (m *OutfitsMenu) fetchOutfitThumbnails(outfits []types.Outfit) ([]string, e
 		})
 	}
 
-	// Send batch request to Roblox API
-	thumbnailResponses, err := m.handler.roAPI.Thumbnails().GetBatchThumbnails(context.Background(), requests.Build())
-	if err != nil {
-		return thumbnailURLs, err
-	}
-
-	// Process responses and store URLs
-	for i, response := range thumbnailResponses {
-		if response.State == types.ThumbnailStateCompleted && response.ImageURL != nil {
-			thumbnailURLs[i] = *response.ImageURL
-		} else {
-			thumbnailURLs[i] = "-"
-		}
-	}
-
-	m.handler.logger.Info("Fetched thumbnail URLs", zap.Strings("urls", thumbnailURLs))
-
-	return thumbnailURLs, nil
+	return m.handler.thumbnailFetcher.ProcessBatchThumbnails(requests)
 }

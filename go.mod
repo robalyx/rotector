@@ -6,15 +6,16 @@ require (
 	github.com/bytedance/sonic v1.12.4
 	github.com/disgoorg/disgo v0.18.13
 	github.com/disgoorg/snowflake/v2 v2.0.3
+	github.com/google/uuid v1.6.0
 	github.com/invopop/jsonschema v0.12.0
 	github.com/jaxron/axonet v0.0.0-20241110114112-10fce0f238e1
 	github.com/jaxron/axonet/middleware/circuitbreaker v0.0.0-20241025054147-6c298c86aa64
-	github.com/jaxron/axonet/middleware/proxy v0.0.0-20241025054147-6c298c86aa64
+	github.com/jaxron/axonet/middleware/proxy v0.0.0-20241110114112-10fce0f238e1
 	github.com/jaxron/axonet/middleware/ratelimit v0.0.0-20241025054147-6c298c86aa64
 	github.com/jaxron/axonet/middleware/redis v0.0.0-20241025054147-6c298c86aa64
-	github.com/jaxron/axonet/middleware/retry v0.0.0-20241025054147-6c298c86aa64
+	github.com/jaxron/axonet/middleware/retry v0.0.0-20241110114112-10fce0f238e1
 	github.com/jaxron/axonet/middleware/singleflight v0.0.0-20241025054147-6c298c86aa64
-	github.com/jaxron/roapi.go v0.0.0-20241103000542-2a127a62c66d
+	github.com/jaxron/roapi.go v0.0.0-20241112100708-662bdb8c0707
 	github.com/openai/openai-go v0.1.0-alpha.33
 	github.com/ozankasikci/go-image-merge v0.3.1
 	github.com/pkoukk/tiktoken-go v0.1.7
@@ -29,7 +30,7 @@ require (
 	github.com/wcharczuk/go-chart/v2 v2.1.2
 	go.uber.org/zap v1.27.0
 	golang.org/x/image v0.21.0
-	golang.org/x/text v0.19.0
+	golang.org/x/text v0.20.0
 )
 
 require (
@@ -48,7 +49,6 @@ require (
 	github.com/go-playground/universal-translator v0.18.1 // indirect
 	github.com/go-playground/validator/v10 v10.22.1 // indirect
 	github.com/golang/freetype v0.0.0-20170609003504-e2365dfdc4a0 // indirect
-	github.com/google/uuid v1.6.0 // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/hashicorp/hcl v1.0.0 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
@@ -80,11 +80,11 @@ require (
 	github.com/wk8/go-ordered-map/v2 v2.1.8 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	golang.org/x/arch v0.11.0 // indirect
-	golang.org/x/crypto v0.28.0 // indirect
+	golang.org/x/crypto v0.29.0 // indirect
 	golang.org/x/exp v0.0.0-20241009180824-f66d83c29e7c // indirect
-	golang.org/x/net v0.30.0 // indirect
-	golang.org/x/sync v0.8.0 // indirect
-	golang.org/x/sys v0.26.0 // indirect
+	golang.org/x/net v0.31.0 // indirect
+	golang.org/x/sync v0.9.0 // indirect
+	golang.org/x/sys v0.27.0 // indirect
 	golang.org/x/time v0.7.0 // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect

@@ -14,6 +14,7 @@ import (
 	"github.com/rotector/rotector/internal/bot/session"
 	"github.com/rotector/rotector/internal/bot/utils"
 	"github.com/rotector/rotector/internal/common/database"
+	"github.com/rotector/rotector/internal/common/fetcher"
 	"github.com/rotector/rotector/internal/common/translator"
 )
 
@@ -129,7 +130,7 @@ func (b *ReviewEmbed) Build() *discord.MessageUpdateBuilder {
 	builder := discord.NewMessageUpdateBuilder()
 
 	// Add user thumbnail or placeholder image
-	if b.user.ThumbnailURL != "" {
+	if b.user.ThumbnailURL != "" && b.user.ThumbnailURL != fetcher.ThumbnailPlaceholder {
 		embed.SetThumbnail(b.user.ThumbnailURL)
 	} else {
 		// Load and attach placeholder image

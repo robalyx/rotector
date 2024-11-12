@@ -105,6 +105,7 @@ const (
 	SessionKeyRoles         = "roles"
 
 	SessionKeyFriends        = "friends"
+	SessionKeyPresences      = "presences"
 	SessionKeyFlaggedFriends = "flaggedFriends"
 	SessionKeyFriendTypes    = "friendTypes"
 

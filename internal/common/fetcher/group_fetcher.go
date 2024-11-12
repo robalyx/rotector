@@ -34,7 +34,6 @@ type GroupFetchResult struct {
 }
 
 // FetchGroupInfos retrieves complete group information for a batch of group IDs.
-// It spawns a goroutine for each group and collects results through a channel.
 func (g *GroupFetcher) FetchGroupInfos(groupIDs []uint64) []*types.GroupResponse {
 	var wg sync.WaitGroup
 	resultsChan := make(chan struct {

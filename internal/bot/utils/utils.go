@@ -17,6 +17,7 @@ import (
 	gim "github.com/ozankasikci/go-image-merge"
 	"github.com/rotector/rotector/assets"
 	"github.com/rotector/rotector/internal/bot/constants"
+	"github.com/rotector/rotector/internal/common/fetcher"
 	"github.com/rotector/rotector/internal/common/queue"
 	"golang.org/x/image/webp"
 )
@@ -104,7 +105,7 @@ func MergeImages(client *client.Client, thumbnailURLs []string, columns, rows, p
 		}
 
 		// Skip if the URL was in a different state
-		if url == "-" {
+		if url == fetcher.ThumbnailPlaceholder {
 			grids[i] = &gim.Grid{Image: placeholderImg}
 			continue
 		}

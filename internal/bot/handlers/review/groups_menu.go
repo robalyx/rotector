@@ -70,17 +70,12 @@ func (m *GroupsMenu) ShowGroupsMenu(event *events.ComponentInteractionCreate, s 
 	}
 
 	// Download and process group icons
-	groupsThumbnailURLs, err := m.fetchGroupsThumbnails(pageGroups)
-	if err != nil {
-		m.handler.logger.Error("Failed to fetch groups thumbnails", zap.Error(err))
-		m.handler.paginationManager.RespondWithError(event, "Failed to fetch groups thumbnails. Please try again.")
-		return
-	}
+	thumbnailMap := m.fetchGroupsThumbnails(groups)
 
-	// Extract URLs in page order for grid creation
+	// Extract URLs for current page
 	pageThumbnailURLs := make([]string, len(pageGroups))
 	for i, group := range pageGroups {
-		if url, ok := groupsThumbnailURLs[group.Group.ID]; ok {
+		if url, ok := thumbnailMap[group.Group.ID]; ok {
 			pageThumbnailURLs[i] = url
 		}
 	}
@@ -159,11 +154,9 @@ func (m *GroupsMenu) handlePageNavigation(event *events.ComponentInteractionCrea
 	}
 }
 
-// fetchGroupsThumbnails downloads icon images for a batch of groups.
+// fetchGroupsThumbnails downloads icon images for all groups.
 // Returns a map of group IDs to their icon URLs.
-func (m *GroupsMenu) fetchGroupsThumbnails(groups []types.UserGroupRoles) (map[uint64]string, error) {
-	thumbnailURLs := make(map[uint64]string)
-
+func (m *GroupsMenu) fetchGroupsThumbnails(groups []types.UserGroupRoles) map[uint64]string {
 	// Create batch request for all group icons
 	requests := thumbnails.NewBatchThumbnailsBuilder()
 	for _, group := range groups {
@@ -176,25 +169,5 @@ func (m *GroupsMenu) fetchGroupsThumbnails(groups []types.UserGroupRoles) (map[u
 		})
 	}
 
-	// Send batch request to Roblox API
-	thumbnailResponses, err := m.handler.roAPI.Thumbnails().GetBatchThumbnails(context.Background(), requests.Build())
-	if err != nil {
-		m.handler.logger.Error("Error fetching batch thumbnails", zap.Error(err))
-		return thumbnailURLs, err
-	}
-
-	// Process responses and store URLs
-	for _, response := range thumbnailResponses {
-		if response.State == types.ThumbnailStateCompleted && response.ImageURL != nil {
-			thumbnailURLs[response.TargetID] = *response.ImageURL
-		} else {
-			thumbnailURLs[response.TargetID] = "-"
-		}
-	}
-
-	m.handler.logger.Info("Fetched batch thumbnails",
-		zap.Int("groups", len(groups)),
-		zap.Int("fetchedThumbnails", len(thumbnailResponses)))
-
-	return thumbnailURLs, nil
+	return m.handler.thumbnailFetcher.ProcessBatchThumbnails(requests)
 }
