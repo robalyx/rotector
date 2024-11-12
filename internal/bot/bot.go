@@ -67,7 +67,7 @@ func New(
 
 	// Create handlers with their dependencies
 	// Each handler receives references to managers it needs to function
-	dashboardHandler := dashboard.New(db, stats, logger, sessionManager, paginationManager)
+	dashboardHandler := dashboard.New(db, stats, logger, sessionManager, paginationManager, redisManager)
 	reviewHandler := review.New(db, logger, roAPI, sessionManager, paginationManager, queueManager, dashboardHandler)
 	settingHandler := setting.New(db, logger, sessionManager, paginationManager, dashboardHandler)
 	logHandler := log.New(db, sessionManager, paginationManager, dashboardHandler, logger)

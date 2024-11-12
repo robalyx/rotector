@@ -200,19 +200,19 @@ func runWorkers(workerType, subType string, count int) {
 			var w interface{ Start() }
 			switch {
 			case workerType == AIWorker && subType == AIWorkerTypeMember:
-				w = ai.NewMemberWorker(app.DB, app.OpenAIClient, app.RoAPI, bar, workerLogger)
+				w = ai.NewMemberWorker(app.DB, app.OpenAIClient, app.RoAPI, app.StatusClient, bar, workerLogger)
 			case workerType == AIWorker && subType == AIWorkerTypeFriend:
-				w = ai.NewFriendWorker(app.DB, app.OpenAIClient, app.RoAPI, bar, workerLogger)
+				w = ai.NewFriendWorker(app.DB, app.OpenAIClient, app.RoAPI, app.StatusClient, bar, workerLogger)
 			case workerType == PurgeWorker && subType == PurgeWorkerTypeBanned:
-				w = purge.NewBannedWorker(app.DB, app.RoAPI, bar, workerLogger)
+				w = purge.NewBannedWorker(app.DB, app.RoAPI, app.StatusClient, bar, workerLogger)
 			case workerType == PurgeWorker && subType == PurgeWorkerTypeCleared:
-				w = purge.NewClearedWorker(app.DB, app.RoAPI, bar, workerLogger)
+				w = purge.NewClearedWorker(app.DB, app.RoAPI, app.StatusClient, bar, workerLogger)
 			case workerType == PurgeWorker && subType == PurgeWorkerTypeTracking:
-				w = purge.NewTrackingWorker(app.DB, app.RoAPI, bar, workerLogger)
+				w = purge.NewTrackingWorker(app.DB, app.RoAPI, app.StatusClient, bar, workerLogger)
 			case workerType == StatsWorker:
-				w = stats.NewStatisticsWorker(app.DB, bar, workerLogger)
+				w = stats.NewStatisticsWorker(app.DB, app.StatusClient, bar, workerLogger)
 			case workerType == QueueWorker:
-				w = queue.NewProcessWorker(app.DB, app.OpenAIClient, app.RoAPI, app.Queue, bar, workerLogger)
+				w = queue.NewProcessWorker(app.DB, app.OpenAIClient, app.RoAPI, app.Queue, app.StatusClient, bar, workerLogger)
 			default:
 				log.Fatalf("Invalid worker type: %s %s", workerType, subType)
 			}
@@ -222,13 +222,8 @@ func runWorkers(workerType, subType string, count int) {
 	}
 
 	log.Printf("Started %d %s %s workers", count, workerType, subType)
-
-	// Wait for all workers to finish
 	wg.Wait()
-
-	// Stop the renderer
 	renderer.Stop()
-
 	log.Println("All workers have finished. Exiting.")
 }
 

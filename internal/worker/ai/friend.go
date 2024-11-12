@@ -6,10 +6,12 @@ import (
 
 	"github.com/jaxron/roapi.go/pkg/api"
 	"github.com/openai/openai-go"
+	"github.com/redis/rueidis"
 	"github.com/rotector/rotector/internal/common/checker"
 	"github.com/rotector/rotector/internal/common/database"
 	"github.com/rotector/rotector/internal/common/fetcher"
 	"github.com/rotector/rotector/internal/common/progress"
+	"github.com/rotector/rotector/internal/common/worker"
 	"go.uber.org/zap"
 )
 
@@ -26,13 +28,15 @@ type FriendWorker struct {
 	bar         *progress.Bar
 	userFetcher *fetcher.UserFetcher
 	userChecker *checker.UserChecker
+	reporter    *worker.StatusReporter
 	logger      *zap.Logger
 }
 
 // NewFriendWorker creates a FriendWorker.
-func NewFriendWorker(db *database.Database, openaiClient *openai.Client, roAPI *api.API, bar *progress.Bar, logger *zap.Logger) *FriendWorker {
+func NewFriendWorker(db *database.Database, openaiClient *openai.Client, roAPI *api.API, redisClient rueidis.Client, bar *progress.Bar, logger *zap.Logger) *FriendWorker {
 	userFetcher := fetcher.NewUserFetcher(roAPI, logger)
 	userChecker := checker.NewUserChecker(db, bar, roAPI, openaiClient, userFetcher, logger)
+	reporter := worker.NewStatusReporter(redisClient, "ai", "friend", logger)
 
 	return &FriendWorker{
 		db:          db,
@@ -40,6 +44,7 @@ func NewFriendWorker(db *database.Database, openaiClient *openai.Client, roAPI *
 		bar:         bar,
 		userFetcher: userFetcher,
 		userChecker: userChecker,
+		reporter:    reporter,
 		logger:      logger,
 	}
 }
@@ -50,7 +55,10 @@ func NewFriendWorker(db *database.Database, openaiClient *openai.Client, roAPI *
 // 3. Checks friends for inappropriate content
 // 4. Repeats until stopped.
 func (f *FriendWorker) Start() {
-	f.logger.Info("Friend Worker started")
+	f.logger.Info("Friend Worker started", zap.String("workerID", f.reporter.GetWorkerID()))
+	f.reporter.Start()
+	defer f.reporter.Stop()
+
 	f.bar.SetTotal(100)
 
 	var oldFriendIDs []uint64
@@ -58,21 +66,24 @@ func (f *FriendWorker) Start() {
 		f.bar.Reset()
 
 		// Step 1: Process friends batch (20%)
-		f.bar.SetStepMessage("Processing friends batch")
+		f.bar.SetStepMessage("Processing friends batch", 20)
+		f.reporter.UpdateStatus("Processing friends batch", 20)
 		friendIDs, err := f.processFriendsBatch(oldFriendIDs)
 		if err != nil {
 			f.logger.Error("Error processing friends batch", zap.Error(err))
-			time.Sleep(5 * time.Minute) // Wait before trying again
+			f.reporter.SetHealthy(false)
+			time.Sleep(5 * time.Minute)
 			continue
 		}
-		f.bar.Increment(20)
 
-		// Step 2: Fetch user info (20%)
-		f.bar.SetStepMessage("Fetching user info")
+		// Step 2: Fetch user info (40%)
+		f.bar.SetStepMessage("Fetching user info", 40)
+		f.reporter.UpdateStatus("Fetching user info", 40)
 		userInfos := f.userFetcher.FetchInfos(friendIDs[:FriendUsersToProcess])
-		f.bar.Increment(20)
 
-		// Step 3: Process users (60%)
+		// Step 3: Process users (100%)
+		f.bar.SetStepMessage("Processing users", 100)
+		f.reporter.UpdateStatus("Processing users", 100)
 		failedValidationIDs := f.userChecker.ProcessUsers(userInfos)
 
 		// Step 4: Prepare for next batch
@@ -84,6 +95,9 @@ func (f *FriendWorker) Start() {
 			f.logger.Info("Added failed validation IDs for retry",
 				zap.Int("failedCount", len(failedValidationIDs)))
 		}
+
+		// Reset health status for next iteration
+		f.reporter.SetHealthy(true)
 
 		// Short pause before next iteration
 		time.Sleep(1 * time.Second)

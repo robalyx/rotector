@@ -93,6 +93,7 @@ const (
 	SessionKeyFlaggedCount   = "flaggedCount"
 	SessionKeyClearedCount   = "clearedCount"
 	SessionKeyActiveUsers    = "activeUsers"
+	SessionKeyWorkerStatuses = "workerStatuses"
 
 	SessionKeySettingName   = "settingName"
 	SessionKeySettingType   = "settingType"

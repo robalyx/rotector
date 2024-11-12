@@ -11,6 +11,7 @@ import (
 	"github.com/rotector/rotector/internal/bot/interfaces"
 	"github.com/rotector/rotector/internal/bot/pagination"
 	"github.com/rotector/rotector/internal/bot/session"
+	"github.com/rotector/rotector/internal/common/worker"
 	"go.uber.org/zap"
 )
 
@@ -30,9 +31,10 @@ func NewMenu(h *Handler) *Menu {
 	m.page = &pagination.Page{
 		Name: "Dashboard",
 		Message: func(s *session.Session) *discord.MessageUpdateBuilder {
-			// Load active users for display
 			var activeUsers []snowflake.ID
 			s.GetInterface(constants.SessionKeyActiveUsers, &activeUsers)
+			var workerStatuses []worker.Status
+			s.GetInterface(constants.SessionKeyWorkerStatuses, &workerStatuses)
 
 			// Load statistics from session
 			confirmedCount := s.GetInt(constants.SessionKeyConfirmedCount)
@@ -40,7 +42,7 @@ func NewMenu(h *Handler) *Menu {
 			clearedCount := s.GetInt(constants.SessionKeyClearedCount)
 			imageBuffer := s.GetBuffer(constants.SessionKeyImageBuffer)
 
-			return builders.NewDashboardBuilder(confirmedCount, flaggedCount, clearedCount, imageBuffer, activeUsers).Build()
+			return builders.NewDashboardBuilder(confirmedCount, flaggedCount, clearedCount, imageBuffer, activeUsers, workerStatuses).Build()
 		},
 		SelectHandlerFunc: m.handleSelectMenu,
 		ButtonHandlerFunc: m.handleButton,
@@ -51,6 +53,12 @@ func NewMenu(h *Handler) *Menu {
 // ShowDashboard prepares and displays the dashboard interface by loading
 // current statistics and active user information into the session.
 func (m *Menu) ShowDashboard(event interfaces.CommonEvent, s *session.Session, content string) {
+	// Get worker statuses
+	workerStatuses, err := m.handler.workerMonitor.GetAllStatuses(context.Background())
+	if err != nil {
+		m.handler.logger.Error("Failed to get worker statuses", zap.Error(err))
+	}
+
 	// Load current user counts from database
 	confirmedCount, err := m.handler.db.Users().GetConfirmedUsersCount(context.Background())
 	if err != nil {
@@ -81,12 +89,13 @@ func (m *Menu) ShowDashboard(event interfaces.CommonEvent, s *session.Session, c
 	// Get list of currently active reviewers
 	activeUsers := m.handler.sessionManager.GetActiveUsers(context.Background())
 
-	// Store data in session for the message builder
+	// Store data in session
 	s.Set(constants.SessionKeyConfirmedCount, confirmedCount)
 	s.Set(constants.SessionKeyFlaggedCount, flaggedCount)
 	s.Set(constants.SessionKeyClearedCount, clearedCount)
 	s.SetBuffer(constants.SessionKeyImageBuffer, statsChart)
 	s.Set(constants.SessionKeyActiveUsers, activeUsers)
+	s.Set(constants.SessionKeyWorkerStatuses, workerStatuses)
 
 	m.handler.paginationManager.NavigateTo(event, s, m.page, content)
 }

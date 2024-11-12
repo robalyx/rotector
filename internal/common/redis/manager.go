@@ -25,6 +25,10 @@ const (
 	// SessionDBIndex uses database 3 for user session storage
 	// to prevent session data from interfering with other operations.
 	SessionDBIndex = 3
+
+	// WorkerStatusDBIndex uses database 4 for tracking worker heartbeats and status
+	// to monitor worker health and activity.
+	WorkerStatusDBIndex = 4
 )
 
 // Manager maintains a thread-safe mapping of database indices to Redis clients.

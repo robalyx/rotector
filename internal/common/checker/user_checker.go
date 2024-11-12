@@ -63,22 +63,20 @@ func (c *UserChecker) ProcessUsers(userInfos []*fetcher.Info) []uint64 {
 	var usersForAICheck []*fetcher.Info
 	var failedValidationIDs []uint64
 
-	// Check if users belong to flagged groups
-	c.bar.SetStepMessage("Checking user groups")
+	// Check if users belong to flagged groups (20%)
+	c.bar.SetStepMessage("Checking user groups", 20)
 	flaggedUsersFromGroups, remainingUsers := c.groupChecker.ProcessUsers(userInfos)
 	flaggedUsers = append(flaggedUsers, flaggedUsersFromGroups...)
 	usersForAICheck = remainingUsers
-	c.bar.Increment(10)
 
-	// Check users based on their friends
-	c.bar.SetStepMessage("Checking user friends")
+	// Check users based on their friends (40%)
+	c.bar.SetStepMessage("Checking user friends", 40)
 	flaggedUsersFromFriends, remainingUsers := c.friendChecker.ProcessUsers(usersForAICheck)
 	flaggedUsers = append(flaggedUsers, flaggedUsersFromFriends...)
 	usersForAICheck = remainingUsers
-	c.bar.Increment(10)
 
-	// Process remaining users with AI
-	c.bar.SetStepMessage("Checking users with AI")
+	// Process remaining users with AI (60%)
+	c.bar.SetStepMessage("Checking users with AI", 60)
 	if len(usersForAICheck) > 0 {
 		aiFlaggedUsers, failedIDs, err := c.aiChecker.ProcessUsers(usersForAICheck)
 		if err != nil {
@@ -88,28 +86,23 @@ func (c *UserChecker) ProcessUsers(userInfos []*fetcher.Info) []uint64 {
 			failedValidationIDs = append(failedValidationIDs, failedIDs...)
 		}
 	}
-	c.bar.Increment(10)
 
 	// Stop if no users were flagged
 	if len(flaggedUsers) == 0 {
 		c.logger.Info("No flagged users found", zap.Int("userInfos", len(userInfos)))
-		c.bar.Increment(30)
 		return failedValidationIDs
 	}
 
-	// Load additional data for flagged users
-	c.bar.SetStepMessage("Adding image URLs")
+	// Load additional data for flagged users (80%)
+	c.bar.SetStepMessage("Adding image URLs", 80)
 	flaggedUsers = c.thumbnailFetcher.AddImageURLs(flaggedUsers)
-	c.bar.Increment(10)
 
-	c.bar.SetStepMessage("Adding outfits")
+	c.bar.SetStepMessage("Adding outfits", 90)
 	flaggedUsers = c.outfitFetcher.AddOutfits(flaggedUsers)
-	c.bar.Increment(10)
 
-	// Save flagged users to database
-	c.bar.SetStepMessage("Saving flagged users")
+	// Save flagged users to database (100%)
+	c.bar.SetStepMessage("Saving flagged users", 100)
 	c.db.Users().SaveFlaggedUsers(context.Background(), flaggedUsers)
-	c.bar.Increment(10)
 
 	c.logger.Info("Finished processing users",
 		zap.Int("totalProcessed", len(userInfos)),

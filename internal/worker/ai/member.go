@@ -7,10 +7,12 @@ import (
 	"github.com/jaxron/roapi.go/pkg/api"
 	"github.com/jaxron/roapi.go/pkg/api/resources/groups"
 	"github.com/openai/openai-go"
+	"github.com/redis/rueidis"
 	"github.com/rotector/rotector/internal/common/checker"
 	"github.com/rotector/rotector/internal/common/database"
 	"github.com/rotector/rotector/internal/common/fetcher"
 	"github.com/rotector/rotector/internal/common/progress"
+	"github.com/rotector/rotector/internal/common/worker"
 	"go.uber.org/zap"
 )
 
@@ -27,13 +29,15 @@ type MemberWorker struct {
 	bar         *progress.Bar
 	userFetcher *fetcher.UserFetcher
 	userChecker *checker.UserChecker
+	reporter    *worker.StatusReporter
 	logger      *zap.Logger
 }
 
 // NewMemberWorker creates a MemberWorker.
-func NewMemberWorker(db *database.Database, openaiClient *openai.Client, roAPI *api.API, bar *progress.Bar, logger *zap.Logger) *MemberWorker {
+func NewMemberWorker(db *database.Database, openaiClient *openai.Client, roAPI *api.API, redisClient rueidis.Client, bar *progress.Bar, logger *zap.Logger) *MemberWorker {
 	userFetcher := fetcher.NewUserFetcher(roAPI, logger)
 	userChecker := checker.NewUserChecker(db, bar, roAPI, openaiClient, userFetcher, logger)
+	reporter := worker.NewStatusReporter(redisClient, "ai", "member", logger)
 
 	return &MemberWorker{
 		db:          db,
@@ -41,6 +45,7 @@ func NewMemberWorker(db *database.Database, openaiClient *openai.Client, roAPI *
 		bar:         bar,
 		userFetcher: userFetcher,
 		userChecker: userChecker,
+		reporter:    reporter,
 		logger:      logger,
 	}
 }
@@ -51,7 +56,10 @@ func NewMemberWorker(db *database.Database, openaiClient *openai.Client, roAPI *
 // 3. Checks members for inappropriate content
 // 4. Repeats until stopped.
 func (g *MemberWorker) Start() {
-	g.logger.Info("Group Worker started")
+	g.logger.Info("Member Worker started", zap.String("workerID", g.reporter.GetWorkerID()))
+	g.reporter.Start()
+	defer g.reporter.Stop()
+
 	g.bar.SetTotal(100)
 
 	var oldUserIDs []uint64
@@ -59,31 +67,35 @@ func (g *MemberWorker) Start() {
 		g.bar.Reset()
 
 		// Step 1: Get next confirmed group (10%)
-		g.bar.SetStepMessage("Fetching next confirmed group")
+		g.bar.SetStepMessage("Fetching next confirmed group", 10)
+		g.reporter.UpdateStatus("Fetching next confirmed group", 10)
 		group, err := g.db.Groups().GetNextConfirmedGroup(context.Background())
 		if err != nil {
 			g.logger.Error("Error getting next confirmed group", zap.Error(err))
-			time.Sleep(5 * time.Minute) // Wait before trying again
+			g.reporter.SetHealthy(false)
+			time.Sleep(5 * time.Minute)
 			continue
 		}
-		g.bar.Increment(10)
 
-		// Step 2: Get group users (15%)
-		g.bar.SetStepMessage("Processing group users")
+		// Step 2: Get group users (40%)
+		g.bar.SetStepMessage("Processing group users", 40)
+		g.reporter.UpdateStatus("Processing group users", 40)
 		userIDs, err := g.processGroup(group.ID, oldUserIDs)
 		if err != nil {
 			g.logger.Error("Error processing group", zap.Error(err), zap.Uint64("groupID", group.ID))
-			time.Sleep(5 * time.Minute) // Wait before trying again
+			g.reporter.SetHealthy(false)
+			time.Sleep(5 * time.Minute)
 			continue
 		}
-		g.bar.Increment(15)
 
-		// Step 3: Fetch user info (15%)
-		g.bar.SetStepMessage("Fetching user info")
+		// Step 3: Fetch user info (70%)
+		g.bar.SetStepMessage("Fetching user info", 70)
+		g.reporter.UpdateStatus("Fetching user info", 70)
 		userInfos := g.userFetcher.FetchInfos(userIDs[:GroupUsersToProcess])
-		g.bar.Increment(15)
 
-		// Step 4: Process users (60%)
+		// Step 4: Process users (100%)
+		g.bar.SetStepMessage("Processing users", 100)
+		g.reporter.UpdateStatus("Processing users", 100)
 		failedValidationIDs := g.userChecker.ProcessUsers(userInfos)
 
 		// Step 5: Prepare for next batch
@@ -95,6 +107,9 @@ func (g *MemberWorker) Start() {
 			g.logger.Info("Added failed validation IDs for retry",
 				zap.Int("failedCount", len(failedValidationIDs)))
 		}
+
+		// Reset health status for next iteration
+		g.reporter.SetHealthy(true)
 
 		// Short pause before next iteration
 		time.Sleep(1 * time.Second)

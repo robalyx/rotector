@@ -76,13 +76,18 @@ func (b *Bar) SetMessage(message string) {
 	b.message = message
 }
 
-// SetStepMessage updates the current step description and resets the step timer.
-func (b *Bar) SetStepMessage(message string) {
+// SetStepMessage updates the current step description, resets the step timer,
+// and updates the progress percentage.
+func (b *Bar) SetStepMessage(message string, progress int64) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
 	b.stepMessage = message
 	b.stepStart = time.Now()
+	b.current = progress
+	if b.current > b.total {
+		b.current = b.total
+	}
 }
 
 // String generates the visual progress bar with percentage complete,

@@ -8,6 +8,7 @@ import (
 	"github.com/jaxron/roapi.go/pkg/api"
 	"github.com/openai/openai-go"
 	"github.com/openai/openai-go/option"
+	"github.com/redis/rueidis"
 	"github.com/rotector/rotector/internal/common/config"
 	"github.com/rotector/rotector/internal/common/database"
 	"github.com/rotector/rotector/internal/common/queue"
@@ -28,6 +29,7 @@ type AppSetup struct {
 	RoAPI        *api.API           // RoAPI HTTP client
 	Queue        *queue.Manager     // Background job queue
 	RedisManager *redis.Manager     // Redis connection manager
+	StatusClient rueidis.Client     // Redis client for worker status reporting
 	LogManager   *LogManager        // Log management system
 	pprofServer  *pprofServer       // Debug HTTP server for pprof
 }
@@ -52,17 +54,15 @@ func InitializeApp(logDir string) (*AppSetup, error) {
 	redisManager := redis.NewManager(cfg, logger)
 
 	// Statistics tracking requires its own Redis database
-	statsRedis, err := redisManager.GetClient(redis.StatsDBIndex)
+	statsClient, err := redisManager.GetClient(redis.StatsDBIndex)
 	if err != nil {
-		logger.Fatal("Failed to create statistics Redis client", zap.Error(err))
 		return nil, err
 	}
-	stats := statistics.NewClient(statsRedis, logger)
+	stats := statistics.NewClient(statsClient, logger)
 
 	// Database connection pool is created with statistics tracking
 	db, err := database.NewConnection(cfg, stats, dbLogger)
 	if err != nil {
-		logger.Fatal("Failed to connect to database", zap.Error(err))
 		return nil, err
 	}
 
@@ -75,17 +75,21 @@ func InitializeApp(logDir string) (*AppSetup, error) {
 	// RoAPI client is configured with middleware chain
 	roAPI, err := getRoAPIClient(cfg, redisManager, logger)
 	if err != nil {
-		logger.Fatal("Failed to create RoAPI client", zap.Error(err))
 		return nil, err
 	}
 
 	// Queue manager creates its own Redis database for job storage
-	queueRedis, err := redisManager.GetClient(redis.QueueDBIndex)
+	queueClient, err := redisManager.GetClient(redis.QueueDBIndex)
 	if err != nil {
-		logger.Fatal("Failed to create queue Redis client", zap.Error(err))
 		return nil, err
 	}
-	queueManager := queue.NewManager(db, queueRedis, logger)
+	queueManager := queue.NewManager(db, queueClient, logger)
+
+	// Get Redis client for worker status reporting
+	statusClient, err := redisManager.GetClient(redis.WorkerStatusDBIndex)
+	if err != nil {
+		return nil, err
+	}
 
 	// Start pprof server if enabled
 	var pprofSrv *pprofServer
@@ -110,6 +114,7 @@ func InitializeApp(logDir string) (*AppSetup, error) {
 		RoAPI:        roAPI,
 		Queue:        queueManager,
 		RedisManager: redisManager,
+		StatusClient: statusClient,
 		LogManager:   logManager,
 		pprofServer:  pprofSrv,
 	}, nil

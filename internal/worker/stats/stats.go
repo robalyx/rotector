@@ -4,59 +4,65 @@ import (
 	"context"
 	"time"
 
+	"github.com/redis/rueidis"
 	"github.com/rotector/rotector/internal/common/database"
 	"github.com/rotector/rotector/internal/common/progress"
+	"github.com/rotector/rotector/internal/common/worker"
 	"go.uber.org/zap"
 )
 
 // StatisticsWorker handles the daily upload of statistics from Redis to PostgreSQL.
 type StatisticsWorker struct {
-	db     *database.Database
-	bar    *progress.Bar
-	logger *zap.Logger
+	db       *database.Database
+	bar      *progress.Bar
+	reporter *worker.StatusReporter
+	logger   *zap.Logger
 }
 
-// NewStatisticsWorker creates a StatisticsWorker with database access for
-// storing aggregated statistics.
-func NewStatisticsWorker(db *database.Database, bar *progress.Bar, logger *zap.Logger) *StatisticsWorker {
+// NewStatisticsWorker creates a StatisticsWorker.
+func NewStatisticsWorker(db *database.Database, redisClient rueidis.Client, bar *progress.Bar, logger *zap.Logger) *StatisticsWorker {
+	reporter := worker.NewStatusReporter(redisClient, "stats", "upload", logger)
+
 	return &StatisticsWorker{
-		db:     db,
-		bar:    bar,
-		logger: logger,
+		db:       db,
+		bar:      bar,
+		reporter: reporter,
+		logger:   logger,
 	}
 }
 
-// Start begins the statistics worker's main loop:
-// 1. Waits until 1 AM to ensure all daily stats are complete
-// 2. Uploads yesterday's statistics from Redis to PostgreSQL
-// 3. Cleans up Redis data after successful upload
-// 4. Repeats every 24 hours.
+// Start begins the statistics worker's main loop.
 func (s *StatisticsWorker) Start() {
-	s.logger.Info("Statistics Worker started")
+	s.logger.Info("Statistics Worker started", zap.String("workerID", s.reporter.GetWorkerID()))
+	s.reporter.Start()
+	defer s.reporter.Stop()
+
 	s.bar.SetTotal(100)
 
 	for {
 		s.bar.Reset()
 
-		// Step 1: Wait until 1 AM (20%)
-		s.bar.SetStepMessage("Waiting for next upload window")
+		// Step 1: Wait until 1 AM (0%)
+		s.bar.SetStepMessage("Waiting for next upload window", 0)
+		s.reporter.UpdateStatus("Waiting for next upload window", 0)
 		nextRun := s.calculateNextRun()
 		time.Sleep(time.Until(nextRun))
-		s.bar.Increment(20)
 
-		// Step 2: Upload statistics (60%)
-		s.bar.SetStepMessage("Uploading daily statistics")
+		// Step 2: Upload statistics (50%)
+		s.bar.SetStepMessage("Uploading daily statistics", 50)
+		s.reporter.UpdateStatus("Uploading daily statistics", 50)
 		if err := s.db.Stats().UploadDailyStatsToDB(context.Background()); err != nil {
 			s.logger.Error("Failed to upload daily statistics", zap.Error(err))
+			s.reporter.SetHealthy(false)
+			continue
 		}
-		s.bar.Increment(60)
 
-		// Step 3: Wait for next day (20%)
-		s.bar.SetStepMessage("Waiting for next day")
-		s.bar.Increment(20)
+		// Step 3: Completed, waiting for next day (100%)
+		s.bar.SetStepMessage("Upload complete, waiting for next day", 100)
+		s.reporter.UpdateStatus("Upload complete, waiting for next day", 100)
+		s.reporter.SetHealthy(true)
 
 		// Wait 23 hours before checking again
-		// This ensures we don't miss the 1 AM window
 		time.Sleep(23 * time.Hour)
 	}
 }

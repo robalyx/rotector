@@ -5,7 +5,9 @@ import (
 	"github.com/rotector/rotector/internal/bot/pagination"
 	"github.com/rotector/rotector/internal/bot/session"
 	"github.com/rotector/rotector/internal/common/database"
+	"github.com/rotector/rotector/internal/common/redis"
 	"github.com/rotector/rotector/internal/common/statistics"
+	"github.com/rotector/rotector/internal/common/worker"
 	"go.uber.org/zap"
 )
 
@@ -17,6 +19,7 @@ type Handler struct {
 	stats             *statistics.Client
 	sessionManager    *session.Manager
 	paginationManager *pagination.Manager
+	workerMonitor     *worker.Monitor
 	dashboard         *Menu
 	logger            *zap.Logger
 	reviewHandler     interfaces.ReviewHandler
@@ -33,13 +36,21 @@ func New(
 	logger *zap.Logger,
 	sessionManager *session.Manager,
 	paginationManager *pagination.Manager,
+	redisManager *redis.Manager,
 ) *Handler {
+	// Get Redis client for worker status
+	statusClient, err := redisManager.GetClient(redis.WorkerStatusDBIndex)
+	if err != nil {
+		logger.Fatal("Failed to get Redis client for worker status", zap.Error(err))
+	}
+
 	h := &Handler{
 		db:                db,
 		stats:             stats,
 		logger:            logger,
 		sessionManager:    sessionManager,
 		paginationManager: paginationManager,
+		workerMonitor:     worker.NewMonitor(statusClient, logger),
 	}
 
 	// Initialize menu and register its page

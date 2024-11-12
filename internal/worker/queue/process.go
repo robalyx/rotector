@@ -8,11 +8,13 @@ import (
 	"github.com/bytedance/sonic"
 	"github.com/jaxron/roapi.go/pkg/api"
 	"github.com/openai/openai-go"
+	"github.com/redis/rueidis"
 	"github.com/rotector/rotector/internal/common/checker"
 	"github.com/rotector/rotector/internal/common/database"
 	"github.com/rotector/rotector/internal/common/fetcher"
 	"github.com/rotector/rotector/internal/common/progress"
 	"github.com/rotector/rotector/internal/common/queue"
+	"github.com/rotector/rotector/internal/common/worker"
 	"go.uber.org/zap"
 )
 
@@ -28,6 +30,7 @@ type ProcessWorker struct {
 	bar          *progress.Bar
 	userFetcher  *fetcher.UserFetcher
 	userChecker  *checker.UserChecker
+	reporter     *worker.StatusReporter
 	logger       *zap.Logger
 }
 
@@ -37,11 +40,13 @@ func NewProcessWorker(
 	openAIClient *openai.Client,
 	roAPI *api.API,
 	queue *queue.Manager,
+	redisClient rueidis.Client,
 	bar *progress.Bar,
 	logger *zap.Logger,
 ) *ProcessWorker {
 	userFetcher := fetcher.NewUserFetcher(roAPI, logger)
 	userChecker := checker.NewUserChecker(db, bar, roAPI, openAIClient, userFetcher, logger)
+	reporter := worker.NewStatusReporter(redisClient, "queue", "process", logger)
 
 	return &ProcessWorker{
 		db:           db,
@@ -51,6 +56,7 @@ func NewProcessWorker(
 		bar:          bar,
 		userFetcher:  userFetcher,
 		userChecker:  userChecker,
+		reporter:     reporter,
 		logger:       logger,
 	}
 }
@@ -61,25 +67,30 @@ func NewProcessWorker(
 // 3. Updates queue status and position
 // 4. Repeats until stopped.
 func (p *ProcessWorker) Start() {
-	p.logger.Info("Process Worker started")
+	p.logger.Info("Process Worker started", zap.String("workerID", p.reporter.GetWorkerID()))
+	p.reporter.Start()
+	defer p.reporter.Stop()
+
 	p.bar.SetTotal(100)
 
 	for {
 		p.bar.Reset()
 
 		// Step 1: Get next batch of items (20%)
-		p.bar.SetStepMessage("Getting next batch")
+		p.bar.SetStepMessage("Getting next batch", 20)
+		p.reporter.UpdateStatus("Getting next batch", 20)
 		items, err := p.getNextBatch()
 		if err != nil {
 			p.logger.Error("Error getting next batch", zap.Error(err))
+			p.reporter.SetHealthy(false)
 			time.Sleep(5 * time.Minute) // Wait before trying again
 			continue
 		}
-		p.bar.Increment(20)
 
 		// If no items to process, wait before checking again
 		if len(items) == 0 {
-			p.bar.SetStepMessage("No items to process, waiting")
+			p.bar.SetStepMessage("No items to process, waiting", 0)
+			p.reporter.UpdateStatus("No items to process, waiting", 0)
 			time.Sleep(5 * time.Minute)
 			continue
 		}
@@ -160,13 +171,16 @@ func (p *ProcessWorker) processItems(items []*queue.Item) {
 	increment := 80 / itemCount
 
 	for i, item := range items {
-		p.bar.SetStepMessage(fmt.Sprintf("Processing item %d/%d", i+1, itemCount))
+		progress := 20 + ((i + 1) * increment) // Start at 20% and increment for each item
+		p.bar.SetStepMessage(fmt.Sprintf("Processing item %d/%d", i+1, itemCount), int64(progress))
+		p.reporter.UpdateStatus(fmt.Sprintf("Processing item %d/%d", i+1, itemCount), progress)
 
 		// Update status to processing
 		if err := p.queue.SetQueueInfo(ctx, item.UserID, queue.StatusProcessing, item.Priority, 0); err != nil {
 			p.logger.Error("Failed to update queue info",
 				zap.Error(err),
 				zap.Uint64("userID", item.UserID))
+			p.reporter.SetHealthy(false)
 			continue
 		}
 
@@ -188,6 +202,7 @@ func (p *ProcessWorker) processItems(items []*queue.Item) {
 					p.logger.Error("Failed to update queue info",
 						zap.Error(err),
 						zap.Uint64("userID", item.UserID))
+					p.reporter.SetHealthy(false)
 				}
 				continue
 			}
@@ -195,7 +210,7 @@ func (p *ProcessWorker) processItems(items []*queue.Item) {
 
 		// Update final status and remove from queue
 		p.updateQueueStatus(ctx, item, queue.StatusComplete)
-		p.bar.Increment(int64(increment))
+		p.reporter.SetHealthy(true)
 	}
 }
 
