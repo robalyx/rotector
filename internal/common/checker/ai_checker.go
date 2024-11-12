@@ -21,7 +21,7 @@ import (
 //nolint:lll
 const (
 	// ReviewSystemPrompt provides detailed instructions to the AI model for analyzing user content.
-	ReviewSystemPrompt = `You are a Roblox moderator analyzing user data for inappropriate sexual or suggestive content. Flag violations by considering explicit content, suggestive language, and combinations of phrases, symbols, and emojis. Use exact strings for 'flaggedContent'. If a user's description is empty, only check their username. Otherwise check both username and description.
+	ReviewSystemPrompt = `You are a Roblox moderator analyzing user data for inappropriate sexual or suggestive content. Flag violations by considering explicit content, suggestive language, and combinations of phrases, symbols, and emojis. Use exact strings for 'flaggedContent'. If a user's description is empty, only check their username and display name (if available).
 
 Flag content with: explicit sexual terms, innuendos, body part references, hookup solicitation, porn references, suggestive emojis, NSFW content, ERP terms, fetish mentions, and grooming language (age questions, photo requests, off-platform chat, personal info seeking, gift offers, secret keeping). Also flag sexualized roleplay, non-consensual references, exploitation, harassment, predatory behavior (love bombing, isolation, manipulation), suspicious requests (camera/mic usage, private games, social media), and adult industry references (OnlyFans, modeling scams, compensation offers).
 
@@ -111,6 +111,7 @@ func (a *AIChecker) ProcessUsers(userInfos []*fetcher.Info) ([]*database.User, [
 	// Create a struct for user summaries for AI analysis
 	type UserSummary struct {
 		Name        string `json:"name"`
+		DisplayName string `json:"displayName,omitempty"`
 		Description string `json:"description"`
 	}
 
@@ -120,10 +121,15 @@ func (a *AIChecker) ProcessUsers(userInfos []*fetcher.Info) ([]*database.User, [
 	// Convert map to slice for OpenAI request
 	userInfosWithoutID := make([]UserSummary, 0, len(translatedInfos))
 	for _, userInfo := range translatedInfos {
-		userInfosWithoutID = append(userInfosWithoutID, UserSummary{
+		summary := UserSummary{
 			Name:        userInfo.Name,
 			Description: userInfo.Description,
-		})
+		}
+		// Only include display name if it's different from the username
+		if userInfo.DisplayName != userInfo.Name {
+			summary.DisplayName = userInfo.DisplayName
+		}
+		userInfosWithoutID = append(userInfosWithoutID, summary)
 	}
 
 	// Minify JSON to reduce token usage
@@ -338,7 +344,9 @@ func (a *AIChecker) validateFlaggedUsers(flaggedUsers FlaggedUsers, translatedIn
 			// Count how many flagged words are found in the translated content
 			foundWords := 0
 			for _, word := range allFlaggedWords {
-				if utils.ContainsNormalized(translatedInfo.Name, word) || utils.ContainsNormalized(translatedInfo.Description, word) {
+				if utils.ContainsNormalized(translatedInfo.Name, word) ||
+					(translatedInfo.DisplayName != translatedInfo.Name && utils.ContainsNormalized(translatedInfo.DisplayName, word)) ||
+					utils.ContainsNormalized(translatedInfo.Description, word) {
 					foundWords++
 				}
 			}
