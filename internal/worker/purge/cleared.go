@@ -12,12 +12,6 @@ import (
 	"go.uber.org/zap"
 )
 
-const (
-	// ClearedUsersToProcess sets how many users to process in each batch.
-	// This helps control memory usage and database load.
-	ClearedUsersToProcess = 200
-)
-
 // ClearedWorker removes old cleared users from the database.
 // It helps maintain database size by removing users that were cleared long ago.
 type ClearedWorker struct {
@@ -64,7 +58,7 @@ func (p *ClearedWorker) Start() {
 		// Step 2: Process users (100%)
 		p.bar.SetStepMessage("Processing users", 100)
 		p.reporter.UpdateStatus("Processing users", 100)
-		affected, err := p.db.Users().PurgeOldClearedUsers(context.Background(), cutoffDate, ClearedUsersToProcess)
+		affected, err := p.db.Users().PurgeOldClearedUsers(context.Background(), cutoffDate, worker.ClearedUsersToProcess)
 		if err != nil {
 			p.logger.Error("Error purging old cleared users", zap.Error(err))
 			p.reporter.SetHealthy(false)

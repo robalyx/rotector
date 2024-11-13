@@ -2,6 +2,7 @@ package ai
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/jaxron/roapi.go/pkg/api"
@@ -13,11 +14,6 @@ import (
 	"github.com/rotector/rotector/internal/common/progress"
 	"github.com/rotector/rotector/internal/common/worker"
 	"go.uber.org/zap"
-)
-
-const (
-	// FriendUsersToProcess sets how many users to process in each batch.
-	FriendUsersToProcess = 100
 )
 
 // FriendWorker processes user friend networks by checking each friend's
@@ -65,6 +61,26 @@ func (f *FriendWorker) Start() {
 	for {
 		f.bar.Reset()
 
+		// Check flagged users count
+		flaggedCount, err := f.db.Users().GetFlaggedUsersCount(context.Background())
+		if err != nil {
+			f.logger.Error("Error getting flagged users count", zap.Error(err))
+			f.reporter.SetHealthy(false)
+			time.Sleep(5 * time.Minute)
+			continue
+		}
+
+		// If above threshold, pause processing
+		if flaggedCount >= worker.FlaggedUsersThreshold {
+			f.bar.SetStepMessage(fmt.Sprintf("Paused - %d flagged users exceeds threshold of %d", flaggedCount, worker.FlaggedUsersThreshold), 0)
+			f.reporter.UpdateStatus(fmt.Sprintf("Paused - %d flagged users exceeds threshold", flaggedCount), 0)
+			f.logger.Info("Pausing worker - flagged users threshold exceeded",
+				zap.Int("flaggedCount", flaggedCount),
+				zap.Int("threshold", worker.FlaggedUsersThreshold))
+			time.Sleep(5 * time.Minute)
+			continue
+		}
+
 		// Step 1: Process friends batch (20%)
 		f.bar.SetStepMessage("Processing friends batch", 20)
 		f.reporter.UpdateStatus("Processing friends batch", 20)
@@ -79,7 +95,7 @@ func (f *FriendWorker) Start() {
 		// Step 2: Fetch user info (40%)
 		f.bar.SetStepMessage("Fetching user info", 40)
 		f.reporter.UpdateStatus("Fetching user info", 40)
-		userInfos := f.userFetcher.FetchInfos(friendIDs[:FriendUsersToProcess])
+		userInfos := f.userFetcher.FetchInfos(friendIDs[:worker.FriendUsersToProcess])
 
 		// Step 3: Process users (100%)
 		f.bar.SetStepMessage("Processing users", 100)
@@ -87,7 +103,7 @@ func (f *FriendWorker) Start() {
 		failedValidationIDs := f.userChecker.ProcessUsers(userInfos)
 
 		// Step 4: Prepare for next batch
-		oldFriendIDs = friendIDs[FriendUsersToProcess:]
+		oldFriendIDs = friendIDs[worker.FriendUsersToProcess:]
 
 		// Add failed validation IDs back to the queue for retry
 		if len(failedValidationIDs) > 0 {
@@ -110,7 +126,7 @@ func (f *FriendWorker) Start() {
 // 3. Filtering out already processed users
 // 4. Collecting enough IDs to fill a batch.
 func (f *FriendWorker) processFriendsBatch(friendIDs []uint64) ([]uint64, error) {
-	for len(friendIDs) < FriendUsersToProcess {
+	for len(friendIDs) < worker.FriendUsersToProcess {
 		// Get the next confirmed user
 		user, err := f.db.Users().GetNextConfirmedUser(context.Background())
 		if err != nil {
@@ -158,7 +174,7 @@ func (f *FriendWorker) processFriendsBatch(friendIDs []uint64) ([]uint64, error)
 			zap.Uint64("userID", user.ID))
 
 		// If we have enough friends, break out of the loop
-		if len(friendIDs) >= FriendUsersToProcess {
+		if len(friendIDs) >= worker.FriendUsersToProcess {
 			break
 		}
 	}

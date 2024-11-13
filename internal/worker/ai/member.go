@@ -2,6 +2,7 @@ package ai
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/jaxron/roapi.go/pkg/api"
@@ -14,11 +15,6 @@ import (
 	"github.com/rotector/rotector/internal/common/progress"
 	"github.com/rotector/rotector/internal/common/worker"
 	"go.uber.org/zap"
-)
-
-const (
-	// GroupUsersToProcess sets how many users to process in each batch.
-	GroupUsersToProcess = 100
 )
 
 // MemberWorker processes group member lists by checking each member's
@@ -66,6 +62,26 @@ func (g *MemberWorker) Start() {
 	for {
 		g.bar.Reset()
 
+		// Check flagged users count
+		flaggedCount, err := g.db.Users().GetFlaggedUsersCount(context.Background())
+		if err != nil {
+			g.logger.Error("Error getting flagged users count", zap.Error(err))
+			g.reporter.SetHealthy(false)
+			time.Sleep(5 * time.Minute)
+			continue
+		}
+
+		// If above threshold, pause processing
+		if flaggedCount >= worker.FlaggedUsersThreshold {
+			g.bar.SetStepMessage(fmt.Sprintf("Paused - %d flagged users exceeds threshold of %d", flaggedCount, worker.FlaggedUsersThreshold), 0)
+			g.reporter.UpdateStatus(fmt.Sprintf("Paused - %d flagged users exceeds threshold", flaggedCount), 0)
+			g.logger.Info("Pausing worker - flagged users threshold exceeded",
+				zap.Int("flaggedCount", flaggedCount),
+				zap.Int("threshold", worker.FlaggedUsersThreshold))
+			time.Sleep(5 * time.Minute)
+			continue
+		}
+
 		// Step 1: Get next confirmed group (10%)
 		g.bar.SetStepMessage("Fetching next confirmed group", 10)
 		g.reporter.UpdateStatus("Fetching next confirmed group", 10)
@@ -91,7 +107,7 @@ func (g *MemberWorker) Start() {
 		// Step 3: Fetch user info (70%)
 		g.bar.SetStepMessage("Fetching user info", 70)
 		g.reporter.UpdateStatus("Fetching user info", 70)
-		userInfos := g.userFetcher.FetchInfos(userIDs[:GroupUsersToProcess])
+		userInfos := g.userFetcher.FetchInfos(userIDs[:worker.GroupUsersToProcess])
 
 		// Step 4: Process users (100%)
 		g.bar.SetStepMessage("Processing users", 100)
@@ -99,7 +115,7 @@ func (g *MemberWorker) Start() {
 		failedValidationIDs := g.userChecker.ProcessUsers(userInfos)
 
 		// Step 5: Prepare for next batch
-		oldUserIDs = userIDs[GroupUsersToProcess:]
+		oldUserIDs = userIDs[worker.GroupUsersToProcess:]
 
 		// Add failed validation IDs back to the queue for retry
 		if len(failedValidationIDs) > 0 {
@@ -124,7 +140,7 @@ func (g *MemberWorker) processGroup(groupID uint64, userIDs []uint64) ([]uint64,
 	g.logger.Info("Processing group", zap.Uint64("groupID", groupID))
 
 	cursor := ""
-	for len(userIDs) < GroupUsersToProcess {
+	for len(userIDs) < worker.GroupUsersToProcess {
 		// Fetch group users with cursor pagination
 		builder := groups.NewGroupUsersBuilder(groupID).WithLimit(100).WithCursor(cursor)
 		groupUsers, err := g.roAPI.Groups().GetGroupUsers(context.Background(), builder.Build())

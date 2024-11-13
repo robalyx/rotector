@@ -13,11 +13,6 @@ import (
 	"go.uber.org/zap"
 )
 
-const (
-	// PurgeUsersToProcess sets how many users to check in each batch.
-	PurgeUsersToProcess = 200
-)
-
 // BannedWorker removes banned users from confirmed or flagged users.
 // It periodically checks users against the Roblox API to find banned accounts.
 type BannedWorker struct {
@@ -62,7 +57,7 @@ func (p *BannedWorker) Start() {
 		// Step 1: Get batch of users to check (20%)
 		p.bar.SetStepMessage("Fetching users to check", 20)
 		p.reporter.UpdateStatus("Fetching users to check", 20)
-		users, err := p.db.Users().GetUsersToCheck(context.Background(), PurgeUsersToProcess)
+		users, err := p.db.Users().GetUsersToCheck(context.Background(), worker.PurgeUsersToProcess)
 		if err != nil {
 			p.logger.Error("Error getting users to check", zap.Error(err))
 			p.reporter.SetHealthy(false)

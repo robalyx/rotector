@@ -18,10 +18,7 @@ import (
 	"go.uber.org/zap"
 )
 
-// ProcessWorker handles items in the processing queue by:
-// 1. Checking different priority queues in order (high -> normal -> low)
-// 2. Running AI analysis on queued users
-// 3. Updating queue status and position information.
+// ProcessWorker handles items in the queues.
 type ProcessWorker struct {
 	db           *database.Database
 	openAIClient *openai.Client
@@ -83,7 +80,7 @@ func (p *ProcessWorker) Start() {
 		if err != nil {
 			p.logger.Error("Error getting next batch", zap.Error(err))
 			p.reporter.SetHealthy(false)
-			time.Sleep(5 * time.Minute) // Wait before trying again
+			time.Sleep(5 * time.Minute)
 			continue
 		}
 
@@ -91,7 +88,7 @@ func (p *ProcessWorker) Start() {
 		if len(items) == 0 {
 			p.bar.SetStepMessage("No items to process, waiting", 0)
 			p.reporter.UpdateStatus("No items to process, waiting", 0)
-			time.Sleep(5 * time.Minute)
+			time.Sleep(10 * time.Second)
 			continue
 		}
 
