@@ -209,7 +209,7 @@ func (b *Bot) handleComponentInteraction(event *events.ComponentInteractionCreat
 	// Please open a PR if you have a better solution or a fix for this.
 	isModal := false
 	stringSelectData, ok := event.Data.(discord.StringSelectMenuInteractionData)
-	if ok && strings.HasSuffix(stringSelectData.Values[0], "modal") {
+	if ok && strings.HasSuffix(stringSelectData.Values[0], "exception") {
 		isModal = true
 	}
 

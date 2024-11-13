@@ -54,11 +54,21 @@ func (b *DashboardBuilder) Build() *discord.MessageUpdateBuilder {
 		AddContainerComponents(
 			discord.NewActionRow(
 				discord.NewStringSelectMenu(constants.ActionSelectMenuCustomID, "Select an action",
-					discord.NewStringSelectMenuOption("Review Flagged Users", constants.StartReviewCustomID).WithEmoji(discord.ComponentEmoji{Name: "🔍"}),
-					discord.NewStringSelectMenuOption("Log Query Browser", constants.LogQueryBrowserCustomID).WithEmoji(discord.ComponentEmoji{Name: "📜"}),
-					discord.NewStringSelectMenuOption("Queue Manager", constants.QueueManagerCustomID).WithEmoji(discord.ComponentEmoji{Name: "📋"}),
-					discord.NewStringSelectMenuOption("User Settings", constants.UserSettingsCustomID).WithEmoji(discord.ComponentEmoji{Name: "👤"}),
-					discord.NewStringSelectMenuOption("Guild Settings", constants.GuildSettingsCustomID).WithEmoji(discord.ComponentEmoji{Name: "⚙️"}),
+					discord.NewStringSelectMenuOption("Review Users", constants.StartReviewCustomID).
+						WithEmoji(discord.ComponentEmoji{Name: "🔍"}).
+						WithDescription("Start reviewing flagged users"),
+					discord.NewStringSelectMenuOption("Activity Log Browser", constants.LogActivityBrowserCustomID).
+						WithEmoji(discord.ComponentEmoji{Name: "📜"}).
+						WithDescription("Search and filter activity logs"),
+					discord.NewStringSelectMenuOption("Queue Manager", constants.QueueManagerCustomID).
+						WithEmoji(discord.ComponentEmoji{Name: "📋"}).
+						WithDescription("Manage recheck queue priorities"),
+					discord.NewStringSelectMenuOption("User Settings", constants.UserSettingsCustomID).
+						WithEmoji(discord.ComponentEmoji{Name: "👤"}).
+						WithDescription("Configure your personal settings"),
+					discord.NewStringSelectMenuOption("Guild Settings", constants.GuildSettingsCustomID).
+						WithEmoji(discord.ComponentEmoji{Name: "⚙️"}).
+						WithDescription("Configure server-wide settings"),
 				),
 			),
 			discord.NewActionRow(

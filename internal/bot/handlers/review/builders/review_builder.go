@@ -106,21 +106,27 @@ func (b *ReviewEmbed) Build() *discord.MessageUpdateBuilder {
 		// Action options menu
 		discord.NewActionRow(
 			discord.NewStringSelectMenu(constants.ActionSelectMenuCustomID, "Actions",
-				discord.NewStringSelectMenuOption("Ban with reason", constants.BanWithReasonButtonCustomID).
-					WithEmoji(discord.ComponentEmoji{Name: "🚫"}),
+				discord.NewStringSelectMenuOption("Confirm with reason", constants.ConfirmWithReasonButtonCustomID).
+					WithEmoji(discord.ComponentEmoji{Name: "🚫"}).
+					WithDescription("Confirm the user with a custom reason"),
+				discord.NewStringSelectMenuOption("Recheck user", constants.RecheckButtonCustomID).
+					WithEmoji(discord.ComponentEmoji{Name: "🔄"}).
+					WithDescription("Add user to high priority queue for recheck"),
 				discord.NewStringSelectMenuOption("Open outfit viewer", constants.OpenOutfitsMenuButtonCustomID).
-					WithEmoji(discord.ComponentEmoji{Name: "👕"}),
+					WithEmoji(discord.ComponentEmoji{Name: "👕"}).
+					WithDescription("View all user outfits"),
 				discord.NewStringSelectMenuOption("Open friends viewer", constants.OpenFriendsMenuButtonCustomID).
-					WithEmoji(discord.ComponentEmoji{Name: "👫"}),
+					WithEmoji(discord.ComponentEmoji{Name: "👫"}).
+					WithDescription("View all user friends"),
 				discord.NewStringSelectMenuOption("Open group viewer", constants.OpenGroupsMenuButtonCustomID).
-					WithEmoji(discord.ComponentEmoji{Name: "🌐"}),
+					WithEmoji(discord.ComponentEmoji{Name: "🌐"}).
+					WithDescription("View all user groups"),
 			),
 		),
 		// Quick action buttons
 		discord.NewActionRow(
 			discord.NewSecondaryButton("◀️", constants.BackButtonCustomID),
-			discord.NewSecondaryButton("🔄", constants.RecheckButtonCustomID),
-			discord.NewDangerButton("Ban", constants.BanButtonCustomID),
+			discord.NewDangerButton("Confirm", constants.ConfirmButtonCustomID),
 			discord.NewSuccessButton("Clear", constants.ClearButtonCustomID),
 			discord.NewSecondaryButton("Skip", constants.SkipButtonCustomID),
 		),

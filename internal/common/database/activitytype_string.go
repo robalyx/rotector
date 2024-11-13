@@ -10,16 +10,16 @@ func _() {
 	var x [1]struct{}
 	_ = x[ActivityTypeAll-0]
 	_ = x[ActivityTypeViewed-1]
-	_ = x[ActivityTypeBanned-2]
-	_ = x[ActivityTypeBannedCustom-3]
+	_ = x[ActivityTypeConfirmed-2]
+	_ = x[ActivityTypeConfirmedCustom-3]
 	_ = x[ActivityTypeCleared-4]
 	_ = x[ActivityTypeSkipped-5]
 	_ = x[ActivityTypeRechecked-6]
 }
 
-const _ActivityType_name = "ALLVIEWEDBANNEDBANNED_CUSTOMCLEAREDSKIPPEDRECHECKED"
+const _ActivityType_name = "ALLVIEWEDCONFIRMEDCONFIRMED_CUSTOMCLEAREDSKIPPEDRECHECKED"
 
-var _ActivityType_index = [...]uint8{0, 3, 9, 15, 28, 35, 42, 51}
+var _ActivityType_index = [...]uint8{0, 3, 9, 18, 34, 41, 48, 57}
 
 func (i ActivityType) String() string {
 	if i < 0 || i >= ActivityType(len(_ActivityType_index)-1) {

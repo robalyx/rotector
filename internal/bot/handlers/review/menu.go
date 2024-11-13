@@ -106,8 +106,10 @@ func (m *Menu) handleSelectMenu(event *events.ComponentInteractionCreate, s *ses
 		m.ShowReviewMenu(event, s, "Changed sort order. Will take effect for the next user.")
 	case constants.ActionSelectMenuCustomID:
 		switch option {
-		case constants.BanWithReasonButtonCustomID:
-			m.handleBanWithReason(event, s)
+		case constants.ConfirmWithReasonButtonCustomID:
+			m.handleConfirmWithReason(event, s)
+		case constants.RecheckButtonCustomID:
+			m.handleRecheck(event, s)
 		case constants.OpenOutfitsMenuButtonCustomID:
 			m.handler.outfitsMenu.ShowOutfitsMenu(event, s, 0)
 		case constants.OpenFriendsMenuButtonCustomID:
@@ -123,10 +125,8 @@ func (m *Menu) handleButton(event *events.ComponentInteractionCreate, s *session
 	switch customID {
 	case constants.BackButtonCustomID:
 		m.handler.dashboardHandler.ShowDashboard(event, s, "")
-	case constants.RecheckButtonCustomID:
-		m.handleRecheck(event, s)
-	case constants.BanButtonCustomID:
-		m.handleBanUser(event, s)
+	case constants.ConfirmButtonCustomID:
+		m.handleConfirmUser(event, s)
 	case constants.ClearButtonCustomID:
 		m.handleClearUser(event, s)
 	case constants.SkipButtonCustomID:
@@ -136,8 +136,8 @@ func (m *Menu) handleButton(event *events.ComponentInteractionCreate, s *session
 
 // handleModal handles the modal for the review menu.
 func (m *Menu) handleModal(event *events.ModalSubmitInteractionCreate, s *session.Session) {
-	if event.Data.CustomID == constants.BanWithReasonModalCustomID {
-		m.handleBanWithReasonModalSubmit(event, s)
+	if event.Data.CustomID == constants.ConfirmWithReasonModalCustomID {
+		m.handleConfirmWithReasonModalSubmit(event, s)
 	}
 }
 
@@ -188,24 +188,24 @@ func (m *Menu) handleRecheck(event *events.ComponentInteractionCreate, s *sessio
 	m.handler.statusMenu.ShowStatusMenu(event, s)
 }
 
-// handleBanUser moves a user to the confirmed state and logs the action.
-// After banning, it loads a new user for review.
-func (m *Menu) handleBanUser(event interfaces.CommonEvent, s *session.Session) {
+// handleConfirmUser moves a user to the confirmed state and logs the action.
+// After confirming, it loads a new user for review.
+func (m *Menu) handleConfirmUser(event interfaces.CommonEvent, s *session.Session) {
 	var user *database.FlaggedUser
 	s.GetInterface(constants.SessionKeyTarget, &user)
 
 	// Update user status in database
 	if err := m.handler.db.Users().ConfirmUser(context.Background(), user); err != nil {
 		m.handler.logger.Error("Failed to confirm user", zap.Error(err))
-		m.handler.paginationManager.RespondWithError(event, "Failed to ban the user. Please try again.")
+		m.handler.paginationManager.RespondWithError(event, "Failed to confirm the user. Please try again.")
 		return
 	}
 
-	// Log the ban action asynchronously
+	// Log the confirm action asynchronously
 	go m.handler.db.UserActivity().LogActivity(context.Background(), &database.UserActivityLog{
 		UserID:            user.ID,
 		ReviewerID:        uint64(event.User().ID),
-		ActivityType:      database.ActivityTypeBanned,
+		ActivityType:      database.ActivityTypeConfirmed,
 		ActivityTimestamp: time.Now(),
 		Details:           map[string]interface{}{"reason": user.Reason},
 	})
@@ -218,7 +218,7 @@ func (m *Menu) handleBanUser(event interfaces.CommonEvent, s *session.Session) {
 
 	// Clear current user and load next one
 	s.Delete(constants.SessionKeyTarget)
-	m.ShowReviewMenu(event, s, fmt.Sprintf("User banned. %d users left to review.", flaggedCount))
+	m.ShowReviewMenu(event, s, fmt.Sprintf("User confirmed. %d users left to review.", flaggedCount))
 }
 
 // handleClearUser removes a user from the flagged state and logs the action.
@@ -280,20 +280,20 @@ func (m *Menu) handleSkipUser(event interfaces.CommonEvent, s *session.Session) 
 	m.ShowReviewMenu(event, s, fmt.Sprintf("Skipped user. %d users left to review.", flaggedCount))
 }
 
-// handleBanWithReason opens a modal for entering a custom ban reason.
+// handleConfirmWithReason opens a modal for entering a custom confirm reason.
 // The modal pre-fills with the current reason if one exists.
-func (m *Menu) handleBanWithReason(event *events.ComponentInteractionCreate, s *session.Session) {
+func (m *Menu) handleConfirmWithReason(event *events.ComponentInteractionCreate, s *session.Session) {
 	var user *database.FlaggedUser
 	s.GetInterface(constants.SessionKeyTarget, &user)
 
 	// Create modal with pre-filled reason field
 	modal := discord.NewModalCreateBuilder().
-		SetCustomID(constants.BanWithReasonModalCustomID).
-		SetTitle("Ban User with Reason").
+		SetCustomID(constants.ConfirmWithReasonModalCustomID).
+		SetTitle("Confirm User with Reason").
 		AddActionRow(
-			discord.NewTextInput("ban_reason", discord.TextInputStyleParagraph, "Ban Reason").
+			discord.NewTextInput(constants.ConfirmReasonInputCustomID, discord.TextInputStyleParagraph, "Confirm Reason").
 				WithRequired(true).
-				WithPlaceholder("Enter the reason for banning this user...").
+				WithPlaceholder("Enter the reason for confirming this user...").
 				WithValue(user.Reason),
 		).
 		Build()
@@ -301,20 +301,20 @@ func (m *Menu) handleBanWithReason(event *events.ComponentInteractionCreate, s *
 	// Show modal to user
 	if err := event.Modal(modal); err != nil {
 		m.handler.logger.Error("Failed to create modal", zap.Error(err))
-		m.handler.paginationManager.RespondWithError(event, "Failed to open the ban reason form. Please try again.")
+		m.handler.paginationManager.RespondWithError(event, "Failed to open the confirm reason form. Please try again.")
 	}
 }
 
-// handleBanWithReasonModalSubmit processes the custom ban reason from the modal
-// and performs the ban with the provided reason.
-func (m *Menu) handleBanWithReasonModalSubmit(event *events.ModalSubmitInteractionCreate, s *session.Session) {
+// handleConfirmWithReasonModalSubmit processes the custom confirm reason from the modal
+// and performs the confirm with the provided reason.
+func (m *Menu) handleConfirmWithReasonModalSubmit(event *events.ModalSubmitInteractionCreate, s *session.Session) {
 	var user *database.FlaggedUser
 	s.GetInterface(constants.SessionKeyTarget, &user)
 
-	// Get and validate the ban reason
-	reason := event.Data.Text("ban_reason")
+	// Get and validate the confirm reason
+	reason := event.Data.Text(constants.ConfirmReasonInputCustomID)
 	if reason == "" {
-		m.handler.paginationManager.RespondWithError(event, "Ban reason cannot be empty. Please try again.")
+		m.handler.paginationManager.RespondWithError(event, "Confirm reason cannot be empty. Please try again.")
 		return
 	}
 
@@ -328,18 +328,18 @@ func (m *Menu) handleBanWithReasonModalSubmit(event *events.ModalSubmitInteracti
 		return
 	}
 
-	// Log the custom ban action asynchronously
+	// Log the custom confirm action asynchronously
 	go m.handler.db.UserActivity().LogActivity(context.Background(), &database.UserActivityLog{
 		UserID:            user.ID,
 		ReviewerID:        uint64(event.User().ID),
-		ActivityType:      database.ActivityTypeBannedCustom,
+		ActivityType:      database.ActivityTypeConfirmedCustom,
 		ActivityTimestamp: time.Now(),
 		Details:           map[string]interface{}{"reason": user.Reason},
 	})
 
 	// Clear current user and load next one
 	s.Delete(constants.SessionKeyTarget)
-	m.ShowReviewMenu(event, s, "User banned.")
+	m.ShowReviewMenu(event, s, "User confirmed.")
 }
 
 // fetchNewTarget gets a new user to review based on the current sort order.

@@ -20,17 +20,18 @@ const (
 	// Review Menu.
 	SortOrderSelectMenuCustomID = "sort_order"
 
-	BanWithReasonModalCustomID = "ban_with_reason_modal"
+	ConfirmWithReasonModalCustomID = "confirm_with_reason_modal"
+	ConfirmReasonInputCustomID     = "confirm_reason"
 
-	BanWithReasonButtonCustomID   = "ban_with_reason_modal"
-	OpenOutfitsMenuButtonCustomID = "open_outfits_menu"
-	OpenFriendsMenuButtonCustomID = "open_friends_menu"
-	OpenGroupsMenuButtonCustomID  = "open_groups_menu"
+	ConfirmWithReasonButtonCustomID = "confirm_with_reason_exception"
+	RecheckButtonCustomID           = "recheck"
+	OpenOutfitsMenuButtonCustomID   = "open_outfits_menu"
+	OpenFriendsMenuButtonCustomID   = "open_friends_menu"
+	OpenGroupsMenuButtonCustomID    = "open_groups_menu"
 
-	BanButtonCustomID     = "ban"
+	ConfirmButtonCustomID = "confirm"
 	ClearButtonCustomID   = "clear"
 	SkipButtonCustomID    = "skip"
-	RecheckButtonCustomID = "recheck"
 	AbortButtonCustomID   = "abort"
 
 	// Friends Menu.
@@ -61,18 +62,18 @@ const (
 
 	// Logs Menu.
 	LogsPerPage                         = 10
-	LogQueryBrowserCustomID             = "log_query_browser"
+	LogActivityBrowserCustomID          = "log_activity_browser"
 	LogsQueryInputCustomID              = "query_input"
-	LogsQueryUserIDOption               = "query_user_id_modal"
-	LogsQueryReviewerIDOption           = "query_reviewer_id_modal"
-	LogsQueryDateRangeOption            = "query_date_range_modal"
+	LogsQueryUserIDOption               = "query_user_id_exception"
+	LogsQueryReviewerIDOption           = "query_reviewer_id_exception"
+	LogsQueryDateRangeOption            = "query_date_range_exception"
 	LogsQueryActivityTypeFilterCustomID = "activity_type_filter"
 
 	// Queue Menu.
 	QueueManagerCustomID        = "queue_manager"
-	QueueHighPriorityCustomID   = "queue_high_priority_modal"
-	QueueNormalPriorityCustomID = "queue_normal_priority_modal"
-	QueueLowPriorityCustomID    = "queue_low_priority_modal"
+	QueueHighPriorityCustomID   = "queue_high_priority_exception"
+	QueueNormalPriorityCustomID = "queue_normal_priority_exception"
+	QueueLowPriorityCustomID    = "queue_low_priority_exception"
 	AddToQueueModalCustomID     = "add_to_queue_modal"
 	UserIDInputCustomID         = "user_id_input"
 	ReasonInputCustomID         = "reason_input"

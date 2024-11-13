@@ -41,8 +41,10 @@ func (b *UserSettingsEmbed) Build() *discord.MessageUpdateBuilder {
 	components := []discord.ContainerComponent{
 		discord.NewActionRow(
 			discord.NewStringSelectMenu(constants.UserSettingSelectID, "Select a setting to change",
-				discord.NewStringSelectMenuOption("Change Streamer Mode", constants.StreamerModeOption),
-				discord.NewStringSelectMenuOption("Change Default Sort", constants.DefaultSortOption),
+				discord.NewStringSelectMenuOption("Change Streamer Mode", constants.StreamerModeOption).
+					WithDescription("Toggle censoring of sensitive information"),
+				discord.NewStringSelectMenuOption("Change Default Sort", constants.DefaultSortOption).
+					WithDescription("Set what users are shown first in the review menu"),
 			),
 		),
 		discord.NewActionRow(
@@ -88,7 +90,8 @@ func (b *GuildSettingsEmbed) Build() *discord.MessageUpdateBuilder {
 	components := []discord.ContainerComponent{
 		discord.NewActionRow(
 			discord.NewStringSelectMenu(constants.GuildSettingSelectID, "Select roles to whitelist",
-				discord.NewStringSelectMenuOption("Change Whitelisted Roles", constants.WhitelistedRolesOption),
+				discord.NewStringSelectMenuOption("Change Whitelisted Roles", constants.WhitelistedRolesOption).
+					WithDescription("Set which roles can use the bot"),
 			),
 		),
 		discord.NewActionRow(

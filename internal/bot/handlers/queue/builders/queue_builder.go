@@ -46,11 +46,14 @@ func (b *QueueBuilder) Build() *discord.MessageUpdateBuilder {
 		discord.NewActionRow(
 			discord.NewStringSelectMenu(constants.ActionSelectMenuCustomID, "Add to queue",
 				discord.NewStringSelectMenuOption("Add to High Priority", constants.QueueHighPriorityCustomID).
-					WithEmoji(discord.ComponentEmoji{Name: "🔴"}),
+					WithEmoji(discord.ComponentEmoji{Name: "🔴"}).
+					WithDescription("Add user to high priority queue"),
 				discord.NewStringSelectMenuOption("Add to Normal Priority", constants.QueueNormalPriorityCustomID).
-					WithEmoji(discord.ComponentEmoji{Name: "🟡"}),
+					WithEmoji(discord.ComponentEmoji{Name: "🟡"}).
+					WithDescription("Add user to normal priority queue"),
 				discord.NewStringSelectMenuOption("Add to Low Priority", constants.QueueLowPriorityCustomID).
-					WithEmoji(discord.ComponentEmoji{Name: "🟢"}),
+					WithEmoji(discord.ComponentEmoji{Name: "🟢"}).
+					WithDescription("Add user to low priority queue"),
 			),
 		),
 		// Navigation and refresh buttons

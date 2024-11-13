@@ -18,10 +18,10 @@ const (
 	ActivityTypeAll ActivityType = iota // ALL
 	// ActivityTypeViewed tracks when a moderator opens a user's profile.
 	ActivityTypeViewed // VIEWED
-	// ActivityTypeBanned tracks when a moderator confirms a user as inappropriate.
-	ActivityTypeBanned // BANNED
-	// ActivityTypeBannedCustom tracks bans with custom moderator-provided reasons.
-	ActivityTypeBannedCustom // BANNED_CUSTOM
+	// ActivityTypeConfirmed tracks when a moderator confirms a user as inappropriate.
+	ActivityTypeConfirmed // CONFIRMED
+	// ActivityTypeConfirmedCustom tracks bans with custom moderator-provided reasons.
+	ActivityTypeConfirmedCustom // CONFIRMED_CUSTOM
 	// ActivityTypeCleared tracks when a moderator marks a user as appropriate.
 	ActivityTypeCleared // CLEARED
 	// ActivityTypeSkipped tracks when a moderator skips reviewing a user.
