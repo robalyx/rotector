@@ -23,6 +23,7 @@ type UserChecker struct {
 	aiChecker        *AIChecker
 	groupChecker     *GroupChecker
 	friendChecker    *FriendChecker
+	followerChecker  *FollowerChecker
 	logger           *zap.Logger
 }
 
@@ -46,6 +47,7 @@ func NewUserChecker(
 		aiChecker:        aiChecker,
 		groupChecker:     NewGroupChecker(db, logger),
 		friendChecker:    NewFriendChecker(db, aiChecker, logger),
+		followerChecker:  NewFollowerChecker(roAPI, logger),
 		logger:           logger,
 	}
 }
@@ -92,6 +94,10 @@ func (c *UserChecker) ProcessUsers(userInfos []*fetcher.Info) []uint64 {
 		c.logger.Info("No flagged users found", zap.Int("userInfos", len(userInfos)))
 		return failedValidationIDs
 	}
+
+	// Check followers for flagged users (70%)
+	c.bar.SetStepMessage("Checking user followers", 70)
+	flaggedUsers = c.followerChecker.ProcessUsers(flaggedUsers)
 
 	// Load additional data for flagged users (80%)
 	c.bar.SetStepMessage("Adding image URLs", 80)

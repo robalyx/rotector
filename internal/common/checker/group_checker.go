@@ -36,11 +36,16 @@ func NewGroupChecker(db *database.Database, logger *zap.Logger) *GroupChecker {
 // ProcessUsers checks multiple users' groups concurrently and returns flagged users
 // and remaining users that need further checking.
 func (gc *GroupChecker) ProcessUsers(userInfos []*fetcher.Info) ([]*database.User, []*fetcher.Info) {
+	// GroupCheckResult contains the result of checking a user's groups.
+	type GroupCheckResult struct {
+		UserID      uint64
+		User        *database.User
+		AutoFlagged bool
+		Error       error
+	}
+
 	var wg sync.WaitGroup
-	resultsChan := make(chan struct {
-		UserID uint64
-		Result *GroupCheckResult
-	}, len(userInfos))
+	resultsChan := make(chan GroupCheckResult, len(userInfos))
 
 	// Spawn a goroutine for each user
 	for _, userInfo := range userInfos {
@@ -50,16 +55,11 @@ func (gc *GroupChecker) ProcessUsers(userInfos []*fetcher.Info) ([]*database.Use
 
 			// Process user groups
 			user, autoFlagged, err := gc.processUserGroups(info)
-			resultsChan <- struct {
-				UserID uint64
-				Result *GroupCheckResult
-			}{
-				UserID: info.ID,
-				Result: &GroupCheckResult{
-					User:        user,
-					AutoFlagged: autoFlagged,
-					Error:       err,
-				},
+			resultsChan <- GroupCheckResult{
+				UserID:      info.ID,
+				User:        user,
+				AutoFlagged: autoFlagged,
+				Error:       err,
 			}
 		}(userInfo)
 	}
@@ -70,16 +70,15 @@ func (gc *GroupChecker) ProcessUsers(userInfos []*fetcher.Info) ([]*database.Use
 		close(resultsChan)
 	}()
 
-	// Create maps to track results and original userInfos
-	results := make(map[uint64]*GroupCheckResult)
+	// Collect user infos and results
 	userInfoMap := make(map[uint64]*fetcher.Info)
 	for _, info := range userInfos {
 		userInfoMap[info.ID] = info
 	}
 
-	// Collect results from the channel
+	results := make(map[uint64]*GroupCheckResult)
 	for result := range resultsChan {
-		results[result.UserID] = result.Result
+		results[result.UserID] = &result
 	}
 
 	// Separate users into flagged and remaining

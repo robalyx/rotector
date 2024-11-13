@@ -20,13 +20,6 @@ type FriendChecker struct {
 	logger    *zap.Logger
 }
 
-// FriendCheckResult contains the result of checking a user's friends.
-type FriendCheckResult struct {
-	User        *database.User
-	AutoFlagged bool
-	Error       error
-}
-
 // NewFriendChecker creates a FriendChecker.
 func NewFriendChecker(db *database.Database, aiChecker *AIChecker, logger *zap.Logger) *FriendChecker {
 	return &FriendChecker{
@@ -39,11 +32,16 @@ func NewFriendChecker(db *database.Database, aiChecker *AIChecker, logger *zap.L
 // ProcessUsers checks multiple users' friends concurrently and returns flagged users
 // and remaining users that need further checking.
 func (fc *FriendChecker) ProcessUsers(userInfos []*fetcher.Info) ([]*database.User, []*fetcher.Info) {
+	// FriendCheckResult contains the result of checking a user's friends.
+	type FriendCheckResult struct {
+		UserID      uint64
+		User        *database.User
+		AutoFlagged bool
+		Error       error
+	}
+
 	var wg sync.WaitGroup
-	resultsChan := make(chan struct {
-		UserID uint64
-		Result *FriendCheckResult
-	}, len(userInfos))
+	resultsChan := make(chan FriendCheckResult, len(userInfos))
 
 	// Spawn a goroutine for each user
 	for _, userInfo := range userInfos {
@@ -53,16 +51,11 @@ func (fc *FriendChecker) ProcessUsers(userInfos []*fetcher.Info) ([]*database.Us
 
 			// Process user friends
 			user, autoFlagged, err := fc.processUserFriends(info)
-			resultsChan <- struct {
-				UserID uint64
-				Result *FriendCheckResult
-			}{
-				UserID: info.ID,
-				Result: &FriendCheckResult{
-					User:        user,
-					AutoFlagged: autoFlagged,
-					Error:       err,
-				},
+			resultsChan <- FriendCheckResult{
+				UserID:      info.ID,
+				User:        user,
+				AutoFlagged: autoFlagged,
+				Error:       err,
 			}
 		}(userInfo)
 	}
@@ -73,16 +66,15 @@ func (fc *FriendChecker) ProcessUsers(userInfos []*fetcher.Info) ([]*database.Us
 		close(resultsChan)
 	}()
 
-	// Create maps to track results and original userInfos
-	results := make(map[uint64]*FriendCheckResult)
+	// Collect user infos and results
 	userInfoMap := make(map[uint64]*fetcher.Info)
 	for _, info := range userInfos {
 		userInfoMap[info.ID] = info
 	}
 
-	// Collect results from the channel
+	results := make(map[uint64]*FriendCheckResult)
 	for result := range resultsChan {
-		results[result.UserID] = result.Result
+		results[result.UserID] = &result
 	}
 
 	// Separate users into flagged and remaining

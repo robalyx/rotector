@@ -64,13 +64,6 @@ type FlaggedUser struct {
 	Confidence     float64  `json:"confidence"     jsonschema_description:"Confidence level of the AI's assessment"`
 }
 
-// TranslationResult contains the result of translating a user's description.
-type TranslationResult struct {
-	UserInfo       *fetcher.Info
-	TranslatedDesc string
-	Err            error
-}
-
 // AIChecker handles AI-based content analysis by sending user data to OpenAI.
 type AIChecker struct {
 	openAIClient *openai.Client
@@ -392,6 +385,13 @@ func (a *AIChecker) validateFlaggedUsers(flaggedUsers FlaggedUsers, translatedIn
 // it falls back to using the original content. Returns maps using normalized usernames
 // as keys.
 func (a *AIChecker) prepareUserInfos(userInfos []*fetcher.Info) (map[string]*fetcher.Info, map[string]*fetcher.Info) {
+	// TranslationResult contains the result of translating a user's description.
+	type TranslationResult struct {
+		UserInfo       *fetcher.Info
+		TranslatedDesc string
+		Err            error
+	}
+
 	var wg sync.WaitGroup
 	resultsChan := make(chan TranslationResult, len(userInfos))
 
