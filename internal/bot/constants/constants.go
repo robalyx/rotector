@@ -68,6 +68,7 @@ const (
 	LogsQueryReviewerIDOption           = "query_reviewer_id_exception"
 	LogsQueryDateRangeOption            = "query_date_range_exception"
 	LogsQueryActivityTypeFilterCustomID = "activity_type_filter"
+	ClearFiltersButtonCustomID          = "clear_filters"
 
 	// Queue Menu.
 	QueueManagerCustomID        = "queue_manager"
@@ -115,12 +116,12 @@ const (
 
 	SessionKeyOutfits = "outfits"
 
-	SessionKeyLogs               = "logs"
-	SessionKeyUserID             = "userID"
-	SessionKeyReviewerID         = "reviewerID"
-	SessionKeyActivityTypeFilter = "activityTypeFilter"
-	SessionKeyDateRangeStart     = "dateRangeStart"
-	SessionKeyDateRangeEnd       = "dateRangeEnd"
+	SessionKeyLogs                 = "logs"
+	SessionKeyUserIDFilter         = "userID"
+	SessionKeyReviewerIDFilter     = "reviewerID"
+	SessionKeyActivityTypeFilter   = "activityTypeFilter"
+	SessionKeyDateRangeStartFilter = "dateRangeStart"
+	SessionKeyDateRangeEndFilter   = "dateRangeEnd"
 
 	SessionKeyQueueUser        = "queueUser"
 	SessionKeyQueuePriority    = "queuePriority"

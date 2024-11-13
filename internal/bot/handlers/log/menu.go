@@ -48,11 +48,11 @@ func NewMenu(h *Handler) *Menu {
 func (m *Menu) ShowLogMenu(event interfaces.CommonEvent, s *session.Session) {
 	// Initialize session data with default values
 	s.Set(constants.SessionKeyLogs, []*database.UserActivityLog{})
-	s.Set(constants.SessionKeyUserID, uint64(0))
-	s.Set(constants.SessionKeyReviewerID, uint64(0))
+	s.Set(constants.SessionKeyUserIDFilter, uint64(0))
+	s.Set(constants.SessionKeyReviewerIDFilter, uint64(0))
 	s.Set(constants.SessionKeyActivityTypeFilter, database.ActivityTypeAll)
-	s.Set(constants.SessionKeyDateRangeStart, time.Time{})
-	s.Set(constants.SessionKeyDateRangeEnd, time.Time{})
+	s.Set(constants.SessionKeyDateRangeStartFilter, time.Time{})
+	s.Set(constants.SessionKeyDateRangeEndFilter, time.Time{})
 	s.Set(constants.SessionKeyTotalItems, 0)
 	s.Set(constants.SessionKeyStart, 0)
 	s.Set(constants.SessionKeyPaginationPage, 0)
@@ -94,8 +94,22 @@ func (m *Menu) handleSelectMenu(event *events.ComponentInteractionCreate, s *ses
 // back to the dashboard and page navigation.
 func (m *Menu) handleButton(event *events.ComponentInteractionCreate, s *session.Session, customID string) {
 	switch customID {
-	case string(constants.BackButtonCustomID):
+	case constants.BackButtonCustomID:
 		m.handler.dashboardHandler.ShowDashboard(event, s, "")
+	case constants.RefreshButtonCustomID:
+		// Keep current page and filters, just refresh the data
+		currentPage := s.GetInt(constants.SessionKeyPaginationPage)
+		m.updateLogData(event, s, currentPage)
+	case constants.ClearFiltersButtonCustomID:
+		// Reset all filters to default values
+		s.Set(constants.SessionKeyUserIDFilter, uint64(0))
+		s.Set(constants.SessionKeyReviewerIDFilter, uint64(0))
+		s.Set(constants.SessionKeyActivityTypeFilter, database.ActivityTypeAll)
+		s.Set(constants.SessionKeyDateRangeStartFilter, time.Time{})
+		s.Set(constants.SessionKeyDateRangeEndFilter, time.Time{})
+		s.Set(constants.SessionKeyPaginationPage, 0)
+
+		m.updateLogData(event, s, 0)
 	case string(utils.ViewerFirstPage), string(utils.ViewerPrevPage), string(utils.ViewerNextPage), string(utils.ViewerLastPage):
 		m.handlePagination(event, s, utils.ViewerAction(customID))
 	}
@@ -143,9 +157,9 @@ func (m *Menu) handleIDModalSubmit(event *events.ModalSubmitInteractionCreate, s
 
 	// Store ID in appropriate session key based on query type
 	if queryType == constants.LogsQueryUserIDOption {
-		s.Set(constants.SessionKeyUserID, id)
+		s.Set(constants.SessionKeyUserIDFilter, id)
 	} else if queryType == constants.LogsQueryReviewerIDOption {
-		s.Set(constants.SessionKeyReviewerID, id)
+		s.Set(constants.SessionKeyReviewerIDFilter, id)
 	}
 	s.Set(constants.SessionKeyPaginationPage, 0)
 
@@ -162,8 +176,8 @@ func (m *Menu) handleDateRangeModalSubmit(event *events.ModalSubmitInteractionCr
 		return
 	}
 
-	s.Set(constants.SessionKeyDateRangeStart, startDate)
-	s.Set(constants.SessionKeyDateRangeEnd, endDate)
+	s.Set(constants.SessionKeyDateRangeStartFilter, startDate)
+	s.Set(constants.SessionKeyDateRangeEndFilter, endDate)
 	s.Set(constants.SessionKeyPaginationPage, 0)
 
 	m.updateLogData(event, s, 0)
@@ -192,12 +206,12 @@ func (m *Menu) updateLogData(event interfaces.CommonEvent, s *session.Session, p
 	var activityTypeFilter database.ActivityType
 	s.GetInterface(constants.SessionKeyActivityTypeFilter, &activityTypeFilter)
 	var startDate time.Time
-	s.GetInterface(constants.SessionKeyDateRangeStart, &startDate)
+	s.GetInterface(constants.SessionKeyDateRangeStartFilter, &startDate)
 	var endDate time.Time
-	s.GetInterface(constants.SessionKeyDateRangeEnd, &endDate)
+	s.GetInterface(constants.SessionKeyDateRangeEndFilter, &endDate)
 
-	userID := s.GetUint64(constants.SessionKeyUserID)
-	reviewerID := s.GetUint64(constants.SessionKeyReviewerID)
+	userID := s.GetUint64(constants.SessionKeyUserIDFilter)
+	reviewerID := s.GetUint64(constants.SessionKeyReviewerIDFilter)
 
 	// Fetch filtered logs from database
 	logs, totalLogs, err := m.handler.db.UserActivity().GetLogs(context.Background(), userID, reviewerID, activityTypeFilter, startDate, endDate, page, constants.LogsPerPage)

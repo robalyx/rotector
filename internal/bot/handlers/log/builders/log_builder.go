@@ -38,15 +38,15 @@ func NewLogEmbed(s *session.Session) *LogEmbed {
 	var activityTypeFilter database.ActivityType
 	s.GetInterface(constants.SessionKeyActivityTypeFilter, &activityTypeFilter)
 	var startDate time.Time
-	s.GetInterface(constants.SessionKeyDateRangeStart, &startDate)
+	s.GetInterface(constants.SessionKeyDateRangeStartFilter, &startDate)
 	var endDate time.Time
-	s.GetInterface(constants.SessionKeyDateRangeEnd, &endDate)
+	s.GetInterface(constants.SessionKeyDateRangeEndFilter, &endDate)
 
 	return &LogEmbed{
 		settings:           settings,
 		logs:               logs,
-		userID:             s.GetUint64(constants.SessionKeyUserID),
-		reviewerID:         s.GetUint64(constants.SessionKeyReviewerID),
+		userID:             s.GetUint64(constants.SessionKeyUserIDFilter),
+		reviewerID:         s.GetUint64(constants.SessionKeyReviewerIDFilter),
 		activityTypeFilter: activityTypeFilter,
 		startDate:          startDate,
 		endDate:            endDate,
@@ -114,10 +114,13 @@ func (b *LogEmbed) Build() *discord.MessageUpdateBuilder {
 	components := []discord.ContainerComponent{
 		// Query condition selection menu
 		discord.NewActionRow(
-			discord.NewStringSelectMenu(constants.ActionSelectMenuCustomID, "Set Query Condition",
-				discord.NewStringSelectMenuOption("Query User ID", constants.LogsQueryUserIDOption),
-				discord.NewStringSelectMenuOption("Query Reviewer ID", constants.LogsQueryReviewerIDOption),
-				discord.NewStringSelectMenuOption("Query Date Range", constants.LogsQueryDateRangeOption),
+			discord.NewStringSelectMenu(constants.ActionSelectMenuCustomID, "Set Filter Condition",
+				discord.NewStringSelectMenuOption("Filter by User ID", constants.LogsQueryUserIDOption).
+					WithDescription(utils.CensorString(strconv.FormatUint(b.userID, 10), b.settings.StreamerMode)),
+				discord.NewStringSelectMenuOption("Filter by Reviewer ID", constants.LogsQueryReviewerIDOption).
+					WithDescription(strconv.FormatUint(b.reviewerID, 10)),
+				discord.NewStringSelectMenuOption("Filter by Date Range", constants.LogsQueryDateRangeOption).
+					WithDescription(fmt.Sprintf("%s to %s", b.startDate.Format("2006-01-02"), b.endDate.Format("2006-01-02"))),
 			),
 		),
 		// Activity type filter menu
@@ -132,9 +135,14 @@ func (b *LogEmbed) Build() *discord.MessageUpdateBuilder {
 				discord.NewStringSelectMenuOption("Rechecked", strconv.Itoa(int(database.ActivityTypeRechecked))).WithDefault(b.activityTypeFilter == database.ActivityTypeRechecked),
 			),
 		),
+		// Clear filters and refresh buttons
+		discord.NewActionRow(
+			discord.NewDangerButton("Clear Filters", constants.ClearFiltersButtonCustomID),
+			discord.NewSecondaryButton("Refresh Logs", constants.RefreshButtonCustomID),
+		),
 		// Navigation buttons
 		discord.NewActionRow(
-			discord.NewSecondaryButton("◀️", string(constants.BackButtonCustomID)),
+			discord.NewSecondaryButton("◀️", constants.BackButtonCustomID),
 			discord.NewSecondaryButton("⏮️", string(utils.ViewerFirstPage)).WithDisabled(b.page == 0 || b.total == 0),
 			discord.NewSecondaryButton("◀️", string(utils.ViewerPrevPage)).WithDisabled(b.page == 0 || b.total == 0),
 			discord.NewSecondaryButton("▶️", string(utils.ViewerNextPage)).WithDisabled(b.page == totalPages-1 || b.total == 0),
