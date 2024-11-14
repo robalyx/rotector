@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/disgoorg/disgo/discord"
 	"github.com/jaxron/roapi.go/pkg/api/types"
@@ -54,8 +55,10 @@ func NewGroupsEmbed(s *session.Session) *GroupsEmbed {
 // Build creates a Discord message with a grid of group thumbnails and information.
 // Each group entry shows:
 // - Group name (with link to group page)
+// - Indicators for group, verification, privacy, flagged status
+// - Description (if available)
+// - Owner information
 // - User's role in the group
-// - Warning indicator if the group is flagged
 // Navigation buttons are disabled when at the start/end of the list.
 func (b *GroupsEmbed) Build() *discord.MessageUpdateBuilder {
 	totalPages := (b.total + constants.GroupsPerPage - 1) / constants.GroupsPerPage
@@ -89,19 +92,58 @@ func (b *GroupsEmbed) Build() *discord.MessageUpdateBuilder {
 	// Add fields for each group on the current page
 	for i, group := range b.groups {
 		fieldName := fmt.Sprintf("Group %d", b.start+i+1)
-		fieldValue := fmt.Sprintf(
-			"[%s](https://www.roblox.com/groups/%d)\n(%s)",
-			utils.CensorString(group.Group.Name, b.settings.StreamerMode),
-			group.Group.ID,
-			group.Role.Name,
-		)
 
 		// Add warning indicator for flagged groups
 		if b.flaggedGroups[group.Group.ID] {
 			fieldName += " ⚠️"
 		}
 
-		embed.AddField(fieldName, fieldValue, true)
+		// Add verification badge if group is verified
+		if group.Group.HasVerifiedBadge {
+			fieldName += " ✓"
+		}
+
+		// Format group information
+		info := fmt.Sprintf(
+			"[%s](https://www.roblox.com/groups/%d)\n",
+			utils.CensorString(group.Group.Name, b.settings.StreamerMode),
+			group.Group.ID,
+		)
+
+		// Add member count and role
+		info += fmt.Sprintf("👥 `%s` • 👤 `%s`\n",
+			utils.FormatNumber(group.Group.MemberCount),
+			group.Role.Name,
+		)
+
+		// Add owner information
+		info += fmt.Sprintf("👑 Owner: [%s](https://www.roblox.com/users/%d/profile)\n",
+			utils.CensorString(group.Group.Owner.Username, b.settings.StreamerMode),
+			group.Group.Owner.UserID,
+		)
+
+		// Add group status indicators
+		var status []string
+		if group.Group.IsLocked != nil && *group.Group.IsLocked {
+			status = append(status, "🔒 Locked")
+		}
+		if !group.Group.PublicEntryAllowed {
+			status = append(status, "🚫 Private")
+		}
+		if len(status) > 0 {
+			info += strings.Join(status, " • ") + "\n"
+		}
+
+		// Add description if available
+		if group.Group.Description != "" {
+			desc := utils.NormalizeString(group.Group.Description)
+			if len(desc) > 500 {
+				desc = desc[:497] + "..."
+			}
+			info += fmt.Sprintf("```%s```", desc)
+		}
+
+		embed.AddField(fieldName, info, false)
 	}
 
 	return discord.NewMessageUpdateBuilder().

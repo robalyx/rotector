@@ -46,9 +46,9 @@ const (
 	OutfitGridRows    = 5
 
 	// Groups Menu.
-	GroupsPerPage     = 15
+	GroupsPerPage     = 9
 	GroupsGridColumns = 3
-	GroupsGridRows    = 5
+	GroupsGridRows    = 3
 
 	// User Settings.
 	UserSettingPrefix   = "user"
