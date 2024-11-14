@@ -146,37 +146,37 @@ func (b *Bot) Close() {
 // then validating guild settings and user permissions before handling the command in a goroutine.
 // The goroutine approach allows for concurrent processing of commands.
 func (b *Bot) handleApplicationCommandInteraction(event *events.ApplicationCommandInteractionCreate) {
-	// Defer response to prevent Discord timeout while processing
-	if err := event.DeferCreateMessage(true); err != nil {
-		b.logger.Error("Failed to defer create message", zap.Error(err))
-		return
-	}
-
-	// Only handle dashboard command - respond with error for unknown commands
-	if event.SlashCommandInteractionData().CommandName() != constants.DashboardCommandName {
-		b.paginationManager.RespondWithError(event, "This command is not available.")
-		return
-	}
-
-	// Verify guild settings and user permissions
-	guildSettings, err := b.db.Settings().GetGuildSettings(context.Background(), uint64(*event.GuildID()))
-	if err != nil {
-		b.logger.Error("Failed to get guild settings", zap.Error(err))
-		return
-	}
-
-	// Check if user has required roles
-	if !guildSettings.HasAnyRole(event.Member().RoleIDs) {
-		b.paginationManager.RespondWithError(event, "You are not authorized to use this command.")
-		return
-	}
-
-	// Process command in goroutine to allow for concurrent processing
 	go func() {
+		// Defer response to prevent Discord timeout while processing
+		if err := event.DeferCreateMessage(true); err != nil {
+			b.logger.Error("Failed to defer create message", zap.Error(err))
+			return
+		}
+
+		// Only handle dashboard command - respond with error for unknown commands
+		if event.SlashCommandInteractionData().CommandName() != constants.DashboardCommandName {
+			b.paginationManager.RespondWithError(event, "This command is not available.")
+			return
+		}
+
+		// Verify guild settings and user permissions
+		guildSettings, err := b.db.Settings().GetGuildSettings(context.Background(), uint64(*event.GuildID()))
+		if err != nil {
+			b.logger.Error("Failed to get guild settings", zap.Error(err))
+			return
+		}
+
+		// Check if user has required roles
+		if !guildSettings.HasAnyRole(event.Member().RoleIDs) {
+			b.paginationManager.RespondWithError(event, "You are not authorized to use this command.")
+			return
+		}
+
 		start := time.Now()
 		defer func() {
 			if r := recover(); r != nil {
 				b.logger.Error("Panic in application command interaction handler", zap.Any("panic", r))
+				b.sessionManager.CloseSession(context.Background(), event.User().ID)
 			}
 			duration := time.Since(start)
 			b.logger.Debug("Application command interaction handled",
@@ -203,34 +203,34 @@ func (b *Bot) handleApplicationCommandInteraction(event *events.ApplicationComma
 // It first updates the message to show "Processing..." and removes interactive components
 // to prevent double-clicks, then processes the interaction in a goroutine.
 func (b *Bot) handleComponentInteraction(event *events.ComponentInteractionCreate) {
-	// WORKAROUND:
-	// Special handling for modal interactions to prevent response conflicts.
-	// If we are opening a modal and we try to defer, there will be an error that the interaction is already responded to.
-	// Please open a PR if you have a better solution or a fix for this.
-	isModal := false
-	stringSelectData, ok := event.Data.(discord.StringSelectMenuInteractionData)
-	if ok && strings.HasSuffix(stringSelectData.Values[0], "exception") {
-		isModal = true
-	}
-
-	// Update message to prevent double-clicks (skip for modals)
-	if !isModal {
-		updateBuilder := discord.NewMessageUpdateBuilder().
-			SetContent(utils.GetTimestampedSubtext("Processing...")).
-			ClearContainerComponents()
-
-		if err := event.UpdateMessage(updateBuilder.Build()); err != nil {
-			b.logger.Error("Failed to update message", zap.Error(err))
-			return
-		}
-	}
-
-	// Process interaction in goroutine
 	go func() {
+		// WORKAROUND:
+		// Special handling for modal interactions to prevent response conflicts.
+		// If we are opening a modal and we try to defer, there will be an error that the interaction is already responded to.
+		// Please open a PR if you have a better solution or a fix for this.
+		isModal := false
+		stringSelectData, ok := event.Data.(discord.StringSelectMenuInteractionData)
+		if ok && strings.HasSuffix(stringSelectData.Values[0], "exception") {
+			isModal = true
+		}
+
+		// Update message to prevent double-clicks (skip for modals)
+		if !isModal {
+			updateBuilder := discord.NewMessageUpdateBuilder().
+				SetContent(utils.GetTimestampedSubtext("Processing...")).
+				ClearContainerComponents()
+
+			if err := event.UpdateMessage(updateBuilder.Build()); err != nil {
+				b.logger.Error("Failed to update message", zap.Error(err))
+				return
+			}
+		}
+
 		start := time.Now()
 		defer func() {
 			if r := recover(); r != nil {
 				b.logger.Error("Panic in component interaction handler", zap.Any("panic", r))
+				b.sessionManager.CloseSession(context.Background(), event.User().ID)
 			}
 			duration := time.Since(start)
 			b.logger.Debug("Component interaction handled",
@@ -264,22 +264,22 @@ func (b *Bot) handleComponentInteraction(event *events.ComponentInteractionCreat
 // It updates the message to show "Processing..." and removes interactive components,
 // then processes the submission in a goroutine.
 func (b *Bot) handleModalSubmit(event *events.ModalSubmitInteractionCreate) {
-	// Update message to prevent double-submissions
-	updateBuilder := discord.NewMessageUpdateBuilder().
-		SetContent(utils.GetTimestampedSubtext("Processing...")).
-		ClearContainerComponents()
-
-	if err := event.UpdateMessage(updateBuilder.Build()); err != nil {
-		b.logger.Error("Failed to update message", zap.Error(err))
-		return
-	}
-
-	// Process submission in goroutine
 	go func() {
+		// Update message to prevent double-submissions
+		updateBuilder := discord.NewMessageUpdateBuilder().
+			SetContent(utils.GetTimestampedSubtext("Processing...")).
+			ClearContainerComponents()
+
+		if err := event.UpdateMessage(updateBuilder.Build()); err != nil {
+			b.logger.Error("Failed to update message", zap.Error(err))
+			return
+		}
+
 		start := time.Now()
 		defer func() {
 			if r := recover(); r != nil {
 				b.logger.Error("Panic in modal submit interaction handler", zap.Any("panic", r))
+				b.sessionManager.CloseSession(context.Background(), event.User().ID)
 			}
 			duration := time.Since(start)
 			b.logger.Debug("Modal submit interaction handled",
