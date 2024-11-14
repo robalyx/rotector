@@ -11,7 +11,7 @@ import (
 	"go.uber.org/zap"
 )
 
-// StatisticsWorker handles the daily upload of statistics from Redis to PostgreSQL.
+// StatisticsWorker handles hourly statistics snapshots.
 type StatisticsWorker struct {
 	db       *database.Database
 	bar      *progress.Bar
@@ -21,8 +21,7 @@ type StatisticsWorker struct {
 
 // NewStatisticsWorker creates a StatisticsWorker.
 func NewStatisticsWorker(db *database.Database, redisClient rueidis.Client, bar *progress.Bar, logger *zap.Logger) *StatisticsWorker {
-	reporter := worker.NewStatusReporter(redisClient, "stats", "upload", logger)
-
+	reporter := worker.NewStatusReporter(redisClient, "stats", "", logger)
 	return &StatisticsWorker{
 		db:       db,
 		bar:      bar,
@@ -42,39 +41,46 @@ func (s *StatisticsWorker) Start() {
 	for {
 		s.bar.Reset()
 
-		// Step 1: Wait until 1 AM (0%)
-		s.bar.SetStepMessage("Waiting for next upload window", 0)
-		s.reporter.UpdateStatus("Waiting for next upload window", 0)
-		nextRun := s.calculateNextRun()
-		time.Sleep(time.Until(nextRun))
+		// Step 1: Wait until the start of the next hour (0%)
+		s.bar.SetStepMessage("Waiting for next hour", 0)
+		s.reporter.UpdateStatus("Waiting for next hour", 0)
+		nextHour := time.Now().UTC().Truncate(time.Hour).Add(time.Hour)
+		time.Sleep(time.Until(nextHour))
 
-		// Step 2: Upload statistics (50%)
-		s.bar.SetStepMessage("Uploading daily statistics", 50)
-		s.reporter.UpdateStatus("Uploading daily statistics", 50)
-		if err := s.db.Stats().UploadDailyStatsToDB(context.Background()); err != nil {
-			s.logger.Error("Failed to upload daily statistics", zap.Error(err))
+		// Step 2: Get current stats (25%)
+		s.bar.SetStepMessage("Collecting statistics", 25)
+		s.reporter.UpdateStatus("Collecting statistics", 25)
+		stats, err := s.db.Stats().GetCurrentStats(context.Background())
+		if err != nil {
+			s.logger.Error("Failed to get current stats", zap.Error(err))
 			s.reporter.SetHealthy(false)
 			continue
 		}
 
-		// Step 3: Completed, waiting for next day (100%)
-		s.bar.SetStepMessage("Upload complete, waiting for next day", 100)
-		s.reporter.UpdateStatus("Upload complete, waiting for next day", 100)
+		// Step 3: Save current stats (50%)
+		s.bar.SetStepMessage("Saving statistics", 50)
+		s.reporter.UpdateStatus("Saving statistics", 50)
+		if err := s.db.Stats().SaveHourlyStats(context.Background(), stats); err != nil {
+			s.logger.Error("Failed to save hourly stats", zap.Error(err))
+			s.reporter.SetHealthy(false)
+			continue
+		}
+
+		// Step 4: Clean up old stats (75%)
+		s.bar.SetStepMessage("Cleaning up old stats", 75)
+		s.reporter.UpdateStatus("Cleaning up old stats", 75)
+		cutoffDate := time.Now().UTC().AddDate(0, 0, -30) // 30 days ago
+		if err := s.db.Stats().PurgeOldStats(context.Background(), cutoffDate); err != nil {
+			s.logger.Error("Failed to purge old stats", zap.Error(err))
+			s.reporter.SetHealthy(false)
+			continue
+		}
+
+		// Step 5: Completed (100%)
+		s.bar.SetStepMessage("Statistics updated", 100)
+		s.reporter.UpdateStatus("Statistics updated", 100)
 		s.reporter.SetHealthy(true)
 
-		// Wait 23 hours before checking again
-		time.Sleep(23 * time.Hour)
+		s.logger.Info("Hourly statistics saved successfully")
 	}
-}
-
-// calculateNextRun determines when to run the next upload by:
-// 1. Finding the next 1 AM timestamp
-// 2. Adding a day if it's already past 1 AM.
-func (s *StatisticsWorker) calculateNextRun() time.Time {
-	now := time.Now()
-	nextRun := time.Date(now.Year(), now.Month(), now.Day(), 1, 0, 0, 0, now.Location())
-	if now.After(nextRun) {
-		nextRun = nextRun.Add(24 * time.Hour)
-	}
-	return nextRun
 }

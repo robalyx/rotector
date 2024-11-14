@@ -13,7 +13,6 @@ import (
 	"github.com/rotector/rotector/internal/common/database"
 	"github.com/rotector/rotector/internal/common/queue"
 	"github.com/rotector/rotector/internal/common/redis"
-	"github.com/rotector/rotector/internal/common/statistics"
 	"go.uber.org/zap"
 )
 
@@ -25,7 +24,6 @@ type AppSetup struct {
 	DBLogger     *zap.Logger        // Database-specific logger
 	DB           *database.Database // Database connection pool
 	OpenAIClient *openai.Client     // OpenAI API client
-	Stats        *statistics.Client // Statistics tracking
 	RoAPI        *api.API           // RoAPI HTTP client
 	Queue        *queue.Manager     // Background job queue
 	RedisManager *redis.Manager     // Redis connection manager
@@ -53,15 +51,8 @@ func InitializeApp(logDir string) (*AppSetup, error) {
 	// Redis manager provides connection pools for various subsystems
 	redisManager := redis.NewManager(cfg, logger)
 
-	// Statistics tracking requires its own Redis database
-	statsClient, err := redisManager.GetClient(redis.StatsDBIndex)
-	if err != nil {
-		return nil, err
-	}
-	stats := statistics.NewClient(statsClient, logger)
-
 	// Database connection pool is created with statistics tracking
-	db, err := database.NewConnection(cfg, stats, dbLogger)
+	db, err := database.NewConnection(cfg, dbLogger)
 	if err != nil {
 		return nil, err
 	}
@@ -110,7 +101,6 @@ func InitializeApp(logDir string) (*AppSetup, error) {
 		DBLogger:     dbLogger,
 		DB:           db,
 		OpenAIClient: openaiClient,
-		Stats:        stats,
 		RoAPI:        roAPI,
 		Queue:        queueManager,
 		RedisManager: redisManager,

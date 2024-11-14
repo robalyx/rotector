@@ -27,7 +27,6 @@ func main() {
 	discordBot, err := bot.New(
 		setup.Config.Discord.Token,
 		setup.DB,
-		setup.Stats,
 		setup.RoAPI,
 		setup.Queue,
 		setup.RedisManager,

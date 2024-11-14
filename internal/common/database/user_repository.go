@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/rotector/rotector/internal/common/statistics"
+	"github.com/jaxron/roapi.go/pkg/api/types"
 	"github.com/uptrace/bun"
 	"go.uber.org/zap"
 )
@@ -19,20 +19,66 @@ const (
 	UserTypeCleared = "cleared"
 )
 
+// User combines all the information needed to review a user.
+// This base structure is embedded in other user types (Flagged, Confirmed).
+type User struct {
+	ID             uint64                 `bun:",pk"        json:"id"`
+	Name           string                 `bun:",notnull"   json:"name"`
+	DisplayName    string                 `bun:",notnull"   json:"displayName"`
+	Description    string                 `bun:",notnull"   json:"description"`
+	CreatedAt      time.Time              `bun:",notnull"   json:"createdAt"`
+	Reason         string                 `bun:",notnull"   json:"reason"`
+	Groups         []types.UserGroupRoles `bun:"type:jsonb" json:"groups"`
+	Outfits        []types.Outfit         `bun:"type:jsonb" json:"outfits"`
+	Friends        []types.Friend         `bun:"type:jsonb" json:"friends"`
+	FlaggedContent []string               `bun:"type:jsonb" json:"flaggedContent"`
+	FlaggedGroups  []uint64               `bun:"type:jsonb" json:"flaggedGroups"`
+	Confidence     float64                `bun:",notnull"   json:"confidence"`
+	LastScanned    time.Time              `bun:",notnull"   json:"lastScanned"`
+	LastUpdated    time.Time              `bun:",notnull"   json:"lastUpdated"`
+	LastViewed     time.Time              `bun:",notnull"   json:"lastViewed"`
+	LastPurgeCheck time.Time              `bun:",notnull"   json:"lastPurgeCheck"`
+	ThumbnailURL   string                 `bun:",notnull"   json:"thumbnailUrl"`
+}
+
+// FlaggedUser extends User to track users that need review.
+// The base User structure contains all the fields needed for review.
+type FlaggedUser struct {
+	User
+}
+
+// ConfirmedUser extends User to track users that have been reviewed and confirmed.
+// The VerifiedAt field shows when the user was confirmed by a moderator.
+type ConfirmedUser struct {
+	User
+	VerifiedAt time.Time `bun:",notnull" json:"verifiedAt"`
+}
+
+// ClearedUser extends User to track users that were cleared during review.
+// The ClearedAt field shows when the user was cleared by a moderator.
+type ClearedUser struct {
+	User
+	ClearedAt time.Time `bun:",notnull" json:"clearedAt"`
+}
+
+// BannedUser extends User to track users that were banned and removed.
+// The PurgedAt field shows when the user was removed from the system.
+type BannedUser struct {
+	User
+	PurgedAt time.Time `bun:",notnull" json:"purgedAt"`
+}
+
 // UserRepository handles database operations for user records.
 type UserRepository struct {
 	db       *bun.DB
-	stats    *statistics.Client
 	tracking *TrackingRepository
 	logger   *zap.Logger
 }
 
-// NewUserRepository creates a UserRepository with references to the statistics
-// and tracking systems for updating related data during user operations.
-func NewUserRepository(db *bun.DB, stats *statistics.Client, tracking *TrackingRepository, logger *zap.Logger) *UserRepository {
+// NewUserRepository creates a UserRepository with references to the tracking system.
+func NewUserRepository(db *bun.DB, tracking *TrackingRepository, logger *zap.Logger) *UserRepository {
 	return &UserRepository{
 		db:       db,
-		stats:    stats,
 		tracking: tracking,
 		logger:   logger,
 	}
@@ -172,15 +218,6 @@ func (r *UserRepository) SaveFlaggedUsers(ctx context.Context, flaggedUsers []*U
 			zap.String("thumbnail_url", flaggedUser.ThumbnailURL))
 	}
 
-	// Update statistics
-	if err := r.stats.IncrementDailyStat(ctx, statistics.FieldUsersFlagged, len(flaggedUsers)); err != nil {
-		r.logger.Error("Failed to increment users_flagged statistic", zap.Error(err))
-	}
-
-	if err := r.stats.IncrementHourlyStat(ctx, statistics.FieldUsersFlagged, len(flaggedUsers)); err != nil {
-		r.logger.Error("Failed to increment hourly flagged stat", zap.Error(err))
-	}
-
 	r.logger.Info("Finished saving flagged users")
 }
 
@@ -233,16 +270,6 @@ func (r *UserRepository) ConfirmUser(ctx context.Context, user *FlaggedUser) err
 			}
 		}
 
-		// Update statistics
-		if err := r.stats.IncrementDailyStat(ctx, statistics.FieldUsersConfirmed, 1); err != nil {
-			r.logger.Error("Failed to increment users_confirmed statistic", zap.Error(err))
-			return err
-		}
-
-		if err := r.stats.IncrementHourlyStat(ctx, statistics.FieldUsersConfirmed, 1); err != nil {
-			r.logger.Error("Failed to increment hourly confirmed stat", zap.Error(err))
-		}
-
 		return nil
 	})
 }
@@ -288,16 +315,6 @@ func (r *UserRepository) ClearUser(ctx context.Context, user *FlaggedUser) error
 		}
 
 		r.logger.Info("User cleared and moved to cleared_users", zap.Uint64("userID", user.ID))
-
-		// Update statistics
-		if err := r.stats.IncrementDailyStat(ctx, statistics.FieldUsersCleared, 1); err != nil {
-			r.logger.Error("Failed to increment users_cleared statistic", zap.Error(err))
-			return err
-		}
-
-		if err := r.stats.IncrementHourlyStat(ctx, statistics.FieldUsersCleared, 1); err != nil {
-			r.logger.Error("Failed to increment hourly cleared stat", zap.Error(err))
-		}
 
 		return nil
 	})
@@ -620,12 +637,6 @@ func (r *UserRepository) RemoveBannedUsers(ctx context.Context, userIDs []uint64
 			return err
 		}
 
-		// Update statistics
-		if err := r.stats.IncrementDailyStat(ctx, statistics.FieldBannedUsersPurged, len(userIDs)); err != nil {
-			r.logger.Error("Failed to increment banned_users_purged statistic", zap.Error(err))
-			return err
-		}
-
 		r.logger.Info("Moved banned users to banned_users", zap.Int("count", len(userIDs)))
 		return nil
 	})
@@ -679,12 +690,6 @@ func (r *UserRepository) PurgeOldClearedUsers(ctx context.Context, cutoffDate ti
 		r.logger.Info("Purged cleared users from database",
 			zap.Int("count", affected),
 			zap.Uint64s("userIDs", userIDs))
-
-		// Update statistics
-		if err := r.stats.IncrementDailyStat(ctx, statistics.FieldClearedUsersPurged, affected); err != nil {
-			r.logger.Error("Failed to increment cleared_users_purged statistic", zap.Error(err))
-			return err
-		}
 
 		return nil
 	})

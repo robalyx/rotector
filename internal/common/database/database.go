@@ -5,13 +5,8 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"slices"
-	"time"
 
-	"github.com/disgoorg/snowflake/v2"
-	"github.com/jaxron/roapi.go/pkg/api/types"
 	"github.com/rotector/rotector/internal/common/config"
-	"github.com/rotector/rotector/internal/common/statistics"
 	"github.com/uptrace/bun"
 	"github.com/uptrace/bun/dialect/pgdialect"
 	"github.com/uptrace/bun/driver/pgdriver"
@@ -30,122 +25,6 @@ const (
 // ErrInvalidSortBy indicates that the provided sort method is not supported.
 var ErrInvalidSortBy = errors.New("invalid sortBy value")
 
-// FlaggedGroup stores information about a group that needs review.
-// The confidence score helps prioritize which groups to review first.
-type FlaggedGroup struct {
-	ID           uint64    `bun:",pk"`
-	Name         string    `bun:",notnull"`
-	Description  string    `bun:",notnull"`
-	Owner        uint64    `bun:",notnull"`
-	Reason       string    `bun:",notnull"`
-	Confidence   float64   `bun:",notnull"`
-	LastUpdated  time.Time `bun:",notnull"`
-	ThumbnailURL string
-}
-
-// ConfirmedGroup stores information about a group that has been reviewed and confirmed.
-// The last_scanned field helps track when to re-check the group's members.
-type ConfirmedGroup struct {
-	ID          uint64 `bun:",pk"`
-	Name        string `bun:",notnull"`
-	Description string `bun:",notnull"`
-	Owner       uint64 `bun:",notnull"`
-	LastScanned time.Time
-}
-
-// User combines all the information needed to review a user.
-// This base structure is embedded in other user types (Flagged, Confirmed).
-type User struct {
-	ID             uint64                 `bun:",pk"        json:"id"`
-	Name           string                 `bun:",notnull"   json:"name"`
-	DisplayName    string                 `bun:",notnull"   json:"displayName"`
-	Description    string                 `bun:",notnull"   json:"description"`
-	CreatedAt      time.Time              `bun:",notnull"   json:"createdAt"`
-	Reason         string                 `bun:",notnull"   json:"reason"`
-	Groups         []types.UserGroupRoles `bun:"type:jsonb" json:"groups"`
-	Outfits        []types.Outfit         `bun:"type:jsonb" json:"outfits"`
-	Friends        []types.Friend         `bun:"type:jsonb" json:"friends"`
-	FlaggedContent []string               `bun:"type:jsonb" json:"flaggedContent"`
-	FlaggedGroups  []uint64               `bun:"type:jsonb" json:"flaggedGroups"`
-	Confidence     float64                `bun:",notnull"   json:"confidence"`
-	LastScanned    time.Time              `bun:",notnull"   json:"lastScanned"`
-	LastUpdated    time.Time              `bun:",notnull"   json:"lastUpdated"`
-	LastViewed     time.Time              `bun:",notnull"   json:"lastViewed"`
-	LastPurgeCheck time.Time              `bun:",notnull"   json:"lastPurgeCheck"`
-	ThumbnailURL   string                 `bun:",notnull"   json:"thumbnailUrl"`
-}
-
-// FlaggedUser extends User to track users that need review.
-// The base User structure contains all the fields needed for review.
-type FlaggedUser struct {
-	User
-}
-
-// ConfirmedUser extends User to track users that have been reviewed and confirmed.
-// The VerifiedAt field shows when the user was confirmed by a moderator.
-type ConfirmedUser struct {
-	User
-	VerifiedAt time.Time `bun:",notnull" json:"verifiedAt"`
-}
-
-// ClearedUser extends User to track users that were cleared during review.
-// The ClearedAt field shows when the user was cleared by a moderator.
-type ClearedUser struct {
-	User
-	ClearedAt time.Time `bun:",notnull" json:"clearedAt"`
-}
-
-// BannedUser extends User to track users that were banned and removed.
-// The PurgedAt field shows when the user was removed from the system.
-type BannedUser struct {
-	User
-	PurgedAt time.Time `bun:",notnull" json:"purgedAt"`
-}
-
-// DailyStatistics tracks daily counts of activities and purges.
-// The date field serves as the primary key for grouping statistics.
-type DailyStatistics struct {
-	Date               time.Time `bun:",pk"`
-	UsersConfirmed     int64     `bun:",notnull"`
-	UsersFlagged       int64     `bun:",notnull"`
-	UsersCleared       int64     `bun:",notnull"`
-	BannedUsersPurged  int64     `bun:",notnull"`
-	FlaggedUsersPurged int64     `bun:",notnull"`
-	ClearedUsersPurged int64     `bun:",notnull"`
-}
-
-// UserSetting stores user-specific preferences.
-type UserSetting struct {
-	UserID       uint64 `bun:",pk"`
-	StreamerMode bool   `bun:",notnull"`
-	DefaultSort  string `bun:",notnull"`
-}
-
-// GuildSetting stores server-wide configuration options.
-type GuildSetting struct {
-	GuildID          uint64   `bun:",pk"`
-	WhitelistedRoles []uint64 `bun:"type:bigint[]"`
-}
-
-// GroupMemberTracking monitors confirmed users within groups.
-// The LastAppended field helps determine when to purge old tracking data.
-type GroupMemberTracking struct {
-	GroupID        uint64    `bun:",pk"`
-	ConfirmedUsers []uint64  `bun:"type:bigint[]"`
-	LastAppended   time.Time `bun:",notnull"`
-}
-
-// HasAnyRole checks if any of the provided role IDs match the whitelisted roles.
-// Returns true if there is at least one match, false otherwise.
-func (s *GuildSetting) HasAnyRole(roleIDs []snowflake.ID) bool {
-	for _, roleID := range roleIDs {
-		if slices.Contains(s.WhitelistedRoles, uint64(roleID)) {
-			return true
-		}
-	}
-	return false
-}
-
 // Database represents the database connection and operations.
 // It manages access to different repositories that handle specific data types.
 type Database struct {
@@ -160,8 +39,7 @@ type Database struct {
 }
 
 // NewConnection establishes a new database connection and returns a Database instance.
-// It initializes all repositories and creates necessary tables and indexes.
-func NewConnection(config *config.Config, stats *statistics.Client, logger *zap.Logger) (*Database, error) {
+func NewConnection(config *config.Config, logger *zap.Logger) (*Database, error) {
 	// Initialize database connection with config values
 	sqldb := sql.OpenDB(pgdriver.NewConnector(
 		pgdriver.WithAddr(fmt.Sprintf("%s:%d", config.PostgreSQL.Host, config.PostgreSQL.Port)),
@@ -184,9 +62,9 @@ func NewConnection(config *config.Config, stats *statistics.Client, logger *zap.
 	database := &Database{
 		db:           db,
 		logger:       logger,
-		users:        NewUserRepository(db, stats, tracking, logger),
+		users:        NewUserRepository(db, tracking, logger),
 		groups:       NewGroupRepository(db, logger),
-		stats:        NewStatsRepository(db, stats, logger),
+		stats:        NewStatsRepository(db, logger),
 		settings:     NewSettingRepository(db, logger),
 		userActivity: NewUserActivityRepository(db, logger),
 		tracking:     tracking,
@@ -214,7 +92,7 @@ func (d *Database) createSchema() error {
 		(*ConfirmedUser)(nil),
 		(*ClearedUser)(nil),
 		(*BannedUser)(nil),
-		(*DailyStatistics)(nil),
+		(*HourlyStats)(nil),
 		(*UserSetting)(nil),
 		(*GuildSetting)(nil),
 		(*UserActivityLog)(nil),
@@ -237,15 +115,27 @@ func (d *Database) createSchema() error {
 
 	// Create indexes for efficient querying
 	_, err := d.db.NewRaw(`
+		-- User activity logs indexes
 		CREATE INDEX IF NOT EXISTS idx_user_activity_logs_user_id ON user_activity_logs (user_id);
 		CREATE INDEX IF NOT EXISTS idx_user_activity_logs_reviewer_id ON user_activity_logs (reviewer_id);
 		CREATE INDEX IF NOT EXISTS idx_user_activity_logs_activity_timestamp ON user_activity_logs (activity_timestamp);
 
+		-- Group tracking indexes
 		CREATE INDEX IF NOT EXISTS idx_group_member_trackings_last_appended ON group_member_trackings (last_appended);
 		CREATE INDEX IF NOT EXISTS idx_group_member_trackings_group_id_array_length 
 		ON group_member_trackings USING btree (group_id, array_length(confirmed_users, 1));
 
+		-- User status indexes
 		CREATE INDEX IF NOT EXISTS idx_cleared_users_cleared_at ON cleared_users (cleared_at);
+		CREATE INDEX IF NOT EXISTS idx_banned_users_purged_at ON banned_users (purged_at);
+		CREATE INDEX IF NOT EXISTS idx_flagged_users_last_purge_check ON flagged_users (last_purge_check);
+		CREATE INDEX IF NOT EXISTS idx_confirmed_users_last_scanned ON confirmed_users (last_scanned);
+		CREATE INDEX IF NOT EXISTS idx_flagged_users_last_viewed ON flagged_users (last_viewed);
+		CREATE INDEX IF NOT EXISTS idx_flagged_users_confidence ON flagged_users (confidence DESC);
+		CREATE INDEX IF NOT EXISTS idx_flagged_users_last_updated ON flagged_users (last_updated ASC);
+
+		-- Statistics indexes
+		CREATE INDEX IF NOT EXISTS idx_hourly_stats_timestamp ON hourly_stats (timestamp DESC);
 	`).Exec(context.Background())
 	if err != nil {
 		d.logger.Error("Failed to create indexes", zap.Error(err))
@@ -296,7 +186,6 @@ func (d *Database) setupTimescaleDB() error {
 }
 
 // Close gracefully shuts down the database connection.
-// It logs any errors that occur during shutdown.
 func (d *Database) Close() error {
 	err := d.db.Close()
 	if err != nil {

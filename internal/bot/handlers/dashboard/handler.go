@@ -6,7 +6,6 @@ import (
 	"github.com/rotector/rotector/internal/bot/session"
 	"github.com/rotector/rotector/internal/common/database"
 	"github.com/rotector/rotector/internal/common/redis"
-	"github.com/rotector/rotector/internal/common/statistics"
 	"github.com/rotector/rotector/internal/common/worker"
 	"go.uber.org/zap"
 )
@@ -16,7 +15,6 @@ import (
 // needed for navigation between different sections of the bot.
 type Handler struct {
 	db                *database.Database
-	stats             *statistics.Client
 	sessionManager    *session.Manager
 	paginationManager *pagination.Manager
 	workerMonitor     *worker.Monitor
@@ -32,7 +30,6 @@ type Handler struct {
 // page with the pagination manager.
 func New(
 	db *database.Database,
-	stats *statistics.Client,
 	logger *zap.Logger,
 	sessionManager *session.Manager,
 	paginationManager *pagination.Manager,
@@ -46,7 +43,6 @@ func New(
 
 	h := &Handler{
 		db:                db,
-		stats:             stats,
 		logger:            logger,
 		sessionManager:    sessionManager,
 		paginationManager: paginationManager,

@@ -8,6 +8,14 @@ import (
 	"go.uber.org/zap"
 )
 
+// GroupMemberTracking monitors confirmed users within groups.
+// The LastAppended field helps determine when to purge old tracking data.
+type GroupMemberTracking struct {
+	GroupID        uint64    `bun:",pk"`
+	ConfirmedUsers []uint64  `bun:"type:bigint[]"`
+	LastAppended   time.Time `bun:",notnull"`
+}
+
 // TrackingRepository handles database operations for monitoring affiliations
 // between users and groups.
 type TrackingRepository struct {

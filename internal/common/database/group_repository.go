@@ -8,6 +8,29 @@ import (
 	"go.uber.org/zap"
 )
 
+// FlaggedGroup stores information about a group that needs review.
+// The confidence score helps prioritize which groups to review first.
+type FlaggedGroup struct {
+	ID           uint64    `bun:",pk"`
+	Name         string    `bun:",notnull"`
+	Description  string    `bun:",notnull"`
+	Owner        uint64    `bun:",notnull"`
+	Reason       string    `bun:",notnull"`
+	Confidence   float64   `bun:",notnull"`
+	LastUpdated  time.Time `bun:",notnull"`
+	ThumbnailURL string
+}
+
+// ConfirmedGroup stores information about a group that has been reviewed and confirmed.
+// The last_scanned field helps track when to re-check the group's members.
+type ConfirmedGroup struct {
+	ID          uint64 `bun:",pk"`
+	Name        string `bun:",notnull"`
+	Description string `bun:",notnull"`
+	Owner       uint64 `bun:",notnull"`
+	LastScanned time.Time
+}
+
 // GroupRepository handles database operations for group records.
 type GroupRepository struct {
 	db     *bun.DB

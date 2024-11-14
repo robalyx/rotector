@@ -50,8 +50,7 @@ func NewMenu(h *Handler) *Menu {
 	return &m
 }
 
-// ShowDashboard prepares and displays the dashboard interface by loading
-// current statistics and active user information into the session.
+// ShowDashboard prepares and displays the dashboard interface.
 func (m *Menu) ShowDashboard(event interfaces.CommonEvent, s *session.Session, content string) {
 	// Get worker statuses
 	workerStatuses, err := m.handler.workerMonitor.GetAllStatuses(context.Background())
@@ -75,12 +74,15 @@ func (m *Menu) ShowDashboard(event interfaces.CommonEvent, s *session.Session, c
 		m.handler.logger.Error("Failed to get cleared users count", zap.Error(err))
 	}
 
-	// Generate statistics chart
-	hourlyStats, err := m.handler.stats.GetHourlyStats(context.Background())
+	// Get hourly stats for the chart
+	hourlyStats, err := m.handler.db.Stats().GetHourlyStats(context.Background())
 	if err != nil {
 		m.handler.logger.Error("Failed to get hourly stats", zap.Error(err))
 	}
 
+	m.handler.logger.Info("Hourly stats", zap.Any("stats", hourlyStats))
+
+	// Generate statistics chart (always create a chart, even with empty stats)
 	statsChart, err := builders.NewChartBuilder(hourlyStats).Build()
 	if err != nil {
 		m.handler.logger.Error("Failed to build stats chart", zap.Error(err))

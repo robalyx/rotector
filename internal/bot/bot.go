@@ -28,7 +28,6 @@ import (
 	"github.com/rotector/rotector/internal/common/database"
 	queueManager "github.com/rotector/rotector/internal/common/queue"
 	"github.com/rotector/rotector/internal/common/redis"
-	"github.com/rotector/rotector/internal/common/statistics"
 )
 
 // Bot coordinates all the handlers and managers needed for Discord interaction.
@@ -52,7 +51,6 @@ type Bot struct {
 func New(
 	token string,
 	db *database.Database,
-	stats *statistics.Client,
 	roAPI *api.API,
 	queueManager *queueManager.Manager,
 	redisManager *redis.Manager,
@@ -67,7 +65,7 @@ func New(
 
 	// Create handlers with their dependencies
 	// Each handler receives references to managers it needs to function
-	dashboardHandler := dashboard.New(db, stats, logger, sessionManager, paginationManager, redisManager)
+	dashboardHandler := dashboard.New(db, logger, sessionManager, paginationManager, redisManager)
 	reviewHandler := review.New(db, logger, roAPI, sessionManager, paginationManager, queueManager, dashboardHandler)
 	settingHandler := setting.New(db, logger, sessionManager, paginationManager, dashboardHandler)
 	logHandler := log.New(db, sessionManager, paginationManager, dashboardHandler, logger)

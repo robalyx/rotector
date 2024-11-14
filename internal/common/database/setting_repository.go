@@ -4,10 +4,36 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"slices"
 
+	"github.com/disgoorg/snowflake/v2"
 	"github.com/uptrace/bun"
 	"go.uber.org/zap"
 )
+
+// UserSetting stores user-specific preferences.
+type UserSetting struct {
+	UserID       uint64 `bun:",pk"`
+	StreamerMode bool   `bun:",notnull"`
+	DefaultSort  string `bun:",notnull"`
+}
+
+// GuildSetting stores server-wide configuration options.
+type GuildSetting struct {
+	GuildID          uint64   `bun:",pk"`
+	WhitelistedRoles []uint64 `bun:"type:bigint[]"`
+}
+
+// HasAnyRole checks if any of the provided role IDs match the whitelisted roles.
+// Returns true if there is at least one match, false otherwise.
+func (s *GuildSetting) HasAnyRole(roleIDs []snowflake.ID) bool {
+	for _, roleID := range roleIDs {
+		if slices.Contains(s.WhitelistedRoles, uint64(roleID)) {
+			return true
+		}
+	}
+	return false
+}
 
 // SettingRepository handles database operations for user and guild settings.
 type SettingRepository struct {

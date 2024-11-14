@@ -3,8 +3,9 @@ package builders
 import (
 	"bytes"
 	"fmt"
+	"time"
 
-	"github.com/rotector/rotector/internal/common/statistics"
+	"github.com/rotector/rotector/internal/common/database"
 	"github.com/wcharczuk/go-chart/v2"
 	"github.com/wcharczuk/go-chart/v2/drawing"
 )
@@ -36,14 +37,13 @@ const (
 	paddingRight = 20
 )
 
-// ChartBuilder creates statistical charts for the dashboard by combining
-// hourly data points into line graphs.
+// ChartBuilder creates statistical charts for the dashboard.
 type ChartBuilder struct {
-	stats statistics.HourlyStats
+	stats []database.HourlyStats
 }
 
 // NewChartBuilder loads hourly statistics to create a new chart builder.
-func NewChartBuilder(stats statistics.HourlyStats) *ChartBuilder {
+func NewChartBuilder(stats []database.HourlyStats) *ChartBuilder {
 	return &ChartBuilder{
 		stats: stats,
 	}
@@ -88,34 +88,50 @@ func (b *ChartBuilder) Build() (*bytes.Buffer, error) {
 	return buf, nil
 }
 
-// prepareDataSeries extracts data points from hourly statistics into
-// separate slices for x-axis values and each data series.
+// prepareDataSeries extracts data points from hourly statistics.
 func (b *ChartBuilder) prepareDataSeries() ([]float64, []float64, []float64, []float64) {
-	xValues := make([]float64, len(b.stats))
-	confirmedSeries := make([]float64, len(b.stats))
-	flaggedSeries := make([]float64, len(b.stats))
-	clearedSeries := make([]float64, len(b.stats))
+	const hoursToShow = 24
+	xValues := make([]float64, hoursToShow)
+	confirmedSeries := make([]float64, hoursToShow)
+	flaggedSeries := make([]float64, hoursToShow)
+	clearedSeries := make([]float64, hoursToShow)
 
-	for i, stat := range b.stats {
+	// Create a map of truncated timestamps to stats for lookup
+	statsMap := make(map[time.Time]database.HourlyStats)
+	for _, stat := range b.stats {
+		// Truncate timestamp to hour to ensure exact matches
+		truncatedTime := stat.Timestamp.Truncate(time.Hour)
+		statsMap[truncatedTime] = stat
+	}
+
+	// Fill in data points for each hour, using 0 for missing hours
+	now := time.Now().UTC().Truncate(time.Hour)
+	for i := range hoursToShow {
 		xValues[i] = float64(i)
-		confirmedSeries[i] = float64(stat.Confirmed)
-		flaggedSeries[i] = float64(stat.Flagged)
-		clearedSeries[i] = float64(stat.Cleared)
+		timestamp := now.Add(time.Duration(-i) * time.Hour)
+
+		if stat, exists := statsMap[timestamp]; exists {
+			// Place values in reverse order (newest to oldest)
+			confirmedSeries[hoursToShow-1-i] = float64(stat.UsersConfirmed)
+			flaggedSeries[hoursToShow-1-i] = float64(stat.UsersFlagged)
+			clearedSeries[hoursToShow-1-i] = float64(stat.UsersCleared)
+		}
 	}
 
 	return xValues, confirmedSeries, flaggedSeries, clearedSeries
 }
 
-// prepareGridLinesAndTicks creates grid lines and x-axis labels showing
-// how many hours ago each data point represents.
+// prepareGridLinesAndTicks creates grid lines and x-axis labels.
 func (b *ChartBuilder) prepareGridLinesAndTicks() ([]chart.GridLine, []chart.Tick) {
-	gridLines := make([]chart.GridLine, len(b.stats))
-	ticks := make([]chart.Tick, len(b.stats))
-	for i := range b.stats {
+	const hoursToShow = 24
+	gridLines := make([]chart.GridLine, hoursToShow)
+	ticks := make([]chart.Tick, hoursToShow)
+
+	for i := range hoursToShow {
 		gridLines[i] = chart.GridLine{Value: float64(i)}
 
 		// Format as hours ago
-		hoursAgo := len(b.stats) - 1 - i
+		hoursAgo := hoursToShow - 1 - i
 		label := "now"
 		if hoursAgo > 0 {
 			label = fmt.Sprintf("%dh ago", hoursAgo)
