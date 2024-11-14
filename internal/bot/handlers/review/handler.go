@@ -27,6 +27,7 @@ type Handler struct {
 	statusMenu        *StatusMenu
 	logger            *zap.Logger
 	dashboardHandler  interfaces.DashboardHandler
+	logHandler        interfaces.LogHandler
 	thumbnailFetcher  *fetcher.ThumbnailFetcher
 	presenceFetcher   *fetcher.PresenceFetcher
 }
@@ -41,6 +42,7 @@ func New(
 	paginationManager *pagination.Manager,
 	queueManager *queue.Manager,
 	dashboardHandler interfaces.DashboardHandler,
+	logHandler interfaces.LogHandler,
 ) *Handler {
 	h := &Handler{
 		db:                db,
@@ -50,6 +52,7 @@ func New(
 		queueManager:      queueManager,
 		logger:            logger,
 		dashboardHandler:  dashboardHandler,
+		logHandler:        logHandler,
 		thumbnailFetcher:  fetcher.NewThumbnailFetcher(roAPI, logger),
 		presenceFetcher:   fetcher.NewPresenceFetcher(roAPI, logger),
 	}

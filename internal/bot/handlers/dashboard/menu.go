@@ -117,7 +117,7 @@ func (m *Menu) handleSelectMenu(event *events.ComponentInteractionCreate, s *ses
 	case constants.GuildSettingsCustomID:
 		m.handler.settingsHandler.ShowGuildSettings(event, s)
 	case constants.LogActivityBrowserCustomID:
-		m.handler.logsHandler.ShowLogMenu(event, s)
+		m.handler.logHandler.ShowLogMenu(event, s)
 	case constants.QueueManagerCustomID:
 		m.handler.queueHandler.ShowQueueMenu(event, s)
 	}

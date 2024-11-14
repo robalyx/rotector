@@ -22,7 +22,7 @@ type Handler struct {
 	logger            *zap.Logger
 	reviewHandler     interfaces.ReviewHandler
 	settingsHandler   interfaces.SettingsHandler
-	logsHandler       interfaces.LogsHandler
+	logHandler        interfaces.LogHandler
 	queueHandler      interfaces.QueueHandler
 }
 
@@ -68,10 +68,10 @@ func (h *Handler) SetSettingsHandler(settingsHandler interfaces.SettingsHandler)
 	h.settingsHandler = settingsHandler
 }
 
-// SetLogsHandler links the logs handler to enable navigation
+// SetLogHandler links the log handler to enable navigation
 // to the logs section from the dashboard.
-func (h *Handler) SetLogsHandler(logsHandler interfaces.LogsHandler) {
-	h.logsHandler = logsHandler
+func (h *Handler) SetLogHandler(logHandler interfaces.LogHandler) {
+	h.logHandler = logHandler
 }
 
 // SetQueueHandler links the queue handler to enable navigation

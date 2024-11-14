@@ -66,15 +66,15 @@ func New(
 	// Create handlers with their dependencies
 	// Each handler receives references to managers it needs to function
 	dashboardHandler := dashboard.New(db, logger, sessionManager, paginationManager, redisManager)
-	reviewHandler := review.New(db, logger, roAPI, sessionManager, paginationManager, queueManager, dashboardHandler)
-	settingHandler := setting.New(db, logger, sessionManager, paginationManager, dashboardHandler)
 	logHandler := log.New(db, sessionManager, paginationManager, dashboardHandler, logger)
+	settingHandler := setting.New(db, logger, sessionManager, paginationManager, dashboardHandler)
+	reviewHandler := review.New(db, logger, roAPI, sessionManager, paginationManager, queueManager, dashboardHandler, logHandler)
 	queueHandler := queue.New(db, logger, sessionManager, paginationManager, queueManager, dashboardHandler, reviewHandler)
 
 	// Cross-link handlers to enable navigation between different sections
-	dashboardHandler.SetReviewHandler(reviewHandler)
+	dashboardHandler.SetLogHandler(logHandler)
 	dashboardHandler.SetSettingsHandler(settingHandler)
-	dashboardHandler.SetLogsHandler(logHandler)
+	dashboardHandler.SetReviewHandler(reviewHandler)
 	dashboardHandler.SetQueueHandler(queueHandler)
 
 	// Initialize bot structure with all components

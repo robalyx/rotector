@@ -31,11 +31,14 @@ type SettingsHandler interface {
 	ShowGuildSettings(event CommonEvent, s *session.Session)
 }
 
-// LogsHandler defines the interface for handling logs-related actions.
-type LogsHandler interface {
+// LogHandler defines the interface for handling logs-related actions.
+type LogHandler interface {
 	// ShowLogMenu prepares and displays the log interface by initializing
 	// session data with default values and loading user preferences.
 	ShowLogMenu(event CommonEvent, s *session.Session)
+	// ResetFilters resets all log filters to their default values in the given session.
+	// This is useful when switching between different views or users.
+	ResetFilters(s *session.Session)
 }
 
 // QueueHandler defines the interface for handling queue-related actions.

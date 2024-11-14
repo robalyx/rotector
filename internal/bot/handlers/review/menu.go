@@ -114,6 +114,8 @@ func (m *Menu) handleSelectMenu(event *events.ComponentInteractionCreate, s *ses
 			m.handleConfirmWithReason(event, s)
 		case constants.RecheckButtonCustomID:
 			m.handleRecheck(event, s)
+		case constants.ViewUserLogsButtonCustomID:
+			m.handleViewUserLogs(event, s)
 		case constants.OpenOutfitsMenuButtonCustomID:
 			m.handler.outfitsMenu.ShowOutfitsMenu(event, s, 0)
 		case constants.OpenFriendsMenuButtonCustomID:
@@ -198,6 +200,24 @@ func (m *Menu) handleRecheck(event *events.ComponentInteractionCreate, s *sessio
 	s.Set(constants.SessionKeyQueueUser, user.ID)
 
 	m.handler.statusMenu.ShowStatusMenu(event, s)
+}
+
+// handleViewUserLogs handles the shortcut to view user logs.
+// It stores the user ID in session for log filtering and shows the logs menu.
+func (m *Menu) handleViewUserLogs(event *events.ComponentInteractionCreate, s *session.Session) {
+	var user *database.FlaggedUser
+	s.GetInterface(constants.SessionKeyTarget, &user)
+	if user == nil {
+		m.handler.paginationManager.RespondWithError(event, "No user selected to view logs.")
+		return
+	}
+
+	// Set the user ID filter
+	m.handler.logHandler.ResetFilters(s)
+	s.Set(constants.SessionKeyUserIDFilter, user.ID)
+
+	// Show the logs menu
+	m.handler.logHandler.ShowLogMenu(event, s)
 }
 
 // handleConfirmUser moves a user to the confirmed state and logs the action.

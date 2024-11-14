@@ -25,6 +25,7 @@ const (
 
 	ConfirmWithReasonButtonCustomID = "confirm_with_reason_exception"
 	RecheckButtonCustomID           = "recheck"
+	ViewUserLogsButtonCustomID      = "view_user_logs"
 	OpenOutfitsMenuButtonCustomID   = "open_outfits_menu"
 	OpenFriendsMenuButtonCustomID   = "open_friends_menu"
 	OpenGroupsMenuButtonCustomID    = "open_groups_menu"

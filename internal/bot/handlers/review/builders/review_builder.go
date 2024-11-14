@@ -112,6 +112,9 @@ func (b *ReviewEmbed) Build() *discord.MessageUpdateBuilder {
 				discord.NewStringSelectMenuOption("Recheck user", constants.RecheckButtonCustomID).
 					WithEmoji(discord.ComponentEmoji{Name: "🔄"}).
 					WithDescription("Add user to high priority queue for recheck"),
+				discord.NewStringSelectMenuOption("View user logs", constants.ViewUserLogsButtonCustomID).
+					WithEmoji(discord.ComponentEmoji{Name: "📋"}).
+					WithDescription("View activity logs for this user"),
 				discord.NewStringSelectMenuOption("Open outfit viewer", constants.OpenOutfitsMenuButtonCustomID).
 					WithEmoji(discord.ComponentEmoji{Name: "👕"}).
 					WithDescription("View all user outfits"),

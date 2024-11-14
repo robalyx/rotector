@@ -1,6 +1,9 @@
 package log
 
 import (
+	"time"
+
+	"github.com/rotector/rotector/internal/bot/constants"
 	"github.com/rotector/rotector/internal/bot/interfaces"
 	"github.com/rotector/rotector/internal/bot/pagination"
 	"github.com/rotector/rotector/internal/bot/session"
@@ -48,4 +51,18 @@ func New(
 // session data with default values and loading user preferences.
 func (h *Handler) ShowLogMenu(event interfaces.CommonEvent, s *session.Session) {
 	h.logMenu.ShowLogMenu(event, s)
+}
+
+// ResetFilters resets all log filters to their default values in the given session.
+// This is useful when switching between different views or users.
+func (h *Handler) ResetFilters(s *session.Session) {
+	s.Set(constants.SessionKeyLogs, []*database.UserActivityLog{})
+	s.Set(constants.SessionKeyUserIDFilter, uint64(0))
+	s.Set(constants.SessionKeyReviewerIDFilter, uint64(0))
+	s.Set(constants.SessionKeyActivityTypeFilter, database.ActivityTypeAll)
+	s.Set(constants.SessionKeyDateRangeStartFilter, time.Time{})
+	s.Set(constants.SessionKeyDateRangeEndFilter, time.Time{})
+	s.Set(constants.SessionKeyTotalItems, 0)
+	s.Set(constants.SessionKeyPaginationPage, 0)
+	s.Set(constants.SessionKeyStart, 0)
 }

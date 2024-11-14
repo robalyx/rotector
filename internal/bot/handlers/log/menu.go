@@ -43,21 +43,35 @@ func NewMenu(h *Handler) *Menu {
 	return m
 }
 
-// ShowLogMenu prepares and displays the log interface by initializing
-// session data with default values and loading user preferences.
+// ShowLogMenu prepares and displays the logs based on current filters
+// and updates the session with the results.
 func (m *Menu) ShowLogMenu(event interfaces.CommonEvent, s *session.Session) {
-	// Initialize session data with default values
-	s.Set(constants.SessionKeyLogs, []*database.UserActivityLog{})
-	s.Set(constants.SessionKeyUserIDFilter, uint64(0))
-	s.Set(constants.SessionKeyReviewerIDFilter, uint64(0))
-	s.Set(constants.SessionKeyActivityTypeFilter, database.ActivityTypeAll)
-	s.Set(constants.SessionKeyDateRangeStartFilter, time.Time{})
-	s.Set(constants.SessionKeyDateRangeEndFilter, time.Time{})
-	s.Set(constants.SessionKeyTotalItems, 0)
-	s.Set(constants.SessionKeyStart, 0)
-	s.Set(constants.SessionKeyPaginationPage, 0)
+	// Get query parameters from session
+	var activityTypeFilter database.ActivityType
+	s.GetInterface(constants.SessionKeyActivityTypeFilter, &activityTypeFilter)
+	var startDate time.Time
+	s.GetInterface(constants.SessionKeyDateRangeStartFilter, &startDate)
+	var endDate time.Time
+	s.GetInterface(constants.SessionKeyDateRangeEndFilter, &endDate)
 
-	m.updateLogData(event, s, 0)
+	userID := s.GetUint64(constants.SessionKeyUserIDFilter)
+	reviewerID := s.GetUint64(constants.SessionKeyReviewerIDFilter)
+	currentPage := s.GetInt(constants.SessionKeyPaginationPage)
+
+	// Fetch filtered logs from database
+	logs, totalLogs, err := m.handler.db.UserActivity().GetLogs(context.Background(), userID, reviewerID, activityTypeFilter, startDate, endDate, currentPage, constants.LogsPerPage)
+	if err != nil {
+		m.handler.logger.Error("Failed to get logs", zap.Error(err))
+		m.handler.paginationManager.NavigateTo(event, s, m.page, "Failed to retrieve log data. Please try again.")
+		return
+	}
+
+	// Store results in session for the message builder
+	s.Set(constants.SessionKeyLogs, logs)
+	s.Set(constants.SessionKeyTotalItems, totalLogs)
+	s.Set(constants.SessionKeyStart, currentPage*constants.LogsPerPage)
+
+	m.handler.paginationManager.NavigateTo(event, s, m.page, "")
 }
 
 // handleSelectMenu processes select menu interactions by showing the appropriate
@@ -86,7 +100,7 @@ func (m *Menu) handleSelectMenu(event *events.ComponentInteractionCreate, s *ses
 		s.Set(constants.SessionKeyActivityTypeFilter, database.ActivityType(optionInt))
 		s.Set(constants.SessionKeyStart, 0)
 		s.Set(constants.SessionKeyPaginationPage, 0)
-		m.updateLogData(event, s, 0)
+		m.ShowLogMenu(event, s)
 	}
 }
 
@@ -95,21 +109,12 @@ func (m *Menu) handleSelectMenu(event *events.ComponentInteractionCreate, s *ses
 func (m *Menu) handleButton(event *events.ComponentInteractionCreate, s *session.Session, customID string) {
 	switch customID {
 	case constants.BackButtonCustomID:
-		m.handler.dashboardHandler.ShowDashboard(event, s, "")
+		m.handler.paginationManager.NavigateBack(event, s, "")
 	case constants.RefreshButtonCustomID:
-		// Keep current page and filters, just refresh the data
-		currentPage := s.GetInt(constants.SessionKeyPaginationPage)
-		m.updateLogData(event, s, currentPage)
+		m.ShowLogMenu(event, s)
 	case constants.ClearFiltersButtonCustomID:
-		// Reset all filters to default values
-		s.Set(constants.SessionKeyUserIDFilter, uint64(0))
-		s.Set(constants.SessionKeyReviewerIDFilter, uint64(0))
-		s.Set(constants.SessionKeyActivityTypeFilter, database.ActivityTypeAll)
-		s.Set(constants.SessionKeyDateRangeStartFilter, time.Time{})
-		s.Set(constants.SessionKeyDateRangeEndFilter, time.Time{})
-		s.Set(constants.SessionKeyPaginationPage, 0)
-
-		m.updateLogData(event, s, 0)
+		m.handler.ResetFilters(s)
+		m.ShowLogMenu(event, s)
 	case string(utils.ViewerFirstPage), string(utils.ViewerPrevPage), string(utils.ViewerNextPage), string(utils.ViewerLastPage):
 		m.handlePagination(event, s, utils.ViewerAction(customID))
 	}
@@ -161,9 +166,9 @@ func (m *Menu) handleIDModalSubmit(event *events.ModalSubmitInteractionCreate, s
 	} else if queryType == constants.LogsQueryReviewerIDOption {
 		s.Set(constants.SessionKeyReviewerIDFilter, id)
 	}
-	s.Set(constants.SessionKeyPaginationPage, 0)
 
-	m.updateLogData(event, s, 0)
+	s.Set(constants.SessionKeyPaginationPage, 0)
+	m.ShowLogMenu(event, s)
 }
 
 // handleDateRangeModalSubmit processes date range modal submissions by parsing
@@ -180,7 +185,7 @@ func (m *Menu) handleDateRangeModalSubmit(event *events.ModalSubmitInteractionCr
 	s.Set(constants.SessionKeyDateRangeEndFilter, endDate)
 	s.Set(constants.SessionKeyPaginationPage, 0)
 
-	m.updateLogData(event, s, 0)
+	m.ShowLogMenu(event, s)
 }
 
 // handlePagination processes page navigation by calculating the target page
@@ -196,35 +201,6 @@ func (m *Menu) handlePagination(event *events.ComponentInteractionCreate, s *ses
 		return
 	}
 
-	m.updateLogData(event, s, newPage)
-}
-
-// updateLogData fetches log entries from the database based on current filters
-// and updates the session with the results.
-func (m *Menu) updateLogData(event interfaces.CommonEvent, s *session.Session, page int) {
-	// Get query parameters from session
-	var activityTypeFilter database.ActivityType
-	s.GetInterface(constants.SessionKeyActivityTypeFilter, &activityTypeFilter)
-	var startDate time.Time
-	s.GetInterface(constants.SessionKeyDateRangeStartFilter, &startDate)
-	var endDate time.Time
-	s.GetInterface(constants.SessionKeyDateRangeEndFilter, &endDate)
-
-	userID := s.GetUint64(constants.SessionKeyUserIDFilter)
-	reviewerID := s.GetUint64(constants.SessionKeyReviewerIDFilter)
-
-	// Fetch filtered logs from database
-	logs, totalLogs, err := m.handler.db.UserActivity().GetLogs(context.Background(), userID, reviewerID, activityTypeFilter, startDate, endDate, page, constants.LogsPerPage)
-	if err != nil {
-		m.handler.logger.Error("Failed to get logs", zap.Error(err))
-		m.handler.paginationManager.NavigateTo(event, s, m.page, "Failed to retrieve log data. Please try again.")
-		return
-	}
-
-	// Store results in session for the message builder
-	s.Set(constants.SessionKeyLogs, logs)
-	s.Set(constants.SessionKeyTotalItems, totalLogs)
-	s.Set(constants.SessionKeyStart, page*constants.LogsPerPage)
-
-	m.handler.paginationManager.NavigateTo(event, s, m.page, "")
+	s.Set(constants.SessionKeyPaginationPage, newPage)
+	m.ShowLogMenu(event, s)
 }
