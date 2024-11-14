@@ -89,6 +89,10 @@ func (m *Menu) ShowReviewMenu(event interfaces.CommonEvent, s *session.Session, 
 
 // handleSelectMenu handles the select menu for the review menu.
 func (m *Menu) handleSelectMenu(event *events.ComponentInteractionCreate, s *session.Session, customID string, option string) {
+	if m.checkLastViewed(event, s) {
+		return
+	}
+
 	switch customID {
 	case constants.SortOrderSelectMenuCustomID:
 		// Retrieve user settings from session
@@ -122,6 +126,10 @@ func (m *Menu) handleSelectMenu(event *events.ComponentInteractionCreate, s *ses
 
 // handleButton handles the buttons for the review menu.
 func (m *Menu) handleButton(event *events.ComponentInteractionCreate, s *session.Session, customID string) {
+	if m.checkLastViewed(event, s) {
+		return
+	}
+
 	switch customID {
 	case constants.BackButtonCustomID:
 		m.handler.dashboardHandler.ShowDashboard(event, s, "")
@@ -136,6 +144,10 @@ func (m *Menu) handleButton(event *events.ComponentInteractionCreate, s *session
 
 // handleModal handles the modal for the review menu.
 func (m *Menu) handleModal(event *events.ModalSubmitInteractionCreate, s *session.Session) {
+	if m.checkLastViewed(event, s) {
+		return
+	}
+
 	if event.Data.CustomID == constants.ConfirmWithReasonModalCustomID {
 		m.handleConfirmWithReasonModalSubmit(event, s)
 	}
@@ -371,4 +383,21 @@ func (m *Menu) fetchNewTarget(s *session.Session, reviewerID uint64) (*database.
 	})
 
 	return user, nil
+}
+
+// checkLastViewed checks if the current target user has timed out and needs to be refreshed.
+// Clears the current user and loads a new one if the timeout is detected.
+func (m *Menu) checkLastViewed(event interfaces.CommonEvent, s *session.Session) bool {
+	var user *database.FlaggedUser
+	s.GetInterface(constants.SessionKeyTarget, &user)
+
+	// Check if more than 10 minutes have passed since last view
+	if user != nil && time.Since(user.LastViewed) > 10*time.Minute {
+		// Clear current user and load new one
+		s.Delete(constants.SessionKeyTarget)
+		m.ShowReviewMenu(event, s, "Previous review timed out after 10 minutes of inactivity. Showing new user.")
+		return true
+	}
+
+	return false
 }
