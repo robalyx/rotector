@@ -22,9 +22,11 @@ const (
 
 	ConfirmWithReasonModalCustomID = "confirm_with_reason_modal"
 	ConfirmReasonInputCustomID     = "confirm_reason"
+	RecheckReasonModalCustomID     = "recheck_reason_modal"
+	RecheckReasonInputCustomID     = "recheck_reason"
 
 	ConfirmWithReasonButtonCustomID = "confirm_with_reason_exception"
-	RecheckButtonCustomID           = "recheck"
+	RecheckButtonCustomID           = "recheck_exception"
 	ViewUserLogsButtonCustomID      = "view_user_logs"
 	OpenOutfitsMenuButtonCustomID   = "open_outfits_menu"
 	OpenFriendsMenuButtonCustomID   = "open_friends_menu"

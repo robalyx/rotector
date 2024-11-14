@@ -150,8 +150,11 @@ func (m *Menu) handleModal(event *events.ModalSubmitInteractionCreate, s *sessio
 		return
 	}
 
-	if event.Data.CustomID == constants.ConfirmWithReasonModalCustomID {
+	switch event.Data.CustomID {
+	case constants.ConfirmWithReasonModalCustomID:
 		m.handleConfirmWithReasonModalSubmit(event, s)
+	case constants.RecheckReasonModalCustomID:
+		m.handleRecheckModalSubmit(event, s)
 	}
 }
 
@@ -168,11 +171,42 @@ func (m *Menu) handleRecheck(event *events.ComponentInteractionCreate, s *sessio
 		return
 	}
 
+	// Create modal for reason input
+	modal := discord.NewModalCreateBuilder().
+		SetCustomID(constants.RecheckReasonModalCustomID).
+		SetTitle("Recheck User").
+		AddActionRow(
+			discord.NewTextInput(constants.RecheckReasonInputCustomID, discord.TextInputStyleParagraph, "Recheck Reason").
+				WithRequired(true).
+				WithPlaceholder("Enter the reason for rechecking this user..."),
+		).
+		Build()
+
+	// Show modal to user
+	if err := event.Modal(modal); err != nil {
+		m.handler.logger.Error("Failed to create modal", zap.Error(err))
+		m.handler.paginationManager.RespondWithError(event, "Failed to open the recheck reason form. Please try again.")
+	}
+}
+
+// handleRecheckModalSubmit processes the custom recheck reason from the modal
+// and performs the recheck with the provided reason.
+func (m *Menu) handleRecheckModalSubmit(event *events.ModalSubmitInteractionCreate, s *session.Session) {
+	var user *database.FlaggedUser
+	s.GetInterface(constants.SessionKeyTarget, &user)
+
+	// Get and validate the recheck reason
+	reason := event.Data.Text(constants.RecheckReasonInputCustomID)
+	if reason == "" {
+		m.ShowReviewMenu(event, s, "Recheck reason cannot be empty. Please try again.")
+		return
+	}
+
 	// Add to high priority queue with reviewer information
-	err = m.handler.queueManager.AddToQueue(context.Background(), &queue.Item{
+	err := m.handler.queueManager.AddToQueue(context.Background(), &queue.Item{
 		UserID:      user.ID,
 		Priority:    queue.HighPriority,
-		Reason:      fmt.Sprintf("Re-queue requested by reviewer %d", event.User().ID),
+		Reason:      reason,
 		AddedBy:     uint64(event.User().ID),
 		AddedAt:     time.Now(),
 		Status:      queue.StatusPending,
