@@ -68,12 +68,13 @@ func (b *GroupsEmbed) Build() *discord.MessageUpdateBuilder {
 	file := discord.NewFile(fileName, "", b.imageBuffer)
 
 	// Build embed with user info and thumbnails
+	censor := b.settings.StreamerMode || b.settings.ReviewMode == database.TrainingReviewMode
 	embed := discord.NewEmbedBuilder().
 		SetTitle(fmt.Sprintf("User Groups (Page %d/%d)", b.page+1, totalPages)).
 		SetDescription(fmt.Sprintf(
 			"```%s (%s)```",
-			utils.CensorString(b.user.Name, b.settings.StreamerMode),
-			utils.CensorString(strconv.FormatUint(b.user.ID, 10), b.settings.StreamerMode),
+			utils.CensorString(b.user.Name, censor),
+			utils.CensorString(strconv.FormatUint(b.user.ID, 10), censor),
 		)).
 		SetImage("attachment://" + fileName).
 		SetColor(utils.GetMessageEmbedColor(b.settings.StreamerMode))
@@ -103,12 +104,17 @@ func (b *GroupsEmbed) Build() *discord.MessageUpdateBuilder {
 			fieldName += " ✓"
 		}
 
-		// Format group information
-		info := fmt.Sprintf(
-			"[%s](https://www.roblox.com/groups/%d)\n",
-			utils.CensorString(group.Group.Name, b.settings.StreamerMode),
-			group.Group.ID,
-		)
+		// Format group information based on mode
+		var info string
+		if b.settings.ReviewMode == database.TrainingReviewMode {
+			info = utils.CensorString(group.Group.Name, true) + "\n"
+		} else {
+			info = fmt.Sprintf(
+				"[%s](https://www.roblox.com/groups/%d)\n",
+				utils.CensorString(group.Group.Name, b.settings.StreamerMode),
+				group.Group.ID,
+			)
+		}
 
 		// Add member count and role
 		info += fmt.Sprintf("👥 `%s` • 👤 `%s`\n",
@@ -116,11 +122,15 @@ func (b *GroupsEmbed) Build() *discord.MessageUpdateBuilder {
 			group.Role.Name,
 		)
 
-		// Add owner information
-		info += fmt.Sprintf("👑 Owner: [%s](https://www.roblox.com/users/%d/profile)\n",
-			utils.CensorString(group.Group.Owner.Username, b.settings.StreamerMode),
-			group.Group.Owner.UserID,
-		)
+		// Add owner information based on mode
+		if b.settings.ReviewMode == database.TrainingReviewMode {
+			info += fmt.Sprintf("👑 Owner: %s\n",
+				utils.CensorString(group.Group.Owner.Username, true))
+		} else {
+			info += fmt.Sprintf("👑 Owner: [%s](https://www.roblox.com/users/%d/profile)\n",
+				utils.CensorString(group.Group.Owner.Username, b.settings.StreamerMode),
+				group.Group.Owner.UserID)
+		}
 
 		// Add group status indicators
 		var status []string

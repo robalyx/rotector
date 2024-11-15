@@ -15,11 +15,13 @@ func _() {
 	_ = x[ActivityTypeCleared-4]
 	_ = x[ActivityTypeSkipped-5]
 	_ = x[ActivityTypeRechecked-6]
+	_ = x[ActivityTypeTrainingUpvote-7]
+	_ = x[ActivityTypeTrainingDownvote-8]
 }
 
-const _ActivityType_name = "ALLVIEWEDCONFIRMEDCONFIRMED_CUSTOMCLEAREDSKIPPEDRECHECKED"
+const _ActivityType_name = "ALLVIEWEDCONFIRMEDCONFIRMED_CUSTOMCLEAREDSKIPPEDRECHECKEDTRAINING_UPVOTETRAINING_DOWNVOTE"
 
-var _ActivityType_index = [...]uint8{0, 3, 9, 18, 34, 41, 48, 57}
+var _ActivityType_index = [...]uint8{0, 3, 9, 18, 34, 41, 48, 57, 72, 89}
 
 func (i ActivityType) String() string {
 	if i < 0 || i >= ActivityType(len(_ActivityType_index)-1) {

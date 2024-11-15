@@ -60,13 +60,20 @@ func (b *StatusEmbed) Build() *discord.MessageUpdateBuilder {
 
 	// Create embed with queue information
 	embed := discord.NewEmbedBuilder().
-		SetTitle("Recheck Status").
-		AddField("Current User", fmt.Sprintf(
+		SetTitle("Recheck Status")
+
+	// Format user field based on review mode
+	if b.settings.ReviewMode == database.TrainingReviewMode {
+		embed.AddField("Current User", utils.CensorString(strconv.FormatUint(b.userID, 10), true), true)
+	} else {
+		embed.AddField("Current User", fmt.Sprintf(
 			"[%s](https://roblox.com/users/%d/profile)",
 			utils.CensorString(strconv.FormatUint(b.userID, 10), b.settings.StreamerMode),
 			b.userID,
-		), true).
-		AddField("Status", queueInfo, false).
+		), true)
+	}
+
+	embed.AddField("Status", queueInfo, false).
 		AddField("High Priority Queue", fmt.Sprintf("%d items", b.highPriorityCount), true).
 		AddField("Normal Priority Queue", fmt.Sprintf("%d items", b.normalPriorityCount), true).
 		AddField("Low Priority Queue", fmt.Sprintf("%d items", b.lowPriorityCount), true).

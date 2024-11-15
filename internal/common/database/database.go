@@ -3,7 +3,6 @@ package database
 import (
 	"context"
 	"database/sql"
-	"errors"
 	"fmt"
 
 	"github.com/rotector/rotector/internal/common/config"
@@ -12,18 +11,6 @@ import (
 	"github.com/uptrace/bun/driver/pgdriver"
 	"go.uber.org/zap"
 )
-
-const (
-	// SortByRandom orders users randomly to ensure even distribution of reviews.
-	SortByRandom = "random"
-	// SortByConfidence orders users by their confidence score from highest to lowest.
-	SortByConfidence = "confidence"
-	// SortByLastUpdated orders users by their last update time from oldest to newest.
-	SortByLastUpdated = "last_updated"
-)
-
-// ErrInvalidSortBy indicates that the provided sort method is not supported.
-var ErrInvalidSortBy = errors.New("invalid sortBy value")
 
 // Database represents the database connection and operations.
 // It manages access to different repositories that handle specific data types.
@@ -133,6 +120,12 @@ func (d *Database) createSchema() error {
 		CREATE INDEX IF NOT EXISTS idx_flagged_users_last_viewed ON flagged_users (last_viewed);
 		CREATE INDEX IF NOT EXISTS idx_flagged_users_confidence ON flagged_users (confidence DESC);
 		CREATE INDEX IF NOT EXISTS idx_flagged_users_last_updated ON flagged_users (last_updated ASC);
+
+		-- Training mode reputation indexes
+		CREATE INDEX IF NOT EXISTS idx_flagged_users_reputation ON flagged_users (reputation DESC);
+		CREATE INDEX IF NOT EXISTS idx_confirmed_users_reputation ON confirmed_users (reputation DESC);
+		CREATE INDEX IF NOT EXISTS idx_cleared_users_reputation ON cleared_users (reputation DESC);
+		CREATE INDEX IF NOT EXISTS idx_banned_users_reputation ON banned_users (reputation DESC);
 
 		-- Statistics indexes
 		CREATE INDEX IF NOT EXISTS idx_hourly_stats_timestamp ON hourly_stats (timestamp DESC);

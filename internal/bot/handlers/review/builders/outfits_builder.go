@@ -60,11 +60,12 @@ func (b *OutfitsEmbed) Build() *discord.MessageUpdateBuilder {
 	file := discord.NewFile(fileName, "", b.imageBuffer)
 
 	// Build embed with user info and thumbnails
+	censor := b.settings.StreamerMode || b.settings.ReviewMode == database.TrainingReviewMode
 	embed := discord.NewEmbedBuilder().
 		SetTitle(fmt.Sprintf("User Outfits (Page %d/%d)", b.page+1, totalPages)).
 		SetDescription(fmt.Sprintf("```%s (%s)```",
-			utils.CensorString(b.user.Name, b.settings.StreamerMode),
-			utils.CensorString(strconv.FormatUint(b.user.ID, 10), b.settings.StreamerMode),
+			utils.CensorString(b.user.Name, censor),
+			utils.CensorString(strconv.FormatUint(b.user.ID, 10), censor),
 		)).
 		SetImage("attachment://" + fileName).
 		SetColor(utils.GetMessageEmbedColor(b.settings.StreamerMode))

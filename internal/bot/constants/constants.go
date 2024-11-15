@@ -1,23 +1,29 @@
 package constants
 
+// Commands.
 const (
-	// Commands.
 	DashboardCommandName = "dashboard"
+)
 
-	// Common.
+// Common.
+const (
 	NotApplicable            = "N/A"
 	ActionSelectMenuCustomID = "action"
 	RefreshButtonCustomID    = "refresh"
 	BackButtonCustomID       = "back"
 	DefaultEmbedColor        = 0x312D2B
 	StreamerModeEmbedColor   = 0x3E3769
+)
 
-	// Dashboard Menu.
+// Dashboard Menu.
+const (
 	StartReviewCustomID   = "start_review"
 	UserSettingsCustomID  = "user_settings"
 	GuildSettingsCustomID = "guild_settings"
+)
 
-	// Review Menu.
+// Review Menu.
+const (
 	SortOrderSelectMenuCustomID = "sort_order"
 
 	ConfirmWithReasonModalCustomID = "confirm_with_reason_modal"
@@ -31,39 +37,53 @@ const (
 	OpenOutfitsMenuButtonCustomID   = "open_outfits_menu"
 	OpenFriendsMenuButtonCustomID   = "open_friends_menu"
 	OpenGroupsMenuButtonCustomID    = "open_groups_menu"
+	SwitchReviewModeCustomID        = "switch_review_mode"
 
 	ConfirmButtonCustomID = "confirm"
 	ClearButtonCustomID   = "clear"
 	SkipButtonCustomID    = "skip"
 	AbortButtonCustomID   = "abort"
+)
 
-	// Friends Menu.
+// Friends Menu.
+const (
 	FriendsPerPage     = 12
 	FriendsGridColumns = 3
 	FriendsGridRows    = 4
+)
 
-	// Outfits Menu.
+// Outfits Menu.
+const (
 	OutfitsPerPage    = 15
 	OutfitGridColumns = 3
 	OutfitGridRows    = 5
+)
 
-	// Groups Menu.
+// Groups Menu.
+const (
 	GroupsPerPage     = 9
 	GroupsGridColumns = 3
 	GroupsGridRows    = 3
+)
 
-	// User Settings.
+// User Settings.
+const (
 	UserSettingPrefix   = "user"
 	UserSettingSelectID = "user_setting_select"
 	StreamerModeOption  = "streamer_mode"
 	DefaultSortOption   = "default_sort"
+	ReviewModeOption    = "review_mode"
+)
 
-	// Guild Settings.
+// Guild Settings.
+const (
 	GuildSettingPrefix     = "guild"
 	GuildSettingSelectID   = "guild_setting_select"
 	WhitelistedRolesOption = "whitelisted_roles"
+)
 
-	// Logs Menu.
+// Logs Menu.
+const (
 	LogsPerPage                         = 10
 	LogActivityBrowserCustomID          = "log_activity_browser"
 	LogsQueryInputCustomID              = "query_input"
@@ -72,8 +92,10 @@ const (
 	LogsQueryDateRangeOption            = "query_date_range_exception"
 	LogsQueryActivityTypeFilterCustomID = "activity_type_filter"
 	ClearFiltersButtonCustomID          = "clear_filters"
+)
 
-	// Queue Menu.
+// Queue Menu.
+const (
 	QueueManagerCustomID        = "queue_manager"
 	QueueHighPriorityCustomID   = "queue_high_priority_exception"
 	QueueNormalPriorityCustomID = "queue_normal_priority_exception"
@@ -81,8 +103,10 @@ const (
 	AddToQueueModalCustomID     = "add_to_queue_modal"
 	UserIDInputCustomID         = "user_id_input"
 	ReasonInputCustomID         = "reason_input"
+)
 
-	// Session keys.
+// Session keys.
+const (
 	SessionKeyMessageID    = "messageID"
 	SessionKeyTarget       = "target"
 	SessionKeyCurrentPage  = "currentPage"

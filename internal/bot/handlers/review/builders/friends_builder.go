@@ -73,12 +73,13 @@ func (b *FriendsEmbed) Build() *discord.MessageUpdateBuilder {
 	file := discord.NewFile(fileName, "", b.imageBuffer)
 
 	// Build embed with user info and avatars
+	censor := b.settings.StreamerMode || b.settings.ReviewMode == database.TrainingReviewMode
 	embed := discord.NewEmbedBuilder().
 		SetTitle(fmt.Sprintf("User Friends (Page %d/%d)", b.page+1, totalPages)).
 		SetDescription(fmt.Sprintf(
 			"```%s (%s)```",
-			utils.CensorString(b.user.Name, b.settings.StreamerMode),
-			utils.CensorString(strconv.FormatUint(b.user.ID, 10), b.settings.StreamerMode),
+			utils.CensorString(b.user.Name, censor),
+			utils.CensorString(strconv.FormatUint(b.user.ID, 10), censor),
 		)).
 		SetImage("attachment://" + fileName).
 		SetColor(utils.GetMessageEmbedColor(b.settings.StreamerMode))
@@ -122,11 +123,17 @@ func (b *FriendsEmbed) Build() *discord.MessageUpdateBuilder {
 			}
 		}
 
-		fieldValue := fmt.Sprintf(
-			"[%s](https://www.roblox.com/users/%d/profile)",
-			utils.CensorString(friend.Name, b.settings.StreamerMode),
-			friend.ID,
-		)
+		// Format friend information based on mode
+		var fieldValue string
+		if b.settings.ReviewMode == database.TrainingReviewMode {
+			fieldValue = utils.CensorString(friend.Name, true)
+		} else {
+			fieldValue = fmt.Sprintf(
+				"[%s](https://www.roblox.com/users/%d/profile)",
+				utils.CensorString(friend.Name, b.settings.StreamerMode),
+				friend.ID,
+			)
+		}
 
 		// Add presence details if available
 		if presence, ok := b.presences[friend.ID]; ok {

@@ -11,11 +11,31 @@ import (
 	"go.uber.org/zap"
 )
 
+// Review Modes.
+const (
+	TrainingReviewMode = "training"
+	StandardReviewMode = "standard"
+)
+
+// FormatReviewMode converts the review mode constant to a user-friendly display string.
+// This function is exported so it can be used by other packages.
+func FormatReviewMode(mode string) string {
+	switch mode {
+	case TrainingReviewMode:
+		return "Training Mode"
+	case StandardReviewMode:
+		return "Standard Mode"
+	default:
+		return "Unknown Mode"
+	}
+}
+
 // UserSetting stores user-specific preferences.
 type UserSetting struct {
 	UserID       uint64 `bun:",pk"`
 	StreamerMode bool   `bun:",notnull"`
 	DefaultSort  string `bun:",notnull"`
+	ReviewMode   string `bun:",notnull"`
 }
 
 // GuildSetting stores server-wide configuration options.
@@ -52,8 +72,10 @@ func NewSettingRepository(db *bun.DB, logger *zap.Logger) *SettingRepository {
 // GetUserSettings retrieves settings for a specific user.
 func (r *SettingRepository) GetUserSettings(ctx context.Context, userID uint64) (*UserSetting, error) {
 	settings := &UserSetting{
-		UserID:      userID,
-		DefaultSort: SortByRandom,
+		UserID:       userID,
+		StreamerMode: false,
+		DefaultSort:  SortByRandom,
+		ReviewMode:   StandardReviewMode,
 	}
 
 	err := r.db.NewSelect().Model(settings).
@@ -82,6 +104,7 @@ func (r *SettingRepository) SaveUserSettings(ctx context.Context, settings *User
 		On("CONFLICT (user_id) DO UPDATE").
 		Set("streamer_mode = EXCLUDED.streamer_mode").
 		Set("default_sort = EXCLUDED.default_sort").
+		Set("review_mode = EXCLUDED.review_mode").
 		Exec(ctx)
 	if err != nil {
 		r.logger.Error("Failed to save user settings",

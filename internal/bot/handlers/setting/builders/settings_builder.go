@@ -35,6 +35,7 @@ func (b *UserSettingsEmbed) Build() *discord.MessageUpdateBuilder {
 		SetTitle("User Settings").
 		AddField("Streamer Mode", strconv.FormatBool(b.settings.StreamerMode), true).
 		AddField("Default Sort", b.settings.DefaultSort, true).
+		AddField("Review Mode", database.FormatReviewMode(b.settings.ReviewMode), true).
 		SetColor(constants.DefaultEmbedColor)
 
 	// Add interactive components for changing settings
@@ -45,6 +46,8 @@ func (b *UserSettingsEmbed) Build() *discord.MessageUpdateBuilder {
 					WithDescription("Toggle censoring of sensitive information"),
 				discord.NewStringSelectMenuOption("Change Default Sort", constants.DefaultSortOption).
 					WithDescription("Set what users are shown first in the review menu"),
+				discord.NewStringSelectMenuOption("Change Review Mode", constants.ReviewModeOption).
+					WithDescription("Switch between training and standard review modes"),
 			),
 		),
 		discord.NewActionRow(

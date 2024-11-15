@@ -66,29 +66,112 @@ func NewReviewEmbed(s *session.Session, translator *translator.Translator, db *d
 // - Lists of groups, friends, and outfits
 // - Review history from the database.
 func (b *ReviewEmbed) Build() *discord.MessageUpdateBuilder {
-	// Create embed with user information fields
-	embed := discord.NewEmbedBuilder().
-		AddField("ID", fmt.Sprintf(
+	// Create the review mode info embed
+	var modeTitle string
+	var modeDescription string
+
+	switch b.settings.ReviewMode {
+	case database.TrainingReviewMode:
+		modeTitle = "🎓 " + database.FormatReviewMode(b.settings.ReviewMode)
+		modeDescription = "Use upvotes/downvotes to help moderators focus on the most important cases. In this view, information is censored and you will not see any external links."
+	case database.StandardReviewMode:
+		modeTitle = "⚠️ " + database.FormatReviewMode(b.settings.ReviewMode)
+		modeDescription = "Your actions will be recorded and will affect the database. Review users carefully before confirming or clearing them."
+	default:
+		modeTitle = "❌ Unknown Mode"
+		modeDescription = "Error encountered. Please check your settings."
+	}
+
+	modeEmbed := discord.NewEmbedBuilder().
+		SetTitle(modeTitle).
+		SetDescription(modeDescription).
+		SetColor(utils.GetMessageEmbedColor(b.settings.StreamerMode))
+
+	// Create main review embed
+	reviewEmbed := discord.NewEmbedBuilder().
+		SetColor(utils.GetMessageEmbedColor(b.settings.StreamerMode))
+
+	// Add fields based on review mode
+	if b.settings.ReviewMode == database.TrainingReviewMode {
+		// Training mode - show limited information without links
+		reviewEmbed.AddField("ID", utils.CensorString(strconv.FormatUint(b.user.ID, 10), true), true).
+			AddField("Name", utils.CensorString(b.user.Name, true), true).
+			AddField("Display Name", utils.CensorString(b.user.DisplayName, true), true).
+			AddField("Created At", fmt.Sprintf("<t:%d:R>", b.user.CreatedAt.Unix()), true).
+			AddField("Last Updated", fmt.Sprintf("<t:%d:R>", b.user.LastUpdated.Unix()), true).
+			AddField("Confidence", fmt.Sprintf("%.2f", b.user.Confidence), true).
+			AddField("Training Votes", fmt.Sprintf("👍 %d | 👎 %d", b.user.Upvotes, b.user.Downvotes), true).
+			AddField("Reason", b.user.Reason, false).
+			AddField("Description", b.getDescription(), false).
+			AddField(b.getFriendsField(), b.getFriendsTraining(), false).
+			AddField("Groups", b.getGroupsTraining(), false).
+			AddField("Outfits", b.getOutfits(), false).
+			AddField(b.getFlaggedType(), b.getFlaggedContent(), false)
+	} else {
+		// Standard mode - show all information with links
+		reviewEmbed.AddField("ID", fmt.Sprintf(
 			"[%s](https://www.roblox.com/users/%d/profile)",
 			utils.CensorString(strconv.FormatUint(b.user.ID, 10), b.settings.StreamerMode),
 			b.user.ID,
 		), true).
-		AddField("Name", utils.CensorString(b.user.Name, b.settings.StreamerMode), true).
-		AddField("Display Name", utils.CensorString(b.user.DisplayName, b.settings.StreamerMode), true).
-		AddField("Created At", fmt.Sprintf("<t:%d:R>", b.user.CreatedAt.Unix()), true).
-		AddField("Last Updated", fmt.Sprintf("<t:%d:R>", b.user.LastUpdated.Unix()), true).
-		AddField("Confidence", fmt.Sprintf("%.2f", b.user.Confidence), true).
-		AddField("Reason", b.user.Reason, true).
-		AddField("Description", b.getDescription(), false).
-		AddField("Groups", b.getGroups(), false).
-		AddField(b.getFriendsField(), b.getFriends(), false).
-		AddField("Outfits", b.getOutfits(), false).
-		AddField(b.getFlaggedType(), b.getFlaggedContent(), false).
-		AddField("Review History", b.getReviewHistory(), false).
-		SetColor(utils.GetMessageEmbedColor(b.settings.StreamerMode))
+			AddField("Name", utils.CensorString(b.user.Name, b.settings.StreamerMode), true).
+			AddField("Display Name", utils.CensorString(b.user.DisplayName, b.settings.StreamerMode), true).
+			AddField("Created At", fmt.Sprintf("<t:%d:R>", b.user.CreatedAt.Unix()), true).
+			AddField("Last Updated", fmt.Sprintf("<t:%d:R>", b.user.LastUpdated.Unix()), true).
+			AddField("Confidence", fmt.Sprintf("%.2f", b.user.Confidence), true).
+			AddField("Training Votes", fmt.Sprintf("👍 %d | 👎 %d", b.user.Upvotes, b.user.Downvotes), true).
+			AddField("Reason", b.user.Reason, false).
+			AddField("Description", b.getDescription(), false).
+			AddField(b.getFriendsField(), b.getFriends(), false).
+			AddField("Groups", b.getGroups(), false).
+			AddField("Outfits", b.getOutfits(), false).
+			AddField(b.getFlaggedType(), b.getFlaggedContent(), false).
+			AddField("Review History", b.getReviewHistory(), false)
+	}
 
-	// Add interactive components for sorting and actions
-	components := []discord.ContainerComponent{
+	// Add user thumbnail or placeholder image (existing code)
+	builder := discord.NewMessageUpdateBuilder()
+	if b.user.ThumbnailURL != "" && b.user.ThumbnailURL != fetcher.ThumbnailPlaceholder {
+		reviewEmbed.SetThumbnail(b.user.ThumbnailURL)
+	} else {
+		// Load and attach placeholder image
+		placeholderImage, err := assets.Images.Open("images/content_deleted.png")
+		if err == nil {
+			builder.SetFiles(discord.NewFile("content_deleted.png", "", placeholderImage))
+			_ = placeholderImage.Close()
+		}
+		reviewEmbed.SetThumbnail("attachment://content_deleted.png")
+	}
+
+	// Add both embeds and components to the message
+	return builder.
+		SetEmbeds(modeEmbed.Build(), reviewEmbed.Build()). // Add both embeds
+		AddContainerComponents(b.buildComponents()...)     // Move components to separate method for cleaner code
+}
+
+// buildComponents creates the interactive components for the review menu.
+func (b *ReviewEmbed) buildComponents() []discord.ContainerComponent {
+	// Create the mode switch option based on current mode
+	var modeSwitchOption discord.StringSelectMenuOption
+	var confirmButtonLabel string
+	var clearButtonLabel string
+
+	switch b.settings.ReviewMode {
+	case database.TrainingReviewMode:
+		modeSwitchOption = discord.NewStringSelectMenuOption("Switch to Standard Mode", constants.SwitchReviewModeCustomID).
+			WithEmoji(discord.ComponentEmoji{Name: "⚠️"}).
+			WithDescription("Switch to standard mode for actual moderation")
+		confirmButtonLabel = "Upvote"
+		clearButtonLabel = "Downvote"
+	case database.StandardReviewMode:
+		modeSwitchOption = discord.NewStringSelectMenuOption("Switch to Training Mode", constants.SwitchReviewModeCustomID).
+			WithEmoji(discord.ComponentEmoji{Name: "🎓"}).
+			WithDescription("Switch to training mode to practice")
+		confirmButtonLabel = "Confirm"
+		clearButtonLabel = "Clear"
+	}
+
+	return []discord.ContainerComponent{
 		// Sorting options menu
 		discord.NewActionRow(
 			discord.NewStringSelectMenu(constants.SortOrderSelectMenuCustomID, "Sorting",
@@ -101,6 +184,9 @@ func (b *ReviewEmbed) Build() *discord.MessageUpdateBuilder {
 				discord.NewStringSelectMenuOption("Selected by last updated time", database.SortByLastUpdated).
 					WithDefault(b.settings.DefaultSort == database.SortByLastUpdated).
 					WithEmoji(discord.ComponentEmoji{Name: "📅"}),
+				discord.NewStringSelectMenuOption("Selected by community votes", database.SortByReputation).
+					WithDefault(b.settings.DefaultSort == database.SortByReputation).
+					WithEmoji(discord.ComponentEmoji{Name: "👥"}),
 			),
 		),
 		// Action options menu
@@ -115,46 +201,26 @@ func (b *ReviewEmbed) Build() *discord.MessageUpdateBuilder {
 				discord.NewStringSelectMenuOption("View user logs", constants.ViewUserLogsButtonCustomID).
 					WithEmoji(discord.ComponentEmoji{Name: "📋"}).
 					WithDescription("View activity logs for this user"),
-				discord.NewStringSelectMenuOption("Open outfit viewer", constants.OpenOutfitsMenuButtonCustomID).
-					WithEmoji(discord.ComponentEmoji{Name: "👕"}).
-					WithDescription("View all user outfits"),
+				modeSwitchOption,
 				discord.NewStringSelectMenuOption("Open friends viewer", constants.OpenFriendsMenuButtonCustomID).
 					WithEmoji(discord.ComponentEmoji{Name: "👫"}).
 					WithDescription("View all user friends"),
 				discord.NewStringSelectMenuOption("Open group viewer", constants.OpenGroupsMenuButtonCustomID).
 					WithEmoji(discord.ComponentEmoji{Name: "🌐"}).
 					WithDescription("View all user groups"),
+				discord.NewStringSelectMenuOption("Open outfit viewer", constants.OpenOutfitsMenuButtonCustomID).
+					WithEmoji(discord.ComponentEmoji{Name: "👕"}).
+					WithDescription("View all user outfits"),
 			),
 		),
 		// Quick action buttons
 		discord.NewActionRow(
 			discord.NewSecondaryButton("◀️", constants.BackButtonCustomID),
-			discord.NewDangerButton("Confirm", constants.ConfirmButtonCustomID),
-			discord.NewSuccessButton("Clear", constants.ClearButtonCustomID),
+			discord.NewDangerButton(confirmButtonLabel, constants.ConfirmButtonCustomID),
+			discord.NewSuccessButton(clearButtonLabel, constants.ClearButtonCustomID),
 			discord.NewSecondaryButton("Skip", constants.SkipButtonCustomID),
 		),
 	}
-
-	// Create the message builder
-	builder := discord.NewMessageUpdateBuilder()
-
-	// Add user thumbnail or placeholder image
-	if b.user.ThumbnailURL != "" && b.user.ThumbnailURL != fetcher.ThumbnailPlaceholder {
-		embed.SetThumbnail(b.user.ThumbnailURL)
-	} else {
-		// Load and attach placeholder image
-		placeholderImage, err := assets.Images.Open("images/content_deleted.png")
-		if err == nil {
-			builder.SetFiles(discord.NewFile("content_deleted.png", "", placeholderImage))
-			_ = placeholderImage.Close()
-		}
-
-		embed.SetThumbnail("attachment://content_deleted.png")
-	}
-
-	return builder.
-		SetEmbeds(embed.Build()).
-		AddContainerComponents(components...)
 }
 
 // getDescription returns the description field for the embed.
@@ -182,96 +248,6 @@ func (b *ReviewEmbed) getDescription() string {
 	}
 
 	return description
-}
-
-// getGroups returns the groups field for the embed.
-func (b *ReviewEmbed) getGroups() string {
-	// Get the first 10 groups
-	groups := []string{}
-	for i, group := range b.user.Groups {
-		if i >= 10 {
-			groups = append(groups, fmt.Sprintf("... and %d more", len(b.user.Groups)-10))
-			break
-		}
-		groups = append(groups, fmt.Sprintf(
-			"[%s](https://www.roblox.com/groups/%d)",
-			utils.CensorString(group.Group.Name, b.settings.StreamerMode),
-			group.Group.ID,
-		))
-	}
-
-	// If no groups are found, return NotApplicable
-	if len(groups) == 0 {
-		return constants.NotApplicable
-	}
-
-	return strings.Join(groups, ", ")
-}
-
-// getFriendsField returns the friends field name for the embed.
-func (b *ReviewEmbed) getFriendsField() string {
-	if len(b.friendTypes) > 0 {
-		confirmedCount := 0
-		flaggedCount := 0
-		for _, friendType := range b.friendTypes {
-			if friendType == database.UserTypeConfirmed {
-				confirmedCount++
-			} else if friendType == database.UserTypeFlagged {
-				flaggedCount++
-			}
-		}
-
-		return fmt.Sprintf("Friends (%d ⚠️, %d ⏳)", confirmedCount, flaggedCount)
-	}
-	return "Friends"
-}
-
-// getFriends returns the friends field for the embed.
-func (b *ReviewEmbed) getFriends() string {
-	// Get the first 10 friends
-	friends := make([]string, 0, FriendsLimit)
-	for i, friend := range b.user.Friends {
-		if i >= FriendsLimit {
-			break
-		}
-		friends = append(friends, fmt.Sprintf(
-			"[%s](https://www.roblox.com/users/%d/profile)",
-			utils.CensorString(friend.Name, b.settings.StreamerMode),
-			friend.ID,
-		))
-	}
-
-	// If no friends are found, return NotApplicable
-	if len(friends) == 0 {
-		return constants.NotApplicable
-	}
-
-	// Add "and more" if there are more friends
-	result := strings.Join(friends, ", ")
-	if len(b.user.Friends) > FriendsLimit {
-		result += fmt.Sprintf(" ... and %d more", len(b.user.Friends)-FriendsLimit)
-	}
-
-	return result
-}
-
-// getOutfits returns the outfits field for the embed.
-func (b *ReviewEmbed) getOutfits() string {
-	// Get the first 10 outfits
-	outfits := []string{}
-	for i, outfit := range b.user.Outfits {
-		if i >= 10 {
-			outfits = append(outfits, fmt.Sprintf("... and %d more", len(b.user.Outfits)-10))
-			break
-		}
-		outfits = append(outfits, outfit.Name)
-	}
-	// If no outfits are found, return NotApplicable
-	if len(outfits) == 0 {
-		return constants.NotApplicable
-	}
-
-	return strings.Join(outfits, ", ")
 }
 
 // getFlaggedType returns the flagged type field for the embed.
@@ -333,4 +309,136 @@ func (b *ReviewEmbed) getReviewHistory() string {
 	}
 
 	return strings.Join(history, "\n")
+}
+
+// getGroups returns the groups field for the embed.
+func (b *ReviewEmbed) getGroups() string {
+	// Get the first 10 groups
+	groups := []string{}
+	for i, group := range b.user.Groups {
+		if i >= 10 {
+			groups = append(groups, fmt.Sprintf("... and %d more", len(b.user.Groups)-10))
+			break
+		}
+		groups = append(groups, fmt.Sprintf(
+			"[%s](https://www.roblox.com/groups/%d)",
+			utils.CensorString(group.Group.Name, b.settings.StreamerMode),
+			group.Group.ID,
+		))
+	}
+
+	// If no groups are found, return NotApplicable
+	if len(groups) == 0 {
+		return constants.NotApplicable
+	}
+
+	return strings.Join(groups, ", ")
+}
+
+// getGroupsTraining returns the groups field for the embed in training mode.
+// Unlike the standard mode version, this excludes links to group pages.
+func (b *ReviewEmbed) getGroupsTraining() string {
+	groups := []string{}
+	for i, group := range b.user.Groups {
+		if i >= 10 {
+			groups = append(groups, fmt.Sprintf("... and %d more", len(b.user.Groups)-10))
+			break
+		}
+		groups = append(groups, utils.CensorString(group.Group.Name, true))
+	}
+
+	if len(groups) == 0 {
+		return constants.NotApplicable
+	}
+
+	return strings.Join(groups, ", ")
+}
+
+// getFriendsField returns the friends field name for the embed.
+func (b *ReviewEmbed) getFriendsField() string {
+	if len(b.friendTypes) > 0 {
+		confirmedCount := 0
+		flaggedCount := 0
+		for _, friendType := range b.friendTypes {
+			if friendType == database.UserTypeConfirmed {
+				confirmedCount++
+			} else if friendType == database.UserTypeFlagged {
+				flaggedCount++
+			}
+		}
+
+		return fmt.Sprintf("Friends (%d ⚠️, %d ⏳)", confirmedCount, flaggedCount)
+	}
+	return "Friends"
+}
+
+// getFriends returns the friends field for the embed.
+func (b *ReviewEmbed) getFriends() string {
+	// Get the first 10 friends
+	friends := make([]string, 0, FriendsLimit)
+	for i, friend := range b.user.Friends {
+		if i >= FriendsLimit {
+			break
+		}
+		friends = append(friends, fmt.Sprintf(
+			"[%s](https://www.roblox.com/users/%d/profile)",
+			utils.CensorString(friend.Name, b.settings.StreamerMode),
+			friend.ID,
+		))
+	}
+
+	// If no friends are found, return NotApplicable
+	if len(friends) == 0 {
+		return constants.NotApplicable
+	}
+
+	// Add "and more" if there are more friends
+	result := strings.Join(friends, ", ")
+	if len(b.user.Friends) > FriendsLimit {
+		result += fmt.Sprintf(" ... and %d more", len(b.user.Friends)-FriendsLimit)
+	}
+
+	return result
+}
+
+// getFriendsTraining returns the friends field for the embed in training mode.
+// This version shows only friend names without links to their profiles.
+func (b *ReviewEmbed) getFriendsTraining() string {
+	friends := make([]string, 0, FriendsLimit)
+	for i, friend := range b.user.Friends {
+		if i >= FriendsLimit {
+			break
+		}
+		friends = append(friends, utils.CensorString(friend.Name, true))
+	}
+
+	if len(friends) == 0 {
+		return constants.NotApplicable
+	}
+
+	result := strings.Join(friends, ", ")
+	if len(b.user.Friends) > FriendsLimit {
+		result += fmt.Sprintf(" ... and %d more", len(b.user.Friends)-FriendsLimit)
+	}
+
+	return result
+}
+
+// getOutfits returns the outfits field for the embed.
+func (b *ReviewEmbed) getOutfits() string {
+	// Get the first 10 outfits
+	outfits := []string{}
+	for i, outfit := range b.user.Outfits {
+		if i >= 10 {
+			outfits = append(outfits, fmt.Sprintf("... and %d more", len(b.user.Outfits)-10))
+			break
+		}
+		outfits = append(outfits, outfit.Name)
+	}
+	// If no outfits are found, return NotApplicable
+	if len(outfits) == 0 {
+		return constants.NotApplicable
+	}
+
+	return strings.Join(outfits, ", ")
 }

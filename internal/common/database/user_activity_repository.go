@@ -28,6 +28,10 @@ const (
 	ActivityTypeSkipped // SKIPPED
 	// ActivityTypeRechecked tracks when a moderator requests an AI recheck.
 	ActivityTypeRechecked // RECHECKED
+	// ActivityTypeTrainingUpvote tracks when a moderator upvotes a user in training mode.
+	ActivityTypeTrainingUpvote // TRAINING_UPVOTE
+	// ActivityTypeTrainingDownvote tracks when a moderator downvotes a user in training mode.
+	ActivityTypeTrainingDownvote // TRAINING_DOWNVOTE
 )
 
 // UserActivityLog stores information about moderator actions.

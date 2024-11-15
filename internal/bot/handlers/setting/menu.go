@@ -80,6 +80,23 @@ func (m *Menu) ShowMenu(event interfaces.CommonEvent, s *session.Session, settin
 			discord.NewStringSelectMenuOption("Last Updated", database.SortByLastUpdated),
 		}
 
+	case constants.ReviewModeOption:
+		// Load user settings for review mode selection
+		var settings *database.UserSetting
+		s.GetInterface(constants.SessionKeyUserSettings, &settings)
+
+		currentValue = database.FormatReviewMode(settings.ReviewMode)
+		options = []discord.StringSelectMenuOption{
+			discord.NewStringSelectMenuOption(
+				database.FormatReviewMode(database.TrainingReviewMode),
+				database.TrainingReviewMode,
+			).WithDescription("Practice reviewing without affecting the system"),
+			discord.NewStringSelectMenuOption(
+				database.FormatReviewMode(database.StandardReviewMode),
+				database.StandardReviewMode,
+			).WithDescription("Normal review mode for actual moderation"),
+		}
+
 	case constants.WhitelistedRolesOption:
 		// Load guild settings and available roles for role whitelist
 		settings := m.handler.guildMenu.getGuildSettings(event)
@@ -107,8 +124,8 @@ func (m *Menu) ShowMenu(event interfaces.CommonEvent, s *session.Session, settin
 func (m *Menu) handleSettingChange(event *events.ComponentInteractionCreate, s *session.Session, customID string, option string) {
 	settingName := s.GetString(constants.SessionKeySettingName)
 	settingType := s.GetString(constants.SessionKeySettingType)
-	m.saveSetting(event, s, settingType, customID, option)
 
+	m.saveSetting(event, s, settingType, customID, option)
 	m.ShowMenu(event, s, settingName, settingType, customID)
 }
 
@@ -155,8 +172,10 @@ func (m *Menu) saveUserSetting(s *session.Session, customID, option string) {
 		}
 
 	case constants.DefaultSortOption:
-		// Save sort preference directly
 		settings.DefaultSort = option
+
+	case constants.ReviewModeOption:
+		settings.ReviewMode = option
 
 	default:
 		m.handler.logger.Warn("Unknown user setting", zap.String("customID", customID))

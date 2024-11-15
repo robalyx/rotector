@@ -2,6 +2,7 @@ package database
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -18,6 +19,20 @@ const (
 	// UserTypeCleared indicates a user was reviewed and found to be appropriate.
 	UserTypeCleared = "cleared"
 )
+
+const (
+	// SortByRandom orders users randomly to ensure even distribution of reviews.
+	SortByRandom = "random"
+	// SortByConfidence orders users by their confidence score from highest to lowest.
+	SortByConfidence = "confidence"
+	// SortByLastUpdated orders users by their last update time from oldest to newest.
+	SortByLastUpdated = "last_updated"
+	// SortByReputation orders users by their community reputation (upvotes - downvotes).
+	SortByReputation = "reputation"
+)
+
+// ErrInvalidSortBy indicates that the provided sort method is not supported.
+var ErrInvalidSortBy = errors.New("invalid sortBy value")
 
 // User combines all the information needed to review a user.
 // This base structure is embedded in other user types (Flagged, Confirmed).
@@ -39,6 +54,9 @@ type User struct {
 	LastViewed     time.Time              `bun:",notnull"   json:"lastViewed"`
 	LastPurgeCheck time.Time              `bun:",notnull"   json:"lastPurgeCheck"`
 	ThumbnailURL   string                 `bun:",notnull"   json:"thumbnailUrl"`
+	Upvotes        int                    `bun:",notnull"   json:"upvotes"`
+	Downvotes      int                    `bun:",notnull"   json:"downvotes"`
+	Reputation     int                    `bun:",notnull"   json:"reputation"`
 }
 
 // FlaggedUser extends User to track users that need review.
@@ -87,7 +105,8 @@ func NewUserRepository(db *bun.DB, tracking *TrackingRepository, logger *zap.Log
 // GetFlaggedUserToReview finds a user to review based on the sort method:
 // - random: selects any unviewed user randomly
 // - confidence: selects the user with highest confidence score
-// - last_updated: selects the oldest updated user.
+// - last_updated: selects the oldest updated user
+// - reputation: selects the user with highest upvotes - downvotes.
 func (r *UserRepository) GetFlaggedUserToReview(ctx context.Context, sortBy string) (*FlaggedUser, error) {
 	var user FlaggedUser
 	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
@@ -99,6 +118,8 @@ func (r *UserRepository) GetFlaggedUserToReview(ctx context.Context, sortBy stri
 			query.Order("confidence DESC")
 		case SortByLastUpdated:
 			query.Order("last_updated ASC")
+		case SortByReputation:
+			query.Order("reputation DESC")
 		case SortByRandom:
 			query.OrderExpr("RANDOM()")
 		default:
@@ -131,7 +152,7 @@ func (r *UserRepository) GetFlaggedUserToReview(ctx context.Context, sortBy stri
 		return nil, err
 	}
 
-	r.logger.Info("Retrieved random flagged user",
+	r.logger.Info("Retrieved flagged user to review",
 		zap.Uint64("userID", user.ID),
 		zap.String("sortBy", sortBy),
 		zap.Time("lastViewed", user.LastViewed))
@@ -195,6 +216,9 @@ func (r *UserRepository) SaveFlaggedUsers(ctx context.Context, flaggedUsers []*U
 			Set("confidence = EXCLUDED.confidence").
 			Set("last_updated = EXCLUDED.last_updated").
 			Set("thumbnail_url = EXCLUDED.thumbnail_url").
+			Set("upvotes = EXCLUDED.upvotes").
+			Set("downvotes = EXCLUDED.downvotes").
+			Set("reputation = EXCLUDED.reputation").
 			Exec(ctx)
 		if err != nil {
 			r.logger.Error("Error saving flagged user",
@@ -249,6 +273,9 @@ func (r *UserRepository) ConfirmUser(ctx context.Context, user *FlaggedUser) err
 			Set("last_viewed = EXCLUDED.last_viewed").
 			Set("last_purge_check = EXCLUDED.last_purge_check").
 			Set("thumbnail_url = EXCLUDED.thumbnail_url").
+			Set("upvotes = EXCLUDED.upvotes").
+			Set("downvotes = EXCLUDED.downvotes").
+			Set("reputation = EXCLUDED.reputation").
 			Set("verified_at = EXCLUDED.verified_at").
 			Exec(ctx)
 		if err != nil {
@@ -301,6 +328,9 @@ func (r *UserRepository) ClearUser(ctx context.Context, user *FlaggedUser) error
 			Set("last_viewed = EXCLUDED.last_viewed").
 			Set("last_purge_check = EXCLUDED.last_purge_check").
 			Set("thumbnail_url = EXCLUDED.thumbnail_url").
+			Set("upvotes = EXCLUDED.upvotes").
+			Set("downvotes = EXCLUDED.downvotes").
+			Set("reputation = EXCLUDED.reputation").
 			Set("cleared_at = EXCLUDED.cleared_at").
 			Exec(ctx)
 		if err != nil {
@@ -695,4 +725,50 @@ func (r *UserRepository) PurgeOldClearedUsers(ctx context.Context, cutoffDate ti
 	})
 
 	return affected, err
+}
+
+// UpdateTrainingVotes updates the upvotes or downvotes count for a user in training mode.
+func (r *UserRepository) UpdateTrainingVotes(ctx context.Context, userID uint64, isUpvote bool) error {
+	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+		// First get current vote counts
+		var user FlaggedUser
+		err := tx.NewSelect().
+			Model(&user).
+			Column("upvotes", "downvotes").
+			Where("id = ?", userID).
+			Scan(ctx)
+		if err != nil {
+			return err
+		}
+
+		// Increment appropriate vote count
+		if isUpvote {
+			user.Upvotes++
+		} else {
+			user.Downvotes++
+		}
+
+		// Calculate new reputation
+		newReputation := user.Upvotes - user.Downvotes
+
+		// Update the user with new values
+		_, err = tx.NewUpdate().
+			Model((*FlaggedUser)(nil)).
+			Set("upvotes = ?", user.Upvotes).
+			Set("downvotes = ?", user.Downvotes).
+			Set("reputation = ?", newReputation).
+			Where("id = ?", userID).
+			Exec(ctx)
+		if err != nil {
+			r.logger.Error("Failed to update training votes",
+				zap.Error(err),
+				zap.Uint64("userID", userID),
+				zap.String("voteType", map[bool]string{true: "upvote", false: "downvote"}[isUpvote]))
+			return err
+		}
+
+		return nil
+	})
+
+	return err
 }

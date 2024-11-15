@@ -116,6 +116,8 @@ func (m *Menu) handleSelectMenu(event *events.ComponentInteractionCreate, s *ses
 			m.handleRecheck(event, s)
 		case constants.ViewUserLogsButtonCustomID:
 			m.handleViewUserLogs(event, s)
+		case constants.SwitchReviewModeCustomID:
+			m.handleSwitchReviewMode(event, s)
 		case constants.OpenOutfitsMenuButtonCustomID:
 			m.handler.outfitsMenu.ShowOutfitsMenu(event, s, 0)
 		case constants.OpenFriendsMenuButtonCustomID:
@@ -194,6 +196,8 @@ func (m *Menu) handleRecheck(event *events.ComponentInteractionCreate, s *sessio
 func (m *Menu) handleRecheckModalSubmit(event *events.ModalSubmitInteractionCreate, s *session.Session) {
 	var user *database.FlaggedUser
 	s.GetInterface(constants.SessionKeyTarget, &user)
+	var settings *database.UserSetting
+	s.GetInterface(constants.SessionKeyUserSettings, &settings)
 
 	// Get and validate the recheck reason
 	reason := event.Data.Text(constants.RecheckReasonInputCustomID)
@@ -202,10 +206,16 @@ func (m *Menu) handleRecheckModalSubmit(event *events.ModalSubmitInteractionCrea
 		return
 	}
 
-	// Add to high priority queue with reviewer information
+	// Determine priority based on review mode
+	priority := queue.HighPriority
+	if settings.ReviewMode == database.TrainingReviewMode {
+		priority = queue.LowPriority
+	}
+
+	// Add to queue with reviewer information
 	err := m.handler.queueManager.AddToQueue(context.Background(), &queue.Item{
 		UserID:      user.ID,
-		Priority:    queue.HighPriority,
+		Priority:    priority,
 		Reason:      reason,
 		AddedBy:     uint64(event.User().ID),
 		AddedAt:     time.Now(),
@@ -222,8 +232,8 @@ func (m *Menu) handleRecheckModalSubmit(event *events.ModalSubmitInteractionCrea
 		context.Background(),
 		user.ID,
 		queue.StatusPending,
-		queue.HighPriority,
-		m.handler.queueManager.GetQueueLength(context.Background(), queue.HighPriority),
+		priority,
+		m.handler.queueManager.GetQueueLength(context.Background(), priority),
 	)
 	if err != nil {
 		m.handler.paginationManager.RespondWithError(event, "Failed to update queue info")
@@ -260,21 +270,47 @@ func (m *Menu) handleConfirmUser(event interfaces.CommonEvent, s *session.Sessio
 	var user *database.FlaggedUser
 	s.GetInterface(constants.SessionKeyTarget, &user)
 
-	// Update user status in database
-	if err := m.handler.db.Users().ConfirmUser(context.Background(), user); err != nil {
-		m.handler.logger.Error("Failed to confirm user", zap.Error(err))
-		m.handler.paginationManager.RespondWithError(event, "Failed to confirm the user. Please try again.")
-		return
-	}
+	var settings *database.UserSetting
+	s.GetInterface(constants.SessionKeyUserSettings, &settings)
 
-	// Log the confirm action asynchronously
-	go m.handler.db.UserActivity().LogActivity(context.Background(), &database.UserActivityLog{
-		UserID:            user.ID,
-		ReviewerID:        uint64(event.User().ID),
-		ActivityType:      database.ActivityTypeConfirmed,
-		ActivityTimestamp: time.Now(),
-		Details:           map[string]interface{}{"reason": user.Reason},
-	})
+	var actionMsg string
+	if settings.ReviewMode == database.TrainingReviewMode {
+		// Training mode - increment upvotes
+		if err := m.handler.db.Users().UpdateTrainingVotes(context.Background(), user.ID, true); err != nil {
+			m.handler.paginationManager.RespondWithError(event, "Failed to update upvotes. Please try again.")
+			return
+		}
+		user.Upvotes++
+		actionMsg = "upvoted"
+		// Log the training upvote action
+		go m.handler.db.UserActivity().LogActivity(context.Background(), &database.UserActivityLog{
+			UserID:            user.ID,
+			ReviewerID:        uint64(event.User().ID),
+			ActivityType:      database.ActivityTypeTrainingUpvote,
+			ActivityTimestamp: time.Now(),
+			Details: map[string]interface{}{
+				"upvotes":   user.Upvotes,
+				"downvotes": user.Downvotes,
+			},
+		})
+	} else {
+		// Standard mode - confirm user
+		if err := m.handler.db.Users().ConfirmUser(context.Background(), user); err != nil {
+			m.handler.logger.Error("Failed to confirm user", zap.Error(err))
+			m.handler.paginationManager.RespondWithError(event, "Failed to confirm the user. Please try again.")
+			return
+		}
+		actionMsg = "confirmed"
+
+		// Log the confirm action
+		go m.handler.db.UserActivity().LogActivity(context.Background(), &database.UserActivityLog{
+			UserID:            user.ID,
+			ReviewerID:        uint64(event.User().ID),
+			ActivityType:      database.ActivityTypeConfirmed,
+			ActivityTimestamp: time.Now(),
+			Details:           map[string]interface{}{"reason": user.Reason},
+		})
+	}
 
 	// Get the number of flagged users left to review
 	flaggedCount, err := m.handler.db.Users().GetFlaggedUsersCount(context.Background())
@@ -284,7 +320,7 @@ func (m *Menu) handleConfirmUser(event interfaces.CommonEvent, s *session.Sessio
 
 	// Clear current user and load next one
 	s.Delete(constants.SessionKeyTarget)
-	m.ShowReviewMenu(event, s, fmt.Sprintf("User confirmed. %d users left to review.", flaggedCount))
+	m.ShowReviewMenu(event, s, fmt.Sprintf("User %s. %d users left to review.", actionMsg, flaggedCount))
 }
 
 // handleClearUser removes a user from the flagged state and logs the action.
@@ -293,21 +329,47 @@ func (m *Menu) handleClearUser(event interfaces.CommonEvent, s *session.Session)
 	var user *database.FlaggedUser
 	s.GetInterface(constants.SessionKeyTarget, &user)
 
-	// Update user status in database
-	if err := m.handler.db.Users().ClearUser(context.Background(), user); err != nil {
-		m.handler.logger.Error("Failed to reject user", zap.Error(err))
-		m.handler.paginationManager.RespondWithError(event, "Failed to reject the user. Please try again.")
-		return
-	}
+	var settings *database.UserSetting
+	s.GetInterface(constants.SessionKeyUserSettings, &settings)
 
-	// Log the clear action asynchronously
-	go m.handler.db.UserActivity().LogActivity(context.Background(), &database.UserActivityLog{
-		UserID:            user.ID,
-		ReviewerID:        uint64(event.User().ID),
-		ActivityType:      database.ActivityTypeCleared,
-		ActivityTimestamp: time.Now(),
-		Details:           make(map[string]interface{}),
-	})
+	var actionMsg string
+	if settings.ReviewMode == database.TrainingReviewMode {
+		// Training mode - increment downvotes
+		if err := m.handler.db.Users().UpdateTrainingVotes(context.Background(), user.ID, false); err != nil {
+			m.handler.paginationManager.RespondWithError(event, "Failed to update downvotes. Please try again.")
+			return
+		}
+		user.Downvotes++
+		actionMsg = "downvoted"
+		// Log the training downvote action
+		go m.handler.db.UserActivity().LogActivity(context.Background(), &database.UserActivityLog{
+			UserID:            user.ID,
+			ReviewerID:        uint64(event.User().ID),
+			ActivityType:      database.ActivityTypeTrainingDownvote,
+			ActivityTimestamp: time.Now(),
+			Details: map[string]interface{}{
+				"upvotes":   user.Upvotes,
+				"downvotes": user.Downvotes,
+			},
+		})
+	} else {
+		// Standard mode - clear user
+		if err := m.handler.db.Users().ClearUser(context.Background(), user); err != nil {
+			m.handler.logger.Error("Failed to clear user", zap.Error(err))
+			m.handler.paginationManager.RespondWithError(event, "Failed to clear the user. Please try again.")
+			return
+		}
+		actionMsg = "cleared"
+
+		// Log the clear action
+		go m.handler.db.UserActivity().LogActivity(context.Background(), &database.UserActivityLog{
+			UserID:            user.ID,
+			ReviewerID:        uint64(event.User().ID),
+			ActivityType:      database.ActivityTypeCleared,
+			ActivityTimestamp: time.Now(),
+			Details:           make(map[string]interface{}),
+		})
+	}
 
 	// Get the number of flagged users left to review
 	flaggedCount, err := m.handler.db.Users().GetFlaggedUsersCount(context.Background())
@@ -317,7 +379,7 @@ func (m *Menu) handleClearUser(event interfaces.CommonEvent, s *session.Session)
 
 	// Clear current user and load next one
 	s.Delete(constants.SessionKeyTarget)
-	m.ShowReviewMenu(event, s, fmt.Sprintf("User cleared. %d users left to review.", flaggedCount))
+	m.ShowReviewMenu(event, s, fmt.Sprintf("User %s. %d users left to review.", actionMsg, flaggedCount))
 }
 
 // handleSkipUser logs the skip action and moves to the next user without
@@ -406,6 +468,30 @@ func (m *Menu) handleConfirmWithReasonModalSubmit(event *events.ModalSubmitInter
 	// Clear current user and load next one
 	s.Delete(constants.SessionKeyTarget)
 	m.ShowReviewMenu(event, s, "User confirmed.")
+}
+
+// handleSwitchReviewMode switches between training and standard review modes.
+func (m *Menu) handleSwitchReviewMode(event *events.ComponentInteractionCreate, s *session.Session) {
+	var settings *database.UserSetting
+	s.GetInterface(constants.SessionKeyUserSettings, &settings)
+
+	// Toggle between modes
+	if settings.ReviewMode == database.TrainingReviewMode {
+		settings.ReviewMode = database.StandardReviewMode
+	} else {
+		settings.ReviewMode = database.TrainingReviewMode
+	}
+
+	// Save the updated setting
+	if err := m.handler.db.Settings().SaveUserSettings(context.Background(), settings); err != nil {
+		m.handler.logger.Error("Failed to save review mode setting", zap.Error(err))
+		m.handler.paginationManager.RespondWithError(event, "Failed to switch review mode. Please try again.")
+		return
+	}
+
+	// Update session and refresh the menu
+	s.Set(constants.SessionKeyUserSettings, settings)
+	m.ShowReviewMenu(event, s, "Switched to "+database.FormatReviewMode(settings.ReviewMode))
 }
 
 // fetchNewTarget gets a new user to review based on the current sort order.
