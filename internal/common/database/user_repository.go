@@ -34,6 +34,14 @@ const (
 // ErrInvalidSortBy indicates that the provided sort method is not supported.
 var ErrInvalidSortBy = errors.New("invalid sortBy value")
 
+// ExtendedFriend contains additional user information beyond the basic Friend type.
+type ExtendedFriend struct {
+	types.Friend            // Embed the base Friend type
+	Name             string // Username of the friend
+	DisplayName      string // Display name of the friend
+	HasVerifiedBadge bool   // Whether the friend has a verified badge
+}
+
 // User combines all the information needed to review a user.
 // This base structure is embedded in other user types (Flagged, Confirmed).
 type User struct {
@@ -45,7 +53,8 @@ type User struct {
 	Reason         string                 `bun:",notnull"   json:"reason"`
 	Groups         []types.UserGroupRoles `bun:"type:jsonb" json:"groups"`
 	Outfits        []types.Outfit         `bun:"type:jsonb" json:"outfits"`
-	Friends        []types.Friend         `bun:"type:jsonb" json:"friends"`
+	Friends        []ExtendedFriend       `bun:"type:jsonb" json:"friends"`
+	Games          []types.Game           `bun:"type:jsonb" json:"games"`
 	FlaggedContent []string               `bun:"type:jsonb" json:"flaggedContent"`
 	FlaggedGroups  []uint64               `bun:"type:jsonb" json:"flaggedGroups"`
 	Confidence     float64                `bun:",notnull"   json:"confidence"`
@@ -211,6 +220,7 @@ func (r *UserRepository) SaveFlaggedUsers(ctx context.Context, flaggedUsers []*U
 			Set("groups = EXCLUDED.groups").
 			Set("outfits = EXCLUDED.outfits").
 			Set("friends = EXCLUDED.friends").
+			Set("games = EXCLUDED.games").
 			Set("flagged_content = EXCLUDED.flagged_content").
 			Set("flagged_groups = EXCLUDED.flagged_groups").
 			Set("confidence = EXCLUDED.confidence").
@@ -265,6 +275,7 @@ func (r *UserRepository) ConfirmUser(ctx context.Context, user *FlaggedUser) err
 			Set("groups = EXCLUDED.groups").
 			Set("outfits = EXCLUDED.outfits").
 			Set("friends = EXCLUDED.friends").
+			Set("games = EXCLUDED.games").
 			Set("flagged_content = EXCLUDED.flagged_content").
 			Set("flagged_groups = EXCLUDED.flagged_groups").
 			Set("confidence = EXCLUDED.confidence").
@@ -320,6 +331,7 @@ func (r *UserRepository) ClearUser(ctx context.Context, user *FlaggedUser) error
 			Set("groups = EXCLUDED.groups").
 			Set("outfits = EXCLUDED.outfits").
 			Set("friends = EXCLUDED.friends").
+			Set("games = EXCLUDED.games").
 			Set("flagged_content = EXCLUDED.flagged_content").
 			Set("flagged_groups = EXCLUDED.flagged_groups").
 			Set("confidence = EXCLUDED.confidence").

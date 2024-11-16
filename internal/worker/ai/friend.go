@@ -149,9 +149,7 @@ func (f *FriendWorker) processFriendsBatch(friendIDs []uint64) ([]uint64, error)
 		// Extract friend IDs
 		newFriendIDs := make([]uint64, 0, len(friends))
 		for _, friend := range friends {
-			if !friend.IsBanned && !friend.IsDeleted {
-				newFriendIDs = append(newFriendIDs, friend.ID)
-			}
+			newFriendIDs = append(newFriendIDs, friend.ID)
 		}
 
 		// Check which users already exist in the database

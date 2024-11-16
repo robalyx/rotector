@@ -19,8 +19,8 @@ import (
 type FriendsEmbed struct {
 	settings       *database.UserSetting
 	user           *database.FlaggedUser
-	friends        []types.Friend
-	presences      map[uint64]types.UserPresence
+	friends        []database.ExtendedFriend
+	presences      map[uint64]types.UserPresenceResponse
 	flaggedFriends map[uint64]*database.User
 	friendTypes    map[uint64]string
 	start          int
@@ -36,9 +36,9 @@ func NewFriendsEmbed(s *session.Session) *FriendsEmbed {
 	s.GetInterface(constants.SessionKeyUserSettings, &settings)
 	var user *database.FlaggedUser
 	s.GetInterface(constants.SessionKeyTarget, &user)
-	var friends []types.Friend
+	var friends []database.ExtendedFriend
 	s.GetInterface(constants.SessionKeyFriends, &friends)
-	var presences map[uint64]types.UserPresence
+	var presences map[uint64]types.UserPresenceResponse
 	s.GetInterface(constants.SessionKeyPresences, &presences)
 	var flaggedFriends map[uint64]*database.User
 	s.GetInterface(constants.SessionKeyFlaggedFriends, &flaggedFriends)

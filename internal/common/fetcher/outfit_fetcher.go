@@ -59,7 +59,7 @@ func (o *OutfitFetcher) AddOutfits(users []*database.User) []*database.User {
 			}{
 				UserID: u.ID,
 				Result: &OutfitFetchResult{
-					Outfits: outfits,
+					Outfits: outfits.Data,
 					Error:   err,
 				},
 			}

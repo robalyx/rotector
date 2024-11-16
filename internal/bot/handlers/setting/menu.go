@@ -78,6 +78,7 @@ func (m *Menu) ShowMenu(event interfaces.CommonEvent, s *session.Session, settin
 			discord.NewStringSelectMenuOption("Random", database.SortByRandom),
 			discord.NewStringSelectMenuOption("Confidence", database.SortByConfidence),
 			discord.NewStringSelectMenuOption("Last Updated", database.SortByLastUpdated),
+			discord.NewStringSelectMenuOption("Reputation", database.SortByReputation),
 		}
 
 	case constants.ReviewModeOption:

@@ -101,11 +101,13 @@ func (b *ReviewEmbed) Build() *discord.MessageUpdateBuilder {
 			AddField("Last Updated", fmt.Sprintf("<t:%d:R>", b.user.LastUpdated.Unix()), true).
 			AddField("Confidence", fmt.Sprintf("%.2f", b.user.Confidence), true).
 			AddField("Training Votes", fmt.Sprintf("👍 %d | 👎 %d", b.user.Upvotes, b.user.Downvotes), true).
+			AddField("Game Visits", b.getTotalVisits(), true).
 			AddField("Reason", b.user.Reason, false).
 			AddField("Description", b.getDescription(), false).
-			AddField(b.getFriendsField(), b.getFriendsTraining(), false).
-			AddField("Groups", b.getGroupsTraining(), false).
+			AddField(b.getFriendsField(), b.getFriends(), false).
+			AddField("Groups", b.getGroups(), false).
 			AddField("Outfits", b.getOutfits(), false).
+			AddField("Games", b.getGames(), false).
 			AddField(b.getFlaggedType(), b.getFlaggedContent(), false)
 	} else {
 		// Standard mode - show all information with links
@@ -120,11 +122,13 @@ func (b *ReviewEmbed) Build() *discord.MessageUpdateBuilder {
 			AddField("Last Updated", fmt.Sprintf("<t:%d:R>", b.user.LastUpdated.Unix()), true).
 			AddField("Confidence", fmt.Sprintf("%.2f", b.user.Confidence), true).
 			AddField("Training Votes", fmt.Sprintf("👍 %d | 👎 %d", b.user.Upvotes, b.user.Downvotes), true).
+			AddField("Game Visits", b.getTotalVisits(), true).
 			AddField("Reason", b.user.Reason, false).
 			AddField("Description", b.getDescription(), false).
 			AddField(b.getFriendsField(), b.getFriends(), false).
 			AddField("Groups", b.getGroups(), false).
 			AddField("Outfits", b.getOutfits(), false).
+			AddField("Games", b.getGames(), false).
 			AddField(b.getFlaggedType(), b.getFlaggedContent(), false).
 			AddField("Review History", b.getReviewHistory(), false)
 	}
@@ -311,88 +315,32 @@ func (b *ReviewEmbed) getReviewHistory() string {
 	return strings.Join(history, "\n")
 }
 
-// getGroups returns the groups field for the embed.
-func (b *ReviewEmbed) getGroups() string {
-	// Get the first 10 groups
-	groups := []string{}
-	for i, group := range b.user.Groups {
-		if i >= 10 {
-			groups = append(groups, fmt.Sprintf("... and %d more", len(b.user.Groups)-10))
-			break
-		}
-		groups = append(groups, fmt.Sprintf(
-			"[%s](https://www.roblox.com/groups/%d)",
-			utils.CensorString(group.Group.Name, b.settings.StreamerMode),
-			group.Group.ID,
-		))
-	}
-
-	// If no groups are found, return NotApplicable
-	if len(groups) == 0 {
-		return constants.NotApplicable
-	}
-
-	return strings.Join(groups, ", ")
-}
-
-// getGroupsTraining returns the groups field for the embed in training mode.
-// Unlike the standard mode version, this excludes links to group pages.
-func (b *ReviewEmbed) getGroupsTraining() string {
-	groups := []string{}
-	for i, group := range b.user.Groups {
-		if i >= 10 {
-			groups = append(groups, fmt.Sprintf("... and %d more", len(b.user.Groups)-10))
-			break
-		}
-		groups = append(groups, utils.CensorString(group.Group.Name, true))
-	}
-
-	if len(groups) == 0 {
-		return constants.NotApplicable
-	}
-
-	return strings.Join(groups, ", ")
-}
-
-// getFriendsField returns the friends field name for the embed.
-func (b *ReviewEmbed) getFriendsField() string {
-	if len(b.friendTypes) > 0 {
-		confirmedCount := 0
-		flaggedCount := 0
-		for _, friendType := range b.friendTypes {
-			if friendType == database.UserTypeConfirmed {
-				confirmedCount++
-			} else if friendType == database.UserTypeFlagged {
-				flaggedCount++
-			}
-		}
-
-		return fmt.Sprintf("Friends (%d ⚠️, %d ⏳)", confirmedCount, flaggedCount)
-	}
-	return "Friends"
-}
-
 // getFriends returns the friends field for the embed.
 func (b *ReviewEmbed) getFriends() string {
-	// Get the first 10 friends
 	friends := make([]string, 0, FriendsLimit)
+	isTraining := b.settings.ReviewMode == database.TrainingReviewMode
+
 	for i, friend := range b.user.Friends {
 		if i >= FriendsLimit {
 			break
 		}
-		friends = append(friends, fmt.Sprintf(
-			"[%s](https://www.roblox.com/users/%d/profile)",
-			utils.CensorString(friend.Name, b.settings.StreamerMode),
-			friend.ID,
-		))
+
+		name := utils.CensorString(friend.Name, isTraining || b.settings.StreamerMode)
+		if isTraining {
+			friends = append(friends, name)
+		} else {
+			friends = append(friends, fmt.Sprintf(
+				"[%s](https://www.roblox.com/users/%d/profile)",
+				name,
+				friend.ID,
+			))
+		}
 	}
 
-	// If no friends are found, return NotApplicable
 	if len(friends) == 0 {
 		return constants.NotApplicable
 	}
 
-	// Add "and more" if there are more friends
 	result := strings.Join(friends, ", ")
 	if len(b.user.Friends) > FriendsLimit {
 		result += fmt.Sprintf(" ... and %d more", len(b.user.Friends)-FriendsLimit)
@@ -401,27 +349,78 @@ func (b *ReviewEmbed) getFriends() string {
 	return result
 }
 
-// getFriendsTraining returns the friends field for the embed in training mode.
-// This version shows only friend names without links to their profiles.
-func (b *ReviewEmbed) getFriendsTraining() string {
-	friends := make([]string, 0, FriendsLimit)
-	for i, friend := range b.user.Friends {
-		if i >= FriendsLimit {
+// getGroups returns the groups field for the embed.
+func (b *ReviewEmbed) getGroups() string {
+	groups := []string{}
+	isTraining := b.settings.ReviewMode == database.TrainingReviewMode
+
+	for i, group := range b.user.Groups {
+		if i >= 10 {
+			groups = append(groups, fmt.Sprintf("... and %d more", len(b.user.Groups)-10))
 			break
 		}
-		friends = append(friends, utils.CensorString(friend.Name, true))
+
+		name := utils.CensorString(group.Group.Name, isTraining || b.settings.StreamerMode)
+		if isTraining {
+			groups = append(groups, name)
+		} else {
+			groups = append(groups, fmt.Sprintf(
+				"[%s](https://www.roblox.com/groups/%d)",
+				name,
+				group.Group.ID,
+			))
+		}
 	}
 
-	if len(friends) == 0 {
+	if len(groups) == 0 {
 		return constants.NotApplicable
 	}
 
-	result := strings.Join(friends, ", ")
-	if len(b.user.Friends) > FriendsLimit {
-		result += fmt.Sprintf(" ... and %d more", len(b.user.Friends)-FriendsLimit)
+	return strings.Join(groups, ", ")
+}
+
+// getTotalVisits returns the total visits across all games.
+func (b *ReviewEmbed) getTotalVisits() string {
+	if len(b.user.Games) == 0 {
+		return constants.NotApplicable
 	}
 
-	return result
+	var totalVisits uint64
+	for _, game := range b.user.Games {
+		totalVisits += game.PlaceVisits
+	}
+
+	return utils.FormatNumber(totalVisits)
+}
+
+// getGames returns the games field for the embed.
+func (b *ReviewEmbed) getGames() string {
+	if len(b.user.Games) == 0 {
+		return constants.NotApplicable
+	}
+
+	// Format games list with visit counts
+	games := []string{}
+	isTraining := b.settings.ReviewMode == database.TrainingReviewMode
+
+	for i, game := range b.user.Games {
+		if i >= 10 {
+			games = append(games, fmt.Sprintf("... and %d more", len(b.user.Games)-10))
+			break
+		}
+
+		name := utils.CensorString(game.Name, isTraining || b.settings.StreamerMode)
+		visits := utils.FormatNumber(game.PlaceVisits)
+
+		if isTraining {
+			games = append(games, fmt.Sprintf("%s (%s visits)", name, visits))
+		} else {
+			games = append(games, fmt.Sprintf("[%s](https://www.roblox.com/games/%d) (%s visits)",
+				name, game.ID, visits))
+		}
+	}
+
+	return strings.Join(games, ", ")
 }
 
 // getOutfits returns the outfits field for the embed.
@@ -441,4 +440,22 @@ func (b *ReviewEmbed) getOutfits() string {
 	}
 
 	return strings.Join(outfits, ", ")
+}
+
+// getFriendsField returns the friends field name for the embed.
+func (b *ReviewEmbed) getFriendsField() string {
+	if len(b.friendTypes) > 0 {
+		confirmedCount := 0
+		flaggedCount := 0
+		for _, friendType := range b.friendTypes {
+			if friendType == database.UserTypeConfirmed {
+				confirmedCount++
+			} else if friendType == database.UserTypeFlagged {
+				flaggedCount++
+			}
+		}
+
+		return fmt.Sprintf("Friends (%d ⚠️, %d ⏳)", confirmedCount, flaggedCount)
+	}
+	return "Friends"
 }

@@ -130,10 +130,10 @@ func (m *FriendsMenu) handlePageNavigation(event *events.ComponentInteractionCre
 }
 
 // fetchFriendData handles concurrent fetching of thumbnails and presence information.
-func (m *FriendsMenu) fetchFriendData(allFriends []types.Friend) (map[uint64]string, map[uint64]types.UserPresence) {
+func (m *FriendsMenu) fetchFriendData(allFriends []database.ExtendedFriend) (map[uint64]string, map[uint64]types.UserPresenceResponse) {
 	var wg sync.WaitGroup
 	var thumbnailMap map[uint64]string
-	var presenceMap map[uint64]types.UserPresence
+	presenceMap := make(map[uint64]types.UserPresenceResponse)
 
 	wg.Add(2)
 
@@ -166,8 +166,7 @@ func (m *FriendsMenu) fetchFriendData(allFriends []types.Friend) (map[uint64]str
 
 		presences := m.handler.presenceFetcher.FetchPresences(friendIDs)
 
-		// Create presence map for easy lookup
-		presenceMap = make(map[uint64]types.UserPresence)
+		// Populate presence map with presence information
 		for _, presence := range presences {
 			presenceMap[presence.UserID] = presence
 		}
@@ -184,9 +183,9 @@ func (m *FriendsMenu) fetchFriendData(allFriends []types.Friend) (map[uint64]str
 // 2. Flagged friends (⏳) - Users that are currently flagged for review
 // 3. Unflagged friends - Users with no current flags or status
 // Returns a new slice with friends sorted in this priority order.
-func (m *FriendsMenu) sortFriendsByStatus(friends []types.Friend, friendTypes map[uint64]string) []types.Friend {
+func (m *FriendsMenu) sortFriendsByStatus(friends []database.ExtendedFriend, friendTypes map[uint64]string) []database.ExtendedFriend {
 	// Create three slices for different status types
-	var confirmedFriends, flaggedFriends, unflaggedFriends []types.Friend
+	var confirmedFriends, flaggedFriends, unflaggedFriends []database.ExtendedFriend
 
 	// Categorize friends based on their status
 	for _, friend := range friends {
@@ -201,7 +200,7 @@ func (m *FriendsMenu) sortFriendsByStatus(friends []types.Friend, friendTypes ma
 	}
 
 	// Combine slices in priority order (confirmed -> flagged -> unflagged)
-	sortedFriends := make([]types.Friend, 0, len(friends))
+	sortedFriends := make([]database.ExtendedFriend, 0, len(friends))
 	sortedFriends = append(sortedFriends, confirmedFriends...)
 	sortedFriends = append(sortedFriends, flaggedFriends...)
 	sortedFriends = append(sortedFriends, unflaggedFriends...)

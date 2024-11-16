@@ -12,7 +12,7 @@ import (
 
 // PresenceFetchResult contains the result of fetching user presences.
 type PresenceFetchResult struct {
-	Presences []types.UserPresence
+	Presences []types.UserPresenceResponse
 	Error     error
 }
 
@@ -32,7 +32,7 @@ func NewPresenceFetcher(roAPI *api.API, logger *zap.Logger) *PresenceFetcher {
 
 // FetchPresences retrieves presence information for a batch of user IDs.
 // It processes users in batches of 50 (Roblox API limit) and returns all successful presence fetches.
-func (p *PresenceFetcher) FetchPresences(userIDs []uint64) []types.UserPresence {
+func (p *PresenceFetcher) FetchPresences(userIDs []uint64) []types.UserPresenceResponse {
 	var wg sync.WaitGroup
 	resultsChan := make(chan *PresenceFetchResult, (len(userIDs)+99)/100) // Ceiling division for batch count
 
@@ -67,7 +67,7 @@ func (p *PresenceFetcher) FetchPresences(userIDs []uint64) []types.UserPresence 
 	}()
 
 	// Collect and combine results from all batches
-	var allPresences []types.UserPresence
+	var allPresences []types.UserPresenceResponse
 	successfulFetches := 0
 
 	for result := range resultsChan {

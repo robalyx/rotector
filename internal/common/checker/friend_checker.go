@@ -168,6 +168,7 @@ func (fc *FriendChecker) processUserFriends(userInfo *fetcher.Info) (*database.U
 			Reason:      reason,
 			Groups:      userInfo.Groups,
 			Friends:     userInfo.Friends,
+			Games:       userInfo.Games,
 			Confidence:  math.Round(confidence*100) / 100, // Round to 2 decimal places
 			LastUpdated: userInfo.LastUpdated,
 		}
@@ -191,17 +192,17 @@ func (fc *FriendChecker) processUserFriends(userInfo *fetcher.Info) (*database.U
 func (fc *FriendChecker) calculateConfidence(confirmedCount, flaggedCount int, totalFriends int, createdAt time.Time) float64 {
 	var confidence float64
 
-	// Factor 1: Absolute number of inappropriate friends - 50% weight
+	// Factor 1: Absolute number of inappropriate friends - 60% weight
 	inappropriateWeight := fc.calculateInappropriateWeight(confirmedCount, flaggedCount)
-	confidence += inappropriateWeight * 0.50
+	confidence += inappropriateWeight * 0.60
 
-	// Factor 2: Ratio of inappropriate friends - 40% weight
+	// Factor 2: Ratio of inappropriate friends - 30% weight
 	// This helps catch users with a high concentration of inappropriate friends
 	// even if they don't meet the absolute number thresholds
 	if totalFriends > 0 {
 		totalInappropriate := float64(confirmedCount) + (float64(flaggedCount) * 0.5)
 		ratioWeight := math.Min(totalInappropriate/float64(totalFriends), 1.0)
-		confidence += ratioWeight * 0.40
+		confidence += ratioWeight * 0.30
 	}
 
 	// Factor 3: Account age weight - 10% weight

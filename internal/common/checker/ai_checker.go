@@ -318,6 +318,9 @@ func (a *AIChecker) validateFlaggedUsers(flaggedUsers FlaggedUsers, translatedIn
 	for _, flaggedUser := range flaggedUsers.Users {
 		// Skip users with confidence score below 0.4
 		if flaggedUser.Confidence < 0.4 {
+			a.logger.Debug("Skipping flagged user with low confidence",
+				zap.String("username", flaggedUser.Name),
+				zap.Float64("confidence", flaggedUser.Confidence))
 			continue
 		}
 
@@ -358,6 +361,7 @@ func (a *AIChecker) validateFlaggedUsers(flaggedUsers FlaggedUsers, translatedIn
 					Reason:         flaggedUser.Reason,
 					Groups:         originalInfo.Groups,
 					Friends:        originalInfo.Friends,
+					Games:          originalInfo.Games,
 					FlaggedContent: flaggedUser.FlaggedContent,
 					Confidence:     flaggedUser.Confidence,
 					LastUpdated:    originalInfo.LastUpdated,
