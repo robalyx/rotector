@@ -35,6 +35,8 @@ var multipleNewlinesRegex = regexp.MustCompile(`\n{4,}`)
 type ReviewEmbed struct {
 	db          *database.Database
 	settings    *database.UserSetting
+	botSettings *database.BotSetting
+	userID      uint64
 	user        *database.FlaggedUser
 	translator  *translator.Translator
 	friendTypes map[uint64]string
@@ -45,6 +47,8 @@ type ReviewEmbed struct {
 func NewReviewEmbed(s *session.Session, translator *translator.Translator, db *database.Database) *ReviewEmbed {
 	var settings *database.UserSetting
 	s.GetInterface(constants.SessionKeyUserSettings, &settings)
+	var botSettings *database.BotSetting
+	s.GetInterface(constants.SessionKeyBotSettings, &botSettings)
 	var user *database.FlaggedUser
 	s.GetInterface(constants.SessionKeyTarget, &user)
 	var friendTypes map[uint64]string
@@ -53,6 +57,8 @@ func NewReviewEmbed(s *session.Session, translator *translator.Translator, db *d
 	return &ReviewEmbed{
 		db:          db,
 		settings:    settings,
+		botSettings: botSettings,
+		userID:      s.GetUint64(constants.SessionKeyUserID),
 		user:        user,
 		translator:  translator,
 		friendTypes: friendTypes,
@@ -60,41 +66,65 @@ func NewReviewEmbed(s *session.Session, translator *translator.Translator, db *d
 }
 
 // Build creates a Discord message with user information in an embed and adds
-// interactive components for reviewing the user. The embed includes:
-// - Basic user info (ID, name, creation date)
-// - User description (translated if non-English)
-// - Lists of groups, friends, and outfits
-// - Review history from the database.
+// interactive components for reviewing the user.
 func (b *ReviewEmbed) Build() *discord.MessageUpdateBuilder {
-	// Create the review mode info embed
-	var modeTitle string
-	var modeDescription string
+	// Create embeds
+	modeEmbed := b.buildModeEmbed()
+	reviewEmbed := b.buildReviewEmbed()
+
+	// Create components
+	components := b.buildComponents()
+
+	// Create builder and handle thumbnail
+	builder := discord.NewMessageUpdateBuilder()
+	if b.user.ThumbnailURL != "" && b.user.ThumbnailURL != fetcher.ThumbnailPlaceholder {
+		reviewEmbed.SetThumbnail(b.user.ThumbnailURL)
+	} else {
+		// Load and attach placeholder image
+		placeholderImage, err := assets.Images.Open("images/content_deleted.png")
+		if err == nil {
+			builder.SetFiles(discord.NewFile("content_deleted.png", "", placeholderImage))
+			_ = placeholderImage.Close()
+		}
+		reviewEmbed.SetThumbnail("attachment://content_deleted.png")
+	}
+
+	return builder.
+		SetEmbeds(modeEmbed.Build(), reviewEmbed.Build()).
+		AddContainerComponents(components...)
+}
+
+// buildModeEmbed creates the review mode info embed.
+func (b *ReviewEmbed) buildModeEmbed() *discord.EmbedBuilder {
+	var title string
+	var description string
 
 	switch b.settings.ReviewMode {
 	case database.TrainingReviewMode:
-		modeTitle = "🎓 " + database.FormatReviewMode(b.settings.ReviewMode)
-		modeDescription = "Use upvotes/downvotes to help moderators focus on the most important cases. In this view, information is censored and you will not see any external links."
+		title = "🎓 " + database.FormatReviewMode(b.settings.ReviewMode)
+		description = "**You are not an official reviewer.** However, you may help moderators by using upvotes/downvotes. In this view, information is censored and you will not see any external links."
 	case database.StandardReviewMode:
-		modeTitle = "⚠️ " + database.FormatReviewMode(b.settings.ReviewMode)
-		modeDescription = "Your actions will be recorded and will affect the database. Review users carefully before confirming or clearing them."
+		title = "⚠️ " + database.FormatReviewMode(b.settings.ReviewMode)
+		description = "Your actions will be recorded and will affect the database. Review users carefully before confirming or clearing them."
 	default:
-		modeTitle = "❌ Unknown Mode"
-		modeDescription = "Error encountered. Please check your settings."
+		title = "❌ Unknown Mode"
+		description = "Error encountered. Please check your settings."
 	}
 
-	modeEmbed := discord.NewEmbedBuilder().
-		SetTitle(modeTitle).
-		SetDescription(modeDescription).
+	return discord.NewEmbedBuilder().
+		SetTitle(title).
+		SetDescription(description).
+		SetColor(utils.GetMessageEmbedColor(b.settings.StreamerMode))
+}
+
+// buildReviewEmbed creates the main review information embed.
+func (b *ReviewEmbed) buildReviewEmbed() *discord.EmbedBuilder {
+	embed := discord.NewEmbedBuilder().
 		SetColor(utils.GetMessageEmbedColor(b.settings.StreamerMode))
 
-	// Create main review embed
-	reviewEmbed := discord.NewEmbedBuilder().
-		SetColor(utils.GetMessageEmbedColor(b.settings.StreamerMode))
-
-	// Add fields based on review mode
 	if b.settings.ReviewMode == database.TrainingReviewMode {
 		// Training mode - show limited information without links
-		reviewEmbed.AddField("ID", utils.CensorString(strconv.FormatUint(b.user.ID, 10), true), true).
+		embed.AddField("ID", utils.CensorString(strconv.FormatUint(b.user.ID, 10), true), true).
 			AddField("Name", utils.CensorString(b.user.Name, true), true).
 			AddField("Display Name", utils.CensorString(b.user.DisplayName, true), true).
 			AddField("Created At", fmt.Sprintf("<t:%d:R>", b.user.CreatedAt.Unix()), true).
@@ -111,7 +141,7 @@ func (b *ReviewEmbed) Build() *discord.MessageUpdateBuilder {
 			AddField(b.getFlaggedType(), b.getFlaggedContent(), false)
 	} else {
 		// Standard mode - show all information with links
-		reviewEmbed.AddField("ID", fmt.Sprintf(
+		embed.AddField("ID", fmt.Sprintf(
 			"[%s](https://www.roblox.com/users/%d/profile)",
 			utils.CensorString(strconv.FormatUint(b.user.ID, 10), b.settings.StreamerMode),
 			b.user.ID,
@@ -133,48 +163,60 @@ func (b *ReviewEmbed) Build() *discord.MessageUpdateBuilder {
 			AddField("Review History", b.getReviewHistory(), false)
 	}
 
-	// Add user thumbnail or placeholder image (existing code)
-	builder := discord.NewMessageUpdateBuilder()
-	if b.user.ThumbnailURL != "" && b.user.ThumbnailURL != fetcher.ThumbnailPlaceholder {
-		reviewEmbed.SetThumbnail(b.user.ThumbnailURL)
-	} else {
-		// Load and attach placeholder image
-		placeholderImage, err := assets.Images.Open("images/content_deleted.png")
-		if err == nil {
-			builder.SetFiles(discord.NewFile("content_deleted.png", "", placeholderImage))
-			_ = placeholderImage.Close()
-		}
-		reviewEmbed.SetThumbnail("attachment://content_deleted.png")
-	}
-
-	// Add both embeds and components to the message
-	return builder.
-		SetEmbeds(modeEmbed.Build(), reviewEmbed.Build()). // Add both embeds
-		AddContainerComponents(b.buildComponents()...)     // Move components to separate method for cleaner code
+	return embed
 }
 
-// buildComponents creates the interactive components for the review menu.
-func (b *ReviewEmbed) buildComponents() []discord.ContainerComponent {
-	// Create the mode switch option based on current mode
-	var modeSwitchOption discord.StringSelectMenuOption
-	var confirmButtonLabel string
-	var clearButtonLabel string
-
-	switch b.settings.ReviewMode {
-	case database.TrainingReviewMode:
-		modeSwitchOption = discord.NewStringSelectMenuOption("Switch to Standard Mode", constants.SwitchReviewModeCustomID).
-			WithEmoji(discord.ComponentEmoji{Name: "⚠️"}).
-			WithDescription("Switch to standard mode for actual moderation")
-		confirmButtonLabel = "Upvote"
-		clearButtonLabel = "Downvote"
-	case database.StandardReviewMode:
-		modeSwitchOption = discord.NewStringSelectMenuOption("Switch to Training Mode", constants.SwitchReviewModeCustomID).
-			WithEmoji(discord.ComponentEmoji{Name: "🎓"}).
-			WithDescription("Switch to training mode to practice")
-		confirmButtonLabel = "Confirm"
-		clearButtonLabel = "Clear"
+// buildActionOptions creates the action menu options.
+func (b *ReviewEmbed) buildActionOptions() []discord.StringSelectMenuOption {
+	// Create base options that everyone can access
+	options := []discord.StringSelectMenuOption{
+		discord.NewStringSelectMenuOption("Open friends viewer", constants.OpenFriendsMenuButtonCustomID).
+			WithEmoji(discord.ComponentEmoji{Name: "👫"}).
+			WithDescription("View all user friends"),
+		discord.NewStringSelectMenuOption("Open group viewer", constants.OpenGroupsMenuButtonCustomID).
+			WithEmoji(discord.ComponentEmoji{Name: "🌐"}).
+			WithDescription("View all user groups"),
+		discord.NewStringSelectMenuOption("Open outfit viewer", constants.OpenOutfitsMenuButtonCustomID).
+			WithEmoji(discord.ComponentEmoji{Name: "👕"}).
+			WithDescription("View all user outfits"),
 	}
 
+	// Add reviewer-only options
+	if b.botSettings.IsReviewer(b.userID) {
+		reviewerOptions := []discord.StringSelectMenuOption{
+			discord.NewStringSelectMenuOption("Confirm with reason", constants.ConfirmWithReasonButtonCustomID).
+				WithEmoji(discord.ComponentEmoji{Name: "🚫"}).
+				WithDescription("Confirm the user with a custom reason"),
+			discord.NewStringSelectMenuOption("Recheck user", constants.RecheckButtonCustomID).
+				WithEmoji(discord.ComponentEmoji{Name: "🔄"}).
+				WithDescription("Add user to high priority queue for recheck"),
+			discord.NewStringSelectMenuOption("View user logs", constants.ViewUserLogsButtonCustomID).
+				WithEmoji(discord.ComponentEmoji{Name: "📋"}).
+				WithDescription("View activity logs for this user"),
+		}
+		options = append(reviewerOptions, options...)
+
+		// Add mode switch option
+		if b.settings.ReviewMode == database.TrainingReviewMode {
+			options = append(options,
+				discord.NewStringSelectMenuOption("Switch to Standard Mode", constants.SwitchReviewModeCustomID).
+					WithEmoji(discord.ComponentEmoji{Name: "⚠️"}).
+					WithDescription("Switch to standard mode for actual moderation"),
+			)
+		} else {
+			options = append(options,
+				discord.NewStringSelectMenuOption("Switch to Training Mode", constants.SwitchReviewModeCustomID).
+					WithEmoji(discord.ComponentEmoji{Name: "🎓"}).
+					WithDescription("Switch to training mode to practice"),
+			)
+		}
+	}
+
+	return options
+}
+
+// buildComponents creates all interactive components for the review menu.
+func (b *ReviewEmbed) buildComponents() []discord.ContainerComponent {
 	return []discord.ContainerComponent{
 		// Sorting options menu
 		discord.NewActionRow(
@@ -195,36 +237,32 @@ func (b *ReviewEmbed) buildComponents() []discord.ContainerComponent {
 		),
 		// Action options menu
 		discord.NewActionRow(
-			discord.NewStringSelectMenu(constants.ActionSelectMenuCustomID, "Actions",
-				discord.NewStringSelectMenuOption("Confirm with reason", constants.ConfirmWithReasonButtonCustomID).
-					WithEmoji(discord.ComponentEmoji{Name: "🚫"}).
-					WithDescription("Confirm the user with a custom reason"),
-				discord.NewStringSelectMenuOption("Recheck user", constants.RecheckButtonCustomID).
-					WithEmoji(discord.ComponentEmoji{Name: "🔄"}).
-					WithDescription("Add user to high priority queue for recheck"),
-				discord.NewStringSelectMenuOption("View user logs", constants.ViewUserLogsButtonCustomID).
-					WithEmoji(discord.ComponentEmoji{Name: "📋"}).
-					WithDescription("View activity logs for this user"),
-				modeSwitchOption,
-				discord.NewStringSelectMenuOption("Open friends viewer", constants.OpenFriendsMenuButtonCustomID).
-					WithEmoji(discord.ComponentEmoji{Name: "👫"}).
-					WithDescription("View all user friends"),
-				discord.NewStringSelectMenuOption("Open group viewer", constants.OpenGroupsMenuButtonCustomID).
-					WithEmoji(discord.ComponentEmoji{Name: "🌐"}).
-					WithDescription("View all user groups"),
-				discord.NewStringSelectMenuOption("Open outfit viewer", constants.OpenOutfitsMenuButtonCustomID).
-					WithEmoji(discord.ComponentEmoji{Name: "👕"}).
-					WithDescription("View all user outfits"),
-			),
+			discord.NewStringSelectMenu(constants.ActionSelectMenuCustomID, "Actions", b.buildActionOptions()...),
 		),
 		// Quick action buttons
 		discord.NewActionRow(
 			discord.NewSecondaryButton("◀️", constants.BackButtonCustomID),
-			discord.NewDangerButton(confirmButtonLabel, constants.ConfirmButtonCustomID),
-			discord.NewSuccessButton(clearButtonLabel, constants.ClearButtonCustomID),
+			discord.NewDangerButton(b.getConfirmButtonLabel(), constants.ConfirmButtonCustomID),
+			discord.NewSuccessButton(b.getClearButtonLabel(), constants.ClearButtonCustomID),
 			discord.NewSecondaryButton("Skip", constants.SkipButtonCustomID),
 		),
 	}
+}
+
+// getConfirmButtonLabel returns the appropriate label for the confirm button based on review mode.
+func (b *ReviewEmbed) getConfirmButtonLabel() string {
+	if b.settings.ReviewMode == database.TrainingReviewMode {
+		return "Upvote"
+	}
+	return "Confirm"
+}
+
+// getClearButtonLabel returns the appropriate label for the clear button based on review mode.
+func (b *ReviewEmbed) getClearButtonLabel() string {
+	if b.settings.ReviewMode == database.TrainingReviewMode {
+		return "Downvote"
+	}
+	return "Clear"
 }
 
 // getDescription returns the description field for the embed.

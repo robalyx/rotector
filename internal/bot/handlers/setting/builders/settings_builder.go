@@ -13,7 +13,9 @@ import (
 
 // UserSettingsEmbed creates the visual layout for user preferences.
 type UserSettingsEmbed struct {
-	settings *database.UserSetting
+	settings    *database.UserSetting
+	botSettings *database.BotSetting
+	userID      uint64
 }
 
 // NewUserSettingsEmbed loads user settings from the session state to create
@@ -21,15 +23,35 @@ type UserSettingsEmbed struct {
 func NewUserSettingsEmbed(s *session.Session) *UserSettingsEmbed {
 	var settings *database.UserSetting
 	s.GetInterface(constants.SessionKeyUserSettings, &settings)
+	var botSettings *database.BotSetting
+	s.GetInterface(constants.SessionKeyBotSettings, &botSettings)
 
 	return &UserSettingsEmbed{
-		settings: settings,
+		settings:    settings,
+		botSettings: botSettings,
+		userID:      s.GetUint64(constants.SessionKeyUserID),
 	}
 }
 
 // Build creates a Discord message with the current settings displayed in an embed
 // and adds select menus for changing each setting.
 func (b *UserSettingsEmbed) Build() *discord.MessageUpdateBuilder {
+	// Create base options
+	options := []discord.StringSelectMenuOption{
+		discord.NewStringSelectMenuOption("Change Streamer Mode", constants.StreamerModeOption).
+			WithDescription("Toggle censoring of sensitive information"),
+		discord.NewStringSelectMenuOption("Change Default Sort", constants.DefaultSortOption).
+			WithDescription("Set what users are shown first in the review menu"),
+	}
+
+	// Add review mode option only for reviewers
+	if b.botSettings.IsReviewer(b.userID) {
+		options = append(options,
+			discord.NewStringSelectMenuOption("Change Review Mode", constants.ReviewModeOption).
+				WithDescription("Switch between training and standard review modes"),
+		)
+	}
+
 	// Create embed with current settings values
 	embed := discord.NewEmbedBuilder().
 		SetTitle("User Settings").
@@ -41,14 +63,7 @@ func (b *UserSettingsEmbed) Build() *discord.MessageUpdateBuilder {
 	// Add interactive components for changing settings
 	components := []discord.ContainerComponent{
 		discord.NewActionRow(
-			discord.NewStringSelectMenu(constants.UserSettingSelectID, "Select a setting to change",
-				discord.NewStringSelectMenuOption("Change Streamer Mode", constants.StreamerModeOption).
-					WithDescription("Toggle censoring of sensitive information"),
-				discord.NewStringSelectMenuOption("Change Default Sort", constants.DefaultSortOption).
-					WithDescription("Set what users are shown first in the review menu"),
-				discord.NewStringSelectMenuOption("Change Review Mode", constants.ReviewModeOption).
-					WithDescription("Switch between training and standard review modes"),
-			),
+			discord.NewStringSelectMenu(constants.UserSettingSelectID, "Select a setting to change", options...),
 		),
 		discord.NewActionRow(
 			discord.NewSecondaryButton("Back", constants.BackButtonCustomID),
@@ -60,41 +75,38 @@ func (b *UserSettingsEmbed) Build() *discord.MessageUpdateBuilder {
 		AddContainerComponents(components...)
 }
 
-// GuildSettingsEmbed creates the visual layout for server settings.
-type GuildSettingsEmbed struct {
-	settings *database.GuildSetting
-	roles    []discord.Role
+// BotSettingsEmbed creates the visual layout for bot settings.
+type BotSettingsEmbed struct {
+	settings *database.BotSetting
 }
 
-// NewGuildSettingsEmbed loads guild settings and roles from the session state
-// to create a new embed builder.
-func NewGuildSettingsEmbed(s *session.Session) *GuildSettingsEmbed {
-	var settings *database.GuildSetting
-	s.GetInterface(constants.SessionKeyGuildSettings, &settings)
-	var roles []discord.Role
-	s.GetInterface(constants.SessionKeyRoles, &roles)
+// NewBotSettingsEmbed loads bot settings from the session state.
+func NewBotSettingsEmbed(s *session.Session) *BotSettingsEmbed {
+	var settings *database.BotSetting
+	s.GetInterface(constants.SessionKeyBotSettings, &settings)
 
-	return &GuildSettingsEmbed{
+	return &BotSettingsEmbed{
 		settings: settings,
-		roles:    roles,
 	}
 }
 
-// Build creates a Discord message with the current guild settings displayed in an embed
-// and adds select menus for changing each setting.
-func (b *GuildSettingsEmbed) Build() *discord.MessageUpdateBuilder {
-	// Create embed with current whitelisted roles
+// Build creates a Discord message with the current bot settings.
+func (b *BotSettingsEmbed) Build() *discord.MessageUpdateBuilder {
+	// Create embed with current settings
 	embed := discord.NewEmbedBuilder().
-		SetTitle("Guild Settings").
-		AddField("Whitelisted Roles", utils.FormatWhitelistedRoles(b.settings.WhitelistedRoles, b.roles), false).
+		SetTitle("Bot Settings").
+		AddField("Reviewer IDs", utils.FormatIDs(b.settings.ReviewerIDs), false).
+		AddField("Admin IDs", utils.FormatIDs(b.settings.AdminIDs), false).
 		SetColor(constants.DefaultEmbedColor)
 
 	// Add interactive components for changing settings
 	components := []discord.ContainerComponent{
 		discord.NewActionRow(
-			discord.NewStringSelectMenu(constants.GuildSettingSelectID, "Select roles to whitelist",
-				discord.NewStringSelectMenuOption("Change Whitelisted Roles", constants.WhitelistedRolesOption).
-					WithDescription("Set which roles can use the bot"),
+			discord.NewStringSelectMenu(constants.BotSettingSelectID, "Select a setting to change",
+				discord.NewStringSelectMenuOption("Change Reviewer IDs", constants.ReviewerIDsOption).
+					WithDescription("Set which users can review using the bot"),
+				discord.NewStringSelectMenuOption("Change Admin IDs", constants.AdminIDsOption).
+					WithDescription("Set which users can access bot settings"),
 			),
 		),
 		discord.NewActionRow(

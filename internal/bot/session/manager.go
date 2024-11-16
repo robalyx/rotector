@@ -54,13 +54,19 @@ func NewManager(db *database.Database, redisManager *redis.Manager, logger *zap.
 // GetOrCreateSession loads or initializes a session for a given user.
 // New sessions are populated with user settings from the database.
 // Existing sessions are refreshed with the latest user settings.
-func (m *Manager) GetOrCreateSession(ctx context.Context, userID snowflake.ID) (*Session, error) {
-	key := fmt.Sprintf("%s%s", SessionPrefix, userID)
+func (m *Manager) GetOrCreateSession(ctx context.Context, userID uint64) (*Session, error) {
+	key := fmt.Sprintf("%s%d", SessionPrefix, userID)
 
 	// Load user settings
-	settings, err := m.db.Settings().GetUserSettings(ctx, uint64(userID))
+	settings, err := m.db.Settings().GetUserSettings(ctx, userID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load user settings: %w", err)
+	}
+
+	// Load bot settings
+	botSettings, err := m.db.Settings().GetBotSettings(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load bot settings: %w", err)
 	}
 
 	// Try loading existing session
@@ -71,6 +77,7 @@ func (m *Manager) GetOrCreateSession(ctx context.Context, userID snowflake.ID) (
 			sessionData := make(map[string]interface{})
 			session := NewSession(m.db, m.redis, key, sessionData, m.logger)
 			session.Set(constants.SessionKeyUserSettings, settings)
+			session.Set(constants.SessionKeyBotSettings, botSettings)
 			return session, nil
 		}
 		return nil, fmt.Errorf("failed to query Redis: %w", err)
@@ -90,13 +97,14 @@ func (m *Manager) GetOrCreateSession(ctx context.Context, userID snowflake.ID) (
 	// Update existing session with latest settings
 	session := NewSession(m.db, m.redis, key, sessionData, m.logger)
 	session.Set(constants.SessionKeyUserSettings, settings)
+	session.Set(constants.SessionKeyBotSettings, botSettings)
 	return session, nil
 }
 
 // CloseSession removes a user's session from Redis immediately rather than
 // waiting for expiration.
-func (m *Manager) CloseSession(ctx context.Context, userID snowflake.ID) {
-	key := fmt.Sprintf("%s%s", SessionPrefix, userID)
+func (m *Manager) CloseSession(ctx context.Context, userID uint64) {
+	key := fmt.Sprintf("%s%d", SessionPrefix, userID)
 	if err := m.redis.Do(ctx, m.redis.B().Del().Key(key).Build()).Error(); err != nil {
 		m.logger.Error("Failed to delete session", zap.Error(err))
 	}

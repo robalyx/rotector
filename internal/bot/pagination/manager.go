@@ -109,6 +109,10 @@ func (m *Manager) HandleInteraction(event interfaces.CommonEvent, s *session.Ses
 // It stores the previous page and message ID in the session, allowing for navigation history.
 // The content parameter adds a timestamped message above the page content.
 func (m *Manager) NavigateTo(event interfaces.CommonEvent, s *session.Session, page *Page, content string) {
+	// Set the user ID in the session
+	s.Set(constants.SessionKeyUserID, strconv.FormatUint(uint64(event.User().ID), 10))
+
+	// Update the message with the new content and components
 	messageUpdate := page.Message(s).
 		SetContent(utils.GetTimestampedSubtext(content)).
 		RetainAttachments().
@@ -119,17 +123,25 @@ func (m *Manager) NavigateTo(event interfaces.CommonEvent, s *session.Session, p
 		m.logger.Error("Failed to update interaction response", zap.Error(err))
 	}
 
+	// Update the page in the session
+	m.UpdatePage(s, page)
+
+	// Set the message ID in the session
+	s.Set(constants.SessionKeyMessageID, strconv.FormatUint(uint64(message.ID), 10))
+
+	m.logger.Debug("Updated message",
+		zap.String("page", page.Name),
+		zap.Uint64("message_id", uint64(message.ID)))
+}
+
+// UpdatePage updates the session with the current page and previous page.
+func (m *Manager) UpdatePage(s *session.Session, page *Page) {
 	currentPage := s.GetString(constants.SessionKeyCurrentPage)
 	if page.Name != currentPage {
 		s.Set(constants.SessionKeyPreviousPage, currentPage)
 	}
 
-	s.Set(constants.SessionKeyMessageID, strconv.FormatUint(uint64(message.ID), 10))
 	s.Set(constants.SessionKeyCurrentPage, page.Name)
-
-	m.logger.Debug("Updated message",
-		zap.String("page", page.Name),
-		zap.Uint64("message_id", uint64(message.ID)))
 }
 
 // NavigateBack navigates back to the previous page.

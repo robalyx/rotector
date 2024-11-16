@@ -17,9 +17,9 @@ const (
 
 // Dashboard Menu.
 const (
-	StartReviewCustomID   = "start_review"
-	UserSettingsCustomID  = "user_settings"
-	GuildSettingsCustomID = "guild_settings"
+	StartReviewCustomID  = "start_review"
+	UserSettingsCustomID = "user_settings"
+	BotSettingsCustomID  = "bot_settings"
 )
 
 // Review Menu.
@@ -75,11 +75,12 @@ const (
 	ReviewModeOption    = "review_mode"
 )
 
-// Guild Settings.
+// Bot Settings.
 const (
-	GuildSettingPrefix     = "guild"
-	GuildSettingSelectID   = "guild_setting_select"
-	WhitelistedRolesOption = "whitelisted_roles"
+	BotSettingPrefix   = "bot"
+	BotSettingSelectID = "bot_setting_select"
+	ReviewerIDsOption  = "reviewer_ids_exception"
+	AdminIDsOption     = "admin_ids_exception"
 )
 
 // Logs Menu.
@@ -107,6 +108,7 @@ const (
 
 // Session keys.
 const (
+	SessionKeyUserID       = "userID"
 	SessionKeyMessageID    = "messageID"
 	SessionKeyTarget       = "target"
 	SessionKeyCurrentPage  = "currentPage"
@@ -124,14 +126,14 @@ const (
 	SessionKeyActiveUsers    = "activeUsers"
 	SessionKeyWorkerStatuses = "workerStatuses"
 
-	SessionKeySettingName   = "settingName"
-	SessionKeySettingType   = "settingType"
-	SessionKeyUserSettings  = "userSettings"
-	SessionKeyGuildSettings = "guildSettings"
-	SessionKeyCurrentValue  = "currentValue"
-	SessionKeyCustomID      = "customID"
-	SessionKeyOptions       = "options"
-	SessionKeyRoles         = "roles"
+	SessionKeySettingName  = "settingName"
+	SessionKeySettingType  = "settingType"
+	SessionKeyUserSettings = "userSettings"
+	SessionKeyBotSettings  = "botSettings"
+	SessionKeyCurrentValue = "currentValue"
+	SessionKeyCustomID     = "customID"
+	SessionKeyOptions      = "options"
+	SessionKeyRoles        = "roles"
 
 	SessionKeyFriends        = "friends"
 	SessionKeyPresences      = "presences"

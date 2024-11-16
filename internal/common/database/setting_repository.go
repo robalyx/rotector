@@ -4,9 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"slices"
 
-	"github.com/disgoorg/snowflake/v2"
 	"github.com/uptrace/bun"
 	"go.uber.org/zap"
 )
@@ -18,7 +16,6 @@ const (
 )
 
 // FormatReviewMode converts the review mode constant to a user-friendly display string.
-// This function is exported so it can be used by other packages.
 func FormatReviewMode(mode string) string {
 	switch mode {
 	case TrainingReviewMode:
@@ -38,24 +35,34 @@ type UserSetting struct {
 	ReviewMode   string `bun:",notnull"`
 }
 
-// GuildSetting stores server-wide configuration options.
-type GuildSetting struct {
-	GuildID          uint64   `bun:",pk"`
-	WhitelistedRoles []uint64 `bun:"type:bigint[]"`
+// BotSetting stores bot-wide configuration options.
+type BotSetting struct {
+	ID          uint64   `bun:",pk,autoincrement"`
+	ReviewerIDs []uint64 `bun:"reviewer_ids,type:bigint[]"`
+	AdminIDs    []uint64 `bun:"admin_ids,type:bigint[]"`
 }
 
-// HasAnyRole checks if any of the provided role IDs match the whitelisted roles.
-// Returns true if there is at least one match, false otherwise.
-func (s *GuildSetting) HasAnyRole(roleIDs []snowflake.ID) bool {
-	for _, roleID := range roleIDs {
-		if slices.Contains(s.WhitelistedRoles, uint64(roleID)) {
+// IsAdmin checks if the given user ID is in the admin list.
+func (s *BotSetting) IsAdmin(userID uint64) bool {
+	for _, adminID := range s.AdminIDs {
+		if adminID == userID {
 			return true
 		}
 	}
 	return false
 }
 
-// SettingRepository handles database operations for user and guild settings.
+// IsReviewer checks if the given user ID is in the reviewer list.
+func (s *BotSetting) IsReviewer(userID uint64) bool {
+	for _, reviewerID := range s.ReviewerIDs {
+		if reviewerID == userID {
+			return true
+		}
+	}
+	return false
+}
+
+// SettingRepository handles database operations for user and bot settings.
 type SettingRepository struct {
 	db     *bun.DB
 	logger *zap.Logger
@@ -116,24 +123,12 @@ func (r *SettingRepository) SaveUserSettings(ctx context.Context, settings *User
 	return nil
 }
 
-// SaveGuildSettings saves guild settings to the database.
-func (r *SettingRepository) SaveGuildSettings(ctx context.Context, settings *GuildSetting) error {
-	_, err := r.db.NewInsert().Model(settings).
-		On("CONFLICT (guild_id) DO UPDATE").
-		Set("whitelisted_roles = EXCLUDED.whitelisted_roles").
-		Exec(ctx)
-	if err != nil {
-		r.logger.Error("Failed to save guild settings", zap.Error(err), zap.Uint64("guildID", settings.GuildID))
-		return err
-	}
-	return nil
-}
-
-// GetGuildSettings retrieves settings for a specific guild.
-func (r *SettingRepository) GetGuildSettings(ctx context.Context, guildID uint64) (*GuildSetting, error) {
-	settings := &GuildSetting{
-		GuildID:          guildID,
-		WhitelistedRoles: []uint64{},
+// GetBotSettings retrieves the bot settings.
+func (r *SettingRepository) GetBotSettings(ctx context.Context) (*BotSetting, error) {
+	settings := &BotSetting{
+		ID:          1,
+		ReviewerIDs: []uint64{},
+		AdminIDs:    []uint64{},
 	}
 
 	err := r.db.NewSelect().Model(settings).
@@ -144,11 +139,11 @@ func (r *SettingRepository) GetGuildSettings(ctx context.Context, guildID uint64
 			// Create default settings if none exist
 			_, err = r.db.NewInsert().Model(settings).Exec(ctx)
 			if err != nil {
-				r.logger.Error("Failed to create guild settings", zap.Error(err), zap.Uint64("guildID", guildID))
+				r.logger.Error("Failed to create bot settings", zap.Error(err))
 				return nil, err
 			}
 		} else {
-			r.logger.Error("Failed to get guild settings", zap.Error(err), zap.Uint64("guildID", guildID))
+			r.logger.Error("Failed to get bot settings", zap.Error(err))
 			return nil, err
 		}
 	}
@@ -156,42 +151,62 @@ func (r *SettingRepository) GetGuildSettings(ctx context.Context, guildID uint64
 	return settings, nil
 }
 
-// ToggleWhitelistedRole adds or removes a role from a guild's whitelist.
-func (r *SettingRepository) ToggleWhitelistedRole(ctx context.Context, guildID, roleID uint64) error {
-	settings, err := r.GetGuildSettings(ctx, guildID)
+// SaveBotSettings saves bot settings to the database.
+func (r *SettingRepository) SaveBotSettings(ctx context.Context, settings *BotSetting) error {
+	_, err := r.db.NewInsert().Model(settings).
+		On("CONFLICT (id) DO UPDATE").
+		Set("reviewer_ids = EXCLUDED.reviewer_ids").
+		Set("admin_ids = EXCLUDED.admin_ids").
+		Exec(ctx)
+	if err != nil {
+		r.logger.Error("Failed to save bot settings", zap.Error(err))
+		return err
+	}
+	return nil
+}
+
+// ToggleReviewerID adds or removes a reviewer ID.
+func (r *SettingRepository) ToggleReviewerID(ctx context.Context, reviewerID uint64) error {
+	settings, err := r.GetBotSettings(ctx)
 	if err != nil {
 		return err
 	}
 
-	// Remove role if it exists, add if it doesn't
-	roleExists := false
-	for i, existingRoleID := range settings.WhitelistedRoles {
-		if existingRoleID == roleID {
-			settings.WhitelistedRoles = append(
-				settings.WhitelistedRoles[:i],
-				settings.WhitelistedRoles[i+1:]...,
-			)
-			roleExists = true
+	exists := false
+	for i, id := range settings.ReviewerIDs {
+		if id == reviewerID {
+			settings.ReviewerIDs = append(settings.ReviewerIDs[:i], settings.ReviewerIDs[i+1:]...)
+			exists = true
 			break
 		}
 	}
 
-	if !roleExists {
-		settings.WhitelistedRoles = append(settings.WhitelistedRoles, roleID)
+	if !exists {
+		settings.ReviewerIDs = append(settings.ReviewerIDs, reviewerID)
 	}
 
-	// Save updated settings
-	_, err = r.db.NewInsert().Model(settings).
-		On("CONFLICT (guild_id) DO UPDATE").
-		Set("whitelisted_roles = EXCLUDED.whitelisted_roles").
-		Exec(ctx)
+	return r.SaveBotSettings(ctx, settings)
+}
+
+// ToggleAdminID adds or removes an admin ID.
+func (r *SettingRepository) ToggleAdminID(ctx context.Context, adminID uint64) error {
+	settings, err := r.GetBotSettings(ctx)
 	if err != nil {
-		r.logger.Error("Failed to toggle whitelisted role",
-			zap.Error(err),
-			zap.Uint64("guildID", guildID),
-			zap.Uint64("roleID", roleID))
 		return err
 	}
 
-	return nil
+	exists := false
+	for i, id := range settings.AdminIDs {
+		if id == adminID {
+			settings.AdminIDs = append(settings.AdminIDs[:i], settings.AdminIDs[i+1:]...)
+			exists = true
+			break
+		}
+	}
+
+	if !exists {
+		settings.AdminIDs = append(settings.AdminIDs, adminID)
+	}
+
+	return r.SaveBotSettings(ctx, settings)
 }

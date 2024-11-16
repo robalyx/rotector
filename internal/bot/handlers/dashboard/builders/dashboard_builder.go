@@ -10,6 +10,7 @@ import (
 	"github.com/disgoorg/disgo/discord"
 	"github.com/disgoorg/snowflake/v2"
 	"github.com/rotector/rotector/internal/bot/constants"
+	"github.com/rotector/rotector/internal/common/database"
 	"github.com/rotector/rotector/internal/common/worker"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
@@ -23,6 +24,8 @@ const (
 
 // DashboardBuilder creates the visual layout for the main dashboard.
 type DashboardBuilder struct {
+	botSettings    *database.BotSetting
+	userID         uint64
 	confirmedCount int
 	flaggedCount   int
 	clearedCount   int
@@ -32,10 +35,18 @@ type DashboardBuilder struct {
 	titleCaser     cases.Caser
 }
 
-// NewDashboardBuilder loads current statistics and active user information
-// to create a new builder.
-func NewDashboardBuilder(confirmedCount, flaggedCount, clearedCount int, imageBuffer *bytes.Buffer, activeUsers []snowflake.ID, workerStatuses []worker.Status) *DashboardBuilder {
+// NewDashboardBuilder creates a new dashboard builder.
+func NewDashboardBuilder(
+	botSettings *database.BotSetting,
+	userID uint64,
+	confirmedCount, flaggedCount, clearedCount int,
+	imageBuffer *bytes.Buffer,
+	activeUsers []snowflake.ID,
+	workerStatuses []worker.Status,
+) *DashboardBuilder {
 	return &DashboardBuilder{
+		botSettings:    botSettings,
+		userID:         userID,
 		confirmedCount: confirmedCount,
 		flaggedCount:   flaggedCount,
 		clearedCount:   clearedCount,
@@ -48,28 +59,45 @@ func NewDashboardBuilder(confirmedCount, flaggedCount, clearedCount int, imageBu
 
 // Build creates a Discord message showing statistics and worker status.
 func (b *DashboardBuilder) Build() *discord.MessageUpdateBuilder {
+	// Create base options
+	options := []discord.StringSelectMenuOption{
+		discord.NewStringSelectMenuOption("Review Users", constants.StartReviewCustomID).
+			WithEmoji(discord.ComponentEmoji{Name: "🔍"}).
+			WithDescription("Start reviewing flagged users"),
+	}
+
+	// Add activity log and queue manager options only for reviewers
+	if b.botSettings.IsReviewer(b.userID) {
+		options = append(options,
+			discord.NewStringSelectMenuOption("Activity Log Browser", constants.LogActivityBrowserCustomID).
+				WithEmoji(discord.ComponentEmoji{Name: "📜"}).
+				WithDescription("Search and filter activity logs"),
+			discord.NewStringSelectMenuOption("Queue Manager", constants.QueueManagerCustomID).
+				WithEmoji(discord.ComponentEmoji{Name: "📋"}).
+				WithDescription("Manage recheck queue priorities"),
+		)
+	}
+
+	// Add user settings option
+	options = append(options,
+		discord.NewStringSelectMenuOption("User Settings", constants.UserSettingsCustomID).
+			WithEmoji(discord.ComponentEmoji{Name: "👤"}).
+			WithDescription("Configure your personal settings"),
+	)
+
+	// Add bot settings option only for admins
+	if b.botSettings.IsAdmin(b.userID) {
+		options = append(options, discord.NewStringSelectMenuOption("Bot Settings", constants.BotSettingsCustomID).
+			WithEmoji(discord.ComponentEmoji{Name: "⚙️"}).
+			WithDescription("Configure bot-wide settings"))
+	}
+
 	// Create message builder with both embeds
 	builder := discord.NewMessageUpdateBuilder().
 		SetEmbeds(b.buildStatsEmbed(), b.buildWorkerStatusEmbed()).
 		AddContainerComponents(
 			discord.NewActionRow(
-				discord.NewStringSelectMenu(constants.ActionSelectMenuCustomID, "Select an action",
-					discord.NewStringSelectMenuOption("Review Users", constants.StartReviewCustomID).
-						WithEmoji(discord.ComponentEmoji{Name: "🔍"}).
-						WithDescription("Start reviewing flagged users"),
-					discord.NewStringSelectMenuOption("Activity Log Browser", constants.LogActivityBrowserCustomID).
-						WithEmoji(discord.ComponentEmoji{Name: "📜"}).
-						WithDescription("Search and filter activity logs"),
-					discord.NewStringSelectMenuOption("Queue Manager", constants.QueueManagerCustomID).
-						WithEmoji(discord.ComponentEmoji{Name: "📋"}).
-						WithDescription("Manage recheck queue priorities"),
-					discord.NewStringSelectMenuOption("User Settings", constants.UserSettingsCustomID).
-						WithEmoji(discord.ComponentEmoji{Name: "👤"}).
-						WithDescription("Configure your personal settings"),
-					discord.NewStringSelectMenuOption("Guild Settings", constants.GuildSettingsCustomID).
-						WithEmoji(discord.ComponentEmoji{Name: "⚙️"}).
-						WithDescription("Configure server-wide settings"),
-				),
+				discord.NewStringSelectMenu(constants.ActionSelectMenuCustomID, "Select an action", options...),
 			),
 			discord.NewActionRow(
 				discord.NewSecondaryButton("🔄", string(constants.RefreshButtonCustomID)),

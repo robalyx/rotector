@@ -17,7 +17,7 @@ type Handler struct {
 	paginationManager *pagination.Manager
 	settingMenu       *Menu
 	userMenu          *UserMenu
-	guildMenu         *GuildMenu
+	botMenu           *BotMenu
 	logger            *zap.Logger
 	dashboardHandler  interfaces.DashboardHandler
 }
@@ -42,11 +42,11 @@ func New(
 	// Initialize all menus with references to this handler
 	h.settingMenu = NewMenu(h)
 	h.userMenu = NewUserMenu(h)
-	h.guildMenu = NewGuildMenu(h)
+	h.botMenu = NewBotMenu(h)
 
 	// Register menu pages with the pagination manager
 	paginationManager.AddPage(h.userMenu.page)
-	paginationManager.AddPage(h.guildMenu.page)
+	paginationManager.AddPage(h.botMenu.page)
 	paginationManager.AddPage(h.settingMenu.page)
 
 	return h
@@ -58,8 +58,7 @@ func (h *Handler) ShowUserSettings(event interfaces.CommonEvent, s *session.Sess
 	h.userMenu.ShowMenu(event, s)
 }
 
-// ShowGuildSettings loads guild settings and available roles into the session,
-// then displays them through the pagination system.
-func (h *Handler) ShowGuildSettings(event interfaces.CommonEvent, s *session.Session) {
-	h.guildMenu.ShowMenu(event, s)
+// ShowBotSettings loads bot settings into the session, then displays them through the pagination system.
+func (h *Handler) ShowBotSettings(event interfaces.CommonEvent, s *session.Session) {
+	h.botMenu.ShowMenu(event, s)
 }

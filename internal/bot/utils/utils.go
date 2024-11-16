@@ -13,7 +13,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/disgoorg/disgo/discord"
 	"github.com/jaxron/axonet/pkg/client"
 	gim "github.com/ozankasikci/go-image-merge"
 	"github.com/rotector/rotector/assets"
@@ -34,22 +33,17 @@ var (
 	ErrEndDateBeforeStartDate = errors.New("end date cannot be before start date")
 )
 
-// FormatWhitelistedRoles converts role IDs to their corresponding names by looking up each ID
-// in the provided roles slice. Returns a comma-separated string of role names.
-func FormatWhitelistedRoles(whitelistedRoles []uint64, roles []discord.Role) string {
-	var roleNames []string
-	for _, roleID := range whitelistedRoles {
-		for _, role := range roles {
-			if uint64(role.ID) == roleID {
-				roleNames = append(roleNames, role.Name)
-				break
-			}
-		}
+// FormatIDs formats a slice of user IDs into a readable string with mentions.
+func FormatIDs(ids []uint64) string {
+	if len(ids) == 0 {
+		return "None"
 	}
-	if len(roleNames) == 0 {
-		return "No roles whitelisted"
+
+	mentions := make([]string, len(ids))
+	for i, id := range ids {
+		mentions[i] = fmt.Sprintf("<@%d>", id)
 	}
-	return strings.Join(roleNames, ", ")
+	return strings.Join(mentions, ", ")
 }
 
 // NormalizeString sanitizes text by replacing newlines with spaces and removing backticks

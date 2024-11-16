@@ -47,6 +47,20 @@ func NewMenu(h *Handler) *Menu {
 
 // ShowReviewMenu prepares and displays the review interface.
 func (m *Menu) ShowReviewMenu(event interfaces.CommonEvent, s *session.Session, content string) {
+	var settings *database.BotSetting
+	s.GetInterface(constants.SessionKeyBotSettings, &settings)
+	var userSettings *database.UserSetting
+	s.GetInterface(constants.SessionKeyUserSettings, &userSettings)
+
+	// Force training mode if user is not a reviewer
+	if !settings.IsReviewer(uint64(event.User().ID)) && userSettings.ReviewMode != database.TrainingReviewMode {
+		userSettings.ReviewMode = database.TrainingReviewMode
+		if err := m.handler.db.Settings().SaveUserSettings(context.Background(), userSettings); err != nil {
+			m.handler.logger.Error("Failed to enforce training mode", zap.Error(err))
+		}
+		s.Set(constants.SessionKeyUserSettings, userSettings)
+	}
+
 	var user *database.FlaggedUser
 	s.GetInterface(constants.SessionKeyTarget, &user)
 
@@ -87,44 +101,79 @@ func (m *Menu) ShowReviewMenu(event interfaces.CommonEvent, s *session.Session, 
 	m.handler.paginationManager.NavigateTo(event, s, m.page, content)
 }
 
-// handleSelectMenu handles the select menu for the review menu.
+// handleSelectMenu processes select menu interactions.
 func (m *Menu) handleSelectMenu(event *events.ComponentInteractionCreate, s *session.Session, customID string, option string) {
-	if m.checkLastViewed(event, s) {
+	switch customID {
+	case constants.SortOrderSelectMenuCustomID:
+		m.handleSortOrderSelection(event, s, option)
+	case constants.ActionSelectMenuCustomID:
+		m.handleActionSelection(event, s, option)
+	}
+}
+
+// handleSortOrderSelection processes sort order menu selections.
+func (m *Menu) handleSortOrderSelection(event *events.ComponentInteractionCreate, s *session.Session, option string) {
+	// Retrieve user settings from session
+	var settings *database.UserSetting
+	s.GetInterface(constants.SessionKeyUserSettings, &settings)
+
+	// Update user's default sort preference
+	settings.DefaultSort = option
+	if err := m.handler.db.Settings().SaveUserSettings(context.Background(), settings); err != nil {
+		m.handler.logger.Error("Failed to save user settings", zap.Error(err))
+		m.handler.paginationManager.RespondWithError(event, "Failed to save sort order. Please try again.")
 		return
 	}
 
-	switch customID {
-	case constants.SortOrderSelectMenuCustomID:
-		// Retrieve user settings from session
-		var settings *database.UserSetting
-		s.GetInterface(constants.SessionKeyUserSettings, &settings)
+	m.ShowReviewMenu(event, s, "Changed sort order. Will take effect for the next user.")
+}
 
-		// Update user's default sort preference
-		settings.DefaultSort = option
-		if err := m.handler.db.Settings().SaveUserSettings(context.Background(), settings); err != nil {
-			m.handler.logger.Error("Failed to save user settings", zap.Error(err))
-			m.handler.paginationManager.RespondWithError(event, "Failed to save sort order. Please try again.")
+// handleActionSelection processes action menu selections.
+func (m *Menu) handleActionSelection(event *events.ComponentInteractionCreate, s *session.Session, option string) {
+	// Get bot settings to check reviewer status
+	var settings *database.BotSetting
+	s.GetInterface(constants.SessionKeyBotSettings, &settings)
+	userID := uint64(event.User().ID)
+
+	switch option {
+	case constants.OpenOutfitsMenuButtonCustomID:
+		m.handler.outfitsMenu.ShowOutfitsMenu(event, s, 0)
+	case constants.OpenFriendsMenuButtonCustomID:
+		m.handler.friendsMenu.ShowFriendsMenu(event, s, 0)
+	case constants.OpenGroupsMenuButtonCustomID:
+		m.handler.groupsMenu.ShowGroupsMenu(event, s, 0)
+
+	case constants.ConfirmWithReasonButtonCustomID:
+		if !settings.IsReviewer(userID) {
+			m.handler.logger.Error("Non-reviewer attempted to use confirm with reason", zap.Uint64("user_id", userID))
+			m.handler.paginationManager.RespondWithError(event, "You do not have permission to confirm users with custom reasons.")
 			return
 		}
+		m.handleConfirmWithReason(event, s)
 
-		m.ShowReviewMenu(event, s, "Changed sort order. Will take effect for the next user.")
-	case constants.ActionSelectMenuCustomID:
-		switch option {
-		case constants.ConfirmWithReasonButtonCustomID:
-			m.handleConfirmWithReason(event, s)
-		case constants.RecheckButtonCustomID:
-			m.handleRecheck(event, s)
-		case constants.ViewUserLogsButtonCustomID:
-			m.handleViewUserLogs(event, s)
-		case constants.SwitchReviewModeCustomID:
-			m.handleSwitchReviewMode(event, s)
-		case constants.OpenOutfitsMenuButtonCustomID:
-			m.handler.outfitsMenu.ShowOutfitsMenu(event, s, 0)
-		case constants.OpenFriendsMenuButtonCustomID:
-			m.handler.friendsMenu.ShowFriendsMenu(event, s, 0)
-		case constants.OpenGroupsMenuButtonCustomID:
-			m.handler.groupsMenu.ShowGroupsMenu(event, s, 0)
+	case constants.RecheckButtonCustomID:
+		if !settings.IsReviewer(userID) {
+			m.handler.logger.Error("Non-reviewer attempted to recheck user", zap.Uint64("user_id", userID))
+			m.handler.paginationManager.RespondWithError(event, "You do not have permission to recheck users.")
+			return
 		}
+		m.handleRecheck(event, s)
+
+	case constants.ViewUserLogsButtonCustomID:
+		if !settings.IsReviewer(userID) {
+			m.handler.logger.Error("Non-reviewer attempted to view logs", zap.Uint64("user_id", userID))
+			m.handler.paginationManager.RespondWithError(event, "You do not have permission to view activity logs.")
+			return
+		}
+		m.handleViewUserLogs(event, s)
+
+	case constants.SwitchReviewModeCustomID:
+		if !settings.IsReviewer(userID) {
+			m.handler.logger.Error("Non-reviewer attempted to switch review mode", zap.Uint64("user_id", userID))
+			m.handler.paginationManager.RespondWithError(event, "You do not have permission to switch review modes.")
+			return
+		}
+		m.handleSwitchReviewMode(event, s)
 	}
 }
 

@@ -26,9 +26,9 @@ type SettingsHandler interface {
 	// ShowUserSettings loads user settings from the database into the session and
 	// displays them through the pagination system.
 	ShowUserSettings(event CommonEvent, s *session.Session)
-	// ShowGuildSettings loads guild settings and available roles into the session,
-	// then displays them through the pagination system.
-	ShowGuildSettings(event CommonEvent, s *session.Session)
+	// ShowMenu loads bot settings from the database into the session and
+	// displays them through the pagination system.
+	ShowBotSettings(event CommonEvent, s *session.Session)
 }
 
 // LogHandler defines the interface for handling logs-related actions.

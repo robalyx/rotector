@@ -81,7 +81,7 @@ func (d *Database) createSchema() error {
 		(*BannedUser)(nil),
 		(*HourlyStats)(nil),
 		(*UserSetting)(nil),
-		(*GuildSetting)(nil),
+		(*BotSetting)(nil),
 		(*UserActivityLog)(nil),
 		(*GroupMemberTracking)(nil),
 	}

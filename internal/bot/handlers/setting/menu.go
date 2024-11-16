@@ -9,16 +9,13 @@ import (
 	"github.com/disgoorg/disgo/events"
 	"github.com/rotector/rotector/internal/bot/constants"
 	"github.com/rotector/rotector/internal/bot/handlers/setting/builders"
-	"github.com/rotector/rotector/internal/bot/interfaces"
 	"github.com/rotector/rotector/internal/bot/pagination"
 	"github.com/rotector/rotector/internal/bot/session"
-	"github.com/rotector/rotector/internal/bot/utils"
 	"github.com/rotector/rotector/internal/common/database"
 	"go.uber.org/zap"
 )
 
 // Menu handles the interface for changing individual settings.
-// It works with both user and guild settings through a common interface.
 type Menu struct {
 	handler *Handler
 	page    *pagination.Page
@@ -40,13 +37,14 @@ func NewMenu(h *Handler) *Menu {
 		},
 		SelectHandlerFunc: m.handleSettingChange,
 		ButtonHandlerFunc: m.handleSettingButton,
+		ModalHandlerFunc:  m.handleSettingModal,
 	}
 	return m
 }
 
 // ShowMenu prepares and displays the settings change interface by loading
 // the current value and available options for the selected setting.
-func (m *Menu) ShowMenu(event interfaces.CommonEvent, s *session.Session, settingName, settingType, customID string) {
+func (m *Menu) ShowMenu(event *events.ComponentInteractionCreate, s *session.Session, settingName, settingType, customID string) {
 	// Store setting information in session for the message builder
 	s.Set(constants.SessionKeySettingName, settingName)
 	s.Set(constants.SessionKeySettingType, settingType)
@@ -98,19 +96,30 @@ func (m *Menu) ShowMenu(event interfaces.CommonEvent, s *session.Session, settin
 			).WithDescription("Normal review mode for actual moderation"),
 		}
 
-	case constants.WhitelistedRolesOption:
-		// Load guild settings and available roles for role whitelist
-		settings := m.handler.guildMenu.getGuildSettings(event)
-		roles, err := event.Client().Rest().GetRoles(*event.GuildID())
-		if err != nil {
-			m.handler.logger.Error("Failed to fetch guild roles", zap.Error(err))
+	case constants.ReviewerIDsOption, constants.AdminIDsOption:
+		// Create modal for ID input
+		modal := discord.NewModalCreateBuilder().
+			SetCustomID(customID).
+			SetTitle("Toggle " + settingName).
+			AddActionRow(
+				discord.NewTextInput(
+					"id_input",
+					discord.TextInputStyleShort,
+					"User ID",
+				).WithRequired(true).
+					WithPlaceholder("Enter the user ID to toggle..."),
+			).
+			Build()
+
+		// Show modal to user
+		if err := event.Modal(modal); err != nil {
+			m.handler.logger.Error("Failed to create modal", zap.Error(err))
+			m.handler.paginationManager.RespondWithError(event, "Failed to open the ID input form. Please try again.")
 			return
 		}
-		currentValue = utils.FormatWhitelistedRoles(settings.WhitelistedRoles, roles)
-		options = make([]discord.StringSelectMenuOption, 0, len(roles))
-		for _, role := range roles {
-			options = append(options, discord.NewStringSelectMenuOption(role.Name, role.ID.String()))
-		}
+
+		m.handler.paginationManager.UpdatePage(s, m.page)
+		return
 	}
 
 	// Store values in session for the message builder
@@ -126,7 +135,7 @@ func (m *Menu) handleSettingChange(event *events.ComponentInteractionCreate, s *
 	settingName := s.GetString(constants.SessionKeySettingName)
 	settingType := s.GetString(constants.SessionKeySettingType)
 
-	m.saveSetting(event, s, settingType, customID, option)
+	m.saveSetting(s, settingType, customID, option)
 	m.ShowMenu(event, s, settingName, settingType, customID)
 }
 
@@ -138,27 +147,47 @@ func (m *Menu) handleSettingButton(event *events.ComponentInteractionCreate, s *
 		settingType := split[0]
 		if strings.HasPrefix(settingType, constants.UserSettingPrefix) {
 			m.handler.userMenu.ShowMenu(event, s)
-		} else if strings.HasPrefix(settingType, constants.GuildSettingPrefix) {
-			m.handler.guildMenu.ShowMenu(event, s)
+		} else if strings.HasPrefix(settingType, constants.BotSettingPrefix) {
+			m.handler.botMenu.ShowMenu(event, s)
 		}
 	}
 }
 
-// saveSetting routes the setting change to the appropriate save function
-// based on whether it's a user or guild setting.
-func (m *Menu) saveSetting(event interfaces.CommonEvent, s *session.Session, settingType, customID, option string) {
+// handleSettingModal processes modal interactions.
+func (m *Menu) handleSettingModal(event *events.ModalSubmitInteractionCreate, s *session.Session) {
+	customID := event.Data.CustomID
+	switch customID {
+	case constants.ReviewerIDsOption, constants.AdminIDsOption:
+		// Get ID input from modal
+		idStr := event.Data.Text("id_input")
+		if _, err := strconv.ParseUint(idStr, 10, 64); err != nil {
+			m.handler.logger.Error("Failed to parse ID input", zap.Error(err))
+			m.handler.botMenu.ShowMenu(event, s)
+			return
+		}
+
+		// Save the setting
+		settingType := s.GetString(constants.SessionKeySettingType)
+		m.saveSetting(s, settingType, customID, idStr)
+
+		// Refresh the bot settings menu
+		m.handler.botMenu.ShowMenu(event, s)
+	}
+}
+
+// saveSetting routes the setting change to the appropriate save function.
+func (m *Menu) saveSetting(s *session.Session, settingType, customID, option string) {
 	switch settingType {
 	case constants.UserSettingPrefix:
 		m.saveUserSetting(s, customID, option)
-	case constants.GuildSettingPrefix:
-		m.saveGuildSetting(event, customID, option)
+	case constants.BotSettingPrefix:
+		m.saveBotSetting(s, customID, option)
 	default:
 		m.handler.logger.Warn("unknown setting type", zap.String("settingType", settingType))
 	}
 }
 
 // saveUserSetting updates user-specific settings in both the database and session.
-// It handles different setting types and validates the input before saving.
 func (m *Menu) saveUserSetting(s *session.Session, customID, option string) {
 	var settings *database.UserSetting
 	s.GetInterface(constants.SessionKeyUserSettings, &settings)
@@ -192,25 +221,36 @@ func (m *Menu) saveUserSetting(s *session.Session, customID, option string) {
 	s.Set(constants.SessionKeyUserSettings, settings)
 }
 
-// saveGuildSetting updates guild-specific settings in the database.
-// It handles role whitelist changes through the toggle mechanism.
-func (m *Menu) saveGuildSetting(event interfaces.CommonEvent, customID, option string) {
-	guildID := uint64(*event.GuildID())
+// saveBotSetting updates bot-wide settings in the database.
+func (m *Menu) saveBotSetting(s *session.Session, customID, option string) {
+	// Parse the ID
+	id, err := strconv.ParseUint(option, 10, 64)
+	if err != nil {
+		m.handler.logger.Error("Failed to parse ID input", zap.Error(err))
+		return
+	}
 
-	switch customID {
-	case constants.WhitelistedRolesOption:
-		// Parse and toggle the selected role
-		roleID, err := strconv.ParseUint(option, 10, 64)
-		if err != nil {
-			m.handler.logger.Error("failed to parse role ID", zap.Error(err))
+	// Toggle the ID based on setting type
+	if customID == constants.ReviewerIDsOption {
+		if err := m.handler.db.Settings().ToggleReviewerID(context.Background(), id); err != nil {
+			m.handler.logger.Error("Failed to toggle reviewer ID", zap.Error(err))
 			return
 		}
-
-		if err := m.handler.db.Settings().ToggleWhitelistedRole(context.Background(), guildID, roleID); err != nil {
-			m.handler.logger.Error("failed to toggle whitelisted role", zap.Error(err))
+	} else if customID == constants.AdminIDsOption {
+		if err := m.handler.db.Settings().ToggleAdminID(context.Background(), id); err != nil {
+			m.handler.logger.Error("Failed to toggle admin ID", zap.Error(err))
+			return
 		}
-
-	default:
-		m.handler.logger.Warn("unknown guild setting", zap.String("customID", customID))
 	}
+
+	// Update bot settings in session
+	settings, err := m.handler.db.Settings().GetBotSettings(context.Background())
+	if err != nil {
+		m.handler.logger.Error("Failed to fetch bot settings", zap.Error(err))
+		return
+	}
+	s.Set(constants.SessionKeyBotSettings, settings)
+
+	// Close the target user's session to reflect the change
+	m.handler.sessionManager.CloseSession(context.Background(), id)
 }

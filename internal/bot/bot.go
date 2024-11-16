@@ -157,24 +157,11 @@ func (b *Bot) handleApplicationCommandInteraction(event *events.ApplicationComma
 			return
 		}
 
-		// Verify guild settings and user permissions
-		guildSettings, err := b.db.Settings().GetGuildSettings(context.Background(), uint64(*event.GuildID()))
-		if err != nil {
-			b.logger.Error("Failed to get guild settings", zap.Error(err))
-			return
-		}
-
-		// Check if user has required roles
-		if !guildSettings.HasAnyRole(event.Member().RoleIDs) {
-			b.paginationManager.RespondWithError(event, "You are not authorized to use this command.")
-			return
-		}
-
 		start := time.Now()
 		defer func() {
 			if r := recover(); r != nil {
 				b.logger.Error("Panic in application command interaction handler", zap.Any("panic", r))
-				b.sessionManager.CloseSession(context.Background(), event.User().ID)
+				b.sessionManager.CloseSession(context.Background(), uint64(event.User().ID))
 			}
 			duration := time.Since(start)
 			b.logger.Debug("Application command interaction handled",
@@ -228,7 +215,7 @@ func (b *Bot) handleComponentInteraction(event *events.ComponentInteractionCreat
 		defer func() {
 			if r := recover(); r != nil {
 				b.logger.Error("Panic in component interaction handler", zap.Any("panic", r))
-				b.sessionManager.CloseSession(context.Background(), event.User().ID)
+				b.sessionManager.CloseSession(context.Background(), uint64(event.User().ID))
 			}
 			duration := time.Since(start)
 			b.logger.Debug("Component interaction handled",
@@ -277,7 +264,7 @@ func (b *Bot) handleModalSubmit(event *events.ModalSubmitInteractionCreate) {
 		defer func() {
 			if r := recover(); r != nil {
 				b.logger.Error("Panic in modal submit interaction handler", zap.Any("panic", r))
-				b.sessionManager.CloseSession(context.Background(), event.User().ID)
+				b.sessionManager.CloseSession(context.Background(), uint64(event.User().ID))
 			}
 			duration := time.Since(start)
 			b.logger.Debug("Modal submit interaction handled",
@@ -300,7 +287,7 @@ func (b *Bot) handleModalSubmit(event *events.ModalSubmitInteractionCreate) {
 // validateAndGetSession retrieves or creates a session for the given user and validates its state.
 func (b *Bot) validateAndGetSession(event interfaces.CommonEvent, userID snowflake.ID) (*session.Session, bool) {
 	// Get or create user session
-	s, err := b.sessionManager.GetOrCreateSession(context.Background(), userID)
+	s, err := b.sessionManager.GetOrCreateSession(context.Background(), uint64(userID))
 	if err != nil {
 		b.logger.Error("Failed to get or create session", zap.Error(err))
 		b.paginationManager.RespondWithError(event, "Failed to get or create session.")
