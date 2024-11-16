@@ -151,7 +151,9 @@ const (
 	SessionKeyDateRangeEndFilter   = "dateRangeEnd"
 
 	SessionKeyQueueUser        = "queueUser"
+	SessionKeyQueueStatus      = "queueStatus"
 	SessionKeyQueuePriority    = "queuePriority"
+	SessionKeyQueuePosition    = "queuePosition"
 	SessionKeyQueueHighCount   = "queueHighCount"
 	SessionKeyQueueNormalCount = "queueNormalCount"
 	SessionKeyQueueLowCount    = "queueLowCount"

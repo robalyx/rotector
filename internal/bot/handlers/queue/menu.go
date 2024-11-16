@@ -60,17 +60,14 @@ func (m *Menu) ShowQueueMenu(event interfaces.CommonEvent, s *session.Session, c
 
 // handleSelectMenu processes select menu interactions by storing the selected
 // priority and showing a modal for user ID input.
-func (m *Menu) handleSelectMenu(event *events.ComponentInteractionCreate, s *session.Session, customID string, option string) {
+func (m *Menu) handleSelectMenu(event *events.ComponentInteractionCreate, _ *session.Session, customID string, option string) {
 	if customID != constants.ActionSelectMenuCustomID {
 		return
 	}
 
-	// Store the selected priority for the modal handler
-	s.Set(constants.SessionKeyQueuePriority, option)
-
 	// Create modal for user ID and reason input
 	modal := discord.NewModalCreateBuilder().
-		SetCustomID(constants.AddToQueueModalCustomID).
+		SetCustomID(option).
 		SetTitle("Add User to Queue").
 		AddActionRow(
 			discord.NewTextInput(constants.UserIDInputCustomID, discord.TextInputStyleShort, "User ID").
@@ -103,10 +100,6 @@ func (m *Menu) handleButton(event *events.ComponentInteractionCreate, s *session
 // handleModal processes modal submissions by adding the user to the queue
 // with the specified priority and reason.
 func (m *Menu) handleModal(event *events.ModalSubmitInteractionCreate, s *session.Session) {
-	if event.Data.CustomID != constants.AddToQueueModalCustomID {
-		return
-	}
-
 	// Parse user ID and get reason from modal
 	userIDStr := event.Data.Text(constants.UserIDInputCustomID)
 	reason := event.Data.Text(constants.ReasonInputCustomID)
@@ -129,10 +122,9 @@ func (m *Menu) handleModal(event *events.ModalSubmitInteractionCreate, s *sessio
 	}
 
 	// Add to queue with selected priority
-	priority := s.GetString(constants.SessionKeyQueuePriority)
 	err = m.handler.queueManager.AddToQueue(context.Background(), &queue.Item{
 		UserID:      userID,
-		Priority:    utils.GetPriorityFromCustomID(priority),
+		Priority:    utils.GetPriorityFromCustomID(event.Data.CustomID),
 		Reason:      reason,
 		AddedBy:     uint64(event.User().ID),
 		AddedAt:     time.Now(),

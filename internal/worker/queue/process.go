@@ -129,21 +129,6 @@ func (p *ProcessWorker) getNextBatch() ([]*queue.Item, error) {
 				continue
 			}
 
-			// Skip aborted items
-			if p.queue.IsAborted(ctx, item.UserID) {
-				if err := p.queue.ClearQueueInfo(ctx, item.UserID); err != nil {
-					p.logger.Error("Failed to clear queue info for aborted item",
-						zap.Error(err),
-						zap.Uint64("userID", item.UserID))
-				}
-				if err := p.queue.RemoveQueueItem(ctx, key, &item); err != nil {
-					p.logger.Error("Failed to remove aborted item from queue",
-						zap.Error(err),
-						zap.Uint64("userID", item.UserID))
-				}
-				continue
-			}
-
 			items = append(items, &item)
 		}
 
@@ -156,59 +141,73 @@ func (p *ProcessWorker) getNextBatch() ([]*queue.Item, error) {
 	return items, nil
 }
 
-// processItems handles each queued item by:
-// 1. Updating queue status to "Processing"
-// 2. Fetching user information
-// 3. Running AI analysis
-// 4. Updating final queue status
-// 5. Removing item from queue.
+// processItems handles batches of queued items by:
+// 1. Updating queue status to "Processing" for all items
+// 2. Fetching user information in batch
+// 3. Running AI analysis on the batch
+// 4. Updating final queue status for all items
+// 5. Removing processed items from queue.
 func (p *ProcessWorker) processItems(items []*queue.Item) {
 	ctx := context.Background()
 	itemCount := len(items)
-	increment := 80 / itemCount
 
-	for i, item := range items {
-		progress := 20 + ((i + 1) * increment) // Start at 20% and increment for each item
-		p.bar.SetStepMessage(fmt.Sprintf("Processing item %d/%d", i+1, itemCount), int64(progress))
-		p.reporter.UpdateStatus(fmt.Sprintf("Processing item %d/%d", i+1, itemCount), progress)
+	p.bar.SetStepMessage("Processing batch", 25)
+	p.reporter.UpdateStatus(fmt.Sprintf("Processing batch of %d items", itemCount), 25)
 
-		// Update status to processing
+	// Update status to processing for all items
+	for _, item := range items {
 		if err := p.queue.SetQueueInfo(ctx, item.UserID, queue.StatusProcessing, item.Priority, 0); err != nil {
 			p.logger.Error("Failed to update queue info",
 				zap.Error(err),
 				zap.Uint64("userID", item.UserID))
 			p.reporter.SetHealthy(false)
-			continue
 		}
-
-		// Fetch and process user
-		userInfos := p.userFetcher.FetchInfos([]uint64{item.UserID})
-		if len(userInfos) > 0 {
-			failedValidationIDs := p.userChecker.ProcessUsers(userInfos)
-
-			// If validation failed, update status back to pending
-			if len(failedValidationIDs) > 0 {
-				// Update status back to pending
-				if err := p.queue.SetQueueInfo(
-					ctx,
-					item.UserID,
-					queue.StatusPending,
-					item.Priority,
-					p.queue.GetQueueLength(ctx, item.Priority),
-				); err != nil {
-					p.logger.Error("Failed to update queue info",
-						zap.Error(err),
-						zap.Uint64("userID", item.UserID))
-					p.reporter.SetHealthy(false)
-				}
-				continue
-			}
-		}
-
-		// Update final status and remove from queue
-		p.updateQueueStatus(ctx, item, queue.StatusComplete)
-		p.reporter.SetHealthy(true)
 	}
+
+	// Extract user IDs from items
+	userIDs := make([]uint64, len(items))
+	userIDToItem := make(map[uint64]*queue.Item)
+	for i, item := range items {
+		userIDs[i] = item.UserID
+		userIDToItem[item.UserID] = item
+	}
+
+	// Fetch all users in batch
+	p.bar.SetStepMessage("Fetching user information", 50)
+	p.reporter.UpdateStatus("Fetching user information", 50)
+
+	userInfos := p.userFetcher.FetchInfos(userIDs)
+
+	// Process users with AI checker
+	p.bar.SetStepMessage("Processing with AI", 75)
+	p.reporter.UpdateStatus("Processing with AI", 75)
+
+	failedValidationIDs := p.userChecker.ProcessUsers(userInfos)
+
+	// Create set of failed IDs for quick lookup
+	failedIDSet := make(map[uint64]bool)
+	for _, id := range failedValidationIDs {
+		failedIDSet[id] = true
+	}
+
+	// Update final status for all items
+	p.bar.SetStepMessage("Updating queue status", 100)
+	p.reporter.UpdateStatus("Updating queue status", 100)
+
+	for _, userID := range userIDs {
+		item := userIDToItem[userID]
+		if failedIDSet[userID] {
+			// Update status to skipped for failed validations
+			p.updateQueueStatus(ctx, item, queue.StatusSkipped)
+		} else {
+			// Update final status and remove from queue for successful validations
+			p.updateQueueStatus(ctx, item, queue.StatusComplete)
+		}
+	}
+
+	p.logger.Info("Finished processing batch",
+		zap.Int("totalItems", len(items)),
+		zap.Int("failedValidations", len(failedValidationIDs)))
 }
 
 // updateQueueStatus handles the final state of a queue item by:

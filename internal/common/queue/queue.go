@@ -17,10 +17,6 @@ const (
 	// remains valid in Redis before automatic cleanup.
 	QueueInfoExpiry = 1 * time.Hour
 
-	// AbortedExpiry defines the TTL for aborted status flags in Redis,
-	// allowing automatic cleanup of stale abort markers.
-	AbortedExpiry = 1 * time.Hour
-
 	// HighPriority items are processed first through a dedicated Redis sorted set.
 	// Used for urgent operations that need immediate attention.
 	HighPriority = "high"
@@ -53,9 +49,6 @@ const (
 	// QueuePriorityPrefix namespaces Redis keys mapping items to priority levels.
 	// Keys are formatted as "queue_priority:{userID}".
 	QueuePriorityPrefix = "queue_priority:"
-	// AbortedPrefix namespaces Redis keys marking manually cancelled items.
-	// Keys are formatted as "aborted:{userID}".
-	AbortedPrefix = "aborted:"
 )
 
 // Item encapsulates all metadata needed to process a queued task.
@@ -100,14 +93,6 @@ func (m *Manager) GetQueueLength(ctx context.Context, priority string) int {
 
 // AddToQueue adds an item to the queue.
 func (m *Manager) AddToQueue(ctx context.Context, item *Item) error {
-	// If user was previously aborted, remove the abort status
-	// This allows the user to be requeued by another reviewer
-	if m.IsAborted(ctx, item.UserID) {
-		if err := m.ClearAborted(ctx, item.UserID); err != nil {
-			return err
-		}
-	}
-
 	// Serialize item to JSON
 	itemJSON, err := sonic.Marshal(item)
 	if err != nil {
@@ -237,65 +222,6 @@ func (m *Manager) SetQueueInfo(ctx context.Context, userID uint64, status, prior
 		Ex(QueueInfoExpiry).
 		Build()).Error(); err != nil {
 		return fmt.Errorf("failed to set position: %w", err)
-	}
-
-	return nil
-}
-
-// ClearQueueInfo removes all queue info for a user.
-func (m *Manager) ClearQueueInfo(ctx context.Context, userID uint64) error {
-	// Delete status
-	if err := m.client.Do(ctx, m.client.B().Del().Key(
-		fmt.Sprintf("%s%d", QueueStatusPrefix, userID)).Build()).Error(); err != nil {
-		return fmt.Errorf("failed to delete status: %w", err)
-	}
-
-	// Delete priority
-	if err := m.client.Do(ctx, m.client.B().Del().Key(
-		fmt.Sprintf("%s%d", QueuePriorityPrefix, userID)).Build()).Error(); err != nil {
-		return fmt.Errorf("failed to delete priority: %w", err)
-	}
-
-	// Delete position
-	if err := m.client.Do(ctx, m.client.B().Del().Key(
-		fmt.Sprintf("%s%d", QueuePositionPrefix, userID)).Build()).Error(); err != nil {
-		return fmt.Errorf("failed to delete position: %w", err)
-	}
-
-	return nil
-}
-
-// MarkAsAborted marks a user ID as aborted.
-func (m *Manager) MarkAsAborted(ctx context.Context, userID uint64) error {
-	// Set aborted flag with 24 hour expiry (cleanup)
-	err := m.client.Do(ctx, m.client.B().Set().
-		Key(fmt.Sprintf("%s%d", AbortedPrefix, userID)).
-		Value("1").
-		Ex(AbortedExpiry).
-		Build()).Error()
-	if err != nil {
-		return fmt.Errorf("failed to mark user as aborted: %w", err)
-	}
-
-	return nil
-}
-
-// IsAborted checks if a user ID has been marked as aborted.
-func (m *Manager) IsAborted(ctx context.Context, userID uint64) bool {
-	result := m.client.Do(ctx, m.client.B().Get().
-		Key(fmt.Sprintf("%s%d", AbortedPrefix, userID)).
-		Build())
-
-	return result.Error() == nil
-}
-
-// ClearAborted removes the aborted status for a user ID.
-func (m *Manager) ClearAborted(ctx context.Context, userID uint64) error {
-	err := m.client.Do(ctx, m.client.B().Del().
-		Key(fmt.Sprintf("%s%d", AbortedPrefix, userID)).
-		Build()).Error()
-	if err != nil {
-		return fmt.Errorf("failed to clear aborted status: %w", err)
 	}
 
 	return nil

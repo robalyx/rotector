@@ -1,7 +1,6 @@
 package builders
 
 import (
-	"context"
 	"fmt"
 	"strconv"
 
@@ -20,6 +19,9 @@ type StatusEmbed struct {
 	settings            *database.UserSetting
 	queueManager        *queue.Manager
 	userID              uint64
+	status              string
+	priority            string
+	position            int
 	highPriorityCount   int
 	normalPriorityCount int
 	lowPriorityCount    int
@@ -35,6 +37,9 @@ func NewStatusEmbed(queueManager *queue.Manager, s *session.Session) *StatusEmbe
 		settings:            settings,
 		queueManager:        queueManager,
 		userID:              s.GetUint64(constants.SessionKeyQueueUser),
+		status:              s.GetString(constants.SessionKeyQueueStatus),
+		priority:            s.GetString(constants.SessionKeyQueuePriority),
+		position:            s.GetInt(constants.SessionKeyQueuePosition),
 		highPriorityCount:   s.GetInt(constants.SessionKeyQueueHighCount),
 		normalPriorityCount: s.GetInt(constants.SessionKeyQueueNormalCount),
 		lowPriorityCount:    s.GetInt(constants.SessionKeyQueueLowCount),
@@ -46,18 +51,6 @@ func NewStatusEmbed(queueManager *queue.Manager, s *session.Session) *StatusEmbe
 // - Number of items in each priority queue
 // - Refresh and abort buttons for queue management.
 func (b *StatusEmbed) Build() *discord.MessageUpdateBuilder {
-	// Get current queue status and position
-	queueInfo := "Not in queue"
-	status, priority, position, err := b.queueManager.GetQueueInfo(context.Background(), b.userID)
-	if err == nil && status != "" {
-		if position > 0 {
-			queueInfo = fmt.Sprintf("%s (Position: %d in %s queue)",
-				status, position, priority)
-		} else {
-			queueInfo = status
-		}
-	}
-
 	// Create embed with queue information
 	embed := discord.NewEmbedBuilder().
 		SetTitle("Recheck Status")
@@ -73,7 +66,7 @@ func (b *StatusEmbed) Build() *discord.MessageUpdateBuilder {
 		), true)
 	}
 
-	embed.AddField("Status", queueInfo, false).
+	embed.AddField("Status", fmt.Sprintf("%s (Position: %d in %s queue)", b.status, b.position, b.priority), false).
 		AddField("High Priority Queue", fmt.Sprintf("%d items", b.highPriorityCount), true).
 		AddField("Normal Priority Queue", fmt.Sprintf("%d items", b.normalPriorityCount), true).
 		AddField("Low Priority Queue", fmt.Sprintf("%d items", b.lowPriorityCount), true).

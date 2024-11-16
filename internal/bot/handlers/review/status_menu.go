@@ -13,7 +13,6 @@ import (
 	"github.com/rotector/rotector/internal/bot/session"
 	"github.com/rotector/rotector/internal/common/database"
 	"github.com/rotector/rotector/internal/common/queue"
-	"go.uber.org/zap"
 )
 
 // StatusMenu handles the display and interaction logic for viewing queue status.
@@ -41,22 +40,11 @@ func NewStatusMenu(h *Handler) *StatusMenu {
 // ShowStatusMenu prepares and displays the status interface by loading
 // current queue counts and position information into the session.
 func (m *StatusMenu) ShowStatusMenu(event interfaces.CommonEvent, s *session.Session) {
-	// Update queue counts for each priority level
-	s.Set(constants.SessionKeyQueueHighCount, m.handler.queueManager.GetQueueLength(context.Background(), queue.HighPriority))
-	s.Set(constants.SessionKeyQueueNormalCount, m.handler.queueManager.GetQueueLength(context.Background(), queue.NormalPriority))
-	s.Set(constants.SessionKeyQueueLowCount, m.handler.queueManager.GetQueueLength(context.Background(), queue.LowPriority))
+	userID := s.GetUint64(constants.SessionKeyQueueUser)
+	status, priority, position, err := m.handler.queueManager.GetQueueInfo(context.Background(), userID)
 
 	// Check if processing is complete
-	userID := s.GetUint64(constants.SessionKeyQueueUser)
-	status, _, _, err := m.handler.queueManager.GetQueueInfo(context.Background(), userID)
 	if err == nil && (status == queue.StatusComplete || status == queue.StatusSkipped) {
-		// Clean up queue info
-		if err := m.handler.queueManager.ClearQueueInfo(context.Background(), userID); err != nil {
-			m.handler.logger.Error("Failed to clear queue info",
-				zap.Error(err),
-				zap.Uint64("userID", userID))
-		}
-
 		// Check if user was flagged after recheck
 		flaggedUser, err := m.handler.db.Users().GetFlaggedUserByIDToReview(context.Background(), userID)
 		if err != nil {
@@ -81,6 +69,16 @@ func (m *StatusMenu) ShowStatusMenu(event interfaces.CommonEvent, s *session.Ses
 		return
 	}
 
+	// Update queue counts for each priority level
+	s.Set(constants.SessionKeyQueueHighCount, m.handler.queueManager.GetQueueLength(context.Background(), queue.HighPriority))
+	s.Set(constants.SessionKeyQueueNormalCount, m.handler.queueManager.GetQueueLength(context.Background(), queue.NormalPriority))
+	s.Set(constants.SessionKeyQueueLowCount, m.handler.queueManager.GetQueueLength(context.Background(), queue.LowPriority))
+
+	// Update queue information
+	s.Set(constants.SessionKeyQueueStatus, status)
+	s.Set(constants.SessionKeyQueuePriority, priority)
+	s.Set(constants.SessionKeyQueuePosition, position)
+
 	m.handler.paginationManager.NavigateTo(event, s, m.page, "")
 }
 
@@ -90,26 +88,6 @@ func (m *StatusMenu) handleButton(event *events.ComponentInteractionCreate, s *s
 	case constants.RefreshButtonCustomID:
 		m.ShowStatusMenu(event, s)
 	case constants.AbortButtonCustomID:
-		m.handleAbort(event, s)
+		m.handler.paginationManager.NavigateBack(event, s, "Recheck aborted")
 	}
-}
-
-// handleAbort marks a queued user as aborted and cleans up queue information.
-// The worker will handle removing the user from the queue when it sees the abort flag.
-func (m *StatusMenu) handleAbort(event *events.ComponentInteractionCreate, s *session.Session) {
-	userID := s.GetUint64(constants.SessionKeyQueueUser)
-
-	// Mark as aborted (will be cleaned up after 24 hours)
-	if err := m.handler.queueManager.MarkAsAborted(context.Background(), userID); err != nil {
-		m.handler.paginationManager.RespondWithError(event, "Failed to mark user as aborted")
-		return
-	}
-
-	// Clean up queue info
-	if err := m.handler.queueManager.ClearQueueInfo(context.Background(), userID); err != nil {
-		m.handler.paginationManager.RespondWithError(event, "Failed to clear queue info")
-		return
-	}
-
-	m.handler.paginationManager.NavigateBack(event, s, "Recheck aborted")
 }
