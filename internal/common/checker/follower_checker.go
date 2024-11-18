@@ -15,7 +15,7 @@ const (
 	FollowerThreshold = 1000
 
 	// WarningTemplate is the template for the warning message.
-	WarningTemplate = "⚠️ **WARNING: Popular user with %d followers** ⚠️\n\n%s"
+	WarningTemplate = "⚠️ **WARNING: Popular user with large amount of followers** ⚠️\n\n%s"
 )
 
 // FollowerChecker handles checking if flagged users are popular based on follower count.
@@ -84,7 +84,7 @@ func (fc *FollowerChecker) ProcessUsers(flaggedUsers []*database.User) []*databa
 		followers := results[user.ID]
 		if followers >= FollowerThreshold {
 			user.Confidence = 1.0
-			user.Reason = fmt.Sprintf(WarningTemplate, followers, user.Reason)
+			user.Reason = fmt.Sprintf(WarningTemplate, user.Reason)
 
 			fc.logger.Info("Popular user flagged",
 				zap.Uint64("userID", user.ID),

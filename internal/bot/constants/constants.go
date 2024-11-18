@@ -139,6 +139,7 @@ const (
 	SessionKeyPresences      = "presences"
 	SessionKeyFlaggedFriends = "flaggedFriends"
 	SessionKeyFriendTypes    = "friendTypes"
+	SessionKeyFollowCounts   = "followCounts"
 
 	SessionKeyGroups        = "groups"
 	SessionKeyFlaggedGroups = "flaggedGroups"

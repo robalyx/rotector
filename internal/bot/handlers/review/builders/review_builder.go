@@ -33,13 +33,14 @@ var multipleNewlinesRegex = regexp.MustCompile(`\n{4,}`)
 
 // ReviewEmbed creates the visual layout for reviewing a flagged user.
 type ReviewEmbed struct {
-	db          *database.Database
-	settings    *database.UserSetting
-	botSettings *database.BotSetting
-	userID      uint64
-	user        *database.FlaggedUser
-	translator  *translator.Translator
-	friendTypes map[uint64]string
+	db           *database.Database
+	settings     *database.UserSetting
+	botSettings  *database.BotSetting
+	userID       uint64
+	user         *database.FlaggedUser
+	translator   *translator.Translator
+	friendTypes  map[uint64]string
+	followCounts *fetcher.FollowCounts
 }
 
 // NewReviewEmbed loads user data and settings from the session state to create
@@ -53,15 +54,18 @@ func NewReviewEmbed(s *session.Session, translator *translator.Translator, db *d
 	s.GetInterface(constants.SessionKeyTarget, &user)
 	var friendTypes map[uint64]string
 	s.GetInterface(constants.SessionKeyFriendTypes, &friendTypes)
+	var followCounts *fetcher.FollowCounts
+	s.GetInterface(constants.SessionKeyFollowCounts, &followCounts)
 
 	return &ReviewEmbed{
-		db:          db,
-		settings:    settings,
-		botSettings: botSettings,
-		userID:      s.GetUint64(constants.SessionKeyUserID),
-		user:        user,
-		translator:  translator,
-		friendTypes: friendTypes,
+		db:           db,
+		settings:     settings,
+		botSettings:  botSettings,
+		userID:       s.GetUint64(constants.SessionKeyUserID),
+		user:         user,
+		translator:   translator,
+		friendTypes:  friendTypes,
+		followCounts: followCounts,
 	}
 }
 
@@ -122,16 +126,25 @@ func (b *ReviewEmbed) buildReviewEmbed() *discord.EmbedBuilder {
 	embed := discord.NewEmbedBuilder().
 		SetColor(utils.GetMessageEmbedColor(b.settings.StreamerMode))
 
+	votes := fmt.Sprintf("👍 %d | 👎 %d", b.user.Upvotes, b.user.Downvotes)
+	createdAt := fmt.Sprintf("<t:%d:R>", b.user.CreatedAt.Unix())
+	lastUpdated := fmt.Sprintf("<t:%d:R>", b.user.LastUpdated.Unix())
+	confidence := fmt.Sprintf("%.2f", b.user.Confidence)
+	followerCount := utils.FormatNumber(b.followCounts.FollowerCount)
+	followingCount := utils.FormatNumber(b.followCounts.FollowingCount)
+
 	if b.settings.ReviewMode == database.TrainingReviewMode {
 		// Training mode - show limited information without links
-		embed.AddField("ID", utils.CensorString(strconv.FormatUint(b.user.ID, 10), true), true).
+		embed.SetAuthorName(votes).
+			AddField("ID", utils.CensorString(strconv.FormatUint(b.user.ID, 10), true), true).
 			AddField("Name", utils.CensorString(b.user.Name, true), true).
 			AddField("Display Name", utils.CensorString(b.user.DisplayName, true), true).
-			AddField("Created At", fmt.Sprintf("<t:%d:R>", b.user.CreatedAt.Unix()), true).
-			AddField("Last Updated", fmt.Sprintf("<t:%d:R>", b.user.LastUpdated.Unix()), true).
-			AddField("Confidence", fmt.Sprintf("%.2f", b.user.Confidence), true).
-			AddField("Training Votes", fmt.Sprintf("👍 %d | 👎 %d", b.user.Upvotes, b.user.Downvotes), true).
+			AddField("Followers", followerCount, true).
+			AddField("Following", followingCount, true).
 			AddField("Game Visits", b.getTotalVisits(), true).
+			AddField("Confidence", confidence, true).
+			AddField("Created At", createdAt, true).
+			AddField("Last Updated", lastUpdated, true).
 			AddField("Reason", b.user.Reason, false).
 			AddField("Description", b.getDescription(), false).
 			AddField(b.getFriendsField(), b.getFriends(), false).
@@ -141,18 +154,20 @@ func (b *ReviewEmbed) buildReviewEmbed() *discord.EmbedBuilder {
 			AddField(b.getFlaggedType(), b.getFlaggedContent(), false)
 	} else {
 		// Standard mode - show all information with links
-		embed.AddField("ID", fmt.Sprintf(
-			"[%s](https://www.roblox.com/users/%d/profile)",
-			utils.CensorString(strconv.FormatUint(b.user.ID, 10), b.settings.StreamerMode),
-			b.user.ID,
-		), true).
+		embed.SetAuthorName(votes).
+			AddField("ID", fmt.Sprintf(
+				"[%s](https://www.roblox.com/users/%d/profile)",
+				utils.CensorString(strconv.FormatUint(b.user.ID, 10), b.settings.StreamerMode),
+				b.user.ID,
+			), true).
 			AddField("Name", utils.CensorString(b.user.Name, b.settings.StreamerMode), true).
 			AddField("Display Name", utils.CensorString(b.user.DisplayName, b.settings.StreamerMode), true).
-			AddField("Created At", fmt.Sprintf("<t:%d:R>", b.user.CreatedAt.Unix()), true).
-			AddField("Last Updated", fmt.Sprintf("<t:%d:R>", b.user.LastUpdated.Unix()), true).
-			AddField("Confidence", fmt.Sprintf("%.2f", b.user.Confidence), true).
-			AddField("Training Votes", fmt.Sprintf("👍 %d | 👎 %d", b.user.Upvotes, b.user.Downvotes), true).
+			AddField("Followers", followerCount, true).
+			AddField("Following", followingCount, true).
 			AddField("Game Visits", b.getTotalVisits(), true).
+			AddField("Confidence", confidence, true).
+			AddField("Created At", createdAt, true).
+			AddField("Last Updated", lastUpdated, true).
 			AddField("Reason", b.user.Reason, false).
 			AddField("Description", b.getDescription(), false).
 			AddField(b.getFriendsField(), b.getFriends(), false).

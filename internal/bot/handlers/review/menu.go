@@ -75,6 +75,12 @@ func (m *Menu) ShowReviewMenu(event interfaces.CommonEvent, s *session.Session, 
 		}
 	}
 
+	// Fetch follow counts for the user
+	followCounts, err := m.handler.followFetcher.FetchUserFollowCounts(user.ID)
+	if err != nil {
+		m.handler.logger.Error("Failed to fetch follow counts", zap.Error(err))
+	}
+
 	// Check friend status and get friend data by looking up each friend in the database
 	flaggedFriends := make(map[uint64]*database.User)
 	friendTypes := make(map[uint64]string)
@@ -97,6 +103,7 @@ func (m *Menu) ShowReviewMenu(event interfaces.CommonEvent, s *session.Session, 
 	// Store data in session for the message builder
 	s.Set(constants.SessionKeyFlaggedFriends, flaggedFriends)
 	s.Set(constants.SessionKeyFriendTypes, friendTypes)
+	s.Set(constants.SessionKeyFollowCounts, followCounts)
 
 	m.handler.paginationManager.NavigateTo(event, s, m.page, content)
 }

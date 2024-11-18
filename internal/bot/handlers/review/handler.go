@@ -30,6 +30,7 @@ type Handler struct {
 	logHandler        interfaces.LogHandler
 	thumbnailFetcher  *fetcher.ThumbnailFetcher
 	presenceFetcher   *fetcher.PresenceFetcher
+	followFetcher     *fetcher.FollowFetcher
 }
 
 // New creates a Handler by initializing all review menus and registering their
@@ -55,6 +56,7 @@ func New(
 		logHandler:        logHandler,
 		thumbnailFetcher:  fetcher.NewThumbnailFetcher(roAPI, logger),
 		presenceFetcher:   fetcher.NewPresenceFetcher(roAPI, logger),
+		followFetcher:     fetcher.NewFollowFetcher(roAPI, logger),
 	}
 
 	// Initialize all menus with references to this handler
