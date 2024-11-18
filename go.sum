@@ -72,16 +72,6 @@ github.com/jaxron/axonet/middleware/retry v0.0.0-20241110114112-10fce0f238e1 h1:
 github.com/jaxron/axonet/middleware/retry v0.0.0-20241110114112-10fce0f238e1/go.mod h1:zXiRNoI5Fb76FNNLwoHF50fAPUApoXVQe4NVH0NX0Ng=
 github.com/jaxron/axonet/middleware/singleflight v0.0.0-20241025054147-6c298c86aa64 h1:CZUXR/DkfLariT/7jVAFJhYUV4azYb8BiqH+vD2dfQM=
 github.com/jaxron/axonet/middleware/singleflight v0.0.0-20241025054147-6c298c86aa64/go.mod h1:G5Z8xIfdiEF6lMtxQyMelOhqtx4XN6xumLJJojZK49k=
-github.com/jaxron/roapi.go v0.0.0-20241112100708-662bdb8c0707 h1:SQed6gGEVHxofRaENO2+5hMVS5zz1wcQHOyvqsrv1SM=
-github.com/jaxron/roapi.go v0.0.0-20241112100708-662bdb8c0707/go.mod h1:XJzdW42VIfAUMnCMKX0nRFkpmrKFUyWlo9pYijyWT58=
-github.com/jaxron/roapi.go v0.0.0-20241115031755-36c63afbe900 h1:rUebLlWWXoeMU82vWzNZJTLZMOfWn+OwOw/EzyTAU2o=
-github.com/jaxron/roapi.go v0.0.0-20241115031755-36c63afbe900/go.mod h1:XJzdW42VIfAUMnCMKX0nRFkpmrKFUyWlo9pYijyWT58=
-github.com/jaxron/roapi.go v0.0.0-20241115105101-d396ec0b6358 h1:kHF+TACEpj4uZYVa7r7CXSJQ7yvsb6SzzSMCp8zm7UM=
-github.com/jaxron/roapi.go v0.0.0-20241115105101-d396ec0b6358/go.mod h1:XJzdW42VIfAUMnCMKX0nRFkpmrKFUyWlo9pYijyWT58=
-github.com/jaxron/roapi.go v0.0.0-20241116022613-1718211e506a h1:huMf/tOGFx37M84cX30LXpNhxjDaOZUIDw/1IHvmCfU=
-github.com/jaxron/roapi.go v0.0.0-20241116022613-1718211e506a/go.mod h1:XJzdW42VIfAUMnCMKX0nRFkpmrKFUyWlo9pYijyWT58=
-github.com/jaxron/roapi.go v0.0.0-20241116040648-5bbf3c03d4bf h1:VO7PByTQIlCDO5+NmKwewMU6p2HNPm9TJfczxaBlkoU=
-github.com/jaxron/roapi.go v0.0.0-20241116040648-5bbf3c03d4bf/go.mod h1:XJzdW42VIfAUMnCMKX0nRFkpmrKFUyWlo9pYijyWT58=
 github.com/jaxron/roapi.go v0.0.0-20241116084212-9720de0431c8 h1:TiQghTP+KR3E/583GfCUgbs5OYj/aE55plhHFgRC2pY=
 github.com/jaxron/roapi.go v0.0.0-20241116084212-9720de0431c8/go.mod h1:XJzdW42VIfAUMnCMKX0nRFkpmrKFUyWlo9pYijyWT58=
 github.com/jinzhu/inflection v1.0.0 h1:K317FqzuhWc8YvSVlFMCCUb36O/S9MCKRDI7QkRKD/E=
@@ -107,8 +97,8 @@ github.com/niemeyer/pretty v0.0.0-20200227124842-a10e7caefd8e h1:fD57ERR4JtEqsWb
 github.com/niemeyer/pretty v0.0.0-20200227124842-a10e7caefd8e/go.mod h1:zD1mROLANZcx1PVRCS0qkT7pwLkGfwJo4zjcN/Tysno=
 github.com/onsi/gomega v1.34.1 h1:EUMJIKUjM8sKjYbtxQI9A4z2o+rruxnzNvpknOXie6k=
 github.com/onsi/gomega v1.34.1/go.mod h1:kU1QgUvBDLXBJq618Xvm2LUX6rSAfRaFRTcdOeDLwwY=
-github.com/openai/openai-go v0.1.0-alpha.36 h1:TKDYmJGdb3oiJjOx4LONQL5Y9ORKFFrsyz+OB4O+dFQ=
-github.com/openai/openai-go v0.1.0-alpha.36/go.mod h1:3SdE6BffOX9HPEQv8IL/fi3LYZ5TUpRYaqGQZbyk11A=
+github.com/openai/openai-go v0.1.0-alpha.37 h1:dstNWRmODNmcvVrNhJ1tzmD8J9hy+aaycwKAqLZVx2Q=
+github.com/openai/openai-go v0.1.0-alpha.37/go.mod h1:3SdE6BffOX9HPEQv8IL/fi3LYZ5TUpRYaqGQZbyk11A=
 github.com/ozankasikci/go-image-merge v0.3.1 h1:R25/9jeZ2wMaTcPT1ZQI7S8axlcvGkJu0jrUA2TIhSs=
 github.com/ozankasikci/go-image-merge v0.3.1/go.mod h1:NQ2aN0b21buFx3p+5x4dZrKuPSLh2uBukK7F30BrYTo=
 github.com/pelletier/go-toml/v2 v2.2.3 h1:YmeHyLY8mFWbdkNWwpr+qIL2bEqT0o95WSdkNHvL12M=
