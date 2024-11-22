@@ -254,6 +254,8 @@ func (r *GroupModel) GetFlaggedGroupToReview(ctx context.Context, sortBy string)
 			query.OrderExpr("array_length(flagged_users, 1) DESC")
 		case SortByConfidence:
 			query.OrderExpr("confidence DESC")
+		case SortByReputation:
+			query.Order("reputation ASC")
 		case SortByRandom:
 			query.OrderExpr("RANDOM()")
 		default:

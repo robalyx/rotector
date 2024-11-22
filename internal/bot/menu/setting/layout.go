@@ -76,7 +76,7 @@ func (m *Menu) ShowMenu(event *events.ComponentInteractionCreate, s *session.Ses
 			discord.NewStringSelectMenuOption("Random", models.SortByRandom),
 			discord.NewStringSelectMenuOption("Confidence", models.SortByConfidence),
 			discord.NewStringSelectMenuOption("Last Updated", models.SortByLastUpdated),
-			discord.NewStringSelectMenuOption("Reputation", models.SortByReputation),
+			discord.NewStringSelectMenuOption("Bad Reputation", models.SortByReputation),
 		}
 
 	case constants.GroupDefaultSortOption:
@@ -89,6 +89,7 @@ func (m *Menu) ShowMenu(event *events.ComponentInteractionCreate, s *session.Ses
 			discord.NewStringSelectMenuOption("Random", models.SortByRandom),
 			discord.NewStringSelectMenuOption("Confidence", models.SortByConfidence),
 			discord.NewStringSelectMenuOption("Flagged Users", models.SortByFlaggedUsers),
+			discord.NewStringSelectMenuOption("Bad Reputation", models.SortByReputation),
 		}
 
 	case constants.ReviewModeOption:

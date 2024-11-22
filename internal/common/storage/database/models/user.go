@@ -117,7 +117,7 @@ func (r *UserModel) GetFlaggedUserToReview(ctx context.Context, sortBy string) (
 		case SortByLastUpdated:
 			query.Order("last_updated ASC")
 		case SortByReputation:
-			query.Order("reputation DESC")
+			query.Order("reputation ASC")
 		case SortByRandom:
 			query.OrderExpr("RANDOM()")
 		default:

@@ -126,23 +126,26 @@ func (c *Client) createSchema() error {
 		CREATE INDEX IF NOT EXISTS idx_flagged_users_last_updated ON flagged_users (last_updated ASC);
 
 		-- Training mode reputation indexes
-		CREATE INDEX IF NOT EXISTS idx_flagged_users_reputation ON flagged_users (reputation DESC);
-		CREATE INDEX IF NOT EXISTS idx_confirmed_users_reputation ON confirmed_users (reputation DESC);
-		CREATE INDEX IF NOT EXISTS idx_cleared_users_reputation ON cleared_users (reputation DESC);
-		CREATE INDEX IF NOT EXISTS idx_banned_users_reputation ON banned_users (reputation DESC);
+		CREATE INDEX IF NOT EXISTS idx_flagged_users_reputation ON flagged_users (reputation ASC);
+		CREATE INDEX IF NOT EXISTS idx_confirmed_users_reputation ON confirmed_users (reputation ASC);
+		CREATE INDEX IF NOT EXISTS idx_cleared_users_reputation ON cleared_users (reputation ASC);
+		CREATE INDEX IF NOT EXISTS idx_banned_users_reputation ON banned_users (reputation ASC);
 
+		-- Group training mode indexes
+		CREATE INDEX IF NOT EXISTS idx_flagged_groups_reputation ON flagged_groups (reputation ASC);
+		CREATE INDEX IF NOT EXISTS idx_confirmed_groups_reputation ON confirmed_groups (reputation ASC);
+		CREATE INDEX IF NOT EXISTS idx_cleared_groups_reputation ON cleared_groups (reputation ASC);
+		CREATE INDEX IF NOT EXISTS idx_locked_groups_reputation ON locked_groups (reputation ASC);
+		
 		-- Statistics indexes
 		CREATE INDEX IF NOT EXISTS idx_hourly_stats_timestamp ON hourly_stats (timestamp DESC);
 
 		-- Group status indexes
 		CREATE INDEX IF NOT EXISTS idx_flagged_groups_last_viewed ON flagged_groups (last_viewed);
 		CREATE INDEX IF NOT EXISTS idx_flagged_groups_flagged_users_length 
-		ON flagged_groups USING btree (array_length(flagged_users, 1) DESC NULLS LAST);
+		ON flagged_groups USING btree (array_length(flagged_users, 1) DESC);
 		CREATE INDEX IF NOT EXISTS idx_confirmed_groups_last_scanned ON confirmed_groups (last_scanned);
 		
-		-- Group training mode indexes
-		CREATE INDEX IF NOT EXISTS idx_flagged_groups_reputation ON flagged_groups (reputation DESC);
-		CREATE INDEX IF NOT EXISTS idx_confirmed_groups_reputation ON confirmed_groups (reputation DESC);
 	`).Exec(context.Background())
 	if err != nil {
 		c.logger.Error("Failed to create indexes", zap.Error(err))

@@ -231,9 +231,9 @@ func (b *ReviewBuilder) buildComponents() []discord.ContainerComponent {
 				discord.NewStringSelectMenuOption("Selected by last updated time", models.SortByLastUpdated).
 					WithDefault(b.settings.UserDefaultSort == models.SortByLastUpdated).
 					WithEmoji(discord.ComponentEmoji{Name: "📅"}),
-				discord.NewStringSelectMenuOption("Selected by community votes", models.SortByReputation).
+				discord.NewStringSelectMenuOption("Selected by bad reputation", models.SortByReputation).
 					WithDefault(b.settings.UserDefaultSort == models.SortByReputation).
-					WithEmoji(discord.ComponentEmoji{Name: "👥"}),
+					WithEmoji(discord.ComponentEmoji{Name: "👎"}),
 			),
 		),
 		// Action options menu

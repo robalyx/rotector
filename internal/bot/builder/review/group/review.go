@@ -193,6 +193,9 @@ func (b *ReviewBuilder) buildComponents() []discord.ContainerComponent {
 				discord.NewStringSelectMenuOption("Selected by flagged users", models.SortByFlaggedUsers).
 					WithDefault(b.settings.GroupDefaultSort == models.SortByFlaggedUsers).
 					WithEmoji(discord.ComponentEmoji{Name: "👥"}),
+				discord.NewStringSelectMenuOption("Selected by bad reputation", models.SortByReputation).
+					WithDefault(b.settings.GroupDefaultSort == models.SortByReputation).
+					WithEmoji(discord.ComponentEmoji{Name: "👎"}),
 			),
 		),
 		// Action options menu
