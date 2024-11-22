@@ -1,7 +1,7 @@
 package interfaces
 
 import (
-	"github.com/rotector/rotector/internal/bot/session"
+	"github.com/rotector/rotector/internal/bot/core/session"
 )
 
 // DashboardHandler defines the interface for handling dashboard-related actions.
@@ -11,14 +11,21 @@ type DashboardHandler interface {
 	ShowDashboard(event CommonEvent, s *session.Session, content string)
 }
 
-// ReviewHandler defines the interface for handling review-related actions.
-type ReviewHandler interface {
+// UserReviewHandler defines the interface for handling user review-related actions.
+type UserReviewHandler interface {
 	// ShowReviewMenu prepares and displays the review interface by loading
 	// user data and friend status information into the session.
 	ShowReviewMenu(event CommonEvent, s *session.Session)
 	// ShowStatusMenu prepares and displays the status interface by loading
 	// current queue counts and position information into the session.
 	ShowStatusMenu(event CommonEvent, s *session.Session)
+}
+
+// GroupReviewHandler defines the interface for handling group review-related actions.
+type GroupReviewHandler interface {
+	// ShowReviewMenu prepares and displays the review interface by loading
+	// group data into the session.
+	ShowReviewMenu(event CommonEvent, s *session.Session)
 }
 
 // SettingsHandler defines the interface for handling settings-related actions.

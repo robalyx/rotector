@@ -10,26 +10,26 @@ import (
 	"github.com/openai/openai-go/option"
 	"github.com/redis/rueidis"
 	"github.com/rotector/rotector/internal/common/config"
-	"github.com/rotector/rotector/internal/common/database"
 	"github.com/rotector/rotector/internal/common/queue"
-	"github.com/rotector/rotector/internal/common/redis"
+	"github.com/rotector/rotector/internal/common/storage/database"
+	"github.com/rotector/rotector/internal/common/storage/redis"
 	"go.uber.org/zap"
 )
 
 // AppSetup bundles all core dependencies and services needed by the application.
 // Each field represents a major subsystem that needs initialization and cleanup.
 type AppSetup struct {
-	Config       *config.Config     // Application configuration
-	Logger       *zap.Logger        // Main application logger
-	DBLogger     *zap.Logger        // Database-specific logger
-	DB           *database.Database // Database connection pool
-	OpenAIClient *openai.Client     // OpenAI API client
-	RoAPI        *api.API           // RoAPI HTTP client
-	Queue        *queue.Manager     // Background job queue
-	RedisManager *redis.Manager     // Redis connection manager
-	StatusClient rueidis.Client     // Redis client for worker status reporting
-	LogManager   *LogManager        // Log management system
-	pprofServer  *pprofServer       // Debug HTTP server for pprof
+	Config       *config.Config   // Application configuration
+	Logger       *zap.Logger      // Main application logger
+	DBLogger     *zap.Logger      // Database-specific logger
+	DB           *database.Client // Database connection pool
+	OpenAIClient *openai.Client   // OpenAI API client
+	RoAPI        *api.API         // RoAPI HTTP client
+	Queue        *queue.Manager   // Background job queue
+	RedisManager *redis.Manager   // Redis connection manager
+	StatusClient rueidis.Client   // Redis client for worker status reporting
+	LogManager   *LogManager      // Log management system
+	pprofServer  *pprofServer     // Debug HTTP server for pprof
 }
 
 // InitializeApp bootstraps all application dependencies in the correct order,

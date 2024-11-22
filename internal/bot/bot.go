@@ -16,31 +16,32 @@ import (
 
 	"github.com/jaxron/roapi.go/pkg/api"
 	"github.com/rotector/rotector/internal/bot/constants"
-	"github.com/rotector/rotector/internal/bot/handlers/dashboard"
-	"github.com/rotector/rotector/internal/bot/handlers/log"
-	"github.com/rotector/rotector/internal/bot/handlers/queue"
-	"github.com/rotector/rotector/internal/bot/handlers/review"
-	"github.com/rotector/rotector/internal/bot/handlers/setting"
+	"github.com/rotector/rotector/internal/bot/core/pagination"
+	"github.com/rotector/rotector/internal/bot/core/session"
 	"github.com/rotector/rotector/internal/bot/interfaces"
-	"github.com/rotector/rotector/internal/bot/pagination"
-	"github.com/rotector/rotector/internal/bot/session"
+	"github.com/rotector/rotector/internal/bot/menu/dashboard"
+	"github.com/rotector/rotector/internal/bot/menu/log"
+	"github.com/rotector/rotector/internal/bot/menu/queue"
+	groupReview "github.com/rotector/rotector/internal/bot/menu/review/group"
+	userReview "github.com/rotector/rotector/internal/bot/menu/review/user"
+	"github.com/rotector/rotector/internal/bot/menu/setting"
 	"github.com/rotector/rotector/internal/bot/utils"
-	"github.com/rotector/rotector/internal/common/database"
 	queueManager "github.com/rotector/rotector/internal/common/queue"
-	"github.com/rotector/rotector/internal/common/redis"
+	"github.com/rotector/rotector/internal/common/storage/database"
+	"github.com/rotector/rotector/internal/common/storage/redis"
 )
 
 // Bot coordinates all the handlers and managers needed for Discord interaction.
 // It maintains connections to the database, Discord client, and various handlers
 // while processing user interactions through the session and pagination managers.
 type Bot struct {
-	db                *database.Database
+	db                *database.Client
 	client            bot.Client
 	logger            *zap.Logger
 	sessionManager    *session.Manager
 	paginationManager *pagination.Manager
 	dashboardHandler  *dashboard.Handler
-	reviewHandler     *review.Handler
+	userReviewHandler *userReview.Handler
 	settingHandler    *setting.Handler
 	logHandler        *log.Handler
 }
@@ -50,7 +51,7 @@ type Bot struct {
 // configures the Discord client with necessary gateway intents and event listeners.
 func New(
 	token string,
-	db *database.Database,
+	db *database.Client,
 	roAPI *api.API,
 	queueManager *queueManager.Manager,
 	redisManager *redis.Manager,
@@ -68,13 +69,15 @@ func New(
 	dashboardHandler := dashboard.New(db, logger, sessionManager, paginationManager, redisManager)
 	logHandler := log.New(db, sessionManager, paginationManager, dashboardHandler, logger)
 	settingHandler := setting.New(db, logger, sessionManager, paginationManager, dashboardHandler)
-	reviewHandler := review.New(db, logger, roAPI, sessionManager, paginationManager, queueManager, dashboardHandler, logHandler)
-	queueHandler := queue.New(db, logger, sessionManager, paginationManager, queueManager, dashboardHandler, reviewHandler)
+	userReviewHandler := userReview.New(db, logger, roAPI, sessionManager, paginationManager, queueManager, dashboardHandler, logHandler)
+	groupReviewHandler := groupReview.New(db, logger, roAPI, sessionManager, paginationManager, dashboardHandler, logHandler)
+	queueHandler := queue.New(db, logger, sessionManager, paginationManager, queueManager, dashboardHandler, userReviewHandler)
 
 	// Cross-link handlers to enable navigation between different sections
 	dashboardHandler.SetLogHandler(logHandler)
 	dashboardHandler.SetSettingsHandler(settingHandler)
-	dashboardHandler.SetReviewHandler(reviewHandler)
+	dashboardHandler.SetUserReviewHandler(userReviewHandler)
+	dashboardHandler.SetGroupReviewHandler(groupReviewHandler)
 	dashboardHandler.SetQueueHandler(queueHandler)
 
 	// Initialize bot structure with all components
@@ -84,7 +87,7 @@ func New(
 		sessionManager:    sessionManager,
 		paginationManager: paginationManager,
 		dashboardHandler:  dashboardHandler,
-		reviewHandler:     reviewHandler,
+		userReviewHandler: userReviewHandler,
 		settingHandler:    settingHandler,
 		logHandler:        logHandler,
 	}

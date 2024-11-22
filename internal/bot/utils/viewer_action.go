@@ -2,7 +2,7 @@ package utils
 
 import (
 	"github.com/rotector/rotector/internal/bot/constants"
-	"github.com/rotector/rotector/internal/bot/session"
+	"github.com/rotector/rotector/internal/bot/core/session"
 )
 
 // ViewerAction represents the type of page navigation action.

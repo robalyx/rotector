@@ -26,18 +26,13 @@ const (
 	AIWorkerTypeMember = "member"
 
 	// PurgeWorker removes outdated or banned data from the system.
-	PurgeWorker             = "purge"
-	PurgeWorkerTypeBanned   = "banned"
-	PurgeWorkerTypeCleared  = "cleared"
-	PurgeWorkerTypeTracking = "tracking"
+	PurgeWorker = "purge"
 
 	// StatsWorker handles statistics aggregation and storage.
-	StatsWorker           = "stats"
-	StatsWorkerTypeUpload = "upload"
+	StatsWorker = "stats"
 
 	// QueueWorker manages the processing queue for user checks.
-	QueueWorker            = "queue"
-	QueueWorkerTypeProcess = "process"
+	QueueWorker = "queue"
 )
 
 func main() {
@@ -100,40 +95,13 @@ func newAIWorkerCmd() *cobra.Command {
 // - cleared: removes old cleared users
 // - tracking: removes stale tracking data.
 func newPurgeWorkerCmd() *cobra.Command {
-	cmd := &cobra.Command{
+	return &cobra.Command{
 		Use:   PurgeWorker,
 		Short: "Start purge workers",
-		Long:  `Start purge workers, which can be banned, cleared, or tracking workers.`,
+		Run: func(_ *cobra.Command, _ []string) {
+			runWorkers(PurgeWorker, "", 1)
+		},
 	}
-
-	cmd.AddCommand(
-		&cobra.Command{
-			Use:   PurgeWorkerTypeBanned,
-			Short: "Start banned user purge workers",
-			Run: func(cmd *cobra.Command, _ []string) {
-				count, _ := cmd.Flags().GetInt("workers")
-				runWorkers(PurgeWorker, PurgeWorkerTypeBanned, count)
-			},
-		},
-		&cobra.Command{
-			Use:   PurgeWorkerTypeCleared,
-			Short: "Start cleared user purge workers",
-			Run: func(cmd *cobra.Command, _ []string) {
-				count, _ := cmd.Flags().GetInt("workers")
-				runWorkers(PurgeWorker, PurgeWorkerTypeCleared, count)
-			},
-		},
-		&cobra.Command{
-			Use:   PurgeWorkerTypeTracking,
-			Short: "Start tracking purge workers",
-			Run: func(cmd *cobra.Command, _ []string) {
-				count, _ := cmd.Flags().GetInt("workers")
-				runWorkers(PurgeWorker, PurgeWorkerTypeTracking, count)
-			},
-		},
-	)
-
-	return cmd
 }
 
 // newStatsWorkerCmd creates a command for statistics management.
@@ -143,7 +111,7 @@ func newStatsWorkerCmd() *cobra.Command {
 		Use:   StatsWorker,
 		Short: "Start statistics worker",
 		Run: func(_ *cobra.Command, _ []string) {
-			runWorkers(StatsWorker, StatsWorkerTypeUpload, 1)
+			runWorkers(StatsWorker, "", 1)
 		},
 	}
 }
@@ -156,7 +124,7 @@ func newQueueWorkerCmd() *cobra.Command {
 		Short: "Start queue process worker",
 		Run: func(cmd *cobra.Command, _ []string) {
 			count, _ := cmd.Flags().GetInt("workers")
-			runWorkers(QueueWorker, QueueWorkerTypeProcess, count)
+			runWorkers(QueueWorker, "", count)
 		},
 	}
 }
@@ -200,19 +168,15 @@ func runWorkers(workerType, subType string, count int) {
 			var w interface{ Start() }
 			switch {
 			case workerType == AIWorker && subType == AIWorkerTypeMember:
-				w = ai.NewMemberWorker(app.DB, app.OpenAIClient, app.RoAPI, app.StatusClient, bar, workerLogger)
+				w = ai.NewGroupWorker(app.DB, app.OpenAIClient, app.RoAPI, app.StatusClient, bar, workerLogger)
 			case workerType == AIWorker && subType == AIWorkerTypeFriend:
 				w = ai.NewFriendWorker(app.DB, app.OpenAIClient, app.RoAPI, app.StatusClient, bar, workerLogger)
-			case workerType == PurgeWorker && subType == PurgeWorkerTypeBanned:
-				w = purge.NewBannedWorker(app.DB, app.RoAPI, app.StatusClient, bar, workerLogger)
-			case workerType == PurgeWorker && subType == PurgeWorkerTypeCleared:
-				w = purge.NewClearedWorker(app.DB, app.RoAPI, app.StatusClient, bar, workerLogger)
-			case workerType == PurgeWorker && subType == PurgeWorkerTypeTracking:
-				w = purge.NewTrackingWorker(app.DB, app.RoAPI, app.StatusClient, bar, workerLogger)
+			case workerType == PurgeWorker:
+				w = purge.New(app.DB, app.RoAPI, app.StatusClient, bar, workerLogger)
 			case workerType == StatsWorker:
-				w = stats.NewStatisticsWorker(app.DB, app.StatusClient, bar, workerLogger)
+				w = stats.New(app.DB, app.StatusClient, bar, workerLogger)
 			case workerType == QueueWorker:
-				w = queue.NewProcessWorker(app.DB, app.OpenAIClient, app.RoAPI, app.Queue, app.StatusClient, bar, workerLogger)
+				w = queue.New(app.DB, app.OpenAIClient, app.RoAPI, app.Queue, app.StatusClient, bar, workerLogger)
 			default:
 				log.Fatalf("Invalid worker type: %s %s", workerType, subType)
 			}

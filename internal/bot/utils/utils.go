@@ -8,6 +8,7 @@ import (
 	"image"
 	"image/png"
 	"math"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -17,10 +18,13 @@ import (
 	gim "github.com/ozankasikci/go-image-merge"
 	"github.com/rotector/rotector/assets"
 	"github.com/rotector/rotector/internal/bot/constants"
-	"github.com/rotector/rotector/internal/common/fetcher"
+	"github.com/rotector/rotector/internal/common/client/fetcher"
 	"github.com/rotector/rotector/internal/common/queue"
 	"golang.org/x/image/webp"
 )
+
+// Regular expression to clean up excessive newlines in descriptions.
+var multipleNewlinesRegex = regexp.MustCompile(`\n{4,}`)
 
 var (
 	// ErrInvalidDateRangeFormat indicates that the date range string is not in the format "YYYY-MM-DD to YYYY-MM-DD".
@@ -44,6 +48,14 @@ func FormatIDs(ids []uint64) string {
 		mentions[i] = fmt.Sprintf("<@%d>", id)
 	}
 	return strings.Join(mentions, ", ")
+}
+
+// FormatString formats a string by trimming it, replacing backticks, and enclosing in markdown.
+func FormatString(s string) string {
+	s = multipleNewlinesRegex.ReplaceAllString(s, "\n")
+	s = strings.TrimSpace(s)
+	s = strings.ReplaceAll(s, "`", "")
+	return fmt.Sprintf("```\n%s\n```", s)
 }
 
 // NormalizeString sanitizes text by replacing newlines with spaces and removing backticks

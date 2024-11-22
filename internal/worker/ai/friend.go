@@ -8,31 +8,31 @@ import (
 	"github.com/jaxron/roapi.go/pkg/api"
 	"github.com/openai/openai-go"
 	"github.com/redis/rueidis"
-	"github.com/rotector/rotector/internal/common/checker"
-	"github.com/rotector/rotector/internal/common/database"
-	"github.com/rotector/rotector/internal/common/fetcher"
+	"github.com/rotector/rotector/internal/common/client/checker"
+	"github.com/rotector/rotector/internal/common/client/fetcher"
 	"github.com/rotector/rotector/internal/common/progress"
-	"github.com/rotector/rotector/internal/common/worker"
+	"github.com/rotector/rotector/internal/common/storage/database"
+	"github.com/rotector/rotector/internal/worker/core"
 	"go.uber.org/zap"
 )
 
 // FriendWorker processes user friend networks by checking each friend's
 // status and analyzing their profiles for inappropriate content.
 type FriendWorker struct {
-	db          *database.Database
+	db          *database.Client
 	roAPI       *api.API
 	bar         *progress.Bar
 	userFetcher *fetcher.UserFetcher
 	userChecker *checker.UserChecker
-	reporter    *worker.StatusReporter
+	reporter    *core.StatusReporter
 	logger      *zap.Logger
 }
 
 // NewFriendWorker creates a FriendWorker.
-func NewFriendWorker(db *database.Database, openaiClient *openai.Client, roAPI *api.API, redisClient rueidis.Client, bar *progress.Bar, logger *zap.Logger) *FriendWorker {
+func NewFriendWorker(db *database.Client, openaiClient *openai.Client, roAPI *api.API, redisClient rueidis.Client, bar *progress.Bar, logger *zap.Logger) *FriendWorker {
 	userFetcher := fetcher.NewUserFetcher(roAPI, logger)
 	userChecker := checker.NewUserChecker(db, bar, roAPI, openaiClient, userFetcher, logger)
-	reporter := worker.NewStatusReporter(redisClient, "ai", "friend", logger)
+	reporter := core.NewStatusReporter(redisClient, "ai", "friend", logger)
 
 	return &FriendWorker{
 		db:          db,
@@ -60,6 +60,7 @@ func (f *FriendWorker) Start() {
 	var oldFriendIDs []uint64
 	for {
 		f.bar.Reset()
+		f.reporter.SetHealthy(true)
 
 		// Check flagged users count
 		flaggedCount, err := f.db.Users().GetFlaggedUsersCount(context.Background())
@@ -71,12 +72,12 @@ func (f *FriendWorker) Start() {
 		}
 
 		// If above threshold, pause processing
-		if flaggedCount >= worker.FlaggedUsersThreshold {
-			f.bar.SetStepMessage(fmt.Sprintf("Paused - %d flagged users exceeds threshold of %d", flaggedCount, worker.FlaggedUsersThreshold), 0)
+		if flaggedCount >= core.FlaggedUsersThreshold {
+			f.bar.SetStepMessage(fmt.Sprintf("Paused - %d flagged users exceeds threshold of %d", flaggedCount, core.FlaggedUsersThreshold), 0)
 			f.reporter.UpdateStatus(fmt.Sprintf("Paused - %d flagged users exceeds threshold", flaggedCount), 0)
 			f.logger.Info("Pausing worker - flagged users threshold exceeded",
 				zap.Int("flaggedCount", flaggedCount),
-				zap.Int("threshold", worker.FlaggedUsersThreshold))
+				zap.Int("threshold", core.FlaggedUsersThreshold))
 			time.Sleep(5 * time.Minute)
 			continue
 		}
@@ -95,15 +96,15 @@ func (f *FriendWorker) Start() {
 		// Step 2: Fetch user info (40%)
 		f.bar.SetStepMessage("Fetching user info", 40)
 		f.reporter.UpdateStatus("Fetching user info", 40)
-		userInfos := f.userFetcher.FetchInfos(friendIDs[:worker.FriendUsersToProcess])
+		userInfos := f.userFetcher.FetchInfos(friendIDs[:core.FriendUsersToProcess])
 
-		// Step 3: Process users (100%)
-		f.bar.SetStepMessage("Processing users", 100)
-		f.reporter.UpdateStatus("Processing users", 100)
+		// Step 3: Process users (60%)
+		f.bar.SetStepMessage("Processing users", 60)
+		f.reporter.UpdateStatus("Processing users", 60)
 		failedValidationIDs := f.userChecker.ProcessUsers(userInfos)
 
 		// Step 4: Prepare for next batch
-		oldFriendIDs = friendIDs[worker.FriendUsersToProcess:]
+		oldFriendIDs = friendIDs[core.FriendUsersToProcess:]
 
 		// Add failed validation IDs back to the queue for retry
 		if len(failedValidationIDs) > 0 {
@@ -112,8 +113,9 @@ func (f *FriendWorker) Start() {
 				zap.Int("failedCount", len(failedValidationIDs)))
 		}
 
-		// Reset health status for next iteration
-		f.reporter.SetHealthy(true)
+		// Step 5: Completed (100%)
+		f.bar.SetStepMessage("Completed", 100)
+		f.reporter.UpdateStatus("Completed", 100)
 
 		// Short pause before next iteration
 		time.Sleep(1 * time.Second)
@@ -126,7 +128,7 @@ func (f *FriendWorker) Start() {
 // 3. Filtering out already processed users
 // 4. Collecting enough IDs to fill a batch.
 func (f *FriendWorker) processFriendsBatch(friendIDs []uint64) ([]uint64, error) {
-	for len(friendIDs) < worker.FriendUsersToProcess {
+	for len(friendIDs) < core.FriendUsersToProcess {
 		// Get the next confirmed user
 		user, err := f.db.Users().GetNextConfirmedUser(context.Background())
 		if err != nil {
@@ -142,13 +144,13 @@ func (f *FriendWorker) processFriendsBatch(friendIDs []uint64) ([]uint64, error)
 		}
 
 		// If the user has no friends, skip them
-		if len(friends) == 0 {
+		if len(friends.Data) == 0 {
 			continue
 		}
 
 		// Extract friend IDs
-		newFriendIDs := make([]uint64, 0, len(friends))
-		for _, friend := range friends {
+		newFriendIDs := make([]uint64, 0, len(friends.Data))
+		for _, friend := range friends.Data {
 			newFriendIDs = append(newFriendIDs, friend.ID)
 		}
 
@@ -167,12 +169,12 @@ func (f *FriendWorker) processFriendsBatch(friendIDs []uint64) ([]uint64, error)
 		}
 
 		f.logger.Info("Fetched friends",
-			zap.Int("totalFriends", len(friends)),
+			zap.Int("totalFriends", len(friends.Data)),
 			zap.Int("newFriends", len(newFriendIDs)-len(existingUsers)),
 			zap.Uint64("userID", user.ID))
 
 		// If we have enough friends, break out of the loop
-		if len(friendIDs) >= worker.FriendUsersToProcess {
+		if len(friendIDs) >= core.FriendUsersToProcess {
 			break
 		}
 	}

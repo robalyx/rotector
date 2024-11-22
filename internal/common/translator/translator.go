@@ -266,7 +266,7 @@ func isBinaryFormat(text string) bool {
 // or content with repeated characters (e.g., "####" or "----").
 func shouldSkipTranslation(text string) bool {
 	// Skip short content
-	if len(text) <= 3 {
+	if len(text) <= 4 {
 		return true
 	}
 

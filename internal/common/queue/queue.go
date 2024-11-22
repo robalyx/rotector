@@ -8,7 +8,8 @@ import (
 
 	"github.com/bytedance/sonic"
 	"github.com/redis/rueidis"
-	"github.com/rotector/rotector/internal/common/database"
+	"github.com/rotector/rotector/internal/common/storage/database"
+	"github.com/rotector/rotector/internal/common/storage/database/models"
 	"go.uber.org/zap"
 )
 
@@ -65,14 +66,14 @@ type Item struct {
 // Manager orchestrates queue operations using Redis sorted sets for priority queues
 // and separate keys for metadata storage. Thread-safe through Redis transactions.
 type Manager struct {
-	db     *database.Database // For persistent storage and activity logging
-	client rueidis.Client     // Redis client for queue operations
-	logger *zap.Logger        // Structured logging
+	db     *database.Client // For persistent storage and activity logging
+	client rueidis.Client   // Redis client for queue operations
+	logger *zap.Logger      // Structured logging
 }
 
 // NewManager initializes a queue manager with its required dependencies.
 // The manager uses Redis sorted sets for queue storage and regular keys for metadata.
-func NewManager(db *database.Database, client rueidis.Client, logger *zap.Logger) *Manager {
+func NewManager(db *database.Client, client rueidis.Client, logger *zap.Logger) *Manager {
 	return &Manager{
 		db:     db,
 		client: client,
@@ -111,10 +112,12 @@ func (m *Manager) AddToQueue(ctx context.Context, item *Item) error {
 	}
 
 	// Log the activity
-	go m.db.UserActivity().LogActivity(ctx, &database.UserActivityLog{
-		UserID:            item.UserID,
+	go m.db.UserActivity().LogActivity(ctx, &models.UserActivityLog{
+		ActivityTarget: models.ActivityTarget{
+			UserID: item.UserID,
+		},
 		ReviewerID:        item.AddedBy,
-		ActivityType:      database.ActivityTypeRechecked,
+		ActivityType:      models.ActivityTypeUserRechecked,
 		ActivityTimestamp: time.Now(),
 		Details:           map[string]interface{}{"reason": item.Reason},
 	})

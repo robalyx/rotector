@@ -17,9 +17,10 @@ const (
 
 // Dashboard Menu.
 const (
-	StartReviewCustomID  = "start_review"
-	UserSettingsCustomID = "user_settings"
-	BotSettingsCustomID  = "bot_settings"
+	StartUserReviewCustomID  = "start_user_review"
+	StartGroupReviewCustomID = "start_group_review"
+	UserSettingsCustomID     = "user_settings"
+	BotSettingsCustomID      = "bot_settings"
 )
 
 // Review Menu.
@@ -68,11 +69,12 @@ const (
 
 // User Settings.
 const (
-	UserSettingPrefix   = "user"
-	UserSettingSelectID = "user_setting_select"
-	StreamerModeOption  = "streamer_mode"
-	DefaultSortOption   = "default_sort"
-	ReviewModeOption    = "review_mode"
+	UserSettingPrefix      = "user"
+	UserSettingSelectID    = "user_setting_select"
+	StreamerModeOption     = "streamer_mode"
+	UserDefaultSortOption  = "user_default_sort"
+	GroupDefaultSortOption = "group_default_sort"
+	ReviewModeOption       = "review_mode"
 )
 
 // Bot Settings.
@@ -89,6 +91,7 @@ const (
 	LogActivityBrowserCustomID          = "log_activity_browser"
 	LogsQueryInputCustomID              = "query_input"
 	LogsQueryUserIDOption               = "query_user_id_exception"
+	LogsQueryGroupIDOption              = "query_group_id_exception"
 	LogsQueryReviewerIDOption           = "query_reviewer_id_exception"
 	LogsQueryDateRangeOption            = "query_date_range_exception"
 	LogsQueryActivityTypeFilterCustomID = "activity_type_filter"
@@ -147,11 +150,12 @@ const (
 	SessionKeyOutfits = "outfits"
 
 	SessionKeyLogs                 = "logs"
-	SessionKeyUserIDFilter         = "userID"
-	SessionKeyReviewerIDFilter     = "reviewerID"
+	SessionKeyUserIDFilter         = "userIDFilter"
+	SessionKeyGroupIDFilter        = "groupIDFilter"
+	SessionKeyReviewerIDFilter     = "reviewerIDFilter"
 	SessionKeyActivityTypeFilter   = "activityTypeFilter"
-	SessionKeyDateRangeStartFilter = "dateRangeStart"
-	SessionKeyDateRangeEndFilter   = "dateRangeEnd"
+	SessionKeyDateRangeStartFilter = "dateRangeStartFilter"
+	SessionKeyDateRangeEndFilter   = "dateRangeEndFilter"
 
 	SessionKeyQueueUser        = "queueUser"
 	SessionKeyQueueStatus      = "queueStatus"
@@ -160,4 +164,47 @@ const (
 	SessionKeyQueueHighCount   = "queueHighCount"
 	SessionKeyQueueNormalCount = "queueNormalCount"
 	SessionKeyQueueLowCount    = "queueLowCount"
+
+	SessionKeyGroupTarget = "groupTarget"
+
+	GroupConfirmWithReasonModalCustomID = "group_confirm_with_reason_modal"
+	GroupConfirmReasonInputCustomID     = "group_confirm_reason"
+	GroupRecheckReasonModalCustomID     = "group_recheck_reason_modal"
+	GroupRecheckReasonInputCustomID     = "group_recheck_reason"
+
+	GroupConfirmWithReasonButtonCustomID = "group_confirm_with_reason_exception"
+	GroupRecheckButtonCustomID           = "group_recheck_exception"
+	GroupViewLogsButtonCustomID          = "group_view_logs"
+
+	GroupConfirmButtonCustomID = "group_confirm"
+	GroupClearButtonCustomID   = "group_clear"
+	GroupSkipButtonCustomID    = "group_skip"
+)
+
+const (
+	// ReviewHistoryLimit caps the number of review history entries shown.
+	ReviewHistoryLimit = 5
+
+	// ReviewFriendsLimit caps the number of friends shown in the main review embed
+	// to prevent the embed from becoming too long.
+	ReviewFriendsLimit = 10
+
+	// ReviewGroupsLimit caps the number of groups shown in the main review embed
+	// to prevent the embed from becoming too long.
+	ReviewGroupsLimit = 10
+
+	// ReviewGamesLimit caps the number of games shown in the main review embed
+	// to prevent the embed from becoming too long.
+	ReviewGamesLimit = 10
+
+	// ReviewOutfitsLimit caps the number of outfits shown in the main review embed
+	// to prevent the embed from becoming too long.
+	ReviewOutfitsLimit = 10
+)
+
+// Review mode descriptions.
+const (
+	TrainingModeDescription = "**You are not an official reviewer.** However, you may help moderators by using upvotes/downvotes. In this view, information is censored and there are no external links."
+	StandardModeDescription = "Your actions will be recorded and will affect the database. Review groups carefully before confirming or clearing them."
+	UnknownModeDescription  = "Error encountered. Please check your settings."
 )

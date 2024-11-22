@@ -20,7 +20,7 @@ import (
 	"github.com/jaxron/axonet/pkg/client"
 	"github.com/jaxron/roapi.go/pkg/api"
 	"github.com/rotector/rotector/internal/common/config"
-	"github.com/rotector/rotector/internal/common/redis"
+	"github.com/rotector/rotector/internal/common/storage/redis"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
 )
