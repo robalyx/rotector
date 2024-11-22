@@ -47,7 +47,11 @@ func (u *UserMenu) handleUserSettingSelection(event *events.ComponentInteraction
 	case constants.StreamerModeOption:
 		settingName = "Streamer Mode"
 	case constants.UserDefaultSortOption:
-		settingName = "Default Sort"
+		settingName = "User Default Sort"
+	case constants.GroupDefaultSortOption:
+		settingName = "Group Default Sort"
+	case constants.ReviewModeOption:
+		settingName = "Review Mode"
 	}
 
 	// Show the change menu for the selected setting
