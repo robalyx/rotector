@@ -331,20 +331,21 @@ func (m *Menu) handleConfirmUser(event interfaces.CommonEvent, s *session.Sessio
 
 	var actionMsg string
 	if settings.ReviewMode == models.TrainingReviewMode {
-		// Training mode - increment upvotes
-		if err := m.handler.db.Users().UpdateTrainingVotes(context.Background(), user.ID, true); err != nil {
-			m.handler.paginationManager.RespondWithError(event, "Failed to update upvotes. Please try again.")
+		// Training mode - increment downvotes
+		if err := m.handler.db.Users().UpdateTrainingVotes(context.Background(), user.ID, false); err != nil {
+			m.handler.paginationManager.RespondWithError(event, "Failed to update downvotes. Please try again.")
 			return
 		}
-		user.Upvotes++
-		actionMsg = "upvoted"
-		// Log the training upvote action
+		user.Downvotes++
+		actionMsg = "downvoted"
+
+		// Log the training downvote action
 		go m.handler.db.UserActivity().LogActivity(context.Background(), &models.UserActivityLog{
 			ActivityTarget: models.ActivityTarget{
 				UserID: user.ID,
 			},
 			ReviewerID:        uint64(event.User().ID),
-			ActivityType:      models.ActivityTypeUserTrainingUpvote,
+			ActivityType:      models.ActivityTypeUserTrainingDownvote,
 			ActivityTimestamp: time.Now(),
 			Details: map[string]interface{}{
 				"upvotes":   user.Upvotes,
@@ -394,20 +395,21 @@ func (m *Menu) handleClearUser(event interfaces.CommonEvent, s *session.Session)
 
 	var actionMsg string
 	if settings.ReviewMode == models.TrainingReviewMode {
-		// Training mode - increment downvotes
-		if err := m.handler.db.Users().UpdateTrainingVotes(context.Background(), user.ID, false); err != nil {
-			m.handler.paginationManager.RespondWithError(event, "Failed to update downvotes. Please try again.")
+		// Training mode - increment upvotes
+		if err := m.handler.db.Users().UpdateTrainingVotes(context.Background(), user.ID, true); err != nil {
+			m.handler.paginationManager.RespondWithError(event, "Failed to update upvotes. Please try again.")
 			return
 		}
-		user.Downvotes++
-		actionMsg = "downvoted"
-		// Log the training downvote action
+		user.Upvotes++
+		actionMsg = "upvoted"
+
+		// Log the training upvote action
 		go m.handler.db.UserActivity().LogActivity(context.Background(), &models.UserActivityLog{
 			ActivityTarget: models.ActivityTarget{
 				UserID: user.ID,
 			},
 			ReviewerID:        uint64(event.User().ID),
-			ActivityType:      models.ActivityTypeUserTrainingDownvote,
+			ActivityType:      models.ActivityTypeUserTrainingUpvote,
 			ActivityTimestamp: time.Now(),
 			Details: map[string]interface{}{
 				"upvotes":   user.Upvotes,

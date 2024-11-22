@@ -264,20 +264,21 @@ func (m *Menu) handleConfirmGroup(event interfaces.CommonEvent, s *session.Sessi
 
 	var actionMsg string
 	if settings.ReviewMode == models.TrainingReviewMode {
-		// Training mode - increment upvotes
-		if err := m.handler.db.Groups().UpdateTrainingVotes(context.Background(), group.ID, true); err != nil {
-			m.handler.paginationManager.RespondWithError(event, "Failed to update upvotes. Please try again.")
+		// Training mode - increment downvotes
+		if err := m.handler.db.Groups().UpdateTrainingVotes(context.Background(), group.ID, false); err != nil {
+			m.handler.paginationManager.RespondWithError(event, "Failed to update downvotes. Please try again.")
 			return
 		}
-		group.Upvotes++
-		actionMsg = "upvoted"
-		// Log the training upvote action
+		group.Downvotes++
+		actionMsg = "downvoted"
+
+		// Log the training downvote action
 		go m.handler.db.UserActivity().LogActivity(context.Background(), &models.UserActivityLog{
 			ActivityTarget: models.ActivityTarget{
 				GroupID: group.ID,
 			},
 			ReviewerID:        uint64(event.User().ID),
-			ActivityType:      models.ActivityTypeGroupTrainingUpvote,
+			ActivityType:      models.ActivityTypeGroupTrainingDownvote,
 			ActivityTimestamp: time.Now(),
 			Details: map[string]interface{}{
 				"upvotes":   group.Upvotes,
@@ -320,20 +321,21 @@ func (m *Menu) handleClearGroup(event interfaces.CommonEvent, s *session.Session
 
 	var actionMsg string
 	if settings.ReviewMode == models.TrainingReviewMode {
-		// Training mode - increment downvotes
-		if err := m.handler.db.Groups().UpdateTrainingVotes(context.Background(), group.ID, false); err != nil {
-			m.handler.paginationManager.RespondWithError(event, "Failed to update downvotes. Please try again.")
+		// Training mode - increment upvotes
+		if err := m.handler.db.Groups().UpdateTrainingVotes(context.Background(), group.ID, true); err != nil {
+			m.handler.paginationManager.RespondWithError(event, "Failed to update upvotes. Please try again.")
 			return
 		}
-		group.Downvotes++
-		actionMsg = "downvoted"
-		// Log the training downvote action
+		group.Upvotes++
+		actionMsg = "upvoted"
+
+		// Log the training upvote action
 		go m.handler.db.UserActivity().LogActivity(context.Background(), &models.UserActivityLog{
 			ActivityTarget: models.ActivityTarget{
 				GroupID: group.ID,
 			},
 			ReviewerID:        uint64(event.User().ID),
-			ActivityType:      models.ActivityTypeGroupTrainingDownvote,
+			ActivityType:      models.ActivityTypeGroupTrainingUpvote,
 			ActivityTimestamp: time.Now(),
 			Details: map[string]interface{}{
 				"upvotes":   group.Upvotes,

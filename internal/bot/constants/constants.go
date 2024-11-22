@@ -204,7 +204,13 @@ const (
 
 // Review mode descriptions.
 const (
-	TrainingModeDescription = "**You are not an official reviewer.** However, you may help moderators by using upvotes/downvotes. In this view, information is censored and there are no external links."
-	StandardModeDescription = "Your actions will be recorded and will affect the database. Review groups carefully before confirming or clearing them."
-	UnknownModeDescription  = "Error encountered. Please check your settings."
+	TrainingModeDescription = `
+		**You are not an official reviewer.**
+		However, you may help moderators by using upvotes/downvotes. Downvotes mean that the target is inappropriate.
+		In this view, information is censored and there are no external links. 
+		`
+	StandardModeDescription = `
+		Your actions will be recorded and will affect the database. Review carefully before confirming or clearing them.
+		`
+	UnknownModeDescription = "Error encountered. Please check your settings."
 )

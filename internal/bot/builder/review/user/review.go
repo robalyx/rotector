@@ -253,7 +253,7 @@ func (b *ReviewBuilder) buildComponents() []discord.ContainerComponent {
 // getConfirmButtonLabel returns the appropriate label for the confirm button based on review mode.
 func (b *ReviewBuilder) getConfirmButtonLabel() string {
 	if b.settings.ReviewMode == models.TrainingReviewMode {
-		return "Upvote"
+		return "Downvote"
 	}
 	return "Confirm"
 }
@@ -261,7 +261,7 @@ func (b *ReviewBuilder) getConfirmButtonLabel() string {
 // getClearButtonLabel returns the appropriate label for the clear button based on review mode.
 func (b *ReviewBuilder) getClearButtonLabel() string {
 	if b.settings.ReviewMode == models.TrainingReviewMode {
-		return "Downvote"
+		return "Upvote"
 	}
 	return "Clear"
 }
