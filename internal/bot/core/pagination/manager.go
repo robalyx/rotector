@@ -1,6 +1,7 @@
 package pagination
 
 import (
+	"context"
 	"strconv"
 
 	"github.com/disgoorg/disgo/discord"
@@ -47,16 +48,18 @@ type Page struct {
 // Manager maintains a map of pages indexed by their names and handles
 // the routing of Discord interactions to the appropriate page handlers.
 type Manager struct {
-	pages  map[string]*Page
-	logger *zap.Logger
+	sessionManager *session.Manager
+	pages          map[string]*Page
+	logger         *zap.Logger
 }
 
 // NewManager initializes a new Manager with an empty pages map
 // and the provided logger for debugging interaction handling.
-func NewManager(logger *zap.Logger) *Manager {
+func NewManager(sessionManager *session.Manager, logger *zap.Logger) *Manager {
 	return &Manager{
-		pages:  make(map[string]*Page),
-		logger: logger,
+		sessionManager: sessionManager,
+		pages:          make(map[string]*Page),
+		logger:         logger,
 	}
 }
 
@@ -164,4 +167,5 @@ func (m *Manager) RespondWithError(event interfaces.CommonEvent, message string)
 		Build()
 
 	_, _ = event.Client().Rest().UpdateInteractionResponse(event.ApplicationID(), event.Token(), messageUpdate)
+	m.sessionManager.CloseSession(context.Background(), uint64(event.User().ID))
 }

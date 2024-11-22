@@ -62,7 +62,7 @@ func New(
 	if err != nil {
 		return nil, fmt.Errorf("failed to create session manager: %w", err)
 	}
-	paginationManager := pagination.NewManager(logger)
+	paginationManager := pagination.NewManager(sessionManager, logger)
 
 	// Create handlers with their dependencies
 	// Each handler receives references to managers it needs to function
@@ -164,7 +164,7 @@ func (b *Bot) handleApplicationCommandInteraction(event *events.ApplicationComma
 		defer func() {
 			if r := recover(); r != nil {
 				b.logger.Error("Panic in application command interaction handler", zap.Any("panic", r))
-				b.sessionManager.CloseSession(context.Background(), uint64(event.User().ID))
+				b.paginationManager.RespondWithError(event, "Internal error. Please report this to an administrator.")
 			}
 			duration := time.Since(start)
 			b.logger.Debug("Application command interaction handled",
@@ -218,7 +218,7 @@ func (b *Bot) handleComponentInteraction(event *events.ComponentInteractionCreat
 		defer func() {
 			if r := recover(); r != nil {
 				b.logger.Error("Panic in component interaction handler", zap.Any("panic", r))
-				b.sessionManager.CloseSession(context.Background(), uint64(event.User().ID))
+				b.paginationManager.RespondWithError(event, "Internal error. Please report this to an administrator.")
 			}
 			duration := time.Since(start)
 			b.logger.Debug("Component interaction handled",
@@ -267,7 +267,7 @@ func (b *Bot) handleModalSubmit(event *events.ModalSubmitInteractionCreate) {
 		defer func() {
 			if r := recover(); r != nil {
 				b.logger.Error("Panic in modal submit interaction handler", zap.Any("panic", r))
-				b.sessionManager.CloseSession(context.Background(), uint64(event.User().ID))
+				b.paginationManager.RespondWithError(event, "Internal error. Please report this to an administrator.")
 			}
 			duration := time.Since(start)
 			b.logger.Debug("Modal submit interaction handled",
