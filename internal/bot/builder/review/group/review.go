@@ -239,7 +239,7 @@ func (b *ReviewBuilder) getShout() string {
 
 // getReviewHistory returns the review history field for the embed.
 func (b *ReviewBuilder) getReviewHistory() string {
-	logs, total, err := b.db.UserActivity().GetLogs(
+	logs, nextCursor, err := b.db.UserActivity().GetLogs(
 		context.Background(),
 		models.ActivityFilter{
 			GroupID:      b.group.ID,
@@ -248,8 +248,8 @@ func (b *ReviewBuilder) getReviewHistory() string {
 			StartDate:    time.Time{},
 			EndDate:      time.Time{},
 		},
+		nil,
 		constants.ReviewHistoryLimit,
-		constants.LogsPerPage,
 	)
 	if err != nil {
 		return "Failed to fetch review history"
@@ -265,8 +265,8 @@ func (b *ReviewBuilder) getReviewHistory() string {
 			log.ReviewerID, log.ActivityType.String(), log.ActivityTimestamp.Unix()))
 	}
 
-	if total > constants.ReviewHistoryLimit {
-		history = append(history, fmt.Sprintf("... and %d more", total-constants.ReviewHistoryLimit))
+	if nextCursor != nil {
+		history = append(history, "... and more")
 	}
 
 	return strings.Join(history, "\n")

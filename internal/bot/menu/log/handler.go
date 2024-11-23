@@ -55,7 +55,6 @@ func (h *Handler) ShowLogMenu(event interfaces.CommonEvent, s *session.Session) 
 }
 
 // ResetFilters resets all log filters to their default values in the given session.
-// This is useful when switching between different views or users.
 func (h *Handler) ResetFilters(s *session.Session) {
 	s.Set(constants.SessionKeyLogs, []*models.UserActivityLog{})
 	s.Set(constants.SessionKeyUserIDFilter, uint64(0))
@@ -64,7 +63,9 @@ func (h *Handler) ResetFilters(s *session.Session) {
 	s.Set(constants.SessionKeyActivityTypeFilter, models.ActivityTypeAll)
 	s.Set(constants.SessionKeyDateRangeStartFilter, time.Time{})
 	s.Set(constants.SessionKeyDateRangeEndFilter, time.Time{})
-	s.Set(constants.SessionKeyTotalItems, 0)
-	s.Set(constants.SessionKeyPaginationPage, 0)
-	s.Set(constants.SessionKeyStart, 0)
+	s.Set(constants.SessionKeyCursor, nil)
+	s.Set(constants.SessionKeyNextCursor, nil)
+	s.Set(constants.SessionKeyPrevCursors, []*models.LogCursor{})
+	s.Set(constants.SessionKeyHasNextPage, false)
+	s.Set(constants.SessionKeyHasPrevPage, false)
 }

@@ -58,9 +58,17 @@ func NewConnection(config *config.Config, logger *zap.Logger) (*Client, error) {
 		tracking:     tracking,
 	}
 
-	// Initialize database schema and TimescaleDB extension
+	// Initialize database components
 	if err := client.createSchema(); err != nil {
 		return nil, fmt.Errorf("failed to create schema: %w", err)
+	}
+
+	if err := client.createIndexes(); err != nil {
+		return nil, fmt.Errorf("failed to create indexes: %w", err)
+	}
+
+	if err := client.setupSequences(); err != nil {
+		return nil, fmt.Errorf("failed to setup sequences: %w", err)
 	}
 
 	if err := client.setupTimescaleDB(); err != nil {
@@ -71,7 +79,7 @@ func NewConnection(config *config.Config, logger *zap.Logger) (*Client, error) {
 	return client, nil
 }
 
-// createSchema creates all required database tables and indexes.
+// createSchema creates all required database tables.
 func (c *Client) createSchema() error {
 	models := []interface{}{
 		(*models.FlaggedGroup)(nil),
@@ -103,13 +111,21 @@ func (c *Client) createSchema() error {
 		}
 	}
 
-	// Create indexes for efficient querying
+	return nil
+}
+
+// createIndexes creates all database indexes for efficient querying.
+func (c *Client) createIndexes() error {
 	_, err := c.db.NewRaw(`
 		-- User activity logs indexes
 		CREATE INDEX IF NOT EXISTS idx_user_activity_logs_user_id ON user_activity_logs (user_id) WHERE user_id > 0;
 		CREATE INDEX IF NOT EXISTS idx_user_activity_logs_group_id ON user_activity_logs (group_id) WHERE group_id > 0;
 		CREATE INDEX IF NOT EXISTS idx_user_activity_logs_reviewer_id ON user_activity_logs (reviewer_id);
 		CREATE INDEX IF NOT EXISTS idx_user_activity_logs_activity_type ON user_activity_logs (activity_type);
+		
+		-- Index for cursor-based pagination on activity logs
+		CREATE INDEX IF NOT EXISTS idx_user_activity_logs_cursor 
+		ON user_activity_logs (activity_timestamp DESC, sequence DESC);
 		
 		-- Group tracking indexes
 		CREATE INDEX IF NOT EXISTS idx_group_member_trackings_last_appended ON group_member_trackings (last_appended);
@@ -145,7 +161,6 @@ func (c *Client) createSchema() error {
 		CREATE INDEX IF NOT EXISTS idx_flagged_groups_flagged_users_length 
 		ON flagged_groups USING btree (array_length(flagged_users, 1) DESC);
 		CREATE INDEX IF NOT EXISTS idx_confirmed_groups_last_scanned ON confirmed_groups (last_scanned);
-		
 	`).Exec(context.Background())
 	if err != nil {
 		c.logger.Error("Failed to create indexes", zap.Error(err))
@@ -156,8 +171,7 @@ func (c *Client) createSchema() error {
 	return nil
 }
 
-// setupTimescaleDB initializes the TimescaleDB extension and creates hypertables
-// for time-series data. This enables efficient querying of historical data.
+// setupTimescaleDB initializes the TimescaleDB extension and creates hypertables.
 func (c *Client) setupTimescaleDB() error {
 	// Check if TimescaleDB extension exists
 	var exists bool
@@ -184,7 +198,7 @@ func (c *Client) setupTimescaleDB() error {
 		c.logger.Info("TimescaleDB extension already exists")
 	}
 
-	// Create hypertable with unique index on (id, activity_timestamp)
+	// Create hypertable
 	_, err = c.db.NewRaw(`
 		SELECT create_hypertable('user_activity_logs', 'activity_timestamp', 
 			chunk_time_interval => INTERVAL '1 day',
@@ -192,7 +206,20 @@ func (c *Client) setupTimescaleDB() error {
 		);
 	`).Exec(context.Background())
 	if err != nil {
-		return fmt.Errorf("failed to create hypertable: %w", err)
+		return fmt.Errorf("failed to setup TimescaleDB: %w", err)
+	}
+
+	return nil
+}
+
+// setupSequences creates and initializes all required sequences.
+func (c *Client) setupSequences() error {
+	_, err := c.db.NewRaw(`
+		-- Create sequence for generating unique log identifiers
+		CREATE SEQUENCE IF NOT EXISTS user_activity_logs_sequence;
+	`).Exec(context.Background())
+	if err != nil {
+		return fmt.Errorf("failed to setup sequences: %w", err)
 	}
 
 	return nil

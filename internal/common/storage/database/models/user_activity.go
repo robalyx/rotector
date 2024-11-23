@@ -2,11 +2,15 @@ package models
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/uptrace/bun"
 	"go.uber.org/zap"
 )
+
+// Add at the top with other constants/types.
+var ErrNoLogsFound = errors.New("no logs found")
 
 // ActivityType represents different kinds of user actions in the system.
 //
@@ -67,12 +71,19 @@ type ActivityFilter struct {
 	EndDate      time.Time
 }
 
+// LogCursor represents a pagination cursor for activity logs.
+type LogCursor struct {
+	Timestamp time.Time
+	Sequence  int64
+}
+
 // UserActivityLog stores information about moderator actions.
 type UserActivityLog struct {
+	Sequence int64 `bun:",pk,autoincrement"`
 	ActivityTarget
 	ReviewerID        uint64                 `bun:",notnull"`
 	ActivityType      ActivityType           `bun:",notnull"`
-	ActivityTimestamp time.Time              `bun:",notnull"`
+	ActivityTimestamp time.Time              `bun:",notnull,pk"`
 	Details           map[string]interface{} `bun:"type:jsonb"`
 }
 
@@ -120,54 +131,52 @@ func (r *UserActivityModel) LogActivity(ctx context.Context, log *UserActivityLo
 }
 
 // GetLogs retrieves activity logs based on filter criteria.
-func (r *UserActivityModel) GetLogs(ctx context.Context, filter ActivityFilter, page, limit int) ([]*UserActivityLog, int, error) {
+func (r *UserActivityModel) GetLogs(ctx context.Context, filter ActivityFilter, cursor *LogCursor, limit int) ([]*UserActivityLog, *LogCursor, error) {
 	var logs []*UserActivityLog
 
 	// Build base query conditions
-	baseQuery := func(q *bun.SelectQuery) *bun.SelectQuery {
-		if filter.UserID != 0 {
-			q = q.Where("user_id = ?", filter.UserID)
-		}
-		if filter.GroupID != 0 {
-			q = q.Where("group_id = ?", filter.GroupID)
-		}
-		if filter.ReviewerID != 0 {
-			q = q.Where("reviewer_id = ?", filter.ReviewerID)
-		}
-		if filter.ActivityType != ActivityTypeAll {
-			q = q.Where("activity_type = ?", filter.ActivityType)
-		}
-		if !filter.StartDate.IsZero() && !filter.EndDate.IsZero() {
-			q = q.Where("activity_timestamp BETWEEN ? AND ?", filter.StartDate, filter.EndDate)
-		}
-		return q
+	query := r.db.NewSelect().Model(&logs)
+
+	if filter.UserID != 0 {
+		query = query.Where("user_id = ?", filter.UserID)
+	}
+	if filter.GroupID != 0 {
+		query = query.Where("group_id = ?", filter.GroupID)
+	}
+	if filter.ReviewerID != 0 {
+		query = query.Where("reviewer_id = ?", filter.ReviewerID)
+	}
+	if filter.ActivityType != ActivityTypeAll {
+		query = query.Where("activity_type = ?", filter.ActivityType)
+	}
+	if !filter.StartDate.IsZero() && !filter.EndDate.IsZero() {
+		query = query.Where("activity_timestamp BETWEEN ? AND ?", filter.StartDate, filter.EndDate)
 	}
 
-	// Get total count
-	total, err := baseQuery(
-		r.db.NewSelect().Model((*UserActivityLog)(nil)),
-	).Count(ctx)
-	if err != nil {
-		r.logger.Error("Failed to get total log count", zap.Error(err))
-		return nil, 0, err
+	// Apply cursor conditions if cursor exists
+	if cursor != nil {
+		query = query.Where("(activity_timestamp, sequence) <= (?, ?)", cursor.Timestamp, cursor.Sequence)
 	}
 
-	// Get paginated results
-	err = baseQuery(
-		r.db.NewSelect().Model(&logs),
-	).Order("activity_timestamp DESC").
-		Limit(limit).
-		Offset(page * limit).
-		Scan(ctx)
+	// Order by timestamp and sequence for stable pagination
+	query = query.Order("activity_timestamp DESC", "sequence DESC").
+		Limit(limit + 1) // Get one extra to determine if there are more results
+
+	err := query.Scan(ctx)
 	if err != nil {
 		r.logger.Error("Failed to get logs", zap.Error(err))
-		return nil, 0, err
+		return nil, nil, err
 	}
 
-	r.logger.Debug("Retrieved logs",
-		zap.Int("total", total),
-		zap.Int("page", page),
-		zap.Int("limit", limit))
+	var nextCursor *LogCursor
+	if len(logs) > limit {
+		// If we got more results than the limit, the last item becomes our next cursor
+		nextCursor = &LogCursor{
+			Timestamp: logs[limit].ActivityTimestamp,
+			Sequence:  logs[limit].Sequence,
+		}
+		logs = logs[:limit] // Remove the extra item
+	}
 
-	return logs, total, nil
+	return logs, nextCursor, nil
 }

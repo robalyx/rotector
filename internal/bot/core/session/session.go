@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
+	"time"
 
 	"github.com/redis/rueidis"
 	"github.com/spf13/cast"
@@ -90,6 +91,13 @@ func (s *Session) GetInterface(key string, v interface{}) {
 			zap.String("type", fmt.Sprintf("%T", v)))
 		return
 	}
+}
+
+// GetTime retrieves a time.Time value from the session.
+func (s *Session) GetTime(key string) time.Time {
+	var value time.Time
+	s.GetInterface(key, &value)
+	return value
 }
 
 // GetBuffer retrieves and decodes a base64 encoded buffer from the session.

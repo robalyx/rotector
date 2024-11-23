@@ -23,10 +23,8 @@ type Builder struct {
 	activityTypeFilter models.ActivityType
 	startDate          time.Time
 	endDate            time.Time
-	start              int
-	page               int
-	total              int
-	logsPerPage        int
+	hasNextPage        bool
+	hasPrevPage        bool
 }
 
 // NewBuilder creates a new log builder.
@@ -37,10 +35,6 @@ func NewBuilder(s *session.Session) *Builder {
 	s.GetInterface(constants.SessionKeyLogs, &logs)
 	var activityTypeFilter models.ActivityType
 	s.GetInterface(constants.SessionKeyActivityTypeFilter, &activityTypeFilter)
-	var startDate time.Time
-	s.GetInterface(constants.SessionKeyDateRangeStartFilter, &startDate)
-	var endDate time.Time
-	s.GetInterface(constants.SessionKeyDateRangeEndFilter, &endDate)
 
 	return &Builder{
 		settings:           settings,
@@ -49,12 +43,10 @@ func NewBuilder(s *session.Session) *Builder {
 		groupID:            s.GetUint64(constants.SessionKeyGroupIDFilter),
 		reviewerID:         s.GetUint64(constants.SessionKeyReviewerIDFilter),
 		activityTypeFilter: activityTypeFilter,
-		startDate:          startDate,
-		endDate:            endDate,
-		start:              s.GetInt(constants.SessionKeyStart),
-		page:               s.GetInt(constants.SessionKeyPaginationPage),
-		total:              s.GetInt(constants.SessionKeyTotalItems),
-		logsPerPage:        constants.LogsPerPage,
+		startDate:          s.GetTime(constants.SessionKeyDateRangeStartFilter),
+		endDate:            s.GetTime(constants.SessionKeyDateRangeEndFilter),
+		hasNextPage:        s.GetBool(constants.SessionKeyHasNextPage),
+		hasPrevPage:        s.GetBool(constants.SessionKeyHasPrevPage),
 	}
 }
 
@@ -67,10 +59,6 @@ func (b *Builder) Build() *discord.MessageUpdateBuilder {
 	embed := discord.NewEmbedBuilder().
 		SetTitle("Log Query Results").
 		SetColor(utils.GetMessageEmbedColor(b.settings.StreamerMode))
-
-	// Create components
-	totalPages := (b.total + b.logsPerPage - 1) / b.logsPerPage
-	components := b.buildComponents(totalPages)
 
 	// Add fields for each active query condition
 	if b.userID != 0 {
@@ -91,12 +79,11 @@ func (b *Builder) Build() *discord.MessageUpdateBuilder {
 
 	// Add log entries with details
 	if len(b.logs) > 0 {
-		for i, log := range b.logs {
+		for _, log := range b.logs {
 			details := ""
 			for key, value := range log.Details {
 				newKey := strings.ToUpper(key[:1]) + key[1:]
 				newValue := utils.NormalizeString(fmt.Sprintf("%v", value))
-
 				details += fmt.Sprintf("\n%s: `%v`", newKey, newValue)
 			}
 
@@ -117,15 +104,18 @@ func (b *Builder) Build() *discord.MessageUpdateBuilder {
 			description += fmt.Sprintf("\nReviewer: <@%d>%s", log.ReviewerID, details)
 
 			embed.AddField(
-				fmt.Sprintf("%d. <t:%d:F>", b.start+i+1, log.ActivityTimestamp.Unix()),
+				fmt.Sprintf("<t:%d:F>", log.ActivityTimestamp.Unix()),
 				description,
 				false,
 			)
 		}
-		embed.SetFooterText(fmt.Sprintf("Page %d/%d | Total Logs: %d", b.page+1, totalPages, b.total))
+		embed.SetFooterText(fmt.Sprintf("Sequence %d | %d logs shown", b.logs[0].Sequence, len(b.logs)))
 	} else {
 		embed.AddField("No Results", "No log entries found for the given query", false)
 	}
+
+	// Create components
+	components := b.buildComponents()
 
 	return discord.NewMessageUpdateBuilder().
 		SetEmbeds(embed.Build()).
@@ -133,7 +123,7 @@ func (b *Builder) Build() *discord.MessageUpdateBuilder {
 }
 
 // buildComponents creates all interactive components for the log viewer.
-func (b *Builder) buildComponents(totalPages int) []discord.ContainerComponent {
+func (b *Builder) buildComponents() []discord.ContainerComponent {
 	return []discord.ContainerComponent{
 		// Query condition selection menu
 		discord.NewActionRow(
@@ -151,39 +141,7 @@ func (b *Builder) buildComponents(totalPages int) []discord.ContainerComponent {
 		// Activity type filter menu
 		discord.NewActionRow(
 			discord.NewStringSelectMenu(constants.LogsQueryActivityTypeFilterCustomID, "Filter Activity Type",
-				discord.NewStringSelectMenuOption("All", strconv.Itoa(int(models.ActivityTypeAll))).
-					WithDefault(b.activityTypeFilter == models.ActivityTypeAll),
-				discord.NewStringSelectMenuOption("User Viewed", strconv.Itoa(int(models.ActivityTypeUserViewed))).
-					WithDefault(b.activityTypeFilter == models.ActivityTypeUserViewed),
-				discord.NewStringSelectMenuOption("User Confirmed", strconv.Itoa(int(models.ActivityTypeUserConfirmed))).
-					WithDefault(b.activityTypeFilter == models.ActivityTypeUserConfirmed),
-				discord.NewStringSelectMenuOption("User Confirmed (Custom)", strconv.Itoa(int(models.ActivityTypeUserConfirmedCustom))).
-					WithDefault(b.activityTypeFilter == models.ActivityTypeUserConfirmedCustom),
-				discord.NewStringSelectMenuOption("User Cleared", strconv.Itoa(int(models.ActivityTypeUserCleared))).
-					WithDefault(b.activityTypeFilter == models.ActivityTypeUserCleared),
-				discord.NewStringSelectMenuOption("User Skipped", strconv.Itoa(int(models.ActivityTypeUserSkipped))).
-					WithDefault(b.activityTypeFilter == models.ActivityTypeUserSkipped),
-				discord.NewStringSelectMenuOption("User Rechecked", strconv.Itoa(int(models.ActivityTypeUserRechecked))).
-					WithDefault(b.activityTypeFilter == models.ActivityTypeUserRechecked),
-				discord.NewStringSelectMenuOption("User Training Upvote", strconv.Itoa(int(models.ActivityTypeUserTrainingUpvote))).
-					WithDefault(b.activityTypeFilter == models.ActivityTypeUserTrainingUpvote),
-				discord.NewStringSelectMenuOption("User Training Downvote", strconv.Itoa(int(models.ActivityTypeUserTrainingDownvote))).
-					WithDefault(b.activityTypeFilter == models.ActivityTypeUserTrainingDownvote),
-				discord.NewStringSelectMenuOption("Group Viewed", strconv.Itoa(int(models.ActivityTypeGroupViewed))).
-					WithDefault(b.activityTypeFilter == models.ActivityTypeGroupViewed),
-				discord.NewStringSelectMenuOption("Group Confirmed", strconv.Itoa(int(models.ActivityTypeGroupConfirmed))).
-					WithDefault(b.activityTypeFilter == models.ActivityTypeGroupConfirmed),
-				discord.NewStringSelectMenuOption("Group Confirmed (Custom)", strconv.Itoa(int(models.ActivityTypeGroupConfirmedCustom))).
-					WithDefault(b.activityTypeFilter == models.ActivityTypeGroupConfirmedCustom),
-				discord.NewStringSelectMenuOption("Group Cleared", strconv.Itoa(int(models.ActivityTypeGroupCleared))).
-					WithDefault(b.activityTypeFilter == models.ActivityTypeGroupCleared),
-				discord.NewStringSelectMenuOption("Group Skipped", strconv.Itoa(int(models.ActivityTypeGroupSkipped))).
-					WithDefault(b.activityTypeFilter == models.ActivityTypeGroupSkipped),
-				discord.NewStringSelectMenuOption("Group Training Upvote", strconv.Itoa(int(models.ActivityTypeGroupTrainingUpvote))).
-					WithDefault(b.activityTypeFilter == models.ActivityTypeGroupTrainingUpvote),
-				discord.NewStringSelectMenuOption("Group Training Downvote", strconv.Itoa(int(models.ActivityTypeGroupTrainingDownvote))).
-					WithDefault(b.activityTypeFilter == models.ActivityTypeGroupTrainingDownvote),
-			),
+				b.buildActivityTypeOptions()...),
 		),
 		// Clear filters and refresh buttons
 		discord.NewActionRow(
@@ -193,10 +151,48 @@ func (b *Builder) buildComponents(totalPages int) []discord.ContainerComponent {
 		// Navigation buttons
 		discord.NewActionRow(
 			discord.NewSecondaryButton("◀️", constants.BackButtonCustomID),
-			discord.NewSecondaryButton("⏮️", string(utils.ViewerFirstPage)).WithDisabled(b.page == 0 || b.total == 0),
-			discord.NewSecondaryButton("◀️", string(utils.ViewerPrevPage)).WithDisabled(b.page == 0 || b.total == 0),
-			discord.NewSecondaryButton("▶️", string(utils.ViewerNextPage)).WithDisabled(b.page == totalPages-1 || b.total == 0),
-			discord.NewSecondaryButton("⏭️", string(utils.ViewerLastPage)).WithDisabled(b.page == totalPages-1 || b.total == 0),
+			discord.NewSecondaryButton("⏮️", string(utils.ViewerFirstPage)).WithDisabled(!b.hasPrevPage),
+			discord.NewSecondaryButton("◀️", string(utils.ViewerPrevPage)).WithDisabled(!b.hasPrevPage),
+			discord.NewSecondaryButton("▶️", string(utils.ViewerNextPage)).WithDisabled(!b.hasNextPage),
+			discord.NewSecondaryButton("⏭️", string(utils.ViewerLastPage)).WithDisabled(true), // This is disabled on purpose
 		),
+	}
+}
+
+// buildActivityTypeOptions creates the options for the activity type filter menu.
+func (b *Builder) buildActivityTypeOptions() []discord.StringSelectMenuOption {
+	return []discord.StringSelectMenuOption{
+		discord.NewStringSelectMenuOption("All", strconv.Itoa(int(models.ActivityTypeAll))).
+			WithDefault(b.activityTypeFilter == models.ActivityTypeAll),
+		discord.NewStringSelectMenuOption("User Viewed", strconv.Itoa(int(models.ActivityTypeUserViewed))).
+			WithDefault(b.activityTypeFilter == models.ActivityTypeUserViewed),
+		discord.NewStringSelectMenuOption("User Confirmed", strconv.Itoa(int(models.ActivityTypeUserConfirmed))).
+			WithDefault(b.activityTypeFilter == models.ActivityTypeUserConfirmed),
+		discord.NewStringSelectMenuOption("User Confirmed (Custom)", strconv.Itoa(int(models.ActivityTypeUserConfirmedCustom))).
+			WithDefault(b.activityTypeFilter == models.ActivityTypeUserConfirmedCustom),
+		discord.NewStringSelectMenuOption("User Cleared", strconv.Itoa(int(models.ActivityTypeUserCleared))).
+			WithDefault(b.activityTypeFilter == models.ActivityTypeUserCleared),
+		discord.NewStringSelectMenuOption("User Skipped", strconv.Itoa(int(models.ActivityTypeUserSkipped))).
+			WithDefault(b.activityTypeFilter == models.ActivityTypeUserSkipped),
+		discord.NewStringSelectMenuOption("User Rechecked", strconv.Itoa(int(models.ActivityTypeUserRechecked))).
+			WithDefault(b.activityTypeFilter == models.ActivityTypeUserRechecked),
+		discord.NewStringSelectMenuOption("User Training Upvote", strconv.Itoa(int(models.ActivityTypeUserTrainingUpvote))).
+			WithDefault(b.activityTypeFilter == models.ActivityTypeUserTrainingUpvote),
+		discord.NewStringSelectMenuOption("User Training Downvote", strconv.Itoa(int(models.ActivityTypeUserTrainingDownvote))).
+			WithDefault(b.activityTypeFilter == models.ActivityTypeUserTrainingDownvote),
+		discord.NewStringSelectMenuOption("Group Viewed", strconv.Itoa(int(models.ActivityTypeGroupViewed))).
+			WithDefault(b.activityTypeFilter == models.ActivityTypeGroupViewed),
+		discord.NewStringSelectMenuOption("Group Confirmed", strconv.Itoa(int(models.ActivityTypeGroupConfirmed))).
+			WithDefault(b.activityTypeFilter == models.ActivityTypeGroupConfirmed),
+		discord.NewStringSelectMenuOption("Group Confirmed (Custom)", strconv.Itoa(int(models.ActivityTypeGroupConfirmedCustom))).
+			WithDefault(b.activityTypeFilter == models.ActivityTypeGroupConfirmedCustom),
+		discord.NewStringSelectMenuOption("Group Cleared", strconv.Itoa(int(models.ActivityTypeGroupCleared))).
+			WithDefault(b.activityTypeFilter == models.ActivityTypeGroupCleared),
+		discord.NewStringSelectMenuOption("Group Skipped", strconv.Itoa(int(models.ActivityTypeGroupSkipped))).
+			WithDefault(b.activityTypeFilter == models.ActivityTypeGroupSkipped),
+		discord.NewStringSelectMenuOption("Group Training Upvote", strconv.Itoa(int(models.ActivityTypeGroupTrainingUpvote))).
+			WithDefault(b.activityTypeFilter == models.ActivityTypeGroupTrainingUpvote),
+		discord.NewStringSelectMenuOption("Group Training Downvote", strconv.Itoa(int(models.ActivityTypeGroupTrainingDownvote))).
+			WithDefault(b.activityTypeFilter == models.ActivityTypeGroupTrainingDownvote),
 	}
 }

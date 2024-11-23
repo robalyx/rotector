@@ -119,6 +119,11 @@ const (
 
 	SessionKeyImageBuffer = "imageBuffer"
 
+	SessionKeyCursor         = "cursor"
+	SessionKeyNextCursor     = "nextCursor"
+	SessionKeyPrevCursors    = "prevCursors"
+	SessionKeyHasNextPage    = "hasNextPage"
+	SessionKeyHasPrevPage    = "hasPrevPage"
 	SessionKeyPaginationPage = "paginationPage"
 	SessionKeyStart          = "start"
 	SessionKeyTotalItems     = "totalItems"

@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"strconv"
-	"time"
 
 	"github.com/disgoorg/disgo/discord"
 	"github.com/disgoorg/disgo/events"
@@ -47,30 +46,24 @@ func NewMenu(h *Handler) *Menu {
 // and updates the session with the results.
 func (m *Menu) ShowLogMenu(event interfaces.CommonEvent, s *session.Session) {
 	// Get query parameters from session
-	var activityTypeFilter models.ActivityType
-	s.GetInterface(constants.SessionKeyActivityTypeFilter, &activityTypeFilter)
-	var startDate time.Time
-	s.GetInterface(constants.SessionKeyDateRangeStartFilter, &startDate)
-	var endDate time.Time
-	s.GetInterface(constants.SessionKeyDateRangeEndFilter, &endDate)
+	activityFilter := models.ActivityFilter{
+		UserID:     s.GetUint64(constants.SessionKeyUserIDFilter),
+		GroupID:    s.GetUint64(constants.SessionKeyGroupIDFilter),
+		ReviewerID: s.GetUint64(constants.SessionKeyReviewerIDFilter),
+		StartDate:  s.GetTime(constants.SessionKeyDateRangeStartFilter),
+		EndDate:    s.GetTime(constants.SessionKeyDateRangeEndFilter),
+	}
+	s.GetInterface(constants.SessionKeyActivityTypeFilter, &activityFilter.ActivityType)
 
-	userID := s.GetUint64(constants.SessionKeyUserIDFilter)
-	groupID := s.GetUint64(constants.SessionKeyGroupIDFilter)
-	reviewerID := s.GetUint64(constants.SessionKeyReviewerIDFilter)
-	currentPage := s.GetInt(constants.SessionKeyPaginationPage)
+	// Get cursor from session if it exists
+	var cursor *models.LogCursor
+	s.GetInterface(constants.SessionKeyCursor, &cursor)
 
 	// Fetch filtered logs from database
-	logs, totalLogs, err := m.handler.db.UserActivity().GetLogs(
+	logs, nextCursor, err := m.handler.db.UserActivity().GetLogs(
 		context.Background(),
-		models.ActivityFilter{
-			UserID:       userID,
-			GroupID:      groupID,
-			ReviewerID:   reviewerID,
-			ActivityType: activityTypeFilter,
-			StartDate:    startDate,
-			EndDate:      endDate,
-		},
-		currentPage,
+		activityFilter,
+		cursor,
 		constants.LogsPerPage,
 	)
 	if err != nil {
@@ -79,10 +72,27 @@ func (m *Menu) ShowLogMenu(event interfaces.CommonEvent, s *session.Session) {
 		return
 	}
 
-	// Store results in session for the message builder
+	// If this is the first page (cursor is nil), create a cursor from the first log
+	if cursor == nil && len(logs) > 0 {
+		cursor = &models.LogCursor{
+			Timestamp: logs[0].ActivityTimestamp,
+			Sequence:  logs[0].Sequence,
+		}
+	}
+
+	// Get previous cursors array
+	var prevCursors []*models.LogCursor
+	s.GetInterface(constants.SessionKeyPrevCursors, &prevCursors)
+	if prevCursors == nil {
+		prevCursors = make([]*models.LogCursor, 0)
+	}
+
+	// Store results and cursor in session
 	s.Set(constants.SessionKeyLogs, logs)
-	s.Set(constants.SessionKeyTotalItems, totalLogs)
-	s.Set(constants.SessionKeyStart, currentPage*constants.LogsPerPage)
+	s.Set(constants.SessionKeyCursor, cursor)
+	s.Set(constants.SessionKeyNextCursor, nextCursor)
+	s.Set(constants.SessionKeyHasNextPage, nextCursor != nil)
+	s.Set(constants.SessionKeyHasPrevPage, len(prevCursors) > 0)
 
 	m.handler.paginationManager.NavigateTo(event, s, m.page, "")
 }
@@ -113,8 +123,6 @@ func (m *Menu) handleSelectMenu(event *events.ComponentInteractionCreate, s *ses
 		}
 
 		s.Set(constants.SessionKeyActivityTypeFilter, models.ActivityType(optionInt))
-		s.Set(constants.SessionKeyStart, 0)
-		s.Set(constants.SessionKeyPaginationPage, 0)
 		m.ShowLogMenu(event, s)
 	}
 }
@@ -185,7 +193,6 @@ func (m *Menu) handleIDModalSubmit(event *events.ModalSubmitInteractionCreate, s
 		s.Set(constants.SessionKeyReviewerIDFilter, id)
 	}
 
-	s.Set(constants.SessionKeyPaginationPage, 0)
 	m.ShowLogMenu(event, s)
 }
 
@@ -201,24 +208,40 @@ func (m *Menu) handleDateRangeModalSubmit(event *events.ModalSubmitInteractionCr
 
 	s.Set(constants.SessionKeyDateRangeStartFilter, startDate)
 	s.Set(constants.SessionKeyDateRangeEndFilter, endDate)
-	s.Set(constants.SessionKeyPaginationPage, 0)
 
 	m.ShowLogMenu(event, s)
 }
 
-// handlePagination processes page navigation by calculating the target page
-// number and refreshing the log display.
+// handlePagination processes page navigation.
 func (m *Menu) handlePagination(event *events.ComponentInteractionCreate, s *session.Session, action utils.ViewerAction) {
-	totalItems := s.GetInt(constants.SessionKeyTotalItems)
-	maxPage := (totalItems - 1) / constants.LogsPerPage
+	switch action {
+	case utils.ViewerNextPage:
+		if s.GetBool(constants.SessionKeyHasNextPage) {
+			var cursor *models.LogCursor
+			s.GetInterface(constants.SessionKeyCursor, &cursor)
+			var nextCursor *models.LogCursor
+			s.GetInterface(constants.SessionKeyNextCursor, &nextCursor)
+			var prevCursors []*models.LogCursor
+			s.GetInterface(constants.SessionKeyPrevCursors, &prevCursors)
 
-	newPage, ok := action.ParsePageAction(s, action, maxPage)
-	if !ok {
-		m.handler.logger.Warn("Invalid pagination action", zap.String("action", string(action)))
-		m.handler.paginationManager.RespondWithError(event, "Invalid interaction.")
-		return
+			s.Set(constants.SessionKeyPrevCursors, append(prevCursors, cursor))
+			s.Set(constants.SessionKeyCursor, nextCursor)
+			m.ShowLogMenu(event, s)
+		}
+	case utils.ViewerPrevPage:
+		var prevCursors []*models.LogCursor
+		s.GetInterface(constants.SessionKeyPrevCursors, &prevCursors)
+		if len(prevCursors) > 0 {
+			lastIdx := len(prevCursors) - 1
+			s.Set(constants.SessionKeyPrevCursors, prevCursors[:lastIdx])
+			s.Set(constants.SessionKeyCursor, prevCursors[lastIdx])
+			m.ShowLogMenu(event, s)
+		}
+	case utils.ViewerFirstPage:
+		s.Set(constants.SessionKeyCursor, nil)
+		s.Set(constants.SessionKeyPrevCursors, []*models.LogCursor{})
+		m.ShowLogMenu(event, s)
+	case utils.ViewerLastPage:
+		m.handler.paginationManager.RespondWithError(event, "how are you here?")
 	}
-
-	s.Set(constants.SessionKeyPaginationPage, newPage)
-	m.ShowLogMenu(event, s)
 }
