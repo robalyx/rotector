@@ -27,7 +27,7 @@ import (
 
 // getRoAPIClient constructs an HTTP client with a middleware chain for reliability and performance.
 // Middleware order is important - each layer wraps the next in specified priority.
-func getRoAPIClient(cfg *config.Config, redisManager *redis.Manager, logger *zap.Logger) (*api.API, error) {
+func getRoAPIClient(cfg *config.CommonConfig, redisManager *redis.Manager, logger *zap.Logger) (*api.API, error) {
 	// Load authentication and proxy configuration
 	cookies := readCookies(logger)
 	proxies := readProxies(logger)

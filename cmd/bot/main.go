@@ -25,7 +25,7 @@ func main() {
 
 	// Create bot instance
 	discordBot, err := bot.New(
-		setup.Config.Discord.Token,
+		setup.Config.Bot.Discord.Token,
 		setup.DB,
 		setup.RoAPI,
 		setup.Queue,

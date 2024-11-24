@@ -42,29 +42,29 @@ func InitializeApp(logDir string) (*AppSetup, error) {
 	}
 
 	// Logging system is initialized next to capture setup issues
-	logManager := NewLogManager(logDir, cfg.Debug.LogLevel, cfg.Debug.MaxLogsToKeep)
+	logManager := NewLogManager(logDir, cfg.Common.Debug.LogLevel, cfg.Common.Debug.MaxLogsToKeep)
 	logger, dbLogger, err := logManager.GetLoggers()
 	if err != nil {
 		return nil, err
 	}
 
 	// Redis manager provides connection pools for various subsystems
-	redisManager := redis.NewManager(cfg, logger)
+	redisManager := redis.NewManager(&cfg.Common.Redis, logger)
 
 	// Database connection pool is created with statistics tracking
-	db, err := database.NewConnection(cfg, dbLogger)
+	db, err := database.NewConnection(&cfg.Common.PostgreSQL, dbLogger, cfg.Common.Debug.QueryLogging)
 	if err != nil {
 		return nil, err
 	}
 
 	// OpenAI client is configured with API key from config
 	openaiClient := openai.NewClient(
-		option.WithAPIKey(cfg.OpenAI.APIKey),
+		option.WithAPIKey(cfg.Common.OpenAI.APIKey),
 		option.WithRequestTimeout(30*time.Second),
 	)
 
 	// RoAPI client is configured with middleware chain
-	roAPI, err := getRoAPIClient(cfg, redisManager, logger)
+	roAPI, err := getRoAPIClient(&cfg.Common, redisManager, logger)
 	if err != nil {
 		return nil, err
 	}
@@ -84,8 +84,8 @@ func InitializeApp(logDir string) (*AppSetup, error) {
 
 	// Start pprof server if enabled
 	var pprofSrv *pprofServer
-	if cfg.Debug.EnablePprof {
-		srv, err := startPprofServer(cfg.Debug.PprofPort, logger)
+	if cfg.Common.Debug.EnablePprof {
+		srv, err := startPprofServer(cfg.Common.Debug.PprofPort, logger)
 		if err != nil {
 			logger.Error("Failed to start pprof server", zap.Error(err))
 		} else {

@@ -8,14 +8,28 @@ import (
 
 // Config represents the entire application configuration.
 type Config struct {
+	Common CommonConfig
+	Bot    BotConfig
+	Worker WorkerConfig
+}
+
+// CommonConfig contains configuration shared between bot and worker.
+type CommonConfig struct {
 	Debug          Debug
 	RateLimit      RateLimit
 	CircuitBreaker CircuitBreaker
 	PostgreSQL     PostgreSQL
 	Redis          Redis
 	OpenAI         OpenAI
-	Discord        Discord
 }
+
+// BotConfig contains Discord bot specific configuration.
+type BotConfig struct {
+	Discord Discord
+}
+
+// WorkerConfig contains worker specific configuration.
+type WorkerConfig struct{}
 
 // Debug contains debug-related configuration.
 type Debug struct {
@@ -72,12 +86,8 @@ type Discord struct {
 }
 
 // LoadConfig loads the configuration from the specified file.
-// It searches multiple paths to find the config file:
-// 1. User's home directory
-// 2. System-wide configuration
-// 3. Current directory.
 func LoadConfig() (*Config, error) {
-	viper.SetConfigName("config")
+	viper.SetConfigName("common")
 	viper.SetConfigType("toml")
 
 	// Add default search paths
@@ -88,6 +98,18 @@ func LoadConfig() (*Config, error) {
 	viper.AddConfigPath(".")
 
 	if err := viper.ReadInConfig(); err != nil {
+		return nil, err
+	}
+
+	// Load bot config
+	viper.SetConfigName("bot")
+	if err := viper.MergeInConfig(); err != nil {
+		return nil, err
+	}
+
+	// Load worker config
+	viper.SetConfigName("worker")
+	if err := viper.MergeInConfig(); err != nil {
 		return nil, err
 	}
 

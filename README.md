@@ -18,7 +18,7 @@
 </h1>
 
 <p align="center">
-  <em>When Roblox moderators dream of superpowers, they dream of <b>Rotector</b>. A powerful application written in <a href="https://go.dev/">Go</a>, designed to assist in identifying inappropriate user accounts on Roblox using AI and smart algorithms.</em>
+  <em>When Roblox moderators dream of superpowers, they dream of <b>Rotector</b>. A powerful application built with <a href="https://go.dev/">Go</a> that uses AI and smart algorithms to find inappropriate Roblox accounts.</em>
   <br><br>
   🚀 <strong>An experimental project built with modern technologies.</strong>
 </p>
@@ -37,6 +37,7 @@
 - [📦 Prerequisites](#-prerequisites)
 - [🎯 Accuracy](#-accuracy)
 - [⚡ Efficiency](#-efficiency)
+- [🔄 Reviewing](#-reviewing)
 - [🛣️ Roadmap](#️-roadmap)
 - [❓ FAQ](#-faq)
 - [👥 Contributing](#-contributing)
@@ -47,7 +48,7 @@
 
 |                                                                                                                                                 Swift AI Assisted Moderation                                                                                                                                                  |                                                                                                                                      In-Depth User Investigation                                                                                                                                       |
 | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------: | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------: |
-|                       <p align="center"><img src="assets/images/01.gif" width="450"></p><p align="center">Review flagged accounts quickly with AI assistance. This system provides profile overviews and AI-generated violation reasons, allowing moderators to make informed decisions in seconds.</p>                       |       <p align="center"><img src="assets/images/02.gif" width="450"></p><p align="center">The review menu also allows in-depth user investigation. Moderators can easily explore a user's outfits, friends, and groups, providing a detailed view for thorough and informed decision-making.</p>       |
+|                       <p align="center"><img src="assets/images/01.gif" width="450"></p><p align="center">Review flagged accounts quickly with AI help. The system shows profile details and AI-detected violations, helping moderators make quick and smart decisions.</p>                       |       <p align="center"><img src="assets/images/02.gif" width="450"></p><p align="center">The review menu also allows in-depth user investigation. Moderators can easily explore a user's outfits, friends, and groups, providing a detailed view for thorough and informed decision-making.</p>       |
 |                                                                                                                                                         Streamer Mode                                                                                                                                                         |                                                                                                                                            User Log Browser                                                                                                                                            |
 | <p align="center"><img src="assets/images/03.gif" width="450"></p><p align="center">Streamer mode provides additional privacy by censoring sensitive user information in the review menu. This feature is particularly useful for content creators and streamers who want to showcase the tool while maintaining privacy.</p> | <p align="center"><img src="assets/images/04.gif" width="450"></p><p align="center">The log browser enables detailed querying of moderation actions. Administrators can search through logs based on specific users, actions, or date ranges, providing detailed audit trails. No more sabotaging!</p> |
 |                                                                                                                                                   Multi-format Translation                                                                                                                                                    |                                                                                                                                       Session State Preservation                                                                                                                                       |
@@ -74,6 +75,14 @@ Rotector offers key features for efficient moderation:
   - Streamer mode for content creators
   - Translation support (natural languages, morse code, binary)
   - Session state preservation
+  - **Community Review Mode:**
+    - Upvote/downvote system for flagged users
+    - No external links or sensitive data exposed
+    - Assists moderator decision-making
+  - **Official Review Mode:**
+    - Full uncensored view of user information
+    - Ability to trigger AI worker rechecks
+    - Access to detailed activity logs
 
 - **Worker System**
 
@@ -99,9 +108,9 @@ Rotector offers key features for efficient moderation:
   - Response caching to reduce load on Roblox API
 
 - **Detailed Logging**
+  - Log files for operations and errors
   - Full audit trails and statistics
   - Real-time monitoring dashboard
-  - Log files for operations and errors
 
 ## 📦 Prerequisites
 
@@ -112,7 +121,7 @@ Rotector offers key features for efficient moderation:
 
 - [Go](https://go.dev/) 1.23.2
 - [PostgreSQL](https://www.postgresql.org/) 17.0 (with [TimescaleDB](https://www.timescale.com/) 2.17.1 extension)
-- [DragonflyDB](https://dragonflydb.io/) 1.24.0 or [Redis](https://redis.io/) 7.4.1
+- [DragonflyDB](https://dragonflydb.io/) 1.25.1 or [Redis](https://redis.io/) 7.4.1
 - OpenAI API key (uses [gpt-4o-mini](https://platform.openai.com/docs/models/gpt-4o-mini#gpt-4o-mini))
 - Discord Bot token
 
@@ -123,61 +132,71 @@ Rotector offers key features for efficient moderation:
 
 ## 🎯 Accuracy
 
-Rotector is designed to identify potentially inappropriate content while minimizing false positives. Here's an overview of its capabilities.
+Rotector is designed to find inappropriate content while minimizing false flags. Here's how it works:
 
-### Detection Capabilities
+### Detection Process
 
-Rotector uses a multi-layered approach to identify inappropriate content while maintaining high accuracy:
+Rotector uses two detection systems for users and groups:
 
-1. **Analysis Algorithm**:
-   The system uses a weighted scoring system that considers multiple factors including friend relationships and account information to identify inappropriate accounts. The weighting system is carefully tuned to detect both obvious and subtle patterns while minimizing false positives.
+#### User Detection
 
-2. **AI Detection**:
-   The system uses a conservative flagging approach to minimize false positives, where AI only raises flags when there is clear evidence of violations. While this means some borderline cases may be missed in favor of accuracy, it ensures high confidence in flagged accounts. The AI friend worker systematically analyzes friend lists of flagged accounts which has proven to be very effective.
+1. **Smart Scoring**:
+   We look at different factors like friends and account details to identify inappropriate content. Our system is carefully tuned to catch both obvious and subtle patterns while avoiding false positives.
+
+2. **AI Checks**:
+   The AI uses a conservative approach - it only flags accounts when there is clear evidence of violations. While this means it might miss some borderline cases, it ensures high confidence in flagged accounts. The AI friend worker systematically analyzes friend lists of flagged accounts which has proven to be very effective.
 
 3. **Validation Measures**:
-   To prevent AI hallucination, the system implements strict validation measures. All AI-generated content is cross-checked against actual user profile data, ensuring that flagged content actually exists on the profile. This double-verification process maintains the system's high accuracy and reliability.
+   When the AI flags content, we always check to make sure that content really exists on the user's profile. This extra step helps us avoid mistakes and keeps our system reliable.
+
+#### Group Detection
+
+1. **Member Monitoring**:
+   The system tracks the number of flagged users within each group. When the count of flagged members surpasses a threshold, the group is automatically flagged for review. This approach helps identify potentially inappropriate communities that may contain users engaging in inappropriate behavior.
+
+2. **Whitelist System**:
+   Popular communities such as official Roblox groups or major fan clubs may initially trigger flags due to their large user base. However, once these groups are manually reviewed and cleared by moderators, they are permanently added to a whitelist to prevent future flags. This whitelist status isn't permanent though as administrators are able to reverse this status.
 
 > [!TIP]
-> For detailed performance metrics and test results, see the [Efficiency](#-efficiency) section.
+> Interested in seeing how well it performs? Check out our test results in the [Efficiency](#-efficiency) section.
 
-### What it Does Not Detect
+### What We Don't Detect
 
-To reduce false positives, Rotector is designed to avoid flagging:
+To avoid false positives, Rotector won't flag accounts for:
 
 <details>
-<summary>Users solely based on their affiliations (friend/follower/following)</summary>
-Affiliate-based flagging could unfairly target users who may have been added or followed unknowingly, or who connected with others before they became inappropriate accounts. Historical connections don't have enough context to determine current intent. However, if the account is found to be involved in a large network of inappropriate accounts, it will be flagged.
+<summary>Just having certain friends or followers</summary>
+We don't flag accounts just because they're connected to someone breaking the rules. They might have been added or followed without knowing the other person was breaking rules. However, if we find an account is part of a large network of bad accounts, we will flag it.
 </details>
 
 <details>
-<summary>General mentions of friendship or relationships</summary>
-Normal social interactions and platonic relationships are normal on the platform.
+<summary>Normal friendship conversations</summary>
+Regular social interactions and friendly relationships are normal on Roblox.
 </details>
 
 <details>
-<summary>Non-sexual emojis or common internet slang</summary>
-Many emojis and slang terms have multiple meanings and are commonly used innocently. Therefore, context is crucial, and flagging such content would lead to many false positives.
+<summary>Regular emojis or internet slang</summary>
+Many emojis and slang words can mean different things and are often used innocently. We look at how they're being used before making any decisions.
 </details>
 
 <details>
-<summary>Artistic content without explicit sexual themes</summary>
-Creative expression is a core part of the Roblox platform. Art should only be flagged when it clearly violates guidelines.
+<summary>Art without inappropriate themes</summary>
+Creative expression is important on Roblox. We only flag art that clearly breaks the rules.
 </details>
 
 <details>
-<summary>Discussions about gender identity or sexual orientation</summary>
-These are legitimate parts of personal identity. Flagging such content could lead to discrimination and prevent users from expressing their authentic selves within platform guidelines.
+<summary>Talking about gender or orientation</summary>
+These are normal parts of personal identity. Flagging such content could unfairly target users just for being themselves.
 </details>
 
 <details>
-<summary>References to non-sexual roleplaying games</summary>
-Roleplaying is a popular and legitimate form of gameplay on Roblox. Only explicit adult or inappropriate roleplay scenarios would be flagged.
+<summary>Normal roleplay games</summary>
+Roleplaying is a big part of Roblox. We only flag roleplay that's clearly inappropriate.
 </details>
 
 <details>
-<summary>General profanity or non-sexual insults</summary>
-These are better handled by existing chat filters and standard moderation tools. Focusing on these would affect the tool's primary purpose of detecting safety concerns.
+<summary>Regular bad language</summary>
+Normal swearing and insults are handled by Roblox's chat filters. We focus on more serious safety issues.
 </details>
 
 ## ⚡ Efficiency
@@ -219,32 +238,47 @@ In a manual review of 100 randomly selected flagged users from this test run:
 - 99 users were confirmed as correctly flagged
 - 1 user was cleared due to insufficient profile information
 
+## 🔄 Reviewing
+
+Rotector has two different ways to review flagged accounts: one for community members and one for official moderators. This dual approach ensures both community engagement and high standards of moderation.
+
+### Community Review Mode
+
+Anyone can help review flagged accounts through a carefully designed training mode. To protect privacy, this mode censors user information and hides external links. Users can participate by upvoting/downvoting based on whether they think an account breaks the rules, which helps point out accounts that need urgent review.
+
+This system helps official moderators in several ways:
+
+- Finds the most serious cases quickly
+- Gives moderators extra input for their decisions
+- Helps train new moderators
+- Lets the community help keep Roblox safe
+
+### Official Review Mode
+
+Official moderators have more tools and permissions for account review. They can:
+
+- See all account information (unless they turn on streamer mode)
+- Ask AI workers to recheck accounts
+- See logs of all moderation actions
+- Make changes to the database
+- Switch between standard mode and training mode
+
+What makes this mode special is that moderators can do everything needed to handle flagged accounts. While community votes help, moderators make the final decisions about what happens to flagged accounts.
+
+This dual-system approach works well because it lets everyone help out while making sure trained moderators handle the final decisions.
+
 ## 🛣️ Roadmap
 
 This roadmap shows our major upcoming features, but we've got even more in the works! We're always adding new features based on what the community suggests.
 
-- 📊 **Dashboard Features**
-
-  - [ ] Real-time worker status monitoring
-  - [ ] More statistical overview
-
 - 👥 **Moderation Tools**
 
-  - [ ] Session transfer between moderators
   - [ ] Appeal process system
   - [ ] Inventory inspection
-  - [ ] Group flagging and reviewing
-
-- 🌟 **Community Review System**
-
-  - [ ] Community members can vote flagged accounts
-  - [ ] Reputation-based user review system
-  - [ ] High vote count accounts are reviewed first
 
 - 🔍 **Scanning Capabilities**
 
   - [ ] Group content detection (wall posts, names, descriptions)
-  - [x] Cryptographic content detection
 
 - 🌐 **Public API** (Available in Beta)
   - [ ] REST API for developers to integrate with
@@ -277,77 +311,79 @@ Note that setting up Rotector requires:
 <details>
 <summary>What's the story behind Rotector?</summary>
 
-Rotector began with its creator, [jaxron](https://github.com/jaxron), developing two foundational libraries on September 23, 2024: [RoAPI.go](https://github.com/jaxron/roapi.go) and [axonet](https://github.com/jaxron/axonet). These libraries became the backbone of Rotector's networking and API interaction capabilities.
+Rotector started when [jaxron](https://github.com/jaxron) developed two important libraries on September 23, 2024: [RoAPI.go](https://github.com/jaxron/roapi.go) and [axonet](https://github.com/jaxron/axonet). These libraries became the backbone of Rotector's networking and API interaction capabilities.
 
-Rotector's official development secretly started on October 13, 2024, driven by his personal concerns about the growing problem of inappropriate behavior and content on the Roblox platform, and with the ambitious goal to protect younger players from potential predators. The project was officially open-sourced for alpha testing on November 8, 2024.
+Rotector's official development began secretly on October 13, 2024 due to his personal concerns about inappropriate behavior on Roblox and a desire to help protect young players. The project was made public for the alpha testing phase on November 8, 2024.
 
-While Roblox has its own moderation system, the platform's massive user base makes it difficult to quickly identify every inappropriate account. Some Roblox staff have also acknowledged the challenge of moderating users due to the high volume of reports. Even after being reported, inappropriate accounts—including those potentially belonging to predators—often remain active.
+While Roblox already has moderators, there are so many users that it's hard to catch every inappropriate account quickly. Some Roblox staff have also acknowledged that it's difficult to handle all the reports they get. Sometimes, inappropriate accounts stay active even after being reported.
 
-By automating the detection process, Rotector aims to simplify this process and enable quicker identification of potentially inappropriate accounts. We want to contribute to the current moderating efforts and give the Roblox community—especially its younger members—an extra level of security.
+Rotector helps by finding these accounts automatically. Our goal is to make moderation easier and help keep the Roblox community, especially young players, safer.
 
 </details>
 
 <details>
 <summary>Why is Rotector open-sourced?</summary>
 
-We believe in transparency and the power of open source. By making our code public, anyone can understand how the tool works. This project also serves as a learning resource for those interested in online safety and moderation technologies.
+We believe in transparency and the power of open source. By making our code public, anyone can understand how the tool works. It's also a great way for people to learn about online safety and moderation tools.
 
-While we welcome feedback and suggestions, please note that this open-source release is primarily for informational and educational purposes.
+While we welcome feedback, ideas, and contributions, this open-source release is mainly to show how the tool works and help others learn from it.
 
 </details>
 
 <details>
 <summary>When will the REST API be available?</summary>
 
-The REST API will be available during beta phase. In the current alpha phase, the project is focused on core functionality including worker capabilities and the reviewing system. Once these foundational features are stable, we'll begin work on the public API that will allow developers to integrate Rotector's capabilities into their own applications.
+The REST API will be ready during the beta phase. At this time, we're focusing on making sure the core features work well. Once those are stable, we'll work on the API so other developers can use Rotector in their own projects.
 
 </details>
 
 <details>
 <summary>Can I use Rotector without the Discord bot?</summary>
 
-Although the Discord bot is essential for the easy review and moderation of detected accounts, Rotector's primary features (identifying and reporting accounts with workers) can function on their own. If you decide not to use the Discord bot, you would have to implement another method for reviewing detected accounts. This could involve directly querying the database or creating a custom interface for reviewing detected accounts.
+Yes, but the Discord bot makes reviewing accounts much easier. The main features (finding and reporting inappropriate accounts) work fine without Discord. If you don't want to use the Discord bot, you'll need to create your own way to review the accounts that get flagged.
 
 </details>
 
 <details>
 <summary>Why use Discord instead of a custom web interface?</summary>
 
-Discord's bot framework provides all the functionality needed for efficient review processes, including buttons, dropdowns, forms, and rich embeds. Using Discord also allows us to focus our development efforts on core features rather than spending time building and maintaining a custom frontend.
+Discord already has everything we need for reviewing accounts - buttons, dropdowns, forms, and rich embeds. Using Discord lets us focus on making Rotector better instead of building a whole new interface from scratch.
 
 </details>
 
 <details>
 <summary>Are proxies and cookies necessary to use Rotector?</summary>
 
-No, proxies and cookies are not required to use Rotector. Proxies can be helpful for distributed requests and avoiding rate limits when making many requests. However, while cookies are mentioned in the configuration, they are not currently used for anything in the project.
+No, you don't need proxies or cookies to use Rotector. Proxies can help if you're making lots of requests, but they're optional. While cookies are mentioned in the settings, we don't use them for anything at the moment.
 
-You can configure proxies in the `config.toml` file if needed. This configuration file also includes a rate limiter setting, which allows you to control the frequency of requests to the Roblox API.
+Proxies can be set up in the `config.toml` file. This file also includes a rate limit setting that lets you control how many requests Rotector makes to Roblox's API.
 
 </details>
 
 <details>
 <summary>Will users who have stopped their inappropriate behavior be removed from the database?</summary>
 
-No, past rule violations remain in the database, even if a user claims that they have changed their ways. This can be useful for law enforcement investigations and for future safety concerns. Additionally, some users try to clean their reputation temporarily, only to resume their actions later.
+No, past rule violations remain in the database, even if users say they've changed. This can be useful for law enforcement investigations and for future safety concerns. Some users try to clean up their profiles temporarily, only to return to breaking rules later.
 
-This isn't about preventing forgiveness, but rather about maintaining accountability. The records serve as a crucial part of our ongoing efforts to keep the platform safe for all users, especially minors.
+This isn't about preventing second chances - it's about keeping the platform safe, especially for young users.
 
 </details>
 
 <details>
 <summary>Who inspired the creation of Rotector?</summary>
 
-[Ruben Sim](https://www.youtube.com/@RubenSim), a YouTuber and former game developer, helped inspire Rotector through his dedicated work exposing Roblox's moderation issues. His efforts running the [Moderation for Dummies](https://x.com/ModForDummies) Twitter account, which consistently posts verified ERP accounts, showed what dedicated individuals can achieve even without technical resources or official support. We are deeply grateful for his contributions which helped pave the way for our project.
+[Ruben Sim](https://www.youtube.com/@RubenSim), a YouTuber and former game developer, helped inspire Rotector. His work exposing Roblox's moderation problems, especially through the [Moderation for Dummies](https://x.com/ModForDummies) Twitter account, showed what one person could do even without special tools. We are deeply grateful for his contributions which helped pave the way for our project.
 
 </details>
 
 <details>
 <summary>How did "Rotector" get its name?</summary>
 
-1. **Protector**: Aims to protect the Roblox community, especially younger players, from inappropriate content and potential predators.
-2. **Detector**: Designed to detect and identify potentially inappropriate accounts on the platform.
-3. **"Ro-" prefix**: Comes from "Roblox", the platform it's designed to work with.
+The name comes from three ideas:
+
+1. **Protector**: We want to protect Roblox players from inappropriate content
+2. **Detector**: We find inappropriate accounts
+3. **"Ro-" prefix**: From "Roblox", the platform we work with
 
 </details>
 

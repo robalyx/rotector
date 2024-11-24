@@ -35,14 +35,14 @@ const (
 // Each database index gets its own dedicated connection pool through rueidis.
 type Manager struct {
 	clients map[int]rueidis.Client
-	config  *config.Config
+	config  *config.Redis
 	logger  *zap.Logger
 	mu      sync.RWMutex // Protects concurrent access to the clients map
 }
 
 // NewManager initializes the Redis connection manager with an empty client pool.
 // Actual client connections are created lazily when first requested.
-func NewManager(config *config.Config, logger *zap.Logger) *Manager {
+func NewManager(config *config.Redis, logger *zap.Logger) *Manager {
 	return &Manager{
 		clients: make(map[int]rueidis.Client),
 		config:  config,
@@ -63,9 +63,9 @@ func (m *Manager) GetClient(dbIndex int) (rueidis.Client, error) {
 
 	// Create new client with database selection
 	client, err := rueidis.NewClient(rueidis.ClientOption{
-		InitAddress: []string{fmt.Sprintf("%s:%d", m.config.Redis.Host, m.config.Redis.Port)},
-		Username:    m.config.Redis.Username,
-		Password:    m.config.Redis.Password,
+		InitAddress: []string{fmt.Sprintf("%s:%d", m.config.Host, m.config.Port)},
+		Username:    m.config.Username,
+		Password:    m.config.Password,
 		SelectDB:    dbIndex,
 	})
 	if err != nil {

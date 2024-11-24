@@ -1,35 +1,31 @@
-[debug]
+[common.debug]
 log_level = "info"
 max_logs_to_keep = 10
 query_logging = true
 enable_pprof = false
 pprof_port = 6060
 
-[ratelimit]
+[common.ratelimit]
 requests_per_second = 100.0
 burst_size = 1
 
-[circuitbreaker]
+[common.circuitbreaker]
 max_failures = 10
 failure_threshold = 500
 recovery_timeout = 1000
 
-[postgresql]
+[common.postgresql]
 host = "127.0.0.1"
 port = 5432
 user = "postgres"
 password = "postgres"
 db_name = "postgres"
 
-[redis]
+[common.redis]
 host = "127.0.0.1"
 port = 6379
 username = ""
 password = ""
 
-[openai]
-api_key = ""
-
-[discord]
-token = ""
-
+[common.openai]
+api_key = "" 
