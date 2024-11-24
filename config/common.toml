@@ -1,6 +1,7 @@
 [common.debug]
 log_level = "info"
 max_logs_to_keep = 10
+max_log_lines = 5000
 query_logging = true
 enable_pprof = false
 pprof_port = 6060

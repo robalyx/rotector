@@ -35,6 +35,7 @@ type WorkerConfig struct{}
 type Debug struct {
 	LogLevel      string `mapstructure:"log_level"`
 	MaxLogsToKeep int    `mapstructure:"max_logs_to_keep"`
+	MaxLogLines   int    `mapstructure:"max_log_lines"`
 	QueryLogging  bool   `mapstructure:"query_logging"`
 	EnablePprof   bool   `mapstructure:"enable_pprof"`
 	PprofPort     int    `mapstructure:"pprof_port"`

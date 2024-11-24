@@ -42,7 +42,7 @@ func InitializeApp(logDir string) (*AppSetup, error) {
 	}
 
 	// Logging system is initialized next to capture setup issues
-	logManager := NewLogManager(logDir, cfg.Common.Debug.LogLevel, cfg.Common.Debug.MaxLogsToKeep)
+	logManager := NewLogManager(logDir, &cfg.Common.Debug)
 	logger, dbLogger, err := logManager.GetLoggers()
 	if err != nil {
 		return nil, err
