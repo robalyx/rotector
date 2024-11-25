@@ -24,9 +24,9 @@ require (
 	github.com/spf13/cobra v1.8.1
 	github.com/spf13/viper v1.19.0
 	github.com/tdewolff/minify/v2 v2.21.1
-	github.com/uptrace/bun v1.2.5
+	github.com/uptrace/bun v1.2.6
 	github.com/uptrace/bun/dialect/pgdialect v1.2.5
-	github.com/uptrace/bun/driver/pgdriver v1.2.5
+	github.com/uptrace/bun/driver/pgdriver v1.2.6
 	github.com/wcharczuk/go-chart/v2 v2.1.2
 	go.uber.org/zap v1.27.0
 	golang.org/x/image v0.21.0
@@ -77,7 +77,7 @@ require (
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
 	github.com/vmihailenco/msgpack/v5 v5.4.1 // indirect
 	github.com/vmihailenco/tagparser/v2 v2.0.0 // indirect
-	github.com/wk8/go-ordered-map/v2 v2.1.8 // indirect
+	github.com/wk8/go-ordered-map/v2 v2.1.9-0.20240816141633-0a40785b4f41 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	golang.org/x/arch v0.11.0 // indirect
 	golang.org/x/crypto v0.29.0 // indirect
