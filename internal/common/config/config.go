@@ -29,7 +29,10 @@ type BotConfig struct {
 }
 
 // WorkerConfig contains worker specific configuration.
-type WorkerConfig struct{}
+type WorkerConfig struct {
+	BatchSizes      BatchSizes
+	ThresholdLimits ThresholdLimits
+}
 
 // Debug contains debug-related configuration.
 type Debug struct {
@@ -84,6 +87,20 @@ type OpenAI struct {
 // Token must be provided for bot authentication.
 type Discord struct {
 	Token string
+}
+
+// BatchSizes configures how many items to process in each batch.
+type BatchSizes struct {
+	FriendUsers int `mapstructure:"friend_users"`
+	PurgeUsers  int `mapstructure:"purge_users"`
+	GroupUsers  int `mapstructure:"group_users"`
+	PurgeGroups int `mapstructure:"purge_groups"`
+}
+
+// ThresholdLimits configures various thresholds for worker operations.
+type ThresholdLimits struct {
+	FlaggedUsers       int `mapstructure:"flagged_users"`
+	MinFlaggedForGroup int `mapstructure:"min_flagged_for_group"`
 }
 
 // LoadConfig loads the configuration from the specified file.

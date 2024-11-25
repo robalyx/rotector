@@ -11,6 +11,7 @@ import (
 	"github.com/redis/rueidis"
 	"github.com/rotector/rotector/internal/common/client/checker"
 	"github.com/rotector/rotector/internal/common/client/fetcher"
+	"github.com/rotector/rotector/internal/common/config"
 	"github.com/rotector/rotector/internal/common/progress"
 	"github.com/rotector/rotector/internal/common/storage/database"
 	"github.com/rotector/rotector/internal/worker/core"
@@ -20,29 +21,41 @@ import (
 // GroupWorker processes group member lists by checking each member's
 // status and analyzing their profiles for inappropriate content.
 type GroupWorker struct {
-	db          *database.Client
-	roAPI       *api.API
-	bar         *progress.Bar
-	userFetcher *fetcher.UserFetcher
-	userChecker *checker.UserChecker
-	reporter    *core.StatusReporter
-	logger      *zap.Logger
+	db               *database.Client
+	roAPI            *api.API
+	bar              *progress.Bar
+	userFetcher      *fetcher.UserFetcher
+	userChecker      *checker.UserChecker
+	reporter         *core.StatusReporter
+	logger           *zap.Logger
+	batchSize        int
+	flaggedThreshold int
 }
 
 // NewGroupWorker creates a GroupWorker.
-func NewGroupWorker(db *database.Client, openaiClient *openai.Client, roAPI *api.API, redisClient rueidis.Client, bar *progress.Bar, logger *zap.Logger) *GroupWorker {
+func NewGroupWorker(
+	db *database.Client,
+	openaiClient *openai.Client,
+	roAPI *api.API,
+	redisClient rueidis.Client,
+	bar *progress.Bar,
+	cfg *config.WorkerConfig,
+	logger *zap.Logger,
+) *GroupWorker {
 	userFetcher := fetcher.NewUserFetcher(roAPI, logger)
 	userChecker := checker.NewUserChecker(db, bar, roAPI, openaiClient, userFetcher, logger)
 	reporter := core.NewStatusReporter(redisClient, "ai", "member", logger)
 
 	return &GroupWorker{
-		db:          db,
-		roAPI:       roAPI,
-		bar:         bar,
-		userFetcher: userFetcher,
-		userChecker: userChecker,
-		reporter:    reporter,
-		logger:      logger,
+		db:               db,
+		roAPI:            roAPI,
+		bar:              bar,
+		userFetcher:      userFetcher,
+		userChecker:      userChecker,
+		reporter:         reporter,
+		logger:           logger,
+		batchSize:        cfg.BatchSizes.GroupUsers,
+		flaggedThreshold: cfg.ThresholdLimits.FlaggedUsers,
 	}
 }
 
@@ -73,12 +86,12 @@ func (g *GroupWorker) Start() {
 		}
 
 		// If above threshold, pause processing
-		if flaggedCount >= core.FlaggedUsersThreshold {
-			g.bar.SetStepMessage(fmt.Sprintf("Paused - %d flagged users exceeds threshold of %d", flaggedCount, core.FlaggedUsersThreshold), 0)
+		if flaggedCount >= g.flaggedThreshold {
+			g.bar.SetStepMessage(fmt.Sprintf("Paused - %d flagged users exceeds threshold of %d", flaggedCount, g.flaggedThreshold), 0)
 			g.reporter.UpdateStatus(fmt.Sprintf("Paused - %d flagged users exceeds threshold", flaggedCount), 0)
 			g.logger.Info("Pausing worker - flagged users threshold exceeded",
 				zap.Int("flaggedCount", flaggedCount),
-				zap.Int("threshold", core.FlaggedUsersThreshold))
+				zap.Int("threshold", g.flaggedThreshold))
 			time.Sleep(5 * time.Minute)
 			continue
 		}
@@ -108,7 +121,7 @@ func (g *GroupWorker) Start() {
 		// Step 3: Fetch user info (70%)
 		g.bar.SetStepMessage("Fetching user info", 70)
 		g.reporter.UpdateStatus("Fetching user info", 70)
-		userInfos := g.userFetcher.FetchInfos(userIDs[:core.GroupUsersToProcess])
+		userInfos := g.userFetcher.FetchInfos(userIDs[:g.batchSize])
 
 		// Step 4: Process users (90%)
 		g.bar.SetStepMessage("Processing users", 90)
@@ -116,7 +129,7 @@ func (g *GroupWorker) Start() {
 		failedValidationIDs := g.userChecker.ProcessUsers(userInfos)
 
 		// Step 5: Prepare for next batch
-		oldUserIDs = userIDs[core.GroupUsersToProcess:]
+		oldUserIDs = userIDs[g.batchSize:]
 
 		// Add failed validation IDs back to the queue for retry
 		if len(failedValidationIDs) > 0 {
@@ -142,7 +155,7 @@ func (g *GroupWorker) processGroup(groupID uint64, userIDs []uint64) ([]uint64, 
 	g.logger.Info("Processing group", zap.Uint64("groupID", groupID))
 
 	cursor := ""
-	for len(userIDs) < core.GroupUsersToProcess {
+	for len(userIDs) < g.batchSize {
 		// Fetch group users with cursor pagination
 		builder := groups.NewGroupUsersBuilder(groupID).WithLimit(100).WithCursor(cursor)
 		groupUsers, err := g.roAPI.Groups().GetGroupUsers(context.Background(), builder.Build())

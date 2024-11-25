@@ -168,11 +168,11 @@ func runWorkers(workerType, subType string, count int) {
 			var w interface{ Start() }
 			switch {
 			case workerType == AIWorker && subType == AIWorkerTypeMember:
-				w = ai.NewGroupWorker(app.DB, app.OpenAIClient, app.RoAPI, app.StatusClient, bar, workerLogger)
+				w = ai.NewGroupWorker(app.DB, app.OpenAIClient, app.RoAPI, app.StatusClient, bar, &app.Config.Worker, workerLogger)
 			case workerType == AIWorker && subType == AIWorkerTypeFriend:
-				w = ai.NewFriendWorker(app.DB, app.OpenAIClient, app.RoAPI, app.StatusClient, bar, workerLogger)
+				w = ai.NewFriendWorker(app.DB, app.OpenAIClient, app.RoAPI, app.StatusClient, bar, &app.Config.Worker, workerLogger)
 			case workerType == PurgeWorker:
-				w = purge.New(app.DB, app.RoAPI, app.StatusClient, bar, workerLogger)
+				w = purge.New(app.DB, app.RoAPI, app.StatusClient, bar, &app.Config.Worker, workerLogger)
 			case workerType == StatsWorker:
 				w = stats.New(app.DB, app.StatusClient, bar, workerLogger)
 			case workerType == QueueWorker:

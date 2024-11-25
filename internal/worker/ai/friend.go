@@ -10,6 +10,7 @@ import (
 	"github.com/redis/rueidis"
 	"github.com/rotector/rotector/internal/common/client/checker"
 	"github.com/rotector/rotector/internal/common/client/fetcher"
+	"github.com/rotector/rotector/internal/common/config"
 	"github.com/rotector/rotector/internal/common/progress"
 	"github.com/rotector/rotector/internal/common/storage/database"
 	"github.com/rotector/rotector/internal/worker/core"
@@ -19,29 +20,41 @@ import (
 // FriendWorker processes user friend networks by checking each friend's
 // status and analyzing their profiles for inappropriate content.
 type FriendWorker struct {
-	db          *database.Client
-	roAPI       *api.API
-	bar         *progress.Bar
-	userFetcher *fetcher.UserFetcher
-	userChecker *checker.UserChecker
-	reporter    *core.StatusReporter
-	logger      *zap.Logger
+	db               *database.Client
+	roAPI            *api.API
+	bar              *progress.Bar
+	userFetcher      *fetcher.UserFetcher
+	userChecker      *checker.UserChecker
+	reporter         *core.StatusReporter
+	logger           *zap.Logger
+	batchSize        int
+	flaggedThreshold int
 }
 
 // NewFriendWorker creates a FriendWorker.
-func NewFriendWorker(db *database.Client, openaiClient *openai.Client, roAPI *api.API, redisClient rueidis.Client, bar *progress.Bar, logger *zap.Logger) *FriendWorker {
+func NewFriendWorker(
+	db *database.Client,
+	openaiClient *openai.Client,
+	roAPI *api.API,
+	redisClient rueidis.Client,
+	bar *progress.Bar,
+	cfg *config.WorkerConfig,
+	logger *zap.Logger,
+) *FriendWorker {
 	userFetcher := fetcher.NewUserFetcher(roAPI, logger)
 	userChecker := checker.NewUserChecker(db, bar, roAPI, openaiClient, userFetcher, logger)
 	reporter := core.NewStatusReporter(redisClient, "ai", "friend", logger)
 
 	return &FriendWorker{
-		db:          db,
-		roAPI:       roAPI,
-		bar:         bar,
-		userFetcher: userFetcher,
-		userChecker: userChecker,
-		reporter:    reporter,
-		logger:      logger,
+		db:               db,
+		roAPI:            roAPI,
+		bar:              bar,
+		userFetcher:      userFetcher,
+		userChecker:      userChecker,
+		reporter:         reporter,
+		logger:           logger,
+		batchSize:        cfg.BatchSizes.FriendUsers,
+		flaggedThreshold: cfg.ThresholdLimits.FlaggedUsers,
 	}
 }
 
@@ -72,12 +85,12 @@ func (f *FriendWorker) Start() {
 		}
 
 		// If above threshold, pause processing
-		if flaggedCount >= core.FlaggedUsersThreshold {
-			f.bar.SetStepMessage(fmt.Sprintf("Paused - %d flagged users exceeds threshold of %d", flaggedCount, core.FlaggedUsersThreshold), 0)
+		if flaggedCount >= f.flaggedThreshold {
+			f.bar.SetStepMessage(fmt.Sprintf("Paused - %d flagged users exceeds threshold of %d", flaggedCount, f.flaggedThreshold), 0)
 			f.reporter.UpdateStatus(fmt.Sprintf("Paused - %d flagged users exceeds threshold", flaggedCount), 0)
 			f.logger.Info("Pausing worker - flagged users threshold exceeded",
 				zap.Int("flaggedCount", flaggedCount),
-				zap.Int("threshold", core.FlaggedUsersThreshold))
+				zap.Int("threshold", f.flaggedThreshold))
 			time.Sleep(5 * time.Minute)
 			continue
 		}
@@ -96,7 +109,7 @@ func (f *FriendWorker) Start() {
 		// Step 2: Fetch user info (40%)
 		f.bar.SetStepMessage("Fetching user info", 40)
 		f.reporter.UpdateStatus("Fetching user info", 40)
-		userInfos := f.userFetcher.FetchInfos(friendIDs[:core.FriendUsersToProcess])
+		userInfos := f.userFetcher.FetchInfos(friendIDs[:f.batchSize])
 
 		// Step 3: Process users (60%)
 		f.bar.SetStepMessage("Processing users", 60)
@@ -104,7 +117,7 @@ func (f *FriendWorker) Start() {
 		failedValidationIDs := f.userChecker.ProcessUsers(userInfos)
 
 		// Step 4: Prepare for next batch
-		oldFriendIDs = friendIDs[core.FriendUsersToProcess:]
+		oldFriendIDs = friendIDs[f.batchSize:]
 
 		// Add failed validation IDs back to the queue for retry
 		if len(failedValidationIDs) > 0 {
@@ -128,7 +141,7 @@ func (f *FriendWorker) Start() {
 // 3. Filtering out already processed users
 // 4. Collecting enough IDs to fill a batch.
 func (f *FriendWorker) processFriendsBatch(friendIDs []uint64) ([]uint64, error) {
-	for len(friendIDs) < core.FriendUsersToProcess {
+	for len(friendIDs) < f.batchSize {
 		// Get the next confirmed user
 		user, err := f.db.Users().GetNextConfirmedUser(context.Background())
 		if err != nil {
@@ -174,7 +187,7 @@ func (f *FriendWorker) processFriendsBatch(friendIDs []uint64) ([]uint64, error)
 			zap.Uint64("userID", user.ID))
 
 		// If we have enough friends, break out of the loop
-		if len(friendIDs) >= core.FriendUsersToProcess {
+		if len(friendIDs) >= f.batchSize {
 			break
 		}
 	}

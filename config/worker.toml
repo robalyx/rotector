@@ -1,1 +1,9 @@
-[worker]
+[worker.batch_sizes]
+friend_users = 100
+group_users = 100
+purge_users = 200
+purge_groups = 100
+
+[worker.threshold_limits]
+flagged_users = 1000
+min_flagged_for_group = 50

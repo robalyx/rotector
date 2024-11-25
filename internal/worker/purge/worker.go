@@ -9,6 +9,7 @@ import (
 	"github.com/jaxron/roapi.go/pkg/api"
 	"github.com/redis/rueidis"
 	"github.com/rotector/rotector/internal/common/client/fetcher"
+	"github.com/rotector/rotector/internal/common/config"
 	"github.com/rotector/rotector/internal/common/progress"
 	"github.com/rotector/rotector/internal/common/storage/database"
 	"github.com/rotector/rotector/internal/common/storage/database/models"
@@ -26,10 +27,20 @@ type Worker struct {
 	thumbnailFetcher *fetcher.ThumbnailFetcher
 	reporter         *core.StatusReporter
 	logger           *zap.Logger
+	userBatchSize    int
+	groupBatchSize   int
+	minFlaggedUsers  int
 }
 
 // New creates a new purge worker.
-func New(db *database.Client, roAPI *api.API, redisClient rueidis.Client, bar *progress.Bar, logger *zap.Logger) *Worker {
+func New(
+	db *database.Client,
+	roAPI *api.API,
+	redisClient rueidis.Client,
+	bar *progress.Bar,
+	cfg *config.WorkerConfig,
+	logger *zap.Logger,
+) *Worker {
 	userFetcher := fetcher.NewUserFetcher(roAPI, logger)
 	groupFetcher := fetcher.NewGroupFetcher(roAPI, logger)
 	thumbnailFetcher := fetcher.NewThumbnailFetcher(roAPI, logger)
@@ -44,6 +55,9 @@ func New(db *database.Client, roAPI *api.API, redisClient rueidis.Client, bar *p
 		thumbnailFetcher: thumbnailFetcher,
 		reporter:         reporter,
 		logger:           logger,
+		userBatchSize:    cfg.BatchSizes.PurgeUsers,
+		groupBatchSize:   cfg.BatchSizes.PurgeGroups,
+		minFlaggedUsers:  cfg.ThresholdLimits.MinFlaggedForGroup,
 	}
 }
 
@@ -89,7 +103,7 @@ func (w *Worker) processBannedUsers() {
 	w.reporter.UpdateStatus("Processing banned users", 25)
 
 	// Get users to check
-	users, err := w.db.Users().GetUsersToCheck(context.Background(), core.PurgeUsersToProcess)
+	users, err := w.db.Users().GetUsersToCheck(context.Background(), w.userBatchSize)
 	if err != nil {
 		w.logger.Error("Error getting users to check", zap.Error(err))
 		w.reporter.SetHealthy(false)
@@ -127,7 +141,7 @@ func (w *Worker) processLockedGroups() {
 	w.reporter.UpdateStatus("Processing locked groups", 35)
 
 	// Get groups to check
-	groups, err := w.db.Groups().GetGroupsToCheck(context.Background(), core.PurgeGroupsToProcess)
+	groups, err := w.db.Groups().GetGroupsToCheck(context.Background(), w.groupBatchSize)
 	if err != nil {
 		w.logger.Error("Error getting groups to check", zap.Error(err))
 		w.reporter.SetHealthy(false)
@@ -231,8 +245,7 @@ func (w *Worker) processGroupTracking() {
 // flagged users. Groups exceeding the threshold are flagged with a confidence
 // score based on the ratio of flagged members.
 func (w *Worker) checkGroupTrackings() error {
-	// Find groups with enough flagged members
-	groupsWithUsers, err := w.db.Tracking().GetAndRemoveQualifiedGroupTrackings(context.Background(), core.MinFlaggedGroupUsersForFlag)
+	groupsWithUsers, err := w.db.Tracking().GetAndRemoveQualifiedGroupTrackings(context.Background(), w.minFlaggedUsers)
 	if err != nil {
 		return err
 	}
@@ -261,8 +274,8 @@ func (w *Worker) checkGroupTrackings() error {
 				Owner:        groupInfo.Owner.UserID,
 				Shout:        groupInfo.Shout,
 				MemberCount:  groupInfo.MemberCount,
-				Reason:       fmt.Sprintf("Group has at least %d flagged users", core.MinFlaggedGroupUsersForFlag),
-				Confidence:   math.Min(float64(len(flaggedUsers))/(float64(core.MinFlaggedGroupUsersForFlag)*10), 1.0),
+				Reason:       fmt.Sprintf("Group has at least %d flagged users", w.minFlaggedUsers),
+				Confidence:   math.Min(float64(len(flaggedUsers))/(float64(w.minFlaggedUsers)*10), 1.0),
 				LastUpdated:  time.Now(),
 				FlaggedUsers: flaggedUsers,
 			},
