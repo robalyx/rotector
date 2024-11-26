@@ -194,11 +194,18 @@ func (b *Bot) handleComponentInteraction(event *events.ComponentInteractionCreat
 	go func() {
 		// WORKAROUND:
 		// Special handling for modal interactions to prevent response conflicts.
-		// If we are opening a modal and we try to defer, there will be an error that the interaction is already responded to.
+		// If we are opening a modal and we try to defer, there will be an error
+		// that the interaction is already responded to.
 		// Please open a PR if you have a better solution or a fix for this.
 		isModal := false
+
+		// Check conditions for modal interaction
 		stringSelectData, ok := event.Data.(discord.StringSelectMenuInteractionData)
-		if ok && strings.HasSuffix(stringSelectData.Values[0], "exception") {
+		if ok && strings.HasSuffix(stringSelectData.Values[0], constants.ModalOpenSuffix) {
+			isModal = true
+		}
+
+		if strings.HasSuffix(event.Data.CustomID(), constants.ModalOpenSuffix) {
 			isModal = true
 		}
 

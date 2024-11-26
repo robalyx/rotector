@@ -11,6 +11,7 @@ const (
 	ActionSelectMenuCustomID = "action"
 	RefreshButtonCustomID    = "refresh"
 	BackButtonCustomID       = "back"
+	ModalOpenSuffix          = "_exception"
 	DefaultEmbedColor        = 0x312D2B
 	StreamerModeEmbedColor   = 0x3E3769
 )
@@ -32,8 +33,8 @@ const (
 	RecheckReasonModalCustomID     = "recheck_reason_modal"
 	RecheckReasonInputCustomID     = "recheck_reason"
 
-	ConfirmWithReasonButtonCustomID = "confirm_with_reason_exception"
-	RecheckButtonCustomID           = "recheck_exception"
+	ConfirmWithReasonButtonCustomID = "confirm_with_reason" + ModalOpenSuffix
+	RecheckButtonCustomID           = "recheck" + ModalOpenSuffix
 	ViewUserLogsButtonCustomID      = "view_user_logs"
 	OpenOutfitsMenuButtonCustomID   = "open_outfits_menu"
 	OpenFriendsMenuButtonCustomID   = "open_friends_menu"
@@ -81,8 +82,8 @@ const (
 const (
 	BotSettingPrefix   = "bot"
 	BotSettingSelectID = "bot_setting_select"
-	ReviewerIDsOption  = "reviewer_ids_exception"
-	AdminIDsOption     = "admin_ids_exception"
+	ReviewerIDsOption  = "reviewer_ids"
+	AdminIDsOption     = "admin_ids"
 )
 
 // Logs Menu.
@@ -90,10 +91,10 @@ const (
 	LogsPerPage                         = 10
 	LogActivityBrowserCustomID          = "log_activity_browser"
 	LogsQueryInputCustomID              = "query_input"
-	LogsQueryUserIDOption               = "query_user_id_exception"
-	LogsQueryGroupIDOption              = "query_group_id_exception"
-	LogsQueryReviewerIDOption           = "query_reviewer_id_exception"
-	LogsQueryDateRangeOption            = "query_date_range_exception"
+	LogsQueryUserIDOption               = "query_user_id" + ModalOpenSuffix
+	LogsQueryGroupIDOption              = "query_group_id" + ModalOpenSuffix
+	LogsQueryReviewerIDOption           = "query_reviewer_id" + ModalOpenSuffix
+	LogsQueryDateRangeOption            = "query_date_range" + ModalOpenSuffix
 	LogsQueryActivityTypeFilterCustomID = "activity_type_filter"
 	ClearFiltersButtonCustomID          = "clear_filters"
 )
@@ -101,9 +102,9 @@ const (
 // Queue Menu.
 const (
 	QueueManagerCustomID        = "queue_manager"
-	QueueHighPriorityCustomID   = "queue_high_priority_exception"
-	QueueNormalPriorityCustomID = "queue_normal_priority_exception"
-	QueueLowPriorityCustomID    = "queue_low_priority_exception"
+	QueueHighPriorityCustomID   = "queue_high_priority" + ModalOpenSuffix
+	QueueNormalPriorityCustomID = "queue_normal_priority" + ModalOpenSuffix
+	QueueLowPriorityCustomID    = "queue_low_priority" + ModalOpenSuffix
 	AddToQueueModalCustomID     = "add_to_queue_modal"
 	UserIDInputCustomID         = "user_id_input"
 	ReasonInputCustomID         = "reason_input"
@@ -136,6 +137,7 @@ const (
 
 	SessionKeySettingName  = "settingName"
 	SessionKeySettingType  = "settingType"
+	SessionKeySetting      = "setting"
 	SessionKeyUserSettings = "userSettings"
 	SessionKeyBotSettings  = "botSettings"
 	SessionKeyCurrentValue = "currentValue"
@@ -177,8 +179,8 @@ const (
 	GroupRecheckReasonModalCustomID     = "group_recheck_reason_modal"
 	GroupRecheckReasonInputCustomID     = "group_recheck_reason"
 
-	GroupConfirmWithReasonButtonCustomID = "group_confirm_with_reason_exception"
-	GroupRecheckButtonCustomID           = "group_recheck_exception"
+	GroupConfirmWithReasonButtonCustomID = "group_confirm_with_reason" + ModalOpenSuffix
+	GroupRecheckButtonCustomID           = "group_recheck" + ModalOpenSuffix
 	GroupViewLogsButtonCustomID          = "group_view_logs"
 
 	GroupConfirmButtonCustomID = "group_confirm"

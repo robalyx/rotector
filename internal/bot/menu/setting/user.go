@@ -41,21 +41,8 @@ func (u *UserMenu) ShowMenu(event interfaces.CommonEvent, s *session.Session) {
 // handleUserSettingSelection processes select menu interactions by determining
 // which setting was chosen and showing the appropriate change menu.
 func (u *UserMenu) handleUserSettingSelection(event *events.ComponentInteractionCreate, s *session.Session, _ string, option string) {
-	// Map option IDs to human-readable names
-	var settingName string
-	switch option {
-	case constants.StreamerModeOption:
-		settingName = "Streamer Mode"
-	case constants.UserDefaultSortOption:
-		settingName = "User Default Sort"
-	case constants.GroupDefaultSortOption:
-		settingName = "Group Default Sort"
-	case constants.ReviewModeOption:
-		settingName = "Review Mode"
-	}
-
 	// Show the change menu for the selected setting
-	u.handler.settingMenu.ShowMenu(event, s, settingName, constants.UserSettingPrefix, option)
+	u.handler.settingMenu.ShowMenu(event, s, constants.UserSettingPrefix, option)
 }
 
 // handleUserSettingButton processes button interactions.

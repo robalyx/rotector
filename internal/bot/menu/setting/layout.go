@@ -2,6 +2,7 @@ package setting
 
 import (
 	"context"
+	"fmt"
 	"strconv"
 	"strings"
 
@@ -11,29 +12,29 @@ import (
 	"github.com/rotector/rotector/internal/bot/constants"
 	"github.com/rotector/rotector/internal/bot/core/pagination"
 	"github.com/rotector/rotector/internal/bot/core/session"
+	"github.com/rotector/rotector/internal/bot/interfaces"
 	"github.com/rotector/rotector/internal/common/storage/database/models"
 	"go.uber.org/zap"
 )
 
 // Menu handles the interface for changing individual settings.
 type Menu struct {
-	handler *Handler
-	page    *pagination.Page
+	handler  *Handler
+	page     *pagination.Page
+	registry *models.SettingRegistry
 }
 
 // NewMenu creates a Menu and sets up its page with message builders and
 // interaction handlers for changing settings.
 func NewMenu(h *Handler) *Menu {
-	m := &Menu{handler: h}
+	m := &Menu{
+		handler:  h,
+		registry: models.NewSettingRegistry(),
+	}
 	m.page = &pagination.Page{
 		Name: "Setting Change Menu",
 		Message: func(s *session.Session) *discord.MessageUpdateBuilder {
-			var options []discord.StringSelectMenuOption
-			s.GetInterface(constants.SessionKeyOptions, &options)
-
-			return setting.NewUpdateBuilder(s).
-				AddOptions(options...).
-				Build()
+			return setting.NewUpdateBuilder(s).Build()
 		},
 		SelectHandlerFunc: m.handleSettingChange,
 		ButtonHandlerFunc: m.handleSettingButton,
@@ -42,231 +43,221 @@ func NewMenu(h *Handler) *Menu {
 	return m
 }
 
-// ShowMenu prepares and displays the settings change interface by loading
-// the current value and available options for the selected setting.
-func (m *Menu) ShowMenu(event *events.ComponentInteractionCreate, s *session.Session, settingName, settingType, customID string) {
-	// Store setting information in session for the message builder
-	s.Set(constants.SessionKeySettingName, settingName)
-	s.Set(constants.SessionKeySettingType, settingType)
-	s.Set(constants.SessionKeyCustomID, customID)
-
-	// Load current value and options based on setting type
-	var currentValue string
-	var options []discord.StringSelectMenuOption
-
-	switch customID {
-	case constants.StreamerModeOption:
-		// Load user settings for streamer mode toggle
-		var settings *models.UserSetting
-		s.GetInterface(constants.SessionKeyUserSettings, &settings)
-
-		currentValue = strconv.FormatBool(settings.StreamerMode)
-		options = []discord.StringSelectMenuOption{
-			discord.NewStringSelectMenuOption("Enable", "true"),
-			discord.NewStringSelectMenuOption("Disable", "false"),
-		}
-
-	case constants.UserDefaultSortOption:
-		// Load user settings for user sort preference
-		var settings *models.UserSetting
-		s.GetInterface(constants.SessionKeyUserSettings, &settings)
-
-		currentValue = settings.UserDefaultSort
-		options = []discord.StringSelectMenuOption{
-			discord.NewStringSelectMenuOption("Random", models.SortByRandom),
-			discord.NewStringSelectMenuOption("Confidence", models.SortByConfidence),
-			discord.NewStringSelectMenuOption("Last Updated", models.SortByLastUpdated),
-			discord.NewStringSelectMenuOption("Bad Reputation", models.SortByReputation),
-		}
-
-	case constants.GroupDefaultSortOption:
-		// Load user settings for group sort preference
-		var settings *models.UserSetting
-		s.GetInterface(constants.SessionKeyUserSettings, &settings)
-
-		currentValue = settings.GroupDefaultSort
-		options = []discord.StringSelectMenuOption{
-			discord.NewStringSelectMenuOption("Random", models.SortByRandom),
-			discord.NewStringSelectMenuOption("Confidence", models.SortByConfidence),
-			discord.NewStringSelectMenuOption("Flagged Users", models.SortByFlaggedUsers),
-			discord.NewStringSelectMenuOption("Bad Reputation", models.SortByReputation),
-		}
-
-	case constants.ReviewModeOption:
-		// Load user settings for review mode selection
-		var settings *models.UserSetting
-		s.GetInterface(constants.SessionKeyUserSettings, &settings)
-
-		currentValue = models.FormatReviewMode(settings.ReviewMode)
-		options = []discord.StringSelectMenuOption{
-			discord.NewStringSelectMenuOption(
-				models.FormatReviewMode(models.TrainingReviewMode),
-				models.TrainingReviewMode,
-			).WithDescription("Practice reviewing without affecting the system"),
-			discord.NewStringSelectMenuOption(
-				models.FormatReviewMode(models.StandardReviewMode),
-				models.StandardReviewMode,
-			).WithDescription("Normal review mode for actual moderation"),
-		}
-
-	case constants.ReviewerIDsOption, constants.AdminIDsOption:
-		// Create modal for ID input
-		modal := discord.NewModalCreateBuilder().
-			SetCustomID(customID).
-			SetTitle("Toggle " + settingName).
-			AddActionRow(
-				discord.NewTextInput(
-					"id_input",
-					discord.TextInputStyleShort,
-					"User ID",
-				).WithRequired(true).
-					WithPlaceholder("Enter the user ID to toggle..."),
-			).
-			Build()
-
-		// Show modal to user
-		if err := event.Modal(modal); err != nil {
-			m.handler.logger.Error("Failed to create modal", zap.Error(err))
-			m.handler.paginationManager.RespondWithError(event, "Failed to open the ID input form. Please try again.")
-			return
-		}
-
-		m.handler.paginationManager.UpdatePage(s, m.page)
-		return
+// ShowMenu prepares and displays the settings change interface.
+func (m *Menu) ShowMenu(event interfaces.CommonEvent, s *session.Session, settingType, settingKey string) {
+	// Get the setting definition
+	var setting models.Setting
+	if strings.HasPrefix(settingType, constants.UserSettingPrefix) {
+		setting = m.registry.UserSettings[settingKey]
+	} else {
+		setting = m.registry.BotSettings[settingKey]
 	}
 
-	// Store values in session for the message builder
+	// Store setting information in session
+	s.Set(constants.SessionKeySettingName, setting.Name)
+	s.Set(constants.SessionKeySettingType, settingType)
+	s.Set(constants.SessionKeyCustomID, settingKey)
+	s.Set(constants.SessionKeySetting, setting)
+
+	// Get current value based on setting type
+	currentValue := m.getCurrentValue(s, setting, settingType)
 	s.Set(constants.SessionKeyCurrentValue, currentValue)
-	s.Set(constants.SessionKeyOptions, options)
 
 	m.handler.paginationManager.NavigateTo(event, s, m.page, "")
 }
 
-// handleSettingChange processes select menu interactions by saving the new value
-// and refreshing the settings display.
-func (m *Menu) handleSettingChange(event *events.ComponentInteractionCreate, s *session.Session, customID string, option string) {
-	settingName := s.GetString(constants.SessionKeySettingName)
-	settingType := s.GetString(constants.SessionKeySettingType)
+// getCurrentValue gets the current value of a setting.
+func (m *Menu) getCurrentValue(s *session.Session, setting models.Setting, settingType string) string {
+	// Handle user settings
+	if strings.HasPrefix(settingType, constants.UserSettingPrefix) {
+		var userSettings *models.UserSetting
+		s.GetInterface(constants.SessionKeyUserSettings, &userSettings)
 
-	m.saveSetting(s, settingType, customID, option)
-	m.ShowMenu(event, s, settingName, settingType, customID)
+		switch setting.Key {
+		case constants.StreamerModeOption:
+			return strconv.FormatBool(userSettings.StreamerMode)
+		case constants.UserDefaultSortOption:
+			return userSettings.UserDefaultSort
+		case constants.GroupDefaultSortOption:
+			return userSettings.GroupDefaultSort
+		case constants.ReviewModeOption:
+			return models.FormatReviewMode(userSettings.ReviewMode)
+		}
+	}
+
+	// Handle bot settings
+	if strings.HasPrefix(settingType, constants.BotSettingPrefix) {
+		var botSettings *models.BotSetting
+		s.GetInterface(constants.SessionKeyBotSettings, &botSettings)
+
+		switch setting.Key {
+		case constants.ReviewerIDsOption:
+			return fmt.Sprintf("%v", botSettings.ReviewerIDs)
+		case constants.AdminIDsOption:
+			return fmt.Sprintf("%v", botSettings.AdminIDs)
+		}
+	}
+
+	return fmt.Sprintf("%v", setting.DefaultValue)
+}
+
+// handleSettingChange processes setting value changes.
+func (m *Menu) handleSettingChange(event *events.ComponentInteractionCreate, s *session.Session, _ string, option string) {
+	settingType := s.GetString(constants.SessionKeySettingType)
+	settingKey := s.GetString(constants.SessionKeyCustomID)
+
+	var setting models.Setting
+	if strings.HasPrefix(settingType, constants.UserSettingPrefix) {
+		setting = m.registry.UserSettings[settingKey]
+	} else {
+		setting = m.registry.BotSettings[settingKey]
+	}
+
+	// Validate the new value
+	if err := m.validateSettingValue(s, setting, option); err != nil {
+		m.handler.paginationManager.RespondWithError(event, err.Error())
+		return
+	}
+
+	// Update the setting
+	if err := m.updateSetting(s, setting, option); err != nil {
+		m.handler.paginationManager.RespondWithError(event, "Failed to update setting")
+		return
+	}
+
+	m.ShowMenu(event, s, settingType, settingKey)
+}
+
+// validateSettingValue validates a setting value.
+func (m *Menu) validateSettingValue(s *session.Session, setting models.Setting, value string) error {
+	userID := s.GetUint64(constants.SessionKeyUserID)
+
+	for _, validator := range setting.Validators {
+		if err := validator(value, userID); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// updateSetting updates a setting value in the database.
+func (m *Menu) updateSetting(s *session.Session, setting models.Setting, value string) error {
+	var userSettings *models.UserSetting
+	s.GetInterface(constants.SessionKeyUserSettings, &userSettings)
+
+	switch setting.Key {
+	case constants.StreamerModeOption:
+		boolVal, _ := strconv.ParseBool(value)
+		userSettings.StreamerMode = boolVal
+	case constants.UserDefaultSortOption:
+		userSettings.UserDefaultSort = value
+	case constants.GroupDefaultSortOption:
+		userSettings.GroupDefaultSort = value
+	case constants.ReviewModeOption:
+		userSettings.ReviewMode = value
+	}
+
+	// Save to database
+	err := m.handler.db.Settings().SaveUserSettings(context.Background(), userSettings)
+	if err != nil {
+		return err
+	}
+
+	// Update session
+	s.Set(constants.SessionKeyUserSettings, userSettings)
+	return nil
 }
 
 // handleSettingButton processes button interactions.
 func (m *Menu) handleSettingButton(event *events.ComponentInteractionCreate, s *session.Session, customID string) {
+	// Handle back button
 	split := strings.Split(customID, "_")
 	if len(split) > 1 && split[1] == constants.BackButtonCustomID {
-		// Return to the appropriate settings menu based on setting type
 		settingType := split[0]
 		if strings.HasPrefix(settingType, constants.UserSettingPrefix) {
 			m.handler.userMenu.ShowMenu(event, s)
 		} else if strings.HasPrefix(settingType, constants.BotSettingPrefix) {
 			m.handler.botMenu.ShowMenu(event, s)
 		}
+		return
+	}
+
+	// Get the current setting
+	var setting models.Setting
+	s.GetInterface(constants.SessionKeySetting, &setting)
+
+	// Handle ID setting button click
+	if setting.Type == models.SettingTypeID {
+		textInput := discord.NewTextInput("id_input", discord.TextInputStyleShort, "User ID").
+			WithRequired(true).
+			WithPlaceholder("Enter the user ID to toggle...")
+
+		modal := discord.NewModalCreateBuilder().
+			SetCustomID(setting.Key).
+			SetTitle("Toggle " + setting.Name).
+			AddActionRow(textInput)
+
+		// Show modal to user
+		if err := event.Modal(modal.Build()); err != nil {
+			m.handler.logger.Error("Failed to open the ID input form", zap.Error(err))
+			m.handler.paginationManager.RespondWithError(event, "Failed to open the ID input form. Please try again.")
+		}
 	}
 }
 
-// handleSettingModal processes modal interactions.
+// handleSettingModal processes modal submissions.
 func (m *Menu) handleSettingModal(event *events.ModalSubmitInteractionCreate, s *session.Session) {
-	customID := event.Data.CustomID
-	switch customID {
-	case constants.ReviewerIDsOption, constants.AdminIDsOption:
-		// Get ID input from modal
-		idStr := event.Data.Text("id_input")
-		if _, err := strconv.ParseUint(idStr, 10, 64); err != nil {
-			m.handler.logger.Error("Failed to parse ID input", zap.Error(err))
-			m.handler.botMenu.ShowMenu(event, s)
-			return
-		}
+	settingType := s.GetString(constants.SessionKeySettingType)
+	settingKey := s.GetString(constants.SessionKeyCustomID)
 
-		// Save the setting
-		settingType := s.GetString(constants.SessionKeySettingType)
-		m.saveSetting(s, settingType, customID, idStr)
-
-		// Refresh the bot settings menu
-		m.handler.botMenu.ShowMenu(event, s)
+	var setting models.Setting
+	if strings.HasPrefix(settingType, constants.UserSettingPrefix) {
+		setting = m.registry.UserSettings[settingKey]
+	} else {
+		setting = m.registry.BotSettings[settingKey]
 	}
-}
 
-// saveSetting routes the setting change to the appropriate save function.
-func (m *Menu) saveSetting(s *session.Session, settingType, customID, option string) {
-	switch settingType {
-	case constants.UserSettingPrefix:
-		m.saveUserSetting(s, customID, option)
-	case constants.BotSettingPrefix:
-		m.saveBotSetting(s, customID, option)
-	default:
-		m.handler.logger.Warn("unknown setting type", zap.String("settingType", settingType))
-	}
-}
+	// Get ID input from modal
+	idStr := event.Data.Text("id_input")
 
-// saveUserSetting updates user-specific settings in both the database and session.
-func (m *Menu) saveUserSetting(s *session.Session, customID, option string) {
-	var settings *models.UserSetting
-	s.GetInterface(constants.SessionKeyUserSettings, &settings)
-
-	switch customID {
-	case constants.StreamerModeOption:
-		// Parse and save streamer mode toggle
-		var err error
-		if settings.StreamerMode, err = strconv.ParseBool(option); err != nil {
-			m.handler.logger.Error("Failed to parse streamer mode", zap.Error(err))
-			return
-		}
-
-	case constants.UserDefaultSortOption:
-		settings.UserDefaultSort = option
-
-	case constants.GroupDefaultSortOption:
-		settings.GroupDefaultSort = option
-
-	case constants.ReviewModeOption:
-		settings.ReviewMode = option
-
-	default:
-		m.handler.logger.Warn("Unknown user setting", zap.String("customID", customID))
+	// Validate the input using the setting's validators
+	if err := m.validateSettingValue(s, setting, idStr); err != nil {
+		m.handler.paginationManager.RespondWithError(event, err.Error())
 		return
 	}
 
-	// Save to database and update session
-	if err := m.handler.db.Settings().SaveUserSettings(context.Background(), settings); err != nil {
-		m.handler.logger.Error("Failed to save user settings", zap.Error(err))
-		return
-	}
-
-	s.Set(constants.SessionKeyUserSettings, settings)
-}
-
-// saveBotSetting updates bot-wide settings in the models.
-func (m *Menu) saveBotSetting(s *session.Session, customID, option string) {
-	// Parse the ID
-	id, err := strconv.ParseUint(option, 10, 64)
+	// Parse the ID after validation
+	id, err := strconv.ParseUint(idStr, 10, 64)
 	if err != nil {
-		m.handler.logger.Error("Failed to parse ID input", zap.Error(err))
+		m.handler.paginationManager.RespondWithError(event, "Invalid ID format")
 		return
 	}
 
-	// Toggle the ID based on setting type
-	if customID == constants.ReviewerIDsOption {
+	// Handle different ID settings
+	var botSettings *models.BotSetting
+	s.GetInterface(constants.SessionKeyBotSettings, &botSettings)
+
+	switch setting.Key {
+	case constants.ReviewerIDsOption:
 		if err := m.handler.db.Settings().ToggleReviewerID(context.Background(), id); err != nil {
-			m.handler.logger.Error("Failed to toggle reviewer ID", zap.Error(err))
+			m.handler.paginationManager.RespondWithError(event, "Failed to toggle reviewer ID")
 			return
 		}
-	} else if customID == constants.AdminIDsOption {
+	case constants.AdminIDsOption:
 		if err := m.handler.db.Settings().ToggleAdminID(context.Background(), id); err != nil {
-			m.handler.logger.Error("Failed to toggle admin ID", zap.Error(err))
+			m.handler.paginationManager.RespondWithError(event, "Failed to toggle admin ID")
 			return
 		}
 	}
 
-	// Update bot settings in session
-	settings, err := m.handler.db.Settings().GetBotSettings(context.Background())
+	// Refresh bot settings in session
+	updatedSettings, err := m.handler.db.Settings().GetBotSettings(context.Background())
 	if err != nil {
-		m.handler.logger.Error("Failed to fetch bot settings", zap.Error(err))
+		m.handler.paginationManager.RespondWithError(event, "Failed to refresh settings")
 		return
 	}
-	s.Set(constants.SessionKeyBotSettings, settings)
+	s.Set(constants.SessionKeyBotSettings, updatedSettings)
 
-	// Close the target user's session to reflect the change
-	m.handler.sessionManager.CloseSession(context.Background(), id)
+	// Show updated settings
+	m.ShowMenu(event, s, settingType, settingKey)
 }

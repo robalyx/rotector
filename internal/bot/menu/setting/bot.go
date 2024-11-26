@@ -38,12 +38,8 @@ func (b *BotMenu) ShowMenu(event interfaces.CommonEvent, s *session.Session) {
 
 // handleBotSettingSelection processes select menu interactions.
 func (b *BotMenu) handleBotSettingSelection(event *events.ComponentInteractionCreate, s *session.Session, _ string, option string) {
-	switch option {
-	case constants.ReviewerIDsOption:
-		b.handler.settingMenu.ShowMenu(event, s, "Reviewer IDs", constants.BotSettingPrefix, option)
-	case constants.AdminIDsOption:
-		b.handler.settingMenu.ShowMenu(event, s, "Admin IDs", constants.BotSettingPrefix, option)
-	}
+	// Show the change menu for the selected setting
+	b.handler.settingMenu.ShowMenu(event, s, constants.BotSettingPrefix, option)
 }
 
 // handleBotSettingButton processes button interactions.
