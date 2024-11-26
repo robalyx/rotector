@@ -3,7 +3,7 @@ module github.com/rotector/rotector
 go 1.23.2
 
 require (
-	github.com/bytedance/sonic v1.12.4
+	github.com/bytedance/sonic v1.12.5
 	github.com/disgoorg/disgo v0.18.13
 	github.com/disgoorg/snowflake/v2 v2.0.3
 	github.com/google/uuid v1.6.0
@@ -16,20 +16,20 @@ require (
 	github.com/jaxron/axonet/middleware/retry v0.0.0-20241110114112-10fce0f238e1
 	github.com/jaxron/axonet/middleware/singleflight v0.0.0-20241025054147-6c298c86aa64
 	github.com/jaxron/roapi.go v0.0.0-20241119055136-846c2991b4a7
-	github.com/openai/openai-go v0.1.0-alpha.36
+	github.com/openai/openai-go v0.1.0-alpha.38
 	github.com/ozankasikci/go-image-merge v0.3.1
 	github.com/pkoukk/tiktoken-go v0.1.7
-	github.com/redis/rueidis v1.0.49
+	github.com/redis/rueidis v1.0.50
 	github.com/spf13/cast v1.7.0
 	github.com/spf13/cobra v1.8.1
 	github.com/spf13/viper v1.19.0
-	github.com/tdewolff/minify/v2 v2.21.1
-	github.com/uptrace/bun v1.2.5
-	github.com/uptrace/bun/dialect/pgdialect v1.2.5
-	github.com/uptrace/bun/driver/pgdriver v1.2.5
+	github.com/tdewolff/minify/v2 v2.21.2
+	github.com/uptrace/bun v1.2.6
+	github.com/uptrace/bun/dialect/pgdialect v1.2.6
+	github.com/uptrace/bun/driver/pgdriver v1.2.6
 	github.com/wcharczuk/go-chart/v2 v2.1.2
 	go.uber.org/zap v1.27.0
-	golang.org/x/image v0.21.0
+	golang.org/x/image v0.22.0
 	golang.org/x/text v0.20.0
 )
 
@@ -77,7 +77,7 @@ require (
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
 	github.com/vmihailenco/msgpack/v5 v5.4.1 // indirect
 	github.com/vmihailenco/tagparser/v2 v2.0.0 // indirect
-	github.com/wk8/go-ordered-map/v2 v2.1.8 // indirect
+	github.com/wk8/go-ordered-map/v2 v2.1.9-0.20240816141633-0a40785b4f41 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	golang.org/x/arch v0.11.0 // indirect
 	golang.org/x/crypto v0.29.0 // indirect
