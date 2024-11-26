@@ -59,6 +59,8 @@ func (b *UpdateBuilder) buildComponents() []discord.ContainerComponent {
 		components = append(components, b.buildEnumComponents())
 	case models.SettingTypeID:
 		components = append(components, b.buildIDComponents())
+	case models.SettingTypeNumber:
+		components = append(components, b.buildNumberComponents())
 	}
 
 	// Add back button
@@ -97,5 +99,11 @@ func (b *UpdateBuilder) buildEnumComponents() discord.ContainerComponent {
 func (b *UpdateBuilder) buildIDComponents() discord.ContainerComponent {
 	return discord.NewActionRow(
 		discord.NewPrimaryButton("Add/Remove ID", b.customID+constants.ModalOpenSuffix),
+	)
+}
+
+func (b *UpdateBuilder) buildNumberComponents() discord.ContainerComponent {
+	return discord.NewActionRow(
+		discord.NewPrimaryButton("Set Value", b.customID+constants.ModalOpenSuffix),
 	)
 }

@@ -84,6 +84,7 @@ const (
 	BotSettingSelectID = "bot_setting_select"
 	ReviewerIDsOption  = "reviewer_ids"
 	AdminIDsOption     = "admin_ids"
+	SessionLimitOption = "session_limit"
 )
 
 // Logs Menu.

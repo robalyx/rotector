@@ -38,9 +38,10 @@ type UserSetting struct {
 
 // BotSetting stores bot-wide configuration options.
 type BotSetting struct {
-	ID          uint64   `bun:",pk,autoincrement"`
-	ReviewerIDs []uint64 `bun:"reviewer_ids,type:bigint[]"`
-	AdminIDs    []uint64 `bun:"admin_ids,type:bigint[]"`
+	ID           uint64   `bun:",pk,autoincrement"`
+	ReviewerIDs  []uint64 `bun:"reviewer_ids,type:bigint[]"`
+	AdminIDs     []uint64 `bun:"admin_ids,type:bigint[]"`
+	SessionLimit uint64   `bun:",notnull"`
 }
 
 // IsAdmin checks if the given user ID is in the admin list.
@@ -129,9 +130,10 @@ func (r *SettingModel) SaveUserSettings(ctx context.Context, settings *UserSetti
 // GetBotSettings retrieves the bot settings.
 func (r *SettingModel) GetBotSettings(ctx context.Context) (*BotSetting, error) {
 	settings := &BotSetting{
-		ID:          1,
-		ReviewerIDs: []uint64{},
-		AdminIDs:    []uint64{},
+		ID:           1,
+		ReviewerIDs:  []uint64{},
+		AdminIDs:     []uint64{},
+		SessionLimit: 0,
 	}
 
 	err := r.db.NewSelect().Model(settings).
@@ -160,6 +162,7 @@ func (r *SettingModel) SaveBotSettings(ctx context.Context, settings *BotSetting
 		On("CONFLICT (id) DO UPDATE").
 		Set("reviewer_ids = EXCLUDED.reviewer_ids").
 		Set("admin_ids = EXCLUDED.admin_ids").
+		Set("session_limit = EXCLUDED.session_limit").
 		Exec(ctx)
 	if err != nil {
 		r.logger.Error("Failed to save bot settings", zap.Error(err))

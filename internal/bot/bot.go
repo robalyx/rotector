@@ -2,6 +2,7 @@ package bot
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -300,7 +301,11 @@ func (b *Bot) validateAndGetSession(event interfaces.CommonEvent, userID snowfla
 	s, err := b.sessionManager.GetOrCreateSession(context.Background(), uint64(userID))
 	if err != nil {
 		b.logger.Error("Failed to get or create session", zap.Error(err))
-		b.paginationManager.RespondWithError(event, "Failed to get or create session.")
+		if errors.Is(err, session.ErrSessionLimitReached) {
+			b.paginationManager.RespondWithError(event, "Session limit reached. Please try again later.")
+		} else {
+			b.paginationManager.RespondWithError(event, "Failed to get or create session.")
+		}
 		return nil, false
 	}
 

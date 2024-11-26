@@ -22,9 +22,10 @@ type SettingType string
 
 // Available setting types.
 const (
-	SettingTypeBool SettingType = "bool"
-	SettingTypeEnum SettingType = "enum"
-	SettingTypeID   SettingType = "id"
+	SettingTypeBool   SettingType = "bool"
+	SettingTypeEnum   SettingType = "enum"
+	SettingTypeID     SettingType = "id"
+	SettingTypeNumber SettingType = "number"
 )
 
 // SettingValidator is a function that validates setting input.
@@ -101,6 +102,15 @@ func validateBool(value string, _ uint64) error {
 	return nil
 }
 
+// validateNumber checks if a string is a valid number.
+func validateNumber(value string, _ uint64) error {
+	_, err := strconv.ParseInt(value, 10, 64)
+	if err != nil {
+		return fmt.Errorf("value must be a valid number: %w", err)
+	}
+	return nil
+}
+
 // NewSettingRegistry creates and initializes the setting registry.
 func NewSettingRegistry() *SettingRegistry {
 	r := &SettingRegistry{
@@ -126,6 +136,7 @@ func (r *SettingRegistry) registerUserSettings() {
 func (r *SettingRegistry) registerBotSettings() {
 	r.BotSettings[constants.ReviewerIDsOption] = r.createReviewerIDsSetting()
 	r.BotSettings[constants.AdminIDsOption] = r.createAdminIDsSetting()
+	r.BotSettings[constants.SessionLimitOption] = r.createSessionLimitSetting()
 }
 
 // createStreamerModeSetting creates the streamer mode setting.
@@ -232,6 +243,29 @@ func (r *SettingRegistry) createReviewModeSetting() Setting {
 		},
 		ValueUpdater: func(value string, us *UserSetting, _ *BotSetting) error {
 			us.ReviewMode = value
+			return nil
+		},
+	}
+}
+
+// createSessionLimitSetting creates the session limit setting.
+func (r *SettingRegistry) createSessionLimitSetting() Setting {
+	return Setting{
+		Key:          constants.SessionLimitOption,
+		Name:         "Session Limit",
+		Description:  "Set the maximum number of concurrent sessions",
+		Type:         SettingTypeNumber,
+		DefaultValue: uint64(0),
+		Validators:   []SettingValidator{validateNumber},
+		ValueGetter: func(_ *UserSetting, bs *BotSetting) string {
+			return strconv.FormatUint(bs.SessionLimit, 10)
+		},
+		ValueUpdater: func(value string, _ *UserSetting, bs *BotSetting) error {
+			limit, err := strconv.ParseUint(value, 10, 64)
+			if err != nil {
+				return err
+			}
+			bs.SessionLimit = limit
 			return nil
 		},
 	}

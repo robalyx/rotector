@@ -29,6 +29,15 @@ const (
 	ScanBatchSize = 1000
 )
 
+// Session errors.
+var (
+	ErrSessionLimitReached  = errors.New("session limit reached")
+	ErrFailedToGetCount     = errors.New("failed to get active session count")
+	ErrFailedToLoadSettings = errors.New("failed to load settings")
+	ErrFailedToGetSession   = errors.New("failed to get session data")
+	ErrFailedToParseSession = errors.New("failed to parse session data")
+)
+
 // Manager manages the session lifecycle using Redis as the backing store.
 // Sessions are prefixed and stored with automatic expiration.
 type Manager struct {
@@ -57,44 +66,57 @@ func NewManager(db *database.Client, redisManager *redis.Manager, logger *zap.Lo
 func (m *Manager) GetOrCreateSession(ctx context.Context, userID uint64) (*Session, error) {
 	key := fmt.Sprintf("%s%d", SessionPrefix, userID)
 
+	// Load bot settings first to check session limit
+	botSettings, err := m.db.Settings().GetBotSettings(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", ErrFailedToLoadSettings, err)
+	}
+
+	// Try loading existing session first
+	result := m.redis.Do(ctx, m.redis.B().Get().Key(key).Build())
+	sessionExists := result.Error() == nil
+
+	// If session doesn't exist, check session limit
+	if !sessionExists && botSettings.SessionLimit > 0 {
+		activeCount, err := m.GetActiveSessionCount(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("%w: %w", ErrFailedToGetCount, err)
+		}
+
+		if activeCount >= botSettings.SessionLimit {
+			m.logger.Debug("Session limit reached",
+				zap.Uint64("active_count", activeCount),
+				zap.Uint64("limit", botSettings.SessionLimit))
+			return nil, ErrSessionLimitReached
+		}
+	}
+
 	// Load user settings
 	settings, err := m.db.Settings().GetUserSettings(ctx, userID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to load user settings: %w", err)
+		return nil, fmt.Errorf("%w: %w", ErrFailedToLoadSettings, err)
 	}
 
-	// Load bot settings
-	botSettings, err := m.db.Settings().GetBotSettings(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to load bot settings: %w", err)
-	}
-
-	// Try loading existing session
-	result := m.redis.Do(ctx, m.redis.B().Get().Key(key).Build())
-	if err := result.Error(); err != nil {
-		if errors.Is(err, rueidis.Nil) {
-			// Initialize new session with fresh settings
-			sessionData := make(map[string]interface{})
-			session := NewSession(m.db, m.redis, key, sessionData, m.logger)
-			session.Set(constants.SessionKeyUserSettings, settings)
-			session.Set(constants.SessionKeyBotSettings, botSettings)
-			return session, nil
+	// If session exists, update it
+	if sessionExists {
+		data, err := result.AsBytes()
+		if err != nil {
+			return nil, fmt.Errorf("%w: %w", ErrFailedToGetSession, err)
 		}
-		return nil, fmt.Errorf("failed to query Redis: %w", err)
+
+		var sessionData map[string]interface{}
+		if err := sonic.Unmarshal(data, &sessionData); err != nil {
+			return nil, fmt.Errorf("%w: %w", ErrFailedToParseSession, err)
+		}
+
+		session := NewSession(m.db, m.redis, key, sessionData, m.logger)
+		session.Set(constants.SessionKeyUserSettings, settings)
+		session.Set(constants.SessionKeyBotSettings, botSettings)
+		return session, nil
 	}
 
-	// Deserialize existing session
-	data, err := result.AsBytes()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get session data as bytes: %w", err)
-	}
-
-	var sessionData map[string]interface{}
-	if err := sonic.Unmarshal(data, &sessionData); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal session data: %w", err)
-	}
-
-	// Update existing session with latest settings
+	// Initialize new session with fresh settings
+	sessionData := make(map[string]interface{})
 	session := NewSession(m.db, m.redis, key, sessionData, m.logger)
 	session.Set(constants.SessionKeyUserSettings, settings)
 	session.Set(constants.SessionKeyBotSettings, botSettings)
@@ -146,4 +168,33 @@ func (m *Manager) GetActiveUsers(ctx context.Context) []snowflake.ID {
 	}
 
 	return activeUsers
+}
+
+// GetActiveSessionCount returns the number of active sessions.
+func (m *Manager) GetActiveSessionCount(ctx context.Context) (uint64, error) {
+	pattern := SessionPrefix + "*"
+	count := uint64(0)
+	cursor := uint64(0)
+
+	for {
+		// Use SCAN to iterate through keys
+		result := m.redis.Do(ctx, m.redis.B().Scan().Cursor(cursor).Match(pattern).Count(ScanBatchSize).Build())
+		if result.Error() != nil {
+			return 0, fmt.Errorf("failed to scan Redis keys: %w", result.Error())
+		}
+
+		keys, err := result.AsScanEntry()
+		if err != nil {
+			return 0, fmt.Errorf("failed to get scan entry: %w", err)
+		}
+
+		count += uint64(len(keys.Elements))
+
+		if keys.Cursor == 0 {
+			break
+		}
+		cursor = keys.Cursor
+	}
+
+	return count, nil
 }

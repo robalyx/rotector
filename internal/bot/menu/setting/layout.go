@@ -141,21 +141,29 @@ func (m *Menu) handleSettingButton(event *events.ComponentInteractionCreate, s *
 	var setting models.Setting
 	s.GetInterface(constants.SessionKeySetting, &setting)
 
-	// Handle ID setting button click
-	if setting.Type == models.SettingTypeID {
-		textInput := discord.NewTextInput("id_input", discord.TextInputStyleShort, "User ID").
-			WithRequired(true).
-			WithPlaceholder("Enter the user ID to toggle...")
+	// Handle ID and number setting button clicks
+	if setting.Type == models.SettingTypeID || setting.Type == models.SettingTypeNumber {
+		textInput := discord.NewTextInput(string(setting.Type), discord.TextInputStyleShort, setting.Name).WithRequired(true)
+		var modalTitle string
+
+		if setting.Type == models.SettingTypeID {
+			textInput.WithPlaceholder("Enter the user ID to toggle...")
+			modalTitle = "Toggle " + setting.Name
+		} else {
+			textInput.WithPlaceholder("Enter a number...").
+				WithValue(s.GetString(constants.SessionKeyCurrentValue))
+			modalTitle = "Set " + setting.Name
+		}
 
 		modal := discord.NewModalCreateBuilder().
 			SetCustomID(setting.Key).
-			SetTitle("Toggle " + setting.Name).
+			SetTitle(modalTitle).
 			AddActionRow(textInput)
 
 		// Show modal to user
 		if err := event.Modal(modal.Build()); err != nil {
-			m.handler.logger.Error("Failed to open the ID input form", zap.Error(err))
-			m.handler.paginationManager.RespondWithError(event, "Failed to open the ID input form. Please try again.")
+			m.handler.logger.Error("Failed to open the input form", zap.Error(err))
+			m.handler.paginationManager.RespondWithError(event, "Failed to open the input form. Please try again.")
 		}
 	}
 }
@@ -166,17 +174,17 @@ func (m *Menu) handleSettingModal(event *events.ModalSubmitInteractionCreate, s 
 	settingKey := s.GetString(constants.SessionKeyCustomID)
 	setting := m.getSetting(settingType, settingKey)
 
-	// Get ID input from modal
-	idStr := event.Data.Text("id_input")
+	// Get input from modal
+	input := event.Data.Text(string(setting.Type))
 
 	// Validate the input using the setting's validators
-	if err := m.validateSettingValue(s, setting, idStr); err != nil {
+	if err := m.validateSettingValue(s, setting, input); err != nil {
 		m.handler.paginationManager.RespondWithError(event, err.Error())
 		return
 	}
 
 	// Update the setting using ValueUpdater
-	if err := m.updateSetting(s, setting, idStr); err != nil {
+	if err := m.updateSetting(s, setting, input); err != nil {
 		m.handler.paginationManager.RespondWithError(event, "Failed to update setting")
 		return
 	}
