@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"fmt"
 	"strings"
 	"unicode"
 
@@ -77,4 +78,17 @@ func ContainsNormalized(s, substr string) bool {
 	}
 
 	return strings.Contains(normalizedS, normalizedSubstr)
+}
+
+// FormatIDs formats a slice of user IDs into a readable string with mentions.
+func FormatIDs(ids []uint64) string {
+	if len(ids) == 0 {
+		return "None"
+	}
+
+	mentions := make([]string, len(ids))
+	for i, id := range ids {
+		mentions[i] = fmt.Sprintf("<@%d>", id)
+	}
+	return strings.Join(mentions, ", ")
 }

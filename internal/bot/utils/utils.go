@@ -37,19 +37,6 @@ var (
 	ErrEndDateBeforeStartDate = errors.New("end date cannot be before start date")
 )
 
-// FormatIDs formats a slice of user IDs into a readable string with mentions.
-func FormatIDs(ids []uint64) string {
-	if len(ids) == 0 {
-		return "None"
-	}
-
-	mentions := make([]string, len(ids))
-	for i, id := range ids {
-		mentions[i] = fmt.Sprintf("<@%d>", id)
-	}
-	return strings.Join(mentions, ", ")
-}
-
 // FormatString formats a string by trimming it, replacing backticks, and enclosing in markdown.
 func FormatString(s string) string {
 	s = multipleNewlinesRegex.ReplaceAllString(s, "\n")

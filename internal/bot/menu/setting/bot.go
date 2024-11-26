@@ -22,7 +22,7 @@ func NewBotMenu(h *Handler) *BotMenu {
 	b.page = &pagination.Page{
 		Name: "Bot Settings Menu",
 		Message: func(s *session.Session) *discord.MessageUpdateBuilder {
-			return setting.NewBotSettingsBuilder(s).Build()
+			return setting.NewBotSettingsBuilder(s, h.registry).Build()
 		},
 		SelectHandlerFunc: b.handleBotSettingSelection,
 		ButtonHandlerFunc: b.handleBotSettingButton,

@@ -24,7 +24,7 @@ func NewUserMenu(h *Handler) *UserMenu {
 	u.page = &pagination.Page{
 		Name: "User Settings Menu",
 		Message: func(s *session.Session) *discord.MessageUpdateBuilder {
-			return setting.NewUserSettingsBuilder(s).Build()
+			return setting.NewUserSettingsBuilder(s, h.registry).Build()
 		},
 		SelectHandlerFunc: u.handleUserSettingSelection,
 		ButtonHandlerFunc: u.handleUserSettingButton,

@@ -1,23 +1,21 @@
 package setting
 
 import (
-	"strconv"
-
 	"github.com/disgoorg/disgo/discord"
 	"github.com/rotector/rotector/internal/bot/constants"
 	"github.com/rotector/rotector/internal/bot/core/session"
 	"github.com/rotector/rotector/internal/common/storage/database/models"
 )
 
-// UserSettingsBuilder creates the visual layout for user preferences.
+// UserSettingsBuilder creates the visual layout for user settings.
 type UserSettingsBuilder struct {
 	settings    *models.UserSetting
 	botSettings *models.BotSetting
-	userID      uint64
+	registry    *models.SettingRegistry
 }
 
 // NewUserSettingsBuilder creates a new user settings builder.
-func NewUserSettingsBuilder(s *session.Session) *UserSettingsBuilder {
+func NewUserSettingsBuilder(s *session.Session, r *models.SettingRegistry) *UserSettingsBuilder {
 	var settings *models.UserSetting
 	s.GetInterface(constants.SessionKeyUserSettings, &settings)
 	var botSettings *models.BotSetting
@@ -26,7 +24,7 @@ func NewUserSettingsBuilder(s *session.Session) *UserSettingsBuilder {
 	return &UserSettingsBuilder{
 		settings:    settings,
 		botSettings: botSettings,
-		userID:      s.GetUint64(constants.SessionKeyUserID),
+		registry:    r,
 	}
 }
 
@@ -34,31 +32,28 @@ func NewUserSettingsBuilder(s *session.Session) *UserSettingsBuilder {
 // and adds select menus for changing each setting.
 func (b *UserSettingsBuilder) Build() *discord.MessageUpdateBuilder {
 	// Create base options
-	options := []discord.StringSelectMenuOption{
-		discord.NewStringSelectMenuOption("Change Streamer Mode", constants.StreamerModeOption).
-			WithDescription("Toggle censoring of sensitive information"),
-		discord.NewStringSelectMenuOption("Change User Default Sort", constants.UserDefaultSortOption).
-			WithDescription("Set what users are shown first in the review menu"),
-		discord.NewStringSelectMenuOption("Change Group Default Sort", constants.GroupDefaultSortOption).
-			WithDescription("Set what groups are shown first in the review menu"),
-	}
+	options := make([]discord.StringSelectMenuOption, 0)
 
-	// Add review mode option only for reviewers
-	if b.botSettings.IsReviewer(b.userID) {
-		options = append(options,
-			discord.NewStringSelectMenuOption("Change Review Mode", constants.ReviewModeOption).
-				WithDescription("Switch between training and standard review modes"),
-		)
+	// Add options for each user setting
+	for _, setting := range b.registry.UserSettings {
+		option := discord.NewStringSelectMenuOption(
+			"Change "+setting.Name,
+			setting.Key,
+		).WithDescription(setting.Description)
+		options = append(options, option)
 	}
 
 	// Create embed with current settings values
 	embed := discord.NewEmbedBuilder().
-		SetTitle("User Settings").
-		AddField("Streamer Mode", strconv.FormatBool(b.settings.StreamerMode), true).
-		AddField("User Default Sort", b.settings.UserDefaultSort, true).
-		AddField("Group Default Sort", b.settings.GroupDefaultSort, true).
-		AddField("Review Mode", models.FormatReviewMode(b.settings.ReviewMode), true).
-		SetColor(constants.DefaultEmbedColor)
+		SetTitle("User Settings")
+
+	// Add fields for each setting
+	for _, setting := range b.registry.UserSettings {
+		value := setting.ValueGetter(b.settings, b.botSettings)
+		embed.AddField(setting.Name, value, true)
+	}
+
+	embed.SetColor(constants.DefaultEmbedColor)
 
 	// Add interactive components for changing settings
 	components := []discord.ContainerComponent{

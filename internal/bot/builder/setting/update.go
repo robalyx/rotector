@@ -2,7 +2,6 @@ package setting
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/disgoorg/disgo/discord"
 	"github.com/rotector/rotector/internal/bot/constants"
@@ -36,10 +35,9 @@ func NewUpdateBuilder(s *session.Session) *UpdateBuilder {
 // Build creates a Discord message showing the current setting value and
 // providing appropriate input controls based on the setting type.
 func (b *UpdateBuilder) Build() *discord.MessageUpdateBuilder {
-	description := b.buildDescription()
 	embed := discord.NewEmbedBuilder().
 		SetTitle("Change " + b.setting.Name).
-		SetDescription(description).
+		SetDescription(fmt.Sprintf("%s\n\nCurrent value:\n%s", b.setting.Description, b.currentValue)).
 		SetColor(constants.DefaultEmbedColor)
 
 	components := b.buildComponents()
@@ -47,36 +45,6 @@ func (b *UpdateBuilder) Build() *discord.MessageUpdateBuilder {
 	return discord.NewMessageUpdateBuilder().
 		SetEmbeds(embed.Build()).
 		AddContainerComponents(components...)
-}
-
-// buildDescription creates the description text for the setting embed.
-func (b *UpdateBuilder) buildDescription() string {
-	description := b.setting.Description + "\n\n"
-
-	if b.setting.Type == models.SettingTypeID {
-		return b.buildIDDescription(description)
-	}
-	return description + "Current value: " + b.currentValue
-}
-
-// buildIDDescription formats the description for ID type settings.
-func (b *UpdateBuilder) buildIDDescription(baseDescription string) string {
-	description := baseDescription + "Current IDs:\n"
-	if b.currentValue == "[]" || b.currentValue == "" {
-		return description + "None"
-	}
-
-	// Remove brackets and split the string
-	idStr := strings.Trim(b.currentValue, "[]")
-	if idStr == "" {
-		return description + "None"
-	}
-
-	ids := strings.Split(idStr, " ")
-	for _, id := range ids {
-		description += fmt.Sprintf("<@%s>\n", id)
-	}
-	return description
 }
 
 // buildComponents creates the interactive components based on setting type.

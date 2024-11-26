@@ -5,6 +5,7 @@ import (
 	"github.com/rotector/rotector/internal/bot/core/session"
 	"github.com/rotector/rotector/internal/bot/interfaces"
 	"github.com/rotector/rotector/internal/common/storage/database"
+	"github.com/rotector/rotector/internal/common/storage/database/models"
 	"go.uber.org/zap"
 )
 
@@ -18,6 +19,7 @@ type Handler struct {
 	settingMenu       *Menu
 	userMenu          *UserMenu
 	botMenu           *BotMenu
+	registry          *models.SettingRegistry
 	logger            *zap.Logger
 	dashboardHandler  interfaces.DashboardHandler
 }
@@ -36,6 +38,7 @@ func New(
 		logger:            logger,
 		sessionManager:    sessionManager,
 		paginationManager: paginationManager,
+		registry:          models.NewSettingRegistry(),
 		dashboardHandler:  dashboardHandler,
 	}
 

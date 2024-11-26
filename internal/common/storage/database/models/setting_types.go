@@ -6,6 +6,7 @@ import (
 	"strconv"
 
 	"github.com/rotector/rotector/internal/bot/constants"
+	"github.com/rotector/rotector/internal/common/utils"
 )
 
 // Common validation errors.
@@ -30,15 +31,23 @@ const (
 // It takes the value to validate and the ID of the user making the change.
 type SettingValidator func(value string, userID uint64) error
 
+// SettingValueGetter is a function that retrieves the value of a setting.
+type SettingValueGetter func(userSettings *UserSetting, botSettings *BotSetting) string
+
+// SettingValueUpdater is a function that updates the value of a setting.
+type SettingValueUpdater func(value string, userSettings *UserSetting, botSettings *BotSetting) error
+
 // Setting defines the structure and behavior of a single setting.
 type Setting struct {
-	Key          string             `json:"key"`          // Unique identifier for the setting
-	Name         string             `json:"name"`         // Display name
-	Description  string             `json:"description"`  // Help text explaining the setting
-	Type         SettingType        `json:"type"`         // Data type of the setting
-	DefaultValue interface{}        `json:"defaultValue"` // Default value
-	Options      []SettingOption    `json:"options"`      // Available options for enum types
-	Validators   []SettingValidator `json:"-"`            // Functions to validate input
+	Key          string              `json:"key"`          // Unique identifier for the setting
+	Name         string              `json:"name"`         // Display name
+	Description  string              `json:"description"`  // Help text explaining the setting
+	Type         SettingType         `json:"type"`         // Data type of the setting
+	DefaultValue interface{}         `json:"defaultValue"` // Default value
+	Options      []SettingOption     `json:"options"`      // Available options for enum types
+	Validators   []SettingValidator  `json:"-"`            // Functions to validate input
+	ValueGetter  SettingValueGetter  `json:"-"`            // Function to retrieve the value
+	ValueUpdater SettingValueUpdater `json:"-"`            // Function to update the value
 }
 
 // SettingOption represents a single option for enum-type settings.
@@ -99,17 +108,49 @@ func NewSettingRegistry() *SettingRegistry {
 		BotSettings:  make(map[string]Setting),
 	}
 
-	// Register user settings
-	r.UserSettings[constants.StreamerModeOption] = Setting{
+	r.registerUserSettings()
+	r.registerBotSettings()
+
+	return r
+}
+
+// registerUserSettings adds all user-specific settings to the registry.
+func (r *SettingRegistry) registerUserSettings() {
+	r.UserSettings[constants.StreamerModeOption] = r.createStreamerModeSetting()
+	r.UserSettings[constants.UserDefaultSortOption] = r.createUserDefaultSortSetting()
+	r.UserSettings[constants.GroupDefaultSortOption] = r.createGroupDefaultSortSetting()
+	r.UserSettings[constants.ReviewModeOption] = r.createReviewModeSetting()
+}
+
+// registerBotSettings adds all bot-wide settings to the registry.
+func (r *SettingRegistry) registerBotSettings() {
+	r.BotSettings[constants.ReviewerIDsOption] = r.createReviewerIDsSetting()
+	r.BotSettings[constants.AdminIDsOption] = r.createAdminIDsSetting()
+}
+
+// createStreamerModeSetting creates the streamer mode setting.
+func (r *SettingRegistry) createStreamerModeSetting() Setting {
+	return Setting{
 		Key:          constants.StreamerModeOption,
 		Name:         "Streamer Mode",
 		Description:  "Toggle censoring of sensitive information",
 		Type:         SettingTypeBool,
 		DefaultValue: false,
 		Validators:   []SettingValidator{validateBool},
+		ValueGetter: func(us *UserSetting, _ *BotSetting) string {
+			return strconv.FormatBool(us.StreamerMode)
+		},
+		ValueUpdater: func(value string, us *UserSetting, _ *BotSetting) error {
+			boolVal, _ := strconv.ParseBool(value)
+			us.StreamerMode = boolVal
+			return nil
+		},
 	}
+}
 
-	r.UserSettings[constants.UserDefaultSortOption] = Setting{
+// createUserDefaultSortSetting creates the user default sort setting.
+func (r *SettingRegistry) createUserDefaultSortSetting() Setting {
+	return Setting{
 		Key:          constants.UserDefaultSortOption,
 		Name:         "User Default Sort",
 		Description:  "Set what users are shown first in the review menu",
@@ -124,9 +165,19 @@ func NewSettingRegistry() *SettingRegistry {
 		Validators: []SettingValidator{
 			validateEnum([]string{SortByRandom, SortByConfidence, SortByLastUpdated, SortByReputation}),
 		},
+		ValueGetter: func(us *UserSetting, _ *BotSetting) string {
+			return us.UserDefaultSort
+		},
+		ValueUpdater: func(value string, us *UserSetting, _ *BotSetting) error {
+			us.UserDefaultSort = value
+			return nil
+		},
 	}
+}
 
-	r.UserSettings[constants.GroupDefaultSortOption] = Setting{
+// createGroupDefaultSortSetting creates the group default sort setting.
+func (r *SettingRegistry) createGroupDefaultSortSetting() Setting {
+	return Setting{
 		Key:          constants.GroupDefaultSortOption,
 		Name:         "Group Default Sort",
 		Description:  "Set what groups are shown first in the review menu",
@@ -141,9 +192,19 @@ func NewSettingRegistry() *SettingRegistry {
 		Validators: []SettingValidator{
 			validateEnum([]string{SortByRandom, SortByConfidence, SortByFlaggedUsers, SortByReputation}),
 		},
+		ValueGetter: func(us *UserSetting, _ *BotSetting) string {
+			return us.GroupDefaultSort
+		},
+		ValueUpdater: func(value string, us *UserSetting, _ *BotSetting) error {
+			us.GroupDefaultSort = value
+			return nil
+		},
 	}
+}
 
-	r.UserSettings[constants.ReviewModeOption] = Setting{
+// createReviewModeSetting creates the review mode setting.
+func (r *SettingRegistry) createReviewModeSetting() Setting {
+	return Setting{
 		Key:          constants.ReviewModeOption,
 		Name:         "Review Mode",
 		Description:  "Switch between training and standard review modes",
@@ -166,26 +227,78 @@ func NewSettingRegistry() *SettingRegistry {
 		Validators: []SettingValidator{
 			validateEnum([]string{TrainingReviewMode, StandardReviewMode}),
 		},
+		ValueGetter: func(us *UserSetting, _ *BotSetting) string {
+			return FormatReviewMode(us.ReviewMode)
+		},
+		ValueUpdater: func(value string, us *UserSetting, _ *BotSetting) error {
+			us.ReviewMode = value
+			return nil
+		},
 	}
+}
 
-	// Register bot settings
-	r.BotSettings[constants.ReviewerIDsOption] = Setting{
+// createReviewerIDsSetting creates the reviewer IDs setting.
+func (r *SettingRegistry) createReviewerIDsSetting() Setting {
+	return Setting{
 		Key:          constants.ReviewerIDsOption,
 		Name:         "Reviewer IDs",
 		Description:  "Set which users can review using the bot",
 		Type:         SettingTypeID,
 		DefaultValue: []uint64{},
 		Validators:   []SettingValidator{validateDiscordID},
+		ValueGetter: func(_ *UserSetting, bs *BotSetting) string {
+			return utils.FormatIDs(bs.ReviewerIDs)
+		},
+		ValueUpdater: func(value string, _ *UserSetting, bs *BotSetting) error {
+			id, err := strconv.ParseUint(value, 10, 64)
+			if err != nil {
+				return err
+			}
+			exists := false
+			for i, reviewerID := range bs.ReviewerIDs {
+				if reviewerID == id {
+					bs.ReviewerIDs = append(bs.ReviewerIDs[:i], bs.ReviewerIDs[i+1:]...)
+					exists = true
+					break
+				}
+			}
+			if !exists {
+				bs.ReviewerIDs = append(bs.ReviewerIDs, id)
+			}
+			return nil
+		},
 	}
+}
 
-	r.BotSettings[constants.AdminIDsOption] = Setting{
+// createAdminIDsSetting creates the admin IDs setting.
+func (r *SettingRegistry) createAdminIDsSetting() Setting {
+	return Setting{
 		Key:          constants.AdminIDsOption,
 		Name:         "Admin IDs",
 		Description:  "Set which users can access bot settings",
 		Type:         SettingTypeID,
 		DefaultValue: []uint64{},
 		Validators:   []SettingValidator{validateDiscordID},
+		ValueGetter: func(_ *UserSetting, bs *BotSetting) string {
+			return utils.FormatIDs(bs.AdminIDs)
+		},
+		ValueUpdater: func(value string, _ *UserSetting, bs *BotSetting) error {
+			id, err := strconv.ParseUint(value, 10, 64)
+			if err != nil {
+				return err
+			}
+			exists := false
+			for i, adminID := range bs.AdminIDs {
+				if adminID == id {
+					bs.AdminIDs = append(bs.AdminIDs[:i], bs.AdminIDs[i+1:]...)
+					exists = true
+					break
+				}
+			}
+			if !exists {
+				bs.AdminIDs = append(bs.AdminIDs, id)
+			}
+			return nil
+		},
 	}
-
-	return r
 }
