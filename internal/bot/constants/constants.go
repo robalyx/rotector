@@ -18,10 +18,14 @@ const (
 
 // Dashboard Menu.
 const (
-	StartUserReviewCustomID  = "start_user_review"
-	StartGroupReviewCustomID = "start_group_review"
-	UserSettingsCustomID     = "user_settings"
-	BotSettingsCustomID      = "bot_settings"
+	StartUserReviewCustomID    = "start_user_review"
+	StartGroupReviewCustomID   = "start_group_review"
+	UserSettingsCustomID       = "user_settings"
+	BotSettingsCustomID        = "bot_settings"
+	SessionKeyUserStatsBuffer  = "userStatsBuffer"
+	SessionKeyGroupStatsBuffer = "groupStatsBuffer"
+	SessionKeyUserCounts       = "userCounts"
+	SessionKeyGroupCounts      = "groupCounts"
 )
 
 // Review Menu.

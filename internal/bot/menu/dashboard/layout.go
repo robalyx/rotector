@@ -34,18 +34,29 @@ func NewMenu(h *Handler) *Menu {
 		Message: func(s *session.Session) *discord.MessageUpdateBuilder {
 			var botSettings *models.BotSetting
 			s.GetInterface(constants.SessionKeyBotSettings, &botSettings)
+			var userCounts *models.UserCounts
+			s.GetInterface(constants.SessionKeyUserCounts, &userCounts)
+			var groupCounts *models.GroupCounts
+			s.GetInterface(constants.SessionKeyGroupCounts, &groupCounts)
 			var activeUsers []snowflake.ID
 			s.GetInterface(constants.SessionKeyActiveUsers, &activeUsers)
 			var workerStatuses []core.Status
 			s.GetInterface(constants.SessionKeyWorkerStatuses, &workerStatuses)
 
 			userID := s.GetUint64(constants.SessionKeyUserID)
-			confirmedCount := s.GetInt(constants.SessionKeyConfirmedCount)
-			flaggedCount := s.GetInt(constants.SessionKeyFlaggedCount)
-			clearedCount := s.GetInt(constants.SessionKeyClearedCount)
-			imageBuffer := s.GetBuffer(constants.SessionKeyImageBuffer)
+			userStatsBuffer := s.GetBuffer(constants.SessionKeyUserStatsBuffer)
+			groupStatsBuffer := s.GetBuffer(constants.SessionKeyGroupStatsBuffer)
 
-			return builder.NewBuilder(botSettings, userID, confirmedCount, flaggedCount, clearedCount, imageBuffer, activeUsers, workerStatuses).Build()
+			return builder.NewBuilder(
+				botSettings,
+				userID,
+				userCounts,
+				groupCounts,
+				userStatsBuffer,
+				groupStatsBuffer,
+				activeUsers,
+				workerStatuses,
+			).Build()
 		},
 		SelectHandlerFunc: m.handleSelectMenu,
 		ButtonHandlerFunc: m.handleButton,
@@ -55,26 +66,17 @@ func NewMenu(h *Handler) *Menu {
 
 // ShowDashboard prepares and displays the dashboard interface.
 func (m *Menu) ShowDashboard(event interfaces.CommonEvent, s *session.Session, content string) {
-	// Get worker statuses
-	workerStatuses, err := m.handler.workerMonitor.GetAllStatuses(context.Background())
+	// Get bot settings
+	botSettings, err := m.handler.db.Settings().GetBotSettings(context.Background())
 	if err != nil {
-		m.handler.logger.Error("Failed to get worker statuses", zap.Error(err))
+		m.handler.logger.Error("Failed to get bot settings", zap.Error(err))
+		return
 	}
 
-	// Load current user counts from database
-	confirmedCount, err := m.handler.db.Users().GetConfirmedUsersCount(context.Background())
+	// Get all counts in a single transaction
+	userCounts, groupCounts, err := m.handler.db.Stats().GetCurrentCounts(context.Background())
 	if err != nil {
-		m.handler.logger.Error("Failed to get confirmed users count", zap.Error(err))
-	}
-
-	flaggedCount, err := m.handler.db.Users().GetFlaggedUsersCount(context.Background())
-	if err != nil {
-		m.handler.logger.Error("Failed to get flagged users count", zap.Error(err))
-	}
-
-	clearedCount, err := m.handler.db.Users().GetClearedUsersCount(context.Background())
-	if err != nil {
-		m.handler.logger.Error("Failed to get cleared users count", zap.Error(err))
+		m.handler.logger.Error("Failed to get counts", zap.Error(err))
 	}
 
 	// Get hourly stats for the chart
@@ -83,22 +85,28 @@ func (m *Menu) ShowDashboard(event interfaces.CommonEvent, s *session.Session, c
 		m.handler.logger.Error("Failed to get hourly stats", zap.Error(err))
 	}
 
-	m.handler.logger.Info("Hourly stats", zap.Any("stats", hourlyStats))
-
-	// Generate statistics chart (always create a chart, even with empty stats)
-	statsChart, err := builder.NewChartBuilder(hourlyStats).Build()
+	// Generate statistics charts
+	userStatsChart, groupStatsChart, err := builder.NewChartBuilder(hourlyStats).Build()
 	if err != nil {
-		m.handler.logger.Error("Failed to build stats chart", zap.Error(err))
+		m.handler.logger.Error("Failed to build stats charts", zap.Error(err))
 	}
 
 	// Get list of currently active reviewers
 	activeUsers := m.handler.sessionManager.GetActiveUsers(context.Background())
 
+	// Get worker statuses
+	workerStatuses, err := m.handler.workerMonitor.GetAllStatuses(context.Background())
+	if err != nil {
+		m.handler.logger.Error("Failed to get worker statuses", zap.Error(err))
+	}
+
 	// Store data in session
-	s.Set(constants.SessionKeyConfirmedCount, confirmedCount)
-	s.Set(constants.SessionKeyFlaggedCount, flaggedCount)
-	s.Set(constants.SessionKeyClearedCount, clearedCount)
-	s.SetBuffer(constants.SessionKeyImageBuffer, statsChart)
+	s.Set(constants.SessionKeyBotSettings, botSettings)
+	s.Set(constants.SessionKeyUserID, uint64(event.User().ID))
+	s.Set(constants.SessionKeyUserCounts, userCounts)
+	s.Set(constants.SessionKeyGroupCounts, groupCounts)
+	s.SetBuffer(constants.SessionKeyUserStatsBuffer, userStatsChart)
+	s.SetBuffer(constants.SessionKeyGroupStatsBuffer, groupStatsChart)
 	s.Set(constants.SessionKeyActiveUsers, activeUsers)
 	s.Set(constants.SessionKeyWorkerStatuses, workerStatuses)
 

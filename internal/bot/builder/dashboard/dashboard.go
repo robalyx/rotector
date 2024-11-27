@@ -24,36 +24,37 @@ const (
 
 // Builder creates the visual layout for the main dashboard.
 type Builder struct {
-	botSettings    *models.BotSetting
-	userID         uint64
-	confirmedCount int
-	flaggedCount   int
-	clearedCount   int
-	imageBuffer    *bytes.Buffer
-	activeUsers    []snowflake.ID
-	workerStatuses []core.Status
-	titleCaser     cases.Caser
+	botSettings      *models.BotSetting
+	userID           uint64
+	userCounts       *models.UserCounts
+	groupCounts      *models.GroupCounts
+	userStatsBuffer  *bytes.Buffer
+	groupStatsBuffer *bytes.Buffer
+	activeUsers      []snowflake.ID
+	workerStatuses   []core.Status
+	titleCaser       cases.Caser
 }
 
 // NewBuilder creates a new dashboard builder.
 func NewBuilder(
 	botSettings *models.BotSetting,
 	userID uint64,
-	confirmedCount, flaggedCount, clearedCount int,
-	imageBuffer *bytes.Buffer,
+	userCounts *models.UserCounts,
+	groupCounts *models.GroupCounts,
+	userStatsBuffer, groupStatsBuffer *bytes.Buffer,
 	activeUsers []snowflake.ID,
 	workerStatuses []core.Status,
 ) *Builder {
 	return &Builder{
-		botSettings:    botSettings,
-		userID:         userID,
-		confirmedCount: confirmedCount,
-		flaggedCount:   flaggedCount,
-		clearedCount:   clearedCount,
-		imageBuffer:    imageBuffer,
-		activeUsers:    activeUsers,
-		workerStatuses: workerStatuses,
-		titleCaser:     cases.Title(language.English),
+		botSettings:      botSettings,
+		userID:           userID,
+		userCounts:       userCounts,
+		groupCounts:      groupCounts,
+		userStatsBuffer:  userStatsBuffer,
+		groupStatsBuffer: groupStatsBuffer,
+		activeUsers:      activeUsers,
+		workerStatuses:   workerStatuses,
+		titleCaser:       cases.Title(language.English),
 	}
 }
 
@@ -95,9 +96,14 @@ func (b *Builder) Build() *discord.MessageUpdateBuilder {
 			WithDescription("Configure bot-wide settings"))
 	}
 
-	// Create message builder with both embeds
+	// Create message builder with all embeds
 	builder := discord.NewMessageUpdateBuilder().
-		SetEmbeds(b.buildStatsEmbed(), b.buildWorkerStatusEmbed()).
+		SetEmbeds(
+			b.buildWelcomeEmbed(),
+			b.buildUserGraphEmbed(),
+			b.buildGroupGraphEmbed(),
+			b.buildWorkerStatusEmbed(),
+		).
 		AddContainerComponents(
 			discord.NewActionRow(
 				discord.NewStringSelectMenu(constants.ActionSelectMenuCustomID, "Select an action", options...),
@@ -107,21 +113,21 @@ func (b *Builder) Build() *discord.MessageUpdateBuilder {
 			),
 		)
 
-	// Attach statistics chart if available
-	if b.imageBuffer != nil {
-		builder.SetFiles(discord.NewFile("stats_chart.png", "", b.imageBuffer))
+	// Attach both chart files if available
+	if b.userStatsBuffer != nil {
+		builder.AddFile("user_stats_chart.png", "image/png", b.userStatsBuffer)
+	}
+	if b.groupStatsBuffer != nil {
+		builder.AddFile("group_stats_chart.png", "image/png", b.groupStatsBuffer)
 	}
 
 	return builder
 }
 
-// buildStatsEmbed creates the main statistics embed.
-func (b *Builder) buildStatsEmbed() discord.Embed {
+// buildWelcomeEmbed creates the main welcome embed.
+func (b *Builder) buildWelcomeEmbed() discord.Embed {
 	embed := discord.NewEmbedBuilder().
 		SetTitle("Welcome to Rotector 👋").
-		AddField("Confirmed Users", strconv.Itoa(b.confirmedCount), true).
-		AddField("Flagged Users", strconv.Itoa(b.flaggedCount), true).
-		AddField("Cleared Users", strconv.Itoa(b.clearedCount), true).
 		SetColor(constants.DefaultEmbedColor)
 
 	// Add active reviewers field if any are online
@@ -131,11 +137,6 @@ func (b *Builder) buildStatsEmbed() discord.Embed {
 			activeUserMentions[i] = fmt.Sprintf("<@%d>", userID)
 		}
 		embed.AddField("Active Reviewers", strings.Join(activeUserMentions, ", "), false)
-	}
-
-	// Add statistics chart if available
-	if b.imageBuffer != nil {
-		embed.SetImage("attachment://stats_chart.png")
 	}
 
 	return embed.Build()
@@ -212,4 +213,40 @@ func (b *Builder) getStatusEmoji(status core.Status) string {
 	}
 
 	return healthyEmoji
+}
+
+// buildUserGraphEmbed creates the embed containing user statistics graph and current counts.
+func (b *Builder) buildUserGraphEmbed() discord.Embed {
+	embed := discord.NewEmbedBuilder().
+		SetTitle("User Statistics").
+		AddField("Confirmed Users", strconv.Itoa(b.userCounts.Confirmed), true).
+		AddField("Flagged Users", strconv.Itoa(b.userCounts.Flagged), true).
+		AddField("Cleared Users", strconv.Itoa(b.userCounts.Cleared), true).
+		AddField("Banned Users", strconv.Itoa(b.userCounts.Banned), true).
+		SetColor(constants.DefaultEmbedColor)
+
+	// Attach user statistics chart if available
+	if b.userStatsBuffer != nil {
+		embed.SetImage("attachment://user_stats_chart.png")
+	}
+
+	return embed.Build()
+}
+
+// buildGroupGraphEmbed creates the embed containing group statistics graph and current counts.
+func (b *Builder) buildGroupGraphEmbed() discord.Embed {
+	embed := discord.NewEmbedBuilder().
+		SetTitle("Group Statistics").
+		AddField("Confirmed Groups", strconv.Itoa(b.groupCounts.Confirmed), true).
+		AddField("Flagged Groups", strconv.Itoa(b.groupCounts.Flagged), true).
+		AddField("Cleared Groups", strconv.Itoa(b.groupCounts.Cleared), true).
+		AddField("Locked Groups", strconv.Itoa(b.groupCounts.Locked), true).
+		SetColor(constants.DefaultEmbedColor)
+
+	// Attach group statistics chart if available
+	if b.groupStatsBuffer != nil {
+		embed.SetImage("attachment://group_stats_chart.png")
+	}
+
+	return embed.Build()
 }

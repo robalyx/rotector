@@ -49,28 +49,38 @@ func NewChartBuilder(stats []models.HourlyStats) *ChartBuilder {
 	}
 }
 
-// Build creates a PNG image showing:
-// - Three line series (confirmed, flagged, cleared users)
-// - Grid lines for easier reading
-// - Hour labels on x-axis
-// - Count labels on y-axis
-// - Legend identifying each line.
-func (b *ChartBuilder) Build() (*bytes.Buffer, error) {
-	// Extract data points for each series
-	xValues, confirmedSeries, flaggedSeries, clearedSeries := b.prepareDataSeries()
-	gridLines, ticks := b.prepareGridLinesAndTicks()
+// Build creates both user and group statistics charts.
+func (b *ChartBuilder) Build() (*bytes.Buffer, *bytes.Buffer, error) {
+	userBuffer, err := b.buildUserChart()
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to build user chart: %w", err)
+	}
+
+	groupBuffer, err := b.buildGroupChart()
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to build group chart: %w", err)
+	}
+
+	return userBuffer, groupBuffer, nil
+}
+
+// buildUserChart creates a chart showing user-related statistics.
+func (b *ChartBuilder) buildUserChart() (*bytes.Buffer, error) {
+	// Extract data points for user series
+	xValues, confirmedSeries, flaggedSeries, clearedSeries, bannedSeries := b.prepareUserDataSeries()
 
 	// Configure and create the chart
 	graph := &chart.Chart{
-		Title:      "User Statistics",
+		Title:      "User Statistics (24h)",
 		TitleStyle: b.getTitleStyle(),
 		Background: b.getBackgroundStyle(),
-		XAxis:      b.getXAxis(gridLines, ticks),
+		XAxis:      b.getXAxis(b.prepareGridLinesAndTicks()),
 		YAxis:      b.getYAxis(),
 		Series: []chart.Series{
-			b.createSeries("Confirmed", xValues, confirmedSeries, chart.ColorBlue),
-			b.createSeries("Flagged", xValues, flaggedSeries, chart.ColorRed),
+			b.createSeries("Confirmed", xValues, confirmedSeries, chart.ColorRed),
+			b.createSeries("Flagged", xValues, flaggedSeries, chart.ColorOrange),
 			b.createSeries("Cleared", xValues, clearedSeries, chart.ColorGreen),
+			b.createSeries("Banned", xValues, bannedSeries, chart.ColorBlue),
 		},
 	}
 
@@ -88,37 +98,106 @@ func (b *ChartBuilder) Build() (*bytes.Buffer, error) {
 	return buf, nil
 }
 
-// prepareDataSeries extracts data points from hourly statistics.
-func (b *ChartBuilder) prepareDataSeries() ([]float64, []float64, []float64, []float64) {
+// buildGroupChart creates a chart showing group-related statistics.
+func (b *ChartBuilder) buildGroupChart() (*bytes.Buffer, error) {
+	// Extract data points for group series
+	xValues, confirmedSeries, flaggedSeries, clearedSeries, lockedSeries := b.prepareGroupDataSeries()
+
+	// Configure and create the chart
+	graph := &chart.Chart{
+		Title:      "Group Statistics (24h)",
+		TitleStyle: b.getTitleStyle(),
+		Background: b.getBackgroundStyle(),
+		XAxis:      b.getXAxis(b.prepareGridLinesAndTicks()),
+		YAxis:      b.getYAxis(),
+		Series: []chart.Series{
+			b.createSeries("Confirmed", xValues, confirmedSeries, chart.ColorRed),
+			b.createSeries("Flagged", xValues, flaggedSeries, chart.ColorOrange),
+			b.createSeries("Cleared", xValues, clearedSeries, chart.ColorGreen),
+			b.createSeries("Locked", xValues, lockedSeries, chart.ColorBlue),
+		},
+	}
+
+	// Add legend below the chart
+	graph.Elements = []chart.Renderable{
+		chart.Legend(graph),
+	}
+
+	// Render chart to PNG format
+	buf := new(bytes.Buffer)
+	if err := graph.Render(chart.PNG, buf); err != nil {
+		return nil, err
+	}
+
+	return buf, nil
+}
+
+// prepareUserDataSeries extracts user-related data points from hourly statistics.
+func (b *ChartBuilder) prepareUserDataSeries() ([]float64, []float64, []float64, []float64, []float64) {
 	const hoursToShow = 24
 	xValues := make([]float64, hoursToShow)
 	confirmedSeries := make([]float64, hoursToShow)
 	flaggedSeries := make([]float64, hoursToShow)
 	clearedSeries := make([]float64, hoursToShow)
+	bannedSeries := make([]float64, hoursToShow)
 
 	// Create a map of truncated timestamps to stats for lookup
 	statsMap := make(map[time.Time]models.HourlyStats)
 	for _, stat := range b.stats {
-		// Truncate timestamp to hour to ensure exact matches
 		truncatedTime := stat.Timestamp.Truncate(time.Hour)
 		statsMap[truncatedTime] = stat
 	}
 
-	// Fill in data points for each hour, using 0 for missing hours
+	// Fill in data points for each hour
 	now := time.Now().UTC().Truncate(time.Hour)
 	for i := range hoursToShow {
 		xValues[i] = float64(i)
 		timestamp := now.Add(time.Duration(-i) * time.Hour)
 
 		if stat, exists := statsMap[timestamp]; exists {
-			// Place values in reverse order (newest to oldest)
-			confirmedSeries[hoursToShow-1-i] = float64(stat.UsersConfirmed)
-			flaggedSeries[hoursToShow-1-i] = float64(stat.UsersFlagged)
-			clearedSeries[hoursToShow-1-i] = float64(stat.UsersCleared)
+			idx := hoursToShow - 1 - i
+			confirmedSeries[idx] = float64(stat.UsersConfirmed)
+			flaggedSeries[idx] = float64(stat.UsersFlagged)
+			clearedSeries[idx] = float64(stat.UsersCleared)
+			bannedSeries[idx] = float64(stat.UsersBanned)
 		}
 	}
 
-	return xValues, confirmedSeries, flaggedSeries, clearedSeries
+	return xValues, confirmedSeries, flaggedSeries, clearedSeries, bannedSeries
+}
+
+// prepareGroupDataSeries extracts group-related data points from hourly statistics.
+func (b *ChartBuilder) prepareGroupDataSeries() ([]float64, []float64, []float64, []float64, []float64) {
+	const hoursToShow = 24
+	xValues := make([]float64, hoursToShow)
+	confirmedSeries := make([]float64, hoursToShow)
+	flaggedSeries := make([]float64, hoursToShow)
+	clearedSeries := make([]float64, hoursToShow)
+	lockedSeries := make([]float64, hoursToShow)
+
+	// Create a map of truncated timestamps to stats for lookup
+	statsMap := make(map[time.Time]models.HourlyStats)
+	for _, stat := range b.stats {
+		truncatedTime := stat.Timestamp.Truncate(time.Hour)
+		statsMap[truncatedTime] = stat
+	}
+
+	// Fill in data points for each hour
+	now := time.Now().UTC().Truncate(time.Hour)
+	for i := range hoursToShow {
+		xValues[i] = float64(i)
+		timestamp := now.Add(time.Duration(-i) * time.Hour)
+
+		if stat, exists := statsMap[timestamp]; exists {
+			idx := hoursToShow - 1 - i
+			confirmedSeries[idx] = float64(stat.GroupsConfirmed)
+			flaggedSeries[idx] = float64(stat.GroupsFlagged)
+			clearedSeries[idx] = float64(stat.GroupsCleared)
+			lockedSeries[idx] = float64(stat.GroupsLocked)
+		}
+	}
+
+	return xValues, confirmedSeries, flaggedSeries, clearedSeries, lockedSeries
 }
 
 // prepareGridLinesAndTicks creates grid lines and x-axis labels.
