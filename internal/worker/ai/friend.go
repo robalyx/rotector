@@ -143,9 +143,9 @@ func (f *FriendWorker) Start() {
 func (f *FriendWorker) processFriendsBatch(friendIDs []uint64) ([]uint64, error) {
 	for len(friendIDs) < f.batchSize {
 		// Get the next confirmed user
-		user, err := f.db.Users().GetNextConfirmedUser(context.Background())
+		user, err := f.db.Users().GetUserToScan(context.Background())
 		if err != nil {
-			f.logger.Error("Error getting next confirmed user", zap.Error(err))
+			f.logger.Error("Error getting user to scan", zap.Error(err))
 			return nil, err
 		}
 

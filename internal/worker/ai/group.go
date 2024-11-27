@@ -99,9 +99,9 @@ func (g *GroupWorker) Start() {
 		// Step 1: Get next confirmed group (10%)
 		g.bar.SetStepMessage("Fetching next confirmed group", 10)
 		g.reporter.UpdateStatus("Fetching next confirmed group", 10)
-		group, err := g.db.Groups().GetNextConfirmedGroup(context.Background())
+		group, err := g.db.Groups().GetGroupToScan(context.Background())
 		if err != nil {
-			g.logger.Error("Error getting next confirmed group", zap.Error(err))
+			g.logger.Error("Error getting group to scan", zap.Error(err))
 			g.reporter.SetHealthy(false)
 			time.Sleep(5 * time.Minute)
 			continue

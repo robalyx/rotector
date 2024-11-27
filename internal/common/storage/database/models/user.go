@@ -158,40 +158,6 @@ func (r *UserModel) GetFlaggedUserToReview(ctx context.Context, sortBy string) (
 	return &user, nil
 }
 
-// GetNextConfirmedUser finds the next confirmed user that needs scanning.
-func (r *UserModel) GetNextConfirmedUser(ctx context.Context) (*ConfirmedUser, error) {
-	var user ConfirmedUser
-	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
-		err := tx.NewSelect().Model(&user).
-			Where("last_scanned IS NULL OR last_scanned < NOW() - INTERVAL '1 day'").
-			Order("last_scanned ASC NULLS FIRST").
-			Limit(1).
-			For("UPDATE SKIP LOCKED").
-			Scan(ctx)
-		if err != nil {
-			r.logger.Error("Failed to get next confirmed user", zap.Error(err))
-			return err
-		}
-
-		_, err = tx.NewUpdate().Model(&user).
-			Set("last_scanned = ?", time.Now()).
-			Where("id = ?", user.ID).
-			Exec(ctx)
-		if err != nil {
-			r.logger.Error("Failed to update last_scanned", zap.Error(err))
-			return err
-		}
-
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	r.logger.Debug("Retrieved next confirmed user", zap.Uint64("userID", user.ID))
-	return &user, nil
-}
-
 // SaveFlaggedUsers adds or updates users in the flagged_users table.
 // For each user, it updates all fields if the user already exists,
 // or inserts a new record if they don't.
@@ -736,4 +702,63 @@ func (r *UserModel) UpdateTrainingVotes(ctx context.Context, userID uint64, isUp
 	})
 
 	return err
+}
+
+// GetUserToScan finds the next user to scan from confirmed_users, falling back to flagged_users
+// if no confirmed users are available.
+func (r *UserModel) GetUserToScan(ctx context.Context) (*User, error) {
+	var user *User
+	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+		// First try confirmed users
+		var confirmedUser ConfirmedUser
+		err := tx.NewSelect().Model(&confirmedUser).
+			Where("last_scanned IS NULL OR last_scanned < NOW() - INTERVAL '1 day'").
+			Order("last_scanned ASC NULLS FIRST").
+			Limit(1).
+			For("UPDATE SKIP LOCKED").
+			Scan(ctx)
+		if err == nil {
+			// Update last_scanned
+			_, err = tx.NewUpdate().Model(&confirmedUser).
+				Set("last_scanned = ?", time.Now()).
+				Where("id = ?", confirmedUser.ID).
+				Exec(ctx)
+			if err != nil {
+				r.logger.Error("Failed to update last_scanned for confirmed user", zap.Error(err))
+				return err
+			}
+			user = &confirmedUser.User
+			return nil
+		}
+
+		// If no confirmed users, try flagged users
+		var flaggedUser FlaggedUser
+		err = tx.NewSelect().Model(&flaggedUser).
+			Where("last_scanned IS NULL OR last_scanned < NOW() - INTERVAL '1 day'").
+			Order("last_scanned ASC NULLS FIRST").
+			Limit(1).
+			For("UPDATE SKIP LOCKED").
+			Scan(ctx)
+		if err != nil {
+			r.logger.Error("Failed to get user to scan", zap.Error(err))
+			return err
+		}
+
+		// Update last_scanned
+		_, err = tx.NewUpdate().Model(&flaggedUser).
+			Set("last_scanned = ?", time.Now()).
+			Where("id = ?", flaggedUser.ID).
+			Exec(ctx)
+		if err != nil {
+			r.logger.Error("Failed to update last_scanned for flagged user", zap.Error(err))
+			return err
+		}
+		user = &flaggedUser.User
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return user, nil
 }

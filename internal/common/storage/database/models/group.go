@@ -71,44 +71,6 @@ func NewGroup(db *bun.DB, logger *zap.Logger) *GroupModel {
 	}
 }
 
-// GetNextConfirmedGroup retrieves the next confirmed group to be processed.
-func (r *GroupModel) GetNextConfirmedGroup(ctx context.Context) (*ConfirmedGroup, error) {
-	var group ConfirmedGroup
-
-	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
-		err := tx.NewSelect().Model(&group).
-			Where("last_scanned IS NULL OR last_scanned < NOW() - INTERVAL '1 day'").
-			Order("last_scanned ASC NULLS FIRST").
-			Limit(1).
-			For("UPDATE SKIP LOCKED").
-			Scan(ctx)
-		if err != nil {
-			r.logger.Error("Failed to get next confirmed group", zap.Error(err))
-			return err
-		}
-
-		_, err = tx.NewUpdate().Model(&group).
-			Set("last_scanned = ?", time.Now()).
-			Where("id = ?", group.ID).
-			Exec(ctx)
-		if err != nil {
-			r.logger.Error("Failed to update last_scanned", zap.Error(err))
-			return err
-		}
-
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	r.logger.Debug("Retrieved and updated next confirmed group",
-		zap.Uint64("groupID", group.ID),
-		zap.Time("lastScanned", group.LastScanned))
-
-	return &group, nil
-}
-
 // CheckConfirmedGroups finds which groups from a list of IDs exist in confirmed_groups.
 // Returns a slice of confirmed group IDs.
 func (r *GroupModel) CheckConfirmedGroups(ctx context.Context, groupIDs []uint64) ([]uint64, error) {
@@ -562,4 +524,63 @@ func (r *GroupModel) RemoveLockedGroups(ctx context.Context, groupIDs []uint64) 
 		r.logger.Debug("Moved locked groups to locked_groups", zap.Int("count", len(groupIDs)))
 		return nil
 	})
+}
+
+// GetGroupToScan finds the next group to scan from confirmed_groups, falling back to flagged_groups
+// if no confirmed groups are available.
+func (r *GroupModel) GetGroupToScan(ctx context.Context) (*Group, error) {
+	var group *Group
+	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+		// First try confirmed groups
+		var confirmedGroup ConfirmedGroup
+		err := tx.NewSelect().Model(&confirmedGroup).
+			Where("last_scanned IS NULL OR last_scanned < NOW() - INTERVAL '1 day'").
+			Order("last_scanned ASC NULLS FIRST").
+			Limit(1).
+			For("UPDATE SKIP LOCKED").
+			Scan(ctx)
+		if err == nil {
+			// Update last_scanned
+			_, err = tx.NewUpdate().Model(&confirmedGroup).
+				Set("last_scanned = ?", time.Now()).
+				Where("id = ?", confirmedGroup.ID).
+				Exec(ctx)
+			if err != nil {
+				r.logger.Error("Failed to update last_scanned for confirmed group", zap.Error(err))
+				return err
+			}
+			group = &confirmedGroup.Group
+			return nil
+		}
+
+		// If no confirmed groups, try flagged groups
+		var flaggedGroup FlaggedGroup
+		err = tx.NewSelect().Model(&flaggedGroup).
+			Where("last_scanned IS NULL OR last_scanned < NOW() - INTERVAL '1 day'").
+			Order("last_scanned ASC NULLS FIRST").
+			Limit(1).
+			For("UPDATE SKIP LOCKED").
+			Scan(ctx)
+		if err != nil {
+			r.logger.Error("Failed to get group to scan", zap.Error(err))
+			return err
+		}
+
+		// Update last_scanned
+		_, err = tx.NewUpdate().Model(&flaggedGroup).
+			Set("last_scanned = ?", time.Now()).
+			Where("id = ?", flaggedGroup.ID).
+			Exec(ctx)
+		if err != nil {
+			r.logger.Error("Failed to update last_scanned for flagged group", zap.Error(err))
+			return err
+		}
+		group = &flaggedGroup.Group
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return group, nil
 }
