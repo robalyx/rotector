@@ -30,8 +30,8 @@ type BotConfig struct {
 
 // WorkerConfig contains worker specific configuration.
 type WorkerConfig struct {
-	BatchSizes      BatchSizes
-	ThresholdLimits ThresholdLimits
+	BatchSizes      BatchSizes      `mapstructure:"batch_sizes"`
+	ThresholdLimits ThresholdLimits `mapstructure:"threshold_limits"`
 }
 
 // Debug contains debug-related configuration.
