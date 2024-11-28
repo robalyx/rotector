@@ -12,39 +12,39 @@ import (
 
 // BotMenu handles the display and interaction logic for bot-wide settings.
 type BotMenu struct {
-	handler *Handler
-	page    *pagination.Page
+	layout *Layout
+	page   *pagination.Page
 }
 
 // NewBotMenu creates a BotMenu and sets up its page.
-func NewBotMenu(h *Handler) *BotMenu {
-	b := &BotMenu{handler: h}
-	b.page = &pagination.Page{
+func NewBotMenu(l *Layout) *BotMenu {
+	m := &BotMenu{layout: l}
+	m.page = &pagination.Page{
 		Name: "Bot Settings Menu",
 		Message: func(s *session.Session) *discord.MessageUpdateBuilder {
-			return setting.NewBotSettingsBuilder(s, h.registry).Build()
+			return setting.NewBotSettingsBuilder(s, l.registry).Build()
 		},
-		SelectHandlerFunc: b.handleBotSettingSelection,
-		ButtonHandlerFunc: b.handleBotSettingButton,
+		SelectHandlerFunc: m.handleBotSettingSelection,
+		ButtonHandlerFunc: m.handleBotSettingButton,
 	}
-	return b
+	return m
 }
 
-// ShowMenu loads bot settings from the database into the session and
+// Show loads bot settings from the database into the session and
 // displays them through the pagination system.
-func (b *BotMenu) ShowMenu(event interfaces.CommonEvent, s *session.Session) {
-	b.handler.paginationManager.NavigateTo(event, s, b.page, "")
+func (m *BotMenu) Show(event interfaces.CommonEvent, s *session.Session) {
+	m.layout.paginationManager.NavigateTo(event, s, m.page, "")
 }
 
 // handleBotSettingSelection processes select menu interactions.
-func (b *BotMenu) handleBotSettingSelection(event *events.ComponentInteractionCreate, s *session.Session, _ string, option string) {
+func (m *BotMenu) handleBotSettingSelection(event *events.ComponentInteractionCreate, s *session.Session, _ string, option string) {
 	// Show the change menu for the selected setting
-	b.handler.settingMenu.ShowMenu(event, s, constants.BotSettingPrefix, option)
+	m.layout.updateMenu.Show(event, s, constants.BotSettingPrefix, option)
 }
 
 // handleBotSettingButton processes button interactions.
-func (b *BotMenu) handleBotSettingButton(event *events.ComponentInteractionCreate, s *session.Session, customID string) {
+func (m *BotMenu) handleBotSettingButton(event *events.ComponentInteractionCreate, s *session.Session, customID string) {
 	if customID == constants.BackButtonCustomID {
-		b.handler.dashboardHandler.ShowDashboard(event, s, "")
+		m.layout.dashboardLayout.Show(event, s, "")
 	}
 }

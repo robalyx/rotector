@@ -18,18 +18,16 @@ import (
 )
 
 // FriendsMenu handles the display and interaction logic for viewing a user's friends.
-// It works with the friends builder to create paginated views of friend avatars
-// and manages friend status indicators.
 type FriendsMenu struct {
-	handler *Handler
-	page    *pagination.Page
+	layout *Layout
+	page   *pagination.Page
 }
 
 // NewFriendsMenu creates a FriendsMenu and sets up its page with message builders
 // and interaction handlers. The page is configured to show friend information
 // and handle navigation.
-func NewFriendsMenu(h *Handler) *FriendsMenu {
-	m := FriendsMenu{handler: h}
+func NewFriendsMenu(layout *Layout) *FriendsMenu {
+	m := &FriendsMenu{layout: layout}
 	m.page = &pagination.Page{
 		Name: "Friends Menu",
 		Message: func(s *session.Session) *discord.MessageUpdateBuilder {
@@ -37,18 +35,18 @@ func NewFriendsMenu(h *Handler) *FriendsMenu {
 		},
 		ButtonHandlerFunc: m.handlePageNavigation,
 	}
-	return &m
+	return m
 }
 
-// ShowFriendsMenu prepares and displays the friends interface for a specific page.
+// Show prepares and displays the friends interface for a specific page.
 // It loads friend data, checks their status, and creates a grid of avatars.
-func (m *FriendsMenu) ShowFriendsMenu(event *events.ComponentInteractionCreate, s *session.Session, page int) {
+func (m *FriendsMenu) Show(event *events.ComponentInteractionCreate, s *session.Session, page int) {
 	var user *models.FlaggedUser
 	s.GetInterface(constants.SessionKeyTarget, &user)
 
 	// Return to review menu if user has no friends
 	if len(user.Friends) == 0 {
-		m.handler.reviewMenu.ShowReviewMenu(event, s, "No friends found for this user.")
+		m.layout.reviewMenu.Show(event, s, "No friends found for this user.")
 		return
 	}
 
@@ -78,15 +76,15 @@ func (m *FriendsMenu) ShowFriendsMenu(event *events.ComponentInteractionCreate, 
 
 	// Create grid image from avatars
 	buf, err := utils.MergeImages(
-		m.handler.roAPI.GetClient(),
+		m.layout.roAPI.GetClient(),
 		thumbnailURLs,
 		constants.FriendsGridColumns,
 		constants.FriendsGridRows,
 		constants.FriendsPerPage,
 	)
 	if err != nil {
-		m.handler.logger.Error("Failed to merge friend images", zap.Error(err))
-		m.handler.paginationManager.RespondWithError(event, "Failed to process friend images. Please try again.")
+		m.layout.logger.Error("Failed to merge friend images", zap.Error(err))
+		m.layout.paginationManager.RespondWithError(event, "Failed to process friend images. Please try again.")
 		return
 	}
 
@@ -98,7 +96,7 @@ func (m *FriendsMenu) ShowFriendsMenu(event *events.ComponentInteractionCreate, 
 	s.Set(constants.SessionKeyTotalItems, len(sortedFriends))
 	s.SetBuffer(constants.SessionKeyImageBuffer, buf)
 
-	m.handler.paginationManager.NavigateTo(event, s, m.page, "")
+	m.layout.paginationManager.NavigateTo(event, s, m.page, "")
 }
 
 // handlePageNavigation processes navigation button clicks by calculating
@@ -114,18 +112,18 @@ func (m *FriendsMenu) handlePageNavigation(event *events.ComponentInteractionCre
 		maxPage := (len(user.Friends) - 1) / constants.FriendsPerPage
 		page, ok := action.ParsePageAction(s, action, maxPage)
 		if !ok {
-			m.handler.paginationManager.RespondWithError(event, "Invalid interaction.")
+			m.layout.paginationManager.RespondWithError(event, "Invalid interaction.")
 			return
 		}
 
-		m.ShowFriendsMenu(event, s, page)
+		m.Show(event, s, page)
 
 	case constants.BackButtonCustomID:
-		m.handler.reviewMenu.ShowReviewMenu(event, s, "")
+		m.layout.reviewMenu.Show(event, s, "")
 
 	default:
-		m.handler.logger.Warn("Invalid friends viewer action", zap.String("action", string(action)))
-		m.handler.paginationManager.RespondWithError(event, "Invalid interaction.")
+		m.layout.logger.Warn("Invalid friends viewer action", zap.String("action", string(action)))
+		m.layout.paginationManager.RespondWithError(event, "Invalid interaction.")
 	}
 }
 
@@ -153,7 +151,7 @@ func (m *FriendsMenu) fetchFriendData(allFriends []models.ExtendedFriend) (map[u
 		}
 
 		// Process thumbnails
-		thumbnailMap = m.handler.thumbnailFetcher.ProcessBatchThumbnails(requests)
+		thumbnailMap = m.layout.thumbnailFetcher.ProcessBatchThumbnails(requests)
 	}()
 
 	// Fetch presence information
@@ -164,7 +162,7 @@ func (m *FriendsMenu) fetchFriendData(allFriends []models.ExtendedFriend) (map[u
 			friendIDs[i] = friend.ID
 		}
 
-		presences := m.handler.presenceFetcher.FetchPresences(friendIDs)
+		presences := m.layout.presenceFetcher.FetchPresences(friendIDs)
 
 		// Populate presence map with presence information
 		for _, presence := range presences {

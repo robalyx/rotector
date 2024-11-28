@@ -17,17 +17,16 @@ import (
 )
 
 // OutfitsMenu handles the display and interaction logic for viewing a user's outfits.
-// It works with the outfits builder to create paginated views of outfit thumbnails.
 type OutfitsMenu struct {
-	handler *Handler
-	page    *pagination.Page
+	layout *Layout
+	page   *pagination.Page
 }
 
 // NewOutfitsMenu creates an OutfitsMenu and sets up its page with message builders
 // and interaction handlers. The page is configured to show outfit information
 // and handle navigation.
-func NewOutfitsMenu(h *Handler) *OutfitsMenu {
-	m := OutfitsMenu{handler: h}
+func NewOutfitsMenu(layout *Layout) *OutfitsMenu {
+	m := &OutfitsMenu{layout: layout}
 	m.page = &pagination.Page{
 		Name: "Outfits Menu",
 		Message: func(s *session.Session) *discord.MessageUpdateBuilder {
@@ -35,18 +34,18 @@ func NewOutfitsMenu(h *Handler) *OutfitsMenu {
 		},
 		ButtonHandlerFunc: m.handlePageNavigation,
 	}
-	return &m
+	return m
 }
 
-// ShowOutfitsMenu prepares and displays the outfits interface for a specific page.
+// Show prepares and displays the outfits interface for a specific page.
 // It loads outfit data and creates a grid of thumbnails.
-func (m *OutfitsMenu) ShowOutfitsMenu(event *events.ComponentInteractionCreate, s *session.Session, page int) {
+func (m *OutfitsMenu) Show(event *events.ComponentInteractionCreate, s *session.Session, page int) {
 	var user *models.FlaggedUser
 	s.GetInterface(constants.SessionKeyTarget, &user)
 
 	// Return to review menu if user has no outfits
 	if len(user.Outfits) == 0 {
-		m.handler.reviewMenu.ShowReviewMenu(event, s, "No outfits found for this user.")
+		m.layout.reviewMenu.Show(event, s, "No outfits found for this user.")
 		return
 	}
 
@@ -73,15 +72,15 @@ func (m *OutfitsMenu) ShowOutfitsMenu(event *events.ComponentInteractionCreate, 
 
 	// Create grid image from thumbnails
 	buf, err := utils.MergeImages(
-		m.handler.roAPI.GetClient(),
+		m.layout.roAPI.GetClient(),
 		thumbnailURLs,
 		constants.OutfitGridColumns,
 		constants.OutfitGridRows,
 		constants.OutfitsPerPage,
 	)
 	if err != nil {
-		m.handler.logger.Error("Failed to merge outfit images", zap.Error(err))
-		m.handler.paginationManager.RespondWithError(event, "Failed to process outfit images. Please try again.")
+		m.layout.logger.Error("Failed to merge outfit images", zap.Error(err))
+		m.layout.paginationManager.RespondWithError(event, "Failed to process outfit images. Please try again.")
 		return
 	}
 
@@ -92,7 +91,7 @@ func (m *OutfitsMenu) ShowOutfitsMenu(event *events.ComponentInteractionCreate, 
 	s.Set(constants.SessionKeyTotalItems, len(outfits))
 	s.SetBuffer(constants.SessionKeyImageBuffer, buf)
 
-	m.handler.paginationManager.NavigateTo(event, s, m.page, "")
+	m.layout.paginationManager.NavigateTo(event, s, m.page, "")
 }
 
 // handlePageNavigation processes navigation button clicks by calculating
@@ -108,18 +107,18 @@ func (m *OutfitsMenu) handlePageNavigation(event *events.ComponentInteractionCre
 		maxPage := (len(user.Outfits) - 1) / constants.OutfitsPerPage
 		page, ok := action.ParsePageAction(s, action, maxPage)
 		if !ok {
-			m.handler.paginationManager.RespondWithError(event, "Invalid interaction.")
+			m.layout.paginationManager.RespondWithError(event, "Invalid interaction.")
 			return
 		}
 
-		m.ShowOutfitsMenu(event, s, page)
+		m.Show(event, s, page)
 
 	case constants.BackButtonCustomID:
-		m.handler.reviewMenu.ShowReviewMenu(event, s, "")
+		m.layout.reviewMenu.Show(event, s, "")
 
 	default:
-		m.handler.logger.Warn("Invalid outfits viewer action", zap.String("action", string(action)))
-		m.handler.paginationManager.RespondWithError(event, "Invalid interaction.")
+		m.layout.logger.Warn("Invalid outfits viewer action", zap.String("action", string(action)))
+		m.layout.paginationManager.RespondWithError(event, "Invalid interaction.")
 	}
 }
 
@@ -138,5 +137,5 @@ func (m *OutfitsMenu) fetchOutfitThumbnails(outfits []types.Outfit) map[uint64]s
 		})
 	}
 
-	return m.handler.thumbnailFetcher.ProcessBatchThumbnails(requests)
+	return m.layout.thumbnailFetcher.ProcessBatchThumbnails(requests)
 }

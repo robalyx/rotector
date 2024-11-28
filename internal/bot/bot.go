@@ -32,8 +32,8 @@ import (
 	"github.com/rotector/rotector/internal/common/storage/redis"
 )
 
-// Bot coordinates all the handlers and managers needed for Discord interaction.
-// It maintains connections to the database, Discord client, and various handlers
+// Bot handles all the layouts and managers needed for Discord interaction.
+// It maintains connections to the database, Discord client, and various layouts
 // while processing user interactions through the session and pagination managers.
 type Bot struct {
 	db                *database.Client
@@ -41,15 +41,15 @@ type Bot struct {
 	logger            *zap.Logger
 	sessionManager    *session.Manager
 	paginationManager *pagination.Manager
-	dashboardHandler  *dashboard.Handler
-	userReviewHandler *userReview.Handler
-	settingHandler    *setting.Handler
-	logHandler        *log.Handler
+	dashboardLayout   interfaces.DashboardLayout
+	userReviewLayout  interfaces.UserReviewLayout
+	settingLayout     interfaces.SettingLayout
+	logLayout         interfaces.LogLayout
 }
 
-// New initializes a Bot instance by creating all required managers and handlers.
-// It establishes connections between handlers through dependency injection and
-// configures the Discord client with necessary gateway intents and event listeners.
+// New initializes a Bot instance by creating all required managers and layouts.
+// It connects layouts through dependency injection and configures the Discord
+// client with necessary gateway intents and event listeners.
 func New(
 	token string,
 	db *database.Client,
@@ -65,21 +65,20 @@ func New(
 	}
 	paginationManager := pagination.NewManager(sessionManager, logger)
 
-	// Create handlers with their dependencies
-	// Each handler receives references to managers it needs to function
-	dashboardHandler := dashboard.New(db, logger, sessionManager, paginationManager, redisManager)
-	logHandler := log.New(db, sessionManager, paginationManager, dashboardHandler, logger)
-	settingHandler := setting.New(db, logger, sessionManager, paginationManager, dashboardHandler)
-	userReviewHandler := userReview.New(db, logger, roAPI, sessionManager, paginationManager, queueManager, dashboardHandler, logHandler)
-	groupReviewHandler := groupReview.New(db, logger, roAPI, sessionManager, paginationManager, dashboardHandler, logHandler)
-	queueHandler := queue.New(db, logger, sessionManager, paginationManager, queueManager, dashboardHandler, userReviewHandler)
+	// Create layouts with their dependencies
+	dashboardLayout := dashboard.New(db, logger, sessionManager, paginationManager, redisManager)
+	logLayout := log.New(db, sessionManager, paginationManager, dashboardLayout, logger)
+	settingLayout := setting.New(db, logger, sessionManager, paginationManager, dashboardLayout)
+	userReviewLayout := userReview.New(db, logger, roAPI, sessionManager, paginationManager, queueManager, dashboardLayout, logLayout)
+	groupReviewLayout := groupReview.New(db, logger, roAPI, sessionManager, paginationManager, dashboardLayout, logLayout)
+	queueLayout := queue.New(db, logger, sessionManager, paginationManager, queueManager, dashboardLayout, userReviewLayout)
 
-	// Cross-link handlers to enable navigation between different sections
-	dashboardHandler.SetLogHandler(logHandler)
-	dashboardHandler.SetSettingsHandler(settingHandler)
-	dashboardHandler.SetUserReviewHandler(userReviewHandler)
-	dashboardHandler.SetGroupReviewHandler(groupReviewHandler)
-	dashboardHandler.SetQueueHandler(queueHandler)
+	// Cross-link layouts to enable navigation between different sections
+	dashboardLayout.SetLogLayout(logLayout)
+	dashboardLayout.SetSettingLayout(settingLayout)
+	dashboardLayout.SetUserReviewLayout(userReviewLayout)
+	dashboardLayout.SetGroupReviewLayout(groupReviewLayout)
+	dashboardLayout.SetQueueLayout(queueLayout)
 
 	// Initialize bot structure with all components
 	b := &Bot{
@@ -87,10 +86,10 @@ func New(
 		logger:            logger,
 		sessionManager:    sessionManager,
 		paginationManager: paginationManager,
-		dashboardHandler:  dashboardHandler,
-		userReviewHandler: userReviewHandler,
-		settingHandler:    settingHandler,
-		logHandler:        logHandler,
+		dashboardLayout:   dashboardLayout,
+		userReviewLayout:  userReviewLayout,
+		settingLayout:     settingLayout,
+		logLayout:         logLayout,
 	}
 
 	// Configure Discord client with required gateway intents and event handlers
@@ -314,7 +313,7 @@ func (b *Bot) validateAndGetSession(event interfaces.CommonEvent, userID snowfla
 	page := b.paginationManager.GetPage(currentPage)
 	if page == nil {
 		// If no valid page exists, reset to dashboard
-		b.dashboardHandler.ShowDashboard(event, s, "New session created.")
+		b.dashboardLayout.Show(event, s, "New session created.")
 		s.Touch(context.Background())
 		return s, false
 	}

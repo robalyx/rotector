@@ -18,18 +18,16 @@ import (
 )
 
 // GroupsMenu handles the display and interaction logic for viewing a user's groups.
-// It works with the groups builder to create paginated views of group icons
-// and manages group status indicators.
 type GroupsMenu struct {
-	handler *Handler
-	page    *pagination.Page
+	layout *Layout
+	page   *pagination.Page
 }
 
 // NewGroupsMenu creates a GroupsMenu and sets up its page with message builders
 // and interaction handlers. The page is configured to show group information
 // and handle navigation.
-func NewGroupsMenu(h *Handler) *GroupsMenu {
-	m := GroupsMenu{handler: h}
+func NewGroupsMenu(layout *Layout) *GroupsMenu {
+	m := &GroupsMenu{layout: layout}
 	m.page = &pagination.Page{
 		Name: "Groups Menu",
 		Message: func(s *session.Session) *discord.MessageUpdateBuilder {
@@ -37,18 +35,18 @@ func NewGroupsMenu(h *Handler) *GroupsMenu {
 		},
 		ButtonHandlerFunc: m.handlePageNavigation,
 	}
-	return &m
+	return m
 }
 
-// ShowGroupsMenu prepares and displays the groups interface for a specific page.
+// Show prepares and displays the groups interface for a specific page.
 // It loads group data, checks their status, and creates a grid of icons.
-func (m *GroupsMenu) ShowGroupsMenu(event *events.ComponentInteractionCreate, s *session.Session, page int) {
+func (m *GroupsMenu) Show(event *events.ComponentInteractionCreate, s *session.Session, page int) {
 	var user *models.FlaggedUser
 	s.GetInterface(constants.SessionKeyTarget, &user)
 
 	// Return to review menu if user has no groups
 	if len(user.Groups) == 0 {
-		m.handler.reviewMenu.ShowReviewMenu(event, s, "No groups found for this user.")
+		m.layout.reviewMenu.Show(event, s, "No groups found for this user.")
 		return
 	}
 	groups := user.Groups
@@ -64,8 +62,8 @@ func (m *GroupsMenu) ShowGroupsMenu(event *events.ComponentInteractionCreate, s 
 	// Check database for flagged groups
 	flaggedGroups, err := m.getFlaggedGroups(pageGroups)
 	if err != nil {
-		m.handler.logger.Error("Failed to get flagged groups", zap.Error(err))
-		m.handler.paginationManager.RespondWithError(event, "Failed to get flagged groups. Please try again.")
+		m.layout.logger.Error("Failed to get flagged groups", zap.Error(err))
+		m.layout.paginationManager.RespondWithError(event, "Failed to get flagged groups. Please try again.")
 		return
 	}
 
@@ -82,15 +80,15 @@ func (m *GroupsMenu) ShowGroupsMenu(event *events.ComponentInteractionCreate, s 
 
 	// Create grid image from icons
 	buf, err := utils.MergeImages(
-		m.handler.roAPI.GetClient(),
+		m.layout.roAPI.GetClient(),
 		pageThumbnailURLs,
 		constants.GroupsGridColumns,
 		constants.GroupsGridRows,
 		constants.GroupsPerPage,
 	)
 	if err != nil {
-		m.handler.logger.Error("Failed to merge group images", zap.Error(err))
-		m.handler.paginationManager.RespondWithError(event, "Failed to process group images. Please try again.")
+		m.layout.logger.Error("Failed to merge group images", zap.Error(err))
+		m.layout.paginationManager.RespondWithError(event, "Failed to process group images. Please try again.")
 		return
 	}
 
@@ -102,7 +100,7 @@ func (m *GroupsMenu) ShowGroupsMenu(event *events.ComponentInteractionCreate, s 
 	s.Set(constants.SessionKeyTotalItems, len(groups))
 	s.SetBuffer(constants.SessionKeyImageBuffer, buf)
 
-	m.handler.paginationManager.NavigateTo(event, s, m.page, "")
+	m.layout.paginationManager.NavigateTo(event, s, m.page, "")
 }
 
 // getFlaggedGroups checks the database to find which groups are flagged.
@@ -113,7 +111,7 @@ func (m *GroupsMenu) getFlaggedGroups(groups []*types.UserGroupRoles) (map[uint6
 		groupIDs[i] = group.Group.ID
 	}
 
-	flaggedGroups, err := m.handler.db.Groups().CheckConfirmedGroups(context.Background(), groupIDs)
+	flaggedGroups, err := m.layout.db.Groups().CheckConfirmedGroups(context.Background(), groupIDs)
 	if err != nil {
 		return nil, err
 	}
@@ -139,18 +137,18 @@ func (m *GroupsMenu) handlePageNavigation(event *events.ComponentInteractionCrea
 		maxPage := (len(user.Groups) - 1) / constants.GroupsPerPage
 		page, ok := action.ParsePageAction(s, action, maxPage)
 		if !ok {
-			m.handler.paginationManager.RespondWithError(event, "Invalid interaction.")
+			m.layout.paginationManager.RespondWithError(event, "Invalid interaction.")
 			return
 		}
 
-		m.ShowGroupsMenu(event, s, page)
+		m.Show(event, s, page)
 
 	case constants.BackButtonCustomID:
-		m.handler.reviewMenu.ShowReviewMenu(event, s, "")
+		m.layout.reviewMenu.Show(event, s, "")
 
 	default:
-		m.handler.logger.Warn("Invalid groups viewer action", zap.String("action", string(action)))
-		m.handler.paginationManager.RespondWithError(event, "Invalid interaction.")
+		m.layout.logger.Warn("Invalid groups viewer action", zap.String("action", string(action)))
+		m.layout.paginationManager.RespondWithError(event, "Invalid interaction.")
 	}
 }
 
@@ -169,5 +167,5 @@ func (m *GroupsMenu) fetchGroupsThumbnails(groups []*types.UserGroupRoles) map[u
 		})
 	}
 
-	return m.handler.thumbnailFetcher.ProcessBatchThumbnails(requests)
+	return m.layout.thumbnailFetcher.ProcessBatchThumbnails(requests)
 }

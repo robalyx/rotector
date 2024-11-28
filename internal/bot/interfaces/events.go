@@ -8,7 +8,7 @@ import (
 )
 
 // CommonEvent extracts shared functionality from different Discord event types.
-// This allows handlers to work with any interaction event without type checking.
+// This allows pagination to work with any interaction event without type checking.
 type CommonEvent interface {
 	// Client returns the Discord client instance handling this event
 	Client() bot.Client
