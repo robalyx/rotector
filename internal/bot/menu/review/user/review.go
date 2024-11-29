@@ -52,11 +52,13 @@ func (m *ReviewMenu) Show(event interfaces.CommonEvent, s *session.Session, cont
 		userSettings.ReviewMode = models.TrainingReviewMode
 		if err := m.layout.db.Settings().SaveUserSettings(context.Background(), userSettings); err != nil {
 			m.layout.logger.Error("Failed to enforce training mode", zap.Error(err))
+			m.layout.paginationManager.RespondWithError(event, "Failed to enforce training mode. Please try again.")
+			return
 		}
 		s.Set(constants.SessionKeyUserSettings, userSettings)
 	}
 
-	var user *models.FlaggedUser
+	var user *models.ConfirmedUser
 	s.GetInterface(constants.SessionKeyTarget, &user)
 
 	// If no user is set in session, fetch a new one
@@ -176,6 +178,14 @@ func (m *ReviewMenu) handleActionSelection(event *events.ComponentInteractionCre
 			return
 		}
 		m.handleSwitchReviewMode(event, s)
+
+	case constants.SwitchTargetModeCustomID:
+		if !settings.IsReviewer(userID) {
+			m.layout.logger.Error("Non-reviewer attempted to switch target mode", zap.Uint64("user_id", userID))
+			m.layout.paginationManager.RespondWithError(event, "You do not have permission to switch target modes.")
+			return
+		}
+		m.handleSwitchTargetMode(event, s)
 	}
 }
 
@@ -238,7 +248,7 @@ func (m *ReviewMenu) handleRecheck(event *events.ComponentInteractionCreate, s *
 	// Show modal to user
 	if err := event.Modal(modal); err != nil {
 		m.layout.logger.Error("Failed to create modal", zap.Error(err))
-		m.layout.paginationManager.RespondWithError(event, "Failed to open the recheck reason forh. Please try again.")
+		m.layout.paginationManager.RespondWithError(event, "Failed to open the recheck reason for modal. Please try again.")
 	}
 }
 
@@ -492,7 +502,7 @@ func (m *ReviewMenu) handleConfirmWithReason(event *events.ComponentInteractionC
 	// Show modal to user
 	if err := event.Modal(modal); err != nil {
 		m.layout.logger.Error("Failed to create modal", zap.Error(err))
-		m.layout.paginationManager.RespondWithError(event, "Failed to open the confirm reason forh. Please try again.")
+		m.layout.paginationManager.RespondWithError(event, "Failed to open the confirm reason for modal. Please try again.")
 	}
 }
 
@@ -559,10 +569,32 @@ func (m *ReviewMenu) handleSwitchReviewMode(event *events.ComponentInteractionCr
 	m.Show(event, s, "Switched to "+models.FormatReviewMode(settings.ReviewMode))
 }
 
+// handleSwitchTargetMode switches between reviewing flagged items and re-reviewing confirmed items.
+func (m *ReviewMenu) handleSwitchTargetMode(event *events.ComponentInteractionCreate, s *session.Session) {
+	var settings *models.UserSetting
+	s.GetInterface(constants.SessionKeyUserSettings, &settings)
+
+	// Toggle between modes
+	if settings.ReviewTargetMode == models.FlaggedReviewTarget {
+		settings.ReviewTargetMode = models.ConfirmedReviewTarget
+	} else {
+		settings.ReviewTargetMode = models.FlaggedReviewTarget
+	}
+
+	// Save the updated setting
+	if err := m.layout.db.Settings().SaveUserSettings(context.Background(), settings); err != nil {
+		m.layout.logger.Error("Failed to save target mode setting", zap.Error(err))
+		m.layout.paginationManager.RespondWithError(event, "Failed to switch target mode. Please try again.")
+		return
+	}
+
+	// Update session and refresh the menu
+	s.Set(constants.SessionKeyUserSettings, settings)
+	m.Show(event, s, "Switched to "+models.FormatReviewTargetMode(settings.ReviewTargetMode))
+}
+
 // fetchNewTarget gets a new user to review based on the current sort order.
-// It logs the view action and stores the user in the session.
-func (m *ReviewMenu) fetchNewTarget(s *session.Session, reviewerID uint64) (*models.FlaggedUser, error) {
-	// Retrieve user settings from session
+func (m *ReviewMenu) fetchNewTarget(s *session.Session, reviewerID uint64) (*models.ConfirmedUser, error) {
 	var settings *models.UserSetting
 	s.GetInterface(constants.SessionKeyUserSettings, &settings)
 
@@ -570,7 +602,7 @@ func (m *ReviewMenu) fetchNewTarget(s *session.Session, reviewerID uint64) (*mod
 	sortBy := settings.UserDefaultSort
 
 	// Get the next user to review
-	user, err := m.layout.db.Users().GetFlaggedUserToReview(context.Background(), sortBy)
+	user, err := m.layout.db.Users().GetUserToReview(context.Background(), sortBy, settings.ReviewTargetMode)
 	if err != nil {
 		return nil, err
 	}

@@ -15,6 +15,12 @@ const (
 	StandardReviewMode = "standard"
 )
 
+// Review Target Modes.
+const (
+	FlaggedReviewTarget   = "flagged"
+	ConfirmedReviewTarget = "confirmed"
+)
+
 // FormatReviewMode converts the review mode constant to a user-friendly display string.
 func FormatReviewMode(mode string) string {
 	switch mode {
@@ -27,6 +33,18 @@ func FormatReviewMode(mode string) string {
 	}
 }
 
+// FormatReviewTargetMode converts the target mode to display string.
+func FormatReviewTargetMode(mode string) string {
+	switch mode {
+	case FlaggedReviewTarget:
+		return "Flagged Items"
+	case ConfirmedReviewTarget:
+		return "Confirmed Items"
+	default:
+		return "Unknown Target"
+	}
+}
+
 // UserSetting stores user-specific preferences.
 type UserSetting struct {
 	UserID           uint64 `bun:",pk"`
@@ -34,6 +52,7 @@ type UserSetting struct {
 	UserDefaultSort  string `bun:",notnull"`
 	GroupDefaultSort string `bun:",notnull"`
 	ReviewMode       string `bun:",notnull"`
+	ReviewTargetMode string `bun:",notnull"`
 }
 
 // BotSetting stores bot-wide configuration options.
@@ -86,6 +105,7 @@ func (r *SettingModel) GetUserSettings(ctx context.Context, userID uint64) (*Use
 		UserDefaultSort:  SortByRandom,
 		GroupDefaultSort: SortByRandom,
 		ReviewMode:       StandardReviewMode,
+		ReviewTargetMode: FlaggedReviewTarget,
 	}
 
 	err := r.db.NewSelect().Model(settings).
@@ -116,6 +136,7 @@ func (r *SettingModel) SaveUserSettings(ctx context.Context, settings *UserSetti
 		Set("user_default_sort = EXCLUDED.user_default_sort").
 		Set("group_default_sort = EXCLUDED.group_default_sort").
 		Set("review_mode = EXCLUDED.review_mode").
+		Set("review_target_mode = EXCLUDED.review_target_mode").
 		Exec(ctx)
 	if err != nil {
 		r.logger.Error("Failed to save user settings",

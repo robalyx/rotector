@@ -2,7 +2,6 @@ package models
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"time"
 
@@ -19,9 +18,6 @@ const (
 	// UserTypeCleared indicates a user was reviewed and found to be appropriate.
 	UserTypeCleared = "cleared"
 )
-
-// ErrInvalidSortBy indicates that the provided sort method is not supported.
-var ErrInvalidSortBy = errors.New("invalid sortBy value")
 
 // ExtendedFriend contains additional user information beyond the basic Friend type.
 type ExtendedFriend struct {
@@ -98,64 +94,6 @@ func NewUser(db *bun.DB, tracking *TrackingModel, logger *zap.Logger) *UserModel
 		tracking: tracking,
 		logger:   logger,
 	}
-}
-
-// GetFlaggedUserToReview finds a user to review based on the sort method:
-// - random: selects any unviewed user randomly
-// - confidence: selects the user with highest confidence score
-// - last_updated: selects the oldest updated user
-// - reputation: selects the user with highest upvotes - downvotes.
-func (r *UserModel) GetFlaggedUserToReview(ctx context.Context, sortBy string) (*FlaggedUser, error) {
-	var user FlaggedUser
-	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
-		query := tx.NewSelect().Model(&user).
-			Where("last_viewed IS NULL OR last_viewed < NOW() - INTERVAL '10 minutes'")
-
-		switch sortBy {
-		case SortByConfidence:
-			query.Order("confidence DESC")
-		case SortByLastUpdated:
-			query.Order("last_updated ASC")
-		case SortByReputation:
-			query.Order("reputation ASC")
-		case SortByRandom:
-			query.OrderExpr("RANDOM()")
-		default:
-			return fmt.Errorf("%w: %s", ErrInvalidSortBy, sortBy)
-		}
-
-		err := query.Limit(1).
-			For("UPDATE SKIP LOCKED").
-			Scan(ctx)
-		if err != nil {
-			r.logger.Error("Failed to get flagged user to review", zap.Error(err))
-			return err
-		}
-
-		// Update last_viewed
-		now := time.Now()
-		_, err = tx.NewUpdate().Model(&user).
-			Set("last_viewed = ?", now).
-			Where("id = ?", user.ID).
-			Exec(ctx)
-		if err != nil {
-			r.logger.Error("Failed to update last_viewed", zap.Error(err))
-			return err
-		}
-		user.LastViewed = now
-
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	r.logger.Debug("Retrieved flagged user to review",
-		zap.Uint64("userID", user.ID),
-		zap.String("sortBy", sortBy),
-		zap.Time("lastViewed", user.LastViewed))
-
-	return &user, nil
 }
 
 // SaveFlaggedUsers adds or updates users in the flagged_users table.
@@ -661,46 +599,50 @@ func (r *UserModel) PurgeOldClearedUsers(ctx context.Context, cutoffDate time.Ti
 // UpdateTrainingVotes updates the upvotes or downvotes count for a user in training mode.
 func (r *UserModel) UpdateTrainingVotes(ctx context.Context, userID uint64, isUpvote bool) error {
 	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
-		// First get current vote counts
-		var user FlaggedUser
-		err := tx.NewSelect().
-			Model(&user).
-			Column("upvotes", "downvotes").
-			Where("id = ?", userID).
-			Scan(ctx)
-		if err != nil {
-			return err
+		// Try to update votes in either flagged or confirmed table
+		if err := r.updateVotesInTable(ctx, tx, (*FlaggedUser)(nil), userID, isUpvote); err == nil {
+			return nil
 		}
-
-		// Increment appropriate vote count
-		if isUpvote {
-			user.Upvotes++
-		} else {
-			user.Downvotes++
-		}
-
-		// Calculate new reputation
-		newReputation := user.Upvotes - user.Downvotes
-
-		// Update the user with new values
-		_, err = tx.NewUpdate().
-			Model((*FlaggedUser)(nil)).
-			Set("upvotes = ?", user.Upvotes).
-			Set("downvotes = ?", user.Downvotes).
-			Set("reputation = ?", newReputation).
-			Where("id = ?", userID).
-			Exec(ctx)
-		if err != nil {
-			r.logger.Error("Failed to update training votes",
-				zap.Error(err),
-				zap.Uint64("userID", userID),
-				zap.String("voteType", map[bool]string{true: "upvote", false: "downvote"}[isUpvote]))
-			return err
-		}
-
-		return nil
+		return r.updateVotesInTable(ctx, tx, (*ConfirmedUser)(nil), userID, isUpvote)
 	})
+	if err != nil {
+		r.logger.Error("Failed to update training votes",
+			zap.Error(err),
+			zap.Uint64("userID", userID),
+			zap.String("voteType", map[bool]string{true: "upvote", false: "downvote"}[isUpvote]))
+	}
+	return err
+}
 
+// updateVotesInTable handles updating votes for a specific table type.
+func (r *UserModel) updateVotesInTable(ctx context.Context, tx bun.Tx, model interface{}, userID uint64, isUpvote bool) error {
+	// Get current vote counts
+	var upvotes, downvotes int
+	err := tx.NewSelect().
+		Model(model).
+		Column("upvotes", "downvotes").
+		Where("id = ?", userID).
+		Scan(ctx, &upvotes, &downvotes)
+	if err != nil {
+		return err
+	}
+
+	// Update vote counts
+	if isUpvote {
+		upvotes++
+	} else {
+		downvotes++
+	}
+	reputation := upvotes - downvotes
+
+	// Save updated counts
+	_, err = tx.NewUpdate().
+		Model(model).
+		Set("upvotes = ?", upvotes).
+		Set("downvotes = ?", downvotes).
+		Set("reputation = ?", reputation).
+		Where("id = ?", userID).
+		Exec(ctx)
 	return err
 }
 
@@ -761,4 +703,111 @@ func (r *UserModel) GetUserToScan(ctx context.Context) (*User, error) {
 	}
 
 	return user, nil
+}
+
+// GetUserToReview finds a user to review based on the sort method and target mode.
+func (r *UserModel) GetUserToReview(ctx context.Context, sortBy string, targetMode string) (*ConfirmedUser, error) {
+	var primaryModel, fallbackModel interface{}
+
+	// Set up which models to try first and as fallback based on target mode
+	if targetMode == FlaggedReviewTarget {
+		primaryModel = &FlaggedUser{}
+		fallbackModel = &ConfirmedUser{}
+	} else {
+		primaryModel = &ConfirmedUser{}
+		fallbackModel = &FlaggedUser{}
+	}
+
+	// Try primary target first
+	result, err := r.getNextToReview(ctx, primaryModel, sortBy)
+	if err == nil {
+		if flaggedUser, ok := result.(*FlaggedUser); ok {
+			return &ConfirmedUser{
+				User:       flaggedUser.User,
+				VerifiedAt: time.Time{}, // Zero time since it's not confirmed yet
+			}, nil
+		}
+		if confirmedUser, ok := result.(*ConfirmedUser); ok {
+			return confirmedUser, nil
+		}
+	}
+
+	// Try fallback target
+	result, err = r.getNextToReview(ctx, fallbackModel, sortBy)
+	if err == nil {
+		if flaggedUser, ok := result.(*FlaggedUser); ok {
+			return &ConfirmedUser{
+				User:       flaggedUser.User,
+				VerifiedAt: time.Time{}, // Zero time since it's not confirmed yet
+			}, nil
+		}
+		if confirmedUser, ok := result.(*ConfirmedUser); ok {
+			return confirmedUser, nil
+		}
+	}
+
+	return nil, ErrNoUsersToReview
+}
+
+// getNextToReview handles the common logic for getting the next item to review.
+func (r *UserModel) getNextToReview(ctx context.Context, model interface{}, sortBy string) (interface{}, error) {
+	var result interface{}
+	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+		query := tx.NewSelect().
+			Model(model).
+			Where("last_viewed IS NULL OR last_viewed < NOW() - INTERVAL '10 minutes'")
+
+		// Apply sort order
+		switch sortBy {
+		case SortByConfidence:
+			query.Order("confidence DESC")
+		case SortByLastUpdated:
+			query.Order("last_updated ASC")
+		case SortByReputation:
+			query.Order("reputation ASC")
+		case SortByRandom:
+			query.OrderExpr("RANDOM()")
+		default:
+			return fmt.Errorf("%w: %s", ErrInvalidSortBy, sortBy)
+		}
+
+		err := query.Limit(1).
+			For("UPDATE SKIP LOCKED").
+			Scan(ctx)
+		if err != nil {
+			return err
+		}
+
+		// Update last_viewed based on model type
+		now := time.Now()
+		var id uint64
+		switch m := model.(type) {
+		case *FlaggedUser:
+			m.LastViewed = now
+			id = m.ID
+			result = m
+		case *ConfirmedUser:
+			m.LastViewed = now
+			id = m.ID
+			result = m
+		default:
+			return fmt.Errorf("%w: %T", ErrUnsupportedModel, model)
+		}
+
+		_, err = tx.NewUpdate().
+			Model(model).
+			Set("last_viewed = ?", now).
+			Where("id = ?", id).
+			Exec(ctx)
+		if err != nil {
+			return err
+		}
+
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return result, nil
 }

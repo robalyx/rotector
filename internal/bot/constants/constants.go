@@ -44,6 +44,7 @@ const (
 	OpenFriendsMenuButtonCustomID   = "open_friends_menu"
 	OpenGroupsMenuButtonCustomID    = "open_groups_menu"
 	SwitchReviewModeCustomID        = "switch_review_mode"
+	SwitchTargetModeCustomID        = "switch_target_mode"
 
 	ConfirmButtonCustomID = "confirm"
 	ClearButtonCustomID   = "clear"
@@ -80,6 +81,7 @@ const (
 	UserDefaultSortOption  = "user_default_sort"
 	GroupDefaultSortOption = "group_default_sort"
 	ReviewModeOption       = "review_mode"
+	ReviewTargetModeOption = "review_target_mode"
 )
 
 // Bot Settings.
@@ -212,17 +214,4 @@ const (
 	// ReviewOutfitsLimit caps the number of outfits shown in the main review embed
 	// to prevent the embed from becoming too long.
 	ReviewOutfitsLimit = 10
-)
-
-// Review mode descriptions.
-const (
-	TrainingModeDescription = `
-		**You are not an official reviewer.**
-		However, you may help moderators by using upvotes/downvotes. Downvotes mean that the target is inappropriate.
-		In this view, information is censored and there are no external links. 
-		`
-	StandardModeDescription = `
-		Your actions will be recorded and will affect the database. Review carefully before confirming or clearing them.
-		`
-	UnknownModeDescription = "Error encountered. Please check your settings."
 )

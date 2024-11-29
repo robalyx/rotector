@@ -17,13 +17,13 @@ import (
 	"github.com/rotector/rotector/internal/common/storage/database/models"
 )
 
-// ReviewBuilder creates the visual layout for reviewing a flagged group.
+// ReviewBuilder creates the visual layout for reviewing a group.
 type ReviewBuilder struct {
 	db          *database.Client
 	settings    *models.UserSetting
 	botSettings *models.BotSetting
 	userID      uint64
-	group       *models.FlaggedGroup
+	group       *models.ConfirmedGroup
 }
 
 // NewReviewBuilder creates a new review builder.
@@ -32,7 +32,7 @@ func NewReviewBuilder(s *session.Session, db *database.Client) *ReviewBuilder {
 	s.GetInterface(constants.SessionKeyUserSettings, &settings)
 	var botSettings *models.BotSetting
 	s.GetInterface(constants.SessionKeyBotSettings, &botSettings)
-	var group *models.FlaggedGroup
+	var group *models.ConfirmedGroup
 	s.GetInterface(constants.SessionKeyGroupTarget, &group)
 
 	return &ReviewBuilder{
@@ -75,23 +75,29 @@ func (b *ReviewBuilder) Build() *discord.MessageUpdateBuilder {
 
 // buildModeEmbed creates the review mode info embed.
 func (b *ReviewBuilder) buildModeEmbed() *discord.EmbedBuilder {
-	var title string
+	var mode string
 	var description string
 
+	// Format review mode
 	switch b.settings.ReviewMode {
 	case models.TrainingReviewMode:
-		title = "🎓 " + models.FormatReviewMode(b.settings.ReviewMode)
-		description = "**You are not an official reviewer.** However, you may help moderators by using upvotes/downvotes. In this view, information is censored and you will not see any external links."
+		mode = "🎓 Training Mode"
+		description += `
+		**You are not an official reviewer.**
+		You may help moderators by using upvotes/downvotes to indicate suspicious activity. Information is censored and external links are disabled.
+		`
 	case models.StandardReviewMode:
-		title = "⚠️ " + models.FormatReviewMode(b.settings.ReviewMode)
-		description = "Your actions will be recorded and will affect the models. Review groups carefully before confirming or clearing them."
+		mode = "⚠️ Standard Mode"
+		description += `
+		Your actions are recorded and affect the database. Please review carefully before taking action.
+		`
 	default:
-		title = "❌ Unknown Mode"
+		mode = "❌ Unknown Mode"
 		description = "Error encountered. Please check your settings."
 	}
 
 	return discord.NewEmbedBuilder().
-		SetTitle(title).
+		SetTitle(mode).
 		SetDescription(description).
 		SetColor(utils.GetMessageEmbedColor(b.settings.StreamerMode))
 }
@@ -101,7 +107,15 @@ func (b *ReviewBuilder) buildReviewEmbed() *discord.EmbedBuilder {
 	embed := discord.NewEmbedBuilder().
 		SetColor(utils.GetMessageEmbedColor(b.settings.StreamerMode))
 
-	votes := fmt.Sprintf("👍 %d | 👎 %d", b.group.Upvotes, b.group.Downvotes)
+	// Add status indicator
+	var status string
+	if b.group.VerifiedAt.IsZero() {
+		status = "⏳ Flagged Group"
+	} else {
+		status = "⚠️ Confirmed Group"
+	}
+
+	header := fmt.Sprintf("%s • 👍 %d | 👎 %d", status, b.group.Upvotes, b.group.Downvotes)
 	lastUpdated := fmt.Sprintf("<t:%d:R>", b.group.LastUpdated.Unix())
 	confidence := fmt.Sprintf("%.2f", b.group.Confidence)
 	memberCount := strconv.FormatUint(b.group.MemberCount, 10)
@@ -109,7 +123,7 @@ func (b *ReviewBuilder) buildReviewEmbed() *discord.EmbedBuilder {
 
 	if b.settings.ReviewMode == models.TrainingReviewMode {
 		// Training mode - show limited information without links
-		embed.SetAuthorName(votes).
+		embed.SetAuthorName(header).
 			AddField("ID", utils.CensorString(strconv.FormatUint(b.group.ID, 10), true), true).
 			AddField("Name", utils.CensorString(b.group.Name, true), true).
 			AddField("Owner", utils.CensorString(strconv.FormatUint(b.group.Owner, 10), true), true).
@@ -122,7 +136,7 @@ func (b *ReviewBuilder) buildReviewEmbed() *discord.EmbedBuilder {
 			AddField("Description", b.getDescription(), false)
 	} else {
 		// Standard mode - show all information with links
-		embed.SetAuthorName(votes).
+		embed.SetAuthorName(header).
 			AddField("ID", fmt.Sprintf(
 				"[%s](https://www.roblox.com/groups/%d)",
 				utils.CensorString(strconv.FormatUint(b.group.ID, 10), b.settings.StreamerMode),
@@ -144,13 +158,33 @@ func (b *ReviewBuilder) buildReviewEmbed() *discord.EmbedBuilder {
 			AddField("Review History", b.getReviewHistory(), false)
 	}
 
+	// Add verified at time if this is a confirmed group
+	if !b.group.VerifiedAt.IsZero() {
+		embed.AddField("Verified At", fmt.Sprintf("<t:%d:R>", b.group.VerifiedAt.Unix()), true)
+	}
+
 	return embed
 }
 
-// buildComponents creates all interactive components for the review menu.
-func (b *ReviewBuilder) buildComponents() []discord.ContainerComponent {
+// buildActionOptions creates the action menu options.
+func (b *ReviewBuilder) buildActionOptions() []discord.StringSelectMenuOption {
+	// Get switch text and description
+	var switchText string
+	var switchDesc string
+	if b.settings.ReviewTargetMode == models.FlaggedReviewTarget {
+		switchText = "Switch to Confirmed Target"
+		switchDesc = "Switch to re-reviewing confirmed groups"
+	} else {
+		switchText = "Switch to Flagged Target"
+		switchDesc = "Switch to reviewing flagged groups"
+	}
+
 	// Create base options that everyone can access
-	options := []discord.StringSelectMenuOption{}
+	options := []discord.StringSelectMenuOption{
+		discord.NewStringSelectMenuOption(switchText, constants.SwitchTargetModeCustomID).
+			WithEmoji(discord.ComponentEmoji{Name: "🔄"}).
+			WithDescription(switchDesc),
+	}
 
 	// Add reviewer-only options
 	if b.botSettings.IsReviewer(b.userID) {
@@ -180,6 +214,11 @@ func (b *ReviewBuilder) buildComponents() []discord.ContainerComponent {
 		}
 	}
 
+	return options
+}
+
+// buildComponents creates all interactive components for the review menu.
+func (b *ReviewBuilder) buildComponents() []discord.ContainerComponent {
 	return []discord.ContainerComponent{
 		// Sorting options menu
 		discord.NewActionRow(
@@ -200,7 +239,7 @@ func (b *ReviewBuilder) buildComponents() []discord.ContainerComponent {
 		),
 		// Action options menu
 		discord.NewActionRow(
-			discord.NewStringSelectMenu(constants.ActionSelectMenuCustomID, "Actions", options...),
+			discord.NewStringSelectMenu(constants.ActionSelectMenuCustomID, "Actions", b.buildActionOptions()...),
 		),
 		// Quick action buttons
 		discord.NewActionRow(

@@ -18,13 +18,13 @@ import (
 	"github.com/rotector/rotector/internal/common/translator"
 )
 
-// ReviewBuilder creates the visual layout for reviewing a flagged user.
+// ReviewBuilder creates the visual layout for reviewing a user.
 type ReviewBuilder struct {
 	db           *database.Client
 	settings     *models.UserSetting
 	botSettings  *models.BotSetting
 	userID       uint64
-	user         *models.FlaggedUser
+	user         *models.ConfirmedUser
 	translator   *translator.Translator
 	friendTypes  map[uint64]string
 	followCounts *fetcher.FollowCounts
@@ -36,7 +36,7 @@ func NewReviewBuilder(s *session.Session, translator *translator.Translator, db 
 	s.GetInterface(constants.SessionKeyUserSettings, &settings)
 	var botSettings *models.BotSetting
 	s.GetInterface(constants.SessionKeyBotSettings, &botSettings)
-	var user *models.FlaggedUser
+	var user *models.ConfirmedUser
 	s.GetInterface(constants.SessionKeyTarget, &user)
 	var friendTypes map[uint64]string
 	s.GetInterface(constants.SessionKeyFriendTypes, &friendTypes)
@@ -86,23 +86,29 @@ func (b *ReviewBuilder) Build() *discord.MessageUpdateBuilder {
 
 // buildModeEmbed creates the review mode info embed.
 func (b *ReviewBuilder) buildModeEmbed() *discord.EmbedBuilder {
-	var title string
+	var mode string
 	var description string
 
+	// Format review mode
 	switch b.settings.ReviewMode {
 	case models.TrainingReviewMode:
-		title = "🎓 " + models.FormatReviewMode(b.settings.ReviewMode)
-		description = "**You are not an official reviewer.** However, you may help moderators by using upvotes/downvotes. In this view, information is censored and you will not see any external links."
+		mode = "🎓 Training Mode"
+		description += `
+		**You are not an official reviewer.**
+		You may help moderators by using upvotes/downvotes to indicate suspicious activity. Information is censored and external links are disabled.
+		`
 	case models.StandardReviewMode:
-		title = "⚠️ " + models.FormatReviewMode(b.settings.ReviewMode)
-		description = "Your actions will be recorded and will affect the models. Review users carefully before confirming or clearing them."
+		mode = "⚠️ Standard Mode"
+		description += `
+		Your actions are recorded and affect the database. Please review carefully before taking action.
+		`
 	default:
-		title = "❌ Unknown Mode"
-		description = "Error encountered. Please check your settings."
+		mode = "❌ Unknown Mode"
+		description += "Error encountered. Please check your settings."
 	}
 
 	return discord.NewEmbedBuilder().
-		SetTitle(title).
+		SetTitle(mode).
 		SetDescription(description).
 		SetColor(utils.GetMessageEmbedColor(b.settings.StreamerMode))
 }
@@ -112,7 +118,15 @@ func (b *ReviewBuilder) buildReviewBuilder() *discord.EmbedBuilder {
 	embed := discord.NewEmbedBuilder().
 		SetColor(utils.GetMessageEmbedColor(b.settings.StreamerMode))
 
-	votes := fmt.Sprintf("👍 %d | 👎 %d", b.user.Upvotes, b.user.Downvotes)
+	// Add status indicator
+	var status string
+	if b.user.VerifiedAt.IsZero() {
+		status = "⏳ Flagged User"
+	} else {
+		status = "⚠️ Confirmed User"
+	}
+
+	header := fmt.Sprintf("%s • 👍 %d | 👎 %d", status, b.user.Upvotes, b.user.Downvotes)
 	createdAt := fmt.Sprintf("<t:%d:R>", b.user.CreatedAt.Unix())
 	lastUpdated := fmt.Sprintf("<t:%d:R>", b.user.LastUpdated.Unix())
 	confidence := fmt.Sprintf("%.2f", b.user.Confidence)
@@ -121,7 +135,7 @@ func (b *ReviewBuilder) buildReviewBuilder() *discord.EmbedBuilder {
 
 	if b.settings.ReviewMode == models.TrainingReviewMode {
 		// Training mode - show limited information without links
-		embed.SetAuthorName(votes).
+		embed.SetAuthorName(header).
 			AddField("ID", utils.CensorString(strconv.FormatUint(b.user.ID, 10), true), true).
 			AddField("Name", utils.CensorString(b.user.Name, true), true).
 			AddField("Display Name", utils.CensorString(b.user.DisplayName, true), true).
@@ -140,7 +154,7 @@ func (b *ReviewBuilder) buildReviewBuilder() *discord.EmbedBuilder {
 			AddField(b.getFlaggedType(), b.getFlaggedContent(), false)
 	} else {
 		// Standard mode - show all information with links
-		embed.SetAuthorName(votes).
+		embed.SetAuthorName(header).
 			AddField("ID", fmt.Sprintf(
 				"[%s](https://www.roblox.com/users/%d/profile)",
 				utils.CensorString(strconv.FormatUint(b.user.ID, 10), b.settings.StreamerMode),
@@ -164,11 +178,27 @@ func (b *ReviewBuilder) buildReviewBuilder() *discord.EmbedBuilder {
 			AddField("Review History", b.getReviewHistory(), false)
 	}
 
+	// Add verified at time if this is a confirmed user
+	if !b.user.VerifiedAt.IsZero() {
+		embed.AddField("Verified At", fmt.Sprintf("<t:%d:R>", b.user.VerifiedAt.Unix()), true)
+	}
+
 	return embed
 }
 
 // buildActionOptions creates the action menu options.
 func (b *ReviewBuilder) buildActionOptions() []discord.StringSelectMenuOption {
+	// Get switch text and description
+	var switchText string
+	var switchDesc string
+	if b.settings.ReviewTargetMode == models.FlaggedReviewTarget {
+		switchText = "Switch to Confirmed Target"
+		switchDesc = "Switch to re-reviewing confirmed users"
+	} else {
+		switchText = "Switch to Flagged Target"
+		switchDesc = "Switch to reviewing flagged users"
+	}
+
 	// Create base options that everyone can access
 	options := []discord.StringSelectMenuOption{
 		discord.NewStringSelectMenuOption("Open friends viewer", constants.OpenFriendsMenuButtonCustomID).
@@ -180,6 +210,9 @@ func (b *ReviewBuilder) buildActionOptions() []discord.StringSelectMenuOption {
 		discord.NewStringSelectMenuOption("Open outfit viewer", constants.OpenOutfitsMenuButtonCustomID).
 			WithEmoji(discord.ComponentEmoji{Name: "👕"}).
 			WithDescription("View all user outfits"),
+		discord.NewStringSelectMenuOption(switchText, constants.SwitchTargetModeCustomID).
+			WithEmoji(discord.ComponentEmoji{Name: "🔄"}).
+			WithDescription(switchDesc),
 	}
 
 	// Add reviewer-only options

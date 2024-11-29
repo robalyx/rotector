@@ -201,58 +201,6 @@ func (r *GroupModel) ConfirmGroup(ctx context.Context, group *FlaggedGroup) erro
 	})
 }
 
-// GetFlaggedGroupToReview finds a group to review based on the sort method:
-// - random: selects any unviewed group randomly
-// - members: selects the group with the most confirmed members.
-func (r *GroupModel) GetFlaggedGroupToReview(ctx context.Context, sortBy string) (*FlaggedGroup, error) {
-	var group FlaggedGroup
-	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
-		query := tx.NewSelect().Model(&group).
-			Where("last_viewed IS NULL OR last_viewed < NOW() - INTERVAL '10 minutes'")
-
-		switch sortBy {
-		case SortByFlaggedUsers:
-			// Order by the length of the flagged_users array
-			query.OrderExpr("array_length(flagged_users, 1) DESC")
-		case SortByConfidence:
-			query.OrderExpr("confidence DESC")
-		case SortByReputation:
-			query.Order("reputation ASC")
-		case SortByRandom:
-			query.OrderExpr("RANDOM()")
-		default:
-			return fmt.Errorf("%w: %s", ErrInvalidSortBy, sortBy)
-		}
-
-		err := query.Limit(1).
-			For("UPDATE SKIP LOCKED").
-			Scan(ctx)
-		if err != nil {
-			r.logger.Error("Failed to get flagged group to review", zap.Error(err))
-			return err
-		}
-
-		// Update last_viewed
-		now := time.Now()
-		_, err = tx.NewUpdate().Model(&group).
-			Set("last_viewed = ?", now).
-			Where("id = ?", group.ID).
-			Exec(ctx)
-		if err != nil {
-			r.logger.Error("Failed to update last_viewed", zap.Error(err))
-			return err
-		}
-		group.LastViewed = now
-
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	return &group, nil
-}
-
 // ClearGroup moves a group from flagged_groups to cleared_groups.
 // This happens when a moderator determines that a group was incorrectly flagged.
 func (r *GroupModel) ClearGroup(ctx context.Context, group *FlaggedGroup) error {
@@ -325,42 +273,50 @@ func (r *GroupModel) GetClearedGroupsCount(ctx context.Context) (int, error) {
 // UpdateTrainingVotes updates the upvotes or downvotes count for a group in training mode.
 func (r *GroupModel) UpdateTrainingVotes(ctx context.Context, groupID uint64, isUpvote bool) error {
 	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
-		var group FlaggedGroup
-		err := tx.NewSelect().
-			Model(&group).
-			Column("upvotes", "downvotes").
-			Where("id = ?", groupID).
-			Scan(ctx)
-		if err != nil {
-			return err
+		// Try to update votes in either flagged or confirmed table
+		if err := r.updateVotesInTable(ctx, tx, (*FlaggedGroup)(nil), groupID, isUpvote); err == nil {
+			return nil
 		}
-
-		if isUpvote {
-			group.Upvotes++
-		} else {
-			group.Downvotes++
-		}
-
-		newReputation := group.Upvotes - group.Downvotes
-
-		_, err = tx.NewUpdate().
-			Model((*FlaggedGroup)(nil)).
-			Set("upvotes = ?", group.Upvotes).
-			Set("downvotes = ?", group.Downvotes).
-			Set("reputation = ?", newReputation).
-			Where("id = ?", groupID).
-			Exec(ctx)
-		if err != nil {
-			r.logger.Error("Failed to update training votes",
-				zap.Error(err),
-				zap.Uint64("groupID", groupID),
-				zap.String("voteType", map[bool]string{true: "upvote", false: "downvote"}[isUpvote]))
-			return err
-		}
-
-		return nil
+		return r.updateVotesInTable(ctx, tx, (*ConfirmedGroup)(nil), groupID, isUpvote)
 	})
+	if err != nil {
+		r.logger.Error("Failed to update training votes",
+			zap.Error(err),
+			zap.Uint64("groupID", groupID),
+			zap.String("voteType", map[bool]string{true: "upvote", false: "downvote"}[isUpvote]))
+	}
+	return err
+}
 
+// updateVotesInTable handles updating votes for a specific table type.
+func (r *GroupModel) updateVotesInTable(ctx context.Context, tx bun.Tx, model interface{}, groupID uint64, isUpvote bool) error {
+	// Get current vote counts
+	var upvotes, downvotes int
+	err := tx.NewSelect().
+		Model(model).
+		Column("upvotes", "downvotes").
+		Where("id = ?", groupID).
+		Scan(ctx, &upvotes, &downvotes)
+	if err != nil {
+		return err
+	}
+
+	// Update vote counts
+	if isUpvote {
+		upvotes++
+	} else {
+		downvotes++
+	}
+	reputation := upvotes - downvotes
+
+	// Save updated counts
+	_, err = tx.NewUpdate().
+		Model(model).
+		Set("upvotes = ?", upvotes).
+		Set("downvotes = ?", downvotes).
+		Set("reputation = ?", reputation).
+		Where("id = ?", groupID).
+		Exec(ctx)
 	return err
 }
 
@@ -583,4 +539,111 @@ func (r *GroupModel) GetGroupToScan(ctx context.Context) (*Group, error) {
 	}
 
 	return group, nil
+}
+
+// GetGroupToReview finds a group to review based on the sort method and target mode.
+func (r *GroupModel) GetGroupToReview(ctx context.Context, sortBy string, targetMode string) (*ConfirmedGroup, error) {
+	var primaryModel, fallbackModel interface{}
+
+	// Set up which models to try first and as fallback based on target mode
+	if targetMode == FlaggedReviewTarget {
+		primaryModel = &FlaggedGroup{}
+		fallbackModel = &ConfirmedGroup{}
+	} else {
+		primaryModel = &ConfirmedGroup{}
+		fallbackModel = &FlaggedGroup{}
+	}
+
+	// Try primary target first
+	result, err := r.getNextToReview(ctx, primaryModel, sortBy)
+	if err == nil {
+		if flaggedGroup, ok := result.(*FlaggedGroup); ok {
+			return &ConfirmedGroup{
+				Group:      flaggedGroup.Group,
+				VerifiedAt: time.Time{}, // Zero time since it's not confirmed yet
+			}, nil
+		}
+		if confirmedGroup, ok := result.(*ConfirmedGroup); ok {
+			return confirmedGroup, nil
+		}
+	}
+
+	// Try fallback target
+	result, err = r.getNextToReview(ctx, fallbackModel, sortBy)
+	if err == nil {
+		if flaggedGroup, ok := result.(*FlaggedGroup); ok {
+			return &ConfirmedGroup{
+				Group:      flaggedGroup.Group,
+				VerifiedAt: time.Time{}, // Zero time since it's not confirmed yet
+			}, nil
+		}
+		if confirmedGroup, ok := result.(*ConfirmedGroup); ok {
+			return confirmedGroup, nil
+		}
+	}
+
+	return nil, ErrNoGroupsToReview
+}
+
+// getNextToReview handles the common logic for getting the next item to review.
+func (r *GroupModel) getNextToReview(ctx context.Context, model interface{}, sortBy string) (interface{}, error) {
+	var result interface{}
+	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+		query := tx.NewSelect().
+			Model(model).
+			Where("last_viewed IS NULL OR last_viewed < NOW() - INTERVAL '10 minutes'")
+
+		// Apply sort order
+		switch sortBy {
+		case SortByConfidence:
+			query.Order("confidence DESC")
+		case SortByFlaggedUsers:
+			query.OrderExpr("array_length(flagged_users, 1) DESC")
+		case SortByReputation:
+			query.Order("reputation ASC")
+		case SortByRandom:
+			query.OrderExpr("RANDOM()")
+		default:
+			return fmt.Errorf("%w: %s", ErrInvalidSortBy, sortBy)
+		}
+
+		err := query.Limit(1).
+			For("UPDATE SKIP LOCKED").
+			Scan(ctx)
+		if err != nil {
+			return err
+		}
+
+		// Update last_viewed based on model type
+		now := time.Now()
+		var id uint64
+		switch m := model.(type) {
+		case *FlaggedGroup:
+			m.LastViewed = now
+			id = m.ID
+			result = m
+		case *ConfirmedGroup:
+			m.LastViewed = now
+			id = m.ID
+			result = m
+		default:
+			return fmt.Errorf("%w: %T", ErrUnsupportedModel, model)
+		}
+
+		_, err = tx.NewUpdate().
+			Model(model).
+			Set("last_viewed = ?", now).
+			Where("id = ?", id).
+			Exec(ctx)
+		if err != nil {
+			return err
+		}
+
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return result, nil
 }

@@ -130,6 +130,7 @@ func (r *SettingRegistry) registerUserSettings() {
 	r.UserSettings[constants.UserDefaultSortOption] = r.createUserDefaultSortSetting()
 	r.UserSettings[constants.GroupDefaultSortOption] = r.createGroupDefaultSortSetting()
 	r.UserSettings[constants.ReviewModeOption] = r.createReviewModeSetting()
+	r.UserSettings[constants.ReviewTargetModeOption] = r.createReviewTargetModeSetting()
 }
 
 // registerBotSettings adds all bot-wide settings to the registry.
@@ -332,6 +333,41 @@ func (r *SettingRegistry) createAdminIDsSetting() Setting {
 			if !exists {
 				bs.AdminIDs = append(bs.AdminIDs, id)
 			}
+			return nil
+		},
+	}
+}
+
+// createReviewTargetModeSetting creates the review target mode setting.
+func (r *SettingRegistry) createReviewTargetModeSetting() Setting {
+	return Setting{
+		Key:          constants.ReviewTargetModeOption,
+		Name:         "Review Target Mode",
+		Description:  "Switch between reviewing flagged items and re-reviewing confirmed items",
+		Type:         SettingTypeEnum,
+		DefaultValue: FlaggedReviewTarget,
+		Options: []SettingOption{
+			{
+				Value:       FlaggedReviewTarget,
+				Label:       "Flagged Items",
+				Description: "Review newly flagged items",
+				Emoji:       "🔍",
+			},
+			{
+				Value:       ConfirmedReviewTarget,
+				Label:       "Confirmed Items",
+				Description: "Re-review previously confirmed items",
+				Emoji:       "🔄",
+			},
+		},
+		Validators: []SettingValidator{
+			validateEnum([]string{FlaggedReviewTarget, ConfirmedReviewTarget}),
+		},
+		ValueGetter: func(us *UserSetting, _ *BotSetting) string {
+			return FormatReviewTargetMode(us.ReviewTargetMode)
+		},
+		ValueUpdater: func(value string, us *UserSetting, _ *BotSetting) error {
+			us.ReviewTargetMode = value
 			return nil
 		},
 	}
