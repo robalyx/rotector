@@ -2,9 +2,12 @@ package stats
 
 import (
 	"context"
+	"fmt"
 	"time"
 
+	"github.com/openai/openai-go"
 	"github.com/redis/rueidis"
+	"github.com/rotector/rotector/internal/common/client/checker"
 	"github.com/rotector/rotector/internal/common/progress"
 	"github.com/rotector/rotector/internal/common/storage/database"
 	"github.com/rotector/rotector/internal/worker/core"
@@ -16,16 +19,20 @@ type Worker struct {
 	db       *database.Client
 	bar      *progress.Bar
 	reporter *core.StatusReporter
+	checker  *checker.StatsChecker
 	logger   *zap.Logger
 }
 
 // New creates a new stats core.
-func New(db *database.Client, redisClient rueidis.Client, bar *progress.Bar, logger *zap.Logger) *Worker {
+func New(db *database.Client, openaiClient *openai.Client, redisClient rueidis.Client, bar *progress.Bar, logger *zap.Logger) *Worker {
 	reporter := core.NewStatusReporter(redisClient, "stats", "", logger)
+	checker := checker.NewStatsChecker(openaiClient, logger)
+
 	return &Worker{
 		db:       db,
 		bar:      bar,
 		reporter: reporter,
+		checker:  checker,
 		logger:   logger,
 	}
 }
@@ -41,6 +48,7 @@ func (w *Worker) Start() {
 	for {
 		w.bar.Reset()
 		w.reporter.SetHealthy(true)
+		ctx := context.Background()
 
 		// Step 1: Wait until the start of the next hour (0%)
 		w.bar.SetStepMessage("Waiting for next hour", 0)
@@ -48,30 +56,39 @@ func (w *Worker) Start() {
 		nextHour := time.Now().UTC().Truncate(time.Hour).Add(time.Hour)
 		time.Sleep(time.Until(nextHour))
 
-		// Step 2: Get current stats (25%)
-		w.bar.SetStepMessage("Collecting statistics", 25)
-		w.reporter.UpdateStatus("Collecting statistics", 25)
-		stats, err := w.db.Stats().GetCurrentStats(context.Background())
+		// Step 2: Get current stats (20%)
+		w.bar.SetStepMessage("Collecting statistics", 20)
+		w.reporter.UpdateStatus("Collecting statistics", 20)
+		stats, err := w.db.Stats().GetCurrentStats(ctx)
 		if err != nil {
 			w.logger.Error("Failed to get current stats", zap.Error(err))
 			w.reporter.SetHealthy(false)
 			continue
 		}
 
-		// Step 3: Save current stats (50%)
-		w.bar.SetStepMessage("Saving statistics", 50)
-		w.reporter.UpdateStatus("Saving statistics", 50)
-		if err := w.db.Stats().SaveHourlyStats(context.Background(), stats); err != nil {
+		// Step 3: Save current stats (40%)
+		w.bar.SetStepMessage("Saving statistics", 40)
+		w.reporter.UpdateStatus("Saving statistics", 40)
+		if err := w.db.Stats().SaveHourlyStats(ctx, stats); err != nil {
 			w.logger.Error("Failed to save hourly stats", zap.Error(err))
 			w.reporter.SetHealthy(false)
 			continue
 		}
 
-		// Step 4: Clean up old stats (75%)
-		w.bar.SetStepMessage("Cleaning up old stats", 75)
-		w.reporter.UpdateStatus("Cleaning up old stats", 75)
+		// Step 4: Update welcome message (60%)
+		w.bar.SetStepMessage("Updating welcome message", 60)
+		w.reporter.UpdateStatus("Updating welcome message", 60)
+		if err := w.updateWelcomeMessage(ctx); err != nil {
+			w.logger.Error("Failed to update welcome message", zap.Error(err))
+			w.reporter.SetHealthy(false)
+			continue
+		}
+
+		// Step 5: Clean up old stats (80%)
+		w.bar.SetStepMessage("Cleaning up old stats", 80)
+		w.reporter.UpdateStatus("Cleaning up old stats", 80)
 		cutoffDate := time.Now().UTC().AddDate(0, 0, -30) // 30 days ago
-		if err := w.db.Stats().PurgeOldStats(context.Background(), cutoffDate); err != nil {
+		if err := w.db.Stats().PurgeOldStats(ctx, cutoffDate); err != nil {
 			w.logger.Error("Failed to purge old stats", zap.Error(err))
 			w.reporter.SetHealthy(false)
 			continue
@@ -83,4 +100,33 @@ func (w *Worker) Start() {
 
 		w.logger.Info("Hourly statistics saved successfully")
 	}
+}
+
+// updateWelcomeMessage handles the generation and updating of the welcome message.
+func (w *Worker) updateWelcomeMessage(ctx context.Context) error {
+	// Get historical stats for AI analysis
+	historicalStats, err := w.db.Stats().GetHourlyStats(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get historical stats: %w", err)
+	}
+
+	// Generate new welcome message
+	message, err := w.checker.GenerateWelcomeMessage(ctx, historicalStats)
+	if err != nil {
+		return fmt.Errorf("failed to generate welcome message: %w", err)
+	}
+
+	// Get and update bot settings
+	botSettings, err := w.db.Settings().GetBotSettings(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get bot settings: %w", err)
+	}
+
+	botSettings.WelcomeMessage = message
+	if err := w.db.Settings().SaveBotSettings(ctx, botSettings); err != nil {
+		return fmt.Errorf("failed to save welcome message: %w", err)
+	}
+
+	w.logger.Info("Updated welcome message", zap.String("message", message))
+	return nil
 }

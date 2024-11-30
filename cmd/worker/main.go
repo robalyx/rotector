@@ -174,7 +174,7 @@ func runWorkers(workerType, subType string, count int) {
 			case workerType == PurgeWorker:
 				w = purge.New(app.DB, app.RoAPI, app.StatusClient, bar, &app.Config.Worker, workerLogger)
 			case workerType == StatsWorker:
-				w = stats.New(app.DB, app.StatusClient, bar, workerLogger)
+				w = stats.New(app.DB, app.OpenAIClient, app.StatusClient, bar, workerLogger)
 			case workerType == QueueWorker:
 				w = queue.New(app.DB, app.OpenAIClient, app.RoAPI, app.Queue, app.StatusClient, bar, workerLogger)
 			default:
