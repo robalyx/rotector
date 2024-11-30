@@ -130,6 +130,11 @@ func (b *Builder) buildWelcomeEmbed() discord.Embed {
 		SetTitle("Welcome to Rotector 👋").
 		SetColor(constants.DefaultEmbedColor)
 
+	// Add welcome message if set
+	if b.botSettings.WelcomeMessage != "" {
+		embed.SetDescription(b.botSettings.WelcomeMessage)
+	}
+
 	// Add active reviewers field if any are online
 	if len(b.activeUsers) > 0 {
 		activeUserMentions := make([]string, len(b.activeUsers))

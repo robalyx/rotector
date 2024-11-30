@@ -142,18 +142,24 @@ func (m *UpdateMenu) handleSettingButton(event *events.ComponentInteractionCreat
 	s.GetInterface(constants.SessionKeySetting, &setting)
 
 	// Handle ID and number setting button clicks
-	if setting.Type == models.SettingTypeID || setting.Type == models.SettingTypeNumber {
-		textInput := discord.NewTextInput(string(setting.Type), discord.TextInputStyleShort, setting.Name).WithRequired(true)
+	if setting.Type == models.SettingTypeID || setting.Type == models.SettingTypeNumber || setting.Type == models.SettingTypeText {
+		textInput := discord.NewTextInput(string(setting.Type), discord.TextInputStyleParagraph, setting.Name).WithRequired(true)
 		var modalTitle string
 
-		if setting.Type == models.SettingTypeID {
+		switch setting.Type {
+		case models.SettingTypeID:
 			textInput.WithPlaceholder("Enter the user ID to toggle...")
 			modalTitle = "Toggle " + setting.Name
-		} else {
+		case models.SettingTypeNumber:
 			textInput.WithPlaceholder("Enter a number...").
 				WithValue(s.GetString(constants.SessionKeyCurrentValue))
 			modalTitle = "Set " + setting.Name
-		}
+		case models.SettingTypeText:
+			textInput.WithPlaceholder("Enter your message...").
+				WithValue(s.GetString(constants.SessionKeyCurrentValue)).
+				WithStyle(discord.TextInputStyleParagraph)
+			modalTitle = "Set " + setting.Name
+		} //exhaustive:ignore
 
 		modal := discord.NewModalCreateBuilder().
 			SetCustomID(setting.Key).

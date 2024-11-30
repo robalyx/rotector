@@ -86,11 +86,12 @@ const (
 
 // Bot Settings.
 const (
-	BotSettingPrefix   = "bot"
-	BotSettingSelectID = "bot_setting_select"
-	ReviewerIDsOption  = "reviewer_ids"
-	AdminIDsOption     = "admin_ids"
-	SessionLimitOption = "session_limit"
+	BotSettingPrefix     = "bot"
+	BotSettingSelectID   = "bot_setting_select"
+	ReviewerIDsOption    = "reviewer_ids"
+	AdminIDsOption       = "admin_ids"
+	SessionLimitOption   = "session_limit"
+	WelcomeMessageOption = "welcome_message"
 )
 
 // Logs Menu.

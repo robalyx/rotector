@@ -11,10 +11,11 @@ import (
 
 // Common validation errors.
 var (
-	ErrInvalidIDFormat  = errors.New("invalid Discord ID format")
-	ErrSelfAssignment   = errors.New("you cannot add/remove yourself")
-	ErrInvalidOption    = errors.New("invalid option selected")
-	ErrInvalidBoolValue = errors.New("value must be true or false")
+	ErrInvalidIDFormat       = errors.New("invalid Discord ID format")
+	ErrSelfAssignment        = errors.New("you cannot add/remove yourself")
+	ErrInvalidOption         = errors.New("invalid option selected")
+	ErrInvalidBoolValue      = errors.New("value must be true or false")
+	ErrWelcomeMessageTooLong = errors.New("welcome message cannot exceed 512 characters")
 )
 
 // SettingType represents the data type of a setting.
@@ -26,6 +27,7 @@ const (
 	SettingTypeEnum   SettingType = "enum"
 	SettingTypeID     SettingType = "id"
 	SettingTypeNumber SettingType = "number"
+	SettingTypeText   SettingType = "text"
 )
 
 // SettingValidator is a function that validates setting input.
@@ -138,6 +140,7 @@ func (r *SettingRegistry) registerBotSettings() {
 	r.BotSettings[constants.ReviewerIDsOption] = r.createReviewerIDsSetting()
 	r.BotSettings[constants.AdminIDsOption] = r.createAdminIDsSetting()
 	r.BotSettings[constants.SessionLimitOption] = r.createSessionLimitSetting()
+	r.BotSettings[constants.WelcomeMessageOption] = r.createWelcomeMessageSetting()
 }
 
 // createStreamerModeSetting creates the streamer mode setting.
@@ -368,6 +371,35 @@ func (r *SettingRegistry) createReviewTargetModeSetting() Setting {
 		},
 		ValueUpdater: func(value string, us *UserSetting, _ *BotSetting) error {
 			us.ReviewTargetMode = value
+			return nil
+		},
+	}
+}
+
+// createWelcomeMessageSetting creates the welcome message setting.
+func (r *SettingRegistry) createWelcomeMessageSetting() Setting {
+	return Setting{
+		Key:          constants.WelcomeMessageOption,
+		Name:         "Welcome Message",
+		Description:  "Set the welcome message shown on the dashboard",
+		Type:         SettingTypeText,
+		DefaultValue: "",
+		Validators: []SettingValidator{
+			func(value string, _ uint64) error {
+				if len(value) > 512 {
+					return ErrWelcomeMessageTooLong
+				}
+				return nil
+			},
+		},
+		ValueGetter: func(_ *UserSetting, bs *BotSetting) string {
+			if bs.WelcomeMessage == "" {
+				return "No welcome message set"
+			}
+			return bs.WelcomeMessage
+		},
+		ValueUpdater: func(value string, _ *UserSetting, bs *BotSetting) error {
+			bs.WelcomeMessage = value
 			return nil
 		},
 	}
