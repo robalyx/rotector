@@ -460,21 +460,12 @@ func (a *AIChecker) GenerateFriendReason(userInfo *fetcher.Info, confirmedFriend
 
 // validateFlaggedUsers validates the flagged users against the translated content
 // but uses original descriptions when creating validated users. It checks if at least
-// 50% of the flagged words are found in the translated content to confirm the AI's findings.
-// Only users with a confidence score >= 0.4 will be validated.
+// 30% of the flagged words are found in the translated content to confirm the AI's findings.
 func (a *AIChecker) validateFlaggedUsers(flaggedUsers FlaggedUsers, translatedInfos map[string]*fetcher.Info, originalInfos map[string]*fetcher.Info) ([]*models.User, []uint64) {
 	var validatedUsers []*models.User
 	var failedValidationIDs []uint64
 
 	for _, flaggedUser := range flaggedUsers.Users {
-		// Skip users with confidence score below 0.4
-		if flaggedUser.Confidence < 0.4 {
-			a.logger.Debug("Skipping flagged user with low confidence",
-				zap.String("username", flaggedUser.Name),
-				zap.Float64("confidence", flaggedUser.Confidence))
-			continue
-		}
-
 		normalizedName := utils.NormalizeString(flaggedUser.Name)
 
 		// Check if the flagged user exists in both maps
@@ -498,8 +489,8 @@ func (a *AIChecker) validateFlaggedUsers(flaggedUsers FlaggedUsers, translatedIn
 				}
 			}
 
-			// Check if at least 50% of the flagged words are found
-			isValid := float64(foundWords) >= 0.5*float64(len(allFlaggedWords))
+			// Check if at least 30% of the flagged words are found
+			isValid := float64(foundWords) >= 0.3*float64(len(allFlaggedWords))
 
 			// If the flagged user is correct, add it using original info
 			if isValid {
