@@ -32,7 +32,7 @@ type FriendWorker struct {
 // NewFriendWorker creates a FriendWorker.
 func NewFriendWorker(app *setup.App, bar *progress.Bar, logger *zap.Logger) *FriendWorker {
 	userFetcher := fetcher.NewUserFetcher(app, logger)
-	userChecker := checker.NewUserChecker(app, bar, userFetcher, logger)
+	userChecker := checker.NewUserChecker(app, userFetcher, logger)
 	reporter := core.NewStatusReporter(app.StatusClient, "ai", "friend", logger)
 
 	return &FriendWorker{

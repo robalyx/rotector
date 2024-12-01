@@ -156,17 +156,19 @@ func (fc *FriendChecker) processUserFriends(userInfo *fetcher.Info) (*models.Use
 		}
 
 		user := &models.User{
-			ID:          userInfo.ID,
-			Name:        userInfo.Name,
-			DisplayName: userInfo.DisplayName,
-			Description: userInfo.Description,
-			CreatedAt:   userInfo.CreatedAt,
-			Reason:      reason,
-			Groups:      userInfo.Groups.Data,
-			Friends:     userInfo.Friends.Data,
-			Games:       userInfo.Games.Data,
-			Confidence:  math.Round(confidence*100) / 100, // Round to 2 decimal places
-			LastUpdated: userInfo.LastUpdated,
+			ID:             userInfo.ID,
+			Name:           userInfo.Name,
+			DisplayName:    userInfo.DisplayName,
+			Description:    userInfo.Description,
+			CreatedAt:      userInfo.CreatedAt,
+			Reason:         "Friend Analysis: " + reason,
+			Groups:         userInfo.Groups.Data,
+			Friends:        userInfo.Friends.Data,
+			Games:          userInfo.Games.Data,
+			FollowerCount:  userInfo.FollowerCount,
+			FollowingCount: userInfo.FollowingCount,
+			Confidence:     math.Round(confidence*100) / 100, // Round to 2 decimal places
+			LastUpdated:    userInfo.LastUpdated,
 		}
 
 		fc.logger.Info("User automatically flagged",

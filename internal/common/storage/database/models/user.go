@@ -42,6 +42,8 @@ type User struct {
 	Games          []*types.Game           `bun:"type:jsonb" json:"games"`
 	FlaggedContent []string                `bun:"type:jsonb" json:"flaggedContent"`
 	FlaggedGroups  []uint64                `bun:"type:jsonb" json:"flaggedGroups"`
+	FollowerCount  uint64                  `bun:",notnull"   json:"followerCount"`
+	FollowingCount uint64                  `bun:",notnull"   json:"followingCount"`
 	Confidence     float64                 `bun:",notnull"   json:"confidence"`
 	LastScanned    time.Time               `bun:",notnull"   json:"lastScanned"`
 	LastUpdated    time.Time               `bun:",notnull"   json:"lastUpdated"`
@@ -116,6 +118,8 @@ func (r *UserModel) SaveFlaggedUsers(ctx context.Context, flaggedUsers []*User) 
 			Set("games = EXCLUDED.games").
 			Set("flagged_content = EXCLUDED.flagged_content").
 			Set("flagged_groups = EXCLUDED.flagged_groups").
+			Set("follower_count = EXCLUDED.follower_count").
+			Set("following_count = EXCLUDED.following_count").
 			Set("confidence = EXCLUDED.confidence").
 			Set("last_updated = EXCLUDED.last_updated").
 			Set("thumbnail_url = EXCLUDED.thumbnail_url").
@@ -171,6 +175,8 @@ func (r *UserModel) ConfirmUser(ctx context.Context, user *FlaggedUser) error {
 			Set("games = EXCLUDED.games").
 			Set("flagged_content = EXCLUDED.flagged_content").
 			Set("flagged_groups = EXCLUDED.flagged_groups").
+			Set("follower_count = EXCLUDED.follower_count").
+			Set("following_count = EXCLUDED.following_count").
 			Set("confidence = EXCLUDED.confidence").
 			Set("last_scanned = EXCLUDED.last_scanned").
 			Set("last_updated = EXCLUDED.last_updated").
@@ -219,6 +225,8 @@ func (r *UserModel) ClearUser(ctx context.Context, user *FlaggedUser) error {
 			Set("games = EXCLUDED.games").
 			Set("flagged_content = EXCLUDED.flagged_content").
 			Set("flagged_groups = EXCLUDED.flagged_groups").
+			Set("follower_count = EXCLUDED.follower_count").
+			Set("following_count = EXCLUDED.following_count").
 			Set("confidence = EXCLUDED.confidence").
 			Set("last_scanned = EXCLUDED.last_scanned").
 			Set("last_updated = EXCLUDED.last_updated").

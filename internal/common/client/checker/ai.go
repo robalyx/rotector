@@ -134,6 +134,7 @@ Analysis Focus:
 - Evaluate network concentration
 - Generate clear, short, factual 1-sentence reason
 - Highlight most serious violations and patterns
+- Never include usernames in the reason
 
 Confidence Calculation (start at 0):
 - +0.6: Multiple confirmed friends with serious violations
@@ -460,7 +461,7 @@ func (a *AIChecker) GenerateFriendReason(userInfo *fetcher.Info, confirmedFriend
 
 // validateFlaggedUsers validates the flagged users against the translated content
 // but uses original descriptions when creating validated users. It checks if at least
-// 30% of the flagged words are found in the translated content to confirm the AI's findings.
+// 10% of the flagged words are found in the translated content to confirm the AI's findings.
 func (a *AIChecker) validateFlaggedUsers(flaggedUsers FlaggedUsers, translatedInfos map[string]*fetcher.Info, originalInfos map[string]*fetcher.Info) ([]*models.User, []uint64) {
 	var validatedUsers []*models.User
 	var failedValidationIDs []uint64
@@ -489,8 +490,8 @@ func (a *AIChecker) validateFlaggedUsers(flaggedUsers FlaggedUsers, translatedIn
 				}
 			}
 
-			// Check if at least 30% of the flagged words are found
-			isValid := float64(foundWords) >= 0.3*float64(len(allFlaggedWords))
+			// Check if at least 10% of the flagged words are found
+			isValid := float64(foundWords) >= 0.1*float64(len(allFlaggedWords))
 
 			// If the flagged user is correct, add it using original info
 			if isValid {
@@ -504,6 +505,8 @@ func (a *AIChecker) validateFlaggedUsers(flaggedUsers FlaggedUsers, translatedIn
 					Groups:         originalInfo.Groups.Data,
 					Friends:        originalInfo.Friends.Data,
 					Games:          originalInfo.Games.Data,
+					FollowerCount:  originalInfo.FollowerCount,
+					FollowingCount: originalInfo.FollowingCount,
 					FlaggedContent: flaggedUser.FlaggedContent,
 					Confidence:     flaggedUser.Confidence,
 					LastUpdated:    originalInfo.LastUpdated,

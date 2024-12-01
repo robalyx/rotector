@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/rotector/rotector/internal/common/client/fetcher"
-	"github.com/rotector/rotector/internal/common/progress"
 	"github.com/rotector/rotector/internal/common/setup"
 	"github.com/rotector/rotector/internal/common/storage/database"
 	"github.com/rotector/rotector/internal/common/storage/database/models"
@@ -17,7 +16,6 @@ import (
 // multiple checking methods (AI, groups, friends) and managing the progress bar.
 type UserChecker struct {
 	db               *database.Client
-	bar              *progress.Bar
 	userFetcher      *fetcher.UserFetcher
 	outfitFetcher    *fetcher.OutfitFetcher
 	thumbnailFetcher *fetcher.ThumbnailFetcher
@@ -29,13 +27,12 @@ type UserChecker struct {
 }
 
 // NewUserChecker creates a UserChecker with all required dependencies.
-func NewUserChecker(app *setup.App, bar *progress.Bar, userFetcher *fetcher.UserFetcher, logger *zap.Logger) *UserChecker {
+func NewUserChecker(app *setup.App, userFetcher *fetcher.UserFetcher, logger *zap.Logger) *UserChecker {
 	translator := translator.New(app.RoAPI.GetClient())
 	aiChecker := NewAIChecker(app, translator, logger)
 
 	return &UserChecker{
 		db:               app.DB,
-		bar:              bar,
 		userFetcher:      userFetcher,
 		outfitFetcher:    fetcher.NewOutfitFetcher(app.RoAPI, logger),
 		thumbnailFetcher: fetcher.NewThumbnailFetcher(app.RoAPI, logger),
@@ -59,18 +56,15 @@ func (c *UserChecker) ProcessUsers(userInfos []*fetcher.Info) []uint64 {
 	var flaggedUsers []*models.User
 	var failedValidationIDs []uint64
 
-	// Check if users belong to flagged groups (20%)
-	c.bar.SetStepMessage("Checking user groups", 20)
+	// Check if users belong to flagged groups
 	flaggedUsersFromGroups, remainingUsers := c.groupChecker.ProcessUsers(userInfos)
 	flaggedUsers = append(flaggedUsers, flaggedUsersFromGroups...)
 
-	// Check users based on their friends (40%)
-	c.bar.SetStepMessage("Checking user friends", 40)
+	// Check users based on their friends
 	flaggedUsersFromFriends := c.friendChecker.ProcessUsers(remainingUsers)
 	flaggedUsers = append(flaggedUsers, flaggedUsersFromFriends...)
 
-	// Process all users with AI (60%)
-	c.bar.SetStepMessage("Checking users with AI", 60)
+	// Process all users with AI
 	aiFlaggedUsers, failedIDs, err := c.aiChecker.ProcessUsers(userInfos)
 	if err != nil {
 		c.logger.Error("Error checking users with AI", zap.Error(err))
@@ -103,19 +97,14 @@ func (c *UserChecker) ProcessUsers(userInfos []*fetcher.Info) []uint64 {
 		return failedValidationIDs
 	}
 
-	// Check followers for flagged users (70%)
-	c.bar.SetStepMessage("Checking user followers", 70)
+	// Check followers for flagged users
 	flaggedUsers = c.followerChecker.ProcessUsers(flaggedUsers)
 
-	// Load additional data for flagged users (80%)
-	c.bar.SetStepMessage("Adding image URLs", 80)
+	// Load additional data for flagged users
 	flaggedUsers = c.thumbnailFetcher.AddImageURLs(flaggedUsers)
-
-	c.bar.SetStepMessage("Adding outfits", 90)
 	flaggedUsers = c.outfitFetcher.AddOutfits(flaggedUsers)
 
-	// Save flagged users to database (100%)
-	c.bar.SetStepMessage("Saving flagged users", 100)
+	// Save flagged users to database
 	c.db.Users().SaveFlaggedUsers(context.Background(), flaggedUsers)
 
 	c.logger.Info("Finished processing users",

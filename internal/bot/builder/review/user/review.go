@@ -20,14 +20,13 @@ import (
 
 // ReviewBuilder creates the visual layout for reviewing a user.
 type ReviewBuilder struct {
-	db           *database.Client
-	settings     *models.UserSetting
-	botSettings  *models.BotSetting
-	userID       uint64
-	user         *models.ConfirmedUser
-	translator   *translator.Translator
-	friendTypes  map[uint64]string
-	followCounts *fetcher.FollowCounts
+	db          *database.Client
+	settings    *models.UserSetting
+	botSettings *models.BotSetting
+	userID      uint64
+	user        *models.ConfirmedUser
+	translator  *translator.Translator
+	friendTypes map[uint64]string
 }
 
 // NewReviewBuilder creates a new review builder.
@@ -40,18 +39,15 @@ func NewReviewBuilder(s *session.Session, translator *translator.Translator, db 
 	s.GetInterface(constants.SessionKeyTarget, &user)
 	var friendTypes map[uint64]string
 	s.GetInterface(constants.SessionKeyFriendTypes, &friendTypes)
-	var followCounts *fetcher.FollowCounts
-	s.GetInterface(constants.SessionKeyFollowCounts, &followCounts)
 
 	return &ReviewBuilder{
-		db:           db,
-		settings:     settings,
-		botSettings:  botSettings,
-		userID:       s.GetUint64(constants.SessionKeyUserID),
-		user:         user,
-		translator:   translator,
-		friendTypes:  friendTypes,
-		followCounts: followCounts,
+		db:          db,
+		settings:    settings,
+		botSettings: botSettings,
+		userID:      s.GetUint64(constants.SessionKeyUserID),
+		user:        user,
+		translator:  translator,
+		friendTypes: friendTypes,
 	}
 }
 
@@ -130,8 +126,8 @@ func (b *ReviewBuilder) buildReviewBuilder() *discord.EmbedBuilder {
 	createdAt := fmt.Sprintf("<t:%d:R>", b.user.CreatedAt.Unix())
 	lastUpdated := fmt.Sprintf("<t:%d:R>", b.user.LastUpdated.Unix())
 	confidence := fmt.Sprintf("%.2f", b.user.Confidence)
-	followerCount := utils.FormatNumber(b.followCounts.FollowerCount)
-	followingCount := utils.FormatNumber(b.followCounts.FollowingCount)
+	followerCount := utils.FormatNumber(b.user.FollowerCount)
+	followingCount := utils.FormatNumber(b.user.FollowingCount)
 
 	if b.settings.ReviewMode == models.TrainingReviewMode {
 		// Training mode - show limited information without links
