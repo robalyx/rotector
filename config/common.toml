@@ -30,4 +30,4 @@ password = ""
 
 [common.gemini_ai]
 api_key = ""
-model = "gemini-1.5-flash-latest"
+model = "gemini-1.5-flash-8b-latest"
