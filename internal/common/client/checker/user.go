@@ -2,6 +2,7 @@ package checker
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/rotector/rotector/internal/common/client/fetcher"
 	"github.com/rotector/rotector/internal/common/progress"
@@ -56,31 +57,44 @@ func (c *UserChecker) ProcessUsers(userInfos []*fetcher.Info) []uint64 {
 	c.logger.Info("Processing users", zap.Int("userInfos", len(userInfos)))
 
 	var flaggedUsers []*models.User
-	var usersForAICheck []*fetcher.Info
 	var failedValidationIDs []uint64
 
 	// Check if users belong to flagged groups (20%)
 	c.bar.SetStepMessage("Checking user groups", 20)
 	flaggedUsersFromGroups, remainingUsers := c.groupChecker.ProcessUsers(userInfos)
 	flaggedUsers = append(flaggedUsers, flaggedUsersFromGroups...)
-	usersForAICheck = remainingUsers
 
 	// Check users based on their friends (40%)
 	c.bar.SetStepMessage("Checking user friends", 40)
-	flaggedUsersFromFriends, remainingUsers := c.friendChecker.ProcessUsers(usersForAICheck)
+	flaggedUsersFromFriends := c.friendChecker.ProcessUsers(remainingUsers)
 	flaggedUsers = append(flaggedUsers, flaggedUsersFromFriends...)
-	usersForAICheck = remainingUsers
 
-	// Process remaining users with AI (60%)
+	// Process all users with AI (60%)
 	c.bar.SetStepMessage("Checking users with AI", 60)
-	if len(usersForAICheck) > 0 {
-		aiFlaggedUsers, failedIDs, err := c.aiChecker.ProcessUsers(usersForAICheck)
-		if err != nil {
-			c.logger.Error("Error checking users with AI", zap.Error(err))
-		} else {
-			flaggedUsers = append(flaggedUsers, aiFlaggedUsers...)
-			failedValidationIDs = append(failedValidationIDs, failedIDs...)
+	aiFlaggedUsers, failedIDs, err := c.aiChecker.ProcessUsers(userInfos)
+	if err != nil {
+		c.logger.Error("Error checking users with AI", zap.Error(err))
+	} else {
+		// Create a map of existing flagged users by ID for easy lookup
+		flaggedByID := make(map[uint64]*models.User)
+		for _, user := range flaggedUsers {
+			flaggedByID[user.ID] = user
 		}
+
+		// Process AI flagged users
+		for _, aiUser := range aiFlaggedUsers {
+			if existingUser, ok := flaggedByID[aiUser.ID]; ok {
+				// User was flagged by both friends and AI
+				existingUser.Confidence = 1.0
+				existingUser.Reason = fmt.Sprintf("%s\n\nAI Analysis: %s", existingUser.Reason, aiUser.Reason)
+				existingUser.FlaggedContent = aiUser.FlaggedContent
+			} else {
+				// User was only flagged by AI
+				flaggedUsers = append(flaggedUsers, aiUser)
+			}
+		}
+
+		failedValidationIDs = append(failedValidationIDs, failedIDs...)
 	}
 
 	// Stop if no users were flagged
