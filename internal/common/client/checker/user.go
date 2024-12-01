@@ -3,10 +3,9 @@ package checker
 import (
 	"context"
 
-	"github.com/google/generative-ai-go/genai"
-	"github.com/jaxron/roapi.go/pkg/api"
 	"github.com/rotector/rotector/internal/common/client/fetcher"
 	"github.com/rotector/rotector/internal/common/progress"
+	"github.com/rotector/rotector/internal/common/setup"
 	"github.com/rotector/rotector/internal/common/storage/database"
 	"github.com/rotector/rotector/internal/common/storage/database/models"
 	"github.com/rotector/rotector/internal/common/translator"
@@ -29,28 +28,20 @@ type UserChecker struct {
 }
 
 // NewUserChecker creates a UserChecker with all required dependencies.
-func NewUserChecker(
-	db *database.Client,
-	bar *progress.Bar,
-	roAPI *api.API,
-	genAIClient *genai.Client,
-	genAIModel string,
-	userFetcher *fetcher.UserFetcher,
-	logger *zap.Logger,
-) *UserChecker {
-	translator := translator.New(roAPI.GetClient())
-	aiChecker := NewAIChecker(genAIClient, genAIModel, translator, logger)
+func NewUserChecker(app *setup.App, bar *progress.Bar, userFetcher *fetcher.UserFetcher, logger *zap.Logger) *UserChecker {
+	translator := translator.New(app.RoAPI.GetClient())
+	aiChecker := NewAIChecker(app, translator, logger)
 
 	return &UserChecker{
-		db:               db,
+		db:               app.DB,
 		bar:              bar,
 		userFetcher:      userFetcher,
-		outfitFetcher:    fetcher.NewOutfitFetcher(roAPI, logger),
-		thumbnailFetcher: fetcher.NewThumbnailFetcher(roAPI, logger),
+		outfitFetcher:    fetcher.NewOutfitFetcher(app.RoAPI, logger),
+		thumbnailFetcher: fetcher.NewThumbnailFetcher(app.RoAPI, logger),
 		aiChecker:        aiChecker,
-		groupChecker:     NewGroupChecker(db, logger),
-		friendChecker:    NewFriendChecker(db, aiChecker, logger),
-		followerChecker:  NewFollowerChecker(roAPI, logger),
+		groupChecker:     NewGroupChecker(app.DB, logger),
+		friendChecker:    NewFriendChecker(app.DB, aiChecker, logger),
+		followerChecker:  NewFollowerChecker(app.RoAPI, logger),
 		logger:           logger,
 	}
 }

@@ -5,14 +5,12 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/google/generative-ai-go/genai"
 	"github.com/jaxron/roapi.go/pkg/api"
 	"github.com/jaxron/roapi.go/pkg/api/resources/groups"
-	"github.com/redis/rueidis"
 	"github.com/rotector/rotector/internal/common/client/checker"
 	"github.com/rotector/rotector/internal/common/client/fetcher"
-	"github.com/rotector/rotector/internal/common/config"
 	"github.com/rotector/rotector/internal/common/progress"
+	"github.com/rotector/rotector/internal/common/setup"
 	"github.com/rotector/rotector/internal/common/storage/database"
 	"github.com/rotector/rotector/internal/worker/core"
 	"go.uber.org/zap"
@@ -33,30 +31,21 @@ type GroupWorker struct {
 }
 
 // NewGroupWorker creates a GroupWorker.
-func NewGroupWorker(
-	db *database.Client,
-	genAIClient *genai.Client,
-	genAIModel string,
-	roAPI *api.API,
-	redisClient rueidis.Client,
-	bar *progress.Bar,
-	cfg *config.WorkerConfig,
-	logger *zap.Logger,
-) *GroupWorker {
-	userFetcher := fetcher.NewUserFetcher(roAPI, logger)
-	userChecker := checker.NewUserChecker(db, bar, roAPI, genAIClient, genAIModel, userFetcher, logger)
-	reporter := core.NewStatusReporter(redisClient, "ai", "member", logger)
+func NewGroupWorker(app *setup.App, bar *progress.Bar, logger *zap.Logger) *GroupWorker {
+	userFetcher := fetcher.NewUserFetcher(app, logger)
+	userChecker := checker.NewUserChecker(app, bar, userFetcher, logger)
+	reporter := core.NewStatusReporter(app.StatusClient, "ai", "member", logger)
 
 	return &GroupWorker{
-		db:               db,
-		roAPI:            roAPI,
+		db:               app.DB,
+		roAPI:            app.RoAPI,
 		bar:              bar,
 		userFetcher:      userFetcher,
 		userChecker:      userChecker,
 		reporter:         reporter,
 		logger:           logger,
-		batchSize:        cfg.BatchSizes.GroupUsers,
-		flaggedThreshold: cfg.ThresholdLimits.FlaggedUsers,
+		batchSize:        app.Config.Worker.BatchSizes.GroupUsers,
+		flaggedThreshold: app.Config.Worker.ThresholdLimits.FlaggedUsers,
 	}
 }
 

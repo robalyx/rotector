@@ -7,10 +7,9 @@ import (
 	"time"
 
 	"github.com/jaxron/roapi.go/pkg/api"
-	"github.com/redis/rueidis"
 	"github.com/rotector/rotector/internal/common/client/fetcher"
-	"github.com/rotector/rotector/internal/common/config"
 	"github.com/rotector/rotector/internal/common/progress"
+	"github.com/rotector/rotector/internal/common/setup"
 	"github.com/rotector/rotector/internal/common/storage/database"
 	"github.com/rotector/rotector/internal/common/storage/database/models"
 	"github.com/rotector/rotector/internal/worker/core"
@@ -33,31 +32,24 @@ type Worker struct {
 }
 
 // New creates a new purge worker.
-func New(
-	db *database.Client,
-	roAPI *api.API,
-	redisClient rueidis.Client,
-	bar *progress.Bar,
-	cfg *config.WorkerConfig,
-	logger *zap.Logger,
-) *Worker {
-	userFetcher := fetcher.NewUserFetcher(roAPI, logger)
-	groupFetcher := fetcher.NewGroupFetcher(roAPI, logger)
-	thumbnailFetcher := fetcher.NewThumbnailFetcher(roAPI, logger)
-	reporter := core.NewStatusReporter(redisClient, "purge", "main", logger)
+func New(app *setup.App, bar *progress.Bar, logger *zap.Logger) *Worker {
+	userFetcher := fetcher.NewUserFetcher(app, logger)
+	groupFetcher := fetcher.NewGroupFetcher(app.RoAPI, logger)
+	thumbnailFetcher := fetcher.NewThumbnailFetcher(app.RoAPI, logger)
+	reporter := core.NewStatusReporter(app.StatusClient, "purge", "main", logger)
 
 	return &Worker{
-		db:               db,
-		roAPI:            roAPI,
+		db:               app.DB,
+		roAPI:            app.RoAPI,
 		bar:              bar,
 		userFetcher:      userFetcher,
 		groupFetcher:     groupFetcher,
 		thumbnailFetcher: thumbnailFetcher,
 		reporter:         reporter,
 		logger:           logger,
-		userBatchSize:    cfg.BatchSizes.PurgeUsers,
-		groupBatchSize:   cfg.BatchSizes.PurgeGroups,
-		minFlaggedUsers:  cfg.ThresholdLimits.MinFlaggedForGroup,
+		userBatchSize:    app.Config.Worker.BatchSizes.PurgeUsers,
+		groupBatchSize:   app.Config.Worker.BatchSizes.PurgeGroups,
+		minFlaggedUsers:  app.Config.Worker.ThresholdLimits.MinFlaggedForGroup,
 	}
 }
 

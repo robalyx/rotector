@@ -5,13 +5,11 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/google/generative-ai-go/genai"
 	"github.com/jaxron/roapi.go/pkg/api"
-	"github.com/redis/rueidis"
 	"github.com/rotector/rotector/internal/common/client/checker"
 	"github.com/rotector/rotector/internal/common/client/fetcher"
-	"github.com/rotector/rotector/internal/common/config"
 	"github.com/rotector/rotector/internal/common/progress"
+	"github.com/rotector/rotector/internal/common/setup"
 	"github.com/rotector/rotector/internal/common/storage/database"
 	"github.com/rotector/rotector/internal/worker/core"
 	"go.uber.org/zap"
@@ -32,30 +30,21 @@ type FriendWorker struct {
 }
 
 // NewFriendWorker creates a FriendWorker.
-func NewFriendWorker(
-	db *database.Client,
-	genAIClient *genai.Client,
-	genAIModel string,
-	roAPI *api.API,
-	redisClient rueidis.Client,
-	bar *progress.Bar,
-	cfg *config.WorkerConfig,
-	logger *zap.Logger,
-) *FriendWorker {
-	userFetcher := fetcher.NewUserFetcher(roAPI, logger)
-	userChecker := checker.NewUserChecker(db, bar, roAPI, genAIClient, genAIModel, userFetcher, logger)
-	reporter := core.NewStatusReporter(redisClient, "ai", "friend", logger)
+func NewFriendWorker(app *setup.App, bar *progress.Bar, logger *zap.Logger) *FriendWorker {
+	userFetcher := fetcher.NewUserFetcher(app, logger)
+	userChecker := checker.NewUserChecker(app, bar, userFetcher, logger)
+	reporter := core.NewStatusReporter(app.StatusClient, "ai", "friend", logger)
 
 	return &FriendWorker{
-		db:               db,
-		roAPI:            roAPI,
+		db:               app.DB,
+		roAPI:            app.RoAPI,
 		bar:              bar,
 		userFetcher:      userFetcher,
 		userChecker:      userChecker,
 		reporter:         reporter,
 		logger:           logger,
-		batchSize:        cfg.BatchSizes.FriendUsers,
-		flaggedThreshold: cfg.ThresholdLimits.FlaggedUsers,
+		batchSize:        app.Config.Worker.BatchSizes.FriendUsers,
+		flaggedThreshold: app.Config.Worker.ThresholdLimits.FlaggedUsers,
 	}
 }
 

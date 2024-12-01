@@ -168,15 +168,15 @@ func runWorkers(workerType, subType string, count int) {
 			var w interface{ Start() }
 			switch {
 			case workerType == AIWorker && subType == AIWorkerTypeMember:
-				w = ai.NewGroupWorker(app.DB, app.GenAIClient, app.GenAIModel, app.RoAPI, app.StatusClient, bar, &app.Config.Worker, workerLogger)
+				w = ai.NewGroupWorker(app, bar, workerLogger)
 			case workerType == AIWorker && subType == AIWorkerTypeFriend:
-				w = ai.NewFriendWorker(app.DB, app.GenAIClient, app.GenAIModel, app.RoAPI, app.StatusClient, bar, &app.Config.Worker, workerLogger)
+				w = ai.NewFriendWorker(app, bar, workerLogger)
 			case workerType == PurgeWorker:
-				w = purge.New(app.DB, app.RoAPI, app.StatusClient, bar, &app.Config.Worker, workerLogger)
+				w = purge.New(app, bar, workerLogger)
 			case workerType == StatsWorker:
-				w = stats.New(app.DB, app.GenAIClient, app.GenAIModel, app.StatusClient, bar, workerLogger)
+				w = stats.New(app, bar, workerLogger)
 			case workerType == QueueWorker:
-				w = queue.New(app.DB, app.GenAIClient, app.GenAIModel, app.RoAPI, app.Queue, app.StatusClient, bar, workerLogger)
+				w = queue.New(app, bar, workerLogger)
 			default:
 				log.Fatalf("Invalid worker type: %s %s", workerType, subType)
 			}

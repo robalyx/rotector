@@ -16,9 +16,9 @@ import (
 	"google.golang.org/api/option"
 )
 
-// AppSetup bundles all core dependencies and services needed by the application.
+// App bundles all core dependencies and services needed by the application.
 // Each field represents a major subsystem that needs initialization and cleanup.
-type AppSetup struct {
+type App struct {
 	Config       *config.Config   // Application configuration
 	Logger       *zap.Logger      // Main application logger
 	DBLogger     *zap.Logger      // Database-specific logger
@@ -35,7 +35,7 @@ type AppSetup struct {
 
 // InitializeApp bootstraps all application dependencies in the correct order,
 // ensuring each component has its required dependencies available.
-func InitializeApp(logDir string) (*AppSetup, error) {
+func InitializeApp(logDir string) (*App, error) {
 	// Configuration must be loaded first as other components depend on it
 	cfg, err := config.LoadConfig()
 	if err != nil {
@@ -96,7 +96,7 @@ func InitializeApp(logDir string) (*AppSetup, error) {
 	}
 
 	// Bundle all initialized components
-	return &AppSetup{
+	return &App{
 		Config:       cfg,
 		Logger:       logger,
 		DBLogger:     dbLogger,
@@ -114,7 +114,7 @@ func InitializeApp(logDir string) (*AppSetup, error) {
 
 // CleanupApp ensures graceful shutdown of all components in reverse initialization order.
 // Logs but does not fail on cleanup errors to ensure all components get cleanup attempts.
-func (s *AppSetup) CleanupApp() {
+func (s *App) CleanupApp() {
 	// Shutdown pprof server if running
 	if s.pprofServer != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

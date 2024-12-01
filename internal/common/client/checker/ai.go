@@ -10,6 +10,7 @@ import (
 	"github.com/bytedance/sonic"
 	"github.com/google/generative-ai-go/genai"
 	"github.com/rotector/rotector/internal/common/client/fetcher"
+	"github.com/rotector/rotector/internal/common/setup"
 	"github.com/rotector/rotector/internal/common/storage/database/models"
 	"github.com/rotector/rotector/internal/common/translator"
 	"github.com/rotector/rotector/internal/common/utils"
@@ -146,9 +147,9 @@ type AIChecker struct {
 }
 
 // NewAIChecker creates an AIChecker with separate models for user and friend analysis.
-func NewAIChecker(genAIClient *genai.Client, genAIModel string, translator *translator.Translator, logger *zap.Logger) *AIChecker {
+func NewAIChecker(app *setup.App, translator *translator.Translator, logger *zap.Logger) *AIChecker {
 	// Create user analysis model
-	userModel := genAIClient.GenerativeModel(genAIModel)
+	userModel := app.GenAIClient.GenerativeModel(app.Config.Common.GeminiAI.Model)
 	userModel.SystemInstruction = genai.NewUserContent(genai.Text(ReviewSystemPrompt))
 	userModel.GenerationConfig.ResponseMIMEType = "application/json"
 	userModel.GenerationConfig.ResponseSchema = &genai.Schema{
@@ -187,7 +188,7 @@ func NewAIChecker(genAIClient *genai.Client, genAIModel string, translator *tran
 	}
 
 	// Create friend analysis model
-	friendModel := genAIClient.GenerativeModel(genAIModel)
+	friendModel := app.GenAIClient.GenerativeModel(app.Config.Common.GeminiAI.Model)
 	friendModel.SystemInstruction = genai.NewUserContent(genai.Text(FriendSystemPrompt))
 	friendModel.GenerationConfig.ResponseMIMEType = "application/json"
 	friendModel.GenerationConfig.ResponseSchema = &genai.Schema{

@@ -5,10 +5,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/google/generative-ai-go/genai"
-	"github.com/redis/rueidis"
 	"github.com/rotector/rotector/internal/common/client/checker"
 	"github.com/rotector/rotector/internal/common/progress"
+	"github.com/rotector/rotector/internal/common/setup"
 	"github.com/rotector/rotector/internal/common/storage/database"
 	"github.com/rotector/rotector/internal/worker/core"
 	"go.uber.org/zap"
@@ -24,12 +23,12 @@ type Worker struct {
 }
 
 // New creates a new stats core.
-func New(db *database.Client, genAIClient *genai.Client, genAIModel string, redisClient rueidis.Client, bar *progress.Bar, logger *zap.Logger) *Worker {
-	reporter := core.NewStatusReporter(redisClient, "stats", "", logger)
-	checker := checker.NewStatsChecker(genAIClient, genAIModel, logger)
+func New(app *setup.App, bar *progress.Bar, logger *zap.Logger) *Worker {
+	reporter := core.NewStatusReporter(app.StatusClient, "stats", "", logger)
+	checker := checker.NewStatsChecker(app, logger)
 
 	return &Worker{
-		db:       db,
+		db:       app.DB,
 		bar:      bar,
 		reporter: reporter,
 		checker:  checker,

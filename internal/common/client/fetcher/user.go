@@ -9,6 +9,7 @@ import (
 	"github.com/jaxron/roapi.go/pkg/api"
 	"github.com/jaxron/roapi.go/pkg/api/resources/groups"
 	"github.com/jaxron/roapi.go/pkg/api/types"
+	"github.com/rotector/rotector/internal/common/setup"
 	"github.com/rotector/rotector/internal/common/storage/database/models"
 	"go.uber.org/zap"
 )
@@ -56,12 +57,12 @@ type UserFetcher struct {
 }
 
 // NewUserFetcher creates a UserFetcher with the provided API client and logger.
-func NewUserFetcher(roAPI *api.API, logger *zap.Logger) *UserFetcher {
+func NewUserFetcher(app *setup.App, logger *zap.Logger) *UserFetcher {
 	return &UserFetcher{
-		roAPI:         roAPI,
+		roAPI:         app.RoAPI,
 		logger:        logger,
-		gameFetcher:   NewGameFetcher(roAPI, logger),
-		friendFetcher: NewFriendFetcher(roAPI, logger),
+		gameFetcher:   NewGameFetcher(app.RoAPI, logger),
+		friendFetcher: NewFriendFetcher(app.RoAPI, logger),
 	}
 }
 

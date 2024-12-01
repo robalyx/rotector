@@ -6,6 +6,7 @@ import (
 
 	"github.com/bytedance/sonic"
 	"github.com/google/generative-ai-go/genai"
+	"github.com/rotector/rotector/internal/common/setup"
 	"github.com/rotector/rotector/internal/common/storage/database/models"
 	"github.com/rotector/rotector/internal/common/utils"
 	"github.com/tdewolff/minify/v2"
@@ -59,9 +60,9 @@ type StatsChecker struct {
 }
 
 // NewStatsChecker creates a new stats checker instance.
-func NewStatsChecker(genAIClient *genai.Client, genAIModel string, logger *zap.Logger) *StatsChecker {
+func NewStatsChecker(app *setup.App, logger *zap.Logger) *StatsChecker {
 	// Create a new Gemini model
-	model := genAIClient.GenerativeModel(genAIModel)
+	model := app.GenAIClient.GenerativeModel(app.Config.Common.GeminiAI.Model)
 	model.SystemInstruction = genai.NewUserContent(genai.Text(StatsSystemPrompt))
 
 	// Configure model to return plain text
