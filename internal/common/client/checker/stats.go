@@ -5,13 +5,15 @@ import (
 	"fmt"
 
 	"github.com/bytedance/sonic"
-	"github.com/openai/openai-go"
+	"github.com/google/generative-ai-go/genai"
 	"github.com/rotector/rotector/internal/common/storage/database/models"
+	"github.com/rotector/rotector/internal/common/utils"
 	"github.com/tdewolff/minify/v2"
 	"github.com/tdewolff/minify/v2/json"
 	"go.uber.org/zap"
 )
 
+// StatsSystemPrompt is the system prompt for the stats checker.
 const StatsSystemPrompt = `You are a witty assistant analyzing moderation statistics. Generate a short, engaging welcome message (max 512 characters) for moderators based on statistical trends. 
 
 Instructions:
@@ -34,77 +36,92 @@ Writing style:
 - Each sentence should mock predators with a unique joke
 - No greetings or dramatic words
 - Keep jokes simple and direct, no complex metaphors
-- Maximum 3 sentences
+- Maximum 4 sentences
 
-Example tones:
-- "Another batch thinking they're smarter than kids. Our system proves they're not even smarter than algorithms. Thanks for the easy bans."
-- "Imagine failing to outsmart both children and basic pattern matching. Detection rates show they're getting worse at hiding. Maybe try a new hobby."
-- "Fresh group of predators thinking they're clever. Same old tricks getting flagged instantly. At least they're consistent at being obvious."
-`
+Example responses (format reference only):
+- "Predators keep trying new tricks but our algorithms catch them faster than they can type. Their attempts to hide get more pathetic by the day. Another successful batch of bans."
+- "Today's predators thought they were clever until our system proved otherwise. Their attempts to evade detection are getting lazier. At least they make our job entertaining."
+- "Our detection rates show predators are getting worse at hiding. Their failed attempts at grooming are becoming more obvious. The system catches them faster than they can make new accounts."`
+
+// MaxOutputTokens is the maximum number of tokens in the response.
+const MaxOutputTokens = 512
 
 // StatsData represents the formatted statistics for AI analysis.
 type StatsData struct {
-	History []models.HourlyStats `json:"history" jsonschema_description:"Historical statistics from the last 24 hours"`
+	History []models.HourlyStats `json:"history"`
 }
 
 // StatsChecker analyzes statistics and generates welcome messages.
 type StatsChecker struct {
-	openAIClient *openai.Client
-	minify       *minify.M
-	logger       *zap.Logger
+	genModel *genai.GenerativeModel
+	minify   *minify.M
+	logger   *zap.Logger
 }
 
 // NewStatsChecker creates a new stats checker instance.
-func NewStatsChecker(openAIClient *openai.Client, logger *zap.Logger) *StatsChecker {
+func NewStatsChecker(genAIClient *genai.Client, genAIModel string, logger *zap.Logger) *StatsChecker {
+	// Create a new Gemini model
+	model := genAIClient.GenerativeModel(genAIModel)
+	model.SystemInstruction = genai.NewUserContent(genai.Text(StatsSystemPrompt))
+
+	// Configure model to return plain text
+	maxTokens := int32(MaxOutputTokens)
+	temperature := float32(0.7)
+	model.GenerationConfig.ResponseMIMEType = "text/plain"
+	model.GenerationConfig.MaxOutputTokens = &maxTokens
+	model.GenerationConfig.Temperature = &temperature
+
+	// Create a minifier for JSON optimization
 	m := minify.New()
 	m.AddFunc("application/json", json.Minify)
 
 	return &StatsChecker{
-		openAIClient: openAIClient,
-		minify:       m,
-		logger:       logger,
+		genModel: model,
+		minify:   m,
+		logger:   logger,
 	}
 }
 
 // GenerateWelcomeMessage analyzes current and historical stats to generate a contextual welcome message.
 func (s *StatsChecker) GenerateWelcomeMessage(ctx context.Context, historicalStats []models.HourlyStats) (string, error) {
-	// Format stats data for AI usage
+	// Format stats data for AI analysis
 	data := StatsData{
 		History: historicalStats,
 	}
 
-	// Convert to JSON
+	// Convert stats to JSON
 	statsJSON, err := sonic.Marshal(data)
 	if err != nil {
-		s.logger.Error("Failed to marshal stats data", zap.Error(err))
-		return "", err
+		s.logger.Error("failed to marshal stats data", zap.Error(err))
+		return "", fmt.Errorf("%w: %w", ErrJSONProcessing, err)
 	}
 
 	// Minify JSON to reduce token usage
 	statsJSON, err = s.minify.Bytes("application/json", statsJSON)
 	if err != nil {
-		s.logger.Error("Failed to minify stats data", zap.Error(err))
-		return "", err
+		s.logger.Error("failed to minify stats data", zap.Error(err))
+		return "", fmt.Errorf("%w: %w", ErrJSONProcessing, err)
 	}
 
-	// Send request to OpenAI
-	chatCompletion, err := s.openAIClient.Chat.Completions.New(ctx, openai.ChatCompletionNewParams{
-		Messages: openai.F([]openai.ChatCompletionMessageParamUnion{
-			openai.SystemMessage(StatsSystemPrompt),
-			openai.UserMessage(string(statsJSON)),
-		}),
-		Model:       openai.F(openai.ChatModelGPT4oMini2024_07_18),
-		Temperature: openai.F(1.0),
-		MaxTokens:   openai.F(int64(512)),
-	})
+	// Generate welcome message using Gemini model
+	resp, err := s.genModel.GenerateContent(ctx, genai.Text(string(statsJSON)))
 	if err != nil {
-		return "", fmt.Errorf("OpenAI API error: %w", err)
+		return "", fmt.Errorf("%w: %w", ErrModelResponse, err)
 	}
 
-	message := chatCompletion.Choices[0].Message.Content
+	// Check for empty response
+	if len(resp.Candidates) == 0 || len(resp.Candidates[0].Content.Parts) == 0 {
+		return "", fmt.Errorf("%w: no response from model", ErrModelResponse)
+	}
+
+	// Extract response text from Gemini's response
+	message := resp.Candidates[0].Content.Parts[0].(genai.Text)
+
+	// Clean up the response text
+	cleanMessage := utils.CleanupText(string(message))
 
 	s.logger.Debug("Generated welcome message",
-		zap.String("message", message))
+		zap.String("message", cleanMessage))
 
-	return message, nil
+	return cleanMessage, nil
 }

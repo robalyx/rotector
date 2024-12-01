@@ -2,16 +2,19 @@ package utils
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 	"unicode"
 
-	"github.com/invopop/jsonschema"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
 	"golang.org/x/text/runes"
 	"golang.org/x/text/transform"
 	"golang.org/x/text/unicode/norm"
 )
+
+// MultipleSpaces matches any sequence of whitespace (including newlines).
+var MultipleSpaces = regexp.MustCompile(`\s+`)
 
 // normalizer combines multiple transformers to clean up text:
 // 1. NFKC converts compatibility characters to their canonical forms
@@ -28,21 +31,6 @@ var normalizer = transform.Chain( //nolint:gochecknoglobals
 	cases.Lower(language.Und),
 	norm.NFC,
 )
-
-// GenerateSchema creates a JSON schema for validating data structures.
-// It uses reflection to analyze the type T and build a schema that:
-// - Disallows additional properties
-// - Includes all fields directly (no references)
-// - Adds descriptions from jsonschema tags.
-func GenerateSchema[T any]() interface{} {
-	reflector := jsonschema.Reflector{
-		AllowAdditionalProperties: false,
-		DoNotReference:            true,
-	}
-	var v T
-	schema := reflector.Reflect(v)
-	return schema
-}
 
 // NormalizeString cleans up text by:
 // 1. Removing diacritical marks (é -> e)
@@ -91,4 +79,17 @@ func FormatIDs(ids []uint64) string {
 		mentions[i] = fmt.Sprintf("<@%d>", id)
 	}
 	return strings.Join(mentions, ", ")
+}
+
+// Add new cleanup function
+// CleanupText removes extra whitespace, newlines, and ensures proper sentence spacing:
+// 1. Replaces all whitespace sequences (including newlines) with a single space
+// 2. Trims leading/trailing whitespace
+// 3. Ensures exactly one space after periods.
+func CleanupText(s string) string {
+	// Replace all whitespace sequences with a single space and trim
+	s = strings.TrimSpace(MultipleSpaces.ReplaceAllString(s, " "))
+	// Fix double spaces after periods
+	s = strings.ReplaceAll(s, ".  ", ". ")
+	return s
 }

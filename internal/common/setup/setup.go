@@ -5,15 +5,15 @@ import (
 	"log"
 	"time"
 
+	"github.com/google/generative-ai-go/genai"
 	"github.com/jaxron/roapi.go/pkg/api"
-	"github.com/openai/openai-go"
-	"github.com/openai/openai-go/option"
 	"github.com/redis/rueidis"
 	"github.com/rotector/rotector/internal/common/config"
 	"github.com/rotector/rotector/internal/common/queue"
 	"github.com/rotector/rotector/internal/common/storage/database"
 	"github.com/rotector/rotector/internal/common/storage/redis"
 	"go.uber.org/zap"
+	"google.golang.org/api/option"
 )
 
 // AppSetup bundles all core dependencies and services needed by the application.
@@ -23,7 +23,8 @@ type AppSetup struct {
 	Logger       *zap.Logger      // Main application logger
 	DBLogger     *zap.Logger      // Database-specific logger
 	DB           *database.Client // Database connection pool
-	OpenAIClient *openai.Client   // OpenAI API client
+	GenAIClient  *genai.Client    // Generative AI client
+	GenAIModel   string           // Generative AI model
 	RoAPI        *api.API         // RoAPI HTTP client
 	Queue        *queue.Manager   // Background job queue
 	RedisManager *redis.Manager   // Redis connection manager
@@ -58,10 +59,10 @@ func InitializeApp(logDir string) (*AppSetup, error) {
 	}
 
 	// OpenAI client is configured with API key from config
-	openaiClient := openai.NewClient(
-		option.WithAPIKey(cfg.Common.OpenAI.APIKey),
-		option.WithRequestTimeout(30*time.Second),
-	)
+	genAIClient, err := genai.NewClient(context.Background(), option.WithAPIKey(cfg.Common.GeminiAI.APIKey))
+	if err != nil {
+		logger.Fatal("Failed to create Gemini client", zap.Error(err))
+	}
 
 	// RoAPI client is configured with middleware chain
 	roAPI, err := getRoAPIClient(&cfg.Common, redisManager, logger)
@@ -100,7 +101,8 @@ func InitializeApp(logDir string) (*AppSetup, error) {
 		Logger:       logger,
 		DBLogger:     dbLogger,
 		DB:           db,
-		OpenAIClient: openaiClient,
+		GenAIClient:  genAIClient,
+		GenAIModel:   cfg.Common.GeminiAI.Model,
 		RoAPI:        roAPI,
 		Queue:        queueManager,
 		RedisManager: redisManager,
@@ -139,4 +141,7 @@ func (s *AppSetup) CleanupApp() {
 
 	// Close Redis connections last as other components might need it during cleanup
 	s.RedisManager.Close()
+
+	// Close Gemini AI client
+	s.GenAIClient.Close()
 }

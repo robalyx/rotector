@@ -3,8 +3,8 @@ package checker
 import (
 	"context"
 
+	"github.com/google/generative-ai-go/genai"
 	"github.com/jaxron/roapi.go/pkg/api"
-	"github.com/openai/openai-go"
 	"github.com/rotector/rotector/internal/common/client/fetcher"
 	"github.com/rotector/rotector/internal/common/progress"
 	"github.com/rotector/rotector/internal/common/storage/database"
@@ -33,12 +33,14 @@ func NewUserChecker(
 	db *database.Client,
 	bar *progress.Bar,
 	roAPI *api.API,
-	openaiClient *openai.Client,
+	genAIClient *genai.Client,
+	genAIModel string,
 	userFetcher *fetcher.UserFetcher,
 	logger *zap.Logger,
 ) *UserChecker {
 	translator := translator.New(roAPI.GetClient())
-	aiChecker := NewAIChecker(openaiClient, translator, logger)
+	aiChecker := NewAIChecker(genAIClient, genAIModel, translator, logger)
+
 	return &UserChecker{
 		db:               db,
 		bar:              bar,

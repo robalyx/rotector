@@ -6,8 +6,8 @@ import (
 	"time"
 
 	"github.com/bytedance/sonic"
+	"github.com/google/generative-ai-go/genai"
 	"github.com/jaxron/roapi.go/pkg/api"
-	"github.com/openai/openai-go"
 	"github.com/redis/rueidis"
 	"github.com/rotector/rotector/internal/common/client/checker"
 	"github.com/rotector/rotector/internal/common/client/fetcher"
@@ -20,21 +20,21 @@ import (
 
 // Worker handles items in the queues.
 type Worker struct {
-	db           *database.Client
-	openAIClient *openai.Client
-	roAPI        *api.API
-	queue        *queue.Manager
-	bar          *progress.Bar
-	userFetcher  *fetcher.UserFetcher
-	userChecker  *checker.UserChecker
-	reporter     *core.StatusReporter
-	logger       *zap.Logger
+	db          *database.Client
+	roAPI       *api.API
+	queue       *queue.Manager
+	bar         *progress.Bar
+	userFetcher *fetcher.UserFetcher
+	userChecker *checker.UserChecker
+	reporter    *core.StatusReporter
+	logger      *zap.Logger
 }
 
 // New creates a new queue core.
 func New(
 	db *database.Client,
-	openAIClient *openai.Client,
+	genAIClient *genai.Client,
+	genAIModel string,
 	roAPI *api.API,
 	queue *queue.Manager,
 	redisClient rueidis.Client,
@@ -42,19 +42,18 @@ func New(
 	logger *zap.Logger,
 ) *Worker {
 	userFetcher := fetcher.NewUserFetcher(roAPI, logger)
-	userChecker := checker.NewUserChecker(db, bar, roAPI, openAIClient, userFetcher, logger)
+	userChecker := checker.NewUserChecker(db, bar, roAPI, genAIClient, genAIModel, userFetcher, logger)
 	reporter := core.NewStatusReporter(redisClient, "queue", "process", logger)
 
 	return &Worker{
-		db:           db,
-		openAIClient: openAIClient,
-		roAPI:        roAPI,
-		queue:        queue,
-		bar:          bar,
-		userFetcher:  userFetcher,
-		userChecker:  userChecker,
-		reporter:     reporter,
-		logger:       logger,
+		db:          db,
+		roAPI:       roAPI,
+		queue:       queue,
+		bar:         bar,
+		userFetcher: userFetcher,
+		userChecker: userChecker,
+		reporter:    reporter,
+		logger:      logger,
 	}
 }
 

@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/google/generative-ai-go/genai"
 	"github.com/jaxron/roapi.go/pkg/api"
 	"github.com/jaxron/roapi.go/pkg/api/resources/groups"
-	"github.com/openai/openai-go"
 	"github.com/redis/rueidis"
 	"github.com/rotector/rotector/internal/common/client/checker"
 	"github.com/rotector/rotector/internal/common/client/fetcher"
@@ -35,7 +35,8 @@ type GroupWorker struct {
 // NewGroupWorker creates a GroupWorker.
 func NewGroupWorker(
 	db *database.Client,
-	openaiClient *openai.Client,
+	genAIClient *genai.Client,
+	genAIModel string,
 	roAPI *api.API,
 	redisClient rueidis.Client,
 	bar *progress.Bar,
@@ -43,7 +44,7 @@ func NewGroupWorker(
 	logger *zap.Logger,
 ) *GroupWorker {
 	userFetcher := fetcher.NewUserFetcher(roAPI, logger)
-	userChecker := checker.NewUserChecker(db, bar, roAPI, openaiClient, userFetcher, logger)
+	userChecker := checker.NewUserChecker(db, bar, roAPI, genAIClient, genAIModel, userFetcher, logger)
 	reporter := core.NewStatusReporter(redisClient, "ai", "member", logger)
 
 	return &GroupWorker{

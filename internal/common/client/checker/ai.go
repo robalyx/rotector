@@ -2,13 +2,13 @@ package checker
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
 
 	"github.com/bytedance/sonic"
-	"github.com/openai/openai-go"
-	"github.com/pkoukk/tiktoken-go"
+	"github.com/google/generative-ai-go/genai"
 	"github.com/rotector/rotector/internal/common/client/fetcher"
 	"github.com/rotector/rotector/internal/common/storage/database/models"
 	"github.com/rotector/rotector/internal/common/translator"
@@ -26,6 +26,7 @@ Analysis Instructions:
 - Flag violations considering explicit content, suggestive language, and combinations of phrases/symbols/emojis
 - Use exact strings for 'flaggedContent'
 - If description is empty, only check username and display name
+- Return ONLY users that violate the guidelines
 
 Flag content containing:
 - Explicit sexual terms and innuendos
@@ -104,60 +105,120 @@ Confidence Levels:
 
 Note: Leave the flaggedContent field empty.`
 
+	// FriendUserPrompt is the prompt for analyzing a user's friend network.
 	FriendUserPrompt = `User: %s
 Friend data: %s`
-
-	// MaxFriendDataTokens is the maximum number of tokens allowed for friend data.
-	MaxFriendDataTokens = 400
 )
 
-// Generate the JSON schema at initialization time to avoid repeated generation.
+// MaxFriendDataTokens is the maximum number of tokens allowed for friend data.
+const MaxFriendDataTokens = 400
+
+// Package-level errors.
 var (
-	flaggedUsersSchema = utils.GenerateSchema[FlaggedUsers]() //nolint:gochecknoglobals
-	flaggedUserSchema  = utils.GenerateSchema[FlaggedUser]()  //nolint:gochecknoglobals
+	// ErrModelResponse indicates the model returned no usable response.
+	ErrModelResponse = errors.New("model response error")
+	// ErrJSONProcessing indicates a JSON processing error.
+	ErrJSONProcessing = errors.New("JSON processing error")
 )
 
 // FlaggedUsers holds a list of users that the AI has identified as inappropriate.
 // The JSON schema is used to ensure consistent responses from the AI.
 type FlaggedUsers struct {
-	Users []FlaggedUser `json:"users" jsonschema_description:"List of flagged users"`
+	Users []FlaggedUser `json:"users"`
 }
 
 // FlaggedUser contains the AI's analysis results for a single user.
 // The confidence score and flagged content help moderators make decisions.
 type FlaggedUser struct {
-	Name           string   `json:"name"           jsonschema_description:"Exact username of the flagged user"`
-	Reason         string   `json:"reason"         jsonschema_description:"Clear explanation of why the user was flagged"`
-	FlaggedContent []string `json:"flaggedContent" jsonschema_description:"Exact content that was flagged"`
-	Confidence     float64  `json:"confidence"     jsonschema_description:"Confidence level of the AI's assessment"`
+	Name           string   `json:"name"`
+	Reason         string   `json:"reason"`
+	FlaggedContent []string `json:"flaggedContent"`
+	Confidence     float64  `json:"confidence"`
 }
 
-// AIChecker handles AI-based content analysis by sending user data to OpenAI.
+// AIChecker handles AI-based content analysis using Gemini models.
 type AIChecker struct {
-	openAIClient *openai.Client
-	minify       *minify.M
-	tke          *tiktoken.Tiktoken
-	translator   *translator.Translator
-	logger       *zap.Logger
+	userModel   *genai.GenerativeModel // For analyzing user content
+	friendModel *genai.GenerativeModel // For analyzing friend networks
+	minify      *minify.M
+	translator  *translator.Translator
+	logger      *zap.Logger
 }
 
-// NewAIChecker creates an AIChecker with a minifier for JSON optimization,
-// translator for handling non-English content, and the provided OpenAI client and logger.
-func NewAIChecker(openAIClient *openai.Client, translator *translator.Translator, logger *zap.Logger) *AIChecker {
+// NewAIChecker creates an AIChecker with separate models for user and friend analysis.
+func NewAIChecker(genAIClient *genai.Client, genAIModel string, translator *translator.Translator, logger *zap.Logger) *AIChecker {
+	// Create user analysis model
+	userModel := genAIClient.GenerativeModel(genAIModel)
+	userModel.SystemInstruction = genai.NewUserContent(genai.Text(ReviewSystemPrompt))
+	userModel.GenerationConfig.ResponseMIMEType = "application/json"
+	userModel.GenerationConfig.ResponseSchema = &genai.Schema{
+		Type: genai.TypeObject,
+		Properties: map[string]*genai.Schema{
+			"users": {
+				Type: genai.TypeArray,
+				Items: &genai.Schema{
+					Type: genai.TypeObject,
+					Properties: map[string]*genai.Schema{
+						"name": {
+							Type:        genai.TypeString,
+							Description: "Exact username of the flagged user",
+						},
+						"reason": {
+							Type:        genai.TypeString,
+							Description: "Clear explanation of why the user was flagged",
+						},
+						"flaggedContent": {
+							Type: genai.TypeArray,
+							Items: &genai.Schema{
+								Type: genai.TypeString,
+							},
+							Description: "Exact content that was flagged",
+						},
+						"confidence": {
+							Type:        genai.TypeNumber,
+							Description: "Confidence level of the AI's assessment",
+						},
+					},
+					Required: []string{"name", "reason", "flaggedContent", "confidence"},
+				},
+			},
+		},
+		Required: []string{"users"},
+	}
+
+	// Create friend analysis model
+	friendModel := genAIClient.GenerativeModel(genAIModel)
+	friendModel.SystemInstruction = genai.NewUserContent(genai.Text(FriendSystemPrompt))
+	friendModel.GenerationConfig.ResponseMIMEType = "application/json"
+	friendModel.GenerationConfig.ResponseSchema = &genai.Schema{
+		Type: genai.TypeObject,
+		Properties: map[string]*genai.Schema{
+			"name": {
+				Type:        genai.TypeString,
+				Description: "Username being analyzed",
+			},
+			"reason": {
+				Type:        genai.TypeString,
+				Description: "Analysis of friend network patterns",
+			},
+			"confidence": {
+				Type:        genai.TypeNumber,
+				Description: "Confidence level in the analysis",
+			},
+		},
+		Required: []string{"name", "reason", "confidence"},
+	}
+
+	// Create a minifier for JSON optimization
 	m := minify.New()
 	m.AddFunc("application/json", json.Minify)
 
-	tke, err := tiktoken.GetEncoding("cl100k_base")
-	if err != nil {
-		logger.Fatal("Failed to get tiktoken encoding", zap.Error(err))
-	}
-
 	return &AIChecker{
-		openAIClient: openAIClient,
-		minify:       m,
-		tke:          tke,
-		translator:   translator,
-		logger:       logger,
+		userModel:   userModel,
+		friendModel: friendModel,
+		minify:      m,
+		translator:  translator,
+		logger:      logger,
 	}
 }
 
@@ -197,51 +258,36 @@ func (a *AIChecker) ProcessUsers(userInfos []*fetcher.Info) ([]*models.User, []u
 	userInfoJSON, err := sonic.Marshal(userInfosWithoutID)
 	if err != nil {
 		a.logger.Error("Error marshaling user info", zap.Error(err))
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("%w: %w", ErrJSONProcessing, err)
 	}
 
 	userInfoJSON, err = a.minify.Bytes("application/json", userInfoJSON)
 	if err != nil {
 		a.logger.Error("Error minifying user info", zap.Error(err))
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("%w: %w", ErrJSONProcessing, err)
 	}
 
-	a.logger.Info("Sending user info to AI for analysis")
-
-	// Configure OpenAI request with schema enforcement
-	schemaParam := openai.ResponseFormatJSONSchemaJSONSchemaParam{
-		Name:        openai.F("flaggedUsers"),
-		Description: openai.F("List of flagged users"),
-		Schema:      openai.F(flaggedUsersSchema),
-		Strict:      openai.Bool(true),
-	}
-
-	// Send request to OpenAI
-	chatCompletion, err := a.openAIClient.Chat.Completions.New(context.Background(), openai.ChatCompletionNewParams{
-		Messages: openai.F([]openai.ChatCompletionMessageParamUnion{
-			openai.SystemMessage(ReviewSystemPrompt),
-			openai.UserMessage(string(userInfoJSON)),
-		}),
-		ResponseFormat: openai.F[openai.ChatCompletionNewParamsResponseFormatUnion](
-			openai.ResponseFormatJSONSchemaParam{
-				Type:       openai.F(openai.ResponseFormatJSONSchemaTypeJSONSchema),
-				JSONSchema: openai.F(schemaParam),
-			},
-		),
-		Model:       openai.F(openai.ChatModelGPT4oMini2024_07_18),
-		Temperature: openai.F(0.2),
-	})
+	// Generate content using Gemini model
+	resp, err := a.userModel.GenerateContent(context.Background(), genai.Text(string(userInfoJSON)))
 	if err != nil {
-		a.logger.Error("Error calling OpenAI API", zap.Error(err))
-		return nil, nil, err
+		a.logger.Error("Error calling Gemini API", zap.Error(err))
+		return nil, nil, fmt.Errorf("%w: %w", ErrModelResponse, err)
 	}
 
-	// Parse AI response
+	// Check for empty response
+	if len(resp.Candidates) == 0 || len(resp.Candidates[0].Content.Parts) == 0 {
+		return nil, nil, fmt.Errorf("%w: no response from Gemini", ErrModelResponse)
+	}
+
+	// Extract response text from Gemini's response
+	responseText := resp.Candidates[0].Content.Parts[0].(genai.Text)
+
+	// Parse Gemini response into FlaggedUsers struct
 	var flaggedUsers FlaggedUsers
-	err = sonic.Unmarshal([]byte(chatCompletion.Choices[0].Message.Content), &flaggedUsers)
+	err = sonic.Unmarshal([]byte(responseText), &flaggedUsers)
 	if err != nil {
 		a.logger.Error("Error unmarshaling flagged users", zap.Error(err))
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("%w: %w", ErrJSONProcessing, err)
 	}
 
 	a.logger.Info("Received AI response",
@@ -266,9 +312,9 @@ func (a *AIChecker) GenerateFriendReason(userInfo *fetcher.Info, confirmedFriend
 
 	// Collect friend summaries with token counting
 	friendSummaries := make([]FriendSummary, 0, len(confirmedFriends)+len(flaggedFriends))
-	currentTokens := 0
 
 	// Helper function to add friend if within token limit
+	currentTokens := int32(0)
 	addFriend := func(friend *models.User, friendType string) bool {
 		summary := FriendSummary{
 			Name:   friend.Name,
@@ -285,15 +331,20 @@ func (a *AIChecker) GenerateFriendReason(userInfo *fetcher.Info, confirmedFriend
 			return false
 		}
 
-		tokens := a.tke.Encode(string(summaryJSON), nil, nil)
-		tokenCount := len(tokens)
+		tokenCount, err := a.friendModel.CountTokens(context.Background(), genai.Text(summaryJSON))
+		if err != nil {
+			a.logger.Warn("Failed to count tokens for friend summary",
+				zap.String("username", friend.Name),
+				zap.Error(err))
+			return false
+		}
 
-		if currentTokens+tokenCount > MaxFriendDataTokens {
+		currentTokens += tokenCount.TotalTokens
+		if currentTokens > MaxFriendDataTokens {
 			return false
 		}
 
 		friendSummaries = append(friendSummaries, summary)
-		currentTokens += tokenCount
 		return true
 	}
 
@@ -301,7 +352,7 @@ func (a *AIChecker) GenerateFriendReason(userInfo *fetcher.Info, confirmedFriend
 	for _, friend := range confirmedFriends {
 		if !addFriend(friend, models.UserTypeConfirmed) {
 			a.logger.Debug("Reached token limit while adding confirmed friends",
-				zap.Int("currentTokens", currentTokens),
+				zap.Int32("currentTokens", currentTokens),
 				zap.Int("totalConfirmed", len(confirmedFriends)))
 			break
 		}
@@ -311,7 +362,7 @@ func (a *AIChecker) GenerateFriendReason(userInfo *fetcher.Info, confirmedFriend
 	for _, friend := range flaggedFriends {
 		if !addFriend(friend, models.UserTypeFlagged) {
 			a.logger.Debug("Reached token limit while adding flagged friends",
-				zap.Int("currentTokens", currentTokens),
+				zap.Int32("currentTokens", currentTokens),
 				zap.Int("totalFlagged", len(flaggedFriends)))
 			break
 		}
@@ -320,47 +371,36 @@ func (a *AIChecker) GenerateFriendReason(userInfo *fetcher.Info, confirmedFriend
 	// Convert to JSON for the AI request
 	friendDataJSON, err := sonic.Marshal(friendSummaries)
 	if err != nil {
-		return "", fmt.Errorf("failed to marshal friend data: %w", err)
+		return "", fmt.Errorf("%w: %w", ErrJSONProcessing, err)
 	}
 
 	// Minify JSON to reduce token usage
 	friendDataJSON, err = a.minify.Bytes("application/json", friendDataJSON)
 	if err != nil {
-		return "", fmt.Errorf("failed to minify friend data: %w", err)
+		return "", fmt.Errorf("%w: %w", ErrJSONProcessing, err)
 	}
 
-	// Configure OpenAI request with schema enforcement
-	schemaParam := openai.ResponseFormatJSONSchemaJSONSchemaParam{
-		Name:        openai.F("flaggedUser"),
-		Description: openai.F("Flagged user information"),
-		Schema:      openai.F(flaggedUserSchema),
-		Strict:      openai.Bool(true),
-	}
+	// Configure prompt for friend analysis
+	prompt := fmt.Sprintf(FriendUserPrompt, userInfo.Name, string(friendDataJSON))
 
-	// Send request to OpenAI
-	chatCompletion, err := a.openAIClient.Chat.Completions.New(context.Background(), openai.ChatCompletionNewParams{
-		Messages: openai.F([]openai.ChatCompletionMessageParamUnion{
-			openai.SystemMessage(FriendSystemPrompt),
-			openai.UserMessage(fmt.Sprintf(FriendUserPrompt, userInfo.Name, string(friendDataJSON))),
-		}),
-		ResponseFormat: openai.F[openai.ChatCompletionNewParamsResponseFormatUnion](
-			openai.ResponseFormatJSONSchemaParam{
-				Type:       openai.F(openai.ResponseFormatJSONSchemaTypeJSONSchema),
-				JSONSchema: openai.F(schemaParam),
-			},
-		),
-		Model:       openai.F(openai.ChatModelGPT4oMini2024_07_18),
-		Temperature: openai.F(0.0),
-	})
+	// Generate friend analysis using Gemini model
+	resp, err := a.friendModel.GenerateContent(context.Background(), genai.Text(prompt))
 	if err != nil {
-		return "", fmt.Errorf("OpenAI API error: %w", err)
+		return "", fmt.Errorf("%w: %w", ErrModelResponse, err)
 	}
 
-	// Parse AI response
+	if len(resp.Candidates) == 0 || len(resp.Candidates[0].Content.Parts) == 0 {
+		return "", fmt.Errorf("%w: no response from Gemini", ErrModelResponse)
+	}
+
+	// Extract response text from Gemini's response
+	responseText := resp.Candidates[0].Content.Parts[0].(genai.Text)
+
+	// Parse Gemini response into FlaggedUser struct
 	var flaggedUser FlaggedUser
-	err = sonic.Unmarshal([]byte(chatCompletion.Choices[0].Message.Content), &flaggedUser)
+	err = sonic.Unmarshal([]byte(responseText), &flaggedUser)
 	if err != nil {
-		return "", fmt.Errorf("failed to unmarshal AI response: %w", err)
+		return "", fmt.Errorf("%w: %w", ErrJSONProcessing, err)
 	}
 
 	reason := flaggedUser.Reason
@@ -368,8 +408,7 @@ func (a *AIChecker) GenerateFriendReason(userInfo *fetcher.Info, confirmedFriend
 		zap.String("username", userInfo.Name),
 		zap.Int("confirmedFriends", len(confirmedFriends)),
 		zap.Int("flaggedFriends", len(flaggedFriends)),
-		zap.Int("includedFriends", len(friendSummaries)),
-		zap.Int("totalTokens", currentTokens),
+		zap.Int32("totalTokens", currentTokens),
 		zap.String("generatedReason", reason))
 
 	return reason, nil

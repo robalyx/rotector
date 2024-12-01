@@ -11,15 +11,15 @@ import (
 
 // HourlyStats stores cumulative statistics for each hour.
 type HourlyStats struct {
-	Timestamp       time.Time `bun:",pk"      json:"timestamp"       jsonschema_description:"Time of the statistics snapshot"`
-	UsersConfirmed  int64     `bun:",notnull" json:"usersConfirmed"  jsonschema_description:"Confirmed users at this time"`
-	UsersFlagged    int64     `bun:",notnull" json:"usersFlagged"    jsonschema_description:"Flagged users at this time"`
-	UsersCleared    int64     `bun:",notnull" json:"usersCleared"    jsonschema_description:"Users cleared in this period"`
-	UsersBanned     int64     `bun:",notnull" json:"usersBanned"     jsonschema_description:"Users banned in this period"`
-	GroupsConfirmed int64     `bun:",notnull" json:"groupsConfirmed" jsonschema_description:"Confirmed groups at this time"`
-	GroupsFlagged   int64     `bun:",notnull" json:"groupsFlagged"   jsonschema_description:"Flagged groups at this time"`
-	GroupsCleared   int64     `bun:",notnull" json:"groupsCleared"   jsonschema_description:"Groups cleared in this period"`
-	GroupsLocked    int64     `bun:",notnull" json:"groupsLocked"    jsonschema_description:"Groups locked in this period"`
+	Timestamp       time.Time `bun:",pk"      json:"timestamp"`
+	UsersConfirmed  int64     `bun:",notnull" json:"usersConfirmed"`
+	UsersFlagged    int64     `bun:",notnull" json:"usersFlagged"`
+	UsersCleared    int64     `bun:",notnull" json:"usersCleared"`
+	UsersBanned     int64     `bun:",notnull" json:"usersBanned"`
+	GroupsConfirmed int64     `bun:",notnull" json:"groupsConfirmed"`
+	GroupsFlagged   int64     `bun:",notnull" json:"groupsFlagged"`
+	GroupsCleared   int64     `bun:",notnull" json:"groupsCleared"`
+	GroupsLocked    int64     `bun:",notnull" json:"groupsLocked"`
 }
 
 // UserCounts holds all user-related statistics.

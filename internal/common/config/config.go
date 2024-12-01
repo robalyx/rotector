@@ -15,12 +15,12 @@ type Config struct {
 
 // CommonConfig contains configuration shared between bot and worker.
 type CommonConfig struct {
-	Debug          Debug
-	RateLimit      RateLimit
-	CircuitBreaker CircuitBreaker
-	PostgreSQL     PostgreSQL
-	Redis          Redis
-	OpenAI         OpenAI
+	Debug          Debug          `mapstructure:"debug"`
+	RateLimit      RateLimit      `mapstructure:"rate_limit"`
+	CircuitBreaker CircuitBreaker `mapstructure:"circuit_breaker"`
+	PostgreSQL     PostgreSQL     `mapstructure:"postgresql"`
+	Redis          Redis          `mapstructure:"redis"`
+	GeminiAI       GeminiAI       `mapstructure:"gemini_ai"`
 }
 
 // BotConfig contains Discord bot specific configuration.
@@ -77,10 +77,11 @@ type Redis struct {
 	Password string
 }
 
-// OpenAI contains OpenAI API configuration.
+// GeminiAI contains GeminiAI API configuration.
 // APIKey must be provided for authentication.
-type OpenAI struct {
+type GeminiAI struct {
 	APIKey string `mapstructure:"api_key"`
+	Model  string `mapstructure:"model"`
 }
 
 // Discord contains Discord bot configuration.

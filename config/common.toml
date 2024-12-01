@@ -6,11 +6,11 @@ query_logging = true
 enable_pprof = false
 pprof_port = 6060
 
-[common.ratelimit]
+[common.rate_limit]
 requests_per_second = 100.0
 burst_size = 1
 
-[common.circuitbreaker]
+[common.circuit_breaker]
 max_failures = 10
 failure_threshold = 500
 recovery_timeout = 1000
@@ -28,5 +28,6 @@ port = 6379
 username = ""
 password = ""
 
-[common.openai]
-api_key = "" 
+[common.gemini_ai]
+api_key = ""
+model = "gemini-1.5-flash-latest"
