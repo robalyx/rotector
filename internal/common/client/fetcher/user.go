@@ -17,6 +17,13 @@ import (
 // ErrUserBanned indicates that the user is banned from Roblox.
 var ErrUserBanned = errors.New("user is banned")
 
+// UserFetchResult contains the result of fetching a user's information.
+type UserFetchResult struct {
+	ID    uint64
+	Info  *Info
+	Error error
+}
+
 // UserGroupFetchResult contains the result of fetching a user's groups.
 type UserGroupFetchResult struct {
 	Data  []*types.UserGroupRoles
@@ -71,17 +78,8 @@ func NewUserFetcher(app *setup.App, logger *zap.Logger) *UserFetcher {
 // FetchInfos retrieves complete user information for a batch of user IDs.
 // It skips banned users and fetches groups/friends/games concurrently for each user.
 func (u *UserFetcher) FetchInfos(userIDs []uint64) []*Info {
-	// UserFetchResult contains the result of fetching a user's information.
-	type UserFetchResult struct {
-		Info  *Info
-		Error error
-	}
-
 	var wg sync.WaitGroup
-	resultsChan := make(chan struct {
-		UserID uint64
-		Result *UserFetchResult
-	}, len(userIDs))
+	resultsChan := make(chan UserFetchResult, len(userIDs))
 
 	// Process each user concurrently
 	for _, userID := range userIDs {
@@ -92,24 +90,18 @@ func (u *UserFetcher) FetchInfos(userIDs []uint64) []*Info {
 			// Fetch the user info
 			userInfo, err := u.roAPI.Users().GetUserByID(context.Background(), id)
 			if err != nil {
-				resultsChan <- struct {
-					UserID uint64
-					Result *UserFetchResult
-				}{
-					UserID: id,
-					Result: &UserFetchResult{Error: err},
+				resultsChan <- UserFetchResult{
+					ID:    id,
+					Error: err,
 				}
 				return
 			}
 
 			// Skip banned users
 			if userInfo.IsBanned {
-				resultsChan <- struct {
-					UserID uint64
-					Result *UserFetchResult
-				}{
-					UserID: id,
-					Result: &UserFetchResult{Error: ErrUserBanned},
+				resultsChan <- UserFetchResult{
+					ID:    id,
+					Error: ErrUserBanned,
 				}
 				return
 			}
@@ -118,25 +110,20 @@ func (u *UserFetcher) FetchInfos(userIDs []uint64) []*Info {
 			groups, friends, games, followerCount, followingCount := u.fetchUserData(id)
 
 			// Send the user info to the channel
-			resultsChan <- struct {
-				UserID uint64
-				Result *UserFetchResult
-			}{
-				UserID: id,
-				Result: &UserFetchResult{
-					Info: &Info{
-						ID:             userInfo.ID,
-						Name:           userInfo.Name,
-						DisplayName:    userInfo.DisplayName,
-						Description:    userInfo.Description,
-						CreatedAt:      userInfo.Created,
-						Groups:         groups,
-						Friends:        friends,
-						Games:          games,
-						FollowerCount:  followerCount,
-						FollowingCount: followingCount,
-						LastUpdated:    time.Now(),
-					},
+			resultsChan <- UserFetchResult{
+				ID: id,
+				Info: &Info{
+					ID:             userInfo.ID,
+					Name:           userInfo.Name,
+					DisplayName:    userInfo.DisplayName,
+					Description:    userInfo.Description,
+					CreatedAt:      userInfo.Created,
+					Groups:         groups,
+					Friends:        friends,
+					Games:          games,
+					FollowerCount:  followerCount,
+					FollowingCount: followingCount,
+					LastUpdated:    time.Now(),
 				},
 			}
 		}(userID)
@@ -151,7 +138,7 @@ func (u *UserFetcher) FetchInfos(userIDs []uint64) []*Info {
 	// Collect results from the channel
 	results := make(map[uint64]*UserFetchResult)
 	for result := range resultsChan {
-		results[result.UserID] = result.Result
+		results[result.ID] = &result
 	}
 
 	// Process results and filter out errors
@@ -208,19 +195,10 @@ func (u *UserFetcher) fetchUserData(userID uint64) (*UserGroupFetchResult, *User
 		u.fetchGames(userID, gameChan)
 	}()
 
-	// Fetch follower count
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		u.fetchFollowerCount(userID, followerChan)
-	}()
-
-	// Fetch following count
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		u.fetchFollowingCount(userID, followingChan)
-	}()
+	// Fetch follower and following count in sequence since
+	// the rate limits for these endpoints are really bad.
+	u.fetchFollowerCount(userID, followerChan)
+	u.fetchFollowingCount(userID, followingChan)
 
 	// Wait for all goroutines to complete
 	wg.Wait()

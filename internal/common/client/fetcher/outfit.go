@@ -13,7 +13,8 @@ import (
 
 // OutfitFetchResult contains the result of fetching a user's outfits.
 type OutfitFetchResult struct {
-	Outfits []types.Outfit
+	ID      uint64
+	Outfits *types.OutfitResponse
 	Error   error
 }
 
@@ -34,10 +35,7 @@ func NewOutfitFetcher(roAPI *api.API, logger *zap.Logger) *OutfitFetcher {
 // AddOutfits fetches outfits for a batch of users and adds them to the user records.
 func (o *OutfitFetcher) AddOutfits(users []*models.User) []*models.User {
 	var wg sync.WaitGroup
-	resultsChan := make(chan struct {
-		UserID uint64
-		Result *OutfitFetchResult
-	}, len(users))
+	resultsChan := make(chan OutfitFetchResult, len(users))
 
 	// Create a map to maintain order of users
 	userMap := make(map[uint64]*models.User)
@@ -53,15 +51,10 @@ func (o *OutfitFetcher) AddOutfits(users []*models.User) []*models.User {
 
 			builder := avatar.NewUserOutfitsBuilder(u.ID).WithItemsPerPage(1000).WithIsEditable(true)
 			outfits, err := o.roAPI.Avatar().GetUserOutfits(context.Background(), builder.Build())
-			resultsChan <- struct {
-				UserID uint64
-				Result *OutfitFetchResult
-			}{
-				UserID: u.ID,
-				Result: &OutfitFetchResult{
-					Outfits: outfits.Data,
-					Error:   err,
-				},
+			resultsChan <- OutfitFetchResult{
+				ID:      u.ID,
+				Outfits: outfits,
+				Error:   err,
 			}
 		}(user)
 	}
@@ -75,7 +68,7 @@ func (o *OutfitFetcher) AddOutfits(users []*models.User) []*models.User {
 	// Collect results from the channel
 	results := make(map[uint64]*OutfitFetchResult)
 	for result := range resultsChan {
-		results[result.UserID] = result.Result
+		results[result.ID] = &result
 	}
 
 	// Process results and maintain original order
@@ -88,7 +81,7 @@ func (o *OutfitFetcher) AddOutfits(users []*models.User) []*models.User {
 				zap.Uint64("userID", user.ID))
 			continue
 		}
-		user.Outfits = result.Outfits
+		user.Outfits = result.Outfits.Data
 		updatedUsers = append(updatedUsers, user)
 	}
 

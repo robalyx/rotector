@@ -29,17 +29,15 @@ func NewGroupFetcher(roAPI *api.API, logger *zap.Logger) *GroupFetcher {
 
 // GroupFetchResult contains the result of fetching a group's information.
 type GroupFetchResult struct {
-	GroupInfo *types.GroupResponse
-	Error     error
+	ID    uint64
+	Info  *types.GroupResponse
+	Error error
 }
 
 // FetchGroupInfos retrieves complete group information for a batch of group IDs.
 func (g *GroupFetcher) FetchGroupInfos(groupIDs []uint64) []*types.GroupResponse {
 	var wg sync.WaitGroup
-	resultsChan := make(chan struct {
-		GroupID uint64
-		Result  *GroupFetchResult
-	}, len(groupIDs))
+	resultsChan := make(chan GroupFetchResult, len(groupIDs))
 
 	// Spawn a goroutine for each group
 	for _, groupID := range groupIDs {
@@ -50,40 +48,25 @@ func (g *GroupFetcher) FetchGroupInfos(groupIDs []uint64) []*types.GroupResponse
 			// Fetch the group info
 			groupInfo, err := g.roAPI.Groups().GetGroupInfo(context.Background(), id)
 			if err != nil {
-				resultsChan <- struct {
-					GroupID uint64
-					Result  *GroupFetchResult
-				}{
-					GroupID: id,
-					Result: &GroupFetchResult{
-						Error: err,
-					},
+				resultsChan <- GroupFetchResult{
+					ID:    id,
+					Error: err,
 				}
 				return
 			}
 
 			// Check for locked groups
 			if groupInfo.IsLocked != nil && *groupInfo.IsLocked {
-				resultsChan <- struct {
-					GroupID uint64
-					Result  *GroupFetchResult
-				}{
-					GroupID: id,
-					Result: &GroupFetchResult{
-						Error: ErrGroupLocked,
-					},
+				resultsChan <- GroupFetchResult{
+					ID:    id,
+					Error: ErrGroupLocked,
 				}
 				return
 			}
 
-			resultsChan <- struct {
-				GroupID uint64
-				Result  *GroupFetchResult
-			}{
-				GroupID: id,
-				Result: &GroupFetchResult{
-					GroupInfo: groupInfo,
-				},
+			resultsChan <- GroupFetchResult{
+				ID:   id,
+				Info: groupInfo,
 			}
 		}(groupID)
 	}
@@ -95,9 +78,9 @@ func (g *GroupFetcher) FetchGroupInfos(groupIDs []uint64) []*types.GroupResponse
 	}()
 
 	// Collect results from the channel
-	results := make(map[uint64]*GroupFetchResult)
+	results := make(map[uint64]GroupFetchResult)
 	for result := range resultsChan {
-		results[result.GroupID] = result.Result
+		results[result.ID] = result
 	}
 
 	// Process results and filter out errors
@@ -112,7 +95,7 @@ func (g *GroupFetcher) FetchGroupInfos(groupIDs []uint64) []*types.GroupResponse
 			continue
 		}
 
-		validGroups = append(validGroups, result.GroupInfo)
+		validGroups = append(validGroups, result.Info)
 	}
 
 	g.logger.Debug("Finished fetching group information",

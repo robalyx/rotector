@@ -80,7 +80,7 @@ func (c *UserChecker) ProcessUsers(userInfos []*fetcher.Info) []uint64 {
 			if existingUser, ok := flaggedByID[aiUser.ID]; ok {
 				// User was flagged by both friends and AI
 				existingUser.Confidence = 1.0
-				existingUser.Reason = fmt.Sprintf("%s\n\nAI Analysis: %s", existingUser.Reason, aiUser.Reason)
+				existingUser.Reason = fmt.Sprintf("%s\n\nUser Analysis: %s", existingUser.Reason, aiUser.Reason)
 				existingUser.FlaggedContent = aiUser.FlaggedContent
 			} else {
 				// User was only flagged by AI
