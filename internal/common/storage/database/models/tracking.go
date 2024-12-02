@@ -2,6 +2,7 @@ package models
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/uptrace/bun"
@@ -32,66 +33,30 @@ func NewTracking(db *bun.DB, logger *zap.Logger) *TrackingModel {
 }
 
 // AddUserToGroupTracking adds a user ID to a group's tracking list.
-// If the group exists in confirmed_groups or flagged_groups, it adds the user to their lists.
-// Otherwise, it creates a new tracking entry.
+// If the group exists in any of the group tables (confirmed, flagged, cleared, banned),
+// it adds the user to their lists. Otherwise, it creates a new tracking entry.
 func (r *TrackingModel) AddUserToGroupTracking(ctx context.Context, groupID, userID uint64) error {
 	return r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
-		// Check if group is in confirmed_groups
-		exists, err := tx.NewSelect().Model((*ConfirmedGroup)(nil)).
-			Where("id = ?", groupID).
-			Exists(ctx)
-		if err != nil {
-			r.logger.Error("Failed to check confirmed group",
-				zap.Error(err),
-				zap.Uint64("groupID", groupID))
-			return err
+		// Check all group tables in order
+		tables := []interface{}{
+			(*ConfirmedGroup)(nil),
+			(*FlaggedGroup)(nil),
+			(*ClearedGroup)(nil),
+			(*LockedGroup)(nil),
 		}
 
-		if exists {
-			// Add user to confirmed group's flagged users list
-			_, err = tx.NewUpdate().Model(&ConfirmedGroup{}).
-				Set("flagged_users = array_append(array_remove(flagged_users, ?), ?)", userID, userID).
-				Where("id = ?", groupID).
-				Exec(ctx)
+		for _, table := range tables {
+			found, err := r.checkGroupTableAndUpdate(ctx, tx, table, groupID, userID)
 			if err != nil {
-				r.logger.Error("Failed to update confirmed group's flagged users",
-					zap.Error(err),
-					zap.Uint64("groupID", groupID),
-					zap.Uint64("userID", userID))
 				return err
 			}
-			return nil
-		}
-
-		// Check if group is in flagged_groups
-		exists, err = tx.NewSelect().Model((*FlaggedGroup)(nil)).
-			Where("id = ?", groupID).
-			Exists(ctx)
-		if err != nil {
-			r.logger.Error("Failed to check flagged group",
-				zap.Error(err),
-				zap.Uint64("groupID", groupID))
-			return err
-		}
-
-		if exists {
-			// Add user to flagged group's flagged users list
-			_, err = tx.NewUpdate().Model(&FlaggedGroup{}).
-				Set("flagged_users = array_append(array_remove(flagged_users, ?), ?)", userID, userID).
-				Where("id = ?", groupID).
-				Exec(ctx)
-			if err != nil {
-				r.logger.Error("Failed to update flagged group's flagged users",
-					zap.Error(err),
-					zap.Uint64("groupID", groupID),
-					zap.Uint64("userID", userID))
-				return err
+			if found {
+				return nil
 			}
-			return nil
 		}
 
-		// If group is not in either table, create new tracking entry
-		_, err = tx.NewInsert().Model(&GroupMemberTracking{
+		// If group is not in any table, create new tracking entry
+		_, err := tx.NewInsert().Model(&GroupMemberTracking{
 			GroupID:      groupID,
 			FlaggedUsers: []uint64{userID},
 			LastAppended: time.Now(),
@@ -109,6 +74,47 @@ func (r *TrackingModel) AddUserToGroupTracking(ctx context.Context, groupID, use
 
 		return nil
 	})
+}
+
+// checkGroupTableAndUpdate checks if a group exists in the specified table and updates its flagged users.
+// Returns true if the group was found and updated, false otherwise.
+func (r *TrackingModel) checkGroupTableAndUpdate(
+	ctx context.Context,
+	tx bun.Tx,
+	model interface{},
+	groupID uint64,
+	userID uint64,
+) (bool, error) {
+	exists, err := tx.NewSelect().
+		Model(model).
+		Where("id = ?", groupID).
+		Exists(ctx)
+	if err != nil {
+		r.logger.Error("Failed to check group existence",
+			zap.Error(err),
+			zap.String("table", fmt.Sprintf("%T", model)),
+			zap.Uint64("groupID", groupID))
+		return false, err
+	}
+
+	if exists {
+		_, err = tx.NewUpdate().
+			Model(model).
+			Set("flagged_users = array_append(array_remove(flagged_users, ?), ?)", userID, userID).
+			Where("id = ?", groupID).
+			Exec(ctx)
+		if err != nil {
+			r.logger.Error("Failed to update group's flagged users",
+				zap.Error(err),
+				zap.String("table", fmt.Sprintf("%T", model)),
+				zap.Uint64("groupID", groupID),
+				zap.Uint64("userID", userID))
+			return false, err
+		}
+		return true, nil
+	}
+
+	return false, nil
 }
 
 // PurgeOldTrackings removes tracking entries that haven't been updated recently.

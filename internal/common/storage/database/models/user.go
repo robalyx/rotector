@@ -17,6 +17,8 @@ const (
 	UserTypeFlagged = "flagged"
 	// UserTypeCleared indicates a user was reviewed and found to be appropriate.
 	UserTypeCleared = "cleared"
+	// UserTypeBanned indicates a user was banned and removed from the system.
+	UserTypeBanned = "banned"
 )
 
 // ExtendedFriend contains additional user information beyond the basic Friend type.
@@ -50,9 +52,9 @@ type User struct {
 	LastViewed     time.Time               `bun:",notnull"   json:"lastViewed"`
 	LastPurgeCheck time.Time               `bun:",notnull"   json:"lastPurgeCheck"`
 	ThumbnailURL   string                  `bun:",notnull"   json:"thumbnailUrl"`
-	Upvotes        int                     `bun:",notnull"   json:"upvotes"`
-	Downvotes      int                     `bun:",notnull"   json:"downvotes"`
-	Reputation     int                     `bun:",notnull"   json:"reputation"`
+	Upvotes        int32                   `bun:",notnull"   json:"upvotes"`
+	Downvotes      int32                   `bun:",notnull"   json:"downvotes"`
+	Reputation     int32                   `bun:",notnull"   json:"reputation"`
 }
 
 // FlaggedUser extends User to track users that need review.
@@ -352,7 +354,7 @@ func (r *UserModel) GetClearedUsersCount(ctx context.Context) (int, error) {
 }
 
 // CheckExistingUsers finds which users from a list of IDs exist in any user table.
-// Returns a map of user IDs to their status (confirmed, flagged, cleared).
+// Returns a map of user IDs to their status (confirmed, flagged, cleared, banned).
 func (r *UserModel) CheckExistingUsers(ctx context.Context, userIDs []uint64) (map[uint64]string, error) {
 	var users []struct {
 		ID     uint64
@@ -374,6 +376,12 @@ func (r *UserModel) CheckExistingUsers(ctx context.Context, userIDs []uint64) (m
 				tx.NewSelect().Model((*ClearedUser)(nil)).
 					Column("id").
 					ColumnExpr("? AS status", UserTypeCleared).
+					Where("id IN (?)", bun.In(userIDs)),
+			).
+			Union(
+				tx.NewSelect().Model((*BannedUser)(nil)).
+					Column("id").
+					ColumnExpr("? AS status", UserTypeBanned).
 					Where("id IN (?)", bun.In(userIDs)),
 			).
 			Scan(ctx, &users)
@@ -428,6 +436,34 @@ func (r *UserModel) GetUsersByIDs(ctx context.Context, userIDs []uint64) (map[ui
 	for _, user := range flaggedUsers {
 		users[user.ID] = &user.User
 		userTypes[user.ID] = UserTypeFlagged
+	}
+
+	// Query cleared users
+	var clearedUsers []ClearedUser
+	err = r.db.NewSelect().
+		Model(&clearedUsers).
+		Where("id IN (?)", bun.In(userIDs)).
+		Scan(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+	for _, user := range clearedUsers {
+		users[user.ID] = &user.User
+		userTypes[user.ID] = UserTypeCleared
+	}
+
+	// Query banned users
+	var bannedUsers []BannedUser
+	err = r.db.NewSelect().
+		Model(&bannedUsers).
+		Where("id IN (?)", bun.In(userIDs)).
+		Scan(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+	for _, user := range bannedUsers {
+		users[user.ID] = &user.User
+		userTypes[user.ID] = "banned"
 	}
 
 	r.logger.Debug("Retrieved users by IDs",

@@ -146,21 +146,7 @@ func (r *GroupModel) SaveFlaggedGroups(ctx context.Context, flaggedGroups []*Fla
 func (r *GroupModel) ConfirmGroup(ctx context.Context, group *FlaggedGroup) error {
 	return r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
 		confirmedGroup := &ConfirmedGroup{
-			Group: Group{
-				ID:           group.ID,
-				Name:         group.Name,
-				Description:  group.Description,
-				Owner:        group.Owner,
-				Reason:       group.Reason,
-				Confidence:   group.Confidence,
-				LastScanned:  group.LastScanned,
-				LastUpdated:  group.LastUpdated,
-				LastViewed:   group.LastViewed,
-				ThumbnailURL: group.ThumbnailURL,
-				Upvotes:      group.Upvotes,
-				Downvotes:    group.Downvotes,
-				Reputation:   group.Reputation,
-			},
+			Group:      group.Group,
 			VerifiedAt: time.Now(),
 		}
 
