@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"time"
 
 	"github.com/rotector/rotector/internal/common/config"
 	"github.com/rotector/rotector/internal/common/storage/database/models"
@@ -36,6 +37,12 @@ func NewConnection(config *config.PostgreSQL, logger *zap.Logger, logQueries boo
 		pgdriver.WithDatabase(config.DBName),
 		pgdriver.WithInsecure(true),
 	))
+
+	// Set connection pool settings
+	sqldb.SetMaxOpenConns(config.MaxOpenConns)
+	sqldb.SetMaxIdleConns(config.MaxIdleConns)
+	sqldb.SetConnMaxLifetime(time.Duration(config.MaxLifetime) * time.Minute)
+	sqldb.SetConnMaxIdleTime(time.Duration(config.MaxIdleTime) * time.Minute)
 
 	// Create Bun db instance
 	db := bun.NewDB(sqldb, pgdialect.New())

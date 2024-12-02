@@ -68,20 +68,24 @@ type Retry struct {
 // PostgreSQL contains database connection configuration.
 // DBName specifies which database to use within the PostgreSQL server.
 type PostgreSQL struct {
-	Host     string
-	Port     int
-	User     string
-	Password string
-	DBName   string `mapstructure:"db_name"`
+	Host         string `mapstructure:"host"`
+	Port         int    `mapstructure:"port"`
+	User         string `mapstructure:"user"`
+	Password     string `mapstructure:"password"`
+	DBName       string `mapstructure:"db_name"`
+	MaxOpenConns int    `mapstructure:"max_open_conns"`
+	MaxIdleConns int    `mapstructure:"max_idle_conns"`
+	MaxLifetime  int    `mapstructure:"max_lifetime"`  // In minutes
+	MaxIdleTime  int    `mapstructure:"max_idle_time"` // In minutes
 }
 
 // Redis contains Redis connection configuration.
 // Username is optional and can be empty for default authentication.
 type Redis struct {
-	Host     string
-	Port     int
-	Username string
-	Password string
+	Host     string `mapstructure:"host"`
+	Port     int    `mapstructure:"port"`
+	Username string `mapstructure:"username"`
+	Password string `mapstructure:"password"`
 }
 
 // GeminiAI contains GeminiAI API configuration.
@@ -94,7 +98,7 @@ type GeminiAI struct {
 // Discord contains Discord bot configuration.
 // Token must be provided for bot authentication.
 type Discord struct {
-	Token string
+	Token string `mapstructure:"token"`
 }
 
 // BatchSizes configures how many items to process in each batch.
