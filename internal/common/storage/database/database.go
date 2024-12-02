@@ -14,6 +14,9 @@ import (
 	"go.uber.org/zap"
 )
 
+// PartitionCount is the number of partitions for user and group tables.
+const PartitionCount = 8
+
 // Client represents the database connection and operations.
 // It manages access to different repositories that handle specific data types.
 type Client struct {
@@ -88,15 +91,14 @@ func NewConnection(config *config.PostgreSQL, logger *zap.Logger, logQueries boo
 
 // createSchema creates all required database tables.
 func (c *Client) createSchema() error {
+	// First create parent partitioned tables
+	err := c.createPartitionedTables()
+	if err != nil {
+		return fmt.Errorf("failed to create partitioned tables: %w", err)
+	}
+
+	// Then create other non-partitioned tables
 	models := []interface{}{
-		(*models.FlaggedGroup)(nil),
-		(*models.ConfirmedGroup)(nil),
-		(*models.ClearedGroup)(nil),
-		(*models.LockedGroup)(nil),
-		(*models.FlaggedUser)(nil),
-		(*models.ConfirmedUser)(nil),
-		(*models.ClearedUser)(nil),
-		(*models.BannedUser)(nil),
 		(*models.HourlyStats)(nil),
 		(*models.UserSetting)(nil),
 		(*models.BotSetting)(nil),
@@ -115,6 +117,50 @@ func (c *Client) createSchema() error {
 				zap.Error(err),
 				zap.String("model", fmt.Sprintf("%T", model)))
 			return err
+		}
+	}
+
+	return nil
+}
+
+// createPartitionedTables creates the parent tables and their partitions for user and group tables.
+func (c *Client) createPartitionedTables() error {
+	tables := []struct {
+		model interface{}
+		name  string
+	}{
+		{(*models.FlaggedUser)(nil), "flagged_users"},
+		{(*models.ConfirmedUser)(nil), "confirmed_users"},
+		{(*models.ClearedUser)(nil), "cleared_users"},
+		{(*models.BannedUser)(nil), "banned_users"},
+		{(*models.FlaggedGroup)(nil), "flagged_groups"},
+		{(*models.ConfirmedGroup)(nil), "confirmed_groups"},
+		{(*models.ClearedGroup)(nil), "cleared_groups"},
+		{(*models.LockedGroup)(nil), "locked_groups"},
+	}
+
+	for _, table := range tables {
+		// Create partitioned table from model
+		_, err := c.db.NewCreateTable().
+			Model(table.model).
+			ModelTableExpr(table.name).
+			IfNotExists().
+			PartitionBy(`HASH (id)`).
+			Exec(context.Background())
+		if err != nil {
+			return fmt.Errorf("failed to create parent table %s: %w", table.name, err)
+		}
+
+		// Create partitions
+		for i := range PartitionCount {
+			_, err = c.db.NewRaw(fmt.Sprintf(`
+				CREATE TABLE IF NOT EXISTS %s_%d 
+				PARTITION OF %s 
+				FOR VALUES WITH (modulus %d, remainder %d);
+			`, table.name, i, table.name, PartitionCount, i)).Exec(context.Background())
+			if err != nil {
+				return fmt.Errorf("failed to create partition %s_%d: %w", table.name, i, err)
+			}
 		}
 	}
 
