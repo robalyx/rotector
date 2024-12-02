@@ -274,7 +274,7 @@ func NewAIChecker(app *setup.App, translator *translator.Translator, logger *zap
 // 2. Sending translated content to OpenAI for analysis
 // 3. Validating AI responses against translated content
 // 4. Creating validated users with original descriptions.
-func (a *AIChecker) ProcessUsers(userInfos []*fetcher.Info) ([]*models.User, []uint64, error) {
+func (a *AIChecker) ProcessUsers(userInfos []*fetcher.Info) (map[uint64]*models.User, []uint64, error) {
 	// Create a struct for user summaries for AI analysis
 	type UserSummary struct {
 		Name        string `json:"name"`
@@ -462,8 +462,8 @@ func (a *AIChecker) GenerateFriendReason(userInfo *fetcher.Info, confirmedFriend
 // validateFlaggedUsers validates the flagged users against the translated content
 // but uses original descriptions when creating validated users. It checks if at least
 // 10% of the flagged words are found in the translated content to confirm the AI's findings.
-func (a *AIChecker) validateFlaggedUsers(flaggedUsers FlaggedUsers, translatedInfos map[string]*fetcher.Info, originalInfos map[string]*fetcher.Info) ([]*models.User, []uint64) {
-	var validatedUsers []*models.User
+func (a *AIChecker) validateFlaggedUsers(flaggedUsers FlaggedUsers, translatedInfos map[string]*fetcher.Info, originalInfos map[string]*fetcher.Info) (map[uint64]*models.User, []uint64) {
+	validatedUsers := make(map[uint64]*models.User)
 	var failedValidationIDs []uint64
 
 	for _, flaggedUser := range flaggedUsers.Users {
@@ -495,13 +495,13 @@ func (a *AIChecker) validateFlaggedUsers(flaggedUsers FlaggedUsers, translatedIn
 
 			// If the flagged user is correct, add it using original info
 			if isValid {
-				validatedUsers = append(validatedUsers, &models.User{
+				validatedUsers[originalInfo.ID] = &models.User{
 					ID:             originalInfo.ID,
 					Name:           originalInfo.Name,
 					DisplayName:    originalInfo.DisplayName,
 					Description:    originalInfo.Description,
 					CreatedAt:      originalInfo.CreatedAt,
-					Reason:         flaggedUser.Reason,
+					Reason:         "AI Analysis: " + flaggedUser.Reason,
 					Groups:         originalInfo.Groups.Data,
 					Friends:        originalInfo.Friends.Data,
 					Games:          originalInfo.Games.Data,
@@ -510,7 +510,7 @@ func (a *AIChecker) validateFlaggedUsers(flaggedUsers FlaggedUsers, translatedIn
 					FlaggedContent: flaggedUser.FlaggedContent,
 					Confidence:     flaggedUser.Confidence,
 					LastUpdated:    originalInfo.LastUpdated,
-				})
+				}
 			} else {
 				failedValidationIDs = append(failedValidationIDs, originalInfo.ID)
 				a.logger.Warn("AI flagged content did not pass validation",

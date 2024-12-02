@@ -33,15 +33,9 @@ func NewOutfitFetcher(roAPI *api.API, logger *zap.Logger) *OutfitFetcher {
 }
 
 // AddOutfits fetches outfits for a batch of users and adds them to the user records.
-func (o *OutfitFetcher) AddOutfits(users []*models.User) []*models.User {
+func (o *OutfitFetcher) AddOutfits(users map[uint64]*models.User) map[uint64]*models.User {
 	var wg sync.WaitGroup
 	resultsChan := make(chan OutfitFetchResult, len(users))
-
-	// Create a map to maintain order of users
-	userMap := make(map[uint64]*models.User)
-	for _, user := range users {
-		userMap[user.ID] = user
-	}
 
 	// Process each user concurrently
 	for _, user := range users {
@@ -72,7 +66,7 @@ func (o *OutfitFetcher) AddOutfits(users []*models.User) []*models.User {
 	}
 
 	// Process results and maintain original order
-	updatedUsers := make([]*models.User, 0, len(users))
+	updatedUsers := make(map[uint64]*models.User, len(users))
 	for _, user := range users {
 		result := results[user.ID]
 		if result.Error != nil {
@@ -82,7 +76,7 @@ func (o *OutfitFetcher) AddOutfits(users []*models.User) []*models.User {
 			continue
 		}
 		user.Outfits = result.Outfits.Data
-		updatedUsers = append(updatedUsers, user)
+		updatedUsers[user.ID] = user
 	}
 
 	o.logger.Debug("Finished fetching user outfits",

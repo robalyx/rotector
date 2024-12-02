@@ -36,7 +36,7 @@ func NewGroupChecker(db *database.Client, logger *zap.Logger) *GroupChecker {
 
 // ProcessUsers checks multiple users' groups concurrently and returns flagged users
 // and remaining users that need further checking.
-func (gc *GroupChecker) ProcessUsers(userInfos []*fetcher.Info) ([]*models.User, []*fetcher.Info) {
+func (gc *GroupChecker) ProcessUsers(userInfos []*fetcher.Info) (map[uint64]*models.User, []*fetcher.Info) {
 	// GroupCheckResult contains the result of checking a user's groups.
 	type GroupCheckResult struct {
 		UserID      uint64
@@ -83,7 +83,7 @@ func (gc *GroupChecker) ProcessUsers(userInfos []*fetcher.Info) ([]*models.User,
 	}
 
 	// Separate users into flagged and remaining
-	var flaggedUsers []*models.User
+	flaggedUsers := make(map[uint64]*models.User)
 	var remainingUsers []*fetcher.Info
 
 	for userID, result := range results {
@@ -96,7 +96,7 @@ func (gc *GroupChecker) ProcessUsers(userInfos []*fetcher.Info) ([]*models.User,
 		}
 
 		if result.AutoFlagged {
-			flaggedUsers = append(flaggedUsers, result.User)
+			flaggedUsers[userID] = result.User
 		} else {
 			remainingUsers = append(remainingUsers, userInfoMap[userID])
 		}
@@ -137,7 +137,7 @@ func (gc *GroupChecker) processUserGroups(userInfo *fetcher.Info) (*models.User,
 			DisplayName:    userInfo.DisplayName,
 			Description:    userInfo.Description,
 			CreatedAt:      userInfo.CreatedAt,
-			Reason:         fmt.Sprintf("Member of %d flagged groups", len(flaggedGroupIDs)),
+			Reason:         fmt.Sprintf("Group Analysis: Member of %d flagged groups", len(flaggedGroupIDs)),
 			Groups:         userInfo.Groups.Data,
 			Friends:        userInfo.Friends.Data,
 			Games:          userInfo.Games.Data,

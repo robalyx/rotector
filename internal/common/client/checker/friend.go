@@ -31,7 +31,7 @@ func NewFriendChecker(db *database.Client, aiChecker *AIChecker, logger *zap.Log
 }
 
 // ProcessUsers checks multiple users' friends concurrently and returns flagged users.
-func (fc *FriendChecker) ProcessUsers(userInfos []*fetcher.Info) []*models.User {
+func (fc *FriendChecker) ProcessUsers(userInfos []*fetcher.Info) map[uint64]*models.User {
 	// FriendCheckResult contains the result of checking a user's friends.
 	type FriendCheckResult struct {
 		UserID      uint64
@@ -78,8 +78,7 @@ func (fc *FriendChecker) ProcessUsers(userInfos []*fetcher.Info) []*models.User 
 	}
 
 	// Collect flagged users
-	var flaggedUsers []*models.User
-
+	flaggedUsers := make(map[uint64]*models.User)
 	for userID, result := range results {
 		if result.Error != nil {
 			fc.logger.Error("Error checking user friends",
@@ -89,7 +88,7 @@ func (fc *FriendChecker) ProcessUsers(userInfos []*fetcher.Info) []*models.User 
 		}
 
 		if result.AutoFlagged {
-			flaggedUsers = append(flaggedUsers, result.User)
+			flaggedUsers[userID] = result.User
 		}
 	}
 

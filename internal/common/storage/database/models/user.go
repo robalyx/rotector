@@ -103,7 +103,7 @@ func NewUser(db *bun.DB, tracking *TrackingModel, logger *zap.Logger) *UserModel
 // SaveFlaggedUsers adds or updates users in the flagged_users table.
 // For each user, it updates all fields if the user already exists,
 // or inserts a new record if they don't.
-func (r *UserModel) SaveFlaggedUsers(ctx context.Context, flaggedUsers []*User) {
+func (r *UserModel) SaveFlaggedUsers(ctx context.Context, flaggedUsers map[uint64]*User) {
 	r.logger.Debug("Saving flagged users", zap.Int("count", len(flaggedUsers)))
 
 	for _, flaggedUser := range flaggedUsers {

@@ -7,7 +7,6 @@ import (
 	"github.com/rotector/rotector/internal/common/client/fetcher"
 	"github.com/rotector/rotector/internal/common/setup"
 	"github.com/rotector/rotector/internal/common/storage/database"
-	"github.com/rotector/rotector/internal/common/storage/database/models"
 	"github.com/rotector/rotector/internal/common/translator"
 	"go.uber.org/zap"
 )
@@ -53,48 +52,42 @@ func NewUserChecker(app *setup.App, userFetcher *fetcher.UserFetcher, logger *za
 func (c *UserChecker) ProcessUsers(userInfos []*fetcher.Info) []uint64 {
 	c.logger.Info("Processing users", zap.Int("userInfos", len(userInfos)))
 
-	var flaggedUsers []*models.User
-	var failedValidationIDs []uint64
+	// Process group checker results
+	flaggedUsers, remainingUsers := c.groupChecker.ProcessUsers(userInfos)
 
-	// Check if users belong to flagged groups
-	flaggedUsersFromGroups, remainingUsers := c.groupChecker.ProcessUsers(userInfos)
-	flaggedUsers = append(flaggedUsers, flaggedUsersFromGroups...)
+	// Process friend checker results
+	flaggedByFriends := c.friendChecker.ProcessUsers(remainingUsers)
+	for userID, friendUser := range flaggedByFriends {
+		if existingUser, ok := flaggedUsers[userID]; ok {
+			// Combine reasons and update confidence
+			existingUser.Reason = fmt.Sprintf("%s\n\n%s", existingUser.Reason, friendUser.Reason)
+			existingUser.Confidence = 1.0
+		} else {
+			flaggedUsers[userID] = friendUser
+		}
+	}
 
-	// Check users based on their friends
-	flaggedUsersFromFriends := c.friendChecker.ProcessUsers(remainingUsers)
-	flaggedUsers = append(flaggedUsers, flaggedUsersFromFriends...)
-
-	// Process all users with AI
-	aiFlaggedUsers, failedIDs, err := c.aiChecker.ProcessUsers(userInfos)
+	// Process AI results
+	flaggedByAI, failedIDs, err := c.aiChecker.ProcessUsers(userInfos)
 	if err != nil {
 		c.logger.Error("Error checking users with AI", zap.Error(err))
 	} else {
-		// Create a map of existing flagged users by ID for easy lookup
-		flaggedByID := make(map[uint64]*models.User)
-		for _, user := range flaggedUsers {
-			flaggedByID[user.ID] = user
-		}
-
-		// Process AI flagged users
-		for _, aiUser := range aiFlaggedUsers {
-			if existingUser, ok := flaggedByID[aiUser.ID]; ok {
-				// User was flagged by both friends and AI
+		for userID, aiUser := range flaggedByAI {
+			if existingUser, ok := flaggedUsers[userID]; ok {
+				// Combine reasons and update confidence
+				existingUser.Reason = fmt.Sprintf("%s\n\n%s", existingUser.Reason, aiUser.Reason)
 				existingUser.Confidence = 1.0
-				existingUser.Reason = fmt.Sprintf("%s\n\nUser Analysis: %s", existingUser.Reason, aiUser.Reason)
 				existingUser.FlaggedContent = aiUser.FlaggedContent
 			} else {
-				// User was only flagged by AI
-				flaggedUsers = append(flaggedUsers, aiUser)
+				flaggedUsers[userID] = aiUser
 			}
 		}
-
-		failedValidationIDs = append(failedValidationIDs, failedIDs...)
 	}
 
 	// Stop if no users were flagged
 	if len(flaggedUsers) == 0 {
 		c.logger.Info("No flagged users found", zap.Int("userInfos", len(userInfos)))
-		return failedValidationIDs
+		return failedIDs
 	}
 
 	// Check followers for flagged users
@@ -111,5 +104,5 @@ func (c *UserChecker) ProcessUsers(userInfos []*fetcher.Info) []uint64 {
 		zap.Int("totalProcessed", len(userInfos)),
 		zap.Int("flaggedUsers", len(flaggedUsers)))
 
-	return failedValidationIDs
+	return failedIDs
 }

@@ -33,7 +33,7 @@ func NewFollowerChecker(roAPI *api.API, logger *zap.Logger) *FollowerChecker {
 }
 
 // ProcessUsers checks follower counts for flagged users and updates their confidence/reason if popular.
-func (fc *FollowerChecker) ProcessUsers(flaggedUsers []*models.User) []*models.User {
+func (fc *FollowerChecker) ProcessUsers(flaggedUsers map[uint64]*models.User) map[uint64]*models.User {
 	// FollowerCheckResult contains the result of checking a user's followers.
 	type FollowerCheckResult struct {
 		UserID    uint64
@@ -79,8 +79,8 @@ func (fc *FollowerChecker) ProcessUsers(flaggedUsers []*models.User) []*models.U
 	}
 
 	// Update confidence and reason for popular users
-	updatedUsers := make([]*models.User, len(flaggedUsers))
-	for i, user := range flaggedUsers {
+	updatedUsers := make(map[uint64]*models.User, len(flaggedUsers))
+	for _, user := range flaggedUsers {
 		followers := results[user.ID]
 		if followers >= FollowerThreshold {
 			user.Confidence = 1.0
@@ -92,7 +92,7 @@ func (fc *FollowerChecker) ProcessUsers(flaggedUsers []*models.User) []*models.U
 				zap.Uint64("followers", followers))
 		}
 
-		updatedUsers[i] = user
+		updatedUsers[user.ID] = user
 	}
 
 	return updatedUsers
