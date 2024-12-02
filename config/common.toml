@@ -15,6 +15,11 @@ max_failures = 10
 failure_threshold = 500
 recovery_timeout = 1000
 
+[common.retry]
+max_retries = 5
+delay = 3000
+max_delay = 5000
+
 [common.postgresql]
 host = "127.0.0.1"
 port = 5432

@@ -53,11 +53,15 @@ func getRoAPIClient(cfg *config.CommonConfig, redisManager *redis.Manager, logge
 		client.WithMiddleware(6,
 			circuitbreaker.New(
 				cfg.CircuitBreaker.MaxFailures,
-				cfg.CircuitBreaker.FailureThreshold,
-				cfg.CircuitBreaker.RecoveryTimeout,
+				time.Duration(cfg.CircuitBreaker.FailureThreshold)*time.Millisecond,
+				time.Duration(cfg.CircuitBreaker.RecoveryTimeout)*time.Millisecond,
 			),
 		),
-		client.WithMiddleware(5, retry.New(5, 1*time.Second, 5*time.Second)),
+		client.WithMiddleware(5, retry.New(
+			cfg.Retry.MaxRetries,
+			time.Duration(cfg.Retry.Delay)*time.Millisecond,
+			time.Duration(cfg.Retry.MaxDelay)*time.Millisecond,
+		)),
 		client.WithMiddleware(4, singleflight.New()),
 		client.WithMiddleware(3, axonetRedis.New(redisClient, 1*time.Hour)),
 		client.WithMiddleware(2, ratelimit.New(cfg.RateLimit.RequestsPerSecond, cfg.RateLimit.BurstSize)),

@@ -1,8 +1,6 @@
 package config
 
 import (
-	"time"
-
 	"github.com/spf13/viper"
 )
 
@@ -18,6 +16,7 @@ type CommonConfig struct {
 	Debug          Debug          `mapstructure:"debug"`
 	RateLimit      RateLimit      `mapstructure:"rate_limit"`
 	CircuitBreaker CircuitBreaker `mapstructure:"circuit_breaker"`
+	Retry          Retry          `mapstructure:"retry"`
 	PostgreSQL     PostgreSQL     `mapstructure:"postgresql"`
 	Redis          Redis          `mapstructure:"redis"`
 	GeminiAI       GeminiAI       `mapstructure:"gemini_ai"`
@@ -53,9 +52,17 @@ type RateLimit struct {
 // CircuitBreaker contains circuit breaker configuration.
 // It prevents cascading failures by temporarily stopping requests after errors.
 type CircuitBreaker struct {
-	MaxFailures      uint32        `mapstructure:"max_failures"`
-	FailureThreshold time.Duration `mapstructure:"failure_threshold"`
-	RecoveryTimeout  time.Duration `mapstructure:"recovery_timeout"`
+	MaxFailures      uint32 `mapstructure:"max_failures"`
+	FailureThreshold int    `mapstructure:"failure_threshold"` // In milliseconds
+	RecoveryTimeout  int    `mapstructure:"recovery_timeout"`  // In milliseconds
+}
+
+// Retry contains retry configuration.
+// It retries a failed request up to a maximum number of times with a delay between each retry.
+type Retry struct {
+	MaxRetries uint64 `mapstructure:"max_retries"`
+	Delay      int    `mapstructure:"delay"`     // In milliseconds
+	MaxDelay   int    `mapstructure:"max_delay"` // In milliseconds
 }
 
 // PostgreSQL contains database connection configuration.
