@@ -114,8 +114,18 @@ func (gc *GroupChecker) processUserGroups(userInfo *fetcher.Info) (*models.User,
 		return nil, false, nil
 	}
 
-	// Track user groups concurrently
-	gc.trackUserGroups(userInfo)
+	// Track user groups concurrently without blocking
+	for _, group := range userInfo.Groups.Data {
+		go func(groupID, userID uint64) {
+			err := gc.db.Tracking().AddUserToGroupTracking(context.Background(), groupID, userID)
+			if err != nil {
+				gc.logger.Error("Failed to add user to group tracking",
+					zap.Error(err),
+					zap.Uint64("groupID", groupID),
+					zap.Uint64("userID", userID))
+			}
+		}(group.Group.ID, userInfo.ID)
+	}
 
 	// Extract group IDs for batch lookup
 	groupIDs := make([]uint64, len(userInfo.Groups.Data))
@@ -156,44 +166,4 @@ func (gc *GroupChecker) processUserGroups(userInfo *fetcher.Info) (*models.User,
 	}
 
 	return nil, false, nil
-}
-
-// trackUserGroups handles concurrent tracking of user's group memberships.
-func (gc *GroupChecker) trackUserGroups(userInfo *fetcher.Info) {
-	type TrackingError struct {
-		GroupID uint64
-		Err     error
-	}
-
-	var wg sync.WaitGroup
-	trackingErrChan := make(chan TrackingError, len(userInfo.Groups.Data))
-
-	for _, group := range userInfo.Groups.Data {
-		wg.Add(1)
-		go func(groupID, userID uint64) {
-			defer wg.Done()
-
-			err := gc.db.Tracking().AddUserToGroupTracking(context.Background(), groupID, userID)
-			if err != nil {
-				trackingErrChan <- TrackingError{
-					GroupID: groupID,
-					Err:     err,
-				}
-			}
-		}(group.Group.ID, userInfo.ID)
-	}
-
-	// Close error channel when all goroutines complete
-	go func() {
-		wg.Wait()
-		close(trackingErrChan)
-	}()
-
-	// Log all errors
-	for err := range trackingErrChan {
-		gc.logger.Error("Failed to add user to group tracking",
-			zap.Error(err.Err),
-			zap.Uint64("userID", userInfo.ID),
-			zap.Uint64("groupID", err.GroupID))
-	}
 }
