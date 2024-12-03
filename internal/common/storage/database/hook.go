@@ -25,15 +25,22 @@ func (h *Hook) BeforeQuery(ctx context.Context, _ *bun.QueryEvent) context.Conte
 
 // AfterQuery logs the query and its execution time.
 func (h *Hook) AfterQuery(_ context.Context, event *bun.QueryEvent) {
-	// Log query with different levels based on error
-	if event.Err != nil {
-		h.logger.Error("Query failed",
+	duration := time.Since(event.StartTime)
+
+	// Track transaction boundaries
+	if event.Query == "BEGIN" || event.Query == "COMMIT" || event.Query == "ROLLBACK" {
+		if duration > 200*time.Millisecond {
+			h.logger.Warn("Slow transaction boundary",
+				zap.String("operation", event.Query),
+				zap.Duration("duration", duration))
+		}
+		return
+	}
+
+	// Track long queries
+	if duration > time.Second {
+		h.logger.Warn("Slow query detected",
 			zap.String("query", event.Query),
-			zap.Duration("duration", time.Since(event.StartTime)),
-			zap.Error(event.Err))
-	} else {
-		h.logger.Debug("Query executed",
-			zap.String("query", event.Query),
-			zap.Duration("duration", time.Since(event.StartTime)))
+			zap.Duration("duration", duration))
 	}
 }

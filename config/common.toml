@@ -2,7 +2,6 @@
 log_level = "info"
 max_logs_to_keep = 10
 max_log_lines = 5000
-query_logging = true
 enable_pprof = false
 pprof_port = 6060
 
@@ -16,9 +15,9 @@ failure_threshold = 500 # 500 milliseconds
 recovery_timeout = 1000 # 1 second
 
 [common.retry]
-max_retries = 5
-delay = 4000 # 4 seconds
-max_delay = 6000 # 6 seconds
+max_retries = 3
+delay = 2000 # 2 seconds
+max_delay = 5000 # 5 seconds
 
 [common.postgresql]
 host = "127.0.0.1"
@@ -26,8 +25,8 @@ port = 5432
 user = "postgres"
 password = "postgres"
 db_name = "postgres"
-max_open_conns = 50
-max_idle_conns = 25
+max_open_conns = 10
+max_idle_conns = 10
 max_lifetime = 30  # 30 minutes
 max_idle_time = 10  # 10 minutes
 

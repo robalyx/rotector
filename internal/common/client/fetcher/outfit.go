@@ -32,8 +32,8 @@ func NewOutfitFetcher(roAPI *api.API, logger *zap.Logger) *OutfitFetcher {
 	}
 }
 
-// AddOutfits fetches outfits for a batch of users and adds them to the user records.
-func (o *OutfitFetcher) AddOutfits(users map[uint64]*models.User) map[uint64]*models.User {
+// AddOutfits fetches outfits for a batch of users and returns a map of results.
+func (o *OutfitFetcher) AddOutfits(users map[uint64]*models.User) map[uint64]*OutfitFetchResult {
 	var wg sync.WaitGroup
 	resultsChan := make(chan OutfitFetchResult, len(users))
 
@@ -60,28 +60,20 @@ func (o *OutfitFetcher) AddOutfits(users map[uint64]*models.User) map[uint64]*mo
 	}()
 
 	// Collect results from the channel
-	results := make(map[uint64]*OutfitFetchResult)
+	results := make(map[uint64]*OutfitFetchResult, len(users))
 	for result := range resultsChan {
-		results[result.ID] = &result
-	}
-
-	// Process results and maintain original order
-	updatedUsers := make(map[uint64]*models.User, len(users))
-	for _, user := range users {
-		result := results[user.ID]
 		if result.Error != nil {
 			o.logger.Error("Failed to fetch user outfits",
 				zap.Error(result.Error),
-				zap.Uint64("userID", user.ID))
+				zap.Uint64("userID", result.ID))
 			continue
 		}
-		user.Outfits = result.Outfits.Data
-		updatedUsers[user.ID] = user
+		results[result.ID] = &result
 	}
 
 	o.logger.Debug("Finished fetching user outfits",
 		zap.Int("totalUsers", len(users)),
-		zap.Int("successfulFetches", len(updatedUsers)))
+		zap.Int("successfulFetches", len(results)))
 
-	return updatedUsers
+	return results
 }

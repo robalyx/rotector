@@ -14,15 +14,13 @@ import (
 // UserChecker coordinates the checking process by combining results from
 // multiple checking methods (AI, groups, friends) and managing the progress bar.
 type UserChecker struct {
-	db               *database.Client
-	userFetcher      *fetcher.UserFetcher
-	outfitFetcher    *fetcher.OutfitFetcher
-	thumbnailFetcher *fetcher.ThumbnailFetcher
-	aiChecker        *AIChecker
-	groupChecker     *GroupChecker
-	friendChecker    *FriendChecker
-	followerChecker  *FollowerChecker
-	logger           *zap.Logger
+	app           *setup.App
+	db            *database.Client
+	userFetcher   *fetcher.UserFetcher
+	aiChecker     *AIChecker
+	groupChecker  *GroupChecker
+	friendChecker *FriendChecker
+	logger        *zap.Logger
 }
 
 // NewUserChecker creates a UserChecker with all required dependencies.
@@ -31,15 +29,13 @@ func NewUserChecker(app *setup.App, userFetcher *fetcher.UserFetcher, logger *za
 	aiChecker := NewAIChecker(app, translator, logger)
 
 	return &UserChecker{
-		db:               app.DB,
-		userFetcher:      userFetcher,
-		outfitFetcher:    fetcher.NewOutfitFetcher(app.RoAPI, logger),
-		thumbnailFetcher: fetcher.NewThumbnailFetcher(app.RoAPI, logger),
-		aiChecker:        aiChecker,
-		groupChecker:     NewGroupChecker(app.DB, logger),
-		friendChecker:    NewFriendChecker(app.DB, aiChecker, logger),
-		followerChecker:  NewFollowerChecker(app.RoAPI, logger),
-		logger:           logger,
+		app:           app,
+		db:            app.DB,
+		userFetcher:   userFetcher,
+		aiChecker:     aiChecker,
+		groupChecker:  NewGroupChecker(app.DB, logger),
+		friendChecker: NewFriendChecker(app.DB, aiChecker, logger),
+		logger:        logger,
 	}
 }
 
@@ -90,12 +86,21 @@ func (c *UserChecker) ProcessUsers(userInfos []*fetcher.Info) []uint64 {
 		return failedIDs
 	}
 
-	// Check followers for flagged users
-	flaggedUsers = c.followerChecker.ProcessUsers(flaggedUsers)
+	// Fetch additional user data concurrently
+	flaggedUsers = c.userFetcher.FetchAdditionalUserData(flaggedUsers)
 
-	// Load additional data for flagged users
-	flaggedUsers = c.thumbnailFetcher.AddImageURLs(flaggedUsers)
-	flaggedUsers = c.outfitFetcher.AddOutfits(flaggedUsers)
+	// Check if any flagged users have a follower count above the threshold
+	for _, user := range flaggedUsers {
+		if user.FollowerCount >= c.app.Config.Worker.ThresholdLimits.MinFollowersForPopularUser {
+			user.Reason = "⚠️ **WARNING: Popular user with large amount of followers**\n\n" + user.Reason
+			user.Confidence = 1.0
+
+			c.logger.Info("Popular user flagged",
+				zap.Uint64("userID", user.ID),
+				zap.String("username", user.Name),
+				zap.Uint64("followers", user.FollowerCount))
+		}
+	}
 
 	// Save flagged users to database
 	c.db.Users().SaveFlaggedUsers(context.Background(), flaggedUsers)

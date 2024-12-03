@@ -27,8 +27,8 @@ func NewThumbnailFetcher(roAPI *api.API, logger *zap.Logger) *ThumbnailFetcher {
 	}
 }
 
-// AddImageURLs fetches thumbnails for a batch of users and adds them to the user records.
-func (t *ThumbnailFetcher) AddImageURLs(users map[uint64]*models.User) map[uint64]*models.User {
+// AddImageURLs fetches thumbnails for a batch of users and returns a map of results.
+func (t *ThumbnailFetcher) AddImageURLs(users map[uint64]*models.User) map[uint64]string {
 	// Create batch request for headshots
 	requests := thumbnails.NewBatchThumbnailsBuilder()
 	for _, user := range users {
@@ -44,20 +44,11 @@ func (t *ThumbnailFetcher) AddImageURLs(users map[uint64]*models.User) map[uint6
 	// Process thumbnails
 	results := t.ProcessBatchThumbnails(requests)
 
-	// Add thumbnail URLs to users
-	updatedUsers := make(map[uint64]*models.User, len(users))
-	for _, user := range users {
-		if thumbnailURL, ok := results[user.ID]; ok {
-			user.ThumbnailURL = thumbnailURL
-			updatedUsers[user.ID] = user
-		}
-	}
-
 	t.logger.Debug("Finished fetching user thumbnails",
 		zap.Int("totalUsers", len(users)),
-		zap.Int("successfulFetches", len(updatedUsers)))
+		zap.Int("successfulFetches", len(results)))
 
-	return updatedUsers
+	return results
 }
 
 // AddGroupImageURLs fetches thumbnails for groups and adds them to the group records.

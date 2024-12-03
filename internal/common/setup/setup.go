@@ -53,7 +53,7 @@ func InitializeApp(logDir string) (*App, error) {
 	redisManager := redis.NewManager(&cfg.Common.Redis, logger)
 
 	// Database connection pool is created with statistics tracking
-	db, err := database.NewConnection(&cfg.Common.PostgreSQL, dbLogger, cfg.Common.Debug.QueryLogging)
+	db, err := database.NewConnection(&cfg.Common.PostgreSQL, dbLogger)
 	if err != nil {
 		return nil, err
 	}

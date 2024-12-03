@@ -7,3 +7,4 @@ purge_groups = 100
 [worker.threshold_limits]
 flagged_users = 1000
 min_flagged_for_group = 50
+min_followers_for_popular_user = 1000

@@ -38,7 +38,6 @@ type Debug struct {
 	LogLevel      string `mapstructure:"log_level"`
 	MaxLogsToKeep int    `mapstructure:"max_logs_to_keep"`
 	MaxLogLines   int    `mapstructure:"max_log_lines"`
-	QueryLogging  bool   `mapstructure:"query_logging"`
 	EnablePprof   bool   `mapstructure:"enable_pprof"`
 	PprofPort     int    `mapstructure:"pprof_port"`
 }
@@ -111,8 +110,9 @@ type BatchSizes struct {
 
 // ThresholdLimits configures various thresholds for worker operations.
 type ThresholdLimits struct {
-	FlaggedUsers       int `mapstructure:"flagged_users"`
-	MinFlaggedForGroup int `mapstructure:"min_flagged_for_group"`
+	FlaggedUsers               int    `mapstructure:"flagged_users"`
+	MinFlaggedForGroup         int    `mapstructure:"min_flagged_for_group"`
+	MinFollowersForPopularUser uint64 `mapstructure:"min_followers_for_popular_user"`
 }
 
 // LoadConfig loads the configuration from the specified file.

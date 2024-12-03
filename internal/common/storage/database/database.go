@@ -31,7 +31,7 @@ type Client struct {
 }
 
 // NewConnection establishes a new database connection and returns a Client instance.
-func NewConnection(config *config.PostgreSQL, logger *zap.Logger, logQueries bool) (*Client, error) {
+func NewConnection(config *config.PostgreSQL, logger *zap.Logger) (*Client, error) {
 	// Initialize database connection with config values
 	sqldb := sql.OpenDB(pgdriver.NewConnector(
 		pgdriver.WithAddr(fmt.Sprintf("%s:%d", config.Host, config.Port)),
@@ -39,6 +39,7 @@ func NewConnection(config *config.PostgreSQL, logger *zap.Logger, logQueries boo
 		pgdriver.WithPassword(config.Password),
 		pgdriver.WithDatabase(config.DBName),
 		pgdriver.WithInsecure(true),
+		pgdriver.WithApplicationName("rotector"),
 	))
 
 	// Set connection pool settings
@@ -51,9 +52,7 @@ func NewConnection(config *config.PostgreSQL, logger *zap.Logger, logQueries boo
 	db := bun.NewDB(sqldb, pgdialect.New())
 
 	// Enable query logging with zap logger
-	if logQueries {
-		db.AddQueryHook(NewHook(logger))
-	}
+	db.AddQueryHook(NewHook(logger))
 
 	// Create repositories
 	tracking := models.NewTracking(db, logger)

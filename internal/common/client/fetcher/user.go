@@ -59,19 +59,25 @@ type Info struct {
 
 // UserFetcher handles concurrent retrieval of user information from the Roblox API.
 type UserFetcher struct {
-	roAPI         *api.API
-	logger        *zap.Logger
-	gameFetcher   *GameFetcher
-	friendFetcher *FriendFetcher
+	roAPI            *api.API
+	logger           *zap.Logger
+	gameFetcher      *GameFetcher
+	friendFetcher    *FriendFetcher
+	outfitFetcher    *OutfitFetcher
+	thumbnailFetcher *ThumbnailFetcher
+	followFetcher    *FollowFetcher
 }
 
 // NewUserFetcher creates a UserFetcher with the provided API client and logger.
 func NewUserFetcher(app *setup.App, logger *zap.Logger) *UserFetcher {
 	return &UserFetcher{
-		roAPI:         app.RoAPI,
-		logger:        logger,
-		gameFetcher:   NewGameFetcher(app.RoAPI, logger),
-		friendFetcher: NewFriendFetcher(app.RoAPI, logger),
+		roAPI:            app.RoAPI,
+		logger:           logger,
+		gameFetcher:      NewGameFetcher(app.RoAPI, logger),
+		friendFetcher:    NewFriendFetcher(app.RoAPI, logger),
+		outfitFetcher:    NewOutfitFetcher(app.RoAPI, logger),
+		thumbnailFetcher: NewThumbnailFetcher(app.RoAPI, logger),
+		followFetcher:    NewFollowFetcher(app.RoAPI, logger),
 	}
 }
 
@@ -107,23 +113,21 @@ func (u *UserFetcher) FetchInfos(userIDs []uint64) []*Info {
 			}
 
 			// Fetch groups, friends, and games concurrently
-			groups, friends, games, followerCount, followingCount := u.fetchUserData(id)
+			groups, friends, games := u.fetchUserData(id)
 
 			// Send the user info to the channel
 			resultsChan <- UserFetchResult{
 				ID: id,
 				Info: &Info{
-					ID:             userInfo.ID,
-					Name:           userInfo.Name,
-					DisplayName:    userInfo.DisplayName,
-					Description:    userInfo.Description,
-					CreatedAt:      userInfo.Created,
-					Groups:         groups,
-					Friends:        friends,
-					Games:          games,
-					FollowerCount:  followerCount,
-					FollowingCount: followingCount,
-					LastUpdated:    time.Now(),
+					ID:          userInfo.ID,
+					Name:        userInfo.Name,
+					DisplayName: userInfo.DisplayName,
+					Description: userInfo.Description,
+					CreatedAt:   userInfo.Created,
+					Groups:      groups,
+					Friends:     friends,
+					Games:       games,
+					LastUpdated: time.Now(),
 				},
 			}
 		}(userID)
@@ -166,134 +170,95 @@ func (u *UserFetcher) FetchInfos(userIDs []uint64) []*Info {
 }
 
 // fetchUserData retrieves a user's group memberships, friend list, games, follower count, and following count concurrently.
-func (u *UserFetcher) fetchUserData(userID uint64) (*UserGroupFetchResult, *UserFriendFetchResult, *UserGamesFetchResult, uint64, uint64) {
+func (u *UserFetcher) fetchUserData(userID uint64) (*UserGroupFetchResult, *UserFriendFetchResult, *UserGamesFetchResult) {
 	var wg sync.WaitGroup
+	wg.Add(3)
+
 	groupChan := make(chan *UserGroupFetchResult, 1)
 	friendChan := make(chan *UserFriendFetchResult, 1)
 	gameChan := make(chan *UserGamesFetchResult, 1)
-	followerChan := make(chan uint64, 1)
-	followingChan := make(chan uint64, 1)
 
 	// Fetch user's groups
-	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		u.fetchGroups(userID, groupChan)
+		builder := groups.NewUserGroupRolesBuilder(userID)
+		fetchedGroups, err := u.roAPI.Groups().GetUserGroupRoles(context.Background(), builder.Build())
+		if err != nil {
+			groupChan <- &UserGroupFetchResult{Error: err}
+			return
+		}
+
+		groups := make([]*types.UserGroupRoles, 0, len(fetchedGroups.Data))
+		for _, group := range fetchedGroups.Data {
+			groups = append(groups, &group)
+		}
+		groupChan <- &UserGroupFetchResult{Data: groups}
 	}()
 
 	// Fetch user's friends
-	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		u.fetchFriends(userID, friendChan)
+		fetchedFriends, err := u.friendFetcher.GetFriends(context.Background(), userID)
+		friendChan <- &UserFriendFetchResult{
+			Data:  fetchedFriends,
+			Error: err,
+		}
 	}()
 
 	// Fetch user's games
-	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		u.fetchGames(userID, gameChan)
+		games, err := u.gameFetcher.FetchGamesForUser(userID)
+		gameChan <- &UserGamesFetchResult{
+			Data:  games,
+			Error: err,
+		}
 	}()
 
-	// Fetch follower and following count in sequence since
-	// the rate limits for these endpoints are really bad.
-	u.fetchFollowerCount(userID, followerChan)
-	u.fetchFollowingCount(userID, followingChan)
+	// Process results as they arrive
+	var groupResult *UserGroupFetchResult
+	var friendResult *UserFriendFetchResult
+	var gameResult *UserGamesFetchResult
 
-	// Wait for all goroutines to complete
+	remaining := 3
+	for remaining > 0 {
+		select {
+		case result := <-groupChan:
+			if result.Error != nil {
+				u.logger.Warn("Error fetching user groups",
+					zap.Uint64("userID", userID),
+					zap.Error(result.Error))
+			}
+			groupResult = result
+			remaining--
+
+		case result := <-friendChan:
+			if result.Error != nil {
+				u.logger.Warn("Error fetching user friends",
+					zap.Uint64("userID", userID),
+					zap.Error(result.Error))
+			}
+			friendResult = result
+			remaining--
+
+		case result := <-gameChan:
+			if result.Error != nil {
+				u.logger.Warn("Error fetching user games",
+					zap.Uint64("userID", userID),
+					zap.Error(result.Error))
+			}
+			gameResult = result
+			remaining--
+		}
+	}
+
+	// Wait for all goroutines to finish and close channels
 	wg.Wait()
+	close(groupChan)
+	close(friendChan)
+	close(gameChan)
 
-	// Get results
-	groupResult := <-groupChan
-	friendResult := <-friendChan
-	gameResult := <-gameChan
-	followerCount := <-followerChan
-	followingCount := <-followingChan
-
-	if groupResult.Error != nil {
-		u.logger.Warn("Error fetching user groups",
-			zap.Uint64("userID", userID),
-			zap.Error(groupResult.Error))
-	}
-
-	if friendResult.Error != nil {
-		u.logger.Warn("Error fetching user friends",
-			zap.Uint64("userID", userID),
-			zap.Error(friendResult.Error))
-	}
-
-	if gameResult.Error != nil {
-		u.logger.Warn("Error fetching user games",
-			zap.Uint64("userID", userID),
-			zap.Error(gameResult.Error))
-	}
-
-	return groupResult, friendResult, gameResult, followerCount, followingCount
-}
-
-// fetchGroups retrieves a user's group memberships.
-func (u *UserFetcher) fetchGroups(userID uint64, groupChan chan *UserGroupFetchResult) {
-	defer close(groupChan)
-	builder := groups.NewUserGroupRolesBuilder(userID)
-	fetchedGroups, err := u.roAPI.Groups().GetUserGroupRoles(context.Background(), builder.Build())
-	if err != nil {
-		groupChan <- &UserGroupFetchResult{Error: err}
-		return
-	}
-
-	groups := make([]*types.UserGroupRoles, 0, len(fetchedGroups.Data))
-	for _, group := range fetchedGroups.Data {
-		groups = append(groups, &group)
-	}
-	groupChan <- &UserGroupFetchResult{Data: groups}
-}
-
-// fetchFriends retrieves a user's friend list.
-func (u *UserFetcher) fetchFriends(userID uint64, friendChan chan *UserFriendFetchResult) {
-	defer close(friendChan)
-	fetchedFriends, err := u.friendFetcher.GetFriends(context.Background(), userID)
-	friendChan <- &UserFriendFetchResult{
-		Data:  fetchedFriends,
-		Error: err,
-	}
-}
-
-// fetchGames retrieves a user's games.
-func (u *UserFetcher) fetchGames(userID uint64, gameChan chan *UserGamesFetchResult) {
-	defer close(gameChan)
-	games, err := u.gameFetcher.FetchGamesForUser(userID)
-	gameChan <- &UserGamesFetchResult{
-		Data:  games,
-		Error: err,
-	}
-}
-
-// fetchFollowerCount retrieves a user's follower count.
-func (u *UserFetcher) fetchFollowerCount(userID uint64, followerChan chan uint64) {
-	defer close(followerChan)
-	count, err := u.roAPI.Friends().GetFollowerCount(context.Background(), userID)
-	if err != nil {
-		u.logger.Warn("Error fetching follower count",
-			zap.Uint64("userID", userID),
-			zap.Error(err))
-		followerChan <- 0
-		return
-	}
-	followerChan <- count
-}
-
-// fetchFollowingCount retrieves a user's following count.
-func (u *UserFetcher) fetchFollowingCount(userID uint64, followingChan chan uint64) {
-	defer close(followingChan)
-	count, err := u.roAPI.Friends().GetFollowingCount(context.Background(), userID)
-	if err != nil {
-		u.logger.Warn("Error fetching following count",
-			zap.Uint64("userID", userID),
-			zap.Error(err))
-		followingChan <- 0
-		return
-	}
-	followingChan <- count
+	return groupResult, friendResult, gameResult
 }
 
 // FetchBannedUsers checks which users from a batch of IDs are currently banned.
@@ -336,4 +301,74 @@ func (u *UserFetcher) FetchBannedUsers(userIDs []uint64) ([]uint64, error) {
 		zap.Int("bannedUsers", len(results)))
 
 	return results, nil
+}
+
+// FetchAdditionalUserData concurrently fetches thumbnails, outfits, and follow counts for users.
+func (u *UserFetcher) FetchAdditionalUserData(users map[uint64]*models.User) map[uint64]*models.User {
+	var wg sync.WaitGroup
+	wg.Add(3)
+
+	// Create channels for results
+	imagesChan := make(chan map[uint64]string, 1)
+	outfitsChan := make(chan map[uint64]*OutfitFetchResult, 1)
+	followsChan := make(chan map[uint64]*FollowFetchResult, 1)
+
+	// Fetch data concurrently
+	go func() {
+		defer wg.Done()
+		imagesChan <- u.thumbnailFetcher.AddImageURLs(users)
+	}()
+
+	go func() {
+		defer wg.Done()
+		outfitsChan <- u.outfitFetcher.AddOutfits(users)
+	}()
+
+	go func() {
+		defer wg.Done()
+		followsChan <- u.followFetcher.AddFollowCounts(users)
+	}()
+
+	// Process results as they arrive
+	remaining := 3
+	for remaining > 0 {
+		select {
+		case images := <-imagesChan:
+			for id, url := range images {
+				if user, ok := users[id]; ok {
+					user.ThumbnailURL = url
+				}
+			}
+			remaining--
+
+		case outfits := <-outfitsChan:
+			for id, result := range outfits {
+				if result.Error == nil {
+					if user, ok := users[id]; ok {
+						user.Outfits = result.Outfits.Data
+					}
+				}
+			}
+			remaining--
+
+		case follows := <-followsChan:
+			for id, result := range follows {
+				if result.Error == nil {
+					if user, ok := users[id]; ok {
+						user.FollowerCount = result.FollowerCount
+						user.FollowingCount = result.FollowingCount
+					}
+				}
+			}
+			remaining--
+		}
+	}
+
+	// Wait for all goroutines to finish and close channels
+	wg.Wait()
+	close(imagesChan)
+	close(outfitsChan)
+	close(followsChan)
+
+	return users
 }
