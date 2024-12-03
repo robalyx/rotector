@@ -28,14 +28,9 @@ Analysis Instructions:
 - Flag ALL violations, no matter how subtle
 - Flag users even if only one suspicious phrase is found
 - Use exact strings for 'flaggedContent'
-- For users with empty descriptions:
-  * Do not consider the empty description as suspicious
-  * Still flag if username or display name contains violations
+- Do not consider the empty description as suspicious
 - When in doubt, flag the user - false positives are better than missing violations
-- Friend counts are provided only to help interpret ambiguous content:
-  * If content could be innocent or suspicious, high numbers of flagged/confirmed friends suggest it's likely suspicious
-  * Do not flag a user solely based on their friend counts
-  * Only use friend counts to help interpret unclear or ambiguous content
+- Never flag the same user multiple times - combine all violations into one entry
 
 Flag content containing:
 - Explicit sexual terms and innuendos
@@ -104,14 +99,6 @@ Flag predatory behavior:
 - References to age preferences
 - Suggestive emoji combinations
 
-Exclude ONLY:
-- Non-suggestive orientation/gender identity
-- General friendship without suspicious context
-- Non-sexual profanity
-- Legitimate trading without suspicious terms
-- Social/cultural discussions without suspicious content
-- Legitimate studio/development work without ANY suspicious context
-
 Confidence Calculation (start at 0):
 - +0.6: Explicit violations
 - +0.4: Clear suggestive content or suspicious combinations
@@ -146,9 +133,7 @@ Confidence Calculation (start at 0):
 Confidence Levels:
 - High (0.8-1.0): Strong confirmed networks
 - Medium (0.4-0.7): Clear patterns with mixed status
-- Low (0.0-0.3): Limited connections
-
-Note: Leave the flaggedContent field empty.`
+- Low (0.0-0.3): Limited connections`
 
 	// FriendUserPrompt is the prompt for analyzing a user's friend network.
 	FriendUserPrompt = `User: %s
@@ -230,6 +215,8 @@ func NewAIChecker(app *setup.App, translator *translator.Translator, logger *zap
 		},
 		Required: []string{"users"},
 	}
+	userTemp := float32(1.0)
+	userModel.Temperature = &userTemp
 
 	// Create friend analysis model
 	friendModel := app.GenAIClient.GenerativeModel(app.Config.Common.GeminiAI.Model)
@@ -253,6 +240,8 @@ func NewAIChecker(app *setup.App, translator *translator.Translator, logger *zap
 		},
 		Required: []string{"name", "reason", "confidence"},
 	}
+	friendTemp := float32(0.8)
+	friendModel.Temperature = &friendTemp
 
 	// Create a minifier for JSON optimization
 	m := minify.New()
@@ -396,9 +385,6 @@ func (a *AIChecker) GenerateFriendReason(userInfo *fetcher.Info, confirmedFriend
 	// Add confirmed friends first (they're usually more important)
 	for _, friend := range confirmedFriends {
 		if !addFriend(friend, models.UserTypeConfirmed) {
-			a.logger.Debug("Reached token limit while adding confirmed friends",
-				zap.Int32("currentTokens", currentTokens),
-				zap.Int("totalConfirmed", len(confirmedFriends)))
 			break
 		}
 	}
@@ -406,9 +392,6 @@ func (a *AIChecker) GenerateFriendReason(userInfo *fetcher.Info, confirmedFriend
 	// Add flagged friends if there's room
 	for _, friend := range flaggedFriends {
 		if !addFriend(friend, models.UserTypeFlagged) {
-			a.logger.Debug("Reached token limit while adding flagged friends",
-				zap.Int32("currentTokens", currentTokens),
-				zap.Int("totalFlagged", len(flaggedFriends)))
 			break
 		}
 	}
