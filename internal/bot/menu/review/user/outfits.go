@@ -6,13 +6,13 @@ import (
 	"github.com/disgoorg/disgo/discord"
 	"github.com/disgoorg/disgo/events"
 	"github.com/jaxron/roapi.go/pkg/api/resources/thumbnails"
-	"github.com/jaxron/roapi.go/pkg/api/types"
+	apiTypes "github.com/jaxron/roapi.go/pkg/api/types"
 	builder "github.com/rotector/rotector/internal/bot/builder/review/user"
 	"github.com/rotector/rotector/internal/bot/constants"
 	"github.com/rotector/rotector/internal/bot/core/pagination"
 	"github.com/rotector/rotector/internal/bot/core/session"
 	"github.com/rotector/rotector/internal/bot/utils"
-	"github.com/rotector/rotector/internal/common/storage/database/models"
+	"github.com/rotector/rotector/internal/common/storage/database/types"
 	"go.uber.org/zap"
 )
 
@@ -40,7 +40,7 @@ func NewOutfitsMenu(layout *Layout) *OutfitsMenu {
 // Show prepares and displays the outfits interface for a specific page.
 // It loads outfit data and creates a grid of thumbnails.
 func (m *OutfitsMenu) Show(event *events.ComponentInteractionCreate, s *session.Session, page int) {
-	var user *models.FlaggedUser
+	var user *types.FlaggedUser
 	s.GetInterface(constants.SessionKeyTarget, &user)
 
 	// Return to review menu if user has no outfits
@@ -100,7 +100,7 @@ func (m *OutfitsMenu) handlePageNavigation(event *events.ComponentInteractionCre
 	action := utils.ViewerAction(customID)
 	switch action {
 	case utils.ViewerFirstPage, utils.ViewerPrevPage, utils.ViewerNextPage, utils.ViewerLastPage:
-		var user *models.FlaggedUser
+		var user *types.FlaggedUser
 		s.GetInterface(constants.SessionKeyTarget, &user)
 
 		// Calculate max page and validate navigation action
@@ -124,16 +124,16 @@ func (m *OutfitsMenu) handlePageNavigation(event *events.ComponentInteractionCre
 
 // fetchOutfitThumbnails downloads thumbnail images for all outfits.
 // Returns a map of outfit IDs to their thumbnail URLs.
-func (m *OutfitsMenu) fetchOutfitThumbnails(outfits []types.Outfit) map[uint64]string {
+func (m *OutfitsMenu) fetchOutfitThumbnails(outfits []apiTypes.Outfit) map[uint64]string {
 	// Create batch request for all outfit thumbnails
 	requests := thumbnails.NewBatchThumbnailsBuilder()
 	for _, outfit := range outfits {
-		requests.AddRequest(types.ThumbnailRequest{
-			Type:      types.OutfitType,
-			Size:      types.Size150x150,
+		requests.AddRequest(apiTypes.ThumbnailRequest{
+			Type:      apiTypes.OutfitType,
+			Size:      apiTypes.Size150x150,
 			RequestID: strconv.FormatUint(outfit.ID, 10),
 			TargetID:  outfit.ID,
-			Format:    types.WEBP,
+			Format:    apiTypes.WEBP,
 		})
 	}
 

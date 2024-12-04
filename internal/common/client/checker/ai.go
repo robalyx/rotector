@@ -11,7 +11,7 @@ import (
 	"github.com/google/generative-ai-go/genai"
 	"github.com/rotector/rotector/internal/common/client/fetcher"
 	"github.com/rotector/rotector/internal/common/setup"
-	"github.com/rotector/rotector/internal/common/storage/database/models"
+	"github.com/rotector/rotector/internal/common/storage/database/types"
 	"github.com/rotector/rotector/internal/common/translator"
 	"github.com/rotector/rotector/internal/common/utils"
 	"github.com/tdewolff/minify/v2"
@@ -263,7 +263,7 @@ func NewAIChecker(app *setup.App, translator *translator.Translator, logger *zap
 // 2. Sending translated content to OpenAI for analysis
 // 3. Validating AI responses against translated content
 // 4. Creating validated users with original descriptions.
-func (a *AIChecker) ProcessUsers(userInfos []*fetcher.Info) (map[uint64]*models.User, []uint64, error) {
+func (a *AIChecker) ProcessUsers(userInfos []*fetcher.Info) (map[uint64]*types.User, []uint64, error) {
 	// Create a struct for user summaries for AI analysis
 	type UserSummary struct {
 		Name        string `json:"name"`
@@ -336,12 +336,12 @@ func (a *AIChecker) ProcessUsers(userInfos []*fetcher.Info) (map[uint64]*models.
 
 // GenerateFriendReason uses AI to analyze a user's friend list and generate a detailed reason
 // for flagging based on the patterns found in their friends' reasons.
-func (a *AIChecker) GenerateFriendReason(userInfo *fetcher.Info, confirmedFriends, flaggedFriends map[uint64]*models.User) (string, error) {
+func (a *AIChecker) GenerateFriendReason(userInfo *fetcher.Info, confirmedFriends, flaggedFriends map[uint64]*types.User) (string, error) {
 	// Create a summary of friend data for AI analysis
 	type FriendSummary struct {
-		Name   string `json:"name"`
-		Reason string `json:"reason"`
-		Type   string `json:"type"`
+		Name   string         `json:"name"`
+		Reason string         `json:"reason"`
+		Type   types.UserType `json:"type"`
 	}
 
 	// Collect friend summaries with token counting
@@ -349,7 +349,7 @@ func (a *AIChecker) GenerateFriendReason(userInfo *fetcher.Info, confirmedFriend
 
 	// Helper function to add friend if within token limit
 	currentTokens := int32(0)
-	addFriend := func(friend *models.User, friendType string) bool {
+	addFriend := func(friend *types.User, friendType types.UserType) bool {
 		summary := FriendSummary{
 			Name:   friend.Name,
 			Reason: friend.Reason,
@@ -384,14 +384,14 @@ func (a *AIChecker) GenerateFriendReason(userInfo *fetcher.Info, confirmedFriend
 
 	// Add confirmed friends first (they're usually more important)
 	for _, friend := range confirmedFriends {
-		if !addFriend(friend, models.UserTypeConfirmed) {
+		if !addFriend(friend, types.UserTypeConfirmed) {
 			break
 		}
 	}
 
 	// Add flagged friends if there's room
 	for _, friend := range flaggedFriends {
-		if !addFriend(friend, models.UserTypeFlagged) {
+		if !addFriend(friend, types.UserTypeFlagged) {
 			break
 		}
 	}
@@ -445,8 +445,8 @@ func (a *AIChecker) GenerateFriendReason(userInfo *fetcher.Info, confirmedFriend
 // validateFlaggedUsers validates the flagged users against the translated content
 // but uses original descriptions when creating validated users. It checks if at least
 // 10% of the flagged words are found in the translated content to confirm the AI's findings.
-func (a *AIChecker) validateFlaggedUsers(flaggedUsers FlaggedUsers, translatedInfos map[string]*fetcher.Info, originalInfos map[string]*fetcher.Info) (map[uint64]*models.User, []uint64) {
-	validatedUsers := make(map[uint64]*models.User)
+func (a *AIChecker) validateFlaggedUsers(flaggedUsers FlaggedUsers, translatedInfos map[string]*fetcher.Info, originalInfos map[string]*fetcher.Info) (map[uint64]*types.User, []uint64) {
+	validatedUsers := make(map[uint64]*types.User)
 	var failedValidationIDs []uint64
 
 	for _, flaggedUser := range flaggedUsers.Users {
@@ -478,7 +478,7 @@ func (a *AIChecker) validateFlaggedUsers(flaggedUsers FlaggedUsers, translatedIn
 
 			// If the flagged user is correct, add it using original info
 			if isValid {
-				validatedUsers[originalInfo.ID] = &models.User{
+				validatedUsers[originalInfo.ID] = &types.User{
 					ID:             originalInfo.ID,
 					Name:           originalInfo.Name,
 					DisplayName:    originalInfo.DisplayName,

@@ -7,13 +7,13 @@ import (
 	"github.com/disgoorg/disgo/discord"
 	"github.com/disgoorg/disgo/events"
 	"github.com/jaxron/roapi.go/pkg/api/resources/thumbnails"
-	"github.com/jaxron/roapi.go/pkg/api/types"
+	apiTypes "github.com/jaxron/roapi.go/pkg/api/types"
 	builder "github.com/rotector/rotector/internal/bot/builder/review/user"
 	"github.com/rotector/rotector/internal/bot/constants"
 	"github.com/rotector/rotector/internal/bot/core/pagination"
 	"github.com/rotector/rotector/internal/bot/core/session"
 	"github.com/rotector/rotector/internal/bot/utils"
-	"github.com/rotector/rotector/internal/common/storage/database/models"
+	"github.com/rotector/rotector/internal/common/storage/database/types"
 	"go.uber.org/zap"
 )
 
@@ -41,7 +41,7 @@ func NewGroupsMenu(layout *Layout) *GroupsMenu {
 // Show prepares and displays the groups interface for a specific page.
 // It loads group data, checks their status, and creates a grid of icons.
 func (m *GroupsMenu) Show(event *events.ComponentInteractionCreate, s *session.Session, page int) {
-	var user *models.FlaggedUser
+	var user *types.FlaggedUser
 	s.GetInterface(constants.SessionKeyTarget, &user)
 
 	// Return to review menu if user has no groups
@@ -105,7 +105,7 @@ func (m *GroupsMenu) Show(event *events.ComponentInteractionCreate, s *session.S
 
 // getFlaggedGroups checks the database to find which groups are flagged.
 // Returns a map of group IDs to their flagged status.
-func (m *GroupsMenu) getFlaggedGroups(groups []*types.UserGroupRoles) (map[uint64]bool, error) {
+func (m *GroupsMenu) getFlaggedGroups(groups []*apiTypes.UserGroupRoles) (map[uint64]bool, error) {
 	groupIDs := make([]uint64, len(groups))
 	for i, group := range groups {
 		groupIDs[i] = group.Group.ID
@@ -130,7 +130,7 @@ func (m *GroupsMenu) handlePageNavigation(event *events.ComponentInteractionCrea
 	action := utils.ViewerAction(customID)
 	switch action {
 	case utils.ViewerFirstPage, utils.ViewerPrevPage, utils.ViewerNextPage, utils.ViewerLastPage:
-		var user *models.FlaggedUser
+		var user *types.FlaggedUser
 		s.GetInterface(constants.SessionKeyTarget, &user)
 
 		// Calculate max page and validate navigation action
@@ -154,16 +154,16 @@ func (m *GroupsMenu) handlePageNavigation(event *events.ComponentInteractionCrea
 
 // fetchGroupsThumbnails downloads icon images for all groups.
 // Returns a map of group IDs to their icon URLs.
-func (m *GroupsMenu) fetchGroupsThumbnails(groups []*types.UserGroupRoles) map[uint64]string {
+func (m *GroupsMenu) fetchGroupsThumbnails(groups []*apiTypes.UserGroupRoles) map[uint64]string {
 	// Create batch request for all group icons
 	requests := thumbnails.NewBatchThumbnailsBuilder()
 	for _, group := range groups {
-		requests.AddRequest(types.ThumbnailRequest{
-			Type:      types.GroupIconType,
+		requests.AddRequest(apiTypes.ThumbnailRequest{
+			Type:      apiTypes.GroupIconType,
 			TargetID:  group.Group.ID,
 			RequestID: strconv.FormatUint(group.Group.ID, 10),
-			Size:      types.Size150x150,
-			Format:    types.WEBP,
+			Size:      apiTypes.Size150x150,
+			Format:    apiTypes.WEBP,
 		})
 	}
 

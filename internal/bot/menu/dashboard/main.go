@@ -11,7 +11,7 @@ import (
 	"github.com/rotector/rotector/internal/bot/core/pagination"
 	"github.com/rotector/rotector/internal/bot/core/session"
 	"github.com/rotector/rotector/internal/bot/interfaces"
-	"github.com/rotector/rotector/internal/common/storage/database/models"
+	"github.com/rotector/rotector/internal/common/storage/database/types"
 	"github.com/rotector/rotector/internal/worker/core"
 	"go.uber.org/zap"
 )
@@ -29,11 +29,11 @@ func NewMainMenu(layout *Layout) *MainMenu {
 	m.page = &pagination.Page{
 		Name: "Dashboard",
 		Message: func(s *session.Session) *discord.MessageUpdateBuilder {
-			var botSettings *models.BotSetting
+			var botSettings *types.BotSetting
 			s.GetInterface(constants.SessionKeyBotSettings, &botSettings)
-			var userCounts *models.UserCounts
+			var userCounts *types.UserCounts
 			s.GetInterface(constants.SessionKeyUserCounts, &userCounts)
-			var groupCounts *models.GroupCounts
+			var groupCounts *types.GroupCounts
 			s.GetInterface(constants.SessionKeyGroupCounts, &groupCounts)
 			var activeUsers []snowflake.ID
 			s.GetInterface(constants.SessionKeyActiveUsers, &activeUsers)
@@ -118,7 +118,7 @@ func (m *MainMenu) handleSelectMenu(event *events.ComponentInteractionCreate, s 
 	}
 
 	// Get bot settings to check reviewer status
-	var settings *models.BotSetting
+	var settings *types.BotSetting
 	s.GetInterface(constants.SessionKeyBotSettings, &settings)
 
 	switch option {

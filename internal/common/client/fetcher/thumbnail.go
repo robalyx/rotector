@@ -6,8 +6,8 @@ import (
 
 	"github.com/jaxron/roapi.go/pkg/api"
 	"github.com/jaxron/roapi.go/pkg/api/resources/thumbnails"
-	"github.com/jaxron/roapi.go/pkg/api/types"
-	"github.com/rotector/rotector/internal/common/storage/database/models"
+	apiTypes "github.com/jaxron/roapi.go/pkg/api/types"
+	"github.com/rotector/rotector/internal/common/storage/database/types"
 	"go.uber.org/zap"
 )
 
@@ -28,16 +28,16 @@ func NewThumbnailFetcher(roAPI *api.API, logger *zap.Logger) *ThumbnailFetcher {
 }
 
 // AddImageURLs fetches thumbnails for a batch of users and returns a map of results.
-func (t *ThumbnailFetcher) AddImageURLs(users map[uint64]*models.User) map[uint64]string {
+func (t *ThumbnailFetcher) AddImageURLs(users map[uint64]*types.User) map[uint64]string {
 	// Create batch request for headshots
 	requests := thumbnails.NewBatchThumbnailsBuilder()
 	for _, user := range users {
-		requests.AddRequest(types.ThumbnailRequest{
-			Type:      types.AvatarHeadShotType,
+		requests.AddRequest(apiTypes.ThumbnailRequest{
+			Type:      apiTypes.AvatarHeadShotType,
 			TargetID:  user.ID,
 			RequestID: strconv.FormatUint(user.ID, 10),
-			Size:      types.Size420x420,
-			Format:    types.PNG,
+			Size:      apiTypes.Size420x420,
+			Format:    apiTypes.PNG,
 		})
 	}
 
@@ -52,16 +52,16 @@ func (t *ThumbnailFetcher) AddImageURLs(users map[uint64]*models.User) map[uint6
 }
 
 // AddGroupImageURLs fetches thumbnails for groups and adds them to the group records.
-func (t *ThumbnailFetcher) AddGroupImageURLs(groups []*models.FlaggedGroup) []*models.FlaggedGroup {
+func (t *ThumbnailFetcher) AddGroupImageURLs(groups []*types.FlaggedGroup) []*types.FlaggedGroup {
 	// Create batch request for group icons
 	requests := thumbnails.NewBatchThumbnailsBuilder()
 	for _, group := range groups {
-		requests.AddRequest(types.ThumbnailRequest{
-			Type:      types.GroupIconType,
+		requests.AddRequest(apiTypes.ThumbnailRequest{
+			Type:      apiTypes.GroupIconType,
 			TargetID:  group.ID,
 			RequestID: strconv.FormatUint(group.ID, 10),
-			Size:      types.Size420x420,
-			Format:    types.PNG,
+			Size:      apiTypes.Size420x420,
+			Format:    apiTypes.PNG,
 		})
 	}
 
@@ -69,7 +69,7 @@ func (t *ThumbnailFetcher) AddGroupImageURLs(groups []*models.FlaggedGroup) []*m
 	results := t.ProcessBatchThumbnails(requests)
 
 	// Add thumbnail URLs to groups
-	updatedGroups := make([]*models.FlaggedGroup, 0, len(groups))
+	updatedGroups := make([]*types.FlaggedGroup, 0, len(groups))
 	for _, group := range groups {
 		if thumbnailURL, ok := results[group.ID]; ok {
 			group.ThumbnailURL = thumbnailURL
@@ -115,7 +115,7 @@ func (t *ThumbnailFetcher) ProcessBatchThumbnails(requests *thumbnails.BatchThum
 
 		// Process responses and store URLs
 		for _, response := range thumbnailResponses.Data {
-			if response.State == types.ThumbnailStateCompleted && response.ImageURL != nil {
+			if response.State == apiTypes.ThumbnailStateCompleted && response.ImageURL != nil {
 				thumbnailURLs[response.TargetID] = *response.ImageURL
 			} else {
 				thumbnailURLs[response.TargetID] = ThumbnailPlaceholder

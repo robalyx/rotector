@@ -8,9 +8,9 @@ import (
 
 	"github.com/jaxron/roapi.go/pkg/api"
 	"github.com/jaxron/roapi.go/pkg/api/resources/groups"
-	"github.com/jaxron/roapi.go/pkg/api/types"
+	apiTypes "github.com/jaxron/roapi.go/pkg/api/types"
 	"github.com/rotector/rotector/internal/common/setup"
-	"github.com/rotector/rotector/internal/common/storage/database/models"
+	"github.com/rotector/rotector/internal/common/storage/database/types"
 	"go.uber.org/zap"
 )
 
@@ -26,19 +26,19 @@ type UserFetchResult struct {
 
 // UserGroupFetchResult contains the result of fetching a user's groups.
 type UserGroupFetchResult struct {
-	Data  []*types.UserGroupRoles
+	Data  []*apiTypes.UserGroupRoles
 	Error error
 }
 
 // UserFriendFetchResult contains the result of fetching a user's friends.
 type UserFriendFetchResult struct {
-	Data  []models.ExtendedFriend
+	Data  []types.ExtendedFriend
 	Error error
 }
 
 // UserGamesFetchResult contains the result of fetching a user's games.
 type UserGamesFetchResult struct {
-	Data  []*types.Game
+	Data  []*apiTypes.Game
 	Error error
 }
 
@@ -188,7 +188,7 @@ func (u *UserFetcher) fetchUserData(userID uint64) (*UserGroupFetchResult, *User
 			return
 		}
 
-		groups := make([]*types.UserGroupRoles, 0, len(fetchedGroups.Data))
+		groups := make([]*apiTypes.UserGroupRoles, 0, len(fetchedGroups.Data))
 		for _, group := range fetchedGroups.Data {
 			groups = append(groups, &group)
 		}
@@ -304,7 +304,7 @@ func (u *UserFetcher) FetchBannedUsers(userIDs []uint64) ([]uint64, error) {
 }
 
 // FetchAdditionalUserData concurrently fetches thumbnails, outfits, and follow counts for users.
-func (u *UserFetcher) FetchAdditionalUserData(users map[uint64]*models.User) map[uint64]*models.User {
+func (u *UserFetcher) FetchAdditionalUserData(users map[uint64]*types.User) map[uint64]*types.User {
 	var wg sync.WaitGroup
 	wg.Add(3)
 

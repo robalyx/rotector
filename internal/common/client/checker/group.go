@@ -7,13 +7,13 @@ import (
 
 	"github.com/rotector/rotector/internal/common/client/fetcher"
 	"github.com/rotector/rotector/internal/common/storage/database"
-	"github.com/rotector/rotector/internal/common/storage/database/models"
+	"github.com/rotector/rotector/internal/common/storage/database/types"
 	"go.uber.org/zap"
 )
 
 // GroupCheckResult contains the result of checking a user's groups.
 type GroupCheckResult struct {
-	User        *models.User
+	User        *types.User
 	AutoFlagged bool
 	Error       error
 }
@@ -36,11 +36,11 @@ func NewGroupChecker(db *database.Client, logger *zap.Logger) *GroupChecker {
 
 // ProcessUsers checks multiple users' groups concurrently and returns flagged users
 // and remaining users that need further checking.
-func (gc *GroupChecker) ProcessUsers(userInfos []*fetcher.Info) (map[uint64]*models.User, []*fetcher.Info) {
+func (gc *GroupChecker) ProcessUsers(userInfos []*fetcher.Info) (map[uint64]*types.User, []*fetcher.Info) {
 	// GroupCheckResult contains the result of checking a user's groups.
 	type GroupCheckResult struct {
 		UserID      uint64
-		User        *models.User
+		User        *types.User
 		AutoFlagged bool
 		Error       error
 	}
@@ -83,7 +83,7 @@ func (gc *GroupChecker) ProcessUsers(userInfos []*fetcher.Info) (map[uint64]*mod
 	}
 
 	// Separate users into flagged and remaining
-	flaggedUsers := make(map[uint64]*models.User)
+	flaggedUsers := make(map[uint64]*types.User)
 	var remainingUsers []*fetcher.Info
 
 	for userID, result := range results {
@@ -108,7 +108,7 @@ func (gc *GroupChecker) ProcessUsers(userInfos []*fetcher.Info) (map[uint64]*mod
 // processUserGroups checks if a user belongs to multiple flagged groups.
 // The confidence score increases with the number of flagged groups relative
 // to total group membership.
-func (gc *GroupChecker) processUserGroups(userInfo *fetcher.Info) (*models.User, bool, error) {
+func (gc *GroupChecker) processUserGroups(userInfo *fetcher.Info) (*types.User, bool, error) {
 	// Skip users with no group memberships
 	if len(userInfo.Groups.Data) == 0 {
 		return nil, false, nil
@@ -141,7 +141,7 @@ func (gc *GroupChecker) processUserGroups(userInfo *fetcher.Info) (*models.User,
 
 	// Auto-flag users in 2 or more flagged groups
 	if len(flaggedGroupIDs) >= 2 {
-		user := &models.User{
+		user := &types.User{
 			ID:             userInfo.ID,
 			Name:           userInfo.Name,
 			DisplayName:    userInfo.DisplayName,

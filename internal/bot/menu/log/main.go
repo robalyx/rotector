@@ -13,7 +13,7 @@ import (
 	"github.com/rotector/rotector/internal/bot/core/session"
 	"github.com/rotector/rotector/internal/bot/interfaces"
 	"github.com/rotector/rotector/internal/bot/utils"
-	"github.com/rotector/rotector/internal/common/storage/database/models"
+	"github.com/rotector/rotector/internal/common/storage/database/types"
 	"go.uber.org/zap"
 )
 
@@ -44,7 +44,7 @@ func NewMainMenu(l *Layout) *MainMenu {
 // and updates the session with the results.
 func (m *MainMenu) Show(event interfaces.CommonEvent, s *session.Session) {
 	// Get query parameters from session
-	activityFilter := models.ActivityFilter{
+	activityFilter := types.ActivityFilter{
 		UserID:     s.GetUint64(constants.SessionKeyUserIDFilter),
 		GroupID:    s.GetUint64(constants.SessionKeyGroupIDFilter),
 		ReviewerID: s.GetUint64(constants.SessionKeyReviewerIDFilter),
@@ -54,7 +54,7 @@ func (m *MainMenu) Show(event interfaces.CommonEvent, s *session.Session) {
 	s.GetInterface(constants.SessionKeyActivityTypeFilter, &activityFilter.ActivityType)
 
 	// Get cursor from session if it exists
-	var cursor *models.LogCursor
+	var cursor *types.LogCursor
 	s.GetInterface(constants.SessionKeyCursor, &cursor)
 
 	// Fetch filtered logs from database
@@ -72,17 +72,17 @@ func (m *MainMenu) Show(event interfaces.CommonEvent, s *session.Session) {
 
 	// If this is the first page (cursor is nil), create a cursor from the first log
 	if cursor == nil && len(logs) > 0 {
-		cursor = &models.LogCursor{
+		cursor = &types.LogCursor{
 			Timestamp: logs[0].ActivityTimestamp,
 			Sequence:  logs[0].Sequence,
 		}
 	}
 
 	// Get previous cursors array
-	var prevCursors []*models.LogCursor
+	var prevCursors []*types.LogCursor
 	s.GetInterface(constants.SessionKeyPrevCursors, &prevCursors)
 	if prevCursors == nil {
-		prevCursors = make([]*models.LogCursor, 0)
+		prevCursors = make([]*types.LogCursor, 0)
 	}
 
 	// Store results and cursor in session
@@ -120,7 +120,7 @@ func (m *MainMenu) handleSelectMenu(event *events.ComponentInteractionCreate, s 
 			return
 		}
 
-		s.Set(constants.SessionKeyActivityTypeFilter, models.ActivityType(optionInt))
+		s.Set(constants.SessionKeyActivityTypeFilter, types.ActivityType(optionInt))
 		m.Show(event, s)
 	}
 }
@@ -215,11 +215,11 @@ func (m *MainMenu) handlePagination(event *events.ComponentInteractionCreate, s 
 	switch action {
 	case utils.ViewerNextPage:
 		if s.GetBool(constants.SessionKeyHasNextPage) {
-			var cursor *models.LogCursor
+			var cursor *types.LogCursor
 			s.GetInterface(constants.SessionKeyCursor, &cursor)
-			var nextCursor *models.LogCursor
+			var nextCursor *types.LogCursor
 			s.GetInterface(constants.SessionKeyNextCursor, &nextCursor)
-			var prevCursors []*models.LogCursor
+			var prevCursors []*types.LogCursor
 			s.GetInterface(constants.SessionKeyPrevCursors, &prevCursors)
 
 			s.Set(constants.SessionKeyPrevCursors, append(prevCursors, cursor))
@@ -227,7 +227,7 @@ func (m *MainMenu) handlePagination(event *events.ComponentInteractionCreate, s 
 			m.Show(event, s)
 		}
 	case utils.ViewerPrevPage:
-		var prevCursors []*models.LogCursor
+		var prevCursors []*types.LogCursor
 		s.GetInterface(constants.SessionKeyPrevCursors, &prevCursors)
 		if len(prevCursors) > 0 {
 			lastIdx := len(prevCursors) - 1
@@ -237,7 +237,7 @@ func (m *MainMenu) handlePagination(event *events.ComponentInteractionCreate, s 
 		}
 	case utils.ViewerFirstPage:
 		s.Set(constants.SessionKeyCursor, nil)
-		s.Set(constants.SessionKeyPrevCursors, []*models.LogCursor{})
+		s.Set(constants.SessionKeyPrevCursors, []*types.LogCursor{})
 		m.Show(event, s)
 	case utils.ViewerLastPage:
 		m.layout.paginationManager.RespondWithError(event, "how are you here?")

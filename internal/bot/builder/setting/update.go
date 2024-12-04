@@ -6,7 +6,7 @@ import (
 	"github.com/disgoorg/disgo/discord"
 	"github.com/rotector/rotector/internal/bot/constants"
 	"github.com/rotector/rotector/internal/bot/core/session"
-	"github.com/rotector/rotector/internal/common/storage/database/models"
+	"github.com/rotector/rotector/internal/common/storage/database/types"
 )
 
 // UpdateBuilder creates a generic settings change menu.
@@ -15,12 +15,12 @@ type UpdateBuilder struct {
 	settingType  string
 	currentValue string
 	customID     string
-	setting      models.Setting
+	setting      Setting
 }
 
 // NewUpdateBuilder creates a new update builder.
 func NewUpdateBuilder(s *session.Session) *UpdateBuilder {
-	var setting models.Setting
+	var setting Setting
 	s.GetInterface(constants.SessionKeySetting, &setting)
 
 	return &UpdateBuilder{
@@ -53,11 +53,11 @@ func (b *UpdateBuilder) buildComponents() []discord.ContainerComponent {
 
 	// Add setting-specific components
 	switch b.setting.Type {
-	case models.SettingTypeBool:
+	case types.SettingTypeBool:
 		components = append(components, b.buildBooleanComponents())
-	case models.SettingTypeEnum:
+	case types.SettingTypeEnum:
 		components = append(components, b.buildEnumComponents())
-	case models.SettingTypeID, models.SettingTypeNumber, models.SettingTypeText:
+	case types.SettingTypeID, types.SettingTypeNumber, types.SettingTypeText:
 		components = append(components, b.buildModalComponents())
 	}
 
@@ -97,11 +97,11 @@ func (b *UpdateBuilder) buildEnumComponents() discord.ContainerComponent {
 func (b *UpdateBuilder) buildModalComponents() discord.ContainerComponent {
 	var buttonText string
 	switch b.setting.Type {
-	case models.SettingTypeID:
+	case types.SettingTypeID:
 		buttonText = "Add/Remove ID"
-	case models.SettingTypeNumber:
+	case types.SettingTypeNumber:
 		buttonText = "Set Value"
-	case models.SettingTypeText:
+	case types.SettingTypeText:
 		buttonText = "Set Message"
 	} //exhaustive:ignore
 

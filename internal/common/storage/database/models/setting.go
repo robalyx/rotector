@@ -5,84 +5,10 @@ import (
 	"database/sql"
 	"errors"
 
+	"github.com/rotector/rotector/internal/common/storage/database/types"
 	"github.com/uptrace/bun"
 	"go.uber.org/zap"
 )
-
-// Review Modes.
-const (
-	TrainingReviewMode = "training"
-	StandardReviewMode = "standard"
-)
-
-// Review Target Modes.
-const (
-	FlaggedReviewTarget   = "flagged"
-	ConfirmedReviewTarget = "confirmed"
-)
-
-// FormatReviewMode converts the review mode constant to a user-friendly display string.
-func FormatReviewMode(mode string) string {
-	switch mode {
-	case TrainingReviewMode:
-		return "Training Mode"
-	case StandardReviewMode:
-		return "Standard Mode"
-	default:
-		return "Unknown Mode"
-	}
-}
-
-// FormatReviewTargetMode converts the target mode to display string.
-func FormatReviewTargetMode(mode string) string {
-	switch mode {
-	case FlaggedReviewTarget:
-		return "Flagged Items"
-	case ConfirmedReviewTarget:
-		return "Confirmed Items"
-	default:
-		return "Unknown Target"
-	}
-}
-
-// UserSetting stores user-specific preferences.
-type UserSetting struct {
-	UserID           uint64 `bun:",pk"`
-	StreamerMode     bool   `bun:",notnull"`
-	UserDefaultSort  string `bun:",notnull"`
-	GroupDefaultSort string `bun:",notnull"`
-	ReviewMode       string `bun:",notnull"`
-	ReviewTargetMode string `bun:",notnull"`
-}
-
-// BotSetting stores bot-wide configuration options.
-type BotSetting struct {
-	ID             uint64   `bun:",pk,autoincrement"`
-	ReviewerIDs    []uint64 `bun:"reviewer_ids,type:bigint[]"`
-	AdminIDs       []uint64 `bun:"admin_ids,type:bigint[]"`
-	SessionLimit   uint64   `bun:",notnull"`
-	WelcomeMessage string   `bun:",notnull,default:''"`
-}
-
-// IsAdmin checks if the given user ID is in the admin list.
-func (s *BotSetting) IsAdmin(userID uint64) bool {
-	for _, adminID := range s.AdminIDs {
-		if adminID == userID {
-			return true
-		}
-	}
-	return false
-}
-
-// IsReviewer checks if the given user ID is in the reviewer list.
-func (s *BotSetting) IsReviewer(userID uint64) bool {
-	for _, reviewerID := range s.ReviewerIDs {
-		if reviewerID == userID {
-			return true
-		}
-	}
-	return false
-}
 
 // SettingModel handles database operations for user and bot settings.
 type SettingModel struct {
@@ -99,14 +25,14 @@ func NewSetting(db *bun.DB, logger *zap.Logger) *SettingModel {
 }
 
 // GetUserSettings retrieves settings for a specific user.
-func (r *SettingModel) GetUserSettings(ctx context.Context, userID uint64) (*UserSetting, error) {
-	settings := &UserSetting{
+func (r *SettingModel) GetUserSettings(ctx context.Context, userID uint64) (*types.UserSetting, error) {
+	settings := &types.UserSetting{
 		UserID:           userID,
 		StreamerMode:     false,
-		UserDefaultSort:  SortByRandom,
-		GroupDefaultSort: SortByRandom,
-		ReviewMode:       StandardReviewMode,
-		ReviewTargetMode: FlaggedReviewTarget,
+		UserDefaultSort:  types.SortByRandom,
+		GroupDefaultSort: types.SortByRandom,
+		ReviewMode:       types.StandardReviewMode,
+		ReviewTargetMode: types.FlaggedReviewTarget,
 	}
 
 	err := r.db.NewSelect().Model(settings).
@@ -130,7 +56,7 @@ func (r *SettingModel) GetUserSettings(ctx context.Context, userID uint64) (*Use
 }
 
 // SaveUserSettings updates or creates user settings.
-func (r *SettingModel) SaveUserSettings(ctx context.Context, settings *UserSetting) error {
+func (r *SettingModel) SaveUserSettings(ctx context.Context, settings *types.UserSetting) error {
 	_, err := r.db.NewInsert().Model(settings).
 		On("CONFLICT (user_id) DO UPDATE").
 		Set("streamer_mode = EXCLUDED.streamer_mode").
@@ -150,8 +76,8 @@ func (r *SettingModel) SaveUserSettings(ctx context.Context, settings *UserSetti
 }
 
 // GetBotSettings retrieves the bot settings.
-func (r *SettingModel) GetBotSettings(ctx context.Context) (*BotSetting, error) {
-	settings := &BotSetting{
+func (r *SettingModel) GetBotSettings(ctx context.Context) (*types.BotSetting, error) {
+	settings := &types.BotSetting{
 		ID:             1,
 		ReviewerIDs:    []uint64{},
 		AdminIDs:       []uint64{},
@@ -180,7 +106,7 @@ func (r *SettingModel) GetBotSettings(ctx context.Context) (*BotSetting, error) 
 }
 
 // SaveBotSettings saves bot settings to the database.
-func (r *SettingModel) SaveBotSettings(ctx context.Context, settings *BotSetting) error {
+func (r *SettingModel) SaveBotSettings(ctx context.Context, settings *types.BotSetting) error {
 	_, err := r.db.NewInsert().Model(settings).
 		On("CONFLICT (id) DO UPDATE").
 		Set("reviewer_ids = EXCLUDED.reviewer_ids").

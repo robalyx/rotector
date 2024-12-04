@@ -11,7 +11,7 @@ import (
 	"github.com/rotector/rotector/internal/common/progress"
 	"github.com/rotector/rotector/internal/common/setup"
 	"github.com/rotector/rotector/internal/common/storage/database"
-	"github.com/rotector/rotector/internal/common/storage/database/models"
+	"github.com/rotector/rotector/internal/common/storage/database/types"
 	"github.com/rotector/rotector/internal/worker/core"
 	"go.uber.org/zap"
 )
@@ -255,11 +255,11 @@ func (w *Worker) checkGroupTrackings() error {
 	}
 
 	// Create flagged group entries with confidence scores
-	flaggedGroups := make([]*models.FlaggedGroup, 0, len(groupInfos))
+	flaggedGroups := make([]*types.FlaggedGroup, 0, len(groupInfos))
 	for _, groupInfo := range groupInfos {
 		flaggedUsers := groupsWithUsers[groupInfo.ID]
-		flaggedGroups = append(flaggedGroups, &models.FlaggedGroup{
-			Group: models.Group{
+		flaggedGroups = append(flaggedGroups, &types.FlaggedGroup{
+			Group: types.Group{
 				ID:           groupInfo.ID,
 				Name:         groupInfo.Name,
 				Description:  groupInfo.Description,

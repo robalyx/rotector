@@ -10,17 +10,17 @@ import (
 	"github.com/rotector/rotector/internal/bot/constants"
 	"github.com/rotector/rotector/internal/bot/core/session"
 	"github.com/rotector/rotector/internal/bot/utils"
-	"github.com/rotector/rotector/internal/common/storage/database/models"
+	"github.com/rotector/rotector/internal/common/storage/database/types"
 )
 
 // Builder creates the visual layout for viewing activity logs.
 type Builder struct {
-	settings           *models.UserSetting
-	logs               []*models.UserActivityLog
+	settings           *types.UserSetting
+	logs               []*types.UserActivityLog
 	userID             uint64
 	groupID            uint64
 	reviewerID         uint64
-	activityTypeFilter models.ActivityType
+	activityTypeFilter types.ActivityType
 	startDate          time.Time
 	endDate            time.Time
 	hasNextPage        bool
@@ -29,11 +29,11 @@ type Builder struct {
 
 // NewBuilder creates a new log builder.
 func NewBuilder(s *session.Session) *Builder {
-	var settings *models.UserSetting
+	var settings *types.UserSetting
 	s.GetInterface(constants.SessionKeyUserSettings, &settings)
-	var logs []*models.UserActivityLog
+	var logs []*types.UserActivityLog
 	s.GetInterface(constants.SessionKeyLogs, &logs)
-	var activityTypeFilter models.ActivityType
+	var activityTypeFilter types.ActivityType
 	s.GetInterface(constants.SessionKeyActivityTypeFilter, &activityTypeFilter)
 
 	return &Builder{
@@ -70,7 +70,7 @@ func (b *Builder) Build() *discord.MessageUpdateBuilder {
 	if b.reviewerID != 0 {
 		embed.AddField("Reviewer ID", fmt.Sprintf("`%d`", b.reviewerID), true)
 	}
-	if b.activityTypeFilter != models.ActivityTypeAll {
+	if b.activityTypeFilter != types.ActivityTypeAll {
 		embed.AddField("Activity Type", fmt.Sprintf("`%s`", b.activityTypeFilter), true)
 	}
 	if !b.startDate.IsZero() && !b.endDate.IsZero() {
@@ -89,16 +89,16 @@ func (b *Builder) Build() *discord.MessageUpdateBuilder {
 
 			description := fmt.Sprintf("Activity: `%s`", log.ActivityType.String())
 
-			if log.UserID != 0 {
+			if log.ActivityTarget.UserID != 0 {
 				description += fmt.Sprintf("\nUser: [%s](https://www.roblox.com/users/%d/profile)",
-					utils.CensorString(strconv.FormatUint(log.UserID, 10), b.settings.StreamerMode),
-					log.UserID)
+					utils.CensorString(strconv.FormatUint(log.ActivityTarget.UserID, 10), b.settings.StreamerMode),
+					log.ActivityTarget.UserID)
 			}
 
-			if log.GroupID != 0 {
+			if log.ActivityTarget.GroupID != 0 {
 				description += fmt.Sprintf("\nGroup: [%s](https://www.roblox.com/groups/%d)",
-					utils.CensorString(strconv.FormatUint(log.GroupID, 10), b.settings.StreamerMode),
-					log.GroupID)
+					utils.CensorString(strconv.FormatUint(log.ActivityTarget.GroupID, 10), b.settings.StreamerMode),
+					log.ActivityTarget.GroupID)
 			}
 
 			description += fmt.Sprintf("\nReviewer: <@%d>%s", log.ReviewerID, details)
@@ -162,37 +162,37 @@ func (b *Builder) buildComponents() []discord.ContainerComponent {
 // buildActivityTypeOptions creates the options for the activity type filter menu.
 func (b *Builder) buildActivityTypeOptions() []discord.StringSelectMenuOption {
 	return []discord.StringSelectMenuOption{
-		discord.NewStringSelectMenuOption("All", strconv.Itoa(int(models.ActivityTypeAll))).
-			WithDefault(b.activityTypeFilter == models.ActivityTypeAll),
-		discord.NewStringSelectMenuOption("User Viewed", strconv.Itoa(int(models.ActivityTypeUserViewed))).
-			WithDefault(b.activityTypeFilter == models.ActivityTypeUserViewed),
-		discord.NewStringSelectMenuOption("User Confirmed", strconv.Itoa(int(models.ActivityTypeUserConfirmed))).
-			WithDefault(b.activityTypeFilter == models.ActivityTypeUserConfirmed),
-		discord.NewStringSelectMenuOption("User Confirmed (Custom)", strconv.Itoa(int(models.ActivityTypeUserConfirmedCustom))).
-			WithDefault(b.activityTypeFilter == models.ActivityTypeUserConfirmedCustom),
-		discord.NewStringSelectMenuOption("User Cleared", strconv.Itoa(int(models.ActivityTypeUserCleared))).
-			WithDefault(b.activityTypeFilter == models.ActivityTypeUserCleared),
-		discord.NewStringSelectMenuOption("User Skipped", strconv.Itoa(int(models.ActivityTypeUserSkipped))).
-			WithDefault(b.activityTypeFilter == models.ActivityTypeUserSkipped),
-		discord.NewStringSelectMenuOption("User Rechecked", strconv.Itoa(int(models.ActivityTypeUserRechecked))).
-			WithDefault(b.activityTypeFilter == models.ActivityTypeUserRechecked),
-		discord.NewStringSelectMenuOption("User Training Upvote", strconv.Itoa(int(models.ActivityTypeUserTrainingUpvote))).
-			WithDefault(b.activityTypeFilter == models.ActivityTypeUserTrainingUpvote),
-		discord.NewStringSelectMenuOption("User Training Downvote", strconv.Itoa(int(models.ActivityTypeUserTrainingDownvote))).
-			WithDefault(b.activityTypeFilter == models.ActivityTypeUserTrainingDownvote),
-		discord.NewStringSelectMenuOption("Group Viewed", strconv.Itoa(int(models.ActivityTypeGroupViewed))).
-			WithDefault(b.activityTypeFilter == models.ActivityTypeGroupViewed),
-		discord.NewStringSelectMenuOption("Group Confirmed", strconv.Itoa(int(models.ActivityTypeGroupConfirmed))).
-			WithDefault(b.activityTypeFilter == models.ActivityTypeGroupConfirmed),
-		discord.NewStringSelectMenuOption("Group Confirmed (Custom)", strconv.Itoa(int(models.ActivityTypeGroupConfirmedCustom))).
-			WithDefault(b.activityTypeFilter == models.ActivityTypeGroupConfirmedCustom),
-		discord.NewStringSelectMenuOption("Group Cleared", strconv.Itoa(int(models.ActivityTypeGroupCleared))).
-			WithDefault(b.activityTypeFilter == models.ActivityTypeGroupCleared),
-		discord.NewStringSelectMenuOption("Group Skipped", strconv.Itoa(int(models.ActivityTypeGroupSkipped))).
-			WithDefault(b.activityTypeFilter == models.ActivityTypeGroupSkipped),
-		discord.NewStringSelectMenuOption("Group Training Upvote", strconv.Itoa(int(models.ActivityTypeGroupTrainingUpvote))).
-			WithDefault(b.activityTypeFilter == models.ActivityTypeGroupTrainingUpvote),
-		discord.NewStringSelectMenuOption("Group Training Downvote", strconv.Itoa(int(models.ActivityTypeGroupTrainingDownvote))).
-			WithDefault(b.activityTypeFilter == models.ActivityTypeGroupTrainingDownvote),
+		discord.NewStringSelectMenuOption("All", strconv.Itoa(int(types.ActivityTypeAll))).
+			WithDefault(b.activityTypeFilter == types.ActivityTypeAll),
+		discord.NewStringSelectMenuOption("User Viewed", strconv.Itoa(int(types.ActivityTypeUserViewed))).
+			WithDefault(b.activityTypeFilter == types.ActivityTypeUserViewed),
+		discord.NewStringSelectMenuOption("User Confirmed", strconv.Itoa(int(types.ActivityTypeUserConfirmed))).
+			WithDefault(b.activityTypeFilter == types.ActivityTypeUserConfirmed),
+		discord.NewStringSelectMenuOption("User Confirmed (Custom)", strconv.Itoa(int(types.ActivityTypeUserConfirmedCustom))).
+			WithDefault(b.activityTypeFilter == types.ActivityTypeUserConfirmedCustom),
+		discord.NewStringSelectMenuOption("User Cleared", strconv.Itoa(int(types.ActivityTypeUserCleared))).
+			WithDefault(b.activityTypeFilter == types.ActivityTypeUserCleared),
+		discord.NewStringSelectMenuOption("User Skipped", strconv.Itoa(int(types.ActivityTypeUserSkipped))).
+			WithDefault(b.activityTypeFilter == types.ActivityTypeUserSkipped),
+		discord.NewStringSelectMenuOption("User Rechecked", strconv.Itoa(int(types.ActivityTypeUserRechecked))).
+			WithDefault(b.activityTypeFilter == types.ActivityTypeUserRechecked),
+		discord.NewStringSelectMenuOption("User Training Upvote", strconv.Itoa(int(types.ActivityTypeUserTrainingUpvote))).
+			WithDefault(b.activityTypeFilter == types.ActivityTypeUserTrainingUpvote),
+		discord.NewStringSelectMenuOption("User Training Downvote", strconv.Itoa(int(types.ActivityTypeUserTrainingDownvote))).
+			WithDefault(b.activityTypeFilter == types.ActivityTypeUserTrainingDownvote),
+		discord.NewStringSelectMenuOption("Group Viewed", strconv.Itoa(int(types.ActivityTypeGroupViewed))).
+			WithDefault(b.activityTypeFilter == types.ActivityTypeGroupViewed),
+		discord.NewStringSelectMenuOption("Group Confirmed", strconv.Itoa(int(types.ActivityTypeGroupConfirmed))).
+			WithDefault(b.activityTypeFilter == types.ActivityTypeGroupConfirmed),
+		discord.NewStringSelectMenuOption("Group Confirmed (Custom)", strconv.Itoa(int(types.ActivityTypeGroupConfirmedCustom))).
+			WithDefault(b.activityTypeFilter == types.ActivityTypeGroupConfirmedCustom),
+		discord.NewStringSelectMenuOption("Group Cleared", strconv.Itoa(int(types.ActivityTypeGroupCleared))).
+			WithDefault(b.activityTypeFilter == types.ActivityTypeGroupCleared),
+		discord.NewStringSelectMenuOption("Group Skipped", strconv.Itoa(int(types.ActivityTypeGroupSkipped))).
+			WithDefault(b.activityTypeFilter == types.ActivityTypeGroupSkipped),
+		discord.NewStringSelectMenuOption("Group Training Upvote", strconv.Itoa(int(types.ActivityTypeGroupTrainingUpvote))).
+			WithDefault(b.activityTypeFilter == types.ActivityTypeGroupTrainingUpvote),
+		discord.NewStringSelectMenuOption("Group Training Downvote", strconv.Itoa(int(types.ActivityTypeGroupTrainingDownvote))).
+			WithDefault(b.activityTypeFilter == types.ActivityTypeGroupTrainingDownvote),
 	}
 }

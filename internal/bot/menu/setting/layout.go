@@ -1,11 +1,11 @@
 package setting
 
 import (
+	"github.com/rotector/rotector/internal/bot/builder/setting"
 	"github.com/rotector/rotector/internal/bot/core/pagination"
 	"github.com/rotector/rotector/internal/bot/core/session"
 	"github.com/rotector/rotector/internal/bot/interfaces"
 	"github.com/rotector/rotector/internal/common/storage/database"
-	"github.com/rotector/rotector/internal/common/storage/database/models"
 	"go.uber.org/zap"
 )
 
@@ -17,7 +17,7 @@ type Layout struct {
 	updateMenu        *UpdateMenu
 	userMenu          *UserMenu
 	botMenu           *BotMenu
-	registry          *models.SettingRegistry
+	registry          *setting.Registry
 	logger            *zap.Logger
 	dashboardLayout   interfaces.DashboardLayout
 }
@@ -37,7 +37,7 @@ func New(
 		logger:            logger,
 		sessionManager:    sessionManager,
 		paginationManager: paginationManager,
-		registry:          models.NewSettingRegistry(),
+		registry:          setting.NewRegistry(),
 		dashboardLayout:   dashboardLayout,
 	}
 

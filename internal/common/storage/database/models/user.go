@@ -5,84 +5,10 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/jaxron/roapi.go/pkg/api/types"
+	"github.com/rotector/rotector/internal/common/storage/database/types"
 	"github.com/uptrace/bun"
 	"go.uber.org/zap"
 )
-
-const (
-	// UserTypeConfirmed indicates a user has been reviewed and confirmed as inappropriate.
-	UserTypeConfirmed = "confirmed"
-	// UserTypeFlagged indicates a user needs review for potential violations.
-	UserTypeFlagged = "flagged"
-	// UserTypeCleared indicates a user was reviewed and found to be appropriate.
-	UserTypeCleared = "cleared"
-	// UserTypeBanned indicates a user was banned and removed from the system.
-	UserTypeBanned = "banned"
-)
-
-// ExtendedFriend contains additional user information beyond the basic Friend type.
-type ExtendedFriend struct {
-	types.Friend            // Embed the base Friend type
-	Name             string // Username of the friend
-	DisplayName      string // Display name of the friend
-	HasVerifiedBadge bool   // Whether the friend has a verified badge
-}
-
-// User combines all the information needed to review a user.
-// This base structure is embedded in other user types (Flagged, Confirmed).
-type User struct {
-	ID             uint64                  `bun:",pk"        json:"id"`
-	Name           string                  `bun:",notnull"   json:"name"`
-	DisplayName    string                  `bun:",notnull"   json:"displayName"`
-	Description    string                  `bun:",notnull"   json:"description"`
-	CreatedAt      time.Time               `bun:",notnull"   json:"createdAt"`
-	Reason         string                  `bun:",notnull"   json:"reason"`
-	Groups         []*types.UserGroupRoles `bun:"type:jsonb" json:"groups"`
-	Outfits        []types.Outfit          `bun:"type:jsonb" json:"outfits"`
-	Friends        []ExtendedFriend        `bun:"type:jsonb" json:"friends"`
-	Games          []*types.Game           `bun:"type:jsonb" json:"games"`
-	FlaggedContent []string                `bun:"type:jsonb" json:"flaggedContent"`
-	FlaggedGroups  []uint64                `bun:"type:jsonb" json:"flaggedGroups"`
-	FollowerCount  uint64                  `bun:",notnull"   json:"followerCount"`
-	FollowingCount uint64                  `bun:",notnull"   json:"followingCount"`
-	Confidence     float64                 `bun:",notnull"   json:"confidence"`
-	LastScanned    time.Time               `bun:",notnull"   json:"lastScanned"`
-	LastUpdated    time.Time               `bun:",notnull"   json:"lastUpdated"`
-	LastViewed     time.Time               `bun:",notnull"   json:"lastViewed"`
-	LastPurgeCheck time.Time               `bun:",notnull"   json:"lastPurgeCheck"`
-	ThumbnailURL   string                  `bun:",notnull"   json:"thumbnailUrl"`
-	Upvotes        int32                   `bun:",notnull"   json:"upvotes"`
-	Downvotes      int32                   `bun:",notnull"   json:"downvotes"`
-	Reputation     int32                   `bun:",notnull"   json:"reputation"`
-}
-
-// FlaggedUser extends User to track users that need review.
-// The base User structure contains all the fields needed for review.
-type FlaggedUser struct {
-	User
-}
-
-// ConfirmedUser extends User to track users that have been reviewed and confirmed.
-// The VerifiedAt field shows when the user was confirmed by a moderator.
-type ConfirmedUser struct {
-	User
-	VerifiedAt time.Time `bun:",notnull" json:"verifiedAt"`
-}
-
-// ClearedUser extends User to track users that were cleared during review.
-// The ClearedAt field shows when the user was cleared by a moderator.
-type ClearedUser struct {
-	User
-	ClearedAt time.Time `bun:",notnull" json:"clearedAt"`
-}
-
-// BannedUser extends User to track users that were banned and removed.
-// The PurgedAt field shows when the user was removed from the system.
-type BannedUser struct {
-	User
-	PurgedAt time.Time `bun:",notnull" json:"purgedAt"`
-}
 
 // UserModel handles database operations for user records.
 type UserModel struct {
@@ -103,11 +29,11 @@ func NewUser(db *bun.DB, tracking *TrackingModel, logger *zap.Logger) *UserModel
 // SaveFlaggedUsers adds or updates users in the flagged_users table.
 // For each user, it updates all fields if the user already exists,
 // or inserts a new record if they don't.
-func (r *UserModel) SaveFlaggedUsers(ctx context.Context, flaggedUsers map[uint64]*User) {
+func (r *UserModel) SaveFlaggedUsers(ctx context.Context, flaggedUsers map[uint64]*types.User) {
 	r.logger.Debug("Saving flagged users", zap.Int("count", len(flaggedUsers)))
 
 	for _, flaggedUser := range flaggedUsers {
-		_, err := r.db.NewInsert().Model(&FlaggedUser{User: *flaggedUser}).
+		_, err := r.db.NewInsert().Model(&types.FlaggedUser{User: *flaggedUser}).
 			On("CONFLICT (id) DO UPDATE").
 			Set("name = EXCLUDED.name").
 			Set("display_name = EXCLUDED.display_name").
@@ -157,9 +83,9 @@ func (r *UserModel) SaveFlaggedUsers(ctx context.Context, flaggedUsers map[uint6
 // ConfirmUser moves a user from flagged_users to confirmed_users.
 // This happens when a moderator confirms that a user is inappropriate.
 // The user's groups and friends are tracked to help identify related users.
-func (r *UserModel) ConfirmUser(ctx context.Context, user *FlaggedUser) error {
+func (r *UserModel) ConfirmUser(ctx context.Context, user *types.FlaggedUser) error {
 	return r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
-		confirmedUser := &ConfirmedUser{
+		confirmedUser := &types.ConfirmedUser{
 			User:       user.User,
 			VerifiedAt: time.Now(),
 		}
@@ -195,7 +121,7 @@ func (r *UserModel) ConfirmUser(ctx context.Context, user *FlaggedUser) error {
 			return err
 		}
 
-		_, err = tx.NewDelete().Model((*FlaggedUser)(nil)).Where("id = ?", user.ID).Exec(ctx)
+		_, err = tx.NewDelete().Model((*types.FlaggedUser)(nil)).Where("id = ?", user.ID).Exec(ctx)
 		if err != nil {
 			r.logger.Error("Failed to delete user from flagged_users", zap.Error(err), zap.Uint64("userID", user.ID))
 			return err
@@ -207,9 +133,9 @@ func (r *UserModel) ConfirmUser(ctx context.Context, user *FlaggedUser) error {
 
 // ClearUser moves a user from flagged_users to cleared_users.
 // This happens when a moderator determines that a user was incorrectly flagged.
-func (r *UserModel) ClearUser(ctx context.Context, user *FlaggedUser) error {
+func (r *UserModel) ClearUser(ctx context.Context, user *types.FlaggedUser) error {
 	return r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
-		clearedUser := &ClearedUser{
+		clearedUser := &types.ClearedUser{
 			User:      user.User,
 			ClearedAt: time.Now(),
 		}
@@ -245,7 +171,7 @@ func (r *UserModel) ClearUser(ctx context.Context, user *FlaggedUser) error {
 			return err
 		}
 
-		_, err = tx.NewDelete().Model((*FlaggedUser)(nil)).Where("id = ?", user.ID).Exec(ctx)
+		_, err = tx.NewDelete().Model((*types.FlaggedUser)(nil)).Where("id = ?", user.ID).Exec(ctx)
 		if err != nil {
 			r.logger.Error("Failed to delete user from flagged_users", zap.Error(err), zap.Uint64("userID", user.ID))
 			return err
@@ -259,8 +185,8 @@ func (r *UserModel) ClearUser(ctx context.Context, user *FlaggedUser) error {
 
 // GetFlaggedUserByIDToReview finds a user in the flagged_users table by their ID
 // and updates their last_viewed timestamp.
-func (r *UserModel) GetFlaggedUserByIDToReview(ctx context.Context, id uint64) (*FlaggedUser, error) {
-	var user FlaggedUser
+func (r *UserModel) GetFlaggedUserByIDToReview(ctx context.Context, id uint64) (*types.FlaggedUser, error) {
+	var user types.FlaggedUser
 	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
 		// Get the user with row lock
 		err := tx.NewSelect().
@@ -303,8 +229,8 @@ func (r *UserModel) GetFlaggedUserByIDToReview(ctx context.Context, id uint64) (
 }
 
 // GetClearedUserByID finds a user in the cleared_users table by their ID.
-func (r *UserModel) GetClearedUserByID(ctx context.Context, id uint64) (*ClearedUser, error) {
-	var user ClearedUser
+func (r *UserModel) GetClearedUserByID(ctx context.Context, id uint64) (*types.ClearedUser, error) {
+	var user types.ClearedUser
 	err := r.db.NewSelect().
 		Model(&user).
 		Where("id = ?", id).
@@ -320,7 +246,7 @@ func (r *UserModel) GetClearedUserByID(ctx context.Context, id uint64) (*Cleared
 // GetConfirmedUsersCount returns the total number of users in confirmed_users.
 func (r *UserModel) GetConfirmedUsersCount(ctx context.Context) (int, error) {
 	count, err := r.db.NewSelect().
-		Model((*ConfirmedUser)(nil)).
+		Model((*types.ConfirmedUser)(nil)).
 		Count(ctx)
 	if err != nil {
 		r.logger.Error("Failed to get confirmed users count", zap.Error(err))
@@ -332,7 +258,7 @@ func (r *UserModel) GetConfirmedUsersCount(ctx context.Context) (int, error) {
 // GetFlaggedUsersCount returns the total number of users in flagged_users.
 func (r *UserModel) GetFlaggedUsersCount(ctx context.Context) (int, error) {
 	count, err := r.db.NewSelect().
-		Model((*FlaggedUser)(nil)).
+		Model((*types.FlaggedUser)(nil)).
 		Count(ctx)
 	if err != nil {
 		r.logger.Error("Failed to get flagged users count", zap.Error(err))
@@ -344,7 +270,7 @@ func (r *UserModel) GetFlaggedUsersCount(ctx context.Context) (int, error) {
 // GetClearedUsersCount returns the total number of users in cleared_users.
 func (r *UserModel) GetClearedUsersCount(ctx context.Context) (int, error) {
 	count, err := r.db.NewSelect().
-		Model((*ClearedUser)(nil)).
+		Model((*types.ClearedUser)(nil)).
 		Count(ctx)
 	if err != nil {
 		r.logger.Error("Failed to get cleared users count", zap.Error(err))
@@ -355,33 +281,33 @@ func (r *UserModel) GetClearedUsersCount(ctx context.Context) (int, error) {
 
 // CheckExistingUsers finds which users from a list of IDs exist in any user table.
 // Returns a map of user IDs to their status (confirmed, flagged, cleared, banned).
-func (r *UserModel) CheckExistingUsers(ctx context.Context, userIDs []uint64) (map[uint64]string, error) {
+func (r *UserModel) CheckExistingUsers(ctx context.Context, userIDs []uint64) (map[uint64]types.UserType, error) {
 	var users []struct {
 		ID     uint64
-		Status string
+		Status types.UserType
 	}
 
 	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
-		err := tx.NewSelect().Model((*ConfirmedUser)(nil)).
+		err := tx.NewSelect().Model((*types.ConfirmedUser)(nil)).
 			Column("id").
-			ColumnExpr("? AS status", UserTypeConfirmed).
+			ColumnExpr("? AS status", types.UserTypeConfirmed).
 			Where("id IN (?)", bun.In(userIDs)).
 			Union(
-				tx.NewSelect().Model((*FlaggedUser)(nil)).
+				tx.NewSelect().Model((*types.FlaggedUser)(nil)).
 					Column("id").
-					ColumnExpr("? AS status", UserTypeFlagged).
+					ColumnExpr("? AS status", types.UserTypeFlagged).
 					Where("id IN (?)", bun.In(userIDs)),
 			).
 			Union(
-				tx.NewSelect().Model((*ClearedUser)(nil)).
+				tx.NewSelect().Model((*types.ClearedUser)(nil)).
 					Column("id").
-					ColumnExpr("? AS status", UserTypeCleared).
+					ColumnExpr("? AS status", types.UserTypeCleared).
 					Where("id IN (?)", bun.In(userIDs)),
 			).
 			Union(
-				tx.NewSelect().Model((*BannedUser)(nil)).
+				tx.NewSelect().Model((*types.BannedUser)(nil)).
 					Column("id").
-					ColumnExpr("? AS status", UserTypeBanned).
+					ColumnExpr("? AS status", types.UserTypeBanned).
 					Where("id IN (?)", bun.In(userIDs)),
 			).
 			Scan(ctx, &users)
@@ -392,7 +318,7 @@ func (r *UserModel) CheckExistingUsers(ctx context.Context, userIDs []uint64) (m
 		return nil, err
 	}
 
-	result := make(map[uint64]string, len(users))
+	result := make(map[uint64]types.UserType, len(users))
 	for _, user := range users {
 		result[user.ID] = user.Status
 	}
@@ -404,66 +330,80 @@ func (r *UserModel) CheckExistingUsers(ctx context.Context, userIDs []uint64) (m
 	return result, nil
 }
 
-// GetUsersByIDs retrieves full user information for a list of user IDs.
+// GetUsersByIDs retrieves specified user information for a list of user IDs.
 // Returns a map of user IDs to user data and a separate map for their types.
-func (r *UserModel) GetUsersByIDs(ctx context.Context, userIDs []uint64) (map[uint64]*User, map[uint64]string, error) {
-	users := make(map[uint64]*User)
-	userTypes := make(map[uint64]string)
+func (r *UserModel) GetUsersByIDs(ctx context.Context, userIDs []uint64, fields types.UserFields) (map[uint64]*types.User, map[uint64]types.UserType, error) {
+	users := make(map[uint64]*types.User)
+	userTypes := make(map[uint64]types.UserType)
 
-	// Query confirmed users
-	var confirmedUsers []ConfirmedUser
-	err := r.db.NewSelect().
-		Model(&confirmedUsers).
-		Where("id IN (?)", bun.In(userIDs)).
-		Scan(ctx)
-	if err != nil {
-		return nil, nil, err
-	}
-	for _, user := range confirmedUsers {
-		users[user.ID] = &user.User
-		userTypes[user.ID] = UserTypeConfirmed
-	}
+	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+		// Query confirmed users
+		var confirmedUsers []types.ConfirmedUser
+		err := tx.NewSelect().
+			Model(&confirmedUsers).
+			Column(fields.Columns()...).
+			Where("id IN (?)", bun.In(userIDs)).
+			Scan(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to get confirmed users: %w", err)
+		}
+		for _, user := range confirmedUsers {
+			users[user.ID] = &user.User
+			userTypes[user.ID] = types.UserTypeConfirmed
+		}
 
-	// Query flagged users
-	var flaggedUsers []FlaggedUser
-	err = r.db.NewSelect().
-		Model(&flaggedUsers).
-		Where("id IN (?)", bun.In(userIDs)).
-		Scan(ctx)
-	if err != nil {
-		return nil, nil, err
-	}
-	for _, user := range flaggedUsers {
-		users[user.ID] = &user.User
-		userTypes[user.ID] = UserTypeFlagged
-	}
+		// Query flagged users
+		var flaggedUsers []types.FlaggedUser
+		err = tx.NewSelect().
+			Model(&flaggedUsers).
+			Column(fields.Columns()...).
+			Where("id IN (?)", bun.In(userIDs)).
+			Scan(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to get flagged users: %w", err)
+		}
+		for _, user := range flaggedUsers {
+			users[user.ID] = &user.User
+			userTypes[user.ID] = types.UserTypeFlagged
+		}
 
-	// Query cleared users
-	var clearedUsers []ClearedUser
-	err = r.db.NewSelect().
-		Model(&clearedUsers).
-		Where("id IN (?)", bun.In(userIDs)).
-		Scan(ctx)
-	if err != nil {
-		return nil, nil, err
-	}
-	for _, user := range clearedUsers {
-		users[user.ID] = &user.User
-		userTypes[user.ID] = UserTypeCleared
-	}
+		// Query cleared users
+		var clearedUsers []types.ClearedUser
+		err = tx.NewSelect().
+			Model(&clearedUsers).
+			Column(fields.Columns()...).
+			Where("id IN (?)", bun.In(userIDs)).
+			Scan(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to get cleared users: %w", err)
+		}
+		for _, user := range clearedUsers {
+			users[user.ID] = &user.User
+			userTypes[user.ID] = types.UserTypeCleared
+		}
 
-	// Query banned users
-	var bannedUsers []BannedUser
-	err = r.db.NewSelect().
-		Model(&bannedUsers).
-		Where("id IN (?)", bun.In(userIDs)).
-		Scan(ctx)
+		// Query banned users
+		var bannedUsers []types.BannedUser
+		err = tx.NewSelect().
+			Model(&bannedUsers).
+			Column(fields.Columns()...).
+			Where("id IN (?)", bun.In(userIDs)).
+			Scan(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to get banned users: %w", err)
+		}
+		for _, user := range bannedUsers {
+			users[user.ID] = &user.User
+			userTypes[user.ID] = types.UserTypeBanned
+		}
+
+		return nil
+	})
 	if err != nil {
+		r.logger.Error("Failed to get users by IDs",
+			zap.Error(err),
+			zap.Uint64s("userIDs", userIDs))
 		return nil, nil, err
-	}
-	for _, user := range bannedUsers {
-		users[user.ID] = &user.User
-		userTypes[user.ID] = "banned"
 	}
 
 	r.logger.Debug("Retrieved users by IDs",
@@ -509,7 +449,7 @@ func (r *UserModel) GetUsersToCheck(ctx context.Context, limit int) ([]uint64, e
 
 		// Update last_purge_check for selected users
 		if len(userIDs) > 0 {
-			_, err = tx.NewUpdate().Model((*ConfirmedUser)(nil)).
+			_, err = tx.NewUpdate().Model((*types.ConfirmedUser)(nil)).
 				Set("last_purge_check = ?", time.Now()).
 				Where("id IN (?)", bun.In(userIDs)).
 				Exec(ctx)
@@ -518,7 +458,7 @@ func (r *UserModel) GetUsersToCheck(ctx context.Context, limit int) ([]uint64, e
 				return err
 			}
 
-			_, err = tx.NewUpdate().Model((*FlaggedUser)(nil)).
+			_, err = tx.NewUpdate().Model((*types.FlaggedUser)(nil)).
 				Set("last_purge_check = ?", time.Now()).
 				Where("id IN (?)", bun.In(userIDs)).
 				Exec(ctx)
@@ -543,7 +483,7 @@ func (r *UserModel) GetUsersToCheck(ctx context.Context, limit int) ([]uint64, e
 func (r *UserModel) RemoveBannedUsers(ctx context.Context, userIDs []uint64) error {
 	return r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
 		// Move confirmed users to banned_users
-		var confirmedUsers []ConfirmedUser
+		var confirmedUsers []types.ConfirmedUser
 		err := tx.NewSelect().Model(&confirmedUsers).
 			Where("id IN (?)", bun.In(userIDs)).
 			Scan(ctx)
@@ -553,7 +493,7 @@ func (r *UserModel) RemoveBannedUsers(ctx context.Context, userIDs []uint64) err
 		}
 
 		for _, user := range confirmedUsers {
-			bannedUser := &BannedUser{
+			bannedUser := &types.BannedUser{
 				User:     user.User,
 				PurgedAt: time.Now(),
 			}
@@ -567,7 +507,7 @@ func (r *UserModel) RemoveBannedUsers(ctx context.Context, userIDs []uint64) err
 		}
 
 		// Move flagged users to banned_users
-		var flaggedUsers []FlaggedUser
+		var flaggedUsers []types.FlaggedUser
 		err = tx.NewSelect().Model(&flaggedUsers).
 			Where("id IN (?)", bun.In(userIDs)).
 			Scan(ctx)
@@ -577,7 +517,7 @@ func (r *UserModel) RemoveBannedUsers(ctx context.Context, userIDs []uint64) err
 		}
 
 		for _, user := range flaggedUsers {
-			bannedUser := &BannedUser{
+			bannedUser := &types.BannedUser{
 				User:     user.User,
 				PurgedAt: time.Now(),
 			}
@@ -591,7 +531,7 @@ func (r *UserModel) RemoveBannedUsers(ctx context.Context, userIDs []uint64) err
 		}
 
 		// Remove users from confirmed_users
-		_, err = tx.NewDelete().Model((*ConfirmedUser)(nil)).
+		_, err = tx.NewDelete().Model((*types.ConfirmedUser)(nil)).
 			Where("id IN (?)", bun.In(userIDs)).
 			Exec(ctx)
 		if err != nil {
@@ -600,7 +540,7 @@ func (r *UserModel) RemoveBannedUsers(ctx context.Context, userIDs []uint64) err
 		}
 
 		// Remove users from flagged_users
-		_, err = tx.NewDelete().Model((*FlaggedUser)(nil)).
+		_, err = tx.NewDelete().Model((*types.FlaggedUser)(nil)).
 			Where("id IN (?)", bun.In(userIDs)).
 			Exec(ctx)
 		if err != nil {
@@ -617,7 +557,7 @@ func (r *UserModel) RemoveBannedUsers(ctx context.Context, userIDs []uint64) err
 // This helps maintain database size by removing users that were cleared long ago.
 func (r *UserModel) PurgeOldClearedUsers(ctx context.Context, cutoffDate time.Time) (int, error) {
 	result, err := r.db.NewDelete().
-		Model((*ClearedUser)(nil)).
+		Model((*types.ClearedUser)(nil)).
 		Where("cleared_at < ?", cutoffDate).
 		Exec(ctx)
 	if err != nil {
@@ -644,10 +584,10 @@ func (r *UserModel) PurgeOldClearedUsers(ctx context.Context, cutoffDate time.Ti
 func (r *UserModel) UpdateTrainingVotes(ctx context.Context, userID uint64, isUpvote bool) error {
 	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
 		// Try to update votes in either flagged or confirmed table
-		if err := r.updateVotesInTable(ctx, tx, (*FlaggedUser)(nil), userID, isUpvote); err == nil {
+		if err := r.updateVotesInTable(ctx, tx, (*types.FlaggedUser)(nil), userID, isUpvote); err == nil {
 			return nil
 		}
-		return r.updateVotesInTable(ctx, tx, (*ConfirmedUser)(nil), userID, isUpvote)
+		return r.updateVotesInTable(ctx, tx, (*types.ConfirmedUser)(nil), userID, isUpvote)
 	})
 	if err != nil {
 		r.logger.Error("Failed to update training votes",
@@ -692,11 +632,11 @@ func (r *UserModel) updateVotesInTable(ctx context.Context, tx bun.Tx, model int
 
 // GetUserToScan finds the next user to scan from confirmed_users, falling back to flagged_users
 // if no confirmed users are available.
-func (r *UserModel) GetUserToScan(ctx context.Context) (*User, error) {
-	var user *User
+func (r *UserModel) GetUserToScan(ctx context.Context) (*types.User, error) {
+	var user *types.User
 	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
 		// First try confirmed users
-		var confirmedUser ConfirmedUser
+		var confirmedUser types.ConfirmedUser
 		err := tx.NewSelect().Model(&confirmedUser).
 			Where("last_scanned IS NULL OR last_scanned < NOW() - INTERVAL '1 day'").
 			Order("last_scanned ASC NULLS FIRST").
@@ -718,7 +658,7 @@ func (r *UserModel) GetUserToScan(ctx context.Context) (*User, error) {
 		}
 
 		// If no confirmed users, try flagged users
-		var flaggedUser FlaggedUser
+		var flaggedUser types.FlaggedUser
 		err = tx.NewSelect().Model(&flaggedUser).
 			Where("last_scanned IS NULL OR last_scanned < NOW() - INTERVAL '1 day'").
 			Order("last_scanned ASC NULLS FIRST").
@@ -750,28 +690,28 @@ func (r *UserModel) GetUserToScan(ctx context.Context) (*User, error) {
 }
 
 // GetUserToReview finds a user to review based on the sort method and target mode.
-func (r *UserModel) GetUserToReview(ctx context.Context, sortBy string, targetMode string) (*ConfirmedUser, error) {
+func (r *UserModel) GetUserToReview(ctx context.Context, sortBy types.SortBy, targetMode types.ReviewTargetMode) (*types.ConfirmedUser, error) {
 	var primaryModel, fallbackModel interface{}
 
 	// Set up which models to try first and as fallback based on target mode
-	if targetMode == FlaggedReviewTarget {
-		primaryModel = &FlaggedUser{}
-		fallbackModel = &ConfirmedUser{}
+	if targetMode == types.FlaggedReviewTarget {
+		primaryModel = &types.FlaggedUser{}
+		fallbackModel = &types.ConfirmedUser{}
 	} else {
-		primaryModel = &ConfirmedUser{}
-		fallbackModel = &FlaggedUser{}
+		primaryModel = &types.ConfirmedUser{}
+		fallbackModel = &types.FlaggedUser{}
 	}
 
 	// Try primary target first
 	result, err := r.getNextToReview(ctx, primaryModel, sortBy)
 	if err == nil {
-		if flaggedUser, ok := result.(*FlaggedUser); ok {
-			return &ConfirmedUser{
+		if flaggedUser, ok := result.(*types.FlaggedUser); ok {
+			return &types.ConfirmedUser{
 				User:       flaggedUser.User,
 				VerifiedAt: time.Time{}, // Zero time since it's not confirmed yet
 			}, nil
 		}
-		if confirmedUser, ok := result.(*ConfirmedUser); ok {
+		if confirmedUser, ok := result.(*types.ConfirmedUser); ok {
 			return confirmedUser, nil
 		}
 	}
@@ -779,22 +719,22 @@ func (r *UserModel) GetUserToReview(ctx context.Context, sortBy string, targetMo
 	// Try fallback target
 	result, err = r.getNextToReview(ctx, fallbackModel, sortBy)
 	if err == nil {
-		if flaggedUser, ok := result.(*FlaggedUser); ok {
-			return &ConfirmedUser{
+		if flaggedUser, ok := result.(*types.FlaggedUser); ok {
+			return &types.ConfirmedUser{
 				User:       flaggedUser.User,
 				VerifiedAt: time.Time{}, // Zero time since it's not confirmed yet
 			}, nil
 		}
-		if confirmedUser, ok := result.(*ConfirmedUser); ok {
+		if confirmedUser, ok := result.(*types.ConfirmedUser); ok {
 			return confirmedUser, nil
 		}
 	}
 
-	return nil, ErrNoUsersToReview
+	return nil, types.ErrNoUsersToReview
 }
 
 // getNextToReview handles the common logic for getting the next item to review.
-func (r *UserModel) getNextToReview(ctx context.Context, model interface{}, sortBy string) (interface{}, error) {
+func (r *UserModel) getNextToReview(ctx context.Context, model interface{}, sortBy types.SortBy) (interface{}, error) {
 	var result interface{}
 	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
 		query := tx.NewSelect().
@@ -803,17 +743,17 @@ func (r *UserModel) getNextToReview(ctx context.Context, model interface{}, sort
 
 		// Apply sort order
 		switch sortBy {
-		case SortByConfidence:
+		case types.SortByConfidence:
 			query.Order("confidence DESC")
-		case SortByLastUpdated:
+		case types.SortByLastUpdated:
 			query.Order("last_updated ASC")
-		case SortByReputation:
+		case types.SortByReputation:
 			query.Order("reputation ASC")
-		case SortByRandom:
+		case types.SortByRandom:
 			query.OrderExpr("RANDOM()")
 		default:
-			return fmt.Errorf("%w: %s", ErrInvalidSortBy, sortBy)
-		}
+			return fmt.Errorf("%w: %s", types.ErrInvalidSortBy, sortBy)
+		} //exhaustive:ignore
 
 		err := query.Limit(1).
 			For("UPDATE SKIP LOCKED").
@@ -826,16 +766,16 @@ func (r *UserModel) getNextToReview(ctx context.Context, model interface{}, sort
 		now := time.Now()
 		var id uint64
 		switch m := model.(type) {
-		case *FlaggedUser:
+		case *types.FlaggedUser:
 			m.LastViewed = now
 			id = m.ID
 			result = m
-		case *ConfirmedUser:
+		case *types.ConfirmedUser:
 			m.LastViewed = now
 			id = m.ID
 			result = m
 		default:
-			return fmt.Errorf("%w: %T", ErrUnsupportedModel, model)
+			return fmt.Errorf("%w: %T", types.ErrUnsupportedModel, model)
 		}
 
 		_, err = tx.NewUpdate().

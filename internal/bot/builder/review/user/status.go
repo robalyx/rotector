@@ -8,7 +8,7 @@ import (
 	"github.com/rotector/rotector/internal/bot/core/session"
 	"github.com/rotector/rotector/internal/bot/utils"
 	"github.com/rotector/rotector/internal/common/queue"
-	"github.com/rotector/rotector/internal/common/storage/database/models"
+	"github.com/rotector/rotector/internal/common/storage/database/types"
 
 	"github.com/disgoorg/disgo/discord"
 )
@@ -16,7 +16,7 @@ import (
 // StatusBuilder creates the visual layout for viewing queue status information.
 // It combines queue position, status, and queue lengths into a Discord embed.
 type StatusBuilder struct {
-	settings            *models.UserSetting
+	settings            *types.UserSetting
 	queueManager        *queue.Manager
 	userID              uint64
 	status              string
@@ -29,7 +29,7 @@ type StatusBuilder struct {
 
 // NewStatusBuilder creates a new status builder.
 func NewStatusBuilder(queueManager *queue.Manager, s *session.Session) *StatusBuilder {
-	var settings *models.UserSetting
+	var settings *types.UserSetting
 	s.GetInterface(constants.SessionKeyUserSettings, &settings)
 
 	return &StatusBuilder{
@@ -55,7 +55,7 @@ func (b *StatusBuilder) Build() *discord.MessageUpdateBuilder {
 		SetTitle("Recheck Status")
 
 	// Format user field based on review mode
-	if b.settings.ReviewMode == models.TrainingReviewMode {
+	if b.settings.ReviewMode == types.TrainingReviewMode {
 		embed.AddField("Current User", utils.CensorString(strconv.FormatUint(b.userID, 10), true), true)
 	} else {
 		embed.AddField("Current User", fmt.Sprintf(

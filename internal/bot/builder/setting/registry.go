@@ -1,4 +1,4 @@
-package models
+package setting
 
 import (
 	"errors"
@@ -6,10 +6,11 @@ import (
 	"strconv"
 
 	"github.com/rotector/rotector/internal/bot/constants"
+	"github.com/rotector/rotector/internal/common/storage/database/types"
 	"github.com/rotector/rotector/internal/common/utils"
 )
 
-// Common validation errors.
+// Validation errors.
 var (
 	ErrInvalidIDFormat       = errors.New("invalid Discord ID format")
 	ErrSelfAssignment        = errors.New("you cannot add/remove yourself")
@@ -18,51 +19,31 @@ var (
 	ErrWelcomeMessageTooLong = errors.New("welcome message cannot exceed 512 characters")
 )
 
-// SettingType represents the data type of a setting.
-type SettingType string
-
-// Available setting types.
-const (
-	SettingTypeBool   SettingType = "bool"
-	SettingTypeEnum   SettingType = "enum"
-	SettingTypeID     SettingType = "id"
-	SettingTypeNumber SettingType = "number"
-	SettingTypeText   SettingType = "text"
-)
-
-// SettingValidator is a function that validates setting input.
+// Validator is a function that validates setting input.
 // It takes the value to validate and the ID of the user making the change.
-type SettingValidator func(value string, userID uint64) error
+type Validator func(value string, userID uint64) error
 
-// SettingValueGetter is a function that retrieves the value of a setting.
-type SettingValueGetter func(userSettings *UserSetting, botSettings *BotSetting) string
+// ValueGetter is a function that retrieves the value of a setting.
+type ValueGetter func(userSettings *types.UserSetting, botSettings *types.BotSetting) string
 
-// SettingValueUpdater is a function that updates the value of a setting.
-type SettingValueUpdater func(value string, userSettings *UserSetting, botSettings *BotSetting) error
+// ValueUpdater is a function that updates the value of a setting.
+type ValueUpdater func(value string, userSettings *types.UserSetting, botSettings *types.BotSetting) error
 
 // Setting defines the structure and behavior of a single setting.
 type Setting struct {
-	Key          string              `json:"key"`          // Unique identifier for the setting
-	Name         string              `json:"name"`         // Display name
-	Description  string              `json:"description"`  // Help text explaining the setting
-	Type         SettingType         `json:"type"`         // Data type of the setting
-	DefaultValue interface{}         `json:"defaultValue"` // Default value
-	Options      []SettingOption     `json:"options"`      // Available options for enum types
-	Validators   []SettingValidator  `json:"-"`            // Functions to validate input
-	ValueGetter  SettingValueGetter  `json:"-"`            // Function to retrieve the value
-	ValueUpdater SettingValueUpdater `json:"-"`            // Function to update the value
+	Key          string                `json:"key"`          // Unique identifier for the setting
+	Name         string                `json:"name"`         // Display name
+	Description  string                `json:"description"`  // Help text explaining the setting
+	Type         types.SettingType     `json:"type"`         // Data type of the setting
+	DefaultValue interface{}           `json:"defaultValue"` // Default value
+	Options      []types.SettingOption `json:"options"`      // Available options for enum types
+	Validators   []Validator           `json:"-"`            // Functions to validate input
+	ValueGetter  ValueGetter           `json:"-"`            // Function to retrieve the value
+	ValueUpdater ValueUpdater          `json:"-"`            // Function to update the value
 }
 
-// SettingOption represents a single option for enum-type settings.
-type SettingOption struct {
-	Value       string `json:"value"`       // Internal value used by the system
-	Label       string `json:"label"`       // Display name shown to users
-	Description string `json:"description"` // Help text explaining the option
-	Emoji       string `json:"emoji"`       // Optional emoji to display with the option
-}
-
-// SettingRegistry manages the available settings.
-type SettingRegistry struct {
+// Registry manages the available settings.
+type Registry struct {
 	UserSettings map[string]Setting // User-specific settings
 	BotSettings  map[string]Setting // Bot-wide settings
 }
@@ -85,7 +66,7 @@ func validateDiscordID(value string, userID uint64) error {
 }
 
 // validateEnum returns a validator function that checks if a value is in a list of valid options.
-func validateEnum(validOptions []string) SettingValidator {
+func validateEnum(validOptions []string) Validator {
 	return func(value string, _ uint64) error {
 		for _, opt := range validOptions {
 			if value == opt {
@@ -113,9 +94,9 @@ func validateNumber(value string, _ uint64) error {
 	return nil
 }
 
-// NewSettingRegistry creates and initializes the setting registry.
-func NewSettingRegistry() *SettingRegistry {
-	r := &SettingRegistry{
+// NewRegistry creates and initializes the setting registry.
+func NewRegistry() *Registry {
+	r := &Registry{
 		UserSettings: make(map[string]Setting),
 		BotSettings:  make(map[string]Setting),
 	}
@@ -127,7 +108,7 @@ func NewSettingRegistry() *SettingRegistry {
 }
 
 // registerUserSettings adds all user-specific settings to the registry.
-func (r *SettingRegistry) registerUserSettings() {
+func (r *Registry) registerUserSettings() {
 	r.UserSettings[constants.StreamerModeOption] = r.createStreamerModeSetting()
 	r.UserSettings[constants.UserDefaultSortOption] = r.createUserDefaultSortSetting()
 	r.UserSettings[constants.GroupDefaultSortOption] = r.createGroupDefaultSortSetting()
@@ -136,7 +117,7 @@ func (r *SettingRegistry) registerUserSettings() {
 }
 
 // registerBotSettings adds all bot-wide settings to the registry.
-func (r *SettingRegistry) registerBotSettings() {
+func (r *Registry) registerBotSettings() {
 	r.BotSettings[constants.ReviewerIDsOption] = r.createReviewerIDsSetting()
 	r.BotSettings[constants.AdminIDsOption] = r.createAdminIDsSetting()
 	r.BotSettings[constants.SessionLimitOption] = r.createSessionLimitSetting()
@@ -144,18 +125,18 @@ func (r *SettingRegistry) registerBotSettings() {
 }
 
 // createStreamerModeSetting creates the streamer mode setting.
-func (r *SettingRegistry) createStreamerModeSetting() Setting {
+func (r *Registry) createStreamerModeSetting() Setting {
 	return Setting{
 		Key:          constants.StreamerModeOption,
 		Name:         "Streamer Mode",
 		Description:  "Toggle censoring of sensitive information",
-		Type:         SettingTypeBool,
+		Type:         types.SettingTypeBool,
 		DefaultValue: false,
-		Validators:   []SettingValidator{validateBool},
-		ValueGetter: func(us *UserSetting, _ *BotSetting) string {
+		Validators:   []Validator{validateBool},
+		ValueGetter: func(us *types.UserSetting, _ *types.BotSetting) string {
 			return strconv.FormatBool(us.StreamerMode)
 		},
-		ValueUpdater: func(value string, us *UserSetting, _ *BotSetting) error {
+		ValueUpdater: func(value string, us *types.UserSetting, _ *types.BotSetting) error {
 			boolVal, _ := strconv.ParseBool(value)
 			us.StreamerMode = boolVal
 			return nil
@@ -164,107 +145,120 @@ func (r *SettingRegistry) createStreamerModeSetting() Setting {
 }
 
 // createUserDefaultSortSetting creates the user default sort setting.
-func (r *SettingRegistry) createUserDefaultSortSetting() Setting {
+func (r *Registry) createUserDefaultSortSetting() Setting {
 	return Setting{
 		Key:          constants.UserDefaultSortOption,
 		Name:         "User Default Sort",
 		Description:  "Set what users are shown first in the review menu",
-		Type:         SettingTypeEnum,
-		DefaultValue: SortByRandom,
-		Options: []SettingOption{
-			{Value: SortByRandom, Label: "Random", Description: "Selected by random", Emoji: "🔀"},
-			{Value: SortByConfidence, Label: "Confidence", Description: "Selected by confidence", Emoji: "🔮"},
-			{Value: SortByLastUpdated, Label: "Last Updated", Description: "Selected by last updated time", Emoji: "📅"},
-			{Value: SortByReputation, Label: "Bad Reputation", Description: "Selected by bad reputation", Emoji: "👎"},
+		Type:         types.SettingTypeEnum,
+		DefaultValue: types.SortByRandom,
+		Options: []types.SettingOption{
+			{Value: string(types.SortByRandom), Label: "Random", Description: "Selected by random", Emoji: "🔀"},
+			{Value: string(types.SortByConfidence), Label: "Confidence", Description: "Selected by confidence", Emoji: "🔮"},
+			{Value: string(types.SortByLastUpdated), Label: "Last Updated", Description: "Selected by last updated time", Emoji: "📅"},
+			{Value: string(types.SortByReputation), Label: "Bad Reputation", Description: "Selected by bad reputation", Emoji: "👎"},
 		},
-		Validators: []SettingValidator{
-			validateEnum([]string{SortByRandom, SortByConfidence, SortByLastUpdated, SortByReputation}),
+		Validators: []Validator{
+			validateEnum([]string{
+				string(types.SortByRandom),
+				string(types.SortByConfidence),
+				string(types.SortByLastUpdated),
+				string(types.SortByReputation),
+			}),
 		},
-		ValueGetter: func(us *UserSetting, _ *BotSetting) string {
-			return us.UserDefaultSort
+		ValueGetter: func(us *types.UserSetting, _ *types.BotSetting) string {
+			return string(us.UserDefaultSort)
 		},
-		ValueUpdater: func(value string, us *UserSetting, _ *BotSetting) error {
-			us.UserDefaultSort = value
+		ValueUpdater: func(value string, us *types.UserSetting, _ *types.BotSetting) error {
+			us.UserDefaultSort = types.SortBy(value)
 			return nil
 		},
 	}
 }
 
 // createGroupDefaultSortSetting creates the group default sort setting.
-func (r *SettingRegistry) createGroupDefaultSortSetting() Setting {
+func (r *Registry) createGroupDefaultSortSetting() Setting {
 	return Setting{
 		Key:          constants.GroupDefaultSortOption,
 		Name:         "Group Default Sort",
 		Description:  "Set what groups are shown first in the review menu",
-		Type:         SettingTypeEnum,
-		DefaultValue: SortByRandom,
-		Options: []SettingOption{
-			{Value: SortByRandom, Label: "Random", Description: "Selected by random", Emoji: "🔀"},
-			{Value: SortByConfidence, Label: "Confidence", Description: "Selected by confidence", Emoji: "🔍"},
-			{Value: SortByFlaggedUsers, Label: "Flagged Users", Description: "Selected by flagged users", Emoji: "👥"},
-			{Value: SortByReputation, Label: "Bad Reputation", Description: "Selected by bad reputation", Emoji: "👎"},
+		Type:         types.SettingTypeEnum,
+		DefaultValue: types.SortByRandom,
+		Options: []types.SettingOption{
+			{Value: string(types.SortByRandom), Label: "Random", Description: "Selected by random", Emoji: "🔀"},
+			{Value: string(types.SortByConfidence), Label: "Confidence", Description: "Selected by confidence", Emoji: "🔍"},
+			{Value: string(types.SortByFlaggedUsers), Label: "Flagged Users", Description: "Selected by flagged users", Emoji: "👥"},
+			{Value: string(types.SortByReputation), Label: "Bad Reputation", Description: "Selected by bad reputation", Emoji: "👎"},
 		},
-		Validators: []SettingValidator{
-			validateEnum([]string{SortByRandom, SortByConfidence, SortByFlaggedUsers, SortByReputation}),
+		Validators: []Validator{
+			validateEnum([]string{
+				string(types.SortByRandom),
+				string(types.SortByConfidence),
+				string(types.SortByFlaggedUsers),
+				string(types.SortByReputation),
+			}),
 		},
-		ValueGetter: func(us *UserSetting, _ *BotSetting) string {
-			return us.GroupDefaultSort
+		ValueGetter: func(us *types.UserSetting, _ *types.BotSetting) string {
+			return us.GroupDefaultSort.FormatDisplay()
 		},
-		ValueUpdater: func(value string, us *UserSetting, _ *BotSetting) error {
-			us.GroupDefaultSort = value
+		ValueUpdater: func(value string, us *types.UserSetting, _ *types.BotSetting) error {
+			us.GroupDefaultSort = types.SortBy(value)
 			return nil
 		},
 	}
 }
 
 // createReviewModeSetting creates the review mode setting.
-func (r *SettingRegistry) createReviewModeSetting() Setting {
+func (r *Registry) createReviewModeSetting() Setting {
 	return Setting{
 		Key:          constants.ReviewModeOption,
 		Name:         "Review Mode",
 		Description:  "Switch between training and standard review modes",
-		Type:         SettingTypeEnum,
-		DefaultValue: StandardReviewMode,
-		Options: []SettingOption{
+		Type:         types.SettingTypeEnum,
+		DefaultValue: types.StandardReviewMode,
+		Options: []types.SettingOption{
 			{
-				Value:       TrainingReviewMode,
+				Value:       string(types.TrainingReviewMode),
 				Label:       "Training Mode",
 				Description: "Practice reviewing without affecting the system",
 				Emoji:       "🎓",
 			},
 			{
-				Value:       StandardReviewMode,
+				Value:       string(types.StandardReviewMode),
 				Label:       "Standard Mode",
 				Description: "Normal review mode for actual moderation",
 				Emoji:       "⚠️",
 			},
 		},
-		Validators: []SettingValidator{
-			validateEnum([]string{TrainingReviewMode, StandardReviewMode}),
+		Validators: []Validator{
+			validateEnum([]string{
+				string(types.TrainingReviewMode),
+				string(types.StandardReviewMode),
+			}),
 		},
-		ValueGetter: func(us *UserSetting, _ *BotSetting) string {
-			return FormatReviewMode(us.ReviewMode)
+		ValueGetter: func(us *types.UserSetting, _ *types.BotSetting) string {
+			return us.ReviewMode.FormatDisplay()
 		},
-		ValueUpdater: func(value string, us *UserSetting, _ *BotSetting) error {
-			us.ReviewMode = value
+		ValueUpdater: func(value string, us *types.UserSetting, _ *types.BotSetting) error {
+			us.ReviewMode = types.ReviewMode(value)
 			return nil
 		},
 	}
 }
 
 // createSessionLimitSetting creates the session limit setting.
-func (r *SettingRegistry) createSessionLimitSetting() Setting {
+func (r *Registry) createSessionLimitSetting() Setting {
 	return Setting{
 		Key:          constants.SessionLimitOption,
 		Name:         "Session Limit",
 		Description:  "Set the maximum number of concurrent sessions",
-		Type:         SettingTypeNumber,
+		Type:         types.SettingTypeNumber,
 		DefaultValue: uint64(0),
-		Validators:   []SettingValidator{validateNumber},
-		ValueGetter: func(_ *UserSetting, bs *BotSetting) string {
+		Validators:   []Validator{validateNumber},
+		ValueGetter: func(_ *types.UserSetting, bs *types.BotSetting) string {
 			return strconv.FormatUint(bs.SessionLimit, 10)
 		},
-		ValueUpdater: func(value string, _ *UserSetting, bs *BotSetting) error {
+		ValueUpdater: func(value string, _ *types.UserSetting, bs *types.BotSetting) error {
 			limit, err := strconv.ParseUint(value, 10, 64)
 			if err != nil {
 				return err
@@ -276,18 +270,18 @@ func (r *SettingRegistry) createSessionLimitSetting() Setting {
 }
 
 // createReviewerIDsSetting creates the reviewer IDs setting.
-func (r *SettingRegistry) createReviewerIDsSetting() Setting {
+func (r *Registry) createReviewerIDsSetting() Setting {
 	return Setting{
 		Key:          constants.ReviewerIDsOption,
 		Name:         "Reviewer IDs",
 		Description:  "Set which users can review using the bot",
-		Type:         SettingTypeID,
+		Type:         types.SettingTypeID,
 		DefaultValue: []uint64{},
-		Validators:   []SettingValidator{validateDiscordID},
-		ValueGetter: func(_ *UserSetting, bs *BotSetting) string {
+		Validators:   []Validator{validateDiscordID},
+		ValueGetter: func(_ *types.UserSetting, bs *types.BotSetting) string {
 			return utils.FormatIDs(bs.ReviewerIDs)
 		},
-		ValueUpdater: func(value string, _ *UserSetting, bs *BotSetting) error {
+		ValueUpdater: func(value string, _ *types.UserSetting, bs *types.BotSetting) error {
 			id, err := strconv.ParseUint(value, 10, 64)
 			if err != nil {
 				return err
@@ -309,18 +303,18 @@ func (r *SettingRegistry) createReviewerIDsSetting() Setting {
 }
 
 // createAdminIDsSetting creates the admin IDs setting.
-func (r *SettingRegistry) createAdminIDsSetting() Setting {
+func (r *Registry) createAdminIDsSetting() Setting {
 	return Setting{
 		Key:          constants.AdminIDsOption,
 		Name:         "Admin IDs",
 		Description:  "Set which users can access bot settings",
-		Type:         SettingTypeID,
+		Type:         types.SettingTypeID,
 		DefaultValue: []uint64{},
-		Validators:   []SettingValidator{validateDiscordID},
-		ValueGetter: func(_ *UserSetting, bs *BotSetting) string {
+		Validators:   []Validator{validateDiscordID},
+		ValueGetter: func(_ *types.UserSetting, bs *types.BotSetting) string {
 			return utils.FormatIDs(bs.AdminIDs)
 		},
-		ValueUpdater: func(value string, _ *UserSetting, bs *BotSetting) error {
+		ValueUpdater: func(value string, _ *types.UserSetting, bs *types.BotSetting) error {
 			id, err := strconv.ParseUint(value, 10, 64)
 			if err != nil {
 				return err
@@ -342,49 +336,52 @@ func (r *SettingRegistry) createAdminIDsSetting() Setting {
 }
 
 // createReviewTargetModeSetting creates the review target mode setting.
-func (r *SettingRegistry) createReviewTargetModeSetting() Setting {
+func (r *Registry) createReviewTargetModeSetting() Setting {
 	return Setting{
 		Key:          constants.ReviewTargetModeOption,
 		Name:         "Review Target Mode",
 		Description:  "Switch between reviewing flagged items and re-reviewing confirmed items",
-		Type:         SettingTypeEnum,
-		DefaultValue: FlaggedReviewTarget,
-		Options: []SettingOption{
+		Type:         types.SettingTypeEnum,
+		DefaultValue: types.FlaggedReviewTarget,
+		Options: []types.SettingOption{
 			{
-				Value:       FlaggedReviewTarget,
+				Value:       string(types.FlaggedReviewTarget),
 				Label:       "Flagged Items",
 				Description: "Review newly flagged items",
 				Emoji:       "🔍",
 			},
 			{
-				Value:       ConfirmedReviewTarget,
+				Value:       string(types.ConfirmedReviewTarget),
 				Label:       "Confirmed Items",
 				Description: "Re-review previously confirmed items",
 				Emoji:       "🔄",
 			},
 		},
-		Validators: []SettingValidator{
-			validateEnum([]string{FlaggedReviewTarget, ConfirmedReviewTarget}),
+		Validators: []Validator{
+			validateEnum([]string{
+				string(types.FlaggedReviewTarget),
+				string(types.ConfirmedReviewTarget),
+			}),
 		},
-		ValueGetter: func(us *UserSetting, _ *BotSetting) string {
-			return FormatReviewTargetMode(us.ReviewTargetMode)
+		ValueGetter: func(us *types.UserSetting, _ *types.BotSetting) string {
+			return us.ReviewTargetMode.FormatDisplay()
 		},
-		ValueUpdater: func(value string, us *UserSetting, _ *BotSetting) error {
-			us.ReviewTargetMode = value
+		ValueUpdater: func(value string, us *types.UserSetting, _ *types.BotSetting) error {
+			us.ReviewTargetMode = types.ReviewTargetMode(value)
 			return nil
 		},
 	}
 }
 
 // createWelcomeMessageSetting creates the welcome message setting.
-func (r *SettingRegistry) createWelcomeMessageSetting() Setting {
+func (r *Registry) createWelcomeMessageSetting() Setting {
 	return Setting{
 		Key:          constants.WelcomeMessageOption,
 		Name:         "Welcome Message",
 		Description:  "Set the welcome message shown on the dashboard",
-		Type:         SettingTypeText,
+		Type:         types.SettingTypeText,
 		DefaultValue: "",
-		Validators: []SettingValidator{
+		Validators: []Validator{
 			func(value string, _ uint64) error {
 				if len(value) > 512 {
 					return ErrWelcomeMessageTooLong
@@ -392,13 +389,13 @@ func (r *SettingRegistry) createWelcomeMessageSetting() Setting {
 				return nil
 			},
 		},
-		ValueGetter: func(_ *UserSetting, bs *BotSetting) string {
+		ValueGetter: func(_ *types.UserSetting, bs *types.BotSetting) string {
 			if bs.WelcomeMessage == "" {
 				return "No welcome message set"
 			}
 			return bs.WelcomeMessage
 		},
-		ValueUpdater: func(value string, _ *UserSetting, bs *BotSetting) error {
+		ValueUpdater: func(value string, _ *types.UserSetting, bs *types.BotSetting) error {
 			bs.WelcomeMessage = value
 			return nil
 		},

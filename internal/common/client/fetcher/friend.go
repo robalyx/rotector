@@ -7,20 +7,20 @@ import (
 	"github.com/jaxron/roapi.go/pkg/api"
 	"github.com/jaxron/roapi.go/pkg/api/resources/friends"
 	"github.com/jaxron/roapi.go/pkg/api/resources/users"
-	"github.com/jaxron/roapi.go/pkg/api/types"
-	"github.com/rotector/rotector/internal/common/storage/database/models"
+	apiTypes "github.com/jaxron/roapi.go/pkg/api/types"
+	"github.com/rotector/rotector/internal/common/storage/database/types"
 	"go.uber.org/zap"
 )
 
 // FriendFetchResult contains the result of fetching a user's friends.
 type FriendFetchResult struct {
-	Data  []models.ExtendedFriend
+	Data  []types.ExtendedFriend
 	Error error
 }
 
 // FriendDetails contains the result of fetching a user's friends.
 type FriendDetails struct {
-	Data []models.ExtendedFriend
+	Data []types.ExtendedFriend
 }
 
 // FriendFetcher handles retrieval of user friend information from the Roblox API.
@@ -38,8 +38,8 @@ func NewFriendFetcher(roAPI *api.API, logger *zap.Logger) *FriendFetcher {
 }
 
 // GetFriends retrieves all friends for a user ID, handling pagination and user details.
-func (f *FriendFetcher) GetFriends(ctx context.Context, userID uint64) ([]models.ExtendedFriend, error) {
-	var allFriends []models.ExtendedFriend
+func (f *FriendFetcher) GetFriends(ctx context.Context, userID uint64) ([]types.ExtendedFriend, error) {
+	var allFriends []types.ExtendedFriend
 	var cursor string
 	batchSize := 100 // Process friend details in batches of 100
 	currentBatch := make([]uint64, 0, batchSize)
@@ -120,7 +120,7 @@ func (f *FriendFetcher) GetFriends(ctx context.Context, userID uint64) ([]models
 }
 
 // getFriendDetails fetches user details for a batch of friend IDs.
-func (f *FriendFetcher) getFriendDetails(ctx context.Context, friendIDs []uint64) ([]models.ExtendedFriend, error) {
+func (f *FriendFetcher) getFriendDetails(ctx context.Context, friendIDs []uint64) ([]types.ExtendedFriend, error) {
 	// Fetch user details for the batch
 	builder := users.NewUsersByIDsBuilder(friendIDs...)
 	userDetails, err := f.roAPI.Users().GetUsersByIDs(ctx, builder.Build())
@@ -129,10 +129,10 @@ func (f *FriendFetcher) getFriendDetails(ctx context.Context, friendIDs []uint64
 	}
 
 	// Convert user details to ExtendedFriend type
-	batchFriends := make([]models.ExtendedFriend, 0, len(userDetails.Data))
+	batchFriends := make([]types.ExtendedFriend, 0, len(userDetails.Data))
 	for _, user := range userDetails.Data {
-		batchFriends = append(batchFriends, models.ExtendedFriend{
-			Friend: types.Friend{
+		batchFriends = append(batchFriends, types.ExtendedFriend{
+			Friend: apiTypes.Friend{
 				ID: user.ID,
 			},
 			Name:             user.Name,

@@ -9,7 +9,7 @@ import (
 	"github.com/bytedance/sonic"
 	"github.com/redis/rueidis"
 	"github.com/rotector/rotector/internal/common/storage/database"
-	"github.com/rotector/rotector/internal/common/storage/database/models"
+	"github.com/rotector/rotector/internal/common/storage/database/types"
 	"go.uber.org/zap"
 )
 
@@ -112,12 +112,12 @@ func (m *Manager) AddToQueue(ctx context.Context, item *Item) error {
 	}
 
 	// Log the activity
-	go m.db.UserActivity().LogActivity(ctx, &models.UserActivityLog{
-		ActivityTarget: models.ActivityTarget{
+	go m.db.UserActivity().Log(ctx, &types.UserActivityLog{
+		ActivityTarget: types.ActivityTarget{
 			UserID: item.UserID,
 		},
 		ReviewerID:        item.AddedBy,
-		ActivityType:      models.ActivityTypeUserRechecked,
+		ActivityType:      types.ActivityTypeUserRechecked,
 		ActivityTimestamp: time.Now(),
 		Details:           map[string]interface{}{"reason": item.Reason},
 	})

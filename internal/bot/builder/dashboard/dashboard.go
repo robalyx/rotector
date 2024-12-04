@@ -10,7 +10,7 @@ import (
 	"github.com/disgoorg/disgo/discord"
 	"github.com/disgoorg/snowflake/v2"
 	"github.com/rotector/rotector/internal/bot/constants"
-	"github.com/rotector/rotector/internal/common/storage/database/models"
+	"github.com/rotector/rotector/internal/common/storage/database/types"
 	"github.com/rotector/rotector/internal/worker/core"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
@@ -24,10 +24,10 @@ const (
 
 // Builder creates the visual layout for the main dashboard.
 type Builder struct {
-	botSettings      *models.BotSetting
+	botSettings      *types.BotSetting
 	userID           uint64
-	userCounts       *models.UserCounts
-	groupCounts      *models.GroupCounts
+	userCounts       *types.UserCounts
+	groupCounts      *types.GroupCounts
 	userStatsBuffer  *bytes.Buffer
 	groupStatsBuffer *bytes.Buffer
 	activeUsers      []snowflake.ID
@@ -37,10 +37,10 @@ type Builder struct {
 
 // NewBuilder creates a new dashboard builder.
 func NewBuilder(
-	botSettings *models.BotSetting,
+	botSettings *types.BotSetting,
 	userID uint64,
-	userCounts *models.UserCounts,
-	groupCounts *models.GroupCounts,
+	userCounts *types.UserCounts,
+	groupCounts *types.GroupCounts,
 	userStatsBuffer, groupStatsBuffer *bytes.Buffer,
 	activeUsers []snowflake.ID,
 	workerStatuses []core.Status,

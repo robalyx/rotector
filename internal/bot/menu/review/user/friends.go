@@ -7,13 +7,13 @@ import (
 	"github.com/disgoorg/disgo/discord"
 	"github.com/disgoorg/disgo/events"
 	"github.com/jaxron/roapi.go/pkg/api/resources/thumbnails"
-	"github.com/jaxron/roapi.go/pkg/api/types"
+	apiTypes "github.com/jaxron/roapi.go/pkg/api/types"
 	builder "github.com/rotector/rotector/internal/bot/builder/review/user"
 	"github.com/rotector/rotector/internal/bot/constants"
 	"github.com/rotector/rotector/internal/bot/core/pagination"
 	"github.com/rotector/rotector/internal/bot/core/session"
 	"github.com/rotector/rotector/internal/bot/utils"
-	"github.com/rotector/rotector/internal/common/storage/database/models"
+	"github.com/rotector/rotector/internal/common/storage/database/types"
 	"go.uber.org/zap"
 )
 
@@ -41,7 +41,7 @@ func NewFriendsMenu(layout *Layout) *FriendsMenu {
 // Show prepares and displays the friends interface for a specific page.
 // It loads friend data, checks their status, and creates a grid of avatars.
 func (m *FriendsMenu) Show(event *events.ComponentInteractionCreate, s *session.Session, page int) {
-	var user *models.FlaggedUser
+	var user *types.FlaggedUser
 	s.GetInterface(constants.SessionKeyTarget, &user)
 
 	// Return to review menu if user has no friends
@@ -51,7 +51,7 @@ func (m *FriendsMenu) Show(event *events.ComponentInteractionCreate, s *session.
 	}
 
 	// Get friend types from session and sort friends by status
-	var friendTypes map[uint64]string
+	var friendTypes map[uint64]types.UserType
 	s.GetInterface(constants.SessionKeyFriendTypes, &friendTypes)
 	sortedFriends := m.sortFriendsByStatus(user.Friends, friendTypes)
 
@@ -105,7 +105,7 @@ func (m *FriendsMenu) handlePageNavigation(event *events.ComponentInteractionCre
 	action := utils.ViewerAction(customID)
 	switch action {
 	case utils.ViewerFirstPage, utils.ViewerPrevPage, utils.ViewerNextPage, utils.ViewerLastPage:
-		var user *models.FlaggedUser
+		var user *types.FlaggedUser
 		s.GetInterface(constants.SessionKeyTarget, &user)
 
 		// Calculate max page and validate navigation action
@@ -128,10 +128,10 @@ func (m *FriendsMenu) handlePageNavigation(event *events.ComponentInteractionCre
 }
 
 // fetchFriendData handles concurrent fetching of thumbnails and presence information.
-func (m *FriendsMenu) fetchFriendData(allFriends []models.ExtendedFriend) (map[uint64]string, map[uint64]*types.UserPresenceResponse) {
+func (m *FriendsMenu) fetchFriendData(allFriends []types.ExtendedFriend) (map[uint64]string, map[uint64]*apiTypes.UserPresenceResponse) {
 	var wg sync.WaitGroup
 	var thumbnailMap map[uint64]string
-	presenceMap := make(map[uint64]*types.UserPresenceResponse)
+	presenceMap := make(map[uint64]*apiTypes.UserPresenceResponse)
 
 	wg.Add(2)
 
@@ -141,12 +141,12 @@ func (m *FriendsMenu) fetchFriendData(allFriends []models.ExtendedFriend) (map[u
 		// Create batch request for all friend avatars
 		requests := thumbnails.NewBatchThumbnailsBuilder()
 		for _, friend := range allFriends {
-			requests.AddRequest(types.ThumbnailRequest{
-				Type:      types.AvatarType,
+			requests.AddRequest(apiTypes.ThumbnailRequest{
+				Type:      apiTypes.AvatarType,
 				TargetID:  friend.ID,
 				RequestID: strconv.FormatUint(friend.ID, 10),
-				Size:      types.Size150x150,
-				Format:    types.WEBP,
+				Size:      apiTypes.Size150x150,
+				Format:    apiTypes.WEBP,
 			})
 		}
 
@@ -181,24 +181,24 @@ func (m *FriendsMenu) fetchFriendData(allFriends []models.ExtendedFriend) (map[u
 // 2. Flagged friends (⏳) - Users that are currently flagged for review
 // 3. Unflagged friends - Users with no current flags or status
 // Returns a new slice with friends sorted in this priority order.
-func (m *FriendsMenu) sortFriendsByStatus(friends []models.ExtendedFriend, friendTypes map[uint64]string) []models.ExtendedFriend {
+func (m *FriendsMenu) sortFriendsByStatus(friends []types.ExtendedFriend, friendTypes map[uint64]types.UserType) []types.ExtendedFriend {
 	// Create three slices for different status types
-	var confirmedFriends, flaggedFriends, unflaggedFriends []models.ExtendedFriend
+	var confirmedFriends, flaggedFriends, unflaggedFriends []types.ExtendedFriend
 
 	// Categorize friends based on their status
 	for _, friend := range friends {
 		switch friendTypes[friend.ID] {
-		case models.UserTypeConfirmed:
+		case types.UserTypeConfirmed:
 			confirmedFriends = append(confirmedFriends, friend)
-		case models.UserTypeFlagged:
+		case types.UserTypeFlagged:
 			flaggedFriends = append(flaggedFriends, friend)
 		default:
 			unflaggedFriends = append(unflaggedFriends, friend)
-		}
+		} //exhaustive:ignore
 	}
 
 	// Combine slices in priority order (confirmed -> flagged -> unflagged)
-	sortedFriends := make([]models.ExtendedFriend, 0, len(friends))
+	sortedFriends := make([]types.ExtendedFriend, 0, len(friends))
 	sortedFriends = append(sortedFriends, confirmedFriends...)
 	sortedFriends = append(sortedFriends, flaggedFriends...)
 	sortedFriends = append(sortedFriends, unflaggedFriends...)

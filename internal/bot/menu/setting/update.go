@@ -11,7 +11,7 @@ import (
 	"github.com/rotector/rotector/internal/bot/core/pagination"
 	"github.com/rotector/rotector/internal/bot/core/session"
 	"github.com/rotector/rotector/internal/bot/interfaces"
-	"github.com/rotector/rotector/internal/common/storage/database/models"
+	"github.com/rotector/rotector/internal/common/storage/database/types"
 	"go.uber.org/zap"
 )
 
@@ -49,9 +49,9 @@ func (m *UpdateMenu) Show(event interfaces.CommonEvent, s *session.Session, sett
 	s.Set(constants.SessionKeySetting, setting)
 
 	// Get current value based on setting type
-	var userSettings *models.UserSetting
+	var userSettings *types.UserSetting
 	s.GetInterface(constants.SessionKeyUserSettings, &userSettings)
-	var botSettings *models.BotSetting
+	var botSettings *types.BotSetting
 	s.GetInterface(constants.SessionKeyBotSettings, &botSettings)
 
 	currentValue := setting.ValueGetter(userSettings, botSettings)
@@ -82,7 +82,7 @@ func (m *UpdateMenu) handleSettingChange(event *events.ComponentInteractionCreat
 }
 
 // validateSettingValue validates a setting value.
-func (m *UpdateMenu) validateSettingValue(s *session.Session, setting models.Setting, value string) error {
+func (m *UpdateMenu) validateSettingValue(s *session.Session, setting setting.Setting, value string) error {
 	userID := s.GetUint64(constants.SessionKeyUserID)
 
 	for _, validator := range setting.Validators {
@@ -94,10 +94,10 @@ func (m *UpdateMenu) validateSettingValue(s *session.Session, setting models.Set
 }
 
 // updateSetting updates a setting value in the database.
-func (m *UpdateMenu) updateSetting(s *session.Session, setting models.Setting, value string) error {
-	var userSettings *models.UserSetting
+func (m *UpdateMenu) updateSetting(s *session.Session, setting setting.Setting, value string) error {
+	var userSettings *types.UserSetting
 	s.GetInterface(constants.SessionKeyUserSettings, &userSettings)
-	var botSettings *models.BotSetting
+	var botSettings *types.BotSetting
 	s.GetInterface(constants.SessionKeyBotSettings, &botSettings)
 
 	// Use the setting's ValueUpdater to update the value
@@ -138,23 +138,23 @@ func (m *UpdateMenu) handleSettingButton(event *events.ComponentInteractionCreat
 	}
 
 	// Get the current setting
-	var setting models.Setting
+	var setting setting.Setting
 	s.GetInterface(constants.SessionKeySetting, &setting)
 
 	// Handle ID and number setting button clicks
-	if setting.Type == models.SettingTypeID || setting.Type == models.SettingTypeNumber || setting.Type == models.SettingTypeText {
+	if setting.Type == types.SettingTypeID || setting.Type == types.SettingTypeNumber || setting.Type == types.SettingTypeText {
 		textInput := discord.NewTextInput(string(setting.Type), discord.TextInputStyleParagraph, setting.Name).WithRequired(true)
 		var modalTitle string
 
 		switch setting.Type {
-		case models.SettingTypeID:
+		case types.SettingTypeID:
 			textInput.WithPlaceholder("Enter the user ID to toggle...")
 			modalTitle = "Toggle " + setting.Name
-		case models.SettingTypeNumber:
+		case types.SettingTypeNumber:
 			textInput.WithPlaceholder("Enter a number...").
 				WithValue(s.GetString(constants.SessionKeyCurrentValue))
 			modalTitle = "Set " + setting.Name
-		case models.SettingTypeText:
+		case types.SettingTypeText:
 			textInput.WithPlaceholder("Enter your message...").
 				WithValue(s.GetString(constants.SessionKeyCurrentValue)).
 				WithStyle(discord.TextInputStyleParagraph)
@@ -200,7 +200,7 @@ func (m *UpdateMenu) handleSettingModal(event *events.ModalSubmitInteractionCrea
 }
 
 // getSetting returns the setting definition for the given type and key.
-func (m *UpdateMenu) getSetting(settingType, settingKey string) models.Setting {
+func (m *UpdateMenu) getSetting(settingType, settingKey string) setting.Setting {
 	if strings.HasPrefix(settingType, constants.UserSettingPrefix) {
 		return m.layout.registry.UserSettings[settingKey]
 	}

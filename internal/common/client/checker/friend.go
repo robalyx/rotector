@@ -9,7 +9,7 @@ import (
 
 	"github.com/rotector/rotector/internal/common/client/fetcher"
 	"github.com/rotector/rotector/internal/common/storage/database"
-	"github.com/rotector/rotector/internal/common/storage/database/models"
+	"github.com/rotector/rotector/internal/common/storage/database/types"
 	"go.uber.org/zap"
 )
 
@@ -31,11 +31,11 @@ func NewFriendChecker(db *database.Client, aiChecker *AIChecker, logger *zap.Log
 }
 
 // ProcessUsers checks multiple users' friends concurrently and returns flagged users.
-func (fc *FriendChecker) ProcessUsers(userInfos []*fetcher.Info) map[uint64]*models.User {
+func (fc *FriendChecker) ProcessUsers(userInfos []*fetcher.Info) map[uint64]*types.User {
 	// FriendCheckResult contains the result of checking a user's friends.
 	type FriendCheckResult struct {
 		UserID      uint64
-		User        *models.User
+		User        *types.User
 		AutoFlagged bool
 		Error       error
 	}
@@ -78,7 +78,7 @@ func (fc *FriendChecker) ProcessUsers(userInfos []*fetcher.Info) map[uint64]*mod
 	}
 
 	// Collect flagged users
-	flaggedUsers := make(map[uint64]*models.User)
+	flaggedUsers := make(map[uint64]*types.User)
 	for userID, result := range results {
 		if result.Error != nil {
 			fc.logger.Error("Error checking user friends",
@@ -96,7 +96,7 @@ func (fc *FriendChecker) ProcessUsers(userInfos []*fetcher.Info) map[uint64]*mod
 }
 
 // processUserFriends checks if a user should be flagged based on their friends.
-func (fc *FriendChecker) processUserFriends(userInfo *fetcher.Info) (*models.User, bool, error) {
+func (fc *FriendChecker) processUserFriends(userInfo *fetcher.Info) (*types.User, bool, error) {
 	// Skip users with very few friends to avoid false positives
 	if len(userInfo.Friends.Data) < 3 {
 		return nil, false, nil
@@ -109,26 +109,29 @@ func (fc *FriendChecker) processUserFriends(userInfo *fetcher.Info) (*models.Use
 	}
 
 	// Check which users already exist in the database
-	existingUsers, userTypes, err := fc.db.Users().GetUsersByIDs(context.Background(), friendIDs)
+	existingUsers, userTypes, err := fc.db.Users().GetUsersByIDs(context.Background(), friendIDs, types.UserFields{
+		Basic:  true,
+		Reason: true,
+	})
 	if err != nil {
 		return nil, false, err
 	}
 
 	// Separate friends by type and count them
-	confirmedFriends := make(map[uint64]*models.User)
-	flaggedFriends := make(map[uint64]*models.User)
+	confirmedFriends := make(map[uint64]*types.User)
+	flaggedFriends := make(map[uint64]*types.User)
 	confirmedCount := 0
 	flaggedCount := 0
 
 	for id, user := range existingUsers {
 		switch userTypes[id] {
-		case models.UserTypeConfirmed:
+		case types.UserTypeConfirmed:
 			confirmedCount++
 			confirmedFriends[id] = user
-		case models.UserTypeFlagged:
+		case types.UserTypeFlagged:
 			flaggedCount++
 			flaggedFriends[id] = user
-		}
+		} //exhaustive:ignore
 	}
 
 	// Calculate confidence score
@@ -154,7 +157,7 @@ func (fc *FriendChecker) processUserFriends(userInfo *fetcher.Info) (*models.Use
 			)
 		}
 
-		user := &models.User{
+		user := &types.User{
 			ID:             userInfo.ID,
 			Name:           userInfo.Name,
 			DisplayName:    userInfo.DisplayName,

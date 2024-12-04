@@ -7,7 +7,7 @@ import (
 	"github.com/bytedance/sonic"
 	"github.com/google/generative-ai-go/genai"
 	"github.com/rotector/rotector/internal/common/setup"
-	"github.com/rotector/rotector/internal/common/storage/database/models"
+	"github.com/rotector/rotector/internal/common/storage/database/types"
 	"github.com/rotector/rotector/internal/common/utils"
 	"github.com/tdewolff/minify/v2"
 	"github.com/tdewolff/minify/v2/json"
@@ -49,7 +49,7 @@ const MaxOutputTokens = 512
 
 // StatsData represents the formatted statistics for AI analysis.
 type StatsData struct {
-	History []models.HourlyStats `json:"history"`
+	History []types.HourlyStats `json:"history"`
 }
 
 // StatsChecker analyzes statistics and generates welcome messages.
@@ -84,7 +84,7 @@ func NewStatsChecker(app *setup.App, logger *zap.Logger) *StatsChecker {
 }
 
 // GenerateWelcomeMessage analyzes current and historical stats to generate a contextual welcome message.
-func (s *StatsChecker) GenerateWelcomeMessage(ctx context.Context, historicalStats []models.HourlyStats) (string, error) {
+func (s *StatsChecker) GenerateWelcomeMessage(ctx context.Context, historicalStats []types.HourlyStats) (string, error) {
 	// Format stats data for AI analysis
 	data := StatsData{
 		History: historicalStats,

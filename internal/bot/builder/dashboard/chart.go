@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/rotector/rotector/internal/common/storage/database/models"
+	"github.com/rotector/rotector/internal/common/storage/database/types"
 	"github.com/wcharczuk/go-chart/v2"
 	"github.com/wcharczuk/go-chart/v2/drawing"
 )
@@ -39,11 +39,11 @@ const (
 
 // ChartBuilder creates statistical charts for the dashboard.
 type ChartBuilder struct {
-	stats []models.HourlyStats
+	stats []types.HourlyStats
 }
 
 // NewChartBuilder loads hourly statistics to create a new chart builder.
-func NewChartBuilder(stats []models.HourlyStats) *ChartBuilder {
+func NewChartBuilder(stats []types.HourlyStats) *ChartBuilder {
 	return &ChartBuilder{
 		stats: stats,
 	}
@@ -142,7 +142,7 @@ func (b *ChartBuilder) prepareUserDataSeries() ([]float64, []float64, []float64,
 	bannedSeries := make([]float64, hoursToShow)
 
 	// Create a map of truncated timestamps to stats for lookup
-	statsMap := make(map[time.Time]models.HourlyStats)
+	statsMap := make(map[time.Time]types.HourlyStats)
 	for _, stat := range b.stats {
 		truncatedTime := stat.Timestamp.Truncate(time.Hour)
 		statsMap[truncatedTime] = stat
@@ -176,7 +176,7 @@ func (b *ChartBuilder) prepareGroupDataSeries() ([]float64, []float64, []float64
 	lockedSeries := make([]float64, hoursToShow)
 
 	// Create a map of truncated timestamps to stats for lookup
-	statsMap := make(map[time.Time]models.HourlyStats)
+	statsMap := make(map[time.Time]types.HourlyStats)
 	for _, stat := range b.stats {
 		truncatedTime := stat.Timestamp.Truncate(time.Hour)
 		statsMap[truncatedTime] = stat

@@ -10,7 +10,7 @@ import (
 )
 
 const (
-	// CacheDBIndex stores temporary data like API responses and computation results
+	// CacheDBIndex stores temporary data like API responses and DB queries
 	// in database 0 to keep it separate from other Redis data.
 	CacheDBIndex = 0
 

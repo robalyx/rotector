@@ -6,23 +6,23 @@ import (
 	"strconv"
 
 	"github.com/disgoorg/disgo/discord"
-	"github.com/jaxron/roapi.go/pkg/api/types"
+	apiTypes "github.com/jaxron/roapi.go/pkg/api/types"
 	"github.com/rotector/rotector/internal/bot/constants"
 	"github.com/rotector/rotector/internal/bot/core/session"
 	"github.com/rotector/rotector/internal/bot/utils"
-	"github.com/rotector/rotector/internal/common/storage/database/models"
+	"github.com/rotector/rotector/internal/common/storage/database/types"
 )
 
 // FriendsBuilder creates the visual layout for viewing a user's friends.
 // It combines friend information with flagged/confirmed status indicators and
 // supports pagination through a grid of friend avatars.
 type FriendsBuilder struct {
-	settings       *models.UserSetting
-	user           *models.FlaggedUser
-	friends        []models.ExtendedFriend
-	presences      map[uint64]types.UserPresenceResponse
-	flaggedFriends map[uint64]*models.User
-	friendTypes    map[uint64]string
+	settings       *types.UserSetting
+	user           *types.FlaggedUser
+	friends        []types.ExtendedFriend
+	presences      map[uint64]apiTypes.UserPresenceResponse
+	flaggedFriends map[uint64]*types.User
+	friendTypes    map[uint64]types.UserType
 	start          int
 	page           int
 	total          int
@@ -31,17 +31,17 @@ type FriendsBuilder struct {
 
 // NewFriendsBuilder creates a new friends builder.
 func NewFriendsBuilder(s *session.Session) *FriendsBuilder {
-	var settings *models.UserSetting
+	var settings *types.UserSetting
 	s.GetInterface(constants.SessionKeyUserSettings, &settings)
-	var user *models.FlaggedUser
+	var user *types.FlaggedUser
 	s.GetInterface(constants.SessionKeyTarget, &user)
-	var friends []models.ExtendedFriend
+	var friends []types.ExtendedFriend
 	s.GetInterface(constants.SessionKeyFriends, &friends)
-	var presences map[uint64]types.UserPresenceResponse
+	var presences map[uint64]apiTypes.UserPresenceResponse
 	s.GetInterface(constants.SessionKeyPresences, &presences)
-	var flaggedFriends map[uint64]*models.User
+	var flaggedFriends map[uint64]*types.User
 	s.GetInterface(constants.SessionKeyFlaggedFriends, &flaggedFriends)
-	var friendTypes map[uint64]string
+	var friendTypes map[uint64]types.UserType
 	s.GetInterface(constants.SessionKeyFriendTypes, &friendTypes)
 
 	return &FriendsBuilder{
@@ -72,7 +72,7 @@ func (b *FriendsBuilder) Build() *discord.MessageUpdateBuilder {
 	file := discord.NewFile(fileName, "", b.imageBuffer)
 
 	// Build embed with user info and avatars
-	censor := b.settings.StreamerMode || b.settings.ReviewMode == models.TrainingReviewMode
+	censor := b.settings.StreamerMode || b.settings.ReviewMode == types.TrainingReviewMode
 	embed := discord.NewEmbedBuilder().
 		SetTitle(fmt.Sprintf("User Friends (Page %d/%d)", b.page+1, totalPages)).
 		SetDescription(fmt.Sprintf(
@@ -101,13 +101,13 @@ func (b *FriendsBuilder) Build() *discord.MessageUpdateBuilder {
 		// Add presence indicator emoji
 		if presence, ok := b.presences[friend.ID]; ok {
 			switch presence.UserPresenceType {
-			case types.Website:
+			case apiTypes.Website:
 				fieldName += " 🌐" // Website
-			case types.InGame:
+			case apiTypes.InGame:
 				fieldName += " 🎮" // In Game
-			case types.InStudio:
+			case apiTypes.InStudio:
 				fieldName += " 🔨" // In Studio
-			case types.Offline:
+			case apiTypes.Offline:
 				fieldName += " 💤" // Offline
 			}
 		}
@@ -115,16 +115,20 @@ func (b *FriendsBuilder) Build() *discord.MessageUpdateBuilder {
 		// Add status indicators (⚠️ or ⏳)
 		if friendType, ok := b.friendTypes[friend.ID]; ok {
 			switch friendType {
-			case models.UserTypeConfirmed:
+			case types.UserTypeConfirmed:
 				fieldName += " ⚠️"
-			case models.UserTypeFlagged:
+			case types.UserTypeFlagged:
 				fieldName += " ⏳"
+			case types.UserTypeCleared:
+				fieldName += " ✅"
+			case types.UserTypeBanned:
+				fieldName += " 🔨"
 			}
 		}
 
 		// Format friend information based on mode
 		var fieldValue string
-		if b.settings.ReviewMode == models.TrainingReviewMode {
+		if b.settings.ReviewMode == types.TrainingReviewMode {
 			fieldValue = utils.CensorString(friend.Name, true)
 		} else {
 			fieldValue = fmt.Sprintf(
@@ -136,7 +140,7 @@ func (b *FriendsBuilder) Build() *discord.MessageUpdateBuilder {
 
 		// Add presence details if available
 		if presence, ok := b.presences[friend.ID]; ok {
-			if presence.UserPresenceType != types.Offline {
+			if presence.UserPresenceType != apiTypes.Offline {
 				fieldValue += "\n" + presence.LastLocation
 			} else {
 				fieldValue += fmt.Sprintf("\nLast Online: <t:%d:R>", presence.LastOnline.Unix())

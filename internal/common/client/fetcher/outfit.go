@@ -6,15 +6,15 @@ import (
 
 	"github.com/jaxron/roapi.go/pkg/api"
 	"github.com/jaxron/roapi.go/pkg/api/resources/avatar"
-	"github.com/jaxron/roapi.go/pkg/api/types"
-	"github.com/rotector/rotector/internal/common/storage/database/models"
+	apiTypes "github.com/jaxron/roapi.go/pkg/api/types"
+	"github.com/rotector/rotector/internal/common/storage/database/types"
 	"go.uber.org/zap"
 )
 
 // OutfitFetchResult contains the result of fetching a user's outfits.
 type OutfitFetchResult struct {
 	ID      uint64
-	Outfits *types.OutfitResponse
+	Outfits *apiTypes.OutfitResponse
 	Error   error
 }
 
@@ -33,14 +33,14 @@ func NewOutfitFetcher(roAPI *api.API, logger *zap.Logger) *OutfitFetcher {
 }
 
 // AddOutfits fetches outfits for a batch of users and returns a map of results.
-func (o *OutfitFetcher) AddOutfits(users map[uint64]*models.User) map[uint64]*OutfitFetchResult {
+func (o *OutfitFetcher) AddOutfits(users map[uint64]*types.User) map[uint64]*OutfitFetchResult {
 	var wg sync.WaitGroup
 	resultsChan := make(chan OutfitFetchResult, len(users))
 
 	// Process each user concurrently
 	for _, user := range users {
 		wg.Add(1)
-		go func(u *models.User) {
+		go func(u *types.User) {
 			defer wg.Done()
 
 			builder := avatar.NewUserOutfitsBuilder(u.ID).WithItemsPerPage(1000).WithIsEditable(true)

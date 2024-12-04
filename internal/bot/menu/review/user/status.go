@@ -12,7 +12,7 @@ import (
 	"github.com/rotector/rotector/internal/bot/core/session"
 	"github.com/rotector/rotector/internal/bot/interfaces"
 	"github.com/rotector/rotector/internal/common/queue"
-	"github.com/rotector/rotector/internal/common/storage/database/models"
+	"github.com/rotector/rotector/internal/common/storage/database/types"
 )
 
 // StatusMenu handles the display and interaction logic for viewing queue status.
@@ -56,12 +56,12 @@ func (m *StatusMenu) Show(event interfaces.CommonEvent, s *session.Session) {
 		s.Set(constants.SessionKeyTarget, flaggedUser)
 
 		// Log the view action asynchronously
-		go m.layout.db.UserActivity().LogActivity(context.Background(), &models.UserActivityLog{
-			ActivityTarget: models.ActivityTarget{
+		go m.layout.db.UserActivity().Log(context.Background(), &types.UserActivityLog{
+			ActivityTarget: types.ActivityTarget{
 				UserID: flaggedUser.ID,
 			},
 			ReviewerID:        uint64(event.User().ID),
-			ActivityType:      models.ActivityTypeUserViewed,
+			ActivityType:      types.ActivityTypeUserViewed,
 			ActivityTimestamp: time.Now(),
 			Details:           make(map[string]interface{}),
 		})

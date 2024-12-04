@@ -5,17 +5,10 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/rotector/rotector/internal/common/storage/database/types"
 	"github.com/uptrace/bun"
 	"go.uber.org/zap"
 )
-
-// GroupMemberTracking monitors confirmed users within groups.
-// The LastAppended field helps determine when to purge old tracking data.
-type GroupMemberTracking struct {
-	GroupID      uint64    `bun:",pk"`
-	FlaggedUsers []uint64  `bun:"type:bigint[]"`
-	LastAppended time.Time `bun:",notnull"`
-}
 
 // TrackingModel handles database operations for monitoring affiliations
 // between users and groups.
@@ -39,10 +32,10 @@ func (r *TrackingModel) AddUserToGroupTracking(ctx context.Context, groupID, use
 	return r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
 		// Check all group tables in order
 		tables := []interface{}{
-			(*ConfirmedGroup)(nil),
-			(*FlaggedGroup)(nil),
-			(*ClearedGroup)(nil),
-			(*LockedGroup)(nil),
+			(*types.ConfirmedGroup)(nil),
+			(*types.FlaggedGroup)(nil),
+			(*types.ClearedGroup)(nil),
+			(*types.LockedGroup)(nil),
 		}
 
 		for _, table := range tables {
@@ -56,7 +49,7 @@ func (r *TrackingModel) AddUserToGroupTracking(ctx context.Context, groupID, use
 		}
 
 		// If group is not in any table, create new tracking entry
-		_, err := tx.NewInsert().Model(&GroupMemberTracking{
+		_, err := tx.NewInsert().Model(&types.GroupMemberTracking{
 			GroupID:      groupID,
 			FlaggedUsers: []uint64{userID},
 			LastAppended: time.Now(),
@@ -119,7 +112,7 @@ func (r *TrackingModel) checkGroupTableAndUpdate(
 
 // PurgeOldTrackings removes tracking entries that haven't been updated recently.
 func (r *TrackingModel) PurgeOldTrackings(ctx context.Context, cutoffDate time.Time) (int, error) {
-	result, err := r.db.NewDelete().Model((*GroupMemberTracking)(nil)).
+	result, err := r.db.NewDelete().Model((*types.GroupMemberTracking)(nil)).
 		Where("last_appended < ?", cutoffDate).
 		Exec(ctx)
 	if err != nil {
@@ -139,7 +132,7 @@ func (r *TrackingModel) PurgeOldTrackings(ctx context.Context, cutoffDate time.T
 // GetAndRemoveQualifiedGroupTrackings finds groups with enough flagged users.
 // GetAndRemoveQualifiedGroupTrackings returns a map of group IDs to their flagged user IDs.
 func (r *TrackingModel) GetAndRemoveQualifiedGroupTrackings(ctx context.Context, minFlaggedUsers int) (map[uint64][]uint64, error) {
-	var trackings []GroupMemberTracking
+	var trackings []types.GroupMemberTracking
 
 	// Find groups with enough flagged users
 	err := r.db.NewSelect().Model(&trackings).
@@ -158,7 +151,7 @@ func (r *TrackingModel) GetAndRemoveQualifiedGroupTrackings(ctx context.Context,
 
 	// Remove found groups from tracking
 	if len(groupIDs) > 0 {
-		_, err = r.db.NewDelete().Model((*GroupMemberTracking)(nil)).
+		_, err = r.db.NewDelete().Model((*types.GroupMemberTracking)(nil)).
 			Where("group_id IN (?)", bun.In(groupIDs)).
 			Exec(ctx)
 		if err != nil {

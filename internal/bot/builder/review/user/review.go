@@ -14,30 +14,30 @@ import (
 	"github.com/rotector/rotector/internal/bot/utils"
 	"github.com/rotector/rotector/internal/common/client/fetcher"
 	"github.com/rotector/rotector/internal/common/storage/database"
-	"github.com/rotector/rotector/internal/common/storage/database/models"
+	"github.com/rotector/rotector/internal/common/storage/database/types"
 	"github.com/rotector/rotector/internal/common/translator"
 )
 
 // ReviewBuilder creates the visual layout for reviewing a user.
 type ReviewBuilder struct {
 	db          *database.Client
-	settings    *models.UserSetting
-	botSettings *models.BotSetting
+	settings    *types.UserSetting
+	botSettings *types.BotSetting
 	userID      uint64
-	user        *models.ConfirmedUser
+	user        *types.ConfirmedUser
 	translator  *translator.Translator
-	friendTypes map[uint64]string
+	friendTypes map[uint64]types.UserType
 }
 
 // NewReviewBuilder creates a new review builder.
 func NewReviewBuilder(s *session.Session, translator *translator.Translator, db *database.Client) *ReviewBuilder {
-	var settings *models.UserSetting
+	var settings *types.UserSetting
 	s.GetInterface(constants.SessionKeyUserSettings, &settings)
-	var botSettings *models.BotSetting
+	var botSettings *types.BotSetting
 	s.GetInterface(constants.SessionKeyBotSettings, &botSettings)
-	var user *models.ConfirmedUser
+	var user *types.ConfirmedUser
 	s.GetInterface(constants.SessionKeyTarget, &user)
-	var friendTypes map[uint64]string
+	var friendTypes map[uint64]types.UserType
 	s.GetInterface(constants.SessionKeyFriendTypes, &friendTypes)
 
 	return &ReviewBuilder{
@@ -87,13 +87,13 @@ func (b *ReviewBuilder) buildModeEmbed() *discord.EmbedBuilder {
 
 	// Format review mode
 	switch b.settings.ReviewMode {
-	case models.TrainingReviewMode:
+	case types.TrainingReviewMode:
 		mode = "🎓 Training Mode"
 		description += `
 		**You are not an official reviewer.**
 		You may help moderators by using upvotes/downvotes to indicate suspicious activity. Information is censored and external links are disabled.
 		`
-	case models.StandardReviewMode:
+	case types.StandardReviewMode:
 		mode = "⚠️ Standard Mode"
 		description += `
 		Your actions are recorded and affect the database. Please review carefully before taking action.
@@ -129,7 +129,7 @@ func (b *ReviewBuilder) buildReviewBuilder() *discord.EmbedBuilder {
 	followerCount := utils.FormatNumber(b.user.FollowerCount)
 	followingCount := utils.FormatNumber(b.user.FollowingCount)
 
-	if b.settings.ReviewMode == models.TrainingReviewMode {
+	if b.settings.ReviewMode == types.TrainingReviewMode {
 		// Training mode - show limited information without links
 		embed.SetAuthorName(header).
 			AddField("ID", utils.CensorString(strconv.FormatUint(b.user.ID, 10), true), true).
@@ -187,7 +187,7 @@ func (b *ReviewBuilder) buildActionOptions() []discord.StringSelectMenuOption {
 	// Get switch text and description
 	var switchText string
 	var switchDesc string
-	if b.settings.ReviewTargetMode == models.FlaggedReviewTarget {
+	if b.settings.ReviewTargetMode == types.FlaggedReviewTarget {
 		switchText = "Switch to Confirmed Target"
 		switchDesc = "Switch to re-reviewing confirmed users"
 	} else {
@@ -227,7 +227,7 @@ func (b *ReviewBuilder) buildActionOptions() []discord.StringSelectMenuOption {
 		options = append(reviewerOptions, options...)
 
 		// Add mode switch option
-		if b.settings.ReviewMode == models.TrainingReviewMode {
+		if b.settings.ReviewMode == types.TrainingReviewMode {
 			options = append(options,
 				discord.NewStringSelectMenuOption("Switch to Standard Mode", constants.SwitchReviewModeCustomID).
 					WithEmoji(discord.ComponentEmoji{Name: "⚠️"}).
@@ -251,17 +251,17 @@ func (b *ReviewBuilder) buildComponents() []discord.ContainerComponent {
 		// Sorting options menu
 		discord.NewActionRow(
 			discord.NewStringSelectMenu(constants.SortOrderSelectMenuCustomID, "Sorting",
-				discord.NewStringSelectMenuOption("Selected by random", models.SortByRandom).
-					WithDefault(b.settings.UserDefaultSort == models.SortByRandom).
+				discord.NewStringSelectMenuOption("Selected by random", string(types.SortByRandom)).
+					WithDefault(b.settings.UserDefaultSort == types.SortByRandom).
 					WithEmoji(discord.ComponentEmoji{Name: "🔀"}),
-				discord.NewStringSelectMenuOption("Selected by confidence", models.SortByConfidence).
-					WithDefault(b.settings.UserDefaultSort == models.SortByConfidence).
+				discord.NewStringSelectMenuOption("Selected by confidence", string(types.SortByConfidence)).
+					WithDefault(b.settings.UserDefaultSort == types.SortByConfidence).
 					WithEmoji(discord.ComponentEmoji{Name: "🔮"}),
-				discord.NewStringSelectMenuOption("Selected by last updated time", models.SortByLastUpdated).
-					WithDefault(b.settings.UserDefaultSort == models.SortByLastUpdated).
+				discord.NewStringSelectMenuOption("Selected by last updated time", string(types.SortByLastUpdated)).
+					WithDefault(b.settings.UserDefaultSort == types.SortByLastUpdated).
 					WithEmoji(discord.ComponentEmoji{Name: "📅"}),
-				discord.NewStringSelectMenuOption("Selected by bad reputation", models.SortByReputation).
-					WithDefault(b.settings.UserDefaultSort == models.SortByReputation).
+				discord.NewStringSelectMenuOption("Selected by bad reputation", string(types.SortByReputation)).
+					WithDefault(b.settings.UserDefaultSort == types.SortByReputation).
 					WithEmoji(discord.ComponentEmoji{Name: "👎"}),
 			),
 		),
@@ -281,7 +281,7 @@ func (b *ReviewBuilder) buildComponents() []discord.ContainerComponent {
 
 // getConfirmButtonLabel returns the appropriate label for the confirm button based on review mode.
 func (b *ReviewBuilder) getConfirmButtonLabel() string {
-	if b.settings.ReviewMode == models.TrainingReviewMode {
+	if b.settings.ReviewMode == types.TrainingReviewMode {
 		return "Downvote"
 	}
 	return "Confirm"
@@ -289,7 +289,7 @@ func (b *ReviewBuilder) getConfirmButtonLabel() string {
 
 // getClearButtonLabel returns the appropriate label for the clear button based on review mode.
 func (b *ReviewBuilder) getClearButtonLabel() string {
-	if b.settings.ReviewMode == models.TrainingReviewMode {
+	if b.settings.ReviewMode == types.TrainingReviewMode {
 		return "Upvote"
 	}
 	return "Clear"
@@ -371,11 +371,11 @@ func (b *ReviewBuilder) getFlaggedContent() string {
 func (b *ReviewBuilder) getReviewHistory() string {
 	logs, nextCursor, err := b.db.UserActivity().GetLogs(
 		context.Background(),
-		models.ActivityFilter{
+		types.ActivityFilter{
 			UserID:       b.user.ID,
 			GroupID:      0,
 			ReviewerID:   0,
-			ActivityType: models.ActivityTypeAll,
+			ActivityType: types.ActivityTypeAll,
 			StartDate:    time.Time{},
 			EndDate:      time.Time{},
 		},
@@ -406,7 +406,7 @@ func (b *ReviewBuilder) getReviewHistory() string {
 // getFriends returns the friends field for the embed.
 func (b *ReviewBuilder) getFriends() string {
 	friends := make([]string, 0, constants.ReviewFriendsLimit)
-	isTraining := b.settings.ReviewMode == models.TrainingReviewMode
+	isTraining := b.settings.ReviewMode == types.TrainingReviewMode
 
 	for i, friend := range b.user.Friends {
 		if i >= constants.ReviewFriendsLimit {
@@ -440,7 +440,7 @@ func (b *ReviewBuilder) getFriends() string {
 // getGroups returns the groups field for the embed.
 func (b *ReviewBuilder) getGroups() string {
 	groups := make([]string, 0, constants.ReviewGroupsLimit)
-	isTraining := b.settings.ReviewMode == models.TrainingReviewMode
+	isTraining := b.settings.ReviewMode == types.TrainingReviewMode
 
 	for i, group := range b.user.Groups {
 		if i >= constants.ReviewGroupsLimit {
@@ -480,7 +480,7 @@ func (b *ReviewBuilder) getGames() string {
 
 	// Format games list with visit counts
 	games := make([]string, 0, constants.ReviewGamesLimit)
-	isTraining := b.settings.ReviewMode == models.TrainingReviewMode
+	isTraining := b.settings.ReviewMode == types.TrainingReviewMode
 
 	for i, game := range b.user.Games {
 		if i >= constants.ReviewGamesLimit {
@@ -541,9 +541,9 @@ func (b *ReviewBuilder) getFriendsField() string {
 		confirmedCount := 0
 		flaggedCount := 0
 		for _, friendType := range b.friendTypes {
-			if friendType == models.UserTypeConfirmed {
+			if friendType == types.UserTypeConfirmed {
 				confirmedCount++
-			} else if friendType == models.UserTypeFlagged {
+			} else if friendType == types.UserTypeFlagged {
 				flaggedCount++
 			}
 		}

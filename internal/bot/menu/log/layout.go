@@ -8,7 +8,7 @@ import (
 	"github.com/rotector/rotector/internal/bot/core/session"
 	"github.com/rotector/rotector/internal/bot/interfaces"
 	"github.com/rotector/rotector/internal/common/storage/database"
-	"github.com/rotector/rotector/internal/common/storage/database/models"
+	"github.com/rotector/rotector/internal/common/storage/database/types"
 	"go.uber.org/zap"
 )
 
@@ -55,16 +55,16 @@ func (l *Layout) Show(event interfaces.CommonEvent, s *session.Session) {
 
 // ResetFilters resets all log filters to their default values in the given session.
 func (l *Layout) ResetFilters(s *session.Session) {
-	s.Set(constants.SessionKeyLogs, []*models.UserActivityLog{})
+	s.Set(constants.SessionKeyLogs, []*types.UserActivityLog{})
 	s.Set(constants.SessionKeyUserIDFilter, uint64(0))
 	s.Set(constants.SessionKeyGroupIDFilter, uint64(0))
 	s.Set(constants.SessionKeyReviewerIDFilter, uint64(0))
-	s.Set(constants.SessionKeyActivityTypeFilter, models.ActivityTypeAll)
+	s.Set(constants.SessionKeyActivityTypeFilter, types.ActivityTypeAll)
 	s.Set(constants.SessionKeyDateRangeStartFilter, time.Time{})
 	s.Set(constants.SessionKeyDateRangeEndFilter, time.Time{})
 	s.Set(constants.SessionKeyCursor, nil)
 	s.Set(constants.SessionKeyNextCursor, nil)
-	s.Set(constants.SessionKeyPrevCursors, []*models.LogCursor{})
+	s.Set(constants.SessionKeyPrevCursors, []*types.LogCursor{})
 	s.Set(constants.SessionKeyHasNextPage, false)
 	s.Set(constants.SessionKeyHasPrevPage, false)
 }

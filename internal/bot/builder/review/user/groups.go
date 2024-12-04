@@ -7,20 +7,20 @@ import (
 	"strings"
 
 	"github.com/disgoorg/disgo/discord"
-	"github.com/jaxron/roapi.go/pkg/api/types"
+	apiTypes "github.com/jaxron/roapi.go/pkg/api/types"
 	"github.com/rotector/rotector/internal/bot/constants"
 	"github.com/rotector/rotector/internal/bot/core/session"
 	"github.com/rotector/rotector/internal/bot/utils"
-	"github.com/rotector/rotector/internal/common/storage/database/models"
+	"github.com/rotector/rotector/internal/common/storage/database/types"
 )
 
 // GroupsBuilder creates the visual layout for viewing a user's groups.
 // It combines group information with flagged status indicators and
 // supports pagination through a grid of group thumbnails.
 type GroupsBuilder struct {
-	settings      *models.UserSetting
-	user          *models.FlaggedUser
-	groups        []types.UserGroupRoles
+	settings      *types.UserSetting
+	user          *types.FlaggedUser
+	groups        []apiTypes.UserGroupRoles
 	flaggedGroups map[uint64]bool
 	start         int
 	page          int
@@ -30,11 +30,11 @@ type GroupsBuilder struct {
 
 // NewGroupsBuilder creates a new groups builder.
 func NewGroupsBuilder(s *session.Session) *GroupsBuilder {
-	var settings *models.UserSetting
+	var settings *types.UserSetting
 	s.GetInterface(constants.SessionKeyUserSettings, &settings)
-	var user *models.FlaggedUser
+	var user *types.FlaggedUser
 	s.GetInterface(constants.SessionKeyTarget, &user)
-	var groups []types.UserGroupRoles
+	var groups []apiTypes.UserGroupRoles
 	s.GetInterface(constants.SessionKeyGroups, &groups)
 	var flaggedGroups map[uint64]bool
 	s.GetInterface(constants.SessionKeyFlaggedGroups, &flaggedGroups)
@@ -67,7 +67,7 @@ func (b *GroupsBuilder) Build() *discord.MessageUpdateBuilder {
 	file := discord.NewFile(fileName, "", b.imageBuffer)
 
 	// Build embed with user info and thumbnails
-	censor := b.settings.StreamerMode || b.settings.ReviewMode == models.TrainingReviewMode
+	censor := b.settings.StreamerMode || b.settings.ReviewMode == types.TrainingReviewMode
 	embed := discord.NewEmbedBuilder().
 		SetTitle(fmt.Sprintf("User Groups (Page %d/%d)", b.page+1, totalPages)).
 		SetDescription(fmt.Sprintf(
@@ -105,7 +105,7 @@ func (b *GroupsBuilder) Build() *discord.MessageUpdateBuilder {
 
 		// Format group information based on mode
 		var info string
-		if b.settings.ReviewMode == models.TrainingReviewMode {
+		if b.settings.ReviewMode == types.TrainingReviewMode {
 			info = utils.CensorString(group.Group.Name, true) + "\n"
 		} else {
 			info = fmt.Sprintf(
@@ -122,7 +122,7 @@ func (b *GroupsBuilder) Build() *discord.MessageUpdateBuilder {
 		)
 
 		// Add owner information based on mode
-		if b.settings.ReviewMode == models.TrainingReviewMode {
+		if b.settings.ReviewMode == types.TrainingReviewMode {
 			info += fmt.Sprintf("👑 Owner: %s\n",
 				utils.CensorString(group.Group.Owner.Username, true))
 		} else {

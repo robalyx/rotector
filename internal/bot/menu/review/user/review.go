@@ -13,7 +13,7 @@ import (
 	"github.com/rotector/rotector/internal/bot/core/session"
 	"github.com/rotector/rotector/internal/bot/interfaces"
 	"github.com/rotector/rotector/internal/common/queue"
-	"github.com/rotector/rotector/internal/common/storage/database/models"
+	"github.com/rotector/rotector/internal/common/storage/database/types"
 	"go.uber.org/zap"
 )
 
@@ -42,14 +42,14 @@ func NewReviewMenu(layout *Layout) *ReviewMenu {
 
 // Show prepares and displays the review interface.
 func (m *ReviewMenu) Show(event interfaces.CommonEvent, s *session.Session, content string) {
-	var settings *models.BotSetting
+	var settings *types.BotSetting
 	s.GetInterface(constants.SessionKeyBotSettings, &settings)
-	var userSettings *models.UserSetting
+	var userSettings *types.UserSetting
 	s.GetInterface(constants.SessionKeyUserSettings, &userSettings)
 
 	// Force training mode if user is not a reviewer
-	if !settings.IsReviewer(uint64(event.User().ID)) && userSettings.ReviewMode != models.TrainingReviewMode {
-		userSettings.ReviewMode = models.TrainingReviewMode
+	if !settings.IsReviewer(uint64(event.User().ID)) && userSettings.ReviewMode != types.TrainingReviewMode {
+		userSettings.ReviewMode = types.TrainingReviewMode
 		if err := m.layout.db.Settings().SaveUserSettings(context.Background(), userSettings); err != nil {
 			m.layout.logger.Error("Failed to enforce training mode", zap.Error(err))
 			m.layout.paginationManager.RespondWithError(event, "Failed to enforce training mode. Please try again.")
@@ -58,7 +58,7 @@ func (m *ReviewMenu) Show(event interfaces.CommonEvent, s *session.Session, cont
 		s.Set(constants.SessionKeyUserSettings, userSettings)
 	}
 
-	var user *models.ConfirmedUser
+	var user *types.ConfirmedUser
 	s.GetInterface(constants.SessionKeyTarget, &user)
 
 	// If no user is set in session, fetch a new one
@@ -73,8 +73,8 @@ func (m *ReviewMenu) Show(event interfaces.CommonEvent, s *session.Session, cont
 	}
 
 	// Check friend status and get friend data by looking up each friend in the database
-	flaggedFriends := make(map[uint64]*models.User)
-	friendTypes := make(map[uint64]string)
+	flaggedFriends := make(map[uint64]*types.User)
+	friendTypes := make(map[uint64]types.UserType)
 	if len(user.Friends) > 0 {
 		// Extract friend IDs for batch lookup
 		friendIDs := make([]uint64, len(user.Friends))
@@ -84,7 +84,11 @@ func (m *ReviewMenu) Show(event interfaces.CommonEvent, s *session.Session, cont
 
 		// Get full user data and types for friends that exist in the database
 		var err error
-		flaggedFriends, friendTypes, err = m.layout.db.Users().GetUsersByIDs(context.Background(), friendIDs)
+		flaggedFriends, friendTypes, err = m.layout.db.Users().GetUsersByIDs(context.Background(), friendIDs, types.UserFields{
+			Basic:      true,
+			Reason:     true,
+			Confidence: true,
+		})
 		if err != nil {
 			m.layout.logger.Error("Failed to get friend data", zap.Error(err))
 			return
@@ -111,11 +115,11 @@ func (m *ReviewMenu) handleSelectMenu(event *events.ComponentInteractionCreate, 
 // handleSortOrderSelection processes sort order menu selections.
 func (m *ReviewMenu) handleSortOrderSelection(event *events.ComponentInteractionCreate, s *session.Session, option string) {
 	// Retrieve user settings from session
-	var settings *models.UserSetting
+	var settings *types.UserSetting
 	s.GetInterface(constants.SessionKeyUserSettings, &settings)
 
 	// Update user's default sort preference
-	settings.UserDefaultSort = option
+	settings.UserDefaultSort = types.SortBy(option)
 	if err := m.layout.db.Settings().SaveUserSettings(context.Background(), settings); err != nil {
 		m.layout.logger.Error("Failed to save user settings", zap.Error(err))
 		m.layout.paginationManager.RespondWithError(event, "Failed to save sort order. Please try again.")
@@ -128,7 +132,7 @@ func (m *ReviewMenu) handleSortOrderSelection(event *events.ComponentInteraction
 // handleActionSelection processes action menu selections.
 func (m *ReviewMenu) handleActionSelection(event *events.ComponentInteractionCreate, s *session.Session, option string) {
 	// Get bot settings to check reviewer status
-	var settings *models.BotSetting
+	var settings *types.BotSetting
 	s.GetInterface(constants.SessionKeyBotSettings, &settings)
 	userID := uint64(event.User().ID)
 
@@ -217,7 +221,7 @@ func (m *ReviewMenu) handleModal(event *events.ModalSubmitInteractionCreate, s *
 // handleRecheck adds the user to the high priority queue for re-processing.
 // If the user is already in queue, it shows the status menu instead.
 func (m *ReviewMenu) handleRecheck(event *events.ComponentInteractionCreate, s *session.Session) {
-	var user *models.FlaggedUser
+	var user *types.FlaggedUser
 	s.GetInterface(constants.SessionKeyTarget, &user)
 
 	// Check if user is already in queue to prevent duplicate entries
@@ -248,9 +252,9 @@ func (m *ReviewMenu) handleRecheck(event *events.ComponentInteractionCreate, s *
 // handleRecheckModalSubmit processes the custom recheck reason from the modal
 // and performs the recheck with the provided reason.
 func (m *ReviewMenu) handleRecheckModalSubmit(event *events.ModalSubmitInteractionCreate, s *session.Session) {
-	var user *models.FlaggedUser
+	var user *types.FlaggedUser
 	s.GetInterface(constants.SessionKeyTarget, &user)
-	var settings *models.UserSetting
+	var settings *types.UserSetting
 	s.GetInterface(constants.SessionKeyUserSettings, &settings)
 
 	// Get and validate the recheck reason
@@ -262,7 +266,7 @@ func (m *ReviewMenu) handleRecheckModalSubmit(event *events.ModalSubmitInteracti
 
 	// Determine priority based on review mode
 	priority := queue.HighPriority
-	if settings.ReviewMode == models.TrainingReviewMode {
+	if settings.ReviewMode == types.TrainingReviewMode {
 		priority = queue.LowPriority
 	}
 
@@ -303,7 +307,7 @@ func (m *ReviewMenu) handleRecheckModalSubmit(event *events.ModalSubmitInteracti
 // handleViewUserLogs handles the shortcut to view user logs.
 // It stores the user ID in session for log filtering and shows the logs menu.
 func (m *ReviewMenu) handleViewUserLogs(event *events.ComponentInteractionCreate, s *session.Session) {
-	var user *models.FlaggedUser
+	var user *types.FlaggedUser
 	s.GetInterface(constants.SessionKeyTarget, &user)
 	if user == nil {
 		m.layout.paginationManager.RespondWithError(event, "No user selected to view logs.")
@@ -321,14 +325,14 @@ func (m *ReviewMenu) handleViewUserLogs(event *events.ComponentInteractionCreate
 // handleConfirmUser moves a user to the confirmed state and logs the action.
 // After confirming, it loads a new user for review.
 func (m *ReviewMenu) handleConfirmUser(event interfaces.CommonEvent, s *session.Session) {
-	var user *models.FlaggedUser
+	var user *types.FlaggedUser
 	s.GetInterface(constants.SessionKeyTarget, &user)
 
-	var settings *models.UserSetting
+	var settings *types.UserSetting
 	s.GetInterface(constants.SessionKeyUserSettings, &settings)
 
 	var actionMsg string
-	if settings.ReviewMode == models.TrainingReviewMode {
+	if settings.ReviewMode == types.TrainingReviewMode {
 		// Training mode - increment downvotes
 		if err := m.layout.db.Users().UpdateTrainingVotes(context.Background(), user.ID, false); err != nil {
 			m.layout.paginationManager.RespondWithError(event, "Failed to update downvotes. Please try again.")
@@ -338,12 +342,12 @@ func (m *ReviewMenu) handleConfirmUser(event interfaces.CommonEvent, s *session.
 		actionMsg = "downvoted"
 
 		// Log the training downvote action
-		go m.layout.db.UserActivity().LogActivity(context.Background(), &models.UserActivityLog{
-			ActivityTarget: models.ActivityTarget{
+		go m.layout.db.UserActivity().Log(context.Background(), &types.UserActivityLog{
+			ActivityTarget: types.ActivityTarget{
 				UserID: user.ID,
 			},
 			ReviewerID:        uint64(event.User().ID),
-			ActivityType:      models.ActivityTypeUserTrainingDownvote,
+			ActivityType:      types.ActivityTypeUserTrainingDownvote,
 			ActivityTimestamp: time.Now(),
 			Details: map[string]interface{}{
 				"upvotes":   user.Upvotes,
@@ -360,12 +364,12 @@ func (m *ReviewMenu) handleConfirmUser(event interfaces.CommonEvent, s *session.
 		actionMsg = "confirmed"
 
 		// Log the confirm action
-		go m.layout.db.UserActivity().LogActivity(context.Background(), &models.UserActivityLog{
-			ActivityTarget: models.ActivityTarget{
+		go m.layout.db.UserActivity().Log(context.Background(), &types.UserActivityLog{
+			ActivityTarget: types.ActivityTarget{
 				UserID: user.ID,
 			},
 			ReviewerID:        uint64(event.User().ID),
-			ActivityType:      models.ActivityTypeUserConfirmed,
+			ActivityType:      types.ActivityTypeUserConfirmed,
 			ActivityTimestamp: time.Now(),
 			Details:           map[string]interface{}{"reason": user.Reason},
 		})
@@ -385,14 +389,14 @@ func (m *ReviewMenu) handleConfirmUser(event interfaces.CommonEvent, s *session.
 // handleClearUser removes a user from the flagged state and logs the action.
 // After clearing, it loads a new user for review.
 func (m *ReviewMenu) handleClearUser(event interfaces.CommonEvent, s *session.Session) {
-	var user *models.FlaggedUser
+	var user *types.FlaggedUser
 	s.GetInterface(constants.SessionKeyTarget, &user)
 
-	var settings *models.UserSetting
+	var settings *types.UserSetting
 	s.GetInterface(constants.SessionKeyUserSettings, &settings)
 
 	var actionMsg string
-	if settings.ReviewMode == models.TrainingReviewMode {
+	if settings.ReviewMode == types.TrainingReviewMode {
 		// Training mode - increment upvotes
 		if err := m.layout.db.Users().UpdateTrainingVotes(context.Background(), user.ID, true); err != nil {
 			m.layout.paginationManager.RespondWithError(event, "Failed to update upvotes. Please try again.")
@@ -402,12 +406,12 @@ func (m *ReviewMenu) handleClearUser(event interfaces.CommonEvent, s *session.Se
 		actionMsg = "upvoted"
 
 		// Log the training upvote action
-		go m.layout.db.UserActivity().LogActivity(context.Background(), &models.UserActivityLog{
-			ActivityTarget: models.ActivityTarget{
+		go m.layout.db.UserActivity().Log(context.Background(), &types.UserActivityLog{
+			ActivityTarget: types.ActivityTarget{
 				UserID: user.ID,
 			},
 			ReviewerID:        uint64(event.User().ID),
-			ActivityType:      models.ActivityTypeUserTrainingUpvote,
+			ActivityType:      types.ActivityTypeUserTrainingUpvote,
 			ActivityTimestamp: time.Now(),
 			Details: map[string]interface{}{
 				"upvotes":   user.Upvotes,
@@ -424,12 +428,12 @@ func (m *ReviewMenu) handleClearUser(event interfaces.CommonEvent, s *session.Se
 		actionMsg = "cleared"
 
 		// Log the clear action
-		go m.layout.db.UserActivity().LogActivity(context.Background(), &models.UserActivityLog{
-			ActivityTarget: models.ActivityTarget{
+		go m.layout.db.UserActivity().Log(context.Background(), &types.UserActivityLog{
+			ActivityTarget: types.ActivityTarget{
 				UserID: user.ID,
 			},
 			ReviewerID:        uint64(event.User().ID),
-			ActivityType:      models.ActivityTypeUserCleared,
+			ActivityType:      types.ActivityTypeUserCleared,
 			ActivityTimestamp: time.Now(),
 			Details:           make(map[string]interface{}),
 		})
@@ -449,16 +453,16 @@ func (m *ReviewMenu) handleClearUser(event interfaces.CommonEvent, s *session.Se
 // handleSkipUser logs the skip action and moves to the next user without
 // changing the current user's status.
 func (m *ReviewMenu) handleSkipUser(event interfaces.CommonEvent, s *session.Session) {
-	var user *models.FlaggedUser
+	var user *types.FlaggedUser
 	s.GetInterface(constants.SessionKeyTarget, &user)
 
 	// Log the skip action asynchronously
-	go m.layout.db.UserActivity().LogActivity(context.Background(), &models.UserActivityLog{
-		ActivityTarget: models.ActivityTarget{
+	go m.layout.db.UserActivity().Log(context.Background(), &types.UserActivityLog{
+		ActivityTarget: types.ActivityTarget{
 			UserID: user.ID,
 		},
 		ReviewerID:        uint64(event.User().ID),
-		ActivityType:      models.ActivityTypeUserSkipped,
+		ActivityType:      types.ActivityTypeUserSkipped,
 		ActivityTimestamp: time.Now(),
 		Details:           make(map[string]interface{}),
 	})
@@ -477,7 +481,7 @@ func (m *ReviewMenu) handleSkipUser(event interfaces.CommonEvent, s *session.Ses
 // handleConfirmWithReason opens a modal for entering a custom confirm reason.
 // The modal pre-fills with the current reason if one exists.
 func (m *ReviewMenu) handleConfirmWithReason(event *events.ComponentInteractionCreate, s *session.Session) {
-	var user *models.FlaggedUser
+	var user *types.FlaggedUser
 	s.GetInterface(constants.SessionKeyTarget, &user)
 
 	// Create modal with pre-filled reason field
@@ -502,7 +506,7 @@ func (m *ReviewMenu) handleConfirmWithReason(event *events.ComponentInteractionC
 // handleConfirmWithReasonModalSubmit processes the custom confirm reason from the modal
 // and performs the confirm with the provided reason.
 func (m *ReviewMenu) handleConfirmWithReasonModalSubmit(event *events.ModalSubmitInteractionCreate, s *session.Session) {
-	var user *models.FlaggedUser
+	var user *types.FlaggedUser
 	s.GetInterface(constants.SessionKeyTarget, &user)
 
 	// Get and validate the confirm reason
@@ -523,12 +527,12 @@ func (m *ReviewMenu) handleConfirmWithReasonModalSubmit(event *events.ModalSubmi
 	}
 
 	// Log the custom confirm action asynchronously
-	go m.layout.db.UserActivity().LogActivity(context.Background(), &models.UserActivityLog{
-		ActivityTarget: models.ActivityTarget{
+	go m.layout.db.UserActivity().Log(context.Background(), &types.UserActivityLog{
+		ActivityTarget: types.ActivityTarget{
 			UserID: user.ID,
 		},
 		ReviewerID:        uint64(event.User().ID),
-		ActivityType:      models.ActivityTypeUserConfirmedCustom,
+		ActivityType:      types.ActivityTypeUserConfirmedCustom,
 		ActivityTimestamp: time.Now(),
 		Details:           map[string]interface{}{"reason": user.Reason},
 	})
@@ -540,14 +544,14 @@ func (m *ReviewMenu) handleConfirmWithReasonModalSubmit(event *events.ModalSubmi
 
 // handleSwitchReviewMode switches between training and standard review modes.
 func (m *ReviewMenu) handleSwitchReviewMode(event *events.ComponentInteractionCreate, s *session.Session) {
-	var settings *models.UserSetting
+	var settings *types.UserSetting
 	s.GetInterface(constants.SessionKeyUserSettings, &settings)
 
 	// Toggle between modes
-	if settings.ReviewMode == models.TrainingReviewMode {
-		settings.ReviewMode = models.StandardReviewMode
+	if settings.ReviewMode == types.TrainingReviewMode {
+		settings.ReviewMode = types.StandardReviewMode
 	} else {
-		settings.ReviewMode = models.TrainingReviewMode
+		settings.ReviewMode = types.TrainingReviewMode
 	}
 
 	// Save the updated setting
@@ -559,19 +563,19 @@ func (m *ReviewMenu) handleSwitchReviewMode(event *events.ComponentInteractionCr
 
 	// Update session and refresh the menu
 	s.Set(constants.SessionKeyUserSettings, settings)
-	m.Show(event, s, "Switched to "+models.FormatReviewMode(settings.ReviewMode))
+	m.Show(event, s, "Switched to "+settings.ReviewMode.FormatDisplay())
 }
 
 // handleSwitchTargetMode switches between reviewing flagged items and re-reviewing confirmed items.
 func (m *ReviewMenu) handleSwitchTargetMode(event *events.ComponentInteractionCreate, s *session.Session) {
-	var settings *models.UserSetting
+	var settings *types.UserSetting
 	s.GetInterface(constants.SessionKeyUserSettings, &settings)
 
 	// Toggle between modes
-	if settings.ReviewTargetMode == models.FlaggedReviewTarget {
-		settings.ReviewTargetMode = models.ConfirmedReviewTarget
+	if settings.ReviewTargetMode == types.FlaggedReviewTarget {
+		settings.ReviewTargetMode = types.ConfirmedReviewTarget
 	} else {
-		settings.ReviewTargetMode = models.FlaggedReviewTarget
+		settings.ReviewTargetMode = types.FlaggedReviewTarget
 	}
 
 	// Save the updated setting
@@ -583,12 +587,12 @@ func (m *ReviewMenu) handleSwitchTargetMode(event *events.ComponentInteractionCr
 
 	// Update session and refresh the menu
 	s.Set(constants.SessionKeyUserSettings, settings)
-	m.Show(event, s, "Switched to "+models.FormatReviewTargetMode(settings.ReviewTargetMode))
+	m.Show(event, s, "Switched to "+settings.ReviewTargetMode.FormatDisplay())
 }
 
 // fetchNewTarget gets a new user to review based on the current sort order.
-func (m *ReviewMenu) fetchNewTarget(s *session.Session, reviewerID uint64) (*models.ConfirmedUser, error) {
-	var settings *models.UserSetting
+func (m *ReviewMenu) fetchNewTarget(s *session.Session, reviewerID uint64) (*types.ConfirmedUser, error) {
+	var settings *types.UserSetting
 	s.GetInterface(constants.SessionKeyUserSettings, &settings)
 
 	// Get the sort order from user settings
@@ -604,12 +608,12 @@ func (m *ReviewMenu) fetchNewTarget(s *session.Session, reviewerID uint64) (*mod
 	s.Set(constants.SessionKeyTarget, user)
 
 	// Log the view action asynchronously
-	go m.layout.db.UserActivity().LogActivity(context.Background(), &models.UserActivityLog{
-		ActivityTarget: models.ActivityTarget{
+	go m.layout.db.UserActivity().Log(context.Background(), &types.UserActivityLog{
+		ActivityTarget: types.ActivityTarget{
 			UserID: user.ID,
 		},
 		ReviewerID:        reviewerID,
-		ActivityType:      models.ActivityTypeUserViewed,
+		ActivityType:      types.ActivityTypeUserViewed,
 		ActivityTimestamp: time.Now(),
 		Details:           make(map[string]interface{}),
 	})
@@ -620,7 +624,7 @@ func (m *ReviewMenu) fetchNewTarget(s *session.Session, reviewerID uint64) (*mod
 // checkLastViewed checks if the current target user has timed out and needs to be refreshed.
 // Clears the current user and loads a new one if the timeout is detected.
 func (m *ReviewMenu) checkLastViewed(event interfaces.CommonEvent, s *session.Session) bool {
-	var user *models.FlaggedUser
+	var user *types.FlaggedUser
 	s.GetInterface(constants.SessionKeyTarget, &user)
 
 	// Check if more than 10 minutes have passed since last view

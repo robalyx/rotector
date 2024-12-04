@@ -6,20 +6,20 @@ import (
 	"strconv"
 
 	"github.com/disgoorg/disgo/discord"
-	"github.com/jaxron/roapi.go/pkg/api/types"
+	apiTypes "github.com/jaxron/roapi.go/pkg/api/types"
 	"github.com/rotector/rotector/internal/bot/constants"
 	"github.com/rotector/rotector/internal/bot/core/session"
 	"github.com/rotector/rotector/internal/bot/utils"
-	"github.com/rotector/rotector/internal/common/storage/database/models"
+	"github.com/rotector/rotector/internal/common/storage/database/types"
 )
 
 // OutfitsBuilder creates the visual layout for viewing a user's outfits.
 // It combines outfit information with thumbnails and supports pagination
 // through a grid of outfit previews.
 type OutfitsBuilder struct {
-	settings    *models.UserSetting
-	user        *models.FlaggedUser
-	outfits     []types.Outfit
+	settings    *types.UserSetting
+	user        *types.FlaggedUser
+	outfits     []apiTypes.Outfit
 	start       int
 	page        int
 	total       int
@@ -28,11 +28,11 @@ type OutfitsBuilder struct {
 
 // NewOutfitsBuilder creates a new outfits builder.
 func NewOutfitsBuilder(s *session.Session) *OutfitsBuilder {
-	var settings *models.UserSetting
+	var settings *types.UserSetting
 	s.GetInterface(constants.SessionKeyUserSettings, &settings)
-	var user *models.FlaggedUser
+	var user *types.FlaggedUser
 	s.GetInterface(constants.SessionKeyTarget, &user)
-	var outfits []types.Outfit
+	var outfits []apiTypes.Outfit
 	s.GetInterface(constants.SessionKeyOutfits, &outfits)
 
 	return &OutfitsBuilder{
@@ -59,7 +59,7 @@ func (b *OutfitsBuilder) Build() *discord.MessageUpdateBuilder {
 	file := discord.NewFile(fileName, "", b.imageBuffer)
 
 	// Build embed with user info and thumbnails
-	censor := b.settings.StreamerMode || b.settings.ReviewMode == models.TrainingReviewMode
+	censor := b.settings.StreamerMode || b.settings.ReviewMode == types.TrainingReviewMode
 	embed := discord.NewEmbedBuilder().
 		SetTitle(fmt.Sprintf("User Outfits (Page %d/%d)", b.page+1, totalPages)).
 		SetDescription(fmt.Sprintf("```%s (%s)```",

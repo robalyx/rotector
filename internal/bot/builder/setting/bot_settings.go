@@ -4,18 +4,18 @@ import (
 	"github.com/disgoorg/disgo/discord"
 	"github.com/rotector/rotector/internal/bot/constants"
 	"github.com/rotector/rotector/internal/bot/core/session"
-	"github.com/rotector/rotector/internal/common/storage/database/models"
+	"github.com/rotector/rotector/internal/common/storage/database/types"
 )
 
 // BotSettingsBuilder creates the visual layout for bot settings.
 type BotSettingsBuilder struct {
-	settings *models.BotSetting
-	registry *models.SettingRegistry
+	settings *types.BotSetting
+	registry *Registry
 }
 
 // NewBotSettingsBuilder creates a new bot settings builder.
-func NewBotSettingsBuilder(s *session.Session, r *models.SettingRegistry) *BotSettingsBuilder {
-	var settings *models.BotSetting
+func NewBotSettingsBuilder(s *session.Session, r *Registry) *BotSettingsBuilder {
+	var settings *types.BotSetting
 	s.GetInterface(constants.SessionKeyBotSettings, &settings)
 
 	return &BotSettingsBuilder{

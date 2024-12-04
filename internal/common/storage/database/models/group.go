@@ -5,56 +5,10 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/jaxron/roapi.go/pkg/api/types"
+	"github.com/rotector/rotector/internal/common/storage/database/types"
 	"github.com/uptrace/bun"
 	"go.uber.org/zap"
 )
-
-// Group combines all the information needed to review a group.
-type Group struct {
-	ID             uint64            `bun:",pk"           json:"id"`
-	Name           string            `bun:",notnull"      json:"name"`
-	Description    string            `bun:",notnull"      json:"description"`
-	Owner          uint64            `bun:",notnull"      json:"owner"`
-	Shout          *types.GroupShout `bun:"type:jsonb"    json:"shout"`
-	MemberCount    uint64            `bun:",notnull"      json:"memberCount"`
-	Reason         string            `bun:",notnull"      json:"reason"`
-	Confidence     float64           `bun:",notnull"      json:"confidence"`
-	LastScanned    time.Time         `bun:",notnull"      json:"lastScanned"`
-	LastUpdated    time.Time         `bun:",notnull"      json:"lastUpdated"`
-	LastViewed     time.Time         `bun:",notnull"      json:"lastViewed"`
-	LastPurgeCheck time.Time         `bun:",notnull"      json:"lastPurgeCheck"`
-	ThumbnailURL   string            `bun:",notnull"      json:"thumbnailUrl"`
-	Upvotes        int               `bun:",notnull"      json:"upvotes"`
-	Downvotes      int               `bun:",notnull"      json:"downvotes"`
-	Reputation     int               `bun:",notnull"      json:"reputation"`
-	FlaggedUsers   []uint64          `bun:"type:bigint[]" json:"flaggedUsers"`
-}
-
-// FlaggedGroup extends Group to track groups that need review.
-type FlaggedGroup struct {
-	Group
-}
-
-// ConfirmedGroup extends Group to track groups that have been reviewed and confirmed.
-type ConfirmedGroup struct {
-	Group
-	VerifiedAt time.Time `bun:",notnull" json:"verifiedAt"`
-}
-
-// ClearedGroup extends Group to track groups that were cleared during review.
-// The ClearedAt field shows when the group was cleared by a moderator.
-type ClearedGroup struct {
-	Group
-	ClearedAt time.Time `bun:",notnull" json:"clearedAt"`
-}
-
-// LockedGroup extends Group to track groups that were locked and removed.
-// The LockedAt field shows when the group was found to be locked.
-type LockedGroup struct {
-	Group
-	LockedAt time.Time `bun:",notnull" json:"lockedAt"`
-}
 
 // GroupModel handles database operations for group records.
 type GroupModel struct {
@@ -76,7 +30,7 @@ func NewGroup(db *bun.DB, logger *zap.Logger) *GroupModel {
 func (r *GroupModel) CheckConfirmedGroups(ctx context.Context, groupIDs []uint64) ([]uint64, error) {
 	var confirmedGroupIDs []uint64
 	err := r.db.NewSelect().
-		Model((*ConfirmedGroup)(nil)).
+		Model((*types.ConfirmedGroup)(nil)).
 		Column("id").
 		Where("id IN (?)", bun.In(groupIDs)).
 		Scan(ctx, &confirmedGroupIDs)
@@ -95,7 +49,7 @@ func (r *GroupModel) CheckConfirmedGroups(ctx context.Context, groupIDs []uint64
 // SaveFlaggedGroups adds or updates groups in the flagged_groups table.
 // For each group, it updates all fields if the group already exists,
 // or inserts a new record if they don't.
-func (r *GroupModel) SaveFlaggedGroups(ctx context.Context, flaggedGroups []*FlaggedGroup) {
+func (r *GroupModel) SaveFlaggedGroups(ctx context.Context, flaggedGroups []*types.FlaggedGroup) {
 	r.logger.Debug("Saving flagged groups", zap.Int("count", len(flaggedGroups)))
 
 	for _, flaggedGroup := range flaggedGroups {
@@ -143,9 +97,9 @@ func (r *GroupModel) SaveFlaggedGroups(ctx context.Context, flaggedGroups []*Fla
 
 // ConfirmGroup moves a group from flagged_groups to confirmed_groups.
 // This happens when a moderator confirms that a group is inappropriate.
-func (r *GroupModel) ConfirmGroup(ctx context.Context, group *FlaggedGroup) error {
+func (r *GroupModel) ConfirmGroup(ctx context.Context, group *types.FlaggedGroup) error {
 	return r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
-		confirmedGroup := &ConfirmedGroup{
+		confirmedGroup := &types.ConfirmedGroup{
 			Group:      group.Group,
 			VerifiedAt: time.Now(),
 		}
@@ -173,7 +127,7 @@ func (r *GroupModel) ConfirmGroup(ctx context.Context, group *FlaggedGroup) erro
 			return err
 		}
 
-		_, err = tx.NewDelete().Model((*FlaggedGroup)(nil)).
+		_, err = tx.NewDelete().Model((*types.FlaggedGroup)(nil)).
 			Where("id = ?", group.ID).
 			Exec(ctx)
 		if err != nil {
@@ -189,9 +143,9 @@ func (r *GroupModel) ConfirmGroup(ctx context.Context, group *FlaggedGroup) erro
 
 // ClearGroup moves a group from flagged_groups to cleared_groups.
 // This happens when a moderator determines that a group was incorrectly flagged.
-func (r *GroupModel) ClearGroup(ctx context.Context, group *FlaggedGroup) error {
+func (r *GroupModel) ClearGroup(ctx context.Context, group *types.FlaggedGroup) error {
 	return r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
-		clearedGroup := &ClearedGroup{
+		clearedGroup := &types.ClearedGroup{
 			Group:     group.Group,
 			ClearedAt: time.Now(),
 		}
@@ -217,7 +171,7 @@ func (r *GroupModel) ClearGroup(ctx context.Context, group *FlaggedGroup) error 
 			return err
 		}
 
-		_, err = tx.NewDelete().Model((*FlaggedGroup)(nil)).Where("id = ?", group.ID).Exec(ctx)
+		_, err = tx.NewDelete().Model((*types.FlaggedGroup)(nil)).Where("id = ?", group.ID).Exec(ctx)
 		if err != nil {
 			r.logger.Error("Failed to delete group from flagged_groups", zap.Error(err), zap.Uint64("groupID", group.ID))
 			return err
@@ -230,8 +184,8 @@ func (r *GroupModel) ClearGroup(ctx context.Context, group *FlaggedGroup) error 
 }
 
 // GetClearedGroupByID finds a group in the cleared_groups table by their ID.
-func (r *GroupModel) GetClearedGroupByID(ctx context.Context, id uint64) (*ClearedGroup, error) {
-	var group ClearedGroup
+func (r *GroupModel) GetClearedGroupByID(ctx context.Context, id uint64) (*types.ClearedGroup, error) {
+	var group types.ClearedGroup
 	err := r.db.NewSelect().
 		Model(&group).
 		Where("id = ?", id).
@@ -247,7 +201,7 @@ func (r *GroupModel) GetClearedGroupByID(ctx context.Context, id uint64) (*Clear
 // GetClearedGroupsCount returns the total number of groups in cleared_groups.
 func (r *GroupModel) GetClearedGroupsCount(ctx context.Context) (int, error) {
 	count, err := r.db.NewSelect().
-		Model((*ClearedGroup)(nil)).
+		Model((*types.ClearedGroup)(nil)).
 		Count(ctx)
 	if err != nil {
 		r.logger.Error("Failed to get cleared groups count", zap.Error(err))
@@ -260,10 +214,10 @@ func (r *GroupModel) GetClearedGroupsCount(ctx context.Context) (int, error) {
 func (r *GroupModel) UpdateTrainingVotes(ctx context.Context, groupID uint64, isUpvote bool) error {
 	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
 		// Try to update votes in either flagged or confirmed table
-		if err := r.updateVotesInTable(ctx, tx, (*FlaggedGroup)(nil), groupID, isUpvote); err == nil {
+		if err := r.updateVotesInTable(ctx, tx, (*types.FlaggedGroup)(nil), groupID, isUpvote); err == nil {
 			return nil
 		}
-		return r.updateVotesInTable(ctx, tx, (*ConfirmedGroup)(nil), groupID, isUpvote)
+		return r.updateVotesInTable(ctx, tx, (*types.ConfirmedGroup)(nil), groupID, isUpvote)
 	})
 	if err != nil {
 		r.logger.Error("Failed to update training votes",
@@ -341,7 +295,7 @@ func (r *GroupModel) GetGroupsToCheck(ctx context.Context, limit int) ([]uint64,
 
 		// Update last_purge_check for selected groups
 		if len(groupIDs) > 0 {
-			_, err = tx.NewUpdate().Model((*ConfirmedGroup)(nil)).
+			_, err = tx.NewUpdate().Model((*types.ConfirmedGroup)(nil)).
 				Set("last_purge_check = ?", time.Now()).
 				Where("id IN (?)", bun.In(groupIDs)).
 				Exec(ctx)
@@ -350,7 +304,7 @@ func (r *GroupModel) GetGroupsToCheck(ctx context.Context, limit int) ([]uint64,
 				return err
 			}
 
-			_, err = tx.NewUpdate().Model((*FlaggedGroup)(nil)).
+			_, err = tx.NewUpdate().Model((*types.FlaggedGroup)(nil)).
 				Set("last_purge_check = ?", time.Now()).
 				Where("id IN (?)", bun.In(groupIDs)).
 				Exec(ctx)
@@ -370,7 +324,7 @@ func (r *GroupModel) GetGroupsToCheck(ctx context.Context, limit int) ([]uint64,
 // This helps maintain database size by removing groups that were cleared long ago.
 func (r *GroupModel) PurgeOldClearedGroups(ctx context.Context, cutoffDate time.Time) (int, error) {
 	result, err := r.db.NewDelete().
-		Model((*ClearedGroup)(nil)).
+		Model((*types.ClearedGroup)(nil)).
 		Where("cleared_at < ?", cutoffDate).
 		Exec(ctx)
 	if err != nil {
@@ -398,7 +352,7 @@ func (r *GroupModel) PurgeOldClearedGroups(ctx context.Context, cutoffDate time.
 func (r *GroupModel) RemoveLockedGroups(ctx context.Context, groupIDs []uint64) error {
 	return r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
 		// Move confirmed groups to locked_groups
-		var confirmedGroups []ConfirmedGroup
+		var confirmedGroups []types.ConfirmedGroup
 		err := tx.NewSelect().Model(&confirmedGroups).
 			Where("id IN (?)", bun.In(groupIDs)).
 			Scan(ctx)
@@ -408,7 +362,7 @@ func (r *GroupModel) RemoveLockedGroups(ctx context.Context, groupIDs []uint64) 
 		}
 
 		for _, group := range confirmedGroups {
-			lockedGroup := &LockedGroup{
+			lockedGroup := &types.LockedGroup{
 				Group:    group.Group,
 				LockedAt: time.Now(),
 			}
@@ -422,7 +376,7 @@ func (r *GroupModel) RemoveLockedGroups(ctx context.Context, groupIDs []uint64) 
 		}
 
 		// Move flagged groups to locked_groups
-		var flaggedGroups []FlaggedGroup
+		var flaggedGroups []types.FlaggedGroup
 		err = tx.NewSelect().Model(&flaggedGroups).
 			Where("id IN (?)", bun.In(groupIDs)).
 			Scan(ctx)
@@ -432,7 +386,7 @@ func (r *GroupModel) RemoveLockedGroups(ctx context.Context, groupIDs []uint64) 
 		}
 
 		for _, group := range flaggedGroups {
-			lockedGroup := &LockedGroup{
+			lockedGroup := &types.LockedGroup{
 				Group:    group.Group,
 				LockedAt: time.Now(),
 			}
@@ -446,7 +400,7 @@ func (r *GroupModel) RemoveLockedGroups(ctx context.Context, groupIDs []uint64) 
 		}
 
 		// Remove groups from confirmed_groups
-		_, err = tx.NewDelete().Model((*ConfirmedGroup)(nil)).
+		_, err = tx.NewDelete().Model((*types.ConfirmedGroup)(nil)).
 			Where("id IN (?)", bun.In(groupIDs)).
 			Exec(ctx)
 		if err != nil {
@@ -455,7 +409,7 @@ func (r *GroupModel) RemoveLockedGroups(ctx context.Context, groupIDs []uint64) 
 		}
 
 		// Remove groups from flagged_groups
-		_, err = tx.NewDelete().Model((*FlaggedGroup)(nil)).
+		_, err = tx.NewDelete().Model((*types.FlaggedGroup)(nil)).
 			Where("id IN (?)", bun.In(groupIDs)).
 			Exec(ctx)
 		if err != nil {
@@ -470,11 +424,11 @@ func (r *GroupModel) RemoveLockedGroups(ctx context.Context, groupIDs []uint64) 
 
 // GetGroupToScan finds the next group to scan from confirmed_groups, falling back to flagged_groups
 // if no confirmed groups are available.
-func (r *GroupModel) GetGroupToScan(ctx context.Context) (*Group, error) {
-	var group *Group
+func (r *GroupModel) GetGroupToScan(ctx context.Context) (*types.Group, error) {
+	var group *types.Group
 	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
 		// First try confirmed groups
-		var confirmedGroup ConfirmedGroup
+		var confirmedGroup types.ConfirmedGroup
 		err := tx.NewSelect().Model(&confirmedGroup).
 			Where("last_scanned IS NULL OR last_scanned < NOW() - INTERVAL '1 day'").
 			Order("last_scanned ASC NULLS FIRST").
@@ -496,7 +450,7 @@ func (r *GroupModel) GetGroupToScan(ctx context.Context) (*Group, error) {
 		}
 
 		// If no confirmed groups, try flagged groups
-		var flaggedGroup FlaggedGroup
+		var flaggedGroup types.FlaggedGroup
 		err = tx.NewSelect().Model(&flaggedGroup).
 			Where("last_scanned IS NULL OR last_scanned < NOW() - INTERVAL '1 day'").
 			Order("last_scanned ASC NULLS FIRST").
@@ -528,28 +482,28 @@ func (r *GroupModel) GetGroupToScan(ctx context.Context) (*Group, error) {
 }
 
 // GetGroupToReview finds a group to review based on the sort method and target mode.
-func (r *GroupModel) GetGroupToReview(ctx context.Context, sortBy string, targetMode string) (*ConfirmedGroup, error) {
+func (r *GroupModel) GetGroupToReview(ctx context.Context, sortBy types.SortBy, targetMode types.ReviewTargetMode) (*types.ConfirmedGroup, error) {
 	var primaryModel, fallbackModel interface{}
 
 	// Set up which models to try first and as fallback based on target mode
-	if targetMode == FlaggedReviewTarget {
-		primaryModel = &FlaggedGroup{}
-		fallbackModel = &ConfirmedGroup{}
+	if targetMode == types.FlaggedReviewTarget {
+		primaryModel = &types.FlaggedGroup{}
+		fallbackModel = &types.ConfirmedGroup{}
 	} else {
-		primaryModel = &ConfirmedGroup{}
-		fallbackModel = &FlaggedGroup{}
+		primaryModel = &types.ConfirmedGroup{}
+		fallbackModel = &types.FlaggedGroup{}
 	}
 
 	// Try primary target first
 	result, err := r.getNextToReview(ctx, primaryModel, sortBy)
 	if err == nil {
-		if flaggedGroup, ok := result.(*FlaggedGroup); ok {
-			return &ConfirmedGroup{
+		if flaggedGroup, ok := result.(*types.FlaggedGroup); ok {
+			return &types.ConfirmedGroup{
 				Group:      flaggedGroup.Group,
 				VerifiedAt: time.Time{}, // Zero time since it's not confirmed yet
 			}, nil
 		}
-		if confirmedGroup, ok := result.(*ConfirmedGroup); ok {
+		if confirmedGroup, ok := result.(*types.ConfirmedGroup); ok {
 			return confirmedGroup, nil
 		}
 	}
@@ -557,22 +511,22 @@ func (r *GroupModel) GetGroupToReview(ctx context.Context, sortBy string, target
 	// Try fallback target
 	result, err = r.getNextToReview(ctx, fallbackModel, sortBy)
 	if err == nil {
-		if flaggedGroup, ok := result.(*FlaggedGroup); ok {
-			return &ConfirmedGroup{
+		if flaggedGroup, ok := result.(*types.FlaggedGroup); ok {
+			return &types.ConfirmedGroup{
 				Group:      flaggedGroup.Group,
 				VerifiedAt: time.Time{}, // Zero time since it's not confirmed yet
 			}, nil
 		}
-		if confirmedGroup, ok := result.(*ConfirmedGroup); ok {
+		if confirmedGroup, ok := result.(*types.ConfirmedGroup); ok {
 			return confirmedGroup, nil
 		}
 	}
 
-	return nil, ErrNoGroupsToReview
+	return nil, types.ErrNoGroupsToReview
 }
 
 // getNextToReview handles the common logic for getting the next item to review.
-func (r *GroupModel) getNextToReview(ctx context.Context, model interface{}, sortBy string) (interface{}, error) {
+func (r *GroupModel) getNextToReview(ctx context.Context, model interface{}, sortBy types.SortBy) (interface{}, error) {
 	var result interface{}
 	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
 		query := tx.NewSelect().
@@ -581,17 +535,17 @@ func (r *GroupModel) getNextToReview(ctx context.Context, model interface{}, sor
 
 		// Apply sort order
 		switch sortBy {
-		case SortByConfidence:
+		case types.SortByConfidence:
 			query.Order("confidence DESC")
-		case SortByFlaggedUsers:
+		case types.SortByFlaggedUsers:
 			query.OrderExpr("array_length(flagged_users, 1) DESC")
-		case SortByReputation:
+		case types.SortByReputation:
 			query.Order("reputation ASC")
-		case SortByRandom:
+		case types.SortByRandom:
 			query.OrderExpr("RANDOM()")
 		default:
-			return fmt.Errorf("%w: %s", ErrInvalidSortBy, sortBy)
-		}
+			return fmt.Errorf("%w: %s", types.ErrInvalidSortBy, sortBy)
+		} //exhaustive:ignore
 
 		err := query.Limit(1).
 			For("UPDATE SKIP LOCKED").
@@ -604,16 +558,16 @@ func (r *GroupModel) getNextToReview(ctx context.Context, model interface{}, sor
 		now := time.Now()
 		var id uint64
 		switch m := model.(type) {
-		case *FlaggedGroup:
+		case *types.FlaggedGroup:
 			m.LastViewed = now
 			id = m.ID
 			result = m
-		case *ConfirmedGroup:
+		case *types.ConfirmedGroup:
 			m.LastViewed = now
 			id = m.ID
 			result = m
 		default:
-			return fmt.Errorf("%w: %T", ErrUnsupportedModel, model)
+			return fmt.Errorf("%w: %T", types.ErrUnsupportedModel, model)
 		}
 
 		_, err = tx.NewUpdate().

@@ -6,7 +6,7 @@ import (
 	"sync"
 
 	"github.com/jaxron/roapi.go/pkg/api"
-	"github.com/rotector/rotector/internal/common/storage/database/models"
+	"github.com/rotector/rotector/internal/common/storage/database/types"
 	"go.uber.org/zap"
 )
 
@@ -33,14 +33,14 @@ func NewFollowFetcher(roAPI *api.API, logger *zap.Logger) *FollowFetcher {
 }
 
 // AddFollowCounts fetches follow counts and returns a map of results.
-func (f *FollowFetcher) AddFollowCounts(users map[uint64]*models.User) map[uint64]*FollowFetchResult {
+func (f *FollowFetcher) AddFollowCounts(users map[uint64]*types.User) map[uint64]*FollowFetchResult {
 	var wg sync.WaitGroup
 	resultsChan := make(chan FollowFetchResult, len(users))
 
 	// Process each user concurrently
 	for _, user := range users {
 		wg.Add(1)
-		go func(u *models.User) {
+		go func(u *types.User) {
 			defer wg.Done()
 
 			// Get follower and following counts

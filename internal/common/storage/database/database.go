@@ -8,6 +8,7 @@ import (
 
 	"github.com/rotector/rotector/internal/common/config"
 	"github.com/rotector/rotector/internal/common/storage/database/models"
+	"github.com/rotector/rotector/internal/common/storage/database/types"
 	"github.com/uptrace/bun"
 	"github.com/uptrace/bun/dialect/pgdialect"
 	"github.com/uptrace/bun/driver/pgdriver"
@@ -26,7 +27,7 @@ type Client struct {
 	groups       *models.GroupModel
 	stats        *models.StatsModel
 	settings     *models.SettingModel
-	userActivity *models.UserActivityModel
+	userActivity *models.ActivityModel
 	tracking     *models.TrackingModel
 }
 
@@ -98,11 +99,11 @@ func (c *Client) createSchema() error {
 
 	// Then create other non-partitioned tables
 	models := []interface{}{
-		(*models.HourlyStats)(nil),
-		(*models.UserSetting)(nil),
-		(*models.BotSetting)(nil),
-		(*models.UserActivityLog)(nil),
-		(*models.GroupMemberTracking)(nil),
+		(*types.HourlyStats)(nil),
+		(*types.UserSetting)(nil),
+		(*types.BotSetting)(nil),
+		(*types.UserActivityLog)(nil),
+		(*types.GroupMemberTracking)(nil),
 	}
 
 	// Create tables if they don't exist
@@ -128,14 +129,14 @@ func (c *Client) createPartitionedTables() error {
 		model interface{}
 		name  string
 	}{
-		{(*models.FlaggedUser)(nil), "flagged_users"},
-		{(*models.ConfirmedUser)(nil), "confirmed_users"},
-		{(*models.ClearedUser)(nil), "cleared_users"},
-		{(*models.BannedUser)(nil), "banned_users"},
-		{(*models.FlaggedGroup)(nil), "flagged_groups"},
-		{(*models.ConfirmedGroup)(nil), "confirmed_groups"},
-		{(*models.ClearedGroup)(nil), "cleared_groups"},
-		{(*models.LockedGroup)(nil), "locked_groups"},
+		{(*types.FlaggedUser)(nil), "flagged_users"},
+		{(*types.ConfirmedUser)(nil), "confirmed_users"},
+		{(*types.ClearedUser)(nil), "cleared_users"},
+		{(*types.BannedUser)(nil), "banned_users"},
+		{(*types.FlaggedGroup)(nil), "flagged_groups"},
+		{(*types.ConfirmedGroup)(nil), "confirmed_groups"},
+		{(*types.ClearedGroup)(nil), "cleared_groups"},
+		{(*types.LockedGroup)(nil), "locked_groups"},
 	}
 
 	for _, table := range tables {
@@ -314,6 +315,6 @@ func (c *Client) Tracking() *models.TrackingModel {
 }
 
 // UserActivity returns the repository for logging user actions.
-func (c *Client) UserActivity() *models.UserActivityModel {
+func (c *Client) UserActivity() *models.ActivityModel {
 	return c.userActivity
 }
