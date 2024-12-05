@@ -95,9 +95,34 @@ func (m *ReviewMenu) Show(event interfaces.CommonEvent, s *session.Session, cont
 		}
 	}
 
+	// Check group status
+	groupTypes := make(map[uint64]types.GroupType)
+	flaggedGroups := make(map[uint64]*types.Group)
+	if len(user.Groups) > 0 {
+		// Extract group IDs for batch lookup
+		groupIDs := make([]uint64, len(user.Groups))
+		for i, group := range user.Groups {
+			groupIDs[i] = group.Group.ID
+		}
+
+		// Get full group data and types
+		var err error
+		flaggedGroups, groupTypes, err = m.layout.db.Groups().GetGroupsByIDs(context.Background(), groupIDs, types.GroupFields{
+			Basic:      true,
+			Reason:     true,
+			Confidence: true,
+		})
+		if err != nil {
+			m.layout.logger.Error("Failed to get group data", zap.Error(err))
+			return
+		}
+	}
+
 	// Store data in session for the message builder
 	s.Set(constants.SessionKeyFlaggedFriends, flaggedFriends)
 	s.Set(constants.SessionKeyFriendTypes, friendTypes)
+	s.Set(constants.SessionKeyFlaggedGroups, flaggedGroups)
+	s.Set(constants.SessionKeyGroupTypes, groupTypes)
 
 	m.layout.paginationManager.NavigateTo(event, s, m.page, content)
 }

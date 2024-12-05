@@ -1,41 +1,72 @@
 [common.debug]
+# Log level (debug, info, warn, error)
 log_level = "info"
+
+# Maximum number of log files to keep before rotation
 max_logs_to_keep = 10
+# Maximum number of lines per log file
 max_log_lines = 5000
+
+# Enable pprof debugging endpoints
 enable_pprof = false
+# Port for pprof HTTP server if enabled
 pprof_port = 6060
 
 [common.rate_limit]
+# Maximum number of requests per second
 requests_per_second = 100.0
-burst_size = 1
+# Maximum burst size for rate limiting
+burst_size = 100
 
 [common.circuit_breaker]
+# Maximum number of consecutive failures before circuit opens
 max_failures = 10
-failure_threshold = 500 # 500 milliseconds
-recovery_timeout = 1000 # 1 second
+# Time in milliseconds after which a request is considered failed
+failure_threshold = 500
+# Time in milliseconds before attempting to close circuit
+recovery_timeout = 5000
 
 [common.retry]
+# Maximum number of retry attempts
 max_retries = 3
-delay = 2000 # 2 seconds
-max_delay = 5000 # 5 seconds
+# Initial delay between retries in milliseconds
+delay = 2000
+# Maximum delay between retries in milliseconds
+max_delay = 5000
 
 [common.postgresql]
+# PostgreSQL server hostname
 host = "127.0.0.1"
+# PostgreSQL server port
 port = 5432
+# PostgreSQL username
 user = "postgres"
+# PostgreSQL password
 password = "postgres"
+# PostgreSQL name
 db_name = "postgres"
+
+# Maximum number of open connections
 max_open_conns = 10
+# Maximum number of idle connections
 max_idle_conns = 10
-max_lifetime = 30  # 30 minutes
-max_idle_time = 10  # 10 minutes
+# Maximum connection lifetime in minutes
+max_lifetime = 30
+# Maximum idle connection time in minutes
+max_idle_time = 10
 
 [common.redis]
+# Redis server hostname
 host = "127.0.0.1"
+# Redis server port
 port = 6379
+# Redis username (optional)
 username = ""
+# Redis password (optional)
 password = ""
 
 [common.gemini_ai]
+# Gemini AI API key for authentication
 api_key = ""
+# Model version to use for AI analysis
 model = "gemini-1.5-flash-8b-latest"

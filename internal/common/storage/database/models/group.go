@@ -25,27 +25,6 @@ func NewGroup(db *bun.DB, logger *zap.Logger) *GroupModel {
 	}
 }
 
-// CheckConfirmedGroups finds which groups from a list of IDs exist in confirmed_groups.
-// Returns a slice of confirmed group IDs.
-func (r *GroupModel) CheckConfirmedGroups(ctx context.Context, groupIDs []uint64) ([]uint64, error) {
-	var confirmedGroupIDs []uint64
-	err := r.db.NewSelect().
-		Model((*types.ConfirmedGroup)(nil)).
-		Column("id").
-		Where("id IN (?)", bun.In(groupIDs)).
-		Scan(ctx, &confirmedGroupIDs)
-	if err != nil {
-		r.logger.Error("Failed to check confirmed groups", zap.Error(err))
-		return nil, err
-	}
-
-	r.logger.Debug("Checked confirmed groups",
-		zap.Int("total", len(groupIDs)),
-		zap.Int("confirmed", len(confirmedGroupIDs)))
-
-	return confirmedGroupIDs, nil
-}
-
 // SaveFlaggedGroups adds or updates groups in the flagged_groups table.
 // For each group, it updates all fields if the group already exists,
 // or inserts a new record if they don't.
@@ -208,6 +187,89 @@ func (r *GroupModel) GetClearedGroupsCount(ctx context.Context) (int, error) {
 		return 0, err
 	}
 	return count, nil
+}
+
+// GetGroupsByIDs retrieves specified group information for a list of group IDs.
+// Returns a map of group IDs to group data and a separate map for their types.
+func (r *GroupModel) GetGroupsByIDs(ctx context.Context, groupIDs []uint64, fields types.GroupFields) (map[uint64]*types.Group, map[uint64]types.GroupType, error) {
+	groups := make(map[uint64]*types.Group)
+	groupTypes := make(map[uint64]types.GroupType)
+
+	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+		// Query confirmed groups
+		var confirmedGroups []types.ConfirmedGroup
+		err := tx.NewSelect().
+			Model(&confirmedGroups).
+			Column(fields.Columns()...).
+			Where("id IN (?)", bun.In(groupIDs)).
+			Scan(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to get confirmed groups: %w", err)
+		}
+		for _, group := range confirmedGroups {
+			groups[group.ID] = &group.Group
+			groupTypes[group.ID] = types.GroupTypeConfirmed
+		}
+
+		// Query flagged groups
+		var flaggedGroups []types.FlaggedGroup
+		err = tx.NewSelect().
+			Model(&flaggedGroups).
+			Column(fields.Columns()...).
+			Where("id IN (?)", bun.In(groupIDs)).
+			Scan(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to get flagged groups: %w", err)
+		}
+		for _, group := range flaggedGroups {
+			groups[group.ID] = &group.Group
+			groupTypes[group.ID] = types.GroupTypeFlagged
+		}
+
+		// Query cleared groups
+		var clearedGroups []types.ClearedGroup
+		err = tx.NewSelect().
+			Model(&clearedGroups).
+			Column(fields.Columns()...).
+			Where("id IN (?)", bun.In(groupIDs)).
+			Scan(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to get cleared groups: %w", err)
+		}
+		for _, group := range clearedGroups {
+			groups[group.ID] = &group.Group
+			groupTypes[group.ID] = types.GroupTypeCleared
+		}
+
+		// Query locked groups
+		var lockedGroups []types.LockedGroup
+		err = tx.NewSelect().
+			Model(&lockedGroups).
+			Column(fields.Columns()...).
+			Where("id IN (?)", bun.In(groupIDs)).
+			Scan(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to get locked groups: %w", err)
+		}
+		for _, group := range lockedGroups {
+			groups[group.ID] = &group.Group
+			groupTypes[group.ID] = types.GroupTypeLocked
+		}
+
+		return nil
+	})
+	if err != nil {
+		r.logger.Error("Failed to get groups by IDs",
+			zap.Error(err),
+			zap.Uint64s("groupIDs", groupIDs))
+		return nil, nil, err
+	}
+
+	r.logger.Debug("Retrieved groups by IDs",
+		zap.Int("requestedCount", len(groupIDs)),
+		zap.Int("foundCount", len(groups)))
+
+	return groups, groupTypes, nil
 }
 
 // UpdateTrainingVotes updates the upvotes or downvotes count for a group in training mode.
@@ -586,4 +648,27 @@ func (r *GroupModel) getNextToReview(ctx context.Context, model interface{}, sor
 	}
 
 	return result, nil
+}
+
+// CheckConfirmedGroups checks which groups from a list of IDs exist in any group table.
+// Returns a map of group IDs to their status (confirmed, flagged, cleared, locked).
+func (r *GroupModel) CheckConfirmedGroups(ctx context.Context, groupIDs []uint64) ([]uint64, error) {
+	var confirmedGroupIDs []uint64
+
+	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+		// Query confirmed groups
+		err := tx.NewSelect().
+			Model((*types.ConfirmedGroup)(nil)).
+			Column("id").
+			Where("id IN (?)", bun.In(groupIDs)).
+			Scan(ctx, &confirmedGroupIDs)
+		if err != nil {
+			r.logger.Error("Failed to check confirmed groups", zap.Error(err))
+			return err
+		}
+
+		return nil
+	})
+
+	return confirmedGroupIDs, err
 }

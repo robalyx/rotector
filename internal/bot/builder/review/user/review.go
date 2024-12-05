@@ -20,13 +20,15 @@ import (
 
 // ReviewBuilder creates the visual layout for reviewing a user.
 type ReviewBuilder struct {
-	db          *database.Client
-	settings    *types.UserSetting
-	botSettings *types.BotSetting
-	userID      uint64
-	user        *types.ConfirmedUser
-	translator  *translator.Translator
-	friendTypes map[uint64]types.UserType
+	db            *database.Client
+	settings      *types.UserSetting
+	botSettings   *types.BotSetting
+	userID        uint64
+	user          *types.ConfirmedUser
+	translator    *translator.Translator
+	friendTypes   map[uint64]types.UserType
+	groupTypes    map[uint64]types.GroupType
+	flaggedGroups map[uint64]*types.Group
 }
 
 // NewReviewBuilder creates a new review builder.
@@ -39,15 +41,21 @@ func NewReviewBuilder(s *session.Session, translator *translator.Translator, db 
 	s.GetInterface(constants.SessionKeyTarget, &user)
 	var friendTypes map[uint64]types.UserType
 	s.GetInterface(constants.SessionKeyFriendTypes, &friendTypes)
+	var groupTypes map[uint64]types.GroupType
+	s.GetInterface(constants.SessionKeyGroupTypes, &groupTypes)
+	var flaggedGroups map[uint64]*types.Group
+	s.GetInterface(constants.SessionKeyFlaggedGroups, &flaggedGroups)
 
 	return &ReviewBuilder{
-		db:          db,
-		settings:    settings,
-		botSettings: botSettings,
-		userID:      s.GetUint64(constants.SessionKeyUserID),
-		user:        user,
-		translator:  translator,
-		friendTypes: friendTypes,
+		db:            db,
+		settings:      settings,
+		botSettings:   botSettings,
+		userID:        s.GetUint64(constants.SessionKeyUserID),
+		user:          user,
+		translator:    translator,
+		friendTypes:   friendTypes,
+		groupTypes:    groupTypes,
+		flaggedGroups: flaggedGroups,
 	}
 }
 
@@ -144,7 +152,7 @@ func (b *ReviewBuilder) buildReviewBuilder() *discord.EmbedBuilder {
 			AddField("Reason", b.user.Reason, false).
 			AddField("Description", b.getDescription(), false).
 			AddField(b.getFriendsField(), b.getFriends(), false).
-			AddField("Groups", b.getGroups(), false).
+			AddField(b.getGroupsField(), b.getGroups(), false).
 			AddField("Outfits", b.getOutfits(), false).
 			AddField("Games", b.getGames(), false).
 			AddField(b.getFlaggedType(), b.getFlaggedContent(), false)
@@ -167,7 +175,7 @@ func (b *ReviewBuilder) buildReviewBuilder() *discord.EmbedBuilder {
 			AddField("Reason", b.user.Reason, false).
 			AddField("Description", b.getDescription(), false).
 			AddField(b.getFriendsField(), b.getFriends(), false).
-			AddField("Groups", b.getGroups(), false).
+			AddField(b.getGroupsField(), b.getGroups(), false).
 			AddField("Outfits", b.getOutfits(), false).
 			AddField("Games", b.getGames(), false).
 			AddField(b.getFlaggedType(), b.getFlaggedContent(), false).
@@ -444,7 +452,6 @@ func (b *ReviewBuilder) getGroups() string {
 
 	for i, group := range b.user.Groups {
 		if i >= constants.ReviewGroupsLimit {
-			groups = append(groups, fmt.Sprintf("... and %d more", len(b.user.Groups)-constants.ReviewGroupsLimit))
 			break
 		}
 
@@ -551,4 +558,22 @@ func (b *ReviewBuilder) getFriendsField() string {
 		return fmt.Sprintf("Friends (%d ⚠️, %d ⏳)", confirmedCount, flaggedCount)
 	}
 	return "Friends"
+}
+
+// getGroupsField returns the groups field name for the embed.
+func (b *ReviewBuilder) getGroupsField() string {
+	if len(b.groupTypes) > 0 {
+		confirmedCount := 0
+		flaggedCount := 0
+		for _, groupType := range b.groupTypes {
+			if groupType == types.GroupTypeConfirmed {
+				confirmedCount++
+			} else if groupType == types.GroupTypeFlagged {
+				flaggedCount++
+			}
+		}
+
+		return fmt.Sprintf("Groups (%d ⚠️, %d ⏳)", confirmedCount, flaggedCount)
+	}
+	return "Groups"
 }

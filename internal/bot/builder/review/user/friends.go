@@ -112,7 +112,7 @@ func (b *FriendsBuilder) Build() *discord.MessageUpdateBuilder {
 			}
 		}
 
-		// Add status indicators (⚠️ or ⏳)
+		// Add status indicators
 		if friendType, ok := b.friendTypes[friend.ID]; ok {
 			switch friendType {
 			case types.UserTypeConfirmed:

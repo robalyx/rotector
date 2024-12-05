@@ -160,6 +160,7 @@ const (
 
 	SessionKeyGroups        = "groups"
 	SessionKeyFlaggedGroups = "flaggedGroups"
+	SessionKeyGroupTypes    = "groupTypes"
 
 	SessionKeyOutfits = "outfits"
 

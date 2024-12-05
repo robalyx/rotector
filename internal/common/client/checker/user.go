@@ -34,7 +34,7 @@ func NewUserChecker(app *setup.App, userFetcher *fetcher.UserFetcher, logger *za
 		userFetcher:   userFetcher,
 		aiChecker:     aiChecker,
 		groupChecker:  NewGroupChecker(app.DB, logger),
-		friendChecker: NewFriendChecker(app.DB, aiChecker, logger),
+		friendChecker: NewFriendChecker(app, logger),
 		logger:        logger,
 	}
 }

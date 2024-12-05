@@ -51,3 +51,79 @@ type LockedGroup struct {
 	Group
 	LockedAt time.Time `bun:",notnull" json:"lockedAt"`
 }
+
+// GroupType represents the different states a group can be in.
+type GroupType string
+
+const (
+	// GroupTypeConfirmed indicates a group has been reviewed and confirmed as inappropriate.
+	GroupTypeConfirmed GroupType = "confirmed"
+	// GroupTypeFlagged indicates a group needs review for potential violations.
+	GroupTypeFlagged GroupType = "flagged"
+	// GroupTypeCleared indicates a group was reviewed and found to be appropriate.
+	GroupTypeCleared GroupType = "cleared"
+	// GroupTypeLocked indicates a group was locked and removed from the platform.
+	GroupTypeLocked GroupType = "locked"
+)
+
+// GroupFields represents the fields that can be requested when fetching groups.
+type GroupFields struct {
+	// Basic group information
+	Basic        bool // ID, Name, Description
+	Owner        bool // Owner ID
+	Shout        bool // Group shout
+	MemberCount  bool // Member count
+	Reason       bool // Reason for flagging
+	Thumbnail    bool // ThumbnailURL
+	FlaggedUsers bool // FlaggedUsers list
+
+	// Statistics
+	Confidence bool // AI confidence score
+	Reputation bool // Upvotes, Downvotes, Reputation
+
+	// All timestamps
+	Timestamps bool
+}
+
+// Columns returns the list of database columns to fetch based on the selected fields.
+func (f GroupFields) Columns() []string {
+	var columns []string
+
+	if f.Basic {
+		columns = append(columns, "id", "name", "description")
+	}
+	if f.Owner {
+		columns = append(columns, "owner")
+	}
+	if f.Shout {
+		columns = append(columns, "shout")
+	}
+	if f.MemberCount {
+		columns = append(columns, "member_count")
+	}
+	if f.Reason {
+		columns = append(columns, "reason")
+	}
+	if f.Thumbnail {
+		columns = append(columns, "thumbnail_url")
+	}
+	if f.FlaggedUsers {
+		columns = append(columns, "flagged_users")
+	}
+	if f.Confidence {
+		columns = append(columns, "confidence")
+	}
+	if f.Reputation {
+		columns = append(columns, "upvotes", "downvotes", "reputation")
+	}
+	if f.Timestamps {
+		columns = append(columns,
+			"last_scanned",
+			"last_updated",
+			"last_viewed",
+			"last_purge_check",
+		)
+	}
+
+	return columns
+}

@@ -20,8 +20,9 @@ import (
 type GroupsBuilder struct {
 	settings      *types.UserSetting
 	user          *types.FlaggedUser
-	groups        []apiTypes.UserGroupRoles
-	flaggedGroups map[uint64]bool
+	groups        []*apiTypes.UserGroupRoles
+	groupTypes    map[uint64]types.GroupType
+	flaggedGroups map[uint64]*types.Group
 	start         int
 	page          int
 	total         int
@@ -34,15 +35,18 @@ func NewGroupsBuilder(s *session.Session) *GroupsBuilder {
 	s.GetInterface(constants.SessionKeyUserSettings, &settings)
 	var user *types.FlaggedUser
 	s.GetInterface(constants.SessionKeyTarget, &user)
-	var groups []apiTypes.UserGroupRoles
+	var groups []*apiTypes.UserGroupRoles
 	s.GetInterface(constants.SessionKeyGroups, &groups)
-	var flaggedGroups map[uint64]bool
+	var groupTypes map[uint64]types.GroupType
+	s.GetInterface(constants.SessionKeyGroupTypes, &groupTypes)
+	var flaggedGroups map[uint64]*types.Group
 	s.GetInterface(constants.SessionKeyFlaggedGroups, &flaggedGroups)
 
 	return &GroupsBuilder{
 		settings:      settings,
 		user:          user,
 		groups:        groups,
+		groupTypes:    groupTypes,
 		flaggedGroups: flaggedGroups,
 		start:         s.GetInt(constants.SessionKeyStart),
 		page:          s.GetInt(constants.SessionKeyPaginationPage),
@@ -93,9 +97,18 @@ func (b *GroupsBuilder) Build() *discord.MessageUpdateBuilder {
 	for i, group := range b.groups {
 		fieldName := fmt.Sprintf("Group %d", b.start+i+1)
 
-		// Add warning indicator for flagged groups
-		if b.flaggedGroups[group.Group.ID] {
-			fieldName += " ⚠️"
+		// Add status indicators
+		if groupType, ok := b.groupTypes[group.Group.ID]; ok {
+			switch groupType {
+			case types.GroupTypeConfirmed:
+				fieldName += " ⚠️"
+			case types.GroupTypeFlagged:
+				fieldName += " ⏳"
+			case types.GroupTypeCleared:
+				fieldName += " ✅"
+			case types.GroupTypeLocked:
+				fieldName += " 🔒"
+			}
 		}
 
 		// Add verification badge if group is verified
@@ -141,6 +154,16 @@ func (b *GroupsBuilder) Build() *discord.MessageUpdateBuilder {
 		}
 		if len(status) > 0 {
 			info += strings.Join(status, " • ") + "\n"
+		}
+
+		// Add flagged group info if available
+		if flaggedGroup, ok := b.flaggedGroups[group.Group.ID]; ok {
+			if flaggedGroup.Confidence > 0 {
+				info += fmt.Sprintf("🔮 Confidence: `%.2f`\n", flaggedGroup.Confidence)
+			}
+			if flaggedGroup.Reason != "" {
+				info += fmt.Sprintf("```%s```", flaggedGroup.Reason)
+			}
 		}
 
 		// Add description if available

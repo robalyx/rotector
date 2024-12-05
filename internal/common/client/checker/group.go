@@ -3,6 +3,7 @@ package checker
 import (
 	"context"
 	"fmt"
+	"math"
 	"sync"
 
 	"github.com/rotector/rotector/internal/common/client/fetcher"
@@ -133,37 +134,120 @@ func (gc *GroupChecker) processUserGroups(userInfo *fetcher.Info) (*types.User, 
 		groupIDs[i] = group.Group.ID
 	}
 
-	// Check database for flagged groups
-	flaggedGroupIDs, err := gc.db.Groups().CheckConfirmedGroups(context.Background(), groupIDs)
+	// Check database for groups in all tables
+	existingGroups, groupTypes, err := gc.db.Groups().GetGroupsByIDs(context.Background(), groupIDs, types.GroupFields{
+		Basic:  true,
+		Reason: true,
+	})
 	if err != nil {
 		return nil, false, err
 	}
 
-	// Auto-flag users in 2 or more flagged groups
-	if len(flaggedGroupIDs) >= 2 {
+	// Separate groups by type and count them
+	confirmedGroups := make(map[uint64]*types.Group)
+	flaggedGroups := make(map[uint64]*types.Group)
+	confirmedCount := 0
+	flaggedCount := 0
+
+	for id, group := range existingGroups {
+		switch groupTypes[id] {
+		case types.GroupTypeConfirmed:
+			confirmedCount++
+			confirmedGroups[id] = group
+		case types.GroupTypeFlagged:
+			flaggedCount++
+			flaggedGroups[id] = group
+		} //exhaustive:ignore
+	}
+
+	// Calculate confidence score based on group memberships
+	confidence := gc.calculateConfidence(confirmedCount, flaggedCount, len(userInfo.Groups.Data))
+
+	// Auto-flag users in 2 or more inappropriate groups
+	if confidence >= 0.4 {
+		// Generate reason based on group memberships
+		reason := fmt.Sprintf(
+			"Member of %d confirmed and %d flagged inappropriate groups (%.1f%% total).",
+			confirmedCount,
+			flaggedCount,
+			float64(confirmedCount+flaggedCount)/float64(len(userInfo.Groups.Data))*100,
+		)
+
 		user := &types.User{
 			ID:             userInfo.ID,
 			Name:           userInfo.Name,
 			DisplayName:    userInfo.DisplayName,
 			Description:    userInfo.Description,
 			CreatedAt:      userInfo.CreatedAt,
-			Reason:         fmt.Sprintf("Group Analysis: Member of %d flagged groups", len(flaggedGroupIDs)),
+			Reason:         "Group Analysis: " + reason,
 			Groups:         userInfo.Groups.Data,
 			Friends:        userInfo.Friends.Data,
 			Games:          userInfo.Games.Data,
 			FollowerCount:  userInfo.FollowerCount,
 			FollowingCount: userInfo.FollowingCount,
-			FlaggedGroups:  flaggedGroupIDs,
-			Confidence:     float64(len(flaggedGroupIDs)) / float64(len(userInfo.Groups.Data)),
+			FlaggedGroups:  gc.getGroupIDs(confirmedGroups, flaggedGroups),
+			Confidence:     math.Round(confidence*100) / 100, // Round to 2 decimal places
 			LastUpdated:    userInfo.LastUpdated,
 		}
 
 		gc.logger.Info("User automatically flagged",
 			zap.Uint64("userID", userInfo.ID),
-			zap.Uint64s("flaggedGroupIDs", flaggedGroupIDs))
+			zap.Int("confirmedGroups", confirmedCount),
+			zap.Int("flaggedGroups", flaggedCount),
+			zap.Float64("confidence", confidence))
 
 		return user, true, nil
 	}
 
 	return nil, false, nil
+}
+
+// calculateConfidence computes a weighted confidence score based on group memberships.
+func (gc *GroupChecker) calculateConfidence(confirmedCount, flaggedCount, totalGroups int) float64 {
+	var confidence float64
+
+	// Factor 1: Absolute number of inappropriate groups - 60% weight
+	inappropriateWeight := gc.calculateInappropriateWeight(confirmedCount, flaggedCount)
+	confidence += inappropriateWeight * 0.60
+
+	// Factor 2: Ratio of inappropriate groups - 40% weight
+	if totalGroups > 0 {
+		totalInappropriate := float64(confirmedCount) + (float64(flaggedCount) * 0.5)
+		ratioWeight := math.Min(totalInappropriate/float64(totalGroups), 1.0)
+		confidence += ratioWeight * 0.40
+	}
+
+	return confidence
+}
+
+// calculateInappropriateWeight returns a weight based on the total number of inappropriate groups.
+func (gc *GroupChecker) calculateInappropriateWeight(confirmedCount, flaggedCount int) float64 {
+	totalWeight := float64(confirmedCount) + (float64(flaggedCount) * 0.5)
+
+	switch {
+	case confirmedCount >= 4 || totalWeight >= 6:
+		return 1.0
+	case confirmedCount >= 3 || totalWeight >= 4:
+		return 0.8
+	case confirmedCount >= 2 || totalWeight >= 3:
+		return 0.6
+	case confirmedCount >= 1 || totalWeight >= 1:
+		return 0.4
+	default:
+		return 0.0
+	}
+}
+
+// getGroupIDs combines IDs from confirmed and flagged groups.
+func (gc *GroupChecker) getGroupIDs(confirmedGroups, flaggedGroups map[uint64]*types.Group) []uint64 {
+	flaggedIDs := make([]uint64, 0, len(confirmedGroups)+len(flaggedGroups))
+
+	for id := range confirmedGroups {
+		flaggedIDs = append(flaggedIDs, id)
+	}
+	for id := range flaggedGroups {
+		flaggedIDs = append(flaggedIDs, id)
+	}
+
+	return flaggedIDs
 }

@@ -1,2 +1,4 @@
 [bot.discord]
+# Discord bot token for authentication
+# Get this from the Discord Developer Portal
 token = "" 

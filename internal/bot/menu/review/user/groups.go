@@ -1,7 +1,6 @@
 package user
 
 import (
-	"context"
 	"strconv"
 
 	"github.com/disgoorg/disgo/discord"
@@ -39,7 +38,6 @@ func NewGroupsMenu(layout *Layout) *GroupsMenu {
 }
 
 // Show prepares and displays the groups interface for a specific page.
-// It loads group data, checks their status, and creates a grid of icons.
 func (m *GroupsMenu) Show(event *events.ComponentInteractionCreate, s *session.Session, page int) {
 	var user *types.FlaggedUser
 	s.GetInterface(constants.SessionKeyTarget, &user)
@@ -49,26 +47,22 @@ func (m *GroupsMenu) Show(event *events.ComponentInteractionCreate, s *session.S
 		m.layout.reviewMenu.Show(event, s, "No groups found for this user.")
 		return
 	}
-	groups := user.Groups
 
-	// Calculate page boundaries and get subset of groups
+	// Get group types from session and sort groups by status
+	var groupTypes map[uint64]types.GroupType
+	s.GetInterface(constants.SessionKeyGroupTypes, &groupTypes)
+	sortedGroups := m.sortGroupsByStatus(user.Groups, groupTypes)
+
+	// Calculate page boundaries
 	start := page * constants.GroupsPerPage
 	end := start + constants.GroupsPerPage
-	if end > len(groups) {
-		end = len(groups)
+	if end > len(sortedGroups) {
+		end = len(sortedGroups)
 	}
-	pageGroups := groups[start:end]
-
-	// Check database for flagged groups
-	flaggedGroups, err := m.getFlaggedGroups(pageGroups)
-	if err != nil {
-		m.layout.logger.Error("Failed to get flagged groups", zap.Error(err))
-		m.layout.paginationManager.RespondWithError(event, "Failed to get flagged groups. Please try again.")
-		return
-	}
+	pageGroups := sortedGroups[start:end]
 
 	// Download and process group icons
-	thumbnailMap := m.fetchGroupsThumbnails(groups)
+	thumbnailMap := m.fetchGroupsThumbnails(sortedGroups)
 
 	// Extract URLs for current page
 	pageThumbnailURLs := make([]string, len(pageGroups))
@@ -94,34 +88,42 @@ func (m *GroupsMenu) Show(event *events.ComponentInteractionCreate, s *session.S
 
 	// Store data in session for the message builder
 	s.Set(constants.SessionKeyGroups, pageGroups)
-	s.Set(constants.SessionKeyFlaggedGroups, flaggedGroups)
 	s.Set(constants.SessionKeyStart, start)
 	s.Set(constants.SessionKeyPaginationPage, page)
-	s.Set(constants.SessionKeyTotalItems, len(groups))
+	s.Set(constants.SessionKeyTotalItems, len(sortedGroups))
 	s.SetBuffer(constants.SessionKeyImageBuffer, buf)
 
 	m.layout.paginationManager.NavigateTo(event, s, m.page, "")
 }
 
-// getFlaggedGroups checks the database to find which groups are flagged.
-// Returns a map of group IDs to their flagged status.
-func (m *GroupsMenu) getFlaggedGroups(groups []*apiTypes.UserGroupRoles) (map[uint64]bool, error) {
-	groupIDs := make([]uint64, len(groups))
-	for i, group := range groups {
-		groupIDs[i] = group.Group.ID
+// sortGroupsByStatus sorts groups into three categories based on their status:
+// 1. Confirmed groups (⚠️) - Groups that have been reviewed and confirmed
+// 2. Flagged groups (⏳) - Groups that are currently flagged for review
+// 3. Unflagged groups - Groups with no current flags or status
+// Returns a new slice with groups sorted in this priority order.
+func (m *GroupsMenu) sortGroupsByStatus(groups []*apiTypes.UserGroupRoles, groupTypes map[uint64]types.GroupType) []*apiTypes.UserGroupRoles {
+	// Create three slices for different status types
+	var confirmedGroups, flaggedGroups, unflaggedGroups []*apiTypes.UserGroupRoles
+
+	// Categorize groups based on their status
+	for _, group := range groups {
+		switch groupTypes[group.Group.ID] {
+		case types.GroupTypeConfirmed:
+			confirmedGroups = append(confirmedGroups, group)
+		case types.GroupTypeFlagged:
+			flaggedGroups = append(flaggedGroups, group)
+		default:
+			unflaggedGroups = append(unflaggedGroups, group)
+		} //exhaustive:ignore
 	}
 
-	flaggedGroups, err := m.layout.db.Groups().CheckConfirmedGroups(context.Background(), groupIDs)
-	if err != nil {
-		return nil, err
-	}
+	// Combine slices in priority order (confirmed -> flagged -> unflagged)
+	sortedGroups := make([]*apiTypes.UserGroupRoles, 0, len(groups))
+	sortedGroups = append(sortedGroups, confirmedGroups...)
+	sortedGroups = append(sortedGroups, flaggedGroups...)
+	sortedGroups = append(sortedGroups, unflaggedGroups...)
 
-	flaggedGroupsMap := make(map[uint64]bool)
-	for _, id := range flaggedGroups {
-		flaggedGroupsMap[id] = true
-	}
-
-	return flaggedGroupsMap, nil
+	return sortedGroups
 }
 
 // handlePageNavigation processes navigation button clicks by calculating
