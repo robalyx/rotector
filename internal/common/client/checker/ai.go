@@ -168,11 +168,10 @@ type FlaggedUser struct {
 
 // AIChecker handles AI-based content analysis using Gemini models.
 type AIChecker struct {
-	userModel   *genai.GenerativeModel // For analyzing user content
-	friendModel *genai.GenerativeModel // For analyzing friend networks
-	minify      *minify.M
-	translator  *translator.Translator
-	logger      *zap.Logger
+	userModel  *genai.GenerativeModel
+	minify     *minify.M
+	translator *translator.Translator
+	logger     *zap.Logger
 }
 
 // NewAIChecker creates an AIChecker with separate models for user and friend analysis.
@@ -218,41 +217,15 @@ func NewAIChecker(app *setup.App, translator *translator.Translator, logger *zap
 	userTemp := float32(1.0)
 	userModel.Temperature = &userTemp
 
-	// Create friend analysis model
-	friendModel := app.GenAIClient.GenerativeModel(app.Config.Common.GeminiAI.Model)
-	friendModel.SystemInstruction = genai.NewUserContent(genai.Text(FriendSystemPrompt))
-	friendModel.GenerationConfig.ResponseMIMEType = "application/json"
-	friendModel.GenerationConfig.ResponseSchema = &genai.Schema{
-		Type: genai.TypeObject,
-		Properties: map[string]*genai.Schema{
-			"name": {
-				Type:        genai.TypeString,
-				Description: "Username being analyzed",
-			},
-			"reason": {
-				Type:        genai.TypeString,
-				Description: "Analysis of friend network patterns",
-			},
-			"confidence": {
-				Type:        genai.TypeNumber,
-				Description: "Confidence level in the analysis",
-			},
-		},
-		Required: []string{"name", "reason", "confidence"},
-	}
-	friendTemp := float32(0.8)
-	friendModel.Temperature = &friendTemp
-
 	// Create a minifier for JSON optimization
 	m := minify.New()
 	m.AddFunc("application/json", json.Minify)
 
 	return &AIChecker{
-		userModel:   userModel,
-		friendModel: friendModel,
-		minify:      m,
-		translator:  translator,
-		logger:      logger,
+		userModel:  userModel,
+		minify:     m,
+		translator: translator,
+		logger:     logger,
 	}
 }
 
@@ -332,114 +305,6 @@ func (a *AIChecker) ProcessUsers(userInfos []*fetcher.Info) (map[uint64]*types.U
 	validatedUsers, failedValidationIDs := a.validateFlaggedUsers(flaggedUsers, translatedInfos, originalInfos)
 
 	return validatedUsers, failedValidationIDs, nil
-}
-
-// GenerateFriendReason uses AI to analyze a user's friend list and generate a detailed reason
-// for flagging based on the patterns found in their friends' reasons.
-func (a *AIChecker) GenerateFriendReason(userInfo *fetcher.Info, confirmedFriends, flaggedFriends map[uint64]*types.User) (string, error) {
-	// Create a summary of friend data for AI analysis
-	type FriendSummary struct {
-		Name   string         `json:"name"`
-		Reason string         `json:"reason"`
-		Type   types.UserType `json:"type"`
-	}
-
-	// Collect friend summaries with token counting
-	friendSummaries := make([]FriendSummary, 0, len(confirmedFriends)+len(flaggedFriends))
-
-	// Helper function to add friend if within token limit
-	currentTokens := int32(0)
-	addFriend := func(friend *types.User, friendType types.UserType) bool {
-		summary := FriendSummary{
-			Name:   friend.Name,
-			Reason: friend.Reason,
-			Type:   friendType,
-		}
-
-		// Convert to JSON to count tokens accurately
-		summaryJSON, err := sonic.Marshal(summary)
-		if err != nil {
-			a.logger.Warn("Failed to marshal friend summary",
-				zap.String("username", friend.Name),
-				zap.Error(err))
-			return false
-		}
-
-		tokenCount, err := a.friendModel.CountTokens(context.Background(), genai.Text(summaryJSON))
-		if err != nil {
-			a.logger.Warn("Failed to count tokens for friend summary",
-				zap.String("username", friend.Name),
-				zap.Error(err))
-			return false
-		}
-
-		currentTokens += tokenCount.TotalTokens
-		if currentTokens > MaxFriendDataTokens {
-			return false
-		}
-
-		friendSummaries = append(friendSummaries, summary)
-		return true
-	}
-
-	// Add confirmed friends first (they're usually more important)
-	for _, friend := range confirmedFriends {
-		if !addFriend(friend, types.UserTypeConfirmed) {
-			break
-		}
-	}
-
-	// Add flagged friends if there's room
-	for _, friend := range flaggedFriends {
-		if !addFriend(friend, types.UserTypeFlagged) {
-			break
-		}
-	}
-
-	// Convert to JSON for the AI request
-	friendDataJSON, err := sonic.Marshal(friendSummaries)
-	if err != nil {
-		return "", fmt.Errorf("%w: %w", ErrJSONProcessing, err)
-	}
-
-	// Minify JSON to reduce token usage
-	friendDataJSON, err = a.minify.Bytes("application/json", friendDataJSON)
-	if err != nil {
-		return "", fmt.Errorf("%w: %w", ErrJSONProcessing, err)
-	}
-
-	// Configure prompt for friend analysis
-	prompt := fmt.Sprintf(FriendUserPrompt, userInfo.Name, string(friendDataJSON))
-
-	// Generate friend analysis using Gemini model
-	resp, err := a.friendModel.GenerateContent(context.Background(), genai.Text(prompt))
-	if err != nil {
-		return "", fmt.Errorf("%w: %w", ErrModelResponse, err)
-	}
-
-	if len(resp.Candidates) == 0 || len(resp.Candidates[0].Content.Parts) == 0 {
-		return "", fmt.Errorf("%w: no response from Gemini", ErrModelResponse)
-	}
-
-	// Extract response text from Gemini's response
-	responseText := resp.Candidates[0].Content.Parts[0].(genai.Text)
-
-	// Parse Gemini response into FlaggedUser struct
-	var flaggedUser FlaggedUser
-	err = sonic.Unmarshal([]byte(responseText), &flaggedUser)
-	if err != nil {
-		return "", fmt.Errorf("%w: %w", ErrJSONProcessing, err)
-	}
-
-	reason := flaggedUser.Reason
-	a.logger.Debug("Generated friend network reason",
-		zap.String("username", userInfo.Name),
-		zap.Int("confirmedFriends", len(confirmedFriends)),
-		zap.Int("flaggedFriends", len(flaggedFriends)),
-		zap.Int32("totalTokens", currentTokens),
-		zap.String("generatedReason", reason))
-
-	return reason, nil
 }
 
 // validateFlaggedUsers validates the flagged users against the translated content
