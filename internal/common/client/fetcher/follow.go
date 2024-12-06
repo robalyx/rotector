@@ -33,7 +33,7 @@ func NewFollowFetcher(roAPI *api.API, logger *zap.Logger) *FollowFetcher {
 }
 
 // AddFollowCounts fetches follow counts and returns a map of results.
-func (f *FollowFetcher) AddFollowCounts(users map[uint64]*types.User) map[uint64]*FollowFetchResult {
+func (f *FollowFetcher) AddFollowCounts(users map[uint64]*types.User) map[uint64]*types.User {
 	var wg sync.WaitGroup
 	resultsChan := make(chan FollowFetchResult, len(users))
 
@@ -64,7 +64,6 @@ func (f *FollowFetcher) AddFollowCounts(users map[uint64]*types.User) map[uint64
 	}()
 
 	// Collect results from the channel
-	results := make(map[uint64]*FollowFetchResult, len(users))
 	for result := range resultsChan {
 		if result.Error != nil {
 			f.logger.Error("Failed to fetch follow counts",
@@ -72,12 +71,13 @@ func (f *FollowFetcher) AddFollowCounts(users map[uint64]*types.User) map[uint64
 				zap.Uint64("userID", result.ID))
 			continue
 		}
-		results[result.ID] = &result
+
+		users[result.ID].FollowerCount = result.FollowerCount
+		users[result.ID].FollowingCount = result.FollowingCount
 	}
 
 	f.logger.Debug("Finished fetching follow counts",
-		zap.Int("totalUsers", len(users)),
-		zap.Int("successfulFetches", len(results)))
+		zap.Int("totalUsers", len(users)))
 
-	return results
+	return users
 }

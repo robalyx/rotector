@@ -14,9 +14,9 @@ pprof_port = 6060
 
 [common.rate_limit]
 # Maximum number of requests per second
-requests_per_second = 100.0
+requests_per_second = 50.0
 # Maximum burst size for rate limiting
-burst_size = 100
+burst_size = 50
 
 [common.circuit_breaker]
 # Maximum number of consecutive failures before circuit opens
@@ -30,7 +30,7 @@ recovery_timeout = 5000
 # Maximum number of retry attempts
 max_retries = 3
 # Initial delay between retries in milliseconds
-delay = 2000
+delay = 4000
 # Maximum delay between retries in milliseconds
 max_delay = 5000
 

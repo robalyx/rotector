@@ -59,25 +59,19 @@ type Info struct {
 
 // UserFetcher handles concurrent retrieval of user information from the Roblox API.
 type UserFetcher struct {
-	roAPI            *api.API
-	logger           *zap.Logger
-	gameFetcher      *GameFetcher
-	friendFetcher    *FriendFetcher
-	outfitFetcher    *OutfitFetcher
-	thumbnailFetcher *ThumbnailFetcher
-	followFetcher    *FollowFetcher
+	roAPI         *api.API
+	logger        *zap.Logger
+	gameFetcher   *GameFetcher
+	friendFetcher *FriendFetcher
 }
 
 // NewUserFetcher creates a UserFetcher with the provided API client and logger.
 func NewUserFetcher(app *setup.App, logger *zap.Logger) *UserFetcher {
 	return &UserFetcher{
-		roAPI:            app.RoAPI,
-		logger:           logger,
-		gameFetcher:      NewGameFetcher(app.RoAPI, logger),
-		friendFetcher:    NewFriendFetcher(app.RoAPI, logger),
-		outfitFetcher:    NewOutfitFetcher(app.RoAPI, logger),
-		thumbnailFetcher: NewThumbnailFetcher(app.RoAPI, logger),
-		followFetcher:    NewFollowFetcher(app.RoAPI, logger),
+		roAPI:         app.RoAPI,
+		logger:        logger,
+		gameFetcher:   NewGameFetcher(app.RoAPI, logger),
+		friendFetcher: NewFriendFetcher(app.RoAPI, logger),
 	}
 }
 
@@ -301,74 +295,4 @@ func (u *UserFetcher) FetchBannedUsers(userIDs []uint64) ([]uint64, error) {
 		zap.Int("bannedUsers", len(results)))
 
 	return results, nil
-}
-
-// FetchAdditionalUserData concurrently fetches thumbnails, outfits, and follow counts for users.
-func (u *UserFetcher) FetchAdditionalUserData(users map[uint64]*types.User) map[uint64]*types.User {
-	var wg sync.WaitGroup
-	wg.Add(3)
-
-	// Create channels for results
-	imagesChan := make(chan map[uint64]string, 1)
-	outfitsChan := make(chan map[uint64]*OutfitFetchResult, 1)
-	followsChan := make(chan map[uint64]*FollowFetchResult, 1)
-
-	// Fetch data concurrently
-	go func() {
-		defer wg.Done()
-		imagesChan <- u.thumbnailFetcher.AddImageURLs(users)
-	}()
-
-	go func() {
-		defer wg.Done()
-		outfitsChan <- u.outfitFetcher.AddOutfits(users)
-	}()
-
-	go func() {
-		defer wg.Done()
-		followsChan <- u.followFetcher.AddFollowCounts(users)
-	}()
-
-	// Process results as they arrive
-	remaining := 3
-	for remaining > 0 {
-		select {
-		case images := <-imagesChan:
-			for id, url := range images {
-				if user, ok := users[id]; ok {
-					user.ThumbnailURL = url
-				}
-			}
-			remaining--
-
-		case outfits := <-outfitsChan:
-			for id, result := range outfits {
-				if result.Error == nil {
-					if user, ok := users[id]; ok {
-						user.Outfits = result.Outfits.Data
-					}
-				}
-			}
-			remaining--
-
-		case follows := <-followsChan:
-			for id, result := range follows {
-				if result.Error == nil {
-					if user, ok := users[id]; ok {
-						user.FollowerCount = result.FollowerCount
-						user.FollowingCount = result.FollowingCount
-					}
-				}
-			}
-			remaining--
-		}
-	}
-
-	// Wait for all goroutines to finish and close channels
-	wg.Wait()
-	close(imagesChan)
-	close(outfitsChan)
-	close(followsChan)
-
-	return users
 }
