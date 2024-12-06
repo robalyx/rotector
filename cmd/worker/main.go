@@ -196,15 +196,20 @@ func runWorkers(workerType, subType string, count int) {
 // 2. Restarts the worker after a delay if it stops
 // 3. Logs any errors that occur.
 func runWorker(w interface{ Start() }, logger *zap.Logger) {
-	defer func() {
-		if r := recover(); r != nil {
-			logger.Error("Worker panicked", zap.Any("panic", r))
-		}
-	}()
-
 	for {
-		logger.Info("Starting worker")
-		w.Start()
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+					logger.Error("Worker panicked", zap.Any("panic", r))
+					logger.Info("Restarting worker in 5 seconds...")
+					time.Sleep(5 * time.Second)
+				}
+			}()
+
+			logger.Info("Starting worker")
+			w.Start()
+		}()
+
 		logger.Error("Worker stopped unexpectedly. Restarting in 5 seconds...")
 		time.Sleep(5 * time.Second)
 	}
