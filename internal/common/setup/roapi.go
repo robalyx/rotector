@@ -38,6 +38,10 @@ func getRoAPIClient(cfg *config.CommonConfig, redisManager *redis.Manager, logge
 		return nil, err
 	}
 
+	// Shuffle proxies to avoid request failures
+	proxiesMiddleware := proxy.New(proxies)
+	proxiesMiddleware.Shuffle()
+
 	// Build client with middleware chain in priority order:
 	// 6. Circuit breaker prevents cascading failures
 	// 5. Retry handles transient failures
@@ -49,7 +53,7 @@ func getRoAPIClient(cfg *config.CommonConfig, redisManager *redis.Manager, logge
 		client.WithMarshalFunc(sonic.Marshal),
 		client.WithUnmarshalFunc(sonic.Unmarshal),
 		client.WithLogger(NewLogger(logger)),
-		client.WithTimeout(10*time.Second),
+		client.WithTimeout(5*time.Second),
 		client.WithMiddleware(6,
 			circuitbreaker.New(
 				cfg.CircuitBreaker.MaxFailures,
@@ -65,7 +69,7 @@ func getRoAPIClient(cfg *config.CommonConfig, redisManager *redis.Manager, logge
 		client.WithMiddleware(4, singleflight.New()),
 		client.WithMiddleware(3, axonetRedis.New(redisClient, 1*time.Hour)),
 		client.WithMiddleware(2, ratelimit.New(cfg.RateLimit.RequestsPerSecond, cfg.RateLimit.BurstSize)),
-		client.WithMiddleware(1, proxy.New(proxies)),
+		client.WithMiddleware(1, proxiesMiddleware),
 	), nil
 }
 
