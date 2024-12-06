@@ -1,3 +1,4 @@
 .git
 logs/bot_logs
+logs/rpc_logs
 logs/worker_logs

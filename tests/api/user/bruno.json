@@ -1,0 +1,9 @@
+{
+  "version": "1",
+  "name": "Rotector RPC User",
+  "type": "collection",
+  "ignore": [
+    "node_modules",
+    ".git"
+  ]
+}

@@ -1,0 +1,76 @@
+syntax = "proto3";
+
+package rotector.user;
+option go_package = "github.com/rotector/rotector/rpc/user";
+
+// UserStatus represents which table the user exists in
+enum UserStatus {
+  USER_STATUS_UNKNOWN = 0;
+  USER_STATUS_FLAGGED = 1;
+  USER_STATUS_CONFIRMED = 2;
+  USER_STATUS_CLEARED = 3;
+  USER_STATUS_BANNED = 4;
+}
+
+// Group represents group information
+message Group {
+  uint64 id = 1;
+  string name = 2;
+  string role = 3;
+}
+
+// Friend represents friend information
+message Friend {
+  uint64 id = 1;
+  string name = 2;
+  string display_name = 3;
+  bool has_verified_badge = 4;
+}
+
+// Game represents game information
+message Game {
+  uint64 id = 1;
+  string name = 2;
+}
+
+// User represents all user information
+message User {
+  uint64 id = 1;
+  string name = 2;
+  string display_name = 3;
+  string description = 4;
+  string created_at = 5;
+  string reason = 6;
+  repeated Group groups = 7;
+  repeated Friend friends = 8;
+  repeated Game games = 9;
+  repeated string flagged_content = 10;
+  repeated uint64 flagged_groups = 11;
+  uint64 follower_count = 12;
+  uint64 following_count = 13;
+  double confidence = 14;
+  string last_scanned = 15;
+  string last_updated = 16;
+  string last_viewed = 17;
+  string thumbnail_url = 18;
+  int32 upvotes = 19;
+  int32 downvotes = 20;
+  int32 reputation = 21;
+  UserStatus status = 22;
+}
+
+// GetUserRequest represents the request for getting user information
+message GetUserRequest {
+  uint64 user_id = 1;
+}
+
+// GetUserResponse represents the response containing user information
+message GetUserResponse {
+  bool exists = 1;
+  User user = 2;
+}
+
+// UserService defines the user service
+service UserService {
+  rpc GetUser(GetUserRequest) returns (GetUserResponse);
+} 
