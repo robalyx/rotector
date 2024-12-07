@@ -168,27 +168,11 @@ func (b *ReviewBuilder) buildReviewEmbed() *discord.EmbedBuilder {
 
 // buildActionOptions creates the action menu options.
 func (b *ReviewBuilder) buildActionOptions() []discord.StringSelectMenuOption {
-	// Get switch text and description
-	var switchText string
-	var switchDesc string
-	if b.settings.ReviewTargetMode == types.FlaggedReviewTarget {
-		switchText = "Switch to Confirmed Target"
-		switchDesc = "Switch to re-reviewing confirmed groups"
-	} else {
-		switchText = "Switch to Flagged Target"
-		switchDesc = "Switch to reviewing flagged groups"
-	}
-
-	// Create base options that everyone can access
-	options := []discord.StringSelectMenuOption{
-		discord.NewStringSelectMenuOption(switchText, constants.SwitchTargetModeCustomID).
-			WithEmoji(discord.ComponentEmoji{Name: "🔄"}).
-			WithDescription(switchDesc),
-	}
+	var options []discord.StringSelectMenuOption
 
 	// Add reviewer-only options
 	if b.botSettings.IsReviewer(b.userID) {
-		reviewerOptions := []discord.StringSelectMenuOption{
+		options = []discord.StringSelectMenuOption{
 			discord.NewStringSelectMenuOption("Confirm with reason", constants.GroupConfirmWithReasonButtonCustomID).
 				WithEmoji(discord.ComponentEmoji{Name: "🚫"}).
 				WithDescription("Confirm the group with a custom reason"),
@@ -196,7 +180,6 @@ func (b *ReviewBuilder) buildActionOptions() []discord.StringSelectMenuOption {
 				WithEmoji(discord.ComponentEmoji{Name: "📋"}).
 				WithDescription("View activity logs for this group"),
 		}
-		options = append(reviewerOptions, options...)
 
 		// Add mode switch option
 		if b.settings.ReviewMode == types.TrainingReviewMode {
@@ -213,6 +196,24 @@ func (b *ReviewBuilder) buildActionOptions() []discord.StringSelectMenuOption {
 			)
 		}
 	}
+
+	// Get switch text and description
+	var switchText string
+	var switchDesc string
+	if b.settings.ReviewTargetMode == types.FlaggedReviewTarget {
+		switchText = "Switch to Confirmed Target"
+		switchDesc = "Switch to re-reviewing confirmed groups"
+	} else {
+		switchText = "Switch to Flagged Target"
+		switchDesc = "Switch to reviewing flagged groups"
+	}
+
+	// Add switch option
+	options = append(options,
+		discord.NewStringSelectMenuOption(switchText, constants.SwitchTargetModeCustomID).
+			WithEmoji(discord.ComponentEmoji{Name: "🔄"}).
+			WithDescription(switchDesc),
+	)
 
 	return options
 }

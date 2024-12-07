@@ -131,11 +131,6 @@ func (m *ReviewMenu) handleActionSelection(event *events.ComponentInteractionCre
 		m.handleSwitchReviewMode(event, s)
 
 	case constants.SwitchTargetModeCustomID:
-		if !settings.IsReviewer(userID) {
-			m.layout.logger.Error("Non-reviewer attempted to switch target mode", zap.Uint64("user_id", userID))
-			m.layout.paginationManager.RespondWithError(event, "You do not have permission to switch target modes.")
-			return
-		}
 		m.handleSwitchTargetMode(event, s)
 	}
 }

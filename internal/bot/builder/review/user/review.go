@@ -192,17 +192,6 @@ func (b *ReviewBuilder) buildReviewBuilder() *discord.EmbedBuilder {
 
 // buildActionOptions creates the action menu options.
 func (b *ReviewBuilder) buildActionOptions() []discord.StringSelectMenuOption {
-	// Get switch text and description
-	var switchText string
-	var switchDesc string
-	if b.settings.ReviewTargetMode == types.FlaggedReviewTarget {
-		switchText = "Switch to Confirmed Target"
-		switchDesc = "Switch to re-reviewing confirmed users"
-	} else {
-		switchText = "Switch to Flagged Target"
-		switchDesc = "Switch to reviewing flagged users"
-	}
-
 	// Create base options that everyone can access
 	options := []discord.StringSelectMenuOption{
 		discord.NewStringSelectMenuOption("Open friends viewer", constants.OpenFriendsMenuButtonCustomID).
@@ -214,9 +203,6 @@ func (b *ReviewBuilder) buildActionOptions() []discord.StringSelectMenuOption {
 		discord.NewStringSelectMenuOption("Open outfit viewer", constants.OpenOutfitsMenuButtonCustomID).
 			WithEmoji(discord.ComponentEmoji{Name: "👕"}).
 			WithDescription("View all user outfits"),
-		discord.NewStringSelectMenuOption(switchText, constants.SwitchTargetModeCustomID).
-			WithEmoji(discord.ComponentEmoji{Name: "🔄"}).
-			WithDescription(switchDesc),
 	}
 
 	// Add reviewer-only options
@@ -232,7 +218,7 @@ func (b *ReviewBuilder) buildActionOptions() []discord.StringSelectMenuOption {
 				WithEmoji(discord.ComponentEmoji{Name: "📋"}).
 				WithDescription("View activity logs for this user"),
 		}
-		options = append(reviewerOptions, options...)
+		options = append(options, reviewerOptions...)
 
 		// Add mode switch option
 		if b.settings.ReviewMode == types.TrainingReviewMode {
@@ -249,6 +235,24 @@ func (b *ReviewBuilder) buildActionOptions() []discord.StringSelectMenuOption {
 			)
 		}
 	}
+
+	// Get switch text and description
+	var switchText string
+	var switchDesc string
+	if b.settings.ReviewTargetMode == types.FlaggedReviewTarget {
+		switchText = "Switch to Confirmed Target"
+		switchDesc = "Switch to re-reviewing confirmed users"
+	} else {
+		switchText = "Switch to Flagged Target"
+		switchDesc = "Switch to reviewing flagged users"
+	}
+
+	// Add switch option
+	options = append(options,
+		discord.NewStringSelectMenuOption(switchText, constants.SwitchTargetModeCustomID).
+			WithEmoji(discord.ComponentEmoji{Name: "🔄"}).
+			WithDescription(switchDesc),
+	)
 
 	return options
 }
