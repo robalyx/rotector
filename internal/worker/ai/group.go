@@ -55,7 +55,7 @@ func NewGroupWorker(app *setup.App, bar *progress.Bar, logger *zap.Logger) *Grou
 // 3. Checks members for inappropriate content
 // 4. Repeats until stopped.
 func (g *GroupWorker) Start() {
-	g.logger.Info("Member Worker started", zap.String("workerID", g.reporter.GetWorkerID()))
+	g.logger.Info("Group Worker started", zap.String("workerID", g.reporter.GetWorkerID()))
 	g.reporter.Start()
 	defer g.reporter.Stop()
 
@@ -86,9 +86,9 @@ func (g *GroupWorker) Start() {
 			continue
 		}
 
-		// Step 1: Get next confirmed group (10%)
-		g.bar.SetStepMessage("Fetching next confirmed group", 10)
-		g.reporter.UpdateStatus("Fetching next confirmed group", 10)
+		// Step 1: Get next group to process (10%)
+		g.bar.SetStepMessage("Fetching next group to process", 10)
+		g.reporter.UpdateStatus("Fetching next group to process", 10)
 		group, err := g.db.Groups().GetGroupToScan(context.Background())
 		if err != nil {
 			g.logger.Error("Error getting group to scan", zap.Error(err))
