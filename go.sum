@@ -129,6 +129,8 @@ github.com/jaxron/axonet/middleware/singleflight v0.0.0-20241110114112-10fce0f23
 github.com/jaxron/axonet/middleware/singleflight v0.0.0-20241110114112-10fce0f238e1/go.mod h1:G5Z8xIfdiEF6lMtxQyMelOhqtx4XN6xumLJJojZK49k=
 github.com/jaxron/roapi.go v0.0.0-20241202125150-60eff328968c h1:ZGt0Ce4BNIl2E4cXIoWZUDyKVwyLD1YmyOwJ4hDmfkU=
 github.com/jaxron/roapi.go v0.0.0-20241202125150-60eff328968c/go.mod h1:XJzdW42VIfAUMnCMKX0nRFkpmrKFUyWlo9pYijyWT58=
+github.com/jaxron/roapi.go v0.0.0-20241207095928-5d33fcc38cf1 h1:rIex5yX8DEq1JB9Oi0foWwDbvs9gbDc2IfrI0VdeqVc=
+github.com/jaxron/roapi.go v0.0.0-20241207095928-5d33fcc38cf1/go.mod h1:XJzdW42VIfAUMnCMKX0nRFkpmrKFUyWlo9pYijyWT58=
 github.com/jinzhu/inflection v1.0.0 h1:K317FqzuhWc8YvSVlFMCCUb36O/S9MCKRDI7QkRKD/E=
 github.com/jinzhu/inflection v1.0.0/go.mod h1:h+uFLlag+Qp1Va5pdKtLDYj+kHp5pxUVkryuEj+Srlc=
 github.com/josharian/intern v1.0.0/go.mod h1:5DoeVV0s6jJacbCEi61lwdGj/aVlrQvzHFFd8Hwg//Y=

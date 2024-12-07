@@ -2,7 +2,6 @@ package models
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/rotector/rotector/internal/common/storage/database/types"
@@ -25,89 +24,38 @@ func NewTracking(db *bun.DB, logger *zap.Logger) *TrackingModel {
 	}
 }
 
-// AddUserToGroupTracking adds a user ID to a group's tracking list.
-// If the group exists in any of the group tables (confirmed, flagged, cleared, banned),
-// it adds the user to their lists. Otherwise, it creates a new tracking entry.
-func (r *TrackingModel) AddUserToGroupTracking(ctx context.Context, groupID, userID uint64) error {
-	return r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
-		// Check all group tables in order
-		tables := []interface{}{
-			(*types.ConfirmedGroup)(nil),
-			(*types.FlaggedGroup)(nil),
-			(*types.ClearedGroup)(nil),
-			(*types.LockedGroup)(nil),
-		}
+// AddUsersToGroupsTracking adds multiple users to multiple groups' tracking lists.
+func (r *TrackingModel) AddUsersToGroupsTracking(ctx context.Context, groupToUsers map[uint64][]uint64) error {
+	// Create tracking entries for bulk insert
+	trackings := make([]types.GroupMemberTracking, 0, len(groupToUsers))
+	now := time.Now()
 
-		for _, table := range tables {
-			found, err := r.checkGroupTableAndUpdate(ctx, tx, table, groupID, userID)
-			if err != nil {
-				return err
-			}
-			if found {
-				return nil
-			}
-		}
-
-		// If group is not in any table, create new tracking entry
-		_, err := tx.NewInsert().Model(&types.GroupMemberTracking{
+	for groupID, userIDs := range groupToUsers {
+		trackings = append(trackings, types.GroupMemberTracking{
 			GroupID:      groupID,
-			FlaggedUsers: []uint64{userID},
-			LastAppended: time.Now(),
-		}).On("CONFLICT (group_id) DO UPDATE").
-			Set("flagged_users = array_append(array_remove(group_member_tracking.flagged_users, ?), ?)", userID, userID).
-			Set("last_appended = EXCLUDED.last_appended").
-			Exec(ctx)
-		if err != nil {
-			r.logger.Error("Failed to add user to group tracking",
-				zap.Error(err),
-				zap.Uint64("groupID", groupID),
-				zap.Uint64("userID", userID))
-			return err
-		}
+			FlaggedUsers: userIDs,
+			LastAppended: now,
+		})
+	}
 
-		return nil
-	})
-}
-
-// checkGroupTableAndUpdate checks if a group exists in the specified table and updates its flagged users.
-// Returns true if the group was found and updated, false otherwise.
-func (r *TrackingModel) checkGroupTableAndUpdate(
-	ctx context.Context,
-	tx bun.Tx,
-	model interface{},
-	groupID uint64,
-	userID uint64,
-) (bool, error) {
-	exists, err := tx.NewSelect().
-		Model(model).
-		Where("id = ?", groupID).
-		Exists(ctx)
+	// Perform bulk insert with upsert
+	_, err := r.db.NewInsert().
+		Model(&trackings).
+		On("CONFLICT (group_id) DO UPDATE").
+		Set("flagged_users = ARRAY(SELECT DISTINCT unnest(EXCLUDED.flagged_users || group_member_tracking.flagged_users))").
+		Set("last_appended = EXCLUDED.last_appended").
+		Exec(ctx)
 	if err != nil {
-		r.logger.Error("Failed to check group existence",
+		r.logger.Error("Failed to add users to groups tracking",
 			zap.Error(err),
-			zap.String("table", fmt.Sprintf("%T", model)),
-			zap.Uint64("groupID", groupID))
-		return false, err
+			zap.Int("groupCount", len(groupToUsers)))
+		return err
 	}
 
-	if exists {
-		_, err = tx.NewUpdate().
-			Model(model).
-			Set("flagged_users = array_append(array_remove(flagged_users, ?), ?)", userID, userID).
-			Where("id = ?", groupID).
-			Exec(ctx)
-		if err != nil {
-			r.logger.Error("Failed to update group's flagged users",
-				zap.Error(err),
-				zap.String("table", fmt.Sprintf("%T", model)),
-				zap.Uint64("groupID", groupID),
-				zap.Uint64("userID", userID))
-			return false, err
-		}
-		return true, nil
-	}
+	r.logger.Debug("Successfully processed group tracking updates",
+		zap.Int("groupCount", len(groupToUsers)))
 
-	return false, nil
+	return nil
 }
 
 // PurgeOldTrackings removes tracking entries that haven't been updated recently.

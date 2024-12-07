@@ -2,7 +2,6 @@ package checker
 
 import (
 	"context"
-	"fmt"
 	"math"
 	"sync"
 
@@ -14,9 +13,9 @@ import (
 
 // GroupCheckResult contains the result of checking a user's groups.
 type GroupCheckResult struct {
+	UserID      uint64
 	User        *types.User
 	AutoFlagged bool
-	Error       error
 }
 
 // GroupChecker handles the checking of user groups by comparing them against
@@ -35,17 +34,41 @@ func NewGroupChecker(db *database.Client, logger *zap.Logger) *GroupChecker {
 	}
 }
 
-// ProcessUsers checks multiple users' groups concurrently and returns flagged users
-// and remaining users that need further checking.
-func (gc *GroupChecker) ProcessUsers(userInfos []*fetcher.Info) (map[uint64]*types.User, []*fetcher.Info) {
-	// GroupCheckResult contains the result of checking a user's groups.
-	type GroupCheckResult struct {
-		UserID      uint64
-		User        *types.User
-		AutoFlagged bool
-		Error       error
+// ProcessUsers checks multiple users' groups concurrently and returns flagged users.
+func (gc *GroupChecker) ProcessUsers(userInfos []*fetcher.Info) map[uint64]*types.User {
+	// Collect all unique group IDs across all users
+	uniqueGroupIDs := make(map[uint64]struct{})
+	groupToUsers := make(map[uint64][]uint64)
+	for _, userInfo := range userInfos {
+		for _, group := range userInfo.Groups.Data {
+			uniqueGroupIDs[group.Group.ID] = struct{}{}
+			groupToUsers[group.Group.ID] = append(groupToUsers[group.Group.ID], userInfo.ID)
+		}
 	}
 
+	// Convert unique IDs to slice
+	groupIDs := make([]uint64, 0, len(uniqueGroupIDs))
+	for groupID := range uniqueGroupIDs {
+		groupIDs = append(groupIDs, groupID)
+	}
+
+	// Fetch all existing groups
+	existingGroups, groupTypes, err := gc.db.Groups().GetGroupsByIDs(context.Background(), groupIDs, types.GroupFields{
+		Basic:  true,
+		Reason: true,
+	})
+	if err != nil {
+		gc.logger.Error("Failed to fetch existing groups", zap.Error(err))
+		return nil
+	}
+
+	// Track all users in groups
+	err = gc.db.Tracking().AddUsersToGroupsTracking(context.Background(), groupToUsers)
+	if err != nil {
+		gc.logger.Error("Failed to add users to groups tracking", zap.Error(err))
+	}
+
+	// Process each user concurrently
 	var wg sync.WaitGroup
 	resultsChan := make(chan GroupCheckResult, len(userInfos))
 
@@ -56,108 +79,56 @@ func (gc *GroupChecker) ProcessUsers(userInfos []*fetcher.Info) (map[uint64]*typ
 			defer wg.Done()
 
 			// Process user groups
-			user, autoFlagged, err := gc.processUserGroups(info)
+			user, autoFlagged := gc.processUserGroups(info, existingGroups, groupTypes)
 			resultsChan <- GroupCheckResult{
 				UserID:      info.ID,
 				User:        user,
 				AutoFlagged: autoFlagged,
-				Error:       err,
 			}
 		}(userInfo)
 	}
 
-	// Close the channel when all goroutines are done
+	// Close channel when all goroutines complete
 	go func() {
 		wg.Wait()
 		close(resultsChan)
 	}()
 
-	// Collect user infos and results
-	userInfoMap := make(map[uint64]*fetcher.Info)
-	for _, info := range userInfos {
-		userInfoMap[info.ID] = info
-	}
-
-	results := make(map[uint64]*GroupCheckResult)
-	for result := range resultsChan {
-		results[result.UserID] = &result
-	}
-
-	// Separate users into flagged and remaining
+	// Collect flagged users
 	flaggedUsers := make(map[uint64]*types.User)
-	var remainingUsers []*fetcher.Info
-
-	for userID, result := range results {
-		if result.Error != nil {
-			gc.logger.Error("Error checking user groups",
-				zap.Error(result.Error),
-				zap.Uint64("userID", userID))
-			remainingUsers = append(remainingUsers, userInfoMap[userID])
-			continue
-		}
-
+	for result := range resultsChan {
 		if result.AutoFlagged {
-			flaggedUsers[userID] = result.User
-		} else {
-			remainingUsers = append(remainingUsers, userInfoMap[userID])
+			flaggedUsers[result.UserID] = result.User
 		}
 	}
 
-	return flaggedUsers, remainingUsers
+	return flaggedUsers
 }
 
-// processUserGroups checks if a user belongs to multiple flagged groups.
-// The confidence score increases with the number of flagged groups relative
-// to total group membership.
-func (gc *GroupChecker) processUserGroups(userInfo *fetcher.Info) (*types.User, bool, error) {
+// processUserGroups checks if a user should be flagged based on their groups.
+func (gc *GroupChecker) processUserGroups(userInfo *fetcher.Info, existingGroups map[uint64]*types.Group, groupTypes map[uint64]types.GroupType) (*types.User, bool) {
 	// Skip users with no group memberships
 	if len(userInfo.Groups.Data) == 0 {
-		return nil, false, nil
+		return nil, false
 	}
 
-	// Track user groups concurrently without blocking
-	for _, group := range userInfo.Groups.Data {
-		go func(groupID, userID uint64) {
-			err := gc.db.Tracking().AddUserToGroupTracking(context.Background(), groupID, userID)
-			if err != nil {
-				gc.logger.Error("Failed to add user to group tracking",
-					zap.Error(err),
-					zap.Uint64("groupID", groupID),
-					zap.Uint64("userID", userID))
-			}
-		}(group.Group.ID, userInfo.ID)
-	}
-
-	// Extract group IDs for batch lookup
-	groupIDs := make([]uint64, len(userInfo.Groups.Data))
-	for i, group := range userInfo.Groups.Data {
-		groupIDs[i] = group.Group.ID
-	}
-
-	// Check database for groups in all tables
-	existingGroups, groupTypes, err := gc.db.Groups().GetGroupsByIDs(context.Background(), groupIDs, types.GroupFields{
-		Basic:  true,
-		Reason: true,
-	})
-	if err != nil {
-		return nil, false, err
-	}
-
-	// Separate groups by type and count them
+	// Count confirmed and flagged groups
 	confirmedGroups := make(map[uint64]*types.Group)
 	flaggedGroups := make(map[uint64]*types.Group)
 	confirmedCount := 0
 	flaggedCount := 0
 
-	for id, group := range existingGroups {
-		switch groupTypes[id] {
-		case types.GroupTypeConfirmed:
-			confirmedCount++
-			confirmedGroups[id] = group
-		case types.GroupTypeFlagged:
-			flaggedCount++
-			flaggedGroups[id] = group
-		} //exhaustive:ignore
+	for _, group := range userInfo.Groups.Data {
+		if existingGroup, exists := existingGroups[group.Group.ID]; exists {
+			switch groupTypes[group.Group.ID] {
+			case types.GroupTypeConfirmed:
+				confirmedCount++
+				confirmedGroups[group.Group.ID] = existingGroup
+			case types.GroupTypeFlagged:
+				flaggedCount++
+				flaggedGroups[group.Group.ID] = existingGroup
+			} //exhaustive:ignore
+		}
 	}
 
 	// Calculate confidence score based on group memberships
@@ -165,21 +136,13 @@ func (gc *GroupChecker) processUserGroups(userInfo *fetcher.Info) (*types.User, 
 
 	// Auto-flag users in 2 or more inappropriate groups
 	if confidence >= 0.4 {
-		// Generate reason based on group memberships
-		reason := fmt.Sprintf(
-			"Member of %d confirmed and %d flagged inappropriate groups (%.1f%% total).",
-			confirmedCount,
-			flaggedCount,
-			float64(confirmedCount+flaggedCount)/float64(len(userInfo.Groups.Data))*100,
-		)
-
 		user := &types.User{
 			ID:             userInfo.ID,
 			Name:           userInfo.Name,
 			DisplayName:    userInfo.DisplayName,
 			Description:    userInfo.Description,
 			CreatedAt:      userInfo.CreatedAt,
-			Reason:         "Group Analysis: " + reason,
+			Reason:         "Group Analysis: Member of multiple inappropriate groups.",
 			Groups:         userInfo.Groups.Data,
 			Friends:        userInfo.Friends.Data,
 			Games:          userInfo.Games.Data,
@@ -196,10 +159,10 @@ func (gc *GroupChecker) processUserGroups(userInfo *fetcher.Info) (*types.User, 
 			zap.Int("flaggedGroups", flaggedCount),
 			zap.Float64("confidence", confidence))
 
-		return user, true, nil
+		return user, true
 	}
 
-	return nil, false, nil
+	return nil, false
 }
 
 // calculateConfidence computes a weighted confidence score based on group memberships.

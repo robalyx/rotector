@@ -18,6 +18,13 @@ import (
 	"go.uber.org/zap"
 )
 
+// FriendCheckResult contains the result of checking a user's friends.
+type FriendCheckResult struct {
+	UserID      uint64
+	User        *types.User
+	AutoFlagged bool
+}
+
 // FriendChecker handles the analysis of user friend relationships to identify
 // users connected to multiple flagged accounts.
 type FriendChecker struct {
@@ -68,14 +75,31 @@ func NewFriendChecker(app *setup.App, logger *zap.Logger) *FriendChecker {
 
 // ProcessUsers checks multiple users' friends concurrently and returns flagged users.
 func (fc *FriendChecker) ProcessUsers(userInfos []*fetcher.Info) map[uint64]*types.User {
-	// FriendCheckResult contains the result of checking a user's friends.
-	type FriendCheckResult struct {
-		UserID      uint64
-		User        *types.User
-		AutoFlagged bool
-		Error       error
+	// Collect all unique friend IDs across all users
+	uniqueFriendIDs := make(map[uint64]struct{})
+	for _, userInfo := range userInfos {
+		for _, friend := range userInfo.Friends.Data {
+			uniqueFriendIDs[friend.ID] = struct{}{}
+		}
 	}
 
+	// Convert unique IDs to slice
+	friendIDs := make([]uint64, 0, len(uniqueFriendIDs))
+	for friendID := range uniqueFriendIDs {
+		friendIDs = append(friendIDs, friendID)
+	}
+
+	// Fetch all existing friends
+	existingFriends, friendTypes, err := fc.db.Users().GetUsersByIDs(context.Background(), friendIDs, types.UserFields{
+		Basic:  true,
+		Reason: true,
+	})
+	if err != nil {
+		fc.logger.Error("Failed to fetch existing friends", zap.Error(err))
+		return nil
+	}
+
+	// Process each user concurrently
 	var wg sync.WaitGroup
 	resultsChan := make(chan FriendCheckResult, len(userInfos))
 
@@ -86,45 +110,26 @@ func (fc *FriendChecker) ProcessUsers(userInfos []*fetcher.Info) map[uint64]*typ
 			defer wg.Done()
 
 			// Process user friends
-			user, autoFlagged, err := fc.processUserFriends(info)
+			user, autoFlagged := fc.processUserFriends(info, existingFriends, friendTypes)
 			resultsChan <- FriendCheckResult{
 				UserID:      info.ID,
 				User:        user,
 				AutoFlagged: autoFlagged,
-				Error:       err,
 			}
 		}(userInfo)
 	}
 
-	// Close the channel when all goroutines are done
+	// Close channel when all goroutines complete
 	go func() {
 		wg.Wait()
 		close(resultsChan)
 	}()
 
-	// Collect user infos and results
-	userInfoMap := make(map[uint64]*fetcher.Info)
-	for _, info := range userInfos {
-		userInfoMap[info.ID] = info
-	}
-
-	results := make(map[uint64]*FriendCheckResult)
-	for result := range resultsChan {
-		results[result.UserID] = &result
-	}
-
 	// Collect flagged users
 	flaggedUsers := make(map[uint64]*types.User)
-	for userID, result := range results {
-		if result.Error != nil {
-			fc.logger.Error("Error checking user friends",
-				zap.Error(result.Error),
-				zap.Uint64("userID", userID))
-			continue
-		}
-
+	for result := range resultsChan {
 		if result.AutoFlagged {
-			flaggedUsers[userID] = result.User
+			flaggedUsers[result.UserID] = result.User
 		}
 	}
 
@@ -132,42 +137,29 @@ func (fc *FriendChecker) ProcessUsers(userInfos []*fetcher.Info) map[uint64]*typ
 }
 
 // processUserFriends checks if a user should be flagged based on their friends.
-func (fc *FriendChecker) processUserFriends(userInfo *fetcher.Info) (*types.User, bool, error) {
+func (fc *FriendChecker) processUserFriends(userInfo *fetcher.Info, existingFriends map[uint64]*types.User, friendTypes map[uint64]types.UserType) (*types.User, bool) {
 	// Skip users with very few friends to avoid false positives
 	if len(userInfo.Friends.Data) < 3 {
-		return nil, false, nil
+		return nil, false
 	}
 
-	// Extract friend IDs
-	friendIDs := make([]uint64, len(userInfo.Friends.Data))
-	for i, friend := range userInfo.Friends.Data {
-		friendIDs[i] = friend.ID
-	}
-
-	// Check which users already exist in the database
-	existingUsers, userTypes, err := fc.db.Users().GetUsersByIDs(context.Background(), friendIDs, types.UserFields{
-		Basic:  true,
-		Reason: true,
-	})
-	if err != nil {
-		return nil, false, err
-	}
-
-	// Separate friends by type and count them
+	// Count confirmed and flagged friends
 	confirmedFriends := make(map[uint64]*types.User)
 	flaggedFriends := make(map[uint64]*types.User)
 	confirmedCount := 0
 	flaggedCount := 0
 
-	for id, user := range existingUsers {
-		switch userTypes[id] {
-		case types.UserTypeConfirmed:
-			confirmedCount++
-			confirmedFriends[id] = user
-		case types.UserTypeFlagged:
-			flaggedCount++
-			flaggedFriends[id] = user
-		} //exhaustive:ignore
+	for _, friend := range userInfo.Friends.Data {
+		if user, exists := existingFriends[friend.ID]; exists {
+			switch friendTypes[friend.ID] {
+			case types.UserTypeConfirmed:
+				confirmedCount++
+				confirmedFriends[friend.ID] = user
+			case types.UserTypeFlagged:
+				flaggedCount++
+				flaggedFriends[friend.ID] = user
+			} //exhaustive:ignore
+		}
 	}
 
 	// Calculate confidence score
@@ -217,10 +209,10 @@ func (fc *FriendChecker) processUserFriends(userInfo *fetcher.Info) (*types.User
 			zap.Int("accountAgeDays", int(accountAge.Hours()/24)),
 			zap.String("reason", reason))
 
-		return user, true, nil
+		return user, true
 	}
 
-	return nil, false, nil
+	return nil, false
 }
 
 // calculateConfidence computes a weighted confidence score based on friend relationships and account age.

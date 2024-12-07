@@ -29,55 +29,53 @@ func NewUser(db *bun.DB, tracking *TrackingModel, logger *zap.Logger) *UserModel
 // SaveFlaggedUsers adds or updates users in the flagged_users table.
 // For each user, it updates all fields if the user already exists,
 // or inserts a new record if they don't.
-func (r *UserModel) SaveFlaggedUsers(ctx context.Context, flaggedUsers map[uint64]*types.User) {
-	r.logger.Debug("Saving flagged users", zap.Int("count", len(flaggedUsers)))
-
-	for _, flaggedUser := range flaggedUsers {
-		_, err := r.db.NewInsert().Model(&types.FlaggedUser{User: *flaggedUser}).
-			On("CONFLICT (id) DO UPDATE").
-			Set("name = EXCLUDED.name").
-			Set("display_name = EXCLUDED.display_name").
-			Set("description = EXCLUDED.description").
-			Set("created_at = EXCLUDED.created_at").
-			Set("reason = EXCLUDED.reason").
-			Set("groups = EXCLUDED.groups").
-			Set("outfits = EXCLUDED.outfits").
-			Set("friends = EXCLUDED.friends").
-			Set("games = EXCLUDED.games").
-			Set("flagged_content = EXCLUDED.flagged_content").
-			Set("flagged_groups = EXCLUDED.flagged_groups").
-			Set("follower_count = EXCLUDED.follower_count").
-			Set("following_count = EXCLUDED.following_count").
-			Set("confidence = EXCLUDED.confidence").
-			Set("last_updated = EXCLUDED.last_updated").
-			Set("thumbnail_url = EXCLUDED.thumbnail_url").
-			Set("upvotes = EXCLUDED.upvotes").
-			Set("downvotes = EXCLUDED.downvotes").
-			Set("reputation = EXCLUDED.reputation").
-			Exec(ctx)
-		if err != nil {
-			r.logger.Error("Error saving flagged user",
-				zap.Uint64("userID", flaggedUser.ID),
-				zap.String("username", flaggedUser.Name),
-				zap.String("reason", flaggedUser.Reason),
-				zap.Float64("confidence", flaggedUser.Confidence),
-				zap.Error(err))
-			continue
-		}
-
-		r.logger.Debug("Saved flagged user",
-			zap.Uint64("userID", flaggedUser.ID),
-			zap.String("username", flaggedUser.Name),
-			zap.String("reason", flaggedUser.Reason),
-			zap.Int("groups_count", len(flaggedUser.Groups)),
-			zap.Strings("flagged_content", flaggedUser.FlaggedContent),
-			zap.Uint64s("flagged_groups", flaggedUser.FlaggedGroups),
-			zap.Float64("confidence", flaggedUser.Confidence),
-			zap.Time("last_updated", time.Now()),
-			zap.String("thumbnail_url", flaggedUser.ThumbnailURL))
+func (r *UserModel) SaveFlaggedUsers(ctx context.Context, flaggedUsers map[uint64]*types.User) error {
+	// Convert map to slice for bulk insert
+	users := make([]*types.FlaggedUser, 0, len(flaggedUsers))
+	for _, user := range flaggedUsers {
+		users = append(users, &types.FlaggedUser{
+			User: *user,
+		})
 	}
 
-	r.logger.Debug("Finished saving flagged users")
+	// Perform bulk insert with upsert
+	_, err := r.db.NewInsert().
+		Model(&users).
+		On("CONFLICT (id) DO UPDATE").
+		Set("name = EXCLUDED.name").
+		Set("display_name = EXCLUDED.display_name").
+		Set("description = EXCLUDED.description").
+		Set("created_at = EXCLUDED.created_at").
+		Set("reason = EXCLUDED.reason").
+		Set("groups = EXCLUDED.groups").
+		Set("outfits = EXCLUDED.outfits").
+		Set("friends = EXCLUDED.friends").
+		Set("games = EXCLUDED.games").
+		Set("flagged_content = EXCLUDED.flagged_content").
+		Set("flagged_groups = EXCLUDED.flagged_groups").
+		Set("follower_count = EXCLUDED.follower_count").
+		Set("following_count = EXCLUDED.following_count").
+		Set("confidence = EXCLUDED.confidence").
+		Set("last_scanned = EXCLUDED.last_scanned").
+		Set("last_updated = EXCLUDED.last_updated").
+		Set("last_viewed = EXCLUDED.last_viewed").
+		Set("last_purge_check = EXCLUDED.last_purge_check").
+		Set("thumbnail_url = EXCLUDED.thumbnail_url").
+		Set("upvotes = EXCLUDED.upvotes").
+		Set("downvotes = EXCLUDED.downvotes").
+		Set("reputation = EXCLUDED.reputation").
+		Exec(ctx)
+	if err != nil {
+		r.logger.Error("Failed to save flagged users",
+			zap.Error(err),
+			zap.Int("userCount", len(flaggedUsers)))
+		return err
+	}
+
+	r.logger.Debug("Successfully saved flagged users",
+		zap.Int("userCount", len(flaggedUsers)))
+
+	return nil
 }
 
 // ConfirmUser moves a user from flagged_users to confirmed_users.

@@ -55,10 +55,10 @@ func (c *UserChecker) ProcessUsers(userInfos []*fetcher.Info) []uint64 {
 	c.logger.Info("Processing users", zap.Int("userInfos", len(userInfos)))
 
 	// Process group checker results
-	flaggedUsers, remainingUsers := c.groupChecker.ProcessUsers(userInfos)
+	flaggedUsers := c.groupChecker.ProcessUsers(userInfos)
 
 	// Process friend checker results
-	flaggedByFriends := c.friendChecker.ProcessUsers(remainingUsers)
+	flaggedByFriends := c.friendChecker.ProcessUsers(userInfos)
 	for userID, friendUser := range flaggedByFriends {
 		if existingUser, ok := flaggedUsers[userID]; ok {
 			// Combine reasons and update confidence
@@ -111,7 +111,9 @@ func (c *UserChecker) ProcessUsers(userInfos []*fetcher.Info) []uint64 {
 	}
 
 	// Save flagged users to database
-	c.db.Users().SaveFlaggedUsers(context.Background(), flaggedUsers)
+	if err := c.db.Users().SaveFlaggedUsers(context.Background(), flaggedUsers); err != nil {
+		c.logger.Error("Failed to save flagged users", zap.Error(err))
+	}
 
 	c.logger.Info("Finished processing users",
 		zap.Int("totalProcessed", len(userInfos)),
