@@ -44,7 +44,7 @@ func NormalizeString(s string) string {
 
 	result, _, err := transform.String(normalizer, s)
 	if err != nil {
-		return ""
+		return s
 	}
 	return result
 }
@@ -59,10 +59,13 @@ func ContainsNormalized(s, substr string) bool {
 	}
 
 	normalizedS := NormalizeString(s)
-	normalizedSubstr := NormalizeString(substr)
+	if normalizedS == "" {
+		return strings.Contains(strings.ToLower(s), strings.ToLower(substr))
+	}
 
-	if normalizedS == "" || normalizedSubstr == "" {
-		return false
+	normalizedSubstr := NormalizeString(substr)
+	if normalizedSubstr == "" {
+		return strings.Contains(strings.ToLower(s), strings.ToLower(substr))
 	}
 
 	return strings.Contains(normalizedS, normalizedSubstr)
