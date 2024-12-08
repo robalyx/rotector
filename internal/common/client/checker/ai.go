@@ -257,7 +257,7 @@ func (a *AIChecker) ProcessUsers(userInfos []*fetcher.Info) (map[uint64]*types.U
 	}
 
 	// Check for empty response
-	if len(resp.Candidates) == 0 || len(resp.Candidates[0].Content.Parts) == 0 {
+	if len(resp.Candidates) == 0 || resp.Candidates[0].Content == nil || len(resp.Candidates[0].Content.Parts) == 0 {
 		return nil, nil, fmt.Errorf("%w: no response from Gemini", ErrModelResponse)
 	}
 
@@ -290,11 +290,9 @@ func (a *AIChecker) validateFlaggedUsers(flaggedUsers FlaggedUsers, translatedIn
 	var failedValidationIDs []uint64
 
 	for _, flaggedUser := range flaggedUsers.Users {
-		normalizedName := utils.NormalizeString(flaggedUser.Name)
-
 		// Check if the flagged user exists in both maps
-		translatedInfo, exists := translatedInfos[normalizedName]
-		originalInfo, hasOriginal := originalInfos[normalizedName]
+		translatedInfo, exists := translatedInfos[flaggedUser.Name]
+		originalInfo, hasOriginal := originalInfos[flaggedUser.Name]
 
 		if exists && hasOriginal {
 			// Split all flagged content into words
@@ -373,8 +371,7 @@ func (a *AIChecker) prepareUserInfos(userInfos []*fetcher.Info) (map[string]*fet
 
 	// Initialize maps and spawn translation goroutines
 	for _, info := range userInfos {
-		normalizedName := utils.NormalizeString(info.Name)
-		originalInfos[normalizedName] = info
+		originalInfos[info.Name] = info
 
 		wg.Add(1)
 		go func(info *fetcher.Info) {
@@ -413,10 +410,9 @@ func (a *AIChecker) prepareUserInfos(userInfos []*fetcher.Info) (map[string]*fet
 
 	// Process results
 	for result := range resultsChan {
-		normalizedName := utils.NormalizeString(result.UserInfo.Name)
 		if result.Err != nil {
 			// Use original userInfo if translation fails
-			translatedInfos[normalizedName] = result.UserInfo
+			translatedInfos[result.UserInfo.Name] = result.UserInfo
 			a.logger.Error("Translation failed, using original description",
 				zap.String("username", result.UserInfo.Name),
 				zap.Error(result.Err))
@@ -429,7 +425,7 @@ func (a *AIChecker) prepareUserInfos(userInfos []*fetcher.Info) (map[string]*fet
 			translatedInfo.Description = result.TranslatedDesc
 			a.logger.Debug("Translated description", zap.String("username", translatedInfo.Name))
 		}
-		translatedInfos[normalizedName] = &translatedInfo
+		translatedInfos[result.UserInfo.Name] = &translatedInfo
 	}
 
 	return translatedInfos, originalInfos
