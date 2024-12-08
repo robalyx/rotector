@@ -1,4 +1,4 @@
-package setup
+package logger
 
 import (
 	"fmt"
@@ -10,35 +10,14 @@ import (
 	"sync"
 	"time"
 
-	"github.com/jaxron/axonet/pkg/client/logger"
 	"github.com/rotector/rotector/internal/common/config"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
 
-// Logger adapts zap.Logger to implement the axonet logger.Logger interface.
-type Logger struct {
-	zap *zap.Logger
-}
-
-// NewLogger creates a new Logger instance that wraps a zap.Logger.
-// This adapter allows zap.Logger to be used with the axonet logging interface.
-func NewLogger(zapLogger *zap.Logger) logger.Logger {
-	return &Logger{zap: zapLogger}
-}
-
-func (l *Logger) Debug(msg string)                          { l.zap.Debug(msg) }
-func (l *Logger) Info(msg string)                           { l.zap.Info(msg) }
-func (l *Logger) Warn(msg string)                           { l.zap.Warn(msg) }
-func (l *Logger) Error(msg string)                          { l.zap.Error(msg) }
-func (l *Logger) Debugf(format string, args ...interface{}) { l.zap.Sugar().Debugf(format, args...) }
-func (l *Logger) Infof(format string, args ...interface{})  { l.zap.Sugar().Infof(format, args...) }
-func (l *Logger) Warnf(format string, args ...interface{})  { l.zap.Sugar().Warnf(format, args...) }
-func (l *Logger) Errorf(format string, args ...interface{}) { l.zap.Sugar().Errorf(format, args...) }
-
-// LogManager handles the creation and management of log files and directories.
+// Manager handles the creation and management of log files and directories.
 // It maintains both timestamped session logs and a "latest" symlink for easy access.
-type LogManager struct {
+type Manager struct {
 	currentSessionDir string // Path to the current session's log directory
 	logDir            string // Base directory for all logs
 	level             string // Logging level (debug, info, warn, error)
@@ -46,9 +25,9 @@ type LogManager struct {
 	maxLogLines       int    // Maximum number of lines to keep in each log file
 }
 
-// NewLogManager creates a new LogManager instance.
-func NewLogManager(logDir string, cfg *config.Debug) *LogManager {
-	return &LogManager{
+// NewManager creates a new Manager instance.
+func NewManager(logDir string, cfg *config.Debug) *Manager {
+	return &Manager{
 		logDir:        logDir,
 		level:         cfg.LogLevel,
 		maxLogsToKeep: cfg.MaxLogsToKeep,
@@ -56,20 +35,10 @@ func NewLogManager(logDir string, cfg *config.Debug) *LogManager {
 	}
 }
 
-// WithFields creates a new logger with additional context fields.
-// It converts axonet fields to zap fields and creates a new logger instance.
-func (l *Logger) WithFields(fields ...logger.Field) logger.Logger {
-	zapFields := make([]zap.Field, len(fields))
-	for i, f := range fields {
-		zapFields[i] = zap.Any(f.Key, f.Value)
-	}
-	return &Logger{zap: l.zap.With(zapFields...)}
-}
-
 // GetLoggers initializes the main and database loggers.
 // Returns separate loggers for main application and database logging.
 // Both loggers write to their respective files in both the session and latest directories.
-func (lm *LogManager) GetLoggers() (*zap.Logger, *zap.Logger, error) {
+func (lm *Manager) GetLoggers() (*zap.Logger, *zap.Logger, error) {
 	if err := lm.setupLogDirectories(); err != nil {
 		return nil, nil, err
 	}
@@ -98,7 +67,7 @@ func (lm *LogManager) GetLoggers() (*zap.Logger, *zap.Logger, error) {
 // GetWorkerLogger creates a logger for background workers.
 // Each worker gets its own log file in both the session and latest directories.
 // Returns a no-op logger if initialization fails.
-func (lm *LogManager) GetWorkerLogger(name string) *zap.Logger {
+func (lm *Manager) GetWorkerLogger(name string) *zap.Logger {
 	zapLevel, err := zapcore.ParseLevel(lm.level)
 	if err != nil {
 		return zap.NewNop() // Return no-op logger on invalid level
@@ -125,7 +94,7 @@ func (lm *LogManager) GetWorkerLogger(name string) *zap.Logger {
 
 // setupLogDirectories creates and manages the log directory structure.
 // It ensures the base directory exists, rotates old logs, and sets up the latest directory.
-func (lm *LogManager) setupLogDirectories() error {
+func (lm *Manager) setupLogDirectories() error {
 	// Ensure base log directory exists
 	if err := os.MkdirAll(lm.logDir, os.ModePerm); err != nil {
 		return fmt.Errorf("failed to create logs directory: %w", err)
@@ -157,7 +126,7 @@ func (lm *LogManager) setupLogDirectories() error {
 
 // getOrCreateSessionDir returns the current session directory or creates a new one.
 // Falls back to base log directory if creation fails.
-func (lm *LogManager) getOrCreateSessionDir() string {
+func (lm *Manager) getOrCreateSessionDir() string {
 	if lm.currentSessionDir != "" {
 		return lm.currentSessionDir
 	}
@@ -171,7 +140,7 @@ func (lm *LogManager) getOrCreateSessionDir() string {
 }
 
 // initLogger creates a new zap logger instance with the specified paths and level.
-func (lm *LogManager) initLogger(logPaths []string) (*zap.Logger, error) {
+func (lm *Manager) initLogger(logPaths []string) (*zap.Logger, error) {
 	zapLevel, err := zapcore.ParseLevel(lm.level)
 	if err != nil {
 		return nil, fmt.Errorf("invalid log level: %w", err)
@@ -205,7 +174,7 @@ func (lm *LogManager) initLogger(logPaths []string) (*zap.Logger, error) {
 
 // rotateLogSessions maintains the log directory by removing old sessions.
 // Keeps only the most recent sessions based on maxLogsToKeep.
-func (lm *LogManager) rotateLogSessions() error {
+func (lm *Manager) rotateLogSessions() error {
 	sessions, err := filepath.Glob(filepath.Join(lm.logDir, "*"))
 	if err != nil {
 		return err

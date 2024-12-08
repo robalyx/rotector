@@ -10,6 +10,8 @@ import (
 	"github.com/redis/rueidis"
 	"github.com/rotector/rotector/internal/common/config"
 	"github.com/rotector/rotector/internal/common/queue"
+	"github.com/rotector/rotector/internal/common/setup/client"
+	"github.com/rotector/rotector/internal/common/setup/logger"
 	"github.com/rotector/rotector/internal/common/storage/database"
 	"github.com/rotector/rotector/internal/common/storage/redis"
 	"go.uber.org/zap"
@@ -29,7 +31,7 @@ type App struct {
 	Queue        *queue.Manager   // Background job queue
 	RedisManager *redis.Manager   // Redis connection manager
 	StatusClient rueidis.Client   // Redis client for worker status reporting
-	LogManager   *LogManager      // Log management system
+	LogManager   *logger.Manager  // Log management system
 	pprofServer  *pprofServer     // Debug HTTP server for pprof
 }
 
@@ -43,7 +45,7 @@ func InitializeApp(logDir string) (*App, error) {
 	}
 
 	// Logging system is initialized next to capture setup issues
-	logManager := NewLogManager(logDir, &cfg.Common.Debug)
+	logManager := logger.NewManager(logDir, &cfg.Common.Debug)
 	logger, dbLogger, err := logManager.GetLoggers()
 	if err != nil {
 		return nil, err
@@ -65,7 +67,7 @@ func InitializeApp(logDir string) (*App, error) {
 	}
 
 	// RoAPI client is configured with middleware chain
-	roAPI, err := getRoAPIClient(&cfg.Common, redisManager, logger)
+	roAPI, err := client.GetRoAPIClient(&cfg.Common, redisManager, logger)
 	if err != nil {
 		return nil, err
 	}

@@ -1,4 +1,4 @@
-package setup
+package client
 
 import (
 	"bufio"
@@ -13,27 +13,34 @@ import (
 	"github.com/bytedance/sonic"
 	"github.com/jaxron/axonet/middleware/circuitbreaker"
 	"github.com/jaxron/axonet/middleware/proxy"
-	"github.com/jaxron/axonet/middleware/ratelimit"
 	axonetRedis "github.com/jaxron/axonet/middleware/redis"
 	"github.com/jaxron/axonet/middleware/retry"
 	"github.com/jaxron/axonet/middleware/singleflight"
 	"github.com/jaxron/axonet/pkg/client"
 	"github.com/jaxron/roapi.go/pkg/api"
 	"github.com/rotector/rotector/internal/common/config"
+	"github.com/rotector/rotector/internal/common/setup/client/middleware/ratelimit"
+	"github.com/rotector/rotector/internal/common/setup/logger"
 	"github.com/rotector/rotector/internal/common/storage/redis"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
 )
 
-// getRoAPIClient constructs an HTTP client with a middleware chain for reliability and performance.
+// GetRoAPIClient constructs an HTTP client with a middleware chain for reliability and performance.
 // Middleware order is important - each layer wraps the next in specified priority.
-func getRoAPIClient(cfg *config.CommonConfig, redisManager *redis.Manager, logger *zap.Logger) (*api.API, error) {
+func GetRoAPIClient(cfg *config.CommonConfig, redisManager *redis.Manager, zapLogger *zap.Logger) (*api.API, error) {
 	// Load authentication and proxy configuration
-	cookies := readCookies(logger)
-	proxies := readProxies(logger)
+	cookies := readCookies(zapLogger)
+	proxies := readProxies(zapLogger)
 
-	// Cache layer requires its own Redis database
+	// Get Redis client for caching
 	redisClient, err := redisManager.GetClient(redis.CacheDBIndex)
+	if err != nil {
+		return nil, err
+	}
+
+	// Get Redis client for rate limiting
+	ratelimitClient, err := redisManager.GetClient(redis.RateLimitDBIndex)
 	if err != nil {
 		return nil, err
 	}
@@ -52,8 +59,8 @@ func getRoAPIClient(cfg *config.CommonConfig, redisManager *redis.Manager, logge
 	return api.New(cookies,
 		client.WithMarshalFunc(sonic.Marshal),
 		client.WithUnmarshalFunc(sonic.Unmarshal),
-		client.WithLogger(NewLogger(logger)),
-		client.WithTimeout(5*time.Second),
+		client.WithLogger(logger.New(zapLogger)),
+		client.WithTimeout(time.Duration(cfg.RateLimit.RequestTimeout)*time.Second),
 		client.WithMiddleware(6,
 			circuitbreaker.New(
 				cfg.CircuitBreaker.MaxFailures,
@@ -68,7 +75,7 @@ func getRoAPIClient(cfg *config.CommonConfig, redisManager *redis.Manager, logge
 		)),
 		client.WithMiddleware(4, singleflight.New()),
 		client.WithMiddleware(3, axonetRedis.New(redisClient, 1*time.Hour)),
-		client.WithMiddleware(2, ratelimit.New(cfg.RateLimit.RequestsPerSecond, cfg.RateLimit.BurstSize)),
+		client.WithMiddleware(2, ratelimit.NewRateLimiter(ratelimitClient, float64(cfg.RateLimit.RequestsPerSecond))),
 		client.WithMiddleware(1, proxiesMiddleware),
 	), nil
 }

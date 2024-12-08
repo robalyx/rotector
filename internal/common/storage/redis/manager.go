@@ -29,6 +29,9 @@ const (
 	// WorkerStatusDBIndex uses database 4 for tracking worker heartbeats and status
 	// to monitor worker health and activity.
 	WorkerStatusDBIndex = 4
+
+	// RateLimitDBIndex uses database 5 for global rate limiting.
+	RateLimitDBIndex = 5
 )
 
 // Manager maintains a thread-safe mapping of database indices to Redis clients.
@@ -63,10 +66,13 @@ func (m *Manager) GetClient(dbIndex int) (rueidis.Client, error) {
 
 	// Create new client with database selection
 	client, err := rueidis.NewClient(rueidis.ClientOption{
-		InitAddress: []string{fmt.Sprintf("%s:%d", m.config.Host, m.config.Port)},
-		Username:    m.config.Username,
-		Password:    m.config.Password,
-		SelectDB:    dbIndex,
+		InitAddress:         []string{fmt.Sprintf("%s:%d", m.config.Host, m.config.Port)},
+		Username:            m.config.Username,
+		Password:            m.config.Password,
+		SelectDB:            dbIndex,
+		ClientName:          "rotector",
+		ReadBufferEachConn:  1 << 20,
+		WriteBufferEachConn: 1 << 20,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Redis client for DB %d: %w", dbIndex, err)

@@ -52,8 +52,8 @@ type Debug struct {
 type RateLimit struct {
 	// Maximum number of requests per second
 	RequestsPerSecond float64 `mapstructure:"requests_per_second"`
-	// Maximum burst size for rate limiting
-	BurstSize int `mapstructure:"burst_size"`
+	// Timeout for HTTP requests in seconds
+	RequestTimeout int `mapstructure:"request_timeout"`
 }
 
 // CircuitBreaker contains circuit breaker configuration.
