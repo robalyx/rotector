@@ -1,45 +1,44 @@
-# Build stage
-FROM golang:1.23.2-alpine AS builder
+# ============================================
+# Stage 1: Build stage
+# ============================================
+FROM golang:1.23.4-alpine AS builder
 
 # Set working directory
 WORKDIR /app
 
-# Copy go mod files
-COPY go.mod go.sum ./
+# Install build dependencies
+RUN apk add --no-cache upx
 
-# Download dependencies
+# Copy go.mod and go.sum
+COPY go.mod go.sum ./
 RUN go mod download
 
 # Copy source code
 COPY . .
 
-# Build the applications
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o /app/bin/bot cmd/bot/main.go && \
-    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o /app/bin/worker cmd/worker/main.go
+# Build binaries with optimizations
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
+    -ldflags="-s -w" \
+    -o /app/bin/ \
+    ./cmd/bot \
+    ./cmd/worker \
+    ./cmd/entrypoint && \
+    upx --best --lzma /app/bin/*
 
-# Final stage
-FROM alpine:latest
+# ============================================
+# Stage 2: Final stage
+# ============================================
+FROM gcr.io/distroless/static-debian12:latest-amd64
+
+# Set working directory
+WORKDIR /app
 
 # Set default environment variables
 ENV RUN_TYPE=bot \
     WORKER_TYPE=ai \
     WORKERS_COUNT=1
 
-# Install ca-certificates
-RUN apk add --no-cache ca-certificates tzdata
-
-# Create necessary directories
-RUN mkdir -p /app/config/credentials /app/logs/bot_logs /app/logs/worker_logs
-
 # Copy binaries from builder
-COPY --from=builder /app/bin/bot /app/bin/bot
-COPY --from=builder /app/bin/worker /app/bin/worker
+COPY --from=builder /app/bin/ /app/bin/
 
-# Set working directory
-WORKDIR /app
-
-# Copy entrypoint script
-COPY docker-entrypoint.sh /app/
-RUN chmod +x /app/docker-entrypoint.sh
-
-ENTRYPOINT ["/app/docker-entrypoint.sh"]
+ENTRYPOINT ["/app/bin/entrypoint"]
