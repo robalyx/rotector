@@ -2,7 +2,6 @@ package fetcher
 
 import (
 	"context"
-	"sync"
 
 	"github.com/jaxron/roapi.go/pkg/api"
 	"github.com/jaxron/roapi.go/pkg/api/resources/friends"
@@ -37,22 +36,10 @@ func NewFriendFetcher(roAPI *api.API, logger *zap.Logger) *FriendFetcher {
 	}
 }
 
-// GetFriends retrieves all friends for a user ID, handling pagination and user details.
-func (f *FriendFetcher) GetFriends(ctx context.Context, userID uint64) ([]types.ExtendedFriend, error) {
-	var allFriends []types.ExtendedFriend
+// GetFriends retrieves the friend IDs for a user with pagination handling.
+func (f *FriendFetcher) GetFriends(ctx context.Context, userID uint64) ([]uint64, error) {
+	var friendIDs []uint64
 	var cursor string
-	batchSize := 100 // Process friend details in batches of 100
-	currentBatch := make([]uint64, 0, batchSize)
-
-	// Channel to collect results from batch processing goroutines
-	resultsChan := make(chan FriendFetchResult)
-	var wg sync.WaitGroup
-
-	// Start a goroutine to wait for all batches and close channel
-	go func() {
-		wg.Wait()
-		close(resultsChan)
-	}()
 
 	for {
 		// Create request builder
@@ -69,81 +56,64 @@ func (f *FriendFetcher) GetFriends(ctx context.Context, userID uint64) ([]types.
 			return nil, err
 		}
 
-		// Add friend IDs to current batch
+		// Add friend IDs to slice
 		for _, friend := range response.PageItems {
-			currentBatch = append(currentBatch, friend.ID)
-
-			// Process batch when it reaches batchSize
-			if len(currentBatch) >= batchSize {
-				wg.Add(1)
-				go func(batch []uint64) {
-					defer wg.Done()
-					friendDetails, err := f.getFriendDetails(ctx, batch)
-					resultsChan <- FriendFetchResult{
-						Data:  friendDetails,
-						Error: err,
-					}
-				}(currentBatch)
-
-				currentBatch = make([]uint64, 0, batchSize)
-			}
+			friendIDs = append(friendIDs, friend.ID)
 		}
 
 		// Check if there are more pages
-		if !response.HasMore || response.NextCursor == nil {
+		if response.NextCursor == nil {
 			break
 		}
 
 		cursor = *response.NextCursor
 	}
 
-	// Process any remaining friends in the last batch
-	if len(currentBatch) > 0 {
-		friendDetails, err := f.getFriendDetails(ctx, currentBatch)
-		if err != nil {
-			f.logger.Error("Error processing final batch", zap.Error(err))
-		} else {
-			allFriends = append(allFriends, friendDetails...)
-		}
-	}
-
-	// Collect results from all batches
-	for result := range resultsChan {
-		if result.Error != nil {
-			f.logger.Error("Error processing friend batch", zap.Error(result.Error))
-			continue
-		}
-		allFriends = append(allFriends, result.Data...)
-	}
-
-	return allFriends, nil
+	return friendIDs, nil
 }
 
-// getFriendDetails fetches user details for a batch of friend IDs.
-func (f *FriendFetcher) getFriendDetails(ctx context.Context, friendIDs []uint64) ([]types.ExtendedFriend, error) {
-	// Fetch user details for the batch
-	builder := users.NewUsersByIDsBuilder(friendIDs...)
-	userDetails, err := f.roAPI.Users().GetUsersByIDs(ctx, builder.Build())
+// GetFriendsWithDetails retrieves all friends with their extended details for a user.
+func (f *FriendFetcher) GetFriendsWithDetails(ctx context.Context, userID uint64) ([]types.ExtendedFriend, error) {
+	// Get all friend IDs
+	friendIDs, err := f.GetFriends(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
 
-	// Convert user details to ExtendedFriend type
-	batchFriends := make([]types.ExtendedFriend, 0, len(userDetails.Data))
-	for _, user := range userDetails.Data {
-		batchFriends = append(batchFriends, types.ExtendedFriend{
-			Friend: apiTypes.Friend{
-				ID: user.ID,
-			},
-			Name:             user.Name,
-			DisplayName:      user.DisplayName,
-			HasVerifiedBadge: user.HasVerifiedBadge,
-		})
+	var allFriends []types.ExtendedFriend
+	batchSize := 100
+
+	// Process friendIDs in batches
+	for i := 0; i < len(friendIDs); i += batchSize {
+		end := i + batchSize
+		if end > len(friendIDs) {
+			end = len(friendIDs)
+		}
+
+		// Fetch user details for the current batch
+		builder := users.NewUsersByIDsBuilder(friendIDs[i:end]...)
+		userDetails, err := f.roAPI.Users().GetUsersByIDs(ctx, builder.Build())
+		if err != nil {
+			return nil, err
+		}
+
+		// Convert user details to ExtendedFriend type
+		for _, user := range userDetails.Data {
+			allFriends = append(allFriends, types.ExtendedFriend{
+				Friend: apiTypes.Friend{
+					ID: user.ID,
+				},
+				Name:             user.Name,
+				DisplayName:      user.DisplayName,
+				HasVerifiedBadge: user.HasVerifiedBadge,
+			})
+		}
+
+		f.logger.Debug("Finished fetching friend details batch",
+			zap.Int("batchStart", i),
+			zap.Int("batchEnd", end),
+			zap.Int("successfulFetches", len(userDetails.Data)))
 	}
 
-	f.logger.Debug("Finished fetching friend details",
-		zap.Int("totalRequested", len(friendIDs)),
-		zap.Int("successfulFetches", len(batchFriends)))
-
-	return batchFriends, nil
+	return allFriends, nil
 }
