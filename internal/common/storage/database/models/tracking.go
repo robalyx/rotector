@@ -2,6 +2,7 @@ package models
 
 import (
 	"context"
+	"sort"
 	"time"
 
 	"github.com/rotector/rotector/internal/common/storage/database/types"
@@ -38,17 +39,43 @@ func (r *TrackingModel) AddUsersToGroupsTracking(ctx context.Context, groupToUse
 		})
 	}
 
-	// Perform bulk insert with upsert
-	_, err := r.db.NewInsert().
-		Model(&trackings).
-		On("CONFLICT (group_id) DO UPDATE").
-		Set("flagged_users = ARRAY(SELECT DISTINCT unnest(EXCLUDED.flagged_users || group_member_tracking.flagged_users))").
-		Set("last_appended = EXCLUDED.last_appended").
-		Exec(ctx)
+	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+		// Lock the groups in a consistent order to prevent deadlocks
+		groupIDs := make([]uint64, 0, len(groupToUsers))
+		for groupID := range groupToUsers {
+			groupIDs = append(groupIDs, groupID)
+		}
+		sort.Slice(groupIDs, func(i, j int) bool { return groupIDs[i] < groupIDs[j] })
+
+		// Lock the rows we're going to update
+		var existing []types.GroupMemberTracking
+		err := tx.NewSelect().
+			Model(&existing).
+			Where("group_id IN (?)", bun.In(groupIDs)).
+			For("UPDATE").
+			Order("group_id").
+			Scan(ctx)
+		if err != nil {
+			return err
+		}
+
+		// Perform bulk insert with upsert
+		_, err = tx.NewInsert().
+			Model(&trackings).
+			On("CONFLICT (group_id) DO UPDATE").
+			Set("flagged_users = ARRAY(SELECT DISTINCT unnest(EXCLUDED.flagged_users || group_member_tracking.flagged_users))").
+			Set("last_appended = EXCLUDED.last_appended").
+			Exec(ctx)
+		if err != nil {
+			r.logger.Error("Failed to add users to groups tracking",
+				zap.Error(err),
+				zap.Int("groupCount", len(groupToUsers)))
+			return err
+		}
+
+		return nil
+	})
 	if err != nil {
-		r.logger.Error("Failed to add users to groups tracking",
-			zap.Error(err),
-			zap.Int("groupCount", len(groupToUsers)))
 		return err
 	}
 
