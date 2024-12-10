@@ -39,8 +39,13 @@ func (h *Hook) AfterQuery(_ context.Context, event *bun.QueryEvent) {
 
 	// Track long queries
 	if duration > 3*time.Second {
+		query := event.Query
+		if len(query) > 100 {
+			query = query[:100] + "..."
+		}
+
 		h.logger.Warn("Slow query detected",
-			zap.String("query", event.Query),
+			zap.String("query", query),
 			zap.Duration("duration", duration))
 	}
 }
