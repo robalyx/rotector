@@ -7,7 +7,7 @@ FROM golang:1.23.4-alpine AS builder
 WORKDIR /app
 
 # Install build dependencies
-RUN apk add --no-cache upx
+RUN apk add --no-cache upx ca-certificates
 
 # Copy go.mod and go.sum
 COPY go.mod go.sum ./
@@ -32,6 +32,9 @@ FROM gcr.io/distroless/static-debian12:latest-amd64
 
 # Set working directory
 WORKDIR /app
+
+# Copy CA certificates from builder
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 
 # Set default environment variables
 ENV RUN_TYPE=bot \
