@@ -12,61 +12,75 @@ enable_pprof = false
 # Port for pprof HTTP server if enabled
 pprof_port = 6060
 
-[common.rate_limit]
-# Maximum number of requests per second
-requests_per_second = 50.0
-# Timeout for HTTP requests in seconds
-request_timeout = 10
+[common.proxy]
+# Default cooldown period in milliseconds for unspecified endpoints
+default_cooldown = 5000
+# HTTP request timeout in milliseconds
+request_timeout = 8000
+# Duration in milliseconds to mark a proxy as unhealthy after a timeout error
+unhealthy_duration = 30000
+
+# Endpoint-specific cooldown periods in milliseconds
+[common.proxy.endpoints]
+following_count = { pattern = "friends.roblox.com/v1/users/{id}/followings/count", cooldown = 3000 }
+followers_count = { pattern = "friends.roblox.com/v1/users/{id}/followers/count", cooldown = 3000 }
+find_friends = { pattern = "friends.roblox.com/v1/users/{id}/friends/find", cooldown = 3000 }
+user_info = { pattern = "users.roblox.com/v1/users/{id}", cooldown = 3000 }
+user_info_batch = { pattern = "users.roblox.com/v1/users", cooldown = 3000 }
+user_games = { pattern = "games.roblox.com/v2/users/{id}/games", cooldown = 3000 }
+user_outfits = { pattern = "avatar.roblox.com/v2/avatar/users/{id}/outfits", cooldown = 3000 }
+user_groups = { pattern = "groups.roblox.com/v1/users/{id}/groups/roles", cooldown = 3000 }
+thumbnail_batch = { pattern = "thumbnails.roblox.com/v1/batch", cooldown = 2000 }
 
 [common.circuit_breaker]
-# Maximum number of consecutive failures before circuit opens
+# Number of failures before circuit opens
 max_failures = 10
-# Time in milliseconds after which a request is considered failed
+# Request timeout in milliseconds
 failure_threshold = 500
-# Time in milliseconds before attempting to close circuit
-recovery_timeout = 5000
+# Recovery delay in milliseconds
+recovery_timeout = 30000
 
 [common.retry]
-# Maximum number of retry attempts
-max_retries = 3
-# Initial delay between retries in milliseconds
+# Maximum retry attempts
+max_retries = 10
+# Initial retry delay in milliseconds
 delay = 3000
-# Maximum delay between retries in milliseconds
-max_delay = 5000
+# Maximum retry delay in milliseconds
+max_delay = 4000
 
 [common.postgresql]
-# PostgreSQL server hostname
+# Database hostname
 host = "127.0.0.1"
-# PostgreSQL server port
+# Database port
 port = 5432
-# PostgreSQL username
+# Database username
 user = "postgres"
-# PostgreSQL password
+# Database password
 password = "postgres"
-# PostgreSQL name
+# Database name
 db_name = "postgres"
 
-# Maximum number of open connections
+# Maximum open connections
 max_open_conns = 10
-# Maximum number of idle connections
+# Maximum idle connections
 max_idle_conns = 10
-# Maximum connection lifetime in minutes
+# Connection lifetime in minutes
 max_lifetime = 30
-# Maximum idle connection time in minutes
+# Idle timeout in minutes
 max_idle_time = 10
 
 [common.redis]
-# Redis server hostname
+# Redis hostname
 host = "127.0.0.1"
-# Redis server port
+# Redis port
 port = 6379
-# Redis username (optional)
+# Redis username
 username = ""
-# Redis password (optional)
+# Redis password
 password = ""
 
 [common.gemini_ai]
-# Gemini AI API key for authentication
+# API key for authentication
 api_key = ""
-# Model version to use for AI analysis
+# Model version to use
 model = "gemini-1.5-flash-8b-latest"

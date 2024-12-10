@@ -12,14 +12,13 @@ import (
 
 	"github.com/bytedance/sonic"
 	"github.com/jaxron/axonet/middleware/circuitbreaker"
-	"github.com/jaxron/axonet/middleware/proxy"
 	axonetRedis "github.com/jaxron/axonet/middleware/redis"
 	"github.com/jaxron/axonet/middleware/retry"
 	"github.com/jaxron/axonet/middleware/singleflight"
 	"github.com/jaxron/axonet/pkg/client"
 	"github.com/jaxron/roapi.go/pkg/api"
 	"github.com/rotector/rotector/internal/common/config"
-	"github.com/rotector/rotector/internal/common/setup/client/middleware/ratelimit"
+	"github.com/rotector/rotector/internal/common/setup/client/middleware/proxy"
 	"github.com/rotector/rotector/internal/common/setup/logger"
 	"github.com/rotector/rotector/internal/common/storage/redis"
 	"github.com/spf13/viper"
@@ -39,44 +38,38 @@ func GetRoAPIClient(cfg *config.CommonConfig, redisManager *redis.Manager, zapLo
 		return nil, err
 	}
 
-	// Get Redis client for rate limiting
-	ratelimitClient, err := redisManager.GetClient(redis.RateLimitDBIndex)
+	// Get Redis client for proxy rotation
+	proxyClient, err := redisManager.GetClient(redis.ProxyDBIndex)
 	if err != nil {
 		return nil, err
 	}
 
-	// Shuffle proxies to avoid request failures
-	proxiesMiddleware := proxy.New(proxies)
-	proxiesMiddleware.Shuffle()
-
 	// Build client with middleware chain in priority order:
-	// 6. Circuit breaker prevents cascading failures
-	// 5. Retry handles transient failures
-	// 4. Single flight deduplicates concurrent requests
-	// 3. Redis caching reduces API load
-	// 2. Rate limiting prevents API abuse
-	// 1. Proxy routing distributes requests
+	// 5. Circuit breaker prevents cascading failures
+	// 4. Retry handles transient failures
+	// 3. Single flight deduplicates concurrent requests
+	// 2. Redis caching reduces API load
+	// 1. Proxy routing with rate limiting
 	return api.New(cookies,
 		client.WithMarshalFunc(sonic.Marshal),
 		client.WithUnmarshalFunc(sonic.Unmarshal),
 		client.WithLogger(logger.New(zapLogger)),
-		client.WithTimeout(time.Duration(cfg.RateLimit.RequestTimeout)*time.Second),
-		client.WithMiddleware(6,
+		client.WithTimeout(time.Duration(cfg.Proxy.RequestTimeout)*time.Millisecond),
+		client.WithMiddleware(5,
 			circuitbreaker.New(
 				cfg.CircuitBreaker.MaxFailures,
 				time.Duration(cfg.CircuitBreaker.FailureThreshold)*time.Millisecond,
 				time.Duration(cfg.CircuitBreaker.RecoveryTimeout)*time.Millisecond,
 			),
 		),
-		client.WithMiddleware(5, retry.New(
+		client.WithMiddleware(4, retry.New(
 			cfg.Retry.MaxRetries,
 			time.Duration(cfg.Retry.Delay)*time.Millisecond,
 			time.Duration(cfg.Retry.MaxDelay)*time.Millisecond,
 		)),
-		client.WithMiddleware(4, singleflight.New()),
-		client.WithMiddleware(3, axonetRedis.New(redisClient, 1*time.Hour)),
-		client.WithMiddleware(2, ratelimit.NewRateLimiter(ratelimitClient, float64(cfg.RateLimit.RequestsPerSecond))),
-		client.WithMiddleware(1, proxiesMiddleware),
+		client.WithMiddleware(3, singleflight.New()),
+		client.WithMiddleware(2, axonetRedis.New(redisClient, 1*time.Hour)),
+		client.WithMiddleware(1, proxy.New(proxies, proxyClient, &cfg.Proxy)),
 	), nil
 }
 

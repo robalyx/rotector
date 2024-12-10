@@ -30,8 +30,8 @@ const (
 	// to monitor worker health and activity.
 	WorkerStatusDBIndex = 4
 
-	// RateLimitDBIndex uses database 5 for global rate limiting.
-	RateLimitDBIndex = 5
+	// ProxyDBIndex uses database 5 for proxy rotation synchronization and monitoring.
+	ProxyDBIndex = 5
 )
 
 // Manager maintains a thread-safe mapping of database indices to Redis clients.
