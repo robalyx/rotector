@@ -9,11 +9,10 @@ require (
 	github.com/google/generative-ai-go v0.19.0
 	github.com/google/uuid v1.6.0
 	github.com/jaxron/axonet v0.0.0-20241110114112-10fce0f238e1
-	github.com/jaxron/axonet/middleware/circuitbreaker v0.0.0-20241110114112-10fce0f238e1
-	github.com/jaxron/axonet/middleware/proxy v0.0.0-20241110114112-10fce0f238e1
-	github.com/jaxron/axonet/middleware/redis v0.0.0-20241110114112-10fce0f238e1
-	github.com/jaxron/axonet/middleware/retry v0.0.0-20241110114112-10fce0f238e1
-	github.com/jaxron/axonet/middleware/singleflight v0.0.0-20241110114112-10fce0f238e1
+	github.com/jaxron/axonet/middleware/circuitbreaker v0.0.0-20241210091027-3b92c80609cf
+	github.com/jaxron/axonet/middleware/redis v0.0.0-20241210091027-3b92c80609cf
+	github.com/jaxron/axonet/middleware/retry v0.0.0-20241210091027-3b92c80609cf
+	github.com/jaxron/axonet/middleware/singleflight v0.0.0-20241210091027-3b92c80609cf
 	github.com/jaxron/roapi.go v0.0.0-20241207095928-5d33fcc38cf1
 	github.com/ozankasikci/go-image-merge v0.3.1
 	github.com/redis/rueidis v1.0.51
@@ -101,8 +100,8 @@ require (
 	golang.org/x/oauth2 v0.24.0 // indirect
 	golang.org/x/sync v0.10.0 // indirect
 	golang.org/x/sys v0.28.0 // indirect
-	google.golang.org/genproto/googleapis/api v0.0.0-20241206012308-a4fef0638583 // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20241206012308-a4fef0638583 // indirect
+	google.golang.org/genproto/googleapis/api v0.0.0-20241209162323-e6fa225c2576 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20241209162323-e6fa225c2576 // indirect
 	google.golang.org/grpc v1.68.1 // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
