@@ -276,7 +276,9 @@ func (w *Worker) checkGroupTrackings() error {
 
 	// Add thumbnails and save to database
 	flaggedGroups = w.thumbnailFetcher.AddGroupImageURLs(flaggedGroups)
-	w.db.Groups().SaveFlaggedGroups(context.Background(), flaggedGroups)
+	if err := w.db.Groups().SaveFlaggedGroups(context.Background(), flaggedGroups); err != nil {
+		return fmt.Errorf("failed to save flagged groups: %w", err)
+	}
 
 	w.logger.Info("Checked group trackings", zap.Int("flagged_groups", len(flaggedGroups)))
 	return nil

@@ -28,50 +28,38 @@ func NewGroup(db *bun.DB, logger *zap.Logger) *GroupModel {
 // SaveFlaggedGroups adds or updates groups in the flagged_groups table.
 // For each group, it updates all fields if the group already exists,
 // or inserts a new record if they don't.
-func (r *GroupModel) SaveFlaggedGroups(ctx context.Context, flaggedGroups []*types.FlaggedGroup) {
+func (r *GroupModel) SaveFlaggedGroups(ctx context.Context, flaggedGroups []*types.FlaggedGroup) error {
 	r.logger.Debug("Saving flagged groups", zap.Int("count", len(flaggedGroups)))
 
-	for _, flaggedGroup := range flaggedGroups {
-		_, err := r.db.NewInsert().Model(flaggedGroup).
-			On("CONFLICT (id) DO UPDATE").
-			Set("name = EXCLUDED.name").
-			Set("description = EXCLUDED.description").
-			Set("owner = EXCLUDED.owner").
-			Set("shout = EXCLUDED.shout").
-			Set("member_count = EXCLUDED.member_count").
-			Set("reason = EXCLUDED.reason").
-			Set("confidence = EXCLUDED.confidence").
-			Set("last_scanned = EXCLUDED.last_scanned").
-			Set("last_updated = EXCLUDED.last_updated").
-			Set("last_viewed = EXCLUDED.last_viewed").
-			Set("last_purge_check = EXCLUDED.last_purge_check").
-			Set("thumbnail_url = EXCLUDED.thumbnail_url").
-			Set("upvotes = EXCLUDED.upvotes").
-			Set("downvotes = EXCLUDED.downvotes").
-			Set("reputation = EXCLUDED.reputation").
-			Set("flagged_users = EXCLUDED.flagged_users").
-			Exec(ctx)
-		if err != nil {
-			r.logger.Error("Error saving flagged group",
-				zap.Uint64("groupID", flaggedGroup.ID),
-				zap.String("name", flaggedGroup.Name),
-				zap.String("reason", flaggedGroup.Reason),
-				zap.Float64("confidence", flaggedGroup.Confidence),
-				zap.Error(err))
-			continue
-		}
-
-		r.logger.Debug("Saved flagged group",
-			zap.Uint64("groupID", flaggedGroup.ID),
-			zap.String("name", flaggedGroup.Name),
-			zap.String("reason", flaggedGroup.Reason),
-			zap.Float64("confidence", flaggedGroup.Confidence),
-			zap.Time("last_updated", flaggedGroup.LastUpdated),
-			zap.String("thumbnail_url", flaggedGroup.ThumbnailURL),
-			zap.Uint64("member_count", flaggedGroup.MemberCount))
+	// Perform bulk insert with upsert
+	_, err := r.db.NewInsert().
+		Model(&flaggedGroups).
+		On("CONFLICT (id) DO UPDATE").
+		Set("name = EXCLUDED.name").
+		Set("description = EXCLUDED.description").
+		Set("owner = EXCLUDED.owner").
+		Set("shout = EXCLUDED.shout").
+		Set("member_count = EXCLUDED.member_count").
+		Set("reason = EXCLUDED.reason").
+		Set("confidence = EXCLUDED.confidence").
+		Set("last_scanned = EXCLUDED.last_scanned").
+		Set("last_updated = EXCLUDED.last_updated").
+		Set("last_viewed = EXCLUDED.last_viewed").
+		Set("last_purge_check = EXCLUDED.last_purge_check").
+		Set("thumbnail_url = EXCLUDED.thumbnail_url").
+		Set("upvotes = EXCLUDED.upvotes").
+		Set("downvotes = EXCLUDED.downvotes").
+		Set("reputation = EXCLUDED.reputation").
+		Exec(ctx)
+	if err != nil {
+		r.logger.Error("Failed to save flagged groups",
+			zap.Error(err),
+			zap.Int("groupCount", len(flaggedGroups)))
+		return err
 	}
 
 	r.logger.Debug("Finished saving flagged groups")
+	return nil
 }
 
 // ConfirmGroup moves a group from flagged_groups to confirmed_groups.
