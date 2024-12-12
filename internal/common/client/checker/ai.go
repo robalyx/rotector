@@ -27,9 +27,10 @@ Key Rules:
 - Flag ANY violations, no matter how subtle
 - For 'flaggedContent', copy-paste EXACT text segments from the user's name, display name, or description that violate guidelines
 - Never return placeholder text like "string" - only use actual content from the user's profile
-- Do not flag empty descriptions
-- When in doubt, flag the user
 - Combine all violations for a user into one entry
+- Exclude users without any violations from the response
+- Do not flag empty descriptions as they are not violations
+- When in doubt, flag the user
 
 Content Categories to Watch For:
 - Explicit sexual terms and innuendos
@@ -279,7 +280,7 @@ func (a *AIChecker) ProcessUsers(userInfos []*fetcher.Info) (map[uint64]*types.U
 
 // validateFlaggedUsers validates the flagged users against the translated content
 // but uses original descriptions when creating validated users. It checks if at least
-// 10% of the flagged words are found in the translated content to confirm the AI's findings.
+// 30% of the flagged words are found in the translated content to confirm the AI's findings.
 func (a *AIChecker) validateFlaggedUsers(flaggedUsers FlaggedUsers, translatedInfos map[string]*fetcher.Info, originalInfos map[string]*fetcher.Info) (map[uint64]*types.User, []uint64) {
 	validatedUsers := make(map[uint64]*types.User)
 	var failedValidationIDs []uint64
@@ -289,7 +290,7 @@ func (a *AIChecker) validateFlaggedUsers(flaggedUsers FlaggedUsers, translatedIn
 		translatedInfo, exists := translatedInfos[flaggedUser.Name]
 		originalInfo, hasOriginal := originalInfos[flaggedUser.Name]
 
-		if exists && hasOriginal {
+		if exists && hasOriginal && flaggedUser.Confidence > 0 {
 			// Split all flagged content into words
 			var allFlaggedWords []string
 			for _, content := range flaggedUser.FlaggedContent {
@@ -306,8 +307,8 @@ func (a *AIChecker) validateFlaggedUsers(flaggedUsers FlaggedUsers, translatedIn
 				}
 			}
 
-			// Check if at least 10% of the flagged words are found
-			isValid := float64(foundWords) >= 0.1*float64(len(allFlaggedWords))
+			// Check if at least 30% of the flagged words are found
+			isValid := float64(foundWords) >= 0.3*float64(len(allFlaggedWords))
 
 			// If the flagged user is correct, add it using original info
 			if isValid {
