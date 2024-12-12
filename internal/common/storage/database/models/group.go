@@ -313,56 +313,50 @@ func (r *GroupModel) updateVotesInTable(ctx context.Context, tx bun.Tx, model in
 // GetGroupsToCheck finds groups that haven't been checked for locked status recently.
 func (r *GroupModel) GetGroupsToCheck(ctx context.Context, limit int) ([]uint64, error) {
 	var groupIDs []uint64
-
 	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
-		// Use CTE to select groups
+		// Get and update confirmed groups
 		err := tx.NewRaw(`
-			WITH selected_groups AS (
-				(
-					SELECT id, 'confirmed' as type
-					FROM confirmed_groups
-					WHERE last_purge_check IS NULL 
-						OR last_purge_check < NOW() - INTERVAL '8 hours'
-					ORDER BY RANDOM()
+			WITH updated AS (
+				UPDATE confirmed_groups
+				SET last_purge_check = NOW()
+				WHERE id IN (
+					SELECT id FROM confirmed_groups
+					WHERE last_purge_check < NOW() - INTERVAL '1 day'
+					ORDER BY last_purge_check ASC
 					LIMIT ?
+					FOR UPDATE SKIP LOCKED
 				)
-				UNION ALL
-				(
-					SELECT id, 'flagged' as type
-					FROM flagged_groups
-					WHERE last_purge_check IS NULL 
-						OR last_purge_check < NOW() - INTERVAL '8 hours'
-					ORDER BY RANDOM()
-					LIMIT ?
-				)
+				RETURNING id
 			)
-			SELECT id FROM selected_groups
-		`, limit/2, limit/2).Scan(ctx, &groupIDs)
+			SELECT * FROM updated
+		`, limit/2).Scan(ctx, &groupIDs)
 		if err != nil {
-			r.logger.Error("Failed to get groups to check", zap.Error(err))
+			r.logger.Error("Failed to get and update confirmed groups", zap.Error(err))
 			return err
 		}
 
-		// Update last_purge_check for selected groups
-		if len(groupIDs) > 0 {
-			_, err = tx.NewUpdate().Model((*types.ConfirmedGroup)(nil)).
-				Set("last_purge_check = ?", time.Now()).
-				Where("id IN (?)", bun.In(groupIDs)).
-				Exec(ctx)
-			if err != nil {
-				r.logger.Error("Failed to update last_purge_check for confirmed groups", zap.Error(err))
-				return err
-			}
-
-			_, err = tx.NewUpdate().Model((*types.FlaggedGroup)(nil)).
-				Set("last_purge_check = ?", time.Now()).
-				Where("id IN (?)", bun.In(groupIDs)).
-				Exec(ctx)
-			if err != nil {
-				r.logger.Error("Failed to update last_purge_check for flagged groups", zap.Error(err))
-				return err
-			}
+		// Get and update flagged groups
+		var flaggedIDs []uint64
+		err = tx.NewRaw(`
+			WITH updated AS (
+				UPDATE flagged_groups
+				SET last_purge_check = NOW()
+				WHERE id IN (
+					SELECT id FROM flagged_groups
+					WHERE last_purge_check < NOW() - INTERVAL '1 day'
+					ORDER BY last_purge_check ASC
+					LIMIT ?
+					FOR UPDATE SKIP LOCKED
+				)
+				RETURNING id
+			)
+			SELECT * FROM updated
+		`, limit/2).Scan(ctx, &flaggedIDs)
+		if err != nil {
+			r.logger.Error("Failed to get and update flagged groups", zap.Error(err))
+			return err
 		}
+		groupIDs = append(groupIDs, flaggedIDs...)
 
 		return nil
 	})

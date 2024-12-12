@@ -415,65 +415,55 @@ func (r *UserModel) GetUsersByIDs(ctx context.Context, userIDs []uint64, fields 
 // Returns a batch of user IDs and updates their last_purge_check timestamp.
 func (r *UserModel) GetUsersToCheck(ctx context.Context, limit int) ([]uint64, error) {
 	var userIDs []uint64
-
 	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
-		// Use CTE to select users
+		// Get and update confirmed users
 		err := tx.NewRaw(`
-			WITH selected_users AS (
-				(
-					SELECT id, 'confirmed' as type
-					FROM confirmed_users
-					WHERE last_purge_check IS NULL 
-						OR last_purge_check < NOW() - INTERVAL '8 hours'
-					ORDER BY RANDOM()
+			WITH updated AS (
+				UPDATE confirmed_users
+				SET last_purge_check = NOW()
+				WHERE id IN (
+					SELECT id FROM confirmed_users
+					WHERE last_purge_check < NOW() - INTERVAL '1 day'
+					ORDER BY last_purge_check ASC
 					LIMIT ?
+					FOR UPDATE SKIP LOCKED
 				)
-				UNION ALL
-				(
-					SELECT id, 'flagged' as type
-					FROM flagged_users
-					WHERE last_purge_check IS NULL 
-						OR last_purge_check < NOW() - INTERVAL '8 hours'
-					ORDER BY RANDOM()
-					LIMIT ?
-				)
+				RETURNING id
 			)
-			SELECT id FROM selected_users
-		`, limit/2, limit/2).Scan(ctx, &userIDs)
+			SELECT * FROM updated
+		`, limit/2).Scan(ctx, &userIDs)
 		if err != nil {
-			r.logger.Error("Failed to get users to check", zap.Error(err))
+			r.logger.Error("Failed to get and update confirmed users", zap.Error(err))
 			return err
 		}
 
-		// Update last_purge_check for selected users
-		if len(userIDs) > 0 {
-			_, err = tx.NewUpdate().Model((*types.ConfirmedUser)(nil)).
-				Set("last_purge_check = ?", time.Now()).
-				Where("id IN (?)", bun.In(userIDs)).
-				Exec(ctx)
-			if err != nil {
-				r.logger.Error("Failed to update last_purge_check for confirmed users", zap.Error(err))
-				return err
-			}
-
-			_, err = tx.NewUpdate().Model((*types.FlaggedUser)(nil)).
-				Set("last_purge_check = ?", time.Now()).
-				Where("id IN (?)", bun.In(userIDs)).
-				Exec(ctx)
-			if err != nil {
-				r.logger.Error("Failed to update last_purge_check for flagged users", zap.Error(err))
-				return err
-			}
+		// Get and update flagged users
+		var flaggedIDs []uint64
+		err = tx.NewRaw(`
+			WITH updated AS (
+				UPDATE flagged_users
+				SET last_purge_check = NOW()
+				WHERE id IN (
+					SELECT id FROM flagged_users
+					WHERE last_purge_check < NOW() - INTERVAL '1 day'
+					ORDER BY last_purge_check ASC
+					LIMIT ?
+					FOR UPDATE SKIP LOCKED
+				)
+				RETURNING id
+			)
+			SELECT * FROM updated
+		`, limit/2).Scan(ctx, &flaggedIDs)
+		if err != nil {
+			r.logger.Error("Failed to get and update flagged users", zap.Error(err))
+			return err
 		}
+		userIDs = append(userIDs, flaggedIDs...)
 
 		return nil
 	})
-	if err != nil {
-		return nil, err
-	}
 
-	r.logger.Debug("Retrieved and updated users to check", zap.Int("count", len(userIDs)))
-	return userIDs, nil
+	return userIDs, err
 }
 
 // RemoveBannedUsers moves users from confirmed_users and flagged_users to banned_users.
