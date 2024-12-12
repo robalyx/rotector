@@ -102,6 +102,7 @@ type BatchSizes struct {
 	PurgeUsers  int `mapstructure:"purge_users"`  // Number of users to check for purging in one batch
 	GroupUsers  int `mapstructure:"group_users"`  // Number of group members to process in one batch
 	PurgeGroups int `mapstructure:"purge_groups"` // Number of groups to check for purging in one batch
+	QueueItems  int `mapstructure:"queue_items"`  // Number of queue items to process in one batch
 }
 
 // ThresholdLimits configures various thresholds for worker operations.

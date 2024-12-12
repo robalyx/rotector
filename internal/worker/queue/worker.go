@@ -27,6 +27,7 @@ type Worker struct {
 	userChecker *checker.UserChecker
 	reporter    *core.StatusReporter
 	logger      *zap.Logger
+	batchSize   int
 }
 
 // New creates a new queue core.
@@ -44,6 +45,7 @@ func New(app *setup.App, bar *progress.Bar, logger *zap.Logger) *Worker {
 		userChecker: userChecker,
 		reporter:    reporter,
 		logger:      logger,
+		batchSize:   app.Config.Worker.BatchSizes.QueueItems,
 	}
 }
 
@@ -91,13 +93,8 @@ func (w *Worker) Start() {
 	}
 }
 
-// getNextBatch retrieves items from queues in priority order:
-// 1. High priority queue first
-// 2. Normal priority queue second
-// 3. Low priority queue last
-// Returns up to 10 items per batch.
+// getNextBatch retrieves items from queues based on priority order.
 func (w *Worker) getNextBatch() ([]*queue.Item, error) {
-	ctx := context.Background()
 	var items []*queue.Item
 
 	// Check queues in priority order
@@ -108,7 +105,7 @@ func (w *Worker) getNextBatch() ([]*queue.Item, error) {
 	} {
 		// Get items from current priority queue
 		key := fmt.Sprintf("queue:%s_priority", priority)
-		itemsJSON, err := w.queue.GetQueueItems(ctx, key, 10-len(items))
+		itemsJSON, err := w.queue.GetQueueItems(context.Background(), key, w.batchSize-len(items))
 		if err != nil {
 			return nil, fmt.Errorf("failed to get items from queue: %w", err)
 		}
@@ -127,7 +124,7 @@ func (w *Worker) getNextBatch() ([]*queue.Item, error) {
 		}
 
 		// Stop if batch is full
-		if len(items) >= 10 {
+		if len(items) >= w.batchSize {
 			break
 		}
 	}

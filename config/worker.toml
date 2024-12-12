@@ -7,11 +7,13 @@ group_users = 100
 purge_users = 200
 # Number of groups to check for purging in one batch
 purge_groups = 100
+# Number of queue items to process in one batch
+queue_items = 50
 
 [worker.threshold_limits]
 # Maximum number of flagged users before stopping worker
 flagged_users = 1000
 # Minimum number of flagged users needed to flag a group
-min_flagged_for_group = 50
+min_flagged_for_group = 200
 # Minimum follower count to consider a user "popular"
 min_followers_for_popular_user = 1000
