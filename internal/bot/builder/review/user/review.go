@@ -154,8 +154,9 @@ func (b *ReviewBuilder) buildReviewBuilder() *discord.EmbedBuilder {
 			AddField(b.getFriendsField(), b.getFriends(), false).
 			AddField(b.getGroupsField(), b.getGroups(), false).
 			AddField("Outfits", b.getOutfits(), false).
-			AddField("Games", b.getGames(), false).
-			AddField(b.getFlaggedType(), b.getFlaggedContent(), false)
+			AddField("Games", b.getGames(), false)
+
+		b.addFlaggedFields(embed)
 	} else {
 		// Standard mode - show all information with links
 		embed.SetAuthorName(header).
@@ -177,9 +178,10 @@ func (b *ReviewBuilder) buildReviewBuilder() *discord.EmbedBuilder {
 			AddField(b.getFriendsField(), b.getFriends(), false).
 			AddField(b.getGroupsField(), b.getGroups(), false).
 			AddField("Outfits", b.getOutfits(), false).
-			AddField("Games", b.getGames(), false).
-			AddField(b.getFlaggedType(), b.getFlaggedContent(), false).
-			AddField("Review History", b.getReviewHistory(), false)
+			AddField("Games", b.getGames(), false)
+
+		b.addFlaggedFields(embed)
+		embed.AddField("Review History", b.getReviewHistory(), false)
 	}
 
 	// Add verified at time if this is a confirmed user
@@ -342,41 +344,59 @@ func (b *ReviewBuilder) getDescription() string {
 	return description
 }
 
-// getFlaggedType returns the flagged type field for the embed.
-func (b *ReviewBuilder) getFlaggedType() string {
-	if len(b.user.FlaggedGroups) > 0 {
-		return "Flagged Groups"
+// addFlaggedFields adds the flagged content and groups fields to the embed if they exist.
+func (b *ReviewBuilder) addFlaggedFields(embed *discord.EmbedBuilder) {
+	if len(b.user.FlaggedContent) != 0 {
+		embed.AddField("Flagged Content", b.getFlaggedContent(), false)
 	}
-	return "Flagged Content"
+
+	if len(b.user.FlaggedGroups) != 0 {
+		embed.AddField("Flagged Groups", b.getFlaggedGroups(), false)
+	}
 }
 
 // getFlaggedContent returns the flagged content field for the embed.
 func (b *ReviewBuilder) getFlaggedContent() string {
-	flaggedGroups := b.user.FlaggedGroups
-	if len(flaggedGroups) > 0 {
-		var content strings.Builder
-		for _, flaggedGroupID := range flaggedGroups {
-			for _, group := range b.user.Groups {
-				if group.Group.ID == flaggedGroupID {
-					content.WriteString(fmt.Sprintf("- [%s](https://www.roblox.com/groups/%d) (%s)\n",
-						group.Group.Name, group.Group.ID, group.Role.Name))
-					break
+	content := make([]string, 0, 5)
+	for i, item := range b.user.FlaggedContent {
+		if i >= 5 {
+			content = append(content, "... and more")
+			break
+		}
+		normalized := utils.NormalizeString(item)
+		content = append(content, fmt.Sprintf("- `%s`", normalized))
+	}
+
+	return strings.Join(content, "\n")
+}
+
+// getFlaggedGroups returns the flagged groups field for the embed.
+func (b *ReviewBuilder) getFlaggedGroups() string {
+	content := make([]string, 0, 5)
+	for i, flaggedGroupID := range b.user.FlaggedGroups {
+		if i >= 5 {
+			content = append(content, "... and more")
+			break
+		}
+
+		for _, group := range b.user.Groups {
+			if group.Group.ID == flaggedGroupID {
+				if b.settings.ReviewMode == types.TrainingReviewMode {
+					content = append(content, fmt.Sprintf("- %s (%s)",
+						utils.CensorString(group.Group.Name, true),
+						group.Role.Name))
+				} else {
+					content = append(content, fmt.Sprintf("- [%s](https://www.roblox.com/groups/%d) (%s)",
+						utils.CensorString(group.Group.Name, b.settings.StreamerMode),
+						group.Group.ID,
+						group.Role.Name))
 				}
+				break
 			}
 		}
-		return content.String()
 	}
 
-	flaggedContent := b.user.FlaggedContent
-	if len(flaggedContent) > 0 {
-		for i := range flaggedContent {
-			// Remove all newlines and backticks
-			flaggedContent[i] = utils.NormalizeString(flaggedContent[i])
-		}
-		return fmt.Sprintf("- `%s`", strings.Join(flaggedContent, "`\n- `"))
-	}
-
-	return constants.NotApplicable
+	return strings.Join(content, "\n")
 }
 
 // getReviewHistory returns the review history field for the embed.
