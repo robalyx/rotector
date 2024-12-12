@@ -1,6 +1,6 @@
 <h1 align="center">
   <picture>
-    <img width="800" alt="Rotector" src="./assets/images/banner.gif">
+    <img width="800" alt="Rotector" src="./assets/gif/banner.gif">
   </picture>
   <br>
   <a href="https://github.com/rotector/rotector/blob/main/LICENSE">
@@ -20,7 +20,7 @@
 <p align="center">
   <em>When Roblox moderators dream of superpowers, they dream of <b>Rotector</b>. A powerful application built with <a href="https://go.dev/">Go</a> that uses AI and smart algorithms to find inappropriate Roblox accounts.</em>
   <br><br>
-  🚀 <strong>An experimental project built with modern technologies.</strong>
+  🚀 <strong>Powered by modern technologies.</strong>
 </p>
 
 ---
@@ -32,85 +32,35 @@
 
 ## 📚 Table of Contents
 
-- [🔍 Overview](#-overview)
 - [🚀 Features](#-features)
 - [📦 Prerequisites](#-prerequisites)
-- [🎯 Accuracy](#-accuracy)
+- [🔄 How It Works](#-how-it-works)
 - [⚡ Efficiency](#-efficiency)
 - [🔄 Reviewing](#-reviewing)
+- [🔌 API Server](#-api-server)
 - [🛣️ Roadmap](#️-roadmap)
 - [❓ FAQ](#-faq)
 - [👥 Contributing](#-contributing)
 - [📄 License](#-license)
 - [⚠️ Disclaimer](#%EF%B8%8F-disclaimer)
 
-## 🔍 Overview
-
-|                                                                                                                                                 Swift AI Assisted Moderation                                                                                                                                                  |                                                                                                                                      In-Depth User Investigation                                                                                                                                       |
-| :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------: | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------: |
-|                       <p align="center"><img src="assets/images/01.gif" width="450"></p><p align="center">Review flagged accounts quickly with AI help. The system shows profile details and AI-detected violations, helping moderators make quick and smart decisions.</p>                       |       <p align="center"><img src="assets/images/02.gif" width="450"></p><p align="center">The review menu also allows in-depth user investigation. Moderators can easily explore a user's outfits, friends, and groups, providing a detailed view for thorough and informed decision-making.</p>       |
-|                                                                                                                                                         Streamer Mode                                                                                                                                                         |                                                                                                                                            User Log Browser                                                                                                                                            |
-| <p align="center"><img src="assets/images/03.gif" width="450"></p><p align="center">Streamer mode provides additional privacy by censoring sensitive user information in the review menu. This feature is particularly useful for content creators and streamers who want to showcase the tool while maintaining privacy.</p> | <p align="center"><img src="assets/images/04.gif" width="450"></p><p align="center">The log browser enables detailed querying of moderation actions. Administrators can search through logs based on specific users, actions, or date ranges, providing detailed audit trails. No more sabotaging!</p> |
-|                                                                                                                                                   Multi-format Translation                                                                                                                                                    |                                                                                                                                       Session State Preservation                                                                                                                                       |
-|                      <p align="center"><img src="assets/images/05.gif" width="450"></p><p align="center">The review menu features translation capabilities, supporting natural languages, morse code, and binary. This ensures effective review of content across different languages and encodings.</p>                      |                                    <p align="center"><img src="assets/images/06.gif" width="450"></p><p align="center">Review sessions are preserved across channels and servers, allowing moderators to seamlessly resume their work from where they left off.</p>                                    |
-|                                                                                                                                                   Live Statistics Dashboard                                                                                                                                                   |                                                                                                                                         Priority Queue System                                                                                                                                          |
-|                                                   <p align="center"><img src="assets/images/07.gif" width="450"></p><p align="center">The dashboard displays live hourly statistics showing active reviewers and various statistics for real-time performance tracking.</p>                                                   |                        <p align="center"><img src="assets/images/08.gif" width="450"></p><p align="center">Users can be added to priority queues for immediate processing. Workers automatically process these queues to check for potential violations using AI analysis.</p>                         |
-|                                                                                                                                             Real-time Worker Progress Monitoring                                                                                                                                              |                                                                                                                                                                                                                                                                                                        |
-|                   <p align="center"><img src="assets/images/09.gif" width="450"></p><p align="center">Workers can be monitored in real-time to track progress directly from the terminal. Administrators can easily track the status and performance of various workers to ensure efficient operation.</p>                    |                                                                                                                                                                                                                                                                                                        |
-
 ## 🚀 Features
 
-Rotector offers key features for efficient moderation:
+|                                                                                                                                                         Fast AI-Assisted Workflow                                                                                                                                                         |                                                                                                                          In-Depth User Investigation                                                                                                                          |
+|:-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------:|:-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------:|
+|                                       <p align="center"><img src="assets/gif/fast_workflow.gif" width="450"></p><p align="center">Easily review flagged accounts within seconds with the help of AI and an overview of profile details and violations, helping moderators make smart decisions.</p>                                       |                         <p align="center"><img src="assets/gif/user_investigation.gif" width="450"></p><p align="center">Moderators can easily explore a user's outfits, friends, and groups, providing an understanding of the user's activity.</p>                          |
+|                                                                                                                                                         Multi-Format Translation                                                                                                                                                          |                                                                                                                             Activity Log Browser                                                                                                                              |
+|                    <p align="center"><img src="assets/gif/content_translation.gif" width="450"></p><p align="center">The review menu features translation capabilities, supporting natural languages, morse code, and binary, which ensures effective review of content across different languages and encodings.</p>                     | <p align="center"><img src="assets/gif/activity_logs.gif" width="450"></p><p align="center">The log browser allows administrators to make detailed queries of moderation actions based on specific users, actions, or date ranges, which provides detailed audit trails.</p>  |
+|                                                                                                                                                               Streamer Mode                                                                                                                                                               |                                                                                                                          Session State Preservation                                                                                                                           |
+| <p align="center"><img src="assets/gif/streamer_mode.gif" width="450"></p><p align="center">Streamer mode provides additional privacy by censoring sensitive user information in the review menu. This feature is particularly useful for content creators and moderators who want to use the tool while maintaining confidentiality.</p> | <p align="center"><img src="assets/gif/state_preservation.gif" width="450"></p><p align="center">With our modern infrastructure, review sessions are preserved across channels and servers, allowing moderators to seamlessly resume their work from where they left off.</p> |
+|                                                                                                                                                               Training Mode                                                                                                                                                               |                                                                                                                                 Review Modes                                                                                                                                  |
+|                      <p align="center"><img src="assets/gif/training_mode.gif" width="450"></p><p align="center">Non-official moderators in the community can participate by upvoting/downvoting based on whether they think an account breaks the rules, helping to point out accounts that need urgent review.</p>                      |            <p align="center"><img src="assets/gif/review_mode.gif" width="450"></p><p align="center">Moderators can switch between Standard Mode (ban/clear) and Review mode (downvote/upvote), and also switch between reviewing Flagged and Confirmed users.</p>            |
+|                                                                                                                                                             User Queue System                                                                                                                                                             |                                                                                                                                 Recheck Users                                                                                                                                 |
+|                                                  <p align="center"><img src="assets/gif/user_queue.gif" width="450"></p><p align="center">Want to manually check a specific user? Users can be added to priority queues for processing by workers to check for potential violations.</p>                                                  |                                  <p align="center"><img src="assets/gif/recheck_users.gif" width="450"></p><p align="center">Users can be rechecked if analysis is wrong or the user information is outdated right from the review menu.</p>                                  |
+|                                                                                                                                                         Live Statistics Dashboard                                                                                                                                                         |                                                                                                                           Performant Infrastructure                                                                                                                           |
+|                             <p align="center"><img src="assets/gif/dashboard.gif" width="450"></p><p align="center">The dashboard displays live hourly statistics showing an AI-generated analysis message, active reviewers, active workers, and various statistics for real-time performance tracking.</p>                              |            <p align="center"><img src="assets/gif/performance.gif" width="450"></p><p align="center">Engineered with cutting-edge technologies and sophisticated optimization techniques, delivering sub-second response times and seamless user experiences.</p>             |
 
-- **AI-powered Analysis**
-
-  - OpenAI integration for content analysis
-  - High-accuracy detection of inappropriate profiles
-  - Validation measures to prevent AI hallucination
-
-- **Discord Review System**
-
-  - Efficient review and action workflow
-  - Overview of outfits, friends, groups
-  - Streamer mode for content creators
-  - Translation support (natural languages, morse code, binary)
-  - Session state preservation
-  - **Community Review Mode:**
-    - Upvote/downvote system for flagged users
-    - No external links or sensitive data exposed
-    - Assists moderator decision-making
-  - **Official Review Mode:**
-    - Full uncensored view of user information
-    - Ability to trigger AI worker rechecks
-    - Access to detailed activity logs
-
-- **Worker System**
-
-  - Multi-threaded parallel processing
-  - Flexible command-line interface for worker management
-  - Worker types:
-    - AI Workers: Processes affiliations of flagged users or users in flagged groups
-    - Purge Workers: Maintains database hygiene for old data and users
-    - Queue Workers: Processes the queue of users to be checked by AI workers
-    - Stats Worker: Uploads cached statistics to PostgreSQL daily
-
-- **Priority Queue System**
-
-  - Custom user ID queueing with priority levels
-  - Automated AI analysis of queued users
-
-- **Optimized Requests** ([axonet](https://github.com/jaxron/axonet) & [RoAPI.go](https://github.com/jaxron/roapi.go))
-
-  - Fault-tolerant operations with [circuit breaker patterns](https://en.wikipedia.org/wiki/Circuit_breaker_design_pattern)
-  - Retry mechanisms with [exponential backoff](https://en.wikipedia.org/wiki/Exponential_backoff)
-  - Request deduplication through [single flight](https://pkg.go.dev/golang.org/x/sync/singleflight)
-  - Rotatable proxy support to avoid rate limits
-  - Response caching to reduce load on Roblox API
-
-- **Detailed Logging**
-  - Log files for operations and errors
-  - Full audit trails and statistics
-  - Real-time monitoring dashboard
+<p align="center"><em>...and so much more to come!</em></p>
 
 ## 📦 Prerequisites
 
@@ -119,153 +69,499 @@ Rotector offers key features for efficient moderation:
 
 ### Essential
 
-- [Go](https://go.dev/) 1.23.2
-- [PostgreSQL](https://www.postgresql.org/) 17.0 (with [TimescaleDB](https://www.timescale.com/) 2.17.1 extension)
-- [DragonflyDB](https://dragonflydb.io/) 1.25.1 or [Redis](https://redis.io/) 7.4.1
-- OpenAI API key (uses [gpt-4o-mini](https://platform.openai.com/docs/models/gpt-4o-mini#gpt-4o-mini))
+- [Go](https://go.dev/) 1.23.X
+- [PostgreSQL](https://www.postgresql.org/) 17.2 (with [TimescaleDB](https://www.timescale.com/) 2.17.1 extension)
+- [DragonflyDB](https://dragonflydb.io/) 1.25.X or [Redis](https://redis.io/) 7.4.X
+- Google Cloud API key (uses [Gemini 1.5 Flash-8B](https://ai.google.dev/gemini-api/docs/models/gemini#gemini-1.5-flash-8b) by default)
+- Proxies to avoid rate limits (at least 60 per worker)
 - Discord Bot token
 
 ### Optional
 
-- Proxies: For distributed requests and bypassing rate limits
 - Cookies: Not necessary at this time
 
-## 🎯 Accuracy
+## 🔄 How It Works
 
-Rotector is designed to find inappropriate content while minimizing false flags. Here's how it works:
-
-### Detection Process
-
-Rotector uses two detection systems for users and groups:
-
-#### User Detection
-
-1. **Smart Scoring**:
-   We look at different factors like friends and account details to identify inappropriate content. Our system is carefully tuned to catch both obvious and subtle patterns while avoiding false positives.
-
-2. **AI Checks**:
-   The AI uses a conservative approach - it only flags accounts when there is clear evidence of violations. While this means it might miss some borderline cases, it ensures high confidence in flagged accounts. The AI friend worker systematically analyzes friend lists of flagged accounts which has proven to be very effective.
-
-3. **Validation Measures**:
-   When the AI flags content, we always check to make sure that content really exists on the user's profile. This extra step helps us avoid mistakes and keeps our system reliable.
-
-#### Group Detection
-
-1. **Member Monitoring**:
-   The system tracks the number of flagged users within each group. When the count of flagged members surpasses a threshold, the group is automatically flagged for review. This approach helps identify potentially inappropriate communities that may contain users engaging in inappropriate behavior.
-
-2. **Whitelist System**:
-   Popular communities such as official Roblox groups or major fan clubs may initially trigger flags due to their large user base. However, once these groups are manually reviewed and cleared by moderators, they are permanently added to a whitelist to prevent future flags. This whitelist status isn't permanent though as administrators are able to reverse this status.
+Rotector uses a multi-worker system to process and analyze Roblox accounts efficiently, with each type of worker responsible for different parts of the detection process.
 
 > [!TIP]
 > Interested in seeing how well it performs? Check out our test results in the [Efficiency](#-efficiency) section.
 
-### What We Don't Detect
-
-To avoid false positives, Rotector won't flag accounts for:
+### Workers
 
 <details>
-<summary>Just having certain friends or followers</summary>
-We don't flag accounts just because they're connected to someone breaking the rules. They might have been added or followed without knowing the other person was breaking rules. However, if we find an account is part of a large network of bad accounts, we will flag it.
+<summary>AI Friend Worker</summary>
+
+The AI friend worker systematically analyzes user networks to identify inappropriate content and behavior patterns. Here's how it works:
+
+```mermaid
+flowchart TB
+    Start([Start Worker]) --> GetBatch[Get Next Batch<br>of Users]
+    
+    subgraph Processing [User Processing]
+        direction TB
+        subgraph DataCollection [Data Collection]
+            direction LR
+            FetchInfo[Fetch Basic Info] --> |Parallel| GetGroups[Groups]
+            FetchInfo --> |Parallel| GetFriends[Friends]
+            FetchInfo --> |Parallel| GetGames[Games]
+        end
+        
+        subgraph Analysis [Content Analysis]
+            direction LR
+            GroupCheck[Check Groups<br>for Flags] --> TrackGroups[Track User's<br>Groups] --> FriendCheck[Check Friends<br>for Flags] --> Translate[Translate<br>Description] --> AICheck[AI Content<br>Analysis]
+        end
+        
+        DataCollection --> Analysis
+        
+        Analysis --> Validation{Validate<br>Results}
+        
+        Validation -->|Failed| RetryQueue[Add to<br>Retry Queue]
+        
+        subgraph EnrichData [Data Enrichment]
+            direction LR
+            GetThumbnails[Fetch Thumbnails] --> GetOutfits[Fetch Outfits]
+            GetOutfits --> GetFollowers[Get Follower<br>Count]
+            GetFollowers --> GetFollowing[Get Following<br>Count]
+        end
+        
+        Validation -->|Passed| EnrichData
+        
+        EnrichData --> PopularCheck{Popular User<br>Check}
+        PopularCheck -->|Yes| HighConfidence[Set High<br>Confidence Flag]
+        PopularCheck -->|No| SaveDB[(Save to<br>Database)]
+        HighConfidence --> SaveDB
+    end
+    
+    GetBatch --> Processing
+    RetryQueue --> GetBatch
+    SaveDB --> GetBatch
+```
+
+The worker continuously processes users in batches, with built-in safeguards:
+
+- Pauses when flagged user count exceeds threshold
+- Validates AI results against original content
+- Maintains retry queue for failed validations
+- Enriches flagged users with additional data for review
+
+Going into more detail about the detection process:
+
+1. **Smart Scoring**:
+   We analyze multiple factors including friend networks, group memberships, and account information to identify patterns of inappropriate content. Our system is tuned to catch both clear and subtle violations while minimizing false positives.
+
+2. **AI Analysis**:
+   Our AI only flags accounts with evidence of violations. While this means some borderline cases might be missed, it ensures high confidence in flagged accounts.
+
+3. **Validation System**:
+   When the AI flags content, we validate that it exists on the user's profile. This extra verification step helps prevent false positives and maintains system reliability.
+
+What We Don't Flag:
+
+- Accounts just for having only one flagged friend/follower
+- Normal friendship conversations
+- Regular emojis or internet slang
+- Art without inappropriate themes
+- Gender/orientation discussions
+- Normal roleplay activities
+- Regular bad language (handled by Roblox filters)
+
 </details>
 
 <details>
-<summary>Normal friendship conversations</summary>
-Regular social interactions and friendly relationships are normal on Roblox.
+<summary>AI Group Worker</summary>
+
+The AI group worker analyzes group member lists to identify inappropriate accounts. Here's how it works:
+
+```mermaid
+flowchart TB
+    Start([Start Worker]) --> GetGroup[Get Next Group<br>to Process]
+    
+    subgraph Processing [User Processing]
+        direction TB
+        subgraph DataCollection [Data Collection]
+            direction LR
+            FetchMembers[Fetch Member List] --> |For each member| FetchInfo[Fetch Basic Info]
+            FetchInfo --> |Parallel| GetGroups[Groups]
+            FetchInfo --> |Parallel| GetFriends[Friends]
+            FetchInfo --> |Parallel| GetGames[Games]
+        end
+        
+        subgraph Analysis [Content Analysis]
+            direction LR
+            GroupCheck[Check Groups<br>for Flags] --> FriendCheck[Check Friends<br>for Flags] --> Translate[Translate<br>Description] --> AICheck[AI Content<br>Analysis]
+        end
+        
+        DataCollection --> Analysis
+        
+        Analysis --> Validation{Validate<br>Results}
+        
+        Validation -->|Failed| RetryQueue[Add to<br>Retry Queue]
+        
+        subgraph EnrichData [Data Enrichment]
+            direction LR
+            GetThumbnails[Fetch Thumbnails] --> GetOutfits[Fetch Outfits]
+            GetOutfits --> GetFollowers[Get Follower<br>Count]
+            GetFollowers --> GetFollowing[Get Following<br>Count]
+        end
+        
+        Validation -->|Passed| EnrichData
+        
+        EnrichData --> PopularCheck{Popular User<br>Check}
+        PopularCheck -->|Yes| HighConfidence[Set High<br>Confidence Flag]
+        PopularCheck -->|No| SaveDB[(Save to<br>Database)]
+        HighConfidence --> SaveDB
+    end
+    
+    GetGroup --> Processing
+    RetryQueue --> GetGroup
+    SaveDB --> GetGroup
+```
+
+The key difference from the friend worker is that it:
+
+- Processes members from inappropriate groups
+- Uses cursor pagination to handle large member lists
+
+Going into more detail about the detection process:
+
+1. **Group Analysis**:
+   The system tracks the groups each flagged user is in. For the groups that exceed a certain threshold of flagged members, they are flagged for review.
+
+2. **False Positives**:
+   Large groups like fan groups may be flagged due to their member count. After manual review, cleared groups are whitelisted to prevent future flags, though administrators can reverse this status if needed.
+
 </details>
 
 <details>
-<summary>Regular emojis or internet slang</summary>
-Many emojis and slang words can mean different things and are often used innocently. We look at how they're being used before making any decisions.
+<summary>Purge Worker</summary>
+
+The purge worker maintains database hygiene by cleaning up old data and checking for banned/locked accounts:
+
+```mermaid
+flowchart TB
+    Start([Start Worker]) --> Loop[Start Cleanup Cycle]
+    
+    subgraph Processing [Cleanup Processing]
+        direction TB
+        subgraph BannedUsers [Process Banned Users]
+            direction LR
+            GetUsers[Get Users to Check] --> CheckBanned[Check for<br>Banned Users]
+            CheckBanned --> RemoveBanned[Move to<br>Banned Table]
+        end
+        
+        subgraph LockedGroups [Process Locked Groups]
+            direction LR
+            GetGroups[Get Groups to Check] --> CheckLocked[Check for<br>Locked Groups]
+            CheckLocked --> RemoveLocked[Move to<br>Locked Table]
+        end
+        
+        subgraph ClearedItems [Process Cleared Items]
+            direction LR
+            PurgeUsers[Remove Old<br>Cleared Users] --> PurgeGroups[Remove Old<br>Cleared Groups]
+        end
+        
+        subgraph Tracking [Process Tracking]
+            direction LR
+            CheckTracking[Check Group<br>Tracking Data] --> PurgeTracking[Remove Old<br>Tracking Data]
+        end
+        
+        BannedUsers --> LockedGroups
+        LockedGroups --> ClearedItems
+        ClearedItems --> Tracking
+    end
+    
+    Loop --> Processing
+    Processing --> Wait[Wait 5 Minutes]
+    Wait --> Loop
+```
+
+The worker continuously:
+
+- Checks for and removes banned users
+- Checks for and removes locked groups
+- Purges old cleared users/groups
+- Maintains group tracking data
+- Runs every 5 minutes
+
 </details>
 
 <details>
-<summary>Art without inappropriate themes</summary>
-Creative expression is important on Roblox. We only flag art that clearly breaks the rules.
+<summary>Queue Worker</summary>
+
+The queue worker processes user verification requests from different priority queues:
+
+```mermaid
+flowchart TB
+    Start([Start Worker]) --> GetBatch[Get Next Batch<br>Max 50 Items]
+    
+    subgraph Processing [Queue Processing]
+        direction TB
+        subgraph QueueCheck [Queue Management]
+            direction TB
+            CheckHigh[Check High Priority<br>Get up to 50] --> RemainingH{Batch<br>Full?}
+            RemainingH -->|No| CheckNormal[Check Normal Priority<br>Get up to Remaining]
+            RemainingH -->|Yes| Process
+            
+            CheckNormal --> RemainingN{Batch<br>Full?}
+            RemainingN -->|No| CheckLow[Check Low Priority<br>Get up to Remaining]
+            RemainingN -->|Yes| Process
+            
+            CheckLow --> Process[Process<br>Batch]
+        end
+        
+        subgraph ItemProcess [Item Processing]
+            direction LR
+            UpdateStatus[Set Status to<br>Processing] --> FetchInfo[Fetch User<br>Information]
+            FetchInfo --> AICheck[Run AI<br>Analysis]
+            AICheck --> Validate{Validate<br>Results}
+            
+            Validate -->|Failed| RetryQueue[Add to<br>Retry Queue]
+            Validate -->|Passed| UpdateQueue[Update Queue<br>Status]
+        end
+        
+        QueueCheck --> ItemProcess
+    end
+    
+    GetBatch --> Processing
+    RetryQueue --> GetBatch
+    UpdateQueue --> GetBatch
+```
+
+The worker:
+
+- Processes items in priority order (High → Normal → Low)
+- Updates queue status for tracking
+- Handles validation failures with retries
+- Runs continuously with smart batching
+
 </details>
 
 <details>
-<summary>Talking about gender or orientation</summary>
-These are normal parts of personal identity. Flagging such content could unfairly target users just for being themselves.
+<summary>Stats Worker</summary>
+
+The stats worker collects and processes statistical data for analysis:
+
+```mermaid
+flowchart TB
+    Start([Start Worker]) --> WaitHour[Wait for Next Hour]
+    
+    subgraph Processing [Stats Processing]
+        direction TB
+        subgraph Collection [Data Collection]
+            direction LR
+            GetStats[Get Current Stats] --> SaveStats[Save Hourly<br>Snapshot]
+        end
+        
+        subgraph Analysis [Stats Analysis]
+            direction LR
+            GetHistory[Get Historical<br>Stats] --> AIAnalysis[Generate AI<br>Analysis]
+            AIAnalysis --> UpdateMessage[Update Welcome<br>Message]
+        end
+        
+        subgraph Cleanup [Data Cleanup]
+            PurgeOld[Remove Old Stats<br>>30 Days]
+        end
+        
+        Collection --> Analysis
+        Analysis --> Cleanup
+    end
+    
+    WaitHour --> Processing
+    Processing --> WaitHour
+```
+
+The worker:
+
+- Runs hourly statistical snapshots
+- Generates AI analysis of trends
+- Updates welcome messages
+- Cleans up old data
+
 </details>
 
-<details>
-<summary>Normal roleplay games</summary>
-Roleplaying is a big part of Roblox. We only flag roleplay that's clearly inappropriate.
-</details>
+### Requests
 
 <details>
-<summary>Regular bad language</summary>
-Normal swearing and insults are handled by Roblox's chat filters. We focus on more serious safety issues.
+<summary>Middleware Layers</summary>
+
+Rotector uses a sophisticated middleware chain to ensure reliable and efficient API interactions. Here's how requests are processed:
+
+```mermaid
+flowchart TB
+    Start([API Request]) --> Layer1
+
+    subgraph Layer1 [Layer 1: Proxy Routing]
+        ProxyLayer[Load Distribution<br>Endpoint Cooldowns]
+    end
+
+    subgraph Layer2 [Layer 2: Caching]
+        RedisCache[Redis Cache<br>1 Hour TTL]
+    end
+
+    subgraph Layer3 [Layer 3: Efficiency]
+        SingleFlight[Single Flight<br>Deduplicates Concurrent<br>Requests]
+    end
+
+    subgraph Layer4 [Layer 4: Reliability]
+        RetryLogic[Retry with<br>Exponential Backoff]
+    end
+
+    subgraph Layer5 [Layer 5: Fault Tolerance]
+        CircuitBreaker[Circuit Breaker<br>Prevents Cascading Failures]
+    end
+
+    Layer1 --> Layer2
+    Layer2 --> Layer3
+    Layer3 --> Layer4
+    Layer4 --> Layer5
+    Layer5 --> RobloxAPI[(Roblox API)]
+
+    style RobloxAPI fill:#f96,stroke:#333
+```
+
+Each layer serves a specific purpose:
+
+1. **Proxy Routing** (Layer 1)
+   - Distributes requests across multiple proxies
+   - Manages endpoint-specific cooldowns per proxy
+   - Helps avoid IP-based rate limits
+
+2. **Redis Caching** (Layer 2)
+   - Caches responses for 1 hour
+   - Reduces load on Roblox API
+   - Improves response times
+
+3. **Request Deduplication** (Layer 3)
+   - Combines identical concurrent requests
+   - Reduces unnecessary API calls
+   - Uses Go's singleflight pattern
+
+4. **Retry Logic** (Layer 4)
+   - Handles transient failures
+   - Uses exponential backoff
+   - Configurable retry limits
+
+5. **Circuit Breaker** (Layer 5)
+   - Prevents cascading failures
+   - Automatic recovery after timeout
+   - Configurable failure thresholds
+
+The middleware chain processes requests, with each middleware layer adding its optimization, which ensures maximum efficiency while maintaining reliability.
+
 </details>
 
 ## ⚡ Efficiency
 
-Rotector is designed to be highly efficient in processing large volumes of data while maintaining reasonable resource usage. Below is a performance snapshot from one of our test runs (as of November 7, 2024).
+Rotector is built to efficiently handle large amounts of data while keeping resource usage at a reasonable level. Here's a performance snapshot from one of our test runs on a shared VPS:
 
 > [!NOTE]
-> These results are from a single test run and should be considered illustrative rather than definitive. Performance can vary significantly based on multiple factors like API response times, proxy performance, system resources, configuration, and more.
+> These results come from a single test run and should be viewed as illustrative rather than definitive. Performance can vary significantly due to various factors such as API response times, proxy performance, system resources, configuration, and more. Not all of the VPS resources were used.
 
-### Test Configuration
+### Test Environment
 
-- Users to Scan: 500
-- Workers: 3 AI friend workers
-- Proxies: 250 Romanian Location
-- Rate Limit: 200 requests/second
+#### VPS Specifications
 
-### Performance Metrics
+- OS: Ubuntu 24.04
+- CPU: Intel Xeon Gold 6150 with 8 vCores @ 2.693GHz
+- RAM: 24 GB
+- Network: 1 Gbit/s
+- Location: Germany
 
-| Metric                              | Value                 |
-| ----------------------------------- | --------------------- |
-| Time Taken                          | 44 minutes 32 seconds |
-| **Accounts Flagged**                | **7,078**             |
-| API Requests Sent                   | 74,243                |
-| API Request Success Rate            | 99.86%                |
-| Bandwidth Used                      | 753.48 MB             |
-| OpenAI Token Cost                   | $0.16                 |
-| OpenAI API Calls                    | 241                   |
-| Redis Memory Usage                  | 803.92 MB             |
-| Redis Key Count                     | 69,663                |
-| Concurrent Goroutines (min/avg/max) | 335 / 2,428 / 4,454   |
+#### Test Configuration
+
+- Time Given: 1 hour
+- Confirmed Users: 500
+- Confirmed Groups: 0
+- Workers: 5 AI friend workers
+- Proxies: 300 shared proxies
+
+### Test Metrics
+
+| Metric                   | Current Run | Change from Previous Run |
+|--------------------------|-------------|--------------------------|
+| Users Scanned            | 1,001       | + 32.77%                 |
+| **Users Flagged**        | **14,800**  | **+ 109.10%**            |
+| **Groups Flagged**       | **167**     | N/A                      |
+| Requests Sent            | 300,195     | + 304.34%                |
+| Bandwidth Used           | 2.83 GB     | + 284.60%                |
+| Avg Concurrent Requests  | 1,060       | N/A                      |
+| Avg Requests Per Second  | 12          | N/A                      |
+| Avg Bandwith Per Request | 9.88 KB     | N/A                      |
+| AI Cost                  | **$0.07**   | **- 56.25%**             |
+| AI Calls (CT)            | 13,089      | N/A                      |
+| AI Calls (GC)            | 5,720       | + 2273.44%               |
+| AI Latency (CT)          | ~0.017s     | N/A                      |
+| AI Latency (GC)          | ~1.038s     | N/A                      |
+| Redis Memory Usage       | 702.62 MB   | - 12.60%                 |
+| Redis Key Count          | 204,172     | + 193.09%                |
 
 > [!NOTE]
-> At this rate, a 24-hour runtime would theoretically flag approximately **228,869 users** with AI costs of $5.17. However, the actual number of flagged users would likely decrease over time as more users are added to the database, since previously processed users would not need to be rechecked.
+> **CT** and **GC** in the metrics refer to _CountTokens_ and _GenerateContent_ calls to the Gemini API respectively.
 
-### Accuracy Validation
+### Test Analysis
 
-In a manual review of 100 randomly selected flagged users from this test run:
+#### User Detection
 
-- 99 users were confirmed as correctly flagged
-- 1 user was cleared due to insufficient profile information
+At the current rate, a 24-hour runtime would theoretically flag approximately **355,200 users**, with AI costing only **$1.68**. However, the number of flagged users would probably be lower as more users are added to the database. If Rotector maintained this detection rate, it could potentially flag **a hundred thousand inappropriate accounts in just a week**!
+
+A brief review of the results shows that most users were flagged accurately, with some false positives, which is to be expected. These false positives are subtle violations that are borderline cases and are not necessarily inappropriate.
+
+There are many ways to improve the current performance even further. Yes, you heard that right!
+
+The biggest limitation is the number of proxies available due to their high costs. These proxies are necessary as workers need to process users and gather all necessary data upfront which makes many requests per second. This pre-loading approach means that when moderators review flagged accounts, they get near-instant access to all user information without waiting for additional API requests.
+
+With more proxies or even a special way to get past rate limits, we could potentially scan over 100 times more users per hour instead of the current rate given the current VPS resources. This would theoretically be possible as Rotector is built with performance in mind.
+
+#### Group Detection
+
+We discovered several large groups of inappropriate accounts that have managed to avoid detection by traditional moderation techniques:
+
+- Group with 1911 flagged users (34XXXX55)
+- Group with 1845 flagged users (45XXXX3)
+- Group with 1814 flagged users (34XXXX41)
+- Group with 1557 flagged users (65XXXX7)
+- Group with 1283 flagged users (34XXXX64)
+- Group with 1183 flagged users (87XXXX5)
+- ... and many more with hundreds of flagged users
+
+However, there were many false flags that we plan to address with various optimizations in future updates.
 
 ## 🔄 Reviewing
 
-Rotector has two different ways to review flagged accounts: one for community members and one for official moderators. This dual approach ensures both community engagement and high standards of moderation.
+Rotector has two methods for reviewing flagged accounts: one designed for community members and another for official moderators. This dual approach promotes community involvement while allowing official moderators to handle the final decisions.
 
-### Community Review Mode
+### Community Review Mode (Training Mode)
 
-Anyone can help review flagged accounts through a carefully designed training mode. To protect privacy, this mode censors user information and hides external links. Users can participate by upvoting/downvoting based on whether they think an account breaks the rules, which helps point out accounts that need urgent review.
+<p align="left"><img src="assets/gif/training_mode.gif" width="450"></p>
+
+Anyone can assist in reviewing flagged accounts through a specially designed Training Mode. To ensure confidentiality, this mode censors user information and hides external links. Anyone can participate by upvoting/downvoting based on their assessment of whether an account violates the rules, which helps point out accounts that need urgent review by official moderators.
 
 This system helps official moderators in several ways:
 
 - Finds the most serious cases quickly
 - Gives moderators extra input for their decisions
 - Helps train new moderators
-- Lets the community help keep Roblox safe
 
-### Official Review Mode
+### Official Review Mode (Standard Mode)
 
-Official moderators have more tools and permissions for account review. They can:
+<p align="left"><img src="assets/gif/standard_mode.gif" width="450"></p>
 
-- See all account information (unless they turn on streamer mode)
-- Ask AI workers to recheck accounts
-- See logs of all moderation actions
+Official moderators have better tools and permissions for reviewing accounts. They are able to:
+
+- Access all account information (unless they turn on streamer mode)
+- Request workers to recheck accounts
+- View logs of all moderation activities
+- Toggle between standard mode and training mode
 - Make changes to the database
-- Switch between standard mode and training mode
 
-What makes this mode special is that moderators can do everything needed to handle flagged accounts. While community votes help, moderators make the final decisions about what happens to flagged accounts.
+What sets this mode apart is that moderators have the authority to take all necessary actions regarding flagged accounts. While community votes provide input, it is the moderators who ultimately decide the fate of these accounts.
 
-This dual-system approach works well because it lets everyone help out while making sure trained moderators handle the final decisions.
+## 🔌 API Server
+
+Rotector provides a high-performance RPC server built with [Twirp](https://twitchtv.github.io/twirp/docs/intro.html), offering both Protocol Buffer and JSON interfaces for integration with your own projects.
+
+For detailed documentation and examples, see our [API Documentation](/examples/rpc/README.md).
 
 ## 🛣️ Roadmap
 
@@ -274,14 +570,14 @@ This roadmap shows our major upcoming features, but we've got even more in the w
 - 👥 **Moderation Tools**
 
   - [ ] Appeal process system
-  - [ ] Inventory inspection
+  - [ ] Inventory viewer
 
 - 🔍 **Scanning Capabilities**
 
   - [ ] Group content detection (wall posts, names, descriptions)
 
 - 🌐 **Public API** (Available in Beta)
-  - [ ] REST API for developers to integrate with
+  - [ ] RPC/REST API for developers to integrate with
   - [ ] Script for Roblox game developers to integrate with
 
 ## ❓ FAQ
@@ -311,11 +607,11 @@ Note that setting up Rotector requires:
 <details>
 <summary>What's the story behind Rotector?</summary>
 
-Rotector started when [jaxron](https://github.com/jaxron) developed two important libraries on September 23, 2024: [RoAPI.go](https://github.com/jaxron/roapi.go) and [axonet](https://github.com/jaxron/axonet). These libraries became the backbone of Rotector's networking and API interaction capabilities.
+Rotector started when [jaxron](https://github.com/jaxron) developed two important libraries on September 23, 2024: [RoAPI.go](https://github.com/jaxron/roapi.go) and [axonet](https://github.com/jaxron/axonet) which became the backbone of Rotector's networking and API interaction capabilities.
 
-Rotector's official development began secretly on October 13, 2024 due to his personal concerns about inappropriate behavior on Roblox and a desire to help protect young players. The project was made public for the alpha testing phase on November 8, 2024.
+Rotector's official development began secretly on October 13, 2024, due to his concerns about inappropriate behavior on Roblox and a desire to help protect young players. The project was made public for the alpha testing phase on November 8, 2024.
 
-While Roblox already has moderators, there are so many users that it's hard to catch every inappropriate account quickly. Some Roblox staff have also acknowledged that it's difficult to handle all the reports they get. Sometimes, inappropriate accounts stay active even after being reported.
+While Roblox already has moderators, there are so many users that it's hard to catch every inappropriate account easily. Some Roblox staff have also acknowledged that it's difficult to handle all the reports they get. Sometimes, inappropriate accounts and groups stay active even after being reported.
 
 Rotector helps by finding these accounts automatically. Our goal is to make moderation easier and help keep the Roblox community, especially young players, safer.
 
@@ -324,23 +620,16 @@ Rotector helps by finding these accounts automatically. Our goal is to make mode
 <details>
 <summary>Why is Rotector open-sourced?</summary>
 
-We believe in transparency and the power of open source. By making our code public, anyone can understand how the tool works. It's also a great way for people to learn about online safety and moderation tools.
+We believe in transparency and the power of open source. By making our code public, anyone can understand how the tool works and it's also a great way for people to learn about online safety and moderation tools.
 
 While we welcome feedback, ideas, and contributions, this open-source release is mainly to show how the tool works and help others learn from it.
 
 </details>
 
 <details>
-<summary>When will the REST API be available?</summary>
-
-The REST API will be ready during the beta phase. At this time, we're focusing on making sure the core features work well. Once those are stable, we'll work on the API so other developers can use Rotector in their own projects.
-
-</details>
-
-<details>
 <summary>Can I use Rotector without the Discord bot?</summary>
 
-Yes, but the Discord bot makes reviewing accounts much easier. The main features (finding and reporting inappropriate accounts) work fine without Discord. If you don't want to use the Discord bot, you'll need to create your own way to review the accounts that get flagged.
+Yes, but the Discord bot makes reviewing accounts much easier. The main features (finding and flagging inappropriate accounts) work fine without Discord but you'll need to create your own way to review the accounts that get flagged. All flagged users and groups are stored in the `flagged_users` and `flagged_groups` tables in the database.
 
 </details>
 
@@ -354,18 +643,25 @@ Discord already has everything we need for reviewing accounts - buttons, dropdow
 <details>
 <summary>Are proxies and cookies necessary to use Rotector?</summary>
 
-No, you don't need proxies or cookies to use Rotector. Proxies can help if you're making lots of requests, but they're optional. While cookies are mentioned in the settings, we don't use them for anything at the moment.
+Proxies are required as Rotector makes lots of requests per second. While cookies are mentioned in the settings, we don't use them for anything at the moment.
 
-Proxies can be set up in the `config.toml` file. This file also includes a rate limit setting that lets you control how many requests Rotector makes to Roblox's API.
+Proxies can be set up in the `config.toml` file. This file also includes cooldown settings for each endpoint that lets you control how many requests Rotector makes to Roblox's API.
 
 </details>
 
 <details>
 <summary>Will users who have stopped their inappropriate behavior be removed from the database?</summary>
 
-No, past rule violations remain in the database, even if users say they've changed. This can be useful for law enforcement investigations and for future safety concerns. Some users try to clean up their profiles temporarily, only to return to breaking rules later.
+No, past rule violations remain in the database, even if users say they've changed. This can be useful for law enforcement investigations and for future safety concerns.
 
-This isn't about preventing second chances - it's about keeping the platform safe, especially for young users.
+Some users try to clean up their profiles temporarily, only to return to breaking rules later. It isn't about preventing second chances but rather about keeping the platform safe, especially for young users.
+
+</details>
+
+<details>
+<summary>Why did Rotector switch from GPT-4o mini to Gemini?</summary>
+
+We made the switch to Gemini because it is 4 times cheaper than GPT-4o mini, offers 5 times faster output speed, and has 2 times lower latency, while maintaining the same level of accuracy in identifying inappropriate content. This change allows us to achieve more with a smaller budget, introduce new features that were previously unaffordable, and ensure the project's long-term sustainability.
 
 </details>
 

@@ -1,6 +1,7 @@
 # 🚀 RPC Server Examples
 
-> [!WARNING] > **Rotector is currently in alpha, and this API isn't ready for production use just yet.** The API will be available for testing during the beta phase, but until then, the server and its endpoints may change without notice. We suggest waiting for the beta release before developing any integrations or using the server in a production environment.
+> [!WARNING]
+> **This API is still in its prototyping phase!** The API will be available for testing during the beta phase, but until then, the server and its endpoints may change without notice. We suggest waiting for the beta release before developing any integrations or using the server in a production environment.
 
 This directory contains examples demonstrating how to use the RPC server API for Rotector.
 
@@ -144,8 +145,8 @@ When using the HTTP/JSON interface, you may notice that some integer fields, suc
 
 ```json
 {
-  "follower_count": "10", // string in JSON
-  "following_count": "5" // string in JSON
+  "follower_count": "10",
+  "following_count": "5"
 }
 ```
 
