@@ -237,7 +237,7 @@ func (w *Worker) processGroupTracking() {
 // flagged users. Groups exceeding the threshold are flagged with a confidence
 // score based on the ratio of flagged members.
 func (w *Worker) checkGroupTrackings() error {
-	groupsWithUsers, err := w.db.Tracking().GetAndRemoveQualifiedGroupTrackings(context.Background(), w.minFlaggedUsers)
+	groupsWithUsers, err := w.db.Tracking().GetAndQualifyGroupTrackings(context.Background(), w.minFlaggedUsers)
 	if err != nil {
 		return err
 	}
@@ -260,16 +260,15 @@ func (w *Worker) checkGroupTrackings() error {
 		flaggedUsers := groupsWithUsers[groupInfo.ID]
 		flaggedGroups = append(flaggedGroups, &types.FlaggedGroup{
 			Group: types.Group{
-				ID:           groupInfo.ID,
-				Name:         groupInfo.Name,
-				Description:  groupInfo.Description,
-				Owner:        groupInfo.Owner.UserID,
-				Shout:        groupInfo.Shout,
-				MemberCount:  groupInfo.MemberCount,
-				Reason:       fmt.Sprintf("Group has at least %d flagged users", w.minFlaggedUsers),
-				Confidence:   math.Min(float64(len(flaggedUsers))/(float64(w.minFlaggedUsers)*10), 1.0),
-				LastUpdated:  time.Now(),
-				FlaggedUsers: flaggedUsers,
+				ID:          groupInfo.ID,
+				Name:        groupInfo.Name,
+				Description: groupInfo.Description,
+				Owner:       groupInfo.Owner.UserID,
+				Shout:       groupInfo.Shout,
+				MemberCount: groupInfo.MemberCount,
+				Reason:      fmt.Sprintf("Group has at least %d flagged users", w.minFlaggedUsers),
+				Confidence:  math.Min(float64(len(flaggedUsers))/(float64(w.minFlaggedUsers)*10), 1.0),
+				LastUpdated: time.Now(),
 			},
 		})
 	}

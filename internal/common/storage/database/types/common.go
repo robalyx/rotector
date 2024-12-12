@@ -14,8 +14,6 @@ const (
 	SortByLastUpdated SortBy = "last_updated"
 	// SortByReputation orders items by their community reputation (upvotes - downvotes).
 	SortByReputation SortBy = "reputation"
-	// SortByFlaggedUsers orders groups by their number of flagged members.
-	SortByFlaggedUsers SortBy = "flagged_users"
 )
 
 // FormatDisplay returns a user-friendly display string for the SortBy.
@@ -29,8 +27,6 @@ func (s SortBy) FormatDisplay() string {
 		return "Last Updated"
 	case SortByReputation:
 		return "Bad Reputation"
-	case SortByFlaggedUsers:
-		return "Flagged Users"
 	default:
 		return "Unknown Sort"
 	}

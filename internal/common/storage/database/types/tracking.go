@@ -8,4 +8,5 @@ type GroupMemberTracking struct {
 	GroupID      uint64    `bun:",pk"`
 	FlaggedUsers []uint64  `bun:"type:bigint[]"`
 	LastAppended time.Time `bun:",notnull"`
+	IsFlagged    bool      `bun:",notnull"`
 }

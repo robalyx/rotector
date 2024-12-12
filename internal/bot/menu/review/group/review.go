@@ -140,17 +140,21 @@ func (m *ReviewMenu) fetchNewTarget(s *session.Session, reviewerID uint64) (*typ
 	var settings *types.UserSetting
 	s.GetInterface(constants.SessionKeyUserSettings, &settings)
 
-	// Get the sort order from user settings
-	sortBy := settings.GroupDefaultSort
-
 	// Get the next group to review
-	group, err := m.layout.db.Groups().GetGroupToReview(context.Background(), sortBy, settings.ReviewTargetMode)
+	group, err := m.layout.db.Groups().GetGroupToReview(context.Background(), settings.GroupDefaultSort, settings.ReviewTargetMode)
 	if err != nil {
 		return nil, err
 	}
 
-	// Store the group in session for the message builder
+	// Get flagged users from tracking
+	flaggedUsers, err := m.layout.db.Tracking().GetFlaggedUsers(context.Background(), group.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Store the group and flagged users in session
 	s.Set(constants.SessionKeyGroupTarget, group)
+	s.Set(constants.SessionKeyGroupFlaggedUsers, flaggedUsers)
 
 	// Log the view action asynchronously
 	go m.layout.db.UserActivity().Log(context.Background(), &types.UserActivityLog{

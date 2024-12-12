@@ -36,6 +36,7 @@ func (r *TrackingModel) AddUsersToGroupsTracking(ctx context.Context, groupToUse
 			GroupID:      groupID,
 			FlaggedUsers: userIDs,
 			LastAppended: now,
+			IsFlagged:    false,
 		})
 	}
 
@@ -65,6 +66,7 @@ func (r *TrackingModel) AddUsersToGroupsTracking(ctx context.Context, groupToUse
 			On("CONFLICT (group_id) DO UPDATE").
 			Set("flagged_users = ARRAY(SELECT DISTINCT unnest(EXCLUDED.flagged_users || group_member_tracking.flagged_users))").
 			Set("last_appended = EXCLUDED.last_appended").
+			Set("is_flagged = group_member_tracking.is_flagged").
 			Exec(ctx)
 		if err != nil {
 			r.logger.Error("Failed to add users to groups tracking",
@@ -104,33 +106,35 @@ func (r *TrackingModel) PurgeOldTrackings(ctx context.Context, cutoffDate time.T
 	return int(rowsAffected), nil
 }
 
-// GetAndRemoveQualifiedGroupTrackings finds groups with enough flagged users.
-// GetAndRemoveQualifiedGroupTrackings returns a map of group IDs to their flagged user IDs.
-func (r *TrackingModel) GetAndRemoveQualifiedGroupTrackings(ctx context.Context, minFlaggedUsers int) (map[uint64][]uint64, error) {
+// GetAndQualifyGroupTrackings finds groups with enough flagged users and marks them as flagged.
+// Returns a map of group IDs to their flagged user IDs.
+func (r *TrackingModel) GetAndQualifyGroupTrackings(ctx context.Context, minFlaggedUsers int) (map[uint64][]uint64, error) {
 	var trackings []types.GroupMemberTracking
 
-	// Find groups with enough flagged users
+	// Find groups with enough flagged users that haven't been flagged yet
 	err := r.db.NewSelect().Model(&trackings).
 		Where("array_length(flagged_users, 1) >= ?", minFlaggedUsers).
+		Where("is_flagged = false").
 		Scan(ctx)
 	if err != nil {
 		r.logger.Error("Failed to get qualified group trackings", zap.Error(err))
 		return nil, err
 	}
 
-	// Extract group IDs for deletion
+	// Extract group IDs and mark them as flagged
 	groupIDs := make([]uint64, len(trackings))
 	for i, tracking := range trackings {
 		groupIDs[i] = tracking.GroupID
 	}
 
-	// Remove found groups from tracking
+	// Update groups as flagged
 	if len(groupIDs) > 0 {
-		_, err = r.db.NewDelete().Model((*types.GroupMemberTracking)(nil)).
+		_, err = r.db.NewUpdate().Model((*types.GroupMemberTracking)(nil)).
+			Set("is_flagged = true").
 			Where("group_id IN (?)", bun.In(groupIDs)).
 			Exec(ctx)
 		if err != nil {
-			r.logger.Error("Failed to delete group trackings", zap.Error(err))
+			r.logger.Error("Failed to update group tracking flags", zap.Error(err))
 			return nil, err
 		}
 	}
@@ -142,4 +146,21 @@ func (r *TrackingModel) GetAndRemoveQualifiedGroupTrackings(ctx context.Context,
 	}
 
 	return result, nil
+}
+
+// GetFlaggedUsers retrieves the list of flagged users for a specific group.
+func (r *TrackingModel) GetFlaggedUsers(ctx context.Context, groupID uint64) ([]uint64, error) {
+	var tracking types.GroupMemberTracking
+	err := r.db.NewSelect().Model(&tracking).
+		Column("flagged_users").
+		Where("group_id = ?", groupID).
+		Scan(ctx)
+	if err != nil {
+		r.logger.Error("Failed to get flagged users for group",
+			zap.Error(err),
+			zap.Uint64("groupID", groupID))
+		return nil, err
+	}
+
+	return tracking.FlaggedUsers, nil
 }

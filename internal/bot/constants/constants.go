@@ -180,7 +180,8 @@ const (
 	SessionKeyQueueNormalCount = "queueNormalCount"
 	SessionKeyQueueLowCount    = "queueLowCount"
 
-	SessionKeyGroupTarget = "groupTarget"
+	SessionKeyGroupTarget       = "groupTarget"
+	SessionKeyGroupFlaggedUsers = "groupFlaggedUsers"
 
 	GroupConfirmWithReasonModalCustomID = "group_confirm_with_reason_modal"
 	GroupConfirmReasonInputCustomID     = "group_confirm_reason"

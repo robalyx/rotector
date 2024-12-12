@@ -19,11 +19,12 @@ import (
 
 // ReviewBuilder creates the visual layout for reviewing a group.
 type ReviewBuilder struct {
-	db          *database.Client
-	settings    *types.UserSetting
-	botSettings *types.BotSetting
-	userID      uint64
-	group       *types.ConfirmedGroup
+	db           *database.Client
+	settings     *types.UserSetting
+	botSettings  *types.BotSetting
+	userID       uint64
+	group        *types.ConfirmedGroup
+	flaggedUsers []uint64
 }
 
 // NewReviewBuilder creates a new review builder.
@@ -34,13 +35,16 @@ func NewReviewBuilder(s *session.Session, db *database.Client) *ReviewBuilder {
 	s.GetInterface(constants.SessionKeyBotSettings, &botSettings)
 	var group *types.ConfirmedGroup
 	s.GetInterface(constants.SessionKeyGroupTarget, &group)
+	var flaggedUsers []uint64
+	s.GetInterface(constants.SessionKeyGroupFlaggedUsers, &flaggedUsers)
 
 	return &ReviewBuilder{
-		db:          db,
-		settings:    settings,
-		botSettings: botSettings,
-		userID:      s.GetUint64(constants.SessionKeyUserID),
-		group:       group,
+		db:           db,
+		settings:     settings,
+		botSettings:  botSettings,
+		userID:       s.GetUint64(constants.SessionKeyUserID),
+		group:        group,
+		flaggedUsers: flaggedUsers,
 	}
 }
 
@@ -119,7 +123,7 @@ func (b *ReviewBuilder) buildReviewEmbed() *discord.EmbedBuilder {
 	lastUpdated := fmt.Sprintf("<t:%d:R>", b.group.LastUpdated.Unix())
 	confidence := fmt.Sprintf("%.2f", b.group.Confidence)
 	memberCount := strconv.FormatUint(b.group.MemberCount, 10)
-	flaggedMembers := strconv.Itoa(len(b.group.FlaggedUsers))
+	flaggedMembers := strconv.Itoa(len(b.flaggedUsers))
 
 	if b.settings.ReviewMode == types.TrainingReviewMode {
 		// Training mode - show limited information without links
@@ -230,9 +234,6 @@ func (b *ReviewBuilder) buildComponents() []discord.ContainerComponent {
 				discord.NewStringSelectMenuOption("Selected by confidence", string(types.SortByConfidence)).
 					WithDefault(b.settings.GroupDefaultSort == types.SortByConfidence).
 					WithEmoji(discord.ComponentEmoji{Name: "🔍"}),
-				discord.NewStringSelectMenuOption("Selected by flagged users", string(types.SortByFlaggedUsers)).
-					WithDefault(b.settings.GroupDefaultSort == types.SortByFlaggedUsers).
-					WithEmoji(discord.ComponentEmoji{Name: "👥"}),
 				discord.NewStringSelectMenuOption("Selected by bad reputation", string(types.SortByReputation)).
 					WithDefault(b.settings.GroupDefaultSort == types.SortByReputation).
 					WithEmoji(discord.ComponentEmoji{Name: "👎"}),

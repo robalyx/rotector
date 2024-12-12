@@ -587,8 +587,6 @@ func (r *GroupModel) getNextToReview(ctx context.Context, model interface{}, sor
 		switch sortBy {
 		case types.SortByConfidence:
 			query.Order("confidence DESC")
-		case types.SortByFlaggedUsers:
-			query.OrderExpr("array_length(flagged_users, 1) DESC")
 		case types.SortByReputation:
 			query.Order("reputation ASC")
 		case types.SortByRandom:

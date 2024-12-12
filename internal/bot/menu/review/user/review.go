@@ -615,11 +615,8 @@ func (m *ReviewMenu) fetchNewTarget(s *session.Session, reviewerID uint64) (*typ
 	var settings *types.UserSetting
 	s.GetInterface(constants.SessionKeyUserSettings, &settings)
 
-	// Get the sort order from user settings
-	sortBy := settings.UserDefaultSort
-
 	// Get the next user to review
-	user, err := m.layout.db.Users().GetUserToReview(context.Background(), sortBy, settings.ReviewTargetMode)
+	user, err := m.layout.db.Users().GetUserToReview(context.Background(), settings.UserDefaultSort, settings.ReviewTargetMode)
 	if err != nil {
 		return nil, err
 	}
