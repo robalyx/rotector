@@ -636,8 +636,8 @@ func (r *UserModel) GetUserToScan(ctx context.Context) (*types.User, error) {
 		// First try confirmed users
 		var confirmedUser types.ConfirmedUser
 		err := tx.NewSelect().Model(&confirmedUser).
-			Where("last_scanned IS NULL OR last_scanned < NOW() - INTERVAL '1 day'").
-			Order("last_scanned ASC NULLS FIRST").
+			Where("last_scanned < NOW() - INTERVAL '1 day'").
+			Order("last_scanned ASC").
 			Limit(1).
 			For("UPDATE SKIP LOCKED").
 			Scan(ctx)
@@ -658,8 +658,8 @@ func (r *UserModel) GetUserToScan(ctx context.Context) (*types.User, error) {
 		// If no confirmed users, try flagged users
 		var flaggedUser types.FlaggedUser
 		err = tx.NewSelect().Model(&flaggedUser).
-			Where("last_scanned IS NULL OR last_scanned < NOW() - INTERVAL '1 day'").
-			Order("last_scanned ASC NULLS FIRST").
+			Where("last_scanned < NOW() - INTERVAL '1 day'").
+			Order("last_scanned ASC").
 			Limit(1).
 			For("UPDATE SKIP LOCKED").
 			Scan(ctx)
@@ -737,7 +737,7 @@ func (r *UserModel) getNextToReview(ctx context.Context, model interface{}, sort
 	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
 		query := tx.NewSelect().
 			Model(model).
-			Where("last_viewed IS NULL OR last_viewed < NOW() - INTERVAL '10 minutes'")
+			Where("last_viewed < NOW() - INTERVAL '10 minutes'")
 
 		// Apply sort order
 		switch sortBy {

@@ -171,49 +171,76 @@ func (c *Client) createPartitionedTables() error {
 func (c *Client) createIndexes() error {
 	_, err := c.db.NewRaw(`
 		-- User activity logs indexes
-		CREATE INDEX IF NOT EXISTS idx_user_activity_logs_user_id ON user_activity_logs (user_id) WHERE user_id > 0;
-		CREATE INDEX IF NOT EXISTS idx_user_activity_logs_group_id ON user_activity_logs (group_id) WHERE group_id > 0;
-		CREATE INDEX IF NOT EXISTS idx_user_activity_logs_reviewer_id ON user_activity_logs (reviewer_id);
-		CREATE INDEX IF NOT EXISTS idx_user_activity_logs_activity_type ON user_activity_logs (activity_type);
-		
-		-- Index for cursor-based pagination on activity logs
-		CREATE INDEX IF NOT EXISTS idx_user_activity_logs_cursor 
+		CREATE INDEX IF NOT EXISTS idx_user_activity_logs_time 
 		ON user_activity_logs (activity_timestamp DESC, sequence DESC);
+
+		CREATE INDEX IF NOT EXISTS idx_user_activity_logs_user_time 
+		ON user_activity_logs (user_id, activity_timestamp DESC, sequence DESC) 
+		WHERE user_id > 0;
+		
+		CREATE INDEX IF NOT EXISTS idx_user_activity_logs_group_time 
+		ON user_activity_logs (group_id, activity_timestamp DESC, sequence DESC) 
+		WHERE group_id > 0;
+		
+		CREATE INDEX IF NOT EXISTS idx_user_activity_logs_reviewer_time 
+		ON user_activity_logs (reviewer_id, activity_timestamp DESC, sequence DESC);
+		
+		CREATE INDEX IF NOT EXISTS idx_user_activity_logs_type_time 
+		ON user_activity_logs (activity_type, activity_timestamp DESC, sequence DESC);
 		
 		-- Scanning indexes for users and groups
-		CREATE INDEX IF NOT EXISTS idx_confirmed_users_scan_time ON confirmed_users (last_scanned ASC NULLS FIRST);
-		CREATE INDEX IF NOT EXISTS idx_flagged_users_scan_time ON flagged_users (last_scanned ASC NULLS FIRST);
-		CREATE INDEX IF NOT EXISTS idx_confirmed_groups_scan_time ON confirmed_groups (last_scanned ASC NULLS FIRST);
-		CREATE INDEX IF NOT EXISTS idx_flagged_groups_scan_time ON flagged_groups (last_scanned ASC NULLS FIRST);
+		CREATE INDEX IF NOT EXISTS idx_confirmed_users_scan_time ON confirmed_users (last_scanned ASC);
+		CREATE INDEX IF NOT EXISTS idx_flagged_users_scan_time ON flagged_users (last_scanned ASC);
+		CREATE INDEX IF NOT EXISTS idx_confirmed_groups_scan_time ON confirmed_groups (last_scanned ASC);
+		CREATE INDEX IF NOT EXISTS idx_flagged_groups_scan_time ON flagged_groups (last_scanned ASC);
 		
 		-- Group tracking indexes
-		CREATE INDEX IF NOT EXISTS idx_group_member_trackings_last_appended ON group_member_trackings (last_appended);
-		CREATE INDEX IF NOT EXISTS idx_group_member_trackings_group_id_array_length 
-		ON group_member_trackings USING btree (group_id, array_length(flagged_users, 1));
+		CREATE INDEX IF NOT EXISTS idx_group_member_trackings_last_appended 
+		ON group_member_trackings (last_appended);
+		
+		CREATE INDEX IF NOT EXISTS idx_group_member_trackings_flagged_count 
+		ON group_member_trackings (is_flagged, array_length(flagged_users, 1)) 
+		WHERE is_flagged = false;
+
+		-- Group review sorting indexes
+		CREATE INDEX IF NOT EXISTS idx_flagged_groups_confidence_viewed 
+		ON flagged_groups (confidence DESC, last_viewed ASC);
+		CREATE INDEX IF NOT EXISTS idx_confirmed_groups_confidence_viewed 
+		ON confirmed_groups (confidence DESC, last_viewed ASC);
+		
+		CREATE INDEX IF NOT EXISTS idx_flagged_groups_reputation_viewed 
+		ON flagged_groups (reputation ASC, last_viewed ASC);
+		CREATE INDEX IF NOT EXISTS idx_confirmed_groups_reputation_viewed 
+		ON confirmed_groups (reputation ASC, last_viewed ASC);
+
+		-- User review sorting indexes
+		CREATE INDEX IF NOT EXISTS idx_flagged_users_confidence_viewed 
+		ON flagged_users (confidence DESC, last_viewed ASC);
+		CREATE INDEX IF NOT EXISTS idx_confirmed_users_confidence_viewed 
+		ON confirmed_users (confidence DESC, last_viewed ASC);
+		
+		CREATE INDEX IF NOT EXISTS idx_flagged_users_reputation_viewed 
+		ON flagged_users (reputation ASC, last_viewed ASC);
+		CREATE INDEX IF NOT EXISTS idx_confirmed_users_reputation_viewed 
+		ON confirmed_users (reputation ASC, last_viewed ASC);
+		
+		CREATE INDEX IF NOT EXISTS idx_flagged_users_updated_viewed 
+		ON flagged_users (last_updated ASC, last_viewed ASC);
+		CREATE INDEX IF NOT EXISTS idx_confirmed_users_updated_viewed 
+		ON confirmed_users (last_updated ASC, last_viewed ASC);
 
 		-- User status indexes
-		CREATE INDEX IF NOT EXISTS idx_banned_users_purged_at ON banned_users (purged_at);
+		CREATE INDEX IF NOT EXISTS idx_cleared_users_purged_at ON cleared_users (cleared_at);
 		CREATE INDEX IF NOT EXISTS idx_flagged_users_last_purge_check ON flagged_users (last_purge_check);
+		CREATE INDEX IF NOT EXISTS idx_confirmed_users_last_purge_check ON confirmed_users (last_purge_check);
 		
-		-- Training mode reputation indexes
-		CREATE INDEX IF NOT EXISTS idx_flagged_users_reputation ON flagged_users (reputation ASC);
-		CREATE INDEX IF NOT EXISTS idx_confirmed_users_reputation ON confirmed_users (reputation ASC);
-		CREATE INDEX IF NOT EXISTS idx_cleared_users_reputation ON cleared_users (reputation ASC);
-		CREATE INDEX IF NOT EXISTS idx_banned_users_reputation ON banned_users (reputation ASC);
-
-		-- Group training mode indexes
-		CREATE INDEX IF NOT EXISTS idx_flagged_groups_reputation ON flagged_groups (reputation ASC);
-		CREATE INDEX IF NOT EXISTS idx_confirmed_groups_reputation ON confirmed_groups (reputation ASC);
-		CREATE INDEX IF NOT EXISTS idx_cleared_groups_reputation ON cleared_groups (reputation ASC);
-		CREATE INDEX IF NOT EXISTS idx_locked_groups_reputation ON locked_groups (reputation ASC);
+		-- Group status indexes
+		CREATE INDEX IF NOT EXISTS idx_cleared_groups_purged_at ON cleared_groups (cleared_at);
+		CREATE INDEX IF NOT EXISTS idx_flagged_groups_last_purge_check ON flagged_groups (last_purge_check);
+		CREATE INDEX IF NOT EXISTS idx_confirmed_groups_last_purge_check ON confirmed_groups (last_purge_check);
 		
 		-- Statistics indexes
 		CREATE INDEX IF NOT EXISTS idx_hourly_stats_timestamp ON hourly_stats (timestamp DESC);
-
-		-- Group status indexes
-		CREATE INDEX IF NOT EXISTS idx_flagged_groups_last_viewed ON flagged_groups (last_viewed);
-		CREATE INDEX IF NOT EXISTS idx_flagged_groups_flagged_users_length 
-		ON flagged_groups USING btree (array_length(flagged_users, 1) DESC);
 	`).Exec(context.Background())
 	if err != nil {
 		c.logger.Error("Failed to create indexes", zap.Error(err))

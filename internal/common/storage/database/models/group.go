@@ -480,8 +480,8 @@ func (r *GroupModel) GetGroupToScan(ctx context.Context) (*types.Group, error) {
 		// First try confirmed groups
 		var confirmedGroup types.ConfirmedGroup
 		err := tx.NewSelect().Model(&confirmedGroup).
-			Where("last_scanned IS NULL OR last_scanned < NOW() - INTERVAL '1 day'").
-			Order("last_scanned ASC NULLS FIRST").
+			Where("last_scanned < NOW() - INTERVAL '1 day'").
+			Order("last_scanned ASC").
 			Limit(1).
 			For("UPDATE SKIP LOCKED").
 			Scan(ctx)
@@ -502,8 +502,8 @@ func (r *GroupModel) GetGroupToScan(ctx context.Context) (*types.Group, error) {
 		// If no confirmed groups, try flagged groups
 		var flaggedGroup types.FlaggedGroup
 		err = tx.NewSelect().Model(&flaggedGroup).
-			Where("last_scanned IS NULL OR last_scanned < NOW() - INTERVAL '1 day'").
-			Order("last_scanned ASC NULLS FIRST").
+			Where("last_scanned < NOW() - INTERVAL '1 day'").
+			Order("last_scanned ASC").
 			Limit(1).
 			For("UPDATE SKIP LOCKED").
 			Scan(ctx)
@@ -581,7 +581,7 @@ func (r *GroupModel) getNextToReview(ctx context.Context, model interface{}, sor
 	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
 		query := tx.NewSelect().
 			Model(model).
-			Where("last_viewed IS NULL OR last_viewed < NOW() - INTERVAL '10 minutes'")
+			Where("last_viewed < NOW() - INTERVAL '10 minutes'")
 
 		// Apply sort order
 		switch sortBy {
