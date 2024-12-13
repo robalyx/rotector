@@ -18,6 +18,30 @@ import (
 	"go.uber.org/zap"
 )
 
+const (
+	// FriendSystemPrompt provides detailed instructions to the AI model for analyzing friend networks.
+	FriendSystemPrompt = `You are a network analysis specialist focusing on identifying networks of predatory users on Roblox.
+
+Task: Analyze friend networks to identify patterns of predatory behavior and connections between inappropriate users targeting minors.
+
+Context:
+- Review violation types and confirmation status of friends
+- Look for patterns of predatory behavior and inappropriate content
+- Focus on factual, verifiable connections
+- Do not include usernames in your analysis
+- Use general terms like "the user" or "their friends" instead of names`
+
+	// FriendUserPrompt is the prompt for analyzing a user's friend network.
+	FriendUserPrompt = `User: %s
+Friend data: %s`
+)
+
+// FriendAnalysis contains the result of analyzing a user's friend network.
+type FriendAnalysis struct {
+	Name     string `json:"name"`
+	Analysis string `json:"analysis"`
+}
+
 // FriendCheckResult contains the result of checking a user's friends.
 type FriendCheckResult struct {
 	UserID      uint64
@@ -47,18 +71,14 @@ func NewFriendChecker(app *setup.App, logger *zap.Logger) *FriendChecker {
 				Type:        genai.TypeString,
 				Description: "Username being analyzed",
 			},
-			"reason": {
+			"analysis": {
 				Type:        genai.TypeString,
-				Description: "Analysis of friend network patterns",
-			},
-			"confidence": {
-				Type:        genai.TypeNumber,
-				Description: "Confidence level in the analysis",
+				Description: `Analysis of friend network patterns`,
 			},
 		},
-		Required: []string{"name", "reason", "confidence"},
+		Required: []string{"name", "analysis"},
 	}
-	friendTemp := float32(0.8)
+	friendTemp := float32(0.1)
 	friendModel.Temperature = &friendTemp
 
 	// Create a minifier for JSON optimization
@@ -368,14 +388,14 @@ func (fc *FriendChecker) generateFriendReason(userInfo *fetcher.Info, confirmedF
 	// Extract response text from Gemini's response
 	responseText := resp.Candidates[0].Content.Parts[0].(genai.Text)
 
-	// Parse Gemini response into FlaggedUser struct
-	var flaggedUser FlaggedUser
-	err = sonic.Unmarshal([]byte(responseText), &flaggedUser)
+	// Parse Gemini response into FriendAnalysis struct
+	var friendAnalysis FriendAnalysis
+	err = sonic.Unmarshal([]byte(responseText), &friendAnalysis)
 	if err != nil {
 		return "", fmt.Errorf("%w: %w", ErrJSONProcessing, err)
 	}
 
-	reason := flaggedUser.Reason
+	reason := friendAnalysis.Analysis
 	fc.logger.Debug("Generated friend network reason",
 		zap.String("username", userInfo.Name),
 		zap.Int("confirmedFriends", len(confirmedFriends)),

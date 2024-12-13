@@ -157,9 +157,7 @@ func (u *UserFetcher) FetchInfos(userIDs []uint64) []*Info {
 			continue
 		}
 
-		if result.Info != nil {
-			validUsers = append(validUsers, result.Info)
-		}
+		validUsers = append(validUsers, result.Info)
 	}
 
 	u.logger.Debug("Finished fetching user information",
