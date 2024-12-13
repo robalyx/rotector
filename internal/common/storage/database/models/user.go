@@ -52,7 +52,6 @@ func (r *UserModel) SaveFlaggedUsers(ctx context.Context, flaggedUsers map[uint6
 		Set("friends = EXCLUDED.friends").
 		Set("games = EXCLUDED.games").
 		Set("flagged_content = EXCLUDED.flagged_content").
-		Set("flagged_groups = EXCLUDED.flagged_groups").
 		Set("follower_count = EXCLUDED.follower_count").
 		Set("following_count = EXCLUDED.following_count").
 		Set("confidence = EXCLUDED.confidence").
@@ -100,7 +99,6 @@ func (r *UserModel) ConfirmUser(ctx context.Context, user *types.FlaggedUser) er
 			Set("friends = EXCLUDED.friends").
 			Set("games = EXCLUDED.games").
 			Set("flagged_content = EXCLUDED.flagged_content").
-			Set("flagged_groups = EXCLUDED.flagged_groups").
 			Set("follower_count = EXCLUDED.follower_count").
 			Set("following_count = EXCLUDED.following_count").
 			Set("confidence = EXCLUDED.confidence").
@@ -150,7 +148,6 @@ func (r *UserModel) ClearUser(ctx context.Context, user *types.FlaggedUser) erro
 			Set("friends = EXCLUDED.friends").
 			Set("games = EXCLUDED.games").
 			Set("flagged_content = EXCLUDED.flagged_content").
-			Set("flagged_groups = EXCLUDED.flagged_groups").
 			Set("follower_count = EXCLUDED.follower_count").
 			Set("following_count = EXCLUDED.following_count").
 			Set("confidence = EXCLUDED.confidence").

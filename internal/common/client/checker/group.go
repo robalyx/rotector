@@ -148,7 +148,6 @@ func (gc *GroupChecker) processUserGroups(userInfo *fetcher.Info, existingGroups
 			Games:          userInfo.Games.Data,
 			FollowerCount:  userInfo.FollowerCount,
 			FollowingCount: userInfo.FollowingCount,
-			FlaggedGroups:  gc.getGroupIDs(confirmedGroups, flaggedGroups),
 			Confidence:     math.Round(confidence*100) / 100, // Round to 2 decimal places
 			LastUpdated:    userInfo.LastUpdated,
 		}
@@ -199,18 +198,4 @@ func (gc *GroupChecker) calculateInappropriateWeight(confirmedCount, flaggedCoun
 	default:
 		return 0.0
 	}
-}
-
-// getGroupIDs combines IDs from confirmed and flagged groups.
-func (gc *GroupChecker) getGroupIDs(confirmedGroups, flaggedGroups map[uint64]*types.Group) []uint64 {
-	flaggedIDs := make([]uint64, 0, len(confirmedGroups)+len(flaggedGroups))
-
-	for id := range confirmedGroups {
-		flaggedIDs = append(flaggedIDs, id)
-	}
-	for id := range flaggedGroups {
-		flaggedIDs = append(flaggedIDs, id)
-	}
-
-	return flaggedIDs
 }

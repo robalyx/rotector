@@ -37,7 +37,6 @@
 - [🔄 How It Works](#-how-it-works)
 - [⚡ Efficiency](#-efficiency)
 - [🔄 Reviewing](#-reviewing)
-- [🔌 API Server](#-api-server)
 - [🛣️ Roadmap](#️-roadmap)
 - [❓ FAQ](#-faq)
 - [👥 Contributing](#-contributing)
@@ -556,12 +555,6 @@ Official moderators have better tools and permissions for reviewing accounts. Th
 - Make changes to the database
 
 What sets this mode apart is that moderators have the authority to take all necessary actions regarding flagged accounts. While community votes provide input, it is the moderators who ultimately decide the fate of these accounts.
-
-## 🔌 API Server
-
-Rotector provides a high-performance RPC server built with [Twirp](https://twitchtv.github.io/twirp/docs/intro.html), offering both Protocol Buffer and JSON interfaces for integration with your own projects.
-
-For detailed documentation and examples, see our [API Documentation](/examples/rpc/README.md).
 
 ## 🛣️ Roadmap
 

@@ -63,7 +63,6 @@ Example response:
       }
     ],
     "flagged_content": ["im 18", "having fun"],
-    "flagged_groups": [],
     "follower_count": "10",
     "following_count": "5",
     "confidence": 0.75,

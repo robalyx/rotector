@@ -62,7 +62,6 @@ func (h *UserHandler) GetUser(ctx context.Context, req *user.GetUserRequest) (*u
 		CreatedAt:      userData.CreatedAt.Format(time.RFC3339),
 		Reason:         userData.Reason,
 		FlaggedContent: userData.FlaggedContent,
-		FlaggedGroups:  userData.FlaggedGroups,
 		FollowerCount:  userData.FollowerCount,
 		FollowingCount: userData.FollowingCount,
 		Confidence:     userData.Confidence,

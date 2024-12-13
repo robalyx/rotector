@@ -156,7 +156,9 @@ func (b *ReviewBuilder) buildReviewBuilder() *discord.EmbedBuilder {
 			AddField("Outfits", b.getOutfits(), false).
 			AddField("Games", b.getGames(), false)
 
-		b.addFlaggedFields(embed)
+		if len(b.user.FlaggedContent) != 0 {
+			embed.AddField("Flagged Content", b.getFlaggedContent(), false)
+		}
 	} else {
 		// Standard mode - show all information with links
 		embed.SetAuthorName(header).
@@ -180,7 +182,9 @@ func (b *ReviewBuilder) buildReviewBuilder() *discord.EmbedBuilder {
 			AddField("Outfits", b.getOutfits(), false).
 			AddField("Games", b.getGames(), false)
 
-		b.addFlaggedFields(embed)
+		if len(b.user.FlaggedContent) != 0 {
+			embed.AddField("Flagged Content", b.getFlaggedContent(), false)
+		}
 		embed.AddField("Review History", b.getReviewHistory(), false)
 	}
 
@@ -344,17 +348,6 @@ func (b *ReviewBuilder) getDescription() string {
 	return description
 }
 
-// addFlaggedFields adds the flagged content and groups fields to the embed if they exist.
-func (b *ReviewBuilder) addFlaggedFields(embed *discord.EmbedBuilder) {
-	if len(b.user.FlaggedContent) != 0 {
-		embed.AddField("Flagged Content", b.getFlaggedContent(), false)
-	}
-
-	if len(b.user.FlaggedGroups) != 0 {
-		embed.AddField("Flagged Groups", b.getFlaggedGroups(), false)
-	}
-}
-
 // getFlaggedContent returns the flagged content field for the embed.
 func (b *ReviewBuilder) getFlaggedContent() string {
 	content := make([]string, 0, 5)
@@ -365,35 +358,6 @@ func (b *ReviewBuilder) getFlaggedContent() string {
 		}
 		normalized := utils.NormalizeString(item)
 		content = append(content, fmt.Sprintf("- `%s`", normalized))
-	}
-
-	return strings.Join(content, "\n")
-}
-
-// getFlaggedGroups returns the flagged groups field for the embed.
-func (b *ReviewBuilder) getFlaggedGroups() string {
-	content := make([]string, 0, 5)
-	for i, flaggedGroupID := range b.user.FlaggedGroups {
-		if i >= 5 {
-			content = append(content, "... and more")
-			break
-		}
-
-		for _, group := range b.user.Groups {
-			if group.Group.ID == flaggedGroupID {
-				if b.settings.ReviewMode == types.TrainingReviewMode {
-					content = append(content, fmt.Sprintf("- %s (%s)",
-						utils.CensorString(group.Group.Name, true),
-						group.Role.Name))
-				} else {
-					content = append(content, fmt.Sprintf("- [%s](https://www.roblox.com/groups/%d) (%s)",
-						utils.CensorString(group.Group.Name, b.settings.StreamerMode),
-						group.Group.ID,
-						group.Role.Name))
-				}
-				break
-			}
-		}
 	}
 
 	return strings.Join(content, "\n")

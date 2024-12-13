@@ -42,7 +42,6 @@ type User struct {
 	Friends        []ExtendedFriend        `bun:"type:jsonb" json:"friends"`
 	Games          []*types.Game           `bun:"type:jsonb" json:"games"`
 	FlaggedContent []string                `bun:"type:jsonb" json:"flaggedContent"`
-	FlaggedGroups  []uint64                `bun:"type:jsonb" json:"flaggedGroups"`
 	FollowerCount  uint64                  `bun:",notnull"   json:"followerCount"`
 	FollowingCount uint64                  `bun:",notnull"   json:"followingCount"`
 	Confidence     float64                 `bun:",notnull"   json:"confidence"`
