@@ -134,7 +134,6 @@ func (f *FriendWorker) Start() {
 // 3. Filtering out already processed users
 // 4. Collecting enough IDs to fill a batch.
 func (f *FriendWorker) processFriendsBatch(friendIDs []uint64) ([]uint64, error) {
-	var newFriendIDs []uint64
 	for len(friendIDs) < f.batchSize {
 		// Get the next confirmed user
 		user, err := f.db.Users().GetUserToScan(context.Background())
@@ -144,14 +143,14 @@ func (f *FriendWorker) processFriendsBatch(friendIDs []uint64) ([]uint64, error)
 		}
 
 		// Fetch friends for the user
-		friendIDs, err := f.friendFetcher.GetFriends(context.Background(), user.ID)
+		userFriendIDs, err := f.friendFetcher.GetFriends(context.Background(), user.ID)
 		if err != nil {
 			f.logger.Error("Error fetching friends", zap.Error(err), zap.Uint64("userID", user.ID))
 			continue
 		}
 
 		// If the user has no friends, skip them
-		if len(friendIDs) == 0 {
+		if len(userFriendIDs) == 0 {
 			continue
 		}
 
@@ -163,22 +162,17 @@ func (f *FriendWorker) processFriendsBatch(friendIDs []uint64) ([]uint64, error)
 		}
 
 		// Add only new users to the friendIDs slice
-		for _, friendID := range friendIDs {
+		for _, friendID := range userFriendIDs {
 			if _, exists := existingUsers[friendID]; !exists {
-				newFriendIDs = append(newFriendIDs, friendID)
+				friendIDs = append(friendIDs, friendID)
 			}
 		}
 
 		f.logger.Info("Fetched friends",
+			zap.Int("userFriends", len(userFriendIDs)),
 			zap.Int("totalFriends", len(friendIDs)),
-			zap.Int("newFriends", len(newFriendIDs)),
 			zap.Uint64("userID", user.ID))
-
-		// If we have enough friends, break out of the loop
-		if len(newFriendIDs) >= f.batchSize {
-			break
-		}
 	}
 
-	return newFriendIDs, nil
+	return friendIDs, nil
 }
