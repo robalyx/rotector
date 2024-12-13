@@ -57,6 +57,7 @@ type Proxies struct {
 	proxies           []*url.URL
 	client            rueidis.Client
 	logger            logger.Logger
+	requestTimeout    time.Duration
 	defaultCooldown   time.Duration
 	unhealthyDuration time.Duration
 	endpoints         []EndpointPattern
@@ -98,6 +99,7 @@ func New(proxies []*url.URL, client rueidis.Client, cfg *config.Proxy) *Proxies 
 		proxies:           proxies,
 		client:            client,
 		logger:            &logger.NoOpLogger{},
+		requestTimeout:    time.Duration(cfg.RequestTimeout) * time.Millisecond,
 		defaultCooldown:   time.Duration(cfg.DefaultCooldown) * time.Millisecond,
 		unhealthyDuration: time.Duration(cfg.UnhealthyDuration) * time.Millisecond,
 		endpoints:         patterns,
@@ -107,36 +109,50 @@ func New(proxies []*url.URL, client rueidis.Client, cfg *config.Proxy) *Proxies 
 	}
 }
 
-// Process applies proxy logic before passing the request to the next middleware
+// Process applies proxy logic before passing the request to the next middleware.
 // It selects an available proxy based on endpoint cooldowns and configures the HTTP client.
 func (m *Proxies) Process(ctx context.Context, httpClient *http.Client, req *http.Request, next middleware.NextFunc) (*http.Response, error) {
-	if len(m.proxies) > 0 {
-		// Get normalized endpoint path and cooldown
-		endpoint := fmt.Sprintf("%s%s", req.Host, getNormalizedPath(req.URL.Path))
-		cooldown := m.getCooldown(endpoint)
-
-		// Select proxy for endpoint
-		proxy, err := m.selectProxyForEndpoint(ctx, endpoint, cooldown)
-		if err != nil {
-			return nil, fmt.Errorf("failed to select proxy: %w", err)
-		}
-
-		// Apply proxy to client
-		httpClient, err = m.applyProxyToClient(httpClient, proxy)
-		if err != nil {
-			return nil, err
-		}
-
-		// Check if the response is an error
-		resp, err := next(ctx, httpClient, req)
-		if err != nil {
-			return nil, m.checkResponseError(ctx, err, proxy)
-		}
-
-		return resp, nil
+	if len(m.proxies) == 0 {
+		return next(ctx, httpClient, req)
 	}
 
-	return next(ctx, httpClient, req)
+	// Get normalized endpoint path
+	endpoint := fmt.Sprintf("%s%s", req.Host, getNormalizedPath(req.URL.Path))
+
+	// Select proxy for endpoint
+	proxy, proxyIndex, err := m.selectProxyForEndpoint(ctx, endpoint)
+	if err != nil {
+		return nil, fmt.Errorf("failed to select proxy: %w", err)
+	}
+
+	// Apply proxy to client
+	httpClient, err = m.applyProxyToClient(httpClient, proxy)
+	if err != nil {
+		return nil, err
+	}
+
+	// Make the request
+	resp, err := next(ctx, httpClient, req)
+	if err != nil {
+		return nil, m.checkResponseError(ctx, err, proxy)
+	}
+
+	// Update the timestamp after the request completes successfully
+	cooldown := m.getCooldown(endpoint)
+	if updateErr := m.updateProxyTimestamp(ctx, endpoint, proxyIndex, cooldown); updateErr != nil {
+		m.logger.WithFields(
+			logger.String("endpoint", endpoint),
+			logger.String("error", updateErr.Error()),
+		).Error("Failed to update proxy timestamp")
+	}
+
+	m.logger.WithFields(
+		logger.String("endpoint", endpoint),
+		logger.Int64("index", proxyIndex),
+		logger.String("cooldown", cooldown.String()),
+	).Debug("Used proxy")
+
+	return resp, nil
 }
 
 // getCooldown returns the cooldown duration for a given endpoint
@@ -152,7 +168,7 @@ func (m *Proxies) getCooldown(endpoint string) time.Duration {
 
 // selectProxyForEndpoint chooses an appropriate proxy for the given endpoint
 // It uses Redis to track endpoint usage and ensure proper cooldown periods.
-func (m *Proxies) selectProxyForEndpoint(ctx context.Context, endpoint string, cooldown time.Duration) (*url.URL, error) {
+func (m *Proxies) selectProxyForEndpoint(ctx context.Context, endpoint string) (*url.URL, int64, error) {
 	now := time.Now().Unix()
 	lastSuccessKey := fmt.Sprintf("%s:%s:%s", LastSuccessKeyPrefix, m.proxyHash, endpoint)
 
@@ -165,35 +181,35 @@ func (m *Proxies) selectProxyForEndpoint(ctx context.Context, endpoint string, c
 		Arg(m.numProxies).
 		Arg(endpoint).
 		Arg(strconv.FormatInt(now, 10)).
-		Arg(strconv.FormatInt(int64(cooldown.Seconds()), 10)).
+		Arg(strconv.FormatInt(int64(m.requestTimeout.Seconds()), 10)).
 		Arg(m.proxyHash).
 		Build())
 
 	if resp.Error() != nil {
-		return nil, fmt.Errorf("redis error: %w", resp.Error())
+		return nil, -1, fmt.Errorf("redis error: %w", resp.Error())
 	}
 
 	// Parse the response array
 	result, err := resp.ToArray()
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse redis response: %w", err)
+		return nil, -1, fmt.Errorf("failed to parse redis response: %w", err)
 	}
 
 	// Parse index from response
 	index, err := result[0].AsInt64()
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse proxy index: %w", err)
+		return nil, -1, fmt.Errorf("failed to parse proxy index: %w", err)
 	}
 
 	// Special case: no healthy proxies available
 	if index == -1 {
-		return nil, ErrNoHealthyProxies
+		return nil, -1, ErrNoHealthyProxies
 	}
 
 	// Parse wait time from response
 	waitSeconds, err := result[1].AsInt64()
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse wait time: %w", err)
+		return nil, -1, fmt.Errorf("failed to parse wait time: %w", err)
 	}
 
 	// Check if we need to wait for the proxy to be ready
@@ -207,20 +223,14 @@ func (m *Proxies) selectProxyForEndpoint(ctx context.Context, endpoint string, c
 
 		select {
 		case <-ctx.Done():
-			return nil, ctx.Err()
+			return nil, -1, ctx.Err()
 		case <-time.After(waitTime):
 			// Use the same proxy after waiting
-			return m.proxies[index], nil
+			return m.proxies[index], index, nil
 		}
 	}
 
-	m.logger.WithFields(
-		logger.String("endpoint", endpoint),
-		logger.Int64("index", index),
-		logger.String("cooldown", cooldown.String()),
-	).Debug("Using proxy")
-
-	return m.proxies[index], nil
+	return m.proxies[index], index, nil
 }
 
 // applyProxyToClient applies the proxy to the given http.Client
@@ -252,6 +262,21 @@ func (m *Proxies) applyProxyToClient(httpClient *http.Client, proxy *url.URL) (*
 		Jar:           httpClient.Jar,
 		Timeout:       httpClient.Timeout,
 	}, nil
+}
+
+// updateProxyTimestamp updates the timestamp for when the proxy was actually used.
+func (m *Proxies) updateProxyTimestamp(ctx context.Context, endpoint string, proxyIndex int64, cooldown time.Duration) error {
+	endpointKey := fmt.Sprintf("proxy_endpoints:%s:%d", m.proxyHash, proxyIndex)
+	nextAvailable := time.Now().Add(cooldown).Unix()
+
+	// Update the timestamp to when the endpoint will be available again
+	err := m.client.Do(ctx, m.client.B().Zadd().
+		Key(endpointKey).
+		ScoreMember().
+		ScoreMember(float64(nextAvailable), endpoint).
+		Build()).Error()
+
+	return err
 }
 
 // checkResponseError checks if the error is a timeout/network error and marks the proxy as unhealthy if it is.

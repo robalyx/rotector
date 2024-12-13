@@ -42,7 +42,7 @@ recovery_timeout = 30000
 
 [common.retry]
 # Maximum retry attempts
-max_retries = 6
+max_retries = 5
 # Initial retry delay in milliseconds
 delay = 4000
 # Maximum retry delay in milliseconds
@@ -61,11 +61,11 @@ password = "postgres"
 db_name = "postgres"
 
 # Maximum open connections
-max_open_conns = 10
+max_open_conns = 8
 # Maximum idle connections
-max_idle_conns = 10
+max_idle_conns = 8
 # Connection lifetime in minutes
-max_lifetime = 30
+max_lifetime = 10
 # Idle timeout in minutes
 max_idle_time = 10
 
