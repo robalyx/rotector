@@ -19,11 +19,21 @@ COPY . .
 # Build binaries with optimizations
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
     -ldflags="-s -w" \
-    -o /app/bin/ \
-    ./cmd/bot \
-    ./cmd/worker \
-    ./cmd/entrypoint && \
-    upx --best --lzma /app/bin/*
+    -o /app/bin/bot \
+    ./cmd/bot
+
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
+    -ldflags="-s -w" \
+    -o /app/bin/worker \
+    ./cmd/worker
+
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
+    -ldflags="-s -w" \
+    -o /app/bin/entrypoint \
+    ./cmd/entrypoint
+
+# Compress binaries after building
+RUN upx --best --lzma /app/bin/*
 
 # ============================================
 # Stage 2: Final stage
