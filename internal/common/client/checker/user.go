@@ -34,7 +34,7 @@ func NewUserChecker(app *setup.App, userFetcher *fetcher.UserFetcher, logger *za
 		db:            app.DB,
 		userFetcher:   userFetcher,
 		userAnalyzer:  userAnalyzer,
-		groupChecker:  NewGroupChecker(app.DB, logger),
+		groupChecker:  NewGroupChecker(app.DB, logger, app.Config.Worker.ThresholdLimits.MaxGroupMembersTrack),
 		friendChecker: NewFriendChecker(app, logger),
 		logger:        logger,
 	}

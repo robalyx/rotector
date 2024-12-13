@@ -14,6 +14,8 @@ queue_items = 50
 # Maximum number of flagged users before stopping worker
 flagged_users = 1000
 # Minimum number of flagged users needed to flag a group
-min_flagged_for_group = 200
+min_flagged_for_group = 10
 # Minimum follower count to consider a user "popular"
 min_followers_for_popular_user = 1000
+# Maximum group members before skipping tracking
+max_group_members_track = 50000

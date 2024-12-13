@@ -110,6 +110,7 @@ type ThresholdLimits struct {
 	FlaggedUsers           int    `mapstructure:"flagged_users"`                  // Maximum number of flagged users before stopping worker
 	MinFlaggedForGroup     int    `mapstructure:"min_flagged_for_group"`          // Minimum number of flagged users needed to flag a group
 	MinFollowersForPopular uint64 `mapstructure:"min_followers_for_popular_user"` // Minimum follower count to consider a user "popular"
+	MaxGroupMembersTrack   uint64 `mapstructure:"max_group_members_track"`        // Maximum group members before skipping tracking
 }
 
 // RPCServer contains server configuration options.

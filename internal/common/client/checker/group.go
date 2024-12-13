@@ -21,16 +21,18 @@ type GroupCheckResult struct {
 // GroupChecker handles the checking of user groups by comparing them against
 // a database of known inappropriate groups.
 type GroupChecker struct {
-	db     *database.Client
-	logger *zap.Logger
+	db                   *database.Client
+	logger               *zap.Logger
+	maxGroupMembersTrack uint64
 }
 
 // NewGroupChecker creates a GroupChecker with database access for looking up
 // flagged group information.
-func NewGroupChecker(db *database.Client, logger *zap.Logger) *GroupChecker {
+func NewGroupChecker(db *database.Client, logger *zap.Logger, maxGroupMembersTrack uint64) *GroupChecker {
 	return &GroupChecker{
-		db:     db,
-		logger: logger,
+		db:                   db,
+		logger:               logger,
+		maxGroupMembersTrack: maxGroupMembersTrack,
 	}
 }
 
@@ -38,11 +40,15 @@ func NewGroupChecker(db *database.Client, logger *zap.Logger) *GroupChecker {
 func (c *GroupChecker) ProcessUsers(userInfos []*fetcher.Info) map[uint64]*types.User {
 	// Collect all unique group IDs across all users
 	uniqueGroupIDs := make(map[uint64]struct{})
-	groupToUsers := make(map[uint64][]uint64)
+	groupUsersTracking := make(map[uint64][]uint64)
 	for _, userInfo := range userInfos {
 		for _, group := range userInfo.Groups.Data {
 			uniqueGroupIDs[group.Group.ID] = struct{}{}
-			groupToUsers[group.Group.ID] = append(groupToUsers[group.Group.ID], userInfo.ID)
+
+			// Only track if member count is below threshold
+			if group.Group.MemberCount <= c.maxGroupMembersTrack {
+				groupUsersTracking[group.Group.ID] = append(groupUsersTracking[group.Group.ID], userInfo.ID)
+			}
 		}
 	}
 
@@ -63,7 +69,7 @@ func (c *GroupChecker) ProcessUsers(userInfos []*fetcher.Info) map[uint64]*types
 	}
 
 	// Track all users in groups
-	err = c.db.Tracking().AddUsersToGroupsTracking(context.Background(), groupToUsers)
+	err = c.db.Tracking().AddUsersToGroupsTracking(context.Background(), groupUsersTracking)
 	if err != nil {
 		c.logger.Error("Failed to add users to groups tracking", zap.Error(err))
 	}
