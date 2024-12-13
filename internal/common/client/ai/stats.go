@@ -1,4 +1,4 @@
-package checker
+package ai
 
 import (
 	"context"
@@ -14,7 +14,7 @@ import (
 	"go.uber.org/zap"
 )
 
-// StatsSystemPrompt is the system prompt for the stats checker.
+// StatsSystemPrompt is the system prompt for the stats analyzer.
 const StatsSystemPrompt = `You are a witty assistant analyzing moderation statistics. Generate a short, engaging welcome message (max 512 characters) for moderators based on statistical trends. 
 
 Instructions:
@@ -52,15 +52,15 @@ type StatsData struct {
 	History []types.HourlyStats `json:"history"`
 }
 
-// StatsChecker analyzes statistics and generates welcome messages.
-type StatsChecker struct {
+// StatsAnalyzer analyzes statistics and generates welcome messages.
+type StatsAnalyzer struct {
 	genModel *genai.GenerativeModel
 	minify   *minify.M
 	logger   *zap.Logger
 }
 
-// NewStatsChecker creates a new stats checker instance.
-func NewStatsChecker(app *setup.App, logger *zap.Logger) *StatsChecker {
+// NewStatsAnalyzer creates a new stats analyzer instance.
+func NewStatsAnalyzer(app *setup.App, logger *zap.Logger) *StatsAnalyzer {
 	// Create a new Gemini model
 	model := app.GenAIClient.GenerativeModel(app.Config.Common.GeminiAI.Model)
 	model.SystemInstruction = genai.NewUserContent(genai.Text(StatsSystemPrompt))
@@ -76,7 +76,7 @@ func NewStatsChecker(app *setup.App, logger *zap.Logger) *StatsChecker {
 	m := minify.New()
 	m.AddFunc("application/json", json.Minify)
 
-	return &StatsChecker{
+	return &StatsAnalyzer{
 		genModel: model,
 		minify:   m,
 		logger:   logger,
@@ -84,7 +84,7 @@ func NewStatsChecker(app *setup.App, logger *zap.Logger) *StatsChecker {
 }
 
 // GenerateWelcomeMessage analyzes current and historical stats to generate a contextual welcome message.
-func (s *StatsChecker) GenerateWelcomeMessage(ctx context.Context, historicalStats []types.HourlyStats) (string, error) {
+func (a *StatsAnalyzer) GenerateWelcomeMessage(ctx context.Context, historicalStats []types.HourlyStats) (string, error) {
 	// Format stats data for AI analysis
 	data := StatsData{
 		History: historicalStats,
@@ -93,19 +93,19 @@ func (s *StatsChecker) GenerateWelcomeMessage(ctx context.Context, historicalSta
 	// Convert stats to JSON
 	statsJSON, err := sonic.Marshal(data)
 	if err != nil {
-		s.logger.Error("failed to marshal stats data", zap.Error(err))
+		a.logger.Error("failed to marshal stats data", zap.Error(err))
 		return "", fmt.Errorf("%w: %w", ErrJSONProcessing, err)
 	}
 
 	// Minify JSON to reduce token usage
-	statsJSON, err = s.minify.Bytes("application/json", statsJSON)
+	statsJSON, err = a.minify.Bytes("application/json", statsJSON)
 	if err != nil {
-		s.logger.Error("failed to minify stats data", zap.Error(err))
+		a.logger.Error("failed to minify stats data", zap.Error(err))
 		return "", fmt.Errorf("%w: %w", ErrJSONProcessing, err)
 	}
 
 	// Generate welcome message using Gemini model
-	resp, err := s.genModel.GenerateContent(ctx, genai.Text(string(statsJSON)))
+	resp, err := a.genModel.GenerateContent(ctx, genai.Text(string(statsJSON)))
 	if err != nil {
 		return "", fmt.Errorf("%w: %w", ErrModelResponse, err)
 	}
@@ -121,7 +121,7 @@ func (s *StatsChecker) GenerateWelcomeMessage(ctx context.Context, historicalSta
 	// Clean up the response text
 	cleanMessage := utils.CleanupText(string(message))
 
-	s.logger.Debug("Generated welcome message",
+	a.logger.Debug("Generated welcome message",
 		zap.String("message", cleanMessage))
 
 	return cleanMessage, nil

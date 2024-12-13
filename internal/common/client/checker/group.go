@@ -35,7 +35,7 @@ func NewGroupChecker(db *database.Client, logger *zap.Logger) *GroupChecker {
 }
 
 // ProcessUsers checks multiple users' groups concurrently and returns flagged users.
-func (gc *GroupChecker) ProcessUsers(userInfos []*fetcher.Info) map[uint64]*types.User {
+func (c *GroupChecker) ProcessUsers(userInfos []*fetcher.Info) map[uint64]*types.User {
 	// Collect all unique group IDs across all users
 	uniqueGroupIDs := make(map[uint64]struct{})
 	groupToUsers := make(map[uint64][]uint64)
@@ -53,19 +53,19 @@ func (gc *GroupChecker) ProcessUsers(userInfos []*fetcher.Info) map[uint64]*type
 	}
 
 	// Fetch all existing groups
-	existingGroups, groupTypes, err := gc.db.Groups().GetGroupsByIDs(context.Background(), groupIDs, types.GroupFields{
+	existingGroups, groupTypes, err := c.db.Groups().GetGroupsByIDs(context.Background(), groupIDs, types.GroupFields{
 		Basic:  true,
 		Reason: true,
 	})
 	if err != nil {
-		gc.logger.Error("Failed to fetch existing groups", zap.Error(err))
+		c.logger.Error("Failed to fetch existing groups", zap.Error(err))
 		return nil
 	}
 
 	// Track all users in groups
-	err = gc.db.Tracking().AddUsersToGroupsTracking(context.Background(), groupToUsers)
+	err = c.db.Tracking().AddUsersToGroupsTracking(context.Background(), groupToUsers)
 	if err != nil {
-		gc.logger.Error("Failed to add users to groups tracking", zap.Error(err))
+		c.logger.Error("Failed to add users to groups tracking", zap.Error(err))
 	}
 
 	// Process each user concurrently
@@ -79,7 +79,7 @@ func (gc *GroupChecker) ProcessUsers(userInfos []*fetcher.Info) map[uint64]*type
 			defer wg.Done()
 
 			// Process user groups
-			user, autoFlagged := gc.processUserGroups(info, existingGroups, groupTypes)
+			user, autoFlagged := c.processUserGroups(info, existingGroups, groupTypes)
 			resultsChan <- GroupCheckResult{
 				UserID:      info.ID,
 				User:        user,
@@ -106,7 +106,7 @@ func (gc *GroupChecker) ProcessUsers(userInfos []*fetcher.Info) map[uint64]*type
 }
 
 // processUserGroups checks if a user should be flagged based on their groups.
-func (gc *GroupChecker) processUserGroups(userInfo *fetcher.Info, existingGroups map[uint64]*types.Group, groupTypes map[uint64]types.GroupType) (*types.User, bool) {
+func (c *GroupChecker) processUserGroups(userInfo *fetcher.Info, existingGroups map[uint64]*types.Group, groupTypes map[uint64]types.GroupType) (*types.User, bool) {
 	// Skip users with no group memberships
 	if len(userInfo.Groups.Data) == 0 {
 		return nil, false
@@ -132,7 +132,7 @@ func (gc *GroupChecker) processUserGroups(userInfo *fetcher.Info, existingGroups
 	}
 
 	// Calculate confidence score based on group memberships
-	confidence := gc.calculateConfidence(confirmedCount, flaggedCount, len(userInfo.Groups.Data))
+	confidence := c.calculateConfidence(confirmedCount, flaggedCount, len(userInfo.Groups.Data))
 
 	// Auto-flag users in 2 or more inappropriate groups
 	if confidence >= 0.4 {
@@ -152,7 +152,7 @@ func (gc *GroupChecker) processUserGroups(userInfo *fetcher.Info, existingGroups
 			LastUpdated:    userInfo.LastUpdated,
 		}
 
-		gc.logger.Info("User automatically flagged",
+		c.logger.Info("User automatically flagged",
 			zap.Uint64("userID", userInfo.ID),
 			zap.Int("confirmedGroups", confirmedCount),
 			zap.Int("flaggedGroups", flaggedCount),
@@ -165,11 +165,11 @@ func (gc *GroupChecker) processUserGroups(userInfo *fetcher.Info, existingGroups
 }
 
 // calculateConfidence computes a weighted confidence score based on group memberships.
-func (gc *GroupChecker) calculateConfidence(confirmedCount, flaggedCount, totalGroups int) float64 {
+func (c *GroupChecker) calculateConfidence(confirmedCount, flaggedCount, totalGroups int) float64 {
 	var confidence float64
 
 	// Factor 1: Absolute number of inappropriate groups - 60% weight
-	inappropriateWeight := gc.calculateInappropriateWeight(confirmedCount, flaggedCount)
+	inappropriateWeight := c.calculateInappropriateWeight(confirmedCount, flaggedCount)
 	confidence += inappropriateWeight * 0.60
 
 	// Factor 2: Ratio of inappropriate groups - 40% weight
@@ -183,7 +183,7 @@ func (gc *GroupChecker) calculateConfidence(confirmedCount, flaggedCount, totalG
 }
 
 // calculateInappropriateWeight returns a weight based on the total number of inappropriate groups.
-func (gc *GroupChecker) calculateInappropriateWeight(confirmedCount, flaggedCount int) float64 {
+func (c *GroupChecker) calculateInappropriateWeight(confirmedCount, flaggedCount int) float64 {
 	totalWeight := float64(confirmedCount) + (float64(flaggedCount) * 0.5)
 
 	switch {

@@ -1,8 +1,7 @@
-package checker
+package ai
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -105,14 +104,6 @@ Confidence level grading:
 // MaxFriendDataTokens is the maximum number of tokens allowed for friend data.
 const MaxFriendDataTokens = 400
 
-// Package-level errors.
-var (
-	// ErrModelResponse indicates the model returned no usable response.
-	ErrModelResponse = errors.New("model response error")
-	// ErrJSONProcessing indicates a JSON processing error.
-	ErrJSONProcessing = errors.New("JSON processing error")
-)
-
 // FlaggedUsers holds a list of users that the AI has identified as inappropriate.
 // The JSON schema is used to ensure consistent responses from the AI.
 type FlaggedUsers struct {
@@ -128,16 +119,16 @@ type FlaggedUser struct {
 	Confidence     float64  `json:"confidence"`
 }
 
-// AIChecker handles AI-based content analysis using Gemini models.
-type AIChecker struct {
+// UserAnalyzer handles AI-based content analysis using Gemini models.
+type UserAnalyzer struct {
 	userModel  *genai.GenerativeModel
 	minify     *minify.M
 	translator *translator.Translator
 	logger     *zap.Logger
 }
 
-// NewAIChecker creates an AIChecker with separate models for user and friend analysis.
-func NewAIChecker(app *setup.App, translator *translator.Translator, logger *zap.Logger) *AIChecker {
+// NewUserAnalyzer creates an UserAnalyzer with separate models for user and friend analysis.
+func NewUserAnalyzer(app *setup.App, translator *translator.Translator, logger *zap.Logger) *UserAnalyzer {
 	// Create user analysis model
 	userModel := app.GenAIClient.GenerativeModel(app.Config.Common.GeminiAI.Model)
 	userModel.SystemInstruction = genai.NewUserContent(genai.Text(ReviewSystemPrompt))
@@ -184,7 +175,7 @@ func NewAIChecker(app *setup.App, translator *translator.Translator, logger *zap
 	m := minify.New()
 	m.AddFunc("application/json", json.Minify)
 
-	return &AIChecker{
+	return &UserAnalyzer{
 		userModel:  userModel,
 		minify:     m,
 		translator: translator,
@@ -199,7 +190,7 @@ func NewAIChecker(app *setup.App, translator *translator.Translator, logger *zap
 // 2. Sending translated content to OpenAI for analysis
 // 3. Validating AI responses against translated content
 // 4. Creating validated users with original descriptions.
-func (a *AIChecker) ProcessUsers(userInfos []*fetcher.Info) (map[uint64]*types.User, []uint64, error) {
+func (a *UserAnalyzer) ProcessUsers(userInfos []*fetcher.Info) (map[uint64]*types.User, []uint64, error) {
 	// Create a struct for user summaries for AI analysis
 	type UserSummary struct {
 		Name        string `json:"name"`
@@ -272,8 +263,8 @@ func (a *AIChecker) ProcessUsers(userInfos []*fetcher.Info) (map[uint64]*types.U
 
 // validateFlaggedUsers validates the flagged users against the translated content
 // but uses original descriptions when creating validated users. It checks if at least
-// 50% of the flagged words are found in the translated content to confirm the AI's findings.
-func (a *AIChecker) validateFlaggedUsers(flaggedUsers FlaggedUsers, translatedInfos map[string]*fetcher.Info, originalInfos map[string]*fetcher.Info) (map[uint64]*types.User, []uint64) {
+// 30% of the flagged words are found in the translated content to confirm the AI's findings.
+func (a *UserAnalyzer) validateFlaggedUsers(flaggedUsers FlaggedUsers, translatedInfos map[string]*fetcher.Info, originalInfos map[string]*fetcher.Info) (map[uint64]*types.User, []uint64) {
 	validatedUsers := make(map[uint64]*types.User)
 	var failedValidationIDs []uint64
 
@@ -318,8 +309,8 @@ func (a *AIChecker) validateFlaggedUsers(flaggedUsers FlaggedUsers, translatedIn
 			}
 		}
 
-		// Check if at least 50% of the flagged words are found
-		isValid := float64(foundWords) >= 0.5*float64(len(allFlaggedWords))
+		// Check if at least 30% of the flagged words are found
+		isValid := float64(foundWords) >= 0.3*float64(len(allFlaggedWords))
 
 		// If the flagged user is correct, add it using original info
 		if isValid {
@@ -358,7 +349,7 @@ func (a *AIChecker) validateFlaggedUsers(flaggedUsers FlaggedUsers, translatedIn
 // and original user infos for validation. If translation fails for any description,
 // it falls back to using the original content. Returns maps using normalized usernames
 // as keys.
-func (a *AIChecker) prepareUserInfos(userInfos []*fetcher.Info) (map[string]*fetcher.Info, map[string]*fetcher.Info) {
+func (a *UserAnalyzer) prepareUserInfos(userInfos []*fetcher.Info) (map[string]*fetcher.Info, map[string]*fetcher.Info) {
 	// TranslationResult contains the result of translating a user's description.
 	type TranslationResult struct {
 		UserInfo       *fetcher.Info

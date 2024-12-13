@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/rotector/rotector/internal/common/client/ai"
 	"github.com/rotector/rotector/internal/common/client/fetcher"
 	"github.com/rotector/rotector/internal/common/setup"
 	"github.com/rotector/rotector/internal/common/storage/database"
@@ -17,7 +18,7 @@ type UserChecker struct {
 	app           *setup.App
 	db            *database.Client
 	userFetcher   *fetcher.UserFetcher
-	aiChecker     *AIChecker
+	userAnalyzer  *ai.UserAnalyzer
 	groupChecker  *GroupChecker
 	friendChecker *FriendChecker
 	logger        *zap.Logger
@@ -26,13 +27,13 @@ type UserChecker struct {
 // NewUserChecker creates a UserChecker with all required dependencies.
 func NewUserChecker(app *setup.App, userFetcher *fetcher.UserFetcher, logger *zap.Logger) *UserChecker {
 	translator := translator.New(app.RoAPI.GetClient())
-	aiChecker := NewAIChecker(app, translator, logger)
+	userAnalyzer := ai.NewUserAnalyzer(app, translator, logger)
 
 	return &UserChecker{
 		app:           app,
 		db:            app.DB,
 		userFetcher:   userFetcher,
-		aiChecker:     aiChecker,
+		userAnalyzer:  userAnalyzer,
 		groupChecker:  NewGroupChecker(app.DB, logger),
 		friendChecker: NewFriendChecker(app, logger),
 		logger:        logger,
@@ -64,7 +65,7 @@ func (c *UserChecker) ProcessUsers(userInfos []*fetcher.Info) []uint64 {
 	}
 
 	// Process AI results
-	flaggedByAI, failedIDs, err := c.aiChecker.ProcessUsers(userInfos)
+	flaggedByAI, failedIDs, err := c.userAnalyzer.ProcessUsers(userInfos)
 	if err != nil {
 		c.logger.Error("Error checking users with AI", zap.Error(err))
 	} else {

@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/rotector/rotector/internal/common/client/checker"
+	"github.com/rotector/rotector/internal/common/client/ai"
 	"github.com/rotector/rotector/internal/common/progress"
 	"github.com/rotector/rotector/internal/common/setup"
 	"github.com/rotector/rotector/internal/common/storage/database"
@@ -18,20 +18,17 @@ type Worker struct {
 	db       *database.Client
 	bar      *progress.Bar
 	reporter *core.StatusReporter
-	checker  *checker.StatsChecker
+	analyzer *ai.StatsAnalyzer
 	logger   *zap.Logger
 }
 
 // New creates a new stats core.
 func New(app *setup.App, bar *progress.Bar, logger *zap.Logger) *Worker {
-	reporter := core.NewStatusReporter(app.StatusClient, "stats", "", logger)
-	checker := checker.NewStatsChecker(app, logger)
-
 	return &Worker{
 		db:       app.DB,
 		bar:      bar,
-		reporter: reporter,
-		checker:  checker,
+		reporter: core.NewStatusReporter(app.StatusClient, "stats", "", logger),
+		analyzer: ai.NewStatsAnalyzer(app, logger),
 		logger:   logger,
 	}
 }
@@ -110,7 +107,7 @@ func (w *Worker) updateWelcomeMessage(ctx context.Context) error {
 	}
 
 	// Generate new welcome message
-	message, err := w.checker.GenerateWelcomeMessage(ctx, historicalStats)
+	message, err := w.analyzer.GenerateWelcomeMessage(ctx, historicalStats)
 	if err != nil {
 		return fmt.Errorf("failed to generate welcome message: %w", err)
 	}
