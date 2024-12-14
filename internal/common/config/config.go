@@ -21,6 +21,7 @@ type CommonConfig struct {
 	Redis          Redis          `mapstructure:"redis"`
 	GeminiAI       GeminiAI       `mapstructure:"gemini_ai"`
 	Proxy          Proxy          `mapstructure:"proxy"`
+	Sentry         Sentry         `mapstructure:"sentry"`
 }
 
 // BotConfig contains Discord bot specific configuration.
@@ -146,6 +147,11 @@ type Proxy struct {
 type EndpointLimit struct {
 	Pattern  string `mapstructure:"pattern"`  // URL pattern with placeholders
 	Cooldown int    `mapstructure:"cooldown"` // Time in milliseconds until next request allowed
+}
+
+// Sentry contains Sentry error tracking configuration.
+type Sentry struct {
+	DSN string `mapstructure:"dsn"` // Sentry DSN for error reporting
 }
 
 // LoadConfig loads the configuration from the specified file.

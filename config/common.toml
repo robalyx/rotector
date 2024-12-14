@@ -12,6 +12,10 @@ enable_pprof = false
 # Port for pprof HTTP server if enabled
 pprof_port = 6060
 
+[common.sentry]
+# Sentry DSN for error tracking (leave empty to disable)
+dsn = ""
+
 [common.proxy]
 # Default cooldown period in milliseconds for unspecified endpoints
 default_cooldown = 5000

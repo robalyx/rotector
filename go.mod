@@ -6,6 +6,7 @@ require (
 	github.com/bytedance/sonic v1.12.5
 	github.com/disgoorg/disgo v0.18.14
 	github.com/disgoorg/snowflake/v2 v2.0.3
+	github.com/getsentry/sentry-go v0.30.0
 	github.com/google/generative-ai-go v0.19.0
 	github.com/google/uuid v1.6.0
 	github.com/jaxron/axonet v0.0.0-20241110114112-10fce0f238e1

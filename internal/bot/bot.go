@@ -163,7 +163,12 @@ func (b *Bot) handleApplicationCommandInteraction(event *events.ApplicationComma
 		start := time.Now()
 		defer func() {
 			if r := recover(); r != nil {
-				b.logger.Error("Panic in application command interaction handler", zap.Any("panic", r))
+				b.logger.Error("Application command interaction failed",
+					zap.String("command", event.SlashCommandInteractionData().CommandName()),
+					zap.String("user_id", event.User().ID.String()),
+					zap.Any("panic", r),
+					zap.Stack("stack"),
+				)
 				b.paginationManager.RespondWithError(event, "Internal error. Please report this to an administrator.")
 			}
 			duration := time.Since(start)
@@ -224,7 +229,13 @@ func (b *Bot) handleComponentInteraction(event *events.ComponentInteractionCreat
 		start := time.Now()
 		defer func() {
 			if r := recover(); r != nil {
-				b.logger.Error("Panic in component interaction handler", zap.Any("panic", r))
+				b.logger.Error("Component interaction failed",
+					zap.String("component_id", event.Data.CustomID()),
+					zap.String("component_type", fmt.Sprintf("%T", event.Data)),
+					zap.String("user_id", event.User().ID.String()),
+					zap.Any("panic", r),
+					zap.Stack("stack"),
+				)
 				b.paginationManager.RespondWithError(event, "Internal error. Please report this to an administrator.")
 			}
 			duration := time.Since(start)
@@ -273,7 +284,18 @@ func (b *Bot) handleModalSubmit(event *events.ModalSubmitInteractionCreate) {
 		start := time.Now()
 		defer func() {
 			if r := recover(); r != nil {
-				b.logger.Error("Panic in modal submit interaction handler", zap.Any("panic", r))
+				formData := make(map[string]string)
+				for id, comp := range event.Data.Components {
+					formData[id] = fmt.Sprintf("Component type: %T", comp)
+				}
+
+				b.logger.Error("Modal submission failed",
+					zap.String("modal_id", event.Data.CustomID),
+					zap.String("user_id", event.User().ID.String()),
+					zap.Any("form_data", formData),
+					zap.Any("panic", r),
+					zap.Stack("stack"),
+				)
 				b.paginationManager.RespondWithError(event, "Internal error. Please report this to an administrator.")
 			}
 			duration := time.Since(start)
@@ -299,10 +321,10 @@ func (b *Bot) validateAndGetSession(event interfaces.CommonEvent, userID snowfla
 	// Get or create user session
 	s, err := b.sessionManager.GetOrCreateSession(context.Background(), uint64(userID))
 	if err != nil {
-		b.logger.Error("Failed to get or create session", zap.Error(err))
 		if errors.Is(err, session.ErrSessionLimitReached) {
 			b.paginationManager.RespondWithError(event, "Session limit reached. Please try again later.")
 		} else {
+			b.logger.Error("Failed to get or create session", zap.Error(err))
 			b.paginationManager.RespondWithError(event, "Failed to get or create session.")
 		}
 		return nil, false

@@ -191,16 +191,17 @@ func runWorkers(workerType, subType string, count int) {
 	log.Println("All workers have finished. Exiting.")
 }
 
-// runWorker runs a single worker in a loop with error recovery:
-// 1. Catches panics to prevent worker crashes
-// 2. Restarts the worker after a delay if it stops
-// 3. Logs any errors that occur.
+// runWorker runs a single worker in a loop with error recovery.
 func runWorker(w interface{ Start() }, logger *zap.Logger) {
 	for {
 		func() {
 			defer func() {
 				if r := recover(); r != nil {
-					logger.Error("Worker panicked", zap.Any("panic", r))
+					logger.Error("Worker execution failed",
+						zap.String("worker_type", fmt.Sprintf("%T", w)),
+						zap.Any("panic", r),
+						zap.Stack("stack"),
+					)
 					logger.Info("Restarting worker in 5 seconds...")
 					time.Sleep(5 * time.Second)
 				}
@@ -210,7 +211,10 @@ func runWorker(w interface{ Start() }, logger *zap.Logger) {
 			w.Start()
 		}()
 
-		logger.Error("Worker stopped unexpectedly. Restarting in 5 seconds...")
+		logger.Error("Worker stopped unexpectedly",
+			zap.String("worker_type", fmt.Sprintf("%T", w)),
+			zap.Stack("stack"),
+		)
 		time.Sleep(5 * time.Second)
 	}
 }

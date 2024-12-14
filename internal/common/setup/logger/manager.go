@@ -2,14 +2,12 @@ package logger
 
 import (
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"sort"
-	"strings"
-	"sync"
 	"time"
 
+	"github.com/getsentry/sentry-go"
 	"github.com/rotector/rotector/internal/common/config"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -70,13 +68,13 @@ func (lm *Manager) GetLoggers() (*zap.Logger, *zap.Logger, error) {
 func (lm *Manager) GetWorkerLogger(name string) *zap.Logger {
 	zapLevel, err := zapcore.ParseLevel(lm.level)
 	if err != nil {
-		return zap.NewNop() // Return no-op logger on invalid level
+		return zap.NewNop()
 	}
 
 	sessionDir := lm.getOrCreateSessionDir()
 	latestDir := filepath.Join(lm.logDir, "latest")
 
-	// Configure the logger with both session and latest outputs
+	// Configure the logger
 	config := zap.NewDevelopmentConfig()
 	config.OutputPaths = []string{
 		filepath.Join(sessionDir, name+".log"),
@@ -84,9 +82,20 @@ func (lm *Manager) GetWorkerLogger(name string) *zap.Logger {
 	}
 	config.Level = zap.NewAtomicLevelAt(zapLevel)
 
+	// Create the logger
 	logger, err := config.Build()
 	if err != nil {
-		return zap.NewNop() // Return no-op logger on build failure
+		return zap.NewNop()
+	}
+
+	// Add Sentry core if Sentry client is initialized
+	if sentry.CurrentHub().Client() != nil {
+		sentryLevel := zap.LevelEnablerFunc(func(lvl zapcore.Level) bool {
+			return lvl >= zapcore.ErrorLevel
+		})
+		logger = logger.WithOptions(zap.WrapCore(func(core zapcore.Core) zapcore.Core {
+			return zapcore.NewTee(core, NewSentryCore(sentryLevel))
+		}))
 	}
 
 	return logger
@@ -156,16 +165,25 @@ func (lm *Manager) initLogger(logPaths []string) (*zap.Logger, error) {
 			return nil, fmt.Errorf("cannot open log file %s: %w", path, err)
 		}
 
-		// Create line counting writer
-		lineWriter := NewLineCountingWriter(file, lm.maxLogLines, path)
+		// Create log rotator
+		logRotator := NewLogRotator(file, lm.maxLogLines, path)
 
 		// Create custom core with our writer
 		core := zapcore.NewCore(
 			zapcore.NewConsoleEncoder(encoderConfig),
-			zapcore.AddSync(lineWriter),
+			zapcore.AddSync(logRotator),
 			zapLevel,
 		)
 		cores = append(cores, core)
+	}
+
+	// Add Sentry core if Sentry client is initialized
+	if sentry.CurrentHub().Client() != nil {
+		// Only forward error and fatal level logs to Sentry
+		sentryLevel := zap.LevelEnablerFunc(func(lvl zapcore.Level) bool {
+			return lvl >= zapcore.ErrorLevel
+		})
+		cores = append(cores, NewSentryCore(sentryLevel))
 	}
 
 	// Create logger with all cores
@@ -199,154 +217,4 @@ func (lm *Manager) rotateLogSessions() error {
 	}
 
 	return nil
-}
-
-// LineCountingWriter wraps an io.Writer and maintains a fixed number of lines.
-type LineCountingWriter struct {
-	writer   io.Writer
-	buffer   *RingBuffer
-	filePath string
-	mutex    sync.Mutex
-}
-
-// NewLineCountingWriter creates a new LineCountingWriter.
-func NewLineCountingWriter(writer io.Writer, maxLines int, filePath string) *LineCountingWriter {
-	return &LineCountingWriter{
-		writer:   writer,
-		buffer:   NewRingBuffer(maxLines),
-		filePath: filePath,
-	}
-}
-
-// Write implements io.Writer and maintains the line buffer.
-func (w *LineCountingWriter) Write(p []byte) (n int, err error) {
-	w.mutex.Lock()
-	defer w.mutex.Unlock()
-
-	// Write to the underlying writer first
-	n, err = w.writer.Write(p)
-	if err != nil {
-		return n, err
-	}
-
-	// Split the input into lines
-	data := string(p)
-	newLines := strings.Split(strings.TrimRight(data, "\n"), "\n")
-
-	// Add non-empty lines to the buffer
-	for _, line := range newLines {
-		if line != "" {
-			w.buffer.add(line)
-
-			// Only rotate when we've seen twice the capacity
-			if w.buffer.totalSeen == w.buffer.capacity*2 {
-				if err := w.rotate(); err != nil {
-					return n, fmt.Errorf("failed to rotate log file: %w", err)
-				}
-				// Reset the total seen counter after rotation
-				w.buffer.totalSeen = w.buffer.size
-			}
-		}
-	}
-
-	return n, nil
-}
-
-// rotate writes the current buffer to a new file.
-func (w *LineCountingWriter) rotate() error {
-	// Get all lines in chronological order
-	lines := w.buffer.getLines()
-	if len(lines) == 0 {
-		return nil
-	}
-
-	// Create a temporary file
-	temp, err := os.CreateTemp(filepath.Dir(w.filePath), "temp-log-")
-	if err != nil {
-		return err
-	}
-	tempPath := temp.Name()
-
-	// Write all lines in one operation
-	content := strings.Join(lines, "\n") + "\n"
-	if _, err := temp.WriteString(content); err != nil {
-		temp.Close()
-		os.Remove(tempPath)
-		return err
-	}
-
-	if err := temp.Sync(); err != nil {
-		temp.Close()
-		os.Remove(tempPath)
-		return err
-	}
-	temp.Close()
-
-	// Close the original writer if it implements io.Closer
-	if closer, ok := w.writer.(io.Closer); ok {
-		closer.Close()
-	}
-
-	// On Windows, remove the original file first
-	os.Remove(w.filePath)
-
-	// Rename temp file to original
-	if err := os.Rename(tempPath, w.filePath); err != nil {
-		return err
-	}
-
-	// Reopen the file for writing
-	newFile, err := os.OpenFile(w.filePath, os.O_APPEND|os.O_WRONLY, 0o644)
-	if err != nil {
-		return err
-	}
-
-	// Update the writer
-	w.writer = newFile
-
-	return nil
-}
-
-// RingBuffer implements a circular buffer for log lines.
-type RingBuffer struct {
-	lines     []string
-	capacity  int
-	head      int // Points to the next write position
-	size      int // Current number of items in buffer
-	totalSeen int // Total number of lines that have passed through
-}
-
-// NewRingBuffer creates a new ring buffer with the specified capacity.
-func NewRingBuffer(capacity int) *RingBuffer {
-	return &RingBuffer{
-		lines:    make([]string, capacity),
-		capacity: capacity,
-	}
-}
-
-// add adds a line to the ring buffer.
-func (rb *RingBuffer) add(line string) {
-	rb.lines[rb.head] = line
-	rb.head = (rb.head + 1) % rb.capacity
-	if rb.size < rb.capacity {
-		rb.size++
-	}
-	rb.totalSeen++
-}
-
-// getLines returns all lines in chronological order.
-func (rb *RingBuffer) getLines() []string {
-	if rb.size == 0 {
-		return nil
-	}
-
-	result := make([]string, rb.size)
-	start := (rb.head - rb.size + rb.capacity) % rb.capacity
-
-	for i := range rb.size {
-		idx := (start + i) % rb.capacity
-		result[i] = rb.lines[idx]
-	}
-
-	return result
 }

@@ -2,9 +2,12 @@ package setup
 
 import (
 	"context"
+	"fmt"
 	"log"
+	"runtime"
 	"time"
 
+	"github.com/getsentry/sentry-go"
 	"github.com/google/generative-ai-go/genai"
 	"github.com/jaxron/roapi.go/pkg/api"
 	"github.com/redis/rueidis"
@@ -42,6 +45,21 @@ func InitializeApp(logDir string) (*App, error) {
 	cfg, err := config.LoadConfig()
 	if err != nil {
 		return nil, err
+	}
+
+	// Initialize Sentry if DSN is provided
+	if cfg.Common.Sentry.DSN != "" {
+		err := sentry.Init(sentry.ClientOptions{
+			Dsn: cfg.Common.Sentry.DSN,
+			BeforeSend: func(event *sentry.Event, _ *sentry.EventHint) *sentry.Event {
+				event.Tags["go_version"] = runtime.Version()
+				return event
+			},
+		})
+		if err != nil {
+			return nil, fmt.Errorf("failed to initialize Sentry: %w", err)
+		}
+		defer sentry.Flush(2 * time.Second)
 	}
 
 	// Logging system is initialized next to capture setup issues
