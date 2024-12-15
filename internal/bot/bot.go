@@ -183,11 +183,17 @@ func (b *Bot) handleApplicationCommandInteraction(event *events.ApplicationComma
 			return
 		}
 
-		// Navigate to stored page or show dashboard
-		currentPage := s.GetString(constants.SessionKeyCurrentPage)
-		page := b.paginationManager.GetPage(currentPage)
-		b.paginationManager.NavigateTo(event, s, page, "")
+		// Check if the session has a valid current page
+		page := b.paginationManager.GetPage(s.GetString(constants.SessionKeyCurrentPage))
+		if page == nil {
+			// If no valid page exists, reset to dashboard
+			b.dashboardLayout.Show(event, s, "New session created.")
+			s.Touch(context.Background())
+			return
+		}
 
+		// Navigate to stored page
+		b.paginationManager.NavigateTo(event, s, page, "")
 		s.Touch(context.Background())
 	}()
 }
@@ -197,6 +203,32 @@ func (b *Bot) handleApplicationCommandInteraction(event *events.ApplicationComma
 // to prevent double-clicks, then processes the interaction in a goroutine.
 func (b *Bot) handleComponentInteraction(event *events.ComponentInteractionCreate) {
 	go func() {
+		start := time.Now()
+		defer func() {
+			if r := recover(); r != nil {
+				b.logger.Error("Component interaction failed",
+					zap.String("component_id", event.Data.CustomID()),
+					zap.String("component_type", fmt.Sprintf("%T", event.Data)),
+					zap.String("user_id", event.User().ID.String()),
+					zap.Any("panic", r),
+				)
+				b.paginationManager.RespondWithError(event, "Internal error. Please report this to an administrator.")
+			}
+			duration := time.Since(start)
+			b.logger.Debug("Component interaction handled",
+				zap.String("custom_id", event.Data.CustomID()),
+				zap.Duration("duration", duration))
+		}()
+
+		// Validate session but return early if session creation failed or session expired
+		s, ok := b.validateAndGetSession(event, event.User().ID)
+		if !ok {
+			return
+		}
+
+		// Get current page
+		page := b.paginationManager.GetPage(s.GetString(constants.SessionKeyCurrentPage))
+
 		// WORKAROUND:
 		// Special handling for modal interactions to prevent response conflicts.
 		// If we are opening a modal and we try to defer, there will be an error
@@ -215,7 +247,7 @@ func (b *Bot) handleComponentInteraction(event *events.ComponentInteractionCreat
 		}
 
 		// Update message to prevent double-clicks (skip for modals)
-		if !isModal {
+		if !isModal || page == nil {
 			updateBuilder := discord.NewMessageUpdateBuilder().
 				SetContent(utils.GetTimestampedSubtext("Processing...")).
 				ClearContainerComponents()
@@ -226,27 +258,12 @@ func (b *Bot) handleComponentInteraction(event *events.ComponentInteractionCreat
 			}
 		}
 
-		start := time.Now()
-		defer func() {
-			if r := recover(); r != nil {
-				b.logger.Error("Component interaction failed",
-					zap.String("component_id", event.Data.CustomID()),
-					zap.String("component_type", fmt.Sprintf("%T", event.Data)),
-					zap.String("user_id", event.User().ID.String()),
-					zap.Any("panic", r),
-					zap.Stack("stack"),
-				)
-				b.paginationManager.RespondWithError(event, "Internal error. Please report this to an administrator.")
-			}
-			duration := time.Since(start)
-			b.logger.Debug("Component interaction handled",
-				zap.String("custom_id", event.Data.CustomID()),
-				zap.Duration("duration", duration))
-		}()
-
-		// Validate session but return early if session creation failed or session expired
-		s, ok := b.validateAndGetSession(event, event.User().ID)
-		if !ok {
+		// Check if the session has a valid current page
+		if page == nil {
+			// If no valid page exists, reset to dashboard
+			s.Set(constants.SessionKeyMessageID, strconv.FormatUint(uint64(event.Message.ID), 10))
+			b.dashboardLayout.Show(event, s, "New session created.")
+			s.Touch(context.Background())
 			return
 		}
 
@@ -310,6 +327,15 @@ func (b *Bot) handleModalSubmit(event *events.ModalSubmitInteractionCreate) {
 			return
 		}
 
+		// Check if the session has a valid current page
+		page := b.paginationManager.GetPage(s.GetString(constants.SessionKeyCurrentPage))
+		if page == nil {
+			// If no valid page exists, reset to dashboard
+			b.dashboardLayout.Show(event, s, "New session created.")
+			s.Touch(context.Background())
+			return
+		}
+
 		// Handle submission and update session
 		b.paginationManager.HandleInteraction(event, s)
 		s.Touch(context.Background())
@@ -328,16 +354,6 @@ func (b *Bot) validateAndGetSession(event interfaces.CommonEvent, userID snowfla
 			b.paginationManager.RespondWithError(event, "Failed to get or create session.")
 		}
 		return nil, false
-	}
-
-	// Check if the session has a valid current page
-	currentPage := s.GetString(constants.SessionKeyCurrentPage)
-	page := b.paginationManager.GetPage(currentPage)
-	if page == nil {
-		// If no valid page exists, reset to dashboard
-		b.dashboardLayout.Show(event, s, "New session created.")
-		s.Touch(context.Background())
-		return s, false
 	}
 
 	return s, true
