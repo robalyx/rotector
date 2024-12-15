@@ -44,8 +44,10 @@ func (c *SentryCore) Write(ent zapcore.Entry, fields []zapcore.Field) error {
 				scope.SetExtra(k, v)
 			}
 
-			// Set log level tag
-			scope.SetTag("log_level", ent.Level.String())
+			// Set stack trace
+			if ent.Stack != "" {
+				scope.SetExtra("stacktrace", ent.Stack)
+			}
 
 			// Capture the error
 			sentry.CaptureMessage(ent.Message)

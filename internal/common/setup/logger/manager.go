@@ -158,6 +158,7 @@ func (lm *Manager) initLogger(logPaths []string) (*zap.Logger, error) {
 	// Create custom writer for each output path
 	cores := make([]zapcore.Core, 0, len(logPaths))
 	encoderConfig := zap.NewDevelopmentEncoderConfig()
+	encoderConfig.EncodeCaller = zapcore.ShortCallerEncoder
 
 	for _, path := range logPaths {
 		file, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
@@ -179,15 +180,19 @@ func (lm *Manager) initLogger(logPaths []string) (*zap.Logger, error) {
 
 	// Add Sentry core if Sentry client is initialized
 	if sentry.CurrentHub().Client() != nil {
-		// Only forward error and fatal level logs to Sentry
 		sentryLevel := zap.LevelEnablerFunc(func(lvl zapcore.Level) bool {
 			return lvl >= zapcore.ErrorLevel
 		})
 		cores = append(cores, NewSentryCore(sentryLevel))
 	}
 
-	// Create logger with all cores
-	return zap.New(zapcore.NewTee(cores...)), nil
+	// Create logger with all cores and development options
+	return zap.New(
+		zapcore.NewTee(cores...),
+		zap.AddCaller(),
+		zap.AddStacktrace(zapcore.ErrorLevel),
+		zap.Development(),
+	), nil
 }
 
 // rotateLogSessions maintains the log directory by removing old sessions.
