@@ -98,8 +98,7 @@ type UserFields struct {
 	Games   bool // Played games
 
 	// Flagged content
-	Content       bool // FlaggedContent
-	FlaggedGroups bool // FlaggedGroups
+	Content bool
 
 	// Statistics
 	Followers  bool // FollowerCount, FollowingCount
@@ -127,8 +126,7 @@ func DefaultUserFields() UserFields {
 		Games:   true,
 
 		// Flagged content
-		Content:       true,
-		FlaggedGroups: true,
+		Content: true,
 
 		// Stats
 		Followers:  true,
@@ -173,9 +171,6 @@ func (f UserFields) Columns() []string {
 	}
 	if f.Content {
 		columns = append(columns, "flagged_content")
-	}
-	if f.FlaggedGroups {
-		columns = append(columns, "flagged_groups")
 	}
 	if f.Followers {
 		columns = append(columns, "follower_count", "following_count")
