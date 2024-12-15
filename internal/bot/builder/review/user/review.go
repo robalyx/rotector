@@ -137,6 +137,15 @@ func (b *ReviewBuilder) buildReviewBuilder() *discord.EmbedBuilder {
 	followerCount := utils.FormatNumber(b.user.FollowerCount)
 	followingCount := utils.FormatNumber(b.user.FollowingCount)
 
+	// Censor reason if needed
+	reason := utils.CensorStringsInText(
+		b.user.Reason,
+		b.settings.StreamerMode,
+		strconv.FormatUint(b.user.ID, 10),
+		b.user.Name,
+		b.user.DisplayName,
+	)
+
 	if b.settings.ReviewMode == types.TrainingReviewMode {
 		// Training mode - show limited information without links
 		embed.SetAuthorName(header).
@@ -149,7 +158,7 @@ func (b *ReviewBuilder) buildReviewBuilder() *discord.EmbedBuilder {
 			AddField("Confidence", confidence, true).
 			AddField("Created At", createdAt, true).
 			AddField("Last Updated", lastUpdated, true).
-			AddField("Reason", b.user.Reason, false).
+			AddField("Reason", reason, false).
 			AddField("Description", b.getDescription(), false).
 			AddField(b.getFriendsField(), b.getFriends(), false).
 			AddField(b.getGroupsField(), b.getGroups(), false).
@@ -175,7 +184,7 @@ func (b *ReviewBuilder) buildReviewBuilder() *discord.EmbedBuilder {
 			AddField("Confidence", confidence, true).
 			AddField("Created At", createdAt, true).
 			AddField("Last Updated", lastUpdated, true).
-			AddField("Reason", b.user.Reason, false).
+			AddField("Reason", reason, false).
 			AddField("Description", b.getDescription(), false).
 			AddField(b.getFriendsField(), b.getFriends(), false).
 			AddField(b.getGroupsField(), b.getGroups(), false).
@@ -341,6 +350,15 @@ func (b *ReviewBuilder) getDescription() string {
 
 	// Format the description
 	description = utils.FormatString(description)
+
+	// Censor sensitive information in description if needed
+	description = utils.CensorStringsInText(
+		description,
+		b.settings.StreamerMode,
+		strconv.FormatUint(b.user.ID, 10),
+		b.user.Name,
+		b.user.DisplayName,
+	)
 
 	// Translate the description
 	translatedDescription, err := b.translator.Translate(context.Background(), description, "auto", "en")

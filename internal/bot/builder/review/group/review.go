@@ -125,6 +125,15 @@ func (b *ReviewBuilder) buildReviewEmbed() *discord.EmbedBuilder {
 	memberCount := strconv.FormatUint(b.group.MemberCount, 10)
 	flaggedMembers := strconv.Itoa(len(b.flaggedUsers))
 
+	// Censor reason if needed
+	reason := utils.CensorStringsInText(
+		b.group.Reason,
+		b.settings.StreamerMode,
+		strconv.FormatUint(b.group.ID, 10),
+		b.group.Name,
+		strconv.FormatUint(b.group.Owner, 10),
+	)
+
 	if b.settings.ReviewMode == types.TrainingReviewMode {
 		// Training mode - show limited information without links
 		embed.SetAuthorName(header).
@@ -135,7 +144,7 @@ func (b *ReviewBuilder) buildReviewEmbed() *discord.EmbedBuilder {
 			AddField("Flagged Members", flaggedMembers, true).
 			AddField("Confidence", confidence, true).
 			AddField("Last Updated", lastUpdated, true).
-			AddField("Reason", b.group.Reason, false).
+			AddField("Reason", reason, false).
 			AddField("Shout", b.getShout(), false).
 			AddField("Description", b.getDescription(), false)
 	} else {
@@ -156,7 +165,7 @@ func (b *ReviewBuilder) buildReviewEmbed() *discord.EmbedBuilder {
 			AddField("Flagged Members", flaggedMembers, true).
 			AddField("Confidence", confidence, true).
 			AddField("Last Updated", lastUpdated, true).
-			AddField("Reason", b.group.Reason, false).
+			AddField("Reason", reason, false).
 			AddField("Shout", b.getShout(), false).
 			AddField("Description", b.getDescription(), false).
 			AddField("Review History", b.getReviewHistory(), false)
@@ -267,6 +276,15 @@ func (b *ReviewBuilder) getDescription() string {
 
 	// Format the description
 	description = utils.FormatString(description)
+
+	// Censor sensitive information in description
+	description = utils.CensorStringsInText(
+		description,
+		b.settings.StreamerMode,
+		strconv.FormatUint(b.group.ID, 10),
+		b.group.Name,
+		strconv.FormatUint(b.group.Owner, 10),
+	)
 
 	return description
 }

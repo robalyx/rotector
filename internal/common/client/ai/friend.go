@@ -20,12 +20,12 @@ const (
 
 Task: Analyze friend networks to identify patterns of predatory behavior and connections between inappropriate users targeting minors.
 
-Context:
+Instructions:
 - Review violation types and confirmation status of friends
 - Look for patterns of predatory behavior and inappropriate content
 - Focus on factual, verifiable connections
-- Do not include usernames in your analysis
-- Use general terms like "the user" or "their friends" instead of names`
+- Keep your analysis concise and within 1 sentence
+- Do not include usernames in your analysis`
 
 	// FriendUserPrompt is the prompt for analyzing a user's friend network.
 	FriendUserPrompt = `User: %s

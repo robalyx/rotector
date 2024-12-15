@@ -37,6 +37,9 @@ Guidelines for flagging:
 - Flag explicit or subtle violations and predatory patterns
 - When in doubt about violations, flag with lower confidence (0.1-0.4)
 - It is better to have false positives than miss predators
+- Keep reasons concise and within 1 sentence
+- Do not include usernames in your reason
+- Do not repeat the same content in flaggedContent array for the same user
 - Do not add users with no violations to the list
 - Do not flag empty descriptions
 

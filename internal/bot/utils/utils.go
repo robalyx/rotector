@@ -9,6 +9,7 @@ import (
 	"image/png"
 	"math"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -194,6 +195,41 @@ func CensorString(s string, streamerMode bool) string {
 
 	// Convert back to string and return
 	return string(runes)
+}
+
+// CensorStringsInText censors specified strings within a larger text.
+// It uses CensorString to censor each target string if streamerMode is enabled.
+// The search is case-insensitive.
+func CensorStringsInText(text string, streamerMode bool, targets ...string) string {
+	if !streamerMode {
+		return text
+	}
+
+	// Sort targets by length in descending order to handle longer strings first
+	// This prevents partial matches of shorter strings within longer ones
+	sort.Slice(targets, func(i, j int) bool {
+		return len(targets[i]) > len(targets[j])
+	})
+
+	// Create a map to store censored versions of targets
+	censoredMap := make(map[string]string, len(targets))
+	for _, target := range targets {
+		if target == "" {
+			continue
+		}
+		// Create case-insensitive regex pattern
+		pattern := "(?i)" + regexp.QuoteMeta(target)
+		censoredMap[pattern] = CensorString(target, true)
+	}
+
+	// Replace each target with its censored version using regex
+	result := text
+	for pattern, censored := range censoredMap {
+		re := regexp.MustCompile(pattern)
+		result = re.ReplaceAllString(result, censored)
+	}
+
+	return result
 }
 
 // GetMessageEmbedColor returns the appropriate embed color based on streamer mode.
