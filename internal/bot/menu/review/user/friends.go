@@ -176,32 +176,35 @@ func (m *FriendsMenu) fetchFriendData(allFriends []types.ExtendedFriend) (map[ui
 	return thumbnailMap, presenceMap
 }
 
-// sortFriendsByStatus sorts friends into three categories based on their status:
+// sortFriendsByStatus sorts friends into categories based on their status:
 // 1. Confirmed friends (⚠️) - Users that have been reviewed and confirmed
 // 2. Flagged friends (⏳) - Users that are currently flagged for review
-// 3. Unflagged friends - Users with no current flags or status
+// 3. Banned friends (🔨) - Users that have been banned
+// 4. Cleared friends (✅) - Users that have been cleared
+// 5. Unflagged friends - Users with no current flags or status
 // Returns a new slice with friends sorted in this priority order.
 func (m *FriendsMenu) sortFriendsByStatus(friends []types.ExtendedFriend, friendTypes map[uint64]types.UserType) []types.ExtendedFriend {
-	// Create three slices for different status types
-	var confirmedFriends, flaggedFriends, unflaggedFriends []types.ExtendedFriend
-
-	// Categorize friends based on their status
+	// Group friends by their status
+	groupedFriends := make(map[types.UserType][]types.ExtendedFriend)
 	for _, friend := range friends {
-		switch friendTypes[friend.ID] {
-		case types.UserTypeConfirmed:
-			confirmedFriends = append(confirmedFriends, friend)
-		case types.UserTypeFlagged:
-			flaggedFriends = append(flaggedFriends, friend)
-		default:
-			unflaggedFriends = append(unflaggedFriends, friend)
-		} //exhaustive:ignore
+		status := friendTypes[friend.ID]
+		groupedFriends[status] = append(groupedFriends[status], friend)
 	}
 
-	// Combine slices in priority order (confirmed -> flagged -> unflagged)
+	// Define status priority order
+	statusOrder := []types.UserType{
+		types.UserTypeConfirmed,
+		types.UserTypeFlagged,
+		types.UserTypeBanned,
+		types.UserTypeCleared,
+		types.UserTypeUnflagged,
+	}
+
+	// Combine friends in priority order
 	sortedFriends := make([]types.ExtendedFriend, 0, len(friends))
-	sortedFriends = append(sortedFriends, confirmedFriends...)
-	sortedFriends = append(sortedFriends, flaggedFriends...)
-	sortedFriends = append(sortedFriends, unflaggedFriends...)
+	for _, status := range statusOrder {
+		sortedFriends = append(sortedFriends, groupedFriends[status]...)
+	}
 
 	return sortedFriends
 }

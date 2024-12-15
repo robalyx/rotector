@@ -63,6 +63,8 @@ const (
 	GroupTypeCleared GroupType = "cleared"
 	// GroupTypeLocked indicates a group was locked and removed from the platform.
 	GroupTypeLocked GroupType = "locked"
+	// GroupTypeUnflagged indicates a group was not found in the database.
+	GroupTypeUnflagged GroupType = "unflagged"
 )
 
 // GroupFields represents the fields that can be requested when fetching groups.

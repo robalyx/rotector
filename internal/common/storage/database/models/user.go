@@ -392,6 +392,13 @@ func (r *UserModel) GetUsersByIDs(ctx context.Context, userIDs []uint64, fields 
 			userTypes[user.ID] = types.UserTypeBanned
 		}
 
+		// Mark remaining IDs as unflagged
+		for _, id := range userIDs {
+			if _, ok := userTypes[id]; !ok {
+				userTypes[id] = types.UserTypeUnflagged
+			}
+		}
+
 		return nil
 	})
 	if err != nil {

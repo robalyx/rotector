@@ -123,6 +123,8 @@ func (b *FriendsBuilder) Build() *discord.MessageUpdateBuilder {
 				fieldName += " ✅"
 			case types.UserTypeBanned:
 				fieldName += " 🔨"
+			case types.UserTypeUnflagged:
+				fieldName += ""
 			}
 		}
 

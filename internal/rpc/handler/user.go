@@ -33,15 +33,8 @@ func (h *UserHandler) GetUser(ctx context.Context, req *user.GetUserRequest) (*u
 		return nil, err
 	}
 
-	userData := users[req.GetUserId()]
-	if userData == nil {
-		return &user.GetUserResponse{
-			Exists: false,
-		}, nil
-	}
-
 	// Convert user status
-	status := user.UserStatus_USER_STATUS_UNKNOWN
+	var status user.UserStatus
 	switch userTypes[req.GetUserId()] {
 	case types.UserTypeFlagged:
 		status = user.UserStatus_USER_STATUS_FLAGGED
@@ -51,9 +44,19 @@ func (h *UserHandler) GetUser(ctx context.Context, req *user.GetUserRequest) (*u
 		status = user.UserStatus_USER_STATUS_CLEARED
 	case types.UserTypeBanned:
 		status = user.UserStatus_USER_STATUS_BANNED
+	case types.UserTypeUnflagged:
+		status = user.UserStatus_USER_STATUS_UNFLAGGED
+	}
+
+	// If the user is unflagged, return immediately
+	if status == user.UserStatus_USER_STATUS_UNFLAGGED {
+		return &user.GetUserResponse{
+			Status: user.UserStatus_USER_STATUS_UNFLAGGED,
+		}, nil
 	}
 
 	// Convert user data to protobuf message
+	userData := users[req.GetUserId()]
 	protoUser := &user.User{
 		Id:             userData.ID,
 		Name:           userData.Name,
@@ -72,7 +75,6 @@ func (h *UserHandler) GetUser(ctx context.Context, req *user.GetUserRequest) (*u
 		Upvotes:        userData.Upvotes,
 		Downvotes:      userData.Downvotes,
 		Reputation:     userData.Reputation,
-		Status:         status,
 	}
 
 	// Convert groups
@@ -103,7 +105,7 @@ func (h *UserHandler) GetUser(ctx context.Context, req *user.GetUserRequest) (*u
 	}
 
 	return &user.GetUserResponse{
-		Exists: true,
+		Status: status,
 		User:   protoUser,
 	}, nil
 }

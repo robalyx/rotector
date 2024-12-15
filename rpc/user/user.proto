@@ -5,11 +5,11 @@ option go_package = "github.com/rotector/rotector/rpc/user";
 
 // UserStatus represents which table the user exists in
 enum UserStatus {
-  USER_STATUS_UNKNOWN = 0;
-  USER_STATUS_FLAGGED = 1;
-  USER_STATUS_CONFIRMED = 2;
-  USER_STATUS_CLEARED = 3;
-  USER_STATUS_BANNED = 4;
+  USER_STATUS_FLAGGED = 0;
+  USER_STATUS_CONFIRMED = 1;
+  USER_STATUS_CLEARED = 2;
+  USER_STATUS_BANNED = 3;
+  USER_STATUS_UNFLAGGED = 4;
 }
 
 // Group represents group information
@@ -66,7 +66,7 @@ message GetUserRequest {
 
 // GetUserResponse represents the response containing user information
 message GetUserResponse {
-  bool exists = 1;
+  UserStatus status = 1;
   User user = 2;
 }
 

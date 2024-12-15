@@ -18,6 +18,8 @@ const (
 	UserTypeCleared UserType = "cleared"
 	// UserTypeBanned indicates a user was banned and removed from the system.
 	UserTypeBanned UserType = "banned"
+	// UserTypeUnflagged indicates a user was not found in the database.
+	UserTypeUnflagged UserType = "unflagged"
 )
 
 // ExtendedFriend contains additional user information beyond the basic Friend type.

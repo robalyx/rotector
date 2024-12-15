@@ -34,7 +34,7 @@ func main() {
 	}
 
 	// Check if user exists
-	if !resp.GetExists() {
+	if resp.GetStatus() == user.UserStatus_USER_STATUS_UNFLAGGED {
 		fmt.Printf("User %d: NOT FOUND\n", userID)
 		return
 	}

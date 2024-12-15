@@ -96,32 +96,34 @@ func (m *GroupsMenu) Show(event *events.ComponentInteractionCreate, s *session.S
 	m.layout.paginationManager.NavigateTo(event, s, m.page, "")
 }
 
-// sortGroupsByStatus sorts groups into three categories based on their status:
+// sortGroupsByStatus sorts groups into categories based on their status:
 // 1. Confirmed groups (⚠️) - Groups that have been reviewed and confirmed
 // 2. Flagged groups (⏳) - Groups that are currently flagged for review
-// 3. Unflagged groups - Groups with no current flags or status
+// 3. Locked groups (🔒) - Groups that have been locked
+// 4. Cleared groups (✅) - Groups that have been cleared
 // Returns a new slice with groups sorted in this priority order.
 func (m *GroupsMenu) sortGroupsByStatus(groups []*apiTypes.UserGroupRoles, groupTypes map[uint64]types.GroupType) []*apiTypes.UserGroupRoles {
-	// Create three slices for different status types
-	var confirmedGroups, flaggedGroups, unflaggedGroups []*apiTypes.UserGroupRoles
-
-	// Categorize groups based on their status
+	// Group groups by their status
+	groupedGroups := make(map[types.GroupType][]*apiTypes.UserGroupRoles)
 	for _, group := range groups {
-		switch groupTypes[group.Group.ID] {
-		case types.GroupTypeConfirmed:
-			confirmedGroups = append(confirmedGroups, group)
-		case types.GroupTypeFlagged:
-			flaggedGroups = append(flaggedGroups, group)
-		default:
-			unflaggedGroups = append(unflaggedGroups, group)
-		} //exhaustive:ignore
+		status := groupTypes[group.Group.ID]
+		groupedGroups[status] = append(groupedGroups[status], group)
 	}
 
-	// Combine slices in priority order (confirmed -> flagged -> unflagged)
+	// Define status priority order
+	statusOrder := []types.GroupType{
+		types.GroupTypeConfirmed,
+		types.GroupTypeFlagged,
+		types.GroupTypeLocked,
+		types.GroupTypeCleared,
+		types.GroupTypeUnflagged,
+	}
+
+	// Combine groups in priority order
 	sortedGroups := make([]*apiTypes.UserGroupRoles, 0, len(groups))
-	sortedGroups = append(sortedGroups, confirmedGroups...)
-	sortedGroups = append(sortedGroups, flaggedGroups...)
-	sortedGroups = append(sortedGroups, unflaggedGroups...)
+	for _, status := range statusOrder {
+		sortedGroups = append(sortedGroups, groupedGroups[status]...)
+	}
 
 	return sortedGroups
 }

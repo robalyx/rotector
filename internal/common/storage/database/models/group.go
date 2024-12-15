@@ -244,6 +244,13 @@ func (r *GroupModel) GetGroupsByIDs(ctx context.Context, groupIDs []uint64, fiel
 			groupTypes[group.ID] = types.GroupTypeLocked
 		}
 
+		// Mark remaining IDs as unflagged
+		for _, id := range groupIDs {
+			if _, ok := groupTypes[id]; !ok {
+				groupTypes[id] = types.GroupTypeUnflagged
+			}
+		}
+
 		return nil
 	})
 	if err != nil {

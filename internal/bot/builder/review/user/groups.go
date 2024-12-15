@@ -108,6 +108,8 @@ func (b *GroupsBuilder) Build() *discord.MessageUpdateBuilder {
 				fieldName += " ✅"
 			case types.GroupTypeLocked:
 				fieldName += " 🔒"
+			case types.GroupTypeUnflagged:
+				fieldName += ""
 			}
 		}
 

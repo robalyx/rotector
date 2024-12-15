@@ -33,7 +33,7 @@ Example response:
 
 ```json
 {
-  "exists": true,
+  "status": "USER_STATUS_FLAGGED",
   "user": {
     "id": "123456789",
     "name": "username123",
@@ -72,19 +72,18 @@ Example response:
     "thumbnail_url": "https://example.com/avatar.jpg",
     "upvotes": 0,
     "downvotes": 0,
-    "reputation": 0,
-    "status": "USER_STATUS_FLAGGED"
+    "reputation": 0
   }
 }
 ```
 
 ### Error Handling
 
-1. Success response with `exists: false` if user doesn't exist:
+1. Success response with `status: USER_STATUS_UNFLAGGED` if user doesn't exist:
 
 ```json
 {
-  "exists": false,
+  "status": "USER_STATUS_UNFLAGGED",
   "user": null
 }
 ```

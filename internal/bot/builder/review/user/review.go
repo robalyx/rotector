@@ -535,36 +535,66 @@ func (b *ReviewBuilder) getOutfits() string {
 
 // getFriendsField returns the friends field name for the embed.
 func (b *ReviewBuilder) getFriendsField() string {
-	if len(b.friendTypes) > 0 {
-		confirmedCount := 0
-		flaggedCount := 0
-		for _, friendType := range b.friendTypes {
-			if friendType == types.UserTypeConfirmed {
-				confirmedCount++
-			} else if friendType == types.UserTypeFlagged {
-				flaggedCount++
-			}
-		}
+	if len(b.friendTypes) == 0 {
+		return "Friends"
+	}
 
-		return fmt.Sprintf("Friends (%d ⚠️, %d ⏳)", confirmedCount, flaggedCount)
+	// Count different friend types
+	counts := make(map[types.UserType]int)
+	for _, friendType := range b.friendTypes {
+		counts[friendType]++
+	}
+
+	// Build status parts
+	var parts []string
+	if c := counts[types.UserTypeConfirmed]; c > 0 {
+		parts = append(parts, fmt.Sprintf("%d ⚠️", c))
+	}
+	if c := counts[types.UserTypeFlagged]; c > 0 {
+		parts = append(parts, fmt.Sprintf("%d ⏳", c))
+	}
+	if c := counts[types.UserTypeCleared]; c > 0 {
+		parts = append(parts, fmt.Sprintf("%d ✅", c))
+	}
+	if c := counts[types.UserTypeBanned]; c > 0 {
+		parts = append(parts, fmt.Sprintf("%d 🔨", c))
+	}
+
+	if len(parts) > 0 {
+		return "Friends (" + strings.Join(parts, ", ") + ")"
 	}
 	return "Friends"
 }
 
 // getGroupsField returns the groups field name for the embed.
 func (b *ReviewBuilder) getGroupsField() string {
-	if len(b.groupTypes) > 0 {
-		confirmedCount := 0
-		flaggedCount := 0
-		for _, groupType := range b.groupTypes {
-			if groupType == types.GroupTypeConfirmed {
-				confirmedCount++
-			} else if groupType == types.GroupTypeFlagged {
-				flaggedCount++
-			}
-		}
+	if len(b.groupTypes) == 0 {
+		return "Groups"
+	}
 
-		return fmt.Sprintf("Groups (%d ⚠️, %d ⏳)", confirmedCount, flaggedCount)
+	// Count different group types
+	counts := make(map[types.GroupType]int)
+	for _, groupType := range b.groupTypes {
+		counts[groupType]++
+	}
+
+	// Build status parts
+	var parts []string
+	if c := counts[types.GroupTypeConfirmed]; c > 0 {
+		parts = append(parts, fmt.Sprintf("%d ⚠️", c))
+	}
+	if c := counts[types.GroupTypeFlagged]; c > 0 {
+		parts = append(parts, fmt.Sprintf("%d ⏳", c))
+	}
+	if c := counts[types.GroupTypeCleared]; c > 0 {
+		parts = append(parts, fmt.Sprintf("%d ✅", c))
+	}
+	if c := counts[types.GroupTypeLocked]; c > 0 {
+		parts = append(parts, fmt.Sprintf("%d 🔒", c))
+	}
+
+	if len(parts) > 0 {
+		return "Groups (" + strings.Join(parts, ", ") + ")"
 	}
 	return "Groups"
 }
