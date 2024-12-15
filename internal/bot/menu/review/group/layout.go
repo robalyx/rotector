@@ -1,11 +1,11 @@
 package group
 
 import (
-	"github.com/jaxron/roapi.go/pkg/api"
 	"github.com/rotector/rotector/internal/bot/core/pagination"
 	"github.com/rotector/rotector/internal/bot/core/session"
 	"github.com/rotector/rotector/internal/bot/interfaces"
 	"github.com/rotector/rotector/internal/common/client/fetcher"
+	"github.com/rotector/rotector/internal/common/setup"
 	"github.com/rotector/rotector/internal/common/storage/database"
 	"go.uber.org/zap"
 )
@@ -19,6 +19,7 @@ type Layout struct {
 	logger            *zap.Logger
 	dashboardLayout   interfaces.DashboardLayout
 	logLayout         interfaces.LogLayout
+	chatLayout        interfaces.ChatLayout
 	groupFetcher      *fetcher.GroupFetcher
 }
 
@@ -26,23 +27,23 @@ type Layout struct {
 // pages with the pagination manager. The layout is configured with references
 // to all required services and managers.
 func New(
-	db *database.Client,
-	logger *zap.Logger,
-	roAPI *api.API,
+	app *setup.App,
 	sessionManager *session.Manager,
 	paginationManager *pagination.Manager,
 	dashboardLayout interfaces.DashboardLayout,
 	logLayout interfaces.LogLayout,
+	chatLayout interfaces.ChatLayout,
 ) *Layout {
 	// Initialize layout
 	l := &Layout{
-		db:                db,
+		db:                app.DB,
 		sessionManager:    sessionManager,
 		paginationManager: paginationManager,
-		logger:            logger,
+		logger:            app.Logger,
 		dashboardLayout:   dashboardLayout,
 		logLayout:         logLayout,
-		groupFetcher:      fetcher.NewGroupFetcher(roAPI, logger),
+		chatLayout:        chatLayout,
+		groupFetcher:      fetcher.NewGroupFetcher(app.RoAPI, app.Logger),
 	}
 	l.reviewMenu = NewReviewMenu(l)
 

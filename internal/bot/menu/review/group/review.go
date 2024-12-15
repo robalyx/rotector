@@ -114,6 +114,14 @@ func (m *ReviewMenu) handleActionSelection(event *events.ComponentInteractionCre
 	case constants.GroupViewLogsButtonCustomID:
 		m.handleViewGroupLogs(event, s)
 
+	case constants.OpenAIChatButtonCustomID:
+		if !settings.IsReviewer(userID) {
+			m.layout.logger.Error("Non-reviewer attempted to open AI chat", zap.Uint64("user_id", userID))
+			m.layout.paginationManager.RespondWithError(event, "You do not have permission to open the AI chat.")
+			return
+		}
+		m.handleOpenAIChat(event, s)
+
 	case constants.GroupConfirmWithReasonButtonCustomID:
 		if !settings.IsReviewer(userID) {
 			m.layout.logger.Error("Non-reviewer attempted to use confirm with reason", zap.Uint64("user_id", userID))
@@ -208,6 +216,39 @@ func (m *ReviewMenu) handleViewGroupLogs(event *events.ComponentInteractionCreat
 
 	// Show the logs menu
 	m.layout.logLayout.Show(event, s)
+}
+
+// handleOpenAIChat handles the button to open the AI chat for the current group.
+func (m *ReviewMenu) handleOpenAIChat(event *events.ComponentInteractionCreate, s *session.Session) {
+	var target *types.FlaggedGroup
+	s.GetInterface(constants.SessionKeyGroupTarget, &target)
+	var flaggedUsers []uint64
+	s.GetInterface(constants.SessionKeyGroupFlaggedUsers, &flaggedUsers)
+
+	// Create context message about the group
+	context := fmt.Sprintf(`<context>
+Group Information:
+
+Name: %s
+Owner ID: %d
+Members: %d
+Description: %s
+Reason Flagged: %s
+Confidence: %.2f
+Flagged Members: %d</context>`,
+		target.Name,
+		target.Owner,
+		target.MemberCount,
+		target.Description,
+		target.Reason,
+		target.Confidence,
+		len(flaggedUsers),
+	)
+
+	// Update session and navigate to chat
+	s.Set(constants.SessionKeyChatContext, context)
+	s.Set(constants.SessionKeyPaginationPage, 0)
+	m.layout.chatLayout.Show(event, s)
 }
 
 // handleConfirmWithReason opens a modal for entering a custom confirm reason.

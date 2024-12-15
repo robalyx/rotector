@@ -54,3 +54,8 @@ type QueueLayout interface {
 	// current queue lengths into the session.
 	Show(event CommonEvent, s *session.Session)
 }
+
+// ChatLayout defines the interface for handling AI chat interactions.
+type ChatLayout interface {
+	Show(event CommonEvent, s *session.Session)
+}

@@ -112,6 +112,7 @@ func (r *Registry) registerUserSettings() {
 	r.UserSettings[constants.StreamerModeOption] = r.createStreamerModeSetting()
 	r.UserSettings[constants.UserDefaultSortOption] = r.createUserDefaultSortSetting()
 	r.UserSettings[constants.GroupDefaultSortOption] = r.createGroupDefaultSortSetting()
+	r.UserSettings[constants.ChatModelOption] = r.createChatModelSetting()
 	r.UserSettings[constants.ReviewModeOption] = r.createReviewModeSetting()
 	r.UserSettings[constants.ReviewTargetModeOption] = r.createReviewTargetModeSetting()
 }
@@ -201,6 +202,36 @@ func (r *Registry) createGroupDefaultSortSetting() Setting {
 		},
 		ValueUpdater: func(value string, us *types.UserSetting, _ *types.BotSetting) error {
 			us.GroupDefaultSort = types.SortBy(value)
+			return nil
+		},
+	}
+}
+
+// createChatModelSetting creates the chat model setting.
+func (r *Registry) createChatModelSetting() Setting {
+	return Setting{
+		Key:          constants.ChatModelOption,
+		Name:         "Chat Model",
+		Description:  "Set the chat model to use",
+		Type:         types.SettingTypeEnum,
+		DefaultValue: types.ChatModelGeminiPro,
+		Options: []types.SettingOption{
+			{Value: string(types.ChatModelGeminiPro), Label: "Gemini Pro", Description: "Best for advanced reasoning and conversations", Emoji: "💬"},
+			{Value: string(types.ChatModelGeminiFlash), Label: "Gemini Flash", Description: "Best for basic reasoning and conversations", Emoji: "💬"},
+			{Value: string(types.ChatModelGeminiFlash8B), Label: "Gemini Flash 8B", Description: "Best for basic reasoning and conversations", Emoji: "💬"},
+		},
+		Validators: []Validator{
+			validateEnum([]string{
+				string(types.ChatModelGeminiPro),
+				string(types.ChatModelGeminiFlash),
+				string(types.ChatModelGeminiFlash8B),
+			}),
+		},
+		ValueGetter: func(us *types.UserSetting, _ *types.BotSetting) string {
+			return us.ChatModel.FormatDisplay()
+		},
+		ValueUpdater: func(value string, us *types.UserSetting, _ *types.BotSetting) error {
+			us.ChatModel = types.ChatModel(value)
 			return nil
 		},
 	}

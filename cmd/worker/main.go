@@ -139,7 +139,7 @@ func runWorkers(workerType, subType string, count int) {
 	if err != nil {
 		log.Fatalf("Failed to initialize application: %v", err)
 	}
-	defer app.CleanupApp()
+	defer app.Cleanup()
 
 	// Initialize progress bars
 	bars := make([]*progress.Bar, count)
@@ -200,7 +200,6 @@ func runWorker(w interface{ Start() }, logger *zap.Logger) {
 					logger.Error("Worker execution failed",
 						zap.String("worker_type", fmt.Sprintf("%T", w)),
 						zap.Any("panic", r),
-						zap.Stack("stack"),
 					)
 					logger.Info("Restarting worker in 5 seconds...")
 					time.Sleep(5 * time.Second)
@@ -213,7 +212,6 @@ func runWorker(w interface{ Start() }, logger *zap.Logger) {
 
 		logger.Error("Worker stopped unexpectedly",
 			zap.String("worker_type", fmt.Sprintf("%T", w)),
-			zap.Stack("stack"),
 		)
 		time.Sleep(5 * time.Second)
 	}

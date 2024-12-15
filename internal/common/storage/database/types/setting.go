@@ -6,6 +6,7 @@ type UserSetting struct {
 	StreamerMode     bool             `bun:",notnull"`
 	UserDefaultSort  SortBy           `bun:",notnull"`
 	GroupDefaultSort SortBy           `bun:",notnull"`
+	ChatModel        ChatModel        `bun:",notnull"`
 	ReviewMode       ReviewMode       `bun:",notnull"`
 	ReviewTargetMode ReviewTargetMode `bun:",notnull"`
 }

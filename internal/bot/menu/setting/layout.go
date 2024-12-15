@@ -5,6 +5,7 @@ import (
 	"github.com/rotector/rotector/internal/bot/core/pagination"
 	"github.com/rotector/rotector/internal/bot/core/session"
 	"github.com/rotector/rotector/internal/bot/interfaces"
+	"github.com/rotector/rotector/internal/common/setup"
 	"github.com/rotector/rotector/internal/common/storage/database"
 	"go.uber.org/zap"
 )
@@ -25,16 +26,15 @@ type Layout struct {
 // New creates a Layout by initializing all setting menus and registering their
 // pages with the pagination manager.
 func New(
-	db *database.Client,
-	logger *zap.Logger,
+	app *setup.App,
 	sessionManager *session.Manager,
 	paginationManager *pagination.Manager,
 	dashboardLayout interfaces.DashboardLayout,
 ) *Layout {
 	// Initialize layout
 	l := &Layout{
-		db:                db,
-		logger:            logger,
+		db:                app.DB,
+		logger:            app.Logger,
 		sessionManager:    sessionManager,
 		paginationManager: paginationManager,
 		registry:          setting.NewRegistry(),

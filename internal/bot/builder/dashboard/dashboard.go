@@ -73,6 +73,9 @@ func (b *Builder) Build() *discord.MessageUpdateBuilder {
 	// Add activity log and queue manager options only for reviewers
 	if b.botSettings.IsReviewer(b.userID) {
 		options = append(options,
+			discord.NewStringSelectMenuOption("AI Chat Assistant", constants.ChatAssistantCustomID).
+				WithEmoji(discord.ComponentEmoji{Name: "🤖"}).
+				WithDescription("Chat with AI about moderation topics"),
 			discord.NewStringSelectMenuOption("Activity Log Browser", constants.LogActivityBrowserCustomID).
 				WithEmoji(discord.ComponentEmoji{Name: "📜"}).
 				WithDescription("Search and filter activity logs"),

@@ -169,6 +169,14 @@ func (m *ReviewMenu) handleActionSelection(event *events.ComponentInteractionCre
 	case constants.OpenGroupsMenuButtonCustomID:
 		m.layout.groupsMenu.Show(event, s, 0)
 
+	case constants.OpenAIChatButtonCustomID:
+		if !settings.IsReviewer(userID) {
+			m.layout.logger.Error("Non-reviewer attempted to open AI chat", zap.Uint64("user_id", userID))
+			m.layout.paginationManager.RespondWithError(event, "You do not have permission to open the AI chat.")
+			return
+		}
+		m.handleOpenAIChat(event, s)
+
 	case constants.ConfirmWithReasonButtonCustomID:
 		if !settings.IsReviewer(userID) {
 			m.layout.logger.Error("Non-reviewer attempted to use confirm with reason", zap.Uint64("user_id", userID))
@@ -496,6 +504,40 @@ func (m *ReviewMenu) handleSkipUser(event interfaces.CommonEvent, s *session.Ses
 	// Clear current user and load next one
 	s.Delete(constants.SessionKeyTarget)
 	m.Show(event, s, fmt.Sprintf("Skipped user. %d users left to review.", flaggedCount))
+}
+
+// handleOpenAIChat handles the button to open the AI chat for the current user.
+// It adds a context message about the user and opens up the AI chat.
+func (m *ReviewMenu) handleOpenAIChat(event *events.ComponentInteractionCreate, s *session.Session) {
+	var target *types.FlaggedUser
+	s.GetInterface(constants.SessionKeyTarget, &target)
+
+	// Create context message about the user
+	context := fmt.Sprintf(`<context>
+User Information:
+
+Username: %s
+Display Name: %s
+Description: %s
+Friends: %d
+Groups: %d
+Outfits: %d
+Reason Flagged: %s
+Confidence: %.2f</context>`,
+		target.Name,
+		target.DisplayName,
+		target.Description,
+		len(target.Friends),
+		len(target.Groups),
+		len(target.Outfits),
+		target.Reason,
+		target.Confidence,
+	)
+
+	// Update session and navigate to chat
+	s.Set(constants.SessionKeyChatContext, context)
+	s.Set(constants.SessionKeyPaginationPage, 0)
+	m.layout.chatLayout.Show(event, s)
 }
 
 // handleConfirmWithReason opens a modal for entering a custom confirm reason.

@@ -7,6 +7,7 @@ import (
 	"github.com/rotector/rotector/internal/bot/core/pagination"
 	"github.com/rotector/rotector/internal/bot/core/session"
 	"github.com/rotector/rotector/internal/bot/interfaces"
+	"github.com/rotector/rotector/internal/common/setup"
 	"github.com/rotector/rotector/internal/common/storage/database"
 	"github.com/rotector/rotector/internal/common/storage/database/types"
 	"go.uber.org/zap"
@@ -25,19 +26,18 @@ type Layout struct {
 // New creates a Layout by initializing the log menu and registering its
 // page with the pagination manager.
 func New(
-	db *database.Client,
+	app *setup.App,
 	sessionManager *session.Manager,
 	paginationManager *pagination.Manager,
 	dashboardLayout interfaces.DashboardLayout,
-	logger *zap.Logger,
 ) *Layout {
 	// Initialize layout
 	l := &Layout{
-		db:                db,
+		db:                app.DB,
 		sessionManager:    sessionManager,
 		paginationManager: paginationManager,
 		dashboardLayout:   dashboardLayout,
-		logger:            logger,
+		logger:            app.Logger,
 	}
 	l.mainMenu = NewMainMenu(l)
 

@@ -33,7 +33,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to initialize application: %v", err)
 	}
-	defer app.CleanupApp()
+	defer app.Cleanup()
 
 	// Create server
 	handler := rpc.NewServer(app.DB, app.Logger, &app.Config.RPC)

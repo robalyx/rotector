@@ -132,9 +132,9 @@ func InitializeApp(logDir string) (*App, error) {
 	}, nil
 }
 
-// CleanupApp ensures graceful shutdown of all components in reverse initialization order.
+// Cleanup ensures graceful shutdown of all components in reverse initialization order.
 // Logs but does not fail on cleanup errors to ensure all components get cleanup attempts.
-func (s *App) CleanupApp() {
+func (s *App) Cleanup() {
 	// Shutdown pprof server if running
 	if s.pprofServer != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

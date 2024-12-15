@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -15,11 +16,11 @@ import (
 	"github.com/disgoorg/snowflake/v2"
 	"go.uber.org/zap"
 
-	"github.com/jaxron/roapi.go/pkg/api"
 	"github.com/rotector/rotector/internal/bot/constants"
 	"github.com/rotector/rotector/internal/bot/core/pagination"
 	"github.com/rotector/rotector/internal/bot/core/session"
 	"github.com/rotector/rotector/internal/bot/interfaces"
+	"github.com/rotector/rotector/internal/bot/menu/chat"
 	"github.com/rotector/rotector/internal/bot/menu/dashboard"
 	"github.com/rotector/rotector/internal/bot/menu/log"
 	"github.com/rotector/rotector/internal/bot/menu/queue"
@@ -27,9 +28,8 @@ import (
 	userReview "github.com/rotector/rotector/internal/bot/menu/review/user"
 	"github.com/rotector/rotector/internal/bot/menu/setting"
 	"github.com/rotector/rotector/internal/bot/utils"
-	queueManager "github.com/rotector/rotector/internal/common/queue"
+	"github.com/rotector/rotector/internal/common/setup"
 	"github.com/rotector/rotector/internal/common/storage/database"
-	"github.com/rotector/rotector/internal/common/storage/redis"
 )
 
 // Bot handles all the layouts and managers needed for Discord interaction.
@@ -50,28 +50,22 @@ type Bot struct {
 // New initializes a Bot instance by creating all required managers and layouts.
 // It connects layouts through dependency injection and configures the Discord
 // client with necessary gateway intents and event listeners.
-func New(
-	token string,
-	db *database.Client,
-	roAPI *api.API,
-	queueManager *queueManager.Manager,
-	redisManager *redis.Manager,
-	logger *zap.Logger,
-) (*Bot, error) {
+func New(app *setup.App) (*Bot, error) {
 	// Initialize session manager for persistent storage
-	sessionManager, err := session.NewManager(db, redisManager, logger)
+	sessionManager, err := session.NewManager(app.DB, app.RedisManager, app.Logger)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create session manager: %w", err)
 	}
-	paginationManager := pagination.NewManager(sessionManager, logger)
+	paginationManager := pagination.NewManager(sessionManager, app.Logger)
 
 	// Create layouts with their dependencies
-	dashboardLayout := dashboard.New(db, logger, sessionManager, paginationManager, redisManager)
-	logLayout := log.New(db, sessionManager, paginationManager, dashboardLayout, logger)
-	settingLayout := setting.New(db, logger, sessionManager, paginationManager, dashboardLayout)
-	userReviewLayout := userReview.New(db, logger, roAPI, sessionManager, paginationManager, queueManager, dashboardLayout, logLayout)
-	groupReviewLayout := groupReview.New(db, logger, roAPI, sessionManager, paginationManager, dashboardLayout, logLayout)
-	queueLayout := queue.New(db, logger, sessionManager, paginationManager, queueManager, dashboardLayout, userReviewLayout)
+	dashboardLayout := dashboard.New(app, sessionManager, paginationManager)
+	settingLayout := setting.New(app, sessionManager, paginationManager, dashboardLayout)
+	logLayout := log.New(app, sessionManager, paginationManager, dashboardLayout)
+	chatLayout := chat.New(app, sessionManager, paginationManager, dashboardLayout)
+	userReviewLayout := userReview.New(app, sessionManager, paginationManager, dashboardLayout, logLayout, chatLayout)
+	groupReviewLayout := groupReview.New(app, sessionManager, paginationManager, dashboardLayout, logLayout, chatLayout)
+	queueLayout := queue.New(app, sessionManager, paginationManager, dashboardLayout, userReviewLayout)
 
 	// Cross-link layouts to enable navigation between different sections
 	dashboardLayout.SetLogLayout(logLayout)
@@ -79,11 +73,12 @@ func New(
 	dashboardLayout.SetUserReviewLayout(userReviewLayout)
 	dashboardLayout.SetGroupReviewLayout(groupReviewLayout)
 	dashboardLayout.SetQueueLayout(queueLayout)
+	dashboardLayout.SetChatLayout(chatLayout)
 
 	// Initialize bot structure with all components
 	b := &Bot{
-		db:                db,
-		logger:            logger,
+		db:                app.DB,
+		logger:            app.Logger,
 		sessionManager:    sessionManager,
 		paginationManager: paginationManager,
 		dashboardLayout:   dashboardLayout,
@@ -93,7 +88,7 @@ func New(
 	}
 
 	// Configure Discord client with required gateway intents and event handlers
-	client, err := disgo.New(token,
+	client, err := disgo.New(app.Config.Bot.Discord.Token,
 		bot.WithGatewayConfigOpts(
 			gateway.WithIntents(
 				gateway.IntentGuilds,
@@ -167,7 +162,6 @@ func (b *Bot) handleApplicationCommandInteraction(event *events.ApplicationComma
 					zap.String("command", event.SlashCommandInteractionData().CommandName()),
 					zap.String("user_id", event.User().ID.String()),
 					zap.Any("panic", r),
-					zap.Stack("stack"),
 				)
 				b.paginationManager.RespondWithError(event, "Internal error. Please report this to an administrator.")
 			}
@@ -311,7 +305,6 @@ func (b *Bot) handleModalSubmit(event *events.ModalSubmitInteractionCreate) {
 					zap.String("user_id", event.User().ID.String()),
 					zap.Any("form_data", formData),
 					zap.Any("panic", r),
-					zap.Stack("stack"),
 				)
 				b.paginationManager.RespondWithError(event, "Internal error. Please report this to an administrator.")
 			}

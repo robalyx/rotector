@@ -214,6 +214,9 @@ func (b *ReviewBuilder) buildActionOptions() []discord.StringSelectMenuOption {
 	// Add reviewer-only options
 	if b.botSettings.IsReviewer(b.userID) {
 		reviewerOptions := []discord.StringSelectMenuOption{
+			discord.NewStringSelectMenuOption("Ask AI about user", constants.OpenAIChatButtonCustomID).
+				WithEmoji(discord.ComponentEmoji{Name: "🤖"}).
+				WithDescription("Ask the AI questions about this user"),
 			discord.NewStringSelectMenuOption("Confirm with reason", constants.ConfirmWithReasonButtonCustomID).
 				WithEmoji(discord.ComponentEmoji{Name: "🚫"}).
 				WithDescription("Confirm the user with a custom reason"),

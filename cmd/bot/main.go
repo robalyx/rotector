@@ -17,21 +17,14 @@ const (
 
 func main() {
 	// Initialize application with required dependencies
-	setup, err := setup.InitializeApp(BotLogDir)
+	app, err := setup.InitializeApp(BotLogDir)
 	if err != nil {
 		log.Fatalf("Failed to initialize application: %v", err)
 	}
-	defer setup.CleanupApp()
+	defer app.Cleanup()
 
 	// Create bot instance
-	discordBot, err := bot.New(
-		setup.Config.Bot.Discord.Token,
-		setup.DB,
-		setup.RoAPI,
-		setup.Queue,
-		setup.RedisManager,
-		setup.Logger,
-	)
+	discordBot, err := bot.New(app)
 	if err != nil {
 		log.Printf("Failed to create bot: %v", err)
 		return

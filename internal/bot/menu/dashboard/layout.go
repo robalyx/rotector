@@ -4,6 +4,7 @@ import (
 	"github.com/rotector/rotector/internal/bot/core/pagination"
 	"github.com/rotector/rotector/internal/bot/core/session"
 	"github.com/rotector/rotector/internal/bot/interfaces"
+	"github.com/rotector/rotector/internal/common/setup"
 	"github.com/rotector/rotector/internal/common/storage/database"
 	"github.com/rotector/rotector/internal/common/storage/redis"
 	"github.com/rotector/rotector/internal/worker/core"
@@ -23,31 +24,30 @@ type Layout struct {
 	settingLayout     interfaces.SettingLayout
 	logLayout         interfaces.LogLayout
 	queueLayout       interfaces.QueueLayout
+	chatLayout        interfaces.ChatLayout
 }
 
 // New creates a Menu and sets up its page with message builders and
 // interaction handlers. The page is configured to show statistics and
 // handle navigation to other sections.
 func New(
-	db *database.Client,
-	logger *zap.Logger,
+	app *setup.App,
 	sessionManager *session.Manager,
 	paginationManager *pagination.Manager,
-	redisManager *redis.Manager,
 ) *Layout {
 	// Get Redis client for worker status
-	statusClient, err := redisManager.GetClient(redis.WorkerStatusDBIndex)
+	statusClient, err := app.RedisManager.GetClient(redis.WorkerStatusDBIndex)
 	if err != nil {
-		logger.Fatal("Failed to get Redis client for worker status", zap.Error(err))
+		app.Logger.Fatal("Failed to get Redis client for worker status", zap.Error(err))
 	}
 
 	// Initialize layout
 	l := &Layout{
-		db:                db,
-		logger:            logger,
+		db:                app.DB,
+		logger:            app.Logger,
 		sessionManager:    sessionManager,
 		paginationManager: paginationManager,
-		workerMonitor:     core.NewMonitor(statusClient, logger),
+		workerMonitor:     core.NewMonitor(statusClient, app.Logger),
 	}
 	l.mainMenu = NewMainMenu(l)
 
@@ -85,6 +85,12 @@ func (l *Layout) SetLogLayout(logLayout interfaces.LogLayout) {
 // to the queue section from the dashboard.
 func (l *Layout) SetQueueLayout(queueLayout interfaces.QueueLayout) {
 	l.queueLayout = queueLayout
+}
+
+// SetChatLayout links the chat layout to enable navigation
+// to the AI chat section from the dashboard.
+func (l *Layout) SetChatLayout(chatLayout interfaces.ChatLayout) {
+	l.chatLayout = chatLayout
 }
 
 // Show prepares and displays the dashboard interface by loading

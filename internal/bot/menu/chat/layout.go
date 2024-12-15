@@ -1,56 +1,52 @@
-package queue
+package chat
 
 import (
 	"github.com/rotector/rotector/internal/bot/core/pagination"
 	"github.com/rotector/rotector/internal/bot/core/session"
 	"github.com/rotector/rotector/internal/bot/interfaces"
-	"github.com/rotector/rotector/internal/common/queue"
+	"github.com/rotector/rotector/internal/common/client/ai"
 	"github.com/rotector/rotector/internal/common/setup"
 	"github.com/rotector/rotector/internal/common/storage/database"
 	"go.uber.org/zap"
 )
 
-// Layout handles queue management operations and their interactions.
+// Layout handles the chat interface and AI interactions.
 type Layout struct {
 	db                *database.Client
-	logger            *zap.Logger
 	sessionManager    *session.Manager
 	paginationManager *pagination.Manager
-	queueManager      *queue.Manager
-	mainMenu          *MainMenu
+	chatHandler       *ai.ChatHandler
+	menu              *Menu
 	dashboardLayout   interfaces.DashboardLayout
-	userReviewLayout  interfaces.UserReviewLayout
+	logger            *zap.Logger
 }
 
-// New creates a Layout by initializing the queue menu and registering its
-// page with the pagination manager.
+// New creates a new chat layout.
 func New(
 	app *setup.App,
 	sessionManager *session.Manager,
 	paginationManager *pagination.Manager,
 	dashboardLayout interfaces.DashboardLayout,
-	userReviewLayout interfaces.UserReviewLayout,
 ) *Layout {
-	// Initialize layout
 	l := &Layout{
 		db:                app.DB,
-		logger:            app.Logger,
 		sessionManager:    sessionManager,
 		paginationManager: paginationManager,
-		queueManager:      app.Queue,
+		chatHandler:       ai.NewChatHandler(app.GenAIClient, app.Logger),
 		dashboardLayout:   dashboardLayout,
-		userReviewLayout:  userReviewLayout,
+		logger:            app.Logger,
 	}
-	l.mainMenu = NewMainMenu(l)
 
-	// Initialize and register page
-	paginationManager.AddPage(l.mainMenu.page)
+	// Initialize menu
+	l.menu = NewMenu(l)
+
+	// Register menu page
+	paginationManager.AddPage(l.menu.page)
 
 	return l
 }
 
-// Show prepares and displays the queue interface by loading
-// current queue lengths into the session.
+// Show displays the chat interface.
 func (l *Layout) Show(event interfaces.CommonEvent, s *session.Session) {
-	l.mainMenu.Show(event, s, "")
+	l.menu.Show(event, s, "")
 }

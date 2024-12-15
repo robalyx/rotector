@@ -32,6 +32,29 @@ func (s SortBy) FormatDisplay() string {
 	}
 }
 
+// ChatModel represents different chat models.
+type ChatModel string
+
+const (
+	ChatModelGeminiPro     ChatModel = "gemini-1.5-pro-latest"
+	ChatModelGeminiFlash   ChatModel = "gemini-1.5-flash-latest"
+	ChatModelGeminiFlash8B ChatModel = "gemini-1.5-flash-8b-latest"
+)
+
+// FormatDisplay returns a user-friendly display string for the ChatModel.
+func (c ChatModel) FormatDisplay() string {
+	switch c {
+	case ChatModelGeminiPro:
+		return "Gemini Pro"
+	case ChatModelGeminiFlash:
+		return "Gemini Flash"
+	case ChatModelGeminiFlash8B:
+		return "Gemini Flash 8B"
+	default:
+		return "Unknown Model"
+	}
+}
+
 // ReviewMode represents different modes of reviewing items.
 type ReviewMode string
 

@@ -22,6 +22,7 @@ const (
 	StartGroupReviewCustomID   = "start_group_review"
 	UserSettingsCustomID       = "user_settings"
 	BotSettingsCustomID        = "bot_settings"
+	ChatAssistantCustomID      = "chat_assistant"
 	SessionKeyUserStatsBuffer  = "userStatsBuffer"
 	SessionKeyGroupStatsBuffer = "groupStatsBuffer"
 	SessionKeyUserCounts       = "userCounts"
@@ -37,6 +38,7 @@ const (
 	RecheckReasonModalCustomID     = "recheck_reason_modal"
 	RecheckReasonInputCustomID     = "recheck_reason"
 
+	OpenAIChatButtonCustomID        = "open_ai_chat"
 	ConfirmWithReasonButtonCustomID = "confirm_with_reason" + ModalOpenSuffix
 	RecheckButtonCustomID           = "recheck" + ModalOpenSuffix
 	ViewUserLogsButtonCustomID      = "view_user_logs"
@@ -73,6 +75,18 @@ const (
 	GroupsGridRows    = 3
 )
 
+// Chat Menu.
+const (
+	ChatMessagesPerPage      = 2
+	ChatSendButtonID         = "chat_send" + ModalOpenSuffix
+	ChatInputModalID         = "chat_input_modal"
+	ChatInputCustomID        = "chat_input"
+	ChatClearHistoryButtonID = "chat_clear_history"
+	ChatClearContextButtonID = "chat_clear_context"
+	ChatModelSelectID        = "chat_model_select"
+	ChatAnalyzeUserID        = "chat_analyze_user"
+)
+
 // User Settings.
 const (
 	UserSettingPrefix      = "user"
@@ -80,6 +94,7 @@ const (
 	StreamerModeOption     = "streamer_mode"
 	UserDefaultSortOption  = "user_default_sort"
 	GroupDefaultSortOption = "group_default_sort"
+	ChatModelOption        = "chat_model"
 	ReviewModeOption       = "review_mode"
 	ReviewTargetModeOption = "review_target_mode"
 )
@@ -136,6 +151,7 @@ const (
 	SessionKeyPaginationPage = "paginationPage"
 	SessionKeyStart          = "start"
 	SessionKeyTotalItems     = "totalItems"
+	SessionKeyIsStreaming    = "isStreaming"
 
 	SessionKeyConfirmedCount = "confirmedCount"
 	SessionKeyFlaggedCount   = "flaggedCount"
@@ -163,6 +179,9 @@ const (
 	SessionKeyGroupTypes    = "groupTypes"
 
 	SessionKeyOutfits = "outfits"
+
+	SessionKeyChatHistory = "chatHistory"
+	SessionKeyChatContext = "chatContext"
 
 	SessionKeyLogs                 = "logs"
 	SessionKeyUserIDFilter         = "userIDFilter"

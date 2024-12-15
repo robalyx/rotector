@@ -7,6 +7,7 @@ import (
 	"github.com/rotector/rotector/internal/bot/interfaces"
 	"github.com/rotector/rotector/internal/common/client/fetcher"
 	"github.com/rotector/rotector/internal/common/queue"
+	"github.com/rotector/rotector/internal/common/setup"
 	"github.com/rotector/rotector/internal/common/storage/database"
 	"github.com/rotector/rotector/internal/common/translator"
 	"go.uber.org/zap"
@@ -30,33 +31,33 @@ type Layout struct {
 	logger            *zap.Logger
 	dashboardLayout   interfaces.DashboardLayout
 	logLayout         interfaces.LogLayout
+	chatLayout        interfaces.ChatLayout
 }
 
 // New creates a Layout by initializing all review menus and registering their
 // pages with the pagination manager.
 func New(
-	db *database.Client,
-	logger *zap.Logger,
-	roAPI *api.API,
+	app *setup.App,
 	sessionManager *session.Manager,
 	paginationManager *pagination.Manager,
-	queueManager *queue.Manager,
 	dashboardLayout interfaces.DashboardLayout,
 	logLayout interfaces.LogLayout,
+	chatLayout interfaces.ChatLayout,
 ) *Layout {
 	// Initialize layout
 	l := &Layout{
-		db:                db,
-		roAPI:             roAPI,
+		db:                app.DB,
+		roAPI:             app.RoAPI,
 		sessionManager:    sessionManager,
 		paginationManager: paginationManager,
-		queueManager:      queueManager,
-		translator:        translator.New(roAPI.GetClient()),
-		thumbnailFetcher:  fetcher.NewThumbnailFetcher(roAPI, logger),
-		presenceFetcher:   fetcher.NewPresenceFetcher(roAPI, logger),
-		logger:            logger,
+		queueManager:      app.Queue,
+		translator:        translator.New(app.RoAPI.GetClient()),
+		thumbnailFetcher:  fetcher.NewThumbnailFetcher(app.RoAPI, app.Logger),
+		presenceFetcher:   fetcher.NewPresenceFetcher(app.RoAPI, app.Logger),
+		logger:            app.Logger,
 		dashboardLayout:   dashboardLayout,
 		logLayout:         logLayout,
+		chatLayout:        chatLayout,
 	}
 
 	// Initialize all menus with references to this layout

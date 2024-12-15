@@ -149,6 +149,13 @@ func (m *MainMenu) handleSelectMenu(event *events.ComponentInteractionCreate, s 
 			return
 		}
 		m.layout.queueLayout.Show(event, s)
+	case constants.ChatAssistantCustomID:
+		if !settings.IsReviewer(uint64(event.User().ID)) {
+			m.layout.logger.Error("User is not in reviewer list but somehow attempted to access chat assistant", zap.Uint64("user_id", uint64(event.User().ID)))
+			m.layout.paginationManager.RespondWithError(event, "You do not have permission to access the chat assistant.")
+			return
+		}
+		m.layout.chatLayout.Show(event, s)
 	}
 }
 
