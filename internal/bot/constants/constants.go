@@ -18,15 +18,11 @@ const (
 
 // Dashboard Menu.
 const (
-	StartUserReviewCustomID    = "start_user_review"
-	StartGroupReviewCustomID   = "start_group_review"
-	UserSettingsCustomID       = "user_settings"
-	BotSettingsCustomID        = "bot_settings"
-	ChatAssistantCustomID      = "chat_assistant"
-	SessionKeyUserStatsBuffer  = "userStatsBuffer"
-	SessionKeyGroupStatsBuffer = "groupStatsBuffer"
-	SessionKeyUserCounts       = "userCounts"
-	SessionKeyGroupCounts      = "groupCounts"
+	StartUserReviewCustomID  = "start_user_review"
+	StartGroupReviewCustomID = "start_group_review"
+	UserSettingsCustomID     = "user_settings"
+	BotSettingsCustomID      = "bot_settings"
+	ChatAssistantCustomID    = "chat_assistant"
 )
 
 // Review Menu.
@@ -140,8 +136,13 @@ const (
 	SessionKeyTarget       = "target"
 	SessionKeyCurrentPage  = "currentPage"
 	SessionKeyPreviousPage = "previousPage"
+	SessionKeyImageBuffer  = "imageBuffer"
 
-	SessionKeyImageBuffer = "imageBuffer"
+	SessionKeyIsRefreshed      = "isRefreshed"
+	SessionKeyUserStatsBuffer  = "userStatsBuffer"
+	SessionKeyGroupStatsBuffer = "groupStatsBuffer"
+	SessionKeyUserCounts       = "userCounts"
+	SessionKeyGroupCounts      = "groupCounts"
 
 	SessionKeyCursor         = "cursor"
 	SessionKeyNextCursor     = "nextCursor"

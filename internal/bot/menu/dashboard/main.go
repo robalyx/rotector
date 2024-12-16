@@ -63,6 +63,12 @@ func NewMainMenu(layout *Layout) *MainMenu {
 
 // Show prepares and displays the dashboard interface.
 func (m *MainMenu) Show(event interfaces.CommonEvent, s *session.Session, content string) {
+	// If the dashboard is already refreshed, directly navigate to the page
+	if s.GetBool(constants.SessionKeyIsRefreshed) {
+		m.layout.paginationManager.NavigateTo(event, s, m.page, content)
+		return
+	}
+
 	// Get bot settings
 	botSettings, err := m.layout.db.Settings().GetBotSettings(context.Background())
 	if err != nil {
@@ -100,12 +106,13 @@ func (m *MainMenu) Show(event interfaces.CommonEvent, s *session.Session, conten
 	// Store data in session
 	s.Set(constants.SessionKeyBotSettings, botSettings)
 	s.Set(constants.SessionKeyUserID, uint64(event.User().ID))
-	s.Set(constants.SessionKeyUserCounts, userCounts)
-	s.Set(constants.SessionKeyGroupCounts, groupCounts)
 	s.SetBuffer(constants.SessionKeyUserStatsBuffer, userStatsChart)
 	s.SetBuffer(constants.SessionKeyGroupStatsBuffer, groupStatsChart)
+	s.Set(constants.SessionKeyUserCounts, userCounts)
+	s.Set(constants.SessionKeyGroupCounts, groupCounts)
 	s.Set(constants.SessionKeyActiveUsers, activeUsers)
 	s.Set(constants.SessionKeyWorkerStatuses, workerStatuses)
+	s.Set(constants.SessionKeyIsRefreshed, true)
 
 	m.layout.paginationManager.NavigateTo(event, s, m.page, content)
 }
@@ -163,6 +170,7 @@ func (m *MainMenu) handleSelectMenu(event *events.ComponentInteractionCreate, s 
 // to update the dashboard statistics.
 func (m *MainMenu) handleButton(event *events.ComponentInteractionCreate, s *session.Session, customID string) {
 	if customID == constants.RefreshButtonCustomID {
+		s.Set(constants.SessionKeyIsRefreshed, false)
 		m.Show(event, s, "Refreshed dashboard.")
 	}
 }
