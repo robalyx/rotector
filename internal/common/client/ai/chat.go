@@ -70,8 +70,15 @@ func (h *ChatHandler) StreamResponse(ctx context.Context, history []*genai.Conte
 		cs := model.StartChat()
 		cs.History = history
 
-		// Send message and get response stream
-		iter := cs.SendMessageStream(ctx, genai.Text(message))
+		// Send message with retry
+		iter, err := withRetry(ctx, func() (*genai.GenerateContentResponseIterator, error) {
+			return cs.SendMessageStream(ctx, genai.Text(message)), nil
+		})
+		if err != nil {
+			h.logger.Error("Error starting chat stream", zap.Error(err))
+			responseChan <- fmt.Sprintf("Error: %v", err)
+			return
+		}
 
 		// Stream responses as they arrive
 		for {

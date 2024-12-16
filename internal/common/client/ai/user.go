@@ -231,8 +231,10 @@ func (a *UserAnalyzer) ProcessUsers(userInfos []*fetcher.Info) (map[uint64]*type
 		return nil, nil, fmt.Errorf("%w: %w", ErrJSONProcessing, err)
 	}
 
-	// Generate content using Gemini model
-	resp, err := a.userModel.GenerateContent(context.Background(), genai.Text(string(userInfoJSON)))
+	// Generate content using Gemini model with retry
+	resp, err := withRetry(context.Background(), func() (*genai.GenerateContentResponse, error) {
+		return a.userModel.GenerateContent(context.Background(), genai.Text(string(userInfoJSON)))
+	})
 	if err != nil {
 		a.logger.Error("Error calling Gemini API", zap.Error(err))
 		return nil, nil, fmt.Errorf("%w: %w", ErrModelResponse, err)
@@ -384,13 +386,15 @@ func (a *UserAnalyzer) prepareUserInfos(userInfos []*fetcher.Info) (map[string]*
 				return
 			}
 
-			// Translate the description
-			translated, err := a.translator.Translate(
-				context.Background(),
-				info.Description,
-				"auto", // Auto-detect source language
-				"en",   // Translate to English
-			)
+			// Translate the description with retry
+			translated, err := withRetry(context.Background(), func() (string, error) {
+				return a.translator.Translate(
+					context.Background(),
+					info.Description,
+					"auto", // Auto-detect source language
+					"en",   // Translate to English
+				)
+			})
 
 			resultsChan <- TranslationResult{
 				UserInfo:       info,
