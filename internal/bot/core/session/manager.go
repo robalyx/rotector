@@ -11,6 +11,7 @@ import (
 	"github.com/redis/rueidis"
 	"github.com/rotector/rotector/internal/bot/constants"
 	"github.com/rotector/rotector/internal/common/storage/database"
+	"github.com/rotector/rotector/internal/common/storage/database/types"
 	"github.com/rotector/rotector/internal/common/storage/redis"
 	"go.uber.org/zap"
 )
@@ -41,23 +42,37 @@ var (
 // Manager manages the session lifecycle using Redis as the backing store.
 // Sessions are prefixed and stored with automatic expiration.
 type Manager struct {
-	db     *database.Client
-	redis  rueidis.Client
-	logger *zap.Logger
+	db          *database.Client
+	redis       rueidis.Client
+	botSettings *types.BotSetting
+	logger      *zap.Logger
 }
 
 // NewManager creates a new session manager that uses Redis as the backing store.
 func NewManager(db *database.Client, redisManager *redis.Manager, logger *zap.Logger) (*Manager, error) {
+	// Get Redis client
 	redisClient, err := redisManager.GetClient(redis.SessionDBIndex)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get Redis client: %w", err)
 	}
 
+	// Load bot settings
+	botSettings, err := db.Settings().GetBotSettings(context.Background())
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", ErrFailedToLoadSettings, err)
+	}
+
 	return &Manager{
-		db:     db,
-		redis:  redisClient,
-		logger: logger,
+		db:          db,
+		redis:       redisClient,
+		botSettings: botSettings,
+		logger:      logger,
 	}, nil
+}
+
+// UpdateBotSettings updates the bot settings to the latest version.
+func (m *Manager) UpdateBotSettings(botSettings *types.BotSetting) {
+	m.botSettings = botSettings
 }
 
 // GetOrCreateSession loads or initializes a session for a given user.
@@ -66,35 +81,23 @@ func NewManager(db *database.Client, redisManager *redis.Manager, logger *zap.Lo
 func (m *Manager) GetOrCreateSession(ctx context.Context, userID uint64) (*Session, error) {
 	key := fmt.Sprintf("%s%d", SessionPrefix, userID)
 
-	// Load bot settings first to check session limit
-	botSettings, err := m.db.Settings().GetBotSettings(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("%w: %w", ErrFailedToLoadSettings, err)
-	}
-
 	// Try loading existing session first
 	result := m.redis.Do(ctx, m.redis.B().Get().Key(key).Build())
 	sessionExists := result.Error() == nil
 
 	// If session doesn't exist, check session limit
-	if !sessionExists && botSettings.SessionLimit > 0 {
+	if !sessionExists && m.botSettings.SessionLimit > 0 {
 		activeCount, err := m.GetActiveSessionCount(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("%w: %w", ErrFailedToGetCount, err)
 		}
 
-		if activeCount >= botSettings.SessionLimit {
+		if activeCount >= m.botSettings.SessionLimit {
 			m.logger.Debug("Session limit reached",
 				zap.Uint64("active_count", activeCount),
-				zap.Uint64("limit", botSettings.SessionLimit))
+				zap.Uint64("limit", m.botSettings.SessionLimit))
 			return nil, ErrSessionLimitReached
 		}
-	}
-
-	// Load user settings
-	settings, err := m.db.Settings().GetUserSettings(ctx, userID)
-	if err != nil {
-		return nil, fmt.Errorf("%w: %w", ErrFailedToLoadSettings, err)
 	}
 
 	// If session exists, update it
@@ -110,16 +113,21 @@ func (m *Manager) GetOrCreateSession(ctx context.Context, userID uint64) (*Sessi
 		}
 
 		session := NewSession(m.db, m.redis, key, sessionData, m.logger)
-		session.Set(constants.SessionKeyUserSettings, settings)
-		session.Set(constants.SessionKeyBotSettings, botSettings)
+		session.Set(constants.SessionKeyBotSettings, m.botSettings)
 		return session, nil
+	}
+
+	// Load user settings
+	userSettings, err := m.db.Settings().GetUserSettings(ctx, userID)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", ErrFailedToLoadSettings, err)
 	}
 
 	// Initialize new session with fresh settings
 	sessionData := make(map[string]interface{})
 	session := NewSession(m.db, m.redis, key, sessionData, m.logger)
-	session.Set(constants.SessionKeyUserSettings, settings)
-	session.Set(constants.SessionKeyBotSettings, botSettings)
+	session.Set(constants.SessionKeyUserSettings, userSettings)
+	session.Set(constants.SessionKeyBotSettings, m.botSettings)
 	return session, nil
 }
 

@@ -69,13 +69,6 @@ func (m *MainMenu) Show(event interfaces.CommonEvent, s *session.Session, conten
 		return
 	}
 
-	// Get bot settings
-	botSettings, err := m.layout.db.Settings().GetBotSettings(context.Background())
-	if err != nil {
-		m.layout.logger.Error("Failed to get bot settings", zap.Error(err))
-		return
-	}
-
 	// Get all counts in a single transaction
 	userCounts, groupCounts, err := m.layout.db.Stats().GetCurrentCounts(context.Background())
 	if err != nil {
@@ -104,7 +97,6 @@ func (m *MainMenu) Show(event interfaces.CommonEvent, s *session.Session, conten
 	}
 
 	// Store data in session
-	s.Set(constants.SessionKeyBotSettings, botSettings)
 	s.Set(constants.SessionKeyUserID, uint64(event.User().ID))
 	s.SetBuffer(constants.SessionKeyUserStatsBuffer, userStatsChart)
 	s.SetBuffer(constants.SessionKeyGroupStatsBuffer, groupStatsChart)
