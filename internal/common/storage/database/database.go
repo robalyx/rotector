@@ -195,13 +195,17 @@ func (c *Client) createIndexes() error {
 		CREATE INDEX IF NOT EXISTS idx_flagged_groups_scan_time ON flagged_groups (last_scanned ASC);
 		
 		-- Group tracking indexes
-		CREATE INDEX IF NOT EXISTS idx_group_member_trackings_last_appended 
-		ON group_member_trackings (last_appended);
-		
-		CREATE INDEX IF NOT EXISTS idx_group_member_trackings_flagged_count 
-		ON group_member_trackings (is_flagged, array_length(flagged_users, 1)) 
+		CREATE INDEX IF NOT EXISTS idx_group_member_trackings_check 
+		ON group_member_trackings (is_flagged, last_checked ASC) 
 		WHERE is_flagged = false;
-
+		
+		CREATE INDEX IF NOT EXISTS idx_group_member_trackings_group_id
+		ON group_member_trackings (group_id);
+		
+		CREATE INDEX IF NOT EXISTS idx_group_member_trackings_cleanup
+		ON group_member_trackings (last_appended)
+		WHERE is_flagged = false;
+		
 		-- Group review sorting indexes
 		CREATE INDEX IF NOT EXISTS idx_flagged_groups_confidence_viewed 
 		ON flagged_groups (confidence DESC, last_viewed ASC);

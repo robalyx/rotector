@@ -39,7 +39,6 @@ func (r *GroupModel) SaveFlaggedGroups(ctx context.Context, flaggedGroups []*typ
 		Set("description = EXCLUDED.description").
 		Set("owner = EXCLUDED.owner").
 		Set("shout = EXCLUDED.shout").
-		Set("member_count = EXCLUDED.member_count").
 		Set("reason = EXCLUDED.reason").
 		Set("confidence = EXCLUDED.confidence").
 		Set("last_scanned = EXCLUDED.last_scanned").

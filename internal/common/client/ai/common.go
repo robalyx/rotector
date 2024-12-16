@@ -22,9 +22,10 @@ func withRetry[T any](ctx context.Context, operation func() (T, error)) (T, erro
 
 	// Configure exponential backoff
 	b := backoff.WithMaxRetries(backoff.NewExponentialBackOff(
+		backoff.WithMaxElapsedTime(10*time.Second),
 		backoff.WithInitialInterval(100*time.Millisecond),
 		backoff.WithMaxInterval(1*time.Second),
-	), 3)
+	), 5)
 
 	// Create backoff operation with context
 	backoffOperation := func() error {

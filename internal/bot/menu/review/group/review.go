@@ -7,6 +7,7 @@ import (
 
 	"github.com/disgoorg/disgo/discord"
 	"github.com/disgoorg/disgo/events"
+	apiTypes "github.com/jaxron/roapi.go/pkg/api/types"
 	builder "github.com/rotector/rotector/internal/bot/builder/review/group"
 	"github.com/rotector/rotector/internal/bot/constants"
 	"github.com/rotector/rotector/internal/bot/core/pagination"
@@ -72,6 +73,19 @@ func (m *ReviewMenu) Show(event interfaces.CommonEvent, s *session.Session, cont
 			return
 		}
 	}
+
+	// Fetch latest group info from API
+	groupInfo, err := m.layout.roAPI.Groups().GetGroupInfo(context.Background(), group.ID)
+	if err != nil {
+		m.layout.logger.Error("Failed to fetch group info",
+			zap.Error(err),
+			zap.Uint64("groupID", group.ID))
+		m.layout.paginationManager.RespondWithError(event, "Failed to fetch latest group information. Please try again.")
+		return
+	}
+
+	// Store group info in session
+	s.Set(constants.SessionKeyGroupInfo, groupInfo)
 
 	m.layout.paginationManager.NavigateTo(event, s, m.page, content)
 }
@@ -215,8 +229,11 @@ func (m *ReviewMenu) handleViewGroupLogs(event *events.ComponentInteractionCreat
 
 // handleOpenAIChat handles the button to open the AI chat for the current group.
 func (m *ReviewMenu) handleOpenAIChat(event *events.ComponentInteractionCreate, s *session.Session) {
-	var target *types.FlaggedGroup
-	s.GetInterface(constants.SessionKeyGroupTarget, &target)
+	var group *types.FlaggedGroup
+	s.GetInterface(constants.SessionKeyGroupTarget, &group)
+	var groupInfo *apiTypes.GroupResponse
+	s.GetInterface(constants.SessionKeyGroupInfo, &groupInfo)
+
 	var flaggedUsers []uint64
 	s.GetInterface(constants.SessionKeyGroupFlaggedUsers, &flaggedUsers)
 
@@ -226,17 +243,19 @@ Group Information:
 
 Name: %s
 Owner ID: %d
+Owner Username: %s
 Members: %d
 Description: %s
 Reason Flagged: %s
 Confidence: %.2f
 Flagged Members: %d</context>`,
-		target.Name,
-		target.Owner,
-		target.MemberCount,
-		target.Description,
-		target.Reason,
-		target.Confidence,
+		group.Name,
+		group.Owner.UserID,
+		group.Owner.Username,
+		groupInfo.MemberCount,
+		group.Description,
+		group.Reason,
+		group.Confidence,
 		len(flaggedUsers),
 	)
 

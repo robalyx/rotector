@@ -2,33 +2,34 @@ package purge
 
 import (
 	"context"
-	"fmt"
-	"math"
 	"time"
 
 	"github.com/jaxron/roapi.go/pkg/api"
+	"github.com/rotector/rotector/internal/common/client/checker"
 	"github.com/rotector/rotector/internal/common/client/fetcher"
 	"github.com/rotector/rotector/internal/common/progress"
 	"github.com/rotector/rotector/internal/common/setup"
 	"github.com/rotector/rotector/internal/common/storage/database"
-	"github.com/rotector/rotector/internal/common/storage/database/types"
 	"github.com/rotector/rotector/internal/worker/core"
 	"go.uber.org/zap"
 )
 
 // Worker handles all purge operations.
 type Worker struct {
-	db               *database.Client
-	roAPI            *api.API
-	bar              *progress.Bar
-	userFetcher      *fetcher.UserFetcher
-	groupFetcher     *fetcher.GroupFetcher
-	thumbnailFetcher *fetcher.ThumbnailFetcher
-	reporter         *core.StatusReporter
-	logger           *zap.Logger
-	userBatchSize    int
-	groupBatchSize   int
-	minFlaggedUsers  int
+	db                 *database.Client
+	roAPI              *api.API
+	bar                *progress.Bar
+	userFetcher        *fetcher.UserFetcher
+	groupFetcher       *fetcher.GroupFetcher
+	thumbnailFetcher   *fetcher.ThumbnailFetcher
+	groupChecker       *checker.GroupChecker
+	reporter           *core.StatusReporter
+	logger             *zap.Logger
+	userBatchSize      int
+	groupBatchSize     int
+	trackBatchSize     int
+	minFlaggedOverride int
+	minFlaggedPercent  float64
 }
 
 // New creates a new purge worker.
@@ -37,19 +38,29 @@ func New(app *setup.App, bar *progress.Bar, logger *zap.Logger) *Worker {
 	groupFetcher := fetcher.NewGroupFetcher(app.RoAPI, logger)
 	thumbnailFetcher := fetcher.NewThumbnailFetcher(app.RoAPI, logger)
 	reporter := core.NewStatusReporter(app.StatusClient, "purge", "main", logger)
+	groupChecker := checker.NewGroupChecker(
+		app.DB,
+		logger,
+		app.Config.Worker.ThresholdLimits.MaxGroupMembersTrack,
+		app.Config.Worker.ThresholdLimits.MinFlaggedOverride,
+		app.Config.Worker.ThresholdLimits.MinFlaggedPercentage,
+	)
 
 	return &Worker{
-		db:               app.DB,
-		roAPI:            app.RoAPI,
-		bar:              bar,
-		userFetcher:      userFetcher,
-		groupFetcher:     groupFetcher,
-		thumbnailFetcher: thumbnailFetcher,
-		reporter:         reporter,
-		logger:           logger,
-		userBatchSize:    app.Config.Worker.BatchSizes.PurgeUsers,
-		groupBatchSize:   app.Config.Worker.BatchSizes.PurgeGroups,
-		minFlaggedUsers:  app.Config.Worker.ThresholdLimits.MinFlaggedForGroup,
+		db:                 app.DB,
+		roAPI:              app.RoAPI,
+		bar:                bar,
+		userFetcher:        userFetcher,
+		groupFetcher:       groupFetcher,
+		thumbnailFetcher:   thumbnailFetcher,
+		groupChecker:       groupChecker,
+		reporter:           reporter,
+		logger:             logger,
+		userBatchSize:      app.Config.Worker.BatchSizes.PurgeUsers,
+		groupBatchSize:     app.Config.Worker.BatchSizes.PurgeGroups,
+		trackBatchSize:     app.Config.Worker.BatchSizes.TrackGroups,
+		minFlaggedOverride: app.Config.Worker.ThresholdLimits.MinFlaggedOverride,
+		minFlaggedPercent:  app.Config.Worker.ThresholdLimits.MinFlaggedPercentage,
 	}
 }
 
@@ -85,7 +96,7 @@ func (w *Worker) Start() {
 		w.reporter.UpdateStatus("Completed", 100)
 
 		// Wait before next cycle
-		time.Sleep(5 * time.Minute)
+		time.Sleep(1 * time.Minute)
 	}
 }
 
@@ -210,36 +221,18 @@ func (w *Worker) processGroupTracking() {
 	w.bar.SetStepMessage("Processing group tracking", 75)
 	w.reporter.UpdateStatus("Processing group tracking", 75)
 
-	// Check group trackings
-	if err := w.checkGroupTrackings(); err != nil {
+	// Get groups to check
+	groupsWithUsers, err := w.db.Tracking().GetGroupTrackingsToCheck(context.Background(), w.trackBatchSize)
+	if err != nil {
 		w.logger.Error("Error checking group trackings", zap.Error(err))
 		w.reporter.SetHealthy(false)
 		return
 	}
 
-	// Purge old trackings
-	cutoffDate := time.Now().AddDate(0, 0, -30)
-	affected, err := w.db.Tracking().PurgeOldTrackings(context.Background(), cutoffDate)
-	if err != nil {
-		w.logger.Error("Error purging old trackings", zap.Error(err))
-		w.reporter.SetHealthy(false)
+	// Check if there are any groups to check
+	if len(groupsWithUsers) == 0 {
+		w.logger.Info("No groups to check for tracking")
 		return
-	}
-
-	if affected > 0 {
-		w.logger.Info("Purged old trackings",
-			zap.Int("affected", affected),
-			zap.Time("cutoffDate", cutoffDate))
-	}
-}
-
-// checkGroupTrackings analyzes group member lists to find groups with many
-// flagged users. Groups exceeding the threshold are flagged with a confidence
-// score based on the ratio of flagged members.
-func (w *Worker) checkGroupTrackings() error {
-	groupsWithUsers, err := w.db.Tracking().GetAndQualifyGroupTrackings(context.Background(), w.minFlaggedUsers)
-	if err != nil {
-		return err
 	}
 
 	// Extract group IDs for batch lookup
@@ -251,34 +244,35 @@ func (w *Worker) checkGroupTrackings() error {
 	// Load group information from API
 	groupInfos := w.groupFetcher.FetchGroupInfos(groupIDs)
 	if len(groupInfos) == 0 {
-		return nil
+		return
 	}
 
-	// Create flagged group entries with confidence scores
-	flaggedGroups := make([]*types.FlaggedGroup, 0, len(groupInfos))
-	for _, groupInfo := range groupInfos {
-		flaggedUsers := groupsWithUsers[groupInfo.ID]
-		flaggedGroups = append(flaggedGroups, &types.FlaggedGroup{
-			Group: types.Group{
-				ID:          groupInfo.ID,
-				Name:        groupInfo.Name,
-				Description: groupInfo.Description,
-				Owner:       groupInfo.Owner.UserID,
-				Shout:       groupInfo.Shout,
-				MemberCount: groupInfo.MemberCount,
-				Reason:      fmt.Sprintf("Group has at least %d flagged users", w.minFlaggedUsers),
-				Confidence:  math.Min(float64(len(flaggedUsers))/(float64(w.minFlaggedUsers)*10), 1.0),
-				LastUpdated: time.Now(),
-			},
-		})
+	// Check which groups exceed the percentage threshold
+	flaggedGroups := w.groupChecker.CheckGroupPercentages(groupInfos, groupsWithUsers)
+	if len(flaggedGroups) == 0 {
+		return
 	}
 
 	// Add thumbnails and save to database
 	flaggedGroups = w.thumbnailFetcher.AddGroupImageURLs(flaggedGroups)
 	if err := w.db.Groups().SaveFlaggedGroups(context.Background(), flaggedGroups); err != nil {
-		return fmt.Errorf("failed to save flagged groups: %w", err)
+		w.logger.Error("Failed to save flagged groups", zap.Error(err))
+		return
 	}
 
-	w.logger.Info("Checked group trackings", zap.Int("flagged_groups", len(flaggedGroups)))
-	return nil
+	// Extract group IDs that were flagged
+	flaggedGroupIDs := make([]uint64, len(flaggedGroups))
+	for i, group := range flaggedGroups {
+		flaggedGroupIDs[i] = group.ID
+	}
+
+	// Update tracking entries to mark them as flagged
+	if err := w.db.Tracking().UpdateFlaggedGroups(context.Background(), flaggedGroupIDs); err != nil {
+		w.logger.Error("Failed to update tracking entries", zap.Error(err))
+		return
+	}
+
+	w.logger.Info("Processed group trackings",
+		zap.Int("checkedGroups", len(groupInfos)),
+		zap.Int("flaggedGroups", len(flaggedGroups)))
 }

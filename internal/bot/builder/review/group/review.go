@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/disgoorg/disgo/discord"
+	apiTypes "github.com/jaxron/roapi.go/pkg/api/types"
 	"github.com/rotector/rotector/assets"
 	"github.com/rotector/rotector/internal/bot/constants"
 	"github.com/rotector/rotector/internal/bot/core/session"
@@ -24,6 +25,7 @@ type ReviewBuilder struct {
 	botSettings  *types.BotSetting
 	userID       uint64
 	group        *types.ReviewGroup
+	groupInfo    *apiTypes.GroupResponse
 	flaggedUsers []uint64
 }
 
@@ -35,6 +37,8 @@ func NewReviewBuilder(s *session.Session, db *database.Client) *ReviewBuilder {
 	s.GetInterface(constants.SessionKeyBotSettings, &botSettings)
 	var group *types.ReviewGroup
 	s.GetInterface(constants.SessionKeyGroupTarget, &group)
+	var groupInfo *apiTypes.GroupResponse
+	s.GetInterface(constants.SessionKeyGroupInfo, &groupInfo)
 	var flaggedUsers []uint64
 	s.GetInterface(constants.SessionKeyGroupFlaggedUsers, &flaggedUsers)
 
@@ -44,6 +48,7 @@ func NewReviewBuilder(s *session.Session, db *database.Client) *ReviewBuilder {
 		botSettings:  botSettings,
 		userID:       s.GetUint64(constants.SessionKeyUserID),
 		group:        group,
+		groupInfo:    groupInfo,
 		flaggedUsers: flaggedUsers,
 	}
 }
@@ -129,7 +134,7 @@ func (b *ReviewBuilder) buildReviewEmbed() *discord.EmbedBuilder {
 	header := fmt.Sprintf("%s • 👍 %d | 👎 %d", status, b.group.Upvotes, b.group.Downvotes)
 	lastUpdated := fmt.Sprintf("<t:%d:R>", b.group.LastUpdated.Unix())
 	confidence := fmt.Sprintf("%.2f", b.group.Confidence)
-	memberCount := strconv.FormatUint(b.group.MemberCount, 10)
+	memberCount := strconv.FormatUint(b.groupInfo.MemberCount, 10)
 	flaggedMembers := strconv.Itoa(len(b.flaggedUsers))
 
 	// Censor reason if needed
@@ -138,7 +143,7 @@ func (b *ReviewBuilder) buildReviewEmbed() *discord.EmbedBuilder {
 		b.settings.StreamerMode,
 		strconv.FormatUint(b.group.ID, 10),
 		b.group.Name,
-		strconv.FormatUint(b.group.Owner, 10),
+		strconv.FormatUint(b.group.Owner.UserID, 10),
 	)
 
 	if b.settings.ReviewMode == types.TrainingReviewMode {
@@ -146,7 +151,7 @@ func (b *ReviewBuilder) buildReviewEmbed() *discord.EmbedBuilder {
 		embed.SetAuthorName(header).
 			AddField("ID", utils.CensorString(strconv.FormatUint(b.group.ID, 10), true), true).
 			AddField("Name", utils.CensorString(b.group.Name, true), true).
-			AddField("Owner", utils.CensorString(strconv.FormatUint(b.group.Owner, 10), true), true).
+			AddField("Owner", utils.CensorString(strconv.FormatUint(b.group.Owner.UserID, 10), true), true).
 			AddField("Members", memberCount, true).
 			AddField("Flagged Members", flaggedMembers, true).
 			AddField("Confidence", confidence, true).
@@ -165,8 +170,8 @@ func (b *ReviewBuilder) buildReviewEmbed() *discord.EmbedBuilder {
 			AddField("Name", utils.CensorString(b.group.Name, b.settings.StreamerMode), true).
 			AddField("Owner", fmt.Sprintf(
 				"[%s](https://www.roblox.com/users/%d/profile)",
-				utils.CensorString(strconv.FormatUint(b.group.Owner, 10), b.settings.StreamerMode),
-				b.group.Owner,
+				utils.CensorString(strconv.FormatUint(b.group.Owner.UserID, 10), b.settings.StreamerMode),
+				b.group.Owner.UserID,
 			), true).
 			AddField("Members", memberCount, true).
 			AddField("Flagged Members", flaggedMembers, true).
@@ -270,7 +275,7 @@ func (b *ReviewBuilder) getDescription() string {
 		b.settings.StreamerMode,
 		strconv.FormatUint(b.group.ID, 10),
 		b.group.Name,
-		strconv.FormatUint(b.group.Owner, 10),
+		strconv.FormatUint(b.group.Owner.UserID, 10),
 	)
 
 	return description

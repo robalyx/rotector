@@ -1,6 +1,7 @@
 package group
 
 import (
+	"github.com/jaxron/roapi.go/pkg/api"
 	"github.com/rotector/rotector/internal/bot/core/pagination"
 	"github.com/rotector/rotector/internal/bot/core/session"
 	"github.com/rotector/rotector/internal/bot/interfaces"
@@ -13,6 +14,7 @@ import (
 // Layout handles all review-related menus and their interactions.
 type Layout struct {
 	db                *database.Client
+	roAPI             *api.API
 	sessionManager    *session.Manager
 	paginationManager *pagination.Manager
 	reviewMenu        *ReviewMenu
@@ -39,6 +41,7 @@ func New(
 	// Initialize layout
 	l := &Layout{
 		db:                app.DB,
+		roAPI:             app.RoAPI,
 		sessionManager:    sessionManager,
 		paginationManager: paginationManager,
 		logger:            app.Logger,

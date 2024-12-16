@@ -15,9 +15,8 @@ type Group struct {
 	ID             uint64            `bun:",pk"        json:"id"`
 	Name           string            `bun:",notnull"   json:"name"`
 	Description    string            `bun:",notnull"   json:"description"`
-	Owner          uint64            `bun:",notnull"   json:"owner"`
+	Owner          *types.GroupUser  `bun:",notnull"   json:"owner"`
 	Shout          *types.GroupShout `bun:"type:jsonb" json:"shout"`
-	MemberCount    uint64            `bun:",notnull"   json:"memberCount"`
 	Reason         string            `bun:",notnull"   json:"reason"`
 	Confidence     float64           `bun:",notnull"   json:"confidence"`
 	LastScanned    time.Time         `bun:",notnull"   json:"lastScanned"`
@@ -86,7 +85,6 @@ type GroupFields struct {
 	Basic        bool // ID, Name, Description
 	Owner        bool // Owner ID
 	Shout        bool // Group shout
-	MemberCount  bool // Member count
 	Reason       bool // Reason for flagging
 	Thumbnail    bool // ThumbnailURL
 	FlaggedUsers bool // FlaggedUsers list
@@ -111,9 +109,6 @@ func (f GroupFields) Columns() []string {
 	}
 	if f.Shout {
 		columns = append(columns, "shout")
-	}
-	if f.MemberCount {
-		columns = append(columns, "member_count")
 	}
 	if f.Reason {
 		columns = append(columns, "reason")

@@ -4,7 +4,9 @@ import (
 	"context"
 	"math"
 	"sync"
+	"time"
 
+	apiTypes "github.com/jaxron/roapi.go/pkg/api/types"
 	"github.com/rotector/rotector/internal/common/client/fetcher"
 	"github.com/rotector/rotector/internal/common/storage/database"
 	"github.com/rotector/rotector/internal/common/storage/database/types"
@@ -24,16 +26,67 @@ type GroupChecker struct {
 	db                   *database.Client
 	logger               *zap.Logger
 	maxGroupMembersTrack uint64
+	minFlaggedOverride   int
+	minFlaggedPercentage float64
 }
 
 // NewGroupChecker creates a GroupChecker with database access for looking up
 // flagged group information.
-func NewGroupChecker(db *database.Client, logger *zap.Logger, maxGroupMembersTrack uint64) *GroupChecker {
+func NewGroupChecker(db *database.Client, logger *zap.Logger, maxGroupMembersTrack uint64, minFlaggedOverride int, minFlaggedPercentage float64) *GroupChecker {
 	return &GroupChecker{
 		db:                   db,
 		logger:               logger,
 		maxGroupMembersTrack: maxGroupMembersTrack,
+		minFlaggedOverride:   minFlaggedOverride,
+		minFlaggedPercentage: minFlaggedPercentage,
 	}
+}
+
+// CheckGroupPercentages analyzes groups to find those exceeding the flagged user threshold.
+func (c *GroupChecker) CheckGroupPercentages(groupInfos []*apiTypes.GroupResponse, groupToFlaggedUsers map[uint64][]uint64) []*types.FlaggedGroup {
+	flaggedGroups := make([]*types.FlaggedGroup, 0)
+
+	for _, groupInfo := range groupInfos {
+		flaggedUsers := groupToFlaggedUsers[groupInfo.ID]
+
+		// Skip if group has no flagged users
+		if len(flaggedUsers) == 0 {
+			continue
+		}
+
+		var reason string
+		var confidence float64
+
+		// Calculate percentage of flagged users
+		percentage := (float64(len(flaggedUsers)) / float64(groupInfo.MemberCount)) * 100
+
+		// Determine if and why the group should be flagged
+		switch {
+		case len(flaggedUsers) >= c.minFlaggedOverride:
+			reason = "Group has large number of flagged users"
+			confidence = math.Min(float64(len(flaggedUsers))/float64(c.minFlaggedOverride), 1.0)
+		case percentage >= c.minFlaggedPercentage:
+			reason = "Group has large percentage of flagged users"
+			confidence = math.Min(percentage/c.minFlaggedPercentage, 1.0)
+		default:
+			continue
+		}
+
+		flaggedGroups = append(flaggedGroups, &types.FlaggedGroup{
+			Group: types.Group{
+				ID:          groupInfo.ID,
+				Name:        groupInfo.Name,
+				Description: groupInfo.Description,
+				Owner:       groupInfo.Owner,
+				Shout:       groupInfo.Shout,
+				Reason:      reason,
+				Confidence:  confidence,
+				LastUpdated: time.Now(),
+			},
+		})
+	}
+
+	return flaggedGroups
 }
 
 // ProcessUsers checks multiple users' groups concurrently and returns flagged users.

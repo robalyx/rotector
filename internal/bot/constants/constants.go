@@ -208,6 +208,7 @@ const (
 
 	SessionKeyGroupTarget       = "groupTarget"
 	SessionKeyGroupFlaggedUsers = "groupFlaggedUsers"
+	SessionKeyGroupInfo         = "groupInfo"
 
 	GroupConfirmWithReasonModalCustomID = "group_confirm_with_reason_modal"
 	GroupConfirmReasonInputCustomID     = "group_confirm_reason"

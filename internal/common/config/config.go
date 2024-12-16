@@ -103,15 +103,17 @@ type BatchSizes struct {
 	PurgeUsers  int `mapstructure:"purge_users"`  // Number of users to check for purging in one batch
 	GroupUsers  int `mapstructure:"group_users"`  // Number of group members to process in one batch
 	PurgeGroups int `mapstructure:"purge_groups"` // Number of groups to check for purging in one batch
+	TrackGroups int `mapstructure:"track_groups"` // Number of group trackings to process in one batch
 	QueueItems  int `mapstructure:"queue_items"`  // Number of queue items to process in one batch
 }
 
 // ThresholdLimits configures various thresholds for worker operations.
 type ThresholdLimits struct {
-	FlaggedUsers           int    `mapstructure:"flagged_users"`                  // Maximum number of flagged users before stopping worker
-	MinFlaggedForGroup     int    `mapstructure:"min_flagged_for_group"`          // Minimum number of flagged users needed to flag a group
-	MinFollowersForPopular uint64 `mapstructure:"min_followers_for_popular_user"` // Minimum follower count to consider a user "popular"
-	MaxGroupMembersTrack   uint64 `mapstructure:"max_group_members_track"`        // Maximum group members before skipping tracking
+	FlaggedUsers           int     `mapstructure:"flagged_users"`                  // Maximum number of flagged users before stopping worker
+	MinFlaggedPercentage   float64 `mapstructure:"min_flagged_percentage"`         // Minimum percentage of flagged users needed to flag a group
+	MinFlaggedOverride     int     `mapstructure:"min_flagged_override"`           // Flag group if flagged users count exceeds this value
+	MinFollowersForPopular uint64  `mapstructure:"min_followers_for_popular_user"` // Minimum follower count to consider a user "popular"
+	MaxGroupMembersTrack   uint64  `mapstructure:"max_group_members_track"`        // Maximum group members before skipping tracking
 }
 
 // RPCServer contains server configuration options.

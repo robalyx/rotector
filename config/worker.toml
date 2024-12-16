@@ -1,21 +1,25 @@
 [worker.batch_sizes]
 # Number of friends to process in one batch
-friend_users = 100
+friend_users = 50
 # Number of group members to process in one batch
-group_users = 100
+group_users = 50
 # Number of users to check for purging in one batch
 purge_users = 200
 # Number of groups to check for purging in one batch
 purge_groups = 100
+# Number of group trackings to process in one batch
+track_groups = 50
 # Number of queue items to process in one batch
 queue_items = 50
 
 [worker.threshold_limits]
 # Maximum number of flagged users before stopping worker
-flagged_users = 1000
-# Minimum number of flagged users needed to flag a group
-min_flagged_for_group = 10
+flagged_users = 100000
+# Minimum percentage of flagged users needed to flag a group
+min_flagged_percentage = 50.0
+# Flag group if flagged users count exceeds this value, regardless of percentage
+min_flagged_override = 100
 # Minimum follower count to consider a user "popular"
 min_followers_for_popular_user = 1000
 # Maximum group members before skipping tracking
-max_group_members_track = 50000
+max_group_members_track = 20000

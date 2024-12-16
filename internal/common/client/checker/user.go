@@ -30,11 +30,15 @@ func NewUserChecker(app *setup.App, userFetcher *fetcher.UserFetcher, logger *za
 	userAnalyzer := ai.NewUserAnalyzer(app, translator, logger)
 
 	return &UserChecker{
-		app:           app,
-		db:            app.DB,
-		userFetcher:   userFetcher,
-		userAnalyzer:  userAnalyzer,
-		groupChecker:  NewGroupChecker(app.DB, logger, app.Config.Worker.ThresholdLimits.MaxGroupMembersTrack),
+		app:          app,
+		db:           app.DB,
+		userFetcher:  userFetcher,
+		userAnalyzer: userAnalyzer,
+		groupChecker: NewGroupChecker(app.DB, logger,
+			app.Config.Worker.ThresholdLimits.MaxGroupMembersTrack,
+			app.Config.Worker.ThresholdLimits.MinFlaggedOverride,
+			app.Config.Worker.ThresholdLimits.MinFlaggedPercentage,
+		),
 		friendChecker: NewFriendChecker(app, logger),
 		logger:        logger,
 	}
@@ -66,9 +70,7 @@ func (c *UserChecker) ProcessUsers(userInfos []*fetcher.Info) []uint64 {
 
 	// Process AI results
 	flaggedByAI, failedIDs, err := c.userAnalyzer.ProcessUsers(userInfos)
-	if err != nil {
-		c.logger.Error("Error checking users with AI", zap.Error(err))
-	} else {
+	if err == nil {
 		for userID, aiUser := range flaggedByAI {
 			if existingUser, ok := flaggedUsers[userID]; ok {
 				// Combine reasons and update confidence

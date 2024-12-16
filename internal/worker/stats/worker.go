@@ -117,8 +117,8 @@ func (w *Worker) updateWelcomeMessage(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to get bot settings: %w", err)
 	}
-
 	botSettings.WelcomeMessage = message
+
 	if err := w.db.Settings().SaveBotSettings(ctx, botSettings); err != nil {
 		return fmt.Errorf("failed to save welcome message: %w", err)
 	}

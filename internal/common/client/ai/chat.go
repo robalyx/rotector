@@ -25,16 +25,14 @@ Rotector uses AI techniques to flag suspicious users, and you are here to assist
 - Evaluating user relationships and group associations
 
 You should:
-- Keep responses brief and concise (max 2-3 short paragraphs)
 - Be direct and factual in your explanations
 - Focus on the most relevant information for moderation
 - Highlight key risks and concerns
-- Suggest practical moderation actions when needed
 
 Format your responses:
 - Use paragraphs to separate different points
-- Start new paragraphs for new topics
-- Keep paragraphs focused and concise
+- Each paragraph is short and concise (max 100 characters)
+- Ensure there are no more than 3 paragraphs
 - Use bullet points sparingly and only for lists
 - Use plain text only - no bold, italic, or other markdown`
 )
@@ -44,6 +42,7 @@ type ChatHandler struct {
 	genAIClient     *genai.Client
 	logger          *zap.Logger
 	maxOutputTokens int32
+	temperature     float32
 }
 
 // NewChatHandler creates a new chat handler with the specified model.
@@ -52,6 +51,7 @@ func NewChatHandler(genAIClient *genai.Client, logger *zap.Logger) *ChatHandler 
 		genAIClient:     genAIClient,
 		logger:          logger,
 		maxOutputTokens: 200,
+		temperature:     0.5,
 	}
 }
 
@@ -65,6 +65,7 @@ func (h *ChatHandler) StreamResponse(ctx context.Context, history []*genai.Conte
 		model := h.genAIClient.GenerativeModel(modelName)
 		model.SystemInstruction = genai.NewUserContent(genai.Text(ChatSystemPrompt))
 		model.MaxOutputTokens = &h.maxOutputTokens
+		model.Temperature = &h.temperature
 
 		// Create chat session with history
 		cs := model.StartChat()
