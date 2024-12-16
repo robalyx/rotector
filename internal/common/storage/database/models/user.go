@@ -325,6 +325,58 @@ func (r *UserModel) CheckExistingUsers(ctx context.Context, userIDs []uint64) (m
 	return result, nil
 }
 
+// GetUserByID retrieves a user from any user table by their ID.
+// It checks all user tables (flagged, confirmed, cleared, banned) and returns the user with their status.
+func (r *UserModel) GetUserByID(ctx context.Context, userID uint64, fields types.UserFields) (*types.ConfirmedUser, error) {
+	// Try each user table in order
+	tables := []struct {
+		model interface{}
+		name  string
+	}{
+		{(*types.FlaggedUser)(nil), "flagged_users"},
+		{(*types.ConfirmedUser)(nil), "confirmed_users"},
+		{(*types.ClearedUser)(nil), "cleared_users"},
+		{(*types.BannedUser)(nil), "banned_users"},
+	}
+
+	// Build query with selected fields
+	columns := fields.Columns()
+
+	// Try each table until we find the user
+	for _, table := range tables {
+		var user types.ConfirmedUser
+		err := r.db.NewSelect().
+			Model(table.model).
+			ModelTableExpr(table.name).
+			Column(columns...).
+			Where("id = ?", userID).
+			Scan(ctx, &user)
+
+		if err == nil {
+			// Update last viewed timestamp
+			_, err = r.db.NewUpdate().
+				Model(table.model).
+				ModelTableExpr(table.name).
+				Set("last_viewed = ?", time.Now()).
+				Where("id = ?", userID).
+				Exec(ctx)
+			if err != nil {
+				r.logger.Error("Failed to update last_viewed timestamp",
+					zap.Error(err),
+					zap.Uint64("user_id", userID))
+			}
+			return &user, nil
+		}
+
+		r.logger.Error("Error querying user table",
+			zap.Error(err),
+			zap.String("table", table.name),
+			zap.Uint64("user_id", userID))
+	}
+
+	return nil, types.ErrUserNotFound
+}
+
 // GetUsersByIDs retrieves specified user information for a list of user IDs.
 // Returns a map of user IDs to user data and a separate map for their types.
 func (r *UserModel) GetUsersByIDs(ctx context.Context, userIDs []uint64, fields types.UserFields) (map[uint64]*types.User, map[uint64]types.UserType, error) {
@@ -332,11 +384,14 @@ func (r *UserModel) GetUsersByIDs(ctx context.Context, userIDs []uint64, fields 
 	userTypes := make(map[uint64]types.UserType)
 
 	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+		// Build query with selected fields
+		columns := fields.Columns()
+
 		// Query confirmed users
 		var confirmedUsers []types.ConfirmedUser
 		err := tx.NewSelect().
 			Model(&confirmedUsers).
-			Column(fields.Columns()...).
+			Column(columns...).
 			Where("id IN (?)", bun.In(userIDs)).
 			Scan(ctx)
 		if err != nil {
@@ -351,7 +406,7 @@ func (r *UserModel) GetUsersByIDs(ctx context.Context, userIDs []uint64, fields 
 		var flaggedUsers []types.FlaggedUser
 		err = tx.NewSelect().
 			Model(&flaggedUsers).
-			Column(fields.Columns()...).
+			Column(columns...).
 			Where("id IN (?)", bun.In(userIDs)).
 			Scan(ctx)
 		if err != nil {
@@ -366,7 +421,7 @@ func (r *UserModel) GetUsersByIDs(ctx context.Context, userIDs []uint64, fields 
 		var clearedUsers []types.ClearedUser
 		err = tx.NewSelect().
 			Model(&clearedUsers).
-			Column(fields.Columns()...).
+			Column(columns...).
 			Where("id IN (?)", bun.In(userIDs)).
 			Scan(ctx)
 		if err != nil {
@@ -381,7 +436,7 @@ func (r *UserModel) GetUsersByIDs(ctx context.Context, userIDs []uint64, fields 
 		var bannedUsers []types.BannedUser
 		err = tx.NewSelect().
 			Model(&bannedUsers).
-			Column(fields.Columns()...).
+			Column(columns...).
 			Where("id IN (?)", bun.In(userIDs)).
 			Scan(ctx)
 		if err != nil {

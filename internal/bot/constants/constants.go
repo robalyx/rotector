@@ -23,6 +23,12 @@ const (
 	UserSettingsCustomID     = "user_settings"
 	BotSettingsCustomID      = "bot_settings"
 	ChatAssistantCustomID    = "chat_assistant"
+	LookupUserCustomID       = "lookup_user" + ModalOpenSuffix
+	LookupGroupCustomID      = "lookup_group" + ModalOpenSuffix
+	LookupUserModalCustomID  = "lookup_user_modal"
+	LookupGroupModalCustomID = "lookup_group_modal"
+	LookupUserInputCustomID  = "lookup_user_input"
+	LookupGroupInputCustomID = "lookup_group_input"
 )
 
 // Review Menu.

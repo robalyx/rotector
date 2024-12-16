@@ -1,10 +1,14 @@
 package types
 
 import (
+	"errors"
 	"time"
 
 	"github.com/jaxron/roapi.go/pkg/api/types"
 )
+
+// ErrGroupNotFound is returned when a group is not found in the database.
+var ErrGroupNotFound = errors.New("group not found")
 
 // Group combines all the information needed to review a group.
 type Group struct {
@@ -124,6 +128,11 @@ func (f GroupFields) Columns() []string {
 			"last_viewed",
 			"last_purge_check",
 		)
+	}
+
+	// Select all if no fields specified
+	if len(columns) == 0 {
+		columns = []string{"*"}
 	}
 
 	return columns

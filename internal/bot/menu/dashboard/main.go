@@ -2,6 +2,7 @@ package dashboard
 
 import (
 	"context"
+	"strconv"
 
 	"github.com/disgoorg/disgo/discord"
 	"github.com/disgoorg/disgo/events"
@@ -57,6 +58,7 @@ func NewMainMenu(layout *Layout) *MainMenu {
 		},
 		SelectHandlerFunc: m.handleSelectMenu,
 		ButtonHandlerFunc: m.handleButton,
+		ModalHandlerFunc:  m.handleModal,
 	}
 	return m
 }
@@ -155,7 +157,103 @@ func (m *MainMenu) handleSelectMenu(event *events.ComponentInteractionCreate, s 
 			return
 		}
 		m.layout.chatLayout.Show(event, s)
+	case constants.LookupUserCustomID:
+		m.handleLookupUser(event)
+	case constants.LookupGroupCustomID:
+		m.handleLookupGroup(event)
 	}
+}
+
+// handleLookupUser opens a modal for entering a specific user ID to review.
+func (m *MainMenu) handleLookupUser(event *events.ComponentInteractionCreate) {
+	modal := discord.NewModalCreateBuilder().
+		SetCustomID(constants.LookupUserModalCustomID).
+		SetTitle("Lookup User").
+		AddActionRow(
+			discord.NewTextInput(constants.LookupUserInputCustomID, discord.TextInputStyleShort, "User ID").
+				WithRequired(true).
+				WithPlaceholder("Enter the user ID to lookup..."),
+		).
+		Build()
+
+	if err := event.Modal(modal); err != nil {
+		m.layout.logger.Error("Failed to create user lookup modal", zap.Error(err))
+		m.layout.paginationManager.RespondWithError(event, "Failed to open the user lookup modal. Please try again.")
+	}
+}
+
+// handleLookupGroup opens a modal for entering a specific group ID to review.
+func (m *MainMenu) handleLookupGroup(event *events.ComponentInteractionCreate) {
+	modal := discord.NewModalCreateBuilder().
+		SetCustomID(constants.LookupGroupModalCustomID).
+		SetTitle("Lookup Group").
+		AddActionRow(
+			discord.NewTextInput(constants.LookupGroupInputCustomID, discord.TextInputStyleShort, "Group ID").
+				WithRequired(true).
+				WithPlaceholder("Enter the group ID to lookup..."),
+		).
+		Build()
+
+	if err := event.Modal(modal); err != nil {
+		m.layout.logger.Error("Failed to create group lookup modal", zap.Error(err))
+		m.layout.paginationManager.RespondWithError(event, "Failed to open the group lookup modal. Please try again.")
+	}
+}
+
+// handleModal processes modal submissions for user and group lookups.
+func (m *MainMenu) handleModal(event *events.ModalSubmitInteractionCreate, s *session.Session) {
+	switch event.Data.CustomID {
+	case constants.LookupUserModalCustomID:
+		m.handleLookupUserModalSubmit(event, s)
+	case constants.LookupGroupModalCustomID:
+		m.handleLookupGroupModalSubmit(event, s)
+	}
+}
+
+// handleLookupUserModalSubmit processes the user ID input and opens the review menu.
+func (m *MainMenu) handleLookupUserModalSubmit(event *events.ModalSubmitInteractionCreate, s *session.Session) {
+	// Get and validate the user ID input
+	userIDStr := event.Data.Text(constants.LookupUserInputCustomID)
+	userID, err := strconv.ParseUint(userIDStr, 10, 64)
+	if err != nil {
+		m.layout.paginationManager.RespondWithError(event, "Invalid user ID format. Please enter a valid number.")
+		return
+	}
+
+	// Get user from database
+	user, err := m.layout.db.Users().GetUserByID(context.Background(), userID, types.UserFields{})
+	if err != nil {
+		m.layout.logger.Error("Failed to fetch user", zap.Error(err))
+		m.layout.paginationManager.RespondWithError(event, "Failed to find user. They may not be in our database.")
+		return
+	}
+
+	// Store user in session and show review menu
+	s.Set(constants.SessionKeyTarget, user)
+	m.layout.userReviewLayout.ShowReviewMenu(event, s)
+}
+
+// handleLookupGroupModalSubmit processes the group ID input and opens the review menu.
+func (m *MainMenu) handleLookupGroupModalSubmit(event *events.ModalSubmitInteractionCreate, s *session.Session) {
+	// Get and validate the group ID input
+	groupIDStr := event.Data.Text(constants.LookupGroupInputCustomID)
+	groupID, err := strconv.ParseUint(groupIDStr, 10, 64)
+	if err != nil {
+		m.layout.paginationManager.RespondWithError(event, "Invalid group ID format. Please enter a valid number.")
+		return
+	}
+
+	// Get group from database
+	group, err := m.layout.db.Groups().GetGroupByID(context.Background(), groupID, types.GroupFields{})
+	if err != nil {
+		m.layout.logger.Error("Failed to fetch group", zap.Error(err))
+		m.layout.paginationManager.RespondWithError(event, "Failed to find group. It may not be in our database.")
+		return
+	}
+
+	// Store group in session and show review menu
+	s.Set(constants.SessionKeyGroupTarget, group)
+	m.layout.groupReviewLayout.Show(event, s)
 }
 
 // handleButton processes button interactions, mainly handling refresh requests

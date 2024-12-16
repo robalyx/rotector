@@ -68,6 +68,12 @@ func (b *Builder) Build() *discord.MessageUpdateBuilder {
 		discord.NewStringSelectMenuOption("Review Groups", constants.StartGroupReviewCustomID).
 			WithEmoji(discord.ComponentEmoji{Name: "🔍"}).
 			WithDescription("Start reviewing flagged groups"),
+		discord.NewStringSelectMenuOption("Lookup User", constants.LookupUserCustomID).
+			WithEmoji(discord.ComponentEmoji{Name: "👤"}).
+			WithDescription("Look up a specific user by ID"),
+		discord.NewStringSelectMenuOption("Lookup Group", constants.LookupGroupCustomID).
+			WithEmoji(discord.ComponentEmoji{Name: "👥"}).
+			WithDescription("Look up a specific group by ID"),
 	}
 
 	// Add activity log and queue manager options only for reviewers

@@ -1,10 +1,14 @@
 package types
 
 import (
+	"errors"
 	"time"
 
 	"github.com/jaxron/roapi.go/pkg/api/types"
 )
+
+// ErrUserNotFound is returned when a user is not found in the database.
+var ErrUserNotFound = errors.New("user not found")
 
 // UserType represents the different states a user can be in.
 type UserType string
@@ -111,35 +115,6 @@ type UserFields struct {
 	Timestamps bool
 }
 
-// DefaultUserFields returns UserFields with all fields set to true.
-func DefaultUserFields() UserFields {
-	return UserFields{
-		// Basic info
-		Basic:       true,
-		Description: true,
-		Reason:      true,
-		CreatedAt:   true,
-		Thumbnail:   true,
-
-		// Relationships
-		Groups:  true,
-		Outfits: true,
-		Friends: true,
-		Games:   true,
-
-		// Flagged content
-		Content: true,
-
-		// Stats
-		Followers:  true,
-		Confidence: true,
-		Reputation: true,
-
-		// All timestamps
-		Timestamps: true,
-	}
-}
-
 // Columns returns the list of database columns to fetch based on the selected fields.
 func (f UserFields) Columns() []string {
 	var columns []string
@@ -190,6 +165,11 @@ func (f UserFields) Columns() []string {
 			"last_viewed",
 			"last_purge_check",
 		)
+	}
+
+	// Select all if no fields specified
+	if len(columns) == 0 {
+		columns = []string{"*"}
 	}
 
 	return columns
