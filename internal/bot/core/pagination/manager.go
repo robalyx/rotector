@@ -88,14 +88,14 @@ func (m *Manager) HandleInteraction(event interfaces.CommonEvent, s *session.Ses
 				page.SelectHandlerFunc(e, s, data.CustomID(), data.Values[0])
 				m.logger.Debug("Select interaction", zap.String("customID", data.CustomID()), zap.String("option", data.Values[0]))
 			} else {
-				m.logger.Warn("No select handler found for customID", zap.String("customID", data.CustomID()))
+				m.logger.Error("No select handler found for customID", zap.String("customID", data.CustomID()))
 			}
 		case discord.ButtonInteractionData:
 			if page.ButtonHandlerFunc != nil {
 				page.ButtonHandlerFunc(e, s, data.CustomID())
 				m.logger.Debug("Button interaction", zap.String("customID", data.CustomID()))
 			} else {
-				m.logger.Warn("No button handler found for customID", zap.String("customID", data.CustomID()))
+				m.logger.Error("No button handler found for customID", zap.String("customID", data.CustomID()))
 			}
 		}
 	case *events.ModalSubmitInteractionCreate:
@@ -103,7 +103,7 @@ func (m *Manager) HandleInteraction(event interfaces.CommonEvent, s *session.Ses
 			page.ModalHandlerFunc(e, s)
 			m.logger.Debug("Modal submit interaction", zap.String("customID", e.Data.CustomID))
 		} else {
-			m.logger.Warn("No modal handler found for customID", zap.String("customID", e.Data.CustomID))
+			m.logger.Error("No modal handler found for customID", zap.String("customID", e.Data.CustomID))
 		}
 	}
 }
