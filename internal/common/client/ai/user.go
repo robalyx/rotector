@@ -231,31 +231,34 @@ func (a *UserAnalyzer) ProcessUsers(userInfos []*fetcher.Info) (map[uint64]*type
 		return nil, nil, fmt.Errorf("%w: %w", ErrJSONProcessing, err)
 	}
 
-	// Generate content using Gemini model with retry
-	resp, err := withRetry(context.Background(), func() (*genai.GenerateContentResponse, error) {
-		return a.userModel.GenerateContent(context.Background(), genai.Text(string(userInfoJSON)))
+	// Generate content and parse response using Gemini model with retry
+	var flaggedUsers FlaggedUsers
+	_, err = withRetry(context.Background(), func() (*FlaggedUsers, error) {
+		resp, err := a.userModel.GenerateContent(context.Background(), genai.Text(string(userInfoJSON)))
+		if err != nil {
+			return nil, fmt.Errorf("gemini API error: %w", err)
+		}
+
+		// Check for empty response
+		if len(resp.Candidates) == 0 || resp.Candidates[0].Content == nil || len(resp.Candidates[0].Content.Parts) == 0 {
+			return nil, fmt.Errorf("%w: no response from Gemini", ErrModelResponse)
+		}
+
+		// Extract and parse response
+		responseText := resp.Candidates[0].Content.Parts[0].(genai.Text)
+		var result FlaggedUsers
+		if err := sonic.Unmarshal([]byte(responseText), &result); err != nil {
+			return nil, fmt.Errorf("JSON unmarshal error: %w", err)
+		}
+
+		return &result, nil
 	})
 	if err != nil {
-		a.logger.Error("Error calling Gemini API", zap.Error(err))
+		a.logger.Error("Error processing Gemini response", zap.Error(err))
 		return nil, nil, fmt.Errorf("%w: %w", ErrModelResponse, err)
 	}
 
-	// Check for empty response
-	if len(resp.Candidates) == 0 || resp.Candidates[0].Content == nil || len(resp.Candidates[0].Content.Parts) == 0 {
-		return nil, nil, fmt.Errorf("%w: no response from Gemini", ErrModelResponse)
-	}
-
-	// Extract response text from Gemini's response
-	responseText := resp.Candidates[0].Content.Parts[0].(genai.Text)
-
-	// Parse Gemini response into FlaggedUsers struct
-	var flaggedUsers FlaggedUsers
-	err = sonic.Unmarshal([]byte(responseText), &flaggedUsers)
-	if err != nil {
-		a.logger.Error("Error unmarshaling flagged users", zap.Error(err))
-		return nil, nil, fmt.Errorf("%w: %w", ErrJSONProcessing, err)
-	}
-
+	// Use the parsed flaggedUsers directly
 	a.logger.Info("Received AI response",
 		zap.Int("totalUsers", len(userInfos)),
 		zap.Int("flaggedUsers", len(flaggedUsers.Users)))

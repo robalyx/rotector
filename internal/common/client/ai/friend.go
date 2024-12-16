@@ -65,7 +65,7 @@ func NewFriendAnalyzer(app *setup.App, logger *zap.Logger) *FriendAnalyzer {
 		},
 		Required: []string{"name", "analysis"},
 	}
-	friendTemp := float32(0.1)
+	friendTemp := float32(0.2)
 	friendModel.Temperature = &friendTemp
 
 	// Create a minifier for JSON optimization
@@ -157,25 +157,28 @@ func (a *FriendAnalyzer) GenerateFriendReason(userInfo *fetcher.Info, confirmedF
 	prompt := fmt.Sprintf(FriendUserPrompt, userInfo.Name, string(friendDataJSON))
 
 	// Generate friend analysis using Gemini model with retry
-	resp, err := withRetry(context.Background(), func() (*genai.GenerateContentResponse, error) {
-		return a.genModel.GenerateContent(context.Background(), genai.Text(prompt))
+	var friendAnalysis FriendAnalysis
+	_, err = withRetry(context.Background(), func() (*FriendAnalysis, error) {
+		resp, err := a.genModel.GenerateContent(context.Background(), genai.Text(prompt))
+		if err != nil {
+			return nil, fmt.Errorf("gemini API error: %w", err)
+		}
+
+		if len(resp.Candidates) == 0 || len(resp.Candidates[0].Content.Parts) == 0 {
+			return nil, fmt.Errorf("%w: no response from Gemini", ErrModelResponse)
+		}
+
+		// Extract and parse response
+		responseText := resp.Candidates[0].Content.Parts[0].(genai.Text)
+		var result FriendAnalysis
+		if err := sonic.Unmarshal([]byte(responseText), &result); err != nil {
+			return nil, fmt.Errorf("JSON unmarshal error: %w", err)
+		}
+
+		return &result, nil
 	})
 	if err != nil {
 		return "", fmt.Errorf("%w: %w", ErrModelResponse, err)
-	}
-
-	if len(resp.Candidates) == 0 || len(resp.Candidates[0].Content.Parts) == 0 {
-		return "", fmt.Errorf("%w: no response from Gemini", ErrModelResponse)
-	}
-
-	// Extract response text from Gemini's response
-	responseText := resp.Candidates[0].Content.Parts[0].(genai.Text)
-
-	// Parse Gemini response into FriendAnalysis struct
-	var friendAnalysis FriendAnalysis
-	err = sonic.Unmarshal([]byte(responseText), &friendAnalysis)
-	if err != nil {
-		return "", fmt.Errorf("%w: %w", ErrJSONProcessing, err)
 	}
 
 	reason := friendAnalysis.Analysis
