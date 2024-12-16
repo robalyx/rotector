@@ -131,12 +131,7 @@ func (m *UpdateMenu) handleSettingButton(event *events.ComponentInteractionCreat
 	// Handle back button
 	split := strings.Split(customID, "_")
 	if len(split) > 1 && split[1] == constants.BackButtonCustomID {
-		settingType := split[0]
-		if strings.HasPrefix(settingType, constants.UserSettingPrefix) {
-			m.layout.userMenu.Show(event, s)
-		} else if strings.HasPrefix(settingType, constants.BotSettingPrefix) {
-			m.layout.botMenu.Show(event, s)
-		}
+		m.layout.paginationManager.NavigateBack(event, s, "")
 		return
 	}
 

@@ -64,3 +64,8 @@ func (l *Layout) ShowUser(event interfaces.CommonEvent, s *session.Session) {
 func (l *Layout) ShowBot(event interfaces.CommonEvent, s *session.Session) {
 	l.botMenu.Show(event, s)
 }
+
+// ShowUpdate loads the update menu and displays it through the pagination system.
+func (l *Layout) ShowUpdate(event interfaces.CommonEvent, s *session.Session, prefix string, option string) {
+	l.updateMenu.Show(event, s, prefix, option)
+}

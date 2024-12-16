@@ -88,6 +88,15 @@ type BannedUser struct {
 	PurgedAt time.Time `bun:",notnull" json:"purgedAt"`
 }
 
+// ReviewUser combines all possible user states into a single structure for review.
+type ReviewUser struct {
+	User       `json:"user"`
+	VerifiedAt time.Time `json:"verifiedAt,omitempty"` // When user was confirmed
+	ClearedAt  time.Time `json:"clearedAt,omitempty"`  // When user was cleared
+	PurgedAt   time.Time `json:"purgedAt,omitempty"`   // When user was banned/purged
+	Status     UserType  `json:"status"`               // Current user status
+}
+
 // UserFields represents the fields that can be requested when fetching users.
 type UserFields struct {
 	// Basic user information

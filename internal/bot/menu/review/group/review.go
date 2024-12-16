@@ -59,7 +59,7 @@ func (m *ReviewMenu) Show(event interfaces.CommonEvent, s *session.Session, cont
 		s.Set(constants.SessionKeyUserSettings, userSettings)
 	}
 
-	var group *types.ConfirmedGroup
+	var group *types.ReviewGroup
 	s.GetInterface(constants.SessionKeyGroupTarget, &group)
 
 	// If no group is set in session, fetch a new one
@@ -130,21 +130,16 @@ func (m *ReviewMenu) handleActionSelection(event *events.ComponentInteractionCre
 		}
 		m.handleConfirmWithReason(event, s)
 
-	case constants.SwitchReviewModeCustomID:
-		if !settings.IsReviewer(userID) {
-			m.layout.logger.Error("Non-reviewer attempted to switch review mode", zap.Uint64("user_id", userID))
-			m.layout.paginationManager.RespondWithError(event, "You do not have permission to switch review modes.")
-			return
-		}
-		m.handleSwitchReviewMode(event, s)
+	case constants.ReviewTargetModeOption:
+		m.layout.settingLayout.ShowUpdate(event, s, constants.UserSettingPrefix, constants.ReviewTargetModeOption)
 
-	case constants.SwitchTargetModeCustomID:
-		m.handleSwitchTargetMode(event, s)
+	case constants.ReviewModeOption:
+		m.layout.settingLayout.ShowUpdate(event, s, constants.UserSettingPrefix, constants.ReviewModeOption)
 	}
 }
 
 // fetchNewTarget gets a new group to review based on the current sort order.
-func (m *ReviewMenu) fetchNewTarget(s *session.Session, reviewerID uint64) (*types.ConfirmedGroup, error) {
+func (m *ReviewMenu) fetchNewTarget(s *session.Session, reviewerID uint64) (*types.ReviewGroup, error) {
 	var settings *types.UserSetting
 	s.GetInterface(constants.SessionKeyUserSettings, &settings)
 
@@ -274,54 +269,6 @@ func (m *ReviewMenu) handleConfirmWithReason(event *events.ComponentInteractionC
 		m.layout.logger.Error("Failed to create modal", zap.Error(err))
 		m.layout.paginationManager.RespondWithError(event, "Failed to open the confirm reason form. Please try again.")
 	}
-}
-
-// handleSwitchReviewMode switches between training and standard review modes.
-func (m *ReviewMenu) handleSwitchReviewMode(event *events.ComponentInteractionCreate, s *session.Session) {
-	var settings *types.UserSetting
-	s.GetInterface(constants.SessionKeyUserSettings, &settings)
-
-	// Toggle between modes
-	if settings.ReviewMode == types.TrainingReviewMode {
-		settings.ReviewMode = types.StandardReviewMode
-	} else {
-		settings.ReviewMode = types.TrainingReviewMode
-	}
-
-	// Save the updated setting
-	if err := m.layout.db.Settings().SaveUserSettings(context.Background(), settings); err != nil {
-		m.layout.logger.Error("Failed to save review mode setting", zap.Error(err))
-		m.layout.paginationManager.RespondWithError(event, "Failed to switch review mode. Please try again.")
-		return
-	}
-
-	// Update session and refresh the menu
-	s.Set(constants.SessionKeyUserSettings, settings)
-	m.Show(event, s, "Switched to "+settings.ReviewMode.FormatDisplay())
-}
-
-// handleSwitchTargetMode switches between reviewing flagged items and re-reviewing confirmed items.
-func (m *ReviewMenu) handleSwitchTargetMode(event *events.ComponentInteractionCreate, s *session.Session) {
-	var settings *types.UserSetting
-	s.GetInterface(constants.SessionKeyUserSettings, &settings)
-
-	// Toggle between modes
-	if settings.ReviewTargetMode == types.FlaggedReviewTarget {
-		settings.ReviewTargetMode = types.ConfirmedReviewTarget
-	} else {
-		settings.ReviewTargetMode = types.FlaggedReviewTarget
-	}
-
-	// Save the updated setting
-	if err := m.layout.db.Settings().SaveUserSettings(context.Background(), settings); err != nil {
-		m.layout.logger.Error("Failed to save target mode setting", zap.Error(err))
-		m.layout.paginationManager.RespondWithError(event, "Failed to switch target mode. Please try again.")
-		return
-	}
-
-	// Update session and refresh the menu
-	s.Set(constants.SessionKeyUserSettings, settings)
-	m.Show(event, s, "Switched to "+settings.ReviewTargetMode.FormatDisplay())
 }
 
 // handleConfirmGroup moves a group to the confirmed state and logs the action.

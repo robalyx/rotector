@@ -369,7 +369,7 @@ func (r *Registry) createReviewTargetModeSetting() Setting {
 	return Setting{
 		Key:          constants.ReviewTargetModeOption,
 		Name:         "Review Target Mode",
-		Description:  "Switch between reviewing flagged items and re-reviewing confirmed items",
+		Description:  "Switch between reviewing different types of items",
 		Type:         types.SettingTypeEnum,
 		DefaultValue: types.FlaggedReviewTarget,
 		Options: []types.SettingOption{
@@ -382,14 +382,28 @@ func (r *Registry) createReviewTargetModeSetting() Setting {
 			{
 				Value:       string(types.ConfirmedReviewTarget),
 				Label:       "Confirmed Items",
-				Description: "Re-review previously confirmed items",
-				Emoji:       "🔄",
+				Description: "Re-review confirmed items",
+				Emoji:       "⚠️",
+			},
+			{
+				Value:       string(types.ClearedReviewTarget),
+				Label:       "Cleared Items",
+				Description: "Re-review cleared items",
+				Emoji:       "✅",
+			},
+			{
+				Value:       string(types.BannedReviewTarget),
+				Label:       "Banned Items",
+				Description: "Re-review banned/locked items",
+				Emoji:       "🔒",
 			},
 		},
 		Validators: []Validator{
 			validateEnum([]string{
 				string(types.FlaggedReviewTarget),
 				string(types.ConfirmedReviewTarget),
+				string(types.ClearedReviewTarget),
+				string(types.BannedReviewTarget),
 			}),
 		},
 		ValueGetter: func(us *types.UserSetting, _ *types.BotSetting) string {

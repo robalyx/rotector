@@ -18,6 +18,7 @@ type Layout struct {
 	reviewMenu        *ReviewMenu
 	logger            *zap.Logger
 	dashboardLayout   interfaces.DashboardLayout
+	settingLayout     interfaces.SettingLayout
 	logLayout         interfaces.LogLayout
 	chatLayout        interfaces.ChatLayout
 	groupFetcher      *fetcher.GroupFetcher
@@ -31,6 +32,7 @@ func New(
 	sessionManager *session.Manager,
 	paginationManager *pagination.Manager,
 	dashboardLayout interfaces.DashboardLayout,
+	settingLayout interfaces.SettingLayout,
 	logLayout interfaces.LogLayout,
 	chatLayout interfaces.ChatLayout,
 ) *Layout {
@@ -41,6 +43,7 @@ func New(
 		paginationManager: paginationManager,
 		logger:            app.Logger,
 		dashboardLayout:   dashboardLayout,
+		settingLayout:     settingLayout,
 		logLayout:         logLayout,
 		chatLayout:        chatLayout,
 		groupFetcher:      fetcher.NewGroupFetcher(app.RoAPI, app.Logger),

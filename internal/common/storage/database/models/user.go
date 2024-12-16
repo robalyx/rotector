@@ -737,47 +737,76 @@ func (r *UserModel) GetUserToScan(ctx context.Context) (*types.User, error) {
 }
 
 // GetUserToReview finds a user to review based on the sort method and target mode.
-func (r *UserModel) GetUserToReview(ctx context.Context, sortBy types.SortBy, targetMode types.ReviewTargetMode) (*types.ConfirmedUser, error) {
-	var primaryModel, fallbackModel interface{}
-
-	// Set up which models to try first and as fallback based on target mode
-	if targetMode == types.FlaggedReviewTarget {
-		primaryModel = &types.FlaggedUser{}
-		fallbackModel = &types.ConfirmedUser{}
-	} else {
-		primaryModel = &types.ConfirmedUser{}
-		fallbackModel = &types.FlaggedUser{}
+func (r *UserModel) GetUserToReview(ctx context.Context, sortBy types.SortBy, targetMode types.ReviewTargetMode) (*types.ReviewUser, error) {
+	// Define models in priority order based on target mode
+	var models []interface{}
+	switch targetMode {
+	case types.FlaggedReviewTarget:
+		models = []interface{}{
+			&types.FlaggedUser{},   // Primary target
+			&types.ConfirmedUser{}, // First fallback
+			&types.ClearedUser{},   // Second fallback
+			&types.BannedUser{},    // Last fallback
+		}
+	case types.ConfirmedReviewTarget:
+		models = []interface{}{
+			&types.ConfirmedUser{}, // Primary target
+			&types.FlaggedUser{},   // First fallback
+			&types.ClearedUser{},   // Second fallback
+			&types.BannedUser{},    // Last fallback
+		}
+	case types.ClearedReviewTarget:
+		models = []interface{}{
+			&types.ClearedUser{},   // Primary target
+			&types.FlaggedUser{},   // First fallback
+			&types.ConfirmedUser{}, // Second fallback
+			&types.BannedUser{},    // Last fallback
+		}
+	case types.BannedReviewTarget:
+		models = []interface{}{
+			&types.BannedUser{},    // Primary target
+			&types.FlaggedUser{},   // First fallback
+			&types.ConfirmedUser{}, // Second fallback
+			&types.ClearedUser{},   // Last fallback
+		}
 	}
 
-	// Try primary target first
-	result, err := r.getNextToReview(ctx, primaryModel, sortBy)
-	if err == nil {
-		if flaggedUser, ok := result.(*types.FlaggedUser); ok {
-			return &types.ConfirmedUser{
-				User:       flaggedUser.User,
-				VerifiedAt: time.Time{}, // Zero time since it's not confirmed yet
-			}, nil
-		}
-		if confirmedUser, ok := result.(*types.ConfirmedUser); ok {
-			return confirmedUser, nil
-		}
-	}
-
-	// Try fallback target
-	result, err = r.getNextToReview(ctx, fallbackModel, sortBy)
-	if err == nil {
-		if flaggedUser, ok := result.(*types.FlaggedUser); ok {
-			return &types.ConfirmedUser{
-				User:       flaggedUser.User,
-				VerifiedAt: time.Time{}, // Zero time since it's not confirmed yet
-			}, nil
-		}
-		if confirmedUser, ok := result.(*types.ConfirmedUser); ok {
-			return confirmedUser, nil
+	// Try each model in order until we find a user
+	for _, model := range models {
+		result, err := r.getNextToReview(ctx, model, sortBy)
+		if err == nil {
+			return r.convertToReviewUser(result)
 		}
 	}
 
 	return nil, types.ErrNoUsersToReview
+}
+
+// convertToReviewUser converts any user type to a ReviewUser.
+func (r *UserModel) convertToReviewUser(user interface{}) (*types.ReviewUser, error) {
+	review := &types.ReviewUser{}
+
+	switch u := user.(type) {
+	case *types.FlaggedUser:
+		review.User = u.User
+		review.Status = types.UserTypeFlagged
+	case *types.ConfirmedUser:
+		review.User = u.User
+		review.VerifiedAt = u.VerifiedAt
+		review.Status = types.UserTypeConfirmed
+	case *types.ClearedUser:
+		review.User = u.User
+		review.ClearedAt = u.ClearedAt
+		review.Status = types.UserTypeCleared
+	case *types.BannedUser:
+		review.User = u.User
+		review.PurgedAt = u.PurgedAt
+		review.Status = types.UserTypeBanned
+	default:
+		return nil, fmt.Errorf("%w: %T", types.ErrUnsupportedModel, user)
+	}
+
+	return review, nil
 }
 
 // getNextToReview handles the common logic for getting the next item to review.
@@ -818,6 +847,14 @@ func (r *UserModel) getNextToReview(ctx context.Context, model interface{}, sort
 			id = m.ID
 			result = m
 		case *types.ConfirmedUser:
+			m.LastViewed = now
+			id = m.ID
+			result = m
+		case *types.ClearedUser:
+			m.LastViewed = now
+			id = m.ID
+			result = m
+		case *types.BannedUser:
 			m.LastViewed = now
 			id = m.ID
 			result = m

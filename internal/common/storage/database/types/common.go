@@ -77,25 +77,33 @@ func (r ReviewMode) FormatDisplay() string {
 	}
 }
 
-// ReviewTargetMode represents different types of items to review.
+// ReviewTargetMode represents what type of items to review.
 type ReviewTargetMode string
 
 const (
-	// FlaggedReviewTarget is for reviewing newly flagged items.
+	// FlaggedReviewTarget indicates reviewing newly flagged items.
 	FlaggedReviewTarget ReviewTargetMode = "flagged"
-	// ConfirmedReviewTarget is for re-reviewing previously confirmed items.
+	// ConfirmedReviewTarget indicates re-reviewing previously confirmed items.
 	ConfirmedReviewTarget ReviewTargetMode = "confirmed"
+	// ClearedReviewTarget indicates re-reviewing previously cleared items.
+	ClearedReviewTarget ReviewTargetMode = "cleared"
+	// BannedReviewTarget indicates re-reviewing banned/locked items.
+	BannedReviewTarget ReviewTargetMode = "banned"
 )
 
-// FormatDisplay returns a user-friendly display string for the ReviewTargetMode.
-func (r ReviewTargetMode) FormatDisplay() string {
-	switch r {
+// FormatDisplay returns a human-readable string for the review target mode.
+func (m ReviewTargetMode) FormatDisplay() string {
+	switch m {
 	case FlaggedReviewTarget:
 		return "Flagged Items"
 	case ConfirmedReviewTarget:
 		return "Confirmed Items"
+	case ClearedReviewTarget:
+		return "Cleared Items"
+	case BannedReviewTarget:
+		return "Banned Items"
 	default:
-		return "Unknown Target"
+		return "Unknown"
 	}
 }
 

@@ -23,7 +23,7 @@ type ReviewBuilder struct {
 	settings     *types.UserSetting
 	botSettings  *types.BotSetting
 	userID       uint64
-	group        *types.ConfirmedGroup
+	group        *types.ReviewGroup
 	flaggedUsers []uint64
 }
 
@@ -33,7 +33,7 @@ func NewReviewBuilder(s *session.Session, db *database.Client) *ReviewBuilder {
 	s.GetInterface(constants.SessionKeyUserSettings, &settings)
 	var botSettings *types.BotSetting
 	s.GetInterface(constants.SessionKeyBotSettings, &botSettings)
-	var group *types.ConfirmedGroup
+	var group *types.ReviewGroup
 	s.GetInterface(constants.SessionKeyGroupTarget, &group)
 	var flaggedUsers []uint64
 	s.GetInterface(constants.SessionKeyGroupFlaggedUsers, &flaggedUsers)
@@ -111,12 +111,19 @@ func (b *ReviewBuilder) buildReviewEmbed() *discord.EmbedBuilder {
 	embed := discord.NewEmbedBuilder().
 		SetColor(utils.GetMessageEmbedColor(b.settings.StreamerMode))
 
-	// Add status indicator
+	// Add status indicator based on group status
 	var status string
-	if b.group.VerifiedAt.IsZero() {
+	switch b.group.Status {
+	case types.GroupTypeFlagged:
 		status = "⏳ Flagged Group"
-	} else {
+	case types.GroupTypeConfirmed:
 		status = "⚠️ Confirmed Group"
+	case types.GroupTypeCleared:
+		status = "✅ Cleared Group"
+	case types.GroupTypeLocked:
+		status = "🔒 Locked Group"
+	case types.GroupTypeUnflagged:
+		status = "🔄 Unflagged Group"
 	}
 
 	header := fmt.Sprintf("%s • 👍 %d | 👎 %d", status, b.group.Upvotes, b.group.Downvotes)
@@ -171,9 +178,15 @@ func (b *ReviewBuilder) buildReviewEmbed() *discord.EmbedBuilder {
 			AddField("Review History", b.getReviewHistory(), false)
 	}
 
-	// Add verified at time if this is a confirmed group
+	// Add status-specific timestamps
 	if !b.group.VerifiedAt.IsZero() {
 		embed.AddField("Verified At", fmt.Sprintf("<t:%d:R>", b.group.VerifiedAt.Unix()), true)
+	}
+	if !b.group.ClearedAt.IsZero() {
+		embed.AddField("Cleared At", fmt.Sprintf("<t:%d:R>", b.group.ClearedAt.Unix()), true)
+	}
+	if !b.group.LockedAt.IsZero() {
+		embed.AddField("Locked At", fmt.Sprintf("<t:%d:R>", b.group.LockedAt.Unix()), true)
 	}
 
 	return embed
@@ -185,7 +198,7 @@ func (b *ReviewBuilder) buildActionOptions() []discord.StringSelectMenuOption {
 
 	// Add reviewer-only options
 	if b.botSettings.IsReviewer(b.userID) {
-		options = []discord.StringSelectMenuOption{
+		reviewerOptions := []discord.StringSelectMenuOption{
 			discord.NewStringSelectMenuOption("Ask AI about group", constants.OpenAIChatButtonCustomID).
 				WithEmoji(discord.ComponentEmoji{Name: "🤖"}).
 				WithDescription("Ask the AI questions about this group"),
@@ -195,41 +208,15 @@ func (b *ReviewBuilder) buildActionOptions() []discord.StringSelectMenuOption {
 			discord.NewStringSelectMenuOption("View group logs", constants.GroupViewLogsButtonCustomID).
 				WithEmoji(discord.ComponentEmoji{Name: "📋"}).
 				WithDescription("View activity logs for this group"),
+			discord.NewStringSelectMenuOption("Change Review Target", constants.ReviewTargetModeOption).
+				WithEmoji(discord.ComponentEmoji{Name: "🎯"}).
+				WithDescription("Change what type of groups to review"),
+			discord.NewStringSelectMenuOption("Change Review Mode", constants.ReviewModeOption).
+				WithEmoji(discord.ComponentEmoji{Name: "🎓"}).
+				WithDescription("Switch between training and standard modes"),
 		}
-
-		// Add mode switch option
-		if b.settings.ReviewMode == types.TrainingReviewMode {
-			options = append(options,
-				discord.NewStringSelectMenuOption("Switch to Standard Mode", constants.SwitchReviewModeCustomID).
-					WithEmoji(discord.ComponentEmoji{Name: "⚠️"}).
-					WithDescription("Switch to standard mode for actual moderation"),
-			)
-		} else {
-			options = append(options,
-				discord.NewStringSelectMenuOption("Switch to Training Mode", constants.SwitchReviewModeCustomID).
-					WithEmoji(discord.ComponentEmoji{Name: "🎓"}).
-					WithDescription("Switch to training mode to practice"),
-			)
-		}
+		options = append(options, reviewerOptions...)
 	}
-
-	// Get switch text and description
-	var switchText string
-	var switchDesc string
-	if b.settings.ReviewTargetMode == types.FlaggedReviewTarget {
-		switchText = "Switch to Confirmed Target"
-		switchDesc = "Switch to re-reviewing confirmed groups"
-	} else {
-		switchText = "Switch to Flagged Target"
-		switchDesc = "Switch to reviewing flagged groups"
-	}
-
-	// Add switch option
-	options = append(options,
-		discord.NewStringSelectMenuOption(switchText, constants.SwitchTargetModeCustomID).
-			WithEmoji(discord.ComponentEmoji{Name: "🔄"}).
-			WithDescription(switchDesc),
-	)
 
 	return options
 }

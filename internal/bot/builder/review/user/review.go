@@ -24,7 +24,7 @@ type ReviewBuilder struct {
 	settings      *types.UserSetting
 	botSettings   *types.BotSetting
 	userID        uint64
-	user          *types.ConfirmedUser
+	user          *types.ReviewUser
 	translator    *translator.Translator
 	friendTypes   map[uint64]types.UserType
 	groupTypes    map[uint64]types.GroupType
@@ -37,7 +37,7 @@ func NewReviewBuilder(s *session.Session, translator *translator.Translator, db 
 	s.GetInterface(constants.SessionKeyUserSettings, &settings)
 	var botSettings *types.BotSetting
 	s.GetInterface(constants.SessionKeyBotSettings, &botSettings)
-	var user *types.ConfirmedUser
+	var user *types.ReviewUser
 	s.GetInterface(constants.SessionKeyTarget, &user)
 	var friendTypes map[uint64]types.UserType
 	s.GetInterface(constants.SessionKeyFriendTypes, &friendTypes)
@@ -122,12 +122,19 @@ func (b *ReviewBuilder) buildReviewBuilder() *discord.EmbedBuilder {
 	embed := discord.NewEmbedBuilder().
 		SetColor(utils.GetMessageEmbedColor(b.settings.StreamerMode))
 
-	// Add status indicator
+	// Add status indicator based on user status
 	var status string
-	if b.user.VerifiedAt.IsZero() {
+	switch b.user.Status {
+	case types.UserTypeFlagged:
 		status = "⏳ Flagged User"
-	} else {
+	case types.UserTypeConfirmed:
 		status = "⚠️ Confirmed User"
+	case types.UserTypeCleared:
+		status = "✅ Cleared User"
+	case types.UserTypeBanned:
+		status = "🔨 Banned User"
+	case types.UserTypeUnflagged:
+		status = "🔄 Unflagged User"
 	}
 
 	header := fmt.Sprintf("%s • 👍 %d | 👎 %d", status, b.user.Upvotes, b.user.Downvotes)
@@ -197,9 +204,15 @@ func (b *ReviewBuilder) buildReviewBuilder() *discord.EmbedBuilder {
 		embed.AddField("Review History", b.getReviewHistory(), false)
 	}
 
-	// Add verified at time if this is a confirmed user
+	// Add status-specific timestamps
 	if !b.user.VerifiedAt.IsZero() {
 		embed.AddField("Verified At", fmt.Sprintf("<t:%d:R>", b.user.VerifiedAt.Unix()), true)
+	}
+	if !b.user.ClearedAt.IsZero() {
+		embed.AddField("Cleared At", fmt.Sprintf("<t:%d:R>", b.user.ClearedAt.Unix()), true)
+	}
+	if !b.user.PurgedAt.IsZero() {
+		embed.AddField("Purged At", fmt.Sprintf("<t:%d:R>", b.user.PurgedAt.Unix()), true)
 	}
 
 	return embed
@@ -235,42 +248,15 @@ func (b *ReviewBuilder) buildActionOptions() []discord.StringSelectMenuOption {
 			discord.NewStringSelectMenuOption("View user logs", constants.ViewUserLogsButtonCustomID).
 				WithEmoji(discord.ComponentEmoji{Name: "📋"}).
 				WithDescription("View activity logs for this user"),
+			discord.NewStringSelectMenuOption("Change Review Target", constants.ReviewTargetModeOption).
+				WithEmoji(discord.ComponentEmoji{Name: "🎯"}).
+				WithDescription("Change what type of users to review"),
+			discord.NewStringSelectMenuOption("Change Review Mode", constants.ReviewModeOption).
+				WithEmoji(discord.ComponentEmoji{Name: "🎓"}).
+				WithDescription("Switch between training and standard modes"),
 		}
 		options = append(options, reviewerOptions...)
-
-		// Add mode switch option
-		if b.settings.ReviewMode == types.TrainingReviewMode {
-			options = append(options,
-				discord.NewStringSelectMenuOption("Switch to Standard Mode", constants.SwitchReviewModeCustomID).
-					WithEmoji(discord.ComponentEmoji{Name: "⚠️"}).
-					WithDescription("Switch to standard mode for actual moderation"),
-			)
-		} else {
-			options = append(options,
-				discord.NewStringSelectMenuOption("Switch to Training Mode", constants.SwitchReviewModeCustomID).
-					WithEmoji(discord.ComponentEmoji{Name: "🎓"}).
-					WithDescription("Switch to training mode to practice"),
-			)
-		}
 	}
-
-	// Get switch text and description
-	var switchText string
-	var switchDesc string
-	if b.settings.ReviewTargetMode == types.FlaggedReviewTarget {
-		switchText = "Switch to Confirmed Target"
-		switchDesc = "Switch to re-reviewing confirmed users"
-	} else {
-		switchText = "Switch to Flagged Target"
-		switchDesc = "Switch to reviewing flagged users"
-	}
-
-	// Add switch option
-	options = append(options,
-		discord.NewStringSelectMenuOption(switchText, constants.SwitchTargetModeCustomID).
-			WithEmoji(discord.ComponentEmoji{Name: "🔄"}).
-			WithDescription(switchDesc),
-	)
 
 	return options
 }

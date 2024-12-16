@@ -58,7 +58,7 @@ func (m *ReviewMenu) Show(event interfaces.CommonEvent, s *session.Session, cont
 		s.Set(constants.SessionKeyUserSettings, userSettings)
 	}
 
-	var user *types.ConfirmedUser
+	var user *types.ReviewUser
 	s.GetInterface(constants.SessionKeyTarget, &user)
 
 	// If no user is set in session, fetch a new one
@@ -211,6 +211,12 @@ func (m *ReviewMenu) handleActionSelection(event *events.ComponentInteractionCre
 
 	case constants.SwitchTargetModeCustomID:
 		m.handleSwitchTargetMode(event, s)
+
+	case constants.ReviewTargetModeOption:
+		m.layout.settingLayout.ShowUpdate(event, s, constants.UserSettingPrefix, constants.ReviewTargetModeOption)
+
+	case constants.ReviewModeOption:
+		m.layout.settingLayout.ShowUpdate(event, s, constants.UserSettingPrefix, constants.ReviewModeOption)
 	}
 }
 
@@ -653,7 +659,7 @@ func (m *ReviewMenu) handleSwitchTargetMode(event *events.ComponentInteractionCr
 }
 
 // fetchNewTarget gets a new user to review based on the current sort order.
-func (m *ReviewMenu) fetchNewTarget(s *session.Session, reviewerID uint64) (*types.ConfirmedUser, error) {
+func (m *ReviewMenu) fetchNewTarget(s *session.Session, reviewerID uint64) (*types.ReviewUser, error) {
 	var settings *types.UserSetting
 	s.GetInterface(constants.SessionKeyUserSettings, &settings)
 

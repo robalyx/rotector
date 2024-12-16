@@ -30,6 +30,7 @@ type Layout struct {
 	presenceFetcher   *fetcher.PresenceFetcher
 	logger            *zap.Logger
 	dashboardLayout   interfaces.DashboardLayout
+	settingLayout     interfaces.SettingLayout
 	logLayout         interfaces.LogLayout
 	chatLayout        interfaces.ChatLayout
 }
@@ -41,6 +42,7 @@ func New(
 	sessionManager *session.Manager,
 	paginationManager *pagination.Manager,
 	dashboardLayout interfaces.DashboardLayout,
+	settingLayout interfaces.SettingLayout,
 	logLayout interfaces.LogLayout,
 	chatLayout interfaces.ChatLayout,
 ) *Layout {
@@ -56,6 +58,7 @@ func New(
 		presenceFetcher:   fetcher.NewPresenceFetcher(app.RoAPI, app.Logger),
 		logger:            app.Logger,
 		dashboardLayout:   dashboardLayout,
+		settingLayout:     settingLayout,
 		logLayout:         logLayout,
 		chatLayout:        chatLayout,
 	}

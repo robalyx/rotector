@@ -592,47 +592,76 @@ func (r *GroupModel) GetGroupToScan(ctx context.Context) (*types.Group, error) {
 }
 
 // GetGroupToReview finds a group to review based on the sort method and target mode.
-func (r *GroupModel) GetGroupToReview(ctx context.Context, sortBy types.SortBy, targetMode types.ReviewTargetMode) (*types.ConfirmedGroup, error) {
-	var primaryModel, fallbackModel interface{}
-
-	// Set up which models to try first and as fallback based on target mode
-	if targetMode == types.FlaggedReviewTarget {
-		primaryModel = &types.FlaggedGroup{}
-		fallbackModel = &types.ConfirmedGroup{}
-	} else {
-		primaryModel = &types.ConfirmedGroup{}
-		fallbackModel = &types.FlaggedGroup{}
+func (r *GroupModel) GetGroupToReview(ctx context.Context, sortBy types.SortBy, targetMode types.ReviewTargetMode) (*types.ReviewGroup, error) {
+	// Define models in priority order based on target mode
+	var models []interface{}
+	switch targetMode {
+	case types.FlaggedReviewTarget:
+		models = []interface{}{
+			&types.FlaggedGroup{},   // Primary target
+			&types.ConfirmedGroup{}, // First fallback
+			&types.ClearedGroup{},   // Second fallback
+			&types.LockedGroup{},    // Last fallback
+		}
+	case types.ConfirmedReviewTarget:
+		models = []interface{}{
+			&types.ConfirmedGroup{}, // Primary target
+			&types.FlaggedGroup{},   // First fallback
+			&types.ClearedGroup{},   // Second fallback
+			&types.LockedGroup{},    // Last fallback
+		}
+	case types.ClearedReviewTarget:
+		models = []interface{}{
+			&types.ClearedGroup{},   // Primary target
+			&types.FlaggedGroup{},   // First fallback
+			&types.ConfirmedGroup{}, // Second fallback
+			&types.LockedGroup{},    // Last fallback
+		}
+	case types.BannedReviewTarget:
+		models = []interface{}{
+			&types.LockedGroup{},    // Primary target
+			&types.FlaggedGroup{},   // First fallback
+			&types.ConfirmedGroup{}, // Second fallback
+			&types.ClearedGroup{},   // Last fallback
+		}
 	}
 
-	// Try primary target first
-	result, err := r.getNextToReview(ctx, primaryModel, sortBy)
-	if err == nil {
-		if flaggedGroup, ok := result.(*types.FlaggedGroup); ok {
-			return &types.ConfirmedGroup{
-				Group:      flaggedGroup.Group,
-				VerifiedAt: time.Time{}, // Zero time since it's not confirmed yet
-			}, nil
-		}
-		if confirmedGroup, ok := result.(*types.ConfirmedGroup); ok {
-			return confirmedGroup, nil
-		}
-	}
-
-	// Try fallback target
-	result, err = r.getNextToReview(ctx, fallbackModel, sortBy)
-	if err == nil {
-		if flaggedGroup, ok := result.(*types.FlaggedGroup); ok {
-			return &types.ConfirmedGroup{
-				Group:      flaggedGroup.Group,
-				VerifiedAt: time.Time{}, // Zero time since it's not confirmed yet
-			}, nil
-		}
-		if confirmedGroup, ok := result.(*types.ConfirmedGroup); ok {
-			return confirmedGroup, nil
+	// Try each model in order until we find a group
+	for _, model := range models {
+		result, err := r.getNextToReview(ctx, model, sortBy)
+		if err == nil {
+			return r.convertToReviewGroup(result)
 		}
 	}
 
 	return nil, types.ErrNoGroupsToReview
+}
+
+// convertToReviewGroup converts any group type to a ReviewGroup.
+func (r *GroupModel) convertToReviewGroup(group interface{}) (*types.ReviewGroup, error) {
+	review := &types.ReviewGroup{}
+
+	switch g := group.(type) {
+	case *types.FlaggedGroup:
+		review.Group = g.Group
+		review.Status = types.GroupTypeFlagged
+	case *types.ConfirmedGroup:
+		review.Group = g.Group
+		review.VerifiedAt = g.VerifiedAt
+		review.Status = types.GroupTypeConfirmed
+	case *types.ClearedGroup:
+		review.Group = g.Group
+		review.ClearedAt = g.ClearedAt
+		review.Status = types.GroupTypeCleared
+	case *types.LockedGroup:
+		review.Group = g.Group
+		review.LockedAt = g.LockedAt
+		review.Status = types.GroupTypeLocked
+	default:
+		return nil, fmt.Errorf("%w: %T", types.ErrUnsupportedModel, group)
+	}
+
+	return review, nil
 }
 
 // getNextToReview handles the common logic for getting the next item to review.
@@ -671,6 +700,14 @@ func (r *GroupModel) getNextToReview(ctx context.Context, model interface{}, sor
 			id = m.ID
 			result = m
 		case *types.ConfirmedGroup:
+			m.LastViewed = now
+			id = m.ID
+			result = m
+		case *types.ClearedGroup:
+			m.LastViewed = now
+			id = m.ID
+			result = m
+		case *types.LockedGroup:
 			m.LastViewed = now
 			id = m.ID
 			result = m

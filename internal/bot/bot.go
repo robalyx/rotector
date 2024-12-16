@@ -63,8 +63,8 @@ func New(app *setup.App) (*Bot, error) {
 	settingLayout := setting.New(app, sessionManager, paginationManager, dashboardLayout)
 	logLayout := log.New(app, sessionManager, paginationManager, dashboardLayout)
 	chatLayout := chat.New(app, sessionManager, paginationManager, dashboardLayout)
-	userReviewLayout := userReview.New(app, sessionManager, paginationManager, dashboardLayout, logLayout, chatLayout)
-	groupReviewLayout := groupReview.New(app, sessionManager, paginationManager, dashboardLayout, logLayout, chatLayout)
+	userReviewLayout := userReview.New(app, sessionManager, paginationManager, dashboardLayout, settingLayout, logLayout, chatLayout)
+	groupReviewLayout := groupReview.New(app, sessionManager, paginationManager, dashboardLayout, settingLayout, logLayout, chatLayout)
 	queueLayout := queue.New(app, sessionManager, paginationManager, dashboardLayout, userReviewLayout)
 
 	// Cross-link layouts to enable navigation between different sections

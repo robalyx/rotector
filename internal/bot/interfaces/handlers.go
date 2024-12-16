@@ -36,6 +36,8 @@ type SettingLayout interface {
 	// ShowBot loads bot settings from the database into the session and
 	// displays them through the pagination system.
 	ShowBot(event CommonEvent, s *session.Session)
+	// ShowUpdate loads the update menu and displays it through the pagination system.
+	ShowUpdate(event CommonEvent, s *session.Session, prefix string, option string)
 }
 
 // LogLayout defines the interface for handling logs-related actions.
