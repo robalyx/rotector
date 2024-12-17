@@ -136,6 +136,7 @@ func (r *UserModel) ClearUser(ctx context.Context, user *types.FlaggedUser) erro
 			ClearedAt: time.Now(),
 		}
 
+		// Move user to cleared_users table
 		_, err := tx.NewInsert().Model(clearedUser).
 			On("CONFLICT (id) DO UPDATE").
 			Set("name = EXCLUDED.name").
@@ -162,17 +163,25 @@ func (r *UserModel) ClearUser(ctx context.Context, user *types.FlaggedUser) erro
 			Set("cleared_at = EXCLUDED.cleared_at").
 			Exec(ctx)
 		if err != nil {
-			r.logger.Error("Failed to insert or update user in cleared_users", zap.Error(err), zap.Uint64("userID", user.ID))
+			r.logger.Error("Failed to insert or update user in cleared_users",
+				zap.Error(err),
+				zap.Uint64("userID", user.ID))
 			return err
 		}
 
-		_, err = tx.NewDelete().Model((*types.FlaggedUser)(nil)).Where("id = ?", user.ID).Exec(ctx)
+		// Delete user from flagged_users table
+		_, err = tx.NewDelete().Model((*types.FlaggedUser)(nil)).
+			Where("id = ?", user.ID).
+			Exec(ctx)
 		if err != nil {
-			r.logger.Error("Failed to delete user from flagged_users", zap.Error(err), zap.Uint64("userID", user.ID))
+			r.logger.Error("Failed to delete user from flagged_users",
+				zap.Error(err),
+				zap.Uint64("userID", user.ID))
 			return err
 		}
 
-		r.logger.Debug("User cleared and moved to cleared_users", zap.Uint64("userID", user.ID))
+		r.logger.Debug("User cleared and moved to cleared_users",
+			zap.Uint64("userID", user.ID))
 
 		return nil
 	})

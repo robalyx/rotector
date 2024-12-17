@@ -5,6 +5,7 @@ import (
 	"sort"
 	"time"
 
+	apiTypes "github.com/jaxron/roapi.go/pkg/api/types"
 	"github.com/rotector/rotector/internal/common/storage/database/types"
 	"github.com/uptrace/bun"
 	"go.uber.org/zap"
@@ -186,4 +187,34 @@ func (r *TrackingModel) UpdateFlaggedGroups(ctx context.Context, groupIDs []uint
 		return err
 	}
 	return nil
+}
+
+// RemoveUserFromGroups removes a user from the tracking lists of specified groups.
+func (r *TrackingModel) RemoveUserFromGroups(ctx context.Context, userID uint64, groups []*apiTypes.UserGroupRoles) {
+	if len(groups) == 0 {
+		return
+	}
+
+	// Get all group IDs the user is in
+	groupIDs := make([]uint64, 0, len(groups))
+	for _, group := range groups {
+		groupIDs = append(groupIDs, group.Group.ID)
+	}
+
+	// Remove user from group tracking
+	_, err := r.db.NewUpdate().
+		Model((*types.GroupMemberTracking)(nil)).
+		Set("flagged_users = array_remove(flagged_users, ?)", userID).
+		Where("group_id IN (?)", bun.In(groupIDs)).
+		Exec(ctx)
+	if err != nil {
+		r.logger.Error("Failed to remove user from group tracking",
+			zap.Error(err),
+			zap.Uint64("userID", userID),
+			zap.Uint64s("groupIDs", groupIDs))
+	}
+
+	r.logger.Debug("Removed user from group tracking",
+		zap.Uint64("userID", userID),
+		zap.Int("groupCount", len(groupIDs)))
 }
