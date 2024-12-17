@@ -1,6 +1,7 @@
 package dashboard
 
 import (
+	"github.com/redis/rueidis"
 	"github.com/rotector/rotector/internal/bot/core/pagination"
 	"github.com/rotector/rotector/internal/bot/core/session"
 	"github.com/rotector/rotector/internal/bot/interfaces"
@@ -14,6 +15,7 @@ import (
 // Layout handles the display and interaction logic for the main dashboard.
 type Layout struct {
 	db                *database.Client
+	redisClient       rueidis.Client
 	sessionManager    *session.Manager
 	paginationManager *pagination.Manager
 	workerMonitor     *core.Monitor
@@ -35,6 +37,12 @@ func New(
 	sessionManager *session.Manager,
 	paginationManager *pagination.Manager,
 ) *Layout {
+	// Get Redis client for stats
+	statsClient, err := app.RedisManager.GetClient(redis.StatsDBIndex)
+	if err != nil {
+		app.Logger.Fatal("Failed to get Redis client for stats", zap.Error(err))
+	}
+
 	// Get Redis client for worker status
 	statusClient, err := app.RedisManager.GetClient(redis.WorkerStatusDBIndex)
 	if err != nil {
@@ -44,6 +52,7 @@ func New(
 	// Initialize layout
 	l := &Layout{
 		db:                app.DB,
+		redisClient:       statsClient,
 		logger:            app.Logger,
 		sessionManager:    sessionManager,
 		paginationManager: paginationManager,

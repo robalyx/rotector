@@ -144,11 +144,9 @@ const (
 	SessionKeyPreviousPage = "previousPage"
 	SessionKeyImageBuffer  = "imageBuffer"
 
-	SessionKeyIsRefreshed      = "isRefreshed"
-	SessionKeyUserStatsBuffer  = "userStatsBuffer"
-	SessionKeyGroupStatsBuffer = "groupStatsBuffer"
-	SessionKeyUserCounts       = "userCounts"
-	SessionKeyGroupCounts      = "groupCounts"
+	SessionKeyIsRefreshed = "isRefreshed"
+	SessionKeyUserCounts  = "userCounts"
+	SessionKeyGroupCounts = "groupCounts"
 
 	SessionKeyCursor         = "cursor"
 	SessionKeyNextCursor     = "nextCursor"

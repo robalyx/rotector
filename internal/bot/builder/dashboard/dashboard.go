@@ -2,6 +2,8 @@ package dashboard
 
 import (
 	"bytes"
+	"context"
+	"encoding/base64"
 	"fmt"
 	"strconv"
 	"strings"
@@ -9,9 +11,12 @@ import (
 
 	"github.com/disgoorg/disgo/discord"
 	"github.com/disgoorg/snowflake/v2"
+	"github.com/redis/rueidis"
 	"github.com/rotector/rotector/internal/bot/constants"
+	"github.com/rotector/rotector/internal/bot/core/session"
 	"github.com/rotector/rotector/internal/common/storage/database/types"
 	"github.com/rotector/rotector/internal/worker/core"
+	"github.com/rotector/rotector/internal/worker/stats"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
 )
@@ -36,18 +41,24 @@ type Builder struct {
 }
 
 // NewBuilder creates a new dashboard builder.
-func NewBuilder(
-	botSettings *types.BotSetting,
-	userID uint64,
-	userCounts *types.UserCounts,
-	groupCounts *types.GroupCounts,
-	userStatsBuffer, groupStatsBuffer *bytes.Buffer,
-	activeUsers []snowflake.ID,
-	workerStatuses []core.Status,
-) *Builder {
+func NewBuilder(s *session.Session, redisClient rueidis.Client) *Builder {
+	var botSettings *types.BotSetting
+	s.GetInterface(constants.SessionKeyBotSettings, &botSettings)
+	var userCounts *types.UserCounts
+	s.GetInterface(constants.SessionKeyUserCounts, &userCounts)
+	var groupCounts *types.GroupCounts
+	s.GetInterface(constants.SessionKeyGroupCounts, &groupCounts)
+	var activeUsers []snowflake.ID
+	s.GetInterface(constants.SessionKeyActiveUsers, &activeUsers)
+	var workerStatuses []core.Status
+	s.GetInterface(constants.SessionKeyWorkerStatuses, &workerStatuses)
+
+	// Get chart buffers from Redis
+	userStatsBuffer, groupStatsBuffer := getChartBuffers(redisClient)
+
 	return &Builder{
 		botSettings:      botSettings,
-		userID:           userID,
+		userID:           s.GetUint64(constants.SessionKeyUserID),
 		userCounts:       userCounts,
 		groupCounts:      groupCounts,
 		userStatsBuffer:  userStatsBuffer,
@@ -56,6 +67,31 @@ func NewBuilder(
 		workerStatuses:   workerStatuses,
 		titleCaser:       cases.Title(language.English),
 	}
+}
+
+// getChartBuffers retrieves the cached chart buffers from Redis.
+func getChartBuffers(client rueidis.Client) (*bytes.Buffer, *bytes.Buffer) {
+	var userStatsChart, groupStatsChart *bytes.Buffer
+
+	// Get user stats chart
+	if result := client.Do(context.Background(), client.B().Get().Key(stats.UserStatsChartKey).Build()); result.Error() == nil {
+		if data, err := result.AsBytes(); err == nil {
+			if decoded, err := base64.StdEncoding.DecodeString(string(data)); err == nil {
+				userStatsChart = bytes.NewBuffer(decoded)
+			}
+		}
+	}
+
+	// Get group stats chart
+	if result := client.Do(context.Background(), client.B().Get().Key(stats.GroupStatsChartKey).Build()); result.Error() == nil {
+		if data, err := result.AsBytes(); err == nil {
+			if decoded, err := base64.StdEncoding.DecodeString(string(data)); err == nil {
+				groupStatsChart = bytes.NewBuffer(decoded)
+			}
+		}
+	}
+
+	return userStatsChart, groupStatsChart
 }
 
 // Build creates a Discord message showing statistics and worker status.

@@ -6,14 +6,12 @@ import (
 
 	"github.com/disgoorg/disgo/discord"
 	"github.com/disgoorg/disgo/events"
-	"github.com/disgoorg/snowflake/v2"
 	builder "github.com/rotector/rotector/internal/bot/builder/dashboard"
 	"github.com/rotector/rotector/internal/bot/constants"
 	"github.com/rotector/rotector/internal/bot/core/pagination"
 	"github.com/rotector/rotector/internal/bot/core/session"
 	"github.com/rotector/rotector/internal/bot/interfaces"
 	"github.com/rotector/rotector/internal/common/storage/database/types"
-	"github.com/rotector/rotector/internal/worker/core"
 	"go.uber.org/zap"
 )
 
@@ -30,31 +28,7 @@ func NewMainMenu(layout *Layout) *MainMenu {
 	m.page = &pagination.Page{
 		Name: "Dashboard",
 		Message: func(s *session.Session) *discord.MessageUpdateBuilder {
-			var botSettings *types.BotSetting
-			s.GetInterface(constants.SessionKeyBotSettings, &botSettings)
-			var userCounts *types.UserCounts
-			s.GetInterface(constants.SessionKeyUserCounts, &userCounts)
-			var groupCounts *types.GroupCounts
-			s.GetInterface(constants.SessionKeyGroupCounts, &groupCounts)
-			var activeUsers []snowflake.ID
-			s.GetInterface(constants.SessionKeyActiveUsers, &activeUsers)
-			var workerStatuses []core.Status
-			s.GetInterface(constants.SessionKeyWorkerStatuses, &workerStatuses)
-
-			userID := s.GetUint64(constants.SessionKeyUserID)
-			userStatsBuffer := s.GetBuffer(constants.SessionKeyUserStatsBuffer)
-			groupStatsBuffer := s.GetBuffer(constants.SessionKeyGroupStatsBuffer)
-
-			return builder.NewBuilder(
-				botSettings,
-				userID,
-				userCounts,
-				groupCounts,
-				userStatsBuffer,
-				groupStatsBuffer,
-				activeUsers,
-				workerStatuses,
-			).Build()
+			return builder.NewBuilder(s, m.layout.redisClient).Build()
 		},
 		SelectHandlerFunc: m.handleSelectMenu,
 		ButtonHandlerFunc: m.handleButton,
@@ -77,18 +51,6 @@ func (m *MainMenu) Show(event interfaces.CommonEvent, s *session.Session, conten
 		m.layout.logger.Error("Failed to get counts", zap.Error(err))
 	}
 
-	// Get hourly stats for the chart
-	hourlyStats, err := m.layout.db.Stats().GetHourlyStats(context.Background())
-	if err != nil {
-		m.layout.logger.Error("Failed to get hourly stats", zap.Error(err))
-	}
-
-	// Generate statistics charts
-	userStatsChart, groupStatsChart, err := builder.NewChartBuilder(hourlyStats).Build()
-	if err != nil {
-		m.layout.logger.Error("Failed to build stats charts", zap.Error(err))
-	}
-
 	// Get list of currently active reviewers
 	activeUsers := m.layout.sessionManager.GetActiveUsers(context.Background())
 
@@ -100,8 +62,6 @@ func (m *MainMenu) Show(event interfaces.CommonEvent, s *session.Session, conten
 
 	// Store data in session
 	s.Set(constants.SessionKeyUserID, uint64(event.User().ID))
-	s.SetBuffer(constants.SessionKeyUserStatsBuffer, userStatsChart)
-	s.SetBuffer(constants.SessionKeyGroupStatsBuffer, groupStatsChart)
 	s.Set(constants.SessionKeyUserCounts, userCounts)
 	s.Set(constants.SessionKeyGroupCounts, groupCounts)
 	s.Set(constants.SessionKeyActiveUsers, activeUsers)

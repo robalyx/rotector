@@ -1,4 +1,4 @@
-package dashboard
+package stats
 
 import (
 	"bytes"
