@@ -1,8 +1,8 @@
 package user
 
 import (
+	"bytes"
 	"strconv"
-	"sync"
 
 	"github.com/disgoorg/disgo/discord"
 	"github.com/disgoorg/disgo/events"
@@ -63,30 +63,8 @@ func (m *FriendsMenu) Show(event *events.ComponentInteractionCreate, s *session.
 	}
 	pageFriends := sortedFriends[start:end]
 
-	// Fetch data concurrently
-	thumbnailMap, presenceMap := m.fetchFriendData(sortedFriends)
-
-	// Extract thumbnail URLs for the current page
-	thumbnailURLs := make([]string, len(pageFriends))
-	for i, friend := range pageFriends {
-		if url, ok := thumbnailMap[friend.ID]; ok {
-			thumbnailURLs[i] = url
-		}
-	}
-
-	// Create grid image from avatars
-	buf, err := utils.MergeImages(
-		m.layout.roAPI.GetClient(),
-		thumbnailURLs,
-		constants.FriendsGridColumns,
-		constants.FriendsGridRows,
-		constants.FriendsPerPage,
-	)
-	if err != nil {
-		m.layout.logger.Error("Failed to merge friend images", zap.Error(err))
-		m.layout.paginationManager.RespondWithError(event, "Failed to process friend images. Please try again.")
-		return
-	}
+	// Fetch presence data
+	presenceMap := m.fetchPresences(sortedFriends)
 
 	// Store data in session for the message builder
 	s.Set(constants.SessionKeyFriends, pageFriends)
@@ -94,9 +72,20 @@ func (m *FriendsMenu) Show(event *events.ComponentInteractionCreate, s *session.
 	s.Set(constants.SessionKeyStart, start)
 	s.Set(constants.SessionKeyPaginationPage, page)
 	s.Set(constants.SessionKeyTotalItems, len(sortedFriends))
-	s.SetBuffer(constants.SessionKeyImageBuffer, buf)
 
-	m.layout.paginationManager.NavigateTo(event, s, m.page, "")
+	// Start streaming images
+	m.layout.imageStreamer.Stream(pagination.StreamRequest{
+		Event:    event,
+		Session:  s,
+		Page:     m.page,
+		URLFunc:  func() []string { return m.fetchFriendThumbnails(pageFriends) },
+		Columns:  constants.FriendsGridColumns,
+		Rows:     constants.FriendsGridRows,
+		MaxItems: constants.FriendsPerPage,
+		OnSuccess: func(buf *bytes.Buffer) {
+			s.SetBuffer(constants.SessionKeyImageBuffer, buf)
+		},
+	})
 }
 
 // handlePageNavigation processes navigation button clicks by calculating
@@ -125,55 +114,6 @@ func (m *FriendsMenu) handlePageNavigation(event *events.ComponentInteractionCre
 		m.layout.logger.Warn("Invalid friends viewer action", zap.String("action", string(action)))
 		m.layout.paginationManager.RespondWithError(event, "Invalid interaction.")
 	}
-}
-
-// fetchFriendData handles concurrent fetching of thumbnails and presence information.
-func (m *FriendsMenu) fetchFriendData(allFriends []types.ExtendedFriend) (map[uint64]string, map[uint64]*apiTypes.UserPresenceResponse) {
-	var wg sync.WaitGroup
-	var thumbnailMap map[uint64]string
-	presenceMap := make(map[uint64]*apiTypes.UserPresenceResponse)
-
-	wg.Add(2)
-
-	// Fetch thumbnails for all friends
-	go func() {
-		defer wg.Done()
-		// Create batch request for all friend avatars
-		requests := thumbnails.NewBatchThumbnailsBuilder()
-		for _, friend := range allFriends {
-			requests.AddRequest(apiTypes.ThumbnailRequest{
-				Type:      apiTypes.AvatarType,
-				TargetID:  friend.ID,
-				RequestID: strconv.FormatUint(friend.ID, 10),
-				Size:      apiTypes.Size150x150,
-				Format:    apiTypes.WEBP,
-			})
-		}
-
-		// Process thumbnails
-		thumbnailMap = m.layout.thumbnailFetcher.ProcessBatchThumbnails(requests)
-	}()
-
-	// Fetch presence information
-	go func() {
-		defer wg.Done()
-		friendIDs := make([]uint64, len(allFriends))
-		for i, friend := range allFriends {
-			friendIDs[i] = friend.ID
-		}
-
-		presences := m.layout.presenceFetcher.FetchPresences(friendIDs)
-
-		// Populate presence map with presence information
-		for _, presence := range presences {
-			presenceMap[presence.UserID] = presence
-		}
-	}()
-
-	// Wait for both goroutines to complete
-	wg.Wait()
-
-	return thumbnailMap, presenceMap
 }
 
 // sortFriendsByStatus sorts friends into categories based on their status:
@@ -207,4 +147,51 @@ func (m *FriendsMenu) sortFriendsByStatus(friends []types.ExtendedFriend, friend
 	}
 
 	return sortedFriends
+}
+
+// fetchPresences handles concurrent fetching of presence information.
+func (m *FriendsMenu) fetchPresences(allFriends []types.ExtendedFriend) map[uint64]*apiTypes.UserPresenceResponse {
+	presenceMap := make(map[uint64]*apiTypes.UserPresenceResponse)
+
+	// Extract friend IDs
+	friendIDs := make([]uint64, len(allFriends))
+	for i, friend := range allFriends {
+		friendIDs[i] = friend.ID
+	}
+
+	// Fetch and map presences
+	presences := m.layout.presenceFetcher.FetchPresences(friendIDs)
+	for _, presence := range presences {
+		presenceMap[presence.UserID] = presence
+	}
+
+	return presenceMap
+}
+
+// fetchFriendThumbnails fetches thumbnails for a slice of friends.
+func (m *FriendsMenu) fetchFriendThumbnails(friends []types.ExtendedFriend) []string {
+	// Create batch request for friend avatars
+	requests := thumbnails.NewBatchThumbnailsBuilder()
+	for _, friend := range friends {
+		requests.AddRequest(apiTypes.ThumbnailRequest{
+			Type:      apiTypes.AvatarType,
+			TargetID:  friend.ID,
+			RequestID: strconv.FormatUint(friend.ID, 10),
+			Size:      apiTypes.Size150x150,
+			Format:    apiTypes.WEBP,
+		})
+	}
+
+	// Process thumbnails
+	thumbnailMap := m.layout.thumbnailFetcher.ProcessBatchThumbnails(requests)
+
+	// Convert map to ordered slice of URLs
+	thumbnailURLs := make([]string, len(friends))
+	for i, friend := range friends {
+		if url, ok := thumbnailMap[friend.ID]; ok {
+			thumbnailURLs[i] = url
+		}
+	}
+
+	return thumbnailURLs
 }

@@ -46,7 +46,7 @@ recovery_timeout = 30000
 
 [common.retry]
 # Maximum retry attempts
-max_retries = 5
+max_retries = 3
 # Initial retry delay in milliseconds
 delay = 4000
 # Maximum retry delay in milliseconds

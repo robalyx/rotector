@@ -1,6 +1,7 @@
 package user
 
 import (
+	"bytes"
 	"strconv"
 
 	"github.com/disgoorg/disgo/discord"
@@ -61,39 +62,25 @@ func (m *GroupsMenu) Show(event *events.ComponentInteractionCreate, s *session.S
 	}
 	pageGroups := sortedGroups[start:end]
 
-	// Download and process group icons
-	thumbnailMap := m.fetchGroupsThumbnails(sortedGroups)
-
-	// Extract URLs for current page
-	pageThumbnailURLs := make([]string, len(pageGroups))
-	for i, group := range pageGroups {
-		if url, ok := thumbnailMap[group.Group.ID]; ok {
-			pageThumbnailURLs[i] = url
-		}
-	}
-
-	// Create grid image from icons
-	buf, err := utils.MergeImages(
-		m.layout.roAPI.GetClient(),
-		pageThumbnailURLs,
-		constants.GroupsGridColumns,
-		constants.GroupsGridRows,
-		constants.GroupsPerPage,
-	)
-	if err != nil {
-		m.layout.logger.Error("Failed to merge group images", zap.Error(err))
-		m.layout.paginationManager.RespondWithError(event, "Failed to process group images. Please try again.")
-		return
-	}
-
 	// Store data in session for the message builder
 	s.Set(constants.SessionKeyGroups, pageGroups)
 	s.Set(constants.SessionKeyStart, start)
 	s.Set(constants.SessionKeyPaginationPage, page)
 	s.Set(constants.SessionKeyTotalItems, len(sortedGroups))
-	s.SetBuffer(constants.SessionKeyImageBuffer, buf)
 
-	m.layout.paginationManager.NavigateTo(event, s, m.page, "")
+	// Start streaming images
+	m.layout.imageStreamer.Stream(pagination.StreamRequest{
+		Event:    event,
+		Session:  s,
+		Page:     m.page,
+		URLFunc:  func() []string { return m.fetchGroupThumbnails(pageGroups) },
+		Columns:  constants.GroupsGridColumns,
+		Rows:     constants.GroupsGridRows,
+		MaxItems: constants.GroupsPerPage,
+		OnSuccess: func(buf *bytes.Buffer) {
+			s.SetBuffer(constants.SessionKeyImageBuffer, buf)
+		},
+	})
 }
 
 // sortGroupsByStatus sorts groups into categories based on their status:
@@ -156,10 +143,9 @@ func (m *GroupsMenu) handlePageNavigation(event *events.ComponentInteractionCrea
 	}
 }
 
-// fetchGroupsThumbnails downloads icon images for all groups.
-// Returns a map of group IDs to their icon URLs.
-func (m *GroupsMenu) fetchGroupsThumbnails(groups []*apiTypes.UserGroupRoles) map[uint64]string {
-	// Create batch request for all group icons
+// fetchGroupThumbnails gets the thumbnail URLs for a list of groups.
+func (m *GroupsMenu) fetchGroupThumbnails(groups []*apiTypes.UserGroupRoles) []string {
+	// Create batch request for group icons
 	requests := thumbnails.NewBatchThumbnailsBuilder()
 	for _, group := range groups {
 		requests.AddRequest(apiTypes.ThumbnailRequest{
@@ -171,5 +157,16 @@ func (m *GroupsMenu) fetchGroupsThumbnails(groups []*apiTypes.UserGroupRoles) ma
 		})
 	}
 
-	return m.layout.thumbnailFetcher.ProcessBatchThumbnails(requests)
+	// Process thumbnails
+	thumbnailMap := m.layout.thumbnailFetcher.ProcessBatchThumbnails(requests)
+
+	// Convert map to ordered slice of URLs
+	thumbnailURLs := make([]string, len(groups))
+	for i, group := range groups {
+		if url, ok := thumbnailMap[group.Group.ID]; ok {
+			thumbnailURLs[i] = url
+		}
+	}
+
+	return thumbnailURLs
 }

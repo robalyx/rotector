@@ -1,6 +1,7 @@
 package user
 
 import (
+	"bytes"
 	"strconv"
 
 	"github.com/disgoorg/disgo/discord"
@@ -38,7 +39,6 @@ func NewOutfitsMenu(layout *Layout) *OutfitsMenu {
 }
 
 // Show prepares and displays the outfits interface for a specific page.
-// It loads outfit data and creates a grid of thumbnails.
 func (m *OutfitsMenu) Show(event *events.ComponentInteractionCreate, s *session.Session, page int) {
 	var user *types.FlaggedUser
 	s.GetInterface(constants.SessionKeyTarget, &user)
@@ -49,49 +49,33 @@ func (m *OutfitsMenu) Show(event *events.ComponentInteractionCreate, s *session.
 		return
 	}
 
-	outfits := user.Outfits
-
-	// Calculate page boundaries and get subset of outfits
+	// Calculate page boundaries
 	start := page * constants.OutfitsPerPage
 	end := start + constants.OutfitsPerPage
-	if end > len(outfits) {
-		end = len(outfits)
+	if end > len(user.Outfits) {
+		end = len(user.Outfits)
 	}
-	pageOutfits := outfits[start:end]
-
-	// Download and process outfit thumbnails
-	thumbnailMap := m.fetchOutfitThumbnails(outfits)
-
-	// Extract URLs for current page
-	thumbnailURLs := make([]string, len(pageOutfits))
-	for i, outfit := range pageOutfits {
-		if url, ok := thumbnailMap[outfit.ID]; ok {
-			thumbnailURLs[i] = url
-		}
-	}
-
-	// Create grid image from thumbnails
-	buf, err := utils.MergeImages(
-		m.layout.roAPI.GetClient(),
-		thumbnailURLs,
-		constants.OutfitGridColumns,
-		constants.OutfitGridRows,
-		constants.OutfitsPerPage,
-	)
-	if err != nil {
-		m.layout.logger.Error("Failed to merge outfit images", zap.Error(err))
-		m.layout.paginationManager.RespondWithError(event, "Failed to process outfit images. Please try again.")
-		return
-	}
+	pageOutfits := user.Outfits[start:end]
 
 	// Store data in session for the message builder
 	s.Set(constants.SessionKeyOutfits, pageOutfits)
 	s.Set(constants.SessionKeyStart, start)
 	s.Set(constants.SessionKeyPaginationPage, page)
-	s.Set(constants.SessionKeyTotalItems, len(outfits))
-	s.SetBuffer(constants.SessionKeyImageBuffer, buf)
+	s.Set(constants.SessionKeyTotalItems, len(user.Outfits))
 
-	m.layout.paginationManager.NavigateTo(event, s, m.page, "")
+	// Start streaming images
+	m.layout.imageStreamer.Stream(pagination.StreamRequest{
+		Event:    event,
+		Session:  s,
+		Page:     m.page,
+		URLFunc:  func() []string { return m.fetchOutfitThumbnails(pageOutfits) },
+		Columns:  constants.OutfitGridColumns,
+		Rows:     constants.OutfitGridRows,
+		MaxItems: constants.OutfitsPerPage,
+		OnSuccess: func(buf *bytes.Buffer) {
+			s.SetBuffer(constants.SessionKeyImageBuffer, buf)
+		},
+	})
 }
 
 // handlePageNavigation processes navigation button clicks by calculating
@@ -122,20 +106,30 @@ func (m *OutfitsMenu) handlePageNavigation(event *events.ComponentInteractionCre
 	}
 }
 
-// fetchOutfitThumbnails downloads thumbnail images for all outfits.
-// Returns a map of outfit IDs to their thumbnail URLs.
-func (m *OutfitsMenu) fetchOutfitThumbnails(outfits []apiTypes.Outfit) map[uint64]string {
-	// Create batch request for all outfit thumbnails
+// fetchOutfitThumbnails gets the thumbnail URLs for a list of outfits.
+func (m *OutfitsMenu) fetchOutfitThumbnails(outfits []apiTypes.Outfit) []string {
+	// Create batch request for outfit thumbnails
 	requests := thumbnails.NewBatchThumbnailsBuilder()
 	for _, outfit := range outfits {
 		requests.AddRequest(apiTypes.ThumbnailRequest{
 			Type:      apiTypes.OutfitType,
-			Size:      apiTypes.Size150x150,
-			RequestID: strconv.FormatUint(outfit.ID, 10),
 			TargetID:  outfit.ID,
+			RequestID: strconv.FormatUint(outfit.ID, 10),
+			Size:      apiTypes.Size150x150,
 			Format:    apiTypes.WEBP,
 		})
 	}
 
-	return m.layout.thumbnailFetcher.ProcessBatchThumbnails(requests)
+	// Process thumbnails
+	thumbnailMap := m.layout.thumbnailFetcher.ProcessBatchThumbnails(requests)
+
+	// Convert map to ordered slice of URLs
+	thumbnailURLs := make([]string, len(outfits))
+	for i, outfit := range outfits {
+		if url, ok := thumbnailMap[outfit.ID]; ok {
+			thumbnailURLs[i] = url
+		}
+	}
+
+	return thumbnailURLs
 }

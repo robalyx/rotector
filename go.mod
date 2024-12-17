@@ -16,7 +16,6 @@ require (
 	github.com/jaxron/axonet/middleware/retry v0.0.0-20241210091027-3b92c80609cf
 	github.com/jaxron/axonet/middleware/singleflight v0.0.0-20241210091027-3b92c80609cf
 	github.com/jaxron/roapi.go v0.0.0-20241207095928-5d33fcc38cf1
-	github.com/ozankasikci/go-image-merge v0.3.1
 	github.com/redis/rueidis v1.0.51
 	github.com/spf13/cast v1.7.0
 	github.com/spf13/cobra v1.8.1

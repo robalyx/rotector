@@ -148,8 +148,7 @@ func (m *Menu) handleModal(event *events.ModalSubmitInteractionCreate, s *sessio
 		s.GetInterface(constants.SessionKeyUserSettings, &userSettings)
 
 		// Stream AI response
-		ctx := context.Background()
-		responseChan := m.layout.chatHandler.StreamResponse(ctx, history.ToGenAIHistory(), string(userSettings.ChatModel), message)
+		responseChan := m.layout.chatHandler.StreamResponse(context.Background(), history.ToGenAIHistory(), string(userSettings.ChatModel), message)
 
 		// Add messages to history
 		userMessage := &ai.ChatMessage{

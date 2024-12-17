@@ -28,6 +28,7 @@ type Layout struct {
 	statusMenu        *StatusMenu
 	thumbnailFetcher  *fetcher.ThumbnailFetcher
 	presenceFetcher   *fetcher.PresenceFetcher
+	imageStreamer     *pagination.ImageStreamer
 	logger            *zap.Logger
 	dashboardLayout   interfaces.DashboardLayout
 	settingLayout     interfaces.SettingLayout
@@ -56,6 +57,7 @@ func New(
 		translator:        translator.New(app.RoAPI.GetClient()),
 		thumbnailFetcher:  fetcher.NewThumbnailFetcher(app.RoAPI, app.Logger),
 		presenceFetcher:   fetcher.NewPresenceFetcher(app.RoAPI, app.Logger),
+		imageStreamer:     pagination.NewImageStreamer(paginationManager, app.Logger, app.RoAPI.GetClient()),
 		logger:            app.Logger,
 		dashboardLayout:   dashboardLayout,
 		settingLayout:     settingLayout,

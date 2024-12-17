@@ -1,27 +1,17 @@
 package utils
 
 import (
-	"bytes"
-	"context"
 	"errors"
 	"fmt"
-	"image"
-	"image/png"
 	"math"
 	"regexp"
 	"sort"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
-	"github.com/jaxron/axonet/pkg/client"
-	gim "github.com/ozankasikci/go-image-merge"
-	"github.com/rotector/rotector/assets"
 	"github.com/rotector/rotector/internal/bot/constants"
-	"github.com/rotector/rotector/internal/common/client/fetcher"
 	"github.com/rotector/rotector/internal/common/queue"
-	"golang.org/x/image/webp"
 )
 
 // Regular expression to clean up excessive newlines in descriptions.
@@ -73,94 +63,6 @@ func FormatNumber(n uint64) string {
 		return fmt.Sprintf("%.1fM", float64(n)/1000000)
 	}
 	return fmt.Sprintf("%.1fB", float64(n)/1000000000)
-}
-
-// MergeImages combines multiple outfit thumbnails into a single grid image.
-// It downloads images concurrently and uses a placeholder for missing or failed downloads.
-// The grid dimensions are determined by the columns and rows parameters.
-func MergeImages(client *client.Client, thumbnailURLs []string, columns, rows, perPage int) (*bytes.Buffer, error) {
-	// Load placeholder image for missing or failed thumbnails
-	imageFile, err := assets.Images.Open("images/content_deleted.png")
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = imageFile.Close() }()
-
-	placeholderImg, _, err := image.Decode(imageFile)
-	if err != nil {
-		return nil, err
-	}
-
-	// Initialize grid with empty images
-	emptyImg := image.NewRGBA(image.Rect(0, 0, 150, 150))
-	grids := make([]*gim.Grid, perPage)
-	for i := range grids {
-		grids[i] = &gim.Grid{Image: emptyImg}
-	}
-
-	// Download and process outfit images concurrently using goroutines
-	var wg sync.WaitGroup
-	var mu sync.Mutex
-
-	for i, url := range thumbnailURLs {
-		// Ensure we don't exceed the perPage limit
-		if i >= perPage {
-			break
-		}
-
-		// Skip if the URL is empty
-		if url == "" {
-			continue
-		}
-
-		// Skip if the URL was in a different state
-		if url == fetcher.ThumbnailPlaceholder {
-			grids[i] = &gim.Grid{Image: placeholderImg}
-			continue
-		}
-
-		wg.Add(1)
-		go func(index int, imageURL string) {
-			defer wg.Done()
-
-			var img image.Image
-
-			// Download and decode WebP image, use placeholder on failure
-			resp, err := client.NewRequest().URL(imageURL).Do(context.Background())
-			if err != nil {
-				img = placeholderImg
-			} else {
-				defer resp.Body.Close()
-				decodedImg, err := webp.Decode(resp.Body)
-				if err != nil {
-					img = placeholderImg
-				} else {
-					img = decodedImg
-				}
-			}
-
-			// Thread-safe update of the grids slice
-			mu.Lock()
-			grids[index] = &gim.Grid{Image: img}
-			mu.Unlock()
-		}(i, url)
-	}
-
-	wg.Wait()
-
-	// Merge all images into a single grid
-	mergedImage, err := gim.New(grids, columns, rows).Merge()
-	if err != nil {
-		return nil, err
-	}
-
-	// Encode the final image as PNG
-	var buf bytes.Buffer
-	if err := png.Encode(&buf, mergedImage); err != nil {
-		return nil, err
-	}
-
-	return &buf, nil
 }
 
 // CensorString partially obscures text by replacing middle characters with 'X'.

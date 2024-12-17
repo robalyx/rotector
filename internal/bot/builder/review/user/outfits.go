@@ -14,8 +14,6 @@ import (
 )
 
 // OutfitsBuilder creates the visual layout for viewing a user's outfits.
-// It combines outfit information with thumbnails and supports pagination
-// through a grid of outfit previews.
 type OutfitsBuilder struct {
 	settings    *types.UserSetting
 	user        *types.FlaggedUser
@@ -24,6 +22,7 @@ type OutfitsBuilder struct {
 	page        int
 	total       int
 	imageBuffer *bytes.Buffer
+	isStreaming bool
 }
 
 // NewOutfitsBuilder creates a new outfits builder.
@@ -43,50 +42,51 @@ func NewOutfitsBuilder(s *session.Session) *OutfitsBuilder {
 		page:        s.GetInt(constants.SessionKeyPaginationPage),
 		total:       s.GetInt(constants.SessionKeyTotalItems),
 		imageBuffer: s.GetBuffer(constants.SessionKeyImageBuffer),
+		isStreaming: s.GetBool(constants.SessionKeyIsStreaming),
 	}
 }
 
 // Build creates a Discord message with a grid of outfit thumbnails and information.
-// Each outfit entry shows:
-// - Outfit name
-// - Thumbnail preview
-// Navigation buttons are disabled when at the start/end of the list.
 func (b *OutfitsBuilder) Build() *discord.MessageUpdateBuilder {
 	totalPages := (b.total + constants.OutfitsPerPage - 1) / constants.OutfitsPerPage
+	censor := b.settings.StreamerMode || b.settings.ReviewMode == types.TrainingReviewMode
 
 	// Create file attachment for the outfit thumbnails grid
 	fileName := fmt.Sprintf("outfits_%d_%d.png", b.user.ID, b.page)
 	file := discord.NewFile(fileName, "", b.imageBuffer)
 
-	// Build embed with user info and thumbnails
-	censor := b.settings.StreamerMode || b.settings.ReviewMode == types.TrainingReviewMode
+	// Build base embed with user info
 	embed := discord.NewEmbedBuilder().
 		SetTitle(fmt.Sprintf("User Outfits (Page %d/%d)", b.page+1, totalPages)).
-		SetDescription(fmt.Sprintf("```%s (%s)```",
+		SetDescription(fmt.Sprintf(
+			"```%s (%s)```",
 			utils.CensorString(b.user.Name, censor),
 			utils.CensorString(strconv.FormatUint(b.user.ID, 10), censor),
 		)).
 		SetImage("attachment://" + fileName).
 		SetColor(utils.GetMessageEmbedColor(b.settings.StreamerMode))
 
-	// Add fields for each outfit on the current page
+	// Add fields for each outfit
 	for i, outfit := range b.outfits {
 		embed.AddField(fmt.Sprintf("Outfit %d", b.start+i+1), outfit.Name, true)
 	}
 
-	// Add navigation buttons with proper disabled states
-	components := []discord.ContainerComponent{
-		discord.NewActionRow(
-			discord.NewSecondaryButton("◀️", string(constants.BackButtonCustomID)),
-			discord.NewSecondaryButton("⏮️", string(utils.ViewerFirstPage)).WithDisabled(b.page == 0),
-			discord.NewSecondaryButton("◀️", string(utils.ViewerPrevPage)).WithDisabled(b.page == 0),
-			discord.NewSecondaryButton("▶️", string(utils.ViewerNextPage)).WithDisabled(b.page == totalPages-1),
-			discord.NewSecondaryButton("⏭️", string(utils.ViewerLastPage)).WithDisabled(b.page == totalPages-1),
-		),
+	builder := discord.NewMessageUpdateBuilder().
+		SetEmbeds(embed.Build()).
+		SetFiles(file)
+
+	// Only add navigation components if not streaming
+	if !b.isStreaming {
+		builder.AddContainerComponents([]discord.ContainerComponent{
+			discord.NewActionRow(
+				discord.NewSecondaryButton("◀️", string(constants.BackButtonCustomID)),
+				discord.NewSecondaryButton("⏮️", string(utils.ViewerFirstPage)).WithDisabled(b.page == 0),
+				discord.NewSecondaryButton("◀️", string(utils.ViewerPrevPage)).WithDisabled(b.page == 0),
+				discord.NewSecondaryButton("▶️", string(utils.ViewerNextPage)).WithDisabled(b.page == totalPages-1),
+				discord.NewSecondaryButton("⏭️", string(utils.ViewerLastPage)).WithDisabled(b.page == totalPages-1),
+			),
+		}...)
 	}
 
-	return discord.NewMessageUpdateBuilder().
-		SetEmbeds(embed.Build()).
-		SetFiles(file).
-		AddContainerComponents(components...)
+	return builder
 }
