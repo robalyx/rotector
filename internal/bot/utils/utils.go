@@ -28,6 +28,14 @@ var (
 	ErrEndDateBeforeStartDate = errors.New("end date cannot be before start date")
 )
 
+// TruncateString truncates a string to a maximum length.
+func TruncateString(s string, maxLength int) string {
+	if len(s) > maxLength {
+		return s[:maxLength-3] + "..."
+	}
+	return s
+}
+
 // FormatString formats a string by trimming it, replacing backticks, and enclosing in markdown.
 func FormatString(s string) string {
 	s = multipleNewlinesRegex.ReplaceAllString(s, "\n")

@@ -334,10 +334,9 @@ func (b *ReviewBuilder) getDescription() string {
 		return constants.NotApplicable
 	}
 
-	// Format the description
+	// Prepare description
+	description = utils.TruncateString(description, 400)
 	description = utils.FormatString(description)
-
-	// Censor sensitive information in description if needed
 	description = utils.CensorStringsInText(
 		description,
 		b.settings.StreamerMode,
@@ -363,8 +362,9 @@ func (b *ReviewBuilder) getFlaggedContent() string {
 			content = append(content, "... and more")
 			break
 		}
-		normalized := utils.NormalizeString(item)
-		content = append(content, fmt.Sprintf("- `%s`", normalized))
+		newItem := utils.TruncateString(item, 100)
+		newItem = utils.NormalizeString(newItem)
+		content = append(content, fmt.Sprintf("- `%s`", newItem))
 	}
 
 	return strings.Join(content, "\n")

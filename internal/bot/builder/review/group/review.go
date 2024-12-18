@@ -266,10 +266,9 @@ func (b *ReviewBuilder) getDescription() string {
 		return constants.NotApplicable
 	}
 
-	// Format the description
+	// Prepare description
+	description = utils.TruncateString(description, 400)
 	description = utils.FormatString(description)
-
-	// Censor sensitive information in description
 	description = utils.CensorStringsInText(
 		description,
 		b.settings.StreamerMode,
@@ -288,7 +287,11 @@ func (b *ReviewBuilder) getShout() string {
 		return constants.NotApplicable
 	}
 
-	return utils.FormatString(b.group.Shout.Body)
+	// Prepare shout
+	shout := utils.TruncateString(b.group.Shout.Body, 400)
+	shout = utils.FormatString(shout)
+
+	return shout
 }
 
 // getReviewHistory returns the review history field for the embed.
