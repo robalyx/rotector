@@ -689,13 +689,13 @@ func (r *GroupModel) getNextToReview(ctx context.Context, model interface{}, sor
 		switch sortBy {
 		case types.ReviewSortByConfidence:
 			query.Order("confidence DESC")
+		case types.ReviewSortByLastUpdated:
+			query.Order("last_updated ASC")
 		case types.ReviewSortByReputation:
 			query.Order("reputation ASC")
 		case types.ReviewSortByRandom:
 			query.OrderExpr("RANDOM()")
-		default:
-			return fmt.Errorf("%w: %s", types.ErrInvalidSortBy, sortBy)
-		} //exhaustive:ignore
+		}
 
 		err := query.Limit(1).
 			For("UPDATE SKIP LOCKED").

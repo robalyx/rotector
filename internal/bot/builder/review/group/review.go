@@ -238,6 +238,9 @@ func (b *ReviewBuilder) buildComponents() []discord.ContainerComponent {
 				discord.NewStringSelectMenuOption("Selected by confidence", string(types.ReviewSortByConfidence)).
 					WithDefault(b.settings.GroupDefaultSort == types.ReviewSortByConfidence).
 					WithEmoji(discord.ComponentEmoji{Name: "🔍"}),
+				discord.NewStringSelectMenuOption("Selected by last updated time", string(types.ReviewSortByLastUpdated)).
+					WithDefault(b.settings.GroupDefaultSort == types.ReviewSortByLastUpdated).
+					WithEmoji(discord.ComponentEmoji{Name: "📅"}),
 				discord.NewStringSelectMenuOption("Selected by bad reputation", string(types.ReviewSortByReputation)).
 					WithDefault(b.settings.GroupDefaultSort == types.ReviewSortByReputation).
 					WithEmoji(discord.ComponentEmoji{Name: "👎"}),

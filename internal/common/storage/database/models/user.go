@@ -852,9 +852,7 @@ func (r *UserModel) getNextToReview(ctx context.Context, model interface{}, sort
 			query.Order("reputation ASC")
 		case types.ReviewSortByRandom:
 			query.OrderExpr("RANDOM()")
-		default:
-			return fmt.Errorf("%w: %s", types.ErrInvalidSortBy, sortBy)
-		} //exhaustive:ignore
+		}
 
 		err := query.Limit(1).
 			For("UPDATE SKIP LOCKED").

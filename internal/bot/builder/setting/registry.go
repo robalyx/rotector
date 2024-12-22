@@ -190,12 +190,14 @@ func (r *Registry) createGroupDefaultSortSetting() Setting {
 		Options: []types.SettingOption{
 			{Value: string(types.ReviewSortByRandom), Label: "Random", Description: "Selected by random", Emoji: "🔀"},
 			{Value: string(types.ReviewSortByConfidence), Label: "Confidence", Description: "Selected by confidence", Emoji: "🔍"},
+			{Value: string(types.ReviewSortByLastUpdated), Label: "Last Updated", Description: "Selected by last updated time", Emoji: "📅"},
 			{Value: string(types.ReviewSortByReputation), Label: "Bad Reputation", Description: "Selected by bad reputation", Emoji: "👎"},
 		},
 		Validators: []Validator{
 			validateEnum([]string{
 				string(types.ReviewSortByRandom),
 				string(types.ReviewSortByConfidence),
+				string(types.ReviewSortByLastUpdated),
 				string(types.ReviewSortByReputation),
 			}),
 		},
