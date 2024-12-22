@@ -44,6 +44,19 @@ func FormatString(s string) string {
 	return fmt.Sprintf("```\n%s\n```", s)
 }
 
+// FormatIDs formats a slice of user IDs into a readable string with mentions.
+func FormatIDs(ids []uint64) string {
+	if len(ids) == 0 {
+		return "None"
+	}
+
+	mentions := make([]string, len(ids))
+	for i, id := range ids {
+		mentions[i] = fmt.Sprintf("<@%d>", id)
+	}
+	return strings.Join(mentions, ", ")
+}
+
 // NormalizeString sanitizes text by replacing newlines with spaces and removing backticks
 // to prevent Discord markdown formatting issues.
 func NormalizeString(s string) string {

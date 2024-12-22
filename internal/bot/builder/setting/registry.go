@@ -6,8 +6,8 @@ import (
 	"strconv"
 
 	"github.com/rotector/rotector/internal/bot/constants"
+	"github.com/rotector/rotector/internal/bot/utils"
 	"github.com/rotector/rotector/internal/common/storage/database/types"
-	"github.com/rotector/rotector/internal/common/utils"
 )
 
 // Validation errors.
@@ -394,7 +394,15 @@ func (r *Registry) createReviewerIDsSetting() Setting {
 		DefaultValue: []uint64{},
 		Validators:   []Validator{validateDiscordID},
 		ValueGetter: func(_ *types.UserSetting, bs *types.BotSetting) string {
-			return utils.FormatIDs(bs.ReviewerIDs)
+			if len(bs.ReviewerIDs) == 0 {
+				return "No reviewers set"
+			}
+			// Show only first 10 IDs
+			displayIDs := utils.FormatIDs(bs.ReviewerIDs)
+			if len(bs.ReviewerIDs) > 10 {
+				displayIDs += fmt.Sprintf("\n...and %d more", len(bs.ReviewerIDs)-10)
+			}
+			return displayIDs
 		},
 		ValueUpdater: func(value string, _ *types.UserSetting, bs *types.BotSetting) error {
 			id, err := strconv.ParseUint(value, 10, 64)
@@ -427,7 +435,15 @@ func (r *Registry) createAdminIDsSetting() Setting {
 		DefaultValue: []uint64{},
 		Validators:   []Validator{validateDiscordID},
 		ValueGetter: func(_ *types.UserSetting, bs *types.BotSetting) string {
-			return utils.FormatIDs(bs.AdminIDs)
+			if len(bs.AdminIDs) == 0 {
+				return "No admins set"
+			}
+			// Show only first 10 IDs
+			displayIDs := utils.FormatIDs(bs.AdminIDs)
+			if len(bs.AdminIDs) > 10 {
+				displayIDs += fmt.Sprintf("\n...and %d more", len(bs.AdminIDs)-10)
+			}
+			return displayIDs
 		},
 		ValueUpdater: func(value string, _ *types.UserSetting, bs *types.BotSetting) error {
 			id, err := strconv.ParseUint(value, 10, 64)
