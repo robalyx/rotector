@@ -1,6 +1,8 @@
 package setting
 
 import (
+	"sort"
+
 	"github.com/disgoorg/disgo/discord"
 	"github.com/rotector/rotector/internal/bot/constants"
 	"github.com/rotector/rotector/internal/bot/core/session"
@@ -31,11 +33,19 @@ func NewUserSettingsBuilder(s *session.Session, r *Registry) *UserSettingsBuilde
 // Build creates a Discord message with the current settings displayed in an embed
 // and adds select menus for changing each setting.
 func (b *UserSettingsBuilder) Build() *discord.MessageUpdateBuilder {
-	// Create base options
-	options := make([]discord.StringSelectMenuOption, 0)
+	// Get all settings keys and sort them
+	keys := make([]string, 0, len(b.registry.UserSettings))
+	for key := range b.registry.UserSettings {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
 
-	// Add options for each user setting
-	for _, setting := range b.registry.UserSettings {
+	// Create base options
+	options := make([]discord.StringSelectMenuOption, 0, len(b.registry.UserSettings))
+
+	// Add options for each user setting in alphabetical order
+	for _, key := range keys {
+		setting := b.registry.UserSettings[key]
 		option := discord.NewStringSelectMenuOption(
 			"Change "+setting.Name,
 			setting.Key,
@@ -48,7 +58,8 @@ func (b *UserSettingsBuilder) Build() *discord.MessageUpdateBuilder {
 		SetTitle("User Settings")
 
 	// Add fields for each setting
-	for _, setting := range b.registry.UserSettings {
+	for _, key := range keys {
+		setting := b.registry.UserSettings[key]
 		value := setting.ValueGetter(b.settings, b.botSettings)
 		embed.AddField(setting.Name, value, true)
 	}

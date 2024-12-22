@@ -1,6 +1,8 @@
 package setting
 
 import (
+	"sort"
+
 	"github.com/disgoorg/disgo/discord"
 	"github.com/rotector/rotector/internal/bot/constants"
 	"github.com/rotector/rotector/internal/bot/core/session"
@@ -30,8 +32,16 @@ func (b *BotSettingsBuilder) Build() *discord.MessageUpdateBuilder {
 	embed := discord.NewEmbedBuilder().
 		SetTitle("Bot Settings")
 
+	// Get all settings keys and sort them
+	keys := make([]string, 0, len(b.registry.BotSettings))
+	for key := range b.registry.BotSettings {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+
 	// Add fields for each setting
-	for _, setting := range b.registry.BotSettings {
+	for _, key := range keys {
+		setting := b.registry.BotSettings[key]
 		value := setting.ValueGetter(nil, b.settings)
 		embed.AddField(setting.Name, value, false)
 	}
@@ -39,8 +49,9 @@ func (b *BotSettingsBuilder) Build() *discord.MessageUpdateBuilder {
 	embed.SetColor(constants.DefaultEmbedColor)
 
 	// Add interactive components for changing settings
-	options := make([]discord.StringSelectMenuOption, 0)
-	for _, setting := range b.registry.BotSettings {
+	options := make([]discord.StringSelectMenuOption, 0, len(b.registry.BotSettings))
+	for _, key := range keys {
+		setting := b.registry.BotSettings[key]
 		option := discord.NewStringSelectMenuOption(
 			"Change "+setting.Name,
 			setting.Key,
