@@ -68,12 +68,14 @@ func (m *UpdateMenu) handleSettingChange(event *events.ComponentInteractionCreat
 
 	// Validate the new value
 	if err := m.validateSettingValue(s, setting, option); err != nil {
+		m.layout.logger.Error("Failed to validate setting value", zap.Error(err))
 		m.layout.paginationManager.RespondWithError(event, err.Error())
 		return
 	}
 
 	// Update the setting
 	if err := m.updateSetting(s, setting, option); err != nil {
+		m.layout.logger.Error("Failed to update setting", zap.Error(err))
 		m.layout.paginationManager.RespondWithError(event, "Failed to update setting")
 		return
 	}
@@ -183,12 +185,14 @@ func (m *UpdateMenu) handleSettingModal(event *events.ModalSubmitInteractionCrea
 
 	// Validate the input using the setting's validators
 	if err := m.validateSettingValue(s, setting, input); err != nil {
+		m.layout.logger.Error("Failed to validate setting value", zap.Error(err))
 		m.layout.paginationManager.RespondWithError(event, err.Error())
 		return
 	}
 
 	// Update the setting using ValueUpdater
 	if err := m.updateSetting(s, setting, input); err != nil {
+		m.layout.logger.Error("Failed to update setting", zap.Error(err))
 		m.layout.paginationManager.RespondWithError(event, "Failed to update setting")
 		return
 	}

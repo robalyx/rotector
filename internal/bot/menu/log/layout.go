@@ -62,9 +62,9 @@ func (l *Layout) ResetFilters(s *session.Session) {
 	s.Set(constants.SessionKeyActivityTypeFilter, types.ActivityTypeAll)
 	s.Set(constants.SessionKeyDateRangeStartFilter, time.Time{})
 	s.Set(constants.SessionKeyDateRangeEndFilter, time.Time{})
-	s.Set(constants.SessionKeyCursor, nil)
-	s.Set(constants.SessionKeyNextCursor, nil)
-	s.Set(constants.SessionKeyPrevCursors, []*types.LogCursor{})
+	s.Set(constants.SessionKeyLogCursor, nil)
+	s.Set(constants.SessionKeyLogNextCursor, nil)
+	s.Set(constants.SessionKeyLogPrevCursors, []*types.LogCursor{})
 	s.Set(constants.SessionKeyHasNextPage, false)
 	s.Set(constants.SessionKeyHasPrevPage, false)
 }

@@ -58,9 +58,7 @@ func newRootCmd() *cobra.Command {
 	return rootCmd
 }
 
-// newAIWorkerCmd creates subcommands for AI-based content analysis:
-// - friend: analyzes user friend networks
-// - member: analyzes group members.
+// newAIWorkerCmd creates subcommands for AI-based content analysis.
 func newAIWorkerCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   AIWorker,
@@ -90,10 +88,7 @@ func newAIWorkerCmd() *cobra.Command {
 	return cmd
 }
 
-// newPurgeWorkerCmd creates subcommands for data cleanup:
-// - banned: removes banned users
-// - cleared: removes old cleared users
-// - tracking: removes stale tracking data.
+// newPurgeWorkerCmd creates subcommands for data cleanup.
 func newPurgeWorkerCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   PurgeWorker,

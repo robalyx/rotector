@@ -2,6 +2,8 @@ package models
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"fmt"
 	"time"
 
@@ -176,60 +178,84 @@ func (r *GroupModel) GetClearedGroupsCount(ctx context.Context) (int, error) {
 	return count, nil
 }
 
-// GetGroupByID retrieves a group from any group table by their ID.
-// It checks all group tables (flagged, confirmed, cleared, locked) and returns the group with their status.
-func (r *GroupModel) GetGroupByID(ctx context.Context, groupID uint64, fields types.GroupFields) (*types.ConfirmedGroup, error) {
-	// Try each group table in order
-	tables := []struct {
-		model interface{}
-		name  string
-	}{
-		{(*types.FlaggedGroup)(nil), "flagged_groups"},
-		{(*types.ConfirmedGroup)(nil), "confirmed_groups"},
-		{(*types.ClearedGroup)(nil), "cleared_groups"},
-		{(*types.LockedGroup)(nil), "locked_groups"},
-	}
+// GetGroupByID retrieves a group by its ID from any of the group tables.
+func (r *GroupModel) GetGroupByID(ctx context.Context, groupID uint64, fields types.GroupFields) (*types.ReviewGroup, error) {
+	var reviewGroup *types.ReviewGroup
 
-	// Build query with selected fields
-	columns := fields.Columns()
-	if len(columns) == 0 {
-		columns = []string{"*"} // Select all if no fields specified
-	}
+	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+		// Map of model types to their status
+		modelTypes := map[interface{}]types.GroupType{
+			new(types.FlaggedGroup):   types.GroupTypeFlagged,
+			new(types.ConfirmedGroup): types.GroupTypeConfirmed,
+			new(types.ClearedGroup):   types.GroupTypeCleared,
+			new(types.LockedGroup):    types.GroupTypeLocked,
+		}
 
-	// Try each table until we find the group
-	for _, table := range tables {
-		var group types.ConfirmedGroup
-		err := r.db.NewSelect().
-			Model(table.model).
-			ModelTableExpr(table.name).
-			Column(columns...).
-			Where("id = ?", groupID).
-			Scan(ctx, &group)
+		// Build query with selected fields
+		columns := fields.Columns()
 
-		if err == nil {
-			// Update last viewed timestamp
-			_, err = r.db.NewUpdate().
-				Model(table.model).
-				ModelTableExpr(table.name).
-				Set("last_viewed = ?", time.Now()).
+		// Try each model type until we find the group
+		for model, status := range modelTypes {
+			err := tx.NewSelect().
+				Model(model).
+				Column(columns...).
+				Where("id = ?", groupID).
+				For("UPDATE SKIP LOCKED").
+				Scan(ctx, model)
+			if err != nil {
+				if errors.Is(err, sql.ErrNoRows) {
+					continue
+				}
+				r.logger.Error("Failed to get group by ID",
+					zap.Error(err),
+					zap.Uint64("groupID", groupID),
+					zap.String("status", string(status)))
+				continue
+			}
+
+			now := time.Now()
+
+			// Update last viewed timestamp within the transaction
+			_, err = tx.NewUpdate().
+				Model(model).
+				Set("last_viewed = ?", now).
 				Where("id = ?", groupID).
 				Exec(ctx)
 			if err != nil {
 				r.logger.Error("Failed to update last_viewed timestamp",
 					zap.Error(err),
-					zap.Uint64("group_id", groupID))
+					zap.Uint64("groupID", groupID))
+				return err
 			}
 
-			return &group, nil
+			// Extract the base Group data and additional fields
+			reviewGroup = &types.ReviewGroup{}
+			switch v := model.(type) {
+			case *types.FlaggedGroup:
+				reviewGroup.Group = v.Group
+			case *types.ConfirmedGroup:
+				reviewGroup.Group = v.Group
+				reviewGroup.VerifiedAt = v.VerifiedAt
+			case *types.ClearedGroup:
+				reviewGroup.Group = v.Group
+				reviewGroup.ClearedAt = v.ClearedAt
+			case *types.LockedGroup:
+				reviewGroup.Group = v.Group
+				reviewGroup.LockedAt = v.LockedAt
+			}
+
+			reviewGroup.Status = status
+			reviewGroup.LastViewed = now
+			return nil
 		}
 
-		r.logger.Error("Error querying group table",
-			zap.Error(err),
-			zap.String("table", table.name),
-			zap.Uint64("group_id", groupID))
+		return types.ErrGroupNotFound
+	})
+	if err != nil {
+		return nil, err
 	}
 
-	return nil, types.ErrGroupNotFound
+	return reviewGroup, nil
 }
 
 // GetGroupsByIDs retrieves specified group information for a list of group IDs.
@@ -591,7 +617,7 @@ func (r *GroupModel) GetGroupToScan(ctx context.Context) (*types.Group, error) {
 }
 
 // GetGroupToReview finds a group to review based on the sort method and target mode.
-func (r *GroupModel) GetGroupToReview(ctx context.Context, sortBy types.SortBy, targetMode types.ReviewTargetMode) (*types.ReviewGroup, error) {
+func (r *GroupModel) GetGroupToReview(ctx context.Context, sortBy types.ReviewSortBy, targetMode types.ReviewTargetMode) (*types.ReviewGroup, error) {
 	// Define models in priority order based on target mode
 	var models []interface{}
 	switch targetMode {
@@ -664,7 +690,7 @@ func (r *GroupModel) convertToReviewGroup(group interface{}) (*types.ReviewGroup
 }
 
 // getNextToReview handles the common logic for getting the next item to review.
-func (r *GroupModel) getNextToReview(ctx context.Context, model interface{}, sortBy types.SortBy) (interface{}, error) {
+func (r *GroupModel) getNextToReview(ctx context.Context, model interface{}, sortBy types.ReviewSortBy) (interface{}, error) {
 	var result interface{}
 	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
 		query := tx.NewSelect().
@@ -673,11 +699,11 @@ func (r *GroupModel) getNextToReview(ctx context.Context, model interface{}, sor
 
 		// Apply sort order
 		switch sortBy {
-		case types.SortByConfidence:
+		case types.ReviewSortByConfidence:
 			query.Order("confidence DESC")
-		case types.SortByReputation:
+		case types.ReviewSortByReputation:
 			query.Order("reputation ASC")
-		case types.SortByRandom:
+		case types.ReviewSortByRandom:
 			query.OrderExpr("RANDOM()")
 		default:
 			return fmt.Errorf("%w: %s", types.ErrInvalidSortBy, sortBy)

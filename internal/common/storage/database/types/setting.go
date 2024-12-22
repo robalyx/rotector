@@ -1,14 +1,20 @@
 package types
 
+import (
+	"github.com/disgoorg/snowflake/v2"
+)
+
 // UserSetting stores user-specific preferences.
 type UserSetting struct {
-	UserID           uint64           `bun:",pk"`
-	StreamerMode     bool             `bun:",notnull"`
-	UserDefaultSort  SortBy           `bun:",notnull"`
-	GroupDefaultSort SortBy           `bun:",notnull"`
-	ChatModel        ChatModel        `bun:",notnull"`
-	ReviewMode       ReviewMode       `bun:",notnull"`
-	ReviewTargetMode ReviewTargetMode `bun:",notnull"`
+	UserID             snowflake.ID     `bun:",pk"`
+	StreamerMode       bool             `bun:",notnull"`
+	UserDefaultSort    ReviewSortBy     `bun:",notnull"`
+	GroupDefaultSort   ReviewSortBy     `bun:",notnull"`
+	AppealDefaultSort  AppealSortBy     `bun:",notnull"`
+	AppealStatusFilter AppealFilterBy   `bun:",notnull"`
+	ChatModel          ChatModel        `bun:",notnull"`
+	ReviewMode         ReviewMode       `bun:",notnull"`
+	ReviewTargetMode   ReviewTargetMode `bun:",notnull"`
 }
 
 // BotSetting stores bot-wide configuration options.

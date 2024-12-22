@@ -20,6 +20,7 @@ import (
 	"github.com/rotector/rotector/internal/bot/core/pagination"
 	"github.com/rotector/rotector/internal/bot/core/session"
 	"github.com/rotector/rotector/internal/bot/interfaces"
+	"github.com/rotector/rotector/internal/bot/menu/appeal"
 	"github.com/rotector/rotector/internal/bot/menu/chat"
 	"github.com/rotector/rotector/internal/bot/menu/dashboard"
 	"github.com/rotector/rotector/internal/bot/menu/log"
@@ -42,9 +43,6 @@ type Bot struct {
 	sessionManager    *session.Manager
 	paginationManager *pagination.Manager
 	dashboardLayout   interfaces.DashboardLayout
-	userReviewLayout  interfaces.UserReviewLayout
-	settingLayout     interfaces.SettingLayout
-	logLayout         interfaces.LogLayout
 }
 
 // New initializes a Bot instance by creating all required managers and layouts.
@@ -66,6 +64,7 @@ func New(app *setup.App) (*Bot, error) {
 	userReviewLayout := userReview.New(app, sessionManager, paginationManager, dashboardLayout, settingLayout, logLayout, chatLayout)
 	groupReviewLayout := groupReview.New(app, sessionManager, paginationManager, dashboardLayout, settingLayout, logLayout, chatLayout)
 	queueLayout := queue.New(app, sessionManager, paginationManager, dashboardLayout, userReviewLayout)
+	appealLayout := appeal.New(app, sessionManager, paginationManager, dashboardLayout, userReviewLayout)
 
 	// Cross-link layouts to enable navigation between different sections
 	dashboardLayout.SetLogLayout(logLayout)
@@ -74,6 +73,7 @@ func New(app *setup.App) (*Bot, error) {
 	dashboardLayout.SetGroupReviewLayout(groupReviewLayout)
 	dashboardLayout.SetQueueLayout(queueLayout)
 	dashboardLayout.SetChatLayout(chatLayout)
+	dashboardLayout.SetAppealLayout(appealLayout)
 
 	// Initialize bot structure with all components
 	b := &Bot{
@@ -82,9 +82,6 @@ func New(app *setup.App) (*Bot, error) {
 		sessionManager:    sessionManager,
 		paginationManager: paginationManager,
 		dashboardLayout:   dashboardLayout,
-		userReviewLayout:  userReviewLayout,
-		settingLayout:     settingLayout,
-		logLayout:         logLayout,
 	}
 
 	// Configure Discord client with required gateway intents and event handlers
@@ -338,7 +335,7 @@ func (b *Bot) handleModalSubmit(event *events.ModalSubmitInteractionCreate) {
 // validateAndGetSession retrieves or creates a session for the given user and validates its state.
 func (b *Bot) validateAndGetSession(event interfaces.CommonEvent, userID snowflake.ID) (*session.Session, bool) {
 	// Get or create user session
-	s, err := b.sessionManager.GetOrCreateSession(context.Background(), uint64(userID))
+	s, err := b.sessionManager.GetOrCreateSession(context.Background(), userID)
 	if err != nil {
 		if errors.Is(err, session.ErrSessionLimitReached) {
 			b.paginationManager.RespondWithError(event, "Session limit reached. Please try again later.")

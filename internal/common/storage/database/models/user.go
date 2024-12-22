@@ -2,6 +2,8 @@ package models
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"fmt"
 	"time"
 
@@ -80,7 +82,7 @@ func (r *UserModel) SaveFlaggedUsers(ctx context.Context, flaggedUsers map[uint6
 // ConfirmUser moves a user from flagged_users to confirmed_users.
 // This happens when a moderator confirms that a user is inappropriate.
 // The user's groups and friends are tracked to help identify related users.
-func (r *UserModel) ConfirmUser(ctx context.Context, user *types.FlaggedUser) error {
+func (r *UserModel) ConfirmUser(ctx context.Context, user *types.ReviewUser) error {
 	return r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
 		confirmedUser := &types.ConfirmedUser{
 			User:       user.User,
@@ -129,7 +131,7 @@ func (r *UserModel) ConfirmUser(ctx context.Context, user *types.FlaggedUser) er
 
 // ClearUser moves a user from flagged_users to cleared_users.
 // This happens when a moderator determines that a user was incorrectly flagged.
-func (r *UserModel) ClearUser(ctx context.Context, user *types.FlaggedUser) error {
+func (r *UserModel) ClearUser(ctx context.Context, user *types.ReviewUser) error {
 	return r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
 		clearedUser := &types.ClearedUser{
 			User:      user.User,
@@ -175,6 +177,17 @@ func (r *UserModel) ClearUser(ctx context.Context, user *types.FlaggedUser) erro
 			Exec(ctx)
 		if err != nil {
 			r.logger.Error("Failed to delete user from flagged_users",
+				zap.Error(err),
+				zap.Uint64("userID", user.ID))
+			return err
+		}
+
+		// Delete user from confirmed_users table
+		_, err = tx.NewDelete().Model((*types.ConfirmedUser)(nil)).
+			Where("id = ?", user.ID).
+			Exec(ctx)
+		if err != nil {
+			r.logger.Error("Failed to delete user from confirmed_users",
 				zap.Error(err),
 				zap.Uint64("userID", user.ID))
 			return err
@@ -334,56 +347,95 @@ func (r *UserModel) CheckExistingUsers(ctx context.Context, userIDs []uint64) (m
 	return result, nil
 }
 
-// GetUserByID retrieves a user from any user table by their ID.
-// It checks all user tables (flagged, confirmed, cleared, banned) and returns the user with their status.
-func (r *UserModel) GetUserByID(ctx context.Context, userID uint64, fields types.UserFields) (*types.ConfirmedUser, error) {
-	// Try each user table in order
-	tables := []struct {
-		model interface{}
-		name  string
-	}{
-		{(*types.FlaggedUser)(nil), "flagged_users"},
-		{(*types.ConfirmedUser)(nil), "confirmed_users"},
-		{(*types.ClearedUser)(nil), "cleared_users"},
-		{(*types.BannedUser)(nil), "banned_users"},
-	}
+// GetUserByID retrieves a user by their ID from any of the user tables.
+// If review is true, it ensures the user hasn't been viewed in the last 10 minutes
+// and updates their last_viewed timestamp.
+func (r *UserModel) GetUserByID(ctx context.Context, userID uint64, fields types.UserFields, review bool) (*types.ReviewUser, error) {
+	var reviewUser *types.ReviewUser
 
-	// Build query with selected fields
-	columns := fields.Columns()
-
-	// Try each table until we find the user
-	for _, table := range tables {
-		var user types.ConfirmedUser
-		err := r.db.NewSelect().
-			Model(table.model).
-			ModelTableExpr(table.name).
-			Column(columns...).
-			Where("id = ?", userID).
-			Scan(ctx, &user)
-
-		if err == nil {
-			// Update last viewed timestamp
-			_, err = r.db.NewUpdate().
-				Model(table.model).
-				ModelTableExpr(table.name).
-				Set("last_viewed = ?", time.Now()).
-				Where("id = ?", userID).
-				Exec(ctx)
-			if err != nil {
-				r.logger.Error("Failed to update last_viewed timestamp",
-					zap.Error(err),
-					zap.Uint64("user_id", userID))
-			}
-			return &user, nil
+	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+		// Map of model types to their status
+		modelTypes := map[interface{}]types.UserType{
+			new(types.FlaggedUser):   types.UserTypeFlagged,
+			new(types.ConfirmedUser): types.UserTypeConfirmed,
+			new(types.ClearedUser):   types.UserTypeCleared,
+			new(types.BannedUser):    types.UserTypeBanned,
 		}
 
-		r.logger.Error("Error querying user table",
-			zap.Error(err),
-			zap.String("table", table.name),
-			zap.Uint64("user_id", userID))
+		// Build query with selected fields
+		columns := fields.Columns()
+
+		// Try each model type until we find the user
+		for model, status := range modelTypes {
+			query := tx.NewSelect().
+				Model(model).
+				Column(columns...).
+				Where("id = ?", userID)
+
+			// Add last_viewed check and row locking if reviewing
+			if review {
+				query.Where("last_viewed < NOW() - INTERVAL '10 minutes'")
+				query.For("UPDATE SKIP LOCKED")
+			}
+
+			err := query.Scan(ctx, model)
+			if err != nil {
+				if errors.Is(err, sql.ErrNoRows) {
+					continue
+				}
+
+				r.logger.Error("Failed to get user by ID",
+					zap.Error(err),
+					zap.Uint64("userID", userID),
+					zap.String("status", string(status)))
+				continue
+			}
+
+			now := time.Now()
+
+			// Update last viewed timestamp if reviewing
+			if review {
+				_, err = tx.NewUpdate().
+					Model(model).
+					Set("last_viewed = ?", now).
+					Where("id = ?", userID).
+					Exec(ctx)
+				if err != nil {
+					r.logger.Error("Failed to update last_viewed timestamp",
+						zap.Error(err),
+						zap.Uint64("user_id", userID))
+					return err
+				}
+			}
+
+			// Extract the base User data and additional fields
+			reviewUser = &types.ReviewUser{}
+			switch v := model.(type) {
+			case *types.FlaggedUser:
+				reviewUser.User = v.User
+			case *types.ConfirmedUser:
+				reviewUser.User = v.User
+				reviewUser.VerifiedAt = v.VerifiedAt
+			case *types.ClearedUser:
+				reviewUser.User = v.User
+				reviewUser.ClearedAt = v.ClearedAt
+			case *types.BannedUser:
+				reviewUser.User = v.User
+				reviewUser.PurgedAt = v.PurgedAt
+			}
+
+			reviewUser.Status = status
+			reviewUser.LastViewed = now
+			return nil
+		}
+
+		return types.ErrUserNotFound
+	})
+	if err != nil {
+		return nil, err
 	}
 
-	return nil, types.ErrUserNotFound
+	return reviewUser, nil
 }
 
 // GetUsersByIDs retrieves specified user information for a list of user IDs.
@@ -746,7 +798,7 @@ func (r *UserModel) GetUserToScan(ctx context.Context) (*types.User, error) {
 }
 
 // GetUserToReview finds a user to review based on the sort method and target mode.
-func (r *UserModel) GetUserToReview(ctx context.Context, sortBy types.SortBy, targetMode types.ReviewTargetMode) (*types.ReviewUser, error) {
+func (r *UserModel) GetUserToReview(ctx context.Context, sortBy types.ReviewSortBy, targetMode types.ReviewTargetMode) (*types.ReviewUser, error) {
 	// Define models in priority order based on target mode
 	var models []interface{}
 	switch targetMode {
@@ -819,7 +871,7 @@ func (r *UserModel) convertToReviewUser(user interface{}) (*types.ReviewUser, er
 }
 
 // getNextToReview handles the common logic for getting the next item to review.
-func (r *UserModel) getNextToReview(ctx context.Context, model interface{}, sortBy types.SortBy) (interface{}, error) {
+func (r *UserModel) getNextToReview(ctx context.Context, model interface{}, sortBy types.ReviewSortBy) (interface{}, error) {
 	var result interface{}
 	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
 		query := tx.NewSelect().
@@ -828,13 +880,13 @@ func (r *UserModel) getNextToReview(ctx context.Context, model interface{}, sort
 
 		// Apply sort order
 		switch sortBy {
-		case types.SortByConfidence:
+		case types.ReviewSortByConfidence:
 			query.Order("confidence DESC")
-		case types.SortByLastUpdated:
+		case types.ReviewSortByLastUpdated:
 			query.Order("last_updated ASC")
-		case types.SortByReputation:
+		case types.ReviewSortByReputation:
 			query.Order("reputation ASC")
-		case types.SortByRandom:
+		case types.ReviewSortByRandom:
 			query.OrderExpr("RANDOM()")
 		default:
 			return fmt.Errorf("%w: %s", types.ErrInvalidSortBy, sortBy)

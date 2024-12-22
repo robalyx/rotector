@@ -55,7 +55,7 @@ func (m *MainMenu) Show(event interfaces.CommonEvent, s *session.Session) {
 
 	// Get cursor from session if it exists
 	var cursor *types.LogCursor
-	s.GetInterface(constants.SessionKeyCursor, &cursor)
+	s.GetInterface(constants.SessionKeyLogCursor, &cursor)
 
 	// Fetch filtered logs from database
 	logs, nextCursor, err := m.layout.db.UserActivity().GetLogs(
@@ -72,23 +72,21 @@ func (m *MainMenu) Show(event interfaces.CommonEvent, s *session.Session) {
 
 	// If this is the first page (cursor is nil), create a cursor from the first log
 	if cursor == nil && len(logs) > 0 {
+		log := logs[0]
 		cursor = &types.LogCursor{
-			Timestamp: logs[0].ActivityTimestamp,
-			Sequence:  logs[0].Sequence,
+			Timestamp: log.ActivityTimestamp,
+			Sequence:  log.Sequence,
 		}
 	}
 
 	// Get previous cursors array
 	var prevCursors []*types.LogCursor
-	s.GetInterface(constants.SessionKeyPrevCursors, &prevCursors)
-	if prevCursors == nil {
-		prevCursors = make([]*types.LogCursor, 0)
-	}
+	s.GetInterface(constants.SessionKeyLogPrevCursors, &prevCursors)
 
 	// Store results and cursor in session
 	s.Set(constants.SessionKeyLogs, logs)
-	s.Set(constants.SessionKeyCursor, cursor)
-	s.Set(constants.SessionKeyNextCursor, nextCursor)
+	s.Set(constants.SessionKeyLogCursor, cursor)
+	s.Set(constants.SessionKeyLogNextCursor, nextCursor)
 	s.Set(constants.SessionKeyHasNextPage, nextCursor != nil)
 	s.Set(constants.SessionKeyHasPrevPage, len(prevCursors) > 0)
 
@@ -216,30 +214,31 @@ func (m *MainMenu) handlePagination(event *events.ComponentInteractionCreate, s 
 	case utils.ViewerNextPage:
 		if s.GetBool(constants.SessionKeyHasNextPage) {
 			var cursor *types.LogCursor
-			s.GetInterface(constants.SessionKeyCursor, &cursor)
+			s.GetInterface(constants.SessionKeyLogCursor, &cursor)
 			var nextCursor *types.LogCursor
-			s.GetInterface(constants.SessionKeyNextCursor, &nextCursor)
+			s.GetInterface(constants.SessionKeyLogNextCursor, &nextCursor)
 			var prevCursors []*types.LogCursor
-			s.GetInterface(constants.SessionKeyPrevCursors, &prevCursors)
+			s.GetInterface(constants.SessionKeyLogPrevCursors, &prevCursors)
 
-			s.Set(constants.SessionKeyPrevCursors, append(prevCursors, cursor))
-			s.Set(constants.SessionKeyCursor, nextCursor)
+			s.Set(constants.SessionKeyLogCursor, nextCursor)
+			s.Set(constants.SessionKeyLogPrevCursors, append(prevCursors, cursor))
 			m.Show(event, s)
 		}
 	case utils.ViewerPrevPage:
 		var prevCursors []*types.LogCursor
-		s.GetInterface(constants.SessionKeyPrevCursors, &prevCursors)
+		s.GetInterface(constants.SessionKeyLogPrevCursors, &prevCursors)
+
 		if len(prevCursors) > 0 {
 			lastIdx := len(prevCursors) - 1
-			s.Set(constants.SessionKeyPrevCursors, prevCursors[:lastIdx])
-			s.Set(constants.SessionKeyCursor, prevCursors[lastIdx])
+			s.Set(constants.SessionKeyLogPrevCursors, prevCursors[:lastIdx])
+			s.Set(constants.SessionKeyLogCursor, prevCursors[lastIdx])
 			m.Show(event, s)
 		}
 	case utils.ViewerFirstPage:
-		s.Set(constants.SessionKeyCursor, nil)
-		s.Set(constants.SessionKeyPrevCursors, []*types.LogCursor{})
+		s.Set(constants.SessionKeyLogCursor, nil)
+		s.Set(constants.SessionKeyLogPrevCursors, make([]*types.LogCursor, 0))
 		m.Show(event, s)
 	case utils.ViewerLastPage:
-		m.layout.paginationManager.RespondWithError(event, "how are you here?")
+		return
 	}
 }

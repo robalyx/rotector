@@ -231,6 +231,9 @@ func (b *ReviewBuilder) buildActionOptions() []discord.StringSelectMenuOption {
 		discord.NewStringSelectMenuOption("Open outfit viewer", constants.OpenOutfitsMenuButtonCustomID).
 			WithEmoji(discord.ComponentEmoji{Name: "👕"}).
 			WithDescription("View all user outfits"),
+		discord.NewStringSelectMenuOption("Submit Appeal", constants.AppealUserCustomID).
+			WithEmoji(discord.ComponentEmoji{Name: "📝"}).
+			WithDescription("Submit an appeal for this user"),
 	}
 
 	// Add reviewer-only options
@@ -267,17 +270,17 @@ func (b *ReviewBuilder) buildComponents() []discord.ContainerComponent {
 		// Sorting options menu
 		discord.NewActionRow(
 			discord.NewStringSelectMenu(constants.SortOrderSelectMenuCustomID, "Sorting",
-				discord.NewStringSelectMenuOption("Selected by random", string(types.SortByRandom)).
-					WithDefault(b.settings.UserDefaultSort == types.SortByRandom).
+				discord.NewStringSelectMenuOption("Selected by random", string(types.ReviewSortByRandom)).
+					WithDefault(b.settings.UserDefaultSort == types.ReviewSortByRandom).
 					WithEmoji(discord.ComponentEmoji{Name: "🔀"}),
-				discord.NewStringSelectMenuOption("Selected by confidence", string(types.SortByConfidence)).
-					WithDefault(b.settings.UserDefaultSort == types.SortByConfidence).
+				discord.NewStringSelectMenuOption("Selected by confidence", string(types.ReviewSortByConfidence)).
+					WithDefault(b.settings.UserDefaultSort == types.ReviewSortByConfidence).
 					WithEmoji(discord.ComponentEmoji{Name: "🔮"}),
-				discord.NewStringSelectMenuOption("Selected by last updated time", string(types.SortByLastUpdated)).
-					WithDefault(b.settings.UserDefaultSort == types.SortByLastUpdated).
+				discord.NewStringSelectMenuOption("Selected by last updated time", string(types.ReviewSortByLastUpdated)).
+					WithDefault(b.settings.UserDefaultSort == types.ReviewSortByLastUpdated).
 					WithEmoji(discord.ComponentEmoji{Name: "📅"}),
-				discord.NewStringSelectMenuOption("Selected by bad reputation", string(types.SortByReputation)).
-					WithDefault(b.settings.UserDefaultSort == types.SortByReputation).
+				discord.NewStringSelectMenuOption("Selected by bad reputation", string(types.ReviewSortByReputation)).
+					WithDefault(b.settings.UserDefaultSort == types.ReviewSortByReputation).
 					WithEmoji(discord.ComponentEmoji{Name: "👎"}),
 			),
 		),

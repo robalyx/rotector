@@ -34,13 +34,14 @@ func NewOutfitsMenu(layout *Layout) *OutfitsMenu {
 			return builder.NewOutfitsBuilder(s).Build()
 		},
 		ButtonHandlerFunc: m.handlePageNavigation,
+		IsSubMenu:         true,
 	}
 	return m
 }
 
 // Show prepares and displays the outfits interface for a specific page.
 func (m *OutfitsMenu) Show(event *events.ComponentInteractionCreate, s *session.Session, page int) {
-	var user *types.FlaggedUser
+	var user *types.ReviewUser
 	s.GetInterface(constants.SessionKeyTarget, &user)
 
 	// Return to review menu if user has no outfits
@@ -84,16 +85,12 @@ func (m *OutfitsMenu) handlePageNavigation(event *events.ComponentInteractionCre
 	action := utils.ViewerAction(customID)
 	switch action {
 	case utils.ViewerFirstPage, utils.ViewerPrevPage, utils.ViewerNextPage, utils.ViewerLastPage:
-		var user *types.FlaggedUser
+		var user *types.ReviewUser
 		s.GetInterface(constants.SessionKeyTarget, &user)
 
 		// Calculate max page and validate navigation action
 		maxPage := (len(user.Outfits) - 1) / constants.OutfitsPerPage
-		page, ok := action.ParsePageAction(s, action, maxPage)
-		if !ok {
-			m.layout.paginationManager.RespondWithError(event, "Invalid interaction.")
-			return
-		}
+		page := action.ParsePageAction(s, action, maxPage)
 
 		m.Show(event, s, page)
 

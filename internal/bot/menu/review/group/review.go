@@ -107,7 +107,7 @@ func (m *ReviewMenu) handleSortOrderSelection(event *events.ComponentInteraction
 	s.GetInterface(constants.SessionKeyUserSettings, &settings)
 
 	// Update user's group sort preference
-	settings.GroupDefaultSort = types.SortBy(option)
+	settings.GroupDefaultSort = types.ReviewSortBy(option)
 	if err := m.layout.db.Settings().SaveUserSettings(context.Background(), settings); err != nil {
 		m.layout.logger.Error("Failed to save user settings", zap.Error(err))
 		m.layout.paginationManager.RespondWithError(event, "Failed to save sort order. Please try again.")
@@ -173,7 +173,7 @@ func (m *ReviewMenu) fetchNewTarget(s *session.Session, reviewerID uint64) (*typ
 	s.Set(constants.SessionKeyGroupTarget, group)
 	s.Set(constants.SessionKeyGroupFlaggedUsers, flaggedUsers)
 
-	// Log the view action asynchronously
+	// Log the view action
 	go m.layout.db.UserActivity().Log(context.Background(), &types.UserActivityLog{
 		ActivityTarget: types.ActivityTarget{
 			GroupID: group.ID,
@@ -302,6 +302,7 @@ func (m *ReviewMenu) handleConfirmGroup(event interfaces.CommonEvent, s *session
 	if settings.ReviewMode == types.TrainingReviewMode {
 		// Training mode - increment downvotes
 		if err := m.layout.db.Groups().UpdateTrainingVotes(context.Background(), group.ID, false); err != nil {
+			m.layout.logger.Error("Failed to update downvotes", zap.Error(err))
 			m.layout.paginationManager.RespondWithError(event, "Failed to update downvotes. Please try again.")
 			return
 		}
@@ -359,6 +360,7 @@ func (m *ReviewMenu) handleClearGroup(event interfaces.CommonEvent, s *session.S
 	if settings.ReviewMode == types.TrainingReviewMode {
 		// Training mode - increment upvotes
 		if err := m.layout.db.Groups().UpdateTrainingVotes(context.Background(), group.ID, true); err != nil {
+			m.layout.logger.Error("Failed to update upvotes", zap.Error(err))
 			m.layout.paginationManager.RespondWithError(event, "Failed to update upvotes. Please try again.")
 			return
 		}
@@ -433,7 +435,7 @@ func (m *ReviewMenu) handleConfirmWithReasonModalSubmit(event *events.ModalSubmi
 	// Get and validate the confirm reason
 	reason := event.Data.Text(constants.GroupConfirmReasonInputCustomID)
 	if reason == "" {
-		m.layout.paginationManager.RespondWithError(event, "Confirm reason cannot be empty. Please try again.")
+		m.layout.paginationManager.NavigateTo(event, s, m.page, "Confirm reason cannot be empty. Please try again.")
 		return
 	}
 

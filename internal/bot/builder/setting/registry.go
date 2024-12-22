@@ -112,6 +112,8 @@ func (r *Registry) registerUserSettings() {
 	r.UserSettings[constants.StreamerModeOption] = r.createStreamerModeSetting()
 	r.UserSettings[constants.UserDefaultSortOption] = r.createUserDefaultSortSetting()
 	r.UserSettings[constants.GroupDefaultSortOption] = r.createGroupDefaultSortSetting()
+	r.UserSettings[constants.AppealDefaultSortOption] = r.createAppealDefaultSortSetting()
+	r.UserSettings[constants.AppealStatusFilterOption] = r.createAppealStatusFilterSetting()
 	r.UserSettings[constants.ChatModelOption] = r.createChatModelSetting()
 	r.UserSettings[constants.ReviewModeOption] = r.createReviewModeSetting()
 	r.UserSettings[constants.ReviewTargetModeOption] = r.createReviewTargetModeSetting()
@@ -152,26 +154,26 @@ func (r *Registry) createUserDefaultSortSetting() Setting {
 		Name:         "User Default Sort",
 		Description:  "Set what users are shown first in the review menu",
 		Type:         types.SettingTypeEnum,
-		DefaultValue: types.SortByRandom,
+		DefaultValue: types.ReviewSortByRandom,
 		Options: []types.SettingOption{
-			{Value: string(types.SortByRandom), Label: "Random", Description: "Selected by random", Emoji: "🔀"},
-			{Value: string(types.SortByConfidence), Label: "Confidence", Description: "Selected by confidence", Emoji: "🔮"},
-			{Value: string(types.SortByLastUpdated), Label: "Last Updated", Description: "Selected by last updated time", Emoji: "📅"},
-			{Value: string(types.SortByReputation), Label: "Bad Reputation", Description: "Selected by bad reputation", Emoji: "👎"},
+			{Value: string(types.ReviewSortByRandom), Label: "Random", Description: "Selected by random", Emoji: "🔀"},
+			{Value: string(types.ReviewSortByConfidence), Label: "Confidence", Description: "Selected by confidence", Emoji: "🔮"},
+			{Value: string(types.ReviewSortByLastUpdated), Label: "Last Updated", Description: "Selected by last updated time", Emoji: "📅"},
+			{Value: string(types.ReviewSortByReputation), Label: "Bad Reputation", Description: "Selected by bad reputation", Emoji: "👎"},
 		},
 		Validators: []Validator{
 			validateEnum([]string{
-				string(types.SortByRandom),
-				string(types.SortByConfidence),
-				string(types.SortByLastUpdated),
-				string(types.SortByReputation),
+				string(types.ReviewSortByRandom),
+				string(types.ReviewSortByConfidence),
+				string(types.ReviewSortByLastUpdated),
+				string(types.ReviewSortByReputation),
 			}),
 		},
 		ValueGetter: func(us *types.UserSetting, _ *types.BotSetting) string {
 			return string(us.UserDefaultSort)
 		},
 		ValueUpdater: func(value string, us *types.UserSetting, _ *types.BotSetting) error {
-			us.UserDefaultSort = types.SortBy(value)
+			us.UserDefaultSort = types.ReviewSortBy(value)
 			return nil
 		},
 	}
@@ -184,24 +186,106 @@ func (r *Registry) createGroupDefaultSortSetting() Setting {
 		Name:         "Group Default Sort",
 		Description:  "Set what groups are shown first in the review menu",
 		Type:         types.SettingTypeEnum,
-		DefaultValue: types.SortByRandom,
+		DefaultValue: types.ReviewSortByRandom,
 		Options: []types.SettingOption{
-			{Value: string(types.SortByRandom), Label: "Random", Description: "Selected by random", Emoji: "🔀"},
-			{Value: string(types.SortByConfidence), Label: "Confidence", Description: "Selected by confidence", Emoji: "🔍"},
-			{Value: string(types.SortByReputation), Label: "Bad Reputation", Description: "Selected by bad reputation", Emoji: "👎"},
+			{Value: string(types.ReviewSortByRandom), Label: "Random", Description: "Selected by random", Emoji: "🔀"},
+			{Value: string(types.ReviewSortByConfidence), Label: "Confidence", Description: "Selected by confidence", Emoji: "🔍"},
+			{Value: string(types.ReviewSortByReputation), Label: "Bad Reputation", Description: "Selected by bad reputation", Emoji: "👎"},
 		},
 		Validators: []Validator{
 			validateEnum([]string{
-				string(types.SortByRandom),
-				string(types.SortByConfidence),
-				string(types.SortByReputation),
+				string(types.ReviewSortByRandom),
+				string(types.ReviewSortByConfidence),
+				string(types.ReviewSortByReputation),
 			}),
 		},
 		ValueGetter: func(us *types.UserSetting, _ *types.BotSetting) string {
 			return us.GroupDefaultSort.FormatDisplay()
 		},
 		ValueUpdater: func(value string, us *types.UserSetting, _ *types.BotSetting) error {
-			us.GroupDefaultSort = types.SortBy(value)
+			us.GroupDefaultSort = types.ReviewSortBy(value)
+			return nil
+		},
+	}
+}
+
+// createAppealDefaultSortSetting creates the appeal default sort setting.
+func (r *Registry) createAppealDefaultSortSetting() Setting {
+	return Setting{
+		Key:          constants.AppealDefaultSortOption,
+		Name:         "Appeal Default Sort",
+		Description:  "Set how appeals are sorted in the overview",
+		Type:         types.SettingTypeEnum,
+		DefaultValue: types.AppealSortByNewest,
+		Options: []types.SettingOption{
+			{Value: string(types.AppealSortByNewest), Label: "Newest First", Description: "Show newest appeals first", Emoji: "🆕"},
+			{Value: string(types.AppealSortByOldest), Label: "Oldest First", Description: "Show oldest appeals first", Emoji: "⏳"},
+			{Value: string(types.AppealSortByClaimed), Label: "My Claims", Description: "Show appeals claimed by you", Emoji: "👤"},
+		},
+		Validators: []Validator{
+			validateEnum([]string{
+				string(types.AppealSortByNewest),
+				string(types.AppealSortByOldest),
+				string(types.AppealSortByClaimed),
+			}),
+		},
+		ValueGetter: func(us *types.UserSetting, _ *types.BotSetting) string {
+			return us.AppealDefaultSort.FormatDisplay()
+		},
+		ValueUpdater: func(value string, us *types.UserSetting, _ *types.BotSetting) error {
+			us.AppealDefaultSort = types.AppealSortBy(value)
+			return nil
+		},
+	}
+}
+
+// createAppealStatusFilterSetting creates the appeal status filter setting.
+func (r *Registry) createAppealStatusFilterSetting() Setting {
+	return Setting{
+		Key:          constants.AppealStatusFilterOption,
+		Name:         "Appeal Status Filter",
+		Description:  "Set the default status filter for appeals",
+		Type:         types.SettingTypeEnum,
+		DefaultValue: "",
+		Options: []types.SettingOption{
+			{
+				Value:       string(types.AppealFilterByAll),
+				Label:       "All Appeals",
+				Description: "Show appeals of all statuses",
+				Emoji:       "📋",
+			},
+			{
+				Value:       string(types.AppealFilterByPending),
+				Label:       "Pending Appeals",
+				Description: "Show only pending appeals",
+				Emoji:       "⏳",
+			},
+			{
+				Value:       string(types.AppealFilterByAccepted),
+				Label:       "Accepted Appeals",
+				Description: "Show only accepted appeals",
+				Emoji:       "✅",
+			},
+			{
+				Value:       string(types.AppealFilterByRejected),
+				Label:       "Rejected Appeals",
+				Description: "Show only rejected appeals",
+				Emoji:       "❌",
+			},
+		},
+		Validators: []Validator{
+			validateEnum([]string{
+				string(types.AppealFilterByAll),
+				string(types.AppealFilterByPending),
+				string(types.AppealFilterByAccepted),
+				string(types.AppealFilterByRejected),
+			}),
+		},
+		ValueGetter: func(us *types.UserSetting, _ *types.BotSetting) string {
+			return string(us.AppealStatusFilter)
+		},
+		ValueUpdater: func(value string, us *types.UserSetting, _ *types.BotSetting) error {
+			us.AppealStatusFilter = types.AppealFilterBy(value)
 			return nil
 		},
 	}

@@ -19,7 +19,7 @@ import (
 // supports pagination through a grid of group thumbnails.
 type GroupsBuilder struct {
 	settings      *types.UserSetting
-	user          *types.FlaggedUser
+	user          *types.ReviewUser
 	groups        []*apiTypes.UserGroupRoles
 	groupTypes    map[uint64]types.GroupType
 	flaggedGroups map[uint64]*types.Group
@@ -34,7 +34,7 @@ type GroupsBuilder struct {
 func NewGroupsBuilder(s *session.Session) *GroupsBuilder {
 	var settings *types.UserSetting
 	s.GetInterface(constants.SessionKeyUserSettings, &settings)
-	var user *types.FlaggedUser
+	var user *types.ReviewUser
 	s.GetInterface(constants.SessionKeyTarget, &user)
 	var groups []*apiTypes.UserGroupRoles
 	s.GetInterface(constants.SessionKeyGroups, &groups)

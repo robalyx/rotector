@@ -45,10 +45,7 @@ func NewStatusBuilder(queueManager *queue.Manager, s *session.Session) *StatusBu
 	}
 }
 
-// Build creates a Discord message showing:
-// - Current user's queue status and position
-// - Number of items in each priority queue
-// - Refresh and abort buttons for queue management.
+// Build creates a Discord message showing the user's queue status.
 func (b *StatusBuilder) Build() *discord.MessageUpdateBuilder {
 	// Create embed with queue information
 	embed := discord.NewEmbedBuilder().

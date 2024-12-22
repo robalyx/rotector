@@ -232,14 +232,14 @@ func (b *ReviewBuilder) buildComponents() []discord.ContainerComponent {
 		// Sorting options menu
 		discord.NewActionRow(
 			discord.NewStringSelectMenu(constants.SortOrderSelectMenuCustomID, "Sorting",
-				discord.NewStringSelectMenuOption("Selected by random", string(types.SortByRandom)).
-					WithDefault(b.settings.GroupDefaultSort == types.SortByRandom).
+				discord.NewStringSelectMenuOption("Selected by random", string(types.ReviewSortByRandom)).
+					WithDefault(b.settings.GroupDefaultSort == types.ReviewSortByRandom).
 					WithEmoji(discord.ComponentEmoji{Name: "🔀"}),
-				discord.NewStringSelectMenuOption("Selected by confidence", string(types.SortByConfidence)).
-					WithDefault(b.settings.GroupDefaultSort == types.SortByConfidence).
+				discord.NewStringSelectMenuOption("Selected by confidence", string(types.ReviewSortByConfidence)).
+					WithDefault(b.settings.GroupDefaultSort == types.ReviewSortByConfidence).
 					WithEmoji(discord.ComponentEmoji{Name: "🔍"}),
-				discord.NewStringSelectMenuOption("Selected by bad reputation", string(types.SortByReputation)).
-					WithDefault(b.settings.GroupDefaultSort == types.SortByReputation).
+				discord.NewStringSelectMenuOption("Selected by bad reputation", string(types.ReviewSortByReputation)).
+					WithDefault(b.settings.GroupDefaultSort == types.ReviewSortByReputation).
 					WithEmoji(discord.ComponentEmoji{Name: "👎"}),
 			),
 		),

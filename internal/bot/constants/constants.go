@@ -31,7 +31,7 @@ const (
 	LookupGroupInputCustomID = "lookup_group_input"
 )
 
-// Review Menu.
+// User Review Menu.
 const (
 	SortOrderSelectMenuCustomID = "sort_order"
 
@@ -77,6 +77,22 @@ const (
 	GroupsGridRows    = 3
 )
 
+// Group Review Menu.
+const (
+	GroupConfirmWithReasonModalCustomID = "group_confirm_with_reason_modal"
+	GroupConfirmReasonInputCustomID     = "group_confirm_reason"
+	GroupRecheckReasonModalCustomID     = "group_recheck_reason_modal"
+	GroupRecheckReasonInputCustomID     = "group_recheck_reason"
+
+	GroupConfirmWithReasonButtonCustomID = "group_confirm_with_reason" + ModalOpenSuffix
+	GroupRecheckButtonCustomID           = "group_recheck" + ModalOpenSuffix
+	GroupViewLogsButtonCustomID          = "group_view_logs"
+
+	GroupConfirmButtonCustomID = "group_confirm"
+	GroupClearButtonCustomID   = "group_clear"
+	GroupSkipButtonCustomID    = "group_skip"
+)
+
 // Chat Menu.
 const (
 	ChatMessagesPerPage      = 2
@@ -91,14 +107,16 @@ const (
 
 // User Settings.
 const (
-	UserSettingPrefix      = "user"
-	UserSettingSelectID    = "user_setting_select"
-	StreamerModeOption     = "streamer_mode"
-	UserDefaultSortOption  = "user_default_sort"
-	GroupDefaultSortOption = "group_default_sort"
-	ChatModelOption        = "chat_model"
-	ReviewModeOption       = "review_mode"
-	ReviewTargetModeOption = "review_target_mode"
+	UserSettingPrefix        = "user"
+	UserSettingSelectID      = "user_setting_select"
+	StreamerModeOption       = "streamer_mode"
+	UserDefaultSortOption    = "user_default_sort"
+	GroupDefaultSortOption   = "group_default_sort"
+	AppealDefaultSortOption  = "appeal_default_sort"
+	AppealStatusFilterOption = "appeal_status_filter"
+	ChatModelOption          = "chat_model"
+	ReviewModeOption         = "review_mode"
+	ReviewTargetModeOption   = "review_target_mode"
 )
 
 // Bot Settings.
@@ -135,6 +153,33 @@ const (
 	ReasonInputCustomID         = "reason_input"
 )
 
+// Appeal Menu.
+const (
+	AppealMenuCustomID = "appeal_menu"
+	AppealUserCustomID = "appeal_user" + ModalOpenSuffix
+
+	AppealModalCustomID       = "appeal_modal"
+	AppealUserInputCustomID   = "appeal_user_input"
+	AppealReasonInputCustomID = "appeal_reason_input"
+
+	ReviewUserButtonCustomID   = "review_user"
+	AcceptAppealButtonCustomID = "accept_appeal" + ModalOpenSuffix
+	RejectAppealButtonCustomID = "reject_appeal" + ModalOpenSuffix
+	AppealCloseButtonCustomID  = "appeal_close"
+
+	AcceptAppealModalCustomID  = "accept_appeal_modal"
+	RejectAppealModalCustomID  = "reject_appeal_modal"
+	AppealRespondModalCustomID = "appeal_respond_modal"
+
+	AppealsPerPage              = 5
+	AppealMessagesPerPage       = 5
+	AppealSelectID              = "appeal_select"
+	AppealStatusSelectID        = "appeal_status"
+	AppealSortSelectID          = "appeal_sort"
+	AppealCreateButtonCustomID  = "appeal_create" + ModalOpenSuffix
+	AppealRespondButtonCustomID = "appeal_respond" + ModalOpenSuffix
+)
+
 // Session keys.
 const (
 	SessionKeyUserID       = "userID"
@@ -148,14 +193,12 @@ const (
 	SessionKeyUserCounts  = "userCounts"
 	SessionKeyGroupCounts = "groupCounts"
 
-	SessionKeyCursor         = "cursor"
-	SessionKeyNextCursor     = "nextCursor"
-	SessionKeyPrevCursors    = "prevCursors"
-	SessionKeyHasNextPage    = "hasNextPage"
-	SessionKeyHasPrevPage    = "hasPrevPage"
 	SessionKeyPaginationPage = "paginationPage"
 	SessionKeyStart          = "start"
 	SessionKeyTotalItems     = "totalItems"
+	SessionKeyTotalPages     = "totalPages"
+	SessionKeyHasNextPage    = "hasNextPage"
+	SessionKeyHasPrevPage    = "hasPrevPage"
 	SessionKeyIsStreaming    = "isStreaming"
 
 	SessionKeyConfirmedCount = "confirmedCount"
@@ -189,6 +232,9 @@ const (
 	SessionKeyChatContext = "chatContext"
 
 	SessionKeyLogs                 = "logs"
+	SessionKeyLogCursor            = "cursor"
+	SessionKeyLogNextCursor        = "nextCursor"
+	SessionKeyLogPrevCursors       = "prevCursors"
 	SessionKeyUserIDFilter         = "userIDFilter"
 	SessionKeyGroupIDFilter        = "groupIDFilter"
 	SessionKeyReviewerIDFilter     = "reviewerIDFilter"
@@ -208,18 +254,12 @@ const (
 	SessionKeyGroupFlaggedUsers = "groupFlaggedUsers"
 	SessionKeyGroupInfo         = "groupInfo"
 
-	GroupConfirmWithReasonModalCustomID = "group_confirm_with_reason_modal"
-	GroupConfirmReasonInputCustomID     = "group_confirm_reason"
-	GroupRecheckReasonModalCustomID     = "group_recheck_reason_modal"
-	GroupRecheckReasonInputCustomID     = "group_recheck_reason"
-
-	GroupConfirmWithReasonButtonCustomID = "group_confirm_with_reason" + ModalOpenSuffix
-	GroupRecheckButtonCustomID           = "group_recheck" + ModalOpenSuffix
-	GroupViewLogsButtonCustomID          = "group_view_logs"
-
-	GroupConfirmButtonCustomID = "group_confirm"
-	GroupClearButtonCustomID   = "group_clear"
-	GroupSkipButtonCustomID    = "group_skip"
+	SessionKeyAppeal            = "appeal"
+	SessionKeyAppeals           = "appeals"
+	SessionKeyAppealMessages    = "appealMessages"
+	SessionKeyAppealCursor      = "appealCursor"
+	SessionKeyAppealNextCursor  = "appealNextCursor"
+	SessionKeyAppealPrevCursors = "appealPrevCursors"
 )
 
 const (

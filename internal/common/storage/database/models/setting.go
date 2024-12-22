@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 
+	"github.com/disgoorg/snowflake/v2"
 	"github.com/rotector/rotector/internal/common/storage/database/types"
 	"github.com/uptrace/bun"
 	"go.uber.org/zap"
@@ -25,15 +26,17 @@ func NewSetting(db *bun.DB, logger *zap.Logger) *SettingModel {
 }
 
 // GetUserSettings retrieves settings for a specific user.
-func (r *SettingModel) GetUserSettings(ctx context.Context, userID uint64) (*types.UserSetting, error) {
+func (r *SettingModel) GetUserSettings(ctx context.Context, userID snowflake.ID) (*types.UserSetting, error) {
 	settings := &types.UserSetting{
-		UserID:           userID,
-		StreamerMode:     false,
-		UserDefaultSort:  types.SortByRandom,
-		GroupDefaultSort: types.SortByRandom,
-		ChatModel:        types.ChatModelGeminiPro,
-		ReviewMode:       types.StandardReviewMode,
-		ReviewTargetMode: types.FlaggedReviewTarget,
+		UserID:             userID,
+		StreamerMode:       false,
+		UserDefaultSort:    types.ReviewSortByRandom,
+		GroupDefaultSort:   types.ReviewSortByRandom,
+		AppealDefaultSort:  types.AppealSortByNewest,
+		AppealStatusFilter: types.AppealFilterByAll,
+		ChatModel:          types.ChatModelGeminiPro,
+		ReviewMode:         types.StandardReviewMode,
+		ReviewTargetMode:   types.FlaggedReviewTarget,
 	}
 
 	err := r.db.NewSelect().Model(settings).
@@ -44,11 +47,11 @@ func (r *SettingModel) GetUserSettings(ctx context.Context, userID uint64) (*typ
 			// Create default settings if none exist
 			_, err = r.db.NewInsert().Model(settings).Exec(ctx)
 			if err != nil {
-				r.logger.Error("Failed to create user settings", zap.Error(err), zap.Uint64("userID", userID))
+				r.logger.Error("Failed to create user settings", zap.Error(err), zap.Uint64("userID", uint64(userID)))
 				return nil, err
 			}
 		} else {
-			r.logger.Error("Failed to get user settings", zap.Error(err), zap.Uint64("userID", userID))
+			r.logger.Error("Failed to get user settings", zap.Error(err), zap.Uint64("userID", uint64(userID)))
 			return nil, err
 		}
 	}
@@ -63,6 +66,8 @@ func (r *SettingModel) SaveUserSettings(ctx context.Context, settings *types.Use
 		Set("streamer_mode = EXCLUDED.streamer_mode").
 		Set("user_default_sort = EXCLUDED.user_default_sort").
 		Set("group_default_sort = EXCLUDED.group_default_sort").
+		Set("appeal_status_filter = EXCLUDED.appeal_status_filter").
+		Set("appeal_default_sort = EXCLUDED.appeal_default_sort").
 		Set("chat_model = EXCLUDED.chat_model").
 		Set("review_mode = EXCLUDED.review_mode").
 		Set("review_target_mode = EXCLUDED.review_target_mode").
@@ -70,7 +75,7 @@ func (r *SettingModel) SaveUserSettings(ctx context.Context, settings *types.Use
 	if err != nil {
 		r.logger.Error("Failed to save user settings",
 			zap.Error(err),
-			zap.Uint64("userID", settings.UserID))
+			zap.Uint64("userID", uint64(settings.UserID)))
 		return err
 	}
 

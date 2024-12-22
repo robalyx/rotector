@@ -17,7 +17,7 @@ import (
 // FriendsBuilder creates the visual layout for viewing a user's friends.
 type FriendsBuilder struct {
 	settings       *types.UserSetting
-	user           *types.FlaggedUser
+	user           *types.ReviewUser
 	friends        []types.ExtendedFriend
 	presences      map[uint64]apiTypes.UserPresenceResponse
 	flaggedFriends map[uint64]*types.User
@@ -33,7 +33,7 @@ type FriendsBuilder struct {
 func NewFriendsBuilder(s *session.Session) *FriendsBuilder {
 	var settings *types.UserSetting
 	s.GetInterface(constants.SessionKeyUserSettings, &settings)
-	var user *types.FlaggedUser
+	var user *types.ReviewUser
 	s.GetInterface(constants.SessionKeyTarget, &user)
 	var friends []types.ExtendedFriend
 	s.GetInterface(constants.SessionKeyFriends, &friends)

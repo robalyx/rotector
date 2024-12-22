@@ -95,10 +95,11 @@ func (r *ActivityModel) GetLogs(ctx context.Context, filter types.ActivityFilter
 
 	var nextCursor *types.LogCursor
 	if len(logs) > limit {
-		// If we got more results than the limit, the last item becomes our next cursor
+		// Use the extra item as the next cursor
+		last := logs[limit]
 		nextCursor = &types.LogCursor{
-			Timestamp: logs[limit].ActivityTimestamp,
-			Sequence:  logs[limit].Sequence,
+			Timestamp: last.ActivityTimestamp,
+			Sequence:  last.Sequence,
 		}
 		logs = logs[:limit] // Remove the extra item
 	}

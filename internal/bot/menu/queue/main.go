@@ -130,6 +130,7 @@ func (m *MainMenu) handleModal(event *events.ModalSubmitInteractionCreate, s *se
 		CheckExists: false,
 	})
 	if err != nil {
+		m.layout.logger.Error("Failed to add user to queue", zap.Error(err))
 		m.layout.paginationManager.RespondWithError(event, "Failed to add user to queue")
 		return
 	}
@@ -143,6 +144,7 @@ func (m *MainMenu) handleModal(event *events.ModalSubmitInteractionCreate, s *se
 		m.layout.queueManager.GetQueueLength(context.Background(), queue.HighPriority),
 	)
 	if err != nil {
+		m.layout.logger.Error("Failed to update queue info", zap.Error(err))
 		m.layout.paginationManager.RespondWithError(event, "Failed to update queue info")
 		return
 	}

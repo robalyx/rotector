@@ -110,9 +110,12 @@ func (b *Builder) Build() *discord.MessageUpdateBuilder {
 		discord.NewStringSelectMenuOption("Lookup Group", constants.LookupGroupCustomID).
 			WithEmoji(discord.ComponentEmoji{Name: "👥"}).
 			WithDescription("Look up a specific group by ID"),
+		discord.NewStringSelectMenuOption("View Appeals", constants.AppealMenuCustomID).
+			WithEmoji(discord.ComponentEmoji{Name: "⚖️"}).
+			WithDescription("View pending appeals"),
 	}
 
-	// Add activity log and queue manager options only for reviewers
+	// Add reviewer-only options
 	if b.botSettings.IsReviewer(b.userID) {
 		options = append(options,
 			discord.NewStringSelectMenuOption("AI Chat Assistant", constants.ChatAssistantCustomID).

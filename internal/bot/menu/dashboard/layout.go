@@ -27,6 +27,7 @@ type Layout struct {
 	logLayout         interfaces.LogLayout
 	queueLayout       interfaces.QueueLayout
 	chatLayout        interfaces.ChatLayout
+	appealLayout      interfaces.AppealLayout
 }
 
 // New creates a Menu and sets up its page with message builders and
@@ -100,6 +101,12 @@ func (l *Layout) SetQueueLayout(queueLayout interfaces.QueueLayout) {
 // to the AI chat section from the dashboard.
 func (l *Layout) SetChatLayout(chatLayout interfaces.ChatLayout) {
 	l.chatLayout = chatLayout
+}
+
+// SetAppealLayout links the appeal layout to enable navigation
+// to the appeal section from the dashboard.
+func (l *Layout) SetAppealLayout(appealLayout interfaces.AppealLayout) {
+	l.appealLayout = appealLayout
 }
 
 // Show prepares and displays the dashboard interface by loading

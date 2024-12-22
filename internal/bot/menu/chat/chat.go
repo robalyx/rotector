@@ -53,11 +53,7 @@ func (m *Menu) handleButton(event *events.ComponentInteractionCreate, s *session
 		s.GetInterface(constants.SessionKeyChatHistory, &history)
 
 		maxPage := (len(history.Messages)/2 - 1) / constants.ChatMessagesPerPage
-		page, ok := action.ParsePageAction(s, action, maxPage)
-		if !ok {
-			m.layout.paginationManager.RespondWithError(event, "Invalid interaction.")
-			return
-		}
+		page := action.ParsePageAction(s, action, maxPage)
 
 		s.Set(constants.SessionKeyPaginationPage, page)
 		m.Show(event, s, "")
@@ -123,7 +119,7 @@ func (m *Menu) handleModal(event *events.ModalSubmitInteractionCreate, s *sessio
 	case constants.ChatInputModalID:
 		message := event.Data.Text(constants.ChatInputCustomID)
 		if message == "" {
-			m.layout.paginationManager.RespondWithError(event, "Message cannot be empty")
+			m.layout.paginationManager.NavigateTo(event, s, m.page, "Message cannot be empty")
 			return
 		}
 

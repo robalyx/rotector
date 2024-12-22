@@ -16,7 +16,7 @@ import (
 // OutfitsBuilder creates the visual layout for viewing a user's outfits.
 type OutfitsBuilder struct {
 	settings    *types.UserSetting
-	user        *types.FlaggedUser
+	user        *types.ReviewUser
 	outfits     []apiTypes.Outfit
 	start       int
 	page        int
@@ -29,7 +29,7 @@ type OutfitsBuilder struct {
 func NewOutfitsBuilder(s *session.Session) *OutfitsBuilder {
 	var settings *types.UserSetting
 	s.GetInterface(constants.SessionKeyUserSettings, &settings)
-	var user *types.FlaggedUser
+	var user *types.ReviewUser
 	s.GetInterface(constants.SessionKeyTarget, &user)
 	var outfits []apiTypes.Outfit
 	s.GetInterface(constants.SessionKeyOutfits, &outfits)

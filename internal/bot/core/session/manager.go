@@ -78,7 +78,7 @@ func (m *Manager) UpdateBotSettings(botSettings *types.BotSetting) {
 // GetOrCreateSession loads or initializes a session for a given user.
 // New sessions are populated with user settings from the database.
 // Existing sessions are refreshed with the latest user settings.
-func (m *Manager) GetOrCreateSession(ctx context.Context, userID uint64) (*Session, error) {
+func (m *Manager) GetOrCreateSession(ctx context.Context, userID snowflake.ID) (*Session, error) {
 	key := fmt.Sprintf("%s%d", SessionPrefix, userID)
 
 	// Try loading existing session first

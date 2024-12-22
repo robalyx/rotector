@@ -36,6 +36,7 @@ func NewReviewMenu(layout *Layout) *ReviewMenu {
 		SelectHandlerFunc: m.handleSelectMenu,
 		ButtonHandlerFunc: m.handleButton,
 		ModalHandlerFunc:  m.handleModal,
+		IsSubMenu:         true,
 	}
 	return m
 }
@@ -144,7 +145,7 @@ func (m *ReviewMenu) handleSortOrderSelection(event *events.ComponentInteraction
 	s.GetInterface(constants.SessionKeyUserSettings, &settings)
 
 	// Update user's default sort preference
-	settings.UserDefaultSort = types.SortBy(option)
+	settings.UserDefaultSort = types.ReviewSortBy(option)
 	if err := m.layout.db.Settings().SaveUserSettings(context.Background(), settings); err != nil {
 		m.layout.logger.Error("Failed to save user settings", zap.Error(err))
 		m.layout.paginationManager.RespondWithError(event, "Failed to save sort order. Please try again.")
@@ -168,7 +169,8 @@ func (m *ReviewMenu) handleActionSelection(event *events.ComponentInteractionCre
 		m.layout.friendsMenu.Show(event, s, 0)
 	case constants.OpenGroupsMenuButtonCustomID:
 		m.layout.groupsMenu.Show(event, s, 0)
-
+	case constants.AppealUserCustomID:
+		m.handleAppealUser(event, s)
 	case constants.OpenAIChatButtonCustomID:
 		if !settings.IsReviewer(userID) {
 			m.layout.logger.Error("Non-reviewer attempted to open AI chat", zap.Uint64("user_id", userID))
@@ -176,7 +178,6 @@ func (m *ReviewMenu) handleActionSelection(event *events.ComponentInteractionCre
 			return
 		}
 		m.handleOpenAIChat(event, s)
-
 	case constants.ConfirmWithReasonButtonCustomID:
 		if !settings.IsReviewer(userID) {
 			m.layout.logger.Error("Non-reviewer attempted to use confirm with reason", zap.Uint64("user_id", userID))
@@ -184,7 +185,6 @@ func (m *ReviewMenu) handleActionSelection(event *events.ComponentInteractionCre
 			return
 		}
 		m.handleConfirmWithReason(event, s)
-
 	case constants.RecheckButtonCustomID:
 		if !settings.IsReviewer(userID) {
 			m.layout.logger.Error("Non-reviewer attempted to recheck user", zap.Uint64("user_id", userID))
@@ -192,7 +192,6 @@ func (m *ReviewMenu) handleActionSelection(event *events.ComponentInteractionCre
 			return
 		}
 		m.handleRecheck(event, s)
-
 	case constants.ViewUserLogsButtonCustomID:
 		if !settings.IsReviewer(userID) {
 			m.layout.logger.Error("Non-reviewer attempted to view logs", zap.Uint64("user_id", userID))
@@ -200,7 +199,6 @@ func (m *ReviewMenu) handleActionSelection(event *events.ComponentInteractionCre
 			return
 		}
 		m.handleViewUserLogs(event, s)
-
 	case constants.SwitchReviewModeCustomID:
 		if !settings.IsReviewer(userID) {
 			m.layout.logger.Error("Non-reviewer attempted to switch review mode", zap.Uint64("user_id", userID))
@@ -208,13 +206,10 @@ func (m *ReviewMenu) handleActionSelection(event *events.ComponentInteractionCre
 			return
 		}
 		m.handleSwitchReviewMode(event, s)
-
 	case constants.SwitchTargetModeCustomID:
 		m.handleSwitchTargetMode(event, s)
-
 	case constants.ReviewTargetModeOption:
 		m.layout.settingLayout.ShowUpdate(event, s, constants.UserSettingPrefix, constants.ReviewTargetModeOption)
-
 	case constants.ReviewModeOption:
 		m.layout.settingLayout.ShowUpdate(event, s, constants.UserSettingPrefix, constants.ReviewModeOption)
 	}
@@ -228,7 +223,7 @@ func (m *ReviewMenu) handleButton(event *events.ComponentInteractionCreate, s *s
 
 	switch customID {
 	case constants.BackButtonCustomID:
-		m.layout.dashboardLayout.Show(event, s, "")
+		m.layout.paginationManager.NavigateBack(event, s, "")
 	case constants.ConfirmButtonCustomID:
 		m.handleConfirmUser(event, s)
 	case constants.ClearButtonCustomID:
@@ -249,13 +244,15 @@ func (m *ReviewMenu) handleModal(event *events.ModalSubmitInteractionCreate, s *
 		m.handleConfirmWithReasonModalSubmit(event, s)
 	case constants.RecheckReasonModalCustomID:
 		m.handleRecheckModalSubmit(event, s)
+	case constants.AppealModalCustomID:
+		m.handleAppealModalSubmit(event, s)
 	}
 }
 
 // handleRecheck adds the user to the high priority queue for re-processing.
 // If the user is already in queue, it shows the status menu instead.
 func (m *ReviewMenu) handleRecheck(event *events.ComponentInteractionCreate, s *session.Session) {
-	var user *types.FlaggedUser
+	var user *types.ReviewUser
 	s.GetInterface(constants.SessionKeyTarget, &user)
 
 	// Check if user is already in queue to prevent duplicate entries
@@ -286,7 +283,7 @@ func (m *ReviewMenu) handleRecheck(event *events.ComponentInteractionCreate, s *
 // handleRecheckModalSubmit processes the custom recheck reason from the modal
 // and performs the recheck with the provided reason.
 func (m *ReviewMenu) handleRecheckModalSubmit(event *events.ModalSubmitInteractionCreate, s *session.Session) {
-	var user *types.FlaggedUser
+	var user *types.ReviewUser
 	s.GetInterface(constants.SessionKeyTarget, &user)
 	var settings *types.UserSetting
 	s.GetInterface(constants.SessionKeyUserSettings, &settings)
@@ -315,6 +312,7 @@ func (m *ReviewMenu) handleRecheckModalSubmit(event *events.ModalSubmitInteracti
 		CheckExists: true,
 	})
 	if err != nil {
+		m.layout.logger.Error("Failed to add user to queue", zap.Error(err))
 		m.layout.paginationManager.RespondWithError(event, "Failed to add user to queue")
 		return
 	}
@@ -328,6 +326,7 @@ func (m *ReviewMenu) handleRecheckModalSubmit(event *events.ModalSubmitInteracti
 		m.layout.queueManager.GetQueueLength(context.Background(), priority),
 	)
 	if err != nil {
+		m.layout.logger.Error("Failed to update queue info", zap.Error(err))
 		m.layout.paginationManager.RespondWithError(event, "Failed to update queue info")
 		return
 	}
@@ -341,9 +340,10 @@ func (m *ReviewMenu) handleRecheckModalSubmit(event *events.ModalSubmitInteracti
 // handleViewUserLogs handles the shortcut to view user logs.
 // It stores the user ID in session for log filtering and shows the logs menu.
 func (m *ReviewMenu) handleViewUserLogs(event *events.ComponentInteractionCreate, s *session.Session) {
-	var user *types.FlaggedUser
+	var user *types.ReviewUser
 	s.GetInterface(constants.SessionKeyTarget, &user)
 	if user == nil {
+		m.layout.logger.Error("No user selected to view logs")
 		m.layout.paginationManager.RespondWithError(event, "No user selected to view logs.")
 		return
 	}
@@ -359,7 +359,7 @@ func (m *ReviewMenu) handleViewUserLogs(event *events.ComponentInteractionCreate
 // handleConfirmUser moves a user to the confirmed state and logs the action.
 // After confirming, it loads a new user for review.
 func (m *ReviewMenu) handleConfirmUser(event interfaces.CommonEvent, s *session.Session) {
-	var user *types.FlaggedUser
+	var user *types.ReviewUser
 	s.GetInterface(constants.SessionKeyTarget, &user)
 
 	var settings *types.UserSetting
@@ -369,6 +369,7 @@ func (m *ReviewMenu) handleConfirmUser(event interfaces.CommonEvent, s *session.
 	if settings.ReviewMode == types.TrainingReviewMode {
 		// Training mode - increment downvotes
 		if err := m.layout.db.Users().UpdateTrainingVotes(context.Background(), user.ID, false); err != nil {
+			m.layout.logger.Error("Failed to update downvotes", zap.Error(err))
 			m.layout.paginationManager.RespondWithError(event, "Failed to update downvotes. Please try again.")
 			return
 		}
@@ -423,9 +424,8 @@ func (m *ReviewMenu) handleConfirmUser(event interfaces.CommonEvent, s *session.
 // handleClearUser removes a user from the flagged state and logs the action.
 // After clearing, it loads a new user for review.
 func (m *ReviewMenu) handleClearUser(event interfaces.CommonEvent, s *session.Session) {
-	var user *types.FlaggedUser
+	var user *types.ReviewUser
 	s.GetInterface(constants.SessionKeyTarget, &user)
-
 	var settings *types.UserSetting
 	s.GetInterface(constants.SessionKeyUserSettings, &settings)
 
@@ -433,6 +433,7 @@ func (m *ReviewMenu) handleClearUser(event interfaces.CommonEvent, s *session.Se
 	if settings.ReviewMode == types.TrainingReviewMode {
 		// Training mode - increment upvotes
 		if err := m.layout.db.Users().UpdateTrainingVotes(context.Background(), user.ID, true); err != nil {
+			m.layout.logger.Error("Failed to update upvotes", zap.Error(err))
 			m.layout.paginationManager.RespondWithError(event, "Failed to update upvotes. Please try again.")
 			return
 		}
@@ -490,7 +491,7 @@ func (m *ReviewMenu) handleClearUser(event interfaces.CommonEvent, s *session.Se
 // handleSkipUser logs the skip action and moves to the next user without
 // changing the current user's status.
 func (m *ReviewMenu) handleSkipUser(event interfaces.CommonEvent, s *session.Session) {
-	var user *types.FlaggedUser
+	var user *types.ReviewUser
 	s.GetInterface(constants.SessionKeyTarget, &user)
 
 	// Log the skip action asynchronously
@@ -515,10 +516,81 @@ func (m *ReviewMenu) handleSkipUser(event interfaces.CommonEvent, s *session.Ses
 	m.Show(event, s, fmt.Sprintf("Skipped user. %d users left to review.", flaggedCount))
 }
 
+// handleAppealUser opens a modal for submitting an appeal for the current user.
+func (m *ReviewMenu) handleAppealUser(event *events.ComponentInteractionCreate, s *session.Session) {
+	var user *types.ReviewUser
+	s.GetInterface(constants.SessionKeyTarget, &user)
+
+	// Create modal for appeal reason input
+	modal := discord.NewModalCreateBuilder().
+		SetCustomID(constants.AppealModalCustomID).
+		SetTitle("Submit Appeal").
+		AddActionRow(
+			discord.NewTextInput(constants.AppealReasonInputCustomID, discord.TextInputStyleParagraph, "Appeal Reason").
+				WithRequired(true).
+				WithMaxLength(512).
+				WithPlaceholder("Enter the reason for appealing this user..."),
+		).
+		Build()
+
+	// Show modal to user
+	if err := event.Modal(modal); err != nil {
+		m.layout.logger.Error("Failed to create appeal modal", zap.Error(err))
+		m.layout.paginationManager.RespondWithError(event, "Failed to open the appeal modal. Please try again.")
+	}
+}
+
+// handleAppealModalSubmit processes the appeal reason from the modal.
+func (m *ReviewMenu) handleAppealModalSubmit(event *events.ModalSubmitInteractionCreate, s *session.Session) {
+	var user *types.ReviewUser
+	s.GetInterface(constants.SessionKeyTarget, &user)
+
+	// Get and validate the appeal reason
+	reason := event.Data.Text(constants.AppealReasonInputCustomID)
+	if reason == "" {
+		m.layout.paginationManager.NavigateTo(event, s, m.page, "Appeal reason cannot be empty. Please try again.")
+		return
+	}
+
+	// Only allow appeals for confirmed/flagged users
+	if user.Status != types.UserTypeConfirmed && user.Status != types.UserTypeFlagged {
+		m.layout.paginationManager.NavigateTo(event, s, m.page, "Cannot submit appeal - user must be confirmed or flagged.")
+		return
+	}
+
+	// Create appeal request
+	appeal := &types.Appeal{
+		UserID:      user.ID,
+		RequesterID: uint64(event.User().ID),
+	}
+
+	// Submit appeal
+	if err := m.layout.db.Appeals().CreateAppeal(context.Background(), appeal, reason); err != nil {
+		m.layout.logger.Error("Failed to create appeal", zap.Error(err))
+		m.layout.paginationManager.RespondWithError(event, "Failed to submit appeal. Please try again.")
+		return
+	}
+
+	// Log the appeal submission
+	go m.layout.db.UserActivity().Log(context.Background(), &types.UserActivityLog{
+		ActivityTarget: types.ActivityTarget{
+			UserID: user.ID,
+		},
+		ReviewerID:        uint64(event.User().ID),
+		ActivityType:      types.ActivityTypeAppealSubmitted,
+		ActivityTimestamp: time.Now(),
+		Details: map[string]interface{}{
+			"reason": reason,
+		},
+	})
+
+	m.Show(event, s, "Appeal submitted successfully.")
+}
+
 // handleOpenAIChat handles the button to open the AI chat for the current user.
 // It adds a context message about the user and opens up the AI chat.
 func (m *ReviewMenu) handleOpenAIChat(event *events.ComponentInteractionCreate, s *session.Session) {
-	var target *types.FlaggedUser
+	var target *types.ReviewUser
 	s.GetInterface(constants.SessionKeyTarget, &target)
 
 	// Create context message about the user
@@ -552,7 +624,7 @@ Confidence: %.2f</context>`,
 // handleConfirmWithReason opens a modal for entering a custom confirm reason.
 // The modal pre-fills with the current reason if one exists.
 func (m *ReviewMenu) handleConfirmWithReason(event *events.ComponentInteractionCreate, s *session.Session) {
-	var user *types.FlaggedUser
+	var user *types.ReviewUser
 	s.GetInterface(constants.SessionKeyTarget, &user)
 
 	// Create modal with pre-filled reason field
@@ -577,13 +649,13 @@ func (m *ReviewMenu) handleConfirmWithReason(event *events.ComponentInteractionC
 // handleConfirmWithReasonModalSubmit processes the custom confirm reason from the modal
 // and performs the confirm with the provided reason.
 func (m *ReviewMenu) handleConfirmWithReasonModalSubmit(event *events.ModalSubmitInteractionCreate, s *session.Session) {
-	var user *types.FlaggedUser
+	var user *types.ReviewUser
 	s.GetInterface(constants.SessionKeyTarget, &user)
 
 	// Get and validate the confirm reason
 	reason := event.Data.Text(constants.ConfirmReasonInputCustomID)
 	if reason == "" {
-		m.layout.paginationManager.RespondWithError(event, "Confirm reason cannot be empty. Please try again.")
+		m.layout.paginationManager.NavigateTo(event, s, m.page, "Confirm reason cannot be empty. Please try again.")
 		return
 	}
 
@@ -675,7 +747,7 @@ func (m *ReviewMenu) fetchNewTarget(s *session.Session, reviewerID uint64) (*typ
 	// Store the user in session for the message builder
 	s.Set(constants.SessionKeyTarget, user)
 
-	// Log the view action asynchronously
+	// Log the view action
 	go m.layout.db.UserActivity().Log(context.Background(), &types.UserActivityLog{
 		ActivityTarget: types.ActivityTarget{
 			UserID: user.ID,
@@ -692,7 +764,7 @@ func (m *ReviewMenu) fetchNewTarget(s *session.Session, reviewerID uint64) (*typ
 // checkLastViewed checks if the current target user has timed out and needs to be refreshed.
 // Clears the current user and loads a new one if the timeout is detected.
 func (m *ReviewMenu) checkLastViewed(event interfaces.CommonEvent, s *session.Session) bool {
-	var user *types.FlaggedUser
+	var user *types.ReviewUser
 	s.GetInterface(constants.SessionKeyTarget, &user)
 
 	// Check if more than 10 minutes have passed since last view

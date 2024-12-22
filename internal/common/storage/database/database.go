@@ -29,6 +29,7 @@ type Client struct {
 	settings     *models.SettingModel
 	userActivity *models.ActivityModel
 	tracking     *models.TrackingModel
+	appeals      *models.AppealModel
 }
 
 // NewConnection establishes a new database connection and returns a Client instance.
@@ -66,6 +67,7 @@ func NewConnection(config *config.PostgreSQL, logger *zap.Logger) (*Client, erro
 		settings:     models.NewSetting(db, logger),
 		userActivity: models.NewUserActivity(db, logger),
 		tracking:     tracking,
+		appeals:      models.NewAppeal(db, logger),
 	}
 
 	// Initialize database components
@@ -103,6 +105,9 @@ func (c *Client) createSchema() error {
 		(*types.UserSetting)(nil),
 		(*types.BotSetting)(nil),
 		(*types.UserActivityLog)(nil),
+		(*types.Appeal)(nil),
+		(*types.AppealMessage)(nil),
+		(*types.AppealTimeline)(nil),
 		(*types.GroupMemberTracking)(nil),
 	}
 
@@ -187,7 +192,27 @@ func (c *Client) createIndexes() error {
 		
 		CREATE INDEX IF NOT EXISTS idx_user_activity_logs_type_time 
 		ON user_activity_logs (activity_type, activity_timestamp DESC, sequence DESC);
-		
+
+		-- Appeal indexes
+		CREATE INDEX IF NOT EXISTS idx_appeals_user_id ON appeals (user_id);
+		CREATE INDEX IF NOT EXISTS idx_appeals_requester_id ON appeals (requester_id);
+		CREATE INDEX IF NOT EXISTS idx_appeals_status ON appeals (status);
+		CREATE INDEX IF NOT EXISTS idx_appeals_claimed_by ON appeals (claimed_by) WHERE claimed_by > 0;
+
+		-- Appeal timeline indexes
+		CREATE INDEX IF NOT EXISTS idx_appeal_timelines_timestamp_asc 
+		ON appeal_timelines (timestamp ASC, id ASC);
+
+		CREATE INDEX IF NOT EXISTS idx_appeal_timelines_timestamp_desc 
+		ON appeal_timelines (timestamp DESC, id DESC);
+
+		CREATE INDEX IF NOT EXISTS idx_appeal_timelines_activity_desc
+		ON appeal_timelines (last_activity DESC, id DESC);
+
+		-- Appeal messages index
+		CREATE INDEX IF NOT EXISTS idx_appeal_messages_appeal_created
+		ON appeal_messages (appeal_id, created_at ASC);
+
 		-- Scanning indexes for users and groups
 		CREATE INDEX IF NOT EXISTS idx_confirmed_users_scan_time ON confirmed_users (last_scanned ASC);
 		CREATE INDEX IF NOT EXISTS idx_flagged_users_scan_time ON flagged_users (last_scanned ASC);
@@ -282,15 +307,20 @@ func (c *Client) setupTimescaleDB() error {
 		c.logger.Info("TimescaleDB extension already exists")
 	}
 
-	// Create hypertable
+	// Create hypertables
 	_, err = c.db.NewRaw(`
 		SELECT create_hypertable('user_activity_logs', 'activity_timestamp', 
 			chunk_time_interval => INTERVAL '1 day',
 			if_not_exists => TRUE
 		);
+
+		SELECT create_hypertable('appeal_timelines', 'timestamp', 
+			chunk_time_interval => INTERVAL '1 day',
+			if_not_exists => TRUE
+		);
 	`).Exec(context.Background())
 	if err != nil {
-		return fmt.Errorf("failed to setup TimescaleDB: %w", err)
+		return fmt.Errorf("failed to create hypertable: %w", err)
 	}
 
 	return nil
@@ -348,4 +378,9 @@ func (c *Client) Tracking() *models.TrackingModel {
 // UserActivity returns the repository for logging user actions.
 func (c *Client) UserActivity() *models.ActivityModel {
 	return c.userActivity
+}
+
+// Appeals returns the repository for appeal-related operations.
+func (c *Client) Appeals() *models.AppealModel {
+	return c.appeals
 }

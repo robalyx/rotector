@@ -2,30 +2,70 @@ package types
 
 import "errors"
 
-// SortBy represents different ways to sort items in the system.
-type SortBy string
+// AppealFilterBy represents different ways to filter appeals.
+type AppealFilterBy string
 
 const (
-	// SortByRandom orders items randomly to ensure even distribution of reviews.
-	SortByRandom SortBy = "random"
-	// SortByConfidence orders items by their confidence score from highest to lowest.
-	SortByConfidence SortBy = "confidence"
-	// SortByLastUpdated orders items by their last update time from oldest to newest.
-	SortByLastUpdated SortBy = "last_updated"
-	// SortByReputation orders items by their community reputation (upvotes - downvotes).
-	SortByReputation SortBy = "reputation"
+	// AppealFilterByPending shows only pending appeals.
+	AppealFilterByPending AppealFilterBy = "pending"
+	// AppealFilterByAccepted shows only accepted appeals.
+	AppealFilterByAccepted AppealFilterBy = "accepted"
+	// AppealFilterByRejected shows only rejected appeals.
+	AppealFilterByRejected AppealFilterBy = "rejected"
+	// AppealFilterByAll shows all appeals.
+	AppealFilterByAll AppealFilterBy = "all"
 )
 
-// FormatDisplay returns a user-friendly display string for the SortBy.
-func (s SortBy) FormatDisplay() string {
+// AppealSortBy represents different ways to sort appeals.
+type AppealSortBy string
+
+const (
+	// AppealSortByNewest orders appeals by submission time, newest first.
+	AppealSortByNewest AppealSortBy = "newest"
+	// AppealSortByOldest orders appeals by submission time, oldest first.
+	AppealSortByOldest AppealSortBy = "oldest"
+	// AppealSortByClaimed orders appeals by claimed status and last activity.
+	AppealSortByClaimed AppealSortBy = "claimed"
+)
+
+// FormatDisplay returns a user-friendly display string for the AppealSortBy.
+func (s AppealSortBy) FormatDisplay() string {
 	switch s {
-	case SortByRandom:
+	case AppealSortByNewest:
+		return "Newest First"
+	case AppealSortByOldest:
+		return "Oldest First"
+	case AppealSortByClaimed:
+		return "My Claims"
+	default:
+		return "Unknown Sort"
+	}
+}
+
+// Rename existing SortBy to ReviewSortBy.
+type ReviewSortBy string
+
+const (
+	// ReviewSortByRandom orders reviews by random.
+	ReviewSortByRandom ReviewSortBy = "random"
+	// ReviewSortByConfidence orders reviews by confidence.
+	ReviewSortByConfidence ReviewSortBy = "confidence"
+	// ReviewSortByLastUpdated orders reviews by last updated.
+	ReviewSortByLastUpdated ReviewSortBy = "last_updated"
+	// ReviewSortByReputation orders reviews by reputation.
+	ReviewSortByReputation ReviewSortBy = "reputation"
+)
+
+// FormatDisplay returns a user-friendly display string for the ReviewSortBy.
+func (s ReviewSortBy) FormatDisplay() string {
+	switch s {
+	case ReviewSortByRandom:
 		return "Random"
-	case SortByConfidence:
+	case ReviewSortByConfidence:
 		return "Confidence"
-	case SortByLastUpdated:
+	case ReviewSortByLastUpdated:
 		return "Last Updated"
-	case SortByReputation:
+	case ReviewSortByReputation:
 		return "Bad Reputation"
 	default:
 		return "Unknown Sort"

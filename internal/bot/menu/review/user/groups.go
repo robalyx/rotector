@@ -34,13 +34,14 @@ func NewGroupsMenu(layout *Layout) *GroupsMenu {
 			return builder.NewGroupsBuilder(s).Build()
 		},
 		ButtonHandlerFunc: m.handlePageNavigation,
+		IsSubMenu:         true,
 	}
 	return m
 }
 
 // Show prepares and displays the groups interface for a specific page.
 func (m *GroupsMenu) Show(event *events.ComponentInteractionCreate, s *session.Session, page int) {
-	var user *types.FlaggedUser
+	var user *types.ReviewUser
 	s.GetInterface(constants.SessionKeyTarget, &user)
 
 	// Return to review menu if user has no groups
@@ -121,16 +122,12 @@ func (m *GroupsMenu) handlePageNavigation(event *events.ComponentInteractionCrea
 	action := utils.ViewerAction(customID)
 	switch action {
 	case utils.ViewerFirstPage, utils.ViewerPrevPage, utils.ViewerNextPage, utils.ViewerLastPage:
-		var user *types.FlaggedUser
+		var user *types.ReviewUser
 		s.GetInterface(constants.SessionKeyTarget, &user)
 
 		// Calculate max page and validate navigation action
 		maxPage := (len(user.Groups) - 1) / constants.GroupsPerPage
-		page, ok := action.ParsePageAction(s, action, maxPage)
-		if !ok {
-			m.layout.paginationManager.RespondWithError(event, "Invalid interaction.")
-			return
-		}
+		page := action.ParsePageAction(s, action, maxPage)
 
 		m.Show(event, s, page)
 

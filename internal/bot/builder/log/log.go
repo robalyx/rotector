@@ -50,10 +50,7 @@ func NewBuilder(s *session.Session) *Builder {
 	}
 }
 
-// Build creates a Discord message showing:
-// - Current filter settings (user ID, reviewer ID, activity type, date range)
-// - List of log entries with timestamps and details
-// - Filter menus and navigation buttons.
+// Build creates a Discord message showing the log entries.
 func (b *Builder) Build() *discord.MessageUpdateBuilder {
 	// Create embed
 	embed := discord.NewEmbedBuilder().
@@ -194,5 +191,15 @@ func (b *Builder) buildActivityTypeOptions() []discord.StringSelectMenuOption {
 			WithDefault(b.activityTypeFilter == types.ActivityTypeGroupTrainingUpvote),
 		discord.NewStringSelectMenuOption("Group Training Downvote", strconv.Itoa(int(types.ActivityTypeGroupTrainingDownvote))).
 			WithDefault(b.activityTypeFilter == types.ActivityTypeGroupTrainingDownvote),
+		discord.NewStringSelectMenuOption("Appeal Submitted", strconv.Itoa(int(types.ActivityTypeAppealSubmitted))).
+			WithDefault(b.activityTypeFilter == types.ActivityTypeAppealSubmitted),
+		discord.NewStringSelectMenuOption("Appeal Skipped", strconv.Itoa(int(types.ActivityTypeAppealSkipped))).
+			WithDefault(b.activityTypeFilter == types.ActivityTypeAppealSkipped),
+		discord.NewStringSelectMenuOption("Appeal Accepted", strconv.Itoa(int(types.ActivityTypeAppealAccepted))).
+			WithDefault(b.activityTypeFilter == types.ActivityTypeAppealAccepted),
+		discord.NewStringSelectMenuOption("Appeal Rejected", strconv.Itoa(int(types.ActivityTypeAppealRejected))).
+			WithDefault(b.activityTypeFilter == types.ActivityTypeAppealRejected),
+		discord.NewStringSelectMenuOption("Appeal Closed", strconv.Itoa(int(types.ActivityTypeAppealClosed))).
+			WithDefault(b.activityTypeFilter == types.ActivityTypeAppealClosed),
 	}
 }

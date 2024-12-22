@@ -34,6 +34,7 @@ func NewFriendsMenu(layout *Layout) *FriendsMenu {
 			return builder.NewFriendsBuilder(s).Build()
 		},
 		ButtonHandlerFunc: m.handlePageNavigation,
+		IsSubMenu:         true,
 	}
 	return m
 }
@@ -41,7 +42,7 @@ func NewFriendsMenu(layout *Layout) *FriendsMenu {
 // Show prepares and displays the friends interface for a specific page.
 // It loads friend data, checks their status, and creates a grid of avatars.
 func (m *FriendsMenu) Show(event *events.ComponentInteractionCreate, s *session.Session, page int) {
-	var user *types.FlaggedUser
+	var user *types.ReviewUser
 	s.GetInterface(constants.SessionKeyTarget, &user)
 
 	// Return to review menu if user has no friends
@@ -94,16 +95,12 @@ func (m *FriendsMenu) handlePageNavigation(event *events.ComponentInteractionCre
 	action := utils.ViewerAction(customID)
 	switch action {
 	case utils.ViewerFirstPage, utils.ViewerPrevPage, utils.ViewerNextPage, utils.ViewerLastPage:
-		var user *types.FlaggedUser
+		var user *types.ReviewUser
 		s.GetInterface(constants.SessionKeyTarget, &user)
 
 		// Calculate max page and validate navigation action
 		maxPage := (len(user.Friends) - 1) / constants.FriendsPerPage
-		page, ok := action.ParsePageAction(s, action, maxPage)
-		if !ok {
-			m.layout.paginationManager.RespondWithError(event, "Invalid interaction.")
-			return
-		}
+		page := action.ParsePageAction(s, action, maxPage)
 
 		m.Show(event, s, page)
 

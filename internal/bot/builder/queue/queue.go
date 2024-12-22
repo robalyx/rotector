@@ -25,10 +25,7 @@ func NewBuilder(highCount, normalCount, lowCount int) *Builder {
 	}
 }
 
-// Build creates a Discord message showing:
-// - Current number of items in each priority queue
-// - Select menu for adding users to different priority queues
-// - Navigation and refresh buttons.
+// Build creates a Discord message showing the priority queues.
 func (b *Builder) Build() *discord.MessageUpdateBuilder {
 	// Create embed showing queue lengths
 	embed := discord.NewEmbedBuilder().

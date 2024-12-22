@@ -42,6 +42,17 @@ const (
 	ActivityTypeGroupTrainingUpvote // GROUP_TRAINING_UPVOTE
 	// ActivityTypeGroupTrainingDownvote tracks when a moderator downvotes a group in training mode.
 	ActivityTypeGroupTrainingDownvote // GROUP_TRAINING_DOWNVOTE
+
+	// ActivityTypeAppealSubmitted tracks when a moderator submits an appeal.
+	ActivityTypeAppealSubmitted // APPEAL_SUBMITTED
+	// ActivityTypeAppealSkipped tracks when a moderator skips reviewing an appeal.
+	ActivityTypeAppealSkipped // APPEAL_SKIPPED
+	// ActivityTypeAppealAccepted tracks when a moderator accepts an appeal.
+	ActivityTypeAppealAccepted // APPEAL_ACCEPTED
+	// ActivityTypeAppealRejected tracks when a moderator rejects an appeal.
+	ActivityTypeAppealRejected // APPEAL_REJECTED
+	// ActivityTypeAppealClosed tracks when a user closes an appeal.
+	ActivityTypeAppealClosed // APPEAL_CLOSED
 )
 
 // ActivityTarget identifies the target of an activity log entry.

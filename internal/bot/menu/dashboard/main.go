@@ -2,6 +2,7 @@ package dashboard
 
 import (
 	"context"
+	"errors"
 	"strconv"
 
 	"github.com/disgoorg/disgo/discord"
@@ -71,8 +72,7 @@ func (m *MainMenu) Show(event interfaces.CommonEvent, s *session.Session, conten
 	m.layout.paginationManager.NavigateTo(event, s, m.page, content)
 }
 
-// handleSelectMenu processes select menu interactions by routing to the
-// appropriate section based on the selected option.
+// handleSelectMenu processes select menu interactions.
 func (m *MainMenu) handleSelectMenu(event *events.ComponentInteractionCreate, s *session.Session, customID string, option string) {
 	if customID != constants.ActionSelectMenuCustomID {
 		return
@@ -121,6 +121,8 @@ func (m *MainMenu) handleSelectMenu(event *events.ComponentInteractionCreate, s 
 		m.handleLookupUser(event)
 	case constants.LookupGroupCustomID:
 		m.handleLookupGroup(event)
+	case constants.AppealMenuCustomID:
+		m.layout.appealLayout.ShowOverview(event, s, "")
 	}
 }
 
@@ -160,7 +162,7 @@ func (m *MainMenu) handleLookupGroup(event *events.ComponentInteractionCreate) {
 	}
 }
 
-// handleModal processes modal submissions for user and group lookups.
+// handleModal processes modal submissions.
 func (m *MainMenu) handleModal(event *events.ModalSubmitInteractionCreate, s *session.Session) {
 	switch event.Data.CustomID {
 	case constants.LookupUserModalCustomID:
@@ -176,15 +178,19 @@ func (m *MainMenu) handleLookupUserModalSubmit(event *events.ModalSubmitInteract
 	userIDStr := event.Data.Text(constants.LookupUserInputCustomID)
 	userID, err := strconv.ParseUint(userIDStr, 10, 64)
 	if err != nil {
-		m.layout.paginationManager.RespondWithError(event, "Invalid user ID format. Please enter a valid number.")
+		m.layout.paginationManager.NavigateTo(event, s, m.page, "Invalid user ID format. Please enter a valid number.")
 		return
 	}
 
 	// Get user from database
-	user, err := m.layout.db.Users().GetUserByID(context.Background(), userID, types.UserFields{})
+	user, err := m.layout.db.Users().GetUserByID(context.Background(), userID, types.UserFields{}, true)
 	if err != nil {
+		if errors.Is(err, types.ErrUserNotFound) {
+			m.layout.paginationManager.NavigateTo(event, s, m.page, "Failed to find user. They may not be in our database or is reserved.")
+			return
+		}
 		m.layout.logger.Error("Failed to fetch user", zap.Error(err))
-		m.layout.paginationManager.RespondWithError(event, "Failed to find user. They may not be in our database.")
+		m.layout.paginationManager.RespondWithError(event, "Failed to fetch user for review. Please try again.")
 		return
 	}
 
@@ -199,15 +205,19 @@ func (m *MainMenu) handleLookupGroupModalSubmit(event *events.ModalSubmitInterac
 	groupIDStr := event.Data.Text(constants.LookupGroupInputCustomID)
 	groupID, err := strconv.ParseUint(groupIDStr, 10, 64)
 	if err != nil {
-		m.layout.paginationManager.RespondWithError(event, "Invalid group ID format. Please enter a valid number.")
+		m.layout.paginationManager.NavigateTo(event, s, m.page, "Invalid group ID format. Please enter a valid number.")
 		return
 	}
 
 	// Get group from database
 	group, err := m.layout.db.Groups().GetGroupByID(context.Background(), groupID, types.GroupFields{})
 	if err != nil {
+		if errors.Is(err, types.ErrGroupNotFound) {
+			m.layout.paginationManager.NavigateTo(event, s, m.page, "Failed to find group. It may not be in our database or is reserved.")
+			return
+		}
 		m.layout.logger.Error("Failed to fetch group", zap.Error(err))
-		m.layout.paginationManager.RespondWithError(event, "Failed to find group. It may not be in our database.")
+		m.layout.paginationManager.RespondWithError(event, "Failed to fetch group for review. Please try again.")
 		return
 	}
 

@@ -244,10 +244,7 @@ func (b *ChartBuilder) getBackgroundStyle() chart.Style {
 	}
 }
 
-// getXAxis returns configuration for the x-axis including:
-// - Rotated labels to prevent overlap
-// - Grid lines for easier reading
-// - Custom tick marks and labels.
+// getXAxis returns configuration for the x-axis.
 func (b *ChartBuilder) getXAxis(gridLines []chart.GridLine, ticks []chart.Tick) chart.XAxis {
 	return chart.XAxis{
 		Style: chart.Style{
@@ -264,9 +261,7 @@ func (b *ChartBuilder) getXAxis(gridLines []chart.GridLine, ticks []chart.Tick) 
 	}
 }
 
-// getYAxis returns configuration for the y-axis including:
-// - Grid lines for easier reading
-// - Number formatting for count labels.
+// getYAxis returns configuration for the y-axis.
 func (b *ChartBuilder) getYAxis() chart.YAxis {
 	return chart.YAxis{
 		Style: chart.Style{
@@ -286,11 +281,7 @@ func (b *ChartBuilder) getYAxis() chart.YAxis {
 	}
 }
 
-// createSeries builds a line series for the chart with:
-// - Custom name for the legend
-// - Data points from x and y values
-// - Specified line color and thickness
-// - Dots at each data point.
+// createSeries builds a line series for the chart.
 func (b *ChartBuilder) createSeries(name string, xValues, yValues []float64, color drawing.Color) chart.Series {
 	return chart.ContinuousSeries{
 		Name:    name,

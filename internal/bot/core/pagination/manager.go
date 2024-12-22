@@ -17,8 +17,9 @@ import (
 // types of Discord interactions (select menus, buttons, modals) and a message builder function.
 // The handlers are optional - a page may only use some interaction types.
 type Page struct {
-	Name    string
-	Message func(s *session.Session) *discord.MessageUpdateBuilder
+	Name      string
+	Message   func(s *session.Session) *discord.MessageUpdateBuilder
+	IsSubMenu bool
 
 	// SelectHandlerFunc processes select menu interactions by taking the selected option
 	// and custom ID to determine what action to take
@@ -113,7 +114,7 @@ func (m *Manager) HandleInteraction(event interfaces.CommonEvent, s *session.Ses
 // The content parameter adds a timestamped message above the page content.
 func (m *Manager) NavigateTo(event interfaces.CommonEvent, s *session.Session, page *Page, content string) {
 	// Set the user ID in the session
-	s.Set(constants.SessionKeyUserID, strconv.FormatUint(uint64(event.User().ID), 10))
+	s.Set(constants.SessionKeyUserID, uint64(event.User().ID))
 
 	// Update the message with the new content and components
 	messageUpdate := page.Message(s).
@@ -139,9 +140,10 @@ func (m *Manager) NavigateTo(event interfaces.CommonEvent, s *session.Session, p
 
 // UpdatePage updates the session with the current page and previous page.
 func (m *Manager) UpdatePage(s *session.Session, page *Page) {
-	currentPage := s.GetString(constants.SessionKeyCurrentPage)
-	if page.Name != currentPage {
-		s.Set(constants.SessionKeyPreviousPage, currentPage)
+	currentPageName := s.GetString(constants.SessionKeyCurrentPage)
+	currentPage := m.GetPage(currentPageName)
+	if page.Name != currentPageName && currentPage != nil && !currentPage.IsSubMenu {
+		s.Set(constants.SessionKeyPreviousPage, currentPageName)
 	}
 
 	s.Set(constants.SessionKeyCurrentPage, page.Name)

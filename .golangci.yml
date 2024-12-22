@@ -24,9 +24,8 @@ linters:
     - dupl # Not needed
     - varnamelen # Not needed
     - nonamedreturns # Not needed
-    - gomnd # Deprecated
+    - iface # Not needed
     - exportloopref # Deprecated
-    - execinquery # Deprecated
 
 linters-settings:
   lll:
@@ -39,3 +38,5 @@ linters-settings:
       - singleCaseSwitch
   gocognit:
     min-complexity: 35
+  goconst:
+    min-len: 4
