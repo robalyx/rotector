@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 
 	"github.com/disgoorg/snowflake/v2"
 	"github.com/rotector/rotector/internal/common/storage/database/types"
@@ -47,12 +48,10 @@ func (r *SettingModel) GetUserSettings(ctx context.Context, userID snowflake.ID)
 			// Create default settings if none exist
 			_, err = r.db.NewInsert().Model(settings).Exec(ctx)
 			if err != nil {
-				r.logger.Error("Failed to create user settings", zap.Error(err), zap.Uint64("userID", uint64(userID)))
-				return nil, err
+				return nil, fmt.Errorf("failed to create user settings: %w (userID=%d)", err, userID)
 			}
 		} else {
-			r.logger.Error("Failed to get user settings", zap.Error(err), zap.Uint64("userID", uint64(userID)))
-			return nil, err
+			return nil, fmt.Errorf("failed to get user settings: %w (userID=%d)", err, userID)
 		}
 	}
 
@@ -73,10 +72,7 @@ func (r *SettingModel) SaveUserSettings(ctx context.Context, settings *types.Use
 		Set("review_target_mode = EXCLUDED.review_target_mode").
 		Exec(ctx)
 	if err != nil {
-		r.logger.Error("Failed to save user settings",
-			zap.Error(err),
-			zap.Uint64("userID", uint64(settings.UserID)))
-		return err
+		return fmt.Errorf("failed to save user settings: %w (userID=%d)", err, settings.UserID)
 	}
 
 	return nil
@@ -100,12 +96,10 @@ func (r *SettingModel) GetBotSettings(ctx context.Context) (*types.BotSetting, e
 			// Create default settings if none exist
 			_, err = r.db.NewInsert().Model(settings).Exec(ctx)
 			if err != nil {
-				r.logger.Error("Failed to create bot settings", zap.Error(err))
-				return nil, err
+				return nil, fmt.Errorf("failed to create bot settings: %w", err)
 			}
 		} else {
-			r.logger.Error("Failed to get bot settings", zap.Error(err))
-			return nil, err
+			return nil, fmt.Errorf("failed to get bot settings: %w", err)
 		}
 	}
 
@@ -122,8 +116,7 @@ func (r *SettingModel) SaveBotSettings(ctx context.Context, settings *types.BotS
 		Set("welcome_message = EXCLUDED.welcome_message").
 		Exec(ctx)
 	if err != nil {
-		r.logger.Error("Failed to save bot settings", zap.Error(err))
-		return err
+		return fmt.Errorf("failed to save bot settings: %w", err)
 	}
 	return nil
 }

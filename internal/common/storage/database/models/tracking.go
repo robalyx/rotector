@@ -2,6 +2,7 @@ package models
 
 import (
 	"context"
+	"fmt"
 	"sort"
 	"time"
 
@@ -70,10 +71,7 @@ func (r *TrackingModel) AddUsersToGroupsTracking(ctx context.Context, groupToUse
 			Set("is_flagged = group_member_tracking.is_flagged").
 			Exec(ctx)
 		if err != nil {
-			r.logger.Error("Failed to add users to groups tracking",
-				zap.Error(err),
-				zap.Int("groupCount", len(groupToUsers)))
-			return err
+			return fmt.Errorf("failed to add users to groups tracking: %w (groupCount=%d)", err, len(groupToUsers))
 		}
 
 		return nil
@@ -94,14 +92,18 @@ func (r *TrackingModel) PurgeOldTrackings(ctx context.Context, cutoffDate time.T
 		Where("last_appended < ?", cutoffDate).
 		Exec(ctx)
 	if err != nil {
-		r.logger.Error("Failed to purge old group trackings", zap.Error(err))
-		return 0, err
+		return 0, fmt.Errorf(
+			"failed to purge old group trackings: %w (cutoffDate=%s)",
+			err, cutoffDate.Format(time.RFC3339),
+		)
 	}
 
 	rowsAffected, err := result.RowsAffected()
 	if err != nil {
-		r.logger.Error("Failed to get rows affected", zap.Error(err))
-		return 0, err
+		return 0, fmt.Errorf(
+			"failed to get rows affected: %w (cutoffDate=%s)",
+			err, cutoffDate.Format(time.RFC3339),
+		)
 	}
 
 	return int(rowsAffected), nil
@@ -123,8 +125,7 @@ func (r *TrackingModel) GetGroupTrackingsToCheck(ctx context.Context, batchSize 
 			For("UPDATE").
 			Scan(ctx)
 		if err != nil {
-			r.logger.Error("Failed to get group trackings to check", zap.Error(err))
-			return err
+			return fmt.Errorf("failed to get group trackings to check: %w", err)
 		}
 
 		// Update last_checked timestamp for these groups
@@ -139,8 +140,7 @@ func (r *TrackingModel) GetGroupTrackingsToCheck(ctx context.Context, batchSize 
 				Where("group_id IN (?)", bun.In(groupIDs)).
 				Exec(ctx)
 			if err != nil {
-				r.logger.Error("Failed to update last_checked timestamps", zap.Error(err))
-				return err
+				return fmt.Errorf("failed to update last_checked timestamps: %w", err)
 			}
 		}
 
@@ -152,8 +152,7 @@ func (r *TrackingModel) GetGroupTrackingsToCheck(ctx context.Context, batchSize 
 		return nil
 	})
 	if err != nil {
-		r.logger.Error("Failed to get group trackings to check", zap.Error(err))
-		return nil, err
+		return nil, fmt.Errorf("failed to get group trackings to check: %w", err)
 	}
 
 	return result, nil
@@ -167,10 +166,7 @@ func (r *TrackingModel) GetFlaggedUsers(ctx context.Context, groupID uint64) ([]
 		Where("group_id = ?", groupID).
 		Scan(ctx)
 	if err != nil {
-		r.logger.Error("Failed to get flagged users for group",
-			zap.Error(err),
-			zap.Uint64("groupID", groupID))
-		return nil, err
+		return nil, fmt.Errorf("failed to get flagged users for group: %w (groupID=%d)", err, groupID)
 	}
 
 	return tracking.FlaggedUsers, nil
@@ -183,8 +179,7 @@ func (r *TrackingModel) UpdateFlaggedGroups(ctx context.Context, groupIDs []uint
 		Where("group_id IN (?)", bun.In(groupIDs)).
 		Exec(ctx)
 	if err != nil {
-		r.logger.Error("Failed to update flagged groups", zap.Error(err))
-		return err
+		return fmt.Errorf("failed to update flagged groups: %w (groupCount=%d)", err, len(groupIDs))
 	}
 	return nil
 }

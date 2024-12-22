@@ -95,8 +95,7 @@ func (r *StatsModel) GetCurrentStats(ctx context.Context) (*types.HourlyStats, e
 		return nil
 	})
 	if err != nil {
-		r.logger.Error("Failed to get current stats", zap.Error(err))
-		return nil, err
+		return nil, fmt.Errorf("failed to get current stats: %w", err)
 	}
 
 	return &stats, nil
@@ -117,8 +116,7 @@ func (r *StatsModel) SaveHourlyStats(ctx context.Context, stats *types.HourlySta
 		Set("groups_locked = EXCLUDED.groups_locked").
 		Exec(ctx)
 	if err != nil {
-		r.logger.Error("Failed to save hourly stats", zap.Error(err))
-		return err
+		return fmt.Errorf("failed to save hourly stats: %w", err)
 	}
 
 	return nil
@@ -136,8 +134,7 @@ func (r *StatsModel) GetHourlyStats(ctx context.Context) ([]types.HourlyStats, e
 		Order("timestamp ASC").
 		Scan(ctx)
 	if err != nil {
-		r.logger.Error("Failed to get hourly stats", zap.Error(err))
-		return nil, err
+		return nil, fmt.Errorf("failed to get hourly stats: %w", err)
 	}
 
 	return stats, nil
@@ -150,16 +147,12 @@ func (r *StatsModel) PurgeOldStats(ctx context.Context, cutoffDate time.Time) er
 		Where("timestamp < ?", cutoffDate).
 		Exec(ctx)
 	if err != nil {
-		r.logger.Error("Failed to purge old stats",
-			zap.Error(err),
-			zap.Time("cutoffDate", cutoffDate))
-		return err
+		return fmt.Errorf("failed to purge old stats: %w (cutoffDate=%s)", err, cutoffDate.Format(time.RFC3339))
 	}
 
 	rowsAffected, err := result.RowsAffected()
 	if err != nil {
-		r.logger.Error("Failed to get rows affected", zap.Error(err))
-		return err
+		return fmt.Errorf("failed to get rows affected: %w (cutoffDate=%s)", err, cutoffDate.Format(time.RFC3339))
 	}
 
 	r.logger.Debug("Purged old stats",
@@ -227,8 +220,7 @@ func (r *StatsModel) GetCurrentCounts(ctx context.Context) (*types.UserCounts, *
 		return nil
 	})
 	if err != nil {
-		r.logger.Error("Failed to get current counts", zap.Error(err))
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("failed to get current counts: %w", err)
 	}
 
 	return &userCounts, &groupCounts, nil

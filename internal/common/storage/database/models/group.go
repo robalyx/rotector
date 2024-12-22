@@ -53,10 +53,7 @@ func (r *GroupModel) SaveFlaggedGroups(ctx context.Context, flaggedGroups []*typ
 		Set("reputation = EXCLUDED.reputation").
 		Exec(ctx)
 	if err != nil {
-		r.logger.Error("Failed to save flagged groups",
-			zap.Error(err),
-			zap.Int("groupCount", len(flaggedGroups)))
-		return err
+		return fmt.Errorf("failed to save flagged groups: %w (groupCount=%d)", err, len(flaggedGroups))
 	}
 
 	r.logger.Debug("Finished saving flagged groups")
@@ -89,20 +86,14 @@ func (r *GroupModel) ConfirmGroup(ctx context.Context, group *types.FlaggedGroup
 			Set("verified_at = EXCLUDED.verified_at").
 			Exec(ctx)
 		if err != nil {
-			r.logger.Error("Failed to insert or update group in confirmed_groups",
-				zap.Error(err),
-				zap.Uint64("groupID", group.ID))
-			return err
+			return fmt.Errorf("failed to insert or update group in confirmed_groups: %w (groupID=%d)", err, group.ID)
 		}
 
 		_, err = tx.NewDelete().Model((*types.FlaggedGroup)(nil)).
 			Where("id = ?", group.ID).
 			Exec(ctx)
 		if err != nil {
-			r.logger.Error("Failed to delete group from flagged_groups",
-				zap.Error(err),
-				zap.Uint64("groupID", group.ID))
-			return err
+			return fmt.Errorf("failed to delete group from flagged_groups: %w (groupID=%d)", err, group.ID)
 		}
 
 		return nil
@@ -135,14 +126,12 @@ func (r *GroupModel) ClearGroup(ctx context.Context, group *types.FlaggedGroup) 
 			Set("cleared_at = EXCLUDED.cleared_at").
 			Exec(ctx)
 		if err != nil {
-			r.logger.Error("Failed to insert or update group in cleared_groups", zap.Error(err), zap.Uint64("groupID", group.ID))
-			return err
+			return fmt.Errorf("failed to insert or update group in cleared_groups: %w (groupID=%d)", err, group.ID)
 		}
 
 		_, err = tx.NewDelete().Model((*types.FlaggedGroup)(nil)).Where("id = ?", group.ID).Exec(ctx)
 		if err != nil {
-			r.logger.Error("Failed to delete group from flagged_groups", zap.Error(err), zap.Uint64("groupID", group.ID))
-			return err
+			return fmt.Errorf("failed to delete group from flagged_groups: %w (groupID=%d)", err, group.ID)
 		}
 
 		r.logger.Debug("Group cleared and moved to cleared_groups", zap.Uint64("groupID", group.ID))
@@ -159,8 +148,7 @@ func (r *GroupModel) GetClearedGroupByID(ctx context.Context, id uint64) (*types
 		Where("id = ?", id).
 		Scan(ctx)
 	if err != nil {
-		r.logger.Error("Failed to get cleared group by ID", zap.Error(err), zap.Uint64("groupID", id))
-		return nil, err
+		return nil, fmt.Errorf("failed to get cleared group by ID: %w (groupID=%d)", err, id)
 	}
 	r.logger.Debug("Retrieved cleared group by ID", zap.Uint64("groupID", id))
 	return &group, nil
@@ -172,8 +160,7 @@ func (r *GroupModel) GetClearedGroupsCount(ctx context.Context) (int, error) {
 		Model((*types.ClearedGroup)(nil)).
 		Count(ctx)
 	if err != nil {
-		r.logger.Error("Failed to get cleared groups count", zap.Error(err))
-		return 0, err
+		return 0, fmt.Errorf("failed to get cleared groups count: %w", err)
 	}
 	return count, nil
 }
@@ -222,10 +209,7 @@ func (r *GroupModel) GetGroupByID(ctx context.Context, groupID uint64, fields ty
 				Where("id = ?", groupID).
 				Exec(ctx)
 			if err != nil {
-				r.logger.Error("Failed to update last_viewed timestamp",
-					zap.Error(err),
-					zap.Uint64("groupID", groupID))
-				return err
+				return fmt.Errorf("failed to update last_viewed timestamp: %w (groupID=%d)", err, groupID)
 			}
 
 			// Extract the base Group data and additional fields
@@ -338,10 +322,7 @@ func (r *GroupModel) GetGroupsByIDs(ctx context.Context, groupIDs []uint64, fiel
 		return nil
 	})
 	if err != nil {
-		r.logger.Error("Failed to get groups by IDs",
-			zap.Error(err),
-			zap.Uint64s("groupIDs", groupIDs))
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("failed to get groups by IDs: %w (groupCount=%d)", err, len(groupIDs))
 	}
 
 	r.logger.Debug("Retrieved groups by IDs",
@@ -361,12 +342,13 @@ func (r *GroupModel) UpdateTrainingVotes(ctx context.Context, groupID uint64, is
 		return r.updateVotesInTable(ctx, tx, (*types.ConfirmedGroup)(nil), groupID, isUpvote)
 	})
 	if err != nil {
-		r.logger.Error("Failed to update training votes",
-			zap.Error(err),
-			zap.Uint64("groupID", groupID),
-			zap.String("voteType", map[bool]string{true: "upvote", false: "downvote"}[isUpvote]))
+		return fmt.Errorf(
+			"failed to update training votes: %w (groupID=%d, voteType=%s)",
+			err, groupID, map[bool]string{true: "upvote", false: "downvote"}[isUpvote],
+		)
 	}
-	return err
+
+	return nil
 }
 
 // updateVotesInTable handles updating votes for a specific table type.
@@ -422,8 +404,7 @@ func (r *GroupModel) GetGroupsToCheck(ctx context.Context, limit int) ([]uint64,
 			SELECT * FROM updated
 		`, limit/2).Scan(ctx, &groupIDs)
 		if err != nil {
-			r.logger.Error("Failed to get and update confirmed groups", zap.Error(err))
-			return err
+			return fmt.Errorf("failed to get and update confirmed groups: %w", err)
 		}
 
 		// Get and update flagged groups
@@ -444,8 +425,7 @@ func (r *GroupModel) GetGroupsToCheck(ctx context.Context, limit int) ([]uint64,
 			SELECT * FROM updated
 		`, limit/2).Scan(ctx, &flaggedIDs)
 		if err != nil {
-			r.logger.Error("Failed to get and update flagged groups", zap.Error(err))
-			return err
+			return fmt.Errorf("failed to get and update flagged groups: %w", err)
 		}
 		groupIDs = append(groupIDs, flaggedIDs...)
 
@@ -463,16 +443,15 @@ func (r *GroupModel) PurgeOldClearedGroups(ctx context.Context, cutoffDate time.
 		Where("cleared_at < ?", cutoffDate).
 		Exec(ctx)
 	if err != nil {
-		r.logger.Error("Failed to purge old cleared groups",
-			zap.Error(err),
-			zap.Time("cutoffDate", cutoffDate))
-		return 0, err
+		return 0, fmt.Errorf(
+			"failed to purge old cleared groups: %w (cutoffDate=%s)",
+			err, cutoffDate.Format(time.RFC3339),
+		)
 	}
 
 	affected, err := result.RowsAffected()
 	if err != nil {
-		r.logger.Error("Failed to get rows affected", zap.Error(err))
-		return 0, err
+		return 0, fmt.Errorf("failed to get rows affected: %w", err)
 	}
 
 	r.logger.Debug("Purged old cleared groups",
@@ -492,8 +471,7 @@ func (r *GroupModel) RemoveLockedGroups(ctx context.Context, groupIDs []uint64) 
 			Where("id IN (?)", bun.In(groupIDs)).
 			Scan(ctx)
 		if err != nil {
-			r.logger.Error("Failed to select confirmed groups for locking", zap.Error(err))
-			return err
+			return fmt.Errorf("failed to select confirmed groups for locking: %w", err)
 		}
 
 		for _, group := range confirmedGroups {
@@ -505,8 +483,10 @@ func (r *GroupModel) RemoveLockedGroups(ctx context.Context, groupIDs []uint64) 
 				On("CONFLICT (id) DO UPDATE").
 				Exec(ctx)
 			if err != nil {
-				r.logger.Error("Failed to insert locked group from confirmed_groups", zap.Error(err), zap.Uint64("groupID", group.ID))
-				return err
+				return fmt.Errorf(
+					"failed to insert locked group from confirmed_groups: %w (groupID=%d)",
+					err, group.ID,
+				)
 			}
 		}
 
@@ -516,8 +496,7 @@ func (r *GroupModel) RemoveLockedGroups(ctx context.Context, groupIDs []uint64) 
 			Where("id IN (?)", bun.In(groupIDs)).
 			Scan(ctx)
 		if err != nil {
-			r.logger.Error("Failed to select flagged groups for locking", zap.Error(err))
-			return err
+			return fmt.Errorf("failed to select flagged groups for locking: %w", err)
 		}
 
 		for _, group := range flaggedGroups {
@@ -529,8 +508,10 @@ func (r *GroupModel) RemoveLockedGroups(ctx context.Context, groupIDs []uint64) 
 				On("CONFLICT (id) DO UPDATE").
 				Exec(ctx)
 			if err != nil {
-				r.logger.Error("Failed to insert locked group from flagged_groups", zap.Error(err), zap.Uint64("groupID", group.ID))
-				return err
+				return fmt.Errorf(
+					"failed to insert locked group from flagged_groups: %w (groupID=%d)",
+					err, group.ID,
+				)
 			}
 		}
 
@@ -539,8 +520,10 @@ func (r *GroupModel) RemoveLockedGroups(ctx context.Context, groupIDs []uint64) 
 			Where("id IN (?)", bun.In(groupIDs)).
 			Exec(ctx)
 		if err != nil {
-			r.logger.Error("Failed to remove locked groups from confirmed_groups", zap.Error(err))
-			return err
+			return fmt.Errorf(
+				"failed to remove locked groups from confirmed_groups: %w (groupCount=%d)",
+				err, len(groupIDs),
+			)
 		}
 
 		// Remove groups from flagged_groups
@@ -548,8 +531,10 @@ func (r *GroupModel) RemoveLockedGroups(ctx context.Context, groupIDs []uint64) 
 			Where("id IN (?)", bun.In(groupIDs)).
 			Exec(ctx)
 		if err != nil {
-			r.logger.Error("Failed to remove locked groups from flagged_groups", zap.Error(err))
-			return err
+			return fmt.Errorf(
+				"failed to remove locked groups from flagged_groups: %w (groupCount=%d)",
+				err, len(groupIDs),
+			)
 		}
 
 		r.logger.Debug("Moved locked groups to locked_groups", zap.Int("count", len(groupIDs)))
@@ -577,8 +562,10 @@ func (r *GroupModel) GetGroupToScan(ctx context.Context) (*types.Group, error) {
 				Where("id = ?", confirmedGroup.ID).
 				Exec(ctx)
 			if err != nil {
-				r.logger.Error("Failed to update last_scanned for confirmed group", zap.Error(err))
-				return err
+				return fmt.Errorf(
+					"failed to update last_scanned for confirmed group: %w (groupID=%d)",
+					err, confirmedGroup.ID,
+				)
 			}
 			group = &confirmedGroup.Group
 			return nil
@@ -593,8 +580,7 @@ func (r *GroupModel) GetGroupToScan(ctx context.Context) (*types.Group, error) {
 			For("UPDATE SKIP LOCKED").
 			Scan(ctx)
 		if err != nil {
-			r.logger.Error("Failed to get group to scan", zap.Error(err))
-			return err
+			return fmt.Errorf("failed to get group to scan: %w", err)
 		}
 
 		// Update last_scanned
@@ -603,8 +589,10 @@ func (r *GroupModel) GetGroupToScan(ctx context.Context) (*types.Group, error) {
 			Where("id = ?", flaggedGroup.ID).
 			Exec(ctx)
 		if err != nil {
-			r.logger.Error("Failed to update last_scanned for flagged group", zap.Error(err))
-			return err
+			return fmt.Errorf(
+				"failed to update last_scanned for flagged group: %w (groupID=%d)",
+				err, flaggedGroup.ID,
+			)
 		}
 		group = &flaggedGroup.Group
 		return nil
@@ -771,8 +759,7 @@ func (r *GroupModel) CheckConfirmedGroups(ctx context.Context, groupIDs []uint64
 			Where("id IN (?)", bun.In(groupIDs)).
 			Scan(ctx, &confirmedGroupIDs)
 		if err != nil {
-			r.logger.Error("Failed to check confirmed groups", zap.Error(err))
-			return err
+			return fmt.Errorf("failed to query confirmed groups: %w", err)
 		}
 
 		return nil

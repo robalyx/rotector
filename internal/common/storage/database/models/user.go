@@ -67,10 +67,7 @@ func (r *UserModel) SaveFlaggedUsers(ctx context.Context, flaggedUsers map[uint6
 		Set("reputation = EXCLUDED.reputation").
 		Exec(ctx)
 	if err != nil {
-		r.logger.Error("Failed to save flagged users",
-			zap.Error(err),
-			zap.Int("userCount", len(flaggedUsers)))
-		return err
+		return fmt.Errorf("failed to save flagged users: %w (userCount=%d)", err, len(flaggedUsers))
 	}
 
 	r.logger.Debug("Successfully saved flagged users",
@@ -115,14 +112,12 @@ func (r *UserModel) ConfirmUser(ctx context.Context, user *types.ReviewUser) err
 			Set("verified_at = EXCLUDED.verified_at").
 			Exec(ctx)
 		if err != nil {
-			r.logger.Error("Failed to insert or update user in confirmed_users", zap.Error(err), zap.Uint64("userID", user.ID))
-			return err
+			return fmt.Errorf("failed to insert or update user in confirmed_users: %w (userID=%d)", err, user.ID)
 		}
 
 		_, err = tx.NewDelete().Model((*types.FlaggedUser)(nil)).Where("id = ?", user.ID).Exec(ctx)
 		if err != nil {
-			r.logger.Error("Failed to delete user from flagged_users", zap.Error(err), zap.Uint64("userID", user.ID))
-			return err
+			return fmt.Errorf("failed to delete user from flagged_users: %w (userID=%d)", err, user.ID)
 		}
 
 		return nil
@@ -165,10 +160,7 @@ func (r *UserModel) ClearUser(ctx context.Context, user *types.ReviewUser) error
 			Set("cleared_at = EXCLUDED.cleared_at").
 			Exec(ctx)
 		if err != nil {
-			r.logger.Error("Failed to insert or update user in cleared_users",
-				zap.Error(err),
-				zap.Uint64("userID", user.ID))
-			return err
+			return fmt.Errorf("failed to insert or update user in cleared_users: %w (userID=%d)", err, user.ID)
 		}
 
 		// Delete user from flagged_users table
@@ -176,10 +168,7 @@ func (r *UserModel) ClearUser(ctx context.Context, user *types.ReviewUser) error
 			Where("id = ?", user.ID).
 			Exec(ctx)
 		if err != nil {
-			r.logger.Error("Failed to delete user from flagged_users",
-				zap.Error(err),
-				zap.Uint64("userID", user.ID))
-			return err
+			return fmt.Errorf("failed to delete user from flagged_users: %w (userID=%d)", err, user.ID)
 		}
 
 		// Delete user from confirmed_users table
@@ -187,10 +176,7 @@ func (r *UserModel) ClearUser(ctx context.Context, user *types.ReviewUser) error
 			Where("id = ?", user.ID).
 			Exec(ctx)
 		if err != nil {
-			r.logger.Error("Failed to delete user from confirmed_users",
-				zap.Error(err),
-				zap.Uint64("userID", user.ID))
-			return err
+			return fmt.Errorf("failed to delete user from confirmed_users: %w (userID=%d)", err, user.ID)
 		}
 
 		r.logger.Debug("User cleared and moved to cleared_users",
@@ -212,10 +198,7 @@ func (r *UserModel) GetFlaggedUserByIDToReview(ctx context.Context, id uint64) (
 			For("UPDATE SKIP LOCKED").
 			Scan(ctx)
 		if err != nil {
-			r.logger.Error("Failed to get flagged user by ID",
-				zap.Error(err),
-				zap.Uint64("userID", id))
-			return err
+			return fmt.Errorf("failed to get flagged user by ID: %w (userID=%d)", err, id)
 		}
 
 		// Update last_viewed
@@ -226,10 +209,7 @@ func (r *UserModel) GetFlaggedUserByIDToReview(ctx context.Context, id uint64) (
 			Where("id = ?", id).
 			Exec(ctx)
 		if err != nil {
-			r.logger.Error("Failed to update last_viewed",
-				zap.Error(err),
-				zap.Uint64("userID", id))
-			return err
+			return fmt.Errorf("failed to update last_viewed: %w (userID=%d)", err, id)
 		}
 		user.LastViewed = now
 
@@ -253,8 +233,7 @@ func (r *UserModel) GetClearedUserByID(ctx context.Context, id uint64) (*types.C
 		Where("id = ?", id).
 		Scan(ctx)
 	if err != nil {
-		r.logger.Error("Failed to get cleared user by ID", zap.Error(err), zap.Uint64("userID", id))
-		return nil, err
+		return nil, fmt.Errorf("failed to get cleared user by ID: %w (userID=%d)", err, id)
 	}
 	r.logger.Debug("Retrieved cleared user by ID", zap.Uint64("userID", id))
 	return &user, nil
@@ -266,8 +245,7 @@ func (r *UserModel) GetConfirmedUsersCount(ctx context.Context) (int, error) {
 		Model((*types.ConfirmedUser)(nil)).
 		Count(ctx)
 	if err != nil {
-		r.logger.Error("Failed to get confirmed users count", zap.Error(err))
-		return 0, err
+		return 0, fmt.Errorf("failed to get confirmed users count: %w", err)
 	}
 	return count, nil
 }
@@ -278,8 +256,7 @@ func (r *UserModel) GetFlaggedUsersCount(ctx context.Context) (int, error) {
 		Model((*types.FlaggedUser)(nil)).
 		Count(ctx)
 	if err != nil {
-		r.logger.Error("Failed to get flagged users count", zap.Error(err))
-		return 0, err
+		return 0, fmt.Errorf("failed to get flagged users count: %w", err)
 	}
 	return count, nil
 }
@@ -290,8 +267,7 @@ func (r *UserModel) GetClearedUsersCount(ctx context.Context) (int, error) {
 		Model((*types.ClearedUser)(nil)).
 		Count(ctx)
 	if err != nil {
-		r.logger.Error("Failed to get cleared users count", zap.Error(err))
-		return 0, err
+		return 0, fmt.Errorf("failed to get cleared users count: %w", err)
 	}
 	return count, nil
 }
@@ -331,8 +307,7 @@ func (r *UserModel) CheckExistingUsers(ctx context.Context, userIDs []uint64) (m
 		return err
 	})
 	if err != nil {
-		r.logger.Error("Failed to check existing users", zap.Error(err))
-		return nil, err
+		return nil, fmt.Errorf("failed to check existing users: %w", err)
 	}
 
 	result := make(map[uint64]types.UserType, len(users))
@@ -401,10 +376,10 @@ func (r *UserModel) GetUserByID(ctx context.Context, userID uint64, fields types
 					Where("id = ?", userID).
 					Exec(ctx)
 				if err != nil {
-					r.logger.Error("Failed to update last_viewed timestamp",
-						zap.Error(err),
-						zap.Uint64("user_id", userID))
-					return err
+					return fmt.Errorf(
+						"failed to update last_viewed timestamp: %w (userID=%d)",
+						err, userID,
+					)
 				}
 			}
 
@@ -518,10 +493,7 @@ func (r *UserModel) GetUsersByIDs(ctx context.Context, userIDs []uint64, fields 
 		return nil
 	})
 	if err != nil {
-		r.logger.Error("Failed to get users by IDs",
-			zap.Error(err),
-			zap.Uint64s("userIDs", userIDs))
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("failed to get users by IDs: %w (userCount=%d)", err, len(userIDs))
 	}
 
 	r.logger.Debug("Retrieved users by IDs",
@@ -553,8 +525,7 @@ func (r *UserModel) GetUsersToCheck(ctx context.Context, limit int) ([]uint64, e
 			SELECT * FROM updated
 		`, limit/2).Scan(ctx, &userIDs)
 		if err != nil {
-			r.logger.Error("Failed to get and update confirmed users", zap.Error(err))
-			return err
+			return fmt.Errorf("failed to get and update confirmed users: %w", err)
 		}
 
 		// Get and update flagged users
@@ -575,8 +546,7 @@ func (r *UserModel) GetUsersToCheck(ctx context.Context, limit int) ([]uint64, e
 			SELECT * FROM updated
 		`, limit/2).Scan(ctx, &flaggedIDs)
 		if err != nil {
-			r.logger.Error("Failed to get and update flagged users", zap.Error(err))
-			return err
+			return fmt.Errorf("failed to get and update flagged users: %w", err)
 		}
 		userIDs = append(userIDs, flaggedIDs...)
 
@@ -596,8 +566,7 @@ func (r *UserModel) RemoveBannedUsers(ctx context.Context, userIDs []uint64) err
 			Where("id IN (?)", bun.In(userIDs)).
 			Scan(ctx)
 		if err != nil {
-			r.logger.Error("Failed to select confirmed users for banning", zap.Error(err))
-			return err
+			return fmt.Errorf("failed to select confirmed users for banning: %w", err)
 		}
 
 		for _, user := range confirmedUsers {
@@ -609,8 +578,7 @@ func (r *UserModel) RemoveBannedUsers(ctx context.Context, userIDs []uint64) err
 				On("CONFLICT (id) DO UPDATE").
 				Exec(ctx)
 			if err != nil {
-				r.logger.Error("Failed to insert banned user from confirmed_users", zap.Error(err), zap.Uint64("userID", user.ID))
-				return err
+				return fmt.Errorf("failed to insert banned user from confirmed_users: %w (userID=%d)", err, user.ID)
 			}
 		}
 
@@ -620,8 +588,7 @@ func (r *UserModel) RemoveBannedUsers(ctx context.Context, userIDs []uint64) err
 			Where("id IN (?)", bun.In(userIDs)).
 			Scan(ctx)
 		if err != nil {
-			r.logger.Error("Failed to select flagged users for banning", zap.Error(err))
-			return err
+			return fmt.Errorf("failed to select flagged users for banning: %w", err)
 		}
 
 		for _, user := range flaggedUsers {
@@ -633,8 +600,7 @@ func (r *UserModel) RemoveBannedUsers(ctx context.Context, userIDs []uint64) err
 				On("CONFLICT (id) DO UPDATE").
 				Exec(ctx)
 			if err != nil {
-				r.logger.Error("Failed to insert banned user from flagged_users", zap.Error(err), zap.Uint64("userID", user.ID))
-				return err
+				return fmt.Errorf("failed to insert banned user from flagged_users: %w (userID=%d)", err, user.ID)
 			}
 		}
 
@@ -643,8 +609,7 @@ func (r *UserModel) RemoveBannedUsers(ctx context.Context, userIDs []uint64) err
 			Where("id IN (?)", bun.In(userIDs)).
 			Exec(ctx)
 		if err != nil {
-			r.logger.Error("Failed to remove banned users from confirmed_users", zap.Error(err))
-			return err
+			return fmt.Errorf("failed to remove banned users from confirmed_users: %w (userCount=%d)", err, len(userIDs))
 		}
 
 		// Remove users from flagged_users
@@ -652,8 +617,7 @@ func (r *UserModel) RemoveBannedUsers(ctx context.Context, userIDs []uint64) err
 			Where("id IN (?)", bun.In(userIDs)).
 			Exec(ctx)
 		if err != nil {
-			r.logger.Error("Failed to remove banned users from flagged_users", zap.Error(err))
-			return err
+			return fmt.Errorf("failed to remove banned users from flagged_users: %w (userCount=%d)", err, len(userIDs))
 		}
 
 		r.logger.Debug("Moved banned users to banned_users", zap.Int("count", len(userIDs)))
@@ -669,16 +633,12 @@ func (r *UserModel) PurgeOldClearedUsers(ctx context.Context, cutoffDate time.Ti
 		Where("cleared_at < ?", cutoffDate).
 		Exec(ctx)
 	if err != nil {
-		r.logger.Error("Failed to purge old cleared users",
-			zap.Error(err),
-			zap.Time("cutoffDate", cutoffDate))
-		return 0, err
+		return 0, fmt.Errorf("failed to purge old cleared users: %w (cutoffDate=%s)", err, cutoffDate.Format(time.RFC3339))
 	}
 
 	affected, err := result.RowsAffected()
 	if err != nil {
-		r.logger.Error("Failed to get rows affected", zap.Error(err))
-		return 0, err
+		return 0, fmt.Errorf("failed to get rows affected: %w (cutoffDate=%s)", err, cutoffDate.Format(time.RFC3339))
 	}
 
 	r.logger.Debug("Purged old cleared users",
@@ -698,12 +658,13 @@ func (r *UserModel) UpdateTrainingVotes(ctx context.Context, userID uint64, isUp
 		return r.updateVotesInTable(ctx, tx, (*types.ConfirmedUser)(nil), userID, isUpvote)
 	})
 	if err != nil {
-		r.logger.Error("Failed to update training votes",
-			zap.Error(err),
-			zap.Uint64("userID", userID),
-			zap.String("voteType", map[bool]string{true: "upvote", false: "downvote"}[isUpvote]))
+		return fmt.Errorf(
+			"failed to update training votes: %w (userID=%d, voteType=%s)",
+			err, userID, map[bool]string{true: "upvote", false: "downvote"}[isUpvote],
+		)
 	}
-	return err
+
+	return nil
 }
 
 // updateVotesInTable handles updating votes for a specific table type.
@@ -758,8 +719,10 @@ func (r *UserModel) GetUserToScan(ctx context.Context) (*types.User, error) {
 				Where("id = ?", confirmedUser.ID).
 				Exec(ctx)
 			if err != nil {
-				r.logger.Error("Failed to update last_scanned for confirmed user", zap.Error(err))
-				return err
+				return fmt.Errorf(
+					"failed to update last_scanned for confirmed user: %w (userID=%d)",
+					err, confirmedUser.ID,
+				)
 			}
 			user = &confirmedUser.User
 			return nil
@@ -774,8 +737,7 @@ func (r *UserModel) GetUserToScan(ctx context.Context) (*types.User, error) {
 			For("UPDATE SKIP LOCKED").
 			Scan(ctx)
 		if err != nil {
-			r.logger.Error("Failed to get user to scan", zap.Error(err))
-			return err
+			return fmt.Errorf("failed to get user to scan: %w", err)
 		}
 
 		// Update last_scanned
@@ -784,8 +746,10 @@ func (r *UserModel) GetUserToScan(ctx context.Context) (*types.User, error) {
 			Where("id = ?", flaggedUser.ID).
 			Exec(ctx)
 		if err != nil {
-			r.logger.Error("Failed to update last_scanned for flagged user", zap.Error(err))
-			return err
+			return fmt.Errorf(
+				"failed to update last_scanned for flagged user: %w (userID=%d)",
+				err, flaggedUser.ID,
+			)
 		}
 		user = &flaggedUser.User
 		return nil

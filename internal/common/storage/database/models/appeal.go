@@ -2,6 +2,7 @@ package models
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/rotector/rotector/internal/common/storage/database/types"
@@ -42,11 +43,10 @@ func (r *AppealModel) CreateAppeal(ctx context.Context, appeal *types.Appeal, re
 		// Create the appeal
 		_, err := tx.NewInsert().Model(appeal).Exec(ctx)
 		if err != nil {
-			r.logger.Error("Failed to create appeal",
-				zap.Error(err),
-				zap.Uint64("userID", appeal.UserID),
-				zap.Uint64("requesterID", appeal.RequesterID))
-			return err
+			return fmt.Errorf(
+				"failed to create appeal: %w (userID=%d, requesterID=%d)",
+				err, appeal.UserID, appeal.RequesterID,
+			)
 		}
 
 		// Create timeline entry
@@ -58,10 +58,7 @@ func (r *AppealModel) CreateAppeal(ctx context.Context, appeal *types.Appeal, re
 		}
 		_, err = tx.NewInsert().Model(timeline).Exec(ctx)
 		if err != nil {
-			r.logger.Error("Failed to create appeal timeline",
-				zap.Error(err),
-				zap.Int64("appealID", appeal.ID))
-			return err
+			return fmt.Errorf("failed to create appeal timeline: %w (appealID=%d)", err, appeal.ID)
 		}
 
 		// Create initial message
@@ -74,10 +71,7 @@ func (r *AppealModel) CreateAppeal(ctx context.Context, appeal *types.Appeal, re
 		}
 		_, err = tx.NewInsert().Model(message).Exec(ctx)
 		if err != nil {
-			r.logger.Error("Failed to create initial appeal message",
-				zap.Error(err),
-				zap.Int64("appealID", appeal.ID))
-			return err
+			return fmt.Errorf("failed to create initial appeal message: %w (appealID=%d)", err, appeal.ID)
 		}
 
 		r.logger.Debug("Created appeal",
@@ -103,10 +97,7 @@ func (r *AppealModel) AcceptAppeal(ctx context.Context, appealID int64, reviewer
 			Where("status = ?", types.AppealStatusPending).
 			Exec(ctx)
 		if err != nil {
-			r.logger.Error("Failed to accept appeal",
-				zap.Error(err),
-				zap.Int64("appealID", appealID))
-			return err
+			return fmt.Errorf("failed to accept appeal: %w (appealID=%d)", err, appealID)
 		}
 
 		// Update timeline
@@ -116,10 +107,7 @@ func (r *AppealModel) AcceptAppeal(ctx context.Context, appealID int64, reviewer
 			Where("id = ?", appealID).
 			Exec(ctx)
 		if err != nil {
-			r.logger.Error("Failed to update appeal timeline",
-				zap.Error(err),
-				zap.Int64("appealID", appealID))
-			return err
+			return fmt.Errorf("failed to update appeal timeline: %w (appealID=%d)", err, appealID)
 		}
 
 		r.logger.Debug("Accepted appeal",
@@ -144,10 +132,7 @@ func (r *AppealModel) RejectAppeal(ctx context.Context, appealID int64, reviewer
 			Where("status = ?", types.AppealStatusPending).
 			Exec(ctx)
 		if err != nil {
-			r.logger.Error("Failed to reject appeal",
-				zap.Error(err),
-				zap.Int64("appealID", appealID))
-			return err
+			return fmt.Errorf("failed to reject appeal: %w (appealID=%d)", err, appealID)
 		}
 
 		// Update timeline
@@ -157,10 +142,7 @@ func (r *AppealModel) RejectAppeal(ctx context.Context, appealID int64, reviewer
 			Where("id = ?", appealID).
 			Exec(ctx)
 		if err != nil {
-			r.logger.Error("Failed to update appeal timeline",
-				zap.Error(err),
-				zap.Int64("appealID", appealID))
-			return err
+			return fmt.Errorf("failed to update appeal timeline: %w (appealID=%d)", err, appealID)
 		}
 
 		r.logger.Debug("Rejected appeal",
@@ -178,10 +160,7 @@ func (r *AppealModel) HasPendingAppealByRequester(ctx context.Context, requester
 		Where("status = ?", types.AppealStatusPending).
 		Exists(ctx)
 	if err != nil {
-		r.logger.Error("Failed to check pending appeals",
-			zap.Error(err),
-			zap.Uint64("requesterID", requesterID))
-		return false, err
+		return false, fmt.Errorf("failed to check pending appeals: %w (requesterID=%d)", err, requesterID)
 	}
 	return exists, nil
 }
@@ -235,11 +214,10 @@ func (r *AppealModel) GetAppealsToReview(
 	var results []appealResult
 	err := query.Scan(ctx, &results)
 	if err != nil {
-		r.logger.Error("Failed to get appeals with cursor",
-			zap.Error(err),
-			zap.String("sortBy", string(sortBy)),
-			zap.Uint64("reviewerID", reviewerID))
-		return nil, nil, nil, err
+		return nil, nil, nil, fmt.Errorf(
+			"failed to get appeals with cursor: %w (sortBy=%s, reviewerID=%d)",
+			err, string(sortBy), reviewerID,
+		)
 	}
 
 	// Process results to get appeals and cursors for pagination
@@ -279,10 +257,10 @@ func (r *AppealModel) GetAppealsByRequester(
 
 	err := query.Scan(ctx, &results)
 	if err != nil {
-		r.logger.Error("Failed to get appeals by requester",
-			zap.Error(err),
-			zap.Uint64("requesterID", requesterID))
-		return nil, nil, nil, err
+		return nil, nil, nil, fmt.Errorf(
+			"failed to get appeals by requester: %w (requesterID=%d)",
+			err, requesterID,
+		)
 	}
 
 	// Process results to get appeals and cursors for pagination
@@ -299,10 +277,7 @@ func (r *AppealModel) GetAppealMessages(ctx context.Context, appealID int64) ([]
 		Order("created_at ASC").
 		Scan(ctx)
 	if err != nil {
-		r.logger.Error("Failed to get appeal messages",
-			zap.Error(err),
-			zap.Int64("appealID", appealID))
-		return nil, err
+		return nil, fmt.Errorf("failed to get appeal messages: %w (appealID=%d)", err, appealID)
 	}
 
 	return messages, nil
@@ -314,39 +289,32 @@ func (r *AppealModel) AddAppealMessage(ctx context.Context, message *types.Appea
 	return r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
 		// Insert the new message
 		if _, err := tx.NewInsert().Model(message).Exec(ctx); err != nil {
-			r.logger.Error("Failed to insert appeal message",
-				zap.Error(err),
-				zap.Int64("appealID", appeal.ID))
-			return err
+			return fmt.Errorf("failed to insert appeal message: %w (appealID=%d)", err, appeal.ID)
 		}
 
 		now := time.Now()
 
 		// Auto-claim appeal for moderator messages if not already claimed
 		if message.Role == types.MessageRoleModerator && appeal.ClaimedBy == 0 {
-			if _, err := tx.NewUpdate().
+			_, err := tx.NewUpdate().
 				Model(appeal).
 				Set("claimed_by = ?", message.UserID).
 				Set("claimed_at = ?", now).
 				Where("id = ?", appeal.ID).
-				Exec(ctx); err != nil {
-				r.logger.Error("Failed to update appeal",
-					zap.Error(err),
-					zap.Int64("appealID", appeal.ID))
-				return err
+				Exec(ctx)
+			if err != nil {
+				return fmt.Errorf("failed to update appeal: %w (appealID=%d)", err, appeal.ID)
 			}
 		}
 
 		// Update the appeal's last activity timestamp
-		if _, err := tx.NewUpdate().
+		_, err := tx.NewUpdate().
 			Model((*types.AppealTimeline)(nil)).
 			Set("last_activity = ?", now).
 			Where("id = ?", appeal.ID).
-			Exec(ctx); err != nil {
-			r.logger.Error("Failed to update appeal timeline",
-				zap.Error(err),
-				zap.Int64("appealID", appeal.ID))
-			return err
+			Exec(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to update appeal timeline: %w (appealID=%d)", err, appeal.ID)
 		}
 
 		return nil

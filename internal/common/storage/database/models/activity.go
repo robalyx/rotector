@@ -3,6 +3,7 @@ package models
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"github.com/rotector/rotector/internal/common/storage/database/types"
 	"github.com/uptrace/bun"
@@ -89,8 +90,7 @@ func (r *ActivityModel) GetLogs(ctx context.Context, filter types.ActivityFilter
 
 	err := query.Scan(ctx)
 	if err != nil {
-		r.logger.Error("Failed to get logs", zap.Error(err))
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("failed to get logs: %w", err)
 	}
 
 	var nextCursor *types.LogCursor
