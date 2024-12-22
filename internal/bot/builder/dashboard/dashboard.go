@@ -14,6 +14,7 @@ import (
 	"github.com/redis/rueidis"
 	"github.com/rotector/rotector/internal/bot/constants"
 	"github.com/rotector/rotector/internal/bot/core/session"
+	"github.com/rotector/rotector/internal/bot/utils"
 	"github.com/rotector/rotector/internal/common/storage/database/types"
 	"github.com/rotector/rotector/internal/worker/core"
 	"github.com/rotector/rotector/internal/worker/stats"
@@ -185,11 +186,25 @@ func (b *Builder) buildWelcomeEmbed() discord.Embed {
 
 	// Add active reviewers field if any are online
 	if len(b.activeUsers) > 0 {
-		activeUserMentions := make([]string, len(b.activeUsers))
-		for i, userID := range b.activeUsers {
-			activeUserMentions[i] = fmt.Sprintf("<@%d>", userID)
+		// Show only first 10 reviewers
+		displayUsers := b.activeUsers
+		if len(displayUsers) > 10 {
+			displayUsers = displayUsers[:10]
 		}
-		embed.AddField("Active Reviewers", strings.Join(activeUserMentions, ", "), false)
+
+		// Convert snowflake IDs to uint64
+		displayIDs := make([]uint64, len(displayUsers))
+		for i, userID := range displayUsers {
+			displayIDs[i] = uint64(userID)
+		}
+
+		// Format IDs and add count of additional users if any
+		fieldValue := utils.FormatIDs(displayIDs)
+		if len(b.activeUsers) > 10 {
+			fieldValue += fmt.Sprintf("\n...and %d more", len(b.activeUsers)-10)
+		}
+
+		embed.AddField("Active Reviewers", fieldValue, false)
 	}
 
 	return embed.Build()
