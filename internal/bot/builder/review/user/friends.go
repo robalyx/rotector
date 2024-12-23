@@ -172,7 +172,17 @@ func (b *FriendsBuilder) getFriendFieldValue(friend types.ExtendedFriend) string
 			info.WriteString(fmt.Sprintf(" (%.2f)", flaggedFriend.Confidence))
 		}
 		if flaggedFriend.Reason != "" {
-			info.WriteString(fmt.Sprintf("\n```%s```", flaggedFriend.Reason))
+			censored := utils.CensorStringsInText(
+				flaggedFriend.Reason,
+				b.settings.StreamerMode,
+				strconv.FormatUint(b.user.ID, 10),
+				b.user.Name,
+				b.user.DisplayName,
+				strconv.FormatUint(flaggedFriend.ID, 10),
+				flaggedFriend.Name,
+				flaggedFriend.DisplayName,
+			)
+			info.WriteString(fmt.Sprintf("\n```%s```", censored))
 		}
 	}
 
