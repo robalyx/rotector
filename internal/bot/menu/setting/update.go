@@ -113,16 +113,13 @@ func (m *UpdateMenu) updateSetting(s *session.Session, setting setting.Setting, 
 		if err != nil {
 			return err
 		}
-
 		s.Set(constants.SessionKeyUserSettings, userSettings)
 	} else {
 		err := m.layout.db.Settings().SaveBotSettings(context.Background(), botSettings)
 		if err != nil {
 			return err
 		}
-
 		s.Set(constants.SessionKeyBotSettings, botSettings)
-		m.layout.sessionManager.UpdateBotSettings(botSettings)
 	}
 
 	return nil

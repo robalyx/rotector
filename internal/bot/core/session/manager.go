@@ -17,6 +17,9 @@ import (
 )
 
 const (
+	// BotSettingsRefreshInterval defines how often bot settings should be reloaded.
+	BotSettingsRefreshInterval = time.Minute
+
 	// SessionTimeout defines how long a session remains valid before expiring.
 	// After this duration, Redis will automatically delete the session data.
 	SessionTimeout = 10 * time.Minute
@@ -42,10 +45,11 @@ var (
 // Manager manages the session lifecycle using Redis as the backing store.
 // Sessions are prefixed and stored with automatic expiration.
 type Manager struct {
-	db          *database.Client
-	redis       rueidis.Client
-	botSettings *types.BotSetting
-	logger      *zap.Logger
+	db                 *database.Client
+	redis              rueidis.Client
+	logger             *zap.Logger
+	botSettings        *types.BotSetting
+	lastSettingsUpdate time.Time
 }
 
 // NewManager creates a new session manager that uses Redis as the backing store.
@@ -63,25 +67,31 @@ func NewManager(db *database.Client, redisManager *redis.Manager, logger *zap.Lo
 	}
 
 	return &Manager{
-		db:          db,
-		redis:       redisClient,
-		botSettings: botSettings,
-		logger:      logger,
+		db:                 db,
+		redis:              redisClient,
+		logger:             logger,
+		botSettings:        botSettings,
+		lastSettingsUpdate: time.Now(),
 	}, nil
-}
-
-// UpdateBotSettings updates the bot settings to the latest version.
-func (m *Manager) UpdateBotSettings(botSettings *types.BotSetting) {
-	m.botSettings = botSettings
 }
 
 // GetOrCreateSession loads or initializes a session for a given user.
 // New sessions are populated with user settings from the database.
 // Existing sessions are refreshed with the latest user settings.
 func (m *Manager) GetOrCreateSession(ctx context.Context, userID snowflake.ID) (*Session, error) {
-	key := fmt.Sprintf("%s%d", SessionPrefix, userID)
+	// Check if bot settings need to be reloaded
+	if time.Since(m.lastSettingsUpdate) >= BotSettingsRefreshInterval {
+		botSettings, err := m.db.Settings().GetBotSettings(ctx)
+		if err != nil {
+			m.logger.Error("Failed to reload bot settings", zap.Error(err))
+		} else {
+			m.botSettings = botSettings
+			m.lastSettingsUpdate = time.Now()
+		}
+	}
 
 	// Try loading existing session first
+	key := fmt.Sprintf("%s%d", SessionPrefix, userID)
 	result := m.redis.Do(ctx, m.redis.B().Get().Key(key).Build())
 	sessionExists := result.Error() == nil
 
