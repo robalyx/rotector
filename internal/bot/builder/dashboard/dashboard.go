@@ -186,22 +186,18 @@ func (b *Builder) buildWelcomeEmbed() discord.Embed {
 
 	// Add active reviewers field if any are online
 	if len(b.activeUsers) > 0 {
-		// Show only first 10 reviewers
-		displayUsers := b.activeUsers
-		if len(displayUsers) > 10 {
-			displayUsers = displayUsers[:10]
-		}
-
-		// Convert snowflake IDs to uint64
-		displayIDs := make([]uint64, len(displayUsers))
-		for i, userID := range displayUsers {
-			displayIDs[i] = uint64(userID)
+		// Collect reviewer IDs
+		displayIDs := make([]uint64, 0, 10)
+		for _, userID := range b.activeUsers {
+			if b.botSettings.IsReviewer(uint64(userID)) {
+				displayIDs = append(displayIDs, uint64(userID))
+			}
 		}
 
 		// Format IDs and add count of additional users if any
 		fieldValue := utils.FormatIDs(displayIDs)
-		if len(b.activeUsers) > 10 {
-			fieldValue += fmt.Sprintf("\n...and %d more", len(b.activeUsers)-10)
+		if len(displayIDs) > 10 {
+			fieldValue += fmt.Sprintf("\n...and %d more", len(displayIDs)-10)
 		}
 
 		embed.AddField("Active Reviewers", fieldValue, false)
