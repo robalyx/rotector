@@ -65,11 +65,17 @@ func (h *ChatHandler) StreamResponse(ctx context.Context, history []*genai.Conte
 		defer close(responseChan)
 		defer close(historyChan)
 
+		// Limit history to last 10 messages
+		limitedHistory := history
+		if len(history) > 10 {
+			limitedHistory = history[len(history)-10:]
+		}
+
 		// Create chat model
 		cc, err := h.genAIClient.CreateCachedContent(ctx, &genai.CachedContent{
 			Model:             modelName,
 			SystemInstruction: genai.NewUserContent(genai.Text(ChatSystemPrompt)),
-			Contents:          history,
+			Contents:          limitedHistory,
 		})
 		if err != nil {
 			log.Fatal(err)
