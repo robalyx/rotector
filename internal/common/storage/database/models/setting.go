@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/disgoorg/snowflake/v2"
 	"github.com/rotector/rotector/internal/common/storage/database/types"
@@ -38,6 +39,10 @@ func (r *SettingModel) GetUserSettings(ctx context.Context, userID snowflake.ID)
 		ChatModel:          types.ChatModelGeminiPro,
 		ReviewMode:         types.StandardReviewMode,
 		ReviewTargetMode:   types.FlaggedReviewTarget,
+		ChatMessageUsage: types.ChatMessageUsage{
+			FirstMessageTime: time.Unix(0, 0),
+			MessageCount:     0,
+		},
 	}
 
 	err := r.db.NewSelect().Model(settings).
@@ -60,6 +65,7 @@ func (r *SettingModel) GetUserSettings(ctx context.Context, userID snowflake.ID)
 
 // SaveUserSettings updates or creates user settings.
 func (r *SettingModel) SaveUserSettings(ctx context.Context, settings *types.UserSetting) error {
+	r.logger.Info("message_count", zap.Int("message_count", settings.ChatMessageUsage.MessageCount))
 	_, err := r.db.NewInsert().Model(settings).
 		On("CONFLICT (user_id) DO UPDATE").
 		Set("streamer_mode = EXCLUDED.streamer_mode").
@@ -70,6 +76,8 @@ func (r *SettingModel) SaveUserSettings(ctx context.Context, settings *types.Use
 		Set("chat_model = EXCLUDED.chat_model").
 		Set("review_mode = EXCLUDED.review_mode").
 		Set("review_target_mode = EXCLUDED.review_target_mode").
+		Set("first_message_time = EXCLUDED.first_message_time").
+		Set("message_count = EXCLUDED.message_count").
 		Exec(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to save user settings: %w (userID=%d)", err, settings.UserID)

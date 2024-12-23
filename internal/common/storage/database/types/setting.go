@@ -1,8 +1,16 @@
 package types
 
 import (
+	"time"
+
 	"github.com/disgoorg/snowflake/v2"
 )
+
+// ChatMessageUsage keeps track of chat message usage within a 24-hour period.
+type ChatMessageUsage struct {
+	FirstMessageTime time.Time `bun:",nullzero,notnull"`
+	MessageCount     int       `bun:",notnull"`
+}
 
 // UserSetting stores user-specific preferences.
 type UserSetting struct {
@@ -15,6 +23,7 @@ type UserSetting struct {
 	ChatModel          ChatModel        `bun:",notnull"`
 	ReviewMode         ReviewMode       `bun:",notnull"`
 	ReviewTargetMode   ReviewTargetMode `bun:",notnull"`
+	ChatMessageUsage   ChatMessageUsage `bun:",embed"`
 }
 
 // BotSetting stores bot-wide configuration options.

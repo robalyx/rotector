@@ -124,6 +124,16 @@ func (m *Menu) handleModal(event *events.ModalSubmitInteractionCreate, s *sessio
 			return
 		}
 
+		// Get user settings
+		var userSettings *types.UserSetting
+		s.GetInterface(constants.SessionKeyUserSettings, &userSettings)
+
+		// Check message limits
+		if allowed, errMsg := m.checkMessageLimits(s, userSettings); !allowed {
+			m.layout.paginationManager.NavigateTo(event, s, m.page, errMsg)
+			return
+		}
+
 		// Prepend context if available
 		var msgContext string
 		s.GetInterface(constants.SessionKeyChatContext, &msgContext)
@@ -138,11 +148,9 @@ func (m *Menu) handleModal(event *events.ModalSubmitInteractionCreate, s *sessio
 		// Show "AI is typing..." message
 		m.layout.paginationManager.NavigateTo(event, s, m.page, "AI is typing...")
 
-		// Get user settings and chat history
+		// Get chat history
 		var history ai.ChatHistory
 		s.GetInterface(constants.SessionKeyChatHistory, &history)
-		var userSettings *types.UserSetting
-		s.GetInterface(constants.SessionKeyUserSettings, &userSettings)
 
 		// Stream AI response
 		responseChan, historyChan := m.layout.chatHandler.StreamResponse(
@@ -190,4 +198,36 @@ func (m *Menu) handleModal(event *events.ModalSubmitInteractionCreate, s *sessio
 		// Show final message
 		m.layout.paginationManager.NavigateTo(event, s, m.page, "Response completed.")
 	}
+}
+
+// checkMessageLimits checks if the user has exceeded their daily message limit.
+// Returns true if the message should be allowed, false if it should be blocked.
+func (m *Menu) checkMessageLimits(s *session.Session, userSettings *types.UserSetting) (bool, string) {
+	now := time.Now()
+	if userSettings.ChatMessageUsage.FirstMessageTime.IsZero() ||
+		now.Sub(userSettings.ChatMessageUsage.FirstMessageTime) > constants.ChatMessageResetLimit {
+		// First message or past time limit - reset both time and count
+		userSettings.ChatMessageUsage.FirstMessageTime = now
+		userSettings.ChatMessageUsage.MessageCount = 1
+	} else {
+		// Within time limit - check count
+		if userSettings.ChatMessageUsage.MessageCount >= constants.MaxChatMessagesPerDay {
+			timeLeft := userSettings.ChatMessageUsage.FirstMessageTime.Add(constants.ChatMessageResetLimit).Sub(now)
+			return false, fmt.Sprintf("You have reached the limit of %d messages per day. Please try again in %s.",
+				constants.MaxChatMessagesPerDay,
+				timeLeft.String())
+		}
+		userSettings.ChatMessageUsage.MessageCount++
+	}
+
+	// Save updated usage to database
+	if err := m.layout.db.Settings().SaveUserSettings(context.Background(), userSettings); err != nil {
+		m.layout.logger.Error("Failed to save chat message usage", zap.Error(err))
+		return false, "Failed to update chat message usage. Please try again."
+	}
+
+	// Update session with new settings
+	s.Set(constants.SessionKeyUserSettings, userSettings)
+
+	return true, ""
 }

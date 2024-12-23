@@ -1,5 +1,7 @@
 package constants
 
+import "time"
+
 // Commands.
 const (
 	DashboardCommandName = "dashboard"
@@ -95,6 +97,9 @@ const (
 
 // Chat Menu.
 const (
+	MaxChatMessagesPerDay = 50
+	ChatMessageResetLimit = 24 * time.Hour
+
 	ChatMessagesPerPage      = 2
 	ChatSendButtonID         = "chat_send" + ModalOpenSuffix
 	ChatInputModalID         = "chat_input_modal"
