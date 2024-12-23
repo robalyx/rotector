@@ -17,7 +17,7 @@ require (
 	github.com/jaxron/axonet/middleware/singleflight v0.0.0-20241210091027-3b92c80609cf
 	github.com/jaxron/roapi.go v0.0.0-20241207095928-5d33fcc38cf1
 	github.com/redis/rueidis v1.0.51
-	github.com/spf13/cast v1.7.0
+	github.com/spf13/cast v1.7.1
 	github.com/spf13/cobra v1.8.1
 	github.com/spf13/viper v1.19.0
 	github.com/tdewolff/minify/v2 v2.21.2
@@ -30,8 +30,8 @@ require (
 	golang.org/x/image v0.23.0
 	golang.org/x/text v0.21.0
 	golang.org/x/time v0.8.0
-	google.golang.org/api v0.212.0
-	google.golang.org/protobuf v1.36.0
+	google.golang.org/api v0.214.0
+	google.golang.org/protobuf v1.36.1
 )
 
 require (
@@ -94,7 +94,7 @@ require (
 	golang.org/x/arch v0.12.0 // indirect
 	golang.org/x/crypto v0.31.0 // indirect
 	golang.org/x/exp v0.0.0-20241204233417-43b7b7cde48d // indirect
-	golang.org/x/net v0.32.0 // indirect
+	golang.org/x/net v0.33.0 // indirect
 	golang.org/x/oauth2 v0.24.0 // indirect
 	golang.org/x/sync v0.10.0 // indirect
 	golang.org/x/sys v0.28.0 // indirect
