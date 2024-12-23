@@ -92,6 +92,10 @@ func (m *ReviewMenu) Show(event interfaces.CommonEvent, s *session.Session, cont
 
 // handleSelectMenu processes select menu interactions.
 func (m *ReviewMenu) handleSelectMenu(event *events.ComponentInteractionCreate, s *session.Session, customID string, option string) {
+	if m.checkLastViewed(event, s) {
+		return
+	}
+
 	switch customID {
 	case constants.SortOrderSelectMenuCustomID:
 		m.handleSortOrderSelection(event, s, option)
@@ -189,6 +193,10 @@ func (m *ReviewMenu) fetchNewTarget(s *session.Session, reviewerID uint64) (*typ
 
 // handleButton processes button clicks.
 func (m *ReviewMenu) handleButton(event *events.ComponentInteractionCreate, s *session.Session, customID string) {
+	if m.checkLastViewed(event, s) {
+		return
+	}
+
 	switch customID {
 	case constants.BackButtonCustomID:
 		m.layout.dashboardLayout.Show(event, s, "")
@@ -203,6 +211,10 @@ func (m *ReviewMenu) handleButton(event *events.ComponentInteractionCreate, s *s
 
 // handleModal processes modal submissions.
 func (m *ReviewMenu) handleModal(event *events.ModalSubmitInteractionCreate, s *session.Session) {
+	if m.checkLastViewed(event, s) {
+		return
+	}
+
 	switch event.Data.CustomID {
 	case constants.GroupConfirmWithReasonModalCustomID:
 		m.handleConfirmWithReasonModalSubmit(event, s)
@@ -463,4 +475,21 @@ func (m *ReviewMenu) handleConfirmWithReasonModalSubmit(event *events.ModalSubmi
 	// Clear current group and load next one
 	s.Delete(constants.SessionKeyGroupTarget)
 	m.Show(event, s, "Group confirmed.")
+}
+
+// checkLastViewed checks if the current target group has timed out and needs to be refreshed.
+// Clears the current group and loads a new one if the timeout is detected.
+func (m *ReviewMenu) checkLastViewed(event interfaces.CommonEvent, s *session.Session) bool {
+	var group *types.ReviewGroup
+	s.GetInterface(constants.SessionKeyGroupTarget, &group)
+
+	// Check if more than 10 minutes have passed since last view
+	if group != nil && time.Since(group.LastViewed) > 10*time.Minute {
+		// Clear current group and load new one
+		s.Delete(constants.SessionKeyGroupTarget)
+		m.Show(event, s, "Previous review timed out after 10 minutes of inactivity. Showing new group.")
+		return true
+	}
+
+	return false
 }
