@@ -19,31 +19,39 @@ type UserSetting struct {
 
 // BotSetting stores bot-wide configuration options.
 type BotSetting struct {
-	ID             uint64   `bun:",pk,autoincrement"`
-	ReviewerIDs    []uint64 `bun:"reviewer_ids,type:bigint[]"`
-	AdminIDs       []uint64 `bun:"admin_ids,type:bigint[]"`
-	SessionLimit   uint64   `bun:",notnull"`
-	WelcomeMessage string   `bun:",notnull,default:''"`
+	ID             uint64              `bun:",pk,autoincrement"`
+	ReviewerIDs    []uint64            `bun:"reviewer_ids,type:bigint[]"`
+	AdminIDs       []uint64            `bun:"admin_ids,type:bigint[]"`
+	SessionLimit   uint64              `bun:",notnull"`
+	WelcomeMessage string              `bun:",notnull,default:''"`
+	reviewerMap    map[uint64]struct{} // In-memory map for O(1) lookups
+	adminMap       map[uint64]struct{} // In-memory map for O(1) lookups
 }
 
 // IsAdmin checks if the given user ID is in the admin list.
 func (s *BotSetting) IsAdmin(userID uint64) bool {
-	for _, adminID := range s.AdminIDs {
-		if adminID == userID {
-			return true
+	if s.adminMap == nil {
+		s.adminMap = make(map[uint64]struct{}, len(s.AdminIDs))
+		for _, id := range s.AdminIDs {
+			s.adminMap[id] = struct{}{}
 		}
 	}
-	return false
+
+	_, exists := s.adminMap[userID]
+	return exists
 }
 
 // IsReviewer checks if the given user ID is in the reviewer list.
 func (s *BotSetting) IsReviewer(userID uint64) bool {
-	for _, reviewerID := range s.ReviewerIDs {
-		if reviewerID == userID {
-			return true
+	if s.reviewerMap == nil {
+		s.reviewerMap = make(map[uint64]struct{}, len(s.ReviewerIDs))
+		for _, id := range s.ReviewerIDs {
+			s.reviewerMap[id] = struct{}{}
 		}
 	}
-	return false
+
+	_, exists := s.reviewerMap[userID]
+	return exists
 }
 
 // SettingType represents the data type of a setting.
