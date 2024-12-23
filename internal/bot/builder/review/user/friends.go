@@ -19,9 +19,8 @@ type FriendsBuilder struct {
 	settings       *types.UserSetting
 	user           *types.ReviewUser
 	friends        []types.ExtendedFriend
-	presences      map[uint64]apiTypes.UserPresenceResponse
-	flaggedFriends map[uint64]*types.User
-	friendTypes    map[uint64]types.UserType
+	presences      map[uint64]*apiTypes.UserPresenceResponse
+	flaggedFriends map[uint64]*types.ReviewUser
 	start          int
 	page           int
 	total          int
@@ -37,12 +36,10 @@ func NewFriendsBuilder(s *session.Session) *FriendsBuilder {
 	s.GetInterface(constants.SessionKeyTarget, &user)
 	var friends []types.ExtendedFriend
 	s.GetInterface(constants.SessionKeyFriends, &friends)
-	var presences map[uint64]apiTypes.UserPresenceResponse
+	var presences map[uint64]*apiTypes.UserPresenceResponse
 	s.GetInterface(constants.SessionKeyPresences, &presences)
-	var flaggedFriends map[uint64]*types.User
+	var flaggedFriends map[uint64]*types.ReviewUser
 	s.GetInterface(constants.SessionKeyFlaggedFriends, &flaggedFriends)
-	var friendTypes map[uint64]types.UserType
-	s.GetInterface(constants.SessionKeyFriendTypes, &friendTypes)
 
 	return &FriendsBuilder{
 		settings:       settings,
@@ -50,7 +47,6 @@ func NewFriendsBuilder(s *session.Session) *FriendsBuilder {
 		friends:        friends,
 		presences:      presences,
 		flaggedFriends: flaggedFriends,
-		friendTypes:    friendTypes,
 		start:          s.GetInt(constants.SessionKeyStart),
 		page:           s.GetInt(constants.SessionKeyPaginationPage),
 		total:          s.GetInt(constants.SessionKeyTotalItems),
@@ -124,9 +120,9 @@ func (b *FriendsBuilder) getFriendFieldName(index int, friend types.ExtendedFrie
 		}
 	}
 
-	// Add status indicator based on friend type
-	if friendType, ok := b.friendTypes[friend.ID]; ok {
-		switch friendType {
+	// Add status indicator based on friend status
+	if reviewUser, ok := b.flaggedFriends[friend.ID]; ok {
+		switch reviewUser.Status {
 		case types.UserTypeConfirmed:
 			fieldName += " ⚠️"
 		case types.UserTypeFlagged:

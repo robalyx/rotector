@@ -414,10 +414,9 @@ func (r *UserModel) GetUserByID(ctx context.Context, userID uint64, fields types
 }
 
 // GetUsersByIDs retrieves specified user information for a list of user IDs.
-// Returns a map of user IDs to user data and a separate map for their types.
-func (r *UserModel) GetUsersByIDs(ctx context.Context, userIDs []uint64, fields types.UserFields) (map[uint64]*types.User, map[uint64]types.UserType, error) {
-	users := make(map[uint64]*types.User)
-	userTypes := make(map[uint64]types.UserType)
+// Returns a map of user IDs to review users.
+func (r *UserModel) GetUsersByIDs(ctx context.Context, userIDs []uint64, fields types.UserFields) (map[uint64]*types.ReviewUser, error) {
+	users := make(map[uint64]*types.ReviewUser)
 
 	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
 		// Build query with selected fields
@@ -434,8 +433,11 @@ func (r *UserModel) GetUsersByIDs(ctx context.Context, userIDs []uint64, fields 
 			return fmt.Errorf("failed to get confirmed users: %w", err)
 		}
 		for _, user := range confirmedUsers {
-			users[user.ID] = &user.User
-			userTypes[user.ID] = types.UserTypeConfirmed
+			users[user.ID] = &types.ReviewUser{
+				User:       user.User,
+				VerifiedAt: user.VerifiedAt,
+				Status:     types.UserTypeConfirmed,
+			}
 		}
 
 		// Query flagged users
@@ -449,8 +451,10 @@ func (r *UserModel) GetUsersByIDs(ctx context.Context, userIDs []uint64, fields 
 			return fmt.Errorf("failed to get flagged users: %w", err)
 		}
 		for _, user := range flaggedUsers {
-			users[user.ID] = &user.User
-			userTypes[user.ID] = types.UserTypeFlagged
+			users[user.ID] = &types.ReviewUser{
+				User:   user.User,
+				Status: types.UserTypeFlagged,
+			}
 		}
 
 		// Query cleared users
@@ -464,8 +468,11 @@ func (r *UserModel) GetUsersByIDs(ctx context.Context, userIDs []uint64, fields 
 			return fmt.Errorf("failed to get cleared users: %w", err)
 		}
 		for _, user := range clearedUsers {
-			users[user.ID] = &user.User
-			userTypes[user.ID] = types.UserTypeCleared
+			users[user.ID] = &types.ReviewUser{
+				User:      user.User,
+				ClearedAt: user.ClearedAt,
+				Status:    types.UserTypeCleared,
+			}
 		}
 
 		// Query banned users
@@ -479,28 +486,34 @@ func (r *UserModel) GetUsersByIDs(ctx context.Context, userIDs []uint64, fields 
 			return fmt.Errorf("failed to get banned users: %w", err)
 		}
 		for _, user := range bannedUsers {
-			users[user.ID] = &user.User
-			userTypes[user.ID] = types.UserTypeBanned
+			users[user.ID] = &types.ReviewUser{
+				User:     user.User,
+				PurgedAt: user.PurgedAt,
+				Status:   types.UserTypeBanned,
+			}
 		}
 
 		// Mark remaining IDs as unflagged
 		for _, id := range userIDs {
-			if _, ok := userTypes[id]; !ok {
-				userTypes[id] = types.UserTypeUnflagged
+			if _, ok := users[id]; !ok {
+				users[id] = &types.ReviewUser{
+					User:   types.User{ID: id},
+					Status: types.UserTypeUnflagged,
+				}
 			}
 		}
 
 		return nil
 	})
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to get users by IDs: %w (userCount=%d)", err, len(userIDs))
+		return nil, fmt.Errorf("failed to get users by IDs: %w (userCount=%d)", err, len(userIDs))
 	}
 
 	r.logger.Debug("Retrieved users by IDs",
 		zap.Int("requestedCount", len(userIDs)),
 		zap.Int("foundCount", len(users)))
 
-	return users, userTypes, nil
+	return users, nil
 }
 
 // GetUsersToCheck finds users that haven't been checked for banned status recently.

@@ -243,10 +243,9 @@ func (r *GroupModel) GetGroupByID(ctx context.Context, groupID uint64, fields ty
 }
 
 // GetGroupsByIDs retrieves specified group information for a list of group IDs.
-// Returns a map of group IDs to group data and a separate map for their types.
-func (r *GroupModel) GetGroupsByIDs(ctx context.Context, groupIDs []uint64, fields types.GroupFields) (map[uint64]*types.Group, map[uint64]types.GroupType, error) {
-	groups := make(map[uint64]*types.Group)
-	groupTypes := make(map[uint64]types.GroupType)
+// Returns a map of group IDs to review groups.
+func (r *GroupModel) GetGroupsByIDs(ctx context.Context, groupIDs []uint64, fields types.GroupFields) (map[uint64]*types.ReviewGroup, error) {
+	groups := make(map[uint64]*types.ReviewGroup)
 
 	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
 		// Build query with selected fields
@@ -263,8 +262,11 @@ func (r *GroupModel) GetGroupsByIDs(ctx context.Context, groupIDs []uint64, fiel
 			return fmt.Errorf("failed to get confirmed groups: %w", err)
 		}
 		for _, group := range confirmedGroups {
-			groups[group.ID] = &group.Group
-			groupTypes[group.ID] = types.GroupTypeConfirmed
+			groups[group.ID] = &types.ReviewGroup{
+				Group:      group.Group,
+				VerifiedAt: group.VerifiedAt,
+				Status:     types.GroupTypeConfirmed,
+			}
 		}
 
 		// Query flagged groups
@@ -278,8 +280,10 @@ func (r *GroupModel) GetGroupsByIDs(ctx context.Context, groupIDs []uint64, fiel
 			return fmt.Errorf("failed to get flagged groups: %w", err)
 		}
 		for _, group := range flaggedGroups {
-			groups[group.ID] = &group.Group
-			groupTypes[group.ID] = types.GroupTypeFlagged
+			groups[group.ID] = &types.ReviewGroup{
+				Group:  group.Group,
+				Status: types.GroupTypeFlagged,
+			}
 		}
 
 		// Query cleared groups
@@ -293,8 +297,11 @@ func (r *GroupModel) GetGroupsByIDs(ctx context.Context, groupIDs []uint64, fiel
 			return fmt.Errorf("failed to get cleared groups: %w", err)
 		}
 		for _, group := range clearedGroups {
-			groups[group.ID] = &group.Group
-			groupTypes[group.ID] = types.GroupTypeCleared
+			groups[group.ID] = &types.ReviewGroup{
+				Group:     group.Group,
+				ClearedAt: group.ClearedAt,
+				Status:    types.GroupTypeCleared,
+			}
 		}
 
 		// Query locked groups
@@ -308,28 +315,34 @@ func (r *GroupModel) GetGroupsByIDs(ctx context.Context, groupIDs []uint64, fiel
 			return fmt.Errorf("failed to get locked groups: %w", err)
 		}
 		for _, group := range lockedGroups {
-			groups[group.ID] = &group.Group
-			groupTypes[group.ID] = types.GroupTypeLocked
+			groups[group.ID] = &types.ReviewGroup{
+				Group:    group.Group,
+				LockedAt: group.LockedAt,
+				Status:   types.GroupTypeLocked,
+			}
 		}
 
 		// Mark remaining IDs as unflagged
 		for _, id := range groupIDs {
-			if _, ok := groupTypes[id]; !ok {
-				groupTypes[id] = types.GroupTypeUnflagged
+			if _, ok := groups[id]; !ok {
+				groups[id] = &types.ReviewGroup{
+					Group:  types.Group{ID: id},
+					Status: types.GroupTypeUnflagged,
+				}
 			}
 		}
 
 		return nil
 	})
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to get groups by IDs: %w (groupCount=%d)", err, len(groupIDs))
+		return nil, fmt.Errorf("failed to get groups by IDs: %w (groupCount=%d)", err, len(groupIDs))
 	}
 
 	r.logger.Debug("Retrieved groups by IDs",
 		zap.Int("requestedCount", len(groupIDs)),
 		zap.Int("foundCount", len(groups)))
 
-	return groups, groupTypes, nil
+	return groups, nil
 }
 
 // UpdateTrainingVotes updates the upvotes or downvotes count for a group in training mode.

@@ -52,9 +52,9 @@ func (m *FriendsMenu) Show(event *events.ComponentInteractionCreate, s *session.
 	}
 
 	// Get friend types from session and sort friends by status
-	var friendTypes map[uint64]types.UserType
-	s.GetInterface(constants.SessionKeyFriendTypes, &friendTypes)
-	sortedFriends := m.sortFriendsByStatus(user.Friends, friendTypes)
+	var flaggedFriends map[uint64]*types.ReviewUser
+	s.GetInterface(constants.SessionKeyFlaggedFriends, &flaggedFriends)
+	sortedFriends := m.sortFriendsByStatus(user.Friends, flaggedFriends)
 
 	// Calculate page boundaries
 	start := page * constants.FriendsPerPage
@@ -113,18 +113,15 @@ func (m *FriendsMenu) handlePageNavigation(event *events.ComponentInteractionCre
 	}
 }
 
-// sortFriendsByStatus sorts friends into categories based on their status:
-// 1. Confirmed friends (⚠️) - Users that have been reviewed and confirmed
-// 2. Flagged friends (⏳) - Users that are currently flagged for review
-// 3. Banned friends (🔨) - Users that have been banned
-// 4. Cleared friends (✅) - Users that have been cleared
-// 5. Unflagged friends - Users with no current flags or status
-// Returns a new slice with friends sorted in this priority order.
-func (m *FriendsMenu) sortFriendsByStatus(friends []types.ExtendedFriend, friendTypes map[uint64]types.UserType) []types.ExtendedFriend {
+// sortFriendsByStatus sorts friends into categories based on their status.
+func (m *FriendsMenu) sortFriendsByStatus(friends []types.ExtendedFriend, flaggedFriends map[uint64]*types.ReviewUser) []types.ExtendedFriend {
 	// Group friends by their status
 	groupedFriends := make(map[types.UserType][]types.ExtendedFriend)
 	for _, friend := range friends {
-		status := friendTypes[friend.ID]
+		status := types.UserTypeUnflagged
+		if reviewUser, exists := flaggedFriends[friend.ID]; exists {
+			status = reviewUser.Status
+		}
 		groupedFriends[status] = append(groupedFriends[status], friend)
 	}
 

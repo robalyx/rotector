@@ -112,7 +112,7 @@ func (c *GroupChecker) ProcessUsers(userInfos []*fetcher.Info) map[uint64]*types
 	}
 
 	// Fetch all existing groups
-	existingGroups, groupTypes, err := c.db.Groups().GetGroupsByIDs(context.Background(), groupIDs, types.GroupFields{
+	existingGroups, err := c.db.Groups().GetGroupsByIDs(context.Background(), groupIDs, types.GroupFields{
 		Basic:  true,
 		Reason: true,
 	})
@@ -138,7 +138,7 @@ func (c *GroupChecker) ProcessUsers(userInfos []*fetcher.Info) map[uint64]*types
 			defer wg.Done()
 
 			// Process user groups
-			user, autoFlagged := c.processUserGroups(info, existingGroups, groupTypes)
+			user, autoFlagged := c.processUserGroups(info, existingGroups)
 			resultsChan <- GroupCheckResult{
 				UserID:      info.ID,
 				User:        user,
@@ -165,37 +165,39 @@ func (c *GroupChecker) ProcessUsers(userInfos []*fetcher.Info) map[uint64]*types
 }
 
 // processUserGroups checks if a user should be flagged based on their groups.
-func (c *GroupChecker) processUserGroups(userInfo *fetcher.Info, existingGroups map[uint64]*types.Group, groupTypes map[uint64]types.GroupType) (*types.User, bool) {
-	// Skip users with no group memberships
-	if len(userInfo.Groups.Data) == 0 {
+func (c *GroupChecker) processUserGroups(userInfo *fetcher.Info, existingGroups map[uint64]*types.ReviewGroup) (*types.User, bool) {
+	// Skip users with very few groups to avoid false positives
+	if len(userInfo.Groups.Data) < 2 {
 		return nil, false
 	}
 
 	// Count confirmed and flagged groups
-	confirmedGroups := make(map[uint64]*types.Group)
-	flaggedGroups := make(map[uint64]*types.Group)
 	confirmedCount := 0
 	flaggedCount := 0
 
 	for _, group := range userInfo.Groups.Data {
-		if existingGroup, exists := existingGroups[group.Group.ID]; exists {
-			switch groupTypes[group.Group.ID] {
+		if reviewGroup, exists := existingGroups[group.Group.ID]; exists {
+			switch reviewGroup.Status {
 			case types.GroupTypeConfirmed:
 				confirmedCount++
-				confirmedGroups[group.Group.ID] = existingGroup
 			case types.GroupTypeFlagged:
 				flaggedCount++
-				flaggedGroups[group.Group.ID] = existingGroup
 			} //exhaustive:ignore
 		}
 	}
 
-	// Calculate confidence score based on group memberships
+	// Calculate confidence score
 	confidence := c.calculateConfidence(confirmedCount, flaggedCount, len(userInfo.Groups.Data))
 
-	// Auto-flag users in 2 or more inappropriate groups
+	// Flag user if confidence exceeds threshold
 	if confidence >= 0.4 {
-		user := &types.User{
+		c.logger.Info("User automatically flagged",
+			zap.Uint64("userID", userInfo.ID),
+			zap.Int("confirmedGroups", confirmedCount),
+			zap.Int("flaggedGroups", flaggedCount),
+			zap.Float64("confidence", confidence))
+
+		return &types.User{
 			ID:             userInfo.ID,
 			Name:           userInfo.Name,
 			DisplayName:    userInfo.DisplayName,
@@ -209,15 +211,7 @@ func (c *GroupChecker) processUserGroups(userInfo *fetcher.Info, existingGroups 
 			FollowingCount: userInfo.FollowingCount,
 			Confidence:     math.Round(confidence*100) / 100, // Round to 2 decimal places
 			LastUpdated:    userInfo.LastUpdated,
-		}
-
-		c.logger.Info("User automatically flagged",
-			zap.Uint64("userID", userInfo.ID),
-			zap.Int("confirmedGroups", confirmedCount),
-			zap.Int("flaggedGroups", flaggedCount),
-			zap.Float64("confidence", confidence))
-
-		return user, true
+		}, true
 	}
 
 	return nil, false

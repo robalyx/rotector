@@ -15,14 +15,11 @@ import (
 )
 
 // GroupsBuilder creates the visual layout for viewing a user's groups.
-// It combines group information with flagged status indicators and
-// supports pagination through a grid of group thumbnails.
 type GroupsBuilder struct {
 	settings      *types.UserSetting
 	user          *types.ReviewUser
 	groups        []*apiTypes.UserGroupRoles
-	groupTypes    map[uint64]types.GroupType
-	flaggedGroups map[uint64]*types.Group
+	flaggedGroups map[uint64]*types.ReviewGroup
 	start         int
 	page          int
 	total         int
@@ -38,16 +35,13 @@ func NewGroupsBuilder(s *session.Session) *GroupsBuilder {
 	s.GetInterface(constants.SessionKeyTarget, &user)
 	var groups []*apiTypes.UserGroupRoles
 	s.GetInterface(constants.SessionKeyGroups, &groups)
-	var groupTypes map[uint64]types.GroupType
-	s.GetInterface(constants.SessionKeyGroupTypes, &groupTypes)
-	var flaggedGroups map[uint64]*types.Group
+	var flaggedGroups map[uint64]*types.ReviewGroup
 	s.GetInterface(constants.SessionKeyFlaggedGroups, &flaggedGroups)
 
 	return &GroupsBuilder{
 		settings:      settings,
 		user:          user,
 		groups:        groups,
-		groupTypes:    groupTypes,
 		flaggedGroups: flaggedGroups,
 		start:         s.GetInt(constants.SessionKeyStart),
 		page:          s.GetInt(constants.SessionKeyPaginationPage),
@@ -108,9 +102,9 @@ func (b *GroupsBuilder) Build() *discord.MessageUpdateBuilder {
 func (b *GroupsBuilder) getGroupFieldName(index int, group *apiTypes.UserGroupRoles) string {
 	fieldName := fmt.Sprintf("Group %d", b.start+index+1)
 
-	// Add status indicator based on group type
-	if groupType, ok := b.groupTypes[group.Group.ID]; ok {
-		switch groupType {
+	// Add status indicator based on group status
+	if reviewGroup, ok := b.flaggedGroups[group.Group.ID]; ok {
+		switch reviewGroup.Status {
 		case types.GroupTypeConfirmed:
 			fieldName += " ⚠️"
 		case types.GroupTypeFlagged:

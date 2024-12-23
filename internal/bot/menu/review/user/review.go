@@ -74,8 +74,7 @@ func (m *ReviewMenu) Show(event interfaces.CommonEvent, s *session.Session, cont
 	}
 
 	// Check friend status and get friend data by looking up each friend in the database
-	flaggedFriends := make(map[uint64]*types.User)
-	friendTypes := make(map[uint64]types.UserType)
+	var flaggedFriends map[uint64]*types.ReviewUser
 	if len(user.Friends) > 0 {
 		// Extract friend IDs for batch lookup
 		friendIDs := make([]uint64, len(user.Friends))
@@ -85,7 +84,7 @@ func (m *ReviewMenu) Show(event interfaces.CommonEvent, s *session.Session, cont
 
 		// Get full user data and types for friends that exist in the database
 		var err error
-		flaggedFriends, friendTypes, err = m.layout.db.Users().GetUsersByIDs(context.Background(), friendIDs, types.UserFields{
+		flaggedFriends, err = m.layout.db.Users().GetUsersByIDs(context.Background(), friendIDs, types.UserFields{
 			Basic:      true,
 			Reason:     true,
 			Confidence: true,
@@ -97,8 +96,7 @@ func (m *ReviewMenu) Show(event interfaces.CommonEvent, s *session.Session, cont
 	}
 
 	// Check group status
-	groupTypes := make(map[uint64]types.GroupType)
-	flaggedGroups := make(map[uint64]*types.Group)
+	var flaggedGroups map[uint64]*types.ReviewGroup
 	if len(user.Groups) > 0 {
 		// Extract group IDs for batch lookup
 		groupIDs := make([]uint64, len(user.Groups))
@@ -108,7 +106,7 @@ func (m *ReviewMenu) Show(event interfaces.CommonEvent, s *session.Session, cont
 
 		// Get full group data and types
 		var err error
-		flaggedGroups, groupTypes, err = m.layout.db.Groups().GetGroupsByIDs(context.Background(), groupIDs, types.GroupFields{
+		flaggedGroups, err = m.layout.db.Groups().GetGroupsByIDs(context.Background(), groupIDs, types.GroupFields{
 			Basic:      true,
 			Reason:     true,
 			Confidence: true,
@@ -121,9 +119,7 @@ func (m *ReviewMenu) Show(event interfaces.CommonEvent, s *session.Session, cont
 
 	// Store data in session for the message builder
 	s.Set(constants.SessionKeyFlaggedFriends, flaggedFriends)
-	s.Set(constants.SessionKeyFriendTypes, friendTypes)
 	s.Set(constants.SessionKeyFlaggedGroups, flaggedGroups)
-	s.Set(constants.SessionKeyGroupTypes, groupTypes)
 
 	m.layout.paginationManager.NavigateTo(event, s, m.page, content)
 }

@@ -20,15 +20,14 @@ import (
 
 // ReviewBuilder creates the visual layout for reviewing a user.
 type ReviewBuilder struct {
-	db            *database.Client
-	settings      *types.UserSetting
-	botSettings   *types.BotSetting
-	userID        uint64
-	user          *types.ReviewUser
-	translator    *translator.Translator
-	friendTypes   map[uint64]types.UserType
-	groupTypes    map[uint64]types.GroupType
-	flaggedGroups map[uint64]*types.Group
+	db             *database.Client
+	settings       *types.UserSetting
+	botSettings    *types.BotSetting
+	userID         uint64
+	user           *types.ReviewUser
+	translator     *translator.Translator
+	flaggedFriends map[uint64]*types.ReviewUser
+	flaggedGroups  map[uint64]*types.ReviewGroup
 }
 
 // NewReviewBuilder creates a new review builder.
@@ -39,23 +38,20 @@ func NewReviewBuilder(s *session.Session, translator *translator.Translator, db 
 	s.GetInterface(constants.SessionKeyBotSettings, &botSettings)
 	var user *types.ReviewUser
 	s.GetInterface(constants.SessionKeyTarget, &user)
-	var friendTypes map[uint64]types.UserType
-	s.GetInterface(constants.SessionKeyFriendTypes, &friendTypes)
-	var groupTypes map[uint64]types.GroupType
-	s.GetInterface(constants.SessionKeyGroupTypes, &groupTypes)
-	var flaggedGroups map[uint64]*types.Group
+	var flaggedFriends map[uint64]*types.ReviewUser
+	s.GetInterface(constants.SessionKeyFlaggedFriends, &flaggedFriends)
+	var flaggedGroups map[uint64]*types.ReviewGroup
 	s.GetInterface(constants.SessionKeyFlaggedGroups, &flaggedGroups)
 
 	return &ReviewBuilder{
-		db:            db,
-		settings:      settings,
-		botSettings:   botSettings,
-		userID:        s.GetUint64(constants.SessionKeyUserID),
-		user:          user,
-		translator:    translator,
-		friendTypes:   friendTypes,
-		groupTypes:    groupTypes,
-		flaggedGroups: flaggedGroups,
+		db:             db,
+		settings:       settings,
+		botSettings:    botSettings,
+		userID:         s.GetUint64(constants.SessionKeyUserID),
+		user:           user,
+		translator:     translator,
+		flaggedFriends: flaggedFriends,
+		flaggedGroups:  flaggedGroups,
 	}
 }
 
@@ -542,14 +538,14 @@ func (b *ReviewBuilder) getOutfits() string {
 
 // getFriendsField returns the friends field name for the embed.
 func (b *ReviewBuilder) getFriendsField() string {
-	if len(b.friendTypes) == 0 {
+	if len(b.flaggedFriends) == 0 {
 		return "Friends"
 	}
 
 	// Count different friend types
 	counts := make(map[types.UserType]int)
-	for _, friendType := range b.friendTypes {
-		counts[friendType]++
+	for _, friend := range b.flaggedFriends {
+		counts[friend.Status]++
 	}
 
 	// Build status parts
@@ -560,11 +556,11 @@ func (b *ReviewBuilder) getFriendsField() string {
 	if c := counts[types.UserTypeFlagged]; c > 0 {
 		parts = append(parts, fmt.Sprintf("%d ⏳", c))
 	}
-	if c := counts[types.UserTypeCleared]; c > 0 {
-		parts = append(parts, fmt.Sprintf("%d ✅", c))
-	}
 	if c := counts[types.UserTypeBanned]; c > 0 {
 		parts = append(parts, fmt.Sprintf("%d 🔨", c))
+	}
+	if c := counts[types.UserTypeCleared]; c > 0 {
+		parts = append(parts, fmt.Sprintf("%d ✅", c))
 	}
 
 	if len(parts) > 0 {
@@ -575,14 +571,14 @@ func (b *ReviewBuilder) getFriendsField() string {
 
 // getGroupsField returns the groups field name for the embed.
 func (b *ReviewBuilder) getGroupsField() string {
-	if len(b.groupTypes) == 0 {
+	if len(b.flaggedGroups) == 0 {
 		return "Groups"
 	}
 
 	// Count different group types
 	counts := make(map[types.GroupType]int)
-	for _, groupType := range b.groupTypes {
-		counts[groupType]++
+	for _, group := range b.flaggedGroups {
+		counts[group.Status]++
 	}
 
 	// Build status parts

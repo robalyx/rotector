@@ -225,11 +225,9 @@ const (
 	SessionKeyFriends        = "friends"
 	SessionKeyPresences      = "presences"
 	SessionKeyFlaggedFriends = "flaggedFriends"
-	SessionKeyFriendTypes    = "friendTypes"
 
 	SessionKeyGroups        = "groups"
 	SessionKeyFlaggedGroups = "flaggedGroups"
-	SessionKeyGroupTypes    = "groupTypes"
 
 	SessionKeyOutfits = "outfits"
 

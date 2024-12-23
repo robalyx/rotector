@@ -51,9 +51,9 @@ func (m *GroupsMenu) Show(event *events.ComponentInteractionCreate, s *session.S
 	}
 
 	// Get group types from session and sort groups by status
-	var groupTypes map[uint64]types.GroupType
-	s.GetInterface(constants.SessionKeyGroupTypes, &groupTypes)
-	sortedGroups := m.sortGroupsByStatus(user.Groups, groupTypes)
+	var flaggedGroups map[uint64]*types.ReviewGroup
+	s.GetInterface(constants.SessionKeyFlaggedGroups, &flaggedGroups)
+	sortedGroups := m.sortGroupsByStatus(user.Groups, flaggedGroups)
 
 	// Calculate page boundaries
 	start := page * constants.GroupsPerPage
@@ -84,17 +84,15 @@ func (m *GroupsMenu) Show(event *events.ComponentInteractionCreate, s *session.S
 	})
 }
 
-// sortGroupsByStatus sorts groups into categories based on their status:
-// 1. Confirmed groups (⚠️) - Groups that have been reviewed and confirmed
-// 2. Flagged groups (⏳) - Groups that are currently flagged for review
-// 3. Locked groups (🔒) - Groups that have been locked
-// 4. Cleared groups (✅) - Groups that have been cleared
-// Returns a new slice with groups sorted in this priority order.
-func (m *GroupsMenu) sortGroupsByStatus(groups []*apiTypes.UserGroupRoles, groupTypes map[uint64]types.GroupType) []*apiTypes.UserGroupRoles {
+// sortGroupsByStatus sorts groups into categories based on their status.
+func (m *GroupsMenu) sortGroupsByStatus(groups []*apiTypes.UserGroupRoles, flaggedGroups map[uint64]*types.ReviewGroup) []*apiTypes.UserGroupRoles {
 	// Group groups by their status
 	groupedGroups := make(map[types.GroupType][]*apiTypes.UserGroupRoles)
 	for _, group := range groups {
-		status := groupTypes[group.Group.ID]
+		status := types.GroupTypeUnflagged
+		if reviewGroup, exists := flaggedGroups[group.Group.ID]; exists {
+			status = reviewGroup.Status
+		}
 		groupedGroups[status] = append(groupedGroups[status], group)
 	}
 

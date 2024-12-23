@@ -80,7 +80,7 @@ func (c *FriendChecker) ProcessUsers(userInfos []*fetcher.Info) map[uint64]*type
 	}
 
 	// Fetch all existing friends
-	existingFriends, friendTypes, err := c.db.Users().GetUsersByIDs(context.Background(), friendIDs, types.UserFields{
+	existingFriends, err := c.db.Users().GetUsersByIDs(context.Background(), friendIDs, types.UserFields{
 		Basic:  true,
 		Reason: true,
 	})
@@ -100,7 +100,7 @@ func (c *FriendChecker) ProcessUsers(userInfos []*fetcher.Info) map[uint64]*type
 			defer wg.Done()
 
 			// Process user friends
-			user, autoFlagged := c.processUserFriends(info, existingFriends, friendTypes)
+			user, autoFlagged := c.processUserFriends(info, existingFriends)
 			resultsChan <- FriendCheckResult{
 				UserID:      info.ID,
 				User:        user,
@@ -127,7 +127,7 @@ func (c *FriendChecker) ProcessUsers(userInfos []*fetcher.Info) map[uint64]*type
 }
 
 // processUserFriends checks if a user should be flagged based on their friends.
-func (c *FriendChecker) processUserFriends(userInfo *fetcher.Info, existingFriends map[uint64]*types.User, friendTypes map[uint64]types.UserType) (*types.User, bool) {
+func (c *FriendChecker) processUserFriends(userInfo *fetcher.Info, existingFriends map[uint64]*types.ReviewUser) (*types.User, bool) {
 	// Skip users with very few friends to avoid false positives
 	if len(userInfo.Friends.Data) < 3 {
 		return nil, false
@@ -140,14 +140,14 @@ func (c *FriendChecker) processUserFriends(userInfo *fetcher.Info, existingFrien
 	flaggedCount := 0
 
 	for _, friend := range userInfo.Friends.Data {
-		if user, exists := existingFriends[friend.ID]; exists {
-			switch friendTypes[friend.ID] {
+		if reviewUser, exists := existingFriends[friend.ID]; exists {
+			switch reviewUser.Status {
 			case types.UserTypeConfirmed:
 				confirmedCount++
-				confirmedFriends[friend.ID] = user
+				confirmedFriends[friend.ID] = &reviewUser.User
 			case types.UserTypeFlagged:
 				flaggedCount++
-				flaggedFriends[friend.ID] = user
+				flaggedFriends[friend.ID] = &reviewUser.User
 			} //exhaustive:ignore
 		}
 	}
