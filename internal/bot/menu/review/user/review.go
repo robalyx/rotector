@@ -130,6 +130,10 @@ func (m *ReviewMenu) Show(event interfaces.CommonEvent, s *session.Session, cont
 
 // handleSelectMenu processes select menu interactions.
 func (m *ReviewMenu) handleSelectMenu(event *events.ComponentInteractionCreate, s *session.Session, customID string, option string) {
+	if m.checkLastViewed(event, s) {
+		return
+	}
+
 	switch customID {
 	case constants.SortOrderSelectMenuCustomID:
 		m.handleSortOrderSelection(event, s, option)
