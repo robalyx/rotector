@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 
 	"github.com/google/generative-ai-go/genai"
 	"go.uber.org/zap"
@@ -55,21 +56,36 @@ func NewChatHandler(genAIClient *genai.Client, logger *zap.Logger) *ChatHandler 
 	}
 }
 
-// StreamResponse sends a message to the AI and streams the response through a channel.
-func (h *ChatHandler) StreamResponse(ctx context.Context, history []*genai.Content, modelName string, message string) chan string {
+// StreamResponse sends a message to the AI and streams both the response and history through channels.
+func (h *ChatHandler) StreamResponse(ctx context.Context, history []*genai.Content, modelName string, message string) (chan string, chan []*genai.Content) {
 	responseChan := make(chan string)
+	historyChan := make(chan []*genai.Content, 1)
+
 	go func() {
 		defer close(responseChan)
+		defer close(historyChan)
 
 		// Create chat model
-		model := h.genAIClient.GenerativeModel(modelName)
-		model.SystemInstruction = genai.NewUserContent(genai.Text(ChatSystemPrompt))
+		cc, err := h.genAIClient.CreateCachedContent(ctx, &genai.CachedContent{
+			Model:             modelName,
+			SystemInstruction: genai.NewUserContent(genai.Text(ChatSystemPrompt)),
+			Contents:          history,
+		})
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer func() {
+			if err := h.genAIClient.DeleteCachedContent(ctx, cc.Name); err != nil {
+				h.logger.Error("Error deleting cached content", zap.Error(err))
+			}
+		}()
+
+		model := h.genAIClient.GenerativeModelFromCachedContent(cc)
 		model.MaxOutputTokens = &h.maxOutputTokens
 		model.Temperature = &h.temperature
 
 		// Create chat session with history
 		cs := model.StartChat()
-		cs.History = history
 
 		// Send message with retry
 		iter, err := withRetry(ctx, func() (*genai.GenerateContentResponseIterator, error) {
@@ -104,7 +120,10 @@ func (h *ChatHandler) StreamResponse(ctx context.Context, history []*genai.Conte
 				}
 			}
 		}
+
+		// Send final history after conversation is complete
+		historyChan <- cs.History
 	}()
 
-	return responseChan
+	return responseChan, historyChan
 }

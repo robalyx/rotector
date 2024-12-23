@@ -7,6 +7,7 @@ import (
 
 	"github.com/disgoorg/disgo/discord"
 	"github.com/disgoorg/disgo/events"
+	"github.com/google/generative-ai-go/genai"
 	builder "github.com/rotector/rotector/internal/bot/builder/chat"
 	"github.com/rotector/rotector/internal/bot/constants"
 	"github.com/rotector/rotector/internal/bot/core/pagination"
@@ -144,19 +145,12 @@ func (m *Menu) handleModal(event *events.ModalSubmitInteractionCreate, s *sessio
 		s.GetInterface(constants.SessionKeyUserSettings, &userSettings)
 
 		// Stream AI response
-		responseChan := m.layout.chatHandler.StreamResponse(context.Background(), history.ToGenAIHistory(), string(userSettings.ChatModel), message)
-
-		// Add messages to history
-		userMessage := &ai.ChatMessage{
-			Role:    "user",
-			Content: message,
-		}
-		aiMessage := &ai.ChatMessage{
-			Role:    "model",
-			Content: "",
-		}
-		history.Messages = append(history.Messages, userMessage, aiMessage)
-		s.Set(constants.SessionKeyChatHistory, history)
+		responseChan, historyChan := m.layout.chatHandler.StreamResponse(
+			context.Background(),
+			history.ToGenAIHistory(),
+			string(userSettings.ChatModel),
+			message,
+		)
 
 		// Stream AI response
 		var lastUpdate time.Time
@@ -166,22 +160,28 @@ func (m *Menu) handleModal(event *events.ModalSubmitInteractionCreate, s *sessio
 
 			// Update message at most once per second to avoid rate limits
 			if time.Since(lastUpdate) > 1*time.Second {
-				// Update the latest AI message's content
-				history.Messages[len(history.Messages)-1].Content = aiResponse
-				s.Set(constants.SessionKeyChatHistory, history)
-
-				// Update display
 				m.layout.paginationManager.NavigateTo(event, s, m.page, "Receiving response...")
 				lastUpdate = time.Now()
 			}
 		}
 
-		// Prevent rate limit
-		time.Sleep(1 * time.Second)
+		// Get final history from channel
+		if genAIHistory := <-historyChan; genAIHistory != nil {
+			// Get existing history from session
+			var existingHistory ai.ChatHistory
+			s.GetInterface(constants.SessionKeyChatHistory, &existingHistory)
 
-		// Do final update to ensure we have the complete response
-		history.Messages[len(history.Messages)-1].Content = aiResponse
-		s.Set(constants.SessionKeyChatHistory, history)
+			// Append the new messages to existing history
+			for _, msg := range genAIHistory {
+				existingHistory.Messages = append(existingHistory.Messages, &ai.ChatMessage{
+					Role:    msg.Role,
+					Content: string(msg.Parts[0].(genai.Text)),
+				})
+			}
+
+			// Update session with combined history
+			s.Set(constants.SessionKeyChatHistory, existingHistory)
+		}
 
 		// Calculate new page number to show latest messages
 		s.Set(constants.SessionKeyPaginationPage, 0)
