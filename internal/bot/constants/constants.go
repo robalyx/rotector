@@ -24,6 +24,7 @@ const (
 	StartGroupReviewCustomID = "start_group_review"
 	UserSettingsCustomID     = "user_settings"
 	BotSettingsCustomID      = "bot_settings"
+	AppealMenuCustomID       = "appeal_menu"
 	ChatAssistantCustomID    = "chat_assistant"
 	LookupUserCustomID       = "lookup_user" + ModalOpenSuffix
 	LookupGroupCustomID      = "lookup_group" + ModalOpenSuffix
@@ -160,9 +161,6 @@ const (
 
 // Appeal Menu.
 const (
-	AppealMenuCustomID = "appeal_menu"
-	AppealUserCustomID = "appeal_user" + ModalOpenSuffix
-
 	AppealModalCustomID       = "appeal_modal"
 	AppealUserInputCustomID   = "appeal_user_input"
 	AppealReasonInputCustomID = "appeal_reason_input"
@@ -183,6 +181,8 @@ const (
 	AppealSortSelectID          = "appeal_sort"
 	AppealCreateButtonCustomID  = "appeal_create" + ModalOpenSuffix
 	AppealRespondButtonCustomID = "appeal_respond" + ModalOpenSuffix
+
+	VerifyDescriptionButtonID = "verify_description"
 )
 
 // Session keys.
@@ -263,6 +263,10 @@ const (
 	SessionKeyAppealCursor      = "appealCursor"
 	SessionKeyAppealNextCursor  = "appealNextCursor"
 	SessionKeyAppealPrevCursors = "appealPrevCursors"
+
+	SessionKeyVerifyUserID = "verifyUserID"
+	SessionKeyVerifyReason = "verifyReason"
+	SessionKeyVerifyCode   = "verifyCode"
 )
 
 const (

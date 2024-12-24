@@ -227,9 +227,6 @@ func (b *ReviewBuilder) buildActionOptions() []discord.StringSelectMenuOption {
 		discord.NewStringSelectMenuOption("Open outfit viewer", constants.OpenOutfitsMenuButtonCustomID).
 			WithEmoji(discord.ComponentEmoji{Name: "👕"}).
 			WithDescription("View all user outfits"),
-		discord.NewStringSelectMenuOption("Submit Appeal", constants.AppealUserCustomID).
-			WithEmoji(discord.ComponentEmoji{Name: "📝"}).
-			WithDescription("Submit an appeal for this user"),
 	}
 
 	// Add reviewer-only options

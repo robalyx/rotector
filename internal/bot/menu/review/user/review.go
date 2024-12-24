@@ -169,8 +169,6 @@ func (m *ReviewMenu) handleActionSelection(event *events.ComponentInteractionCre
 		m.layout.friendsMenu.Show(event, s, 0)
 	case constants.OpenGroupsMenuButtonCustomID:
 		m.layout.groupsMenu.Show(event, s, 0)
-	case constants.AppealUserCustomID:
-		m.handleAppealUser(event, s)
 	case constants.OpenAIChatButtonCustomID:
 		if !settings.IsReviewer(userID) {
 			m.layout.logger.Error("Non-reviewer attempted to open AI chat", zap.Uint64("user_id", userID))
@@ -244,8 +242,6 @@ func (m *ReviewMenu) handleModal(event *events.ModalSubmitInteractionCreate, s *
 		m.handleConfirmWithReasonModalSubmit(event, s)
 	case constants.RecheckReasonModalCustomID:
 		m.handleRecheckModalSubmit(event, s)
-	case constants.AppealModalCustomID:
-		m.handleAppealModalSubmit(event, s)
 	}
 }
 
@@ -514,77 +510,6 @@ func (m *ReviewMenu) handleSkipUser(event interfaces.CommonEvent, s *session.Ses
 	// Clear current user and load next one
 	s.Delete(constants.SessionKeyTarget)
 	m.Show(event, s, fmt.Sprintf("Skipped user. %d users left to review.", flaggedCount))
-}
-
-// handleAppealUser opens a modal for submitting an appeal for the current user.
-func (m *ReviewMenu) handleAppealUser(event *events.ComponentInteractionCreate, s *session.Session) {
-	var user *types.ReviewUser
-	s.GetInterface(constants.SessionKeyTarget, &user)
-
-	// Create modal for appeal reason input
-	modal := discord.NewModalCreateBuilder().
-		SetCustomID(constants.AppealModalCustomID).
-		SetTitle("Submit Appeal").
-		AddActionRow(
-			discord.NewTextInput(constants.AppealReasonInputCustomID, discord.TextInputStyleParagraph, "Appeal Reason").
-				WithRequired(true).
-				WithMaxLength(512).
-				WithPlaceholder("Enter the reason for appealing this user..."),
-		).
-		Build()
-
-	// Show modal to user
-	if err := event.Modal(modal); err != nil {
-		m.layout.logger.Error("Failed to create appeal modal", zap.Error(err))
-		m.layout.paginationManager.RespondWithError(event, "Failed to open the appeal modal. Please try again.")
-	}
-}
-
-// handleAppealModalSubmit processes the appeal reason from the modal.
-func (m *ReviewMenu) handleAppealModalSubmit(event *events.ModalSubmitInteractionCreate, s *session.Session) {
-	var user *types.ReviewUser
-	s.GetInterface(constants.SessionKeyTarget, &user)
-
-	// Get and validate the appeal reason
-	reason := event.Data.Text(constants.AppealReasonInputCustomID)
-	if reason == "" {
-		m.layout.paginationManager.NavigateTo(event, s, m.page, "Appeal reason cannot be empty. Please try again.")
-		return
-	}
-
-	// Only allow appeals for confirmed/flagged users
-	if user.Status != types.UserTypeConfirmed && user.Status != types.UserTypeFlagged {
-		m.layout.paginationManager.NavigateTo(event, s, m.page, "Cannot submit appeal - user must be confirmed or flagged.")
-		return
-	}
-
-	// Create appeal request
-	appeal := &types.Appeal{
-		UserID:      user.ID,
-		RequesterID: uint64(event.User().ID),
-	}
-
-	// Submit appeal
-	if err := m.layout.db.Appeals().CreateAppeal(context.Background(), appeal, reason); err != nil {
-		m.layout.logger.Error("Failed to create appeal", zap.Error(err))
-		m.layout.paginationManager.RespondWithError(event, "Failed to submit appeal. Please try again.")
-		return
-	}
-
-	// Log the appeal submission
-	go m.layout.db.UserActivity().Log(context.Background(), &types.UserActivityLog{
-		ActivityTarget: types.ActivityTarget{
-			UserID: user.ID,
-		},
-		ReviewerID:        uint64(event.User().ID),
-		ActivityType:      types.ActivityTypeAppealSubmitted,
-		ActivityTimestamp: time.Now(),
-		Details: map[string]interface{}{
-			"reason": reason,
-		},
-	})
-
-	m.Show(event, s, "Appeal submitted successfully.")
 }
 
 // handleOpenAIChat handles the button to open the AI chat for the current user.

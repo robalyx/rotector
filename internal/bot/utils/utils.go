@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"math/rand"
 	"regexp"
 	"sort"
 	"strconv"
@@ -153,6 +154,24 @@ func CensorStringsInText(text string, streamerMode bool, targets ...string) stri
 	}
 
 	return result
+}
+
+// GenerateRandomWords generates a string of random words.
+func GenerateRandomWords(count int) string {
+	words := []string{
+		"apple", "banana", "cherry", "dragon", "elephant",
+		"flower", "guitar", "hammer", "island", "jungle",
+		"kettle", "lemon", "monkey", "needle", "orange",
+		"pencil", "queen", "rabbit", "sunset", "tiger",
+		"umbrella", "violin", "window", "yellow", "zebra",
+	}
+
+	selected := make([]string, count)
+	for i := range count {
+		selected[i] = words[rand.Intn(len(words))]
+	}
+
+	return strings.Join(selected, " ")
 }
 
 // GetMessageEmbedColor returns the appropriate embed color based on streamer mode.

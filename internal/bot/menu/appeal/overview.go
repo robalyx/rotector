@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"strconv"
-	"time"
 
 	"github.com/disgoorg/disgo/discord"
 	"github.com/disgoorg/disgo/events"
@@ -273,31 +272,6 @@ func (m *OverviewMenu) handleCreateAppealModalSubmit(event *events.ModalSubmitIn
 		return
 	}
 
-	// Create appeal request
-	appeal := &types.Appeal{
-		UserID:      userID,
-		RequesterID: uint64(event.User().ID),
-	}
-
-	// Submit appeal with reason
-	if err := m.layout.db.Appeals().CreateAppeal(context.Background(), appeal, reason); err != nil {
-		m.layout.logger.Error("Failed to create appeal", zap.Error(err))
-		m.layout.paginationManager.RespondWithError(event, "Failed to submit appeal. Please try again.")
-		return
-	}
-
-	// Log the appeal submission
-	go m.layout.db.UserActivity().Log(context.Background(), &types.UserActivityLog{
-		ActivityTarget: types.ActivityTarget{
-			UserID: userID,
-		},
-		ReviewerID:        uint64(event.User().ID),
-		ActivityType:      types.ActivityTypeAppealSubmitted,
-		ActivityTimestamp: time.Now(),
-		Details: map[string]interface{}{
-			"reason": reason,
-		},
-	})
-
-	m.Show(event, s, "Appeal submitted successfully.")
+	// Show verification menu
+	m.layout.ShowVerify(event, s, userID, reason)
 }
