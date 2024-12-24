@@ -310,17 +310,10 @@ func (m *TicketMenu) handleRespondModalSubmit(event *events.ModalSubmitInteracti
 		var messages []*types.AppealMessage
 		s.GetInterface(constants.SessionKeyAppealMessages, &messages)
 
-		if len(messages) > 0 {
-			lastMsg := messages[len(messages)-1]
-
-			// If the last message was from this user and less than 1 minute ago, prevent response
-			if lastMsg.UserID == userID &&
-				lastMsg.Role == types.MessageRoleUser &&
-				time.Since(lastMsg.CreatedAt) < time.Minute {
-				m.layout.paginationManager.NavigateTo(event, s, m.page,
-					"Please wait at least 1 minute between messages.")
-				return
-			}
+		// Check if user is allowed to send a message
+		if allowed, errorMsg := m.isMessageAllowed(messages, userID); !allowed {
+			m.layout.paginationManager.NavigateTo(event, s, m.page, errorMsg)
+			return
 		}
 	}
 
@@ -432,4 +425,33 @@ func (m *TicketMenu) handleRejectModalSubmit(event *events.ModalSubmitInteractio
 
 	// Refresh the ticket view
 	m.Show(event, s, appeal.ID, "Appeal rejected.")
+}
+
+// isMessageAllowed checks if a user is allowed to send a message based on spam prevention rules.
+func (m *TicketMenu) isMessageAllowed(messages []*types.AppealMessage, userID uint64) (bool, string) {
+	// Check if the last 3 messages were from this user
+	consecutiveUserMessages := 0
+	for i := len(messages) - 1; i >= 0 && i > len(messages)-4; i-- {
+		if messages[i].UserID == userID && messages[i].Role == types.MessageRoleUser {
+			consecutiveUserMessages++
+		} else {
+			break
+		}
+	}
+
+	if consecutiveUserMessages >= 3 {
+		return false, "Please wait for a moderator to respond before sending more messages."
+	}
+
+	// Check rate limit
+	if len(messages) > 0 {
+		lastMsg := messages[len(messages)-1]
+		if lastMsg.UserID == userID &&
+			lastMsg.Role == types.MessageRoleUser &&
+			time.Since(lastMsg.CreatedAt) < time.Minute {
+			return false, "Please wait at least 1 minute between messages."
+		}
+	}
+
+	return true, ""
 }
