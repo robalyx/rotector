@@ -165,6 +165,20 @@ func (r *AppealModel) HasPendingAppealByRequester(ctx context.Context, requester
 	return exists, nil
 }
 
+// HasPreviousRejection checks if a user ID has any rejected appeals.
+func (r *AppealModel) HasPreviousRejection(ctx context.Context, userID uint64) (bool, error) {
+	exists, err := r.db.NewSelect().
+		Model((*types.Appeal)(nil)).
+		Where("user_id = ?", userID).
+		Where("status = ?", types.AppealStatusRejected).
+		Exists(ctx)
+	if err != nil {
+		return false, fmt.Errorf("failed to check previous rejections: %w (userID=%d)", err, userID)
+	}
+
+	return exists, nil
+}
+
 // GetAppealsToReview gets a list of appeals based on sort criteria.
 // It supports pagination through cursors and different sorting options.
 func (r *AppealModel) GetAppealsToReview(

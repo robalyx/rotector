@@ -247,6 +247,19 @@ func (m *OverviewMenu) handleCreateAppealModalSubmit(event *events.ModalSubmitIn
 		return
 	}
 
+	// Check if the user ID has been previously rejected
+	hasRejection, err := m.layout.db.Appeals().HasPreviousRejection(context.Background(), userID)
+	if err != nil {
+		m.layout.logger.Error("Failed to check previous rejections", zap.Error(err))
+		m.layout.paginationManager.RespondWithError(event, "Failed to check appeal history. Please try again.")
+		return
+	}
+	if hasRejection {
+		m.layout.paginationManager.NavigateTo(event, s, m.page,
+			"This user ID has a previously rejected appeal. New appeals are not allowed.")
+		return
+	}
+
 	// Verify user exists in database
 	user, err := m.layout.db.Users().GetUserByID(context.Background(), userID, types.UserFields{Basic: true}, false)
 	if err != nil {
