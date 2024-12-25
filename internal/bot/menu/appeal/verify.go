@@ -118,5 +118,6 @@ func (m *VerifyMenu) verifyDescription(event *events.ComponentInteractionCreate,
 	})
 
 	s.Delete(constants.SessionKeyAppealCursor)
+	s.Delete(constants.SessionKeyAppealPrevCursors)
 	m.layout.ShowOverview(event, s, "✅ Account verified and appeal submitted successfully!")
 }
