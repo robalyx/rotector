@@ -27,7 +27,7 @@ import (
 
 // GetRoAPIClient constructs an HTTP client with a middleware chain for reliability and performance.
 // Middleware order is important - each layer wraps the next in specified priority.
-func GetRoAPIClient(cfg *config.CommonConfig, redisManager *redis.Manager, zapLogger *zap.Logger) (*api.API, error) {
+func GetRoAPIClient(cfg *config.CommonConfig, redisManager *redis.Manager, zapLogger *zap.Logger) (*api.API, *proxy.Proxies, error) {
 	// Load authentication and proxy configuration
 	cookies := readCookies(zapLogger)
 	proxies := readProxies(zapLogger)
@@ -35,14 +35,17 @@ func GetRoAPIClient(cfg *config.CommonConfig, redisManager *redis.Manager, zapLo
 	// Get Redis client for caching
 	redisClient, err := redisManager.GetClient(redis.CacheDBIndex)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	// Get Redis client for proxy rotation
 	proxyClient, err := redisManager.GetClient(redis.ProxyDBIndex)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
+
+	// Initialize proxy middleware
+	proxyMiddleware := proxy.New(proxies, proxyClient, &cfg.Proxy)
 
 	// Build client with middleware chain in priority order:
 	// 5. Circuit breaker prevents cascading failures
@@ -69,8 +72,8 @@ func GetRoAPIClient(cfg *config.CommonConfig, redisManager *redis.Manager, zapLo
 		)),
 		client.WithMiddleware(3, singleflight.New()),
 		client.WithMiddleware(2, axonetRedis.New(redisClient, 1*time.Hour)),
-		client.WithMiddleware(1, proxy.New(proxies, proxyClient, &cfg.Proxy)),
-	), nil
+		client.WithMiddleware(1, proxyMiddleware),
+	), proxyMiddleware, nil
 }
 
 // readProxies parses proxy configuration from a file in IP:Port:Username:Password format.

@@ -14,6 +14,7 @@ import (
 	"github.com/rotector/rotector/internal/common/config"
 	"github.com/rotector/rotector/internal/common/queue"
 	"github.com/rotector/rotector/internal/common/setup/client"
+	"github.com/rotector/rotector/internal/common/setup/client/middleware/proxy"
 	"github.com/rotector/rotector/internal/common/setup/logger"
 	"github.com/rotector/rotector/internal/common/storage/database"
 	"github.com/rotector/rotector/internal/common/storage/redis"
@@ -36,6 +37,7 @@ type App struct {
 	StatusClient rueidis.Client   // Redis client for worker status reporting
 	LogManager   *logger.Manager  // Log management system
 	pprofServer  *pprofServer     // Debug HTTP server for pprof
+	proxies      *proxy.Proxies   // Proxy middleware
 }
 
 // InitializeApp bootstraps all application dependencies in the correct order,
@@ -85,7 +87,7 @@ func InitializeApp(logDir string) (*App, error) {
 	}
 
 	// RoAPI client is configured with middleware chain
-	roAPI, err := client.GetRoAPIClient(&cfg.Common, redisManager, logger)
+	roAPI, proxies, err := client.GetRoAPIClient(&cfg.Common, redisManager, logger)
 	if err != nil {
 		return nil, err
 	}
@@ -129,6 +131,7 @@ func InitializeApp(logDir string) (*App, error) {
 		StatusClient: statusClient,
 		LogManager:   logManager,
 		pprofServer:  pprofSrv,
+		proxies:      proxies,
 	}, nil
 }
 
@@ -159,9 +162,12 @@ func (s *App) Cleanup() {
 		log.Printf("Failed to close database connection: %v", err)
 	}
 
-	// Close Redis connections last as other components might need it during cleanup
-	s.RedisManager.Close()
+	// Cleanup proxy transports
+	s.proxies.Cleanup()
 
 	// Close Gemini AI client
 	s.GenAIClient.Close()
+
+	// Close Redis connections last as other components might need it during cleanup
+	s.RedisManager.Close()
 }

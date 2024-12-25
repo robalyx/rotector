@@ -6,12 +6,14 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"net/url"
 	"regexp"
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/jaxron/axonet/pkg/client/logger"
@@ -24,13 +26,10 @@ import (
 const (
 	// RotationKeyPrefix is the prefix for proxy rotation keys in Redis.
 	RotationKeyPrefix = "proxy_rotation"
-
 	// EndpointKeyPrefix is the prefix for endpoint tracking keys in Redis.
 	EndpointKeyPrefix = "proxy_endpoints"
-
 	// LastSuccessKeyPrefix is the prefix for storing last successful proxy index per endpoint.
 	LastSuccessKeyPrefix = "proxy_last_success"
-
 	// UnhealthyKeyPrefix is the prefix for storing unhealthy proxy status.
 	UnhealthyKeyPrefix = "proxy_unhealthy"
 )
@@ -38,7 +37,6 @@ const (
 var (
 	// ErrInvalidTransport is returned when the HTTP client's transport is not compatible.
 	ErrInvalidTransport = errors.New("invalid transport")
-
 	// ErrNoHealthyProxies is returned when all proxies are marked as unhealthy.
 	ErrNoHealthyProxies = errors.New("no healthy proxies available")
 )
@@ -56,6 +54,8 @@ type EndpointPattern struct {
 type Proxies struct {
 	proxies           []*url.URL
 	client            rueidis.Client
+	proxyClients      map[string]*http.Client
+	cleanupMutex      sync.Mutex
 	logger            logger.Logger
 	requestTimeout    time.Duration
 	defaultCooldown   time.Duration
@@ -70,6 +70,29 @@ type Proxies struct {
 func New(proxies []*url.URL, client rueidis.Client, cfg *config.Proxy) *Proxies {
 	patterns := make([]EndpointPattern, 0, len(cfg.Endpoints))
 	proxyHash := generateProxyHash(proxies)
+
+	// Create HTTP clients for all proxies
+	proxyClients := make(map[string]*http.Client, len(proxies))
+	for _, proxy := range proxies {
+		transport := &http.Transport{
+			Proxy: http.ProxyURL(proxy),
+			DialContext: (&net.Dialer{
+				Timeout:   20 * time.Second,
+				KeepAlive: 30 * time.Second,
+			}).DialContext,
+			ForceAttemptHTTP2:     true,
+			MaxIdleConns:          100,
+			IdleConnTimeout:       90 * time.Second,
+			TLSHandshakeTimeout:   10 * time.Second,
+			ExpectContinueTimeout: 1 * time.Second,
+			ResponseHeaderTimeout: 10 * time.Second,
+		}
+
+		proxyClients[proxy.String()] = &http.Client{
+			Transport: transport,
+			Timeout:   time.Duration(cfg.RequestTimeout) * time.Millisecond,
+		}
+	}
 
 	for _, endpoint := range cfg.Endpoints {
 		// Build the regex pattern
@@ -98,6 +121,7 @@ func New(proxies []*url.URL, client rueidis.Client, cfg *config.Proxy) *Proxies 
 	return &Proxies{
 		proxies:           proxies,
 		client:            client,
+		proxyClients:      proxyClients,
 		logger:            &logger.NoOpLogger{},
 		requestTimeout:    time.Duration(cfg.RequestTimeout) * time.Millisecond,
 		defaultCooldown:   time.Duration(cfg.DefaultCooldown) * time.Millisecond,
@@ -107,6 +131,17 @@ func New(proxies []*url.URL, client rueidis.Client, cfg *config.Proxy) *Proxies 
 		rotationKey:       fmt.Sprintf("%s:%s", RotationKeyPrefix, proxyHash),
 		numProxies:        strconv.Itoa(len(proxies)),
 	}
+}
+
+// Cleanup closes idle connections in the transport pool.
+func (m *Proxies) Cleanup() {
+	m.cleanupMutex.Lock()
+	defer m.cleanupMutex.Unlock()
+
+	for _, client := range m.proxyClients {
+		client.CloseIdleConnections()
+	}
+	m.proxyClients = make(map[string]*http.Client)
 }
 
 // Process applies proxy logic before passing the request to the next middleware.
@@ -126,10 +161,7 @@ func (m *Proxies) Process(ctx context.Context, httpClient *http.Client, req *htt
 	}
 
 	// Apply proxy to client
-	httpClient, err = m.applyProxyToClient(httpClient, proxy)
-	if err != nil {
-		return nil, err
-	}
+	httpClient = m.applyProxyToClient(httpClient, proxy)
 
 	// Make the request
 	resp, err := next(ctx, httpClient, req)
@@ -233,35 +265,16 @@ func (m *Proxies) selectProxyForEndpoint(ctx context.Context, endpoint string) (
 	return m.proxies[index], index, nil
 }
 
-// applyProxyToClient applies the proxy to the given http.Client
-// It creates a new client with a cloned transport to avoid modifying the original.
-func (m *Proxies) applyProxyToClient(httpClient *http.Client, proxy *url.URL) (*http.Client, error) {
-	// Get the transport from the client
-	transport, err := m.getTransport(httpClient)
-	if err != nil {
-		return nil, err
-	}
+// applyProxyToClient applies the proxy to the given http.Client.
+func (m *Proxies) applyProxyToClient(httpClient *http.Client, proxy *url.URL) *http.Client {
+	proxyStr := proxy.String()
+	proxyClient := m.proxyClients[proxyStr]
 
-	// Clone the transport
-	newTransport := transport.Clone()
+	// Copy settings from original client
+	proxyClient.CheckRedirect = httpClient.CheckRedirect
+	proxyClient.Jar = httpClient.Jar
 
-	// Modify only the necessary fields
-	newTransport.Proxy = http.ProxyURL(proxy)
-	newTransport.OnProxyConnectResponse = func(_ context.Context, proxyURL *url.URL, req *http.Request, _ *http.Response) error {
-		m.logger.WithFields(
-			logger.String("proxy", proxyURL.Host),
-			logger.String("url", req.URL.String()),
-		).Debug("Proxy connection established")
-		return nil
-	}
-
-	// Create a new client with the modified transport
-	return &http.Client{
-		Transport:     newTransport,
-		CheckRedirect: httpClient.CheckRedirect,
-		Jar:           httpClient.Jar,
-		Timeout:       httpClient.Timeout,
-	}, nil
+	return proxyClient
 }
 
 // updateProxyTimestamp updates the timestamp for when the proxy was actually used.
@@ -305,21 +318,20 @@ func (m *Proxies) checkResponseError(ctx context.Context, err error, proxy *url.
 	return err
 }
 
-// getTransport extracts the http.Transport from the client.
-// Returns the default transport if none is set, or an error if the transport is incompatible.
-func (m *Proxies) getTransport(httpClient *http.Client) (*http.Transport, error) {
-	if t, ok := httpClient.Transport.(*http.Transport); ok {
-		return t, nil
-	}
-	if httpClient.Transport == nil {
-		return http.DefaultTransport.(*http.Transport), nil
-	}
-	return nil, ErrInvalidTransport
-}
-
 // SetLogger sets the logger for the middleware.
 func (m *Proxies) SetLogger(l logger.Logger) {
 	m.logger = l
+	for _, client := range m.proxyClients {
+		if transport, ok := client.Transport.(*http.Transport); ok {
+			transport.OnProxyConnectResponse = func(_ context.Context, proxyURL *url.URL, req *http.Request, _ *http.Response) error {
+				l.WithFields(
+					logger.String("proxy", proxyURL.Host),
+					logger.String("url", req.URL.String()),
+				).Debug("Proxy connection established")
+				return nil
+			}
+		}
+	}
 }
 
 // generateProxyHash creates a consistent hash for a list of proxies.
