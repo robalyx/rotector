@@ -696,7 +696,7 @@ func (r *GroupModel) getNextToReview(ctx context.Context, model interface{}, sor
 	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
 		query := tx.NewSelect().
 			Model(model).
-			Where("last_viewed < NOW() - INTERVAL '10 minutes'")
+			Where("last_viewed < NOW() - INTERVAL '5 minutes'")
 
 		// Apply sort order
 		switch sortBy {

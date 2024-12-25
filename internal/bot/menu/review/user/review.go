@@ -691,11 +691,11 @@ func (m *ReviewMenu) checkLastViewed(event interfaces.CommonEvent, s *session.Se
 	var user *types.ReviewUser
 	s.GetInterface(constants.SessionKeyTarget, &user)
 
-	// Check if more than 10 minutes have passed since last view
-	if user != nil && time.Since(user.LastViewed) > 10*time.Minute {
+	// Check if more than 5 minutes have passed since last view
+	if user != nil && time.Since(user.LastViewed) > 5*time.Minute {
 		// Clear current user and load new one
 		s.Delete(constants.SessionKeyTarget)
-		m.Show(event, s, "Previous review timed out after 10 minutes of inactivity. Showing new user.")
+		m.Show(event, s, "Previous review timed out after 5 minutes of inactivity. Showing new user.")
 		return true
 	}
 

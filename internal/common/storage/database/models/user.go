@@ -349,7 +349,7 @@ func (r *UserModel) GetUserByID(ctx context.Context, userID uint64, fields types
 
 			// Add last_viewed check and row locking if reviewing
 			if review {
-				query.Where("last_viewed < NOW() - INTERVAL '10 minutes'")
+				query.Where("last_viewed < NOW() - INTERVAL '5 minutes'")
 				query.For("UPDATE SKIP LOCKED")
 			}
 
@@ -853,7 +853,7 @@ func (r *UserModel) getNextToReview(ctx context.Context, model interface{}, sort
 	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
 		query := tx.NewSelect().
 			Model(model).
-			Where("last_viewed < NOW() - INTERVAL '10 minutes'")
+			Where("last_viewed < NOW() - INTERVAL '5 minutes'")
 
 		// Apply sort order
 		switch sortBy {

@@ -483,11 +483,11 @@ func (m *ReviewMenu) checkLastViewed(event interfaces.CommonEvent, s *session.Se
 	var group *types.ReviewGroup
 	s.GetInterface(constants.SessionKeyGroupTarget, &group)
 
-	// Check if more than 10 minutes have passed since last view
-	if group != nil && time.Since(group.LastViewed) > 10*time.Minute {
+	// Check if more than 5 minutes have passed since last view
+	if group != nil && time.Since(group.LastViewed) > 5*time.Minute {
 		// Clear current group and load new one
 		s.Delete(constants.SessionKeyGroupTarget)
-		m.Show(event, s, "Previous review timed out after 10 minutes of inactivity. Showing new group.")
+		m.Show(event, s, "Previous review timed out after 5 minutes of inactivity. Showing new group.")
 		return true
 	}
 
