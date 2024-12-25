@@ -151,6 +151,10 @@ func (m *OverviewMenu) handleButton(event *events.ComponentInteractionCreate, s 
 	switch customID {
 	case constants.BackButtonCustomID:
 		m.layout.dashboardLayout.Show(event, s, "")
+	case constants.RefreshButtonCustomID:
+		s.Delete(constants.SessionKeyAppealCursor)
+		s.Delete(constants.SessionKeyAppealPrevCursors)
+		m.Show(event, s, "Appeals refreshed.")
 	case constants.AppealCreateButtonCustomID:
 		m.handleCreateAppeal(event)
 	case string(utils.ViewerFirstPage), string(utils.ViewerPrevPage), string(utils.ViewerNextPage), string(utils.ViewerLastPage):

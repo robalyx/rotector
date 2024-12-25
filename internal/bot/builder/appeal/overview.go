@@ -191,12 +191,22 @@ func (b *OverviewBuilder) buildComponents() []discord.ContainerComponent {
 					WithDefault(b.sortBy == types.AppealSortByNewest),
 			),
 		))
-	} else {
-		// Add button to create a new appeal
-		components = append(components, discord.NewActionRow(
-			discord.NewPrimaryButton("New Appeal", constants.AppealCreateButtonCustomID),
-		))
 	}
+
+	// Add action buttons row
+	var actionButtons []discord.InteractiveComponent
+
+	// Add refresh button for everyone
+	actionButtons = append(actionButtons,
+		discord.NewSecondaryButton("🔄 Refresh", constants.RefreshButtonCustomID))
+
+	// Add new appeal button only for non-reviewers
+	if !b.isReviewer {
+		actionButtons = append(actionButtons,
+			discord.NewPrimaryButton("New Appeal", constants.AppealCreateButtonCustomID))
+	}
+
+	components = append(components, discord.NewActionRow(actionButtons...))
 
 	// Add navigation buttons
 	components = append(components, discord.NewActionRow(
