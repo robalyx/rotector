@@ -34,7 +34,6 @@ func NewFriendsMenu(layout *Layout) *FriendsMenu {
 			return builder.NewFriendsBuilder(s).Build()
 		},
 		ButtonHandlerFunc: m.handlePageNavigation,
-		IsSubMenu:         true,
 	}
 	return m
 }
@@ -105,7 +104,7 @@ func (m *FriendsMenu) handlePageNavigation(event *events.ComponentInteractionCre
 		m.Show(event, s, page)
 
 	case constants.BackButtonCustomID:
-		m.layout.reviewMenu.Show(event, s, "")
+		m.layout.paginationManager.NavigateBack(event, s, "")
 
 	default:
 		m.layout.logger.Warn("Invalid friends viewer action", zap.String("action", string(action)))

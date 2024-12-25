@@ -187,12 +187,12 @@ const (
 
 // Session keys.
 const (
-	SessionKeyUserID       = "userID"
-	SessionKeyMessageID    = "messageID"
-	SessionKeyTarget       = "target"
-	SessionKeyCurrentPage  = "currentPage"
-	SessionKeyPreviousPage = "previousPage"
-	SessionKeyImageBuffer  = "imageBuffer"
+	SessionKeyUserID        = "userID"
+	SessionKeyMessageID     = "messageID"
+	SessionKeyTarget        = "target"
+	SessionKeyCurrentPage   = "currentPage"
+	SessionKeyPreviousPages = "previousPages"
+	SessionKeyImageBuffer   = "imageBuffer"
 
 	SessionKeyIsRefreshed = "isRefreshed"
 	SessionKeyUserCounts  = "userCounts"

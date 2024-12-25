@@ -227,6 +227,9 @@ func (b *ReviewBuilder) buildActionOptions() []discord.StringSelectMenuOption {
 		discord.NewStringSelectMenuOption("Open outfit viewer", constants.OpenOutfitsMenuButtonCustomID).
 			WithEmoji(discord.ComponentEmoji{Name: "👕"}).
 			WithDescription("View all user outfits"),
+		discord.NewStringSelectMenuOption("Change Review Target", constants.ReviewTargetModeOption).
+			WithEmoji(discord.ComponentEmoji{Name: "🎯"}).
+			WithDescription("Change what type of users to review"),
 	}
 
 	// Add reviewer-only options
@@ -244,9 +247,6 @@ func (b *ReviewBuilder) buildActionOptions() []discord.StringSelectMenuOption {
 			discord.NewStringSelectMenuOption("View user logs", constants.ViewUserLogsButtonCustomID).
 				WithEmoji(discord.ComponentEmoji{Name: "📋"}).
 				WithDescription("View activity logs for this user"),
-			discord.NewStringSelectMenuOption("Change Review Target", constants.ReviewTargetModeOption).
-				WithEmoji(discord.ComponentEmoji{Name: "🎯"}).
-				WithDescription("Change what type of users to review"),
 			discord.NewStringSelectMenuOption("Change Review Mode", constants.ReviewModeOption).
 				WithEmoji(discord.ComponentEmoji{Name: "🎓"}).
 				WithDescription("Switch between training and standard modes"),

@@ -126,7 +126,7 @@ func (m *TicketMenu) handleButton(event *events.ComponentInteractionCreate, s *s
 		s.Set(constants.SessionKeyPaginationPage, page)
 		m.layout.paginationManager.NavigateTo(event, s, m.page, "")
 	case constants.BackButtonCustomID:
-		m.layout.ShowOverview(event, s, "")
+		m.layout.paginationManager.NavigateBack(event, s, "")
 	case constants.AppealRespondButtonCustomID:
 		m.handleRespond(event)
 	case constants.ReviewUserButtonCustomID:

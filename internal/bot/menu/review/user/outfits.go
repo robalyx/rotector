@@ -34,7 +34,6 @@ func NewOutfitsMenu(layout *Layout) *OutfitsMenu {
 			return builder.NewOutfitsBuilder(s).Build()
 		},
 		ButtonHandlerFunc: m.handlePageNavigation,
-		IsSubMenu:         true,
 	}
 	return m
 }
@@ -95,7 +94,7 @@ func (m *OutfitsMenu) handlePageNavigation(event *events.ComponentInteractionCre
 		m.Show(event, s, page)
 
 	case constants.BackButtonCustomID:
-		m.layout.reviewMenu.Show(event, s, "")
+		m.layout.paginationManager.NavigateBack(event, s, "")
 
 	default:
 		m.layout.logger.Warn("Invalid outfits viewer action", zap.String("action", string(action)))

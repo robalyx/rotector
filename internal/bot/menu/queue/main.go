@@ -89,7 +89,7 @@ func (m *MainMenu) handleSelectMenu(event *events.ComponentInteractionCreate, _ 
 func (m *MainMenu) handleButton(event *events.ComponentInteractionCreate, s *session.Session, customID string) {
 	switch customID {
 	case constants.BackButtonCustomID:
-		m.layout.dashboardLayout.Show(event, s, "")
+		m.layout.paginationManager.NavigateBack(event, s, "")
 	case constants.RefreshButtonCustomID:
 		m.Show(event, s, "")
 	}

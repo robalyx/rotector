@@ -17,9 +17,8 @@ import (
 // types of Discord interactions (select menus, buttons, modals) and a message builder function.
 // The handlers are optional - a page may only use some interaction types.
 type Page struct {
-	Name      string
-	Message   func(s *session.Session) *discord.MessageUpdateBuilder
-	IsSubMenu bool
+	Name    string
+	Message func(s *session.Session) *discord.MessageUpdateBuilder
 
 	// SelectHandlerFunc processes select menu interactions by taking the selected option
 	// and custom ID to determine what action to take
@@ -110,8 +109,7 @@ func (m *Manager) HandleInteraction(event interfaces.CommonEvent, s *session.Ses
 }
 
 // NavigateTo updates the Discord message with new content and components for the target page.
-// It stores the previous page and message ID in the session, allowing for navigation history.
-// The content parameter adds a timestamped message above the page content.
+// It stores the page history in the session, allowing for nested navigation.
 func (m *Manager) NavigateTo(event interfaces.CommonEvent, s *session.Session, page *Page, content string) {
 	// Set the user ID in the session
 	s.Set(constants.SessionKeyUserID, uint64(event.User().ID))
@@ -127,7 +125,7 @@ func (m *Manager) NavigateTo(event interfaces.CommonEvent, s *session.Session, p
 		m.logger.Error("Failed to update interaction response", zap.Error(err))
 	}
 
-	// Update the page in the session
+	// Update the page history in the session
 	m.UpdatePage(s, page)
 
 	// Set the message ID in the session
@@ -138,22 +136,47 @@ func (m *Manager) NavigateTo(event interfaces.CommonEvent, s *session.Session, p
 		zap.Uint64("message_id", uint64(message.ID)))
 }
 
-// UpdatePage updates the session with the current page and previous page.
-func (m *Manager) UpdatePage(s *session.Session, page *Page) {
-	currentPageName := s.GetString(constants.SessionKeyCurrentPage)
-	currentPage := m.GetPage(currentPageName)
-	if page.Name != currentPageName && currentPage != nil && !currentPage.IsSubMenu {
-		s.Set(constants.SessionKeyPreviousPage, currentPageName)
+// UpdatePage updates the session with a new page.
+func (m *Manager) UpdatePage(s *session.Session, newPage *Page) {
+	currentPage := s.GetString(constants.SessionKeyCurrentPage)
+	if currentPage != "" && currentPage != newPage.Name {
+		// Get existing page history
+		var previousPages []string
+		s.GetInterface(constants.SessionKeyPreviousPages, &previousPages)
+
+		// Check if new page exists in history
+		for i, page := range previousPages {
+			if page == newPage.Name {
+				// Found the page in history, revert back to its state
+				previousPages = previousPages[:i]
+				s.Set(constants.SessionKeyPreviousPages, previousPages)
+				s.Set(constants.SessionKeyCurrentPage, newPage.Name)
+				return
+			}
+		}
+
+		// Page not in history, append current page
+		previousPages = append(previousPages, currentPage)
+		s.Set(constants.SessionKeyPreviousPages, previousPages)
 	}
 
-	s.Set(constants.SessionKeyCurrentPage, page.Name)
+	s.Set(constants.SessionKeyCurrentPage, newPage.Name)
 }
 
-// NavigateBack navigates back to the previous page.
+// NavigateBack navigates back to the previous page in the history.
 func (m *Manager) NavigateBack(event interfaces.CommonEvent, s *session.Session, content string) {
-	previousPage := s.GetString(constants.SessionKeyPreviousPage)
-	page := m.GetPage(previousPage)
-	m.NavigateTo(event, s, page, content)
+	var previousPages []string
+	s.GetInterface(constants.SessionKeyPreviousPages, &previousPages)
+
+	if len(previousPages) > 0 {
+		// Get the last page from history
+		lastIdx := len(previousPages) - 1
+		previousPage := previousPages[lastIdx]
+
+		// Navigate to the previous page
+		page := m.GetPage(previousPage)
+		m.NavigateTo(event, s, page, content)
+	}
 }
 
 // RespondWithError clears all message components and embeds, replacing them with

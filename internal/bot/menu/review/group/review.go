@@ -199,7 +199,7 @@ func (m *ReviewMenu) handleButton(event *events.ComponentInteractionCreate, s *s
 
 	switch customID {
 	case constants.BackButtonCustomID:
-		m.layout.dashboardLayout.Show(event, s, "")
+		m.layout.paginationManager.NavigateBack(event, s, "")
 	case constants.GroupConfirmButtonCustomID:
 		m.handleConfirmGroup(event, s)
 	case constants.GroupClearButtonCustomID:

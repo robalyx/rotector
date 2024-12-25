@@ -59,7 +59,7 @@ func (m *VerifyMenu) buildMessage(s *session.Session) *discord.MessageUpdateBuil
 func (m *VerifyMenu) handleButton(event *events.ComponentInteractionCreate, s *session.Session, customID string) {
 	switch customID {
 	case constants.BackButtonCustomID:
-		m.layout.ShowOverview(event, s, "Verification cancelled.")
+		m.layout.paginationManager.NavigateBack(event, s, "Verification cancelled.")
 	case constants.VerifyDescriptionButtonID:
 		m.verifyDescription(event, s)
 	}

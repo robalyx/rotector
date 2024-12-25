@@ -34,7 +34,6 @@ func NewGroupsMenu(layout *Layout) *GroupsMenu {
 			return builder.NewGroupsBuilder(s).Build()
 		},
 		ButtonHandlerFunc: m.handlePageNavigation,
-		IsSubMenu:         true,
 	}
 	return m
 }
@@ -130,7 +129,7 @@ func (m *GroupsMenu) handlePageNavigation(event *events.ComponentInteractionCrea
 		m.Show(event, s, page)
 
 	case constants.BackButtonCustomID:
-		m.layout.reviewMenu.Show(event, s, "")
+		m.layout.paginationManager.NavigateBack(event, s, "")
 
 	default:
 		m.layout.logger.Warn("Invalid groups viewer action", zap.String("action", string(action)))

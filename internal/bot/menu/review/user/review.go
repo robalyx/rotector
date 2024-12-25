@@ -36,7 +36,6 @@ func NewReviewMenu(layout *Layout) *ReviewMenu {
 		SelectHandlerFunc: m.handleSelectMenu,
 		ButtonHandlerFunc: m.handleButton,
 		ModalHandlerFunc:  m.handleModal,
-		IsSubMenu:         true,
 	}
 	return m
 }
