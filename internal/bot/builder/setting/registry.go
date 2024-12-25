@@ -6,6 +6,7 @@ import (
 	"strconv"
 
 	"github.com/rotector/rotector/internal/bot/constants"
+	"github.com/rotector/rotector/internal/bot/core/session"
 	"github.com/rotector/rotector/internal/bot/utils"
 	"github.com/rotector/rotector/internal/common/storage/database/types"
 )
@@ -17,6 +18,7 @@ var (
 	ErrInvalidOption         = errors.New("invalid option selected")
 	ErrInvalidBoolValue      = errors.New("value must be true or false")
 	ErrWelcomeMessageTooLong = errors.New("welcome message cannot exceed 512 characters")
+	ErrNotReviewer           = errors.New("you are not an official reviewer")
 )
 
 // Validator is a function that validates setting input.
@@ -27,7 +29,7 @@ type Validator func(value string, userID uint64) error
 type ValueGetter func(userSettings *types.UserSetting, botSettings *types.BotSetting) string
 
 // ValueUpdater is a function that updates the value of a setting.
-type ValueUpdater func(value string, userSettings *types.UserSetting, botSettings *types.BotSetting) error
+type ValueUpdater func(value string, userSettings *types.UserSetting, botSettings *types.BotSetting, s *session.Session) error
 
 // Setting defines the structure and behavior of a single setting.
 type Setting struct {
@@ -139,7 +141,7 @@ func (r *Registry) createStreamerModeSetting() Setting {
 		ValueGetter: func(us *types.UserSetting, _ *types.BotSetting) string {
 			return strconv.FormatBool(us.StreamerMode)
 		},
-		ValueUpdater: func(value string, us *types.UserSetting, _ *types.BotSetting) error {
+		ValueUpdater: func(value string, us *types.UserSetting, _ *types.BotSetting, _ *session.Session) error {
 			boolVal, _ := strconv.ParseBool(value)
 			us.StreamerMode = boolVal
 			return nil
@@ -172,7 +174,7 @@ func (r *Registry) createUserDefaultSortSetting() Setting {
 		ValueGetter: func(us *types.UserSetting, _ *types.BotSetting) string {
 			return string(us.UserDefaultSort)
 		},
-		ValueUpdater: func(value string, us *types.UserSetting, _ *types.BotSetting) error {
+		ValueUpdater: func(value string, us *types.UserSetting, _ *types.BotSetting, _ *session.Session) error {
 			us.UserDefaultSort = types.ReviewSortBy(value)
 			return nil
 		},
@@ -204,7 +206,7 @@ func (r *Registry) createGroupDefaultSortSetting() Setting {
 		ValueGetter: func(us *types.UserSetting, _ *types.BotSetting) string {
 			return us.GroupDefaultSort.FormatDisplay()
 		},
-		ValueUpdater: func(value string, us *types.UserSetting, _ *types.BotSetting) error {
+		ValueUpdater: func(value string, us *types.UserSetting, _ *types.BotSetting, _ *session.Session) error {
 			us.GroupDefaultSort = types.ReviewSortBy(value)
 			return nil
 		},
@@ -234,7 +236,7 @@ func (r *Registry) createAppealDefaultSortSetting() Setting {
 		ValueGetter: func(us *types.UserSetting, _ *types.BotSetting) string {
 			return us.AppealDefaultSort.FormatDisplay()
 		},
-		ValueUpdater: func(value string, us *types.UserSetting, _ *types.BotSetting) error {
+		ValueUpdater: func(value string, us *types.UserSetting, _ *types.BotSetting, _ *session.Session) error {
 			us.AppealDefaultSort = types.AppealSortBy(value)
 			return nil
 		},
@@ -286,7 +288,7 @@ func (r *Registry) createAppealStatusFilterSetting() Setting {
 		ValueGetter: func(us *types.UserSetting, _ *types.BotSetting) string {
 			return string(us.AppealStatusFilter)
 		},
-		ValueUpdater: func(value string, us *types.UserSetting, _ *types.BotSetting) error {
+		ValueUpdater: func(value string, us *types.UserSetting, _ *types.BotSetting, _ *session.Session) error {
 			us.AppealStatusFilter = types.AppealFilterBy(value)
 			return nil
 		},
@@ -316,7 +318,7 @@ func (r *Registry) createChatModelSetting() Setting {
 		ValueGetter: func(us *types.UserSetting, _ *types.BotSetting) string {
 			return us.ChatModel.FormatDisplay()
 		},
-		ValueUpdater: func(value string, us *types.UserSetting, _ *types.BotSetting) error {
+		ValueUpdater: func(value string, us *types.UserSetting, _ *types.BotSetting, _ *session.Session) error {
 			us.ChatModel = types.ChatModel(value)
 			return nil
 		},
@@ -354,7 +356,12 @@ func (r *Registry) createReviewModeSetting() Setting {
 		ValueGetter: func(us *types.UserSetting, _ *types.BotSetting) string {
 			return us.ReviewMode.FormatDisplay()
 		},
-		ValueUpdater: func(value string, us *types.UserSetting, _ *types.BotSetting) error {
+		ValueUpdater: func(value string, us *types.UserSetting, bs *types.BotSetting, s *session.Session) error {
+			// Only allow changing to standard mode if user is a reviewer
+			userID := s.GetUint64(constants.SessionKeyUserID)
+			if value == string(types.StandardReviewMode) && !bs.IsReviewer(userID) {
+				return ErrNotReviewer
+			}
 			us.ReviewMode = types.ReviewMode(value)
 			return nil
 		},
@@ -373,7 +380,7 @@ func (r *Registry) createSessionLimitSetting() Setting {
 		ValueGetter: func(_ *types.UserSetting, bs *types.BotSetting) string {
 			return strconv.FormatUint(bs.SessionLimit, 10)
 		},
-		ValueUpdater: func(value string, _ *types.UserSetting, bs *types.BotSetting) error {
+		ValueUpdater: func(value string, _ *types.UserSetting, bs *types.BotSetting, _ *session.Session) error {
 			limit, err := strconv.ParseUint(value, 10, 64)
 			if err != nil {
 				return err
@@ -404,7 +411,7 @@ func (r *Registry) createReviewerIDsSetting() Setting {
 			}
 			return displayIDs
 		},
-		ValueUpdater: func(value string, _ *types.UserSetting, bs *types.BotSetting) error {
+		ValueUpdater: func(value string, _ *types.UserSetting, bs *types.BotSetting, _ *session.Session) error {
 			id, err := strconv.ParseUint(value, 10, 64)
 			if err != nil {
 				return err
@@ -445,7 +452,7 @@ func (r *Registry) createAdminIDsSetting() Setting {
 			}
 			return displayIDs
 		},
-		ValueUpdater: func(value string, _ *types.UserSetting, bs *types.BotSetting) error {
+		ValueUpdater: func(value string, _ *types.UserSetting, bs *types.BotSetting, _ *session.Session) error {
 			id, err := strconv.ParseUint(value, 10, 64)
 			if err != nil {
 				return err
@@ -511,7 +518,7 @@ func (r *Registry) createReviewTargetModeSetting() Setting {
 		ValueGetter: func(us *types.UserSetting, _ *types.BotSetting) string {
 			return us.ReviewTargetMode.FormatDisplay()
 		},
-		ValueUpdater: func(value string, us *types.UserSetting, _ *types.BotSetting) error {
+		ValueUpdater: func(value string, us *types.UserSetting, _ *types.BotSetting, _ *session.Session) error {
 			us.ReviewTargetMode = types.ReviewTargetMode(value)
 			return nil
 		},
@@ -540,7 +547,7 @@ func (r *Registry) createWelcomeMessageSetting() Setting {
 			}
 			return bs.WelcomeMessage
 		},
-		ValueUpdater: func(value string, _ *types.UserSetting, bs *types.BotSetting) error {
+		ValueUpdater: func(value string, _ *types.UserSetting, bs *types.BotSetting, _ *session.Session) error {
 			bs.WelcomeMessage = value
 			return nil
 		},

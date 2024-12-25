@@ -2,6 +2,7 @@ package setting
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	"github.com/disgoorg/disgo/discord"
@@ -75,8 +76,7 @@ func (m *UpdateMenu) handleSettingChange(event *events.ComponentInteractionCreat
 
 	// Update the setting
 	if err := m.updateSetting(s, setting, option); err != nil {
-		m.layout.logger.Error("Failed to update setting", zap.Error(err))
-		m.layout.paginationManager.RespondWithError(event, "Failed to update setting")
+		m.layout.paginationManager.NavigateTo(event, s, m.page, fmt.Sprintf("Failed to update setting: %v", err))
 		return
 	}
 
@@ -103,7 +103,7 @@ func (m *UpdateMenu) updateSetting(s *session.Session, setting setting.Setting, 
 	s.GetInterface(constants.SessionKeyBotSettings, &botSettings)
 
 	// Use the setting's ValueUpdater to update the value
-	if err := setting.ValueUpdater(value, userSettings, botSettings); err != nil {
+	if err := setting.ValueUpdater(value, userSettings, botSettings, s); err != nil {
 		return err
 	}
 
@@ -189,8 +189,7 @@ func (m *UpdateMenu) handleSettingModal(event *events.ModalSubmitInteractionCrea
 
 	// Update the setting using ValueUpdater
 	if err := m.updateSetting(s, setting, input); err != nil {
-		m.layout.logger.Error("Failed to update setting", zap.Error(err))
-		m.layout.paginationManager.RespondWithError(event, "Failed to update setting")
+		m.layout.paginationManager.NavigateTo(event, s, m.page, fmt.Sprintf("Failed to update setting: %v", err))
 		return
 	}
 
