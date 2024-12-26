@@ -108,12 +108,10 @@ func (f *FriendFetcher) GetFriendsWithDetails(ctx context.Context, userID uint64
 				HasVerifiedBadge: user.HasVerifiedBadge,
 			})
 		}
-
-		f.logger.Debug("Finished fetching friend details batch",
-			zap.Int("batchStart", i),
-			zap.Int("batchEnd", end),
-			zap.Int("successfulFetches", len(userDetails.Data)))
 	}
+
+	f.logger.Debug("Finished fetching friend details",
+		zap.Int("successfulFetches", len(allFriends)))
 
 	return allFriends, nil
 }

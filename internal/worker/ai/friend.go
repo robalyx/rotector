@@ -155,7 +155,7 @@ func (f *FriendWorker) processFriendsBatch(friendIDs []uint64) ([]uint64, error)
 		}
 
 		// Check which users already exist in the database
-		existingUsers, err := f.db.Users().CheckExistingUsers(context.Background(), friendIDs)
+		existingUsers, err := f.db.Users().CheckExistingUsers(context.Background(), userFriendIDs)
 		if err != nil {
 			f.logger.Error("Error checking existing users", zap.Error(err))
 			continue
