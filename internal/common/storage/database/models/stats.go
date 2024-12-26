@@ -140,6 +140,18 @@ func (r *StatsModel) GetHourlyStats(ctx context.Context) ([]types.HourlyStats, e
 	return stats, nil
 }
 
+// HasStatsForHour checks if statistics exist for a specific hour.
+func (r *StatsModel) HasStatsForHour(ctx context.Context, hour time.Time) (bool, error) {
+	exists, err := r.db.NewSelect().
+		Model((*types.HourlyStats)(nil)).
+		Where("timestamp = ?", hour.UTC().Truncate(time.Hour)).
+		Exists(ctx)
+	if err != nil {
+		return false, fmt.Errorf("failed to check stats existence for hour %v: %w", hour, err)
+	}
+	return exists, nil
+}
+
 // PurgeOldStats removes statistics older than the cutoff date.
 func (r *StatsModel) PurgeOldStats(ctx context.Context, cutoffDate time.Time) error {
 	result, err := r.db.NewDelete().

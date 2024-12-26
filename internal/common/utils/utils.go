@@ -70,15 +70,7 @@ func ContainsNormalized(s, substr string) bool {
 	return strings.Contains(normalizedS, normalizedSubstr)
 }
 
-// Add new cleanup function
-// CleanupText removes extra whitespace, newlines, and ensures proper sentence spacing:
-// 1. Replaces all whitespace sequences (including newlines) with a single space
-// 2. Trims leading/trailing whitespace
-// 3. Ensures exactly one space after periods.
+// CleanupText removes extra whitespaces.
 func CleanupText(s string) string {
-	// Replace all whitespace sequences with a single space and trim
-	s = strings.TrimSpace(MultipleSpaces.ReplaceAllString(s, " "))
-	// Fix double spaces after periods
-	s = strings.ReplaceAll(s, ".  ", ". ")
-	return s
+	return strings.TrimSpace(MultipleSpaces.ReplaceAllString(s, " "))
 }

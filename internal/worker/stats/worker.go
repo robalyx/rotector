@@ -61,31 +61,40 @@ func (w *Worker) Start() {
 	for {
 		w.bar.Reset()
 		w.reporter.SetHealthy(true)
+
 		ctx := context.Background()
+		currentHour := time.Now().UTC().Truncate(time.Hour)
 
-		// Step 1: Wait until the start of the next hour (0%)
-		w.bar.SetStepMessage("Waiting for next hour", 0)
-		w.reporter.UpdateStatus("Waiting for next hour", 0)
-		nextHour := time.Now().UTC().Truncate(time.Hour).Add(time.Hour)
-		time.Sleep(time.Until(nextHour))
+		// Step 1: Check if stats exist for current hour (0%)
+		w.bar.SetStepMessage("Checking current hour stats", 0)
+		w.reporter.UpdateStatus("Checking current hour stats", 0)
 
-		// Step 2: Get current stats (20%)
-		w.bar.SetStepMessage("Collecting statistics", 20)
-		w.reporter.UpdateStatus("Collecting statistics", 20)
-		stats, err := w.db.Stats().GetCurrentStats(ctx)
+		exists, err := w.db.Stats().HasStatsForHour(ctx, currentHour)
 		if err != nil {
-			w.logger.Error("Failed to get current stats", zap.Error(err))
+			w.logger.Error("Failed to check current hour stats", zap.Error(err))
 			w.reporter.SetHealthy(false)
 			continue
 		}
 
-		// Step 3: Save current stats (40%)
-		w.bar.SetStepMessage("Saving statistics", 40)
-		w.reporter.UpdateStatus("Saving statistics", 40)
-		if err := w.db.Stats().SaveHourlyStats(ctx, stats); err != nil {
-			w.logger.Error("Failed to save hourly stats", zap.Error(err))
-			w.reporter.SetHealthy(false)
-			continue
+		if !exists {
+			// Step 2: Get current stats (20%)
+			w.bar.SetStepMessage("Collecting statistics", 20)
+			w.reporter.UpdateStatus("Collecting statistics", 20)
+			stats, err := w.db.Stats().GetCurrentStats(ctx)
+			if err != nil {
+				w.logger.Error("Failed to get current stats", zap.Error(err))
+				w.reporter.SetHealthy(false)
+				continue
+			}
+
+			// Step 3: Save current stats (40%)
+			w.bar.SetStepMessage("Saving statistics", 40)
+			w.reporter.UpdateStatus("Saving statistics", 40)
+			if err := w.db.Stats().SaveHourlyStats(ctx, stats); err != nil {
+				w.logger.Error("Failed to save hourly stats", zap.Error(err))
+				w.reporter.SetHealthy(false)
+				continue
+			}
 		}
 
 		// Step 4: Generate and cache charts (50%)
@@ -117,10 +126,12 @@ func (w *Worker) Start() {
 		}
 
 		// Step 7: Completed (100%)
-		w.bar.SetStepMessage("Statistics updated", 100)
-		w.reporter.UpdateStatus("Statistics updated", 100)
+		w.bar.SetStepMessage("Waiting for next hour", 100)
+		w.reporter.UpdateStatus("Waiting for next hour", 100)
+		nextHour := currentHour.Add(time.Hour)
+		time.Sleep(time.Until(nextHour))
 
-		w.logger.Info("Hourly statistics saved successfully")
+		w.logger.Info("Hourly statistics processing completed")
 	}
 }
 
