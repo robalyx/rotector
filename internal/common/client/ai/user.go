@@ -232,8 +232,7 @@ func (a *UserAnalyzer) ProcessUsers(userInfos []*fetcher.Info) (map[uint64]*type
 	}
 
 	// Generate content and parse response using Gemini model with retry
-	var flaggedUsers FlaggedUsers
-	_, err = withRetry(context.Background(), func() (*FlaggedUsers, error) {
+	flaggedUsers, err := withRetry(context.Background(), func() (*FlaggedUsers, error) {
 		resp, err := a.userModel.GenerateContent(context.Background(), genai.Text(string(userInfoJSON)))
 		if err != nil {
 			return nil, fmt.Errorf("gemini API error: %w", err)
@@ -272,7 +271,7 @@ func (a *UserAnalyzer) ProcessUsers(userInfos []*fetcher.Info) (map[uint64]*type
 // validateFlaggedUsers validates the flagged users against the translated content
 // but uses original descriptions when creating validated users. It checks if at least
 // 30% of the flagged words are found in the translated content to confirm the AI's findings.
-func (a *UserAnalyzer) validateFlaggedUsers(flaggedUsers FlaggedUsers, translatedInfos map[string]*fetcher.Info, originalInfos map[string]*fetcher.Info) (map[uint64]*types.User, []uint64) {
+func (a *UserAnalyzer) validateFlaggedUsers(flaggedUsers *FlaggedUsers, translatedInfos map[string]*fetcher.Info, originalInfos map[string]*fetcher.Info) (map[uint64]*types.User, []uint64) {
 	validatedUsers := make(map[uint64]*types.User)
 	var failedValidationIDs []uint64
 

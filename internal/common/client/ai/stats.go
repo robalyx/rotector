@@ -105,23 +105,22 @@ func (a *StatsAnalyzer) GenerateWelcomeMessage(ctx context.Context, historicalSt
 	}
 
 	// Generate welcome message using Gemini model with retry
-	var message string
-	_, err = withRetry(ctx, func() (*string, error) {
+	message, err := withRetry(ctx, func() (string, error) {
 		resp, err := a.genModel.GenerateContent(ctx, genai.Text(string(statsJSON)))
 		if err != nil {
-			return nil, fmt.Errorf("gemini API error: %w", err)
+			return "", fmt.Errorf("gemini API error: %w", err)
 		}
 
 		// Check for empty response
 		if len(resp.Candidates) == 0 || len(resp.Candidates[0].Content.Parts) == 0 {
-			return nil, fmt.Errorf("%w: no response from model", ErrModelResponse)
+			return "", fmt.Errorf("%w: no response from model", ErrModelResponse)
 		}
 
 		// Extract response text
 		text := string(resp.Candidates[0].Content.Parts[0].(genai.Text))
 		cleanMessage := utils.CleanupText(text)
 
-		return &cleanMessage, nil
+		return cleanMessage, nil
 	})
 	if err != nil {
 		return "", err

@@ -157,8 +157,7 @@ func (a *FriendAnalyzer) GenerateFriendReason(userInfo *fetcher.Info, confirmedF
 	prompt := fmt.Sprintf(FriendUserPrompt, userInfo.Name, string(friendDataJSON))
 
 	// Generate friend analysis using Gemini model with retry
-	var friendAnalysis FriendAnalysis
-	_, err = withRetry(context.Background(), func() (*FriendAnalysis, error) {
+	friendAnalysis, err := withRetry(context.Background(), func() (*FriendAnalysis, error) {
 		resp, err := a.genModel.GenerateContent(context.Background(), genai.Text(prompt))
 		if err != nil {
 			return nil, fmt.Errorf("gemini API error: %w", err)
