@@ -92,7 +92,7 @@ func (is *ImageStreamer) Stream(req StreamRequest) {
 	)
 
 	// Create request context with timeout
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 6*time.Second)
 	defer cancel()
 
 	// Start downloading images concurrently
@@ -141,7 +141,7 @@ func (is *ImageStreamer) Stream(req StreamRequest) {
 	}()
 
 	// Update display periodically until all images are downloaded
-	ticker := time.NewTicker(1 * time.Second)
+	ticker := time.NewTicker(1500 * time.Millisecond)
 	defer ticker.Stop()
 
 	for {
@@ -149,13 +149,13 @@ func (is *ImageStreamer) Stream(req StreamRequest) {
 		case <-ctx.Done():
 			// Clean up streaming state before returning
 			req.Session.Set(constants.SessionKeyIsStreaming, false)
-			is.createAndDisplayGrid(req, downloadedImages, &mu, "Loading images...")
+			is.createAndDisplayGrid(req, downloadedImages, &mu, "Images took too long to load")
 			return
 		case <-doneChan:
 			// Final update when all images are downloaded
-			message := ""
+			message := "Images loaded"
 			if failed := failedDownloads.Load(); failed > 0 {
-				message = fmt.Sprintf("Failed to load %d images", failed)
+				message = fmt.Sprintf("Images loaded (%d failed)", failed)
 			}
 
 			req.Session.Set(constants.SessionKeyIsStreaming, false)

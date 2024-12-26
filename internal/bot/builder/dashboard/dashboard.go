@@ -158,7 +158,7 @@ func (b *Builder) Build() *discord.MessageUpdateBuilder {
 				discord.NewStringSelectMenu(constants.ActionSelectMenuCustomID, "Select an action", options...),
 			),
 			discord.NewActionRow(
-				discord.NewSecondaryButton("🔄", string(constants.RefreshButtonCustomID)),
+				discord.NewSecondaryButton("🔄 Refresh", string(constants.RefreshButtonCustomID)),
 			),
 		)
 

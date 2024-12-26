@@ -20,13 +20,13 @@ import (
 
 // ReviewBuilder creates the visual layout for reviewing a group.
 type ReviewBuilder struct {
-	db           *database.Client
-	settings     *types.UserSetting
-	botSettings  *types.BotSetting
-	userID       uint64
-	group        *types.ReviewGroup
-	groupInfo    *apiTypes.GroupResponse
-	flaggedUsers []uint64
+	db          *database.Client
+	settings    *types.UserSetting
+	botSettings *types.BotSetting
+	userID      uint64
+	group       *types.ReviewGroup
+	groupInfo   *apiTypes.GroupResponse
+	memberIDs   []uint64
 }
 
 // NewReviewBuilder creates a new review builder.
@@ -39,17 +39,17 @@ func NewReviewBuilder(s *session.Session, db *database.Client) *ReviewBuilder {
 	s.GetInterface(constants.SessionKeyGroupTarget, &group)
 	var groupInfo *apiTypes.GroupResponse
 	s.GetInterface(constants.SessionKeyGroupInfo, &groupInfo)
-	var flaggedUsers []uint64
-	s.GetInterface(constants.SessionKeyGroupFlaggedUsers, &flaggedUsers)
+	var memberIDs []uint64
+	s.GetInterface(constants.SessionKeyGroupMemberIDs, &memberIDs)
 
 	return &ReviewBuilder{
-		db:           db,
-		settings:     settings,
-		botSettings:  botSettings,
-		userID:       s.GetUint64(constants.SessionKeyUserID),
-		group:        group,
-		groupInfo:    groupInfo,
-		flaggedUsers: flaggedUsers,
+		db:          db,
+		settings:    settings,
+		botSettings: botSettings,
+		userID:      s.GetUint64(constants.SessionKeyUserID),
+		group:       group,
+		groupInfo:   groupInfo,
+		memberIDs:   memberIDs,
 	}
 }
 
@@ -135,7 +135,7 @@ func (b *ReviewBuilder) buildReviewEmbed() *discord.EmbedBuilder {
 	lastUpdated := fmt.Sprintf("<t:%d:R>", b.group.LastUpdated.Unix())
 	confidence := fmt.Sprintf("%.2f", b.group.Confidence)
 	memberCount := strconv.FormatUint(b.groupInfo.MemberCount, 10)
-	flaggedMembers := strconv.Itoa(len(b.flaggedUsers))
+	flaggedMembers := strconv.Itoa(len(b.memberIDs))
 
 	// Censor reason if needed
 	reason := utils.CensorStringsInText(
@@ -199,7 +199,14 @@ func (b *ReviewBuilder) buildReviewEmbed() *discord.EmbedBuilder {
 
 // buildActionOptions creates the action menu options.
 func (b *ReviewBuilder) buildActionOptions() []discord.StringSelectMenuOption {
-	var options []discord.StringSelectMenuOption
+	options := []discord.StringSelectMenuOption{
+		discord.NewStringSelectMenuOption("View Flagged Members", constants.GroupViewMembersButtonCustomID).
+			WithDescription("View all flagged members of this group").
+			WithEmoji(discord.ComponentEmoji{Name: "👥"}),
+		discord.NewStringSelectMenuOption("Change Review Target", constants.ReviewTargetModeOption).
+			WithEmoji(discord.ComponentEmoji{Name: "🎯"}).
+			WithDescription("Change what type of groups to review"),
+	}
 
 	// Add reviewer-only options
 	if b.botSettings.IsReviewer(b.userID) {
@@ -213,9 +220,6 @@ func (b *ReviewBuilder) buildActionOptions() []discord.StringSelectMenuOption {
 			discord.NewStringSelectMenuOption("View group logs", constants.GroupViewLogsButtonCustomID).
 				WithEmoji(discord.ComponentEmoji{Name: "📋"}).
 				WithDescription("View activity logs for this group"),
-			discord.NewStringSelectMenuOption("Change Review Target", constants.ReviewTargetModeOption).
-				WithEmoji(discord.ComponentEmoji{Name: "🎯"}).
-				WithDescription("Change what type of groups to review"),
 			discord.NewStringSelectMenuOption("Change Review Mode", constants.ReviewModeOption).
 				WithEmoji(discord.ComponentEmoji{Name: "🎓"}).
 				WithDescription("Switch between training and standard modes"),

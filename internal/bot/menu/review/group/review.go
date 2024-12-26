@@ -129,9 +129,10 @@ func (m *ReviewMenu) handleActionSelection(event *events.ComponentInteractionCre
 	userID := uint64(event.User().ID)
 
 	switch option {
+	case constants.GroupViewMembersButtonCustomID:
+		m.layout.membersMenu.Show(event, s, 0)
 	case constants.GroupViewLogsButtonCustomID:
 		m.handleViewGroupLogs(event, s)
-
 	case constants.OpenAIChatButtonCustomID:
 		if !settings.IsReviewer(userID) {
 			m.layout.logger.Error("Non-reviewer attempted to open AI chat", zap.Uint64("user_id", userID))
@@ -139,7 +140,6 @@ func (m *ReviewMenu) handleActionSelection(event *events.ComponentInteractionCre
 			return
 		}
 		m.handleOpenAIChat(event, s)
-
 	case constants.GroupConfirmWithReasonButtonCustomID:
 		if !settings.IsReviewer(userID) {
 			m.layout.logger.Error("Non-reviewer attempted to use confirm with reason", zap.Uint64("user_id", userID))
@@ -147,10 +147,8 @@ func (m *ReviewMenu) handleActionSelection(event *events.ComponentInteractionCre
 			return
 		}
 		m.handleConfirmWithReason(event, s)
-
 	case constants.ReviewTargetModeOption:
 		m.layout.settingLayout.ShowUpdate(event, s, constants.UserSettingPrefix, constants.ReviewTargetModeOption)
-
 	case constants.ReviewModeOption:
 		m.layout.settingLayout.ShowUpdate(event, s, constants.UserSettingPrefix, constants.ReviewModeOption)
 	}
@@ -175,7 +173,7 @@ func (m *ReviewMenu) fetchNewTarget(s *session.Session, reviewerID uint64) (*typ
 
 	// Store the group and flagged users in session
 	s.Set(constants.SessionKeyGroupTarget, group)
-	s.Set(constants.SessionKeyGroupFlaggedUsers, flaggedUsers)
+	s.Set(constants.SessionKeyGroupMemberIDs, flaggedUsers)
 
 	// Log the view action
 	go m.layout.db.UserActivity().Log(context.Background(), &types.UserActivityLog{
@@ -245,9 +243,8 @@ func (m *ReviewMenu) handleOpenAIChat(event *events.ComponentInteractionCreate, 
 	s.GetInterface(constants.SessionKeyGroupTarget, &group)
 	var groupInfo *apiTypes.GroupResponse
 	s.GetInterface(constants.SessionKeyGroupInfo, &groupInfo)
-
-	var flaggedUsers []uint64
-	s.GetInterface(constants.SessionKeyGroupFlaggedUsers, &flaggedUsers)
+	var memberIDs []uint64
+	s.GetInterface(constants.SessionKeyGroupMemberIDs, &memberIDs)
 
 	// Create context message about the group
 	context := fmt.Sprintf(`<context>
@@ -268,7 +265,7 @@ Flagged Members: %d</context>`,
 		group.Description,
 		group.Reason,
 		group.Confidence,
-		len(flaggedUsers),
+		len(memberIDs),
 	)
 
 	// Update session and navigate to chat

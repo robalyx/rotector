@@ -59,21 +59,21 @@ const (
 	AbortButtonCustomID   = "abort"
 )
 
-// Friends Menu.
+// User Review Menu - Friends Viewer.
 const (
 	FriendsPerPage     = 12
 	FriendsGridColumns = 3
 	FriendsGridRows    = 4
 )
 
-// Outfits Menu.
+// User Review Menu - Outfits Viewer.
 const (
 	OutfitsPerPage    = 15
 	OutfitGridColumns = 3
 	OutfitGridRows    = 5
 )
 
-// Groups Menu.
+// User Review Menu - Groups Viewer.
 const (
 	GroupsPerPage     = 9
 	GroupsGridColumns = 3
@@ -89,11 +89,19 @@ const (
 
 	GroupConfirmWithReasonButtonCustomID = "group_confirm_with_reason" + ModalOpenSuffix
 	GroupRecheckButtonCustomID           = "group_recheck" + ModalOpenSuffix
+	GroupViewMembersButtonCustomID       = "group_view_members"
 	GroupViewLogsButtonCustomID          = "group_view_logs"
 
 	GroupConfirmButtonCustomID = "group_confirm"
 	GroupClearButtonCustomID   = "group_clear"
 	GroupSkipButtonCustomID    = "group_skip"
+)
+
+// Group Review Menu - Members Viewer.
+const (
+	MembersPerPage     = 9
+	MembersGridColumns = 3
+	MembersGridRows    = 4
 )
 
 // Chat Menu.
@@ -253,9 +261,11 @@ const (
 	SessionKeyQueueNormalCount = "queueNormalCount"
 	SessionKeyQueueLowCount    = "queueLowCount"
 
-	SessionKeyGroupTarget       = "groupTarget"
-	SessionKeyGroupFlaggedUsers = "groupFlaggedUsers"
-	SessionKeyGroupInfo         = "groupInfo"
+	SessionKeyGroupTarget      = "groupTarget"
+	SessionKeyGroupMemberIDs   = "groupMemberIDs"
+	SessionKeyGroupMembers     = "groupMembers"
+	SessionKeyGroupPageMembers = "groupPageMembers"
+	SessionKeyGroupInfo        = "groupInfo"
 
 	SessionKeyAppeal            = "appeal"
 	SessionKeyAppeals           = "appeals"

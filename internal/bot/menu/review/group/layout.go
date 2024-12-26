@@ -18,12 +18,16 @@ type Layout struct {
 	sessionManager    *session.Manager
 	paginationManager *pagination.Manager
 	reviewMenu        *ReviewMenu
+	membersMenu       *MembersMenu
+	groupFetcher      *fetcher.GroupFetcher
+	thumbnailFetcher  *fetcher.ThumbnailFetcher
+	presenceFetcher   *fetcher.PresenceFetcher
+	imageStreamer     *pagination.ImageStreamer
 	logger            *zap.Logger
 	dashboardLayout   interfaces.DashboardLayout
 	settingLayout     interfaces.SettingLayout
 	logLayout         interfaces.LogLayout
 	chatLayout        interfaces.ChatLayout
-	groupFetcher      *fetcher.GroupFetcher
 }
 
 // New creates a Layout by initializing all review menus and registering their
@@ -44,17 +48,24 @@ func New(
 		roAPI:             app.RoAPI,
 		sessionManager:    sessionManager,
 		paginationManager: paginationManager,
+		groupFetcher:      fetcher.NewGroupFetcher(app.RoAPI, app.Logger),
+		thumbnailFetcher:  fetcher.NewThumbnailFetcher(app.RoAPI, app.Logger),
+		presenceFetcher:   fetcher.NewPresenceFetcher(app.RoAPI, app.Logger),
+		imageStreamer:     pagination.NewImageStreamer(paginationManager, app.Logger, app.RoAPI.GetClient()),
 		logger:            app.Logger,
 		dashboardLayout:   dashboardLayout,
 		settingLayout:     settingLayout,
 		logLayout:         logLayout,
 		chatLayout:        chatLayout,
-		groupFetcher:      fetcher.NewGroupFetcher(app.RoAPI, app.Logger),
 	}
-	l.reviewMenu = NewReviewMenu(l)
 
-	// Register menu page with the pagination manager
+	// Initialize all menus with references to this layout
+	l.reviewMenu = NewReviewMenu(l)
+	l.membersMenu = NewMembersMenu(l)
+
+	// Register menu pages with the pagination manager
 	paginationManager.AddPage(l.reviewMenu.page)
+	paginationManager.AddPage(l.membersMenu.page)
 
 	return l
 }

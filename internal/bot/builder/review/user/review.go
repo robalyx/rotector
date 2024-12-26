@@ -95,7 +95,7 @@ func (b *ReviewBuilder) buildModeEmbed() *discord.EmbedBuilder {
 		mode = "🎓 Training Mode"
 		description += `
 		**You are not an official reviewer.**
-		You may help moderators by using upvotes/downvotes to indicate suspicious activity. Information is censored and external links are disabled.
+		You may help moderators by downvoting to indicate suspicious activity. Information is censored and external links are disabled.
 		`
 	case types.StandardReviewMode:
 		mode = "⚠️ Standard Mode"
