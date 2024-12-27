@@ -95,7 +95,7 @@ func (b *ReviewBuilder) buildModeEmbed() *discord.EmbedBuilder {
 		mode = "🎓 Training Mode"
 		description += `
 		**You are not an official reviewer.**
-		You may help moderators by downvoting to indicate suspicious activity. Information is censored and external links are disabled.
+		You may help moderators by downvoting to indicate inappropriate activity. Information is censored and external links are disabled.
 		`
 	case types.StandardReviewMode:
 		mode = "⚠️ Standard Mode"
@@ -482,7 +482,6 @@ func (b *ReviewBuilder) getGames() string {
 
 	for i, game := range b.user.Games {
 		if i >= constants.ReviewGamesLimit {
-			games = append(games, fmt.Sprintf("... and %d more", len(b.user.Games)-constants.ReviewGamesLimit))
 			break
 		}
 
@@ -515,7 +514,6 @@ func (b *ReviewBuilder) getOutfits() string {
 	outfits := make([]string, 0, constants.ReviewOutfitsLimit)
 	for i, outfit := range b.user.Outfits {
 		if i >= constants.ReviewOutfitsLimit {
-			outfits = append(outfits, fmt.Sprintf("... and %d more", len(b.user.Outfits)-constants.ReviewOutfitsLimit))
 			break
 		}
 		outfits = append(outfits, outfit.Name)
