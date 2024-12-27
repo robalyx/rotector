@@ -104,8 +104,12 @@ func (m *VerifyMenu) verifyDescription(event *events.ComponentInteractionCreate,
 		return
 	}
 
+	s.Delete(constants.SessionKeyAppealCursor)
+	s.Delete(constants.SessionKeyAppealPrevCursors)
+	m.layout.ShowOverview(event, s, "✅ Account verified and appeal submitted successfully!")
+
 	// Log the appeal submission
-	go m.layout.db.UserActivity().Log(context.Background(), &types.UserActivityLog{
+	m.layout.db.UserActivity().Log(context.Background(), &types.UserActivityLog{
 		ActivityTarget: types.ActivityTarget{
 			UserID: userID,
 		},
@@ -116,8 +120,4 @@ func (m *VerifyMenu) verifyDescription(event *events.ComponentInteractionCreate,
 			"reason": reason,
 		},
 	})
-
-	s.Delete(constants.SessionKeyAppealCursor)
-	s.Delete(constants.SessionKeyAppealPrevCursors)
-	m.layout.ShowOverview(event, s, "✅ Account verified and appeal submitted successfully!")
 }

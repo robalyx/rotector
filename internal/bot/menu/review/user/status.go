@@ -54,9 +54,10 @@ func (m *StatusMenu) Show(event interfaces.CommonEvent, s *session.Session) {
 
 		// User is still flagged, show updated information
 		s.Set(constants.SessionKeyTarget, flaggedUser)
+		m.layout.reviewMenu.Show(event, s, "User has been rechecked. Showing updated information.")
 
-		// Log the view action asynchronously
-		go m.layout.db.UserActivity().Log(context.Background(), &types.UserActivityLog{
+		// Log the view action
+		m.layout.db.UserActivity().Log(context.Background(), &types.UserActivityLog{
 			ActivityTarget: types.ActivityTarget{
 				UserID: flaggedUser.ID,
 			},
@@ -65,8 +66,6 @@ func (m *StatusMenu) Show(event interfaces.CommonEvent, s *session.Session) {
 			ActivityTimestamp: time.Now(),
 			Details:           make(map[string]interface{}),
 		})
-
-		m.layout.reviewMenu.Show(event, s, "User has been rechecked. Showing updated information.")
 		return
 	}
 

@@ -178,9 +178,10 @@ func (m *TicketMenu) handleReviewUser(event *events.ComponentInteractionCreate, 
 
 	// Store user in session and show review menu
 	s.Set(constants.SessionKeyTarget, user)
+	m.layout.userReviewLayout.ShowReviewMenu(event, s)
 
 	// Log the view action
-	go m.layout.db.UserActivity().Log(context.Background(), &types.UserActivityLog{
+	m.layout.db.UserActivity().Log(context.Background(), &types.UserActivityLog{
 		ActivityTarget: types.ActivityTarget{
 			UserID: user.ID,
 		},
@@ -189,8 +190,6 @@ func (m *TicketMenu) handleReviewUser(event *events.ComponentInteractionCreate, 
 		ActivityTimestamp: time.Now(),
 		Details:           make(map[string]interface{}),
 	})
-
-	m.layout.userReviewLayout.ShowReviewMenu(event, s)
 }
 
 // handleAcceptAppeal opens a modal for accepting the appeal with a reason.
@@ -251,8 +250,11 @@ func (m *TicketMenu) handleCloseAppeal(event *events.ComponentInteractionCreate,
 		return
 	}
 
+	// Return to overview
+	m.layout.ShowOverview(event, s, "Appeal closed successfully.")
+
 	// Log the appeal closing
-	go m.layout.db.UserActivity().Log(context.Background(), &types.UserActivityLog{
+	m.layout.db.UserActivity().Log(context.Background(), &types.UserActivityLog{
 		ActivityTarget: types.ActivityTarget{
 			UserID: appeal.UserID,
 		},
@@ -263,9 +265,6 @@ func (m *TicketMenu) handleCloseAppeal(event *events.ComponentInteractionCreate,
 			"appeal_id": appeal.ID,
 		},
 	})
-
-	// Return to overview
-	m.layout.ShowOverview(event, s, "Appeal closed successfully.")
 }
 
 // handleModal processes modal submissions.
@@ -374,8 +373,11 @@ func (m *TicketMenu) handleAcceptModalSubmit(event *events.ModalSubmitInteractio
 		return
 	}
 
+	// Refresh the ticket view
+	m.Show(event, s, appeal.ID, "Appeal accepted and user cleared.")
+
 	// Log the appeal acceptance
-	go m.layout.db.UserActivity().Log(context.Background(), &types.UserActivityLog{
+	m.layout.db.UserActivity().Log(context.Background(), &types.UserActivityLog{
 		ActivityTarget: types.ActivityTarget{
 			UserID: appeal.UserID,
 		},
@@ -387,9 +389,6 @@ func (m *TicketMenu) handleAcceptModalSubmit(event *events.ModalSubmitInteractio
 			"appeal_id": appeal.ID,
 		},
 	})
-
-	// Refresh the ticket view
-	m.Show(event, s, appeal.ID, "Appeal accepted and user cleared.")
 }
 
 // handleRejectModalSubmit processes the reject appeal submission.
@@ -409,8 +408,11 @@ func (m *TicketMenu) handleRejectModalSubmit(event *events.ModalSubmitInteractio
 		return
 	}
 
+	// Refresh the ticket view
+	m.Show(event, s, appeal.ID, "Appeal rejected.")
+
 	// Log the appeal rejection
-	go m.layout.db.UserActivity().Log(context.Background(), &types.UserActivityLog{
+	m.layout.db.UserActivity().Log(context.Background(), &types.UserActivityLog{
 		ActivityTarget: types.ActivityTarget{
 			UserID: appeal.UserID,
 		},
@@ -422,9 +424,6 @@ func (m *TicketMenu) handleRejectModalSubmit(event *events.ModalSubmitInteractio
 			"appeal_id": appeal.ID,
 		},
 	})
-
-	// Refresh the ticket view
-	m.Show(event, s, appeal.ID, "Appeal rejected.")
 }
 
 // isMessageAllowed checks if a user is allowed to send a message based on spam prevention rules.
