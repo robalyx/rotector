@@ -76,9 +76,8 @@ func (r *UserModel) SaveFlaggedUsers(ctx context.Context, flaggedUsers map[uint6
 	return nil
 }
 
-// ConfirmUser moves a user from flagged_users to confirmed_users.
+// ConfirmUser moves a user from other user tables to confirmed_users.
 // This happens when a moderator confirms that a user is inappropriate.
-// The user's groups and friends are tracked to help identify related users.
 func (r *UserModel) ConfirmUser(ctx context.Context, user *types.ReviewUser) error {
 	return r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
 		confirmedUser := &types.ConfirmedUser{
@@ -86,6 +85,7 @@ func (r *UserModel) ConfirmUser(ctx context.Context, user *types.ReviewUser) err
 			VerifiedAt: time.Now(),
 		}
 
+		// Move user to confirmed_users table
 		_, err := tx.NewInsert().Model(confirmedUser).
 			On("CONFLICT (id) DO UPDATE").
 			Set("name = EXCLUDED.name").
@@ -115,16 +115,29 @@ func (r *UserModel) ConfirmUser(ctx context.Context, user *types.ReviewUser) err
 			return fmt.Errorf("failed to insert or update user in confirmed_users: %w (userID=%d)", err, user.ID)
 		}
 
+		// Delete from flagged_users table
 		_, err = tx.NewDelete().Model((*types.FlaggedUser)(nil)).Where("id = ?", user.ID).Exec(ctx)
 		if err != nil {
 			return fmt.Errorf("failed to delete user from flagged_users: %w (userID=%d)", err, user.ID)
+		}
+
+		// Delete from cleared_users table
+		_, err = tx.NewDelete().Model((*types.ClearedUser)(nil)).Where("id = ?", user.ID).Exec(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to delete user from cleared_users: %w (userID=%d)", err, user.ID)
+		}
+
+		// Delete from banned_users table
+		_, err = tx.NewDelete().Model((*types.BannedUser)(nil)).Where("id = ?", user.ID).Exec(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to delete user from banned_users: %w (userID=%d)", err, user.ID)
 		}
 
 		return nil
 	})
 }
 
-// ClearUser moves a user from flagged_users to cleared_users.
+// ClearUser moves a user from other user tables to cleared_users.
 // This happens when a moderator determines that a user was incorrectly flagged.
 func (r *UserModel) ClearUser(ctx context.Context, user *types.ReviewUser) error {
 	return r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
@@ -164,19 +177,21 @@ func (r *UserModel) ClearUser(ctx context.Context, user *types.ReviewUser) error
 		}
 
 		// Delete user from flagged_users table
-		_, err = tx.NewDelete().Model((*types.FlaggedUser)(nil)).
-			Where("id = ?", user.ID).
-			Exec(ctx)
+		_, err = tx.NewDelete().Model((*types.FlaggedUser)(nil)).Where("id = ?", user.ID).Exec(ctx)
 		if err != nil {
 			return fmt.Errorf("failed to delete user from flagged_users: %w (userID=%d)", err, user.ID)
 		}
 
 		// Delete user from confirmed_users table
-		_, err = tx.NewDelete().Model((*types.ConfirmedUser)(nil)).
-			Where("id = ?", user.ID).
-			Exec(ctx)
+		_, err = tx.NewDelete().Model((*types.ConfirmedUser)(nil)).Where("id = ?", user.ID).Exec(ctx)
 		if err != nil {
 			return fmt.Errorf("failed to delete user from confirmed_users: %w (userID=%d)", err, user.ID)
+		}
+
+		// Delete from banned_users table
+		_, err = tx.NewDelete().Model((*types.BannedUser)(nil)).Where("id = ?", user.ID).Exec(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to delete user from banned_users: %w (userID=%d)", err, user.ID)
 		}
 
 		r.logger.Debug("User cleared and moved to cleared_users",

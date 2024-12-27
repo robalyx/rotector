@@ -222,7 +222,7 @@ func (m *ReviewMenu) handleModal(event *events.ModalSubmitInteractionCreate, s *
 // handleViewGroupLogs handles the shortcut to view group logs.
 // It stores the group ID in session for log filtering and shows the logs menu.
 func (m *ReviewMenu) handleViewGroupLogs(event *events.ComponentInteractionCreate, s *session.Session) {
-	var group *types.FlaggedGroup
+	var group *types.ReviewGroup
 	s.GetInterface(constants.SessionKeyGroupTarget, &group)
 	if group == nil {
 		m.layout.paginationManager.RespondWithError(event, "No group selected to view logs.")
@@ -239,7 +239,7 @@ func (m *ReviewMenu) handleViewGroupLogs(event *events.ComponentInteractionCreat
 
 // handleOpenAIChat handles the button to open the AI chat for the current group.
 func (m *ReviewMenu) handleOpenAIChat(event *events.ComponentInteractionCreate, s *session.Session) {
-	var group *types.FlaggedGroup
+	var group *types.ReviewGroup
 	s.GetInterface(constants.SessionKeyGroupTarget, &group)
 	var groupInfo *apiTypes.GroupResponse
 	s.GetInterface(constants.SessionKeyGroupInfo, &groupInfo)
@@ -277,7 +277,7 @@ Flagged Members: %d</context>`,
 // handleConfirmWithReason opens a modal for entering a custom confirm reason.
 // The modal pre-fills with the current reason if one exists.
 func (m *ReviewMenu) handleConfirmWithReason(event *events.ComponentInteractionCreate, s *session.Session) {
-	var group *types.FlaggedGroup
+	var group *types.ReviewGroup
 	s.GetInterface(constants.SessionKeyGroupTarget, &group)
 
 	// Create modal with pre-filled reason field
@@ -301,9 +301,8 @@ func (m *ReviewMenu) handleConfirmWithReason(event *events.ComponentInteractionC
 
 // handleConfirmGroup moves a group to the confirmed state and logs the action.
 func (m *ReviewMenu) handleConfirmGroup(event interfaces.CommonEvent, s *session.Session) {
-	var group *types.FlaggedGroup
+	var group *types.ReviewGroup
 	s.GetInterface(constants.SessionKeyGroupTarget, &group)
-
 	var settings *types.UserSetting
 	s.GetInterface(constants.SessionKeyUserSettings, &settings)
 
@@ -359,7 +358,7 @@ func (m *ReviewMenu) handleConfirmGroup(event interfaces.CommonEvent, s *session
 
 // handleClearGroup removes a group from the flagged state and logs the action.
 func (m *ReviewMenu) handleClearGroup(event interfaces.CommonEvent, s *session.Session) {
-	var group *types.FlaggedGroup
+	var group *types.ReviewGroup
 	s.GetInterface(constants.SessionKeyGroupTarget, &group)
 
 	var settings *types.UserSetting
@@ -417,7 +416,7 @@ func (m *ReviewMenu) handleClearGroup(event interfaces.CommonEvent, s *session.S
 
 // handleSkipGroup logs the skip action and moves to the next group.
 func (m *ReviewMenu) handleSkipGroup(event interfaces.CommonEvent, s *session.Session) {
-	var group *types.FlaggedGroup
+	var group *types.ReviewGroup
 	s.GetInterface(constants.SessionKeyGroupTarget, &group)
 
 	// Log the skip action asynchronously
@@ -438,7 +437,7 @@ func (m *ReviewMenu) handleSkipGroup(event interfaces.CommonEvent, s *session.Se
 
 // handleConfirmWithReasonModalSubmit processes the custom confirm reason from the modal.
 func (m *ReviewMenu) handleConfirmWithReasonModalSubmit(event *events.ModalSubmitInteractionCreate, s *session.Session) {
-	var group *types.FlaggedGroup
+	var group *types.ReviewGroup
 	s.GetInterface(constants.SessionKeyGroupTarget, &group)
 
 	// Get and validate the confirm reason

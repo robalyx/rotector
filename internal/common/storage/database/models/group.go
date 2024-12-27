@@ -60,15 +60,16 @@ func (r *GroupModel) SaveFlaggedGroups(ctx context.Context, flaggedGroups []*typ
 	return nil
 }
 
-// ConfirmGroup moves a group from flagged_groups to confirmed_groups.
+// ConfirmGroup moves a group from other group tables to confirmed_groups.
 // This happens when a moderator confirms that a group is inappropriate.
-func (r *GroupModel) ConfirmGroup(ctx context.Context, group *types.FlaggedGroup) error {
+func (r *GroupModel) ConfirmGroup(ctx context.Context, group *types.ReviewGroup) error {
 	return r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
 		confirmedGroup := &types.ConfirmedGroup{
 			Group:      group.Group,
 			VerifiedAt: time.Now(),
 		}
 
+		// Move group to confirmed_groups table
 		_, err := tx.NewInsert().Model(confirmedGroup).
 			On("CONFLICT (id) DO UPDATE").
 			Set("name = EXCLUDED.name").
@@ -89,26 +90,38 @@ func (r *GroupModel) ConfirmGroup(ctx context.Context, group *types.FlaggedGroup
 			return fmt.Errorf("failed to insert or update group in confirmed_groups: %w (groupID=%d)", err, group.ID)
 		}
 
-		_, err = tx.NewDelete().Model((*types.FlaggedGroup)(nil)).
-			Where("id = ?", group.ID).
-			Exec(ctx)
+		// Delete from flagged_groups table
+		_, err = tx.NewDelete().Model((*types.FlaggedGroup)(nil)).Where("id = ?", group.ID).Exec(ctx)
 		if err != nil {
 			return fmt.Errorf("failed to delete group from flagged_groups: %w (groupID=%d)", err, group.ID)
+		}
+
+		// Delete from cleared_groups table
+		_, err = tx.NewDelete().Model((*types.ClearedGroup)(nil)).Where("id = ?", group.ID).Exec(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to delete group from cleared_groups: %w (groupID=%d)", err, group.ID)
+		}
+
+		// Delete from locked_groups table
+		_, err = tx.NewDelete().Model((*types.LockedGroup)(nil)).Where("id = ?", group.ID).Exec(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to delete group from locked_groups: %w (groupID=%d)", err, group.ID)
 		}
 
 		return nil
 	})
 }
 
-// ClearGroup moves a group from flagged_groups to cleared_groups.
+// ClearGroup moves a group from other group tables to cleared_groups.
 // This happens when a moderator determines that a group was incorrectly flagged.
-func (r *GroupModel) ClearGroup(ctx context.Context, group *types.FlaggedGroup) error {
+func (r *GroupModel) ClearGroup(ctx context.Context, group *types.ReviewGroup) error {
 	return r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
 		clearedGroup := &types.ClearedGroup{
 			Group:     group.Group,
 			ClearedAt: time.Now(),
 		}
 
+		// Move group to cleared_groups table
 		_, err := tx.NewInsert().Model(clearedGroup).
 			On("CONFLICT (id) DO UPDATE").
 			Set("name = EXCLUDED.name").
@@ -129,9 +142,22 @@ func (r *GroupModel) ClearGroup(ctx context.Context, group *types.FlaggedGroup) 
 			return fmt.Errorf("failed to insert or update group in cleared_groups: %w (groupID=%d)", err, group.ID)
 		}
 
+		// Delete from flagged_groups table
 		_, err = tx.NewDelete().Model((*types.FlaggedGroup)(nil)).Where("id = ?", group.ID).Exec(ctx)
 		if err != nil {
 			return fmt.Errorf("failed to delete group from flagged_groups: %w (groupID=%d)", err, group.ID)
+		}
+
+		// Delete from confirmed_groups table
+		_, err = tx.NewDelete().Model((*types.ConfirmedGroup)(nil)).Where("id = ?", group.ID).Exec(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to delete group from confirmed_groups: %w (groupID=%d)", err, group.ID)
+		}
+
+		// Delete from locked_groups table
+		_, err = tx.NewDelete().Model((*types.LockedGroup)(nil)).Where("id = ?", group.ID).Exec(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to delete group from locked_groups: %w (groupID=%d)", err, group.ID)
 		}
 
 		r.logger.Debug("Group cleared and moved to cleared_groups", zap.Uint64("groupID", group.ID))
