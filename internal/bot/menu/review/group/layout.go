@@ -28,6 +28,7 @@ type Layout struct {
 	settingLayout     interfaces.SettingLayout
 	logLayout         interfaces.LogLayout
 	chatLayout        interfaces.ChatLayout
+	captchaLayout     interfaces.CaptchaLayout
 }
 
 // New creates a Layout by initializing all review menus and registering their
@@ -41,6 +42,7 @@ func New(
 	settingLayout interfaces.SettingLayout,
 	logLayout interfaces.LogLayout,
 	chatLayout interfaces.ChatLayout,
+	captchaLayout interfaces.CaptchaLayout,
 ) *Layout {
 	// Initialize layout
 	l := &Layout{
@@ -57,6 +59,7 @@ func New(
 		settingLayout:     settingLayout,
 		logLayout:         logLayout,
 		chatLayout:        chatLayout,
+		captchaLayout:     captchaLayout,
 	}
 
 	// Initialize all menus with references to this layout

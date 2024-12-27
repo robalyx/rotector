@@ -125,7 +125,7 @@ func (m *ReviewMenu) Show(event interfaces.CommonEvent, s *session.Session, cont
 
 // handleSelectMenu processes select menu interactions.
 func (m *ReviewMenu) handleSelectMenu(event *events.ComponentInteractionCreate, s *session.Session, customID string, option string) {
-	if m.checkLastViewed(event, s) {
+	if m.checkLastViewed(event, s) || m.checkCaptchaRequired(event, s) {
 		return
 	}
 
@@ -214,7 +214,7 @@ func (m *ReviewMenu) handleActionSelection(event *events.ComponentInteractionCre
 
 // handleButton handles the buttons for the review menu.
 func (m *ReviewMenu) handleButton(event *events.ComponentInteractionCreate, s *session.Session, customID string) {
-	if m.checkLastViewed(event, s) {
+	if m.checkLastViewed(event, s) || m.checkCaptchaRequired(event, s) {
 		return
 	}
 
@@ -232,7 +232,7 @@ func (m *ReviewMenu) handleButton(event *events.ComponentInteractionCreate, s *s
 
 // handleModal handles the modal for the review menu.
 func (m *ReviewMenu) handleModal(event *events.ModalSubmitInteractionCreate, s *session.Session) {
-	if m.checkLastViewed(event, s) {
+	if m.checkLastViewed(event, s) || m.checkCaptchaRequired(event, s) {
 		return
 	}
 
@@ -414,6 +414,7 @@ func (m *ReviewMenu) handleConfirmUser(event interfaces.CommonEvent, s *session.
 	// Clear current user and load next one
 	s.Delete(constants.SessionKeyTarget)
 	m.Show(event, s, fmt.Sprintf("User %s. %d users left to review.", actionMsg, flaggedCount))
+	m.incrementReviewCounter(event, s)
 }
 
 // handleClearUser removes a user from the flagged state and logs the action.
@@ -481,6 +482,7 @@ func (m *ReviewMenu) handleClearUser(event interfaces.CommonEvent, s *session.Se
 	// Clear current user and load next one
 	s.Delete(constants.SessionKeyTarget)
 	m.Show(event, s, fmt.Sprintf("User %s. %d users left to review.", actionMsg, flaggedCount))
+	m.incrementReviewCounter(event, s)
 }
 
 // handleSkipUser logs the skip action and moves to the next user without
@@ -509,6 +511,7 @@ func (m *ReviewMenu) handleSkipUser(event interfaces.CommonEvent, s *session.Ses
 	// Clear current user and load next one
 	s.Delete(constants.SessionKeyTarget)
 	m.Show(event, s, fmt.Sprintf("Skipped user. %d users left to review.", flaggedCount))
+	m.incrementReviewCounter(event, s)
 }
 
 // handleOpenAIChat handles the button to open the AI chat for the current user.
@@ -607,6 +610,7 @@ func (m *ReviewMenu) handleConfirmWithReasonModalSubmit(event *events.ModalSubmi
 	// Clear current user and load next one
 	s.Delete(constants.SessionKeyTarget)
 	m.Show(event, s, "User confirmed.")
+	m.incrementReviewCounter(event, s)
 }
 
 // handleSwitchReviewMode switches between training and standard review modes.
@@ -700,4 +704,35 @@ func (m *ReviewMenu) checkLastViewed(event interfaces.CommonEvent, s *session.Se
 	}
 
 	return false
+}
+
+// checkCaptchaRequired checks if CAPTCHA verification is needed.
+func (m *ReviewMenu) checkCaptchaRequired(event interfaces.CommonEvent, s *session.Session) bool {
+	var settings *types.UserSetting
+	s.GetInterface(constants.SessionKeyUserSettings, &settings)
+
+	if settings.ReviewsSinceCaptcha >= 10 {
+		m.layout.captchaLayout.Show(event, s, "Please complete CAPTCHA verification to continue.")
+		return true
+	}
+
+	return false
+}
+
+// incrementReviewCounter increments the reviews since last CAPTCHA counter.
+func (m *ReviewMenu) incrementReviewCounter(event interfaces.CommonEvent, s *session.Session) {
+	var settings *types.UserSetting
+	s.GetInterface(constants.SessionKeyUserSettings, &settings)
+	var botSettings *types.BotSetting
+	s.GetInterface(constants.SessionKeyBotSettings, &botSettings)
+
+	// Only increment counter for non-reviewers in training mode
+	if !botSettings.IsReviewer(uint64(event.User().ID)) &&
+		settings.ReviewMode == types.TrainingReviewMode {
+		settings.ReviewsSinceCaptcha++
+		if err := m.layout.db.Settings().SaveUserSettings(context.Background(), settings); err != nil {
+			m.layout.logger.Error("Failed to update reviews counter", zap.Error(err))
+		}
+		s.Set(constants.SessionKeyUserSettings, settings)
+	}
 }

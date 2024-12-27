@@ -99,7 +99,7 @@ const (
 
 // Group Review Menu - Members Viewer.
 const (
-	MembersPerPage     = 9
+	MembersPerPage     = 12
 	MembersGridColumns = 3
 	MembersGridRows    = 4
 )
@@ -193,6 +193,16 @@ const (
 	VerifyDescriptionButtonID = "verify_description"
 )
 
+// CAPTCHA Menu.
+const (
+	CaptchaTimeout = 5 * time.Minute
+
+	CaptchaAnswerButtonCustomID  = "captcha_answer" + ModalOpenSuffix
+	CaptchaRefreshButtonCustomID = "captcha_refresh"
+	CaptchaAnswerModalCustomID   = "captcha_answer_modal"
+	CaptchaAnswerInputCustomID   = "captcha_answer_input"
+)
+
 // Session keys.
 const (
 	SessionKeyUserID        = "userID"
@@ -277,6 +287,9 @@ const (
 	SessionKeyVerifyUserID = "verifyUserID"
 	SessionKeyVerifyReason = "verifyReason"
 	SessionKeyVerifyCode   = "verifyCode"
+
+	SessionKeyCaptchaAnswer = "captchaAnswer"
+	SessionKeyCaptchaImage  = "captchaImage"
 )
 
 const (

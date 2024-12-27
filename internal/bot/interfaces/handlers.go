@@ -62,3 +62,8 @@ type AppealLayout interface {
 	// ShowTicket displays a specific appeal ticket.
 	ShowTicket(event CommonEvent, s *session.Session, appealID int64, content string)
 }
+
+// CaptchaLayout defines the interface for CAPTCHA verification.
+type CaptchaLayout interface {
+	Show(event CommonEvent, s *session.Session, content string)
+}

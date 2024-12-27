@@ -14,16 +14,17 @@ type ChatMessageUsage struct {
 
 // UserSetting stores user-specific preferences.
 type UserSetting struct {
-	UserID             snowflake.ID     `bun:",pk"`
-	StreamerMode       bool             `bun:",notnull"`
-	UserDefaultSort    ReviewSortBy     `bun:",notnull"`
-	GroupDefaultSort   ReviewSortBy     `bun:",notnull"`
-	AppealDefaultSort  AppealSortBy     `bun:",notnull"`
-	AppealStatusFilter AppealFilterBy   `bun:",notnull"`
-	ChatModel          ChatModel        `bun:",notnull"`
-	ReviewMode         ReviewMode       `bun:",notnull"`
-	ReviewTargetMode   ReviewTargetMode `bun:",notnull"`
-	ChatMessageUsage   ChatMessageUsage `bun:",embed"`
+	UserID              snowflake.ID     `bun:",pk"`
+	StreamerMode        bool             `bun:",notnull"`
+	UserDefaultSort     ReviewSortBy     `bun:",notnull"`
+	GroupDefaultSort    ReviewSortBy     `bun:",notnull"`
+	AppealDefaultSort   AppealSortBy     `bun:",notnull"`
+	AppealStatusFilter  AppealFilterBy   `bun:",notnull"`
+	ChatModel           ChatModel        `bun:",notnull"`
+	ReviewMode          ReviewMode       `bun:",notnull"`
+	ReviewTargetMode    ReviewTargetMode `bun:",notnull"`
+	ChatMessageUsage    ChatMessageUsage `bun:",embed"`
+	ReviewsSinceCaptcha int              `bun:",notnull,default:0"`
 }
 
 // BotSetting stores bot-wide configuration options.

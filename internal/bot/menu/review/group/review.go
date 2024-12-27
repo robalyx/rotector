@@ -92,7 +92,7 @@ func (m *ReviewMenu) Show(event interfaces.CommonEvent, s *session.Session, cont
 
 // handleSelectMenu processes select menu interactions.
 func (m *ReviewMenu) handleSelectMenu(event *events.ComponentInteractionCreate, s *session.Session, customID string, option string) {
-	if m.checkLastViewed(event, s) {
+	if m.checkLastViewed(event, s) || m.checkCaptchaRequired(event, s) {
 		return
 	}
 
@@ -191,7 +191,7 @@ func (m *ReviewMenu) fetchNewTarget(s *session.Session, reviewerID uint64) (*typ
 
 // handleButton processes button clicks.
 func (m *ReviewMenu) handleButton(event *events.ComponentInteractionCreate, s *session.Session, customID string) {
-	if m.checkLastViewed(event, s) {
+	if m.checkLastViewed(event, s) || m.checkCaptchaRequired(event, s) {
 		return
 	}
 
@@ -209,7 +209,7 @@ func (m *ReviewMenu) handleButton(event *events.ComponentInteractionCreate, s *s
 
 // handleModal processes modal submissions.
 func (m *ReviewMenu) handleModal(event *events.ModalSubmitInteractionCreate, s *session.Session) {
-	if m.checkLastViewed(event, s) {
+	if m.checkLastViewed(event, s) || m.checkCaptchaRequired(event, s) {
 		return
 	}
 
@@ -354,6 +354,7 @@ func (m *ReviewMenu) handleConfirmGroup(event interfaces.CommonEvent, s *session
 	// Clear current group and load next one
 	s.Delete(constants.SessionKeyGroupTarget)
 	m.Show(event, s, fmt.Sprintf("Group %s.", actionMsg))
+	m.incrementReviewCounter(event, s)
 }
 
 // handleClearGroup removes a group from the flagged state and logs the action.
@@ -412,6 +413,7 @@ func (m *ReviewMenu) handleClearGroup(event interfaces.CommonEvent, s *session.S
 	// Clear current group and load next one
 	s.Delete(constants.SessionKeyGroupTarget)
 	m.Show(event, s, fmt.Sprintf("Group %s.", actionMsg))
+	m.incrementReviewCounter(event, s)
 }
 
 // handleSkipGroup logs the skip action and moves to the next group.
@@ -433,6 +435,7 @@ func (m *ReviewMenu) handleSkipGroup(event interfaces.CommonEvent, s *session.Se
 	// Clear current group and load next one
 	s.Delete(constants.SessionKeyGroupTarget)
 	m.Show(event, s, "Skipped group.")
+	m.incrementReviewCounter(event, s)
 }
 
 // handleConfirmWithReasonModalSubmit processes the custom confirm reason from the modal.
@@ -471,6 +474,7 @@ func (m *ReviewMenu) handleConfirmWithReasonModalSubmit(event *events.ModalSubmi
 	// Clear current group and load next one
 	s.Delete(constants.SessionKeyGroupTarget)
 	m.Show(event, s, "Group confirmed.")
+	m.incrementReviewCounter(event, s)
 }
 
 // checkLastViewed checks if the current target group has timed out and needs to be refreshed.
@@ -488,4 +492,35 @@ func (m *ReviewMenu) checkLastViewed(event interfaces.CommonEvent, s *session.Se
 	}
 
 	return false
+}
+
+// checkCaptchaRequired checks if CAPTCHA verification is needed.
+func (m *ReviewMenu) checkCaptchaRequired(event interfaces.CommonEvent, s *session.Session) bool {
+	var settings *types.UserSetting
+	s.GetInterface(constants.SessionKeyUserSettings, &settings)
+
+	if settings.ReviewsSinceCaptcha >= 10 {
+		m.layout.captchaLayout.Show(event, s, "Please complete CAPTCHA verification to continue.")
+		return true
+	}
+
+	return false
+}
+
+// incrementReviewCounter increments the reviews since last CAPTCHA counter.
+func (m *ReviewMenu) incrementReviewCounter(event interfaces.CommonEvent, s *session.Session) {
+	var settings *types.UserSetting
+	s.GetInterface(constants.SessionKeyUserSettings, &settings)
+	var botSettings *types.BotSetting
+	s.GetInterface(constants.SessionKeyBotSettings, &botSettings)
+
+	// Only increment counter for non-reviewers in training mode
+	if !botSettings.IsReviewer(uint64(event.User().ID)) &&
+		settings.ReviewMode == types.TrainingReviewMode {
+		settings.ReviewsSinceCaptcha++
+		if err := m.layout.db.Settings().SaveUserSettings(context.Background(), settings); err != nil {
+			m.layout.logger.Error("Failed to update reviews counter", zap.Error(err))
+		}
+		s.Set(constants.SessionKeyUserSettings, settings)
+	}
 }

@@ -5,6 +5,7 @@ go 1.23.2
 require (
 	github.com/bytedance/sonic v1.12.6
 	github.com/cenkalti/backoff/v4 v4.3.0
+	github.com/dchest/captcha v1.1.0
 	github.com/disgoorg/disgo v0.18.14
 	github.com/disgoorg/snowflake/v2 v2.0.3
 	github.com/getsentry/sentry-go v0.30.0

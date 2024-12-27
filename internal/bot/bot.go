@@ -21,6 +21,7 @@ import (
 	"github.com/rotector/rotector/internal/bot/core/session"
 	"github.com/rotector/rotector/internal/bot/interfaces"
 	"github.com/rotector/rotector/internal/bot/menu/appeal"
+	"github.com/rotector/rotector/internal/bot/menu/captcha"
 	"github.com/rotector/rotector/internal/bot/menu/chat"
 	"github.com/rotector/rotector/internal/bot/menu/dashboard"
 	"github.com/rotector/rotector/internal/bot/menu/log"
@@ -61,8 +62,9 @@ func New(app *setup.App) (*Bot, error) {
 	settingLayout := setting.New(app, sessionManager, paginationManager, dashboardLayout)
 	logLayout := log.New(app, sessionManager, paginationManager, dashboardLayout)
 	chatLayout := chat.New(app, sessionManager, paginationManager, dashboardLayout)
-	userReviewLayout := userReview.New(app, sessionManager, paginationManager, dashboardLayout, settingLayout, logLayout, chatLayout)
-	groupReviewLayout := groupReview.New(app, sessionManager, paginationManager, dashboardLayout, settingLayout, logLayout, chatLayout)
+	captchaLayout := captcha.New(app, sessionManager, paginationManager)
+	userReviewLayout := userReview.New(app, sessionManager, paginationManager, dashboardLayout, settingLayout, logLayout, chatLayout, captchaLayout)
+	groupReviewLayout := groupReview.New(app, sessionManager, paginationManager, dashboardLayout, settingLayout, logLayout, chatLayout, captchaLayout)
 	queueLayout := queue.New(app, sessionManager, paginationManager, dashboardLayout, userReviewLayout)
 	appealLayout := appeal.New(app, sessionManager, paginationManager, dashboardLayout, userReviewLayout)
 
