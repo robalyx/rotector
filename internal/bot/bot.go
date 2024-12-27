@@ -58,24 +58,27 @@ func New(app *setup.App) (*Bot, error) {
 	paginationManager := pagination.NewManager(sessionManager, app.Logger)
 
 	// Create layouts with their dependencies
-	dashboardLayout := dashboard.New(app, sessionManager, paginationManager)
-	settingLayout := setting.New(app, sessionManager, paginationManager, dashboardLayout)
-	logLayout := log.New(app, sessionManager, paginationManager, dashboardLayout)
-	chatLayout := chat.New(app, sessionManager, paginationManager, dashboardLayout)
+	settingLayout := setting.New(app, sessionManager, paginationManager)
+	logLayout := log.New(app, sessionManager, paginationManager)
+	chatLayout := chat.New(app, sessionManager, paginationManager)
 	captchaLayout := captcha.New(app, sessionManager, paginationManager)
-	userReviewLayout := userReview.New(app, sessionManager, paginationManager, dashboardLayout, settingLayout, logLayout, chatLayout, captchaLayout)
-	groupReviewLayout := groupReview.New(app, sessionManager, paginationManager, dashboardLayout, settingLayout, logLayout, chatLayout, captchaLayout)
-	queueLayout := queue.New(app, sessionManager, paginationManager, dashboardLayout, userReviewLayout)
-	appealLayout := appeal.New(app, sessionManager, paginationManager, dashboardLayout, userReviewLayout)
-
-	// Cross-link layouts to enable navigation between different sections
-	dashboardLayout.SetLogLayout(logLayout)
-	dashboardLayout.SetSettingLayout(settingLayout)
-	dashboardLayout.SetUserReviewLayout(userReviewLayout)
-	dashboardLayout.SetGroupReviewLayout(groupReviewLayout)
-	dashboardLayout.SetQueueLayout(queueLayout)
-	dashboardLayout.SetChatLayout(chatLayout)
-	dashboardLayout.SetAppealLayout(appealLayout)
+	userReviewLayout := userReview.New(app, sessionManager, paginationManager, settingLayout, logLayout, chatLayout, captchaLayout)
+	groupReviewLayout := groupReview.New(app, sessionManager, paginationManager, settingLayout, logLayout, chatLayout, captchaLayout)
+	queueLayout := queue.New(app, sessionManager, paginationManager, userReviewLayout)
+	appealLayout := appeal.New(app, sessionManager, paginationManager, userReviewLayout)
+	adminLayout := admin.New(app, sessionManager, paginationManager, settingLayout)
+	dashboardLayout := dashboard.New(
+		app,
+		sessionManager,
+		paginationManager,
+		userReviewLayout,
+		groupReviewLayout,
+		settingLayout,
+		logLayout,
+		queueLayout,
+		chatLayout,
+		appealLayout,
+	)
 
 	// Initialize bot structure with all components
 	b := &Bot{

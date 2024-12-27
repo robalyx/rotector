@@ -37,6 +37,13 @@ func New(
 	app *setup.App,
 	sessionManager *session.Manager,
 	paginationManager *pagination.Manager,
+	userReviewLayout interfaces.UserReviewLayout,
+	groupReviewLayout interfaces.GroupReviewLayout,
+	settingLayout interfaces.SettingLayout,
+	logLayout interfaces.LogLayout,
+	queueLayout interfaces.QueueLayout,
+	chatLayout interfaces.ChatLayout,
+	appealLayout interfaces.AppealLayout,
 ) *Layout {
 	// Get Redis client for stats
 	statsClient, err := app.RedisManager.GetClient(redis.StatsDBIndex)
@@ -54,10 +61,17 @@ func New(
 	l := &Layout{
 		db:                app.DB,
 		redisClient:       statsClient,
-		logger:            app.Logger,
 		sessionManager:    sessionManager,
 		paginationManager: paginationManager,
+		logger:            app.Logger,
 		workerMonitor:     core.NewMonitor(statusClient, app.Logger),
+		userReviewLayout:  userReviewLayout,
+		groupReviewLayout: groupReviewLayout,
+		settingLayout:     settingLayout,
+		logLayout:         logLayout,
+		queueLayout:       queueLayout,
+		chatLayout:        chatLayout,
+		appealLayout:      appealLayout,
 	}
 	l.mainMenu = NewMainMenu(l)
 
@@ -65,48 +79,6 @@ func New(
 	paginationManager.AddPage(l.mainMenu.page)
 
 	return l
-}
-
-// SetUserReviewLayout links the user review layout to enable navigation
-// to the user review section from the dashboard.
-func (l *Layout) SetUserReviewLayout(reviewLayout interfaces.UserReviewLayout) {
-	l.userReviewLayout = reviewLayout
-}
-
-// SetGroupReviewLayout links the group review layout to enable navigation
-// to the group review section from the dashboard.
-func (l *Layout) SetGroupReviewLayout(reviewLayout interfaces.GroupReviewLayout) {
-	l.groupReviewLayout = reviewLayout
-}
-
-// SetSettingLayout links the settings layout to enable navigation
-// to the settings section from the dashboard.
-func (l *Layout) SetSettingLayout(settingLayout interfaces.SettingLayout) {
-	l.settingLayout = settingLayout
-}
-
-// SetLogLayout links the log layout to enable navigation
-// to the logs section from the dashboard.
-func (l *Layout) SetLogLayout(logLayout interfaces.LogLayout) {
-	l.logLayout = logLayout
-}
-
-// SetQueueLayout links the queue layout to enable navigation
-// to the queue section from the dashboard.
-func (l *Layout) SetQueueLayout(queueLayout interfaces.QueueLayout) {
-	l.queueLayout = queueLayout
-}
-
-// SetChatLayout links the chat layout to enable navigation
-// to the AI chat section from the dashboard.
-func (l *Layout) SetChatLayout(chatLayout interfaces.ChatLayout) {
-	l.chatLayout = chatLayout
-}
-
-// SetAppealLayout links the appeal layout to enable navigation
-// to the appeal section from the dashboard.
-func (l *Layout) SetAppealLayout(appealLayout interfaces.AppealLayout) {
-	l.appealLayout = appealLayout
 }
 
 // Show prepares and displays the dashboard interface by loading

@@ -20,7 +20,6 @@ type Layout struct {
 	botMenu           *BotMenu
 	registry          *setting.Registry
 	logger            *zap.Logger
-	dashboardLayout   interfaces.DashboardLayout
 }
 
 // New creates a Layout by initializing all setting menus and registering their
@@ -29,7 +28,6 @@ func New(
 	app *setup.App,
 	sessionManager *session.Manager,
 	paginationManager *pagination.Manager,
-	dashboardLayout interfaces.DashboardLayout,
 ) *Layout {
 	// Initialize layout
 	l := &Layout{
@@ -38,7 +36,6 @@ func New(
 		sessionManager:    sessionManager,
 		paginationManager: paginationManager,
 		registry:          setting.NewRegistry(),
-		dashboardLayout:   dashboardLayout,
 	}
 
 	// Initialize all menus with references to this layout

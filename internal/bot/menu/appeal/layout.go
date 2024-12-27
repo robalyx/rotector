@@ -20,7 +20,6 @@ type Layout struct {
 	overviewMenu      *OverviewMenu
 	ticketMenu        *TicketMenu
 	verifyMenu        *VerifyMenu
-	dashboardLayout   interfaces.DashboardLayout
 	userReviewLayout  interfaces.UserReviewLayout
 }
 
@@ -30,7 +29,6 @@ func New(
 	app *setup.App,
 	sessionManager *session.Manager,
 	paginationManager *pagination.Manager,
-	dashboardLayout interfaces.DashboardLayout,
 	userReviewLayout interfaces.UserReviewLayout,
 ) *Layout {
 	// Initialize layout
@@ -40,7 +38,6 @@ func New(
 		logger:            app.Logger,
 		sessionManager:    sessionManager,
 		paginationManager: paginationManager,
-		dashboardLayout:   dashboardLayout,
 		userReviewLayout:  userReviewLayout,
 	}
 

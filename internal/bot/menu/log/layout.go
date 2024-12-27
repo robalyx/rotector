@@ -20,7 +20,6 @@ type Layout struct {
 	paginationManager *pagination.Manager
 	mainMenu          *MainMenu
 	logger            *zap.Logger
-	dashboardLayout   interfaces.DashboardLayout
 }
 
 // New creates a Layout by initializing the log menu and registering its
@@ -29,14 +28,12 @@ func New(
 	app *setup.App,
 	sessionManager *session.Manager,
 	paginationManager *pagination.Manager,
-	dashboardLayout interfaces.DashboardLayout,
 ) *Layout {
 	// Initialize layout
 	l := &Layout{
 		db:                app.DB,
 		sessionManager:    sessionManager,
 		paginationManager: paginationManager,
-		dashboardLayout:   dashboardLayout,
 		logger:            app.Logger,
 	}
 	l.mainMenu = NewMainMenu(l)

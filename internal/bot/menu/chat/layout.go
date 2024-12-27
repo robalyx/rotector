@@ -17,7 +17,6 @@ type Layout struct {
 	paginationManager *pagination.Manager
 	chatHandler       *ai.ChatHandler
 	menu              *Menu
-	dashboardLayout   interfaces.DashboardLayout
 	logger            *zap.Logger
 }
 
@@ -26,14 +25,12 @@ func New(
 	app *setup.App,
 	sessionManager *session.Manager,
 	paginationManager *pagination.Manager,
-	dashboardLayout interfaces.DashboardLayout,
 ) *Layout {
 	l := &Layout{
 		db:                app.DB,
 		sessionManager:    sessionManager,
 		paginationManager: paginationManager,
 		chatHandler:       ai.NewChatHandler(app.GenAIClient, app.Logger),
-		dashboardLayout:   dashboardLayout,
 		logger:            app.Logger,
 	}
 

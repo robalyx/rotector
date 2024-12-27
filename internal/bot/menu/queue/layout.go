@@ -18,7 +18,6 @@ type Layout struct {
 	paginationManager *pagination.Manager
 	queueManager      *queue.Manager
 	mainMenu          *MainMenu
-	dashboardLayout   interfaces.DashboardLayout
 	userReviewLayout  interfaces.UserReviewLayout
 }
 
@@ -28,7 +27,6 @@ func New(
 	app *setup.App,
 	sessionManager *session.Manager,
 	paginationManager *pagination.Manager,
-	dashboardLayout interfaces.DashboardLayout,
 	userReviewLayout interfaces.UserReviewLayout,
 ) *Layout {
 	// Initialize layout
@@ -38,7 +36,6 @@ func New(
 		sessionManager:    sessionManager,
 		paginationManager: paginationManager,
 		queueManager:      app.Queue,
-		dashboardLayout:   dashboardLayout,
 		userReviewLayout:  userReviewLayout,
 	}
 	l.mainMenu = NewMainMenu(l)
