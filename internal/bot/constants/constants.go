@@ -20,17 +20,20 @@ const (
 
 // Dashboard Menu.
 const (
-	StartUserReviewCustomID  = "start_user_review"
-	StartGroupReviewCustomID = "start_group_review"
-	UserSettingsCustomID     = "user_settings"
-	BotSettingsCustomID      = "bot_settings"
-	AppealMenuCustomID       = "appeal_menu"
-	ChatAssistantCustomID    = "chat_assistant"
-	LookupUserCustomID       = "lookup_user" + ModalOpenSuffix
-	LookupGroupCustomID      = "lookup_group" + ModalOpenSuffix
+	StartUserReviewButtonCustomID  = "start_user_review"
+	StartGroupReviewButtonCustomID = "start_group_review"
+	UserSettingsButtonCustomID     = "user_settings"
+	ActivityBrowserButtonCustomID  = "activity_browser"
+	QueueManagerButtonCustomID     = "queue_manager"
+	AdminMenuButtonCustomID        = "admin_menu"
+	AppealMenuButtonCustomID       = "appeal_menu"
+	ChatAssistantButtonCustomID    = "chat_assistant"
+	LookupUserButtonCustomID       = "lookup_user" + ModalOpenSuffix
+	LookupGroupButtonCustomID      = "lookup_group" + ModalOpenSuffix
+
 	LookupUserModalCustomID  = "lookup_user_modal"
-	LookupGroupModalCustomID = "lookup_group_modal"
 	LookupUserInputCustomID  = "lookup_user_input"
+	LookupGroupModalCustomID = "lookup_group_modal"
 	LookupGroupInputCustomID = "lookup_group_input"
 )
 
@@ -146,7 +149,6 @@ const (
 // Logs Menu.
 const (
 	LogsPerPage                         = 10
-	LogActivityBrowserCustomID          = "log_activity_browser"
 	LogsQueryInputCustomID              = "query_input"
 	LogsQueryUserIDOption               = "query_user_id" + ModalOpenSuffix
 	LogsQueryGroupIDOption              = "query_group_id" + ModalOpenSuffix
@@ -158,7 +160,6 @@ const (
 
 // Queue Menu.
 const (
-	QueueManagerCustomID        = "queue_manager"
 	QueueHighPriorityCustomID   = "queue_high_priority" + ModalOpenSuffix
 	QueueNormalPriorityCustomID = "queue_normal_priority" + ModalOpenSuffix
 	QueueLowPriorityCustomID    = "queue_low_priority" + ModalOpenSuffix
@@ -201,6 +202,24 @@ const (
 	CaptchaRefreshButtonCustomID = "captcha_refresh"
 	CaptchaAnswerModalCustomID   = "captcha_answer_modal"
 	CaptchaAnswerInputCustomID   = "captcha_answer_input"
+)
+
+// Admin Menu.
+const (
+	BotSettingsButtonCustomID = "bot_settings"
+	DeleteUserButtonCustomID  = "delete_user" + ModalOpenSuffix
+	DeleteGroupButtonCustomID = "delete_group" + ModalOpenSuffix
+
+	DeleteUserModalCustomID   = "delete_user_modal"
+	DeleteGroupModalCustomID  = "delete_group_modal"
+	DeleteUserInputCustomID   = "delete_user_input"
+	DeleteGroupInputCustomID  = "delete_group_input"
+	DeleteReasonInputCustomID = "delete_reason_input"
+
+	DeleteConfirmButtonCustomID = "delete_confirm"
+
+	DeleteUserAction  = "delete_user"
+	DeleteGroupAction = "delete_group"
 )
 
 // Session keys.
@@ -290,6 +309,10 @@ const (
 
 	SessionKeyCaptchaAnswer = "captchaAnswer"
 	SessionKeyCaptchaImage  = "captchaImage"
+
+	SessionKeyDeleteAction = "deleteAction"
+	SessionKeyDeleteID     = "deleteID"
+	SessionKeyDeleteReason = "deleteReason"
 )
 
 const (

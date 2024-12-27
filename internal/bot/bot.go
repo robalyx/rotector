@@ -20,6 +20,7 @@ import (
 	"github.com/rotector/rotector/internal/bot/core/pagination"
 	"github.com/rotector/rotector/internal/bot/core/session"
 	"github.com/rotector/rotector/internal/bot/interfaces"
+	"github.com/rotector/rotector/internal/bot/menu/admin"
 	"github.com/rotector/rotector/internal/bot/menu/appeal"
 	"github.com/rotector/rotector/internal/bot/menu/captcha"
 	"github.com/rotector/rotector/internal/bot/menu/chat"
@@ -78,6 +79,7 @@ func New(app *setup.App) (*Bot, error) {
 		queueLayout,
 		chatLayout,
 		appealLayout,
+		adminLayout,
 	)
 
 	// Initialize bot structure with all components

@@ -53,6 +53,11 @@ const (
 	ActivityTypeAppealRejected // APPEAL_REJECTED
 	// ActivityTypeAppealClosed tracks when a user closes an appeal.
 	ActivityTypeAppealClosed // APPEAL_CLOSED
+
+	// ActivityTypeUserDeleted tracks when an admin deletes a user from the database.
+	ActivityTypeUserDeleted // USER_DELETED
+	// ActivityTypeGroupDeleted tracks when an admin deletes a group from the database.
+	ActivityTypeGroupDeleted // GROUP_DELETED
 )
 
 // ActivityTarget identifies the target of an activity log entry.

@@ -581,6 +581,60 @@ func (r *GroupModel) RemoveLockedGroups(ctx context.Context, groupIDs []uint64) 
 	})
 }
 
+// DeleteGroup removes a group and all associated data from the database.
+func (r *GroupModel) DeleteGroup(ctx context.Context, groupID uint64) (bool, error) {
+	var totalAffected int64
+	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+		// Delete from flagged_groups
+		result, err := tx.NewDelete().
+			Model((*types.FlaggedGroup)(nil)).
+			Where("id = ?", groupID).
+			Exec(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to delete from flagged_groups: %w", err)
+		}
+		affected, _ := result.RowsAffected()
+		totalAffected += affected
+
+		// Delete from confirmed_groups
+		result, err = tx.NewDelete().
+			Model((*types.ConfirmedGroup)(nil)).
+			Where("id = ?", groupID).
+			Exec(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to delete from confirmed_groups: %w", err)
+		}
+		affected, _ = result.RowsAffected()
+		totalAffected += affected
+
+		// Delete from cleared_groups
+		result, err = tx.NewDelete().
+			Model((*types.ClearedGroup)(nil)).
+			Where("id = ?", groupID).
+			Exec(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to delete from cleared_groups: %w", err)
+		}
+		affected, _ = result.RowsAffected()
+		totalAffected += affected
+
+		// Delete from locked_groups
+		result, err = tx.NewDelete().
+			Model((*types.LockedGroup)(nil)).
+			Where("id = ?", groupID).
+			Exec(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to delete from locked_groups: %w", err)
+		}
+		affected, _ = result.RowsAffected()
+		totalAffected += affected
+
+		return nil
+	})
+
+	return totalAffected > 0, err
+}
+
 // GetGroupToScan finds the next group to scan from confirmed_groups, falling back to flagged_groups
 // if no confirmed groups are available.
 func (r *GroupModel) GetGroupToScan(ctx context.Context) (*types.Group, error) {

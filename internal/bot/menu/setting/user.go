@@ -48,6 +48,6 @@ func (m *UserMenu) handleUserSettingSelection(event *events.ComponentInteraction
 // handleUserSettingButton processes button interactions.
 func (m *UserMenu) handleUserSettingButton(event *events.ComponentInteractionCreate, s *session.Session, customID string) {
 	if customID == constants.BackButtonCustomID {
-		m.layout.dashboardLayout.Show(event, s, "")
+		m.layout.paginationManager.NavigateBack(event, s, "")
 	}
 }

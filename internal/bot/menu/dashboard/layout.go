@@ -28,6 +28,7 @@ type Layout struct {
 	queueLayout       interfaces.QueueLayout
 	chatLayout        interfaces.ChatLayout
 	appealLayout      interfaces.AppealLayout
+	adminLayout       interfaces.AdminLayout
 }
 
 // New creates a Menu and sets up its page with message builders and
@@ -44,6 +45,7 @@ func New(
 	queueLayout interfaces.QueueLayout,
 	chatLayout interfaces.ChatLayout,
 	appealLayout interfaces.AppealLayout,
+	adminLayout interfaces.AdminLayout,
 ) *Layout {
 	// Get Redis client for stats
 	statsClient, err := app.RedisManager.GetClient(redis.StatsDBIndex)
@@ -72,6 +74,7 @@ func New(
 		queueLayout:       queueLayout,
 		chatLayout:        chatLayout,
 		appealLayout:      appealLayout,
+		adminLayout:       adminLayout,
 	}
 	l.mainMenu = NewMainMenu(l)
 

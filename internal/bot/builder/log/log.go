@@ -201,5 +201,9 @@ func (b *Builder) buildActivityTypeOptions() []discord.StringSelectMenuOption {
 			WithDefault(b.activityTypeFilter == types.ActivityTypeAppealRejected),
 		discord.NewStringSelectMenuOption("Appeal Closed", strconv.Itoa(int(types.ActivityTypeAppealClosed))).
 			WithDefault(b.activityTypeFilter == types.ActivityTypeAppealClosed),
+		discord.NewStringSelectMenuOption("User Deleted", strconv.Itoa(int(types.ActivityTypeUserDeleted))).
+			WithDefault(b.activityTypeFilter == types.ActivityTypeUserDeleted),
+		discord.NewStringSelectMenuOption("Group Deleted", strconv.Itoa(int(types.ActivityTypeGroupDeleted))).
+			WithDefault(b.activityTypeFilter == types.ActivityTypeGroupDeleted),
 	}
 }

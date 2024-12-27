@@ -99,19 +99,19 @@ func getChartBuffers(client rueidis.Client) (*bytes.Buffer, *bytes.Buffer) {
 func (b *Builder) Build() *discord.MessageUpdateBuilder {
 	// Create base options
 	options := []discord.StringSelectMenuOption{
-		discord.NewStringSelectMenuOption("Review Users", constants.StartUserReviewCustomID).
+		discord.NewStringSelectMenuOption("Review Users", constants.StartUserReviewButtonCustomID).
 			WithEmoji(discord.ComponentEmoji{Name: "🔍"}).
 			WithDescription("Start reviewing flagged users"),
-		discord.NewStringSelectMenuOption("Review Groups", constants.StartGroupReviewCustomID).
+		discord.NewStringSelectMenuOption("Review Groups", constants.StartGroupReviewButtonCustomID).
 			WithEmoji(discord.ComponentEmoji{Name: "🔍"}).
 			WithDescription("Start reviewing flagged groups"),
-		discord.NewStringSelectMenuOption("Lookup User", constants.LookupUserCustomID).
+		discord.NewStringSelectMenuOption("Lookup User", constants.LookupUserButtonCustomID).
 			WithEmoji(discord.ComponentEmoji{Name: "👤"}).
 			WithDescription("Look up a specific user by ID"),
-		discord.NewStringSelectMenuOption("Lookup Group", constants.LookupGroupCustomID).
+		discord.NewStringSelectMenuOption("Lookup Group", constants.LookupGroupButtonCustomID).
 			WithEmoji(discord.ComponentEmoji{Name: "👥"}).
 			WithDescription("Look up a specific group by ID"),
-		discord.NewStringSelectMenuOption("View Appeals", constants.AppealMenuCustomID).
+		discord.NewStringSelectMenuOption("View Appeals", constants.AppealMenuButtonCustomID).
 			WithEmoji(discord.ComponentEmoji{Name: "⚖️"}).
 			WithDescription("View pending appeals"),
 	}
@@ -119,13 +119,13 @@ func (b *Builder) Build() *discord.MessageUpdateBuilder {
 	// Add reviewer-only options
 	if b.botSettings.IsReviewer(b.userID) {
 		options = append(options,
-			discord.NewStringSelectMenuOption("AI Chat Assistant", constants.ChatAssistantCustomID).
+			discord.NewStringSelectMenuOption("AI Chat Assistant", constants.ChatAssistantButtonCustomID).
 				WithEmoji(discord.ComponentEmoji{Name: "🤖"}).
 				WithDescription("Chat with AI about moderation topics"),
-			discord.NewStringSelectMenuOption("Activity Log Browser", constants.LogActivityBrowserCustomID).
+			discord.NewStringSelectMenuOption("Activity Log Browser", constants.ActivityBrowserButtonCustomID).
 				WithEmoji(discord.ComponentEmoji{Name: "📜"}).
 				WithDescription("Search and filter activity logs"),
-			discord.NewStringSelectMenuOption("User Queue Manager", constants.QueueManagerCustomID).
+			discord.NewStringSelectMenuOption("User Queue Manager", constants.QueueManagerButtonCustomID).
 				WithEmoji(discord.ComponentEmoji{Name: "📋"}).
 				WithDescription("Manage user recheck queue priorities"),
 		)
@@ -133,16 +133,18 @@ func (b *Builder) Build() *discord.MessageUpdateBuilder {
 
 	// Add user settings option
 	options = append(options,
-		discord.NewStringSelectMenuOption("User Settings", constants.UserSettingsCustomID).
+		discord.NewStringSelectMenuOption("User Settings", constants.UserSettingsButtonCustomID).
 			WithEmoji(discord.ComponentEmoji{Name: "👤"}).
 			WithDescription("Configure your personal settings"),
 	)
 
-	// Add bot settings option only for admins
+	// Add admin tools option only for admins
 	if b.botSettings.IsAdmin(b.userID) {
-		options = append(options, discord.NewStringSelectMenuOption("Bot Settings", constants.BotSettingsCustomID).
-			WithEmoji(discord.ComponentEmoji{Name: "⚙️"}).
-			WithDescription("Configure bot-wide settings"))
+		options = append(options,
+			discord.NewStringSelectMenuOption("Admin Tools", constants.AdminMenuButtonCustomID).
+				WithEmoji(discord.ComponentEmoji{Name: "⚡"}).
+				WithDescription("Access administrative tools"),
+		)
 	}
 
 	// Create message builder with all embeds

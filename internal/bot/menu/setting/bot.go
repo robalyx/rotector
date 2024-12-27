@@ -45,6 +45,6 @@ func (m *BotMenu) handleBotSettingSelection(event *events.ComponentInteractionCr
 // handleBotSettingButton processes button interactions.
 func (m *BotMenu) handleBotSettingButton(event *events.ComponentInteractionCreate, s *session.Session, customID string) {
 	if customID == constants.BackButtonCustomID {
-		m.layout.dashboardLayout.Show(event, s, "")
+		m.layout.paginationManager.NavigateBack(event, s, "")
 	}
 }

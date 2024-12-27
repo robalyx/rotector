@@ -676,6 +676,60 @@ func (r *UserModel) PurgeOldClearedUsers(ctx context.Context, cutoffDate time.Ti
 	return int(affected), nil
 }
 
+// DeleteUser removes a user and all associated data from the database.
+func (r *UserModel) DeleteUser(ctx context.Context, userID uint64) (bool, error) {
+	var totalAffected int64
+	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+		// Delete from flagged_users
+		result, err := tx.NewDelete().
+			Model((*types.FlaggedUser)(nil)).
+			Where("id = ?", userID).
+			Exec(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to delete from flagged_users: %w", err)
+		}
+		affected, _ := result.RowsAffected()
+		totalAffected += affected
+
+		// Delete from confirmed_users
+		result, err = tx.NewDelete().
+			Model((*types.ConfirmedUser)(nil)).
+			Where("id = ?", userID).
+			Exec(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to delete from confirmed_users: %w", err)
+		}
+		affected, _ = result.RowsAffected()
+		totalAffected += affected
+
+		// Delete from cleared_users
+		result, err = tx.NewDelete().
+			Model((*types.ClearedUser)(nil)).
+			Where("id = ?", userID).
+			Exec(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to delete from cleared_users: %w", err)
+		}
+		affected, _ = result.RowsAffected()
+		totalAffected += affected
+
+		// Delete from banned_users
+		result, err = tx.NewDelete().
+			Model((*types.BannedUser)(nil)).
+			Where("id = ?", userID).
+			Exec(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to delete from banned_users: %w", err)
+		}
+		affected, _ = result.RowsAffected()
+		totalAffected += affected
+
+		return nil
+	})
+
+	return totalAffected > 0, err
+}
+
 // UpdateTrainingVotes updates the upvotes or downvotes count for a user in training mode.
 func (r *UserModel) UpdateTrainingVotes(ctx context.Context, userID uint64, isUpvote bool) error {
 	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {

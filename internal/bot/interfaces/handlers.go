@@ -67,3 +67,9 @@ type AppealLayout interface {
 type CaptchaLayout interface {
 	Show(event CommonEvent, s *session.Session, content string)
 }
+
+// AdminLayout defines the interface for handling admin-related actions.
+type AdminLayout interface {
+	// Show prepares and displays the admin menu.
+	Show(event CommonEvent, s *session.Session)
+}

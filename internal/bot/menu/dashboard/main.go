@@ -83,46 +83,47 @@ func (m *MainMenu) handleSelectMenu(event *events.ComponentInteractionCreate, s 
 	s.GetInterface(constants.SessionKeyBotSettings, &settings)
 
 	switch option {
-	case constants.StartUserReviewCustomID:
+	case constants.StartUserReviewButtonCustomID:
 		m.layout.userReviewLayout.ShowReviewMenu(event, s)
-	case constants.StartGroupReviewCustomID:
+	case constants.StartGroupReviewButtonCustomID:
 		m.layout.groupReviewLayout.Show(event, s)
-	case constants.UserSettingsCustomID:
+	case constants.UserSettingsButtonCustomID:
 		m.layout.settingLayout.ShowUser(event, s)
-	case constants.BotSettingsCustomID:
-		if !settings.IsAdmin(uint64(event.User().ID)) {
-			m.layout.logger.Error("User is not in admin list but somehow attempted to access bot settings", zap.Uint64("user_id", uint64(event.User().ID)))
-			m.layout.paginationManager.RespondWithError(event, "You do not have permission to access bot settings.")
-			return
-		}
-		m.layout.settingLayout.ShowBot(event, s)
-	case constants.LogActivityBrowserCustomID:
+	case constants.ActivityBrowserButtonCustomID:
 		if !settings.IsReviewer(uint64(event.User().ID)) {
 			m.layout.logger.Error("User is not in reviewer list but somehow attempted to access log browser", zap.Uint64("user_id", uint64(event.User().ID)))
 			m.layout.paginationManager.RespondWithError(event, "You do not have permission to access log browser.")
 			return
 		}
 		m.layout.logLayout.Show(event, s)
-	case constants.QueueManagerCustomID:
+	case constants.QueueManagerButtonCustomID:
 		if !settings.IsReviewer(uint64(event.User().ID)) {
 			m.layout.logger.Error("User is not in reviewer list but somehow attempted to access queue manager", zap.Uint64("user_id", uint64(event.User().ID)))
 			m.layout.paginationManager.RespondWithError(event, "You do not have permission to access queue manager.")
 			return
 		}
 		m.layout.queueLayout.Show(event, s)
-	case constants.ChatAssistantCustomID:
+	case constants.ChatAssistantButtonCustomID:
 		if !settings.IsReviewer(uint64(event.User().ID)) {
 			m.layout.logger.Error("User is not in reviewer list but somehow attempted to access chat assistant", zap.Uint64("user_id", uint64(event.User().ID)))
 			m.layout.paginationManager.RespondWithError(event, "You do not have permission to access the chat assistant.")
 			return
 		}
 		m.layout.chatLayout.Show(event, s)
-	case constants.LookupUserCustomID:
+	case constants.LookupUserButtonCustomID:
 		m.handleLookupUser(event)
-	case constants.LookupGroupCustomID:
+	case constants.LookupGroupButtonCustomID:
 		m.handleLookupGroup(event)
-	case constants.AppealMenuCustomID:
+	case constants.AppealMenuButtonCustomID:
 		m.layout.appealLayout.ShowOverview(event, s, "")
+	case constants.AdminMenuButtonCustomID:
+		if !settings.IsAdmin(uint64(event.User().ID)) {
+			m.layout.logger.Error("Non-admin attempted to access admin menu",
+				zap.Uint64("user_id", uint64(event.User().ID)))
+			m.layout.paginationManager.RespondWithError(event, "You do not have permission to access admin tools.")
+			return
+		}
+		m.layout.adminLayout.Show(event, s)
 	}
 }
 
