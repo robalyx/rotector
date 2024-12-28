@@ -414,7 +414,7 @@ func (m *ReviewMenu) handleConfirmUser(event interfaces.CommonEvent, s *session.
 	// Clear current user and load next one
 	s.Delete(constants.SessionKeyTarget)
 	m.Show(event, s, fmt.Sprintf("User %s. %d users left to review.", actionMsg, flaggedCount))
-	m.incrementReviewCounter(event, s)
+	m.updateCounters(s)
 }
 
 // handleClearUser removes a user from the flagged state and logs the action.
@@ -482,25 +482,20 @@ func (m *ReviewMenu) handleClearUser(event interfaces.CommonEvent, s *session.Se
 	// Clear current user and load next one
 	s.Delete(constants.SessionKeyTarget)
 	m.Show(event, s, fmt.Sprintf("User %s. %d users left to review.", actionMsg, flaggedCount))
-	m.incrementReviewCounter(event, s)
+	m.updateCounters(s)
 }
 
 // handleSkipUser logs the skip action and moves to the next user without
 // changing the current user's status.
 func (m *ReviewMenu) handleSkipUser(event interfaces.CommonEvent, s *session.Session) {
-	var user *types.ReviewUser
-	s.GetInterface(constants.SessionKeyTarget, &user)
+	var settings *types.UserSetting
+	s.GetInterface(constants.SessionKeyUserSettings, &settings)
 
-	// Log the skip action asynchronously
-	go m.layout.db.UserActivity().Log(context.Background(), &types.UserActivityLog{
-		ActivityTarget: types.ActivityTarget{
-			UserID: user.ID,
-		},
-		ReviewerID:        uint64(event.User().ID),
-		ActivityType:      types.ActivityTypeUserSkipped,
-		ActivityTimestamp: time.Now(),
-		Details:           make(map[string]interface{}),
-	})
+	// Check if skipping is allowed
+	if msg := settings.SkipUsage.CanSkip(); msg != "" {
+		m.layout.paginationManager.NavigateTo(event, s, m.page, msg)
+		return
+	}
 
 	// Get the number of flagged users left to review
 	flaggedCount, err := m.layout.db.Users().GetFlaggedUsersCount(context.Background())
@@ -511,7 +506,33 @@ func (m *ReviewMenu) handleSkipUser(event interfaces.CommonEvent, s *session.Ses
 	// Clear current user and load next one
 	s.Delete(constants.SessionKeyTarget)
 	m.Show(event, s, fmt.Sprintf("Skipped user. %d users left to review.", flaggedCount))
-	m.incrementReviewCounter(event, s)
+
+	// Update skip and captcha counters
+	var botSettings *types.BotSetting
+	s.GetInterface(constants.SessionKeyBotSettings, &botSettings)
+
+	settings.SkipUsage.IncrementSkips()
+	settings.CaptchaUsage.IncrementReviews(settings, botSettings)
+	if err := m.layout.db.Settings().SaveUserSettings(context.Background(), settings); err != nil {
+		m.layout.logger.Error("Failed to update skip tracking", zap.Error(err))
+		m.layout.paginationManager.RespondWithError(event, "Failed to update skip tracking. Please try again.")
+		return
+	}
+	s.Set(constants.SessionKeyUserSettings, settings)
+
+	// Log the skip action
+	var user *types.ReviewUser
+	s.GetInterface(constants.SessionKeyTarget, &user)
+
+	m.layout.db.UserActivity().Log(context.Background(), &types.UserActivityLog{
+		ActivityTarget: types.ActivityTarget{
+			UserID: user.ID,
+		},
+		ReviewerID:        uint64(event.User().ID),
+		ActivityType:      types.ActivityTypeUserSkipped,
+		ActivityTimestamp: time.Now(),
+		Details:           make(map[string]interface{}),
+	})
 }
 
 // handleOpenAIChat handles the button to open the AI chat for the current user.
@@ -596,8 +617,13 @@ func (m *ReviewMenu) handleConfirmWithReasonModalSubmit(event *events.ModalSubmi
 		return
 	}
 
-	// Log the custom confirm action asynchronously
-	go m.layout.db.UserActivity().Log(context.Background(), &types.UserActivityLog{
+	// Clear current user and load next one
+	s.Delete(constants.SessionKeyTarget)
+	m.Show(event, s, "User confirmed.")
+	m.updateCounters(s)
+
+	// Log the custom confirm action
+	m.layout.db.UserActivity().Log(context.Background(), &types.UserActivityLog{
 		ActivityTarget: types.ActivityTarget{
 			UserID: user.ID,
 		},
@@ -606,11 +632,6 @@ func (m *ReviewMenu) handleConfirmWithReasonModalSubmit(event *events.ModalSubmi
 		ActivityTimestamp: time.Now(),
 		Details:           map[string]interface{}{"reason": user.Reason},
 	})
-
-	// Clear current user and load next one
-	s.Delete(constants.SessionKeyTarget)
-	m.Show(event, s, "User confirmed.")
-	m.incrementReviewCounter(event, s)
 }
 
 // handleSwitchReviewMode switches between training and standard review modes.
@@ -710,29 +731,24 @@ func (m *ReviewMenu) checkLastViewed(event interfaces.CommonEvent, s *session.Se
 func (m *ReviewMenu) checkCaptchaRequired(event interfaces.CommonEvent, s *session.Session) bool {
 	var settings *types.UserSetting
 	s.GetInterface(constants.SessionKeyUserSettings, &settings)
-
-	if settings.ReviewsSinceCaptcha >= 10 {
+	if settings.CaptchaUsage.NeedsCaptcha() {
 		m.layout.captchaLayout.Show(event, s, "Please complete CAPTCHA verification to continue.")
 		return true
 	}
-
 	return false
 }
 
-// incrementReviewCounter increments the reviews since last CAPTCHA counter.
-func (m *ReviewMenu) incrementReviewCounter(event interfaces.CommonEvent, s *session.Session) {
+// updateCounters updates the review and skip counters.
+func (m *ReviewMenu) updateCounters(s *session.Session) {
 	var settings *types.UserSetting
 	s.GetInterface(constants.SessionKeyUserSettings, &settings)
 	var botSettings *types.BotSetting
 	s.GetInterface(constants.SessionKeyBotSettings, &botSettings)
 
-	// Only increment counter for non-reviewers in training mode
-	if !botSettings.IsReviewer(uint64(event.User().ID)) &&
-		settings.ReviewMode == types.TrainingReviewMode {
-		settings.ReviewsSinceCaptcha++
-		if err := m.layout.db.Settings().SaveUserSettings(context.Background(), settings); err != nil {
-			m.layout.logger.Error("Failed to update reviews counter", zap.Error(err))
-		}
-		s.Set(constants.SessionKeyUserSettings, settings)
+	settings.CaptchaUsage.IncrementReviews(settings, botSettings)
+	settings.SkipUsage.ResetSkips()
+	if err := m.layout.db.Settings().SaveUserSettings(context.Background(), settings); err != nil {
+		m.layout.logger.Error("Failed to update counters", zap.Error(err))
 	}
+	s.Set(constants.SessionKeyUserSettings, settings)
 }

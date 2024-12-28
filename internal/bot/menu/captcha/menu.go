@@ -120,8 +120,8 @@ func (m *Menu) handleModal(event *events.ModalSubmitInteractionCreate, s *sessio
 	// Reset reviews counter
 	var settings *types.UserSetting
 	s.GetInterface(constants.SessionKeyUserSettings, &settings)
-	settings.ReviewsSinceCaptcha = 0
 
+	settings.CaptchaUsage.ResetReviews()
 	if err := m.layout.db.Settings().SaveUserSettings(context.Background(), settings); err != nil {
 		m.layout.logger.Error("Failed to reset CAPTCHA counter", zap.Error(err))
 		m.layout.paginationManager.RespondWithError(event, "Failed to verify CAPTCHA. Please try again.")

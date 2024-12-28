@@ -43,7 +43,13 @@ func (r *SettingModel) GetUserSettings(ctx context.Context, userID snowflake.ID)
 			FirstMessageTime: time.Unix(0, 0),
 			MessageCount:     0,
 		},
-		ReviewsSinceCaptcha: 0,
+		SkipUsage: types.SkipUsage{
+			LastSkipTime:     time.Unix(0, 0),
+			ConsecutiveSkips: 0,
+		},
+		CaptchaUsage: types.CaptchaUsage{
+			ReviewCount: 0,
+		},
 	}
 
 	err := r.db.NewSelect().Model(settings).
@@ -79,7 +85,9 @@ func (r *SettingModel) SaveUserSettings(ctx context.Context, settings *types.Use
 		Set("review_target_mode = EXCLUDED.review_target_mode").
 		Set("first_message_time = EXCLUDED.first_message_time").
 		Set("message_count = EXCLUDED.message_count").
-		Set("reviews_since_captcha = EXCLUDED.reviews_since_captcha").
+		Set("last_skip_time = EXCLUDED.last_skip_time").
+		Set("consecutive_skips = EXCLUDED.consecutive_skips").
+		Set("review_count = EXCLUDED.review_count").
 		Exec(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to save user settings: %w (userID=%d)", err, settings.UserID)

@@ -1,6 +1,7 @@
 package types
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/disgoorg/snowflake/v2"
@@ -12,19 +13,75 @@ type ChatMessageUsage struct {
 	MessageCount     int       `bun:",notnull"`
 }
 
+// SkipUsage keeps track of skip usage and limits.
+type SkipUsage struct {
+	LastSkipTime     time.Time `bun:",nullzero,notnull"`
+	ConsecutiveSkips int       `bun:",notnull"`
+}
+
+// CanSkip checks if skipping is allowed based on limits and cooldown.
+// Returns a non-empty message if skipping is not allowed.
+func (s *SkipUsage) CanSkip() string {
+	if s.ConsecutiveSkips >= 3 {
+		return "You have reached the maximum number of consecutive skips. Please use an action."
+	}
+
+	if !s.LastSkipTime.IsZero() && time.Since(s.LastSkipTime) < 30*time.Second {
+		remainingTime := 30*time.Second - time.Since(s.LastSkipTime)
+		return fmt.Sprintf("You are on skip cooldown. Please wait %d seconds.", int(remainingTime.Seconds()))
+	}
+
+	return ""
+}
+
+// IncrementSkips updates the skip tracking information.
+func (s *SkipUsage) IncrementSkips() {
+	s.LastSkipTime = time.Now()
+	s.ConsecutiveSkips++
+}
+
+// ResetSkips resets the consecutive skips counter.
+func (s *SkipUsage) ResetSkips() {
+	s.ConsecutiveSkips = 0
+}
+
+// CaptchaUsage keeps track of reviews since last CAPTCHA verification.
+type CaptchaUsage struct {
+	ReviewCount int `bun:",notnull"`
+}
+
+// NeedsCaptcha checks if CAPTCHA verification is needed.
+// Returns true if the user has reached the review limit.
+func (c *CaptchaUsage) NeedsCaptcha() bool {
+	return c.ReviewCount >= 10
+}
+
+// IncrementReviews increments the review counter.
+func (c *CaptchaUsage) IncrementReviews(user *UserSetting, bot *BotSetting) {
+	if !bot.IsReviewer(uint64(user.UserID)) && user.ReviewMode == TrainingReviewMode {
+		c.ReviewCount++
+	}
+}
+
+// ResetReviews resets the review counter.
+func (c *CaptchaUsage) ResetReviews() {
+	c.ReviewCount = 0
+}
+
 // UserSetting stores user-specific preferences.
 type UserSetting struct {
-	UserID              snowflake.ID     `bun:",pk"`
-	StreamerMode        bool             `bun:",notnull"`
-	UserDefaultSort     ReviewSortBy     `bun:",notnull"`
-	GroupDefaultSort    ReviewSortBy     `bun:",notnull"`
-	AppealDefaultSort   AppealSortBy     `bun:",notnull"`
-	AppealStatusFilter  AppealFilterBy   `bun:",notnull"`
-	ChatModel           ChatModel        `bun:",notnull"`
-	ReviewMode          ReviewMode       `bun:",notnull"`
-	ReviewTargetMode    ReviewTargetMode `bun:",notnull"`
-	ChatMessageUsage    ChatMessageUsage `bun:",embed"`
-	ReviewsSinceCaptcha int              `bun:",notnull,default:0"`
+	UserID             snowflake.ID     `bun:",pk"`
+	StreamerMode       bool             `bun:",notnull"`
+	UserDefaultSort    ReviewSortBy     `bun:",notnull"`
+	GroupDefaultSort   ReviewSortBy     `bun:",notnull"`
+	AppealDefaultSort  AppealSortBy     `bun:",notnull"`
+	AppealStatusFilter AppealFilterBy   `bun:",notnull"`
+	ChatModel          ChatModel        `bun:",notnull"`
+	ReviewMode         ReviewMode       `bun:",notnull"`
+	ReviewTargetMode   ReviewTargetMode `bun:",notnull"`
+	ChatMessageUsage   ChatMessageUsage `bun:",embed"`
+	SkipUsage          SkipUsage        `bun:",embed"`
+	CaptchaUsage       CaptchaUsage     `bun:",embed"`
 }
 
 // BotSetting stores bot-wide configuration options.
