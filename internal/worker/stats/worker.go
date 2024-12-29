@@ -11,6 +11,7 @@ import (
 	"github.com/rotector/rotector/internal/common/progress"
 	"github.com/rotector/rotector/internal/common/setup"
 	"github.com/rotector/rotector/internal/common/storage/database"
+	"github.com/rotector/rotector/internal/common/storage/database/types"
 	"github.com/rotector/rotector/internal/common/storage/redis"
 	"github.com/rotector/rotector/internal/worker/core"
 	"go.uber.org/zap"
@@ -51,7 +52,7 @@ func New(app *setup.App, bar *progress.Bar, logger *zap.Logger) *Worker {
 }
 
 // Start begins the statistics worker's main loop.
-func (w *Worker) Start() {
+func (w *Worker) Start() { //nolint:funlen
 	w.logger.Info("Statistics Worker started", zap.String("workerID", w.reporter.GetWorkerID()))
 	w.reporter.Start()
 	defer w.reporter.Stop()
@@ -97,10 +98,18 @@ func (w *Worker) Start() {
 			}
 		}
 
+		// Get hourly stats
+		hourlyStats, err := w.db.Stats().GetHourlyStats(ctx)
+		if err != nil {
+			w.logger.Error("Failed to get hourly stats", zap.Error(err))
+			w.reporter.SetHealthy(false)
+			continue
+		}
+
 		// Step 4: Generate and cache charts (50%)
 		w.bar.SetStepMessage("Generating charts", 50)
 		w.reporter.UpdateStatus("Generating charts", 50)
-		if err := w.generateAndCacheCharts(ctx); err != nil {
+		if err := w.generateAndCacheCharts(ctx, hourlyStats); err != nil {
 			w.logger.Error("Failed to generate and cache charts", zap.Error(err))
 			w.reporter.SetHealthy(false)
 			continue
@@ -109,7 +118,7 @@ func (w *Worker) Start() {
 		// Step 5: Update welcome message (60%)
 		w.bar.SetStepMessage("Updating welcome message", 60)
 		w.reporter.UpdateStatus("Updating welcome message", 60)
-		if err := w.updateWelcomeMessage(ctx); err != nil {
+		if err := w.updateWelcomeMessage(ctx, hourlyStats); err != nil {
 			w.logger.Error("Failed to update welcome message", zap.Error(err))
 			w.reporter.SetHealthy(false)
 			continue
@@ -136,13 +145,7 @@ func (w *Worker) Start() {
 }
 
 // generateAndCacheCharts generates statistics charts and caches them in Redis.
-func (w *Worker) generateAndCacheCharts(ctx context.Context) error {
-	// Get hourly stats for charts
-	hourlyStats, err := w.db.Stats().GetHourlyStats(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to get hourly stats: %w", err)
-	}
-
+func (w *Worker) generateAndCacheCharts(ctx context.Context, hourlyStats []*types.HourlyStats) error {
 	// Generate charts
 	userStatsChart, groupStatsChart, err := NewChartBuilder(hourlyStats).Build()
 	if err != nil {
@@ -175,15 +178,9 @@ func (w *Worker) generateAndCacheCharts(ctx context.Context) error {
 }
 
 // updateWelcomeMessage handles the generation and updating of the welcome message.
-func (w *Worker) updateWelcomeMessage(ctx context.Context) error {
-	// Get historical stats for AI analysis
-	historicalStats, err := w.db.Stats().GetHourlyStats(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to get historical stats: %w", err)
-	}
-
+func (w *Worker) updateWelcomeMessage(ctx context.Context, hourlyStats []*types.HourlyStats) error {
 	// Generate new welcome message
-	message, err := w.analyzer.GenerateWelcomeMessage(ctx, historicalStats)
+	message, err := w.analyzer.GenerateWelcomeMessage(ctx, hourlyStats)
 	if err != nil {
 		return fmt.Errorf("failed to generate welcome message: %w", err)
 	}

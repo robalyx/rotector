@@ -13,6 +13,9 @@ import (
 // Chart dimensions and styling constants control the visual appearance
 // of the statistics chart.
 const (
+	// hoursToShow is the number of x-axis ticks to show in the chart.
+	hoursToShow = 24
+
 	// titleFontSize sets the size of the chart title text.
 	titleFontSize = 12.0
 	// xAxisFontSize sets the size of x-axis labels.
@@ -39,11 +42,11 @@ const (
 
 // ChartBuilder creates statistical charts for the dashboard.
 type ChartBuilder struct {
-	stats []types.HourlyStats
+	stats []*types.HourlyStats
 }
 
 // NewChartBuilder loads hourly statistics to create a new chart builder.
-func NewChartBuilder(stats []types.HourlyStats) *ChartBuilder {
+func NewChartBuilder(stats []*types.HourlyStats) *ChartBuilder {
 	return &ChartBuilder{
 		stats: stats,
 	}
@@ -134,7 +137,6 @@ func (b *ChartBuilder) buildGroupChart() (*bytes.Buffer, error) {
 
 // prepareUserDataSeries extracts user-related data points from hourly statistics.
 func (b *ChartBuilder) prepareUserDataSeries() ([]float64, []float64, []float64, []float64, []float64) {
-	const hoursToShow = 24
 	xValues := make([]float64, hoursToShow)
 	confirmedSeries := make([]float64, hoursToShow)
 	flaggedSeries := make([]float64, hoursToShow)
@@ -142,7 +144,7 @@ func (b *ChartBuilder) prepareUserDataSeries() ([]float64, []float64, []float64,
 	bannedSeries := make([]float64, hoursToShow)
 
 	// Create a map of truncated timestamps to stats for lookup
-	statsMap := make(map[time.Time]types.HourlyStats)
+	statsMap := make(map[time.Time]*types.HourlyStats)
 	for _, stat := range b.stats {
 		truncatedTime := stat.Timestamp.Truncate(time.Hour)
 		statsMap[truncatedTime] = stat
@@ -168,7 +170,6 @@ func (b *ChartBuilder) prepareUserDataSeries() ([]float64, []float64, []float64,
 
 // prepareGroupDataSeries extracts group-related data points from hourly statistics.
 func (b *ChartBuilder) prepareGroupDataSeries() ([]float64, []float64, []float64, []float64, []float64) {
-	const hoursToShow = 24
 	xValues := make([]float64, hoursToShow)
 	confirmedSeries := make([]float64, hoursToShow)
 	flaggedSeries := make([]float64, hoursToShow)
@@ -176,7 +177,7 @@ func (b *ChartBuilder) prepareGroupDataSeries() ([]float64, []float64, []float64
 	lockedSeries := make([]float64, hoursToShow)
 
 	// Create a map of truncated timestamps to stats for lookup
-	statsMap := make(map[time.Time]types.HourlyStats)
+	statsMap := make(map[time.Time]*types.HourlyStats)
 	for _, stat := range b.stats {
 		truncatedTime := stat.Timestamp.Truncate(time.Hour)
 		statsMap[truncatedTime] = stat
@@ -202,7 +203,6 @@ func (b *ChartBuilder) prepareGroupDataSeries() ([]float64, []float64, []float64
 
 // prepareGridLinesAndTicks creates grid lines and x-axis labels.
 func (b *ChartBuilder) prepareGridLinesAndTicks() ([]chart.GridLine, []chart.Tick) {
-	const hoursToShow = 24
 	gridLines := make([]chart.GridLine, hoursToShow)
 	ticks := make([]chart.Tick, hoursToShow)
 
@@ -210,11 +210,8 @@ func (b *ChartBuilder) prepareGridLinesAndTicks() ([]chart.GridLine, []chart.Tic
 		gridLines[i] = chart.GridLine{Value: float64(i)}
 
 		// Format as hours ago
-		hoursAgo := hoursToShow - 1 - i
-		label := "now"
-		if hoursAgo > 0 {
-			label = fmt.Sprintf("%dh ago", hoursAgo)
-		}
+		hoursAgo := hoursToShow - i
+		label := fmt.Sprintf("%dh ago", hoursAgo)
 
 		ticks[i] = chart.Tick{
 			Value: float64(i),

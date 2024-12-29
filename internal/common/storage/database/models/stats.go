@@ -123,8 +123,8 @@ func (r *StatsModel) SaveHourlyStats(ctx context.Context, stats *types.HourlySta
 }
 
 // GetHourlyStats retrieves hourly statistics for the last 24 hours.
-func (r *StatsModel) GetHourlyStats(ctx context.Context) ([]types.HourlyStats, error) {
-	var stats []types.HourlyStats
+func (r *StatsModel) GetHourlyStats(ctx context.Context) ([]*types.HourlyStats, error) {
+	var stats []*types.HourlyStats
 	now := time.Now().UTC()
 	dayAgo := now.Add(-24 * time.Hour)
 

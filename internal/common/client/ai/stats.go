@@ -49,7 +49,7 @@ const MaxOutputTokens = 512
 
 // StatsData represents the formatted statistics for AI analysis.
 type StatsData struct {
-	History []types.HourlyStats `json:"history"`
+	History []*types.HourlyStats `json:"history"`
 }
 
 // StatsAnalyzer analyzes statistics and generates welcome messages.
@@ -84,7 +84,7 @@ func NewStatsAnalyzer(app *setup.App, logger *zap.Logger) *StatsAnalyzer {
 }
 
 // GenerateWelcomeMessage analyzes current and historical stats to generate a contextual welcome message.
-func (a *StatsAnalyzer) GenerateWelcomeMessage(ctx context.Context, historicalStats []types.HourlyStats) (string, error) {
+func (a *StatsAnalyzer) GenerateWelcomeMessage(ctx context.Context, historicalStats []*types.HourlyStats) (string, error) {
 	// Format stats data for AI analysis
 	data := StatsData{
 		History: historicalStats,
