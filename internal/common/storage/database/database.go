@@ -109,6 +109,8 @@ func (c *Client) createSchema() error {
 		(*types.AppealMessage)(nil),
 		(*types.AppealTimeline)(nil),
 		(*types.GroupMemberTracking)(nil),
+		(*types.UserReputation)(nil),
+		(*types.GroupReputation)(nil),
 	}
 
 	// Create tables if they don't exist
@@ -236,28 +238,45 @@ func (c *Client) createIndexes() error {
 		ON flagged_groups (confidence DESC, last_viewed ASC);
 		CREATE INDEX IF NOT EXISTS idx_confirmed_groups_confidence_viewed 
 		ON confirmed_groups (confidence DESC, last_viewed ASC);
+		CREATE INDEX IF NOT EXISTS idx_cleared_groups_confidence_viewed 
+		ON cleared_groups (confidence DESC, last_viewed ASC);
+		CREATE INDEX IF NOT EXISTS idx_locked_groups_confidence_viewed 
+		ON locked_groups (confidence DESC, last_viewed ASC);
+
+		CREATE INDEX IF NOT EXISTS idx_flagged_groups_updated_viewed 
+		ON flagged_groups (last_updated ASC, last_viewed ASC);
+		CREATE INDEX IF NOT EXISTS idx_confirmed_groups_updated_viewed 
+		ON confirmed_groups (last_updated ASC, last_viewed ASC);
+		CREATE INDEX IF NOT EXISTS idx_cleared_groups_updated_viewed 
+		ON cleared_groups (last_updated ASC, last_viewed ASC);
+		CREATE INDEX IF NOT EXISTS idx_locked_groups_updated_viewed 
+		ON locked_groups (last_updated ASC, last_viewed ASC);
 		
-		CREATE INDEX IF NOT EXISTS idx_flagged_groups_reputation_viewed 
-		ON flagged_groups (reputation ASC, last_viewed ASC);
-		CREATE INDEX IF NOT EXISTS idx_confirmed_groups_reputation_viewed 
-		ON confirmed_groups (reputation ASC, last_viewed ASC);
+		CREATE INDEX IF NOT EXISTS idx_group_reputations_id_score 
+		ON group_reputations (id, score);
 
 		-- User review sorting indexes
 		CREATE INDEX IF NOT EXISTS idx_flagged_users_confidence_viewed 
 		ON flagged_users (confidence DESC, last_viewed ASC);
 		CREATE INDEX IF NOT EXISTS idx_confirmed_users_confidence_viewed 
 		ON confirmed_users (confidence DESC, last_viewed ASC);
-		
-		CREATE INDEX IF NOT EXISTS idx_flagged_users_reputation_viewed 
-		ON flagged_users (reputation ASC, last_viewed ASC);
-		CREATE INDEX IF NOT EXISTS idx_confirmed_users_reputation_viewed 
-		ON confirmed_users (reputation ASC, last_viewed ASC);
+		CREATE INDEX IF NOT EXISTS idx_cleared_users_confidence_viewed 
+		ON cleared_users (confidence DESC, last_viewed ASC);
+		CREATE INDEX IF NOT EXISTS idx_banned_users_confidence_viewed 
+		ON banned_users (confidence DESC, last_viewed ASC);
 		
 		CREATE INDEX IF NOT EXISTS idx_flagged_users_updated_viewed 
 		ON flagged_users (last_updated ASC, last_viewed ASC);
 		CREATE INDEX IF NOT EXISTS idx_confirmed_users_updated_viewed 
 		ON confirmed_users (last_updated ASC, last_viewed ASC);
+		CREATE INDEX IF NOT EXISTS idx_cleared_users_updated_viewed 
+		ON cleared_users (last_updated ASC, last_viewed ASC);
+		CREATE INDEX IF NOT EXISTS idx_banned_users_updated_viewed 
+		ON banned_users (last_updated ASC, last_viewed ASC);
 
+		CREATE INDEX IF NOT EXISTS idx_user_reputations_id_score 
+		ON user_reputations (id, score);
+		
 		-- User status indexes
 		CREATE INDEX IF NOT EXISTS idx_cleared_users_purged_at ON cleared_users (cleared_at);
 		CREATE INDEX IF NOT EXISTS idx_flagged_users_last_purge_check ON flagged_users (last_purge_check);

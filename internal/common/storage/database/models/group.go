@@ -192,80 +192,107 @@ func (r *GroupModel) GetClearedGroupsCount(ctx context.Context) (int, error) {
 }
 
 // GetGroupByID retrieves a group by its ID from any of the group tables.
-func (r *GroupModel) GetGroupByID(ctx context.Context, groupID uint64, fields types.GroupFields) (*types.ReviewGroup, error) {
-	var reviewGroup *types.ReviewGroup
-
+// If review is true, it ensures the group hasn't been viewed in the last 5 minutes
+// and updates their last_viewed timestamp.
+func (r *GroupModel) GetGroupByID(ctx context.Context, groupID uint64, fields types.GroupFields, review bool) (*types.ReviewGroup, error) {
+	var result types.ReviewGroup
 	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
-		// Map of model types to their status
-		modelTypes := map[interface{}]types.GroupType{
-			new(types.FlaggedGroup):   types.GroupTypeFlagged,
-			new(types.ConfirmedGroup): types.GroupTypeConfirmed,
-			new(types.ClearedGroup):   types.GroupTypeCleared,
-			new(types.LockedGroup):    types.GroupTypeLocked,
+		models := []interface{}{
+			(*types.FlaggedGroup)(nil),
+			(*types.ConfirmedGroup)(nil),
+			(*types.ClearedGroup)(nil),
+			(*types.LockedGroup)(nil),
 		}
 
 		// Build query with selected fields
 		columns := fields.Columns()
 
 		// Try each model type until we find the group
-		for model, status := range modelTypes {
-			err := tx.NewSelect().
+		var found bool
+		for _, model := range models {
+			query := tx.NewSelect().
 				Model(model).
 				Column(columns...).
-				Where("id = ?", groupID).
-				For("UPDATE SKIP LOCKED").
-				Scan(ctx, model)
+				Where("id = ?", groupID)
+
+			// Add last_viewed check and row locking if reviewing
+			if review {
+				query.Where("last_viewed < NOW() - INTERVAL '5 minutes'")
+				query.For("UPDATE")
+			}
+
+			err := query.Scan(ctx, model)
 			if err != nil {
 				if errors.Is(err, sql.ErrNoRows) {
 					continue
 				}
 				r.logger.Error("Failed to get group by ID",
 					zap.Error(err),
-					zap.Uint64("groupID", groupID),
-					zap.String("status", string(status)))
+					zap.Uint64("groupID", groupID))
 				continue
 			}
 
-			now := time.Now()
-
-			// Update last viewed timestamp within the transaction
-			_, err = tx.NewUpdate().
-				Model(model).
-				Set("last_viewed = ?", now).
-				Where("id = ?", groupID).
-				Exec(ctx)
-			if err != nil {
-				return fmt.Errorf("failed to update last_viewed timestamp: %w (groupID=%d)", err, groupID)
-			}
-
-			// Extract the base Group data and additional fields
-			reviewGroup = &types.ReviewGroup{}
-			switch v := model.(type) {
+			// Set result based on model type
+			switch m := model.(type) {
 			case *types.FlaggedGroup:
-				reviewGroup.Group = v.Group
+				result.Group = m.Group
+				result.Status = types.GroupTypeFlagged
 			case *types.ConfirmedGroup:
-				reviewGroup.Group = v.Group
-				reviewGroup.VerifiedAt = v.VerifiedAt
+				result.Group = m.Group
+				result.VerifiedAt = m.VerifiedAt
+				result.Status = types.GroupTypeConfirmed
 			case *types.ClearedGroup:
-				reviewGroup.Group = v.Group
-				reviewGroup.ClearedAt = v.ClearedAt
+				result.Group = m.Group
+				result.ClearedAt = m.ClearedAt
+				result.Status = types.GroupTypeCleared
 			case *types.LockedGroup:
-				reviewGroup.Group = v.Group
-				reviewGroup.LockedAt = v.LockedAt
+				result.Group = m.Group
+				result.LockedAt = m.LockedAt
+				result.Status = types.GroupTypeLocked
+			default:
+				return fmt.Errorf("%w: %T", types.ErrUnsupportedModel, model)
 			}
 
-			reviewGroup.Status = status
-			reviewGroup.LastViewed = now
-			return nil
+			found = true
+
+			// Update last_viewed if reviewing
+			if review {
+				now := time.Now()
+				_, err = tx.NewUpdate().
+					Model(model).
+					Set("last_viewed = ?", now).
+					Where("id = ?", groupID).
+					Exec(ctx)
+				if err != nil {
+					return fmt.Errorf("failed to update last_viewed: %w", err)
+				}
+				result.LastViewed = now
+			}
+			break
 		}
 
-		return types.ErrGroupNotFound
+		if !found {
+			return types.ErrGroupNotFound
+		}
+
+		// Get reputation
+		var reputation types.GroupReputation
+		err := tx.NewSelect().
+			Model(&reputation).
+			Where("id = ?", groupID).
+			Scan(ctx)
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return fmt.Errorf("failed to get group reputation: %w", err)
+		}
+		result.Reputation = reputation.Reputation
+
+		return nil
 	})
 	if err != nil {
 		return nil, err
 	}
 
-	return reviewGroup, nil
+	return &result, nil
 }
 
 // GetGroupsByIDs retrieves specified group information for a list of group IDs.
@@ -371,55 +398,37 @@ func (r *GroupModel) GetGroupsByIDs(ctx context.Context, groupIDs []uint64, fiel
 	return groups, nil
 }
 
-// UpdateTrainingVotes updates the upvotes or downvotes count for a group in training mode.
 func (r *GroupModel) UpdateTrainingVotes(ctx context.Context, groupID uint64, isUpvote bool) error {
-	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
-		// Try to update votes in either flagged or confirmed table
-		if err := r.updateVotesInTable(ctx, tx, (*types.FlaggedGroup)(nil), groupID, isUpvote); err == nil {
-			return nil
+	return r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+		var reputation types.GroupReputation
+		err := tx.NewSelect().
+			Model(&reputation).
+			Where("id = ?", groupID).
+			For("UPDATE").
+			Scan(ctx)
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return err
 		}
-		return r.updateVotesInTable(ctx, tx, (*types.ConfirmedGroup)(nil), groupID, isUpvote)
-	})
-	if err != nil {
-		return fmt.Errorf(
-			"failed to update training votes: %w (groupID=%d, voteType=%s)",
-			err, groupID, map[bool]string{true: "upvote", false: "downvote"}[isUpvote],
-		)
-	}
 
-	return nil
-}
+		if isUpvote {
+			reputation.Upvotes++
+		} else {
+			reputation.Downvotes++
+		}
+		reputation.ID = groupID
+		reputation.Score = reputation.Upvotes - reputation.Downvotes
+		reputation.UpdatedAt = time.Now()
 
-// updateVotesInTable handles updating votes for a specific table type.
-func (r *GroupModel) updateVotesInTable(ctx context.Context, tx bun.Tx, model interface{}, groupID uint64, isUpvote bool) error {
-	// Get current vote counts
-	var upvotes, downvotes int
-	err := tx.NewSelect().
-		Model(model).
-		Column("upvotes", "downvotes").
-		Where("id = ?", groupID).
-		Scan(ctx, &upvotes, &downvotes)
-	if err != nil {
+		_, err = tx.NewInsert().
+			Model(&reputation).
+			On("CONFLICT (id) DO UPDATE").
+			Set("upvotes = EXCLUDED.upvotes").
+			Set("downvotes = EXCLUDED.downvotes").
+			Set("score = EXCLUDED.score").
+			Set("updated_at = EXCLUDED.updated_at").
+			Exec(ctx)
 		return err
-	}
-
-	// Update vote counts
-	if isUpvote {
-		upvotes++
-	} else {
-		downvotes++
-	}
-	reputation := upvotes - downvotes
-
-	// Save updated counts
-	_, err = tx.NewUpdate().
-		Model(model).
-		Set("upvotes = ?", upvotes).
-		Set("downvotes = ?", downvotes).
-		Set("reputation = ?", reputation).
-		Where("id = ?", groupID).
-		Exec(ctx)
-	return err
+	})
 }
 
 // GetGroupsToCheck finds groups that haven't been checked for locked status recently.
@@ -697,6 +706,28 @@ func (r *GroupModel) GetGroupToScan(ctx context.Context) (*types.Group, error) {
 	return group, nil
 }
 
+// CheckConfirmedGroups checks which groups from a list of IDs exist in any group table.
+// Returns a map of group IDs to their status (confirmed, flagged, cleared, locked).
+func (r *GroupModel) CheckConfirmedGroups(ctx context.Context, groupIDs []uint64) ([]uint64, error) {
+	var confirmedGroupIDs []uint64
+
+	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+		// Query confirmed groups
+		err := tx.NewSelect().
+			Model((*types.ConfirmedGroup)(nil)).
+			Column("id").
+			Where("id IN (?)", bun.In(groupIDs)).
+			Scan(ctx, &confirmedGroupIDs)
+		if err != nil {
+			return fmt.Errorf("failed to query confirmed groups: %w", err)
+		}
+
+		return nil
+	})
+
+	return confirmedGroupIDs, err
+}
+
 // GetGroupToReview finds a group to review based on the sort method and target mode.
 func (r *GroupModel) GetGroupToReview(ctx context.Context, sortBy types.ReviewSortBy, targetMode types.ReviewTargetMode) (*types.ReviewGroup, error) {
 	// Define models in priority order based on target mode
@@ -736,99 +767,94 @@ func (r *GroupModel) GetGroupToReview(ctx context.Context, sortBy types.ReviewSo
 	for _, model := range models {
 		result, err := r.getNextToReview(ctx, model, sortBy)
 		if err == nil {
-			return r.convertToReviewGroup(result)
+			return result, nil
+		}
+		if !errors.Is(err, sql.ErrNoRows) {
+			return nil, err
 		}
 	}
 
 	return nil, types.ErrNoGroupsToReview
 }
 
-// convertToReviewGroup converts any group type to a ReviewGroup.
-func (r *GroupModel) convertToReviewGroup(group interface{}) (*types.ReviewGroup, error) {
-	review := &types.ReviewGroup{}
-
-	switch g := group.(type) {
-	case *types.FlaggedGroup:
-		review.Group = g.Group
-		review.Status = types.GroupTypeFlagged
-	case *types.ConfirmedGroup:
-		review.Group = g.Group
-		review.VerifiedAt = g.VerifiedAt
-		review.Status = types.GroupTypeConfirmed
-	case *types.ClearedGroup:
-		review.Group = g.Group
-		review.ClearedAt = g.ClearedAt
-		review.Status = types.GroupTypeCleared
-	case *types.LockedGroup:
-		review.Group = g.Group
-		review.LockedAt = g.LockedAt
-		review.Status = types.GroupTypeLocked
-	default:
-		return nil, fmt.Errorf("%w: %T", types.ErrUnsupportedModel, group)
-	}
-
-	return review, nil
-}
-
 // getNextToReview handles the common logic for getting the next item to review.
-func (r *GroupModel) getNextToReview(ctx context.Context, model interface{}, sortBy types.ReviewSortBy) (interface{}, error) {
-	var result interface{}
+func (r *GroupModel) getNextToReview(ctx context.Context, model interface{}, sortBy types.ReviewSortBy) (*types.ReviewGroup, error) {
+	var result types.ReviewGroup
 	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
-		query := tx.NewSelect().
+		// Build subquery to get ID
+		subq := tx.NewSelect().
 			Model(model).
+			Column("id").
 			Where("last_viewed < NOW() - INTERVAL '5 minutes'")
 
-		// Apply sort order
+		// Apply sort order to subquery
 		switch sortBy {
 		case types.ReviewSortByConfidence:
-			query.Order("confidence DESC")
+			subq.Order("confidence DESC")
 		case types.ReviewSortByLastUpdated:
-			query.Order("last_updated ASC")
+			subq.Order("last_updated ASC")
 		case types.ReviewSortByReputation:
-			query.Order("reputation ASC")
+			subq.Join("LEFT JOIN group_reputations ON group_reputations.id = ?TableAlias.id").
+				OrderExpr("COALESCE(group_reputations.score, 0) ASC")
 		case types.ReviewSortByRandom:
-			query.OrderExpr("RANDOM()")
+			subq.OrderExpr("RANDOM()")
 		}
 
-		err := query.Limit(1).
-			For("UPDATE SKIP LOCKED").
+		subq.Limit(1)
+
+		// Main query to get the full record with FOR UPDATE
+		err := tx.NewSelect().
+			Model(model).
+			Where("id = (?)", subq).
+			For("UPDATE").
 			Scan(ctx)
 		if err != nil {
 			return err
 		}
 
-		// Update last_viewed based on model type
-		now := time.Now()
-		var id uint64
+		// Set result based on model type
 		switch m := model.(type) {
 		case *types.FlaggedGroup:
-			m.LastViewed = now
-			id = m.ID
-			result = m
+			result.Group = m.Group
+			result.Status = types.GroupTypeFlagged
 		case *types.ConfirmedGroup:
-			m.LastViewed = now
-			id = m.ID
-			result = m
+			result.Group = m.Group
+			result.VerifiedAt = m.VerifiedAt
+			result.Status = types.GroupTypeConfirmed
 		case *types.ClearedGroup:
-			m.LastViewed = now
-			id = m.ID
-			result = m
+			result.Group = m.Group
+			result.ClearedAt = m.ClearedAt
+			result.Status = types.GroupTypeCleared
 		case *types.LockedGroup:
-			m.LastViewed = now
-			id = m.ID
-			result = m
+			result.Group = m.Group
+			result.LockedAt = m.LockedAt
+			result.Status = types.GroupTypeLocked
 		default:
 			return fmt.Errorf("%w: %T", types.ErrUnsupportedModel, model)
 		}
 
+		// Get reputation
+		var reputation types.GroupReputation
+		err = tx.NewSelect().
+			Model(&reputation).
+			Where("id = ?", result.ID).
+			Scan(ctx)
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return fmt.Errorf("failed to get group reputation: %w", err)
+		}
+		result.Reputation = reputation.Reputation
+
+		// Update last_viewed
+		now := time.Now()
 		_, err = tx.NewUpdate().
 			Model(model).
 			Set("last_viewed = ?", now).
-			Where("id = ?", id).
+			Where("id = ?", result.ID).
 			Exec(ctx)
 		if err != nil {
 			return err
 		}
+		result.LastViewed = now
 
 		return nil
 	})
@@ -836,27 +862,5 @@ func (r *GroupModel) getNextToReview(ctx context.Context, model interface{}, sor
 		return nil, err
 	}
 
-	return result, nil
-}
-
-// CheckConfirmedGroups checks which groups from a list of IDs exist in any group table.
-// Returns a map of group IDs to their status (confirmed, flagged, cleared, locked).
-func (r *GroupModel) CheckConfirmedGroups(ctx context.Context, groupIDs []uint64) ([]uint64, error) {
-	var confirmedGroupIDs []uint64
-
-	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
-		// Query confirmed groups
-		err := tx.NewSelect().
-			Model((*types.ConfirmedGroup)(nil)).
-			Column("id").
-			Where("id IN (?)", bun.In(groupIDs)).
-			Scan(ctx, &confirmedGroupIDs)
-		if err != nil {
-			return fmt.Errorf("failed to query confirmed groups: %w", err)
-		}
-
-		return nil
-	})
-
-	return confirmedGroupIDs, err
+	return &result, nil
 }

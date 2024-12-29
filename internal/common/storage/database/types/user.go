@@ -56,9 +56,6 @@ type User struct {
 	LastViewed     time.Time               `bun:",notnull"   json:"lastViewed"`
 	LastPurgeCheck time.Time               `bun:",notnull"   json:"lastPurgeCheck"`
 	ThumbnailURL   string                  `bun:",notnull"   json:"thumbnailUrl"`
-	Upvotes        int32                   `bun:",notnull"   json:"upvotes"`
-	Downvotes      int32                   `bun:",notnull"   json:"downvotes"`
-	Reputation     int32                   `bun:",notnull"   json:"reputation"`
 }
 
 // FlaggedUser extends User to track users that need review.
@@ -91,10 +88,11 @@ type BannedUser struct {
 // ReviewUser combines all possible user states into a single structure for review.
 type ReviewUser struct {
 	User       `json:"user"`
-	VerifiedAt time.Time `json:"verifiedAt,omitempty"` // When user was confirmed
-	ClearedAt  time.Time `json:"clearedAt,omitempty"`  // When user was cleared
-	PurgedAt   time.Time `json:"purgedAt,omitempty"`   // When user was banned/purged
-	Status     UserType  `json:"status"`               // Current user status
+	VerifiedAt time.Time  `json:"verifiedAt,omitempty"`
+	ClearedAt  time.Time  `json:"clearedAt,omitempty"`
+	PurgedAt   time.Time  `json:"purgedAt,omitempty"`
+	Status     UserType   `json:"status"`
+	Reputation Reputation `json:"reputation"`
 }
 
 // UserFields represents the fields that can be requested when fetching users.
@@ -118,7 +116,7 @@ type UserFields struct {
 	// Statistics
 	Followers  bool // FollowerCount, FollowingCount
 	Confidence bool // AI confidence score
-	Reputation bool // Upvotes, Downvotes, Reputation
+	Reputation bool // Upvotes, Downvotes, Score
 
 	// All timestamps (LastScanned, LastUpdated, LastViewed, LastPurgeCheck)
 	Timestamps bool
@@ -164,9 +162,6 @@ func (f UserFields) Columns() []string {
 	if f.Confidence {
 		columns = append(columns, "confidence")
 	}
-	if f.Reputation {
-		columns = append(columns, "upvotes", "downvotes", "reputation")
-	}
 	if f.Timestamps {
 		columns = append(columns,
 			"last_scanned",
@@ -174,6 +169,9 @@ func (f UserFields) Columns() []string {
 			"last_viewed",
 			"last_purge_check",
 		)
+	}
+	if f.Reputation {
+		columns = append(columns, "upvotes", "downvotes", "score")
 	}
 
 	// Select all if no fields specified

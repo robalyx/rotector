@@ -24,9 +24,6 @@ type Group struct {
 	LastViewed     time.Time         `bun:",notnull"   json:"lastViewed"`
 	LastPurgeCheck time.Time         `bun:",notnull"   json:"lastPurgeCheck"`
 	ThumbnailURL   string            `bun:",notnull"   json:"thumbnailUrl"`
-	Upvotes        int               `bun:",notnull"   json:"upvotes"`
-	Downvotes      int               `bun:",notnull"   json:"downvotes"`
-	Reputation     int               `bun:",notnull"   json:"reputation"`
 }
 
 // FlaggedGroup extends Group to track groups that need review.
@@ -57,10 +54,11 @@ type LockedGroup struct {
 // ReviewGroup combines all possible group states into a single structure for review.
 type ReviewGroup struct {
 	Group      `json:"group"`
-	VerifiedAt time.Time `json:"verifiedAt,omitempty"` // When group was confirmed
-	ClearedAt  time.Time `json:"clearedAt,omitempty"`  // When group was cleared
-	LockedAt   time.Time `json:"lockedAt,omitempty"`   // When group was locked
-	Status     GroupType `json:"status"`               // Current group status
+	VerifiedAt time.Time  `json:"verifiedAt,omitempty"`
+	ClearedAt  time.Time  `json:"clearedAt,omitempty"`
+	LockedAt   time.Time  `json:"lockedAt,omitempty"`
+	Status     GroupType  `json:"status"`
+	Reputation Reputation `json:"reputation"`
 }
 
 // GroupType represents the different states a group can be in.
@@ -91,7 +89,7 @@ type GroupFields struct {
 
 	// Statistics
 	Confidence bool // AI confidence score
-	Reputation bool // Upvotes, Downvotes, Reputation
+	Reputation bool // Upvotes, Downvotes, Score
 
 	// All timestamps
 	Timestamps bool
@@ -123,7 +121,7 @@ func (f GroupFields) Columns() []string {
 		columns = append(columns, "confidence")
 	}
 	if f.Reputation {
-		columns = append(columns, "upvotes", "downvotes", "reputation")
+		columns = append(columns, "upvotes", "downvotes", "score")
 	}
 	if f.Timestamps {
 		columns = append(columns,

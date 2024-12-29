@@ -211,7 +211,7 @@ func (m *MainMenu) handleLookupGroupModalSubmit(event *events.ModalSubmitInterac
 	}
 
 	// Get group from database
-	group, err := m.layout.db.Groups().GetGroupByID(context.Background(), groupID, types.GroupFields{})
+	group, err := m.layout.db.Groups().GetGroupByID(context.Background(), groupID, types.GroupFields{}, true)
 	if err != nil {
 		if errors.Is(err, types.ErrGroupNotFound) {
 			m.layout.paginationManager.NavigateTo(event, s, m.page, "Failed to find group. It may not be in our database or is reserved.")

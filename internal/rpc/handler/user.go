@@ -71,9 +71,9 @@ func (h *UserHandler) GetUser(ctx context.Context, req *user.GetUserRequest) (*u
 		LastUpdated:    reviewUser.LastUpdated.Format(time.RFC3339),
 		LastViewed:     reviewUser.LastViewed.Format(time.RFC3339),
 		ThumbnailUrl:   reviewUser.ThumbnailURL,
-		Upvotes:        reviewUser.Upvotes,
-		Downvotes:      reviewUser.Downvotes,
-		Reputation:     reviewUser.Reputation,
+		Upvotes:        reviewUser.Reputation.Upvotes,
+		Downvotes:      reviewUser.Reputation.Downvotes,
+		Reputation:     reviewUser.Reputation.Score,
 	}
 
 	// Convert groups

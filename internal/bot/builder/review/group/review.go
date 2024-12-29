@@ -131,7 +131,7 @@ func (b *ReviewBuilder) buildReviewEmbed() *discord.EmbedBuilder {
 		status = "🔄 Unflagged Group"
 	}
 
-	header := fmt.Sprintf("%s • 👍 %d | 👎 %d", status, b.group.Upvotes, b.group.Downvotes)
+	header := fmt.Sprintf("%s • 👍 %d | 👎 %d", status, b.group.Reputation.Upvotes, b.group.Reputation.Downvotes)
 	lastUpdated := fmt.Sprintf("<t:%d:R>", b.group.LastUpdated.Unix())
 	confidence := fmt.Sprintf("%.2f", b.group.Confidence)
 	memberCount := strconv.FormatUint(b.groupInfo.MemberCount, 10)

@@ -315,7 +315,7 @@ func (m *ReviewMenu) handleConfirmGroup(event interfaces.CommonEvent, s *session
 			m.layout.paginationManager.RespondWithError(event, "Failed to update downvotes. Please try again.")
 			return
 		}
-		group.Downvotes++
+		group.Reputation.Downvotes++
 		actionMsg = "downvoted"
 
 		// Log the training downvote action
@@ -327,8 +327,8 @@ func (m *ReviewMenu) handleConfirmGroup(event interfaces.CommonEvent, s *session
 			ActivityType:      types.ActivityTypeGroupTrainingDownvote,
 			ActivityTimestamp: time.Now(),
 			Details: map[string]interface{}{
-				"upvotes":   group.Upvotes,
-				"downvotes": group.Downvotes,
+				"upvotes":   group.Reputation.Upvotes,
+				"downvotes": group.Reputation.Downvotes,
 			},
 		})
 	} else {
@@ -373,7 +373,7 @@ func (m *ReviewMenu) handleClearGroup(event interfaces.CommonEvent, s *session.S
 			m.layout.paginationManager.RespondWithError(event, "Failed to update upvotes. Please try again.")
 			return
 		}
-		group.Upvotes++
+		group.Reputation.Upvotes++
 		actionMsg = "upvoted"
 
 		// Log the training upvote action
@@ -385,8 +385,8 @@ func (m *ReviewMenu) handleClearGroup(event interfaces.CommonEvent, s *session.S
 			ActivityType:      types.ActivityTypeGroupTrainingUpvote,
 			ActivityTimestamp: time.Now(),
 			Details: map[string]interface{}{
-				"upvotes":   group.Upvotes,
-				"downvotes": group.Downvotes,
+				"upvotes":   group.Reputation.Upvotes,
+				"downvotes": group.Reputation.Downvotes,
 			},
 		})
 	} else {

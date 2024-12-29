@@ -133,7 +133,7 @@ func (b *ReviewBuilder) buildReviewBuilder() *discord.EmbedBuilder {
 		status = "🔄 Unflagged User"
 	}
 
-	header := fmt.Sprintf("%s • 👍 %d | 👎 %d", status, b.user.Upvotes, b.user.Downvotes)
+	header := fmt.Sprintf("%s • 👍 %d | 👎 %d", status, b.user.Reputation.Upvotes, b.user.Reputation.Downvotes)
 	createdAt := fmt.Sprintf("<t:%d:R>", b.user.CreatedAt.Unix())
 	lastUpdated := fmt.Sprintf("<t:%d:R>", b.user.LastUpdated.Unix())
 	confidence := fmt.Sprintf("%.2f", b.user.Confidence)

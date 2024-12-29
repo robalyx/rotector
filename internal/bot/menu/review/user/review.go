@@ -357,7 +357,6 @@ func (m *ReviewMenu) handleViewUserLogs(event *events.ComponentInteractionCreate
 func (m *ReviewMenu) handleConfirmUser(event interfaces.CommonEvent, s *session.Session) {
 	var user *types.ReviewUser
 	s.GetInterface(constants.SessionKeyTarget, &user)
-
 	var settings *types.UserSetting
 	s.GetInterface(constants.SessionKeyUserSettings, &settings)
 
@@ -369,7 +368,7 @@ func (m *ReviewMenu) handleConfirmUser(event interfaces.CommonEvent, s *session.
 			m.layout.paginationManager.RespondWithError(event, "Failed to update downvotes. Please try again.")
 			return
 		}
-		user.Downvotes++
+		user.Reputation.Downvotes++
 		actionMsg = "downvoted"
 
 		// Log the training downvote action
@@ -381,8 +380,8 @@ func (m *ReviewMenu) handleConfirmUser(event interfaces.CommonEvent, s *session.
 			ActivityType:      types.ActivityTypeUserTrainingDownvote,
 			ActivityTimestamp: time.Now(),
 			Details: map[string]interface{}{
-				"upvotes":   user.Upvotes,
-				"downvotes": user.Downvotes,
+				"upvotes":   user.Reputation.Upvotes,
+				"downvotes": user.Reputation.Downvotes,
 			},
 		})
 	} else {
@@ -434,7 +433,7 @@ func (m *ReviewMenu) handleClearUser(event interfaces.CommonEvent, s *session.Se
 			m.layout.paginationManager.RespondWithError(event, "Failed to update upvotes. Please try again.")
 			return
 		}
-		user.Upvotes++
+		user.Reputation.Upvotes++
 		actionMsg = "upvoted"
 
 		// Log the training upvote action
@@ -446,8 +445,8 @@ func (m *ReviewMenu) handleClearUser(event interfaces.CommonEvent, s *session.Se
 			ActivityType:      types.ActivityTypeUserTrainingUpvote,
 			ActivityTimestamp: time.Now(),
 			Details: map[string]interface{}{
-				"upvotes":   user.Upvotes,
-				"downvotes": user.Downvotes,
+				"upvotes":   user.Reputation.Upvotes,
+				"downvotes": user.Reputation.Downvotes,
 			},
 		})
 	} else {
