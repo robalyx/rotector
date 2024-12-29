@@ -117,6 +117,7 @@ func (m *ReviewMenu) handleSortOrderSelection(event *events.ComponentInteraction
 		m.layout.paginationManager.RespondWithError(event, "Failed to save sort order. Please try again.")
 		return
 	}
+	s.Set(constants.SessionKeyUserSettings, settings)
 
 	m.Show(event, s, "Changed sort order. Will take effect for the next group.")
 }
