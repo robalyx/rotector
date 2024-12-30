@@ -17,7 +17,7 @@ require (
 	github.com/jaxron/axonet/middleware/retry v0.0.0-20241224051239-2d7d6fad4b03
 	github.com/jaxron/axonet/middleware/singleflight v0.0.0-20241224051239-2d7d6fad4b03
 	github.com/jaxron/roapi.go v0.0.0-20241207095928-5d33fcc38cf1
-	github.com/redis/rueidis v1.0.51
+	github.com/redis/rueidis v1.0.52
 	github.com/spf13/cast v1.7.1
 	github.com/spf13/cobra v1.8.1
 	github.com/spf13/viper v1.19.0
