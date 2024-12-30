@@ -224,7 +224,6 @@ const (
 
 // Session keys.
 const (
-	SessionKeyUserID        = "userID"
 	SessionKeyMessageID     = "messageID"
 	SessionKeyTarget        = "target"
 	SessionKeyCurrentPage   = "currentPage"

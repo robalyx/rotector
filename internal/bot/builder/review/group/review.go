@@ -46,7 +46,7 @@ func NewReviewBuilder(s *session.Session, db *database.Client) *ReviewBuilder {
 		db:          db,
 		settings:    settings,
 		botSettings: botSettings,
-		userID:      s.GetUint64(constants.SessionKeyUserID),
+		userID:      s.UserID(),
 		group:       group,
 		groupInfo:   groupInfo,
 		memberIDs:   memberIDs,

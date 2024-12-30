@@ -122,7 +122,7 @@ func (m *Manager) GetOrCreateSession(ctx context.Context, userID snowflake.ID) (
 			return nil, fmt.Errorf("%w: %w", ErrFailedToParseSession, err)
 		}
 
-		session := NewSession(m.db, m.redis, key, sessionData, m.logger)
+		session := NewSession(m.db, m.redis, key, sessionData, m.logger, uint64(userID))
 		session.Set(constants.SessionKeyBotSettings, m.botSettings)
 		return session, nil
 	}
@@ -135,7 +135,7 @@ func (m *Manager) GetOrCreateSession(ctx context.Context, userID snowflake.ID) (
 
 	// Initialize new session with fresh settings
 	sessionData := make(map[string]interface{})
-	session := NewSession(m.db, m.redis, key, sessionData, m.logger)
+	session := NewSession(m.db, m.redis, key, sessionData, m.logger, uint64(userID))
 	session.Set(constants.SessionKeyUserSettings, userSettings)
 	session.Set(constants.SessionKeyBotSettings, m.botSettings)
 	return session, nil

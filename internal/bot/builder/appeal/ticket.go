@@ -41,8 +41,8 @@ func NewTicketBuilder(s *session.Session) *TicketBuilder {
 		botSettings: botSettings,
 		page:        s.GetInt(constants.SessionKeyPaginationPage),
 		totalPages:  s.GetInt(constants.SessionKeyTotalPages),
-		isReviewer:  botSettings.IsReviewer(s.GetUint64(constants.SessionKeyUserID)),
-		userID:      s.GetUint64(constants.SessionKeyUserID),
+		isReviewer:  botSettings.IsReviewer(s.UserID()),
+		userID:      s.UserID(),
 	}
 }
 

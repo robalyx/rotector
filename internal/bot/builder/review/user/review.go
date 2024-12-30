@@ -47,7 +47,7 @@ func NewReviewBuilder(s *session.Session, translator *translator.Translator, db 
 		db:             db,
 		settings:       settings,
 		botSettings:    botSettings,
-		userID:         s.GetUint64(constants.SessionKeyUserID),
+		userID:         s.UserID(),
 		user:           user,
 		translator:     translator,
 		flaggedFriends: flaggedFriends,

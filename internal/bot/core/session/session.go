@@ -23,17 +23,31 @@ type Session struct {
 	key    string
 	data   map[string]interface{}
 	logger *zap.Logger
+	userID uint64
 }
 
 // NewSession creates a new session for the given user.
-func NewSession(db *database.Client, redis rueidis.Client, key string, data map[string]interface{}, logger *zap.Logger) *Session {
+func NewSession(
+	db *database.Client,
+	redis rueidis.Client,
+	key string,
+	data map[string]interface{},
+	logger *zap.Logger,
+	userID uint64,
+) *Session {
 	return &Session{
 		db:     db,
 		redis:  redis,
 		key:    key,
 		data:   data,
 		logger: logger,
+		userID: userID,
 	}
+}
+
+// UserID returns the user ID associated with the session.
+func (s *Session) UserID() uint64 {
+	return s.userID
 }
 
 // Touch serializes the session data to JSON and updates the TTL in Redis to prevent expiration.

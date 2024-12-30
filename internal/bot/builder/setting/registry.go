@@ -358,8 +358,7 @@ func (r *Registry) createReviewModeSetting() Setting {
 		},
 		ValueUpdater: func(value string, us *types.UserSetting, bs *types.BotSetting, s *session.Session) error {
 			// Only allow changing to standard mode if user is a reviewer
-			userID := s.GetUint64(constants.SessionKeyUserID)
-			if value == string(types.StandardReviewMode) && !bs.IsReviewer(userID) {
+			if value == string(types.StandardReviewMode) && !bs.IsReviewer(s.UserID()) {
 				return ErrNotReviewer
 			}
 			us.ReviewMode = types.ReviewMode(value)

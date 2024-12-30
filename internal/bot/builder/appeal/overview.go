@@ -38,7 +38,7 @@ func NewOverviewBuilder(s *session.Session) *OverviewBuilder {
 		statusFilter: settings.AppealStatusFilter,
 		hasNextPage:  s.GetBool(constants.SessionKeyHasNextPage),
 		hasPrevPage:  s.GetBool(constants.SessionKeyHasPrevPage),
-		isReviewer:   botSettings.IsReviewer(s.GetUint64(constants.SessionKeyUserID)),
+		isReviewer:   botSettings.IsReviewer(s.UserID()),
 	}
 }
 

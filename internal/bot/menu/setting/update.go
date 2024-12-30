@@ -85,10 +85,8 @@ func (m *UpdateMenu) handleSettingChange(event *events.ComponentInteractionCreat
 
 // validateSettingValue validates a setting value.
 func (m *UpdateMenu) validateSettingValue(s *session.Session, setting setting.Setting, value string) error {
-	userID := s.GetUint64(constants.SessionKeyUserID)
-
 	for _, validator := range setting.Validators {
-		if err := validator(value, userID); err != nil {
+		if err := validator(value, s.UserID()); err != nil {
 			return err
 		}
 	}

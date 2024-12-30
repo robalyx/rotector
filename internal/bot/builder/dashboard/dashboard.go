@@ -59,7 +59,7 @@ func NewBuilder(s *session.Session, redisClient rueidis.Client) *Builder {
 
 	return &Builder{
 		botSettings:      botSettings,
-		userID:           s.GetUint64(constants.SessionKeyUserID),
+		userID:           s.UserID(),
 		userCounts:       userCounts,
 		groupCounts:      groupCounts,
 		userStatsBuffer:  userStatsBuffer,

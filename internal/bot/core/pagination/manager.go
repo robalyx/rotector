@@ -111,9 +111,6 @@ func (m *Manager) HandleInteraction(event interfaces.CommonEvent, s *session.Ses
 // NavigateTo updates the Discord message with new content and components for the target page.
 // It stores the page history in the session, allowing for nested navigation.
 func (m *Manager) NavigateTo(event interfaces.CommonEvent, s *session.Session, page *Page, content string) {
-	// Set the user ID in the session
-	s.Set(constants.SessionKeyUserID, uint64(event.User().ID))
-
 	// Update the message with the new content and components
 	messageUpdate := page.Message(s).
 		SetContent(utils.GetTimestampedSubtext(content)).

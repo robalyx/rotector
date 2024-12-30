@@ -62,7 +62,6 @@ func (m *MainMenu) Show(event interfaces.CommonEvent, s *session.Session, conten
 	}
 
 	// Store data in session
-	s.Set(constants.SessionKeyUserID, uint64(event.User().ID))
 	s.Set(constants.SessionKeyUserCounts, userCounts)
 	s.Set(constants.SessionKeyGroupCounts, groupCounts)
 	s.Set(constants.SessionKeyActiveUsers, activeUsers)
