@@ -48,9 +48,6 @@ func (r *GroupModel) SaveFlaggedGroups(ctx context.Context, flaggedGroups []*typ
 		Set("last_viewed = EXCLUDED.last_viewed").
 		Set("last_purge_check = EXCLUDED.last_purge_check").
 		Set("thumbnail_url = EXCLUDED.thumbnail_url").
-		Set("upvotes = EXCLUDED.upvotes").
-		Set("downvotes = EXCLUDED.downvotes").
-		Set("reputation = EXCLUDED.reputation").
 		Exec(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to save flagged groups: %w (groupCount=%d)", err, len(flaggedGroups))
@@ -81,9 +78,6 @@ func (r *GroupModel) ConfirmGroup(ctx context.Context, group *types.ReviewGroup)
 			Set("last_updated = EXCLUDED.last_updated").
 			Set("last_viewed = EXCLUDED.last_viewed").
 			Set("thumbnail_url = EXCLUDED.thumbnail_url").
-			Set("upvotes = EXCLUDED.upvotes").
-			Set("downvotes = EXCLUDED.downvotes").
-			Set("reputation = EXCLUDED.reputation").
 			Set("verified_at = EXCLUDED.verified_at").
 			Exec(ctx)
 		if err != nil {
@@ -133,9 +127,6 @@ func (r *GroupModel) ClearGroup(ctx context.Context, group *types.ReviewGroup) e
 			Set("last_updated = EXCLUDED.last_updated").
 			Set("last_viewed = EXCLUDED.last_viewed").
 			Set("thumbnail_url = EXCLUDED.thumbnail_url").
-			Set("upvotes = EXCLUDED.upvotes").
-			Set("downvotes = EXCLUDED.downvotes").
-			Set("reputation = EXCLUDED.reputation").
 			Set("cleared_at = EXCLUDED.cleared_at").
 			Exec(ctx)
 		if err != nil {

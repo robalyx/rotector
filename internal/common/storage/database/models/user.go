@@ -32,17 +32,42 @@ func NewUser(db *bun.DB, tracking *TrackingModel, logger *zap.Logger) *UserModel
 // For each user, it updates all fields if the user already exists,
 // or inserts a new record if they don't.
 func (r *UserModel) SaveFlaggedUsers(ctx context.Context, flaggedUsers map[uint64]*types.User) error {
-	// Convert map to slice for bulk insert
-	users := make([]*types.FlaggedUser, 0, len(flaggedUsers))
-	for _, user := range flaggedUsers {
-		users = append(users, &types.FlaggedUser{
+	// Get list of user IDs to check
+	userIDs := make([]uint64, 0, len(flaggedUsers))
+	for id := range flaggedUsers {
+		userIDs = append(userIDs, id)
+	}
+
+	// Check which users already exist in any table
+	existingUsers, err := r.CheckExistingUsers(ctx, userIDs)
+	if err != nil {
+		return fmt.Errorf("failed to check existing users: %w", err)
+	}
+
+	// Filter out users that are already in other tables
+	filteredUsers := make([]*types.FlaggedUser, 0)
+	for id, user := range flaggedUsers {
+		if status, exists := existingUsers[id]; exists {
+			// Skip if user is already in another table
+			r.logger.Debug("Skipping user that already exists",
+				zap.Uint64("userID", id),
+				zap.String("status", string(status)))
+			continue
+		}
+		filteredUsers = append(filteredUsers, &types.FlaggedUser{
 			User: *user,
 		})
 	}
 
-	// Perform bulk insert with upsert
-	_, err := r.db.NewInsert().
-		Model(&users).
+	// Check if there are any users left to save
+	if len(filteredUsers) == 0 {
+		r.logger.Debug("No new users to flag after filtering existing users")
+		return nil
+	}
+
+	// Perform bulk insert with upsert for remaining users
+	_, err = r.db.NewInsert().
+		Model(&filteredUsers).
 		On("CONFLICT (id) DO UPDATE").
 		Set("name = EXCLUDED.name").
 		Set("display_name = EXCLUDED.display_name").
@@ -62,16 +87,15 @@ func (r *UserModel) SaveFlaggedUsers(ctx context.Context, flaggedUsers map[uint6
 		Set("last_viewed = EXCLUDED.last_viewed").
 		Set("last_purge_check = EXCLUDED.last_purge_check").
 		Set("thumbnail_url = EXCLUDED.thumbnail_url").
-		Set("upvotes = EXCLUDED.upvotes").
-		Set("downvotes = EXCLUDED.downvotes").
-		Set("reputation = EXCLUDED.reputation").
 		Exec(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to save flagged users: %w (userCount=%d)", err, len(flaggedUsers))
+		return fmt.Errorf("failed to save flagged users: %w (userCount=%d)", err, len(filteredUsers))
 	}
 
 	r.logger.Debug("Successfully saved flagged users",
-		zap.Int("userCount", len(flaggedUsers)))
+		zap.Int("totalUsers", len(flaggedUsers)),
+		zap.Int("savedUsers", len(filteredUsers)),
+		zap.Int("skippedUsers", len(flaggedUsers)-len(filteredUsers)))
 
 	return nil
 }
@@ -106,9 +130,6 @@ func (r *UserModel) ConfirmUser(ctx context.Context, user *types.ReviewUser) err
 			Set("last_viewed = EXCLUDED.last_viewed").
 			Set("last_purge_check = EXCLUDED.last_purge_check").
 			Set("thumbnail_url = EXCLUDED.thumbnail_url").
-			Set("upvotes = EXCLUDED.upvotes").
-			Set("downvotes = EXCLUDED.downvotes").
-			Set("reputation = EXCLUDED.reputation").
 			Set("verified_at = EXCLUDED.verified_at").
 			Exec(ctx)
 		if err != nil {
@@ -167,9 +188,6 @@ func (r *UserModel) ClearUser(ctx context.Context, user *types.ReviewUser) error
 			Set("last_viewed = EXCLUDED.last_viewed").
 			Set("last_purge_check = EXCLUDED.last_purge_check").
 			Set("thumbnail_url = EXCLUDED.thumbnail_url").
-			Set("upvotes = EXCLUDED.upvotes").
-			Set("downvotes = EXCLUDED.downvotes").
-			Set("reputation = EXCLUDED.reputation").
 			Set("cleared_at = EXCLUDED.cleared_at").
 			Exec(ctx)
 		if err != nil {
@@ -295,32 +313,29 @@ func (r *UserModel) CheckExistingUsers(ctx context.Context, userIDs []uint64) (m
 		Status types.UserType
 	}
 
-	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
-		err := tx.NewSelect().Model((*types.ConfirmedUser)(nil)).
-			Column("id").
-			ColumnExpr("? AS status", types.UserTypeConfirmed).
-			Where("id IN (?)", bun.In(userIDs)).
-			Union(
-				tx.NewSelect().Model((*types.FlaggedUser)(nil)).
-					Column("id").
-					ColumnExpr("? AS status", types.UserTypeFlagged).
-					Where("id IN (?)", bun.In(userIDs)),
-			).
-			Union(
-				tx.NewSelect().Model((*types.ClearedUser)(nil)).
-					Column("id").
-					ColumnExpr("? AS status", types.UserTypeCleared).
-					Where("id IN (?)", bun.In(userIDs)),
-			).
-			Union(
-				tx.NewSelect().Model((*types.BannedUser)(nil)).
-					Column("id").
-					ColumnExpr("? AS status", types.UserTypeBanned).
-					Where("id IN (?)", bun.In(userIDs)),
-			).
-			Scan(ctx, &users)
-		return err
-	})
+	err := r.db.NewSelect().Model((*types.ConfirmedUser)(nil)).
+		Column("id").
+		ColumnExpr("? AS status", types.UserTypeConfirmed).
+		Where("id IN (?)", bun.In(userIDs)).
+		Union(
+			r.db.NewSelect().Model((*types.FlaggedUser)(nil)).
+				Column("id").
+				ColumnExpr("? AS status", types.UserTypeFlagged).
+				Where("id IN (?)", bun.In(userIDs)),
+		).
+		Union(
+			r.db.NewSelect().Model((*types.ClearedUser)(nil)).
+				Column("id").
+				ColumnExpr("? AS status", types.UserTypeCleared).
+				Where("id IN (?)", bun.In(userIDs)),
+		).
+		Union(
+			r.db.NewSelect().Model((*types.BannedUser)(nil)).
+				Column("id").
+				ColumnExpr("? AS status", types.UserTypeBanned).
+				Where("id IN (?)", bun.In(userIDs)),
+		).
+		Scan(ctx, &users)
 	if err != nil {
 		return nil, fmt.Errorf("failed to check existing users: %w", err)
 	}
