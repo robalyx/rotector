@@ -25,6 +25,7 @@ linters:
     - varnamelen # Not needed
     - nonamedreturns # Not needed
     - iface # Not needed
+    - gochecknoinits # Not needed
     - exportloopref # Deprecated
 
 linters-settings:
