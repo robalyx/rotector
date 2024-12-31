@@ -359,10 +359,10 @@ func (r *UserModel) GetUserByID(ctx context.Context, userID uint64, fields types
 	var result types.ReviewUser
 	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
 		models := []interface{}{
-			(*types.FlaggedUser)(nil),
-			(*types.ConfirmedUser)(nil),
-			(*types.ClearedUser)(nil),
-			(*types.BannedUser)(nil),
+			&types.FlaggedUser{},
+			&types.ConfirmedUser{},
+			&types.ClearedUser{},
+			&types.BannedUser{},
 		}
 
 		// Build query with selected fields
@@ -382,7 +382,7 @@ func (r *UserModel) GetUserByID(ctx context.Context, userID uint64, fields types
 				query.For("UPDATE")
 			}
 
-			err := query.Scan(ctx, model)
+			err := query.Scan(ctx)
 			if err != nil {
 				if errors.Is(err, sql.ErrNoRows) {
 					continue

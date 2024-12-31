@@ -189,10 +189,10 @@ func (r *GroupModel) GetGroupByID(ctx context.Context, groupID uint64, fields ty
 	var result types.ReviewGroup
 	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
 		models := []interface{}{
-			(*types.FlaggedGroup)(nil),
-			(*types.ConfirmedGroup)(nil),
-			(*types.ClearedGroup)(nil),
-			(*types.LockedGroup)(nil),
+			&types.FlaggedGroup{},
+			&types.ConfirmedGroup{},
+			&types.ClearedGroup{},
+			&types.LockedGroup{},
 		}
 
 		// Build query with selected fields
@@ -212,7 +212,7 @@ func (r *GroupModel) GetGroupByID(ctx context.Context, groupID uint64, fields ty
 				query.For("UPDATE")
 			}
 
-			err := query.Scan(ctx, model)
+			err := query.Scan(ctx)
 			if err != nil {
 				if errors.Is(err, sql.ErrNoRows) {
 					continue
