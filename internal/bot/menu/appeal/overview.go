@@ -239,8 +239,20 @@ func (m *OverviewMenu) handleCreateAppealModalSubmit(event *events.ModalSubmitIn
 		return
 	}
 
+	// Check if the user ID already has a pending appeal
+	exists, err := m.layout.db.Appeals().HasPendingAppealByUserID(context.Background(), userID)
+	if err != nil {
+		m.layout.logger.Error("Failed to check pending appeals for user", zap.Error(err))
+		m.layout.paginationManager.RespondWithError(event, "Failed to check pending appeals. Please try again.")
+		return
+	}
+	if exists {
+		m.layout.paginationManager.NavigateTo(event, s, m.page, "This user ID already has a pending appeal. Please wait for it to be reviewed.")
+		return
+	}
+
 	// Check if the Discord user already has a pending appeal
-	exists, err := m.layout.db.Appeals().HasPendingAppealByRequester(context.Background(), uint64(event.User().ID))
+	exists, err = m.layout.db.Appeals().HasPendingAppealByRequester(context.Background(), uint64(event.User().ID))
 	if err != nil {
 		m.layout.logger.Error("Failed to check pending appeals", zap.Error(err))
 		m.layout.paginationManager.RespondWithError(event, "Failed to check pending appeals. Please try again.")
