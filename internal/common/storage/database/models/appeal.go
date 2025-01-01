@@ -165,12 +165,13 @@ func (r *AppealModel) HasPendingAppealByRequester(ctx context.Context, requester
 	return exists, nil
 }
 
-// HasPreviousRejection checks if a user ID has any rejected appeals.
+// HasPreviousRejection checks if a user ID has any rejected appeals within the last 7 days.
 func (r *AppealModel) HasPreviousRejection(ctx context.Context, userID uint64) (bool, error) {
 	exists, err := r.db.NewSelect().
 		Model((*types.Appeal)(nil)).
 		Where("user_id = ?", userID).
 		Where("status = ?", types.AppealStatusRejected).
+		Where("reviewed_at > ?", time.Now().AddDate(0, 0, -7)).
 		Exists(ctx)
 	if err != nil {
 		return false, fmt.Errorf("failed to check previous rejections: %w (userID=%d)", err, userID)

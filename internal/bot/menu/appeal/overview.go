@@ -260,7 +260,7 @@ func (m *OverviewMenu) handleCreateAppealModalSubmit(event *events.ModalSubmitIn
 	}
 	if hasRejection {
 		m.layout.paginationManager.NavigateTo(event, s, m.page,
-			"This user ID has a previously rejected appeal. New appeals are not allowed.")
+			"This user ID has a rejected appeal in the last 7 days. Please wait before submitting a new appeal.")
 		return
 	}
 
