@@ -1,7 +1,6 @@
 package database
 
 import (
-	"context"
 	"database/sql"
 	"fmt"
 	"io"
@@ -9,13 +8,11 @@ import (
 
 	"github.com/bytedance/sonic"
 	"github.com/rotector/rotector/internal/common/config"
-	"github.com/rotector/rotector/internal/common/storage/database/migrations"
 	"github.com/rotector/rotector/internal/common/storage/database/models"
 	"github.com/uptrace/bun"
 	"github.com/uptrace/bun/dialect/pgdialect"
 	"github.com/uptrace/bun/driver/pgdriver"
 	"github.com/uptrace/bun/extra/bunjson"
-	"github.com/uptrace/bun/migrate"
 	"go.uber.org/zap"
 )
 
@@ -80,27 +77,6 @@ func NewConnection(config *config.PostgreSQL, logger *zap.Logger) (*Client, erro
 	db := bun.NewDB(sqldb, pgdialect.New())
 	db.AddQueryHook(NewHook(logger))
 
-	// Run migrations
-	migrator := migrate.NewMigrator(db, migrations.Migrations)
-	if err := migrator.Init(context.Background()); err != nil {
-		return nil, fmt.Errorf("failed to initialize migrator: %w", err)
-	}
-
-	if err := migrator.Lock(context.Background()); err != nil {
-		return nil, fmt.Errorf("failed to lock migrator: %w", err)
-	}
-	defer migrator.Unlock(context.Background()) //nolint:errcheck
-
-	group, err := migrator.Migrate(context.Background())
-	if err != nil {
-		return nil, fmt.Errorf("failed to run migrations: %w", err)
-	}
-	if !group.IsZero() {
-		logger.Info("Successfully ran database migrations",
-			zap.Int64("group", group.ID),
-			zap.Int("migrations", len(group.Migrations)))
-	}
-
 	// Create repositories
 	tracking := models.NewTracking(db, logger)
 	client := &Client{
@@ -115,7 +91,7 @@ func NewConnection(config *config.PostgreSQL, logger *zap.Logger) (*Client, erro
 		appeals:      models.NewAppeal(db, logger),
 	}
 
-	logger.Info("Database connection established and migrations completed")
+	logger.Info("Database connection established")
 	return client, nil
 }
 
