@@ -105,12 +105,6 @@ func (b *Builder) Build() *discord.MessageUpdateBuilder {
 		discord.NewStringSelectMenuOption("Review Groups", constants.StartGroupReviewButtonCustomID).
 			WithEmoji(discord.ComponentEmoji{Name: "🔍"}).
 			WithDescription("Start reviewing flagged groups"),
-		discord.NewStringSelectMenuOption("Lookup User", constants.LookupUserButtonCustomID).
-			WithEmoji(discord.ComponentEmoji{Name: "👤"}).
-			WithDescription("Look up a specific user by ID"),
-		discord.NewStringSelectMenuOption("Lookup Group", constants.LookupGroupButtonCustomID).
-			WithEmoji(discord.ComponentEmoji{Name: "👥"}).
-			WithDescription("Look up a specific group by ID"),
 		discord.NewStringSelectMenuOption("View Appeals", constants.AppealMenuButtonCustomID).
 			WithEmoji(discord.ComponentEmoji{Name: "⚖️"}).
 			WithDescription("View pending appeals"),
@@ -119,6 +113,12 @@ func (b *Builder) Build() *discord.MessageUpdateBuilder {
 	// Add reviewer-only options
 	if b.botSettings.IsReviewer(b.userID) {
 		options = append(options,
+			discord.NewStringSelectMenuOption("Review Specific User", constants.ReviewUserButtonCustomID).
+				WithEmoji(discord.ComponentEmoji{Name: "👤"}).
+				WithDescription("Review a specific user by ID"),
+			discord.NewStringSelectMenuOption("Review Specific Group", constants.ReviewGroupButtonCustomID).
+				WithEmoji(discord.ComponentEmoji{Name: "👥"}).
+				WithDescription("Review a specific group by ID"),
 			discord.NewStringSelectMenuOption("AI Chat Assistant", constants.ChatAssistantButtonCustomID).
 				WithEmoji(discord.ComponentEmoji{Name: "🤖"}).
 				WithDescription("Chat with AI about moderation topics"),

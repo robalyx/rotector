@@ -79,7 +79,7 @@ func (b *TicketBuilder) Build() *discord.MessageUpdateBuilder {
 		// Add reviewer buttons if user is a reviewer
 		if b.isReviewer {
 			actionButtons = append(actionButtons,
-				discord.NewPrimaryButton("Review User", constants.ReviewUserButtonCustomID),
+				discord.NewPrimaryButton("Review User", constants.AppealReviewUserButtonCustomID),
 				discord.NewSuccessButton("Accept", constants.AcceptAppealButtonCustomID),
 				discord.NewDangerButton("Reject", constants.RejectAppealButtonCustomID),
 			)
