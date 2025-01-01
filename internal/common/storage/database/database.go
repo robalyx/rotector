@@ -4,20 +4,42 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"io"
 	"time"
 
+	"github.com/bytedance/sonic"
 	"github.com/rotector/rotector/internal/common/config"
 	"github.com/rotector/rotector/internal/common/storage/database/migrations"
 	"github.com/rotector/rotector/internal/common/storage/database/models"
 	"github.com/uptrace/bun"
 	"github.com/uptrace/bun/dialect/pgdialect"
 	"github.com/uptrace/bun/driver/pgdriver"
+	"github.com/uptrace/bun/extra/bunjson"
 	"github.com/uptrace/bun/migrate"
 	"go.uber.org/zap"
 )
 
 // PartitionCount is the number of partitions for user and group tables.
 const PartitionCount = 8
+
+// sonicProvider is a JSON provider that uses Sonic for encoding and decoding.
+type sonicProvider struct{}
+
+func (sonicProvider) Marshal(v interface{}) ([]byte, error) {
+	return sonic.Marshal(v)
+}
+
+func (sonicProvider) Unmarshal(data []byte, v interface{}) error {
+	return sonic.Unmarshal(data, v)
+}
+
+func (sonicProvider) NewEncoder(w io.Writer) bunjson.Encoder {
+	return sonic.ConfigDefault.NewEncoder(w)
+}
+
+func (sonicProvider) NewDecoder(r io.Reader) bunjson.Decoder {
+	return sonic.ConfigDefault.NewDecoder(r)
+}
 
 // Client represents the database connection and operations.
 // It manages access to different repositories that handle specific data types.
@@ -50,6 +72,9 @@ func NewConnection(config *config.PostgreSQL, logger *zap.Logger) (*Client, erro
 	sqldb.SetMaxIdleConns(config.MaxIdleConns)
 	sqldb.SetConnMaxLifetime(time.Duration(config.MaxLifetime) * time.Minute)
 	sqldb.SetConnMaxIdleTime(time.Duration(config.MaxIdleTime) * time.Minute)
+
+	// Set Sonic as the JSON provider
+	bunjson.SetProvider(sonicProvider{})
 
 	// Create Bun db instance
 	db := bun.NewDB(sqldb, pgdialect.New())
