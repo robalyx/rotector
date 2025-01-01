@@ -355,10 +355,12 @@ func (m *ReviewMenu) handleViewUserLogs(event *events.ComponentInteractionCreate
 // handleConfirmUser moves a user to the confirmed state and logs the action.
 // After confirming, it loads a new user for review.
 func (m *ReviewMenu) handleConfirmUser(event interfaces.CommonEvent, s *session.Session) {
-	var user *types.ReviewUser
-	s.GetInterface(constants.SessionKeyTarget, &user)
 	var settings *types.UserSetting
 	s.GetInterface(constants.SessionKeyUserSettings, &settings)
+	var botSettings *types.BotSetting
+	s.GetInterface(constants.SessionKeyBotSettings, &botSettings)
+	var user *types.ReviewUser
+	s.GetInterface(constants.SessionKeyTarget, &user)
 
 	var actionMsg string
 	if settings.ReviewMode == types.TrainingReviewMode {
@@ -385,7 +387,14 @@ func (m *ReviewMenu) handleConfirmUser(event interfaces.CommonEvent, s *session.
 			},
 		})
 	} else {
-		// Standard mode - confirm user
+		// Standard mode - check permissions and confirm user
+		if !botSettings.IsReviewer(uint64(event.User().ID)) {
+			m.layout.logger.Error("Non-reviewer attempted to confirm user",
+				zap.Uint64("user_id", uint64(event.User().ID)))
+			m.layout.paginationManager.RespondWithError(event, "You do not have permission to confirm users.")
+			return
+		}
+
 		if err := m.layout.db.Users().ConfirmUser(context.Background(), user); err != nil {
 			m.layout.logger.Error("Failed to confirm user", zap.Error(err))
 			m.layout.paginationManager.RespondWithError(event, "Failed to confirm the user. Please try again.")
@@ -420,10 +429,12 @@ func (m *ReviewMenu) handleConfirmUser(event interfaces.CommonEvent, s *session.
 // handleClearUser removes a user from the flagged state and logs the action.
 // After clearing, it loads a new user for review.
 func (m *ReviewMenu) handleClearUser(event interfaces.CommonEvent, s *session.Session) {
-	var user *types.ReviewUser
-	s.GetInterface(constants.SessionKeyTarget, &user)
 	var settings *types.UserSetting
 	s.GetInterface(constants.SessionKeyUserSettings, &settings)
+	var botSettings *types.BotSetting
+	s.GetInterface(constants.SessionKeyBotSettings, &botSettings)
+	var user *types.ReviewUser
+	s.GetInterface(constants.SessionKeyTarget, &user)
 
 	var actionMsg string
 	if settings.ReviewMode == types.TrainingReviewMode {
@@ -450,7 +461,14 @@ func (m *ReviewMenu) handleClearUser(event interfaces.CommonEvent, s *session.Se
 			},
 		})
 	} else {
-		// Standard mode - clear user
+		// Standard mode - check permissions and clear user
+		if !botSettings.IsReviewer(uint64(event.User().ID)) {
+			m.layout.logger.Error("Non-reviewer attempted to clear user",
+				zap.Uint64("user_id", uint64(event.User().ID)))
+			m.layout.paginationManager.RespondWithError(event, "You do not have permission to clear users.")
+			return
+		}
+
 		if err := m.layout.db.Users().ClearUser(context.Background(), user); err != nil {
 			m.layout.logger.Error("Failed to clear user", zap.Error(err))
 			m.layout.paginationManager.RespondWithError(event, "Failed to clear the user. Please try again.")

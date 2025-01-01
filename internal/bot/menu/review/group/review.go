@@ -302,10 +302,12 @@ func (m *ReviewMenu) handleConfirmWithReason(event *events.ComponentInteractionC
 
 // handleConfirmGroup moves a group to the confirmed state and logs the action.
 func (m *ReviewMenu) handleConfirmGroup(event interfaces.CommonEvent, s *session.Session) {
-	var group *types.ReviewGroup
-	s.GetInterface(constants.SessionKeyGroupTarget, &group)
 	var settings *types.UserSetting
 	s.GetInterface(constants.SessionKeyUserSettings, &settings)
+	var botSettings *types.BotSetting
+	s.GetInterface(constants.SessionKeyBotSettings, &botSettings)
+	var group *types.ReviewGroup
+	s.GetInterface(constants.SessionKeyGroupTarget, &group)
 
 	var actionMsg string
 	if settings.ReviewMode == types.TrainingReviewMode {
@@ -332,7 +334,14 @@ func (m *ReviewMenu) handleConfirmGroup(event interfaces.CommonEvent, s *session
 			},
 		})
 	} else {
-		// Standard mode - confirm group
+		// Standard mode - check permissions and confirm group
+		if !botSettings.IsReviewer(uint64(event.User().ID)) {
+			m.layout.logger.Error("Non-reviewer attempted to confirm group",
+				zap.Uint64("user_id", uint64(event.User().ID)))
+			m.layout.paginationManager.RespondWithError(event, "You do not have permission to confirm groups.")
+			return
+		}
+
 		if err := m.layout.db.Groups().ConfirmGroup(context.Background(), group); err != nil {
 			m.layout.logger.Error("Failed to confirm group", zap.Error(err))
 			m.layout.paginationManager.RespondWithError(event, "Failed to confirm the group. Please try again.")
@@ -360,10 +369,12 @@ func (m *ReviewMenu) handleConfirmGroup(event interfaces.CommonEvent, s *session
 
 // handleClearGroup removes a group from the flagged state and logs the action.
 func (m *ReviewMenu) handleClearGroup(event interfaces.CommonEvent, s *session.Session) {
-	var group *types.ReviewGroup
-	s.GetInterface(constants.SessionKeyGroupTarget, &group)
 	var settings *types.UserSetting
 	s.GetInterface(constants.SessionKeyUserSettings, &settings)
+	var botSettings *types.BotSetting
+	s.GetInterface(constants.SessionKeyBotSettings, &botSettings)
+	var group *types.ReviewGroup
+	s.GetInterface(constants.SessionKeyGroupTarget, &group)
 
 	var actionMsg string
 	if settings.ReviewMode == types.TrainingReviewMode {
@@ -390,7 +401,14 @@ func (m *ReviewMenu) handleClearGroup(event interfaces.CommonEvent, s *session.S
 			},
 		})
 	} else {
-		// Standard mode - clear group
+		// Standard mode - check permissions and clear group
+		if !botSettings.IsReviewer(uint64(event.User().ID)) {
+			m.layout.logger.Error("Non-reviewer attempted to clear group",
+				zap.Uint64("user_id", uint64(event.User().ID)))
+			m.layout.paginationManager.RespondWithError(event, "You do not have permission to clear groups.")
+			return
+		}
+
 		if err := m.layout.db.Groups().ClearGroup(context.Background(), group); err != nil {
 			m.layout.logger.Error("Failed to clear group", zap.Error(err))
 			m.layout.paginationManager.RespondWithError(event, "Failed to clear the group. Please try again.")
