@@ -149,7 +149,10 @@ func (b *OverviewBuilder) buildComponents() []discord.ContainerComponent {
 			option := discord.NewStringSelectMenuOption(
 				fmt.Sprintf("%s Appeal #%d", statusEmoji, appeal.ID),
 				strconv.FormatInt(appeal.ID, 10),
-			).WithDescription(fmt.Sprintf("View appeal for User ID: %d", appeal.UserID))
+			).WithDescription(
+				"View appeal for User ID: " +
+					utils.CensorString(strconv.FormatUint(appeal.UserID, 10), b.settings.StreamerMode),
+			)
 
 			options = append(options, option)
 		}

@@ -132,8 +132,6 @@ func (m *ReviewMenu) handleActionSelection(event *events.ComponentInteractionCre
 	switch option {
 	case constants.GroupViewMembersButtonCustomID:
 		m.layout.membersMenu.Show(event, s, 0)
-	case constants.GroupViewLogsButtonCustomID:
-		m.handleViewGroupLogs(event, s)
 	case constants.OpenAIChatButtonCustomID:
 		if !settings.IsReviewer(userID) {
 			m.layout.logger.Error("Non-reviewer attempted to open AI chat", zap.Uint64("user_id", userID))
@@ -141,17 +139,41 @@ func (m *ReviewMenu) handleActionSelection(event *events.ComponentInteractionCre
 			return
 		}
 		m.handleOpenAIChat(event, s)
+	case constants.GroupViewLogsButtonCustomID:
+		if !settings.IsReviewer(userID) {
+			m.layout.logger.Error("Non-reviewer attempted to view logs", zap.Uint64("user_id", userID))
+			m.layout.paginationManager.RespondWithError(event, "You do not have permission to view activity logs.")
+			return
+		}
+		m.handleViewGroupLogs(event, s)
 	case constants.GroupConfirmWithReasonButtonCustomID:
 		if !settings.IsReviewer(userID) {
 			m.layout.logger.Error("Non-reviewer attempted to use confirm with reason", zap.Uint64("user_id", userID))
 			m.layout.paginationManager.RespondWithError(event, "You do not have permission to confirm groups with custom reasons.")
 			return
 		}
+		if s.GetBool(constants.SessionKeyIsLookupMode) {
+			m.layout.paginationManager.RespondWithError(event, "Cannot confirm groups in lookup mode.")
+			return
+		}
 		m.handleConfirmWithReason(event, s)
-	case constants.ReviewTargetModeOption:
-		m.layout.settingLayout.ShowUpdate(event, s, constants.UserSettingPrefix, constants.ReviewTargetModeOption)
 	case constants.ReviewModeOption:
+		if !settings.IsReviewer(userID) {
+			m.layout.logger.Error("Non-reviewer attempted to change review mode", zap.Uint64("user_id", userID))
+			m.layout.paginationManager.RespondWithError(event, "You do not have permission to change review mode.")
+			return
+		}
+		if s.GetBool(constants.SessionKeyIsLookupMode) {
+			m.layout.paginationManager.RespondWithError(event, "Cannot change review mode in lookup mode.")
+			return
+		}
 		m.layout.settingLayout.ShowUpdate(event, s, constants.UserSettingPrefix, constants.ReviewModeOption)
+	case constants.ReviewTargetModeOption:
+		if s.GetBool(constants.SessionKeyIsLookupMode) {
+			m.layout.paginationManager.RespondWithError(event, "Cannot change review target in lookup mode.")
+			return
+		}
+		m.layout.settingLayout.ShowUpdate(event, s, constants.UserSettingPrefix, constants.ReviewTargetModeOption)
 	}
 }
 
@@ -196,8 +218,19 @@ func (m *ReviewMenu) handleButton(event *events.ComponentInteractionCreate, s *s
 		return
 	}
 
+	// Prevent actions in lookup mode except for back button
+	isLookupMode := s.GetBool(constants.SessionKeyIsLookupMode)
+	if isLookupMode && customID != constants.BackButtonCustomID {
+		m.layout.paginationManager.RespondWithError(event, "Actions are not available in lookup mode.")
+		return
+	}
+
 	switch customID {
 	case constants.BackButtonCustomID:
+		if isLookupMode {
+			s.Delete(constants.SessionKeyGroupTarget)
+			s.Delete(constants.SessionKeyIsLookupMode)
+		}
 		m.layout.paginationManager.NavigateBack(event, s, "")
 	case constants.GroupConfirmButtonCustomID:
 		m.handleConfirmGroup(event, s)
@@ -211,6 +244,12 @@ func (m *ReviewMenu) handleButton(event *events.ComponentInteractionCreate, s *s
 // handleModal processes modal submissions.
 func (m *ReviewMenu) handleModal(event *events.ModalSubmitInteractionCreate, s *session.Session) {
 	if m.checkLastViewed(event, s) || m.checkCaptchaRequired(event, s) {
+		return
+	}
+
+	// Prevent actions in lookup mode
+	if s.GetBool(constants.SessionKeyIsLookupMode) {
+		m.layout.paginationManager.RespondWithError(event, "Actions are not available in lookup mode.")
 		return
 	}
 
@@ -522,8 +561,10 @@ func (m *ReviewMenu) checkLastViewed(event interfaces.CommonEvent, s *session.Se
 	var group *types.ReviewGroup
 	s.GetInterface(constants.SessionKeyGroupTarget, &group)
 
+	isLookupMode := s.GetBool(constants.SessionKeyIsLookupMode)
+
 	// Check if more than 5 minutes have passed since last view
-	if group != nil && time.Since(group.LastViewed) > 5*time.Minute {
+	if group != nil && time.Since(group.LastViewed) > 5*time.Minute && !isLookupMode {
 		// Clear current group and load new one
 		s.Delete(constants.SessionKeyGroupTarget)
 		m.Show(event, s, "Previous review timed out after 5 minutes of inactivity. Showing new group.")

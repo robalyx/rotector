@@ -28,6 +28,7 @@ type ReviewBuilder struct {
 	translator     *translator.Translator
 	flaggedFriends map[uint64]*types.ReviewUser
 	flaggedGroups  map[uint64]*types.ReviewGroup
+	isLookupMode   bool
 }
 
 // NewReviewBuilder creates a new review builder.
@@ -52,21 +53,26 @@ func NewReviewBuilder(s *session.Session, translator *translator.Translator, db 
 		translator:     translator,
 		flaggedFriends: flaggedFriends,
 		flaggedGroups:  flaggedGroups,
+		isLookupMode:   s.GetBool(constants.SessionKeyIsLookupMode),
 	}
 }
 
 // Build creates a Discord message with user information in an embed and adds
 // interactive components for reviewing the user.
 func (b *ReviewBuilder) Build() *discord.MessageUpdateBuilder {
+	builder := discord.NewMessageUpdateBuilder()
+
 	// Create embeds
-	modeEmbed := b.buildModeEmbed()
+	if !b.isLookupMode {
+		modeEmbed := b.buildModeEmbed()
+		builder.AddEmbeds(modeEmbed.Build())
+	}
 	reviewEmbed := b.buildReviewBuilder()
 
 	// Create components
 	components := b.buildComponents()
 
 	// Create builder and handle thumbnail
-	builder := discord.NewMessageUpdateBuilder()
 	if b.user.ThumbnailURL != "" && b.user.ThumbnailURL != fetcher.ThumbnailPlaceholder {
 		reviewEmbed.SetThumbnail(b.user.ThumbnailURL)
 	} else {
@@ -80,7 +86,7 @@ func (b *ReviewBuilder) Build() *discord.MessageUpdateBuilder {
 	}
 
 	return builder.
-		SetEmbeds(modeEmbed.Build(), reviewEmbed.Build()).
+		AddEmbeds(reviewEmbed.Build()).
 		AddContainerComponents(components...)
 }
 
@@ -216,7 +222,6 @@ func (b *ReviewBuilder) buildReviewBuilder() *discord.EmbedBuilder {
 
 // buildActionOptions creates the action menu options.
 func (b *ReviewBuilder) buildActionOptions() []discord.StringSelectMenuOption {
-	// Create base options that everyone can access
 	options := []discord.StringSelectMenuOption{
 		discord.NewStringSelectMenuOption("Open friends viewer", constants.OpenFriendsMenuButtonCustomID).
 			WithEmoji(discord.ComponentEmoji{Name: "👫"}).
@@ -227,31 +232,45 @@ func (b *ReviewBuilder) buildActionOptions() []discord.StringSelectMenuOption {
 		discord.NewStringSelectMenuOption("Open outfit viewer", constants.OpenOutfitsMenuButtonCustomID).
 			WithEmoji(discord.ComponentEmoji{Name: "👕"}).
 			WithDescription("View all user outfits"),
-		discord.NewStringSelectMenuOption("Change Review Target", constants.ReviewTargetModeOption).
-			WithEmoji(discord.ComponentEmoji{Name: "🎯"}).
-			WithDescription("Change what type of users to review"),
 	}
 
 	// Add reviewer-only options
 	if b.botSettings.IsReviewer(b.userID) {
+		// Options available in both normal and lookup mode
 		reviewerOptions := []discord.StringSelectMenuOption{
 			discord.NewStringSelectMenuOption("Ask AI about user", constants.OpenAIChatButtonCustomID).
 				WithEmoji(discord.ComponentEmoji{Name: "🤖"}).
 				WithDescription("Ask the AI questions about this user"),
-			discord.NewStringSelectMenuOption("Confirm with reason", constants.ConfirmWithReasonButtonCustomID).
-				WithEmoji(discord.ComponentEmoji{Name: "🚫"}).
-				WithDescription("Confirm the user with a custom reason"),
-			discord.NewStringSelectMenuOption("Recheck user", constants.RecheckButtonCustomID).
-				WithEmoji(discord.ComponentEmoji{Name: "🔄"}).
-				WithDescription("Add user to high priority queue for recheck"),
 			discord.NewStringSelectMenuOption("View user logs", constants.ViewUserLogsButtonCustomID).
 				WithEmoji(discord.ComponentEmoji{Name: "📋"}).
 				WithDescription("View activity logs for this user"),
-			discord.NewStringSelectMenuOption("Change Review Mode", constants.ReviewModeOption).
-				WithEmoji(discord.ComponentEmoji{Name: "🎓"}).
-				WithDescription("Switch between training and standard modes"),
+			discord.NewStringSelectMenuOption("Recheck user", constants.RecheckButtonCustomID).
+				WithEmoji(discord.ComponentEmoji{Name: "🔄"}).
+				WithDescription("Add user to high priority queue for recheck"),
 		}
 		options = append(options, reviewerOptions...)
+
+		// Options only available when not in lookup mode
+		if !b.isLookupMode {
+			modeSpecificOptions := []discord.StringSelectMenuOption{
+				discord.NewStringSelectMenuOption("Confirm with reason", constants.ConfirmWithReasonButtonCustomID).
+					WithEmoji(discord.ComponentEmoji{Name: "🚫"}).
+					WithDescription("Confirm the user with a custom reason"),
+				discord.NewStringSelectMenuOption("Change Review Mode", constants.ReviewModeOption).
+					WithEmoji(discord.ComponentEmoji{Name: "🎓"}).
+					WithDescription("Switch between training and standard modes"),
+			}
+			options = append(options, modeSpecificOptions...)
+		}
+	}
+
+	// Add default options for non-lookup mode
+	if !b.isLookupMode {
+		options = append(options,
+			discord.NewStringSelectMenuOption("Change Review Target", constants.ReviewTargetModeOption).
+				WithEmoji(discord.ComponentEmoji{Name: "🎯"}).
+				WithDescription("Change what type of users to review"),
+		)
 	}
 
 	return options
@@ -259,36 +278,52 @@ func (b *ReviewBuilder) buildActionOptions() []discord.StringSelectMenuOption {
 
 // buildComponents creates all interactive components for the review menu.
 func (b *ReviewBuilder) buildComponents() []discord.ContainerComponent {
-	return []discord.ContainerComponent{
-		// Sorting options menu
-		discord.NewActionRow(
-			discord.NewStringSelectMenu(constants.SortOrderSelectMenuCustomID, "Sorting",
-				discord.NewStringSelectMenuOption("Selected by random", string(types.ReviewSortByRandom)).
-					WithDefault(b.settings.UserDefaultSort == types.ReviewSortByRandom).
-					WithEmoji(discord.ComponentEmoji{Name: "🔀"}),
-				discord.NewStringSelectMenuOption("Selected by confidence", string(types.ReviewSortByConfidence)).
-					WithDefault(b.settings.UserDefaultSort == types.ReviewSortByConfidence).
-					WithEmoji(discord.ComponentEmoji{Name: "🔮"}),
-				discord.NewStringSelectMenuOption("Selected by last updated time", string(types.ReviewSortByLastUpdated)).
-					WithDefault(b.settings.UserDefaultSort == types.ReviewSortByLastUpdated).
-					WithEmoji(discord.ComponentEmoji{Name: "📅"}),
-				discord.NewStringSelectMenuOption("Selected by bad reputation", string(types.ReviewSortByReputation)).
-					WithDefault(b.settings.UserDefaultSort == types.ReviewSortByReputation).
-					WithEmoji(discord.ComponentEmoji{Name: "👎"}),
+	components := []discord.ContainerComponent{}
+
+	// Add sorting options if not in lookup mode
+	if !b.isLookupMode {
+		components = append(components,
+			discord.NewActionRow(
+				discord.NewStringSelectMenu(constants.SortOrderSelectMenuCustomID, "Sorting",
+					discord.NewStringSelectMenuOption("Selected by random", string(types.ReviewSortByRandom)).
+						WithDefault(b.settings.UserDefaultSort == types.ReviewSortByRandom).
+						WithEmoji(discord.ComponentEmoji{Name: "🔀"}),
+					discord.NewStringSelectMenuOption("Selected by confidence", string(types.ReviewSortByConfidence)).
+						WithDefault(b.settings.UserDefaultSort == types.ReviewSortByConfidence).
+						WithEmoji(discord.ComponentEmoji{Name: "🔮"}),
+					discord.NewStringSelectMenuOption("Selected by last updated time", string(types.ReviewSortByLastUpdated)).
+						WithDefault(b.settings.UserDefaultSort == types.ReviewSortByLastUpdated).
+						WithEmoji(discord.ComponentEmoji{Name: "📅"}),
+					discord.NewStringSelectMenuOption("Selected by bad reputation", string(types.ReviewSortByReputation)).
+						WithDefault(b.settings.UserDefaultSort == types.ReviewSortByReputation).
+						WithEmoji(discord.ComponentEmoji{Name: "👎"}),
+				),
 			),
-		),
-		// Action options menu
+		)
+	}
+
+	// Add action options menu
+	components = append(components,
 		discord.NewActionRow(
 			discord.NewStringSelectMenu(constants.ActionSelectMenuCustomID, "Actions", b.buildActionOptions()...),
 		),
-		// Quick action buttons
-		discord.NewActionRow(
+	)
+
+	// Add navigation/action buttons
+	if !b.isLookupMode {
+		components = append(components, discord.NewActionRow(
 			discord.NewSecondaryButton("◀️", constants.BackButtonCustomID),
 			discord.NewDangerButton(b.getConfirmButtonLabel(), constants.ConfirmButtonCustomID),
 			discord.NewSuccessButton(b.getClearButtonLabel(), constants.ClearButtonCustomID),
 			discord.NewSecondaryButton("Skip", constants.SkipButtonCustomID),
-		),
+		))
+	} else {
+		components = append(components, discord.NewActionRow(
+			discord.NewSecondaryButton("◀️", constants.BackButtonCustomID),
+		))
 	}
+
+	return components
 }
 
 // getConfirmButtonLabel returns the appropriate label for the confirm button based on review mode.

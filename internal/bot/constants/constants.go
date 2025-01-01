@@ -28,13 +28,15 @@ const (
 	AdminMenuButtonCustomID        = "admin_menu"
 	AppealMenuButtonCustomID       = "appeal_menu"
 	ChatAssistantButtonCustomID    = "chat_assistant"
+	LookupUserButtonCustomID       = "lookup_user" + ModalOpenSuffix
+	LookupGroupButtonCustomID      = "lookup_group" + ModalOpenSuffix
 	ReviewUserButtonCustomID       = "review_user" + ModalOpenSuffix
 	ReviewGroupButtonCustomID      = "review_group" + ModalOpenSuffix
 
-	ReviewUserModalCustomID  = "review_user_modal"
-	ReviewUserInputCustomID  = "review_user_input"
-	ReviewGroupModalCustomID = "review_group_modal"
-	ReviewGroupInputCustomID = "review_group_input"
+	LookupUserModalCustomID  = "lookup_user_modal"
+	LookupUserInputCustomID  = "lookup_user_input"
+	LookupGroupModalCustomID = "lookup_group_modal"
+	LookupGroupInputCustomID = "lookup_group_input"
 )
 
 // User Review Menu.
@@ -174,7 +176,7 @@ const (
 	AppealUserInputCustomID   = "appeal_user_input"
 	AppealReasonInputCustomID = "appeal_reason_input"
 
-	AppealReviewUserButtonCustomID = "appeal_review_user"
+	AppealLookupUserButtonCustomID = "appeal_lookup_user"
 	AcceptAppealButtonCustomID     = "accept_appeal" + ModalOpenSuffix
 	RejectAppealButtonCustomID     = "reject_appeal" + ModalOpenSuffix
 	AppealCloseButtonCustomID      = "appeal_close"
@@ -225,7 +227,6 @@ const (
 // Session keys.
 const (
 	SessionKeyMessageID     = "messageID"
-	SessionKeyTarget        = "target"
 	SessionKeyCurrentPage   = "currentPage"
 	SessionKeyPreviousPages = "previousPages"
 	SessionKeyImageBuffer   = "imageBuffer"
@@ -288,6 +289,10 @@ const (
 	SessionKeyQueueHighCount   = "queueHighCount"
 	SessionKeyQueueNormalCount = "queueNormalCount"
 	SessionKeyQueueLowCount    = "queueLowCount"
+
+	SessionKeyIsLookupMode = "isLookupMode"
+
+	SessionKeyTarget = "target"
 
 	SessionKeyGroupTarget      = "groupTarget"
 	SessionKeyGroupMemberIDs   = "groupMemberIDs"

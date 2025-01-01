@@ -86,6 +86,10 @@ func (m *MainMenu) handleSelectMenu(event *events.ComponentInteractionCreate, s 
 		m.layout.userReviewLayout.ShowReviewMenu(event, s)
 	case constants.StartGroupReviewButtonCustomID:
 		m.layout.groupReviewLayout.Show(event, s)
+	case constants.LookupUserButtonCustomID:
+		m.handleLookupUser(event, s, false)
+	case constants.LookupGroupButtonCustomID:
+		m.handleLookupGroup(event, s, false)
 	case constants.UserSettingsButtonCustomID:
 		m.layout.settingLayout.ShowUser(event, s)
 	case constants.ActivityBrowserButtonCustomID:
@@ -115,14 +119,14 @@ func (m *MainMenu) handleSelectMenu(event *events.ComponentInteractionCreate, s 
 			m.layout.paginationManager.RespondWithError(event, "You do not have permission to access lookup user.")
 			return
 		}
-		m.handleLookupUser(event)
+		m.handleLookupUser(event, s, true)
 	case constants.ReviewGroupButtonCustomID:
 		if !settings.IsReviewer(uint64(event.User().ID)) {
 			m.layout.logger.Error("User is not in reviewer list but somehow attempted to access lookup group", zap.Uint64("user_id", uint64(event.User().ID)))
 			m.layout.paginationManager.RespondWithError(event, "You do not have permission to access lookup group.")
 			return
 		}
-		m.handleLookupGroup(event)
+		m.handleLookupGroup(event, s, true)
 	case constants.AppealMenuButtonCustomID:
 		m.layout.appealLayout.ShowOverview(event, s, "")
 	case constants.AdminMenuButtonCustomID:
@@ -136,48 +140,50 @@ func (m *MainMenu) handleSelectMenu(event *events.ComponentInteractionCreate, s 
 	}
 }
 
-// handleLookupUser opens a modal for entering a specific user ID to review.
-func (m *MainMenu) handleLookupUser(event *events.ComponentInteractionCreate) {
+// handleLookupUser opens a modal for entering a specific user ID to lookup.
+func (m *MainMenu) handleLookupUser(event *events.ComponentInteractionCreate, s *session.Session, isReview bool) {
 	modal := discord.NewModalCreateBuilder().
-		SetCustomID(constants.ReviewUserModalCustomID).
+		SetCustomID(constants.LookupUserModalCustomID).
 		SetTitle("Lookup User").
 		AddActionRow(
-			discord.NewTextInput(constants.ReviewUserInputCustomID, discord.TextInputStyleShort, "User ID").
+			discord.NewTextInput(constants.LookupUserInputCustomID, discord.TextInputStyleShort, "User ID").
 				WithRequired(true).
 				WithPlaceholder("Enter the user ID to lookup..."),
 		).
 		Build()
-
 	if err := event.Modal(modal); err != nil {
 		m.layout.logger.Error("Failed to create user lookup modal", zap.Error(err))
 		m.layout.paginationManager.RespondWithError(event, "Failed to open the user lookup modal. Please try again.")
 	}
+
+	s.Set(constants.SessionKeyIsLookupMode, !isReview)
 }
 
-// handleLookupGroup opens a modal for entering a specific group ID to review.
-func (m *MainMenu) handleLookupGroup(event *events.ComponentInteractionCreate) {
+// handleLookupGroup opens a modal for entering a specific group ID to lookup.
+func (m *MainMenu) handleLookupGroup(event *events.ComponentInteractionCreate, s *session.Session, isReview bool) {
 	modal := discord.NewModalCreateBuilder().
-		SetCustomID(constants.ReviewGroupModalCustomID).
+		SetCustomID(constants.LookupGroupModalCustomID).
 		SetTitle("Lookup Group").
 		AddActionRow(
-			discord.NewTextInput(constants.ReviewGroupInputCustomID, discord.TextInputStyleShort, "Group ID").
+			discord.NewTextInput(constants.LookupGroupInputCustomID, discord.TextInputStyleShort, "Group ID").
 				WithRequired(true).
 				WithPlaceholder("Enter the group ID to lookup..."),
 		).
 		Build()
-
 	if err := event.Modal(modal); err != nil {
 		m.layout.logger.Error("Failed to create group lookup modal", zap.Error(err))
 		m.layout.paginationManager.RespondWithError(event, "Failed to open the group lookup modal. Please try again.")
 	}
+
+	s.Set(constants.SessionKeyIsLookupMode, !isReview)
 }
 
 // handleModal processes modal submissions.
 func (m *MainMenu) handleModal(event *events.ModalSubmitInteractionCreate, s *session.Session) {
 	switch event.Data.CustomID {
-	case constants.ReviewUserModalCustomID:
+	case constants.LookupUserModalCustomID:
 		m.handleLookupUserModalSubmit(event, s)
-	case constants.ReviewGroupModalCustomID:
+	case constants.LookupGroupModalCustomID:
 		m.handleLookupGroupModalSubmit(event, s)
 	}
 }
@@ -185,7 +191,7 @@ func (m *MainMenu) handleModal(event *events.ModalSubmitInteractionCreate, s *se
 // handleLookupUserModalSubmit processes the user ID input and opens the review menu.
 func (m *MainMenu) handleLookupUserModalSubmit(event *events.ModalSubmitInteractionCreate, s *session.Session) {
 	// Get and validate the user ID input
-	userIDStr := event.Data.Text(constants.ReviewUserInputCustomID)
+	userIDStr := event.Data.Text(constants.LookupUserInputCustomID)
 	userID, err := strconv.ParseUint(userIDStr, 10, 64)
 	if err != nil {
 		m.layout.paginationManager.NavigateTo(event, s, m.page, "Invalid user ID format. Please enter a valid number.")
@@ -193,7 +199,8 @@ func (m *MainMenu) handleLookupUserModalSubmit(event *events.ModalSubmitInteract
 	}
 
 	// Get user from database
-	user, canReview, err := m.layout.db.Users().GetUserByID(context.Background(), userID, types.UserFields{}, true)
+	isLookupMode := s.GetBool(constants.SessionKeyIsLookupMode)
+	user, canReview, err := m.layout.db.Users().GetUserByID(context.Background(), userID, types.UserFields{}, !isLookupMode)
 	if err != nil {
 		if errors.Is(err, types.ErrUserNotFound) {
 			m.layout.paginationManager.NavigateTo(event, s, m.page, "Failed to find user. They may not be in our database.")
@@ -217,7 +224,7 @@ func (m *MainMenu) handleLookupUserModalSubmit(event *events.ModalSubmitInteract
 // handleLookupGroupModalSubmit processes the group ID input and opens the review menu.
 func (m *MainMenu) handleLookupGroupModalSubmit(event *events.ModalSubmitInteractionCreate, s *session.Session) {
 	// Get and validate the group ID input
-	groupIDStr := event.Data.Text(constants.ReviewGroupInputCustomID)
+	groupIDStr := event.Data.Text(constants.LookupGroupInputCustomID)
 	groupID, err := strconv.ParseUint(groupIDStr, 10, 64)
 	if err != nil {
 		m.layout.paginationManager.NavigateTo(event, s, m.page, "Invalid group ID format. Please enter a valid number.")

@@ -129,8 +129,8 @@ func (m *TicketMenu) handleButton(event *events.ComponentInteractionCreate, s *s
 		m.layout.paginationManager.NavigateBack(event, s, "")
 	case constants.AppealRespondButtonCustomID:
 		m.handleRespond(event)
-	case constants.AppealReviewUserButtonCustomID:
-		m.handleReviewUser(event, s)
+	case constants.AppealLookupUserButtonCustomID:
+		m.handleLookupUser(event, s)
 	case constants.AcceptAppealButtonCustomID:
 		m.handleAcceptAppeal(event)
 	case constants.RejectAppealButtonCustomID:
@@ -159,13 +159,13 @@ func (m *TicketMenu) handleRespond(event *events.ComponentInteractionCreate) {
 	}
 }
 
-// handleReviewUser opens the review menu for the appealed user.
-func (m *TicketMenu) handleReviewUser(event *events.ComponentInteractionCreate, s *session.Session) {
+// handleLookupUser opens the review menu for the appealed user.
+func (m *TicketMenu) handleLookupUser(event *events.ComponentInteractionCreate, s *session.Session) {
 	var appeal *types.Appeal
 	s.GetInterface(constants.SessionKeyAppeal, &appeal)
 
 	// Get user from database
-	user, canReview, err := m.layout.db.Users().GetUserByID(context.Background(), appeal.UserID, types.UserFields{}, true)
+	user, _, err := m.layout.db.Users().GetUserByID(context.Background(), appeal.UserID, types.UserFields{}, false)
 	if err != nil {
 		if errors.Is(err, types.ErrUserNotFound) {
 			m.layout.paginationManager.NavigateTo(event, s, m.page, "Failed to find user. They may not be in our database.")
@@ -176,12 +176,8 @@ func (m *TicketMenu) handleReviewUser(event *events.ComponentInteractionCreate, 
 		return
 	}
 
-	if !canReview {
-		m.layout.paginationManager.NavigateTo(event, s, m.page, "User has been viewed recently. Please try again later.")
-		return
-	}
-
 	// Store user in session and show review menu
+	s.Set(constants.SessionKeyIsLookupMode, true)
 	s.Set(constants.SessionKeyTarget, user)
 	m.layout.userReviewLayout.ShowReviewMenu(event, s)
 

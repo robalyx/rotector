@@ -163,12 +163,12 @@ func (m *ReviewMenu) handleActionSelection(event *events.ComponentInteractionCre
 	userID := uint64(event.User().ID)
 
 	switch option {
-	case constants.OpenOutfitsMenuButtonCustomID:
-		m.layout.outfitsMenu.Show(event, s, 0)
 	case constants.OpenFriendsMenuButtonCustomID:
 		m.layout.friendsMenu.Show(event, s, 0)
 	case constants.OpenGroupsMenuButtonCustomID:
 		m.layout.groupsMenu.Show(event, s, 0)
+	case constants.OpenOutfitsMenuButtonCustomID:
+		m.layout.outfitsMenu.Show(event, s, 0)
 	case constants.OpenAIChatButtonCustomID:
 		if !settings.IsReviewer(userID) {
 			m.layout.logger.Error("Non-reviewer attempted to open AI chat", zap.Uint64("user_id", userID))
@@ -176,20 +176,6 @@ func (m *ReviewMenu) handleActionSelection(event *events.ComponentInteractionCre
 			return
 		}
 		m.handleOpenAIChat(event, s)
-	case constants.ConfirmWithReasonButtonCustomID:
-		if !settings.IsReviewer(userID) {
-			m.layout.logger.Error("Non-reviewer attempted to use confirm with reason", zap.Uint64("user_id", userID))
-			m.layout.paginationManager.RespondWithError(event, "You do not have permission to confirm users with custom reasons.")
-			return
-		}
-		m.handleConfirmWithReason(event, s)
-	case constants.RecheckButtonCustomID:
-		if !settings.IsReviewer(userID) {
-			m.layout.logger.Error("Non-reviewer attempted to recheck user", zap.Uint64("user_id", userID))
-			m.layout.paginationManager.RespondWithError(event, "You do not have permission to recheck users.")
-			return
-		}
-		m.handleRecheck(event, s)
 	case constants.ViewUserLogsButtonCustomID:
 		if !settings.IsReviewer(userID) {
 			m.layout.logger.Error("Non-reviewer attempted to view logs", zap.Uint64("user_id", userID))
@@ -197,19 +183,41 @@ func (m *ReviewMenu) handleActionSelection(event *events.ComponentInteractionCre
 			return
 		}
 		m.handleViewUserLogs(event, s)
-	case constants.SwitchReviewModeCustomID:
+	case constants.RecheckButtonCustomID:
 		if !settings.IsReviewer(userID) {
-			m.layout.logger.Error("Non-reviewer attempted to switch review mode", zap.Uint64("user_id", userID))
-			m.layout.paginationManager.RespondWithError(event, "You do not have permission to switch review modes.")
+			m.layout.logger.Error("Non-reviewer attempted to recheck user", zap.Uint64("user_id", userID))
+			m.layout.paginationManager.RespondWithError(event, "You do not have permission to recheck users.")
 			return
 		}
-		m.handleSwitchReviewMode(event, s)
-	case constants.SwitchTargetModeCustomID:
-		m.handleSwitchTargetMode(event, s)
-	case constants.ReviewTargetModeOption:
-		m.layout.settingLayout.ShowUpdate(event, s, constants.UserSettingPrefix, constants.ReviewTargetModeOption)
+		m.handleRecheck(event, s)
+	case constants.ConfirmWithReasonButtonCustomID:
+		if !settings.IsReviewer(userID) {
+			m.layout.logger.Error("Non-reviewer attempted to use confirm with reason", zap.Uint64("user_id", userID))
+			m.layout.paginationManager.RespondWithError(event, "You do not have permission to confirm users with custom reasons.")
+			return
+		}
+		if s.GetBool(constants.SessionKeyIsLookupMode) {
+			m.layout.paginationManager.RespondWithError(event, "Cannot confirm users in lookup mode.")
+			return
+		}
+		m.handleConfirmWithReason(event, s)
 	case constants.ReviewModeOption:
+		if !settings.IsReviewer(userID) {
+			m.layout.logger.Error("Non-reviewer attempted to change review mode", zap.Uint64("user_id", userID))
+			m.layout.paginationManager.RespondWithError(event, "You do not have permission to change review mode.")
+			return
+		}
+		if s.GetBool(constants.SessionKeyIsLookupMode) {
+			m.layout.paginationManager.RespondWithError(event, "Cannot change review mode in lookup mode.")
+			return
+		}
 		m.layout.settingLayout.ShowUpdate(event, s, constants.UserSettingPrefix, constants.ReviewModeOption)
+	case constants.ReviewTargetModeOption:
+		if s.GetBool(constants.SessionKeyIsLookupMode) {
+			m.layout.paginationManager.RespondWithError(event, "Cannot change review target in lookup mode.")
+			return
+		}
+		m.layout.settingLayout.ShowUpdate(event, s, constants.UserSettingPrefix, constants.ReviewTargetModeOption)
 	}
 }
 
@@ -219,8 +227,19 @@ func (m *ReviewMenu) handleButton(event *events.ComponentInteractionCreate, s *s
 		return
 	}
 
+	// Prevent actions in lookup mode except for back button
+	isLookupMode := s.GetBool(constants.SessionKeyIsLookupMode)
+	if isLookupMode && customID != constants.BackButtonCustomID {
+		m.layout.paginationManager.RespondWithError(event, "Actions are not available in lookup mode.")
+		return
+	}
+
 	switch customID {
 	case constants.BackButtonCustomID:
+		if isLookupMode {
+			s.Delete(constants.SessionKeyTarget)
+			s.Delete(constants.SessionKeyIsLookupMode)
+		}
 		m.layout.paginationManager.NavigateBack(event, s, "")
 	case constants.ConfirmButtonCustomID:
 		m.handleConfirmUser(event, s)
@@ -234,6 +253,12 @@ func (m *ReviewMenu) handleButton(event *events.ComponentInteractionCreate, s *s
 // handleModal handles the modal for the review menu.
 func (m *ReviewMenu) handleModal(event *events.ModalSubmitInteractionCreate, s *session.Session) {
 	if m.checkLastViewed(event, s) || m.checkCaptchaRequired(event, s) {
+		return
+	}
+
+	// Prevent actions in lookup mode
+	if s.GetBool(constants.SessionKeyIsLookupMode) {
+		m.layout.paginationManager.RespondWithError(event, "Actions are not available in lookup mode.")
 		return
 	}
 
@@ -652,54 +677,6 @@ func (m *ReviewMenu) handleConfirmWithReasonModalSubmit(event *events.ModalSubmi
 	})
 }
 
-// handleSwitchReviewMode switches between training and standard review modes.
-func (m *ReviewMenu) handleSwitchReviewMode(event *events.ComponentInteractionCreate, s *session.Session) {
-	var settings *types.UserSetting
-	s.GetInterface(constants.SessionKeyUserSettings, &settings)
-
-	// Toggle between modes
-	if settings.ReviewMode == types.TrainingReviewMode {
-		settings.ReviewMode = types.StandardReviewMode
-	} else {
-		settings.ReviewMode = types.TrainingReviewMode
-	}
-
-	// Save the updated setting
-	if err := m.layout.db.Settings().SaveUserSettings(context.Background(), settings); err != nil {
-		m.layout.logger.Error("Failed to save review mode setting", zap.Error(err))
-		m.layout.paginationManager.RespondWithError(event, "Failed to switch review mode. Please try again.")
-		return
-	}
-
-	// Update session and refresh the menu
-	s.Set(constants.SessionKeyUserSettings, settings)
-	m.Show(event, s, "Switched to "+settings.ReviewMode.FormatDisplay())
-}
-
-// handleSwitchTargetMode switches between reviewing flagged items and re-reviewing confirmed items.
-func (m *ReviewMenu) handleSwitchTargetMode(event *events.ComponentInteractionCreate, s *session.Session) {
-	var settings *types.UserSetting
-	s.GetInterface(constants.SessionKeyUserSettings, &settings)
-
-	// Toggle between modes
-	if settings.ReviewTargetMode == types.FlaggedReviewTarget {
-		settings.ReviewTargetMode = types.ConfirmedReviewTarget
-	} else {
-		settings.ReviewTargetMode = types.FlaggedReviewTarget
-	}
-
-	// Save the updated setting
-	if err := m.layout.db.Settings().SaveUserSettings(context.Background(), settings); err != nil {
-		m.layout.logger.Error("Failed to save target mode setting", zap.Error(err))
-		m.layout.paginationManager.RespondWithError(event, "Failed to switch target mode. Please try again.")
-		return
-	}
-
-	// Update session and refresh the menu
-	s.Set(constants.SessionKeyUserSettings, settings)
-	m.Show(event, s, "Switched to "+settings.ReviewTargetMode.FormatDisplay())
-}
-
 // fetchNewTarget gets a new user to review based on the current sort order.
 func (m *ReviewMenu) fetchNewTarget(s *session.Session, reviewerID uint64) (*types.ReviewUser, error) {
 	var settings *types.UserSetting
@@ -734,8 +711,10 @@ func (m *ReviewMenu) checkLastViewed(event interfaces.CommonEvent, s *session.Se
 	var user *types.ReviewUser
 	s.GetInterface(constants.SessionKeyTarget, &user)
 
+	isLookupMode := s.GetBool(constants.SessionKeyIsLookupMode)
+
 	// Check if more than 5 minutes have passed since last view
-	if user != nil && time.Since(user.LastViewed) > 5*time.Minute {
+	if user != nil && time.Since(user.LastViewed) > 5*time.Minute && !isLookupMode {
 		// Clear current user and load new one
 		s.Delete(constants.SessionKeyTarget)
 		m.Show(event, s, "Previous review timed out after 5 minutes of inactivity. Showing new user.")
