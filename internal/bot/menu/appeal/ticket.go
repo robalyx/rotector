@@ -374,7 +374,7 @@ func (m *TicketMenu) handleAcceptModalSubmit(event *events.ModalSubmitInteractio
 	}
 
 	// Refresh the ticket view
-	m.Show(event, s, appeal.ID, "Appeal accepted and user cleared.")
+	m.layout.ShowOverview(event, s, "Appeal accepted and user cleared.")
 
 	// Log the appeal acceptance
 	m.layout.db.UserActivity().Log(context.Background(), &types.UserActivityLog{
@@ -409,7 +409,7 @@ func (m *TicketMenu) handleRejectModalSubmit(event *events.ModalSubmitInteractio
 	}
 
 	// Refresh the ticket view
-	m.Show(event, s, appeal.ID, "Appeal rejected.")
+	m.layout.ShowOverview(event, s, "Appeal rejected.")
 
 	// Log the appeal rejection
 	m.layout.db.UserActivity().Log(context.Background(), &types.UserActivityLog{
