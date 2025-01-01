@@ -193,14 +193,19 @@ func (m *MainMenu) handleLookupUserModalSubmit(event *events.ModalSubmitInteract
 	}
 
 	// Get user from database
-	user, err := m.layout.db.Users().GetUserByID(context.Background(), userID, types.UserFields{}, true)
+	user, canReview, err := m.layout.db.Users().GetUserByID(context.Background(), userID, types.UserFields{}, true)
 	if err != nil {
 		if errors.Is(err, types.ErrUserNotFound) {
-			m.layout.paginationManager.NavigateTo(event, s, m.page, "Failed to find user. They may not be in our database or is reserved.")
+			m.layout.paginationManager.NavigateTo(event, s, m.page, "Failed to find user. They may not be in our database.")
 			return
 		}
 		m.layout.logger.Error("Failed to fetch user", zap.Error(err))
 		m.layout.paginationManager.RespondWithError(event, "Failed to fetch user for review. Please try again.")
+		return
+	}
+
+	if !canReview {
+		m.layout.paginationManager.NavigateTo(event, s, m.page, "User has been viewed recently. Please try again later.")
 		return
 	}
 
@@ -212,7 +217,7 @@ func (m *MainMenu) handleLookupUserModalSubmit(event *events.ModalSubmitInteract
 // handleLookupGroupModalSubmit processes the group ID input and opens the review menu.
 func (m *MainMenu) handleLookupGroupModalSubmit(event *events.ModalSubmitInteractionCreate, s *session.Session) {
 	// Get and validate the group ID input
-	groupIDStr := event.Data.Text(constants.ReviewSpecificGroupInputCustomID)
+	groupIDStr := event.Data.Text(constants.ReviewGroupInputCustomID)
 	groupID, err := strconv.ParseUint(groupIDStr, 10, 64)
 	if err != nil {
 		m.layout.paginationManager.NavigateTo(event, s, m.page, "Invalid group ID format. Please enter a valid number.")
@@ -220,14 +225,19 @@ func (m *MainMenu) handleLookupGroupModalSubmit(event *events.ModalSubmitInterac
 	}
 
 	// Get group from database
-	group, err := m.layout.db.Groups().GetGroupByID(context.Background(), groupID, types.GroupFields{}, true)
+	group, canReview, err := m.layout.db.Groups().GetGroupByID(context.Background(), groupID, types.GroupFields{}, true)
 	if err != nil {
 		if errors.Is(err, types.ErrGroupNotFound) {
-			m.layout.paginationManager.NavigateTo(event, s, m.page, "Failed to find group. It may not be in our database or is reserved.")
+			m.layout.paginationManager.NavigateTo(event, s, m.page, "Failed to find group. It may not be in our database.")
 			return
 		}
 		m.layout.logger.Error("Failed to fetch group", zap.Error(err))
 		m.layout.paginationManager.RespondWithError(event, "Failed to fetch group for review. Please try again.")
+		return
+	}
+
+	if !canReview {
+		m.layout.paginationManager.NavigateTo(event, s, m.page, "Group has been viewed recently. Please try again later.")
 		return
 	}
 

@@ -62,7 +62,7 @@ func (m *TicketMenu) Show(event interfaces.CommonEvent, s *session.Session, appe
 	// If appeal is pending, check if user's status has changed
 	if appeal.Status == types.AppealStatusPending { //nolint:nestif
 		// Get current user status
-		user, err := m.layout.db.Users().GetUserByID(context.Background(), appeal.UserID, types.UserFields{Basic: true}, false)
+		user, _, err := m.layout.db.Users().GetUserByID(context.Background(), appeal.UserID, types.UserFields{Basic: true}, false)
 		if err != nil {
 			if !errors.Is(err, types.ErrUserNotFound) {
 				m.layout.logger.Error("Failed to get user status", zap.Error(err))
@@ -165,14 +165,19 @@ func (m *TicketMenu) handleReviewUser(event *events.ComponentInteractionCreate, 
 	s.GetInterface(constants.SessionKeyAppeal, &appeal)
 
 	// Get user from database
-	user, err := m.layout.db.Users().GetUserByID(context.Background(), appeal.UserID, types.UserFields{}, true)
+	user, canReview, err := m.layout.db.Users().GetUserByID(context.Background(), appeal.UserID, types.UserFields{}, true)
 	if err != nil {
 		if errors.Is(err, types.ErrUserNotFound) {
-			m.layout.paginationManager.NavigateTo(event, s, m.page, "Failed to find user. They may not be in our database or is reserved.")
+			m.layout.paginationManager.NavigateTo(event, s, m.page, "Failed to find user. They may not be in our database.")
 			return
 		}
 		m.layout.logger.Error("Failed to fetch user for review", zap.Error(err))
 		m.layout.paginationManager.RespondWithError(event, "Failed to fetch user for review. Please try again.")
+		return
+	}
+
+	if !canReview {
+		m.layout.paginationManager.NavigateTo(event, s, m.page, "User has been viewed recently. Please try again later.")
 		return
 	}
 
@@ -346,7 +351,7 @@ func (m *TicketMenu) handleAcceptModalSubmit(event *events.ModalSubmitInteractio
 	}
 
 	// Get user to clear
-	user, err := m.layout.db.Users().GetUserByID(context.Background(), appeal.UserID, types.UserFields{Basic: true}, false)
+	user, _, err := m.layout.db.Users().GetUserByID(context.Background(), appeal.UserID, types.UserFields{Basic: true}, false)
 	if err != nil {
 		if errors.Is(err, types.ErrUserNotFound) {
 			m.layout.paginationManager.NavigateTo(event, s, m.page, "Failed to find user. They may no longer exist in our database.")

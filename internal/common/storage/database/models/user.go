@@ -353,10 +353,11 @@ func (r *UserModel) CheckExistingUsers(ctx context.Context, userIDs []uint64) (m
 }
 
 // GetUserByID retrieves a user by their ID from any of the user tables.
-// If review is true, it ensures the user hasn't been viewed in the last 5 minutes
-// and updates their last_viewed timestamp.
-func (r *UserModel) GetUserByID(ctx context.Context, userID uint64, fields types.UserFields, review bool) (*types.ReviewUser, error) {
+// Returns the user and a boolean indicating if they can be reviewed.
+func (r *UserModel) GetUserByID(ctx context.Context, userID uint64, fields types.UserFields, updateLastViewed bool) (*types.ReviewUser, bool, error) {
 	var result types.ReviewUser
+	var canReview bool
+
 	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
 		models := []interface{}{
 			&types.FlaggedUser{},
@@ -376,9 +377,8 @@ func (r *UserModel) GetUserByID(ctx context.Context, userID uint64, fields types
 				Column(columns...).
 				Where("id = ?", userID)
 
-			// Add last_viewed check and row locking if reviewing
-			if review {
-				query.Where("last_viewed < NOW() - INTERVAL '5 minutes'")
+			// Add row locking if updating last_viewed
+			if updateLastViewed {
 				query.For("UPDATE")
 			}
 
@@ -416,8 +416,11 @@ func (r *UserModel) GetUserByID(ctx context.Context, userID uint64, fields types
 
 			found = true
 
-			// Update last_viewed if reviewing
-			if review {
+			// Check if user can be reviewed
+			canReview = time.Since(result.LastViewed) > 5*time.Minute
+
+			// Update last_viewed if requested
+			if canReview && updateLastViewed {
 				now := time.Now()
 				_, err = tx.NewUpdate().
 					Model(model).
@@ -450,10 +453,10 @@ func (r *UserModel) GetUserByID(ctx context.Context, userID uint64, fields types
 		return nil
 	})
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 
-	return &result, nil
+	return &result, canReview, nil
 }
 
 // GetUsersByIDs retrieves specified user information for a list of user IDs.

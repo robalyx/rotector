@@ -257,7 +257,6 @@ func (a *UserAnalyzer) ProcessUsers(userInfos []*fetcher.Info) (map[uint64]*type
 		return nil, nil, fmt.Errorf("%w: %w", ErrModelResponse, err)
 	}
 
-	// Use the parsed flaggedUsers directly
 	a.logger.Info("Received AI response",
 		zap.Int("totalUsers", len(userInfos)),
 		zap.Int("flaggedUsers", len(flaggedUsers.Users)))

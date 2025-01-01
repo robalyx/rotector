@@ -27,7 +27,7 @@ func NewUserHandler(db *database.Client, logger *zap.Logger) *UserHandler {
 // GetUser handles the GetUser RPC method.
 func (h *UserHandler) GetUser(ctx context.Context, req *user.GetUserRequest) (*user.GetUserResponse, error) {
 	// Get full user information
-	reviewUser, err := h.db.Users().GetUserByID(ctx, req.GetUserId(), types.UserFields{}, true)
+	reviewUser, _, err := h.db.Users().GetUserByID(ctx, req.GetUserId(), types.UserFields{}, false)
 	if err != nil {
 		h.logger.Error("Failed to get user information", zap.Error(err))
 		return nil, err

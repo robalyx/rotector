@@ -183,10 +183,11 @@ func (r *GroupModel) GetClearedGroupsCount(ctx context.Context) (int, error) {
 }
 
 // GetGroupByID retrieves a group by its ID from any of the group tables.
-// If review is true, it ensures the group hasn't been viewed in the last 5 minutes
-// and updates their last_viewed timestamp.
-func (r *GroupModel) GetGroupByID(ctx context.Context, groupID uint64, fields types.GroupFields, review bool) (*types.ReviewGroup, error) {
+// Returns the group and a boolean indicating if it can be reviewed.
+func (r *GroupModel) GetGroupByID(ctx context.Context, groupID uint64, fields types.GroupFields, updateLastViewed bool) (*types.ReviewGroup, bool, error) {
 	var result types.ReviewGroup
+	var canReview bool
+
 	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
 		models := []interface{}{
 			&types.FlaggedGroup{},
@@ -206,9 +207,8 @@ func (r *GroupModel) GetGroupByID(ctx context.Context, groupID uint64, fields ty
 				Column(columns...).
 				Where("id = ?", groupID)
 
-			// Add last_viewed check and row locking if reviewing
-			if review {
-				query.Where("last_viewed < NOW() - INTERVAL '5 minutes'")
+			// Add row locking if updating last_viewed
+			if updateLastViewed {
 				query.For("UPDATE")
 			}
 
@@ -246,8 +246,11 @@ func (r *GroupModel) GetGroupByID(ctx context.Context, groupID uint64, fields ty
 
 			found = true
 
-			// Update last_viewed if reviewing
-			if review {
+			// Check if group can be reviewed
+			canReview = time.Since(result.LastViewed) > 5*time.Minute
+
+			// Update last_viewed if requested
+			if canReview && updateLastViewed {
 				now := time.Now()
 				_, err = tx.NewUpdate().
 					Model(model).
@@ -280,10 +283,10 @@ func (r *GroupModel) GetGroupByID(ctx context.Context, groupID uint64, fields ty
 		return nil
 	})
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 
-	return &result, nil
+	return &result, canReview, nil
 }
 
 // GetGroupsByIDs retrieves specified group information for a list of group IDs.
