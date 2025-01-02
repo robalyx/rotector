@@ -19,14 +19,16 @@
 
 <p align="center">
   <em>When Roblox moderators dream of superpowers, they dream of <b>Rotector</b>. A powerful application built with <a href="https://go.dev/">Go</a> that uses AI and smart algorithms to find inappropriate Roblox accounts.</em>
-  <br><br>
-  🚀 <strong>Powered by modern technologies.</strong>
 </p>
 
 ---
 
 > [!IMPORTANT]
-> This project is currently in an **ALPHA** state with frequent breaking changes expected. Issues are currently disabled as the team focuses on implementing core features. This is a **community-driven initiative** and is not affiliated with, endorsed by, or sponsored by Roblox Corporation. More details in the [Disclaimer](#%EF%B8%8F-disclaimer) section.
+> This project is currently in an **ALPHA** state with frequent breaking changes - **do not use this in production yet**. This is a **community-driven initiative** and is not affiliated with, endorsed by, or sponsored by Roblox Corporation. More details in the [Disclaimer](#%EF%B8%8F-disclaimer) section.
+
+<p align="center">
+  👀 <strong>beta is coming...</strong>
+</p>
 
 ---
 
@@ -56,8 +58,10 @@
 |                      <p align="center"><img src="assets/gif/training_mode.gif" width="450"></p><p align="center">Non-official moderators in the community can participate by upvoting/downvoting based on whether they think an account breaks the rules, helping to point out accounts that need urgent review.</p>                      |            <p align="center"><img src="assets/gif/review_mode.gif" width="450"></p><p align="center">Moderators can switch between Standard Mode (ban/clear) and Review mode (downvote/upvote), and also switch between reviewing Flagged and Confirmed users.</p>            |
 |                                                                                                                                                             User Queue System                                                                                                                                                             |                                                                                                                                 Recheck Users                                                                                                                                 |
 |                                                  <p align="center"><img src="assets/gif/user_queue.gif" width="450"></p><p align="center">Want to manually check a specific user? Users can be added to priority queues for processing by workers to check for potential violations.</p>                                                  |                                  <p align="center"><img src="assets/gif/recheck_users.gif" width="450"></p><p align="center">Users can be rechecked if analysis is wrong or the user information is outdated right from the review menu.</p>                                  |
-|                                                                                                                                                         Live Statistics Dashboard                                                                                                                                                         |                                                                                                                           Performant Infrastructure                                                                                                                           |
-|                             <p align="center"><img src="assets/gif/dashboard.gif" width="450"></p><p align="center">The dashboard displays live hourly statistics showing an AI-generated analysis message, active reviewers, active workers, and various statistics for real-time performance tracking.</p>                              |            <p align="center"><img src="assets/gif/performance.gif" width="450"></p><p align="center">Engineered with cutting-edge technologies and sophisticated optimization techniques, delivering sub-second response times and seamless user experiences.</p>             |
+|                                                                                                                                                               Appeal System                                                                                                                                                               |                                                                                                                               User/Group Lookup                                                                                                                               |
+|          <p align="center"><img src="assets/gif/appeal_system.gif" width="450"></p><p align="center">Users can appeal flagged accounts through an intuitive ticket system. The automated verification process ensures legitimate appeals, and moderators can efficiently process appeals with simple accept/reject actions.</p>           |            <p align="center"><img src="assets/gif/lookup_system.gif" width="450"></p><p align="center">Moderators can quickly look up and review specific users or groups by providing their ID/UUID, allowing for targeted investigation of flagged accounts.</p>            |
+|                                                                                                                                                         Live Statistics Dashboard                                                                                                                                                         |                                                                                                                            AI Moderation Assistant                                                                                                                            |
+|                             <p align="center"><img src="assets/gif/dashboard.gif" width="450"></p><p align="center">The dashboard displays live hourly statistics showing an AI-generated analysis message, active reviewers, active workers, and various statistics for real-time performance tracking.</p>                              |                      <p align="center"><img src="assets/gif/ai_chat.gif" width="450"></p><p align="center">Moderators can use an AI assistant to get guidance on moderation decisions, analyze user behavior patterns, and receive recommendations.</p>                       |
 
 <p align="center"><em>...and so much more to come!</em></p>
 
@@ -71,12 +75,13 @@
 - [Go](https://go.dev/) 1.23.X
 - [PostgreSQL](https://www.postgresql.org/) 17.2 (with [TimescaleDB](https://www.timescale.com/) 2.17.1 extension)
 - [DragonflyDB](https://dragonflydb.io/) 1.25.X or [Redis](https://redis.io/) 7.4.X
-- Google Cloud API key (uses [Gemini 1.5 Flash-8B](https://ai.google.dev/gemini-api/docs/models/gemini#gemini-1.5-flash-8b) by default)
-- Proxies to avoid rate limits (at least 60 per worker)
+- [Google AI Studio](https://aistudio.google.com/) Paid API key (uses [Gemini 1.5 Flash-8B](https://ai.google.dev/gemini-api/docs/models/gemini#gemini-1.5-flash-8b) by default)
+- Proxies to avoid rate limits (recommended 40 per worker)
 - Discord Bot token
 
 ### Optional
 
+- [GlitchTip](https://glitchtip.com/), [Uptrace](https://uptrace.dev/), or [Sentry](https://sentry.io) (recommended for production)
 - Cookies: Not necessary at this time
 
 ## 🔄 How It Works
@@ -235,7 +240,7 @@ Going into more detail about the detection process:
 <details>
 <summary>Purge Worker</summary>
 
-The purge worker maintains database hygiene by cleaning up old data and checking for banned/locked accounts:
+The purge worker maintains database hygiene by cleaning up old data, checking for banned/locked accounts, and flagging groups:
 
 ```mermaid
 flowchart TB
@@ -260,9 +265,11 @@ flowchart TB
             PurgeUsers[Remove Old<br>Cleared Users] --> PurgeGroups[Remove Old<br>Cleared Groups]
         end
         
-        subgraph Tracking [Process Tracking]
+        subgraph Tracking [Process Group Tracking]
             direction LR
-            CheckTracking[Check Group<br>Tracking Data] --> PurgeTracking[Remove Old<br>Tracking Data]
+            GetTracking[Get Groups to<br>Track] --> FetchInfo[Fetch Group Info<br>from API]
+            FetchInfo --> CheckThresholds[Check Percentage<br>Thresholds]
+            CheckThresholds --> |Exceeds Threshold| SaveGroups[Save Flagged<br>Groups]
         end
         
         BannedUsers --> LockedGroups
@@ -280,8 +287,8 @@ The worker continuously:
 - Checks for and removes banned users
 - Checks for and removes locked groups
 - Purges old cleared users/groups
-- Maintains group tracking data
-- Runs every 5 minutes
+- Flag groups with flagged users
+- Runs every 1 minute
 
 </details>
 
@@ -298,7 +305,7 @@ flowchart TB
         direction TB
         subgraph QueueCheck [Queue Management]
             direction TB
-            CheckHigh[Check High Priority<br>Get up to 50] --> RemainingH{Batch<br>Full?}
+            CheckHigh[Check High Priority] --> RemainingH{Batch<br>Full?}
             RemainingH -->|No| CheckNormal[Check Normal Priority<br>Get up to Remaining]
             RemainingH -->|Yes| Process
             
@@ -452,7 +459,7 @@ The middleware chain processes requests, with each middleware layer adding its o
 
 ## ⚡ Efficiency
 
-Rotector is built to efficiently handle large amounts of data while keeping resource usage at a reasonable level. Here's a performance snapshot from one of our test runs on a shared VPS:
+Rotector is built to efficiently handle large amounts of data while keeping resource usage at a reasonable level. Here's a performance snapshot from one of our test runs on a shared VPS (as of v0.1.0-alpha.4-pre.1):
 
 > [!NOTE]
 > These results come from a single test run and should be viewed as illustrative rather than definitive. Performance can vary significantly due to various factors such as API response times, proxy performance, system resources, configuration, and more. Not all of the VPS resources were used.
@@ -472,28 +479,28 @@ Rotector is built to efficiently handle large amounts of data while keeping reso
 - Time Given: 1 hour
 - Confirmed Users: 500
 - Confirmed Groups: 0
-- Workers: 5 AI friend workers
+- Workers: 5 AI friend workers, 1 purge worker
 - Proxies: 300 shared proxies
 
 ### Test Metrics
 
 | Metric                   | Current Run | Change from Previous Run |
 |--------------------------|-------------|--------------------------|
-| Users Scanned            | 1,001       | + 32.77%                 |
-| **Users Flagged**        | **14,800**  | **+ 109.10%**            |
+| Users Scanned            | 1,001       | N/A                      |
+| **Users Flagged**        | **14,800**  | N/A                      |
 | **Groups Flagged**       | **167**     | N/A                      |
-| Requests Sent            | 300,195     | + 304.34%                |
-| Bandwidth Used           | 2.83 GB     | + 284.60%                |
+| Requests Sent            | 300,195     | N/A                      |
+| Bandwidth Used           | 2.83 GB     | N/A                      |
 | Avg Concurrent Requests  | 1,060       | N/A                      |
 | Avg Requests Per Second  | 12          | N/A                      |
 | Avg Bandwith Per Request | 9.88 KB     | N/A                      |
-| AI Cost                  | **$0.07**   | **- 56.25%**             |
+| AI Cost                  | **$0.07**   | N/A                      |
 | AI Calls (CT)            | 13,089      | N/A                      |
-| AI Calls (GC)            | 5,720       | + 2273.44%               |
+| AI Calls (GC)            | 5,720       | N/A                      |
 | AI Latency (CT)          | ~0.017s     | N/A                      |
 | AI Latency (GC)          | ~1.038s     | N/A                      |
-| Redis Memory Usage       | 702.62 MB   | - 12.60%                 |
-| Redis Key Count          | 204,172     | + 193.09%                |
+| Redis Memory Usage       | 702.62 MB   | N/A                      |
+| Redis Key Count          | 204,172     | N/A                      |
 
 > [!NOTE]
 > **CT** and **GC** in the metrics refer to _CountTokens_ and _GenerateContent_ calls to the Gemini API respectively.
@@ -562,7 +569,7 @@ This roadmap shows our major upcoming features, but we've got even more in the w
 
 - 👥 **Moderation Tools**
 
-  - [ ] Appeal process system
+  - [X] Appeal process system
   - [ ] Inventory viewer
 
 - 🔍 **Scanning Capabilities**
@@ -638,7 +645,7 @@ Discord already has everything we need for reviewing accounts - buttons, dropdow
 
 Proxies are required as Rotector makes lots of requests per second. While cookies are mentioned in the settings, we don't use them for anything at the moment.
 
-Proxies can be set up in the `config.toml` file. This file also includes cooldown settings for each endpoint that lets you control how many requests Rotector makes to Roblox's API.
+The `config.toml` file includes cooldown settings for each endpoint that lets you control how many requests Rotector makes to Roblox's API.
 
 </details>
 
@@ -701,3 +708,9 @@ While Rotector only accesses publicly available information through Roblox's API
 - This tool should not be used to harass or target specific users
 - Any automated scanning and excessive requests may violate Roblox's Terms of Service
 - Users are responsible for respecting the rate limit
+
+---
+
+<p align="center">
+  🚀 <strong>Powered by modern technologies.</strong>
+</p>
