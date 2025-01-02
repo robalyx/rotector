@@ -61,7 +61,7 @@ message User {
 
 // GetUserRequest represents the request for getting user information
 message GetUserRequest {
-  uint64 user_id = 1;
+  string user_id = 1;
 }
 
 // GetUserResponse represents the response containing user information

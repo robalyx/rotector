@@ -5,8 +5,10 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strconv"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/rotector/rotector/internal/common/storage/database/types"
 	"github.com/uptrace/bun"
 	"go.uber.org/zap"
@@ -33,10 +35,18 @@ func NewGroup(db *bun.DB, logger *zap.Logger) *GroupModel {
 func (r *GroupModel) SaveFlaggedGroups(ctx context.Context, flaggedGroups []*types.FlaggedGroup) error {
 	r.logger.Debug("Saving flagged groups", zap.Int("count", len(flaggedGroups)))
 
+	// Generate UUIDs for new groups
+	for _, group := range flaggedGroups {
+		if group.UUID == "" {
+			group.UUID = uuid.New().String()
+		}
+	}
+
 	// Perform bulk insert with upsert
 	_, err := r.db.NewInsert().
 		Model(&flaggedGroups).
 		On("CONFLICT (id) DO UPDATE").
+		Set("uuid = EXCLUDED.uuid").
 		Set("name = EXCLUDED.name").
 		Set("description = EXCLUDED.description").
 		Set("owner = EXCLUDED.owner").
@@ -182,13 +192,13 @@ func (r *GroupModel) GetClearedGroupsCount(ctx context.Context) (int, error) {
 	return count, nil
 }
 
-// GetGroupByID retrieves a group by its ID from any of the group tables.
-// Returns the group and a boolean indicating if it can be reviewed.
-func (r *GroupModel) GetGroupByID(ctx context.Context, groupID uint64, fields types.GroupFields, updateLastViewed bool) (*types.ReviewGroup, bool, error) {
+// GetGroupByID retrieves a group by either their numeric ID or UUID.
+func (r *GroupModel) GetGroupByID(ctx context.Context, groupID string, fields types.GroupFields, isReviewing bool) (*types.ReviewGroup, bool, error) {
 	var result types.ReviewGroup
 	var canReview bool
 
 	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+		// Try each model in order until we find a group
 		models := []interface{}{
 			&types.FlaggedGroup{},
 			&types.ConfirmedGroup{},
@@ -196,91 +206,79 @@ func (r *GroupModel) GetGroupByID(ctx context.Context, groupID uint64, fields ty
 			&types.LockedGroup{},
 		}
 
-		// Build query with selected fields
-		columns := fields.Columns()
-
-		// Try each model type until we find the group
-		var found bool
 		for _, model := range models {
 			query := tx.NewSelect().
 				Model(model).
-				Column(columns...).
-				Where("id = ?", groupID)
+				Column(fields.Columns()...)
 
-			// Add row locking if updating last_viewed
-			if updateLastViewed {
+			// Check if input is numeric (ID) or string (UUID)
+			if id, err := strconv.ParseUint(groupID, 10, 64); err == nil {
+				query.Where("id = ?", id)
+			} else {
+				query.Where("uuid = ?", groupID)
+			}
+
+			if isReviewing {
 				query.For("UPDATE")
 			}
 
 			err := query.Scan(ctx)
-			if err != nil {
-				if errors.Is(err, sql.ErrNoRows) {
-					continue
+			if err == nil {
+				// Set result based on model type
+				switch m := model.(type) {
+				case *types.FlaggedGroup:
+					result.Group = m.Group
+					result.Status = types.GroupTypeFlagged
+				case *types.ConfirmedGroup:
+					result.Group = m.Group
+					result.VerifiedAt = m.VerifiedAt
+					result.Status = types.GroupTypeConfirmed
+				case *types.ClearedGroup:
+					result.Group = m.Group
+					result.ClearedAt = m.ClearedAt
+					result.Status = types.GroupTypeCleared
+				case *types.LockedGroup:
+					result.Group = m.Group
+					result.LockedAt = m.LockedAt
+					result.Status = types.GroupTypeLocked
 				}
-				r.logger.Error("Failed to get group by ID",
-					zap.Error(err),
-					zap.Uint64("groupID", groupID))
-				continue
-			}
 
-			// Set result based on model type
-			switch m := model.(type) {
-			case *types.FlaggedGroup:
-				result.Group = m.Group
-				result.Status = types.GroupTypeFlagged
-			case *types.ConfirmedGroup:
-				result.Group = m.Group
-				result.VerifiedAt = m.VerifiedAt
-				result.Status = types.GroupTypeConfirmed
-			case *types.ClearedGroup:
-				result.Group = m.Group
-				result.ClearedAt = m.ClearedAt
-				result.Status = types.GroupTypeCleared
-			case *types.LockedGroup:
-				result.Group = m.Group
-				result.LockedAt = m.LockedAt
-				result.Status = types.GroupTypeLocked
-			default:
-				return fmt.Errorf("%w: %T", types.ErrUnsupportedModel, model)
-			}
+				// Check if group can be reviewed
+				canReview = !isReviewing || time.Since(result.LastViewed) > 5*time.Minute
 
-			found = true
-
-			// Check if group can be reviewed
-			canReview = time.Since(result.LastViewed) > 5*time.Minute
-
-			// Update last_viewed if requested
-			if canReview && updateLastViewed {
-				now := time.Now()
-				_, err = tx.NewUpdate().
-					Model(model).
-					Set("last_viewed = ?", now).
-					Where("id = ?", groupID).
-					Exec(ctx)
-				if err != nil {
-					return fmt.Errorf("failed to update last_viewed: %w", err)
+				// Get reputation
+				var reputation types.GroupReputation
+				err = tx.NewSelect().
+					Model(&reputation).
+					Where("id = ?", result.ID).
+					Scan(ctx)
+				if err != nil && !errors.Is(err, sql.ErrNoRows) {
+					return fmt.Errorf("failed to get group reputation: %w", err)
 				}
-				result.LastViewed = now
+				result.Reputation = reputation.Reputation
+
+				// Update last_viewed if requested
+				if isReviewing {
+					now := time.Now()
+					_, err = tx.NewUpdate().
+						Model(model).
+						Set("last_viewed = ?", now).
+						Where("id = ?", result.ID).
+						Exec(ctx)
+					if err != nil {
+						return err
+					}
+					result.LastViewed = now
+				}
+
+				return nil
 			}
-			break
+			if !errors.Is(err, sql.ErrNoRows) {
+				return err
+			}
 		}
 
-		if !found {
-			return types.ErrGroupNotFound
-		}
-
-		// Get reputation
-		var reputation types.GroupReputation
-		err := tx.NewSelect().
-			Model(&reputation).
-			Where("id = ?", groupID).
-			Scan(ctx)
-		if err != nil && !errors.Is(err, sql.ErrNoRows) {
-			return fmt.Errorf("failed to get group reputation: %w", err)
-		}
-		result.Reputation = reputation.Reputation
-
-		return nil
+		return types.ErrGroupNotFound
 	})
 	if err != nil {
 		return nil, false, err

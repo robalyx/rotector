@@ -5,8 +5,10 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strconv"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/rotector/rotector/internal/common/storage/database/types"
 	"github.com/uptrace/bun"
 	"go.uber.org/zap"
@@ -54,6 +56,12 @@ func (r *UserModel) SaveFlaggedUsers(ctx context.Context, flaggedUsers map[uint6
 				zap.String("status", string(status)))
 			continue
 		}
+
+		// Generate UUID for new users
+		if user.UUID == "" {
+			user.UUID = uuid.New().String()
+		}
+
 		filteredUsers = append(filteredUsers, &types.FlaggedUser{
 			User: *user,
 		})
@@ -69,6 +77,7 @@ func (r *UserModel) SaveFlaggedUsers(ctx context.Context, flaggedUsers map[uint6
 	_, err = r.db.NewInsert().
 		Model(&filteredUsers).
 		On("CONFLICT (id) DO UPDATE").
+		Set("uuid = EXCLUDED.uuid").
 		Set("name = EXCLUDED.name").
 		Set("display_name = EXCLUDED.display_name").
 		Set("description = EXCLUDED.description").
@@ -352,13 +361,13 @@ func (r *UserModel) CheckExistingUsers(ctx context.Context, userIDs []uint64) (m
 	return result, nil
 }
 
-// GetUserByID retrieves a user by their ID from any of the user tables.
-// Returns the user and a boolean indicating if they can be reviewed.
-func (r *UserModel) GetUserByID(ctx context.Context, userID uint64, fields types.UserFields, updateLastViewed bool) (*types.ReviewUser, bool, error) {
+// GetUserByID retrieves a user by either their numeric ID or UUID.
+func (r *UserModel) GetUserByID(ctx context.Context, userID string, fields types.UserFields, isReviewing bool) (*types.ReviewUser, bool, error) {
 	var result types.ReviewUser
 	var canReview bool
 
 	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+		// Try each model in order until we find a user
 		models := []interface{}{
 			&types.FlaggedUser{},
 			&types.ConfirmedUser{},
@@ -366,91 +375,79 @@ func (r *UserModel) GetUserByID(ctx context.Context, userID uint64, fields types
 			&types.BannedUser{},
 		}
 
-		// Build query with selected fields
-		columns := fields.Columns()
-
-		// Try each model type until we find the user
-		var found bool
 		for _, model := range models {
 			query := tx.NewSelect().
 				Model(model).
-				Column(columns...).
-				Where("id = ?", userID)
+				Column(fields.Columns()...)
 
-			// Add row locking if updating last_viewed
-			if updateLastViewed {
+			// Check if input is numeric (ID) or string (UUID)
+			if id, err := strconv.ParseUint(userID, 10, 64); err == nil {
+				query.Where("id = ?", id)
+			} else {
+				query.Where("uuid = ?", userID)
+			}
+
+			if isReviewing {
 				query.For("UPDATE")
 			}
 
 			err := query.Scan(ctx)
-			if err != nil {
-				if errors.Is(err, sql.ErrNoRows) {
-					continue
+			if err == nil {
+				// Set result based on model type
+				switch m := model.(type) {
+				case *types.FlaggedUser:
+					result.User = m.User
+					result.Status = types.UserTypeFlagged
+				case *types.ConfirmedUser:
+					result.User = m.User
+					result.VerifiedAt = m.VerifiedAt
+					result.Status = types.UserTypeConfirmed
+				case *types.ClearedUser:
+					result.User = m.User
+					result.ClearedAt = m.ClearedAt
+					result.Status = types.UserTypeCleared
+				case *types.BannedUser:
+					result.User = m.User
+					result.PurgedAt = m.PurgedAt
+					result.Status = types.UserTypeBanned
 				}
-				r.logger.Error("Failed to get user by ID",
-					zap.Error(err),
-					zap.Uint64("userID", userID))
-				continue
-			}
 
-			// Set result based on model type
-			switch m := model.(type) {
-			case *types.FlaggedUser:
-				result.User = m.User
-				result.Status = types.UserTypeFlagged
-			case *types.ConfirmedUser:
-				result.User = m.User
-				result.VerifiedAt = m.VerifiedAt
-				result.Status = types.UserTypeConfirmed
-			case *types.ClearedUser:
-				result.User = m.User
-				result.ClearedAt = m.ClearedAt
-				result.Status = types.UserTypeCleared
-			case *types.BannedUser:
-				result.User = m.User
-				result.PurgedAt = m.PurgedAt
-				result.Status = types.UserTypeBanned
-			default:
-				return fmt.Errorf("%w: %T", types.ErrUnsupportedModel, model)
-			}
+				// Check if user can be reviewed
+				canReview = !isReviewing || time.Since(result.LastViewed) > 5*time.Minute
 
-			found = true
-
-			// Check if user can be reviewed
-			canReview = time.Since(result.LastViewed) > 5*time.Minute
-
-			// Update last_viewed if requested
-			if canReview && updateLastViewed {
-				now := time.Now()
-				_, err = tx.NewUpdate().
-					Model(model).
-					Set("last_viewed = ?", now).
-					Where("id = ?", userID).
-					Exec(ctx)
-				if err != nil {
-					return fmt.Errorf("failed to update last_viewed: %w", err)
+				// Get reputation
+				var reputation types.UserReputation
+				err = tx.NewSelect().
+					Model(&reputation).
+					Where("id = ?", result.ID).
+					Scan(ctx)
+				if err != nil && !errors.Is(err, sql.ErrNoRows) {
+					return fmt.Errorf("failed to get user reputation: %w", err)
 				}
-				result.LastViewed = now
+				result.Reputation = reputation.Reputation
+
+				// Update last_viewed if requested
+				if isReviewing {
+					now := time.Now()
+					_, err = tx.NewUpdate().
+						Model(model).
+						Set("last_viewed = ?", now).
+						Where("id = ?", result.ID).
+						Exec(ctx)
+					if err != nil {
+						return err
+					}
+					result.LastViewed = now
+				}
+
+				return nil
 			}
-			break
+			if !errors.Is(err, sql.ErrNoRows) {
+				return err
+			}
 		}
 
-		if !found {
-			return types.ErrUserNotFound
-		}
-
-		// Get reputation
-		var reputation types.UserReputation
-		err := tx.NewSelect().
-			Model(&reputation).
-			Where("id = ?", userID).
-			Scan(ctx)
-		if err != nil && !errors.Is(err, sql.ErrNoRows) {
-			return fmt.Errorf("failed to get user reputation: %w", err)
-		}
-		result.Reputation = reputation.Reputation
-
-		return nil
+		return types.ErrUserNotFound
 	})
 	if err != nil {
 		return nil, false, err

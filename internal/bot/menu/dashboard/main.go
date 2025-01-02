@@ -3,7 +3,6 @@ package dashboard
 import (
 	"context"
 	"errors"
-	"strconv"
 
 	"github.com/disgoorg/disgo/discord"
 	"github.com/disgoorg/disgo/events"
@@ -148,9 +147,9 @@ func (m *MainMenu) handleLookupUser(event *events.ComponentInteractionCreate, s 
 		SetCustomID(constants.LookupUserModalCustomID).
 		SetTitle("Lookup User").
 		AddActionRow(
-			discord.NewTextInput(constants.LookupUserInputCustomID, discord.TextInputStyleShort, "User ID").
+			discord.NewTextInput(constants.LookupUserInputCustomID, discord.TextInputStyleShort, "User ID or UUID").
 				WithRequired(true).
-				WithPlaceholder("Enter the user ID to lookup..."),
+				WithPlaceholder("Enter the user ID or UUID to lookup..."),
 		).
 		Build()
 	if err := event.Modal(modal); err != nil {
@@ -167,9 +166,9 @@ func (m *MainMenu) handleLookupGroup(event *events.ComponentInteractionCreate, s
 		SetCustomID(constants.LookupGroupModalCustomID).
 		SetTitle("Lookup Group").
 		AddActionRow(
-			discord.NewTextInput(constants.LookupGroupInputCustomID, discord.TextInputStyleShort, "Group ID").
+			discord.NewTextInput(constants.LookupGroupInputCustomID, discord.TextInputStyleShort, "Group ID or UUID").
 				WithRequired(true).
-				WithPlaceholder("Enter the group ID to lookup..."),
+				WithPlaceholder("Enter the group ID or UUID to lookup..."),
 		).
 		Build()
 	if err := event.Modal(modal); err != nil {
@@ -192,17 +191,12 @@ func (m *MainMenu) handleModal(event *events.ModalSubmitInteractionCreate, s *se
 
 // handleLookupUserModalSubmit processes the user ID input and opens the review menu.
 func (m *MainMenu) handleLookupUserModalSubmit(event *events.ModalSubmitInteractionCreate, s *session.Session) {
-	// Get and validate the user ID input
+	// Get the user ID input
 	userIDStr := event.Data.Text(constants.LookupUserInputCustomID)
-	userID, err := strconv.ParseUint(userIDStr, 10, 64)
-	if err != nil {
-		m.layout.paginationManager.NavigateTo(event, s, m.page, "Invalid user ID format. Please enter a valid number.")
-		return
-	}
 
 	// Get user from database
 	isLookupMode := s.GetBool(constants.SessionKeyIsLookupMode)
-	user, canReview, err := m.layout.db.Users().GetUserByID(context.Background(), userID, types.UserFields{}, !isLookupMode)
+	user, canReview, err := m.layout.db.Users().GetUserByID(context.Background(), userIDStr, types.UserFields{}, !isLookupMode)
 	if err != nil {
 		if errors.Is(err, types.ErrUserNotFound) {
 			m.layout.paginationManager.NavigateTo(event, s, m.page, "Failed to find user. They may not be in our database.")
@@ -225,16 +219,11 @@ func (m *MainMenu) handleLookupUserModalSubmit(event *events.ModalSubmitInteract
 
 // handleLookupGroupModalSubmit processes the group ID input and opens the review menu.
 func (m *MainMenu) handleLookupGroupModalSubmit(event *events.ModalSubmitInteractionCreate, s *session.Session) {
-	// Get and validate the group ID input
+	// Get the group ID input
 	groupIDStr := event.Data.Text(constants.LookupGroupInputCustomID)
-	groupID, err := strconv.ParseUint(groupIDStr, 10, 64)
-	if err != nil {
-		m.layout.paginationManager.NavigateTo(event, s, m.page, "Invalid group ID format. Please enter a valid number.")
-		return
-	}
 
 	// Get group from database
-	group, canReview, err := m.layout.db.Groups().GetGroupByID(context.Background(), groupID, types.GroupFields{}, true)
+	group, canReview, err := m.layout.db.Groups().GetGroupByID(context.Background(), groupIDStr, types.GroupFields{}, true)
 	if err != nil {
 		if errors.Is(err, types.ErrGroupNotFound) {
 			m.layout.paginationManager.NavigateTo(event, s, m.page, "Failed to find group. It may not be in our database.")

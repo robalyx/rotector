@@ -38,6 +38,7 @@ type ExtendedFriend struct {
 // This base structure is embedded in other user types (Flagged, Confirmed).
 type User struct {
 	ID             uint64                  `bun:",pk"        json:"id"`
+	UUID           string                  `bun:",notnull"   json:"uuid"`
 	Name           string                  `bun:",notnull"   json:"name"`
 	DisplayName    string                  `bun:",notnull"   json:"displayName"`
 	Description    string                  `bun:",notnull"   json:"description"`

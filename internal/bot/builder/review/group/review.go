@@ -200,6 +200,9 @@ func (b *ReviewBuilder) buildReviewEmbed() *discord.EmbedBuilder {
 		embed.AddField("Locked At", fmt.Sprintf("<t:%d:R>", b.group.LockedAt.Unix()), true)
 	}
 
+	// Add UUID to footer
+	embed.SetFooter("UUID: "+b.group.UUID, "")
+
 	return embed
 }
 

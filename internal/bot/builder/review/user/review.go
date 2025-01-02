@@ -217,6 +217,9 @@ func (b *ReviewBuilder) buildReviewBuilder() *discord.EmbedBuilder {
 		embed.AddField("Purged At", fmt.Sprintf("<t:%d:R>", b.user.PurgedAt.Unix()), true)
 	}
 
+	// Add UUID to footer
+	embed.SetFooter("UUID: "+b.user.UUID, "")
+
 	return embed
 }
 

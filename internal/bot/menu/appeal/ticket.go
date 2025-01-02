@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/disgoorg/disgo/discord"
@@ -62,7 +63,7 @@ func (m *TicketMenu) Show(event interfaces.CommonEvent, s *session.Session, appe
 	// If appeal is pending, check if user's status has changed
 	if appeal.Status == types.AppealStatusPending { //nolint:nestif
 		// Get current user status
-		user, _, err := m.layout.db.Users().GetUserByID(context.Background(), appeal.UserID, types.UserFields{Basic: true}, false)
+		user, _, err := m.layout.db.Users().GetUserByID(context.Background(), strconv.FormatUint(appeal.UserID, 10), types.UserFields{Basic: true}, false)
 		if err != nil {
 			if !errors.Is(err, types.ErrUserNotFound) {
 				m.layout.logger.Error("Failed to get user status", zap.Error(err))
@@ -165,7 +166,7 @@ func (m *TicketMenu) handleLookupUser(event *events.ComponentInteractionCreate, 
 	s.GetInterface(constants.SessionKeyAppeal, &appeal)
 
 	// Get user from database
-	user, _, err := m.layout.db.Users().GetUserByID(context.Background(), appeal.UserID, types.UserFields{}, false)
+	user, _, err := m.layout.db.Users().GetUserByID(context.Background(), strconv.FormatUint(appeal.UserID, 10), types.UserFields{}, false)
 	if err != nil {
 		if errors.Is(err, types.ErrUserNotFound) {
 			m.layout.paginationManager.NavigateTo(event, s, m.page, "Failed to find user. They may not be in our database.")
@@ -347,7 +348,7 @@ func (m *TicketMenu) handleAcceptModalSubmit(event *events.ModalSubmitInteractio
 	}
 
 	// Get user to clear
-	user, _, err := m.layout.db.Users().GetUserByID(context.Background(), appeal.UserID, types.UserFields{Basic: true}, false)
+	user, _, err := m.layout.db.Users().GetUserByID(context.Background(), strconv.FormatUint(appeal.UserID, 10), types.UserFields{Basic: true}, false)
 	if err != nil {
 		if errors.Is(err, types.ErrUserNotFound) {
 			m.layout.paginationManager.NavigateTo(event, s, m.page, "Failed to find user. They may no longer exist in our database.")

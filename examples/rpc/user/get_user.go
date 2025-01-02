@@ -20,9 +20,7 @@ func main() {
 		fmt.Println("Usage: get_user <user_id>")
 		os.Exit(1)
 	}
-
-	var userID uint64
-	fmt.Sscanf(os.Args[1], "%d", &userID)
+	userID := os.Args[1]
 
 	// Make request
 	resp, err := client.GetUser(context.Background(), &user.GetUserRequest{
@@ -35,7 +33,7 @@ func main() {
 
 	// Check if user exists
 	if resp.GetStatus() == user.UserStatus_USER_STATUS_UNFLAGGED {
-		fmt.Printf("User %d: NOT FOUND\n", userID)
+		fmt.Printf("User %s: NOT FOUND\n", userID)
 		return
 	}
 

@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/rotector/rotector/internal/common/storage/database"
@@ -28,9 +29,18 @@ func NewUserHandler(db *database.Client, logger *zap.Logger) *UserHandler {
 func (h *UserHandler) GetUser(ctx context.Context, req *user.GetUserRequest) (*user.GetUserResponse, error) {
 	// Get full user information
 	reviewUser, _, err := h.db.Users().GetUserByID(ctx, req.GetUserId(), types.UserFields{}, false)
-	if err != nil {
-		h.logger.Error("Failed to get user information", zap.Error(err))
+	if err != nil && !errors.Is(err, types.ErrUserNotFound) {
+		h.logger.Error("Failed to get user information",
+			zap.String("user_id", req.GetUserId()),
+			zap.Error(err))
 		return nil, err
+	}
+
+	// If the user is not found, return immediately
+	if errors.Is(err, types.ErrUserNotFound) {
+		return &user.GetUserResponse{
+			Status: user.UserStatus_USER_STATUS_UNFLAGGED,
+		}, nil
 	}
 
 	// Convert user status
@@ -46,13 +56,6 @@ func (h *UserHandler) GetUser(ctx context.Context, req *user.GetUserRequest) (*u
 		status = user.UserStatus_USER_STATUS_BANNED
 	case types.UserTypeUnflagged:
 		status = user.UserStatus_USER_STATUS_UNFLAGGED
-	}
-
-	// If the user is unflagged, return immediately
-	if status == user.UserStatus_USER_STATUS_UNFLAGGED {
-		return &user.GetUserResponse{
-			Status: user.UserStatus_USER_STATUS_UNFLAGGED,
-		}, nil
 	}
 
 	// Convert user data to protobuf message
