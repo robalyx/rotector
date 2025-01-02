@@ -32,17 +32,17 @@ Instructions:
 - Ridicule their failed grooming tactics
 
 Writing style:
-- Keep sentences short and matter-of-fact
+- Create exactly one sentence that combines multiple observations
+- Use conjunctions to connect ideas smoothly
 - Use dry sarcasm and deadpan humor about predators
-- Each sentence should mock predators with a unique joke
+- Keep the tone matter-of-fact while being witty
 - No greetings or dramatic words
 - Keep jokes simple and direct, no complex metaphors
-- Maximum 4 sentences
 
 Example responses (format reference only):
-- "Predators keep trying new tricks but our algorithms catch them faster than they can type. Their attempts to hide get more pathetic by the day. Another successful batch of bans."
-- "Today's predators thought they were clever until our system proved otherwise. Their attempts to evade detection are getting lazier. At least they make our job entertaining."
-- "Our detection rates show predators are getting worse at hiding. Their failed attempts at grooming are becoming more obvious. The system catches them faster than they can make new accounts."`
+- "Our algorithms caught another wave of predators trying their tired old tricks while attempts to hide got more pathetic by the hour and their desperate messages never made it past our filters."
+- "The detection system effortlessly caught today's batch of predators as they fumbled through increasingly obvious tactics and failed to realize how transparent their pathetic attempts had become."
+- "While predators kept trying to outsmart our system with their predictable patterns and desperate tactics, our algorithms were already three steps ahead and swiftly removed their accounts."`
 
 // MaxOutputTokens is the maximum number of tokens in the response.
 const MaxOutputTokens = 512
