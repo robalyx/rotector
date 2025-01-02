@@ -2,6 +2,7 @@ package user
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -66,6 +67,10 @@ func (m *ReviewMenu) Show(event interfaces.CommonEvent, s *session.Session, cont
 		var err error
 		user, err = m.fetchNewTarget(s, uint64(event.User().ID))
 		if err != nil {
+			if errors.Is(err, types.ErrNoUsersToReview) {
+				m.layout.paginationManager.Refresh(event, s, "No users to review. Please check back later.")
+				return
+			}
 			m.layout.logger.Error("Failed to fetch a new user", zap.Error(err))
 			m.layout.paginationManager.RespondWithError(event, "Failed to fetch a new user. Please try again.")
 			return

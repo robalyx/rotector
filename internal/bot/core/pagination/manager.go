@@ -75,7 +75,7 @@ func (m *Manager) GetPage(name string) *Page {
 
 // HandleInteraction routes Discord interactions to the appropriate handler function
 // based on the interaction type (select menu, button, or modal) and the current page.
-// If no handler is found for an interaction, a warning is logged.
+// If no handler is found for an interaction, an error is logged.
 func (m *Manager) HandleInteraction(event interfaces.CommonEvent, s *session.Session) {
 	currentPage := s.GetString(constants.SessionKeyCurrentPage)
 	page := m.GetPage(currentPage)
@@ -174,6 +174,13 @@ func (m *Manager) NavigateBack(event interfaces.CommonEvent, s *session.Session,
 		page := m.GetPage(previousPage)
 		m.NavigateTo(event, s, page, content)
 	}
+}
+
+// Refresh reloads the current page in the session.
+func (m *Manager) Refresh(event interfaces.CommonEvent, s *session.Session, content string) {
+	currentPage := s.GetString(constants.SessionKeyCurrentPage)
+	page := m.GetPage(currentPage)
+	m.NavigateTo(event, s, page, content)
 }
 
 // RespondWithError clears all message components and embeds, replacing them with

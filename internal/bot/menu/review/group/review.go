@@ -2,6 +2,7 @@ package group
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -68,6 +69,10 @@ func (m *ReviewMenu) Show(event interfaces.CommonEvent, s *session.Session, cont
 		var err error
 		group, err = m.fetchNewTarget(s, uint64(event.User().ID))
 		if err != nil {
+			if errors.Is(err, types.ErrNoGroupsToReview) {
+				m.layout.paginationManager.Refresh(event, s, "No groups to review. Please check back later.")
+				return
+			}
 			m.layout.logger.Error("Failed to fetch a new group", zap.Error(err))
 			m.layout.paginationManager.RespondWithError(event, "Failed to fetch a new group. Please try again.")
 			return
