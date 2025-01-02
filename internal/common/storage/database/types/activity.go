@@ -11,8 +11,10 @@ const (
 	// ActivityTypeAll matches any activity type in database queries.
 	ActivityTypeAll ActivityType = iota // ALL
 
-	// ActivityTypeUserViewed tracks when a moderator opens a user's profile.
+	// ActivityTypeUserViewed tracks when a moderator reviews a user's profile.
 	ActivityTypeUserViewed // USER_VIEWED
+	// ActivityTypeUserLookup tracks when a moderator looks up a user's profile.
+	ActivityTypeUserLookup // USER_LOOKUP
 	// ActivityTypeUserConfirmed tracks when a moderator confirms a user as inappropriate.
 	ActivityTypeUserConfirmed // USER_CONFIRMED
 	// ActivityTypeUserConfirmedCustom tracks bans with custom moderator-provided reasons.
@@ -27,9 +29,13 @@ const (
 	ActivityTypeUserTrainingUpvote // USER_TRAINING_UPVOTE
 	// ActivityTypeUserTrainingDownvote tracks when a moderator downvotes a user in training mode.
 	ActivityTypeUserTrainingDownvote // USER_TRAINING_DOWNVOTE
+	// ActivityTypeUserDeleted tracks when an admin deletes a user from the database.
+	ActivityTypeUserDeleted // USER_DELETED
 
-	// ActivityTypeGroupViewed tracks when a moderator opens a group's profile.
+	// ActivityTypeGroupViewed tracks when a moderator reviews a group's profile.
 	ActivityTypeGroupViewed // GROUP_VIEWED
+	// ActivityTypeGroupLookup tracks when a moderator looks up a group's profile.
+	ActivityTypeGroupLookup // GROUP_LOOKUP
 	// ActivityTypeGroupConfirmed tracks when a moderator confirms a group as inappropriate.
 	ActivityTypeGroupConfirmed // GROUP_CONFIRMED
 	// ActivityTypeGroupConfirmedCustom tracks bans with custom moderator-provided reasons.
@@ -42,6 +48,8 @@ const (
 	ActivityTypeGroupTrainingUpvote // GROUP_TRAINING_UPVOTE
 	// ActivityTypeGroupTrainingDownvote tracks when a moderator downvotes a group in training mode.
 	ActivityTypeGroupTrainingDownvote // GROUP_TRAINING_DOWNVOTE
+	// ActivityTypeGroupDeleted tracks when an admin deletes a group from the database.
+	ActivityTypeGroupDeleted // GROUP_DELETED
 
 	// ActivityTypeAppealSubmitted tracks when a moderator submits an appeal.
 	ActivityTypeAppealSubmitted // APPEAL_SUBMITTED
@@ -53,11 +61,6 @@ const (
 	ActivityTypeAppealRejected // APPEAL_REJECTED
 	// ActivityTypeAppealClosed tracks when a user closes an appeal.
 	ActivityTypeAppealClosed // APPEAL_CLOSED
-
-	// ActivityTypeUserDeleted tracks when an admin deletes a user from the database.
-	ActivityTypeUserDeleted // USER_DELETED
-	// ActivityTypeGroupDeleted tracks when an admin deletes a group from the database.
-	ActivityTypeGroupDeleted // GROUP_DELETED
 )
 
 // ActivityTarget identifies the target of an activity log entry.

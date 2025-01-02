@@ -182,13 +182,13 @@ func (m *TicketMenu) handleLookupUser(event *events.ComponentInteractionCreate, 
 	s.Set(constants.SessionKeyTarget, user)
 	m.layout.userReviewLayout.ShowReviewMenu(event, s)
 
-	// Log the view action
+	// Log the lookup action
 	m.layout.db.UserActivity().Log(context.Background(), &types.UserActivityLog{
 		ActivityTarget: types.ActivityTarget{
 			UserID: user.ID,
 		},
 		ReviewerID:        uint64(event.User().ID),
-		ActivityType:      types.ActivityTypeUserViewed,
+		ActivityType:      types.ActivityTypeUserLookup,
 		ActivityTimestamp: time.Now(),
 		Details:           map[string]interface{}{},
 	})

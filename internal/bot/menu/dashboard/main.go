@@ -3,6 +3,7 @@ package dashboard
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/disgoorg/disgo/discord"
 	"github.com/disgoorg/disgo/events"
@@ -215,6 +216,17 @@ func (m *MainMenu) handleLookupUserModalSubmit(event *events.ModalSubmitInteract
 	// Store user in session and show review menu
 	s.Set(constants.SessionKeyTarget, user)
 	m.layout.userReviewLayout.ShowReviewMenu(event, s)
+
+	// Log the lookup action
+	m.layout.db.UserActivity().Log(context.Background(), &types.UserActivityLog{
+		ActivityTarget: types.ActivityTarget{
+			UserID: user.ID,
+		},
+		ReviewerID:        uint64(event.User().ID),
+		ActivityType:      types.ActivityTypeUserLookup,
+		ActivityTimestamp: time.Now(),
+		Details:           map[string]interface{}{},
+	})
 }
 
 // handleLookupGroupModalSubmit processes the group ID input and opens the review menu.
@@ -242,6 +254,17 @@ func (m *MainMenu) handleLookupGroupModalSubmit(event *events.ModalSubmitInterac
 	// Store group in session and show review menu
 	s.Set(constants.SessionKeyGroupTarget, group)
 	m.layout.groupReviewLayout.Show(event, s)
+
+	// Log the lookup action
+	m.layout.db.UserActivity().Log(context.Background(), &types.UserActivityLog{
+		ActivityTarget: types.ActivityTarget{
+			GroupID: group.ID,
+		},
+		ReviewerID:        uint64(event.User().ID),
+		ActivityType:      types.ActivityTypeGroupLookup,
+		ActivityTimestamp: time.Now(),
+		Details:           map[string]interface{}{},
+	})
 }
 
 // handleButton processes button interactions, mainly handling refresh requests
