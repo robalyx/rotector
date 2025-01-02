@@ -83,8 +83,10 @@ func (m *MainMenu) handleSelectMenu(event *events.ComponentInteractionCreate, s 
 
 	switch option {
 	case constants.StartUserReviewButtonCustomID:
+		s.Set(constants.SessionKeyIsLookupMode, false)
 		m.layout.userReviewLayout.ShowReviewMenu(event, s)
 	case constants.StartGroupReviewButtonCustomID:
+		s.Set(constants.SessionKeyIsLookupMode, false)
 		m.layout.groupReviewLayout.Show(event, s)
 	case constants.LookupUserButtonCustomID:
 		m.handleLookupUser(event, s, false)
