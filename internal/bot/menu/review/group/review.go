@@ -211,7 +211,7 @@ func (m *ReviewMenu) fetchNewTarget(s *session.Session, reviewerID uint64) (*typ
 		ReviewerID:        reviewerID,
 		ActivityType:      types.ActivityTypeGroupViewed,
 		ActivityTimestamp: time.Now(),
-		Details:           make(map[string]interface{}),
+		Details:           map[string]interface{}{},
 	})
 
 	return group, nil
@@ -468,7 +468,7 @@ func (m *ReviewMenu) handleClearGroup(event interfaces.CommonEvent, s *session.S
 			ReviewerID:        uint64(event.User().ID),
 			ActivityType:      types.ActivityTypeGroupCleared,
 			ActivityTimestamp: time.Now(),
-			Details:           make(map[string]interface{}),
+			Details:           map[string]interface{}{},
 		})
 	}
 
@@ -517,7 +517,7 @@ func (m *ReviewMenu) handleSkipGroup(event interfaces.CommonEvent, s *session.Se
 		ReviewerID:        uint64(event.User().ID),
 		ActivityType:      types.ActivityTypeGroupSkipped,
 		ActivityTimestamp: time.Now(),
-		Details:           make(map[string]interface{}),
+		Details:           map[string]interface{}{},
 	})
 }
 

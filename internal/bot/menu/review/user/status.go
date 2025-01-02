@@ -64,7 +64,7 @@ func (m *StatusMenu) Show(event interfaces.CommonEvent, s *session.Session) {
 			ReviewerID:        uint64(event.User().ID),
 			ActivityType:      types.ActivityTypeUserViewed,
 			ActivityTimestamp: time.Now(),
-			Details:           make(map[string]interface{}),
+			Details:           map[string]interface{}{},
 		})
 		return
 	}

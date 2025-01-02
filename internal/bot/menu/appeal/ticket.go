@@ -190,7 +190,7 @@ func (m *TicketMenu) handleLookupUser(event *events.ComponentInteractionCreate, 
 		ReviewerID:        uint64(event.User().ID),
 		ActivityType:      types.ActivityTypeUserViewed,
 		ActivityTimestamp: time.Now(),
-		Details:           make(map[string]interface{}),
+		Details:           map[string]interface{}{},
 	})
 }
 

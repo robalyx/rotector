@@ -517,7 +517,7 @@ func (m *ReviewMenu) handleClearUser(event interfaces.CommonEvent, s *session.Se
 			ReviewerID:        uint64(event.User().ID),
 			ActivityType:      types.ActivityTypeUserCleared,
 			ActivityTimestamp: time.Now(),
-			Details:           make(map[string]interface{}),
+			Details:           map[string]interface{}{},
 		})
 	}
 
@@ -579,7 +579,7 @@ func (m *ReviewMenu) handleSkipUser(event interfaces.CommonEvent, s *session.Ses
 		ReviewerID:        uint64(event.User().ID),
 		ActivityType:      types.ActivityTypeUserSkipped,
 		ActivityTimestamp: time.Now(),
-		Details:           make(map[string]interface{}),
+		Details:           map[string]interface{}{},
 	})
 }
 
@@ -704,7 +704,7 @@ func (m *ReviewMenu) fetchNewTarget(s *session.Session, reviewerID uint64) (*typ
 		ReviewerID:        reviewerID,
 		ActivityType:      types.ActivityTypeUserViewed,
 		ActivityTimestamp: time.Now(),
-		Details:           make(map[string]interface{}),
+		Details:           map[string]interface{}{},
 	})
 
 	return user, nil
