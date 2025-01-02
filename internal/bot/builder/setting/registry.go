@@ -18,6 +18,7 @@ var (
 	ErrInvalidOption         = errors.New("invalid option selected")
 	ErrInvalidBoolValue      = errors.New("value must be true or false")
 	ErrWelcomeMessageTooLong = errors.New("welcome message cannot exceed 512 characters")
+	ErrAnnouncementTooLong   = errors.New("announcement message cannot exceed 512 characters")
 	ErrNotReviewer           = errors.New("you are not an official reviewer")
 )
 
@@ -127,6 +128,8 @@ func (r *Registry) registerBotSettings() {
 	r.BotSettings[constants.AdminIDsOption] = r.createAdminIDsSetting()
 	r.BotSettings[constants.SessionLimitOption] = r.createSessionLimitSetting()
 	r.BotSettings[constants.WelcomeMessageOption] = r.createWelcomeMessageSetting()
+	r.BotSettings[constants.AnnouncementTypeOption] = r.createAnnouncementTypeSetting()
+	r.BotSettings[constants.AnnouncementMessageOption] = r.createAnnouncementMessageSetting()
 }
 
 // createStreamerModeSetting creates the streamer mode setting.
@@ -548,6 +551,69 @@ func (r *Registry) createWelcomeMessageSetting() Setting {
 		},
 		ValueUpdater: func(value string, _ *types.UserSetting, bs *types.BotSetting, _ *session.Session) error {
 			bs.WelcomeMessage = value
+			return nil
+		},
+	}
+}
+
+// createAnnouncementTypeSetting creates the announcement type setting.
+func (r *Registry) createAnnouncementTypeSetting() Setting {
+	return Setting{
+		Key:          constants.AnnouncementTypeOption,
+		Name:         "Announcement Type",
+		Description:  "Set the type of announcement to display",
+		Type:         types.SettingTypeEnum,
+		DefaultValue: types.AnnouncementTypeNone,
+		Options: []types.SettingOption{
+			{Value: string(types.AnnouncementTypeNone), Label: "None", Description: "No announcement", Emoji: "❌"},
+			{Value: string(types.AnnouncementTypeInfo), Label: "Info", Description: "Information announcement", Emoji: "ℹ️"},
+			{Value: string(types.AnnouncementTypeWarning), Label: "Warning", Description: "Warning announcement", Emoji: "⚠️"},
+			{Value: string(types.AnnouncementTypeSuccess), Label: "Success", Description: "Success announcement", Emoji: "✅"},
+			{Value: string(types.AnnouncementTypeError), Label: "Error", Description: "Error announcement", Emoji: "🚫"},
+		},
+		Validators: []Validator{
+			validateEnum([]string{
+				string(types.AnnouncementTypeNone),
+				string(types.AnnouncementTypeInfo),
+				string(types.AnnouncementTypeWarning),
+				string(types.AnnouncementTypeSuccess),
+				string(types.AnnouncementTypeError),
+			}),
+		},
+		ValueGetter: func(_ *types.UserSetting, bs *types.BotSetting) string {
+			return string(bs.Announcement.Type)
+		},
+		ValueUpdater: func(value string, _ *types.UserSetting, bs *types.BotSetting, _ *session.Session) error {
+			bs.Announcement.Type = types.AnnouncementType(value)
+			return nil
+		},
+	}
+}
+
+// createAnnouncementMessageSetting creates the announcement message setting.
+func (r *Registry) createAnnouncementMessageSetting() Setting {
+	return Setting{
+		Key:          constants.AnnouncementMessageOption,
+		Name:         "Announcement Message",
+		Description:  "Set the announcement message to display",
+		Type:         types.SettingTypeText,
+		DefaultValue: "",
+		Validators: []Validator{
+			func(value string, _ uint64) error {
+				if len(value) > 512 {
+					return ErrAnnouncementTooLong
+				}
+				return nil
+			},
+		},
+		ValueGetter: func(_ *types.UserSetting, bs *types.BotSetting) string {
+			if bs.Announcement.Message == "" {
+				return "No announcement message set"
+			}
+			return bs.Announcement.Message
+		},
+		ValueUpdater: func(value string, _ *types.UserSetting, bs *types.BotSetting, _ *session.Session) error {
+			bs.Announcement.Message = value
 			return nil
 		},
 	}

@@ -153,14 +153,23 @@ func (b *Builder) Build() *discord.MessageUpdateBuilder {
 		)
 	}
 
-	// Create message builder with all embeds
+	// Create embeds
+	embeds := []discord.Embed{
+		b.buildWelcomeEmbed(),
+		b.buildUserGraphEmbed(),
+		b.buildGroupGraphEmbed(),
+		b.buildWorkerStatusEmbed(),
+	}
+
+	// Add announcement embed if type is not none
+	if b.botSettings.Announcement.Type != types.AnnouncementTypeNone &&
+		b.botSettings.Announcement.Message != "" {
+		embeds = append(embeds, b.buildAnnouncementEmbed())
+	}
+
+	// Create message builder
 	builder := discord.NewMessageUpdateBuilder().
-		SetEmbeds(
-			b.buildWelcomeEmbed(),
-			b.buildUserGraphEmbed(),
-			b.buildGroupGraphEmbed(),
-			b.buildWorkerStatusEmbed(),
-		).
+		SetEmbeds(embeds...).
 		AddContainerComponents(
 			discord.NewActionRow(
 				discord.NewStringSelectMenu(constants.ActionSelectMenuCustomID, "Select an action", options...),
@@ -321,4 +330,32 @@ func (b *Builder) buildGroupGraphEmbed() discord.Embed {
 	}
 
 	return embed.Build()
+}
+
+// buildAnnouncementEmbed creates the announcement embed.
+func (b *Builder) buildAnnouncementEmbed() discord.Embed {
+	var color int
+	var title string
+
+	switch b.botSettings.Announcement.Type {
+	case types.AnnouncementTypeInfo:
+		color = 0x3498DB // Blue
+		title = "📢 Announcement"
+	case types.AnnouncementTypeWarning:
+		color = 0xF1C40F // Yellow
+		title = "⚠️ Warning"
+	case types.AnnouncementTypeSuccess:
+		color = 0x2ECC71 // Green
+		title = "✅ Notice"
+	case types.AnnouncementTypeError:
+		color = 0xE74C3C // Red
+		title = "🚫 Alert"
+	case types.AnnouncementTypeNone:
+	}
+
+	return discord.NewEmbedBuilder().
+		SetTitle(title).
+		SetDescription(b.botSettings.Announcement.Message).
+		SetColor(color).
+		Build()
 }

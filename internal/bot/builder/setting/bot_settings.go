@@ -30,7 +30,8 @@ func NewBotSettingsBuilder(s *session.Session, r *Registry) *BotSettingsBuilder 
 func (b *BotSettingsBuilder) Build() *discord.MessageUpdateBuilder {
 	// Create embed with current settings
 	embed := discord.NewEmbedBuilder().
-		SetTitle("Bot Settings")
+		SetTitle("Bot Settings").
+		SetDescription("NOTE: It will take a minute for the settings to propagate.")
 
 	// Get all settings keys and sort them
 	keys := make([]string, 0, len(b.registry.BotSettings))

@@ -84,6 +84,23 @@ type UserSetting struct {
 	CaptchaUsage       CaptchaUsage     `bun:",embed"`
 }
 
+// AnnouncementType is the type of announcement message.
+type AnnouncementType string
+
+const (
+	AnnouncementTypeNone    AnnouncementType = "none"
+	AnnouncementTypeInfo    AnnouncementType = "info"
+	AnnouncementTypeWarning AnnouncementType = "warning"
+	AnnouncementTypeSuccess AnnouncementType = "success"
+	AnnouncementTypeError   AnnouncementType = "error"
+)
+
+// Announcement stores the dashboard announcement configuration.
+type Announcement struct {
+	Type    AnnouncementType `bun:"announcement_type,notnull,default:'none'"`
+	Message string           `bun:"announcement_message,notnull,default:''"`
+}
+
 // BotSetting stores bot-wide configuration options.
 type BotSetting struct {
 	ID             uint64              `bun:",pk,autoincrement"`
@@ -91,6 +108,7 @@ type BotSetting struct {
 	AdminIDs       []uint64            `bun:"admin_ids,type:bigint[]"`
 	SessionLimit   uint64              `bun:",notnull"`
 	WelcomeMessage string              `bun:",notnull,default:''"`
+	Announcement   Announcement        `bun:",embed"`
 	reviewerMap    map[uint64]struct{} // In-memory map for O(1) lookups
 	adminMap       map[uint64]struct{} // In-memory map for O(1) lookups
 }

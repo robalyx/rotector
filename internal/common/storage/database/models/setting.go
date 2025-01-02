@@ -104,6 +104,10 @@ func (r *SettingModel) GetBotSettings(ctx context.Context) (*types.BotSetting, e
 		AdminIDs:       []uint64{},
 		SessionLimit:   0,
 		WelcomeMessage: "",
+		Announcement: types.Announcement{
+			Type:    types.AnnouncementTypeNone,
+			Message: "",
+		},
 	}
 
 	err := r.db.NewSelect().Model(settings).
@@ -132,6 +136,8 @@ func (r *SettingModel) SaveBotSettings(ctx context.Context, settings *types.BotS
 		Set("admin_ids = EXCLUDED.admin_ids").
 		Set("session_limit = EXCLUDED.session_limit").
 		Set("welcome_message = EXCLUDED.welcome_message").
+		Set("announcement_type = EXCLUDED.announcement_type").
+		Set("announcement_message = EXCLUDED.announcement_message").
 		Exec(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to save bot settings: %w", err)

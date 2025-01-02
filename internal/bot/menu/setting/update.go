@@ -69,8 +69,7 @@ func (m *UpdateMenu) handleSettingChange(event *events.ComponentInteractionCreat
 
 	// Validate the new value
 	if err := m.validateSettingValue(s, setting, option); err != nil {
-		m.layout.logger.Error("Failed to validate setting value", zap.Error(err))
-		m.layout.paginationManager.RespondWithError(event, err.Error())
+		m.layout.paginationManager.NavigateTo(event, s, m.page, fmt.Sprintf("Failed to validate setting value: %v", err))
 		return
 	}
 
@@ -81,16 +80,6 @@ func (m *UpdateMenu) handleSettingChange(event *events.ComponentInteractionCreat
 	}
 
 	m.Show(event, s, settingType, settingKey)
-}
-
-// validateSettingValue validates a setting value.
-func (m *UpdateMenu) validateSettingValue(s *session.Session, setting setting.Setting, value string) error {
-	for _, validator := range setting.Validators {
-		if err := validator(value, s.UserID()); err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 // updateSetting updates a setting value in the database.
@@ -180,8 +169,7 @@ func (m *UpdateMenu) handleSettingModal(event *events.ModalSubmitInteractionCrea
 
 	// Validate the input using the setting's validators
 	if err := m.validateSettingValue(s, setting, input); err != nil {
-		m.layout.logger.Error("Failed to validate setting value", zap.Error(err))
-		m.layout.paginationManager.RespondWithError(event, err.Error())
+		m.layout.paginationManager.NavigateTo(event, s, m.page, fmt.Sprintf("Failed to validate setting value: %v", err))
 		return
 	}
 
@@ -201,4 +189,14 @@ func (m *UpdateMenu) getSetting(settingType, settingKey string) setting.Setting 
 		return m.layout.registry.UserSettings[settingKey]
 	}
 	return m.layout.registry.BotSettings[settingKey]
+}
+
+// validateSettingValue validates a setting value.
+func (m *UpdateMenu) validateSettingValue(s *session.Session, setting setting.Setting, value string) error {
+	for _, validator := range setting.Validators {
+		if err := validator(value, s.UserID()); err != nil {
+			return err
+		}
+	}
+	return nil
 }
