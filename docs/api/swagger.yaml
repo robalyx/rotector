@@ -1,0 +1,251 @@
+basePath: /v1
+definitions:
+  internal_rest_types.Group:
+    properties:
+      confidence:
+        type: number
+      description:
+        type: string
+      downvotes:
+        type: integer
+      id:
+        type: integer
+      lastScanned:
+        type: string
+      lastUpdated:
+        type: string
+      lastViewed:
+        type: string
+      name:
+        type: string
+      owner:
+        $ref: '#/definitions/types.GroupUser'
+      reason:
+        type: string
+      reputation:
+        type: integer
+      shout:
+        $ref: '#/definitions/types.GroupShout'
+      thumbnailUrl:
+        type: string
+      upvotes:
+        type: integer
+    type: object
+  internal_rest_types.User:
+    properties:
+      confidence:
+        type: number
+      createdAt:
+        type: string
+      description:
+        type: string
+      displayName:
+        type: string
+      downvotes:
+        type: integer
+      flaggedContent:
+        items:
+          type: string
+        type: array
+      flaggedGroups:
+        items:
+          type: integer
+        type: array
+      followerCount:
+        type: integer
+      followingCount:
+        type: integer
+      friends:
+        items:
+          $ref: '#/definitions/types.Friend'
+        type: array
+      games:
+        items:
+          $ref: '#/definitions/types.Game'
+        type: array
+      groups:
+        items:
+          $ref: '#/definitions/types.UserGroup'
+        type: array
+      id:
+        type: integer
+      lastScanned:
+        type: string
+      lastUpdated:
+        type: string
+      lastViewed:
+        type: string
+      name:
+        type: string
+      reason:
+        type: string
+      reputation:
+        type: integer
+      thumbnailUrl:
+        type: string
+      upvotes:
+        type: integer
+    type: object
+  types.Friend:
+    properties:
+      displayName:
+        type: string
+      hasVerifiedBadge:
+        type: boolean
+      id:
+        type: integer
+      name:
+        type: string
+    type: object
+  types.Game:
+    properties:
+      id:
+        type: integer
+      name:
+        type: string
+    type: object
+  types.GetGroupResponse:
+    properties:
+      group:
+        $ref: '#/definitions/internal_rest_types.Group'
+      status:
+        $ref: '#/definitions/types.GroupStatus'
+    type: object
+  types.GetUserResponse:
+    properties:
+      status:
+        $ref: '#/definitions/types.UserStatus'
+      user:
+        $ref: '#/definitions/internal_rest_types.User'
+    type: object
+  types.GroupShout:
+    properties:
+      content:
+        type: string
+      poster:
+        $ref: '#/definitions/types.GroupUser'
+    type: object
+  types.GroupStatus:
+    enum:
+    - flagged
+    - confirmed
+    - cleared
+    - locked
+    - unflagged
+    type: string
+    x-enum-varnames:
+    - GroupStatusFlagged
+    - GroupStatusConfirmed
+    - GroupStatusCleared
+    - GroupStatusLocked
+    - GroupStatusUnflagged
+  types.GroupUser:
+    properties:
+      displayName:
+        type: string
+      id:
+        type: integer
+      name:
+        type: string
+    type: object
+  types.UserGroup:
+    properties:
+      id:
+        type: integer
+      name:
+        type: string
+      role:
+        type: string
+    type: object
+  types.UserStatus:
+    enum:
+    - flagged
+    - confirmed
+    - cleared
+    - banned
+    - unflagged
+    type: string
+    x-enum-varnames:
+    - UserStatusFlagged
+    - UserStatusConfirmed
+    - UserStatusCleared
+    - UserStatusBanned
+    - UserStatusUnflagged
+info:
+  contact: {}
+  description: REST API for Rotector
+  license:
+    name: GPL-2.0
+    url: https://www.gnu.org/licenses/old-licenses/gpl-2.0.en.html
+  title: Rotector API
+  version: "1.0"
+paths:
+  /groups/{id}:
+    get:
+      consumes:
+      - application/json
+      description: Retrieves detailed information about a group by their ID
+      parameters:
+      - description: Group ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/types.GetGroupResponse'
+        "429":
+          description: Rate limit exceeded
+          schema:
+            type: string
+        "500":
+          description: Internal server error
+          schema:
+            type: string
+      security:
+      - BearerAuth: []
+      summary: Get group information
+      tags:
+      - groups
+  /users/{id}:
+    get:
+      consumes:
+      - application/json
+      description: Retrieves detailed information about a user by their ID
+      parameters:
+      - description: User ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/types.GetUserResponse'
+        "429":
+          description: Rate limit exceeded
+          schema:
+            type: string
+        "500":
+          description: Internal server error
+          schema:
+            type: string
+      security:
+      - BearerAuth: []
+      summary: Get user information
+      tags:
+      - users
+securityDefinitions:
+  BearerAuth:
+    description: 'API key must be provided as: Bearer <api_key>'
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"

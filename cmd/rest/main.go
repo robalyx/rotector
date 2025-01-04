@@ -11,13 +11,14 @@ import (
 	"syscall"
 	"time"
 
+	_ "github.com/rotector/rotector/docs/api"
 	"github.com/rotector/rotector/internal/common/setup"
-	"github.com/rotector/rotector/internal/rpc"
+	"github.com/rotector/rotector/internal/rest"
 	"go.uber.org/zap"
 )
 
-// RPCLogDir specifies where RPC server log files are stored.
-const RPCLogDir = "logs/rpc_logs"
+// RESTLogDir specifies where REST server log files are stored.
+const RESTLogDir = "logs/rest_logs"
 
 // Server timeouts.
 const (
@@ -26,23 +27,32 @@ const (
 	ShutdownTimeout = 30 * time.Second
 )
 
+//	@title			Rotector API
+//	@version		1.0
+//	@description	REST API for Rotector
+
+//	@license.name	GPL-2.0
+//	@license.url	https://www.gnu.org/licenses/old-licenses/gpl-2.0.en.html
+
+//	@BasePath	/v1
+
+// @securityDefinitions.apikey	BearerAuth
+// @in							header
+// @name						Authorization
+// @description				API key must be provided as: Bearer <api_key>
 func main() {
 	// Initialize application with required dependencies
-	app, err := setup.InitializeApp(RPCLogDir)
+	app, err := setup.InitializeApp(RESTLogDir)
 	if err != nil {
 		log.Fatalf("Failed to initialize application: %v", err)
 	}
 	defer app.Cleanup()
 
 	// Create server
-	handler, err := rpc.NewServer(app.DB, app.Logger, &app.Config.API)
+	handler, err := rest.NewServer(app.DB, app.Logger, &app.Config.API)
 	if err != nil {
-		app.Logger.Fatal("Failed to create RPC server", zap.Error(err))
+		app.Logger.Fatal("Failed to create REST server", zap.Error(err))
 	}
-
-	// Create HTTP server multiplexer
-	mux := http.NewServeMux()
-	mux.Handle("/twirp/", handler)
 
 	// Get server address from config
 	addr := fmt.Sprintf("%s:%d", app.Config.API.Server.Host, app.Config.API.Server.Port)
@@ -50,14 +60,14 @@ func main() {
 	// Create HTTP server with timeouts
 	srv := &http.Server{
 		Addr:         addr,
-		Handler:      mux,
+		Handler:      handler,
 		ReadTimeout:  ReadTimeout,
 		WriteTimeout: WriteTimeout,
 	}
 
 	// Start server in a goroutine
 	go func() {
-		log.Printf("RPC server started on %s", addr)
+		log.Printf("REST server started on %s", addr)
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			app.Logger.Error("Failed to start server", zap.Error(err))
 		}
@@ -68,7 +78,7 @@ func main() {
 	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
 	<-stop
 
-	app.Logger.Info("Shutting down RPC server...")
+	app.Logger.Info("Shutting down REST server...")
 
 	// Create shutdown context with timeout
 	ctx, cancel := context.WithTimeout(context.Background(), ShutdownTimeout)

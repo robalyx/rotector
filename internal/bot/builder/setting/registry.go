@@ -4,6 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"strings"
+	"time"
 
 	"github.com/rotector/rotector/internal/bot/constants"
 	"github.com/rotector/rotector/internal/bot/core/session"
@@ -19,6 +21,7 @@ var (
 	ErrInvalidBoolValue      = errors.New("value must be true or false")
 	ErrWelcomeMessageTooLong = errors.New("welcome message cannot exceed 512 characters")
 	ErrAnnouncementTooLong   = errors.New("announcement message cannot exceed 512 characters")
+	ErrDescriptionTooLong    = errors.New("description cannot exceed 512 characters")
 	ErrNotReviewer           = errors.New("you are not an official reviewer")
 )
 
@@ -130,6 +133,7 @@ func (r *Registry) registerBotSettings() {
 	r.BotSettings[constants.WelcomeMessageOption] = r.createWelcomeMessageSetting()
 	r.BotSettings[constants.AnnouncementTypeOption] = r.createAnnouncementTypeSetting()
 	r.BotSettings[constants.AnnouncementMessageOption] = r.createAnnouncementMessageSetting()
+	r.BotSettings[constants.APIKeysOption] = r.createAPIKeysSetting()
 }
 
 // createStreamerModeSetting creates the streamer mode setting.
@@ -614,6 +618,66 @@ func (r *Registry) createAnnouncementMessageSetting() Setting {
 		},
 		ValueUpdater: func(value string, _ *types.UserSetting, bs *types.BotSetting, _ *session.Session) error {
 			bs.Announcement.Message = value
+			return nil
+		},
+	}
+}
+
+// createAPIKeysSetting creates the API keys setting.
+func (r *Registry) createAPIKeysSetting() Setting {
+	return Setting{
+		Key:          constants.APIKeysOption,
+		Name:         "API Keys",
+		Description:  "Manage API keys for REST API access",
+		Type:         types.SettingTypeText,
+		DefaultValue: []types.APIKeyInfo{},
+		Validators: []Validator{
+			func(value string, _ uint64) error {
+				if len(value) > 100 {
+					return ErrDescriptionTooLong
+				}
+				return nil
+			},
+		},
+		ValueGetter: func(_ *types.UserSetting, bs *types.BotSetting) string {
+			if len(bs.APIKeys) == 0 {
+				return "No API keys configured"
+			}
+
+			var sb strings.Builder
+			for i, key := range bs.APIKeys {
+				if i > 0 {
+					sb.WriteString("\n")
+				}
+				// Only show first 8 chars of key for security
+				sb.WriteString(fmt.Sprintf("||%s||: %s (Created: %s)",
+					key.Key,
+					key.Description,
+					key.CreatedAt.Format("2006-01-02")))
+			}
+			return sb.String()
+		},
+		ValueUpdater: func(value string, _ *types.UserSetting, bs *types.BotSetting, _ *session.Session) error {
+			// First check if the value matches an existing API key
+			for i, key := range bs.APIKeys {
+				if key.Key == value {
+					// Remove the key if found
+					bs.APIKeys = append(bs.APIKeys[:i], bs.APIKeys[i+1:]...)
+					return nil
+				}
+			}
+
+			// If not removing, treat as new key creation
+			// Generate a new API key
+			key := utils.GenerateSecureToken(32)
+
+			newKey := types.APIKeyInfo{
+				Key:         key,
+				Description: value,
+				CreatedAt:   time.Now(),
+			}
+
+			bs.APIKeys = append(bs.APIKeys, newKey)
 			return nil
 		},
 	}

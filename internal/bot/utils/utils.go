@@ -1,6 +1,8 @@
 package utils
 
 import (
+	cryptoRand "crypto/rand"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"math"
@@ -172,6 +174,16 @@ func GenerateRandomWords(count int) string {
 	}
 
 	return strings.Join(selected, " ")
+}
+
+// GenerateSecureToken generates a cryptographically secure random token of the specified length.
+// The resulting string is URL-safe base64 encoded.
+func GenerateSecureToken(length int) string {
+	b := make([]byte, length)
+	if _, err := cryptoRand.Read(b); err != nil {
+		panic(err) // This should never happen
+	}
+	return base64.URLEncoding.EncodeToString(b)[:length]
 }
 
 // GetMessageEmbedColor returns the appropriate embed color based on streamer mode.

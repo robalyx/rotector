@@ -9,7 +9,7 @@ type Config struct {
 	Common CommonConfig
 	Bot    BotConfig
 	Worker WorkerConfig
-	RPC    RPCConfig
+	API    APIConfig
 }
 
 // CommonConfig contains configuration shared between bot and worker.
@@ -35,11 +35,11 @@ type WorkerConfig struct {
 	ThresholdLimits ThresholdLimits `mapstructure:"threshold_limits"`
 }
 
-// RPCConfig contains RPC server specific configuration.
-type RPCConfig struct {
-	Server    RPCServer    `mapstructure:"server"`
-	IP        RPCIPConfig  `mapstructure:"ip"`
-	RateLimit RPCRateLimit `mapstructure:"rate_limit"`
+// APIConfig contains RPC server specific configuration.
+type APIConfig struct {
+	Server    APIServer `mapstructure:"server"`
+	IP        IPConfig  `mapstructure:"ip"`
+	RateLimit RateLimit `mapstructure:"rate_limit"`
 }
 
 // Debug contains debug-related configuration.
@@ -116,14 +116,14 @@ type ThresholdLimits struct {
 	MaxGroupMembersTrack   uint64  `mapstructure:"max_group_members_track"`        // Maximum group members before skipping tracking
 }
 
-// RPCServer contains server configuration options.
-type RPCServer struct {
+// APIServer contains server configuration options.
+type APIServer struct {
 	Host string `mapstructure:"host"` // Host address to listen on
 	Port int    `mapstructure:"port"` // Port number to listen on
 }
 
-// RPCIPConfig contains IP validation configuration.
-type RPCIPConfig struct {
+// IPConfig contains IP validation configuration.
+type IPConfig struct {
 	// Enable checking of forwarded headers (X-Forwarded-For, etc.)
 	EnableHeaderCheck bool     `mapstructure:"enable_header_check"` // Enable checking of forwarded headers (X-Forwarded-For, etc.)
 	TrustedProxies    []string `mapstructure:"trusted_proxies"`     // List of trusted proxy IPs that can set forwarded headers
@@ -131,10 +131,14 @@ type RPCIPConfig struct {
 	AllowLocalIPs     bool     `mapstructure:"allow_local_ips"`     // Allow local IPs (127.0.0.1, etc.) for development/testing
 }
 
-// RPCRateLimit contains rate limiting configuration for the RPC server.
-type RPCRateLimit struct {
-	RequestsPerSecond float64 `mapstructure:"requests_per_second"` // Maximum number of requests per second per IP
-	BurstSize         int     `mapstructure:"burst_size"`          // Maximum burst size for rate limiting
+// RateLimit contains rate limiting configuration for the RPC server.
+type RateLimit struct {
+	RequestsPerSecond    float64 `mapstructure:"requests_per_second"`      // Maximum number of requests per second per IP
+	BurstSize            int     `mapstructure:"burst_size"`               // Maximum burst size for rate limiting
+	APIKeyRequestsPerSec float64 `mapstructure:"api_key_requests_per_sec"` // Maximum number of requests per second for API key users
+	APIKeyBurstSize      int     `mapstructure:"api_key_burst_size"`       // Maximum burst size for API key users
+	BlockDuration        int     `mapstructure:"block_duration"`           // Duration in seconds to block IPs that continue sending requests while rate limited
+	StrikeLimit          int     `mapstructure:"strike_limit"`             // Number of rate limit violations before applying block duration
 }
 
 // Proxy contains proxy-related configuration.
@@ -184,8 +188,8 @@ func LoadConfig() (*Config, error) {
 		return nil, err
 	}
 
-	// Load RPC config
-	viper.SetConfigName("rpc")
+	// Load API config
+	viper.SetConfigName("api")
 	if err := viper.MergeInConfig(); err != nil {
 		return nil, err
 	}

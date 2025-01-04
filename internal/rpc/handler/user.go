@@ -3,11 +3,11 @@ package handler
 import (
 	"context"
 	"errors"
-	"time"
 
 	"github.com/rotector/rotector/internal/common/storage/database"
 	"github.com/rotector/rotector/internal/common/storage/database/types"
-	"github.com/rotector/rotector/rpc/user"
+	"github.com/rotector/rotector/internal/rpc/convert"
+	"github.com/rotector/rotector/internal/rpc/proto"
 	"go.uber.org/zap"
 )
 
@@ -26,8 +26,8 @@ func NewUserHandler(db *database.Client, logger *zap.Logger) *UserHandler {
 }
 
 // GetUser handles the GetUser RPC method.
-func (h *UserHandler) GetUser(ctx context.Context, req *user.GetUserRequest) (*user.GetUserResponse, error) {
-	// Get full user information
+func (h *UserHandler) GetUser(ctx context.Context, req *proto.GetUserRequest) (*proto.GetUserResponse, error) {
+	// Get full user information from database
 	reviewUser, _, err := h.db.Users().GetUserByID(ctx, req.GetUserId(), types.UserFields{}, false)
 	if err != nil && !errors.Is(err, types.ErrUserNotFound) {
 		h.logger.Error("Failed to get user information",
@@ -36,78 +36,16 @@ func (h *UserHandler) GetUser(ctx context.Context, req *user.GetUserRequest) (*u
 		return nil, err
 	}
 
-	// If the user is not found, return immediately
+	// If the user is not found, return unflagged status
 	if errors.Is(err, types.ErrUserNotFound) {
-		return &user.GetUserResponse{
-			Status: user.UserStatus_USER_STATUS_UNFLAGGED,
+		return &proto.GetUserResponse{
+			Status: proto.UserStatus_USER_STATUS_UNFLAGGED,
 		}, nil
 	}
 
-	// Convert user status
-	var status user.UserStatus
-	switch reviewUser.Status {
-	case types.UserTypeFlagged:
-		status = user.UserStatus_USER_STATUS_FLAGGED
-	case types.UserTypeConfirmed:
-		status = user.UserStatus_USER_STATUS_CONFIRMED
-	case types.UserTypeCleared:
-		status = user.UserStatus_USER_STATUS_CLEARED
-	case types.UserTypeBanned:
-		status = user.UserStatus_USER_STATUS_BANNED
-	case types.UserTypeUnflagged:
-		status = user.UserStatus_USER_STATUS_UNFLAGGED
-	}
-
-	// Convert user data to protobuf message
-	protoUser := &user.User{
-		Id:             reviewUser.ID,
-		Name:           reviewUser.Name,
-		DisplayName:    reviewUser.DisplayName,
-		Description:    reviewUser.Description,
-		CreatedAt:      reviewUser.CreatedAt.Format(time.RFC3339),
-		Reason:         reviewUser.Reason,
-		FlaggedContent: reviewUser.FlaggedContent,
-		FollowerCount:  reviewUser.FollowerCount,
-		FollowingCount: reviewUser.FollowingCount,
-		Confidence:     reviewUser.Confidence,
-		LastScanned:    reviewUser.LastScanned.Format(time.RFC3339),
-		LastUpdated:    reviewUser.LastUpdated.Format(time.RFC3339),
-		LastViewed:     reviewUser.LastViewed.Format(time.RFC3339),
-		ThumbnailUrl:   reviewUser.ThumbnailURL,
-		Upvotes:        reviewUser.Reputation.Upvotes,
-		Downvotes:      reviewUser.Reputation.Downvotes,
-		Reputation:     reviewUser.Reputation.Score,
-	}
-
-	// Convert groups
-	for _, g := range reviewUser.Groups {
-		protoUser.Groups = append(protoUser.Groups, &user.Group{
-			Id:   g.Group.ID,
-			Name: g.Group.Name,
-			Role: g.Role.Name,
-		})
-	}
-
-	// Convert friends
-	for _, f := range reviewUser.Friends {
-		protoUser.Friends = append(protoUser.Friends, &user.Friend{
-			Id:               f.ID,
-			Name:             f.Name,
-			DisplayName:      f.DisplayName,
-			HasVerifiedBadge: f.HasVerifiedBadge,
-		})
-	}
-
-	// Convert games
-	for _, g := range reviewUser.Games {
-		protoUser.Games = append(protoUser.Games, &user.Game{
-			Id:   g.ID,
-			Name: g.Name,
-		})
-	}
-
-	return &user.GetUserResponse{
-		Status: status,
-		User:   protoUser,
+	// Convert to RPC API type
+	return &proto.GetUserResponse{
+		Status: convert.UserStatus(reviewUser.Status),
+		User:   convert.User(reviewUser),
 	}, nil
 }

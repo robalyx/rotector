@@ -139,7 +139,7 @@ func (m *UpdateMenu) handleSettingButton(event *events.ComponentInteractionCreat
 				WithValue(s.GetString(constants.SessionKeyCurrentValue))
 			modalTitle = "Set " + setting.Name
 		case types.SettingTypeText:
-			textInput.WithPlaceholder("Enter your message...").
+			textInput.WithPlaceholder("Enter your description...").
 				WithValue(s.GetString(constants.SessionKeyCurrentValue)).
 				WithStyle(discord.TextInputStyleParagraph)
 			modalTitle = "Set " + setting.Name

@@ -148,6 +148,7 @@ const (
 	WelcomeMessageOption      = "welcome_message"
 	AnnouncementTypeOption    = "announcement_type"
 	AnnouncementMessageOption = "announcement_message"
+	APIKeysOption             = "api_keys"
 )
 
 // Logs Menu.

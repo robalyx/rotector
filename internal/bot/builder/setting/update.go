@@ -102,7 +102,7 @@ func (b *UpdateBuilder) buildModalComponents() discord.ContainerComponent {
 	case types.SettingTypeNumber:
 		buttonText = "Set Value"
 	case types.SettingTypeText:
-		buttonText = "Set Message"
+		buttonText = "Set Description"
 	} //exhaustive:ignore
 
 	return discord.NewActionRow(

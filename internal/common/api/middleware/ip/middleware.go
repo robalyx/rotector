@@ -6,14 +6,15 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/rotector/rotector/internal/common/api/middleware/header"
 	"github.com/rotector/rotector/internal/common/config"
 	"github.com/twitchtv/twirp"
+	"github.com/uptrace/bunrouter"
 	"go.uber.org/zap"
 )
 
 type (
-	ctxKey           struct{}
-	remoteAddrCtxKey struct{}
+	ipCtxKey struct{}
 )
 
 // UnknownIP is returned when no valid IP can be determined.
@@ -21,7 +22,7 @@ const UnknownIP = "unknown"
 
 // FromContext retrieves the client IP from the context.
 func FromContext(ctx context.Context) string {
-	if ip, ok := ctx.Value(ctxKey{}).(string); ok {
+	if ip, ok := ctx.Value(ipCtxKey{}).(string); ok {
 		return ip
 	}
 	return UnknownIP
@@ -31,11 +32,11 @@ func FromContext(ctx context.Context) string {
 type Middleware struct {
 	checker *Checker
 	logger  *zap.Logger
-	config  *config.RPCIPConfig
+	config  *config.IPConfig
 }
 
 // New creates a new IP middleware.
-func New(logger *zap.Logger, config *config.RPCIPConfig) *Middleware {
+func New(logger *zap.Logger, config *config.IPConfig) *Middleware {
 	return &Middleware{
 		checker: NewChecker(logger, config),
 		logger:  logger,
@@ -43,64 +44,44 @@ func New(logger *zap.Logger, config *config.RPCIPConfig) *Middleware {
 	}
 }
 
-// WithHeaderExtraction wraps an http.Handler to extract IP-related headers.
-func WithHeaderExtraction(logger *zap.Logger, config *config.RPCIPConfig) func(http.Handler) http.Handler {
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			ctx := r.Context()
-
-			// Store remote address in context
-			logger.Debug("Storing remote address in context",
-				zap.String("remote_addr", r.RemoteAddr))
-			ctx = context.WithValue(ctx, remoteAddrCtxKey{}, r.RemoteAddr)
-
-			// Extract relevant headers
-			headers := make(http.Header)
-			for _, h := range config.CustomHeaders {
-				if v := r.Header.Get(h); v != "" {
-					logger.Debug("Found IP-related header",
-						zap.String("header", h),
-						zap.String("value", v))
-					headers.Set(h, v)
-				}
-			}
-
-			// Store filtered headers in context
-			ctx, err := twirp.WithHTTPRequestHeaders(ctx, headers)
-			if err != nil {
-				logger.Error("Failed to set headers in context", zap.Error(err))
-				http.Error(w, "Internal server error", http.StatusInternalServerError)
-				return
-			}
-
-			next.ServeHTTP(w, r.WithContext(ctx))
-		})
-	}
-}
-
-// ServerHooks returns Twirp server hooks for IP detection.
-func (m *Middleware) ServerHooks() *twirp.ServerHooks {
+// AsRPCHooks returns Twirp server hooks for IP validation in RPC server.
+func (m *Middleware) AsRPCHooks() *twirp.ServerHooks {
 	return &twirp.ServerHooks{
-		RequestReceived: m.requestReceived,
+		RequestReceived: func(ctx context.Context) (context.Context, error) {
+			ip := m.getClientIP(ctx)
+			if ip == UnknownIP {
+				m.logger.Warn("No valid client IP found in request")
+				return ctx, twirp.NewError(twirp.PermissionDenied, "request must include a valid public IP address")
+			}
+
+			m.logger.Debug("Client IP detected", zap.String("ip", ip))
+			return context.WithValue(ctx, ipCtxKey{}, ip), nil
+		},
 	}
 }
 
-// requestReceived handles incoming requests and extracts the client IP.
-func (m *Middleware) requestReceived(ctx context.Context) (context.Context, error) {
-	ip := m.getClientIP(ctx)
-	if ip == UnknownIP {
-		m.logger.Warn("No valid client IP found in request")
-		return ctx, twirp.NewError(twirp.PermissionDenied, "request must include a valid public IP address")
-	}
+// AsRESTMiddleware returns a bunrouter middleware handler for IP validation in REST server.
+func (m *Middleware) AsRESTMiddleware(next bunrouter.HandlerFunc) bunrouter.HandlerFunc {
+	return func(w http.ResponseWriter, req bunrouter.Request) error {
+		// Get client IP from context
+		ip := m.getClientIP(req.Context())
+		if ip == UnknownIP {
+			http.Error(w, "Invalid IP address", http.StatusForbidden)
+			return nil
+		}
 
-	m.logger.Debug("Client IP detected", zap.String("ip", ip))
-	return context.WithValue(ctx, ctxKey{}, ip), nil
+		// Store IP in context for handlers
+		ctx := context.WithValue(req.Context(), ipCtxKey{}, ip)
+		req = req.WithContext(ctx)
+
+		return next(w, req)
+	}
 }
 
 // getClientIP extracts the client IP from the request context.
 func (m *Middleware) getClientIP(ctx context.Context) string {
 	// Get headers from context
-	header, ok := twirp.HTTPRequestHeaders(ctx)
+	headers, ok := twirp.HTTPRequestHeaders(ctx)
 	if !ok {
 		m.logger.Debug("No headers found in context")
 		return UnknownIP
@@ -121,7 +102,7 @@ func (m *Middleware) getClientIP(ctx context.Context) string {
 
 	// If remote IP is a trusted proxy, check headers
 	if m.checker.IsTrustedProxy(remoteIP) {
-		if ip := m.getIPFromHeaders(header); ip != UnknownIP {
+		if ip := m.getIPFromHeaders(headers); ip != UnknownIP {
 			m.logger.Debug("Found valid IP in headers", zap.String("ip", ip))
 			return ip
 		}
@@ -145,8 +126,8 @@ func (m *Middleware) useRemoteIP(remoteIP net.IP, reason string) string {
 // getRemoteIP gets and validates the remote IP from the context.
 func (m *Middleware) getRemoteIP(ctx context.Context) net.IP {
 	// Get remote address from context
-	remoteAddr, ok := ctx.Value(remoteAddrCtxKey{}).(string)
-	if !ok {
+	remoteAddr := header.FromRemoteAddr(ctx)
+	if remoteAddr == "" {
 		m.logger.Debug("No remote address in context")
 		return nil
 	}

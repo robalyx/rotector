@@ -11,7 +11,6 @@ import (
 	"github.com/redis/rueidis"
 	"github.com/rotector/rotector/internal/bot/constants"
 	"github.com/rotector/rotector/internal/common/storage/database"
-	"github.com/rotector/rotector/internal/common/storage/database/types"
 	"github.com/rotector/rotector/internal/common/storage/redis"
 	"go.uber.org/zap"
 )
@@ -45,11 +44,9 @@ var (
 // Manager manages the session lifecycle using Redis as the backing store.
 // Sessions are prefixed and stored with automatic expiration.
 type Manager struct {
-	db                 *database.Client
-	redis              rueidis.Client
-	logger             *zap.Logger
-	botSettings        *types.BotSetting
-	lastSettingsUpdate time.Time
+	db     *database.Client
+	redis  rueidis.Client
+	logger *zap.Logger
 }
 
 // NewManager creates a new session manager that uses Redis as the backing store.
@@ -60,18 +57,10 @@ func NewManager(db *database.Client, redisManager *redis.Manager, logger *zap.Lo
 		return nil, fmt.Errorf("failed to get Redis client: %w", err)
 	}
 
-	// Load bot settings
-	botSettings, err := db.Settings().GetBotSettings(context.Background())
-	if err != nil {
-		return nil, fmt.Errorf("%w: %w", ErrFailedToLoadSettings, err)
-	}
-
 	return &Manager{
-		db:                 db,
-		redis:              redisClient,
-		logger:             logger,
-		botSettings:        botSettings,
-		lastSettingsUpdate: time.Now(),
+		db:     db,
+		redis:  redisClient,
+		logger: logger,
 	}, nil
 }
 
@@ -79,15 +68,10 @@ func NewManager(db *database.Client, redisManager *redis.Manager, logger *zap.Lo
 // New sessions are populated with user settings from the database.
 // Existing sessions are refreshed with the latest user settings.
 func (m *Manager) GetOrCreateSession(ctx context.Context, userID snowflake.ID) (*Session, error) {
-	// Check if bot settings need to be reloaded
-	if time.Since(m.lastSettingsUpdate) >= BotSettingsRefreshInterval {
-		botSettings, err := m.db.Settings().GetBotSettings(ctx)
-		if err != nil {
-			m.logger.Error("Failed to reload bot settings", zap.Error(err))
-		} else {
-			m.botSettings = botSettings
-			m.lastSettingsUpdate = time.Now()
-		}
+	// Load bot settings
+	botSettings, err := m.db.Settings().GetBotSettings(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", ErrFailedToLoadSettings, err)
 	}
 
 	// Try loading existing session first
@@ -96,16 +80,16 @@ func (m *Manager) GetOrCreateSession(ctx context.Context, userID snowflake.ID) (
 	sessionExists := result.Error() == nil
 
 	// If session doesn't exist, check session limit
-	if !sessionExists && m.botSettings.SessionLimit > 0 {
+	if !sessionExists && botSettings.SessionLimit > 0 {
 		activeCount, err := m.GetActiveSessionCount(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("%w: %w", ErrFailedToGetCount, err)
 		}
 
-		if activeCount >= m.botSettings.SessionLimit {
+		if activeCount >= botSettings.SessionLimit {
 			m.logger.Debug("Session limit reached",
 				zap.Uint64("active_count", activeCount),
-				zap.Uint64("limit", m.botSettings.SessionLimit))
+				zap.Uint64("limit", botSettings.SessionLimit))
 			return nil, ErrSessionLimitReached
 		}
 	}
@@ -123,7 +107,7 @@ func (m *Manager) GetOrCreateSession(ctx context.Context, userID snowflake.ID) (
 		}
 
 		session := NewSession(m.db, m.redis, key, sessionData, m.logger, uint64(userID))
-		session.Set(constants.SessionKeyBotSettings, m.botSettings)
+		session.Set(constants.SessionKeyBotSettings, botSettings)
 		return session, nil
 	}
 
@@ -137,7 +121,7 @@ func (m *Manager) GetOrCreateSession(ctx context.Context, userID snowflake.ID) (
 	sessionData := make(map[string]interface{})
 	session := NewSession(m.db, m.redis, key, sessionData, m.logger, uint64(userID))
 	session.Set(constants.SessionKeyUserSettings, userSettings)
-	session.Set(constants.SessionKeyBotSettings, m.botSettings)
+	session.Set(constants.SessionKeyBotSettings, botSettings)
 	return session, nil
 }
 

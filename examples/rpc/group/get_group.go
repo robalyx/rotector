@@ -12,12 +12,12 @@ import (
 )
 
 func main() {
-	// Get user ID from command line
+	// Get group ID from command line
 	if len(os.Args) <= 1 {
-		log.Println("Usage: get_user <user_id> [api_key]")
+		log.Println("Usage: get_group <group_id> [api_key]")
 		return
 	}
-	userID := os.Args[1]
+	groupID := os.Args[1]
 
 	// Create context
 	ctx := context.Background()
@@ -40,24 +40,24 @@ func main() {
 	client := proto.NewRotectorServiceProtobufClient("http://localhost:8080", &http.Client{})
 
 	// Make request
-	resp, err := client.GetUser(ctx, &proto.GetUserRequest{
-		UserId: userID,
+	resp, err := client.GetGroup(ctx, &proto.GetGroupRequest{
+		GroupId: groupID,
 	})
 	if err != nil {
-		log.Printf("Error getting user: %v\n", err)
+		log.Printf("Error getting group: %v\n", err)
 		return
 	}
 
-	// Check if user exists
-	if resp.GetStatus() == proto.UserStatus_USER_STATUS_UNFLAGGED {
-		log.Printf("User %s: NOT FOUND\n", userID)
+	// Check if group exists
+	if resp.GetStatus() == proto.GroupStatus_GROUP_STATUS_UNFLAGGED {
+		log.Printf("Group %s: NOT FOUND\n", groupID)
 		return
 	}
 
 	// Pretty print the full response
 	jsonBytes, err := json.MarshalIndent(resp, "", "  ")
 	if err != nil {
-		log.Printf("Error marshalling user: %v\n", err)
+		log.Printf("Error marshalling group: %v\n", err)
 		return
 	}
 	log.Println(string(jsonBytes))

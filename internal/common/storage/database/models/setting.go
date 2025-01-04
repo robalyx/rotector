@@ -17,6 +17,7 @@ import (
 type SettingModel struct {
 	db     *bun.DB
 	logger *zap.Logger
+	cache  *types.BotSetting
 }
 
 // NewSetting creates a SettingModel with database access.
@@ -98,6 +99,11 @@ func (r *SettingModel) SaveUserSettings(ctx context.Context, settings *types.Use
 
 // GetBotSettings retrieves the bot settings.
 func (r *SettingModel) GetBotSettings(ctx context.Context) (*types.BotSetting, error) {
+	// Return cached settings if they exist and are fresh
+	if r.cache != nil && !r.cache.NeedsRefresh() {
+		return r.cache, nil
+	}
+
 	settings := &types.BotSetting{
 		ID:             1,
 		ReviewerIDs:    []uint64{},
@@ -125,6 +131,10 @@ func (r *SettingModel) GetBotSettings(ctx context.Context) (*types.BotSetting, e
 		}
 	}
 
+	// Update cache
+	settings.UpdateRefreshTime()
+	r.cache = settings
+
 	return settings, nil
 }
 
@@ -138,9 +148,15 @@ func (r *SettingModel) SaveBotSettings(ctx context.Context, settings *types.BotS
 		Set("welcome_message = EXCLUDED.welcome_message").
 		Set("announcement_type = EXCLUDED.announcement_type").
 		Set("announcement_message = EXCLUDED.announcement_message").
+		Set("api_keys = EXCLUDED.api_keys").
 		Exec(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to save bot settings: %w", err)
 	}
+
+	// Update cache
+	settings.UpdateRefreshTime()
+	r.cache = settings
+
 	return nil
 }

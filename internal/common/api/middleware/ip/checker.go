@@ -11,11 +11,11 @@ import (
 type Checker struct {
 	privateCIDRs []*net.IPNet // List of private and special-use CIDR ranges
 	logger       *zap.Logger
-	config       *config.RPCIPConfig
+	config       *config.IPConfig
 }
 
 // NewChecker creates a new Checker with predefined private ranges.
-func NewChecker(logger *zap.Logger, config *config.RPCIPConfig) *Checker {
+func NewChecker(logger *zap.Logger, config *config.IPConfig) *Checker {
 	// Define private network ranges in CIDR notation
 	cidrs := [...]string{
 		// IPv4 ranges
