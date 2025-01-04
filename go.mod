@@ -8,7 +8,7 @@ require (
 	github.com/dchest/captcha v1.1.0
 	github.com/disgoorg/disgo v0.18.14
 	github.com/disgoorg/snowflake/v2 v2.0.3
-	github.com/getsentry/sentry-go v0.30.0
+	github.com/getsentry/sentry-go v0.31.1
 	github.com/google/generative-ai-go v0.19.0
 	github.com/google/uuid v1.6.0
 	github.com/jaxron/axonet v0.0.0-20241224051239-2d7d6fad4b03
@@ -18,7 +18,7 @@ require (
 	github.com/jaxron/axonet/middleware/singleflight v0.0.0-20241224051239-2d7d6fad4b03
 	github.com/jaxron/roapi.go v0.0.0-20241207095928-5d33fcc38cf1
 	github.com/klauspost/compress v1.17.11
-	github.com/redis/rueidis v1.0.51
+	github.com/redis/rueidis v1.0.52
 	github.com/spf13/cast v1.7.1
 	github.com/spf13/cobra v1.8.1
 	github.com/spf13/viper v1.19.0
@@ -26,9 +26,9 @@ require (
 	github.com/swaggo/swag v1.16.4
 	github.com/tdewolff/minify/v2 v2.21.2
 	github.com/twitchtv/twirp v8.1.3+incompatible
-	github.com/uptrace/bun v1.2.6
-	github.com/uptrace/bun/dialect/pgdialect v1.2.6
-	github.com/uptrace/bun/driver/pgdriver v1.2.6
+	github.com/uptrace/bun v1.2.7
+	github.com/uptrace/bun/dialect/pgdialect v1.2.7
+	github.com/uptrace/bun/driver/pgdriver v1.2.7
 	github.com/uptrace/bunrouter v1.0.22
 	github.com/wcharczuk/go-chart/v2 v2.1.2
 	go.uber.org/zap v1.27.0
@@ -47,8 +47,6 @@ require (
 	cloud.google.com/go/compute/metadata v0.6.0 // indirect
 	cloud.google.com/go/longrunning v0.6.3 // indirect
 	github.com/KyleBanks/depth v1.2.1 // indirect
-	github.com/bahlo/generic-list-go v0.2.0 // indirect
-	github.com/buger/jsonparser v1.1.1 // indirect
 	github.com/bytedance/sonic/loader v0.2.1 // indirect
 	github.com/cespare/xxhash v1.1.0 // indirect
 	github.com/cloudwego/base64x v0.1.4 // indirect
@@ -96,7 +94,6 @@ require (
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
 	github.com/vmihailenco/msgpack/v5 v5.4.1 // indirect
 	github.com/vmihailenco/tagparser/v2 v2.0.0 // indirect
-	github.com/wk8/go-ordered-map/v2 v2.1.9-0.20240816141633-0a40785b4f41 // indirect
 	go.opentelemetry.io/auto/sdk v1.1.0 // indirect
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.58.0 // indirect
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.58.0 // indirect
