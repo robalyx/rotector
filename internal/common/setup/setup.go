@@ -42,7 +42,7 @@ type App struct {
 
 // InitializeApp bootstraps all application dependencies in the correct order,
 // ensuring each component has its required dependencies available.
-func InitializeApp(logDir string) (*App, error) {
+func InitializeApp(ctx context.Context, logDir string) (*App, error) {
 	// Configuration must be loaded first as other components depend on it
 	cfg, configDir, err := config.LoadConfig()
 	if err != nil {
@@ -81,7 +81,7 @@ func InitializeApp(logDir string) (*App, error) {
 	}
 
 	// OpenAI client is configured with API key from config
-	genAIClient, err := genai.NewClient(context.Background(), option.WithAPIKey(cfg.Common.GeminiAI.APIKey))
+	genAIClient, err := genai.NewClient(ctx, option.WithAPIKey(cfg.Common.GeminiAI.APIKey))
 	if err != nil {
 		logger.Fatal("Failed to create Gemini client", zap.Error(err))
 	}
@@ -137,12 +137,9 @@ func InitializeApp(logDir string) (*App, error) {
 
 // Cleanup ensures graceful shutdown of all components in reverse initialization order.
 // Logs but does not fail on cleanup errors to ensure all components get cleanup attempts.
-func (s *App) Cleanup() {
+func (s *App) Cleanup(ctx context.Context) {
 	// Shutdown pprof server if running
 	if s.pprofServer != nil {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-
 		if err := s.pprofServer.srv.Shutdown(ctx); err != nil {
 			s.Logger.Error("Failed to shutdown pprof server", zap.Error(err))
 		}

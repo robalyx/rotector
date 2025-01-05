@@ -1,8 +1,10 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
+	"os"
 	"sync"
 	"time"
 
@@ -12,7 +14,7 @@ import (
 	"github.com/rotector/rotector/internal/worker/purge"
 	"github.com/rotector/rotector/internal/worker/queue"
 	"github.com/rotector/rotector/internal/worker/stats"
-	"github.com/spf13/cobra"
+	"github.com/urfave/cli/v3"
 	"go.uber.org/zap"
 )
 
@@ -36,105 +38,84 @@ const (
 )
 
 func main() {
-	if err := newRootCmd().Execute(); err != nil {
-		log.Fatalf("Failed to execute root command: %v", err)
+	if err := run(); err != nil {
+		log.Printf("Error: %v", err)
+		os.Exit(1)
 	}
 }
 
-// newRootCmd creates the root command with subcommands for each worker type.
-// The workers flag controls how many instances of each worker to start.
-func newRootCmd() *cobra.Command {
-	rootCmd := &cobra.Command{
-		Use:   "worker",
-		Short: "Start the rotector worker",
-		Long:  `This command starts the rotector worker, which can be either a group worker, user worker, stats worker, or tracking worker.`,
-	}
-	rootCmd.PersistentFlags().IntP("workers", "w", 1, "Number of workers to start")
-	rootCmd.AddCommand(newAIWorkerCmd())
-	rootCmd.AddCommand(newPurgeWorkerCmd())
-	rootCmd.AddCommand(newStatsWorkerCmd())
-	rootCmd.AddCommand(newQueueWorkerCmd())
-
-	return rootCmd
-}
-
-// newAIWorkerCmd creates subcommands for AI-based content analysis.
-func newAIWorkerCmd() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   AIWorker,
-		Short: "Start AI workers",
-		Long:  `Start AI workers, which can be friend or group workers.`,
-	}
-
-	cmd.AddCommand(
-		&cobra.Command{
-			Use:   AIWorkerTypeFriend,
-			Short: "Start user friend workers",
-			Run: func(cmd *cobra.Command, _ []string) {
-				count, _ := cmd.Flags().GetInt("workers")
-				runWorkers(AIWorker, AIWorkerTypeFriend, count)
+func run() error {
+	app := &cli.Command{
+		Name:  "worker",
+		Usage: "Start the rotector worker",
+		Flags: []cli.Flag{
+			&cli.IntFlag{
+				Name:    "workers",
+				Aliases: []string{"w"},
+				Value:   1,
+				Usage:   "Number of workers to start",
 			},
 		},
-		&cobra.Command{
-			Use:   AIWorkerTypeMember,
-			Short: "Start group member workers",
-			Run: func(cmd *cobra.Command, _ []string) {
-				count, _ := cmd.Flags().GetInt("workers")
-				runWorkers(AIWorker, AIWorkerTypeMember, count)
+		Commands: []*cli.Command{
+			{
+				Name:  AIWorker,
+				Usage: "Start AI workers",
+				Commands: []*cli.Command{
+					{
+						Name:  AIWorkerTypeFriend,
+						Usage: "Start user friend workers",
+						Action: func(ctx context.Context, c *cli.Command) error {
+							runWorkers(ctx, AIWorker, AIWorkerTypeFriend, c.Int("workers"))
+							return nil
+						},
+					},
+					{
+						Name:  AIWorkerTypeMember,
+						Usage: "Start group member workers",
+						Action: func(ctx context.Context, c *cli.Command) error {
+							runWorkers(ctx, AIWorker, AIWorkerTypeMember, c.Int("workers"))
+							return nil
+						},
+					},
+				},
+			},
+			{
+				Name:  PurgeWorker,
+				Usage: "Start purge workers",
+				Action: func(ctx context.Context, c *cli.Command) error {
+					runWorkers(ctx, PurgeWorker, "", c.Int("workers"))
+					return nil
+				},
+			},
+			{
+				Name:  StatsWorker,
+				Usage: "Start statistics worker",
+				Action: func(ctx context.Context, c *cli.Command) error {
+					runWorkers(ctx, StatsWorker, "", c.Int("workers"))
+					return nil
+				},
+			},
+			{
+				Name:  QueueWorker,
+				Usage: "Start queue process worker",
+				Action: func(ctx context.Context, c *cli.Command) error {
+					runWorkers(ctx, QueueWorker, "", c.Int("workers"))
+					return nil
+				},
 			},
 		},
-	)
-
-	return cmd
-}
-
-// newPurgeWorkerCmd creates subcommands for data cleanup.
-func newPurgeWorkerCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   PurgeWorker,
-		Short: "Start purge workers",
-		Run: func(_ *cobra.Command, _ []string) {
-			runWorkers(PurgeWorker, "", 1)
-		},
 	}
+
+	return app.Run(context.Background(), os.Args)
 }
 
-// newStatsWorkerCmd creates a command for statistics management.
-// Only one stats worker is needed to handle all statistics operations.
-func newStatsWorkerCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   StatsWorker,
-		Short: "Start statistics worker",
-		Run: func(_ *cobra.Command, _ []string) {
-			runWorkers(StatsWorker, "", 1)
-		},
-	}
-}
-
-// newQueueWorkerCmd creates a command for queue processing.
-// Multiple workers can process the queue concurrently.
-func newQueueWorkerCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   QueueWorker,
-		Short: "Start queue process worker",
-		Run: func(cmd *cobra.Command, _ []string) {
-			count, _ := cmd.Flags().GetInt("workers")
-			runWorkers(QueueWorker, "", count)
-		},
-	}
-}
-
-// runWorkers starts multiple instances of a worker type:
-// 1. Initializes the application and creates progress bars
-// 2. Starts the renderer to show progress
-// 3. Launches workers in goroutines
-// 4. Waits for all workers to finish.
-func runWorkers(workerType, subType string, count int) {
-	app, err := setup.InitializeApp(WorkerLogDir)
+// runWorkers starts multiple instances of a worker type.
+func runWorkers(ctx context.Context, workerType, subType string, count int64) {
+	app, err := setup.InitializeApp(ctx, WorkerLogDir)
 	if err != nil {
 		log.Fatalf("Failed to initialize application: %v", err)
 	}
-	defer app.Cleanup()
+	defer app.Cleanup(ctx)
 
 	// Initialize progress bars
 	bars := make([]*progress.Bar, count)
@@ -150,7 +131,7 @@ func runWorkers(workerType, subType string, count int) {
 	var wg sync.WaitGroup
 	for i := range count {
 		wg.Add(1)
-		go func(workerID int) {
+		go func(workerID int64) {
 			defer wg.Done()
 
 			workerLogger := app.LogManager.GetWorkerLogger(
@@ -176,7 +157,7 @@ func runWorkers(workerType, subType string, count int) {
 				log.Fatalf("Invalid worker type: %s %s", workerType, subType)
 			}
 
-			runWorker(w, workerLogger)
+			runWorker(ctx, w, workerLogger)
 		}(i)
 	}
 
@@ -187,27 +168,33 @@ func runWorkers(workerType, subType string, count int) {
 }
 
 // runWorker runs a single worker in a loop with error recovery.
-func runWorker(w interface{ Start() }, logger *zap.Logger) {
+func runWorker(ctx context.Context, w interface{ Start() }, logger *zap.Logger) {
 	for {
-		func() {
-			defer func() {
-				if r := recover(); r != nil {
-					logger.Error("Worker execution failed",
-						zap.String("worker_type", fmt.Sprintf("%T", w)),
-						zap.Any("panic", r),
-					)
-					logger.Info("Restarting worker in 5 seconds...")
-					time.Sleep(5 * time.Second)
-				}
+		select {
+		case <-ctx.Done():
+			logger.Info("Context cancelled, stopping worker")
+			return
+		default:
+			func() {
+				defer func() {
+					if r := recover(); r != nil {
+						logger.Error("Worker execution failed",
+							zap.String("worker_type", fmt.Sprintf("%T", w)),
+							zap.Any("panic", r),
+						)
+						logger.Info("Restarting worker in 5 seconds...")
+						time.Sleep(5 * time.Second)
+					}
+				}()
+
+				logger.Info("Starting worker")
+				w.Start()
 			}()
 
-			logger.Info("Starting worker")
-			w.Start()
-		}()
-
-		logger.Error("Worker stopped unexpectedly",
-			zap.String("worker_type", fmt.Sprintf("%T", w)),
-		)
-		time.Sleep(5 * time.Second)
+			logger.Error("Worker stopped unexpectedly",
+				zap.String("worker_type", fmt.Sprintf("%T", w)),
+			)
+			time.Sleep(5 * time.Second)
+		}
 	}
 }

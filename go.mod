@@ -23,7 +23,6 @@ require (
 	github.com/knadh/koanf/v2 v2.1.2
 	github.com/redis/rueidis v1.0.52
 	github.com/spf13/cast v1.7.1
-	github.com/spf13/cobra v1.8.1
 	github.com/swaggo/http-swagger v1.3.4
 	github.com/swaggo/swag v1.16.4
 	github.com/tdewolff/minify/v2 v2.21.2
@@ -32,6 +31,7 @@ require (
 	github.com/uptrace/bun/dialect/pgdialect v1.2.7
 	github.com/uptrace/bun/driver/pgdriver v1.2.7
 	github.com/uptrace/bunrouter v1.0.22
+	github.com/urfave/cli/v3 v3.0.0-beta1
 	github.com/wcharczuk/go-chart/v2 v2.1.2
 	go.uber.org/zap v1.27.0
 	golang.org/x/image v0.23.0
@@ -73,7 +73,6 @@ require (
 	github.com/googleapis/enterprise-certificate-proxy v0.3.4 // indirect
 	github.com/googleapis/gax-go/v2 v2.14.1 // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
-	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/jinzhu/inflection v1.0.0 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/klauspost/cpuid/v2 v2.2.9 // indirect
@@ -87,7 +86,6 @@ require (
 	github.com/puzpuzpuz/xsync/v3 v3.4.0 // indirect
 	github.com/sasha-s/go-csync v0.0.0-20240107134140-fcbab37b09ad // indirect
 	github.com/sony/gobreaker v1.0.0 // indirect
-	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/swaggo/files v1.0.1 // indirect
 	github.com/tdewolff/parse/v2 v2.7.19 // indirect
 	github.com/tmthrgd/go-hex v0.0.0-20190904060850-447a3041c3bc // indirect

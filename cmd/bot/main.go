@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log"
 	"os"
 	"os/signal"
@@ -17,11 +18,11 @@ const (
 
 func main() {
 	// Initialize application with required dependencies
-	app, err := setup.InitializeApp(BotLogDir)
+	app, err := setup.InitializeApp(context.Background(), BotLogDir)
 	if err != nil {
 		log.Fatalf("Failed to initialize application: %v", err)
 	}
-	defer app.Cleanup()
+	defer app.Cleanup(context.Background())
 
 	// Create bot instance
 	discordBot, err := bot.New(app)

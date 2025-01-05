@@ -1,176 +1,140 @@
 package main
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"log"
+	"os"
 
 	"github.com/rotector/rotector/internal/common/setup/config"
 	"github.com/rotector/rotector/internal/common/storage/database"
 	"github.com/rotector/rotector/internal/common/storage/database/migrations"
-	"github.com/spf13/cobra"
 	"github.com/uptrace/bun/migrate"
+	"github.com/urfave/cli/v3"
 	"go.uber.org/zap"
 )
 
+var ErrNameRequired = errors.New("NAME argument required")
+
 func main() {
-	if err := newRootCmd().Execute(); err != nil {
-		log.Fatal(err)
+	if err := run(); err != nil {
+		log.Printf("Error: %v", err)
+		os.Exit(1)
 	}
 }
 
-func newRootCmd() *cobra.Command {
-	rootCmd := &cobra.Command{
-		Use:   "db",
-		Short: "Database management tool",
-		Long:  "Tool for managing database migrations and maintenance tasks.",
+func run() error {
+	// Setup dependencies
+	db, migrator, logger, err := setupMigrator()
+	if err != nil {
+		return fmt.Errorf("failed to setup migrator: %w", err)
 	}
+	defer db.Close()
 
-	// Add subcommands
-	rootCmd.AddCommand(
-		newInitCmd(),
-		newMigrateCmd(),
-		newRollbackCmd(),
-		newStatusCmd(),
-		newCreateCmd(),
-	)
+	app := &cli.Command{
+		Name:  "db",
+		Usage: "Database management tool",
+		Commands: []*cli.Command{
+			{
+				Name:  "init",
+				Usage: "Initialize migration tables",
+				Action: func(ctx context.Context, _ *cli.Command) error {
+					return migrator.Init(ctx)
+				},
+			},
+			{
+				Name:  "migrate",
+				Usage: "Run pending migrations",
+				Action: func(ctx context.Context, _ *cli.Command) error {
+					if err := migrator.Lock(ctx); err != nil {
+						return err
+					}
+					defer migrator.Unlock(ctx) //nolint:errcheck
 
-	return rootCmd
-}
+					group, err := migrator.Migrate(ctx)
+					if err != nil {
+						return err
+					}
 
-func newInitCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "init",
-		Short: "Initialize migration tables",
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			db, migrator, _, err := setupMigrator()
-			if err != nil {
-				return err
-			}
-			defer db.Close()
+					if group.IsZero() {
+						logger.Info("No new migrations to run (database is up to date)")
+						return nil
+					}
 
-			return migrator.Init(cmd.Context())
+					logger.Info("Successfully migrated",
+						zap.String("group", group.String()),
+					)
+					return nil
+				},
+			},
+			{
+				Name:  "rollback",
+				Usage: "Rollback the last migration group",
+				Action: func(ctx context.Context, _ *cli.Command) error {
+					if err := migrator.Lock(ctx); err != nil {
+						return err
+					}
+					defer migrator.Unlock(ctx) //nolint:errcheck
+
+					group, err := migrator.Rollback(ctx)
+					if err != nil {
+						return err
+					}
+
+					if group.IsZero() {
+						logger.Info("No groups to roll back")
+						return nil
+					}
+
+					logger.Info("Successfully rolled back",
+						zap.String("group", group.String()),
+					)
+					return nil
+				},
+			},
+			{
+				Name:  "status",
+				Usage: "Show migration status",
+				Action: func(ctx context.Context, _ *cli.Command) error {
+					ms, err := migrator.MigrationsWithStatus(ctx)
+					if err != nil {
+						return err
+					}
+
+					logger.Info("Migration status",
+						zap.String("migrations", ms.String()),
+						zap.String("unapplied", ms.Unapplied().String()),
+						zap.String("last_group", ms.LastGroup().String()),
+					)
+					return nil
+				},
+			},
+			{
+				Name:      "create",
+				Usage:     "Create a new Go migration file",
+				ArgsUsage: "NAME",
+				Action: func(ctx context.Context, c *cli.Command) error {
+					if c.Args().Len() != 1 {
+						return ErrNameRequired
+					}
+
+					mf, err := migrator.CreateGoMigration(ctx, c.Args().First())
+					if err != nil {
+						return err
+					}
+
+					logger.Info("Created Go migration",
+						zap.String("name", mf.Name),
+						zap.String("path", mf.Path),
+					)
+					return nil
+				},
+			},
 		},
 	}
-}
 
-func newMigrateCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "migrate",
-		Short: "Run pending migrations",
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			db, migrator, logger, err := setupMigrator()
-			if err != nil {
-				return err
-			}
-			defer db.Close()
-
-			if err := migrator.Lock(cmd.Context()); err != nil {
-				return err
-			}
-			defer migrator.Unlock(cmd.Context()) //nolint:errcheck
-
-			group, err := migrator.Migrate(cmd.Context())
-			if err != nil {
-				return err
-			}
-
-			if group.IsZero() {
-				logger.Info("No new migrations to run (database is up to date)")
-				return nil
-			}
-
-			logger.Info("Successfully migrated",
-				zap.String("group", group.String()),
-			)
-			return nil
-		},
-	}
-}
-
-func newRollbackCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "rollback",
-		Short: "Rollback the last migration group",
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			db, migrator, logger, err := setupMigrator()
-			if err != nil {
-				return err
-			}
-			defer db.Close()
-
-			if err := migrator.Lock(cmd.Context()); err != nil {
-				return err
-			}
-			defer migrator.Unlock(cmd.Context()) //nolint:errcheck
-
-			group, err := migrator.Rollback(cmd.Context())
-			if err != nil {
-				return err
-			}
-
-			if group.IsZero() {
-				logger.Info("No groups to roll back")
-				return nil
-			}
-
-			logger.Info("Successfully rolled back",
-				zap.String("group", group.String()),
-			)
-			return nil
-		},
-	}
-}
-
-func newStatusCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "status",
-		Short: "Show migration status",
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			db, migrator, logger, err := setupMigrator()
-			if err != nil {
-				return err
-			}
-			defer db.Close()
-
-			ms, err := migrator.MigrationsWithStatus(cmd.Context())
-			if err != nil {
-				return err
-			}
-
-			logger.Info("Migration status",
-				zap.String("migrations", ms.String()),
-				zap.String("unapplied", ms.Unapplied().String()),
-				zap.String("last_group", ms.LastGroup().String()),
-			)
-			return nil
-		},
-	}
-}
-
-func newCreateCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "create [name]",
-		Short: "Create a new Go migration file",
-		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			db, migrator, logger, err := setupMigrator()
-			if err != nil {
-				return err
-			}
-			defer db.Close()
-
-			mf, err := migrator.CreateGoMigration(cmd.Context(), args[0])
-			if err != nil {
-				return err
-			}
-
-			logger.Info("Created Go migration",
-				zap.String("name", mf.Name),
-				zap.String("path", mf.Path),
-			)
-			return nil
-		},
-	}
+	return app.Run(context.Background(), os.Args)
 }
 
 // setupMigrator initializes the database connection and migrator.
