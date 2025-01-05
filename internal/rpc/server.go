@@ -7,7 +7,7 @@ import (
 	"github.com/rotector/rotector/internal/common/api/middleware/header"
 	"github.com/rotector/rotector/internal/common/api/middleware/ip"
 	"github.com/rotector/rotector/internal/common/api/middleware/ratelimit"
-	"github.com/rotector/rotector/internal/common/config"
+	"github.com/rotector/rotector/internal/common/setup/config"
 	"github.com/rotector/rotector/internal/common/storage/database"
 	"github.com/rotector/rotector/internal/rpc/handler"
 	"github.com/rotector/rotector/internal/rpc/proto"

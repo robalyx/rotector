@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/rotector/rotector/internal/common/api/middleware/header"
-	"github.com/rotector/rotector/internal/common/config"
+	"github.com/rotector/rotector/internal/common/setup/config"
 	"github.com/twitchtv/twirp"
 	"github.com/uptrace/bunrouter"
 	"go.uber.org/zap"

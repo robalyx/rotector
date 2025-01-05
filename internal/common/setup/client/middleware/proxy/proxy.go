@@ -19,8 +19,8 @@ import (
 	"github.com/jaxron/axonet/pkg/client/logger"
 	"github.com/jaxron/axonet/pkg/client/middleware"
 	"github.com/redis/rueidis"
-	"github.com/rotector/rotector/internal/common/config"
 	"github.com/rotector/rotector/internal/common/setup/client/middleware/proxy/scripts"
+	"github.com/rotector/rotector/internal/common/setup/config"
 )
 
 const (

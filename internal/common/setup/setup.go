@@ -11,10 +11,10 @@ import (
 	"github.com/google/generative-ai-go/genai"
 	"github.com/jaxron/roapi.go/pkg/api"
 	"github.com/redis/rueidis"
-	"github.com/rotector/rotector/internal/common/config"
 	"github.com/rotector/rotector/internal/common/queue"
 	"github.com/rotector/rotector/internal/common/setup/client"
 	"github.com/rotector/rotector/internal/common/setup/client/middleware/proxy"
+	"github.com/rotector/rotector/internal/common/setup/config"
 	"github.com/rotector/rotector/internal/common/setup/logger"
 	"github.com/rotector/rotector/internal/common/storage/database"
 	"github.com/rotector/rotector/internal/common/storage/redis"
@@ -44,7 +44,7 @@ type App struct {
 // ensuring each component has its required dependencies available.
 func InitializeApp(logDir string) (*App, error) {
 	// Configuration must be loaded first as other components depend on it
-	cfg, err := config.LoadConfig()
+	cfg, configDir, err := config.LoadConfig()
 	if err != nil {
 		return nil, err
 	}
@@ -87,7 +87,7 @@ func InitializeApp(logDir string) (*App, error) {
 	}
 
 	// RoAPI client is configured with middleware chain
-	roAPI, proxies, err := client.GetRoAPIClient(&cfg.Common, redisManager, logger)
+	roAPI, proxies, err := client.GetRoAPIClient(&cfg.Common, configDir, redisManager, logger)
 	if err != nil {
 		return nil, err
 	}

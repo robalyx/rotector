@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/rotector/rotector/internal/common/config"
+	"github.com/rotector/rotector/internal/common/setup/config"
 	"github.com/rotector/rotector/internal/common/storage/database"
 	"github.com/rotector/rotector/internal/common/storage/database/migrations"
 	"github.com/spf13/cobra"
@@ -176,7 +176,7 @@ func newCreateCmd() *cobra.Command {
 // setupMigrator initializes the database connection and migrator.
 func setupMigrator() (*database.Client, *migrate.Migrator, *zap.Logger, error) {
 	// Load full configuration
-	cfg, err := config.LoadConfig()
+	cfg, _, err := config.LoadConfig()
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("failed to load config: %w", err)
 	}

@@ -6,7 +6,6 @@ import (
 	"net"
 	"net/url"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -17,20 +16,19 @@ import (
 	"github.com/jaxron/axonet/middleware/singleflight"
 	"github.com/jaxron/axonet/pkg/client"
 	"github.com/jaxron/roapi.go/pkg/api"
-	"github.com/rotector/rotector/internal/common/config"
 	"github.com/rotector/rotector/internal/common/setup/client/middleware/proxy"
+	"github.com/rotector/rotector/internal/common/setup/config"
 	"github.com/rotector/rotector/internal/common/setup/logger"
 	"github.com/rotector/rotector/internal/common/storage/redis"
-	"github.com/spf13/viper"
 	"go.uber.org/zap"
 )
 
 // GetRoAPIClient constructs an HTTP client with a middleware chain for reliability and performance.
 // Middleware order is important - each layer wraps the next in specified priority.
-func GetRoAPIClient(cfg *config.CommonConfig, redisManager *redis.Manager, zapLogger *zap.Logger) (*api.API, *proxy.Proxies, error) {
+func GetRoAPIClient(cfg *config.CommonConfig, configDir string, redisManager *redis.Manager, zapLogger *zap.Logger) (*api.API, *proxy.Proxies, error) {
 	// Load authentication and proxy configuration
-	cookies := readCookies(zapLogger)
-	proxies := readProxies(zapLogger)
+	cookies := readCookies(configDir, zapLogger)
+	proxies := readProxies(configDir, zapLogger)
 
 	// Get Redis client for caching
 	redisClient, err := redisManager.GetClient(redis.CacheDBIndex)
@@ -78,11 +76,11 @@ func GetRoAPIClient(cfg *config.CommonConfig, redisManager *redis.Manager, zapLo
 
 // readProxies parses proxy configuration from a file in IP:Port:Username:Password format.
 // Each line represents one proxy server. Invalid formats trigger fatal errors.
-func readProxies(logger *zap.Logger) []*url.URL {
+func readProxies(configDir string, logger *zap.Logger) []*url.URL {
 	var proxies []*url.URL
 
 	// Load proxy configuration file
-	proxiesFile := filepath.Dir(viper.GetViper().ConfigFileUsed()) + "/credentials/proxies"
+	proxiesFile := configDir + "/credentials/proxies"
 	file, err := os.Open(proxiesFile)
 	if err != nil {
 		logger.Fatal("failed to open proxy file", zap.Error(err))
@@ -126,11 +124,11 @@ func readProxies(logger *zap.Logger) []*url.URL {
 
 // readCookies loads authentication cookies from a file, one cookie per line.
 // Returns empty slice and logs error if file cannot be read.
-func readCookies(logger *zap.Logger) []string {
+func readCookies(configDir string, logger *zap.Logger) []string {
 	var cookies []string
 
 	// Load cookie file
-	cookiesFile := filepath.Dir(viper.GetViper().ConfigFileUsed()) + "/credentials/cookies"
+	cookiesFile := configDir + "/credentials/cookies"
 	file, err := os.Open(cookiesFile)
 	if err != nil {
 		logger.Fatal("failed to open cookie file", zap.Error(err))
