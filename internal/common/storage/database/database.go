@@ -1,6 +1,7 @@
 package database
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"io"
@@ -8,11 +9,13 @@ import (
 
 	"github.com/bytedance/sonic"
 	"github.com/rotector/rotector/internal/common/setup/config"
+	"github.com/rotector/rotector/internal/common/storage/database/migrations"
 	"github.com/rotector/rotector/internal/common/storage/database/models"
 	"github.com/uptrace/bun"
 	"github.com/uptrace/bun/dialect/pgdialect"
 	"github.com/uptrace/bun/driver/pgdriver"
 	"github.com/uptrace/bun/extra/bunjson"
+	"github.com/uptrace/bun/migrate"
 	"go.uber.org/zap"
 )
 
@@ -53,7 +56,7 @@ type Client struct {
 }
 
 // NewConnection establishes a new database connection and returns a Client instance.
-func NewConnection(config *config.PostgreSQL, logger *zap.Logger) (*Client, error) {
+func NewConnection(ctx context.Context, config *config.PostgreSQL, logger *zap.Logger, autoMigrate bool) (*Client, error) {
 	// Initialize database connection with config values
 	sqldb := sql.OpenDB(pgdriver.NewConnector(
 		pgdriver.WithAddr(fmt.Sprintf("%s:%d", config.Host, config.Port)),
@@ -76,6 +79,22 @@ func NewConnection(config *config.PostgreSQL, logger *zap.Logger) (*Client, erro
 	// Create Bun db instance
 	db := bun.NewDB(sqldb, pgdialect.New())
 	db.AddQueryHook(NewHook(logger))
+
+	// Run migrations if requested
+	if autoMigrate {
+		migrator := migrate.NewMigrator(db, migrations.Migrations)
+		if err := migrator.Init(ctx); err != nil {
+			return nil, fmt.Errorf("failed to initialize migrations: %w", err)
+		}
+
+		group, err := migrator.Migrate(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("failed to run migrations: %w", err)
+		}
+		if !group.IsZero() {
+			logger.Info("Automatically ran migrations", zap.String("group", group.String()))
+		}
+	}
 
 	// Create repositories
 	tracking := models.NewTracking(db, logger)

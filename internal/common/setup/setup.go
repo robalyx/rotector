@@ -17,7 +17,9 @@ import (
 	"github.com/rotector/rotector/internal/common/setup/config"
 	"github.com/rotector/rotector/internal/common/setup/logger"
 	"github.com/rotector/rotector/internal/common/storage/database"
+	"github.com/rotector/rotector/internal/common/storage/database/migrations"
 	"github.com/rotector/rotector/internal/common/storage/redis"
+	"github.com/uptrace/bun/migrate"
 	"go.uber.org/zap"
 	"google.golang.org/api/option"
 )
@@ -74,8 +76,8 @@ func InitializeApp(ctx context.Context, logDir string) (*App, error) {
 	// Redis manager provides connection pools for various subsystems
 	redisManager := redis.NewManager(&cfg.Common.Redis, logger)
 
-	// Database connection pool is created with statistics tracking
-	db, err := database.NewConnection(&cfg.Common.PostgreSQL, dbLogger)
+	// Initialize database with migration check
+	db, err := checkAndRunMigrations(ctx, &cfg.Common.PostgreSQL, dbLogger)
 	if err != nil {
 		return nil, err
 	}
@@ -167,4 +169,38 @@ func (s *App) Cleanup(ctx context.Context) {
 
 	// Close Redis connections last as other components might need it during cleanup
 	s.RedisManager.Close()
+}
+
+// checkAndRunMigrations runs database migrations if needed.
+func checkAndRunMigrations(ctx context.Context, cfg *config.PostgreSQL, dbLogger *zap.Logger) (*database.Client, error) {
+	tempDB, err := database.NewConnection(ctx, cfg, dbLogger, false)
+	if err != nil {
+		return nil, err
+	}
+
+	migrator := migrate.NewMigrator(tempDB.DB(), migrations.Migrations)
+	ms, err := migrator.MigrationsWithStatus(ctx)
+	if err != nil {
+		tempDB.Close()
+		return nil, fmt.Errorf("failed to check migration status: %w", err)
+	}
+
+	var db *database.Client
+	unapplied := ms.Unapplied()
+	if len(unapplied) > 0 {
+		log.Println("Database migrations are pending. Would you like to run them now? (y/N)")
+		var response string
+		_, _ = fmt.Scanln(&response)
+
+		if response == "y" || response == "Y" {
+			tempDB.Close()
+			db, err = database.NewConnection(ctx, cfg, dbLogger, true)
+		} else {
+			log.Fatalf("Closing program due to incomplete migrations")
+		}
+	} else {
+		db = tempDB
+	}
+
+	return db, err
 }

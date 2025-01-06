@@ -152,7 +152,7 @@ func setupMigrator() (*database.Client, *migrate.Migrator, *zap.Logger, error) {
 	}
 
 	// Connect to database
-	db, err := database.NewConnection(&cfg.Common.PostgreSQL, logger)
+	db, err := database.NewConnection(context.Background(), &cfg.Common.PostgreSQL, logger, false)
 	if err != nil {
 		return nil, nil, logger, fmt.Errorf("failed to connect to database: %w", err)
 	}
