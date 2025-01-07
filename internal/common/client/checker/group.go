@@ -122,9 +122,11 @@ func (c *GroupChecker) ProcessUsers(userInfos []*fetcher.Info) map[uint64]*types
 	}
 
 	// Track all users in groups
-	err = c.db.Tracking().AddUsersToGroupsTracking(context.Background(), groupUsersTracking)
-	if err != nil {
-		c.logger.Error("Failed to add users to groups tracking", zap.Error(err))
+	if len(groupUsersTracking) > 0 {
+		err = c.db.Tracking().AddUsersToGroupsTracking(context.Background(), groupUsersTracking)
+		if err != nil {
+			c.logger.Error("Failed to add users to groups tracking", zap.Error(err))
+		}
 	}
 
 	// Process each user concurrently
