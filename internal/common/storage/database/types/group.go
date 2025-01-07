@@ -4,6 +4,7 @@ import (
 	"errors"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jaxron/roapi.go/pkg/api/types"
 )
 
@@ -13,7 +14,7 @@ var ErrGroupNotFound = errors.New("group not found")
 // Group combines all the information needed to review a group.
 type Group struct {
 	ID             uint64            `bun:",pk"        json:"id"`
-	UUID           string            `bun:",notnull"   json:"uuid"`
+	UUID           uuid.UUID         `bun:",notnull"   json:"uuid"`
 	Name           string            `bun:",notnull"   json:"name"`
 	Description    string            `bun:",notnull"   json:"description"`
 	Owner          *types.GroupUser  `bun:",notnull"   json:"owner"`

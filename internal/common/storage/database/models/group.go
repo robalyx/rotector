@@ -39,8 +39,8 @@ func (r *GroupModel) SaveFlaggedGroups(ctx context.Context, flaggedGroups []*typ
 
 	// Generate UUIDs for new groups
 	for _, group := range flaggedGroups {
-		if group.UUID == "" {
-			group.UUID = uuid.New().String()
+		if group.UUID == uuid.Nil {
+			group.UUID = uuid.New()
 		}
 	}
 
@@ -192,7 +192,12 @@ func (r *GroupModel) GetGroupByID(ctx context.Context, groupID string, fields ty
 			if id, err := strconv.ParseUint(groupID, 10, 64); err == nil {
 				query.Where("id = ?", id)
 			} else {
-				query.Where("uuid = ?", groupID)
+				// Parse UUID string
+				uid, err := uuid.Parse(groupID)
+				if err != nil {
+					return fmt.Errorf("invalid UUID format: %w", err)
+				}
+				query.Where("uuid = ?", uid)
 			}
 
 			err := query.Scan(ctx)

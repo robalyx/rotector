@@ -114,6 +114,7 @@ func (r *SettingModel) GetBotSettings(ctx context.Context) (*types.BotSetting, e
 			Type:    types.AnnouncementTypeNone,
 			Message: "",
 		},
+		APIKeys: []types.APIKeyInfo{},
 	}
 
 	err := r.db.NewSelect().Model(settings).

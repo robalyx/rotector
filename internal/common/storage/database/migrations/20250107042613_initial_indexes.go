@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/rotector/rotector/internal/common/storage/database/types"
 	"github.com/uptrace/bun"
 )
 
@@ -11,28 +12,37 @@ func init() { //nolint:funlen
 	Migrations.MustRegister(func(ctx context.Context, db *bun.DB) error {
 		_, err := db.NewRaw(`
 			-- User activity logs indexes
-			CREATE INDEX IF NOT EXISTS idx_user_activity_logs_time 
-			ON user_activity_logs (activity_timestamp DESC, sequence DESC);
+			CREATE INDEX IF NOT EXISTS idx_activity_logs_time 
+			ON activity_logs (activity_timestamp DESC, sequence DESC);
 
-			CREATE INDEX IF NOT EXISTS idx_user_activity_logs_user_time 
-			ON user_activity_logs (user_id, activity_timestamp DESC, sequence DESC) 
+			CREATE INDEX IF NOT EXISTS idx_activity_logs_user_time 
+			ON activity_logs (user_id, activity_timestamp DESC, sequence DESC) 
 			WHERE user_id > 0;
 			
-			CREATE INDEX IF NOT EXISTS idx_user_activity_logs_group_time 
-			ON user_activity_logs (group_id, activity_timestamp DESC, sequence DESC) 
+			CREATE INDEX IF NOT EXISTS idx_activity_logs_group_time 
+			ON activity_logs (group_id, activity_timestamp DESC, sequence DESC) 
 			WHERE group_id > 0;
 			
-			CREATE INDEX IF NOT EXISTS idx_user_activity_logs_reviewer_time 
-			ON user_activity_logs (reviewer_id, activity_timestamp DESC, sequence DESC);
+			CREATE INDEX IF NOT EXISTS idx_activity_logs_user_viewed 
+			ON activity_logs (reviewer_id, activity_timestamp DESC, activity_type, user_id)
+			WHERE user_id > 0 AND activity_type = ?;
+
+			CREATE INDEX IF NOT EXISTS idx_activity_logs_group_viewed 
+			ON activity_logs (reviewer_id, activity_timestamp DESC, activity_type, group_id)
+			WHERE group_id > 0 AND activity_type = ?;
 			
-			CREATE INDEX IF NOT EXISTS idx_user_activity_logs_type_time 
-			ON user_activity_logs (activity_type, activity_timestamp DESC, sequence DESC);
+			CREATE INDEX IF NOT EXISTS idx_activity_logs_reviewer_time 
+			ON activity_logs (reviewer_id, activity_timestamp DESC, sequence DESC);
+			
+			CREATE INDEX IF NOT EXISTS idx_activity_logs_type_time 
+			ON activity_logs (activity_type, activity_timestamp DESC, sequence DESC);
 
 			-- Appeal indexes
 			CREATE INDEX IF NOT EXISTS idx_appeals_user_id ON appeals (user_id);
 			CREATE INDEX IF NOT EXISTS idx_appeals_requester_id ON appeals (requester_id);
 			CREATE INDEX IF NOT EXISTS idx_appeals_status ON appeals (status);
 			CREATE INDEX IF NOT EXISTS idx_appeals_claimed_by ON appeals (claimed_by) WHERE claimed_by > 0;
+			CREATE INDEX IF NOT EXISTS idx_appeals_rejected_reviewed_at ON appeals (reviewed_at DESC);
 
 			-- Appeal timeline indexes
 			CREATE INDEX IF NOT EXISTS idx_appeal_timelines_timestamp_asc 
@@ -122,7 +132,7 @@ func init() { //nolint:funlen
 			
 			-- Statistics indexes
 			CREATE INDEX IF NOT EXISTS idx_hourly_stats_timestamp ON hourly_stats (timestamp DESC);
-		`).Exec(ctx)
+		`, types.ActivityTypeUserViewed, types.ActivityTypeGroupViewed).Exec(ctx)
 		if err != nil {
 			return fmt.Errorf("failed to create indexes: %w", err)
 		}
@@ -131,17 +141,20 @@ func init() { //nolint:funlen
 	}, func(ctx context.Context, db *bun.DB) error {
 		_, err := db.NewRaw(`
 			-- User activity logs indexes
-			DROP INDEX IF EXISTS idx_user_activity_logs_time;
-			DROP INDEX IF EXISTS idx_user_activity_logs_user_time;
-			DROP INDEX IF EXISTS idx_user_activity_logs_group_time;
-			DROP INDEX IF EXISTS idx_user_activity_logs_reviewer_time;
-			DROP INDEX IF EXISTS idx_user_activity_logs_type_time;
+			DROP INDEX IF EXISTS idx_activity_logs_time;
+			DROP INDEX IF EXISTS idx_activity_logs_user_time;
+			DROP INDEX IF EXISTS idx_activity_logs_group_time;
+			DROP INDEX IF EXISTS idx_activity_logs_user_viewed;
+			DROP INDEX IF EXISTS idx_activity_logs_group_viewed;
+			DROP INDEX IF EXISTS idx_activity_logs_reviewer_time;
+			DROP INDEX IF EXISTS idx_activity_logs_type_time;
 
 			-- Appeal indexes
 			DROP INDEX IF EXISTS idx_appeals_user_id;
 			DROP INDEX IF EXISTS idx_appeals_requester_id;
 			DROP INDEX IF EXISTS idx_appeals_status;
 			DROP INDEX IF EXISTS idx_appeals_claimed_by;
+			DROP INDEX IF EXISTS idx_appeals_rejected_reviewed_at;
 
 			-- Appeal timeline indexes
 			DROP INDEX IF EXISTS idx_appeal_timelines_timestamp_asc;

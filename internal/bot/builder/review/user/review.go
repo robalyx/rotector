@@ -213,7 +213,7 @@ func (b *ReviewBuilder) buildReviewBuilder() *discord.EmbedBuilder {
 	}
 
 	// Add UUID to footer
-	embed.SetFooter("UUID: "+b.user.UUID, "")
+	embed.SetFooter("UUID: "+b.user.UUID.String(), "")
 
 	return embed
 }

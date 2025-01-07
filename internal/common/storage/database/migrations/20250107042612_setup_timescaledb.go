@@ -17,7 +17,7 @@ func init() {
 
 		// Create hypertables
 		_, err = db.NewRaw(`
-			SELECT create_hypertable('user_activity_logs', 'activity_timestamp', 
+			SELECT create_hypertable('activity_logs', 'activity_timestamp', 
 				chunk_time_interval => INTERVAL '1 day',
 				if_not_exists => TRUE
 			);
@@ -36,13 +36,13 @@ func init() {
 		// Down migration - convert hypertables back to regular tables
 		_, err := db.NewRaw(`
 			-- Convert hypertables back to regular tables
-			CREATE TABLE user_activity_logs_backup AS SELECT * FROM user_activity_logs;
+			CREATE TABLE activity_logs_backup AS SELECT * FROM activity_logs;
 			CREATE TABLE appeal_timelines_backup AS SELECT * FROM appeal_timelines;
 			
-			DROP TABLE user_activity_logs CASCADE;
+			DROP TABLE activity_logs CASCADE;
 			DROP TABLE appeal_timelines CASCADE;
 			
-			ALTER TABLE user_activity_logs_backup RENAME TO user_activity_logs;
+			ALTER TABLE activity_logs_backup RENAME TO activity_logs;
 			ALTER TABLE appeal_timelines_backup RENAME TO appeal_timelines;
 			
 			-- Drop the extension

@@ -60,8 +60,8 @@ func (r *UserModel) SaveFlaggedUsers(ctx context.Context, flaggedUsers map[uint6
 		}
 
 		// Generate UUID for new users
-		if user.UUID == "" {
-			user.UUID = uuid.New().String()
+		if user.UUID == uuid.Nil {
+			user.UUID = uuid.New()
 		}
 
 		filteredUsers = append(filteredUsers, &types.FlaggedUser{
@@ -321,7 +321,12 @@ func (r *UserModel) GetUserByID(ctx context.Context, userID string, fields types
 			if id, err := strconv.ParseUint(userID, 10, 64); err == nil {
 				query.Where("id = ?", id)
 			} else {
-				query.Where("uuid = ?", userID)
+				// Parse UUID string
+				uid, err := uuid.Parse(userID)
+				if err != nil {
+					return fmt.Errorf("invalid UUID format: %w", err)
+				}
+				query.Where("uuid = ?", uid)
 			}
 
 			err := query.Scan(ctx)
