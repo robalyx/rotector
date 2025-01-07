@@ -18,14 +18,16 @@ import (
 type UserModel struct {
 	db       *bun.DB
 	tracking *TrackingModel
+	activity *ActivityModel
 	logger   *zap.Logger
 }
 
 // NewUser creates a UserModel with references to the tracking system.
-func NewUser(db *bun.DB, tracking *TrackingModel, logger *zap.Logger) *UserModel {
+func NewUser(db *bun.DB, tracking *TrackingModel, activity *ActivityModel, logger *zap.Logger) *UserModel {
 	return &UserModel{
 		db:       db,
 		tracking: tracking,
+		activity: activity,
 		logger:   logger,
 	}
 }
@@ -244,16 +246,14 @@ func (r *UserModel) GetFlaggedUserByIDToReview(ctx context.Context, id uint64) (
 		}
 
 		// Update last_viewed
-		now := time.Now()
 		_, err = tx.NewUpdate().
 			Model(&user).
-			Set("last_viewed = ?", now).
+			Set("last_viewed = ?", time.Now()).
 			Where("id = ?", id).
 			Exec(ctx)
 		if err != nil {
 			return fmt.Errorf("failed to update last_viewed: %w (userID=%d)", err, id)
 		}
-		user.LastViewed = now
 
 		return nil
 	})
@@ -362,10 +362,8 @@ func (r *UserModel) CheckExistingUsers(ctx context.Context, userIDs []uint64) (m
 }
 
 // GetUserByID retrieves a user by either their numeric ID or UUID.
-func (r *UserModel) GetUserByID(ctx context.Context, userID string, fields types.UserFields, isReviewing bool) (*types.ReviewUser, bool, error) {
+func (r *UserModel) GetUserByID(ctx context.Context, userID string, fields types.UserFields) (*types.ReviewUser, error) {
 	var result types.ReviewUser
-	var canReview bool
-
 	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
 		// Try each model in order until we find a user
 		models := []interface{}{
@@ -378,17 +376,14 @@ func (r *UserModel) GetUserByID(ctx context.Context, userID string, fields types
 		for _, model := range models {
 			query := tx.NewSelect().
 				Model(model).
-				Column(fields.Columns()...)
+				Column(fields.Columns()...).
+				For("UPDATE")
 
 			// Check if input is numeric (ID) or string (UUID)
 			if id, err := strconv.ParseUint(userID, 10, 64); err == nil {
 				query.Where("id = ?", id)
 			} else {
 				query.Where("uuid = ?", userID)
-			}
-
-			if isReviewing {
-				query.For("UPDATE")
 			}
 
 			err := query.Scan(ctx)
@@ -412,9 +407,6 @@ func (r *UserModel) GetUserByID(ctx context.Context, userID string, fields types
 					result.Status = types.UserTypeBanned
 				}
 
-				// Check if user can be reviewed
-				canReview = !isReviewing || time.Since(result.LastViewed) > 5*time.Minute
-
 				// Get reputation
 				var reputation types.UserReputation
 				err = tx.NewSelect().
@@ -427,17 +419,13 @@ func (r *UserModel) GetUserByID(ctx context.Context, userID string, fields types
 				result.Reputation = reputation.Reputation
 
 				// Update last_viewed if requested
-				if isReviewing {
-					now := time.Now()
-					_, err = tx.NewUpdate().
-						Model(model).
-						Set("last_viewed = ?", now).
-						Where("id = ?", result.ID).
-						Exec(ctx)
-					if err != nil {
-						return err
-					}
-					result.LastViewed = now
+				_, err = tx.NewUpdate().
+					Model(model).
+					Set("last_viewed = ?", time.Now()).
+					Where("id = ?", result.ID).
+					Exec(ctx)
+				if err != nil {
+					return err
 				}
 
 				return nil
@@ -450,10 +438,10 @@ func (r *UserModel) GetUserByID(ctx context.Context, userID string, fields types
 		return types.ErrUserNotFound
 	})
 	if err != nil {
-		return nil, false, err
+		return nil, err
 	}
 
-	return &result, canReview, nil
+	return &result, nil
 }
 
 // GetUsersByIDs retrieves specified user information for a list of user IDs.
@@ -857,7 +845,15 @@ func (r *UserModel) GetUserToScan(ctx context.Context) (*types.User, error) {
 }
 
 // GetUserToReview finds a user to review based on the sort method and target mode.
-func (r *UserModel) GetUserToReview(ctx context.Context, sortBy types.ReviewSortBy, targetMode types.ReviewTargetMode) (*types.ReviewUser, error) {
+func (r *UserModel) GetUserToReview(ctx context.Context, sortBy types.ReviewSortBy, targetMode types.ReviewTargetMode, reviewerID uint64) (*types.ReviewUser, error) {
+	// Get recently reviewed user IDs
+	recentIDs, err := r.activity.GetRecentlyReviewedIDs(ctx, reviewerID, false, 100)
+	if err != nil {
+		r.logger.Error("Failed to get recently reviewed user IDs", zap.Error(err))
+		// Continue without filtering if there's an error
+		recentIDs = []uint64{}
+	}
+
 	// Define models in priority order based on target mode
 	var models []interface{}
 	switch targetMode {
@@ -893,7 +889,7 @@ func (r *UserModel) GetUserToReview(ctx context.Context, sortBy types.ReviewSort
 
 	// Try each model in order until we find a user
 	for _, model := range models {
-		result, err := r.getNextToReview(ctx, model, sortBy)
+		result, err := r.getNextToReview(ctx, model, sortBy, recentIDs)
 		if err == nil {
 			return result, nil
 		}
@@ -906,14 +902,18 @@ func (r *UserModel) GetUserToReview(ctx context.Context, sortBy types.ReviewSort
 }
 
 // getNextToReview handles the common logic for getting the next item to review.
-func (r *UserModel) getNextToReview(ctx context.Context, model interface{}, sortBy types.ReviewSortBy) (*types.ReviewUser, error) {
+func (r *UserModel) getNextToReview(ctx context.Context, model interface{}, sortBy types.ReviewSortBy, recentIDs []uint64) (*types.ReviewUser, error) {
 	var result types.ReviewUser
 	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
 		// Build subquery to get ID
 		subq := tx.NewSelect().
 			Model(model).
-			Column("id").
-			Where("last_viewed < NOW() - INTERVAL '5 minutes'")
+			Column("id")
+
+		// Exclude recently reviewed IDs if any exist
+		if len(recentIDs) > 0 {
+			subq.Where("id NOT IN (?)", bun.In(recentIDs))
+		}
 
 		// Apply sort order to subquery
 		switch sortBy {
@@ -973,16 +973,14 @@ func (r *UserModel) getNextToReview(ctx context.Context, model interface{}, sort
 		result.Reputation = reputation.Reputation
 
 		// Update last_viewed
-		now := time.Now()
 		_, err = tx.NewUpdate().
 			Model(model).
-			Set("last_viewed = ?", now).
+			Set("last_viewed = ?", time.Now()).
 			Where("id = ?", result.ID).
 			Exec(ctx)
 		if err != nil {
 			return err
 		}
-		result.LastViewed = now
 
 		return nil
 	})

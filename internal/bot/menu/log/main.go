@@ -58,7 +58,7 @@ func (m *MainMenu) Show(event interfaces.CommonEvent, s *session.Session) {
 	s.GetInterface(constants.SessionKeyLogCursor, &cursor)
 
 	// Fetch filtered logs from database
-	logs, nextCursor, err := m.layout.db.UserActivity().GetLogs(
+	logs, nextCursor, err := m.layout.db.Activity().GetLogs(
 		context.Background(),
 		activityFilter,
 		cursor,

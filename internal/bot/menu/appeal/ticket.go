@@ -63,7 +63,7 @@ func (m *TicketMenu) Show(event interfaces.CommonEvent, s *session.Session, appe
 	// If appeal is pending, check if user's status has changed
 	if appeal.Status == types.AppealStatusPending { //nolint:nestif
 		// Get current user status
-		user, _, err := m.layout.db.Users().GetUserByID(context.Background(), strconv.FormatUint(appeal.UserID, 10), types.UserFields{Basic: true}, false)
+		user, err := m.layout.db.Users().GetUserByID(context.Background(), strconv.FormatUint(appeal.UserID, 10), types.UserFields{})
 		if err != nil {
 			if !errors.Is(err, types.ErrUserNotFound) {
 				m.layout.logger.Error("Failed to get user status", zap.Error(err))
@@ -166,7 +166,7 @@ func (m *TicketMenu) handleLookupUser(event *events.ComponentInteractionCreate, 
 	s.GetInterface(constants.SessionKeyAppeal, &appeal)
 
 	// Get user from database
-	user, _, err := m.layout.db.Users().GetUserByID(context.Background(), strconv.FormatUint(appeal.UserID, 10), types.UserFields{}, false)
+	user, err := m.layout.db.Users().GetUserByID(context.Background(), strconv.FormatUint(appeal.UserID, 10), types.UserFields{})
 	if err != nil {
 		if errors.Is(err, types.ErrUserNotFound) {
 			m.layout.paginationManager.NavigateTo(event, s, m.page, "Failed to find user. They may not be in our database.")
@@ -178,12 +178,11 @@ func (m *TicketMenu) handleLookupUser(event *events.ComponentInteractionCreate, 
 	}
 
 	// Store user in session and show review menu
-	s.Set(constants.SessionKeyIsLookupMode, true)
 	s.Set(constants.SessionKeyTarget, user)
 	m.layout.userReviewLayout.ShowReviewMenu(event, s)
 
 	// Log the lookup action
-	m.layout.db.UserActivity().Log(context.Background(), &types.UserActivityLog{
+	m.layout.db.Activity().Log(context.Background(), &types.ActivityLog{
 		ActivityTarget: types.ActivityTarget{
 			UserID: user.ID,
 		},
@@ -256,7 +255,7 @@ func (m *TicketMenu) handleCloseAppeal(event *events.ComponentInteractionCreate,
 	m.layout.ShowOverview(event, s, "Appeal closed successfully.")
 
 	// Log the appeal closing
-	m.layout.db.UserActivity().Log(context.Background(), &types.UserActivityLog{
+	m.layout.db.Activity().Log(context.Background(), &types.ActivityLog{
 		ActivityTarget: types.ActivityTarget{
 			UserID: appeal.UserID,
 		},
@@ -348,7 +347,7 @@ func (m *TicketMenu) handleAcceptModalSubmit(event *events.ModalSubmitInteractio
 	}
 
 	// Get user to clear
-	user, _, err := m.layout.db.Users().GetUserByID(context.Background(), strconv.FormatUint(appeal.UserID, 10), types.UserFields{Basic: true}, false)
+	user, err := m.layout.db.Users().GetUserByID(context.Background(), strconv.FormatUint(appeal.UserID, 10), types.UserFields{})
 	if err != nil {
 		if errors.Is(err, types.ErrUserNotFound) {
 			m.layout.paginationManager.NavigateTo(event, s, m.page, "Failed to find user. They may no longer exist in our database.")
@@ -379,7 +378,7 @@ func (m *TicketMenu) handleAcceptModalSubmit(event *events.ModalSubmitInteractio
 	m.layout.ShowOverview(event, s, "Appeal accepted and user cleared.")
 
 	// Log the appeal acceptance
-	m.layout.db.UserActivity().Log(context.Background(), &types.UserActivityLog{
+	m.layout.db.Activity().Log(context.Background(), &types.ActivityLog{
 		ActivityTarget: types.ActivityTarget{
 			UserID: appeal.UserID,
 		},
@@ -414,7 +413,7 @@ func (m *TicketMenu) handleRejectModalSubmit(event *events.ModalSubmitInteractio
 	m.layout.ShowOverview(event, s, "Appeal rejected.")
 
 	// Log the appeal rejection
-	m.layout.db.UserActivity().Log(context.Background(), &types.UserActivityLog{
+	m.layout.db.Activity().Log(context.Background(), &types.ActivityLog{
 		ActivityTarget: types.ActivityTarget{
 			UserID: appeal.UserID,
 		},

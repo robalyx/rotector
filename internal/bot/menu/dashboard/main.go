@@ -83,15 +83,13 @@ func (m *MainMenu) handleSelectMenu(event *events.ComponentInteractionCreate, s 
 
 	switch option {
 	case constants.StartUserReviewButtonCustomID:
-		s.Set(constants.SessionKeyIsLookupMode, false)
 		m.layout.userReviewLayout.ShowReviewMenu(event, s)
 	case constants.StartGroupReviewButtonCustomID:
-		s.Set(constants.SessionKeyIsLookupMode, false)
 		m.layout.groupReviewLayout.Show(event, s)
 	case constants.LookupUserButtonCustomID:
-		m.handleLookupUser(event, s, false)
+		m.handleLookupUser(event)
 	case constants.LookupGroupButtonCustomID:
-		m.handleLookupGroup(event, s, false)
+		m.handleLookupGroup(event)
 	case constants.UserSettingsButtonCustomID:
 		m.layout.settingLayout.ShowUser(event, s)
 	case constants.ActivityBrowserButtonCustomID:
@@ -115,20 +113,6 @@ func (m *MainMenu) handleSelectMenu(event *events.ComponentInteractionCreate, s 
 			return
 		}
 		m.layout.chatLayout.Show(event, s)
-	case constants.ReviewUserButtonCustomID:
-		if !settings.IsReviewer(uint64(event.User().ID)) {
-			m.layout.logger.Error("User is not in reviewer list but somehow attempted to access lookup user", zap.Uint64("user_id", uint64(event.User().ID)))
-			m.layout.paginationManager.RespondWithError(event, "You do not have permission to access lookup user.")
-			return
-		}
-		m.handleLookupUser(event, s, true)
-	case constants.ReviewGroupButtonCustomID:
-		if !settings.IsReviewer(uint64(event.User().ID)) {
-			m.layout.logger.Error("User is not in reviewer list but somehow attempted to access lookup group", zap.Uint64("user_id", uint64(event.User().ID)))
-			m.layout.paginationManager.RespondWithError(event, "You do not have permission to access lookup group.")
-			return
-		}
-		m.handleLookupGroup(event, s, true)
 	case constants.AppealMenuButtonCustomID:
 		m.layout.appealLayout.ShowOverview(event, s, "")
 	case constants.AdminMenuButtonCustomID:
@@ -143,7 +127,7 @@ func (m *MainMenu) handleSelectMenu(event *events.ComponentInteractionCreate, s 
 }
 
 // handleLookupUser opens a modal for entering a specific user ID to lookup.
-func (m *MainMenu) handleLookupUser(event *events.ComponentInteractionCreate, s *session.Session, isReview bool) {
+func (m *MainMenu) handleLookupUser(event *events.ComponentInteractionCreate) {
 	modal := discord.NewModalCreateBuilder().
 		SetCustomID(constants.LookupUserModalCustomID).
 		SetTitle("Lookup User").
@@ -157,12 +141,10 @@ func (m *MainMenu) handleLookupUser(event *events.ComponentInteractionCreate, s 
 		m.layout.logger.Error("Failed to create user lookup modal", zap.Error(err))
 		m.layout.paginationManager.RespondWithError(event, "Failed to open the user lookup modal. Please try again.")
 	}
-
-	s.Set(constants.SessionKeyIsLookupMode, !isReview)
 }
 
 // handleLookupGroup opens a modal for entering a specific group ID to lookup.
-func (m *MainMenu) handleLookupGroup(event *events.ComponentInteractionCreate, s *session.Session, isReview bool) {
+func (m *MainMenu) handleLookupGroup(event *events.ComponentInteractionCreate) {
 	modal := discord.NewModalCreateBuilder().
 		SetCustomID(constants.LookupGroupModalCustomID).
 		SetTitle("Lookup Group").
@@ -176,8 +158,6 @@ func (m *MainMenu) handleLookupGroup(event *events.ComponentInteractionCreate, s
 		m.layout.logger.Error("Failed to create group lookup modal", zap.Error(err))
 		m.layout.paginationManager.RespondWithError(event, "Failed to open the group lookup modal. Please try again.")
 	}
-
-	s.Set(constants.SessionKeyIsLookupMode, !isReview)
 }
 
 // handleModal processes modal submissions.
@@ -196,8 +176,7 @@ func (m *MainMenu) handleLookupUserModalSubmit(event *events.ModalSubmitInteract
 	userIDStr := event.Data.Text(constants.LookupUserInputCustomID)
 
 	// Get user from database
-	isLookupMode := s.GetBool(constants.SessionKeyIsLookupMode)
-	user, canReview, err := m.layout.db.Users().GetUserByID(context.Background(), userIDStr, types.UserFields{}, !isLookupMode)
+	user, err := m.layout.db.Users().GetUserByID(context.Background(), userIDStr, types.UserFields{})
 	if err != nil {
 		if errors.Is(err, types.ErrUserNotFound) {
 			m.layout.paginationManager.NavigateTo(event, s, m.page, "Failed to find user. They may not be in our database.")
@@ -208,17 +187,12 @@ func (m *MainMenu) handleLookupUserModalSubmit(event *events.ModalSubmitInteract
 		return
 	}
 
-	if !canReview {
-		m.layout.paginationManager.NavigateTo(event, s, m.page, "User has been viewed recently. Please try again later.")
-		return
-	}
-
 	// Store user in session and show review menu
 	s.Set(constants.SessionKeyTarget, user)
 	m.layout.userReviewLayout.ShowReviewMenu(event, s)
 
 	// Log the lookup action
-	m.layout.db.UserActivity().Log(context.Background(), &types.UserActivityLog{
+	m.layout.db.Activity().Log(context.Background(), &types.ActivityLog{
 		ActivityTarget: types.ActivityTarget{
 			UserID: user.ID,
 		},
@@ -235,7 +209,7 @@ func (m *MainMenu) handleLookupGroupModalSubmit(event *events.ModalSubmitInterac
 	groupIDStr := event.Data.Text(constants.LookupGroupInputCustomID)
 
 	// Get group from database
-	group, canReview, err := m.layout.db.Groups().GetGroupByID(context.Background(), groupIDStr, types.GroupFields{}, true)
+	group, err := m.layout.db.Groups().GetGroupByID(context.Background(), groupIDStr, types.GroupFields{})
 	if err != nil {
 		if errors.Is(err, types.ErrGroupNotFound) {
 			m.layout.paginationManager.NavigateTo(event, s, m.page, "Failed to find group. It may not be in our database.")
@@ -246,17 +220,12 @@ func (m *MainMenu) handleLookupGroupModalSubmit(event *events.ModalSubmitInterac
 		return
 	}
 
-	if !canReview {
-		m.layout.paginationManager.NavigateTo(event, s, m.page, "Group has been viewed recently. Please try again later.")
-		return
-	}
-
 	// Store group in session and show review menu
 	s.Set(constants.SessionKeyGroupTarget, group)
 	m.layout.groupReviewLayout.Show(event, s)
 
 	// Log the lookup action
-	m.layout.db.UserActivity().Log(context.Background(), &types.UserActivityLog{
+	m.layout.db.Activity().Log(context.Background(), &types.ActivityLog{
 		ActivityTarget: types.ActivityTarget{
 			GroupID: group.ID,
 		},

@@ -109,7 +109,7 @@ func (m *VerifyMenu) verifyDescription(event *events.ComponentInteractionCreate,
 	m.layout.ShowOverview(event, s, "✅ Account verified and appeal submitted successfully!")
 
 	// Log the appeal submission
-	m.layout.db.UserActivity().Log(context.Background(), &types.UserActivityLog{
+	m.layout.db.Activity().Log(context.Background(), &types.ActivityLog{
 		ActivityTarget: types.ActivityTarget{
 			UserID: userID,
 		},

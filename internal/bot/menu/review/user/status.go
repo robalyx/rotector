@@ -57,7 +57,7 @@ func (m *StatusMenu) Show(event interfaces.CommonEvent, s *session.Session) {
 		m.layout.reviewMenu.Show(event, s, "User has been rechecked. Showing updated information.")
 
 		// Log the view action
-		m.layout.db.UserActivity().Log(context.Background(), &types.UserActivityLog{
+		m.layout.db.Activity().Log(context.Background(), &types.ActivityLog{
 			ActivityTarget: types.ActivityTarget{
 				UserID: flaggedUser.ID,
 			},

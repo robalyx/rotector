@@ -30,8 +30,6 @@ const (
 	ChatAssistantButtonCustomID    = "chat_assistant"
 	LookupUserButtonCustomID       = "lookup_user" + ModalOpenSuffix
 	LookupGroupButtonCustomID      = "lookup_group" + ModalOpenSuffix
-	ReviewUserButtonCustomID       = "review_user" + ModalOpenSuffix
-	ReviewGroupButtonCustomID      = "review_group" + ModalOpenSuffix
 
 	LookupUserModalCustomID  = "lookup_user_modal"
 	LookupUserInputCustomID  = "lookup_user_input"
@@ -292,8 +290,6 @@ const (
 	SessionKeyQueueHighCount   = "queueHighCount"
 	SessionKeyQueueNormalCount = "queueNormalCount"
 	SessionKeyQueueLowCount    = "queueLowCount"
-
-	SessionKeyIsLookupMode = "isLookupMode"
 
 	SessionKeyTarget = "target"
 

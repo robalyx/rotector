@@ -86,8 +86,8 @@ type LogCursor struct {
 	Sequence  int64
 }
 
-// UserActivityLog stores information about moderator actions.
-type UserActivityLog struct {
+// ActivityLog stores information about moderator actions.
+type ActivityLog struct {
 	Sequence          int64                  `bun:",pk,autoincrement"`
 	ReviewerID        uint64                 `bun:",notnull"`
 	ActivityTarget    ActivityTarget         `bun:",embed"`

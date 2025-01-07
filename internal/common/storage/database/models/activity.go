@@ -19,9 +19,9 @@ type ActivityModel struct {
 	logger *zap.Logger
 }
 
-// NewUserActivity creates a repository with database access for
+// NewActivity creates a repository with database access for
 // storing and retrieving moderator action logs.
-func NewUserActivity(db *bun.DB, logger *zap.Logger) *ActivityModel {
+func NewActivity(db *bun.DB, logger *zap.Logger) *ActivityModel {
 	return &ActivityModel{
 		db:     db,
 		logger: logger,
@@ -29,7 +29,7 @@ func NewUserActivity(db *bun.DB, logger *zap.Logger) *ActivityModel {
 }
 
 // Log stores a moderator action in the database.
-func (r *ActivityModel) Log(ctx context.Context, log *types.UserActivityLog) {
+func (r *ActivityModel) Log(ctx context.Context, log *types.ActivityLog) {
 	// Validate that only one target type is set
 	if (log.ActivityTarget.UserID != 0 && log.ActivityTarget.GroupID != 0) || (log.ActivityTarget.UserID == 0 && log.ActivityTarget.GroupID == 0) {
 		r.logger.Error("Invalid activity log target",
@@ -57,8 +57,8 @@ func (r *ActivityModel) Log(ctx context.Context, log *types.UserActivityLog) {
 }
 
 // GetLogs retrieves activity logs based on filter criteria.
-func (r *ActivityModel) GetLogs(ctx context.Context, filter types.ActivityFilter, cursor *types.LogCursor, limit int) ([]*types.UserActivityLog, *types.LogCursor, error) {
-	var logs []*types.UserActivityLog
+func (r *ActivityModel) GetLogs(ctx context.Context, filter types.ActivityFilter, cursor *types.LogCursor, limit int) ([]*types.ActivityLog, *types.LogCursor, error) {
+	var logs []*types.ActivityLog
 
 	// Build base query conditions
 	query := r.db.NewSelect().Model(&logs)
@@ -105,4 +105,37 @@ func (r *ActivityModel) GetLogs(ctx context.Context, filter types.ActivityFilter
 	}
 
 	return logs, nextCursor, nil
+}
+
+// GetRecentlyReviewedIDs returns the IDs of users or groups that were recently reviewed by a specific reviewer.
+func (r *ActivityModel) GetRecentlyReviewedIDs(ctx context.Context, reviewerID uint64, isGroup bool, limit int) ([]uint64, error) {
+	var logs []*types.ActivityLog
+
+	// Build query to get recently reviewed IDs
+	var itemType string
+	var activityType types.ActivityType
+	if isGroup {
+		itemType = "group_id"
+		activityType = types.ActivityTypeGroupViewed
+	} else {
+		itemType = "user_id"
+		activityType = types.ActivityTypeUserViewed
+	}
+
+	query := r.db.NewSelect().
+		Model(&logs).
+		Column(itemType).
+		Where(itemType+" > 0").
+		Where("reviewer_id = ?", reviewerID).
+		Where("activity_type = ?", activityType).
+		Order("activity_timestamp DESC").
+		Limit(limit)
+
+	var ids []uint64
+	err := query.Scan(ctx, &ids)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get recently reviewed IDs: %w", err)
+	}
+
+	return ids, nil
 }

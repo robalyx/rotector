@@ -58,37 +58,3 @@ type AppealMessage struct {
 	Content   string      `bun:",notnull"`          // Message content
 	CreatedAt time.Time   `bun:",notnull"`          // When the message was sent
 }
-
-// AppealFields represents the fields that can be requested when fetching appeals.
-type AppealFields struct {
-	Basic      bool // ID, UserID, RequesterID
-	Reason     bool // Appeal reason
-	Timestamps bool // SubmittedAt, LastViewed, ReviewedAt
-	Review     bool // ReviewerID, ReviewReason, Status
-	Messages   bool // Include associated messages
-}
-
-// Columns returns the list of database columns to fetch based on the selected fields.
-func (f AppealFields) Columns() []string {
-	var columns []string
-
-	if f.Basic {
-		columns = append(columns, "id", "user_id", "requester_id")
-	}
-	if f.Reason {
-		columns = append(columns, "reason")
-	}
-	if f.Timestamps {
-		columns = append(columns, "submitted_at", "last_viewed", "reviewed_at", "last_activity")
-	}
-	if f.Review {
-		columns = append(columns, "reviewer_id", "review_reason", "status", "claimed_by", "claimed_at")
-	}
-
-	// Select all if no fields specified
-	if len(columns) == 0 {
-		columns = []string{"*"}
-	}
-
-	return columns
-}

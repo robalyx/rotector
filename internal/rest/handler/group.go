@@ -41,7 +41,7 @@ func NewGroupHandler(db *database.Client, logger *zap.Logger) *GroupHandler {
 //	@Router			/groups/{id} [get]
 func (h *GroupHandler) GetGroup(w http.ResponseWriter, req bunrouter.Request) error {
 	// Get group from database
-	reviewGroup, _, err := h.db.Groups().GetGroupByID(req.Context(), req.Param("id"), types.GroupFields{}, false)
+	reviewGroup, err := h.db.Groups().GetGroupByID(req.Context(), req.Param("id"), types.GroupFields{})
 	if err != nil {
 		if errors.Is(err, types.ErrGroupNotFound) {
 			response := restTypes.GetGroupResponse{

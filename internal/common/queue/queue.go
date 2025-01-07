@@ -112,7 +112,7 @@ func (m *Manager) AddToQueue(ctx context.Context, item *Item) error {
 	}
 
 	// Log the activity
-	go m.db.UserActivity().Log(ctx, &types.UserActivityLog{
+	go m.db.Activity().Log(ctx, &types.ActivityLog{
 		ActivityTarget: types.ActivityTarget{
 			UserID: item.UserID,
 		},

@@ -277,7 +277,7 @@ func (m *OverviewMenu) handleCreateAppealModalSubmit(event *events.ModalSubmitIn
 	}
 
 	// Verify user exists in database
-	user, _, err := m.layout.db.Users().GetUserByID(context.Background(), userIDStr, types.UserFields{Basic: true}, false)
+	user, err := m.layout.db.Users().GetUserByID(context.Background(), userIDStr, types.UserFields{})
 	if err != nil {
 		if errors.Is(err, types.ErrUserNotFound) {
 			m.layout.paginationManager.NavigateTo(event, s, m.page, "Cannot submit appeal - user is not in our database.")

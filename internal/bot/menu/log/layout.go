@@ -52,7 +52,7 @@ func (l *Layout) Show(event interfaces.CommonEvent, s *session.Session) {
 
 // ResetFilters resets all log filters to their default values in the given session.
 func (l *Layout) ResetFilters(s *session.Session) {
-	s.Set(constants.SessionKeyLogs, []*types.UserActivityLog{})
+	s.Set(constants.SessionKeyLogs, []*types.ActivityLog{})
 	s.Set(constants.SessionKeyUserIDFilter, uint64(0))
 	s.Set(constants.SessionKeyGroupIDFilter, uint64(0))
 	s.Set(constants.SessionKeyReviewerIDFilter, uint64(0))

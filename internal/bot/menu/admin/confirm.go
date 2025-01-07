@@ -89,7 +89,7 @@ func (m *ConfirmMenu) handleConfirmDelete(event *events.ComponentInteractionCrea
 
 	// Log the deletion
 	if action == constants.DeleteUserAction {
-		go m.layout.db.UserActivity().Log(context.Background(), &types.UserActivityLog{
+		go m.layout.db.Activity().Log(context.Background(), &types.ActivityLog{
 			ActivityTarget: types.ActivityTarget{
 				UserID: id,
 			},
@@ -101,7 +101,7 @@ func (m *ConfirmMenu) handleConfirmDelete(event *events.ComponentInteractionCrea
 			},
 		})
 	} else {
-		go m.layout.db.UserActivity().Log(context.Background(), &types.UserActivityLog{
+		go m.layout.db.Activity().Log(context.Background(), &types.ActivityLog{
 			ActivityTarget: types.ActivityTarget{
 				GroupID: id,
 			},

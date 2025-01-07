@@ -16,16 +16,18 @@ import (
 
 // GroupModel handles database operations for group records.
 type GroupModel struct {
-	db     *bun.DB
-	logger *zap.Logger
+	db       *bun.DB
+	activity *ActivityModel
+	logger   *zap.Logger
 }
 
 // NewGroup creates a GroupModel with database access for
 // storing and retrieving group information.
-func NewGroup(db *bun.DB, logger *zap.Logger) *GroupModel {
+func NewGroup(db *bun.DB, activity *ActivityModel, logger *zap.Logger) *GroupModel {
 	return &GroupModel{
-		db:     db,
-		logger: logger,
+		db:       db,
+		activity: activity,
+		logger:   logger,
 	}
 }
 
@@ -193,9 +195,8 @@ func (r *GroupModel) GetClearedGroupsCount(ctx context.Context) (int, error) {
 }
 
 // GetGroupByID retrieves a group by either their numeric ID or UUID.
-func (r *GroupModel) GetGroupByID(ctx context.Context, groupID string, fields types.GroupFields, isReviewing bool) (*types.ReviewGroup, bool, error) {
+func (r *GroupModel) GetGroupByID(ctx context.Context, groupID string, fields types.GroupFields) (*types.ReviewGroup, error) {
 	var result types.ReviewGroup
-	var canReview bool
 
 	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
 		// Try each model in order until we find a group
@@ -209,17 +210,14 @@ func (r *GroupModel) GetGroupByID(ctx context.Context, groupID string, fields ty
 		for _, model := range models {
 			query := tx.NewSelect().
 				Model(model).
-				Column(fields.Columns()...)
+				Column(fields.Columns()...).
+				For("UPDATE")
 
 			// Check if input is numeric (ID) or string (UUID)
 			if id, err := strconv.ParseUint(groupID, 10, 64); err == nil {
 				query.Where("id = ?", id)
 			} else {
 				query.Where("uuid = ?", groupID)
-			}
-
-			if isReviewing {
-				query.For("UPDATE")
 			}
 
 			err := query.Scan(ctx)
@@ -243,9 +241,6 @@ func (r *GroupModel) GetGroupByID(ctx context.Context, groupID string, fields ty
 					result.Status = types.GroupTypeLocked
 				}
 
-				// Check if group can be reviewed
-				canReview = !isReviewing || time.Since(result.LastViewed) > 5*time.Minute
-
 				// Get reputation
 				var reputation types.GroupReputation
 				err = tx.NewSelect().
@@ -258,17 +253,13 @@ func (r *GroupModel) GetGroupByID(ctx context.Context, groupID string, fields ty
 				result.Reputation = reputation.Reputation
 
 				// Update last_viewed if requested
-				if isReviewing {
-					now := time.Now()
-					_, err = tx.NewUpdate().
-						Model(model).
-						Set("last_viewed = ?", now).
-						Where("id = ?", result.ID).
-						Exec(ctx)
-					if err != nil {
-						return err
-					}
-					result.LastViewed = now
+				_, err = tx.NewUpdate().
+					Model(model).
+					Set("last_viewed = ?", time.Now()).
+					Where("id = ?", result.ID).
+					Exec(ctx)
+				if err != nil {
+					return err
 				}
 
 				return nil
@@ -281,10 +272,10 @@ func (r *GroupModel) GetGroupByID(ctx context.Context, groupID string, fields ty
 		return types.ErrGroupNotFound
 	})
 	if err != nil {
-		return nil, false, err
+		return nil, err
 	}
 
-	return &result, canReview, nil
+	return &result, nil
 }
 
 // GetGroupsByIDs retrieves specified group information for a list of group IDs.
@@ -721,7 +712,15 @@ func (r *GroupModel) CheckConfirmedGroups(ctx context.Context, groupIDs []uint64
 }
 
 // GetGroupToReview finds a group to review based on the sort method and target mode.
-func (r *GroupModel) GetGroupToReview(ctx context.Context, sortBy types.ReviewSortBy, targetMode types.ReviewTargetMode) (*types.ReviewGroup, error) {
+func (r *GroupModel) GetGroupToReview(ctx context.Context, sortBy types.ReviewSortBy, targetMode types.ReviewTargetMode, reviewerID uint64) (*types.ReviewGroup, error) {
+	// Get recently reviewed group IDs
+	recentIDs, err := r.activity.GetRecentlyReviewedIDs(ctx, reviewerID, true, 100)
+	if err != nil {
+		r.logger.Error("Failed to get recently reviewed group IDs", zap.Error(err))
+		// Continue without filtering if there's an error
+		recentIDs = []uint64{}
+	}
+
 	// Define models in priority order based on target mode
 	var models []interface{}
 	switch targetMode {
@@ -757,7 +756,7 @@ func (r *GroupModel) GetGroupToReview(ctx context.Context, sortBy types.ReviewSo
 
 	// Try each model in order until we find a group
 	for _, model := range models {
-		result, err := r.getNextToReview(ctx, model, sortBy)
+		result, err := r.getNextToReview(ctx, model, sortBy, recentIDs)
 		if err == nil {
 			return result, nil
 		}
@@ -770,14 +769,18 @@ func (r *GroupModel) GetGroupToReview(ctx context.Context, sortBy types.ReviewSo
 }
 
 // getNextToReview handles the common logic for getting the next item to review.
-func (r *GroupModel) getNextToReview(ctx context.Context, model interface{}, sortBy types.ReviewSortBy) (*types.ReviewGroup, error) {
+func (r *GroupModel) getNextToReview(ctx context.Context, model interface{}, sortBy types.ReviewSortBy, recentIDs []uint64) (*types.ReviewGroup, error) {
 	var result types.ReviewGroup
 	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
 		// Build subquery to get ID
 		subq := tx.NewSelect().
 			Model(model).
-			Column("id").
-			Where("last_viewed < NOW() - INTERVAL '5 minutes'")
+			Column("id")
+
+		// Exclude recently reviewed IDs if any exist
+		if len(recentIDs) > 0 {
+			subq.Where("id NOT IN (?)", bun.In(recentIDs))
+		}
 
 		// Apply sort order to subquery
 		switch sortBy {
@@ -837,16 +840,14 @@ func (r *GroupModel) getNextToReview(ctx context.Context, model interface{}, sor
 		result.Reputation = reputation.Reputation
 
 		// Update last_viewed
-		now := time.Now()
 		_, err = tx.NewUpdate().
 			Model(model).
-			Set("last_viewed = ?", now).
+			Set("last_viewed = ?", time.Now()).
 			Where("id = ?", result.ID).
 			Exec(ctx)
 		if err != nil {
 			return err
 		}
-		result.LastViewed = now
 
 		return nil
 	})

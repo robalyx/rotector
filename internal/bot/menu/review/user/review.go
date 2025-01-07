@@ -130,7 +130,7 @@ func (m *ReviewMenu) Show(event interfaces.CommonEvent, s *session.Session, cont
 
 // handleSelectMenu processes select menu interactions.
 func (m *ReviewMenu) handleSelectMenu(event *events.ComponentInteractionCreate, s *session.Session, customID string, option string) {
-	if m.checkLastViewed(event, s) || m.checkCaptchaRequired(event, s) {
+	if m.checkCaptchaRequired(event, s) {
 		return
 	}
 
@@ -201,10 +201,6 @@ func (m *ReviewMenu) handleActionSelection(event *events.ComponentInteractionCre
 			m.layout.paginationManager.RespondWithError(event, "You do not have permission to confirm users with custom reasons.")
 			return
 		}
-		if s.GetBool(constants.SessionKeyIsLookupMode) {
-			m.layout.paginationManager.RespondWithError(event, "Cannot confirm users in lookup mode.")
-			return
-		}
 		m.handleConfirmWithReason(event, s)
 	case constants.ReviewModeOption:
 		if !settings.IsReviewer(userID) {
@@ -212,39 +208,20 @@ func (m *ReviewMenu) handleActionSelection(event *events.ComponentInteractionCre
 			m.layout.paginationManager.RespondWithError(event, "You do not have permission to change review mode.")
 			return
 		}
-		if s.GetBool(constants.SessionKeyIsLookupMode) {
-			m.layout.paginationManager.RespondWithError(event, "Cannot change review mode in lookup mode.")
-			return
-		}
 		m.layout.settingLayout.ShowUpdate(event, s, constants.UserSettingPrefix, constants.ReviewModeOption)
 	case constants.ReviewTargetModeOption:
-		if s.GetBool(constants.SessionKeyIsLookupMode) {
-			m.layout.paginationManager.RespondWithError(event, "Cannot change review target in lookup mode.")
-			return
-		}
 		m.layout.settingLayout.ShowUpdate(event, s, constants.UserSettingPrefix, constants.ReviewTargetModeOption)
 	}
 }
 
 // handleButton handles the buttons for the review menu.
 func (m *ReviewMenu) handleButton(event *events.ComponentInteractionCreate, s *session.Session, customID string) {
-	if m.checkLastViewed(event, s) || m.checkCaptchaRequired(event, s) {
-		return
-	}
-
-	// Prevent actions in lookup mode except for back button
-	isLookupMode := s.GetBool(constants.SessionKeyIsLookupMode)
-	if isLookupMode && customID != constants.BackButtonCustomID {
-		m.layout.paginationManager.RespondWithError(event, "Actions are not available in lookup mode.")
+	if m.checkCaptchaRequired(event, s) {
 		return
 	}
 
 	switch customID {
 	case constants.BackButtonCustomID:
-		if isLookupMode {
-			s.Delete(constants.SessionKeyTarget)
-			s.Delete(constants.SessionKeyIsLookupMode)
-		}
 		m.layout.paginationManager.NavigateBack(event, s, "")
 	case constants.ConfirmButtonCustomID:
 		m.handleConfirmUser(event, s)
@@ -257,13 +234,7 @@ func (m *ReviewMenu) handleButton(event *events.ComponentInteractionCreate, s *s
 
 // handleModal handles the modal for the review menu.
 func (m *ReviewMenu) handleModal(event *events.ModalSubmitInteractionCreate, s *session.Session) {
-	if m.checkLastViewed(event, s) || m.checkCaptchaRequired(event, s) {
-		return
-	}
-
-	// Prevent actions in lookup mode
-	if s.GetBool(constants.SessionKeyIsLookupMode) {
-		m.layout.paginationManager.RespondWithError(event, "Actions are not available in lookup mode.")
+	if m.checkCaptchaRequired(event, s) {
 		return
 	}
 
@@ -404,7 +375,7 @@ func (m *ReviewMenu) handleConfirmUser(event interfaces.CommonEvent, s *session.
 		actionMsg = "downvoted"
 
 		// Log the training downvote action
-		go m.layout.db.UserActivity().Log(context.Background(), &types.UserActivityLog{
+		go m.layout.db.Activity().Log(context.Background(), &types.ActivityLog{
 			ActivityTarget: types.ActivityTarget{
 				UserID: user.ID,
 			},
@@ -433,7 +404,7 @@ func (m *ReviewMenu) handleConfirmUser(event interfaces.CommonEvent, s *session.
 		actionMsg = "confirmed"
 
 		// Log the confirm action
-		go m.layout.db.UserActivity().Log(context.Background(), &types.UserActivityLog{
+		go m.layout.db.Activity().Log(context.Background(), &types.ActivityLog{
 			ActivityTarget: types.ActivityTarget{
 				UserID: user.ID,
 			},
@@ -478,7 +449,7 @@ func (m *ReviewMenu) handleClearUser(event interfaces.CommonEvent, s *session.Se
 		actionMsg = "upvoted"
 
 		// Log the training upvote action
-		go m.layout.db.UserActivity().Log(context.Background(), &types.UserActivityLog{
+		go m.layout.db.Activity().Log(context.Background(), &types.ActivityLog{
 			ActivityTarget: types.ActivityTarget{
 				UserID: user.ID,
 			},
@@ -510,7 +481,7 @@ func (m *ReviewMenu) handleClearUser(event interfaces.CommonEvent, s *session.Se
 		go m.layout.db.Tracking().RemoveUserFromGroups(context.Background(), user.ID, user.Groups)
 
 		// Log the clear action
-		go m.layout.db.UserActivity().Log(context.Background(), &types.UserActivityLog{
+		go m.layout.db.Activity().Log(context.Background(), &types.ActivityLog{
 			ActivityTarget: types.ActivityTarget{
 				UserID: user.ID,
 			},
@@ -572,7 +543,7 @@ func (m *ReviewMenu) handleSkipUser(event interfaces.CommonEvent, s *session.Ses
 	var user *types.ReviewUser
 	s.GetInterface(constants.SessionKeyTarget, &user)
 
-	m.layout.db.UserActivity().Log(context.Background(), &types.UserActivityLog{
+	m.layout.db.Activity().Log(context.Background(), &types.ActivityLog{
 		ActivityTarget: types.ActivityTarget{
 			UserID: user.ID,
 		},
@@ -671,7 +642,7 @@ func (m *ReviewMenu) handleConfirmWithReasonModalSubmit(event *events.ModalSubmi
 	m.updateCounters(s)
 
 	// Log the custom confirm action
-	m.layout.db.UserActivity().Log(context.Background(), &types.UserActivityLog{
+	m.layout.db.Activity().Log(context.Background(), &types.ActivityLog{
 		ActivityTarget: types.ActivityTarget{
 			UserID: user.ID,
 		},
@@ -688,7 +659,7 @@ func (m *ReviewMenu) fetchNewTarget(s *session.Session, reviewerID uint64) (*typ
 	s.GetInterface(constants.SessionKeyUserSettings, &settings)
 
 	// Get the next user to review
-	user, err := m.layout.db.Users().GetUserToReview(context.Background(), settings.UserDefaultSort, settings.ReviewTargetMode)
+	user, err := m.layout.db.Users().GetUserToReview(context.Background(), settings.UserDefaultSort, settings.ReviewTargetMode, reviewerID)
 	if err != nil {
 		return nil, err
 	}
@@ -697,7 +668,7 @@ func (m *ReviewMenu) fetchNewTarget(s *session.Session, reviewerID uint64) (*typ
 	s.Set(constants.SessionKeyTarget, user)
 
 	// Log the view action
-	go m.layout.db.UserActivity().Log(context.Background(), &types.UserActivityLog{
+	go m.layout.db.Activity().Log(context.Background(), &types.ActivityLog{
 		ActivityTarget: types.ActivityTarget{
 			UserID: user.ID,
 		},
@@ -708,25 +679,6 @@ func (m *ReviewMenu) fetchNewTarget(s *session.Session, reviewerID uint64) (*typ
 	})
 
 	return user, nil
-}
-
-// checkLastViewed checks if the current target user has timed out and needs to be refreshed.
-// Clears the current user and loads a new one if the timeout is detected.
-func (m *ReviewMenu) checkLastViewed(event interfaces.CommonEvent, s *session.Session) bool {
-	var user *types.ReviewUser
-	s.GetInterface(constants.SessionKeyTarget, &user)
-
-	isLookupMode := s.GetBool(constants.SessionKeyIsLookupMode)
-
-	// Check if more than 5 minutes have passed since last view
-	if user != nil && time.Since(user.LastViewed) > 5*time.Minute && !isLookupMode {
-		// Clear current user and load new one
-		s.Delete(constants.SessionKeyTarget)
-		m.Show(event, s, "Previous review timed out after 5 minutes of inactivity. Showing new user.")
-		return true
-	}
-
-	return false
 }
 
 // checkCaptchaRequired checks if CAPTCHA verification is needed.

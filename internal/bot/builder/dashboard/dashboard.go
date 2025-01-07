@@ -105,17 +105,17 @@ func (b *Builder) Build() *discord.MessageUpdateBuilder {
 		discord.NewStringSelectMenuOption("Review Groups", constants.StartGroupReviewButtonCustomID).
 			WithEmoji(discord.ComponentEmoji{Name: "📝"}).
 			WithDescription("Start reviewing flagged groups"),
+		discord.NewStringSelectMenuOption("Lookup User", constants.LookupUserButtonCustomID).
+			WithEmoji(discord.ComponentEmoji{Name: "🔍"}).
+			WithDescription("Look up specific user by ID or UUID"),
+		discord.NewStringSelectMenuOption("Lookup Group", constants.LookupGroupButtonCustomID).
+			WithEmoji(discord.ComponentEmoji{Name: "🔍"}).
+			WithDescription("Look up specific group by ID or UUID"),
 	}
 
 	// Add reviewer-only options
 	if b.botSettings.IsReviewer(b.userID) {
 		options = append(options,
-			discord.NewStringSelectMenuOption("Review Specific User", constants.ReviewUserButtonCustomID).
-				WithEmoji(discord.ComponentEmoji{Name: "🎯"}).
-				WithDescription("Review a specific user by ID or UUID"),
-			discord.NewStringSelectMenuOption("Review Specific Group", constants.ReviewGroupButtonCustomID).
-				WithEmoji(discord.ComponentEmoji{Name: "🎯"}).
-				WithDescription("Review a specific group by ID or UUID"),
 			discord.NewStringSelectMenuOption("AI Chat Assistant", constants.ChatAssistantButtonCustomID).
 				WithEmoji(discord.ComponentEmoji{Name: "🤖"}).
 				WithDescription("Chat with AI about moderation topics"),
@@ -128,14 +128,8 @@ func (b *Builder) Build() *discord.MessageUpdateBuilder {
 		)
 	}
 
-	// Add other default options
+	// Add last default options
 	options = append(options,
-		discord.NewStringSelectMenuOption("Lookup User", constants.LookupUserButtonCustomID).
-			WithEmoji(discord.ComponentEmoji{Name: "🔍"}).
-			WithDescription("Look up the details of a specific user by ID or UUID"),
-		discord.NewStringSelectMenuOption("Lookup Group", constants.LookupGroupButtonCustomID).
-			WithEmoji(discord.ComponentEmoji{Name: "🔍"}).
-			WithDescription("Look up the details of a specific group by ID or UUID"),
 		discord.NewStringSelectMenuOption("View Appeals", constants.AppealMenuButtonCustomID).
 			WithEmoji(discord.ComponentEmoji{Name: "⚖️"}).
 			WithDescription("View pending appeals"),

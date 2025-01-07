@@ -16,7 +16,7 @@ import (
 // Builder creates the visual layout for viewing activity logs.
 type Builder struct {
 	settings           *types.UserSetting
-	logs               []*types.UserActivityLog
+	logs               []*types.ActivityLog
 	userID             uint64
 	groupID            uint64
 	reviewerID         uint64
@@ -31,7 +31,7 @@ type Builder struct {
 func NewBuilder(s *session.Session) *Builder {
 	var settings *types.UserSetting
 	s.GetInterface(constants.SessionKeyUserSettings, &settings)
-	var logs []*types.UserActivityLog
+	var logs []*types.ActivityLog
 	s.GetInterface(constants.SessionKeyLogs, &logs)
 	var activityTypeFilter types.ActivityType
 	s.GetInterface(constants.SessionKeyActivityTypeFilter, &activityTypeFilter)

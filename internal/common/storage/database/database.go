@@ -44,15 +44,15 @@ func (sonicProvider) NewDecoder(r io.Reader) bunjson.Decoder {
 // Client represents the database connection and operations.
 // It manages access to different repositories that handle specific data types.
 type Client struct {
-	db           *bun.DB
-	logger       *zap.Logger
-	users        *models.UserModel
-	groups       *models.GroupModel
-	stats        *models.StatsModel
-	settings     *models.SettingModel
-	userActivity *models.ActivityModel
-	tracking     *models.TrackingModel
-	appeals      *models.AppealModel
+	db       *bun.DB
+	logger   *zap.Logger
+	users    *models.UserModel
+	groups   *models.GroupModel
+	stats    *models.StatsModel
+	settings *models.SettingModel
+	activity *models.ActivityModel
+	tracking *models.TrackingModel
+	appeals  *models.AppealModel
 }
 
 // NewConnection establishes a new database connection and returns a Client instance.
@@ -98,16 +98,17 @@ func NewConnection(ctx context.Context, config *config.PostgreSQL, logger *zap.L
 
 	// Create repositories
 	tracking := models.NewTracking(db, logger)
+	activity := models.NewActivity(db, logger)
 	client := &Client{
-		db:           db,
-		logger:       logger,
-		users:        models.NewUser(db, tracking, logger),
-		groups:       models.NewGroup(db, logger),
-		stats:        models.NewStats(db, logger),
-		settings:     models.NewSetting(db, logger),
-		userActivity: models.NewUserActivity(db, logger),
-		tracking:     tracking,
-		appeals:      models.NewAppeal(db, logger),
+		db:       db,
+		logger:   logger,
+		users:    models.NewUser(db, tracking, activity, logger),
+		groups:   models.NewGroup(db, activity, logger),
+		stats:    models.NewStats(db, logger),
+		settings: models.NewSetting(db, logger),
+		activity: activity,
+		tracking: tracking,
+		appeals:  models.NewAppeal(db, logger),
 	}
 
 	logger.Info("Database connection established")
@@ -150,9 +151,9 @@ func (c *Client) Tracking() *models.TrackingModel {
 	return c.tracking
 }
 
-// UserActivity returns the repository for logging user actions.
-func (c *Client) UserActivity() *models.ActivityModel {
-	return c.userActivity
+// Activity returns the repository for logging user actions.
+func (c *Client) Activity() *models.ActivityModel {
+	return c.activity
 }
 
 // Appeals returns the repository for appeal-related operations.
