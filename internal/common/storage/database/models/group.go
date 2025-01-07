@@ -169,31 +169,6 @@ func (r *GroupModel) ClearGroup(ctx context.Context, group *types.ReviewGroup) e
 	})
 }
 
-// GetClearedGroupByID finds a group in the cleared_groups table by their ID.
-func (r *GroupModel) GetClearedGroupByID(ctx context.Context, id uint64) (*types.ClearedGroup, error) {
-	var group types.ClearedGroup
-	err := r.db.NewSelect().
-		Model(&group).
-		Where("id = ?", id).
-		Scan(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get cleared group by ID: %w (groupID=%d)", err, id)
-	}
-	r.logger.Debug("Retrieved cleared group by ID", zap.Uint64("groupID", id))
-	return &group, nil
-}
-
-// GetClearedGroupsCount returns the total number of groups in cleared_groups.
-func (r *GroupModel) GetClearedGroupsCount(ctx context.Context) (int, error) {
-	count, err := r.db.NewSelect().
-		Model((*types.ClearedGroup)(nil)).
-		Count(ctx)
-	if err != nil {
-		return 0, fmt.Errorf("failed to get cleared groups count: %w", err)
-	}
-	return count, nil
-}
-
 // GetGroupByID retrieves a group by either their numeric ID or UUID.
 func (r *GroupModel) GetGroupByID(ctx context.Context, groupID string, fields types.GroupFields) (*types.ReviewGroup, error) {
 	var result types.ReviewGroup

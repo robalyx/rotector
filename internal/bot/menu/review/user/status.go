@@ -2,6 +2,7 @@ package user
 
 import (
 	"context"
+	"strconv"
 	"time"
 
 	"github.com/disgoorg/disgo/discord"
@@ -45,7 +46,7 @@ func (m *StatusMenu) Show(event interfaces.CommonEvent, s *session.Session) {
 	// Check if processing is complete
 	if err == nil && (status == queue.StatusComplete || status == queue.StatusSkipped) {
 		// Check if user was flagged after recheck
-		flaggedUser, err := m.layout.db.Users().GetFlaggedUserByIDToReview(context.Background(), userID)
+		user, err := m.layout.db.Users().GetUserByID(context.Background(), strconv.FormatUint(userID, 10), types.UserFields{})
 		if err != nil {
 			// User was not flagged by AI, return to previous page
 			m.layout.paginationManager.NavigateBack(event, s, "User was not flagged by AI after recheck.")
@@ -53,13 +54,13 @@ func (m *StatusMenu) Show(event interfaces.CommonEvent, s *session.Session) {
 		}
 
 		// User is still flagged, show updated information
-		s.Set(constants.SessionKeyTarget, flaggedUser)
+		s.Set(constants.SessionKeyTarget, user)
 		m.layout.reviewMenu.Show(event, s, "User has been rechecked. Showing updated information.")
 
 		// Log the view action
 		m.layout.db.Activity().Log(context.Background(), &types.ActivityLog{
 			ActivityTarget: types.ActivityTarget{
-				UserID: flaggedUser.ID,
+				UserID: user.ID,
 			},
 			ReviewerID:        uint64(event.User().ID),
 			ActivityType:      types.ActivityTypeUserViewed,

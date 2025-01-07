@@ -230,57 +230,6 @@ func (r *UserModel) ClearUser(ctx context.Context, user *types.ReviewUser) error
 	})
 }
 
-// GetFlaggedUserByIDToReview finds a user in the flagged_users table by their ID
-// and updates their last_viewed timestamp.
-func (r *UserModel) GetFlaggedUserByIDToReview(ctx context.Context, id uint64) (*types.FlaggedUser, error) {
-	var user types.FlaggedUser
-	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
-		// Get the user with row lock
-		err := tx.NewSelect().
-			Model(&user).
-			Where("id = ?", id).
-			For("UPDATE SKIP LOCKED").
-			Scan(ctx)
-		if err != nil {
-			return fmt.Errorf("failed to get flagged user by ID: %w (userID=%d)", err, id)
-		}
-
-		// Update last_viewed
-		_, err = tx.NewUpdate().
-			Model(&user).
-			Set("last_viewed = ?", time.Now()).
-			Where("id = ?", id).
-			Exec(ctx)
-		if err != nil {
-			return fmt.Errorf("failed to update last_viewed: %w (userID=%d)", err, id)
-		}
-
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	r.logger.Debug("Retrieved and updated flagged user by ID",
-		zap.Uint64("userID", id),
-		zap.Time("lastViewed", user.LastViewed))
-	return &user, nil
-}
-
-// GetClearedUserByID finds a user in the cleared_users table by their ID.
-func (r *UserModel) GetClearedUserByID(ctx context.Context, id uint64) (*types.ClearedUser, error) {
-	var user types.ClearedUser
-	err := r.db.NewSelect().
-		Model(&user).
-		Where("id = ?", id).
-		Scan(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get cleared user by ID: %w (userID=%d)", err, id)
-	}
-	r.logger.Debug("Retrieved cleared user by ID", zap.Uint64("userID", id))
-	return &user, nil
-}
-
 // GetConfirmedUsersCount returns the total number of users in confirmed_users.
 func (r *UserModel) GetConfirmedUsersCount(ctx context.Context) (int, error) {
 	count, err := r.db.NewSelect().
@@ -299,17 +248,6 @@ func (r *UserModel) GetFlaggedUsersCount(ctx context.Context) (int, error) {
 		Count(ctx)
 	if err != nil {
 		return 0, fmt.Errorf("failed to get flagged users count: %w", err)
-	}
-	return count, nil
-}
-
-// GetClearedUsersCount returns the total number of users in cleared_users.
-func (r *UserModel) GetClearedUsersCount(ctx context.Context) (int, error) {
-	count, err := r.db.NewSelect().
-		Model((*types.ClearedUser)(nil)).
-		Count(ctx)
-	if err != nil {
-		return 0, fmt.Errorf("failed to get cleared users count: %w", err)
 	}
 	return count, nil
 }
