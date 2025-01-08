@@ -93,15 +93,9 @@ func (c *GroupChecker) CheckGroupPercentages(groupInfos []*apiTypes.GroupRespons
 func (c *GroupChecker) ProcessUsers(userInfos []*fetcher.Info) map[uint64]*types.User {
 	// Collect all unique group IDs across all users
 	uniqueGroupIDs := make(map[uint64]struct{})
-	groupUsersTracking := make(map[uint64][]uint64)
 	for _, userInfo := range userInfos {
 		for _, group := range userInfo.Groups.Data {
 			uniqueGroupIDs[group.Group.ID] = struct{}{}
-
-			// Only track if member count is below threshold
-			if group.Group.MemberCount <= c.maxGroupMembersTrack {
-				groupUsersTracking[group.Group.ID] = append(groupUsersTracking[group.Group.ID], userInfo.ID)
-			}
 		}
 	}
 
@@ -119,14 +113,6 @@ func (c *GroupChecker) ProcessUsers(userInfos []*fetcher.Info) map[uint64]*types
 	if err != nil {
 		c.logger.Error("Failed to fetch existing groups", zap.Error(err))
 		return nil
-	}
-
-	// Track all users in groups
-	if len(groupUsersTracking) > 0 {
-		err = c.db.Tracking().AddUsersToGroupsTracking(context.Background(), groupUsersTracking)
-		if err != nil {
-			c.logger.Error("Failed to add users to groups tracking", zap.Error(err))
-		}
 	}
 
 	// Process each user concurrently

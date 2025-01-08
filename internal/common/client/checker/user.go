@@ -8,6 +8,7 @@ import (
 	"github.com/rotector/rotector/internal/common/client/fetcher"
 	"github.com/rotector/rotector/internal/common/setup"
 	"github.com/rotector/rotector/internal/common/storage/database"
+	"github.com/rotector/rotector/internal/common/storage/database/types"
 	"github.com/rotector/rotector/internal/common/translator"
 	"go.uber.org/zap"
 )
@@ -44,11 +45,7 @@ func NewUserChecker(app *setup.App, userFetcher *fetcher.UserFetcher, logger *za
 	}
 }
 
-// ProcessUsers runs users through multiple checking stages:
-// 1. Group checking - flags users in multiple flagged groups
-// 2. Friend checking - flags users with many flagged friends
-// 3. AI checking - analyzes user content for violations
-// After flagging, it loads additional data (outfits, thumbnails) for flagged users.
+// ProcessUsers runs users through multiple checking stage.
 // Returns IDs of users that failed AI validation for retry.
 func (c *UserChecker) ProcessUsers(userInfos []*fetcher.Info) []uint64 {
 	c.logger.Info("Processing users", zap.Int("userInfos", len(userInfos)))
@@ -110,9 +107,34 @@ func (c *UserChecker) ProcessUsers(userInfos []*fetcher.Info) []uint64 {
 		c.logger.Error("Failed to save users", zap.Error(err))
 	}
 
+	// Track flagged users' group memberships
+	go c.trackFlaggedUsersGroups(flaggedUsers)
+
 	c.logger.Info("Finished processing users",
 		zap.Int("totalProcessed", len(userInfos)),
 		zap.Int("flaggedUsers", len(flaggedUsers)))
 
 	return failedIDs
+}
+
+// trackFlaggedUsersGroups adds flagged users' group memberships to tracking.
+func (c *UserChecker) trackFlaggedUsersGroups(flaggedUsers map[uint64]*types.User) {
+	groupUsersTracking := make(map[uint64][]uint64)
+
+	// Collect group memberships for flagged users
+	for userID, user := range flaggedUsers {
+		for _, group := range user.Groups {
+			// Only track if member count is below threshold
+			if group.Group.MemberCount <= c.app.Config.Worker.ThresholdLimits.MaxGroupMembersTrack {
+				groupUsersTracking[group.Group.ID] = append(groupUsersTracking[group.Group.ID], userID)
+			}
+		}
+	}
+
+	// Add to tracking if we have any data
+	if len(groupUsersTracking) > 0 {
+		if err := c.db.Tracking().AddUsersToGroupsTracking(context.Background(), groupUsersTracking); err != nil {
+			c.logger.Error("Failed to add flagged users to groups tracking", zap.Error(err))
+		}
+	}
 }
