@@ -18,7 +18,7 @@ require (
 	github.com/jaxron/axonet/middleware/singleflight v0.0.0-20241224051239-2d7d6fad4b03
 	github.com/jaxron/roapi.go v0.0.0-20241207095928-5d33fcc38cf1
 	github.com/klauspost/compress v1.17.11
-	github.com/knadh/koanf/parsers/toml v0.1.0
+	github.com/knadh/koanf/parsers/toml/v2 v2.1.0
 	github.com/knadh/koanf/providers/file v1.1.2
 	github.com/knadh/koanf/v2 v2.1.2
 	github.com/redis/rueidis v1.0.52
@@ -81,7 +81,7 @@ require (
 	github.com/mailru/easyjson v0.9.0 // indirect
 	github.com/mitchellh/copystructure v1.2.0 // indirect
 	github.com/mitchellh/reflectwalk v1.0.2 // indirect
-	github.com/pelletier/go-toml v1.9.5 // indirect
+	github.com/pelletier/go-toml/v2 v2.2.2 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/puzpuzpuz/xsync/v3 v3.4.0 // indirect
 	github.com/sasha-s/go-csync v0.0.0-20240107134140-fcbab37b09ad // indirect
