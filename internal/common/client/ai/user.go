@@ -335,6 +335,7 @@ func (a *UserAnalyzer) validateFlaggedUsers(flaggedUsers *FlaggedUsers, translat
 				FlaggedContent: flaggedUser.FlaggedContent,
 				Confidence:     flaggedUser.Confidence,
 				LastUpdated:    originalInfo.LastUpdated,
+				LastPurgeCheck: originalInfo.LastPurgeCheck,
 			}
 		} else {
 			failedValidationIDs = append(failedValidationIDs, originalInfo.ID)

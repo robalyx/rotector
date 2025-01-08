@@ -189,6 +189,7 @@ func (c *FriendChecker) processUserFriends(userInfo *fetcher.Info, existingFrien
 			FollowingCount: userInfo.FollowingCount,
 			Confidence:     math.Round(confidence*100) / 100, // Round to 2 decimal places
 			LastUpdated:    userInfo.LastUpdated,
+			LastPurgeCheck: userInfo.LastPurgeCheck,
 		}
 
 		c.logger.Info("User automatically flagged",

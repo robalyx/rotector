@@ -55,6 +55,7 @@ type Info struct {
 	FollowerCount  uint64                 `json:"followerCount"`
 	FollowingCount uint64                 `json:"followingCount"`
 	LastUpdated    time.Time              `json:"lastUpdated"`
+	LastPurgeCheck time.Time              `json:"lastPurgeCheck"`
 }
 
 // UserFetcher handles concurrent retrieval of user information from the Roblox API.
@@ -116,18 +117,20 @@ func (u *UserFetcher) FetchInfos(userIDs []uint64) []*Info {
 			groups, friends, games := u.fetchUserData(id)
 
 			// Send the user info to the channel
+			now := time.Now()
 			resultsChan <- UserFetchResult{
 				ID: id,
 				Info: &Info{
-					ID:          userInfo.ID,
-					Name:        userInfo.Name,
-					DisplayName: userInfo.DisplayName,
-					Description: userInfo.Description,
-					CreatedAt:   userInfo.Created,
-					Groups:      groups,
-					Friends:     friends,
-					Games:       games,
-					LastUpdated: time.Now(),
+					ID:             userInfo.ID,
+					Name:           userInfo.Name,
+					DisplayName:    userInfo.DisplayName,
+					Description:    userInfo.Description,
+					CreatedAt:      userInfo.Created,
+					Groups:         groups,
+					Friends:        friends,
+					Games:          games,
+					LastUpdated:    now,
+					LastPurgeCheck: now,
 				},
 			}
 		}(userID)
