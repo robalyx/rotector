@@ -111,7 +111,7 @@ func (r *TrackingModel) PurgeOldTrackings(ctx context.Context, cutoffDate time.T
 
 // GetGroupTrackingsToCheck finds groups that haven't been checked recently
 // with priority for groups with more flagged users.
-func (r *TrackingModel) GetGroupTrackingsToCheck(ctx context.Context, batchSize int) (map[uint64][]uint64, error) {
+func (r *TrackingModel) GetGroupTrackingsToCheck(ctx context.Context, batchSize int, minFlaggedUsers int) (map[uint64][]uint64, error) {
 	result := make(map[uint64][]uint64)
 
 	now := time.Now()
@@ -128,10 +128,11 @@ func (r *TrackingModel) GetGroupTrackingsToCheck(ctx context.Context, batchSize 
 				FROM group_member_trackings
 				WHERE is_flagged = false 
 				AND last_checked < ?
+				AND cardinality(flagged_users) >= ?
 				ORDER BY cardinality(flagged_users) DESC, last_checked ASC
 				LIMIT ?
 			)
-			RETURNING group_id, flagged_users`, now, tenMinutesAgo, batchSize).
+			RETURNING group_id, flagged_users`, now, tenMinutesAgo, minFlaggedUsers, batchSize).
 			Scan(ctx, &trackings)
 		if err != nil {
 			return fmt.Errorf("failed to get and update group trackings: %w", err)

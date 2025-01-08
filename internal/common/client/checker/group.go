@@ -49,11 +49,6 @@ func (c *GroupChecker) CheckGroupPercentages(groupInfos []*apiTypes.GroupRespons
 	for _, groupInfo := range groupInfos {
 		flaggedUsers := groupToFlaggedUsers[groupInfo.ID]
 
-		// Skip if group has no flagged users
-		if len(flaggedUsers) == 0 {
-			continue
-		}
-
 		var reason string
 		var confidence float64
 

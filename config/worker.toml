@@ -15,11 +15,16 @@ queue_items = 50
 [worker.threshold_limits]
 # Maximum number of flagged users before stopping worker
 flagged_users = 100000
+
+# Minimum number of flagged users needed to consider flagging a group
+min_group_flagged_users = 5
 # Minimum percentage of flagged users needed to flag a group
 min_flagged_percentage = 50.0
 # Flag group if flagged users count exceeds this value, regardless of percentage
 min_flagged_override = 100
+
 # Minimum follower count to consider a user "popular"
 min_followers_for_popular_user = 10000
+
 # Maximum group members before skipping tracking
 max_group_members_track = 20000

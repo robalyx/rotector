@@ -118,6 +118,7 @@ type BatchSizes struct {
 // ThresholdLimits configures various thresholds for worker operations.
 type ThresholdLimits struct {
 	FlaggedUsers           int     `koanf:"flagged_users"`                  // Maximum number of flagged users before stopping worker
+	MinGroupFlaggedUsers   int     `koanf:"min_group_flagged_users"`        // Minimum number of flagged users needed to consider flagging a group
 	MinFlaggedPercentage   float64 `koanf:"min_flagged_percentage"`         // Minimum percentage of flagged users needed to flag a group
 	MinFlaggedOverride     int     `koanf:"min_flagged_override"`           // Flag group if flagged users count exceeds this value
 	MinFollowersForPopular uint64  `koanf:"min_followers_for_popular_user"` // Minimum follower count to consider a user "popular"

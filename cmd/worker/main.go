@@ -191,7 +191,7 @@ func runWorker(ctx context.Context, w interface{ Start() }, logger *zap.Logger) 
 				w.Start()
 			}()
 
-			logger.Error("Worker stopped unexpectedly",
+			logger.Warn("Worker stopped unexpectedly",
 				zap.String("worker_type", fmt.Sprintf("%T", w)),
 			)
 			time.Sleep(5 * time.Second)

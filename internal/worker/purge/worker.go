@@ -16,20 +16,21 @@ import (
 
 // Worker handles all purge operations.
 type Worker struct {
-	db                 *database.Client
-	roAPI              *api.API
-	bar                *progress.Bar
-	userFetcher        *fetcher.UserFetcher
-	groupFetcher       *fetcher.GroupFetcher
-	thumbnailFetcher   *fetcher.ThumbnailFetcher
-	groupChecker       *checker.GroupChecker
-	reporter           *core.StatusReporter
-	logger             *zap.Logger
-	userBatchSize      int
-	groupBatchSize     int
-	trackBatchSize     int
-	minFlaggedOverride int
-	minFlaggedPercent  float64
+	db                   *database.Client
+	roAPI                *api.API
+	bar                  *progress.Bar
+	userFetcher          *fetcher.UserFetcher
+	groupFetcher         *fetcher.GroupFetcher
+	thumbnailFetcher     *fetcher.ThumbnailFetcher
+	groupChecker         *checker.GroupChecker
+	reporter             *core.StatusReporter
+	logger               *zap.Logger
+	userBatchSize        int
+	groupBatchSize       int
+	trackBatchSize       int
+	minGroupFlaggedUsers int
+	minFlaggedOverride   int
+	minFlaggedPercent    float64
 }
 
 // New creates a new purge worker.
@@ -38,29 +39,28 @@ func New(app *setup.App, bar *progress.Bar, logger *zap.Logger) *Worker {
 	groupFetcher := fetcher.NewGroupFetcher(app.RoAPI, logger)
 	thumbnailFetcher := fetcher.NewThumbnailFetcher(app.RoAPI, logger)
 	reporter := core.NewStatusReporter(app.StatusClient, "purge", "main", logger)
-	groupChecker := checker.NewGroupChecker(
-		app.DB,
-		logger,
+	groupChecker := checker.NewGroupChecker(app.DB, logger,
 		app.Config.Worker.ThresholdLimits.MaxGroupMembersTrack,
 		app.Config.Worker.ThresholdLimits.MinFlaggedOverride,
 		app.Config.Worker.ThresholdLimits.MinFlaggedPercentage,
 	)
 
 	return &Worker{
-		db:                 app.DB,
-		roAPI:              app.RoAPI,
-		bar:                bar,
-		userFetcher:        userFetcher,
-		groupFetcher:       groupFetcher,
-		thumbnailFetcher:   thumbnailFetcher,
-		groupChecker:       groupChecker,
-		reporter:           reporter,
-		logger:             logger,
-		userBatchSize:      app.Config.Worker.BatchSizes.PurgeUsers,
-		groupBatchSize:     app.Config.Worker.BatchSizes.PurgeGroups,
-		trackBatchSize:     app.Config.Worker.BatchSizes.TrackGroups,
-		minFlaggedOverride: app.Config.Worker.ThresholdLimits.MinFlaggedOverride,
-		minFlaggedPercent:  app.Config.Worker.ThresholdLimits.MinFlaggedPercentage,
+		db:                   app.DB,
+		roAPI:                app.RoAPI,
+		bar:                  bar,
+		userFetcher:          userFetcher,
+		groupFetcher:         groupFetcher,
+		thumbnailFetcher:     thumbnailFetcher,
+		groupChecker:         groupChecker,
+		reporter:             reporter,
+		logger:               logger,
+		userBatchSize:        app.Config.Worker.BatchSizes.PurgeUsers,
+		groupBatchSize:       app.Config.Worker.BatchSizes.PurgeGroups,
+		trackBatchSize:       app.Config.Worker.BatchSizes.TrackGroups,
+		minGroupFlaggedUsers: app.Config.Worker.ThresholdLimits.MinGroupFlaggedUsers,
+		minFlaggedOverride:   app.Config.Worker.ThresholdLimits.MinFlaggedOverride,
+		minFlaggedPercent:    app.Config.Worker.ThresholdLimits.MinFlaggedPercentage,
 	}
 }
 
@@ -95,8 +95,8 @@ func (w *Worker) Start() {
 		w.bar.SetStepMessage("Completed", 100)
 		w.reporter.UpdateStatus("Completed", 100)
 
-		// Wait before next cycle
-		time.Sleep(1 * time.Minute)
+		// Short pause before next iteration
+		time.Sleep(10 * time.Second)
 	}
 }
 
@@ -222,7 +222,11 @@ func (w *Worker) processGroupTracking() {
 	w.reporter.UpdateStatus("Processing group tracking", 75)
 
 	// Get groups to check
-	groupsWithUsers, err := w.db.Tracking().GetGroupTrackingsToCheck(context.Background(), w.trackBatchSize)
+	groupsWithUsers, err := w.db.Tracking().GetGroupTrackingsToCheck(
+		context.Background(),
+		w.trackBatchSize,
+		w.minGroupFlaggedUsers,
+	)
 	if err != nil {
 		w.logger.Error("Error checking group trackings", zap.Error(err))
 		w.reporter.SetHealthy(false)
