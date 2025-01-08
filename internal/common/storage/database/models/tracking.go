@@ -109,17 +109,19 @@ func (r *TrackingModel) PurgeOldTrackings(ctx context.Context, cutoffDate time.T
 	return int(rowsAffected), nil
 }
 
-// GetGroupTrackingsToCheck finds groups that haven't been checked recently.
+// GetGroupTrackingsToCheck finds groups that haven't been checked recently
+// with priority for groups with more flagged users.
 func (r *TrackingModel) GetGroupTrackingsToCheck(ctx context.Context, batchSize int) (map[uint64][]uint64, error) {
 	result := make(map[uint64][]uint64)
 
 	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
 		var trackings []types.GroupMemberTracking
 
-		// Find groups that haven't been checked in the last 10 minutes
+		// Find groups that haven't been checked
 		err := tx.NewSelect().Model(&trackings).
 			Where("is_flagged = false").
 			Where("last_checked < ?", time.Now().Add(-10*time.Minute)).
+			OrderExpr("cardinality(flagged_users) DESC").
 			Order("last_checked ASC").
 			Limit(batchSize).
 			For("UPDATE").

@@ -66,7 +66,7 @@ func init() { //nolint:funlen
 			
 			-- Group tracking indexes
 			CREATE INDEX IF NOT EXISTS idx_group_member_trackings_check 
-			ON group_member_trackings (is_flagged, last_checked ASC) 
+			ON group_member_trackings (is_flagged, cardinality(flagged_users) DESC, last_checked ASC) 
 			WHERE is_flagged = false;
 			
 			CREATE INDEX IF NOT EXISTS idx_group_member_trackings_group_id
