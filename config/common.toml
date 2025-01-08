@@ -1,3 +1,6 @@
+[common]
+version = 1
+
 [common.debug]
 # Log level (debug, info, warn, error)
 log_level = "info"

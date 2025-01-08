@@ -1,3 +1,6 @@
+[bot]
+version = 1
+
 [bot.discord]
 # Discord bot token for authentication
 # Get this from the Discord Developer Portal

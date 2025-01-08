@@ -10,7 +10,22 @@ import (
 	"github.com/knadh/koanf/v2"
 )
 
-var ErrConfigFileNotFound = errors.New("could not find config file in any config path")
+var (
+	ErrConfigFileNotFound    = errors.New("could not find config file in any config path")
+	ErrConfigVersionMissing  = errors.New("config file is missing version field")
+	ErrConfigVersionMismatch = errors.New("config file version mismatch")
+)
+
+// Repository version tag for config file references
+const RepositoryVersion = "v1.0.0-beta.1"
+
+// Current version of the config file
+const (
+	CurrentCommonVersion = 1
+	CurrentBotVersion    = 1
+	CurrentWorkerVersion = 1
+	CurrentAPIVersion    = 1
+)
 
 // Config represents the entire application configuration.
 type Config struct {
@@ -22,6 +37,7 @@ type Config struct {
 
 // CommonConfig contains configuration shared between bot and worker.
 type CommonConfig struct {
+	Version        int            `koanf:"version"`
 	Debug          Debug          `koanf:"debug"`
 	CircuitBreaker CircuitBreaker `koanf:"circuit_breaker"`
 	Retry          Retry          `koanf:"retry"`
@@ -34,17 +50,20 @@ type CommonConfig struct {
 
 // BotConfig contains Discord bot specific configuration.
 type BotConfig struct {
-	Discord Discord
+	Version int     `koanf:"version"`
+	Discord Discord `koanf:"discord"`
 }
 
 // WorkerConfig contains worker specific configuration.
 type WorkerConfig struct {
+	Version         int             `koanf:"version"`
 	BatchSizes      BatchSizes      `koanf:"batch_sizes"`
 	ThresholdLimits ThresholdLimits `koanf:"threshold_limits"`
 }
 
 // APIConfig contains RPC server specific configuration.
 type APIConfig struct {
+	Version   int       `koanf:"version"`
 	Server    APIServer `koanf:"server"`
 	IP        IPConfig  `koanf:"ip"`
 	RateLimit RateLimit `koanf:"rate_limit"`
@@ -211,11 +230,42 @@ func LoadConfig() (*Config, string, error) {
 	}
 
 	var config Config
-	if err := k.UnmarshalWithConf("", &config, koanf.UnmarshalConf{
-		Tag: "koanf",
-	}); err != nil {
+	if err := k.Unmarshal("", &config); err != nil {
 		return nil, "", fmt.Errorf("error unmarshaling config: %w", err)
 	}
 
+	// Check versions for each config file
+	if err := checkConfigVersion("common", config.Common.Version, CurrentCommonVersion); err != nil {
+		return nil, "", err
+	}
+	if err := checkConfigVersion("bot", config.Bot.Version, CurrentBotVersion); err != nil {
+		return nil, "", err
+	}
+	if err := checkConfigVersion("worker", config.Worker.Version, CurrentWorkerVersion); err != nil {
+		return nil, "", err
+	}
+	if err := checkConfigVersion("api", config.API.Version, CurrentAPIVersion); err != nil {
+		return nil, "", err
+	}
+
 	return &config, usedConfigPath, nil
+}
+
+// checkConfigVersion checks if the config file version is correct.
+func checkConfigVersion(name string, current, expected int) error { //nolint:unparam
+	if current == 0 {
+		return fmt.Errorf("%w: %s.toml", ErrConfigVersionMissing, name)
+	}
+	if current != expected {
+		return fmt.Errorf(
+			"%w: %s.toml (got: %d, expected: %d)\nPlease update your config file from: https://github.com/rotector/rotector/tree/%s/config/%s.toml",
+			ErrConfigVersionMismatch,
+			name,
+			current,
+			expected,
+			RepositoryVersion,
+			name,
+		)
+	}
+	return nil
 }

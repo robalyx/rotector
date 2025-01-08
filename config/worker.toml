@@ -1,3 +1,6 @@
+[worker]
+version = 1
+
 [worker.batch_sizes]
 # Number of friends to process in one batch
 friend_users = 50
