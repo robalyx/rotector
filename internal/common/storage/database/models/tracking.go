@@ -114,36 +114,27 @@ func (r *TrackingModel) PurgeOldTrackings(ctx context.Context, cutoffDate time.T
 func (r *TrackingModel) GetGroupTrackingsToCheck(ctx context.Context, batchSize int) (map[uint64][]uint64, error) {
 	result := make(map[uint64][]uint64)
 
+	now := time.Now()
+	tenMinutesAgo := now.Add(-10 * time.Minute)
 	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
 		var trackings []types.GroupMemberTracking
 
 		// Find groups that haven't been checked
-		err := tx.NewSelect().Model(&trackings).
-			Where("is_flagged = false").
-			Where("last_checked < ?", time.Now().Add(-10*time.Minute)).
-			OrderExpr("cardinality(flagged_users) DESC").
-			Order("last_checked ASC").
-			Limit(batchSize).
-			For("UPDATE").
-			Scan(ctx)
+		err := tx.NewRaw(`
+			UPDATE group_member_trackings
+			SET last_checked = ?
+			WHERE group_id IN (
+				SELECT group_id 
+				FROM group_member_trackings
+				WHERE is_flagged = false 
+				AND last_checked < ?
+				ORDER BY cardinality(flagged_users) DESC, last_checked ASC
+				LIMIT ?
+			)
+			RETURNING group_id, flagged_users`, now, tenMinutesAgo, batchSize).
+			Scan(ctx, &trackings)
 		if err != nil {
-			return fmt.Errorf("failed to get group trackings to check: %w", err)
-		}
-
-		// Update last_checked timestamp for these groups
-		groupIDs := make([]uint64, len(trackings))
-		for i, tracking := range trackings {
-			groupIDs[i] = tracking.GroupID
-		}
-
-		if len(groupIDs) > 0 {
-			_, err = tx.NewUpdate().Model((*types.GroupMemberTracking)(nil)).
-				Set("last_checked = ?", time.Now()).
-				Where("group_id IN (?)", bun.In(groupIDs)).
-				Exec(ctx)
-			if err != nil {
-				return fmt.Errorf("failed to update last_checked timestamps: %w", err)
-			}
+			return fmt.Errorf("failed to get and update group trackings: %w", err)
 		}
 
 		// Map group IDs to their flagged user lists
