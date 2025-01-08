@@ -93,7 +93,6 @@ func (f *FriendWorker) Start() {
 		f.reporter.UpdateStatus("Processing friends batch", 20)
 		friendIDs, err := f.processFriendsBatch(oldFriendIDs)
 		if err != nil {
-			f.logger.Error("Error processing friends batch", zap.Error(err))
 			f.reporter.SetHealthy(false)
 			time.Sleep(5 * time.Minute)
 			continue
@@ -154,10 +153,10 @@ func (f *FriendWorker) processFriendsBatch(friendIDs []uint64) ([]uint64, error)
 			continue
 		}
 
-		// Check which users already exist in the database
-		existingUsers, err := f.db.Users().CheckExistingUsers(context.Background(), userFriendIDs)
+		// Check which users have been recently processed
+		existingUsers, err := f.db.Users().GetRecentlyProcessedUsers(context.Background(), userFriendIDs)
 		if err != nil {
-			f.logger.Error("Error checking existing users", zap.Error(err))
+			f.logger.Error("Error checking recently processed users", zap.Error(err))
 			continue
 		}
 

@@ -8,7 +8,7 @@ purge_users = 200
 # Number of groups to check for purging in one batch
 purge_groups = 100
 # Number of group trackings to process in one batch
-track_groups = 50
+track_groups = 100
 # Number of queue items to process in one batch
 queue_items = 50
 

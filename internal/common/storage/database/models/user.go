@@ -306,9 +306,9 @@ func (r *UserModel) GetFlaggedUsersCount(ctx context.Context) (int, error) {
 	return count, nil
 }
 
-// CheckExistingUsers finds which users from a list of IDs exist in any user table.
-// Returns a map of user IDs to their status (confirmed, flagged, cleared, banned).
-func (r *UserModel) CheckExistingUsers(ctx context.Context, userIDs []uint64) (map[uint64]types.UserType, error) {
+// GetRecentlyProcessedUsers checks which users exist in any table and have been updated within the past 7 days.
+// Returns a map of user IDs to their current status.
+func (r *UserModel) GetRecentlyProcessedUsers(ctx context.Context, userIDs []uint64) (map[uint64]types.UserType, error) {
 	var users []struct {
 		ID     uint64
 		Status types.UserType
@@ -318,27 +318,31 @@ func (r *UserModel) CheckExistingUsers(ctx context.Context, userIDs []uint64) (m
 		Column("id").
 		ColumnExpr("? AS status", types.UserTypeConfirmed).
 		Where("id IN (?)", bun.In(userIDs)).
+		Where("last_updated > NOW() - INTERVAL '7 days'").
 		Union(
 			r.db.NewSelect().Model((*types.FlaggedUser)(nil)).
 				Column("id").
 				ColumnExpr("? AS status", types.UserTypeFlagged).
-				Where("id IN (?)", bun.In(userIDs)),
+				Where("id IN (?)", bun.In(userIDs)).
+				Where("last_updated > NOW() - INTERVAL '7 days'"),
 		).
 		Union(
 			r.db.NewSelect().Model((*types.ClearedUser)(nil)).
 				Column("id").
 				ColumnExpr("? AS status", types.UserTypeCleared).
-				Where("id IN (?)", bun.In(userIDs)),
+				Where("id IN (?)", bun.In(userIDs)).
+				Where("last_updated > NOW() - INTERVAL '7 days'"),
 		).
 		Union(
 			r.db.NewSelect().Model((*types.BannedUser)(nil)).
 				Column("id").
 				ColumnExpr("? AS status", types.UserTypeBanned).
-				Where("id IN (?)", bun.In(userIDs)),
+				Where("id IN (?)", bun.In(userIDs)).
+				Where("last_updated > NOW() - INTERVAL '7 days'"),
 		).
 		Scan(ctx, &users)
 	if err != nil {
-		return nil, fmt.Errorf("failed to check existing users: %w", err)
+		return nil, fmt.Errorf("failed to check recently processed users: %w", err)
 	}
 
 	result := make(map[uint64]types.UserType, len(users))
@@ -346,7 +350,7 @@ func (r *UserModel) CheckExistingUsers(ctx context.Context, userIDs []uint64) (m
 		result[user.ID] = user.Status
 	}
 
-	r.logger.Debug("Checked existing users",
+	r.logger.Debug("Checked recently processed users",
 		zap.Int("total", len(userIDs)),
 		zap.Int("existing", len(result)))
 
@@ -726,7 +730,7 @@ func (r *UserModel) DeleteUser(ctx context.Context, userID uint64) (bool, error)
 		affected, _ = result.RowsAffected()
 		totalAffected += affected
 
-		// Delete from banned_users
+		// Delete from banned_users table
 		result, err = tx.NewDelete().
 			Model((*types.BannedUser)(nil)).
 			Where("id = ?", userID).
@@ -792,6 +796,7 @@ func (r *UserModel) GetUserToScan(ctx context.Context) (*types.User, error) {
 			Limit(1).
 			For("UPDATE SKIP LOCKED").
 			Scan(ctx)
+
 		if err == nil {
 			// Update last_scanned
 			_, err = tx.NewUpdate().Model(&confirmedUser).
@@ -808,6 +813,10 @@ func (r *UserModel) GetUserToScan(ctx context.Context) (*types.User, error) {
 			return nil
 		}
 
+		if !errors.Is(err, sql.ErrNoRows) {
+			return fmt.Errorf("failed to query confirmed users: %w", err)
+		}
+
 		// If no confirmed users, try flagged users
 		var flaggedUser types.FlaggedUser
 		err = tx.NewSelect().Model(&flaggedUser).
@@ -816,23 +825,29 @@ func (r *UserModel) GetUserToScan(ctx context.Context) (*types.User, error) {
 			Limit(1).
 			For("UPDATE SKIP LOCKED").
 			Scan(ctx)
-		if err != nil {
-			return fmt.Errorf("failed to get user to scan: %w", err)
+
+		if err == nil {
+			// Update last_scanned
+			_, err = tx.NewUpdate().Model(&flaggedUser).
+				Set("last_scanned = ?", time.Now()).
+				Where("id = ?", flaggedUser.ID).
+				Exec(ctx)
+			if err != nil {
+				return fmt.Errorf(
+					"failed to update last_scanned for flagged user: %w (userID=%d)",
+					err, flaggedUser.ID,
+				)
+			}
+			user = &flaggedUser.User
+			return nil
 		}
 
-		// Update last_scanned
-		_, err = tx.NewUpdate().Model(&flaggedUser).
-			Set("last_scanned = ?", time.Now()).
-			Where("id = ?", flaggedUser.ID).
-			Exec(ctx)
-		if err != nil {
-			return fmt.Errorf(
-				"failed to update last_scanned for flagged user: %w (userID=%d)",
-				err, flaggedUser.ID,
-			)
+		if !errors.Is(err, sql.ErrNoRows) {
+			return fmt.Errorf("failed to query flagged users: %w", err)
 		}
-		user = &flaggedUser.User
-		return nil
+
+		// No users found to scan
+		return fmt.Errorf("no users available to scan: %w", err)
 	})
 	if err != nil {
 		return nil, err

@@ -102,7 +102,6 @@ func (g *GroupWorker) Start() {
 		g.reporter.UpdateStatus("Processing group users", 40)
 		userIDs, err := g.processGroup(group.ID, oldUserIDs)
 		if err != nil {
-			g.logger.Error("Error processing group", zap.Error(err), zap.Uint64("groupID", group.ID))
 			g.reporter.SetHealthy(false)
 			time.Sleep(5 * time.Minute)
 			continue
@@ -165,10 +164,10 @@ func (g *GroupWorker) processGroup(groupID uint64, userIDs []uint64) ([]uint64, 
 			newUserIDs[i] = groupUser.User.UserID
 		}
 
-		// Check which users already exist in the database
-		existingUsers, err := g.db.Users().CheckExistingUsers(context.Background(), newUserIDs)
+		// Check which users have been recently processed
+		existingUsers, err := g.db.Users().GetRecentlyProcessedUsers(context.Background(), newUserIDs)
 		if err != nil {
-			g.logger.Error("Error checking existing users", zap.Error(err))
+			g.logger.Error("Error checking recently processed users", zap.Error(err))
 			continue
 		}
 
