@@ -43,8 +43,8 @@ func NewGroupChecker(db *database.Client, logger *zap.Logger, maxGroupMembersTra
 }
 
 // CheckGroupPercentages analyzes groups to find those exceeding the flagged user threshold.
-func (c *GroupChecker) CheckGroupPercentages(groupInfos []*apiTypes.GroupResponse, groupToFlaggedUsers map[uint64][]uint64) []*types.FlaggedGroup {
-	flaggedGroups := make([]*types.FlaggedGroup, 0)
+func (c *GroupChecker) CheckGroupPercentages(groupInfos []*apiTypes.GroupResponse, groupToFlaggedUsers map[uint64][]uint64) map[uint64]*types.Group {
+	flaggedGroups := make(map[uint64]*types.Group)
 
 	for _, groupInfo := range groupInfos {
 		flaggedUsers := groupToFlaggedUsers[groupInfo.ID]
@@ -72,18 +72,16 @@ func (c *GroupChecker) CheckGroupPercentages(groupInfos []*apiTypes.GroupRespons
 			continue
 		}
 
-		flaggedGroups = append(flaggedGroups, &types.FlaggedGroup{
-			Group: types.Group{
-				ID:          groupInfo.ID,
-				Name:        groupInfo.Name,
-				Description: groupInfo.Description,
-				Owner:       groupInfo.Owner,
-				Shout:       groupInfo.Shout,
-				Reason:      reason,
-				Confidence:  confidence,
-				LastUpdated: time.Now(),
-			},
-		})
+		flaggedGroups[groupInfo.ID] = &types.Group{
+			ID:          groupInfo.ID,
+			Name:        groupInfo.Name,
+			Description: groupInfo.Description,
+			Owner:       groupInfo.Owner,
+			Shout:       groupInfo.Shout,
+			Reason:      reason,
+			Confidence:  confidence,
+			LastUpdated: time.Now(),
+		}
 	}
 
 	return flaggedGroups

@@ -253,17 +253,19 @@ func (w *Worker) processGroupTracking() {
 		return
 	}
 
-	// Add thumbnails and save to database
+	// Add thumbnails to flagged groups
 	flaggedGroups = w.thumbnailFetcher.AddGroupImageURLs(flaggedGroups)
-	if err := w.db.Groups().SaveFlaggedGroups(context.Background(), flaggedGroups); err != nil {
+
+	// Save flagged groups to database
+	if err := w.db.Groups().SaveGroups(context.Background(), flaggedGroups); err != nil {
 		w.logger.Error("Failed to save flagged groups", zap.Error(err))
 		return
 	}
 
 	// Extract group IDs that were flagged
-	flaggedGroupIDs := make([]uint64, len(flaggedGroups))
-	for i, group := range flaggedGroups {
-		flaggedGroupIDs[i] = group.ID
+	flaggedGroupIDs := make([]uint64, 0, len(flaggedGroups))
+	for _, group := range flaggedGroups {
+		flaggedGroupIDs = append(flaggedGroupIDs, group.ID)
 	}
 
 	// Update tracking entries to mark them as flagged

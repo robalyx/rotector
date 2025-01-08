@@ -31,41 +31,129 @@ func NewGroup(db *bun.DB, activity *ActivityModel, logger *zap.Logger) *GroupMod
 	}
 }
 
-// SaveFlaggedGroups adds or updates groups in the flagged_groups table.
-// For each group, it updates all fields if the group already exists,
-// or inserts a new record if they don't.
-func (r *GroupModel) SaveFlaggedGroups(ctx context.Context, flaggedGroups []*types.FlaggedGroup) error {
-	r.logger.Debug("Saving flagged groups", zap.Int("count", len(flaggedGroups)))
+// SaveGroups updates or inserts groups into their appropriate tables based on their current status.
+func (r *GroupModel) SaveGroups(ctx context.Context, groups map[uint64]*types.Group) error {
+	// Get list of group IDs to check
+	groupIDs := make([]uint64, 0, len(groups))
+	for id := range groups {
+		groupIDs = append(groupIDs, id)
+	}
 
-	// Generate UUIDs for new groups
-	for _, group := range flaggedGroups {
+	// Get existing groups with all their data
+	existingGroups, err := r.GetGroupsByIDs(ctx, groupIDs, types.GroupFields{
+		Timestamps: true,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to get existing groups: %w", err)
+	}
+
+	// Initialize slices for each table
+	flaggedGroups := make([]*types.FlaggedGroup, 0)
+	confirmedGroups := make([]*types.ConfirmedGroup, 0)
+	clearedGroups := make([]*types.ClearedGroup, 0)
+	lockedGroups := make([]*types.LockedGroup, 0)
+	counts := make(map[types.GroupType]int)
+
+	// Group groups by their target tables
+	for id, group := range groups {
+		// Generate UUID for new groups
 		if group.UUID == uuid.Nil {
 			group.UUID = uuid.New()
 		}
+
+		// Get existing group data if available
+		var status types.GroupType
+		existingGroup := existingGroups[id]
+		if existingGroup.Status != types.GroupTypeUnflagged {
+			status = existingGroup.Status
+		} else {
+			// Default to flagged_groups for new groups
+			status = types.GroupTypeFlagged
+		}
+
+		switch status {
+		case types.GroupTypeConfirmed:
+			confirmedGroups = append(confirmedGroups, &types.ConfirmedGroup{
+				Group:      *group,
+				VerifiedAt: existingGroup.VerifiedAt,
+			})
+		case types.GroupTypeFlagged:
+			flaggedGroups = append(flaggedGroups, &types.FlaggedGroup{
+				Group: *group,
+			})
+		case types.GroupTypeCleared:
+			clearedGroups = append(clearedGroups, &types.ClearedGroup{
+				Group:     *group,
+				ClearedAt: existingGroup.ClearedAt,
+			})
+		case types.GroupTypeLocked:
+			lockedGroups = append(lockedGroups, &types.LockedGroup{
+				Group:    *group,
+				LockedAt: existingGroup.LockedAt,
+			})
+		case types.GroupTypeUnflagged:
+			continue
+		}
+		counts[status]++
 	}
 
-	// Perform bulk insert with upsert
-	_, err := r.db.NewInsert().
-		Model(&flaggedGroups).
-		On("CONFLICT (id) DO UPDATE").
-		Set("uuid = EXCLUDED.uuid").
-		Set("name = EXCLUDED.name").
-		Set("description = EXCLUDED.description").
-		Set("owner = EXCLUDED.owner").
-		Set("shout = EXCLUDED.shout").
-		Set("reason = EXCLUDED.reason").
-		Set("confidence = EXCLUDED.confidence").
-		Set("last_scanned = EXCLUDED.last_scanned").
-		Set("last_updated = EXCLUDED.last_updated").
-		Set("last_viewed = EXCLUDED.last_viewed").
-		Set("last_purge_check = EXCLUDED.last_purge_check").
-		Set("thumbnail_url = EXCLUDED.thumbnail_url").
-		Exec(ctx)
+	// Update each table
+	err = r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+		// Helper function to update a table
+		updateTable := func(groups interface{}, status types.GroupType) error {
+			if counts[status] == 0 {
+				return nil
+			}
+
+			_, err := tx.NewInsert().
+				Model(groups).
+				On("CONFLICT (id) DO UPDATE").
+				Set("uuid = EXCLUDED.uuid").
+				Set("name = EXCLUDED.name").
+				Set("description = EXCLUDED.description").
+				Set("owner = EXCLUDED.owner").
+				Set("shout = EXCLUDED.shout").
+				Set("reason = EXCLUDED.reason").
+				Set("confidence = EXCLUDED.confidence").
+				Set("last_scanned = EXCLUDED.last_scanned").
+				Set("last_updated = EXCLUDED.last_updated").
+				Set("last_viewed = EXCLUDED.last_viewed").
+				Set("last_purge_check = EXCLUDED.last_purge_check").
+				Set("thumbnail_url = EXCLUDED.thumbnail_url").
+				Exec(ctx)
+			if err != nil {
+				return fmt.Errorf("failed to update %s groups: %w", status, err)
+			}
+			return nil
+		}
+
+		// Update each table with its corresponding slice
+		if err := updateTable(&flaggedGroups, types.GroupTypeFlagged); err != nil {
+			return err
+		}
+		if err := updateTable(&confirmedGroups, types.GroupTypeConfirmed); err != nil {
+			return err
+		}
+		if err := updateTable(&clearedGroups, types.GroupTypeCleared); err != nil {
+			return err
+		}
+		if err := updateTable(&lockedGroups, types.GroupTypeLocked); err != nil {
+			return err
+		}
+
+		return nil
+	})
 	if err != nil {
-		return fmt.Errorf("failed to save flagged groups: %w (groupCount=%d)", err, len(flaggedGroups))
+		return fmt.Errorf("failed to save groups: %w", err)
 	}
 
-	r.logger.Debug("Finished saving flagged groups")
+	r.logger.Debug("Successfully saved groups",
+		zap.Int("totalGroups", len(groups)),
+		zap.Int("flaggedGroups", counts[types.GroupTypeFlagged]),
+		zap.Int("confirmedGroups", counts[types.GroupTypeConfirmed]),
+		zap.Int("clearedGroups", counts[types.GroupTypeCleared]),
+		zap.Int("lockedGroups", counts[types.GroupTypeLocked]))
+
 	return nil
 }
 

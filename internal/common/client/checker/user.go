@@ -106,8 +106,8 @@ func (c *UserChecker) ProcessUsers(userInfos []*fetcher.Info) []uint64 {
 	}
 
 	// Save flagged users to database
-	if err := c.db.Users().SaveFlaggedUsers(context.Background(), flaggedUsers); err != nil {
-		c.logger.Error("Failed to save flagged users", zap.Error(err))
+	if err := c.db.Users().SaveUsers(context.Background(), flaggedUsers); err != nil {
+		c.logger.Error("Failed to save users", zap.Error(err))
 	}
 
 	c.logger.Info("Finished processing users",

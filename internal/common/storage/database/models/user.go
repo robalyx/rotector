@@ -32,81 +32,135 @@ func NewUser(db *bun.DB, tracking *TrackingModel, activity *ActivityModel, logge
 	}
 }
 
-// SaveFlaggedUsers adds or updates users in the flagged_users table.
-// For each user, it updates all fields if the user already exists,
-// or inserts a new record if they don't.
-func (r *UserModel) SaveFlaggedUsers(ctx context.Context, flaggedUsers map[uint64]*types.User) error {
+// SaveUsers updates or inserts users into their appropriate tables based on their current status.
+func (r *UserModel) SaveUsers(ctx context.Context, users map[uint64]*types.User) error {
 	// Get list of user IDs to check
-	userIDs := make([]uint64, 0, len(flaggedUsers))
-	for id := range flaggedUsers {
+	userIDs := make([]uint64, 0, len(users))
+	for id := range users {
 		userIDs = append(userIDs, id)
 	}
 
-	// Check which users already exist in any table
-	existingUsers, err := r.CheckExistingUsers(ctx, userIDs)
+	// Get existing users with all their data
+	existingUsers, err := r.GetUsersByIDs(ctx, userIDs, types.UserFields{
+		Timestamps: true,
+	})
 	if err != nil {
-		return fmt.Errorf("failed to check existing users: %w", err)
+		return fmt.Errorf("failed to get existing users: %w", err)
 	}
 
-	// Filter out users that are already in other tables
-	filteredUsers := make([]*types.FlaggedUser, 0)
-	for id, user := range flaggedUsers {
-		if status, exists := existingUsers[id]; exists {
-			// Skip if user is already in another table
-			r.logger.Debug("Skipping user that already exists",
-				zap.Uint64("userID", id),
-				zap.String("status", string(status)))
-			continue
-		}
+	// Initialize slices for each table
+	flaggedUsers := make([]*types.FlaggedUser, 0)
+	confirmedUsers := make([]*types.ConfirmedUser, 0)
+	clearedUsers := make([]*types.ClearedUser, 0)
+	bannedUsers := make([]*types.BannedUser, 0)
+	counts := make(map[types.UserType]int)
 
+	// Group users by their target tables
+	for id, user := range users {
 		// Generate UUID for new users
 		if user.UUID == uuid.Nil {
 			user.UUID = uuid.New()
 		}
 
-		filteredUsers = append(filteredUsers, &types.FlaggedUser{
-			User: *user,
-		})
+		// Get existing user data if available
+		var status types.UserType
+		existingUser := existingUsers[id]
+		if existingUser.Status != types.UserTypeUnflagged {
+			status = existingUser.Status
+		} else {
+			// Default to flagged_users for new users
+			status = types.UserTypeFlagged
+		}
+
+		switch status {
+		case types.UserTypeConfirmed:
+			confirmedUsers = append(confirmedUsers, &types.ConfirmedUser{
+				User:       *user,
+				VerifiedAt: existingUser.VerifiedAt,
+			})
+		case types.UserTypeFlagged:
+			flaggedUsers = append(flaggedUsers, &types.FlaggedUser{
+				User: *user,
+			})
+		case types.UserTypeCleared:
+			clearedUsers = append(clearedUsers, &types.ClearedUser{
+				User:      *user,
+				ClearedAt: existingUser.ClearedAt,
+			})
+		case types.UserTypeBanned:
+			bannedUsers = append(bannedUsers, &types.BannedUser{
+				User:     *user,
+				PurgedAt: existingUser.PurgedAt,
+			})
+		case types.UserTypeUnflagged:
+			continue
+		}
+		counts[status]++
 	}
 
-	// Check if there are any users left to save
-	if len(filteredUsers) == 0 {
-		r.logger.Debug("No new users to flag after filtering existing users")
+	// Update each table
+	err = r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+		// Helper function to update a table
+		updateTable := func(users interface{}, status types.UserType) error {
+			if counts[status] == 0 {
+				return nil
+			}
+
+			_, err := tx.NewInsert().
+				Model(users).
+				On("CONFLICT (id) DO UPDATE").
+				Set("uuid = EXCLUDED.uuid").
+				Set("name = EXCLUDED.name").
+				Set("display_name = EXCLUDED.display_name").
+				Set("description = EXCLUDED.description").
+				Set("created_at = EXCLUDED.created_at").
+				Set("reason = EXCLUDED.reason").
+				Set("groups = EXCLUDED.groups").
+				Set("outfits = EXCLUDED.outfits").
+				Set("friends = EXCLUDED.friends").
+				Set("games = EXCLUDED.games").
+				Set("flagged_content = EXCLUDED.flagged_content").
+				Set("follower_count = EXCLUDED.follower_count").
+				Set("following_count = EXCLUDED.following_count").
+				Set("confidence = EXCLUDED.confidence").
+				Set("last_scanned = EXCLUDED.last_scanned").
+				Set("last_updated = EXCLUDED.last_updated").
+				Set("last_viewed = EXCLUDED.last_viewed").
+				Set("last_purge_check = EXCLUDED.last_purge_check").
+				Set("thumbnail_url = EXCLUDED.thumbnail_url").
+				Exec(ctx)
+			if err != nil {
+				return fmt.Errorf("failed to update %s users: %w", status, err)
+			}
+			return nil
+		}
+
+		// Update each table with its corresponding slice
+		if err := updateTable(&flaggedUsers, types.UserTypeFlagged); err != nil {
+			return err
+		}
+		if err := updateTable(&confirmedUsers, types.UserTypeConfirmed); err != nil {
+			return err
+		}
+		if err := updateTable(&clearedUsers, types.UserTypeCleared); err != nil {
+			return err
+		}
+		if err := updateTable(&bannedUsers, types.UserTypeBanned); err != nil {
+			return err
+		}
+
 		return nil
-	}
-
-	// Perform bulk insert with upsert for remaining users
-	_, err = r.db.NewInsert().
-		Model(&filteredUsers).
-		On("CONFLICT (id) DO UPDATE").
-		Set("uuid = EXCLUDED.uuid").
-		Set("name = EXCLUDED.name").
-		Set("display_name = EXCLUDED.display_name").
-		Set("description = EXCLUDED.description").
-		Set("created_at = EXCLUDED.created_at").
-		Set("reason = EXCLUDED.reason").
-		Set("groups = EXCLUDED.groups").
-		Set("outfits = EXCLUDED.outfits").
-		Set("friends = EXCLUDED.friends").
-		Set("games = EXCLUDED.games").
-		Set("flagged_content = EXCLUDED.flagged_content").
-		Set("follower_count = EXCLUDED.follower_count").
-		Set("following_count = EXCLUDED.following_count").
-		Set("confidence = EXCLUDED.confidence").
-		Set("last_scanned = EXCLUDED.last_scanned").
-		Set("last_updated = EXCLUDED.last_updated").
-		Set("last_viewed = EXCLUDED.last_viewed").
-		Set("last_purge_check = EXCLUDED.last_purge_check").
-		Set("thumbnail_url = EXCLUDED.thumbnail_url").
-		Exec(ctx)
+	})
 	if err != nil {
-		return fmt.Errorf("failed to save flagged users: %w (userCount=%d)", err, len(filteredUsers))
+		return fmt.Errorf("failed to save users: %w", err)
 	}
 
-	r.logger.Debug("Successfully saved flagged users",
-		zap.Int("totalUsers", len(flaggedUsers)),
-		zap.Int("savedUsers", len(filteredUsers)),
-		zap.Int("skippedUsers", len(flaggedUsers)-len(filteredUsers)))
+	r.logger.Debug("Successfully saved users",
+		zap.Int("totalUsers", len(users)),
+		zap.Int("flaggedUsers", counts[types.UserTypeFlagged]),
+		zap.Int("confirmedUsers", counts[types.UserTypeConfirmed]),
+		zap.Int("clearedUsers", counts[types.UserTypeCleared]),
+		zap.Int("bannedUsers", counts[types.UserTypeBanned]))
 
 	return nil
 }

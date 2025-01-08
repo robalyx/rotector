@@ -52,7 +52,7 @@ func (t *ThumbnailFetcher) AddImageURLs(users map[uint64]*types.User) map[uint64
 }
 
 // AddGroupImageURLs fetches thumbnails for groups and adds them to the group records.
-func (t *ThumbnailFetcher) AddGroupImageURLs(groups []*types.FlaggedGroup) []*types.FlaggedGroup {
+func (t *ThumbnailFetcher) AddGroupImageURLs(groups map[uint64]*types.Group) map[uint64]*types.Group {
 	// Create batch request for group icons
 	requests := thumbnails.NewBatchThumbnailsBuilder()
 	for _, group := range groups {
@@ -69,11 +69,11 @@ func (t *ThumbnailFetcher) AddGroupImageURLs(groups []*types.FlaggedGroup) []*ty
 	results := t.ProcessBatchThumbnails(requests)
 
 	// Add thumbnail URLs to groups
-	updatedGroups := make([]*types.FlaggedGroup, 0, len(groups))
+	updatedGroups := make(map[uint64]*types.Group, len(groups))
 	for _, group := range groups {
 		if thumbnailURL, ok := results[group.ID]; ok {
 			group.ThumbnailURL = thumbnailURL
-			updatedGroups = append(updatedGroups, group)
+			updatedGroups[group.ID] = group
 		}
 	}
 
