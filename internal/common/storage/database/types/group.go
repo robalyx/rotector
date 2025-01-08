@@ -17,7 +17,7 @@ type Group struct {
 	UUID           uuid.UUID         `bun:",notnull"   json:"uuid"`
 	Name           string            `bun:",notnull"   json:"name"`
 	Description    string            `bun:",notnull"   json:"description"`
-	Owner          *types.GroupUser  `bun:",notnull"   json:"owner"`
+	Owner          *types.GroupUser  `bun:"type:jsonb" json:"owner"`
 	Shout          *types.GroupShout `bun:"type:jsonb" json:"shout"`
 	Reason         string            `bun:",notnull"   json:"reason"`
 	Confidence     float64           `bun:",notnull"   json:"confidence"`
