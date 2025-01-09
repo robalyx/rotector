@@ -46,23 +46,21 @@ func NewGroupChecker(db *database.Client, logger *zap.Logger, maxGroupMembersTra
 func (c *GroupChecker) CheckGroupPercentages(groupInfos []*apiTypes.GroupResponse, groupToFlaggedUsers map[uint64][]uint64) map[uint64]*types.Group {
 	flaggedGroups := make(map[uint64]*types.Group)
 
+	// Identify groups that exceed thresholds
 	for _, groupInfo := range groupInfos {
 		flaggedUsers := groupToFlaggedUsers[groupInfo.ID]
 
 		var reason string
-		var confidence float64
 
 		// Calculate percentage of flagged users
 		percentage := (float64(len(flaggedUsers)) / float64(groupInfo.MemberCount)) * 100
 
-		// Determine if and why the group should be flagged
+		// Determine if group should be flagged
 		switch {
 		case len(flaggedUsers) >= c.minFlaggedOverride:
 			reason = "Group has large number of flagged users"
-			confidence = math.Min(float64(len(flaggedUsers))/float64(c.minFlaggedOverride), 1.0)
 		case percentage >= c.minFlaggedPercentage:
 			reason = "Group has large percentage of flagged users"
-			confidence = math.Min(percentage/c.minFlaggedPercentage, 1.0)
 		default:
 			continue
 		}
@@ -75,13 +73,71 @@ func (c *GroupChecker) CheckGroupPercentages(groupInfos []*apiTypes.GroupRespons
 			Owner:          groupInfo.Owner,
 			Shout:          groupInfo.Shout,
 			Reason:         reason,
-			Confidence:     confidence,
+			Confidence:     0, // NOTE: Confidence will be updated
 			LastUpdated:    now,
 			LastPurgeCheck: now,
 		}
 	}
 
+	// If no groups were flagged, return empty map
+	if len(flaggedGroups) == 0 {
+		return flaggedGroups
+	}
+
+	// Collect all unique flagged user IDs
+	allFlaggedUserIDs := make([]uint64, 0)
+	for groupID := range flaggedGroups {
+		allFlaggedUserIDs = append(allFlaggedUserIDs, groupToFlaggedUsers[groupID]...)
+	}
+
+	// Get user data for confidence calculation
+	users, err := c.db.Users().GetUsersByIDs(context.Background(), allFlaggedUserIDs, types.UserFields{
+		Basic:      true,
+		Confidence: true,
+	})
+	if err != nil {
+		c.logger.Error("Failed to get user confidence data", zap.Error(err))
+		return flaggedGroups
+	}
+
+	// Calculate average confidence for each flagged group
+	for groupID, group := range flaggedGroups {
+		group.Confidence = c.calculateGroupConfidence(groupToFlaggedUsers[groupID], users)
+	}
+
 	return flaggedGroups
+}
+
+// calculateGroupConfidence computes the confidence score for a group based on its flagged users.
+func (c *GroupChecker) calculateGroupConfidence(flaggedUsers []uint64, users map[uint64]*types.ReviewUser) float64 {
+	var totalConfidence float64
+	var validUserCount int
+
+	for _, userID := range flaggedUsers {
+		if user, exists := users[userID]; exists && user.Status != types.UserTypeUnflagged {
+			totalConfidence += user.Confidence
+			validUserCount++
+		}
+	}
+
+	if validUserCount == 0 {
+		c.logger.Fatal("Unreachable: No valid users found for group")
+		return 0.50
+	}
+
+	// Calculate average confidence
+	avgConfidence := totalConfidence / float64(validUserCount)
+
+	// Apply 20% boost if group exceeds override threshold
+	if len(flaggedUsers) >= c.minFlaggedOverride {
+		avgConfidence *= 1.2
+	}
+
+	// Clamp confidence between 0 and 1
+	avgConfidence = math.Min(avgConfidence, 1.0)
+
+	// Round confidence to 2 decimal places
+	return math.Round(avgConfidence*100) / 100
 }
 
 // ProcessUsers checks multiple users' groups concurrently and returns flagged users.
