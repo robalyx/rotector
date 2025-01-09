@@ -11,7 +11,7 @@ import (
 	"github.com/robalyx/rotector/internal/common/progress"
 	"github.com/robalyx/rotector/internal/common/setup"
 	"github.com/robalyx/rotector/internal/worker/ai"
-	"github.com/robalyx/rotector/internal/worker/purge"
+	"github.com/robalyx/rotector/internal/worker/maintenance"
 	"github.com/robalyx/rotector/internal/worker/queue"
 	"github.com/robalyx/rotector/internal/worker/stats"
 	"github.com/urfave/cli/v3"
@@ -27,8 +27,8 @@ const (
 	AIWorkerTypeFriend = "friend"
 	AIWorkerTypeMember = "member"
 
-	// PurgeWorker removes outdated or banned data from the system.
-	PurgeWorker = "purge"
+	// MaintenanceWorker maintains tracking and old data.
+	MaintenanceWorker = "maintenance"
 
 	// StatsWorker handles statistics aggregation and storage.
 	StatsWorker = "stats"
@@ -80,10 +80,10 @@ func run() error {
 				},
 			},
 			{
-				Name:  PurgeWorker,
-				Usage: "Start purge workers",
+				Name:  MaintenanceWorker,
+				Usage: "Start maintenance workers",
 				Action: func(ctx context.Context, c *cli.Command) error {
-					runWorkers(ctx, PurgeWorker, "", c.Int("workers"))
+					runWorkers(ctx, MaintenanceWorker, "", c.Int("workers"))
 					return nil
 				},
 			},
@@ -147,8 +147,8 @@ func runWorkers(ctx context.Context, workerType, subType string, count int64) {
 				w = ai.NewGroupWorker(app, bar, workerLogger)
 			case workerType == AIWorker && subType == AIWorkerTypeFriend:
 				w = ai.NewFriendWorker(app, bar, workerLogger)
-			case workerType == PurgeWorker:
-				w = purge.New(app, bar, workerLogger)
+			case workerType == MaintenanceWorker:
+				w = maintenance.New(app, bar, workerLogger)
 			case workerType == StatsWorker:
 				w = stats.New(app, bar, workerLogger)
 			case workerType == QueueWorker:

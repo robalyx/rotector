@@ -127,9 +127,9 @@ type Discord struct {
 // BatchSizes configures how many items to process in each batch.
 type BatchSizes struct {
 	FriendUsers int `koanf:"friend_users"` // Number of friends to process in one batch
-	PurgeUsers  int `koanf:"purge_users"`  // Number of users to check for purging in one batch
 	GroupUsers  int `koanf:"group_users"`  // Number of group members to process in one batch
-	PurgeGroups int `koanf:"purge_groups"` // Number of groups to check for purging in one batch
+	PurgeUsers  int `koanf:"purge_users"`  // Number of users to check for bans in one batch
+	PurgeGroups int `koanf:"purge_groups"` // Number of groups to check for bans in one batch
 	TrackGroups int `koanf:"track_groups"` // Number of group trackings to process in one batch
 	QueueItems  int `koanf:"queue_items"`  // Number of queue items to process in one batch
 }

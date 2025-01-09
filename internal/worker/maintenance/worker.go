@@ -1,4 +1,4 @@
-package purge
+package maintenance
 
 import (
 	"context"
@@ -14,7 +14,7 @@ import (
 	"go.uber.org/zap"
 )
 
-// Worker handles all purge operations.
+// Worker handles all maintenance operations.
 type Worker struct {
 	db                   *database.Client
 	roAPI                *api.API
@@ -33,12 +33,12 @@ type Worker struct {
 	minFlaggedPercent    float64
 }
 
-// New creates a new purge worker.
+// New creates a new maintenance worker.
 func New(app *setup.App, bar *progress.Bar, logger *zap.Logger) *Worker {
 	userFetcher := fetcher.NewUserFetcher(app, logger)
 	groupFetcher := fetcher.NewGroupFetcher(app.RoAPI, logger)
 	thumbnailFetcher := fetcher.NewThumbnailFetcher(app.RoAPI, logger)
-	reporter := core.NewStatusReporter(app.StatusClient, "purge", "main", logger)
+	reporter := core.NewStatusReporter(app.StatusClient, "maintenance", "main", logger)
 	groupChecker := checker.NewGroupChecker(app.DB, logger,
 		app.Config.Worker.ThresholdLimits.MaxGroupMembersTrack,
 		app.Config.Worker.ThresholdLimits.MinFlaggedOverride,
@@ -64,9 +64,9 @@ func New(app *setup.App, bar *progress.Bar, logger *zap.Logger) *Worker {
 	}
 }
 
-// Start begins the purge worker's main loop.
+// Start begins the maintenance worker's main loop.
 func (w *Worker) Start() {
-	w.logger.Info("Purge Worker started", zap.String("workerID", w.reporter.GetWorkerID()))
+	w.logger.Info("Maintenance Worker started", zap.String("workerID", w.reporter.GetWorkerID()))
 	w.reporter.Start()
 	defer w.reporter.Stop()
 
