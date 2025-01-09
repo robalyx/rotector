@@ -38,26 +38,27 @@ type ExtendedFriend struct {
 // User combines all the information needed to review a user.
 // This base structure is embedded in other user types (Flagged, Confirmed).
 type User struct {
-	ID             uint64                  `bun:",pk"        json:"id"`
-	UUID           uuid.UUID               `bun:",notnull"   json:"uuid"`
-	Name           string                  `bun:",notnull"   json:"name"`
-	DisplayName    string                  `bun:",notnull"   json:"displayName"`
-	Description    string                  `bun:",notnull"   json:"description"`
-	CreatedAt      time.Time               `bun:",notnull"   json:"createdAt"`
-	Reason         string                  `bun:",notnull"   json:"reason"`
-	Groups         []*types.UserGroupRoles `bun:"type:jsonb" json:"groups"`
-	Outfits        []types.Outfit          `bun:"type:jsonb" json:"outfits"`
-	Friends        []ExtendedFriend        `bun:"type:jsonb" json:"friends"`
-	Games          []*types.Game           `bun:"type:jsonb" json:"games"`
-	FlaggedContent []string                `bun:"type:jsonb" json:"flaggedContent"`
-	FollowerCount  uint64                  `bun:",notnull"   json:"followerCount"`
-	FollowingCount uint64                  `bun:",notnull"   json:"followingCount"`
-	Confidence     float64                 `bun:",notnull"   json:"confidence"`
-	LastScanned    time.Time               `bun:",notnull"   json:"lastScanned"`
-	LastUpdated    time.Time               `bun:",notnull"   json:"lastUpdated"`
-	LastViewed     time.Time               `bun:",notnull"   json:"lastViewed"`
-	LastPurgeCheck time.Time               `bun:",notnull"   json:"lastPurgeCheck"`
-	ThumbnailURL   string                  `bun:",notnull"   json:"thumbnailUrl"`
+	ID                  uint64                  `bun:",pk"        json:"id"`
+	UUID                uuid.UUID               `bun:",notnull"   json:"uuid"`
+	Name                string                  `bun:",notnull"   json:"name"`
+	DisplayName         string                  `bun:",notnull"   json:"displayName"`
+	Description         string                  `bun:",notnull"   json:"description"`
+	CreatedAt           time.Time               `bun:",notnull"   json:"createdAt"`
+	Reason              string                  `bun:",notnull"   json:"reason"`
+	Groups              []*types.UserGroupRoles `bun:"type:jsonb" json:"groups"`
+	Outfits             []types.Outfit          `bun:"type:jsonb" json:"outfits"`
+	Friends             []ExtendedFriend        `bun:"type:jsonb" json:"friends"`
+	Games               []*types.Game           `bun:"type:jsonb" json:"games"`
+	FlaggedContent      []string                `bun:"type:jsonb" json:"flaggedContent"`
+	FollowerCount       uint64                  `bun:",notnull"   json:"followerCount"`
+	FollowingCount      uint64                  `bun:",notnull"   json:"followingCount"`
+	Confidence          float64                 `bun:",notnull"   json:"confidence"`
+	LastScanned         time.Time               `bun:",notnull"   json:"lastScanned"`
+	LastUpdated         time.Time               `bun:",notnull"   json:"lastUpdated"`
+	LastViewed          time.Time               `bun:",notnull"   json:"lastViewed"`
+	LastPurgeCheck      time.Time               `bun:",notnull"   json:"lastPurgeCheck"`
+	ThumbnailURL        string                  `bun:",notnull"   json:"thumbnailUrl"`
+	LastThumbnailUpdate time.Time               `bun:",notnull"   json:"lastThumbnailUpdate"`
 }
 
 // FlaggedUser extends User to track users that need review.
@@ -170,6 +171,7 @@ func (f UserFields) Columns() []string {
 			"last_updated",
 			"last_viewed",
 			"last_purge_check",
+			"last_thumbnail_update",
 		)
 	}
 	if f.Reputation {

@@ -119,6 +119,26 @@ func init() { //nolint:funlen
 
 			CREATE INDEX IF NOT EXISTS idx_user_reputations_id_score 
 			ON user_reputations (id, score);
+
+			-- User thumbnail update indexes
+			CREATE INDEX IF NOT EXISTS idx_flagged_users_thumbnail_update 
+			ON flagged_users (last_thumbnail_update ASC);
+			CREATE INDEX IF NOT EXISTS idx_confirmed_users_thumbnail_update 
+			ON confirmed_users (last_thumbnail_update ASC);
+			CREATE INDEX IF NOT EXISTS idx_cleared_users_thumbnail_update 
+			ON cleared_users (last_thumbnail_update ASC);
+			CREATE INDEX IF NOT EXISTS idx_banned_users_thumbnail_update 
+			ON banned_users (last_thumbnail_update ASC);
+
+			-- Group thumbnail update indexes
+			CREATE INDEX IF NOT EXISTS idx_flagged_groups_thumbnail_update 
+			ON flagged_groups (last_thumbnail_update ASC);
+			CREATE INDEX IF NOT EXISTS idx_confirmed_groups_thumbnail_update 
+			ON confirmed_groups (last_thumbnail_update ASC);
+			CREATE INDEX IF NOT EXISTS idx_cleared_groups_thumbnail_update 
+			ON cleared_groups (last_thumbnail_update ASC);
+			CREATE INDEX IF NOT EXISTS idx_locked_groups_thumbnail_update 
+			ON locked_groups (last_thumbnail_update ASC);
 			
 			-- User status indexes
 			CREATE INDEX IF NOT EXISTS idx_cleared_users_purged_at ON cleared_users (cleared_at);
@@ -210,6 +230,18 @@ func init() { //nolint:funlen
 			DROP INDEX IF EXISTS idx_cleared_groups_purged_at;
 			DROP INDEX IF EXISTS idx_flagged_groups_last_purge_check;
 			DROP INDEX IF EXISTS idx_confirmed_groups_last_purge_check;
+
+			-- User thumbnail update indexes
+			DROP INDEX IF EXISTS idx_flagged_users_thumbnail_update;
+			DROP INDEX IF EXISTS idx_confirmed_users_thumbnail_update;
+			DROP INDEX IF EXISTS idx_cleared_users_thumbnail_update;
+			DROP INDEX IF EXISTS idx_banned_users_thumbnail_update;
+
+			-- Group thumbnail update indexes
+			DROP INDEX IF EXISTS idx_flagged_groups_thumbnail_update;
+			DROP INDEX IF EXISTS idx_confirmed_groups_thumbnail_update;
+			DROP INDEX IF EXISTS idx_cleared_groups_thumbnail_update;
+			DROP INDEX IF EXISTS idx_locked_groups_thumbnail_update;
 
 			-- Statistics indexes
 			DROP INDEX IF EXISTS idx_hourly_stats_timestamp;

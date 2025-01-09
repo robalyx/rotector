@@ -18,6 +18,11 @@ track_groups = 100
 # Number of queue items to process in one batch
 queue_items = 50
 
+# Number of users to update thumbnails in one batch
+thumbnail_users = 100
+# Number of groups to update thumbnails in one batch 
+thumbnail_groups = 100
+
 [worker.threshold_limits]
 # Maximum number of flagged users before stopping worker
 flagged_users = 100000

@@ -42,6 +42,7 @@ func (r *UserModel) SaveUsers(ctx context.Context, users map[uint64]*types.User)
 
 	// Get existing users with all their data
 	existingUsers, err := r.GetUsersByIDs(ctx, userIDs, types.UserFields{
+		Basic:      true,
 		Timestamps: true,
 	})
 	if err != nil {
@@ -128,6 +129,7 @@ func (r *UserModel) SaveUsers(ctx context.Context, users map[uint64]*types.User)
 				Set("last_viewed = EXCLUDED.last_viewed").
 				Set("last_purge_check = EXCLUDED.last_purge_check").
 				Set("thumbnail_url = EXCLUDED.thumbnail_url").
+				Set("last_thumbnail_update = EXCLUDED.last_thumbnail_update").
 				Exec(ctx)
 			if err != nil {
 				return fmt.Errorf("failed to update %s users: %w", status, err)
@@ -195,6 +197,7 @@ func (r *UserModel) ConfirmUser(ctx context.Context, user *types.ReviewUser) err
 			Set("last_viewed = EXCLUDED.last_viewed").
 			Set("last_purge_check = EXCLUDED.last_purge_check").
 			Set("thumbnail_url = EXCLUDED.thumbnail_url").
+			Set("last_thumbnail_update = EXCLUDED.last_thumbnail_update").
 			Set("verified_at = EXCLUDED.verified_at").
 			Exec(ctx)
 		if err != nil {
@@ -253,6 +256,7 @@ func (r *UserModel) ClearUser(ctx context.Context, user *types.ReviewUser) error
 			Set("last_viewed = EXCLUDED.last_viewed").
 			Set("last_purge_check = EXCLUDED.last_purge_check").
 			Set("thumbnail_url = EXCLUDED.thumbnail_url").
+			Set("last_thumbnail_update = EXCLUDED.last_thumbnail_update").
 			Set("cleared_at = EXCLUDED.cleared_at").
 			Exec(ctx)
 		if err != nil {
@@ -691,6 +695,40 @@ func (r *UserModel) PurgeOldClearedUsers(ctx context.Context, cutoffDate time.Ti
 		zap.Time("cutoffDate", cutoffDate))
 
 	return int(affected), nil
+}
+
+// GetUsersForThumbnailUpdate retrieves users that need thumbnail updates.
+func (r *UserModel) GetUsersForThumbnailUpdate(ctx context.Context, limit int) (map[uint64]*types.User, error) {
+	users := make(map[uint64]*types.User)
+
+	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+		// Query users from each table that need thumbnail updates
+		for _, model := range []interface{}{
+			(*types.FlaggedUser)(nil),
+			(*types.ConfirmedUser)(nil),
+			(*types.ClearedUser)(nil),
+			(*types.BannedUser)(nil),
+		} {
+			var reviewUsers []types.ReviewUser
+			err := tx.NewSelect().
+				Model(model).
+				Where("last_thumbnail_update < NOW() - INTERVAL '7 days'").
+				OrderExpr("last_thumbnail_update ASC").
+				Limit(limit).
+				Scan(ctx, &reviewUsers)
+
+			if err != nil && !errors.Is(err, sql.ErrNoRows) {
+				return fmt.Errorf("failed to query users for thumbnail update: %w", err)
+			}
+
+			for _, review := range reviewUsers {
+				users[review.ID] = &review.User
+			}
+		}
+		return nil
+	})
+
+	return users, err
 }
 
 // DeleteUser removes a user and all associated data from the database.

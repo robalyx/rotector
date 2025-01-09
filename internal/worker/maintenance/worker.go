@@ -16,21 +16,23 @@ import (
 
 // Worker handles all maintenance operations.
 type Worker struct {
-	db                   *database.Client
-	roAPI                *api.API
-	bar                  *progress.Bar
-	userFetcher          *fetcher.UserFetcher
-	groupFetcher         *fetcher.GroupFetcher
-	thumbnailFetcher     *fetcher.ThumbnailFetcher
-	groupChecker         *checker.GroupChecker
-	reporter             *core.StatusReporter
-	logger               *zap.Logger
-	userBatchSize        int
-	groupBatchSize       int
-	trackBatchSize       int
-	minGroupFlaggedUsers int
-	minFlaggedOverride   int
-	minFlaggedPercent    float64
+	db                      *database.Client
+	roAPI                   *api.API
+	bar                     *progress.Bar
+	userFetcher             *fetcher.UserFetcher
+	groupFetcher            *fetcher.GroupFetcher
+	thumbnailFetcher        *fetcher.ThumbnailFetcher
+	groupChecker            *checker.GroupChecker
+	reporter                *core.StatusReporter
+	logger                  *zap.Logger
+	userBatchSize           int
+	groupBatchSize          int
+	trackBatchSize          int
+	thumbnailUserBatchSize  int
+	thumbnailGroupBatchSize int
+	minGroupFlaggedUsers    int
+	minFlaggedOverride      int
+	minFlaggedPercent       float64
 }
 
 // New creates a new maintenance worker.
@@ -46,21 +48,23 @@ func New(app *setup.App, bar *progress.Bar, logger *zap.Logger) *Worker {
 	)
 
 	return &Worker{
-		db:                   app.DB,
-		roAPI:                app.RoAPI,
-		bar:                  bar,
-		userFetcher:          userFetcher,
-		groupFetcher:         groupFetcher,
-		thumbnailFetcher:     thumbnailFetcher,
-		groupChecker:         groupChecker,
-		reporter:             reporter,
-		logger:               logger,
-		userBatchSize:        app.Config.Worker.BatchSizes.PurgeUsers,
-		groupBatchSize:       app.Config.Worker.BatchSizes.PurgeGroups,
-		trackBatchSize:       app.Config.Worker.BatchSizes.TrackGroups,
-		minGroupFlaggedUsers: app.Config.Worker.ThresholdLimits.MinGroupFlaggedUsers,
-		minFlaggedOverride:   app.Config.Worker.ThresholdLimits.MinFlaggedOverride,
-		minFlaggedPercent:    app.Config.Worker.ThresholdLimits.MinFlaggedPercentage,
+		db:                      app.DB,
+		roAPI:                   app.RoAPI,
+		bar:                     bar,
+		userFetcher:             userFetcher,
+		groupFetcher:            groupFetcher,
+		thumbnailFetcher:        thumbnailFetcher,
+		groupChecker:            groupChecker,
+		reporter:                reporter,
+		logger:                  logger,
+		userBatchSize:           app.Config.Worker.BatchSizes.PurgeUsers,
+		groupBatchSize:          app.Config.Worker.BatchSizes.PurgeGroups,
+		trackBatchSize:          app.Config.Worker.BatchSizes.TrackGroups,
+		thumbnailUserBatchSize:  app.Config.Worker.BatchSizes.ThumbnailUsers,
+		thumbnailGroupBatchSize: app.Config.Worker.BatchSizes.ThumbnailGroups,
+		minGroupFlaggedUsers:    app.Config.Worker.ThresholdLimits.MinGroupFlaggedUsers,
+		minFlaggedOverride:      app.Config.Worker.ThresholdLimits.MinFlaggedOverride,
+		minFlaggedPercent:       app.Config.Worker.ThresholdLimits.MinFlaggedPercentage,
 	}
 }
 
@@ -76,22 +80,28 @@ func (w *Worker) Start() {
 		w.bar.Reset()
 		w.reporter.SetHealthy(true)
 
-		// Step 1: Process banned users (25%)
+		// Step 1: Process banned users (20%)
 		w.processBannedUsers()
 
-		// Step 2: Process locked groups (35%)
+		// Step 2: Process locked groups (30%)
 		w.processLockedGroups()
 
-		// Step 3: Process cleared users (50%)
+		// Step 3: Process cleared users (40%)
 		w.processClearedUsers()
 
-		// Step 4: Process cleared groups (65%)
+		// Step 4: Process cleared groups (50%)
 		w.processClearedGroups()
 
-		// Step 5: Process group tracking (85%)
+		// Step 5: Process group tracking (65%)
 		w.processGroupTracking()
 
-		// Step 6: Completed (100%)
+		// Step 6: Process user thumbnails (80%)
+		w.processUserThumbnails()
+
+		// Step 7: Process group thumbnails (95%)
+		w.processGroupThumbnails()
+
+		// Step 8: Completed (100%)
 		w.bar.SetStepMessage("Completed", 100)
 		w.reporter.UpdateStatus("Completed", 100)
 
@@ -102,8 +112,8 @@ func (w *Worker) Start() {
 
 // processBannedUsers checks for and removes banned users.
 func (w *Worker) processBannedUsers() {
-	w.bar.SetStepMessage("Processing banned users", 25)
-	w.reporter.UpdateStatus("Processing banned users", 25)
+	w.bar.SetStepMessage("Processing banned users", 20)
+	w.reporter.UpdateStatus("Processing banned users", 20)
 
 	// Get users to check
 	users, err := w.db.Users().GetUsersToCheck(context.Background(), w.userBatchSize)
@@ -140,8 +150,8 @@ func (w *Worker) processBannedUsers() {
 
 // processLockedGroups checks for and removes locked groups.
 func (w *Worker) processLockedGroups() {
-	w.bar.SetStepMessage("Processing locked groups", 35)
-	w.reporter.UpdateStatus("Processing locked groups", 35)
+	w.bar.SetStepMessage("Processing locked groups", 30)
+	w.reporter.UpdateStatus("Processing locked groups", 30)
 
 	// Get groups to check
 	groups, err := w.db.Groups().GetGroupsToCheck(context.Background(), w.groupBatchSize)
@@ -178,8 +188,8 @@ func (w *Worker) processLockedGroups() {
 
 // processClearedUsers removes old cleared users.
 func (w *Worker) processClearedUsers() {
-	w.bar.SetStepMessage("Processing cleared users", 50)
-	w.reporter.UpdateStatus("Processing cleared users", 50)
+	w.bar.SetStepMessage("Processing cleared users", 40)
+	w.reporter.UpdateStatus("Processing cleared users", 40)
 
 	cutoffDate := time.Now().AddDate(0, 0, -30) // 30 days ago
 	affected, err := w.db.Users().PurgeOldClearedUsers(context.Background(), cutoffDate)
@@ -198,8 +208,8 @@ func (w *Worker) processClearedUsers() {
 
 // processClearedGroups removes old cleared groups.
 func (w *Worker) processClearedGroups() {
-	w.bar.SetStepMessage("Processing cleared groups", 65)
-	w.reporter.UpdateStatus("Processing cleared groups", 65)
+	w.bar.SetStepMessage("Processing cleared groups", 50)
+	w.reporter.UpdateStatus("Processing cleared groups", 50)
 
 	cutoffDate := time.Now().AddDate(0, 0, -30) // 30 days ago
 	affected, err := w.db.Groups().PurgeOldClearedGroups(context.Background(), cutoffDate)
@@ -218,8 +228,8 @@ func (w *Worker) processClearedGroups() {
 
 // processGroupTracking manages group tracking data.
 func (w *Worker) processGroupTracking() {
-	w.bar.SetStepMessage("Processing group tracking", 75)
-	w.reporter.UpdateStatus("Processing group tracking", 75)
+	w.bar.SetStepMessage("Processing group tracking", 65)
+	w.reporter.UpdateStatus("Processing group tracking", 65)
 
 	// Get groups to check
 	groupsWithUsers, err := w.db.Tracking().GetGroupTrackingsToCheck(
@@ -281,4 +291,79 @@ func (w *Worker) processGroupTracking() {
 	w.logger.Info("Processed group trackings",
 		zap.Int("checkedGroups", len(groupInfos)),
 		zap.Int("flaggedGroups", len(flaggedGroups)))
+}
+
+// processUserThumbnails updates user thumbnails.
+func (w *Worker) processUserThumbnails() {
+	w.bar.SetStepMessage("Processing user thumbnails", 80)
+	w.reporter.UpdateStatus("Processing user thumbnails", 80)
+
+	// Get users that need thumbnail updates
+	users, err := w.db.Users().GetUsersForThumbnailUpdate(context.Background(), w.thumbnailUserBatchSize)
+	if err != nil {
+		w.logger.Error("Error getting users for thumbnail update", zap.Error(err))
+		w.reporter.SetHealthy(false)
+		return
+	}
+
+	if len(users) == 0 {
+		w.logger.Info("No users need thumbnail updates")
+		return
+	}
+
+	// Update thumbnails
+	thumbnailMap := w.thumbnailFetcher.AddImageURLs(users)
+
+	// Update last thumbnail update time
+	now := time.Now()
+	for id, thumbnail := range thumbnailMap {
+		if user, ok := users[id]; ok {
+			user.ThumbnailURL = thumbnail
+			user.LastThumbnailUpdate = now
+		}
+	}
+
+	// Save updated users
+	if err := w.db.Users().SaveUsers(context.Background(), users); err != nil {
+		w.logger.Error("Error saving updated user thumbnails", zap.Error(err))
+		w.reporter.SetHealthy(false)
+		return
+	}
+
+	w.logger.Info("Updated user thumbnails",
+		zap.Int("processedCount", len(users)),
+		zap.Int("updatedCount", len(thumbnailMap)))
+}
+
+// processGroupThumbnails updates group thumbnails.
+func (w *Worker) processGroupThumbnails() {
+	w.bar.SetStepMessage("Processing group thumbnails", 95)
+	w.reporter.UpdateStatus("Processing group thumbnails", 95)
+
+	// Get groups that need thumbnail updates
+	groups, err := w.db.Groups().GetGroupsForThumbnailUpdate(context.Background(), w.thumbnailGroupBatchSize)
+	if err != nil {
+		w.logger.Error("Error getting groups for thumbnail update", zap.Error(err))
+		w.reporter.SetHealthy(false)
+		return
+	}
+
+	if len(groups) == 0 {
+		w.logger.Info("No groups need thumbnail updates")
+		return
+	}
+
+	// Update thumbnails
+	updatedGroups := w.thumbnailFetcher.AddGroupImageURLs(groups)
+
+	// Save updated groups
+	if err := w.db.Groups().SaveGroups(context.Background(), groups); err != nil {
+		w.logger.Error("Error saving updated group thumbnails", zap.Error(err))
+		w.reporter.SetHealthy(false)
+		return
+	}
+
+	w.logger.Info("Updated group thumbnails",
+		zap.Int("processedCount", len(groups)),
+		zap.Int("updatedCount", len(updatedGroups)))
 }

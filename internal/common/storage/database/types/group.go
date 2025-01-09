@@ -13,19 +13,20 @@ var ErrGroupNotFound = errors.New("group not found")
 
 // Group combines all the information needed to review a group.
 type Group struct {
-	ID             uint64            `bun:",pk"        json:"id"`
-	UUID           uuid.UUID         `bun:",notnull"   json:"uuid"`
-	Name           string            `bun:",notnull"   json:"name"`
-	Description    string            `bun:",notnull"   json:"description"`
-	Owner          *types.GroupUser  `bun:"type:jsonb" json:"owner"`
-	Shout          *types.GroupShout `bun:"type:jsonb" json:"shout"`
-	Reason         string            `bun:",notnull"   json:"reason"`
-	Confidence     float64           `bun:",notnull"   json:"confidence"`
-	LastScanned    time.Time         `bun:",notnull"   json:"lastScanned"`
-	LastUpdated    time.Time         `bun:",notnull"   json:"lastUpdated"`
-	LastViewed     time.Time         `bun:",notnull"   json:"lastViewed"`
-	LastPurgeCheck time.Time         `bun:",notnull"   json:"lastPurgeCheck"`
-	ThumbnailURL   string            `bun:",notnull"   json:"thumbnailUrl"`
+	ID                  uint64            `bun:",pk"        json:"id"`
+	UUID                uuid.UUID         `bun:",notnull"   json:"uuid"`
+	Name                string            `bun:",notnull"   json:"name"`
+	Description         string            `bun:",notnull"   json:"description"`
+	Owner               *types.GroupUser  `bun:"type:jsonb" json:"owner"`
+	Shout               *types.GroupShout `bun:"type:jsonb" json:"shout"`
+	Reason              string            `bun:",notnull"   json:"reason"`
+	Confidence          float64           `bun:",notnull"   json:"confidence"`
+	LastScanned         time.Time         `bun:",notnull"   json:"lastScanned"`
+	LastUpdated         time.Time         `bun:",notnull"   json:"lastUpdated"`
+	LastViewed          time.Time         `bun:",notnull"   json:"lastViewed"`
+	LastPurgeCheck      time.Time         `bun:",notnull"   json:"lastPurgeCheck"`
+	ThumbnailURL        string            `bun:",notnull"   json:"thumbnailUrl"`
+	LastThumbnailUpdate time.Time         `bun:",notnull"   json:"lastThumbnailUpdate"`
 }
 
 // FlaggedGroup extends Group to track groups that need review.
@@ -131,6 +132,7 @@ func (f GroupFields) Columns() []string {
 			"last_updated",
 			"last_viewed",
 			"last_purge_check",
+			"last_thumbnail_update",
 		)
 	}
 

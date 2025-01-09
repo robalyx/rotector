@@ -41,6 +41,7 @@ func (r *GroupModel) SaveGroups(ctx context.Context, groups map[uint64]*types.Gr
 
 	// Get existing groups with all their data
 	existingGroups, err := r.GetGroupsByIDs(ctx, groupIDs, types.GroupFields{
+		Basic:      true,
 		Timestamps: true,
 	})
 	if err != nil {
@@ -120,6 +121,7 @@ func (r *GroupModel) SaveGroups(ctx context.Context, groups map[uint64]*types.Gr
 				Set("last_viewed = EXCLUDED.last_viewed").
 				Set("last_purge_check = EXCLUDED.last_purge_check").
 				Set("thumbnail_url = EXCLUDED.thumbnail_url").
+				Set("last_thumbnail_update = EXCLUDED.last_thumbnail_update").
 				Exec(ctx)
 			if err != nil {
 				return fmt.Errorf("failed to update %s groups: %w", status, err)
@@ -172,12 +174,15 @@ func (r *GroupModel) ConfirmGroup(ctx context.Context, group *types.ReviewGroup)
 			Set("name = EXCLUDED.name").
 			Set("description = EXCLUDED.description").
 			Set("owner = EXCLUDED.owner").
+			Set("shout = EXCLUDED.shout").
 			Set("reason = EXCLUDED.reason").
 			Set("confidence = EXCLUDED.confidence").
 			Set("last_scanned = EXCLUDED.last_scanned").
 			Set("last_updated = EXCLUDED.last_updated").
 			Set("last_viewed = EXCLUDED.last_viewed").
+			Set("last_purge_check = EXCLUDED.last_purge_check").
 			Set("thumbnail_url = EXCLUDED.thumbnail_url").
+			Set("last_thumbnail_update = EXCLUDED.last_thumbnail_update").
 			Set("verified_at = EXCLUDED.verified_at").
 			Exec(ctx)
 		if err != nil {
@@ -221,12 +226,15 @@ func (r *GroupModel) ClearGroup(ctx context.Context, group *types.ReviewGroup) e
 			Set("name = EXCLUDED.name").
 			Set("description = EXCLUDED.description").
 			Set("owner = EXCLUDED.owner").
+			Set("shout = EXCLUDED.shout").
 			Set("reason = EXCLUDED.reason").
 			Set("confidence = EXCLUDED.confidence").
 			Set("last_scanned = EXCLUDED.last_scanned").
 			Set("last_updated = EXCLUDED.last_updated").
 			Set("last_viewed = EXCLUDED.last_viewed").
+			Set("last_purge_check = EXCLUDED.last_purge_check").
 			Set("thumbnail_url = EXCLUDED.thumbnail_url").
+			Set("last_thumbnail_update = EXCLUDED.last_thumbnail_update").
 			Set("cleared_at = EXCLUDED.cleared_at").
 			Exec(ctx)
 		if err != nil {
@@ -639,6 +647,40 @@ func (r *GroupModel) RemoveLockedGroups(ctx context.Context, groupIDs []uint64) 
 		r.logger.Debug("Moved locked groups to locked_groups", zap.Int("count", len(groupIDs)))
 		return nil
 	})
+}
+
+// GetGroupsForThumbnailUpdate retrieves groups that need thumbnail updates.
+func (r *GroupModel) GetGroupsForThumbnailUpdate(ctx context.Context, limit int) (map[uint64]*types.Group, error) {
+	groups := make(map[uint64]*types.Group)
+
+	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+		// Query groups from each table that need thumbnail updates
+		for _, model := range []interface{}{
+			(*types.FlaggedGroup)(nil),
+			(*types.ConfirmedGroup)(nil),
+			(*types.ClearedGroup)(nil),
+			(*types.LockedGroup)(nil),
+		} {
+			var reviewGroups []types.ReviewGroup
+			err := tx.NewSelect().
+				Model(model).
+				Where("last_thumbnail_update < NOW() - INTERVAL '7 days'").
+				OrderExpr("last_thumbnail_update ASC").
+				Limit(limit).
+				Scan(ctx, &reviewGroups)
+
+			if err != nil && !errors.Is(err, sql.ErrNoRows) {
+				return fmt.Errorf("failed to query groups for thumbnail update: %w", err)
+			}
+
+			for _, group := range reviewGroups {
+				groups[group.ID] = &group.Group
+			}
+		}
+		return nil
+	})
+
+	return groups, err
 }
 
 // DeleteGroup removes a group and all associated data from the database.

@@ -331,6 +331,7 @@ func (u *UserFetcher) FetchAdditionalUserData(users map[uint64]*types.User) map[
 	}()
 
 	// Process results as they arrive
+	now := time.Now()
 	remaining := 3
 	for remaining > 0 {
 		select {
@@ -338,6 +339,7 @@ func (u *UserFetcher) FetchAdditionalUserData(users map[uint64]*types.User) map[
 			for id, url := range images {
 				if user, ok := users[id]; ok {
 					user.ThumbnailURL = url
+					user.LastThumbnailUpdate = now
 				}
 			}
 			remaining--

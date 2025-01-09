@@ -3,6 +3,7 @@ package fetcher
 import (
 	"context"
 	"strconv"
+	"time"
 
 	"github.com/jaxron/roapi.go/pkg/api"
 	"github.com/jaxron/roapi.go/pkg/api/resources/thumbnails"
@@ -69,10 +70,12 @@ func (t *ThumbnailFetcher) AddGroupImageURLs(groups map[uint64]*types.Group) map
 	results := t.ProcessBatchThumbnails(requests)
 
 	// Add thumbnail URLs to groups
+	now := time.Now()
 	updatedGroups := make(map[uint64]*types.Group, len(groups))
 	for _, group := range groups {
 		if thumbnailURL, ok := results[group.ID]; ok {
 			group.ThumbnailURL = thumbnailURL
+			group.LastThumbnailUpdate = now
 			updatedGroups[group.ID] = group
 		}
 	}
