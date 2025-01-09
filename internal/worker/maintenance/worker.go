@@ -236,6 +236,7 @@ func (w *Worker) processGroupTracking() {
 		context.Background(),
 		w.trackBatchSize,
 		w.minGroupFlaggedUsers,
+		w.minFlaggedOverride,
 	)
 	if err != nil {
 		w.logger.Error("Error checking group trackings", zap.Error(err))

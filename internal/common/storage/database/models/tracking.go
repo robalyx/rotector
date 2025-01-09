@@ -111,29 +111,36 @@ func (r *TrackingModel) PurgeOldTrackings(ctx context.Context, cutoffDate time.T
 
 // GetGroupTrackingsToCheck finds groups that haven't been checked recently
 // with priority for groups with more flagged users.
-func (r *TrackingModel) GetGroupTrackingsToCheck(ctx context.Context, batchSize int, minFlaggedUsers int) (map[uint64][]uint64, error) {
+func (r *TrackingModel) GetGroupTrackingsToCheck(ctx context.Context, batchSize int, minFlaggedUsers int, minFlaggedOverride int) (map[uint64][]uint64, error) {
 	result := make(map[uint64][]uint64)
 
 	now := time.Now()
 	tenMinutesAgo := now.Add(-10 * time.Minute)
+	oneMinuteAgo := now.Add(-1 * time.Minute)
+
 	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
 		var trackings []types.GroupMemberTracking
 
-		// Find groups that haven't been checked
-		err := tx.NewRaw(`
-			UPDATE group_member_trackings
-			SET last_checked = ?
-			WHERE group_id IN (
-				SELECT group_id 
-				FROM group_member_trackings
-				WHERE is_flagged = false 
-				AND last_checked < ?
-				AND cardinality(flagged_users) >= ?
-				ORDER BY cardinality(flagged_users) DESC, last_checked ASC
-				LIMIT ?
-			)
-			RETURNING group_id, flagged_users`, now, tenMinutesAgo, minFlaggedUsers, batchSize).
-			Scan(ctx, &trackings)
+		// Build subquery to find the group IDs to update
+		subq := tx.NewSelect().
+			Model((*types.GroupMemberTracking)(nil)).
+			Column("group_id").
+			Where("is_flagged = FALSE").
+			Where("cardinality(flagged_users) >= ?", minFlaggedUsers).
+			Where("(last_checked < ? AND cardinality(flagged_users) >= ?) OR (last_checked < ? AND cardinality(flagged_users) >= ? / 2)",
+				tenMinutesAgo, minFlaggedOverride,
+				oneMinuteAgo, minFlaggedOverride).
+			OrderExpr("cardinality(flagged_users) DESC").
+			Order("last_checked ASC").
+			Limit(batchSize)
+
+		// Update the selected groups and return their data
+		err := tx.NewUpdate().
+			Model(&trackings).
+			Set("last_checked = ?", now).
+			Where("group_id IN (?)", subq).
+			Returning("group_id, flagged_users").
+			Scan(ctx)
 		if err != nil {
 			return fmt.Errorf("failed to get and update group trackings: %w", err)
 		}
