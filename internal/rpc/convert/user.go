@@ -3,8 +3,8 @@ package convert
 import (
 	"time"
 
-	"github.com/rotector/rotector/internal/common/storage/database/types"
-	"github.com/rotector/rotector/internal/rpc/proto"
+	"github.com/robalyx/rotector/internal/common/storage/database/types"
+	"github.com/robalyx/rotector/internal/rpc/proto"
 )
 
 // UserStatus converts a database user status to RPC API user status.

@@ -2,8 +2,8 @@ package convert
 
 import (
 	apiTypes "github.com/jaxron/roapi.go/pkg/api/types"
-	"github.com/rotector/rotector/internal/common/storage/database/types"
-	restTypes "github.com/rotector/rotector/internal/rest/types"
+	"github.com/robalyx/rotector/internal/common/storage/database/types"
+	restTypes "github.com/robalyx/rotector/internal/rest/types"
 )
 
 // GroupStatus converts a database group status to REST API group status.

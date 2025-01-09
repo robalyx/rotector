@@ -13,9 +13,9 @@ import (
 
 	"github.com/disgoorg/disgo/events"
 	"github.com/jaxron/axonet/pkg/client"
-	"github.com/rotector/rotector/assets"
-	"github.com/rotector/rotector/internal/bot/constants"
-	"github.com/rotector/rotector/internal/bot/core/session"
+	"github.com/robalyx/rotector/assets"
+	"github.com/robalyx/rotector/internal/bot/constants"
+	"github.com/robalyx/rotector/internal/bot/core/session"
 	"go.uber.org/zap"
 	"golang.org/x/image/webp"
 )

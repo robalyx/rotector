@@ -11,9 +11,9 @@ import (
 	"syscall"
 	"time"
 
-	_ "github.com/rotector/rotector/docs/api"
-	"github.com/rotector/rotector/internal/common/setup"
-	"github.com/rotector/rotector/internal/rest"
+	_ "github.com/robalyx/rotector/docs/api"
+	"github.com/robalyx/rotector/internal/common/setup"
+	"github.com/robalyx/rotector/internal/rest"
 	"go.uber.org/zap"
 )
 

@@ -3,14 +3,14 @@
     <img width="800" alt="Rotector" src="./assets/gif/banner.gif">
   </picture>
   <br>
-  <a href="https://github.com/rotector/rotector/blob/main/LICENSE">
-    <img src="https://img.shields.io/github/license/rotector/rotector?style=flat-square&color=4a92e1">
+  <a href="https://github.com/robalyx/rotector/blob/main/LICENSE">
+    <img src="https://img.shields.io/github/license/robalyx/rotector?style=flat-square&color=4a92e1">
   </a>
-  <a href="https://github.com/rotector/rotector/actions/workflows/ci.yml">
-    <img src="https://img.shields.io/github/actions/workflow/status/rotector/rotector/ci.yml?style=flat-square&color=4a92e1">
+  <a href="https://github.com/robalyx/rotector/actions/workflows/ci.yml">
+    <img src="https://img.shields.io/github/actions/workflow/status/robalyx/rotector/ci.yml?style=flat-square&color=4a92e1">
   </a>
-  <a href="https://github.com/rotector/rotector/issues">
-    <img src="https://img.shields.io/github/issues/rotector/rotector?style=flat-square&color=4a92e1">
+  <a href="https://github.com/robalyx/rotector/issues">
+    <img src="https://img.shields.io/github/issues/robalyx/rotector?style=flat-square&color=4a92e1">
   </a>
   <a href="CODE_OF_CONDUCT.md">
     <img src="https://img.shields.io/badge/Contributor%20Covenant-2.1-4a92e1?style=flat-square">

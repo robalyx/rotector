@@ -13,8 +13,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rotector/rotector/internal/bot/constants"
-	"github.com/rotector/rotector/internal/common/queue"
+	"github.com/robalyx/rotector/internal/bot/constants"
+	"github.com/robalyx/rotector/internal/common/queue"
 )
 
 // Regular expression to clean up excessive newlines in descriptions.

@@ -4,10 +4,10 @@ import (
 	"errors"
 	"net/http"
 
-	"github.com/rotector/rotector/internal/common/storage/database"
-	"github.com/rotector/rotector/internal/common/storage/database/types"
-	"github.com/rotector/rotector/internal/rest/convert"
-	restTypes "github.com/rotector/rotector/internal/rest/types"
+	"github.com/robalyx/rotector/internal/common/storage/database"
+	"github.com/robalyx/rotector/internal/common/storage/database/types"
+	"github.com/robalyx/rotector/internal/rest/convert"
+	restTypes "github.com/robalyx/rotector/internal/rest/types"
 	"github.com/uptrace/bunrouter"
 	"go.uber.org/zap"
 )

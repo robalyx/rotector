@@ -9,9 +9,9 @@ import (
 	"github.com/bytedance/sonic"
 	"github.com/disgoorg/snowflake/v2"
 	"github.com/redis/rueidis"
-	"github.com/rotector/rotector/internal/bot/constants"
-	"github.com/rotector/rotector/internal/common/storage/database"
-	"github.com/rotector/rotector/internal/common/storage/redis"
+	"github.com/robalyx/rotector/internal/bot/constants"
+	"github.com/robalyx/rotector/internal/common/storage/database"
+	"github.com/robalyx/rotector/internal/common/storage/redis"
 	"go.uber.org/zap"
 )
 

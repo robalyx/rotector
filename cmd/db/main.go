@@ -7,9 +7,9 @@ import (
 	"log"
 	"os"
 
-	"github.com/rotector/rotector/internal/common/setup/config"
-	"github.com/rotector/rotector/internal/common/storage/database"
-	"github.com/rotector/rotector/internal/common/storage/database/migrations"
+	"github.com/robalyx/rotector/internal/common/setup/config"
+	"github.com/robalyx/rotector/internal/common/storage/database"
+	"github.com/robalyx/rotector/internal/common/storage/database/migrations"
 	"github.com/uptrace/bun/migrate"
 	"github.com/urfave/cli/v3"
 	"go.uber.org/zap"

@@ -6,10 +6,10 @@ import (
 
 	"github.com/disgoorg/disgo/discord"
 	"github.com/disgoorg/disgo/events"
-	"github.com/rotector/rotector/internal/bot/constants"
-	"github.com/rotector/rotector/internal/bot/core/session"
-	"github.com/rotector/rotector/internal/bot/interfaces"
-	"github.com/rotector/rotector/internal/bot/utils"
+	"github.com/robalyx/rotector/internal/bot/constants"
+	"github.com/robalyx/rotector/internal/bot/core/session"
+	"github.com/robalyx/rotector/internal/bot/interfaces"
+	"github.com/robalyx/rotector/internal/bot/utils"
 	"go.uber.org/zap"
 )
 

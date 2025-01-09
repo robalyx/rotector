@@ -6,12 +6,12 @@ import (
 	"time"
 
 	"github.com/jaxron/roapi.go/pkg/api"
-	"github.com/rotector/rotector/internal/common/client/checker"
-	"github.com/rotector/rotector/internal/common/client/fetcher"
-	"github.com/rotector/rotector/internal/common/progress"
-	"github.com/rotector/rotector/internal/common/setup"
-	"github.com/rotector/rotector/internal/common/storage/database"
-	"github.com/rotector/rotector/internal/worker/core"
+	"github.com/robalyx/rotector/internal/common/client/checker"
+	"github.com/robalyx/rotector/internal/common/client/fetcher"
+	"github.com/robalyx/rotector/internal/common/progress"
+	"github.com/robalyx/rotector/internal/common/setup"
+	"github.com/robalyx/rotector/internal/common/storage/database"
+	"github.com/robalyx/rotector/internal/worker/core"
 	"go.uber.org/zap"
 )
 

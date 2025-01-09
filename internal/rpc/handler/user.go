@@ -4,10 +4,10 @@ import (
 	"context"
 	"errors"
 
-	"github.com/rotector/rotector/internal/common/storage/database"
-	"github.com/rotector/rotector/internal/common/storage/database/types"
-	"github.com/rotector/rotector/internal/rpc/convert"
-	"github.com/rotector/rotector/internal/rpc/proto"
+	"github.com/robalyx/rotector/internal/common/storage/database"
+	"github.com/robalyx/rotector/internal/common/storage/database/types"
+	"github.com/robalyx/rotector/internal/rpc/convert"
+	"github.com/robalyx/rotector/internal/rpc/proto"
 	"go.uber.org/zap"
 )
 

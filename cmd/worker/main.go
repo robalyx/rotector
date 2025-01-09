@@ -8,12 +8,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/rotector/rotector/internal/common/progress"
-	"github.com/rotector/rotector/internal/common/setup"
-	"github.com/rotector/rotector/internal/worker/ai"
-	"github.com/rotector/rotector/internal/worker/purge"
-	"github.com/rotector/rotector/internal/worker/queue"
-	"github.com/rotector/rotector/internal/worker/stats"
+	"github.com/robalyx/rotector/internal/common/progress"
+	"github.com/robalyx/rotector/internal/common/setup"
+	"github.com/robalyx/rotector/internal/worker/ai"
+	"github.com/robalyx/rotector/internal/worker/purge"
+	"github.com/robalyx/rotector/internal/worker/queue"
+	"github.com/robalyx/rotector/internal/worker/stats"
 	"github.com/urfave/cli/v3"
 	"go.uber.org/zap"
 )

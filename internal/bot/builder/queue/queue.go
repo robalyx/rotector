@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/disgoorg/disgo/discord"
-	"github.com/rotector/rotector/internal/bot/constants"
+	"github.com/robalyx/rotector/internal/bot/constants"
 )
 
 // Builder creates the visual layout for managing queue operations.

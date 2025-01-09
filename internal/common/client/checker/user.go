@@ -4,12 +4,12 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/rotector/rotector/internal/common/client/ai"
-	"github.com/rotector/rotector/internal/common/client/fetcher"
-	"github.com/rotector/rotector/internal/common/setup"
-	"github.com/rotector/rotector/internal/common/storage/database"
-	"github.com/rotector/rotector/internal/common/storage/database/types"
-	"github.com/rotector/rotector/internal/common/translator"
+	"github.com/robalyx/rotector/internal/common/client/ai"
+	"github.com/robalyx/rotector/internal/common/client/fetcher"
+	"github.com/robalyx/rotector/internal/common/setup"
+	"github.com/robalyx/rotector/internal/common/storage/database"
+	"github.com/robalyx/rotector/internal/common/storage/database/types"
+	"github.com/robalyx/rotector/internal/common/translator"
 	"go.uber.org/zap"
 )
 

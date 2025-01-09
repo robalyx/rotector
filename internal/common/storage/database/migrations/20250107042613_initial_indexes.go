@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/rotector/rotector/internal/common/storage/database/types"
+	"github.com/robalyx/rotector/internal/common/storage/database/types"
 	"github.com/uptrace/bun"
 )
 

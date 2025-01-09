@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/getsentry/sentry-go"
-	"github.com/rotector/rotector/internal/common/setup/config"
+	"github.com/robalyx/rotector/internal/common/setup/config"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )

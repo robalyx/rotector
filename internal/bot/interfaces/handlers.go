@@ -1,7 +1,7 @@
 package interfaces
 
 import (
-	"github.com/rotector/rotector/internal/bot/core/session"
+	"github.com/robalyx/rotector/internal/bot/core/session"
 )
 
 // DashboardLayout defines the interface for handling dashboard-related actions.

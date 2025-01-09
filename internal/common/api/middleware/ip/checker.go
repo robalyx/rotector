@@ -3,7 +3,7 @@ package ip
 import (
 	"net"
 
-	"github.com/rotector/rotector/internal/common/setup/config"
+	"github.com/robalyx/rotector/internal/common/setup/config"
 	"go.uber.org/zap"
 )
 

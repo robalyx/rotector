@@ -1,4 +1,4 @@
-module github.com/rotector/rotector
+module github.com/robalyx/rotector
 
 go 1.23.2
 

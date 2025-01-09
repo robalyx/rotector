@@ -1,8 +1,8 @@
 package utils
 
 import (
-	"github.com/rotector/rotector/internal/bot/constants"
-	"github.com/rotector/rotector/internal/bot/core/session"
+	"github.com/robalyx/rotector/internal/bot/constants"
+	"github.com/robalyx/rotector/internal/bot/core/session"
 )
 
 // ViewerAction represents the type of page navigation action.

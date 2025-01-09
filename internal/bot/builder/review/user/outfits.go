@@ -7,10 +7,10 @@ import (
 
 	"github.com/disgoorg/disgo/discord"
 	apiTypes "github.com/jaxron/roapi.go/pkg/api/types"
-	"github.com/rotector/rotector/internal/bot/constants"
-	"github.com/rotector/rotector/internal/bot/core/session"
-	"github.com/rotector/rotector/internal/bot/utils"
-	"github.com/rotector/rotector/internal/common/storage/database/types"
+	"github.com/robalyx/rotector/internal/bot/constants"
+	"github.com/robalyx/rotector/internal/bot/core/session"
+	"github.com/robalyx/rotector/internal/bot/utils"
+	"github.com/robalyx/rotector/internal/common/storage/database/types"
 )
 
 // OutfitsBuilder creates the visual layout for viewing a user's outfits.

@@ -4,8 +4,8 @@ import (
 	"bytes"
 
 	"github.com/disgoorg/disgo/discord"
-	"github.com/rotector/rotector/internal/bot/constants"
-	"github.com/rotector/rotector/internal/bot/core/session"
+	"github.com/robalyx/rotector/internal/bot/constants"
+	"github.com/robalyx/rotector/internal/bot/core/session"
 )
 
 // Builder creates the visual layout for the CAPTCHA verification interface.

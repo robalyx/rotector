@@ -4,9 +4,9 @@ import (
 	"fmt"
 
 	"github.com/disgoorg/disgo/discord"
-	"github.com/rotector/rotector/internal/bot/constants"
-	"github.com/rotector/rotector/internal/bot/core/session"
-	"github.com/rotector/rotector/internal/common/storage/database/types"
+	"github.com/robalyx/rotector/internal/bot/constants"
+	"github.com/robalyx/rotector/internal/bot/core/session"
+	"github.com/robalyx/rotector/internal/common/storage/database/types"
 )
 
 // UpdateBuilder creates a generic settings change menu.

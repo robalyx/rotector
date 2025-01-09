@@ -2,8 +2,8 @@ package convert
 
 import (
 	apiTypes "github.com/jaxron/roapi.go/pkg/api/types"
-	"github.com/rotector/rotector/internal/common/storage/database/types"
-	restTypes "github.com/rotector/rotector/internal/rest/types"
+	"github.com/robalyx/rotector/internal/common/storage/database/types"
+	restTypes "github.com/robalyx/rotector/internal/rest/types"
 )
 
 // UserStatus converts a database user status to REST API user status.

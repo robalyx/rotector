@@ -4,11 +4,11 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/rotector/rotector/internal/bot/constants"
-	"github.com/rotector/rotector/internal/bot/core/session"
-	"github.com/rotector/rotector/internal/bot/utils"
-	"github.com/rotector/rotector/internal/common/queue"
-	"github.com/rotector/rotector/internal/common/storage/database/types"
+	"github.com/robalyx/rotector/internal/bot/constants"
+	"github.com/robalyx/rotector/internal/bot/core/session"
+	"github.com/robalyx/rotector/internal/bot/utils"
+	"github.com/robalyx/rotector/internal/common/queue"
+	"github.com/robalyx/rotector/internal/common/storage/database/types"
 
 	"github.com/disgoorg/disgo/discord"
 )

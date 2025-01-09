@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/rotector/rotector/internal/rpc/proto"
+	"github.com/robalyx/rotector/internal/rpc/proto"
 	"github.com/twitchtv/twirp"
 )
 

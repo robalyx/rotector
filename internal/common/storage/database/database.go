@@ -8,9 +8,9 @@ import (
 	"time"
 
 	"github.com/bytedance/sonic"
-	"github.com/rotector/rotector/internal/common/setup/config"
-	"github.com/rotector/rotector/internal/common/storage/database/migrations"
-	"github.com/rotector/rotector/internal/common/storage/database/models"
+	"github.com/robalyx/rotector/internal/common/setup/config"
+	"github.com/robalyx/rotector/internal/common/storage/database/migrations"
+	"github.com/robalyx/rotector/internal/common/storage/database/models"
 	"github.com/uptrace/bun"
 	"github.com/uptrace/bun/dialect/pgdialect"
 	"github.com/uptrace/bun/driver/pgdriver"

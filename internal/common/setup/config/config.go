@@ -258,7 +258,7 @@ func checkConfigVersion(name string, current, expected int) error { //nolint:unp
 	}
 	if current != expected {
 		return fmt.Errorf(
-			"%w: %s.toml (got: %d, expected: %d)\nPlease update your config file from: https://github.com/rotector/rotector/tree/%s/config/%s.toml",
+			"%w: %s.toml (got: %d, expected: %d)\nPlease update your config file from: https://github.com/robalyx/rotector/tree/%s/config/%s.toml",
 			ErrConfigVersionMismatch,
 			name,
 			current,

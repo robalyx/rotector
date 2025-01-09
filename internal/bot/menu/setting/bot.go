@@ -3,11 +3,11 @@ package setting
 import (
 	"github.com/disgoorg/disgo/discord"
 	"github.com/disgoorg/disgo/events"
-	"github.com/rotector/rotector/internal/bot/builder/setting"
-	"github.com/rotector/rotector/internal/bot/constants"
-	"github.com/rotector/rotector/internal/bot/core/pagination"
-	"github.com/rotector/rotector/internal/bot/core/session"
-	"github.com/rotector/rotector/internal/bot/interfaces"
+	"github.com/robalyx/rotector/internal/bot/builder/setting"
+	"github.com/robalyx/rotector/internal/bot/constants"
+	"github.com/robalyx/rotector/internal/bot/core/pagination"
+	"github.com/robalyx/rotector/internal/bot/core/session"
+	"github.com/robalyx/rotector/internal/bot/interfaces"
 )
 
 // BotMenu handles the display and interaction logic for bot-wide settings.

@@ -8,14 +8,14 @@ import (
 	"time"
 
 	"github.com/disgoorg/disgo/discord"
-	"github.com/rotector/rotector/assets"
-	"github.com/rotector/rotector/internal/bot/constants"
-	"github.com/rotector/rotector/internal/bot/core/session"
-	"github.com/rotector/rotector/internal/bot/utils"
-	"github.com/rotector/rotector/internal/common/client/fetcher"
-	"github.com/rotector/rotector/internal/common/storage/database"
-	"github.com/rotector/rotector/internal/common/storage/database/types"
-	"github.com/rotector/rotector/internal/common/translator"
+	"github.com/robalyx/rotector/assets"
+	"github.com/robalyx/rotector/internal/bot/constants"
+	"github.com/robalyx/rotector/internal/bot/core/session"
+	"github.com/robalyx/rotector/internal/bot/utils"
+	"github.com/robalyx/rotector/internal/common/client/fetcher"
+	"github.com/robalyx/rotector/internal/common/storage/database"
+	"github.com/robalyx/rotector/internal/common/storage/database/types"
+	"github.com/robalyx/rotector/internal/common/translator"
 )
 
 // ReviewBuilder creates the visual layout for reviewing a user.

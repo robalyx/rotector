@@ -3,11 +3,11 @@ package admin
 import (
 	"github.com/disgoorg/disgo/discord"
 	"github.com/disgoorg/disgo/events"
-	builder "github.com/rotector/rotector/internal/bot/builder/admin"
-	"github.com/rotector/rotector/internal/bot/constants"
-	"github.com/rotector/rotector/internal/bot/core/pagination"
-	"github.com/rotector/rotector/internal/bot/core/session"
-	"github.com/rotector/rotector/internal/bot/interfaces"
+	builder "github.com/robalyx/rotector/internal/bot/builder/admin"
+	"github.com/robalyx/rotector/internal/bot/constants"
+	"github.com/robalyx/rotector/internal/bot/core/pagination"
+	"github.com/robalyx/rotector/internal/bot/core/session"
+	"github.com/robalyx/rotector/internal/bot/interfaces"
 	"go.uber.org/zap"
 )
 

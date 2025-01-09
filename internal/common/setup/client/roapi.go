@@ -16,10 +16,10 @@ import (
 	"github.com/jaxron/axonet/middleware/singleflight"
 	"github.com/jaxron/axonet/pkg/client"
 	"github.com/jaxron/roapi.go/pkg/api"
-	"github.com/rotector/rotector/internal/common/setup/client/middleware/proxy"
-	"github.com/rotector/rotector/internal/common/setup/config"
-	"github.com/rotector/rotector/internal/common/setup/logger"
-	"github.com/rotector/rotector/internal/common/storage/redis"
+	"github.com/robalyx/rotector/internal/common/setup/client/middleware/proxy"
+	"github.com/robalyx/rotector/internal/common/setup/config"
+	"github.com/robalyx/rotector/internal/common/setup/logger"
+	"github.com/robalyx/rotector/internal/common/storage/redis"
 	"go.uber.org/zap"
 )
 

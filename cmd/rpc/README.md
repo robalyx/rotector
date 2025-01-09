@@ -20,7 +20,7 @@ The binary protocol utilized by RPC/Protobuf is more efficient than HTTP/JSON, r
 
 ## 🛠️ Language Support
 
-Twirp utilizes Protocol Buffers (protobuf) to define services and automatically create client/server code. This allows you to use our [protobuf definitions](https://github.com/rotector/rotector/tree/main/internal/rpc/proto) to generate code in various languages, thanks to Twirp's support for multiple languages.
+Twirp utilizes Protocol Buffers (protobuf) to define services and automatically create client/server code. This allows you to use our [protobuf definitions](https://github.com/robalyx/rotector/tree/main/internal/rpc/proto) to generate code in various languages, thanks to Twirp's support for multiple languages.
 
 > [!IMPORTANT]
 > We do not offer assistance for setting up client libraries in languages other than Go. Please consult the documentation of the relevant repository for instructions on how to generate and use client code in your language.

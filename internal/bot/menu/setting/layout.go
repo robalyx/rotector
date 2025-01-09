@@ -1,12 +1,12 @@
 package setting
 
 import (
-	"github.com/rotector/rotector/internal/bot/builder/setting"
-	"github.com/rotector/rotector/internal/bot/core/pagination"
-	"github.com/rotector/rotector/internal/bot/core/session"
-	"github.com/rotector/rotector/internal/bot/interfaces"
-	"github.com/rotector/rotector/internal/common/setup"
-	"github.com/rotector/rotector/internal/common/storage/database"
+	"github.com/robalyx/rotector/internal/bot/builder/setting"
+	"github.com/robalyx/rotector/internal/bot/core/pagination"
+	"github.com/robalyx/rotector/internal/bot/core/session"
+	"github.com/robalyx/rotector/internal/bot/interfaces"
+	"github.com/robalyx/rotector/internal/common/setup"
+	"github.com/robalyx/rotector/internal/common/storage/database"
 	"go.uber.org/zap"
 )
 

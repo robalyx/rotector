@@ -2,8 +2,8 @@ package admin
 
 import (
 	"github.com/disgoorg/disgo/discord"
-	"github.com/rotector/rotector/internal/bot/constants"
-	"github.com/rotector/rotector/internal/bot/core/session"
+	"github.com/robalyx/rotector/internal/bot/constants"
+	"github.com/robalyx/rotector/internal/bot/core/session"
 )
 
 // ConfirmBuilder creates the visual layout for the confirmation menu.

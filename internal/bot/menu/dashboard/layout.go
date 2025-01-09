@@ -2,13 +2,13 @@ package dashboard
 
 import (
 	"github.com/redis/rueidis"
-	"github.com/rotector/rotector/internal/bot/core/pagination"
-	"github.com/rotector/rotector/internal/bot/core/session"
-	"github.com/rotector/rotector/internal/bot/interfaces"
-	"github.com/rotector/rotector/internal/common/setup"
-	"github.com/rotector/rotector/internal/common/storage/database"
-	"github.com/rotector/rotector/internal/common/storage/redis"
-	"github.com/rotector/rotector/internal/worker/core"
+	"github.com/robalyx/rotector/internal/bot/core/pagination"
+	"github.com/robalyx/rotector/internal/bot/core/session"
+	"github.com/robalyx/rotector/internal/bot/interfaces"
+	"github.com/robalyx/rotector/internal/common/setup"
+	"github.com/robalyx/rotector/internal/common/storage/database"
+	"github.com/robalyx/rotector/internal/common/storage/redis"
+	"github.com/robalyx/rotector/internal/worker/core"
 	"go.uber.org/zap"
 )
 

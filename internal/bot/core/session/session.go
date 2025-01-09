@@ -11,7 +11,7 @@ import (
 	"github.com/spf13/cast"
 
 	"github.com/bytedance/sonic"
-	"github.com/rotector/rotector/internal/common/storage/database"
+	"github.com/robalyx/rotector/internal/common/storage/database"
 	"go.uber.org/zap"
 )
 
