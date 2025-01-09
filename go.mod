@@ -27,16 +27,16 @@ require (
 	github.com/swaggo/swag v1.16.4
 	github.com/tdewolff/minify/v2 v2.21.2
 	github.com/twitchtv/twirp v8.1.3+incompatible
-	github.com/uptrace/bun v1.2.7
-	github.com/uptrace/bun/dialect/pgdialect v1.2.7
-	github.com/uptrace/bun/driver/pgdriver v1.2.7
+	github.com/uptrace/bun v1.2.8
+	github.com/uptrace/bun/dialect/pgdialect v1.2.8
+	github.com/uptrace/bun/driver/pgdriver v1.2.8
 	github.com/uptrace/bunrouter v1.0.22
 	github.com/urfave/cli/v3 v3.0.0-beta1
 	github.com/wcharczuk/go-chart/v2 v2.1.2
 	go.uber.org/zap v1.27.0
 	golang.org/x/image v0.23.0
 	golang.org/x/text v0.21.0
-	golang.org/x/time v0.8.0
+	golang.org/x/time v0.9.0
 	google.golang.org/api v0.214.0
 	google.golang.org/protobuf v1.36.1
 )
