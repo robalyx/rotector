@@ -130,6 +130,7 @@ func (m *MainMenu) handleButton(event *events.ComponentInteractionCreate, s *ses
 	case constants.BackButtonCustomID:
 		m.layout.paginationManager.NavigateBack(event, s, "")
 	case constants.RefreshButtonCustomID:
+		m.layout.ResetLogs(s)
 		m.Show(event, s)
 	case constants.ClearFiltersButtonCustomID:
 		m.layout.ResetFilters(s)

@@ -246,6 +246,7 @@ func (m *ReviewMenu) handleViewGroupLogs(event *events.ComponentInteractionCreat
 	}
 
 	// Set the group ID filter
+	m.layout.logLayout.ResetLogs(s)
 	m.layout.logLayout.ResetFilters(s)
 	s.Set(constants.SessionKeyGroupIDFilter, group.ID)
 

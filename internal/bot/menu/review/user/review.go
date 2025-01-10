@@ -346,6 +346,7 @@ func (m *ReviewMenu) handleViewUserLogs(event *events.ComponentInteractionCreate
 	}
 
 	// Set the user ID filter
+	m.layout.logLayout.ResetLogs(s)
 	m.layout.logLayout.ResetFilters(s)
 	s.Set(constants.SessionKeyUserIDFilter, user.ID)
 
