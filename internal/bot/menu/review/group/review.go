@@ -70,7 +70,7 @@ func (m *ReviewMenu) Show(event interfaces.CommonEvent, s *session.Session, cont
 		group, err = m.fetchNewTarget(s, uint64(event.User().ID))
 		if err != nil {
 			if errors.Is(err, types.ErrNoGroupsToReview) {
-				m.layout.paginationManager.Refresh(event, s, "No groups to review. Please check back later.")
+				m.layout.paginationManager.NavigateBack(event, s, "No groups to review. Please check back later.")
 				return
 			}
 			m.layout.logger.Error("Failed to fetch a new group", zap.Error(err))

@@ -173,6 +173,8 @@ func (m *Manager) NavigateBack(event interfaces.CommonEvent, s *session.Session,
 		// Navigate to the previous page
 		page := m.GetPage(previousPage)
 		m.NavigateTo(event, s, page, content)
+	} else {
+		m.Refresh(event, s, content)
 	}
 }
 

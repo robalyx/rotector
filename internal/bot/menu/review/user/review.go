@@ -68,7 +68,7 @@ func (m *ReviewMenu) Show(event interfaces.CommonEvent, s *session.Session, cont
 		user, err = m.fetchNewTarget(s, uint64(event.User().ID))
 		if err != nil {
 			if errors.Is(err, types.ErrNoUsersToReview) {
-				m.layout.paginationManager.Refresh(event, s, "No users to review. Please check back later.")
+				m.layout.paginationManager.NavigateBack(event, s, "No users to review. Please check back later.")
 				return
 			}
 			m.layout.logger.Error("Failed to fetch a new user", zap.Error(err))
