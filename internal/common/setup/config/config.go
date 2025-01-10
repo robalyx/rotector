@@ -121,7 +121,16 @@ type GeminiAI struct {
 
 // Discord contains Discord bot configuration.
 type Discord struct {
-	Token string `koanf:"token"` // Discord bot token for authentication
+	Token    string         `koanf:"token"`    // Discord bot token for authentication
+	Sharding ShardingConfig `koanf:"sharding"` // Sharding configuration
+}
+
+// ShardingConfig contains Discord sharding configuration.
+type ShardingConfig struct {
+	Count      int    `koanf:"count"`       // Number of shards (0 for auto)
+	AutoScale  bool   `koanf:"auto_scale"`  // Enable automatic sharding
+	SplitCount int    `koanf:"split_count"` // Count to split large shards into (when auto_scale is true)
+	ShardIDs   string `koanf:"shard_ids"`   // Comma-separated list of shard IDs to manage (empty for all)
 }
 
 // BatchSizes configures how many items to process in each batch.

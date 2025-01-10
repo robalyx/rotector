@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -12,6 +13,7 @@ import (
 	"github.com/disgoorg/disgo/discord"
 	"github.com/disgoorg/disgo/events"
 	"github.com/disgoorg/disgo/gateway"
+	"github.com/disgoorg/disgo/sharding"
 	"github.com/disgoorg/snowflake/v2"
 	"go.uber.org/zap"
 
@@ -96,6 +98,22 @@ func New(app *setup.App) (*Bot, error) {
 
 	// Configure Discord client with required gateway intents and event handlers
 	client, err := disgo.New(app.Config.Bot.Discord.Token,
+		bot.WithShardManagerConfigOpts(
+			sharding.WithShardCount(app.Config.Bot.Discord.Sharding.Count),
+			sharding.WithAutoScaling(app.Config.Bot.Discord.Sharding.AutoScale),
+			sharding.WithShardSplitCount(app.Config.Bot.Discord.Sharding.SplitCount),
+			func(config *sharding.Config) {
+				// Parse shard IDs if specified
+				if app.Config.Bot.Discord.Sharding.ShardIDs != "" {
+					shardIDStrs := strings.Split(app.Config.Bot.Discord.Sharding.ShardIDs, ",")
+					for _, idStr := range shardIDStrs {
+						if id, err := strconv.Atoi(strings.TrimSpace(idStr)); err == nil {
+							sharding.WithShardIDs(id)(config)
+						}
+					}
+				}
+			},
+		),
 		bot.WithGatewayConfigOpts(
 			gateway.WithIntents(
 				gateway.IntentGuilds,
@@ -134,8 +152,14 @@ func (b *Bot) Start() error {
 		return fmt.Errorf("failed to register commands: %w", err)
 	}
 
-	b.logger.Info("Starting bot")
-	return b.client.OpenGateway(context.Background())
+	// Open gateway connection
+	err = b.client.OpenGateway(context.Background())
+	if err != nil {
+		return fmt.Errorf("failed to open gateway: %w", err)
+	}
+
+	b.logger.Info("Started bot")
+	return nil
 }
 
 // Close gracefully shuts down the Discord gateway connection.

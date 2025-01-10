@@ -4,4 +4,21 @@ version = 1
 [bot.discord]
 # Discord bot token for authentication
 # Get this from the Discord Developer Portal
-token = "" 
+token = ""
+
+[bot.discord.sharding]
+# Number of shards (0 for auto-detection)
+count = 0
+
+# Enable automatic sharding and scaling
+auto_scale = false
+
+# Number of shards to split into when a shard gets too large
+# Default is 2, increase for very large bots
+# Only used if auto_scale is true
+split_count = 2
+
+# Comma-separated list of shard IDs to manage
+# Leave empty to manage all shards
+# Example: "0,1,2" to only manage first 3 shards
+shard_ids = "" 
