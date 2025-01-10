@@ -198,3 +198,16 @@ func (m *Manager) RespondWithError(event interfaces.CommonEvent, message string)
 	_, _ = event.Client().Rest().UpdateInteractionResponse(event.ApplicationID(), event.Token(), messageUpdate)
 	m.sessionManager.CloseSession(context.Background(), uint64(event.User().ID))
 }
+
+// RespondWithMessage updates the interaction response with a new message.
+func (m *Manager) RespondWithMessage(event interfaces.CommonEvent, message string) {
+	messageUpdate := discord.NewMessageUpdateBuilder().
+		SetContent(utils.GetTimestampedSubtext(message)).
+		ClearEmbeds().
+		ClearFiles().
+		ClearContainerComponents().
+		RetainAttachments().
+		Build()
+
+	_, _ = event.Client().Rest().UpdateInteractionResponse(event.ApplicationID(), event.Token(), messageUpdate)
+}
