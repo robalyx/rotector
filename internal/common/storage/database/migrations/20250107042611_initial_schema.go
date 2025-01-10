@@ -61,6 +61,7 @@ func init() {
 			(*types.GroupMemberTracking)(nil),
 			(*types.UserReputation)(nil),
 			(*types.GroupReputation)(nil),
+			(*types.DiscordBan)(nil),
 		}
 
 		for _, model := range models {

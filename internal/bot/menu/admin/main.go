@@ -1,6 +1,9 @@
 package admin
 
 import (
+	"errors"
+	"fmt"
+
 	"github.com/disgoorg/disgo/discord"
 	"github.com/disgoorg/disgo/events"
 	builder "github.com/robalyx/rotector/internal/bot/builder/admin"
@@ -8,6 +11,7 @@ import (
 	"github.com/robalyx/rotector/internal/bot/core/pagination"
 	"github.com/robalyx/rotector/internal/bot/core/session"
 	"github.com/robalyx/rotector/internal/bot/interfaces"
+	"github.com/robalyx/rotector/internal/bot/utils"
 	"go.uber.org/zap"
 )
 
@@ -24,7 +28,7 @@ func NewMainMenu(layout *Layout) *MainMenu {
 	m.page = &pagination.Page{
 		Name: "Admin Menu",
 		Message: func(s *session.Session) *discord.MessageUpdateBuilder {
-			return builder.NewMainBuilder(s).Build()
+			return builder.NewBuilder(s).Build()
 		},
 		SelectHandlerFunc: m.handleSelectMenu,
 		ButtonHandlerFunc: m.handleButton,
@@ -43,10 +47,74 @@ func (m *MainMenu) handleSelectMenu(event *events.ComponentInteractionCreate, s 
 	switch option {
 	case constants.BotSettingsButtonCustomID:
 		m.layout.settingLayout.ShowBot(event, s)
+	case constants.BanUserButtonCustomID:
+		m.handleBanUserModal(event)
+	case constants.UnbanUserButtonCustomID:
+		m.handleUnbanUserModal(event)
 	case constants.DeleteUserButtonCustomID:
 		m.handleDeleteUserModal(event)
 	case constants.DeleteGroupButtonCustomID:
 		m.handleDeleteGroupModal(event)
+	}
+}
+
+// handleBanUserModal opens a modal for entering a user ID to ban.
+func (m *MainMenu) handleBanUserModal(event *events.ComponentInteractionCreate) {
+	modal := discord.NewModalCreateBuilder().
+		SetCustomID(constants.BanUserModalCustomID).
+		SetTitle("Ban User").
+		AddActionRow(
+			discord.NewTextInput(constants.BanUserInputCustomID, discord.TextInputStyleShort, "User ID").
+				WithRequired(true).
+				WithPlaceholder("Enter the user ID to ban..."),
+		).
+		AddActionRow(
+			discord.NewTextInput(constants.BanTypeInputCustomID, discord.TextInputStyleShort, "Ban Type").
+				WithRequired(true).
+				WithPlaceholder("abuse, inappropriate, or other").
+				WithMaxLength(20),
+		).
+		AddActionRow(
+			discord.NewTextInput(constants.BanDurationInputCustomID, discord.TextInputStyleShort, "Duration").
+				WithRequired(false).
+				WithPlaceholder("e.g. 2h45m, 2h, 5m, 1s or leave empty for permanent").
+				WithMaxLength(10),
+		).
+		AddActionRow(
+			discord.NewTextInput(constants.AdminReasonInputCustomID, discord.TextInputStyleParagraph, "Ban Notes").
+				WithRequired(true).
+				WithPlaceholder("Enter notes about this ban...").
+				WithMaxLength(512),
+		).
+		Build()
+
+	if err := event.Modal(modal); err != nil {
+		m.layout.logger.Error("Failed to create ban user modal", zap.Error(err))
+		m.layout.paginationManager.RespondWithError(event, "Failed to open the ban user modal. Please try again.")
+	}
+}
+
+// handleUnbanUserModal opens a modal for entering a user ID to unban.
+func (m *MainMenu) handleUnbanUserModal(event *events.ComponentInteractionCreate) {
+	modal := discord.NewModalCreateBuilder().
+		SetCustomID(constants.UnbanUserModalCustomID).
+		SetTitle("Unban User").
+		AddActionRow(
+			discord.NewTextInput(constants.UnbanUserInputCustomID, discord.TextInputStyleShort, "User ID").
+				WithRequired(true).
+				WithPlaceholder("Enter the user ID to unban..."),
+		).
+		AddActionRow(
+			discord.NewTextInput(constants.AdminReasonInputCustomID, discord.TextInputStyleParagraph, "Unban Notes").
+				WithRequired(true).
+				WithPlaceholder("Enter notes about this unban...").
+				WithMaxLength(512),
+		).
+		Build()
+
+	if err := event.Modal(modal); err != nil {
+		m.layout.logger.Error("Failed to create unban user modal", zap.Error(err))
+		m.layout.paginationManager.RespondWithError(event, "Failed to open the unban user modal. Please try again.")
 	}
 }
 
@@ -61,7 +129,7 @@ func (m *MainMenu) handleDeleteUserModal(event *events.ComponentInteractionCreat
 				WithPlaceholder("Enter the user ID to delete..."),
 		).
 		AddActionRow(
-			discord.NewTextInput(constants.DeleteReasonInputCustomID, discord.TextInputStyleParagraph, "Reason").
+			discord.NewTextInput(constants.AdminReasonInputCustomID, discord.TextInputStyleParagraph, "Reason").
 				WithRequired(true).
 				WithPlaceholder("Enter the reason for deletion...").
 				WithMaxLength(512),
@@ -85,7 +153,7 @@ func (m *MainMenu) handleDeleteGroupModal(event *events.ComponentInteractionCrea
 				WithPlaceholder("Enter the group ID to delete..."),
 		).
 		AddActionRow(
-			discord.NewTextInput(constants.DeleteReasonInputCustomID, discord.TextInputStyleParagraph, "Reason").
+			discord.NewTextInput(constants.AdminReasonInputCustomID, discord.TextInputStyleParagraph, "Reason").
 				WithRequired(true).
 				WithPlaceholder("Enter the reason for deletion...").
 				WithMaxLength(512),
@@ -109,6 +177,10 @@ func (m *MainMenu) handleButton(event *events.ComponentInteractionCreate, s *ses
 // handleModal processes modal submissions.
 func (m *MainMenu) handleModal(event *events.ModalSubmitInteractionCreate, s *session.Session) {
 	switch event.Data.CustomID {
+	case constants.BanUserModalCustomID:
+		m.handleBanUserModalSubmit(event, s)
+	case constants.UnbanUserModalCustomID:
+		m.handleUnbanUserModalSubmit(event, s)
 	case constants.DeleteUserModalCustomID:
 		m.handleDeleteUserModalSubmit(event, s)
 	case constants.DeleteGroupModalCustomID:
@@ -116,20 +188,54 @@ func (m *MainMenu) handleModal(event *events.ModalSubmitInteractionCreate, s *se
 	}
 }
 
+// handleBanUserModalSubmit processes the user ID input and shows confirmation menu.
+func (m *MainMenu) handleBanUserModalSubmit(event *events.ModalSubmitInteractionCreate, s *session.Session) {
+	userID := event.Data.Text(constants.BanUserInputCustomID)
+	banType := event.Data.Text(constants.BanTypeInputCustomID)
+	notes := event.Data.Text(constants.AdminReasonInputCustomID)
+	duration := event.Data.Text(constants.BanDurationInputCustomID)
+
+	// Parse ban duration
+	expiresAt, err := utils.ParseBanDuration(duration)
+	if err != nil && !errors.Is(err, utils.ErrPermanentBan) {
+		m.layout.logger.Debug("Failed to parse ban duration", zap.Error(err))
+		m.layout.paginationManager.Refresh(event, s, fmt.Sprintf("Failed to parse ban duration: %s", err))
+		return
+	}
+
+	s.Set(constants.SessionKeyAdminActionID, userID)
+	s.Set(constants.SessionKeyAdminReason, notes)
+	s.Set(constants.SessionKeyBanType, banType)
+	s.Set(constants.SessionKeyBanExpiry, expiresAt) // Will be nil for permanent bans
+	m.layout.confirmMenu.Show(event, s, constants.BanUserAction, "")
+}
+
+// handleUnbanUserModalSubmit processes the user ID input and shows confirmation menu.
+func (m *MainMenu) handleUnbanUserModalSubmit(event *events.ModalSubmitInteractionCreate, s *session.Session) {
+	userID := event.Data.Text(constants.UnbanUserInputCustomID)
+	notes := event.Data.Text(constants.AdminReasonInputCustomID)
+
+	s.Set(constants.SessionKeyAdminActionID, userID)
+	s.Set(constants.SessionKeyAdminReason, notes)
+	m.layout.confirmMenu.Show(event, s, constants.UnbanUserAction, "")
+}
+
 // handleDeleteUserModalSubmit processes the user ID input and shows confirmation menu.
 func (m *MainMenu) handleDeleteUserModalSubmit(event *events.ModalSubmitInteractionCreate, s *session.Session) {
 	userID := event.Data.Text(constants.DeleteUserInputCustomID)
-	reason := event.Data.Text(constants.DeleteReasonInputCustomID)
-	s.Set(constants.SessionKeyDeleteID, userID)
-	s.Set(constants.SessionKeyDeleteReason, reason)
+	reason := event.Data.Text(constants.AdminReasonInputCustomID)
+
+	s.Set(constants.SessionKeyAdminActionID, userID)
+	s.Set(constants.SessionKeyAdminReason, reason)
 	m.layout.confirmMenu.Show(event, s, constants.DeleteUserAction, "")
 }
 
 // handleDeleteGroupModalSubmit processes the group ID input and shows confirmation menu.
 func (m *MainMenu) handleDeleteGroupModalSubmit(event *events.ModalSubmitInteractionCreate, s *session.Session) {
 	groupID := event.Data.Text(constants.DeleteGroupInputCustomID)
-	reason := event.Data.Text(constants.DeleteReasonInputCustomID)
-	s.Set(constants.SessionKeyDeleteID, groupID)
-	s.Set(constants.SessionKeyDeleteReason, reason)
+	reason := event.Data.Text(constants.AdminReasonInputCustomID)
+
+	s.Set(constants.SessionKeyAdminActionID, groupID)
+	s.Set(constants.SessionKeyAdminReason, reason)
 	m.layout.confirmMenu.Show(event, s, constants.DeleteGroupAction, "")
 }

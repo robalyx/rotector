@@ -53,6 +53,7 @@ type Client struct {
 	activity *models.ActivityModel
 	tracking *models.TrackingModel
 	appeals  *models.AppealModel
+	bans     *models.BanModel
 }
 
 // NewConnection establishes a new database connection and returns a Client instance.
@@ -109,6 +110,7 @@ func NewConnection(ctx context.Context, config *config.PostgreSQL, logger *zap.L
 		activity: activity,
 		tracking: tracking,
 		appeals:  models.NewAppeal(db, logger),
+		bans:     models.NewBan(db, logger),
 	}
 
 	logger.Info("Database connection established")
@@ -159,6 +161,11 @@ func (c *Client) Activity() *models.ActivityModel {
 // Appeals returns the repository for appeal-related operations.
 func (c *Client) Appeals() *models.AppealModel {
 	return c.appeals
+}
+
+// Bans returns the repository for Discord ban operations.
+func (c *Client) Bans() *models.BanModel {
+	return c.bans
 }
 
 // DB returns the underlying bun.DB instance.

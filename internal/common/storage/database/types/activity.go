@@ -1,6 +1,8 @@
 package types
 
-import "time"
+import (
+	"time"
+)
 
 // ActivityType represents different kinds of user actions in the system.
 //
@@ -61,17 +63,24 @@ const (
 	ActivityTypeAppealRejected // APPEAL_REJECTED
 	// ActivityTypeAppealClosed tracks when a user closes an appeal.
 	ActivityTypeAppealClosed // APPEAL_CLOSED
+
+	// ActivityTypeDiscordUserBanned tracks when a Discord user is banned.
+	ActivityTypeDiscordUserBanned // DISCORD_USER_BANNED
+	// ActivityTypeDiscordUserUnbanned tracks when a Discord user is unbanned.
+	ActivityTypeDiscordUserUnbanned // DISCORD_USER_UNBANNED
 )
 
 // ActivityTarget identifies the target of an activity log entry.
-// Only one of UserID or GroupID should be set.
+// Only one of the fields should be set.
 type ActivityTarget struct {
-	UserID  uint64 `bun:",nullzero"` // Set to 0 for group activities
-	GroupID uint64 `bun:",nullzero"` // Set to 0 for user activities
+	DiscordID uint64 `bun:",nullzero"`
+	UserID    uint64 `bun:",nullzero"`
+	GroupID   uint64 `bun:",nullzero"`
 }
 
 // ActivityFilter is used to provide a filter criteria for retrieving activity logs.
 type ActivityFilter struct {
+	DiscordID    uint64
 	UserID       uint64
 	GroupID      uint64
 	ReviewerID   uint64

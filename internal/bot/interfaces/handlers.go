@@ -38,8 +38,9 @@ type SettingLayout interface {
 type LogLayout interface {
 	// Show prepares and displays the log menu.
 	Show(event CommonEvent, s *session.Session)
+	// ResetLogs clears the logs from the session.
+	ResetLogs(s *session.Session)
 	// ResetFilters resets all log filters to their default values in the given session.
-	// This is useful when switching between different views or users.
 	ResetFilters(s *session.Session)
 }
 
@@ -71,5 +72,11 @@ type CaptchaLayout interface {
 // AdminLayout defines the interface for handling admin-related actions.
 type AdminLayout interface {
 	// Show prepares and displays the admin menu.
+	Show(event CommonEvent, s *session.Session)
+}
+
+// BanLayout defines the interface for handling ban-related displays.
+type BanLayout interface {
+	// Show prepares and displays the ban information menu.
 	Show(event CommonEvent, s *session.Session)
 }

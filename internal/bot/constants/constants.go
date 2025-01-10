@@ -15,6 +15,7 @@ const (
 	BackButtonCustomID       = "back"
 	ModalOpenSuffix          = "_exception"
 	DefaultEmbedColor        = 0x312D2B
+	ErrorEmbedColor          = 0xE74C3C
 	StreamerModeEmbedColor   = 0x3E3769
 )
 
@@ -153,6 +154,7 @@ const (
 const (
 	LogsPerPage                         = 10
 	LogsQueryInputCustomID              = "query_input"
+	LogsQueryDiscordIDOption            = "query_discord_id" + ModalOpenSuffix
 	LogsQueryUserIDOption               = "query_user_id" + ModalOpenSuffix
 	LogsQueryGroupIDOption              = "query_group_id" + ModalOpenSuffix
 	LogsQueryReviewerIDOption           = "query_reviewer_id" + ModalOpenSuffix
@@ -210,17 +212,28 @@ const (
 // Admin Menu.
 const (
 	BotSettingsButtonCustomID = "bot_settings"
+	BanUserButtonCustomID     = "ban_user" + ModalOpenSuffix
+	UnbanUserButtonCustomID   = "unban_user" + ModalOpenSuffix
 	DeleteUserButtonCustomID  = "delete_user" + ModalOpenSuffix
 	DeleteGroupButtonCustomID = "delete_group" + ModalOpenSuffix
 
-	DeleteUserModalCustomID   = "delete_user_modal"
-	DeleteGroupModalCustomID  = "delete_group_modal"
-	DeleteUserInputCustomID   = "delete_user_input"
-	DeleteGroupInputCustomID  = "delete_group_input"
-	DeleteReasonInputCustomID = "delete_reason_input"
+	BanUserModalCustomID     = "ban_user_modal"
+	UnbanUserModalCustomID   = "unban_user_modal"
+	DeleteUserModalCustomID  = "delete_user_modal"
+	DeleteGroupModalCustomID = "delete_group_modal"
 
-	DeleteConfirmButtonCustomID = "delete_confirm"
+	BanUserInputCustomID     = "ban_user_input"
+	BanTypeInputCustomID     = "ban_type_input"
+	BanDurationInputCustomID = "ban_duration_input"
+	UnbanUserInputCustomID   = "unban_user_input"
+	DeleteUserInputCustomID  = "delete_user_input"
+	DeleteGroupInputCustomID = "delete_group_input"
+	AdminReasonInputCustomID = "admin_reason_input"
 
+	ActionButtonCustomID = "delete_confirm"
+
+	BanUserAction     = "ban_user"
+	UnbanUserAction   = "unban_user"
 	DeleteUserAction  = "delete_user"
 	DeleteGroupAction = "delete_group"
 )
@@ -276,6 +289,7 @@ const (
 	SessionKeyLogCursor            = "cursor"
 	SessionKeyLogNextCursor        = "nextCursor"
 	SessionKeyLogPrevCursors       = "prevCursors"
+	SessionKeyDiscordIDFilter      = "discordIDFilter"
 	SessionKeyUserIDFilter         = "userIDFilter"
 	SessionKeyGroupIDFilter        = "groupIDFilter"
 	SessionKeyReviewerIDFilter     = "reviewerIDFilter"
@@ -313,9 +327,13 @@ const (
 	SessionKeyCaptchaAnswer = "captchaAnswer"
 	SessionKeyCaptchaImage  = "captchaImage"
 
-	SessionKeyDeleteAction = "deleteAction"
-	SessionKeyDeleteID     = "deleteID"
-	SessionKeyDeleteReason = "deleteReason"
+	SessionKeyAdminAction   = "adminAction"
+	SessionKeyAdminActionID = "adminActionID"
+	SessionKeyAdminReason   = "adminReason"
+
+	SessionKeyBanType   = "banType"
+	SessionKeyBanExpiry = "banExpiry"
+	SessionKeyBanInfo   = "banInfo"
 )
 
 const (

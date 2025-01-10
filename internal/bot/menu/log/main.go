@@ -45,6 +45,7 @@ func NewMainMenu(l *Layout) *MainMenu {
 func (m *MainMenu) Show(event interfaces.CommonEvent, s *session.Session) {
 	// Get query parameters from session
 	activityFilter := types.ActivityFilter{
+		DiscordID:  s.GetUint64(constants.SessionKeyDiscordIDFilter),
 		UserID:     s.GetUint64(constants.SessionKeyUserIDFilter),
 		GroupID:    s.GetUint64(constants.SessionKeyGroupIDFilter),
 		ReviewerID: s.GetUint64(constants.SessionKeyReviewerIDFilter),
@@ -99,6 +100,8 @@ func (m *MainMenu) handleSelectMenu(event *events.ComponentInteractionCreate, s 
 	switch customID {
 	case constants.ActionSelectMenuCustomID:
 		switch option {
+		case constants.LogsQueryDiscordIDOption:
+			m.showQueryModal(event, option, "Discord ID", "ID", "Enter the Discord ID to query logs")
 		case constants.LogsQueryUserIDOption:
 			m.showQueryModal(event, option, "User ID", "ID", "Enter the User ID to query logs")
 		case constants.LogsQueryGroupIDOption:
@@ -145,7 +148,10 @@ func (m *MainMenu) handleButton(event *events.ComponentInteractionCreate, s *ses
 func (m *MainMenu) handleModal(event *events.ModalSubmitInteractionCreate, s *session.Session) {
 	customID := event.Data.CustomID
 	switch customID {
-	case constants.LogsQueryUserIDOption, constants.LogsQueryGroupIDOption, constants.LogsQueryReviewerIDOption:
+	case constants.LogsQueryDiscordIDOption,
+		constants.LogsQueryUserIDOption,
+		constants.LogsQueryGroupIDOption,
+		constants.LogsQueryReviewerIDOption:
 		m.handleIDModalSubmit(event, s, customID)
 	case constants.LogsQueryDateRangeOption:
 		m.handleDateRangeModalSubmit(event, s)
@@ -182,6 +188,8 @@ func (m *MainMenu) handleIDModalSubmit(event *events.ModalSubmitInteractionCreat
 
 	// Store ID in appropriate session key based on query type
 	switch queryType {
+	case constants.LogsQueryDiscordIDOption:
+		s.Set(constants.SessionKeyDiscordIDFilter, id)
 	case constants.LogsQueryUserIDOption:
 		s.Set(constants.SessionKeyUserIDFilter, id)
 	case constants.LogsQueryGroupIDOption:

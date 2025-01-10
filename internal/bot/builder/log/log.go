@@ -17,6 +17,7 @@ import (
 type Builder struct {
 	settings           *types.UserSetting
 	logs               []*types.ActivityLog
+	discordID          uint64
 	userID             uint64
 	groupID            uint64
 	reviewerID         uint64
@@ -39,6 +40,7 @@ func NewBuilder(s *session.Session) *Builder {
 	return &Builder{
 		settings:           settings,
 		logs:               logs,
+		discordID:          s.GetUint64(constants.SessionKeyDiscordIDFilter),
 		userID:             s.GetUint64(constants.SessionKeyUserIDFilter),
 		groupID:            s.GetUint64(constants.SessionKeyGroupIDFilter),
 		reviewerID:         s.GetUint64(constants.SessionKeyReviewerIDFilter),
@@ -58,6 +60,9 @@ func (b *Builder) Build() *discord.MessageUpdateBuilder {
 		SetColor(utils.GetMessageEmbedColor(b.settings.StreamerMode))
 
 	// Add fields for each active query condition
+	if b.discordID != 0 {
+		embed.AddField("Discord ID", fmt.Sprintf("`%s`", utils.CensorString(strconv.FormatUint(b.discordID, 10), b.settings.StreamerMode)), true)
+	}
 	if b.userID != 0 {
 		embed.AddField("User ID", fmt.Sprintf("`%s`", utils.CensorString(strconv.FormatUint(b.userID, 10), b.settings.StreamerMode)), true)
 	}
@@ -85,6 +90,10 @@ func (b *Builder) Build() *discord.MessageUpdateBuilder {
 			}
 
 			description := fmt.Sprintf("Activity: `%s`", log.ActivityType.String())
+
+			if log.ActivityTarget.DiscordID != 0 {
+				description += fmt.Sprintf("\nDiscord: <@%d>", log.ActivityTarget.DiscordID)
+			}
 
 			if log.ActivityTarget.UserID != 0 {
 				description += fmt.Sprintf("\nUser: [%s](https://www.roblox.com/users/%d/profile)",
@@ -125,6 +134,8 @@ func (b *Builder) buildComponents() []discord.ContainerComponent {
 		// Query condition selection menu
 		discord.NewActionRow(
 			discord.NewStringSelectMenu(constants.ActionSelectMenuCustomID, "Set Filter Condition",
+				discord.NewStringSelectMenuOption("Filter by Discord ID", constants.LogsQueryDiscordIDOption).
+					WithDescription(utils.CensorString(strconv.FormatUint(b.discordID, 10), b.settings.StreamerMode)),
 				discord.NewStringSelectMenuOption("Filter by User ID", constants.LogsQueryUserIDOption).
 					WithDescription(utils.CensorString(strconv.FormatUint(b.userID, 10), b.settings.StreamerMode)),
 				discord.NewStringSelectMenuOption("Filter by Group ID", constants.LogsQueryGroupIDOption).
@@ -205,5 +216,9 @@ func (b *Builder) buildActivityTypeOptions() []discord.StringSelectMenuOption {
 			WithDefault(b.activityTypeFilter == types.ActivityTypeUserDeleted),
 		discord.NewStringSelectMenuOption("Group Deleted", strconv.Itoa(int(types.ActivityTypeGroupDeleted))).
 			WithDefault(b.activityTypeFilter == types.ActivityTypeGroupDeleted),
+		discord.NewStringSelectMenuOption("Discord User Banned", strconv.Itoa(int(types.ActivityTypeDiscordUserBanned))).
+			WithDefault(b.activityTypeFilter == types.ActivityTypeDiscordUserBanned),
+		discord.NewStringSelectMenuOption("Discord User Unbanned", strconv.Itoa(int(types.ActivityTypeDiscordUserUnbanned))).
+			WithDefault(b.activityTypeFilter == types.ActivityTypeDiscordUserUnbanned),
 	}
 }

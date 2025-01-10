@@ -29,6 +29,8 @@ var (
 	ErrInvalidEndDate = errors.New("invalid end date")
 	// ErrEndDateBeforeStartDate indicates that the end date occurs before the start date.
 	ErrEndDateBeforeStartDate = errors.New("end date cannot be before start date")
+	// ErrPermanentBan indicates that no duration was specified, meaning a permanent ban.
+	ErrPermanentBan = errors.New("permanent ban")
 )
 
 // TruncateString truncates a string to a maximum length.
@@ -235,6 +237,25 @@ func ParseDateRange(dateRangeStr string) (time.Time, time.Time, error) {
 	}
 
 	return startDate, endDate, nil
+}
+
+// ParseBanDuration parses a duration string like "7d" or "24h" into a time.Duration.
+// Returns ErrPermanentBan if the duration is empty.
+func ParseBanDuration(durationStr string) (*time.Time, error) {
+	// Check for permanent ban
+	if durationStr == "" {
+		return nil, ErrPermanentBan
+	}
+
+	// Parse the duration string
+	duration, err := time.ParseDuration(strings.ToLower(strings.TrimSpace(durationStr)))
+	if err != nil {
+		return nil, fmt.Errorf("invalid duration format: %w", err)
+	}
+
+	// Calculate expiration time
+	expiresAt := time.Now().Add(duration)
+	return &expiresAt, nil
 }
 
 // GetPriorityFromCustomID maps Discord component custom IDs to queue priority levels.

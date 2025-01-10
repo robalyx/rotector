@@ -30,14 +30,6 @@ func NewActivity(db *bun.DB, logger *zap.Logger) *ActivityModel {
 
 // Log stores a moderator action in the database.
 func (r *ActivityModel) Log(ctx context.Context, log *types.ActivityLog) {
-	// Validate that only one target type is set
-	if (log.ActivityTarget.UserID != 0 && log.ActivityTarget.GroupID != 0) || (log.ActivityTarget.UserID == 0 && log.ActivityTarget.GroupID == 0) {
-		r.logger.Error("Invalid activity log target",
-			zap.Uint64("userID", log.ActivityTarget.UserID),
-			zap.Uint64("groupID", log.ActivityTarget.GroupID))
-		return
-	}
-
 	_, err := r.db.NewInsert().Model(log).Exec(ctx)
 	if err != nil {
 		r.logger.Error("Failed to log activity",
@@ -63,6 +55,9 @@ func (r *ActivityModel) GetLogs(ctx context.Context, filter types.ActivityFilter
 	// Build base query conditions
 	query := r.db.NewSelect().Model(&logs)
 
+	if filter.DiscordID != 0 {
+		query = query.Where("discord_id = ?", filter.DiscordID)
+	}
 	if filter.UserID != 0 {
 		query = query.Where("user_id = ?", filter.UserID)
 	}

@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strconv"
 	"strings"
 	"time"
 
@@ -22,6 +21,7 @@ import (
 	"github.com/robalyx/rotector/internal/bot/interfaces"
 	"github.com/robalyx/rotector/internal/bot/menu/admin"
 	"github.com/robalyx/rotector/internal/bot/menu/appeal"
+	"github.com/robalyx/rotector/internal/bot/menu/ban"
 	"github.com/robalyx/rotector/internal/bot/menu/captcha"
 	"github.com/robalyx/rotector/internal/bot/menu/chat"
 	"github.com/robalyx/rotector/internal/bot/menu/dashboard"
@@ -45,6 +45,7 @@ type Bot struct {
 	sessionManager    *session.Manager
 	paginationManager *pagination.Manager
 	dashboardLayout   interfaces.DashboardLayout
+	banLayout         interfaces.BanLayout
 }
 
 // New initializes a Bot instance by creating all required managers and layouts.
@@ -81,6 +82,7 @@ func New(app *setup.App) (*Bot, error) {
 		appealLayout,
 		adminLayout,
 	)
+	banLayout := ban.New(app, sessionManager, paginationManager, dashboardLayout)
 
 	// Initialize bot structure with all components
 	b := &Bot{
@@ -89,6 +91,7 @@ func New(app *setup.App) (*Bot, error) {
 		sessionManager:    sessionManager,
 		paginationManager: paginationManager,
 		dashboardLayout:   dashboardLayout,
+		banLayout:         banLayout,
 	}
 
 	// Configure Discord client with required gateway intents and event handlers
@@ -181,6 +184,11 @@ func (b *Bot) handleApplicationCommandInteraction(event *events.ApplicationComma
 			return
 		}
 
+		// Check if user is banned
+		if b.checkBanStatus(event, s, event.User().ID, false) {
+			return
+		}
+
 		// Check if the session has a valid current page
 		page := b.paginationManager.GetPage(s.GetString(constants.SessionKeyCurrentPage))
 		if page == nil {
@@ -256,10 +264,14 @@ func (b *Bot) handleComponentInteraction(event *events.ComponentInteractionCreat
 			}
 		}
 
+		// Check if user is banned
+		if b.checkBanStatus(event, s, event.User().ID, true) {
+			return
+		}
+
 		// Check if the session has a valid current page
 		if page == nil {
 			// If no valid page exists, reset to dashboard
-			s.Set(constants.SessionKeyMessageID, strconv.FormatUint(uint64(event.Message.ID), 10))
 			b.dashboardLayout.Show(event, s, "New session created.")
 			s.Touch(context.Background())
 			return
@@ -324,6 +336,11 @@ func (b *Bot) handleModalSubmit(event *events.ModalSubmitInteractionCreate) {
 			return
 		}
 
+		// Check if user is banned
+		if b.checkBanStatus(event, s, event.User().ID, true) {
+			return
+		}
+
 		// Check if the session has a valid current page
 		page := b.paginationManager.GetPage(s.GetString(constants.SessionKeyCurrentPage))
 		if page == nil {
@@ -337,6 +354,34 @@ func (b *Bot) handleModalSubmit(event *events.ModalSubmitInteractionCreate) {
 		b.paginationManager.HandleInteraction(event, s)
 		s.Touch(context.Background())
 	}()
+}
+
+// checkBanStatus checks if a user is banned and shows the ban menu if they are.
+// Returns true if the user is banned and should not proceed.
+func (b *Bot) checkBanStatus(event interfaces.CommonEvent, s *session.Session, userID snowflake.ID, closeSession bool) bool {
+	// Check if user is banned
+	banned, err := b.db.Bans().IsBanned(context.Background(), uint64(userID))
+	if err != nil {
+		b.logger.Error("Failed to check ban status",
+			zap.Error(err),
+			zap.Uint64("user_id", uint64(userID)))
+		b.paginationManager.RespondWithError(event, "Failed to verify access status. Please try again later.")
+		return true
+	}
+
+	// If not banned, allow access
+	if !banned {
+		return false
+	}
+
+	// User is banned, show ban menu
+	b.banLayout.Show(event, s)
+
+	// Delete session after
+	if closeSession {
+		b.sessionManager.CloseSession(context.Background(), s.UserID())
+	}
+	return true
 }
 
 // validateAndGetSession retrieves or creates a session for the given user and validates its state.

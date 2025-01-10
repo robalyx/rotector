@@ -2,11 +2,13 @@ package admin
 
 import (
 	"context"
+	"fmt"
 	"strconv"
 	"time"
 
 	"github.com/disgoorg/disgo/discord"
 	"github.com/disgoorg/disgo/events"
+	"github.com/disgoorg/snowflake/v2"
 	builder "github.com/robalyx/rotector/internal/bot/builder/admin"
 	"github.com/robalyx/rotector/internal/bot/constants"
 	"github.com/robalyx/rotector/internal/bot/core/pagination"
@@ -26,7 +28,7 @@ type ConfirmMenu struct {
 func NewConfirmMenu(layout *Layout) *ConfirmMenu {
 	m := &ConfirmMenu{layout: layout}
 	m.page = &pagination.Page{
-		Name: "Delete Confirmation",
+		Name: "Action Confirmation",
 		Message: func(s *session.Session) *discord.MessageUpdateBuilder {
 			return builder.NewConfirmBuilder(s).Build()
 		},
@@ -37,7 +39,7 @@ func NewConfirmMenu(layout *Layout) *ConfirmMenu {
 
 // Show prepares and displays the confirmation interface.
 func (m *ConfirmMenu) Show(event interfaces.CommonEvent, s *session.Session, action string, content string) {
-	s.Set(constants.SessionKeyDeleteAction, action)
+	s.Set(constants.SessionKeyAdminAction, action)
 	m.layout.paginationManager.NavigateTo(event, s, m.page, content)
 }
 
@@ -46,17 +48,134 @@ func (m *ConfirmMenu) handleButton(event *events.ComponentInteractionCreate, s *
 	switch customID {
 	case constants.BackButtonCustomID:
 		m.layout.paginationManager.NavigateBack(event, s, "")
-	case constants.DeleteConfirmButtonCustomID:
-		m.handleConfirmDelete(event, s)
+	case constants.ActionButtonCustomID:
+		m.handleConfirm(event, s)
 	}
 }
 
-// handleConfirmDelete processes the deletion confirmation.
-func (m *ConfirmMenu) handleConfirmDelete(event *events.ComponentInteractionCreate, s *session.Session) {
-	action := s.GetString(constants.SessionKeyDeleteAction)
-	idStr := s.GetString(constants.SessionKeyDeleteID)
-	reason := s.GetString(constants.SessionKeyDeleteReason)
+// handleConfirm processes the confirmation action.
+func (m *ConfirmMenu) handleConfirm(event *events.ComponentInteractionCreate, s *session.Session) {
+	action := s.GetString(constants.SessionKeyAdminAction)
+	id := s.GetString(constants.SessionKeyAdminActionID)
+	reason := s.GetString(constants.SessionKeyAdminReason)
 
+	switch action {
+	case constants.BanUserAction:
+		m.handleBanUser(event, s, id, reason)
+	case constants.UnbanUserAction:
+		m.handleUnbanUser(event, s, id, reason)
+	case constants.DeleteUserAction:
+		m.handleDeleteUser(event, s, id, reason)
+	case constants.DeleteGroupAction:
+		m.handleDeleteGroup(event, s, id, reason)
+	}
+}
+
+// handleBanUser processes the user ban action.
+func (m *ConfirmMenu) handleBanUser(event *events.ComponentInteractionCreate, s *session.Session, userID string, notes string) {
+	// Parse user ID
+	id, err := strconv.ParseUint(userID, 10, 64)
+	if err != nil {
+		m.layout.paginationManager.RespondWithError(event, "Invalid user ID format.")
+		return
+	}
+
+	// Get ban type from session
+	banType := s.GetString(constants.SessionKeyBanType)
+
+	// Validate and parse ban type
+	reason := types.BanReasonOther
+	switch types.BanReason(banType) {
+	case types.BanReasonAbuse, types.BanReasonInappropriate, types.BanReasonOther:
+		reason = types.BanReason(banType)
+	}
+
+	// Get ban expiry from session
+	var expiresAt *time.Time
+	s.GetInterface(constants.SessionKeyBanExpiry, &expiresAt)
+
+	// Ban the user
+	now := time.Now()
+	if err := m.layout.db.Bans().BanUser(context.Background(), &types.DiscordBan{
+		ID:        snowflake.ID(id),
+		Reason:    reason,
+		Source:    types.BanSourceAdmin,
+		Notes:     notes,
+		BannedBy:  uint64(event.User().ID),
+		BannedAt:  now,
+		ExpiresAt: expiresAt,
+		UpdatedAt: now,
+	}); err != nil {
+		m.layout.logger.Error("Failed to ban user",
+			zap.Error(err),
+			zap.Uint64("user_id", id),
+			zap.Uint64("admin_id", uint64(event.User().ID)),
+		)
+		m.layout.paginationManager.RespondWithError(event, "Failed to ban user. Please try again.")
+		return
+	}
+
+	// Log the ban action
+	go m.layout.db.Activity().Log(context.Background(), &types.ActivityLog{
+		ActivityTarget: types.ActivityTarget{
+			DiscordID: id,
+		},
+		ReviewerID:        uint64(event.User().ID),
+		ActivityType:      types.ActivityTypeDiscordUserBanned,
+		ActivityTimestamp: time.Now(),
+		Details: map[string]interface{}{
+			"notes": notes,
+		},
+	})
+
+	m.layout.paginationManager.NavigateBack(event, s, fmt.Sprintf("Successfully banned user %d.", id))
+}
+
+// handleUnbanUser processes the user unban action.
+func (m *ConfirmMenu) handleUnbanUser(event *events.ComponentInteractionCreate, s *session.Session, userID string, notes string) {
+	// Parse user ID
+	id, err := strconv.ParseUint(userID, 10, 64)
+	if err != nil {
+		m.layout.paginationManager.RespondWithError(event, "Invalid user ID format.")
+		return
+	}
+
+	// Unban the user
+	unbanned, err := m.layout.db.Bans().UnbanUser(context.Background(), id)
+	if err != nil {
+		m.layout.logger.Error("Failed to unban user",
+			zap.Error(err),
+			zap.Uint64("user_id", id),
+			zap.Uint64("admin_id", uint64(event.User().ID)),
+		)
+		m.layout.paginationManager.RespondWithError(event, "Failed to unban user. Please try again.")
+		return
+	}
+
+	// Check if the user was actually banned
+	if !unbanned {
+		m.layout.paginationManager.NavigateBack(event, s, "User is not currently banned.")
+		return
+	}
+
+	// Log the unban action
+	go m.layout.db.Activity().Log(context.Background(), &types.ActivityLog{
+		ActivityTarget: types.ActivityTarget{
+			DiscordID: id,
+		},
+		ReviewerID:        uint64(event.User().ID),
+		ActivityType:      types.ActivityTypeDiscordUserUnbanned,
+		ActivityTimestamp: time.Now(),
+		Details: map[string]interface{}{
+			"notes": notes,
+		},
+	})
+
+	m.layout.paginationManager.NavigateBack(event, s, fmt.Sprintf("Successfully unbanned user %d.", id))
+}
+
+// handleDeleteUser processes the user deletion action.
+func (m *ConfirmMenu) handleDeleteUser(event *events.ComponentInteractionCreate, s *session.Session, idStr string, reason string) {
 	// Parse ID from modal
 	id, err := strconv.ParseUint(idStr, 10, 64)
 	if err != nil {
@@ -64,55 +183,75 @@ func (m *ConfirmMenu) handleConfirmDelete(event *events.ComponentInteractionCrea
 		return
 	}
 
-	// Delete user or group
-	var found bool
-	if action == constants.DeleteUserAction {
-		found, err = m.layout.db.Users().DeleteUser(context.Background(), id)
-	} else {
-		found, err = m.layout.db.Groups().DeleteGroup(context.Background(), id)
-	}
-
+	// Delete user
+	found, err := m.layout.db.Users().DeleteUser(context.Background(), id)
 	if err != nil {
-		m.layout.logger.Error("Failed to delete",
+		m.layout.logger.Error("Failed to delete user",
 			zap.Error(err),
-			zap.String("action", action),
 			zap.Uint64("id", id))
-		m.layout.paginationManager.RespondWithError(event, "Failed to delete. Please try again.")
+		m.layout.paginationManager.RespondWithError(event, "Failed to delete user. Please try again.")
 		return
 	}
 
 	// Check if the ID was found in the database
 	if !found {
-		m.layout.paginationManager.NavigateBack(event, s, "ID not found in the database.")
+		m.layout.paginationManager.NavigateBack(event, s, "User ID not found in the database.")
 		return
 	}
 
 	// Log the deletion
-	if action == constants.DeleteUserAction {
-		go m.layout.db.Activity().Log(context.Background(), &types.ActivityLog{
-			ActivityTarget: types.ActivityTarget{
-				UserID: id,
-			},
-			ReviewerID:        uint64(event.User().ID),
-			ActivityType:      types.ActivityTypeUserDeleted,
-			ActivityTimestamp: time.Now(),
-			Details: map[string]interface{}{
-				"reason": reason,
-			},
-		})
-	} else {
-		go m.layout.db.Activity().Log(context.Background(), &types.ActivityLog{
-			ActivityTarget: types.ActivityTarget{
-				GroupID: id,
-			},
-			ReviewerID:        uint64(event.User().ID),
-			ActivityType:      types.ActivityTypeGroupDeleted,
-			ActivityTimestamp: time.Now(),
-			Details: map[string]interface{}{
-				"reason": reason,
-			},
-		})
+	go m.layout.db.Activity().Log(context.Background(), &types.ActivityLog{
+		ActivityTarget: types.ActivityTarget{
+			UserID: id,
+		},
+		ReviewerID:        uint64(event.User().ID),
+		ActivityType:      types.ActivityTypeUserDeleted,
+		ActivityTimestamp: time.Now(),
+		Details: map[string]interface{}{
+			"reason": reason,
+		},
+	})
+
+	m.layout.paginationManager.NavigateBack(event, s, fmt.Sprintf("Successfully deleted user %d.", id))
+}
+
+// handleDeleteGroup processes the group deletion action.
+func (m *ConfirmMenu) handleDeleteGroup(event *events.ComponentInteractionCreate, s *session.Session, idStr string, reason string) {
+	// Parse ID from modal
+	id, err := strconv.ParseUint(idStr, 10, 64)
+	if err != nil {
+		m.layout.paginationManager.RespondWithError(event, "Invalid ID format.")
+		return
 	}
 
-	m.layout.paginationManager.NavigateBack(event, s, "Successfully deleted ID "+idStr)
+	// Delete group
+	found, err := m.layout.db.Groups().DeleteGroup(context.Background(), id)
+	if err != nil {
+		m.layout.logger.Error("Failed to delete group",
+			zap.Error(err),
+			zap.Uint64("id", id))
+		m.layout.paginationManager.RespondWithError(event, "Failed to delete group. Please try again.")
+		return
+	}
+
+	// Check if the ID was found in the database
+	if !found {
+		m.layout.paginationManager.NavigateBack(event, s, "Group ID not found in the database.")
+		return
+	}
+
+	// Log the deletion
+	go m.layout.db.Activity().Log(context.Background(), &types.ActivityLog{
+		ActivityTarget: types.ActivityTarget{
+			GroupID: id,
+		},
+		ReviewerID:        uint64(event.User().ID),
+		ActivityType:      types.ActivityTypeGroupDeleted,
+		ActivityTimestamp: time.Now(),
+		Details: map[string]interface{}{
+			"reason": reason,
+		},
+	})
+
+	m.layout.paginationManager.NavigateBack(event, s, fmt.Sprintf("Successfully deleted group %d.", id))
 }
