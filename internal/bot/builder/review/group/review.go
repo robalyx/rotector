@@ -115,7 +115,11 @@ func (b *ReviewBuilder) buildModeEmbed() *discord.EmbedBuilder {
 // buildReviewEmbed creates the main review information embed.
 func (b *ReviewBuilder) buildReviewEmbed() *discord.EmbedBuilder {
 	embed := discord.NewEmbedBuilder().
-		SetColor(utils.GetMessageEmbedColor(b.settings.StreamerMode))
+		SetColor(utils.GetMessageEmbedColor(b.settings.StreamerMode)).
+		SetTitle(fmt.Sprintf("🛡️ %d Safe • ⚠️ %d Reports",
+			b.group.Reputation.Upvotes,
+			b.group.Reputation.Downvotes,
+		))
 
 	// Add status indicator based on group status
 	var status string
@@ -132,7 +136,6 @@ func (b *ReviewBuilder) buildReviewEmbed() *discord.EmbedBuilder {
 		status = "🔄 Unflagged Group"
 	}
 
-	header := fmt.Sprintf("%s • 👍 %d | 👎 %d", status, b.group.Reputation.Upvotes, b.group.Reputation.Downvotes)
 	lastUpdated := fmt.Sprintf("<t:%d:R>", b.group.LastUpdated.Unix())
 	confidence := fmt.Sprintf("%.2f", b.group.Confidence)
 	memberCount := strconv.FormatUint(b.groupInfo.MemberCount, 10)
@@ -149,8 +152,7 @@ func (b *ReviewBuilder) buildReviewEmbed() *discord.EmbedBuilder {
 
 	if b.settings.ReviewMode == types.TrainingReviewMode {
 		// Training mode - show limited information without links
-		embed.SetAuthorName(header).
-			AddField("ID", utils.CensorString(strconv.FormatUint(b.group.ID, 10), true), true).
+		embed.AddField("ID", utils.CensorString(strconv.FormatUint(b.group.ID, 10), true), true).
 			AddField("Name", utils.CensorString(b.group.Name, true), true).
 			AddField("Owner", utils.CensorString(strconv.FormatUint(b.group.Owner.UserID, 10), true), true).
 			AddField("Members", memberCount, true).
@@ -162,12 +164,11 @@ func (b *ReviewBuilder) buildReviewEmbed() *discord.EmbedBuilder {
 			AddField("Description", b.getDescription(), false)
 	} else {
 		// Standard mode - show all information with links
-		embed.SetAuthorName(header).
-			AddField("ID", fmt.Sprintf(
-				"[%s](https://www.roblox.com/groups/%d)",
-				utils.CensorString(strconv.FormatUint(b.group.ID, 10), b.settings.StreamerMode),
-				b.group.ID,
-			), true).
+		embed.AddField("ID", fmt.Sprintf(
+			"[%s](https://www.roblox.com/groups/%d)",
+			utils.CensorString(strconv.FormatUint(b.group.ID, 10), b.settings.StreamerMode),
+			b.group.ID,
+		), true).
 			AddField("Name", utils.CensorString(b.group.Name, b.settings.StreamerMode), true).
 			AddField("Owner", fmt.Sprintf(
 				"[%s](https://www.roblox.com/users/%d/profile)",
@@ -195,8 +196,8 @@ func (b *ReviewBuilder) buildReviewEmbed() *discord.EmbedBuilder {
 		embed.AddField("Locked At", fmt.Sprintf("<t:%d:R>", b.group.LockedAt.Unix()), true)
 	}
 
-	// Add UUID to footer
-	embed.SetFooter("UUID: "+b.group.UUID.String(), "")
+	// Add UUID and status to footer
+	embed.SetFooter(fmt.Sprintf("%s • UUID: %s", status, b.group.UUID.String()), "")
 
 	return embed
 }
@@ -360,7 +361,7 @@ func (b *ReviewBuilder) getReviewHistory() string {
 // getConfirmButtonLabel returns the appropriate label for the confirm button based on review mode.
 func (b *ReviewBuilder) getConfirmButtonLabel() string {
 	if b.settings.ReviewMode == types.TrainingReviewMode {
-		return "Downvote"
+		return "Report"
 	}
 	return "Confirm"
 }
@@ -368,7 +369,7 @@ func (b *ReviewBuilder) getConfirmButtonLabel() string {
 // getClearButtonLabel returns the appropriate label for the clear button based on review mode.
 func (b *ReviewBuilder) getClearButtonLabel() string {
 	if b.settings.ReviewMode == types.TrainingReviewMode {
-		return "Upvote"
+		return "Safe"
 	}
 	return "Clear"
 }
