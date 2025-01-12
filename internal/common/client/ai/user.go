@@ -186,13 +186,8 @@ func NewUserAnalyzer(app *setup.App, translator *translator.Translator, logger *
 	}
 }
 
-// ProcessUsers sends user information to OpenAI for analysis after translating descriptions.
+// ProcessUsers sends user information to a Gemini model for analysis after translating descriptions.
 // Returns validated users and IDs of users that failed validation for retry.
-// The process involves:
-// 1. Translating user descriptions to proper English
-// 2. Sending translated content to OpenAI for analysis
-// 3. Validating AI responses against translated content
-// 4. Creating validated users with original descriptions.
 func (a *UserAnalyzer) ProcessUsers(userInfos []*fetcher.Info) (map[uint64]*types.User, []uint64, error) {
 	// Create a struct for user summaries for AI analysis
 	type UserSummary struct {
@@ -204,17 +199,25 @@ func (a *UserAnalyzer) ProcessUsers(userInfos []*fetcher.Info) (map[uint64]*type
 	// Translate all descriptions concurrently
 	translatedInfos, originalInfos := a.prepareUserInfos(userInfos)
 
-	// Convert map to slice for OpenAI request
+	// Convert map to slice for AI request
 	userInfosWithoutID := make([]UserSummary, 0, len(translatedInfos))
 	for _, userInfo := range translatedInfos {
 		summary := UserSummary{
-			Name:        userInfo.Name,
-			Description: userInfo.Description,
+			Name: userInfo.Name,
 		}
+
 		// Only include display name if it's different from the username
 		if userInfo.DisplayName != userInfo.Name {
 			summary.DisplayName = userInfo.DisplayName
 		}
+
+		// Replace empty descriptions with placeholder
+		description := userInfo.Description
+		if description == "" {
+			description = "[Empty profile]"
+		}
+		summary.Description = description
+
 		userInfosWithoutID = append(userInfosWithoutID, summary)
 	}
 
