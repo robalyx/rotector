@@ -328,7 +328,7 @@ func (m *ReviewMenu) handleConfirmGroup(event interfaces.CommonEvent, s *session
 	var actionMsg string
 	if settings.ReviewMode == types.TrainingReviewMode {
 		// Training mode - increment downvotes
-		if err := m.layout.db.Groups().UpdateTrainingVotes(context.Background(), group.ID, false); err != nil {
+		if err := m.layout.db.Reputation().UpdateGroupVotes(context.Background(), group.ID, uint64(event.User().ID), false); err != nil {
 			m.layout.logger.Error("Failed to update downvotes", zap.Error(err))
 			m.layout.paginationManager.RespondWithError(event, "Failed to update downvotes. Please try again.")
 			return
@@ -395,7 +395,7 @@ func (m *ReviewMenu) handleClearGroup(event interfaces.CommonEvent, s *session.S
 	var actionMsg string
 	if settings.ReviewMode == types.TrainingReviewMode {
 		// Training mode - increment upvotes
-		if err := m.layout.db.Groups().UpdateTrainingVotes(context.Background(), group.ID, true); err != nil {
+		if err := m.layout.db.Reputation().UpdateGroupVotes(context.Background(), group.ID, uint64(event.User().ID), true); err != nil {
 			m.layout.logger.Error("Failed to update upvotes", zap.Error(err))
 			m.layout.paginationManager.RespondWithError(event, "Failed to update upvotes. Please try again.")
 			return

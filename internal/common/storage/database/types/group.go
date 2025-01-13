@@ -57,11 +57,11 @@ type LockedGroup struct {
 // ReviewGroup combines all possible group states into a single structure for review.
 type ReviewGroup struct {
 	Group      `json:"group"`
-	VerifiedAt time.Time  `json:"verifiedAt,omitempty"`
-	ClearedAt  time.Time  `json:"clearedAt,omitempty"`
-	LockedAt   time.Time  `json:"lockedAt,omitempty"`
-	Status     GroupType  `json:"status"`
-	Reputation Reputation `json:"reputation"`
+	VerifiedAt time.Time   `json:"verifiedAt,omitempty"`
+	ClearedAt  time.Time   `json:"clearedAt,omitempty"`
+	LockedAt   time.Time   `json:"lockedAt,omitempty"`
+	Status     GroupType   `json:"status"`
+	Reputation *Reputation `json:"reputation"`
 }
 
 // GroupType represents the different states a group can be in.

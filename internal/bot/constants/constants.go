@@ -25,6 +25,7 @@ const (
 	StartGroupReviewButtonCustomID = "start_group_review"
 	UserSettingsButtonCustomID     = "user_settings"
 	ActivityBrowserButtonCustomID  = "activity_browser"
+	LeaderboardMenuButtonCustomID  = "leaderboard_menu"
 	QueueManagerButtonCustomID     = "queue_manager"
 	AdminMenuButtonCustomID        = "admin_menu"
 	AppealMenuButtonCustomID       = "appeal_menu"
@@ -238,6 +239,12 @@ const (
 	DeleteGroupAction = "delete_group"
 )
 
+// Leaderboard Menu
+const (
+	LeaderboardEntriesPerPage           = 10
+	LeaderboardPeriodSelectMenuCustomID = "leaderboard_period"
+)
+
 // Session keys.
 const (
 	SessionKeyMessageID     = "messageID"
@@ -334,6 +341,14 @@ const (
 	SessionKeyBanType   = "banType"
 	SessionKeyBanExpiry = "banExpiry"
 	SessionKeyBanInfo   = "banInfo"
+
+	SessionKeyLeaderboardStats       = "leaderboardStats"
+	SessionKeyLeaderboardUsernames   = "leaderboardUsernames"
+	SessionKeyLeaderboardCursor      = "leaderboardCursor"
+	SessionKeyLeaderboardNextCursor  = "leaderboardNextCursor"
+	SessionKeyLeaderboardPrevCursors = "leaderboardPrevCursors"
+	SessionKeyLeaderboardLastRefresh = "leaderboardLastRefresh"
+	SessionKeyLeaderboardNextRefresh = "leaderboardNextRefresh"
 )
 
 const (

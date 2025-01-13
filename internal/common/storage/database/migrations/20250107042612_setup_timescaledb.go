@@ -26,6 +26,11 @@ func init() {
 				chunk_time_interval => INTERVAL '1 day',
 				if_not_exists => TRUE
 			);
+
+			SELECT create_hypertable('vote_stats', 'voted_at', 
+				chunk_time_interval => INTERVAL '1 day',
+				if_not_exists => TRUE
+			);
 		`).Exec(ctx)
 		if err != nil {
 			return fmt.Errorf("failed to create hypertables: %w", err)
@@ -33,17 +38,20 @@ func init() {
 
 		return nil
 	}, func(ctx context.Context, db *bun.DB) error {
-		// Down migration - convert hypertables back to regular tables
+		// Convert hypertables back to regular tables
 		_, err := db.NewRaw(`
 			-- Convert hypertables back to regular tables
 			CREATE TABLE activity_logs_backup AS SELECT * FROM activity_logs;
 			CREATE TABLE appeal_timelines_backup AS SELECT * FROM appeal_timelines;
+			CREATE TABLE vote_stats_backup AS SELECT * FROM vote_stats;
 			
 			DROP TABLE activity_logs CASCADE;
 			DROP TABLE appeal_timelines CASCADE;
+			DROP TABLE vote_stats CASCADE;
 			
 			ALTER TABLE activity_logs_backup RENAME TO activity_logs;
 			ALTER TABLE appeal_timelines_backup RENAME TO appeal_timelines;
+			ALTER TABLE vote_stats_backup RENAME TO vote_stats;
 			
 			-- Drop the extension
 			DROP EXTENSION IF EXISTS timescaledb;

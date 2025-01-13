@@ -16,19 +16,30 @@ import (
 
 // UserModel handles database operations for user records.
 type UserModel struct {
-	db       *bun.DB
-	tracking *TrackingModel
-	activity *ActivityModel
-	logger   *zap.Logger
+	db         *bun.DB
+	tracking   *TrackingModel
+	activity   *ActivityModel
+	reputation *ReputationModel
+	votes      *VoteModel
+	logger     *zap.Logger
 }
 
 // NewUser creates a UserModel with references to the tracking system.
-func NewUser(db *bun.DB, tracking *TrackingModel, activity *ActivityModel, logger *zap.Logger) *UserModel {
+func NewUser(
+	db *bun.DB,
+	tracking *TrackingModel,
+	activity *ActivityModel,
+	reputation *ReputationModel,
+	votes *VoteModel,
+	logger *zap.Logger,
+) *UserModel {
 	return &UserModel{
-		db:       db,
-		tracking: tracking,
-		activity: activity,
-		logger:   logger,
+		db:         db,
+		tracking:   tracking,
+		activity:   activity,
+		reputation: reputation,
+		votes:      votes,
+		logger:     logger,
 	}
 }
 
@@ -168,55 +179,40 @@ func (r *UserModel) SaveUsers(ctx context.Context, users map[uint64]*types.User)
 }
 
 // ConfirmUser moves a user from other user tables to confirmed_users.
-// This happens when a moderator confirms that a user is inappropriate.
 func (r *UserModel) ConfirmUser(ctx context.Context, user *types.ReviewUser) error {
-	return r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
 		confirmedUser := &types.ConfirmedUser{
 			User:       user.User,
 			VerifiedAt: time.Now(),
 		}
 
-		// Move user to confirmed_users table
-		_, err := tx.NewInsert().Model(confirmedUser).
-			On("CONFLICT (id) DO UPDATE").
-			Set("name = EXCLUDED.name").
-			Set("display_name = EXCLUDED.display_name").
-			Set("description = EXCLUDED.description").
-			Set("created_at = EXCLUDED.created_at").
-			Set("reason = EXCLUDED.reason").
-			Set("groups = EXCLUDED.groups").
-			Set("outfits = EXCLUDED.outfits").
-			Set("friends = EXCLUDED.friends").
-			Set("games = EXCLUDED.games").
-			Set("flagged_content = EXCLUDED.flagged_content").
-			Set("follower_count = EXCLUDED.follower_count").
-			Set("following_count = EXCLUDED.following_count").
-			Set("confidence = EXCLUDED.confidence").
-			Set("last_scanned = EXCLUDED.last_scanned").
-			Set("last_updated = EXCLUDED.last_updated").
-			Set("last_viewed = EXCLUDED.last_viewed").
-			Set("last_purge_check = EXCLUDED.last_purge_check").
-			Set("thumbnail_url = EXCLUDED.thumbnail_url").
-			Set("last_thumbnail_update = EXCLUDED.last_thumbnail_update").
-			Set("verified_at = EXCLUDED.verified_at").
+		// Try to move user to confirmed_users table
+		result, err := tx.NewInsert().Model(confirmedUser).
+			On("CONFLICT (id) DO NOTHING").
 			Exec(ctx)
 		if err != nil {
-			return fmt.Errorf("failed to insert or update user in confirmed_users: %w (userID=%d)", err, user.ID)
+			return fmt.Errorf("failed to insert user in confirmed_users: %w (userID=%d)", err, user.ID)
 		}
 
-		// Delete from flagged_users table
+		affected, err := result.RowsAffected()
+		if err != nil {
+			return fmt.Errorf("failed to get rows affected: %w", err)
+		}
+		if affected == 0 {
+			return nil // Skip if there was a conflict
+		}
+
+		// Delete from other tables
 		_, err = tx.NewDelete().Model((*types.FlaggedUser)(nil)).Where("id = ?", user.ID).Exec(ctx)
 		if err != nil {
 			return fmt.Errorf("failed to delete user from flagged_users: %w (userID=%d)", err, user.ID)
 		}
 
-		// Delete from cleared_users table
 		_, err = tx.NewDelete().Model((*types.ClearedUser)(nil)).Where("id = ?", user.ID).Exec(ctx)
 		if err != nil {
 			return fmt.Errorf("failed to delete user from cleared_users: %w (userID=%d)", err, user.ID)
 		}
 
-		// Delete from banned_users table
 		_, err = tx.NewDelete().Model((*types.BannedUser)(nil)).Where("id = ?", user.ID).Exec(ctx)
 		if err != nil {
 			return fmt.Errorf("failed to delete user from banned_users: %w (userID=%d)", err, user.ID)
@@ -224,68 +220,72 @@ func (r *UserModel) ConfirmUser(ctx context.Context, user *types.ReviewUser) err
 
 		return nil
 	})
+	if err != nil {
+		return err
+	}
+
+	// Verify votes for the user
+	if err := r.votes.VerifyVotes(ctx, user.ID, true, types.VoteTypeUser); err != nil {
+		r.logger.Error("Failed to verify votes", zap.Error(err))
+		return err
+	}
+
+	return nil
 }
 
 // ClearUser moves a user from other user tables to cleared_users.
-// This happens when a moderator determines that a user was incorrectly flagged.
 func (r *UserModel) ClearUser(ctx context.Context, user *types.ReviewUser) error {
-	return r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
 		clearedUser := &types.ClearedUser{
 			User:      user.User,
 			ClearedAt: time.Now(),
 		}
 
-		// Move user to cleared_users table
-		_, err := tx.NewInsert().Model(clearedUser).
-			On("CONFLICT (id) DO UPDATE").
-			Set("name = EXCLUDED.name").
-			Set("display_name = EXCLUDED.display_name").
-			Set("description = EXCLUDED.description").
-			Set("created_at = EXCLUDED.created_at").
-			Set("reason = EXCLUDED.reason").
-			Set("groups = EXCLUDED.groups").
-			Set("outfits = EXCLUDED.outfits").
-			Set("friends = EXCLUDED.friends").
-			Set("games = EXCLUDED.games").
-			Set("flagged_content = EXCLUDED.flagged_content").
-			Set("follower_count = EXCLUDED.follower_count").
-			Set("following_count = EXCLUDED.following_count").
-			Set("confidence = EXCLUDED.confidence").
-			Set("last_scanned = EXCLUDED.last_scanned").
-			Set("last_updated = EXCLUDED.last_updated").
-			Set("last_viewed = EXCLUDED.last_viewed").
-			Set("last_purge_check = EXCLUDED.last_purge_check").
-			Set("thumbnail_url = EXCLUDED.thumbnail_url").
-			Set("last_thumbnail_update = EXCLUDED.last_thumbnail_update").
-			Set("cleared_at = EXCLUDED.cleared_at").
+		// Try to move user to cleared_users table
+		result, err := tx.NewInsert().Model(clearedUser).
+			On("CONFLICT (id) DO NOTHING").
 			Exec(ctx)
 		if err != nil {
-			return fmt.Errorf("failed to insert or update user in cleared_users: %w (userID=%d)", err, user.ID)
+			return fmt.Errorf("failed to insert user in cleared_users: %w", err)
 		}
 
-		// Delete user from flagged_users table
+		affected, err := result.RowsAffected()
+		if err != nil {
+			return fmt.Errorf("failed to get rows affected: %w", err)
+		}
+		if affected == 0 {
+			return nil // Skip if there was a conflict
+		}
+
+		// Delete from other tables
 		_, err = tx.NewDelete().Model((*types.FlaggedUser)(nil)).Where("id = ?", user.ID).Exec(ctx)
 		if err != nil {
-			return fmt.Errorf("failed to delete user from flagged_users: %w (userID=%d)", err, user.ID)
+			return fmt.Errorf("failed to delete user from flagged_users: %w", err)
 		}
 
-		// Delete user from confirmed_users table
 		_, err = tx.NewDelete().Model((*types.ConfirmedUser)(nil)).Where("id = ?", user.ID).Exec(ctx)
 		if err != nil {
-			return fmt.Errorf("failed to delete user from confirmed_users: %w (userID=%d)", err, user.ID)
+			return fmt.Errorf("failed to delete user from confirmed_users: %w", err)
 		}
 
-		// Delete from banned_users table
 		_, err = tx.NewDelete().Model((*types.BannedUser)(nil)).Where("id = ?", user.ID).Exec(ctx)
 		if err != nil {
-			return fmt.Errorf("failed to delete user from banned_users: %w (userID=%d)", err, user.ID)
+			return fmt.Errorf("failed to delete user from banned_users: %w", err)
 		}
-
-		r.logger.Debug("User cleared and moved to cleared_users",
-			zap.Uint64("userID", user.ID))
 
 		return nil
 	})
+	if err != nil {
+		return err
+	}
+
+	// Verify votes for the user
+	if err := r.votes.VerifyVotes(ctx, user.ID, false, types.VoteTypeUser); err != nil {
+		r.logger.Error("Failed to verify votes", zap.Error(err))
+		return err
+	}
+
+	return nil
 }
 
 // GetConfirmedUsersCount returns the total number of users in confirmed_users.
@@ -413,15 +413,11 @@ func (r *UserModel) GetUserByID(ctx context.Context, userID string, fields types
 				}
 
 				// Get reputation
-				var reputation types.UserReputation
-				err = tx.NewSelect().
-					Model(&reputation).
-					Where("id = ?", result.ID).
-					Scan(ctx)
-				if err != nil && !errors.Is(err, sql.ErrNoRows) {
+				reputation, err := r.reputation.GetUserReputation(ctx, result.ID)
+				if err != nil {
 					return fmt.Errorf("failed to get user reputation: %w", err)
 				}
-				result.Reputation = reputation.Reputation
+				result.Reputation = reputation
 
 				// Update last_viewed if requested
 				_, err = tx.NewUpdate().
@@ -785,42 +781,6 @@ func (r *UserModel) DeleteUser(ctx context.Context, userID uint64) (bool, error)
 	return totalAffected > 0, err
 }
 
-// UpdateTrainingVotes updates the upvotes or downvotes count for a user in training mode.
-func (r *UserModel) UpdateTrainingVotes(ctx context.Context, userID uint64, isUpvote bool) error {
-	return r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
-		var reputation types.UserReputation
-		err := tx.NewSelect().
-			Model(&reputation).
-			Where("id = ?", userID).
-			For("UPDATE").
-			Scan(ctx)
-		if err != nil && !errors.Is(err, sql.ErrNoRows) {
-			return err
-		}
-
-		// Update vote counts
-		if isUpvote {
-			reputation.Upvotes++
-		} else {
-			reputation.Downvotes++
-		}
-		reputation.ID = userID
-		reputation.Score = reputation.Upvotes - reputation.Downvotes
-		reputation.UpdatedAt = time.Now()
-
-		// Save updated reputation
-		_, err = tx.NewInsert().
-			Model(&reputation).
-			On("CONFLICT (id) DO UPDATE").
-			Set("upvotes = EXCLUDED.upvotes").
-			Set("downvotes = EXCLUDED.downvotes").
-			Set("score = EXCLUDED.score").
-			Set("updated_at = EXCLUDED.updated_at").
-			Exec(ctx)
-		return err
-	})
-}
-
 // GetUserToScan finds the next user to scan from confirmed_users, falling back to flagged_users
 // if no confirmed users are available.
 func (r *UserModel) GetUserToScan(ctx context.Context) (*types.User, error) {
@@ -1012,15 +972,11 @@ func (r *UserModel) getNextToReview(ctx context.Context, model interface{}, sort
 		}
 
 		// Get reputation
-		var reputation types.UserReputation
-		err = tx.NewSelect().
-			Model(&reputation).
-			Where("id = ?", result.ID).
-			Scan(ctx)
-		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		reputation, err := r.reputation.GetUserReputation(ctx, result.ID)
+		if err != nil {
 			return fmt.Errorf("failed to get user reputation: %w", err)
 		}
-		result.Reputation = reputation.Reputation
+		result.Reputation = reputation
 
 		// Update last_viewed
 		_, err = tx.NewUpdate().

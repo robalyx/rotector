@@ -70,18 +70,19 @@ func (c *CaptchaUsage) ResetReviews() {
 
 // UserSetting stores user-specific preferences.
 type UserSetting struct {
-	UserID             snowflake.ID     `bun:",pk"`
-	StreamerMode       bool             `bun:",notnull"`
-	UserDefaultSort    ReviewSortBy     `bun:",notnull"`
-	GroupDefaultSort   ReviewSortBy     `bun:",notnull"`
-	AppealDefaultSort  AppealSortBy     `bun:",notnull"`
-	AppealStatusFilter AppealFilterBy   `bun:",notnull"`
-	ChatModel          ChatModel        `bun:",notnull"`
-	ReviewMode         ReviewMode       `bun:",notnull"`
-	ReviewTargetMode   ReviewTargetMode `bun:",notnull"`
-	ChatMessageUsage   ChatMessageUsage `bun:",embed"`
-	SkipUsage          SkipUsage        `bun:",embed"`
-	CaptchaUsage       CaptchaUsage     `bun:",embed"`
+	UserID             snowflake.ID      `bun:",pk"`
+	StreamerMode       bool              `bun:",notnull"`
+	UserDefaultSort    ReviewSortBy      `bun:",notnull"`
+	GroupDefaultSort   ReviewSortBy      `bun:",notnull"`
+	AppealDefaultSort  AppealSortBy      `bun:",notnull"`
+	AppealStatusFilter AppealFilterBy    `bun:",notnull"`
+	ChatModel          ChatModel         `bun:",notnull"`
+	ReviewMode         ReviewMode        `bun:",notnull"`
+	ReviewTargetMode   ReviewTargetMode  `bun:",notnull"`
+	ChatMessageUsage   ChatMessageUsage  `bun:",embed"`
+	SkipUsage          SkipUsage         `bun:",embed"`
+	CaptchaUsage       CaptchaUsage      `bun:",embed"`
+	LeaderboardPeriod  LeaderboardPeriod `bun:",notnull"`
 }
 
 // AnnouncementType is the type of announcement message.

@@ -9,7 +9,7 @@ import (
 	"github.com/uptrace/bun"
 )
 
-func init() {
+func init() { //nolint:funlen
 	Migrations.MustRegister(func(ctx context.Context, db *bun.DB) error {
 		// Create partitioned tables
 		tables := []struct {
@@ -24,6 +24,11 @@ func init() {
 			{(*types.ConfirmedGroup)(nil), "confirmed_groups"},
 			{(*types.ClearedGroup)(nil), "cleared_groups"},
 			{(*types.LockedGroup)(nil), "locked_groups"},
+			{(*types.GroupMemberTracking)(nil), "group_member_trackings"},
+			{(*types.UserReputation)(nil), "user_reputations"},
+			{(*types.GroupReputation)(nil), "group_reputations"},
+			{(*types.UserVote)(nil), "user_votes"},
+			{(*types.GroupVote)(nil), "group_votes"},
 		}
 
 		for _, table := range tables {
@@ -58,10 +63,9 @@ func init() {
 			(*types.Appeal)(nil),
 			(*types.AppealMessage)(nil),
 			(*types.AppealTimeline)(nil),
-			(*types.GroupMemberTracking)(nil),
-			(*types.UserReputation)(nil),
-			(*types.GroupReputation)(nil),
 			(*types.DiscordBan)(nil),
+			(*types.VoteStats)(nil),
+			(*types.MaterializedViewRefresh)(nil),
 		}
 
 		for _, model := range models {
@@ -78,6 +82,11 @@ func init() {
 	}, func(ctx context.Context, db *bun.DB) error {
 		// Down migration - drop all tables
 		models := []interface{}{
+			(*types.MaterializedViewRefresh)(nil),
+			(*types.VoteStats)(nil),
+			(*types.DiscordBan)(nil),
+			(*types.GroupVote)(nil),
+			(*types.UserVote)(nil),
 			(*types.GroupReputation)(nil),
 			(*types.UserReputation)(nil),
 			(*types.GroupMemberTracking)(nil),
@@ -103,6 +112,11 @@ func init() {
 
 		// Drop partitioned tables
 		partitionedTables := []string{
+			"group_votes",
+			"user_votes",
+			"group_reputations",
+			"user_reputations",
+			"group_member_trackings",
 			"locked_groups",
 			"cleared_groups",
 			"confirmed_groups",

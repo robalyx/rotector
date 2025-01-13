@@ -16,18 +16,22 @@ import (
 
 // GroupModel handles database operations for group records.
 type GroupModel struct {
-	db       *bun.DB
-	activity *ActivityModel
-	logger   *zap.Logger
+	db         *bun.DB
+	activity   *ActivityModel
+	reputation *ReputationModel
+	votes      *VoteModel
+	logger     *zap.Logger
 }
 
 // NewGroup creates a GroupModel with database access for
 // storing and retrieving group information.
-func NewGroup(db *bun.DB, activity *ActivityModel, logger *zap.Logger) *GroupModel {
+func NewGroup(db *bun.DB, activity *ActivityModel, reputation *ReputationModel, votes *VoteModel, logger *zap.Logger) *GroupModel {
 	return &GroupModel{
-		db:       db,
-		activity: activity,
-		logger:   logger,
+		db:         db,
+		activity:   activity,
+		reputation: reputation,
+		votes:      votes,
+		logger:     logger,
 	}
 }
 
@@ -160,109 +164,113 @@ func (r *GroupModel) SaveGroups(ctx context.Context, groups map[uint64]*types.Gr
 }
 
 // ConfirmGroup moves a group from other group tables to confirmed_groups.
-// This happens when a moderator confirms that a group is inappropriate.
 func (r *GroupModel) ConfirmGroup(ctx context.Context, group *types.ReviewGroup) error {
-	return r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
 		confirmedGroup := &types.ConfirmedGroup{
 			Group:      group.Group,
 			VerifiedAt: time.Now(),
 		}
 
-		// Move group to confirmed_groups table
-		_, err := tx.NewInsert().Model(confirmedGroup).
-			On("CONFLICT (id) DO UPDATE").
-			Set("name = EXCLUDED.name").
-			Set("description = EXCLUDED.description").
-			Set("owner = EXCLUDED.owner").
-			Set("shout = EXCLUDED.shout").
-			Set("reason = EXCLUDED.reason").
-			Set("confidence = EXCLUDED.confidence").
-			Set("last_scanned = EXCLUDED.last_scanned").
-			Set("last_updated = EXCLUDED.last_updated").
-			Set("last_viewed = EXCLUDED.last_viewed").
-			Set("last_purge_check = EXCLUDED.last_purge_check").
-			Set("thumbnail_url = EXCLUDED.thumbnail_url").
-			Set("last_thumbnail_update = EXCLUDED.last_thumbnail_update").
-			Set("verified_at = EXCLUDED.verified_at").
+		// Try to move group to confirmed_groups table
+		result, err := tx.NewInsert().Model(confirmedGroup).
+			On("CONFLICT (id) DO NOTHING").
 			Exec(ctx)
 		if err != nil {
-			return fmt.Errorf("failed to insert or update group in confirmed_groups: %w (groupID=%d)", err, group.ID)
+			return fmt.Errorf("failed to insert group in confirmed_groups: %w", err)
 		}
 
-		// Delete from flagged_groups table
+		affected, err := result.RowsAffected()
+		if err != nil {
+			return fmt.Errorf("failed to get rows affected: %w", err)
+		}
+		if affected == 0 {
+			return nil // Skip if there was a conflict
+		}
+
+		// Delete from other tables
 		_, err = tx.NewDelete().Model((*types.FlaggedGroup)(nil)).Where("id = ?", group.ID).Exec(ctx)
 		if err != nil {
-			return fmt.Errorf("failed to delete group from flagged_groups: %w (groupID=%d)", err, group.ID)
+			return fmt.Errorf("failed to delete group from flagged_groups: %w", err)
 		}
 
-		// Delete from cleared_groups table
 		_, err = tx.NewDelete().Model((*types.ClearedGroup)(nil)).Where("id = ?", group.ID).Exec(ctx)
 		if err != nil {
-			return fmt.Errorf("failed to delete group from cleared_groups: %w (groupID=%d)", err, group.ID)
+			return fmt.Errorf("failed to delete group from cleared_groups: %w", err)
 		}
 
-		// Delete from locked_groups table
 		_, err = tx.NewDelete().Model((*types.LockedGroup)(nil)).Where("id = ?", group.ID).Exec(ctx)
 		if err != nil {
-			return fmt.Errorf("failed to delete group from locked_groups: %w (groupID=%d)", err, group.ID)
+			return fmt.Errorf("failed to delete group from locked_groups: %w", err)
 		}
 
 		return nil
 	})
+	if err != nil {
+		return err
+	}
+
+	// Verify votes for the group
+	if err := r.votes.VerifyVotes(ctx, group.ID, true, types.VoteTypeGroup); err != nil {
+		r.logger.Error("Failed to verify votes", zap.Error(err))
+		return err
+	}
+
+	return nil
 }
 
 // ClearGroup moves a group from other group tables to cleared_groups.
-// This happens when a moderator determines that a group was incorrectly flagged.
 func (r *GroupModel) ClearGroup(ctx context.Context, group *types.ReviewGroup) error {
-	return r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
 		clearedGroup := &types.ClearedGroup{
 			Group:     group.Group,
 			ClearedAt: time.Now(),
 		}
 
-		// Move group to cleared_groups table
-		_, err := tx.NewInsert().Model(clearedGroup).
-			On("CONFLICT (id) DO UPDATE").
-			Set("name = EXCLUDED.name").
-			Set("description = EXCLUDED.description").
-			Set("owner = EXCLUDED.owner").
-			Set("shout = EXCLUDED.shout").
-			Set("reason = EXCLUDED.reason").
-			Set("confidence = EXCLUDED.confidence").
-			Set("last_scanned = EXCLUDED.last_scanned").
-			Set("last_updated = EXCLUDED.last_updated").
-			Set("last_viewed = EXCLUDED.last_viewed").
-			Set("last_purge_check = EXCLUDED.last_purge_check").
-			Set("thumbnail_url = EXCLUDED.thumbnail_url").
-			Set("last_thumbnail_update = EXCLUDED.last_thumbnail_update").
-			Set("cleared_at = EXCLUDED.cleared_at").
+		// Try to move group to cleared_groups table
+		result, err := tx.NewInsert().Model(clearedGroup).
+			On("CONFLICT (id) DO NOTHING").
 			Exec(ctx)
 		if err != nil {
-			return fmt.Errorf("failed to insert or update group in cleared_groups: %w (groupID=%d)", err, group.ID)
+			return fmt.Errorf("failed to insert group in cleared_groups: %w", err)
 		}
 
-		// Delete from flagged_groups table
+		affected, err := result.RowsAffected()
+		if err != nil {
+			return fmt.Errorf("failed to get rows affected: %w", err)
+		}
+		if affected == 0 {
+			return nil // Skip if there was a conflict
+		}
+
+		// Delete from other tables
 		_, err = tx.NewDelete().Model((*types.FlaggedGroup)(nil)).Where("id = ?", group.ID).Exec(ctx)
 		if err != nil {
-			return fmt.Errorf("failed to delete group from flagged_groups: %w (groupID=%d)", err, group.ID)
+			return fmt.Errorf("failed to delete group from flagged_groups: %w", err)
 		}
 
-		// Delete from confirmed_groups table
 		_, err = tx.NewDelete().Model((*types.ConfirmedGroup)(nil)).Where("id = ?", group.ID).Exec(ctx)
 		if err != nil {
-			return fmt.Errorf("failed to delete group from confirmed_groups: %w (groupID=%d)", err, group.ID)
+			return fmt.Errorf("failed to delete group from confirmed_groups: %w", err)
 		}
 
-		// Delete from locked_groups table
 		_, err = tx.NewDelete().Model((*types.LockedGroup)(nil)).Where("id = ?", group.ID).Exec(ctx)
 		if err != nil {
-			return fmt.Errorf("failed to delete group from locked_groups: %w (groupID=%d)", err, group.ID)
+			return fmt.Errorf("failed to delete group from locked_groups: %w", err)
 		}
-
-		r.logger.Debug("Group cleared and moved to cleared_groups", zap.Uint64("groupID", group.ID))
 
 		return nil
 	})
+	if err != nil {
+		return err
+	}
+
+	// Verify votes for the group
+	if err := r.votes.VerifyVotes(ctx, group.ID, false, types.VoteTypeGroup); err != nil {
+		r.logger.Error("Failed to verify votes", zap.Error(err))
+		return err
+	}
+
+	return nil
 }
 
 // GetGroupByID retrieves a group by either their numeric ID or UUID.
@@ -318,15 +326,11 @@ func (r *GroupModel) GetGroupByID(ctx context.Context, groupID string, fields ty
 				}
 
 				// Get reputation
-				var reputation types.GroupReputation
-				err = tx.NewSelect().
-					Model(&reputation).
-					Where("id = ?", result.ID).
-					Scan(ctx)
-				if err != nil && !errors.Is(err, sql.ErrNoRows) {
+				reputation, err := r.reputation.GetGroupReputation(ctx, result.ID)
+				if err != nil {
 					return fmt.Errorf("failed to get group reputation: %w", err)
 				}
-				result.Reputation = reputation.Reputation
+				result.Reputation = reputation
 
 				// Update last_viewed if requested
 				_, err = tx.NewUpdate().
@@ -455,39 +459,6 @@ func (r *GroupModel) GetGroupsByIDs(ctx context.Context, groupIDs []uint64, fiel
 		zap.Int("foundCount", len(groups)))
 
 	return groups, nil
-}
-
-func (r *GroupModel) UpdateTrainingVotes(ctx context.Context, groupID uint64, isUpvote bool) error {
-	return r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
-		var reputation types.GroupReputation
-		err := tx.NewSelect().
-			Model(&reputation).
-			Where("id = ?", groupID).
-			For("UPDATE").
-			Scan(ctx)
-		if err != nil && !errors.Is(err, sql.ErrNoRows) {
-			return err
-		}
-
-		if isUpvote {
-			reputation.Upvotes++
-		} else {
-			reputation.Downvotes++
-		}
-		reputation.ID = groupID
-		reputation.Score = reputation.Upvotes - reputation.Downvotes
-		reputation.UpdatedAt = time.Now()
-
-		_, err = tx.NewInsert().
-			Model(&reputation).
-			On("CONFLICT (id) DO UPDATE").
-			Set("upvotes = EXCLUDED.upvotes").
-			Set("downvotes = EXCLUDED.downvotes").
-			Set("score = EXCLUDED.score").
-			Set("updated_at = EXCLUDED.updated_at").
-			Exec(ctx)
-		return err
-	})
 }
 
 // GetGroupsToCheck finds groups that haven't been checked for locked status recently.
@@ -939,15 +910,11 @@ func (r *GroupModel) getNextToReview(ctx context.Context, model interface{}, sor
 		}
 
 		// Get reputation
-		var reputation types.GroupReputation
-		err = tx.NewSelect().
-			Model(&reputation).
-			Where("id = ?", result.ID).
-			Scan(ctx)
-		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		reputation, err := r.reputation.GetGroupReputation(ctx, result.ID)
+		if err != nil {
 			return fmt.Errorf("failed to get group reputation: %w", err)
 		}
-		result.Reputation = reputation.Reputation
+		result.Reputation = reputation
 
 		// Update last_viewed
 		_, err = tx.NewUpdate().

@@ -51,6 +51,7 @@ func (r *SettingModel) GetUserSettings(ctx context.Context, userID snowflake.ID)
 		CaptchaUsage: types.CaptchaUsage{
 			ReviewCount: 0,
 		},
+		LeaderboardPeriod: types.LeaderboardPeriodAllTime,
 	}
 
 	err := r.db.NewSelect().Model(settings).
@@ -73,7 +74,6 @@ func (r *SettingModel) GetUserSettings(ctx context.Context, userID snowflake.ID)
 
 // SaveUserSettings updates or creates user settings.
 func (r *SettingModel) SaveUserSettings(ctx context.Context, settings *types.UserSetting) error {
-	r.logger.Info("message_count", zap.Int("message_count", settings.ChatMessageUsage.MessageCount))
 	_, err := r.db.NewInsert().Model(settings).
 		On("CONFLICT (user_id) DO UPDATE").
 		Set("streamer_mode = EXCLUDED.streamer_mode").
@@ -89,6 +89,7 @@ func (r *SettingModel) SaveUserSettings(ctx context.Context, settings *types.Use
 		Set("last_skip_time = EXCLUDED.last_skip_time").
 		Set("consecutive_skips = EXCLUDED.consecutive_skips").
 		Set("review_count = EXCLUDED.review_count").
+		Set("leaderboard_period = EXCLUDED.leaderboard_period").
 		Exec(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to save user settings: %w (userID=%d)", err, settings.UserID)

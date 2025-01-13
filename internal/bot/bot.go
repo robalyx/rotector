@@ -27,6 +27,7 @@ import (
 	"github.com/robalyx/rotector/internal/bot/menu/captcha"
 	"github.com/robalyx/rotector/internal/bot/menu/chat"
 	"github.com/robalyx/rotector/internal/bot/menu/dashboard"
+	"github.com/robalyx/rotector/internal/bot/menu/leaderboard"
 	"github.com/robalyx/rotector/internal/bot/menu/log"
 	"github.com/robalyx/rotector/internal/bot/menu/queue"
 	groupReview "github.com/robalyx/rotector/internal/bot/menu/review/group"
@@ -38,8 +39,6 @@ import (
 )
 
 // Bot handles all the layouts and managers needed for Discord interaction.
-// It maintains connections to the database, Discord client, and various layouts
-// while processing user interactions through the session and pagination managers.
 type Bot struct {
 	db                *database.Client
 	client            bot.Client
@@ -51,8 +50,6 @@ type Bot struct {
 }
 
 // New initializes a Bot instance by creating all required managers and layouts.
-// It connects layouts through dependency injection and configures the Discord
-// client with necessary gateway intents and event listeners.
 func New(app *setup.App) (*Bot, error) {
 	// Initialize session manager for persistent storage
 	sessionManager, err := session.NewManager(app.DB, app.RedisManager, app.Logger)
@@ -61,42 +58,15 @@ func New(app *setup.App) (*Bot, error) {
 	}
 	paginationManager := pagination.NewManager(sessionManager, app.Logger)
 
-	// Create layouts with their dependencies
-	settingLayout := setting.New(app, sessionManager, paginationManager)
-	logLayout := log.New(app, sessionManager, paginationManager)
-	chatLayout := chat.New(app, sessionManager, paginationManager)
-	captchaLayout := captcha.New(app, sessionManager, paginationManager)
-	userReviewLayout := userReview.New(app, sessionManager, paginationManager, settingLayout, logLayout, chatLayout, captchaLayout)
-	groupReviewLayout := groupReview.New(app, sessionManager, paginationManager, settingLayout, logLayout, chatLayout, captchaLayout)
-	queueLayout := queue.New(app, sessionManager, paginationManager, userReviewLayout)
-	appealLayout := appeal.New(app, sessionManager, paginationManager, userReviewLayout)
-	adminLayout := admin.New(app, sessionManager, paginationManager, settingLayout)
-	dashboardLayout := dashboard.New(
-		app,
-		sessionManager,
-		paginationManager,
-		userReviewLayout,
-		groupReviewLayout,
-		settingLayout,
-		logLayout,
-		queueLayout,
-		chatLayout,
-		appealLayout,
-		adminLayout,
-	)
-	banLayout := ban.New(app, sessionManager, paginationManager, dashboardLayout)
-
-	// Initialize bot structure with all components
+	// Create bot instance
 	b := &Bot{
 		db:                app.DB,
 		logger:            app.Logger,
 		sessionManager:    sessionManager,
 		paginationManager: paginationManager,
-		dashboardLayout:   dashboardLayout,
-		banLayout:         banLayout,
 	}
 
-	// Configure Discord client with required gateway intents and event handlers
+	// Create Discord client
 	client, err := disgo.New(app.Config.Bot.Discord.Token,
 		bot.WithShardManagerConfigOpts(
 			sharding.WithShardCount(app.Config.Bot.Discord.Sharding.Count),
@@ -130,8 +100,36 @@ func New(app *setup.App) (*Bot, error) {
 	if err != nil {
 		return nil, err
 	}
-
 	b.client = client
+
+	// Initialize layouts after bot instance is created
+	settingLayout := setting.New(app, sessionManager, paginationManager)
+	logLayout := log.New(app, sessionManager, paginationManager)
+	chatLayout := chat.New(app, sessionManager, paginationManager)
+	captchaLayout := captcha.New(app, sessionManager, paginationManager)
+	userReviewLayout := userReview.New(app, sessionManager, paginationManager, settingLayout, logLayout, chatLayout, captchaLayout)
+	groupReviewLayout := groupReview.New(app, sessionManager, paginationManager, settingLayout, logLayout, chatLayout, captchaLayout)
+	queueLayout := queue.New(app, sessionManager, paginationManager, userReviewLayout)
+	appealLayout := appeal.New(app, sessionManager, paginationManager, userReviewLayout)
+	adminLayout := admin.New(app, sessionManager, paginationManager, settingLayout)
+	leaderboardLayout := leaderboard.New(app, client, sessionManager, paginationManager)
+
+	b.dashboardLayout = dashboard.New(
+		app,
+		sessionManager,
+		paginationManager,
+		userReviewLayout,
+		groupReviewLayout,
+		settingLayout,
+		logLayout,
+		queueLayout,
+		chatLayout,
+		appealLayout,
+		adminLayout,
+		leaderboardLayout,
+	)
+	b.banLayout = ban.New(app, sessionManager, paginationManager, b.dashboardLayout)
+
 	return b, nil
 }
 
@@ -171,7 +169,6 @@ func (b *Bot) Close() {
 
 // handleApplicationCommandInteraction processes slash commands by first deferring the response,
 // then validating guild settings and user permissions before handling the command in a goroutine.
-// The goroutine approach allows for concurrent processing of commands.
 func (b *Bot) handleApplicationCommandInteraction(event *events.ApplicationCommandInteractionCreate) {
 	go func() {
 		// Defer response to prevent Discord timeout while processing

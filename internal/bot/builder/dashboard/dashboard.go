@@ -111,6 +111,9 @@ func (b *Builder) Build() *discord.MessageUpdateBuilder {
 		discord.NewStringSelectMenuOption("Lookup Group", constants.LookupGroupButtonCustomID).
 			WithEmoji(discord.ComponentEmoji{Name: "🔍"}).
 			WithDescription("Look up specific group by ID or UUID"),
+		discord.NewStringSelectMenuOption("View Leaderboard", constants.LeaderboardMenuButtonCustomID).
+			WithEmoji(discord.ComponentEmoji{Name: "🏆"}).
+			WithDescription("View voting leaderboard"),
 	}
 
 	// Add reviewer-only options

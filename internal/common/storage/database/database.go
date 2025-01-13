@@ -44,16 +44,19 @@ func (sonicProvider) NewDecoder(r io.Reader) bunjson.Decoder {
 // Client represents the database connection and operations.
 // It manages access to different repositories that handle specific data types.
 type Client struct {
-	db       *bun.DB
-	logger   *zap.Logger
-	users    *models.UserModel
-	groups   *models.GroupModel
-	stats    *models.StatsModel
-	settings *models.SettingModel
-	activity *models.ActivityModel
-	tracking *models.TrackingModel
-	appeals  *models.AppealModel
-	bans     *models.BanModel
+	db         *bun.DB
+	logger     *zap.Logger
+	users      *models.UserModel
+	groups     *models.GroupModel
+	stats      *models.StatsModel
+	settings   *models.SettingModel
+	activity   *models.ActivityModel
+	tracking   *models.TrackingModel
+	appeals    *models.AppealModel
+	bans       *models.BanModel
+	reputation *models.ReputationModel
+	votes      *models.VoteModel
+	views      *models.MaterializedViewModel
 }
 
 // NewConnection establishes a new database connection and returns a Client instance.
@@ -100,17 +103,23 @@ func NewConnection(ctx context.Context, config *config.PostgreSQL, logger *zap.L
 	// Create repositories
 	tracking := models.NewTracking(db, logger)
 	activity := models.NewActivity(db, logger)
+	views := models.NewMaterializedView(db, logger)
+	votes := models.NewVote(db, views, logger)
+	reputation := models.NewReputation(db, votes, logger)
 	client := &Client{
-		db:       db,
-		logger:   logger,
-		users:    models.NewUser(db, tracking, activity, logger),
-		groups:   models.NewGroup(db, activity, logger),
-		stats:    models.NewStats(db, logger),
-		settings: models.NewSetting(db, logger),
-		activity: activity,
-		tracking: tracking,
-		appeals:  models.NewAppeal(db, logger),
-		bans:     models.NewBan(db, logger),
+		db:         db,
+		logger:     logger,
+		users:      models.NewUser(db, tracking, activity, reputation, votes, logger),
+		groups:     models.NewGroup(db, activity, reputation, votes, logger),
+		stats:      models.NewStats(db, logger),
+		settings:   models.NewSetting(db, logger),
+		activity:   activity,
+		tracking:   tracking,
+		appeals:    models.NewAppeal(db, logger),
+		bans:       models.NewBan(db, logger),
+		reputation: reputation,
+		votes:      votes,
+		views:      views,
 	}
 
 	logger.Info("Database connection established")
@@ -166,6 +175,21 @@ func (c *Client) Appeals() *models.AppealModel {
 // Bans returns the repository for Discord ban operations.
 func (c *Client) Bans() *models.BanModel {
 	return c.bans
+}
+
+// Reputation returns the repository for reputation operations.
+func (c *Client) Reputation() *models.ReputationModel {
+	return c.reputation
+}
+
+// Votes returns the repository for vote-related operations.
+func (c *Client) Votes() *models.VoteModel {
+	return c.votes
+}
+
+// Views returns the repository for materialized view operations.
+func (c *Client) Views() *models.MaterializedViewModel {
+	return c.views
 }
 
 // DB returns the underlying bun.DB instance.

@@ -99,6 +99,8 @@ func (m *MainMenu) handleSelectMenu(event *events.ComponentInteractionCreate, s 
 			return
 		}
 		m.layout.logLayout.Show(event, s)
+	case constants.LeaderboardMenuButtonCustomID:
+		m.layout.leaderboardLayout.Show(event, s)
 	case constants.QueueManagerButtonCustomID:
 		if !settings.IsReviewer(uint64(event.User().ID)) {
 			m.layout.logger.Error("User is not in reviewer list but somehow attempted to access queue manager", zap.Uint64("user_id", uint64(event.User().ID)))

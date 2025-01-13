@@ -9,6 +9,19 @@ import (
 )
 
 func init() { //nolint:funlen
+	periods := []struct {
+		name     string
+		interval string
+	}{
+		{"daily", "INTERVAL '1 day'"},
+		{"weekly", "INTERVAL '1 week'"},
+		{"biweekly", "INTERVAL '2 weeks'"},
+		{"monthly", "INTERVAL '1 month'"},
+		{"biannually", "INTERVAL '6 months'"},
+		{"annually", "INTERVAL '1 year'"},
+		{"all_time", "NULL"},
+	}
+
 	Migrations.MustRegister(func(ctx context.Context, db *bun.DB) error {
 		_, err := db.NewRaw(`
 			-- User activity logs indexes
@@ -69,8 +82,8 @@ func init() { //nolint:funlen
 			ON group_member_trackings (cardinality(flagged_users) DESC, last_checked ASC)
 			WHERE is_flagged = false;
 			
-			CREATE INDEX IF NOT EXISTS idx_group_member_trackings_group_id
-			ON group_member_trackings (group_id);
+			CREATE INDEX IF NOT EXISTS idx_group_member_trackings_id
+			ON group_member_trackings (id);
 			
 			CREATE INDEX IF NOT EXISTS idx_group_member_trackings_cleanup
 			ON group_member_trackings (last_appended)
@@ -152,9 +165,66 @@ func init() { //nolint:funlen
 			
 			-- Statistics indexes
 			CREATE INDEX IF NOT EXISTS idx_hourly_stats_timestamp ON hourly_stats (timestamp DESC);
+
+			-- Vote indexes
+			CREATE INDEX IF NOT EXISTS idx_user_votes_id_discord 
+			ON user_votes (id, discord_user_id);
+			
+			CREATE INDEX IF NOT EXISTS idx_user_votes_verify
+			ON user_votes (id, is_verified) 
+			WHERE is_verified = false;
+			
+			CREATE INDEX IF NOT EXISTS idx_group_votes_id_discord 
+			ON group_votes (id, discord_user_id);
+			
+			CREATE INDEX IF NOT EXISTS idx_group_votes_verify
+			ON group_votes (id, is_verified)
+			WHERE is_verified = false;
+
+			-- Vote statistics index
+			CREATE INDEX IF NOT EXISTS idx_vote_stats_voted_at 
+			ON vote_stats (voted_at DESC);
 		`, types.ActivityTypeUserViewed, types.ActivityTypeGroupViewed).Exec(ctx)
 		if err != nil {
 			return fmt.Errorf("failed to create indexes: %w", err)
+		}
+
+		// Vote leaderboard indexes
+		for _, period := range periods {
+			viewName := "vote_leaderboard_stats_" + period.name
+
+			// Unique index for concurrent operations
+			_, err = db.NewRaw(fmt.Sprintf(`
+				CREATE UNIQUE INDEX IF NOT EXISTS idx_vote_leaderboard_%s_unique
+				ON %s (discord_user_id);
+			`, period.name, viewName)).Exec(ctx)
+			if err != nil {
+				return fmt.Errorf("failed to create unique index for %s: %w", period.name, err)
+			}
+
+			// Index for sorting and pagination
+			_, err = db.NewRaw(fmt.Sprintf(`
+				CREATE INDEX IF NOT EXISTS idx_vote_leaderboard_%s_sort
+				ON %s (
+					correct_votes DESC,
+					accuracy DESC, 
+					voted_at DESC,
+					discord_user_id
+				) INCLUDE (total_votes);
+			`, period.name, viewName)).Exec(ctx)
+			if err != nil {
+				return fmt.Errorf("failed to create sort index for %s: %w", period.name, err)
+			}
+
+			// Index for user lookups
+			_, err = db.NewRaw(fmt.Sprintf(`
+				CREATE INDEX IF NOT EXISTS idx_vote_leaderboard_%s_user
+				ON %s (discord_user_id)
+				INCLUDE (correct_votes, total_votes, accuracy);
+			`, period.name, viewName)).Exec(ctx)
+			if err != nil {
+				return fmt.Errorf("failed to create user index for %s: %w", period.name, err)
+			}
 		}
 
 		return nil
@@ -192,7 +262,7 @@ func init() { //nolint:funlen
 
 			-- Group tracking indexes
 			DROP INDEX IF EXISTS idx_group_member_trackings_check;
-			DROP INDEX IF EXISTS idx_group_member_trackings_group_id;
+			DROP INDEX IF EXISTS idx_group_member_trackings_id;
 			DROP INDEX IF EXISTS idx_group_member_trackings_cleanup;
 
 			-- Group review sorting indexes
@@ -245,9 +315,30 @@ func init() { //nolint:funlen
 
 			-- Statistics indexes
 			DROP INDEX IF EXISTS idx_hourly_stats_timestamp;
+
+			-- Vote indexes
+			DROP INDEX IF EXISTS idx_user_votes_id_discord;
+			DROP INDEX IF EXISTS idx_user_votes_verify;
+			DROP INDEX IF EXISTS idx_group_votes_id_discord;
+			DROP INDEX IF EXISTS idx_group_votes_verify;
+
+			-- Vote statistics index
+			DROP INDEX IF EXISTS idx_vote_stats_voted_at;
 		`).Exec(ctx)
 		if err != nil {
 			return fmt.Errorf("failed to drop indexes: %w", err)
+		}
+
+		// Drop vote leaderboard indexes
+		for _, period := range periods {
+			_, err = db.NewRaw(fmt.Sprintf(`
+				DROP INDEX IF EXISTS idx_vote_leaderboard_%s_unique;
+				DROP INDEX IF EXISTS idx_vote_leaderboard_%s_sort;
+				DROP INDEX IF EXISTS idx_vote_leaderboard_%s_user;
+			`, period.name, period.name, period.name)).Exec(ctx)
+			if err != nil {
+				return fmt.Errorf("failed to drop indexes for %s: %w", period.name, err)
+			}
 		}
 
 		return nil

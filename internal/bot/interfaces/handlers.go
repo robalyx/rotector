@@ -80,3 +80,9 @@ type BanLayout interface {
 	// Show prepares and displays the ban information menu.
 	Show(event CommonEvent, s *session.Session)
 }
+
+// LeaderboardLayout defines the interface for handling leaderboard-related actions.
+type LeaderboardLayout interface {
+	// Show prepares and displays the leaderboard menu.
+	Show(event CommonEvent, s *session.Session)
+}

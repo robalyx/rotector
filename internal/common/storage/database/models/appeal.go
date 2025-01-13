@@ -219,19 +219,19 @@ func (r *AppealModel) GetAppealsToReview(
 	switch sortBy {
 	case types.AppealSortByOldest:
 		if cursor != nil {
-			query.Where("(t.timestamp, appeal.id) >= (?, ?)", cursor.Timestamp, cursor.ID)
+			query.Where("(t.timestamp, appeal.id) > (?, ?)", cursor.Timestamp, cursor.ID)
 		}
 		query.Order("t.timestamp ASC", "appeal.id ASC")
 	case types.AppealSortByClaimed:
 		query.Where("status = ?", types.AppealStatusPending) // Only show pending appeals for claimed view
 		query.Where("claimed_by = ?", reviewerID)
 		if cursor != nil {
-			query.Where("(t.last_activity, appeal.id) <= (?, ?)", cursor.LastActivity, cursor.ID)
+			query.Where("(t.last_activity, appeal.id) < (?, ?)", cursor.LastActivity, cursor.ID)
 		}
 		query.Order("t.last_activity DESC", "appeal.id DESC")
 	case types.AppealSortByNewest:
 		if cursor != nil {
-			query.Where("(t.timestamp, appeal.id) <= (?, ?)", cursor.Timestamp, cursor.ID)
+			query.Where("(t.timestamp, appeal.id) < (?, ?)", cursor.Timestamp, cursor.ID)
 		}
 		query.Order("t.timestamp DESC", "appeal.id DESC")
 	}
@@ -275,7 +275,7 @@ func (r *AppealModel) GetAppealsByRequester(
 
 	// Apply cursor conditions if cursor exists
 	if cursor != nil {
-		query = query.Where("(t.timestamp, appeal.id) <= (?, ?)", cursor.Timestamp, cursor.ID)
+		query = query.Where("(t.timestamp, appeal.id) < (?, ?)", cursor.Timestamp, cursor.ID)
 	}
 
 	query.Order("t.timestamp DESC", "appeal.id DESC").
@@ -357,7 +357,7 @@ func processAppealResults(results []appealResult, limit int) ([]*types.Appeal, *
 
 	if len(results) > limit {
 		// Use the extra item as the next cursor for pagination
-		last := results[limit]
+		last := results[limit-1]
 		nextCursor = &types.AppealTimeline{
 			ID:           last.Appeal.ID,
 			Timestamp:    last.Timeline.Timestamp,

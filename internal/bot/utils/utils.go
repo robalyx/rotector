@@ -258,6 +258,57 @@ func ParseBanDuration(durationStr string) (*time.Time, error) {
 	return &expiresAt, nil
 }
 
+// FormatTimeAgo returns a human-readable string representing how long ago a time was.
+func FormatTimeAgo(t time.Time) string {
+	if t.IsZero() {
+		return "never"
+	}
+
+	duration := time.Since(t)
+	return formatDuration(duration) + " ago"
+}
+
+// FormatTimeUntil returns a human-readable string representing how long until a time.
+func FormatTimeUntil(t time.Time) string {
+	if t.IsZero() {
+		return "unknown"
+	}
+
+	duration := time.Until(t)
+	return "in " + formatDuration(duration)
+}
+
+// formatDuration converts a duration to a human-readable string.
+func formatDuration(d time.Duration) string {
+	seconds := int(d.Seconds())
+
+	if seconds < 60 {
+		return "moments"
+	}
+
+	minutes := seconds / 60
+	if minutes < 60 {
+		if minutes == 1 {
+			return "1 minute"
+		}
+		return fmt.Sprintf("%d minutes", minutes)
+	}
+
+	hours := minutes / 60
+	if hours < 24 {
+		if hours == 1 {
+			return "1 hour"
+		}
+		return fmt.Sprintf("%d hours", hours)
+	}
+
+	days := hours / 24
+	if days == 1 {
+		return "1 day"
+	}
+	return fmt.Sprintf("%d days", days)
+}
+
 // GetPriorityFromCustomID maps Discord component custom IDs to queue priority levels.
 // Returns NormalPriority if the custom ID is not recognized.
 func GetPriorityFromCustomID(customID string) string {
