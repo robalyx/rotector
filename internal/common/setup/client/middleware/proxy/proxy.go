@@ -321,17 +321,6 @@ func (m *Proxies) checkResponseError(ctx context.Context, err error, proxy *url.
 // SetLogger sets the logger for the middleware.
 func (m *Proxies) SetLogger(l logger.Logger) {
 	m.logger = l
-	for _, client := range m.proxyClients {
-		if transport, ok := client.Transport.(*http.Transport); ok {
-			transport.OnProxyConnectResponse = func(_ context.Context, proxyURL *url.URL, req *http.Request, _ *http.Response) error {
-				l.WithFields(
-					logger.String("proxy", proxyURL.Host),
-					logger.String("url", req.URL.String()),
-				).Debug("Proxy connection established")
-				return nil
-			}
-		}
-	}
 }
 
 // generateProxyHash creates a consistent hash for a list of proxies.

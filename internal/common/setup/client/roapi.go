@@ -56,21 +56,23 @@ func GetRoAPIClient(cfg *config.CommonConfig, configDir string, redisManager *re
 		client.WithUnmarshalFunc(sonic.Unmarshal),
 		client.WithLogger(logger.New(zapLogger)),
 		client.WithTimeout(time.Duration(cfg.Proxy.RequestTimeout)*time.Millisecond),
-		client.WithMiddleware(5,
+		client.WithMiddleware(
 			circuitbreaker.New(
 				cfg.CircuitBreaker.MaxFailures,
 				time.Duration(cfg.CircuitBreaker.FailureThreshold)*time.Millisecond,
 				time.Duration(cfg.CircuitBreaker.RecoveryTimeout)*time.Millisecond,
 			),
 		),
-		client.WithMiddleware(4, retry.New(
-			cfg.Retry.MaxRetries,
-			time.Duration(cfg.Retry.Delay)*time.Millisecond,
-			time.Duration(cfg.Retry.MaxDelay)*time.Millisecond,
-		)),
-		client.WithMiddleware(3, singleflight.New()),
-		client.WithMiddleware(2, axonetRedis.New(redisClient, 1*time.Hour)),
-		client.WithMiddleware(1, proxyMiddleware),
+		client.WithMiddleware(
+			retry.New(
+				cfg.Retry.MaxRetries,
+				time.Duration(cfg.Retry.Delay)*time.Millisecond,
+				time.Duration(cfg.Retry.MaxDelay)*time.Millisecond,
+			),
+		),
+		client.WithMiddleware(singleflight.New()),
+		client.WithMiddleware(axonetRedis.New(redisClient, 1*time.Hour)),
+		client.WithMiddleware(proxyMiddleware),
 	), proxyMiddleware, nil
 }
 
