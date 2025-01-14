@@ -36,7 +36,7 @@
 
 - [🚀 Features](#-features)
 - [📦 Prerequisites](#-prerequisites)
-- [🔄 How It Works](#-how-it-works)
+- [🔄 Architecture](#-architecture)
 - [⚡ Efficiency](#-efficiency)
 - [🔄 Reviewing](#-reviewing)
 - [🛣️ Roadmap](#️-roadmap)
@@ -84,9 +84,9 @@
 - [GlitchTip](https://glitchtip.com/), [Uptrace](https://uptrace.dev/), or [Sentry](https://sentry.io) (recommended for production)
 - Cookies: Not necessary at this time
 
-## 🔄 How It Works
+## 🔄 Architecture
 
-Rotector uses a multi-worker system to process and analyze Roblox accounts efficiently, with each type of worker responsible for different parts of the detection process.
+Rotector uses a multi-worker system to process and analyze Roblox accounts efficiently, with each type of worker responsible for different parts of the detection and maintenance processes.
 
 > [!TIP]
 > Interested in seeing how well it performs? Check out our test results in the [Efficiency](#-efficiency) section.
@@ -113,7 +113,7 @@ flowchart TB
         
         subgraph Analysis [Content Analysis]
             direction LR
-            GroupCheck[Check Groups<br>for Flags] --> TrackGroups[Track User's<br>Groups] --> FriendCheck[Check Friends<br>for Flags] --> Translate[Translate<br>Description] --> AICheck[AI Content<br>Analysis]
+            GroupCheck[Check Groups<br>for Flags] --> FriendCheck[Check Friends<br>for Flags] --> Translate[Translate<br>Description] --> AICheck[AI Content<br>Analysis]
         end
         
         DataCollection --> Analysis
@@ -122,6 +122,11 @@ flowchart TB
         
         Validation -->|Failed| RetryQueue[Add to<br>Retry Queue]
         
+        subgraph GroupTracking [Group Tracking]
+            direction LR
+            TrackGroups[Track User's<br>Groups]
+        end
+        
         subgraph EnrichData [Data Enrichment]
             direction LR
             GetThumbnails[Fetch Thumbnails] --> GetOutfits[Fetch Outfits]
@@ -129,7 +134,8 @@ flowchart TB
             GetFollowers --> GetFollowing[Get Following<br>Count]
         end
         
-        Validation -->|Passed| EnrichData
+        Validation -->|Passed| GroupTracking
+        GroupTracking --> EnrichData
         
         EnrichData --> PopularCheck{Popular User<br>Check}
         PopularCheck -->|Yes| HighConfidence[Set High<br>Confidence Flag]
@@ -201,6 +207,11 @@ flowchart TB
         Analysis --> Validation{Validate<br>Results}
         
         Validation -->|Failed| RetryQueue[Add to<br>Retry Queue]
+
+        subgraph GroupTracking [Group Tracking]
+            direction LR
+            TrackGroups[Track User's<br>Groups]
+        end
         
         subgraph EnrichData [Data Enrichment]
             direction LR
@@ -209,7 +220,8 @@ flowchart TB
             GetFollowers --> GetFollowing[Get Following<br>Count]
         end
         
-        Validation -->|Passed| EnrichData
+        Validation -->|Passed| GroupTracking
+        GroupTracking --> EnrichData
         
         EnrichData --> PopularCheck{Popular User<br>Check}
         PopularCheck -->|Yes| HighConfidence[Set High<br>Confidence Flag]
@@ -238,15 +250,15 @@ Going into more detail about the detection process:
 </details>
 
 <details>
-<summary>Purge Worker</summary>
+<summary>Maintenance Worker</summary>
 
-The purge worker maintains database hygiene by cleaning up old data, checking for banned/locked accounts, and flagging groups:
+The maintenance worker maintains database hygiene by cleaning up old data, checking for banned/locked accounts, and flagging groups:
 
 ```mermaid
 flowchart TB
-    Start([Start Worker]) --> Loop[Start Cleanup Cycle]
+    Start([Start Worker]) --> Loop[Start Maintenance Cycle]
     
-    subgraph Processing [Cleanup Processing]
+    subgraph Processing [Maintenance Processing]
         direction TB
         subgraph BannedUsers [Process Banned Users]
             direction LR
@@ -271,10 +283,24 @@ flowchart TB
             FetchInfo --> CheckThresholds[Check Percentage<br>Thresholds]
             CheckThresholds --> |Exceeds Threshold| SaveGroups[Save Flagged<br>Groups]
         end
+
+        subgraph UserThumbnails [Process User Thumbnails]
+            direction LR
+            GetUserBatch[Get Users for<br>Thumbnail Update] --> FetchUserThumbs[Fetch User<br>Thumbnails]
+            FetchUserThumbs --> UpdateUserThumbs[Update User<br>Thumbnails]
+        end
+
+        subgraph GroupThumbnails [Process Group Thumbnails]
+            direction LR
+            GetGroupBatch[Get Groups for<br>Thumbnail Update] --> FetchGroupThumbs[Fetch Group<br>Thumbnails]
+            FetchGroupThumbs --> UpdateGroupThumbs[Update Group<br>Thumbnails]
+        end
         
         BannedUsers --> LockedGroups
         LockedGroups --> ClearedItems
         ClearedItems --> Tracking
+        Tracking --> UserThumbnails
+        UserThumbnails --> GroupThumbnails
     end
     
     Loop --> Processing
@@ -459,10 +485,10 @@ The middleware chain processes requests, with each middleware layer adding its o
 
 ## ⚡ Efficiency
 
-Rotector is built to efficiently handle large amounts of data while keeping resource usage at a reasonable level. Here's a performance snapshot from one of our test runs on a shared VPS (as of v0.1.0-alpha.4-pre.1):
+Rotector is built to efficiently handle large amounts of data while keeping resource usage at a reasonable level. Here's a performance snapshot from one of our test runs on a shared VPS:
 
 > [!NOTE]
-> These results come from a single test run and should be viewed as illustrative rather than definitive. Performance can vary significantly due to various factors such as API response times, proxy performance, system resources, configuration, and more. Not all of the VPS resources were used.
+> These results should be viewed as illustrative rather than definitive. Performance can vary significantly due to various factors such as API response times, proxy performance, system resources, configuration, and more. Not all of the VPS resources were used.
 
 ### Test Environment
 
@@ -476,31 +502,30 @@ Rotector is built to efficiently handle large amounts of data while keeping reso
 
 #### Test Configuration
 
+- Version: [`bd7281c`](https://github.com/robalyx/rotector/commit/bd7281c2f08e23baf5595d437e47aa3f9d65846d)
 - Time Given: 1 hour
-- Confirmed Users: 500
-- Confirmed Groups: 0
-- Workers: 5 AI friend workers, 1 purge worker
-- Proxies: 300 shared proxies
+- Workers: 15 AI friend workers, 5 maintenance workers
+- Proxies: 500 shared proxies
 
 ### Test Metrics
 
-| Metric                   | Current Run | Change from Previous Run |
-|--------------------------|-------------|--------------------------|
-| Users Scanned            | 1,001       | N/A                      |
-| **Users Flagged**        | **14,800**  | N/A                      |
-| **Groups Flagged**       | **167**     | N/A                      |
-| Requests Sent            | 300,195     | N/A                      |
-| Bandwidth Used           | 2.83 GB     | N/A                      |
-| Avg Concurrent Requests  | 1,060       | N/A                      |
-| Avg Requests Per Second  | 12          | N/A                      |
-| Avg Bandwith Per Request | 9.88 KB     | N/A                      |
-| AI Cost                  | **$0.07**   | N/A                      |
-| AI Calls (CT)            | 13,089      | N/A                      |
-| AI Calls (GC)            | 5,720       | N/A                      |
-| AI Latency (CT)          | ~0.017s     | N/A                      |
-| AI Latency (GC)          | ~1.038s     | N/A                      |
-| Redis Memory Usage       | 702.62 MB   | N/A                      |
-| Redis Key Count          | 204,172     | N/A                      |
+| Metric                   | Current Run | Previous Run |
+|--------------------------|-------------|--------------|
+| Users Scanned            | 740         | 1,001        |
+| **Users Flagged**        | **12,427**  | **14,800**   |
+| **Groups Flagged**       | **95**      | **167**      |
+| Requests Sent            | 79,082      | 300,195      |
+| Bandwidth Used           | 932.09 MB   | 2.83 GB      |
+| Avg Concurrent Requests  | 653         | 1,060        |
+| Avg Requests Per Second  | 6           | 12           |
+| Avg Bandwith Per Request | 12.07 KB    | 9.88 KB      |
+| AI Cost                  | **$0.16**   | **$0.07**    |
+| AI Calls (CT)            | 17,845      | 13,089       |
+| AI Calls (GC)            | 6,158       | 5,720        |
+| AI Latency (CT)          | ~0.017s     | ~0.017s      |
+| AI Latency (GC)          | ~1.265s     | ~1.038s      |
+| Redis Memory Usage       | 1.48 GB     | 702.62 MB    |
+| Redis Key Count          | 385,700     | 204,172      |
 
 > [!NOTE]
 > **CT** and **GC** in the metrics refer to _CountTokens_ and _GenerateContent_ calls to the Gemini API respectively.
@@ -509,29 +534,33 @@ Rotector is built to efficiently handle large amounts of data while keeping reso
 
 #### User Detection
 
-At the current rate, a 24-hour runtime would theoretically flag approximately **355,200 users**, with AI costing only **$1.68**. However, the number of flagged users would probably be lower as more users are added to the database. If Rotector maintained this detection rate, it could potentially flag **a hundred thousand inappropriate accounts in just a week**!
+At the current rate, a 24-hour runtime would theoretically flag approximately **298,248 users**, with AI costing only **$3.84**. However, the number of flagged users would probably be lower as more users are added to the database. If Rotector maintained this detection rate, it could potentially flag **hundreds of thousands of inappropriate accounts in just a week**!
 
-A brief review of the results shows that most users were flagged accurately, with some false positives, which is to be expected. These false positives are subtle violations that are borderline cases and are not necessarily inappropriate.
-
-There are many ways to improve the current performance even further. Yes, you heard that right!
-
-The biggest limitation is the number of proxies available due to their high costs. These proxies are necessary as workers need to process users and gather all necessary data upfront which makes many requests per second. This pre-loading approach means that when moderators review flagged accounts, they get near-instant access to all user information without waiting for additional API requests.
-
-With more proxies or even a special way to get past rate limits, we could potentially scan over 100 times more users per hour instead of the current rate given the current VPS resources. This would theoretically be possible as Rotector is built with performance in mind.
+A brief analysis of the results shows that almost all users were flagged accurately, with some false positives, which is to be expected. These false positives are borderline cases or too vague to be considered inappropriate.
 
 #### Group Detection
 
 We discovered several large groups of inappropriate accounts that have managed to avoid detection by traditional moderation techniques:
 
-- Group with 1911 flagged users (34XXXX55)
-- Group with 1845 flagged users (45XXXX3)
-- Group with 1814 flagged users (34XXXX41)
-- Group with 1557 flagged users (65XXXX7)
-- Group with 1283 flagged users (34XXXX64)
-- Group with 1183 flagged users (87XXXX5)
+- Group with 1934 flagged users (34XXXX55)
+- Group with 1719 flagged users (45XXXX3)
+- Group with 1680 flagged users (34XXXX41)
+- Group with 1521 flagged users (65XXXX7)
+- Group with 1401 flagged users (34XXXX64)
+- Group with 1063 flagged users (35XXXX31)
 - ... and many more with hundreds of flagged users
 
-However, there were many false flags that we plan to address with various optimizations in future updates.
+Smaller groups have also been identified by our detection algorithm, which also considers the percentage of flagged users in a group instead of just raw numbers. This includes small ERP communities and pools of alt account that conventional moderation methods might normally overlook. **All groups were accurately flagged with no false positives.**
+
+#### Comparison with Previous Run
+
+The current run displays fewer users and groups flagged compared to the previous run, which was expected as improvements were made to the detection algorithm and resulted in fewer false positives.
+
+We've also made significant improvements to the networking side. With optimizations in request patterns and strategies, the current run used only roughly a third of the bandwidth compared to the previous run (932.09 MB vs 2.83 GB).
+
+These results are constantly getting better as we improve the detection algorithm and networking side. However, the biggest limitation is the number of proxies available due to their high costs. These proxies are necessary as workers need to process users and gather all necessary data upfront which makes many requests per second. This pre-loading approach means that when moderators review flagged accounts, they get near-instant access to all user information without waiting for additional API requests.
+
+With more proxies or even a special way to get past rate limits, we could potentially scan over 100 times more users per hour instead of the current rate given the current VPS resources. This would theoretically be possible as Rotector is built with performance in mind.
 
 ## 🔄 Reviewing
 
@@ -586,21 +615,6 @@ This roadmap shows our major upcoming features, but we've got even more in the w
 <summary>How do I set this up myself?</summary>
 
 Detailed setup instructions will be available during the beta phase when the codebase is more stable. During alpha, we're focusing on making frequent changes, which makes maintaining documentation difficult.
-
-If you'd like to attempt setting up Rotector anyway, you can examine:
-
-- Configuration files in [`/config`](/config)
-- Worker implementation in [`/cmd/worker`](/cmd/worker)
-- Bot implementation in [`/cmd/bot`](/cmd/bot)
-- Docker setup in [`Dockerfile`](/Dockerfile)
-
-Note that setting up Rotector requires:
-
-1. **Technical Expertise**: Experience with Go, PostgreSQL, and distributed systems
-2. **Infrastructure**: Proper server setup and resource management
-3. **Maintenance Knowledge**: Understanding of the codebase to handle updates and issues
-
-⚠️ We recommend waiting for the beta release for a better setup process with documentation.
 
 </details>
 
