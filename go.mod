@@ -23,6 +23,7 @@ require (
 	github.com/knadh/koanf/v2 v2.1.2
 	github.com/redis/rueidis v1.0.52
 	github.com/spf13/cast v1.7.1
+	github.com/stretchr/testify v1.10.0
 	github.com/swaggo/http-swagger v1.3.4
 	github.com/swaggo/swag v1.16.4
 	github.com/tdewolff/minify/v2 v2.21.2

@@ -2,7 +2,6 @@ package utils
 
 import (
 	"github.com/robalyx/rotector/internal/bot/constants"
-	"github.com/robalyx/rotector/internal/bot/core/session"
 )
 
 // ViewerAction represents the type of page navigation action.
@@ -20,10 +19,16 @@ const (
 	ViewerLastPage ViewerAction = "last_page"
 )
 
+// SessionPaginator represents the minimal session interface needed for pagination.
+type SessionPaginator interface {
+	Set(key string, value interface{})
+	GetInt(key string) int
+}
+
 // ParsePageAction updates the session's pagination page based on the requested action.
 // Returns the new page number and true if the action was valid, or 0 and false if invalid.
 // The maxPage parameter prevents navigation beyond the available pages.
-func (h *ViewerAction) ParsePageAction(s *session.Session, action ViewerAction, maxPage int) int {
+func (h *ViewerAction) ParsePageAction(s SessionPaginator, action ViewerAction, maxPage int) int {
 	var page int
 
 	switch action {

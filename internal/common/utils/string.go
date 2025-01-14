@@ -21,7 +21,7 @@ var MultipleSpaces = regexp.MustCompile(`\s+`)
 // 3. Remove diacritical marks (Mn category)
 // 4. Remove spaces
 // 5. Convert to lowercase
-// 6. NFC recombines characters into their canonical forms.
+// 6. NFC recombines characters into their canonical forms
 var normalizer = transform.Chain( //nolint:gochecknoglobals
 	norm.NFKC,
 	norm.NFD,
