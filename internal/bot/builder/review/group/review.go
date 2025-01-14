@@ -27,6 +27,7 @@ type ReviewBuilder struct {
 	group       *types.ReviewGroup
 	groupInfo   *apiTypes.GroupResponse
 	memberIDs   []uint64
+	isTraining  bool
 }
 
 // NewReviewBuilder creates a new review builder.
@@ -50,6 +51,7 @@ func NewReviewBuilder(s *session.Session, db *database.Client) *ReviewBuilder {
 		group:       group,
 		groupInfo:   groupInfo,
 		memberIDs:   memberIDs,
+		isTraining:  settings.ReviewMode == types.TrainingReviewMode,
 	}
 }
 
@@ -109,13 +111,13 @@ func (b *ReviewBuilder) buildModeEmbed() *discord.EmbedBuilder {
 	return discord.NewEmbedBuilder().
 		SetTitle(mode).
 		SetDescription(description).
-		SetColor(utils.GetMessageEmbedColor(b.settings.StreamerMode))
+		SetColor(utils.GetMessageEmbedColor(b.isTraining || b.settings.StreamerMode))
 }
 
 // buildReviewEmbed creates the main review information embed.
 func (b *ReviewBuilder) buildReviewEmbed() *discord.EmbedBuilder {
 	embed := discord.NewEmbedBuilder().
-		SetColor(utils.GetMessageEmbedColor(b.settings.StreamerMode)).
+		SetColor(utils.GetMessageEmbedColor(b.isTraining || b.settings.StreamerMode)).
 		SetTitle(fmt.Sprintf("🛡️ %d Safe • ⚠️ %d Reports",
 			b.group.Reputation.Upvotes,
 			b.group.Reputation.Downvotes,
@@ -144,7 +146,7 @@ func (b *ReviewBuilder) buildReviewEmbed() *discord.EmbedBuilder {
 	// Censor reason if needed
 	reason := utils.CensorStringsInText(
 		b.group.Reason,
-		b.settings.StreamerMode,
+		b.isTraining || b.settings.StreamerMode,
 		strconv.FormatUint(b.group.ID, 10),
 		b.group.Name,
 		strconv.FormatUint(b.group.Owner.UserID, 10),
@@ -300,7 +302,7 @@ func (b *ReviewBuilder) getDescription() string {
 	description = utils.FormatString(description)
 	description = utils.CensorStringsInText(
 		description,
-		b.settings.StreamerMode,
+		b.isTraining || b.settings.StreamerMode,
 		strconv.FormatUint(b.group.ID, 10),
 		b.group.Name,
 		strconv.FormatUint(b.group.Owner.UserID, 10),

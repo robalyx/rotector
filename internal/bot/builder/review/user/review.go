@@ -28,6 +28,7 @@ type ReviewBuilder struct {
 	translator     *translator.Translator
 	flaggedFriends map[uint64]*types.ReviewUser
 	flaggedGroups  map[uint64]*types.ReviewGroup
+	isTraining     bool
 }
 
 // NewReviewBuilder creates a new review builder.
@@ -52,6 +53,7 @@ func NewReviewBuilder(s *session.Session, translator *translator.Translator, db 
 		translator:     translator,
 		flaggedFriends: flaggedFriends,
 		flaggedGroups:  flaggedGroups,
+		isTraining:     settings.ReviewMode == types.TrainingReviewMode,
 	}
 }
 
@@ -111,13 +113,13 @@ func (b *ReviewBuilder) buildModeEmbed() *discord.EmbedBuilder {
 	return discord.NewEmbedBuilder().
 		SetTitle(mode).
 		SetDescription(description).
-		SetColor(utils.GetMessageEmbedColor(b.settings.StreamerMode))
+		SetColor(utils.GetMessageEmbedColor(b.isTraining || b.settings.StreamerMode))
 }
 
 // buildReviewBuilder creates the main review information embed.
 func (b *ReviewBuilder) buildReviewBuilder() *discord.EmbedBuilder {
 	embed := discord.NewEmbedBuilder().
-		SetColor(utils.GetMessageEmbedColor(b.settings.StreamerMode)).
+		SetColor(utils.GetMessageEmbedColor(b.isTraining || b.settings.StreamerMode)).
 		SetTitle(fmt.Sprintf("🛡️ %d Safe • ⚠️ %d Reports",
 			b.user.Reputation.Upvotes,
 			b.user.Reputation.Downvotes,
@@ -147,7 +149,7 @@ func (b *ReviewBuilder) buildReviewBuilder() *discord.EmbedBuilder {
 	// Censor reason if needed
 	reason := utils.CensorStringsInText(
 		b.user.Reason,
-		b.settings.StreamerMode,
+		b.isTraining || b.settings.StreamerMode,
 		strconv.FormatUint(b.user.ID, 10),
 		b.user.Name,
 		b.user.DisplayName,
@@ -357,7 +359,7 @@ func (b *ReviewBuilder) getDescription() string {
 	description = utils.FormatString(description)
 	description = utils.CensorStringsInText(
 		description,
-		b.settings.StreamerMode,
+		b.isTraining || b.settings.StreamerMode,
 		strconv.FormatUint(b.user.ID, 10),
 		b.user.Name,
 		b.user.DisplayName,
@@ -427,15 +429,14 @@ func (b *ReviewBuilder) getReviewHistory() string {
 // getFriends returns the friends field for the embed.
 func (b *ReviewBuilder) getFriends() string {
 	friends := make([]string, 0, constants.ReviewFriendsLimit)
-	isTraining := b.settings.ReviewMode == types.TrainingReviewMode
 
 	for i, friend := range b.user.Friends {
 		if i >= constants.ReviewFriendsLimit {
 			break
 		}
 
-		name := utils.CensorString(friend.Name, isTraining || b.settings.StreamerMode)
-		if isTraining {
+		name := utils.CensorString(friend.Name, b.isTraining || b.settings.StreamerMode)
+		if b.isTraining {
 			friends = append(friends, name)
 		} else {
 			friends = append(friends, fmt.Sprintf(
@@ -461,15 +462,14 @@ func (b *ReviewBuilder) getFriends() string {
 // getGroups returns the groups field for the embed.
 func (b *ReviewBuilder) getGroups() string {
 	groups := make([]string, 0, constants.ReviewGroupsLimit)
-	isTraining := b.settings.ReviewMode == types.TrainingReviewMode
 
 	for i, group := range b.user.Groups {
 		if i >= constants.ReviewGroupsLimit {
 			break
 		}
 
-		name := utils.CensorString(group.Group.Name, isTraining || b.settings.StreamerMode)
-		if isTraining {
+		name := utils.CensorString(group.Group.Name, b.isTraining || b.settings.StreamerMode)
+		if b.isTraining {
 			groups = append(groups, name)
 		} else {
 			groups = append(groups, fmt.Sprintf(
@@ -500,17 +500,16 @@ func (b *ReviewBuilder) getGames() string {
 
 	// Format games list with visit counts
 	games := make([]string, 0, constants.ReviewGamesLimit)
-	isTraining := b.settings.ReviewMode == types.TrainingReviewMode
 
 	for i, game := range b.user.Games {
 		if i >= constants.ReviewGamesLimit {
 			break
 		}
 
-		name := utils.CensorString(game.Name, isTraining || b.settings.StreamerMode)
+		name := utils.CensorString(game.Name, b.isTraining || b.settings.StreamerMode)
 		visits := utils.FormatNumber(game.PlaceVisits)
 
-		if isTraining {
+		if b.isTraining {
 			games = append(games, fmt.Sprintf("%s (%s visits)", name, visits))
 		} else {
 			games = append(games, fmt.Sprintf("[%s](https://www.roblox.com/games/%d) (%s visits)",
