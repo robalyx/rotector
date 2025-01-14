@@ -34,8 +34,11 @@ func NewOutfitFetcher(roAPI *api.API, logger *zap.Logger) *OutfitFetcher {
 
 // AddOutfits fetches outfits for a batch of users and returns a map of results.
 func (o *OutfitFetcher) AddOutfits(users map[uint64]*types.User) map[uint64]*OutfitFetchResult {
-	var wg sync.WaitGroup
-	resultsChan := make(chan OutfitFetchResult, len(users))
+	var (
+		results = make(map[uint64]*OutfitFetchResult, len(users))
+		wg      sync.WaitGroup
+		mu      sync.Mutex
+	)
 
 	// Process each user concurrently
 	for _, user := range users {
@@ -45,31 +48,23 @@ func (o *OutfitFetcher) AddOutfits(users map[uint64]*types.User) map[uint64]*Out
 
 			builder := avatar.NewUserOutfitsBuilder(u.ID).WithItemsPerPage(1000).WithIsEditable(true)
 			outfits, err := o.roAPI.Avatar().GetUserOutfits(context.Background(), builder.Build())
-			resultsChan <- OutfitFetchResult{
+			if err != nil {
+				o.logger.Error("Failed to fetch user outfits",
+					zap.Error(err),
+					zap.Uint64("userID", u.ID))
+				return
+			}
+
+			mu.Lock()
+			results[u.ID] = &OutfitFetchResult{
 				ID:      u.ID,
 				Outfits: outfits,
-				Error:   err,
 			}
+			mu.Unlock()
 		}(user)
 	}
 
-	// Close channel when all goroutines complete
-	go func() {
-		wg.Wait()
-		close(resultsChan)
-	}()
-
-	// Collect results from the channel
-	results := make(map[uint64]*OutfitFetchResult, len(users))
-	for result := range resultsChan {
-		if result.Error != nil {
-			o.logger.Error("Failed to fetch user outfits",
-				zap.Error(result.Error),
-				zap.Uint64("userID", result.ID))
-			continue
-		}
-		results[result.ID] = &result
-	}
+	wg.Wait()
 
 	o.logger.Debug("Finished fetching user outfits",
 		zap.Int("totalUsers", len(users)),

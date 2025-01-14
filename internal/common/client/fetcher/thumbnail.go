@@ -3,6 +3,7 @@ package fetcher
 import (
 	"context"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/jaxron/roapi.go/pkg/api"
@@ -90,41 +91,53 @@ func (t *ThumbnailFetcher) AddGroupImageURLs(groups map[uint64]*types.Group) map
 // ProcessBatchThumbnails handles batched thumbnail requests, processing them in groups of 100.
 // It returns a map of target IDs to their thumbnail URLs.
 func (t *ThumbnailFetcher) ProcessBatchThumbnails(requests *thumbnails.BatchThumbnailsBuilder) map[uint64]string {
-	thumbnailURLs := make(map[uint64]string)
-	requestList := requests.Build()
+	var (
+		requestList   = requests.Build()
+		thumbnailURLs = make(map[uint64]string)
+		mu            sync.Mutex
+		wg            sync.WaitGroup
+		batchSize     = 100
+	)
 
-	// Process in batches of 100
-	batchSize := 100
 	for i := 0; i < len(requestList.Requests); i += batchSize {
-		end := i + batchSize
-		if end > len(requestList.Requests) {
-			end = len(requestList.Requests)
-		}
+		wg.Add(1)
+		go func(start int) {
+			defer wg.Done()
 
-		// Create new batch request
-		batchRequests := thumbnails.NewBatchThumbnailsBuilder()
-		for _, request := range requestList.Requests[i:end] {
-			batchRequests.AddRequest(request)
-		}
-
-		// Send batch request to Roblox API
-		thumbnailResponses, err := t.roAPI.Thumbnails().GetBatchThumbnails(context.Background(), batchRequests.Build())
-		if err != nil {
-			t.logger.Error("Error fetching batch thumbnails",
-				zap.Error(err),
-				zap.Int("batchStart", i))
-			continue
-		}
-
-		// Process responses and store URLs
-		for _, response := range thumbnailResponses.Data {
-			if response.State == apiTypes.ThumbnailStateCompleted && response.ImageURL != nil {
-				thumbnailURLs[response.TargetID] = *response.ImageURL
-			} else {
-				thumbnailURLs[response.TargetID] = ThumbnailPlaceholder
+			end := start + batchSize
+			if end > len(requestList.Requests) {
+				end = len(requestList.Requests)
 			}
-		}
+
+			// Create new batch request
+			batchRequests := thumbnails.NewBatchThumbnailsBuilder()
+			for _, request := range requestList.Requests[start:end] {
+				batchRequests.AddRequest(request)
+			}
+
+			// Send batch request to Roblox API
+			thumbnailResponses, err := t.roAPI.Thumbnails().GetBatchThumbnails(context.Background(), batchRequests.Build())
+			if err != nil {
+				t.logger.Error("Error fetching batch thumbnails",
+					zap.Error(err),
+					zap.Int("batchStart", start))
+				return
+			}
+
+			// Process responses and store URLs
+			mu.Lock()
+			for _, response := range thumbnailResponses.Data {
+				if response.State == apiTypes.ThumbnailStateCompleted && response.ImageURL != nil {
+					thumbnailURLs[response.TargetID] = *response.ImageURL
+				} else {
+					thumbnailURLs[response.TargetID] = ThumbnailPlaceholder
+				}
+			}
+			mu.Unlock()
+		}(i)
 	}
+
+	wg.Wait()
 
 	t.logger.Debug("Processed batch thumbnails",
 		zap.Int("totalRequested", len(requestList.Requests)),

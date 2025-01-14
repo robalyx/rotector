@@ -34,8 +34,11 @@ func NewFollowFetcher(roAPI *api.API, logger *zap.Logger) *FollowFetcher {
 
 // AddFollowCounts fetches follow counts and returns a map of results.
 func (f *FollowFetcher) AddFollowCounts(users map[uint64]*types.User) map[uint64]*FollowFetchResult {
-	var wg sync.WaitGroup
-	resultsChan := make(chan FollowFetchResult, len(users))
+	var (
+		results = make(map[uint64]*FollowFetchResult, len(users))
+		wg      sync.WaitGroup
+		mu      sync.Mutex
+	)
 
 	// Process each user concurrently
 	for _, user := range users {
@@ -47,33 +50,25 @@ func (f *FollowFetcher) AddFollowCounts(users map[uint64]*types.User) map[uint64
 			followerCount, followerErr := f.roAPI.Friends().GetFollowerCount(context.Background(), u.ID)
 			followingCount, followingErr := f.roAPI.Friends().GetFollowingCount(context.Background(), u.ID)
 
-			// Send results
-			resultsChan <- FollowFetchResult{
+			err := errors.Join(followerErr, followingErr)
+			if err != nil {
+				f.logger.Error("Failed to fetch follow counts",
+					zap.Error(err),
+					zap.Uint64("userID", u.ID))
+				return
+			}
+
+			mu.Lock()
+			results[u.ID] = &FollowFetchResult{
 				ID:             u.ID,
 				FollowerCount:  followerCount,
 				FollowingCount: followingCount,
-				Error:          errors.Join(followerErr, followingErr),
 			}
+			mu.Unlock()
 		}(user)
 	}
 
-	// Close channel when all goroutines complete
-	go func() {
-		wg.Wait()
-		close(resultsChan)
-	}()
-
-	// Collect results from the channel
-	results := make(map[uint64]*FollowFetchResult, len(users))
-	for result := range resultsChan {
-		if result.Error != nil {
-			f.logger.Error("Failed to fetch follow counts",
-				zap.Error(result.Error),
-				zap.Uint64("userID", result.ID))
-			continue
-		}
-		results[result.ID] = &result
-	}
+	wg.Wait()
 
 	f.logger.Debug("Finished fetching follow counts",
 		zap.Int("totalUsers", len(users)),

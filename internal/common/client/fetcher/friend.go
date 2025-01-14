@@ -2,6 +2,7 @@ package fetcher
 
 import (
 	"context"
+	"sync"
 
 	"github.com/jaxron/roapi.go/pkg/api"
 	"github.com/jaxron/roapi.go/pkg/api/resources/friends"
@@ -80,37 +81,58 @@ func (f *FriendFetcher) GetFriendsWithDetails(ctx context.Context, userID uint64
 		return nil, err
 	}
 
-	var allFriends []types.ExtendedFriend
-	batchSize := 100
+	var (
+		allFriends = make([]types.ExtendedFriend, 0, len(friendIDs))
+		mu         sync.Mutex
+		wg         sync.WaitGroup
+		batchSize  = 100
+	)
 
 	// Process friendIDs in batches
 	for i := 0; i < len(friendIDs); i += batchSize {
-		end := i + batchSize
+		start := i
+		end := start + batchSize
 		if end > len(friendIDs) {
 			end = len(friendIDs)
 		}
 
-		// Fetch user details for the current batch
-		builder := users.NewUsersByIDsBuilder(friendIDs[i:end]...)
-		userDetails, err := f.roAPI.Users().GetUsersByIDs(ctx, builder.Build())
-		if err != nil {
-			return nil, err
-		}
+		wg.Add(1)
+		go func(start, end int) {
+			defer wg.Done()
 
-		// Convert user details to ExtendedFriend type
-		for _, user := range userDetails.Data {
-			allFriends = append(allFriends, types.ExtendedFriend{
-				Friend: apiTypes.Friend{
-					ID: user.ID,
-				},
-				Name:             user.Name,
-				DisplayName:      user.DisplayName,
-				HasVerifiedBadge: user.HasVerifiedBadge,
-			})
-		}
+			// Fetch user details for the current batch
+			builder := users.NewUsersByIDsBuilder(friendIDs[start:end]...)
+			userDetails, err := f.roAPI.Users().GetUsersByIDs(ctx, builder.Build())
+			if err != nil {
+				f.logger.Error("Failed to fetch user details",
+					zap.Error(err),
+					zap.Int("batchStart", start),
+					zap.Int("batchEnd", end))
+				return
+			}
+
+			batchFriends := make([]types.ExtendedFriend, 0, len(userDetails.Data))
+			for _, user := range userDetails.Data {
+				batchFriends = append(batchFriends, types.ExtendedFriend{
+					Friend: apiTypes.Friend{
+						ID: user.ID,
+					},
+					Name:             user.Name,
+					DisplayName:      user.DisplayName,
+					HasVerifiedBadge: user.HasVerifiedBadge,
+				})
+			}
+
+			mu.Lock()
+			allFriends = append(allFriends, batchFriends...)
+			mu.Unlock()
+		}(start, end)
 	}
 
+	wg.Wait()
+
 	f.logger.Debug("Finished fetching friend details",
+		zap.Int("totalFriends", len(friendIDs)),
 		zap.Int("successfulFetches", len(allFriends)))
 
 	return allFriends, nil

@@ -28,12 +28,13 @@ func NewGameFetcher(roAPI *api.API, logger *zap.Logger) *GameFetcher {
 	}
 }
 
-// fetchGamesForUser retrieves all games for a single user.
+// FetchGamesForUser retrieves all games for a single user.
 func (g *GameFetcher) FetchGamesForUser(userID uint64) ([]*types.Game, error) {
-	// Pre-allocate the slice with estimated capacity
-	allGames := make([]*types.Game, 0, 50)
+	var (
+		allGames = make([]*types.Game, 0, 50)
+		cursor   string
+	)
 
-	var cursor string
 	for {
 		// Create request builder
 		builder := games.NewUserGamesBuilder(userID).
@@ -61,9 +62,12 @@ func (g *GameFetcher) FetchGamesForUser(userID uint64) ([]*types.Game, error) {
 			break
 		}
 
-		// Update cursor for next page
 		cursor = *response.NextPageCursor
 	}
+
+	g.logger.Debug("Finished fetching games",
+		zap.Uint64("userID", userID),
+		zap.Int("totalGames", len(allGames)))
 
 	return allGames, nil
 }
