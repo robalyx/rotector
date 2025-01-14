@@ -14,6 +14,7 @@ import (
 	"github.com/robalyx/rotector/internal/bot/interfaces"
 	"github.com/robalyx/rotector/internal/common/queue"
 	"github.com/robalyx/rotector/internal/common/storage/database/types"
+	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
 )
 
 // StatusMenu handles the display and interaction logic for viewing queue status.
@@ -63,7 +64,7 @@ func (m *StatusMenu) Show(event interfaces.CommonEvent, s *session.Session) {
 				UserID: user.ID,
 			},
 			ReviewerID:        uint64(event.User().ID),
-			ActivityType:      types.ActivityTypeUserViewed,
+			ActivityType:      enum.ActivityTypeUserViewed,
 			ActivityTimestamp: time.Now(),
 			Details:           map[string]interface{}{},
 		})

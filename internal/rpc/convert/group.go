@@ -4,21 +4,22 @@ import (
 	"time"
 
 	"github.com/robalyx/rotector/internal/common/storage/database/types"
+	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
 	"github.com/robalyx/rotector/internal/rpc/proto"
 )
 
 // GroupStatus converts a database group status to RPC API group status.
-func GroupStatus(status types.GroupType) proto.GroupStatus {
+func GroupStatus(status enum.GroupType) proto.GroupStatus {
 	switch status {
-	case types.GroupTypeFlagged:
+	case enum.GroupTypeFlagged:
 		return proto.GroupStatus_GROUP_STATUS_FLAGGED
-	case types.GroupTypeConfirmed:
+	case enum.GroupTypeConfirmed:
 		return proto.GroupStatus_GROUP_STATUS_CONFIRMED
-	case types.GroupTypeCleared:
+	case enum.GroupTypeCleared:
 		return proto.GroupStatus_GROUP_STATUS_CLEARED
-	case types.GroupTypeLocked:
+	case enum.GroupTypeLocked:
 		return proto.GroupStatus_GROUP_STATUS_LOCKED
-	case types.GroupTypeUnflagged:
+	case enum.GroupTypeUnflagged:
 		return proto.GroupStatus_GROUP_STATUS_UNFLAGGED
 	default:
 		return proto.GroupStatus_GROUP_STATUS_UNFLAGGED

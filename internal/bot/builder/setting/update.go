@@ -6,7 +6,7 @@ import (
 	"github.com/disgoorg/disgo/discord"
 	"github.com/robalyx/rotector/internal/bot/constants"
 	"github.com/robalyx/rotector/internal/bot/core/session"
-	"github.com/robalyx/rotector/internal/common/storage/database/types"
+	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
 )
 
 // UpdateBuilder creates a generic settings change menu.
@@ -53,11 +53,11 @@ func (b *UpdateBuilder) buildComponents() []discord.ContainerComponent {
 
 	// Add setting-specific components
 	switch b.setting.Type {
-	case types.SettingTypeBool:
+	case enum.SettingTypeBool:
 		components = append(components, b.buildBooleanComponents())
-	case types.SettingTypeEnum:
+	case enum.SettingTypeEnum:
 		components = append(components, b.buildEnumComponents())
-	case types.SettingTypeID, types.SettingTypeNumber, types.SettingTypeText:
+	case enum.SettingTypeID, enum.SettingTypeNumber, enum.SettingTypeText:
 		components = append(components, b.buildModalComponents())
 	}
 
@@ -97,11 +97,11 @@ func (b *UpdateBuilder) buildEnumComponents() discord.ContainerComponent {
 func (b *UpdateBuilder) buildModalComponents() discord.ContainerComponent {
 	var buttonText string
 	switch b.setting.Type {
-	case types.SettingTypeID:
+	case enum.SettingTypeID:
 		buttonText = "Add/Remove ID"
-	case types.SettingTypeNumber:
+	case enum.SettingTypeNumber:
 		buttonText = "Set Value"
-	case types.SettingTypeText:
+	case enum.SettingTypeText:
 		buttonText = "Set Description"
 	} //exhaustive:ignore
 

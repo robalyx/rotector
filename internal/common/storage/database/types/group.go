@@ -6,10 +6,13 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jaxron/roapi.go/pkg/api/types"
+	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
 )
 
-// ErrGroupNotFound is returned when a group is not found in the database.
-var ErrGroupNotFound = errors.New("group not found")
+var (
+	ErrGroupNotFound    = errors.New("group not found")
+	ErrNoGroupsToReview = errors.New("no groups available to review")
+)
 
 // Group combines all the information needed to review a group.
 type Group struct {
@@ -57,28 +60,12 @@ type LockedGroup struct {
 // ReviewGroup combines all possible group states into a single structure for review.
 type ReviewGroup struct {
 	Group      `json:"group"`
-	VerifiedAt time.Time   `json:"verifiedAt,omitempty"`
-	ClearedAt  time.Time   `json:"clearedAt,omitempty"`
-	LockedAt   time.Time   `json:"lockedAt,omitempty"`
-	Status     GroupType   `json:"status"`
-	Reputation *Reputation `json:"reputation"`
+	VerifiedAt time.Time      `json:"verifiedAt,omitempty"`
+	ClearedAt  time.Time      `json:"clearedAt,omitempty"`
+	LockedAt   time.Time      `json:"lockedAt,omitempty"`
+	Status     enum.GroupType `json:"status"`
+	Reputation *Reputation    `json:"reputation"`
 }
-
-// GroupType represents the different states a group can be in.
-type GroupType string
-
-const (
-	// GroupTypeConfirmed indicates a group has been reviewed and confirmed as inappropriate.
-	GroupTypeConfirmed GroupType = "confirmed"
-	// GroupTypeFlagged indicates a group needs review for potential violations.
-	GroupTypeFlagged GroupType = "flagged"
-	// GroupTypeCleared indicates a group was reviewed and found to be appropriate.
-	GroupTypeCleared GroupType = "cleared"
-	// GroupTypeLocked indicates a group was locked and removed from the platform.
-	GroupTypeLocked GroupType = "locked"
-	// GroupTypeUnflagged indicates a group was not found in the database.
-	GroupTypeUnflagged GroupType = "unflagged"
-)
 
 // GroupFields represents the fields that can be requested when fetching groups.
 type GroupFields struct {

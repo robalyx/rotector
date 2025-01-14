@@ -6,25 +6,13 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jaxron/roapi.go/pkg/api/types"
+	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
 )
 
-// ErrUserNotFound is returned when a user is not found in the database.
-var ErrUserNotFound = errors.New("user not found")
-
-// UserType represents the different states a user can be in.
-type UserType string
-
-const (
-	// UserTypeConfirmed indicates a user has been reviewed and confirmed as inappropriate.
-	UserTypeConfirmed UserType = "confirmed"
-	// UserTypeFlagged indicates a user needs review for potential violations.
-	UserTypeFlagged UserType = "flagged"
-	// UserTypeCleared indicates a user was reviewed and found to be appropriate.
-	UserTypeCleared UserType = "cleared"
-	// UserTypeBanned indicates a user was banned and removed from the system.
-	UserTypeBanned UserType = "banned"
-	// UserTypeUnflagged indicates a user was not found in the database.
-	UserTypeUnflagged UserType = "unflagged"
+var (
+	ErrUserNotFound     = errors.New("user not found")
+	ErrNoUsersToReview  = errors.New("no users available to review")
+	ErrUnsupportedModel = errors.New("unsupported model type")
 )
 
 // ExtendedFriend contains additional user information beyond the basic Friend type.
@@ -91,11 +79,11 @@ type BannedUser struct {
 // ReviewUser combines all possible user states into a single structure for review.
 type ReviewUser struct {
 	User       `json:"user"`
-	VerifiedAt time.Time   `json:"verifiedAt,omitempty"`
-	ClearedAt  time.Time   `json:"clearedAt,omitempty"`
-	PurgedAt   time.Time   `json:"purgedAt,omitempty"`
-	Status     UserType    `json:"status"`
-	Reputation *Reputation `json:"reputation"`
+	VerifiedAt time.Time     `json:"verifiedAt,omitempty"`
+	ClearedAt  time.Time     `json:"clearedAt,omitempty"`
+	PurgedAt   time.Time     `json:"purgedAt,omitempty"`
+	Status     enum.UserType `json:"status"`
+	Reputation *Reputation   `json:"reputation"`
 }
 
 // UserFields represents the fields that can be requested when fetching users.

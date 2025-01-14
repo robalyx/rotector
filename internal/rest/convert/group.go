@@ -3,21 +3,22 @@ package convert
 import (
 	apiTypes "github.com/jaxron/roapi.go/pkg/api/types"
 	"github.com/robalyx/rotector/internal/common/storage/database/types"
+	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
 	restTypes "github.com/robalyx/rotector/internal/rest/types"
 )
 
 // GroupStatus converts a database group status to REST API group status.
-func GroupStatus(status types.GroupType) restTypes.GroupStatus {
+func GroupStatus(status enum.GroupType) restTypes.GroupStatus {
 	switch status {
-	case types.GroupTypeFlagged:
+	case enum.GroupTypeFlagged:
 		return restTypes.GroupStatusFlagged
-	case types.GroupTypeConfirmed:
+	case enum.GroupTypeConfirmed:
 		return restTypes.GroupStatusConfirmed
-	case types.GroupTypeCleared:
+	case enum.GroupTypeCleared:
 		return restTypes.GroupStatusCleared
-	case types.GroupTypeLocked:
+	case enum.GroupTypeLocked:
 		return restTypes.GroupStatusLocked
-	case types.GroupTypeUnflagged:
+	case enum.GroupTypeUnflagged:
 		return restTypes.GroupStatusUnflagged
 	default:
 		return restTypes.GroupStatusUnflagged

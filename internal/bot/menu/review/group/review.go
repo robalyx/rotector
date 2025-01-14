@@ -15,6 +15,7 @@ import (
 	"github.com/robalyx/rotector/internal/bot/core/session"
 	"github.com/robalyx/rotector/internal/bot/interfaces"
 	"github.com/robalyx/rotector/internal/common/storage/database/types"
+	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
 	"go.uber.org/zap"
 )
 
@@ -51,8 +52,8 @@ func (m *ReviewMenu) Show(event interfaces.CommonEvent, s *session.Session, cont
 	s.GetInterface(constants.SessionKeyUserSettings, &userSettings)
 
 	// Force training mode if user is not a reviewer
-	if !settings.IsReviewer(uint64(event.User().ID)) && userSettings.ReviewMode != types.TrainingReviewMode {
-		userSettings.ReviewMode = types.TrainingReviewMode
+	if !settings.IsReviewer(uint64(event.User().ID)) && userSettings.ReviewMode != enum.ReviewModeTraining {
+		userSettings.ReviewMode = enum.ReviewModeTraining
 		if err := m.layout.db.Settings().SaveUserSettings(context.Background(), userSettings); err != nil {
 			m.layout.logger.Error("Failed to enforce training mode", zap.Error(err))
 			m.layout.paginationManager.RespondWithError(event, "Failed to enforce training mode. Please try again.")
@@ -115,8 +116,16 @@ func (m *ReviewMenu) handleSortOrderSelection(event *events.ComponentInteraction
 	var settings *types.UserSetting
 	s.GetInterface(constants.SessionKeyUserSettings, &settings)
 
+	// Parse option to review sort
+	sortBy, err := enum.ReviewSortByString(option)
+	if err != nil {
+		m.layout.logger.Error("Failed to parse sort order", zap.Error(err))
+		m.layout.paginationManager.RespondWithError(event, "Failed to parse sort order. Please try again.")
+		return
+	}
+
 	// Update user's group sort preference
-	settings.GroupDefaultSort = types.ReviewSortBy(option)
+	settings.GroupDefaultSort = sortBy
 	if err := m.layout.db.Settings().SaveUserSettings(context.Background(), settings); err != nil {
 		m.layout.logger.Error("Failed to save user settings", zap.Error(err))
 		m.layout.paginationManager.RespondWithError(event, "Failed to save sort order. Please try again.")
@@ -197,7 +206,7 @@ func (m *ReviewMenu) fetchNewTarget(s *session.Session, reviewerID uint64) (*typ
 			GroupID: group.ID,
 		},
 		ReviewerID:        reviewerID,
-		ActivityType:      types.ActivityTypeGroupViewed,
+		ActivityType:      enum.ActivityTypeGroupViewed,
 		ActivityTimestamp: time.Now(),
 		Details:           map[string]interface{}{},
 	})
@@ -326,7 +335,7 @@ func (m *ReviewMenu) handleConfirmGroup(event interfaces.CommonEvent, s *session
 	s.GetInterface(constants.SessionKeyGroupTarget, &group)
 
 	var actionMsg string
-	if settings.ReviewMode == types.TrainingReviewMode {
+	if settings.ReviewMode == enum.ReviewModeTraining {
 		// Training mode - increment downvotes
 		if err := m.layout.db.Reputation().UpdateGroupVotes(context.Background(), group.ID, uint64(event.User().ID), false); err != nil {
 			m.layout.logger.Error("Failed to update downvotes", zap.Error(err))
@@ -342,7 +351,7 @@ func (m *ReviewMenu) handleConfirmGroup(event interfaces.CommonEvent, s *session
 				GroupID: group.ID,
 			},
 			ReviewerID:        uint64(event.User().ID),
-			ActivityType:      types.ActivityTypeGroupTrainingDownvote,
+			ActivityType:      enum.ActivityTypeGroupTrainingDownvote,
 			ActivityTimestamp: time.Now(),
 			Details: map[string]interface{}{
 				"upvotes":   group.Reputation.Upvotes,
@@ -371,7 +380,7 @@ func (m *ReviewMenu) handleConfirmGroup(event interfaces.CommonEvent, s *session
 				GroupID: group.ID,
 			},
 			ReviewerID:        uint64(event.User().ID),
-			ActivityType:      types.ActivityTypeGroupConfirmed,
+			ActivityType:      enum.ActivityTypeGroupConfirmed,
 			ActivityTimestamp: time.Now(),
 			Details:           map[string]interface{}{"reason": group.Reason},
 		})
@@ -393,7 +402,7 @@ func (m *ReviewMenu) handleClearGroup(event interfaces.CommonEvent, s *session.S
 	s.GetInterface(constants.SessionKeyGroupTarget, &group)
 
 	var actionMsg string
-	if settings.ReviewMode == types.TrainingReviewMode {
+	if settings.ReviewMode == enum.ReviewModeTraining {
 		// Training mode - increment upvotes
 		if err := m.layout.db.Reputation().UpdateGroupVotes(context.Background(), group.ID, uint64(event.User().ID), true); err != nil {
 			m.layout.logger.Error("Failed to update upvotes", zap.Error(err))
@@ -409,7 +418,7 @@ func (m *ReviewMenu) handleClearGroup(event interfaces.CommonEvent, s *session.S
 				GroupID: group.ID,
 			},
 			ReviewerID:        uint64(event.User().ID),
-			ActivityType:      types.ActivityTypeGroupTrainingUpvote,
+			ActivityType:      enum.ActivityTypeGroupTrainingUpvote,
 			ActivityTimestamp: time.Now(),
 			Details: map[string]interface{}{
 				"upvotes":   group.Reputation.Upvotes,
@@ -438,7 +447,7 @@ func (m *ReviewMenu) handleClearGroup(event interfaces.CommonEvent, s *session.S
 				GroupID: group.ID,
 			},
 			ReviewerID:        uint64(event.User().ID),
-			ActivityType:      types.ActivityTypeGroupCleared,
+			ActivityType:      enum.ActivityTypeGroupCleared,
 			ActivityTimestamp: time.Now(),
 			Details:           map[string]interface{}{},
 		})
@@ -487,7 +496,7 @@ func (m *ReviewMenu) handleSkipGroup(event interfaces.CommonEvent, s *session.Se
 			GroupID: group.ID,
 		},
 		ReviewerID:        uint64(event.User().ID),
-		ActivityType:      types.ActivityTypeGroupSkipped,
+		ActivityType:      enum.ActivityTypeGroupSkipped,
 		ActivityTimestamp: time.Now(),
 		Details:           map[string]interface{}{},
 	})
@@ -526,7 +535,7 @@ func (m *ReviewMenu) handleConfirmWithReasonModalSubmit(event *events.ModalSubmi
 			GroupID: group.ID,
 		},
 		ReviewerID:        uint64(event.User().ID),
-		ActivityType:      types.ActivityTypeGroupConfirmedCustom,
+		ActivityType:      enum.ActivityTypeGroupConfirmedCustom,
 		ActivityTimestamp: time.Now(),
 		Details:           map[string]interface{}{"reason": group.Reason},
 	})

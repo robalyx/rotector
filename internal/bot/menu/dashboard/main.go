@@ -13,6 +13,7 @@ import (
 	"github.com/robalyx/rotector/internal/bot/core/session"
 	"github.com/robalyx/rotector/internal/bot/interfaces"
 	"github.com/robalyx/rotector/internal/common/storage/database/types"
+	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
 	"go.uber.org/zap"
 )
 
@@ -199,7 +200,7 @@ func (m *MainMenu) handleLookupUserModalSubmit(event *events.ModalSubmitInteract
 			UserID: user.ID,
 		},
 		ReviewerID:        uint64(event.User().ID),
-		ActivityType:      types.ActivityTypeUserLookup,
+		ActivityType:      enum.ActivityTypeUserLookup,
 		ActivityTimestamp: time.Now(),
 		Details:           map[string]interface{}{},
 	})
@@ -232,7 +233,7 @@ func (m *MainMenu) handleLookupGroupModalSubmit(event *events.ModalSubmitInterac
 			GroupID: group.ID,
 		},
 		ReviewerID:        uint64(event.User().ID),
-		ActivityType:      types.ActivityTypeGroupLookup,
+		ActivityType:      enum.ActivityTypeGroupLookup,
 		ActivityTimestamp: time.Now(),
 		Details:           map[string]interface{}{},
 	})

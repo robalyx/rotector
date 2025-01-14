@@ -16,6 +16,7 @@ import (
 	"github.com/robalyx/rotector/internal/bot/core/session"
 	"github.com/robalyx/rotector/internal/bot/utils"
 	"github.com/robalyx/rotector/internal/common/storage/database/types"
+	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
 	"github.com/robalyx/rotector/internal/worker/core"
 	"github.com/robalyx/rotector/internal/worker/stats"
 	"golang.org/x/text/cases"
@@ -159,7 +160,7 @@ func (b *Builder) Build() *discord.MessageUpdateBuilder {
 	}
 
 	// Add announcement embed if type is not none
-	if b.botSettings.Announcement.Type != types.AnnouncementTypeNone &&
+	if b.botSettings.Announcement.Type != enum.AnnouncementTypeNone &&
 		b.botSettings.Announcement.Message != "" {
 		embeds = append(embeds, b.buildAnnouncementEmbed())
 	}
@@ -335,19 +336,19 @@ func (b *Builder) buildAnnouncementEmbed() discord.Embed {
 	var title string
 
 	switch b.botSettings.Announcement.Type {
-	case types.AnnouncementTypeInfo:
+	case enum.AnnouncementTypeInfo:
 		color = 0x3498DB // Blue
 		title = "📢 Announcement"
-	case types.AnnouncementTypeWarning:
+	case enum.AnnouncementTypeWarning:
 		color = 0xF1C40F // Yellow
 		title = "⚠️ Warning"
-	case types.AnnouncementTypeSuccess:
+	case enum.AnnouncementTypeSuccess:
 		color = 0x2ECC71 // Green
 		title = "✅ Notice"
-	case types.AnnouncementTypeError:
+	case enum.AnnouncementTypeError:
 		color = 0xE74C3C // Red
 		title = "🚫 Alert"
-	case types.AnnouncementTypeNone:
+	case enum.AnnouncementTypeNone:
 	}
 
 	return discord.NewEmbedBuilder().

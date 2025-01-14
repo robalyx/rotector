@@ -3,21 +3,22 @@ package convert
 import (
 	apiTypes "github.com/jaxron/roapi.go/pkg/api/types"
 	"github.com/robalyx/rotector/internal/common/storage/database/types"
+	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
 	restTypes "github.com/robalyx/rotector/internal/rest/types"
 )
 
 // UserStatus converts a database user status to REST API user status.
-func UserStatus(status types.UserType) restTypes.UserStatus {
+func UserStatus(status enum.UserType) restTypes.UserStatus {
 	switch status {
-	case types.UserTypeFlagged:
+	case enum.UserTypeFlagged:
 		return restTypes.UserStatusFlagged
-	case types.UserTypeConfirmed:
+	case enum.UserTypeConfirmed:
 		return restTypes.UserStatusConfirmed
-	case types.UserTypeCleared:
+	case enum.UserTypeCleared:
 		return restTypes.UserStatusCleared
-	case types.UserTypeBanned:
+	case enum.UserTypeBanned:
 		return restTypes.UserStatusBanned
-	case types.UserTypeUnflagged:
+	case enum.UserTypeUnflagged:
 		return restTypes.UserStatusUnflagged
 	default:
 		return restTypes.UserStatusUnflagged

@@ -9,6 +9,7 @@ import (
 	"github.com/robalyx/rotector/internal/bot/core/session"
 	"github.com/robalyx/rotector/internal/bot/utils"
 	"github.com/robalyx/rotector/internal/common/storage/database/types"
+	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
 )
 
 // Builder creates the visual layout for viewing the voting leaderboard.
@@ -50,7 +51,7 @@ func NewBuilder(s *session.Session) *Builder {
 func (b *Builder) Build() *discord.MessageUpdateBuilder {
 	embed := discord.NewEmbedBuilder().
 		SetTitle("🏆 Voting Leaderboard").
-		SetDescription(fmt.Sprintf("Top voters for %s period", b.settings.LeaderboardPeriod)).
+		SetDescription(fmt.Sprintf("Top voters for %s period", b.settings.LeaderboardPeriod.String())).
 		SetColor(utils.GetMessageEmbedColor(b.settings.StreamerMode))
 
 	if !b.lastRefresh.IsZero() {
@@ -122,20 +123,20 @@ func (b *Builder) buildComponents() []discord.ContainerComponent {
 // buildPeriodOptions creates the options for the time period selection menu.
 func (b *Builder) buildPeriodOptions() []discord.StringSelectMenuOption {
 	return []discord.StringSelectMenuOption{
-		discord.NewStringSelectMenuOption("Daily", string(types.LeaderboardPeriodDaily)).
-			WithDefault(b.settings.LeaderboardPeriod == types.LeaderboardPeriodDaily),
-		discord.NewStringSelectMenuOption("Weekly", string(types.LeaderboardPeriodWeekly)).
-			WithDefault(b.settings.LeaderboardPeriod == types.LeaderboardPeriodWeekly),
-		discord.NewStringSelectMenuOption("Bi-Weekly", string(types.LeaderboardPeriodBiWeekly)).
-			WithDefault(b.settings.LeaderboardPeriod == types.LeaderboardPeriodBiWeekly),
-		discord.NewStringSelectMenuOption("Monthly", string(types.LeaderboardPeriodMonthly)).
-			WithDefault(b.settings.LeaderboardPeriod == types.LeaderboardPeriodMonthly),
-		discord.NewStringSelectMenuOption("Bi-Annually", string(types.LeaderboardPeriodBiAnnually)).
-			WithDefault(b.settings.LeaderboardPeriod == types.LeaderboardPeriodBiAnnually),
-		discord.NewStringSelectMenuOption("Annually", string(types.LeaderboardPeriodAnnually)).
-			WithDefault(b.settings.LeaderboardPeriod == types.LeaderboardPeriodAnnually),
-		discord.NewStringSelectMenuOption("All Time", string(types.LeaderboardPeriodAllTime)).
-			WithDefault(b.settings.LeaderboardPeriod == types.LeaderboardPeriodAllTime),
+		discord.NewStringSelectMenuOption("Daily", enum.LeaderboardPeriodDaily.String()).
+			WithDefault(b.settings.LeaderboardPeriod == enum.LeaderboardPeriodDaily),
+		discord.NewStringSelectMenuOption("Weekly", enum.LeaderboardPeriodWeekly.String()).
+			WithDefault(b.settings.LeaderboardPeriod == enum.LeaderboardPeriodWeekly),
+		discord.NewStringSelectMenuOption("Bi-Weekly", enum.LeaderboardPeriodBiWeekly.String()).
+			WithDefault(b.settings.LeaderboardPeriod == enum.LeaderboardPeriodBiWeekly),
+		discord.NewStringSelectMenuOption("Monthly", enum.LeaderboardPeriodMonthly.String()).
+			WithDefault(b.settings.LeaderboardPeriod == enum.LeaderboardPeriodMonthly),
+		discord.NewStringSelectMenuOption("Bi-Annually", enum.LeaderboardPeriodBiAnnually.String()).
+			WithDefault(b.settings.LeaderboardPeriod == enum.LeaderboardPeriodBiAnnually),
+		discord.NewStringSelectMenuOption("Annually", enum.LeaderboardPeriodAnnually.String()).
+			WithDefault(b.settings.LeaderboardPeriod == enum.LeaderboardPeriodAnnually),
+		discord.NewStringSelectMenuOption("All Time", enum.LeaderboardPeriodAllTime.String()).
+			WithDefault(b.settings.LeaderboardPeriod == enum.LeaderboardPeriodAllTime),
 	}
 }
 

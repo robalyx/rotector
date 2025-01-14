@@ -13,6 +13,7 @@ import (
 	"github.com/robalyx/rotector/internal/bot/interfaces"
 	"github.com/robalyx/rotector/internal/bot/utils"
 	"github.com/robalyx/rotector/internal/common/storage/database/types"
+	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
 	"go.uber.org/zap"
 )
 
@@ -94,8 +95,16 @@ func (m *MainMenu) handleSelectMenu(event *events.ComponentInteractionCreate, s 
 	var settings *types.UserSetting
 	s.GetInterface(constants.SessionKeyUserSettings, &settings)
 
+	// Parse option to leaderboard period
+	period, err := enum.LeaderboardPeriodString(option)
+	if err != nil {
+		m.layout.logger.Error("Failed to parse leaderboard period", zap.Error(err))
+		m.layout.paginationManager.RespondWithError(event, "Failed to save time period preference. Please try again.")
+		return
+	}
+
 	// Update user's leaderboard period preference
-	settings.LeaderboardPeriod = types.LeaderboardPeriod(option)
+	settings.LeaderboardPeriod = period
 	if err := m.layout.db.Settings().SaveUserSettings(context.Background(), settings); err != nil {
 		m.layout.logger.Error("Failed to save user settings", zap.Error(err))
 		m.layout.paginationManager.RespondWithError(event, "Failed to save time period preference. Please try again.")

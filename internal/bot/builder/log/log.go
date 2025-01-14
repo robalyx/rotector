@@ -11,6 +11,7 @@ import (
 	"github.com/robalyx/rotector/internal/bot/core/session"
 	"github.com/robalyx/rotector/internal/bot/utils"
 	"github.com/robalyx/rotector/internal/common/storage/database/types"
+	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
 )
 
 // Builder creates the visual layout for viewing activity logs.
@@ -21,7 +22,7 @@ type Builder struct {
 	userID             uint64
 	groupID            uint64
 	reviewerID         uint64
-	activityTypeFilter types.ActivityType
+	activityTypeFilter enum.ActivityType
 	startDate          time.Time
 	endDate            time.Time
 	hasNextPage        bool
@@ -34,7 +35,7 @@ func NewBuilder(s *session.Session) *Builder {
 	s.GetInterface(constants.SessionKeyUserSettings, &settings)
 	var logs []*types.ActivityLog
 	s.GetInterface(constants.SessionKeyLogs, &logs)
-	var activityTypeFilter types.ActivityType
+	var activityTypeFilter enum.ActivityType
 	s.GetInterface(constants.SessionKeyActivityTypeFilter, &activityTypeFilter)
 
 	return &Builder{
@@ -72,7 +73,7 @@ func (b *Builder) Build() *discord.MessageUpdateBuilder {
 	if b.reviewerID != 0 {
 		embed.AddField("Reviewer ID", fmt.Sprintf("`%d`", b.reviewerID), true)
 	}
-	if b.activityTypeFilter != types.ActivityTypeAll {
+	if b.activityTypeFilter != enum.ActivityTypeAll {
 		embed.AddField("Activity Type", fmt.Sprintf("`%s`", b.activityTypeFilter), true)
 	}
 	if !b.startDate.IsZero() && !b.endDate.IsZero() {
@@ -170,55 +171,55 @@ func (b *Builder) buildComponents() []discord.ContainerComponent {
 // buildActivityTypeOptions creates the options for the activity type filter menu.
 func (b *Builder) buildActivityTypeOptions() []discord.StringSelectMenuOption {
 	return []discord.StringSelectMenuOption{
-		discord.NewStringSelectMenuOption("All", strconv.Itoa(int(types.ActivityTypeAll))).
-			WithDefault(b.activityTypeFilter == types.ActivityTypeAll),
-		discord.NewStringSelectMenuOption("User Viewed", strconv.Itoa(int(types.ActivityTypeUserViewed))).
-			WithDefault(b.activityTypeFilter == types.ActivityTypeUserViewed),
-		discord.NewStringSelectMenuOption("User Confirmed", strconv.Itoa(int(types.ActivityTypeUserConfirmed))).
-			WithDefault(b.activityTypeFilter == types.ActivityTypeUserConfirmed),
-		discord.NewStringSelectMenuOption("User Confirmed (Custom)", strconv.Itoa(int(types.ActivityTypeUserConfirmedCustom))).
-			WithDefault(b.activityTypeFilter == types.ActivityTypeUserConfirmedCustom),
-		discord.NewStringSelectMenuOption("User Cleared", strconv.Itoa(int(types.ActivityTypeUserCleared))).
-			WithDefault(b.activityTypeFilter == types.ActivityTypeUserCleared),
-		discord.NewStringSelectMenuOption("User Skipped", strconv.Itoa(int(types.ActivityTypeUserSkipped))).
-			WithDefault(b.activityTypeFilter == types.ActivityTypeUserSkipped),
-		discord.NewStringSelectMenuOption("User Rechecked", strconv.Itoa(int(types.ActivityTypeUserRechecked))).
-			WithDefault(b.activityTypeFilter == types.ActivityTypeUserRechecked),
-		discord.NewStringSelectMenuOption("User Training Upvote", strconv.Itoa(int(types.ActivityTypeUserTrainingUpvote))).
-			WithDefault(b.activityTypeFilter == types.ActivityTypeUserTrainingUpvote),
-		discord.NewStringSelectMenuOption("User Training Downvote", strconv.Itoa(int(types.ActivityTypeUserTrainingDownvote))).
-			WithDefault(b.activityTypeFilter == types.ActivityTypeUserTrainingDownvote),
-		discord.NewStringSelectMenuOption("Group Viewed", strconv.Itoa(int(types.ActivityTypeGroupViewed))).
-			WithDefault(b.activityTypeFilter == types.ActivityTypeGroupViewed),
-		discord.NewStringSelectMenuOption("Group Confirmed", strconv.Itoa(int(types.ActivityTypeGroupConfirmed))).
-			WithDefault(b.activityTypeFilter == types.ActivityTypeGroupConfirmed),
-		discord.NewStringSelectMenuOption("Group Confirmed (Custom)", strconv.Itoa(int(types.ActivityTypeGroupConfirmedCustom))).
-			WithDefault(b.activityTypeFilter == types.ActivityTypeGroupConfirmedCustom),
-		discord.NewStringSelectMenuOption("Group Cleared", strconv.Itoa(int(types.ActivityTypeGroupCleared))).
-			WithDefault(b.activityTypeFilter == types.ActivityTypeGroupCleared),
-		discord.NewStringSelectMenuOption("Group Skipped", strconv.Itoa(int(types.ActivityTypeGroupSkipped))).
-			WithDefault(b.activityTypeFilter == types.ActivityTypeGroupSkipped),
-		discord.NewStringSelectMenuOption("Group Training Upvote", strconv.Itoa(int(types.ActivityTypeGroupTrainingUpvote))).
-			WithDefault(b.activityTypeFilter == types.ActivityTypeGroupTrainingUpvote),
-		discord.NewStringSelectMenuOption("Group Training Downvote", strconv.Itoa(int(types.ActivityTypeGroupTrainingDownvote))).
-			WithDefault(b.activityTypeFilter == types.ActivityTypeGroupTrainingDownvote),
-		discord.NewStringSelectMenuOption("Appeal Submitted", strconv.Itoa(int(types.ActivityTypeAppealSubmitted))).
-			WithDefault(b.activityTypeFilter == types.ActivityTypeAppealSubmitted),
-		discord.NewStringSelectMenuOption("Appeal Skipped", strconv.Itoa(int(types.ActivityTypeAppealSkipped))).
-			WithDefault(b.activityTypeFilter == types.ActivityTypeAppealSkipped),
-		discord.NewStringSelectMenuOption("Appeal Accepted", strconv.Itoa(int(types.ActivityTypeAppealAccepted))).
-			WithDefault(b.activityTypeFilter == types.ActivityTypeAppealAccepted),
-		discord.NewStringSelectMenuOption("Appeal Rejected", strconv.Itoa(int(types.ActivityTypeAppealRejected))).
-			WithDefault(b.activityTypeFilter == types.ActivityTypeAppealRejected),
-		discord.NewStringSelectMenuOption("Appeal Closed", strconv.Itoa(int(types.ActivityTypeAppealClosed))).
-			WithDefault(b.activityTypeFilter == types.ActivityTypeAppealClosed),
-		discord.NewStringSelectMenuOption("User Deleted", strconv.Itoa(int(types.ActivityTypeUserDeleted))).
-			WithDefault(b.activityTypeFilter == types.ActivityTypeUserDeleted),
-		discord.NewStringSelectMenuOption("Group Deleted", strconv.Itoa(int(types.ActivityTypeGroupDeleted))).
-			WithDefault(b.activityTypeFilter == types.ActivityTypeGroupDeleted),
-		discord.NewStringSelectMenuOption("Discord User Banned", strconv.Itoa(int(types.ActivityTypeDiscordUserBanned))).
-			WithDefault(b.activityTypeFilter == types.ActivityTypeDiscordUserBanned),
-		discord.NewStringSelectMenuOption("Discord User Unbanned", strconv.Itoa(int(types.ActivityTypeDiscordUserUnbanned))).
-			WithDefault(b.activityTypeFilter == types.ActivityTypeDiscordUserUnbanned),
+		discord.NewStringSelectMenuOption("All", strconv.Itoa(int(enum.ActivityTypeAll))).
+			WithDefault(b.activityTypeFilter == enum.ActivityTypeAll),
+		discord.NewStringSelectMenuOption("User Viewed", strconv.Itoa(int(enum.ActivityTypeUserViewed))).
+			WithDefault(b.activityTypeFilter == enum.ActivityTypeUserViewed),
+		discord.NewStringSelectMenuOption("User Confirmed", strconv.Itoa(int(enum.ActivityTypeUserConfirmed))).
+			WithDefault(b.activityTypeFilter == enum.ActivityTypeUserConfirmed),
+		discord.NewStringSelectMenuOption("User Confirmed (Custom)", strconv.Itoa(int(enum.ActivityTypeUserConfirmedCustom))).
+			WithDefault(b.activityTypeFilter == enum.ActivityTypeUserConfirmedCustom),
+		discord.NewStringSelectMenuOption("User Cleared", strconv.Itoa(int(enum.ActivityTypeUserCleared))).
+			WithDefault(b.activityTypeFilter == enum.ActivityTypeUserCleared),
+		discord.NewStringSelectMenuOption("User Skipped", strconv.Itoa(int(enum.ActivityTypeUserSkipped))).
+			WithDefault(b.activityTypeFilter == enum.ActivityTypeUserSkipped),
+		discord.NewStringSelectMenuOption("User Rechecked", strconv.Itoa(int(enum.ActivityTypeUserRechecked))).
+			WithDefault(b.activityTypeFilter == enum.ActivityTypeUserRechecked),
+		discord.NewStringSelectMenuOption("User Training Upvote", strconv.Itoa(int(enum.ActivityTypeUserTrainingUpvote))).
+			WithDefault(b.activityTypeFilter == enum.ActivityTypeUserTrainingUpvote),
+		discord.NewStringSelectMenuOption("User Training Downvote", strconv.Itoa(int(enum.ActivityTypeUserTrainingDownvote))).
+			WithDefault(b.activityTypeFilter == enum.ActivityTypeUserTrainingDownvote),
+		discord.NewStringSelectMenuOption("Group Viewed", strconv.Itoa(int(enum.ActivityTypeGroupViewed))).
+			WithDefault(b.activityTypeFilter == enum.ActivityTypeGroupViewed),
+		discord.NewStringSelectMenuOption("Group Confirmed", strconv.Itoa(int(enum.ActivityTypeGroupConfirmed))).
+			WithDefault(b.activityTypeFilter == enum.ActivityTypeGroupConfirmed),
+		discord.NewStringSelectMenuOption("Group Confirmed (Custom)", strconv.Itoa(int(enum.ActivityTypeGroupConfirmedCustom))).
+			WithDefault(b.activityTypeFilter == enum.ActivityTypeGroupConfirmedCustom),
+		discord.NewStringSelectMenuOption("Group Cleared", strconv.Itoa(int(enum.ActivityTypeGroupCleared))).
+			WithDefault(b.activityTypeFilter == enum.ActivityTypeGroupCleared),
+		discord.NewStringSelectMenuOption("Group Skipped", strconv.Itoa(int(enum.ActivityTypeGroupSkipped))).
+			WithDefault(b.activityTypeFilter == enum.ActivityTypeGroupSkipped),
+		discord.NewStringSelectMenuOption("Group Training Upvote", strconv.Itoa(int(enum.ActivityTypeGroupTrainingUpvote))).
+			WithDefault(b.activityTypeFilter == enum.ActivityTypeGroupTrainingUpvote),
+		discord.NewStringSelectMenuOption("Group Training Downvote", strconv.Itoa(int(enum.ActivityTypeGroupTrainingDownvote))).
+			WithDefault(b.activityTypeFilter == enum.ActivityTypeGroupTrainingDownvote),
+		discord.NewStringSelectMenuOption("Appeal Submitted", strconv.Itoa(int(enum.ActivityTypeAppealSubmitted))).
+			WithDefault(b.activityTypeFilter == enum.ActivityTypeAppealSubmitted),
+		discord.NewStringSelectMenuOption("Appeal Skipped", strconv.Itoa(int(enum.ActivityTypeAppealSkipped))).
+			WithDefault(b.activityTypeFilter == enum.ActivityTypeAppealSkipped),
+		discord.NewStringSelectMenuOption("Appeal Accepted", strconv.Itoa(int(enum.ActivityTypeAppealAccepted))).
+			WithDefault(b.activityTypeFilter == enum.ActivityTypeAppealAccepted),
+		discord.NewStringSelectMenuOption("Appeal Rejected", strconv.Itoa(int(enum.ActivityTypeAppealRejected))).
+			WithDefault(b.activityTypeFilter == enum.ActivityTypeAppealRejected),
+		discord.NewStringSelectMenuOption("Appeal Closed", strconv.Itoa(int(enum.ActivityTypeAppealClosed))).
+			WithDefault(b.activityTypeFilter == enum.ActivityTypeAppealClosed),
+		discord.NewStringSelectMenuOption("User Deleted", strconv.Itoa(int(enum.ActivityTypeUserDeleted))).
+			WithDefault(b.activityTypeFilter == enum.ActivityTypeUserDeleted),
+		discord.NewStringSelectMenuOption("Group Deleted", strconv.Itoa(int(enum.ActivityTypeGroupDeleted))).
+			WithDefault(b.activityTypeFilter == enum.ActivityTypeGroupDeleted),
+		discord.NewStringSelectMenuOption("Discord User Banned", strconv.Itoa(int(enum.ActivityTypeDiscordUserBanned))).
+			WithDefault(b.activityTypeFilter == enum.ActivityTypeDiscordUserBanned),
+		discord.NewStringSelectMenuOption("Discord User Unbanned", strconv.Itoa(int(enum.ActivityTypeDiscordUserUnbanned))).
+			WithDefault(b.activityTypeFilter == enum.ActivityTypeDiscordUserUnbanned),
 	}
 }

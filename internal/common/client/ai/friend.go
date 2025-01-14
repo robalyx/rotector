@@ -9,6 +9,7 @@ import (
 	"github.com/robalyx/rotector/internal/common/client/fetcher"
 	"github.com/robalyx/rotector/internal/common/setup"
 	"github.com/robalyx/rotector/internal/common/storage/database/types"
+	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
 	"github.com/tdewolff/minify/v2"
 	"github.com/tdewolff/minify/v2/json"
 	"go.uber.org/zap"
@@ -83,9 +84,9 @@ func NewFriendAnalyzer(app *setup.App, logger *zap.Logger) *FriendAnalyzer {
 func (a *FriendAnalyzer) GenerateFriendReason(userInfo *fetcher.Info, confirmedFriends, flaggedFriends map[uint64]*types.User) (string, error) {
 	// Create a summary of friend data for AI analysis
 	type FriendSummary struct {
-		Name   string         `json:"name"`
-		Reason string         `json:"reason"`
-		Type   types.UserType `json:"type"`
+		Name   string        `json:"name"`
+		Reason string        `json:"reason"`
+		Type   enum.UserType `json:"type"`
 	}
 
 	// Collect friend summaries with token counting
@@ -93,7 +94,7 @@ func (a *FriendAnalyzer) GenerateFriendReason(userInfo *fetcher.Info, confirmedF
 
 	// Helper function to add friend if within token limit
 	currentTokens := int32(0)
-	addFriend := func(friend *types.User, friendType types.UserType) bool {
+	addFriend := func(friend *types.User, friendType enum.UserType) bool {
 		summary := FriendSummary{
 			Name:   friend.Name,
 			Reason: friend.Reason,
@@ -129,14 +130,14 @@ func (a *FriendAnalyzer) GenerateFriendReason(userInfo *fetcher.Info, confirmedF
 
 	// Add confirmed friends first (they're usually more important)
 	for _, friend := range confirmedFriends {
-		if !addFriend(friend, types.UserTypeConfirmed) {
+		if !addFriend(friend, enum.UserTypeConfirmed) {
 			break
 		}
 	}
 
 	// Add flagged friends if there's room
 	for _, friend := range flaggedFriends {
-		if !addFriend(friend, types.UserTypeFlagged) {
+		if !addFriend(friend, enum.UserTypeFlagged) {
 			break
 		}
 	}

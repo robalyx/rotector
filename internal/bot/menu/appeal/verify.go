@@ -15,6 +15,7 @@ import (
 	"github.com/robalyx/rotector/internal/bot/interfaces"
 	"github.com/robalyx/rotector/internal/bot/utils"
 	"github.com/robalyx/rotector/internal/common/storage/database/types"
+	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
 	"go.uber.org/zap"
 )
 
@@ -95,6 +96,7 @@ func (m *VerifyMenu) verifyDescription(event *events.ComponentInteractionCreate,
 	appeal := &types.Appeal{
 		UserID:      userID,
 		RequesterID: uint64(event.User().ID),
+		Status:      enum.AppealStatusPending,
 	}
 
 	// Submit appeal
@@ -114,7 +116,7 @@ func (m *VerifyMenu) verifyDescription(event *events.ComponentInteractionCreate,
 			UserID: userID,
 		},
 		ReviewerID:        uint64(event.User().ID),
-		ActivityType:      types.ActivityTypeAppealSubmitted,
+		ActivityType:      enum.ActivityTypeAppealSubmitted,
 		ActivityTimestamp: time.Now(),
 		Details: map[string]interface{}{
 			"reason": reason,

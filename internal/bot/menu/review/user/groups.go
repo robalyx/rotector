@@ -14,6 +14,7 @@ import (
 	"github.com/robalyx/rotector/internal/bot/core/session"
 	"github.com/robalyx/rotector/internal/bot/utils"
 	"github.com/robalyx/rotector/internal/common/storage/database/types"
+	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
 	"go.uber.org/zap"
 )
 
@@ -86,9 +87,9 @@ func (m *GroupsMenu) Show(event *events.ComponentInteractionCreate, s *session.S
 // sortGroupsByStatus sorts groups into categories based on their status.
 func (m *GroupsMenu) sortGroupsByStatus(groups []*apiTypes.UserGroupRoles, flaggedGroups map[uint64]*types.ReviewGroup) []*apiTypes.UserGroupRoles {
 	// Group groups by their status
-	groupedGroups := make(map[types.GroupType][]*apiTypes.UserGroupRoles)
+	groupedGroups := make(map[enum.GroupType][]*apiTypes.UserGroupRoles)
 	for _, group := range groups {
-		status := types.GroupTypeUnflagged
+		status := enum.GroupTypeUnflagged
 		if reviewGroup, exists := flaggedGroups[group.Group.ID]; exists {
 			status = reviewGroup.Status
 		}
@@ -96,12 +97,12 @@ func (m *GroupsMenu) sortGroupsByStatus(groups []*apiTypes.UserGroupRoles, flagg
 	}
 
 	// Define status priority order
-	statusOrder := []types.GroupType{
-		types.GroupTypeConfirmed,
-		types.GroupTypeFlagged,
-		types.GroupTypeLocked,
-		types.GroupTypeCleared,
-		types.GroupTypeUnflagged,
+	statusOrder := []enum.GroupType{
+		enum.GroupTypeConfirmed,
+		enum.GroupTypeFlagged,
+		enum.GroupTypeLocked,
+		enum.GroupTypeCleared,
+		enum.GroupTypeUnflagged,
 	}
 
 	// Combine groups in priority order

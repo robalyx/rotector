@@ -10,6 +10,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/robalyx/rotector/internal/common/storage/database/types"
+	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
 	"github.com/uptrace/bun"
 	"go.uber.org/zap"
 )
@@ -57,7 +58,7 @@ func (r *GroupModel) SaveGroups(ctx context.Context, groups map[uint64]*types.Gr
 	confirmedGroups := make([]*types.ConfirmedGroup, 0)
 	clearedGroups := make([]*types.ClearedGroup, 0)
 	lockedGroups := make([]*types.LockedGroup, 0)
-	counts := make(map[types.GroupType]int)
+	counts := make(map[enum.GroupType]int)
 
 	// Group groups by their target tables
 	for id, group := range groups {
@@ -67,36 +68,36 @@ func (r *GroupModel) SaveGroups(ctx context.Context, groups map[uint64]*types.Gr
 		}
 
 		// Get existing group data if available
-		var status types.GroupType
+		var status enum.GroupType
 		existingGroup := existingGroups[id]
-		if existingGroup.Status != types.GroupTypeUnflagged {
+		if existingGroup.Status != enum.GroupTypeUnflagged {
 			status = existingGroup.Status
 		} else {
 			// Default to flagged_groups for new groups
-			status = types.GroupTypeFlagged
+			status = enum.GroupTypeFlagged
 		}
 
 		switch status {
-		case types.GroupTypeConfirmed:
+		case enum.GroupTypeConfirmed:
 			confirmedGroups = append(confirmedGroups, &types.ConfirmedGroup{
 				Group:      *group,
 				VerifiedAt: existingGroup.VerifiedAt,
 			})
-		case types.GroupTypeFlagged:
+		case enum.GroupTypeFlagged:
 			flaggedGroups = append(flaggedGroups, &types.FlaggedGroup{
 				Group: *group,
 			})
-		case types.GroupTypeCleared:
+		case enum.GroupTypeCleared:
 			clearedGroups = append(clearedGroups, &types.ClearedGroup{
 				Group:     *group,
 				ClearedAt: existingGroup.ClearedAt,
 			})
-		case types.GroupTypeLocked:
+		case enum.GroupTypeLocked:
 			lockedGroups = append(lockedGroups, &types.LockedGroup{
 				Group:    *group,
 				LockedAt: existingGroup.LockedAt,
 			})
-		case types.GroupTypeUnflagged:
+		case enum.GroupTypeUnflagged:
 			continue
 		}
 		counts[status]++
@@ -105,7 +106,7 @@ func (r *GroupModel) SaveGroups(ctx context.Context, groups map[uint64]*types.Gr
 	// Update each table
 	err = r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
 		// Helper function to update a table
-		updateTable := func(groups interface{}, status types.GroupType) error {
+		updateTable := func(groups interface{}, status enum.GroupType) error {
 			if counts[status] == 0 {
 				return nil
 			}
@@ -134,16 +135,16 @@ func (r *GroupModel) SaveGroups(ctx context.Context, groups map[uint64]*types.Gr
 		}
 
 		// Update each table with its corresponding slice
-		if err := updateTable(&flaggedGroups, types.GroupTypeFlagged); err != nil {
+		if err := updateTable(&flaggedGroups, enum.GroupTypeFlagged); err != nil {
 			return err
 		}
-		if err := updateTable(&confirmedGroups, types.GroupTypeConfirmed); err != nil {
+		if err := updateTable(&confirmedGroups, enum.GroupTypeConfirmed); err != nil {
 			return err
 		}
-		if err := updateTable(&clearedGroups, types.GroupTypeCleared); err != nil {
+		if err := updateTable(&clearedGroups, enum.GroupTypeCleared); err != nil {
 			return err
 		}
-		if err := updateTable(&lockedGroups, types.GroupTypeLocked); err != nil {
+		if err := updateTable(&lockedGroups, enum.GroupTypeLocked); err != nil {
 			return err
 		}
 
@@ -155,10 +156,10 @@ func (r *GroupModel) SaveGroups(ctx context.Context, groups map[uint64]*types.Gr
 
 	r.logger.Debug("Successfully saved groups",
 		zap.Int("totalGroups", len(groups)),
-		zap.Int("flaggedGroups", counts[types.GroupTypeFlagged]),
-		zap.Int("confirmedGroups", counts[types.GroupTypeConfirmed]),
-		zap.Int("clearedGroups", counts[types.GroupTypeCleared]),
-		zap.Int("lockedGroups", counts[types.GroupTypeLocked]))
+		zap.Int("flaggedGroups", counts[enum.GroupTypeFlagged]),
+		zap.Int("confirmedGroups", counts[enum.GroupTypeConfirmed]),
+		zap.Int("clearedGroups", counts[enum.GroupTypeCleared]),
+		zap.Int("lockedGroups", counts[enum.GroupTypeLocked]))
 
 	return nil
 }
@@ -210,7 +211,7 @@ func (r *GroupModel) ConfirmGroup(ctx context.Context, group *types.ReviewGroup)
 	}
 
 	// Verify votes for the group
-	if err := r.votes.VerifyVotes(ctx, group.ID, true, types.VoteTypeGroup); err != nil {
+	if err := r.votes.VerifyVotes(ctx, group.ID, true, enum.VoteTypeGroup); err != nil {
 		r.logger.Error("Failed to verify votes", zap.Error(err))
 		return err
 	}
@@ -265,7 +266,7 @@ func (r *GroupModel) ClearGroup(ctx context.Context, group *types.ReviewGroup) e
 	}
 
 	// Verify votes for the group
-	if err := r.votes.VerifyVotes(ctx, group.ID, false, types.VoteTypeGroup); err != nil {
+	if err := r.votes.VerifyVotes(ctx, group.ID, false, enum.VoteTypeGroup); err != nil {
 		r.logger.Error("Failed to verify votes", zap.Error(err))
 		return err
 	}
@@ -310,19 +311,19 @@ func (r *GroupModel) GetGroupByID(ctx context.Context, groupID string, fields ty
 				switch m := model.(type) {
 				case *types.FlaggedGroup:
 					result.Group = m.Group
-					result.Status = types.GroupTypeFlagged
+					result.Status = enum.GroupTypeFlagged
 				case *types.ConfirmedGroup:
 					result.Group = m.Group
 					result.VerifiedAt = m.VerifiedAt
-					result.Status = types.GroupTypeConfirmed
+					result.Status = enum.GroupTypeConfirmed
 				case *types.ClearedGroup:
 					result.Group = m.Group
 					result.ClearedAt = m.ClearedAt
-					result.Status = types.GroupTypeCleared
+					result.Status = enum.GroupTypeCleared
 				case *types.LockedGroup:
 					result.Group = m.Group
 					result.LockedAt = m.LockedAt
-					result.Status = types.GroupTypeLocked
+					result.Status = enum.GroupTypeLocked
 				}
 
 				// Get reputation
@@ -381,7 +382,7 @@ func (r *GroupModel) GetGroupsByIDs(ctx context.Context, groupIDs []uint64, fiel
 			groups[group.ID] = &types.ReviewGroup{
 				Group:      group.Group,
 				VerifiedAt: group.VerifiedAt,
-				Status:     types.GroupTypeConfirmed,
+				Status:     enum.GroupTypeConfirmed,
 			}
 		}
 
@@ -398,7 +399,7 @@ func (r *GroupModel) GetGroupsByIDs(ctx context.Context, groupIDs []uint64, fiel
 		for _, group := range flaggedGroups {
 			groups[group.ID] = &types.ReviewGroup{
 				Group:  group.Group,
-				Status: types.GroupTypeFlagged,
+				Status: enum.GroupTypeFlagged,
 			}
 		}
 
@@ -416,7 +417,7 @@ func (r *GroupModel) GetGroupsByIDs(ctx context.Context, groupIDs []uint64, fiel
 			groups[group.ID] = &types.ReviewGroup{
 				Group:     group.Group,
 				ClearedAt: group.ClearedAt,
-				Status:    types.GroupTypeCleared,
+				Status:    enum.GroupTypeCleared,
 			}
 		}
 
@@ -434,7 +435,7 @@ func (r *GroupModel) GetGroupsByIDs(ctx context.Context, groupIDs []uint64, fiel
 			groups[group.ID] = &types.ReviewGroup{
 				Group:    group.Group,
 				LockedAt: group.LockedAt,
-				Status:   types.GroupTypeLocked,
+				Status:   enum.GroupTypeLocked,
 			}
 		}
 
@@ -443,7 +444,7 @@ func (r *GroupModel) GetGroupsByIDs(ctx context.Context, groupIDs []uint64, fiel
 			if _, ok := groups[id]; !ok {
 				groups[id] = &types.ReviewGroup{
 					Group:  types.Group{ID: id},
-					Status: types.GroupTypeUnflagged,
+					Status: enum.GroupTypeUnflagged,
 				}
 			}
 		}
@@ -793,7 +794,7 @@ func (r *GroupModel) CheckConfirmedGroups(ctx context.Context, groupIDs []uint64
 }
 
 // GetGroupToReview finds a group to review based on the sort method and target mode.
-func (r *GroupModel) GetGroupToReview(ctx context.Context, sortBy types.ReviewSortBy, targetMode types.ReviewTargetMode, reviewerID uint64) (*types.ReviewGroup, error) {
+func (r *GroupModel) GetGroupToReview(ctx context.Context, sortBy enum.ReviewSortBy, targetMode enum.ReviewTargetMode, reviewerID uint64) (*types.ReviewGroup, error) {
 	// Get recently reviewed group IDs
 	recentIDs, err := r.activity.GetRecentlyReviewedIDs(ctx, reviewerID, true, 100)
 	if err != nil {
@@ -805,28 +806,28 @@ func (r *GroupModel) GetGroupToReview(ctx context.Context, sortBy types.ReviewSo
 	// Define models in priority order based on target mode
 	var models []interface{}
 	switch targetMode {
-	case types.FlaggedReviewTarget:
+	case enum.ReviewTargetModeFlagged:
 		models = []interface{}{
 			&types.FlaggedGroup{},   // Primary target
 			&types.ConfirmedGroup{}, // First fallback
 			&types.ClearedGroup{},   // Second fallback
 			&types.LockedGroup{},    // Last fallback
 		}
-	case types.ConfirmedReviewTarget:
+	case enum.ReviewTargetModeConfirmed:
 		models = []interface{}{
 			&types.ConfirmedGroup{}, // Primary target
 			&types.FlaggedGroup{},   // First fallback
 			&types.ClearedGroup{},   // Second fallback
 			&types.LockedGroup{},    // Last fallback
 		}
-	case types.ClearedReviewTarget:
+	case enum.ReviewTargetModeCleared:
 		models = []interface{}{
 			&types.ClearedGroup{},   // Primary target
 			&types.FlaggedGroup{},   // First fallback
 			&types.ConfirmedGroup{}, // Second fallback
 			&types.LockedGroup{},    // Last fallback
 		}
-	case types.BannedReviewTarget:
+	case enum.ReviewTargetModeBanned:
 		models = []interface{}{
 			&types.LockedGroup{},    // Primary target
 			&types.FlaggedGroup{},   // First fallback
@@ -850,7 +851,7 @@ func (r *GroupModel) GetGroupToReview(ctx context.Context, sortBy types.ReviewSo
 }
 
 // getNextToReview handles the common logic for getting the next item to review.
-func (r *GroupModel) getNextToReview(ctx context.Context, model interface{}, sortBy types.ReviewSortBy, recentIDs []uint64) (*types.ReviewGroup, error) {
+func (r *GroupModel) getNextToReview(ctx context.Context, model interface{}, sortBy enum.ReviewSortBy, recentIDs []uint64) (*types.ReviewGroup, error) {
 	var result types.ReviewGroup
 	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
 		// Build subquery to get ID
@@ -865,14 +866,14 @@ func (r *GroupModel) getNextToReview(ctx context.Context, model interface{}, sor
 
 		// Apply sort order to subquery
 		switch sortBy {
-		case types.ReviewSortByConfidence:
+		case enum.ReviewSortByConfidence:
 			subq.Order("confidence DESC")
-		case types.ReviewSortByLastUpdated:
+		case enum.ReviewSortByLastUpdated:
 			subq.Order("last_updated ASC")
-		case types.ReviewSortByReputation:
+		case enum.ReviewSortByReputation:
 			subq.Join("LEFT JOIN group_reputations ON group_reputations.id = ?TableAlias.id").
 				OrderExpr("COALESCE(group_reputations.score, 0) ASC")
-		case types.ReviewSortByRandom:
+		case enum.ReviewSortByRandom:
 			subq.OrderExpr("RANDOM()")
 		}
 
@@ -892,19 +893,19 @@ func (r *GroupModel) getNextToReview(ctx context.Context, model interface{}, sor
 		switch m := model.(type) {
 		case *types.FlaggedGroup:
 			result.Group = m.Group
-			result.Status = types.GroupTypeFlagged
+			result.Status = enum.GroupTypeFlagged
 		case *types.ConfirmedGroup:
 			result.Group = m.Group
 			result.VerifiedAt = m.VerifiedAt
-			result.Status = types.GroupTypeConfirmed
+			result.Status = enum.GroupTypeConfirmed
 		case *types.ClearedGroup:
 			result.Group = m.Group
 			result.ClearedAt = m.ClearedAt
-			result.Status = types.GroupTypeCleared
+			result.Status = enum.GroupTypeCleared
 		case *types.LockedGroup:
 			result.Group = m.Group
 			result.LockedAt = m.LockedAt
-			result.Status = types.GroupTypeLocked
+			result.Status = enum.GroupTypeLocked
 		default:
 			return fmt.Errorf("%w: %T", types.ErrUnsupportedModel, model)
 		}

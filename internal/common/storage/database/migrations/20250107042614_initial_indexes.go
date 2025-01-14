@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/robalyx/rotector/internal/common/storage/database/types"
+	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
 	"github.com/uptrace/bun"
 )
 
@@ -13,13 +13,13 @@ func init() { //nolint:funlen
 		name     string
 		interval string
 	}{
-		{"daily", "INTERVAL '1 day'"},
-		{"weekly", "INTERVAL '1 week'"},
-		{"biweekly", "INTERVAL '2 weeks'"},
-		{"monthly", "INTERVAL '1 month'"},
-		{"biannually", "INTERVAL '6 months'"},
-		{"annually", "INTERVAL '1 year'"},
-		{"all_time", "NULL"},
+		{enum.LeaderboardPeriodDaily.String(), "INTERVAL '1 day'"},
+		{enum.LeaderboardPeriodWeekly.String(), "INTERVAL '1 week'"},
+		{enum.LeaderboardPeriodBiWeekly.String(), "INTERVAL '2 weeks'"},
+		{enum.LeaderboardPeriodMonthly.String(), "INTERVAL '1 month'"},
+		{enum.LeaderboardPeriodBiAnnually.String(), "INTERVAL '6 months'"},
+		{enum.LeaderboardPeriodAnnually.String(), "INTERVAL '1 year'"},
+		{enum.LeaderboardPeriodAllTime.String(), "NULL"},
 	}
 
 	Migrations.MustRegister(func(ctx context.Context, db *bun.DB) error {
@@ -184,7 +184,7 @@ func init() { //nolint:funlen
 			-- Vote statistics index
 			CREATE INDEX IF NOT EXISTS idx_vote_stats_voted_at 
 			ON vote_stats (voted_at DESC);
-		`, types.ActivityTypeUserViewed, types.ActivityTypeGroupViewed).Exec(ctx)
+		`, enum.ActivityTypeUserViewed, enum.ActivityTypeGroupViewed).Exec(ctx)
 		if err != nil {
 			return fmt.Errorf("failed to create indexes: %w", err)
 		}

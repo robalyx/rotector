@@ -14,6 +14,7 @@ import (
 	"github.com/robalyx/rotector/internal/bot/interfaces"
 	"github.com/robalyx/rotector/internal/bot/utils"
 	"github.com/robalyx/rotector/internal/common/storage/database/types"
+	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
 	"go.uber.org/zap"
 )
 
@@ -121,7 +122,7 @@ func (m *MainMenu) handleSelectMenu(event *events.ComponentInteractionCreate, s 
 			return
 		}
 
-		s.Set(constants.SessionKeyActivityTypeFilter, types.ActivityType(optionInt))
+		s.Set(constants.SessionKeyActivityTypeFilter, enum.ActivityType(optionInt))
 		m.Show(event, s)
 	}
 }

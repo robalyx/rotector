@@ -15,6 +15,7 @@ import (
 	"github.com/robalyx/rotector/internal/bot/core/session"
 	"github.com/robalyx/rotector/internal/bot/interfaces"
 	"github.com/robalyx/rotector/internal/common/storage/database/types"
+	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
 	"go.uber.org/zap"
 )
 
@@ -83,11 +84,10 @@ func (m *ConfirmMenu) handleBanUser(event *events.ComponentInteractionCreate, s 
 	// Get ban type from session
 	banType := s.GetString(constants.SessionKeyBanType)
 
-	// Validate and parse ban type
-	reason := types.BanReasonOther
-	switch types.BanReason(banType) {
-	case types.BanReasonAbuse, types.BanReasonInappropriate, types.BanReasonOther:
-		reason = types.BanReason(banType)
+	// Parse ban type
+	reason, err := enum.BanReasonString(banType)
+	if err != nil {
+		reason = enum.BanReasonOther
 	}
 
 	// Get ban expiry from session
@@ -99,7 +99,7 @@ func (m *ConfirmMenu) handleBanUser(event *events.ComponentInteractionCreate, s 
 	if err := m.layout.db.Bans().BanUser(context.Background(), &types.DiscordBan{
 		ID:        snowflake.ID(id),
 		Reason:    reason,
-		Source:    types.BanSourceAdmin,
+		Source:    enum.BanSourceAdmin,
 		Notes:     notes,
 		BannedBy:  uint64(event.User().ID),
 		BannedAt:  now,
@@ -121,7 +121,7 @@ func (m *ConfirmMenu) handleBanUser(event *events.ComponentInteractionCreate, s 
 			DiscordID: id,
 		},
 		ReviewerID:        uint64(event.User().ID),
-		ActivityType:      types.ActivityTypeDiscordUserBanned,
+		ActivityType:      enum.ActivityTypeDiscordUserBanned,
 		ActivityTimestamp: time.Now(),
 		Details: map[string]interface{}{
 			"notes": notes,
@@ -164,7 +164,7 @@ func (m *ConfirmMenu) handleUnbanUser(event *events.ComponentInteractionCreate, 
 			DiscordID: id,
 		},
 		ReviewerID:        uint64(event.User().ID),
-		ActivityType:      types.ActivityTypeDiscordUserUnbanned,
+		ActivityType:      enum.ActivityTypeDiscordUserUnbanned,
 		ActivityTimestamp: time.Now(),
 		Details: map[string]interface{}{
 			"notes": notes,
@@ -205,7 +205,7 @@ func (m *ConfirmMenu) handleDeleteUser(event *events.ComponentInteractionCreate,
 			UserID: id,
 		},
 		ReviewerID:        uint64(event.User().ID),
-		ActivityType:      types.ActivityTypeUserDeleted,
+		ActivityType:      enum.ActivityTypeUserDeleted,
 		ActivityTimestamp: time.Now(),
 		Details: map[string]interface{}{
 			"reason": reason,
@@ -246,7 +246,7 @@ func (m *ConfirmMenu) handleDeleteGroup(event *events.ComponentInteractionCreate
 			GroupID: id,
 		},
 		ReviewerID:        uint64(event.User().ID),
-		ActivityType:      types.ActivityTypeGroupDeleted,
+		ActivityType:      enum.ActivityTypeGroupDeleted,
 		ActivityTimestamp: time.Now(),
 		Details: map[string]interface{}{
 			"reason": reason,

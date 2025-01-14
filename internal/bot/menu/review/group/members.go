@@ -15,6 +15,7 @@ import (
 	"github.com/robalyx/rotector/internal/bot/core/session"
 	"github.com/robalyx/rotector/internal/bot/utils"
 	"github.com/robalyx/rotector/internal/common/storage/database/types"
+	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
 	"go.uber.org/zap"
 )
 
@@ -125,9 +126,9 @@ func (m *MembersMenu) handlePageNavigation(event *events.ComponentInteractionCre
 // sortMembersByStatus sorts members by their status in priority order.
 func (m *MembersMenu) sortMembersByStatus(memberIDs []uint64, flaggedUsers map[uint64]*types.ReviewUser) []uint64 {
 	// Group members by status
-	groupedMembers := make(map[types.UserType][]uint64)
+	groupedMembers := make(map[enum.UserType][]uint64)
 	for _, memberID := range memberIDs {
-		status := types.UserTypeUnflagged
+		status := enum.UserTypeUnflagged
 		if member, exists := flaggedUsers[memberID]; exists {
 			status = member.Status
 		}
@@ -135,12 +136,12 @@ func (m *MembersMenu) sortMembersByStatus(memberIDs []uint64, flaggedUsers map[u
 	}
 
 	// Define status priority order
-	statusOrder := []types.UserType{
-		types.UserTypeConfirmed,
-		types.UserTypeFlagged,
-		types.UserTypeBanned,
-		types.UserTypeCleared,
-		types.UserTypeUnflagged,
+	statusOrder := []enum.UserType{
+		enum.UserTypeConfirmed,
+		enum.UserTypeFlagged,
+		enum.UserTypeBanned,
+		enum.UserTypeCleared,
+		enum.UserTypeUnflagged,
 	}
 
 	// Combine members in priority order

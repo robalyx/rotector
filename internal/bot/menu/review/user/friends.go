@@ -14,6 +14,7 @@ import (
 	"github.com/robalyx/rotector/internal/bot/core/session"
 	"github.com/robalyx/rotector/internal/bot/utils"
 	"github.com/robalyx/rotector/internal/common/storage/database/types"
+	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
 	"go.uber.org/zap"
 )
 
@@ -115,9 +116,9 @@ func (m *FriendsMenu) handlePageNavigation(event *events.ComponentInteractionCre
 // sortFriendsByStatus sorts friends into categories based on their status.
 func (m *FriendsMenu) sortFriendsByStatus(friends []types.ExtendedFriend, flaggedFriends map[uint64]*types.ReviewUser) []types.ExtendedFriend {
 	// Group friends by their status
-	groupedFriends := make(map[types.UserType][]types.ExtendedFriend)
+	groupedFriends := make(map[enum.UserType][]types.ExtendedFriend)
 	for _, friend := range friends {
-		status := types.UserTypeUnflagged
+		status := enum.UserTypeUnflagged
 		if reviewUser, exists := flaggedFriends[friend.ID]; exists {
 			status = reviewUser.Status
 		}
@@ -125,12 +126,12 @@ func (m *FriendsMenu) sortFriendsByStatus(friends []types.ExtendedFriend, flagge
 	}
 
 	// Define status priority order
-	statusOrder := []types.UserType{
-		types.UserTypeConfirmed,
-		types.UserTypeFlagged,
-		types.UserTypeBanned,
-		types.UserTypeCleared,
-		types.UserTypeUnflagged,
+	statusOrder := []enum.UserType{
+		enum.UserTypeConfirmed,
+		enum.UserTypeFlagged,
+		enum.UserTypeBanned,
+		enum.UserTypeCleared,
+		enum.UserTypeUnflagged,
 	}
 
 	// Combine friends in priority order

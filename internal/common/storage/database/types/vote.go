@@ -7,27 +7,6 @@ import (
 
 var ErrInvalidVoteType = errors.New("invalid vote type")
 
-// LeaderboardPeriod represents different time periods for the leaderboard.
-type LeaderboardPeriod string
-
-const (
-	LeaderboardPeriodDaily      LeaderboardPeriod = "daily"
-	LeaderboardPeriodWeekly     LeaderboardPeriod = "weekly"
-	LeaderboardPeriodBiWeekly   LeaderboardPeriod = "biweekly"
-	LeaderboardPeriodMonthly    LeaderboardPeriod = "monthly"
-	LeaderboardPeriodBiAnnually LeaderboardPeriod = "biannually"
-	LeaderboardPeriodAnnually   LeaderboardPeriod = "annually"
-	LeaderboardPeriodAllTime    LeaderboardPeriod = "all_time"
-)
-
-// VoteType represents the type of entity being voted on.
-type VoteType string
-
-const (
-	VoteTypeUser  VoteType = "user"
-	VoteTypeGroup VoteType = "group"
-)
-
 // LeaderboardCursor represents a pagination cursor for leaderboard results.
 type LeaderboardCursor struct {
 	CorrectVotes  int64     `json:"correctVotes"`

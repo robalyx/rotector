@@ -9,6 +9,7 @@ import (
 	"github.com/robalyx/rotector/internal/bot/core/session"
 	"github.com/robalyx/rotector/internal/bot/utils"
 	"github.com/robalyx/rotector/internal/common/storage/database/types"
+	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
 )
 
 // TicketBuilder creates the visual layout for an individual appeal ticket.
@@ -70,7 +71,7 @@ func (b *TicketBuilder) Build() *discord.MessageUpdateBuilder {
 	}
 
 	// Add components if appeal is pending
-	if b.appeal.Status == types.AppealStatusPending {
+	if b.appeal.Status == enum.AppealStatusPending {
 		// Create action buttons
 		actionButtons := []discord.InteractiveComponent{
 			discord.NewPrimaryButton("Respond", constants.AppealRespondButtonCustomID),
@@ -102,11 +103,11 @@ func (b *TicketBuilder) buildHeaderEmbed() *discord.EmbedBuilder {
 	// Format status with emoji
 	var statusEmoji string
 	switch b.appeal.Status {
-	case types.AppealStatusPending:
+	case enum.AppealStatusPending:
 		statusEmoji = "⏳"
-	case types.AppealStatusAccepted:
+	case enum.AppealStatusAccepted:
 		statusEmoji = "✅"
-	case types.AppealStatusRejected:
+	case enum.AppealStatusRejected:
 		statusEmoji = "❌"
 	}
 
@@ -119,7 +120,7 @@ func (b *TicketBuilder) buildHeaderEmbed() *discord.EmbedBuilder {
 		AddField("User", fmt.Sprintf("[%s](https://www.roblox.com/users/%d/profile)",
 			utils.CensorString(userIDStr, b.settings.StreamerMode), b.appeal.UserID), true).
 		AddField("Requester", fmt.Sprintf("<@%d>", b.appeal.RequesterID), true).
-		AddField("Status", string(b.appeal.Status), true).
+		AddField("Status", b.appeal.Status.String(), true).
 		AddField("Submitted", fmt.Sprintf("<t:%d:R>", b.appeal.Timestamp.Unix()), true).
 		AddField("Last Viewed", fmt.Sprintf("<t:%d:R>", b.appeal.LastViewed.Unix()), true).
 		AddField("Last Activity", fmt.Sprintf("<t:%d:R>", b.appeal.LastActivity.Unix()), true)
@@ -162,9 +163,9 @@ func (b *TicketBuilder) buildConversationEmbed() *discord.EmbedBuilder {
 			// Format role
 			var roleName string
 			switch msg.Role {
-			case types.MessageRoleModerator:
+			case enum.MessageRoleModerator:
 				roleName = "Moderator"
-			case types.MessageRoleUser:
+			case enum.MessageRoleUser:
 				roleName = "User"
 			}
 

@@ -12,6 +12,7 @@ import (
 	"github.com/robalyx/rotector/internal/bot/core/session"
 	"github.com/robalyx/rotector/internal/bot/utils"
 	"github.com/robalyx/rotector/internal/common/storage/database/types"
+	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
 )
 
 // FriendsBuilder creates the visual layout for viewing a user's friends.
@@ -58,7 +59,7 @@ func NewFriendsBuilder(s *session.Session) *FriendsBuilder {
 // Build creates a Discord message with a grid of friend avatars and information.
 func (b *FriendsBuilder) Build() *discord.MessageUpdateBuilder {
 	totalPages := (b.total + constants.FriendsPerPage - 1) / constants.FriendsPerPage
-	censor := b.settings.StreamerMode || b.settings.ReviewMode == types.TrainingReviewMode
+	censor := b.settings.StreamerMode || b.settings.ReviewMode == enum.ReviewModeTraining
 
 	// Create file attachment for the friend avatars grid
 	fileName := fmt.Sprintf("friends_%d_%d.png", b.user.ID, b.page)
@@ -123,15 +124,15 @@ func (b *FriendsBuilder) getFriendFieldName(index int, friend types.ExtendedFrie
 	// Add status indicator based on friend status
 	if reviewUser, ok := b.flaggedFriends[friend.ID]; ok {
 		switch reviewUser.Status {
-		case types.UserTypeConfirmed:
+		case enum.UserTypeConfirmed:
 			fieldName += " ⚠️"
-		case types.UserTypeFlagged:
+		case enum.UserTypeFlagged:
 			fieldName += " ⏳"
-		case types.UserTypeCleared:
+		case enum.UserTypeCleared:
 			fieldName += " ✅"
-		case types.UserTypeBanned:
+		case enum.UserTypeBanned:
 			fieldName += " 🔨"
-		case types.UserTypeUnflagged:
+		case enum.UserTypeUnflagged:
 		}
 	}
 
@@ -143,7 +144,7 @@ func (b *FriendsBuilder) getFriendFieldValue(friend types.ExtendedFriend) string
 	var info strings.Builder
 
 	// Add friend name (with link in standard mode)
-	if b.settings.ReviewMode == types.TrainingReviewMode {
+	if b.settings.ReviewMode == enum.ReviewModeTraining {
 		info.WriteString(utils.CensorString(friend.Name, true))
 	} else {
 		info.WriteString(fmt.Sprintf(

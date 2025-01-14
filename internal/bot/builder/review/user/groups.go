@@ -12,6 +12,7 @@ import (
 	"github.com/robalyx/rotector/internal/bot/core/session"
 	"github.com/robalyx/rotector/internal/bot/utils"
 	"github.com/robalyx/rotector/internal/common/storage/database/types"
+	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
 )
 
 // GroupsBuilder creates the visual layout for viewing a user's groups.
@@ -54,7 +55,7 @@ func NewGroupsBuilder(s *session.Session) *GroupsBuilder {
 // Build creates a Discord message with a grid of group thumbnails and information.
 func (b *GroupsBuilder) Build() *discord.MessageUpdateBuilder {
 	totalPages := (b.total + constants.GroupsPerPage - 1) / constants.GroupsPerPage
-	censor := b.settings.StreamerMode || b.settings.ReviewMode == types.TrainingReviewMode
+	censor := b.settings.StreamerMode || b.settings.ReviewMode == enum.ReviewModeTraining
 
 	// Create file attachment for the group thumbnails grid
 	fileName := fmt.Sprintf("groups_%d_%d.png", b.user.ID, b.page)
@@ -105,15 +106,15 @@ func (b *GroupsBuilder) getGroupFieldName(index int, group *apiTypes.UserGroupRo
 	// Add status indicator based on group status
 	if reviewGroup, ok := b.flaggedGroups[group.Group.ID]; ok {
 		switch reviewGroup.Status {
-		case types.GroupTypeConfirmed:
+		case enum.GroupTypeConfirmed:
 			fieldName += " ⚠️"
-		case types.GroupTypeFlagged:
+		case enum.GroupTypeFlagged:
 			fieldName += " ⏳"
-		case types.GroupTypeCleared:
+		case enum.GroupTypeCleared:
 			fieldName += " ✅"
-		case types.GroupTypeLocked:
+		case enum.GroupTypeLocked:
 			fieldName += " 🔒"
-		case types.GroupTypeUnflagged:
+		case enum.GroupTypeUnflagged:
 		}
 	}
 
@@ -130,7 +131,7 @@ func (b *GroupsBuilder) getGroupFieldValue(group *apiTypes.UserGroupRoles) strin
 	var info strings.Builder
 
 	// Add group name (with link in standard mode)
-	if b.settings.ReviewMode == types.TrainingReviewMode {
+	if b.settings.ReviewMode == enum.ReviewModeTraining {
 		info.WriteString(utils.CensorString(group.Group.Name, true) + "\n")
 	} else {
 		info.WriteString(fmt.Sprintf(
@@ -147,7 +148,7 @@ func (b *GroupsBuilder) getGroupFieldValue(group *apiTypes.UserGroupRoles) strin
 	))
 
 	// Add owner info (with link in standard mode)
-	if b.settings.ReviewMode == types.TrainingReviewMode {
+	if b.settings.ReviewMode == enum.ReviewModeTraining {
 		info.WriteString(fmt.Sprintf("👑 Owner: %s\n",
 			utils.CensorString(group.Group.Owner.Username, true)))
 	} else {

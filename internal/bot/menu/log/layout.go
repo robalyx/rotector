@@ -10,6 +10,7 @@ import (
 	"github.com/robalyx/rotector/internal/common/setup"
 	"github.com/robalyx/rotector/internal/common/storage/database"
 	"github.com/robalyx/rotector/internal/common/storage/database/types"
+	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
 	"go.uber.org/zap"
 )
 
@@ -56,7 +57,7 @@ func (l *Layout) ResetFilters(s *session.Session) {
 	s.Set(constants.SessionKeyUserIDFilter, uint64(0))
 	s.Set(constants.SessionKeyGroupIDFilter, uint64(0))
 	s.Set(constants.SessionKeyReviewerIDFilter, uint64(0))
-	s.Set(constants.SessionKeyActivityTypeFilter, types.ActivityTypeAll)
+	s.Set(constants.SessionKeyActivityTypeFilter, enum.ActivityTypeAll)
 	s.Set(constants.SessionKeyDateRangeStartFilter, time.Time{})
 	s.Set(constants.SessionKeyDateRangeEndFilter, time.Time{})
 }

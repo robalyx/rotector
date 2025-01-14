@@ -12,6 +12,7 @@ import (
 	"github.com/robalyx/rotector/internal/bot/core/session"
 	"github.com/robalyx/rotector/internal/bot/utils"
 	"github.com/robalyx/rotector/internal/common/storage/database/types"
+	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
 )
 
 // MembersBuilder creates the visual layout for viewing a group's flagged members.
@@ -58,7 +59,7 @@ func NewMembersBuilder(s *session.Session) *MembersBuilder {
 // Build creates a Discord message with a grid of member avatars and information.
 func (b *MembersBuilder) Build() *discord.MessageUpdateBuilder {
 	totalPages := (b.total + constants.MembersPerPage - 1) / constants.MembersPerPage
-	censor := b.settings.StreamerMode || b.settings.ReviewMode == types.TrainingReviewMode
+	censor := b.settings.StreamerMode || b.settings.ReviewMode == enum.ReviewModeTraining
 
 	// Create file attachment for the member avatars grid
 	fileName := fmt.Sprintf("members_%d_%d.png", b.group.ID, b.page)
@@ -123,15 +124,15 @@ func (b *MembersBuilder) getMemberFieldName(index int, memberID uint64) string {
 	// Add status indicator based on member status
 	if member, ok := b.members[memberID]; ok {
 		switch member.Status {
-		case types.UserTypeConfirmed:
+		case enum.UserTypeConfirmed:
 			fieldName += " ⚠️"
-		case types.UserTypeFlagged:
+		case enum.UserTypeFlagged:
 			fieldName += " ⏳"
-		case types.UserTypeCleared:
+		case enum.UserTypeCleared:
 			fieldName += " ✅"
-		case types.UserTypeBanned:
+		case enum.UserTypeBanned:
 			fieldName += " 🔨"
-		case types.UserTypeUnflagged:
+		case enum.UserTypeUnflagged:
 		}
 	}
 
@@ -145,11 +146,11 @@ func (b *MembersBuilder) getMemberFieldValue(memberID uint64) string {
 
 	// Add member name (with link in standard mode)
 	memberName := member.Name
-	if member.Status == types.UserTypeUnflagged {
+	if member.Status == enum.UserTypeUnflagged {
 		memberName = "Unflagged"
 	}
 
-	if b.settings.ReviewMode == types.TrainingReviewMode {
+	if b.settings.ReviewMode == enum.ReviewModeTraining {
 		info.WriteString(utils.CensorString(memberName, true))
 	} else {
 		info.WriteString(fmt.Sprintf(

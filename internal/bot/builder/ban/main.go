@@ -31,8 +31,8 @@ func (b *Builder) Build() *discord.MessageUpdateBuilder {
 	embed := discord.NewEmbedBuilder().
 		SetTitle("Access Denied").
 		SetDescription("You are currently banned from using this bot.").
-		AddField("Ban Reason", string(b.ban.Reason), true).
-		AddField("Ban Source", string(b.ban.Source), true)
+		AddField("Ban Reason", b.ban.Reason.String(), true).
+		AddField("Ban Source", b.ban.Source.String(), true)
 
 	// Add notes if any
 	if b.ban.Notes != "" {

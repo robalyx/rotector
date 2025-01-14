@@ -12,6 +12,7 @@ import (
 	"github.com/robalyx/rotector/internal/common/setup"
 	"github.com/robalyx/rotector/internal/common/storage/database"
 	"github.com/robalyx/rotector/internal/common/storage/database/types"
+	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
 	"go.uber.org/zap"
 )
 
@@ -142,10 +143,10 @@ func (c *FriendChecker) processUserFriends(userInfo *fetcher.Info, existingFrien
 	for _, friend := range userInfo.Friends.Data {
 		if reviewUser, exists := existingFriends[friend.ID]; exists {
 			switch reviewUser.Status {
-			case types.UserTypeConfirmed:
+			case enum.UserTypeConfirmed:
 				confirmedCount++
 				confirmedFriends[friend.ID] = &reviewUser.User
-			case types.UserTypeFlagged:
+			case enum.UserTypeFlagged:
 				flaggedCount++
 				flaggedFriends[friend.ID] = &reviewUser.User
 			} //exhaustive:ignore

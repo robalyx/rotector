@@ -10,6 +10,7 @@ import (
 	"github.com/redis/rueidis"
 	"github.com/robalyx/rotector/internal/common/storage/database"
 	"github.com/robalyx/rotector/internal/common/storage/database/types"
+	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
 	"go.uber.org/zap"
 )
 
@@ -117,7 +118,7 @@ func (m *Manager) AddToQueue(ctx context.Context, item *Item) error {
 			UserID: item.UserID,
 		},
 		ReviewerID:        item.AddedBy,
-		ActivityType:      types.ActivityTypeUserRechecked,
+		ActivityType:      enum.ActivityTypeUserRechecked,
 		ActivityTimestamp: time.Now(),
 		Details:           map[string]interface{}{"reason": item.Reason},
 	})

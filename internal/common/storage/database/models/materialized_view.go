@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/robalyx/rotector/internal/common/storage/database/types"
+	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
 	"github.com/uptrace/bun"
 	"go.uber.org/zap"
 )
@@ -27,7 +28,7 @@ func NewMaterializedView(db *bun.DB, logger *zap.Logger) *MaterializedViewModel 
 }
 
 // RefreshIfStale refreshes a materialized view if it hasn't been refreshed in the given duration.
-func (m *MaterializedViewModel) RefreshIfStale(ctx context.Context, period types.LeaderboardPeriod) error {
+func (m *MaterializedViewModel) RefreshIfStale(ctx context.Context, period enum.LeaderboardPeriod) error {
 	viewName := fmt.Sprintf("vote_leaderboard_stats_%s", period)
 	staleDuration := m.getStaleDuration(period)
 
@@ -68,7 +69,7 @@ func (m *MaterializedViewModel) RefreshIfStale(ctx context.Context, period types
 }
 
 // GetRefreshInfo returns the last refresh time and next scheduled refresh for a view.
-func (m *MaterializedViewModel) GetRefreshInfo(ctx context.Context, period types.LeaderboardPeriod) (lastRefresh, nextRefresh time.Time, err error) {
+func (m *MaterializedViewModel) GetRefreshInfo(ctx context.Context, period enum.LeaderboardPeriod) (lastRefresh, nextRefresh time.Time, err error) {
 	viewName := fmt.Sprintf("vote_leaderboard_stats_%s", period)
 	staleDuration := m.getStaleDuration(period)
 
@@ -88,21 +89,21 @@ func (m *MaterializedViewModel) GetRefreshInfo(ctx context.Context, period types
 }
 
 // getStaleDuration returns the recommended refresh interval for a period.
-func (m *MaterializedViewModel) getStaleDuration(period types.LeaderboardPeriod) time.Duration {
+func (m *MaterializedViewModel) getStaleDuration(period enum.LeaderboardPeriod) time.Duration {
 	switch period {
-	case types.LeaderboardPeriodDaily:
+	case enum.LeaderboardPeriodDaily:
 		return 5 * time.Minute
-	case types.LeaderboardPeriodWeekly:
+	case enum.LeaderboardPeriodWeekly:
 		return 15 * time.Minute
-	case types.LeaderboardPeriodBiWeekly:
+	case enum.LeaderboardPeriodBiWeekly:
 		return 30 * time.Minute
-	case types.LeaderboardPeriodMonthly:
+	case enum.LeaderboardPeriodMonthly:
 		return 1 * time.Hour
-	case types.LeaderboardPeriodBiAnnually:
+	case enum.LeaderboardPeriodBiAnnually:
 		return 6 * time.Hour
-	case types.LeaderboardPeriodAnnually:
+	case enum.LeaderboardPeriodAnnually:
 		return 12 * time.Hour
-	case types.LeaderboardPeriodAllTime:
+	case enum.LeaderboardPeriodAllTime:
 		return 24 * time.Hour
 	default:
 		return 15 * time.Minute

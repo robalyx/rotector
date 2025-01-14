@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/robalyx/rotector/internal/common/storage/database/types"
+	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
 	"github.com/uptrace/bun"
 	"go.uber.org/zap"
 )
@@ -67,7 +68,7 @@ func (r *ActivityModel) GetLogs(ctx context.Context, filter types.ActivityFilter
 	if filter.ReviewerID != 0 {
 		query = query.Where("reviewer_id = ?", filter.ReviewerID)
 	}
-	if filter.ActivityType != types.ActivityTypeAll {
+	if filter.ActivityType != enum.ActivityTypeAll {
 		query = query.Where("activity_type = ?", filter.ActivityType)
 	}
 	if !filter.StartDate.IsZero() && !filter.EndDate.IsZero() {
@@ -108,13 +109,13 @@ func (r *ActivityModel) GetRecentlyReviewedIDs(ctx context.Context, reviewerID u
 
 	// Build query to get recently reviewed IDs
 	var itemType string
-	var activityType types.ActivityType
+	var activityType enum.ActivityType
 	if isGroup {
 		itemType = "group_id"
-		activityType = types.ActivityTypeGroupViewed
+		activityType = enum.ActivityTypeGroupViewed
 	} else {
 		itemType = "user_id"
-		activityType = types.ActivityTypeUserViewed
+		activityType = enum.ActivityTypeUserViewed
 	}
 
 	query := r.db.NewSelect().

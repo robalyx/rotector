@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/disgoorg/snowflake/v2"
+	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
 )
 
 // ChatMessageUsage keeps track of chat message usage within a 24-hour period.
@@ -58,7 +59,7 @@ func (c *CaptchaUsage) NeedsCaptcha() bool {
 
 // IncrementReviews increments the review counter.
 func (c *CaptchaUsage) IncrementReviews(user *UserSetting, bot *BotSetting) {
-	if !bot.IsReviewer(uint64(user.UserID)) && user.ReviewMode == TrainingReviewMode {
+	if !bot.IsReviewer(uint64(user.UserID)) && user.ReviewMode == enum.ReviewModeTraining {
 		c.ReviewCount++
 	}
 }
@@ -70,36 +71,25 @@ func (c *CaptchaUsage) ResetReviews() {
 
 // UserSetting stores user-specific preferences.
 type UserSetting struct {
-	UserID             snowflake.ID      `bun:",pk"`
-	StreamerMode       bool              `bun:",notnull"`
-	UserDefaultSort    ReviewSortBy      `bun:",notnull"`
-	GroupDefaultSort   ReviewSortBy      `bun:",notnull"`
-	AppealDefaultSort  AppealSortBy      `bun:",notnull"`
-	AppealStatusFilter AppealFilterBy    `bun:",notnull"`
-	ChatModel          ChatModel         `bun:",notnull"`
-	ReviewMode         ReviewMode        `bun:",notnull"`
-	ReviewTargetMode   ReviewTargetMode  `bun:",notnull"`
-	ChatMessageUsage   ChatMessageUsage  `bun:",embed"`
-	SkipUsage          SkipUsage         `bun:",embed"`
-	CaptchaUsage       CaptchaUsage      `bun:",embed"`
-	LeaderboardPeriod  LeaderboardPeriod `bun:",notnull"`
+	UserID             snowflake.ID           `bun:",pk"`
+	StreamerMode       bool                   `bun:",notnull"`
+	UserDefaultSort    enum.ReviewSortBy      `bun:",notnull"`
+	GroupDefaultSort   enum.ReviewSortBy      `bun:",notnull"`
+	AppealDefaultSort  enum.AppealSortBy      `bun:",notnull"`
+	AppealStatusFilter enum.AppealStatus      `bun:",notnull"`
+	ChatModel          enum.ChatModel         `bun:",notnull"`
+	ReviewMode         enum.ReviewMode        `bun:",notnull"`
+	ReviewTargetMode   enum.ReviewTargetMode  `bun:",notnull"`
+	ChatMessageUsage   ChatMessageUsage       `bun:",embed"`
+	SkipUsage          SkipUsage              `bun:",embed"`
+	CaptchaUsage       CaptchaUsage           `bun:",embed"`
+	LeaderboardPeriod  enum.LeaderboardPeriod `bun:",notnull"`
 }
-
-// AnnouncementType is the type of announcement message.
-type AnnouncementType string
-
-const (
-	AnnouncementTypeNone    AnnouncementType = "none"
-	AnnouncementTypeInfo    AnnouncementType = "info"
-	AnnouncementTypeWarning AnnouncementType = "warning"
-	AnnouncementTypeSuccess AnnouncementType = "success"
-	AnnouncementTypeError   AnnouncementType = "error"
-)
 
 // Announcement stores the dashboard announcement configuration.
 type Announcement struct {
-	Type    AnnouncementType `bun:"announcement_type,notnull,default:'none'"`
-	Message string           `bun:"announcement_message,notnull,default:''"`
+	Type    enum.AnnouncementType `bun:"announcement_type,notnull"`
+	Message string                `bun:"announcement_message,notnull,default:''"`
 }
 
 // APIKeyInfo stores information about an API key
@@ -172,18 +162,6 @@ func (s *BotSetting) NeedsRefresh() bool {
 func (s *BotSetting) UpdateRefreshTime() {
 	s.lastRefresh = time.Now()
 }
-
-// SettingType represents the data type of a setting.
-type SettingType string
-
-// Available setting types.
-const (
-	SettingTypeBool   SettingType = "bool"
-	SettingTypeEnum   SettingType = "enum"
-	SettingTypeID     SettingType = "id"
-	SettingTypeNumber SettingType = "number"
-	SettingTypeText   SettingType = "text"
-)
 
 // SettingOption represents a single option for enum-type settings.
 type SettingOption struct {

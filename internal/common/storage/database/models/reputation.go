@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/robalyx/rotector/internal/common/storage/database/types"
+	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
 	"github.com/uptrace/bun"
 	"go.uber.org/zap"
 )
@@ -71,7 +72,7 @@ func (r *ReputationModel) UpdateUserVotes(ctx context.Context, userID uint64, di
 	}
 
 	// Save the vote
-	if err := r.votes.SaveVote(ctx, userID, discordUserID, isUpvote, types.VoteTypeUser); err != nil {
+	if err := r.votes.SaveVote(ctx, userID, discordUserID, isUpvote, enum.VoteTypeUser); err != nil {
 		return fmt.Errorf("failed to save vote: %w", err)
 	}
 
@@ -121,7 +122,7 @@ func (r *ReputationModel) UpdateGroupVotes(ctx context.Context, groupID uint64, 
 	}
 
 	// Save the vote
-	if err := r.votes.SaveVote(ctx, groupID, discordUserID, isUpvote, types.VoteTypeGroup); err != nil {
+	if err := r.votes.SaveVote(ctx, groupID, discordUserID, isUpvote, enum.VoteTypeGroup); err != nil {
 		return fmt.Errorf("failed to save vote: %w", err)
 	}
 

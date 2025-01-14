@@ -10,6 +10,7 @@ import (
 	"github.com/robalyx/rotector/internal/common/client/fetcher"
 	"github.com/robalyx/rotector/internal/common/storage/database"
 	"github.com/robalyx/rotector/internal/common/storage/database/types"
+	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
 	"go.uber.org/zap"
 )
 
@@ -114,7 +115,7 @@ func (c *GroupChecker) calculateGroupConfidence(flaggedUsers []uint64, users map
 	var validUserCount int
 
 	for _, userID := range flaggedUsers {
-		if user, exists := users[userID]; exists && user.Status != types.UserTypeUnflagged {
+		if user, exists := users[userID]; exists && user.Status != enum.UserTypeUnflagged {
 			totalConfidence += user.Confidence
 			validUserCount++
 		}
@@ -217,9 +218,9 @@ func (c *GroupChecker) processUserGroups(userInfo *fetcher.Info, existingGroups 
 	for _, group := range userInfo.Groups.Data {
 		if reviewGroup, exists := existingGroups[group.Group.ID]; exists {
 			switch reviewGroup.Status {
-			case types.GroupTypeConfirmed:
+			case enum.GroupTypeConfirmed:
 				confirmedCount++
-			case types.GroupTypeFlagged:
+			case enum.GroupTypeFlagged:
 				flaggedCount++
 			} //exhaustive:ignore
 		}

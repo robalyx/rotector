@@ -9,6 +9,7 @@ import (
 	"github.com/robalyx/rotector/internal/bot/utils"
 	"github.com/robalyx/rotector/internal/common/queue"
 	"github.com/robalyx/rotector/internal/common/storage/database/types"
+	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
 
 	"github.com/disgoorg/disgo/discord"
 )
@@ -52,7 +53,7 @@ func (b *StatusBuilder) Build() *discord.MessageUpdateBuilder {
 		SetTitle("Recheck Status")
 
 	// Format user field based on review mode
-	if b.settings.ReviewMode == types.TrainingReviewMode {
+	if b.settings.ReviewMode == enum.ReviewModeTraining {
 		embed.AddField("Current User", utils.CensorString(strconv.FormatUint(b.userID, 10), true), true)
 	} else {
 		embed.AddField("Current User", fmt.Sprintf(

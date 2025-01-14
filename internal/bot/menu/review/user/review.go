@@ -15,6 +15,7 @@ import (
 	"github.com/robalyx/rotector/internal/bot/interfaces"
 	"github.com/robalyx/rotector/internal/common/queue"
 	"github.com/robalyx/rotector/internal/common/storage/database/types"
+	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
 	"go.uber.org/zap"
 )
 
@@ -49,8 +50,8 @@ func (m *ReviewMenu) Show(event interfaces.CommonEvent, s *session.Session, cont
 	s.GetInterface(constants.SessionKeyUserSettings, &userSettings)
 
 	// Force training mode if user is not a reviewer
-	if !settings.IsReviewer(uint64(event.User().ID)) && userSettings.ReviewMode != types.TrainingReviewMode {
-		userSettings.ReviewMode = types.TrainingReviewMode
+	if !settings.IsReviewer(uint64(event.User().ID)) && userSettings.ReviewMode != enum.ReviewModeTraining {
+		userSettings.ReviewMode = enum.ReviewModeTraining
 		if err := m.layout.db.Settings().SaveUserSettings(context.Background(), userSettings); err != nil {
 			m.layout.logger.Error("Failed to enforce training mode", zap.Error(err))
 			m.layout.paginationManager.RespondWithError(event, "Failed to enforce training mode. Please try again.")
@@ -148,8 +149,16 @@ func (m *ReviewMenu) handleSortOrderSelection(event *events.ComponentInteraction
 	var settings *types.UserSetting
 	s.GetInterface(constants.SessionKeyUserSettings, &settings)
 
+	// Parse option to review sort
+	sortBy, err := enum.ReviewSortByString(option)
+	if err != nil {
+		m.layout.logger.Error("Failed to parse sort order", zap.Error(err))
+		m.layout.paginationManager.RespondWithError(event, "Failed to parse sort order. Please try again.")
+		return
+	}
+
 	// Update user's default sort preference
-	settings.UserDefaultSort = types.ReviewSortBy(option)
+	settings.UserDefaultSort = sortBy
 	if err := m.layout.db.Settings().SaveUserSettings(context.Background(), settings); err != nil {
 		m.layout.logger.Error("Failed to save user settings", zap.Error(err))
 		m.layout.paginationManager.RespondWithError(event, "Failed to save sort order. Please try again.")
@@ -294,7 +303,7 @@ func (m *ReviewMenu) handleRecheckModalSubmit(event *events.ModalSubmitInteracti
 
 	// Determine priority based on review mode
 	priority := queue.HighPriority
-	if settings.ReviewMode == types.TrainingReviewMode {
+	if settings.ReviewMode == enum.ReviewModeTraining {
 		priority = queue.LowPriority
 	}
 
@@ -365,7 +374,7 @@ func (m *ReviewMenu) handleConfirmUser(event interfaces.CommonEvent, s *session.
 	s.GetInterface(constants.SessionKeyTarget, &user)
 
 	var actionMsg string
-	if settings.ReviewMode == types.TrainingReviewMode {
+	if settings.ReviewMode == enum.ReviewModeTraining {
 		// Training mode - increment downvotes
 		if err := m.layout.db.Reputation().UpdateUserVotes(context.Background(), user.ID, uint64(event.User().ID), false); err != nil {
 			m.layout.logger.Error("Failed to update downvotes", zap.Error(err))
@@ -381,7 +390,7 @@ func (m *ReviewMenu) handleConfirmUser(event interfaces.CommonEvent, s *session.
 				UserID: user.ID,
 			},
 			ReviewerID:        uint64(event.User().ID),
-			ActivityType:      types.ActivityTypeUserTrainingDownvote,
+			ActivityType:      enum.ActivityTypeUserTrainingDownvote,
 			ActivityTimestamp: time.Now(),
 			Details: map[string]interface{}{
 				"upvotes":   user.Reputation.Upvotes,
@@ -410,7 +419,7 @@ func (m *ReviewMenu) handleConfirmUser(event interfaces.CommonEvent, s *session.
 				UserID: user.ID,
 			},
 			ReviewerID:        uint64(event.User().ID),
-			ActivityType:      types.ActivityTypeUserConfirmed,
+			ActivityType:      enum.ActivityTypeUserConfirmed,
 			ActivityTimestamp: time.Now(),
 			Details:           map[string]interface{}{"reason": user.Reason},
 		})
@@ -439,7 +448,7 @@ func (m *ReviewMenu) handleClearUser(event interfaces.CommonEvent, s *session.Se
 	s.GetInterface(constants.SessionKeyTarget, &user)
 
 	var actionMsg string
-	if settings.ReviewMode == types.TrainingReviewMode {
+	if settings.ReviewMode == enum.ReviewModeTraining {
 		// Training mode - increment upvotes
 		if err := m.layout.db.Reputation().UpdateUserVotes(context.Background(), user.ID, uint64(event.User().ID), true); err != nil {
 			m.layout.logger.Error("Failed to update upvotes", zap.Error(err))
@@ -455,7 +464,7 @@ func (m *ReviewMenu) handleClearUser(event interfaces.CommonEvent, s *session.Se
 				UserID: user.ID,
 			},
 			ReviewerID:        uint64(event.User().ID),
-			ActivityType:      types.ActivityTypeUserTrainingUpvote,
+			ActivityType:      enum.ActivityTypeUserTrainingUpvote,
 			ActivityTimestamp: time.Now(),
 			Details: map[string]interface{}{
 				"upvotes":   user.Reputation.Upvotes,
@@ -487,7 +496,7 @@ func (m *ReviewMenu) handleClearUser(event interfaces.CommonEvent, s *session.Se
 				UserID: user.ID,
 			},
 			ReviewerID:        uint64(event.User().ID),
-			ActivityType:      types.ActivityTypeUserCleared,
+			ActivityType:      enum.ActivityTypeUserCleared,
 			ActivityTimestamp: time.Now(),
 			Details:           map[string]interface{}{},
 		})
@@ -549,7 +558,7 @@ func (m *ReviewMenu) handleSkipUser(event interfaces.CommonEvent, s *session.Ses
 			UserID: user.ID,
 		},
 		ReviewerID:        uint64(event.User().ID),
-		ActivityType:      types.ActivityTypeUserSkipped,
+		ActivityType:      enum.ActivityTypeUserSkipped,
 		ActivityTimestamp: time.Now(),
 		Details:           map[string]interface{}{},
 	})
@@ -648,7 +657,7 @@ func (m *ReviewMenu) handleConfirmWithReasonModalSubmit(event *events.ModalSubmi
 			UserID: user.ID,
 		},
 		ReviewerID:        uint64(event.User().ID),
-		ActivityType:      types.ActivityTypeUserConfirmedCustom,
+		ActivityType:      enum.ActivityTypeUserConfirmedCustom,
 		ActivityTimestamp: time.Now(),
 		Details:           map[string]interface{}{"reason": user.Reason},
 	})
@@ -674,7 +683,7 @@ func (m *ReviewMenu) fetchNewTarget(s *session.Session, reviewerID uint64) (*typ
 			UserID: user.ID,
 		},
 		ReviewerID:        reviewerID,
-		ActivityType:      types.ActivityTypeUserViewed,
+		ActivityType:      enum.ActivityTypeUserViewed,
 		ActivityTimestamp: time.Now(),
 		Details:           map[string]interface{}{},
 	})

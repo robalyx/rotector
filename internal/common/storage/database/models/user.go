@@ -10,6 +10,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/robalyx/rotector/internal/common/storage/database/types"
+	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
 	"github.com/uptrace/bun"
 	"go.uber.org/zap"
 )
@@ -65,7 +66,7 @@ func (r *UserModel) SaveUsers(ctx context.Context, users map[uint64]*types.User)
 	confirmedUsers := make([]*types.ConfirmedUser, 0)
 	clearedUsers := make([]*types.ClearedUser, 0)
 	bannedUsers := make([]*types.BannedUser, 0)
-	counts := make(map[types.UserType]int)
+	counts := make(map[enum.UserType]int)
 
 	// Group users by their target tables
 	for id, user := range users {
@@ -75,36 +76,36 @@ func (r *UserModel) SaveUsers(ctx context.Context, users map[uint64]*types.User)
 		}
 
 		// Get existing user data if available
-		var status types.UserType
+		var status enum.UserType
 		existingUser := existingUsers[id]
-		if existingUser.Status != types.UserTypeUnflagged {
+		if existingUser.Status != enum.UserTypeUnflagged {
 			status = existingUser.Status
 		} else {
 			// Default to flagged_users for new users
-			status = types.UserTypeFlagged
+			status = enum.UserTypeFlagged
 		}
 
 		switch status {
-		case types.UserTypeConfirmed:
+		case enum.UserTypeConfirmed:
 			confirmedUsers = append(confirmedUsers, &types.ConfirmedUser{
 				User:       *user,
 				VerifiedAt: existingUser.VerifiedAt,
 			})
-		case types.UserTypeFlagged:
+		case enum.UserTypeFlagged:
 			flaggedUsers = append(flaggedUsers, &types.FlaggedUser{
 				User: *user,
 			})
-		case types.UserTypeCleared:
+		case enum.UserTypeCleared:
 			clearedUsers = append(clearedUsers, &types.ClearedUser{
 				User:      *user,
 				ClearedAt: existingUser.ClearedAt,
 			})
-		case types.UserTypeBanned:
+		case enum.UserTypeBanned:
 			bannedUsers = append(bannedUsers, &types.BannedUser{
 				User:     *user,
 				PurgedAt: existingUser.PurgedAt,
 			})
-		case types.UserTypeUnflagged:
+		case enum.UserTypeUnflagged:
 			continue
 		}
 		counts[status]++
@@ -113,7 +114,7 @@ func (r *UserModel) SaveUsers(ctx context.Context, users map[uint64]*types.User)
 	// Update each table
 	err = r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
 		// Helper function to update a table
-		updateTable := func(users interface{}, status types.UserType) error {
+		updateTable := func(users interface{}, status enum.UserType) error {
 			if counts[status] == 0 {
 				return nil
 			}
@@ -149,16 +150,16 @@ func (r *UserModel) SaveUsers(ctx context.Context, users map[uint64]*types.User)
 		}
 
 		// Update each table with its corresponding slice
-		if err := updateTable(&flaggedUsers, types.UserTypeFlagged); err != nil {
+		if err := updateTable(&flaggedUsers, enum.UserTypeFlagged); err != nil {
 			return err
 		}
-		if err := updateTable(&confirmedUsers, types.UserTypeConfirmed); err != nil {
+		if err := updateTable(&confirmedUsers, enum.UserTypeConfirmed); err != nil {
 			return err
 		}
-		if err := updateTable(&clearedUsers, types.UserTypeCleared); err != nil {
+		if err := updateTable(&clearedUsers, enum.UserTypeCleared); err != nil {
 			return err
 		}
-		if err := updateTable(&bannedUsers, types.UserTypeBanned); err != nil {
+		if err := updateTable(&bannedUsers, enum.UserTypeBanned); err != nil {
 			return err
 		}
 
@@ -170,10 +171,10 @@ func (r *UserModel) SaveUsers(ctx context.Context, users map[uint64]*types.User)
 
 	r.logger.Debug("Successfully saved users",
 		zap.Int("totalUsers", len(users)),
-		zap.Int("flaggedUsers", counts[types.UserTypeFlagged]),
-		zap.Int("confirmedUsers", counts[types.UserTypeConfirmed]),
-		zap.Int("clearedUsers", counts[types.UserTypeCleared]),
-		zap.Int("bannedUsers", counts[types.UserTypeBanned]))
+		zap.Int("flaggedUsers", counts[enum.UserTypeFlagged]),
+		zap.Int("confirmedUsers", counts[enum.UserTypeConfirmed]),
+		zap.Int("clearedUsers", counts[enum.UserTypeCleared]),
+		zap.Int("bannedUsers", counts[enum.UserTypeBanned]))
 
 	return nil
 }
@@ -225,7 +226,7 @@ func (r *UserModel) ConfirmUser(ctx context.Context, user *types.ReviewUser) err
 	}
 
 	// Verify votes for the user
-	if err := r.votes.VerifyVotes(ctx, user.ID, true, types.VoteTypeUser); err != nil {
+	if err := r.votes.VerifyVotes(ctx, user.ID, true, enum.VoteTypeUser); err != nil {
 		r.logger.Error("Failed to verify votes", zap.Error(err))
 		return err
 	}
@@ -280,7 +281,7 @@ func (r *UserModel) ClearUser(ctx context.Context, user *types.ReviewUser) error
 	}
 
 	// Verify votes for the user
-	if err := r.votes.VerifyVotes(ctx, user.ID, false, types.VoteTypeUser); err != nil {
+	if err := r.votes.VerifyVotes(ctx, user.ID, false, enum.VoteTypeUser); err != nil {
 		r.logger.Error("Failed to verify votes", zap.Error(err))
 		return err
 	}
@@ -312,35 +313,35 @@ func (r *UserModel) GetFlaggedUsersCount(ctx context.Context) (int, error) {
 
 // GetRecentlyProcessedUsers checks which users exist in any table and have been updated within the past 7 days.
 // Returns a map of user IDs to their current status.
-func (r *UserModel) GetRecentlyProcessedUsers(ctx context.Context, userIDs []uint64) (map[uint64]types.UserType, error) {
+func (r *UserModel) GetRecentlyProcessedUsers(ctx context.Context, userIDs []uint64) (map[uint64]enum.UserType, error) {
 	var users []struct {
 		ID     uint64
-		Status types.UserType
+		Status enum.UserType
 	}
 
 	err := r.db.NewSelect().Model((*types.ConfirmedUser)(nil)).
 		Column("id").
-		ColumnExpr("? AS status", types.UserTypeConfirmed).
+		ColumnExpr("? AS status", enum.UserTypeConfirmed).
 		Where("id IN (?)", bun.In(userIDs)).
 		Where("last_updated > NOW() - INTERVAL '7 days'").
 		Union(
 			r.db.NewSelect().Model((*types.FlaggedUser)(nil)).
 				Column("id").
-				ColumnExpr("? AS status", types.UserTypeFlagged).
+				ColumnExpr("? AS status", enum.UserTypeFlagged).
 				Where("id IN (?)", bun.In(userIDs)).
 				Where("last_updated > NOW() - INTERVAL '7 days'"),
 		).
 		Union(
 			r.db.NewSelect().Model((*types.ClearedUser)(nil)).
 				Column("id").
-				ColumnExpr("? AS status", types.UserTypeCleared).
+				ColumnExpr("? AS status", enum.UserTypeCleared).
 				Where("id IN (?)", bun.In(userIDs)).
 				Where("last_updated > NOW() - INTERVAL '7 days'"),
 		).
 		Union(
 			r.db.NewSelect().Model((*types.BannedUser)(nil)).
 				Column("id").
-				ColumnExpr("? AS status", types.UserTypeBanned).
+				ColumnExpr("? AS status", enum.UserTypeBanned).
 				Where("id IN (?)", bun.In(userIDs)).
 				Where("last_updated > NOW() - INTERVAL '7 days'"),
 		).
@@ -349,7 +350,7 @@ func (r *UserModel) GetRecentlyProcessedUsers(ctx context.Context, userIDs []uin
 		return nil, fmt.Errorf("failed to check recently processed users: %w", err)
 	}
 
-	result := make(map[uint64]types.UserType, len(users))
+	result := make(map[uint64]enum.UserType, len(users))
 	for _, user := range users {
 		result[user.ID] = user.Status
 	}
@@ -397,19 +398,19 @@ func (r *UserModel) GetUserByID(ctx context.Context, userID string, fields types
 				switch m := model.(type) {
 				case *types.FlaggedUser:
 					result.User = m.User
-					result.Status = types.UserTypeFlagged
+					result.Status = enum.UserTypeFlagged
 				case *types.ConfirmedUser:
 					result.User = m.User
 					result.VerifiedAt = m.VerifiedAt
-					result.Status = types.UserTypeConfirmed
+					result.Status = enum.UserTypeConfirmed
 				case *types.ClearedUser:
 					result.User = m.User
 					result.ClearedAt = m.ClearedAt
-					result.Status = types.UserTypeCleared
+					result.Status = enum.UserTypeCleared
 				case *types.BannedUser:
 					result.User = m.User
 					result.PurgedAt = m.PurgedAt
-					result.Status = types.UserTypeBanned
+					result.Status = enum.UserTypeBanned
 				}
 
 				// Get reputation
@@ -468,7 +469,7 @@ func (r *UserModel) GetUsersByIDs(ctx context.Context, userIDs []uint64, fields 
 			users[user.ID] = &types.ReviewUser{
 				User:       user.User,
 				VerifiedAt: user.VerifiedAt,
-				Status:     types.UserTypeConfirmed,
+				Status:     enum.UserTypeConfirmed,
 			}
 		}
 
@@ -485,7 +486,7 @@ func (r *UserModel) GetUsersByIDs(ctx context.Context, userIDs []uint64, fields 
 		for _, user := range flaggedUsers {
 			users[user.ID] = &types.ReviewUser{
 				User:   user.User,
-				Status: types.UserTypeFlagged,
+				Status: enum.UserTypeFlagged,
 			}
 		}
 
@@ -503,7 +504,7 @@ func (r *UserModel) GetUsersByIDs(ctx context.Context, userIDs []uint64, fields 
 			users[user.ID] = &types.ReviewUser{
 				User:      user.User,
 				ClearedAt: user.ClearedAt,
-				Status:    types.UserTypeCleared,
+				Status:    enum.UserTypeCleared,
 			}
 		}
 
@@ -521,7 +522,7 @@ func (r *UserModel) GetUsersByIDs(ctx context.Context, userIDs []uint64, fields 
 			users[user.ID] = &types.ReviewUser{
 				User:     user.User,
 				PurgedAt: user.PurgedAt,
-				Status:   types.UserTypeBanned,
+				Status:   enum.UserTypeBanned,
 			}
 		}
 
@@ -530,7 +531,7 @@ func (r *UserModel) GetUsersByIDs(ctx context.Context, userIDs []uint64, fields 
 			if _, ok := users[id]; !ok {
 				users[id] = &types.ReviewUser{
 					User:   types.User{ID: id},
-					Status: types.UserTypeUnflagged,
+					Status: enum.UserTypeUnflagged,
 				}
 			}
 		}
@@ -855,7 +856,7 @@ func (r *UserModel) GetUserToScan(ctx context.Context) (*types.User, error) {
 }
 
 // GetUserToReview finds a user to review based on the sort method and target mode.
-func (r *UserModel) GetUserToReview(ctx context.Context, sortBy types.ReviewSortBy, targetMode types.ReviewTargetMode, reviewerID uint64) (*types.ReviewUser, error) {
+func (r *UserModel) GetUserToReview(ctx context.Context, sortBy enum.ReviewSortBy, targetMode enum.ReviewTargetMode, reviewerID uint64) (*types.ReviewUser, error) {
 	// Get recently reviewed user IDs
 	recentIDs, err := r.activity.GetRecentlyReviewedIDs(ctx, reviewerID, false, 100)
 	if err != nil {
@@ -867,28 +868,28 @@ func (r *UserModel) GetUserToReview(ctx context.Context, sortBy types.ReviewSort
 	// Define models in priority order based on target mode
 	var models []interface{}
 	switch targetMode {
-	case types.FlaggedReviewTarget:
+	case enum.ReviewTargetModeFlagged:
 		models = []interface{}{
 			&types.FlaggedUser{},   // Primary target
 			&types.ConfirmedUser{}, // First fallback
 			&types.ClearedUser{},   // Second fallback
 			&types.BannedUser{},    // Last fallback
 		}
-	case types.ConfirmedReviewTarget:
+	case enum.ReviewTargetModeConfirmed:
 		models = []interface{}{
 			&types.ConfirmedUser{}, // Primary target
 			&types.FlaggedUser{},   // First fallback
 			&types.ClearedUser{},   // Second fallback
 			&types.BannedUser{},    // Last fallback
 		}
-	case types.ClearedReviewTarget:
+	case enum.ReviewTargetModeCleared:
 		models = []interface{}{
 			&types.ClearedUser{},   // Primary target
 			&types.FlaggedUser{},   // First fallback
 			&types.ConfirmedUser{}, // Second fallback
 			&types.BannedUser{},    // Last fallback
 		}
-	case types.BannedReviewTarget:
+	case enum.ReviewTargetModeBanned:
 		models = []interface{}{
 			&types.BannedUser{},    // Primary target
 			&types.FlaggedUser{},   // First fallback
@@ -912,7 +913,7 @@ func (r *UserModel) GetUserToReview(ctx context.Context, sortBy types.ReviewSort
 }
 
 // getNextToReview handles the common logic for getting the next item to review.
-func (r *UserModel) getNextToReview(ctx context.Context, model interface{}, sortBy types.ReviewSortBy, recentIDs []uint64) (*types.ReviewUser, error) {
+func (r *UserModel) getNextToReview(ctx context.Context, model interface{}, sortBy enum.ReviewSortBy, recentIDs []uint64) (*types.ReviewUser, error) {
 	var result types.ReviewUser
 	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
 		// Build subquery to get ID
@@ -927,14 +928,14 @@ func (r *UserModel) getNextToReview(ctx context.Context, model interface{}, sort
 
 		// Apply sort order to subquery
 		switch sortBy {
-		case types.ReviewSortByConfidence:
+		case enum.ReviewSortByConfidence:
 			subq.Order("confidence DESC")
-		case types.ReviewSortByLastUpdated:
+		case enum.ReviewSortByLastUpdated:
 			subq.Order("last_updated ASC")
-		case types.ReviewSortByReputation:
+		case enum.ReviewSortByReputation:
 			subq.Join("LEFT JOIN user_reputations ON user_reputations.id = ?TableAlias.id").
 				OrderExpr("COALESCE(user_reputations.score, 0) ASC")
-		case types.ReviewSortByRandom:
+		case enum.ReviewSortByRandom:
 			subq.OrderExpr("RANDOM()")
 		}
 
@@ -954,19 +955,19 @@ func (r *UserModel) getNextToReview(ctx context.Context, model interface{}, sort
 		switch m := model.(type) {
 		case *types.FlaggedUser:
 			result.User = m.User
-			result.Status = types.UserTypeFlagged
+			result.Status = enum.UserTypeFlagged
 		case *types.ConfirmedUser:
 			result.User = m.User
 			result.VerifiedAt = m.VerifiedAt
-			result.Status = types.UserTypeConfirmed
+			result.Status = enum.UserTypeConfirmed
 		case *types.ClearedUser:
 			result.User = m.User
 			result.ClearedAt = m.ClearedAt
-			result.Status = types.UserTypeCleared
+			result.Status = enum.UserTypeCleared
 		case *types.BannedUser:
 			result.User = m.User
 			result.PurgedAt = m.PurgedAt
-			result.Status = types.UserTypeBanned
+			result.Status = enum.UserTypeBanned
 		default:
 			return fmt.Errorf("%w: %T", types.ErrUnsupportedModel, model)
 		}

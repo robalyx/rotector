@@ -10,11 +10,12 @@ import (
 	"github.com/robalyx/rotector/internal/bot/utils"
 	"github.com/robalyx/rotector/internal/common/client/ai"
 	"github.com/robalyx/rotector/internal/common/storage/database/types"
+	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
 )
 
 // Builder creates the visual layout for the chat interface.
 type Builder struct {
-	model       types.ChatModel
+	model       enum.ChatModel
 	history     *ai.ChatHistory
 	page        int
 	isStreaming bool
@@ -77,7 +78,7 @@ func (b *Builder) Build() *discord.MessageUpdateBuilder {
 
 		// Add user message (right-aligned) and AI response (left-aligned)
 		b.addPaddedMessage(pairEmbed, fmt.Sprintf("User (%d)", (i/2+1)), userMsg.Content, true)
-		b.addPaddedMessage(pairEmbed, fmt.Sprintf("%s (%d)", b.model.FormatDisplay(), (i/2+1)), aiMsg.Content, false)
+		b.addPaddedMessage(pairEmbed, fmt.Sprintf("%s (%d)", b.model.String(), (i/2+1)), aiMsg.Content, false)
 
 		embedBuilders = append(embedBuilders, pairEmbed)
 	}
@@ -113,15 +114,15 @@ func (b *Builder) Build() *discord.MessageUpdateBuilder {
 		components := []discord.ContainerComponent{
 			discord.NewActionRow(
 				discord.NewStringSelectMenu(constants.ChatModelSelectID, "Select Model",
-					discord.NewStringSelectMenuOption("Gemini Pro", string(types.ChatModelGeminiPro)).
+					discord.NewStringSelectMenuOption("Gemini 1.5 Pro", enum.ChatModelGeminiPro.String()).
 						WithDescription("Best for advanced reasoning and conversations").
-						WithDefault(b.model == types.ChatModelGeminiPro),
-					discord.NewStringSelectMenuOption("Gemini Flash 8B", string(types.ChatModelGeminiFlash8B)).
+						WithDefault(b.model == enum.ChatModelGeminiPro),
+					discord.NewStringSelectMenuOption("Gemini 1.5 Flash 8B", enum.ChatModelGeminiFlash8B.String()).
 						WithDescription("Best for basic reasoning and conversations").
-						WithDefault(b.model == types.ChatModelGeminiFlash8B),
-					discord.NewStringSelectMenuOption("Gemini Flash", string(types.ChatModelGeminiFlash)).
+						WithDefault(b.model == enum.ChatModelGeminiFlash8B),
+					discord.NewStringSelectMenuOption("Gemini 1.5 Flash", enum.ChatModelGeminiFlash.String()).
 						WithDescription("Best for basic reasoning and conversations").
-						WithDefault(b.model == types.ChatModelGeminiFlash),
+						WithDefault(b.model == enum.ChatModelGeminiFlash),
 				),
 			),
 			discord.NewActionRow(

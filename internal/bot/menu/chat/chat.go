@@ -16,6 +16,7 @@ import (
 	"github.com/robalyx/rotector/internal/bot/utils"
 	"github.com/robalyx/rotector/internal/common/client/ai"
 	"github.com/robalyx/rotector/internal/common/storage/database/types"
+	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
 	"go.uber.org/zap"
 )
 
@@ -99,18 +100,25 @@ func (m *Menu) handleSelectMenu(event *events.ComponentInteractionCreate, s *ses
 		var settings *types.UserSetting
 		s.GetInterface(constants.SessionKeyUserSettings, &settings)
 
+		// Parse option to chat model
+		chatModel, err := enum.ChatModelString(option)
+		if err != nil {
+			m.layout.logger.Error("Failed to parse chat model", zap.Error(err))
+			m.layout.paginationManager.RespondWithError(event, "Failed to parse chat model. Please try again.")
+			return
+		}
+
 		// Update user settings with new chat model
-		chatModel := types.ChatModel(option)
 		settings.ChatModel = chatModel
 		if err := m.layout.db.Settings().SaveUserSettings(context.Background(), settings); err != nil {
-			m.layout.logger.Error("Failed to save target mode setting", zap.Error(err))
-			m.layout.paginationManager.RespondWithError(event, "Failed to switch target mode. Please try again.")
+			m.layout.logger.Error("Failed to save chat model setting", zap.Error(err))
+			m.layout.paginationManager.RespondWithError(event, "Failed to switch chat model. Please try again.")
 			return
 		}
 
 		// Update session and refresh the menu
 		s.Set(constants.SessionKeyUserSettings, settings)
-		m.Show(event, s, fmt.Sprintf("Switched to %s model", chatModel.FormatDisplay()))
+		m.Show(event, s, fmt.Sprintf("Switched to %s model", chatModel.String()))
 	}
 }
 
@@ -156,7 +164,7 @@ func (m *Menu) handleModal(event *events.ModalSubmitInteractionCreate, s *sessio
 		responseChan, historyChan := m.layout.chatHandler.StreamResponse(
 			context.Background(),
 			history.ToGenAIHistory(),
-			string(userSettings.ChatModel),
+			userSettings.ChatModel.String(),
 			message,
 		)
 

@@ -11,6 +11,7 @@ import (
 	"github.com/robalyx/rotector/internal/bot/core/session"
 	"github.com/robalyx/rotector/internal/bot/utils"
 	"github.com/robalyx/rotector/internal/common/storage/database/types"
+	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
 )
 
 // Validation errors.
@@ -40,7 +41,7 @@ type Setting struct {
 	Key          string                `json:"key"`          // Unique identifier for the setting
 	Name         string                `json:"name"`         // Display name
 	Description  string                `json:"description"`  // Help text explaining the setting
-	Type         types.SettingType     `json:"type"`         // Data type of the setting
+	Type         enum.SettingType      `json:"type"`         // Data type of the setting
 	DefaultValue interface{}           `json:"defaultValue"` // Default value
 	Options      []types.SettingOption `json:"options"`      // Available options for enum types
 	Validators   []Validator           `json:"-"`            // Functions to validate input
@@ -137,7 +138,7 @@ func (r *Registry) createStreamerModeSetting() Setting {
 		Key:          constants.StreamerModeOption,
 		Name:         "Streamer Mode",
 		Description:  "Toggle censoring of sensitive information",
-		Type:         types.SettingTypeBool,
+		Type:         enum.SettingTypeBool,
 		DefaultValue: false,
 		Validators:   []Validator{validateBool},
 		ValueGetter: func(us *types.UserSetting, _ *types.BotSetting) string {
@@ -157,17 +158,17 @@ func (r *Registry) createReviewModeSetting() Setting {
 		Key:          constants.ReviewModeOption,
 		Name:         "Review Mode",
 		Description:  "Switch between training and standard review modes",
-		Type:         types.SettingTypeEnum,
-		DefaultValue: types.StandardReviewMode,
+		Type:         enum.SettingTypeEnum,
+		DefaultValue: enum.ReviewModeStandard,
 		Options: []types.SettingOption{
 			{
-				Value:       string(types.TrainingReviewMode),
+				Value:       enum.ReviewModeTraining.String(),
 				Label:       "Training Mode",
 				Description: "Practice reviewing without affecting the system",
 				Emoji:       "🎓",
 			},
 			{
-				Value:       string(types.StandardReviewMode),
+				Value:       enum.ReviewModeStandard.String(),
 				Label:       "Standard Mode",
 				Description: "Normal review mode for actual moderation",
 				Emoji:       "⚠️",
@@ -175,19 +176,25 @@ func (r *Registry) createReviewModeSetting() Setting {
 		},
 		Validators: []Validator{
 			validateEnum([]string{
-				string(types.TrainingReviewMode),
-				string(types.StandardReviewMode),
+				enum.ReviewModeTraining.String(),
+				enum.ReviewModeStandard.String(),
 			}),
 		},
 		ValueGetter: func(us *types.UserSetting, _ *types.BotSetting) string {
-			return us.ReviewMode.FormatDisplay()
+			return us.ReviewMode.String()
 		},
 		ValueUpdater: func(value string, us *types.UserSetting, bs *types.BotSetting, s *session.Session) error {
+			reviewMode, err := enum.ReviewModeString(value)
+			if err != nil {
+				return err
+			}
+
 			// Only allow changing to standard mode if user is a reviewer
-			if value == string(types.StandardReviewMode) && !bs.IsReviewer(s.UserID()) {
+			if reviewMode == enum.ReviewModeStandard && !bs.IsReviewer(s.UserID()) {
 				return ErrNotReviewer
 			}
-			us.ReviewMode = types.ReviewMode(value)
+
+			us.ReviewMode = reviewMode
 			return nil
 		},
 	}
@@ -199,7 +206,7 @@ func (r *Registry) createSessionLimitSetting() Setting {
 		Key:          constants.SessionLimitOption,
 		Name:         "Session Limit",
 		Description:  "Set the maximum number of concurrent sessions",
-		Type:         types.SettingTypeNumber,
+		Type:         enum.SettingTypeNumber,
 		DefaultValue: uint64(0),
 		Validators:   []Validator{validateNumber},
 		ValueGetter: func(_ *types.UserSetting, bs *types.BotSetting) string {
@@ -222,7 +229,7 @@ func (r *Registry) createReviewerIDsSetting() Setting {
 		Key:          constants.ReviewerIDsOption,
 		Name:         "Reviewer IDs",
 		Description:  "Set which users can review using the bot",
-		Type:         types.SettingTypeID,
+		Type:         enum.SettingTypeID,
 		DefaultValue: []uint64{},
 		Validators:   []Validator{validateDiscordID},
 		ValueGetter: func(_ *types.UserSetting, bs *types.BotSetting) string {
@@ -263,7 +270,7 @@ func (r *Registry) createAdminIDsSetting() Setting {
 		Key:          constants.AdminIDsOption,
 		Name:         "Admin IDs",
 		Description:  "Set which users can access bot settings",
-		Type:         types.SettingTypeID,
+		Type:         enum.SettingTypeID,
 		DefaultValue: []uint64{},
 		Validators:   []Validator{validateDiscordID},
 		ValueGetter: func(_ *types.UserSetting, bs *types.BotSetting) string {
@@ -304,29 +311,29 @@ func (r *Registry) createReviewTargetModeSetting() Setting {
 		Key:          constants.ReviewTargetModeOption,
 		Name:         "Review Target Mode",
 		Description:  "Switch between reviewing different types of items",
-		Type:         types.SettingTypeEnum,
-		DefaultValue: types.FlaggedReviewTarget,
+		Type:         enum.SettingTypeEnum,
+		DefaultValue: enum.ReviewTargetModeFlagged,
 		Options: []types.SettingOption{
 			{
-				Value:       string(types.FlaggedReviewTarget),
+				Value:       enum.ReviewTargetModeFlagged.String(),
 				Label:       "Flagged Items",
 				Description: "Review newly flagged items",
 				Emoji:       "🔍",
 			},
 			{
-				Value:       string(types.ConfirmedReviewTarget),
+				Value:       enum.ReviewTargetModeConfirmed.String(),
 				Label:       "Confirmed Items",
 				Description: "Re-review confirmed items",
 				Emoji:       "⚠️",
 			},
 			{
-				Value:       string(types.ClearedReviewTarget),
+				Value:       enum.ReviewTargetModeCleared.String(),
 				Label:       "Cleared Items",
 				Description: "Re-review cleared items",
 				Emoji:       "✅",
 			},
 			{
-				Value:       string(types.BannedReviewTarget),
+				Value:       enum.ReviewTargetModeBanned.String(),
 				Label:       "Banned Items",
 				Description: "Re-review banned/locked items",
 				Emoji:       "🔒",
@@ -334,17 +341,21 @@ func (r *Registry) createReviewTargetModeSetting() Setting {
 		},
 		Validators: []Validator{
 			validateEnum([]string{
-				string(types.FlaggedReviewTarget),
-				string(types.ConfirmedReviewTarget),
-				string(types.ClearedReviewTarget),
-				string(types.BannedReviewTarget),
+				enum.ReviewTargetModeFlagged.String(),
+				enum.ReviewTargetModeConfirmed.String(),
+				enum.ReviewTargetModeCleared.String(),
+				enum.ReviewTargetModeBanned.String(),
 			}),
 		},
 		ValueGetter: func(us *types.UserSetting, _ *types.BotSetting) string {
-			return us.ReviewTargetMode.FormatDisplay()
+			return us.ReviewTargetMode.String()
 		},
 		ValueUpdater: func(value string, us *types.UserSetting, _ *types.BotSetting, _ *session.Session) error {
-			us.ReviewTargetMode = types.ReviewTargetMode(value)
+			reviewTargetMode, err := enum.ReviewTargetModeString(value)
+			if err != nil {
+				return err
+			}
+			us.ReviewTargetMode = reviewTargetMode
 			return nil
 		},
 	}
@@ -356,7 +367,7 @@ func (r *Registry) createWelcomeMessageSetting() Setting {
 		Key:          constants.WelcomeMessageOption,
 		Name:         "Welcome Message",
 		Description:  "Set the welcome message shown on the dashboard",
-		Type:         types.SettingTypeText,
+		Type:         enum.SettingTypeText,
 		DefaultValue: "",
 		Validators: []Validator{
 			func(value string, _ uint64) error {
@@ -385,29 +396,33 @@ func (r *Registry) createAnnouncementTypeSetting() Setting {
 		Key:          constants.AnnouncementTypeOption,
 		Name:         "Announcement Type",
 		Description:  "Set the type of announcement to display",
-		Type:         types.SettingTypeEnum,
-		DefaultValue: types.AnnouncementTypeNone,
+		Type:         enum.SettingTypeEnum,
+		DefaultValue: enum.AnnouncementTypeNone,
 		Options: []types.SettingOption{
-			{Value: string(types.AnnouncementTypeNone), Label: "None", Description: "No announcement", Emoji: "❌"},
-			{Value: string(types.AnnouncementTypeInfo), Label: "Info", Description: "Information announcement", Emoji: "ℹ️"},
-			{Value: string(types.AnnouncementTypeWarning), Label: "Warning", Description: "Warning announcement", Emoji: "⚠️"},
-			{Value: string(types.AnnouncementTypeSuccess), Label: "Success", Description: "Success announcement", Emoji: "✅"},
-			{Value: string(types.AnnouncementTypeError), Label: "Error", Description: "Error announcement", Emoji: "🚫"},
+			{Value: enum.AnnouncementTypeNone.String(), Label: "None", Description: "No announcement", Emoji: "❌"},
+			{Value: enum.AnnouncementTypeInfo.String(), Label: "Info", Description: "Information announcement", Emoji: "ℹ️"},
+			{Value: enum.AnnouncementTypeWarning.String(), Label: "Warning", Description: "Warning announcement", Emoji: "⚠️"},
+			{Value: enum.AnnouncementTypeSuccess.String(), Label: "Success", Description: "Success announcement", Emoji: "✅"},
+			{Value: enum.AnnouncementTypeError.String(), Label: "Error", Description: "Error announcement", Emoji: "🚫"},
 		},
 		Validators: []Validator{
 			validateEnum([]string{
-				string(types.AnnouncementTypeNone),
-				string(types.AnnouncementTypeInfo),
-				string(types.AnnouncementTypeWarning),
-				string(types.AnnouncementTypeSuccess),
-				string(types.AnnouncementTypeError),
+				enum.AnnouncementTypeNone.String(),
+				enum.AnnouncementTypeInfo.String(),
+				enum.AnnouncementTypeWarning.String(),
+				enum.AnnouncementTypeSuccess.String(),
+				enum.AnnouncementTypeError.String(),
 			}),
 		},
 		ValueGetter: func(_ *types.UserSetting, bs *types.BotSetting) string {
-			return string(bs.Announcement.Type)
+			return bs.Announcement.Type.String()
 		},
 		ValueUpdater: func(value string, _ *types.UserSetting, bs *types.BotSetting, _ *session.Session) error {
-			bs.Announcement.Type = types.AnnouncementType(value)
+			announcementType, err := enum.AnnouncementTypeString(value)
+			if err != nil {
+				return err
+			}
+			bs.Announcement.Type = announcementType
 			return nil
 		},
 	}
@@ -419,7 +434,7 @@ func (r *Registry) createAnnouncementMessageSetting() Setting {
 		Key:          constants.AnnouncementMessageOption,
 		Name:         "Announcement Message",
 		Description:  "Set the announcement message to display",
-		Type:         types.SettingTypeText,
+		Type:         enum.SettingTypeText,
 		DefaultValue: "",
 		Validators: []Validator{
 			func(value string, _ uint64) error {
@@ -448,7 +463,7 @@ func (r *Registry) createAPIKeysSetting() Setting {
 		Key:          constants.APIKeysOption,
 		Name:         "API Keys",
 		Description:  "Manage API keys for REST API access",
-		Type:         types.SettingTypeText,
+		Type:         enum.SettingTypeText,
 		DefaultValue: []types.APIKeyInfo{},
 		Validators: []Validator{
 			func(value string, _ uint64) error {

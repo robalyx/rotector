@@ -15,6 +15,7 @@ import (
 	"github.com/robalyx/rotector/internal/common/client/fetcher"
 	"github.com/robalyx/rotector/internal/common/storage/database"
 	"github.com/robalyx/rotector/internal/common/storage/database/types"
+	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
 	"github.com/robalyx/rotector/internal/common/translator"
 )
 
@@ -53,7 +54,7 @@ func NewReviewBuilder(s *session.Session, translator *translator.Translator, db 
 		translator:     translator,
 		flaggedFriends: flaggedFriends,
 		flaggedGroups:  flaggedGroups,
-		isTraining:     settings.ReviewMode == types.TrainingReviewMode,
+		isTraining:     settings.ReviewMode == enum.ReviewModeTraining,
 	}
 }
 
@@ -94,13 +95,13 @@ func (b *ReviewBuilder) buildModeEmbed() *discord.EmbedBuilder {
 
 	// Format review mode
 	switch b.settings.ReviewMode {
-	case types.TrainingReviewMode:
+	case enum.ReviewModeTraining:
 		mode = "🎓 Training Mode"
 		description += `
 		**You are not an official reviewer.**
 		You may help moderators by downvoting to indicate inappropriate activity. Information is censored and external links are disabled.
 		`
-	case types.StandardReviewMode:
+	case enum.ReviewModeStandard:
 		mode = "⚠️ Standard Mode"
 		description += `
 		Your actions are recorded and affect the database. Please review carefully before taking action.
@@ -120,23 +121,23 @@ func (b *ReviewBuilder) buildModeEmbed() *discord.EmbedBuilder {
 func (b *ReviewBuilder) buildReviewBuilder() *discord.EmbedBuilder {
 	embed := discord.NewEmbedBuilder().
 		SetColor(utils.GetMessageEmbedColor(b.isTraining || b.settings.StreamerMode)).
-		SetTitle(fmt.Sprintf("🛡️ %d Safe • ⚠️ %d Reports",
-			b.user.Reputation.Upvotes,
+		SetTitle(fmt.Sprintf("⚠️ %d Reports • 🛡️ %d Safe",
 			b.user.Reputation.Downvotes,
+			b.user.Reputation.Upvotes,
 		))
 
 	// Add status indicator based on user status
 	var status string
 	switch b.user.Status {
-	case types.UserTypeFlagged:
+	case enum.UserTypeFlagged:
 		status = "⏳ Flagged User"
-	case types.UserTypeConfirmed:
+	case enum.UserTypeConfirmed:
 		status = "⚠️ Confirmed User"
-	case types.UserTypeCleared:
+	case enum.UserTypeCleared:
 		status = "✅ Cleared User"
-	case types.UserTypeBanned:
+	case enum.UserTypeBanned:
 		status = "🔨 Banned User"
-	case types.UserTypeUnflagged:
+	case enum.UserTypeUnflagged:
 		status = "🔄 Unflagged User"
 	}
 
@@ -155,7 +156,7 @@ func (b *ReviewBuilder) buildReviewBuilder() *discord.EmbedBuilder {
 		b.user.DisplayName,
 	)
 
-	if b.settings.ReviewMode == types.TrainingReviewMode {
+	if b.settings.ReviewMode == enum.ReviewModeTraining {
 		// Training mode - show limited information without links
 		embed.AddField("ID", utils.CensorString(strconv.FormatUint(b.user.ID, 10), true), true).
 			AddField("Name", utils.CensorString(b.user.Name, true), true).
@@ -224,17 +225,17 @@ func (b *ReviewBuilder) buildReviewBuilder() *discord.EmbedBuilder {
 // buildSortingOptions creates the sorting options.
 func (b *ReviewBuilder) buildSortingOptions() []discord.StringSelectMenuOption {
 	return []discord.StringSelectMenuOption{
-		discord.NewStringSelectMenuOption("Selected by random", string(types.ReviewSortByRandom)).
-			WithDefault(b.settings.UserDefaultSort == types.ReviewSortByRandom).
+		discord.NewStringSelectMenuOption("Selected by random", enum.ReviewSortByRandom.String()).
+			WithDefault(b.settings.UserDefaultSort == enum.ReviewSortByRandom).
 			WithEmoji(discord.ComponentEmoji{Name: "🔀"}),
-		discord.NewStringSelectMenuOption("Selected by confidence", string(types.ReviewSortByConfidence)).
-			WithDefault(b.settings.UserDefaultSort == types.ReviewSortByConfidence).
+		discord.NewStringSelectMenuOption("Selected by confidence", enum.ReviewSortByConfidence.String()).
+			WithDefault(b.settings.UserDefaultSort == enum.ReviewSortByConfidence).
 			WithEmoji(discord.ComponentEmoji{Name: "🔮"}),
-		discord.NewStringSelectMenuOption("Selected by last updated time", string(types.ReviewSortByLastUpdated)).
-			WithDefault(b.settings.UserDefaultSort == types.ReviewSortByLastUpdated).
+		discord.NewStringSelectMenuOption("Selected by last updated time", enum.ReviewSortByLastUpdated.String()).
+			WithDefault(b.settings.UserDefaultSort == enum.ReviewSortByLastUpdated).
 			WithEmoji(discord.ComponentEmoji{Name: "📅"}),
-		discord.NewStringSelectMenuOption("Selected by bad reputation", string(types.ReviewSortByReputation)).
-			WithDefault(b.settings.UserDefaultSort == types.ReviewSortByReputation).
+		discord.NewStringSelectMenuOption("Selected by bad reputation", enum.ReviewSortByReputation.String()).
+			WithDefault(b.settings.UserDefaultSort == enum.ReviewSortByReputation).
 			WithEmoji(discord.ComponentEmoji{Name: "👎"}),
 	}
 }
@@ -317,7 +318,7 @@ func (b *ReviewBuilder) buildComponents() []discord.ContainerComponent {
 
 // getConfirmButtonLabel returns the appropriate label for the confirm button based on review mode.
 func (b *ReviewBuilder) getConfirmButtonLabel() string {
-	if b.settings.ReviewMode == types.TrainingReviewMode {
+	if b.settings.ReviewMode == enum.ReviewModeTraining {
 		return "Report"
 	}
 	return "Confirm"
@@ -325,7 +326,7 @@ func (b *ReviewBuilder) getConfirmButtonLabel() string {
 
 // getClearButtonLabel returns the appropriate label for the clear button based on review mode.
 func (b *ReviewBuilder) getClearButtonLabel() string {
-	if b.settings.ReviewMode == types.TrainingReviewMode {
+	if b.settings.ReviewMode == enum.ReviewModeTraining {
 		return "Safe"
 	}
 	return "Clear"
@@ -398,7 +399,7 @@ func (b *ReviewBuilder) getReviewHistory() string {
 			UserID:       b.user.ID,
 			GroupID:      0,
 			ReviewerID:   0,
-			ActivityType: types.ActivityTypeAll,
+			ActivityType: enum.ActivityTypeAll,
 			StartDate:    time.Time{},
 			EndDate:      time.Time{},
 		},
@@ -559,23 +560,23 @@ func (b *ReviewBuilder) getFriendsField() string {
 	}
 
 	// Count different friend types
-	counts := make(map[types.UserType]int)
+	counts := make(map[enum.UserType]int)
 	for _, friend := range b.flaggedFriends {
 		counts[friend.Status]++
 	}
 
 	// Build status parts
 	var parts []string
-	if c := counts[types.UserTypeConfirmed]; c > 0 {
+	if c := counts[enum.UserTypeConfirmed]; c > 0 {
 		parts = append(parts, fmt.Sprintf("%d ⚠️", c))
 	}
-	if c := counts[types.UserTypeFlagged]; c > 0 {
+	if c := counts[enum.UserTypeFlagged]; c > 0 {
 		parts = append(parts, fmt.Sprintf("%d ⏳", c))
 	}
-	if c := counts[types.UserTypeBanned]; c > 0 {
+	if c := counts[enum.UserTypeBanned]; c > 0 {
 		parts = append(parts, fmt.Sprintf("%d 🔨", c))
 	}
-	if c := counts[types.UserTypeCleared]; c > 0 {
+	if c := counts[enum.UserTypeCleared]; c > 0 {
 		parts = append(parts, fmt.Sprintf("%d ✅", c))
 	}
 
@@ -592,23 +593,23 @@ func (b *ReviewBuilder) getGroupsField() string {
 	}
 
 	// Count different group types
-	counts := make(map[types.GroupType]int)
+	counts := make(map[enum.GroupType]int)
 	for _, group := range b.flaggedGroups {
 		counts[group.Status]++
 	}
 
 	// Build status parts
 	var parts []string
-	if c := counts[types.GroupTypeConfirmed]; c > 0 {
+	if c := counts[enum.GroupTypeConfirmed]; c > 0 {
 		parts = append(parts, fmt.Sprintf("%d ⚠️", c))
 	}
-	if c := counts[types.GroupTypeFlagged]; c > 0 {
+	if c := counts[enum.GroupTypeFlagged]; c > 0 {
 		parts = append(parts, fmt.Sprintf("%d ⏳", c))
 	}
-	if c := counts[types.GroupTypeCleared]; c > 0 {
+	if c := counts[enum.GroupTypeCleared]; c > 0 {
 		parts = append(parts, fmt.Sprintf("%d ✅", c))
 	}
-	if c := counts[types.GroupTypeLocked]; c > 0 {
+	if c := counts[enum.GroupTypeLocked]; c > 0 {
 		parts = append(parts, fmt.Sprintf("%d 🔒", c))
 	}
 

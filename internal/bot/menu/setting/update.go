@@ -13,6 +13,7 @@ import (
 	"github.com/robalyx/rotector/internal/bot/core/session"
 	"github.com/robalyx/rotector/internal/bot/interfaces"
 	"github.com/robalyx/rotector/internal/common/storage/database/types"
+	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
 	"go.uber.org/zap"
 )
 
@@ -126,19 +127,19 @@ func (m *UpdateMenu) handleSettingButton(event *events.ComponentInteractionCreat
 	s.GetInterface(constants.SessionKeySetting, &setting)
 
 	// Handle ID and number setting button clicks
-	if setting.Type == types.SettingTypeID || setting.Type == types.SettingTypeNumber || setting.Type == types.SettingTypeText {
-		textInput := discord.NewTextInput(string(setting.Type), discord.TextInputStyleParagraph, setting.Name).WithRequired(true)
+	if setting.Type == enum.SettingTypeID || setting.Type == enum.SettingTypeNumber || setting.Type == enum.SettingTypeText {
+		textInput := discord.NewTextInput(setting.Type.String(), discord.TextInputStyleParagraph, setting.Name).WithRequired(true)
 		var modalTitle string
 
 		switch setting.Type {
-		case types.SettingTypeID:
+		case enum.SettingTypeID:
 			textInput.WithPlaceholder("Enter the user ID to toggle...")
 			modalTitle = "Toggle " + setting.Name
-		case types.SettingTypeNumber:
+		case enum.SettingTypeNumber:
 			textInput.WithPlaceholder("Enter a number...").
 				WithValue(s.GetString(constants.SessionKeyCurrentValue))
 			modalTitle = "Set " + setting.Name
-		case types.SettingTypeText:
+		case enum.SettingTypeText:
 			textInput.WithPlaceholder("Enter your description...").
 				WithValue(s.GetString(constants.SessionKeyCurrentValue)).
 				WithStyle(discord.TextInputStyleParagraph)
@@ -165,7 +166,7 @@ func (m *UpdateMenu) handleSettingModal(event *events.ModalSubmitInteractionCrea
 	setting := m.getSetting(settingType, settingKey)
 
 	// Get input from modal
-	input := event.Data.Text(string(setting.Type))
+	input := event.Data.Text(setting.Type.String())
 
 	// Validate the input using the setting's validators
 	if err := m.validateSettingValue(s, setting, input); err != nil {

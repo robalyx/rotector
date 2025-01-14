@@ -16,6 +16,7 @@ import (
 	"github.com/robalyx/rotector/internal/bot/interfaces"
 	"github.com/robalyx/rotector/internal/bot/utils"
 	"github.com/robalyx/rotector/internal/common/storage/database/types"
+	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
 	"go.uber.org/zap"
 )
 
@@ -61,7 +62,7 @@ func (m *TicketMenu) Show(event interfaces.CommonEvent, s *session.Session, appe
 	}
 
 	// If appeal is pending, check if user's status has changed
-	if appeal.Status == types.AppealStatusPending { //nolint:nestif
+	if appeal.Status == enum.AppealStatusPending { //nolint:nestif
 		// Get current user status
 		user, err := m.layout.db.Users().GetUserByID(context.Background(), strconv.FormatUint(appeal.UserID, 10), types.UserFields{})
 		if err != nil {
@@ -79,13 +80,13 @@ func (m *TicketMenu) Show(event interfaces.CommonEvent, s *session.Session, appe
 			return
 		}
 
-		if user.Status != types.UserTypeConfirmed && user.Status != types.UserTypeFlagged {
+		if user.Status != enum.UserTypeConfirmed && user.Status != enum.UserTypeFlagged {
 			// User is no longer flagged or confirmed, auto-reject the appeal
 			reason := fmt.Sprintf("User status changed to %s", user.Status)
 			if err := m.layout.db.Appeals().RejectAppeal(context.Background(), appeal.ID, 0, reason); err != nil {
 				m.layout.logger.Error("Failed to auto-reject appeal", zap.Error(err))
 			}
-			m.layout.ShowOverview(event, s, "Appeal automatically closed: User status changed to "+string(user.Status))
+			m.layout.ShowOverview(event, s, "Appeal automatically closed: User status changed to "+user.Status.String())
 			return
 		}
 	}
@@ -187,7 +188,7 @@ func (m *TicketMenu) handleLookupUser(event *events.ComponentInteractionCreate, 
 			UserID: user.ID,
 		},
 		ReviewerID:        uint64(event.User().ID),
-		ActivityType:      types.ActivityTypeUserLookup,
+		ActivityType:      enum.ActivityTypeUserLookup,
 		ActivityTimestamp: time.Now(),
 		Details:           map[string]interface{}{},
 	})
@@ -260,7 +261,7 @@ func (m *TicketMenu) handleCloseAppeal(event *events.ComponentInteractionCreate,
 			UserID: appeal.UserID,
 		},
 		ReviewerID:        userID,
-		ActivityType:      types.ActivityTypeAppealClosed,
+		ActivityType:      enum.ActivityTypeAppealClosed,
 		ActivityTimestamp: time.Now(),
 		Details: map[string]interface{}{
 			"appeal_id": appeal.ID,
@@ -286,7 +287,7 @@ func (m *TicketMenu) handleModal(event *events.ModalSubmitInteractionCreate, s *
 // handleRespondModalSubmit processes the response message submission.
 func (m *TicketMenu) handleRespondModalSubmit(event *events.ModalSubmitInteractionCreate, s *session.Session, appeal *types.Appeal) {
 	// Only allow responses for pending appeals
-	if appeal.Status != types.AppealStatusPending {
+	if appeal.Status != enum.AppealStatusPending {
 		m.layout.paginationManager.NavigateTo(event, s, m.page, "Cannot respond to a closed appeal.")
 		return
 	}
@@ -302,10 +303,10 @@ func (m *TicketMenu) handleRespondModalSubmit(event *events.ModalSubmitInteracti
 	s.GetInterface(constants.SessionKeyBotSettings, &botSettings)
 
 	userID := uint64(event.User().ID)
-	role := types.MessageRoleUser
+	role := enum.MessageRoleUser
 
 	if botSettings.IsReviewer(userID) {
-		role = types.MessageRoleModerator
+		role = enum.MessageRoleModerator
 	} else {
 		var messages []*types.AppealMessage
 		s.GetInterface(constants.SessionKeyAppealMessages, &messages)
@@ -383,7 +384,7 @@ func (m *TicketMenu) handleAcceptModalSubmit(event *events.ModalSubmitInteractio
 			UserID: appeal.UserID,
 		},
 		ReviewerID:        userID,
-		ActivityType:      types.ActivityTypeAppealAccepted,
+		ActivityType:      enum.ActivityTypeAppealAccepted,
 		ActivityTimestamp: time.Now(),
 		Details: map[string]interface{}{
 			"reason":    reason,
@@ -418,7 +419,7 @@ func (m *TicketMenu) handleRejectModalSubmit(event *events.ModalSubmitInteractio
 			UserID: appeal.UserID,
 		},
 		ReviewerID:        userID,
-		ActivityType:      types.ActivityTypeAppealRejected,
+		ActivityType:      enum.ActivityTypeAppealRejected,
 		ActivityTimestamp: time.Now(),
 		Details: map[string]interface{}{
 			"reason":    reason,
@@ -432,7 +433,7 @@ func (m *TicketMenu) isMessageAllowed(messages []*types.AppealMessage, userID ui
 	// Check if the last 3 messages were from this user
 	consecutiveUserMessages := 0
 	for i := len(messages) - 1; i >= 0 && i > len(messages)-4; i-- {
-		if messages[i].UserID == userID && messages[i].Role == types.MessageRoleUser {
+		if messages[i].UserID == userID && messages[i].Role == enum.MessageRoleUser {
 			consecutiveUserMessages++
 		} else {
 			break
@@ -447,7 +448,7 @@ func (m *TicketMenu) isMessageAllowed(messages []*types.AppealMessage, userID ui
 	if len(messages) > 0 {
 		lastMsg := messages[len(messages)-1]
 		if lastMsg.UserID == userID &&
-			lastMsg.Role == types.MessageRoleUser &&
+			lastMsg.Role == enum.MessageRoleUser &&
 			time.Since(lastMsg.CreatedAt) < time.Minute {
 			return false, "Please wait at least 1 minute between messages."
 		}

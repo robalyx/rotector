@@ -14,6 +14,7 @@ import (
 	"github.com/robalyx/rotector/internal/bot/interfaces"
 	"github.com/robalyx/rotector/internal/bot/utils"
 	"github.com/robalyx/rotector/internal/common/storage/database/types"
+	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
 	"go.uber.org/zap"
 )
 
@@ -104,8 +105,16 @@ func (m *OverviewMenu) handleSelectMenu(event *events.ComponentInteractionCreate
 		var settings *types.UserSetting
 		s.GetInterface(constants.SessionKeyUserSettings, &settings)
 
+		// Parse option to status
+		status, err := enum.AppealStatusString(option)
+		if err != nil {
+			m.layout.logger.Error("Failed to parse status", zap.Error(err))
+			m.layout.paginationManager.RespondWithError(event, "Failed to parse sort order. Please try again.")
+			return
+		}
+
 		// Update user's default sort preference
-		settings.AppealStatusFilter = types.AppealFilterBy(option)
+		settings.AppealStatusFilter = status
 		if err := m.layout.db.Settings().SaveUserSettings(context.Background(), settings); err != nil {
 			m.layout.logger.Error("Failed to save user settings", zap.Error(err))
 			m.layout.paginationManager.RespondWithError(event, "Failed to save sort order. Please try again.")
@@ -115,14 +124,22 @@ func (m *OverviewMenu) handleSelectMenu(event *events.ComponentInteractionCreate
 		s.Delete(constants.SessionKeyAppealCursor)
 		s.Delete(constants.SessionKeyAppealPrevCursors)
 
-		m.Show(event, s, "Filtered appeals by "+option)
+		m.Show(event, s, "Filtered appeals by "+status.String())
 	case constants.AppealSortSelectID:
 		// Retrieve user settings from session
 		var settings *types.UserSetting
 		s.GetInterface(constants.SessionKeyUserSettings, &settings)
 
+		// Parse option to appeal sort
+		sortBy, err := enum.AppealSortByString(option)
+		if err != nil {
+			m.layout.logger.Error("Failed to parse sort order", zap.Error(err))
+			m.layout.paginationManager.RespondWithError(event, "Failed to parse sort order. Please try again.")
+			return
+		}
+
 		// Update user's default sort preference
-		settings.AppealDefaultSort = types.AppealSortBy(option)
+		settings.AppealDefaultSort = sortBy
 		if err := m.layout.db.Settings().SaveUserSettings(context.Background(), settings); err != nil {
 			m.layout.logger.Error("Failed to save user settings", zap.Error(err))
 			m.layout.paginationManager.RespondWithError(event, "Failed to save sort order. Please try again.")
@@ -289,7 +306,7 @@ func (m *OverviewMenu) handleCreateAppealModalSubmit(event *events.ModalSubmitIn
 	}
 
 	// Only allow appeals for confirmed/flagged users
-	if user.Status != types.UserTypeConfirmed && user.Status != types.UserTypeFlagged {
+	if user.Status != enum.UserTypeConfirmed && user.Status != enum.UserTypeFlagged {
 		m.layout.paginationManager.NavigateTo(event, s, m.page, "Cannot submit appeal - user must be confirmed or flagged.")
 		return
 	}

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/robalyx/rotector/internal/common/storage/database/types"
+	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
 	"github.com/uptrace/bun"
 	"go.uber.org/zap"
 )
@@ -30,11 +31,11 @@ func NewVote(db *bun.DB, views *MaterializedViewModel, logger *zap.Logger) *Vote
 }
 
 // GetUserVoteStats retrieves vote statistics for a Discord user.
-func (v *VoteModel) GetUserVoteStats(ctx context.Context, discordUserID uint64, period types.LeaderboardPeriod) (*types.VoteAccuracy, error) {
+func (v *VoteModel) GetUserVoteStats(ctx context.Context, discordUserID uint64, period enum.LeaderboardPeriod) (*types.VoteAccuracy, error) {
 	var stats types.VoteAccuracy
 
 	err := v.db.NewSelect().
-		TableExpr("vote_leaderboard_stats_"+string(period)).
+		TableExpr("vote_leaderboard_stats_"+period.String()).
 		ColumnExpr("?::bigint as discord_user_id", discordUserID).
 		ColumnExpr("correct_votes").
 		ColumnExpr("total_votes").
@@ -59,7 +60,7 @@ func (v *VoteModel) GetUserVoteStats(ctx context.Context, discordUserID uint64, 
 }
 
 // GetLeaderboard retrieves the top voters for a given time period.
-func (v *VoteModel) GetLeaderboard(ctx context.Context, period types.LeaderboardPeriod, cursor *types.LeaderboardCursor, limit int) ([]types.VoteAccuracy, *types.LeaderboardCursor, error) {
+func (v *VoteModel) GetLeaderboard(ctx context.Context, period enum.LeaderboardPeriod, cursor *types.LeaderboardCursor, limit int) ([]types.VoteAccuracy, *types.LeaderboardCursor, error) {
 	var stats []types.VoteAccuracy
 	var nextCursor *types.LeaderboardCursor
 
@@ -68,14 +69,14 @@ func (v *VoteModel) GetLeaderboard(ctx context.Context, period types.Leaderboard
 	if err != nil {
 		v.logger.Warn("Failed to refresh materialized view",
 			zap.Error(err),
-			zap.String("period", string(period)))
+			zap.String("period", period.String()))
 		// Continue anyway - we'll use slightly stale data
 	}
 
 	// Query the view
 	err = v.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
 		query := tx.NewSelect().
-			TableExpr("vote_leaderboard_stats_"+string(period)).
+			TableExpr("vote_leaderboard_stats_"+period.String()).
 			ColumnExpr("discord_user_id, correct_votes, total_votes, accuracy, voted_at").
 			Order("correct_votes DESC", "accuracy DESC", "voted_at DESC", "discord_user_id").
 			Limit(limit + 1)
@@ -117,10 +118,10 @@ func (v *VoteModel) GetLeaderboard(ctx context.Context, period types.Leaderboard
 }
 
 // getUserRank gets the user's rank based on correct votes.
-func (v *VoteModel) getUserRank(ctx context.Context, discordUserID uint64, period types.LeaderboardPeriod) (int, error) {
+func (v *VoteModel) getUserRank(ctx context.Context, discordUserID uint64, period enum.LeaderboardPeriod) (int, error) {
 	var rank int
 	err := v.db.NewSelect().
-		TableExpr("vote_leaderboard_stats_"+string(period)).
+		TableExpr("vote_leaderboard_stats_"+period.String()).
 		ColumnExpr(`
 			RANK() OVER (
 				ORDER BY correct_votes DESC, accuracy DESC
@@ -139,7 +140,7 @@ func (v *VoteModel) getUserRank(ctx context.Context, discordUserID uint64, perio
 }
 
 // SaveVote records a new vote from a Discord user.
-func (v *VoteModel) SaveVote(ctx context.Context, targetID uint64, discordUserID uint64, isUpvote bool, voteType types.VoteType) error {
+func (v *VoteModel) SaveVote(ctx context.Context, targetID uint64, discordUserID uint64, isUpvote bool, voteType enum.VoteType) error {
 	vote := types.Vote{
 		ID:            targetID,
 		DiscordUserID: discordUserID,
@@ -151,10 +152,10 @@ func (v *VoteModel) SaveVote(ctx context.Context, targetID uint64, discordUserID
 
 	insert := v.db.NewInsert()
 	switch voteType {
-	case types.VoteTypeUser:
+	case enum.VoteTypeUser:
 		userVote := &types.UserVote{Vote: vote}
 		insert = insert.Model(userVote)
-	case types.VoteTypeGroup:
+	case enum.VoteTypeGroup:
 		groupVote := &types.GroupVote{Vote: vote}
 		insert = insert.Model(groupVote)
 	default:
@@ -174,15 +175,15 @@ func (v *VoteModel) SaveVote(ctx context.Context, targetID uint64, discordUserID
 }
 
 // VerifyVotes verifies all unverified votes for a target and updates vote statistics.
-func (v *VoteModel) VerifyVotes(ctx context.Context, targetID uint64, wasInappropriate bool, voteType types.VoteType) error {
+func (v *VoteModel) VerifyVotes(ctx context.Context, targetID uint64, wasInappropriate bool, voteType enum.VoteType) error {
 	// First handle the vote verification in a transaction
 	err := v.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
 		// Use the appropriate model for the query
 		update := tx.NewUpdate()
 		switch voteType {
-		case types.VoteTypeUser:
+		case enum.VoteTypeUser:
 			update = update.Model((*types.UserVote)(nil))
-		case types.VoteTypeGroup:
+		case enum.VoteTypeGroup:
 			update = update.Model((*types.GroupVote)(nil))
 		default:
 			return fmt.Errorf("%w: %s", types.ErrInvalidVoteType, voteType)

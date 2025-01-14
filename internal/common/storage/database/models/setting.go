@@ -9,6 +9,7 @@ import (
 
 	"github.com/disgoorg/snowflake/v2"
 	"github.com/robalyx/rotector/internal/common/storage/database/types"
+	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
 	"github.com/uptrace/bun"
 	"go.uber.org/zap"
 )
@@ -33,13 +34,13 @@ func (r *SettingModel) GetUserSettings(ctx context.Context, userID snowflake.ID)
 	settings := &types.UserSetting{
 		UserID:             userID,
 		StreamerMode:       false,
-		UserDefaultSort:    types.ReviewSortByRandom,
-		GroupDefaultSort:   types.ReviewSortByRandom,
-		AppealDefaultSort:  types.AppealSortByNewest,
-		AppealStatusFilter: types.AppealFilterByAll,
-		ChatModel:          types.ChatModelGeminiPro,
-		ReviewMode:         types.StandardReviewMode,
-		ReviewTargetMode:   types.FlaggedReviewTarget,
+		UserDefaultSort:    enum.ReviewSortByRandom,
+		GroupDefaultSort:   enum.ReviewSortByRandom,
+		AppealDefaultSort:  enum.AppealSortByNewest,
+		AppealStatusFilter: enum.AppealStatusPending,
+		ChatModel:          enum.ChatModelGeminiPro,
+		ReviewMode:         enum.ReviewModeStandard,
+		ReviewTargetMode:   enum.ReviewTargetModeFlagged,
 		ChatMessageUsage: types.ChatMessageUsage{
 			FirstMessageTime: time.Unix(0, 0),
 			MessageCount:     0,
@@ -51,7 +52,7 @@ func (r *SettingModel) GetUserSettings(ctx context.Context, userID snowflake.ID)
 		CaptchaUsage: types.CaptchaUsage{
 			ReviewCount: 0,
 		},
-		LeaderboardPeriod: types.LeaderboardPeriodAllTime,
+		LeaderboardPeriod: enum.LeaderboardPeriodAllTime,
 	}
 
 	err := r.db.NewSelect().Model(settings).
@@ -112,7 +113,7 @@ func (r *SettingModel) GetBotSettings(ctx context.Context) (*types.BotSetting, e
 		SessionLimit:   0,
 		WelcomeMessage: "",
 		Announcement: types.Announcement{
-			Type:    types.AnnouncementTypeNone,
+			Type:    enum.AnnouncementTypeNone,
 			Message: "",
 		},
 		APIKeys: []types.APIKeyInfo{},

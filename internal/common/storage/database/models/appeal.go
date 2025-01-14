@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/robalyx/rotector/internal/common/storage/database/types"
+	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
 	"github.com/uptrace/bun"
 	"go.uber.org/zap"
 )
@@ -36,9 +37,6 @@ func NewAppeal(db *bun.DB, logger *zap.Logger) *AppealModel {
 
 // CreateAppeal submits a new appeal request.
 func (r *AppealModel) CreateAppeal(ctx context.Context, appeal *types.Appeal, reason string) error {
-	now := time.Now()
-	appeal.Status = types.AppealStatusPending
-
 	return r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
 		// Create the appeal
 		_, err := tx.NewInsert().Model(appeal).Exec(ctx)
@@ -50,6 +48,7 @@ func (r *AppealModel) CreateAppeal(ctx context.Context, appeal *types.Appeal, re
 		}
 
 		// Create timeline entry
+		now := time.Now()
 		timeline := &types.AppealTimeline{
 			ID:           appeal.ID,
 			Timestamp:    now,
@@ -65,7 +64,7 @@ func (r *AppealModel) CreateAppeal(ctx context.Context, appeal *types.Appeal, re
 		message := &types.AppealMessage{
 			AppealID:  appeal.ID,
 			UserID:    appeal.RequesterID,
-			Role:      types.MessageRoleUser,
+			Role:      enum.MessageRoleUser,
 			Content:   reason,
 			CreatedAt: now,
 		}
@@ -77,7 +76,8 @@ func (r *AppealModel) CreateAppeal(ctx context.Context, appeal *types.Appeal, re
 		r.logger.Debug("Created appeal",
 			zap.Int64("id", appeal.ID),
 			zap.Uint64("userID", appeal.UserID),
-			zap.Uint64("requesterID", appeal.RequesterID))
+			zap.Uint64("requesterID", appeal.RequesterID),
+			zap.String("status", appeal.Status.String()))
 		return nil
 	})
 }
@@ -89,12 +89,12 @@ func (r *AppealModel) AcceptAppeal(ctx context.Context, appealID int64, reviewer
 		// Update appeal status
 		_, err := tx.NewUpdate().
 			Model((*types.Appeal)(nil)).
-			Set("status = ?", types.AppealStatusAccepted).
+			Set("status = ?", enum.AppealStatusAccepted).
 			Set("reviewer_id = ?", reviewerID).
 			Set("reviewed_at = ?", now).
 			Set("review_reason = ?", reason).
 			Where("id = ?", appealID).
-			Where("status = ?", types.AppealStatusPending).
+			Where("status = ?", enum.AppealStatusPending).
 			Exec(ctx)
 		if err != nil {
 			return fmt.Errorf("failed to accept appeal: %w (appealID=%d)", err, appealID)
@@ -124,12 +124,12 @@ func (r *AppealModel) RejectAppeal(ctx context.Context, appealID int64, reviewer
 		// Update appeal status
 		_, err := tx.NewUpdate().
 			Model((*types.Appeal)(nil)).
-			Set("status = ?", types.AppealStatusRejected).
+			Set("status = ?", enum.AppealStatusRejected).
 			Set("reviewer_id = ?", reviewerID).
 			Set("reviewed_at = ?", now).
 			Set("review_reason = ?", reason).
 			Where("id = ?", appealID).
-			Where("status = ?", types.AppealStatusPending).
+			Where("status = ?", enum.AppealStatusPending).
 			Exec(ctx)
 		if err != nil {
 			return fmt.Errorf("failed to reject appeal: %w (appealID=%d)", err, appealID)
@@ -157,7 +157,7 @@ func (r *AppealModel) HasPendingAppealByRequester(ctx context.Context, requester
 	exists, err := r.db.NewSelect().
 		Model((*types.Appeal)(nil)).
 		Where("requester_id = ?", requesterID).
-		Where("status = ?", types.AppealStatusPending).
+		Where("status = ?", enum.AppealStatusPending).
 		Exists(ctx)
 	if err != nil {
 		return false, fmt.Errorf("failed to check pending appeals: %w (requesterID=%d)", err, requesterID)
@@ -170,7 +170,7 @@ func (r *AppealModel) HasPreviousRejection(ctx context.Context, userID uint64) (
 	exists, err := r.db.NewSelect().
 		Model((*types.Appeal)(nil)).
 		Where("user_id = ?", userID).
-		Where("status = ?", types.AppealStatusRejected).
+		Where("status = ?", enum.AppealStatusRejected).
 		Where("reviewed_at > ?", time.Now().AddDate(0, 0, -7)).
 		Exists(ctx)
 	if err != nil {
@@ -185,7 +185,7 @@ func (r *AppealModel) HasPendingAppealByUserID(ctx context.Context, userID uint6
 	exists, err := r.db.NewSelect().
 		Model((*types.Appeal)(nil)).
 		Where("user_id = ?", userID).
-		Where("status = ?", types.AppealStatusPending).
+		Where("status = ?", enum.AppealStatusPending).
 		Exists(ctx)
 	if err != nil {
 		return false, fmt.Errorf("failed to check pending appeals: %w (userID=%d)", err, userID)
@@ -197,8 +197,8 @@ func (r *AppealModel) HasPendingAppealByUserID(ctx context.Context, userID uint6
 // It supports pagination through cursors and different sorting options.
 func (r *AppealModel) GetAppealsToReview(
 	ctx context.Context,
-	sortBy types.AppealSortBy,
-	statusFilter types.AppealFilterBy,
+	sortBy enum.AppealSortBy,
+	statusFilter enum.AppealStatus,
 	reviewerID uint64,
 	cursor *types.AppealTimeline,
 	limit int,
@@ -211,25 +211,23 @@ func (r *AppealModel) GetAppealsToReview(
 		ColumnExpr("t.timestamp, t.last_viewed, t.last_activity")
 
 	// Apply status filter if not showing all
-	if statusFilter != types.AppealFilterByAll {
-		query.Where("status = ?", statusFilter)
-	}
+	query.Where("status = ?", statusFilter)
 
 	// Apply sort order and cursor conditions based on sort type
 	switch sortBy {
-	case types.AppealSortByOldest:
+	case enum.AppealSortByOldest:
 		if cursor != nil {
 			query.Where("(t.timestamp, appeal.id) > (?, ?)", cursor.Timestamp, cursor.ID)
 		}
 		query.Order("t.timestamp ASC", "appeal.id ASC")
-	case types.AppealSortByClaimed:
-		query.Where("status = ?", types.AppealStatusPending) // Only show pending appeals for claimed view
+	case enum.AppealSortByClaimed:
+		query.Where("status = ?", enum.AppealStatusPending) // Only show pending appeals for claimed view
 		query.Where("claimed_by = ?", reviewerID)
 		if cursor != nil {
 			query.Where("(t.last_activity, appeal.id) < (?, ?)", cursor.LastActivity, cursor.ID)
 		}
 		query.Order("t.last_activity DESC", "appeal.id DESC")
-	case types.AppealSortByNewest:
+	case enum.AppealSortByNewest:
 		if cursor != nil {
 			query.Where("(t.timestamp, appeal.id) < (?, ?)", cursor.Timestamp, cursor.ID)
 		}
@@ -244,7 +242,7 @@ func (r *AppealModel) GetAppealsToReview(
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf(
 			"failed to get appeals with cursor: %w (sortBy=%s, reviewerID=%d)",
-			err, string(sortBy), reviewerID,
+			err, sortBy.String(), reviewerID,
 		)
 	}
 
@@ -256,7 +254,7 @@ func (r *AppealModel) GetAppealsToReview(
 // GetAppealsByRequester gets all appeals submitted by a specific user.
 func (r *AppealModel) GetAppealsByRequester(
 	ctx context.Context,
-	statusFilter types.AppealFilterBy,
+	statusFilter enum.AppealStatus,
 	requesterID uint64,
 	cursor *types.AppealTimeline,
 	limit int,
@@ -268,10 +266,8 @@ func (r *AppealModel) GetAppealsByRequester(
 		ColumnExpr("t.timestamp, t.last_viewed, t.last_activity").
 		Where("requester_id = ?", requesterID)
 
-	// Apply status filter if not showing all
-	if statusFilter != types.AppealFilterByAll {
-		query.Where("status = ?", statusFilter)
-	}
+		// Apply status filter if not showing all
+	query.Where("status = ?", statusFilter)
 
 	// Apply cursor conditions if cursor exists
 	if cursor != nil {
@@ -323,7 +319,7 @@ func (r *AppealModel) AddAppealMessage(ctx context.Context, message *types.Appea
 		now := time.Now()
 
 		// Auto-claim appeal for moderator messages if not already claimed
-		if message.Role == types.MessageRoleModerator && appeal.ClaimedBy == 0 {
+		if message.Role == enum.MessageRoleModerator && appeal.ClaimedBy == 0 {
 			_, err := tx.NewUpdate().
 				Model(appeal).
 				Set("claimed_by = ?", message.UserID).

@@ -16,6 +16,7 @@ import (
 	"github.com/robalyx/rotector/internal/common/client/fetcher"
 	"github.com/robalyx/rotector/internal/common/storage/database"
 	"github.com/robalyx/rotector/internal/common/storage/database/types"
+	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
 )
 
 // ReviewBuilder creates the visual layout for reviewing a group.
@@ -51,7 +52,7 @@ func NewReviewBuilder(s *session.Session, db *database.Client) *ReviewBuilder {
 		group:       group,
 		groupInfo:   groupInfo,
 		memberIDs:   memberIDs,
-		isTraining:  settings.ReviewMode == types.TrainingReviewMode,
+		isTraining:  settings.ReviewMode == enum.ReviewModeTraining,
 	}
 }
 
@@ -92,13 +93,13 @@ func (b *ReviewBuilder) buildModeEmbed() *discord.EmbedBuilder {
 
 	// Format review mode
 	switch b.settings.ReviewMode {
-	case types.TrainingReviewMode:
+	case enum.ReviewModeTraining:
 		mode = "🎓 Training Mode"
 		description += `
 		**You are not an official reviewer.**
 		You may help moderators by downvoting to indicate inappropriate activity. Information is censored and external links are disabled.
 		`
-	case types.StandardReviewMode:
+	case enum.ReviewModeStandard:
 		mode = "⚠️ Standard Mode"
 		description += `
 		Your actions are recorded and affect the database. Please review carefully before taking action.
@@ -118,23 +119,23 @@ func (b *ReviewBuilder) buildModeEmbed() *discord.EmbedBuilder {
 func (b *ReviewBuilder) buildReviewEmbed() *discord.EmbedBuilder {
 	embed := discord.NewEmbedBuilder().
 		SetColor(utils.GetMessageEmbedColor(b.isTraining || b.settings.StreamerMode)).
-		SetTitle(fmt.Sprintf("🛡️ %d Safe • ⚠️ %d Reports",
-			b.group.Reputation.Upvotes,
+		SetTitle(fmt.Sprintf("⚠️ %d Reports • 🛡️ %d Safe ",
 			b.group.Reputation.Downvotes,
+			b.group.Reputation.Upvotes,
 		))
 
 	// Add status indicator based on group status
 	var status string
 	switch b.group.Status {
-	case types.GroupTypeFlagged:
+	case enum.GroupTypeFlagged:
 		status = "⏳ Flagged Group"
-	case types.GroupTypeConfirmed:
+	case enum.GroupTypeConfirmed:
 		status = "⚠️ Confirmed Group"
-	case types.GroupTypeCleared:
+	case enum.GroupTypeCleared:
 		status = "✅ Cleared Group"
-	case types.GroupTypeLocked:
+	case enum.GroupTypeLocked:
 		status = "🔒 Locked Group"
-	case types.GroupTypeUnflagged:
+	case enum.GroupTypeUnflagged:
 		status = "🔄 Unflagged Group"
 	}
 
@@ -152,7 +153,7 @@ func (b *ReviewBuilder) buildReviewEmbed() *discord.EmbedBuilder {
 		strconv.FormatUint(b.group.Owner.UserID, 10),
 	)
 
-	if b.settings.ReviewMode == types.TrainingReviewMode {
+	if b.settings.ReviewMode == enum.ReviewModeTraining {
 		// Training mode - show limited information without links
 		embed.AddField("ID", utils.CensorString(strconv.FormatUint(b.group.ID, 10), true), true).
 			AddField("Name", utils.CensorString(b.group.Name, true), true).
@@ -207,17 +208,17 @@ func (b *ReviewBuilder) buildReviewEmbed() *discord.EmbedBuilder {
 // buildSortingOptions creates the sorting options.
 func (b *ReviewBuilder) buildSortingOptions() []discord.StringSelectMenuOption {
 	return []discord.StringSelectMenuOption{
-		discord.NewStringSelectMenuOption("Selected by random", string(types.ReviewSortByRandom)).
-			WithDefault(b.settings.GroupDefaultSort == types.ReviewSortByRandom).
+		discord.NewStringSelectMenuOption("Selected by random", enum.ReviewSortByRandom.String()).
+			WithDefault(b.settings.GroupDefaultSort == enum.ReviewSortByRandom).
 			WithEmoji(discord.ComponentEmoji{Name: "🔀"}),
-		discord.NewStringSelectMenuOption("Selected by confidence", string(types.ReviewSortByConfidence)).
-			WithDefault(b.settings.GroupDefaultSort == types.ReviewSortByConfidence).
+		discord.NewStringSelectMenuOption("Selected by confidence", enum.ReviewSortByConfidence.String()).
+			WithDefault(b.settings.GroupDefaultSort == enum.ReviewSortByConfidence).
 			WithEmoji(discord.ComponentEmoji{Name: "🔮"}),
-		discord.NewStringSelectMenuOption("Selected by last updated time", string(types.ReviewSortByLastUpdated)).
-			WithDefault(b.settings.GroupDefaultSort == types.ReviewSortByLastUpdated).
+		discord.NewStringSelectMenuOption("Selected by last updated time", enum.ReviewSortByLastUpdated.String()).
+			WithDefault(b.settings.GroupDefaultSort == enum.ReviewSortByLastUpdated).
 			WithEmoji(discord.ComponentEmoji{Name: "📅"}),
-		discord.NewStringSelectMenuOption("Selected by bad reputation", string(types.ReviewSortByReputation)).
-			WithDefault(b.settings.GroupDefaultSort == types.ReviewSortByReputation).
+		discord.NewStringSelectMenuOption("Selected by bad reputation", enum.ReviewSortByReputation.String()).
+			WithDefault(b.settings.GroupDefaultSort == enum.ReviewSortByReputation).
 			WithEmoji(discord.ComponentEmoji{Name: "👎"}),
 	}
 }
@@ -332,7 +333,7 @@ func (b *ReviewBuilder) getReviewHistory() string {
 		types.ActivityFilter{
 			GroupID:      b.group.ID,
 			ReviewerID:   0,
-			ActivityType: types.ActivityTypeAll,
+			ActivityType: enum.ActivityTypeAll,
 			StartDate:    time.Time{},
 			EndDate:      time.Time{},
 		},
@@ -362,7 +363,7 @@ func (b *ReviewBuilder) getReviewHistory() string {
 
 // getConfirmButtonLabel returns the appropriate label for the confirm button based on review mode.
 func (b *ReviewBuilder) getConfirmButtonLabel() string {
-	if b.settings.ReviewMode == types.TrainingReviewMode {
+	if b.settings.ReviewMode == enum.ReviewModeTraining {
 		return "Report"
 	}
 	return "Confirm"
@@ -370,7 +371,7 @@ func (b *ReviewBuilder) getConfirmButtonLabel() string {
 
 // getClearButtonLabel returns the appropriate label for the clear button based on review mode.
 func (b *ReviewBuilder) getClearButtonLabel() string {
-	if b.settings.ReviewMode == types.TrainingReviewMode {
+	if b.settings.ReviewMode == enum.ReviewModeTraining {
 		return "Safe"
 	}
 	return "Clear"

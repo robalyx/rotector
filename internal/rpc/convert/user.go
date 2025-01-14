@@ -4,21 +4,22 @@ import (
 	"time"
 
 	"github.com/robalyx/rotector/internal/common/storage/database/types"
+	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
 	"github.com/robalyx/rotector/internal/rpc/proto"
 )
 
 // UserStatus converts a database user status to RPC API user status.
-func UserStatus(status types.UserType) proto.UserStatus {
+func UserStatus(status enum.UserType) proto.UserStatus {
 	switch status {
-	case types.UserTypeFlagged:
+	case enum.UserTypeFlagged:
 		return proto.UserStatus_USER_STATUS_FLAGGED
-	case types.UserTypeConfirmed:
+	case enum.UserTypeConfirmed:
 		return proto.UserStatus_USER_STATUS_CONFIRMED
-	case types.UserTypeCleared:
+	case enum.UserTypeCleared:
 		return proto.UserStatus_USER_STATUS_CLEARED
-	case types.UserTypeBanned:
+	case enum.UserTypeBanned:
 		return proto.UserStatus_USER_STATUS_BANNED
-	case types.UserTypeUnflagged:
+	case enum.UserTypeUnflagged:
 		return proto.UserStatus_USER_STATUS_UNFLAGGED
 	default:
 		return proto.UserStatus_USER_STATUS_UNFLAGGED

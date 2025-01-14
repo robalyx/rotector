@@ -11,6 +11,7 @@ import (
 	"github.com/robalyx/rotector/internal/bot/core/session"
 	"github.com/robalyx/rotector/internal/bot/utils"
 	"github.com/robalyx/rotector/internal/common/storage/database/types"
+	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
 )
 
 // OutfitsBuilder creates the visual layout for viewing a user's outfits.
@@ -49,7 +50,7 @@ func NewOutfitsBuilder(s *session.Session) *OutfitsBuilder {
 // Build creates a Discord message with a grid of outfit thumbnails and information.
 func (b *OutfitsBuilder) Build() *discord.MessageUpdateBuilder {
 	totalPages := (b.total + constants.OutfitsPerPage - 1) / constants.OutfitsPerPage
-	censor := b.settings.StreamerMode || b.settings.ReviewMode == types.TrainingReviewMode
+	censor := b.settings.StreamerMode || b.settings.ReviewMode == enum.ReviewModeTraining
 
 	// Create file attachment for the outfit thumbnails grid
 	fileName := fmt.Sprintf("outfits_%d_%d.png", b.user.ID, b.page)

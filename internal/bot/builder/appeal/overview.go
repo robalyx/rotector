@@ -9,14 +9,15 @@ import (
 	"github.com/robalyx/rotector/internal/bot/core/session"
 	"github.com/robalyx/rotector/internal/bot/utils"
 	"github.com/robalyx/rotector/internal/common/storage/database/types"
+	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
 )
 
 // OverviewBuilder creates the visual layout for the appeal overview interface.
 type OverviewBuilder struct {
 	appeals      []*types.Appeal
 	settings     *types.UserSetting
-	sortBy       types.AppealSortBy
-	statusFilter types.AppealFilterBy
+	sortBy       enum.AppealSortBy
+	statusFilter enum.AppealStatus
 	hasNextPage  bool
 	hasPrevPage  bool
 	isReviewer   bool
@@ -88,11 +89,11 @@ func (b *OverviewBuilder) formatAppealField(appeal *types.Appeal) (string, strin
 	// Format status with emoji
 	var statusEmoji string
 	switch appeal.Status {
-	case types.AppealStatusPending:
+	case enum.AppealStatusPending:
 		statusEmoji = "⏳"
-	case types.AppealStatusAccepted:
+	case enum.AppealStatusAccepted:
 		statusEmoji = "✅"
-	case types.AppealStatusRejected:
+	case enum.AppealStatusRejected:
 		statusEmoji = "❌"
 	}
 
@@ -137,11 +138,11 @@ func (b *OverviewBuilder) buildComponents() []discord.ContainerComponent {
 			// Format status emoji
 			var statusEmoji string
 			switch appeal.Status {
-			case types.AppealStatusPending:
+			case enum.AppealStatusPending:
 				statusEmoji = "⏳"
-			case types.AppealStatusAccepted:
+			case enum.AppealStatusAccepted:
 				statusEmoji = "✅"
-			case types.AppealStatusRejected:
+			case enum.AppealStatusRejected:
 				statusEmoji = "❌"
 			}
 
@@ -165,33 +166,30 @@ func (b *OverviewBuilder) buildComponents() []discord.ContainerComponent {
 	// Add status filter dropdown
 	components = append(components, discord.NewActionRow(
 		discord.NewStringSelectMenu(constants.AppealStatusSelectID, "Filter by Status",
-			discord.NewStringSelectMenuOption("All Appeals", string(types.AppealFilterByAll)).
-				WithDescription("Show appeals of all statuses").
-				WithDefault(b.statusFilter == types.AppealFilterByAll),
-			discord.NewStringSelectMenuOption("Pending Appeals", string(types.AppealFilterByPending)).
+			discord.NewStringSelectMenuOption("Pending Appeals", enum.AppealStatusPending.String()).
 				WithDescription("Show only pending appeals").
-				WithDefault(b.statusFilter == types.AppealFilterByPending),
-			discord.NewStringSelectMenuOption("Accepted Appeals", string(types.AppealFilterByAccepted)).
+				WithDefault(b.statusFilter == enum.AppealStatusPending),
+			discord.NewStringSelectMenuOption("Accepted Appeals", enum.AppealStatusAccepted.String()).
 				WithDescription("Show only accepted appeals").
-				WithDefault(b.statusFilter == types.AppealFilterByAccepted),
-			discord.NewStringSelectMenuOption("Rejected Appeals", string(types.AppealFilterByRejected)).
+				WithDefault(b.statusFilter == enum.AppealStatusAccepted),
+			discord.NewStringSelectMenuOption("Rejected Appeals", enum.AppealStatusRejected.String()).
 				WithDescription("Show only rejected appeals").
-				WithDefault(b.statusFilter == types.AppealFilterByRejected)),
+				WithDefault(b.statusFilter == enum.AppealStatusRejected)),
 	))
 
 	if b.isReviewer {
 		// Add sorting options for reviewers
 		components = append(components, discord.NewActionRow(
 			discord.NewStringSelectMenu(constants.AppealSortSelectID, "Sort by",
-				discord.NewStringSelectMenuOption("Oldest First", string(types.AppealSortByOldest)).
+				discord.NewStringSelectMenuOption("Oldest First", enum.AppealSortByOldest.String()).
 					WithDescription("Show oldest appeals first").
-					WithDefault(b.sortBy == types.AppealSortByOldest),
-				discord.NewStringSelectMenuOption("My Claims", string(types.AppealSortByClaimed)).
+					WithDefault(b.sortBy == enum.AppealSortByOldest),
+				discord.NewStringSelectMenuOption("My Claims", enum.AppealSortByClaimed.String()).
 					WithDescription("Show appeals claimed by you").
-					WithDefault(b.sortBy == types.AppealSortByClaimed),
-				discord.NewStringSelectMenuOption("Newest First", string(types.AppealSortByNewest)).
+					WithDefault(b.sortBy == enum.AppealSortByClaimed),
+				discord.NewStringSelectMenuOption("Newest First", enum.AppealSortByNewest.String()).
 					WithDescription("Show newest appeals first").
-					WithDefault(b.sortBy == types.AppealSortByNewest),
+					WithDefault(b.sortBy == enum.AppealSortByNewest),
 			),
 		))
 	}
