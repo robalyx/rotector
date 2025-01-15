@@ -412,6 +412,21 @@ func (m *ReviewMenu) handleConfirmUser(event interfaces.CommonEvent, s *session.
 			return
 		}
 
+		// Calculate vote percentages
+		totalVotes := float64(user.Reputation.Upvotes + user.Reputation.Downvotes)
+		if totalVotes >= constants.MinimumVotesRequired {
+			upvotePercentage := float64(user.Reputation.Upvotes) / totalVotes
+
+			// If there's a strong consensus for clearing, prevent confirmation
+			if upvotePercentage >= constants.VoteConsensusThreshold {
+				m.layout.paginationManager.NavigateTo(event, s, m.page,
+					fmt.Sprintf("Cannot confirm - %.0f%% of %d votes indicate this user is safe",
+						upvotePercentage*100, int(totalVotes)))
+				return
+			}
+		}
+
+		// Confirm the user
 		if err := m.layout.db.Users().ConfirmUser(context.Background(), user); err != nil {
 			m.layout.logger.Error("Failed to confirm user", zap.Error(err))
 			m.layout.paginationManager.RespondWithError(event, "Failed to confirm the user. Please try again.")
@@ -486,6 +501,21 @@ func (m *ReviewMenu) handleClearUser(event interfaces.CommonEvent, s *session.Se
 			return
 		}
 
+		// Calculate vote percentages
+		totalVotes := float64(user.Reputation.Upvotes + user.Reputation.Downvotes)
+		if totalVotes >= constants.MinimumVotesRequired {
+			downvotePercentage := float64(user.Reputation.Downvotes) / totalVotes
+
+			// If there's a strong consensus for confirming, prevent clearing
+			if downvotePercentage >= constants.VoteConsensusThreshold {
+				m.layout.paginationManager.NavigateTo(event, s, m.page,
+					fmt.Sprintf("Cannot clear - %.0f%% of %d votes indicate this user is suspicious",
+						downvotePercentage*100, int(totalVotes)))
+				return
+			}
+		}
+
+		// Clear the user
 		if err := m.layout.db.Users().ClearUser(context.Background(), user); err != nil {
 			m.layout.logger.Error("Failed to clear user", zap.Error(err))
 			m.layout.paginationManager.RespondWithError(event, "Failed to clear the user. Please try again.")

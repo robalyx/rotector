@@ -42,6 +42,8 @@ linters-settings:
     min-complexity: 35
   goconst:
     min-len: 4
+  nestif:
+    min-complexity: 8
   gosec:
     excludes:
       - G404 # Insecure random number source (rand)

@@ -40,8 +40,11 @@ const (
 	LookupGroupInputCustomID = "lookup_group_input"
 )
 
-// User Review Menu.
+// Common Review Menu.
 const (
+	VoteConsensusThreshold = 0.75 // 75% votes in one direction blocks the opposite action
+	MinimumVotesRequired   = 10   // Minimum number of votes needed before consensus is enforced
+
 	SortOrderSelectMenuCustomID = "sort_order"
 
 	ConfirmWithReasonModalCustomID = "confirm_with_reason_modal"
@@ -49,6 +52,13 @@ const (
 	RecheckReasonModalCustomID     = "recheck_reason_modal"
 	RecheckReasonInputCustomID     = "recheck_reason"
 
+	ConfirmButtonCustomID = "confirm"
+	ClearButtonCustomID   = "clear"
+	SkipButtonCustomID    = "skip"
+)
+
+// User Review Menu.
+const (
 	OpenAIChatButtonCustomID        = "open_ai_chat"
 	ConfirmWithReasonButtonCustomID = "confirm_with_reason" + ModalOpenSuffix
 	RecheckButtonCustomID           = "recheck" + ModalOpenSuffix
@@ -56,13 +66,7 @@ const (
 	OpenOutfitsMenuButtonCustomID   = "open_outfits_menu"
 	OpenFriendsMenuButtonCustomID   = "open_friends_menu"
 	OpenGroupsMenuButtonCustomID    = "open_groups_menu"
-	SwitchReviewModeCustomID        = "switch_review_mode"
-	SwitchTargetModeCustomID        = "switch_target_mode"
-
-	ConfirmButtonCustomID = "confirm"
-	ClearButtonCustomID   = "clear"
-	SkipButtonCustomID    = "skip"
-	AbortButtonCustomID   = "abort"
+	AbortButtonCustomID             = "abort"
 )
 
 // User Review Menu - Friends Viewer.
@@ -88,19 +92,10 @@ const (
 
 // Group Review Menu.
 const (
-	GroupConfirmWithReasonModalCustomID = "group_confirm_with_reason_modal"
-	GroupConfirmReasonInputCustomID     = "group_confirm_reason"
-	GroupRecheckReasonModalCustomID     = "group_recheck_reason_modal"
-	GroupRecheckReasonInputCustomID     = "group_recheck_reason"
-
 	GroupConfirmWithReasonButtonCustomID = "group_confirm_with_reason" + ModalOpenSuffix
 	GroupRecheckButtonCustomID           = "group_recheck" + ModalOpenSuffix
 	GroupViewMembersButtonCustomID       = "group_view_members"
 	GroupViewLogsButtonCustomID          = "group_view_logs"
-
-	GroupConfirmButtonCustomID = "group_confirm"
-	GroupClearButtonCustomID   = "group_clear"
-	GroupSkipButtonCustomID    = "group_skip"
 )
 
 // Group Review Menu - Members Viewer.

@@ -281,9 +281,9 @@ func (b *ReviewBuilder) buildComponents() []discord.ContainerComponent {
 	// Add navigation/action buttons
 	components = append(components, discord.NewActionRow(
 		discord.NewSecondaryButton("◀️", constants.BackButtonCustomID),
-		discord.NewDangerButton(b.getConfirmButtonLabel(), constants.GroupConfirmButtonCustomID),
-		discord.NewSuccessButton(b.getClearButtonLabel(), constants.GroupClearButtonCustomID),
-		discord.NewSecondaryButton("Skip", constants.GroupSkipButtonCustomID),
+		discord.NewDangerButton(b.getConfirmButtonLabel(), constants.ConfirmButtonCustomID),
+		discord.NewSuccessButton(b.getClearButtonLabel(), constants.ClearButtonCustomID),
+		discord.NewSecondaryButton("Skip", constants.SkipButtonCustomID),
 	))
 
 	return components

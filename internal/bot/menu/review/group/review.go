@@ -238,11 +238,11 @@ func (m *ReviewMenu) handleButton(event *events.ComponentInteractionCreate, s *s
 	switch customID {
 	case constants.BackButtonCustomID:
 		m.layout.paginationManager.NavigateBack(event, s, "")
-	case constants.GroupConfirmButtonCustomID:
+	case constants.ConfirmButtonCustomID:
 		m.handleConfirmGroup(event, s)
-	case constants.GroupClearButtonCustomID:
+	case constants.ClearButtonCustomID:
 		m.handleClearGroup(event, s)
-	case constants.GroupSkipButtonCustomID:
+	case constants.SkipButtonCustomID:
 		m.handleSkipGroup(event, s)
 	}
 }
@@ -254,7 +254,7 @@ func (m *ReviewMenu) handleModal(event *events.ModalSubmitInteractionCreate, s *
 	}
 
 	switch event.Data.CustomID {
-	case constants.GroupConfirmWithReasonModalCustomID:
+	case constants.ConfirmWithReasonModalCustomID:
 		m.handleConfirmWithReasonModalSubmit(event, s)
 	}
 }
@@ -323,10 +323,10 @@ func (m *ReviewMenu) handleConfirmWithReason(event *events.ComponentInteractionC
 
 	// Create modal with pre-filled reason field
 	modal := discord.NewModalCreateBuilder().
-		SetCustomID(constants.GroupConfirmWithReasonModalCustomID).
+		SetCustomID(constants.ConfirmWithReasonModalCustomID).
 		SetTitle("Confirm Group with Reason").
 		AddActionRow(
-			discord.NewTextInput(constants.GroupConfirmReasonInputCustomID, discord.TextInputStyleParagraph, "Confirm Reason").
+			discord.NewTextInput(constants.ConfirmReasonInputCustomID, discord.TextInputStyleParagraph, "Confirm Reason").
 				WithRequired(true).
 				WithPlaceholder("Enter the reason for confirming this group...").
 				WithValue(group.Reason),
@@ -382,6 +382,21 @@ func (m *ReviewMenu) handleConfirmGroup(event interfaces.CommonEvent, s *session
 			return
 		}
 
+		// Calculate vote percentages
+		totalVotes := float64(group.Reputation.Upvotes + group.Reputation.Downvotes)
+		if totalVotes >= constants.MinimumVotesRequired {
+			upvotePercentage := float64(group.Reputation.Upvotes) / totalVotes
+
+			// If there's a strong consensus for clearing, prevent confirmation
+			if upvotePercentage >= constants.VoteConsensusThreshold {
+				m.layout.paginationManager.NavigateTo(event, s, m.page,
+					fmt.Sprintf("Cannot confirm - %.0f%% of %d votes indicate this group is safe",
+						upvotePercentage*100, int(totalVotes)))
+				return
+			}
+		}
+
+		// Confirm the group
 		if err := m.layout.db.Groups().ConfirmGroup(context.Background(), group); err != nil {
 			m.layout.logger.Error("Failed to confirm group", zap.Error(err))
 			m.layout.paginationManager.RespondWithError(event, "Failed to confirm the group. Please try again.")
@@ -449,6 +464,21 @@ func (m *ReviewMenu) handleClearGroup(event interfaces.CommonEvent, s *session.S
 			return
 		}
 
+		// Calculate vote percentages
+		totalVotes := float64(group.Reputation.Upvotes + group.Reputation.Downvotes)
+		if totalVotes >= constants.MinimumVotesRequired {
+			downvotePercentage := float64(group.Reputation.Downvotes) / totalVotes
+
+			// If there's a strong consensus for confirming, prevent clearing
+			if downvotePercentage >= constants.VoteConsensusThreshold {
+				m.layout.paginationManager.NavigateTo(event, s, m.page,
+					fmt.Sprintf("Cannot clear - %.0f%% of %d votes indicate this group is suspicious",
+						downvotePercentage*100, int(totalVotes)))
+				return
+			}
+		}
+
+		// Clear the group
 		if err := m.layout.db.Groups().ClearGroup(context.Background(), group); err != nil {
 			m.layout.logger.Error("Failed to clear group", zap.Error(err))
 			m.layout.paginationManager.RespondWithError(event, "Failed to clear the group. Please try again.")
@@ -523,7 +553,7 @@ func (m *ReviewMenu) handleConfirmWithReasonModalSubmit(event *events.ModalSubmi
 	s.GetInterface(constants.SessionKeyGroupTarget, &group)
 
 	// Get and validate the confirm reason
-	reason := event.Data.Text(constants.GroupConfirmReasonInputCustomID)
+	reason := event.Data.Text(constants.ConfirmReasonInputCustomID)
 	if reason == "" {
 		m.layout.paginationManager.NavigateTo(event, s, m.page, "Confirm reason cannot be empty. Please try again.")
 		return
