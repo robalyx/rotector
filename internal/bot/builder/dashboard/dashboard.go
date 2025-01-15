@@ -31,6 +31,7 @@ type Builder struct {
 	groupStatsBuffer *bytes.Buffer
 	activeUsers      []snowflake.ID
 	workerStatuses   []core.Status
+	voteStats        *types.VoteAccuracy
 	titleCaser       cases.Caser
 }
 
@@ -46,6 +47,8 @@ func NewBuilder(s *session.Session, redisClient rueidis.Client) *Builder {
 	s.GetInterface(constants.SessionKeyActiveUsers, &activeUsers)
 	var workerStatuses []core.Status
 	s.GetInterface(constants.SessionKeyWorkerStatuses, &workerStatuses)
+	var voteStats *types.VoteAccuracy
+	s.GetInterface(constants.SessionKeyVoteStats, &voteStats)
 
 	// Get chart buffers from Redis
 	userStatsBuffer, groupStatsBuffer := getChartBuffers(redisClient)
@@ -59,6 +62,7 @@ func NewBuilder(s *session.Session, redisClient rueidis.Client) *Builder {
 		groupStatsBuffer: groupStatsBuffer,
 		activeUsers:      activeUsers,
 		workerStatuses:   workerStatuses,
+		voteStats:        voteStats,
 		titleCaser:       cases.Title(language.English),
 	}
 }
@@ -149,6 +153,7 @@ func (b *Builder) Build() *discord.MessageUpdateBuilder {
 	// Create embeds
 	embeds := []discord.Embed{
 		b.buildWelcomeEmbed(),
+		b.buildVoteStatsEmbed(),
 		b.buildUserGraphEmbed(),
 		b.buildGroupGraphEmbed(),
 	}
@@ -277,4 +282,29 @@ func (b *Builder) buildAnnouncementEmbed() discord.Embed {
 		SetDescription(b.botSettings.Announcement.Message).
 		SetColor(color).
 		Build()
+}
+
+// buildVoteStatsEmbed creates the vote statistics embed.
+func (b *Builder) buildVoteStatsEmbed() discord.Embed {
+	embed := discord.NewEmbedBuilder().
+		SetTitle("Your Vote Statistics").
+		AddField("Correct Votes", strconv.FormatInt(b.voteStats.CorrectVotes, 10), true).
+		AddField("Total Votes", strconv.FormatInt(b.voteStats.TotalVotes, 10), true).
+		SetColor(constants.DefaultEmbedColor)
+
+	// Calculate and add accuracy field
+	accuracyStr := "0%"
+	if b.voteStats.TotalVotes > 0 {
+		accuracyStr = fmt.Sprintf("%.1f%%", b.voteStats.Accuracy*100)
+	}
+	embed.AddField("Accuracy", accuracyStr, true)
+
+	// Add rank field if available
+	if b.voteStats.Rank > 0 {
+		embed.AddField("Leaderboard Rank", fmt.Sprintf("#%d", b.voteStats.Rank), true)
+	} else {
+		embed.AddField("Leaderboard Rank", "Unranked", true)
+	}
+
+	return embed.Build()
 }

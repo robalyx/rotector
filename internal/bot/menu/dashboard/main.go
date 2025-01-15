@@ -53,6 +53,13 @@ func (m *MainMenu) Show(event interfaces.CommonEvent, s *session.Session, conten
 		m.layout.logger.Error("Failed to get counts", zap.Error(err))
 	}
 
+	// Get vote statistics for the user
+	voteStats, err := m.layout.db.Votes().GetUserVoteStats(context.Background(), uint64(event.User().ID), enum.LeaderboardPeriodAllTime)
+	if err != nil {
+		m.layout.logger.Error("Failed to get vote statistics", zap.Error(err))
+		voteStats = &types.VoteAccuracy{DiscordUserID: uint64(event.User().ID)} // Use empty stats on error
+	}
+
 	// Get list of currently active reviewers
 	activeUsers := m.layout.sessionManager.GetActiveUsers(context.Background())
 
@@ -67,6 +74,7 @@ func (m *MainMenu) Show(event interfaces.CommonEvent, s *session.Session, conten
 	s.Set(constants.SessionKeyGroupCounts, groupCounts)
 	s.Set(constants.SessionKeyActiveUsers, activeUsers)
 	s.Set(constants.SessionKeyWorkerStatuses, workerStatuses)
+	s.Set(constants.SessionKeyVoteStats, voteStats)
 	s.Set(constants.SessionKeyIsRefreshed, true)
 
 	m.layout.paginationManager.NavigateTo(event, s, m.page, content)
