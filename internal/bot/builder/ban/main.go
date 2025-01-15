@@ -7,6 +7,7 @@ import (
 	"github.com/disgoorg/disgo/discord"
 	"github.com/robalyx/rotector/internal/bot/constants"
 	"github.com/robalyx/rotector/internal/bot/core/session"
+	"github.com/robalyx/rotector/internal/bot/utils"
 	"github.com/robalyx/rotector/internal/common/storage/database/types"
 )
 
@@ -36,7 +37,7 @@ func (b *Builder) Build() *discord.MessageUpdateBuilder {
 
 	// Add notes if any
 	if b.ban.Notes != "" {
-		embed.AddField("Additional Notes", b.ban.Notes, false)
+		embed.AddField("Additional Notes", utils.FormatString(b.ban.Notes), false)
 	}
 
 	// Format duration if temporary ban

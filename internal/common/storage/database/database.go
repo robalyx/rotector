@@ -104,7 +104,7 @@ func NewConnection(ctx context.Context, config *config.PostgreSQL, logger *zap.L
 	tracking := models.NewTracking(db, logger)
 	activity := models.NewActivity(db, logger)
 	views := models.NewMaterializedView(db, logger)
-	votes := models.NewVote(db, views, logger)
+	votes := models.NewVote(db, activity, views, logger)
 	reputation := models.NewReputation(db, votes, logger)
 	client := &Client{
 		db:         db,

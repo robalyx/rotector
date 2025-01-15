@@ -65,8 +65,9 @@ func (m *ReviewMenu) Show(event interfaces.CommonEvent, s *session.Session, cont
 
 	// If no user is set in session, fetch a new one
 	if user == nil {
+		var isBanned bool
 		var err error
-		user, err = m.fetchNewTarget(s, uint64(event.User().ID))
+		user, isBanned, err = m.fetchNewTarget(event, s, uint64(event.User().ID))
 		if err != nil {
 			if errors.Is(err, types.ErrNoUsersToReview) {
 				m.layout.paginationManager.NavigateBack(event, s, "No users to review. Please check back later.")
@@ -74,6 +75,11 @@ func (m *ReviewMenu) Show(event interfaces.CommonEvent, s *session.Session, cont
 			}
 			m.layout.logger.Error("Failed to fetch a new user", zap.Error(err))
 			m.layout.paginationManager.RespondWithError(event, "Failed to fetch a new user. Please try again.")
+			return
+		}
+
+		if isBanned {
+			m.layout.paginationManager.RespondWithError(event, "You have been banned for suspicious voting patterns.")
 			return
 		}
 	}
@@ -664,14 +670,23 @@ func (m *ReviewMenu) handleConfirmWithReasonModalSubmit(event *events.ModalSubmi
 }
 
 // fetchNewTarget gets a new user to review based on the current sort order.
-func (m *ReviewMenu) fetchNewTarget(s *session.Session, reviewerID uint64) (*types.ReviewUser, error) {
+func (m *ReviewMenu) fetchNewTarget(event interfaces.CommonEvent, s *session.Session, reviewerID uint64) (*types.ReviewUser, bool, error) {
 	var settings *types.UserSetting
 	s.GetInterface(constants.SessionKeyUserSettings, &settings)
+
+	// Check if user is banned for low accuracy
+	isBanned, err := m.layout.db.Votes().CheckVoteAccuracy(context.Background(), uint64(event.User().ID))
+	if err != nil {
+		m.layout.logger.Error("Failed to check vote accuracy",
+			zap.Error(err),
+			zap.Uint64("user_id", uint64(event.User().ID)))
+		// Continue anyway - not a big requirement
+	}
 
 	// Get the next user to review
 	user, err := m.layout.db.Users().GetUserToReview(context.Background(), settings.UserDefaultSort, settings.ReviewTargetMode, reviewerID)
 	if err != nil {
-		return nil, err
+		return nil, isBanned, err
 	}
 
 	// Store the user in session for the message builder
@@ -688,7 +703,7 @@ func (m *ReviewMenu) fetchNewTarget(s *session.Session, reviewerID uint64) (*typ
 		Details:           map[string]interface{}{},
 	})
 
-	return user, nil
+	return user, isBanned, nil
 }
 
 // checkCaptchaRequired checks if CAPTCHA verification is needed.

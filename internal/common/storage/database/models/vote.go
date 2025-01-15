@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/disgoorg/snowflake/v2"
 	"github.com/robalyx/rotector/internal/common/storage/database/types"
 	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
 	"github.com/uptrace/bun"
@@ -16,17 +17,19 @@ import (
 
 // VoteModel handles database operations for vote records.
 type VoteModel struct {
-	db     *bun.DB
-	views  *MaterializedViewModel
-	logger *zap.Logger
+	db       *bun.DB
+	activity *ActivityModel
+	views    *MaterializedViewModel
+	logger   *zap.Logger
 }
 
 // NewVote creates a new VoteModel instance.
-func NewVote(db *bun.DB, views *MaterializedViewModel, logger *zap.Logger) *VoteModel {
+func NewVote(db *bun.DB, activity *ActivityModel, views *MaterializedViewModel, logger *zap.Logger) *VoteModel {
 	return &VoteModel{
-		db:     db,
-		views:  views,
-		logger: logger,
+		db:       db,
+		activity: activity,
+		views:    views,
+		logger:   logger,
 	}
 }
 
@@ -34,7 +37,17 @@ func NewVote(db *bun.DB, views *MaterializedViewModel, logger *zap.Logger) *Vote
 func (v *VoteModel) GetUserVoteStats(ctx context.Context, discordUserID uint64, period enum.LeaderboardPeriod) (*types.VoteAccuracy, error) {
 	var stats types.VoteAccuracy
 
-	err := v.db.NewSelect().
+	// Try to refresh the materialized view if stale
+	err := v.views.RefreshIfStale(ctx, period)
+	if err != nil {
+		v.logger.Warn("Failed to refresh materialized view",
+			zap.Error(err),
+			zap.String("period", period.String()))
+		// Continue anyway - we'll use slightly stale data
+	}
+
+	// Get user's vote stats
+	err = v.db.NewSelect().
 		TableExpr("vote_leaderboard_stats_"+period.String()).
 		ColumnExpr("?::bigint as discord_user_id", discordUserID).
 		ColumnExpr("correct_votes").
@@ -218,4 +231,64 @@ func (v *VoteModel) VerifyVotes(ctx context.Context, targetID uint64, wasInappro
 	}
 
 	return nil
+}
+
+// CheckVoteAccuracy checks if a user should be banned based on their voting accuracy.
+// Returns true if the user is banned, false otherwise.
+func (v *VoteModel) CheckVoteAccuracy(ctx context.Context, discordUserID uint64) (bool, error) {
+	// Get user's vote stats for all time
+	stats, err := v.GetUserVoteStats(ctx, discordUserID, enum.LeaderboardPeriodAllTime)
+	if err != nil {
+		return false, fmt.Errorf("failed to get vote stats: %w", err)
+	}
+
+	// Check if user has enough votes to be evaluated
+	const MinVotesRequired = 10 // Minimum votes before checking accuracy
+	if stats.TotalVotes < MinVotesRequired {
+		return false, nil
+	}
+
+	// Check if accuracy is below threshold
+	const MinAccuracyRequired = 0.40 // 40% minimum accuracy required
+	shouldBan := stats.Accuracy < MinAccuracyRequired
+	if !shouldBan {
+		return false, nil
+	}
+
+	// Create ban record
+	ban := &types.DiscordBan{
+		ID:       snowflake.ID(discordUserID),
+		Reason:   enum.BanReasonAbuse,
+		Source:   enum.BanSourceSystem,
+		Notes:    "Automated system detection - suspicious voting patterns",
+		BannedBy: 0, // System ban
+		BannedAt: time.Now(),
+	}
+
+	_, err = v.db.NewInsert().Model(ban).Exec(ctx)
+	if err != nil {
+		return false, fmt.Errorf("failed to create ban record: %w", err)
+	}
+
+	// Log the ban action
+	go v.activity.Log(ctx, &types.ActivityLog{
+		ActivityTarget: types.ActivityTarget{
+			DiscordID: discordUserID,
+		},
+		ReviewerID:        0,
+		ActivityType:      enum.ActivityTypeDiscordUserBanned,
+		ActivityTimestamp: time.Now(),
+		Details: map[string]interface{}{
+			"notes":      "Automated system detection - suspicious voting patterns",
+			"accuracy":   stats.Accuracy,
+			"totalVotes": stats.TotalVotes,
+		},
+	})
+
+	v.logger.Info("User banned for low vote accuracy",
+		zap.Uint64("discordUserID", discordUserID),
+		zap.Float64("accuracy", stats.Accuracy),
+		zap.Int64("totalVotes", stats.TotalVotes))
+
+	return true, nil
 }
