@@ -30,6 +30,7 @@ const (
 	AdminMenuButtonCustomID        = "admin_menu"
 	AppealMenuButtonCustomID       = "appeal_menu"
 	ChatAssistantButtonCustomID    = "chat_assistant"
+	WorkerStatusButtonCustomID     = "worker_status"
 	LookupUserButtonCustomID       = "lookup_user" + ModalOpenSuffix
 	LookupGroupButtonCustomID      = "lookup_group" + ModalOpenSuffix
 

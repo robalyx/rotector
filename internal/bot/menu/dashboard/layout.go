@@ -30,6 +30,7 @@ type Layout struct {
 	appealLayout      interfaces.AppealLayout
 	adminLayout       interfaces.AdminLayout
 	leaderboardLayout interfaces.LeaderboardLayout
+	statusLayout      interfaces.StatusLayout
 }
 
 // New creates a Menu and sets up its page with message builders and
@@ -48,6 +49,7 @@ func New(
 	appealLayout interfaces.AppealLayout,
 	adminLayout interfaces.AdminLayout,
 	leaderboardLayout interfaces.LeaderboardLayout,
+	statusLayout interfaces.StatusLayout,
 ) *Layout {
 	// Get Redis client for stats
 	statsClient, err := app.RedisManager.GetClient(redis.StatsDBIndex)
@@ -78,6 +80,7 @@ func New(
 		appealLayout:      appealLayout,
 		adminLayout:       adminLayout,
 		leaderboardLayout: leaderboardLayout,
+		statusLayout:      statusLayout,
 	}
 	l.mainMenu = NewMainMenu(l)
 

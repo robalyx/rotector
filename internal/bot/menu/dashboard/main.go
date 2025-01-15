@@ -116,6 +116,13 @@ func (m *MainMenu) handleSelectMenu(event *events.ComponentInteractionCreate, s 
 			return
 		}
 		m.layout.chatLayout.Show(event, s)
+	case constants.WorkerStatusButtonCustomID:
+		if !settings.IsReviewer(uint64(event.User().ID)) {
+			m.layout.logger.Error("User is not in reviewer list but somehow attempted to access worker status", zap.Uint64("user_id", uint64(event.User().ID)))
+			m.layout.paginationManager.RespondWithError(event, "You do not have permission to access worker status.")
+			return
+		}
+		m.layout.statusLayout.Show(event, s)
 	case constants.AppealMenuButtonCustomID:
 		m.layout.appealLayout.ShowOverview(event, s, "")
 	case constants.AdminMenuButtonCustomID:

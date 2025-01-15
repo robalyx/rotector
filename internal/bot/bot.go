@@ -33,6 +33,7 @@ import (
 	groupReview "github.com/robalyx/rotector/internal/bot/menu/review/group"
 	userReview "github.com/robalyx/rotector/internal/bot/menu/review/user"
 	"github.com/robalyx/rotector/internal/bot/menu/setting"
+	"github.com/robalyx/rotector/internal/bot/menu/status"
 	"github.com/robalyx/rotector/internal/bot/utils"
 	"github.com/robalyx/rotector/internal/common/setup"
 	"github.com/robalyx/rotector/internal/common/storage/database"
@@ -113,6 +114,7 @@ func New(app *setup.App) (*Bot, error) {
 	appealLayout := appeal.New(app, sessionManager, paginationManager, userReviewLayout)
 	adminLayout := admin.New(app, sessionManager, paginationManager, settingLayout)
 	leaderboardLayout := leaderboard.New(app, client, sessionManager, paginationManager)
+	statusLayout := status.New(app, sessionManager, paginationManager)
 
 	b.dashboardLayout = dashboard.New(
 		app,
@@ -127,6 +129,7 @@ func New(app *setup.App) (*Bot, error) {
 		appealLayout,
 		adminLayout,
 		leaderboardLayout,
+		statusLayout,
 	)
 	b.banLayout = ban.New(app, sessionManager, paginationManager, b.dashboardLayout)
 

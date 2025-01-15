@@ -86,3 +86,9 @@ type LeaderboardLayout interface {
 	// Show prepares and displays the leaderboard menu.
 	Show(event CommonEvent, s *session.Session)
 }
+
+// StatusLayout defines the interface for handling worker status-related actions.
+type StatusLayout interface {
+	// Show prepares and displays the worker status menu.
+	Show(event CommonEvent, s *session.Session)
+}
