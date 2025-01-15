@@ -79,8 +79,8 @@ func (m *Manager) GetOrCreateSession(ctx context.Context, userID snowflake.ID) (
 	result := m.redis.Do(ctx, m.redis.B().Get().Key(key).Build())
 	sessionExists := result.Error() == nil
 
-	// If session doesn't exist, check session limit
-	if !sessionExists && botSettings.SessionLimit > 0 {
+	// If session doesn't exist, check session limit (unless user is admin)
+	if !sessionExists && botSettings.SessionLimit > 0 && !botSettings.IsAdmin(uint64(userID)) {
 		activeCount, err := m.GetActiveSessionCount(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("%w: %w", ErrFailedToGetCount, err)
