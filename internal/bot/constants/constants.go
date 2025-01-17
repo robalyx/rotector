@@ -4,7 +4,7 @@ import "time"
 
 // Commands.
 const (
-	DashboardCommandName = "dashboard"
+	RotectorCommandName = "rotector"
 )
 
 // Common.

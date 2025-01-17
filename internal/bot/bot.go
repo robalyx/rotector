@@ -145,8 +145,8 @@ func (b *Bot) Start() error {
 	// Register the dashboard command globally for all guilds
 	_, err := b.client.Rest().SetGlobalCommands(b.client.ApplicationID(), []discord.ApplicationCommandCreate{
 		discord.SlashCommandCreate{
-			Name:        constants.DashboardCommandName,
-			Description: "View the dashboard",
+			Name:        constants.RotectorCommandName,
+			Description: "Open the moderation interface",
 		},
 	})
 	if err != nil {
@@ -181,7 +181,7 @@ func (b *Bot) handleApplicationCommandInteraction(event *events.ApplicationComma
 		}
 
 		// Only handle dashboard command - respond with error for unknown commands
-		if event.SlashCommandInteractionData().CommandName() != constants.DashboardCommandName {
+		if event.SlashCommandInteractionData().CommandName() != constants.RotectorCommandName {
 			b.paginationManager.RespondWithError(event, "This command is not available.")
 			return
 		}
