@@ -7,6 +7,7 @@ import (
 	"log"
 
 	"github.com/google/generative-ai-go/genai"
+	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
 	"go.uber.org/zap"
 	"google.golang.org/api/iterator"
 )
@@ -57,7 +58,7 @@ func NewChatHandler(genAIClient *genai.Client, logger *zap.Logger) *ChatHandler 
 }
 
 // StreamResponse sends a message to the AI and streams both the response and history through channels.
-func (h *ChatHandler) StreamResponse(ctx context.Context, history []*genai.Content, modelName string, message string) (chan string, chan []*genai.Content) {
+func (h *ChatHandler) StreamResponse(ctx context.Context, history []*genai.Content, model enum.ChatModel, message string) (chan string, chan []*genai.Content) {
 	responseChan := make(chan string)
 	historyChan := make(chan []*genai.Content, 1)
 
@@ -73,7 +74,7 @@ func (h *ChatHandler) StreamResponse(ctx context.Context, history []*genai.Conte
 
 		// Create chat model
 		cc, err := h.genAIClient.CreateCachedContent(ctx, &genai.CachedContent{
-			Model:             modelName,
+			Model:             model.String(),
 			SystemInstruction: genai.NewUserContent(genai.Text(ChatSystemPrompt)),
 			Contents:          limitedHistory,
 		})

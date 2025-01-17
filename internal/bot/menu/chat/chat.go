@@ -164,7 +164,7 @@ func (m *Menu) handleModal(event *events.ModalSubmitInteractionCreate, s *sessio
 		responseChan, historyChan := m.layout.chatHandler.StreamResponse(
 			context.Background(),
 			history.ToGenAIHistory(),
-			userSettings.ChatModel.String(),
+			userSettings.ChatModel,
 			message,
 		)
 
