@@ -31,34 +31,32 @@ func (r *StatsModel) GetCurrentStats(ctx context.Context) (*types.HourlyStats, e
 
 	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
 		// Count confirmed users
-		confirmedCount, err := tx.NewSelect().Model((*types.ConfirmedUser)(nil)).Count(ctx)
+		confirmedUserCount, err := tx.NewSelect().Model((*types.ConfirmedUser)(nil)).Count(ctx)
 		if err != nil {
 			return err
 		}
-		stats.UsersConfirmed = int64(confirmedCount)
+		stats.UsersConfirmed = int64(confirmedUserCount)
 
 		// Count flagged users
-		flaggedCount, err := tx.NewSelect().Model((*types.FlaggedUser)(nil)).Count(ctx)
+		flaggedUserCount, err := tx.NewSelect().Model((*types.FlaggedUser)(nil)).Count(ctx)
 		if err != nil {
 			return err
 		}
-		stats.UsersFlagged = int64(flaggedCount)
+		stats.UsersFlagged = int64(flaggedUserCount)
 
 		// Count cleared users
-		clearedCount, err := tx.NewSelect().Model((*types.ClearedUser)(nil)).Count(ctx)
+		clearedUserCount, err := tx.NewSelect().Model((*types.ClearedUser)(nil)).Count(ctx)
 		if err != nil {
 			return err
 		}
-		stats.UsersCleared = int64(clearedCount)
+		stats.UsersCleared = int64(clearedUserCount)
 
-		// Count banned users purged today
-		bannedPurgedCount, err := tx.NewSelect().Model((*types.BannedUser)(nil)).
-			Where("purged_at >= ?", time.Now().UTC().Truncate(24*time.Hour)).
-			Count(ctx)
+		// Count banned users
+		bannedUserCount, err := tx.NewSelect().Model((*types.BannedUser)(nil)).Count(ctx)
 		if err != nil {
 			return err
 		}
-		stats.UsersBanned = int64(bannedPurgedCount)
+		stats.UsersBanned = int64(bannedUserCount)
 
 		// Count confirmed groups
 		confirmedGroupsCount, err := tx.NewSelect().Model((*types.ConfirmedGroup)(nil)).Count(ctx)
@@ -81,12 +79,8 @@ func (r *StatsModel) GetCurrentStats(ctx context.Context) (*types.HourlyStats, e
 		}
 		stats.GroupsCleared = int64(clearedGroupsCount)
 
-		// Count groups locked today
-		lockedGroupsCount, err := tx.NewSelect().Model((*types.FlaggedGroup)(nil)).
-			Where("last_purge_check >= ? AND last_purge_check < ?",
-				time.Now().UTC().Truncate(24*time.Hour),
-				time.Now().UTC()).
-			Count(ctx)
+		// Count locked groups
+		lockedGroupsCount, err := tx.NewSelect().Model((*types.LockedGroup)(nil)).Count(ctx)
 		if err != nil {
 			return err
 		}
