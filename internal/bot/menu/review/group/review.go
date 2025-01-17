@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/disgoorg/disgo/discord"
@@ -287,26 +288,86 @@ func (m *ReviewMenu) handleOpenAIChat(event *events.ComponentInteractionCreate, 
 	var memberIDs []uint64
 	s.GetInterface(constants.SessionKeyGroupMemberIDs, &memberIDs)
 
+	// Get flagged members details with a limit of 20
+	limit := 20
+	if len(memberIDs) > limit {
+		memberIDs = memberIDs[:limit]
+	}
+
+	flaggedMembers, err := m.layout.db.Users().GetUsersByIDs(context.Background(), memberIDs, types.UserFields{
+		Basic:      true,
+		Reason:     true,
+		Confidence: true,
+	})
+	if err != nil {
+		m.layout.logger.Error("Failed to get flagged members data", zap.Error(err))
+	}
+
+	// Build flagged members information
+	membersInfo := make([]string, 0, len(flaggedMembers))
+	for _, member := range flaggedMembers {
+		membersInfo = append(membersInfo, fmt.Sprintf("- %s (ID: %d) | Status: %s | Reason: %s | Confidence: %.2f",
+			member.Name,
+			member.ID,
+			member.Status.String(),
+			member.Reason,
+			member.Confidence))
+	}
+
+	// Add note if there are more members
+	totalMembers := len(memberIDs)
+	if totalMembers > limit {
+		membersInfo = append(membersInfo, fmt.Sprintf("\n... and %d more flagged members", totalMembers-limit))
+	}
+
+	// Format shout information
+	shoutInfo := "No shout available"
+	if group.Shout != nil {
+		shoutInfo = fmt.Sprintf("Posted by: %s\nContent: %s\nPosted at: %s",
+			group.Shout.Poster.Username,
+			group.Shout.Body,
+			group.Shout.Created.Format(time.RFC3339))
+	}
+
 	// Create context message about the group
 	context := fmt.Sprintf(`<context>
 Group Information:
 
-Name: %s
-Owner ID: %d
-Owner Username: %s
-Members: %d
-Description: %s
-Reason Flagged: %s
-Confidence: %.2f
-Flagged Members: %d</context>`,
+Basic Info:
+- Name: %s
+- ID: %d
+- Description: %s
+- Owner: %s (ID: %d)
+- Total Members: %d
+- Reason Flagged: %s
+- Confidence: %.2f
+
+Status Information:
+- Current Status: %s
+- Reputation: %d Reports, %d Safe Votes
+- Last Updated: %s
+
+Shout Information:
+%s
+
+Flagged Members (%d total, showing first %d):
+%s</context>`,
 		group.Name,
-		group.Owner.UserID,
-		group.Owner.Username,
-		groupInfo.MemberCount,
+		group.ID,
 		group.Description,
+		group.Owner.Username,
+		group.Owner.UserID,
+		groupInfo.MemberCount,
 		group.Reason,
 		group.Confidence,
-		len(memberIDs),
+		group.Status.String(),
+		group.Reputation.Downvotes,
+		group.Reputation.Upvotes,
+		group.LastUpdated.Format(time.RFC3339),
+		shoutInfo,
+		totalMembers,
+		limit,
+		strings.Join(membersInfo, "\n"),
 	)
 
 	// Update session and navigate to chat

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/disgoorg/disgo/discord"
@@ -601,31 +602,113 @@ func (m *ReviewMenu) handleSkipUser(event interfaces.CommonEvent, s *session.Ses
 }
 
 // handleOpenAIChat handles the button to open the AI chat for the current user.
-// It adds a context message about the user and opens up the AI chat.
 func (m *ReviewMenu) handleOpenAIChat(event *events.ComponentInteractionCreate, s *session.Session) {
 	var target *types.ReviewUser
 	s.GetInterface(constants.SessionKeyTarget, &target)
+	var flaggedFriends map[uint64]*types.ReviewUser
+	s.GetInterface(constants.SessionKeyFlaggedFriends, &flaggedFriends)
+	var flaggedGroups map[uint64]*types.ReviewGroup
+	s.GetInterface(constants.SessionKeyFlaggedGroups, &flaggedGroups)
+
+	// Build friends information
+	friendsInfo := make([]string, 0, len(target.Friends))
+	for _, friend := range target.Friends {
+		info := fmt.Sprintf("- %s (ID: %d)", friend.Name, friend.ID)
+		if flagged := flaggedFriends[friend.ID]; flagged != nil {
+			info += fmt.Sprintf(" | Status: %s | Reason: %s | Confidence: %.2f",
+				flagged.Status.String(),
+				flagged.Reason,
+				flagged.Confidence)
+		}
+		friendsInfo = append(friendsInfo, info)
+	}
+
+	// Build groups information
+	groupsInfo := make([]string, 0, len(target.Groups))
+	for _, group := range target.Groups {
+		info := fmt.Sprintf("- %s (ID: %d) | Role: %s",
+			group.Group.Name,
+			group.Group.ID,
+			group.Role.Name)
+		if flagged := flaggedGroups[group.Group.ID]; flagged != nil {
+			info += fmt.Sprintf(" | Status: %s | Reason: %s | Confidence: %.2f",
+				flagged.Status.String(),
+				flagged.Reason,
+				flagged.Confidence)
+		}
+		groupsInfo = append(groupsInfo, info)
+	}
+
+	// Build outfits information
+	outfitsInfo := make([]string, 0, len(target.Outfits))
+	for _, outfit := range target.Outfits {
+		outfitsInfo = append(outfitsInfo, fmt.Sprintf("- %s (ID: %d)", outfit.Name, outfit.ID))
+	}
+
+	// Build games information
+	gamesInfo := make([]string, 0, len(target.Games))
+	for _, game := range target.Games {
+		gamesInfo = append(gamesInfo, fmt.Sprintf("- %s (ID: %d) | Visits: %d",
+			game.Name, game.ID, game.PlaceVisits))
+	}
 
 	// Create context message about the user
 	context := fmt.Sprintf(`<context>
 User Information:
 
-Username: %s
-Display Name: %s
-Description: %s
-Friends: %d
-Groups: %d
-Outfits: %d
-Reason Flagged: %s
-Confidence: %.2f</context>`,
+Basic Info:
+- Username: %s
+- Display Name: %s
+- Description: %s
+- Account Created: %s
+- Followers: %d
+- Following: %d
+- Reason Flagged: %s
+- Confidence: %.2f
+
+Status Information:
+- Current Status: %s
+- Reputation: %d Reports, %d Safe Votes
+- Last Updated: %s
+
+Friends (%d total, %d flagged):
+%s
+
+Groups (%d total, %d flagged):
+%s
+
+Outfits (%d total):
+%s
+
+Games (%d total):
+%s
+
+Flagged Content (%d items):
+%s</context>`,
 		target.Name,
 		target.DisplayName,
 		target.Description,
-		len(target.Friends),
-		len(target.Groups),
-		len(target.Outfits),
+		target.CreatedAt.Format(time.RFC3339),
+		target.FollowerCount,
+		target.FollowingCount,
 		target.Reason,
 		target.Confidence,
+		target.Status.String(),
+		target.Reputation.Downvotes,
+		target.Reputation.Upvotes,
+		target.LastUpdated.Format(time.RFC3339),
+		len(target.Friends),
+		len(flaggedFriends),
+		strings.Join(friendsInfo, "\n"),
+		len(target.Groups),
+		len(flaggedGroups),
+		strings.Join(groupsInfo, "\n"),
+		len(target.Outfits),
+		strings.Join(outfitsInfo, "\n"),
+		len(target.Games),
+		strings.Join(gamesInfo, "\n"),
+		len(target.FlaggedContent),
+		strings.Join(target.FlaggedContent, "\n"),
 	)
 
 	// Update session and navigate to chat
