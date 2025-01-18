@@ -45,10 +45,6 @@ func (r *SettingModel) GetUserSettings(ctx context.Context, userID snowflake.ID)
 			FirstMessageTime: time.Unix(0, 0),
 			MessageCount:     0,
 		},
-		SkipUsage: types.SkipUsage{
-			LastSkipTime:     time.Unix(0, 0),
-			ConsecutiveSkips: 0,
-		},
 		CaptchaUsage: types.CaptchaUsage{
 			ReviewCount: 0,
 		},
@@ -87,8 +83,6 @@ func (r *SettingModel) SaveUserSettings(ctx context.Context, settings *types.Use
 		Set("review_target_mode = EXCLUDED.review_target_mode").
 		Set("first_message_time = EXCLUDED.first_message_time").
 		Set("message_count = EXCLUDED.message_count").
-		Set("last_skip_time = EXCLUDED.last_skip_time").
-		Set("consecutive_skips = EXCLUDED.consecutive_skips").
 		Set("review_count = EXCLUDED.review_count").
 		Set("leaderboard_period = EXCLUDED.leaderboard_period").
 		Exec(ctx)

@@ -2,6 +2,7 @@ package group
 
 import (
 	"github.com/jaxron/roapi.go/pkg/api"
+	"github.com/robalyx/rotector/internal/bot/core/captcha"
 	"github.com/robalyx/rotector/internal/bot/core/pagination"
 	"github.com/robalyx/rotector/internal/bot/core/session"
 	"github.com/robalyx/rotector/internal/bot/interfaces"
@@ -23,6 +24,7 @@ type Layout struct {
 	thumbnailFetcher  *fetcher.ThumbnailFetcher
 	presenceFetcher   *fetcher.PresenceFetcher
 	imageStreamer     *pagination.ImageStreamer
+	captcha           *captcha.Manager
 	logger            *zap.Logger
 	settingLayout     interfaces.SettingLayout
 	logLayout         interfaces.LogLayout
@@ -52,6 +54,7 @@ func New(
 		thumbnailFetcher:  fetcher.NewThumbnailFetcher(app.RoAPI, app.Logger),
 		presenceFetcher:   fetcher.NewPresenceFetcher(app.RoAPI, app.Logger),
 		imageStreamer:     pagination.NewImageStreamer(paginationManager, app.Logger, app.RoAPI.GetClient()),
+		captcha:           captcha.NewManager(app.DB, app.Logger),
 		logger:            app.Logger,
 		settingLayout:     settingLayout,
 		logLayout:         logLayout,

@@ -554,15 +554,6 @@ func (m *ReviewMenu) handleClearUser(event interfaces.CommonEvent, s *session.Se
 // handleSkipUser logs the skip action and moves to the next user without
 // changing the current user's status.
 func (m *ReviewMenu) handleSkipUser(event interfaces.CommonEvent, s *session.Session) {
-	var settings *types.UserSetting
-	s.GetInterface(constants.SessionKeyUserSettings, &settings)
-
-	// Check if skipping is allowed
-	if msg := settings.SkipUsage.CanSkip(); msg != "" {
-		m.layout.paginationManager.NavigateTo(event, s, m.page, msg)
-		return
-	}
-
 	// Get the number of flagged users left to review
 	flaggedCount, err := m.layout.db.Users().GetFlaggedUsersCount(context.Background())
 	if err != nil {
@@ -572,19 +563,7 @@ func (m *ReviewMenu) handleSkipUser(event interfaces.CommonEvent, s *session.Ses
 	// Clear current user and load next one
 	s.Delete(constants.SessionKeyTarget)
 	m.Show(event, s, fmt.Sprintf("Skipped user. %d users left to review.", flaggedCount))
-
-	// Update skip and captcha counters
-	var botSettings *types.BotSetting
-	s.GetInterface(constants.SessionKeyBotSettings, &botSettings)
-
-	settings.SkipUsage.IncrementSkips()
-	settings.CaptchaUsage.IncrementReviews(settings, botSettings)
-	if err := m.layout.db.Settings().SaveUserSettings(context.Background(), settings); err != nil {
-		m.layout.logger.Error("Failed to update skip tracking", zap.Error(err))
-		m.layout.paginationManager.RespondWithError(event, "Failed to update skip tracking. Please try again.")
-		return
-	}
-	s.Set(constants.SessionKeyUserSettings, settings)
+	m.updateCounters(s)
 
 	// Log the skip action
 	var user *types.ReviewUser
@@ -821,26 +800,16 @@ func (m *ReviewMenu) fetchNewTarget(event interfaces.CommonEvent, s *session.Ses
 
 // checkCaptchaRequired checks if CAPTCHA verification is needed.
 func (m *ReviewMenu) checkCaptchaRequired(event interfaces.CommonEvent, s *session.Session) bool {
-	var settings *types.UserSetting
-	s.GetInterface(constants.SessionKeyUserSettings, &settings)
-	if settings.CaptchaUsage.NeedsCaptcha() {
+	if m.layout.captcha.IsRequired(s) {
 		m.layout.captchaLayout.Show(event, s, "Please complete CAPTCHA verification to continue.")
 		return true
 	}
 	return false
 }
 
-// updateCounters updates the review and skip counters.
+// updateCounters updates the review counters.
 func (m *ReviewMenu) updateCounters(s *session.Session) {
-	var settings *types.UserSetting
-	s.GetInterface(constants.SessionKeyUserSettings, &settings)
-	var botSettings *types.BotSetting
-	s.GetInterface(constants.SessionKeyBotSettings, &botSettings)
-
-	settings.CaptchaUsage.IncrementReviews(settings, botSettings)
-	settings.SkipUsage.ResetSkips()
-	if err := m.layout.db.Settings().SaveUserSettings(context.Background(), settings); err != nil {
-		m.layout.logger.Error("Failed to update counters", zap.Error(err))
+	if err := m.layout.captcha.IncrementReviewCounter(context.Background(), s); err != nil {
+		m.layout.logger.Error("Failed to update review counter", zap.Error(err))
 	}
-	s.Set(constants.SessionKeyUserSettings, settings)
 }

@@ -3,16 +3,12 @@ package captcha
 import (
 	"bytes"
 	"context"
-	"crypto/rand"
-	"encoding/hex"
-	"fmt"
-	"image/png"
 
-	"github.com/dchest/captcha"
 	"github.com/disgoorg/disgo/discord"
 	"github.com/disgoorg/disgo/events"
 	builder "github.com/robalyx/rotector/internal/bot/builder/captcha"
 	"github.com/robalyx/rotector/internal/bot/constants"
+	"github.com/robalyx/rotector/internal/bot/core/captcha"
 	"github.com/robalyx/rotector/internal/bot/core/pagination"
 	"github.com/robalyx/rotector/internal/bot/core/session"
 	"github.com/robalyx/rotector/internal/bot/interfaces"
@@ -22,8 +18,9 @@ import (
 
 // Menu handles the CAPTCHA verification interface.
 type Menu struct {
-	layout *Layout
-	page   *pagination.Page
+	layout  *Layout
+	page    *pagination.Page
+	captcha *captcha.Manager
 }
 
 // NewMenu creates a new CAPTCHA menu.
@@ -42,10 +39,7 @@ func NewMenu(layout *Layout) *Menu {
 
 // Show displays the CAPTCHA verification interface.
 func (m *Menu) Show(event interfaces.CommonEvent, s *session.Session, content string) {
-	digits := captcha.RandomDigits(6)
-
-	// Generate CAPTCHA image
-	imgBuffer, err := generateCaptchaImage(digits)
+	digits, imgBuffer, err := m.captcha.GenerateImage()
 	if err != nil {
 		m.layout.logger.Error("Failed to generate CAPTCHA image", zap.Error(err))
 		m.layout.paginationManager.RespondWithError(event, "Failed to generate CAPTCHA. Please try again.")
@@ -121,7 +115,7 @@ func (m *Menu) handleModal(event *events.ModalSubmitInteractionCreate, s *sessio
 	var settings *types.UserSetting
 	s.GetInterface(constants.SessionKeyUserSettings, &settings)
 
-	settings.CaptchaUsage.ResetReviews()
+	settings.CaptchaUsage.ReviewCount = 0
 	if err := m.layout.db.Settings().SaveUserSettings(context.Background(), settings); err != nil {
 		m.layout.logger.Error("Failed to reset CAPTCHA counter", zap.Error(err))
 		m.layout.paginationManager.RespondWithError(event, "Failed to verify CAPTCHA. Please try again.")
@@ -133,27 +127,4 @@ func (m *Menu) handleModal(event *events.ModalSubmitInteractionCreate, s *sessio
 	m.layout.paginationManager.NavigateBack(event, s, "✅ CAPTCHA verified successfully!")
 	s.Delete(constants.SessionKeyCaptchaAnswer)
 	s.Delete(constants.SessionKeyCaptchaImage)
-}
-
-// generateCaptchaImage creates a new CAPTCHA image with the given digits.
-func generateCaptchaImage(digits []byte) (*bytes.Buffer, error) {
-	// Generate random hex string to use as a CAPTCHA ID
-	captchaIDBytes := make([]byte, 16)
-	if _, err := rand.Read(captchaIDBytes); err != nil {
-		return nil, fmt.Errorf("failed to generate random ID: %w", err)
-	}
-	captchaID := hex.EncodeToString(captchaIDBytes)
-
-	// Create image from digits
-	img := captcha.NewImage(captchaID, digits, captcha.StdWidth, captcha.StdHeight)
-
-	// Create buffer to store PNG image
-	buf := new(bytes.Buffer)
-
-	// Encode image as PNG
-	if err := png.Encode(buf, img); err != nil {
-		return nil, fmt.Errorf("failed to encode CAPTCHA image: %w", err)
-	}
-
-	return buf, nil
 }
