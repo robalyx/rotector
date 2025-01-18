@@ -44,9 +44,9 @@ func (m *VerifyMenu) Show(event interfaces.CommonEvent, s *session.Session, user
 	verificationCode := utils.GenerateRandomWords(4)
 
 	// Store data in session
-	s.Set(constants.SessionKeyVerifyUserID, userID)
-	s.Set(constants.SessionKeyVerifyReason, reason)
-	s.Set(constants.SessionKeyVerifyCode, verificationCode)
+	session.VerifyUserID.Set(s, userID)
+	session.VerifyReason.Set(s, reason)
+	session.VerifyCode.Set(s, verificationCode)
 
 	m.layout.paginationManager.NavigateTo(event, s, m.page, "")
 }
@@ -68,9 +68,9 @@ func (m *VerifyMenu) handleButton(event *events.ComponentInteractionCreate, s *s
 
 // verifyDescription checks if the user has updated their description with the verification code.
 func (m *VerifyMenu) verifyDescription(event *events.ComponentInteractionCreate, s *session.Session) {
-	userID := s.GetUint64(constants.SessionKeyVerifyUserID)
-	expectedCode := s.GetString(constants.SessionKeyVerifyCode)
-	reason := s.GetString(constants.SessionKeyVerifyReason)
+	userID := session.VerifyUserID.Get(s)
+	expectedCode := session.VerifyCode.Get(s)
+	reason := session.VerifyReason.Get(s)
 
 	// Fetch user profile
 	ctx := context.Background()
@@ -106,8 +106,8 @@ func (m *VerifyMenu) verifyDescription(event *events.ComponentInteractionCreate,
 		return
 	}
 
-	s.Delete(constants.SessionKeyAppealCursor)
-	s.Delete(constants.SessionKeyAppealPrevCursors)
+	session.AppealCursor.Delete(s)
+	session.AppealPrevCursors.Delete(s)
 	m.layout.ShowOverview(event, s, "✅ Account verified and appeal submitted successfully!")
 
 	// Log the appeal submission

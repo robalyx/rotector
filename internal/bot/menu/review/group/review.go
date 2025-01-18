@@ -9,7 +9,6 @@ import (
 
 	"github.com/disgoorg/disgo/discord"
 	"github.com/disgoorg/disgo/events"
-	apiTypes "github.com/jaxron/roapi.go/pkg/api/types"
 	builder "github.com/robalyx/rotector/internal/bot/builder/review/group"
 	"github.com/robalyx/rotector/internal/bot/constants"
 	"github.com/robalyx/rotector/internal/bot/core/pagination"
@@ -47,26 +46,13 @@ func NewReviewMenu(layout *Layout) *ReviewMenu {
 // Show prepares and displays the review interface by loading
 // group data and review settings into the session.
 func (m *ReviewMenu) Show(event interfaces.CommonEvent, s *session.Session, content string) {
-	var settings *types.BotSetting
-	s.GetInterface(constants.SessionKeyBotSettings, &settings)
-	var userSettings *types.UserSetting
-	s.GetInterface(constants.SessionKeyUserSettings, &userSettings)
-
 	// Force training mode if user is not a reviewer
-	if !settings.IsReviewer(uint64(event.User().ID)) && userSettings.ReviewMode != enum.ReviewModeTraining {
-		userSettings.ReviewMode = enum.ReviewModeTraining
-		if err := m.layout.db.Settings().SaveUserSettings(context.Background(), userSettings); err != nil {
-			m.layout.logger.Error("Failed to enforce training mode", zap.Error(err))
-			m.layout.paginationManager.RespondWithError(event, "Failed to enforce training mode. Please try again.")
-			return
-		}
-		s.Set(constants.SessionKeyUserSettings, userSettings)
+	if !s.BotSettings().IsReviewer(uint64(event.User().ID)) && session.UserReviewMode.Get(s) != enum.ReviewModeTraining {
+		session.UserReviewMode.Set(s, enum.ReviewModeTraining)
 	}
 
-	var group *types.ReviewGroup
-	s.GetInterface(constants.SessionKeyGroupTarget, &group)
-
 	// If no group is set in session, fetch a new one
+	group := session.GroupTarget.Get(s)
 	if group == nil {
 		var isBanned bool
 		var err error
@@ -98,7 +84,7 @@ func (m *ReviewMenu) Show(event interfaces.CommonEvent, s *session.Session, cont
 	}
 
 	// Store group info in session
-	s.Set(constants.SessionKeyGroupInfo, groupInfo)
+	session.GroupInfo.Set(s, groupInfo)
 
 	m.layout.paginationManager.NavigateTo(event, s, m.page, content)
 }
@@ -119,10 +105,6 @@ func (m *ReviewMenu) handleSelectMenu(event *events.ComponentInteractionCreate, 
 
 // handleSortOrderSelection processes sort order menu selections.
 func (m *ReviewMenu) handleSortOrderSelection(event *events.ComponentInteractionCreate, s *session.Session, option string) {
-	// Retrieve user settings from session
-	var settings *types.UserSetting
-	s.GetInterface(constants.SessionKeyUserSettings, &settings)
-
 	// Parse option to review sort
 	sortBy, err := enum.ReviewSortByString(option)
 	if err != nil {
@@ -132,50 +114,42 @@ func (m *ReviewMenu) handleSortOrderSelection(event *events.ComponentInteraction
 	}
 
 	// Update user's group sort preference
-	settings.GroupDefaultSort = sortBy
-	if err := m.layout.db.Settings().SaveUserSettings(context.Background(), settings); err != nil {
-		m.layout.logger.Error("Failed to save user settings", zap.Error(err))
-		m.layout.paginationManager.RespondWithError(event, "Failed to save sort order. Please try again.")
-		return
-	}
-	s.Set(constants.SessionKeyUserSettings, settings)
+	session.UserGroupDefaultSort.Set(s, sortBy)
 
 	m.Show(event, s, "Changed sort order. Will take effect for the next group.")
 }
 
 // handleActionSelection processes action menu selections.
 func (m *ReviewMenu) handleActionSelection(event *events.ComponentInteractionCreate, s *session.Session, option string) {
-	// Get bot settings to check reviewer status
-	var settings *types.BotSetting
-	s.GetInterface(constants.SessionKeyBotSettings, &settings)
 	userID := uint64(event.User().ID)
+	isReviewer := s.BotSettings().IsReviewer(userID)
 
 	switch option {
 	case constants.GroupViewMembersButtonCustomID:
 		m.layout.membersMenu.Show(event, s, 0)
 	case constants.OpenAIChatButtonCustomID:
-		if !settings.IsReviewer(userID) {
+		if !isReviewer {
 			m.layout.logger.Error("Non-reviewer attempted to open AI chat", zap.Uint64("user_id", userID))
 			m.layout.paginationManager.RespondWithError(event, "You do not have permission to open the AI chat.")
 			return
 		}
 		m.handleOpenAIChat(event, s)
 	case constants.GroupViewLogsButtonCustomID:
-		if !settings.IsReviewer(userID) {
+		if !isReviewer {
 			m.layout.logger.Error("Non-reviewer attempted to view logs", zap.Uint64("user_id", userID))
 			m.layout.paginationManager.RespondWithError(event, "You do not have permission to view activity logs.")
 			return
 		}
 		m.handleViewGroupLogs(event, s)
 	case constants.GroupConfirmWithReasonButtonCustomID:
-		if !settings.IsReviewer(userID) {
+		if !isReviewer {
 			m.layout.logger.Error("Non-reviewer attempted to use confirm with reason", zap.Uint64("user_id", userID))
 			m.layout.paginationManager.RespondWithError(event, "You do not have permission to confirm groups with custom reasons.")
 			return
 		}
 		m.handleConfirmWithReason(event, s)
 	case constants.ReviewModeOption:
-		if !settings.IsReviewer(userID) {
+		if !isReviewer {
 			m.layout.logger.Error("Non-reviewer attempted to change review mode", zap.Uint64("user_id", userID))
 			m.layout.paginationManager.RespondWithError(event, "You do not have permission to change review mode.")
 			return
@@ -188,9 +162,6 @@ func (m *ReviewMenu) handleActionSelection(event *events.ComponentInteractionCre
 
 // fetchNewTarget gets a new group to review based on the current sort order.
 func (m *ReviewMenu) fetchNewTarget(event interfaces.CommonEvent, s *session.Session, reviewerID uint64) (*types.ReviewGroup, bool, error) {
-	var settings *types.UserSetting
-	s.GetInterface(constants.SessionKeyUserSettings, &settings)
-
 	// Check if user is banned for low accuracy
 	isBanned, err := m.layout.db.Votes().CheckVoteAccuracy(context.Background(), uint64(event.User().ID))
 	if err != nil {
@@ -201,7 +172,10 @@ func (m *ReviewMenu) fetchNewTarget(event interfaces.CommonEvent, s *session.Ses
 	}
 
 	// Get the next group to review
-	group, err := m.layout.db.Groups().GetGroupToReview(context.Background(), settings.GroupDefaultSort, settings.ReviewTargetMode, reviewerID)
+	defaultSort := session.UserGroupDefaultSort.Get(s)
+	reviewTargetMode := session.UserReviewTargetMode.Get(s)
+
+	group, err := m.layout.db.Groups().GetGroupToReview(context.Background(), defaultSort, reviewTargetMode, reviewerID)
 	if err != nil {
 		return nil, isBanned, err
 	}
@@ -213,8 +187,8 @@ func (m *ReviewMenu) fetchNewTarget(event interfaces.CommonEvent, s *session.Ses
 	}
 
 	// Store the group and flagged users in session
-	s.Set(constants.SessionKeyGroupTarget, group)
-	s.Set(constants.SessionKeyGroupMemberIDs, flaggedUsers)
+	session.GroupTarget.Set(s, group)
+	session.GroupMemberIDs.Set(s, flaggedUsers)
 
 	// Log the view action
 	go m.layout.db.Activity().Log(context.Background(), &types.ActivityLog{
@@ -263,8 +237,7 @@ func (m *ReviewMenu) handleModal(event *events.ModalSubmitInteractionCreate, s *
 // handleViewGroupLogs handles the shortcut to view group logs.
 // It stores the group ID in session for log filtering and shows the logs menu.
 func (m *ReviewMenu) handleViewGroupLogs(event *events.ComponentInteractionCreate, s *session.Session) {
-	var group *types.ReviewGroup
-	s.GetInterface(constants.SessionKeyGroupTarget, &group)
+	group := session.GroupTarget.Get(s)
 	if group == nil {
 		m.layout.paginationManager.RespondWithError(event, "No group selected to view logs.")
 		return
@@ -273,7 +246,7 @@ func (m *ReviewMenu) handleViewGroupLogs(event *events.ComponentInteractionCreat
 	// Set the group ID filter
 	m.layout.logLayout.ResetLogs(s)
 	m.layout.logLayout.ResetFilters(s)
-	s.Set(constants.SessionKeyGroupIDFilter, group.ID)
+	session.GroupIDFilter.Set(s, group.ID)
 
 	// Show the logs menu
 	m.layout.logLayout.Show(event, s)
@@ -281,12 +254,9 @@ func (m *ReviewMenu) handleViewGroupLogs(event *events.ComponentInteractionCreat
 
 // handleOpenAIChat handles the button to open the AI chat for the current group.
 func (m *ReviewMenu) handleOpenAIChat(event *events.ComponentInteractionCreate, s *session.Session) {
-	var group *types.ReviewGroup
-	s.GetInterface(constants.SessionKeyGroupTarget, &group)
-	var groupInfo *apiTypes.GroupResponse
-	s.GetInterface(constants.SessionKeyGroupInfo, &groupInfo)
-	var memberIDs []uint64
-	s.GetInterface(constants.SessionKeyGroupMemberIDs, &memberIDs)
+	group := session.GroupTarget.Get(s)
+	groupInfo := session.GroupInfo.Get(s)
+	memberIDs := session.GroupMemberIDs.Get(s)
 
 	// Get flagged members details with a limit of 20
 	limit := 20
@@ -371,16 +341,15 @@ Flagged Members (%d total, showing first %d):
 	)
 
 	// Update session and navigate to chat
-	s.Set(constants.SessionKeyChatContext, context)
-	s.Set(constants.SessionKeyPaginationPage, 0)
+	session.ChatContext.Set(s, context)
+	session.PaginationPage.Set(s, 0)
 	m.layout.chatLayout.Show(event, s)
 }
 
 // handleConfirmWithReason opens a modal for entering a custom confirm reason.
 // The modal pre-fills with the current reason if one exists.
 func (m *ReviewMenu) handleConfirmWithReason(event *events.ComponentInteractionCreate, s *session.Session) {
-	var group *types.ReviewGroup
-	s.GetInterface(constants.SessionKeyGroupTarget, &group)
+	group := session.GroupTarget.Get(s)
 
 	// Create modal with pre-filled reason field
 	modal := discord.NewModalCreateBuilder().
@@ -403,15 +372,10 @@ func (m *ReviewMenu) handleConfirmWithReason(event *events.ComponentInteractionC
 
 // handleConfirmGroup moves a group to the confirmed state and logs the action.
 func (m *ReviewMenu) handleConfirmGroup(event interfaces.CommonEvent, s *session.Session) {
-	var settings *types.UserSetting
-	s.GetInterface(constants.SessionKeyUserSettings, &settings)
-	var botSettings *types.BotSetting
-	s.GetInterface(constants.SessionKeyBotSettings, &botSettings)
-	var group *types.ReviewGroup
-	s.GetInterface(constants.SessionKeyGroupTarget, &group)
+	group := session.GroupTarget.Get(s)
 
 	var actionMsg string
-	if settings.ReviewMode == enum.ReviewModeTraining {
+	if session.UserReviewMode.Get(s) == enum.ReviewModeTraining {
 		// Training mode - increment downvotes
 		if err := m.layout.db.Reputation().UpdateGroupVotes(context.Background(), group.ID, uint64(event.User().ID), false); err != nil {
 			m.layout.logger.Error("Failed to update downvotes", zap.Error(err))
@@ -436,7 +400,7 @@ func (m *ReviewMenu) handleConfirmGroup(event interfaces.CommonEvent, s *session
 		})
 	} else {
 		// Standard mode - check permissions and confirm group
-		if !botSettings.IsReviewer(uint64(event.User().ID)) {
+		if !s.BotSettings().IsReviewer(uint64(event.User().ID)) {
 			m.layout.logger.Error("Non-reviewer attempted to confirm group",
 				zap.Uint64("user_id", uint64(event.User().ID)))
 			m.layout.paginationManager.RespondWithError(event, "You do not have permission to confirm groups.")
@@ -478,22 +442,17 @@ func (m *ReviewMenu) handleConfirmGroup(event interfaces.CommonEvent, s *session
 	}
 
 	// Clear current group and load next one
-	s.Delete(constants.SessionKeyGroupTarget)
+	session.GroupTarget.Delete(s)
 	m.Show(event, s, fmt.Sprintf("Group %s.", actionMsg))
 	m.updateCounters(s)
 }
 
 // handleClearGroup removes a group from the flagged state and logs the action.
 func (m *ReviewMenu) handleClearGroup(event interfaces.CommonEvent, s *session.Session) {
-	var settings *types.UserSetting
-	s.GetInterface(constants.SessionKeyUserSettings, &settings)
-	var botSettings *types.BotSetting
-	s.GetInterface(constants.SessionKeyBotSettings, &botSettings)
-	var group *types.ReviewGroup
-	s.GetInterface(constants.SessionKeyGroupTarget, &group)
+	group := session.GroupTarget.Get(s)
 
 	var actionMsg string
-	if settings.ReviewMode == enum.ReviewModeTraining {
+	if session.UserReviewMode.Get(s) == enum.ReviewModeTraining {
 		// Training mode - increment upvotes
 		if err := m.layout.db.Reputation().UpdateGroupVotes(context.Background(), group.ID, uint64(event.User().ID), true); err != nil {
 			m.layout.logger.Error("Failed to update upvotes", zap.Error(err))
@@ -518,7 +477,7 @@ func (m *ReviewMenu) handleClearGroup(event interfaces.CommonEvent, s *session.S
 		})
 	} else {
 		// Standard mode - check permissions and clear group
-		if !botSettings.IsReviewer(uint64(event.User().ID)) {
+		if !s.BotSettings().IsReviewer(uint64(event.User().ID)) {
 			m.layout.logger.Error("Non-reviewer attempted to clear group",
 				zap.Uint64("user_id", uint64(event.User().ID)))
 			m.layout.paginationManager.RespondWithError(event, "You do not have permission to clear groups.")
@@ -560,7 +519,7 @@ func (m *ReviewMenu) handleClearGroup(event interfaces.CommonEvent, s *session.S
 	}
 
 	// Clear current group and load next one
-	s.Delete(constants.SessionKeyGroupTarget)
+	session.GroupTarget.Delete(s)
 	m.Show(event, s, fmt.Sprintf("Group %s.", actionMsg))
 	m.updateCounters(s)
 }
@@ -568,14 +527,12 @@ func (m *ReviewMenu) handleClearGroup(event interfaces.CommonEvent, s *session.S
 // handleSkipGroup logs the skip action and moves to the next group.
 func (m *ReviewMenu) handleSkipGroup(event interfaces.CommonEvent, s *session.Session) {
 	// Clear current group and load next one
-	s.Delete(constants.SessionKeyGroupTarget)
+	session.GroupTarget.Delete(s)
 	m.Show(event, s, "Skipped group.")
 	m.updateCounters(s)
 
 	// Log the skip action
-	var group *types.ReviewGroup
-	s.GetInterface(constants.SessionKeyGroupTarget, &group)
-
+	group := session.GroupTarget.Get(s)
 	m.layout.db.Activity().Log(context.Background(), &types.ActivityLog{
 		ActivityTarget: types.ActivityTarget{
 			GroupID: group.ID,
@@ -589,9 +546,6 @@ func (m *ReviewMenu) handleSkipGroup(event interfaces.CommonEvent, s *session.Se
 
 // handleConfirmWithReasonModalSubmit processes the custom confirm reason from the modal.
 func (m *ReviewMenu) handleConfirmWithReasonModalSubmit(event *events.ModalSubmitInteractionCreate, s *session.Session) {
-	var group *types.ReviewGroup
-	s.GetInterface(constants.SessionKeyGroupTarget, &group)
-
 	// Get and validate the confirm reason
 	reason := event.Data.Text(constants.ConfirmReasonInputCustomID)
 	if reason == "" {
@@ -600,6 +554,7 @@ func (m *ReviewMenu) handleConfirmWithReasonModalSubmit(event *events.ModalSubmi
 	}
 
 	// Update group's reason with the custom input
+	group := session.GroupTarget.Get(s)
 	group.Reason = reason
 
 	// Update group status in database
@@ -610,7 +565,7 @@ func (m *ReviewMenu) handleConfirmWithReasonModalSubmit(event *events.ModalSubmi
 	}
 
 	// Clear current group and load next one
-	s.Delete(constants.SessionKeyGroupTarget)
+	session.GroupTarget.Delete(s)
 	m.Show(event, s, "Group confirmed.")
 	m.updateCounters(s)
 
@@ -637,7 +592,7 @@ func (m *ReviewMenu) checkCaptchaRequired(event interfaces.CommonEvent, s *sessi
 
 // updateCounters updates the review counters.
 func (m *ReviewMenu) updateCounters(s *session.Session) {
-	if err := m.layout.captcha.IncrementReviewCounter(context.Background(), s); err != nil {
+	if err := m.layout.captcha.IncrementReviewCounter(s); err != nil {
 		m.layout.logger.Error("Failed to update review counter", zap.Error(err))
 	}
 }

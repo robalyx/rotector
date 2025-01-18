@@ -4,7 +4,6 @@ import (
 	"time"
 
 	"github.com/disgoorg/disgo/bot"
-	"github.com/robalyx/rotector/internal/bot/constants"
 	"github.com/robalyx/rotector/internal/bot/core/pagination"
 	"github.com/robalyx/rotector/internal/bot/core/session"
 	"github.com/robalyx/rotector/internal/bot/interfaces"
@@ -55,13 +54,13 @@ func (l *Layout) Show(event interfaces.CommonEvent, s *session.Session) {
 
 // ResetStats clears the leaderboard stats from the session.
 func (l *Layout) ResetStats(s *session.Session) {
-	s.Set(constants.SessionKeyLeaderboardStats, []types.VoteAccuracy{})
-	s.Set(constants.SessionKeyLeaderboardUsernames, make(map[uint64]string))
-	s.Set(constants.SessionKeyLeaderboardCursor, nil)
-	s.Set(constants.SessionKeyLeaderboardNextCursor, nil)
-	s.Set(constants.SessionKeyLeaderboardPrevCursors, []*types.LeaderboardCursor{})
-	s.Set(constants.SessionKeyHasNextPage, false)
-	s.Set(constants.SessionKeyHasPrevPage, false)
-	s.Set(constants.SessionKeyLeaderboardLastRefresh, time.Time{})
-	s.Set(constants.SessionKeyLeaderboardNextRefresh, time.Time{})
+	session.LeaderboardStats.Set(s, []*types.VoteAccuracy{})
+	session.LeaderboardUsernames.Set(s, make(map[uint64]string))
+	session.LeaderboardCursor.Set(s, nil)
+	session.LeaderboardNextCursor.Set(s, nil)
+	session.LeaderboardPrevCursors.Set(s, []*types.LeaderboardCursor{})
+	session.HasNextPage.Set(s, false)
+	session.HasPrevPage.Set(s, false)
+	session.LeaderboardLastRefresh.Set(s, time.Time{})
+	session.LeaderboardNextRefresh.Set(s, time.Time{})
 }

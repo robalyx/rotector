@@ -17,8 +17,8 @@ type VerifyBuilder struct {
 // NewVerifyBuilder creates a new verification builder.
 func NewVerifyBuilder(s *session.Session) *VerifyBuilder {
 	return &VerifyBuilder{
-		userID: s.GetUint64(constants.SessionKeyVerifyUserID),
-		code:   s.GetString(constants.SessionKeyVerifyCode),
+		userID: session.VerifyUserID.Get(s),
+		code:   session.VerifyCode.Get(s),
 	}
 }
 

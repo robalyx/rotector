@@ -35,7 +35,7 @@ type User struct {
 	Reason              string                  `bun:",notnull"   json:"reason"`
 	Groups              []*types.UserGroupRoles `bun:"type:jsonb" json:"groups"`
 	Outfits             []types.Outfit          `bun:"type:jsonb" json:"outfits"`
-	Friends             []ExtendedFriend        `bun:"type:jsonb" json:"friends"`
+	Friends             []*ExtendedFriend       `bun:"type:jsonb" json:"friends"`
 	Games               []*types.Game           `bun:"type:jsonb" json:"games"`
 	FlaggedContent      []string                `bun:"type:jsonb" json:"flaggedContent"`
 	FollowerCount       uint64                  `bun:",notnull"   json:"followerCount"`

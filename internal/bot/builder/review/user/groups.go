@@ -17,7 +17,6 @@ import (
 
 // GroupsBuilder creates the visual layout for viewing a user's groups.
 type GroupsBuilder struct {
-	settings      *types.UserSetting
 	user          *types.ReviewUser
 	groups        []*apiTypes.UserGroupRoles
 	flaggedGroups map[uint64]*types.ReviewGroup
@@ -26,36 +25,27 @@ type GroupsBuilder struct {
 	total         int
 	imageBuffer   *bytes.Buffer
 	isStreaming   bool
+	privacyMode   bool
 }
 
 // NewGroupsBuilder creates a new groups builder.
 func NewGroupsBuilder(s *session.Session) *GroupsBuilder {
-	var settings *types.UserSetting
-	s.GetInterface(constants.SessionKeyUserSettings, &settings)
-	var user *types.ReviewUser
-	s.GetInterface(constants.SessionKeyTarget, &user)
-	var groups []*apiTypes.UserGroupRoles
-	s.GetInterface(constants.SessionKeyGroups, &groups)
-	var flaggedGroups map[uint64]*types.ReviewGroup
-	s.GetInterface(constants.SessionKeyFlaggedGroups, &flaggedGroups)
-
 	return &GroupsBuilder{
-		settings:      settings,
-		user:          user,
-		groups:        groups,
-		flaggedGroups: flaggedGroups,
-		start:         s.GetInt(constants.SessionKeyStart),
-		page:          s.GetInt(constants.SessionKeyPaginationPage),
-		total:         s.GetInt(constants.SessionKeyTotalItems),
-		imageBuffer:   s.GetBuffer(constants.SessionKeyImageBuffer),
-		isStreaming:   s.GetBool(constants.SessionKeyIsStreaming),
+		user:          session.UserTarget.Get(s),
+		groups:        session.Groups.Get(s),
+		flaggedGroups: session.FlaggedGroups.Get(s),
+		start:         session.Start.Get(s),
+		page:          session.PaginationPage.Get(s),
+		total:         session.TotalItems.Get(s),
+		imageBuffer:   session.ImageBuffer.Get(s),
+		isStreaming:   session.IsStreaming.Get(s),
+		privacyMode:   session.UserReviewMode.Get(s) == enum.ReviewModeTraining || session.UserStreamerMode.Get(s),
 	}
 }
 
 // Build creates a Discord message with a grid of group thumbnails and information.
 func (b *GroupsBuilder) Build() *discord.MessageUpdateBuilder {
 	totalPages := (b.total + constants.GroupsPerPage - 1) / constants.GroupsPerPage
-	censor := b.settings.StreamerMode || b.settings.ReviewMode == enum.ReviewModeTraining
 
 	// Create file attachment for the group thumbnails grid
 	fileName := fmt.Sprintf("groups_%d_%d.png", b.user.ID, b.page)
@@ -66,11 +56,11 @@ func (b *GroupsBuilder) Build() *discord.MessageUpdateBuilder {
 		SetTitle(fmt.Sprintf("User Groups (Page %d/%d)", b.page+1, totalPages)).
 		SetDescription(fmt.Sprintf(
 			"```%s (%s)```",
-			utils.CensorString(b.user.Name, censor),
-			utils.CensorString(strconv.FormatUint(b.user.ID, 10), censor),
+			utils.CensorString(b.user.Name, b.privacyMode),
+			utils.CensorString(strconv.FormatUint(b.user.ID, 10), b.privacyMode),
 		)).
 		SetImage("attachment://" + fileName).
-		SetColor(utils.GetMessageEmbedColor(b.settings.StreamerMode))
+		SetColor(utils.GetMessageEmbedColor(b.privacyMode))
 
 	// Add fields for each group
 	for i, group := range b.groups {
@@ -88,10 +78,10 @@ func (b *GroupsBuilder) Build() *discord.MessageUpdateBuilder {
 		builder.AddContainerComponents([]discord.ContainerComponent{
 			discord.NewActionRow(
 				discord.NewSecondaryButton("◀️", string(constants.BackButtonCustomID)),
-				discord.NewSecondaryButton("⏮️", string(utils.ViewerFirstPage)).WithDisabled(b.page == 0),
-				discord.NewSecondaryButton("◀️", string(utils.ViewerPrevPage)).WithDisabled(b.page == 0),
-				discord.NewSecondaryButton("▶️", string(utils.ViewerNextPage)).WithDisabled(b.page == totalPages-1),
-				discord.NewSecondaryButton("⏭️", string(utils.ViewerLastPage)).WithDisabled(b.page == totalPages-1),
+				discord.NewSecondaryButton("⏮️", string(session.ViewerFirstPage)).WithDisabled(b.page == 0),
+				discord.NewSecondaryButton("◀️", string(session.ViewerPrevPage)).WithDisabled(b.page == 0),
+				discord.NewSecondaryButton("▶️", string(session.ViewerNextPage)).WithDisabled(b.page == totalPages-1),
+				discord.NewSecondaryButton("⏭️", string(session.ViewerLastPage)).WithDisabled(b.page == totalPages-1),
 			),
 		}...)
 	}
@@ -131,12 +121,13 @@ func (b *GroupsBuilder) getGroupFieldValue(group *apiTypes.UserGroupRoles) strin
 	var info strings.Builder
 
 	// Add group name (with link in standard mode)
-	if b.settings.ReviewMode == enum.ReviewModeTraining {
-		info.WriteString(utils.CensorString(group.Group.Name, true) + "\n")
+	name := utils.CensorString(group.Group.Name, b.privacyMode)
+	if b.privacyMode {
+		info.WriteString(name + "\n")
 	} else {
 		info.WriteString(fmt.Sprintf(
 			"[%s](https://www.roblox.com/groups/%d)\n",
-			utils.CensorString(group.Group.Name, b.settings.StreamerMode),
+			name,
 			group.Group.ID,
 		))
 	}
@@ -148,12 +139,12 @@ func (b *GroupsBuilder) getGroupFieldValue(group *apiTypes.UserGroupRoles) strin
 	))
 
 	// Add owner info (with link in standard mode)
-	if b.settings.ReviewMode == enum.ReviewModeTraining {
-		info.WriteString(fmt.Sprintf("👑 Owner: %s\n",
-			utils.CensorString(group.Group.Owner.Username, true)))
+	username := utils.CensorString(group.Group.Owner.Username, b.privacyMode)
+	if b.privacyMode {
+		info.WriteString(fmt.Sprintf("👑 Owner: %s\n", username))
 	} else {
 		info.WriteString(fmt.Sprintf("👑 Owner: [%s](https://www.roblox.com/users/%d/profile)\n",
-			utils.CensorString(group.Group.Owner.Username, b.settings.StreamerMode),
+			username,
 			group.Group.Owner.UserID))
 	}
 

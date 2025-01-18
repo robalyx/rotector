@@ -12,6 +12,7 @@ import (
 	"github.com/robalyx/rotector/internal/bot/core/session"
 	"github.com/robalyx/rotector/internal/bot/interfaces"
 	"github.com/robalyx/rotector/internal/bot/utils"
+	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
 	"go.uber.org/zap"
 )
 
@@ -195,6 +196,12 @@ func (m *MainMenu) handleBanUserModalSubmit(event *events.ModalSubmitInteraction
 	notes := event.Data.Text(constants.AdminReasonInputCustomID)
 	duration := event.Data.Text(constants.BanDurationInputCustomID)
 
+	// Parse ban type
+	banReason, err := enum.BanReasonString(banType)
+	if err != nil {
+		banReason = enum.BanReasonOther
+	}
+
 	// Parse ban duration
 	expiresAt, err := utils.ParseBanDuration(duration)
 	if err != nil && !errors.Is(err, utils.ErrPermanentBan) {
@@ -203,10 +210,10 @@ func (m *MainMenu) handleBanUserModalSubmit(event *events.ModalSubmitInteraction
 		return
 	}
 
-	s.Set(constants.SessionKeyAdminActionID, userID)
-	s.Set(constants.SessionKeyAdminReason, notes)
-	s.Set(constants.SessionKeyBanType, banType)
-	s.Set(constants.SessionKeyBanExpiry, expiresAt) // Will be nil for permanent bans
+	session.AdminActionID.Set(s, userID)
+	session.AdminReason.Set(s, notes)
+	session.BanReason.Set(s, banReason)
+	session.BanExpiry.Set(s, expiresAt) // Will be nil for permanent bans
 	m.layout.confirmMenu.Show(event, s, constants.BanUserAction, "")
 }
 
@@ -215,8 +222,8 @@ func (m *MainMenu) handleUnbanUserModalSubmit(event *events.ModalSubmitInteracti
 	userID := event.Data.Text(constants.UnbanUserInputCustomID)
 	notes := event.Data.Text(constants.AdminReasonInputCustomID)
 
-	s.Set(constants.SessionKeyAdminActionID, userID)
-	s.Set(constants.SessionKeyAdminReason, notes)
+	session.AdminActionID.Set(s, userID)
+	session.AdminReason.Set(s, notes)
 	m.layout.confirmMenu.Show(event, s, constants.UnbanUserAction, "")
 }
 
@@ -225,8 +232,8 @@ func (m *MainMenu) handleDeleteUserModalSubmit(event *events.ModalSubmitInteract
 	userID := event.Data.Text(constants.DeleteUserInputCustomID)
 	reason := event.Data.Text(constants.AdminReasonInputCustomID)
 
-	s.Set(constants.SessionKeyAdminActionID, userID)
-	s.Set(constants.SessionKeyAdminReason, reason)
+	session.AdminActionID.Set(s, userID)
+	session.AdminReason.Set(s, reason)
 	m.layout.confirmMenu.Show(event, s, constants.DeleteUserAction, "")
 }
 
@@ -235,7 +242,7 @@ func (m *MainMenu) handleDeleteGroupModalSubmit(event *events.ModalSubmitInterac
 	groupID := event.Data.Text(constants.DeleteGroupInputCustomID)
 	reason := event.Data.Text(constants.AdminReasonInputCustomID)
 
-	s.Set(constants.SessionKeyAdminActionID, groupID)
-	s.Set(constants.SessionKeyAdminReason, reason)
+	session.AdminActionID.Set(s, groupID)
+	session.AdminReason.Set(s, reason)
 	m.layout.confirmMenu.Show(event, s, constants.DeleteGroupAction, "")
 }

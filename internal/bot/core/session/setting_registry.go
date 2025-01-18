@@ -1,4 +1,4 @@
-package setting
+package session
 
 import (
 	"errors"
@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/robalyx/rotector/internal/bot/constants"
-	"github.com/robalyx/rotector/internal/bot/core/session"
 	"github.com/robalyx/rotector/internal/bot/utils"
 	"github.com/robalyx/rotector/internal/common/storage/database/types"
 	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
@@ -31,10 +30,10 @@ var (
 type Validator func(value string, userID uint64) error
 
 // ValueGetter is a function that retrieves the value of a setting.
-type ValueGetter func(userSettings *types.UserSetting, botSettings *types.BotSetting) string
+type ValueGetter func(s *Session) string
 
 // ValueUpdater is a function that updates the value of a setting.
-type ValueUpdater func(value string, userSettings *types.UserSetting, botSettings *types.BotSetting, s *session.Session) error
+type ValueUpdater func(value string, s *Session) error
 
 // Setting defines the structure and behavior of a single setting.
 type Setting struct {
@@ -49,10 +48,10 @@ type Setting struct {
 	ValueUpdater ValueUpdater          `json:"-"`            // Function to update the value
 }
 
-// Registry manages the available settings.
-type Registry struct {
-	UserSettings map[string]Setting // User-specific settings
-	BotSettings  map[string]Setting // Bot-wide settings
+// SettingRegistry manages the available settings.
+type SettingRegistry struct {
+	UserSettings map[string]*Setting // User-specific settings
+	BotSettings  map[string]*Setting // Bot-wide settings
 }
 
 // validateDiscordID checks if a string is a valid Discord user ID.
@@ -101,11 +100,11 @@ func validateNumber(value string, _ uint64) error {
 	return nil
 }
 
-// NewRegistry creates and initializes the setting registry.
-func NewRegistry() *Registry {
-	r := &Registry{
-		UserSettings: make(map[string]Setting),
-		BotSettings:  make(map[string]Setting),
+// NewSettingRegistry creates and initializes the setting registry.
+func NewSettingRegistry() *SettingRegistry {
+	r := &SettingRegistry{
+		UserSettings: make(map[string]*Setting),
+		BotSettings:  make(map[string]*Setting),
 	}
 
 	r.registerUserSettings()
@@ -115,14 +114,14 @@ func NewRegistry() *Registry {
 }
 
 // registerUserSettings adds all user-specific settings to the registry.
-func (r *Registry) registerUserSettings() {
+func (r *SettingRegistry) registerUserSettings() {
 	r.UserSettings[constants.StreamerModeOption] = r.createStreamerModeSetting()
 	r.UserSettings[constants.ReviewModeOption] = r.createReviewModeSetting()
 	r.UserSettings[constants.ReviewTargetModeOption] = r.createReviewTargetModeSetting()
 }
 
 // registerBotSettings adds all bot-wide settings to the registry.
-func (r *Registry) registerBotSettings() {
+func (r *SettingRegistry) registerBotSettings() {
 	r.BotSettings[constants.ReviewerIDsOption] = r.createReviewerIDsSetting()
 	r.BotSettings[constants.AdminIDsOption] = r.createAdminIDsSetting()
 	r.BotSettings[constants.SessionLimitOption] = r.createSessionLimitSetting()
@@ -133,28 +132,28 @@ func (r *Registry) registerBotSettings() {
 }
 
 // createStreamerModeSetting creates the streamer mode setting.
-func (r *Registry) createStreamerModeSetting() Setting {
-	return Setting{
+func (r *SettingRegistry) createStreamerModeSetting() *Setting {
+	return &Setting{
 		Key:          constants.StreamerModeOption,
 		Name:         "Streamer Mode",
 		Description:  "Toggle censoring of sensitive information",
 		Type:         enum.SettingTypeBool,
 		DefaultValue: false,
 		Validators:   []Validator{validateBool},
-		ValueGetter: func(us *types.UserSetting, _ *types.BotSetting) string {
-			return strconv.FormatBool(us.StreamerMode)
+		ValueGetter: func(s *Session) string {
+			return strconv.FormatBool(UserStreamerMode.Get(s))
 		},
-		ValueUpdater: func(value string, us *types.UserSetting, _ *types.BotSetting, _ *session.Session) error {
+		ValueUpdater: func(value string, s *Session) error {
 			boolVal, _ := strconv.ParseBool(value)
-			us.StreamerMode = boolVal
+			UserStreamerMode.Set(s, boolVal)
 			return nil
 		},
 	}
 }
 
 // createReviewModeSetting creates the review mode setting.
-func (r *Registry) createReviewModeSetting() Setting {
-	return Setting{
+func (r *SettingRegistry) createReviewModeSetting() *Setting {
+	return &Setting{
 		Key:          constants.ReviewModeOption,
 		Name:         "Review Mode",
 		Description:  "Switch between training and standard review modes",
@@ -180,134 +179,152 @@ func (r *Registry) createReviewModeSetting() Setting {
 				enum.ReviewModeStandard.String(),
 			}),
 		},
-		ValueGetter: func(us *types.UserSetting, _ *types.BotSetting) string {
-			return us.ReviewMode.String()
+		ValueGetter: func(s *Session) string {
+			return UserReviewMode.Get(s).String()
 		},
-		ValueUpdater: func(value string, us *types.UserSetting, bs *types.BotSetting, s *session.Session) error {
+		ValueUpdater: func(value string, s *Session) error {
 			reviewMode, err := enum.ReviewModeString(value)
 			if err != nil {
 				return err
 			}
 
 			// Only allow changing to standard mode if user is a reviewer
-			if reviewMode == enum.ReviewModeStandard && !bs.IsReviewer(s.UserID()) {
+			if reviewMode == enum.ReviewModeStandard && !s.BotSettings().IsReviewer(s.UserID()) {
 				return ErrNotReviewer
 			}
 
-			us.ReviewMode = reviewMode
+			UserReviewMode.Set(s, reviewMode)
 			return nil
 		},
 	}
 }
 
 // createSessionLimitSetting creates the session limit setting.
-func (r *Registry) createSessionLimitSetting() Setting {
-	return Setting{
+func (r *SettingRegistry) createSessionLimitSetting() *Setting {
+	return &Setting{
 		Key:          constants.SessionLimitOption,
 		Name:         "Session Limit",
 		Description:  "Set the maximum number of concurrent sessions",
 		Type:         enum.SettingTypeNumber,
 		DefaultValue: uint64(0),
 		Validators:   []Validator{validateNumber},
-		ValueGetter: func(_ *types.UserSetting, bs *types.BotSetting) string {
-			return strconv.FormatUint(bs.SessionLimit, 10)
+		ValueGetter: func(s *Session) string {
+			return strconv.FormatUint(BotSessionLimit.Get(s), 10)
 		},
-		ValueUpdater: func(value string, _ *types.UserSetting, bs *types.BotSetting, _ *session.Session) error {
+		ValueUpdater: func(value string, s *Session) error {
 			limit, err := strconv.ParseUint(value, 10, 64)
 			if err != nil {
 				return err
 			}
-			bs.SessionLimit = limit
+			BotSessionLimit.Set(s, limit)
 			return nil
 		},
 	}
 }
 
 // createReviewerIDsSetting creates the reviewer IDs setting.
-func (r *Registry) createReviewerIDsSetting() Setting {
-	return Setting{
+func (r *SettingRegistry) createReviewerIDsSetting() *Setting {
+	return &Setting{
 		Key:          constants.ReviewerIDsOption,
 		Name:         "Reviewer IDs",
 		Description:  "Set which users can review using the bot",
 		Type:         enum.SettingTypeID,
 		DefaultValue: []uint64{},
 		Validators:   []Validator{validateDiscordID},
-		ValueGetter: func(_ *types.UserSetting, bs *types.BotSetting) string {
-			if len(bs.ReviewerIDs) == 0 {
+		ValueGetter: func(s *Session) string {
+			// Check the reviewer IDs from the session
+			reviewerIDs := BotReviewerIDs.Get(s)
+			if len(reviewerIDs) == 0 {
 				return "No reviewers set"
 			}
+
 			// Show only first 10 IDs
-			displayIDs := utils.FormatIDs(bs.ReviewerIDs)
-			if len(bs.ReviewerIDs) > 10 {
-				displayIDs += fmt.Sprintf("\n...and %d more", len(bs.ReviewerIDs)-10)
+			displayIDs := utils.FormatIDs(reviewerIDs)
+			if len(reviewerIDs) > 10 {
+				displayIDs += fmt.Sprintf("\n...and %d more", len(reviewerIDs)-10)
 			}
 			return displayIDs
 		},
-		ValueUpdater: func(value string, _ *types.UserSetting, bs *types.BotSetting, _ *session.Session) error {
+		ValueUpdater: func(value string, s *Session) error {
 			id, err := strconv.ParseUint(value, 10, 64)
 			if err != nil {
 				return err
 			}
+
+			// Check the reviewer IDs from the session
+			reviewerIDs := BotReviewerIDs.Get(s)
 			exists := false
-			for i, reviewerID := range bs.ReviewerIDs {
+			for i, reviewerID := range reviewerIDs {
 				if reviewerID == id {
-					bs.ReviewerIDs = append(bs.ReviewerIDs[:i], bs.ReviewerIDs[i+1:]...)
+					reviewerIDs = append(reviewerIDs[:i], reviewerIDs[i+1:]...)
 					exists = true
 					break
 				}
 			}
 			if !exists {
-				bs.ReviewerIDs = append(bs.ReviewerIDs, id)
+				reviewerIDs = append(reviewerIDs, id)
 			}
+
+			// Set the reviewer IDs in the session
+			BotReviewerIDs.Set(s, reviewerIDs)
 			return nil
 		},
 	}
 }
 
 // createAdminIDsSetting creates the admin IDs setting.
-func (r *Registry) createAdminIDsSetting() Setting {
-	return Setting{
+func (r *SettingRegistry) createAdminIDsSetting() *Setting {
+	return &Setting{
 		Key:          constants.AdminIDsOption,
 		Name:         "Admin IDs",
 		Description:  "Set which users can access bot settings",
 		Type:         enum.SettingTypeID,
 		DefaultValue: []uint64{},
 		Validators:   []Validator{validateDiscordID},
-		ValueGetter: func(_ *types.UserSetting, bs *types.BotSetting) string {
-			if len(bs.AdminIDs) == 0 {
+		ValueGetter: func(s *Session) string {
+			// Check the admin IDs from the session
+			adminIDs := BotAdminIDs.Get(s)
+			if len(adminIDs) == 0 {
 				return "No admins set"
 			}
+
 			// Show only first 10 IDs
-			displayIDs := utils.FormatIDs(bs.AdminIDs)
-			if len(bs.AdminIDs) > 10 {
-				displayIDs += fmt.Sprintf("\n...and %d more", len(bs.AdminIDs)-10)
+			displayIDs := utils.FormatIDs(adminIDs)
+			if len(adminIDs) > 10 {
+				displayIDs += fmt.Sprintf("\n...and %d more", len(adminIDs)-10)
 			}
 			return displayIDs
 		},
-		ValueUpdater: func(value string, _ *types.UserSetting, bs *types.BotSetting, _ *session.Session) error {
+		ValueUpdater: func(value string, s *Session) error {
 			id, err := strconv.ParseUint(value, 10, 64)
 			if err != nil {
 				return err
 			}
+
+			// Check the admin IDs from the session
+			adminIDs := BotAdminIDs.Get(s)
 			exists := false
-			for i, adminID := range bs.AdminIDs {
+			for i, adminID := range adminIDs {
 				if adminID == id {
-					bs.AdminIDs = append(bs.AdminIDs[:i], bs.AdminIDs[i+1:]...)
+					adminIDs = append(adminIDs[:i], adminIDs[i+1:]...)
 					exists = true
 					break
 				}
 			}
 			if !exists {
-				bs.AdminIDs = append(bs.AdminIDs, id)
+				adminIDs = append(adminIDs, id)
 			}
+
+			// Set the admin IDs in the session
+			BotAdminIDs.Set(s, adminIDs)
 			return nil
 		},
 	}
 }
 
 // createReviewTargetModeSetting creates the review target mode setting.
-func (r *Registry) createReviewTargetModeSetting() Setting {
-	return Setting{
+func (r *SettingRegistry) createReviewTargetModeSetting() *Setting {
+	return &Setting{
 		Key:          constants.ReviewTargetModeOption,
 		Name:         "Review Target Mode",
 		Description:  "Switch between reviewing different types of items",
@@ -347,23 +364,23 @@ func (r *Registry) createReviewTargetModeSetting() Setting {
 				enum.ReviewTargetModeBanned.String(),
 			}),
 		},
-		ValueGetter: func(us *types.UserSetting, _ *types.BotSetting) string {
-			return us.ReviewTargetMode.String()
+		ValueGetter: func(s *Session) string {
+			return UserReviewTargetMode.Get(s).String()
 		},
-		ValueUpdater: func(value string, us *types.UserSetting, _ *types.BotSetting, _ *session.Session) error {
+		ValueUpdater: func(value string, s *Session) error {
 			reviewTargetMode, err := enum.ReviewTargetModeString(value)
 			if err != nil {
 				return err
 			}
-			us.ReviewTargetMode = reviewTargetMode
+			UserReviewTargetMode.Set(s, reviewTargetMode)
 			return nil
 		},
 	}
 }
 
 // createWelcomeMessageSetting creates the welcome message setting.
-func (r *Registry) createWelcomeMessageSetting() Setting {
-	return Setting{
+func (r *SettingRegistry) createWelcomeMessageSetting() *Setting {
+	return &Setting{
 		Key:          constants.WelcomeMessageOption,
 		Name:         "Welcome Message",
 		Description:  "Set the welcome message shown on the dashboard",
@@ -377,22 +394,23 @@ func (r *Registry) createWelcomeMessageSetting() Setting {
 				return nil
 			},
 		},
-		ValueGetter: func(_ *types.UserSetting, bs *types.BotSetting) string {
-			if bs.WelcomeMessage == "" {
+		ValueGetter: func(s *Session) string {
+			welcomeMessage := BotWelcomeMessage.Get(s)
+			if welcomeMessage == "" {
 				return "No welcome message set"
 			}
-			return bs.WelcomeMessage
+			return welcomeMessage
 		},
-		ValueUpdater: func(value string, _ *types.UserSetting, bs *types.BotSetting, _ *session.Session) error {
-			bs.WelcomeMessage = value
+		ValueUpdater: func(value string, s *Session) error {
+			BotWelcomeMessage.Set(s, value)
 			return nil
 		},
 	}
 }
 
 // createAnnouncementTypeSetting creates the announcement type setting.
-func (r *Registry) createAnnouncementTypeSetting() Setting {
-	return Setting{
+func (r *SettingRegistry) createAnnouncementTypeSetting() *Setting {
+	return &Setting{
 		Key:          constants.AnnouncementTypeOption,
 		Name:         "Announcement Type",
 		Description:  "Set the type of announcement to display",
@@ -414,23 +432,23 @@ func (r *Registry) createAnnouncementTypeSetting() Setting {
 				enum.AnnouncementTypeError.String(),
 			}),
 		},
-		ValueGetter: func(_ *types.UserSetting, bs *types.BotSetting) string {
-			return bs.Announcement.Type.String()
+		ValueGetter: func(s *Session) string {
+			return BotAnnouncementType.Get(s).String()
 		},
-		ValueUpdater: func(value string, _ *types.UserSetting, bs *types.BotSetting, _ *session.Session) error {
+		ValueUpdater: func(value string, s *Session) error {
 			announcementType, err := enum.AnnouncementTypeString(value)
 			if err != nil {
 				return err
 			}
-			bs.Announcement.Type = announcementType
+			BotAnnouncementType.Set(s, announcementType)
 			return nil
 		},
 	}
 }
 
 // createAnnouncementMessageSetting creates the announcement message setting.
-func (r *Registry) createAnnouncementMessageSetting() Setting {
-	return Setting{
+func (r *SettingRegistry) createAnnouncementMessageSetting() *Setting {
+	return &Setting{
 		Key:          constants.AnnouncementMessageOption,
 		Name:         "Announcement Message",
 		Description:  "Set the announcement message to display",
@@ -444,22 +462,23 @@ func (r *Registry) createAnnouncementMessageSetting() Setting {
 				return nil
 			},
 		},
-		ValueGetter: func(_ *types.UserSetting, bs *types.BotSetting) string {
-			if bs.Announcement.Message == "" {
+		ValueGetter: func(s *Session) string {
+			announcementMessage := BotAnnouncementMessage.Get(s)
+			if announcementMessage == "" {
 				return "No announcement message set"
 			}
-			return bs.Announcement.Message
+			return announcementMessage
 		},
-		ValueUpdater: func(value string, _ *types.UserSetting, bs *types.BotSetting, _ *session.Session) error {
-			bs.Announcement.Message = value
+		ValueUpdater: func(value string, s *Session) error {
+			BotAnnouncementMessage.Set(s, value)
 			return nil
 		},
 	}
 }
 
 // createAPIKeysSetting creates the API keys setting.
-func (r *Registry) createAPIKeysSetting() Setting {
-	return Setting{
+func (r *SettingRegistry) createAPIKeysSetting() *Setting {
+	return &Setting{
 		Key:          constants.APIKeysOption,
 		Name:         "API Keys",
 		Description:  "Manage API keys for REST API access",
@@ -473,13 +492,14 @@ func (r *Registry) createAPIKeysSetting() Setting {
 				return nil
 			},
 		},
-		ValueGetter: func(_ *types.UserSetting, bs *types.BotSetting) string {
-			if len(bs.APIKeys) == 0 {
+		ValueGetter: func(s *Session) string {
+			apiKeys := BotAPIKeys.Get(s)
+			if len(apiKeys) == 0 {
 				return "No API keys configured"
 			}
 
 			var sb strings.Builder
-			for i, key := range bs.APIKeys {
+			for i, key := range apiKeys {
 				if i > 0 {
 					sb.WriteString("\n")
 				}
@@ -491,27 +511,29 @@ func (r *Registry) createAPIKeysSetting() Setting {
 			}
 			return sb.String()
 		},
-		ValueUpdater: func(value string, _ *types.UserSetting, bs *types.BotSetting, _ *session.Session) error {
-			// First check if the value matches an existing API key
-			for i, key := range bs.APIKeys {
+		ValueUpdater: func(value string, s *Session) error {
+			apiKeys := BotAPIKeys.Get(s)
+			exists := false
+			for i, key := range apiKeys {
 				if key.Key == value {
-					// Remove the key if found
-					bs.APIKeys = append(bs.APIKeys[:i], bs.APIKeys[i+1:]...)
-					return nil
+					// Remove existing key
+					apiKeys = append(apiKeys[:i], apiKeys[i+1:]...)
+					exists = true
+					break
 				}
 			}
 
-			// If not removing, treat as new key creation
-			// Generate a new API key
-			key := utils.GenerateSecureToken(32)
-
-			newKey := types.APIKeyInfo{
-				Key:         key,
-				Description: value,
-				CreatedAt:   time.Now(),
+			if !exists {
+				// Add new key
+				newKey := types.APIKeyInfo{
+					Key:         utils.GenerateSecureToken(32),
+					Description: value,
+					CreatedAt:   time.Now(),
+				}
+				apiKeys = append(apiKeys, newKey)
 			}
 
-			bs.APIKeys = append(bs.APIKeys, newKey)
+			BotAPIKeys.Set(s, apiKeys)
 			return nil
 		},
 	}

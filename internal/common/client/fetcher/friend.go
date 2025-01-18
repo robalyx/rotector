@@ -74,7 +74,7 @@ func (f *FriendFetcher) GetFriends(ctx context.Context, userID uint64) ([]uint64
 }
 
 // GetFriendsWithDetails retrieves all friends with their extended details for a user.
-func (f *FriendFetcher) GetFriendsWithDetails(ctx context.Context, userID uint64) ([]types.ExtendedFriend, error) {
+func (f *FriendFetcher) GetFriendsWithDetails(ctx context.Context, userID uint64) ([]*types.ExtendedFriend, error) {
 	// Get all friend IDs
 	friendIDs, err := f.GetFriends(ctx, userID)
 	if err != nil {
@@ -82,7 +82,7 @@ func (f *FriendFetcher) GetFriendsWithDetails(ctx context.Context, userID uint64
 	}
 
 	var (
-		allFriends = make([]types.ExtendedFriend, 0, len(friendIDs))
+		allFriends = make([]*types.ExtendedFriend, 0, len(friendIDs))
 		mu         sync.Mutex
 		wg         sync.WaitGroup
 		batchSize  = 100
@@ -111,9 +111,9 @@ func (f *FriendFetcher) GetFriendsWithDetails(ctx context.Context, userID uint64
 				return
 			}
 
-			batchFriends := make([]types.ExtendedFriend, 0, len(userDetails.Data))
+			batchFriends := make([]*types.ExtendedFriend, 0, len(userDetails.Data))
 			for _, user := range userDetails.Data {
-				batchFriends = append(batchFriends, types.ExtendedFriend{
+				batchFriends = append(batchFriends, &types.ExtendedFriend{
 					Friend: apiTypes.Friend{
 						ID: user.ID,
 					},

@@ -6,22 +6,18 @@ import (
 	"github.com/disgoorg/disgo/discord"
 	"github.com/robalyx/rotector/internal/bot/constants"
 	"github.com/robalyx/rotector/internal/bot/core/session"
-	"github.com/robalyx/rotector/internal/common/storage/database/types"
 )
 
 // BotSettingsBuilder creates the visual layout for bot settings.
 type BotSettingsBuilder struct {
-	settings *types.BotSetting
-	registry *Registry
+	session  *session.Session
+	registry *session.SettingRegistry
 }
 
 // NewBotSettingsBuilder creates a new bot settings builder.
-func NewBotSettingsBuilder(s *session.Session, r *Registry) *BotSettingsBuilder {
-	var settings *types.BotSetting
-	s.GetInterface(constants.SessionKeyBotSettings, &settings)
-
+func NewBotSettingsBuilder(s *session.Session, r *session.SettingRegistry) *BotSettingsBuilder {
 	return &BotSettingsBuilder{
-		settings: settings,
+		session:  s,
 		registry: r,
 	}
 }
@@ -43,7 +39,7 @@ func (b *BotSettingsBuilder) Build() *discord.MessageUpdateBuilder {
 	// Add fields for each setting
 	for _, key := range keys {
 		setting := b.registry.BotSettings[key]
-		value := setting.ValueGetter(nil, b.settings)
+		value := setting.ValueGetter(b.session)
 		embed.AddField(setting.Name, value, false)
 	}
 

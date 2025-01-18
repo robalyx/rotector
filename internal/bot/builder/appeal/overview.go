@@ -15,31 +15,24 @@ import (
 // OverviewBuilder creates the visual layout for the appeal overview interface.
 type OverviewBuilder struct {
 	appeals      []*types.Appeal
-	settings     *types.UserSetting
 	sortBy       enum.AppealSortBy
 	statusFilter enum.AppealStatus
 	hasNextPage  bool
 	hasPrevPage  bool
 	isReviewer   bool
+	streamerMode bool
 }
 
 // NewOverviewBuilder creates a new overview builder.
 func NewOverviewBuilder(s *session.Session) *OverviewBuilder {
-	var appeals []*types.Appeal
-	s.GetInterface(constants.SessionKeyAppeals, &appeals)
-	var settings *types.UserSetting
-	s.GetInterface(constants.SessionKeyUserSettings, &settings)
-	var botSettings *types.BotSetting
-	s.GetInterface(constants.SessionKeyBotSettings, &botSettings)
-
 	return &OverviewBuilder{
-		appeals:      appeals,
-		settings:     settings,
-		sortBy:       settings.AppealDefaultSort,
-		statusFilter: settings.AppealStatusFilter,
-		hasNextPage:  s.GetBool(constants.SessionKeyHasNextPage),
-		hasPrevPage:  s.GetBool(constants.SessionKeyHasPrevPage),
-		isReviewer:   botSettings.IsReviewer(s.UserID()),
+		appeals:      session.Appeals.Get(s),
+		sortBy:       session.UserAppealDefaultSort.Get(s),
+		statusFilter: session.UserAppealStatusFilter.Get(s),
+		hasNextPage:  session.HasNextPage.Get(s),
+		hasPrevPage:  session.HasPrevPage.Get(s),
+		isReviewer:   s.BotSettings().IsReviewer(s.UserID()),
+		streamerMode: session.UserStreamerMode.Get(s),
 	}
 }
 
@@ -57,7 +50,7 @@ func (b *OverviewBuilder) Build() *discord.MessageUpdateBuilder {
 func (b *OverviewBuilder) buildEmbed() *discord.EmbedBuilder {
 	embed := discord.NewEmbedBuilder().
 		SetTitle("Appeal Tickets").
-		SetColor(utils.GetMessageEmbedColor(b.settings.StreamerMode))
+		SetColor(utils.GetMessageEmbedColor(b.streamerMode))
 
 	if len(b.appeals) == 0 {
 		embed.SetDescription("No appeals found.")
@@ -115,7 +108,7 @@ func (b *OverviewBuilder) formatAppealField(appeal *types.Appeal) (string, strin
 			"Submitted: %s\n"+
 			"Last Viewed: %s\n"+
 			"Last Activity: %s",
-		utils.CensorString(strconv.FormatUint(appeal.UserID, 10), b.settings.StreamerMode),
+		utils.CensorString(strconv.FormatUint(appeal.UserID, 10), b.streamerMode),
 		appeal.UserID,
 		appeal.RequesterID,
 		claimedInfo,
@@ -152,7 +145,7 @@ func (b *OverviewBuilder) buildComponents() []discord.ContainerComponent {
 				strconv.FormatInt(appeal.ID, 10),
 			).WithDescription(
 				"View appeal for User ID: " +
-					utils.CensorString(strconv.FormatUint(appeal.UserID, 10), b.settings.StreamerMode),
+					utils.CensorString(strconv.FormatUint(appeal.UserID, 10), b.streamerMode),
 			)
 
 			options = append(options, option)
@@ -212,13 +205,13 @@ func (b *OverviewBuilder) buildComponents() []discord.ContainerComponent {
 	// Add navigation buttons
 	components = append(components, discord.NewActionRow(
 		discord.NewSecondaryButton("◀️", constants.BackButtonCustomID),
-		discord.NewSecondaryButton("⏮️", string(utils.ViewerFirstPage)).
+		discord.NewSecondaryButton("⏮️", string(session.ViewerFirstPage)).
 			WithDisabled(!b.hasPrevPage),
-		discord.NewSecondaryButton("◀️", string(utils.ViewerPrevPage)).
+		discord.NewSecondaryButton("◀️", string(session.ViewerPrevPage)).
 			WithDisabled(!b.hasPrevPage),
-		discord.NewSecondaryButton("▶️", string(utils.ViewerNextPage)).
+		discord.NewSecondaryButton("▶️", string(session.ViewerNextPage)).
 			WithDisabled(!b.hasNextPage),
-		discord.NewSecondaryButton("⏭️", string(utils.ViewerLastPage)).
+		discord.NewSecondaryButton("⏭️", string(session.ViewerLastPage)).
 			WithDisabled(true),
 	))
 

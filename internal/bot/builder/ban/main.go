@@ -18,11 +18,8 @@ type Builder struct {
 
 // NewBuilder creates a new ban menu builder.
 func NewBuilder(s *session.Session) *Builder {
-	var ban *types.DiscordBan
-	s.GetInterface(constants.SessionKeyBanInfo, &ban)
-
 	return &Builder{
-		ban: ban,
+		ban: session.BanInfo.Get(s),
 	}
 }
 

@@ -12,8 +12,6 @@ import (
 	"github.com/robalyx/rotector/internal/bot/constants"
 	"github.com/robalyx/rotector/internal/bot/core/pagination"
 	"github.com/robalyx/rotector/internal/bot/core/session"
-	"github.com/robalyx/rotector/internal/bot/utils"
-	"github.com/robalyx/rotector/internal/common/storage/database/types"
 	"go.uber.org/zap"
 )
 
@@ -40,8 +38,7 @@ func NewOutfitsMenu(layout *Layout) *OutfitsMenu {
 
 // Show prepares and displays the outfits interface for a specific page.
 func (m *OutfitsMenu) Show(event *events.ComponentInteractionCreate, s *session.Session, page int) {
-	var user *types.ReviewUser
-	s.GetInterface(constants.SessionKeyTarget, &user)
+	user := session.UserTarget.Get(s)
 
 	// Return to review menu if user has no outfits
 	if len(user.Outfits) == 0 {
@@ -58,10 +55,10 @@ func (m *OutfitsMenu) Show(event *events.ComponentInteractionCreate, s *session.
 	pageOutfits := user.Outfits[start:end]
 
 	// Store data in session for the message builder
-	s.Set(constants.SessionKeyOutfits, pageOutfits)
-	s.Set(constants.SessionKeyStart, start)
-	s.Set(constants.SessionKeyPaginationPage, page)
-	s.Set(constants.SessionKeyTotalItems, len(user.Outfits))
+	session.Outfits.Set(s, pageOutfits)
+	session.Start.Set(s, start)
+	session.PaginationPage.Set(s, page)
+	session.TotalItems.Set(s, len(user.Outfits))
 
 	// Start streaming images
 	m.layout.imageStreamer.Stream(pagination.StreamRequest{
@@ -73,7 +70,7 @@ func (m *OutfitsMenu) Show(event *events.ComponentInteractionCreate, s *session.
 		Rows:     constants.OutfitGridRows,
 		MaxItems: constants.OutfitsPerPage,
 		OnSuccess: func(buf *bytes.Buffer) {
-			s.SetBuffer(constants.SessionKeyImageBuffer, buf)
+			session.ImageBuffer.Set(s, buf)
 		},
 	})
 }
@@ -81,11 +78,10 @@ func (m *OutfitsMenu) Show(event *events.ComponentInteractionCreate, s *session.
 // handlePageNavigation processes navigation button clicks by calculating
 // the target page number and refreshing the display.
 func (m *OutfitsMenu) handlePageNavigation(event *events.ComponentInteractionCreate, s *session.Session, customID string) {
-	action := utils.ViewerAction(customID)
+	action := session.ViewerAction(customID)
 	switch action {
-	case utils.ViewerFirstPage, utils.ViewerPrevPage, utils.ViewerNextPage, utils.ViewerLastPage:
-		var user *types.ReviewUser
-		s.GetInterface(constants.SessionKeyTarget, &user)
+	case session.ViewerFirstPage, session.ViewerPrevPage, session.ViewerNextPage, session.ViewerLastPage:
+		user := session.UserTarget.Get(s)
 
 		// Calculate max page and validate navigation action
 		maxPage := (len(user.Outfits) - 1) / constants.OutfitsPerPage

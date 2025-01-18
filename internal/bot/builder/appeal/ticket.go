@@ -14,36 +14,25 @@ import (
 
 // TicketBuilder creates the visual layout for an individual appeal ticket.
 type TicketBuilder struct {
-	appeal      *types.Appeal
-	messages    []*types.AppealMessage
-	settings    *types.UserSetting
-	botSettings *types.BotSetting
-	page        int
-	totalPages  int
-	isReviewer  bool
-	userID      uint64
+	appeal       *types.Appeal
+	messages     []*types.AppealMessage
+	page         int
+	totalPages   int
+	userID       uint64
+	isReviewer   bool
+	streamerMode bool
 }
 
 // NewTicketBuilder creates a new ticket builder.
 func NewTicketBuilder(s *session.Session) *TicketBuilder {
-	var appeal *types.Appeal
-	s.GetInterface(constants.SessionKeyAppeal, &appeal)
-	var messages []*types.AppealMessage
-	s.GetInterface(constants.SessionKeyAppealMessages, &messages)
-	var settings *types.UserSetting
-	s.GetInterface(constants.SessionKeyUserSettings, &settings)
-	var botSettings *types.BotSetting
-	s.GetInterface(constants.SessionKeyBotSettings, &botSettings)
-
 	return &TicketBuilder{
-		appeal:      appeal,
-		messages:    messages,
-		settings:    settings,
-		botSettings: botSettings,
-		page:        s.GetInt(constants.SessionKeyPaginationPage),
-		totalPages:  s.GetInt(constants.SessionKeyTotalPages),
-		isReviewer:  botSettings.IsReviewer(s.UserID()),
-		userID:      s.UserID(),
+		appeal:       session.Appeal.Get(s),
+		messages:     session.AppealMessages.Get(s),
+		page:         session.PaginationPage.Get(s),
+		totalPages:   session.TotalPages.Get(s),
+		userID:       s.UserID(),
+		isReviewer:   s.BotSettings().IsReviewer(s.UserID()),
+		streamerMode: session.UserStreamerMode.Get(s),
 	}
 }
 
@@ -63,10 +52,10 @@ func (b *TicketBuilder) Build() *discord.MessageUpdateBuilder {
 	components := []discord.ContainerComponent{
 		discord.NewActionRow(
 			discord.NewSecondaryButton("◀️", constants.BackButtonCustomID),
-			discord.NewSecondaryButton("⏮️", string(utils.ViewerFirstPage)).WithDisabled(b.page == 0),
-			discord.NewSecondaryButton("◀️", string(utils.ViewerPrevPage)).WithDisabled(b.page == 0),
-			discord.NewSecondaryButton("▶️", string(utils.ViewerNextPage)).WithDisabled(b.page == b.totalPages),
-			discord.NewSecondaryButton("⏭️", string(utils.ViewerLastPage)).WithDisabled(b.page == b.totalPages),
+			discord.NewSecondaryButton("⏮️", string(session.ViewerFirstPage)).WithDisabled(b.page == 0),
+			discord.NewSecondaryButton("◀️", string(session.ViewerPrevPage)).WithDisabled(b.page == 0),
+			discord.NewSecondaryButton("▶️", string(session.ViewerNextPage)).WithDisabled(b.page == b.totalPages),
+			discord.NewSecondaryButton("⏭️", string(session.ViewerLastPage)).WithDisabled(b.page == b.totalPages),
 		),
 	}
 
@@ -116,9 +105,9 @@ func (b *TicketBuilder) buildHeaderEmbed() *discord.EmbedBuilder {
 
 	embed := discord.NewEmbedBuilder().
 		SetTitle(fmt.Sprintf("%s Appeal `#%d`", statusEmoji, b.appeal.ID)).
-		SetColor(utils.GetMessageEmbedColor(b.settings.StreamerMode)).
+		SetColor(utils.GetMessageEmbedColor(b.streamerMode)).
 		AddField("User", fmt.Sprintf("[%s](https://www.roblox.com/users/%d/profile)",
-			utils.CensorString(userIDStr, b.settings.StreamerMode), b.appeal.UserID), true).
+			utils.CensorString(userIDStr, b.streamerMode), b.appeal.UserID), true).
 		AddField("Requester", fmt.Sprintf("<@%d>", b.appeal.RequesterID), true).
 		AddField("Status", b.appeal.Status.String(), true).
 		AddField("Submitted", fmt.Sprintf("<t:%d:R>", b.appeal.Timestamp.Unix()), true).
@@ -134,7 +123,7 @@ func (b *TicketBuilder) buildHeaderEmbed() *discord.EmbedBuilder {
 		// Censor any sensitive information in the review reason
 		censoredReason := utils.CensorStringsInText(
 			b.appeal.ReviewReason,
-			b.settings.StreamerMode,
+			b.streamerMode,
 			userIDStr,
 		)
 		embed.AddField("Review Reason", censoredReason, false)
@@ -146,7 +135,7 @@ func (b *TicketBuilder) buildHeaderEmbed() *discord.EmbedBuilder {
 // buildConversationEmbed creates the embed showing the message history.
 func (b *TicketBuilder) buildConversationEmbed() *discord.EmbedBuilder {
 	embed := discord.NewEmbedBuilder().
-		SetColor(utils.GetMessageEmbedColor(b.settings.StreamerMode))
+		SetColor(utils.GetMessageEmbedColor(b.streamerMode))
 
 	// Calculate page boundaries
 	start := b.page * constants.AppealMessagesPerPage
@@ -175,7 +164,7 @@ func (b *TicketBuilder) buildConversationEmbed() *discord.EmbedBuilder {
 			// Censor message content
 			censoredContent := utils.CensorStringsInText(
 				msg.Content,
-				b.settings.StreamerMode,
+				b.streamerMode,
 				strconv.FormatUint(b.appeal.UserID, 10),
 			)
 

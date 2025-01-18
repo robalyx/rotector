@@ -1,7 +1,6 @@
 package setting
 
 import (
-	"context"
 	"fmt"
 	"strings"
 
@@ -12,7 +11,6 @@ import (
 	"github.com/robalyx/rotector/internal/bot/core/pagination"
 	"github.com/robalyx/rotector/internal/bot/core/session"
 	"github.com/robalyx/rotector/internal/bot/interfaces"
-	"github.com/robalyx/rotector/internal/common/storage/database/types"
 	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
 	"go.uber.org/zap"
 )
@@ -45,27 +43,22 @@ func (m *UpdateMenu) Show(event interfaces.CommonEvent, s *session.Session, sett
 	setting := m.getSetting(settingType, settingKey)
 
 	// Store setting information in session
-	s.Set(constants.SessionKeySettingName, setting.Name)
-	s.Set(constants.SessionKeySettingType, settingType)
-	s.Set(constants.SessionKeyCustomID, settingKey)
-	s.Set(constants.SessionKeySetting, setting)
+	session.SettingName.Set(s, setting.Name)
+	session.SettingType.Set(s, settingType)
+	session.CustomID.Set(s, settingKey)
+	session.SettingValue.Set(s, setting)
 
 	// Get current value based on setting type
-	var userSettings *types.UserSetting
-	s.GetInterface(constants.SessionKeyUserSettings, &userSettings)
-	var botSettings *types.BotSetting
-	s.GetInterface(constants.SessionKeyBotSettings, &botSettings)
-
-	currentValue := setting.ValueGetter(userSettings, botSettings)
-	s.Set(constants.SessionKeyCurrentValue, currentValue)
+	currentValue := setting.ValueGetter(s)
+	session.SettingDisplay.Set(s, currentValue)
 
 	m.layout.paginationManager.NavigateTo(event, s, m.page, "")
 }
 
 // handleSettingChange processes setting value changes.
 func (m *UpdateMenu) handleSettingChange(event *events.ComponentInteractionCreate, s *session.Session, _ string, option string) {
-	settingType := s.GetString(constants.SessionKeySettingType)
-	settingKey := s.GetString(constants.SessionKeyCustomID)
+	settingType := session.SettingType.Get(s)
+	settingKey := session.CustomID.Get(s)
 	setting := m.getSetting(settingType, settingKey)
 
 	// Validate the new value
@@ -75,42 +68,12 @@ func (m *UpdateMenu) handleSettingChange(event *events.ComponentInteractionCreat
 	}
 
 	// Update the setting
-	if err := m.updateSetting(s, setting, option); err != nil {
+	if err := setting.ValueUpdater(option, s); err != nil {
 		m.layout.paginationManager.NavigateTo(event, s, m.page, fmt.Sprintf("Failed to update setting: %v", err))
 		return
 	}
 
 	m.Show(event, s, settingType, settingKey)
-}
-
-// updateSetting updates a setting value in the database.
-func (m *UpdateMenu) updateSetting(s *session.Session, setting setting.Setting, value string) error {
-	var userSettings *types.UserSetting
-	s.GetInterface(constants.SessionKeyUserSettings, &userSettings)
-	var botSettings *types.BotSetting
-	s.GetInterface(constants.SessionKeyBotSettings, &botSettings)
-
-	// Use the setting's ValueUpdater to update the value
-	if err := setting.ValueUpdater(value, userSettings, botSettings, s); err != nil {
-		return err
-	}
-
-	// Save to database based on setting type
-	if strings.HasPrefix(s.GetString(constants.SessionKeySettingType), constants.UserSettingPrefix) {
-		err := m.layout.db.Settings().SaveUserSettings(context.Background(), userSettings)
-		if err != nil {
-			return err
-		}
-		s.Set(constants.SessionKeyUserSettings, userSettings)
-	} else {
-		err := m.layout.db.Settings().SaveBotSettings(context.Background(), botSettings)
-		if err != nil {
-			return err
-		}
-		s.Set(constants.SessionKeyBotSettings, botSettings)
-	}
-
-	return nil
 }
 
 // handleSettingButton processes button interactions.
@@ -123,8 +86,7 @@ func (m *UpdateMenu) handleSettingButton(event *events.ComponentInteractionCreat
 	}
 
 	// Get the current setting
-	var setting setting.Setting
-	s.GetInterface(constants.SessionKeySetting, &setting)
+	setting := session.SettingValue.Get(s)
 
 	// Handle ID and number setting button clicks
 	if setting.Type == enum.SettingTypeID || setting.Type == enum.SettingTypeNumber || setting.Type == enum.SettingTypeText {
@@ -137,11 +99,11 @@ func (m *UpdateMenu) handleSettingButton(event *events.ComponentInteractionCreat
 			modalTitle = "Toggle " + setting.Name
 		case enum.SettingTypeNumber:
 			textInput.WithPlaceholder("Enter a number...").
-				WithValue(s.GetString(constants.SessionKeyCurrentValue))
+				WithValue(session.SettingDisplay.Get(s))
 			modalTitle = "Set " + setting.Name
 		case enum.SettingTypeText:
 			textInput.WithPlaceholder("Enter your description...").
-				WithValue(s.GetString(constants.SessionKeyCurrentValue)).
+				WithValue(session.SettingDisplay.Get(s)).
 				WithStyle(discord.TextInputStyleParagraph)
 			modalTitle = "Set " + setting.Name
 		} //exhaustive:ignore
@@ -161,8 +123,8 @@ func (m *UpdateMenu) handleSettingButton(event *events.ComponentInteractionCreat
 
 // handleSettingModal processes modal submissions.
 func (m *UpdateMenu) handleSettingModal(event *events.ModalSubmitInteractionCreate, s *session.Session) {
-	settingType := s.GetString(constants.SessionKeySettingType)
-	settingKey := s.GetString(constants.SessionKeyCustomID)
+	settingType := session.SettingType.Get(s)
+	settingKey := session.CustomID.Get(s)
 	setting := m.getSetting(settingType, settingKey)
 
 	// Get input from modal
@@ -175,7 +137,7 @@ func (m *UpdateMenu) handleSettingModal(event *events.ModalSubmitInteractionCrea
 	}
 
 	// Update the setting using ValueUpdater
-	if err := m.updateSetting(s, setting, input); err != nil {
+	if err := setting.ValueUpdater(input, s); err != nil {
 		m.layout.paginationManager.NavigateTo(event, s, m.page, fmt.Sprintf("Failed to update setting: %v", err))
 		return
 	}
@@ -185,7 +147,7 @@ func (m *UpdateMenu) handleSettingModal(event *events.ModalSubmitInteractionCrea
 }
 
 // getSetting returns the setting definition for the given type and key.
-func (m *UpdateMenu) getSetting(settingType, settingKey string) setting.Setting {
+func (m *UpdateMenu) getSetting(settingType, settingKey string) *session.Setting {
 	if strings.HasPrefix(settingType, constants.UserSettingPrefix) {
 		return m.layout.registry.UserSettings[settingKey]
 	}
@@ -193,7 +155,7 @@ func (m *UpdateMenu) getSetting(settingType, settingKey string) setting.Setting 
 }
 
 // validateSettingValue validates a setting value.
-func (m *UpdateMenu) validateSettingValue(s *session.Session, setting setting.Setting, value string) error {
+func (m *UpdateMenu) validateSettingValue(s *session.Session, setting *session.Setting, value string) error {
 	for _, validator := range setting.Validators {
 		if err := validator(value, s.UserID()); err != nil {
 			return err

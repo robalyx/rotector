@@ -7,7 +7,6 @@ import (
 
 	"github.com/disgoorg/disgo/discord"
 	"github.com/robalyx/rotector/internal/bot/builder/ban"
-	"github.com/robalyx/rotector/internal/bot/constants"
 	"github.com/robalyx/rotector/internal/bot/core/pagination"
 	"github.com/robalyx/rotector/internal/bot/core/session"
 	"github.com/robalyx/rotector/internal/bot/interfaces"
@@ -61,6 +60,6 @@ func (m *Menu) Show(event interfaces.CommonEvent, s *session.Session) {
 	}
 
 	// Store ban in session and show the menu
-	s.Set(constants.SessionKeyBanInfo, ban)
+	session.BanInfo.Set(s, ban)
 	m.layout.paginationManager.NavigateTo(event, s, m.page, "")
 }

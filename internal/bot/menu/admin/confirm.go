@@ -40,7 +40,7 @@ func NewConfirmMenu(layout *Layout) *ConfirmMenu {
 
 // Show prepares and displays the confirmation interface.
 func (m *ConfirmMenu) Show(event interfaces.CommonEvent, s *session.Session, action string, content string) {
-	s.Set(constants.SessionKeyAdminAction, action)
+	session.AdminAction.Set(s, action)
 	m.layout.paginationManager.NavigateTo(event, s, m.page, content)
 }
 
@@ -56,9 +56,9 @@ func (m *ConfirmMenu) handleButton(event *events.ComponentInteractionCreate, s *
 
 // handleConfirm processes the confirmation action.
 func (m *ConfirmMenu) handleConfirm(event *events.ComponentInteractionCreate, s *session.Session) {
-	action := s.GetString(constants.SessionKeyAdminAction)
-	id := s.GetString(constants.SessionKeyAdminActionID)
-	reason := s.GetString(constants.SessionKeyAdminReason)
+	action := session.AdminAction.Get(s)
+	id := session.AdminActionID.Get(s)
+	reason := session.AdminReason.Get(s)
 
 	switch action {
 	case constants.BanUserAction:
@@ -81,24 +81,14 @@ func (m *ConfirmMenu) handleBanUser(event *events.ComponentInteractionCreate, s 
 		return
 	}
 
-	// Get ban type from session
-	banType := s.GetString(constants.SessionKeyBanType)
-
-	// Parse ban type
-	reason, err := enum.BanReasonString(banType)
-	if err != nil {
-		reason = enum.BanReasonOther
-	}
-
-	// Get ban expiry from session
-	var expiresAt *time.Time
-	s.GetInterface(constants.SessionKeyBanExpiry, &expiresAt)
+	banReason := session.BanReason.Get(s)
 
 	// Ban the user
 	now := time.Now()
+	expiresAt := session.BanExpiry.Get(s)
 	if err := m.layout.db.Bans().BanUser(context.Background(), &types.DiscordBan{
 		ID:        snowflake.ID(id),
-		Reason:    reason,
+		Reason:    banReason,
 		Source:    enum.BanSourceAdmin,
 		Notes:     notes,
 		BannedBy:  uint64(event.User().ID),
@@ -124,7 +114,9 @@ func (m *ConfirmMenu) handleBanUser(event *events.ComponentInteractionCreate, s 
 		ActivityType:      enum.ActivityTypeDiscordUserBanned,
 		ActivityTimestamp: time.Now(),
 		Details: map[string]interface{}{
-			"notes": notes,
+			"notes":      notes,
+			"ban_reason": banReason.String(),
+			"expires_at": expiresAt,
 		},
 	})
 

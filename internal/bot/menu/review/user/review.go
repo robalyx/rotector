@@ -45,26 +45,13 @@ func NewReviewMenu(layout *Layout) *ReviewMenu {
 
 // Show prepares and displays the review interface.
 func (m *ReviewMenu) Show(event interfaces.CommonEvent, s *session.Session, content string) {
-	var settings *types.BotSetting
-	s.GetInterface(constants.SessionKeyBotSettings, &settings)
-	var userSettings *types.UserSetting
-	s.GetInterface(constants.SessionKeyUserSettings, &userSettings)
-
 	// Force training mode if user is not a reviewer
-	if !settings.IsReviewer(uint64(event.User().ID)) && userSettings.ReviewMode != enum.ReviewModeTraining {
-		userSettings.ReviewMode = enum.ReviewModeTraining
-		if err := m.layout.db.Settings().SaveUserSettings(context.Background(), userSettings); err != nil {
-			m.layout.logger.Error("Failed to enforce training mode", zap.Error(err))
-			m.layout.paginationManager.RespondWithError(event, "Failed to enforce training mode. Please try again.")
-			return
-		}
-		s.Set(constants.SessionKeyUserSettings, userSettings)
+	if !s.BotSettings().IsReviewer(uint64(event.User().ID)) && session.UserReviewMode.Get(s) != enum.ReviewModeTraining {
+		session.UserReviewMode.Set(s, enum.ReviewModeTraining)
 	}
 
-	var user *types.ReviewUser
-	s.GetInterface(constants.SessionKeyTarget, &user)
-
 	// If no user is set in session, fetch a new one
+	user := session.UserTarget.Get(s)
 	if user == nil {
 		var isBanned bool
 		var err error
@@ -130,8 +117,8 @@ func (m *ReviewMenu) Show(event interfaces.CommonEvent, s *session.Session, cont
 	}
 
 	// Store data in session for the message builder
-	s.Set(constants.SessionKeyFlaggedFriends, flaggedFriends)
-	s.Set(constants.SessionKeyFlaggedGroups, flaggedGroups)
+	session.FlaggedFriends.Set(s, flaggedFriends)
+	session.FlaggedGroups.Set(s, flaggedGroups)
 
 	m.layout.paginationManager.NavigateTo(event, s, m.page, content)
 }
@@ -152,10 +139,6 @@ func (m *ReviewMenu) handleSelectMenu(event *events.ComponentInteractionCreate, 
 
 // handleSortOrderSelection processes sort order menu selections.
 func (m *ReviewMenu) handleSortOrderSelection(event *events.ComponentInteractionCreate, s *session.Session, option string) {
-	// Retrieve user settings from session
-	var settings *types.UserSetting
-	s.GetInterface(constants.SessionKeyUserSettings, &settings)
-
 	// Parse option to review sort
 	sortBy, err := enum.ReviewSortByString(option)
 	if err != nil {
@@ -165,23 +148,15 @@ func (m *ReviewMenu) handleSortOrderSelection(event *events.ComponentInteraction
 	}
 
 	// Update user's default sort preference
-	settings.UserDefaultSort = sortBy
-	if err := m.layout.db.Settings().SaveUserSettings(context.Background(), settings); err != nil {
-		m.layout.logger.Error("Failed to save user settings", zap.Error(err))
-		m.layout.paginationManager.RespondWithError(event, "Failed to save sort order. Please try again.")
-		return
-	}
-	s.Set(constants.SessionKeyUserSettings, settings)
+	session.UserUserDefaultSort.Set(s, sortBy)
 
 	m.Show(event, s, "Changed sort order. Will take effect for the next user.")
 }
 
 // handleActionSelection processes action menu selections.
 func (m *ReviewMenu) handleActionSelection(event *events.ComponentInteractionCreate, s *session.Session, option string) {
-	// Get bot settings to check reviewer status
-	var settings *types.BotSetting
-	s.GetInterface(constants.SessionKeyBotSettings, &settings)
 	userID := uint64(event.User().ID)
+	isReviewer := s.BotSettings().IsReviewer(userID)
 
 	switch option {
 	case constants.OpenFriendsMenuButtonCustomID:
@@ -191,35 +166,35 @@ func (m *ReviewMenu) handleActionSelection(event *events.ComponentInteractionCre
 	case constants.OpenOutfitsMenuButtonCustomID:
 		m.layout.outfitsMenu.Show(event, s, 0)
 	case constants.OpenAIChatButtonCustomID:
-		if !settings.IsReviewer(userID) {
+		if !isReviewer {
 			m.layout.logger.Error("Non-reviewer attempted to open AI chat", zap.Uint64("user_id", userID))
 			m.layout.paginationManager.RespondWithError(event, "You do not have permission to open the AI chat.")
 			return
 		}
 		m.handleOpenAIChat(event, s)
 	case constants.ViewUserLogsButtonCustomID:
-		if !settings.IsReviewer(userID) {
+		if !isReviewer {
 			m.layout.logger.Error("Non-reviewer attempted to view logs", zap.Uint64("user_id", userID))
 			m.layout.paginationManager.RespondWithError(event, "You do not have permission to view activity logs.")
 			return
 		}
 		m.handleViewUserLogs(event, s)
 	case constants.RecheckButtonCustomID:
-		if !settings.IsReviewer(userID) {
+		if !isReviewer {
 			m.layout.logger.Error("Non-reviewer attempted to recheck user", zap.Uint64("user_id", userID))
 			m.layout.paginationManager.RespondWithError(event, "You do not have permission to recheck users.")
 			return
 		}
 		m.handleRecheck(event, s)
 	case constants.ConfirmWithReasonButtonCustomID:
-		if !settings.IsReviewer(userID) {
+		if !isReviewer {
 			m.layout.logger.Error("Non-reviewer attempted to use confirm with reason", zap.Uint64("user_id", userID))
 			m.layout.paginationManager.RespondWithError(event, "You do not have permission to confirm users with custom reasons.")
 			return
 		}
 		m.handleConfirmWithReason(event, s)
 	case constants.ReviewModeOption:
-		if !settings.IsReviewer(userID) {
+		if !isReviewer {
 			m.layout.logger.Error("Non-reviewer attempted to change review mode", zap.Uint64("user_id", userID))
 			m.layout.paginationManager.RespondWithError(event, "You do not have permission to change review mode.")
 			return
@@ -265,8 +240,7 @@ func (m *ReviewMenu) handleModal(event *events.ModalSubmitInteractionCreate, s *
 // handleRecheck adds the user to the high priority queue for re-processing.
 // If the user is already in queue, it shows the status menu instead.
 func (m *ReviewMenu) handleRecheck(event *events.ComponentInteractionCreate, s *session.Session) {
-	var user *types.ReviewUser
-	s.GetInterface(constants.SessionKeyTarget, &user)
+	user := session.UserTarget.Get(s)
 
 	// Check if user is already in queue to prevent duplicate entries
 	status, _, _, err := m.layout.queueManager.GetQueueInfo(context.Background(), user.ID)
@@ -296,11 +270,6 @@ func (m *ReviewMenu) handleRecheck(event *events.ComponentInteractionCreate, s *
 // handleRecheckModalSubmit processes the custom recheck reason from the modal
 // and performs the recheck with the provided reason.
 func (m *ReviewMenu) handleRecheckModalSubmit(event *events.ModalSubmitInteractionCreate, s *session.Session) {
-	var user *types.ReviewUser
-	s.GetInterface(constants.SessionKeyTarget, &user)
-	var settings *types.UserSetting
-	s.GetInterface(constants.SessionKeyUserSettings, &settings)
-
 	// Get and validate the recheck reason
 	reason := event.Data.Text(constants.RecheckReasonInputCustomID)
 	if reason == "" {
@@ -310,9 +279,11 @@ func (m *ReviewMenu) handleRecheckModalSubmit(event *events.ModalSubmitInteracti
 
 	// Determine priority based on review mode
 	priority := queue.HighPriority
-	if settings.ReviewMode == enum.ReviewModeTraining {
+	if session.UserReviewMode.Get(s) == enum.ReviewModeTraining {
 		priority = queue.LowPriority
 	}
+
+	user := session.UserTarget.Get(s)
 
 	// Add to queue with reviewer information
 	err := m.layout.queueManager.AddToQueue(context.Background(), &queue.Item{
@@ -345,7 +316,7 @@ func (m *ReviewMenu) handleRecheckModalSubmit(event *events.ModalSubmitInteracti
 	}
 
 	// Track the queued user in session for status updates
-	s.Set(constants.SessionKeyQueueUser, user.ID)
+	session.QueueUser.Set(s, user.ID)
 
 	m.layout.statusMenu.Show(event, s)
 }
@@ -353,8 +324,7 @@ func (m *ReviewMenu) handleRecheckModalSubmit(event *events.ModalSubmitInteracti
 // handleViewUserLogs handles the shortcut to view user logs.
 // It stores the user ID in session for log filtering and shows the logs menu.
 func (m *ReviewMenu) handleViewUserLogs(event *events.ComponentInteractionCreate, s *session.Session) {
-	var user *types.ReviewUser
-	s.GetInterface(constants.SessionKeyTarget, &user)
+	user := session.UserTarget.Get(s)
 	if user == nil {
 		m.layout.logger.Error("No user selected to view logs")
 		m.layout.paginationManager.RespondWithError(event, "No user selected to view logs.")
@@ -364,7 +334,7 @@ func (m *ReviewMenu) handleViewUserLogs(event *events.ComponentInteractionCreate
 	// Set the user ID filter
 	m.layout.logLayout.ResetLogs(s)
 	m.layout.logLayout.ResetFilters(s)
-	s.Set(constants.SessionKeyUserIDFilter, user.ID)
+	session.UserIDFilter.Set(s, user.ID)
 
 	// Show the logs menu
 	m.layout.logLayout.Show(event, s)
@@ -373,15 +343,10 @@ func (m *ReviewMenu) handleViewUserLogs(event *events.ComponentInteractionCreate
 // handleConfirmUser moves a user to the confirmed state and logs the action.
 // After confirming, it loads a new user for review.
 func (m *ReviewMenu) handleConfirmUser(event interfaces.CommonEvent, s *session.Session) {
-	var settings *types.UserSetting
-	s.GetInterface(constants.SessionKeyUserSettings, &settings)
-	var botSettings *types.BotSetting
-	s.GetInterface(constants.SessionKeyBotSettings, &botSettings)
-	var user *types.ReviewUser
-	s.GetInterface(constants.SessionKeyTarget, &user)
+	user := session.UserTarget.Get(s)
 
 	var actionMsg string
-	if settings.ReviewMode == enum.ReviewModeTraining {
+	if session.UserReviewMode.Get(s) == enum.ReviewModeTraining {
 		// Training mode - increment downvotes
 		if err := m.layout.db.Reputation().UpdateUserVotes(context.Background(), user.ID, uint64(event.User().ID), false); err != nil {
 			m.layout.logger.Error("Failed to update downvotes", zap.Error(err))
@@ -406,7 +371,7 @@ func (m *ReviewMenu) handleConfirmUser(event interfaces.CommonEvent, s *session.
 		})
 	} else {
 		// Standard mode - check permissions and confirm user
-		if !botSettings.IsReviewer(uint64(event.User().ID)) {
+		if !s.BotSettings().IsReviewer(uint64(event.User().ID)) {
 			m.layout.logger.Error("Non-reviewer attempted to confirm user",
 				zap.Uint64("user_id", uint64(event.User().ID)))
 			m.layout.paginationManager.RespondWithError(event, "You do not have permission to confirm users.")
@@ -454,7 +419,7 @@ func (m *ReviewMenu) handleConfirmUser(event interfaces.CommonEvent, s *session.
 	}
 
 	// Clear current user and load next one
-	s.Delete(constants.SessionKeyTarget)
+	session.UserTarget.Delete(s)
 	m.Show(event, s, fmt.Sprintf("User %s. %d users left to review.", actionMsg, flaggedCount))
 	m.updateCounters(s)
 }
@@ -462,15 +427,10 @@ func (m *ReviewMenu) handleConfirmUser(event interfaces.CommonEvent, s *session.
 // handleClearUser removes a user from the flagged state and logs the action.
 // After clearing, it loads a new user for review.
 func (m *ReviewMenu) handleClearUser(event interfaces.CommonEvent, s *session.Session) {
-	var settings *types.UserSetting
-	s.GetInterface(constants.SessionKeyUserSettings, &settings)
-	var botSettings *types.BotSetting
-	s.GetInterface(constants.SessionKeyBotSettings, &botSettings)
-	var user *types.ReviewUser
-	s.GetInterface(constants.SessionKeyTarget, &user)
+	user := session.UserTarget.Get(s)
 
 	var actionMsg string
-	if settings.ReviewMode == enum.ReviewModeTraining {
+	if session.UserReviewMode.Get(s) == enum.ReviewModeTraining {
 		// Training mode - increment upvotes
 		if err := m.layout.db.Reputation().UpdateUserVotes(context.Background(), user.ID, uint64(event.User().ID), true); err != nil {
 			m.layout.logger.Error("Failed to update upvotes", zap.Error(err))
@@ -495,7 +455,7 @@ func (m *ReviewMenu) handleClearUser(event interfaces.CommonEvent, s *session.Se
 		})
 	} else {
 		// Standard mode - check permissions and clear user
-		if !botSettings.IsReviewer(uint64(event.User().ID)) {
+		if !s.BotSettings().IsReviewer(uint64(event.User().ID)) {
 			m.layout.logger.Error("Non-reviewer attempted to clear user",
 				zap.Uint64("user_id", uint64(event.User().ID)))
 			m.layout.paginationManager.RespondWithError(event, "You do not have permission to clear users.")
@@ -546,7 +506,7 @@ func (m *ReviewMenu) handleClearUser(event interfaces.CommonEvent, s *session.Se
 	}
 
 	// Clear current user and load next one
-	s.Delete(constants.SessionKeyTarget)
+	session.UserTarget.Delete(s)
 	m.Show(event, s, fmt.Sprintf("User %s. %d users left to review.", actionMsg, flaggedCount))
 	m.updateCounters(s)
 }
@@ -561,13 +521,12 @@ func (m *ReviewMenu) handleSkipUser(event interfaces.CommonEvent, s *session.Ses
 	}
 
 	// Clear current user and load next one
-	s.Delete(constants.SessionKeyTarget)
+	session.UserTarget.Delete(s)
 	m.Show(event, s, fmt.Sprintf("Skipped user. %d users left to review.", flaggedCount))
 	m.updateCounters(s)
 
 	// Log the skip action
-	var user *types.ReviewUser
-	s.GetInterface(constants.SessionKeyTarget, &user)
+	user := session.UserTarget.Get(s)
 
 	m.layout.db.Activity().Log(context.Background(), &types.ActivityLog{
 		ActivityTarget: types.ActivityTarget{
@@ -582,16 +541,13 @@ func (m *ReviewMenu) handleSkipUser(event interfaces.CommonEvent, s *session.Ses
 
 // handleOpenAIChat handles the button to open the AI chat for the current user.
 func (m *ReviewMenu) handleOpenAIChat(event *events.ComponentInteractionCreate, s *session.Session) {
-	var target *types.ReviewUser
-	s.GetInterface(constants.SessionKeyTarget, &target)
-	var flaggedFriends map[uint64]*types.ReviewUser
-	s.GetInterface(constants.SessionKeyFlaggedFriends, &flaggedFriends)
-	var flaggedGroups map[uint64]*types.ReviewGroup
-	s.GetInterface(constants.SessionKeyFlaggedGroups, &flaggedGroups)
+	user := session.UserTarget.Get(s)
+	flaggedFriends := session.FlaggedFriends.Get(s)
+	flaggedGroups := session.FlaggedGroups.Get(s)
 
 	// Build friends information
-	friendsInfo := make([]string, 0, len(target.Friends))
-	for _, friend := range target.Friends {
+	friendsInfo := make([]string, 0, len(user.Friends))
+	for _, friend := range user.Friends {
 		info := fmt.Sprintf("- %s (ID: %d)", friend.Name, friend.ID)
 		if flagged := flaggedFriends[friend.ID]; flagged != nil {
 			info += fmt.Sprintf(" | Status: %s | Reason: %s | Confidence: %.2f",
@@ -603,8 +559,8 @@ func (m *ReviewMenu) handleOpenAIChat(event *events.ComponentInteractionCreate, 
 	}
 
 	// Build groups information
-	groupsInfo := make([]string, 0, len(target.Groups))
-	for _, group := range target.Groups {
+	groupsInfo := make([]string, 0, len(user.Groups))
+	for _, group := range user.Groups {
 		info := fmt.Sprintf("- %s (ID: %d) | Role: %s",
 			group.Group.Name,
 			group.Group.ID,
@@ -619,14 +575,14 @@ func (m *ReviewMenu) handleOpenAIChat(event *events.ComponentInteractionCreate, 
 	}
 
 	// Build outfits information
-	outfitsInfo := make([]string, 0, len(target.Outfits))
-	for _, outfit := range target.Outfits {
+	outfitsInfo := make([]string, 0, len(user.Outfits))
+	for _, outfit := range user.Outfits {
 		outfitsInfo = append(outfitsInfo, fmt.Sprintf("- %s (ID: %d)", outfit.Name, outfit.ID))
 	}
 
 	// Build games information
-	gamesInfo := make([]string, 0, len(target.Games))
-	for _, game := range target.Games {
+	gamesInfo := make([]string, 0, len(user.Games))
+	for _, game := range user.Games {
 		gamesInfo = append(gamesInfo, fmt.Sprintf("- %s (ID: %d) | Visits: %d",
 			game.Name, game.ID, game.PlaceVisits))
 	}
@@ -664,43 +620,42 @@ Games (%d total):
 
 Flagged Content (%d items):
 %s</context>`,
-		target.Name,
-		target.DisplayName,
-		target.Description,
-		target.CreatedAt.Format(time.RFC3339),
-		target.FollowerCount,
-		target.FollowingCount,
-		target.Reason,
-		target.Confidence,
-		target.Status.String(),
-		target.Reputation.Downvotes,
-		target.Reputation.Upvotes,
-		target.LastUpdated.Format(time.RFC3339),
-		len(target.Friends),
+		user.Name,
+		user.DisplayName,
+		user.Description,
+		user.CreatedAt.Format(time.RFC3339),
+		user.FollowerCount,
+		user.FollowingCount,
+		user.Reason,
+		user.Confidence,
+		user.Status.String(),
+		user.Reputation.Downvotes,
+		user.Reputation.Upvotes,
+		user.LastUpdated.Format(time.RFC3339),
+		len(user.Friends),
 		len(flaggedFriends),
 		strings.Join(friendsInfo, "\n"),
-		len(target.Groups),
+		len(user.Groups),
 		len(flaggedGroups),
 		strings.Join(groupsInfo, "\n"),
-		len(target.Outfits),
+		len(user.Outfits),
 		strings.Join(outfitsInfo, "\n"),
-		len(target.Games),
+		len(user.Games),
 		strings.Join(gamesInfo, "\n"),
-		len(target.FlaggedContent),
-		strings.Join(target.FlaggedContent, "\n"),
+		len(user.FlaggedContent),
+		strings.Join(user.FlaggedContent, "\n"),
 	)
 
 	// Update session and navigate to chat
-	s.Set(constants.SessionKeyChatContext, context)
-	s.Set(constants.SessionKeyPaginationPage, 0)
+	session.ChatContext.Set(s, context)
+	session.PaginationPage.Set(s, 0)
 	m.layout.chatLayout.Show(event, s)
 }
 
 // handleConfirmWithReason opens a modal for entering a custom confirm reason.
 // The modal pre-fills with the current reason if one exists.
 func (m *ReviewMenu) handleConfirmWithReason(event *events.ComponentInteractionCreate, s *session.Session) {
-	var user *types.ReviewUser
-	s.GetInterface(constants.SessionKeyTarget, &user)
+	user := session.UserTarget.Get(s)
 
 	// Create modal with pre-filled reason field
 	modal := discord.NewModalCreateBuilder().
@@ -724,8 +679,7 @@ func (m *ReviewMenu) handleConfirmWithReason(event *events.ComponentInteractionC
 // handleConfirmWithReasonModalSubmit processes the custom confirm reason from the modal
 // and performs the confirm with the provided reason.
 func (m *ReviewMenu) handleConfirmWithReasonModalSubmit(event *events.ModalSubmitInteractionCreate, s *session.Session) {
-	var user *types.ReviewUser
-	s.GetInterface(constants.SessionKeyTarget, &user)
+	user := session.UserTarget.Get(s)
 
 	// Get and validate the confirm reason
 	reason := event.Data.Text(constants.ConfirmReasonInputCustomID)
@@ -745,7 +699,7 @@ func (m *ReviewMenu) handleConfirmWithReasonModalSubmit(event *events.ModalSubmi
 	}
 
 	// Clear current user and load next one
-	s.Delete(constants.SessionKeyTarget)
+	session.UserTarget.Delete(s)
 	m.Show(event, s, "User confirmed.")
 	m.updateCounters(s)
 
@@ -763,9 +717,6 @@ func (m *ReviewMenu) handleConfirmWithReasonModalSubmit(event *events.ModalSubmi
 
 // fetchNewTarget gets a new user to review based on the current sort order.
 func (m *ReviewMenu) fetchNewTarget(event interfaces.CommonEvent, s *session.Session, reviewerID uint64) (*types.ReviewUser, bool, error) {
-	var settings *types.UserSetting
-	s.GetInterface(constants.SessionKeyUserSettings, &settings)
-
 	// Check if user is banned for low accuracy
 	isBanned, err := m.layout.db.Votes().CheckVoteAccuracy(context.Background(), uint64(event.User().ID))
 	if err != nil {
@@ -776,13 +727,16 @@ func (m *ReviewMenu) fetchNewTarget(event interfaces.CommonEvent, s *session.Ses
 	}
 
 	// Get the next user to review
-	user, err := m.layout.db.Users().GetUserToReview(context.Background(), settings.UserDefaultSort, settings.ReviewTargetMode, reviewerID)
+	defaultSort := session.UserUserDefaultSort.Get(s)
+	reviewTargetMode := session.UserReviewTargetMode.Get(s)
+
+	user, err := m.layout.db.Users().GetUserToReview(context.Background(), defaultSort, reviewTargetMode, reviewerID)
 	if err != nil {
 		return nil, isBanned, err
 	}
 
 	// Store the user in session for the message builder
-	s.Set(constants.SessionKeyTarget, user)
+	session.UserTarget.Set(s, user)
 
 	// Log the view action
 	go m.layout.db.Activity().Log(context.Background(), &types.ActivityLog{
@@ -809,7 +763,7 @@ func (m *ReviewMenu) checkCaptchaRequired(event interfaces.CommonEvent, s *sessi
 
 // updateCounters updates the review counters.
 func (m *ReviewMenu) updateCounters(s *session.Session) {
-	if err := m.layout.captcha.IncrementReviewCounter(context.Background(), s); err != nil {
+	if err := m.layout.captcha.IncrementReviewCounter(s); err != nil {
 		m.layout.logger.Error("Failed to update review counter", zap.Error(err))
 	}
 }

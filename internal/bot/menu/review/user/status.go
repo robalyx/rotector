@@ -41,7 +41,7 @@ func NewStatusMenu(layout *Layout) *StatusMenu {
 // Show prepares and displays the status interface by loading
 // current queue counts and position information into the session.
 func (m *StatusMenu) Show(event interfaces.CommonEvent, s *session.Session) {
-	userID := s.GetUint64(constants.SessionKeyQueueUser)
+	userID := session.QueueUser.Get(s)
 	status, priority, position, err := m.layout.queueManager.GetQueueInfo(context.Background(), userID)
 
 	// Check if processing is complete
@@ -55,7 +55,7 @@ func (m *StatusMenu) Show(event interfaces.CommonEvent, s *session.Session) {
 		}
 
 		// User is still flagged, show updated information
-		s.Set(constants.SessionKeyTarget, user)
+		session.UserTarget.Set(s, user)
 		m.layout.reviewMenu.Show(event, s, "User has been rechecked. Showing updated information.")
 
 		// Log the view action
@@ -72,14 +72,14 @@ func (m *StatusMenu) Show(event interfaces.CommonEvent, s *session.Session) {
 	}
 
 	// Update queue counts for each priority level
-	s.Set(constants.SessionKeyQueueHighCount, m.layout.queueManager.GetQueueLength(context.Background(), queue.HighPriority))
-	s.Set(constants.SessionKeyQueueNormalCount, m.layout.queueManager.GetQueueLength(context.Background(), queue.NormalPriority))
-	s.Set(constants.SessionKeyQueueLowCount, m.layout.queueManager.GetQueueLength(context.Background(), queue.LowPriority))
+	session.QueueHighCount.Set(s, m.layout.queueManager.GetQueueLength(context.Background(), queue.HighPriority))
+	session.QueueNormalCount.Set(s, m.layout.queueManager.GetQueueLength(context.Background(), queue.NormalPriority))
+	session.QueueLowCount.Set(s, m.layout.queueManager.GetQueueLength(context.Background(), queue.LowPriority))
 
 	// Update queue information
-	s.Set(constants.SessionKeyQueueStatus, status)
-	s.Set(constants.SessionKeyQueuePriority, priority)
-	s.Set(constants.SessionKeyQueuePosition, position)
+	session.QueueStatus.Set(s, status)
+	session.QueuePriority.Set(s, priority)
+	session.QueuePosition.Set(s, position)
 
 	m.layout.paginationManager.NavigateTo(event, s, m.page, "")
 }

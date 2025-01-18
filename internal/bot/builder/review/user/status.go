@@ -8,7 +8,6 @@ import (
 	"github.com/robalyx/rotector/internal/bot/core/session"
 	"github.com/robalyx/rotector/internal/bot/utils"
 	"github.com/robalyx/rotector/internal/common/queue"
-	"github.com/robalyx/rotector/internal/common/storage/database/types"
 	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
 
 	"github.com/disgoorg/disgo/discord"
@@ -17,7 +16,6 @@ import (
 // StatusBuilder creates the visual layout for viewing queue status information.
 // It combines queue position, status, and queue lengths into a Discord embed.
 type StatusBuilder struct {
-	settings            *types.UserSetting
 	queueManager        *queue.Manager
 	userID              uint64
 	status              string
@@ -26,23 +24,21 @@ type StatusBuilder struct {
 	highPriorityCount   int
 	normalPriorityCount int
 	lowPriorityCount    int
+	privacyMode         bool
 }
 
 // NewStatusBuilder creates a new status builder.
 func NewStatusBuilder(queueManager *queue.Manager, s *session.Session) *StatusBuilder {
-	var settings *types.UserSetting
-	s.GetInterface(constants.SessionKeyUserSettings, &settings)
-
 	return &StatusBuilder{
-		settings:            settings,
 		queueManager:        queueManager,
-		userID:              s.GetUint64(constants.SessionKeyQueueUser),
-		status:              s.GetString(constants.SessionKeyQueueStatus),
-		priority:            s.GetString(constants.SessionKeyQueuePriority),
-		position:            s.GetInt(constants.SessionKeyQueuePosition),
-		highPriorityCount:   s.GetInt(constants.SessionKeyQueueHighCount),
-		normalPriorityCount: s.GetInt(constants.SessionKeyQueueNormalCount),
-		lowPriorityCount:    s.GetInt(constants.SessionKeyQueueLowCount),
+		userID:              session.QueueUser.Get(s),
+		status:              session.QueueStatus.Get(s),
+		priority:            session.QueuePriority.Get(s),
+		position:            session.QueuePosition.Get(s),
+		highPriorityCount:   session.QueueHighCount.Get(s),
+		normalPriorityCount: session.QueueNormalCount.Get(s),
+		lowPriorityCount:    session.QueueLowCount.Get(s),
+		privacyMode:         session.UserReviewMode.Get(s) == enum.ReviewModeTraining || session.UserStreamerMode.Get(s),
 	}
 }
 
@@ -53,12 +49,13 @@ func (b *StatusBuilder) Build() *discord.MessageUpdateBuilder {
 		SetTitle("Recheck Status")
 
 	// Format user field based on review mode
-	if b.settings.ReviewMode == enum.ReviewModeTraining {
-		embed.AddField("Current User", utils.CensorString(strconv.FormatUint(b.userID, 10), true), true)
+	userID := utils.CensorString(strconv.FormatUint(b.userID, 10), b.privacyMode)
+	if b.privacyMode {
+		embed.AddField("Current User", userID, true)
 	} else {
 		embed.AddField("Current User", fmt.Sprintf(
 			"[%s](https://roblox.com/users/%d/profile)",
-			utils.CensorString(strconv.FormatUint(b.userID, 10), b.settings.StreamerMode),
+			userID,
 			b.userID,
 		), true)
 	}
@@ -67,7 +64,7 @@ func (b *StatusBuilder) Build() *discord.MessageUpdateBuilder {
 		AddField("High Priority Queue", fmt.Sprintf("%d items", b.highPriorityCount), true).
 		AddField("Normal Priority Queue", fmt.Sprintf("%d items", b.normalPriorityCount), true).
 		AddField("Low Priority Queue", fmt.Sprintf("%d items", b.lowPriorityCount), true).
-		SetColor(utils.GetMessageEmbedColor(b.settings.StreamerMode))
+		SetColor(utils.GetMessageEmbedColor(b.privacyMode))
 
 	// Add queue management buttons
 	components := []discord.ContainerComponent{

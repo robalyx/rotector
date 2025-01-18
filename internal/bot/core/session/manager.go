@@ -9,7 +9,6 @@ import (
 	"github.com/bytedance/sonic"
 	"github.com/disgoorg/snowflake/v2"
 	"github.com/redis/rueidis"
-	"github.com/robalyx/rotector/internal/bot/constants"
 	"github.com/robalyx/rotector/internal/common/storage/database"
 	"github.com/robalyx/rotector/internal/common/storage/redis"
 	"go.uber.org/zap"
@@ -94,6 +93,12 @@ func (m *Manager) GetOrCreateSession(ctx context.Context, userID snowflake.ID) (
 		}
 	}
 
+	// Load user settings
+	userSettings, err := m.db.Settings().GetUserSettings(ctx, userID)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", ErrFailedToLoadSettings, err)
+	}
+
 	// If session exists, update it
 	if sessionExists {
 		data, err := result.AsBytes()
@@ -106,22 +111,12 @@ func (m *Manager) GetOrCreateSession(ctx context.Context, userID snowflake.ID) (
 			return nil, fmt.Errorf("%w: %w", ErrFailedToParseSession, err)
 		}
 
-		session := NewSession(m.db, m.redis, key, sessionData, m.logger, uint64(userID))
-		session.Set(constants.SessionKeyBotSettings, botSettings)
+		session := NewSession(userSettings, botSettings, m.db, m.redis, key, sessionData, m.logger, uint64(userID))
 		return session, nil
 	}
 
-	// Load user settings
-	userSettings, err := m.db.Settings().GetUserSettings(ctx, userID)
-	if err != nil {
-		return nil, fmt.Errorf("%w: %w", ErrFailedToLoadSettings, err)
-	}
-
 	// Initialize new session with fresh settings
-	sessionData := make(map[string]interface{})
-	session := NewSession(m.db, m.redis, key, sessionData, m.logger, uint64(userID))
-	session.Set(constants.SessionKeyUserSettings, userSettings)
-	session.Set(constants.SessionKeyBotSettings, botSettings)
+	session := NewSession(userSettings, botSettings, m.db, m.redis, key, make(map[string]interface{}), m.logger, uint64(userID))
 	return session, nil
 }
 

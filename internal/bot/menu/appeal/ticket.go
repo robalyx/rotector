@@ -14,7 +14,6 @@ import (
 	"github.com/robalyx/rotector/internal/bot/core/pagination"
 	"github.com/robalyx/rotector/internal/bot/core/session"
 	"github.com/robalyx/rotector/internal/bot/interfaces"
-	"github.com/robalyx/rotector/internal/bot/utils"
 	"github.com/robalyx/rotector/internal/common/storage/database/types"
 	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
 	"go.uber.org/zap"
@@ -43,8 +42,7 @@ func NewTicketMenu(layout *Layout) *TicketMenu {
 // Show prepares and displays the appeal ticket interface.
 func (m *TicketMenu) Show(event interfaces.CommonEvent, s *session.Session, appealID int64, content string) {
 	// Get appeals from session
-	var appeals []*types.Appeal
-	s.GetInterface(constants.SessionKeyAppeals, &appeals)
+	appeals := session.Appeals.Get(s)
 
 	// Find the appeal in the session data
 	var appeal *types.Appeal
@@ -106,26 +104,25 @@ func (m *TicketMenu) Show(event interfaces.CommonEvent, s *session.Session, appe
 	}
 
 	// Store data in session
-	s.Set(constants.SessionKeyAppeal, appeal)
-	s.Set(constants.SessionKeyAppealMessages, messages)
-	s.Set(constants.SessionKeyTotalPages, totalPages)
-	s.Set(constants.SessionKeyPaginationPage, 0) // Reset to first page
+	session.Appeal.Set(s, appeal)
+	session.AppealMessages.Set(s, messages)
+	session.TotalPages.Set(s, totalPages)
+	session.PaginationPage.Set(s, 0) // Reset to first page
 
 	m.layout.paginationManager.NavigateTo(event, s, m.page, content)
 }
 
 // handleButton processes button interactions.
 func (m *TicketMenu) handleButton(event *events.ComponentInteractionCreate, s *session.Session, customID string) {
-	action := utils.ViewerAction(customID)
+	action := session.ViewerAction(customID)
 	switch action {
-	case utils.ViewerFirstPage, utils.ViewerPrevPage, utils.ViewerNextPage, utils.ViewerLastPage:
-		var messages []*types.AppealMessage
-		s.GetInterface(constants.SessionKeyAppealMessages, &messages)
+	case session.ViewerFirstPage, session.ViewerPrevPage, session.ViewerNextPage, session.ViewerLastPage:
+		messages := session.AppealMessages.Get(s)
 
 		maxPage := (len(messages) - 1) / constants.AppealMessagesPerPage
 		page := action.ParsePageAction(s, action, maxPage)
 
-		s.Set(constants.SessionKeyPaginationPage, page)
+		session.PaginationPage.Set(s, page)
 		m.layout.paginationManager.NavigateTo(event, s, m.page, "")
 	case constants.BackButtonCustomID:
 		m.layout.paginationManager.NavigateBack(event, s, "")
@@ -163,8 +160,7 @@ func (m *TicketMenu) handleRespond(event *events.ComponentInteractionCreate) {
 
 // handleLookupUser opens the review menu for the appealed user.
 func (m *TicketMenu) handleLookupUser(event *events.ComponentInteractionCreate, s *session.Session) {
-	var appeal *types.Appeal
-	s.GetInterface(constants.SessionKeyAppeal, &appeal)
+	appeal := session.Appeal.Get(s)
 
 	// Get user from database
 	user, err := m.layout.db.Users().GetUserByID(context.Background(), strconv.FormatUint(appeal.UserID, 10), types.UserFields{})
@@ -179,7 +175,7 @@ func (m *TicketMenu) handleLookupUser(event *events.ComponentInteractionCreate, 
 	}
 
 	// Store user in session and show review menu
-	s.Set(constants.SessionKeyTarget, user)
+	session.UserTarget.Set(s, user)
 	m.layout.userReviewLayout.ShowReviewMenu(event, s)
 
 	// Log the lookup action
@@ -232,8 +228,7 @@ func (m *TicketMenu) handleRejectAppeal(event *events.ComponentInteractionCreate
 
 // handleCloseAppeal handles the user closing their own appeal ticket.
 func (m *TicketMenu) handleCloseAppeal(event *events.ComponentInteractionCreate, s *session.Session) {
-	var appeal *types.Appeal
-	s.GetInterface(constants.SessionKeyAppeal, &appeal)
+	appeal := session.Appeal.Get(s)
 
 	// Verify the user is the appeal creator
 	userID := uint64(event.User().ID)
@@ -271,8 +266,7 @@ func (m *TicketMenu) handleCloseAppeal(event *events.ComponentInteractionCreate,
 
 // handleModal processes modal submissions.
 func (m *TicketMenu) handleModal(event *events.ModalSubmitInteractionCreate, s *session.Session) {
-	var appeal *types.Appeal
-	s.GetInterface(constants.SessionKeyAppeal, &appeal)
+	appeal := session.Appeal.Get(s)
 
 	switch event.Data.CustomID {
 	case constants.AppealRespondModalCustomID:
@@ -292,6 +286,7 @@ func (m *TicketMenu) handleRespondModalSubmit(event *events.ModalSubmitInteracti
 		return
 	}
 
+	// Check if response is empty
 	content := event.Data.Text(constants.AppealReasonInputCustomID)
 	if content == "" {
 		m.layout.paginationManager.NavigateTo(event, s, m.page, "Response cannot be empty.")
@@ -299,19 +294,14 @@ func (m *TicketMenu) handleRespondModalSubmit(event *events.ModalSubmitInteracti
 	}
 
 	// Get user role and check rate limit
-	var botSettings *types.BotSetting
-	s.GetInterface(constants.SessionKeyBotSettings, &botSettings)
-
 	userID := uint64(event.User().ID)
 	role := enum.MessageRoleUser
 
-	if botSettings.IsReviewer(userID) {
+	if s.BotSettings().IsReviewer(userID) {
 		role = enum.MessageRoleModerator
 	} else {
-		var messages []*types.AppealMessage
-		s.GetInterface(constants.SessionKeyAppealMessages, &messages)
-
 		// Check if user is allowed to send a message
+		messages := session.AppealMessages.Get(s)
 		if allowed, errorMsg := m.isMessageAllowed(messages, userID); !allowed {
 			m.layout.paginationManager.NavigateTo(event, s, m.page, errorMsg)
 			return

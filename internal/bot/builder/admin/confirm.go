@@ -7,23 +7,26 @@ import (
 	"github.com/disgoorg/disgo/discord"
 	"github.com/robalyx/rotector/internal/bot/constants"
 	"github.com/robalyx/rotector/internal/bot/core/session"
+	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
 )
 
 // ConfirmBuilder creates the visual layout for the confirmation menu.
 type ConfirmBuilder struct {
-	action  string
-	id      string
-	reason  string
-	session *session.Session
+	action    string
+	id        string
+	reason    string
+	banReason enum.BanReason
+	expiresAt *time.Time
 }
 
 // NewConfirmBuilder creates a new confirmation menu builder.
 func NewConfirmBuilder(s *session.Session) *ConfirmBuilder {
 	return &ConfirmBuilder{
-		action:  s.GetString(constants.SessionKeyAdminAction),
-		id:      s.GetString(constants.SessionKeyAdminActionID),
-		reason:  s.GetString(constants.SessionKeyAdminReason),
-		session: s,
+		action:    session.AdminAction.Get(s),
+		id:        session.AdminActionID.Get(s),
+		reason:    session.AdminReason.Get(s),
+		banReason: session.BanReason.Get(s),
+		expiresAt: session.BanExpiry.Get(s),
 	}
 }
 
@@ -48,14 +51,11 @@ func (b *ConfirmBuilder) Build() *discord.MessageUpdateBuilder {
 		description = "Are you sure you want to ban Discord user `" + b.id + "`?"
 
 		// Add ban type field
-		banType := b.session.GetString(constants.SessionKeyBanType)
-		embed.AddField("Ban Type", banType, true)
+		embed.AddField("Ban Reason", b.banReason.String(), true)
 
 		// Add duration/expiry field
-		var expiresAt *time.Time
-		b.session.GetInterface(constants.SessionKeyBanExpiry, &expiresAt)
-		if expiresAt != nil {
-			embed.AddField("Expires", fmt.Sprintf("<t:%d:f>", expiresAt.Unix()), true)
+		if b.expiresAt != nil {
+			embed.AddField("Expires", fmt.Sprintf("<t:%d:f>", b.expiresAt.Unix()), true)
 		} else {
 			embed.AddField("Duration", "Permanent", true)
 		}

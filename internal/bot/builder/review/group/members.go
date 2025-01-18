@@ -17,7 +17,6 @@ import (
 
 // MembersBuilder creates the visual layout for viewing a group's flagged members.
 type MembersBuilder struct {
-	settings    *types.UserSetting
 	group       *types.ReviewGroup
 	pageMembers []uint64
 	members     map[uint64]*types.ReviewUser
@@ -27,39 +26,28 @@ type MembersBuilder struct {
 	total       int
 	imageBuffer *bytes.Buffer
 	isStreaming bool
+	privacyMode bool
 }
 
 // NewMembersBuilder creates a new members builder.
 func NewMembersBuilder(s *session.Session) *MembersBuilder {
-	var settings *types.UserSetting
-	s.GetInterface(constants.SessionKeyUserSettings, &settings)
-	var group *types.ReviewGroup
-	s.GetInterface(constants.SessionKeyGroupTarget, &group)
-	var pageMembers []uint64
-	s.GetInterface(constants.SessionKeyGroupPageMembers, &pageMembers)
-	var members map[uint64]*types.ReviewUser
-	s.GetInterface(constants.SessionKeyGroupMembers, &members)
-	var presences map[uint64]*apiTypes.UserPresenceResponse
-	s.GetInterface(constants.SessionKeyPresences, &presences)
-
 	return &MembersBuilder{
-		settings:    settings,
-		group:       group,
-		pageMembers: pageMembers,
-		members:     members,
-		presences:   presences,
-		start:       s.GetInt(constants.SessionKeyStart),
-		page:        s.GetInt(constants.SessionKeyPaginationPage),
-		total:       s.GetInt(constants.SessionKeyTotalItems),
-		imageBuffer: s.GetBuffer(constants.SessionKeyImageBuffer),
-		isStreaming: s.GetBool(constants.SessionKeyIsStreaming),
+		group:       session.GroupTarget.Get(s),
+		pageMembers: session.GroupPageMembers.Get(s),
+		members:     session.GroupMembers.Get(s),
+		presences:   session.Presences.Get(s),
+		start:       session.Start.Get(s),
+		page:        session.PaginationPage.Get(s),
+		total:       session.TotalItems.Get(s),
+		imageBuffer: session.ImageBuffer.Get(s),
+		isStreaming: session.IsStreaming.Get(s),
+		privacyMode: session.UserReviewMode.Get(s) == enum.ReviewModeTraining || session.UserStreamerMode.Get(s),
 	}
 }
 
 // Build creates a Discord message with a grid of member avatars and information.
 func (b *MembersBuilder) Build() *discord.MessageUpdateBuilder {
 	totalPages := (b.total + constants.MembersPerPage - 1) / constants.MembersPerPage
-	censor := b.settings.StreamerMode || b.settings.ReviewMode == enum.ReviewModeTraining
 
 	// Create file attachment for the member avatars grid
 	fileName := fmt.Sprintf("members_%d_%d.png", b.group.ID, b.page)
@@ -70,11 +58,11 @@ func (b *MembersBuilder) Build() *discord.MessageUpdateBuilder {
 		SetTitle(fmt.Sprintf("Group Members (Page %d/%d)", b.page+1, totalPages)).
 		SetDescription(fmt.Sprintf(
 			"```%s (%s)```",
-			utils.CensorString(b.group.Name, censor),
-			utils.CensorString(strconv.FormatUint(b.group.ID, 10), censor),
+			utils.CensorString(b.group.Name, b.privacyMode),
+			utils.CensorString(strconv.FormatUint(b.group.ID, 10), b.privacyMode),
 		)).
 		SetImage("attachment://" + fileName).
-		SetColor(utils.GetMessageEmbedColor(b.settings.StreamerMode))
+		SetColor(utils.GetMessageEmbedColor(b.privacyMode))
 
 	// Add fields for each member
 	for i, memberID := range b.pageMembers {
@@ -92,10 +80,10 @@ func (b *MembersBuilder) Build() *discord.MessageUpdateBuilder {
 		builder.AddContainerComponents([]discord.ContainerComponent{
 			discord.NewActionRow(
 				discord.NewSecondaryButton("◀️", string(constants.BackButtonCustomID)),
-				discord.NewSecondaryButton("⏮️", string(utils.ViewerFirstPage)).WithDisabled(b.page == 0),
-				discord.NewSecondaryButton("◀️", string(utils.ViewerPrevPage)).WithDisabled(b.page == 0),
-				discord.NewSecondaryButton("▶️", string(utils.ViewerNextPage)).WithDisabled(b.page == totalPages-1),
-				discord.NewSecondaryButton("⏭️", string(utils.ViewerLastPage)).WithDisabled(b.page == totalPages-1),
+				discord.NewSecondaryButton("⏮️", string(session.ViewerFirstPage)).WithDisabled(b.page == 0),
+				discord.NewSecondaryButton("◀️", string(session.ViewerPrevPage)).WithDisabled(b.page == 0),
+				discord.NewSecondaryButton("▶️", string(session.ViewerNextPage)).WithDisabled(b.page == totalPages-1),
+				discord.NewSecondaryButton("⏭️", string(session.ViewerLastPage)).WithDisabled(b.page == totalPages-1),
 			),
 		}...)
 	}
@@ -150,12 +138,13 @@ func (b *MembersBuilder) getMemberFieldValue(memberID uint64) string {
 		memberName = "Unflagged"
 	}
 
-	if b.settings.ReviewMode == enum.ReviewModeTraining {
-		info.WriteString(utils.CensorString(memberName, true))
+	name := utils.CensorString(memberName, b.privacyMode)
+	if b.privacyMode {
+		info.WriteString(name)
 	} else {
 		info.WriteString(fmt.Sprintf(
 			"[%s](https://www.roblox.com/users/%d/profile)",
-			utils.CensorString(memberName, b.settings.StreamerMode),
+			name,
 			member.ID,
 		))
 	}
@@ -177,7 +166,7 @@ func (b *MembersBuilder) getMemberFieldValue(memberID uint64) string {
 	if member.Reason != "" {
 		censored := utils.CensorStringsInText(
 			member.Reason,
-			b.settings.StreamerMode,
+			b.privacyMode,
 			strconv.FormatUint(b.group.ID, 10),
 			b.group.Name,
 			strconv.FormatUint(member.ID, 10),

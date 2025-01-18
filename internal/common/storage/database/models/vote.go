@@ -73,8 +73,8 @@ func (v *VoteModel) GetUserVoteStats(ctx context.Context, discordUserID uint64, 
 }
 
 // GetLeaderboard retrieves the top voters for a given time period.
-func (v *VoteModel) GetLeaderboard(ctx context.Context, period enum.LeaderboardPeriod, cursor *types.LeaderboardCursor, limit int) ([]types.VoteAccuracy, *types.LeaderboardCursor, error) {
-	var stats []types.VoteAccuracy
+func (v *VoteModel) GetLeaderboard(ctx context.Context, period enum.LeaderboardPeriod, cursor *types.LeaderboardCursor, limit int) ([]*types.VoteAccuracy, *types.LeaderboardCursor, error) {
+	var stats []*types.VoteAccuracy
 	var nextCursor *types.LeaderboardCursor
 
 	// Try to refresh the materialized view if stale

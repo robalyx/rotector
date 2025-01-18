@@ -6,7 +6,6 @@ import (
 
 	"github.com/disgoorg/disgo/discord"
 	"github.com/disgoorg/disgo/events"
-	"github.com/robalyx/rotector/internal/bot/constants"
 	"github.com/robalyx/rotector/internal/bot/core/session"
 	"github.com/robalyx/rotector/internal/bot/interfaces"
 	"github.com/robalyx/rotector/internal/bot/utils"
@@ -77,7 +76,7 @@ func (m *Manager) GetPage(name string) *Page {
 // based on the interaction type (select menu, button, or modal) and the current page.
 // If no handler is found for an interaction, an error is logged.
 func (m *Manager) HandleInteraction(event interfaces.CommonEvent, s *session.Session) {
-	currentPage := s.GetString(constants.SessionKeyCurrentPage)
+	currentPage := session.CurrentPage.Get(s)
 	page := m.GetPage(currentPage)
 
 	switch e := event.(type) {
@@ -126,7 +125,7 @@ func (m *Manager) NavigateTo(event interfaces.CommonEvent, s *session.Session, p
 	m.UpdatePage(s, page)
 
 	// Set the message ID in the session
-	s.Set(constants.SessionKeyMessageID, strconv.FormatUint(uint64(message.ID), 10))
+	session.MessageID.Set(s, strconv.FormatUint(uint64(message.ID), 10))
 
 	m.logger.Debug("Updated message",
 		zap.String("page", page.Name),
@@ -135,35 +134,33 @@ func (m *Manager) NavigateTo(event interfaces.CommonEvent, s *session.Session, p
 
 // UpdatePage updates the session with a new page.
 func (m *Manager) UpdatePage(s *session.Session, newPage *Page) {
-	currentPage := s.GetString(constants.SessionKeyCurrentPage)
+	currentPage := session.CurrentPage.Get(s)
 	if currentPage != "" && currentPage != newPage.Name {
 		// Get existing page history
-		var previousPages []string
-		s.GetInterface(constants.SessionKeyPreviousPages, &previousPages)
+		previousPages := session.PreviousPages.Get(s)
 
 		// Check if new page exists in history
 		for i, page := range previousPages {
 			if page == newPage.Name {
 				// Found the page in history, revert back to its state
 				previousPages = previousPages[:i]
-				s.Set(constants.SessionKeyPreviousPages, previousPages)
-				s.Set(constants.SessionKeyCurrentPage, newPage.Name)
+				session.PreviousPages.Set(s, previousPages)
+				session.CurrentPage.Set(s, newPage.Name)
 				return
 			}
 		}
 
 		// Page not in history, append current page
 		previousPages = append(previousPages, currentPage)
-		s.Set(constants.SessionKeyPreviousPages, previousPages)
+		session.PreviousPages.Set(s, previousPages)
 	}
 
-	s.Set(constants.SessionKeyCurrentPage, newPage.Name)
+	session.CurrentPage.Set(s, newPage.Name)
 }
 
 // NavigateBack navigates back to the previous page in the history.
 func (m *Manager) NavigateBack(event interfaces.CommonEvent, s *session.Session, content string) {
-	var previousPages []string
-	s.GetInterface(constants.SessionKeyPreviousPages, &previousPages)
+	previousPages := session.PreviousPages.Get(s)
 
 	if len(previousPages) > 0 {
 		// Get the last page from history
@@ -180,7 +177,7 @@ func (m *Manager) NavigateBack(event interfaces.CommonEvent, s *session.Session,
 
 // Refresh reloads the current page in the session.
 func (m *Manager) Refresh(event interfaces.CommonEvent, s *session.Session, content string) {
-	currentPage := s.GetString(constants.SessionKeyCurrentPage)
+	currentPage := session.CurrentPage.Get(s)
 	page := m.GetPage(currentPage)
 	m.NavigateTo(event, s, page, content)
 }

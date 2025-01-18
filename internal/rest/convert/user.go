@@ -69,7 +69,7 @@ func UserGroups(groups []*apiTypes.UserGroupRoles) []restTypes.UserGroup {
 }
 
 // Friends converts a slice of database extended friends to REST API friends.
-func Friends(friends []types.ExtendedFriend) []restTypes.Friend {
+func Friends(friends []*types.ExtendedFriend) []restTypes.Friend {
 	result := make([]restTypes.Friend, len(friends))
 	for i, f := range friends {
 		result[i] = restTypes.Friend{

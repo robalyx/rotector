@@ -13,7 +13,6 @@ import (
 	"github.com/robalyx/rotector/internal/bot/constants"
 	"github.com/robalyx/rotector/internal/bot/core/pagination"
 	"github.com/robalyx/rotector/internal/bot/core/session"
-	"github.com/robalyx/rotector/internal/bot/utils"
 	"github.com/robalyx/rotector/internal/common/storage/database/types"
 	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
 	"go.uber.org/zap"
@@ -41,8 +40,7 @@ func NewMembersMenu(layout *Layout) *MembersMenu {
 
 // Show prepares and displays the members interface for a specific page.
 func (m *MembersMenu) Show(event *events.ComponentInteractionCreate, s *session.Session, page int) {
-	var memberIDs []uint64
-	s.GetInterface(constants.SessionKeyGroupMemberIDs, &memberIDs)
+	memberIDs := session.GroupMemberIDs.Get(s)
 
 	// Return to review menu if group has no flagged members
 	if len(memberIDs) == 0 {
@@ -77,13 +75,13 @@ func (m *MembersMenu) Show(event *events.ComponentInteractionCreate, s *session.
 	presenceMap := m.fetchPresences(pageMembers)
 
 	// Store data in session for the message builder
-	s.Set(constants.SessionKeyGroupMemberIDs, sortedMemberIDs)
-	s.Set(constants.SessionKeyGroupMembers, members)
-	s.Set(constants.SessionKeyGroupPageMembers, pageMembers)
-	s.Set(constants.SessionKeyPresences, presenceMap)
-	s.Set(constants.SessionKeyStart, start)
-	s.Set(constants.SessionKeyPaginationPage, page)
-	s.Set(constants.SessionKeyTotalItems, len(sortedMemberIDs))
+	session.GroupMemberIDs.Set(s, sortedMemberIDs)
+	session.GroupMembers.Set(s, members)
+	session.GroupPageMembers.Set(s, pageMembers)
+	session.Presences.Set(s, presenceMap)
+	session.Start.Set(s, start)
+	session.PaginationPage.Set(s, page)
+	session.TotalItems.Set(s, len(sortedMemberIDs))
 
 	// Start streaming images
 	m.layout.imageStreamer.Stream(pagination.StreamRequest{
@@ -95,18 +93,17 @@ func (m *MembersMenu) Show(event *events.ComponentInteractionCreate, s *session.
 		Rows:     constants.MembersGridRows,
 		MaxItems: constants.MembersPerPage,
 		OnSuccess: func(buf *bytes.Buffer) {
-			s.SetBuffer(constants.SessionKeyImageBuffer, buf)
+			session.ImageBuffer.Set(s, buf)
 		},
 	})
 }
 
 // handlePageNavigation processes navigation button clicks.
 func (m *MembersMenu) handlePageNavigation(event *events.ComponentInteractionCreate, s *session.Session, customID string) {
-	action := utils.ViewerAction(customID)
+	action := session.ViewerAction(customID)
 	switch action {
-	case utils.ViewerFirstPage, utils.ViewerPrevPage, utils.ViewerNextPage, utils.ViewerLastPage:
-		var memberIDs []uint64
-		s.GetInterface(constants.SessionKeyGroupMemberIDs, &memberIDs)
+	case session.ViewerFirstPage, session.ViewerPrevPage, session.ViewerNextPage, session.ViewerLastPage:
+		memberIDs := session.GroupMemberIDs.Get(s)
 
 		// Calculate max page and validate navigation action
 		maxPage := (len(memberIDs) - 1) / constants.MembersPerPage

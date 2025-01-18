@@ -9,14 +9,13 @@ import (
 	"github.com/robalyx/rotector/internal/bot/core/session"
 	"github.com/robalyx/rotector/internal/bot/utils"
 	"github.com/robalyx/rotector/internal/common/client/ai"
-	"github.com/robalyx/rotector/internal/common/storage/database/types"
 	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
 )
 
 // Builder creates the visual layout for the chat interface.
 type Builder struct {
 	model       enum.ChatModel
-	history     *ai.ChatHistory
+	history     ai.ChatHistory
 	page        int
 	isStreaming bool
 	context     string
@@ -24,17 +23,12 @@ type Builder struct {
 
 // NewBuilder creates a new chat builder.
 func NewBuilder(s *session.Session) *Builder {
-	var userSettings *types.UserSetting
-	s.GetInterface(constants.SessionKeyUserSettings, &userSettings)
-	var history ai.ChatHistory
-	s.GetInterface(constants.SessionKeyChatHistory, &history)
-
 	return &Builder{
-		model:       userSettings.ChatModel,
-		history:     &history,
-		page:        s.GetInt(constants.SessionKeyPaginationPage),
-		isStreaming: s.GetBool(constants.SessionKeyIsStreaming),
-		context:     s.GetString(constants.SessionKeyChatContext),
+		model:       session.UserChatModel.Get(s),
+		history:     session.ChatHistory.Get(s),
+		page:        session.PaginationPage.Get(s),
+		isStreaming: session.IsStreaming.Get(s),
+		context:     session.ChatContext.Get(s),
 	}
 }
 
@@ -127,10 +121,10 @@ func (b *Builder) Build() *discord.MessageUpdateBuilder {
 			),
 			discord.NewActionRow(
 				discord.NewSecondaryButton("◀️", string(constants.BackButtonCustomID)),
-				discord.NewSecondaryButton("⏮️", string(utils.ViewerFirstPage)).WithDisabled(b.page == 0),
-				discord.NewSecondaryButton("◀️", string(utils.ViewerPrevPage)).WithDisabled(b.page == 0),
-				discord.NewSecondaryButton("▶️", string(utils.ViewerNextPage)).WithDisabled(b.page == totalPages),
-				discord.NewSecondaryButton("⏭️", string(utils.ViewerLastPage)).WithDisabled(b.page == totalPages),
+				discord.NewSecondaryButton("⏮️", string(session.ViewerFirstPage)).WithDisabled(b.page == 0),
+				discord.NewSecondaryButton("◀️", string(session.ViewerPrevPage)).WithDisabled(b.page == 0),
+				discord.NewSecondaryButton("▶️", string(session.ViewerNextPage)).WithDisabled(b.page == totalPages),
+				discord.NewSecondaryButton("⏭️", string(session.ViewerLastPage)).WithDisabled(b.page == totalPages),
 			),
 		}
 

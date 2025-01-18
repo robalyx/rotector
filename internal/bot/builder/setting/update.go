@@ -11,24 +11,21 @@ import (
 
 // UpdateBuilder creates a generic settings change menu.
 type UpdateBuilder struct {
+	setting      *session.Setting
 	settingName  string
 	settingType  string
 	currentValue string
 	customID     string
-	setting      Setting
 }
 
 // NewUpdateBuilder creates a new update builder.
 func NewUpdateBuilder(s *session.Session) *UpdateBuilder {
-	var setting Setting
-	s.GetInterface(constants.SessionKeySetting, &setting)
-
 	return &UpdateBuilder{
-		settingName:  s.GetString(constants.SessionKeySettingName),
-		settingType:  s.GetString(constants.SessionKeySettingType),
-		currentValue: s.GetString(constants.SessionKeyCurrentValue),
-		customID:     s.GetString(constants.SessionKeyCustomID),
-		setting:      setting,
+		setting:      session.SettingValue.Get(s),
+		settingName:  session.SettingName.Get(s),
+		settingType:  session.SettingType.Get(s),
+		currentValue: session.SettingDisplay.Get(s),
+		customID:     session.CustomID.Get(s),
 	}
 }
 

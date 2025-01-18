@@ -1,3 +1,6 @@
+//go:generate go run settings_gen.go
+//go:generate go run keys_gen.go
+
 package session
 
 import (
@@ -5,29 +8,34 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
-	"time"
 
 	"github.com/redis/rueidis"
-	"github.com/spf13/cast"
 
 	"github.com/bytedance/sonic"
 	"github.com/robalyx/rotector/internal/common/storage/database"
+	"github.com/robalyx/rotector/internal/common/storage/database/types"
 	"go.uber.org/zap"
 )
 
 // Session maintains user state through a Redis-backed key-value store where values are
 // serialized as JSON strings. The session automatically expires after a configured timeout.
 type Session struct {
-	db     *database.Client
-	redis  rueidis.Client
-	key    string
-	data   map[string]interface{}
-	logger *zap.Logger
-	userID uint64
+	userSettings       *types.UserSetting
+	botSettings        *types.BotSetting
+	userSettingsUpdate bool
+	botSettingsUpdate  bool
+	db                 *database.Client
+	redis              rueidis.Client
+	key                string
+	data               map[string]interface{}
+	logger             *zap.Logger
+	userID             uint64
 }
 
 // NewSession creates a new session for the given user.
 func NewSession(
+	userSettings *types.UserSetting,
+	botSettings *types.BotSetting,
 	db *database.Client,
 	redis rueidis.Client,
 	key string,
@@ -36,12 +44,16 @@ func NewSession(
 	userID uint64,
 ) *Session {
 	return &Session{
-		db:     db,
-		redis:  redis,
-		key:    key,
-		data:   data,
-		logger: logger,
-		userID: userID,
+		userSettings:       userSettings,
+		botSettings:        botSettings,
+		userSettingsUpdate: false,
+		botSettingsUpdate:  false,
+		db:                 db,
+		redis:              redis,
+		key:                key,
+		data:               data,
+		logger:             logger,
+		userID:             userID,
 	}
 }
 
@@ -67,11 +79,39 @@ func (s *Session) Touch(ctx context.Context) {
 	if err != nil {
 		s.logger.Error("Failed to update session in Redis", zap.Error(err))
 	}
+
+	// Only save user settings if they've been updated
+	if s.userSettingsUpdate {
+		if err := s.db.Settings().SaveUserSettings(ctx, s.userSettings); err != nil {
+			s.logger.Error("Failed to save user settings", zap.Error(err))
+			return
+		}
+		s.userSettingsUpdate = false
+	}
+
+	// Only save bot settings if they've been updated
+	if s.botSettingsUpdate {
+		if err := s.db.Settings().SaveBotSettings(ctx, s.botSettings); err != nil {
+			s.logger.Error("Failed to save bot settings", zap.Error(err))
+			return
+		}
+		s.botSettingsUpdate = false
+	}
 }
 
-// Get retrieves a raw string value from the in-memory session cache.
+// UserSettings returns the current user settings.
+func (s *Session) UserSettings() *types.UserSetting {
+	return s.userSettings
+}
+
+// BotSettings returns the current bot settings.
+func (s *Session) BotSettings() *types.BotSetting {
+	return s.botSettings
+}
+
+// get retrieves a raw string value from the in-memory session cache.
 // Returns empty string if key doesn't exist.
-func (s *Session) Get(key string) interface{} {
+func (s *Session) get(key string) interface{} {
 	if value, ok := s.data[key]; ok {
 		return value
 	}
@@ -79,9 +119,9 @@ func (s *Session) Get(key string) interface{} {
 	return nil
 }
 
-// GetInterface unmarshals the stored value into the provided interface.
-func (s *Session) GetInterface(key string, v interface{}) {
-	value := s.Get(key)
+// getInterface unmarshals the stored value into the provided interface.
+func (s *Session) getInterface(key string, v interface{}) {
+	value := s.get(key)
 	if value == nil {
 		return
 	}
@@ -107,16 +147,9 @@ func (s *Session) GetInterface(key string, v interface{}) {
 	}
 }
 
-// GetTime retrieves a time.Time value from the session.
-func (s *Session) GetTime(key string) time.Time {
-	var value time.Time
-	s.GetInterface(key, &value)
-	return value
-}
-
-// GetBuffer retrieves and decodes a base64 encoded buffer from the session.
-func (s *Session) GetBuffer(key string) *bytes.Buffer {
-	value := s.Get(key)
+// getBuffer retrieves and decodes a base64 encoded buffer from the session.
+func (s *Session) getBuffer(key string) *bytes.Buffer {
+	value := s.get(key)
 	if value == nil {
 		return nil
 	}
@@ -138,15 +171,15 @@ func (s *Session) GetBuffer(key string) *bytes.Buffer {
 	return bytes.NewBuffer(decoded)
 }
 
-// Set sets the value for the given key.
-func (s *Session) Set(key string, value interface{}) {
+// set sets the value for the given key.
+func (s *Session) set(key string, value interface{}) {
 	s.data[key] = value
 	s.logger.Debug("Session key set", zap.String("key", key))
 }
 
-// SetBuffer stores binary data by base64 encoding it first.
+// setBuffer stores binary data by base64 encoding it first.
 // This allows binary data to be safely stored as strings in the session.
-func (s *Session) SetBuffer(key string, buf *bytes.Buffer) {
+func (s *Session) setBuffer(key string, buf *bytes.Buffer) {
 	if buf == nil {
 		s.logger.Warn("Attempted to set nil buffer", zap.String("key", key))
 		return
@@ -158,50 +191,8 @@ func (s *Session) SetBuffer(key string, buf *bytes.Buffer) {
 	s.logger.Debug("Session key set with base64 encoded buffer", zap.String("key", key))
 }
 
-// Delete removes a key from the session data.
-func (s *Session) Delete(key string) {
+// delete removes a key from the session data.
+func (s *Session) delete(key string) {
 	delete(s.data, key)
 	s.logger.Debug("Session key deleted", zap.String("key", key))
-}
-
-// GetString retrieves a string value from the session.
-func (s *Session) GetString(key string) string {
-	if value := s.Get(key); value != nil {
-		if str, ok := value.(string); ok {
-			return str
-		}
-	}
-	return ""
-}
-
-// GetInt retrieves an integer value from the session.
-func (s *Session) GetInt(key string) int {
-	if value := s.Get(key); value != nil {
-		return cast.ToInt(value)
-	}
-	return 0
-}
-
-// GetUint64 retrieves an unsigned 64-bit integer value from the session.
-func (s *Session) GetUint64(key string) uint64 {
-	if value := s.Get(key); value != nil {
-		return cast.ToUint64(value)
-	}
-	return 0
-}
-
-// GetFloat64 retrieves a float64 value from the session.
-func (s *Session) GetFloat64(key string) float64 {
-	if value := s.Get(key); value != nil {
-		return cast.ToFloat64(value)
-	}
-	return 0
-}
-
-// GetBool retrieves a boolean value from the session.
-func (s *Session) GetBool(key string) bool {
-	if value := s.Get(key); value != nil {
-		return cast.ToBool(value)
-	}
-	return false
 }

@@ -12,7 +12,6 @@ import (
 	"github.com/robalyx/rotector/internal/bot/constants"
 	"github.com/robalyx/rotector/internal/bot/core/pagination"
 	"github.com/robalyx/rotector/internal/bot/core/session"
-	"github.com/robalyx/rotector/internal/bot/utils"
 	"github.com/robalyx/rotector/internal/common/storage/database/types"
 	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
 	"go.uber.org/zap"
@@ -41,8 +40,7 @@ func NewGroupsMenu(layout *Layout) *GroupsMenu {
 
 // Show prepares and displays the groups interface for a specific page.
 func (m *GroupsMenu) Show(event *events.ComponentInteractionCreate, s *session.Session, page int) {
-	var user *types.ReviewUser
-	s.GetInterface(constants.SessionKeyTarget, &user)
+	user := session.UserTarget.Get(s)
 
 	// Return to review menu if user has no groups
 	if len(user.Groups) == 0 {
@@ -51,8 +49,7 @@ func (m *GroupsMenu) Show(event *events.ComponentInteractionCreate, s *session.S
 	}
 
 	// Get group types from session and sort groups by status
-	var flaggedGroups map[uint64]*types.ReviewGroup
-	s.GetInterface(constants.SessionKeyFlaggedGroups, &flaggedGroups)
+	flaggedGroups := session.FlaggedGroups.Get(s)
 	sortedGroups := m.sortGroupsByStatus(user.Groups, flaggedGroups)
 
 	// Calculate page boundaries
@@ -64,10 +61,10 @@ func (m *GroupsMenu) Show(event *events.ComponentInteractionCreate, s *session.S
 	pageGroups := sortedGroups[start:end]
 
 	// Store data in session for the message builder
-	s.Set(constants.SessionKeyGroups, pageGroups)
-	s.Set(constants.SessionKeyStart, start)
-	s.Set(constants.SessionKeyPaginationPage, page)
-	s.Set(constants.SessionKeyTotalItems, len(sortedGroups))
+	session.Groups.Set(s, pageGroups)
+	session.Start.Set(s, start)
+	session.PaginationPage.Set(s, page)
+	session.TotalItems.Set(s, len(sortedGroups))
 
 	// Start streaming images
 	m.layout.imageStreamer.Stream(pagination.StreamRequest{
@@ -79,7 +76,7 @@ func (m *GroupsMenu) Show(event *events.ComponentInteractionCreate, s *session.S
 		Rows:     constants.GroupsGridRows,
 		MaxItems: constants.GroupsPerPage,
 		OnSuccess: func(buf *bytes.Buffer) {
-			s.SetBuffer(constants.SessionKeyImageBuffer, buf)
+			session.ImageBuffer.Set(s, buf)
 		},
 	})
 }
@@ -117,11 +114,10 @@ func (m *GroupsMenu) sortGroupsByStatus(groups []*apiTypes.UserGroupRoles, flagg
 // handlePageNavigation processes navigation button clicks by calculating
 // the target page number and refreshing the display.
 func (m *GroupsMenu) handlePageNavigation(event *events.ComponentInteractionCreate, s *session.Session, customID string) {
-	action := utils.ViewerAction(customID)
+	action := session.ViewerAction(customID)
 	switch action {
-	case utils.ViewerFirstPage, utils.ViewerPrevPage, utils.ViewerNextPage, utils.ViewerLastPage:
-		var user *types.ReviewUser
-		s.GetInterface(constants.SessionKeyTarget, &user)
+	case session.ViewerFirstPage, session.ViewerPrevPage, session.ViewerNextPage, session.ViewerLastPage:
+		user := session.UserTarget.Get(s)
 
 		// Calculate max page and validate navigation action
 		maxPage := (len(user.Groups) - 1) / constants.GroupsPerPage

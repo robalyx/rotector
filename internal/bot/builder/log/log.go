@@ -16,7 +16,6 @@ import (
 
 // Builder creates the visual layout for viewing activity logs.
 type Builder struct {
-	settings           *types.UserSetting
 	logs               []*types.ActivityLog
 	discordID          uint64
 	userID             uint64
@@ -27,29 +26,23 @@ type Builder struct {
 	endDate            time.Time
 	hasNextPage        bool
 	hasPrevPage        bool
+	privacyMode        bool
 }
 
 // NewBuilder creates a new log builder.
 func NewBuilder(s *session.Session) *Builder {
-	var settings *types.UserSetting
-	s.GetInterface(constants.SessionKeyUserSettings, &settings)
-	var logs []*types.ActivityLog
-	s.GetInterface(constants.SessionKeyLogs, &logs)
-	var activityTypeFilter enum.ActivityType
-	s.GetInterface(constants.SessionKeyActivityTypeFilter, &activityTypeFilter)
-
 	return &Builder{
-		settings:           settings,
-		logs:               logs,
-		discordID:          s.GetUint64(constants.SessionKeyDiscordIDFilter),
-		userID:             s.GetUint64(constants.SessionKeyUserIDFilter),
-		groupID:            s.GetUint64(constants.SessionKeyGroupIDFilter),
-		reviewerID:         s.GetUint64(constants.SessionKeyReviewerIDFilter),
-		activityTypeFilter: activityTypeFilter,
-		startDate:          s.GetTime(constants.SessionKeyDateRangeStartFilter),
-		endDate:            s.GetTime(constants.SessionKeyDateRangeEndFilter),
-		hasNextPage:        s.GetBool(constants.SessionKeyHasNextPage),
-		hasPrevPage:        s.GetBool(constants.SessionKeyHasPrevPage),
+		logs:               session.Logs.Get(s),
+		discordID:          session.DiscordIDFilter.Get(s),
+		userID:             session.UserIDFilter.Get(s),
+		groupID:            session.GroupIDFilter.Get(s),
+		reviewerID:         session.ReviewerIDFilter.Get(s),
+		activityTypeFilter: session.ActivityTypeFilter.Get(s),
+		startDate:          session.DateRangeStartFilter.Get(s),
+		endDate:            session.DateRangeEndFilter.Get(s),
+		hasNextPage:        session.HasNextPage.Get(s),
+		hasPrevPage:        session.HasPrevPage.Get(s),
+		privacyMode:        session.UserReviewMode.Get(s) == enum.ReviewModeTraining || session.UserStreamerMode.Get(s),
 	}
 }
 
@@ -58,17 +51,17 @@ func (b *Builder) Build() *discord.MessageUpdateBuilder {
 	// Create embed
 	embed := discord.NewEmbedBuilder().
 		SetTitle("Log Query Results").
-		SetColor(utils.GetMessageEmbedColor(b.settings.StreamerMode))
+		SetColor(utils.GetMessageEmbedColor(b.privacyMode))
 
 	// Add fields for each active query condition
 	if b.discordID != 0 {
-		embed.AddField("Discord ID", fmt.Sprintf("`%s`", utils.CensorString(strconv.FormatUint(b.discordID, 10), b.settings.StreamerMode)), true)
+		embed.AddField("Discord ID", fmt.Sprintf("`%s`", utils.CensorString(strconv.FormatUint(b.discordID, 10), b.privacyMode)), true)
 	}
 	if b.userID != 0 {
-		embed.AddField("User ID", fmt.Sprintf("`%s`", utils.CensorString(strconv.FormatUint(b.userID, 10), b.settings.StreamerMode)), true)
+		embed.AddField("User ID", fmt.Sprintf("`%s`", utils.CensorString(strconv.FormatUint(b.userID, 10), b.privacyMode)), true)
 	}
 	if b.groupID != 0 {
-		embed.AddField("Group ID", fmt.Sprintf("`%s`", utils.CensorString(strconv.FormatUint(b.groupID, 10), b.settings.StreamerMode)), true)
+		embed.AddField("Group ID", fmt.Sprintf("`%s`", utils.CensorString(strconv.FormatUint(b.groupID, 10), b.privacyMode)), true)
 	}
 	if b.reviewerID != 0 {
 		embed.AddField("Reviewer ID", fmt.Sprintf("`%d`", b.reviewerID), true)
@@ -98,13 +91,13 @@ func (b *Builder) Build() *discord.MessageUpdateBuilder {
 
 			if log.ActivityTarget.UserID != 0 {
 				description += fmt.Sprintf("\nUser: [%s](https://www.roblox.com/users/%d/profile)",
-					utils.CensorString(strconv.FormatUint(log.ActivityTarget.UserID, 10), b.settings.StreamerMode),
+					utils.CensorString(strconv.FormatUint(log.ActivityTarget.UserID, 10), b.privacyMode),
 					log.ActivityTarget.UserID)
 			}
 
 			if log.ActivityTarget.GroupID != 0 {
 				description += fmt.Sprintf("\nGroup: [%s](https://www.roblox.com/groups/%d)",
-					utils.CensorString(strconv.FormatUint(log.ActivityTarget.GroupID, 10), b.settings.StreamerMode),
+					utils.CensorString(strconv.FormatUint(log.ActivityTarget.GroupID, 10), b.privacyMode),
 					log.ActivityTarget.GroupID)
 			}
 
@@ -136,11 +129,11 @@ func (b *Builder) buildComponents() []discord.ContainerComponent {
 		discord.NewActionRow(
 			discord.NewStringSelectMenu(constants.ActionSelectMenuCustomID, "Set Filter Condition",
 				discord.NewStringSelectMenuOption("Filter by Discord ID", constants.LogsQueryDiscordIDOption).
-					WithDescription(utils.CensorString(strconv.FormatUint(b.discordID, 10), b.settings.StreamerMode)),
+					WithDescription(utils.CensorString(strconv.FormatUint(b.discordID, 10), b.privacyMode)),
 				discord.NewStringSelectMenuOption("Filter by User ID", constants.LogsQueryUserIDOption).
-					WithDescription(utils.CensorString(strconv.FormatUint(b.userID, 10), b.settings.StreamerMode)),
+					WithDescription(utils.CensorString(strconv.FormatUint(b.userID, 10), b.privacyMode)),
 				discord.NewStringSelectMenuOption("Filter by Group ID", constants.LogsQueryGroupIDOption).
-					WithDescription(utils.CensorString(strconv.FormatUint(b.groupID, 10), b.settings.StreamerMode)),
+					WithDescription(utils.CensorString(strconv.FormatUint(b.groupID, 10), b.privacyMode)),
 				discord.NewStringSelectMenuOption("Filter by Reviewer ID", constants.LogsQueryReviewerIDOption).
 					WithDescription(strconv.FormatUint(b.reviewerID, 10)),
 				discord.NewStringSelectMenuOption("Filter by Date Range", constants.LogsQueryDateRangeOption).
@@ -160,10 +153,10 @@ func (b *Builder) buildComponents() []discord.ContainerComponent {
 		// Navigation buttons
 		discord.NewActionRow(
 			discord.NewSecondaryButton("◀️", constants.BackButtonCustomID),
-			discord.NewSecondaryButton("⏮️", string(utils.ViewerFirstPage)).WithDisabled(!b.hasPrevPage),
-			discord.NewSecondaryButton("◀️", string(utils.ViewerPrevPage)).WithDisabled(!b.hasPrevPage),
-			discord.NewSecondaryButton("▶️", string(utils.ViewerNextPage)).WithDisabled(!b.hasNextPage),
-			discord.NewSecondaryButton("⏭️", string(utils.ViewerLastPage)).WithDisabled(true), // This is disabled on purpose
+			discord.NewSecondaryButton("⏮️", string(session.ViewerFirstPage)).WithDisabled(!b.hasPrevPage),
+			discord.NewSecondaryButton("◀️", string(session.ViewerPrevPage)).WithDisabled(!b.hasPrevPage),
+			discord.NewSecondaryButton("▶️", string(session.ViewerNextPage)).WithDisabled(!b.hasNextPage),
+			discord.NewSecondaryButton("⏭️", string(session.ViewerLastPage)).WithDisabled(true), // This is disabled on purpose
 		),
 	}
 }

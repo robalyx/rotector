@@ -12,7 +12,6 @@ import (
 	"github.com/robalyx/rotector/internal/bot/constants"
 	"github.com/robalyx/rotector/internal/bot/core/pagination"
 	"github.com/robalyx/rotector/internal/bot/core/session"
-	"github.com/robalyx/rotector/internal/bot/utils"
 	"github.com/robalyx/rotector/internal/common/storage/database/types"
 	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
 	"go.uber.org/zap"
@@ -42,8 +41,7 @@ func NewFriendsMenu(layout *Layout) *FriendsMenu {
 // Show prepares and displays the friends interface for a specific page.
 // It loads friend data, checks their status, and creates a grid of avatars.
 func (m *FriendsMenu) Show(event *events.ComponentInteractionCreate, s *session.Session, page int) {
-	var user *types.ReviewUser
-	s.GetInterface(constants.SessionKeyTarget, &user)
+	user := session.UserTarget.Get(s)
 
 	// Return to review menu if user has no friends
 	if len(user.Friends) == 0 {
@@ -52,8 +50,7 @@ func (m *FriendsMenu) Show(event *events.ComponentInteractionCreate, s *session.
 	}
 
 	// Get friend types from session and sort friends by status
-	var flaggedFriends map[uint64]*types.ReviewUser
-	s.GetInterface(constants.SessionKeyFlaggedFriends, &flaggedFriends)
+	flaggedFriends := session.FlaggedFriends.Get(s)
 	sortedFriends := m.sortFriendsByStatus(user.Friends, flaggedFriends)
 
 	// Calculate page boundaries
@@ -68,11 +65,11 @@ func (m *FriendsMenu) Show(event *events.ComponentInteractionCreate, s *session.
 	presenceMap := m.fetchPresences(sortedFriends)
 
 	// Store data in session for the message builder
-	s.Set(constants.SessionKeyFriends, pageFriends)
-	s.Set(constants.SessionKeyPresences, presenceMap)
-	s.Set(constants.SessionKeyStart, start)
-	s.Set(constants.SessionKeyPaginationPage, page)
-	s.Set(constants.SessionKeyTotalItems, len(sortedFriends))
+	session.Friends.Set(s, pageFriends)
+	session.Presences.Set(s, presenceMap)
+	session.Start.Set(s, start)
+	session.PaginationPage.Set(s, page)
+	session.TotalItems.Set(s, len(sortedFriends))
 
 	// Start streaming images
 	m.layout.imageStreamer.Stream(pagination.StreamRequest{
@@ -84,7 +81,7 @@ func (m *FriendsMenu) Show(event *events.ComponentInteractionCreate, s *session.
 		Rows:     constants.FriendsGridRows,
 		MaxItems: constants.FriendsPerPage,
 		OnSuccess: func(buf *bytes.Buffer) {
-			s.SetBuffer(constants.SessionKeyImageBuffer, buf)
+			session.ImageBuffer.Set(s, buf)
 		},
 	})
 }
@@ -92,11 +89,10 @@ func (m *FriendsMenu) Show(event *events.ComponentInteractionCreate, s *session.
 // handlePageNavigation processes navigation button clicks by calculating
 // the target page number and refreshing the display.
 func (m *FriendsMenu) handlePageNavigation(event *events.ComponentInteractionCreate, s *session.Session, customID string) {
-	action := utils.ViewerAction(customID)
+	action := session.ViewerAction(customID)
 	switch action {
-	case utils.ViewerFirstPage, utils.ViewerPrevPage, utils.ViewerNextPage, utils.ViewerLastPage:
-		var user *types.ReviewUser
-		s.GetInterface(constants.SessionKeyTarget, &user)
+	case session.ViewerFirstPage, session.ViewerPrevPage, session.ViewerNextPage, session.ViewerLastPage:
+		user := session.UserTarget.Get(s)
 
 		// Calculate max page and validate navigation action
 		maxPage := (len(user.Friends) - 1) / constants.FriendsPerPage
@@ -114,9 +110,9 @@ func (m *FriendsMenu) handlePageNavigation(event *events.ComponentInteractionCre
 }
 
 // sortFriendsByStatus sorts friends into categories based on their status.
-func (m *FriendsMenu) sortFriendsByStatus(friends []types.ExtendedFriend, flaggedFriends map[uint64]*types.ReviewUser) []types.ExtendedFriend {
+func (m *FriendsMenu) sortFriendsByStatus(friends []*types.ExtendedFriend, flaggedFriends map[uint64]*types.ReviewUser) []*types.ExtendedFriend {
 	// Group friends by their status
-	groupedFriends := make(map[enum.UserType][]types.ExtendedFriend)
+	groupedFriends := make(map[enum.UserType][]*types.ExtendedFriend)
 	for _, friend := range friends {
 		status := enum.UserTypeUnflagged
 		if reviewUser, exists := flaggedFriends[friend.ID]; exists {
@@ -135,7 +131,7 @@ func (m *FriendsMenu) sortFriendsByStatus(friends []types.ExtendedFriend, flagge
 	}
 
 	// Combine friends in priority order
-	sortedFriends := make([]types.ExtendedFriend, 0, len(friends))
+	sortedFriends := make([]*types.ExtendedFriend, 0, len(friends))
 	for _, status := range statusOrder {
 		sortedFriends = append(sortedFriends, groupedFriends[status]...)
 	}
@@ -144,7 +140,7 @@ func (m *FriendsMenu) sortFriendsByStatus(friends []types.ExtendedFriend, flagge
 }
 
 // fetchPresences handles concurrent fetching of presence information.
-func (m *FriendsMenu) fetchPresences(allFriends []types.ExtendedFriend) map[uint64]*apiTypes.UserPresenceResponse {
+func (m *FriendsMenu) fetchPresences(allFriends []*types.ExtendedFriend) map[uint64]*apiTypes.UserPresenceResponse {
 	presenceMap := make(map[uint64]*apiTypes.UserPresenceResponse)
 
 	// Extract friend IDs
@@ -163,7 +159,7 @@ func (m *FriendsMenu) fetchPresences(allFriends []types.ExtendedFriend) map[uint
 }
 
 // fetchFriendThumbnails fetches thumbnails for a slice of friends.
-func (m *FriendsMenu) fetchFriendThumbnails(friends []types.ExtendedFriend) []string {
+func (m *FriendsMenu) fetchFriendThumbnails(friends []*types.ExtendedFriend) []string {
 	// Create batch request for friend avatars
 	requests := thumbnails.NewBatchThumbnailsBuilder()
 	for _, friend := range friends {

@@ -2,17 +2,14 @@ package captcha
 
 import (
 	"bytes"
-	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
 	"image/png"
 
 	"github.com/dchest/captcha"
-	"github.com/robalyx/rotector/internal/bot/constants"
 	"github.com/robalyx/rotector/internal/bot/core/session"
 	"github.com/robalyx/rotector/internal/common/storage/database"
-	"github.com/robalyx/rotector/internal/common/storage/database/types"
 	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
 	"go.uber.org/zap"
 )
@@ -57,31 +54,18 @@ func (m *Manager) GenerateImage() ([]byte, *bytes.Buffer, error) {
 }
 
 // IncrementReviewCounter increments the review counter and updates settings.
-func (m *Manager) IncrementReviewCounter(ctx context.Context, s *session.Session) error {
-	var settings *types.UserSetting
-	s.GetInterface(constants.SessionKeyUserSettings, &settings)
-	var botSettings *types.BotSetting
-	s.GetInterface(constants.SessionKeyBotSettings, &botSettings)
-
+func (m *Manager) IncrementReviewCounter(s *session.Session) error {
 	// Only increment for non-reviewers in training mode
-	if !botSettings.IsReviewer(s.UserID()) && settings.ReviewMode == enum.ReviewModeTraining {
-		settings.CaptchaUsage.ReviewCount++
+	if !s.BotSettings().IsReviewer(s.UserID()) && session.UserReviewMode.Get(s) == enum.ReviewModeTraining {
+		reviewCount := session.UserCaptchaUsageReviewCount.Get(s)
+		session.UserCaptchaUsageReviewCount.Set(s, reviewCount+1)
 	}
-
-	// Save updated settings
-	if err := m.db.Settings().SaveUserSettings(ctx, settings); err != nil {
-		return fmt.Errorf("failed to update review counter: %w", err)
-	}
-	s.Set(constants.SessionKeyUserSettings, settings)
-
 	return nil
 }
 
 // IsRequired checks if CAPTCHA verification is needed.
 func (m *Manager) IsRequired(s *session.Session) bool {
-	var settings *types.UserSetting
-	s.GetInterface(constants.SessionKeyUserSettings, &settings)
-
-	isRequired := settings.CaptchaUsage.ReviewCount >= 10
-	return isRequired
+	return session.UserReviewMode.Get(s) == enum.ReviewModeTraining &&
+		!s.BotSettings().IsReviewer(s.UserID()) &&
+		session.UserCaptchaUsageReviewCount.Get(s) >= 10
 }

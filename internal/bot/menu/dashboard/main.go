@@ -42,7 +42,7 @@ func NewMainMenu(layout *Layout) *MainMenu {
 // Show prepares and displays the dashboard interface.
 func (m *MainMenu) Show(event interfaces.CommonEvent, s *session.Session, content string) {
 	// If the dashboard is already refreshed, directly navigate to the page
-	if s.GetBool(constants.SessionKeyIsRefreshed) {
+	if session.IsRefreshed.Get(s) {
 		m.layout.paginationManager.NavigateTo(event, s, m.page, content)
 		return
 	}
@@ -70,12 +70,12 @@ func (m *MainMenu) Show(event interfaces.CommonEvent, s *session.Session, conten
 	}
 
 	// Store data in session
-	s.Set(constants.SessionKeyUserCounts, userCounts)
-	s.Set(constants.SessionKeyGroupCounts, groupCounts)
-	s.Set(constants.SessionKeyActiveUsers, activeUsers)
-	s.Set(constants.SessionKeyWorkerStatuses, workerStatuses)
-	s.Set(constants.SessionKeyVoteStats, voteStats)
-	s.Set(constants.SessionKeyIsRefreshed, true)
+	session.UserCounts.Set(s, userCounts)
+	session.GroupCounts.Set(s, groupCounts)
+	session.ActiveUsers.Set(s, activeUsers)
+	session.WorkerStatuses.Set(s, workerStatuses)
+	session.VoteStats.Set(s, voteStats)
+	session.IsRefreshed.Set(s, true)
 
 	m.layout.paginationManager.NavigateTo(event, s, m.page, content)
 }
@@ -86,9 +86,8 @@ func (m *MainMenu) handleSelectMenu(event *events.ComponentInteractionCreate, s 
 		return
 	}
 
-	// Get bot settings to check reviewer status
-	var settings *types.BotSetting
-	s.GetInterface(constants.SessionKeyBotSettings, &settings)
+	isReviewer := s.BotSettings().IsReviewer(uint64(event.User().ID))
+	isAdmin := s.BotSettings().IsAdmin(uint64(event.User().ID))
 
 	switch option {
 	case constants.StartUserReviewButtonCustomID:
@@ -102,7 +101,7 @@ func (m *MainMenu) handleSelectMenu(event *events.ComponentInteractionCreate, s 
 	case constants.UserSettingsButtonCustomID:
 		m.layout.settingLayout.ShowUser(event, s)
 	case constants.ActivityBrowserButtonCustomID:
-		if !settings.IsReviewer(uint64(event.User().ID)) {
+		if !isReviewer {
 			m.layout.logger.Error("User is not in reviewer list but somehow attempted to access log browser", zap.Uint64("user_id", uint64(event.User().ID)))
 			m.layout.paginationManager.RespondWithError(event, "You do not have permission to access log browser.")
 			return
@@ -111,21 +110,21 @@ func (m *MainMenu) handleSelectMenu(event *events.ComponentInteractionCreate, s 
 	case constants.LeaderboardMenuButtonCustomID:
 		m.layout.leaderboardLayout.Show(event, s)
 	case constants.QueueManagerButtonCustomID:
-		if !settings.IsReviewer(uint64(event.User().ID)) {
+		if !isReviewer {
 			m.layout.logger.Error("User is not in reviewer list but somehow attempted to access queue manager", zap.Uint64("user_id", uint64(event.User().ID)))
 			m.layout.paginationManager.RespondWithError(event, "You do not have permission to access queue manager.")
 			return
 		}
 		m.layout.queueLayout.Show(event, s)
 	case constants.ChatAssistantButtonCustomID:
-		if !settings.IsReviewer(uint64(event.User().ID)) {
+		if !isReviewer {
 			m.layout.logger.Error("User is not in reviewer list but somehow attempted to access chat assistant", zap.Uint64("user_id", uint64(event.User().ID)))
 			m.layout.paginationManager.RespondWithError(event, "You do not have permission to access the chat assistant.")
 			return
 		}
 		m.layout.chatLayout.Show(event, s)
 	case constants.WorkerStatusButtonCustomID:
-		if !settings.IsReviewer(uint64(event.User().ID)) {
+		if !isReviewer {
 			m.layout.logger.Error("User is not in reviewer list but somehow attempted to access worker status", zap.Uint64("user_id", uint64(event.User().ID)))
 			m.layout.paginationManager.RespondWithError(event, "You do not have permission to access worker status.")
 			return
@@ -134,7 +133,7 @@ func (m *MainMenu) handleSelectMenu(event *events.ComponentInteractionCreate, s 
 	case constants.AppealMenuButtonCustomID:
 		m.layout.appealLayout.ShowOverview(event, s, "")
 	case constants.AdminMenuButtonCustomID:
-		if !settings.IsAdmin(uint64(event.User().ID)) {
+		if !isAdmin {
 			m.layout.logger.Error("Non-admin attempted to access admin menu",
 				zap.Uint64("user_id", uint64(event.User().ID)))
 			m.layout.paginationManager.RespondWithError(event, "You do not have permission to access admin tools.")
@@ -206,7 +205,7 @@ func (m *MainMenu) handleLookupUserModalSubmit(event *events.ModalSubmitInteract
 	}
 
 	// Store user in session and show review menu
-	s.Set(constants.SessionKeyTarget, user)
+	session.UserTarget.Set(s, user)
 	m.layout.userReviewLayout.ShowReviewMenu(event, s)
 
 	// Log the lookup action
@@ -239,7 +238,7 @@ func (m *MainMenu) handleLookupGroupModalSubmit(event *events.ModalSubmitInterac
 	}
 
 	// Store group in session and show review menu
-	s.Set(constants.SessionKeyGroupTarget, group)
+	session.GroupTarget.Set(s, group)
 	m.layout.groupReviewLayout.Show(event, s)
 
 	// Log the lookup action
@@ -258,7 +257,7 @@ func (m *MainMenu) handleLookupGroupModalSubmit(event *events.ModalSubmitInterac
 // to update the dashboard statistics.
 func (m *MainMenu) handleButton(event *events.ComponentInteractionCreate, s *session.Session, customID string) {
 	if customID == constants.RefreshButtonCustomID {
-		s.Set(constants.SessionKeyIsRefreshed, false)
+		session.IsRefreshed.Set(s, false)
 		m.Show(event, s, "Refreshed dashboard.")
 	}
 }

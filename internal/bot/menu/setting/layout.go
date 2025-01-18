@@ -1,7 +1,6 @@
 package setting
 
 import (
-	"github.com/robalyx/rotector/internal/bot/builder/setting"
 	"github.com/robalyx/rotector/internal/bot/core/pagination"
 	"github.com/robalyx/rotector/internal/bot/core/session"
 	"github.com/robalyx/rotector/internal/bot/interfaces"
@@ -18,7 +17,7 @@ type Layout struct {
 	updateMenu        *UpdateMenu
 	userMenu          *UserMenu
 	botMenu           *BotMenu
-	registry          *setting.Registry
+	registry          *session.SettingRegistry
 	logger            *zap.Logger
 }
 
@@ -35,7 +34,7 @@ func New(
 		logger:            app.Logger,
 		sessionManager:    sessionManager,
 		paginationManager: paginationManager,
-		registry:          setting.NewRegistry(),
+		registry:          session.NewSettingRegistry(),
 	}
 
 	// Initialize all menus with references to this layout

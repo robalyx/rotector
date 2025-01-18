@@ -46,18 +46,17 @@ func NewMainMenu(l *Layout) *MainMenu {
 func (m *MainMenu) Show(event interfaces.CommonEvent, s *session.Session) {
 	// Get query parameters from session
 	activityFilter := types.ActivityFilter{
-		DiscordID:  s.GetUint64(constants.SessionKeyDiscordIDFilter),
-		UserID:     s.GetUint64(constants.SessionKeyUserIDFilter),
-		GroupID:    s.GetUint64(constants.SessionKeyGroupIDFilter),
-		ReviewerID: s.GetUint64(constants.SessionKeyReviewerIDFilter),
-		StartDate:  s.GetTime(constants.SessionKeyDateRangeStartFilter),
-		EndDate:    s.GetTime(constants.SessionKeyDateRangeEndFilter),
+		DiscordID:    session.DiscordIDFilter.Get(s),
+		UserID:       session.UserIDFilter.Get(s),
+		GroupID:      session.GroupIDFilter.Get(s),
+		ReviewerID:   session.ReviewerIDFilter.Get(s),
+		ActivityType: session.ActivityTypeFilter.Get(s),
+		StartDate:    session.DateRangeStartFilter.Get(s),
+		EndDate:      session.DateRangeEndFilter.Get(s),
 	}
-	s.GetInterface(constants.SessionKeyActivityTypeFilter, &activityFilter.ActivityType)
 
 	// Get cursor from session if it exists
-	var cursor *types.LogCursor
-	s.GetInterface(constants.SessionKeyLogCursor, &cursor)
+	cursor := session.LogCursor.Get(s)
 
 	// Fetch filtered logs from database
 	logs, nextCursor, err := m.layout.db.Activity().GetLogs(
@@ -82,15 +81,14 @@ func (m *MainMenu) Show(event interfaces.CommonEvent, s *session.Session) {
 	}
 
 	// Get previous cursors array
-	var prevCursors []*types.LogCursor
-	s.GetInterface(constants.SessionKeyLogPrevCursors, &prevCursors)
+	prevCursors := session.LogPrevCursors.Get(s)
 
 	// Store results and cursor in session
-	s.Set(constants.SessionKeyLogs, logs)
-	s.Set(constants.SessionKeyLogCursor, cursor)
-	s.Set(constants.SessionKeyLogNextCursor, nextCursor)
-	s.Set(constants.SessionKeyHasNextPage, nextCursor != nil)
-	s.Set(constants.SessionKeyHasPrevPage, len(prevCursors) > 0)
+	session.Logs.Set(s, logs)
+	session.LogCursor.Set(s, cursor)
+	session.LogNextCursor.Set(s, nextCursor)
+	session.HasNextPage.Set(s, nextCursor != nil)
+	session.HasPrevPage.Set(s, len(prevCursors) > 0)
 
 	m.layout.paginationManager.NavigateTo(event, s, m.page, "")
 }
@@ -122,7 +120,7 @@ func (m *MainMenu) handleSelectMenu(event *events.ComponentInteractionCreate, s 
 			return
 		}
 
-		s.Set(constants.SessionKeyActivityTypeFilter, enum.ActivityType(optionInt))
+		session.ActivityTypeFilter.Set(s, enum.ActivityType(optionInt))
 		m.Show(event, s)
 	}
 }
@@ -139,8 +137,8 @@ func (m *MainMenu) handleButton(event *events.ComponentInteractionCreate, s *ses
 	case constants.ClearFiltersButtonCustomID:
 		m.layout.ResetFilters(s)
 		m.Show(event, s)
-	case string(utils.ViewerFirstPage), string(utils.ViewerPrevPage), string(utils.ViewerNextPage), string(utils.ViewerLastPage):
-		m.handlePagination(event, s, utils.ViewerAction(customID))
+	case string(session.ViewerFirstPage), string(session.ViewerPrevPage), string(session.ViewerNextPage), string(session.ViewerLastPage):
+		m.handlePagination(event, s, session.ViewerAction(customID))
 	}
 }
 
@@ -190,13 +188,13 @@ func (m *MainMenu) handleIDModalSubmit(event *events.ModalSubmitInteractionCreat
 	// Store ID in appropriate session key based on query type
 	switch queryType {
 	case constants.LogsQueryDiscordIDOption:
-		s.Set(constants.SessionKeyDiscordIDFilter, id)
+		session.DiscordIDFilter.Set(s, id)
 	case constants.LogsQueryUserIDOption:
-		s.Set(constants.SessionKeyUserIDFilter, id)
+		session.UserIDFilter.Set(s, id)
 	case constants.LogsQueryGroupIDOption:
-		s.Set(constants.SessionKeyGroupIDFilter, id)
+		session.GroupIDFilter.Set(s, id)
 	case constants.LogsQueryReviewerIDOption:
-		s.Set(constants.SessionKeyReviewerIDFilter, id)
+		session.ReviewerIDFilter.Set(s, id)
 	}
 
 	m.Show(event, s)
@@ -212,43 +210,39 @@ func (m *MainMenu) handleDateRangeModalSubmit(event *events.ModalSubmitInteracti
 		return
 	}
 
-	s.Set(constants.SessionKeyDateRangeStartFilter, startDate)
-	s.Set(constants.SessionKeyDateRangeEndFilter, endDate)
+	session.DateRangeStartFilter.Set(s, startDate)
+	session.DateRangeEndFilter.Set(s, endDate)
 
 	m.Show(event, s)
 }
 
 // handlePagination processes page navigation.
-func (m *MainMenu) handlePagination(event *events.ComponentInteractionCreate, s *session.Session, action utils.ViewerAction) {
+func (m *MainMenu) handlePagination(event *events.ComponentInteractionCreate, s *session.Session, action session.ViewerAction) {
 	switch action {
-	case utils.ViewerNextPage:
-		if s.GetBool(constants.SessionKeyHasNextPage) {
-			var cursor *types.LogCursor
-			s.GetInterface(constants.SessionKeyLogCursor, &cursor)
-			var nextCursor *types.LogCursor
-			s.GetInterface(constants.SessionKeyLogNextCursor, &nextCursor)
-			var prevCursors []*types.LogCursor
-			s.GetInterface(constants.SessionKeyLogPrevCursors, &prevCursors)
+	case session.ViewerNextPage:
+		if session.HasNextPage.Get(s) {
+			cursor := session.LogCursor.Get(s)
+			nextCursor := session.LogNextCursor.Get(s)
+			prevCursors := session.LogPrevCursors.Get(s)
 
-			s.Set(constants.SessionKeyLogCursor, nextCursor)
-			s.Set(constants.SessionKeyLogPrevCursors, append(prevCursors, cursor))
+			session.LogCursor.Set(s, nextCursor)
+			session.LogPrevCursors.Set(s, append(prevCursors, cursor))
 			m.Show(event, s)
 		}
-	case utils.ViewerPrevPage:
-		var prevCursors []*types.LogCursor
-		s.GetInterface(constants.SessionKeyLogPrevCursors, &prevCursors)
+	case session.ViewerPrevPage:
+		prevCursors := session.LogPrevCursors.Get(s)
 
 		if len(prevCursors) > 0 {
 			lastIdx := len(prevCursors) - 1
-			s.Set(constants.SessionKeyLogPrevCursors, prevCursors[:lastIdx])
-			s.Set(constants.SessionKeyLogCursor, prevCursors[lastIdx])
+			session.LogPrevCursors.Set(s, prevCursors[:lastIdx])
+			session.LogCursor.Set(s, prevCursors[lastIdx])
 			m.Show(event, s)
 		}
-	case utils.ViewerFirstPage:
-		s.Set(constants.SessionKeyLogCursor, nil)
-		s.Set(constants.SessionKeyLogPrevCursors, make([]*types.LogCursor, 0))
+	case session.ViewerFirstPage:
+		session.LogCursor.Set(s, nil)
+		session.LogPrevCursors.Set(s, make([]*types.LogCursor, 0))
 		m.Show(event, s)
-	case utils.ViewerLastPage:
+	case session.ViewerLastPage:
 		return
 	}
 }

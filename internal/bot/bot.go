@@ -214,7 +214,7 @@ func (b *Bot) handleApplicationCommandInteraction(event *events.ApplicationComma
 		}
 
 		// Check if the session has a valid current page
-		page := b.paginationManager.GetPage(s.GetString(constants.SessionKeyCurrentPage))
+		page := b.paginationManager.GetPage(session.CurrentPage.Get(s))
 		if page == nil {
 			// If no valid page exists, reset to dashboard
 			b.dashboardLayout.Show(event, s, "New session created.")
@@ -257,7 +257,7 @@ func (b *Bot) handleComponentInteraction(event *events.ComponentInteractionCreat
 		}
 
 		// Get current page
-		page := b.paginationManager.GetPage(s.GetString(constants.SessionKeyCurrentPage))
+		page := b.paginationManager.GetPage(session.CurrentPage.Get(s))
 
 		// WORKAROUND:
 		// Special handling for modal interactions to prevent response conflicts.
@@ -302,10 +302,10 @@ func (b *Bot) handleComponentInteraction(event *events.ComponentInteractionCreat
 		}
 
 		// Verify interaction is for latest message
-		sessionMessageID := s.GetUint64(constants.SessionKeyMessageID)
-		if sessionMessageID != uint64(event.Message.ID) {
+		sessionMessageID := session.MessageID.Get(s)
+		if sessionMessageID != event.Message.ID.String() {
 			b.logger.Debug("Interaction is outdated",
-				zap.Uint64("session_message_id", sessionMessageID),
+				zap.String("session_message_id", sessionMessageID),
 				zap.Uint64("event_message_id", uint64(event.Message.ID)))
 			b.paginationManager.RespondWithMessage(event, "This interaction is outdated. Please use the latest interaction.")
 			return
@@ -366,7 +366,7 @@ func (b *Bot) handleModalSubmit(event *events.ModalSubmitInteractionCreate) {
 		}
 
 		// Check if the session has a valid current page
-		page := b.paginationManager.GetPage(s.GetString(constants.SessionKeyCurrentPage))
+		page := b.paginationManager.GetPage(session.CurrentPage.Get(s))
 		if page == nil {
 			// If no valid page exists, reset to dashboard
 			b.dashboardLayout.Show(event, s, "New session created.")

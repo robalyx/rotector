@@ -31,7 +31,7 @@ type UserGroupFetchResult struct {
 
 // UserFriendFetchResult contains the result of fetching a user's friends.
 type UserFriendFetchResult struct {
-	Data  []types.ExtendedFriend
+	Data  []*types.ExtendedFriend
 	Error error
 }
 

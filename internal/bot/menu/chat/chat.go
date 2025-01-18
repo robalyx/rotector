@@ -13,9 +13,7 @@ import (
 	"github.com/robalyx/rotector/internal/bot/core/pagination"
 	"github.com/robalyx/rotector/internal/bot/core/session"
 	"github.com/robalyx/rotector/internal/bot/interfaces"
-	"github.com/robalyx/rotector/internal/bot/utils"
 	"github.com/robalyx/rotector/internal/common/client/ai"
-	"github.com/robalyx/rotector/internal/common/storage/database/types"
 	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
 	"go.uber.org/zap"
 )
@@ -48,16 +46,15 @@ func (m *Menu) Show(event interfaces.CommonEvent, s *session.Session, content st
 
 // handleButton processes button interactions.
 func (m *Menu) handleButton(event *events.ComponentInteractionCreate, s *session.Session, customID string) {
-	action := utils.ViewerAction(customID)
+	action := session.ViewerAction(customID)
 	switch action {
-	case utils.ViewerFirstPage, utils.ViewerPrevPage, utils.ViewerNextPage, utils.ViewerLastPage:
-		var history ai.ChatHistory
-		s.GetInterface(constants.SessionKeyChatHistory, &history)
+	case session.ViewerFirstPage, session.ViewerPrevPage, session.ViewerNextPage, session.ViewerLastPage:
+		history := session.ChatHistory.Get(s)
 
 		maxPage := (len(history.Messages)/2 - 1) / constants.ChatMessagesPerPage
 		page := action.ParsePageAction(s, action, maxPage)
 
-		s.Set(constants.SessionKeyPaginationPage, page)
+		session.PaginationPage.Set(s, page)
 		m.Show(event, s, "")
 
 	case constants.ChatSendButtonID:
@@ -82,12 +79,12 @@ func (m *Menu) handleButton(event *events.ComponentInteractionCreate, s *session
 
 	case constants.ChatClearHistoryButtonID:
 		// Clear chat history
-		s.Set(constants.SessionKeyChatHistory, ai.ChatHistory{Messages: make([]*ai.ChatMessage, 0)})
-		s.Set(constants.SessionKeyPaginationPage, 0)
+		session.ChatHistory.Set(s, ai.ChatHistory{Messages: make([]*ai.ChatMessage, 0)})
+		session.PaginationPage.Set(s, 0)
 		m.Show(event, s, "Chat history cleared.")
 
 	case constants.ChatClearContextButtonID:
-		s.Delete(constants.SessionKeyChatContext)
+		session.ChatContext.Delete(s)
 		m.Show(event, s, "Context cleared.")
 	}
 }
@@ -96,10 +93,6 @@ func (m *Menu) handleButton(event *events.ComponentInteractionCreate, s *session
 func (m *Menu) handleSelectMenu(event *events.ComponentInteractionCreate, s *session.Session, customID string, option string) {
 	switch customID {
 	case constants.ChatModelSelectID:
-		// Get user settings
-		var settings *types.UserSetting
-		s.GetInterface(constants.SessionKeyUserSettings, &settings)
-
 		// Parse option to chat model
 		chatModel, err := enum.ChatModelString(option)
 		if err != nil {
@@ -109,15 +102,9 @@ func (m *Menu) handleSelectMenu(event *events.ComponentInteractionCreate, s *ses
 		}
 
 		// Update user settings with new chat model
-		settings.ChatModel = chatModel
-		if err := m.layout.db.Settings().SaveUserSettings(context.Background(), settings); err != nil {
-			m.layout.logger.Error("Failed to save chat model setting", zap.Error(err))
-			m.layout.paginationManager.RespondWithError(event, "Failed to switch chat model. Please try again.")
-			return
-		}
+		session.UserChatModel.Set(s, chatModel)
 
-		// Update session and refresh the menu
-		s.Set(constants.SessionKeyUserSettings, settings)
+		// Refresh the menu
 		m.Show(event, s, fmt.Sprintf("Switched to %s model", chatModel.String()))
 	}
 }
@@ -132,39 +119,31 @@ func (m *Menu) handleModal(event *events.ModalSubmitInteractionCreate, s *sessio
 			return
 		}
 
-		// Get user settings
-		var userSettings *types.UserSetting
-		s.GetInterface(constants.SessionKeyUserSettings, &userSettings)
-
 		// Check message limits
-		if allowed, errMsg := m.checkMessageLimits(s, userSettings); !allowed {
+		if allowed, errMsg := m.checkMessageLimits(s); !allowed {
 			m.layout.paginationManager.NavigateTo(event, s, m.page, errMsg)
 			return
 		}
 
 		// Prepend context if available
-		var msgContext string
-		s.GetInterface(constants.SessionKeyChatContext, &msgContext)
+		msgContext := session.ChatContext.Get(s)
 		if msgContext != "" {
-			message = msgContext + "\n\n" + message
-			s.Delete(constants.SessionKeyChatContext)
+			message = fmt.Sprintf("%s\n\n%s", msgContext, message)
+			session.ChatContext.Delete(s)
 		}
 
 		// Set streaming state
-		s.Set(constants.SessionKeyIsStreaming, true)
+		session.IsStreaming.Set(s, true)
 
 		// Show "AI is typing..." message
 		m.layout.paginationManager.NavigateTo(event, s, m.page, "AI is typing...")
 
-		// Get chat history
-		var history ai.ChatHistory
-		s.GetInterface(constants.SessionKeyChatHistory, &history)
-
 		// Stream AI response
+		history := session.ChatHistory.Get(s)
 		responseChan, historyChan := m.layout.chatHandler.StreamResponse(
 			context.Background(),
 			history.ToGenAIHistory(),
-			userSettings.ChatModel,
+			session.UserChatModel.Get(s),
 			message,
 		)
 
@@ -184,8 +163,7 @@ func (m *Menu) handleModal(event *events.ModalSubmitInteractionCreate, s *sessio
 		// Get final history from channel
 		if genAIHistory := <-historyChan; genAIHistory != nil {
 			// Get existing history from session
-			var existingHistory ai.ChatHistory
-			s.GetInterface(constants.SessionKeyChatHistory, &existingHistory)
+			existingHistory := session.ChatHistory.Get(s)
 
 			// Append the new messages to existing history
 			for _, msg := range genAIHistory {
@@ -196,12 +174,12 @@ func (m *Menu) handleModal(event *events.ModalSubmitInteractionCreate, s *sessio
 			}
 
 			// Update session with combined history
-			s.Set(constants.SessionKeyChatHistory, existingHistory)
+			session.ChatHistory.Set(s, existingHistory)
 		}
 
 		// Calculate new page number to show latest messages
-		s.Set(constants.SessionKeyPaginationPage, 0)
-		s.Set(constants.SessionKeyIsStreaming, false)
+		session.PaginationPage.Set(s, 0)
+		session.IsStreaming.Set(s, false)
 
 		// Show final message
 		m.layout.paginationManager.NavigateTo(event, s, m.page, "Response completed.")
@@ -210,32 +188,26 @@ func (m *Menu) handleModal(event *events.ModalSubmitInteractionCreate, s *sessio
 
 // checkMessageLimits checks if the user has exceeded their daily message limit.
 // Returns true if the message should be allowed, false if it should be blocked.
-func (m *Menu) checkMessageLimits(s *session.Session, userSettings *types.UserSetting) (bool, string) {
+func (m *Menu) checkMessageLimits(s *session.Session) (bool, string) {
 	now := time.Now()
-	if userSettings.ChatMessageUsage.FirstMessageTime.IsZero() ||
-		now.Sub(userSettings.ChatMessageUsage.FirstMessageTime) > constants.ChatMessageResetLimit {
+	firstMessageTime := session.UserChatMessageUsageFirstMessageTime.Get(s)
+	messageCount := session.UserChatMessageUsageMessageCount.Get(s)
+
+	if firstMessageTime.IsZero() || now.Sub(firstMessageTime) > constants.ChatMessageResetLimit {
 		// First message or past time limit - reset both time and count
-		userSettings.ChatMessageUsage.FirstMessageTime = now
-		userSettings.ChatMessageUsage.MessageCount = 1
+		session.UserChatMessageUsageFirstMessageTime.Set(s, now)
+		session.UserChatMessageUsageMessageCount.Set(s, 1)
 	} else {
-		// Within time limit - check count
-		if userSettings.ChatMessageUsage.MessageCount >= constants.MaxChatMessagesPerDay {
-			timeLeft := userSettings.ChatMessageUsage.FirstMessageTime.Add(constants.ChatMessageResetLimit).Sub(now)
+		// Within time limit - check and increment message count
+		if messageCount >= constants.MaxChatMessagesPerDay {
+			timeLeft := firstMessageTime.Add(constants.ChatMessageResetLimit).Sub(now)
 			return false, fmt.Sprintf("You have reached the limit of %d messages per day. Please try again in %s.",
 				constants.MaxChatMessagesPerDay,
 				timeLeft.String())
 		}
-		userSettings.ChatMessageUsage.MessageCount++
-	}
 
-	// Save updated usage to database
-	if err := m.layout.db.Settings().SaveUserSettings(context.Background(), userSettings); err != nil {
-		m.layout.logger.Error("Failed to save chat message usage", zap.Error(err))
-		return false, "Failed to update chat message usage. Please try again."
+		session.UserChatMessageUsageMessageCount.Set(s, messageCount+1)
 	}
-
-	// Update session with new settings
-	s.Set(constants.SessionKeyUserSettings, userSettings)
 
 	return true, ""
 }

@@ -14,36 +14,27 @@ import (
 
 // Builder creates the visual layout for viewing the voting leaderboard.
 type Builder struct {
-	settings    *types.UserSetting
-	stats       []types.VoteAccuracy
-	usernames   map[uint64]string
-	hasNextPage bool
-	hasPrevPage bool
-	lastRefresh time.Time
-	nextRefresh time.Time
+	stats             []*types.VoteAccuracy
+	usernames         map[uint64]string
+	hasNextPage       bool
+	hasPrevPage       bool
+	lastRefresh       time.Time
+	nextRefresh       time.Time
+	leaderboardPeriod enum.LeaderboardPeriod
+	privacyMode       bool
 }
 
 // NewBuilder creates a new leaderboard builder.
 func NewBuilder(s *session.Session) *Builder {
-	var settings *types.UserSetting
-	s.GetInterface(constants.SessionKeyUserSettings, &settings)
-	var stats []types.VoteAccuracy
-	s.GetInterface(constants.SessionKeyLeaderboardStats, &stats)
-	var usernames map[uint64]string
-	s.GetInterface(constants.SessionKeyLeaderboardUsernames, &usernames)
-	var lastRefresh time.Time
-	s.GetInterface(constants.SessionKeyLeaderboardLastRefresh, &lastRefresh)
-	var nextRefresh time.Time
-	s.GetInterface(constants.SessionKeyLeaderboardNextRefresh, &nextRefresh)
-
 	return &Builder{
-		settings:    settings,
-		stats:       stats,
-		usernames:   usernames,
-		hasNextPage: s.GetBool(constants.SessionKeyHasNextPage),
-		hasPrevPage: s.GetBool(constants.SessionKeyHasPrevPage),
-		lastRefresh: lastRefresh,
-		nextRefresh: nextRefresh,
+		stats:             session.LeaderboardStats.Get(s),
+		usernames:         session.LeaderboardUsernames.Get(s),
+		hasNextPage:       session.HasNextPage.Get(s),
+		hasPrevPage:       session.HasPrevPage.Get(s),
+		lastRefresh:       session.LeaderboardLastRefresh.Get(s),
+		nextRefresh:       session.LeaderboardNextRefresh.Get(s),
+		leaderboardPeriod: session.UserLeaderboardPeriod.Get(s),
+		privacyMode:       session.UserReviewMode.Get(s) == enum.ReviewModeTraining || session.UserStreamerMode.Get(s),
 	}
 }
 
@@ -51,8 +42,8 @@ func NewBuilder(s *session.Session) *Builder {
 func (b *Builder) Build() *discord.MessageUpdateBuilder {
 	embed := discord.NewEmbedBuilder().
 		SetTitle("🏆 Voting Leaderboard").
-		SetDescription(fmt.Sprintf("Top voters for %s period", b.settings.LeaderboardPeriod.String())).
-		SetColor(utils.GetMessageEmbedColor(b.settings.StreamerMode))
+		SetDescription(fmt.Sprintf("Top voters for %s period", b.leaderboardPeriod.String())).
+		SetColor(utils.GetMessageEmbedColor(b.privacyMode))
 
 	if !b.lastRefresh.IsZero() {
 		embed.SetFooter(fmt.Sprintf(
@@ -112,10 +103,10 @@ func (b *Builder) buildComponents() []discord.ContainerComponent {
 		// Navigation buttons
 		discord.NewActionRow(
 			discord.NewSecondaryButton("◀️", constants.BackButtonCustomID),
-			discord.NewSecondaryButton("⏮️", string(utils.ViewerFirstPage)).WithDisabled(!b.hasPrevPage),
-			discord.NewSecondaryButton("◀️", string(utils.ViewerPrevPage)).WithDisabled(!b.hasPrevPage),
-			discord.NewSecondaryButton("▶️", string(utils.ViewerNextPage)).WithDisabled(!b.hasNextPage),
-			discord.NewSecondaryButton("⏭️", string(utils.ViewerLastPage)).WithDisabled(true),
+			discord.NewSecondaryButton("⏮️", string(session.ViewerFirstPage)).WithDisabled(!b.hasPrevPage),
+			discord.NewSecondaryButton("◀️", string(session.ViewerPrevPage)).WithDisabled(!b.hasPrevPage),
+			discord.NewSecondaryButton("▶️", string(session.ViewerNextPage)).WithDisabled(!b.hasNextPage),
+			discord.NewSecondaryButton("⏭️", string(session.ViewerLastPage)).WithDisabled(true),
 		),
 	}
 }
@@ -124,19 +115,19 @@ func (b *Builder) buildComponents() []discord.ContainerComponent {
 func (b *Builder) buildPeriodOptions() []discord.StringSelectMenuOption {
 	return []discord.StringSelectMenuOption{
 		discord.NewStringSelectMenuOption("Daily", enum.LeaderboardPeriodDaily.String()).
-			WithDefault(b.settings.LeaderboardPeriod == enum.LeaderboardPeriodDaily),
+			WithDefault(b.leaderboardPeriod == enum.LeaderboardPeriodDaily),
 		discord.NewStringSelectMenuOption("Weekly", enum.LeaderboardPeriodWeekly.String()).
-			WithDefault(b.settings.LeaderboardPeriod == enum.LeaderboardPeriodWeekly),
+			WithDefault(b.leaderboardPeriod == enum.LeaderboardPeriodWeekly),
 		discord.NewStringSelectMenuOption("Bi-Weekly", enum.LeaderboardPeriodBiWeekly.String()).
-			WithDefault(b.settings.LeaderboardPeriod == enum.LeaderboardPeriodBiWeekly),
+			WithDefault(b.leaderboardPeriod == enum.LeaderboardPeriodBiWeekly),
 		discord.NewStringSelectMenuOption("Monthly", enum.LeaderboardPeriodMonthly.String()).
-			WithDefault(b.settings.LeaderboardPeriod == enum.LeaderboardPeriodMonthly),
+			WithDefault(b.leaderboardPeriod == enum.LeaderboardPeriodMonthly),
 		discord.NewStringSelectMenuOption("Bi-Annually", enum.LeaderboardPeriodBiAnnually.String()).
-			WithDefault(b.settings.LeaderboardPeriod == enum.LeaderboardPeriodBiAnnually),
+			WithDefault(b.leaderboardPeriod == enum.LeaderboardPeriodBiAnnually),
 		discord.NewStringSelectMenuOption("Annually", enum.LeaderboardPeriodAnnually.String()).
-			WithDefault(b.settings.LeaderboardPeriod == enum.LeaderboardPeriodAnnually),
+			WithDefault(b.leaderboardPeriod == enum.LeaderboardPeriodAnnually),
 		discord.NewStringSelectMenuOption("All Time", enum.LeaderboardPeriodAllTime.String()).
-			WithDefault(b.settings.LeaderboardPeriod == enum.LeaderboardPeriodAllTime),
+			WithDefault(b.leaderboardPeriod == enum.LeaderboardPeriodAllTime),
 	}
 }
 

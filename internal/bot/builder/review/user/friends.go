@@ -17,9 +17,8 @@ import (
 
 // FriendsBuilder creates the visual layout for viewing a user's friends.
 type FriendsBuilder struct {
-	settings       *types.UserSetting
 	user           *types.ReviewUser
-	friends        []types.ExtendedFriend
+	friends        []*types.ExtendedFriend
 	presences      map[uint64]*apiTypes.UserPresenceResponse
 	flaggedFriends map[uint64]*types.ReviewUser
 	start          int
@@ -27,39 +26,28 @@ type FriendsBuilder struct {
 	total          int
 	imageBuffer    *bytes.Buffer
 	isStreaming    bool
+	privacyMode    bool
 }
 
 // NewFriendsBuilder creates a new friends builder.
 func NewFriendsBuilder(s *session.Session) *FriendsBuilder {
-	var settings *types.UserSetting
-	s.GetInterface(constants.SessionKeyUserSettings, &settings)
-	var user *types.ReviewUser
-	s.GetInterface(constants.SessionKeyTarget, &user)
-	var friends []types.ExtendedFriend
-	s.GetInterface(constants.SessionKeyFriends, &friends)
-	var presences map[uint64]*apiTypes.UserPresenceResponse
-	s.GetInterface(constants.SessionKeyPresences, &presences)
-	var flaggedFriends map[uint64]*types.ReviewUser
-	s.GetInterface(constants.SessionKeyFlaggedFriends, &flaggedFriends)
-
 	return &FriendsBuilder{
-		settings:       settings,
-		user:           user,
-		friends:        friends,
-		presences:      presences,
-		flaggedFriends: flaggedFriends,
-		start:          s.GetInt(constants.SessionKeyStart),
-		page:           s.GetInt(constants.SessionKeyPaginationPage),
-		total:          s.GetInt(constants.SessionKeyTotalItems),
-		imageBuffer:    s.GetBuffer(constants.SessionKeyImageBuffer),
-		isStreaming:    s.GetBool(constants.SessionKeyIsStreaming),
+		user:           session.UserTarget.Get(s),
+		friends:        session.Friends.Get(s),
+		presences:      session.Presences.Get(s),
+		flaggedFriends: session.FlaggedFriends.Get(s),
+		start:          session.Start.Get(s),
+		page:           session.PaginationPage.Get(s),
+		total:          session.TotalItems.Get(s),
+		imageBuffer:    session.ImageBuffer.Get(s),
+		isStreaming:    session.IsStreaming.Get(s),
+		privacyMode:    session.UserReviewMode.Get(s) == enum.ReviewModeTraining || session.UserStreamerMode.Get(s),
 	}
 }
 
 // Build creates a Discord message with a grid of friend avatars and information.
 func (b *FriendsBuilder) Build() *discord.MessageUpdateBuilder {
 	totalPages := (b.total + constants.FriendsPerPage - 1) / constants.FriendsPerPage
-	censor := b.settings.StreamerMode || b.settings.ReviewMode == enum.ReviewModeTraining
 
 	// Create file attachment for the friend avatars grid
 	fileName := fmt.Sprintf("friends_%d_%d.png", b.user.ID, b.page)
@@ -70,11 +58,11 @@ func (b *FriendsBuilder) Build() *discord.MessageUpdateBuilder {
 		SetTitle(fmt.Sprintf("User Friends (Page %d/%d)", b.page+1, totalPages)).
 		SetDescription(fmt.Sprintf(
 			"```%s (%s)```",
-			utils.CensorString(b.user.Name, censor),
-			utils.CensorString(strconv.FormatUint(b.user.ID, 10), censor),
+			utils.CensorString(b.user.Name, b.privacyMode),
+			utils.CensorString(strconv.FormatUint(b.user.ID, 10), b.privacyMode),
 		)).
 		SetImage("attachment://" + fileName).
-		SetColor(utils.GetMessageEmbedColor(b.settings.StreamerMode))
+		SetColor(utils.GetMessageEmbedColor(b.privacyMode))
 
 	// Add fields for each friend
 	for i, friend := range b.friends {
@@ -92,10 +80,10 @@ func (b *FriendsBuilder) Build() *discord.MessageUpdateBuilder {
 		builder.AddContainerComponents([]discord.ContainerComponent{
 			discord.NewActionRow(
 				discord.NewSecondaryButton("◀️", string(constants.BackButtonCustomID)),
-				discord.NewSecondaryButton("⏮️", string(utils.ViewerFirstPage)).WithDisabled(b.page == 0),
-				discord.NewSecondaryButton("◀️", string(utils.ViewerPrevPage)).WithDisabled(b.page == 0),
-				discord.NewSecondaryButton("▶️", string(utils.ViewerNextPage)).WithDisabled(b.page == totalPages-1),
-				discord.NewSecondaryButton("⏭️", string(utils.ViewerLastPage)).WithDisabled(b.page == totalPages-1),
+				discord.NewSecondaryButton("⏮️", string(session.ViewerFirstPage)).WithDisabled(b.page == 0),
+				discord.NewSecondaryButton("◀️", string(session.ViewerPrevPage)).WithDisabled(b.page == 0),
+				discord.NewSecondaryButton("▶️", string(session.ViewerNextPage)).WithDisabled(b.page == totalPages-1),
+				discord.NewSecondaryButton("⏭️", string(session.ViewerLastPage)).WithDisabled(b.page == totalPages-1),
 			),
 		}...)
 	}
@@ -104,7 +92,7 @@ func (b *FriendsBuilder) Build() *discord.MessageUpdateBuilder {
 }
 
 // getFriendFieldName creates the field name for a friend entry.
-func (b *FriendsBuilder) getFriendFieldName(index int, friend types.ExtendedFriend) string {
+func (b *FriendsBuilder) getFriendFieldName(index int, friend *types.ExtendedFriend) string {
 	fieldName := fmt.Sprintf("Friend %d", b.start+index+1)
 
 	// Add presence indicator
@@ -140,16 +128,17 @@ func (b *FriendsBuilder) getFriendFieldName(index int, friend types.ExtendedFrie
 }
 
 // getFriendFieldValue creates the field value for a friend entry.
-func (b *FriendsBuilder) getFriendFieldValue(friend types.ExtendedFriend) string {
+func (b *FriendsBuilder) getFriendFieldValue(friend *types.ExtendedFriend) string {
 	var info strings.Builder
 
 	// Add friend name (with link in standard mode)
-	if b.settings.ReviewMode == enum.ReviewModeTraining {
-		info.WriteString(utils.CensorString(friend.Name, true))
+	name := utils.CensorString(friend.Name, b.privacyMode)
+	if b.privacyMode {
+		info.WriteString(name)
 	} else {
 		info.WriteString(fmt.Sprintf(
 			"[%s](https://www.roblox.com/users/%d/profile)",
-			utils.CensorString(friend.Name, b.settings.StreamerMode),
+			name,
 			friend.ID,
 		))
 	}
@@ -172,7 +161,7 @@ func (b *FriendsBuilder) getFriendFieldValue(friend types.ExtendedFriend) string
 	if flaggedFriend.Reason != "" {
 		censored := utils.CensorStringsInText(
 			flaggedFriend.Reason,
-			b.settings.StreamerMode,
+			b.privacyMode,
 			strconv.FormatUint(b.user.ID, 10),
 			b.user.Name,
 			b.user.DisplayName,

@@ -32,9 +32,9 @@ func NewMainMenu(layout *Layout) *MainMenu {
 		Name: "Queue Menu",
 		Message: func(s *session.Session) *discord.MessageUpdateBuilder {
 			// Load current queue lengths for display
-			highCount := s.GetInt(constants.SessionKeyQueueHighCount)
-			normalCount := s.GetInt(constants.SessionKeyQueueNormalCount)
-			lowCount := s.GetInt(constants.SessionKeyQueueLowCount)
+			highCount := session.QueueHighCount.Get(s)
+			normalCount := session.QueueNormalCount.Get(s)
+			lowCount := session.QueueLowCount.Get(s)
 
 			return builder.NewBuilder(highCount, normalCount, lowCount).Build()
 		},
@@ -49,9 +49,9 @@ func NewMainMenu(layout *Layout) *MainMenu {
 // current queue lengths into the session.
 func (m *MainMenu) Show(event interfaces.CommonEvent, s *session.Session, content string) {
 	// Store current queue lengths in session for the message builder
-	s.Set(constants.SessionKeyQueueHighCount, m.layout.queueManager.GetQueueLength(context.Background(), queue.HighPriority))
-	s.Set(constants.SessionKeyQueueNormalCount, m.layout.queueManager.GetQueueLength(context.Background(), queue.NormalPriority))
-	s.Set(constants.SessionKeyQueueLowCount, m.layout.queueManager.GetQueueLength(context.Background(), queue.LowPriority))
+	session.QueueHighCount.Set(s, m.layout.queueManager.GetQueueLength(context.Background(), queue.HighPriority))
+	session.QueueNormalCount.Set(s, m.layout.queueManager.GetQueueLength(context.Background(), queue.NormalPriority))
+	session.QueueLowCount.Set(s, m.layout.queueManager.GetQueueLength(context.Background(), queue.LowPriority))
 
 	m.layout.paginationManager.NavigateTo(event, s, m.page, content)
 }
@@ -109,7 +109,7 @@ func (m *MainMenu) handleModal(event *events.ModalSubmitInteractionCreate, s *se
 	}
 
 	// Store user ID for status tracking
-	s.Set(constants.SessionKeyQueueUser, userID)
+	session.QueueUser.Set(s, userID)
 
 	// Check if user is already in queue
 	status, _, _, err := m.layout.queueManager.GetQueueInfo(context.Background(), userID)

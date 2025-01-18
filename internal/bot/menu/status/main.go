@@ -42,7 +42,7 @@ func (m *MainMenu) Show(event interfaces.CommonEvent, s *session.Session) {
 	}
 
 	// Store data in session
-	s.Set(constants.SessionKeyWorkerStatuses, workerStatuses)
+	session.WorkerStatuses.Set(s, workerStatuses)
 
 	m.layout.paginationManager.NavigateTo(event, s, m.page, "")
 }

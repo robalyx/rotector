@@ -23,47 +23,41 @@ import (
 
 // Builder creates the visual layout for the main dashboard.
 type Builder struct {
-	botSettings      *types.BotSetting
-	userID           uint64
-	userCounts       *types.UserCounts
-	groupCounts      *types.GroupCounts
-	userStatsBuffer  *bytes.Buffer
-	groupStatsBuffer *bytes.Buffer
-	activeUsers      []snowflake.ID
-	workerStatuses   []core.Status
-	voteStats        *types.VoteAccuracy
-	titleCaser       cases.Caser
+	userID              uint64
+	userCounts          *types.UserCounts
+	groupCounts         *types.GroupCounts
+	userStatsBuffer     *bytes.Buffer
+	groupStatsBuffer    *bytes.Buffer
+	activeUsers         []snowflake.ID
+	workerStatuses      []core.Status
+	voteStats           *types.VoteAccuracy
+	announcementType    enum.AnnouncementType
+	announcementMessage string
+	welcomeMessage      string
+	isReviewer          bool
+	isAdmin             bool
+	titleCaser          cases.Caser
 }
 
 // NewBuilder creates a new dashboard builder.
 func NewBuilder(s *session.Session, redisClient rueidis.Client) *Builder {
-	var botSettings *types.BotSetting
-	s.GetInterface(constants.SessionKeyBotSettings, &botSettings)
-	var userCounts *types.UserCounts
-	s.GetInterface(constants.SessionKeyUserCounts, &userCounts)
-	var groupCounts *types.GroupCounts
-	s.GetInterface(constants.SessionKeyGroupCounts, &groupCounts)
-	var activeUsers []snowflake.ID
-	s.GetInterface(constants.SessionKeyActiveUsers, &activeUsers)
-	var workerStatuses []core.Status
-	s.GetInterface(constants.SessionKeyWorkerStatuses, &workerStatuses)
-	var voteStats *types.VoteAccuracy
-	s.GetInterface(constants.SessionKeyVoteStats, &voteStats)
-
-	// Get chart buffers from Redis
 	userStatsBuffer, groupStatsBuffer := getChartBuffers(redisClient)
-
+	botSettings := s.BotSettings()
 	return &Builder{
-		botSettings:      botSettings,
-		userID:           s.UserID(),
-		userCounts:       userCounts,
-		groupCounts:      groupCounts,
-		userStatsBuffer:  userStatsBuffer,
-		groupStatsBuffer: groupStatsBuffer,
-		activeUsers:      activeUsers,
-		workerStatuses:   workerStatuses,
-		voteStats:        voteStats,
-		titleCaser:       cases.Title(language.English),
+		userID:              s.UserID(),
+		userCounts:          session.UserCounts.Get(s),
+		groupCounts:         session.GroupCounts.Get(s),
+		userStatsBuffer:     userStatsBuffer,
+		groupStatsBuffer:    groupStatsBuffer,
+		activeUsers:         session.ActiveUsers.Get(s),
+		workerStatuses:      session.WorkerStatuses.Get(s),
+		voteStats:           session.VoteStats.Get(s),
+		announcementType:    session.BotAnnouncementType.Get(s),
+		announcementMessage: session.BotAnnouncementMessage.Get(s),
+		welcomeMessage:      session.BotWelcomeMessage.Get(s),
+		isReviewer:          botSettings.IsReviewer(s.UserID()),
+		isAdmin:             botSettings.IsAdmin(s.UserID()),
+		titleCaser:          cases.Title(language.English),
 	}
 }
 
@@ -114,7 +108,7 @@ func (b *Builder) Build() *discord.MessageUpdateBuilder {
 	}
 
 	// Add reviewer-only options
-	if b.botSettings.IsReviewer(b.userID) {
+	if b.isReviewer {
 		options = append(options,
 			discord.NewStringSelectMenuOption("AI Chat Assistant", constants.ChatAssistantButtonCustomID).
 				WithEmoji(discord.ComponentEmoji{Name: "🤖"}).
@@ -142,7 +136,7 @@ func (b *Builder) Build() *discord.MessageUpdateBuilder {
 	)
 
 	// Add admin tools option only for admins
-	if b.botSettings.IsAdmin(b.userID) {
+	if b.isAdmin {
 		options = append(options,
 			discord.NewStringSelectMenuOption("Admin Tools", constants.AdminMenuButtonCustomID).
 				WithEmoji(discord.ComponentEmoji{Name: "⚡"}).
@@ -159,8 +153,8 @@ func (b *Builder) Build() *discord.MessageUpdateBuilder {
 	}
 
 	// Add announcement embed if type is not none
-	if b.botSettings.Announcement.Type != enum.AnnouncementTypeNone &&
-		b.botSettings.Announcement.Message != "" {
+	if b.announcementType != enum.AnnouncementTypeNone &&
+		b.announcementMessage != "" {
 		embeds = append(embeds, b.buildAnnouncementEmbed())
 	}
 
@@ -194,8 +188,8 @@ func (b *Builder) buildWelcomeEmbed() discord.Embed {
 		SetColor(constants.DefaultEmbedColor)
 
 	// Add welcome message if set
-	if b.botSettings.WelcomeMessage != "" {
-		embed.SetDescription(b.botSettings.WelcomeMessage)
+	if b.welcomeMessage != "" {
+		embed.SetDescription(b.welcomeMessage)
 	}
 
 	// Add active reviewers field if any are online
@@ -203,7 +197,7 @@ func (b *Builder) buildWelcomeEmbed() discord.Embed {
 		// Collect reviewer IDs
 		displayIDs := make([]uint64, 0, 10)
 		for _, userID := range b.activeUsers {
-			if b.botSettings.IsReviewer(uint64(userID)) {
+			if b.isReviewer {
 				displayIDs = append(displayIDs, uint64(userID))
 			}
 		}
@@ -261,7 +255,7 @@ func (b *Builder) buildAnnouncementEmbed() discord.Embed {
 	var color int
 	var title string
 
-	switch b.botSettings.Announcement.Type {
+	switch b.announcementType {
 	case enum.AnnouncementTypeInfo:
 		color = 0x3498DB // Blue
 		title = "📢 Announcement"
@@ -279,7 +273,7 @@ func (b *Builder) buildAnnouncementEmbed() discord.Embed {
 
 	return discord.NewEmbedBuilder().
 		SetTitle(title).
-		SetDescription(b.botSettings.Announcement.Message).
+		SetDescription(b.announcementMessage).
 		SetColor(color).
 		Build()
 }

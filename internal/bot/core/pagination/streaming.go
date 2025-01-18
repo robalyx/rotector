@@ -14,7 +14,6 @@ import (
 	"github.com/disgoorg/disgo/events"
 	"github.com/jaxron/axonet/pkg/client"
 	"github.com/robalyx/rotector/assets"
-	"github.com/robalyx/rotector/internal/bot/constants"
 	"github.com/robalyx/rotector/internal/bot/core/session"
 	"go.uber.org/zap"
 	"golang.org/x/image/webp"
@@ -71,8 +70,8 @@ func NewImageStreamer(paginationManager *Manager, logger *zap.Logger, client *cl
 // Stream starts the image streaming process.
 func (is *ImageStreamer) Stream(req StreamRequest) {
 	// Show initial loading message
-	req.Session.SetBuffer(constants.SessionKeyImageBuffer, new(bytes.Buffer))
-	req.Session.Set(constants.SessionKeyIsStreaming, true)
+	session.ImageBuffer.Set(req.Session, new(bytes.Buffer))
+	session.IsStreaming.Set(req.Session, true)
 	is.paginationManager.NavigateTo(req.Event, req.Session, req.Page, "Loading images...")
 
 	// Get URLs through URLFunc
@@ -148,7 +147,7 @@ func (is *ImageStreamer) Stream(req StreamRequest) {
 		select {
 		case <-ctx.Done():
 			// Clean up streaming state before returning
-			req.Session.Set(constants.SessionKeyIsStreaming, false)
+			session.IsStreaming.Set(req.Session, false)
 			is.createAndDisplayGrid(req, downloadedImages, &mu, "Images took too long to load")
 			return
 		case <-doneChan:
@@ -158,7 +157,7 @@ func (is *ImageStreamer) Stream(req StreamRequest) {
 				message = fmt.Sprintf("Images loaded (%d failed)", failed)
 			}
 
-			req.Session.Set(constants.SessionKeyIsStreaming, false)
+			session.IsStreaming.Set(req.Session, false)
 			is.createAndDisplayGrid(req, downloadedImages, &mu, message)
 			return
 		case <-ticker.C:

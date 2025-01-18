@@ -27,11 +27,8 @@ type Builder struct {
 
 // NewBuilder creates a new status builder.
 func NewBuilder(s *session.Session) *Builder {
-	var workerStatuses []core.Status
-	s.GetInterface(constants.SessionKeyWorkerStatuses, &workerStatuses)
-
 	return &Builder{
-		workerStatuses: workerStatuses,
+		workerStatuses: session.WorkerStatuses.Get(s),
 		titleCaser:     cases.Title(language.English),
 	}
 }

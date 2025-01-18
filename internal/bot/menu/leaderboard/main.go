@@ -11,7 +11,6 @@ import (
 	"github.com/robalyx/rotector/internal/bot/core/pagination"
 	"github.com/robalyx/rotector/internal/bot/core/session"
 	"github.com/robalyx/rotector/internal/bot/interfaces"
-	"github.com/robalyx/rotector/internal/bot/utils"
 	"github.com/robalyx/rotector/internal/common/storage/database/types"
 	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
 	"go.uber.org/zap"
@@ -40,17 +39,13 @@ func NewMainMenu(l *Layout) *MainMenu {
 
 // Show prepares and displays the leaderboard interface.
 func (m *MainMenu) Show(event interfaces.CommonEvent, s *session.Session) {
-	var settings *types.UserSetting
-	s.GetInterface(constants.SessionKeyUserSettings, &settings)
-
-	// Get cursor from session if it exists
-	var cursor *types.LeaderboardCursor
-	s.GetInterface(constants.SessionKeyLeaderboardCursor, &cursor)
+	cursor := session.LeaderboardCursor.Get(s)
+	leaderboardPeriod := session.UserLeaderboardPeriod.Get(s)
 
 	// Fetch leaderboard stats from database
 	stats, nextCursor, err := m.layout.db.Votes().GetLeaderboard(
 		context.Background(),
-		settings.LeaderboardPeriod,
+		leaderboardPeriod,
 		cursor,
 		constants.LeaderboardEntriesPerPage,
 	)
@@ -61,7 +56,7 @@ func (m *MainMenu) Show(event interfaces.CommonEvent, s *session.Session) {
 	}
 
 	// Get refresh info for leaderboard view
-	lastRefresh, nextRefresh, err := m.layout.db.Views().GetRefreshInfo(context.Background(), settings.LeaderboardPeriod)
+	lastRefresh, nextRefresh, err := m.layout.db.Views().GetRefreshInfo(context.Background(), leaderboardPeriod)
 	if err != nil {
 		m.layout.logger.Error("Failed to get refresh info", zap.Error(err))
 	}
@@ -75,13 +70,13 @@ func (m *MainMenu) Show(event interfaces.CommonEvent, s *session.Session) {
 	}
 
 	// Store results in session
-	s.Set(constants.SessionKeyLeaderboardStats, stats)
-	s.Set(constants.SessionKeyLeaderboardUsernames, usernames)
-	s.Set(constants.SessionKeyLeaderboardNextCursor, nextCursor)
-	s.Set(constants.SessionKeyHasNextPage, nextCursor != nil)
-	s.Set(constants.SessionKeyHasPrevPage, cursor != nil)
-	s.Set(constants.SessionKeyLeaderboardLastRefresh, lastRefresh)
-	s.Set(constants.SessionKeyLeaderboardNextRefresh, nextRefresh)
+	session.LeaderboardStats.Set(s, stats)
+	session.LeaderboardUsernames.Set(s, usernames)
+	session.LeaderboardNextCursor.Set(s, nextCursor)
+	session.HasNextPage.Set(s, nextCursor != nil)
+	session.HasPrevPage.Set(s, cursor != nil)
+	session.LeaderboardLastRefresh.Set(s, lastRefresh)
+	session.LeaderboardNextRefresh.Set(s, nextRefresh)
 
 	m.layout.paginationManager.NavigateTo(event, s, m.page, "")
 }
@@ -92,9 +87,6 @@ func (m *MainMenu) handleSelectMenu(event *events.ComponentInteractionCreate, s 
 		return
 	}
 
-	var settings *types.UserSetting
-	s.GetInterface(constants.SessionKeyUserSettings, &settings)
-
 	// Parse option to leaderboard period
 	period, err := enum.LeaderboardPeriodString(option)
 	if err != nil {
@@ -104,13 +96,7 @@ func (m *MainMenu) handleSelectMenu(event *events.ComponentInteractionCreate, s 
 	}
 
 	// Update user's leaderboard period preference
-	settings.LeaderboardPeriod = period
-	if err := m.layout.db.Settings().SaveUserSettings(context.Background(), settings); err != nil {
-		m.layout.logger.Error("Failed to save user settings", zap.Error(err))
-		m.layout.paginationManager.RespondWithError(event, "Failed to save time period preference. Please try again.")
-		return
-	}
-	s.Set(constants.SessionKeyUserSettings, settings)
+	session.UserLeaderboardPeriod.Set(s, period)
 
 	// Reset page and show updated leaderboard
 	m.layout.ResetStats(s)
@@ -125,42 +111,38 @@ func (m *MainMenu) handleButton(event *events.ComponentInteractionCreate, s *ses
 	case constants.RefreshButtonCustomID:
 		m.layout.ResetStats(s)
 		m.Show(event, s)
-	case string(utils.ViewerFirstPage), string(utils.ViewerPrevPage), string(utils.ViewerNextPage), string(utils.ViewerLastPage):
-		m.handlePagination(event, s, utils.ViewerAction(customID))
+	case string(session.ViewerFirstPage), string(session.ViewerPrevPage), string(session.ViewerNextPage), string(session.ViewerLastPage):
+		m.handlePagination(event, s, session.ViewerAction(customID))
 	}
 }
 
 // handlePagination processes page navigation.
-func (m *MainMenu) handlePagination(event *events.ComponentInteractionCreate, s *session.Session, action utils.ViewerAction) {
+func (m *MainMenu) handlePagination(event *events.ComponentInteractionCreate, s *session.Session, action session.ViewerAction) {
 	switch action {
-	case utils.ViewerNextPage:
-		var cursor *types.LeaderboardCursor
-		s.GetInterface(constants.SessionKeyLeaderboardCursor, &cursor)
-		var nextCursor *types.LeaderboardCursor
-		s.GetInterface(constants.SessionKeyLeaderboardNextCursor, &nextCursor)
-		var prevCursors []*types.LeaderboardCursor
-		s.GetInterface(constants.SessionKeyLeaderboardPrevCursors, &prevCursors)
+	case session.ViewerNextPage:
+		cursor := session.LeaderboardCursor.Get(s)
+		nextCursor := session.LeaderboardNextCursor.Get(s)
+		prevCursors := session.LeaderboardPrevCursors.Get(s)
 
-		if s.GetBool(constants.SessionKeyHasNextPage) {
-			s.Set(constants.SessionKeyLeaderboardCursor, nextCursor)
-			s.Set(constants.SessionKeyLeaderboardPrevCursors, append(prevCursors, cursor))
+		if session.HasNextPage.Get(s) {
+			session.LeaderboardCursor.Set(s, nextCursor)
+			session.LeaderboardPrevCursors.Set(s, append(prevCursors, cursor))
 			m.Show(event, s)
 		}
-	case utils.ViewerPrevPage:
-		var prevCursors []*types.LeaderboardCursor
-		s.GetInterface(constants.SessionKeyLeaderboardPrevCursors, &prevCursors)
+	case session.ViewerPrevPage:
+		prevCursors := session.LeaderboardPrevCursors.Get(s)
 
 		if len(prevCursors) > 0 {
 			lastIdx := len(prevCursors) - 1
-			s.Set(constants.SessionKeyLeaderboardPrevCursors, prevCursors[:lastIdx])
-			s.Set(constants.SessionKeyLeaderboardCursor, prevCursors[lastIdx])
+			session.LeaderboardPrevCursors.Set(s, prevCursors[:lastIdx])
+			session.LeaderboardCursor.Set(s, prevCursors[lastIdx])
 			m.Show(event, s)
 		}
-	case utils.ViewerFirstPage:
-		s.Set(constants.SessionKeyLeaderboardCursor, nil)
-		s.Set(constants.SessionKeyLeaderboardPrevCursors, make([]*types.LeaderboardCursor, 0))
+	case session.ViewerFirstPage:
+		session.LeaderboardCursor.Set(s, nil)
+		session.LeaderboardPrevCursors.Set(s, []*types.LeaderboardCursor{})
 		m.Show(event, s)
-	case utils.ViewerLastPage:
+	case session.ViewerLastPage:
 		return
 	}
 }

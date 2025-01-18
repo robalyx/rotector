@@ -12,7 +12,6 @@ import (
 	"github.com/robalyx/rotector/internal/bot/core/pagination"
 	"github.com/robalyx/rotector/internal/bot/core/session"
 	"github.com/robalyx/rotector/internal/bot/interfaces"
-	"github.com/robalyx/rotector/internal/bot/utils"
 	"github.com/robalyx/rotector/internal/common/storage/database/types"
 	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
 	"go.uber.org/zap"
@@ -41,15 +40,9 @@ func NewOverviewMenu(layout *Layout) *OverviewMenu {
 
 // Show prepares and displays the appeal overview interface.
 func (m *OverviewMenu) Show(event interfaces.CommonEvent, s *session.Session, content string) {
-	// Get bot settings and user settings
-	var settings *types.BotSetting
-	s.GetInterface(constants.SessionKeyBotSettings, &settings)
-	var userSettings *types.UserSetting
-	s.GetInterface(constants.SessionKeyUserSettings, &userSettings)
-
-	// Get cursor from session if it exists
-	var cursor *types.AppealTimeline
-	s.GetInterface(constants.SessionKeyAppealCursor, &cursor)
+	defaultSort := session.UserAppealDefaultSort.Get(s)
+	statusFilter := session.UserAppealStatusFilter.Get(s)
+	cursor := session.AppealCursor.Get(s)
 
 	// Get appeals based on user role and sort preference
 	var appeals []*types.Appeal
@@ -57,12 +50,12 @@ func (m *OverviewMenu) Show(event interfaces.CommonEvent, s *session.Session, co
 	var err error
 
 	userID := uint64(event.User().ID)
-	if settings.IsReviewer(userID) {
+	if s.BotSettings().IsReviewer(userID) {
 		// Reviewers can see all appeals
 		appeals, firstCursor, nextCursor, err = m.layout.db.Appeals().GetAppealsToReview(
 			context.Background(),
-			userSettings.AppealDefaultSort,
-			userSettings.AppealStatusFilter,
+			defaultSort,
+			statusFilter,
 			userID,
 			cursor,
 			constants.AppealsPerPage,
@@ -71,7 +64,7 @@ func (m *OverviewMenu) Show(event interfaces.CommonEvent, s *session.Session, co
 		// Regular users only see their own appeals
 		appeals, firstCursor, nextCursor, err = m.layout.db.Appeals().GetAppealsByRequester(
 			context.Background(),
-			userSettings.AppealStatusFilter,
+			statusFilter,
 			userID,
 			cursor,
 			constants.AppealsPerPage,
@@ -83,16 +76,15 @@ func (m *OverviewMenu) Show(event interfaces.CommonEvent, s *session.Session, co
 		return
 	}
 
-	// Get previous cursors array
-	var prevCursors []*types.AppealTimeline
-	s.GetInterface(constants.SessionKeyAppealPrevCursors, &prevCursors)
+	// Get previous cursors
+	prevCursors := session.AppealPrevCursors.Get(s)
 
 	// Store data in session
-	s.Set(constants.SessionKeyAppeals, appeals)
-	s.Set(constants.SessionKeyAppealCursor, firstCursor)
-	s.Set(constants.SessionKeyAppealNextCursor, nextCursor)
-	s.Set(constants.SessionKeyHasNextPage, nextCursor != nil)
-	s.Set(constants.SessionKeyHasPrevPage, len(prevCursors) > 0)
+	session.Appeals.Set(s, appeals)
+	session.AppealCursor.Set(s, firstCursor)
+	session.AppealNextCursor.Set(s, nextCursor)
+	session.HasNextPage.Set(s, nextCursor != nil)
+	session.HasPrevPage.Set(s, len(prevCursors) > 0)
 
 	m.layout.paginationManager.NavigateTo(event, s, m.page, content)
 }
@@ -101,10 +93,6 @@ func (m *OverviewMenu) Show(event interfaces.CommonEvent, s *session.Session, co
 func (m *OverviewMenu) handleSelectMenu(event *events.ComponentInteractionCreate, s *session.Session, customID string, option string) {
 	switch customID {
 	case constants.AppealStatusSelectID:
-		// Retrieve user settings from session
-		var settings *types.UserSetting
-		s.GetInterface(constants.SessionKeyUserSettings, &settings)
-
 		// Parse option to status
 		status, err := enum.AppealStatusString(option)
 		if err != nil {
@@ -114,22 +102,14 @@ func (m *OverviewMenu) handleSelectMenu(event *events.ComponentInteractionCreate
 		}
 
 		// Update user's default sort preference
-		settings.AppealStatusFilter = status
-		if err := m.layout.db.Settings().SaveUserSettings(context.Background(), settings); err != nil {
-			m.layout.logger.Error("Failed to save user settings", zap.Error(err))
-			m.layout.paginationManager.RespondWithError(event, "Failed to save sort order. Please try again.")
-			return
-		}
-		s.Set(constants.SessionKeyUserSettings, settings)
-		s.Delete(constants.SessionKeyAppealCursor)
-		s.Delete(constants.SessionKeyAppealPrevCursors)
+		session.UserAppealStatusFilter.Set(s, status)
+
+		// Delete cursors
+		session.AppealCursor.Delete(s)
+		session.AppealPrevCursors.Delete(s)
 
 		m.Show(event, s, "Filtered appeals by "+status.String())
 	case constants.AppealSortSelectID:
-		// Retrieve user settings from session
-		var settings *types.UserSetting
-		s.GetInterface(constants.SessionKeyUserSettings, &settings)
-
 		// Parse option to appeal sort
 		sortBy, err := enum.AppealSortByString(option)
 		if err != nil {
@@ -139,15 +119,11 @@ func (m *OverviewMenu) handleSelectMenu(event *events.ComponentInteractionCreate
 		}
 
 		// Update user's default sort preference
-		settings.AppealDefaultSort = sortBy
-		if err := m.layout.db.Settings().SaveUserSettings(context.Background(), settings); err != nil {
-			m.layout.logger.Error("Failed to save user settings", zap.Error(err))
-			m.layout.paginationManager.RespondWithError(event, "Failed to save sort order. Please try again.")
-			return
-		}
-		s.Set(constants.SessionKeyUserSettings, settings)
-		s.Delete(constants.SessionKeyAppealCursor)
-		s.Delete(constants.SessionKeyAppealPrevCursors)
+		session.UserAppealDefaultSort.Set(s, sortBy)
+
+		// Delete cursors
+		session.AppealCursor.Delete(s)
+		session.AppealPrevCursors.Delete(s)
 
 		m.Show(event, s, "Sorted appeals by "+option)
 	case constants.AppealSelectID:
@@ -169,13 +145,13 @@ func (m *OverviewMenu) handleButton(event *events.ComponentInteractionCreate, s 
 	case constants.BackButtonCustomID:
 		m.layout.paginationManager.NavigateBack(event, s, "")
 	case constants.RefreshButtonCustomID:
-		s.Delete(constants.SessionKeyAppealCursor)
-		s.Delete(constants.SessionKeyAppealPrevCursors)
+		session.AppealCursor.Delete(s)
+		session.AppealPrevCursors.Delete(s)
 		m.Show(event, s, "Appeals refreshed.")
 	case constants.AppealCreateButtonCustomID:
 		m.handleCreateAppeal(event)
-	case string(utils.ViewerFirstPage), string(utils.ViewerPrevPage), string(utils.ViewerNextPage), string(utils.ViewerLastPage):
-		m.handlePagination(event, s, utils.ViewerAction(customID))
+	case string(session.ViewerFirstPage), string(session.ViewerPrevPage), string(session.ViewerNextPage), string(session.ViewerLastPage):
+		m.handlePagination(event, s, session.ViewerAction(customID))
 	}
 }
 
@@ -204,36 +180,32 @@ func (m *OverviewMenu) handleCreateAppeal(event *events.ComponentInteractionCrea
 }
 
 // handlePagination processes page navigation.
-func (m *OverviewMenu) handlePagination(event *events.ComponentInteractionCreate, s *session.Session, action utils.ViewerAction) {
+func (m *OverviewMenu) handlePagination(event *events.ComponentInteractionCreate, s *session.Session, action session.ViewerAction) {
 	switch action {
-	case utils.ViewerNextPage:
-		if s.GetBool(constants.SessionKeyHasNextPage) {
-			var cursor *types.AppealTimeline
-			s.GetInterface(constants.SessionKeyAppealCursor, &cursor)
-			var nextCursor *types.AppealTimeline
-			s.GetInterface(constants.SessionKeyAppealNextCursor, &nextCursor)
-			var prevCursors []*types.AppealTimeline
-			s.GetInterface(constants.SessionKeyAppealPrevCursors, &prevCursors)
+	case session.ViewerNextPage:
+		if session.HasNextPage.Get(s) {
+			cursor := session.AppealCursor.Get(s)
+			nextCursor := session.AppealNextCursor.Get(s)
+			prevCursors := session.AppealPrevCursors.Get(s)
 
-			s.Set(constants.SessionKeyAppealCursor, nextCursor)
-			s.Set(constants.SessionKeyAppealPrevCursors, append(prevCursors, cursor))
+			session.AppealCursor.Set(s, nextCursor)
+			session.AppealPrevCursors.Set(s, append(prevCursors, cursor))
 			m.Show(event, s, "")
 		}
-	case utils.ViewerPrevPage:
-		var prevCursors []*types.AppealTimeline
-		s.GetInterface(constants.SessionKeyAppealPrevCursors, &prevCursors)
+	case session.ViewerPrevPage:
+		prevCursors := session.AppealPrevCursors.Get(s)
 
 		if len(prevCursors) > 0 {
 			lastIdx := len(prevCursors) - 1
-			s.Set(constants.SessionKeyAppealCursor, prevCursors[lastIdx])
-			s.Set(constants.SessionKeyAppealPrevCursors, prevCursors[:lastIdx])
+			session.AppealCursor.Set(s, prevCursors[lastIdx])
+			session.AppealPrevCursors.Set(s, prevCursors[:lastIdx])
 			m.Show(event, s, "")
 		}
-	case utils.ViewerFirstPage:
-		s.Delete(constants.SessionKeyAppealCursor)
-		s.Set(constants.SessionKeyAppealPrevCursors, make([]*types.AppealTimeline, 0))
+	case session.ViewerFirstPage:
+		session.AppealCursor.Delete(s)
+		session.AppealPrevCursors.Set(s, make([]*types.AppealTimeline, 0))
 		m.Show(event, s, "")
-	case utils.ViewerLastPage:
+	case session.ViewerLastPage:
 		return
 	}
 }

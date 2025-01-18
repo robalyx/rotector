@@ -22,39 +22,30 @@ import (
 // ReviewBuilder creates the visual layout for reviewing a user.
 type ReviewBuilder struct {
 	db             *database.Client
-	settings       *types.UserSetting
-	botSettings    *types.BotSetting
 	userID         uint64
 	user           *types.ReviewUser
-	translator     *translator.Translator
 	flaggedFriends map[uint64]*types.ReviewUser
 	flaggedGroups  map[uint64]*types.ReviewGroup
-	isTraining     bool
+	translator     *translator.Translator
+	reviewMode     enum.ReviewMode
+	defaultSort    enum.ReviewSortBy
+	isReviewer     bool
+	privacyMode    bool
 }
 
 // NewReviewBuilder creates a new review builder.
 func NewReviewBuilder(s *session.Session, translator *translator.Translator, db *database.Client) *ReviewBuilder {
-	var settings *types.UserSetting
-	s.GetInterface(constants.SessionKeyUserSettings, &settings)
-	var botSettings *types.BotSetting
-	s.GetInterface(constants.SessionKeyBotSettings, &botSettings)
-	var user *types.ReviewUser
-	s.GetInterface(constants.SessionKeyTarget, &user)
-	var flaggedFriends map[uint64]*types.ReviewUser
-	s.GetInterface(constants.SessionKeyFlaggedFriends, &flaggedFriends)
-	var flaggedGroups map[uint64]*types.ReviewGroup
-	s.GetInterface(constants.SessionKeyFlaggedGroups, &flaggedGroups)
-
 	return &ReviewBuilder{
 		db:             db,
-		settings:       settings,
-		botSettings:    botSettings,
 		userID:         s.UserID(),
-		user:           user,
+		user:           session.UserTarget.Get(s),
+		flaggedFriends: session.FlaggedFriends.Get(s),
+		flaggedGroups:  session.FlaggedGroups.Get(s),
 		translator:     translator,
-		flaggedFriends: flaggedFriends,
-		flaggedGroups:  flaggedGroups,
-		isTraining:     settings.ReviewMode == enum.ReviewModeTraining,
+		reviewMode:     session.UserReviewMode.Get(s),
+		defaultSort:    session.UserUserDefaultSort.Get(s),
+		isReviewer:     s.BotSettings().IsReviewer(s.UserID()),
+		privacyMode:    session.UserReviewMode.Get(s) == enum.ReviewModeTraining || session.UserStreamerMode.Get(s),
 	}
 }
 
@@ -94,7 +85,7 @@ func (b *ReviewBuilder) buildModeEmbed() *discord.EmbedBuilder {
 	var description string
 
 	// Format review mode
-	switch b.settings.ReviewMode {
+	switch b.reviewMode {
 	case enum.ReviewModeTraining:
 		mode = "🎓 Training Mode"
 		description += `
@@ -114,13 +105,13 @@ func (b *ReviewBuilder) buildModeEmbed() *discord.EmbedBuilder {
 	return discord.NewEmbedBuilder().
 		SetTitle(mode).
 		SetDescription(description).
-		SetColor(utils.GetMessageEmbedColor(b.isTraining || b.settings.StreamerMode))
+		SetColor(utils.GetMessageEmbedColor(b.privacyMode))
 }
 
 // buildReviewBuilder creates the main review information embed.
 func (b *ReviewBuilder) buildReviewBuilder() *discord.EmbedBuilder {
 	embed := discord.NewEmbedBuilder().
-		SetColor(utils.GetMessageEmbedColor(b.isTraining || b.settings.StreamerMode)).
+		SetColor(utils.GetMessageEmbedColor(b.privacyMode)).
 		SetTitle(fmt.Sprintf("⚠️ %d Reports • 🛡️ %d Safe",
 			b.user.Reputation.Downvotes,
 			b.user.Reputation.Upvotes,
@@ -150,13 +141,13 @@ func (b *ReviewBuilder) buildReviewBuilder() *discord.EmbedBuilder {
 	// Censor reason if needed
 	reason := utils.CensorStringsInText(
 		b.user.Reason,
-		b.isTraining || b.settings.StreamerMode,
+		b.privacyMode,
 		strconv.FormatUint(b.user.ID, 10),
 		b.user.Name,
 		b.user.DisplayName,
 	)
 
-	if b.settings.ReviewMode == enum.ReviewModeTraining {
+	if b.reviewMode == enum.ReviewModeTraining {
 		// Training mode - show limited information without links
 		embed.AddField("ID", utils.CensorString(strconv.FormatUint(b.user.ID, 10), true), true).
 			AddField("Name", utils.CensorString(b.user.Name, true), true).
@@ -181,11 +172,11 @@ func (b *ReviewBuilder) buildReviewBuilder() *discord.EmbedBuilder {
 		// Standard mode - show all information with links
 		embed.AddField("ID", fmt.Sprintf(
 			"[%s](https://www.roblox.com/users/%d/profile)",
-			utils.CensorString(strconv.FormatUint(b.user.ID, 10), b.settings.StreamerMode),
+			utils.CensorString(strconv.FormatUint(b.user.ID, 10), b.privacyMode),
 			b.user.ID,
 		), true).
-			AddField("Name", utils.CensorString(b.user.Name, b.settings.StreamerMode), true).
-			AddField("Display Name", utils.CensorString(b.user.DisplayName, b.settings.StreamerMode), true).
+			AddField("Name", utils.CensorString(b.user.Name, b.privacyMode), true).
+			AddField("Display Name", utils.CensorString(b.user.DisplayName, b.privacyMode), true).
 			AddField("Followers", followerCount, true).
 			AddField("Following", followingCount, true).
 			AddField("Game Visits", b.getTotalVisits(), true).
@@ -226,16 +217,16 @@ func (b *ReviewBuilder) buildReviewBuilder() *discord.EmbedBuilder {
 func (b *ReviewBuilder) buildSortingOptions() []discord.StringSelectMenuOption {
 	return []discord.StringSelectMenuOption{
 		discord.NewStringSelectMenuOption("Selected by random", enum.ReviewSortByRandom.String()).
-			WithDefault(b.settings.UserDefaultSort == enum.ReviewSortByRandom).
+			WithDefault(b.defaultSort == enum.ReviewSortByRandom).
 			WithEmoji(discord.ComponentEmoji{Name: "🔀"}),
 		discord.NewStringSelectMenuOption("Selected by confidence", enum.ReviewSortByConfidence.String()).
-			WithDefault(b.settings.UserDefaultSort == enum.ReviewSortByConfidence).
+			WithDefault(b.defaultSort == enum.ReviewSortByConfidence).
 			WithEmoji(discord.ComponentEmoji{Name: "🔮"}),
 		discord.NewStringSelectMenuOption("Selected by last updated time", enum.ReviewSortByLastUpdated.String()).
-			WithDefault(b.settings.UserDefaultSort == enum.ReviewSortByLastUpdated).
+			WithDefault(b.defaultSort == enum.ReviewSortByLastUpdated).
 			WithEmoji(discord.ComponentEmoji{Name: "📅"}),
 		discord.NewStringSelectMenuOption("Selected by bad reputation", enum.ReviewSortByReputation.String()).
-			WithDefault(b.settings.UserDefaultSort == enum.ReviewSortByReputation).
+			WithDefault(b.defaultSort == enum.ReviewSortByReputation).
 			WithEmoji(discord.ComponentEmoji{Name: "👎"}),
 	}
 }
@@ -255,7 +246,7 @@ func (b *ReviewBuilder) buildActionOptions() []discord.StringSelectMenuOption {
 	}
 
 	// Add reviewer-only options
-	if b.botSettings.IsReviewer(b.userID) {
+	if b.isReviewer {
 		// Options available in both normal and lookup mode
 		reviewerOptions := []discord.StringSelectMenuOption{
 			discord.NewStringSelectMenuOption("Ask AI about user", constants.OpenAIChatButtonCustomID).
@@ -318,7 +309,7 @@ func (b *ReviewBuilder) buildComponents() []discord.ContainerComponent {
 
 // getConfirmButtonLabel returns the appropriate label for the confirm button based on review mode.
 func (b *ReviewBuilder) getConfirmButtonLabel() string {
-	if b.settings.ReviewMode == enum.ReviewModeTraining {
+	if b.reviewMode == enum.ReviewModeTraining {
 		return "Report"
 	}
 	return "Confirm"
@@ -326,7 +317,7 @@ func (b *ReviewBuilder) getConfirmButtonLabel() string {
 
 // getClearButtonLabel returns the appropriate label for the clear button based on review mode.
 func (b *ReviewBuilder) getClearButtonLabel() string {
-	if b.settings.ReviewMode == enum.ReviewModeTraining {
+	if b.reviewMode == enum.ReviewModeTraining {
 		return "Safe"
 	}
 	return "Clear"
@@ -360,7 +351,7 @@ func (b *ReviewBuilder) getDescription() string {
 	description = utils.FormatString(description)
 	description = utils.CensorStringsInText(
 		description,
-		b.isTraining || b.settings.StreamerMode,
+		b.privacyMode,
 		strconv.FormatUint(b.user.ID, 10),
 		b.user.Name,
 		b.user.DisplayName,
@@ -436,8 +427,8 @@ func (b *ReviewBuilder) getFriends() string {
 			break
 		}
 
-		name := utils.CensorString(friend.Name, b.isTraining || b.settings.StreamerMode)
-		if b.isTraining {
+		name := utils.CensorString(friend.Name, b.privacyMode)
+		if b.privacyMode {
 			friends = append(friends, name)
 		} else {
 			friends = append(friends, fmt.Sprintf(
@@ -469,8 +460,8 @@ func (b *ReviewBuilder) getGroups() string {
 			break
 		}
 
-		name := utils.CensorString(group.Group.Name, b.isTraining || b.settings.StreamerMode)
-		if b.isTraining {
+		name := utils.CensorString(group.Group.Name, b.privacyMode)
+		if b.privacyMode {
 			groups = append(groups, name)
 		} else {
 			groups = append(groups, fmt.Sprintf(
@@ -507,10 +498,10 @@ func (b *ReviewBuilder) getGames() string {
 			break
 		}
 
-		name := utils.CensorString(game.Name, b.isTraining || b.settings.StreamerMode)
+		name := utils.CensorString(game.Name, b.privacyMode)
 		visits := utils.FormatNumber(game.PlaceVisits)
 
-		if b.isTraining {
+		if b.privacyMode {
 			games = append(games, fmt.Sprintf("%s (%s visits)", name, visits))
 		} else {
 			games = append(games, fmt.Sprintf("[%s](https://www.roblox.com/games/%d) (%s visits)",

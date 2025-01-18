@@ -3,7 +3,6 @@ package log
 import (
 	"time"
 
-	"github.com/robalyx/rotector/internal/bot/constants"
 	"github.com/robalyx/rotector/internal/bot/core/pagination"
 	"github.com/robalyx/rotector/internal/bot/core/session"
 	"github.com/robalyx/rotector/internal/bot/interfaces"
@@ -53,21 +52,21 @@ func (l *Layout) Show(event interfaces.CommonEvent, s *session.Session) {
 
 // ResetFilters resets all log filters to their default values in the given session.
 func (l *Layout) ResetFilters(s *session.Session) {
-	s.Set(constants.SessionKeyDiscordIDFilter, uint64(0))
-	s.Set(constants.SessionKeyUserIDFilter, uint64(0))
-	s.Set(constants.SessionKeyGroupIDFilter, uint64(0))
-	s.Set(constants.SessionKeyReviewerIDFilter, uint64(0))
-	s.Set(constants.SessionKeyActivityTypeFilter, enum.ActivityTypeAll)
-	s.Set(constants.SessionKeyDateRangeStartFilter, time.Time{})
-	s.Set(constants.SessionKeyDateRangeEndFilter, time.Time{})
+	session.DiscordIDFilter.Set(s, uint64(0))
+	session.UserIDFilter.Set(s, uint64(0))
+	session.GroupIDFilter.Set(s, uint64(0))
+	session.ReviewerIDFilter.Set(s, uint64(0))
+	session.ActivityTypeFilter.Set(s, enum.ActivityTypeAll)
+	session.DateRangeStartFilter.Set(s, time.Time{})
+	session.DateRangeEndFilter.Set(s, time.Time{})
 }
 
 // ResetLogs clears the logs from the session.
 func (l *Layout) ResetLogs(s *session.Session) {
-	s.Set(constants.SessionKeyLogs, []*types.ActivityLog{})
-	s.Set(constants.SessionKeyLogCursor, nil)
-	s.Set(constants.SessionKeyLogNextCursor, nil)
-	s.Set(constants.SessionKeyLogPrevCursors, []*types.LogCursor{})
-	s.Set(constants.SessionKeyHasNextPage, false)
-	s.Set(constants.SessionKeyHasPrevPage, false)
+	session.Logs.Set(s, []*types.ActivityLog{})
+	session.LogCursor.Set(s, nil)
+	session.LogNextCursor.Set(s, nil)
+	session.LogPrevCursors.Set(s, []*types.LogCursor{})
+	session.HasNextPage.Set(s, false)
+	session.HasPrevPage.Set(s, false)
 }

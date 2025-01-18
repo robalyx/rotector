@@ -2,7 +2,6 @@ package captcha
 
 import (
 	"bytes"
-	"context"
 
 	"github.com/disgoorg/disgo/discord"
 	"github.com/disgoorg/disgo/events"
@@ -12,7 +11,6 @@ import (
 	"github.com/robalyx/rotector/internal/bot/core/pagination"
 	"github.com/robalyx/rotector/internal/bot/core/session"
 	"github.com/robalyx/rotector/internal/bot/interfaces"
-	"github.com/robalyx/rotector/internal/common/storage/database/types"
 	"go.uber.org/zap"
 )
 
@@ -47,8 +45,8 @@ func (m *Menu) Show(event interfaces.CommonEvent, s *session.Session, content st
 	}
 
 	// Store CAPTCHA info in session
-	s.Set(constants.SessionKeyCaptchaAnswer, digits)
-	s.SetBuffer(constants.SessionKeyCaptchaImage, imgBuffer)
+	session.CaptchaAnswer.Set(s, string(digits))
+	session.CaptchaImage.Set(s, imgBuffer)
 
 	m.layout.paginationManager.NavigateTo(event, s, m.page, content)
 }
@@ -58,8 +56,8 @@ func (m *Menu) handleButton(event *events.ComponentInteractionCreate, s *session
 	switch customID {
 	case constants.BackButtonCustomID:
 		m.layout.paginationManager.NavigateBack(event, s, "")
-		s.Delete(constants.SessionKeyCaptchaAnswer)
-		s.Delete(constants.SessionKeyCaptchaImage)
+		session.CaptchaAnswer.Delete(s)
+		session.CaptchaImage.Delete(s)
 	case constants.CaptchaRefreshButtonCustomID:
 		m.Show(event, s, "Generated new CAPTCHA.")
 	case constants.CaptchaAnswerButtonCustomID:
@@ -103,28 +101,18 @@ func (m *Menu) handleModal(event *events.ModalSubmitInteractionCreate, s *sessio
 	}
 
 	// Compare answers
-	var correctDigits []byte
-	s.GetInterface(constants.SessionKeyCaptchaAnswer, &correctDigits)
+	correctDigits := session.CaptchaAnswer.Get(s)
 
-	if !bytes.Equal(userDigits, correctDigits) {
+	if !bytes.Equal(userDigits, []byte(correctDigits)) {
 		m.Show(event, s, "❌ Incorrect CAPTCHA answer. Please try again.")
 		return
 	}
 
 	// Reset reviews counter
-	var settings *types.UserSetting
-	s.GetInterface(constants.SessionKeyUserSettings, &settings)
-
-	settings.CaptchaUsage.ReviewCount = 0
-	if err := m.layout.db.Settings().SaveUserSettings(context.Background(), settings); err != nil {
-		m.layout.logger.Error("Failed to reset CAPTCHA counter", zap.Error(err))
-		m.layout.paginationManager.RespondWithError(event, "Failed to verify CAPTCHA. Please try again.")
-		return
-	}
-	s.Set(constants.SessionKeyUserSettings, settings)
+	session.UserCaptchaUsageReviewCount.Set(s, 0)
 
 	// Return to previous page
 	m.layout.paginationManager.NavigateBack(event, s, "✅ CAPTCHA verified successfully!")
-	s.Delete(constants.SessionKeyCaptchaAnswer)
-	s.Delete(constants.SessionKeyCaptchaImage)
+	session.CaptchaAnswer.Delete(s)
+	session.CaptchaImage.Delete(s)
 }
