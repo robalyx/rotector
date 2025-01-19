@@ -49,72 +49,65 @@ func main() {
 		{Name: "MessageID", Type: "string", Doc: "MessageID stores the ID of the current message"},
 		{Name: "CurrentPage", Type: "string", Doc: "CurrentPage stores the current page identifier"},
 		{Name: "PreviousPages", Type: "[]string", Doc: "PreviousPages stores the navigation history"},
-		{Name: "IsRefreshed", Type: "bool", Doc: "IsRefreshed indicates if the data has been refreshed"},
 
 		// Pagination related keys
 		{Name: "PaginationPage", Type: "int", Doc: "PaginationPage stores the current pagination page number"},
-		{Name: "Start", Type: "int", Doc: "Start stores the starting offset"},
-		{Name: "TotalItems", Type: "int", Doc: "TotalItems stores the total number of items"},
-		{Name: "TotalPages", Type: "int", Doc: "TotalPages stores the total number of pages"},
-		{Name: "HasNextPage", Type: "bool", Doc: "HasNextPage indicates if there is a next page"},
-		{Name: "HasPrevPage", Type: "bool", Doc: "HasPrevPage indicates if there is a previous page"},
-		{Name: "IsStreaming", Type: "bool", Doc: "IsStreaming indicates if streaming is active"},
+		{Name: "PaginationOffset", Type: "int", Doc: "PaginationOffset stores the starting offset"},
+		{Name: "PaginationTotalItems", Type: "int", Doc: "PaginationTotalItems stores the total number of items"},
+		{Name: "PaginationTotalPages", Type: "int", Doc: "PaginationTotalPages stores the total number of pages"},
+		{Name: "PaginationHasNextPage", Type: "bool", Doc: "PaginationHasNextPage indicates if there is a next page"},
+		{Name: "PaginationHasPrevPage", Type: "bool", Doc: "PaginationHasPrevPage indicates if there is a previous page"},
+		{Name: "PaginationIsStreaming", Type: "bool", Doc: "PaginationIsStreaming indicates if image streaming is active"},
 
 		// Statistics related keys
-		{Name: "UserCounts", Type: "*types.UserCounts", Doc: "UserCounts stores user statistics"},
-		{Name: "GroupCounts", Type: "*types.GroupCounts", Doc: "GroupCounts stores group statistics"},
-		{Name: "ConfirmedCount", Type: "int", Doc: "ConfirmedCount stores the number of confirmed items"},
-		{Name: "FlaggedCount", Type: "int", Doc: "FlaggedCount stores the number of flagged items"},
-		{Name: "ClearedCount", Type: "int", Doc: "ClearedCount stores the number of cleared items"},
-		{Name: "ActiveUsers", Type: "[]snowflake.ID", Doc: "ActiveUsers stores the list of active users"},
-		{Name: "WorkerStatuses", Type: "[]core.Status", Doc: "WorkerStatuses stores worker status information"},
-		{Name: "VoteStats", Type: "*types.VoteAccuracy", Doc: "VoteStats stores voting statistics"},
+		{Name: "StatsIsRefreshed", Type: "bool", Doc: "StatsIsRefreshed indicates if the data has been refreshed"},
+		{Name: "StatsUserCounts", Type: "*types.UserCounts", Doc: "StatsUserCounts stores user statistics"},
+		{Name: "StatsGroupCounts", Type: "*types.GroupCounts", Doc: "StatsGroupCounts stores group statistics"},
+		{Name: "StatsActiveUsers", Type: "[]snowflake.ID", Doc: "StatsActiveUsers stores the list of active reviewers"},
+		{Name: "StatsVotes", Type: "*types.VoteAccuracy", Doc: "StatsVotes stores a user's voting statistics"},
+
+		// Status related keys
+		{Name: "StatusWorkers", Type: "[]core.Status", Doc: "StatusWorkers stores worker status information"},
 
 		// Settings related keys
 		{Name: "SettingName", Type: "string", Doc: "SettingName stores the name of the current setting"},
 		{Name: "SettingType", Type: "string", Doc: "SettingType stores the type of the current setting"},
 		{Name: "SettingValue", Type: "*Setting", Doc: "SettingValue stores the setting value"},
 		{Name: "SettingDisplay", Type: "string", Doc: "SettingDisplay stores the display value of the setting"},
-		{Name: "CustomID", Type: "string", Doc: "CustomID stores the custom identifier"},
-		{Name: "Options", Type: "[]interface{}", Doc: "Options stores available options"},
-		{Name: "Roles", Type: "[]string", Doc: "Roles stores role information"},
+		{Name: "SettingCustomID", Type: "string", Doc: "SettingCustomID stores the custom identifier"},
 
 		// User related keys
 		{Name: "UserTarget", Type: "*types.ReviewUser", Doc: "UserTarget stores the currently selected user"},
-
-		// Friend related keys
-		{Name: "Friends", Type: "[]*types.ExtendedFriend", Doc: "Friends stores the user's friend list"},
-		{Name: "Presences", Type: "map[uint64]*apiTypes.UserPresenceResponse", Doc: "Presences stores friend presence information"},
-		{Name: "FlaggedFriends", Type: "map[uint64]*types.ReviewUser", Doc: "FlaggedFriends stores flagged friends"},
+		{Name: "UserFriends", Type: "[]*types.ExtendedFriend", Doc: "UserFriends stores the user's friend list"},
+		{Name: "UserPresences", Type: "map[uint64]*apiTypes.UserPresenceResponse", Doc: "UserPresences stores friend presence information"},
+		{Name: "UserFlaggedFriends", Type: "map[uint64]*types.ReviewUser", Doc: "UserFlaggedFriends stores flagged friends"},
+		{Name: "UserGroups", Type: "[]*apiTypes.UserGroupRoles", Doc: "UserGroups stores the list of groups"},
+		{Name: "UserFlaggedGroups", Type: "map[uint64]*types.ReviewGroup", Doc: "UserFlaggedGroups stores flagged groups"},
+		{Name: "UserOutfits", Type: "[]apiTypes.Outfit", Doc: "UserOutfits stores user outfits"},
 
 		// Group related keys
-		{Name: "Groups", Type: "[]*apiTypes.UserGroupRoles", Doc: "Groups stores the list of groups"},
-		{Name: "FlaggedGroups", Type: "map[uint64]*types.ReviewGroup", Doc: "FlaggedGroups stores flagged groups"},
 		{Name: "GroupTarget", Type: "*types.ReviewGroup", Doc: "GroupTarget stores the currently selected group"},
 		{Name: "GroupMemberIDs", Type: "[]uint64", Doc: "GroupMemberIDs stores member IDs for the current group"},
 		{Name: "GroupMembers", Type: "map[uint64]*types.ReviewUser", Doc: "GroupMembers stores member details for the current group"},
 		{Name: "GroupPageMembers", Type: "[]uint64", Doc: "GroupPageMembers stores the current page of group members"},
 		{Name: "GroupInfo", Type: "*apiTypes.GroupResponse", Doc: "GroupInfo stores additional group information"},
 
-		// Outfit related keys
-		{Name: "Outfits", Type: "[]apiTypes.Outfit", Doc: "Outfits stores user outfits"},
-
 		// Chat related keys
 		{Name: "ChatHistory", Type: "ai.ChatHistory", Doc: "ChatHistory stores the conversation history"},
 		{Name: "ChatContext", Type: "string", Doc: "ChatContext stores chat context information"},
 
 		// Log related keys
-		{Name: "Logs", Type: "[]*types.ActivityLog", Doc: "Logs stores activity logs"},
+		{Name: "LogActivities", Type: "[]*types.ActivityLog", Doc: "LogActivities stores activity logs"},
 		{Name: "LogCursor", Type: "*types.LogCursor", Doc: "LogCursor stores the current log cursor"},
 		{Name: "LogNextCursor", Type: "*types.LogCursor", Doc: "LogNextCursor stores the next log cursor"},
 		{Name: "LogPrevCursors", Type: "[]*types.LogCursor", Doc: "LogPrevCursors stores previous log cursors"},
-		{Name: "DiscordIDFilter", Type: "uint64", Doc: "DiscordIDFilter stores Discord ID filter"},
-		{Name: "UserIDFilter", Type: "uint64", Doc: "UserIDFilter stores user ID filter"},
-		{Name: "GroupIDFilter", Type: "uint64", Doc: "GroupIDFilter stores group ID filter"},
-		{Name: "ReviewerIDFilter", Type: "uint64", Doc: "ReviewerIDFilter stores reviewer ID filter"},
-		{Name: "ActivityTypeFilter", Type: "enum.ActivityType", Doc: "ActivityTypeFilter stores activity type filter"},
-		{Name: "DateRangeStartFilter", Type: "time.Time", Doc: "DateRangeStartFilter stores start date filter"},
-		{Name: "DateRangeEndFilter", Type: "time.Time", Doc: "DateRangeEndFilter stores end date filter"},
+		{Name: "LogFilterDiscordID", Type: "uint64", Doc: "LogFilterDiscordID stores Discord ID filter"},
+		{Name: "LogFilterUserID", Type: "uint64", Doc: "LogFilterUserID stores user ID filter"},
+		{Name: "LogFilterGroupID", Type: "uint64", Doc: "LogFilterGroupID stores group ID filter"},
+		{Name: "LogFilterReviewerID", Type: "uint64", Doc: "LogFilterReviewerID stores reviewer ID filter"},
+		{Name: "LogFilterActivityType", Type: "enum.ActivityType", Doc: "LogFilterActivityType stores activity type filter"},
+		{Name: "LogFilterDateRangeStart", Type: "time.Time", Doc: "LogFilterDateRangeStart stores start date filter"},
+		{Name: "LogFilterDateRangeEnd", Type: "time.Time", Doc: "LogFilterDateRangeEnd stores end date filter"},
 
 		// Queue related keys
 		{Name: "QueueUser", Type: "uint64", Doc: "QueueUser stores the queued user"},
@@ -126,8 +119,8 @@ func main() {
 		{Name: "QueueLowCount", Type: "int", Doc: "QueueLowCount stores low priority queue count"},
 
 		// Appeal related keys
-		{Name: "Appeals", Type: "[]*types.Appeal", Doc: "Appeals stores the current page of appeals"},
-		{Name: "Appeal", Type: "*types.Appeal", Doc: "Appeal stores the currently selected appeal"},
+		{Name: "AppealList", Type: "[]*types.Appeal", Doc: "AppealList stores the current page of appeals"},
+		{Name: "AppealSelected", Type: "*types.Appeal", Doc: "AppealSelected stores the currently selected appeal"},
 		{Name: "AppealMessages", Type: "[]*types.AppealMessage", Doc: "AppealMessages stores messages for the current appeal"},
 		{Name: "AppealCursor", Type: "*types.AppealTimeline", Doc: "AppealCursor stores the current cursor position"},
 		{Name: "AppealNextCursor", Type: "*types.AppealTimeline", Doc: "AppealNextCursor stores the next cursor position"},
@@ -141,13 +134,13 @@ func main() {
 		// CAPTCHA related keys
 		{Name: "CaptchaAnswer", Type: "string", Doc: "CaptchaAnswer stores the CAPTCHA answer"},
 
-		// Admin action related keys
+		// Admin related keys
 		{Name: "AdminAction", Type: "string", Doc: "AdminAction stores the current admin action"},
 		{Name: "AdminActionID", Type: "string", Doc: "AdminActionID stores the admin action ID"},
 		{Name: "AdminReason", Type: "string", Doc: "AdminReason stores the admin action reason"},
-		{Name: "BanReason", Type: "enum.BanReason", Doc: "BanReason stores the ban reason"},
-		{Name: "BanExpiry", Type: "*time.Time", Doc: "BanExpiry stores the ban expiry time"},
-		{Name: "BanInfo", Type: "*types.DiscordBan", Doc: "BanInfo stores ban information"},
+		{Name: "AdminBanReason", Type: "enum.BanReason", Doc: "AdminBanReason stores the ban reason"},
+		{Name: "AdminBanExpiry", Type: "*time.Time", Doc: "AdminBanExpiry stores the ban expiry time"},
+		{Name: "AdminBanInfo", Type: "*types.DiscordBan", Doc: "AdminBanInfo stores ban information"},
 
 		// Leaderboard related keys
 		{Name: "LeaderboardStats", Type: "[]*types.VoteAccuracy", Doc: "LeaderboardStats stores leaderboard statistics"},
@@ -161,7 +154,6 @@ func main() {
 
 	bufferKeys := []KeyDef{
 		{Name: "ImageBuffer", Doc: "ImageBuffer stores binary image data"},
-		{Name: "CaptchaImage", Doc: "CaptchaImage stores the CAPTCHA image data"},
 	}
 
 	data := struct {

@@ -29,8 +29,8 @@ func NewBuilder(s *session.Session) *Builder {
 	return &Builder{
 		stats:             session.LeaderboardStats.Get(s),
 		usernames:         session.LeaderboardUsernames.Get(s),
-		hasNextPage:       session.HasNextPage.Get(s),
-		hasPrevPage:       session.HasPrevPage.Get(s),
+		hasNextPage:       session.PaginationHasNextPage.Get(s),
+		hasPrevPage:       session.PaginationHasPrevPage.Get(s),
 		lastRefresh:       session.LeaderboardLastRefresh.Get(s),
 		nextRefresh:       session.LeaderboardNextRefresh.Get(s),
 		leaderboardPeriod: session.UserLeaderboardPeriod.Get(s),

@@ -19,7 +19,7 @@ type Builder struct {
 // NewBuilder creates a new ban menu builder.
 func NewBuilder(s *session.Session) *Builder {
 	return &Builder{
-		ban: session.BanInfo.Get(s),
+		ban: session.AdminBanInfo.Get(s),
 	}
 }
 

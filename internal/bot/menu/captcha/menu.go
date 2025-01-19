@@ -46,7 +46,7 @@ func (m *Menu) Show(event interfaces.CommonEvent, s *session.Session, content st
 
 	// Store CAPTCHA info in session
 	session.CaptchaAnswer.Set(s, string(digits))
-	session.CaptchaImage.Set(s, imgBuffer)
+	session.ImageBuffer.Set(s, imgBuffer)
 
 	m.layout.paginationManager.NavigateTo(event, s, m.page, content)
 }
@@ -57,7 +57,7 @@ func (m *Menu) handleButton(event *events.ComponentInteractionCreate, s *session
 	case constants.BackButtonCustomID:
 		m.layout.paginationManager.NavigateBack(event, s, "")
 		session.CaptchaAnswer.Delete(s)
-		session.CaptchaImage.Delete(s)
+		session.ImageBuffer.Delete(s)
 	case constants.CaptchaRefreshButtonCustomID:
 		m.Show(event, s, "Generated new CAPTCHA.")
 	case constants.CaptchaAnswerButtonCustomID:
@@ -114,5 +114,5 @@ func (m *Menu) handleModal(event *events.ModalSubmitInteractionCreate, s *sessio
 	// Return to previous page
 	m.layout.paginationManager.NavigateBack(event, s, "✅ CAPTCHA verified successfully!")
 	session.CaptchaAnswer.Delete(s)
-	session.CaptchaImage.Delete(s)
+	session.ImageBuffer.Delete(s)
 }

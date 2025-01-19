@@ -30,12 +30,12 @@ type OutfitsBuilder struct {
 func NewOutfitsBuilder(s *session.Session) *OutfitsBuilder {
 	return &OutfitsBuilder{
 		user:        session.UserTarget.Get(s),
-		outfits:     session.Outfits.Get(s),
-		start:       session.Start.Get(s),
+		outfits:     session.UserOutfits.Get(s),
+		start:       session.PaginationOffset.Get(s),
 		page:        session.PaginationPage.Get(s),
-		total:       session.TotalItems.Get(s),
+		total:       session.PaginationTotalItems.Get(s),
 		imageBuffer: session.ImageBuffer.Get(s),
-		isStreaming: session.IsStreaming.Get(s),
+		isStreaming: session.PaginationIsStreaming.Get(s),
 		privacyMode: session.UserReviewMode.Get(s) == enum.ReviewModeTraining || session.UserStreamerMode.Get(s),
 	}
 }

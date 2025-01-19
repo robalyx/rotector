@@ -117,8 +117,8 @@ func (m *ReviewMenu) Show(event interfaces.CommonEvent, s *session.Session, cont
 	}
 
 	// Store data in session for the message builder
-	session.FlaggedFriends.Set(s, flaggedFriends)
-	session.FlaggedGroups.Set(s, flaggedGroups)
+	session.UserFlaggedFriends.Set(s, flaggedFriends)
+	session.UserFlaggedGroups.Set(s, flaggedGroups)
 
 	m.layout.paginationManager.NavigateTo(event, s, m.page, content)
 }
@@ -334,7 +334,7 @@ func (m *ReviewMenu) handleViewUserLogs(event *events.ComponentInteractionCreate
 	// Set the user ID filter
 	m.layout.logLayout.ResetLogs(s)
 	m.layout.logLayout.ResetFilters(s)
-	session.UserIDFilter.Set(s, user.ID)
+	session.LogFilterUserID.Set(s, user.ID)
 
 	// Show the logs menu
 	m.layout.logLayout.Show(event, s)
@@ -542,8 +542,8 @@ func (m *ReviewMenu) handleSkipUser(event interfaces.CommonEvent, s *session.Ses
 // handleOpenAIChat handles the button to open the AI chat for the current user.
 func (m *ReviewMenu) handleOpenAIChat(event *events.ComponentInteractionCreate, s *session.Session) {
 	user := session.UserTarget.Get(s)
-	flaggedFriends := session.FlaggedFriends.Get(s)
-	flaggedGroups := session.FlaggedGroups.Get(s)
+	flaggedFriends := session.UserFlaggedFriends.Get(s)
+	flaggedGroups := session.UserFlaggedGroups.Get(s)
 
 	// Build friends information
 	friendsInfo := make([]string, 0, len(user.Friends))

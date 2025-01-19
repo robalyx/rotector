@@ -27,7 +27,7 @@ func NewBuilder(s *session.Session) *Builder {
 		model:       session.UserChatModel.Get(s),
 		history:     session.ChatHistory.Get(s),
 		page:        session.PaginationPage.Get(s),
-		isStreaming: session.IsStreaming.Get(s),
+		isStreaming: session.PaginationIsStreaming.Get(s),
 		context:     session.ChatContext.Get(s),
 	}
 }

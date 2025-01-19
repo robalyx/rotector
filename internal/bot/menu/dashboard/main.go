@@ -42,7 +42,7 @@ func NewMainMenu(layout *Layout) *MainMenu {
 // Show prepares and displays the dashboard interface.
 func (m *MainMenu) Show(event interfaces.CommonEvent, s *session.Session, content string) {
 	// If the dashboard is already refreshed, directly navigate to the page
-	if session.IsRefreshed.Get(s) {
+	if session.StatsIsRefreshed.Get(s) {
 		m.layout.paginationManager.NavigateTo(event, s, m.page, content)
 		return
 	}
@@ -70,12 +70,12 @@ func (m *MainMenu) Show(event interfaces.CommonEvent, s *session.Session, conten
 	}
 
 	// Store data in session
-	session.UserCounts.Set(s, userCounts)
-	session.GroupCounts.Set(s, groupCounts)
-	session.ActiveUsers.Set(s, activeUsers)
-	session.WorkerStatuses.Set(s, workerStatuses)
-	session.VoteStats.Set(s, voteStats)
-	session.IsRefreshed.Set(s, true)
+	session.StatsUserCounts.Set(s, userCounts)
+	session.StatsGroupCounts.Set(s, groupCounts)
+	session.StatsActiveUsers.Set(s, activeUsers)
+	session.StatusWorkers.Set(s, workerStatuses)
+	session.StatsVotes.Set(s, voteStats)
+	session.StatsIsRefreshed.Set(s, true)
 
 	m.layout.paginationManager.NavigateTo(event, s, m.page, content)
 }
@@ -257,7 +257,7 @@ func (m *MainMenu) handleLookupGroupModalSubmit(event *events.ModalSubmitInterac
 // to update the dashboard statistics.
 func (m *MainMenu) handleButton(event *events.ComponentInteractionCreate, s *session.Session, customID string) {
 	if customID == constants.RefreshButtonCustomID {
-		session.IsRefreshed.Set(s, false)
+		session.StatsIsRefreshed.Set(s, false)
 		m.Show(event, s, "Refreshed dashboard.")
 	}
 }

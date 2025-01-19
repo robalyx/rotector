@@ -28,7 +28,7 @@ type Builder struct {
 // NewBuilder creates a new status builder.
 func NewBuilder(s *session.Session) *Builder {
 	return &Builder{
-		workerStatuses: session.WorkerStatuses.Get(s),
+		workerStatuses: session.StatusWorkers.Get(s),
 		titleCaser:     cases.Title(language.English),
 	}
 }

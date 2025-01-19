@@ -32,16 +32,16 @@ type Builder struct {
 // NewBuilder creates a new log builder.
 func NewBuilder(s *session.Session) *Builder {
 	return &Builder{
-		logs:               session.Logs.Get(s),
-		discordID:          session.DiscordIDFilter.Get(s),
-		userID:             session.UserIDFilter.Get(s),
-		groupID:            session.GroupIDFilter.Get(s),
-		reviewerID:         session.ReviewerIDFilter.Get(s),
-		activityTypeFilter: session.ActivityTypeFilter.Get(s),
-		startDate:          session.DateRangeStartFilter.Get(s),
-		endDate:            session.DateRangeEndFilter.Get(s),
-		hasNextPage:        session.HasNextPage.Get(s),
-		hasPrevPage:        session.HasPrevPage.Get(s),
+		logs:               session.LogActivities.Get(s),
+		discordID:          session.LogFilterDiscordID.Get(s),
+		userID:             session.LogFilterUserID.Get(s),
+		groupID:            session.LogFilterGroupID.Get(s),
+		reviewerID:         session.LogFilterReviewerID.Get(s),
+		activityTypeFilter: session.LogFilterActivityType.Get(s),
+		startDate:          session.LogFilterDateRangeStart.Get(s),
+		endDate:            session.LogFilterDateRangeEnd.Get(s),
+		hasNextPage:        session.PaginationHasNextPage.Get(s),
+		hasPrevPage:        session.PaginationHasPrevPage.Get(s),
 		privacyMode:        session.UserReviewMode.Get(s) == enum.ReviewModeTraining || session.UserStreamerMode.Get(s),
 	}
 }

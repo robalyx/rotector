@@ -60,6 +60,6 @@ func (m *Menu) Show(event interfaces.CommonEvent, s *session.Session) {
 	}
 
 	// Store ban in session and show the menu
-	session.BanInfo.Set(s, ban)
+	session.AdminBanInfo.Set(s, ban)
 	m.layout.paginationManager.NavigateTo(event, s, m.page, "")
 }

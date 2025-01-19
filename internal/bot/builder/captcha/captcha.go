@@ -16,7 +16,7 @@ type Builder struct {
 // NewBuilder creates a new CAPTCHA builder.
 func NewBuilder(s *session.Session) *Builder {
 	return &Builder{
-		imgBuffer: session.CaptchaImage.Get(s),
+		imgBuffer: session.ImageBuffer.Get(s),
 	}
 }
 

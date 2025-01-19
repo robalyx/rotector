@@ -46,12 +46,14 @@ func main() {
 		{Name: "StreamerMode", Type: "bool", Doc: "StreamerMode controls streamer-friendly display"},
 		{Name: "UserDefaultSort", Type: "enum.ReviewSortBy", Doc: "UserDefaultSort sets default user review sorting"},
 		{Name: "GroupDefaultSort", Type: "enum.ReviewSortBy", Doc: "GroupDefaultSort sets default group review sorting"},
-		{Name: "AppealDefaultSort", Type: "enum.AppealSortBy", Doc: "AppealDefaultSort sets default appeal sorting"},
-		{Name: "AppealStatusFilter", Type: "enum.AppealStatus", Doc: "AppealStatusFilter sets appeal status filtering"},
 		{Name: "ChatModel", Type: "enum.ChatModel", Doc: "ChatModel sets the AI chat model"},
 		{Name: "ReviewMode", Type: "enum.ReviewMode", Doc: "ReviewMode sets the review mode"},
 		{Name: "ReviewTargetMode", Type: "enum.ReviewTargetMode", Doc: "ReviewTargetMode sets the review target mode"},
 		{Name: "LeaderboardPeriod", Type: "enum.LeaderboardPeriod", Doc: "LeaderboardPeriod sets the leaderboard time period"},
+
+		// Appeal related settings
+		{Name: "AppealDefaultSort", Type: "enum.AppealSortBy", Doc: "AppealDefaultSort sets default appeal sorting"},
+		{Name: "AppealStatusFilter", Type: "enum.AppealStatus", Doc: "AppealStatusFilter sets appeal status filtering"},
 
 		// Chat message usage settings
 		{Name: "ChatMessageUsage.FirstMessageTime", Type: "time.Time", Doc: "ChatMessageUsageFirstMessageTime tracks first message time in 24h period"},

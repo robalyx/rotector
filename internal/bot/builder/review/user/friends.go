@@ -33,14 +33,14 @@ type FriendsBuilder struct {
 func NewFriendsBuilder(s *session.Session) *FriendsBuilder {
 	return &FriendsBuilder{
 		user:           session.UserTarget.Get(s),
-		friends:        session.Friends.Get(s),
-		presences:      session.Presences.Get(s),
-		flaggedFriends: session.FlaggedFriends.Get(s),
-		start:          session.Start.Get(s),
+		friends:        session.UserFriends.Get(s),
+		presences:      session.UserPresences.Get(s),
+		flaggedFriends: session.UserFlaggedFriends.Get(s),
+		start:          session.PaginationOffset.Get(s),
 		page:           session.PaginationPage.Get(s),
-		total:          session.TotalItems.Get(s),
+		total:          session.PaginationTotalItems.Get(s),
 		imageBuffer:    session.ImageBuffer.Get(s),
-		isStreaming:    session.IsStreaming.Get(s),
+		isStreaming:    session.PaginationIsStreaming.Get(s),
 		privacyMode:    session.UserReviewMode.Get(s) == enum.ReviewModeTraining || session.UserStreamerMode.Get(s),
 	}
 }

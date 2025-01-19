@@ -212,8 +212,8 @@ func (m *MainMenu) handleBanUserModalSubmit(event *events.ModalSubmitInteraction
 
 	session.AdminActionID.Set(s, userID)
 	session.AdminReason.Set(s, notes)
-	session.BanReason.Set(s, banReason)
-	session.BanExpiry.Set(s, expiresAt) // Will be nil for permanent bans
+	session.AdminBanReason.Set(s, banReason)
+	session.AdminBanExpiry.Set(s, expiresAt) // Will be nil for permanent bans
 	m.layout.confirmMenu.Show(event, s, constants.BanUserAction, "")
 }
 

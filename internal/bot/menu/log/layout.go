@@ -52,21 +52,21 @@ func (l *Layout) Show(event interfaces.CommonEvent, s *session.Session) {
 
 // ResetFilters resets all log filters to their default values in the given session.
 func (l *Layout) ResetFilters(s *session.Session) {
-	session.DiscordIDFilter.Set(s, uint64(0))
-	session.UserIDFilter.Set(s, uint64(0))
-	session.GroupIDFilter.Set(s, uint64(0))
-	session.ReviewerIDFilter.Set(s, uint64(0))
-	session.ActivityTypeFilter.Set(s, enum.ActivityTypeAll)
-	session.DateRangeStartFilter.Set(s, time.Time{})
-	session.DateRangeEndFilter.Set(s, time.Time{})
+	session.LogFilterDiscordID.Set(s, uint64(0))
+	session.LogFilterUserID.Set(s, uint64(0))
+	session.LogFilterGroupID.Set(s, uint64(0))
+	session.LogFilterReviewerID.Set(s, uint64(0))
+	session.LogFilterActivityType.Set(s, enum.ActivityTypeAll)
+	session.LogFilterDateRangeStart.Set(s, time.Time{})
+	session.LogFilterDateRangeEnd.Set(s, time.Time{})
 }
 
 // ResetLogs clears the logs from the session.
 func (l *Layout) ResetLogs(s *session.Session) {
-	session.Logs.Set(s, []*types.ActivityLog{})
+	session.LogActivities.Set(s, []*types.ActivityLog{})
 	session.LogCursor.Set(s, nil)
 	session.LogNextCursor.Set(s, nil)
 	session.LogPrevCursors.Set(s, []*types.LogCursor{})
-	session.HasNextPage.Set(s, false)
-	session.HasPrevPage.Set(s, false)
+	session.PaginationHasNextPage.Set(s, false)
+	session.PaginationHasPrevPage.Set(s, false)
 }

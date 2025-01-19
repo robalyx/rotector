@@ -35,12 +35,12 @@ func NewMembersBuilder(s *session.Session) *MembersBuilder {
 		group:       session.GroupTarget.Get(s),
 		pageMembers: session.GroupPageMembers.Get(s),
 		members:     session.GroupMembers.Get(s),
-		presences:   session.Presences.Get(s),
-		start:       session.Start.Get(s),
+		presences:   session.UserPresences.Get(s),
+		start:       session.PaginationOffset.Get(s),
 		page:        session.PaginationPage.Get(s),
-		total:       session.TotalItems.Get(s),
+		total:       session.PaginationTotalItems.Get(s),
 		imageBuffer: session.ImageBuffer.Get(s),
-		isStreaming: session.IsStreaming.Get(s),
+		isStreaming: session.PaginationIsStreaming.Get(s),
 		privacyMode: session.UserReviewMode.Get(s) == enum.ReviewModeTraining || session.UserStreamerMode.Get(s),
 	}
 }

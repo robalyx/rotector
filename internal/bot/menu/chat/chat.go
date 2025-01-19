@@ -133,7 +133,7 @@ func (m *Menu) handleModal(event *events.ModalSubmitInteractionCreate, s *sessio
 		}
 
 		// Set streaming state
-		session.IsStreaming.Set(s, true)
+		session.PaginationIsStreaming.Set(s, true)
 
 		// Show "AI is typing..." message
 		m.layout.paginationManager.NavigateTo(event, s, m.page, "AI is typing...")
@@ -179,7 +179,7 @@ func (m *Menu) handleModal(event *events.ModalSubmitInteractionCreate, s *sessio
 
 		// Calculate new page number to show latest messages
 		session.PaginationPage.Set(s, 0)
-		session.IsStreaming.Set(s, false)
+		session.PaginationIsStreaming.Set(s, false)
 
 		// Show final message
 		m.layout.paginationManager.NavigateTo(event, s, m.page, "Response completed.")

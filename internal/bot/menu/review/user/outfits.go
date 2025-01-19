@@ -55,10 +55,10 @@ func (m *OutfitsMenu) Show(event *events.ComponentInteractionCreate, s *session.
 	pageOutfits := user.Outfits[start:end]
 
 	// Store data in session for the message builder
-	session.Outfits.Set(s, pageOutfits)
-	session.Start.Set(s, start)
+	session.UserOutfits.Set(s, pageOutfits)
+	session.PaginationOffset.Set(s, start)
 	session.PaginationPage.Set(s, page)
-	session.TotalItems.Set(s, len(user.Outfits))
+	session.PaginationTotalItems.Set(s, len(user.Outfits))
 
 	// Start streaming images
 	m.layout.imageStreamer.Stream(pagination.StreamRequest{

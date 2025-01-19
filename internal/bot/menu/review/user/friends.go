@@ -50,7 +50,7 @@ func (m *FriendsMenu) Show(event *events.ComponentInteractionCreate, s *session.
 	}
 
 	// Get friend types from session and sort friends by status
-	flaggedFriends := session.FlaggedFriends.Get(s)
+	flaggedFriends := session.UserFlaggedFriends.Get(s)
 	sortedFriends := m.sortFriendsByStatus(user.Friends, flaggedFriends)
 
 	// Calculate page boundaries
@@ -65,11 +65,11 @@ func (m *FriendsMenu) Show(event *events.ComponentInteractionCreate, s *session.
 	presenceMap := m.fetchPresences(sortedFriends)
 
 	// Store data in session for the message builder
-	session.Friends.Set(s, pageFriends)
-	session.Presences.Set(s, presenceMap)
-	session.Start.Set(s, start)
+	session.UserFriends.Set(s, pageFriends)
+	session.UserPresences.Set(s, presenceMap)
+	session.PaginationOffset.Set(s, start)
 	session.PaginationPage.Set(s, page)
-	session.TotalItems.Set(s, len(sortedFriends))
+	session.PaginationTotalItems.Set(s, len(sortedFriends))
 
 	// Start streaming images
 	m.layout.imageStreamer.Stream(pagination.StreamRequest{

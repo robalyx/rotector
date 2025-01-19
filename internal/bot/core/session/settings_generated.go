@@ -16,10 +16,6 @@ var (
 	UserUserDefaultSort = NewUserSettingKey[enum.ReviewSortBy]("UserDefaultSort")
 	// GroupDefaultSort sets default group review sorting
 	UserGroupDefaultSort = NewUserSettingKey[enum.ReviewSortBy]("GroupDefaultSort")
-	// AppealDefaultSort sets default appeal sorting
-	UserAppealDefaultSort = NewUserSettingKey[enum.AppealSortBy]("AppealDefaultSort")
-	// AppealStatusFilter sets appeal status filtering
-	UserAppealStatusFilter = NewUserSettingKey[enum.AppealStatus]("AppealStatusFilter")
 	// ChatModel sets the AI chat model
 	UserChatModel = NewUserSettingKey[enum.ChatModel]("ChatModel")
 	// ReviewMode sets the review mode
@@ -28,6 +24,10 @@ var (
 	UserReviewTargetMode = NewUserSettingKey[enum.ReviewTargetMode]("ReviewTargetMode")
 	// LeaderboardPeriod sets the leaderboard time period
 	UserLeaderboardPeriod = NewUserSettingKey[enum.LeaderboardPeriod]("LeaderboardPeriod")
+	// AppealDefaultSort sets default appeal sorting
+	UserAppealDefaultSort = NewUserSettingKey[enum.AppealSortBy]("AppealDefaultSort")
+	// AppealStatusFilter sets appeal status filtering
+	UserAppealStatusFilter = NewUserSettingKey[enum.AppealStatus]("AppealStatusFilter")
 	// ChatMessageUsageFirstMessageTime tracks first message time in 24h period
 	UserChatMessageUsageFirstMessageTime = NewUserSettingKey[time.Time]("ChatMessageUsage.FirstMessageTime")
 	// ChatMessageUsageMessageCount tracks message count in 24h period

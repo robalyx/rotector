@@ -71,7 +71,7 @@ func NewImageStreamer(paginationManager *Manager, logger *zap.Logger, client *cl
 func (is *ImageStreamer) Stream(req StreamRequest) {
 	// Show initial loading message
 	session.ImageBuffer.Set(req.Session, new(bytes.Buffer))
-	session.IsStreaming.Set(req.Session, true)
+	session.PaginationIsStreaming.Set(req.Session, true)
 	is.paginationManager.NavigateTo(req.Event, req.Session, req.Page, "Loading images...")
 
 	// Get URLs through URLFunc
@@ -147,7 +147,7 @@ func (is *ImageStreamer) Stream(req StreamRequest) {
 		select {
 		case <-ctx.Done():
 			// Clean up streaming state before returning
-			session.IsStreaming.Set(req.Session, false)
+			session.PaginationIsStreaming.Set(req.Session, false)
 			is.createAndDisplayGrid(req, downloadedImages, &mu, "Images took too long to load")
 			return
 		case <-doneChan:
@@ -157,7 +157,7 @@ func (is *ImageStreamer) Stream(req StreamRequest) {
 				message = fmt.Sprintf("Images loaded (%d failed)", failed)
 			}
 
-			session.IsStreaming.Set(req.Session, false)
+			session.PaginationIsStreaming.Set(req.Session, false)
 			is.createAndDisplayGrid(req, downloadedImages, &mu, message)
 			return
 		case <-ticker.C:

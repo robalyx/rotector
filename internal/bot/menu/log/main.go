@@ -46,13 +46,13 @@ func NewMainMenu(l *Layout) *MainMenu {
 func (m *MainMenu) Show(event interfaces.CommonEvent, s *session.Session) {
 	// Get query parameters from session
 	activityFilter := types.ActivityFilter{
-		DiscordID:    session.DiscordIDFilter.Get(s),
-		UserID:       session.UserIDFilter.Get(s),
-		GroupID:      session.GroupIDFilter.Get(s),
-		ReviewerID:   session.ReviewerIDFilter.Get(s),
-		ActivityType: session.ActivityTypeFilter.Get(s),
-		StartDate:    session.DateRangeStartFilter.Get(s),
-		EndDate:      session.DateRangeEndFilter.Get(s),
+		DiscordID:    session.LogFilterDiscordID.Get(s),
+		UserID:       session.LogFilterUserID.Get(s),
+		GroupID:      session.LogFilterGroupID.Get(s),
+		ReviewerID:   session.LogFilterReviewerID.Get(s),
+		ActivityType: session.LogFilterActivityType.Get(s),
+		StartDate:    session.LogFilterDateRangeStart.Get(s),
+		EndDate:      session.LogFilterDateRangeEnd.Get(s),
 	}
 
 	// Get cursor from session if it exists
@@ -84,11 +84,11 @@ func (m *MainMenu) Show(event interfaces.CommonEvent, s *session.Session) {
 	prevCursors := session.LogPrevCursors.Get(s)
 
 	// Store results and cursor in session
-	session.Logs.Set(s, logs)
+	session.LogActivities.Set(s, logs)
 	session.LogCursor.Set(s, cursor)
 	session.LogNextCursor.Set(s, nextCursor)
-	session.HasNextPage.Set(s, nextCursor != nil)
-	session.HasPrevPage.Set(s, len(prevCursors) > 0)
+	session.PaginationHasNextPage.Set(s, nextCursor != nil)
+	session.PaginationHasPrevPage.Set(s, len(prevCursors) > 0)
 
 	m.layout.paginationManager.NavigateTo(event, s, m.page, "")
 }
@@ -120,7 +120,7 @@ func (m *MainMenu) handleSelectMenu(event *events.ComponentInteractionCreate, s 
 			return
 		}
 
-		session.ActivityTypeFilter.Set(s, enum.ActivityType(optionInt))
+		session.LogFilterActivityType.Set(s, enum.ActivityType(optionInt))
 		m.Show(event, s)
 	}
 }
@@ -188,13 +188,13 @@ func (m *MainMenu) handleIDModalSubmit(event *events.ModalSubmitInteractionCreat
 	// Store ID in appropriate session key based on query type
 	switch queryType {
 	case constants.LogsQueryDiscordIDOption:
-		session.DiscordIDFilter.Set(s, id)
+		session.LogFilterDiscordID.Set(s, id)
 	case constants.LogsQueryUserIDOption:
-		session.UserIDFilter.Set(s, id)
+		session.LogFilterUserID.Set(s, id)
 	case constants.LogsQueryGroupIDOption:
-		session.GroupIDFilter.Set(s, id)
+		session.LogFilterGroupID.Set(s, id)
 	case constants.LogsQueryReviewerIDOption:
-		session.ReviewerIDFilter.Set(s, id)
+		session.LogFilterReviewerID.Set(s, id)
 	}
 
 	m.Show(event, s)
@@ -210,8 +210,8 @@ func (m *MainMenu) handleDateRangeModalSubmit(event *events.ModalSubmitInteracti
 		return
 	}
 
-	session.DateRangeStartFilter.Set(s, startDate)
-	session.DateRangeEndFilter.Set(s, endDate)
+	session.LogFilterDateRangeStart.Set(s, startDate)
+	session.LogFilterDateRangeEnd.Set(s, endDate)
 
 	m.Show(event, s)
 }
@@ -220,7 +220,7 @@ func (m *MainMenu) handleDateRangeModalSubmit(event *events.ModalSubmitInteracti
 func (m *MainMenu) handlePagination(event *events.ComponentInteractionCreate, s *session.Session, action session.ViewerAction) {
 	switch action {
 	case session.ViewerNextPage:
-		if session.HasNextPage.Get(s) {
+		if session.PaginationHasNextPage.Get(s) {
 			cursor := session.LogCursor.Get(s)
 			nextCursor := session.LogNextCursor.Get(s)
 			prevCursors := session.LogPrevCursors.Get(s)

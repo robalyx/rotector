@@ -45,13 +45,13 @@ func NewBuilder(s *session.Session, redisClient rueidis.Client) *Builder {
 	botSettings := s.BotSettings()
 	return &Builder{
 		userID:              s.UserID(),
-		userCounts:          session.UserCounts.Get(s),
-		groupCounts:         session.GroupCounts.Get(s),
+		userCounts:          session.StatsUserCounts.Get(s),
+		groupCounts:         session.StatsGroupCounts.Get(s),
 		userStatsBuffer:     userStatsBuffer,
 		groupStatsBuffer:    groupStatsBuffer,
-		activeUsers:         session.ActiveUsers.Get(s),
-		workerStatuses:      session.WorkerStatuses.Get(s),
-		voteStats:           session.VoteStats.Get(s),
+		activeUsers:         session.StatsActiveUsers.Get(s),
+		workerStatuses:      session.StatusWorkers.Get(s),
+		voteStats:           session.StatsVotes.Get(s),
 		announcementType:    session.BotAnnouncementType.Get(s),
 		announcementMessage: session.BotAnnouncementMessage.Get(s),
 		welcomeMessage:      session.BotWelcomeMessage.Get(s),

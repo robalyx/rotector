@@ -32,13 +32,13 @@ type GroupsBuilder struct {
 func NewGroupsBuilder(s *session.Session) *GroupsBuilder {
 	return &GroupsBuilder{
 		user:          session.UserTarget.Get(s),
-		groups:        session.Groups.Get(s),
-		flaggedGroups: session.FlaggedGroups.Get(s),
-		start:         session.Start.Get(s),
+		groups:        session.UserGroups.Get(s),
+		flaggedGroups: session.UserFlaggedGroups.Get(s),
+		start:         session.PaginationOffset.Get(s),
 		page:          session.PaginationPage.Get(s),
-		total:         session.TotalItems.Get(s),
+		total:         session.PaginationTotalItems.Get(s),
 		imageBuffer:   session.ImageBuffer.Get(s),
-		isStreaming:   session.IsStreaming.Get(s),
+		isStreaming:   session.PaginationIsStreaming.Get(s),
 		privacyMode:   session.UserReviewMode.Get(s) == enum.ReviewModeTraining || session.UserStreamerMode.Get(s),
 	}
 }

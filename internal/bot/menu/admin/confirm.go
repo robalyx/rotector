@@ -81,11 +81,11 @@ func (m *ConfirmMenu) handleBanUser(event *events.ComponentInteractionCreate, s 
 		return
 	}
 
-	banReason := session.BanReason.Get(s)
+	banReason := session.AdminBanReason.Get(s)
 
 	// Ban the user
 	now := time.Now()
-	expiresAt := session.BanExpiry.Get(s)
+	expiresAt := session.AdminBanExpiry.Get(s)
 	if err := m.layout.db.Bans().BanUser(context.Background(), &types.DiscordBan{
 		ID:        snowflake.ID(id),
 		Reason:    banReason,

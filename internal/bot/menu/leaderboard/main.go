@@ -73,8 +73,8 @@ func (m *MainMenu) Show(event interfaces.CommonEvent, s *session.Session) {
 	session.LeaderboardStats.Set(s, stats)
 	session.LeaderboardUsernames.Set(s, usernames)
 	session.LeaderboardNextCursor.Set(s, nextCursor)
-	session.HasNextPage.Set(s, nextCursor != nil)
-	session.HasPrevPage.Set(s, cursor != nil)
+	session.PaginationHasNextPage.Set(s, nextCursor != nil)
+	session.PaginationHasPrevPage.Set(s, cursor != nil)
 	session.LeaderboardLastRefresh.Set(s, lastRefresh)
 	session.LeaderboardNextRefresh.Set(s, nextRefresh)
 
@@ -124,7 +124,7 @@ func (m *MainMenu) handlePagination(event *events.ComponentInteractionCreate, s 
 		nextCursor := session.LeaderboardNextCursor.Get(s)
 		prevCursors := session.LeaderboardPrevCursors.Get(s)
 
-		if session.HasNextPage.Get(s) {
+		if session.PaginationHasNextPage.Get(s) {
 			session.LeaderboardCursor.Set(s, nextCursor)
 			session.LeaderboardPrevCursors.Set(s, append(prevCursors, cursor))
 			m.Show(event, s)

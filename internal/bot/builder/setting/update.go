@@ -25,7 +25,7 @@ func NewUpdateBuilder(s *session.Session) *UpdateBuilder {
 		settingName:  session.SettingName.Get(s),
 		settingType:  session.SettingType.Get(s),
 		currentValue: session.SettingDisplay.Get(s),
-		customID:     session.CustomID.Get(s),
+		customID:     session.SettingCustomID.Get(s),
 	}
 }
 

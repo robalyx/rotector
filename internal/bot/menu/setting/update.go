@@ -45,7 +45,7 @@ func (m *UpdateMenu) Show(event interfaces.CommonEvent, s *session.Session, sett
 	// Store setting information in session
 	session.SettingName.Set(s, setting.Name)
 	session.SettingType.Set(s, settingType)
-	session.CustomID.Set(s, settingKey)
+	session.SettingCustomID.Set(s, settingKey)
 	session.SettingValue.Set(s, setting)
 
 	// Get current value based on setting type
@@ -58,7 +58,7 @@ func (m *UpdateMenu) Show(event interfaces.CommonEvent, s *session.Session, sett
 // handleSettingChange processes setting value changes.
 func (m *UpdateMenu) handleSettingChange(event *events.ComponentInteractionCreate, s *session.Session, _ string, option string) {
 	settingType := session.SettingType.Get(s)
-	settingKey := session.CustomID.Get(s)
+	settingKey := session.SettingCustomID.Get(s)
 	setting := m.getSetting(settingType, settingKey)
 
 	// Validate the new value
@@ -124,7 +124,7 @@ func (m *UpdateMenu) handleSettingButton(event *events.ComponentInteractionCreat
 // handleSettingModal processes modal submissions.
 func (m *UpdateMenu) handleSettingModal(event *events.ModalSubmitInteractionCreate, s *session.Session) {
 	settingType := session.SettingType.Get(s)
-	settingKey := session.CustomID.Get(s)
+	settingKey := session.SettingCustomID.Get(s)
 	setting := m.getSetting(settingType, settingKey)
 
 	// Get input from modal

@@ -49,7 +49,7 @@ func (m *GroupsMenu) Show(event *events.ComponentInteractionCreate, s *session.S
 	}
 
 	// Get group types from session and sort groups by status
-	flaggedGroups := session.FlaggedGroups.Get(s)
+	flaggedGroups := session.UserFlaggedGroups.Get(s)
 	sortedGroups := m.sortGroupsByStatus(user.Groups, flaggedGroups)
 
 	// Calculate page boundaries
@@ -61,10 +61,10 @@ func (m *GroupsMenu) Show(event *events.ComponentInteractionCreate, s *session.S
 	pageGroups := sortedGroups[start:end]
 
 	// Store data in session for the message builder
-	session.Groups.Set(s, pageGroups)
-	session.Start.Set(s, start)
+	session.UserGroups.Set(s, pageGroups)
+	session.PaginationOffset.Set(s, start)
 	session.PaginationPage.Set(s, page)
-	session.TotalItems.Set(s, len(sortedGroups))
+	session.PaginationTotalItems.Set(s, len(sortedGroups))
 
 	// Start streaming images
 	m.layout.imageStreamer.Stream(pagination.StreamRequest{

@@ -78,10 +78,10 @@ func (m *MembersMenu) Show(event *events.ComponentInteractionCreate, s *session.
 	session.GroupMemberIDs.Set(s, sortedMemberIDs)
 	session.GroupMembers.Set(s, members)
 	session.GroupPageMembers.Set(s, pageMembers)
-	session.Presences.Set(s, presenceMap)
-	session.Start.Set(s, start)
+	session.UserPresences.Set(s, presenceMap)
+	session.PaginationOffset.Set(s, start)
 	session.PaginationPage.Set(s, page)
-	session.TotalItems.Set(s, len(sortedMemberIDs))
+	session.PaginationTotalItems.Set(s, len(sortedMemberIDs))
 
 	// Start streaming images
 	m.layout.imageStreamer.Stream(pagination.StreamRequest{

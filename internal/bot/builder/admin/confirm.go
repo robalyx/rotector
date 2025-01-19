@@ -25,8 +25,8 @@ func NewConfirmBuilder(s *session.Session) *ConfirmBuilder {
 		action:    session.AdminAction.Get(s),
 		id:        session.AdminActionID.Get(s),
 		reason:    session.AdminReason.Get(s),
-		banReason: session.BanReason.Get(s),
-		expiresAt: session.BanExpiry.Get(s),
+		banReason: session.AdminBanReason.Get(s),
+		expiresAt: session.AdminBanExpiry.Get(s),
 	}
 }
 

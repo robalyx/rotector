@@ -42,7 +42,7 @@ func NewTicketMenu(layout *Layout) *TicketMenu {
 // Show prepares and displays the appeal ticket interface.
 func (m *TicketMenu) Show(event interfaces.CommonEvent, s *session.Session, appealID int64, content string) {
 	// Get appeals from session
-	appeals := session.Appeals.Get(s)
+	appeals := session.AppealList.Get(s)
 
 	// Find the appeal in the session data
 	var appeal *types.Appeal
@@ -104,9 +104,9 @@ func (m *TicketMenu) Show(event interfaces.CommonEvent, s *session.Session, appe
 	}
 
 	// Store data in session
-	session.Appeal.Set(s, appeal)
+	session.AppealSelected.Set(s, appeal)
 	session.AppealMessages.Set(s, messages)
-	session.TotalPages.Set(s, totalPages)
+	session.PaginationTotalPages.Set(s, totalPages)
 	session.PaginationPage.Set(s, 0) // Reset to first page
 
 	m.layout.paginationManager.NavigateTo(event, s, m.page, content)
@@ -160,7 +160,7 @@ func (m *TicketMenu) handleRespond(event *events.ComponentInteractionCreate) {
 
 // handleLookupUser opens the review menu for the appealed user.
 func (m *TicketMenu) handleLookupUser(event *events.ComponentInteractionCreate, s *session.Session) {
-	appeal := session.Appeal.Get(s)
+	appeal := session.AppealSelected.Get(s)
 
 	// Get user from database
 	user, err := m.layout.db.Users().GetUserByID(context.Background(), strconv.FormatUint(appeal.UserID, 10), types.UserFields{})
@@ -228,7 +228,7 @@ func (m *TicketMenu) handleRejectAppeal(event *events.ComponentInteractionCreate
 
 // handleCloseAppeal handles the user closing their own appeal ticket.
 func (m *TicketMenu) handleCloseAppeal(event *events.ComponentInteractionCreate, s *session.Session) {
-	appeal := session.Appeal.Get(s)
+	appeal := session.AppealSelected.Get(s)
 
 	// Verify the user is the appeal creator
 	userID := uint64(event.User().ID)
@@ -266,7 +266,7 @@ func (m *TicketMenu) handleCloseAppeal(event *events.ComponentInteractionCreate,
 
 // handleModal processes modal submissions.
 func (m *TicketMenu) handleModal(event *events.ModalSubmitInteractionCreate, s *session.Session) {
-	appeal := session.Appeal.Get(s)
+	appeal := session.AppealSelected.Get(s)
 
 	switch event.Data.CustomID {
 	case constants.AppealRespondModalCustomID:

@@ -59,8 +59,8 @@ func (l *Layout) ResetStats(s *session.Session) {
 	session.LeaderboardCursor.Set(s, nil)
 	session.LeaderboardNextCursor.Set(s, nil)
 	session.LeaderboardPrevCursors.Set(s, []*types.LeaderboardCursor{})
-	session.HasNextPage.Set(s, false)
-	session.HasPrevPage.Set(s, false)
+	session.PaginationHasNextPage.Set(s, false)
+	session.PaginationHasPrevPage.Set(s, false)
 	session.LeaderboardLastRefresh.Set(s, time.Time{})
 	session.LeaderboardNextRefresh.Set(s, time.Time{})
 }

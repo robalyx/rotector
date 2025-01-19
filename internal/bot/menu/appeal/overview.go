@@ -80,11 +80,11 @@ func (m *OverviewMenu) Show(event interfaces.CommonEvent, s *session.Session, co
 	prevCursors := session.AppealPrevCursors.Get(s)
 
 	// Store data in session
-	session.Appeals.Set(s, appeals)
+	session.AppealList.Set(s, appeals)
 	session.AppealCursor.Set(s, firstCursor)
 	session.AppealNextCursor.Set(s, nextCursor)
-	session.HasNextPage.Set(s, nextCursor != nil)
-	session.HasPrevPage.Set(s, len(prevCursors) > 0)
+	session.PaginationHasNextPage.Set(s, nextCursor != nil)
+	session.PaginationHasPrevPage.Set(s, len(prevCursors) > 0)
 
 	m.layout.paginationManager.NavigateTo(event, s, m.page, content)
 }
@@ -183,7 +183,7 @@ func (m *OverviewMenu) handleCreateAppeal(event *events.ComponentInteractionCrea
 func (m *OverviewMenu) handlePagination(event *events.ComponentInteractionCreate, s *session.Session, action session.ViewerAction) {
 	switch action {
 	case session.ViewerNextPage:
-		if session.HasNextPage.Get(s) {
+		if session.PaginationHasNextPage.Get(s) {
 			cursor := session.AppealCursor.Get(s)
 			nextCursor := session.AppealNextCursor.Get(s)
 			prevCursors := session.AppealPrevCursors.Get(s)

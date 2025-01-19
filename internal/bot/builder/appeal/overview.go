@@ -26,11 +26,11 @@ type OverviewBuilder struct {
 // NewOverviewBuilder creates a new overview builder.
 func NewOverviewBuilder(s *session.Session) *OverviewBuilder {
 	return &OverviewBuilder{
-		appeals:      session.Appeals.Get(s),
+		appeals:      session.AppealList.Get(s),
 		sortBy:       session.UserAppealDefaultSort.Get(s),
 		statusFilter: session.UserAppealStatusFilter.Get(s),
-		hasNextPage:  session.HasNextPage.Get(s),
-		hasPrevPage:  session.HasPrevPage.Get(s),
+		hasNextPage:  session.PaginationHasNextPage.Get(s),
+		hasPrevPage:  session.PaginationHasPrevPage.Get(s),
 		isReviewer:   s.BotSettings().IsReviewer(s.UserID()),
 		streamerMode: session.UserStreamerMode.Get(s),
 	}
