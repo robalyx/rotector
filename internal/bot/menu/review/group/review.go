@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -351,10 +352,16 @@ Flagged Members (%d total, showing first %d):
 func (m *ReviewMenu) handleConfirmWithReason(event *events.ComponentInteractionCreate, s *session.Session) {
 	group := session.GroupTarget.Get(s)
 
-	// Create modal with pre-filled reason field
+	// Create modal with pre-filled reason and confidence fields
 	modal := discord.NewModalCreateBuilder().
 		SetCustomID(constants.ConfirmWithReasonModalCustomID).
 		SetTitle("Confirm Group with Reason").
+		AddActionRow(
+			discord.NewTextInput(constants.ConfirmConfidenceInputCustomID, discord.TextInputStyleShort, "Confidence").
+				WithRequired(true).
+				WithPlaceholder("Enter confidence value (0.0-1.0)").
+				WithValue(fmt.Sprintf("%.2f", group.Confidence)),
+		).
 		AddActionRow(
 			discord.NewTextInput(constants.ConfirmReasonInputCustomID, discord.TextInputStyleParagraph, "Confirm Reason").
 				WithRequired(true).
@@ -553,9 +560,21 @@ func (m *ReviewMenu) handleConfirmWithReasonModalSubmit(event *events.ModalSubmi
 		return
 	}
 
-	// Update group's reason with the custom input
+	// Get and validate the confidence value
+	confidenceStr := event.Data.Text(constants.ConfirmConfidenceInputCustomID)
+	confidence, err := strconv.ParseFloat(confidenceStr, 64)
+	if err != nil || confidence < 0 || confidence > 1 {
+		m.layout.paginationManager.NavigateTo(event, s, m.page, "Invalid confidence value. Must be between 0.0 and 1.0")
+		return
+	}
+
+	// Round confidence to 2 decimal places
+	confidence = float64(int64(confidence*100)) / 100
+
+	// Update group's reason and confidence with the custom input
 	group := session.GroupTarget.Get(s)
 	group.Reason = reason
+	group.Confidence = confidence
 
 	// Update group status in database
 	if err := m.layout.db.Groups().ConfirmGroup(context.Background(), group); err != nil {
@@ -577,7 +596,10 @@ func (m *ReviewMenu) handleConfirmWithReasonModalSubmit(event *events.ModalSubmi
 		ReviewerID:        uint64(event.User().ID),
 		ActivityType:      enum.ActivityTypeGroupConfirmedCustom,
 		ActivityTimestamp: time.Now(),
-		Details:           map[string]interface{}{"reason": group.Reason},
+		Details: map[string]interface{}{
+			"reason":     group.Reason,
+			"confidence": group.Confidence,
+		},
 	})
 }
 

@@ -48,6 +48,7 @@ const (
 	SortOrderSelectMenuCustomID = "sort_order"
 
 	ConfirmWithReasonModalCustomID = "confirm_with_reason_modal"
+	ConfirmConfidenceInputCustomID = "confirm_confidence"
 	ConfirmReasonInputCustomID     = "confirm_reason"
 	RecheckReasonModalCustomID     = "recheck_reason_modal"
 	RecheckReasonInputCustomID     = "recheck_reason"

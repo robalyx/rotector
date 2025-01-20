@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -657,10 +658,16 @@ Flagged Content (%d items):
 func (m *ReviewMenu) handleConfirmWithReason(event *events.ComponentInteractionCreate, s *session.Session) {
 	user := session.UserTarget.Get(s)
 
-	// Create modal with pre-filled reason field
+	// Create modal with pre-filled reason and confidence fields
 	modal := discord.NewModalCreateBuilder().
 		SetCustomID(constants.ConfirmWithReasonModalCustomID).
 		SetTitle("Confirm User with Reason").
+		AddActionRow(
+			discord.NewTextInput(constants.ConfirmConfidenceInputCustomID, discord.TextInputStyleShort, "Confidence").
+				WithRequired(true).
+				WithPlaceholder("Enter confidence value (0.0-1.0)").
+				WithValue(fmt.Sprintf("%.2f", user.Confidence)),
+		).
 		AddActionRow(
 			discord.NewTextInput(constants.ConfirmReasonInputCustomID, discord.TextInputStyleParagraph, "Confirm Reason").
 				WithRequired(true).
@@ -672,15 +679,12 @@ func (m *ReviewMenu) handleConfirmWithReason(event *events.ComponentInteractionC
 	// Show modal to user
 	if err := event.Modal(modal); err != nil {
 		m.layout.logger.Error("Failed to create modal", zap.Error(err))
-		m.layout.paginationManager.RespondWithError(event, "Failed to open the confirm reason for modal. Please try again.")
+		m.layout.paginationManager.RespondWithError(event, "Failed to open the confirm reason form. Please try again.")
 	}
 }
 
-// handleConfirmWithReasonModalSubmit processes the custom confirm reason from the modal
-// and performs the confirm with the provided reason.
+// handleConfirmWithReasonModalSubmit processes the custom confirm reason from the modal.
 func (m *ReviewMenu) handleConfirmWithReasonModalSubmit(event *events.ModalSubmitInteractionCreate, s *session.Session) {
-	user := session.UserTarget.Get(s)
-
 	// Get and validate the confirm reason
 	reason := event.Data.Text(constants.ConfirmReasonInputCustomID)
 	if reason == "" {
@@ -688,8 +692,21 @@ func (m *ReviewMenu) handleConfirmWithReasonModalSubmit(event *events.ModalSubmi
 		return
 	}
 
-	// Update user's reason with the custom input
+	// Get and validate the confidence value
+	confidenceStr := event.Data.Text(constants.ConfirmConfidenceInputCustomID)
+	confidence, err := strconv.ParseFloat(confidenceStr, 64)
+	if err != nil || confidence < 0 || confidence > 1 {
+		m.layout.paginationManager.NavigateTo(event, s, m.page, "Invalid confidence value. Must be between 0.0 and 1.0")
+		return
+	}
+
+	// Round confidence to 2 decimal places
+	confidence = float64(int64(confidence*100)) / 100
+
+	// Update user's reason and confidence with the custom input
+	user := session.UserTarget.Get(s)
 	user.Reason = reason
+	user.Confidence = confidence
 
 	// Update user status in database
 	if err := m.layout.db.Users().ConfirmUser(context.Background(), user); err != nil {
@@ -711,7 +728,10 @@ func (m *ReviewMenu) handleConfirmWithReasonModalSubmit(event *events.ModalSubmi
 		ReviewerID:        uint64(event.User().ID),
 		ActivityType:      enum.ActivityTypeUserConfirmedCustom,
 		ActivityTimestamp: time.Now(),
-		Details:           map[string]interface{}{"reason": user.Reason},
+		Details: map[string]interface{}{
+			"reason":     user.Reason,
+			"confidence": user.Confidence,
+		},
 	})
 }
 
