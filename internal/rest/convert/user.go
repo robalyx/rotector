@@ -16,8 +16,6 @@ func UserStatus(status enum.UserType) restTypes.UserStatus {
 		return restTypes.UserStatusConfirmed
 	case enum.UserTypeCleared:
 		return restTypes.UserStatusCleared
-	case enum.UserTypeBanned:
-		return restTypes.UserStatusBanned
 	case enum.UserTypeUnflagged:
 		return restTypes.UserStatusUnflagged
 	default:

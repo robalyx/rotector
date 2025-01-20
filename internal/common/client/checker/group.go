@@ -68,15 +68,15 @@ func (c *GroupChecker) CheckGroupPercentages(groupInfos []*apiTypes.GroupRespons
 
 		now := time.Now()
 		flaggedGroups[groupInfo.ID] = &types.Group{
-			ID:             groupInfo.ID,
-			Name:           groupInfo.Name,
-			Description:    groupInfo.Description,
-			Owner:          groupInfo.Owner,
-			Shout:          groupInfo.Shout,
-			Reason:         reason,
-			Confidence:     0, // NOTE: Confidence will be updated
-			LastUpdated:    now,
-			LastPurgeCheck: now,
+			ID:            groupInfo.ID,
+			Name:          groupInfo.Name,
+			Description:   groupInfo.Description,
+			Owner:         groupInfo.Owner,
+			Shout:         groupInfo.Shout,
+			Reason:        reason,
+			Confidence:    0, // NOTE: Confidence will be updated
+			LastUpdated:   now,
+			LastLockCheck: now,
 		}
 	}
 
@@ -251,7 +251,7 @@ func (c *GroupChecker) processUserGroups(userInfo *fetcher.Info, existingGroups 
 			FollowingCount: userInfo.FollowingCount,
 			Confidence:     math.Round(confidence*100) / 100, // Round to 2 decimal places
 			LastUpdated:    userInfo.LastUpdated,
-			LastPurgeCheck: userInfo.LastPurgeCheck,
+			LastBanCheck:   userInfo.LastBanCheck,
 		}, true
 	}
 

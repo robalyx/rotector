@@ -118,9 +118,12 @@ func (b *MembersBuilder) getMemberFieldName(index int, memberID uint64) string {
 			fieldName += " ⏳"
 		case enum.UserTypeCleared:
 			fieldName += " ✅"
-		case enum.UserTypeBanned:
-			fieldName += " 🔨"
 		case enum.UserTypeUnflagged:
+		}
+
+		// Add banned status if applicable
+		if member.IsBanned {
+			fieldName += " 🔨"
 		}
 	}
 

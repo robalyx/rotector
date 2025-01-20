@@ -125,7 +125,6 @@ func (m *FriendsMenu) sortFriendsByStatus(friends []*types.ExtendedFriend, flagg
 	statusOrder := []enum.UserType{
 		enum.UserTypeConfirmed,
 		enum.UserTypeFlagged,
-		enum.UserTypeBanned,
 		enum.UserTypeCleared,
 		enum.UserTypeUnflagged,
 	}

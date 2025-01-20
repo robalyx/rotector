@@ -13,13 +13,17 @@ import (
 // StatsModel handles database operations for statistics.
 type StatsModel struct {
 	db     *bun.DB
+	users  *UserModel
+	groups *GroupModel
 	logger *zap.Logger
 }
 
 // NewStats creates a new StatsModel.
-func NewStats(db *bun.DB, logger *zap.Logger) *StatsModel {
+func NewStats(db *bun.DB, users *UserModel, groups *GroupModel, logger *zap.Logger) *StatsModel {
 	return &StatsModel{
 		db:     db,
+		users:  users,
+		groups: groups,
 		logger: logger,
 	}
 }
@@ -52,7 +56,7 @@ func (r *StatsModel) GetCurrentStats(ctx context.Context) (*types.HourlyStats, e
 		stats.UsersCleared = int64(clearedUserCount)
 
 		// Count banned users
-		bannedUserCount, err := tx.NewSelect().Model((*types.BannedUser)(nil)).Count(ctx)
+		bannedUserCount, err := r.users.GetBannedCount(ctx)
 		if err != nil {
 			return err
 		}
@@ -80,7 +84,7 @@ func (r *StatsModel) GetCurrentStats(ctx context.Context) (*types.HourlyStats, e
 		stats.GroupsCleared = int64(clearedGroupsCount)
 
 		// Count locked groups
-		lockedGroupsCount, err := tx.NewSelect().Model((*types.LockedGroup)(nil)).Count(ctx)
+		lockedGroupsCount, err := r.groups.GetLockedCount(ctx)
 		if err != nil {
 			return err
 		}
@@ -167,67 +171,17 @@ func (r *StatsModel) PurgeOldStats(ctx context.Context, cutoffDate time.Time) er
 	return nil
 }
 
-// GetCurrentCounts retrieves all current user and group counts in a single transaction.
+// GetCurrentCounts retrieves all current user and group counts.
 func (r *StatsModel) GetCurrentCounts(ctx context.Context) (*types.UserCounts, *types.GroupCounts, error) {
-	var userCounts types.UserCounts
-	var groupCounts types.GroupCounts
-
-	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
-		// Get user counts
-		confirmedCount, err := tx.NewSelect().Model((*types.ConfirmedUser)(nil)).Count(ctx)
-		if err != nil {
-			return fmt.Errorf("failed to get confirmed users count: %w", err)
-		}
-		userCounts.Confirmed = confirmedCount
-
-		flaggedCount, err := tx.NewSelect().Model((*types.FlaggedUser)(nil)).Count(ctx)
-		if err != nil {
-			return fmt.Errorf("failed to get flagged users count: %w", err)
-		}
-		userCounts.Flagged = flaggedCount
-
-		clearedCount, err := tx.NewSelect().Model((*types.ClearedUser)(nil)).Count(ctx)
-		if err != nil {
-			return fmt.Errorf("failed to get cleared users count: %w", err)
-		}
-		userCounts.Cleared = clearedCount
-
-		bannedCount, err := tx.NewSelect().Model((*types.BannedUser)(nil)).Count(ctx)
-		if err != nil {
-			return fmt.Errorf("failed to get banned users count: %w", err)
-		}
-		userCounts.Banned = bannedCount
-
-		// Get group counts
-		confirmedGroupCount, err := tx.NewSelect().Model((*types.ConfirmedGroup)(nil)).Count(ctx)
-		if err != nil {
-			return fmt.Errorf("failed to get confirmed groups count: %w", err)
-		}
-		groupCounts.Confirmed = confirmedGroupCount
-
-		flaggedGroupCount, err := tx.NewSelect().Model((*types.FlaggedGroup)(nil)).Count(ctx)
-		if err != nil {
-			return fmt.Errorf("failed to get flagged groups count: %w", err)
-		}
-		groupCounts.Flagged = flaggedGroupCount
-
-		clearedGroupCount, err := tx.NewSelect().Model((*types.ClearedGroup)(nil)).Count(ctx)
-		if err != nil {
-			return fmt.Errorf("failed to get cleared groups count: %w", err)
-		}
-		groupCounts.Cleared = clearedGroupCount
-
-		lockedGroupCount, err := tx.NewSelect().Model((*types.LockedGroup)(nil)).Count(ctx)
-		if err != nil {
-			return fmt.Errorf("failed to get locked groups count: %w", err)
-		}
-		groupCounts.Locked = lockedGroupCount
-
-		return nil
-	})
+	userCounts, err := r.users.GetUserCounts(ctx)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to get current counts: %w", err)
+		return nil, nil, fmt.Errorf("failed to get user counts: %w", err)
 	}
 
-	return &userCounts, &groupCounts, nil
+	groupCounts, err := r.groups.GetGroupCounts(ctx)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to get group counts: %w", err)
+	}
+
+	return userCounts, groupCounts, nil
 }

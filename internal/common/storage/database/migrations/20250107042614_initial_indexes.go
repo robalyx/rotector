@@ -90,45 +90,37 @@ func init() { //nolint:funlen
 			WHERE is_flagged = false;
 			
 			-- Group review sorting indexes
-			CREATE INDEX IF NOT EXISTS idx_flagged_groups_confidence_viewed 
-			ON flagged_groups (confidence DESC, last_viewed ASC);
-			CREATE INDEX IF NOT EXISTS idx_confirmed_groups_confidence_viewed 
-			ON confirmed_groups (confidence DESC, last_viewed ASC);
-			CREATE INDEX IF NOT EXISTS idx_cleared_groups_confidence_viewed 
-			ON cleared_groups (confidence DESC, last_viewed ASC);
-			CREATE INDEX IF NOT EXISTS idx_locked_groups_confidence_viewed 
-			ON locked_groups (confidence DESC, last_viewed ASC);
+			CREATE INDEX IF NOT EXISTS idx_flagged_groups_confidence
+			ON flagged_groups (confidence DESC);
+			CREATE INDEX IF NOT EXISTS idx_confirmed_groups_confidence
+			ON confirmed_groups (confidence DESC);
+			CREATE INDEX IF NOT EXISTS idx_cleared_groups_confidence
+			ON cleared_groups (confidence DESC);
 
-			CREATE INDEX IF NOT EXISTS idx_flagged_groups_updated_viewed 
-			ON flagged_groups (last_updated ASC, last_viewed ASC);
-			CREATE INDEX IF NOT EXISTS idx_confirmed_groups_updated_viewed 
-			ON confirmed_groups (last_updated ASC, last_viewed ASC);
-			CREATE INDEX IF NOT EXISTS idx_cleared_groups_updated_viewed 
-			ON cleared_groups (last_updated ASC, last_viewed ASC);
-			CREATE INDEX IF NOT EXISTS idx_locked_groups_updated_viewed 
-			ON locked_groups (last_updated ASC, last_viewed ASC);
+			CREATE INDEX IF NOT EXISTS idx_flagged_groups_updated
+			ON flagged_groups (last_updated ASC);
+			CREATE INDEX IF NOT EXISTS idx_confirmed_groups_updated
+			ON confirmed_groups (last_updated ASC);
+			CREATE INDEX IF NOT EXISTS idx_cleared_groups_updated
+			ON cleared_groups (last_updated ASC);
 			
 			CREATE INDEX IF NOT EXISTS idx_group_reputations_id_score 
 			ON group_reputations (id, score);
 
 			-- User review sorting indexes
-			CREATE INDEX IF NOT EXISTS idx_flagged_users_confidence_viewed 
-			ON flagged_users (confidence DESC, last_viewed ASC);
-			CREATE INDEX IF NOT EXISTS idx_confirmed_users_confidence_viewed 
-			ON confirmed_users (confidence DESC, last_viewed ASC);
-			CREATE INDEX IF NOT EXISTS idx_cleared_users_confidence_viewed 
-			ON cleared_users (confidence DESC, last_viewed ASC);
-			CREATE INDEX IF NOT EXISTS idx_banned_users_confidence_viewed 
-			ON banned_users (confidence DESC, last_viewed ASC);
-			
-			CREATE INDEX IF NOT EXISTS idx_flagged_users_updated_viewed 
-			ON flagged_users (last_updated ASC, last_viewed ASC);
-			CREATE INDEX IF NOT EXISTS idx_confirmed_users_updated_viewed 
-			ON confirmed_users (last_updated ASC, last_viewed ASC);
-			CREATE INDEX IF NOT EXISTS idx_cleared_users_updated_viewed 
-			ON cleared_users (last_updated ASC, last_viewed ASC);
-			CREATE INDEX IF NOT EXISTS idx_banned_users_updated_viewed 
-			ON banned_users (last_updated ASC, last_viewed ASC);
+			CREATE INDEX IF NOT EXISTS idx_flagged_users_confidence
+			ON flagged_users (confidence DESC);
+			CREATE INDEX IF NOT EXISTS idx_confirmed_users_confidence
+			ON confirmed_users (confidence DESC);
+			CREATE INDEX IF NOT EXISTS idx_cleared_users_confidence
+			ON cleared_users (confidence DESC);
+
+			CREATE INDEX IF NOT EXISTS idx_flagged_users_updated
+			ON flagged_users (last_updated ASC);
+			CREATE INDEX IF NOT EXISTS idx_confirmed_users_updated
+			ON confirmed_users (last_updated ASC);
+			CREATE INDEX IF NOT EXISTS idx_cleared_users_updated
+			ON cleared_users (last_updated ASC);
 
 			CREATE INDEX IF NOT EXISTS idx_user_reputations_id_score 
 			ON user_reputations (id, score);
@@ -140,8 +132,6 @@ func init() { //nolint:funlen
 			ON confirmed_users (last_thumbnail_update ASC);
 			CREATE INDEX IF NOT EXISTS idx_cleared_users_thumbnail_update 
 			ON cleared_users (last_thumbnail_update ASC);
-			CREATE INDEX IF NOT EXISTS idx_banned_users_thumbnail_update 
-			ON banned_users (last_thumbnail_update ASC);
 
 			-- Group thumbnail update indexes
 			CREATE INDEX IF NOT EXISTS idx_flagged_groups_thumbnail_update 
@@ -150,18 +140,20 @@ func init() { //nolint:funlen
 			ON confirmed_groups (last_thumbnail_update ASC);
 			CREATE INDEX IF NOT EXISTS idx_cleared_groups_thumbnail_update 
 			ON cleared_groups (last_thumbnail_update ASC);
-			CREATE INDEX IF NOT EXISTS idx_locked_groups_thumbnail_update 
-			ON locked_groups (last_thumbnail_update ASC);
-			
+
 			-- User status indexes
 			CREATE INDEX IF NOT EXISTS idx_cleared_users_purged_at ON cleared_users (cleared_at);
-			CREATE INDEX IF NOT EXISTS idx_flagged_users_last_purge_check ON flagged_users (last_purge_check);
-			CREATE INDEX IF NOT EXISTS idx_confirmed_users_last_purge_check ON confirmed_users (last_purge_check);
+			CREATE INDEX IF NOT EXISTS idx_flagged_users_ban_check 
+			ON flagged_users (last_ban_check ASC);
+			CREATE INDEX IF NOT EXISTS idx_confirmed_users_ban_check 
+			ON confirmed_users (last_ban_check ASC);
 			
 			-- Group status indexes
 			CREATE INDEX IF NOT EXISTS idx_cleared_groups_purged_at ON cleared_groups (cleared_at);
-			CREATE INDEX IF NOT EXISTS idx_flagged_groups_last_purge_check ON flagged_groups (last_purge_check);
-			CREATE INDEX IF NOT EXISTS idx_confirmed_groups_last_purge_check ON confirmed_groups (last_purge_check);
+			CREATE INDEX IF NOT EXISTS idx_flagged_groups_lock_check 
+			ON flagged_groups (last_lock_check ASC);
+			CREATE INDEX IF NOT EXISTS idx_confirmed_groups_lock_check 
+			ON confirmed_groups (last_lock_check ASC);
 			
 			-- Statistics indexes
 			CREATE INDEX IF NOT EXISTS idx_hourly_stats_timestamp ON hourly_stats (timestamp DESC);
@@ -266,52 +258,46 @@ func init() { //nolint:funlen
 			DROP INDEX IF EXISTS idx_group_member_trackings_cleanup;
 
 			-- Group review sorting indexes
-			DROP INDEX IF EXISTS idx_flagged_groups_confidence_viewed;
-			DROP INDEX IF EXISTS idx_confirmed_groups_confidence_viewed;
-			DROP INDEX IF EXISTS idx_cleared_groups_confidence_viewed;
-			DROP INDEX IF EXISTS idx_locked_groups_confidence_viewed;
+			DROP INDEX IF EXISTS idx_flagged_groups_confidence;
+			DROP INDEX IF EXISTS idx_confirmed_groups_confidence;
+			DROP INDEX IF EXISTS idx_cleared_groups_confidence;
 
-			DROP INDEX IF EXISTS idx_flagged_groups_updated_viewed;
-			DROP INDEX IF EXISTS idx_confirmed_groups_updated_viewed;
-			DROP INDEX IF EXISTS idx_cleared_groups_updated_viewed;
-			DROP INDEX IF EXISTS idx_locked_groups_updated_viewed;
+			DROP INDEX IF EXISTS idx_flagged_groups_updated;
+			DROP INDEX IF EXISTS idx_confirmed_groups_updated;
+			DROP INDEX IF EXISTS idx_cleared_groups_updated;
 
 			DROP INDEX IF EXISTS idx_group_reputations_id_score;
 
 			-- User review sorting indexes
-			DROP INDEX IF EXISTS idx_flagged_users_confidence_viewed;
-			DROP INDEX IF EXISTS idx_confirmed_users_confidence_viewed;
-			DROP INDEX IF EXISTS idx_cleared_users_confidence_viewed;
-			DROP INDEX IF EXISTS idx_banned_users_confidence_viewed;
+			DROP INDEX IF EXISTS idx_flagged_users_confidence;
+			DROP INDEX IF EXISTS idx_confirmed_users_confidence;
+			DROP INDEX IF EXISTS idx_cleared_users_confidence;
 
-			DROP INDEX IF EXISTS idx_flagged_users_updated_viewed;
-			DROP INDEX IF EXISTS idx_confirmed_users_updated_viewed;
-			DROP INDEX IF EXISTS idx_cleared_users_updated_viewed;
-			DROP INDEX IF EXISTS idx_banned_users_updated_viewed;
+			DROP INDEX IF EXISTS idx_flagged_users_updated;
+			DROP INDEX IF EXISTS idx_confirmed_users_updated;
+			DROP INDEX IF EXISTS idx_cleared_users_updated;
 
 			DROP INDEX IF EXISTS idx_user_reputations_id_score;
 
 			-- User status indexes
 			DROP INDEX IF EXISTS idx_cleared_users_purged_at;
-			DROP INDEX IF EXISTS idx_flagged_users_last_purge_check;
-			DROP INDEX IF EXISTS idx_confirmed_users_last_purge_check;
+			DROP INDEX IF EXISTS idx_flagged_users_ban_check;
+			DROP INDEX IF EXISTS idx_confirmed_users_ban_check;
 
 			-- Group status indexes
 			DROP INDEX IF EXISTS idx_cleared_groups_purged_at;
-			DROP INDEX IF EXISTS idx_flagged_groups_last_purge_check;
-			DROP INDEX IF EXISTS idx_confirmed_groups_last_purge_check;
+			DROP INDEX IF EXISTS idx_flagged_groups_lock_check;
+			DROP INDEX IF EXISTS idx_confirmed_groups_lock_check;
 
 			-- User thumbnail update indexes
 			DROP INDEX IF EXISTS idx_flagged_users_thumbnail_update;
 			DROP INDEX IF EXISTS idx_confirmed_users_thumbnail_update;
 			DROP INDEX IF EXISTS idx_cleared_users_thumbnail_update;
-			DROP INDEX IF EXISTS idx_banned_users_thumbnail_update;
 
 			-- Group thumbnail update indexes
 			DROP INDEX IF EXISTS idx_flagged_groups_thumbnail_update;
 			DROP INDEX IF EXISTS idx_confirmed_groups_thumbnail_update;
 			DROP INDEX IF EXISTS idx_cleared_groups_thumbnail_update;
-			DROP INDEX IF EXISTS idx_locked_groups_thumbnail_update;
 
 			-- Statistics indexes
 			DROP INDEX IF EXISTS idx_hourly_stats_timestamp;

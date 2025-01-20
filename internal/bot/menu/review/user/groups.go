@@ -97,7 +97,6 @@ func (m *GroupsMenu) sortGroupsByStatus(groups []*apiTypes.UserGroupRoles, flagg
 	statusOrder := []enum.GroupType{
 		enum.GroupTypeConfirmed,
 		enum.GroupTypeFlagged,
-		enum.GroupTypeLocked,
 		enum.GroupTypeCleared,
 		enum.GroupTypeUnflagged,
 	}

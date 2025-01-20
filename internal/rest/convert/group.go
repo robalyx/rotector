@@ -16,8 +16,6 @@ func GroupStatus(status enum.GroupType) restTypes.GroupStatus {
 		return restTypes.GroupStatusConfirmed
 	case enum.GroupTypeCleared:
 		return restTypes.GroupStatusCleared
-	case enum.GroupTypeLocked:
-		return restTypes.GroupStatusLocked
 	case enum.GroupTypeUnflagged:
 		return restTypes.GroupStatusUnflagged
 	default:
@@ -46,6 +44,7 @@ func Group(group *types.ReviewGroup) *restTypes.Group {
 		Upvotes:      group.Reputation.Upvotes,
 		Downvotes:    group.Reputation.Downvotes,
 		Reputation:   group.Reputation.Score,
+		IsLocked:     group.IsLocked,
 	}
 }
 

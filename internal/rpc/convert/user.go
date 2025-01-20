@@ -3,6 +3,7 @@ package convert
 import (
 	"time"
 
+	apiTypes "github.com/jaxron/roapi.go/pkg/api/types"
 	"github.com/robalyx/rotector/internal/common/storage/database/types"
 	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
 	"github.com/robalyx/rotector/internal/rpc/proto"
@@ -17,8 +18,6 @@ func UserStatus(status enum.UserType) proto.UserStatus {
 		return proto.UserStatus_USER_STATUS_CONFIRMED
 	case enum.UserTypeCleared:
 		return proto.UserStatus_USER_STATUS_CLEARED
-	case enum.UserTypeBanned:
-		return proto.UserStatus_USER_STATUS_BANNED
 	case enum.UserTypeUnflagged:
 		return proto.UserStatus_USER_STATUS_UNFLAGGED
 	default:
@@ -32,13 +31,16 @@ func User(user *types.ReviewUser) *proto.User {
 		return nil
 	}
 
-	protoUser := &proto.User{
+	return &proto.User{
 		Id:             user.ID,
 		Name:           user.Name,
 		DisplayName:    user.DisplayName,
 		Description:    user.Description,
 		CreatedAt:      user.CreatedAt.Format(time.RFC3339),
 		Reason:         user.Reason,
+		Groups:         UserGroups(user.Groups),
+		Friends:        Friends(user.Friends),
+		Games:          Games(user.Games),
 		FlaggedContent: user.FlaggedContent,
 		FollowerCount:  user.FollowerCount,
 		FollowingCount: user.FollowingCount,
@@ -50,34 +52,45 @@ func User(user *types.ReviewUser) *proto.User {
 		Upvotes:        user.Reputation.Upvotes,
 		Downvotes:      user.Reputation.Downvotes,
 		Reputation:     user.Reputation.Score,
+		IsBanned:       user.IsBanned,
 	}
+}
 
-	// Convert groups
-	for _, g := range user.Groups {
-		protoUser.Groups = append(protoUser.Groups, &proto.UserGroup{
+// UserGroups converts a slice of API user group roles to RPC API user groups.
+func UserGroups(groups []*apiTypes.UserGroupRoles) []*proto.UserGroup {
+	result := make([]*proto.UserGroup, len(groups))
+	for i, g := range groups {
+		result[i] = &proto.UserGroup{
 			Id:   g.Group.ID,
 			Name: g.Group.Name,
 			Role: g.Role.Name,
-		})
+		}
 	}
+	return result
+}
 
-	// Convert friends
-	for _, f := range user.Friends {
-		protoUser.Friends = append(protoUser.Friends, &proto.Friend{
+// Friends converts a slice of database extended friends to RPC API friends.
+func Friends(friends []*types.ExtendedFriend) []*proto.Friend {
+	result := make([]*proto.Friend, len(friends))
+	for i, f := range friends {
+		result[i] = &proto.Friend{
 			Id:               f.ID,
 			Name:             f.Name,
 			DisplayName:      f.DisplayName,
 			HasVerifiedBadge: f.HasVerifiedBadge,
-		})
+		}
 	}
+	return result
+}
 
-	// Convert games
-	for _, g := range user.Games {
-		protoUser.Games = append(protoUser.Games, &proto.Game{
+// Games converts a slice of API games to RPC API games.
+func Games(games []*apiTypes.Game) []*proto.Game {
+	result := make([]*proto.Game, len(games))
+	for i, g := range games {
+		result[i] = &proto.Game{
 			Id:   g.ID,
 			Name: g.Name,
-		})
+		}
 	}
-
-	return protoUser
+	return result
 }

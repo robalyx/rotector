@@ -44,7 +44,8 @@ type User struct {
 	LastScanned         time.Time               `bun:",notnull"   json:"lastScanned"`
 	LastUpdated         time.Time               `bun:",notnull"   json:"lastUpdated"`
 	LastViewed          time.Time               `bun:",notnull"   json:"lastViewed"`
-	LastPurgeCheck      time.Time               `bun:",notnull"   json:"lastPurgeCheck"`
+	LastBanCheck        time.Time               `bun:",notnull"   json:"lastBanCheck"`
+	IsBanned            bool                    `bun:",notnull"   json:"isBanned"`
 	ThumbnailURL        string                  `bun:",notnull"   json:"thumbnailUrl"`
 	LastThumbnailUpdate time.Time               `bun:",notnull"   json:"lastThumbnailUpdate"`
 }
@@ -69,19 +70,11 @@ type ClearedUser struct {
 	ClearedAt time.Time `bun:",notnull" json:"clearedAt"`
 }
 
-// BannedUser extends User to track users that were banned and removed.
-// The PurgedAt field shows when the user was removed from the system.
-type BannedUser struct {
-	User     `json:"user"`
-	PurgedAt time.Time `bun:",notnull" json:"purgedAt"`
-}
-
 // ReviewUser combines all possible user states into a single structure for review.
 type ReviewUser struct {
 	User       `json:"user"`
 	VerifiedAt time.Time     `json:"verifiedAt,omitempty"`
 	ClearedAt  time.Time     `json:"clearedAt,omitempty"`
-	PurgedAt   time.Time     `json:"purgedAt,omitempty"`
 	Status     enum.UserType `json:"status"`
 	Reputation *Reputation   `json:"reputation"`
 }
@@ -109,7 +102,7 @@ type UserFields struct {
 	Confidence bool // AI confidence score
 	Reputation bool // Upvotes, Downvotes, Score
 
-	// All timestamps (LastScanned, LastUpdated, LastViewed, LastPurgeCheck)
+	// All timestamps
 	Timestamps bool
 }
 
@@ -158,7 +151,7 @@ func (f UserFields) Columns() []string {
 			"last_scanned",
 			"last_updated",
 			"last_viewed",
-			"last_purge_check",
+			"last_ban_check",
 			"last_thumbnail_update",
 		)
 	}

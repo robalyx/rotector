@@ -27,7 +27,8 @@ type Group struct {
 	LastScanned         time.Time         `bun:",notnull"   json:"lastScanned"`
 	LastUpdated         time.Time         `bun:",notnull"   json:"lastUpdated"`
 	LastViewed          time.Time         `bun:",notnull"   json:"lastViewed"`
-	LastPurgeCheck      time.Time         `bun:",notnull"   json:"lastPurgeCheck"`
+	LastLockCheck       time.Time         `bun:",notnull"   json:"lastLockCheck"`
+	IsLocked            bool              `bun:",notnull"   json:"isLocked"`
 	ThumbnailURL        string            `bun:",notnull"   json:"thumbnailUrl"`
 	LastThumbnailUpdate time.Time         `bun:",notnull"   json:"lastThumbnailUpdate"`
 }
@@ -50,19 +51,11 @@ type ClearedGroup struct {
 	ClearedAt time.Time `bun:",notnull" json:"clearedAt"`
 }
 
-// LockedGroup extends Group to track groups that were locked and removed.
-// The LockedAt field shows when the group was found to be locked.
-type LockedGroup struct {
-	Group
-	LockedAt time.Time `bun:",notnull" json:"lockedAt"`
-}
-
 // ReviewGroup combines all possible group states into a single structure for review.
 type ReviewGroup struct {
 	Group      `json:"group"`
 	VerifiedAt time.Time      `json:"verifiedAt,omitempty"`
 	ClearedAt  time.Time      `json:"clearedAt,omitempty"`
-	LockedAt   time.Time      `json:"lockedAt,omitempty"`
 	Status     enum.GroupType `json:"status"`
 	Reputation *Reputation    `json:"reputation"`
 }
@@ -118,7 +111,8 @@ func (f GroupFields) Columns() []string {
 			"last_scanned",
 			"last_updated",
 			"last_viewed",
-			"last_purge_check",
+			"last_lock_check",
+			"is_locked",
 			"last_thumbnail_update",
 		)
 	}

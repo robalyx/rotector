@@ -349,19 +349,12 @@ func (r *SettingRegistry) createReviewTargetModeSetting() *Setting {
 				Description: "Re-review cleared items",
 				Emoji:       "✅",
 			},
-			{
-				Value:       enum.ReviewTargetModeBanned.String(),
-				Label:       "Banned Items",
-				Description: "Re-review banned/locked items",
-				Emoji:       "🔒",
-			},
 		},
 		Validators: []Validator{
 			validateEnum([]string{
 				enum.ReviewTargetModeFlagged.String(),
 				enum.ReviewTargetModeConfirmed.String(),
 				enum.ReviewTargetModeCleared.String(),
-				enum.ReviewTargetModeBanned.String(),
 			}),
 		},
 		ValueGetter: func(s *Session) string {

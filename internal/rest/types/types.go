@@ -9,7 +9,6 @@ const (
 	UserStatusFlagged   UserStatus = "flagged"
 	UserStatusConfirmed UserStatus = "confirmed"
 	UserStatusCleared   UserStatus = "cleared"
-	UserStatusBanned    UserStatus = "banned"
 	UserStatusUnflagged UserStatus = "unflagged"
 )
 
@@ -20,7 +19,6 @@ const (
 	GroupStatusFlagged   GroupStatus = "flagged"
 	GroupStatusConfirmed GroupStatus = "confirmed"
 	GroupStatusCleared   GroupStatus = "cleared"
-	GroupStatusLocked    GroupStatus = "locked"
 	GroupStatusUnflagged GroupStatus = "unflagged"
 )
 
@@ -68,6 +66,7 @@ type User struct {
 	Upvotes        int32       `json:"upvotes"`
 	Downvotes      int32       `json:"downvotes"`
 	Reputation     int32       `json:"reputation"`
+	IsBanned       bool        `json:"isBanned"`
 }
 
 // GroupUser represents a user in the context of a group.
@@ -99,6 +98,7 @@ type Group struct {
 	Upvotes      int32      `json:"upvotes"`
 	Downvotes    int32      `json:"downvotes"`
 	Reputation   int32      `json:"reputation"`
+	IsLocked     bool       `json:"isLocked"`
 }
 
 // GetUserResponse represents the response for the get user endpoint.

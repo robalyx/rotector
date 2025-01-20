@@ -35,7 +35,7 @@ func (t *ThumbnailFetcher) AddImageURLs(users map[uint64]*types.User) map[uint64
 	requests := thumbnails.NewBatchThumbnailsBuilder()
 	for _, user := range users {
 		requests.AddRequest(apiTypes.ThumbnailRequest{
-			Type:      apiTypes.AvatarHeadShotType,
+			Type:      apiTypes.AvatarType,
 			TargetID:  user.ID,
 			RequestID: strconv.FormatUint(user.ID, 10),
 			Size:      apiTypes.Size420x420,

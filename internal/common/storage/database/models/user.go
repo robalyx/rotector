@@ -65,7 +65,6 @@ func (r *UserModel) SaveUsers(ctx context.Context, users map[uint64]*types.User)
 	flaggedUsers := make([]*types.FlaggedUser, 0)
 	confirmedUsers := make([]*types.ConfirmedUser, 0)
 	clearedUsers := make([]*types.ClearedUser, 0)
-	bannedUsers := make([]*types.BannedUser, 0)
 	counts := make(map[enum.UserType]int)
 
 	// Group users by their target tables
@@ -99,11 +98,6 @@ func (r *UserModel) SaveUsers(ctx context.Context, users map[uint64]*types.User)
 			clearedUsers = append(clearedUsers, &types.ClearedUser{
 				User:      *user,
 				ClearedAt: existingUser.ClearedAt,
-			})
-		case enum.UserTypeBanned:
-			bannedUsers = append(bannedUsers, &types.BannedUser{
-				User:     *user,
-				PurgedAt: existingUser.PurgedAt,
 			})
 		case enum.UserTypeUnflagged:
 			continue
@@ -139,7 +133,8 @@ func (r *UserModel) SaveUsers(ctx context.Context, users map[uint64]*types.User)
 				Set("last_scanned = EXCLUDED.last_scanned").
 				Set("last_updated = EXCLUDED.last_updated").
 				Set("last_viewed = EXCLUDED.last_viewed").
-				Set("last_purge_check = EXCLUDED.last_purge_check").
+				Set("last_ban_check = EXCLUDED.last_ban_check").
+				Set("is_banned = EXCLUDED.is_banned").
 				Set("thumbnail_url = EXCLUDED.thumbnail_url").
 				Set("last_thumbnail_update = EXCLUDED.last_thumbnail_update").
 				Exec(ctx)
@@ -159,9 +154,6 @@ func (r *UserModel) SaveUsers(ctx context.Context, users map[uint64]*types.User)
 		if err := updateTable(&clearedUsers, enum.UserTypeCleared); err != nil {
 			return err
 		}
-		if err := updateTable(&bannedUsers, enum.UserTypeBanned); err != nil {
-			return err
-		}
 
 		return nil
 	})
@@ -173,8 +165,7 @@ func (r *UserModel) SaveUsers(ctx context.Context, users map[uint64]*types.User)
 		zap.Int("totalUsers", len(users)),
 		zap.Int("flaggedUsers", counts[enum.UserTypeFlagged]),
 		zap.Int("confirmedUsers", counts[enum.UserTypeConfirmed]),
-		zap.Int("clearedUsers", counts[enum.UserTypeCleared]),
-		zap.Int("bannedUsers", counts[enum.UserTypeBanned]))
+		zap.Int("clearedUsers", counts[enum.UserTypeCleared]))
 
 	return nil
 }
@@ -212,11 +203,6 @@ func (r *UserModel) ConfirmUser(ctx context.Context, user *types.ReviewUser) err
 		_, err = tx.NewDelete().Model((*types.ClearedUser)(nil)).Where("id = ?", user.ID).Exec(ctx)
 		if err != nil {
 			return fmt.Errorf("failed to delete user from cleared_users: %w (userID=%d)", err, user.ID)
-		}
-
-		_, err = tx.NewDelete().Model((*types.BannedUser)(nil)).Where("id = ?", user.ID).Exec(ctx)
-		if err != nil {
-			return fmt.Errorf("failed to delete user from banned_users: %w (userID=%d)", err, user.ID)
 		}
 
 		return nil
@@ -267,11 +253,6 @@ func (r *UserModel) ClearUser(ctx context.Context, user *types.ReviewUser) error
 		_, err = tx.NewDelete().Model((*types.ConfirmedUser)(nil)).Where("id = ?", user.ID).Exec(ctx)
 		if err != nil {
 			return fmt.Errorf("failed to delete user from confirmed_users: %w", err)
-		}
-
-		_, err = tx.NewDelete().Model((*types.BannedUser)(nil)).Where("id = ?", user.ID).Exec(ctx)
-		if err != nil {
-			return fmt.Errorf("failed to delete user from banned_users: %w", err)
 		}
 
 		return nil
@@ -338,13 +319,6 @@ func (r *UserModel) GetRecentlyProcessedUsers(ctx context.Context, userIDs []uin
 				Where("id IN (?)", bun.In(userIDs)).
 				Where("last_updated > NOW() - INTERVAL '7 days'"),
 		).
-		Union(
-			r.db.NewSelect().Model((*types.BannedUser)(nil)).
-				Column("id").
-				ColumnExpr("? AS status", enum.UserTypeBanned).
-				Where("id IN (?)", bun.In(userIDs)).
-				Where("last_updated > NOW() - INTERVAL '7 days'"),
-		).
 		Scan(ctx, &users)
 	if err != nil {
 		return nil, fmt.Errorf("failed to check recently processed users: %w", err)
@@ -371,7 +345,6 @@ func (r *UserModel) GetUserByID(ctx context.Context, userID string, fields types
 			&types.FlaggedUser{},
 			&types.ConfirmedUser{},
 			&types.ClearedUser{},
-			&types.BannedUser{},
 		}
 
 		for _, model := range models {
@@ -407,10 +380,6 @@ func (r *UserModel) GetUserByID(ctx context.Context, userID string, fields types
 					result.User = m.User
 					result.ClearedAt = m.ClearedAt
 					result.Status = enum.UserTypeCleared
-				case *types.BannedUser:
-					result.User = m.User
-					result.PurgedAt = m.PurgedAt
-					result.Status = enum.UserTypeBanned
 				}
 
 				// Get reputation
@@ -508,24 +477,6 @@ func (r *UserModel) GetUsersByIDs(ctx context.Context, userIDs []uint64, fields 
 			}
 		}
 
-		// Query banned users
-		var bannedUsers []types.BannedUser
-		err = tx.NewSelect().
-			Model(&bannedUsers).
-			Column(columns...).
-			Where("id IN (?)", bun.In(userIDs)).
-			Scan(ctx)
-		if err != nil {
-			return fmt.Errorf("failed to get banned users: %w", err)
-		}
-		for _, user := range bannedUsers {
-			users[user.ID] = &types.ReviewUser{
-				User:     user.User,
-				PurgedAt: user.PurgedAt,
-				Status:   enum.UserTypeBanned,
-			}
-		}
-
 		// Mark remaining IDs as unflagged
 		for _, id := range userIDs {
 			if _, ok := users[id]; !ok {
@@ -550,125 +501,181 @@ func (r *UserModel) GetUsersByIDs(ctx context.Context, userIDs []uint64, fields 
 }
 
 // GetUsersToCheck finds users that haven't been checked for banned status recently.
-// Returns a batch of user IDs and updates their last_purge_check timestamp.
-func (r *UserModel) GetUsersToCheck(ctx context.Context, limit int) ([]uint64, error) {
+// Returns two slices: users to check, and currently banned users among those to check.
+func (r *UserModel) GetUsersToCheck(ctx context.Context, limit int) ([]uint64, []uint64, error) {
 	var userIDs []uint64
+	var bannedIDs []uint64
 	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
 		// Get and update confirmed users
-		err := tx.NewRaw(`
-			WITH updated AS (
-				UPDATE confirmed_users
-				SET last_purge_check = NOW()
-				WHERE id IN (
-					SELECT id FROM confirmed_users
-					WHERE last_purge_check < NOW() - INTERVAL '1 day'
-					ORDER BY last_purge_check ASC
-					LIMIT ?
-					FOR UPDATE SKIP LOCKED
-				)
-				RETURNING id
-			)
-			SELECT * FROM updated
-		`, limit/2).Scan(ctx, &userIDs)
+		var confirmedUsers []types.ConfirmedUser
+		err := tx.NewSelect().
+			Model(&confirmedUsers).
+			Column("id", "is_banned").
+			Where("last_ban_check < NOW() - INTERVAL '1 day'").
+			OrderExpr("last_ban_check ASC").
+			Limit(limit / 2).
+			For("UPDATE SKIP LOCKED").
+			Scan(ctx)
 		if err != nil {
-			return fmt.Errorf("failed to get and update confirmed users: %w", err)
+			return fmt.Errorf("failed to get confirmed users: %w", err)
+		}
+
+		if len(confirmedUsers) > 0 {
+			userIDs = make([]uint64, 0, len(confirmedUsers))
+			for _, user := range confirmedUsers {
+				userIDs = append(userIDs, user.ID)
+				if user.IsBanned {
+					bannedIDs = append(bannedIDs, user.ID)
+				}
+			}
+
+			// Update last_ban_check
+			_, err = tx.NewUpdate().
+				Model(&confirmedUsers).
+				Set("last_ban_check = NOW()").
+				Where("id IN (?)", bun.In(userIDs)).
+				Exec(ctx)
+			if err != nil {
+				return fmt.Errorf("failed to update confirmed users: %w", err)
+			}
+		}
+
+		// Calculate remaining limit for flagged users
+		remainingLimit := limit - len(confirmedUsers)
+		if remainingLimit <= 0 {
+			return nil
 		}
 
 		// Get and update flagged users
-		var flaggedIDs []uint64
-		err = tx.NewRaw(`
-			WITH updated AS (
-				UPDATE flagged_users
-				SET last_purge_check = NOW()
-				WHERE id IN (
-					SELECT id FROM flagged_users
-					WHERE last_purge_check < NOW() - INTERVAL '1 day'
-					ORDER BY last_purge_check ASC
-					LIMIT ?
-					FOR UPDATE SKIP LOCKED
-				)
-				RETURNING id
-			)
-			SELECT * FROM updated
-		`, limit/2).Scan(ctx, &flaggedIDs)
+		var flaggedUsers []types.FlaggedUser
+		err = tx.NewSelect().
+			Model(&flaggedUsers).
+			Column("id", "is_banned").
+			Where("last_ban_check < NOW() - INTERVAL '1 day'").
+			OrderExpr("last_ban_check ASC").
+			Limit(remainingLimit).
+			For("UPDATE SKIP LOCKED").
+			Scan(ctx)
 		if err != nil {
-			return fmt.Errorf("failed to get and update flagged users: %w", err)
+			return fmt.Errorf("failed to get flagged users: %w", err)
 		}
-		userIDs = append(userIDs, flaggedIDs...)
+
+		if len(flaggedUsers) > 0 {
+			flaggedIDs := make([]uint64, 0, len(flaggedUsers))
+			for _, user := range flaggedUsers {
+				flaggedIDs = append(flaggedIDs, user.ID)
+				if user.IsBanned {
+					bannedIDs = append(bannedIDs, user.ID)
+				}
+			}
+
+			// Update last_ban_check
+			_, err = tx.NewUpdate().
+				Model(&flaggedUsers).
+				Set("last_ban_check = NOW()").
+				Where("id IN (?)", bun.In(flaggedIDs)).
+				Exec(ctx)
+			if err != nil {
+				return fmt.Errorf("failed to update flagged users: %w", err)
+			}
+
+			userIDs = append(userIDs, flaggedIDs...)
+		}
 
 		return nil
 	})
 
-	return userIDs, err
+	return userIDs, bannedIDs, err
 }
 
-// RemoveBannedUsers moves users from confirmed_users and flagged_users to banned_users.
-// This happens when users are found to be banned by Roblox.
-func (r *UserModel) RemoveBannedUsers(ctx context.Context, userIDs []uint64) error {
+// MarkUsersBanStatus updates the banned status of users in their respective tables.
+func (r *UserModel) MarkUsersBanStatus(ctx context.Context, userIDs []uint64, isBanned bool) error {
 	return r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
-		// Move confirmed users to banned_users
-		var confirmedUsers []types.ConfirmedUser
-		err := tx.NewSelect().Model(&confirmedUsers).
-			Where("id IN (?)", bun.In(userIDs)).
-			Scan(ctx)
-		if err != nil {
-			return fmt.Errorf("failed to select confirmed users for banning: %w", err)
-		}
-
-		for _, user := range confirmedUsers {
-			bannedUser := &types.BannedUser{
-				User:     user.User,
-				PurgedAt: time.Now(),
-			}
-			_, err = tx.NewInsert().Model(bannedUser).
-				On("CONFLICT (id) DO UPDATE").
-				Exec(ctx)
-			if err != nil {
-				return fmt.Errorf("failed to insert banned user from confirmed_users: %w (userID=%d)", err, user.ID)
-			}
-		}
-
-		// Move flagged users to banned_users
-		var flaggedUsers []types.FlaggedUser
-		err = tx.NewSelect().Model(&flaggedUsers).
-			Where("id IN (?)", bun.In(userIDs)).
-			Scan(ctx)
-		if err != nil {
-			return fmt.Errorf("failed to select flagged users for banning: %w", err)
-		}
-
-		for _, user := range flaggedUsers {
-			bannedUser := &types.BannedUser{
-				User:     user.User,
-				PurgedAt: time.Now(),
-			}
-			_, err = tx.NewInsert().Model(bannedUser).
-				On("CONFLICT (id) DO UPDATE").
-				Exec(ctx)
-			if err != nil {
-				return fmt.Errorf("failed to insert banned user from flagged_users: %w (userID=%d)", err, user.ID)
-			}
-		}
-
-		// Remove users from confirmed_users
-		_, err = tx.NewDelete().Model((*types.ConfirmedUser)(nil)).
+		// Update confirmed users
+		_, err := tx.NewUpdate().
+			Model((*types.ConfirmedUser)(nil)).
+			Set("is_banned = ?", isBanned).
 			Where("id IN (?)", bun.In(userIDs)).
 			Exec(ctx)
 		if err != nil {
-			return fmt.Errorf("failed to remove banned users from confirmed_users: %w (userCount=%d)", err, len(userIDs))
+			return fmt.Errorf("failed to mark confirmed users ban status: %w", err)
 		}
 
-		// Remove users from flagged_users
-		_, err = tx.NewDelete().Model((*types.FlaggedUser)(nil)).
+		// Update flagged users
+		_, err = tx.NewUpdate().
+			Model((*types.FlaggedUser)(nil)).
+			Set("is_banned = ?", isBanned).
 			Where("id IN (?)", bun.In(userIDs)).
 			Exec(ctx)
 		if err != nil {
-			return fmt.Errorf("failed to remove banned users from flagged_users: %w (userCount=%d)", err, len(userIDs))
+			return fmt.Errorf("failed to mark flagged users ban status: %w", err)
 		}
 
-		r.logger.Debug("Moved banned users to banned_users", zap.Int("count", len(userIDs)))
+		r.logger.Debug("Marked users ban status",
+			zap.Int("count", len(userIDs)),
+			zap.Bool("isBanned", isBanned))
 		return nil
 	})
+}
+
+// GetBannedCount returns the total number of banned users across all tables
+func (r *UserModel) GetBannedCount(ctx context.Context) (int, error) {
+	count, err := r.db.NewSelect().
+		TableExpr("(?) AS banned_users", r.db.NewSelect().
+			Model((*types.ConfirmedUser)(nil)).
+			Column("id").
+			Where("is_banned = true").
+			UnionAll(
+				r.db.NewSelect().
+					Model((*types.FlaggedUser)(nil)).
+					Column("id").
+					Where("is_banned = true"),
+			),
+		).
+		Count(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("failed to get banned users count: %w", err)
+	}
+
+	return count, nil
+}
+
+// GetUserCounts returns counts for all user statuses
+func (r *UserModel) GetUserCounts(ctx context.Context) (*types.UserCounts, error) {
+	var counts types.UserCounts
+
+	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+		confirmedCount, err := tx.NewSelect().Model((*types.ConfirmedUser)(nil)).Count(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to get confirmed users count: %w", err)
+		}
+		counts.Confirmed = confirmedCount
+
+		flaggedCount, err := tx.NewSelect().Model((*types.FlaggedUser)(nil)).Count(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to get flagged users count: %w", err)
+		}
+		counts.Flagged = flaggedCount
+
+		clearedCount, err := tx.NewSelect().Model((*types.ClearedUser)(nil)).Count(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to get cleared users count: %w", err)
+		}
+		counts.Cleared = clearedCount
+
+		bannedCount, err := r.GetBannedCount(ctx)
+		if err != nil {
+			return err
+		}
+		counts.Banned = bannedCount
+
+		return nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get user counts: %w", err)
+	}
+
+	return &counts, nil
 }
 
 // PurgeOldClearedUsers removes cleared users older than the cutoff date.
@@ -704,7 +711,6 @@ func (r *UserModel) GetUsersForThumbnailUpdate(ctx context.Context, limit int) (
 			(*types.FlaggedUser)(nil),
 			(*types.ConfirmedUser)(nil),
 			(*types.ClearedUser)(nil),
-			(*types.BannedUser)(nil),
 		} {
 			var reviewUsers []types.ReviewUser
 			err := tx.NewSelect().
@@ -761,17 +767,6 @@ func (r *UserModel) DeleteUser(ctx context.Context, userID uint64) (bool, error)
 			Exec(ctx)
 		if err != nil {
 			return fmt.Errorf("failed to delete from cleared_users: %w", err)
-		}
-		affected, _ = result.RowsAffected()
-		totalAffected += affected
-
-		// Delete from banned_users table
-		result, err = tx.NewDelete().
-			Model((*types.BannedUser)(nil)).
-			Where("id = ?", userID).
-			Exec(ctx)
-		if err != nil {
-			return fmt.Errorf("failed to delete from banned_users: %w", err)
 		}
 		affected, _ = result.RowsAffected()
 		totalAffected += affected
@@ -873,28 +868,18 @@ func (r *UserModel) GetUserToReview(ctx context.Context, sortBy enum.ReviewSortB
 			&types.FlaggedUser{},   // Primary target
 			&types.ConfirmedUser{}, // First fallback
 			&types.ClearedUser{},   // Second fallback
-			&types.BannedUser{},    // Last fallback
 		}
 	case enum.ReviewTargetModeConfirmed:
 		models = []interface{}{
 			&types.ConfirmedUser{}, // Primary target
 			&types.FlaggedUser{},   // First fallback
 			&types.ClearedUser{},   // Second fallback
-			&types.BannedUser{},    // Last fallback
 		}
 	case enum.ReviewTargetModeCleared:
 		models = []interface{}{
 			&types.ClearedUser{},   // Primary target
 			&types.FlaggedUser{},   // First fallback
 			&types.ConfirmedUser{}, // Second fallback
-			&types.BannedUser{},    // Last fallback
-		}
-	case enum.ReviewTargetModeBanned:
-		models = []interface{}{
-			&types.BannedUser{},    // Primary target
-			&types.FlaggedUser{},   // First fallback
-			&types.ConfirmedUser{}, // Second fallback
-			&types.ClearedUser{},   // Last fallback
 		}
 	}
 
@@ -964,10 +949,6 @@ func (r *UserModel) getNextToReview(ctx context.Context, model interface{}, sort
 			result.User = m.User
 			result.ClearedAt = m.ClearedAt
 			result.Status = enum.UserTypeCleared
-		case *types.BannedUser:
-			result.User = m.User
-			result.PurgedAt = m.PurgedAt
-			result.Status = enum.UserTypeBanned
 		default:
 			return fmt.Errorf("%w: %T", types.ErrUnsupportedModel, model)
 		}

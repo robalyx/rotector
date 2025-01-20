@@ -110,13 +110,13 @@ func (w *Worker) Start() {
 	}
 }
 
-// processBannedUsers checks for and removes banned users.
+// processBannedUsers checks for and marks banned users.
 func (w *Worker) processBannedUsers() {
 	w.bar.SetStepMessage("Processing banned users", 20)
 	w.reporter.UpdateStatus("Processing banned users", 20)
 
 	// Get users to check
-	users, err := w.db.Users().GetUsersToCheck(context.Background(), w.userBatchSize)
+	users, currentlyBanned, err := w.db.Users().GetUsersToCheck(context.Background(), w.userBatchSize)
 	if err != nil {
 		w.logger.Error("Error getting users to check", zap.Error(err))
 		w.reporter.SetHealthy(false)
@@ -136,25 +136,50 @@ func (w *Worker) processBannedUsers() {
 		return
 	}
 
-	// Remove banned users
+	// Create map of newly banned users for O(1) lookup
+	bannedMap := make(map[uint64]struct{}, len(bannedUserIDs))
+	for _, id := range bannedUserIDs {
+		bannedMap[id] = struct{}{}
+	}
+
+	// Find users that are no longer banned
+	var unbannedUserIDs []uint64
+	for _, id := range currentlyBanned {
+		if _, ok := bannedMap[id]; !ok {
+			unbannedUserIDs = append(unbannedUserIDs, id)
+		}
+	}
+
+	// Mark banned users
 	if len(bannedUserIDs) > 0 {
-		err = w.db.Users().RemoveBannedUsers(context.Background(), bannedUserIDs)
+		err = w.db.Users().MarkUsersBanStatus(context.Background(), bannedUserIDs, true)
 		if err != nil {
-			w.logger.Error("Error removing banned users", zap.Error(err))
+			w.logger.Error("Error marking banned users", zap.Error(err))
 			w.reporter.SetHealthy(false)
 			return
 		}
-		w.logger.Info("Removed banned users", zap.Int("count", len(bannedUserIDs)))
+		w.logger.Info("Marked banned users", zap.Int("count", len(bannedUserIDs)))
+	}
+
+	// Unmark users that are no longer banned
+	if len(unbannedUserIDs) > 0 {
+		err = w.db.Users().MarkUsersBanStatus(context.Background(), unbannedUserIDs, false)
+		if err != nil {
+			w.logger.Error("Error unmarking banned users", zap.Error(err))
+			w.reporter.SetHealthy(false)
+			return
+		}
+		w.logger.Info("Unmarked banned users", zap.Int("count", len(unbannedUserIDs)))
 	}
 }
 
-// processLockedGroups checks for and removes locked groups.
+// processLockedGroups checks for and marks locked groups.
 func (w *Worker) processLockedGroups() {
 	w.bar.SetStepMessage("Processing locked groups", 30)
 	w.reporter.UpdateStatus("Processing locked groups", 30)
 
 	// Get groups to check
-	groups, err := w.db.Groups().GetGroupsToCheck(context.Background(), w.groupBatchSize)
+	groups, currentlyLocked, err := w.db.Groups().GetGroupsToCheck(context.Background(), w.groupBatchSize)
 	if err != nil {
 		w.logger.Error("Error getting groups to check", zap.Error(err))
 		w.reporter.SetHealthy(false)
@@ -174,15 +199,40 @@ func (w *Worker) processLockedGroups() {
 		return
 	}
 
-	// Remove locked groups
+	// Create map of newly locked groups for O(1) lookup
+	lockedMap := make(map[uint64]struct{}, len(lockedGroupIDs))
+	for _, id := range lockedGroupIDs {
+		lockedMap[id] = struct{}{}
+	}
+
+	// Find groups that are no longer locked
+	var unlockedGroupIDs []uint64
+	for _, id := range currentlyLocked {
+		if _, ok := lockedMap[id]; !ok {
+			unlockedGroupIDs = append(unlockedGroupIDs, id)
+		}
+	}
+
+	// Mark locked groups
 	if len(lockedGroupIDs) > 0 {
-		err = w.db.Groups().RemoveLockedGroups(context.Background(), lockedGroupIDs)
+		err = w.db.Groups().MarkGroupsLockStatus(context.Background(), lockedGroupIDs, true)
 		if err != nil {
-			w.logger.Error("Error removing locked groups", zap.Error(err))
+			w.logger.Error("Error marking locked groups", zap.Error(err))
 			w.reporter.SetHealthy(false)
 			return
 		}
-		w.logger.Info("Removed locked groups", zap.Int("count", len(lockedGroupIDs)))
+		w.logger.Info("Marked locked groups", zap.Int("count", len(lockedGroupIDs)))
+	}
+
+	// Unmark groups that are no longer locked
+	if len(unlockedGroupIDs) > 0 {
+		err = w.db.Groups().MarkGroupsLockStatus(context.Background(), unlockedGroupIDs, false)
+		if err != nil {
+			w.logger.Error("Error unmarking locked groups", zap.Error(err))
+			w.reporter.SetHealthy(false)
+			return
+		}
+		w.logger.Info("Unmarked locked groups", zap.Int("count", len(unlockedGroupIDs)))
 	}
 }
 

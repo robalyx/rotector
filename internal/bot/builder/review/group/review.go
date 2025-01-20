@@ -118,16 +118,19 @@ func (b *ReviewBuilder) buildReviewEmbed() *discord.EmbedBuilder {
 	// Add status indicator based on group status
 	var status string
 	switch b.group.Status {
-	case enum.GroupTypeFlagged:
-		status = "⏳ Flagged Group"
 	case enum.GroupTypeConfirmed:
-		status = "⚠️ Confirmed Group"
+		status = "⚠️ Confirmed"
+	case enum.GroupTypeFlagged:
+		status = "⏳ Pending Review"
 	case enum.GroupTypeCleared:
-		status = "✅ Cleared Group"
-	case enum.GroupTypeLocked:
-		status = "🔒 Locked Group"
+		status = "✅ Cleared"
 	case enum.GroupTypeUnflagged:
-		status = "🔄 Unflagged Group"
+		status = "🔄 Unflagged"
+	}
+
+	// Add locked status if applicable
+	if b.group.IsLocked {
+		status += " 🔒 Locked"
 	}
 
 	lastUpdated := fmt.Sprintf("<t:%d:R>", b.group.LastUpdated.Unix())
@@ -185,9 +188,6 @@ func (b *ReviewBuilder) buildReviewEmbed() *discord.EmbedBuilder {
 	}
 	if !b.group.ClearedAt.IsZero() {
 		embed.AddField("Cleared At", fmt.Sprintf("<t:%d:R>", b.group.ClearedAt.Unix()), true)
-	}
-	if !b.group.LockedAt.IsZero() {
-		embed.AddField("Locked At", fmt.Sprintf("<t:%d:R>", b.group.LockedAt.Unix()), true)
 	}
 
 	// Add UUID and status to footer

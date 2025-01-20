@@ -12,8 +12,6 @@ const (
 	GroupTypeFlagged
 	// GroupTypeCleared indicates a group was reviewed and found to be appropriate.
 	GroupTypeCleared
-	// GroupTypeLocked indicates a group was locked and removed from the platform.
-	GroupTypeLocked
 	// GroupTypeUnflagged indicates a group was not found in the database.
 	GroupTypeUnflagged
 )

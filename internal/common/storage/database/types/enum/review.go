@@ -40,6 +40,4 @@ const (
 	ReviewTargetModeConfirmed
 	// ReviewTargetModeCleared indicates re-reviewing previously cleared items.
 	ReviewTargetModeCleared
-	// ReviewTargetModeBanned indicates re-reviewing banned/locked items.
-	ReviewTargetModeBanned
 )

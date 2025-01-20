@@ -7,11 +7,11 @@ import (
 	"strings"
 )
 
-const _ReviewTargetModeName = "FlaggedConfirmedClearedBanned"
+const _ReviewTargetModeName = "FlaggedConfirmedCleared"
 
-var _ReviewTargetModeIndex = [...]uint8{0, 7, 16, 23, 29}
+var _ReviewTargetModeIndex = [...]uint8{0, 7, 16, 23}
 
-const _ReviewTargetModeLowerName = "flaggedconfirmedclearedbanned"
+const _ReviewTargetModeLowerName = "flaggedconfirmedcleared"
 
 func (i ReviewTargetMode) String() string {
 	if i < 0 || i >= ReviewTargetMode(len(_ReviewTargetModeIndex)-1) {
@@ -27,10 +27,9 @@ func _ReviewTargetModeNoOp() {
 	_ = x[ReviewTargetModeFlagged-(0)]
 	_ = x[ReviewTargetModeConfirmed-(1)]
 	_ = x[ReviewTargetModeCleared-(2)]
-	_ = x[ReviewTargetModeBanned-(3)]
 }
 
-var _ReviewTargetModeValues = []ReviewTargetMode{ReviewTargetModeFlagged, ReviewTargetModeConfirmed, ReviewTargetModeCleared, ReviewTargetModeBanned}
+var _ReviewTargetModeValues = []ReviewTargetMode{ReviewTargetModeFlagged, ReviewTargetModeConfirmed, ReviewTargetModeCleared}
 
 var _ReviewTargetModeNameToValueMap = map[string]ReviewTargetMode{
 	_ReviewTargetModeName[0:7]:        ReviewTargetModeFlagged,
@@ -39,15 +38,12 @@ var _ReviewTargetModeNameToValueMap = map[string]ReviewTargetMode{
 	_ReviewTargetModeLowerName[7:16]:  ReviewTargetModeConfirmed,
 	_ReviewTargetModeName[16:23]:      ReviewTargetModeCleared,
 	_ReviewTargetModeLowerName[16:23]: ReviewTargetModeCleared,
-	_ReviewTargetModeName[23:29]:      ReviewTargetModeBanned,
-	_ReviewTargetModeLowerName[23:29]: ReviewTargetModeBanned,
 }
 
 var _ReviewTargetModeNames = []string{
 	_ReviewTargetModeName[0:7],
 	_ReviewTargetModeName[7:16],
 	_ReviewTargetModeName[16:23],
-	_ReviewTargetModeName[23:29],
 }
 
 // ReviewTargetModeString retrieves an enum value from the enum constants string name.

@@ -54,7 +54,7 @@ type Info struct {
 	FollowerCount  uint64                 `json:"followerCount"`
 	FollowingCount uint64                 `json:"followingCount"`
 	LastUpdated    time.Time              `json:"lastUpdated"`
-	LastPurgeCheck time.Time              `json:"lastPurgeCheck"`
+	LastBanCheck   time.Time              `json:"lastBanCheck"`
 }
 
 // UserFetcher handles concurrent retrieval of user information from the Roblox API.
@@ -117,16 +117,16 @@ func (u *UserFetcher) FetchInfos(userIDs []uint64) []*Info {
 			// Add the user info to valid users
 			now := time.Now()
 			info := &Info{
-				ID:             userInfo.ID,
-				Name:           userInfo.Name,
-				DisplayName:    userInfo.DisplayName,
-				Description:    userInfo.Description,
-				CreatedAt:      userInfo.Created,
-				Groups:         groups,
-				Friends:        friends,
-				Games:          games,
-				LastUpdated:    now,
-				LastPurgeCheck: now,
+				ID:           userInfo.ID,
+				Name:         userInfo.Name,
+				DisplayName:  userInfo.DisplayName,
+				Description:  userInfo.Description,
+				CreatedAt:    userInfo.Created,
+				Groups:       groups,
+				Friends:      friends,
+				Games:        games,
+				LastUpdated:  now,
+				LastBanCheck: now,
 			}
 
 			mu.Lock()

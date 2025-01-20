@@ -8,8 +8,7 @@ enum UserStatus {
   USER_STATUS_FLAGGED = 0;
   USER_STATUS_CONFIRMED = 1;
   USER_STATUS_CLEARED = 2;
-  USER_STATUS_BANNED = 3;
-  USER_STATUS_UNFLAGGED = 4;
+  USER_STATUS_UNFLAGGED = 3;
 }
 
 // GroupStatus represents which table the group exists in
@@ -17,8 +16,7 @@ enum GroupStatus {
   GROUP_STATUS_FLAGGED = 0;
   GROUP_STATUS_CONFIRMED = 1;
   GROUP_STATUS_CLEARED = 2;
-  GROUP_STATUS_LOCKED = 3;
-  GROUP_STATUS_UNFLAGGED = 4;
+  GROUP_STATUS_UNFLAGGED = 3;
 }
 
 // UserGroup represents group information for users
@@ -78,6 +76,7 @@ message User {
   int32 upvotes = 19;
   int32 downvotes = 20;
   int32 reputation = 21;
+  bool is_banned = 22;
 }
 
 // Group represents all group information
@@ -96,6 +95,7 @@ message Group {
   int32 upvotes = 12;
   int32 downvotes = 13;
   int32 reputation = 14;
+  bool is_locked = 15;
 }
 
 // GetUserRequest represents the request for getting user information

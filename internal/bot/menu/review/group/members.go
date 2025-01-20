@@ -136,7 +136,6 @@ func (m *MembersMenu) sortMembersByStatus(memberIDs []uint64, flaggedUsers map[u
 	statusOrder := []enum.UserType{
 		enum.UserTypeConfirmed,
 		enum.UserTypeFlagged,
-		enum.UserTypeBanned,
 		enum.UserTypeCleared,
 		enum.UserTypeUnflagged,
 	}

@@ -120,16 +120,19 @@ func (b *ReviewBuilder) buildReviewBuilder() *discord.EmbedBuilder {
 	// Add status indicator based on user status
 	var status string
 	switch b.user.Status {
-	case enum.UserTypeFlagged:
-		status = "⏳ Flagged User"
 	case enum.UserTypeConfirmed:
-		status = "⚠️ Confirmed User"
+		status = "⚠️ Confirmed"
+	case enum.UserTypeFlagged:
+		status = "⏳ Pending Review"
 	case enum.UserTypeCleared:
-		status = "✅ Cleared User"
-	case enum.UserTypeBanned:
-		status = "🔨 Banned User"
+		status = "✅ Cleared"
 	case enum.UserTypeUnflagged:
-		status = "🔄 Unflagged User"
+		status = "🔄 Unflagged"
+	}
+
+	// Add banned status if applicable
+	if b.user.IsBanned {
+		status += " 🔨 Banned"
 	}
 
 	createdAt := fmt.Sprintf("<t:%d:R>", b.user.CreatedAt.Unix())
@@ -202,9 +205,6 @@ func (b *ReviewBuilder) buildReviewBuilder() *discord.EmbedBuilder {
 	}
 	if !b.user.ClearedAt.IsZero() {
 		embed.AddField("Cleared At", fmt.Sprintf("<t:%d:R>", b.user.ClearedAt.Unix()), true)
-	}
-	if !b.user.PurgedAt.IsZero() {
-		embed.AddField("Purged At", fmt.Sprintf("<t:%d:R>", b.user.PurgedAt.Unix()), true)
 	}
 
 	// Add UUID and status to footer
@@ -564,9 +564,6 @@ func (b *ReviewBuilder) getFriendsField() string {
 	if c := counts[enum.UserTypeFlagged]; c > 0 {
 		parts = append(parts, fmt.Sprintf("%d ⏳", c))
 	}
-	if c := counts[enum.UserTypeBanned]; c > 0 {
-		parts = append(parts, fmt.Sprintf("%d 🔨", c))
-	}
 	if c := counts[enum.UserTypeCleared]; c > 0 {
 		parts = append(parts, fmt.Sprintf("%d ✅", c))
 	}
@@ -599,9 +596,6 @@ func (b *ReviewBuilder) getGroupsField() string {
 	}
 	if c := counts[enum.GroupTypeCleared]; c > 0 {
 		parts = append(parts, fmt.Sprintf("%d ✅", c))
-	}
-	if c := counts[enum.GroupTypeLocked]; c > 0 {
-		parts = append(parts, fmt.Sprintf("%d 🔒", c))
 	}
 
 	if len(parts) > 0 {

@@ -106,12 +106,14 @@ func NewConnection(ctx context.Context, config *config.PostgreSQL, logger *zap.L
 	views := models.NewMaterializedView(db, logger)
 	votes := models.NewVote(db, activity, views, logger)
 	reputation := models.NewReputation(db, votes, logger)
+	users := models.NewUser(db, tracking, activity, reputation, votes, logger)
+	groups := models.NewGroup(db, activity, reputation, votes, logger)
 	client := &Client{
 		db:         db,
 		logger:     logger,
-		users:      models.NewUser(db, tracking, activity, reputation, votes, logger),
-		groups:     models.NewGroup(db, activity, reputation, votes, logger),
-		stats:      models.NewStats(db, logger),
+		users:      users,
+		groups:     groups,
+		stats:      models.NewStats(db, users, groups, logger),
 		settings:   models.NewSetting(db, logger),
 		activity:   activity,
 		tracking:   tracking,
