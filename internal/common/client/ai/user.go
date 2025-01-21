@@ -27,21 +27,27 @@ You will receive a list of user profiles in JSON format. Each profile contains:
 - Display name (if different from username)
 - Profile description/bio
 
-Analyze each profile and identify users engaging in inappropriate behavior. Return a list of users that violate or potentially violate the guidelines, including:
+Analyze each profile and identify users engaging in inappropriate behavior. For each profile, return:
 - The exact username
-- Clear explanation of violations found
+- Clear explanation of violations found. Use exactly "NO_VIOLATIONS" if no clear concerns found
 - Exact quotes of the concerning content
-- Confidence level of assessment
+- Confidence level (0.0-1.0) based on severity
+  * Use 0.0 for profiles with no clear violations
+  * Use 0.1-1.0 ONLY for profiles with concerning elements
 
-Guidelines for flagging:
-- Flag explicit or subtle violations and predatory patterns
-- When in doubt about violations, flag with lower confidence (0.1-0.4)
-- It is better to have false positives than miss predators
-- Keep reasons concise and within 1 sentence
-- Do not include usernames in your reason
-- Do not repeat the same content in flaggedContent array for the same user
-- Do not add users with no violations to the list
-- Do not flag empty descriptions
+Confidence Level Guide:
+- 0.0: No predatory elements detected
+- 0.1-0.3: Subtle concerning patterns requiring investigation
+- 0.4-0.6: Clear inappropriate content or behavior
+- 0.7-0.8: Strong indicators of predatory behavior
+- 0.9-1.0: Explicit predatory intent or grooming attempts
+
+Flag explicit or subtle violations and predatory patterns
+Keep reasons concise and within 1 sentence
+Do NOT include usernames in your reason
+Do NOT add users with no violations to the response
+Do NOT repeat the same content in flaggedContent array
+Do NOT flag empty descriptions
 
 Look for predatory behavior:
 - Grooming attempts and manipulation:
@@ -94,14 +100,7 @@ Look for predatory behavior:
   * Adult industry references
   * Suggestive emoji or symbol patterns
   * Disclaimers that seem to hide inappropriate intent
-  * Vague offers of "fun" or "good times"
-
-Confidence level grading:
-1.0: Multiple explicit violations
-0.8: Single explicit violation or clear predatory pattern
-0.6: Clear pattern of concerning behavior
-0.4: Multiple suspicious indicators
-0.2: One or a few concerning indicators`
+  * Vague offers of "fun" or "good times"`
 )
 
 // MaxFriendDataTokens is the maximum number of tokens allowed for friend data.
@@ -135,8 +134,8 @@ func NewUserAnalyzer(app *setup.App, translator *translator.Translator, logger *
 	// Create user analysis model
 	userModel := app.GenAIClient.GenerativeModel(app.Config.Common.GeminiAI.Model)
 	userModel.SystemInstruction = genai.NewUserContent(genai.Text(ReviewSystemPrompt))
-	userModel.GenerationConfig.ResponseMIMEType = "application/json"
-	userModel.GenerationConfig.ResponseSchema = &genai.Schema{
+	userModel.ResponseMIMEType = ApplicationJSON
+	userModel.ResponseSchema = &genai.Schema{
 		Type: genai.TypeObject,
 		Properties: map[string]*genai.Schema{
 			"users": {
@@ -171,12 +170,11 @@ func NewUserAnalyzer(app *setup.App, translator *translator.Translator, logger *
 		},
 		Required: []string{"users"},
 	}
-	userTemp := float32(0.0)
-	userModel.Temperature = &userTemp
-
-	// Create a minifier for JSON optimization
+	userModel.Temperature = utils.Ptr(float32(0.2))
+	userModel.TopP = utils.Ptr(float32(0.5))
+	userModel.TopK = utils.Ptr(int32(10))
 	m := minify.New()
-	m.AddFunc("application/json", json.Minify)
+	m.AddFunc(ApplicationJSON, json.Minify)
 
 	return &UserAnalyzer{
 		userModel:  userModel,
@@ -228,7 +226,7 @@ func (a *UserAnalyzer) ProcessUsers(userInfos []*fetcher.Info) (map[uint64]*type
 		return nil, nil, fmt.Errorf("%w: %w", ErrJSONProcessing, err)
 	}
 
-	userInfoJSON, err = a.minify.Bytes("application/json", userInfoJSON)
+	userInfoJSON, err = a.minify.Bytes(ApplicationJSON, userInfoJSON)
 	if err != nil {
 		a.logger.Error("Error minifying user info", zap.Error(err))
 		return nil, nil, fmt.Errorf("%w: %w", ErrJSONProcessing, err)
@@ -256,16 +254,22 @@ func (a *UserAnalyzer) ProcessUsers(userInfos []*fetcher.Info) (map[uint64]*type
 		return &result, nil
 	})
 	if err != nil {
+		// If batch analysis fails, add all IDs to retry list
+		failedValidationIDs := make([]uint64, 0, len(userInfos))
+		for _, user := range userInfos {
+			failedValidationIDs = append(failedValidationIDs, user.ID)
+		}
 		a.logger.Error("Error processing Gemini response", zap.Error(err))
-		return nil, nil, fmt.Errorf("%w: %w", ErrModelResponse, err)
+		return nil, failedValidationIDs, fmt.Errorf("%w: %w", ErrModelResponse, err)
 	}
-
-	a.logger.Info("Received AI response",
-		zap.Int("totalUsers", len(userInfos)),
-		zap.Int("flaggedUsers", len(flaggedUsers.Users)))
 
 	// Validate AI responses against translated content but use original descriptions for storage
 	validatedUsers, failedValidationIDs := a.validateFlaggedUsers(flaggedUsers, translatedInfos, originalInfos)
+
+	a.logger.Info("Received AI user analysis",
+		zap.Int("totalUsers", len(userInfos)),
+		zap.Int("flaggedUsers", len(flaggedUsers.Users)),
+		zap.Int("validatedUsers", len(validatedUsers)))
 
 	return validatedUsers, failedValidationIDs, nil
 }
@@ -287,8 +291,13 @@ func (a *UserAnalyzer) validateFlaggedUsers(flaggedUsers *FlaggedUsers, translat
 			continue
 		}
 
+		// Skip results with no violations
+		if flaggedUser.Reason == "NO_VIOLATIONS" {
+			continue
+		}
+
 		// Validate confidence level
-		if flaggedUser.Confidence < 0.2 || flaggedUser.Confidence > 1.0 {
+		if flaggedUser.Confidence < 0.1 || flaggedUser.Confidence > 1.0 {
 			a.logger.Debug("AI flagged user with invalid confidence",
 				zap.String("username", flaggedUser.Name),
 				zap.Float64("confidence", flaggedUser.Confidence))
@@ -324,21 +333,23 @@ func (a *UserAnalyzer) validateFlaggedUsers(flaggedUsers *FlaggedUsers, translat
 		// If the flagged user is correct, add it using original info
 		if isValid {
 			validatedUsers[originalInfo.ID] = &types.User{
-				ID:             originalInfo.ID,
-				Name:           originalInfo.Name,
-				DisplayName:    originalInfo.DisplayName,
-				Description:    originalInfo.Description,
-				CreatedAt:      originalInfo.CreatedAt,
-				Reason:         "AI Analysis: " + flaggedUser.Reason,
-				Groups:         originalInfo.Groups.Data,
-				Friends:        originalInfo.Friends.Data,
-				Games:          originalInfo.Games.Data,
-				FollowerCount:  originalInfo.FollowerCount,
-				FollowingCount: originalInfo.FollowingCount,
-				FlaggedContent: flaggedUser.FlaggedContent,
-				Confidence:     flaggedUser.Confidence,
-				LastUpdated:    originalInfo.LastUpdated,
-				LastBanCheck:   originalInfo.LastBanCheck,
+				ID:                  originalInfo.ID,
+				Name:                originalInfo.Name,
+				DisplayName:         originalInfo.DisplayName,
+				Description:         originalInfo.Description,
+				CreatedAt:           originalInfo.CreatedAt,
+				Reason:              "AI Analysis: " + flaggedUser.Reason,
+				Groups:              originalInfo.Groups.Data,
+				Friends:             originalInfo.Friends.Data,
+				Games:               originalInfo.Games.Data,
+				FollowerCount:       originalInfo.FollowerCount,
+				FollowingCount:      originalInfo.FollowingCount,
+				FlaggedContent:      flaggedUser.FlaggedContent,
+				Confidence:          flaggedUser.Confidence,
+				LastUpdated:         originalInfo.LastUpdated,
+				LastBanCheck:        originalInfo.LastBanCheck,
+				ThumbnailURL:        originalInfo.ThumbnailURL,
+				LastThumbnailUpdate: originalInfo.LastThumbnailUpdate,
 			}
 		} else {
 			failedValidationIDs = append(failedValidationIDs, originalInfo.ID)

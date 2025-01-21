@@ -29,8 +29,8 @@ func NewThumbnailFetcher(roAPI *api.API, logger *zap.Logger) *ThumbnailFetcher {
 	}
 }
 
-// AddImageURLs fetches thumbnails for a batch of users and returns a map of results.
-func (t *ThumbnailFetcher) AddImageURLs(users map[uint64]*types.User) map[uint64]string {
+// GetImageURLs fetches thumbnails for a batch of users and returns a map of results.
+func (t *ThumbnailFetcher) GetImageURLs(users map[uint64]*types.User) map[uint64]string {
 	// Create batch request for headshots
 	requests := thumbnails.NewBatchThumbnailsBuilder()
 	for _, user := range users {

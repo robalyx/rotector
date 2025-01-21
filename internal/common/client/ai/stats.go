@@ -64,17 +64,15 @@ func NewStatsAnalyzer(app *setup.App, logger *zap.Logger) *StatsAnalyzer {
 	// Create a new Gemini model
 	model := app.GenAIClient.GenerativeModel(app.Config.Common.GeminiAI.Model)
 	model.SystemInstruction = genai.NewUserContent(genai.Text(StatsSystemPrompt))
-
-	// Configure model to return plain text
-	maxTokens := int32(MaxOutputTokens)
-	temperature := float32(0.7)
-	model.GenerationConfig.ResponseMIMEType = "text/plain"
-	model.GenerationConfig.MaxOutputTokens = &maxTokens
-	model.GenerationConfig.Temperature = &temperature
+	model.ResponseMIMEType = TextPlain
+	model.MaxOutputTokens = utils.Ptr(int32(MaxOutputTokens))
+	model.Temperature = utils.Ptr(float32(0.7))
+	model.TopP = utils.Ptr(float32(0.7))
+	model.TopK = utils.Ptr(int32(40))
 
 	// Create a minifier for JSON optimization
 	m := minify.New()
-	m.AddFunc("application/json", json.Minify)
+	m.AddFunc(ApplicationJSON, json.Minify)
 
 	return &StatsAnalyzer{
 		genModel: model,
@@ -98,7 +96,7 @@ func (a *StatsAnalyzer) GenerateWelcomeMessage(ctx context.Context, historicalSt
 	}
 
 	// Minify JSON to reduce token usage
-	statsJSON, err = a.minify.Bytes("application/json", statsJSON)
+	statsJSON, err = a.minify.Bytes(ApplicationJSON, statsJSON)
 	if err != nil {
 		a.logger.Error("failed to minify stats data", zap.Error(err))
 		return "", fmt.Errorf("%w: %w", ErrJSONProcessing, err)

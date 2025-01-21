@@ -238,20 +238,22 @@ func (c *GroupChecker) processUserGroups(userInfo *fetcher.Info, existingGroups 
 			zap.Float64("confidence", confidence))
 
 		return &types.User{
-			ID:             userInfo.ID,
-			Name:           userInfo.Name,
-			DisplayName:    userInfo.DisplayName,
-			Description:    userInfo.Description,
-			CreatedAt:      userInfo.CreatedAt,
-			Reason:         "Group Analysis: Member of multiple inappropriate groups.",
-			Groups:         userInfo.Groups.Data,
-			Friends:        userInfo.Friends.Data,
-			Games:          userInfo.Games.Data,
-			FollowerCount:  userInfo.FollowerCount,
-			FollowingCount: userInfo.FollowingCount,
-			Confidence:     math.Round(confidence*100) / 100, // Round to 2 decimal places
-			LastUpdated:    userInfo.LastUpdated,
-			LastBanCheck:   userInfo.LastBanCheck,
+			ID:                  userInfo.ID,
+			Name:                userInfo.Name,
+			DisplayName:         userInfo.DisplayName,
+			Description:         userInfo.Description,
+			CreatedAt:           userInfo.CreatedAt,
+			Reason:              "Group Analysis: Member of multiple inappropriate groups.",
+			Groups:              userInfo.Groups.Data,
+			Friends:             userInfo.Friends.Data,
+			Games:               userInfo.Games.Data,
+			FollowerCount:       userInfo.FollowerCount,
+			FollowingCount:      userInfo.FollowingCount,
+			Confidence:          math.Round(confidence*100) / 100, // Round to 2 decimal places
+			LastUpdated:         userInfo.LastUpdated,
+			LastBanCheck:        userInfo.LastBanCheck,
+			ThumbnailURL:        userInfo.ThumbnailURL,
+			LastThumbnailUpdate: userInfo.LastThumbnailUpdate,
 		}, true
 	}
 

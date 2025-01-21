@@ -363,7 +363,7 @@ func (w *Worker) processUserThumbnails() {
 	}
 
 	// Update thumbnails
-	thumbnailMap := w.thumbnailFetcher.AddImageURLs(users)
+	thumbnailMap := w.thumbnailFetcher.GetImageURLs(users)
 
 	// Update last thumbnail update time
 	now := time.Now()

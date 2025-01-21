@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/generative-ai-go/genai"
 	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
+	"github.com/robalyx/rotector/internal/common/utils"
 	"go.uber.org/zap"
 	"google.golang.org/api/iterator"
 )
@@ -90,6 +91,8 @@ func (h *ChatHandler) StreamResponse(ctx context.Context, history []*genai.Conte
 		model := h.genAIClient.GenerativeModelFromCachedContent(cc)
 		model.MaxOutputTokens = &h.maxOutputTokens
 		model.Temperature = &h.temperature
+		model.TopP = utils.Ptr(float32(0.7))
+		model.TopK = utils.Ptr(int32(40))
 
 		// Create chat session with history
 		cs := model.StartChat()

@@ -10,6 +10,7 @@ import (
 	"github.com/robalyx/rotector/internal/common/setup"
 	"github.com/robalyx/rotector/internal/common/storage/database/types"
 	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
+	"github.com/robalyx/rotector/internal/common/utils"
 	"github.com/tdewolff/minify/v2"
 	"github.com/tdewolff/minify/v2/json"
 	"go.uber.org/zap"
@@ -51,8 +52,8 @@ func NewFriendAnalyzer(app *setup.App, logger *zap.Logger) *FriendAnalyzer {
 	// Create friend analysis model
 	friendModel := app.GenAIClient.GenerativeModel(app.Config.Common.GeminiAI.Model)
 	friendModel.SystemInstruction = genai.NewUserContent(genai.Text(FriendSystemPrompt))
-	friendModel.GenerationConfig.ResponseMIMEType = "application/json"
-	friendModel.GenerationConfig.ResponseSchema = &genai.Schema{
+	friendModel.ResponseMIMEType = ApplicationJSON
+	friendModel.ResponseSchema = &genai.Schema{
 		Type: genai.TypeObject,
 		Properties: map[string]*genai.Schema{
 			"name": {
@@ -66,12 +67,13 @@ func NewFriendAnalyzer(app *setup.App, logger *zap.Logger) *FriendAnalyzer {
 		},
 		Required: []string{"name", "analysis"},
 	}
-	friendTemp := float32(0.2)
-	friendModel.Temperature = &friendTemp
+	friendModel.Temperature = utils.Ptr(float32(0.2))
+	friendModel.TopP = utils.Ptr(float32(0.4))
+	friendModel.TopK = utils.Ptr(int32(8))
 
 	// Create a minifier for JSON optimization
 	m := minify.New()
-	m.AddFunc("application/json", json.Minify)
+	m.AddFunc(ApplicationJSON, json.Minify)
 
 	return &FriendAnalyzer{
 		genModel: friendModel,
@@ -149,7 +151,7 @@ func (a *FriendAnalyzer) GenerateFriendReason(userInfo *fetcher.Info, confirmedF
 	}
 
 	// Minify JSON to reduce token usage
-	friendDataJSON, err = a.minify.Bytes("application/json", friendDataJSON)
+	friendDataJSON, err = a.minify.Bytes(ApplicationJSON, friendDataJSON)
 	if err != nil {
 		return "", fmt.Errorf("%w: %w", ErrJSONProcessing, err)
 	}

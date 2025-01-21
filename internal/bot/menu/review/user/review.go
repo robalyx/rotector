@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 	"time"
@@ -701,7 +702,7 @@ func (m *ReviewMenu) handleConfirmWithReasonModalSubmit(event *events.ModalSubmi
 	}
 
 	// Round confidence to 2 decimal places
-	confidence = float64(int64(confidence*100)) / 100
+	confidence = math.Round(confidence*100) / 100
 
 	// Update user's reason and confidence with the custom input
 	user := session.UserTarget.Get(s)

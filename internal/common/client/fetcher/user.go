@@ -43,18 +43,20 @@ type UserGamesFetchResult struct {
 
 // Info combines user profile data with their group memberships and friend list.
 type Info struct {
-	ID             uint64                 `json:"id"`
-	Name           string                 `json:"name"`
-	DisplayName    string                 `json:"displayName"`
-	Description    string                 `json:"description"`
-	CreatedAt      time.Time              `json:"createdAt"`
-	Groups         *UserGroupFetchResult  `json:"groupIds"`
-	Friends        *UserFriendFetchResult `json:"friends"`
-	Games          *UserGamesFetchResult  `json:"games"`
-	FollowerCount  uint64                 `json:"followerCount"`
-	FollowingCount uint64                 `json:"followingCount"`
-	LastUpdated    time.Time              `json:"lastUpdated"`
-	LastBanCheck   time.Time              `json:"lastBanCheck"`
+	ID                  uint64                 `json:"id"`
+	Name                string                 `json:"name"`
+	DisplayName         string                 `json:"displayName"`
+	Description         string                 `json:"description"`
+	CreatedAt           time.Time              `json:"createdAt"`
+	Groups              *UserGroupFetchResult  `json:"groupIds"`
+	Friends             *UserFriendFetchResult `json:"friends"`
+	Games               *UserGamesFetchResult  `json:"games"`
+	FollowerCount       uint64                 `json:"followerCount"`
+	FollowingCount      uint64                 `json:"followingCount"`
+	LastUpdated         time.Time              `json:"lastUpdated"`
+	LastBanCheck        time.Time              `json:"lastBanCheck"`
+	ThumbnailURL        string                 `json:"thumbnailUrl"`
+	LastThumbnailUpdate time.Time              `json:"lastThumbnailUpdate"`
 }
 
 // UserFetcher handles concurrent retrieval of user information from the Roblox API.
@@ -91,6 +93,9 @@ func (u *UserFetcher) FetchInfos(userIDs []uint64) []*Info {
 		wg         sync.WaitGroup
 	)
 
+	// Create a map for batch thumbnail fetching
+	userMap := make(map[uint64]*types.User)
+
 	// Process each user concurrently
 	for _, userID := range userIDs {
 		wg.Add(1)
@@ -114,6 +119,11 @@ func (u *UserFetcher) FetchInfos(userIDs []uint64) []*Info {
 			// Fetch groups, friends, and games concurrently
 			groups, friends, games := u.fetchUserData(id)
 
+			// Add user to map for thumbnail fetching
+			mu.Lock()
+			userMap[id] = &types.User{ID: id}
+			mu.Unlock()
+
 			// Add the user info to valid users
 			now := time.Now()
 			info := &Info{
@@ -136,6 +146,24 @@ func (u *UserFetcher) FetchInfos(userIDs []uint64) []*Info {
 	}
 
 	wg.Wait()
+
+	// Check if user map is empty
+	if len(userMap) == 0 {
+		return validUsers
+	}
+
+	// Fetch thumbnails for all valid users
+	if len(userMap) > 0 {
+		thumbnails := u.thumbnailFetcher.GetImageURLs(userMap)
+
+		// Add thumbnails to the corresponding user info
+		for _, info := range validUsers {
+			if thumbnailURL, ok := thumbnails[info.ID]; ok {
+				info.ThumbnailURL = thumbnailURL
+				info.LastThumbnailUpdate = time.Now()
+			}
+		}
+	}
 
 	u.logger.Debug("Finished fetching user information",
 		zap.Int("totalRequested", len(userIDs)),
@@ -231,27 +259,13 @@ func (u *UserFetcher) FetchBannedUsers(userIDs []uint64) ([]uint64, error) {
 // FetchAdditionalUserData concurrently fetches thumbnails, outfits, and follow counts for users.
 func (u *UserFetcher) FetchAdditionalUserData(users map[uint64]*types.User) map[uint64]*types.User {
 	var (
-		now = time.Now()
-		mu  sync.Mutex
-		wg  sync.WaitGroup
+		mu sync.Mutex
+		wg sync.WaitGroup
 	)
 
-	wg.Add(3)
+	wg.Add(2)
 
 	// Fetch data concurrently
-	go func() {
-		defer wg.Done()
-		images := u.thumbnailFetcher.AddImageURLs(users)
-		mu.Lock()
-		for id, url := range images {
-			if user, ok := users[id]; ok {
-				user.ThumbnailURL = url
-				user.LastThumbnailUpdate = now
-			}
-		}
-		mu.Unlock()
-	}()
-
 	go func() {
 		defer wg.Done()
 		outfits := u.outfitFetcher.AddOutfits(users)

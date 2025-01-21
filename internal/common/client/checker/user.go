@@ -20,6 +20,7 @@ type UserChecker struct {
 	db            *database.Client
 	userFetcher   *fetcher.UserFetcher
 	userAnalyzer  *ai.UserAnalyzer
+	imageAnalyzer *ai.ImageAnalyzer
 	groupChecker  *GroupChecker
 	friendChecker *FriendChecker
 	logger        *zap.Logger
@@ -29,12 +30,14 @@ type UserChecker struct {
 func NewUserChecker(app *setup.App, userFetcher *fetcher.UserFetcher, logger *zap.Logger) *UserChecker {
 	translator := translator.New(app.RoAPI.GetClient())
 	userAnalyzer := ai.NewUserAnalyzer(app, translator, logger)
+	imageAnalyzer := ai.NewImageAnalyzer(app, logger)
 
 	return &UserChecker{
-		app:          app,
-		db:           app.DB,
-		userFetcher:  userFetcher,
-		userAnalyzer: userAnalyzer,
+		app:           app,
+		db:            app.DB,
+		userFetcher:   userFetcher,
+		userAnalyzer:  userAnalyzer,
+		imageAnalyzer: imageAnalyzer,
 		groupChecker: NewGroupChecker(app.DB, logger,
 			app.Config.Worker.ThresholdLimits.MaxGroupMembersTrack,
 			app.Config.Worker.ThresholdLimits.MinFlaggedOverride,
@@ -78,6 +81,22 @@ func (c *UserChecker) ProcessUsers(userInfos []*fetcher.Info) []uint64 {
 				flaggedUsers[userID] = aiUser
 			}
 		}
+	}
+
+	// Process image analysis results
+	flaggedByImage, imageFailedIDs, err := c.imageAnalyzer.ProcessImages(userInfos)
+	if err == nil {
+		for userID, imageUser := range flaggedByImage {
+			if existingUser, ok := flaggedUsers[userID]; ok {
+				// Combine reasons and update confidence
+				existingUser.Reason = fmt.Sprintf("%s\n\n%s", existingUser.Reason, imageUser.Reason)
+				existingUser.Confidence = 1.0
+			} else {
+				flaggedUsers[userID] = imageUser
+			}
+		}
+		// Add image analysis failures to retry list
+		failedIDs = append(failedIDs, imageFailedIDs...)
 	}
 
 	// Stop if no users were flagged

@@ -177,20 +177,22 @@ func (c *FriendChecker) processUserFriends(userInfo *fetcher.Info, existingFrien
 		}
 
 		user := &types.User{
-			ID:             userInfo.ID,
-			Name:           userInfo.Name,
-			DisplayName:    userInfo.DisplayName,
-			Description:    userInfo.Description,
-			CreatedAt:      userInfo.CreatedAt,
-			Reason:         "Friend Analysis: " + reason,
-			Groups:         userInfo.Groups.Data,
-			Friends:        userInfo.Friends.Data,
-			Games:          userInfo.Games.Data,
-			FollowerCount:  userInfo.FollowerCount,
-			FollowingCount: userInfo.FollowingCount,
-			Confidence:     math.Round(confidence*100) / 100, // Round to 2 decimal places
-			LastUpdated:    userInfo.LastUpdated,
-			LastBanCheck:   userInfo.LastBanCheck,
+			ID:                  userInfo.ID,
+			Name:                userInfo.Name,
+			DisplayName:         userInfo.DisplayName,
+			Description:         userInfo.Description,
+			CreatedAt:           userInfo.CreatedAt,
+			Reason:              "Friend Analysis: " + reason,
+			Groups:              userInfo.Groups.Data,
+			Friends:             userInfo.Friends.Data,
+			Games:               userInfo.Games.Data,
+			FollowerCount:       userInfo.FollowerCount,
+			FollowingCount:      userInfo.FollowingCount,
+			Confidence:          math.Round(confidence*100) / 100, // Round to 2 decimal places
+			LastUpdated:         userInfo.LastUpdated,
+			LastBanCheck:        userInfo.LastBanCheck,
+			ThumbnailURL:        userInfo.ThumbnailURL,
+			LastThumbnailUpdate: userInfo.LastThumbnailUpdate,
 		}
 
 		c.logger.Info("User automatically flagged",

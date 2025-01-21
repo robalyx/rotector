@@ -8,6 +8,13 @@ import (
 	"github.com/cenkalti/backoff/v4"
 )
 
+const (
+	// ApplicationJSON is the MIME type for JSON content.
+	ApplicationJSON = "application/json"
+	// TextPlain is the MIME type for plain text content.
+	TextPlain = "text/plain"
+)
+
 // Package-level errors.
 var (
 	// ErrModelResponse indicates the model returned no usable response.
