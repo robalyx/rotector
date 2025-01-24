@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/jaxron/roapi.go/pkg/api"
+	"github.com/jaxron/roapi.go/pkg/api/middleware/auth"
 	"github.com/jaxron/roapi.go/pkg/api/resources/games"
 	"github.com/jaxron/roapi.go/pkg/api/types"
 	"go.uber.org/zap"
@@ -29,7 +30,9 @@ func NewGameFetcher(roAPI *api.API, logger *zap.Logger) *GameFetcher {
 }
 
 // FetchGamesForUser retrieves all games for a single user.
-func (g *GameFetcher) FetchGamesForUser(userID uint64) ([]*types.Game, error) {
+func (g *GameFetcher) FetchGamesForUser(ctx context.Context, userID uint64) ([]*types.Game, error) {
+	ctx = context.WithValue(ctx, auth.KeyAddCookie, true)
+
 	var (
 		allGames = make([]*types.Game, 0, 50)
 		cursor   string
@@ -47,7 +50,7 @@ func (g *GameFetcher) FetchGamesForUser(userID uint64) ([]*types.Game, error) {
 		}
 
 		// Fetch page of games
-		response, err := g.roAPI.Games().GetUserGames(context.Background(), builder.Build())
+		response, err := g.roAPI.Games().GetUserGames(ctx, builder.Build())
 		if err != nil {
 			return nil, err
 		}

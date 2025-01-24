@@ -28,10 +28,10 @@ You will receive a list of user profiles in JSON format. Each profile contains:
 - Profile description/bio
 
 Analyze each profile and identify users engaging in inappropriate behavior. For each profile, return:
-- The exact username
-- Clear explanation of violations found. Use exactly "NO_VIOLATIONS" if no clear concerns found
-- Exact quotes of the concerning content
-- Confidence level (0.0-1.0) based on severity
+- username: The exact username provided
+- reason: Clear explanation of violations found in one sentence. Use exactly "NO_VIOLATIONS" if no clear concerns found
+- flaggedContent: Exact quotes of the concerning content
+- confidence: Level (0.0-1.0) based on severity
   * Use 0.0 for profiles with no clear violations
   * Use 0.1-1.0 ONLY for profiles with concerning elements
 
@@ -42,8 +42,6 @@ Confidence Level Guide:
 - 0.7-0.8: Strong indicators of predatory behavior
 - 0.9-1.0: Explicit predatory intent or grooming attempts
 
-Flag explicit or subtle violations and predatory patterns
-Keep reasons concise and within 1 sentence
 Do NOT include usernames in your reason
 Do NOT add users with no violations to the response
 Do NOT repeat the same content in flaggedContent array
@@ -342,6 +340,7 @@ func (a *UserAnalyzer) validateFlaggedUsers(flaggedUsers *FlaggedUsers, translat
 				Groups:              originalInfo.Groups.Data,
 				Friends:             originalInfo.Friends.Data,
 				Games:               originalInfo.Games.Data,
+				Outfits:             originalInfo.Outfits.Data,
 				FollowerCount:       originalInfo.FollowerCount,
 				FollowingCount:      originalInfo.FollowingCount,
 				FlaggedContent:      flaggedUser.FlaggedContent,

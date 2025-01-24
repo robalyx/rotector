@@ -78,12 +78,12 @@ func main() {
 
 		// User related keys
 		{Name: "UserTarget", Type: "*types.ReviewUser", Doc: "UserTarget stores the currently selected user"},
-		{Name: "UserFriends", Type: "[]*types.ExtendedFriend", Doc: "UserFriends stores the user's friend list"},
+		{Name: "UserFriends", Type: "[]*apiTypes.ExtendedFriend", Doc: "UserFriends stores the user's friend list"},
 		{Name: "UserPresences", Type: "map[uint64]*apiTypes.UserPresenceResponse", Doc: "UserPresences stores friend presence information"},
 		{Name: "UserFlaggedFriends", Type: "map[uint64]*types.ReviewUser", Doc: "UserFlaggedFriends stores flagged friends"},
 		{Name: "UserGroups", Type: "[]*apiTypes.UserGroupRoles", Doc: "UserGroups stores the list of groups"},
 		{Name: "UserFlaggedGroups", Type: "map[uint64]*types.ReviewGroup", Doc: "UserFlaggedGroups stores flagged groups"},
-		{Name: "UserOutfits", Type: "[]apiTypes.Outfit", Doc: "UserOutfits stores user outfits"},
+		{Name: "UserOutfits", Type: "[]*apiTypes.Outfit", Doc: "UserOutfits stores user outfits"},
 
 		// Group related keys
 		{Name: "GroupTarget", Type: "*types.ReviewGroup", Doc: "GroupTarget stores the currently selected group"},

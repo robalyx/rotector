@@ -101,7 +101,7 @@ func (f *FriendWorker) Start() {
 		// Step 2: Fetch user info (40%)
 		f.bar.SetStepMessage("Fetching user info", 40)
 		f.reporter.UpdateStatus("Fetching user info", 40)
-		userInfos := f.userFetcher.FetchInfos(friendIDs[:f.batchSize])
+		userInfos := f.userFetcher.FetchInfos(context.Background(), friendIDs[:f.batchSize])
 
 		// Step 3: Process users (60%)
 		f.bar.SetStepMessage("Processing users", 60)
@@ -142,7 +142,7 @@ func (f *FriendWorker) processFriendsBatch(friendIDs []uint64) ([]uint64, error)
 		}
 
 		// Fetch friends for the user
-		userFriendIDs, err := f.friendFetcher.GetFriends(context.Background(), user.ID)
+		userFriendIDs, err := f.friendFetcher.GetFriendIDs(context.Background(), user.ID)
 		if err != nil {
 			f.logger.Error("Error fetching friends", zap.Error(err), zap.Uint64("userID", user.ID))
 			continue

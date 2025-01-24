@@ -70,14 +70,13 @@ func UserGroups(groups []*apiTypes.UserGroupRoles) []*proto.UserGroup {
 }
 
 // Friends converts a slice of database extended friends to RPC API friends.
-func Friends(friends []*types.ExtendedFriend) []*proto.Friend {
+func Friends(friends []*apiTypes.ExtendedFriend) []*proto.Friend {
 	result := make([]*proto.Friend, len(friends))
 	for i, f := range friends {
 		result[i] = &proto.Friend{
-			Id:               f.ID,
-			Name:             f.Name,
-			DisplayName:      f.DisplayName,
-			HasVerifiedBadge: f.HasVerifiedBadge,
+			Id:          f.ID,
+			Name:        f.Name,
+			DisplayName: f.DisplayName,
 		}
 	}
 	return result

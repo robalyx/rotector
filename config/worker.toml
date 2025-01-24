@@ -23,6 +23,11 @@ thumbnail_users = 100
 # Number of groups to update thumbnails in one batch 
 thumbnail_groups = 100
 
+# Maximum concurrent image downloads for profile images
+image_downloads = 50
+# Maximum concurrent outfit downloads per worker
+outfit_downloads = 50
+
 [worker.threshold_limits]
 # Maximum number of flagged users before stopping worker
 flagged_users = 100000

@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	"github.com/jaxron/roapi.go/pkg/api"
+	"github.com/jaxron/roapi.go/pkg/api/middleware/auth"
 	"github.com/robalyx/rotector/internal/common/storage/database/types"
 	"go.uber.org/zap"
 )
@@ -32,12 +33,13 @@ func NewFollowFetcher(roAPI *api.API, logger *zap.Logger) *FollowFetcher {
 	}
 }
 
-// AddFollowCounts fetches follow counts and returns a map of results.
-func (f *FollowFetcher) AddFollowCounts(users map[uint64]*types.User) map[uint64]*FollowFetchResult {
+// AddFollowCounts fetches follow counts to a map of users.
+func (f *FollowFetcher) AddFollowCounts(ctx context.Context, users map[uint64]*types.User) {
+	ctx = context.WithValue(ctx, auth.KeyAddCookie, true)
+
 	var (
-		results = make(map[uint64]*FollowFetchResult, len(users))
-		wg      sync.WaitGroup
-		mu      sync.Mutex
+		wg sync.WaitGroup
+		mu sync.Mutex
 	)
 
 	// Process each user concurrently
@@ -47,8 +49,8 @@ func (f *FollowFetcher) AddFollowCounts(users map[uint64]*types.User) map[uint64
 			defer wg.Done()
 
 			// Get follower and following counts
-			followerCount, followerErr := f.roAPI.Friends().GetFollowerCount(context.Background(), u.ID)
-			followingCount, followingErr := f.roAPI.Friends().GetFollowingCount(context.Background(), u.ID)
+			followerCount, followerErr := f.roAPI.Friends().GetFollowerCount(ctx, u.ID)
+			followingCount, followingErr := f.roAPI.Friends().GetFollowingCount(ctx, u.ID)
 
 			err := errors.Join(followerErr, followingErr)
 			if err != nil {
@@ -59,11 +61,8 @@ func (f *FollowFetcher) AddFollowCounts(users map[uint64]*types.User) map[uint64
 			}
 
 			mu.Lock()
-			results[u.ID] = &FollowFetchResult{
-				ID:             u.ID,
-				FollowerCount:  followerCount,
-				FollowingCount: followingCount,
-			}
+			users[u.ID].FollowerCount = followerCount
+			users[u.ID].FollowingCount = followingCount
 			mu.Unlock()
 		}(user)
 	}
@@ -71,8 +70,5 @@ func (f *FollowFetcher) AddFollowCounts(users map[uint64]*types.User) map[uint64
 	wg.Wait()
 
 	f.logger.Debug("Finished fetching follow counts",
-		zap.Int("totalUsers", len(users)),
-		zap.Int("successfulFetches", len(results)))
-
-	return results
+		zap.Int("totalUsers", len(users)))
 }

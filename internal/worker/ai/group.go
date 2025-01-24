@@ -110,7 +110,7 @@ func (g *GroupWorker) Start() {
 		// Step 3: Fetch user info (70%)
 		g.bar.SetStepMessage("Fetching user info", 70)
 		g.reporter.UpdateStatus("Fetching user info", 70)
-		userInfos := g.userFetcher.FetchInfos(userIDs[:g.batchSize])
+		userInfos := g.userFetcher.FetchInfos(context.Background(), userIDs[:g.batchSize])
 
 		// Step 4: Process users (90%)
 		g.bar.SetStepMessage("Processing users", 90)

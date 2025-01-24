@@ -31,7 +31,7 @@ type UserGroupFetchResult struct {
 
 // UserFriendFetchResult contains the result of fetching a user's friends.
 type UserFriendFetchResult struct {
-	Data  []*types.ExtendedFriend
+	Data  []*apiTypes.ExtendedFriend
 	Error error
 }
 
@@ -41,22 +41,29 @@ type UserGamesFetchResult struct {
 	Error error
 }
 
+// UserOutfitsFetchResult contains the result of fetching a user's outfits.
+type UserOutfitsFetchResult struct {
+	Data  []*apiTypes.Outfit
+	Error error
+}
+
 // Info combines user profile data with their group memberships and friend list.
 type Info struct {
-	ID                  uint64                 `json:"id"`
-	Name                string                 `json:"name"`
-	DisplayName         string                 `json:"displayName"`
-	Description         string                 `json:"description"`
-	CreatedAt           time.Time              `json:"createdAt"`
-	Groups              *UserGroupFetchResult  `json:"groupIds"`
-	Friends             *UserFriendFetchResult `json:"friends"`
-	Games               *UserGamesFetchResult  `json:"games"`
-	FollowerCount       uint64                 `json:"followerCount"`
-	FollowingCount      uint64                 `json:"followingCount"`
-	LastUpdated         time.Time              `json:"lastUpdated"`
-	LastBanCheck        time.Time              `json:"lastBanCheck"`
-	ThumbnailURL        string                 `json:"thumbnailUrl"`
-	LastThumbnailUpdate time.Time              `json:"lastThumbnailUpdate"`
+	ID                  uint64                  `json:"id"`
+	Name                string                  `json:"name"`
+	DisplayName         string                  `json:"displayName"`
+	Description         string                  `json:"description"`
+	CreatedAt           time.Time               `json:"createdAt"`
+	Groups              *UserGroupFetchResult   `json:"groupIds"`
+	Friends             *UserFriendFetchResult  `json:"friends"`
+	Games               *UserGamesFetchResult   `json:"games"`
+	Outfits             *UserOutfitsFetchResult `json:"outfits"`
+	FollowerCount       uint64                  `json:"followerCount"`
+	FollowingCount      uint64                  `json:"followingCount"`
+	LastUpdated         time.Time               `json:"lastUpdated"`
+	LastBanCheck        time.Time               `json:"lastBanCheck"`
+	ThumbnailURL        string                  `json:"thumbnailUrl"`
+	LastThumbnailUpdate time.Time               `json:"lastThumbnailUpdate"`
 }
 
 // UserFetcher handles concurrent retrieval of user information from the Roblox API.
@@ -68,7 +75,6 @@ type UserFetcher struct {
 	friendFetcher    *FriendFetcher
 	outfitFetcher    *OutfitFetcher
 	thumbnailFetcher *ThumbnailFetcher
-	followFetcher    *FollowFetcher
 }
 
 // NewUserFetcher creates a UserFetcher with the provided API client and logger.
@@ -81,12 +87,11 @@ func NewUserFetcher(app *setup.App, logger *zap.Logger) *UserFetcher {
 		friendFetcher:    NewFriendFetcher(app.RoAPI, logger),
 		outfitFetcher:    NewOutfitFetcher(app.RoAPI, logger),
 		thumbnailFetcher: NewThumbnailFetcher(app.RoAPI, logger),
-		followFetcher:    NewFollowFetcher(app.RoAPI, logger),
 	}
 }
 
 // FetchInfos retrieves complete user information for a batch of user IDs.
-func (u *UserFetcher) FetchInfos(userIDs []uint64) []*Info {
+func (u *UserFetcher) FetchInfos(ctx context.Context, userIDs []uint64) []*Info {
 	var (
 		validUsers = make([]*Info, 0, len(userIDs))
 		mu         sync.Mutex
@@ -103,7 +108,7 @@ func (u *UserFetcher) FetchInfos(userIDs []uint64) []*Info {
 			defer wg.Done()
 
 			// Fetch the user info
-			userInfo, err := u.roAPI.Users().GetUserByID(context.Background(), id)
+			userInfo, err := u.roAPI.Users().GetUserByID(ctx, id)
 			if err != nil {
 				u.logger.Error("Error fetching user info",
 					zap.Uint64("userID", id),
@@ -116,8 +121,8 @@ func (u *UserFetcher) FetchInfos(userIDs []uint64) []*Info {
 				return
 			}
 
-			// Fetch groups, friends, and games concurrently
-			groups, friends, games := u.fetchUserData(id)
+			// Fetch groups, friends, games, and outfits concurrently
+			groups, friends, games, outfits := u.fetchUserData(ctx, id)
 
 			// Add user to map for thumbnail fetching
 			mu.Lock()
@@ -135,6 +140,7 @@ func (u *UserFetcher) FetchInfos(userIDs []uint64) []*Info {
 				Groups:       groups,
 				Friends:      friends,
 				Games:        games,
+				Outfits:      outfits,
 				LastUpdated:  now,
 				LastBanCheck: now,
 			}
@@ -154,7 +160,7 @@ func (u *UserFetcher) FetchInfos(userIDs []uint64) []*Info {
 
 	// Fetch thumbnails for all valid users
 	if len(userMap) > 0 {
-		thumbnails := u.thumbnailFetcher.GetImageURLs(userMap)
+		thumbnails := u.thumbnailFetcher.GetImageURLs(ctx, userMap)
 
 		// Add thumbnails to the corresponding user info
 		for _, info := range validUsers {
@@ -173,20 +179,21 @@ func (u *UserFetcher) FetchInfos(userIDs []uint64) []*Info {
 }
 
 // fetchUserData retrieves a user's group memberships, friend list, and games concurrently.
-func (u *UserFetcher) fetchUserData(userID uint64) (*UserGroupFetchResult, *UserFriendFetchResult, *UserGamesFetchResult) {
+func (u *UserFetcher) fetchUserData(ctx context.Context, userID uint64) (*UserGroupFetchResult, *UserFriendFetchResult, *UserGamesFetchResult, *UserOutfitsFetchResult) {
 	var (
 		groupResult  *UserGroupFetchResult
 		friendResult *UserFriendFetchResult
 		gameResult   *UserGamesFetchResult
+		outfitResult *UserOutfitsFetchResult
 		wg           sync.WaitGroup
 	)
 
-	wg.Add(3)
+	wg.Add(4)
 
 	// Fetch user's groups
 	go func() {
 		defer wg.Done()
-		groups, err := u.groupFetcher.GetUserGroups(context.Background(), userID)
+		groups, err := u.groupFetcher.GetUserGroups(ctx, userID)
 		groupResult = &UserGroupFetchResult{
 			Data:  groups,
 			Error: err,
@@ -196,9 +203,9 @@ func (u *UserFetcher) fetchUserData(userID uint64) (*UserGroupFetchResult, *User
 	// Fetch user's friends
 	go func() {
 		defer wg.Done()
-		fetchedFriends, err := u.friendFetcher.GetFriendsWithDetails(context.Background(), userID)
+		friends, err := u.friendFetcher.GetFriends(ctx, userID)
 		friendResult = &UserFriendFetchResult{
-			Data:  fetchedFriends,
+			Data:  friends,
 			Error: err,
 		}
 	}()
@@ -206,15 +213,36 @@ func (u *UserFetcher) fetchUserData(userID uint64) (*UserGroupFetchResult, *User
 	// Fetch user's games
 	go func() {
 		defer wg.Done()
-		games, err := u.gameFetcher.FetchGamesForUser(userID)
+		games, err := u.gameFetcher.FetchGamesForUser(ctx, userID)
 		gameResult = &UserGamesFetchResult{
 			Data:  games,
 			Error: err,
 		}
 	}()
 
+	// Fetch user's outfits
+	go func() {
+		defer wg.Done()
+		outfits, err := u.outfitFetcher.GetOutfits(ctx, userID)
+		if err != nil {
+			outfitResult = &UserOutfitsFetchResult{Error: err}
+			return
+		}
+
+		// Convert outfits to slice of pointers
+		outfitSlice := make([]*apiTypes.Outfit, 0, len(outfits.Data))
+		for _, outfit := range outfits.Data {
+			outfitSlice = append(outfitSlice, &outfit)
+		}
+
+		outfitResult = &UserOutfitsFetchResult{
+			Data:  outfitSlice,
+			Error: err,
+		}
+	}()
+
 	wg.Wait()
-	return groupResult, friendResult, gameResult
+	return groupResult, friendResult, gameResult, outfitResult
 }
 
 // FetchBannedUsers checks which users from a batch of IDs are currently banned.
@@ -233,7 +261,7 @@ func (u *UserFetcher) FetchBannedUsers(userIDs []uint64) ([]uint64, error) {
 
 			userInfo, err := u.roAPI.Users().GetUserByID(context.Background(), id)
 			if err != nil {
-				u.logger.Warn("Error fetching user info",
+				u.logger.Error("Error fetching user info",
 					zap.Uint64("userID", id),
 					zap.Error(err))
 				return
@@ -254,48 +282,4 @@ func (u *UserFetcher) FetchBannedUsers(userIDs []uint64) ([]uint64, error) {
 		zap.Int("bannedUsers", len(results)))
 
 	return results, nil
-}
-
-// FetchAdditionalUserData concurrently fetches thumbnails, outfits, and follow counts for users.
-func (u *UserFetcher) FetchAdditionalUserData(users map[uint64]*types.User) map[uint64]*types.User {
-	var (
-		mu sync.Mutex
-		wg sync.WaitGroup
-	)
-
-	wg.Add(2)
-
-	// Fetch data concurrently
-	go func() {
-		defer wg.Done()
-		outfits := u.outfitFetcher.AddOutfits(users)
-		mu.Lock()
-		for id, result := range outfits {
-			if result.Error == nil {
-				if user, ok := users[id]; ok {
-					user.Outfits = result.Outfits.Data
-				}
-			}
-		}
-		mu.Unlock()
-	}()
-
-	go func() {
-		defer wg.Done()
-		follows := u.followFetcher.AddFollowCounts(users)
-		mu.Lock()
-		for id, result := range follows {
-			if result.Error == nil {
-				if user, ok := users[id]; ok {
-					user.FollowerCount = result.FollowerCount
-					user.FollowingCount = result.FollowingCount
-				}
-			}
-		}
-		mu.Unlock()
-	}()
-
-	wg.Wait()
-
-	return users
 }

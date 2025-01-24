@@ -5,6 +5,7 @@ import (
 	"sync"
 
 	"github.com/jaxron/roapi.go/pkg/api"
+	"github.com/jaxron/roapi.go/pkg/api/middleware/auth"
 	"github.com/jaxron/roapi.go/pkg/api/resources/presence"
 	"github.com/jaxron/roapi.go/pkg/api/types"
 	"go.uber.org/zap"
@@ -31,7 +32,9 @@ func NewPresenceFetcher(roAPI *api.API, logger *zap.Logger) *PresenceFetcher {
 }
 
 // FetchPresences retrieves presence information for a batch of user IDs.
-func (p *PresenceFetcher) FetchPresences(userIDs []uint64) []*types.UserPresenceResponse {
+func (p *PresenceFetcher) FetchPresences(ctx context.Context, userIDs []uint64) []*types.UserPresenceResponse {
+	ctx = context.WithValue(ctx, auth.KeyAddCookie, true)
+
 	var (
 		allPresences = make([]*types.UserPresenceResponse, 0, len(userIDs))
 		mu           sync.Mutex
@@ -46,7 +49,7 @@ func (p *PresenceFetcher) FetchPresences(userIDs []uint64) []*types.UserPresence
 
 			// Fetch presences for the batch
 			params := presence.NewUserPresencesBuilder(userIDs[start:end]...).Build()
-			presences, err := p.roAPI.Presence().GetUserPresences(context.Background(), params)
+			presences, err := p.roAPI.Presence().GetUserPresences(ctx, params)
 			if err != nil {
 				p.logger.Error("Error fetching user presences",
 					zap.Error(err),

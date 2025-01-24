@@ -164,7 +164,7 @@ func (m *MembersMenu) fetchMemberThumbnails(members []uint64) []string {
 	}
 
 	// Process thumbnails
-	thumbnailMap := m.layout.thumbnailFetcher.ProcessBatchThumbnails(requests)
+	thumbnailMap := m.layout.thumbnailFetcher.ProcessBatchThumbnails(context.Background(), requests)
 
 	// Convert map to ordered slice of URLs
 	thumbnailURLs := make([]string, len(members))
@@ -182,7 +182,7 @@ func (m *MembersMenu) fetchPresences(members []uint64) map[uint64]*apiTypes.User
 	presenceMap := make(map[uint64]*apiTypes.UserPresenceResponse)
 
 	// Fetch and map presences
-	presences := m.layout.presenceFetcher.FetchPresences(members)
+	presences := m.layout.presenceFetcher.FetchPresences(context.Background(), members)
 	for _, presence := range presences {
 		presenceMap[presence.UserID] = presence
 	}

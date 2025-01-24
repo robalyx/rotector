@@ -28,45 +28,36 @@ local start_index = tonumber(redis.call('GET', last_success_key) or redis.call('
 
 -- Get the next proxy index after the last successful one
 local next_index = (start_index + 1) % proxy_count
+local initial_index = next_index
 
--- Keep trying proxies until we find a healthy one or run out of options
-local tries = proxy_count
-while tries > 0 and not is_proxy_healthy(next_index) do
+repeat
+    if is_proxy_healthy(next_index) then
+        break
+    end
     next_index = (next_index + 1) % proxy_count
-    tries = tries - 1
-end
+until next_index == initial_index
 
--- Special case: If all proxies are unhealthy, return error
-if tries == 0 then
+-- If we've checked all proxies and none are healthy
+if next_index == initial_index and not is_proxy_healthy(next_index) then
     return {-1, 0}
 end
 
 -- Generate endpoint key for the selected proxy
 local endpoint_key = string.format("proxy_endpoints:%s:%d", proxy_hash, next_index)
 
--- Check if this endpoint was recently used by this proxy
-local endpoints = redis.call('ZRANGE', endpoint_key, 0, -1, 'WITHSCORES')
-
--- Find the most recent usage of this endpoint
-local last_used = nil
-for i = 1, #endpoints, 2 do
-    local ep = endpoints[i]
-    local ts = tonumber(endpoints[i + 1])
-    if ep == endpoint then
-        last_used = ts
-        break
+-- If endpoint was used and still in cooldown, return index and ready timestamp
+local last_used = redis.call('ZSCORE', endpoint_key, endpoint)
+if last_used then
+    last_used = tonumber(last_used)
+    if (timestamp - last_used) < cooldown then
+        local next_available = last_used + cooldown
+        update_proxy_state(next_index, endpoint_key, next_available)
+        return {next_index, next_available}
     end
-end
-
--- If endpoint was used and still in cooldown, return index and wait time
-if last_used and (timestamp - last_used) < cooldown then
-    local wait_time = cooldown - (timestamp - last_used)
-    update_proxy_state(next_index, endpoint_key, timestamp + wait_time)
-    return {next_index, wait_time}
 end
 
 -- Update state for immediate use
 update_proxy_state(next_index, endpoint_key, timestamp)
 
 -- Return the index of the available proxy with no wait time
-return {next_index, 0}
+return {next_index, timestamp}

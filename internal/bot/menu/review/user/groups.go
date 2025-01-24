@@ -2,6 +2,7 @@ package user
 
 import (
 	"bytes"
+	"context"
 	"strconv"
 
 	"github.com/disgoorg/disgo/discord"
@@ -148,7 +149,7 @@ func (m *GroupsMenu) fetchGroupThumbnails(groups []*apiTypes.UserGroupRoles) []s
 	}
 
 	// Process thumbnails
-	thumbnailMap := m.layout.thumbnailFetcher.ProcessBatchThumbnails(requests)
+	thumbnailMap := m.layout.thumbnailFetcher.ProcessBatchThumbnails(context.Background(), requests)
 
 	// Convert map to ordered slice of URLs
 	thumbnailURLs := make([]string, len(groups))

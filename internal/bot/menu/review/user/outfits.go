@@ -2,6 +2,7 @@ package user
 
 import (
 	"bytes"
+	"context"
 	"strconv"
 
 	"github.com/disgoorg/disgo/discord"
@@ -99,7 +100,7 @@ func (m *OutfitsMenu) handlePageNavigation(event *events.ComponentInteractionCre
 }
 
 // fetchOutfitThumbnails gets the thumbnail URLs for a list of outfits.
-func (m *OutfitsMenu) fetchOutfitThumbnails(outfits []apiTypes.Outfit) []string {
+func (m *OutfitsMenu) fetchOutfitThumbnails(outfits []*apiTypes.Outfit) []string {
 	// Create batch request for outfit thumbnails
 	requests := thumbnails.NewBatchThumbnailsBuilder()
 	for _, outfit := range outfits {
@@ -113,7 +114,7 @@ func (m *OutfitsMenu) fetchOutfitThumbnails(outfits []apiTypes.Outfit) []string 
 	}
 
 	// Process thumbnails
-	thumbnailMap := m.layout.thumbnailFetcher.ProcessBatchThumbnails(requests)
+	thumbnailMap := m.layout.thumbnailFetcher.ProcessBatchThumbnails(context.Background(), requests)
 
 	// Convert map to ordered slice of URLs
 	thumbnailURLs := make([]string, len(outfits))

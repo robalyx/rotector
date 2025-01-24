@@ -2,6 +2,7 @@ package user
 
 import (
 	"bytes"
+	"context"
 	"strconv"
 
 	"github.com/disgoorg/disgo/discord"
@@ -110,9 +111,9 @@ func (m *FriendsMenu) handlePageNavigation(event *events.ComponentInteractionCre
 }
 
 // sortFriendsByStatus sorts friends into categories based on their status.
-func (m *FriendsMenu) sortFriendsByStatus(friends []*types.ExtendedFriend, flaggedFriends map[uint64]*types.ReviewUser) []*types.ExtendedFriend {
+func (m *FriendsMenu) sortFriendsByStatus(friends []*apiTypes.ExtendedFriend, flaggedFriends map[uint64]*types.ReviewUser) []*apiTypes.ExtendedFriend {
 	// Group friends by their status
-	groupedFriends := make(map[enum.UserType][]*types.ExtendedFriend)
+	groupedFriends := make(map[enum.UserType][]*apiTypes.ExtendedFriend)
 	for _, friend := range friends {
 		status := enum.UserTypeUnflagged
 		if reviewUser, exists := flaggedFriends[friend.ID]; exists {
@@ -130,7 +131,7 @@ func (m *FriendsMenu) sortFriendsByStatus(friends []*types.ExtendedFriend, flagg
 	}
 
 	// Combine friends in priority order
-	sortedFriends := make([]*types.ExtendedFriend, 0, len(friends))
+	sortedFriends := make([]*apiTypes.ExtendedFriend, 0, len(friends))
 	for _, status := range statusOrder {
 		sortedFriends = append(sortedFriends, groupedFriends[status]...)
 	}
@@ -139,7 +140,7 @@ func (m *FriendsMenu) sortFriendsByStatus(friends []*types.ExtendedFriend, flagg
 }
 
 // fetchPresences handles concurrent fetching of presence information.
-func (m *FriendsMenu) fetchPresences(allFriends []*types.ExtendedFriend) map[uint64]*apiTypes.UserPresenceResponse {
+func (m *FriendsMenu) fetchPresences(allFriends []*apiTypes.ExtendedFriend) map[uint64]*apiTypes.UserPresenceResponse {
 	presenceMap := make(map[uint64]*apiTypes.UserPresenceResponse)
 
 	// Extract friend IDs
@@ -149,7 +150,7 @@ func (m *FriendsMenu) fetchPresences(allFriends []*types.ExtendedFriend) map[uin
 	}
 
 	// Fetch and map presences
-	presences := m.layout.presenceFetcher.FetchPresences(friendIDs)
+	presences := m.layout.presenceFetcher.FetchPresences(context.Background(), friendIDs)
 	for _, presence := range presences {
 		presenceMap[presence.UserID] = presence
 	}
@@ -158,7 +159,7 @@ func (m *FriendsMenu) fetchPresences(allFriends []*types.ExtendedFriend) map[uin
 }
 
 // fetchFriendThumbnails fetches thumbnails for a slice of friends.
-func (m *FriendsMenu) fetchFriendThumbnails(friends []*types.ExtendedFriend) []string {
+func (m *FriendsMenu) fetchFriendThumbnails(friends []*apiTypes.ExtendedFriend) []string {
 	// Create batch request for friend avatars
 	requests := thumbnails.NewBatchThumbnailsBuilder()
 	for _, friend := range friends {
@@ -172,7 +173,7 @@ func (m *FriendsMenu) fetchFriendThumbnails(friends []*types.ExtendedFriend) []s
 	}
 
 	// Process thumbnails
-	thumbnailMap := m.layout.thumbnailFetcher.ProcessBatchThumbnails(requests)
+	thumbnailMap := m.layout.thumbnailFetcher.ProcessBatchThumbnails(context.Background(), requests)
 
 	// Convert map to ordered slice of URLs
 	thumbnailURLs := make([]string, len(friends))

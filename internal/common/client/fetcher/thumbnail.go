@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/jaxron/roapi.go/pkg/api"
+	"github.com/jaxron/roapi.go/pkg/api/middleware/auth"
 	"github.com/jaxron/roapi.go/pkg/api/resources/thumbnails"
 	apiTypes "github.com/jaxron/roapi.go/pkg/api/types"
 	"github.com/robalyx/rotector/internal/common/storage/database/types"
@@ -30,7 +31,7 @@ func NewThumbnailFetcher(roAPI *api.API, logger *zap.Logger) *ThumbnailFetcher {
 }
 
 // GetImageURLs fetches thumbnails for a batch of users and returns a map of results.
-func (t *ThumbnailFetcher) GetImageURLs(users map[uint64]*types.User) map[uint64]string {
+func (t *ThumbnailFetcher) GetImageURLs(ctx context.Context, users map[uint64]*types.User) map[uint64]string {
 	// Create batch request for headshots
 	requests := thumbnails.NewBatchThumbnailsBuilder()
 	for _, user := range users {
@@ -39,12 +40,12 @@ func (t *ThumbnailFetcher) GetImageURLs(users map[uint64]*types.User) map[uint64
 			TargetID:  user.ID,
 			RequestID: strconv.FormatUint(user.ID, 10),
 			Size:      apiTypes.Size420x420,
-			Format:    apiTypes.PNG,
+			Format:    apiTypes.WEBP,
 		})
 	}
 
 	// Process thumbnails
-	results := t.ProcessBatchThumbnails(requests)
+	results := t.ProcessBatchThumbnails(ctx, requests)
 
 	t.logger.Debug("Finished fetching user thumbnails",
 		zap.Int("totalUsers", len(users)),
@@ -54,7 +55,7 @@ func (t *ThumbnailFetcher) GetImageURLs(users map[uint64]*types.User) map[uint64
 }
 
 // AddGroupImageURLs fetches thumbnails for groups and adds them to the group records.
-func (t *ThumbnailFetcher) AddGroupImageURLs(groups map[uint64]*types.Group) map[uint64]*types.Group {
+func (t *ThumbnailFetcher) AddGroupImageURLs(ctx context.Context, groups map[uint64]*types.Group) map[uint64]*types.Group {
 	// Create batch request for group icons
 	requests := thumbnails.NewBatchThumbnailsBuilder()
 	for _, group := range groups {
@@ -63,12 +64,12 @@ func (t *ThumbnailFetcher) AddGroupImageURLs(groups map[uint64]*types.Group) map
 			TargetID:  group.ID,
 			RequestID: strconv.FormatUint(group.ID, 10),
 			Size:      apiTypes.Size420x420,
-			Format:    apiTypes.PNG,
+			Format:    apiTypes.WEBP,
 		})
 	}
 
 	// Process thumbnails
-	results := t.ProcessBatchThumbnails(requests)
+	results := t.ProcessBatchThumbnails(ctx, requests)
 
 	// Add thumbnail URLs to groups
 	now := time.Now()
@@ -90,7 +91,9 @@ func (t *ThumbnailFetcher) AddGroupImageURLs(groups map[uint64]*types.Group) map
 
 // ProcessBatchThumbnails handles batched thumbnail requests, processing them in groups of 100.
 // It returns a map of target IDs to their thumbnail URLs.
-func (t *ThumbnailFetcher) ProcessBatchThumbnails(requests *thumbnails.BatchThumbnailsBuilder) map[uint64]string {
+func (t *ThumbnailFetcher) ProcessBatchThumbnails(ctx context.Context, requests *thumbnails.BatchThumbnailsBuilder) map[uint64]string {
+	ctx = context.WithValue(ctx, auth.KeyAddCookie, true)
+
 	var (
 		requestList   = requests.Build()
 		thumbnailURLs = make(map[uint64]string)
@@ -116,7 +119,7 @@ func (t *ThumbnailFetcher) ProcessBatchThumbnails(requests *thumbnails.BatchThum
 			}
 
 			// Send batch request to Roblox API
-			thumbnailResponses, err := t.roAPI.Thumbnails().GetBatchThumbnails(context.Background(), batchRequests.Build())
+			thumbnailResponses, err := t.roAPI.Thumbnails().GetBatchThumbnails(ctx, batchRequests.Build())
 			if err != nil {
 				t.logger.Error("Error fetching batch thumbnails",
 					zap.Error(err),

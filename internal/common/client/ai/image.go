@@ -15,6 +15,7 @@ import (
 	"github.com/robalyx/rotector/internal/common/storage/database/types"
 	"github.com/robalyx/rotector/internal/common/utils"
 	"go.uber.org/zap"
+	"golang.org/x/sync/semaphore"
 )
 
 const (
@@ -57,6 +58,7 @@ type ImageAnalyzer struct {
 	httpClient  *client.Client
 	genAIClient *genai.Client
 	imageModel  *genai.GenerativeModel
+	downloadSem *semaphore.Weighted
 	logger      *zap.Logger
 }
 
@@ -119,6 +121,7 @@ func NewImageAnalyzer(app *setup.App, logger *zap.Logger) *ImageAnalyzer {
 		httpClient:  app.RoAPI.GetClient(),
 		genAIClient: app.GenAIClient,
 		imageModel:  imageModel,
+		downloadSem: semaphore.NewWeighted(int64(app.Config.Worker.BatchSizes.ImageDownloads)),
 		logger:      logger,
 	}
 }
@@ -184,7 +187,7 @@ func (a *ImageAnalyzer) ProcessImages(userInfos []*fetcher.Info) (map[uint64]*ty
 	for _, result := range analysis.Results {
 		userInfo, ok := usernameMap[result.Username]
 		if !ok {
-			a.logger.Error("AI returned result for unknown username",
+			a.logger.Warn("AI returned result for unknown username",
 				zap.String("username", result.Username))
 			continue
 		}
@@ -212,6 +215,7 @@ func (a *ImageAnalyzer) ProcessImages(userInfos []*fetcher.Info) (map[uint64]*ty
 			Groups:              userInfo.Groups.Data,
 			Friends:             userInfo.Friends.Data,
 			Games:               userInfo.Games.Data,
+			Outfits:             userInfo.Outfits.Data,
 			FollowerCount:       userInfo.FollowerCount,
 			FollowingCount:      userInfo.FollowingCount,
 			Confidence:          result.Confidence,
@@ -253,6 +257,16 @@ func (a *ImageAnalyzer) downloadAndUploadImages(ctx context.Context, userInfos [
 
 		go func() {
 			defer wg.Done()
+
+			// Acquire semaphore before processing
+			if err := a.downloadSem.Acquire(ctx, 1); err != nil {
+				a.logger.Warn("Failed to acquire semaphore",
+					zap.Uint64("userID", currentInfo.ID),
+					zap.Error(err))
+				resultChan <- result{err: err}
+				return
+			}
+			defer a.downloadSem.Release(1)
 
 			file, err := a.downloadAndUploadImage(ctx, currentInfo.ThumbnailURL)
 			if err != nil {
@@ -310,7 +324,7 @@ func (a *ImageAnalyzer) downloadAndUploadImage(ctx context.Context, url string) 
 
 	// Upload to Gemini
 	file, err := a.genAIClient.UploadFile(ctx, uuid.New().String(), buf, &genai.UploadFileOptions{
-		MIMEType: "image/jpeg", // Roblox thumbnails are always JPEG
+		MIMEType: "image/png",
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to upload image: %w", err)

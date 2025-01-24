@@ -59,7 +59,7 @@ var (
 	// UserTarget stores the currently selected user
 	UserTarget = NewKey[*types.ReviewUser]("UserTarget")
 	// UserFriends stores the user's friend list
-	UserFriends = NewKey[[]*types.ExtendedFriend]("UserFriends")
+	UserFriends = NewKey[[]*apiTypes.ExtendedFriend]("UserFriends")
 	// UserPresences stores friend presence information
 	UserPresences = NewKey[map[uint64]*apiTypes.UserPresenceResponse]("UserPresences")
 	// UserFlaggedFriends stores flagged friends
@@ -69,7 +69,7 @@ var (
 	// UserFlaggedGroups stores flagged groups
 	UserFlaggedGroups = NewKey[map[uint64]*types.ReviewGroup]("UserFlaggedGroups")
 	// UserOutfits stores user outfits
-	UserOutfits = NewKey[[]apiTypes.Outfit]("UserOutfits")
+	UserOutfits = NewKey[[]*apiTypes.Outfit]("UserOutfits")
 	// GroupTarget stores the currently selected group
 	GroupTarget = NewKey[*types.ReviewGroup]("GroupTarget")
 	// GroupMemberIDs stores member IDs for the current group

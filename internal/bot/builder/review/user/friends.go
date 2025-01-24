@@ -18,7 +18,7 @@ import (
 // FriendsBuilder creates the visual layout for viewing a user's friends.
 type FriendsBuilder struct {
 	user           *types.ReviewUser
-	friends        []*types.ExtendedFriend
+	friends        []*apiTypes.ExtendedFriend
 	presences      map[uint64]*apiTypes.UserPresenceResponse
 	flaggedFriends map[uint64]*types.ReviewUser
 	start          int
@@ -92,7 +92,7 @@ func (b *FriendsBuilder) Build() *discord.MessageUpdateBuilder {
 }
 
 // getFriendFieldName creates the field name for a friend entry.
-func (b *FriendsBuilder) getFriendFieldName(index int, friend *types.ExtendedFriend) string {
+func (b *FriendsBuilder) getFriendFieldName(index int, friend *apiTypes.ExtendedFriend) string {
 	fieldName := fmt.Sprintf("Friend %d", b.start+index+1)
 
 	// Add presence indicator
@@ -131,7 +131,7 @@ func (b *FriendsBuilder) getFriendFieldName(index int, friend *types.ExtendedFri
 }
 
 // getFriendFieldValue creates the field value for a friend entry.
-func (b *FriendsBuilder) getFriendFieldValue(friend *types.ExtendedFriend) string {
+func (b *FriendsBuilder) getFriendFieldValue(friend *apiTypes.ExtendedFriend) string {
 	var info strings.Builder
 
 	// Add friend name (with link in standard mode)

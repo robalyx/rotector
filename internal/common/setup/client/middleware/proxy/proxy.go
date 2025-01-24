@@ -57,7 +57,6 @@ type Proxies struct {
 	proxyClients      map[string]*http.Client
 	cleanupMutex      sync.Mutex
 	logger            logger.Logger
-	requestTimeout    time.Duration
 	defaultCooldown   time.Duration
 	unhealthyDuration time.Duration
 	endpoints         []EndpointPattern
@@ -123,7 +122,6 @@ func New(proxies []*url.URL, client rueidis.Client, cfg *config.Proxy) *Proxies 
 		client:            client,
 		proxyClients:      proxyClients,
 		logger:            &logger.NoOpLogger{},
-		requestTimeout:    time.Duration(cfg.RequestTimeout) * time.Millisecond,
 		defaultCooldown:   time.Duration(cfg.DefaultCooldown) * time.Millisecond,
 		unhealthyDuration: time.Duration(cfg.UnhealthyDuration) * time.Millisecond,
 		endpoints:         patterns,
@@ -145,7 +143,6 @@ func (m *Proxies) Cleanup() {
 }
 
 // Process applies proxy logic before passing the request to the next middleware.
-// It selects an available proxy based on endpoint cooldowns and configures the HTTP client.
 func (m *Proxies) Process(ctx context.Context, httpClient *http.Client, req *http.Request, next middleware.NextFunc) (*http.Response, error) {
 	if len(m.proxies) == 0 {
 		return next(ctx, httpClient, req)
@@ -169,19 +166,9 @@ func (m *Proxies) Process(ctx context.Context, httpClient *http.Client, req *htt
 		return nil, m.checkResponseError(ctx, err, proxy)
 	}
 
-	// Update the timestamp after the request completes successfully
-	cooldown := m.getCooldown(endpoint)
-	if updateErr := m.updateProxyTimestamp(ctx, endpoint, proxyIndex, cooldown); updateErr != nil {
-		m.logger.WithFields(
-			logger.String("endpoint", endpoint),
-			logger.String("error", updateErr.Error()),
-		).Error("Failed to update proxy timestamp")
-	}
-
 	m.logger.WithFields(
 		logger.String("endpoint", endpoint),
 		logger.Int64("index", proxyIndex),
-		logger.String("cooldown", cooldown.String()),
 	).Debug("Used proxy")
 
 	return resp, nil
@@ -199,10 +186,12 @@ func (m *Proxies) getCooldown(endpoint string) time.Duration {
 }
 
 // selectProxyForEndpoint chooses an appropriate proxy for the given endpoint
-// It uses Redis to track endpoint usage and ensure proper cooldown periods.
 func (m *Proxies) selectProxyForEndpoint(ctx context.Context, endpoint string) (*url.URL, int64, error) {
 	now := time.Now().Unix()
 	lastSuccessKey := fmt.Sprintf("%s:%s:%s", LastSuccessKeyPrefix, m.proxyHash, endpoint)
+
+	// Get the cooldown for this endpoint
+	cooldown := m.getCooldown(endpoint)
 
 	// Execute the Lua script to get a suitable proxy
 	resp := m.client.Do(ctx, m.client.B().Eval().
@@ -213,7 +202,7 @@ func (m *Proxies) selectProxyForEndpoint(ctx context.Context, endpoint string) (
 		Arg(m.numProxies).
 		Arg(endpoint).
 		Arg(strconv.FormatInt(now, 10)).
-		Arg(strconv.FormatInt(int64(m.requestTimeout.Seconds()), 10)).
+		Arg(strconv.FormatInt(int64(cooldown.Seconds()), 10)).
 		Arg(m.proxyHash).
 		Build())
 
@@ -238,15 +227,15 @@ func (m *Proxies) selectProxyForEndpoint(ctx context.Context, endpoint string) (
 		return nil, -1, ErrNoHealthyProxies
 	}
 
-	// Parse wait time from response
-	waitSeconds, err := result[1].AsInt64()
+	// Parse ready timestamp from response
+	readyTimestamp, err := result[1].AsInt64()
 	if err != nil {
-		return nil, -1, fmt.Errorf("failed to parse wait time: %w", err)
+		return nil, -1, fmt.Errorf("failed to parse ready timestamp: %w", err)
 	}
 
 	// Check if we need to wait for the proxy to be ready
-	if waitSeconds > 0 {
-		waitTime := time.Duration(waitSeconds) * time.Second
+	if readyTimestamp > now {
+		waitTime := time.Duration(readyTimestamp-now) * time.Second
 		m.logger.WithFields(
 			logger.String("endpoint", endpoint),
 			logger.Int64("proxy_index", index),
@@ -275,21 +264,6 @@ func (m *Proxies) applyProxyToClient(httpClient *http.Client, proxy *url.URL) *h
 	proxyClient.Jar = httpClient.Jar
 
 	return proxyClient
-}
-
-// updateProxyTimestamp updates the timestamp for when the proxy was actually used.
-func (m *Proxies) updateProxyTimestamp(ctx context.Context, endpoint string, proxyIndex int64, cooldown time.Duration) error {
-	endpointKey := fmt.Sprintf("proxy_endpoints:%s:%d", m.proxyHash, proxyIndex)
-	nextAvailable := time.Now().Add(cooldown).Unix()
-
-	// Update the timestamp to when the endpoint will be available again
-	err := m.client.Do(ctx, m.client.B().Zadd().
-		Key(endpointKey).
-		ScoreMember().
-		ScoreMember(float64(nextAvailable), endpoint).
-		Build()).Error()
-
-	return err
 }
 
 // checkResponseError checks if the error is a timeout/network error and marks the proxy as unhealthy if it is.

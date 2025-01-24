@@ -247,6 +247,7 @@ func (c *GroupChecker) processUserGroups(userInfo *fetcher.Info, existingGroups 
 			Groups:              userInfo.Groups.Data,
 			Friends:             userInfo.Friends.Data,
 			Games:               userInfo.Games.Data,
+			Outfits:             userInfo.Outfits.Data,
 			FollowerCount:       userInfo.FollowerCount,
 			FollowingCount:      userInfo.FollowingCount,
 			Confidence:          math.Round(confidence*100) / 100, // Round to 2 decimal places

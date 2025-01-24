@@ -192,7 +192,7 @@ func (w *Worker) processLockedGroups() {
 	}
 
 	// Check for locked groups
-	lockedGroupIDs, err := w.groupFetcher.FetchLockedGroups(groups)
+	lockedGroupIDs, err := w.groupFetcher.FetchLockedGroups(context.Background(), groups)
 	if err != nil {
 		w.logger.Error("Error fetching locked groups", zap.Error(err))
 		w.reporter.SetHealthy(false)
@@ -307,7 +307,7 @@ func (w *Worker) processGroupTracking() {
 	}
 
 	// Load group information from API
-	groupInfos := w.groupFetcher.FetchGroupInfos(groupIDs)
+	groupInfos := w.groupFetcher.FetchGroupInfos(context.Background(), groupIDs)
 	if len(groupInfos) == 0 {
 		return
 	}
@@ -319,7 +319,7 @@ func (w *Worker) processGroupTracking() {
 	}
 
 	// Add thumbnails to flagged groups
-	flaggedGroups = w.thumbnailFetcher.AddGroupImageURLs(flaggedGroups)
+	flaggedGroups = w.thumbnailFetcher.AddGroupImageURLs(context.Background(), flaggedGroups)
 
 	// Save flagged groups to database
 	if err := w.db.Groups().SaveGroups(context.Background(), flaggedGroups); err != nil {
@@ -363,7 +363,7 @@ func (w *Worker) processUserThumbnails() {
 	}
 
 	// Update thumbnails
-	thumbnailMap := w.thumbnailFetcher.GetImageURLs(users)
+	thumbnailMap := w.thumbnailFetcher.GetImageURLs(context.Background(), users)
 
 	// Update last thumbnail update time
 	now := time.Now()
@@ -405,7 +405,7 @@ func (w *Worker) processGroupThumbnails() {
 	}
 
 	// Update thumbnails
-	updatedGroups := w.thumbnailFetcher.AddGroupImageURLs(groups)
+	updatedGroups := w.thumbnailFetcher.AddGroupImageURLs(context.Background(), groups)
 
 	// Save updated groups
 	if err := w.db.Groups().SaveGroups(context.Background(), groups); err != nil {

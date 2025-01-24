@@ -16,14 +16,16 @@ import (
 // UserChecker coordinates the checking process by combining results from
 // multiple checking methods (AI, groups, friends) and managing the progress bar.
 type UserChecker struct {
-	app           *setup.App
-	db            *database.Client
-	userFetcher   *fetcher.UserFetcher
-	userAnalyzer  *ai.UserAnalyzer
-	imageAnalyzer *ai.ImageAnalyzer
-	groupChecker  *GroupChecker
-	friendChecker *FriendChecker
-	logger        *zap.Logger
+	app            *setup.App
+	db             *database.Client
+	userFetcher    *fetcher.UserFetcher
+	followFetcher  *fetcher.FollowFetcher
+	userAnalyzer   *ai.UserAnalyzer
+	imageAnalyzer  *ai.ImageAnalyzer
+	outfitAnalyzer *ai.OutfitAnalyzer
+	groupChecker   *GroupChecker
+	friendChecker  *FriendChecker
+	logger         *zap.Logger
 }
 
 // NewUserChecker creates a UserChecker with all required dependencies.
@@ -31,13 +33,16 @@ func NewUserChecker(app *setup.App, userFetcher *fetcher.UserFetcher, logger *za
 	translator := translator.New(app.RoAPI.GetClient())
 	userAnalyzer := ai.NewUserAnalyzer(app, translator, logger)
 	imageAnalyzer := ai.NewImageAnalyzer(app, logger)
+	outfitAnalyzer := ai.NewOutfitAnalyzer(app, logger)
 
 	return &UserChecker{
-		app:           app,
-		db:            app.DB,
-		userFetcher:   userFetcher,
-		userAnalyzer:  userAnalyzer,
-		imageAnalyzer: imageAnalyzer,
+		app:            app,
+		db:             app.DB,
+		userFetcher:    userFetcher,
+		followFetcher:  fetcher.NewFollowFetcher(app.RoAPI, logger),
+		userAnalyzer:   userAnalyzer,
+		imageAnalyzer:  imageAnalyzer,
+		outfitAnalyzer: outfitAnalyzer,
 		groupChecker: NewGroupChecker(app.DB, logger,
 			app.Config.Worker.ThresholdLimits.MaxGroupMembersTrack,
 			app.Config.Worker.ThresholdLimits.MinFlaggedOverride,
@@ -99,14 +104,30 @@ func (c *UserChecker) ProcessUsers(userInfos []*fetcher.Info) []uint64 {
 		failedIDs = append(failedIDs, imageFailedIDs...)
 	}
 
+	// Process outfit analysis results
+	flaggedByOutfit, outfitFailedIDs, err := c.outfitAnalyzer.ProcessOutfits(userInfos)
+	if err == nil {
+		for userID, outfitUser := range flaggedByOutfit {
+			if existingUser, ok := flaggedUsers[userID]; ok {
+				// Combine reasons and update confidence
+				existingUser.Reason = fmt.Sprintf("%s\n\n%s", existingUser.Reason, outfitUser.Reason)
+				existingUser.Confidence = 1.0
+			} else {
+				flaggedUsers[userID] = outfitUser
+			}
+		}
+		// Add outfit analysis failures to retry list
+		failedIDs = append(failedIDs, outfitFailedIDs...)
+	}
+
 	// Stop if no users were flagged
 	if len(flaggedUsers) == 0 {
 		c.logger.Info("No flagged users found", zap.Int("userInfos", len(userInfos)))
 		return failedIDs
 	}
 
-	// Fetch additional user data concurrently
-	flaggedUsers = c.userFetcher.FetchAdditionalUserData(flaggedUsers)
+	// Add follow counts to flagged users
+	c.followFetcher.AddFollowCounts(context.Background(), flaggedUsers)
 
 	// Check if any flagged users have a follower count above the threshold
 	for _, user := range flaggedUsers {

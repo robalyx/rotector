@@ -11,12 +11,12 @@ require (
 	github.com/getsentry/sentry-go v0.31.1
 	github.com/google/generative-ai-go v0.19.0
 	github.com/google/uuid v1.6.0
-	github.com/jaxron/axonet v0.0.0-20250114032231-268d997709d2
-	github.com/jaxron/axonet/middleware/circuitbreaker v0.0.0-20250114032231-268d997709d2
-	github.com/jaxron/axonet/middleware/redis v0.0.0-20250114032231-268d997709d2
-	github.com/jaxron/axonet/middleware/retry v0.0.0-20250114032231-268d997709d2
-	github.com/jaxron/axonet/middleware/singleflight v0.0.0-20250114032231-268d997709d2
-	github.com/jaxron/roapi.go v0.0.0-20250114033748-f796f3351e13
+	github.com/jaxron/axonet v0.0.0-20250121121445-d83bd7750be7
+	github.com/jaxron/axonet/middleware/circuitbreaker v0.0.0-20250121121445-d83bd7750be7
+	github.com/jaxron/axonet/middleware/redis v0.0.0-20250121121445-d83bd7750be7
+	github.com/jaxron/axonet/middleware/retry v0.0.0-20250121121445-d83bd7750be7
+	github.com/jaxron/axonet/middleware/singleflight v0.0.0-20250121121445-d83bd7750be7
+	github.com/jaxron/roapi.go v0.0.0-20250123122908-429dd31004d9
 	github.com/klauspost/compress v1.17.11
 	github.com/knadh/koanf/parsers/toml/v2 v2.1.0
 	github.com/knadh/koanf/providers/file v1.1.2
@@ -35,6 +35,7 @@ require (
 	github.com/wcharczuk/go-chart/v2 v2.1.2
 	go.uber.org/zap v1.27.0
 	golang.org/x/image v0.23.0
+	golang.org/x/sync v0.10.0
 	golang.org/x/text v0.21.0
 	golang.org/x/time v0.9.0
 	google.golang.org/api v0.214.0
@@ -103,7 +104,6 @@ require (
 	golang.org/x/exp v0.0.0-20241217172543-b2144cdd0a67 // indirect
 	golang.org/x/net v0.34.0 // indirect
 	golang.org/x/oauth2 v0.24.0 // indirect
-	golang.org/x/sync v0.10.0 // indirect
 	golang.org/x/sys v0.29.0 // indirect
 	golang.org/x/tools v0.28.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20241223144023-3abc09e42ca8 // indirect

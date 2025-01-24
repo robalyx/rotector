@@ -167,7 +167,7 @@ func (w *Worker) processItems(items []*queue.Item) {
 	w.bar.SetStepMessage("Fetching user information", 50)
 	w.reporter.UpdateStatus("Fetching user information", 50)
 
-	userInfos := w.userFetcher.FetchInfos(userIDs)
+	userInfos := w.userFetcher.FetchInfos(ctx, userIDs)
 
 	// Process users with AI checker
 	w.bar.SetStepMessage("Processing with AI", 75)

@@ -15,14 +15,6 @@ var (
 	ErrUnsupportedModel = errors.New("unsupported model type")
 )
 
-// ExtendedFriend contains additional user information beyond the basic Friend type.
-type ExtendedFriend struct {
-	types.Friend
-	Name             string `json:"name"`             // Username of the friend
-	DisplayName      string `json:"displayName"`      // Display name of the friend
-	HasVerifiedBadge bool   `json:"hasVerifiedBadge"` // Whether the friend has a verified badge
-}
-
 // User combines all the information needed to review a user.
 // This base structure is embedded in other user types (Flagged, Confirmed).
 type User struct {
@@ -34,8 +26,8 @@ type User struct {
 	CreatedAt           time.Time               `bun:",notnull"   json:"createdAt"`
 	Reason              string                  `bun:",notnull"   json:"reason"`
 	Groups              []*types.UserGroupRoles `bun:"type:jsonb" json:"groups"`
-	Outfits             []types.Outfit          `bun:"type:jsonb" json:"outfits"`
-	Friends             []*ExtendedFriend       `bun:"type:jsonb" json:"friends"`
+	Outfits             []*types.Outfit         `bun:"type:jsonb" json:"outfits"`
+	Friends             []*types.ExtendedFriend `bun:"type:jsonb" json:"friends"`
 	Games               []*types.Game           `bun:"type:jsonb" json:"games"`
 	FlaggedContent      []string                `bun:"type:jsonb" json:"flaggedContent"`
 	FollowerCount       uint64                  `bun:",notnull"   json:"followerCount"`

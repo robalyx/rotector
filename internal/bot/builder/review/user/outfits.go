@@ -17,7 +17,7 @@ import (
 // OutfitsBuilder creates the visual layout for viewing a user's outfits.
 type OutfitsBuilder struct {
 	user        *types.ReviewUser
-	outfits     []apiTypes.Outfit
+	outfits     []*apiTypes.Outfit
 	start       int
 	page        int
 	total       int

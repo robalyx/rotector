@@ -31,12 +31,14 @@ unhealthy_duration = 30000
 [common.proxy.endpoints]
 following_count = { pattern = "friends.roblox.com/v1/users/{id}/followings/count", cooldown = 5000 }
 followers_count = { pattern = "friends.roblox.com/v1/users/{id}/followers/count", cooldown = 5000 }
+get_friend_count = { pattern = "friends.roblox.com/v1/users/{id}/friends/count", cooldown = 5000 }
+get_friends = { pattern = "friends.roblox.com/v1/users/{id}/friends", cooldown = 5000 }
 find_friends = { pattern = "friends.roblox.com/v1/users/{id}/friends/find", cooldown = 5000 }
-user_info = { pattern = "users.roblox.com/v1/users/{id}", cooldown = 3000 }
-user_info_batch = { pattern = "users.roblox.com/v1/users", cooldown = 3000 }
-user_games = { pattern = "games.roblox.com/v2/users/{id}/games", cooldown = 3000 }
+user_info = { pattern = "users.roblox.com/v1/users/{id}", cooldown = 5000 }
+user_info_batch = { pattern = "users.roblox.com/v1/users", cooldown = 5000 }
+user_games = { pattern = "games.roblox.com/v2/users/{id}/games", cooldown = 5000 }
 user_outfits = { pattern = "avatar.roblox.com/v2/avatar/users/{id}/outfits", cooldown = 5000 }
-user_groups = { pattern = "groups.roblox.com/v1/users/{id}/groups/roles", cooldown = 3000 }
+user_groups = { pattern = "groups.roblox.com/v1/users/{id}/groups/roles", cooldown = 5000 }
 thumbnail_batch = { pattern = "thumbnails.roblox.com/v1/batch", cooldown = 1000 }
 
 [common.circuit_breaker]

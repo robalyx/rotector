@@ -143,6 +143,8 @@ type BatchSizes struct {
 	QueueItems      int `koanf:"queue_items"`      // Number of queue items to process in one batch
 	ThumbnailUsers  int `koanf:"thumbnail_users"`  // Number of users to update thumbnails in one batch
 	ThumbnailGroups int `koanf:"thumbnail_groups"` // Number of groups to update thumbnails in one batch
+	ImageDownloads  int `koanf:"image_downloads"`  // Maximum concurrent image downloads for profile images
+	OutfitDownloads int `koanf:"outfit_downloads"` // Maximum concurrent outfit downloads per worker
 }
 
 // ThresholdLimits configures various thresholds for worker operations.
