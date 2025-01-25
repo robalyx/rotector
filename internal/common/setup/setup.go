@@ -24,6 +24,33 @@ import (
 	"google.golang.org/api/option"
 )
 
+// ServiceType identifies which service is being initialized.
+type ServiceType int
+
+const (
+	ServiceREST ServiceType = iota
+	ServiceRPC
+	ServiceBot
+	ServiceWorker
+)
+
+// GetRequestTimeout returns the request timeout for the given service type.
+func (s ServiceType) GetRequestTimeout(cfg *config.Config) time.Duration {
+	var timeout int
+	switch s {
+	case ServiceWorker:
+		timeout = cfg.Worker.RequestTimeout
+	case ServiceBot:
+		timeout = cfg.Bot.RequestTimeout
+	case ServiceREST, ServiceRPC:
+		timeout = cfg.API.RequestTimeout
+	default:
+		timeout = 5000
+	}
+
+	return time.Duration(timeout) * time.Millisecond
+}
+
 // App bundles all core dependencies and services needed by the application.
 // Each field represents a major subsystem that needs initialization and cleanup.
 type App struct {
@@ -44,7 +71,7 @@ type App struct {
 
 // InitializeApp bootstraps all application dependencies in the correct order,
 // ensuring each component has its required dependencies available.
-func InitializeApp(ctx context.Context, logDir string) (*App, error) {
+func InitializeApp(ctx context.Context, serviceType ServiceType, logDir string) (*App, error) {
 	// Configuration must be loaded first as other components depend on it
 	cfg, configDir, err := config.LoadConfig()
 	if err != nil {
@@ -89,7 +116,8 @@ func InitializeApp(ctx context.Context, logDir string) (*App, error) {
 	}
 
 	// RoAPI client is configured with middleware chain
-	roAPI, proxies, err := client.GetRoAPIClient(&cfg.Common, configDir, redisManager, logger)
+	requestTimeout := serviceType.GetRequestTimeout(cfg)
+	roAPI, proxies, err := client.GetRoAPIClient(&cfg.Common, configDir, redisManager, logger, requestTimeout)
 	if err != nil {
 		return nil, err
 	}

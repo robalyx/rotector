@@ -42,7 +42,7 @@ const (
 // @description				API key must be provided as: Bearer <api_key>
 func main() {
 	// Initialize application with required dependencies
-	app, err := setup.InitializeApp(context.Background(), RESTLogDir)
+	app, err := setup.InitializeApp(context.Background(), setup.ServiceREST, RESTLogDir)
 	if err != nil {
 		log.Fatalf("Failed to initialize application: %v", err)
 	}

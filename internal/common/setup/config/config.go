@@ -50,13 +50,15 @@ type CommonConfig struct {
 
 // BotConfig contains Discord bot specific configuration.
 type BotConfig struct {
-	Version int     `koanf:"version"`
-	Discord Discord `koanf:"discord"`
+	Version        int     `koanf:"version"`
+	RequestTimeout int     `koanf:"request_timeout"` // Request timeout in milliseconds
+	Discord        Discord `koanf:"discord"`
 }
 
 // WorkerConfig contains worker specific configuration.
 type WorkerConfig struct {
 	Version         int             `koanf:"version"`
+	RequestTimeout  int             `koanf:"request_timeout"` // Request timeout in milliseconds
 	StartupDelay    int             `koanf:"startup_delay"`
 	BatchSizes      BatchSizes      `koanf:"batch_sizes"`
 	ThresholdLimits ThresholdLimits `koanf:"threshold_limits"`
@@ -64,10 +66,11 @@ type WorkerConfig struct {
 
 // APIConfig contains RPC server specific configuration.
 type APIConfig struct {
-	Version   int       `koanf:"version"`
-	Server    APIServer `koanf:"server"`
-	IP        IPConfig  `koanf:"ip"`
-	RateLimit RateLimit `koanf:"rate_limit"`
+	Version        int       `koanf:"version"`
+	RequestTimeout int       `koanf:"request_timeout"` // Request timeout in milliseconds
+	Server         APIServer `koanf:"server"`
+	IP             IPConfig  `koanf:"ip"`
+	RateLimit      RateLimit `koanf:"rate_limit"`
 }
 
 // Debug contains debug-related configuration.
@@ -186,7 +189,6 @@ type RateLimit struct {
 // Proxy contains proxy-related configuration.
 type Proxy struct {
 	DefaultCooldown   int                      `koanf:"default_cooldown"`   // Default cooldown in milliseconds
-	RequestTimeout    int                      `koanf:"request_timeout"`    // HTTP request timeout in milliseconds
 	UnhealthyDuration int                      `koanf:"unhealthy_duration"` // Duration to mark proxy as unhealthy in milliseconds
 	Endpoints         map[string]EndpointLimit `koanf:"endpoints"`          // Endpoint-specific cooldowns
 }

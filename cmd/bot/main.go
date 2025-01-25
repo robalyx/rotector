@@ -18,7 +18,7 @@ const (
 
 func main() {
 	// Initialize application with required dependencies
-	app, err := setup.InitializeApp(context.Background(), BotLogDir)
+	app, err := setup.InitializeApp(context.Background(), setup.ServiceBot, BotLogDir)
 	if err != nil {
 		log.Fatalf("Failed to initialize application: %v", err)
 	}

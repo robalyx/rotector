@@ -111,7 +111,7 @@ func run() error {
 
 // runWorkers starts multiple instances of a worker type.
 func runWorkers(ctx context.Context, workerType, subType string, count int64) {
-	app, err := setup.InitializeApp(ctx, WorkerLogDir)
+	app, err := setup.InitializeApp(ctx, setup.ServiceWorker, WorkerLogDir)
 	if err != nil {
 		log.Fatalf("Failed to initialize application: %v", err)
 	}

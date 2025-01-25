@@ -66,7 +66,7 @@ type Proxies struct {
 }
 
 // New creates a new Proxies instance.
-func New(proxies []*url.URL, client rueidis.Client, cfg *config.Proxy) *Proxies {
+func New(proxies []*url.URL, client rueidis.Client, cfg *config.Proxy, requestTimeout time.Duration) *Proxies {
 	patterns := make([]EndpointPattern, 0, len(cfg.Endpoints))
 	proxyHash := generateProxyHash(proxies)
 
@@ -89,7 +89,7 @@ func New(proxies []*url.URL, client rueidis.Client, cfg *config.Proxy) *Proxies 
 
 		proxyClients[proxy.String()] = &http.Client{
 			Transport: transport,
-			Timeout:   time.Duration(cfg.RequestTimeout) * time.Millisecond,
+			Timeout:   requestTimeout,
 		}
 	}
 

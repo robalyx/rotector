@@ -28,7 +28,7 @@ const (
 
 func main() {
 	// Initialize application with required dependencies
-	app, err := setup.InitializeApp(context.Background(), RPCLogDir)
+	app, err := setup.InitializeApp(context.Background(), setup.ServiceRPC, RPCLogDir)
 	if err != nil {
 		log.Fatalf("Failed to initialize application: %v", err)
 	}

@@ -22,8 +22,6 @@ dsn = ""
 [common.proxy]
 # Default cooldown period in milliseconds for unspecified endpoints
 default_cooldown = 5000
-# HTTP request timeout in milliseconds
-request_timeout = 8000
 # Duration in milliseconds to mark a proxy as unhealthy after a timeout error
 unhealthy_duration = 30000
 

@@ -1,6 +1,9 @@
 [api]
 version = 1
 
+# Request timeout in milliseconds
+request_timeout = 5000
+
 [api.server]
 # Host address to listen on
 # Use "127.0.0.1" for local access only

@@ -25,7 +25,7 @@ import (
 
 // GetRoAPIClient constructs an HTTP client with a middleware chain for reliability and performance.
 // Middleware order is important - each layer wraps the next in specified priority.
-func GetRoAPIClient(cfg *config.CommonConfig, configDir string, redisManager *redis.Manager, zapLogger *zap.Logger) (*api.API, *proxy.Proxies, error) {
+func GetRoAPIClient(cfg *config.CommonConfig, configDir string, redisManager *redis.Manager, zapLogger *zap.Logger, requestTimeout time.Duration) (*api.API, *proxy.Proxies, error) {
 	// Load authentication and proxy configuration
 	cookies := readCookies(configDir, zapLogger)
 	proxies := readProxies(configDir, zapLogger)
@@ -43,7 +43,7 @@ func GetRoAPIClient(cfg *config.CommonConfig, configDir string, redisManager *re
 	}
 
 	// Initialize proxy middleware
-	proxyMiddleware := proxy.New(proxies, proxyClient, &cfg.Proxy)
+	proxyMiddleware := proxy.New(proxies, proxyClient, &cfg.Proxy, requestTimeout)
 
 	// Build client with middleware chain in priority order:
 	// 5. Circuit breaker prevents cascading failures
@@ -55,7 +55,7 @@ func GetRoAPIClient(cfg *config.CommonConfig, configDir string, redisManager *re
 		client.WithMarshalFunc(sonic.Marshal),
 		client.WithUnmarshalFunc(sonic.Unmarshal),
 		client.WithLogger(logger.New(zapLogger)),
-		client.WithTimeout(time.Duration(cfg.Proxy.RequestTimeout)*time.Millisecond),
+		client.WithTimeout(requestTimeout),
 		client.WithMiddleware(
 			circuitbreaker.New(
 				cfg.CircuitBreaker.MaxFailures,
