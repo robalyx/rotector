@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
+	"math/rand"
 	"strconv"
 
 	"github.com/disgoorg/disgo/discord"
@@ -20,6 +21,21 @@ import (
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
 )
+
+// Tips for users shown in the welcome embed footer.
+var tips = []string{ //nolint:gochecknoglobals
+	"Check out the leaderboard to see our top reviewers",
+	"Track your performance through your vote statistics",
+	"Use streamer mode to hide sensitive information",
+	"You can continue from where you left off across all servers",
+	"All foreign text is automatically translated for you",
+	"Take your time to make accurate decisions",
+}
+
+// getRandomTip returns a random tip from the tips slice.
+func getRandomTip() string {
+	return "💡 " + tips[rand.Intn(len(tips))]
+}
 
 // Builder creates the visual layout for the main dashboard.
 type Builder struct {
@@ -210,6 +226,9 @@ func (b *Builder) buildWelcomeEmbed() discord.Embed {
 
 		embed.AddField("Active Reviewers", fieldValue, false)
 	}
+
+	// Add random tip to footer
+	embed.SetFooter(getRandomTip(), "")
 
 	return embed.Build()
 }
