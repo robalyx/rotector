@@ -57,6 +57,7 @@ type BotConfig struct {
 // WorkerConfig contains worker specific configuration.
 type WorkerConfig struct {
 	Version         int             `koanf:"version"`
+	StartupDelay    int             `koanf:"startup_delay"`
 	BatchSizes      BatchSizes      `koanf:"batch_sizes"`
 	ThresholdLimits ThresholdLimits `koanf:"threshold_limits"`
 }

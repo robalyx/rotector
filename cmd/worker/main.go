@@ -127,12 +127,27 @@ func runWorkers(ctx context.Context, workerType, subType string, count int64) {
 	renderer := progress.NewRenderer(bars)
 	go renderer.Render()
 
+	// Get startup delay from config
+	startupDelay := app.Config.Worker.StartupDelay
+	if startupDelay <= 0 {
+		startupDelay = 2000 // Default to 2000ms if not configured
+	}
+
 	// Start workers
 	var wg sync.WaitGroup
 	for i := range count {
 		wg.Add(1)
 		go func(workerID int64) {
 			defer wg.Done()
+
+			// Add staggered startup delay
+			delay := time.Duration(workerID) * time.Duration(startupDelay) * time.Millisecond
+			select {
+			case <-time.After(delay):
+				// Proceed after delay
+			case <-ctx.Done():
+				return // Exit if context cancelled during delay
+			}
 
 			workerLogger := app.LogManager.GetWorkerLogger(
 				fmt.Sprintf("%s_%s_worker_%d", workerType, subType, workerID),
