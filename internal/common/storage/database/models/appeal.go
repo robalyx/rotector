@@ -2,6 +2,8 @@ package models
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"fmt"
 	"time"
 
@@ -163,6 +165,22 @@ func (r *AppealModel) HasPendingAppealByRequester(ctx context.Context, requester
 		return false, fmt.Errorf("failed to check pending appeals: %w (requesterID=%d)", err, requesterID)
 	}
 	return exists, nil
+}
+
+// GetAppealByID retrieves an appeal by its ID with fresh database state
+func (r *AppealModel) GetAppealByID(ctx context.Context, appealID int64) (*types.Appeal, error) {
+	var appeal types.Appeal
+	err := r.db.NewSelect().
+		Model(&appeal).
+		Where("id = ?", appealID).
+		Scan(ctx)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, types.ErrNoAppealsFound
+		}
+		return nil, fmt.Errorf("failed to get appeal: %w", err)
+	}
+	return &appeal, nil
 }
 
 // HasPreviousRejection checks if a user ID has any rejected appeals within the last 7 days.

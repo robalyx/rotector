@@ -268,13 +268,21 @@ func (m *TicketMenu) handleCloseAppeal(event *events.ComponentInteractionCreate,
 func (m *TicketMenu) handleModal(event *events.ModalSubmitInteractionCreate, s *session.Session) {
 	appeal := session.AppealSelected.Get(s)
 
+	// Use fresh appeal data from database
+	currentAppeal, err := m.layout.db.Appeals().GetAppealByID(context.Background(), appeal.ID)
+	if err != nil {
+		m.layout.paginationManager.NavigateTo(event, s, m.page, "❌ Failed to verify appeal status.")
+		return
+	}
+	session.AppealSelected.Set(s, currentAppeal)
+
 	switch event.Data.CustomID {
 	case constants.AppealRespondModalCustomID:
-		m.handleRespondModalSubmit(event, s, appeal)
+		m.handleRespondModalSubmit(event, s, currentAppeal)
 	case constants.AcceptAppealModalCustomID:
-		m.handleAcceptModalSubmit(event, s, appeal)
+		m.handleAcceptModalSubmit(event, s, currentAppeal)
 	case constants.RejectAppealModalCustomID:
-		m.handleRejectModalSubmit(event, s, appeal)
+		m.handleRejectModalSubmit(event, s, currentAppeal)
 	}
 }
 
@@ -282,7 +290,7 @@ func (m *TicketMenu) handleModal(event *events.ModalSubmitInteractionCreate, s *
 func (m *TicketMenu) handleRespondModalSubmit(event *events.ModalSubmitInteractionCreate, s *session.Session, appeal *types.Appeal) {
 	// Only allow responses for pending appeals
 	if appeal.Status != enum.AppealStatusPending {
-		m.layout.paginationManager.NavigateTo(event, s, m.page, "Cannot respond to a closed appeal.")
+		m.layout.paginationManager.NavigateTo(event, s, m.page, "❌ Cannot respond to a closed appeal.")
 		return
 	}
 
@@ -331,6 +339,12 @@ func (m *TicketMenu) handleRespondModalSubmit(event *events.ModalSubmitInteracti
 
 // handleAcceptModalSubmit processes the accept appeal submission.
 func (m *TicketMenu) handleAcceptModalSubmit(event *events.ModalSubmitInteractionCreate, s *session.Session, appeal *types.Appeal) {
+	// Prevent accepting already processed appeals
+	if appeal.Status != enum.AppealStatusPending {
+		m.layout.paginationManager.NavigateTo(event, s, m.page, "❌ This appeal has already been processed.")
+		return
+	}
+
 	reason := event.Data.Text(constants.AppealReasonInputCustomID)
 	if reason == "" {
 		m.layout.paginationManager.NavigateTo(event, s, m.page, "Accept reason cannot be empty.")
@@ -350,10 +364,12 @@ func (m *TicketMenu) handleAcceptModalSubmit(event *events.ModalSubmitInteractio
 	}
 
 	// Clear the user
-	if err := m.layout.db.Users().ClearUser(context.Background(), user); err != nil {
-		m.layout.logger.Error("Failed to clear user", zap.Error(err))
-		m.layout.paginationManager.RespondWithError(event, "Failed to clear user. Please try again.")
-		return
+	if user.Status != enum.UserTypeCleared {
+		if err := m.layout.db.Users().ClearUser(context.Background(), user); err != nil {
+			m.layout.logger.Error("Failed to clear user", zap.Error(err))
+			m.layout.paginationManager.RespondWithError(event, "Failed to clear user. Please try again.")
+			return
+		}
 	}
 
 	// Accept the appeal
@@ -385,6 +401,12 @@ func (m *TicketMenu) handleAcceptModalSubmit(event *events.ModalSubmitInteractio
 
 // handleRejectModalSubmit processes the reject appeal submission.
 func (m *TicketMenu) handleRejectModalSubmit(event *events.ModalSubmitInteractionCreate, s *session.Session, appeal *types.Appeal) {
+	// Prevent rejecting already processed appeals
+	if appeal.Status != enum.AppealStatusPending {
+		m.layout.paginationManager.NavigateTo(event, s, m.page, "❌ This appeal has already been processed.")
+		return
+	}
+
 	reason := event.Data.Text(constants.AppealReasonInputCustomID)
 	if reason == "" {
 		m.layout.paginationManager.NavigateTo(event, s, m.page, "Reject reason cannot be empty.")
