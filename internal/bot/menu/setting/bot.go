@@ -20,7 +20,7 @@ type BotMenu struct {
 func NewBotMenu(l *Layout) *BotMenu {
 	m := &BotMenu{layout: l}
 	m.page = &pagination.Page{
-		Name: "Bot Settings Menu",
+		Name: constants.BotSettingPageName,
 		Message: func(s *session.Session) *discord.MessageUpdateBuilder {
 			return setting.NewBotSettingsBuilder(s, l.registry).Build()
 		},

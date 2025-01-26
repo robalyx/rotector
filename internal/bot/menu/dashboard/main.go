@@ -28,7 +28,7 @@ type MainMenu struct {
 func NewMainMenu(layout *Layout) *MainMenu {
 	m := &MainMenu{layout: layout}
 	m.page = &pagination.Page{
-		Name: "Dashboard",
+		Name: constants.DashboardPageName,
 		Message: func(s *session.Session) *discord.MessageUpdateBuilder {
 			return builder.NewBuilder(s, m.layout.redisClient).Build()
 		},

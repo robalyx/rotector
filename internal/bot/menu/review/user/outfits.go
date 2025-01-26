@@ -28,7 +28,7 @@ type OutfitsMenu struct {
 func NewOutfitsMenu(layout *Layout) *OutfitsMenu {
 	m := &OutfitsMenu{layout: layout}
 	m.page = &pagination.Page{
-		Name: "Outfits Menu",
+		Name: constants.UserOutfitsPageName,
 		Message: func(s *session.Session) *discord.MessageUpdateBuilder {
 			return builder.NewOutfitsBuilder(s).Build()
 		},

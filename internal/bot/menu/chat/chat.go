@@ -28,7 +28,7 @@ type Menu struct {
 func NewMenu(layout *Layout) *Menu {
 	m := &Menu{layout: layout}
 	m.page = &pagination.Page{
-		Name: "Chat Menu",
+		Name: constants.ChatMenuPageName,
 		Message: func(s *session.Session) *discord.MessageUpdateBuilder {
 			return builder.NewBuilder(s).Build()
 		},

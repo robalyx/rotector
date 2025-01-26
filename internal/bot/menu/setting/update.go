@@ -26,7 +26,7 @@ type UpdateMenu struct {
 func NewUpdateMenu(l *Layout) *UpdateMenu {
 	m := &UpdateMenu{layout: l}
 	m.page = &pagination.Page{
-		Name: "Setting Change Menu",
+		Name: constants.SettingUpdatePageName,
 		Message: func(s *session.Session) *discord.MessageUpdateBuilder {
 			return setting.NewUpdateBuilder(s).Build()
 		},

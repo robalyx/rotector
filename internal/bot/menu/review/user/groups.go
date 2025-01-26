@@ -30,7 +30,7 @@ type GroupsMenu struct {
 func NewGroupsMenu(layout *Layout) *GroupsMenu {
 	m := &GroupsMenu{layout: layout}
 	m.page = &pagination.Page{
-		Name: "Groups Menu",
+		Name: constants.UserGroupsPageName,
 		Message: func(s *session.Session) *discord.MessageUpdateBuilder {
 			return builder.NewGroupsBuilder(s).Build()
 		},

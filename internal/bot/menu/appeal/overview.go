@@ -27,7 +27,7 @@ type OverviewMenu struct {
 func NewOverviewMenu(layout *Layout) *OverviewMenu {
 	m := &OverviewMenu{layout: layout}
 	m.page = &pagination.Page{
-		Name: "Appeal Overview",
+		Name: constants.AppealOverviewPageName,
 		Message: func(s *session.Session) *discord.MessageUpdateBuilder {
 			return builder.NewOverviewBuilder(s).Build()
 		},

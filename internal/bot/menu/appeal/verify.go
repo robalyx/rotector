@@ -29,7 +29,7 @@ type VerifyMenu struct {
 func NewVerifyMenu(layout *Layout) *VerifyMenu {
 	m := &VerifyMenu{layout: layout}
 	m.page = &pagination.Page{
-		Name: "Appeal Verification",
+		Name: constants.AppealVerifyPageName,
 		Message: func(s *session.Session) *discord.MessageUpdateBuilder {
 			return m.buildMessage(s)
 		},

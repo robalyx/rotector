@@ -29,7 +29,7 @@ type MainMenu struct {
 func NewMainMenu(layout *Layout) *MainMenu {
 	m := &MainMenu{layout: layout}
 	m.page = &pagination.Page{
-		Name: "Queue Menu",
+		Name: constants.QueuePageName,
 		Message: func(s *session.Session) *discord.MessageUpdateBuilder {
 			// Load current queue lengths for display
 			highCount := session.QueueHighCount.Get(s)

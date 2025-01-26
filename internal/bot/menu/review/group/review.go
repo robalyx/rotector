@@ -34,7 +34,7 @@ type ReviewMenu struct {
 func NewReviewMenu(layout *Layout) *ReviewMenu {
 	m := &ReviewMenu{layout: layout}
 	m.page = &pagination.Page{
-		Name: "Group Review Menu",
+		Name: constants.GroupReviewPageName,
 		Message: func(s *session.Session) *discord.MessageUpdateBuilder {
 			return builder.NewReviewBuilder(s, layout.db).Build()
 		},

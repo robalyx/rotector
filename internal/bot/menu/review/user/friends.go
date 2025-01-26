@@ -30,7 +30,7 @@ type FriendsMenu struct {
 func NewFriendsMenu(layout *Layout) *FriendsMenu {
 	m := &FriendsMenu{layout: layout}
 	m.page = &pagination.Page{
-		Name: "Friends Menu",
+		Name: constants.UserFriendsPageName,
 		Message: func(s *session.Session) *discord.MessageUpdateBuilder {
 			return builder.NewFriendsBuilder(s).Build()
 		},

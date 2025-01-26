@@ -29,7 +29,7 @@ type TicketMenu struct {
 func NewTicketMenu(layout *Layout) *TicketMenu {
 	m := &TicketMenu{layout: layout}
 	m.page = &pagination.Page{
-		Name: "Appeal Ticket",
+		Name: constants.AppealTicketPageName,
 		Message: func(s *session.Session) *discord.MessageUpdateBuilder {
 			return builder.NewTicketBuilder(s).Build()
 		},

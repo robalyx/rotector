@@ -29,7 +29,7 @@ type StatusMenu struct {
 func NewStatusMenu(layout *Layout) *StatusMenu {
 	m := &StatusMenu{layout: layout}
 	m.page = &pagination.Page{
-		Name: "Status Menu",
+		Name: constants.UserStatusPageName,
 		Message: func(s *session.Session) *discord.MessageUpdateBuilder {
 			return builder.NewStatusBuilder(layout.queueManager, s).Build()
 		},
@@ -55,6 +55,9 @@ func (m *StatusMenu) Show(event interfaces.CommonEvent, s *session.Session) {
 		}
 
 		// User is still flagged, show updated information
+		dashboardPage := m.layout.paginationManager.GetPage(constants.DashboardPageName)
+		m.layout.paginationManager.UpdatePage(s, dashboardPage)
+
 		session.UserTarget.Set(s, user)
 		m.layout.reviewMenu.Show(event, s, "User has been rechecked. Showing updated information.")
 

@@ -22,7 +22,7 @@ type UserMenu struct {
 func NewUserMenu(l *Layout) *UserMenu {
 	m := &UserMenu{layout: l}
 	m.page = &pagination.Page{
-		Name: "User Settings Menu",
+		Name: constants.UserSettingPageName,
 		Message: func(s *session.Session) *discord.MessageUpdateBuilder {
 			return setting.NewUserSettingsBuilder(s, l.registry).Build()
 		},

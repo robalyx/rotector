@@ -29,7 +29,7 @@ type ConfirmMenu struct {
 func NewConfirmMenu(layout *Layout) *ConfirmMenu {
 	m := &ConfirmMenu{layout: layout}
 	m.page = &pagination.Page{
-		Name: "Action Confirmation",
+		Name: constants.AdminActionConfirmPageName,
 		Message: func(s *session.Session) *discord.MessageUpdateBuilder {
 			return builder.NewConfirmBuilder(s).Build()
 		},

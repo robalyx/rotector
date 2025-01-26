@@ -69,7 +69,7 @@ func (b *StatusBuilder) Build() *discord.MessageUpdateBuilder {
 	// Add queue management buttons
 	components := []discord.ContainerComponent{
 		discord.NewActionRow(
-			discord.NewSecondaryButton("🔄", constants.RefreshButtonCustomID),
+			discord.NewSecondaryButton("🔄 Refresh", constants.RefreshButtonCustomID),
 			discord.NewDangerButton("Abort", constants.AbortButtonCustomID),
 		),
 	}

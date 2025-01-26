@@ -7,6 +7,7 @@ import (
 
 	"github.com/disgoorg/disgo/discord"
 	"github.com/robalyx/rotector/internal/bot/builder/ban"
+	"github.com/robalyx/rotector/internal/bot/constants"
 	"github.com/robalyx/rotector/internal/bot/core/pagination"
 	"github.com/robalyx/rotector/internal/bot/core/session"
 	"github.com/robalyx/rotector/internal/bot/interfaces"
@@ -23,7 +24,7 @@ type Menu struct {
 func NewMenu(layout *Layout) *Menu {
 	m := &Menu{layout: layout}
 	m.page = &pagination.Page{
-		Name: "Ban Information",
+		Name: constants.BanInfoPageName,
 		Message: func(s *session.Session) *discord.MessageUpdateBuilder {
 			return ban.NewBuilder(s).Build()
 		},

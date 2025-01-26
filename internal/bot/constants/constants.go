@@ -19,6 +19,39 @@ const (
 	StreamerModeEmbedColor   = 0x3E3769
 )
 
+// Page Names.
+const (
+	DashboardPageName = "Dashboard"
+
+	GroupReviewPageName  = "Group Review"
+	GroupMembersPageName = "Group Members"
+
+	UserReviewPageName  = "User Review"
+	UserFriendsPageName = "Friends Menu"
+	UserGroupsPageName  = "Groups Menu"
+	UserOutfitsPageName = "Outfits Menu"
+	UserStatusPageName  = "Status Menu"
+
+	AdminPageName              = "Admin Menu"
+	AdminActionConfirmPageName = "Action Confirmation"
+
+	AppealOverviewPageName = "Appeal Overview"
+	AppealTicketPageName   = "Appeal Ticket"
+	AppealVerifyPageName   = "Appeal Verification"
+
+	BotSettingPageName    = "Bot Settings"
+	UserSettingPageName   = "User Settings"
+	SettingUpdatePageName = "Setting Update"
+
+	BanInfoPageName     = "Ban Information"
+	CaptchaMenuPageName = "CAPTCHA Verification"
+	ChatMenuPageName    = "AI Chat"
+	LeaderboardPageName = "Leaderboard"
+	LogPageName         = "Activity Logs"
+	QueuePageName       = "Queue Manager"
+	StatusPageName      = "Status"
+)
+
 // Dashboard Menu.
 const (
 	StartUserReviewButtonCustomID  = "start_user_review"
