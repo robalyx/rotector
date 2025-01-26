@@ -908,7 +908,7 @@ func (r *UserModel) getNextToReview(ctx context.Context, model interface{}, sort
 
 		// Exclude recently reviewed IDs if any exist
 		if len(recentIDs) > 0 {
-			subq.Where("id NOT IN (?)", bun.In(recentIDs))
+			subq.Where("?TableAlias.id NOT IN (?)", bun.In(recentIDs))
 		}
 
 		// Apply sort order to subquery
