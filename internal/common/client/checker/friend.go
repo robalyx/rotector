@@ -64,8 +64,8 @@ func NewFriendChecker(app *setup.App, logger *zap.Logger) *FriendChecker {
 	}
 }
 
-// ProcessUsers checks multiple users' friends concurrently and returns flagged users.
-func (c *FriendChecker) ProcessUsers(userInfos []*fetcher.Info) map[uint64]*types.User {
+// ProcessUsers checks multiple users' friends concurrently and updates flaggedUsers map.
+func (c *FriendChecker) ProcessUsers(userInfos []*fetcher.Info, flaggedUsers map[uint64]*types.User) {
 	// Collect all unique friend IDs across all users
 	uniqueFriendIDs := make(map[uint64]struct{})
 	for _, userInfo := range userInfos {
@@ -87,7 +87,7 @@ func (c *FriendChecker) ProcessUsers(userInfos []*fetcher.Info) map[uint64]*type
 	})
 	if err != nil {
 		c.logger.Error("Failed to fetch existing friends", zap.Error(err))
-		return nil
+		return
 	}
 
 	// Process each user concurrently
@@ -116,15 +116,18 @@ func (c *FriendChecker) ProcessUsers(userInfos []*fetcher.Info) map[uint64]*type
 		close(resultsChan)
 	}()
 
-	// Collect flagged users
-	flaggedUsers := make(map[uint64]*types.User)
+	// Update flaggedUsers map
 	for result := range resultsChan {
 		if result.AutoFlagged {
-			flaggedUsers[result.UserID] = result.User
+			if existingUser, ok := flaggedUsers[result.UserID]; ok {
+				// Combine reasons and update confidence
+				existingUser.Reason = fmt.Sprintf("%s\n\n%s", existingUser.Reason, result.User.Reason)
+				existingUser.Confidence = 1.0
+			} else {
+				flaggedUsers[result.UserID] = result.User
+			}
 		}
 	}
-
-	return flaggedUsers
 }
 
 // processUserFriends checks if a user should be flagged based on their friends.

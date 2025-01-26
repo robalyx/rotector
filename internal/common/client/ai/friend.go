@@ -14,6 +14,7 @@ import (
 	"github.com/tdewolff/minify/v2"
 	"github.com/tdewolff/minify/v2/json"
 	"go.uber.org/zap"
+	"golang.org/x/sync/semaphore"
 )
 
 const (
@@ -42,9 +43,10 @@ type FriendAnalysis struct {
 
 // FriendAnalyzer handles AI-based analysis of friend networks using Gemini models.
 type FriendAnalyzer struct {
-	genModel *genai.GenerativeModel
-	minify   *minify.M
-	logger   *zap.Logger
+	genModel    *genai.GenerativeModel
+	minify      *minify.M
+	analysisSem *semaphore.Weighted
+	logger      *zap.Logger
 }
 
 // NewFriendAnalyzer creates a FriendAnalyzer.
@@ -76,14 +78,21 @@ func NewFriendAnalyzer(app *setup.App, logger *zap.Logger) *FriendAnalyzer {
 	m.AddFunc(ApplicationJSON, json.Minify)
 
 	return &FriendAnalyzer{
-		genModel: friendModel,
-		minify:   m,
-		logger:   logger,
+		genModel:    friendModel,
+		minify:      m,
+		analysisSem: semaphore.NewWeighted(int64(app.Config.Worker.BatchSizes.FriendAnalysis)),
+		logger:      logger,
 	}
 }
 
 // GenerateFriendReason generates a friend network analysis reason using the Gemini model.
 func (a *FriendAnalyzer) GenerateFriendReason(userInfo *fetcher.Info, confirmedFriends, flaggedFriends map[uint64]*types.User) (string, error) {
+	// Acquire semaphore before making AI request
+	if err := a.analysisSem.Acquire(context.Background(), 1); err != nil {
+		return "", fmt.Errorf("failed to acquire semaphore: %w", err)
+	}
+	defer a.analysisSem.Release(1)
+
 	// Create a summary of friend data for AI analysis
 	type FriendSummary struct {
 		Name   string        `json:"name"`

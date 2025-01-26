@@ -8,9 +8,9 @@ request_timeout = 15000
 
 [worker.batch_sizes]
 # Number of friends to process in one batch
-friend_users = 50
+friend_users = 200
 # Number of group members to process in one batch
-group_users = 50
+group_users = 200
 
 # Number of users to check for bans in one batch
 purge_users = 200
@@ -28,10 +28,16 @@ thumbnail_users = 100
 # Number of groups to update thumbnails in one batch 
 thumbnail_groups = 100
 
-# Maximum concurrent image downloads for profile images
-image_downloads = 50
-# Maximum concurrent outfit downloads per worker
-outfit_downloads = 50
+# Maximum concurrent AI requests for image analysis
+image_analysis = 20
+# Maximum concurrent AI requests for outfit analysis
+outfit_analysis = 50
+# Maximum concurrent AI requests for user analysis
+user_analysis = 20
+# Number of users to analyze in one AI request
+user_analysis_batch = 10
+# Maximum concurrent AI requests for friend analysis
+friend_analysis = 20
 
 [worker.threshold_limits]
 # Maximum number of flagged users before stopping worker

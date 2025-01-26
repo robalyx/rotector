@@ -3,6 +3,7 @@ package ai
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 
@@ -53,12 +54,14 @@ Confidence Level Guide:
 - 0.8-1.0: Missing both shirt AND pants`
 )
 
+var ErrNoImages = errors.New("no images downloaded successfully")
+
 // ImageAnalyzer handles AI-based image analysis using Gemini models.
 type ImageAnalyzer struct {
 	httpClient  *client.Client
 	genAIClient *genai.Client
 	imageModel  *genai.GenerativeModel
-	downloadSem *semaphore.Weighted
+	analysisSem *semaphore.Weighted
 	logger      *zap.Logger
 }
 
@@ -121,25 +124,33 @@ func NewImageAnalyzer(app *setup.App, logger *zap.Logger) *ImageAnalyzer {
 		httpClient:  app.RoAPI.GetClient(),
 		genAIClient: app.GenAIClient,
 		imageModel:  imageModel,
-		downloadSem: semaphore.NewWeighted(int64(app.Config.Worker.BatchSizes.ImageDownloads)),
+		analysisSem: semaphore.NewWeighted(int64(app.Config.Worker.BatchSizes.ImageAnalysis)),
 		logger:      logger,
 	}
 }
 
 // ProcessImages analyzes thumbnail images for a batch of users.
-func (a *ImageAnalyzer) ProcessImages(userInfos []*fetcher.Info) (map[uint64]*types.User, []uint64, error) {
-	var (
-		ctx                 = context.Background()
-		validatedUsers      = make(map[uint64]*types.User)
-		userImages          []UserImage
-		failedValidationIDs []uint64
-	)
+// Returns IDs of users that failed validation for retry.
+func (a *ImageAnalyzer) ProcessImages(userInfos []*fetcher.Info, flaggedUsers map[uint64]*types.User) ([]uint64, error) {
+	var failedValidationIDs []uint64
+
+	// Acquire semaphore before making AI request
+	if err := a.analysisSem.Acquire(context.Background(), 1); err != nil {
+		return nil, fmt.Errorf("failed to acquire semaphore: %w", err)
+	}
+	defer a.analysisSem.Release(1)
 
 	// Analyze images with retry
-	analysis, err := withRetry(ctx, func() (*BatchImageAnalysis, error) {
+	analysis, err := withRetry(context.Background(), func() (*BatchImageAnalysis, error) {
 		// Download and upload images concurrently
-		userImages, failedValidationIDs = a.downloadAndUploadImages(ctx, userInfos)
-		defer a.cleanupFiles(ctx, userImages)
+		var userImages []UserImage
+		userImages, failedValidationIDs = a.downloadAndUploadImages(context.Background(), userInfos)
+		defer a.cleanupFiles(context.Background(), userImages)
+
+		// Skip if no images were downloaded successfully
+		if len(userImages) == 0 {
+			return nil, ErrNoImages
+		}
 
 		// Prepare parts for the model
 		parts := make([]genai.Part, 0, len(userImages)*2+1)
@@ -151,7 +162,7 @@ func (a *ImageAnalyzer) ProcessImages(userInfos []*fetcher.Info) (map[uint64]*ty
 		}
 
 		// Send request to Gemini
-		resp, err := a.imageModel.GenerateContent(ctx, parts...)
+		resp, err := a.imageModel.GenerateContent(context.Background(), parts...)
 		if err != nil {
 			return nil, fmt.Errorf("gemini API error: %w", err)
 		}
@@ -170,17 +181,16 @@ func (a *ImageAnalyzer) ProcessImages(userInfos []*fetcher.Info) (map[uint64]*ty
 	})
 	if err != nil {
 		// If batch analysis fails, add all IDs to retry list
-		for _, img := range userImages {
-			failedValidationIDs = append(failedValidationIDs, img.info.ID)
+		for _, info := range userInfos {
+			failedValidationIDs = append(failedValidationIDs, info.ID)
 		}
-		a.logger.Error("Failed to analyze images", zap.Error(err))
-		return validatedUsers, failedValidationIDs, err
+		return failedValidationIDs, err
 	}
 
 	// Create a map of username to user info
 	usernameMap := make(map[string]*fetcher.Info)
-	for _, img := range userImages {
-		usernameMap[img.info.Name] = img.info
+	for _, info := range userInfos {
+		usernameMap[info.Name] = info
 	}
 
 	// Process results
@@ -205,33 +215,40 @@ func (a *ImageAnalyzer) ProcessImages(userInfos []*fetcher.Info) (map[uint64]*ty
 			continue
 		}
 
-		validatedUsers[userInfo.ID] = &types.User{
-			ID:                  userInfo.ID,
-			Name:                userInfo.Name,
-			DisplayName:         userInfo.DisplayName,
-			Description:         userInfo.Description,
-			CreatedAt:           userInfo.CreatedAt,
-			Reason:              "Image Analysis: Missing required clothing",
-			Groups:              userInfo.Groups.Data,
-			Friends:             userInfo.Friends.Data,
-			Games:               userInfo.Games.Data,
-			Outfits:             userInfo.Outfits.Data,
-			FollowerCount:       userInfo.FollowerCount,
-			FollowingCount:      userInfo.FollowingCount,
-			Confidence:          result.Confidence,
-			LastUpdated:         userInfo.LastUpdated,
-			LastBanCheck:        userInfo.LastBanCheck,
-			ThumbnailURL:        userInfo.ThumbnailURL,
-			LastThumbnailUpdate: userInfo.LastThumbnailUpdate,
+		// Create or update user in flaggedUsers map
+		if existingUser, ok := flaggedUsers[userInfo.ID]; ok {
+			// Combine reasons and update confidence
+			existingUser.Reason = fmt.Sprintf("%s\n\n%s", existingUser.Reason,
+				"Image Analysis: Missing required clothing")
+			existingUser.Confidence = 1.0
+		} else {
+			flaggedUsers[userInfo.ID] = &types.User{
+				ID:                  userInfo.ID,
+				Name:                userInfo.Name,
+				DisplayName:         userInfo.DisplayName,
+				Description:         userInfo.Description,
+				CreatedAt:           userInfo.CreatedAt,
+				Reason:              "Image Analysis: Missing required clothing",
+				Groups:              userInfo.Groups.Data,
+				Friends:             userInfo.Friends.Data,
+				Games:               userInfo.Games.Data,
+				Outfits:             userInfo.Outfits.Data,
+				FollowerCount:       userInfo.FollowerCount,
+				FollowingCount:      userInfo.FollowingCount,
+				Confidence:          result.Confidence,
+				LastUpdated:         userInfo.LastUpdated,
+				LastBanCheck:        userInfo.LastBanCheck,
+				ThumbnailURL:        userInfo.ThumbnailURL,
+				LastThumbnailUpdate: userInfo.LastThumbnailUpdate,
+			}
 		}
 	}
 
 	a.logger.Info("Received AI image analysis",
 		zap.Int("totalUsers", len(userInfos)),
-		zap.Int("flaggedUsers", len(analysis.Results)),
-		zap.Int("validatedUsers", len(validatedUsers)))
+		zap.Int("flaggedUsers", len(flaggedUsers)))
 
-	return validatedUsers, failedValidationIDs, nil
+	return failedValidationIDs, nil
 }
 
 // downloadAndUploadImages concurrently downloads and uploads images for a batch of users.
@@ -257,16 +274,6 @@ func (a *ImageAnalyzer) downloadAndUploadImages(ctx context.Context, userInfos [
 
 		go func() {
 			defer wg.Done()
-
-			// Acquire semaphore before processing
-			if err := a.downloadSem.Acquire(ctx, 1); err != nil {
-				a.logger.Warn("Failed to acquire semaphore",
-					zap.Uint64("userID", currentInfo.ID),
-					zap.Error(err))
-				resultChan <- result{err: err}
-				return
-			}
-			defer a.downloadSem.Release(1)
 
 			file, err := a.downloadAndUploadImage(ctx, currentInfo.ThumbnailURL)
 			if err != nil {
@@ -309,28 +316,30 @@ func (a *ImageAnalyzer) downloadAndUploadImages(ctx context.Context, userInfos [
 
 // downloadAndUploadImage downloads the given URL and uploads it to a file storage.
 func (a *ImageAnalyzer) downloadAndUploadImage(ctx context.Context, url string) (*genai.File, error) {
-	// Download image
-	res, err := a.httpClient.NewRequest().URL(url).Do(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to download image: %w", err)
-	}
-	defer res.Body.Close()
+	return withRetry(ctx, func() (*genai.File, error) {
+		// Download image
+		res, err := a.httpClient.NewRequest().URL(url).Do(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("failed to download image: %w", err)
+		}
+		defer res.Body.Close()
 
-	// Read image data into buffer
-	buf := new(bytes.Buffer)
-	if _, err := buf.ReadFrom(res.Body); err != nil {
-		return nil, fmt.Errorf("failed to read image data: %w", err)
-	}
+		// Read image data into buffer
+		buf := new(bytes.Buffer)
+		if _, err := buf.ReadFrom(res.Body); err != nil {
+			return nil, fmt.Errorf("failed to read image data: %w", err)
+		}
 
-	// Upload to Gemini
-	file, err := a.genAIClient.UploadFile(ctx, uuid.New().String(), buf, &genai.UploadFileOptions{
-		MIMEType: "image/png",
+		// Upload to Gemini
+		file, err := a.genAIClient.UploadFile(ctx, uuid.New().String(), buf, &genai.UploadFileOptions{
+			MIMEType: "image/png",
+		})
+		if err != nil {
+			return nil, fmt.Errorf("failed to upload image: %w", err)
+		}
+
+		return file, nil
 	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to upload image: %w", err)
-	}
-
-	return file, nil
 }
 
 // cleanupFiles deletes uploaded files after analysis.

@@ -3,10 +3,27 @@ package utils
 import (
 	"testing"
 
+	"unicode"
+
 	"github.com/stretchr/testify/assert"
+	"golang.org/x/text/runes"
+	"golang.org/x/text/transform"
+	"golang.org/x/text/unicode/norm"
 )
 
+func newTestNormalizer() transform.Transformer {
+	return transform.Chain(
+		norm.NFKD,                             // Decompose with compatibility decomposition
+		runes.Remove(runes.In(unicode.Mn)),    // Remove non-spacing marks
+		runes.Remove(runes.In(unicode.P)),     // Remove punctuation
+		runes.Map(unicode.ToLower),            // Convert to lowercase before normalization
+		norm.NFKC,                             // Normalize with compatibility composition
+		runes.Remove(runes.In(unicode.Space)), // Remove spaces last
+	)
+}
+
 func TestNormalizeString(t *testing.T) {
+	normalizer := newTestNormalizer()
 	tests := []struct {
 		name  string
 		input string
@@ -35,19 +52,20 @@ func TestNormalizeString(t *testing.T) {
 		{
 			name:  "string with special characters",
 			input: "héllo! @wörld#",
-			want:  "hello!@world#",
+			want:  "helloworld",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := NormalizeString(tt.input)
+			got := NormalizeString(tt.input, normalizer)
 			assert.Equal(t, tt.want, got)
 		})
 	}
 }
 
 func TestContainsNormalized(t *testing.T) {
+	normalizer := newTestNormalizer()
 	tests := []struct {
 		name   string
 		s      string
@@ -94,7 +112,7 @@ func TestContainsNormalized(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := ContainsNormalized(tt.s, tt.substr)
+			got := ContainsNormalized(tt.s, tt.substr, normalizer)
 			assert.Equal(t, tt.want, got)
 		})
 	}
@@ -141,6 +159,60 @@ func TestCleanupText(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := CleanupText(tt.input)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func TestValidateFlaggedWords(t *testing.T) {
+	normalizer := newTestNormalizer()
+	tests := []struct {
+		name         string
+		flaggedWords []string
+		targetTexts  []string
+		want         bool
+	}{
+		{
+			name:         "empty inputs",
+			flaggedWords: []string{},
+			targetTexts:  []string{},
+			want:         false,
+		},
+		{
+			name:         "simple match above threshold",
+			flaggedWords: []string{"hello world", "test case"},
+			targetTexts:  []string{"hello testing world case"},
+			want:         true,
+		},
+		{
+			name:         "match with diacritics",
+			flaggedWords: []string{"héllo wörld"},
+			targetTexts:  []string{"hello world"},
+			want:         true,
+		},
+		{
+			name:         "below threshold match",
+			flaggedWords: []string{"hello world test case"},
+			targetTexts:  []string{"only hello here"},
+			want:         false,
+		},
+		{
+			name:         "match across multiple texts",
+			flaggedWords: []string{"hello world test case"},
+			targetTexts:  []string{"hello world", "test", "case"},
+			want:         true,
+		},
+		{
+			name:         "case insensitive match",
+			flaggedWords: []string{"Hello World TEST case"},
+			targetTexts:  []string{"hello world test CASE"},
+			want:         true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := ValidateFlaggedWords(tt.flaggedWords, normalizer, tt.targetTexts...)
 			assert.Equal(t, tt.want, got)
 		})
 	}

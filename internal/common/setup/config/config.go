@@ -139,16 +139,19 @@ type ShardingConfig struct {
 
 // BatchSizes configures how many items to process in each batch.
 type BatchSizes struct {
-	FriendUsers     int `koanf:"friend_users"`     // Number of friends to process in one batch
-	GroupUsers      int `koanf:"group_users"`      // Number of group members to process in one batch
-	PurgeUsers      int `koanf:"purge_users"`      // Number of users to check for bans in one batch
-	PurgeGroups     int `koanf:"purge_groups"`     // Number of groups to check for bans in one batch
-	TrackGroups     int `koanf:"track_groups"`     // Number of group trackings to process in one batch
-	QueueItems      int `koanf:"queue_items"`      // Number of queue items to process in one batch
-	ThumbnailUsers  int `koanf:"thumbnail_users"`  // Number of users to update thumbnails in one batch
-	ThumbnailGroups int `koanf:"thumbnail_groups"` // Number of groups to update thumbnails in one batch
-	ImageDownloads  int `koanf:"image_downloads"`  // Maximum concurrent image downloads for profile images
-	OutfitDownloads int `koanf:"outfit_downloads"` // Maximum concurrent outfit downloads per worker
+	FriendUsers       int `koanf:"friend_users"`        // Number of friends to process in one batch
+	GroupUsers        int `koanf:"group_users"`         // Number of group members to process in one batch
+	PurgeUsers        int `koanf:"purge_users"`         // Number of users to check for bans in one batch
+	PurgeGroups       int `koanf:"purge_groups"`        // Number of groups to check for bans in one batch
+	TrackGroups       int `koanf:"track_groups"`        // Number of group trackings to process in one batch
+	QueueItems        int `koanf:"queue_items"`         // Number of queue items to process in one batch
+	ThumbnailUsers    int `koanf:"thumbnail_users"`     // Number of users to update thumbnails in one batch
+	ThumbnailGroups   int `koanf:"thumbnail_groups"`    // Number of groups to update thumbnails in one batch
+	ImageAnalysis     int `koanf:"image_analysis"`      // Maximum concurrent AI requests for image analysis
+	OutfitAnalysis    int `koanf:"outfit_analysis"`     // Maximum concurrent AI requests for outfit analysis
+	UserAnalysis      int `koanf:"user_analysis"`       // Maximum concurrent AI requests for user analysis
+	UserAnalysisBatch int `koanf:"user_analysis_batch"` // Number of users to analyze in one AI request
+	FriendAnalysis    int `koanf:"friend_analysis"`     // Maximum concurrent AI requests for friend analysis
 }
 
 // ThresholdLimits configures various thresholds for worker operations.

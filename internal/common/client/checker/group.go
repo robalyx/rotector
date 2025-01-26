@@ -141,8 +141,8 @@ func (c *GroupChecker) calculateGroupConfidence(flaggedUsers []uint64, users map
 	return math.Round(avgConfidence*100) / 100
 }
 
-// ProcessUsers checks multiple users' groups concurrently and returns flagged users.
-func (c *GroupChecker) ProcessUsers(userInfos []*fetcher.Info) map[uint64]*types.User {
+// ProcessUsers checks multiple users' groups concurrently and updates flaggedUsers map.
+func (c *GroupChecker) ProcessUsers(userInfos []*fetcher.Info, flaggedUsers map[uint64]*types.User) {
 	// Collect all unique group IDs across all users
 	uniqueGroupIDs := make(map[uint64]struct{})
 	for _, userInfo := range userInfos {
@@ -164,7 +164,7 @@ func (c *GroupChecker) ProcessUsers(userInfos []*fetcher.Info) map[uint64]*types
 	})
 	if err != nil {
 		c.logger.Error("Failed to fetch existing groups", zap.Error(err))
-		return nil
+		return
 	}
 
 	// Process each user concurrently
@@ -193,15 +193,12 @@ func (c *GroupChecker) ProcessUsers(userInfos []*fetcher.Info) map[uint64]*types
 		close(resultsChan)
 	}()
 
-	// Collect flagged users
-	flaggedUsers := make(map[uint64]*types.User)
+	// Update flaggedUsers map
 	for result := range resultsChan {
 		if result.AutoFlagged {
 			flaggedUsers[result.UserID] = result.User
 		}
 	}
-
-	return flaggedUsers
 }
 
 // processUserGroups checks if a user should be flagged based on their groups.

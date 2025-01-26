@@ -2,7 +2,6 @@ package checker
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/robalyx/rotector/internal/common/client/ai"
 	"github.com/robalyx/rotector/internal/common/client/fetcher"
@@ -58,65 +57,25 @@ func NewUserChecker(app *setup.App, userFetcher *fetcher.UserFetcher, logger *za
 func (c *UserChecker) ProcessUsers(userInfos []*fetcher.Info) []uint64 {
 	c.logger.Info("Processing users", zap.Int("userInfos", len(userInfos)))
 
-	// Process group checker results
-	flaggedUsers := c.groupChecker.ProcessUsers(userInfos)
+	// Initialize map to store flagged users
+	flaggedUsers := make(map[uint64]*types.User)
+	var failedIDs []uint64
 
-	// Process friend checker results
-	flaggedByFriends := c.friendChecker.ProcessUsers(userInfos)
-	for userID, friendUser := range flaggedByFriends {
-		if existingUser, ok := flaggedUsers[userID]; ok {
-			// Combine reasons and update confidence
-			existingUser.Reason = fmt.Sprintf("%s\n\n%s", existingUser.Reason, friendUser.Reason)
-			existingUser.Confidence = 1.0
-		} else {
-			flaggedUsers[userID] = friendUser
-		}
+	// Process group checker
+	c.groupChecker.ProcessUsers(userInfos, flaggedUsers)
+
+	// Process friend checker
+	c.friendChecker.ProcessUsers(userInfos, flaggedUsers)
+
+	// Process user analysis
+	aiFailedIDs, err := c.userAnalyzer.ProcessUsers(userInfos, flaggedUsers)
+	if err != nil {
+		failedIDs = append(failedIDs, aiFailedIDs...)
 	}
 
-	// Process AI results
-	flaggedByAI, failedIDs, err := c.userAnalyzer.ProcessUsers(userInfos)
-	if err == nil {
-		for userID, aiUser := range flaggedByAI {
-			if existingUser, ok := flaggedUsers[userID]; ok {
-				// Combine reasons and update confidence
-				existingUser.Reason = fmt.Sprintf("%s\n\n%s", existingUser.Reason, aiUser.Reason)
-				existingUser.Confidence = 1.0
-				existingUser.FlaggedContent = aiUser.FlaggedContent
-			} else {
-				flaggedUsers[userID] = aiUser
-			}
-		}
-	}
-
-	// Process image analysis results
-	flaggedByImage, imageFailedIDs, err := c.imageAnalyzer.ProcessImages(userInfos)
-	if err == nil {
-		for userID, imageUser := range flaggedByImage {
-			if existingUser, ok := flaggedUsers[userID]; ok {
-				// Combine reasons and update confidence
-				existingUser.Reason = fmt.Sprintf("%s\n\n%s", existingUser.Reason, imageUser.Reason)
-				existingUser.Confidence = 1.0
-			} else {
-				flaggedUsers[userID] = imageUser
-			}
-		}
-		// Add image analysis failures to retry list
-		failedIDs = append(failedIDs, imageFailedIDs...)
-	}
-
-	// Process outfit analysis results
-	flaggedByOutfit, outfitFailedIDs, err := c.outfitAnalyzer.ProcessOutfits(userInfos)
-	if err == nil {
-		for userID, outfitUser := range flaggedByOutfit {
-			if existingUser, ok := flaggedUsers[userID]; ok {
-				// Combine reasons and update confidence
-				existingUser.Reason = fmt.Sprintf("%s\n\n%s", existingUser.Reason, outfitUser.Reason)
-				existingUser.Confidence = 1.0
-			} else {
-				flaggedUsers[userID] = outfitUser
-			}
-		}
-		// Add outfit analysis failures to retry list
+	// Process outfit analysis
+	outfitFailedIDs, err := c.outfitAnalyzer.ProcessOutfits(userInfos, flaggedUsers)
+	if err != nil {
 		failedIDs = append(failedIDs, outfitFailedIDs...)
 	}
 
@@ -124,6 +83,22 @@ func (c *UserChecker) ProcessUsers(userInfos []*fetcher.Info) []uint64 {
 	if len(flaggedUsers) == 0 {
 		c.logger.Info("No flagged users found", zap.Int("userInfos", len(userInfos)))
 		return failedIDs
+	}
+
+	// Create a list of flagged infos for image analysis
+	flaggedInfos := make([]*fetcher.Info, 0, len(flaggedUsers))
+	for _, userInfo := range userInfos {
+		if _, ok := flaggedUsers[userInfo.ID]; ok {
+			flaggedInfos = append(flaggedInfos, userInfo)
+		}
+	}
+
+	// Process image analysis results only for flagged users
+	if len(flaggedInfos) > 0 {
+		imageFailedIDs, err := c.imageAnalyzer.ProcessImages(flaggedInfos, flaggedUsers)
+		if err != nil {
+			failedIDs = append(failedIDs, imageFailedIDs...)
+		}
 	}
 
 	// Add follow counts to flagged users

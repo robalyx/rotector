@@ -2,9 +2,10 @@ package ai
 
 import (
 	"context"
+	"errors"
 	"fmt"
-	"strings"
 	"sync"
+	"unicode"
 
 	"github.com/bytedance/sonic"
 	"github.com/google/generative-ai-go/genai"
@@ -16,90 +17,108 @@ import (
 	"github.com/tdewolff/minify/v2"
 	"github.com/tdewolff/minify/v2/json"
 	"go.uber.org/zap"
+	"golang.org/x/sync/semaphore"
+	"golang.org/x/text/runes"
+	"golang.org/x/text/transform"
+	"golang.org/x/text/unicode/norm"
 )
 
 const (
-	// ReviewSystemPrompt provides detailed instructions to the AI model for analyzing user content.
-	ReviewSystemPrompt = `You are a Roblox moderator focused on detecting predatory behavior and inappropriate content targeting minors.
+	// UserSystemPrompt provides detailed instructions to the AI model for analyzing user content.
+	UserSystemPrompt = `You are a Roblox moderator focused on detecting PREDATORY BEHAVIOR and INAPPROPRIATE CONTENT targeting minors.
 
 You will receive a list of user profiles in JSON format. Each profile contains:
 - Username
 - Display name (if different from username)
 - Profile description/bio
 
-Analyze each profile and identify users engaging in inappropriate behavior. For each profile, return:
+Analyze each profile and identify users engaging in PREDATORY BEHAVIOR. For each profile, return:
 - username: The exact username provided
 - reason: Clear explanation of violations found in one sentence. Use exactly "NO_VIOLATIONS" if no clear concerns found
 - flaggedContent: Exact quotes of the concerning content
 - confidence: Level (0.0-1.0) based on severity
   * Use 0.0 for profiles with no clear violations
-  * Use 0.1-1.0 ONLY for profiles with concerning elements
+  * Use 0.1-1.0 ONLY for profiles with predatory elements
 
 Confidence Level Guide:
 - 0.0: No predatory elements detected
-- 0.1-0.3: Subtle concerning patterns requiring investigation
+- 0.1-0.3: Subtle concerning red flags requiring investigation
 - 0.4-0.6: Clear inappropriate content or behavior
 - 0.7-0.8: Strong indicators of predatory behavior
 - 0.9-1.0: Explicit predatory intent or grooming attempts
 
-Do NOT include usernames in your reason
-Do NOT add users with no violations to the response
-Do NOT repeat the same content in flaggedContent array
-Do NOT flag empty descriptions
+STRICT RULES:
+1. DO NOT flag profiles for:
+   - Simple greetings (Hi, Hello, Hey)
+   - Casual farewells (Bye, See ya)
+   - Simple responses (Yes, No, OK)
+   - Empty/placeholder descriptions
+2. DO NOT include usernames in your reason
+3. DO NOT add users with no violations to the response
+4. DO NOT repeat the same content in flaggedContent array
+5. DO NOT flag empty descriptions
+6. Flag profiles showing MULTIPLE SUBTLE RED FLAGS even if individual elements seem innocent
 
 Look for predatory behavior:
 - Grooming attempts and manipulation:
   * Befriending minors with bad intent
-  * Love bombing and excessive compliments
-  * Offering gifts or special privileges
-  * Guilt-tripping tactics
-  * Isolation attempts
   * Building trust through manipulation
+  * Love bombing and excessive compliments (e.g., "good girl", "good boy")
+  * Exploiting vulnerabilities (e.g. "vulnerable", "needy", "lonely")
+  * Offering gifts or special privileges
+  * Using phrases like MDNI (minors do not interact) to hide predatory intent
+  * Unnecessary declarations of following TOS/Rules (e.g. "TOS follower", "follows TOS")
+  * Coded language for inappropriate activities
+  * Vague offers of "fun" or "good times" (e.g. "add me if you got games")
+  * Adult industry references
+  * References to adult fandoms or communities (e.g. "furry", "bara", "futa"/"fmta"/"fvta")
+  * Offering Robux, limited items, or game passes as incentives
+  * Requests to join "exclusive" Roblox groups/clans
+  * Requests for "bottom" or "top" role preferences
+  * Misspelled/bypassed words (e.g. "stinky", "gas", "poop", "pee", "fart", "loads given")
+  * Phonetic replacements for inappropriate terms
+  * Unicode character substitutions
 
 - Sexual content and inappropriate requests:
-  * Sexual solicitation or innuendo
   * Explicit sexual terms
+  * Sexual solicitation or innuendo
   * Body part references
   * Porn or NSFW content
   * ERP (erotic roleplay) terms
-  * Fetish mentions
-  * Roleplay requests
+  * Fetish mentions (e.g. "giant"/"giantess" sizeplay, scatological terms)
   * Dating or hookup requests
+  * Roleplay requests
+  * Gooner references (internet slang for compulsive behavior)
+  * Specifying "literate" or "illiterate" partners
+  * Suggestive size references (e.g. "big", "massive", "huge", "giant", "giantess")
+  * References to "Game", "condo", "con", "studio" 
+  * Phrases like "no condo", "no studio", "games only", etc. (often used to hide intent)
+  * References to being "young" or "older" (especially underage mentions)
+  * Double meaning phrases about "packages" or "things"
+  * "Trading" with sexual implications or off-platform exchanges (e.g. "trade pics", "special trades")
+  * Goddess/master/dom references
+  * Exploitative "adopt me" scenarios or family roleplay
+  * Suggestive emoji or symbol patterns
   * Inappropriate emoji or symbol combinations
   * Asking for "fun" or to "use me"
   * References to "zero consent" or "limitless"
-  * Suspicious use of "follows TOS" or similar disclaimers
-  * References to "cons" or adult conventions
-  * Suggestive size references ("big", "massive", "huge" + context)
-  * Double meaning phrases about "packages" or "things"
-  * Goddess/master/dom references in suspicious context
-  * References to "studio" or "game"
-
-- Age-related red flags:
-  * Age questions or preferences
-  * References to being "young" or "older"
-  * Age gap mentions
-  * Age + roleplay combinations
-  * Dating requests with age context
+  * References to "bulls"
+  * Non-consensual references
+  * Exploitation/harassment references
 
 - Private contact attempts:
-  * Requests for private meetings
+  * Sharing condo game codes/locations
+  * "Test my game" requests with private access
+  * Friend requests with age-related comments ("I need young friends")
+  * Friend requests with sexualized context ("friends with benefits")
+  * Friend requests with trade coercion ("friend me for free Robux")
   * Off-platform chat attempts
-  * Social media contact requests
-  * Camera/mic usage requests
-  * Private game or chat invites
-  * Photo requests
-  * Personal information seeking
-
-- Suspicious patterns:
-  * Coded language for inappropriate activities
-  * Non-consensual references
-  * Exploitation/harassment
-  * Adult industry references
-  * Suggestive emoji or symbol patterns
-  * Disclaimers that seem to hide inappropriate intent
-  * Vague offers of "fun" or "good times"`
+  * References to "blue app" or "blue user" (Telegram)
+  * References to private servers, rooms, or games
+  * Requests to "add me" combined with inappropriate context`
 )
+
+var ErrBatchProcessing = errors.New("batch processing errors")
 
 // MaxFriendDataTokens is the maximum number of tokens allowed for friend data.
 const MaxFriendDataTokens = 400
@@ -121,17 +140,19 @@ type FlaggedUser struct {
 
 // UserAnalyzer handles AI-based content analysis using Gemini models.
 type UserAnalyzer struct {
-	userModel  *genai.GenerativeModel
-	minify     *minify.M
-	translator *translator.Translator
-	logger     *zap.Logger
+	userModel   *genai.GenerativeModel
+	minify      *minify.M
+	translator  *translator.Translator
+	analysisSem *semaphore.Weighted
+	batchSize   int
+	logger      *zap.Logger
 }
 
 // NewUserAnalyzer creates an UserAnalyzer with separate models for user and friend analysis.
 func NewUserAnalyzer(app *setup.App, translator *translator.Translator, logger *zap.Logger) *UserAnalyzer {
 	// Create user analysis model
 	userModel := app.GenAIClient.GenerativeModel(app.Config.Common.GeminiAI.Model)
-	userModel.SystemInstruction = genai.NewUserContent(genai.Text(ReviewSystemPrompt))
+	userModel.SystemInstruction = genai.NewUserContent(genai.Text(UserSystemPrompt))
 	userModel.ResponseMIMEType = ApplicationJSON
 	userModel.ResponseSchema = &genai.Schema{
 		Type: genai.TypeObject,
@@ -168,32 +189,103 @@ func NewUserAnalyzer(app *setup.App, translator *translator.Translator, logger *
 		},
 		Required: []string{"users"},
 	}
-	userModel.Temperature = utils.Ptr(float32(0.2))
+	userModel.Temperature = utils.Ptr(float32(0.1))
 	userModel.TopP = utils.Ptr(float32(0.5))
 	userModel.TopK = utils.Ptr(int32(10))
 	m := minify.New()
 	m.AddFunc(ApplicationJSON, json.Minify)
 
 	return &UserAnalyzer{
-		userModel:  userModel,
-		minify:     m,
-		translator: translator,
-		logger:     logger,
+		userModel:   userModel,
+		minify:      m,
+		translator:  translator,
+		analysisSem: semaphore.NewWeighted(int64(app.Config.Worker.BatchSizes.UserAnalysis)),
+		batchSize:   app.Config.Worker.BatchSizes.UserAnalysisBatch,
+		logger:      logger,
 	}
 }
 
 // ProcessUsers sends user information to a Gemini model for analysis after translating descriptions.
-// Returns validated users and IDs of users that failed validation for retry.
-func (a *UserAnalyzer) ProcessUsers(userInfos []*fetcher.Info) (map[uint64]*types.User, []uint64, error) {
+// Returns IDs of users that failed validation for retry.
+func (a *UserAnalyzer) ProcessUsers(userInfos []*fetcher.Info, flaggedUsers map[uint64]*types.User) ([]uint64, error) {
+	numBatches := (len(userInfos) + a.batchSize - 1) / a.batchSize
+
+	type batchResult struct {
+		failedIDs []uint64
+		err       error
+	}
+
+	// Process batches concurrently
+	results := make(chan batchResult, numBatches)
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+
+	for i := range numBatches {
+		wg.Add(1)
+		go func(offset int) {
+			defer wg.Done()
+
+			start := offset * a.batchSize
+			end := start + a.batchSize
+			if end > len(userInfos) {
+				end = len(userInfos)
+			}
+
+			// Acquire semaphore before making AI request
+			if err := a.analysisSem.Acquire(context.Background(), 1); err != nil {
+				results <- batchResult{
+					failedIDs: getUserIDs(userInfos[start:end]),
+					err:       fmt.Errorf("failed to acquire semaphore: %w", err),
+				}
+				return
+			}
+			defer a.analysisSem.Release(1)
+
+			// Process batch
+			failedIDs, err := a.processBatch(userInfos[start:end], flaggedUsers, &mu)
+			results <- batchResult{failedIDs: failedIDs, err: err}
+		}(i)
+	}
+
+	// Wait for all batches to complete
+	go func() {
+		wg.Wait()
+		close(results)
+	}()
+
+	// Collect results
+	var allFailedIDs []uint64
+	var errors []error
+
+	for result := range results {
+		if result.err != nil {
+			errors = append(errors, result.err)
+		}
+		allFailedIDs = append(allFailedIDs, result.failedIDs...)
+	}
+
+	if len(errors) > 0 {
+		return allFailedIDs, fmt.Errorf("%w: %v", ErrBatchProcessing, errors)
+	}
+
+	a.logger.Info("Received AI user analysis",
+		zap.Int("totalUsers", len(userInfos)),
+		zap.Int("flaggedUsers", len(flaggedUsers)))
+
+	return allFailedIDs, nil
+}
+
+// processBatch handles a single batch of users.
+func (a *UserAnalyzer) processBatch(userInfos []*fetcher.Info, flaggedUsers map[uint64]*types.User, mu *sync.Mutex) ([]uint64, error) {
+	// Translate all descriptions concurrently
+	translatedInfos, originalInfos := a.prepareUserInfos(userInfos)
+
 	// Create a struct for user summaries for AI analysis
 	type UserSummary struct {
 		Name        string `json:"name"`
 		DisplayName string `json:"displayName,omitempty"`
 		Description string `json:"description"`
 	}
-
-	// Translate all descriptions concurrently
-	translatedInfos, originalInfos := a.prepareUserInfos(userInfos)
 
 	// Convert map to slice for AI request
 	userInfosWithoutID := make([]UserSummary, 0, len(translatedInfos))
@@ -220,18 +312,16 @@ func (a *UserAnalyzer) ProcessUsers(userInfos []*fetcher.Info) (map[uint64]*type
 	// Minify JSON to reduce token usage
 	userInfoJSON, err := sonic.Marshal(userInfosWithoutID)
 	if err != nil {
-		a.logger.Error("Error marshaling user info", zap.Error(err))
-		return nil, nil, fmt.Errorf("%w: %w", ErrJSONProcessing, err)
+		return getUserIDs(userInfos), fmt.Errorf("%w: %w", ErrJSONProcessing, err)
 	}
 
 	userInfoJSON, err = a.minify.Bytes(ApplicationJSON, userInfoJSON)
 	if err != nil {
-		a.logger.Error("Error minifying user info", zap.Error(err))
-		return nil, nil, fmt.Errorf("%w: %w", ErrJSONProcessing, err)
+		return getUserIDs(userInfos), fmt.Errorf("%w: %w", ErrJSONProcessing, err)
 	}
 
 	// Generate content and parse response using Gemini model with retry
-	flaggedUsers, err := withRetry(context.Background(), func() (*FlaggedUsers, error) {
+	flaggedResults, err := withRetry(context.Background(), func() (*FlaggedUsers, error) {
 		resp, err := a.userModel.GenerateContent(context.Background(), genai.Text(string(userInfoJSON)))
 		if err != nil {
 			return nil, fmt.Errorf("gemini API error: %w", err)
@@ -252,34 +342,28 @@ func (a *UserAnalyzer) ProcessUsers(userInfos []*fetcher.Info) (map[uint64]*type
 		return &result, nil
 	})
 	if err != nil {
-		// If batch analysis fails, add all IDs to retry list
-		failedValidationIDs := make([]uint64, 0, len(userInfos))
-		for _, user := range userInfos {
-			failedValidationIDs = append(failedValidationIDs, user.ID)
-		}
-		a.logger.Error("Error processing Gemini response", zap.Error(err))
-		return nil, failedValidationIDs, fmt.Errorf("%w: %w", ErrModelResponse, err)
+		return getUserIDs(userInfos), fmt.Errorf("%w: %w", ErrModelResponse, err)
 	}
 
-	// Validate AI responses against translated content but use original descriptions for storage
-	validatedUsers, failedValidationIDs := a.validateFlaggedUsers(flaggedUsers, translatedInfos, originalInfos)
+	// Validate AI responses and update flaggedUsers map
+	failedValidationIDs := a.validateAndUpdateFlaggedUsers(flaggedResults, translatedInfos, originalInfos, flaggedUsers, mu)
 
-	a.logger.Info("Received AI user analysis",
-		zap.Int("totalUsers", len(userInfos)),
-		zap.Int("flaggedUsers", len(flaggedUsers.Users)),
-		zap.Int("validatedUsers", len(validatedUsers)))
-
-	return validatedUsers, failedValidationIDs, nil
+	return failedValidationIDs, nil
 }
 
-// validateFlaggedUsers validates the flagged users against the translated content
-// but uses original descriptions when creating validated users. It checks if at least
-// 30% of the flagged words are found in the translated content to confirm the AI's findings.
-func (a *UserAnalyzer) validateFlaggedUsers(flaggedUsers *FlaggedUsers, translatedInfos map[string]*fetcher.Info, originalInfos map[string]*fetcher.Info) (map[uint64]*types.User, []uint64) {
-	validatedUsers := make(map[uint64]*types.User)
+// validateAndUpdateFlaggedUsers validates the flagged users and updates the flaggedUsers map.
+func (a *UserAnalyzer) validateAndUpdateFlaggedUsers(flaggedResults *FlaggedUsers, translatedInfos, originalInfos map[string]*fetcher.Info, flaggedUsers map[uint64]*types.User, mu *sync.Mutex) []uint64 {
 	var failedValidationIDs []uint64
+	normalizer := transform.Chain(
+		norm.NFKD,                             // Decompose with compatibility decomposition
+		runes.Remove(runes.In(unicode.Mn)),    // Remove non-spacing marks
+		runes.Remove(runes.In(unicode.P)),     // Remove punctuation
+		runes.Map(unicode.ToLower),            // Convert to lowercase before normalization
+		norm.NFKC,                             // Normalize with compatibility composition
+		runes.Remove(runes.In(unicode.Space)), // Remove spaces
+	)
 
-	for _, flaggedUser := range flaggedUsers.Users {
+	for _, flaggedUser := range flaggedResults.Users {
 		translatedInfo, exists := translatedInfos[flaggedUser.Name]
 		originalInfo, hasOriginal := originalInfos[flaggedUser.Name]
 
@@ -309,47 +393,44 @@ func (a *UserAnalyzer) validateFlaggedUsers(flaggedUsers *FlaggedUsers, translat
 			continue
 		}
 
-		// Split all flagged content into words
-		var allFlaggedWords []string
-		for _, content := range flaggedUser.FlaggedContent {
-			allFlaggedWords = append(allFlaggedWords, strings.Fields(content)...)
-		}
+		// Validate flagged content against user texts
+		isValid := utils.ValidateFlaggedWords(flaggedUser.FlaggedContent,
+			normalizer,
+			translatedInfo.Name,
+			translatedInfo.DisplayName,
+			translatedInfo.Description)
 
-		// Count how many flagged words are found in the translated content
-		foundWords := 0
-		for _, word := range allFlaggedWords {
-			if utils.ContainsNormalized(translatedInfo.Name, word) ||
-				(translatedInfo.DisplayName != translatedInfo.Name && utils.ContainsNormalized(translatedInfo.DisplayName, word)) ||
-				utils.ContainsNormalized(translatedInfo.Description, word) {
-				foundWords++
-			}
-		}
-
-		// Check if at least 30% of the flagged words are found
-		isValid := float64(foundWords) >= 0.3*float64(len(allFlaggedWords))
-
-		// If the flagged user is correct, add it using original info
+		// If the flagged user is valid, update the flaggedUsers map
 		if isValid {
-			validatedUsers[originalInfo.ID] = &types.User{
-				ID:                  originalInfo.ID,
-				Name:                originalInfo.Name,
-				DisplayName:         originalInfo.DisplayName,
-				Description:         originalInfo.Description,
-				CreatedAt:           originalInfo.CreatedAt,
-				Reason:              "AI Analysis: " + flaggedUser.Reason,
-				Groups:              originalInfo.Groups.Data,
-				Friends:             originalInfo.Friends.Data,
-				Games:               originalInfo.Games.Data,
-				Outfits:             originalInfo.Outfits.Data,
-				FollowerCount:       originalInfo.FollowerCount,
-				FollowingCount:      originalInfo.FollowingCount,
-				FlaggedContent:      flaggedUser.FlaggedContent,
-				Confidence:          flaggedUser.Confidence,
-				LastUpdated:         originalInfo.LastUpdated,
-				LastBanCheck:        originalInfo.LastBanCheck,
-				ThumbnailURL:        originalInfo.ThumbnailURL,
-				LastThumbnailUpdate: originalInfo.LastThumbnailUpdate,
+			mu.Lock()
+			if existingUser, ok := flaggedUsers[originalInfo.ID]; ok {
+				// Combine reasons and update confidence
+				existingUser.Reason = fmt.Sprintf("%s\n\nAI Analysis: %s", existingUser.Reason, flaggedUser.Reason)
+				existingUser.Confidence = 1.0
+				existingUser.FlaggedContent = flaggedUser.FlaggedContent
+			} else {
+				flaggedUsers[originalInfo.ID] = &types.User{
+					ID:                  originalInfo.ID,
+					Name:                originalInfo.Name,
+					DisplayName:         originalInfo.DisplayName,
+					Description:         originalInfo.Description,
+					CreatedAt:           originalInfo.CreatedAt,
+					Reason:              "AI Analysis: " + flaggedUser.Reason,
+					Groups:              originalInfo.Groups.Data,
+					Friends:             originalInfo.Friends.Data,
+					Games:               originalInfo.Games.Data,
+					Outfits:             originalInfo.Outfits.Data,
+					FollowerCount:       originalInfo.FollowerCount,
+					FollowingCount:      originalInfo.FollowingCount,
+					FlaggedContent:      flaggedUser.FlaggedContent,
+					Confidence:          flaggedUser.Confidence,
+					LastUpdated:         originalInfo.LastUpdated,
+					LastBanCheck:        originalInfo.LastBanCheck,
+					ThumbnailURL:        originalInfo.ThumbnailURL,
+					LastThumbnailUpdate: originalInfo.LastThumbnailUpdate,
+				}
 			}
+			mu.Unlock()
 		} else {
 			failedValidationIDs = append(failedValidationIDs, originalInfo.ID)
 			a.logger.Warn("AI flagged content did not pass validation",
@@ -357,18 +438,15 @@ func (a *UserAnalyzer) validateFlaggedUsers(flaggedUsers *FlaggedUsers, translat
 				zap.String("flaggedUsername", flaggedUser.Name),
 				zap.String("username", originalInfo.Name),
 				zap.String("description", originalInfo.Description),
-				zap.Strings("flaggedContent", flaggedUser.FlaggedContent),
-				zap.Float64("matchPercentage", float64(foundWords)/float64(len(allFlaggedWords))*100))
+				zap.Strings("flaggedContent", flaggedUser.FlaggedContent))
 		}
 	}
 
-	return validatedUsers, failedValidationIDs
+	return failedValidationIDs
 }
 
-// prepareUserInfos translates user descriptions and maintains maps of both translated
-// and original user infos for validation. If translation fails for any description,
-// it falls back to using the original content. Returns maps using normalized usernames
-// as keys.
+// prepareUserInfos translates user descriptions for different languages and encodings.
+// Returns maps of both translated and original user infos for validation.
 func (a *UserAnalyzer) prepareUserInfos(userInfos []*fetcher.Info) (map[string]*fetcher.Info, map[string]*fetcher.Info) {
 	// TranslationResult contains the result of translating a user's description.
 	type TranslationResult struct {
@@ -446,4 +524,13 @@ func (a *UserAnalyzer) prepareUserInfos(userInfos []*fetcher.Info) (map[string]*
 	}
 
 	return translatedInfos, originalInfos
+}
+
+// getUserIDs extracts user IDs from a slice of user infos.
+func getUserIDs(userInfos []*fetcher.Info) []uint64 {
+	ids := make([]uint64, len(userInfos))
+	for i, info := range userInfos {
+		ids[i] = info.ID
+	}
+	return ids
 }

@@ -82,7 +82,7 @@ type OutfitAnalyzer struct {
 	genAIClient      *genai.Client
 	outfitModel      *genai.GenerativeModel
 	thumbnailFetcher *fetcher.ThumbnailFetcher
-	downloadSem      *semaphore.Weighted
+	analysisSem      *semaphore.Weighted
 	logger           *zap.Logger
 }
 
@@ -126,26 +126,23 @@ func NewOutfitAnalyzer(app *setup.App, logger *zap.Logger) *OutfitAnalyzer {
 		genAIClient:      app.GenAIClient,
 		outfitModel:      outfitModel,
 		thumbnailFetcher: fetcher.NewThumbnailFetcher(app.RoAPI, logger),
-		downloadSem:      semaphore.NewWeighted(int64(app.Config.Worker.BatchSizes.OutfitDownloads)),
+		analysisSem:      semaphore.NewWeighted(int64(app.Config.Worker.BatchSizes.OutfitAnalysis)),
 		logger:           logger,
 	}
 }
 
 // ProcessOutfits analyzes outfit images for a batch of users.
-func (a *OutfitAnalyzer) ProcessOutfits(userInfos []*fetcher.Info) (map[uint64]*types.User, []uint64, error) {
+// Returns IDs of users that failed validation for retry.
+func (a *OutfitAnalyzer) ProcessOutfits(userInfos []*fetcher.Info, flaggedUsers map[uint64]*types.User) ([]uint64, error) {
 	type result struct {
-		user  *types.User
-		err   error
-		retry bool
+		err    error
+		userID uint64
 	}
 
 	var (
-		ctx                 = context.Background()
-		validatedUsers      = make(map[uint64]*types.User)
-		failedValidationIDs []uint64
-		resultsChan         = make(chan result, len(userInfos))
-		mu                  sync.Mutex
-		wg                  sync.WaitGroup
+		resultsChan = make(chan result, len(userInfos))
+		wg          sync.WaitGroup
+		mu          sync.Mutex
 	)
 
 	// Process each user's outfits concurrently
@@ -159,25 +156,14 @@ func (a *OutfitAnalyzer) ProcessOutfits(userInfos []*fetcher.Info) (map[uint64]*
 		go func(info *fetcher.Info) {
 			defer wg.Done()
 
-			user, err := a.analyzeUserOutfits(ctx, info)
-			if err != nil {
-				if errors.Is(err, ErrNoViolations) {
-					resultsChan <- result{}
-					return
-				}
-
+			// Analyze user's outfits
+			err := a.analyzeUserOutfits(context.Background(), info, &mu, flaggedUsers)
+			if err != nil && !errors.Is(err, ErrNoViolations) {
 				resultsChan <- result{
-					err:   err,
-					retry: true,
-					user:  &types.User{ID: info.ID},
+					err:    err,
+					userID: info.ID,
 				}
-				a.logger.Error("Failed to analyze outfits",
-					zap.Error(err),
-					zap.String("username", info.Name))
-				return
 			}
-
-			resultsChan <- result{user: user}
 		}(userInfo)
 	}
 
@@ -187,32 +173,32 @@ func (a *OutfitAnalyzer) ProcessOutfits(userInfos []*fetcher.Info) (map[uint64]*
 		close(resultsChan)
 	}()
 
-	// Collect results
+	// Collect failed validation IDs
+	var failedValidationIDs []uint64
 	for res := range resultsChan {
 		if res.err != nil {
-			if res.retry {
-				failedValidationIDs = append(failedValidationIDs, res.user.ID)
-			}
-			continue
-		}
-
-		if res.user != nil {
-			mu.Lock()
-			validatedUsers[res.user.ID] = res.user
-			mu.Unlock()
+			failedValidationIDs = append(failedValidationIDs, res.userID)
+			a.logger.Error("Failed to analyze outfits",
+				zap.Error(res.err),
+				zap.Uint64("userID", res.userID))
 		}
 	}
 
 	a.logger.Info("Received AI outfit analysis",
 		zap.Int("totalUsers", len(userInfos)),
-		zap.Int("flaggedUsers", len(validatedUsers)),
-		zap.Int("validatedUsers", len(validatedUsers)))
+		zap.Int("flaggedUsers", len(flaggedUsers)))
 
-	return validatedUsers, failedValidationIDs, nil
+	return failedValidationIDs, nil
 }
 
 // analyzeUserOutfits handles the analysis of a single user's outfits.
-func (a *OutfitAnalyzer) analyzeUserOutfits(ctx context.Context, info *fetcher.Info) (*types.User, error) {
+func (a *OutfitAnalyzer) analyzeUserOutfits(ctx context.Context, info *fetcher.Info, mu *sync.Mutex, flaggedUsers map[uint64]*types.User) error {
+	// Acquire semaphore before making AI request
+	if err := a.analysisSem.Acquire(ctx, 1); err != nil {
+		return fmt.Errorf("failed to acquire semaphore: %w", err)
+	}
+	defer a.analysisSem.Release(1)
+
 	// Analyze outfits with retry
 	analysis, err := withRetry(ctx, func() (*OutfitAnalysis, error) {
 		// Create grid image from outfits
@@ -258,12 +244,12 @@ func (a *OutfitAnalyzer) analyzeUserOutfits(ctx context.Context, info *fetcher.I
 		return &result, nil
 	})
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	// Skip results with no violations
 	if analysis.Confidence < 0.1 || analysis.Reason == "NO_VIOLATIONS" {
-		return nil, ErrNoViolations
+		return nil
 	}
 
 	// Validate confidence level
@@ -271,28 +257,39 @@ func (a *OutfitAnalyzer) analyzeUserOutfits(ctx context.Context, info *fetcher.I
 		a.logger.Debug("AI flagged user with invalid confidence",
 			zap.String("username", info.Name),
 			zap.Float64("confidence", analysis.Confidence))
-		return nil, ErrNoViolations
+		return nil
 	}
 
-	return &types.User{
-		ID:                  info.ID,
-		Name:                info.Name,
-		DisplayName:         info.DisplayName,
-		Description:         info.Description,
-		CreatedAt:           info.CreatedAt,
-		Reason:              "Outfit Analysis: " + analysis.Reason,
-		Groups:              info.Groups.Data,
-		Friends:             info.Friends.Data,
-		Games:               info.Games.Data,
-		Outfits:             info.Outfits.Data,
-		FollowerCount:       info.FollowerCount,
-		FollowingCount:      info.FollowingCount,
-		Confidence:          analysis.Confidence,
-		LastUpdated:         info.LastUpdated,
-		LastBanCheck:        info.LastBanCheck,
-		ThumbnailURL:        info.ThumbnailURL,
-		LastThumbnailUpdate: info.LastThumbnailUpdate,
-	}, nil
+	// If analysis is successful and violations found, update flaggedUsers map
+	mu.Lock()
+	if existingUser, ok := flaggedUsers[info.ID]; ok {
+		// Combine reasons and update confidence
+		existingUser.Reason = fmt.Sprintf("%s\n\nOutfit Analysis: %s", existingUser.Reason, analysis.Reason)
+		existingUser.Confidence = 1.0
+	} else {
+		flaggedUsers[info.ID] = &types.User{
+			ID:                  info.ID,
+			Name:                info.Name,
+			DisplayName:         info.DisplayName,
+			Description:         info.Description,
+			CreatedAt:           info.CreatedAt,
+			Reason:              "Outfit Analysis: " + analysis.Reason,
+			Groups:              info.Groups.Data,
+			Friends:             info.Friends.Data,
+			Games:               info.Games.Data,
+			Outfits:             info.Outfits.Data,
+			FollowerCount:       info.FollowerCount,
+			FollowingCount:      info.FollowingCount,
+			Confidence:          analysis.Confidence,
+			LastUpdated:         info.LastUpdated,
+			LastBanCheck:        info.LastBanCheck,
+			ThumbnailURL:        info.ThumbnailURL,
+			LastThumbnailUpdate: info.LastThumbnailUpdate,
+		}
+	}
+	mu.Unlock()
+
+	return nil
 }
 
 // createOutfitGrid downloads outfit images and creates a grid image
@@ -362,18 +359,6 @@ func (a *OutfitAnalyzer) downloadOutfitImages(ctx context.Context, outfits []*ap
 		wg.Add(1)
 		go func(index int, outfit *apiTypes.Outfit, url string) {
 			defer wg.Done()
-
-			// Acquire semaphore before downloading
-			if err := a.downloadSem.Acquire(ctx, 1); err != nil {
-				a.logger.Warn("Failed to acquire semaphore",
-					zap.Error(err),
-					zap.String("url", url))
-				mu.Lock()
-				pendingDownloads--
-				mu.Unlock()
-				return
-			}
-			defer a.downloadSem.Release(1)
 
 			select {
 			case <-ctx.Done():
