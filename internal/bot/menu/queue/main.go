@@ -14,6 +14,8 @@ import (
 	"github.com/robalyx/rotector/internal/bot/interfaces"
 	"github.com/robalyx/rotector/internal/bot/utils"
 	"github.com/robalyx/rotector/internal/common/queue"
+	"github.com/robalyx/rotector/internal/common/storage/database/types"
+	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
 	"go.uber.org/zap"
 )
 
@@ -151,4 +153,15 @@ func (m *MainMenu) handleModal(event *events.ModalSubmitInteractionCreate, s *se
 
 	// Show status menu to track progress
 	m.layout.userReviewLayout.ShowStatusMenu(event, s)
+
+	// Log the activity
+	m.layout.db.Models().Activities().Log(context.Background(), &types.ActivityLog{
+		ActivityTarget: types.ActivityTarget{
+			UserID: userID,
+		},
+		ReviewerID:        uint64(event.User().ID),
+		ActivityType:      enum.ActivityTypeUserRechecked,
+		ActivityTimestamp: time.Now(),
+		Details:           map[string]interface{}{"reason": reason},
+	})
 }

@@ -317,10 +317,20 @@ func (m *ReviewMenu) handleRecheckModalSubmit(event *events.ModalSubmitInteracti
 		return
 	}
 
-	// Track the queued user in session for status updates
+	// Show status menu to track progress
 	session.QueueUser.Set(s, user.ID)
-
 	m.layout.statusMenu.Show(event, s)
+
+	// Log the activity
+	m.layout.db.Models().Activities().Log(context.Background(), &types.ActivityLog{
+		ActivityTarget: types.ActivityTarget{
+			UserID: user.ID,
+		},
+		ReviewerID:        uint64(event.User().ID),
+		ActivityType:      enum.ActivityTypeUserRechecked,
+		ActivityTimestamp: time.Now(),
+		Details:           map[string]interface{}{"reason": reason},
+	})
 }
 
 // handleViewUserLogs handles the shortcut to view user logs.
