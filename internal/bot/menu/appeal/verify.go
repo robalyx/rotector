@@ -100,7 +100,7 @@ func (m *VerifyMenu) verifyDescription(event *events.ComponentInteractionCreate,
 	}
 
 	// Submit appeal
-	if err := m.layout.db.Appeals().CreateAppeal(context.Background(), appeal, reason); err != nil {
+	if err := m.layout.db.Models().Appeals().CreateAppeal(context.Background(), appeal, reason); err != nil {
 		m.layout.logger.Error("Failed to create appeal", zap.Error(err))
 		m.layout.paginationManager.RespondWithError(event, "Failed to submit appeal. Please try again.")
 		return
@@ -111,7 +111,7 @@ func (m *VerifyMenu) verifyDescription(event *events.ComponentInteractionCreate,
 	m.layout.ShowOverview(event, s, "✅ Account verified and appeal submitted successfully!")
 
 	// Log the appeal submission
-	m.layout.db.Activity().Log(context.Background(), &types.ActivityLog{
+	m.layout.db.Models().Activities().Log(context.Background(), &types.ActivityLog{
 		ActivityTarget: types.ActivityTarget{
 			UserID: userID,
 		},

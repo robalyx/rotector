@@ -16,12 +16,12 @@ import (
 
 // Manager handles CAPTCHA-related operations.
 type Manager struct {
-	db     *database.Client
+	db     database.Client
 	logger *zap.Logger
 }
 
 // NewManager creates a new CAPTCHA manager.
-func NewManager(db *database.Client, logger *zap.Logger) *Manager {
+func NewManager(db database.Client, logger *zap.Logger) *Manager {
 	return &Manager{
 		db:     db,
 		logger: logger,

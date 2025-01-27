@@ -22,7 +22,7 @@ type Server struct {
 }
 
 // NewServer creates a new REST API server.
-func NewServer(db *database.Client, logger *zap.Logger, config *config.APIConfig) (http.Handler, error) {
+func NewServer(db database.Client, logger *zap.Logger, config *config.APIConfig) (http.Handler, error) {
 	// Create server instance with handlers
 	server := &Server{
 		userHandler:  handler.NewUserHandler(db, logger),

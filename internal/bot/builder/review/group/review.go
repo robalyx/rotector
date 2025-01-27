@@ -21,7 +21,7 @@ import (
 
 // ReviewBuilder creates the visual layout for reviewing a group.
 type ReviewBuilder struct {
-	db          *database.Client
+	db          database.Client
 	userID      uint64
 	group       *types.ReviewGroup
 	groupInfo   *apiTypes.GroupResponse
@@ -33,7 +33,7 @@ type ReviewBuilder struct {
 }
 
 // NewReviewBuilder creates a new review builder.
-func NewReviewBuilder(s *session.Session, db *database.Client) *ReviewBuilder {
+func NewReviewBuilder(s *session.Session, db database.Client) *ReviewBuilder {
 	return &ReviewBuilder{
 		db:          db,
 		userID:      s.UserID(),
@@ -319,7 +319,7 @@ func (b *ReviewBuilder) getShout() string {
 
 // getReviewHistory returns the review history field for the embed.
 func (b *ReviewBuilder) getReviewHistory() string {
-	logs, nextCursor, err := b.db.Activity().GetLogs(
+	logs, nextCursor, err := b.db.Models().Activities().GetLogs(
 		context.Background(),
 		types.ActivityFilter{
 			GroupID:      b.group.ID,

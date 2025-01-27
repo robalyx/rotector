@@ -14,12 +14,12 @@ import (
 
 // UserHandler handles user-related REST endpoints.
 type UserHandler struct {
-	db     *database.Client
+	db     database.Client
 	logger *zap.Logger
 }
 
 // NewUserHandler creates a new user handler.
-func NewUserHandler(db *database.Client, logger *zap.Logger) *UserHandler {
+func NewUserHandler(db database.Client, logger *zap.Logger) *UserHandler {
 	return &UserHandler{
 		db:     db,
 		logger: logger,
@@ -41,7 +41,7 @@ func NewUserHandler(db *database.Client, logger *zap.Logger) *UserHandler {
 //	@Router			/users/{id} [get]
 func (h *UserHandler) GetUser(w http.ResponseWriter, req bunrouter.Request) error {
 	// Get user from database
-	reviewUser, err := h.db.Users().GetUserByID(req.Context(), req.Param("id"), types.UserFields{})
+	reviewUser, err := h.db.Models().Users().GetUserByID(req.Context(), req.Param("id"), types.UserFields{})
 	if err != nil {
 		if errors.Is(err, types.ErrUserNotFound) {
 			response := restTypes.GetUserResponse{

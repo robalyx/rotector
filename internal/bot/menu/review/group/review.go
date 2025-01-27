@@ -165,7 +165,7 @@ func (m *ReviewMenu) handleActionSelection(event *events.ComponentInteractionCre
 // fetchNewTarget gets a new group to review based on the current sort order.
 func (m *ReviewMenu) fetchNewTarget(event interfaces.CommonEvent, s *session.Session, reviewerID uint64) (*types.ReviewGroup, bool, error) {
 	// Check if user is banned for low accuracy
-	isBanned, err := m.layout.db.Votes().CheckVoteAccuracy(context.Background(), uint64(event.User().ID))
+	isBanned, err := m.layout.db.Models().Votes().CheckVoteAccuracy(context.Background(), uint64(event.User().ID))
 	if err != nil {
 		m.layout.logger.Error("Failed to check vote accuracy",
 			zap.Error(err),
@@ -177,13 +177,13 @@ func (m *ReviewMenu) fetchNewTarget(event interfaces.CommonEvent, s *session.Ses
 	defaultSort := session.UserGroupDefaultSort.Get(s)
 	reviewTargetMode := session.UserReviewTargetMode.Get(s)
 
-	group, err := m.layout.db.Groups().GetGroupToReview(context.Background(), defaultSort, reviewTargetMode, reviewerID)
+	group, err := m.layout.db.Models().Groups().GetGroupToReview(context.Background(), defaultSort, reviewTargetMode, reviewerID)
 	if err != nil {
 		return nil, isBanned, err
 	}
 
 	// Get flagged users from tracking
-	flaggedUsers, err := m.layout.db.Tracking().GetFlaggedUsers(context.Background(), group.ID)
+	flaggedUsers, err := m.layout.db.Models().Tracking().GetFlaggedUsers(context.Background(), group.ID)
 	if err != nil {
 		return nil, isBanned, err
 	}
@@ -193,7 +193,7 @@ func (m *ReviewMenu) fetchNewTarget(event interfaces.CommonEvent, s *session.Ses
 	session.GroupMemberIDs.Set(s, flaggedUsers)
 
 	// Log the view action
-	go m.layout.db.Activity().Log(context.Background(), &types.ActivityLog{
+	go m.layout.db.Models().Activities().Log(context.Background(), &types.ActivityLog{
 		ActivityTarget: types.ActivityTarget{
 			GroupID: group.ID,
 		},
@@ -266,7 +266,7 @@ func (m *ReviewMenu) handleOpenAIChat(event *events.ComponentInteractionCreate, 
 		memberIDs = memberIDs[:limit]
 	}
 
-	flaggedMembers, err := m.layout.db.Users().GetUsersByIDs(context.Background(), memberIDs, types.UserFields{
+	flaggedMembers, err := m.layout.db.Models().Users().GetUsersByIDs(context.Background(), memberIDs, types.UserFields{
 		Basic:      true,
 		Reason:     true,
 		Confidence: true,
@@ -385,7 +385,7 @@ func (m *ReviewMenu) handleConfirmGroup(event interfaces.CommonEvent, s *session
 	var actionMsg string
 	if session.UserReviewMode.Get(s) == enum.ReviewModeTraining {
 		// Training mode - increment downvotes
-		if err := m.layout.db.Reputation().UpdateGroupVotes(context.Background(), group.ID, uint64(event.User().ID), false); err != nil {
+		if err := m.layout.db.Models().Reputation().UpdateGroupVotes(context.Background(), group.ID, uint64(event.User().ID), false); err != nil {
 			m.layout.logger.Error("Failed to update downvotes", zap.Error(err))
 			m.layout.paginationManager.RespondWithError(event, "Failed to update downvotes. Please try again.")
 			return
@@ -394,7 +394,7 @@ func (m *ReviewMenu) handleConfirmGroup(event interfaces.CommonEvent, s *session
 		actionMsg = "downvoted"
 
 		// Log the training downvote action
-		go m.layout.db.Activity().Log(context.Background(), &types.ActivityLog{
+		go m.layout.db.Models().Activities().Log(context.Background(), &types.ActivityLog{
 			ActivityTarget: types.ActivityTarget{
 				GroupID: group.ID,
 			},
@@ -430,7 +430,7 @@ func (m *ReviewMenu) handleConfirmGroup(event interfaces.CommonEvent, s *session
 		}
 
 		// Confirm the group
-		if err := m.layout.db.Groups().ConfirmGroup(context.Background(), group); err != nil {
+		if err := m.layout.db.Models().Groups().ConfirmGroup(context.Background(), group); err != nil {
 			m.layout.logger.Error("Failed to confirm group", zap.Error(err))
 			m.layout.paginationManager.RespondWithError(event, "Failed to confirm the group. Please try again.")
 			return
@@ -438,7 +438,7 @@ func (m *ReviewMenu) handleConfirmGroup(event interfaces.CommonEvent, s *session
 		actionMsg = "confirmed"
 
 		// Log the confirm action
-		go m.layout.db.Activity().Log(context.Background(), &types.ActivityLog{
+		go m.layout.db.Models().Activities().Log(context.Background(), &types.ActivityLog{
 			ActivityTarget: types.ActivityTarget{
 				GroupID: group.ID,
 			},
@@ -462,7 +462,7 @@ func (m *ReviewMenu) handleClearGroup(event interfaces.CommonEvent, s *session.S
 	var actionMsg string
 	if session.UserReviewMode.Get(s) == enum.ReviewModeTraining {
 		// Training mode - increment upvotes
-		if err := m.layout.db.Reputation().UpdateGroupVotes(context.Background(), group.ID, uint64(event.User().ID), true); err != nil {
+		if err := m.layout.db.Models().Reputation().UpdateGroupVotes(context.Background(), group.ID, uint64(event.User().ID), true); err != nil {
 			m.layout.logger.Error("Failed to update upvotes", zap.Error(err))
 			m.layout.paginationManager.RespondWithError(event, "Failed to update upvotes. Please try again.")
 			return
@@ -471,7 +471,7 @@ func (m *ReviewMenu) handleClearGroup(event interfaces.CommonEvent, s *session.S
 		actionMsg = "upvoted"
 
 		// Log the training upvote action
-		go m.layout.db.Activity().Log(context.Background(), &types.ActivityLog{
+		go m.layout.db.Models().Activities().Log(context.Background(), &types.ActivityLog{
 			ActivityTarget: types.ActivityTarget{
 				GroupID: group.ID,
 			},
@@ -507,7 +507,7 @@ func (m *ReviewMenu) handleClearGroup(event interfaces.CommonEvent, s *session.S
 		}
 
 		// Clear the group
-		if err := m.layout.db.Groups().ClearGroup(context.Background(), group); err != nil {
+		if err := m.layout.db.Models().Groups().ClearGroup(context.Background(), group); err != nil {
 			m.layout.logger.Error("Failed to clear group", zap.Error(err))
 			m.layout.paginationManager.RespondWithError(event, "Failed to clear the group. Please try again.")
 			return
@@ -515,7 +515,7 @@ func (m *ReviewMenu) handleClearGroup(event interfaces.CommonEvent, s *session.S
 		actionMsg = "cleared"
 
 		// Log the clear action
-		go m.layout.db.Activity().Log(context.Background(), &types.ActivityLog{
+		go m.layout.db.Models().Activities().Log(context.Background(), &types.ActivityLog{
 			ActivityTarget: types.ActivityTarget{
 				GroupID: group.ID,
 			},
@@ -541,7 +541,7 @@ func (m *ReviewMenu) handleSkipGroup(event interfaces.CommonEvent, s *session.Se
 
 	// Log the skip action
 	group := session.GroupTarget.Get(s)
-	m.layout.db.Activity().Log(context.Background(), &types.ActivityLog{
+	m.layout.db.Models().Activities().Log(context.Background(), &types.ActivityLog{
 		ActivityTarget: types.ActivityTarget{
 			GroupID: group.ID,
 		},
@@ -578,7 +578,7 @@ func (m *ReviewMenu) handleConfirmWithReasonModalSubmit(event *events.ModalSubmi
 	group.Confidence = confidence
 
 	// Update group status in database
-	if err := m.layout.db.Groups().ConfirmGroup(context.Background(), group); err != nil {
+	if err := m.layout.db.Models().Groups().ConfirmGroup(context.Background(), group); err != nil {
 		m.layout.logger.Error("Failed to confirm group", zap.Error(err))
 		m.layout.paginationManager.RespondWithError(event, "Failed to confirm the group. Please try again.")
 		return
@@ -590,7 +590,7 @@ func (m *ReviewMenu) handleConfirmWithReasonModalSubmit(event *events.ModalSubmi
 	m.updateCounters(s)
 
 	// Log the custom confirm action
-	m.layout.db.Activity().Log(context.Background(), &types.ActivityLog{
+	m.layout.db.Models().Activities().Log(context.Background(), &types.ActivityLog{
 		ActivityTarget: types.ActivityTarget{
 			GroupID: group.ID,
 		},

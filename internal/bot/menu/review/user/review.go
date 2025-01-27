@@ -85,7 +85,7 @@ func (m *ReviewMenu) Show(event interfaces.CommonEvent, s *session.Session, cont
 
 		// Get full user data and types for friends that exist in the database
 		var err error
-		flaggedFriends, err = m.layout.db.Users().GetUsersByIDs(context.Background(), friendIDs, types.UserFields{
+		flaggedFriends, err = m.layout.db.Models().Users().GetUsersByIDs(context.Background(), friendIDs, types.UserFields{
 			Basic:      true,
 			Reason:     true,
 			Confidence: true,
@@ -107,7 +107,7 @@ func (m *ReviewMenu) Show(event interfaces.CommonEvent, s *session.Session, cont
 
 		// Get full group data and types
 		var err error
-		flaggedGroups, err = m.layout.db.Groups().GetGroupsByIDs(context.Background(), groupIDs, types.GroupFields{
+		flaggedGroups, err = m.layout.db.Models().Groups().GetGroupsByIDs(context.Background(), groupIDs, types.GroupFields{
 			Basic:      true,
 			Reason:     true,
 			Confidence: true,
@@ -350,7 +350,7 @@ func (m *ReviewMenu) handleConfirmUser(event interfaces.CommonEvent, s *session.
 	var actionMsg string
 	if session.UserReviewMode.Get(s) == enum.ReviewModeTraining {
 		// Training mode - increment downvotes
-		if err := m.layout.db.Reputation().UpdateUserVotes(context.Background(), user.ID, uint64(event.User().ID), false); err != nil {
+		if err := m.layout.db.Models().Reputation().UpdateUserVotes(context.Background(), user.ID, uint64(event.User().ID), false); err != nil {
 			m.layout.logger.Error("Failed to update downvotes", zap.Error(err))
 			m.layout.paginationManager.RespondWithError(event, "Failed to update downvotes. Please try again.")
 			return
@@ -359,7 +359,7 @@ func (m *ReviewMenu) handleConfirmUser(event interfaces.CommonEvent, s *session.
 		actionMsg = "downvoted"
 
 		// Log the training downvote action
-		go m.layout.db.Activity().Log(context.Background(), &types.ActivityLog{
+		go m.layout.db.Models().Activities().Log(context.Background(), &types.ActivityLog{
 			ActivityTarget: types.ActivityTarget{
 				UserID: user.ID,
 			},
@@ -395,7 +395,7 @@ func (m *ReviewMenu) handleConfirmUser(event interfaces.CommonEvent, s *session.
 		}
 
 		// Confirm the user
-		if err := m.layout.db.Users().ConfirmUser(context.Background(), user); err != nil {
+		if err := m.layout.db.Models().Users().ConfirmUser(context.Background(), user); err != nil {
 			m.layout.logger.Error("Failed to confirm user", zap.Error(err))
 			m.layout.paginationManager.RespondWithError(event, "Failed to confirm the user. Please try again.")
 			return
@@ -403,7 +403,7 @@ func (m *ReviewMenu) handleConfirmUser(event interfaces.CommonEvent, s *session.
 		actionMsg = "confirmed"
 
 		// Log the confirm action
-		go m.layout.db.Activity().Log(context.Background(), &types.ActivityLog{
+		go m.layout.db.Models().Activities().Log(context.Background(), &types.ActivityLog{
 			ActivityTarget: types.ActivityTarget{
 				UserID: user.ID,
 			},
@@ -415,7 +415,7 @@ func (m *ReviewMenu) handleConfirmUser(event interfaces.CommonEvent, s *session.
 	}
 
 	// Get the number of flagged users left to review
-	flaggedCount, err := m.layout.db.Users().GetFlaggedUsersCount(context.Background())
+	flaggedCount, err := m.layout.db.Models().Users().GetFlaggedUsersCount(context.Background())
 	if err != nil {
 		m.layout.logger.Error("Failed to get flagged users count", zap.Error(err))
 	}
@@ -434,7 +434,7 @@ func (m *ReviewMenu) handleClearUser(event interfaces.CommonEvent, s *session.Se
 	var actionMsg string
 	if session.UserReviewMode.Get(s) == enum.ReviewModeTraining {
 		// Training mode - increment upvotes
-		if err := m.layout.db.Reputation().UpdateUserVotes(context.Background(), user.ID, uint64(event.User().ID), true); err != nil {
+		if err := m.layout.db.Models().Reputation().UpdateUserVotes(context.Background(), user.ID, uint64(event.User().ID), true); err != nil {
 			m.layout.logger.Error("Failed to update upvotes", zap.Error(err))
 			m.layout.paginationManager.RespondWithError(event, "Failed to update upvotes. Please try again.")
 			return
@@ -443,7 +443,7 @@ func (m *ReviewMenu) handleClearUser(event interfaces.CommonEvent, s *session.Se
 		actionMsg = "upvoted"
 
 		// Log the training upvote action
-		go m.layout.db.Activity().Log(context.Background(), &types.ActivityLog{
+		go m.layout.db.Models().Activities().Log(context.Background(), &types.ActivityLog{
 			ActivityTarget: types.ActivityTarget{
 				UserID: user.ID,
 			},
@@ -479,7 +479,7 @@ func (m *ReviewMenu) handleClearUser(event interfaces.CommonEvent, s *session.Se
 		}
 
 		// Clear the user
-		if err := m.layout.db.Users().ClearUser(context.Background(), user); err != nil {
+		if err := m.layout.db.Models().Users().ClearUser(context.Background(), user); err != nil {
 			m.layout.logger.Error("Failed to clear user", zap.Error(err))
 			m.layout.paginationManager.RespondWithError(event, "Failed to clear the user. Please try again.")
 			return
@@ -487,10 +487,10 @@ func (m *ReviewMenu) handleClearUser(event interfaces.CommonEvent, s *session.Se
 		actionMsg = "cleared"
 
 		// Remove user from group tracking
-		go m.layout.db.Tracking().RemoveUserFromGroups(context.Background(), user.ID, user.Groups)
+		go m.layout.db.Models().Tracking().RemoveUserFromGroups(context.Background(), user.ID, user.Groups)
 
 		// Log the clear action
-		go m.layout.db.Activity().Log(context.Background(), &types.ActivityLog{
+		go m.layout.db.Models().Activities().Log(context.Background(), &types.ActivityLog{
 			ActivityTarget: types.ActivityTarget{
 				UserID: user.ID,
 			},
@@ -502,7 +502,7 @@ func (m *ReviewMenu) handleClearUser(event interfaces.CommonEvent, s *session.Se
 	}
 
 	// Get the number of flagged users left to review
-	flaggedCount, err := m.layout.db.Users().GetFlaggedUsersCount(context.Background())
+	flaggedCount, err := m.layout.db.Models().Users().GetFlaggedUsersCount(context.Background())
 	if err != nil {
 		m.layout.logger.Error("Failed to get flagged users count", zap.Error(err))
 	}
@@ -517,7 +517,7 @@ func (m *ReviewMenu) handleClearUser(event interfaces.CommonEvent, s *session.Se
 // changing the current user's status.
 func (m *ReviewMenu) handleSkipUser(event interfaces.CommonEvent, s *session.Session) {
 	// Get the number of flagged users left to review
-	flaggedCount, err := m.layout.db.Users().GetFlaggedUsersCount(context.Background())
+	flaggedCount, err := m.layout.db.Models().Users().GetFlaggedUsersCount(context.Background())
 	if err != nil {
 		m.layout.logger.Error("Failed to get flagged users count", zap.Error(err))
 	}
@@ -530,7 +530,7 @@ func (m *ReviewMenu) handleSkipUser(event interfaces.CommonEvent, s *session.Ses
 	// Log the skip action
 	user := session.UserTarget.Get(s)
 
-	m.layout.db.Activity().Log(context.Background(), &types.ActivityLog{
+	m.layout.db.Models().Activities().Log(context.Background(), &types.ActivityLog{
 		ActivityTarget: types.ActivityTarget{
 			UserID: user.ID,
 		},
@@ -710,7 +710,7 @@ func (m *ReviewMenu) handleConfirmWithReasonModalSubmit(event *events.ModalSubmi
 	user.Confidence = confidence
 
 	// Update user status in database
-	if err := m.layout.db.Users().ConfirmUser(context.Background(), user); err != nil {
+	if err := m.layout.db.Models().Users().ConfirmUser(context.Background(), user); err != nil {
 		m.layout.logger.Error("Failed to confirm user", zap.Error(err))
 		m.layout.paginationManager.RespondWithError(event, "Failed to confirm the user. Please try again.")
 		return
@@ -722,7 +722,7 @@ func (m *ReviewMenu) handleConfirmWithReasonModalSubmit(event *events.ModalSubmi
 	m.updateCounters(s)
 
 	// Log the custom confirm action
-	m.layout.db.Activity().Log(context.Background(), &types.ActivityLog{
+	m.layout.db.Models().Activities().Log(context.Background(), &types.ActivityLog{
 		ActivityTarget: types.ActivityTarget{
 			UserID: user.ID,
 		},
@@ -739,7 +739,7 @@ func (m *ReviewMenu) handleConfirmWithReasonModalSubmit(event *events.ModalSubmi
 // fetchNewTarget gets a new user to review based on the current sort order.
 func (m *ReviewMenu) fetchNewTarget(event interfaces.CommonEvent, s *session.Session, reviewerID uint64) (*types.ReviewUser, bool, error) {
 	// Check if user is banned for low accuracy
-	isBanned, err := m.layout.db.Votes().CheckVoteAccuracy(context.Background(), uint64(event.User().ID))
+	isBanned, err := m.layout.db.Models().Votes().CheckVoteAccuracy(context.Background(), uint64(event.User().ID))
 	if err != nil {
 		m.layout.logger.Error("Failed to check vote accuracy",
 			zap.Error(err),
@@ -751,7 +751,7 @@ func (m *ReviewMenu) fetchNewTarget(event interfaces.CommonEvent, s *session.Ses
 	defaultSort := session.UserUserDefaultSort.Get(s)
 	reviewTargetMode := session.UserReviewTargetMode.Get(s)
 
-	user, err := m.layout.db.Users().GetUserToReview(context.Background(), defaultSort, reviewTargetMode, reviewerID)
+	user, err := m.layout.db.Models().Users().GetUserToReview(context.Background(), defaultSort, reviewTargetMode, reviewerID)
 	if err != nil {
 		return nil, isBanned, err
 	}
@@ -760,7 +760,7 @@ func (m *ReviewMenu) fetchNewTarget(event interfaces.CommonEvent, s *session.Ses
 	session.UserTarget.Set(s, user)
 
 	// Log the view action
-	go m.layout.db.Activity().Log(context.Background(), &types.ActivityLog{
+	go m.layout.db.Models().Activities().Log(context.Background(), &types.ActivityLog{
 		ActivityTarget: types.ActivityTarget{
 			UserID: user.ID,
 		},

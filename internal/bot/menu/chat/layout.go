@@ -12,7 +12,7 @@ import (
 
 // Layout handles the chat interface and AI interactions.
 type Layout struct {
-	db                *database.Client
+	db                database.Client
 	sessionManager    *session.Manager
 	paginationManager *pagination.Manager
 	chatHandler       *ai.ChatHandler

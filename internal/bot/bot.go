@@ -41,7 +41,7 @@ import (
 
 // Bot handles all the layouts and managers needed for Discord interaction.
 type Bot struct {
-	db                *database.Client
+	db                database.Client
 	client            bot.Client
 	logger            *zap.Logger
 	sessionManager    *session.Manager
@@ -384,7 +384,7 @@ func (b *Bot) handleModalSubmit(event *events.ModalSubmitInteractionCreate) {
 // Returns true if the user is banned and should not proceed.
 func (b *Bot) checkBanStatus(event interfaces.CommonEvent, s *session.Session, userID snowflake.ID, closeSession bool) bool {
 	// Check if user is banned
-	banned, err := b.db.Bans().IsBanned(context.Background(), uint64(userID))
+	banned, err := b.db.Models().Bans().IsBanned(context.Background(), uint64(userID))
 	if err != nil {
 		b.logger.Error("Failed to check ban status",
 			zap.Error(err),

@@ -86,7 +86,7 @@ func (m *ConfirmMenu) handleBanUser(event *events.ComponentInteractionCreate, s 
 	// Ban the user
 	now := time.Now()
 	expiresAt := session.AdminBanExpiry.Get(s)
-	if err := m.layout.db.Bans().BanUser(context.Background(), &types.DiscordBan{
+	if err := m.layout.db.Models().Bans().BanUser(context.Background(), &types.DiscordBan{
 		ID:        snowflake.ID(id),
 		Reason:    banReason,
 		Source:    enum.BanSourceAdmin,
@@ -106,7 +106,7 @@ func (m *ConfirmMenu) handleBanUser(event *events.ComponentInteractionCreate, s 
 	}
 
 	// Log the ban action
-	go m.layout.db.Activity().Log(context.Background(), &types.ActivityLog{
+	go m.layout.db.Models().Activities().Log(context.Background(), &types.ActivityLog{
 		ActivityTarget: types.ActivityTarget{
 			DiscordID: id,
 		},
@@ -133,7 +133,7 @@ func (m *ConfirmMenu) handleUnbanUser(event *events.ComponentInteractionCreate, 
 	}
 
 	// Unban the user
-	unbanned, err := m.layout.db.Bans().UnbanUser(context.Background(), id)
+	unbanned, err := m.layout.db.Models().Bans().UnbanUser(context.Background(), id)
 	if err != nil {
 		m.layout.logger.Error("Failed to unban user",
 			zap.Error(err),
@@ -151,7 +151,7 @@ func (m *ConfirmMenu) handleUnbanUser(event *events.ComponentInteractionCreate, 
 	}
 
 	// Log the unban action
-	go m.layout.db.Activity().Log(context.Background(), &types.ActivityLog{
+	go m.layout.db.Models().Activities().Log(context.Background(), &types.ActivityLog{
 		ActivityTarget: types.ActivityTarget{
 			DiscordID: id,
 		},
@@ -176,7 +176,7 @@ func (m *ConfirmMenu) handleDeleteUser(event *events.ComponentInteractionCreate,
 	}
 
 	// Delete user
-	found, err := m.layout.db.Users().DeleteUser(context.Background(), id)
+	found, err := m.layout.db.Models().Users().DeleteUser(context.Background(), id)
 	if err != nil {
 		m.layout.logger.Error("Failed to delete user",
 			zap.Error(err),
@@ -192,7 +192,7 @@ func (m *ConfirmMenu) handleDeleteUser(event *events.ComponentInteractionCreate,
 	}
 
 	// Log the deletion
-	go m.layout.db.Activity().Log(context.Background(), &types.ActivityLog{
+	go m.layout.db.Models().Activities().Log(context.Background(), &types.ActivityLog{
 		ActivityTarget: types.ActivityTarget{
 			UserID: id,
 		},
@@ -217,7 +217,7 @@ func (m *ConfirmMenu) handleDeleteGroup(event *events.ComponentInteractionCreate
 	}
 
 	// Delete group
-	found, err := m.layout.db.Groups().DeleteGroup(context.Background(), id)
+	found, err := m.layout.db.Models().Groups().DeleteGroup(context.Background(), id)
 	if err != nil {
 		m.layout.logger.Error("Failed to delete group",
 			zap.Error(err),
@@ -233,7 +233,7 @@ func (m *ConfirmMenu) handleDeleteGroup(event *events.ComponentInteractionCreate
 	}
 
 	// Log the deletion
-	go m.layout.db.Activity().Log(context.Background(), &types.ActivityLog{
+	go m.layout.db.Models().Activities().Log(context.Background(), &types.ActivityLog{
 		ActivityTarget: types.ActivityTarget{
 			GroupID: id,
 		},

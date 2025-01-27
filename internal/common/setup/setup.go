@@ -54,19 +54,19 @@ func (s ServiceType) GetRequestTimeout(cfg *config.Config) time.Duration {
 // App bundles all core dependencies and services needed by the application.
 // Each field represents a major subsystem that needs initialization and cleanup.
 type App struct {
-	Config       *config.Config   // Application configuration
-	Logger       *zap.Logger      // Main application logger
-	DBLogger     *zap.Logger      // Database-specific logger
-	DB           *database.Client // Database connection pool
-	GenAIClient  *genai.Client    // Generative AI client
-	GenAIModel   string           // Generative AI model
-	RoAPI        *api.API         // RoAPI HTTP client
-	Queue        *queue.Manager   // Background job queue
-	RedisManager *redis.Manager   // Redis connection manager
-	StatusClient rueidis.Client   // Redis client for worker status reporting
-	LogManager   *logger.Manager  // Log management system
-	pprofServer  *pprofServer     // Debug HTTP server for pprof
-	proxies      *proxy.Proxies   // Proxy middleware
+	Config       *config.Config  // Application configuration
+	Logger       *zap.Logger     // Main application logger
+	DBLogger     *zap.Logger     // Database-specific logger
+	DB           database.Client // Database connection pool
+	GenAIClient  *genai.Client   // Generative AI client
+	GenAIModel   string          // Generative AI model
+	RoAPI        *api.API        // RoAPI HTTP client
+	Queue        *queue.Manager  // Background job queue
+	RedisManager *redis.Manager  // Redis connection manager
+	StatusClient rueidis.Client  // Redis client for worker status reporting
+	LogManager   *logger.Manager // Log management system
+	pprofServer  *pprofServer    // Debug HTTP server for pprof
+	proxies      *proxy.Proxies  // Proxy middleware
 }
 
 // InitializeApp bootstraps all application dependencies in the correct order,
@@ -127,7 +127,7 @@ func InitializeApp(ctx context.Context, serviceType ServiceType, logDir string) 
 	if err != nil {
 		return nil, err
 	}
-	queueManager := queue.NewManager(db, queueClient, logger)
+	queueManager := queue.NewManager(queueClient, logger)
 
 	// Get Redis client for worker status reporting
 	statusClient, err := redisManager.GetClient(redis.WorkerStatusDBIndex)
@@ -200,7 +200,7 @@ func (s *App) Cleanup(ctx context.Context) {
 }
 
 // checkAndRunMigrations runs database migrations if needed.
-func checkAndRunMigrations(ctx context.Context, cfg *config.PostgreSQL, dbLogger *zap.Logger) (*database.Client, error) {
+func checkAndRunMigrations(ctx context.Context, cfg *config.PostgreSQL, dbLogger *zap.Logger) (database.Client, error) {
 	tempDB, err := database.NewConnection(ctx, cfg, dbLogger, false)
 	if err != nil {
 		return nil, err
@@ -213,7 +213,7 @@ func checkAndRunMigrations(ctx context.Context, cfg *config.PostgreSQL, dbLogger
 		return nil, fmt.Errorf("failed to check migration status: %w", err)
 	}
 
-	var db *database.Client
+	var db database.Client
 	unapplied := ms.Unapplied()
 	if len(unapplied) > 0 {
 		log.Println("Database migrations are pending. Would you like to run them now? (y/N)")

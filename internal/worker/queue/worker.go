@@ -19,7 +19,7 @@ import (
 
 // Worker handles items in the queues.
 type Worker struct {
-	db          *database.Client
+	db          database.Client
 	roAPI       *api.API
 	queue       *queue.Manager
 	bar         *progress.Bar

@@ -24,7 +24,7 @@ type GroupCheckResult struct {
 // GroupChecker handles the checking of user groups by comparing them against
 // a database of known inappropriate groups.
 type GroupChecker struct {
-	db                   *database.Client
+	db                   database.Client
 	logger               *zap.Logger
 	maxGroupMembersTrack uint64
 	minFlaggedOverride   int
@@ -33,7 +33,7 @@ type GroupChecker struct {
 
 // NewGroupChecker creates a GroupChecker with database access for looking up
 // flagged group information.
-func NewGroupChecker(db *database.Client, logger *zap.Logger, maxGroupMembersTrack uint64, minFlaggedOverride int, minFlaggedPercentage float64) *GroupChecker {
+func NewGroupChecker(db database.Client, logger *zap.Logger, maxGroupMembersTrack uint64, minFlaggedOverride int, minFlaggedPercentage float64) *GroupChecker {
 	return &GroupChecker{
 		db:                   db,
 		logger:               logger,
@@ -92,7 +92,7 @@ func (c *GroupChecker) CheckGroupPercentages(groupInfos []*apiTypes.GroupRespons
 	}
 
 	// Get user data for confidence calculation
-	users, err := c.db.Users().GetUsersByIDs(context.Background(), allFlaggedUserIDs, types.UserFields{
+	users, err := c.db.Models().Users().GetUsersByIDs(context.Background(), allFlaggedUserIDs, types.UserFields{
 		Basic:      true,
 		Confidence: true,
 	})
@@ -158,7 +158,7 @@ func (c *GroupChecker) ProcessUsers(userInfos []*fetcher.Info, flaggedUsers map[
 	}
 
 	// Fetch all existing groups
-	existingGroups, err := c.db.Groups().GetGroupsByIDs(context.Background(), groupIDs, types.GroupFields{
+	existingGroups, err := c.db.Models().Groups().GetGroupsByIDs(context.Background(), groupIDs, types.GroupFields{
 		Basic:  true,
 		Reason: true,
 	})

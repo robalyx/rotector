@@ -12,7 +12,7 @@ import (
 
 // Layout handles queue management operations and their interactions.
 type Layout struct {
-	db                *database.Client
+	db                database.Client
 	logger            *zap.Logger
 	sessionManager    *session.Manager
 	paginationManager *pagination.Manager

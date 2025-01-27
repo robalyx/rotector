@@ -11,7 +11,7 @@ import (
 
 // Layout handles the CAPTCHA verification interface.
 type Layout struct {
-	db                *database.Client
+	db                database.Client
 	sessionManager    *session.Manager
 	paginationManager *pagination.Manager
 	menu              *Menu

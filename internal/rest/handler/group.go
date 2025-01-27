@@ -14,12 +14,12 @@ import (
 
 // GroupHandler handles group-related REST endpoints.
 type GroupHandler struct {
-	db     *database.Client
+	db     database.Client
 	logger *zap.Logger
 }
 
 // NewGroupHandler creates a new group handler.
-func NewGroupHandler(db *database.Client, logger *zap.Logger) *GroupHandler {
+func NewGroupHandler(db database.Client, logger *zap.Logger) *GroupHandler {
 	return &GroupHandler{
 		db:     db,
 		logger: logger,
@@ -41,7 +41,7 @@ func NewGroupHandler(db *database.Client, logger *zap.Logger) *GroupHandler {
 //	@Router			/groups/{id} [get]
 func (h *GroupHandler) GetGroup(w http.ResponseWriter, req bunrouter.Request) error {
 	// Get group from database
-	reviewGroup, err := h.db.Groups().GetGroupByID(req.Context(), req.Param("id"), types.GroupFields{})
+	reviewGroup, err := h.db.Models().Groups().GetGroupByID(req.Context(), req.Param("id"), types.GroupFields{})
 	if err != nil {
 		if errors.Is(err, types.ErrGroupNotFound) {
 			response := restTypes.GetGroupResponse{

@@ -35,12 +35,12 @@ type limiterState struct {
 type Middleware struct {
 	limiters *utils.TTLMap[string, *limiterState]
 	config   *config.RateLimit
-	db       *database.Client
+	db       database.Client
 	logger   *zap.Logger
 }
 
 // New creates a new rate limiting middleware.
-func New(config *config.RateLimit, db *database.Client, logger *zap.Logger) *Middleware {
+func New(config *config.RateLimit, db database.Client, logger *zap.Logger) *Middleware {
 	// Use the longer of block duration or burst window * 2 for TTL
 	ttl := time.Second * time.Duration(config.BurstSize*2)
 	if blockTTL := time.Second * time.Duration(config.BlockDuration*2); blockTTL > ttl {
@@ -225,7 +225,7 @@ func (m *Middleware) getAPIKey(ctx context.Context, clientIP string) string {
 	apiKey := strings.TrimPrefix(authHeader, "Bearer ")
 
 	// Get bot settings from database
-	botSettings, err := m.db.Settings().GetBotSettings(ctx)
+	botSettings, err := m.db.Models().Settings().GetBotSettings(ctx)
 	if err != nil {
 		m.logger.Error("Failed to get bot settings", zap.Error(err))
 		return ""

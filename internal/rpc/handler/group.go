@@ -13,12 +13,12 @@ import (
 
 // GroupHandler handles group lookup requests.
 type GroupHandler struct {
-	db     *database.Client
+	db     database.Client
 	logger *zap.Logger
 }
 
 // NewGroupHandler creates a new group handler.
-func NewGroupHandler(db *database.Client, logger *zap.Logger) *GroupHandler {
+func NewGroupHandler(db database.Client, logger *zap.Logger) *GroupHandler {
 	return &GroupHandler{
 		db:     db,
 		logger: logger,
@@ -28,7 +28,7 @@ func NewGroupHandler(db *database.Client, logger *zap.Logger) *GroupHandler {
 // GetGroup handles the GetGroup RPC method.
 func (h *GroupHandler) GetGroup(ctx context.Context, req *proto.GetGroupRequest) (*proto.GetGroupResponse, error) {
 	// Get full group information from database
-	reviewGroup, err := h.db.Groups().GetGroupByID(ctx, req.GetGroupId(), types.GroupFields{})
+	reviewGroup, err := h.db.Models().Groups().GetGroupByID(ctx, req.GetGroupId(), types.GroupFields{})
 	if err != nil && !errors.Is(err, types.ErrGroupNotFound) {
 		h.logger.Error("Failed to get group information",
 			zap.String("group_id", req.GetGroupId()),

@@ -8,9 +8,6 @@ import (
 
 	"github.com/bytedance/sonic"
 	"github.com/redis/rueidis"
-	"github.com/robalyx/rotector/internal/common/storage/database"
-	"github.com/robalyx/rotector/internal/common/storage/database/types"
-	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
 	"go.uber.org/zap"
 )
 
@@ -67,16 +64,14 @@ type Item struct {
 // Manager orchestrates queue operations using Redis sorted sets for priority queues
 // and separate keys for metadata storage. Thread-safe through Redis transactions.
 type Manager struct {
-	db     *database.Client // For persistent storage and activity logging
-	client rueidis.Client   // Redis client for queue operations
-	logger *zap.Logger      // Structured logging
+	client rueidis.Client // Redis client for queue operations
+	logger *zap.Logger    // Structured logging
 }
 
 // NewManager initializes a queue manager with its required dependencies.
 // The manager uses Redis sorted sets for queue storage and regular keys for metadata.
-func NewManager(db *database.Client, client rueidis.Client, logger *zap.Logger) *Manager {
+func NewManager(client rueidis.Client, logger *zap.Logger) *Manager {
 	return &Manager{
-		db:     db,
 		client: client,
 		logger: logger,
 	}
@@ -111,17 +106,6 @@ func (m *Manager) AddToQueue(ctx context.Context, item *Item) error {
 		m.logger.Error("Failed to add item to queue", zap.Error(err))
 		return err
 	}
-
-	// Log the activity
-	go m.db.Activity().Log(ctx, &types.ActivityLog{
-		ActivityTarget: types.ActivityTarget{
-			UserID: item.UserID,
-		},
-		ReviewerID:        item.AddedBy,
-		ActivityType:      enum.ActivityTypeUserRechecked,
-		ActivityTimestamp: time.Now(),
-		Details:           map[string]interface{}{"reason": item.Reason},
-	})
 
 	return nil
 }

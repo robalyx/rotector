@@ -43,7 +43,7 @@ func (m *MainMenu) Show(event interfaces.CommonEvent, s *session.Session) {
 	leaderboardPeriod := session.UserLeaderboardPeriod.Get(s)
 
 	// Fetch leaderboard stats from database
-	stats, nextCursor, err := m.layout.db.Votes().GetLeaderboard(
+	stats, nextCursor, err := m.layout.db.Models().Votes().GetLeaderboard(
 		context.Background(),
 		leaderboardPeriod,
 		cursor,
@@ -56,7 +56,7 @@ func (m *MainMenu) Show(event interfaces.CommonEvent, s *session.Session) {
 	}
 
 	// Get refresh info for leaderboard view
-	lastRefresh, nextRefresh, err := m.layout.db.Views().GetRefreshInfo(context.Background(), leaderboardPeriod)
+	lastRefresh, nextRefresh, err := m.layout.db.Models().Views().GetRefreshInfo(context.Background(), leaderboardPeriod)
 	if err != nil {
 		m.layout.logger.Error("Failed to get refresh info", zap.Error(err))
 	}

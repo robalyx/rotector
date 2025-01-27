@@ -11,7 +11,7 @@ import (
 
 // Layout handles the admin menu and its submenus.
 type Layout struct {
-	db                *database.Client
+	db                database.Client
 	sessionManager    *session.Manager
 	paginationManager *pagination.Manager
 	logger            *zap.Logger

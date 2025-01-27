@@ -48,13 +48,13 @@ func (m *MainMenu) Show(event interfaces.CommonEvent, s *session.Session, conten
 	}
 
 	// Get all counts in a single transaction
-	userCounts, groupCounts, err := m.layout.db.Stats().GetCurrentCounts(context.Background())
+	userCounts, groupCounts, err := m.layout.db.Models().Stats().GetCurrentCounts(context.Background())
 	if err != nil {
 		m.layout.logger.Error("Failed to get counts", zap.Error(err))
 	}
 
 	// Get vote statistics for the user
-	voteStats, err := m.layout.db.Votes().GetUserVoteStats(context.Background(), uint64(event.User().ID), enum.LeaderboardPeriodAllTime)
+	voteStats, err := m.layout.db.Models().Votes().GetUserVoteStats(context.Background(), uint64(event.User().ID), enum.LeaderboardPeriodAllTime)
 	if err != nil {
 		m.layout.logger.Error("Failed to get vote statistics", zap.Error(err))
 		voteStats = &types.VoteAccuracy{DiscordUserID: uint64(event.User().ID)} // Use empty stats on error
@@ -193,7 +193,7 @@ func (m *MainMenu) handleLookupUserModalSubmit(event *events.ModalSubmitInteract
 	userIDStr := event.Data.Text(constants.LookupUserInputCustomID)
 
 	// Get user from database
-	user, err := m.layout.db.Users().GetUserByID(context.Background(), userIDStr, types.UserFields{})
+	user, err := m.layout.db.Models().Users().GetUserByID(context.Background(), userIDStr, types.UserFields{})
 	if err != nil {
 		if errors.Is(err, types.ErrUserNotFound) {
 			m.layout.paginationManager.NavigateTo(event, s, m.page, "Failed to find user. They may not be in our database.")
@@ -209,7 +209,7 @@ func (m *MainMenu) handleLookupUserModalSubmit(event *events.ModalSubmitInteract
 	m.layout.userReviewLayout.ShowReviewMenu(event, s)
 
 	// Log the lookup action
-	m.layout.db.Activity().Log(context.Background(), &types.ActivityLog{
+	m.layout.db.Models().Activities().Log(context.Background(), &types.ActivityLog{
 		ActivityTarget: types.ActivityTarget{
 			UserID: user.ID,
 		},
@@ -226,7 +226,7 @@ func (m *MainMenu) handleLookupGroupModalSubmit(event *events.ModalSubmitInterac
 	groupIDStr := event.Data.Text(constants.LookupGroupInputCustomID)
 
 	// Get group from database
-	group, err := m.layout.db.Groups().GetGroupByID(context.Background(), groupIDStr, types.GroupFields{})
+	group, err := m.layout.db.Models().Groups().GetGroupByID(context.Background(), groupIDStr, types.GroupFields{})
 	if err != nil {
 		if errors.Is(err, types.ErrGroupNotFound) {
 			m.layout.paginationManager.NavigateTo(event, s, m.page, "Failed to find group. It may not be in our database.")
@@ -242,7 +242,7 @@ func (m *MainMenu) handleLookupGroupModalSubmit(event *events.ModalSubmitInterac
 	m.layout.groupReviewLayout.Show(event, s)
 
 	// Log the lookup action
-	m.layout.db.Activity().Log(context.Background(), &types.ActivityLog{
+	m.layout.db.Models().Activities().Log(context.Background(), &types.ActivityLog{
 		ActivityTarget: types.ActivityTarget{
 			GroupID: group.ID,
 		},

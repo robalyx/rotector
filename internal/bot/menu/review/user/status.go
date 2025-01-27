@@ -47,7 +47,7 @@ func (m *StatusMenu) Show(event interfaces.CommonEvent, s *session.Session) {
 	// Check if processing is complete
 	if err == nil && (status == queue.StatusComplete || status == queue.StatusSkipped) {
 		// Check if user was flagged after recheck
-		user, err := m.layout.db.Users().GetUserByID(context.Background(), strconv.FormatUint(userID, 10), types.UserFields{})
+		user, err := m.layout.db.Models().Users().GetUserByID(context.Background(), strconv.FormatUint(userID, 10), types.UserFields{})
 		if err != nil {
 			// User was not flagged by AI, return to previous page
 			m.layout.paginationManager.NavigateBack(event, s, "User was not flagged by AI after recheck.")
@@ -62,7 +62,7 @@ func (m *StatusMenu) Show(event interfaces.CommonEvent, s *session.Session) {
 		m.layout.reviewMenu.Show(event, s, "User has been rechecked. Showing updated information.")
 
 		// Log the view action
-		m.layout.db.Activity().Log(context.Background(), &types.ActivityLog{
+		m.layout.db.Models().Activities().Log(context.Background(), &types.ActivityLog{
 			ActivityTarget: types.ActivityTarget{
 				UserID: user.ID,
 			},

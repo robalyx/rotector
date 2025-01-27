@@ -11,7 +11,7 @@ import (
 
 // Layout handles all setting-related menus and their interactions.
 type Layout struct {
-	db                *database.Client
+	db                database.Client
 	sessionManager    *session.Manager
 	paginationManager *pagination.Manager
 	updateMenu        *UpdateMenu

@@ -50,7 +50,7 @@ type FriendCheckResult struct {
 // FriendChecker handles the analysis of user friend relationships to identify
 // users connected to multiple flagged accounts.
 type FriendChecker struct {
-	db             *database.Client
+	db             database.Client
 	friendAnalyzer *ai.FriendAnalyzer
 	logger         *zap.Logger
 }
@@ -81,7 +81,7 @@ func (c *FriendChecker) ProcessUsers(userInfos []*fetcher.Info, flaggedUsers map
 	}
 
 	// Fetch all existing friends
-	existingFriends, err := c.db.Users().GetUsersByIDs(context.Background(), friendIDs, types.UserFields{
+	existingFriends, err := c.db.Models().Users().GetUsersByIDs(context.Background(), friendIDs, types.UserFields{
 		Basic:  true,
 		Reason: true,
 	})

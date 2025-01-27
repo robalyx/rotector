@@ -18,7 +18,7 @@ import (
 // FriendWorker processes user friend networks by checking each friend's
 // status and analyzing their profiles for inappropriate content.
 type FriendWorker struct {
-	db               *database.Client
+	db               database.Client
 	roAPI            *api.API
 	bar              *progress.Bar
 	userFetcher      *fetcher.UserFetcher
@@ -69,7 +69,7 @@ func (f *FriendWorker) Start() {
 		f.reporter.SetHealthy(true)
 
 		// Check flagged users count
-		flaggedCount, err := f.db.Users().GetFlaggedUsersCount(context.Background())
+		flaggedCount, err := f.db.Models().Users().GetFlaggedUsersCount(context.Background())
 		if err != nil {
 			f.logger.Error("Error getting flagged users count", zap.Error(err))
 			f.reporter.SetHealthy(false)
@@ -135,7 +135,7 @@ func (f *FriendWorker) Start() {
 func (f *FriendWorker) processFriendsBatch(friendIDs []uint64) ([]uint64, error) {
 	for len(friendIDs) < f.batchSize {
 		// Get the next confirmed user
-		user, err := f.db.Users().GetUserToScan(context.Background())
+		user, err := f.db.Models().Users().GetUserToScan(context.Background())
 		if err != nil {
 			f.logger.Error("Error getting user to scan", zap.Error(err))
 			return nil, err
@@ -154,7 +154,7 @@ func (f *FriendWorker) processFriendsBatch(friendIDs []uint64) ([]uint64, error)
 		}
 
 		// Check which users have been recently processed
-		existingUsers, err := f.db.Users().GetRecentlyProcessedUsers(context.Background(), userFriendIDs)
+		existingUsers, err := f.db.Models().Users().GetRecentlyProcessedUsers(context.Background(), userFriendIDs)
 		if err != nil {
 			f.logger.Error("Error checking recently processed users", zap.Error(err))
 			continue

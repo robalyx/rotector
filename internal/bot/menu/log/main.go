@@ -59,7 +59,7 @@ func (m *MainMenu) Show(event interfaces.CommonEvent, s *session.Session) {
 	cursor := session.LogCursor.Get(s)
 
 	// Fetch filtered logs from database
-	logs, nextCursor, err := m.layout.db.Activity().GetLogs(
+	logs, nextCursor, err := m.layout.db.Models().Activities().GetLogs(
 		context.Background(),
 		activityFilter,
 		cursor,

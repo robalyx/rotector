@@ -21,7 +21,7 @@ import (
 
 // ReviewBuilder creates the visual layout for reviewing a user.
 type ReviewBuilder struct {
-	db             *database.Client
+	db             database.Client
 	userID         uint64
 	user           *types.ReviewUser
 	flaggedFriends map[uint64]*types.ReviewUser
@@ -34,7 +34,7 @@ type ReviewBuilder struct {
 }
 
 // NewReviewBuilder creates a new review builder.
-func NewReviewBuilder(s *session.Session, translator *translator.Translator, db *database.Client) *ReviewBuilder {
+func NewReviewBuilder(s *session.Session, translator *translator.Translator, db database.Client) *ReviewBuilder {
 	return &ReviewBuilder{
 		db:             db,
 		userID:         s.UserID(),
@@ -384,7 +384,7 @@ func (b *ReviewBuilder) getFlaggedContent() string {
 
 // getReviewHistory returns the review history field for the embed.
 func (b *ReviewBuilder) getReviewHistory() string {
-	logs, nextCursor, err := b.db.Activity().GetLogs(
+	logs, nextCursor, err := b.db.Models().Activities().GetLogs(
 		context.Background(),
 		types.ActivityFilter{
 			UserID:       b.user.ID,

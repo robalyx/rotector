@@ -12,7 +12,7 @@ import (
 
 // Layout handles the appeal menu and its dependencies.
 type Layout struct {
-	db                *database.Client
+	db                database.Client
 	roAPI             *api.API
 	logger            *zap.Logger
 	sessionManager    *session.Manager

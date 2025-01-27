@@ -138,7 +138,7 @@ func run() error {
 }
 
 // setupMigrator initializes the database connection and migrator.
-func setupMigrator() (*database.Client, *migrate.Migrator, *zap.Logger, error) {
+func setupMigrator() (database.Client, *migrate.Migrator, *zap.Logger, error) {
 	// Load full configuration
 	cfg, _, err := config.LoadConfig()
 	if err != nil {

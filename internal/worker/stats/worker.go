@@ -25,7 +25,7 @@ const (
 
 // Worker handles hourly statistics snapshots.
 type Worker struct {
-	db          *database.Client
+	db          database.Client
 	bar         *progress.Bar
 	reporter    *core.StatusReporter
 	analyzer    *ai.StatsAnalyzer
@@ -70,7 +70,7 @@ func (w *Worker) Start() { //nolint:funlen
 		w.bar.SetStepMessage("Checking current hour stats", 0)
 		w.reporter.UpdateStatus("Checking current hour stats", 0)
 
-		exists, err := w.db.Stats().HasStatsForHour(ctx, currentHour)
+		exists, err := w.db.Models().Stats().HasStatsForHour(ctx, currentHour)
 		if err != nil {
 			w.logger.Error("Failed to check current hour stats", zap.Error(err))
 			w.reporter.SetHealthy(false)
@@ -81,7 +81,7 @@ func (w *Worker) Start() { //nolint:funlen
 			// Step 2: Get current stats (20%)
 			w.bar.SetStepMessage("Collecting statistics", 20)
 			w.reporter.UpdateStatus("Collecting statistics", 20)
-			stats, err := w.db.Stats().GetCurrentStats(ctx)
+			stats, err := w.db.Models().Stats().GetCurrentStats(ctx)
 			if err != nil {
 				w.logger.Error("Failed to get current stats", zap.Error(err))
 				w.reporter.SetHealthy(false)
@@ -91,7 +91,7 @@ func (w *Worker) Start() { //nolint:funlen
 			// Step 3: Save current stats (40%)
 			w.bar.SetStepMessage("Saving statistics", 40)
 			w.reporter.UpdateStatus("Saving statistics", 40)
-			if err := w.db.Stats().SaveHourlyStats(ctx, stats); err != nil {
+			if err := w.db.Models().Stats().SaveHourlyStats(ctx, stats); err != nil {
 				w.logger.Error("Failed to save hourly stats", zap.Error(err))
 				w.reporter.SetHealthy(false)
 				continue
@@ -99,7 +99,7 @@ func (w *Worker) Start() { //nolint:funlen
 		}
 
 		// Get hourly stats
-		hourlyStats, err := w.db.Stats().GetHourlyStats(ctx)
+		hourlyStats, err := w.db.Models().Stats().GetHourlyStats(ctx)
 		if err != nil {
 			w.logger.Error("Failed to get hourly stats", zap.Error(err))
 			w.reporter.SetHealthy(false)
@@ -128,7 +128,7 @@ func (w *Worker) Start() { //nolint:funlen
 		w.bar.SetStepMessage("Cleaning up old stats", 80)
 		w.reporter.UpdateStatus("Cleaning up old stats", 80)
 		cutoffDate := time.Now().UTC().AddDate(0, 0, -30) // 30 days ago
-		if err := w.db.Stats().PurgeOldStats(ctx, cutoffDate); err != nil {
+		if err := w.db.Models().Stats().PurgeOldStats(ctx, cutoffDate); err != nil {
 			w.logger.Error("Failed to purge old stats", zap.Error(err))
 			w.reporter.SetHealthy(false)
 			continue
@@ -186,13 +186,13 @@ func (w *Worker) updateWelcomeMessage(ctx context.Context, hourlyStats []*types.
 	}
 
 	// Get and update bot settings
-	botSettings, err := w.db.Settings().GetBotSettings(ctx)
+	botSettings, err := w.db.Models().Settings().GetBotSettings(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get bot settings: %w", err)
 	}
 	botSettings.WelcomeMessage = message
 
-	if err := w.db.Settings().SaveBotSettings(ctx, botSettings); err != nil {
+	if err := w.db.Models().Settings().SaveBotSettings(ctx, botSettings); err != nil {
 		return fmt.Errorf("failed to save welcome message: %w", err)
 	}
 

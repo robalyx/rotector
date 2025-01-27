@@ -19,7 +19,7 @@ import (
 // GroupWorker processes group member lists by checking each member's
 // status and analyzing their profiles for inappropriate content.
 type GroupWorker struct {
-	db               *database.Client
+	db               database.Client
 	roAPI            *api.API
 	bar              *progress.Bar
 	userFetcher      *fetcher.UserFetcher
@@ -67,7 +67,7 @@ func (g *GroupWorker) Start() {
 		g.reporter.SetHealthy(true)
 
 		// Check flagged users count
-		flaggedCount, err := g.db.Users().GetFlaggedUsersCount(context.Background())
+		flaggedCount, err := g.db.Models().Users().GetFlaggedUsersCount(context.Background())
 		if err != nil {
 			g.logger.Error("Error getting flagged users count", zap.Error(err))
 			g.reporter.SetHealthy(false)
@@ -89,7 +89,7 @@ func (g *GroupWorker) Start() {
 		// Step 1: Get next group to process (10%)
 		g.bar.SetStepMessage("Fetching next group to process", 10)
 		g.reporter.UpdateStatus("Fetching next group to process", 10)
-		group, err := g.db.Groups().GetGroupToScan(context.Background())
+		group, err := g.db.Models().Groups().GetGroupToScan(context.Background())
 		if err != nil {
 			g.logger.Error("Error getting group to scan", zap.Error(err))
 			g.reporter.SetHealthy(false)
@@ -165,7 +165,7 @@ func (g *GroupWorker) processGroup(groupID uint64, userIDs []uint64) ([]uint64, 
 		}
 
 		// Check which users have been recently processed
-		existingUsers, err := g.db.Users().GetRecentlyProcessedUsers(context.Background(), newUserIDs)
+		existingUsers, err := g.db.Models().Users().GetRecentlyProcessedUsers(context.Background(), newUserIDs)
 		if err != nil {
 			g.logger.Error("Error checking recently processed users", zap.Error(err))
 			continue

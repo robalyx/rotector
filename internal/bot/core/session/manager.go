@@ -43,13 +43,13 @@ var (
 // Manager manages the session lifecycle using Redis as the backing store.
 // Sessions are prefixed and stored with automatic expiration.
 type Manager struct {
-	db     *database.Client
+	db     database.Client
 	redis  rueidis.Client
 	logger *zap.Logger
 }
 
 // NewManager creates a new session manager that uses Redis as the backing store.
-func NewManager(db *database.Client, redisManager *redis.Manager, logger *zap.Logger) (*Manager, error) {
+func NewManager(db database.Client, redisManager *redis.Manager, logger *zap.Logger) (*Manager, error) {
 	// Get Redis client
 	redisClient, err := redisManager.GetClient(redis.SessionDBIndex)
 	if err != nil {
@@ -68,7 +68,7 @@ func NewManager(db *database.Client, redisManager *redis.Manager, logger *zap.Lo
 // Existing sessions are refreshed with the latest user settings.
 func (m *Manager) GetOrCreateSession(ctx context.Context, userID snowflake.ID) (*Session, error) {
 	// Load bot settings
-	botSettings, err := m.db.Settings().GetBotSettings(ctx)
+	botSettings, err := m.db.Models().Settings().GetBotSettings(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrFailedToLoadSettings, err)
 	}
@@ -94,7 +94,7 @@ func (m *Manager) GetOrCreateSession(ctx context.Context, userID snowflake.ID) (
 	}
 
 	// Load user settings
-	userSettings, err := m.db.Settings().GetUserSettings(ctx, userID)
+	userSettings, err := m.db.Models().Settings().GetUserSettings(ctx, userID)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrFailedToLoadSettings, err)
 	}

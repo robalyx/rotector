@@ -16,7 +16,7 @@ import (
 
 // Worker handles all maintenance operations.
 type Worker struct {
-	db                      *database.Client
+	db                      database.Client
 	roAPI                   *api.API
 	bar                     *progress.Bar
 	userFetcher             *fetcher.UserFetcher
@@ -116,7 +116,7 @@ func (w *Worker) processBannedUsers() {
 	w.reporter.UpdateStatus("Processing banned users", 20)
 
 	// Get users to check
-	users, currentlyBanned, err := w.db.Users().GetUsersToCheck(context.Background(), w.userBatchSize)
+	users, currentlyBanned, err := w.db.Models().Users().GetUsersToCheck(context.Background(), w.userBatchSize)
 	if err != nil {
 		w.logger.Error("Error getting users to check", zap.Error(err))
 		w.reporter.SetHealthy(false)
@@ -152,7 +152,7 @@ func (w *Worker) processBannedUsers() {
 
 	// Mark banned users
 	if len(bannedUserIDs) > 0 {
-		err = w.db.Users().MarkUsersBanStatus(context.Background(), bannedUserIDs, true)
+		err = w.db.Models().Users().MarkUsersBanStatus(context.Background(), bannedUserIDs, true)
 		if err != nil {
 			w.logger.Error("Error marking banned users", zap.Error(err))
 			w.reporter.SetHealthy(false)
@@ -163,7 +163,7 @@ func (w *Worker) processBannedUsers() {
 
 	// Unmark users that are no longer banned
 	if len(unbannedUserIDs) > 0 {
-		err = w.db.Users().MarkUsersBanStatus(context.Background(), unbannedUserIDs, false)
+		err = w.db.Models().Users().MarkUsersBanStatus(context.Background(), unbannedUserIDs, false)
 		if err != nil {
 			w.logger.Error("Error unmarking banned users", zap.Error(err))
 			w.reporter.SetHealthy(false)
@@ -179,7 +179,7 @@ func (w *Worker) processLockedGroups() {
 	w.reporter.UpdateStatus("Processing locked groups", 30)
 
 	// Get groups to check
-	groups, currentlyLocked, err := w.db.Groups().GetGroupsToCheck(context.Background(), w.groupBatchSize)
+	groups, currentlyLocked, err := w.db.Models().Groups().GetGroupsToCheck(context.Background(), w.groupBatchSize)
 	if err != nil {
 		w.logger.Error("Error getting groups to check", zap.Error(err))
 		w.reporter.SetHealthy(false)
@@ -215,7 +215,7 @@ func (w *Worker) processLockedGroups() {
 
 	// Mark locked groups
 	if len(lockedGroupIDs) > 0 {
-		err = w.db.Groups().MarkGroupsLockStatus(context.Background(), lockedGroupIDs, true)
+		err = w.db.Models().Groups().MarkGroupsLockStatus(context.Background(), lockedGroupIDs, true)
 		if err != nil {
 			w.logger.Error("Error marking locked groups", zap.Error(err))
 			w.reporter.SetHealthy(false)
@@ -226,7 +226,7 @@ func (w *Worker) processLockedGroups() {
 
 	// Unmark groups that are no longer locked
 	if len(unlockedGroupIDs) > 0 {
-		err = w.db.Groups().MarkGroupsLockStatus(context.Background(), unlockedGroupIDs, false)
+		err = w.db.Models().Groups().MarkGroupsLockStatus(context.Background(), unlockedGroupIDs, false)
 		if err != nil {
 			w.logger.Error("Error unmarking locked groups", zap.Error(err))
 			w.reporter.SetHealthy(false)
@@ -242,7 +242,7 @@ func (w *Worker) processClearedUsers() {
 	w.reporter.UpdateStatus("Processing cleared users", 40)
 
 	cutoffDate := time.Now().AddDate(0, 0, -30) // 30 days ago
-	affected, err := w.db.Users().PurgeOldClearedUsers(context.Background(), cutoffDate)
+	affected, err := w.db.Models().Users().PurgeOldClearedUsers(context.Background(), cutoffDate)
 	if err != nil {
 		w.logger.Error("Error purging old cleared users", zap.Error(err))
 		w.reporter.SetHealthy(false)
@@ -262,7 +262,7 @@ func (w *Worker) processClearedGroups() {
 	w.reporter.UpdateStatus("Processing cleared groups", 50)
 
 	cutoffDate := time.Now().AddDate(0, 0, -30) // 30 days ago
-	affected, err := w.db.Groups().PurgeOldClearedGroups(context.Background(), cutoffDate)
+	affected, err := w.db.Models().Groups().PurgeOldClearedGroups(context.Background(), cutoffDate)
 	if err != nil {
 		w.logger.Error("Error purging old cleared groups", zap.Error(err))
 		w.reporter.SetHealthy(false)
@@ -282,7 +282,7 @@ func (w *Worker) processGroupTracking() {
 	w.reporter.UpdateStatus("Processing group tracking", 65)
 
 	// Get groups to check
-	groupsWithUsers, err := w.db.Tracking().GetGroupTrackingsToCheck(
+	groupsWithUsers, err := w.db.Models().Tracking().GetGroupTrackingsToCheck(
 		context.Background(),
 		w.trackBatchSize,
 		w.minGroupFlaggedUsers,
@@ -322,7 +322,7 @@ func (w *Worker) processGroupTracking() {
 	flaggedGroups = w.thumbnailFetcher.AddGroupImageURLs(context.Background(), flaggedGroups)
 
 	// Save flagged groups to database
-	if err := w.db.Groups().SaveGroups(context.Background(), flaggedGroups); err != nil {
+	if err := w.db.Models().Groups().SaveGroups(context.Background(), flaggedGroups); err != nil {
 		w.logger.Error("Failed to save flagged groups", zap.Error(err))
 		return
 	}
@@ -334,7 +334,7 @@ func (w *Worker) processGroupTracking() {
 	}
 
 	// Update tracking entries to mark them as flagged
-	if err := w.db.Tracking().UpdateFlaggedGroups(context.Background(), flaggedGroupIDs); err != nil {
+	if err := w.db.Models().Tracking().UpdateFlaggedGroups(context.Background(), flaggedGroupIDs); err != nil {
 		w.logger.Error("Failed to update tracking entries", zap.Error(err))
 		return
 	}
@@ -350,7 +350,7 @@ func (w *Worker) processUserThumbnails() {
 	w.reporter.UpdateStatus("Processing user thumbnails", 80)
 
 	// Get users that need thumbnail updates
-	users, err := w.db.Users().GetUsersForThumbnailUpdate(context.Background(), w.thumbnailUserBatchSize)
+	users, err := w.db.Models().Users().GetUsersForThumbnailUpdate(context.Background(), w.thumbnailUserBatchSize)
 	if err != nil {
 		w.logger.Error("Error getting users for thumbnail update", zap.Error(err))
 		w.reporter.SetHealthy(false)
@@ -375,7 +375,7 @@ func (w *Worker) processUserThumbnails() {
 	}
 
 	// Save updated users
-	if err := w.db.Users().SaveUsers(context.Background(), users); err != nil {
+	if err := w.db.Models().Users().SaveUsers(context.Background(), users); err != nil {
 		w.logger.Error("Error saving updated user thumbnails", zap.Error(err))
 		w.reporter.SetHealthy(false)
 		return
@@ -392,7 +392,7 @@ func (w *Worker) processGroupThumbnails() {
 	w.reporter.UpdateStatus("Processing group thumbnails", 95)
 
 	// Get groups that need thumbnail updates
-	groups, err := w.db.Groups().GetGroupsForThumbnailUpdate(context.Background(), w.thumbnailGroupBatchSize)
+	groups, err := w.db.Models().Groups().GetGroupsForThumbnailUpdate(context.Background(), w.thumbnailGroupBatchSize)
 	if err != nil {
 		w.logger.Error("Error getting groups for thumbnail update", zap.Error(err))
 		w.reporter.SetHealthy(false)
@@ -408,7 +408,7 @@ func (w *Worker) processGroupThumbnails() {
 	updatedGroups := w.thumbnailFetcher.AddGroupImageURLs(context.Background(), groups)
 
 	// Save updated groups
-	if err := w.db.Groups().SaveGroups(context.Background(), groups); err != nil {
+	if err := w.db.Models().Groups().SaveGroups(context.Background(), groups); err != nil {
 		w.logger.Error("Error saving updated group thumbnails", zap.Error(err))
 		w.reporter.SetHealthy(false)
 		return

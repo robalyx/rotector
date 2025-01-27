@@ -14,7 +14,7 @@ import (
 
 // Layout handles the display and interaction logic for the main dashboard.
 type Layout struct {
-	db                *database.Client
+	db                database.Client
 	redisClient       rueidis.Client
 	sessionManager    *session.Manager
 	paginationManager *pagination.Manager

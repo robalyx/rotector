@@ -52,7 +52,7 @@ func (m *OverviewMenu) Show(event interfaces.CommonEvent, s *session.Session, co
 	userID := uint64(event.User().ID)
 	if s.BotSettings().IsReviewer(userID) {
 		// Reviewers can see all appeals
-		appeals, firstCursor, nextCursor, err = m.layout.db.Appeals().GetAppealsToReview(
+		appeals, firstCursor, nextCursor, err = m.layout.db.Models().Appeals().GetAppealsToReview(
 			context.Background(),
 			defaultSort,
 			statusFilter,
@@ -62,7 +62,7 @@ func (m *OverviewMenu) Show(event interfaces.CommonEvent, s *session.Session, co
 		)
 	} else {
 		// Regular users only see their own appeals
-		appeals, firstCursor, nextCursor, err = m.layout.db.Appeals().GetAppealsByRequester(
+		appeals, firstCursor, nextCursor, err = m.layout.db.Models().Appeals().GetAppealsByRequester(
 			context.Background(),
 			statusFilter,
 			userID,
@@ -229,7 +229,7 @@ func (m *OverviewMenu) handleCreateAppealModalSubmit(event *events.ModalSubmitIn
 	}
 
 	// Check if the user ID already has a pending appeal
-	exists, err := m.layout.db.Appeals().HasPendingAppealByUserID(context.Background(), userID)
+	exists, err := m.layout.db.Models().Appeals().HasPendingAppealByUserID(context.Background(), userID)
 	if err != nil {
 		m.layout.logger.Error("Failed to check pending appeals for user", zap.Error(err))
 		m.layout.paginationManager.RespondWithError(event, "Failed to check pending appeals. Please try again.")
@@ -241,7 +241,7 @@ func (m *OverviewMenu) handleCreateAppealModalSubmit(event *events.ModalSubmitIn
 	}
 
 	// Check if the Discord user already has a pending appeal
-	exists, err = m.layout.db.Appeals().HasPendingAppealByRequester(context.Background(), uint64(event.User().ID))
+	exists, err = m.layout.db.Models().Appeals().HasPendingAppealByRequester(context.Background(), uint64(event.User().ID))
 	if err != nil {
 		m.layout.logger.Error("Failed to check pending appeals", zap.Error(err))
 		m.layout.paginationManager.RespondWithError(event, "Failed to check pending appeals. Please try again.")
@@ -253,7 +253,7 @@ func (m *OverviewMenu) handleCreateAppealModalSubmit(event *events.ModalSubmitIn
 	}
 
 	// Check if the user ID has been previously rejected
-	hasRejection, err := m.layout.db.Appeals().HasPreviousRejection(context.Background(), userID)
+	hasRejection, err := m.layout.db.Models().Appeals().HasPreviousRejection(context.Background(), userID)
 	if err != nil {
 		m.layout.logger.Error("Failed to check previous rejections", zap.Error(err))
 		m.layout.paginationManager.RespondWithError(event, "Failed to check appeal history. Please try again.")
@@ -266,7 +266,7 @@ func (m *OverviewMenu) handleCreateAppealModalSubmit(event *events.ModalSubmitIn
 	}
 
 	// Verify user exists in database
-	user, err := m.layout.db.Users().GetUserByID(context.Background(), userIDStr, types.UserFields{})
+	user, err := m.layout.db.Models().Users().GetUserByID(context.Background(), userIDStr, types.UserFields{})
 	if err != nil {
 		if errors.Is(err, types.ErrUserNotFound) {
 			m.layout.paginationManager.NavigateTo(event, s, m.page, "Cannot submit appeal - user is not in our database.")

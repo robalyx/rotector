@@ -24,7 +24,7 @@ type Session struct {
 	botSettings        *types.BotSetting
 	userSettingsUpdate bool
 	botSettingsUpdate  bool
-	db                 *database.Client
+	db                 database.Client
 	redis              rueidis.Client
 	key                string
 	data               map[string]interface{}
@@ -36,7 +36,7 @@ type Session struct {
 func NewSession(
 	userSettings *types.UserSetting,
 	botSettings *types.BotSetting,
-	db *database.Client,
+	db database.Client,
 	redis rueidis.Client,
 	key string,
 	data map[string]interface{},
@@ -82,7 +82,7 @@ func (s *Session) Touch(ctx context.Context) {
 
 	// Only save user settings if they've been updated
 	if s.userSettingsUpdate {
-		if err := s.db.Settings().SaveUserSettings(ctx, s.userSettings); err != nil {
+		if err := s.db.Models().Settings().SaveUserSettings(ctx, s.userSettings); err != nil {
 			s.logger.Error("Failed to save user settings", zap.Error(err))
 			return
 		}
@@ -91,7 +91,7 @@ func (s *Session) Touch(ctx context.Context) {
 
 	// Only save bot settings if they've been updated
 	if s.botSettingsUpdate {
-		if err := s.db.Settings().SaveBotSettings(ctx, s.botSettings); err != nil {
+		if err := s.db.Models().Settings().SaveBotSettings(ctx, s.botSettings); err != nil {
 			s.logger.Error("Failed to save bot settings", zap.Error(err))
 			return
 		}

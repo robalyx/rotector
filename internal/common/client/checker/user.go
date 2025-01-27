@@ -16,7 +16,7 @@ import (
 // multiple checking methods (AI, groups, friends) and managing the progress bar.
 type UserChecker struct {
 	app            *setup.App
-	db             *database.Client
+	db             database.Client
 	userFetcher    *fetcher.UserFetcher
 	followFetcher  *fetcher.FollowFetcher
 	userAnalyzer   *ai.UserAnalyzer
@@ -118,7 +118,7 @@ func (c *UserChecker) ProcessUsers(userInfos []*fetcher.Info) []uint64 {
 	}
 
 	// Save flagged users to database
-	if err := c.db.Users().SaveUsers(context.Background(), flaggedUsers); err != nil {
+	if err := c.db.Models().Users().SaveUsers(context.Background(), flaggedUsers); err != nil {
 		c.logger.Error("Failed to save users", zap.Error(err))
 	}
 
@@ -148,7 +148,7 @@ func (c *UserChecker) trackFlaggedUsersGroups(flaggedUsers map[uint64]*types.Use
 
 	// Add to tracking if we have any data
 	if len(groupUsersTracking) > 0 {
-		if err := c.db.Tracking().AddUsersToGroupsTracking(context.Background(), groupUsersTracking); err != nil {
+		if err := c.db.Models().Tracking().AddUsersToGroupsTracking(context.Background(), groupUsersTracking); err != nil {
 			c.logger.Error("Failed to add flagged users to groups tracking", zap.Error(err))
 		}
 	}
