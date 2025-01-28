@@ -11,6 +11,7 @@ import (
 
 var (
 	ErrGroupNotFound    = errors.New("group not found")
+	ErrInvalidGroupID   = errors.New("invalid group ID")
 	ErrNoGroupsToReview = errors.New("no groups available to review")
 )
 

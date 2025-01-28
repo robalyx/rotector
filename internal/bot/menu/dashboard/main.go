@@ -206,12 +206,15 @@ func (m *MainMenu) handleLookupUserModalSubmit(event *events.ModalSubmitInteract
 	// Get user from database
 	user, err := m.layout.db.Models().Users().GetUserByID(context.Background(), userIDStr, types.UserFields{})
 	if err != nil {
-		if errors.Is(err, types.ErrUserNotFound) {
+		switch {
+		case errors.Is(err, types.ErrUserNotFound):
 			m.layout.paginationManager.NavigateTo(event, s, m.page, "Failed to find user. They may not be in our database.")
-			return
+		case errors.Is(err, types.ErrInvalidUserID):
+			m.layout.paginationManager.NavigateTo(event, s, m.page, "Please provide a valid user ID or UUID.")
+		default:
+			m.layout.logger.Error("Failed to fetch user", zap.Error(err))
+			m.layout.paginationManager.RespondWithError(event, "Failed to fetch user for review. Please try again.")
 		}
-		m.layout.logger.Error("Failed to fetch user", zap.Error(err))
-		m.layout.paginationManager.RespondWithError(event, "Failed to fetch user for review. Please try again.")
 		return
 	}
 
@@ -249,12 +252,15 @@ func (m *MainMenu) handleLookupGroupModalSubmit(event *events.ModalSubmitInterac
 	// Get group from database
 	group, err := m.layout.db.Models().Groups().GetGroupByID(context.Background(), groupIDStr, types.GroupFields{})
 	if err != nil {
-		if errors.Is(err, types.ErrGroupNotFound) {
+		switch {
+		case errors.Is(err, types.ErrGroupNotFound):
 			m.layout.paginationManager.NavigateTo(event, s, m.page, "Failed to find group. It may not be in our database.")
-			return
+		case errors.Is(err, types.ErrInvalidGroupID):
+			m.layout.paginationManager.NavigateTo(event, s, m.page, "Please provide a valid group ID or UUID.")
+		default:
+			m.layout.logger.Error("Failed to fetch group", zap.Error(err))
+			m.layout.paginationManager.RespondWithError(event, "Failed to fetch group for review. Please try again.")
 		}
-		m.layout.logger.Error("Failed to fetch group", zap.Error(err))
-		m.layout.paginationManager.RespondWithError(event, "Failed to fetch group for review. Please try again.")
 		return
 	}
 

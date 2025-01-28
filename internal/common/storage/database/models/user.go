@@ -360,7 +360,7 @@ func (r *UserModel) GetUserByID(ctx context.Context, userID string, fields types
 				// Parse UUID string
 				uid, err := uuid.Parse(userID)
 				if err != nil {
-					return fmt.Errorf("invalid UUID format: %w", err)
+					return types.ErrInvalidUserID
 				}
 				query.Where("uuid = ?", uid)
 			}

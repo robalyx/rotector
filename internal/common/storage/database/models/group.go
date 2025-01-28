@@ -280,7 +280,7 @@ func (r *GroupModel) GetGroupByID(ctx context.Context, groupID string, fields ty
 				// Parse UUID string
 				uid, err := uuid.Parse(groupID)
 				if err != nil {
-					return fmt.Errorf("invalid UUID format: %w", err)
+					return types.ErrInvalidGroupID
 				}
 				query.Where("uuid = ?", uid)
 			}
