@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/robalyx/rotector/internal/bot/constants"
@@ -15,6 +14,7 @@ import (
 
 // Validation errors.
 var (
+	ErrInvalidNumber         = errors.New("value must be a valid number")
 	ErrInvalidIDFormat       = errors.New("invalid Discord ID format")
 	ErrSelfAssignment        = errors.New("you cannot add/remove yourself")
 	ErrInvalidOption         = errors.New("invalid option selected")
@@ -23,6 +23,7 @@ var (
 	ErrAnnouncementTooLong   = errors.New("announcement message cannot exceed 512 characters")
 	ErrDescriptionTooLong    = errors.New("description cannot exceed 512 characters")
 	ErrNotReviewer           = errors.New("you are not an official reviewer")
+	ErrMissingInput          = errors.New("missing input")
 )
 
 // Validator is a function that validates setting input.
@@ -33,7 +34,8 @@ type Validator func(value string, userID uint64) error
 type ValueGetter func(s *Session) string
 
 // ValueUpdater is a function that updates the value of a setting.
-type ValueUpdater func(value string, s *Session) error
+// customID is provided to identify which action is being performed
+type ValueUpdater func(customID string, inputs []string, s *Session) error
 
 // Setting defines the structure and behavior of a single setting.
 type Setting struct {
@@ -73,13 +75,17 @@ func validateDiscordID(value string, userID uint64) error {
 
 // validateEnum returns a validator function that checks if a value is in a list of valid options.
 func validateEnum(validOptions []string) Validator {
+	// Create a map for O(1) lookups
+	optionMap := make(map[string]struct{}, len(validOptions))
+	for _, opt := range validOptions {
+		optionMap[opt] = struct{}{}
+	}
+
 	return func(value string, _ uint64) error {
-		for _, opt := range validOptions {
-			if value == opt {
-				return nil
-			}
+		if _, valid := optionMap[value]; !valid {
+			return fmt.Errorf("%w: must be one of %v", ErrInvalidOption, validOptions)
 		}
-		return ErrInvalidOption
+		return nil
 	}
 }
 
@@ -91,11 +97,14 @@ func validateBool(value string, _ uint64) error {
 	return nil
 }
 
-// validateNumber checks if a string is a valid number.
+// validateNumber checks if a string is a valid non-negative number.
 func validateNumber(value string, _ uint64) error {
-	_, err := strconv.ParseInt(value, 10, 64)
+	num, err := strconv.ParseInt(value, 10, 64)
 	if err != nil {
-		return fmt.Errorf("value must be a valid number: %w", err)
+		return fmt.Errorf("%w: %w", ErrInvalidNumber, err)
+	}
+	if num < 0 {
+		return fmt.Errorf("%w: %d", ErrInvalidNumber, num)
 	}
 	return nil
 }
@@ -143,8 +152,11 @@ func (r *SettingRegistry) createStreamerModeSetting() *Setting {
 		ValueGetter: func(s *Session) string {
 			return strconv.FormatBool(UserStreamerMode.Get(s))
 		},
-		ValueUpdater: func(value string, s *Session) error {
-			boolVal, _ := strconv.ParseBool(value)
+		ValueUpdater: func(_ string, inputs []string, s *Session) error {
+			if len(inputs) < 1 {
+				return ErrMissingInput
+			}
+			boolVal, _ := strconv.ParseBool(inputs[0])
 			UserStreamerMode.Set(s, boolVal)
 			return nil
 		},
@@ -182,8 +194,11 @@ func (r *SettingRegistry) createReviewModeSetting() *Setting {
 		ValueGetter: func(s *Session) string {
 			return UserReviewMode.Get(s).String()
 		},
-		ValueUpdater: func(value string, s *Session) error {
-			reviewMode, err := enum.ReviewModeString(value)
+		ValueUpdater: func(_ string, inputs []string, s *Session) error {
+			if len(inputs) < 1 {
+				return ErrMissingInput
+			}
+			reviewMode, err := enum.ReviewModeString(inputs[0])
 			if err != nil {
 				return err
 			}
@@ -211,8 +226,11 @@ func (r *SettingRegistry) createSessionLimitSetting() *Setting {
 		ValueGetter: func(s *Session) string {
 			return strconv.FormatUint(BotSessionLimit.Get(s), 10)
 		},
-		ValueUpdater: func(value string, s *Session) error {
-			limit, err := strconv.ParseUint(value, 10, 64)
+		ValueUpdater: func(_ string, inputs []string, s *Session) error {
+			if len(inputs) < 1 {
+				return ErrMissingInput
+			}
+			limit, err := strconv.ParseUint(inputs[0], 10, 64)
 			if err != nil {
 				return err
 			}
@@ -227,41 +245,38 @@ func (r *SettingRegistry) createReviewerIDsSetting() *Setting {
 	return &Setting{
 		Key:          constants.ReviewerIDsOption,
 		Name:         "Reviewer IDs",
-		Description:  "Set which users can review using the bot",
+		Description:  "Manage authorized reviewer IDs",
 		Type:         enum.SettingTypeID,
 		DefaultValue: []uint64{},
 		Validators:   []Validator{validateDiscordID},
 		ValueGetter: func(s *Session) string {
-			// Check the reviewer IDs from the session
 			reviewerIDs := BotReviewerIDs.Get(s)
-			if len(reviewerIDs) == 0 {
-				return "No reviewers set"
-			}
-
-			// Show only first 10 IDs
-			displayIDs := utils.FormatIDs(reviewerIDs)
-			if len(reviewerIDs) > 10 {
-				displayIDs += fmt.Sprintf("\n...and %d more", len(reviewerIDs)-10)
-			}
-			return displayIDs
+			return fmt.Sprintf("%d reviewer(s) authorized", len(reviewerIDs))
 		},
-		ValueUpdater: func(value string, s *Session) error {
-			id, err := strconv.ParseUint(value, 10, 64)
+		ValueUpdater: func(_ string, inputs []string, s *Session) error {
+			if len(inputs) < 1 {
+				return ErrMissingInput
+			}
+
+			id, err := strconv.ParseUint(inputs[0], 10, 64)
 			if err != nil {
-				return err
+				return fmt.Errorf("%w: %w", ErrInvalidIDFormat, err)
 			}
 
 			// Check the reviewer IDs from the session
 			reviewerIDs := BotReviewerIDs.Get(s)
-			exists := false
+
+			// Toggle the ID
+			found := false
 			for i, reviewerID := range reviewerIDs {
 				if reviewerID == id {
 					reviewerIDs = append(reviewerIDs[:i], reviewerIDs[i+1:]...)
-					exists = true
+					found = true
 					break
 				}
 			}
-			if !exists {
+
+			if !found {
 				reviewerIDs = append(reviewerIDs, id)
 			}
 
@@ -277,41 +292,38 @@ func (r *SettingRegistry) createAdminIDsSetting() *Setting {
 	return &Setting{
 		Key:          constants.AdminIDsOption,
 		Name:         "Admin IDs",
-		Description:  "Set which users can access bot settings",
+		Description:  "Manage authorized admin IDs",
 		Type:         enum.SettingTypeID,
 		DefaultValue: []uint64{},
 		Validators:   []Validator{validateDiscordID},
 		ValueGetter: func(s *Session) string {
-			// Check the admin IDs from the session
 			adminIDs := BotAdminIDs.Get(s)
-			if len(adminIDs) == 0 {
-				return "No admins set"
-			}
-
-			// Show only first 10 IDs
-			displayIDs := utils.FormatIDs(adminIDs)
-			if len(adminIDs) > 10 {
-				displayIDs += fmt.Sprintf("\n...and %d more", len(adminIDs)-10)
-			}
-			return displayIDs
+			return fmt.Sprintf("%d admin(s) authorized", len(adminIDs))
 		},
-		ValueUpdater: func(value string, s *Session) error {
-			id, err := strconv.ParseUint(value, 10, 64)
+		ValueUpdater: func(_ string, inputs []string, s *Session) error {
+			if len(inputs) < 1 {
+				return ErrMissingInput
+			}
+
+			id, err := strconv.ParseUint(inputs[0], 10, 64)
 			if err != nil {
-				return err
+				return fmt.Errorf("%w: %w", ErrInvalidIDFormat, err)
 			}
 
 			// Check the admin IDs from the session
 			adminIDs := BotAdminIDs.Get(s)
-			exists := false
+
+			// Toggle the ID
+			found := false
 			for i, adminID := range adminIDs {
 				if adminID == id {
 					adminIDs = append(adminIDs[:i], adminIDs[i+1:]...)
-					exists = true
+					found = true
 					break
 				}
 			}
-			if !exists {
+
+			if !found {
 				adminIDs = append(adminIDs, id)
 			}
 
@@ -360,8 +372,11 @@ func (r *SettingRegistry) createReviewTargetModeSetting() *Setting {
 		ValueGetter: func(s *Session) string {
 			return UserReviewTargetMode.Get(s).String()
 		},
-		ValueUpdater: func(value string, s *Session) error {
-			reviewTargetMode, err := enum.ReviewTargetModeString(value)
+		ValueUpdater: func(_ string, inputs []string, s *Session) error {
+			if len(inputs) < 1 {
+				return ErrMissingInput
+			}
+			reviewTargetMode, err := enum.ReviewTargetModeString(inputs[0])
 			if err != nil {
 				return err
 			}
@@ -394,8 +409,11 @@ func (r *SettingRegistry) createWelcomeMessageSetting() *Setting {
 			}
 			return welcomeMessage
 		},
-		ValueUpdater: func(value string, s *Session) error {
-			BotWelcomeMessage.Set(s, value)
+		ValueUpdater: func(_ string, inputs []string, s *Session) error {
+			if len(inputs) < 1 {
+				return ErrMissingInput
+			}
+			BotWelcomeMessage.Set(s, inputs[0])
 			return nil
 		},
 	}
@@ -428,8 +446,11 @@ func (r *SettingRegistry) createAnnouncementTypeSetting() *Setting {
 		ValueGetter: func(s *Session) string {
 			return BotAnnouncementType.Get(s).String()
 		},
-		ValueUpdater: func(value string, s *Session) error {
-			announcementType, err := enum.AnnouncementTypeString(value)
+		ValueUpdater: func(_ string, inputs []string, s *Session) error {
+			if len(inputs) < 1 {
+				return ErrMissingInput
+			}
+			announcementType, err := enum.AnnouncementTypeString(inputs[0])
 			if err != nil {
 				return err
 			}
@@ -462,8 +483,11 @@ func (r *SettingRegistry) createAnnouncementMessageSetting() *Setting {
 			}
 			return announcementMessage
 		},
-		ValueUpdater: func(value string, s *Session) error {
-			BotAnnouncementMessage.Set(s, value)
+		ValueUpdater: func(_ string, inputs []string, s *Session) error {
+			if len(inputs) < 1 {
+				return ErrMissingInput
+			}
+			BotAnnouncementMessage.Set(s, inputs[0])
 			return nil
 		},
 	}
@@ -475,8 +499,28 @@ func (r *SettingRegistry) createAPIKeysSetting() *Setting {
 		Key:          constants.APIKeysOption,
 		Name:         "API Keys",
 		Description:  "Manage API keys for REST API access",
-		Type:         enum.SettingTypeText,
+		Type:         enum.SettingTypeAPIKey,
 		DefaultValue: []types.APIKeyInfo{},
+		Options: []types.SettingOption{
+			{
+				Value:       constants.APIKeyCreateIDOption,
+				Label:       "Create New Key",
+				Description: "Generate a new API key",
+				Emoji:       "🔑",
+			},
+			{
+				Value:       constants.APIKeyDeleteIDOption,
+				Label:       "Delete Key",
+				Description: "Remove an existing API key",
+				Emoji:       "🗑️",
+			},
+			{
+				Value:       constants.APIKeyUpdateIDOption,
+				Label:       "Update Description",
+				Description: "Change an API key's description",
+				Emoji:       "✏️",
+			},
+		},
 		Validators: []Validator{
 			func(value string, _ uint64) error {
 				if len(value) > 100 {
@@ -487,43 +531,44 @@ func (r *SettingRegistry) createAPIKeysSetting() *Setting {
 		},
 		ValueGetter: func(s *Session) string {
 			apiKeys := BotAPIKeys.Get(s)
-			if len(apiKeys) == 0 {
-				return "No API keys configured"
-			}
-
-			var sb strings.Builder
-			for i, key := range apiKeys {
-				if i > 0 {
-					sb.WriteString("\n")
-				}
-				// Only show first 8 chars of key for security
-				sb.WriteString(fmt.Sprintf("||%s||: %s (Created: %s)",
-					key.Key,
-					key.Description,
-					key.CreatedAt.Format("2006-01-02")))
-			}
-			return sb.String()
+			return fmt.Sprintf("%d API key(s) configured", len(apiKeys))
 		},
-		ValueUpdater: func(value string, s *Session) error {
+		ValueUpdater: func(customID string, inputs []string, s *Session) error {
 			apiKeys := BotAPIKeys.Get(s)
-			exists := false
-			for i, key := range apiKeys {
-				if key.Key == value {
-					// Remove existing key
-					apiKeys = append(apiKeys[:i], apiKeys[i+1:]...)
-					exists = true
-					break
-				}
-			}
 
-			if !exists {
-				// Add new key
+			switch customID {
+			case constants.APIKeyCreateIDOption:
+				if len(inputs) < 1 {
+					return ErrMissingInput
+				}
 				newKey := types.APIKeyInfo{
 					Key:         utils.GenerateSecureToken(32),
-					Description: value,
+					Description: inputs[0],
 					CreatedAt:   time.Now(),
 				}
 				apiKeys = append(apiKeys, newKey)
+
+			case constants.APIKeyDeleteIDOption:
+				if len(inputs) < 1 {
+					return ErrMissingInput
+				}
+				for i, key := range apiKeys {
+					if key.Key == inputs[0] {
+						apiKeys = append(apiKeys[:i], apiKeys[i+1:]...)
+						break
+					}
+				}
+
+			case constants.APIKeyUpdateIDOption:
+				if len(inputs) < 2 {
+					return ErrMissingInput
+				}
+				for i := range apiKeys {
+					if apiKeys[i].Key == inputs[0] {
+						apiKeys[i].Description = inputs[1]
+						break
+					}
+				}
 			}
 
 			BotAPIKeys.Set(s, apiKeys)

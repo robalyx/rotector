@@ -11,6 +11,7 @@ const (
 	SettingTypeID
 	SettingTypeNumber
 	SettingTypeText
+	SettingTypeAPIKey
 )
 
 // AnnouncementType is the type of announcement message.

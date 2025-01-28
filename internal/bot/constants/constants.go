@@ -78,6 +78,25 @@ const (
 	VoteConsensusThreshold = 0.75 // 75% votes in one direction blocks the opposite action
 	MinimumVotesRequired   = 10   // Minimum number of votes needed before consensus is enforced
 
+	// ReviewHistoryLimit caps the number of review history entries shown.
+	ReviewHistoryLimit = 5
+
+	// ReviewFriendsLimit caps the number of friends shown in the main review embed
+	// to prevent the embed from becoming too long.
+	ReviewFriendsLimit = 10
+
+	// ReviewGroupsLimit caps the number of groups shown in the main review embed
+	// to prevent the embed from becoming too long.
+	ReviewGroupsLimit = 10
+
+	// ReviewGamesLimit caps the number of games shown in the main review embed
+	// to prevent the embed from becoming too long.
+	ReviewGamesLimit = 10
+
+	// ReviewOutfitsLimit caps the number of outfits shown in the main review embed
+	// to prevent the embed from becoming too long.
+	ReviewOutfitsLimit = 10
+
 	SortOrderSelectMenuCustomID = "sort_order"
 
 	ConfirmWithReasonModalCustomID = "confirm_with_reason_modal"
@@ -170,6 +189,9 @@ const (
 
 // Bot Settings.
 const (
+	SettingsIDsPerPage  = 15
+	SettingsKeysPerPage = 9
+
 	BotSettingPrefix          = "bot"
 	BotSettingSelectID        = "bot_setting_select"
 	ReviewerIDsOption         = "reviewer_ids"
@@ -178,7 +200,11 @@ const (
 	WelcomeMessageOption      = "welcome_message"
 	AnnouncementTypeOption    = "announcement_type"
 	AnnouncementMessageOption = "announcement_message"
-	APIKeysOption             = "api_keys"
+
+	APIKeysOption        = "api_keys"
+	APIKeyCreateIDOption = "api_key_create" + ModalOpenSuffix
+	APIKeyDeleteIDOption = "api_key_delete" + ModalOpenSuffix
+	APIKeyUpdateIDOption = "api_key_update" + ModalOpenSuffix
 )
 
 // Logs Menu.
@@ -273,25 +299,4 @@ const (
 const (
 	LeaderboardEntriesPerPage           = 10
 	LeaderboardPeriodSelectMenuCustomID = "leaderboard_period"
-)
-
-const (
-	// ReviewHistoryLimit caps the number of review history entries shown.
-	ReviewHistoryLimit = 5
-
-	// ReviewFriendsLimit caps the number of friends shown in the main review embed
-	// to prevent the embed from becoming too long.
-	ReviewFriendsLimit = 10
-
-	// ReviewGroupsLimit caps the number of groups shown in the main review embed
-	// to prevent the embed from becoming too long.
-	ReviewGroupsLimit = 10
-
-	// ReviewGamesLimit caps the number of games shown in the main review embed
-	// to prevent the embed from becoming too long.
-	ReviewGamesLimit = 10
-
-	// ReviewOutfitsLimit caps the number of outfits shown in the main review embed
-	// to prevent the embed from becoming too long.
-	ReviewOutfitsLimit = 10
 )
