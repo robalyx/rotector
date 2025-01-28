@@ -12,6 +12,7 @@ import (
 	"github.com/robalyx/rotector/internal/bot/core/pagination"
 	"github.com/robalyx/rotector/internal/bot/core/session"
 	"github.com/robalyx/rotector/internal/bot/interfaces"
+	"github.com/robalyx/rotector/internal/bot/utils"
 	"github.com/robalyx/rotector/internal/common/storage/database/types"
 	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
 	"go.uber.org/zap"
@@ -192,6 +193,16 @@ func (m *MainMenu) handleLookupUserModalSubmit(event *events.ModalSubmitInteract
 	// Get the user ID input
 	userIDStr := event.Data.Text(constants.LookupUserInputCustomID)
 
+	// Parse profile URL if provided
+	if utils.IsRobloxProfileURL(userIDStr) {
+		var err error
+		userIDStr, err = utils.ExtractUserIDFromURL(userIDStr)
+		if err != nil {
+			m.layout.paginationManager.NavigateTo(event, s, m.page, "Invalid Roblox profile URL. Please provide a valid URL or ID.")
+			return
+		}
+	}
+
 	// Get user from database
 	user, err := m.layout.db.Models().Users().GetUserByID(context.Background(), userIDStr, types.UserFields{})
 	if err != nil {
@@ -224,6 +235,16 @@ func (m *MainMenu) handleLookupUserModalSubmit(event *events.ModalSubmitInteract
 func (m *MainMenu) handleLookupGroupModalSubmit(event *events.ModalSubmitInteractionCreate, s *session.Session) {
 	// Get the group ID input
 	groupIDStr := event.Data.Text(constants.LookupGroupInputCustomID)
+
+	// Parse group URL if provided
+	if utils.IsRobloxGroupURL(groupIDStr) {
+		var err error
+		groupIDStr, err = utils.ExtractGroupIDFromURL(groupIDStr)
+		if err != nil {
+			m.layout.paginationManager.NavigateTo(event, s, m.page, "Invalid Roblox group URL. Please provide a valid URL or ID.")
+			return
+		}
+	}
 
 	// Get group from database
 	group, err := m.layout.db.Models().Groups().GetGroupByID(context.Background(), groupIDStr, types.GroupFields{})
