@@ -12,6 +12,7 @@ import (
 	"github.com/robalyx/rotector/internal/bot/core/pagination"
 	"github.com/robalyx/rotector/internal/bot/core/session"
 	"github.com/robalyx/rotector/internal/bot/interfaces"
+	"github.com/robalyx/rotector/internal/bot/utils"
 	"github.com/robalyx/rotector/internal/common/storage/database/types"
 	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
 	"go.uber.org/zap"
@@ -220,8 +221,20 @@ func (m *OverviewMenu) handleModal(event *events.ModalSubmitInteractionCreate, s
 
 // handleCreateAppealModalSubmit processes the appeal creation form submission.
 func (m *OverviewMenu) handleCreateAppealModalSubmit(event *events.ModalSubmitInteractionCreate, s *session.Session) {
-	// Get and validate the user ID input
+	// Get user ID input
 	userIDStr := event.Data.Text(constants.AppealUserInputCustomID)
+
+	// Parse profile URL if provided
+	if utils.IsRobloxProfileURL(userIDStr) {
+		var err error
+		userIDStr, err = utils.ExtractUserIDFromURL(userIDStr)
+		if err != nil {
+			m.layout.paginationManager.NavigateTo(event, s, m.page, "Invalid Roblox profile URL. Please provide a valid URL or ID.")
+			return
+		}
+	}
+
+	// Parse the user ID
 	userID, err := strconv.ParseUint(userIDStr, 10, 64)
 	if err != nil {
 		m.layout.paginationManager.NavigateTo(event, s, m.page, "Invalid user ID format. Please enter a valid number.")
