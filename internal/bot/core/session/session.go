@@ -90,7 +90,7 @@ func (s *Session) Touch(ctx context.Context) {
 	}
 
 	// Only save bot settings if they've been updated
-	if s.botSettingsUpdate {
+	if s.botSettings.IsAdmin(s.userID) && s.botSettingsUpdate {
 		if err := s.db.Models().Settings().SaveBotSettings(ctx, s.botSettings); err != nil {
 			s.logger.Error("Failed to save bot settings", zap.Error(err))
 			return
