@@ -7,11 +7,11 @@ import (
 	"strings"
 )
 
-const _SettingTypeName = "BoolEnumIDNumberText"
+const _SettingTypeName = "BoolEnumIDNumberTextAPIKey"
 
-var _SettingTypeIndex = [...]uint8{0, 4, 8, 10, 16, 20}
+var _SettingTypeIndex = [...]uint8{0, 4, 8, 10, 16, 20, 26}
 
-const _SettingTypeLowerName = "boolenumidnumbertext"
+const _SettingTypeLowerName = "boolenumidnumbertextapikey"
 
 func (i SettingType) String() string {
 	if i < 0 || i >= SettingType(len(_SettingTypeIndex)-1) {
@@ -29,9 +29,10 @@ func _SettingTypeNoOp() {
 	_ = x[SettingTypeID-(2)]
 	_ = x[SettingTypeNumber-(3)]
 	_ = x[SettingTypeText-(4)]
+	_ = x[SettingTypeAPIKey-(5)]
 }
 
-var _SettingTypeValues = []SettingType{SettingTypeBool, SettingTypeEnum, SettingTypeID, SettingTypeNumber, SettingTypeText}
+var _SettingTypeValues = []SettingType{SettingTypeBool, SettingTypeEnum, SettingTypeID, SettingTypeNumber, SettingTypeText, SettingTypeAPIKey}
 
 var _SettingTypeNameToValueMap = map[string]SettingType{
 	_SettingTypeName[0:4]:        SettingTypeBool,
@@ -44,6 +45,8 @@ var _SettingTypeNameToValueMap = map[string]SettingType{
 	_SettingTypeLowerName[10:16]: SettingTypeNumber,
 	_SettingTypeName[16:20]:      SettingTypeText,
 	_SettingTypeLowerName[16:20]: SettingTypeText,
+	_SettingTypeName[20:26]:      SettingTypeAPIKey,
+	_SettingTypeLowerName[20:26]: SettingTypeAPIKey,
 }
 
 var _SettingTypeNames = []string{
@@ -52,6 +55,7 @@ var _SettingTypeNames = []string{
 	_SettingTypeName[8:10],
 	_SettingTypeName[10:16],
 	_SettingTypeName[16:20],
+	_SettingTypeName[20:26],
 }
 
 // SettingTypeString retrieves an enum value from the enum constants string name.

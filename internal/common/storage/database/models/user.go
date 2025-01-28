@@ -920,6 +920,8 @@ func (r *UserModel) getNextToReview(ctx context.Context, model interface{}, sort
 		case enum.ReviewSortByReputation:
 			subq.Join("LEFT JOIN user_reputations ON user_reputations.id = ?TableAlias.id").
 				OrderExpr("COALESCE(user_reputations.score, 0) ASC")
+		case enum.ReviewSortByLastViewed:
+			subq.Order("last_viewed ASC")
 		case enum.ReviewSortByRandom:
 			subq.OrderExpr("RANDOM()")
 		}

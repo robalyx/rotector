@@ -228,6 +228,9 @@ func (b *ReviewBuilder) buildSortingOptions() []discord.StringSelectMenuOption {
 		discord.NewStringSelectMenuOption("Selected by bad reputation", enum.ReviewSortByReputation.String()).
 			WithDefault(b.defaultSort == enum.ReviewSortByReputation).
 			WithEmoji(discord.ComponentEmoji{Name: "👎"}),
+		discord.NewStringSelectMenuOption("Selected by last viewed", enum.ReviewSortByLastViewed.String()).
+			WithDefault(b.defaultSort == enum.ReviewSortByLastViewed).
+			WithEmoji(discord.ComponentEmoji{Name: "👁️"}),
 	}
 }
 

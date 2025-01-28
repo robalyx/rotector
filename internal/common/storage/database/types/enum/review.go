@@ -14,6 +14,8 @@ const (
 	ReviewSortByLastUpdated
 	// ReviewSortByReputation orders reviews by reputation.
 	ReviewSortByReputation
+	// ReviewSortByLastViewed orders reviews by last viewed.
+	ReviewSortByLastViewed
 )
 
 // ReviewMode represents different modes of reviewing items.
