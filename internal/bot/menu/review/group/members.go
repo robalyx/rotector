@@ -71,14 +71,13 @@ func (m *MembersMenu) Show(event *events.ComponentInteractionCreate, s *session.
 	}
 	pageMembers := sortedMemberIDs[start:end]
 
-	// Fetch presence data for the current page of members
-	presenceMap := m.fetchPresences(pageMembers)
+	// Start fetching presences for visible members in background
+	presenceChan := m.layout.presenceFetcher.FetchPresencesConcurrently(context.Background(), pageMembers)
 
-	// Store data in session for the message builder
+	// Store initial data in session
 	session.GroupMemberIDs.Set(s, sortedMemberIDs)
 	session.GroupMembers.Set(s, members)
 	session.GroupPageMembers.Set(s, pageMembers)
-	session.UserPresences.Set(s, presenceMap)
 	session.PaginationOffset.Set(s, start)
 	session.PaginationPage.Set(s, page)
 	session.PaginationTotalItems.Set(s, len(sortedMemberIDs))
@@ -96,6 +95,11 @@ func (m *MembersMenu) Show(event *events.ComponentInteractionCreate, s *session.
 			session.ImageBuffer.Set(s, buf)
 		},
 	})
+
+	// Store presences when they arrive
+	presenceMap := <-presenceChan
+	session.UserPresences.Set(s, presenceMap)
+	m.layout.paginationManager.NavigateTo(event, s, m.page, "")
 }
 
 // handlePageNavigation processes navigation button clicks.
@@ -175,17 +179,4 @@ func (m *MembersMenu) fetchMemberThumbnails(members []uint64) []string {
 	}
 
 	return thumbnailURLs
-}
-
-// fetchPresences fetches presence data for a slice of member IDs.
-func (m *MembersMenu) fetchPresences(members []uint64) map[uint64]*apiTypes.UserPresenceResponse {
-	presenceMap := make(map[uint64]*apiTypes.UserPresenceResponse)
-
-	// Fetch and map presences
-	presences := m.layout.presenceFetcher.FetchPresences(context.Background(), members)
-	for _, presence := range presences {
-		presenceMap[presence.UserID] = presence
-	}
-
-	return presenceMap
 }

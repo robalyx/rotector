@@ -40,7 +40,6 @@ func NewFriendsMenu(layout *Layout) *FriendsMenu {
 }
 
 // Show prepares and displays the friends interface for a specific page.
-// It loads friend data, checks their status, and creates a grid of avatars.
 func (m *FriendsMenu) Show(event *events.ComponentInteractionCreate, s *session.Session, page int) {
 	user := session.UserTarget.Get(s)
 
@@ -62,12 +61,15 @@ func (m *FriendsMenu) Show(event *events.ComponentInteractionCreate, s *session.
 	}
 	pageFriends := sortedFriends[start:end]
 
-	// Fetch presence data
-	presenceMap := m.fetchPresences(sortedFriends)
+	// Start fetching presences for visible friends in background
+	friendIDs := make([]uint64, len(pageFriends))
+	for i, friend := range pageFriends {
+		friendIDs[i] = friend.ID
+	}
+	presenceChan := m.layout.presenceFetcher.FetchPresencesConcurrently(context.Background(), friendIDs)
 
-	// Store data in session for the message builder
+	// Store initial data in session
 	session.UserFriends.Set(s, pageFriends)
-	session.UserPresences.Set(s, presenceMap)
 	session.PaginationOffset.Set(s, start)
 	session.PaginationPage.Set(s, page)
 	session.PaginationTotalItems.Set(s, len(sortedFriends))
@@ -85,6 +87,11 @@ func (m *FriendsMenu) Show(event *events.ComponentInteractionCreate, s *session.
 			session.ImageBuffer.Set(s, buf)
 		},
 	})
+
+	// Store presences when they arrive
+	presenceMap := <-presenceChan
+	session.UserPresences.Set(s, presenceMap)
+	m.layout.paginationManager.NavigateTo(event, s, m.page, "")
 }
 
 // handlePageNavigation processes navigation button clicks by calculating
@@ -137,25 +144,6 @@ func (m *FriendsMenu) sortFriendsByStatus(friends []*apiTypes.ExtendedFriend, fl
 	}
 
 	return sortedFriends
-}
-
-// fetchPresences handles concurrent fetching of presence information.
-func (m *FriendsMenu) fetchPresences(allFriends []*apiTypes.ExtendedFriend) map[uint64]*apiTypes.UserPresenceResponse {
-	presenceMap := make(map[uint64]*apiTypes.UserPresenceResponse)
-
-	// Extract friend IDs
-	friendIDs := make([]uint64, len(allFriends))
-	for i, friend := range allFriends {
-		friendIDs[i] = friend.ID
-	}
-
-	// Fetch and map presences
-	presences := m.layout.presenceFetcher.FetchPresences(context.Background(), friendIDs)
-	for _, presence := range presences {
-		presenceMap[presence.UserID] = presence
-	}
-
-	return presenceMap
 }
 
 // fetchFriendThumbnails fetches thumbnails for a slice of friends.

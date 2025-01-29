@@ -8,6 +8,7 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
+	"sync"
 
 	"github.com/redis/rueidis"
 
@@ -28,6 +29,7 @@ type Session struct {
 	redis              rueidis.Client
 	key                string
 	data               map[string]interface{}
+	mu                 sync.RWMutex
 	logger             *zap.Logger
 	userID             uint64
 }
@@ -66,7 +68,10 @@ func (s *Session) UserID() uint64 {
 // If serialization fails, the error is logged but the session continues.
 func (s *Session) Touch(ctx context.Context) {
 	// Serialize session data to JSON
+	s.mu.RLock()
 	data, err := sonic.MarshalString(s.data)
+	s.mu.RUnlock()
+
 	if err != nil {
 		s.logger.Error("Failed to marshal session data", zap.Error(err))
 		return
@@ -112,6 +117,9 @@ func (s *Session) BotSettings() *types.BotSetting {
 // get retrieves a raw string value from the in-memory session cache.
 // Returns empty string if key doesn't exist.
 func (s *Session) get(key string) interface{} {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
 	if value, ok := s.data[key]; ok {
 		return value
 	}
@@ -173,6 +181,9 @@ func (s *Session) getBuffer(key string) *bytes.Buffer {
 
 // set sets the value for the given key.
 func (s *Session) set(key string, value interface{}) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	s.data[key] = value
 	s.logger.Debug("Session key set", zap.String("key", key))
 }
@@ -187,12 +198,17 @@ func (s *Session) setBuffer(key string, buf *bytes.Buffer) {
 
 	// Encode buffer to base64
 	encoded := base64.StdEncoding.EncodeToString(buf.Bytes())
+	s.mu.Lock()
 	s.data[key] = encoded
+	s.mu.Unlock()
 	s.logger.Debug("Session key set with base64 encoded buffer", zap.String("key", key))
 }
 
 // delete removes a key from the session data.
 func (s *Session) delete(key string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	delete(s.data, key)
 	s.logger.Debug("Session key deleted", zap.String("key", key))
 }

@@ -74,6 +74,8 @@ func (m *OutfitsMenu) Show(event *events.ComponentInteractionCreate, s *session.
 			session.ImageBuffer.Set(s, buf)
 		},
 	})
+
+	m.layout.paginationManager.NavigateTo(event, s, m.page, "")
 }
 
 // handlePageNavigation processes navigation button clicks by calculating

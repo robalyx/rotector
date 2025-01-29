@@ -147,8 +147,8 @@ func (is *ImageStreamer) Stream(req StreamRequest) {
 		select {
 		case <-ctx.Done():
 			// Clean up streaming state before returning
-			session.PaginationIsStreaming.Set(req.Session, false)
 			is.createAndDisplayGrid(req, downloadedImages, &mu, "Images took too long to load")
+			session.PaginationIsStreaming.Set(req.Session, false)
 			return
 		case <-doneChan:
 			// Final update when all images are downloaded
@@ -157,8 +157,8 @@ func (is *ImageStreamer) Stream(req StreamRequest) {
 				message = fmt.Sprintf("Images loaded (%d failed)", failed)
 			}
 
-			session.PaginationIsStreaming.Set(req.Session, false)
 			is.createAndDisplayGrid(req, downloadedImages, &mu, message)
+			session.PaginationIsStreaming.Set(req.Session, false)
 			return
 		case <-ticker.C:
 			// Periodic update while images are still downloading

@@ -80,6 +80,8 @@ func (m *GroupsMenu) Show(event *events.ComponentInteractionCreate, s *session.S
 			session.ImageBuffer.Set(s, buf)
 		},
 	})
+
+	m.layout.paginationManager.NavigateTo(event, s, m.page, "")
 }
 
 // sortGroupsByStatus sorts groups into categories based on their status.

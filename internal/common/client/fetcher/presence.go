@@ -74,6 +74,23 @@ func (p *PresenceFetcher) FetchPresences(ctx context.Context, userIDs []uint64) 
 	return allPresences
 }
 
+// FetchPresencesConcurrently fetches presences in the background and returns a channel with the results.
+func (p *PresenceFetcher) FetchPresencesConcurrently(ctx context.Context, userIDs []uint64) <-chan map[uint64]*types.UserPresenceResponse {
+	resultChan := make(chan map[uint64]*types.UserPresenceResponse, 1)
+
+	go func() {
+		presences := p.FetchPresences(ctx, userIDs)
+		presenceMap := make(map[uint64]*types.UserPresenceResponse)
+		for _, presence := range presences {
+			presenceMap[presence.UserID] = presence
+		}
+		resultChan <- presenceMap
+		close(resultChan)
+	}()
+
+	return resultChan
+}
+
 func minInt(a, b int) int {
 	if a < b {
 		return a
