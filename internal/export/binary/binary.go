@@ -3,16 +3,12 @@ package binary
 import (
 	"encoding/binary"
 	"encoding/hex"
-	"errors"
 	"fmt"
-	"math"
 	"os"
 	"path/filepath"
 
 	"github.com/robalyx/rotector/internal/export/types"
 )
-
-var ErrInvalidRecordCount = errors.New("record count exceeds uint32 max")
 
 // Exporter handles exporting hashes to binary files.
 type Exporter struct {
@@ -48,11 +44,6 @@ func (e *Exporter) Export(userRecords, groupRecords []*types.ExportRecord) error
 
 // writeFile writes records to a binary file.
 func (e *Exporter) writeFile(filename string, records []*types.ExportRecord) error {
-	// Check for potential overflow before converting to uint32
-	if len(records) > math.MaxUint32 {
-		return fmt.Errorf("%w: %d", ErrInvalidRecordCount, len(records))
-	}
-
 	// Write number of records
 	file, err := os.Create(filepath.Join(e.outDir, filename))
 	if err != nil {

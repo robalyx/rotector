@@ -4,7 +4,6 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"io"
-	"math"
 	"os"
 	"path/filepath"
 	"testing"
@@ -137,18 +136,4 @@ func TestExporter_Export(t *testing.T) {
 			}
 		})
 	}
-}
-
-func TestExporter_RecordCountLimit(t *testing.T) {
-	tempDir := t.TempDir()
-	e := New(tempDir)
-
-	// Create records slice larger than uint32 max
-	records := make([]*types.ExportRecord, math.MaxUint32+1)
-
-	// Attempt export
-	err := e.Export(records, nil)
-
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "record count exceeds uint32 max")
 }
