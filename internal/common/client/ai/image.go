@@ -52,6 +52,17 @@ Confidence Level Guide:
 - 0.1-0.4: Missing either shirt OR pants with some coverage
 - 0.5-0.7: Missing either shirt OR pants completely
 - 0.8-1.0: Missing both shirt AND pants`
+
+	// ImageRequestPrompt provides a reminder to follow system guidelines for image analysis.
+	ImageRequestPrompt = `Please analyze these images according to the detailed guidelines in your system prompt.
+
+Remember to:
+- Check for completely missing clothing items only
+- Follow the confidence level guide strictly
+- Apply all STRICT RULES from the system prompt
+- Only flag clear violations with high confidence
+
+Analyze the following images in order:`
 )
 
 var ErrNoImages = errors.New("no images downloaded successfully")
@@ -154,7 +165,7 @@ func (a *ImageAnalyzer) ProcessImages(userInfos []*fetcher.Info, flaggedUsers ma
 
 		// Prepare parts for the model
 		parts := make([]genai.Part, 0, len(userImages)*2+1)
-		parts = append(parts, genai.Text("Analyze the following images in order."))
+		parts = append(parts, genai.Text(ImageRequestPrompt))
 
 		for _, img := range userImages {
 			parts = append(parts, genai.Text(fmt.Sprintf("\nAnalyze image for username %q:", img.info.Name)))

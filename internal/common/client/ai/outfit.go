@@ -56,6 +56,16 @@ Return:
 - confidence: Level (0.0-1.0) based on severity
   * Use 0.0 for no violations
   * Use 0.1-1.0 ONLY when clear violations exist`
+
+	// OutfitRequestPrompt provides a reminder to follow system guidelines for outfit analysis.
+	OutfitRequestPrompt = `Please analyze these outfits according to the detailed guidelines in your system prompt.
+
+Remember to:
+- Check for missing clothing and inappropriate outfit designs
+- Consider outfit names for concerning content
+- Follow the confidence level guide strictly
+- Apply all STRICT RULES from the system prompt
+- Only flag clear violations with high confidence`
 )
 
 const (
@@ -220,7 +230,7 @@ func (a *OutfitAnalyzer) analyzeUserOutfits(ctx context.Context, info *fetcher.I
 		defer a.genAIClient.DeleteFile(ctx, file.Name) //nolint:errcheck
 
 		// Prepare prompt with outfit information
-		prompt := fmt.Sprintf("Analyze outfits for user %q.\nOutfit names: %v", info.Name, outfitNames)
+		prompt := fmt.Sprintf("%s\n\nAnalyze outfits for user %q.\nOutfit names: %v", OutfitRequestPrompt, info.Name, outfitNames)
 
 		// Send request to Gemini
 		resp, err := a.outfitModel.GenerateContent(ctx,

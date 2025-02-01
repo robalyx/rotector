@@ -33,7 +33,7 @@ You will receive a list of user profiles in JSON format. Each profile contains:
 - Profile description/bio
 
 Analyze each profile and identify users engaging in PREDATORY BEHAVIOR. For each profile, return:
-- username: The exact username provided
+- username: The exact username provided (for identification only)
 - reason: Clear explanation of violations found in one sentence. Use exactly "NO_VIOLATIONS" if no clear concerns found
 - flaggedContent: Exact quotes of the concerning content
 - confidence: Level (0.0-1.0) based on severity
@@ -42,10 +42,10 @@ Analyze each profile and identify users engaging in PREDATORY BEHAVIOR. For each
 
 Confidence Level Guide:
 - 0.0: No predatory elements detected
-- 0.1-0.3: Subtle concerning red flags requiring investigation
-- 0.4-0.6: Clear inappropriate content or behavior
-- 0.7-0.8: Strong indicators of predatory behavior
-- 0.9-1.0: Explicit predatory intent or grooming attempts
+- 0.1-0.3: Single concerning element requiring investigation
+- 0.4-0.6: Clear inappropriate content (even single violation)
+- 0.7-0.8: Strong predatory indicators (single severe or multiple violations)
+- 0.9-1.0: Explicit predatory intent (single unambiguous violation)
 
 STRICT RULES:
 1. DO NOT flag profiles for:
@@ -57,65 +57,82 @@ STRICT RULES:
 3. DO NOT add users with no violations to the response
 4. DO NOT repeat the same content in flaggedContent array
 5. DO NOT flag empty descriptions
-6. Flag profiles showing MULTIPLE SUBTLE RED FLAGS even if individual elements seem innocent
+6. Flag profiles showing ANY RED FLAGS even if individual elements seem innocent
+7. Use generic terms like "the user" or "this account" instead of usernames
 
-Look for predatory behavior:
-- Grooming attempts and manipulation:
-  * Befriending minors with bad intent
-  * Building trust through manipulation
-  * Love bombing and excessive compliments (e.g., "good girl", "good boy")
-  * Exploiting vulnerabilities (e.g. "vulnerable", "needy", "lonely")
-  * Offering gifts or special privileges
-  * Using phrases like MDNI (minors do not interact) to hide predatory intent
-  * Unnecessary declarations of following TOS/Rules (e.g. "TOS follower", "follows TOS")
-  * Coded language for inappropriate activities
-  * Vague offers of "fun" or "good times" (e.g. "add me if you got games")
-  * Adult industry references
-  * References to adult fandoms or communities (e.g. "furry", "bara", "futa"/"fmta"/"fvta")
-  * Offering Robux, limited items, or game passes as incentives
-  * Requests to join "exclusive" Roblox groups/clans
-  * Requests for "bottom" or "top" role preferences
-  * Misspelled/bypassed words (e.g. "stinky", "gas", "poop", "pee", "fart", "loads given")
-  * Phonetic replacements for inappropriate terms
-  * Unicode character substitutions
+Look for these concerning behaviors and content:
+- Grooming behaviors (befriending minors, trust-building, love bombing)
+- Love bombing and excessive compliments (e.g., "good girl", "good boy")
+- Exploiting vulnerabilities (e.g. "vulnerable", "needy", "lonely")
+- Declarations of following TOS/Rules (e.g. "TOS follower", "following TOS", "follows TOS", "roblox TOS")
+- Coded language for inappropriate activities
+- Leading phrases implying secrecy (e.g. "iyk", "if yk then yk", "yk me", "yk what")
+- Vague offers of "fun" or "good times" (e.g. "add me if you got games", "invite me")
+- Game/studio/chat disclaimers or invitations (e.g. "studio only", "mainly studio", "no studio", "game only", "chat only")
+- Studio-related activity (e.g. "lets talk on studio", "join my studio", "i dont play studio", "no studio here")
+- Studio authority claims (e.g. "studio developer", "game creator", "build team member")
+- Condo/con references (e.g. "condo games", "con content", "con access", "con worlds", "cons only", "con builder")
+- Adult industry references
+- Adult community/fandom references (e.g. "furry", "bara", "futa", "gooner")
+- Offering gifts/privileges or demanding Robux/items as incentives (e.g. "pay Robux for...", "500 robux to join")
+- References to join "exclusive" Roblox groups/communities
+- References of "bottom" or "top" role preferences including abbreviations (e.g. "looking for bttm", "top only")
+- Misspelled/bypassed words (e.g. "stinky", "gassy", "gas", "poop", "pee", "fart", "loads given")
+- Control dynamics (e.g. "i own you", "owned", "belongs to me", "destroy me", "crush me", "like to get crushed")
+- Service-oriented phrasing (e.g. "at your service", "trainer wanted", "personal trainer", "private lessons")
+- Gender-specific recruitment (e.g. "only girls", "boys only", "female friends needed")
+- Direct messaging demands (e.g. "dm first", "message before adding")
+- Phonetic replacements for inappropriate terms
+- Unicode character substitutions
+- Attention-seeking behavior descriptions (e.g. "experienced", "gets too obsessed", "attention seeker")
+- Explicit sexual terms
+- Sexual solicitation or innuendo
+- Body part references
+- Porn or NSFW content
+- ERP (erotic roleplay) terms
+- Fetish mentions (e.g. "giant"/"giantess" sizeplay, scatological terms)
+- Suggestive size references (e.g. "big", "massive", "huge", "giant", "giantess", "bigger than", "yes its big")
+- References to being "young" or "older" (especially underage mentions)
+- References to banned accounts (e.g. "previous acc got banned", "old account banned", "new account")
+- Double meaning phrases about "packages" or "things"
+- "Trading" with sexual implications or off-platform exchanges (e.g. "trade pics", "special trades")
+- Degradation/humiliation terms (e.g. "spitting", "cow girl", "human toilet")
+- Boundary violations (e.g. "use me", "zero consent", "no limits", "limitless", "anything goes", "push boundaries")
+- Ownership/dominance references in sexual context (e.g. "daddy's girl", "good boy", "mommy's boy", "master", "dom")
+- Specifying "literate" or roleplay skill level (e.g. "literate", "detailed roleplayer")
+- Age-related content (e.g. "no minors", "experienced adult", "mature only", "minors dni", "18+ only")
+- Exploitative "adopt me" scenarios or family roleplay
+- References to roleplay, dating or hookup
+- Suggestive emoji or symbol patterns ONLY WHEN COMBINED WITH OTHER CONCERNING CONTENT
+- Inappropriate emoji or symbol combinations ONLY WHEN CLEARLY SUGGESTIVE (e.g. 🍆 combined with "DM me")
+- Non-consensual references
+- Exploitation/harassment references
+- References to "bulls"
+- Friend requests with inappropriate context (e.g. "I need young friends", "friends with benefits", "friend me for free Robux")
+- Age-restricted invitations (e.g. "mature only", "18+ server", "adults welcome")
+- Modified app/alternative platform references (e.g. "blue app", "tele client", "blue user")
+- Platform feature abuse (e.g. "chat only", "dm me", "use group chat", "party voice only")
+- Requests to "add me" combined with inappropriate context`
 
-- Sexual content and inappropriate requests:
-  * Explicit sexual terms
-  * Sexual solicitation or innuendo
-  * Body part references
-  * Porn or NSFW content
-  * ERP (erotic roleplay) terms
-  * Fetish mentions (e.g. "giant"/"giantess" sizeplay, scatological terms)
-  * Dating or hookup requests
-  * Roleplay requests
-  * Gooner references (internet slang for compulsive behavior)
-  * Specifying "literate" or "illiterate" partners
-  * Suggestive size references (e.g. "big", "massive", "huge", "giant", "giantess")
-  * References to "Game", "condo", "con", "studio" 
-  * Phrases like "no condo", "no studio", "games only", etc. (often used to hide intent)
-  * References to being "young" or "older" (especially underage mentions)
-  * Double meaning phrases about "packages" or "things"
-  * "Trading" with sexual implications or off-platform exchanges (e.g. "trade pics", "special trades")
-  * Goddess/master/dom references
-  * Exploitative "adopt me" scenarios or family roleplay
-  * Suggestive emoji or symbol patterns
-  * Inappropriate emoji or symbol combinations
-  * Asking for "fun" or to "use me"
-  * References to "zero consent" or "limitless"
-  * References to "bulls"
-  * Non-consensual references
-  * Exploitation/harassment references
+	// UserRequestPrompt provides a reminder to follow system guidelines for user analysis.
+	UserRequestPrompt = `Please analyze these user profiles according to the detailed guidelines in your system prompt.
 
-- Private contact attempts:
-  * Sharing condo game codes/locations
-  * "Test my game" requests with private access
-  * Friend requests with age-related comments ("I need young friends")
-  * Friend requests with sexualized context ("friends with benefits")
-  * Friend requests with trade coercion ("friend me for free Robux")
-  * Off-platform chat attempts
-  * References to "blue app" or "blue user" (Telegram)
-  * References to private servers, rooms, or games
-  * Requests to "add me" combined with inappropriate context`
+IMPORTANT REMINDER:
+- NEVER include usernames in your reasons
+- Use generic terms like "the user" or "this account" instead
+- Return usernames only in the "username" field for identification
+
+Remember to:
+- Pay special attention to coded language and subtle references
+- Consider comparative phrases (especially about size, age, or experience)
+- Analyze context-dependent phrases that may seem innocent but indicate predatory behavior
+- Check for patterns across username, display name, and description
+- Follow the confidence level guide strictly
+- Apply all STRICT RULES from the system prompt
+- Flag even subtle disclaimers like "game only" or "chat only"
+- Watch for abbreviated terms like "bttm" meaning bottom
+
+Analyze the following user profiles in order:`
 )
 
 var ErrBatchProcessing = errors.New("batch processing errors")
@@ -320,9 +337,12 @@ func (a *UserAnalyzer) processBatch(userInfos []*fetcher.Info, flaggedUsers map[
 		return getUserIDs(userInfos), fmt.Errorf("%w: %w", ErrJSONProcessing, err)
 	}
 
+	// Prepare request prompt with user info
+	requestPrompt := UserRequestPrompt + string(userInfoJSON)
+
 	// Generate content and parse response using Gemini model with retry
 	flaggedResults, err := withRetry(context.Background(), func() (*FlaggedUsers, error) {
-		resp, err := a.userModel.GenerateContent(context.Background(), genai.Text(string(userInfoJSON)))
+		resp, err := a.userModel.GenerateContent(context.Background(), genai.Text(requestPrompt))
 		if err != nil {
 			return nil, fmt.Errorf("gemini API error: %w", err)
 		}

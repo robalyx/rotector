@@ -28,10 +28,13 @@ Instructions:
 - Look for patterns of predatory behavior and inappropriate content
 - Focus on factual, verifiable connections
 - Keep your analysis concise and within 1 sentence
-- Do not include usernames in your analysis`
+- NEVER include usernames in your analysis
+- Use generic terms like "the user" or "this account" instead of usernames`
 
 	// FriendUserPrompt is the prompt for analyzing a user's friend network.
-	FriendUserPrompt = `User: %s
+	FriendUserPrompt = `IMPORTANT: Do not include any usernames in your analysis.
+
+User: %s
 Friend data: %s`
 )
 
