@@ -10,7 +10,8 @@ import (
 
 	"github.com/robalyx/rotector/internal/common/progress"
 	"github.com/robalyx/rotector/internal/common/setup"
-	"github.com/robalyx/rotector/internal/worker/ai"
+	"github.com/robalyx/rotector/internal/worker/friend"
+	"github.com/robalyx/rotector/internal/worker/group"
 	"github.com/robalyx/rotector/internal/worker/maintenance"
 	"github.com/robalyx/rotector/internal/worker/queue"
 	"github.com/robalyx/rotector/internal/worker/stats"
@@ -22,19 +23,11 @@ const (
 	// WorkerLogDir specifies where worker log files are stored.
 	WorkerLogDir = "logs/worker_logs"
 
-	// AIWorker processes user content through AI analysis.
-	AIWorker           = "ai"
-	AIWorkerTypeFriend = "friend"
-	AIWorkerTypeMember = "member"
-
-	// MaintenanceWorker maintains tracking and old data.
+	FriendWorker      = "friend"
+	GroupWorker       = "group"
 	MaintenanceWorker = "maintenance"
-
-	// StatsWorker handles statistics aggregation and storage.
-	StatsWorker = "stats"
-
-	// QueueWorker manages the processing queue for user checks.
-	QueueWorker = "queue"
+	StatsWorker       = "stats"
+	QueueWorker       = "queue"
 )
 
 func main() {
@@ -58,32 +51,26 @@ func run() error {
 		},
 		Commands: []*cli.Command{
 			{
-				Name:  AIWorker,
-				Usage: "Start AI workers",
-				Commands: []*cli.Command{
-					{
-						Name:  AIWorkerTypeFriend,
-						Usage: "Start user friend workers",
-						Action: func(ctx context.Context, c *cli.Command) error {
-							runWorkers(ctx, AIWorker, AIWorkerTypeFriend, c.Int("workers"))
-							return nil
-						},
-					},
-					{
-						Name:  AIWorkerTypeMember,
-						Usage: "Start group member workers",
-						Action: func(ctx context.Context, c *cli.Command) error {
-							runWorkers(ctx, AIWorker, AIWorkerTypeMember, c.Int("workers"))
-							return nil
-						},
-					},
+				Name:  FriendWorker,
+				Usage: "Start friend network workers",
+				Action: func(ctx context.Context, c *cli.Command) error {
+					runWorkers(ctx, FriendWorker, c.Int("workers"))
+					return nil
+				},
+			},
+			{
+				Name:  GroupWorker,
+				Usage: "Start group member workers",
+				Action: func(ctx context.Context, c *cli.Command) error {
+					runWorkers(ctx, GroupWorker, c.Int("workers"))
+					return nil
 				},
 			},
 			{
 				Name:  MaintenanceWorker,
 				Usage: "Start maintenance workers",
 				Action: func(ctx context.Context, c *cli.Command) error {
-					runWorkers(ctx, MaintenanceWorker, "", c.Int("workers"))
+					runWorkers(ctx, MaintenanceWorker, c.Int("workers"))
 					return nil
 				},
 			},
@@ -91,7 +78,7 @@ func run() error {
 				Name:  StatsWorker,
 				Usage: "Start statistics worker",
 				Action: func(ctx context.Context, c *cli.Command) error {
-					runWorkers(ctx, StatsWorker, "", c.Int("workers"))
+					runWorkers(ctx, StatsWorker, c.Int("workers"))
 					return nil
 				},
 			},
@@ -99,7 +86,7 @@ func run() error {
 				Name:  QueueWorker,
 				Usage: "Start queue process worker",
 				Action: func(ctx context.Context, c *cli.Command) error {
-					runWorkers(ctx, QueueWorker, "", c.Int("workers"))
+					runWorkers(ctx, QueueWorker, c.Int("workers"))
 					return nil
 				},
 			},
@@ -110,7 +97,7 @@ func run() error {
 }
 
 // runWorkers starts multiple instances of a worker type.
-func runWorkers(ctx context.Context, workerType, subType string, count int64) {
+func runWorkers(ctx context.Context, workerType string, count int64) {
 	app, err := setup.InitializeApp(ctx, setup.ServiceWorker, WorkerLogDir)
 	if err != nil {
 		log.Fatalf("Failed to initialize application: %v", err)
@@ -150,33 +137,33 @@ func runWorkers(ctx context.Context, workerType, subType string, count int64) {
 			}
 
 			workerLogger := app.LogManager.GetWorkerLogger(
-				fmt.Sprintf("%s_%s_worker_%d", workerType, subType, workerID),
+				fmt.Sprintf("%s_worker_%d", workerType, workerID),
 			)
 
 			// Get progress bar for this worker
 			bar := bars[workerID]
 
 			var w interface{ Start() }
-			switch {
-			case workerType == AIWorker && subType == AIWorkerTypeMember:
-				w = ai.NewGroupWorker(app, bar, workerLogger)
-			case workerType == AIWorker && subType == AIWorkerTypeFriend:
-				w = ai.NewFriendWorker(app, bar, workerLogger)
-			case workerType == MaintenanceWorker:
+			switch workerType {
+			case FriendWorker:
+				w = friend.New(app, bar, workerLogger)
+			case GroupWorker:
+				w = group.New(app, bar, workerLogger)
+			case MaintenanceWorker:
 				w = maintenance.New(app, bar, workerLogger)
-			case workerType == StatsWorker:
+			case StatsWorker:
 				w = stats.New(app, bar, workerLogger)
-			case workerType == QueueWorker:
+			case QueueWorker:
 				w = queue.New(app, bar, workerLogger)
 			default:
-				log.Fatalf("Invalid worker type: %s %s", workerType, subType)
+				log.Fatalf("Invalid worker type: %s", workerType)
 			}
 
 			runWorker(ctx, w, workerLogger)
 		}(i)
 	}
 
-	log.Printf("Started %d %s %s workers", count, workerType, subType)
+	log.Printf("Started %d %s workers", count, workerType)
 	wg.Wait()
 	renderer.Stop()
 	log.Println("All workers have finished. Exiting.")

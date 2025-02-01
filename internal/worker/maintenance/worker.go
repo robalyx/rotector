@@ -40,7 +40,7 @@ func New(app *setup.App, bar *progress.Bar, logger *zap.Logger) *Worker {
 	userFetcher := fetcher.NewUserFetcher(app, logger)
 	groupFetcher := fetcher.NewGroupFetcher(app.RoAPI, logger)
 	thumbnailFetcher := fetcher.NewThumbnailFetcher(app.RoAPI, logger)
-	reporter := core.NewStatusReporter(app.StatusClient, "maintenance", "main", logger)
+	reporter := core.NewStatusReporter(app.StatusClient, "maintenance", logger)
 	groupChecker := checker.NewGroupChecker(app.DB, logger,
 		app.Config.Worker.ThresholdLimits.MaxGroupMembersTrack,
 		app.Config.Worker.ThresholdLimits.MinFlaggedOverride,

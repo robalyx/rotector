@@ -18,7 +18,7 @@ type StatusReporter struct {
 }
 
 // NewStatusReporter creates a new status reporter for a worker.
-func NewStatusReporter(client rueidis.Client, workerType, subType string, logger *zap.Logger) *StatusReporter {
+func NewStatusReporter(client rueidis.Client, workerType string, logger *zap.Logger) *StatusReporter {
 	// Generate a UUID4 for the worker ID
 	workerID := uuid.New().String()
 
@@ -27,7 +27,6 @@ func NewStatusReporter(client rueidis.Client, workerType, subType string, logger
 		status: Status{
 			WorkerID:   workerID,
 			WorkerType: workerType,
-			SubType:    subType,
 			IsHealthy:  true,
 		},
 		stopChan: make(chan struct{}),

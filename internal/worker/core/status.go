@@ -25,7 +25,6 @@ const (
 type Status struct {
 	WorkerID    string    `json:"workerId"`
 	WorkerType  string    `json:"workerType"`
-	SubType     string    `json:"subType"`
 	LastSeen    time.Time `json:"lastSeen"`
 	CurrentTask string    `json:"currentTask,omitempty"`
 	Progress    int       `json:"progress"`
@@ -58,7 +57,7 @@ func (m *Monitor) ReportStatus(ctx context.Context, status Status) error {
 	}
 
 	// Store in Redis with TTL
-	key := fmt.Sprintf("worker:%s:%s:%s", status.WorkerType, status.SubType, status.WorkerID)
+	key := fmt.Sprintf("worker:%s:%s", status.WorkerType, status.WorkerID)
 	err = m.client.Do(ctx, m.client.B().Set().Key(key).Value(string(data)).Ex(HeartbeatTTL).Build()).Error()
 	if err != nil {
 		return fmt.Errorf("failed to store status: %w", err)

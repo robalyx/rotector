@@ -11,8 +11,7 @@ import (
 func main() {
 	// Get environment variables with defaults
 	runType := getEnvWithDefault("RUN_TYPE", "bot")
-	workerType := getEnvWithDefault("WORKER_TYPE", "ai")
-	workerSubtype := os.Getenv("WORKER_SUBTYPE")
+	workerType := getEnvWithDefault("WORKER_TYPE", "friend")
 	workersCount := getEnvWithDefault("WORKERS_COUNT", "1")
 
 	// Execute the appropriate binary based on RUN_TYPE
@@ -20,11 +19,7 @@ func main() {
 	case "bot":
 		execBinary("/app/bin/bot")
 	case "worker":
-		args := []string{workerType, "--workers", workersCount}
-		if workerSubtype != "" {
-			args = []string{workerType, workerSubtype, "--workers", workersCount}
-		}
-		execBinary("/app/bin/worker", args...)
+		execBinary("/app/bin/worker", workerType, "--workers", workersCount)
 	case "export":
 		execBinary("/app/bin/export", os.Args[1:]...)
 	case "db":
@@ -36,7 +31,7 @@ func main() {
 	default:
 		fmt.Fprintf(os.Stderr, "Invalid RUN_TYPE. Must be one of: 'bot', 'worker', 'export', 'db', 'rest', 'rpc'\n")
 		fmt.Fprintf(os.Stderr, "Usage:\n")
-		fmt.Fprintf(os.Stderr, "  RUN_TYPE=worker WORKER_TYPE=<type> [WORKER_SUBTYPE=<subtype>] WORKERS_COUNT=<count>\n")
+		fmt.Fprintf(os.Stderr, "  RUN_TYPE=worker WORKER_TYPE=<type> WORKERS_COUNT=<count>\n")
 		fmt.Fprintf(os.Stderr, "  RUN_TYPE=<other_type>\n")
 		os.Exit(1)
 	}
