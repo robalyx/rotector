@@ -7,11 +7,11 @@ import (
 	"strings"
 )
 
-const _ActivityTypeName = "AllUserViewedUserLookupUserConfirmedUserConfirmedCustomUserClearedUserSkippedUserRecheckedUserTrainingUpvoteUserTrainingDownvoteUserDeletedGroupViewedGroupLookupGroupConfirmedGroupConfirmedCustomGroupClearedGroupSkippedGroupTrainingUpvoteGroupTrainingDownvoteGroupDeletedAppealSubmittedAppealSkippedAppealAcceptedAppealRejectedAppealClosedDiscordUserBannedDiscordUserUnbanned"
+const _ActivityTypeName = "AllUserViewedUserLookupUserConfirmedUserConfirmedCustomUserClearedUserSkippedUserRecheckedUserTrainingUpvoteUserTrainingDownvoteUserDeletedGroupViewedGroupLookupGroupConfirmedGroupConfirmedCustomGroupClearedGroupSkippedGroupTrainingUpvoteGroupTrainingDownvoteGroupDeletedAppealSubmittedAppealSkippedAppealAcceptedAppealRejectedAppealClosedDiscordUserBannedDiscordUserUnbannedBotSettingUpdated"
 
-var _ActivityTypeIndex = [...]uint16{0, 3, 13, 23, 36, 55, 66, 77, 90, 108, 128, 139, 150, 161, 175, 195, 207, 219, 238, 259, 271, 286, 299, 313, 327, 339, 356, 375}
+var _ActivityTypeIndex = [...]uint16{0, 3, 13, 23, 36, 55, 66, 77, 90, 108, 128, 139, 150, 161, 175, 195, 207, 219, 238, 259, 271, 286, 299, 313, 327, 339, 356, 375, 392}
 
-const _ActivityTypeLowerName = "alluservieweduserlookupuserconfirmeduserconfirmedcustomusercleareduserskippeduserrecheckedusertrainingupvoteusertrainingdownvoteuserdeletedgroupviewedgrouplookupgroupconfirmedgroupconfirmedcustomgroupclearedgroupskippedgrouptrainingupvotegrouptrainingdownvotegroupdeletedappealsubmittedappealskippedappealacceptedappealrejectedappealcloseddiscorduserbanneddiscorduserunbanned"
+const _ActivityTypeLowerName = "alluservieweduserlookupuserconfirmeduserconfirmedcustomusercleareduserskippeduserrecheckedusertrainingupvoteusertrainingdownvoteuserdeletedgroupviewedgrouplookupgroupconfirmedgroupconfirmedcustomgroupclearedgroupskippedgrouptrainingupvotegrouptrainingdownvotegroupdeletedappealsubmittedappealskippedappealacceptedappealrejectedappealcloseddiscorduserbanneddiscorduserunbannedbotsettingupdated"
 
 func (i ActivityType) String() string {
 	if i < 0 || i >= ActivityType(len(_ActivityTypeIndex)-1) {
@@ -51,9 +51,10 @@ func _ActivityTypeNoOp() {
 	_ = x[ActivityTypeAppealClosed-(24)]
 	_ = x[ActivityTypeDiscordUserBanned-(25)]
 	_ = x[ActivityTypeDiscordUserUnbanned-(26)]
+	_ = x[ActivityTypeBotSettingUpdated-(27)]
 }
 
-var _ActivityTypeValues = []ActivityType{ActivityTypeAll, ActivityTypeUserViewed, ActivityTypeUserLookup, ActivityTypeUserConfirmed, ActivityTypeUserConfirmedCustom, ActivityTypeUserCleared, ActivityTypeUserSkipped, ActivityTypeUserRechecked, ActivityTypeUserTrainingUpvote, ActivityTypeUserTrainingDownvote, ActivityTypeUserDeleted, ActivityTypeGroupViewed, ActivityTypeGroupLookup, ActivityTypeGroupConfirmed, ActivityTypeGroupConfirmedCustom, ActivityTypeGroupCleared, ActivityTypeGroupSkipped, ActivityTypeGroupTrainingUpvote, ActivityTypeGroupTrainingDownvote, ActivityTypeGroupDeleted, ActivityTypeAppealSubmitted, ActivityTypeAppealSkipped, ActivityTypeAppealAccepted, ActivityTypeAppealRejected, ActivityTypeAppealClosed, ActivityTypeDiscordUserBanned, ActivityTypeDiscordUserUnbanned}
+var _ActivityTypeValues = []ActivityType{ActivityTypeAll, ActivityTypeUserViewed, ActivityTypeUserLookup, ActivityTypeUserConfirmed, ActivityTypeUserConfirmedCustom, ActivityTypeUserCleared, ActivityTypeUserSkipped, ActivityTypeUserRechecked, ActivityTypeUserTrainingUpvote, ActivityTypeUserTrainingDownvote, ActivityTypeUserDeleted, ActivityTypeGroupViewed, ActivityTypeGroupLookup, ActivityTypeGroupConfirmed, ActivityTypeGroupConfirmedCustom, ActivityTypeGroupCleared, ActivityTypeGroupSkipped, ActivityTypeGroupTrainingUpvote, ActivityTypeGroupTrainingDownvote, ActivityTypeGroupDeleted, ActivityTypeAppealSubmitted, ActivityTypeAppealSkipped, ActivityTypeAppealAccepted, ActivityTypeAppealRejected, ActivityTypeAppealClosed, ActivityTypeDiscordUserBanned, ActivityTypeDiscordUserUnbanned, ActivityTypeBotSettingUpdated}
 
 var _ActivityTypeNameToValueMap = map[string]ActivityType{
 	_ActivityTypeName[0:3]:          ActivityTypeAll,
@@ -110,6 +111,8 @@ var _ActivityTypeNameToValueMap = map[string]ActivityType{
 	_ActivityTypeLowerName[339:356]: ActivityTypeDiscordUserBanned,
 	_ActivityTypeName[356:375]:      ActivityTypeDiscordUserUnbanned,
 	_ActivityTypeLowerName[356:375]: ActivityTypeDiscordUserUnbanned,
+	_ActivityTypeName[375:392]:      ActivityTypeBotSettingUpdated,
+	_ActivityTypeLowerName[375:392]: ActivityTypeBotSettingUpdated,
 }
 
 var _ActivityTypeNames = []string{
@@ -140,6 +143,7 @@ var _ActivityTypeNames = []string{
 	_ActivityTypeName[327:339],
 	_ActivityTypeName[339:356],
 	_ActivityTypeName[356:375],
+	_ActivityTypeName[375:392],
 }
 
 // ActivityTypeString retrieves an enum value from the enum constants string name.

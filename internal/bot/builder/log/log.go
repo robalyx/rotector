@@ -22,6 +22,7 @@ type Builder struct {
 	groupID            uint64
 	reviewerID         uint64
 	activityTypeFilter enum.ActivityType
+	categoryFilter     string
 	startDate          time.Time
 	endDate            time.Time
 	hasNextPage        bool
@@ -38,6 +39,7 @@ func NewBuilder(s *session.Session) *Builder {
 		groupID:            session.LogFilterGroupID.Get(s),
 		reviewerID:         session.LogFilterReviewerID.Get(s),
 		activityTypeFilter: session.LogFilterActivityType.Get(s),
+		categoryFilter:     session.LogFilterActivityCategory.Get(s),
 		startDate:          session.LogFilterDateRangeStart.Get(s),
 		endDate:            session.LogFilterDateRangeEnd.Get(s),
 		hasNextPage:        session.PaginationHasNextPage.Get(s),
@@ -163,9 +165,14 @@ func (b *Builder) buildComponents() []discord.ContainerComponent {
 
 // buildActivityTypeOptions creates the options for the activity type filter menu.
 func (b *Builder) buildActivityTypeOptions() []discord.StringSelectMenuOption {
-	return []discord.StringSelectMenuOption{
+	// First option is always "All"
+	options := []discord.StringSelectMenuOption{
 		discord.NewStringSelectMenuOption("All", strconv.Itoa(int(enum.ActivityTypeAll))).
 			WithDefault(b.activityTypeFilter == enum.ActivityTypeAll),
+	}
+
+	// Group options by category
+	userOptions := []discord.StringSelectMenuOption{
 		discord.NewStringSelectMenuOption("User Viewed", strconv.Itoa(int(enum.ActivityTypeUserViewed))).
 			WithDefault(b.activityTypeFilter == enum.ActivityTypeUserViewed),
 		discord.NewStringSelectMenuOption("User Confirmed", strconv.Itoa(int(enum.ActivityTypeUserConfirmed))).
@@ -182,6 +189,11 @@ func (b *Builder) buildActivityTypeOptions() []discord.StringSelectMenuOption {
 			WithDefault(b.activityTypeFilter == enum.ActivityTypeUserTrainingUpvote),
 		discord.NewStringSelectMenuOption("User Training Downvote", strconv.Itoa(int(enum.ActivityTypeUserTrainingDownvote))).
 			WithDefault(b.activityTypeFilter == enum.ActivityTypeUserTrainingDownvote),
+		discord.NewStringSelectMenuOption("User Deleted", strconv.Itoa(int(enum.ActivityTypeUserDeleted))).
+			WithDefault(b.activityTypeFilter == enum.ActivityTypeUserDeleted),
+	}
+
+	groupOptions := []discord.StringSelectMenuOption{
 		discord.NewStringSelectMenuOption("Group Viewed", strconv.Itoa(int(enum.ActivityTypeGroupViewed))).
 			WithDefault(b.activityTypeFilter == enum.ActivityTypeGroupViewed),
 		discord.NewStringSelectMenuOption("Group Confirmed", strconv.Itoa(int(enum.ActivityTypeGroupConfirmed))).
@@ -196,6 +208,11 @@ func (b *Builder) buildActivityTypeOptions() []discord.StringSelectMenuOption {
 			WithDefault(b.activityTypeFilter == enum.ActivityTypeGroupTrainingUpvote),
 		discord.NewStringSelectMenuOption("Group Training Downvote", strconv.Itoa(int(enum.ActivityTypeGroupTrainingDownvote))).
 			WithDefault(b.activityTypeFilter == enum.ActivityTypeGroupTrainingDownvote),
+		discord.NewStringSelectMenuOption("Group Deleted", strconv.Itoa(int(enum.ActivityTypeGroupDeleted))).
+			WithDefault(b.activityTypeFilter == enum.ActivityTypeGroupDeleted),
+	}
+
+	otherOptions := []discord.StringSelectMenuOption{
 		discord.NewStringSelectMenuOption("Appeal Submitted", strconv.Itoa(int(enum.ActivityTypeAppealSubmitted))).
 			WithDefault(b.activityTypeFilter == enum.ActivityTypeAppealSubmitted),
 		discord.NewStringSelectMenuOption("Appeal Skipped", strconv.Itoa(int(enum.ActivityTypeAppealSkipped))).
@@ -206,13 +223,43 @@ func (b *Builder) buildActivityTypeOptions() []discord.StringSelectMenuOption {
 			WithDefault(b.activityTypeFilter == enum.ActivityTypeAppealRejected),
 		discord.NewStringSelectMenuOption("Appeal Closed", strconv.Itoa(int(enum.ActivityTypeAppealClosed))).
 			WithDefault(b.activityTypeFilter == enum.ActivityTypeAppealClosed),
-		discord.NewStringSelectMenuOption("User Deleted", strconv.Itoa(int(enum.ActivityTypeUserDeleted))).
-			WithDefault(b.activityTypeFilter == enum.ActivityTypeUserDeleted),
-		discord.NewStringSelectMenuOption("Group Deleted", strconv.Itoa(int(enum.ActivityTypeGroupDeleted))).
-			WithDefault(b.activityTypeFilter == enum.ActivityTypeGroupDeleted),
 		discord.NewStringSelectMenuOption("Discord User Banned", strconv.Itoa(int(enum.ActivityTypeDiscordUserBanned))).
 			WithDefault(b.activityTypeFilter == enum.ActivityTypeDiscordUserBanned),
 		discord.NewStringSelectMenuOption("Discord User Unbanned", strconv.Itoa(int(enum.ActivityTypeDiscordUserUnbanned))).
 			WithDefault(b.activityTypeFilter == enum.ActivityTypeDiscordUserUnbanned),
+		discord.NewStringSelectMenuOption("Bot Setting Updated", strconv.Itoa(int(enum.ActivityTypeBotSettingUpdated))).
+			WithDefault(b.activityTypeFilter == enum.ActivityTypeBotSettingUpdated),
 	}
+
+	// Add options based on current category or activity type
+	switch b.categoryFilter {
+	case constants.LogsGroupActivityCategoryOption:
+		options = append(options, groupOptions...)
+		options = append(options,
+			discord.NewStringSelectMenuOption("> Show User Activities", constants.LogsUserActivityCategoryOption).
+				WithDescription("Show user-related activity types"),
+			discord.NewStringSelectMenuOption("> Show Other Activities", constants.LogsOtherActivityCategoryOption).
+				WithDescription("Show other activity types"),
+		)
+
+	case constants.LogsOtherActivityCategoryOption:
+		options = append(options, otherOptions...)
+		options = append(options,
+			discord.NewStringSelectMenuOption("> Show User Activities", constants.LogsUserActivityCategoryOption).
+				WithDescription("Show user-related activity types"),
+			discord.NewStringSelectMenuOption("> Show Group Activities", constants.LogsGroupActivityCategoryOption).
+				WithDescription("Show group-related activity types"),
+		)
+
+	default:
+		options = append(options, userOptions...)
+		options = append(options,
+			discord.NewStringSelectMenuOption("> Show Group Activities", constants.LogsGroupActivityCategoryOption).
+				WithDescription("Show group-related activity types"),
+			discord.NewStringSelectMenuOption("> Show Other Activities", constants.LogsOtherActivityCategoryOption).
+				WithDescription("Show other activity types"),
+		)
+	}
+
+	return options
 }

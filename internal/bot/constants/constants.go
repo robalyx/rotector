@@ -218,6 +218,10 @@ const (
 	LogsQueryDateRangeOption            = "query_date_range" + ModalOpenSuffix
 	LogsQueryActivityTypeFilterCustomID = "activity_type_filter"
 	ClearFiltersButtonCustomID          = "clear_filters"
+
+	LogsUserActivityCategoryOption  = "category_user"
+	LogsGroupActivityCategoryOption = "category_group"
+	LogsOtherActivityCategoryOption = "category_other"
 )
 
 // Queue Menu.

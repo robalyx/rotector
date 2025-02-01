@@ -1,6 +1,7 @@
 package session
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strconv"
@@ -8,6 +9,7 @@ import (
 
 	"github.com/robalyx/rotector/internal/bot/constants"
 	"github.com/robalyx/rotector/internal/bot/utils"
+	"github.com/robalyx/rotector/internal/common/storage/database"
 	"github.com/robalyx/rotector/internal/common/storage/database/types"
 	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
 )
@@ -214,126 +216,6 @@ func (r *SettingRegistry) createReviewModeSetting() *Setting {
 	}
 }
 
-// createSessionLimitSetting creates the session limit setting.
-func (r *SettingRegistry) createSessionLimitSetting() *Setting {
-	return &Setting{
-		Key:          constants.SessionLimitOption,
-		Name:         "Session Limit",
-		Description:  "Set the maximum number of concurrent sessions",
-		Type:         enum.SettingTypeNumber,
-		DefaultValue: uint64(0),
-		Validators:   []Validator{validateNumber},
-		ValueGetter: func(s *Session) string {
-			return strconv.FormatUint(BotSessionLimit.Get(s), 10)
-		},
-		ValueUpdater: func(_ string, inputs []string, s *Session) error {
-			if len(inputs) < 1 {
-				return ErrMissingInput
-			}
-			limit, err := strconv.ParseUint(inputs[0], 10, 64)
-			if err != nil {
-				return err
-			}
-			BotSessionLimit.Set(s, limit)
-			return nil
-		},
-	}
-}
-
-// createReviewerIDsSetting creates the reviewer IDs setting.
-func (r *SettingRegistry) createReviewerIDsSetting() *Setting {
-	return &Setting{
-		Key:          constants.ReviewerIDsOption,
-		Name:         "Reviewer IDs",
-		Description:  "Manage authorized reviewer IDs",
-		Type:         enum.SettingTypeID,
-		DefaultValue: []uint64{},
-		Validators:   []Validator{validateDiscordID},
-		ValueGetter: func(s *Session) string {
-			reviewerIDs := BotReviewerIDs.Get(s)
-			return fmt.Sprintf("%d reviewer(s) authorized", len(reviewerIDs))
-		},
-		ValueUpdater: func(_ string, inputs []string, s *Session) error {
-			if len(inputs) < 1 {
-				return ErrMissingInput
-			}
-
-			id, err := strconv.ParseUint(inputs[0], 10, 64)
-			if err != nil {
-				return fmt.Errorf("%w: %w", ErrInvalidIDFormat, err)
-			}
-
-			// Check the reviewer IDs from the session
-			reviewerIDs := BotReviewerIDs.Get(s)
-
-			// Toggle the ID
-			found := false
-			for i, reviewerID := range reviewerIDs {
-				if reviewerID == id {
-					reviewerIDs = append(reviewerIDs[:i], reviewerIDs[i+1:]...)
-					found = true
-					break
-				}
-			}
-
-			if !found {
-				reviewerIDs = append(reviewerIDs, id)
-			}
-
-			// Set the reviewer IDs in the session
-			BotReviewerIDs.Set(s, reviewerIDs)
-			return nil
-		},
-	}
-}
-
-// createAdminIDsSetting creates the admin IDs setting.
-func (r *SettingRegistry) createAdminIDsSetting() *Setting {
-	return &Setting{
-		Key:          constants.AdminIDsOption,
-		Name:         "Admin IDs",
-		Description:  "Manage authorized admin IDs",
-		Type:         enum.SettingTypeID,
-		DefaultValue: []uint64{},
-		Validators:   []Validator{validateDiscordID},
-		ValueGetter: func(s *Session) string {
-			adminIDs := BotAdminIDs.Get(s)
-			return fmt.Sprintf("%d admin(s) authorized", len(adminIDs))
-		},
-		ValueUpdater: func(_ string, inputs []string, s *Session) error {
-			if len(inputs) < 1 {
-				return ErrMissingInput
-			}
-
-			id, err := strconv.ParseUint(inputs[0], 10, 64)
-			if err != nil {
-				return fmt.Errorf("%w: %w", ErrInvalidIDFormat, err)
-			}
-
-			// Check the admin IDs from the session
-			adminIDs := BotAdminIDs.Get(s)
-
-			// Toggle the ID
-			found := false
-			for i, adminID := range adminIDs {
-				if adminID == id {
-					adminIDs = append(adminIDs[:i], adminIDs[i+1:]...)
-					found = true
-					break
-				}
-			}
-
-			if !found {
-				adminIDs = append(adminIDs, id)
-			}
-
-			// Set the admin IDs in the session
-			BotAdminIDs.Set(s, adminIDs)
-			return nil
-		},
-	}
-}
-
 // createReviewTargetModeSetting creates the review target mode setting.
 func (r *SettingRegistry) createReviewTargetModeSetting() *Setting {
 	return &Setting{
@@ -386,6 +268,160 @@ func (r *SettingRegistry) createReviewTargetModeSetting() *Setting {
 	}
 }
 
+// createSessionLimitSetting creates the session limit setting.
+func (r *SettingRegistry) createSessionLimitSetting() *Setting {
+	return &Setting{
+		Key:          constants.SessionLimitOption,
+		Name:         "Session Limit",
+		Description:  "Set the maximum number of concurrent sessions",
+		Type:         enum.SettingTypeNumber,
+		DefaultValue: uint64(0),
+		Validators:   []Validator{validateNumber},
+		ValueGetter: func(s *Session) string {
+			return strconv.FormatUint(BotSessionLimit.Get(s), 10)
+		},
+		ValueUpdater: func(_ string, inputs []string, s *Session) error {
+			if len(inputs) < 1 {
+				return ErrMissingInput
+			}
+
+			// Get old value for logging
+			oldValue := BotSessionLimit.Get(s)
+
+			// Parse and validate new value
+			limit, err := strconv.ParseUint(inputs[0], 10, 64)
+			if err != nil {
+				return err
+			}
+
+			// Update the setting
+			BotSessionLimit.Set(s, limit)
+
+			// Log the change
+			r.logBotSettingChange(context.Background(), s.db, s.UserID(),
+				constants.SessionLimitOption,
+				strconv.FormatUint(oldValue, 10),
+				strconv.FormatUint(limit, 10))
+
+			return nil
+		},
+	}
+}
+
+// createReviewerIDsSetting creates the reviewer IDs setting.
+func (r *SettingRegistry) createReviewerIDsSetting() *Setting {
+	return &Setting{
+		Key:          constants.ReviewerIDsOption,
+		Name:         "Reviewer IDs",
+		Description:  "Manage authorized reviewer IDs",
+		Type:         enum.SettingTypeID,
+		DefaultValue: []uint64{},
+		Validators:   []Validator{validateDiscordID},
+		ValueGetter: func(s *Session) string {
+			reviewerIDs := BotReviewerIDs.Get(s)
+			return fmt.Sprintf("%d reviewer(s) authorized", len(reviewerIDs))
+		},
+		ValueUpdater: func(_ string, inputs []string, s *Session) error {
+			if len(inputs) < 1 {
+				return ErrMissingInput
+			}
+
+			// Get old IDs for logging
+			oldIDs := BotReviewerIDs.Get(s)
+
+			id, err := strconv.ParseUint(inputs[0], 10, 64)
+			if err != nil {
+				return fmt.Errorf("%w: %w", ErrInvalidIDFormat, err)
+			}
+
+			// Check the reviewer IDs from the session
+			reviewerIDs := BotReviewerIDs.Get(s)
+
+			// Toggle the ID
+			found := false
+			for i, reviewerID := range reviewerIDs {
+				if reviewerID == id {
+					reviewerIDs = append(reviewerIDs[:i], reviewerIDs[i+1:]...)
+					found = true
+					break
+				}
+			}
+
+			if !found {
+				reviewerIDs = append(reviewerIDs, id)
+			}
+
+			// Set the reviewer IDs in the session
+			BotReviewerIDs.Set(s, reviewerIDs)
+
+			// Log the change
+			r.logBotSettingChange(context.Background(), s.db, s.UserID(),
+				constants.ReviewerIDsOption,
+				fmt.Sprintf("%v", oldIDs),
+				fmt.Sprintf("%v", reviewerIDs))
+
+			return nil
+		},
+	}
+}
+
+// createAdminIDsSetting creates the admin IDs setting.
+func (r *SettingRegistry) createAdminIDsSetting() *Setting {
+	return &Setting{
+		Key:          constants.AdminIDsOption,
+		Name:         "Admin IDs",
+		Description:  "Manage authorized admin IDs",
+		Type:         enum.SettingTypeID,
+		DefaultValue: []uint64{},
+		Validators:   []Validator{validateDiscordID},
+		ValueGetter: func(s *Session) string {
+			adminIDs := BotAdminIDs.Get(s)
+			return fmt.Sprintf("%d admin(s) authorized", len(adminIDs))
+		},
+		ValueUpdater: func(_ string, inputs []string, s *Session) error {
+			if len(inputs) < 1 {
+				return ErrMissingInput
+			}
+
+			// Get old IDs for logging
+			oldIDs := BotAdminIDs.Get(s)
+
+			id, err := strconv.ParseUint(inputs[0], 10, 64)
+			if err != nil {
+				return fmt.Errorf("%w: %w", ErrInvalidIDFormat, err)
+			}
+
+			// Check the admin IDs from the session
+			adminIDs := BotAdminIDs.Get(s)
+
+			// Toggle the ID
+			found := false
+			for i, adminID := range adminIDs {
+				if adminID == id {
+					adminIDs = append(adminIDs[:i], adminIDs[i+1:]...)
+					found = true
+					break
+				}
+			}
+
+			if !found {
+				adminIDs = append(adminIDs, id)
+			}
+
+			// Set the admin IDs in the session
+			BotAdminIDs.Set(s, adminIDs)
+
+			// Log the change
+			r.logBotSettingChange(context.Background(), s.db, s.UserID(),
+				constants.AdminIDsOption,
+				fmt.Sprintf("%v", oldIDs),
+				fmt.Sprintf("%v", adminIDs))
+
+			return nil
+		},
+	}
+}
+
 // createWelcomeMessageSetting creates the welcome message setting.
 func (r *SettingRegistry) createWelcomeMessageSetting() *Setting {
 	return &Setting{
@@ -413,7 +449,19 @@ func (r *SettingRegistry) createWelcomeMessageSetting() *Setting {
 			if len(inputs) < 1 {
 				return ErrMissingInput
 			}
+
+			// Get old value for logging
+			oldValue := BotWelcomeMessage.Get(s)
+
+			// Update the setting
 			BotWelcomeMessage.Set(s, inputs[0])
+
+			// Log the change
+			r.logBotSettingChange(context.Background(), s.db, s.UserID(),
+				constants.WelcomeMessageOption,
+				oldValue,
+				inputs[0])
+
 			return nil
 		},
 	}
@@ -450,11 +498,24 @@ func (r *SettingRegistry) createAnnouncementTypeSetting() *Setting {
 			if len(inputs) < 1 {
 				return ErrMissingInput
 			}
+
+			// Get old value for logging
+			oldValue := BotAnnouncementType.Get(s)
+
 			announcementType, err := enum.AnnouncementTypeString(inputs[0])
 			if err != nil {
 				return err
 			}
+
+			// Update the setting
 			BotAnnouncementType.Set(s, announcementType)
+
+			// Log the change
+			r.logBotSettingChange(context.Background(), s.db, s.UserID(),
+				constants.AnnouncementTypeOption,
+				oldValue.String(),
+				announcementType.String())
+
 			return nil
 		},
 	}
@@ -487,7 +548,19 @@ func (r *SettingRegistry) createAnnouncementMessageSetting() *Setting {
 			if len(inputs) < 1 {
 				return ErrMissingInput
 			}
+
+			// Get old value for logging
+			oldValue := BotAnnouncementMessage.Get(s)
+
+			// Update the setting
 			BotAnnouncementMessage.Set(s, inputs[0])
+
+			// Log the change
+			r.logBotSettingChange(context.Background(), s.db, s.UserID(),
+				constants.AnnouncementMessageOption,
+				oldValue,
+				inputs[0])
+
 			return nil
 		},
 	}
@@ -534,8 +607,11 @@ func (r *SettingRegistry) createAPIKeysSetting() *Setting {
 			return fmt.Sprintf("%d API key(s) configured", len(apiKeys))
 		},
 		ValueUpdater: func(customID string, inputs []string, s *Session) error {
+			// Get old keys for logging
+			oldKeys := BotAPIKeys.Get(s)
 			apiKeys := BotAPIKeys.Get(s)
 
+			var oldValue, newValue string
 			switch customID {
 			case constants.APIKeyCreateIDOption:
 				if len(inputs) < 1 {
@@ -547,6 +623,8 @@ func (r *SettingRegistry) createAPIKeysSetting() *Setting {
 					CreatedAt:   time.Now(),
 				}
 				apiKeys = append(apiKeys, newKey)
+				oldValue = fmt.Sprintf("%d keys", len(oldKeys))
+				newValue = fmt.Sprintf("%d keys", len(apiKeys))
 
 			case constants.APIKeyDeleteIDOption:
 				if len(inputs) < 1 {
@@ -554,6 +632,8 @@ func (r *SettingRegistry) createAPIKeysSetting() *Setting {
 				}
 				for i, key := range apiKeys {
 					if key.Key == inputs[0] {
+						oldValue = key.Description
+						newValue = "deleted"
 						apiKeys = append(apiKeys[:i], apiKeys[i+1:]...)
 						break
 					}
@@ -565,14 +645,42 @@ func (r *SettingRegistry) createAPIKeysSetting() *Setting {
 				}
 				for i := range apiKeys {
 					if apiKeys[i].Key == inputs[0] {
+						oldValue = apiKeys[i].Description
+						newValue = inputs[1]
 						apiKeys[i].Description = inputs[1]
 						break
 					}
 				}
 			}
 
+			// Update the setting
 			BotAPIKeys.Set(s, apiKeys)
+
+			// Log the change
+			r.logBotSettingChange(context.Background(), s.db, s.UserID(),
+				customID,
+				oldValue,
+				newValue)
+
 			return nil
 		},
 	}
+}
+
+// logBotSettingChange is a helper method to handle logging changes to bot settings
+func (r *SettingRegistry) logBotSettingChange(ctx context.Context, db database.Client, reviewerID uint64, settingKey, oldValue, newValue string) {
+	details := map[string]interface{}{
+		"setting": settingKey,
+		"old":     oldValue,
+		"new":     newValue,
+	}
+
+	activityLog := &types.ActivityLog{
+		ReviewerID:        reviewerID,
+		ActivityType:      enum.ActivityTypeBotSettingUpdated,
+		ActivityTimestamp: time.Now(),
+		Details:           details,
+	}
+
+	db.Models().Activities().Log(ctx, activityLog)
 }

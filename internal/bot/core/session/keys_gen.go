@@ -106,6 +106,7 @@ func main() {
 		{Name: "LogFilterGroupID", Type: "uint64", Doc: "LogFilterGroupID stores group ID filter"},
 		{Name: "LogFilterReviewerID", Type: "uint64", Doc: "LogFilterReviewerID stores reviewer ID filter"},
 		{Name: "LogFilterActivityType", Type: "enum.ActivityType", Doc: "LogFilterActivityType stores activity type filter"},
+		{Name: "LogFilterActivityCategory", Type: "string", Doc: "LogFilterActivityCategory stores the currently selected activity category"},
 		{Name: "LogFilterDateRangeStart", Type: "time.Time", Doc: "LogFilterDateRangeStart stores start date filter"},
 		{Name: "LogFilterDateRangeEnd", Type: "time.Time", Doc: "LogFilterDateRangeEnd stores end date filter"},
 

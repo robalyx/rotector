@@ -125,7 +125,8 @@ func (m *UpdateMenu) handleSettingButton(event *events.ComponentInteractionCreat
 func (m *UpdateMenu) handleIDModal(event *events.ComponentInteractionCreate, _ *session.Session, setting *session.Setting) {
 	textInput := discord.NewTextInput("0", discord.TextInputStyleParagraph, setting.Name).
 		WithRequired(true).
-		WithPlaceholder("Enter the user ID to toggle...")
+		WithPlaceholder("Enter the user ID to toggle...").
+		WithMaxLength(128)
 
 	modal := discord.NewModalCreateBuilder().
 		SetCustomID(setting.Key).
@@ -143,6 +144,7 @@ func (m *UpdateMenu) handleNumberModal(event *events.ComponentInteractionCreate,
 	textInput := discord.NewTextInput("0", discord.TextInputStyleParagraph, setting.Name).
 		WithRequired(true).
 		WithPlaceholder("Enter a number...").
+		WithMaxLength(128).
 		WithValue(session.SettingDisplay.Get(s))
 
 	modal := discord.NewModalCreateBuilder().
@@ -161,6 +163,7 @@ func (m *UpdateMenu) handleTextModal(event *events.ComponentInteractionCreate, s
 	textInput := discord.NewTextInput("0", discord.TextInputStyleParagraph, setting.Name).
 		WithRequired(true).
 		WithPlaceholder("Enter your description...").
+		WithMaxLength(128).
 		WithValue(session.SettingDisplay.Get(s))
 
 	modal := discord.NewModalCreateBuilder().

@@ -112,6 +112,16 @@ func (m *MainMenu) handleSelectMenu(event *events.ComponentInteractionCreate, s 
 		}
 
 	case constants.LogsQueryActivityTypeFilterCustomID:
+		// Handle category selection
+		switch option {
+		case constants.LogsUserActivityCategoryOption,
+			constants.LogsGroupActivityCategoryOption,
+			constants.LogsOtherActivityCategoryOption:
+			session.LogFilterActivityCategory.Set(s, option)
+			m.layout.paginationManager.NavigateTo(event, s, m.page, "")
+			return
+		}
+
 		// Convert activity type option to int and update filter
 		optionInt, err := strconv.Atoi(option)
 		if err != nil {

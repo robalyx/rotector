@@ -102,6 +102,8 @@ var (
 	LogFilterReviewerID = NewKey[uint64]("LogFilterReviewerID")
 	// LogFilterActivityType stores activity type filter
 	LogFilterActivityType = NewKey[enum.ActivityType]("LogFilterActivityType")
+	// LogFilterActivityCategory stores the currently selected activity category
+	LogFilterActivityCategory = NewKey[string]("LogFilterActivityCategory")
 	// LogFilterDateRangeStart stores start date filter
 	LogFilterDateRangeStart = NewKey[time.Time]("LogFilterDateRangeStart")
 	// LogFilterDateRangeEnd stores end date filter

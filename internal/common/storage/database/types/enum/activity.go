@@ -64,4 +64,7 @@ const (
 	ActivityTypeDiscordUserBanned
 	// ActivityTypeDiscordUserUnbanned tracks when a Discord user is unbanned.
 	ActivityTypeDiscordUserUnbanned
+
+	// ActivityTypeBotSettingUpdated tracks when a bot setting is updated.
+	ActivityTypeBotSettingUpdated
 )

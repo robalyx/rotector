@@ -1,14 +1,11 @@
 package log
 
 import (
-	"time"
-
 	"github.com/robalyx/rotector/internal/bot/core/pagination"
 	"github.com/robalyx/rotector/internal/bot/core/session"
 	"github.com/robalyx/rotector/internal/bot/interfaces"
 	"github.com/robalyx/rotector/internal/common/setup"
 	"github.com/robalyx/rotector/internal/common/storage/database"
-	"github.com/robalyx/rotector/internal/common/storage/database/types"
 	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
 	"go.uber.org/zap"
 )
@@ -52,21 +49,22 @@ func (l *Layout) Show(event interfaces.CommonEvent, s *session.Session) {
 
 // ResetFilters resets all log filters to their default values in the given session.
 func (l *Layout) ResetFilters(s *session.Session) {
-	session.LogFilterDiscordID.Set(s, uint64(0))
-	session.LogFilterUserID.Set(s, uint64(0))
-	session.LogFilterGroupID.Set(s, uint64(0))
-	session.LogFilterReviewerID.Set(s, uint64(0))
+	session.LogFilterDiscordID.Delete(s)
+	session.LogFilterUserID.Delete(s)
+	session.LogFilterGroupID.Delete(s)
+	session.LogFilterReviewerID.Delete(s)
 	session.LogFilterActivityType.Set(s, enum.ActivityTypeAll)
-	session.LogFilterDateRangeStart.Set(s, time.Time{})
-	session.LogFilterDateRangeEnd.Set(s, time.Time{})
+	session.LogFilterActivityCategory.Delete(s)
+	session.LogFilterDateRangeStart.Delete(s)
+	session.LogFilterDateRangeEnd.Delete(s)
 }
 
 // ResetLogs clears the logs from the session.
 func (l *Layout) ResetLogs(s *session.Session) {
-	session.LogActivities.Set(s, []*types.ActivityLog{})
-	session.LogCursor.Set(s, nil)
-	session.LogNextCursor.Set(s, nil)
-	session.LogPrevCursors.Set(s, []*types.LogCursor{})
-	session.PaginationHasNextPage.Set(s, false)
-	session.PaginationHasPrevPage.Set(s, false)
+	session.LogActivities.Delete(s)
+	session.LogCursor.Delete(s)
+	session.LogNextCursor.Delete(s)
+	session.LogPrevCursors.Delete(s)
+	session.PaginationHasNextPage.Delete(s)
+	session.PaginationHasPrevPage.Delete(s)
 }
