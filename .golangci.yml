@@ -26,6 +26,7 @@ linters:
     - nonamedreturns # Not needed
     - iface # Not needed
     - godot # Not needed
+    - forbidigo # Not needed
     - gochecknoinits # Not needed
     - exportloopref # Deprecated
 

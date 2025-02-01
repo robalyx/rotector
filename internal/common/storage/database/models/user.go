@@ -500,6 +500,49 @@ func (r *UserModel) GetUsersByIDs(ctx context.Context, userIDs []uint64, fields 
 	return users, nil
 }
 
+// GetFlaggedAndConfirmedUsers retrieves all flagged and confirmed users.
+func (r *UserModel) GetFlaggedAndConfirmedUsers(ctx context.Context) ([]*types.ReviewUser, error) {
+	var users []*types.ReviewUser
+
+	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+		// Get flagged users
+		var flaggedUsers []types.FlaggedUser
+		err := tx.NewSelect().
+			Model(&flaggedUsers).
+			Column("id", "reason").
+			Scan(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to get flagged users: %w", err)
+		}
+		for _, user := range flaggedUsers {
+			users = append(users, &types.ReviewUser{
+				User:   user.User,
+				Status: enum.UserTypeFlagged,
+			})
+		}
+
+		// Get confirmed users
+		var confirmedUsers []types.ConfirmedUser
+		err = tx.NewSelect().
+			Model(&confirmedUsers).
+			Column("id", "reason").
+			Scan(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to get confirmed users: %w", err)
+		}
+		for _, user := range confirmedUsers {
+			users = append(users, &types.ReviewUser{
+				User:   user.User,
+				Status: enum.UserTypeConfirmed,
+			})
+		}
+
+		return nil
+	})
+
+	return users, err
+}
+
 // GetUsersToCheck finds users that haven't been checked for banned status recently.
 // Returns two slices: users to check, and currently banned users among those to check.
 func (r *UserModel) GetUsersToCheck(ctx context.Context, limit int) ([]uint64, []uint64, error) {

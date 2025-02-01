@@ -32,6 +32,7 @@ const (
 	ServiceRPC
 	ServiceBot
 	ServiceWorker
+	ServiceExport
 )
 
 // GetRequestTimeout returns the request timeout for the given service type.
@@ -44,6 +45,8 @@ func (s ServiceType) GetRequestTimeout(cfg *config.Config) time.Duration {
 		timeout = cfg.Bot.RequestTimeout
 	case ServiceREST, ServiceRPC:
 		timeout = cfg.API.RequestTimeout
+	case ServiceExport:
+		timeout = 30000
 	default:
 		timeout = 5000
 	}

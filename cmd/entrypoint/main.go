@@ -25,9 +25,19 @@ func main() {
 			args = []string{workerType, workerSubtype, "--workers", workersCount}
 		}
 		execBinary("/app/bin/worker", args...)
+	case "export":
+		execBinary("/app/bin/export", os.Args[1:]...)
+	case "db":
+		execBinary("/app/bin/db", os.Args[1:]...)
+	case "rest":
+		execBinary("/app/bin/rest")
+	case "rpc":
+		execBinary("/app/bin/rpc")
 	default:
-		fmt.Fprintf(os.Stderr, "Invalid RUN_TYPE. Must be either 'bot' or 'worker'\n")
-		fmt.Fprintf(os.Stderr, "Usage: RUN_TYPE=worker WORKER_TYPE=<type> [WORKER_SUBTYPE=<subtype>] WORKERS_COUNT=<count>\n")
+		fmt.Fprintf(os.Stderr, "Invalid RUN_TYPE. Must be one of: 'bot', 'worker', 'export', 'db', 'rest', 'rpc'\n")
+		fmt.Fprintf(os.Stderr, "Usage:\n")
+		fmt.Fprintf(os.Stderr, "  RUN_TYPE=worker WORKER_TYPE=<type> [WORKER_SUBTYPE=<subtype>] WORKERS_COUNT=<count>\n")
+		fmt.Fprintf(os.Stderr, "  RUN_TYPE=<other_type>\n")
 		os.Exit(1)
 	}
 }

@@ -420,6 +420,49 @@ func (r *GroupModel) GetGroupsByIDs(ctx context.Context, groupIDs []uint64, fiel
 	return groups, nil
 }
 
+// GetFlaggedAndConfirmedGroups retrieves all flagged and confirmed groups.
+func (r *GroupModel) GetFlaggedAndConfirmedGroups(ctx context.Context) ([]*types.ReviewGroup, error) {
+	var groups []*types.ReviewGroup
+
+	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+		// Get flagged groups
+		var flaggedGroups []types.FlaggedGroup
+		err := tx.NewSelect().
+			Model(&flaggedGroups).
+			Column("id", "reason").
+			Scan(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to get flagged groups: %w", err)
+		}
+		for _, group := range flaggedGroups {
+			groups = append(groups, &types.ReviewGroup{
+				Group:  group.Group,
+				Status: enum.GroupTypeFlagged,
+			})
+		}
+
+		// Get confirmed groups
+		var confirmedGroups []types.ConfirmedGroup
+		err = tx.NewSelect().
+			Model(&confirmedGroups).
+			Column("id", "reason").
+			Scan(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to get confirmed groups: %w", err)
+		}
+		for _, group := range confirmedGroups {
+			groups = append(groups, &types.ReviewGroup{
+				Group:  group.Group,
+				Status: enum.GroupTypeConfirmed,
+			})
+		}
+
+		return nil
+	})
+
+	return groups, err
+}
+
 // GetGroupsToCheck finds groups that haven't been checked for locked status recently.
 // Returns two slices: groups to check, and currently locked groups among those to check.
 func (r *GroupModel) GetGroupsToCheck(ctx context.Context, limit int) ([]uint64, []uint64, error) {
