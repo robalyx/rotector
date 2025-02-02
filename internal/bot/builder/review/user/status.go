@@ -18,8 +18,8 @@ import (
 type StatusBuilder struct {
 	queueManager        *queue.Manager
 	userID              uint64
-	status              string
-	priority            string
+	status              queue.Status
+	priority            queue.Priority
 	position            int
 	highPriorityCount   int
 	normalPriorityCount int

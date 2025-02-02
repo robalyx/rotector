@@ -54,12 +54,11 @@ func NewUserChecker(app *setup.App, userFetcher *fetcher.UserFetcher, logger *za
 
 // ProcessUsers runs users through multiple checking stage.
 // Returns IDs of users that failed AI validation for retry.
-func (c *UserChecker) ProcessUsers(userInfos []*fetcher.Info) []uint64 {
+func (c *UserChecker) ProcessUsers(userInfos []*fetcher.Info) {
 	c.logger.Info("Processing users", zap.Int("userInfos", len(userInfos)))
 
 	// Initialize map to store flagged users
 	flaggedUsers := make(map[uint64]*types.User)
-	var failedIDs []uint64
 
 	// Process group checker
 	c.groupChecker.ProcessUsers(userInfos, flaggedUsers)
@@ -76,7 +75,7 @@ func (c *UserChecker) ProcessUsers(userInfos []*fetcher.Info) []uint64 {
 	// Stop if no users were flagged
 	if len(flaggedUsers) == 0 {
 		c.logger.Info("No flagged users found", zap.Int("userInfos", len(userInfos)))
-		return failedIDs
+		return
 	}
 
 	// Create a list of flagged infos for image analysis
@@ -119,8 +118,6 @@ func (c *UserChecker) ProcessUsers(userInfos []*fetcher.Info) []uint64 {
 	c.logger.Info("Finished processing users",
 		zap.Int("totalProcessed", len(userInfos)),
 		zap.Int("flaggedUsers", len(flaggedUsers)))
-
-	return failedIDs
 }
 
 // trackFlaggedUsersGroups adds flagged users' group memberships to tracking.

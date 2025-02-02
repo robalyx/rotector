@@ -12,7 +12,6 @@ import (
 	"github.com/robalyx/rotector/internal/bot/core/pagination"
 	"github.com/robalyx/rotector/internal/bot/core/session"
 	"github.com/robalyx/rotector/internal/bot/interfaces"
-	"github.com/robalyx/rotector/internal/bot/utils"
 	"github.com/robalyx/rotector/internal/common/queue"
 	"github.com/robalyx/rotector/internal/common/storage/database/types"
 	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
@@ -51,9 +50,9 @@ func NewMainMenu(layout *Layout) *MainMenu {
 // current queue lengths into the session.
 func (m *MainMenu) Show(event interfaces.CommonEvent, s *session.Session, content string) {
 	// Store current queue lengths in session for the message builder
-	session.QueueHighCount.Set(s, m.layout.queueManager.GetQueueLength(context.Background(), queue.HighPriority))
-	session.QueueNormalCount.Set(s, m.layout.queueManager.GetQueueLength(context.Background(), queue.NormalPriority))
-	session.QueueLowCount.Set(s, m.layout.queueManager.GetQueueLength(context.Background(), queue.LowPriority))
+	session.QueueHighCount.Set(s, m.layout.queueManager.GetQueueLength(context.Background(), queue.PriorityHigh))
+	session.QueueNormalCount.Set(s, m.layout.queueManager.GetQueueLength(context.Background(), queue.PriorityNormal))
+	session.QueueLowCount.Set(s, m.layout.queueManager.GetQueueLength(context.Background(), queue.PriorityLow))
 
 	m.layout.paginationManager.NavigateTo(event, s, m.page, content)
 }
@@ -121,10 +120,21 @@ func (m *MainMenu) handleModal(event *events.ModalSubmitInteractionCreate, s *se
 		return
 	}
 
+	// Convert custom ID to priority
+	priority := queue.PriorityNormal
+	switch event.Data.CustomID {
+	case constants.QueueHighPriorityCustomID:
+		priority = queue.PriorityHigh
+	case constants.QueueNormalPriorityCustomID:
+		priority = queue.PriorityNormal
+	case constants.QueueLowPriorityCustomID:
+		priority = queue.PriorityLow
+	}
+
 	// Add to queue with selected priority
 	err = m.layout.queueManager.AddToQueue(context.Background(), &queue.Item{
 		UserID:      userID,
-		Priority:    utils.GetPriorityFromCustomID(event.Data.CustomID),
+		Priority:    priority,
 		Reason:      reason,
 		AddedBy:     uint64(event.User().ID),
 		AddedAt:     time.Now(),
@@ -142,8 +152,8 @@ func (m *MainMenu) handleModal(event *events.ModalSubmitInteractionCreate, s *se
 		context.Background(),
 		userID,
 		queue.StatusPending,
-		queue.HighPriority,
-		m.layout.queueManager.GetQueueLength(context.Background(), queue.HighPriority),
+		queue.PriorityHigh,
+		m.layout.queueManager.GetQueueLength(context.Background(), queue.PriorityHigh),
 	)
 	if err != nil {
 		m.layout.logger.Error("Failed to update queue info", zap.Error(err))

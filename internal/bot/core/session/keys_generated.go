@@ -7,6 +7,7 @@ import (
 	"github.com/disgoorg/snowflake/v2"
 	apiTypes "github.com/jaxron/roapi.go/pkg/api/types"
 	"github.com/robalyx/rotector/internal/common/client/ai"
+	"github.com/robalyx/rotector/internal/common/queue"
 	"github.com/robalyx/rotector/internal/common/storage/database/types"
 	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
 	"github.com/robalyx/rotector/internal/worker/core"
@@ -111,9 +112,9 @@ var (
 	// QueueUser stores the queued user
 	QueueUser = NewKey[uint64]("QueueUser")
 	// QueueStatus stores the queue status
-	QueueStatus = NewKey[string]("QueueStatus")
+	QueueStatus = NewKey[queue.Status]("QueueStatus")
 	// QueuePriority stores the queue priority
-	QueuePriority = NewKey[string]("QueuePriority")
+	QueuePriority = NewKey[queue.Priority]("QueuePriority")
 	// QueuePosition stores the queue position
 	QueuePosition = NewKey[int]("QueuePosition")
 	// QueueHighCount stores high priority queue count

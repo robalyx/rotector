@@ -25,6 +25,7 @@ import (
     "github.com/robalyx/rotector/internal/common/storage/database/types"
     "github.com/robalyx/rotector/internal/common/storage/database/types/enum"
     "github.com/robalyx/rotector/internal/common/client/ai"
+	"github.com/robalyx/rotector/internal/common/queue"
 	"github.com/robalyx/rotector/internal/worker/core"
 	apiTypes "github.com/jaxron/roapi.go/pkg/api/types"
 	"github.com/disgoorg/snowflake/v2"
@@ -112,8 +113,8 @@ func main() {
 
 		// Queue related keys
 		{Name: "QueueUser", Type: "uint64", Doc: "QueueUser stores the queued user"},
-		{Name: "QueueStatus", Type: "string", Doc: "QueueStatus stores the queue status"},
-		{Name: "QueuePriority", Type: "string", Doc: "QueuePriority stores the queue priority"},
+		{Name: "QueueStatus", Type: "queue.Status", Doc: "QueueStatus stores the queue status"},
+		{Name: "QueuePriority", Type: "queue.Priority", Doc: "QueuePriority stores the queue priority"},
 		{Name: "QueuePosition", Type: "int", Doc: "QueuePosition stores the queue position"},
 		{Name: "QueueHighCount", Type: "int", Doc: "QueueHighCount stores high priority queue count"},
 		{Name: "QueueNormalCount", Type: "int", Doc: "QueueNormalCount stores normal priority queue count"},

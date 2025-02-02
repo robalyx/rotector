@@ -280,9 +280,9 @@ func (m *ReviewMenu) handleRecheckModalSubmit(event *events.ModalSubmitInteracti
 	}
 
 	// Determine priority based on review mode
-	priority := queue.HighPriority
+	priority := queue.PriorityHigh
 	if session.UserReviewMode.Get(s) == enum.ReviewModeTraining {
-		priority = queue.LowPriority
+		priority = queue.PriorityLow
 	}
 
 	user := session.UserTarget.Get(s)

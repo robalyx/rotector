@@ -2,6 +2,7 @@ package user
 
 import (
 	"context"
+	"errors"
 	"strconv"
 	"time"
 
@@ -15,6 +16,7 @@ import (
 	"github.com/robalyx/rotector/internal/common/queue"
 	"github.com/robalyx/rotector/internal/common/storage/database/types"
 	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
+	"go.uber.org/zap"
 )
 
 // StatusMenu handles the display and interaction logic for viewing queue status.
@@ -45,12 +47,15 @@ func (m *StatusMenu) Show(event interfaces.CommonEvent, s *session.Session) {
 	status, priority, position, err := m.layout.queueManager.GetQueueInfo(context.Background(), userID)
 
 	// Check if processing is complete
-	if err == nil && (status == queue.StatusComplete || status == queue.StatusSkipped) {
+	if err == nil && status == queue.StatusComplete {
 		// Check if user was flagged after recheck
 		user, err := m.layout.db.Models().Users().GetUserByID(context.Background(), strconv.FormatUint(userID, 10), types.UserFieldAll)
 		if err != nil {
-			// User was not flagged by AI, return to previous page
-			m.layout.paginationManager.NavigateBack(event, s, "User was not flagged by AI after recheck.")
+			if errors.Is(err, types.ErrUserNotFound) {
+				m.layout.paginationManager.NavigateBack(event, s, "User was not flagged by AI after recheck.")
+				return
+			}
+			m.layout.logger.Error("Failed to get user by ID", zap.Error(err))
 			return
 		}
 
@@ -75,9 +80,9 @@ func (m *StatusMenu) Show(event interfaces.CommonEvent, s *session.Session) {
 	}
 
 	// Update queue counts for each priority level
-	session.QueueHighCount.Set(s, m.layout.queueManager.GetQueueLength(context.Background(), queue.HighPriority))
-	session.QueueNormalCount.Set(s, m.layout.queueManager.GetQueueLength(context.Background(), queue.NormalPriority))
-	session.QueueLowCount.Set(s, m.layout.queueManager.GetQueueLength(context.Background(), queue.LowPriority))
+	session.QueueHighCount.Set(s, m.layout.queueManager.GetQueueLength(context.Background(), queue.PriorityHigh))
+	session.QueueNormalCount.Set(s, m.layout.queueManager.GetQueueLength(context.Background(), queue.PriorityNormal))
+	session.QueueLowCount.Set(s, m.layout.queueManager.GetQueueLength(context.Background(), queue.PriorityLow))
 
 	// Update queue information
 	session.QueueStatus.Set(s, status)

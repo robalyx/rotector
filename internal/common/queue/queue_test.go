@@ -47,7 +47,7 @@ func TestAddToQueue(t *testing.T) {
 	ctx := context.Background()
 	testItem := &Item{
 		UserID:      123,
-		Priority:    NormalPriority,
+		Priority:    PriorityNormal,
 		Reason:      "test",
 		AddedBy:     456,
 		AddedAt:     time.Now(),
@@ -59,7 +59,7 @@ func TestAddToQueue(t *testing.T) {
 	require.NoError(t, err)
 
 	// Verify queue length
-	length := manager.GetQueueLength(ctx, NormalPriority)
+	length := manager.GetQueueLength(ctx, PriorityNormal)
 	assert.Equal(t, 1, length)
 }
 
@@ -70,7 +70,7 @@ func TestGetQueueItems(t *testing.T) {
 	ctx := context.Background()
 	testItem := &Item{
 		UserID:      123,
-		Priority:    NormalPriority,
+		Priority:    PriorityNormal,
 		Reason:      "test",
 		AddedBy:     456,
 		AddedAt:     time.Now(),
@@ -96,7 +96,7 @@ func TestRemoveQueueItem(t *testing.T) {
 	ctx := context.Background()
 	testItem := &Item{
 		UserID:      123,
-		Priority:    NormalPriority,
+		Priority:    PriorityNormal,
 		Reason:      "test",
 		AddedBy:     456,
 		AddedAt:     time.Now(),
@@ -113,7 +113,7 @@ func TestRemoveQueueItem(t *testing.T) {
 	require.NoError(t, err)
 
 	// Verify queue is empty
-	length := manager.GetQueueLength(ctx, NormalPriority)
+	length := manager.GetQueueLength(ctx, PriorityNormal)
 	assert.Equal(t, 0, length)
 }
 
@@ -124,7 +124,7 @@ func TestQueueInfo(t *testing.T) {
 	ctx := context.Background()
 	userID := uint64(123)
 	status := StatusPending
-	priority := NormalPriority
+	priority := PriorityNormal
 	position := 1
 
 	// Set queue info
@@ -147,7 +147,7 @@ func TestUpdateQueueItem(t *testing.T) {
 	ctx := context.Background()
 	testItem := &Item{
 		UserID:      123,
-		Priority:    NormalPriority,
+		Priority:    PriorityNormal,
 		Reason:      "test",
 		AddedBy:     456,
 		AddedAt:     time.Now(),

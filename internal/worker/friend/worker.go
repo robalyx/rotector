@@ -102,17 +102,10 @@ func (w *Worker) Start() {
 		// Step 3: Process users (60%)
 		w.bar.SetStepMessage("Processing users", 60)
 		w.reporter.UpdateStatus("Processing users", 60)
-		failedValidationIDs := w.userChecker.ProcessUsers(userInfos)
+		w.userChecker.ProcessUsers(userInfos)
 
 		// Step 4: Prepare for next batch
 		oldFriendIDs = friendIDs[w.batchSize:]
-
-		// Add failed validation IDs back to the queue for retry
-		if len(failedValidationIDs) > 0 {
-			oldFriendIDs = append(oldFriendIDs, failedValidationIDs...)
-			w.logger.Info("Added failed validation IDs for retry",
-				zap.Int("failedCount", len(failedValidationIDs)))
-		}
 
 		// Step 5: Completed (100%)
 		w.bar.SetStepMessage("Completed", 100)

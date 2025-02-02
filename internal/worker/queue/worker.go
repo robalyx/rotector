@@ -30,7 +30,7 @@ type Worker struct {
 	batchSize   int
 }
 
-// New creates a new queue core.
+// New creates a new queue worker.
 func New(app *setup.App, bar *progress.Bar, logger *zap.Logger) *Worker {
 	userFetcher := fetcher.NewUserFetcher(app, logger)
 	userChecker := checker.NewUserChecker(app, userFetcher, logger)
@@ -49,11 +49,7 @@ func New(app *setup.App, bar *progress.Bar, logger *zap.Logger) *Worker {
 	}
 }
 
-// Start begins the process worker's main loop:
-// 1. Gets items from queues in priority order
-// 2. Processes each item through AI analysis
-// 3. Updates queue status and position
-// 4. Repeats until stopped.
+// Start begins the process worker's main loop.
 func (w *Worker) Start() {
 	w.logger.Info("Process Worker started", zap.String("workerID", w.reporter.GetWorkerID()))
 	w.reporter.Start()
@@ -98,10 +94,10 @@ func (w *Worker) getNextBatch() ([]*queue.Item, error) {
 	var items []*queue.Item
 
 	// Check queues in priority order
-	for _, priority := range []string{
-		queue.HighPriority,
-		queue.NormalPriority,
-		queue.LowPriority,
+	for _, priority := range []queue.Priority{
+		queue.PriorityHigh,
+		queue.PriorityNormal,
+		queue.PriorityLow,
 	} {
 		// Get items from current priority queue
 		key := fmt.Sprintf("queue:%s_priority", priority)
@@ -132,12 +128,7 @@ func (w *Worker) getNextBatch() ([]*queue.Item, error) {
 	return items, nil
 }
 
-// processItems handles batches of queued items by:
-// 1. Updating queue status to "Processing" for all items
-// 2. Fetching user information in batch
-// 3. Running AI analysis on the batch
-// 4. Updating final queue status for all items
-// 5. Removing processed items from queue.
+// processItems handles batches of queued items.
 func (w *Worker) processItems(items []*queue.Item) {
 	ctx := context.Background()
 	itemCount := len(items)
@@ -172,14 +163,7 @@ func (w *Worker) processItems(items []*queue.Item) {
 	// Process users with AI checker
 	w.bar.SetStepMessage("Processing with AI", 75)
 	w.reporter.UpdateStatus("Processing with AI", 75)
-
-	failedValidationIDs := w.userChecker.ProcessUsers(userInfos)
-
-	// Create set of failed IDs for quick lookup
-	failedIDSet := make(map[uint64]bool)
-	for _, id := range failedValidationIDs {
-		failedIDSet[id] = true
-	}
+	w.userChecker.ProcessUsers(userInfos)
 
 	// Update final status for all items
 	w.bar.SetStepMessage("Updating queue status", 100)
@@ -187,25 +171,16 @@ func (w *Worker) processItems(items []*queue.Item) {
 
 	for _, userID := range userIDs {
 		item := userIDToItem[userID]
-		if failedIDSet[userID] {
-			// Update status to skipped for failed validations
-			w.updateQueueStatus(ctx, item, queue.StatusSkipped)
-		} else {
-			// Update final status and remove from queue for successful validations
-			w.updateQueueStatus(ctx, item, queue.StatusComplete)
-		}
+		// Update final status and remove from queue for successful validations
+		w.updateQueueStatus(ctx, item, queue.StatusComplete)
 	}
 
 	w.logger.Info("Finished processing batch",
-		zap.Int("totalItems", len(items)),
-		zap.Int("failedValidations", len(failedValidationIDs)))
+		zap.Int("totalItems", len(items)))
 }
 
-// updateQueueStatus handles the final state of a queue item by:
-// 1. Setting the final status in queue info
-// 2. Removing the item from its priority queue
-// 3. Logging any errors that occur.
-func (w *Worker) updateQueueStatus(ctx context.Context, item *queue.Item, status string) {
+// updateQueueStatus handles the final state of a queue item.
+func (w *Worker) updateQueueStatus(ctx context.Context, item *queue.Item, status queue.Status) {
 	// Update queue info with final status
 	if err := w.queue.SetQueueInfo(ctx, item.UserID, status, item.Priority, 0); err != nil {
 		w.logger.Error("Failed to update final queue info",
