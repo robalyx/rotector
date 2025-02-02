@@ -69,6 +69,7 @@ const (
 
 	// Basic group information
 	GroupFieldID           GroupField = 1 << iota // Group ID
+	GroupFieldUUID                                // Group UUID
 	GroupFieldName                                // Group name
 	GroupFieldDescription                         // Group description
 	GroupFieldOwner                               // Owner information
@@ -79,9 +80,9 @@ const (
 
 	// Statistics
 	GroupFieldConfidence // AI confidence score
-	GroupFieldUpvotes    // Reputation upvotes
-	GroupFieldDownvotes  // Reputation downvotes
-	GroupFieldScore      // Reputation score
+
+	// Reputation
+	GroupFieldReputation // Reputation fields (upvotes, downvotes, score)
 
 	// Timestamps
 	GroupFieldLastScanned         // Last scan time
@@ -93,13 +94,9 @@ const (
 
 	// GroupFieldBasic includes the essential group identification fields.
 	GroupFieldBasic = GroupFieldID |
+		GroupFieldUUID |
 		GroupFieldName |
 		GroupFieldDescription
-
-	// GroupFieldReputation includes all reputation-related fields.
-	GroupFieldReputation = GroupFieldUpvotes |
-		GroupFieldDownvotes |
-		GroupFieldScore
 
 	// GroupFieldTimestamps includes all timestamp-related fields.
 	GroupFieldTimestamps = GroupFieldLastScanned |
@@ -124,6 +121,7 @@ const (
 // fieldToColumns maps GroupField bits to their corresponding database columns.
 var groupFieldToColumns = map[GroupField][]string{ //nolint:gochecknoglobals
 	GroupFieldID:                  {"id"},
+	GroupFieldUUID:                {"uuid"},
 	GroupFieldName:                {"name"},
 	GroupFieldDescription:         {"description"},
 	GroupFieldOwner:               {"owner"},
@@ -132,15 +130,17 @@ var groupFieldToColumns = map[GroupField][]string{ //nolint:gochecknoglobals
 	GroupFieldThumbnail:           {"thumbnail_url"},
 	GroupFieldFlaggedUsers:        {"flagged_users"},
 	GroupFieldConfidence:          {"confidence"},
-	GroupFieldUpvotes:             {"upvotes"},
-	GroupFieldDownvotes:           {"downvotes"},
-	GroupFieldScore:               {"score"},
 	GroupFieldLastScanned:         {"last_scanned"},
 	GroupFieldLastUpdated:         {"last_updated"},
 	GroupFieldLastViewed:          {"last_viewed"},
 	GroupFieldLastLockCheck:       {"last_lock_check"},
 	GroupFieldIsLocked:            {"is_locked"},
 	GroupFieldLastThumbnailUpdate: {"last_thumbnail_update"},
+}
+
+// HasReputation returns true if the reputation fields should be included
+func (f GroupField) HasReputation() bool {
+	return f&GroupFieldReputation != 0
 }
 
 // Columns returns the list of database columns to fetch based on the selected fields.

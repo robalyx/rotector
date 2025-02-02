@@ -299,12 +299,14 @@ func (r *GroupModel) GetGroupByID(ctx context.Context, groupID string, fields ty
 					result.Status = enum.GroupTypeCleared
 				}
 
-				// Get reputation
-				reputation, err := r.reputation.GetGroupReputation(ctx, result.ID)
-				if err != nil {
-					return fmt.Errorf("failed to get group reputation: %w", err)
+				// Get reputation if requested
+				if fields.HasReputation() {
+					reputation, err := r.reputation.GetGroupReputation(ctx, result.ID)
+					if err != nil {
+						return fmt.Errorf("failed to get group reputation: %w", err)
+					}
+					result.Reputation = reputation
 				}
-				result.Reputation = reputation
 
 				// Update last_viewed if requested
 				_, err = tx.NewUpdate().

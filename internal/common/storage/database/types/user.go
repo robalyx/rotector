@@ -80,6 +80,7 @@ const (
 
 	// Basic user information
 	UserFieldID          UserField = 1 << iota // User ID
+	UserFieldUUID                              // User UUID
 	UserFieldName                              // Username
 	UserFieldDisplayName                       // Display name
 	UserFieldDescription                       // User description
@@ -98,9 +99,9 @@ const (
 	UserFieldFollowerCount  // Follower count
 	UserFieldFollowingCount // Following count
 	UserFieldConfidence     // AI confidence score
-	UserFieldUpvotes        // Reputation upvotes
-	UserFieldDownvotes      // Reputation downvotes
-	UserFieldScore          // Reputation score
+
+	// Reputation
+	UserFieldReputation // Reputation fields (upvotes, downvotes, score)
 
 	// Timestamps
 	UserFieldLastScanned         // Last scan time
@@ -111,39 +112,28 @@ const (
 	UserFieldLastThumbnailUpdate // Last thumbnail update
 
 	// Common combinations
-	// UserFieldBasic includes the essential user identification fields:
-	// ID, username, and display name
 	UserFieldBasic = UserFieldID |
+		UserFieldUUID |
 		UserFieldName |
 		UserFieldDisplayName
 
-	// UserFieldProfile includes all profile-related fields:
-	// description, creation date, and thumbnail
+	// UserFieldProfile includes all profile-related fields.
 	UserFieldProfile = UserFieldDescription |
 		UserFieldCreatedAt |
 		UserFieldThumbnail
 
-	// UserFieldRelationships includes all relationship-related fields:
-	// groups, outfits, friends, and games
+	// UserFieldRelationships includes all relationship-related fields.
 	UserFieldRelationships = UserFieldGroups |
 		UserFieldOutfits |
 		UserFieldFriends |
 		UserFieldGames
 
-	// UserFieldStats includes all statistical fields:
-	// follower/following counts and confidence score
+	// UserFieldStats includes all statistical fields.
 	UserFieldStats = UserFieldFollowerCount |
 		UserFieldFollowingCount |
 		UserFieldConfidence
 
-	// UserFieldReputation includes all reputation-related fields:
-	// upvotes, downvotes, and overall score
-	UserFieldReputation = UserFieldUpvotes |
-		UserFieldDownvotes |
-		UserFieldScore
-
-	// UserFieldTimestamps includes all timestamp-related fields:
-	// last scanned, updated, viewed, ban check, ban status, and thumbnail update
+	// UserFieldTimestamps includes all timestamp-related fields.
 	UserFieldTimestamps = UserFieldLastScanned |
 		UserFieldLastUpdated |
 		UserFieldLastViewed |
@@ -151,7 +141,7 @@ const (
 		UserFieldIsBanned |
 		UserFieldLastThumbnailUpdate
 
-	// UserFieldAll includes all available fields
+	// UserFieldAll includes all available fields.
 	UserFieldAll = UserFieldBasic |
 		UserFieldProfile |
 		UserFieldRelationships |
@@ -164,6 +154,7 @@ const (
 // userFieldToColumns maps UserField bits to their corresponding database columns.
 var userFieldToColumns = map[UserField][]string{ //nolint:gochecknoglobals
 	UserFieldID:                  {"id"},
+	UserFieldUUID:                {"uuid"},
 	UserFieldName:                {"name"},
 	UserFieldDisplayName:         {"display_name"},
 	UserFieldDescription:         {"description"},
@@ -178,15 +169,17 @@ var userFieldToColumns = map[UserField][]string{ //nolint:gochecknoglobals
 	UserFieldFollowerCount:       {"follower_count"},
 	UserFieldFollowingCount:      {"following_count"},
 	UserFieldConfidence:          {"confidence"},
-	UserFieldUpvotes:             {"upvotes"},
-	UserFieldDownvotes:           {"downvotes"},
-	UserFieldScore:               {"score"},
 	UserFieldLastScanned:         {"last_scanned"},
 	UserFieldLastUpdated:         {"last_updated"},
 	UserFieldLastViewed:          {"last_viewed"},
 	UserFieldLastBanCheck:        {"last_ban_check"},
 	UserFieldIsBanned:            {"is_banned"},
 	UserFieldLastThumbnailUpdate: {"last_thumbnail_update"},
+}
+
+// HasReputation returns true if the reputation fields should be included.
+func (f UserField) HasReputation() bool {
+	return f&UserFieldReputation != 0
 }
 
 // Columns returns the list of database columns to fetch based on the selected fields.

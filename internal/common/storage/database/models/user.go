@@ -379,12 +379,14 @@ func (r *UserModel) GetUserByID(ctx context.Context, userID string, fields types
 					result.Status = enum.UserTypeCleared
 				}
 
-				// Get reputation
-				reputation, err := r.reputation.GetUserReputation(ctx, result.ID)
-				if err != nil {
-					return fmt.Errorf("failed to get user reputation: %w", err)
+				// Get reputation if requested
+				if fields.HasReputation() {
+					reputation, err := r.reputation.GetUserReputation(ctx, result.ID)
+					if err != nil {
+						return fmt.Errorf("failed to get user reputation: %w", err)
+					}
+					result.Reputation = reputation
 				}
-				result.Reputation = reputation
 
 				// Update last_viewed if requested
 				_, err = tx.NewUpdate().
