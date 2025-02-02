@@ -21,6 +21,7 @@ import (
 	"github.com/robalyx/rotector/internal/common/setup"
 	"github.com/robalyx/rotector/internal/common/storage/database/types"
 	"github.com/robalyx/rotector/internal/common/utils"
+	"github.com/sourcegraph/conc/pool"
 	"go.uber.org/zap"
 	"golang.org/x/image/webp"
 	"golang.org/x/sync/semaphore"
@@ -142,17 +143,10 @@ func NewOutfitAnalyzer(app *setup.App, logger *zap.Logger) *OutfitAnalyzer {
 }
 
 // ProcessOutfits analyzes outfit images for a batch of users.
-// Returns IDs of users that failed validation for retry.
-func (a *OutfitAnalyzer) ProcessOutfits(userInfos []*fetcher.Info, flaggedUsers map[uint64]*types.User) ([]uint64, error) {
-	type result struct {
-		err    error
-		userID uint64
-	}
-
+func (a *OutfitAnalyzer) ProcessOutfits(userInfos []*fetcher.Info, flaggedUsers map[uint64]*types.User) {
 	var (
-		resultsChan = make(chan result, len(userInfos))
-		wg          sync.WaitGroup
-		mu          sync.Mutex
+		p  = pool.New().WithContext(context.Background())
+		mu sync.Mutex
 	)
 
 	// Process each user's outfits concurrently
@@ -162,43 +156,28 @@ func (a *OutfitAnalyzer) ProcessOutfits(userInfos []*fetcher.Info, flaggedUsers 
 			continue
 		}
 
-		wg.Add(1)
-		go func(info *fetcher.Info) {
-			defer wg.Done()
-
+		p.Go(func(ctx context.Context) error {
 			// Analyze user's outfits
-			err := a.analyzeUserOutfits(context.Background(), info, &mu, flaggedUsers)
+			err := a.analyzeUserOutfits(ctx, userInfo, &mu, flaggedUsers)
 			if err != nil && !errors.Is(err, ErrNoViolations) {
-				resultsChan <- result{
-					err:    err,
-					userID: info.ID,
-				}
+				a.logger.Error("Failed to analyze outfits",
+					zap.Error(err),
+					zap.Uint64("userID", userInfo.ID))
+				return err
 			}
-		}(userInfo)
+			return nil
+		})
 	}
 
-	// Close results channel when all goroutines complete
-	go func() {
-		wg.Wait()
-		close(resultsChan)
-	}()
-
-	// Collect failed validation IDs
-	var failedValidationIDs []uint64
-	for res := range resultsChan {
-		if res.err != nil {
-			failedValidationIDs = append(failedValidationIDs, res.userID)
-			a.logger.Error("Failed to analyze outfits",
-				zap.Error(res.err),
-				zap.Uint64("userID", res.userID))
-		}
+	// Wait for all goroutines to complete
+	if err := p.Wait(); err != nil {
+		a.logger.Error("Error during outfit analysis", zap.Error(err))
+		return
 	}
 
 	a.logger.Info("Received AI outfit analysis",
 		zap.Int("totalUsers", len(userInfos)),
 		zap.Int("flaggedUsers", len(flaggedUsers)))
-
-	return failedValidationIDs, nil
 }
 
 // analyzeUserOutfits handles the analysis of a single user's outfits.
@@ -339,14 +318,9 @@ func (a *OutfitAnalyzer) getOutfitThumbnails(ctx context.Context, outfits []*api
 
 // downloadOutfitImages concurrently downloads outfit images until we have enough.
 func (a *OutfitAnalyzer) downloadOutfitImages(ctx context.Context, outfits []*apiTypes.Outfit, thumbnailMap map[uint64]string) ([]DownloadResult, error) {
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
-
 	var (
-		wg                  sync.WaitGroup
-		results             = make(chan DownloadResult, len(outfits))
 		successfulDownloads = make([]DownloadResult, 0, MaxOutfits)
-		pendingDownloads    = 0
+		p                   = pool.New().WithContext(ctx)
 		mu                  sync.Mutex
 	)
 
@@ -359,69 +333,50 @@ func (a *OutfitAnalyzer) downloadOutfitImages(ctx context.Context, outfits []*ap
 
 		// Check if we have enough successful downloads
 		mu.Lock()
-		if len(successfulDownloads) >= MaxOutfits || pendingDownloads >= MaxOutfits {
+		if len(successfulDownloads) >= MaxOutfits {
 			mu.Unlock()
 			break
 		}
-		pendingDownloads++
 		mu.Unlock()
 
-		wg.Add(1)
-		go func(index int, outfit *apiTypes.Outfit, url string) {
-			defer wg.Done()
+		currentIndex := i
+		currentOutfit := outfits[i]
+		currentURL := thumbnailURL
 
-			select {
-			case <-ctx.Done():
-				mu.Lock()
-				pendingDownloads--
-				mu.Unlock()
-				return
-			default:
-				// Download image
-				resp, err := a.httpClient.NewRequest().URL(url).Do(ctx)
-				if err != nil {
-					a.logger.Warn("Failed to download outfit image",
-						zap.Error(err),
-						zap.String("url", url))
-					mu.Lock()
-					pendingDownloads--
-					mu.Unlock()
-					return
-				}
-				defer resp.Body.Close()
-
-				// Decode image
-				img, err := webp.Decode(resp.Body)
-				if err != nil {
-					mu.Lock()
-					pendingDownloads--
-					mu.Unlock()
-					return
-				}
-
-				mu.Lock()
-				if len(successfulDownloads) < MaxOutfits {
-					results <- DownloadResult{index, img, outfit.Name}
-				}
-				pendingDownloads--
-				mu.Unlock()
+		p.Go(func(ctx context.Context) error {
+			// Download image
+			resp, err := a.httpClient.NewRequest().URL(currentURL).Do(ctx)
+			if err != nil {
+				a.logger.Warn("Failed to download outfit image",
+					zap.Error(err),
+					zap.String("url", currentURL))
+				return nil
 			}
-		}(i, outfits[i], thumbnailURL)
+			defer resp.Body.Close()
+
+			// Decode image
+			img, err := webp.Decode(resp.Body)
+			if err != nil {
+				return nil
+			}
+
+			mu.Lock()
+			if len(successfulDownloads) < MaxOutfits {
+				successfulDownloads = append(successfulDownloads, DownloadResult{
+					index: currentIndex,
+					img:   img,
+					name:  currentOutfit.Name,
+				})
+			}
+			mu.Unlock()
+
+			return nil
+		})
 	}
 
-	// Close results channel when all goroutines complete
-	go func() {
-		wg.Wait()
-		close(results)
-	}()
-
-	// Collect successful downloads until we have enough
-	for result := range results {
-		successfulDownloads = append(successfulDownloads, result)
-		if len(successfulDownloads) >= MaxOutfits {
-			cancel() // Cancel any remaining downloads
-			break
-		}
+	// Wait for all downloads to complete
+	if err := p.Wait(); err != nil {
+		a.logger.Error("Error during outfit downloads", zap.Error(err))
 	}
 
 	// Check if we got any successful downloads

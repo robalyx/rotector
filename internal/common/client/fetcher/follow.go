@@ -8,6 +8,7 @@ import (
 	"github.com/jaxron/roapi.go/pkg/api"
 	"github.com/jaxron/roapi.go/pkg/api/middleware/auth"
 	"github.com/robalyx/rotector/internal/common/storage/database/types"
+	"github.com/sourcegraph/conc/pool"
 	"go.uber.org/zap"
 )
 
@@ -38,36 +39,38 @@ func (f *FollowFetcher) AddFollowCounts(ctx context.Context, users map[uint64]*t
 	ctx = context.WithValue(ctx, auth.KeyAddCookie, true)
 
 	var (
-		wg sync.WaitGroup
+		p  = pool.New().WithContext(ctx)
 		mu sync.Mutex
 	)
 
 	// Process each user concurrently
 	for _, user := range users {
-		wg.Add(1)
-		go func(u *types.User) {
-			defer wg.Done()
-
+		p.Go(func(ctx context.Context) error {
 			// Get follower and following counts
-			followerCount, followerErr := f.roAPI.Friends().GetFollowerCount(ctx, u.ID)
-			followingCount, followingErr := f.roAPI.Friends().GetFollowingCount(ctx, u.ID)
+			followerCount, followerErr := f.roAPI.Friends().GetFollowerCount(ctx, user.ID)
+			followingCount, followingErr := f.roAPI.Friends().GetFollowingCount(ctx, user.ID)
 
 			err := errors.Join(followerErr, followingErr)
 			if err != nil {
 				f.logger.Error("Failed to fetch follow counts",
 					zap.Error(err),
-					zap.Uint64("userID", u.ID))
-				return
+					zap.Uint64("userID", user.ID))
+				return nil // Don't fail the whole batch for one error
 			}
 
 			mu.Lock()
-			users[u.ID].FollowerCount = followerCount
-			users[u.ID].FollowingCount = followingCount
+			users[user.ID].FollowerCount = followerCount
+			users[user.ID].FollowingCount = followingCount
 			mu.Unlock()
-		}(user)
+
+			return nil
+		})
 	}
 
-	wg.Wait()
+	// Wait for all goroutines to complete
+	if err := p.Wait(); err != nil {
+		f.logger.Error("Error during follow counts fetch", zap.Error(err))
+	}
 
 	f.logger.Debug("Finished fetching follow counts",
 		zap.Int("totalUsers", len(users)))

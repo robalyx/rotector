@@ -89,9 +89,9 @@ func NewFriendAnalyzer(app *setup.App, logger *zap.Logger) *FriendAnalyzer {
 }
 
 // GenerateFriendReason generates a friend network analysis reason using the Gemini model.
-func (a *FriendAnalyzer) GenerateFriendReason(userInfo *fetcher.Info, confirmedFriends, flaggedFriends map[uint64]*types.User) (string, error) {
+func (a *FriendAnalyzer) GenerateFriendReason(ctx context.Context, userInfo *fetcher.Info, confirmedFriends, flaggedFriends map[uint64]*types.User) (string, error) {
 	// Acquire semaphore before making AI request
-	if err := a.analysisSem.Acquire(context.Background(), 1); err != nil {
+	if err := a.analysisSem.Acquire(ctx, 1); err != nil {
 		return "", fmt.Errorf("failed to acquire semaphore: %w", err)
 	}
 	defer a.analysisSem.Release(1)
@@ -125,7 +125,7 @@ func (a *FriendAnalyzer) GenerateFriendReason(userInfo *fetcher.Info, confirmedF
 		}
 
 		// Count and check token limit
-		tokenCount, err := a.genModel.CountTokens(context.Background(), genai.Text(summaryJSON))
+		tokenCount, err := a.genModel.CountTokens(ctx, genai.Text(summaryJSON))
 		if err != nil {
 			a.logger.Warn("Failed to count tokens for friend summary",
 				zap.String("username", friend.Name),
@@ -172,8 +172,8 @@ func (a *FriendAnalyzer) GenerateFriendReason(userInfo *fetcher.Info, confirmedF
 	prompt := fmt.Sprintf(FriendUserPrompt, userInfo.Name, string(friendDataJSON))
 
 	// Generate friend analysis using Gemini model with retry
-	friendAnalysis, err := withRetry(context.Background(), func() (*FriendAnalysis, error) {
-		resp, err := a.genModel.GenerateContent(context.Background(), genai.Text(prompt))
+	friendAnalysis, err := withRetry(ctx, func() (*FriendAnalysis, error) {
+		resp, err := a.genModel.GenerateContent(ctx, genai.Text(prompt))
 		if err != nil {
 			return nil, fmt.Errorf("gemini API error: %w", err)
 		}

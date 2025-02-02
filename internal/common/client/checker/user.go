@@ -68,16 +68,10 @@ func (c *UserChecker) ProcessUsers(userInfos []*fetcher.Info) []uint64 {
 	c.friendChecker.ProcessUsers(userInfos, flaggedUsers)
 
 	// Process user analysis
-	aiFailedIDs, err := c.userAnalyzer.ProcessUsers(userInfos, flaggedUsers)
-	if err != nil {
-		failedIDs = append(failedIDs, aiFailedIDs...)
-	}
+	c.userAnalyzer.ProcessUsers(userInfos, flaggedUsers)
 
 	// Process outfit analysis
-	outfitFailedIDs, err := c.outfitAnalyzer.ProcessOutfits(userInfos, flaggedUsers)
-	if err != nil {
-		failedIDs = append(failedIDs, outfitFailedIDs...)
-	}
+	c.outfitAnalyzer.ProcessOutfits(userInfos, flaggedUsers)
 
 	// Stop if no users were flagged
 	if len(flaggedUsers) == 0 {
@@ -95,10 +89,7 @@ func (c *UserChecker) ProcessUsers(userInfos []*fetcher.Info) []uint64 {
 
 	// Process image analysis results only for flagged users
 	if len(flaggedInfos) > 0 {
-		imageFailedIDs, err := c.imageAnalyzer.ProcessImages(flaggedInfos, flaggedUsers)
-		if err != nil {
-			failedIDs = append(failedIDs, imageFailedIDs...)
-		}
+		c.imageAnalyzer.ProcessImages(flaggedInfos, flaggedUsers)
 	}
 
 	// Add follow counts to flagged users

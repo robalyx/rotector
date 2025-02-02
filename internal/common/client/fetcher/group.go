@@ -9,6 +9,7 @@ import (
 	"github.com/jaxron/roapi.go/pkg/api/middleware/auth"
 	"github.com/jaxron/roapi.go/pkg/api/resources/groups"
 	apiTypes "github.com/jaxron/roapi.go/pkg/api/types"
+	"github.com/sourcegraph/conc/pool"
 	"go.uber.org/zap"
 )
 
@@ -42,37 +43,39 @@ func (g *GroupFetcher) FetchGroupInfos(ctx context.Context, groupIDs []uint64) [
 
 	var (
 		validGroups = make([]*apiTypes.GroupResponse, 0, len(groupIDs))
+		p           = pool.New().WithContext(ctx)
 		mu          sync.Mutex
-		wg          sync.WaitGroup
 	)
 
-	// Spawn a goroutine for each group
-	for _, groupID := range groupIDs {
-		wg.Add(1)
-		go func(id uint64) {
-			defer wg.Done()
-
+	// Process each group concurrently
+	for _, id := range groupIDs {
+		p.Go(func(ctx context.Context) error {
 			// Fetch the group info
 			groupInfo, err := g.roAPI.Groups().GetGroupInfo(ctx, id)
 			if err != nil {
 				g.logger.Error("Error fetching group info",
 					zap.Uint64("groupID", id),
 					zap.Error(err))
-				return
+				return nil // Don't fail the whole batch for one error
 			}
 
 			// Check for locked groups
 			if groupInfo.IsLocked != nil && *groupInfo.IsLocked {
-				return
+				return nil
 			}
 
 			mu.Lock()
 			validGroups = append(validGroups, groupInfo)
 			mu.Unlock()
-		}(groupID)
+
+			return nil
+		})
 	}
 
-	wg.Wait()
+	// Wait for all goroutines to complete
+	if err := p.Wait(); err != nil {
+		g.logger.Error("Error during group fetch", zap.Error(err))
+	}
 
 	g.logger.Debug("Finished fetching group information",
 		zap.Int("totalRequested", len(groupIDs)),
@@ -88,21 +91,18 @@ func (g *GroupFetcher) FetchLockedGroups(ctx context.Context, groupIDs []uint64)
 
 	var (
 		results = make([]uint64, 0, len(groupIDs))
+		p       = pool.New().WithContext(ctx)
 		mu      sync.Mutex
-		wg      sync.WaitGroup
 	)
 
-	for _, groupID := range groupIDs {
-		wg.Add(1)
-		go func(id uint64) {
-			defer wg.Done()
-
+	for _, id := range groupIDs {
+		p.Go(func(ctx context.Context) error {
 			groupInfo, err := g.roAPI.Groups().GetGroupInfo(ctx, id)
 			if err != nil {
 				g.logger.Error("Error fetching group info",
 					zap.Uint64("groupID", id),
 					zap.Error(err))
-				return
+				return nil // Don't fail the whole batch for one error
 			}
 
 			if groupInfo.IsLocked != nil && *groupInfo.IsLocked {
@@ -110,10 +110,15 @@ func (g *GroupFetcher) FetchLockedGroups(ctx context.Context, groupIDs []uint64)
 				results = append(results, groupInfo.ID)
 				mu.Unlock()
 			}
-		}(groupID)
+			return nil
+		})
 	}
 
-	wg.Wait()
+	// Wait for all goroutines to complete
+	if err := p.Wait(); err != nil {
+		g.logger.Error("Error during locked groups fetch", zap.Error(err))
+		return nil, err
+	}
 
 	g.logger.Debug("Finished checking locked groups",
 		zap.Int("totalChecked", len(groupIDs)),

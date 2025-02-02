@@ -11,6 +11,7 @@ import (
 	"github.com/robalyx/rotector/internal/common/storage/database"
 	"github.com/robalyx/rotector/internal/common/storage/database/types"
 	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
+	"github.com/sourcegraph/conc/pool"
 	"go.uber.org/zap"
 )
 
@@ -167,37 +168,30 @@ func (c *GroupChecker) ProcessUsers(userInfos []*fetcher.Info, flaggedUsers map[
 		return
 	}
 
+	var (
+		p  = pool.New().WithContext(context.Background())
+		mu sync.Mutex
+	)
+
 	// Process each user concurrently
-	var wg sync.WaitGroup
-	resultsChan := make(chan GroupCheckResult, len(userInfos))
-
-	// Spawn a goroutine for each user
 	for _, userInfo := range userInfos {
-		wg.Add(1)
-		go func(info *fetcher.Info) {
-			defer wg.Done()
-
+		p.Go(func(_ context.Context) error {
 			// Process user groups
-			user, autoFlagged := c.processUserGroups(info, existingGroups)
-			resultsChan <- GroupCheckResult{
-				UserID:      info.ID,
-				User:        user,
-				AutoFlagged: autoFlagged,
+			user, autoFlagged := c.processUserGroups(userInfo, existingGroups)
+
+			if autoFlagged {
+				mu.Lock()
+				flaggedUsers[userInfo.ID] = user
+				mu.Unlock()
 			}
-		}(userInfo)
+
+			return nil
+		})
 	}
 
-	// Close channel when all goroutines complete
-	go func() {
-		wg.Wait()
-		close(resultsChan)
-	}()
-
-	// Update flaggedUsers map
-	for result := range resultsChan {
-		if result.AutoFlagged {
-			flaggedUsers[result.UserID] = result.User
-		}
+	// Wait for all goroutines to complete
+	if err := p.Wait(); err != nil {
+		c.logger.Error("Error during group processing", zap.Error(err))
 	}
 }
 

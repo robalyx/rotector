@@ -13,6 +13,7 @@ import (
 	"github.com/robalyx/rotector/internal/common/storage/database"
 	"github.com/robalyx/rotector/internal/common/storage/database/types"
 	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
+	"github.com/sourcegraph/conc/pool"
 	"go.uber.org/zap"
 )
 
@@ -90,48 +91,42 @@ func (c *FriendChecker) ProcessUsers(userInfos []*fetcher.Info, flaggedUsers map
 		return
 	}
 
+	var (
+		p  = pool.New().WithContext(context.Background())
+		mu sync.Mutex
+	)
+
 	// Process each user concurrently
-	var wg sync.WaitGroup
-	resultsChan := make(chan FriendCheckResult, len(userInfos))
-
-	// Spawn a goroutine for each user
 	for _, userInfo := range userInfos {
-		wg.Add(1)
-		go func(info *fetcher.Info) {
-			defer wg.Done()
-
+		p.Go(func(ctx context.Context) error {
 			// Process user friends
-			user, autoFlagged := c.processUserFriends(info, existingFriends)
-			resultsChan <- FriendCheckResult{
-				UserID:      info.ID,
-				User:        user,
-				AutoFlagged: autoFlagged,
+			user, autoFlagged := c.processUserFriends(ctx, userInfo, existingFriends)
+
+			mu.Lock()
+			defer mu.Unlock()
+
+			if autoFlagged {
+				if existingUser, ok := flaggedUsers[userInfo.ID]; ok {
+					// Combine reasons and update confidence
+					existingUser.Reason = fmt.Sprintf("%s\n\n%s", existingUser.Reason, user.Reason)
+					existingUser.Confidence = 1.0
+				} else {
+					flaggedUsers[userInfo.ID] = user
+				}
 			}
-		}(userInfo)
+
+			return nil
+		})
 	}
 
-	// Close channel when all goroutines complete
-	go func() {
-		wg.Wait()
-		close(resultsChan)
-	}()
-
-	// Update flaggedUsers map
-	for result := range resultsChan {
-		if result.AutoFlagged {
-			if existingUser, ok := flaggedUsers[result.UserID]; ok {
-				// Combine reasons and update confidence
-				existingUser.Reason = fmt.Sprintf("%s\n\n%s", existingUser.Reason, result.User.Reason)
-				existingUser.Confidence = 1.0
-			} else {
-				flaggedUsers[result.UserID] = result.User
-			}
-		}
+	// Wait for all goroutines to complete
+	if err := p.Wait(); err != nil {
+		c.logger.Error("Error during friend processing", zap.Error(err))
 	}
 }
 
 // processUserFriends checks if a user should be flagged based on their friends.
-func (c *FriendChecker) processUserFriends(userInfo *fetcher.Info, existingFriends map[uint64]*types.ReviewUser) (*types.User, bool) {
+func (c *FriendChecker) processUserFriends(ctx context.Context, userInfo *fetcher.Info, existingFriends map[uint64]*types.ReviewUser) (*types.User, bool) {
 	// Skip users with very few friends to avoid false positives
 	if len(userInfo.Friends.Data) < 3 {
 		return nil, false
@@ -164,7 +159,7 @@ func (c *FriendChecker) processUserFriends(userInfo *fetcher.Info, existingFrien
 		accountAge := time.Since(userInfo.CreatedAt)
 
 		// Generate AI-based reason using friend list analysis
-		reason, err := c.friendAnalyzer.GenerateFriendReason(userInfo, confirmedFriends, flaggedFriends)
+		reason, err := c.friendAnalyzer.GenerateFriendReason(ctx, userInfo, confirmedFriends, flaggedFriends)
 		if err != nil {
 			c.logger.Error("Failed to generate AI reason, falling back to default",
 				zap.Error(err),

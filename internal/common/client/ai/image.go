@@ -15,6 +15,7 @@ import (
 	"github.com/robalyx/rotector/internal/common/setup"
 	"github.com/robalyx/rotector/internal/common/storage/database/types"
 	"github.com/robalyx/rotector/internal/common/utils"
+	"github.com/sourcegraph/conc/pool"
 	"go.uber.org/zap"
 	"golang.org/x/sync/semaphore"
 )
@@ -88,12 +89,6 @@ type ImageAnalysis struct {
 	Confidence   float64 `json:"confidence"`
 }
 
-// UserImage pairs a user's info with their uploaded image file.
-type UserImage struct {
-	info *fetcher.Info
-	file *genai.File
-}
-
 // NewImageAnalyzer creates an ImageAnalyzer instance.
 func NewImageAnalyzer(app *setup.App, logger *zap.Logger) *ImageAnalyzer {
 	// Create image analysis model
@@ -141,188 +136,94 @@ func NewImageAnalyzer(app *setup.App, logger *zap.Logger) *ImageAnalyzer {
 }
 
 // ProcessImages analyzes thumbnail images for a batch of users.
-// Returns IDs of users that failed validation for retry.
-func (a *ImageAnalyzer) ProcessImages(userInfos []*fetcher.Info, flaggedUsers map[uint64]*types.User) ([]uint64, error) {
-	var failedValidationIDs []uint64
+func (a *ImageAnalyzer) ProcessImages(userInfos []*fetcher.Info, flaggedUsers map[uint64]*types.User) {
+	var (
+		p  = pool.New().WithContext(context.Background())
+		mu sync.Mutex
+	)
 
-	// Acquire semaphore before making AI request
-	if err := a.analysisSem.Acquire(context.Background(), 1); err != nil {
-		return nil, fmt.Errorf("failed to acquire semaphore: %w", err)
-	}
-	defer a.analysisSem.Release(1)
-
-	// Analyze images with retry
-	analysis, err := withRetry(context.Background(), func() (*BatchImageAnalysis, error) {
-		// Download and upload images concurrently
-		var userImages []UserImage
-		userImages, failedValidationIDs = a.downloadAndUploadImages(context.Background(), userInfos)
-		defer a.cleanupFiles(context.Background(), userImages)
-
-		// Skip if no images were downloaded successfully
-		if len(userImages) == 0 {
-			return nil, ErrNoImages
-		}
-
-		// Prepare parts for the model
-		parts := make([]genai.Part, 0, len(userImages)*2+1)
-		parts = append(parts, genai.Text(ImageRequestPrompt))
-
-		for _, img := range userImages {
-			parts = append(parts, genai.Text(fmt.Sprintf("\nAnalyze image for username %q:", img.info.Name)))
-			parts = append(parts, genai.FileData{URI: img.file.URI})
-		}
-
-		// Send request to Gemini
-		resp, err := a.imageModel.GenerateContent(context.Background(), parts...)
-		if err != nil {
-			return nil, fmt.Errorf("gemini API error: %w", err)
-		}
-
-		if len(resp.Candidates) == 0 || resp.Candidates[0].Content == nil || len(resp.Candidates[0].Content.Parts) == 0 {
-			return nil, fmt.Errorf("%w: no response from Gemini", ErrModelResponse)
-		}
-
-		responseText := resp.Candidates[0].Content.Parts[0].(genai.Text)
-		var result BatchImageAnalysis
-		if err := sonic.Unmarshal([]byte(responseText), &result); err != nil {
-			return nil, fmt.Errorf("JSON unmarshal error: %w", err)
-		}
-
-		return &result, nil
-	})
-	if err != nil {
-		// If batch analysis fails, add all IDs to retry list
-		for _, info := range userInfos {
-			failedValidationIDs = append(failedValidationIDs, info.ID)
-		}
-		return failedValidationIDs, err
-	}
-
-	// Create a map of username to user info
-	usernameMap := make(map[string]*fetcher.Info)
-	for _, info := range userInfos {
-		usernameMap[info.Name] = info
-	}
-
-	// Process results
-	for _, result := range analysis.Results {
-		userInfo, ok := usernameMap[result.Username]
-		if !ok {
-			a.logger.Warn("AI returned result for unknown username",
-				zap.String("username", result.Username))
-			continue
-		}
-
-		// Skip results with no violations
-		if !result.HasViolation {
-			continue
-		}
-
-		// Validate confidence level
-		if result.Confidence < 0.1 || result.Confidence > 1.0 {
-			a.logger.Debug("AI flagged user with invalid confidence",
-				zap.String("username", userInfo.Name),
-				zap.Float64("confidence", result.Confidence))
-			continue
-		}
-
-		// Create or update user in flaggedUsers map
-		if existingUser, ok := flaggedUsers[userInfo.ID]; ok {
-			// Combine reasons and update confidence
-			existingUser.Reason = fmt.Sprintf("%s\n\n%s", existingUser.Reason,
-				"Image Analysis: Missing required clothing")
-			existingUser.Confidence = 1.0
-		} else {
-			flaggedUsers[userInfo.ID] = &types.User{
-				ID:                  userInfo.ID,
-				Name:                userInfo.Name,
-				DisplayName:         userInfo.DisplayName,
-				Description:         userInfo.Description,
-				CreatedAt:           userInfo.CreatedAt,
-				Reason:              "Image Analysis: Missing required clothing",
-				Groups:              userInfo.Groups.Data,
-				Friends:             userInfo.Friends.Data,
-				Games:               userInfo.Games.Data,
-				Outfits:             userInfo.Outfits.Data,
-				FollowerCount:       userInfo.FollowerCount,
-				FollowingCount:      userInfo.FollowingCount,
-				Confidence:          result.Confidence,
-				LastUpdated:         userInfo.LastUpdated,
-				LastBanCheck:        userInfo.LastBanCheck,
-				ThumbnailURL:        userInfo.ThumbnailURL,
-				LastThumbnailUpdate: userInfo.LastThumbnailUpdate,
+	// Process each user's thumbnail concurrently
+	for _, userInfo := range userInfos {
+		p.Go(func(ctx context.Context) error {
+			// Skip users without thumbnails
+			if userInfo.ThumbnailURL == "" || userInfo.ThumbnailURL == fetcher.ThumbnailPlaceholder {
+				return nil
 			}
-		}
+
+			// Analyze user's thumbnail
+			err := a.analyzeUserThumbnail(ctx, userInfo, &mu, flaggedUsers)
+			if err != nil && !errors.Is(err, ErrNoViolations) {
+				a.logger.Error("Failed to analyze thumbnail",
+					zap.Error(err),
+					zap.Uint64("userID", userInfo.ID))
+				return err
+			}
+			return nil
+		})
+	}
+
+	// Wait for all goroutines to complete
+	if err := p.Wait(); err != nil {
+		a.logger.Error("Error during thumbnail analysis", zap.Error(err))
+		return
 	}
 
 	a.logger.Info("Received AI image analysis",
 		zap.Int("totalUsers", len(userInfos)),
 		zap.Int("flaggedUsers", len(flaggedUsers)))
-
-	return failedValidationIDs, nil
 }
 
-// downloadAndUploadImages concurrently downloads and uploads images for a batch of users.
-func (a *ImageAnalyzer) downloadAndUploadImages(ctx context.Context, userInfos []*fetcher.Info) ([]UserImage, []uint64) {
-	type result struct {
-		image UserImage
-		err   error
+// analyzeUserThumbnail handles the analysis of a single user's thumbnail.
+func (a *ImageAnalyzer) analyzeUserThumbnail(ctx context.Context, info *fetcher.Info, mu *sync.Mutex, flaggedUsers map[uint64]*types.User) error {
+	// Acquire semaphore before making AI request
+	if err := a.analysisSem.Acquire(ctx, 1); err != nil {
+		return fmt.Errorf("failed to acquire semaphore: %w", err)
+	}
+	defer a.analysisSem.Release(1)
+
+	// Download and upload image
+	file, err := a.downloadAndUploadImage(ctx, info.ThumbnailURL)
+	if err != nil {
+		return fmt.Errorf("failed to process image: %w", err)
+	}
+	defer a.genAIClient.DeleteFile(ctx, file.Name) //nolint:errcheck
+
+	// Analyze image
+	analysis, err := a.analyzeImage(ctx, file)
+	if err != nil {
+		return fmt.Errorf("failed to analyze image: %w", err)
 	}
 
-	// Initialize channels
-	resultChan := make(chan result, len(userInfos))
-	var failedValidationIDs []uint64
-	var wg sync.WaitGroup
-
-	// Process each user's thumbnail concurrently
-	for _, userInfo := range userInfos {
-		if userInfo.ThumbnailURL == "" || userInfo.ThumbnailURL == fetcher.ThumbnailPlaceholder {
-			continue
+	// If analysis is successful and violations found, update flaggedUsers map
+	mu.Lock()
+	if existingUser, ok := flaggedUsers[info.ID]; ok {
+		existingUser.Reason = fmt.Sprintf("%s\n\n%s", existingUser.Reason,
+			"Image Analysis: Missing required clothing")
+		existingUser.Confidence = 1.0
+	} else {
+		flaggedUsers[info.ID] = &types.User{
+			ID:                  info.ID,
+			Name:                info.Name,
+			DisplayName:         info.DisplayName,
+			Description:         info.Description,
+			CreatedAt:           info.CreatedAt,
+			Reason:              "Image Analysis: Missing required clothing",
+			Groups:              info.Groups.Data,
+			Friends:             info.Friends.Data,
+			Games:               info.Games.Data,
+			Outfits:             info.Outfits.Data,
+			FollowerCount:       info.FollowerCount,
+			FollowingCount:      info.FollowingCount,
+			Confidence:          analysis.Confidence,
+			LastUpdated:         info.LastUpdated,
+			LastBanCheck:        info.LastBanCheck,
+			ThumbnailURL:        info.ThumbnailURL,
+			LastThumbnailUpdate: info.LastThumbnailUpdate,
 		}
-
-		wg.Add(1)
-		currentInfo := userInfo
-
-		go func() {
-			defer wg.Done()
-
-			file, err := a.downloadAndUploadImage(ctx, currentInfo.ThumbnailURL)
-			if err != nil {
-				a.logger.Warn("Failed to process image",
-					zap.Uint64("userID", currentInfo.ID),
-					zap.Error(err))
-				resultChan <- result{err: err}
-				return
-			}
-
-			resultChan <- result{
-				image: UserImage{
-					info: currentInfo,
-					file: file,
-				},
-			}
-		}()
 	}
+	mu.Unlock()
 
-	// Close result channel when all goroutines complete
-	go func() {
-		wg.Wait()
-		close(resultChan)
-	}()
-
-	// Collect results
-	userImages := make([]UserImage, 0, len(userInfos))
-	for res := range resultChan {
-		if res.err != nil {
-			if res.image.info != nil {
-				failedValidationIDs = append(failedValidationIDs, res.image.info.ID)
-			}
-			continue
-		}
-		userImages = append(userImages, res.image)
-	}
-
-	return userImages, failedValidationIDs
+	return nil
 }
 
 // downloadAndUploadImage downloads the given URL and uploads it to a file storage.
@@ -353,15 +254,28 @@ func (a *ImageAnalyzer) downloadAndUploadImage(ctx context.Context, url string) 
 	})
 }
 
-// cleanupFiles deletes uploaded files after analysis.
-func (a *ImageAnalyzer) cleanupFiles(ctx context.Context, images []UserImage) {
-	for _, img := range images {
-		go func(file *genai.File) {
-			if err := a.genAIClient.DeleteFile(ctx, file.Name); err != nil {
-				a.logger.Warn("Failed to delete uploaded file",
-					zap.String("fileName", file.Name),
-					zap.Error(err))
-			}
-		}(img.file)
+// analyzeImage analyzes the given image and returns the analysis results.
+func (a *ImageAnalyzer) analyzeImage(ctx context.Context, file *genai.File) (*ImageAnalysis, error) {
+	// Prepare parts for the model
+	parts := make([]genai.Part, 0, 2)
+	parts = append(parts, genai.Text(ImageRequestPrompt))
+	parts = append(parts, genai.FileData{URI: file.URI})
+
+	// Send request to Gemini
+	resp, err := a.imageModel.GenerateContent(ctx, parts...)
+	if err != nil {
+		return nil, fmt.Errorf("gemini API error: %w", err)
 	}
+
+	if len(resp.Candidates) == 0 || resp.Candidates[0].Content == nil || len(resp.Candidates[0].Content.Parts) == 0 {
+		return nil, fmt.Errorf("%w: no response from Gemini", ErrModelResponse)
+	}
+
+	responseText := resp.Candidates[0].Content.Parts[0].(genai.Text)
+	var result ImageAnalysis
+	if err := sonic.Unmarshal([]byte(responseText), &result); err != nil {
+		return nil, fmt.Errorf("JSON unmarshal error: %w", err)
+	}
+
+	return &result, nil
 }

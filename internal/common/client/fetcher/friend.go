@@ -9,6 +9,7 @@ import (
 	"github.com/jaxron/roapi.go/pkg/api/resources/friends"
 	"github.com/jaxron/roapi.go/pkg/api/resources/users"
 	apiTypes "github.com/jaxron/roapi.go/pkg/api/types"
+	"github.com/sourcegraph/conc/pool"
 	"go.uber.org/zap"
 )
 
@@ -103,32 +104,29 @@ func (f *FriendFetcher) GetFriends(ctx context.Context, userID uint64) ([]*apiTy
 		return nil, err
 	}
 
-	// Fetch user details in batches
 	var (
 		allFriends = make([]*apiTypes.ExtendedFriend, 0, len(friendIDs))
+		p          = pool.New().WithContext(ctx)
 		mu         sync.Mutex
-		wg         sync.WaitGroup
 		batchSize  = 100
 	)
 
+	// Process batches concurrently
 	for i := 0; i < len(friendIDs); i += batchSize {
 		end := i + batchSize
 		if end > len(friendIDs) {
 			end = len(friendIDs)
 		}
 
-		wg.Add(1)
-		go func(start, end int) {
-			defer wg.Done()
-
-			builder := users.NewUsersByIDsBuilder(friendIDs[start:end]...)
+		p.Go(func(ctx context.Context) error {
+			builder := users.NewUsersByIDsBuilder(friendIDs[i:end]...)
 			userDetails, err := f.roAPI.Users().GetUsersByIDs(ctx, builder.Build())
 			if err != nil {
 				f.logger.Error("Failed to fetch user details",
 					zap.Error(err),
-					zap.Int("batchStart", start),
+					zap.Int("batchStart", i),
 					zap.Int("batchEnd", end))
-				return
+				return nil // Don't fail the whole batch for one error
 			}
 
 			batchFriends := make([]*apiTypes.ExtendedFriend, 0, len(userDetails.Data))
@@ -145,10 +143,16 @@ func (f *FriendFetcher) GetFriends(ctx context.Context, userID uint64) ([]*apiTy
 			mu.Lock()
 			allFriends = append(allFriends, batchFriends...)
 			mu.Unlock()
-		}(i, end)
+
+			return nil
+		})
 	}
 
-	wg.Wait()
+	// Wait for all goroutines to complete
+	if err := p.Wait(); err != nil {
+		f.logger.Error("Error during friend details fetch", zap.Error(err))
+		return nil, err
+	}
 
 	f.logger.Debug("Finished fetching friends using pagination",
 		zap.Uint64("userID", userID),

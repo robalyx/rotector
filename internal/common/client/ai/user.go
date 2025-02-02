@@ -14,6 +14,7 @@ import (
 	"github.com/robalyx/rotector/internal/common/storage/database/types"
 	"github.com/robalyx/rotector/internal/common/translator"
 	"github.com/robalyx/rotector/internal/common/utils"
+	"github.com/sourcegraph/conc/pool"
 	"github.com/tdewolff/minify/v2"
 	"github.com/tdewolff/minify/v2/json"
 	"go.uber.org/zap"
@@ -222,80 +223,56 @@ func NewUserAnalyzer(app *setup.App, translator *translator.Translator, logger *
 	}
 }
 
-// ProcessUsers sends user information to a Gemini model for analysis after translating descriptions.
-// Returns IDs of users that failed validation for retry.
-func (a *UserAnalyzer) ProcessUsers(userInfos []*fetcher.Info, flaggedUsers map[uint64]*types.User) ([]uint64, error) {
+// ProcessUsers analyzes user content for a batch of users.
+func (a *UserAnalyzer) ProcessUsers(userInfos []*fetcher.Info, flaggedUsers map[uint64]*types.User) {
 	numBatches := (len(userInfos) + a.batchSize - 1) / a.batchSize
-
-	type batchResult struct {
-		failedIDs []uint64
-		err       error
-	}
+	var (
+		p  = pool.New().WithContext(context.Background())
+		mu sync.Mutex
+	)
 
 	// Process batches concurrently
-	results := make(chan batchResult, numBatches)
-	var wg sync.WaitGroup
-	var mu sync.Mutex
-
 	for i := range numBatches {
-		wg.Add(1)
-		go func(offset int) {
-			defer wg.Done()
+		start := i * a.batchSize
+		end := start + a.batchSize
+		if end > len(userInfos) {
+			end = len(userInfos)
+		}
 
-			start := offset * a.batchSize
-			end := start + a.batchSize
-			if end > len(userInfos) {
-				end = len(userInfos)
-			}
-
+		p.Go(func(ctx context.Context) error {
 			// Acquire semaphore before making AI request
-			if err := a.analysisSem.Acquire(context.Background(), 1); err != nil {
-				results <- batchResult{
-					failedIDs: getUserIDs(userInfos[start:end]),
-					err:       fmt.Errorf("failed to acquire semaphore: %w", err),
-				}
-				return
+			if err := a.analysisSem.Acquire(ctx, 1); err != nil {
+				return fmt.Errorf("failed to acquire semaphore: %w", err)
 			}
 			defer a.analysisSem.Release(1)
 
 			// Process batch
-			failedIDs, err := a.processBatch(userInfos[start:end], flaggedUsers, &mu)
-			results <- batchResult{failedIDs: failedIDs, err: err}
-		}(i)
+			if err := a.processBatch(ctx, userInfos[start:end], flaggedUsers, &mu); err != nil {
+				a.logger.Error("Failed to process batch",
+					zap.Error(err),
+					zap.Int("batchStart", start),
+					zap.Int("batchEnd", end))
+				return err
+			}
+			return nil
+		})
 	}
 
 	// Wait for all batches to complete
-	go func() {
-		wg.Wait()
-		close(results)
-	}()
-
-	// Collect results
-	var allFailedIDs []uint64
-	var errors []error
-
-	for result := range results {
-		if result.err != nil {
-			errors = append(errors, result.err)
-		}
-		allFailedIDs = append(allFailedIDs, result.failedIDs...)
-	}
-
-	if len(errors) > 0 {
-		return allFailedIDs, fmt.Errorf("%w: %v", ErrBatchProcessing, errors)
+	if err := p.Wait(); err != nil {
+		a.logger.Error("Error during user analysis", zap.Error(err))
+		return
 	}
 
 	a.logger.Info("Received AI user analysis",
 		zap.Int("totalUsers", len(userInfos)),
 		zap.Int("flaggedUsers", len(flaggedUsers)))
-
-	return allFailedIDs, nil
 }
 
 // processBatch handles a single batch of users.
-func (a *UserAnalyzer) processBatch(userInfos []*fetcher.Info, flaggedUsers map[uint64]*types.User, mu *sync.Mutex) ([]uint64, error) {
+func (a *UserAnalyzer) processBatch(ctx context.Context, userInfos []*fetcher.Info, flaggedUsers map[uint64]*types.User, mu *sync.Mutex) error {
 	// Translate all descriptions concurrently
-	translatedInfos, originalInfos := a.prepareUserInfos(userInfos)
+	translatedInfos, originalInfos := a.prepareUserInfos(ctx, userInfos)
 
 	// Create a struct for user summaries for AI analysis
 	type UserSummary struct {
@@ -329,20 +306,20 @@ func (a *UserAnalyzer) processBatch(userInfos []*fetcher.Info, flaggedUsers map[
 	// Minify JSON to reduce token usage
 	userInfoJSON, err := sonic.Marshal(userInfosWithoutID)
 	if err != nil {
-		return getUserIDs(userInfos), fmt.Errorf("%w: %w", ErrJSONProcessing, err)
+		return fmt.Errorf("%w: %w", ErrJSONProcessing, err)
 	}
 
 	userInfoJSON, err = a.minify.Bytes(ApplicationJSON, userInfoJSON)
 	if err != nil {
-		return getUserIDs(userInfos), fmt.Errorf("%w: %w", ErrJSONProcessing, err)
+		return fmt.Errorf("%w: %w", ErrJSONProcessing, err)
 	}
 
 	// Prepare request prompt with user info
 	requestPrompt := UserRequestPrompt + string(userInfoJSON)
 
 	// Generate content and parse response using Gemini model with retry
-	flaggedResults, err := withRetry(context.Background(), func() (*FlaggedUsers, error) {
-		resp, err := a.userModel.GenerateContent(context.Background(), genai.Text(requestPrompt))
+	flaggedResults, err := withRetry(ctx, func() (*FlaggedUsers, error) {
+		resp, err := a.userModel.GenerateContent(ctx, genai.Text(requestPrompt))
 		if err != nil {
 			return nil, fmt.Errorf("gemini API error: %w", err)
 		}
@@ -362,18 +339,17 @@ func (a *UserAnalyzer) processBatch(userInfos []*fetcher.Info, flaggedUsers map[
 		return &result, nil
 	})
 	if err != nil {
-		return getUserIDs(userInfos), fmt.Errorf("%w: %w", ErrModelResponse, err)
+		return fmt.Errorf("%w: %w", ErrModelResponse, err)
 	}
 
-	// Validate AI responses and update flaggedUsers map
-	failedValidationIDs := a.validateAndUpdateFlaggedUsers(flaggedResults, translatedInfos, originalInfos, flaggedUsers, mu)
+	// Validate AI responses
+	a.validateAndUpdateFlaggedUsers(flaggedResults, translatedInfos, originalInfos, flaggedUsers, mu)
 
-	return failedValidationIDs, nil
+	return nil
 }
 
 // validateAndUpdateFlaggedUsers validates the flagged users and updates the flaggedUsers map.
-func (a *UserAnalyzer) validateAndUpdateFlaggedUsers(flaggedResults *FlaggedUsers, translatedInfos, originalInfos map[string]*fetcher.Info, flaggedUsers map[uint64]*types.User, mu *sync.Mutex) []uint64 {
-	var failedValidationIDs []uint64
+func (a *UserAnalyzer) validateAndUpdateFlaggedUsers(flaggedResults *FlaggedUsers, translatedInfos, originalInfos map[string]*fetcher.Info, flaggedUsers map[uint64]*types.User, mu *sync.Mutex) {
 	normalizer := transform.Chain(
 		norm.NFKD,                             // Decompose with compatibility decomposition
 		runes.Remove(runes.In(unicode.Mn)),    // Remove non-spacing marks
@@ -452,7 +428,6 @@ func (a *UserAnalyzer) validateAndUpdateFlaggedUsers(flaggedResults *FlaggedUser
 			}
 			mu.Unlock()
 		} else {
-			failedValidationIDs = append(failedValidationIDs, originalInfo.ID)
 			a.logger.Warn("AI flagged content did not pass validation",
 				zap.Uint64("userID", originalInfo.ID),
 				zap.String("flaggedUsername", flaggedUser.Name),
@@ -461,96 +436,68 @@ func (a *UserAnalyzer) validateAndUpdateFlaggedUsers(flaggedResults *FlaggedUser
 				zap.Strings("flaggedContent", flaggedUser.FlaggedContent))
 		}
 	}
-
-	return failedValidationIDs
 }
 
 // prepareUserInfos translates user descriptions for different languages and encodings.
 // Returns maps of both translated and original user infos for validation.
-func (a *UserAnalyzer) prepareUserInfos(userInfos []*fetcher.Info) (map[string]*fetcher.Info, map[string]*fetcher.Info) {
-	// TranslationResult contains the result of translating a user's description.
-	type TranslationResult struct {
-		UserInfo       *fetcher.Info
-		TranslatedDesc string
-		Err            error
-	}
-
-	var wg sync.WaitGroup
-	resultsChan := make(chan TranslationResult, len(userInfos))
-
-	// Create maps for both original and translated infos
-	originalInfos := make(map[string]*fetcher.Info)
-	translatedInfos := make(map[string]*fetcher.Info)
+func (a *UserAnalyzer) prepareUserInfos(ctx context.Context, userInfos []*fetcher.Info) (map[string]*fetcher.Info, map[string]*fetcher.Info) {
+	var (
+		originalInfos   = make(map[string]*fetcher.Info)
+		translatedInfos = make(map[string]*fetcher.Info)
+		p               = pool.New().WithContext(ctx)
+		mu              sync.Mutex
+	)
 
 	// Initialize maps and spawn translation goroutines
 	for _, info := range userInfos {
 		originalInfos[info.Name] = info
 
-		wg.Add(1)
-		go func(info *fetcher.Info) {
-			defer wg.Done()
-
+		p.Go(func(ctx context.Context) error {
 			// Skip empty descriptions
 			if info.Description == "" {
-				resultsChan <- TranslationResult{
-					UserInfo:       info,
-					TranslatedDesc: "",
-				}
-				return
+				mu.Lock()
+				translatedInfos[info.Name] = info
+				mu.Unlock()
+				return nil
 			}
 
 			// Translate the description with retry
-			translated, err := withRetry(context.Background(), func() (string, error) {
+			translated, err := withRetry(ctx, func() (string, error) {
 				return a.translator.Translate(
-					context.Background(),
+					ctx,
 					info.Description,
 					"auto", // Auto-detect source language
 					"en",   // Translate to English
 				)
 			})
-
-			resultsChan <- TranslationResult{
-				UserInfo:       info,
-				TranslatedDesc: translated,
-				Err:            err,
+			if err != nil {
+				// Use original userInfo if translation fails
+				mu.Lock()
+				translatedInfos[info.Name] = info
+				mu.Unlock()
+				a.logger.Error("Translation failed, using original description",
+					zap.String("username", info.Name),
+					zap.Error(err))
+				return nil
 			}
-		}(info)
+
+			// Create new Info with translated description
+			translatedInfo := *info
+			if translatedInfo.Description != translated {
+				translatedInfo.Description = translated
+				a.logger.Debug("Translated description", zap.String("username", info.Name))
+			}
+			mu.Lock()
+			translatedInfos[info.Name] = &translatedInfo
+			mu.Unlock()
+			return nil
+		})
 	}
 
-	// Close results channel when all translations are complete
-	go func() {
-		wg.Wait()
-		close(resultsChan)
-	}()
-
-	// Process results
-	for result := range resultsChan {
-		if result.Err != nil {
-			// Use original userInfo if translation fails
-			translatedInfos[result.UserInfo.Name] = result.UserInfo
-			a.logger.Error("Translation failed, using original description",
-				zap.String("username", result.UserInfo.Name),
-				zap.Error(result.Err))
-			continue
-		}
-
-		// Create new Info with translated description
-		translatedInfo := *result.UserInfo
-		if translatedInfo.Description != result.TranslatedDesc {
-			translatedInfo.Description = result.TranslatedDesc
-			a.logger.Debug("Translated description", zap.String("username", translatedInfo.Name))
-		}
-		translatedInfos[result.UserInfo.Name] = &translatedInfo
+	// Wait for all translations to complete
+	if err := p.Wait(); err != nil {
+		a.logger.Error("Error during translations", zap.Error(err))
 	}
 
 	return translatedInfos, originalInfos
-}
-
-// getUserIDs extracts user IDs from a slice of user infos.
-func getUserIDs(userInfos []*fetcher.Info) []uint64 {
-	ids := make([]uint64, len(userInfos))
-	for i, info := range userInfos {
-		ids[i] = info.ID
-	}
-	return ids
 }

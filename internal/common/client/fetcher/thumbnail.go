@@ -11,6 +11,7 @@ import (
 	"github.com/jaxron/roapi.go/pkg/api/resources/thumbnails"
 	apiTypes "github.com/jaxron/roapi.go/pkg/api/types"
 	"github.com/robalyx/rotector/internal/common/storage/database/types"
+	"github.com/sourcegraph/conc/pool"
 	"go.uber.org/zap"
 )
 
@@ -97,24 +98,22 @@ func (t *ThumbnailFetcher) ProcessBatchThumbnails(ctx context.Context, requests 
 	var (
 		requestList   = requests.Build()
 		thumbnailURLs = make(map[uint64]string)
+		p             = pool.New().WithContext(ctx)
 		mu            sync.Mutex
-		wg            sync.WaitGroup
 		batchSize     = 100
 	)
 
+	// Process batches concurrently
 	for i := 0; i < len(requestList.Requests); i += batchSize {
-		wg.Add(1)
-		go func(start int) {
-			defer wg.Done()
-
-			end := start + batchSize
+		p.Go(func(ctx context.Context) error {
+			end := i + batchSize
 			if end > len(requestList.Requests) {
 				end = len(requestList.Requests)
 			}
 
 			// Create new batch request
 			batchRequests := thumbnails.NewBatchThumbnailsBuilder()
-			for _, request := range requestList.Requests[start:end] {
+			for _, request := range requestList.Requests[i:end] {
 				batchRequests.AddRequest(request)
 			}
 
@@ -123,8 +122,8 @@ func (t *ThumbnailFetcher) ProcessBatchThumbnails(ctx context.Context, requests 
 			if err != nil {
 				t.logger.Error("Error fetching batch thumbnails",
 					zap.Error(err),
-					zap.Int("batchStart", start))
-				return
+					zap.Int("batchStart", i))
+				return nil // Don't fail the whole batch for one error
 			}
 
 			// Process responses and store URLs
@@ -137,10 +136,15 @@ func (t *ThumbnailFetcher) ProcessBatchThumbnails(ctx context.Context, requests 
 				}
 			}
 			mu.Unlock()
-		}(i)
+
+			return nil
+		})
 	}
 
-	wg.Wait()
+	// Wait for all goroutines to complete
+	if err := p.Wait(); err != nil {
+		t.logger.Error("Error during thumbnail processing", zap.Error(err))
+	}
 
 	t.logger.Debug("Processed batch thumbnails",
 		zap.Int("totalRequested", len(requestList.Requests)),

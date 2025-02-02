@@ -10,6 +10,7 @@ import (
 	apiTypes "github.com/jaxron/roapi.go/pkg/api/types"
 	"github.com/robalyx/rotector/internal/common/setup"
 	"github.com/robalyx/rotector/internal/common/storage/database/types"
+	"github.com/sourcegraph/conc/pool"
 	"go.uber.org/zap"
 )
 
@@ -94,31 +95,26 @@ func NewUserFetcher(app *setup.App, logger *zap.Logger) *UserFetcher {
 func (u *UserFetcher) FetchInfos(ctx context.Context, userIDs []uint64) []*Info {
 	var (
 		validUsers = make([]*Info, 0, len(userIDs))
+		userMap    = make(map[uint64]*types.User)
+		p          = pool.New().WithContext(ctx)
 		mu         sync.Mutex
-		wg         sync.WaitGroup
 	)
 
-	// Create a map for batch thumbnail fetching
-	userMap := make(map[uint64]*types.User)
-
 	// Process each user concurrently
-	for _, userID := range userIDs {
-		wg.Add(1)
-		go func(id uint64) {
-			defer wg.Done()
-
+	for _, id := range userIDs {
+		p.Go(func(ctx context.Context) error {
 			// Fetch the user info
 			userInfo, err := u.roAPI.Users().GetUserByID(ctx, id)
 			if err != nil {
 				u.logger.Error("Error fetching user info",
 					zap.Uint64("userID", id),
 					zap.Error(err))
-				return
+				return nil // Don't fail the whole batch for one error
 			}
 
 			// Skip banned users
 			if userInfo.IsBanned {
-				return
+				return nil
 			}
 
 			// Fetch groups, friends, games, and outfits concurrently
@@ -148,10 +144,15 @@ func (u *UserFetcher) FetchInfos(ctx context.Context, userIDs []uint64) []*Info 
 			mu.Lock()
 			validUsers = append(validUsers, info)
 			mu.Unlock()
-		}(userID)
+
+			return nil
+		})
 	}
 
-	wg.Wait()
+	// Wait for all goroutines to complete
+	if err := p.Wait(); err != nil {
+		u.logger.Error("Error during user fetch", zap.Error(err))
+	}
 
 	// Check if user map is empty
 	if len(userMap) == 0 {
@@ -159,15 +160,13 @@ func (u *UserFetcher) FetchInfos(ctx context.Context, userIDs []uint64) []*Info 
 	}
 
 	// Fetch thumbnails for all valid users
-	if len(userMap) > 0 {
-		thumbnails := u.thumbnailFetcher.GetImageURLs(ctx, userMap)
+	thumbnails := u.thumbnailFetcher.GetImageURLs(ctx, userMap)
 
-		// Add thumbnails to the corresponding user info
-		for _, info := range validUsers {
-			if thumbnailURL, ok := thumbnails[info.ID]; ok {
-				info.ThumbnailURL = thumbnailURL
-				info.LastThumbnailUpdate = time.Now()
-			}
+	// Add thumbnails to the corresponding user info
+	for _, info := range validUsers {
+		if thumbnailURL, ok := thumbnails[info.ID]; ok {
+			info.ThumbnailURL = thumbnailURL
+			info.LastThumbnailUpdate = time.Now()
 		}
 	}
 
@@ -185,48 +184,45 @@ func (u *UserFetcher) fetchUserData(ctx context.Context, userID uint64) (*UserGr
 		friendResult *UserFriendFetchResult
 		gameResult   *UserGamesFetchResult
 		outfitResult *UserOutfitsFetchResult
-		wg           sync.WaitGroup
+		p            = pool.New().WithContext(ctx)
 	)
 
-	wg.Add(4)
-
 	// Fetch user's groups
-	go func() {
-		defer wg.Done()
+	p.Go(func(ctx context.Context) error {
 		groups, err := u.groupFetcher.GetUserGroups(ctx, userID)
 		groupResult = &UserGroupFetchResult{
 			Data:  groups,
 			Error: err,
 		}
-	}()
+		return nil
+	})
 
 	// Fetch user's friends
-	go func() {
-		defer wg.Done()
+	p.Go(func(ctx context.Context) error {
 		friends, err := u.friendFetcher.GetFriends(ctx, userID)
 		friendResult = &UserFriendFetchResult{
 			Data:  friends,
 			Error: err,
 		}
-	}()
+		return nil
+	})
 
 	// Fetch user's games
-	go func() {
-		defer wg.Done()
+	p.Go(func(ctx context.Context) error {
 		games, err := u.gameFetcher.FetchGamesForUser(ctx, userID)
 		gameResult = &UserGamesFetchResult{
 			Data:  games,
 			Error: err,
 		}
-	}()
+		return nil
+	})
 
 	// Fetch user's outfits
-	go func() {
-		defer wg.Done()
+	p.Go(func(ctx context.Context) error {
 		outfits, err := u.outfitFetcher.GetOutfits(ctx, userID)
 		if err != nil {
 			outfitResult = &UserOutfitsFetchResult{Error: err}
-			return
+			return nil //nolint:nilerr
 		}
 
 		// Convert outfits to slice of pointers
@@ -239,32 +235,33 @@ func (u *UserFetcher) fetchUserData(ctx context.Context, userID uint64) (*UserGr
 			Data:  outfitSlice,
 			Error: err,
 		}
-	}()
+		return nil
+	})
 
-	wg.Wait()
+	// Wait for all fetches to complete
+	_ = p.Wait()
+
 	return groupResult, friendResult, gameResult, outfitResult
 }
 
 // FetchBannedUsers checks which users from a batch of IDs are currently banned.
 // Returns a slice of banned user IDs.
-func (u *UserFetcher) FetchBannedUsers(userIDs []uint64) ([]uint64, error) {
+func (u *UserFetcher) FetchBannedUsers(ctx context.Context, userIDs []uint64) ([]uint64, error) {
 	var (
 		results = make([]uint64, 0, len(userIDs))
+		p       = pool.New().WithContext(ctx)
 		mu      sync.Mutex
-		wg      sync.WaitGroup
 	)
 
-	for _, userID := range userIDs {
-		wg.Add(1)
-		go func(id uint64) {
-			defer wg.Done()
-
-			userInfo, err := u.roAPI.Users().GetUserByID(context.Background(), id)
+	// Process each user concurrently
+	for _, id := range userIDs {
+		p.Go(func(ctx context.Context) error {
+			userInfo, err := u.roAPI.Users().GetUserByID(ctx, id)
 			if err != nil {
 				u.logger.Error("Error fetching user info",
 					zap.Uint64("userID", id),
 					zap.Error(err))
-				return
+				return nil // Don't fail the whole batch for one error
 			}
 
 			if userInfo.IsBanned {
@@ -272,10 +269,15 @@ func (u *UserFetcher) FetchBannedUsers(userIDs []uint64) ([]uint64, error) {
 				results = append(results, userInfo.ID)
 				mu.Unlock()
 			}
-		}(userID)
+			return nil
+		})
 	}
 
-	wg.Wait()
+	// Wait for all goroutines to complete
+	if err := p.Wait(); err != nil {
+		u.logger.Error("Error during banned users fetch", zap.Error(err))
+		return nil, err
+	}
 
 	u.logger.Debug("Finished checking banned users",
 		zap.Int("totalChecked", len(userIDs)),

@@ -129,7 +129,7 @@ func (w *Worker) processBannedUsers() {
 	}
 
 	// Check for banned users
-	bannedUserIDs, err := w.userFetcher.FetchBannedUsers(users)
+	bannedUserIDs, err := w.userFetcher.FetchBannedUsers(context.Background(), users)
 	if err != nil {
 		w.logger.Error("Error fetching banned users", zap.Error(err))
 		w.reporter.SetHealthy(false)

@@ -8,6 +8,7 @@ import (
 	"github.com/jaxron/roapi.go/pkg/api/middleware/auth"
 	"github.com/jaxron/roapi.go/pkg/api/resources/presence"
 	"github.com/jaxron/roapi.go/pkg/api/types"
+	"github.com/sourcegraph/conc/pool"
 	"go.uber.org/zap"
 )
 
@@ -37,24 +38,27 @@ func (p *PresenceFetcher) FetchPresences(ctx context.Context, userIDs []uint64) 
 
 	var (
 		allPresences = make([]*types.UserPresenceResponse, 0, len(userIDs))
+		pool         = pool.New().WithContext(ctx)
 		mu           sync.Mutex
-		wg           sync.WaitGroup
 		batchSize    = 50
 	)
 
+	// Process batches concurrently
 	for i := 0; i < len(userIDs); i += batchSize {
-		wg.Add(1)
-		go func(start, end int) {
-			defer wg.Done()
+		pool.Go(func(ctx context.Context) error {
+			end := i + batchSize
+			if end > len(userIDs) {
+				end = len(userIDs)
+			}
 
 			// Fetch presences for the batch
-			params := presence.NewUserPresencesBuilder(userIDs[start:end]...).Build()
+			params := presence.NewUserPresencesBuilder(userIDs[i:end]...).Build()
 			presences, err := p.roAPI.Presence().GetUserPresences(ctx, params)
 			if err != nil {
 				p.logger.Error("Error fetching user presences",
 					zap.Error(err),
-					zap.Int("batchStart", start))
-				return
+					zap.Int("batchStart", i))
+				return nil // Don't fail the whole batch for one error
 			}
 
 			mu.Lock()
@@ -62,10 +66,15 @@ func (p *PresenceFetcher) FetchPresences(ctx context.Context, userIDs []uint64) 
 				allPresences = append(allPresences, &presence)
 			}
 			mu.Unlock()
-		}(i, minInt(i+batchSize, len(userIDs)))
+
+			return nil
+		})
 	}
 
-	wg.Wait()
+	// Wait for all goroutines to complete
+	if err := pool.Wait(); err != nil {
+		p.logger.Error("Error during presence fetch", zap.Error(err))
+	}
 
 	p.logger.Debug("Finished fetching user presences",
 		zap.Int("totalRequested", len(userIDs)),
@@ -89,11 +98,4 @@ func (p *PresenceFetcher) FetchPresencesConcurrently(ctx context.Context, userID
 	}()
 
 	return resultChan
-}
-
-func minInt(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
 }
