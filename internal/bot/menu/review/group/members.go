@@ -49,11 +49,11 @@ func (m *MembersMenu) Show(event *events.ComponentInteractionCreate, s *session.
 	}
 
 	// Get user data from database
-	members, err := m.layout.db.Models().Users().GetUsersByIDs(context.Background(), memberIDs, types.UserFields{
-		Basic:      true,
-		Reason:     true,
-		Confidence: true,
-	})
+	members, err := m.layout.db.Models().Users().GetUsersByIDs(
+		context.Background(),
+		memberIDs,
+		types.UserFieldBasic|types.UserFieldReason|types.UserFieldConfidence,
+	)
 	if err != nil {
 		m.layout.logger.Error("Failed to get user data", zap.Error(err))
 		m.layout.paginationManager.RespondWithError(event, "Failed to fetch member data. Please try again.")

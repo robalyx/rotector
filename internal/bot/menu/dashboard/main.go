@@ -204,7 +204,7 @@ func (m *MainMenu) handleLookupUserModalSubmit(event *events.ModalSubmitInteract
 	}
 
 	// Get user from database
-	user, err := m.layout.db.Models().Users().GetUserByID(context.Background(), userIDStr, types.UserFields{})
+	user, err := m.layout.db.Models().Users().GetUserByID(context.Background(), userIDStr, types.UserFieldAll)
 	if err != nil {
 		switch {
 		case errors.Is(err, types.ErrUserNotFound):
@@ -250,7 +250,7 @@ func (m *MainMenu) handleLookupGroupModalSubmit(event *events.ModalSubmitInterac
 	}
 
 	// Get group from database
-	group, err := m.layout.db.Models().Groups().GetGroupByID(context.Background(), groupIDStr, types.GroupFields{})
+	group, err := m.layout.db.Models().Groups().GetGroupByID(context.Background(), groupIDStr, types.GroupFieldAll)
 	if err != nil {
 		switch {
 		case errors.Is(err, types.ErrGroupNotFound):

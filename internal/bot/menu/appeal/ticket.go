@@ -62,7 +62,7 @@ func (m *TicketMenu) Show(event interfaces.CommonEvent, s *session.Session, appe
 	// If appeal is pending, check if user's status has changed
 	if appeal.Status == enum.AppealStatusPending { //nolint:nestif
 		// Get current user status
-		user, err := m.layout.db.Models().Users().GetUserByID(context.Background(), strconv.FormatUint(appeal.UserID, 10), types.UserFields{})
+		user, err := m.layout.db.Models().Users().GetUserByID(context.Background(), strconv.FormatUint(appeal.UserID, 10), types.UserFieldAll)
 		if err != nil {
 			if !errors.Is(err, types.ErrUserNotFound) {
 				m.layout.logger.Error("Failed to get user status", zap.Error(err))
@@ -163,7 +163,7 @@ func (m *TicketMenu) handleLookupUser(event *events.ComponentInteractionCreate, 
 	appeal := session.AppealSelected.Get(s)
 
 	// Get user from database
-	user, err := m.layout.db.Models().Users().GetUserByID(context.Background(), strconv.FormatUint(appeal.UserID, 10), types.UserFields{})
+	user, err := m.layout.db.Models().Users().GetUserByID(context.Background(), strconv.FormatUint(appeal.UserID, 10), types.UserFieldAll)
 	if err != nil {
 		if errors.Is(err, types.ErrUserNotFound) {
 			m.layout.paginationManager.NavigateTo(event, s, m.page, "Failed to find user. They may not be in our database.")
@@ -352,7 +352,7 @@ func (m *TicketMenu) handleAcceptModalSubmit(event *events.ModalSubmitInteractio
 	}
 
 	// Get user to clear
-	user, err := m.layout.db.Models().Users().GetUserByID(context.Background(), strconv.FormatUint(appeal.UserID, 10), types.UserFields{})
+	user, err := m.layout.db.Models().Users().GetUserByID(context.Background(), strconv.FormatUint(appeal.UserID, 10), types.UserFieldAll)
 	if err != nil {
 		if errors.Is(err, types.ErrUserNotFound) {
 			m.layout.paginationManager.NavigateTo(event, s, m.page, "Failed to find user. They may no longer exist in our database.")

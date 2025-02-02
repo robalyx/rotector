@@ -93,10 +93,7 @@ func (c *GroupChecker) CheckGroupPercentages(groupInfos []*apiTypes.GroupRespons
 	}
 
 	// Get user data for confidence calculation
-	users, err := c.db.Models().Users().GetUsersByIDs(context.Background(), allFlaggedUserIDs, types.UserFields{
-		Basic:      true,
-		Confidence: true,
-	})
+	users, err := c.db.Models().Users().GetUsersByIDs(context.Background(), allFlaggedUserIDs, types.UserFieldBasic|types.UserFieldConfidence)
 	if err != nil {
 		c.logger.Error("Failed to get user confidence data", zap.Error(err))
 		return flaggedGroups
@@ -159,10 +156,7 @@ func (c *GroupChecker) ProcessUsers(userInfos []*fetcher.Info, flaggedUsers map[
 	}
 
 	// Fetch all existing groups
-	existingGroups, err := c.db.Models().Groups().GetGroupsByIDs(context.Background(), groupIDs, types.GroupFields{
-		Basic:  true,
-		Reason: true,
-	})
+	existingGroups, err := c.db.Models().Groups().GetGroupsByIDs(context.Background(), groupIDs, types.GroupFieldBasic|types.GroupFieldReason)
 	if err != nil {
 		c.logger.Error("Failed to fetch existing groups", zap.Error(err))
 		return

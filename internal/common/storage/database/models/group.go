@@ -45,10 +45,7 @@ func (r *GroupModel) SaveGroups(ctx context.Context, groups map[uint64]*types.Gr
 	}
 
 	// Get existing groups with all their data
-	existingGroups, err := r.GetGroupsByIDs(ctx, groupIDs, types.GroupFields{
-		Basic:      true,
-		Timestamps: true,
-	})
+	existingGroups, err := r.GetGroupsByIDs(ctx, groupIDs, types.GroupFieldBasic|types.GroupFieldTimestamps)
 	if err != nil {
 		return fmt.Errorf("failed to get existing groups: %w", err)
 	}
@@ -256,7 +253,7 @@ func (r *GroupModel) ClearGroup(ctx context.Context, group *types.ReviewGroup) e
 }
 
 // GetGroupByID retrieves a group by either their numeric ID or UUID.
-func (r *GroupModel) GetGroupByID(ctx context.Context, groupID string, fields types.GroupFields) (*types.ReviewGroup, error) {
+func (r *GroupModel) GetGroupByID(ctx context.Context, groupID string, fields types.GroupField) (*types.ReviewGroup, error) {
 	var result types.ReviewGroup
 
 	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
@@ -337,7 +334,7 @@ func (r *GroupModel) GetGroupByID(ctx context.Context, groupID string, fields ty
 
 // GetGroupsByIDs retrieves specified group information for a list of group IDs.
 // Returns a map of group IDs to review groups.
-func (r *GroupModel) GetGroupsByIDs(ctx context.Context, groupIDs []uint64, fields types.GroupFields) (map[uint64]*types.ReviewGroup, error) {
+func (r *GroupModel) GetGroupsByIDs(ctx context.Context, groupIDs []uint64, fields types.GroupField) (map[uint64]*types.ReviewGroup, error) {
 	groups := make(map[uint64]*types.ReviewGroup)
 
 	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {

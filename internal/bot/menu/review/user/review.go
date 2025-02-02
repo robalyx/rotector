@@ -85,11 +85,11 @@ func (m *ReviewMenu) Show(event interfaces.CommonEvent, s *session.Session, cont
 
 		// Get full user data and types for friends that exist in the database
 		var err error
-		flaggedFriends, err = m.layout.db.Models().Users().GetUsersByIDs(context.Background(), friendIDs, types.UserFields{
-			Basic:      true,
-			Reason:     true,
-			Confidence: true,
-		})
+		flaggedFriends, err = m.layout.db.Models().Users().GetUsersByIDs(
+			context.Background(),
+			friendIDs,
+			types.UserFieldBasic|types.UserFieldReason|types.UserFieldConfidence,
+		)
 		if err != nil {
 			m.layout.logger.Error("Failed to get friend data", zap.Error(err))
 			return
@@ -107,11 +107,11 @@ func (m *ReviewMenu) Show(event interfaces.CommonEvent, s *session.Session, cont
 
 		// Get full group data and types
 		var err error
-		flaggedGroups, err = m.layout.db.Models().Groups().GetGroupsByIDs(context.Background(), groupIDs, types.GroupFields{
-			Basic:      true,
-			Reason:     true,
-			Confidence: true,
-		})
+		flaggedGroups, err = m.layout.db.Models().Groups().GetGroupsByIDs(
+			context.Background(),
+			groupIDs,
+			types.GroupFieldBasic|types.GroupFieldReason|types.GroupFieldConfidence,
+		)
 		if err != nil {
 			m.layout.logger.Error("Failed to get group data", zap.Error(err))
 			return

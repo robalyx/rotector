@@ -53,10 +53,7 @@ func (r *UserModel) SaveUsers(ctx context.Context, users map[uint64]*types.User)
 	}
 
 	// Get existing users with all their data
-	existingUsers, err := r.GetUsersByIDs(ctx, userIDs, types.UserFields{
-		Basic:      true,
-		Timestamps: true,
-	})
+	existingUsers, err := r.GetUsersByIDs(ctx, userIDs, types.UserFieldBasic|types.UserFieldTimestamps)
 	if err != nil {
 		return fmt.Errorf("failed to get existing users: %w", err)
 	}
@@ -337,7 +334,7 @@ func (r *UserModel) GetRecentlyProcessedUsers(ctx context.Context, userIDs []uin
 }
 
 // GetUserByID retrieves a user by either their numeric ID or UUID.
-func (r *UserModel) GetUserByID(ctx context.Context, userID string, fields types.UserFields) (*types.ReviewUser, error) {
+func (r *UserModel) GetUserByID(ctx context.Context, userID string, fields types.UserField) (*types.ReviewUser, error) {
 	var result types.ReviewUser
 	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
 		// Try each model in order until we find a user
@@ -417,7 +414,7 @@ func (r *UserModel) GetUserByID(ctx context.Context, userID string, fields types
 
 // GetUsersByIDs retrieves specified user information for a list of user IDs.
 // Returns a map of user IDs to review users.
-func (r *UserModel) GetUsersByIDs(ctx context.Context, userIDs []uint64, fields types.UserFields) (map[uint64]*types.ReviewUser, error) {
+func (r *UserModel) GetUsersByIDs(ctx context.Context, userIDs []uint64, fields types.UserField) (map[uint64]*types.ReviewUser, error) {
 	users := make(map[uint64]*types.ReviewUser)
 
 	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {

@@ -41,7 +41,7 @@ func NewUserHandler(db database.Client, logger *zap.Logger) *UserHandler {
 //	@Router			/users/{id} [get]
 func (h *UserHandler) GetUser(w http.ResponseWriter, req bunrouter.Request) error {
 	// Get user from database
-	reviewUser, err := h.db.Models().Users().GetUserByID(req.Context(), req.Param("id"), types.UserFields{})
+	reviewUser, err := h.db.Models().Users().GetUserByID(req.Context(), req.Param("id"), types.UserFieldAll)
 	if err != nil {
 		if errors.Is(err, types.ErrUserNotFound) {
 			response := restTypes.GetUserResponse{

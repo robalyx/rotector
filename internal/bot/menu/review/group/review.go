@@ -266,11 +266,11 @@ func (m *ReviewMenu) handleOpenAIChat(event *events.ComponentInteractionCreate, 
 		memberIDs = memberIDs[:limit]
 	}
 
-	flaggedMembers, err := m.layout.db.Models().Users().GetUsersByIDs(context.Background(), memberIDs, types.UserFields{
-		Basic:      true,
-		Reason:     true,
-		Confidence: true,
-	})
+	flaggedMembers, err := m.layout.db.Models().Users().GetUsersByIDs(
+		context.Background(),
+		memberIDs,
+		types.UserFieldBasic|types.UserFieldReason|types.UserFieldConfidence,
+	)
 	if err != nil {
 		m.layout.logger.Error("Failed to get flagged members data", zap.Error(err))
 	}

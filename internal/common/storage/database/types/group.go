@@ -61,67 +61,114 @@ type ReviewGroup struct {
 	Reputation *Reputation    `json:"reputation"`
 }
 
-// GroupFields represents the fields that can be requested when fetching groups.
-type GroupFields struct {
+// GroupField represents available fields as bit flags.
+type GroupField uint32
+
+const (
+	GroupFieldNone GroupField = 0
+
 	// Basic group information
-	Basic        bool // ID, Name, Description
-	Owner        bool // Owner ID
-	Shout        bool // Group shout
-	Reason       bool // Reason for flagging
-	Thumbnail    bool // ThumbnailURL
-	FlaggedUsers bool // FlaggedUsers list
+	GroupFieldID           GroupField = 1 << iota // Group ID
+	GroupFieldName                                // Group name
+	GroupFieldDescription                         // Group description
+	GroupFieldOwner                               // Owner information
+	GroupFieldShout                               // Group shout
+	GroupFieldReason                              // Reason for flagging
+	GroupFieldThumbnail                           // ThumbnailURL
+	GroupFieldFlaggedUsers                        // FlaggedUsers list
 
 	// Statistics
-	Confidence bool // AI confidence score
-	Reputation bool // Upvotes, Downvotes, Score
+	GroupFieldConfidence // AI confidence score
+	GroupFieldUpvotes    // Reputation upvotes
+	GroupFieldDownvotes  // Reputation downvotes
+	GroupFieldScore      // Reputation score
 
-	// All timestamps
-	Timestamps bool
+	// Timestamps
+	GroupFieldLastScanned         // Last scan time
+	GroupFieldLastUpdated         // Last update time
+	GroupFieldLastViewed          // Last view time
+	GroupFieldLastLockCheck       // Last lock check time
+	GroupFieldIsLocked            // Lock status
+	GroupFieldLastThumbnailUpdate // Last thumbnail update
+
+	// GroupFieldBasic includes the essential group identification fields.
+	GroupFieldBasic = GroupFieldID |
+		GroupFieldName |
+		GroupFieldDescription
+
+	// GroupFieldReputation includes all reputation-related fields.
+	GroupFieldReputation = GroupFieldUpvotes |
+		GroupFieldDownvotes |
+		GroupFieldScore
+
+	// GroupFieldTimestamps includes all timestamp-related fields.
+	GroupFieldTimestamps = GroupFieldLastScanned |
+		GroupFieldLastUpdated |
+		GroupFieldLastViewed |
+		GroupFieldLastLockCheck |
+		GroupFieldIsLocked |
+		GroupFieldLastThumbnailUpdate
+
+	// GroupFieldAll includes all available fields.
+	GroupFieldAll = GroupFieldBasic |
+		GroupFieldOwner |
+		GroupFieldShout |
+		GroupFieldReason |
+		GroupFieldThumbnail |
+		GroupFieldFlaggedUsers |
+		GroupFieldConfidence |
+		GroupFieldReputation |
+		GroupFieldTimestamps
+)
+
+// fieldToColumns maps GroupField bits to their corresponding database columns.
+var groupFieldToColumns = map[GroupField][]string{ //nolint:gochecknoglobals
+	GroupFieldID:                  {"id"},
+	GroupFieldName:                {"name"},
+	GroupFieldDescription:         {"description"},
+	GroupFieldOwner:               {"owner"},
+	GroupFieldShout:               {"shout"},
+	GroupFieldReason:              {"reason"},
+	GroupFieldThumbnail:           {"thumbnail_url"},
+	GroupFieldFlaggedUsers:        {"flagged_users"},
+	GroupFieldConfidence:          {"confidence"},
+	GroupFieldUpvotes:             {"upvotes"},
+	GroupFieldDownvotes:           {"downvotes"},
+	GroupFieldScore:               {"score"},
+	GroupFieldLastScanned:         {"last_scanned"},
+	GroupFieldLastUpdated:         {"last_updated"},
+	GroupFieldLastViewed:          {"last_viewed"},
+	GroupFieldLastLockCheck:       {"last_lock_check"},
+	GroupFieldIsLocked:            {"is_locked"},
+	GroupFieldLastThumbnailUpdate: {"last_thumbnail_update"},
 }
 
 // Columns returns the list of database columns to fetch based on the selected fields.
-func (f GroupFields) Columns() []string {
+func (f GroupField) Columns() []string {
+	if f == GroupFieldNone {
+		return []string{"*"}
+	}
+
 	var columns []string
-
-	if f.Basic {
-		columns = append(columns, "id", "name", "description")
+	for field, cols := range groupFieldToColumns {
+		if f&field != 0 {
+			columns = append(columns, cols...)
+		}
 	}
-	if f.Owner {
-		columns = append(columns, "owner")
-	}
-	if f.Shout {
-		columns = append(columns, "shout")
-	}
-	if f.Reason {
-		columns = append(columns, "reason")
-	}
-	if f.Thumbnail {
-		columns = append(columns, "thumbnail_url")
-	}
-	if f.FlaggedUsers {
-		columns = append(columns, "flagged_users")
-	}
-	if f.Confidence {
-		columns = append(columns, "confidence")
-	}
-	if f.Reputation {
-		columns = append(columns, "upvotes", "downvotes", "score")
-	}
-	if f.Timestamps {
-		columns = append(columns,
-			"last_scanned",
-			"last_updated",
-			"last_viewed",
-			"last_lock_check",
-			"is_locked",
-			"last_thumbnail_update",
-		)
-	}
-
-	// Select all if no fields specified
-	if len(columns) == 0 {
-		columns = []string{"*"}
-	}
-
 	return columns
+}
+
+// Add adds the specified fields to the current selection.
+func (f GroupField) Add(fields GroupField) GroupField {
+	return f | fields
+}
+
+// Remove removes the specified fields from the current selection.
+func (f GroupField) Remove(fields GroupField) GroupField {
+	return f &^ fields
+}
+
+// Has checks if all specified fields are included.
+func (f GroupField) Has(fields GroupField) bool {
+	return f&fields == fields
 }

@@ -72,90 +72,149 @@ type ReviewUser struct {
 	Reputation *Reputation   `json:"reputation"`
 }
 
-// UserFields represents the fields that can be requested when fetching users.
-type UserFields struct {
+// UserField represents available fields as bit flags.
+type UserField uint32
+
+const (
+	UserFieldNone UserField = 0
+
 	// Basic user information
-	Basic       bool // ID, Name, DisplayName
-	Description bool // Description
-	Reason      bool // Reason for flagging
-	CreatedAt   bool // Account creation date
-	Thumbnail   bool // ThumbnailURL
+	UserFieldID          UserField = 1 << iota // User ID
+	UserFieldName                              // Username
+	UserFieldDisplayName                       // Display name
+	UserFieldDescription                       // User description
+	UserFieldCreatedAt                         // Account creation date
+	UserFieldReason                            // Reason for flagging
+	UserFieldThumbnail                         // ThumbnailURL
 
 	// Relationships and content
-	Groups  bool // Group memberships
-	Outfits bool // User outfits
-	Friends bool // Friend list
-	Games   bool // Played games
-
-	// Flagged content
-	Content bool
+	UserFieldGroups         // Group memberships
+	UserFieldOutfits        // User outfits
+	UserFieldFriends        // Friend list
+	UserFieldGames          // Played games
+	UserFieldFlaggedContent // Flagged content
 
 	// Statistics
-	Followers  bool // FollowerCount, FollowingCount
-	Confidence bool // AI confidence score
-	Reputation bool // Upvotes, Downvotes, Score
+	UserFieldFollowerCount  // Follower count
+	UserFieldFollowingCount // Following count
+	UserFieldConfidence     // AI confidence score
+	UserFieldUpvotes        // Reputation upvotes
+	UserFieldDownvotes      // Reputation downvotes
+	UserFieldScore          // Reputation score
 
-	// All timestamps
-	Timestamps bool
+	// Timestamps
+	UserFieldLastScanned         // Last scan time
+	UserFieldLastUpdated         // Last update time
+	UserFieldLastViewed          // Last view time
+	UserFieldLastBanCheck        // Last ban check time
+	UserFieldIsBanned            // Ban status
+	UserFieldLastThumbnailUpdate // Last thumbnail update
+
+	// Common combinations
+	// UserFieldBasic includes the essential user identification fields:
+	// ID, username, and display name
+	UserFieldBasic = UserFieldID |
+		UserFieldName |
+		UserFieldDisplayName
+
+	// UserFieldProfile includes all profile-related fields:
+	// description, creation date, and thumbnail
+	UserFieldProfile = UserFieldDescription |
+		UserFieldCreatedAt |
+		UserFieldThumbnail
+
+	// UserFieldRelationships includes all relationship-related fields:
+	// groups, outfits, friends, and games
+	UserFieldRelationships = UserFieldGroups |
+		UserFieldOutfits |
+		UserFieldFriends |
+		UserFieldGames
+
+	// UserFieldStats includes all statistical fields:
+	// follower/following counts and confidence score
+	UserFieldStats = UserFieldFollowerCount |
+		UserFieldFollowingCount |
+		UserFieldConfidence
+
+	// UserFieldReputation includes all reputation-related fields:
+	// upvotes, downvotes, and overall score
+	UserFieldReputation = UserFieldUpvotes |
+		UserFieldDownvotes |
+		UserFieldScore
+
+	// UserFieldTimestamps includes all timestamp-related fields:
+	// last scanned, updated, viewed, ban check, ban status, and thumbnail update
+	UserFieldTimestamps = UserFieldLastScanned |
+		UserFieldLastUpdated |
+		UserFieldLastViewed |
+		UserFieldLastBanCheck |
+		UserFieldIsBanned |
+		UserFieldLastThumbnailUpdate
+
+	// UserFieldAll includes all available fields
+	UserFieldAll = UserFieldBasic |
+		UserFieldProfile |
+		UserFieldRelationships |
+		UserFieldStats |
+		UserFieldReputation |
+		UserFieldTimestamps |
+		UserFieldFlaggedContent
+)
+
+// userFieldToColumns maps UserField bits to their corresponding database columns.
+var userFieldToColumns = map[UserField][]string{ //nolint:gochecknoglobals
+	UserFieldID:                  {"id"},
+	UserFieldName:                {"name"},
+	UserFieldDisplayName:         {"display_name"},
+	UserFieldDescription:         {"description"},
+	UserFieldCreatedAt:           {"created_at"},
+	UserFieldReason:              {"reason"},
+	UserFieldThumbnail:           {"thumbnail_url"},
+	UserFieldGroups:              {"groups"},
+	UserFieldOutfits:             {"outfits"},
+	UserFieldFriends:             {"friends"},
+	UserFieldGames:               {"games"},
+	UserFieldFlaggedContent:      {"flagged_content"},
+	UserFieldFollowerCount:       {"follower_count"},
+	UserFieldFollowingCount:      {"following_count"},
+	UserFieldConfidence:          {"confidence"},
+	UserFieldUpvotes:             {"upvotes"},
+	UserFieldDownvotes:           {"downvotes"},
+	UserFieldScore:               {"score"},
+	UserFieldLastScanned:         {"last_scanned"},
+	UserFieldLastUpdated:         {"last_updated"},
+	UserFieldLastViewed:          {"last_viewed"},
+	UserFieldLastBanCheck:        {"last_ban_check"},
+	UserFieldIsBanned:            {"is_banned"},
+	UserFieldLastThumbnailUpdate: {"last_thumbnail_update"},
 }
 
 // Columns returns the list of database columns to fetch based on the selected fields.
-func (f UserFields) Columns() []string {
+func (f UserField) Columns() []string {
+	if f == UserFieldNone {
+		return []string{"*"}
+	}
+
 	var columns []string
-
-	if f.Basic {
-		columns = append(columns, "id", "name", "display_name")
+	for field, cols := range userFieldToColumns {
+		if f&field != 0 {
+			columns = append(columns, cols...)
+		}
 	}
-	if f.Description {
-		columns = append(columns, "description")
-	}
-	if f.Reason {
-		columns = append(columns, "reason")
-	}
-	if f.CreatedAt {
-		columns = append(columns, "created_at")
-	}
-	if f.Thumbnail {
-		columns = append(columns, "thumbnail_url")
-	}
-	if f.Groups {
-		columns = append(columns, "groups")
-	}
-	if f.Outfits {
-		columns = append(columns, "outfits")
-	}
-	if f.Friends {
-		columns = append(columns, "friends")
-	}
-	if f.Games {
-		columns = append(columns, "games")
-	}
-	if f.Content {
-		columns = append(columns, "flagged_content")
-	}
-	if f.Followers {
-		columns = append(columns, "follower_count", "following_count")
-	}
-	if f.Confidence {
-		columns = append(columns, "confidence")
-	}
-	if f.Timestamps {
-		columns = append(columns,
-			"last_scanned",
-			"last_updated",
-			"last_viewed",
-			"last_ban_check",
-			"last_thumbnail_update",
-		)
-	}
-	if f.Reputation {
-		columns = append(columns, "upvotes", "downvotes", "score")
-	}
-
-	// Select all if no fields specified
-	if len(columns) == 0 {
-		columns = []string{"*"}
-	}
-
 	return columns
+}
+
+// Add adds the specified fields to the current selection.
+func (f UserField) Add(fields UserField) UserField {
+	return f | fields
+}
+
+// Remove removes the specified fields from the current selection.
+func (f UserField) Remove(fields UserField) UserField {
+	return f &^ fields
+}
+
+// Has checks if all specified fields are included.
+func (f UserField) Has(fields UserField) bool {
+	return f&fields == fields
 }
