@@ -1,4 +1,5 @@
 .git
+.rotector
 exports/
 logs/bot_logs
 logs/export_logs

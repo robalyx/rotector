@@ -220,6 +220,7 @@ func LoadConfig() (*Config, string, error) {
 
 	// Define config search paths
 	configPaths := []string{
+		".rotector",
 		homeDir + "/.rotector/config",
 		"/etc/rotector/config",
 		"/app/config",
