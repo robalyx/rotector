@@ -22,6 +22,16 @@ const (
 	GroupStatusUnflagged GroupStatus = "unflagged"
 )
 
+// Reasons represents the reasons for a user or group.
+type Reasons map[string]Reason
+
+// Reason represents a reason for a user or group.
+type Reason struct {
+	Message    string   `json:"message"`
+	Confidence float64  `json:"confidence"`
+	Evidence   []string `json:"evidence"`
+}
+
 // UserGroup represents a group that a user is a member of.
 type UserGroup struct {
 	ID   uint64 `json:"id"`
@@ -29,44 +39,44 @@ type UserGroup struct {
 	Role string `json:"role"`
 }
 
-// Friend represents a user's friend information.
-type Friend struct {
+// UserFriend represents a user's friend information.
+type UserFriend struct {
 	ID               uint64 `json:"id"`
 	Name             string `json:"name"`
 	DisplayName      string `json:"displayName"`
 	HasVerifiedBadge bool   `json:"hasVerifiedBadge"`
 }
 
-// Game represents a game that a user has played.
-type Game struct {
+// UserGame represents a game that a user has played.
+type UserGame struct {
 	ID   uint64 `json:"id"`
 	Name string `json:"name"`
 }
 
 // User represents detailed user information.
 type User struct {
-	ID             uint64      `json:"id"`
-	Name           string      `json:"name"`
-	DisplayName    string      `json:"displayName"`
-	Description    string      `json:"description"`
-	CreatedAt      time.Time   `json:"createdAt"`
-	Reason         string      `json:"reason"`
-	Groups         []UserGroup `json:"groups"`
-	Friends        []Friend    `json:"friends"`
-	Games          []Game      `json:"games"`
-	FlaggedContent []string    `json:"flaggedContent"`
-	FlaggedGroups  []uint64    `json:"flaggedGroups"`
-	FollowerCount  uint64      `json:"followerCount"`
-	FollowingCount uint64      `json:"followingCount"`
-	Confidence     float64     `json:"confidence"`
-	LastScanned    time.Time   `json:"lastScanned"`
-	LastUpdated    time.Time   `json:"lastUpdated"`
-	LastViewed     time.Time   `json:"lastViewed"`
-	ThumbnailURL   string      `json:"thumbnailUrl"`
-	Upvotes        int32       `json:"upvotes"`
-	Downvotes      int32       `json:"downvotes"`
-	Reputation     int32       `json:"reputation"`
-	IsBanned       bool        `json:"isBanned"`
+	ID             uint64       `json:"id"`
+	Name           string       `json:"name"`
+	DisplayName    string       `json:"displayName"`
+	Description    string       `json:"description"`
+	CreatedAt      time.Time    `json:"createdAt"`
+	Reasons        Reasons      `json:"reasons"`
+	Groups         []UserGroup  `json:"groups"`
+	Friends        []UserFriend `json:"friends"`
+	Games          []UserGame   `json:"games"`
+	FlaggedContent []string     `json:"flaggedContent"`
+	FlaggedGroups  []uint64     `json:"flaggedGroups"`
+	FollowerCount  uint64       `json:"followerCount"`
+	FollowingCount uint64       `json:"followingCount"`
+	Confidence     float64      `json:"confidence"`
+	LastScanned    time.Time    `json:"lastScanned"`
+	LastUpdated    time.Time    `json:"lastUpdated"`
+	LastViewed     time.Time    `json:"lastViewed"`
+	ThumbnailURL   string       `json:"thumbnailUrl"`
+	Upvotes        int32        `json:"upvotes"`
+	Downvotes      int32        `json:"downvotes"`
+	Reputation     int32        `json:"reputation"`
+	IsBanned       bool         `json:"isBanned"`
 }
 
 // GroupUser represents a user in the context of a group.
@@ -89,7 +99,7 @@ type Group struct {
 	Description  string     `json:"description"`
 	Owner        GroupUser  `json:"owner"`
 	Shout        GroupShout `json:"shout"`
-	Reason       string     `json:"reason"`
+	Reasons      Reasons    `json:"reasons"`
 	Confidence   float64    `json:"confidence"`
 	LastScanned  time.Time  `json:"lastScanned"`
 	LastUpdated  time.Time  `json:"lastUpdated"`

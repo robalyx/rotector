@@ -35,11 +35,10 @@ func User(user *types.ReviewUser) *restTypes.User {
 		DisplayName:    user.DisplayName,
 		Description:    user.Description,
 		CreatedAt:      user.CreatedAt,
-		Reason:         user.Reason,
+		Reasons:        UserReasons(user.Reasons),
 		Groups:         UserGroups(user.Groups),
-		Friends:        Friends(user.Friends),
-		Games:          Games(user.Games),
-		FlaggedContent: user.FlaggedContent,
+		Friends:        UserFriends(user.Friends),
+		Games:          UserGames(user.Games),
 		FollowerCount:  user.FollowerCount,
 		FollowingCount: user.FollowingCount,
 		Confidence:     user.Confidence,
@@ -66,11 +65,11 @@ func UserGroups(groups []*apiTypes.UserGroupRoles) []restTypes.UserGroup {
 	return result
 }
 
-// Friends converts a slice of database extended friends to REST API friends.
-func Friends(friends []*apiTypes.ExtendedFriend) []restTypes.Friend {
-	result := make([]restTypes.Friend, len(friends))
+// UserFriends converts a slice of database extended friends to REST API friends.
+func UserFriends(friends []*apiTypes.ExtendedFriend) []restTypes.UserFriend {
+	result := make([]restTypes.UserFriend, len(friends))
 	for i, f := range friends {
-		result[i] = restTypes.Friend{
+		result[i] = restTypes.UserFriend{
 			ID:          f.ID,
 			Name:        f.Name,
 			DisplayName: f.DisplayName,
@@ -79,13 +78,26 @@ func Friends(friends []*apiTypes.ExtendedFriend) []restTypes.Friend {
 	return result
 }
 
-// Games converts a slice of API games to REST API games.
-func Games(games []*apiTypes.Game) []restTypes.Game {
-	result := make([]restTypes.Game, len(games))
+// UserGames converts a slice of API games to REST API games.
+func UserGames(games []*apiTypes.Game) []restTypes.UserGame {
+	result := make([]restTypes.UserGame, len(games))
 	for i, g := range games {
-		result[i] = restTypes.Game{
+		result[i] = restTypes.UserGame{
 			ID:   g.ID,
 			Name: g.Name,
+		}
+	}
+	return result
+}
+
+// UserReasons converts a database user reasons to REST API user reasons.
+func UserReasons(reasons types.Reasons) map[string]restTypes.Reason {
+	result := make(map[string]restTypes.Reason)
+	for k, v := range reasons {
+		result[k.String()] = restTypes.Reason{
+			Message:    v.Message,
+			Confidence: v.Confidence,
+			Evidence:   v.Evidence,
 		}
 	}
 	return result

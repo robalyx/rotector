@@ -139,13 +139,7 @@ func (b *ReviewBuilder) buildReviewEmbed() *discord.EmbedBuilder {
 	flaggedMembers := strconv.Itoa(len(b.memberIDs))
 
 	// Censor reason if needed
-	reason := utils.CensorStringsInText(
-		b.group.Reason,
-		b.privacyMode,
-		strconv.FormatUint(b.group.ID, 10),
-		b.group.Name,
-		strconv.FormatUint(b.group.Owner.UserID, 10),
-	)
+	reason := b.getReasonField()
 
 	if b.reviewMode == enum.ReviewModeTraining {
 		// Training mode - show limited information without links
@@ -159,6 +153,7 @@ func (b *ReviewBuilder) buildReviewEmbed() *discord.EmbedBuilder {
 			AddField("Reason", reason, false).
 			AddField("Shout", b.getShout(), false).
 			AddField("Description", b.getDescription(), false)
+		b.addEvidenceFields(embed)
 	} else {
 		// Standard mode - show all information with links
 		embed.AddField("ID", fmt.Sprintf(
@@ -178,8 +173,9 @@ func (b *ReviewBuilder) buildReviewEmbed() *discord.EmbedBuilder {
 			AddField("Last Updated", lastUpdated, true).
 			AddField("Reason", reason, false).
 			AddField("Shout", b.getShout(), false).
-			AddField("Description", b.getDescription(), false).
-			AddField("Review History", b.getReviewHistory(), false)
+			AddField("Description", b.getDescription(), false)
+		b.addEvidenceFields(embed)
+		embed.AddField("Review History", b.getReviewHistory(), false)
 	}
 
 	// Add status-specific timestamps
@@ -304,6 +300,128 @@ func (b *ReviewBuilder) getDescription() string {
 	)
 
 	return description
+}
+
+// getReasonField returns the reason field for the embed.
+func (b *ReviewBuilder) getReasonField() string {
+	if len(b.group.Reasons) == 0 {
+		return constants.NotApplicable
+	}
+
+	// Build formatted output
+	var formattedReasons []string
+
+	// Order of reason types to display
+	reasonTypes := []enum.ReasonType{
+		enum.ReasonTypeUser,
+		enum.ReasonTypeFriend,
+		enum.ReasonTypeImage,
+		enum.ReasonTypeOutfit,
+		enum.ReasonTypeGroup,
+	}
+
+	for _, reasonType := range reasonTypes {
+		if reason, ok := b.group.Reasons[reasonType]; ok {
+			// Add section header with emoji based on type
+			var emoji string
+			switch reasonType {
+			case enum.ReasonTypeMember:
+				emoji = "👥"
+			case enum.ReasonTypeCustom:
+				emoji = "🔍"
+			case enum.ReasonTypeUser,
+				enum.ReasonTypeFriend,
+				enum.ReasonTypeImage,
+				enum.ReasonTypeOutfit,
+				enum.ReasonTypeGroup:
+				// Do nothing
+			}
+
+			// Join all reasons of this type
+			section := fmt.Sprintf("%s **%s**\n%s",
+				emoji,
+				reasonType.String(),
+				reason.Message,
+			)
+			formattedReasons = append(formattedReasons, section)
+		}
+	}
+
+	// Join all sections with double newlines for spacing
+	reasonText := strings.Join(formattedReasons, "\n\n")
+
+	// Censor if needed
+	if b.privacyMode {
+		reasonText = utils.CensorStringsInText(
+			reasonText,
+			true,
+			strconv.FormatUint(b.group.ID, 10),
+			b.group.Name,
+		)
+	}
+
+	return reasonText
+}
+
+// addEvidenceFields adds separate evidence fields for the embed if any reasons have evidence.
+func (b *ReviewBuilder) addEvidenceFields(embed *discord.EmbedBuilder) {
+	var hasEvidence bool
+	var fields []struct {
+		name  string
+		value string
+	}
+
+	// Collect evidence from all reasons
+	for reasonType, reason := range b.group.Reasons {
+		if len(reason.Evidence) > 0 {
+			hasEvidence = true
+			var evidenceItems []string
+
+			// Add header for this reason type
+			fieldName := fmt.Sprintf("%s Evidence", reasonType)
+
+			// Add up to 5 evidence items
+			for i, evidence := range reason.Evidence {
+				if i >= 5 {
+					evidenceItems = append(evidenceItems, "... and more")
+					break
+				}
+
+				// Format and normalize the evidence
+				evidence = utils.TruncateString(evidence, 100)
+				evidence = utils.NormalizeString(evidence)
+
+				// Censor if needed
+				if b.privacyMode {
+					evidence = utils.CensorStringsInText(
+						evidence,
+						true,
+						strconv.FormatUint(b.group.ID, 10),
+						b.group.Name,
+					)
+				}
+
+				evidenceItems = append(evidenceItems, fmt.Sprintf("- `%s`", evidence))
+			}
+
+			fields = append(fields, struct {
+				name  string
+				value string
+			}{
+				name:  fieldName,
+				value: strings.Join(evidenceItems, "\n"),
+			})
+		}
+	}
+
+	if !hasEvidence {
+		return
+	}
+
+	// Add each evidence type as a separate field
+	for _, field := range fields {
+		embed.AddField(field.name, field.value, false)
+	}
 }
 
 // getShout returns the shout field for the embed.

@@ -20,6 +20,7 @@ import (
 	"github.com/robalyx/rotector/internal/common/client/fetcher"
 	"github.com/robalyx/rotector/internal/common/setup"
 	"github.com/robalyx/rotector/internal/common/storage/database/types"
+	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
 	"github.com/robalyx/rotector/internal/common/utils"
 	"github.com/sourcegraph/conc/pool"
 	"go.uber.org/zap"
@@ -54,6 +55,7 @@ DO NOT flag Any other clothing-related concerns
 Return:
 - username: The exact username provided
 - reason: Clear explanation of violations found in one sentence. Use exactly "NO_VIOLATIONS" if no clear concerns found
+- evidence: Array of outfit names that have violations
 - confidence: Level (0.0-1.0) based on severity
   * Use 0.0 for no violations
   * Use 0.1-1.0 ONLY when clear violations exist`
@@ -82,9 +84,10 @@ var (
 
 // OutfitAnalysis contains the AI's analysis results for a user's outfits.
 type OutfitAnalysis struct {
-	Username   string  `json:"username"`
-	Reason     string  `json:"reason"`
-	Confidence float64 `json:"confidence"`
+	Username   string   `json:"username"`
+	Reason     string   `json:"reason"`
+	Evidence   []string `json:"evidence"`
+	Confidence float64  `json:"confidence"`
 }
 
 // OutfitAnalyzer handles AI-based outfit analysis using Gemini models.
@@ -121,12 +124,19 @@ func NewOutfitAnalyzer(app *setup.App, logger *zap.Logger) *OutfitAnalyzer {
 				Type:        genai.TypeString,
 				Description: "Clear explanation of violations found in outfits",
 			},
+			"evidence": {
+				Type: genai.TypeArray,
+				Items: &genai.Schema{
+					Type: genai.TypeString,
+				},
+				Description: "Names of outfits that have violations",
+			},
 			"confidence": {
 				Type:        genai.TypeNumber,
 				Description: "Confidence level based on severity of violations found",
 			},
 		},
-		Required: []string{"username", "reason", "confidence"},
+		Required: []string{"username", "reason", "evidence", "confidence"},
 	}
 	outfitModel.Temperature = utils.Ptr(float32(0.2))
 	outfitModel.TopP = utils.Ptr(float32(0.1))
@@ -252,24 +262,31 @@ func (a *OutfitAnalyzer) analyzeUserOutfits(ctx context.Context, info *fetcher.I
 	// If analysis is successful and violations found, update flaggedUsers map
 	mu.Lock()
 	if existingUser, ok := flaggedUsers[info.ID]; ok {
-		// Combine reasons and update confidence
-		existingUser.Reason = fmt.Sprintf("%s\n\nOutfit Analysis: %s", existingUser.Reason, analysis.Reason)
-		existingUser.Confidence = 1.0
+		existingUser.Reasons[enum.ReasonTypeOutfit] = &types.Reason{
+			Message:    analysis.Reason,
+			Confidence: analysis.Confidence,
+			Evidence:   analysis.Evidence,
+		}
 	} else {
 		flaggedUsers[info.ID] = &types.User{
-			ID:                  info.ID,
-			Name:                info.Name,
-			DisplayName:         info.DisplayName,
-			Description:         info.Description,
-			CreatedAt:           info.CreatedAt,
-			Reason:              "Outfit Analysis: " + analysis.Reason,
+			ID:          info.ID,
+			Name:        info.Name,
+			DisplayName: info.DisplayName,
+			Description: info.Description,
+			CreatedAt:   info.CreatedAt,
+			Reasons: types.Reasons{
+				enum.ReasonTypeOutfit: &types.Reason{
+					Message:    analysis.Reason,
+					Confidence: analysis.Confidence,
+					Evidence:   analysis.Evidence,
+				},
+			},
 			Groups:              info.Groups.Data,
 			Friends:             info.Friends.Data,
 			Games:               info.Games.Data,
 			Outfits:             info.Outfits.Data,
 			FollowerCount:       info.FollowerCount,
 			FollowingCount:      info.FollowingCount,
-			Confidence:          analysis.Confidence,
 			LastUpdated:         info.LastUpdated,
 			LastBanCheck:        info.LastBanCheck,
 			ThumbnailURL:        info.ThumbnailURL,

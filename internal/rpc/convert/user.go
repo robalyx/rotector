@@ -30,18 +30,16 @@ func User(user *types.ReviewUser) *proto.User {
 	if user == nil {
 		return nil
 	}
-
 	return &proto.User{
 		Id:             user.ID,
 		Name:           user.Name,
 		DisplayName:    user.DisplayName,
 		Description:    user.Description,
 		CreatedAt:      user.CreatedAt.Format(time.RFC3339),
-		Reason:         user.Reason,
+		Reasons:        UserReasons(user.Reasons),
 		Groups:         UserGroups(user.Groups),
-		Friends:        Friends(user.Friends),
-		Games:          Games(user.Games),
-		FlaggedContent: user.FlaggedContent,
+		Friends:        UserFriends(user.Friends),
+		Games:          UserGames(user.Games),
 		FollowerCount:  user.FollowerCount,
 		FollowingCount: user.FollowingCount,
 		Confidence:     user.Confidence,
@@ -69,11 +67,11 @@ func UserGroups(groups []*apiTypes.UserGroupRoles) []*proto.UserGroup {
 	return result
 }
 
-// Friends converts a slice of database extended friends to RPC API friends.
-func Friends(friends []*apiTypes.ExtendedFriend) []*proto.Friend {
-	result := make([]*proto.Friend, len(friends))
+// UserFriends converts a slice of database extended friends to RPC API friends.
+func UserFriends(friends []*apiTypes.ExtendedFriend) []*proto.UserFriend {
+	result := make([]*proto.UserFriend, len(friends))
 	for i, f := range friends {
-		result[i] = &proto.Friend{
+		result[i] = &proto.UserFriend{
 			Id:          f.ID,
 			Name:        f.Name,
 			DisplayName: f.DisplayName,
@@ -82,14 +80,27 @@ func Friends(friends []*apiTypes.ExtendedFriend) []*proto.Friend {
 	return result
 }
 
-// Games converts a slice of API games to RPC API games.
-func Games(games []*apiTypes.Game) []*proto.Game {
-	result := make([]*proto.Game, len(games))
+// UserGames converts a slice of API games to RPC API games.
+func UserGames(games []*apiTypes.Game) []*proto.UserGame {
+	result := make([]*proto.UserGame, len(games))
 	for i, g := range games {
-		result[i] = &proto.Game{
+		result[i] = &proto.UserGame{
 			Id:   g.ID,
 			Name: g.Name,
 		}
 	}
 	return result
+}
+
+// UserReasons converts a database user reasons to RPC API user reasons.
+func UserReasons(reasons types.Reasons) map[string]*proto.Reason {
+	rpcReasons := make(map[string]*proto.Reason)
+	for k, v := range reasons {
+		rpcReasons[k.String()] = &proto.Reason{
+			Message:    v.Message,
+			Confidence: v.Confidence,
+			Evidence:   v.Evidence,
+		}
+	}
+	return rpcReasons
 }

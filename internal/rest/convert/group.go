@@ -35,7 +35,7 @@ func Group(group *types.ReviewGroup) *restTypes.Group {
 		Description:  group.Description,
 		Owner:        GroupUser(group.Owner),
 		Shout:        GroupShout(group.Shout),
-		Reason:       group.Reason,
+		Reasons:      GroupReasons(group.Reasons),
 		Confidence:   group.Confidence,
 		LastScanned:  group.LastScanned,
 		LastUpdated:  group.LastUpdated,
@@ -69,4 +69,17 @@ func GroupShout(shout *apiTypes.GroupShout) restTypes.GroupShout {
 		Content: shout.Body,
 		Poster:  GroupUser(&shout.Poster),
 	}
+}
+
+// GroupReasons converts a database group reasons to REST API group reasons.
+func GroupReasons(reasons types.Reasons) restTypes.Reasons {
+	result := make(restTypes.Reasons)
+	for k, v := range reasons {
+		result[k.String()] = restTypes.Reason{
+			Message:    v.Message,
+			Confidence: v.Confidence,
+			Evidence:   v.Evidence,
+		}
+	}
+	return result
 }

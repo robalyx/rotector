@@ -26,16 +26,16 @@ message UserGroup {
   string role = 3;
 }
 
-// Friend represents friend information
-message Friend {
+// UserFriend represents friend information
+message UserFriend {
   uint64 id = 1;
   string name = 2;
   string display_name = 3;
   bool has_verified_badge = 4;
 }
 
-// Game represents game information
-message Game {
+// UserGame represents game information
+message UserGame {
   uint64 id = 1;
   string name = 2;
 }
@@ -60,11 +60,10 @@ message User {
   string display_name = 3;
   string description = 4;
   string created_at = 5;
-  string reason = 6;
+  map<string, Reason> reasons = 6;
   repeated UserGroup groups = 7;
-  repeated Friend friends = 8;
-  repeated Game games = 9;
-  repeated string flagged_content = 10;
+  repeated UserFriend friends = 8;
+  repeated UserGame games = 9;
   repeated uint64 flagged_groups = 11;
   uint64 follower_count = 12;
   uint64 following_count = 13;
@@ -86,7 +85,7 @@ message Group {
   string description = 3;
   GroupUser owner = 4;
   GroupShout shout = 5;
-  string reason = 6;
+  map<string, Reason> reasons = 6;
   double confidence = 7;
   string last_scanned = 8;
   string last_updated = 9;
@@ -96,6 +95,13 @@ message Group {
   int32 downvotes = 13;
   int32 reputation = 14;
   bool is_locked = 15;
+}
+
+// Reason represents a reason for flagging a user or group
+message Reason {
+  string message = 1;
+  double confidence = 2;
+  repeated string evidence = 3;
 }
 
 // GetUserRequest represents the request for getting user information

@@ -157,22 +157,9 @@ func (b *FriendsBuilder) getFriendFieldValue(friend *apiTypes.ExtendedFriend) st
 
 	// Add confidence and reason if available
 	flaggedFriend := b.flaggedFriends[friend.ID]
-	if flaggedFriend.Confidence > 0 {
-		info.WriteString(fmt.Sprintf(" (%.2f)", flaggedFriend.Confidence))
-	}
-
-	if flaggedFriend.Reason != "" {
-		censored := utils.CensorStringsInText(
-			flaggedFriend.Reason,
-			b.privacyMode,
-			strconv.FormatUint(b.user.ID, 10),
-			b.user.Name,
-			b.user.DisplayName,
-			strconv.FormatUint(flaggedFriend.ID, 10),
-			flaggedFriend.Name,
-			flaggedFriend.DisplayName,
-		)
-		info.WriteString(fmt.Sprintf("\n```%s```", censored))
+	if len(flaggedFriend.Reasons) > 0 {
+		reasonTypes := flaggedFriend.Reasons.Types()
+		info.WriteString(fmt.Sprintf("\n(%.2f) [%s]", flaggedFriend.Confidence, strings.Join(reasonTypes, ", ")))
 	}
 
 	return info.String()

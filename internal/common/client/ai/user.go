@@ -12,6 +12,7 @@ import (
 	"github.com/robalyx/rotector/internal/common/client/fetcher"
 	"github.com/robalyx/rotector/internal/common/setup"
 	"github.com/robalyx/rotector/internal/common/storage/database/types"
+	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
 	"github.com/robalyx/rotector/internal/common/translator"
 	"github.com/robalyx/rotector/internal/common/utils"
 	"github.com/sourcegraph/conc/pool"
@@ -400,26 +401,31 @@ func (a *UserAnalyzer) validateAndUpdateFlaggedUsers(flaggedResults *FlaggedUser
 		if isValid {
 			mu.Lock()
 			if existingUser, ok := flaggedUsers[originalInfo.ID]; ok {
-				// Combine reasons and update confidence
-				existingUser.Reason = fmt.Sprintf("%s\n\nAI Analysis: %s", existingUser.Reason, flaggedUser.Reason)
-				existingUser.Confidence = 1.0
-				existingUser.FlaggedContent = flaggedUser.FlaggedContent
+				existingUser.Reasons[enum.ReasonTypeUser] = &types.Reason{
+					Message:    flaggedUser.Reason,
+					Confidence: flaggedUser.Confidence,
+					Evidence:   flaggedUser.FlaggedContent,
+				}
 			} else {
 				flaggedUsers[originalInfo.ID] = &types.User{
-					ID:                  originalInfo.ID,
-					Name:                originalInfo.Name,
-					DisplayName:         originalInfo.DisplayName,
-					Description:         originalInfo.Description,
-					CreatedAt:           originalInfo.CreatedAt,
-					Reason:              "AI Analysis: " + flaggedUser.Reason,
+					ID:          originalInfo.ID,
+					Name:        originalInfo.Name,
+					DisplayName: originalInfo.DisplayName,
+					Description: originalInfo.Description,
+					CreatedAt:   originalInfo.CreatedAt,
+					Reasons: types.Reasons{
+						enum.ReasonTypeUser: &types.Reason{
+							Message:    flaggedUser.Reason,
+							Confidence: flaggedUser.Confidence,
+							Evidence:   flaggedUser.FlaggedContent,
+						},
+					},
 					Groups:              originalInfo.Groups.Data,
 					Friends:             originalInfo.Friends.Data,
 					Games:               originalInfo.Games.Data,
 					Outfits:             originalInfo.Outfits.Data,
 					FollowerCount:       originalInfo.FollowerCount,
 					FollowingCount:      originalInfo.FollowingCount,
-					FlaggedContent:      flaggedUser.FlaggedContent,
-					Confidence:          flaggedUser.Confidence,
 					LastUpdated:         originalInfo.LastUpdated,
 					LastBanCheck:        originalInfo.LastBanCheck,
 					ThumbnailURL:        originalInfo.ThumbnailURL,

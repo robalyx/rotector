@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/robalyx/rotector/internal/common/setup"
 	dbTypes "github.com/robalyx/rotector/internal/common/storage/database/types"
@@ -145,7 +146,7 @@ func (e *Exporter) hashRecords(items interface{}, salt string, hashType HashType
 		statuses = make([]string, len(v))
 		for i, user := range v {
 			ids[i] = user.ID
-			reasons[i] = user.Reason
+			reasons[i] = strings.Join(user.Reasons.Messages(), "; ")
 			statuses[i] = user.Status.String()
 		}
 	case []*dbTypes.ReviewGroup:
@@ -154,7 +155,7 @@ func (e *Exporter) hashRecords(items interface{}, salt string, hashType HashType
 		statuses = make([]string, len(v))
 		for i, group := range v {
 			ids[i] = group.ID
-			reasons[i] = group.Reason
+			reasons[i] = strings.Join(group.Reasons.Messages(), "; ")
 			statuses[i] = group.Status.String()
 		}
 	}

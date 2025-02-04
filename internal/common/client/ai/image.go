@@ -14,6 +14,7 @@ import (
 	"github.com/robalyx/rotector/internal/common/client/fetcher"
 	"github.com/robalyx/rotector/internal/common/setup"
 	"github.com/robalyx/rotector/internal/common/storage/database/types"
+	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
 	"github.com/robalyx/rotector/internal/common/utils"
 	"github.com/sourcegraph/conc/pool"
 	"go.uber.org/zap"
@@ -197,24 +198,29 @@ func (a *ImageAnalyzer) analyzeUserThumbnail(ctx context.Context, info *fetcher.
 	// If analysis is successful and violations found, update flaggedUsers map
 	mu.Lock()
 	if existingUser, ok := flaggedUsers[info.ID]; ok {
-		existingUser.Reason = fmt.Sprintf("%s\n\n%s", existingUser.Reason,
-			"Image Analysis: Missing required clothing")
-		existingUser.Confidence = 1.0
+		existingUser.Reasons[enum.ReasonTypeImage] = &types.Reason{
+			Message:    "Missing required clothing",
+			Confidence: analysis.Confidence,
+		}
 	} else {
 		flaggedUsers[info.ID] = &types.User{
-			ID:                  info.ID,
-			Name:                info.Name,
-			DisplayName:         info.DisplayName,
-			Description:         info.Description,
-			CreatedAt:           info.CreatedAt,
-			Reason:              "Image Analysis: Missing required clothing",
+			ID:          info.ID,
+			Name:        info.Name,
+			DisplayName: info.DisplayName,
+			Description: info.Description,
+			CreatedAt:   info.CreatedAt,
+			Reasons: types.Reasons{
+				enum.ReasonTypeImage: &types.Reason{
+					Message:    "Missing required clothing",
+					Confidence: analysis.Confidence,
+				},
+			},
 			Groups:              info.Groups.Data,
 			Friends:             info.Friends.Data,
 			Games:               info.Games.Data,
 			Outfits:             info.Outfits.Data,
 			FollowerCount:       info.FollowerCount,
 			FollowingCount:      info.FollowingCount,
-			Confidence:          analysis.Confidence,
 			LastUpdated:         info.LastUpdated,
 			LastBanCheck:        info.LastBanCheck,
 			ThumbnailURL:        info.ThumbnailURL,

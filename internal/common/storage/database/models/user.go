@@ -118,12 +118,11 @@ func (r *UserModel) SaveUsers(ctx context.Context, users map[uint64]*types.User)
 				Set("display_name = EXCLUDED.display_name").
 				Set("description = EXCLUDED.description").
 				Set("created_at = EXCLUDED.created_at").
-				Set("reason = EXCLUDED.reason").
+				Set("reasons = EXCLUDED.reasons").
 				Set("groups = EXCLUDED.groups").
 				Set("outfits = EXCLUDED.outfits").
 				Set("friends = EXCLUDED.friends").
 				Set("games = EXCLUDED.games").
-				Set("flagged_content = EXCLUDED.flagged_content").
 				Set("follower_count = EXCLUDED.follower_count").
 				Set("following_count = EXCLUDED.following_count").
 				Set("confidence = EXCLUDED.confidence").
@@ -508,7 +507,7 @@ func (r *UserModel) GetFlaggedAndConfirmedUsers(ctx context.Context) ([]*types.R
 		var flaggedUsers []types.FlaggedUser
 		err := tx.NewSelect().
 			Model(&flaggedUsers).
-			Column("id", "reason").
+			Column("id", "reasons").
 			Scan(ctx)
 		if err != nil {
 			return fmt.Errorf("failed to get flagged users: %w", err)
@@ -524,7 +523,7 @@ func (r *UserModel) GetFlaggedAndConfirmedUsers(ctx context.Context) ([]*types.R
 		var confirmedUsers []types.ConfirmedUser
 		err = tx.NewSelect().
 			Model(&confirmedUsers).
-			Column("id", "reason").
+			Column("id", "reasons").
 			Scan(ctx)
 		if err != nil {
 			return fmt.Errorf("failed to get confirmed users: %w", err)

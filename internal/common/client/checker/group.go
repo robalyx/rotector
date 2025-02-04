@@ -69,13 +69,17 @@ func (c *GroupChecker) CheckGroupPercentages(groupInfos []*apiTypes.GroupRespons
 
 		now := time.Now()
 		flaggedGroups[groupInfo.ID] = &types.Group{
-			ID:            groupInfo.ID,
-			Name:          groupInfo.Name,
-			Description:   groupInfo.Description,
-			Owner:         groupInfo.Owner,
-			Shout:         groupInfo.Shout,
-			Reason:        reason,
-			Confidence:    0, // NOTE: Confidence will be updated
+			ID:          groupInfo.ID,
+			Name:        groupInfo.Name,
+			Description: groupInfo.Description,
+			Owner:       groupInfo.Owner,
+			Shout:       groupInfo.Shout,
+			Reasons: types.Reasons{
+				enum.ReasonTypeGroup: &types.Reason{
+					Message:    reason,
+					Confidence: 0, // NOTE: Confidence will be updated later
+				},
+			},
 			LastUpdated:   now,
 			LastLockCheck: now,
 		}
@@ -89,7 +93,9 @@ func (c *GroupChecker) CheckGroupPercentages(groupInfos []*apiTypes.GroupRespons
 	// Collect all unique flagged user IDs
 	allFlaggedUserIDs := make([]uint64, 0)
 	for groupID := range flaggedGroups {
-		allFlaggedUserIDs = append(allFlaggedUserIDs, groupToFlaggedUsers[groupID]...)
+		if flaggedUsers, ok := groupToFlaggedUsers[groupID]; ok {
+			allFlaggedUserIDs = append(allFlaggedUserIDs, flaggedUsers...)
+		}
 	}
 
 	// Get user data for confidence calculation
@@ -156,7 +162,7 @@ func (c *GroupChecker) ProcessUsers(userInfos []*fetcher.Info, flaggedUsers map[
 	}
 
 	// Fetch all existing groups
-	existingGroups, err := c.db.Models().Groups().GetGroupsByIDs(context.Background(), groupIDs, types.GroupFieldBasic|types.GroupFieldReason)
+	existingGroups, err := c.db.Models().Groups().GetGroupsByIDs(context.Background(), groupIDs, types.GroupFieldBasic|types.GroupFieldReasons)
 	if err != nil {
 		c.logger.Error("Failed to fetch existing groups", zap.Error(err))
 		return
@@ -223,19 +229,23 @@ func (c *GroupChecker) processUserGroups(userInfo *fetcher.Info, existingGroups 
 			zap.Float64("confidence", confidence))
 
 		return &types.User{
-			ID:                  userInfo.ID,
-			Name:                userInfo.Name,
-			DisplayName:         userInfo.DisplayName,
-			Description:         userInfo.Description,
-			CreatedAt:           userInfo.CreatedAt,
-			Reason:              "Group Analysis: Member of multiple inappropriate groups.",
+			ID:          userInfo.ID,
+			Name:        userInfo.Name,
+			DisplayName: userInfo.DisplayName,
+			Description: userInfo.Description,
+			CreatedAt:   userInfo.CreatedAt,
+			Reasons: types.Reasons{
+				enum.ReasonTypeGroup: &types.Reason{
+					Message:    "Member of multiple inappropriate groups.",
+					Confidence: math.Round(confidence*100) / 100,
+				},
+			},
 			Groups:              userInfo.Groups.Data,
 			Friends:             userInfo.Friends.Data,
 			Games:               userInfo.Games.Data,
 			Outfits:             userInfo.Outfits.Data,
 			FollowerCount:       userInfo.FollowerCount,
 			FollowingCount:      userInfo.FollowingCount,
-			Confidence:          math.Round(confidence*100) / 100, // Round to 2 decimal places
 			LastUpdated:         userInfo.LastUpdated,
 			LastBanCheck:        userInfo.LastBanCheck,
 			ThumbnailURL:        userInfo.ThumbnailURL,

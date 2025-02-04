@@ -168,8 +168,10 @@ func (b *GroupsBuilder) getGroupFieldValue(group *apiTypes.UserGroupRoles) strin
 		if flaggedGroup.Confidence > 0 {
 			info.WriteString(fmt.Sprintf("🔮 Confidence: `%.2f`\n", flaggedGroup.Confidence))
 		}
-		if flaggedGroup.Reason != "" {
-			info.WriteString(fmt.Sprintf("```%s```", flaggedGroup.Reason))
+		if len(flaggedGroup.Reasons) > 0 {
+			for reasonType, reason := range flaggedGroup.Reasons {
+				info.WriteString(fmt.Sprintf("```[%s] %s```\n", reasonType, reason.Message))
+			}
 		}
 	}
 

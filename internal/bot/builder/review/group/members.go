@@ -162,21 +162,9 @@ func (b *MembersBuilder) getMemberFieldValue(memberID uint64) string {
 	}
 
 	// Add reason and confidence if available
-	if member.Confidence > 0 {
-		info.WriteString(fmt.Sprintf(" (%.2f)", member.Confidence))
-	}
-
-	if member.Reason != "" {
-		censored := utils.CensorStringsInText(
-			member.Reason,
-			b.privacyMode,
-			strconv.FormatUint(b.group.ID, 10),
-			b.group.Name,
-			strconv.FormatUint(member.ID, 10),
-			member.Name,
-			member.DisplayName,
-		)
-		info.WriteString(fmt.Sprintf("\n```%s```", censored))
+	if len(member.Reasons) > 0 {
+		reasonTypes := member.Reasons.Types()
+		info.WriteString(fmt.Sprintf("\n(%.2f) [%s]", member.Confidence, strings.Join(reasonTypes, ", ")))
 	}
 
 	return info.String()

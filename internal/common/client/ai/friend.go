@@ -3,6 +3,7 @@ package ai
 import (
 	"context"
 	"fmt"
+	"sync"
 
 	"github.com/bytedance/sonic"
 	"github.com/google/generative-ai-go/genai"
@@ -11,6 +12,7 @@ import (
 	"github.com/robalyx/rotector/internal/common/storage/database/types"
 	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
 	"github.com/robalyx/rotector/internal/common/utils"
+	"github.com/sourcegraph/conc/pool"
 	"github.com/tdewolff/minify/v2"
 	"github.com/tdewolff/minify/v2/json"
 	"go.uber.org/zap"
@@ -23,13 +25,24 @@ const (
 
 Task: Analyze friend networks to identify patterns of predatory behavior and connections between inappropriate users targeting minors.
 
+Each friend's data includes:
+- Name (for identification only)
+- Type (Confirmed or Flagged)
+- ReasonTypes: List of reasons they were flagged
+  * "user" - Content analysis of user profile
+  * "friend" - Friend network analysis
+  * "image" - Profile image analysis
+  * "outfit" - Outfit analysis
+  * "group" - Group membership analysis
+
 Instructions:
 - Review violation types and confirmation status of friends
 - Look for patterns of predatory behavior and inappropriate content
 - Focus on factual, verifiable connections
 - Keep your analysis concise and within 1 sentence
 - NEVER include usernames in your analysis
-- Use generic terms like "the user" or "this account" instead of usernames`
+- Use generic terms like "the user" or "this account" instead of usernames
+- Consider the types of violations when analyzing patterns`
 
 	// FriendUserPrompt is the prompt for analyzing a user's friend network.
 	FriendUserPrompt = `IMPORTANT: Do not include any usernames in your analysis.
@@ -88,6 +101,49 @@ func NewFriendAnalyzer(app *setup.App, logger *zap.Logger) *FriendAnalyzer {
 	}
 }
 
+// GenerateFriendReasons generates friend network analysis reasons for multiple users using the Gemini model.
+func (a *FriendAnalyzer) GenerateFriendReasons(ctx context.Context, userInfos []*fetcher.Info, confirmedFriendsMap, flaggedFriendsMap map[uint64]map[uint64]*types.User) map[uint64]string {
+	var (
+		p       = pool.New().WithContext(ctx)
+		mu      sync.Mutex
+		results = make(map[uint64]string)
+	)
+
+	for _, userInfo := range userInfos {
+		// Skip users with very few friends
+		if len(userInfo.Friends.Data) < 3 {
+			continue
+		}
+
+		p.Go(func(ctx context.Context) error {
+			// Get confirmed and flagged friends for this user
+			confirmedFriends := confirmedFriendsMap[userInfo.ID]
+			flaggedFriends := flaggedFriendsMap[userInfo.ID]
+
+			// Generate reason for this user
+			reason, err := a.GenerateFriendReason(ctx, userInfo, confirmedFriends, flaggedFriends)
+			if err != nil {
+				a.logger.Error("Failed to generate friend reason",
+					zap.Error(err),
+					zap.Uint64("userID", userInfo.ID))
+				return err
+			}
+
+			mu.Lock()
+			results[userInfo.ID] = reason
+			mu.Unlock()
+
+			return nil
+		})
+	}
+
+	if err := p.Wait(); err != nil {
+		a.logger.Error("Error during friend reason generation", zap.Error(err))
+	}
+
+	return results
+}
+
 // GenerateFriendReason generates a friend network analysis reason using the Gemini model.
 func (a *FriendAnalyzer) GenerateFriendReason(ctx context.Context, userInfo *fetcher.Info, confirmedFriends, flaggedFriends map[uint64]*types.User) (string, error) {
 	// Acquire semaphore before making AI request
@@ -98,9 +154,9 @@ func (a *FriendAnalyzer) GenerateFriendReason(ctx context.Context, userInfo *fet
 
 	// Create a summary of friend data for AI analysis
 	type FriendSummary struct {
-		Name   string        `json:"name"`
-		Reason string        `json:"reason"`
-		Type   enum.UserType `json:"type"`
+		Name        string        `json:"name"`
+		Type        enum.UserType `json:"type"`
+		ReasonTypes []string      `json:"reasonTypes"`
 	}
 
 	// Collect friend summaries with token counting
@@ -109,10 +165,11 @@ func (a *FriendAnalyzer) GenerateFriendReason(ctx context.Context, userInfo *fet
 	// Helper function to add friend if within token limit
 	currentTokens := int32(0)
 	addFriend := func(friend *types.User, friendType enum.UserType) bool {
+		reasonTypes := friend.Reasons.Types()
 		summary := FriendSummary{
-			Name:   friend.Name,
-			Reason: friend.Reason,
-			Type:   friendType,
+			Name:        friend.Name,
+			Type:        friendType,
+			ReasonTypes: reasonTypes,
 		}
 
 		// Convert to JSON to count tokens accurately

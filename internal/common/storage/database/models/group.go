@@ -110,7 +110,7 @@ func (r *GroupModel) SaveGroups(ctx context.Context, groups map[uint64]*types.Gr
 				Set("description = EXCLUDED.description").
 				Set("owner = EXCLUDED.owner").
 				Set("shout = EXCLUDED.shout").
-				Set("reason = EXCLUDED.reason").
+				Set("reasons = EXCLUDED.reasons").
 				Set("confidence = EXCLUDED.confidence").
 				Set("last_scanned = EXCLUDED.last_scanned").
 				Set("last_updated = EXCLUDED.last_updated").
@@ -428,7 +428,7 @@ func (r *GroupModel) GetFlaggedAndConfirmedGroups(ctx context.Context) ([]*types
 		var flaggedGroups []types.FlaggedGroup
 		err := tx.NewSelect().
 			Model(&flaggedGroups).
-			Column("id", "reason").
+			Column("id", "reasons").
 			Scan(ctx)
 		if err != nil {
 			return fmt.Errorf("failed to get flagged groups: %w", err)
@@ -444,7 +444,7 @@ func (r *GroupModel) GetFlaggedAndConfirmedGroups(ctx context.Context) ([]*types
 		var confirmedGroups []types.ConfirmedGroup
 		err = tx.NewSelect().
 			Model(&confirmedGroups).
-			Column("id", "reason").
+			Column("id", "reasons").
 			Scan(ctx)
 		if err != nil {
 			return fmt.Errorf("failed to get confirmed groups: %w", err)

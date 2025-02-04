@@ -149,7 +149,7 @@ func (m *ReviewMenu) handleActionSelection(event *events.ComponentInteractionCre
 			m.layout.paginationManager.RespondWithError(event, "You do not have permission to confirm groups with custom reasons.")
 			return
 		}
-		m.handleConfirmWithReason(event, s)
+		m.handleConfirmWithReason(event)
 	case constants.ReviewModeOption:
 		if !isReviewer {
 			m.layout.logger.Error("Non-reviewer attempted to change review mode", zap.Uint64("user_id", userID))
@@ -269,7 +269,7 @@ func (m *ReviewMenu) handleOpenAIChat(event *events.ComponentInteractionCreate, 
 	flaggedMembers, err := m.layout.db.Models().Users().GetUsersByIDs(
 		context.Background(),
 		memberIDs,
-		types.UserFieldBasic|types.UserFieldReason|types.UserFieldConfidence,
+		types.UserFieldBasic|types.UserFieldReasons|types.UserFieldConfidence,
 	)
 	if err != nil {
 		m.layout.logger.Error("Failed to get flagged members data", zap.Error(err))
@@ -278,11 +278,12 @@ func (m *ReviewMenu) handleOpenAIChat(event *events.ComponentInteractionCreate, 
 	// Build flagged members information
 	membersInfo := make([]string, 0, len(flaggedMembers))
 	for _, member := range flaggedMembers {
-		membersInfo = append(membersInfo, fmt.Sprintf("- %s (ID: %d) | Status: %s | Reason: %s | Confidence: %.2f",
+		messages := member.Reasons.Messages()
+		membersInfo = append(membersInfo, fmt.Sprintf("- %s (ID: %d) | Status: %s | Reasons: %s | Confidence: %.2f",
 			member.Name,
 			member.ID,
 			member.Status.String(),
-			member.Reason,
+			strings.Join(messages, "; "),
 			member.Confidence))
 	}
 
@@ -311,7 +312,7 @@ Basic Info:
 - Description: %s
 - Owner: %s (ID: %d)
 - Total Members: %d
-- Reason Flagged: %s
+- Reasons: %s
 - Confidence: %.2f
 
 Status Information:
@@ -330,16 +331,16 @@ Flagged Members (%d total, showing first %d):
 		group.Owner.Username,
 		group.Owner.UserID,
 		groupInfo.MemberCount,
-		group.Reason,
+		group.Reasons.Messages(),
 		group.Confidence,
 		group.Status.String(),
 		group.Reputation.Downvotes,
 		group.Reputation.Upvotes,
 		group.LastUpdated.Format(time.RFC3339),
-		shoutInfo,
+		strings.ReplaceAll(shoutInfo, "\n", " "),
 		totalMembers,
 		limit,
-		strings.Join(membersInfo, "\n"),
+		strings.Join(membersInfo, " "),
 	)
 
 	// Update session and navigate to chat
@@ -350,9 +351,7 @@ Flagged Members (%d total, showing first %d):
 
 // handleConfirmWithReason opens a modal for entering a custom confirm reason.
 // The modal pre-fills with the current reason if one exists.
-func (m *ReviewMenu) handleConfirmWithReason(event *events.ComponentInteractionCreate, s *session.Session) {
-	group := session.GroupTarget.Get(s)
-
+func (m *ReviewMenu) handleConfirmWithReason(event *events.ComponentInteractionCreate) {
 	// Create modal with pre-filled reason and confidence fields
 	modal := discord.NewModalCreateBuilder().
 		SetCustomID(constants.ConfirmWithReasonModalCustomID).
@@ -360,14 +359,12 @@ func (m *ReviewMenu) handleConfirmWithReason(event *events.ComponentInteractionC
 		AddActionRow(
 			discord.NewTextInput(constants.ConfirmConfidenceInputCustomID, discord.TextInputStyleShort, "Confidence").
 				WithRequired(true).
-				WithPlaceholder("Enter confidence value (0.0-1.0)").
-				WithValue(fmt.Sprintf("%.2f", group.Confidence)),
+				WithPlaceholder("Enter confidence value (0.0-1.0)"),
 		).
 		AddActionRow(
 			discord.NewTextInput(constants.ConfirmReasonInputCustomID, discord.TextInputStyleParagraph, "Confirm Reason").
 				WithRequired(true).
-				WithPlaceholder("Enter the reason for confirming this group...").
-				WithValue(group.Reason),
+				WithPlaceholder("Enter the reason for confirming this group..."),
 		).
 		Build()
 
@@ -445,7 +442,9 @@ func (m *ReviewMenu) handleConfirmGroup(event interfaces.CommonEvent, s *session
 			ReviewerID:        uint64(event.User().ID),
 			ActivityType:      enum.ActivityTypeGroupConfirmed,
 			ActivityTimestamp: time.Now(),
-			Details:           map[string]interface{}{"reason": group.Reason},
+			Details: map[string]interface{}{
+				"reasons": group.Reasons.Messages(),
+			},
 		})
 	}
 
@@ -574,8 +573,12 @@ func (m *ReviewMenu) handleConfirmWithReasonModalSubmit(event *events.ModalSubmi
 
 	// Update group's reason and confidence with the custom input
 	group := session.GroupTarget.Get(s)
-	group.Reason = reason
-	group.Confidence = confidence
+	group.Reasons = types.Reasons{
+		enum.ReasonTypeCustom: &types.Reason{
+			Message:    reason,
+			Confidence: confidence,
+		},
+	}
 
 	// Update group status in database
 	if err := m.layout.db.Models().Groups().ConfirmGroup(context.Background(), group); err != nil {
@@ -595,10 +598,10 @@ func (m *ReviewMenu) handleConfirmWithReasonModalSubmit(event *events.ModalSubmi
 			GroupID: group.ID,
 		},
 		ReviewerID:        uint64(event.User().ID),
-		ActivityType:      enum.ActivityTypeGroupConfirmedCustom,
+		ActivityType:      enum.ActivityTypeGroupConfirmed,
 		ActivityTimestamp: time.Now(),
 		Details: map[string]interface{}{
-			"reason":     group.Reason,
+			"reasons":    group.Reasons.Messages(),
 			"confidence": group.Confidence,
 		},
 	})

@@ -88,7 +88,7 @@ func (m *ReviewMenu) Show(event interfaces.CommonEvent, s *session.Session, cont
 		flaggedFriends, err = m.layout.db.Models().Users().GetUsersByIDs(
 			context.Background(),
 			friendIDs,
-			types.UserFieldBasic|types.UserFieldReason|types.UserFieldConfidence,
+			types.UserFieldBasic|types.UserFieldReasons|types.UserFieldConfidence,
 		)
 		if err != nil {
 			m.layout.logger.Error("Failed to get friend data", zap.Error(err))
@@ -110,7 +110,7 @@ func (m *ReviewMenu) Show(event interfaces.CommonEvent, s *session.Session, cont
 		flaggedGroups, err = m.layout.db.Models().Groups().GetGroupsByIDs(
 			context.Background(),
 			groupIDs,
-			types.GroupFieldBasic|types.GroupFieldReason|types.GroupFieldConfidence,
+			types.GroupFieldBasic|types.GroupFieldReasons|types.GroupFieldConfidence,
 		)
 		if err != nil {
 			m.layout.logger.Error("Failed to get group data", zap.Error(err))
@@ -194,7 +194,7 @@ func (m *ReviewMenu) handleActionSelection(event *events.ComponentInteractionCre
 			m.layout.paginationManager.RespondWithError(event, "You do not have permission to confirm users with custom reasons.")
 			return
 		}
-		m.handleConfirmWithReason(event, s)
+		m.handleConfirmWithReason(event)
 	case constants.ReviewModeOption:
 		if !isReviewer {
 			m.layout.logger.Error("Non-reviewer attempted to change review mode", zap.Uint64("user_id", userID))
@@ -420,7 +420,10 @@ func (m *ReviewMenu) handleConfirmUser(event interfaces.CommonEvent, s *session.
 			ReviewerID:        uint64(event.User().ID),
 			ActivityType:      enum.ActivityTypeUserConfirmed,
 			ActivityTimestamp: time.Now(),
-			Details:           map[string]interface{}{"reason": user.Reason},
+			Details: map[string]interface{}{
+				"reasons":    user.Reasons.Messages(),
+				"confidence": user.Confidence,
+			},
 		})
 	}
 
@@ -562,9 +565,10 @@ func (m *ReviewMenu) handleOpenAIChat(event *events.ComponentInteractionCreate, 
 	for _, friend := range user.Friends {
 		info := fmt.Sprintf("- %s (ID: %d)", friend.Name, friend.ID)
 		if flagged := flaggedFriends[friend.ID]; flagged != nil {
-			info += fmt.Sprintf(" | Status: %s | Reason: %s | Confidence: %.2f",
+			messages := flagged.Reasons.Messages()
+			info += fmt.Sprintf(" | Status: %s | Reasons: %s | Confidence: %.2f",
 				flagged.Status.String(),
-				flagged.Reason,
+				strings.Join(messages, "; "),
 				flagged.Confidence)
 		}
 		friendsInfo = append(friendsInfo, info)
@@ -578,9 +582,10 @@ func (m *ReviewMenu) handleOpenAIChat(event *events.ComponentInteractionCreate, 
 			group.Group.ID,
 			group.Role.Name)
 		if flagged := flaggedGroups[group.Group.ID]; flagged != nil {
-			info += fmt.Sprintf(" | Status: %s | Reason: %s | Confidence: %.2f",
+			messages := flagged.Reasons.Messages()
+			info += fmt.Sprintf(" | Status: %s | Reasons: %s | Confidence: %.2f",
 				flagged.Status.String(),
-				flagged.Reason,
+				strings.Join(messages, "; "),
 				flagged.Confidence)
 		}
 		groupsInfo = append(groupsInfo, info)
@@ -610,7 +615,7 @@ Basic Info:
 - Account Created: %s
 - Followers: %d
 - Following: %d
-- Reason Flagged: %s
+- Reasons: %s
 - Confidence: %.2f
 
 Status Information:
@@ -628,9 +633,6 @@ Outfits (%d total):
 %s
 
 Games (%d total):
-%s
-
-Flagged Content (%d items):
 %s</context>`,
 		user.Name,
 		user.DisplayName,
@@ -638,7 +640,7 @@ Flagged Content (%d items):
 		user.CreatedAt.Format(time.RFC3339),
 		user.FollowerCount,
 		user.FollowingCount,
-		user.Reason,
+		user.Reasons.Messages(),
 		user.Confidence,
 		user.Status.String(),
 		user.Reputation.Downvotes,
@@ -646,16 +648,14 @@ Flagged Content (%d items):
 		user.LastUpdated.Format(time.RFC3339),
 		len(user.Friends),
 		len(flaggedFriends),
-		strings.Join(friendsInfo, "\n"),
+		strings.Join(friendsInfo, " "),
 		len(user.Groups),
 		len(flaggedGroups),
-		strings.Join(groupsInfo, "\n"),
+		strings.Join(groupsInfo, " "),
 		len(user.Outfits),
-		strings.Join(outfitsInfo, "\n"),
+		strings.Join(outfitsInfo, " "),
 		len(user.Games),
-		strings.Join(gamesInfo, "\n"),
-		len(user.FlaggedContent),
-		strings.Join(user.FlaggedContent, "\n"),
+		strings.Join(gamesInfo, " "),
 	)
 
 	// Update session and navigate to chat
@@ -666,9 +666,7 @@ Flagged Content (%d items):
 
 // handleConfirmWithReason opens a modal for entering a custom confirm reason.
 // The modal pre-fills with the current reason if one exists.
-func (m *ReviewMenu) handleConfirmWithReason(event *events.ComponentInteractionCreate, s *session.Session) {
-	user := session.UserTarget.Get(s)
-
+func (m *ReviewMenu) handleConfirmWithReason(event *events.ComponentInteractionCreate) {
 	// Create modal with pre-filled reason and confidence fields
 	modal := discord.NewModalCreateBuilder().
 		SetCustomID(constants.ConfirmWithReasonModalCustomID).
@@ -676,14 +674,12 @@ func (m *ReviewMenu) handleConfirmWithReason(event *events.ComponentInteractionC
 		AddActionRow(
 			discord.NewTextInput(constants.ConfirmConfidenceInputCustomID, discord.TextInputStyleShort, "Confidence").
 				WithRequired(true).
-				WithPlaceholder("Enter confidence value (0.0-1.0)").
-				WithValue(fmt.Sprintf("%.2f", user.Confidence)),
+				WithPlaceholder("Enter confidence value (0.0-1.0)"),
 		).
 		AddActionRow(
 			discord.NewTextInput(constants.ConfirmReasonInputCustomID, discord.TextInputStyleParagraph, "Confirm Reason").
 				WithRequired(true).
-				WithPlaceholder("Enter the reason for confirming this user...").
-				WithValue(user.Reason),
+				WithPlaceholder("Enter the reason for confirming this user..."),
 		).
 		Build()
 
@@ -716,8 +712,12 @@ func (m *ReviewMenu) handleConfirmWithReasonModalSubmit(event *events.ModalSubmi
 
 	// Update user's reason and confidence with the custom input
 	user := session.UserTarget.Get(s)
-	user.Reason = reason
-	user.Confidence = confidence
+	user.Reasons = types.Reasons{
+		enum.ReasonTypeCustom: &types.Reason{
+			Message:    reason,
+			Confidence: confidence,
+		},
+	}
 
 	// Update user status in database
 	if err := m.layout.db.Models().Users().ConfirmUser(context.Background(), user); err != nil {
@@ -737,11 +737,11 @@ func (m *ReviewMenu) handleConfirmWithReasonModalSubmit(event *events.ModalSubmi
 			UserID: user.ID,
 		},
 		ReviewerID:        uint64(event.User().ID),
-		ActivityType:      enum.ActivityTypeUserConfirmedCustom,
+		ActivityType:      enum.ActivityTypeUserConfirmed,
 		ActivityTimestamp: time.Now(),
 		Details: map[string]interface{}{
-			"reason":     user.Reason,
-			"confidence": user.Confidence,
+			"reasons":    user.Reasons.Messages(),
+			"confidence": confidence,
 		},
 	})
 }

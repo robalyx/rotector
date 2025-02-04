@@ -2,6 +2,7 @@ package checker
 
 import (
 	"context"
+	"math"
 
 	"github.com/robalyx/rotector/internal/common/client/ai"
 	"github.com/robalyx/rotector/internal/common/client/fetcher"
@@ -94,17 +95,26 @@ func (c *UserChecker) ProcessUsers(userInfos []*fetcher.Info) {
 	// Add follow counts to flagged users
 	c.followFetcher.AddFollowCounts(context.Background(), flaggedUsers)
 
-	// Check if any flagged users have a follower count above the threshold
+	// Calculate final confidence scores
 	for _, user := range flaggedUsers {
-		if user.FollowerCount >= c.app.Config.Worker.ThresholdLimits.MinFollowersForPopular {
-			user.Reason = "⚠️ **WARNING: Popular user with large amount of followers**\n\n" + user.Reason
-			user.Confidence = 1.0
+		var totalConfidence float64
+		var maxConfidence float64
 
-			c.logger.Info("Popular user flagged",
-				zap.Uint64("userID", user.ID),
-				zap.String("username", user.Name),
-				zap.Uint64("followers", user.FollowerCount))
+		// Sum up confidence from all reasons and track highest individual confidence
+		for _, reason := range user.Reasons {
+			totalConfidence += reason.Confidence
+			if reason.Confidence > maxConfidence {
+				maxConfidence = reason.Confidence
+			}
 		}
+
+		// Calculate average but weight it towards highest confidence
+		// 70% highest confidence + 30% average confidence
+		avgConfidence := totalConfidence / float64(len(user.Reasons))
+		finalConfidence := (maxConfidence * 0.7) + (avgConfidence * 0.3)
+
+		// Round to 2 decimal places
+		user.Confidence = math.Round(finalConfidence*100) / 100
 	}
 
 	// Save flagged users to database

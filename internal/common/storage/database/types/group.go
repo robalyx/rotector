@@ -23,7 +23,7 @@ type Group struct {
 	Description         string            `bun:",notnull"   json:"description"`
 	Owner               *types.GroupUser  `bun:"type:jsonb" json:"owner"`
 	Shout               *types.GroupShout `bun:"type:jsonb" json:"shout"`
-	Reason              string            `bun:",notnull"   json:"reason"`
+	Reasons             Reasons           `bun:"type:jsonb" json:"reasons"`
 	Confidence          float64           `bun:",notnull"   json:"confidence"`
 	LastScanned         time.Time         `bun:",notnull"   json:"lastScanned"`
 	LastUpdated         time.Time         `bun:",notnull"   json:"lastUpdated"`
@@ -74,7 +74,7 @@ const (
 	GroupFieldDescription                         // Group description
 	GroupFieldOwner                               // Owner information
 	GroupFieldShout                               // Group shout
-	GroupFieldReason                              // Reason for flagging
+	GroupFieldReasons                             // Reasons for flagging
 	GroupFieldThumbnail                           // ThumbnailURL
 	GroupFieldFlaggedUsers                        // FlaggedUsers list
 
@@ -110,7 +110,7 @@ const (
 	GroupFieldAll = GroupFieldBasic |
 		GroupFieldOwner |
 		GroupFieldShout |
-		GroupFieldReason |
+		GroupFieldReasons |
 		GroupFieldThumbnail |
 		GroupFieldFlaggedUsers |
 		GroupFieldConfidence |
@@ -126,7 +126,7 @@ var groupFieldToColumns = map[GroupField][]string{ //nolint:gochecknoglobals
 	GroupFieldDescription:         {"description"},
 	GroupFieldOwner:               {"owner"},
 	GroupFieldShout:               {"shout"},
-	GroupFieldReason:              {"reason"},
+	GroupFieldReasons:             {"reasons"},
 	GroupFieldThumbnail:           {"thumbnail_url"},
 	GroupFieldFlaggedUsers:        {"flagged_users"},
 	GroupFieldConfidence:          {"confidence"},

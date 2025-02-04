@@ -52,7 +52,7 @@ func (m *MembersMenu) Show(event *events.ComponentInteractionCreate, s *session.
 	members, err := m.layout.db.Models().Users().GetUsersByIDs(
 		context.Background(),
 		memberIDs,
-		types.UserFieldBasic|types.UserFieldReason|types.UserFieldConfidence,
+		types.UserFieldBasic|types.UserFieldReasons|types.UserFieldConfidence,
 	)
 	if err != nil {
 		m.layout.logger.Error("Failed to get user data", zap.Error(err))

@@ -37,7 +37,7 @@ func Group(group *types.ReviewGroup) *proto.Group {
 		Description:  group.Description,
 		Owner:        GroupUser(group.Owner),
 		Shout:        GroupShout(group.Shout),
-		Reason:       group.Reason,
+		Reasons:      GroupReasons(group.Reasons),
 		Confidence:   group.Confidence,
 		LastScanned:  group.LastScanned.Format(time.RFC3339),
 		LastUpdated:  group.LastUpdated.Format(time.RFC3339),
@@ -71,4 +71,17 @@ func GroupShout(shout *apiTypes.GroupShout) *proto.GroupShout {
 		Content: shout.Body,
 		Poster:  GroupUser(&shout.Poster),
 	}
+}
+
+// GroupReasons converts a database group reasons to RPC API group reasons.
+func GroupReasons(reasons types.Reasons) map[string]*proto.Reason {
+	rpcReasons := make(map[string]*proto.Reason)
+	for k, v := range reasons {
+		rpcReasons[k.String()] = &proto.Reason{
+			Message:    v.Message,
+			Confidence: v.Confidence,
+			Evidence:   v.Evidence,
+		}
+	}
+	return rpcReasons
 }

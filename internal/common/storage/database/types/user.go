@@ -25,12 +25,11 @@ type User struct {
 	DisplayName         string                  `bun:",notnull"   json:"displayName"`
 	Description         string                  `bun:",notnull"   json:"description"`
 	CreatedAt           time.Time               `bun:",notnull"   json:"createdAt"`
-	Reason              string                  `bun:",notnull"   json:"reason"`
+	Reasons             Reasons                 `bun:"type:jsonb" json:"reasons"`
 	Groups              []*types.UserGroupRoles `bun:"type:jsonb" json:"groups"`
 	Outfits             []*types.Outfit         `bun:"type:jsonb" json:"outfits"`
 	Friends             []*types.ExtendedFriend `bun:"type:jsonb" json:"friends"`
 	Games               []*types.Game           `bun:"type:jsonb" json:"games"`
-	FlaggedContent      []string                `bun:"type:jsonb" json:"flaggedContent"`
 	FollowerCount       uint64                  `bun:",notnull"   json:"followerCount"`
 	FollowingCount      uint64                  `bun:",notnull"   json:"followingCount"`
 	Confidence          float64                 `bun:",notnull"   json:"confidence"`
@@ -85,15 +84,14 @@ const (
 	UserFieldDisplayName                       // Display name
 	UserFieldDescription                       // User description
 	UserFieldCreatedAt                         // Account creation date
-	UserFieldReason                            // Reason for flagging
+	UserFieldReasons                           // Reasons for flagging
 	UserFieldThumbnail                         // ThumbnailURL
 
 	// Relationships and content
-	UserFieldGroups         // Group memberships
-	UserFieldOutfits        // User outfits
-	UserFieldFriends        // Friend list
-	UserFieldGames          // Played games
-	UserFieldFlaggedContent // Flagged content
+	UserFieldGroups  // Group memberships
+	UserFieldOutfits // User outfits
+	UserFieldFriends // Friend list
+	UserFieldGames   // Played games
 
 	// Statistics
 	UserFieldFollowerCount  // Follower count
@@ -144,11 +142,11 @@ const (
 	// UserFieldAll includes all available fields.
 	UserFieldAll = UserFieldBasic |
 		UserFieldProfile |
+		UserFieldReasons |
 		UserFieldRelationships |
 		UserFieldStats |
 		UserFieldReputation |
-		UserFieldTimestamps |
-		UserFieldFlaggedContent
+		UserFieldTimestamps
 )
 
 // userFieldToColumns maps UserField bits to their corresponding database columns.
@@ -159,13 +157,12 @@ var userFieldToColumns = map[UserField][]string{ //nolint:gochecknoglobals
 	UserFieldDisplayName:         {"display_name"},
 	UserFieldDescription:         {"description"},
 	UserFieldCreatedAt:           {"created_at"},
-	UserFieldReason:              {"reason"},
+	UserFieldReasons:             {"reasons"},
 	UserFieldThumbnail:           {"thumbnail_url"},
 	UserFieldGroups:              {"groups"},
 	UserFieldOutfits:             {"outfits"},
 	UserFieldFriends:             {"friends"},
 	UserFieldGames:               {"games"},
-	UserFieldFlaggedContent:      {"flagged_content"},
 	UserFieldFollowerCount:       {"follower_count"},
 	UserFieldFollowingCount:      {"following_count"},
 	UserFieldConfidence:          {"confidence"},

@@ -2,9 +2,7 @@ package checker
 
 import (
 	"context"
-	"fmt"
 	"math"
-	"sync"
 	"time"
 
 	"github.com/robalyx/rotector/internal/common/client/ai"
@@ -13,7 +11,6 @@ import (
 	"github.com/robalyx/rotector/internal/common/storage/database"
 	"github.com/robalyx/rotector/internal/common/storage/database/types"
 	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
-	"github.com/sourcegraph/conc/pool"
 	"go.uber.org/zap"
 )
 
@@ -82,127 +79,102 @@ func (c *FriendChecker) ProcessUsers(userInfos []*fetcher.Info, flaggedUsers map
 	}
 
 	// Fetch all existing friends
-	existingFriends, err := c.db.Models().Users().GetUsersByIDs(context.Background(), friendIDs, types.UserFieldBasic|types.UserFieldReason)
+	existingFriends, err := c.db.Models().Users().GetUsersByIDs(context.Background(), friendIDs, types.UserFieldBasic|types.UserFieldReasons)
 	if err != nil {
 		c.logger.Error("Failed to fetch existing friends", zap.Error(err))
 		return
 	}
 
-	var (
-		p  = pool.New().WithContext(context.Background())
-		mu sync.Mutex
-	)
+	// Prepare maps for confirmed and flagged friends per user
+	confirmedFriendsMap := make(map[uint64]map[uint64]*types.User)
+	flaggedFriendsMap := make(map[uint64]map[uint64]*types.User)
 
-	// Process each user concurrently
 	for _, userInfo := range userInfos {
-		p.Go(func(ctx context.Context) error {
-			// Process user friends
-			user, autoFlagged := c.processUserFriends(ctx, userInfo, existingFriends)
+		confirmedFriends := make(map[uint64]*types.User)
+		flaggedFriends := make(map[uint64]*types.User)
 
-			mu.Lock()
-			defer mu.Unlock()
+		for _, friend := range userInfo.Friends.Data {
+			if reviewUser, exists := existingFriends[friend.ID]; exists {
+				switch reviewUser.Status {
+				case enum.UserTypeConfirmed:
+					confirmedFriends[friend.ID] = &reviewUser.User
+				case enum.UserTypeFlagged:
+					flaggedFriends[friend.ID] = &reviewUser.User
+				} //exhaustive:ignore
+			}
+		}
 
-			if autoFlagged {
-				if existingUser, ok := flaggedUsers[userInfo.ID]; ok {
-					// Combine reasons and update confidence
-					existingUser.Reason = fmt.Sprintf("%s\n\n%s", existingUser.Reason, user.Reason)
-					existingUser.Confidence = 1.0
-				} else {
-					flaggedUsers[userInfo.ID] = user
+		confirmedFriendsMap[userInfo.ID] = confirmedFriends
+		flaggedFriendsMap[userInfo.ID] = flaggedFriends
+	}
+
+	// Generate reasons for all users
+	reasons := c.friendAnalyzer.GenerateFriendReasons(context.Background(), userInfos, confirmedFriendsMap, flaggedFriendsMap)
+
+	// Process results
+	for _, userInfo := range userInfos {
+		// Skip users with very few friends
+		if len(userInfo.Friends.Data) < 3 {
+			continue
+		}
+
+		confirmedCount := len(confirmedFriendsMap[userInfo.ID])
+		flaggedCount := len(flaggedFriendsMap[userInfo.ID])
+
+		// Calculate confidence score
+		confidence := c.calculateConfidence(confirmedCount, flaggedCount, len(userInfo.Friends.Data), userInfo.CreatedAt)
+
+		// Flag user if confidence exceeds threshold
+		if confidence >= 0.4 {
+			reason := reasons[userInfo.ID]
+			if reason == "" {
+				// Fallback to default reason format if AI generation failed
+				reason = "User has flagged friends."
+			}
+
+			if existingUser, ok := flaggedUsers[userInfo.ID]; ok {
+				// Add new reason
+				existingUser.Reasons[enum.ReasonTypeFriend] = &types.Reason{
+					Message:    reason,
+					Confidence: confidence,
+				}
+				existingUser.Confidence = 1.0
+			} else {
+				flaggedUsers[userInfo.ID] = &types.User{
+					ID:          userInfo.ID,
+					Name:        userInfo.Name,
+					DisplayName: userInfo.DisplayName,
+					Description: userInfo.Description,
+					CreatedAt:   userInfo.CreatedAt,
+					Reasons: types.Reasons{
+						enum.ReasonTypeFriend: &types.Reason{
+							Message:    reason,
+							Confidence: confidence,
+						},
+					},
+					Groups:              userInfo.Groups.Data,
+					Friends:             userInfo.Friends.Data,
+					Games:               userInfo.Games.Data,
+					Outfits:             userInfo.Outfits.Data,
+					FollowerCount:       userInfo.FollowerCount,
+					FollowingCount:      userInfo.FollowingCount,
+					Confidence:          math.Round(confidence*100) / 100,
+					LastUpdated:         userInfo.LastUpdated,
+					LastBanCheck:        userInfo.LastBanCheck,
+					ThumbnailURL:        userInfo.ThumbnailURL,
+					LastThumbnailUpdate: userInfo.LastThumbnailUpdate,
 				}
 			}
 
-			return nil
-		})
-	}
-
-	// Wait for all goroutines to complete
-	if err := p.Wait(); err != nil {
-		c.logger.Error("Error during friend processing", zap.Error(err))
-	}
-}
-
-// processUserFriends checks if a user should be flagged based on their friends.
-func (c *FriendChecker) processUserFriends(ctx context.Context, userInfo *fetcher.Info, existingFriends map[uint64]*types.ReviewUser) (*types.User, bool) {
-	// Skip users with very few friends to avoid false positives
-	if len(userInfo.Friends.Data) < 3 {
-		return nil, false
-	}
-
-	// Count confirmed and flagged friends
-	confirmedFriends := make(map[uint64]*types.User)
-	flaggedFriends := make(map[uint64]*types.User)
-	confirmedCount := 0
-	flaggedCount := 0
-
-	for _, friend := range userInfo.Friends.Data {
-		if reviewUser, exists := existingFriends[friend.ID]; exists {
-			switch reviewUser.Status {
-			case enum.UserTypeConfirmed:
-				confirmedCount++
-				confirmedFriends[friend.ID] = &reviewUser.User
-			case enum.UserTypeFlagged:
-				flaggedCount++
-				flaggedFriends[friend.ID] = &reviewUser.User
-			} //exhaustive:ignore
+			c.logger.Info("User automatically flagged",
+				zap.Uint64("userID", userInfo.ID),
+				zap.Int("confirmedFriends", confirmedCount),
+				zap.Int("flaggedFriends", flaggedCount),
+				zap.Float64("confidence", confidence),
+				zap.Int("accountAgeDays", int(time.Since(userInfo.CreatedAt).Hours()/24)),
+				zap.String("reason", reason))
 		}
 	}
-
-	// Calculate confidence score
-	confidence := c.calculateConfidence(confirmedCount, flaggedCount, len(userInfo.Friends.Data), userInfo.CreatedAt)
-
-	// Flag user if confidence exceeds threshold
-	if confidence >= 0.4 {
-		accountAge := time.Since(userInfo.CreatedAt)
-
-		// Generate AI-based reason using friend list analysis
-		reason, err := c.friendAnalyzer.GenerateFriendReason(ctx, userInfo, confirmedFriends, flaggedFriends)
-		if err != nil {
-			c.logger.Error("Failed to generate AI reason, falling back to default",
-				zap.Error(err),
-				zap.Uint64("userID", userInfo.ID))
-
-			// Fallback to default reason format
-			reason = fmt.Sprintf(
-				"User has %d confirmed and %d flagged friends (%.1f%% total).",
-				confirmedCount,
-				flaggedCount,
-				float64(confirmedCount+flaggedCount)/float64(len(userInfo.Friends.Data))*100,
-			)
-		}
-
-		user := &types.User{
-			ID:                  userInfo.ID,
-			Name:                userInfo.Name,
-			DisplayName:         userInfo.DisplayName,
-			Description:         userInfo.Description,
-			CreatedAt:           userInfo.CreatedAt,
-			Reason:              "Friend Analysis: " + reason,
-			Groups:              userInfo.Groups.Data,
-			Friends:             userInfo.Friends.Data,
-			Games:               userInfo.Games.Data,
-			Outfits:             userInfo.Outfits.Data,
-			FollowerCount:       userInfo.FollowerCount,
-			FollowingCount:      userInfo.FollowingCount,
-			Confidence:          math.Round(confidence*100) / 100, // Round to 2 decimal places
-			LastUpdated:         userInfo.LastUpdated,
-			LastBanCheck:        userInfo.LastBanCheck,
-			ThumbnailURL:        userInfo.ThumbnailURL,
-			LastThumbnailUpdate: userInfo.LastThumbnailUpdate,
-		}
-
-		c.logger.Info("User automatically flagged",
-			zap.Uint64("userID", userInfo.ID),
-			zap.Int("confirmedFriends", confirmedCount),
-			zap.Int("flaggedFriends", flaggedCount),
-			zap.Float64("confidence", confidence),
-			zap.Int("accountAgeDays", int(accountAge.Hours()/24)),
-			zap.String("reason", reason))
-
-		return user, true
-	}
-
-	return nil, false
 }
 
 // calculateConfidence computes a weighted confidence score based on friend relationships and account age.

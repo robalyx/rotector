@@ -15,8 +15,6 @@ const (
 	ActivityTypeUserLookup
 	// ActivityTypeUserConfirmed tracks when a moderator confirms a user as inappropriate.
 	ActivityTypeUserConfirmed
-	// ActivityTypeUserConfirmedCustom tracks bans with custom moderator-provided reasons.
-	ActivityTypeUserConfirmedCustom
 	// ActivityTypeUserCleared tracks when a moderator marks a user as appropriate.
 	ActivityTypeUserCleared
 	// ActivityTypeUserSkipped tracks when a moderator skips reviewing a user.
