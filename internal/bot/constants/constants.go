@@ -39,13 +39,13 @@ const (
 	AppealTicketPageName   = "Appeal Ticket"
 	AppealVerifyPageName   = "Appeal Verification"
 
-	BotSettingPageName    = "Bot Settings"
-	UserSettingPageName   = "User Settings"
+	BotSettingsPageName   = "Bot Settings"
+	UserSettingsPageName  = "User Settings"
 	SettingUpdatePageName = "Setting Update"
 
-	BanInfoPageName     = "Ban Information"
-	CaptchaMenuPageName = "CAPTCHA Verification"
-	ChatMenuPageName    = "AI Chat"
+	BanPageName         = "Ban Information"
+	CaptchaPageName     = "CAPTCHA Verification"
+	ChatPageName        = "AI Chat"
 	LeaderboardPageName = "Leaderboard"
 	LogPageName         = "Activity Logs"
 	QueuePageName       = "Queue Manager"

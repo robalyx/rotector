@@ -25,11 +25,13 @@ type GroupsBuilder struct {
 	total         int
 	imageBuffer   *bytes.Buffer
 	isStreaming   bool
+	trainingMode  bool
 	privacyMode   bool
 }
 
 // NewGroupsBuilder creates a new groups builder.
 func NewGroupsBuilder(s *session.Session) *GroupsBuilder {
+	trainingMode := session.UserReviewMode.Get(s) == enum.ReviewModeTraining
 	return &GroupsBuilder{
 		user:          session.UserTarget.Get(s),
 		groups:        session.UserGroups.Get(s),
@@ -39,7 +41,8 @@ func NewGroupsBuilder(s *session.Session) *GroupsBuilder {
 		total:         session.PaginationTotalItems.Get(s),
 		imageBuffer:   session.ImageBuffer.Get(s),
 		isStreaming:   session.PaginationIsStreaming.Get(s),
-		privacyMode:   session.UserReviewMode.Get(s) == enum.ReviewModeTraining || session.UserStreamerMode.Get(s),
+		trainingMode:  trainingMode,
+		privacyMode:   trainingMode || session.UserStreamerMode.Get(s),
 	}
 }
 
@@ -125,7 +128,7 @@ func (b *GroupsBuilder) getGroupFieldValue(group *apiTypes.UserGroupRoles) strin
 
 	// Add group name (with link in standard mode)
 	name := utils.CensorString(group.Group.Name, b.privacyMode)
-	if b.privacyMode {
+	if b.trainingMode {
 		info.WriteString(name + "\n")
 	} else {
 		info.WriteString(fmt.Sprintf(

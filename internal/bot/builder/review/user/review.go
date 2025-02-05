@@ -30,11 +30,13 @@ type ReviewBuilder struct {
 	reviewMode     enum.ReviewMode
 	defaultSort    enum.ReviewSortBy
 	isReviewer     bool
+	trainingMode   bool
 	privacyMode    bool
 }
 
 // NewReviewBuilder creates a new review builder.
 func NewReviewBuilder(s *session.Session, translator *translator.Translator, db database.Client) *ReviewBuilder {
+	trainingMode := session.UserReviewMode.Get(s) == enum.ReviewModeTraining
 	return &ReviewBuilder{
 		db:             db,
 		userID:         s.UserID(),
@@ -45,7 +47,8 @@ func NewReviewBuilder(s *session.Session, translator *translator.Translator, db 
 		reviewMode:     session.UserReviewMode.Get(s),
 		defaultSort:    session.UserUserDefaultSort.Get(s),
 		isReviewer:     s.BotSettings().IsReviewer(s.UserID()),
-		privacyMode:    session.UserReviewMode.Get(s) == enum.ReviewModeTraining || session.UserStreamerMode.Get(s),
+		trainingMode:   trainingMode,
+		privacyMode:    trainingMode || session.UserStreamerMode.Get(s),
 	}
 }
 
@@ -531,7 +534,7 @@ func (b *ReviewBuilder) getFriends() string {
 		}
 
 		name := utils.CensorString(friend.Name, b.privacyMode)
-		if b.privacyMode {
+		if b.trainingMode {
 			friends = append(friends, name)
 		} else {
 			friends = append(friends, fmt.Sprintf(
@@ -564,7 +567,7 @@ func (b *ReviewBuilder) getGroups() string {
 		}
 
 		name := utils.CensorString(group.Group.Name, b.privacyMode)
-		if b.privacyMode {
+		if b.trainingMode {
 			groups = append(groups, name)
 		} else {
 			groups = append(groups, fmt.Sprintf(
@@ -604,7 +607,7 @@ func (b *ReviewBuilder) getGames() string {
 		name := utils.CensorString(game.Name, b.privacyMode)
 		visits := utils.FormatNumber(game.PlaceVisits)
 
-		if b.privacyMode {
+		if b.trainingMode {
 			games = append(games, fmt.Sprintf("%s (%s visits)", name, visits))
 		} else {
 			games = append(games, fmt.Sprintf("[%s](https://www.roblox.com/games/%d) (%s visits)",

@@ -2,8 +2,6 @@ package queue
 
 import (
 	"github.com/robalyx/rotector/internal/bot/core/pagination"
-	"github.com/robalyx/rotector/internal/bot/core/session"
-	"github.com/robalyx/rotector/internal/bot/interfaces"
 	"github.com/robalyx/rotector/internal/common/queue"
 	"github.com/robalyx/rotector/internal/common/setup"
 	"github.com/robalyx/rotector/internal/common/storage/database"
@@ -12,42 +10,27 @@ import (
 
 // Layout handles queue management operations and their interactions.
 type Layout struct {
-	db                database.Client
-	logger            *zap.Logger
-	sessionManager    *session.Manager
-	paginationManager *pagination.Manager
-	queueManager      *queue.Manager
-	mainMenu          *MainMenu
-	userReviewLayout  interfaces.UserReviewLayout
+	db           database.Client
+	logger       *zap.Logger
+	queueManager *queue.Manager
+	menu         *Menu
 }
 
-// New creates a Layout by initializing the queue menu and registering its
-// page with the pagination manager.
-func New(
-	app *setup.App,
-	sessionManager *session.Manager,
-	paginationManager *pagination.Manager,
-	userReviewLayout interfaces.UserReviewLayout,
-) *Layout {
-	// Initialize layout
+// New creates a Layout by initializing the queue menu.
+func New(app *setup.App) *Layout {
 	l := &Layout{
-		db:                app.DB,
-		logger:            app.Logger,
-		sessionManager:    sessionManager,
-		paginationManager: paginationManager,
-		queueManager:      app.Queue,
-		userReviewLayout:  userReviewLayout,
+		db:           app.DB,
+		logger:       app.Logger,
+		queueManager: app.Queue,
 	}
-	l.mainMenu = NewMainMenu(l)
-
-	// Initialize and register page
-	paginationManager.AddPage(l.mainMenu.page)
+	l.menu = NewMenu(l)
 
 	return l
 }
 
-// Show prepares and displays the queue interface by loading
-// current queue lengths into the session.
-func (l *Layout) Show(event interfaces.CommonEvent, s *session.Session) {
-	l.mainMenu.Show(event, s, "")
+// Pages returns all the pages in the layout.
+func (l *Layout) Pages() []*pagination.Page {
+	return []*pagination.Page{
+		l.menu.page,
+	}
 }

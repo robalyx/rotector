@@ -42,7 +42,7 @@ func NewBuilder(s *session.Session) *Builder {
 func (b *Builder) Build() *discord.MessageUpdateBuilder {
 	embed := discord.NewEmbedBuilder().
 		SetTitle("🏆 Voting Leaderboard").
-		SetDescription(fmt.Sprintf("Top voters for %s period", b.leaderboardPeriod.String())).
+		SetDescription(fmt.Sprintf("Top voters for `%s` period", b.leaderboardPeriod.String())).
 		SetColor(utils.GetMessageEmbedColor(b.privacyMode))
 
 	if !b.lastRefresh.IsZero() {

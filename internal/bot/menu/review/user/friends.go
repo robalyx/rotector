@@ -13,6 +13,7 @@ import (
 	"github.com/robalyx/rotector/internal/bot/constants"
 	"github.com/robalyx/rotector/internal/bot/core/pagination"
 	"github.com/robalyx/rotector/internal/bot/core/session"
+	"github.com/robalyx/rotector/internal/bot/interfaces"
 	"github.com/robalyx/rotector/internal/common/storage/database/types"
 	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
 	"go.uber.org/zap"
@@ -24,9 +25,7 @@ type FriendsMenu struct {
 	page   *pagination.Page
 }
 
-// NewFriendsMenu creates a FriendsMenu and sets up its page with message builders
-// and interaction handlers. The page is configured to show friend information
-// and handle navigation.
+// NewFriendsMenu creates a new friends menu.
 func NewFriendsMenu(layout *Layout) *FriendsMenu {
 	m := &FriendsMenu{layout: layout}
 	m.page = &pagination.Page{
@@ -34,18 +33,19 @@ func NewFriendsMenu(layout *Layout) *FriendsMenu {
 		Message: func(s *session.Session) *discord.MessageUpdateBuilder {
 			return builder.NewFriendsBuilder(s).Build()
 		},
+		ShowHandlerFunc:   m.Show,
 		ButtonHandlerFunc: m.handlePageNavigation,
 	}
 	return m
 }
 
-// Show prepares and displays the friends interface for a specific page.
-func (m *FriendsMenu) Show(event *events.ComponentInteractionCreate, s *session.Session, page int) {
+// Show prepares and displays the friends interface.
+func (m *FriendsMenu) Show(event interfaces.CommonEvent, s *session.Session, r *pagination.Respond) {
 	user := session.UserTarget.Get(s)
 
 	// Return to review menu if user has no friends
 	if len(user.Friends) == 0 {
-		m.layout.reviewMenu.Show(event, s, "No friends found for this user.")
+		r.Cancel(event, s, "No friends found for this user.")
 		return
 	}
 
@@ -54,6 +54,8 @@ func (m *FriendsMenu) Show(event *events.ComponentInteractionCreate, s *session.
 	sortedFriends := m.sortFriendsByStatus(user.Friends, flaggedFriends)
 
 	// Calculate page boundaries
+	page := session.PaginationPage.Get(s)
+
 	start := page * constants.FriendsPerPage
 	end := start + constants.FriendsPerPage
 	if end > len(sortedFriends) {
@@ -91,12 +93,10 @@ func (m *FriendsMenu) Show(event *events.ComponentInteractionCreate, s *session.
 	// Store presences when they arrive
 	presenceMap := <-presenceChan
 	session.UserPresences.Set(s, presenceMap)
-	m.layout.paginationManager.NavigateTo(event, s, m.page, "")
 }
 
-// handlePageNavigation processes navigation button clicks by calculating
-// the target page number and refreshing the display.
-func (m *FriendsMenu) handlePageNavigation(event *events.ComponentInteractionCreate, s *session.Session, customID string) {
+// handlePageNavigation processes navigation button clicks.
+func (m *FriendsMenu) handlePageNavigation(event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, customID string) {
 	action := session.ViewerAction(customID)
 	switch action {
 	case session.ViewerFirstPage, session.ViewerPrevPage, session.ViewerNextPage, session.ViewerLastPage:
@@ -106,14 +106,15 @@ func (m *FriendsMenu) handlePageNavigation(event *events.ComponentInteractionCre
 		maxPage := (len(user.Friends) - 1) / constants.FriendsPerPage
 		page := action.ParsePageAction(s, action, maxPage)
 
-		m.Show(event, s, page)
+		session.PaginationPage.Set(s, page)
+		r.Reload(event, s, "")
 
 	case constants.BackButtonCustomID:
-		m.layout.paginationManager.NavigateBack(event, s, "")
+		r.NavigateBack(event, s, "")
 
 	default:
 		m.layout.logger.Warn("Invalid friends viewer action", zap.String("action", string(action)))
-		m.layout.paginationManager.RespondWithError(event, "Invalid interaction.")
+		r.Error(event, "Invalid interaction.")
 	}
 }
 

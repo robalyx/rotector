@@ -24,28 +24,29 @@ type Menu struct {
 func NewMenu(layout *Layout) *Menu {
 	m := &Menu{layout: layout}
 	m.page = &pagination.Page{
-		Name: constants.BanInfoPageName,
+		Name: constants.BanPageName,
 		Message: func(s *session.Session) *discord.MessageUpdateBuilder {
 			return ban.NewBuilder(s).Build()
 		},
+		ShowHandlerFunc: m.Show,
 	}
 	return m
 }
 
 // Show displays the ban information to the user.
-func (m *Menu) Show(event interfaces.CommonEvent, s *session.Session) {
+func (m *Menu) Show(event interfaces.CommonEvent, s *session.Session, r *pagination.Respond) {
 	// Get ban information
 	ban, err := m.layout.db.Models().Bans().GetBan(context.Background(), s.UserID())
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			m.layout.dashboardLayout.Show(event, s, "")
+			r.Show(event, s, constants.DashboardPageName, "")
 			return
 		}
 
 		m.layout.logger.Error("Failed to get ban information",
 			zap.Error(err),
 			zap.Uint64("user_id", s.UserID()))
-		m.layout.paginationManager.RespondWithError(event, "Failed to retrieve ban information. Please try again later.")
+		r.Error(event, "Failed to retrieve ban information. Please try again later.")
 		return
 	}
 
@@ -56,11 +57,10 @@ func (m *Menu) Show(event interfaces.CommonEvent, s *session.Session) {
 				zap.Error(err),
 				zap.Uint64("user_id", s.UserID()))
 		}
-		m.layout.dashboardLayout.Show(event, s, "Your ban has expired. You may now use the bot.")
+		r.Show(event, s, constants.DashboardPageName, "Your ban has expired. You may now use the bot.")
 		return
 	}
 
 	// Store ban in session and show the menu
 	session.AdminBanInfo.Set(s, ban)
-	m.layout.paginationManager.NavigateTo(event, s, m.page, "")
 }

@@ -18,27 +18,21 @@ import (
 	"go.uber.org/zap"
 )
 
-// MainMenu handles the display and interaction logic for queue management.
-type MainMenu struct {
+// Menu handles the display and interaction logic for queue management.
+type Menu struct {
 	layout *Layout
 	page   *pagination.Page
 }
 
-// NewMainMenu creates a MainMenu and sets up its page with message builders and
-// interaction handlers. The page is configured to show queue statistics
-// and handle queue operations.
-func NewMainMenu(layout *Layout) *MainMenu {
-	m := &MainMenu{layout: layout}
+// NewMenu creates a new queue menu.
+func NewMenu(layout *Layout) *Menu {
+	m := &Menu{layout: layout}
 	m.page = &pagination.Page{
 		Name: constants.QueuePageName,
 		Message: func(s *session.Session) *discord.MessageUpdateBuilder {
-			// Load current queue lengths for display
-			highCount := session.QueueHighCount.Get(s)
-			normalCount := session.QueueNormalCount.Get(s)
-			lowCount := session.QueueLowCount.Get(s)
-
-			return builder.NewBuilder(highCount, normalCount, lowCount).Build()
+			return builder.NewBuilder(s).Build()
 		},
+		ShowHandlerFunc:   m.Show,
 		SelectHandlerFunc: m.handleSelectMenu,
 		ButtonHandlerFunc: m.handleButton,
 		ModalHandlerFunc:  m.handleModal,
@@ -46,20 +40,15 @@ func NewMainMenu(layout *Layout) *MainMenu {
 	return m
 }
 
-// Show prepares and displays the queue interface by loading
-// current queue lengths into the session.
-func (m *MainMenu) Show(event interfaces.CommonEvent, s *session.Session, content string) {
-	// Store current queue lengths in session for the message builder
+// Show prepares and displays the queue interface.
+func (m *Menu) Show(_ interfaces.CommonEvent, s *session.Session, _ *pagination.Respond) {
 	session.QueueHighCount.Set(s, m.layout.queueManager.GetQueueLength(context.Background(), queue.PriorityHigh))
 	session.QueueNormalCount.Set(s, m.layout.queueManager.GetQueueLength(context.Background(), queue.PriorityNormal))
 	session.QueueLowCount.Set(s, m.layout.queueManager.GetQueueLength(context.Background(), queue.PriorityLow))
-
-	m.layout.paginationManager.NavigateTo(event, s, m.page, content)
 }
 
-// handleSelectMenu processes select menu interactions by storing the selected
-// priority and showing a modal for user ID input.
-func (m *MainMenu) handleSelectMenu(event *events.ComponentInteractionCreate, _ *session.Session, customID string, option string) {
+// handleSelectMenu processes select menu interactions.
+func (m *Menu) handleSelectMenu(event *events.ComponentInteractionCreate, _ *session.Session, r *pagination.Respond, customID, option string) {
 	if customID != constants.ActionSelectMenuCustomID {
 		return
 	}
@@ -82,30 +71,29 @@ func (m *MainMenu) handleSelectMenu(event *events.ComponentInteractionCreate, _ 
 
 	if err := event.Modal(modal); err != nil {
 		m.layout.logger.Error("Failed to show modal", zap.Error(err))
+		r.Error(event, "Failed to show modal")
 	}
 }
 
-// handleButton processes button interactions, mainly handling navigation
-// back to the dashboard and queue refresh requests.
-func (m *MainMenu) handleButton(event *events.ComponentInteractionCreate, s *session.Session, customID string) {
+// handleButton processes button interactions.
+func (m *Menu) handleButton(event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, customID string) {
 	switch customID {
 	case constants.BackButtonCustomID:
-		m.layout.paginationManager.NavigateBack(event, s, "")
+		r.NavigateBack(event, s, "")
 	case constants.RefreshButtonCustomID:
-		m.Show(event, s, "")
+		r.Reload(event, s, "")
 	}
 }
 
-// handleModal processes modal submissions by adding the user to the queue
-// with the specified priority and reason.
-func (m *MainMenu) handleModal(event *events.ModalSubmitInteractionCreate, s *session.Session) {
+// handleModal processes modal submissions.
+func (m *Menu) handleModal(event *events.ModalSubmitInteractionCreate, s *session.Session, r *pagination.Respond) {
 	// Parse user ID and get reason from modal
 	userIDStr := event.Data.Text(constants.UserIDInputCustomID)
 	reason := event.Data.Text(constants.ReasonInputCustomID)
 
 	userID, err := strconv.ParseUint(userIDStr, 10, 64)
 	if err != nil {
-		m.Show(event, s, "Invalid user ID format.")
+		r.Cancel(event, s, "Invalid user ID format.")
 		return
 	}
 
@@ -116,7 +104,7 @@ func (m *MainMenu) handleModal(event *events.ModalSubmitInteractionCreate, s *se
 	status, _, _, err := m.layout.queueManager.GetQueueInfo(context.Background(), userID)
 	if err == nil && status != "" {
 		// Show status menu if already queued
-		m.layout.userReviewLayout.ShowStatusMenu(event, s)
+		r.Show(event, s, constants.StatusPageName, "")
 		return
 	}
 
@@ -143,7 +131,7 @@ func (m *MainMenu) handleModal(event *events.ModalSubmitInteractionCreate, s *se
 	})
 	if err != nil {
 		m.layout.logger.Error("Failed to add user to queue", zap.Error(err))
-		m.layout.paginationManager.RespondWithError(event, "Failed to add user to queue")
+		r.Error(event, "Failed to add user to queue")
 		return
 	}
 
@@ -157,12 +145,12 @@ func (m *MainMenu) handleModal(event *events.ModalSubmitInteractionCreate, s *se
 	)
 	if err != nil {
 		m.layout.logger.Error("Failed to update queue info", zap.Error(err))
-		m.layout.paginationManager.RespondWithError(event, "Failed to update queue info")
+		r.Error(event, "Failed to update queue info")
 		return
 	}
 
 	// Show status menu to track progress
-	m.layout.userReviewLayout.ShowStatusMenu(event, s)
+	r.Show(event, s, constants.StatusPageName, "")
 
 	// Log the activity
 	m.layout.db.Models().Activities().Log(context.Background(), &types.ActivityLog{

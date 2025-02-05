@@ -3,8 +3,6 @@ package status
 import (
 	"github.com/redis/rueidis"
 	"github.com/robalyx/rotector/internal/bot/core/pagination"
-	"github.com/robalyx/rotector/internal/bot/core/session"
-	"github.com/robalyx/rotector/internal/bot/interfaces"
 	"github.com/robalyx/rotector/internal/common/setup"
 	"github.com/robalyx/rotector/internal/common/storage/redis"
 	"github.com/robalyx/rotector/internal/worker/core"
@@ -13,21 +11,14 @@ import (
 
 // Layout handles the display and interaction logic for the worker status menu.
 type Layout struct {
-	redisClient       rueidis.Client
-	sessionManager    *session.Manager
-	paginationManager *pagination.Manager
-	workerMonitor     *core.Monitor
-	mainMenu          *MainMenu
-	logger            *zap.Logger
+	redisClient   rueidis.Client
+	workerMonitor *core.Monitor
+	menu          *Menu
+	logger        *zap.Logger
 }
 
-// New creates a Layout and sets up its page with message builders and
-// interaction handlers.
-func New(
-	app *setup.App,
-	sessionManager *session.Manager,
-	paginationManager *pagination.Manager,
-) interfaces.StatusLayout {
+// New creates a Layout by initializing the worker status menu.
+func New(app *setup.App) *Layout {
 	// Get Redis client for worker status
 	statusClient, err := app.RedisManager.GetClient(redis.WorkerStatusDBIndex)
 	if err != nil {
@@ -36,21 +27,18 @@ func New(
 
 	// Initialize layout
 	l := &Layout{
-		redisClient:       statusClient,
-		sessionManager:    sessionManager,
-		paginationManager: paginationManager,
-		logger:            app.Logger,
-		workerMonitor:     core.NewMonitor(statusClient, app.Logger),
+		redisClient:   statusClient,
+		logger:        app.Logger,
+		workerMonitor: core.NewMonitor(statusClient, app.Logger),
 	}
-	l.mainMenu = NewMainMenu(l)
-
-	// Initialize and register page
-	paginationManager.AddPage(l.mainMenu.page)
+	l.menu = NewMenu(l)
 
 	return l
 }
 
-// Show prepares and displays the worker status interface.
-func (l *Layout) Show(event interfaces.CommonEvent, s *session.Session) {
-	l.mainMenu.Show(event, s)
+// Pages returns all the pages in the layout.
+func (l *Layout) Pages() []*pagination.Page {
+	return []*pagination.Page{
+		l.menu.page,
+	}
 }

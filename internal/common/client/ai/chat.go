@@ -36,6 +36,8 @@ Format your responses:
 - Use paragraphs to separate different points
 - Each paragraph is short and concise (max 100 characters)
 - Ensure there are no more than 3 paragraphs
+- NEVER include usernames in your analysis
+- Use generic terms like "the user" or "this account" instead of usernames
 - Use bullet points sparingly and only for lists
 - Use plain text only - no bold, italic, or other markdown`
 )

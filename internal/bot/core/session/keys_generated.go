@@ -16,160 +16,160 @@ import (
 var (
 
 	// MessageID stores the ID of the current message
-	MessageID = NewKey[string]("MessageID")
+	MessageID = NewKey[string]("MessageID", true)
 	// CurrentPage stores the current page identifier
-	CurrentPage = NewKey[string]("CurrentPage")
+	CurrentPage = NewKey[string]("CurrentPage", true)
 	// PreviousPages stores the navigation history
-	PreviousPages = NewKey[[]string]("PreviousPages")
+	PreviousPages = NewKey[[]string]("PreviousPages", true)
 	// PaginationPage stores the current pagination page number
-	PaginationPage = NewKey[int]("PaginationPage")
+	PaginationPage = NewKey[int]("PaginationPage", true)
 	// PaginationOffset stores the starting offset
-	PaginationOffset = NewKey[int]("PaginationOffset")
+	PaginationOffset = NewKey[int]("PaginationOffset", true)
 	// PaginationTotalItems stores the total number of items
-	PaginationTotalItems = NewKey[int]("PaginationTotalItems")
+	PaginationTotalItems = NewKey[int]("PaginationTotalItems", true)
 	// PaginationTotalPages stores the total number of pages
-	PaginationTotalPages = NewKey[int]("PaginationTotalPages")
+	PaginationTotalPages = NewKey[int]("PaginationTotalPages", true)
 	// PaginationHasNextPage indicates if there is a next page
-	PaginationHasNextPage = NewKey[bool]("PaginationHasNextPage")
+	PaginationHasNextPage = NewKey[bool]("PaginationHasNextPage", true)
 	// PaginationHasPrevPage indicates if there is a previous page
-	PaginationHasPrevPage = NewKey[bool]("PaginationHasPrevPage")
+	PaginationHasPrevPage = NewKey[bool]("PaginationHasPrevPage", true)
 	// PaginationIsStreaming indicates if image streaming is active
-	PaginationIsStreaming = NewKey[bool]("PaginationIsStreaming")
+	PaginationIsStreaming = NewKey[bool]("PaginationIsStreaming", true)
 	// StatsIsRefreshed indicates if the data has been refreshed
-	StatsIsRefreshed = NewKey[bool]("StatsIsRefreshed")
+	StatsIsRefreshed = NewKey[bool]("StatsIsRefreshed", true)
 	// StatsUserCounts stores user statistics
-	StatsUserCounts = NewKey[*types.UserCounts]("StatsUserCounts")
+	StatsUserCounts = NewKey[*types.UserCounts]("StatsUserCounts", true)
 	// StatsGroupCounts stores group statistics
-	StatsGroupCounts = NewKey[*types.GroupCounts]("StatsGroupCounts")
+	StatsGroupCounts = NewKey[*types.GroupCounts]("StatsGroupCounts", true)
 	// StatsActiveUsers stores the list of active reviewers
-	StatsActiveUsers = NewKey[[]snowflake.ID]("StatsActiveUsers")
+	StatsActiveUsers = NewKey[[]snowflake.ID]("StatsActiveUsers", true)
 	// StatsVotes stores a user's voting statistics
-	StatsVotes = NewKey[*types.VoteAccuracy]("StatsVotes")
+	StatsVotes = NewKey[*types.VoteAccuracy]("StatsVotes", true)
 	// StatusWorkers stores worker status information
-	StatusWorkers = NewKey[[]core.Status]("StatusWorkers")
+	StatusWorkers = NewKey[[]core.Status]("StatusWorkers", false)
 	// SettingName stores the name of the current setting
-	SettingName = NewKey[string]("SettingName")
+	SettingName = NewKey[string]("SettingName", true)
 	// SettingType stores the type of the current setting
-	SettingType = NewKey[string]("SettingType")
+	SettingType = NewKey[string]("SettingType", true)
 	// SettingValue stores the setting value
-	SettingValue = NewKey[*Setting]("SettingValue")
+	SettingValue = NewKey[*Setting]("SettingValue", true)
 	// SettingDisplay stores the display value of the setting
-	SettingDisplay = NewKey[string]("SettingDisplay")
+	SettingDisplay = NewKey[string]("SettingDisplay", true)
 	// SettingCustomID stores the custom identifier
-	SettingCustomID = NewKey[string]("SettingCustomID")
+	SettingCustomID = NewKey[string]("SettingCustomID", true)
 	// UserTarget stores the currently selected user
-	UserTarget = NewKey[*types.ReviewUser]("UserTarget")
-	// UserFriends stores the user's friend list
-	UserFriends = NewKey[[]*apiTypes.ExtendedFriend]("UserFriends")
-	// UserPresences stores friend presence information
-	UserPresences = NewKey[map[uint64]*apiTypes.UserPresenceResponse]("UserPresences")
+	UserTarget = NewKey[*types.ReviewUser]("UserTarget", true)
 	// UserFlaggedFriends stores flagged friends
-	UserFlaggedFriends = NewKey[map[uint64]*types.ReviewUser]("UserFlaggedFriends")
-	// UserGroups stores the list of groups
-	UserGroups = NewKey[[]*apiTypes.UserGroupRoles]("UserGroups")
+	UserFlaggedFriends = NewKey[map[uint64]*types.ReviewUser]("UserFlaggedFriends", true)
 	// UserFlaggedGroups stores flagged groups
-	UserFlaggedGroups = NewKey[map[uint64]*types.ReviewGroup]("UserFlaggedGroups")
+	UserFlaggedGroups = NewKey[map[uint64]*types.ReviewGroup]("UserFlaggedGroups", true)
+	// UserFriends stores the user's friend list
+	UserFriends = NewKey[[]*apiTypes.ExtendedFriend]("UserFriends", false)
+	// UserPresences stores friend presence information
+	UserPresences = NewKey[map[uint64]*apiTypes.UserPresenceResponse]("UserPresences", false)
+	// UserGroups stores the list of groups
+	UserGroups = NewKey[[]*apiTypes.UserGroupRoles]("UserGroups", false)
 	// UserOutfits stores user outfits
-	UserOutfits = NewKey[[]*apiTypes.Outfit]("UserOutfits")
+	UserOutfits = NewKey[[]*apiTypes.Outfit]("UserOutfits", false)
 	// GroupTarget stores the currently selected group
-	GroupTarget = NewKey[*types.ReviewGroup]("GroupTarget")
-	// GroupMemberIDs stores member IDs for the current group
-	GroupMemberIDs = NewKey[[]uint64]("GroupMemberIDs")
-	// GroupMembers stores member details for the current group
-	GroupMembers = NewKey[map[uint64]*types.ReviewUser]("GroupMembers")
-	// GroupPageMembers stores the current page of group members
-	GroupPageMembers = NewKey[[]uint64]("GroupPageMembers")
+	GroupTarget = NewKey[*types.ReviewGroup]("GroupTarget", true)
 	// GroupInfo stores additional group information
-	GroupInfo = NewKey[*apiTypes.GroupResponse]("GroupInfo")
+	GroupInfo = NewKey[*apiTypes.GroupResponse]("GroupInfo", true)
+	// GroupMemberIDs stores member IDs for the current group
+	GroupMemberIDs = NewKey[[]uint64]("GroupMemberIDs", false)
+	// GroupMembers stores member details for the current group
+	GroupMembers = NewKey[map[uint64]*types.ReviewUser]("GroupMembers", false)
+	// GroupPageMembers stores the current page of group members
+	GroupPageMembers = NewKey[[]uint64]("GroupPageMembers", false)
 	// ChatHistory stores the conversation history
-	ChatHistory = NewKey[ai.ChatHistory]("ChatHistory")
+	ChatHistory = NewKey[ai.ChatHistory]("ChatHistory", true)
 	// ChatContext stores chat context information
-	ChatContext = NewKey[string]("ChatContext")
+	ChatContext = NewKey[string]("ChatContext", true)
 	// LogActivities stores activity logs
-	LogActivities = NewKey[[]*types.ActivityLog]("LogActivities")
+	LogActivities = NewKey[[]*types.ActivityLog]("LogActivities", false)
 	// LogCursor stores the current log cursor
-	LogCursor = NewKey[*types.LogCursor]("LogCursor")
+	LogCursor = NewKey[*types.LogCursor]("LogCursor", false)
 	// LogNextCursor stores the next log cursor
-	LogNextCursor = NewKey[*types.LogCursor]("LogNextCursor")
+	LogNextCursor = NewKey[*types.LogCursor]("LogNextCursor", true)
 	// LogPrevCursors stores previous log cursors
-	LogPrevCursors = NewKey[[]*types.LogCursor]("LogPrevCursors")
+	LogPrevCursors = NewKey[[]*types.LogCursor]("LogPrevCursors", true)
 	// LogFilterDiscordID stores Discord ID filter
-	LogFilterDiscordID = NewKey[uint64]("LogFilterDiscordID")
+	LogFilterDiscordID = NewKey[uint64]("LogFilterDiscordID", true)
 	// LogFilterUserID stores user ID filter
-	LogFilterUserID = NewKey[uint64]("LogFilterUserID")
+	LogFilterUserID = NewKey[uint64]("LogFilterUserID", true)
 	// LogFilterGroupID stores group ID filter
-	LogFilterGroupID = NewKey[uint64]("LogFilterGroupID")
+	LogFilterGroupID = NewKey[uint64]("LogFilterGroupID", true)
 	// LogFilterReviewerID stores reviewer ID filter
-	LogFilterReviewerID = NewKey[uint64]("LogFilterReviewerID")
+	LogFilterReviewerID = NewKey[uint64]("LogFilterReviewerID", true)
 	// LogFilterActivityType stores activity type filter
-	LogFilterActivityType = NewKey[enum.ActivityType]("LogFilterActivityType")
+	LogFilterActivityType = NewKey[enum.ActivityType]("LogFilterActivityType", true)
 	// LogFilterActivityCategory stores the currently selected activity category
-	LogFilterActivityCategory = NewKey[string]("LogFilterActivityCategory")
+	LogFilterActivityCategory = NewKey[string]("LogFilterActivityCategory", true)
 	// LogFilterDateRangeStart stores start date filter
-	LogFilterDateRangeStart = NewKey[time.Time]("LogFilterDateRangeStart")
+	LogFilterDateRangeStart = NewKey[time.Time]("LogFilterDateRangeStart", true)
 	// LogFilterDateRangeEnd stores end date filter
-	LogFilterDateRangeEnd = NewKey[time.Time]("LogFilterDateRangeEnd")
+	LogFilterDateRangeEnd = NewKey[time.Time]("LogFilterDateRangeEnd", true)
 	// QueueUser stores the queued user
-	QueueUser = NewKey[uint64]("QueueUser")
+	QueueUser = NewKey[uint64]("QueueUser", true)
 	// QueueStatus stores the queue status
-	QueueStatus = NewKey[queue.Status]("QueueStatus")
+	QueueStatus = NewKey[queue.Status]("QueueStatus", false)
 	// QueuePriority stores the queue priority
-	QueuePriority = NewKey[queue.Priority]("QueuePriority")
+	QueuePriority = NewKey[queue.Priority]("QueuePriority", false)
 	// QueuePosition stores the queue position
-	QueuePosition = NewKey[int]("QueuePosition")
+	QueuePosition = NewKey[int]("QueuePosition", false)
 	// QueueHighCount stores high priority queue count
-	QueueHighCount = NewKey[int]("QueueHighCount")
+	QueueHighCount = NewKey[int]("QueueHighCount", false)
 	// QueueNormalCount stores normal priority queue count
-	QueueNormalCount = NewKey[int]("QueueNormalCount")
+	QueueNormalCount = NewKey[int]("QueueNormalCount", false)
 	// QueueLowCount stores low priority queue count
-	QueueLowCount = NewKey[int]("QueueLowCount")
+	QueueLowCount = NewKey[int]("QueueLowCount", false)
 	// AppealList stores the current page of appeals
-	AppealList = NewKey[[]*types.Appeal]("AppealList")
+	AppealList = NewKey[[]*types.Appeal]("AppealList", true)
 	// AppealSelected stores the currently selected appeal
-	AppealSelected = NewKey[*types.Appeal]("AppealSelected")
+	AppealSelected = NewKey[*types.Appeal]("AppealSelected", true)
 	// AppealMessages stores messages for the current appeal
-	AppealMessages = NewKey[[]*types.AppealMessage]("AppealMessages")
+	AppealMessages = NewKey[[]*types.AppealMessage]("AppealMessages", true)
 	// AppealCursor stores the current cursor position
-	AppealCursor = NewKey[*types.AppealTimeline]("AppealCursor")
+	AppealCursor = NewKey[*types.AppealTimeline]("AppealCursor", true)
 	// AppealNextCursor stores the next cursor position
-	AppealNextCursor = NewKey[*types.AppealTimeline]("AppealNextCursor")
+	AppealNextCursor = NewKey[*types.AppealTimeline]("AppealNextCursor", true)
 	// AppealPrevCursors stores previous cursor positions
-	AppealPrevCursors = NewKey[[]*types.AppealTimeline]("AppealPrevCursors")
+	AppealPrevCursors = NewKey[[]*types.AppealTimeline]("AppealPrevCursors", true)
 	// VerifyUserID stores the user ID being verified
-	VerifyUserID = NewKey[uint64]("VerifyUserID")
+	VerifyUserID = NewKey[uint64]("VerifyUserID", true)
 	// VerifyReason stores the verification reason
-	VerifyReason = NewKey[string]("VerifyReason")
+	VerifyReason = NewKey[string]("VerifyReason", true)
 	// VerifyCode stores the verification code
-	VerifyCode = NewKey[string]("VerifyCode")
+	VerifyCode = NewKey[string]("VerifyCode", true)
 	// CaptchaAnswer stores the CAPTCHA answer
-	CaptchaAnswer = NewKey[string]("CaptchaAnswer")
+	CaptchaAnswer = NewKey[string]("CaptchaAnswer", true)
 	// AdminAction stores the current admin action
-	AdminAction = NewKey[string]("AdminAction")
+	AdminAction = NewKey[string]("AdminAction", true)
 	// AdminActionID stores the admin action ID
-	AdminActionID = NewKey[string]("AdminActionID")
+	AdminActionID = NewKey[string]("AdminActionID", true)
 	// AdminReason stores the admin action reason
-	AdminReason = NewKey[string]("AdminReason")
+	AdminReason = NewKey[string]("AdminReason", true)
 	// AdminBanReason stores the ban reason
-	AdminBanReason = NewKey[enum.BanReason]("AdminBanReason")
+	AdminBanReason = NewKey[enum.BanReason]("AdminBanReason", true)
 	// AdminBanExpiry stores the ban expiry time
-	AdminBanExpiry = NewKey[*time.Time]("AdminBanExpiry")
+	AdminBanExpiry = NewKey[*time.Time]("AdminBanExpiry", true)
 	// AdminBanInfo stores ban information
-	AdminBanInfo = NewKey[*types.DiscordBan]("AdminBanInfo")
+	AdminBanInfo = NewKey[*types.DiscordBan]("AdminBanInfo", true)
 	// LeaderboardStats stores leaderboard statistics
-	LeaderboardStats = NewKey[[]*types.VoteAccuracy]("LeaderboardStats")
+	LeaderboardStats = NewKey[[]*types.VoteAccuracy]("LeaderboardStats", true)
 	// LeaderboardUsernames stores usernames for the leaderboard
-	LeaderboardUsernames = NewKey[map[uint64]string]("LeaderboardUsernames")
+	LeaderboardUsernames = NewKey[map[uint64]string]("LeaderboardUsernames", true)
 	// LeaderboardCursor stores the current leaderboard cursor
-	LeaderboardCursor = NewKey[*types.LeaderboardCursor]("LeaderboardCursor")
+	LeaderboardCursor = NewKey[*types.LeaderboardCursor]("LeaderboardCursor", true)
 	// LeaderboardNextCursor stores the next leaderboard cursor
-	LeaderboardNextCursor = NewKey[*types.LeaderboardCursor]("LeaderboardNextCursor")
+	LeaderboardNextCursor = NewKey[*types.LeaderboardCursor]("LeaderboardNextCursor", true)
 	// LeaderboardPrevCursors stores previous leaderboard cursors
-	LeaderboardPrevCursors = NewKey[[]*types.LeaderboardCursor]("LeaderboardPrevCursors")
+	LeaderboardPrevCursors = NewKey[[]*types.LeaderboardCursor]("LeaderboardPrevCursors", true)
 	// LeaderboardLastRefresh stores the last refresh time
-	LeaderboardLastRefresh = NewKey[time.Time]("LeaderboardLastRefresh")
+	LeaderboardLastRefresh = NewKey[time.Time]("LeaderboardLastRefresh", true)
 	// LeaderboardNextRefresh stores the next refresh time
-	LeaderboardNextRefresh = NewKey[time.Time]("LeaderboardNextRefresh")
+	LeaderboardNextRefresh = NewKey[time.Time]("LeaderboardNextRefresh", true)
 
 	// ImageBuffer stores binary image data
-	ImageBuffer = NewBufferKey("ImageBuffer")
+	ImageBuffer = NewBufferKey("ImageBuffer", false)
 )

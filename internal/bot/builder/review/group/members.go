@@ -17,31 +17,34 @@ import (
 
 // MembersBuilder creates the visual layout for viewing a group's flagged members.
 type MembersBuilder struct {
-	group       *types.ReviewGroup
-	pageMembers []uint64
-	members     map[uint64]*types.ReviewUser
-	presences   map[uint64]*apiTypes.UserPresenceResponse
-	start       int
-	page        int
-	total       int
-	imageBuffer *bytes.Buffer
-	isStreaming bool
-	privacyMode bool
+	group        *types.ReviewGroup
+	pageMembers  []uint64
+	members      map[uint64]*types.ReviewUser
+	presences    map[uint64]*apiTypes.UserPresenceResponse
+	start        int
+	page         int
+	total        int
+	imageBuffer  *bytes.Buffer
+	isStreaming  bool
+	trainingMode bool
+	privacyMode  bool
 }
 
 // NewMembersBuilder creates a new members builder.
 func NewMembersBuilder(s *session.Session) *MembersBuilder {
+	trainingMode := session.UserReviewMode.Get(s) == enum.ReviewModeTraining
 	return &MembersBuilder{
-		group:       session.GroupTarget.Get(s),
-		pageMembers: session.GroupPageMembers.Get(s),
-		members:     session.GroupMembers.Get(s),
-		presences:   session.UserPresences.Get(s),
-		start:       session.PaginationOffset.Get(s),
-		page:        session.PaginationPage.Get(s),
-		total:       session.PaginationTotalItems.Get(s),
-		imageBuffer: session.ImageBuffer.Get(s),
-		isStreaming: session.PaginationIsStreaming.Get(s),
-		privacyMode: session.UserReviewMode.Get(s) == enum.ReviewModeTraining || session.UserStreamerMode.Get(s),
+		group:        session.GroupTarget.Get(s),
+		pageMembers:  session.GroupPageMembers.Get(s),
+		members:      session.GroupMembers.Get(s),
+		presences:    session.UserPresences.Get(s),
+		start:        session.PaginationOffset.Get(s),
+		page:         session.PaginationPage.Get(s),
+		total:        session.PaginationTotalItems.Get(s),
+		imageBuffer:  session.ImageBuffer.Get(s),
+		isStreaming:  session.PaginationIsStreaming.Get(s),
+		trainingMode: trainingMode,
+		privacyMode:  trainingMode || session.UserStreamerMode.Get(s),
 	}
 }
 
@@ -142,7 +145,7 @@ func (b *MembersBuilder) getMemberFieldValue(memberID uint64) string {
 	}
 
 	name := utils.CensorString(memberName, b.privacyMode)
-	if b.privacyMode {
+	if b.trainingMode {
 		info.WriteString(name)
 	} else {
 		info.WriteString(fmt.Sprintf(

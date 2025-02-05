@@ -1,7 +1,6 @@
 package pagination
 
 import (
-	"context"
 	"strconv"
 
 	"github.com/disgoorg/disgo/discord"
@@ -19,29 +18,38 @@ type Page struct {
 	Name    string
 	Message func(s *session.Session) *discord.MessageUpdateBuilder
 
-	// SelectHandlerFunc processes select menu interactions by taking the selected option
-	// and custom ID to determine what action to take
+	// ShowHandlerFunc is called when the page is shown.
+	ShowHandlerFunc func(
+		event interfaces.CommonEvent,
+		s *session.Session,
+		r *Respond,
+	)
+	// CleanupHandlerFunc is called when the page is closed.
+	CleanupHandlerFunc func(
+		s *session.Session,
+	)
+
+	// SelectHandlerFunc processes select menu interactions.
 	SelectHandlerFunc func(
 		event *events.ComponentInteractionCreate,
 		s *session.Session,
-		customID string,
+		r *Respond,
+		customID,
 		option string,
 	)
-	// ButtonHandlerFunc processes button clicks by using the button's custom ID
-	// to determine what action to take
+	// ButtonHandlerFunc processes button clicks.
 	ButtonHandlerFunc func(
 		event *events.ComponentInteractionCreate,
 		s *session.Session,
+		r *Respond,
 		customID string,
 	)
-	// ModalHandlerFunc processes form submissions from Discord modals
-	// by reading the submitted values
+	// ModalHandlerFunc processes form submissions.
 	ModalHandlerFunc func(
 		event *events.ModalSubmitInteractionCreate,
 		s *session.Session,
+		r *Respond,
 	)
-	// BackHandlerFunc is called when navigating away from this page
-	BackHandlerFunc func()
 }
 
 // Manager maintains a map of pages indexed by their names and handles
@@ -52,8 +60,7 @@ type Manager struct {
 	logger         *zap.Logger
 }
 
-// NewManager initializes a new Manager with an empty pages map
-// and the provided logger for debugging interaction handling.
+// NewManager initializes a new pagination manager.
 func NewManager(sessionManager *session.Manager, logger *zap.Logger) *Manager {
 	return &Manager{
 		sessionManager: sessionManager,
@@ -62,12 +69,14 @@ func NewManager(sessionManager *session.Manager, logger *zap.Logger) *Manager {
 	}
 }
 
-// AddPage stores a page in the manager's pages map using the page's name as the key.
-func (m *Manager) AddPage(page *Page) {
-	m.pages[page.Name] = page
+// AddPages stores pages for the manager using their names as keys.
+func (m *Manager) AddPages(pages []*Page) {
+	for _, page := range pages {
+		m.pages[page.Name] = page
+	}
 }
 
-// GetPage retrieves a page from the manager's pages map using the provided name.
+// GetPage retrieves a page from the manager's pages using the provided name.
 func (m *Manager) GetPage(name string) *Page {
 	return m.pages[name]
 }
@@ -84,32 +93,56 @@ func (m *Manager) HandleInteraction(event interfaces.CommonEvent, s *session.Ses
 		switch data := e.Data.(type) {
 		case discord.StringSelectMenuInteractionData:
 			if page.SelectHandlerFunc != nil {
-				page.SelectHandlerFunc(e, s, data.CustomID(), data.Values[0])
 				m.logger.Debug("Select interaction", zap.String("customID", data.CustomID()), zap.String("option", data.Values[0]))
+				respond := NewRespond(m.sessionManager, m)
+				page.SelectHandlerFunc(e, s, respond, data.CustomID(), data.Values[0])
 			} else {
 				m.logger.Error("No select handler found for customID", zap.String("customID", data.CustomID()))
 			}
 		case discord.ButtonInteractionData:
 			if page.ButtonHandlerFunc != nil {
-				page.ButtonHandlerFunc(e, s, data.CustomID())
 				m.logger.Debug("Button interaction", zap.String("customID", data.CustomID()))
+				respond := NewRespond(m.sessionManager, m)
+				page.ButtonHandlerFunc(e, s, respond, data.CustomID())
 			} else {
 				m.logger.Error("No button handler found for customID", zap.String("customID", data.CustomID()))
 			}
 		}
 	case *events.ModalSubmitInteractionCreate:
 		if page.ModalHandlerFunc != nil {
-			page.ModalHandlerFunc(e, s)
 			m.logger.Debug("Modal submit interaction", zap.String("customID", e.Data.CustomID))
+			respond := NewRespond(m.sessionManager, m)
+			page.ModalHandlerFunc(e, s, respond)
 		} else {
 			m.logger.Error("No modal handler found for customID", zap.String("customID", e.Data.CustomID))
 		}
 	}
 }
 
-// NavigateTo updates the Discord message with new content and components for the target page.
-// It stores the page history in the session, allowing for nested navigation.
-func (m *Manager) NavigateTo(event interfaces.CommonEvent, s *session.Session, page *Page, content string) {
+// Show updates the Discord message with new content and components for the target page.
+func (m *Manager) Show(event interfaces.CommonEvent, s *session.Session, pageName, content string) {
+	page := m.GetPage(pageName)
+	if page == nil {
+		m.logger.Error("Page not found", zap.String("pageName", pageName))
+		return
+	}
+
+	// Handle the page show event
+	responded := false
+	if page.ShowHandlerFunc != nil {
+		respond := NewRespond(m.sessionManager, m)
+		page.ShowHandlerFunc(event, s, respond)
+		responded = respond.responded
+	}
+
+	// Display the page to the user if it wasn't handled by the handler
+	if !responded {
+		m.Display(event, s, page, content)
+	}
+}
+
+// Display updates the page in the session and displays it to the user.
+func (m *Manager) Display(event interfaces.CommonEvent, s *session.Session, page *Page, content string) {
 	// Update the message with the new content and components
 	messageUpdate := page.Message(s).
 		SetContent(utils.GetTimestampedSubtext(content)).
@@ -158,55 +191,14 @@ func (m *Manager) UpdatePage(s *session.Session, newPage *Page) {
 	session.CurrentPage.Set(s, newPage.Name)
 }
 
-// NavigateBack navigates back to the previous page in the history.
-func (m *Manager) NavigateBack(event interfaces.CommonEvent, s *session.Session, content string) {
-	previousPages := session.PreviousPages.Get(s)
-
-	if len(previousPages) > 0 {
-		// Get the last page from history
-		lastIdx := len(previousPages) - 1
-		previousPage := previousPages[lastIdx]
-
-		// Navigate to the previous page
-		page := m.GetPage(previousPage)
-		m.NavigateTo(event, s, page, content)
-	} else {
-		m.Refresh(event, s, content)
-	}
-}
-
-// Refresh reloads the current page in the session.
-func (m *Manager) Refresh(event interfaces.CommonEvent, s *session.Session, content string) {
-	currentPage := session.CurrentPage.Get(s)
-	page := m.GetPage(currentPage)
-	m.NavigateTo(event, s, page, content)
-}
-
-// RespondWithError clears all message components and embeds, replacing them with
-// a timestamped error message. This is used when an unrecoverable error occurs
-// during interaction handling.
+// RespondWithError updates the interaction response with an error message.
 func (m *Manager) RespondWithError(event interfaces.CommonEvent, message string) {
-	messageUpdate := discord.NewMessageUpdateBuilder().
-		SetContent(utils.GetTimestampedSubtext("Fatal error: " + message)).
-		ClearEmbeds().
-		ClearFiles().
-		ClearContainerComponents().
-		RetainAttachments().
-		Build()
-
-	_, _ = event.Client().Rest().UpdateInteractionResponse(event.ApplicationID(), event.Token(), messageUpdate)
-	m.sessionManager.CloseSession(context.Background(), uint64(event.User().ID))
+	respond := NewRespond(m.sessionManager, m)
+	respond.Error(event, message)
 }
 
-// RespondWithMessage updates the interaction response with a new message.
-func (m *Manager) RespondWithMessage(event interfaces.CommonEvent, message string) {
-	messageUpdate := discord.NewMessageUpdateBuilder().
-		SetContent(utils.GetTimestampedSubtext(message)).
-		ClearEmbeds().
-		ClearFiles().
-		ClearContainerComponents().
-		RetainAttachments().
-		Build()
-
-	_, _ = event.Client().Rest().UpdateInteractionResponse(event.ApplicationID(), event.Token(), messageUpdate)
+// RespondWithCancel updates the interaction response with a cancel message.
+func (m *Manager) RespondWithCancel(event interfaces.CommonEvent, s *session.Session, message string) {
+	respond := NewRespond(m.sessionManager, m)
+	respond.Cancel(event, s, message)
 }

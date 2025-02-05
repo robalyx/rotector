@@ -25,9 +25,7 @@ type StatusMenu struct {
 	page   *pagination.Page
 }
 
-// NewStatusMenu creates a StatusMenu and sets up its page with message builders
-// and interaction handlers. The page is configured to show queue information
-// and handle refresh/abort actions.
+// NewStatusMenu creates a new status menu.
 func NewStatusMenu(layout *Layout) *StatusMenu {
 	m := &StatusMenu{layout: layout}
 	m.page = &pagination.Page{
@@ -35,14 +33,14 @@ func NewStatusMenu(layout *Layout) *StatusMenu {
 		Message: func(s *session.Session) *discord.MessageUpdateBuilder {
 			return builder.NewStatusBuilder(layout.queueManager, s).Build()
 		},
+		ShowHandlerFunc:   m.Show,
 		ButtonHandlerFunc: m.handleButton,
 	}
 	return m
 }
 
-// Show prepares and displays the status interface by loading
-// current queue counts and position information into the session.
-func (m *StatusMenu) Show(event interfaces.CommonEvent, s *session.Session) {
+// Show prepares and displays the status interface.
+func (m *StatusMenu) Show(event interfaces.CommonEvent, s *session.Session, r *pagination.Respond) {
 	userID := session.QueueUser.Get(s)
 	status, priority, position, err := m.layout.queueManager.GetQueueInfo(context.Background(), userID)
 
@@ -52,7 +50,7 @@ func (m *StatusMenu) Show(event interfaces.CommonEvent, s *session.Session) {
 		user, err := m.layout.db.Models().Users().GetUserByID(context.Background(), strconv.FormatUint(userID, 10), types.UserFieldAll)
 		if err != nil {
 			if errors.Is(err, types.ErrUserNotFound) {
-				m.layout.paginationManager.NavigateBack(event, s, "User was not flagged by AI after recheck.")
+				r.NavigateBack(event, s, "User was not flagged by AI after recheck.")
 				return
 			}
 			m.layout.logger.Error("Failed to get user by ID", zap.Error(err))
@@ -60,11 +58,10 @@ func (m *StatusMenu) Show(event interfaces.CommonEvent, s *session.Session) {
 		}
 
 		// User is still flagged, show updated information
-		dashboardPage := m.layout.paginationManager.GetPage(constants.DashboardPageName)
-		m.layout.paginationManager.UpdatePage(s, dashboardPage)
+		r.UpdatePage(s, constants.UserReviewPageName)
 
 		session.UserTarget.Set(s, user)
-		m.layout.reviewMenu.Show(event, s, "User has been rechecked. Showing updated information.")
+		r.Show(event, s, constants.UserReviewPageName, "User has been rechecked. Showing updated information.")
 
 		// Log the view action
 		m.layout.db.Models().Activities().Log(context.Background(), &types.ActivityLog{
@@ -88,16 +85,14 @@ func (m *StatusMenu) Show(event interfaces.CommonEvent, s *session.Session) {
 	session.QueueStatus.Set(s, status)
 	session.QueuePriority.Set(s, priority)
 	session.QueuePosition.Set(s, position)
-
-	m.layout.paginationManager.NavigateTo(event, s, m.page, "")
 }
 
 // handleButton processes refresh and abort button clicks.
-func (m *StatusMenu) handleButton(event *events.ComponentInteractionCreate, s *session.Session, customID string) {
+func (m *StatusMenu) handleButton(event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, customID string) {
 	switch customID {
 	case constants.RefreshButtonCustomID:
-		m.Show(event, s)
+		r.Reload(event, s, "")
 	case constants.AbortButtonCustomID:
-		m.layout.paginationManager.NavigateBack(event, s, "Recheck aborted")
+		r.NavigateBack(event, s, "Recheck aborted")
 	}
 }

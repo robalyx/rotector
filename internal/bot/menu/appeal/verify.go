@@ -31,43 +31,32 @@ func NewVerifyMenu(layout *Layout) *VerifyMenu {
 	m.page = &pagination.Page{
 		Name: constants.AppealVerifyPageName,
 		Message: func(s *session.Session) *discord.MessageUpdateBuilder {
-			return m.buildMessage(s)
+			return builder.NewVerifyBuilder(s).Build()
 		},
+		ShowHandlerFunc:   m.Show,
 		ButtonHandlerFunc: m.handleButton,
 	}
 	return m
 }
 
 // Show displays the verification interface.
-func (m *VerifyMenu) Show(event interfaces.CommonEvent, s *session.Session, userID uint64, reason string) {
-	// Generate verification code
+func (m *VerifyMenu) Show(_ interfaces.CommonEvent, s *session.Session, _ *pagination.Respond) {
 	verificationCode := utils.GenerateRandomWords(4)
-
-	// Store data in session
-	session.VerifyUserID.Set(s, userID)
-	session.VerifyReason.Set(s, reason)
 	session.VerifyCode.Set(s, verificationCode)
-
-	m.layout.paginationManager.NavigateTo(event, s, m.page, "")
-}
-
-// buildMessage creates the verification message with instructions.
-func (m *VerifyMenu) buildMessage(s *session.Session) *discord.MessageUpdateBuilder {
-	return builder.NewVerifyBuilder(s).Build()
 }
 
 // handleButton processes button interactions.
-func (m *VerifyMenu) handleButton(event *events.ComponentInteractionCreate, s *session.Session, customID string) {
+func (m *VerifyMenu) handleButton(event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, customID string) {
 	switch customID {
 	case constants.BackButtonCustomID:
-		m.layout.paginationManager.NavigateBack(event, s, "Verification cancelled.")
+		r.NavigateBack(event, s, "Verification cancelled.")
 	case constants.VerifyDescriptionButtonID:
-		m.verifyDescription(event, s)
+		m.verifyDescription(event, s, r)
 	}
 }
 
 // verifyDescription checks if the user has updated their description with the verification code.
-func (m *VerifyMenu) verifyDescription(event *events.ComponentInteractionCreate, s *session.Session) {
+func (m *VerifyMenu) verifyDescription(event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond) {
 	userID := session.VerifyUserID.Get(s)
 	expectedCode := session.VerifyCode.Get(s)
 	reason := session.VerifyReason.Get(s)
@@ -81,34 +70,37 @@ func (m *VerifyMenu) verifyDescription(event *events.ComponentInteractionCreate,
 		m.layout.logger.Error("Failed to fetch user info",
 			zap.Error(err),
 			zap.Uint64("userID", userID))
-		m.layout.paginationManager.RespondWithError(event, "Failed to verify description. Please try again.")
+		r.Error(event, "Failed to verify description. Please try again.")
 		return
 	}
 
 	// Check if description contains verification code
 	if !strings.Contains(userInfo.Description, expectedCode) {
-		m.layout.paginationManager.NavigateTo(event, s, m.page,
-			"❌ Verification code not found in description. Please make sure you copied it exactly.")
+		r.Cancel(event, s, "❌ Verification code not found in description. Please make sure you copied it exactly.")
 		return
 	}
 
 	// Create appeal
+	now := time.Now()
 	appeal := &types.Appeal{
-		UserID:      userID,
-		RequesterID: uint64(event.User().ID),
-		Status:      enum.AppealStatusPending,
+		UserID:       userID,
+		RequesterID:  uint64(event.User().ID),
+		Status:       enum.AppealStatusPending,
+		Timestamp:    now,
+		LastViewed:   now,
+		LastActivity: now,
 	}
 
 	// Submit appeal
 	if err := m.layout.db.Models().Appeals().CreateAppeal(context.Background(), appeal, reason); err != nil {
 		m.layout.logger.Error("Failed to create appeal", zap.Error(err))
-		m.layout.paginationManager.RespondWithError(event, "Failed to submit appeal. Please try again.")
+		r.Error(event, "Failed to submit appeal. Please try again.")
 		return
 	}
 
 	session.AppealCursor.Delete(s)
 	session.AppealPrevCursors.Delete(s)
-	m.layout.ShowOverview(event, s, "✅ Account verified and appeal submitted successfully!")
+	r.Show(event, s, constants.AppealOverviewPageName, "✅ Account verified and appeal submitted successfully!")
 
 	// Log the appeal submission
 	m.layout.db.Models().Activities().Log(context.Background(), &types.ActivityLog{

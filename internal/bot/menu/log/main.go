@@ -18,22 +18,21 @@ import (
 	"go.uber.org/zap"
 )
 
-// MainMenu handles the display and interaction logic for viewing activity logs.
-type MainMenu struct {
+// Menu handles the display and interaction logic for viewing activity logs.
+type Menu struct {
 	layout *Layout
 	page   *pagination.Page
 }
 
-// NewMainMenu creates a MainMenu and sets up its page with message builders and
-// interaction handlers. The page is configured to show log entries
-// and handle filtering/navigation.
-func NewMainMenu(l *Layout) *MainMenu {
-	m := &MainMenu{layout: l}
+// NewMenu creates a new log menu.
+func NewMenu(l *Layout) *Menu {
+	m := &Menu{layout: l}
 	m.page = &pagination.Page{
 		Name: constants.LogPageName,
 		Message: func(s *session.Session) *discord.MessageUpdateBuilder {
 			return builder.NewBuilder(s).Build()
 		},
+		ShowHandlerFunc:   m.Show,
 		SelectHandlerFunc: m.handleSelectMenu,
 		ButtonHandlerFunc: m.handleButton,
 		ModalHandlerFunc:  m.handleModal,
@@ -41,9 +40,8 @@ func NewMainMenu(l *Layout) *MainMenu {
 	return m
 }
 
-// Show prepares and displays the logs based on current filters
-// and updates the session with the results.
-func (m *MainMenu) Show(event interfaces.CommonEvent, s *session.Session) {
+// Show prepares and displays the logs interface.
+func (m *Menu) Show(event interfaces.CommonEvent, s *session.Session, r *pagination.Respond) {
 	// Get query parameters from session
 	activityFilter := types.ActivityFilter{
 		DiscordID:    session.LogFilterDiscordID.Get(s),
@@ -67,7 +65,7 @@ func (m *MainMenu) Show(event interfaces.CommonEvent, s *session.Session) {
 	)
 	if err != nil {
 		m.layout.logger.Error("Failed to get logs", zap.Error(err))
-		m.layout.paginationManager.NavigateTo(event, s, m.page, "Failed to retrieve log data. Please try again.")
+		r.Error(event, "Failed to retrieve log data. Please try again.")
 		return
 	}
 
@@ -89,13 +87,10 @@ func (m *MainMenu) Show(event interfaces.CommonEvent, s *session.Session) {
 	session.LogNextCursor.Set(s, nextCursor)
 	session.PaginationHasNextPage.Set(s, nextCursor != nil)
 	session.PaginationHasPrevPage.Set(s, len(prevCursors) > 0)
-
-	m.layout.paginationManager.NavigateTo(event, s, m.page, "")
 }
 
-// handleSelectMenu processes select menu interactions by showing the appropriate
-// query modal or updating the activity type filter.
-func (m *MainMenu) handleSelectMenu(event *events.ComponentInteractionCreate, s *session.Session, customID string, option string) {
+// handleSelectMenu processes select menu interactions.
+func (m *Menu) handleSelectMenu(event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, customID, option string) {
 	switch customID {
 	case constants.ActionSelectMenuCustomID:
 		switch option {
@@ -118,7 +113,7 @@ func (m *MainMenu) handleSelectMenu(event *events.ComponentInteractionCreate, s 
 			constants.LogsGroupActivityCategoryOption,
 			constants.LogsOtherActivityCategoryOption:
 			session.LogFilterActivityCategory.Set(s, option)
-			m.layout.paginationManager.NavigateTo(event, s, m.page, "")
+			r.Reload(event, s, "")
 			return
 		}
 
@@ -126,50 +121,48 @@ func (m *MainMenu) handleSelectMenu(event *events.ComponentInteractionCreate, s 
 		optionInt, err := strconv.Atoi(option)
 		if err != nil {
 			m.layout.logger.Error("Failed to convert activity type option to int", zap.Error(err))
-			m.layout.paginationManager.RespondWithError(event, "Invalid activity type option.")
+			r.Error(event, "Invalid activity type option.")
 			return
 		}
 
 		session.LogFilterActivityType.Set(s, enum.ActivityType(optionInt))
-		m.Show(event, s)
+		r.Reload(event, s, "")
 	}
 }
 
-// handleButton processes button interactions by handling navigation
-// back to the dashboard and page navigation.
-func (m *MainMenu) handleButton(event *events.ComponentInteractionCreate, s *session.Session, customID string) {
+// handleButton processes button interactions.
+func (m *Menu) handleButton(event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, customID string) {
 	switch customID {
 	case constants.BackButtonCustomID:
-		m.layout.paginationManager.NavigateBack(event, s, "")
+		r.NavigateBack(event, s, "")
 	case constants.RefreshButtonCustomID:
-		m.layout.ResetLogs(s)
-		m.Show(event, s)
+		ResetLogs(s)
+		r.Reload(event, s, "")
 	case constants.ClearFiltersButtonCustomID:
-		m.layout.ResetFilters(s)
-		m.Show(event, s)
+		ResetFilters(s)
+		r.Reload(event, s, "")
 	case string(session.ViewerFirstPage), string(session.ViewerPrevPage), string(session.ViewerNextPage), string(session.ViewerLastPage):
-		m.handlePagination(event, s, session.ViewerAction(customID))
+		m.handlePagination(event, s, r, session.ViewerAction(customID))
 	}
 }
 
 // handleModal processes modal submissions by routing them to the appropriate
 // handler based on the modal's custom ID.
-func (m *MainMenu) handleModal(event *events.ModalSubmitInteractionCreate, s *session.Session) {
+func (m *Menu) handleModal(event *events.ModalSubmitInteractionCreate, s *session.Session, r *pagination.Respond) {
 	customID := event.Data.CustomID
 	switch customID {
 	case constants.LogsQueryDiscordIDOption,
 		constants.LogsQueryUserIDOption,
 		constants.LogsQueryGroupIDOption,
 		constants.LogsQueryReviewerIDOption:
-		m.handleIDModalSubmit(event, s, customID)
+		m.handleIDModalSubmit(event, s, r, customID)
 	case constants.LogsQueryDateRangeOption:
-		m.handleDateRangeModalSubmit(event, s)
+		m.handleDateRangeModalSubmit(event, s, r)
 	}
 }
 
 // showQueryModal creates and displays a modal for entering query parameters.
-// The modal's fields are configured based on the type of query being performed.
-func (m *MainMenu) showQueryModal(event *events.ComponentInteractionCreate, option, title, label, placeholder string) {
+func (m *Menu) showQueryModal(event *events.ComponentInteractionCreate, option, title, label, placeholder string) {
 	modal := discord.NewModalCreateBuilder().
 		SetCustomID(option).
 		SetTitle(title).
@@ -185,13 +178,12 @@ func (m *MainMenu) showQueryModal(event *events.ComponentInteractionCreate, opti
 	}
 }
 
-// handleIDModalSubmit processes ID-based query modal submissions by parsing
-// the ID and updating the appropriate session value.
-func (m *MainMenu) handleIDModalSubmit(event *events.ModalSubmitInteractionCreate, s *session.Session, queryType string) {
+// handleIDModalSubmit processes ID-based query modal submissions.
+func (m *Menu) handleIDModalSubmit(event *events.ModalSubmitInteractionCreate, s *session.Session, r *pagination.Respond, queryType string) {
 	idStr := event.Data.Text(constants.LogsQueryInputCustomID)
 	id, err := strconv.ParseUint(idStr, 10, 64)
 	if err != nil {
-		m.layout.paginationManager.NavigateTo(event, s, m.page, "Invalid ID provided. Please enter a valid numeric ID.")
+		r.Cancel(event, s, "Invalid ID provided. Please enter a valid numeric ID.")
 		return
 	}
 
@@ -207,27 +199,26 @@ func (m *MainMenu) handleIDModalSubmit(event *events.ModalSubmitInteractionCreat
 		session.LogFilterReviewerID.Set(s, id)
 	}
 
-	m.Show(event, s)
+	r.Reload(event, s, "")
 }
 
-// handleDateRangeModalSubmit processes date range modal submissions by parsing
-// the date range string and storing the dates in the session.
-func (m *MainMenu) handleDateRangeModalSubmit(event *events.ModalSubmitInteractionCreate, s *session.Session) {
+// handleDateRangeModalSubmit processes date range modal submissions.
+func (m *Menu) handleDateRangeModalSubmit(event *events.ModalSubmitInteractionCreate, s *session.Session, r *pagination.Respond) {
 	dateRangeStr := event.Data.Text(constants.LogsQueryInputCustomID)
 	startDate, endDate, err := utils.ParseDateRange(dateRangeStr)
 	if err != nil {
-		m.layout.paginationManager.NavigateTo(event, s, m.page, fmt.Sprintf("Invalid date range: %v", err))
+		r.Cancel(event, s, fmt.Sprintf("Invalid date range: %v", err))
 		return
 	}
 
 	session.LogFilterDateRangeStart.Set(s, startDate)
 	session.LogFilterDateRangeEnd.Set(s, endDate)
 
-	m.Show(event, s)
+	r.Reload(event, s, "")
 }
 
 // handlePagination processes page navigation.
-func (m *MainMenu) handlePagination(event *events.ComponentInteractionCreate, s *session.Session, action session.ViewerAction) {
+func (m *Menu) handlePagination(event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, action session.ViewerAction) {
 	switch action {
 	case session.ViewerNextPage:
 		if session.PaginationHasNextPage.Get(s) {
@@ -237,7 +228,7 @@ func (m *MainMenu) handlePagination(event *events.ComponentInteractionCreate, s 
 
 			session.LogCursor.Set(s, nextCursor)
 			session.LogPrevCursors.Set(s, append(prevCursors, cursor))
-			m.Show(event, s)
+			r.Reload(event, s, "")
 		}
 	case session.ViewerPrevPage:
 		prevCursors := session.LogPrevCursors.Get(s)
@@ -246,12 +237,12 @@ func (m *MainMenu) handlePagination(event *events.ComponentInteractionCreate, s 
 			lastIdx := len(prevCursors) - 1
 			session.LogPrevCursors.Set(s, prevCursors[:lastIdx])
 			session.LogCursor.Set(s, prevCursors[lastIdx])
-			m.Show(event, s)
+			r.Reload(event, s, "")
 		}
 	case session.ViewerFirstPage:
 		session.LogCursor.Set(s, nil)
 		session.LogPrevCursors.Set(s, make([]*types.LogCursor, 0))
-		m.Show(event, s)
+		r.Reload(event, s, "")
 	case session.ViewerLastPage:
 		return
 	}

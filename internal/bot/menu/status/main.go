@@ -13,28 +13,28 @@ import (
 	"go.uber.org/zap"
 )
 
-// MainMenu handles worker status operations and their interactions.
-type MainMenu struct {
+// Menu handles worker status operations and their interactions.
+type Menu struct {
 	layout *Layout
 	page   *pagination.Page
 }
 
-// NewMainMenu creates a MainMenu by initializing the status menu and registering its
-// page with the pagination manager.
-func NewMainMenu(layout *Layout) *MainMenu {
-	m := &MainMenu{layout: layout}
+// NewMenu creates a new status menu.
+func NewMenu(layout *Layout) *Menu {
+	m := &Menu{layout: layout}
 	m.page = &pagination.Page{
 		Name: constants.StatusPageName,
 		Message: func(s *session.Session) *discord.MessageUpdateBuilder {
 			return builder.NewBuilder(s).Build()
 		},
+		ShowHandlerFunc:   m.Show,
 		ButtonHandlerFunc: m.handleButton,
 	}
 	return m
 }
 
 // Show prepares and displays the worker status interface.
-func (m *MainMenu) Show(event interfaces.CommonEvent, s *session.Session) {
+func (m *Menu) Show(_ interfaces.CommonEvent, s *session.Session, _ *pagination.Respond) {
 	// Get worker statuses
 	workerStatuses, err := m.layout.workerMonitor.GetAllStatuses(context.Background())
 	if err != nil {
@@ -43,16 +43,14 @@ func (m *MainMenu) Show(event interfaces.CommonEvent, s *session.Session) {
 
 	// Store data in session
 	session.StatusWorkers.Set(s, workerStatuses)
-
-	m.layout.paginationManager.NavigateTo(event, s, m.page, "")
 }
 
 // handleButton processes button interactions, mainly handling refresh requests.
-func (m *MainMenu) handleButton(event *events.ComponentInteractionCreate, s *session.Session, customID string) {
+func (m *Menu) handleButton(event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, customID string) {
 	switch customID {
 	case constants.BackButtonCustomID:
-		m.layout.paginationManager.NavigateBack(event, s, "")
+		r.NavigateBack(event, s, "")
 	case constants.RefreshButtonCustomID:
-		m.Show(event, s)
+		r.Reload(event, s, "")
 	}
 }

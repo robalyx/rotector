@@ -24,11 +24,13 @@ type StatusBuilder struct {
 	highPriorityCount   int
 	normalPriorityCount int
 	lowPriorityCount    int
+	trainingMode        bool
 	privacyMode         bool
 }
 
 // NewStatusBuilder creates a new status builder.
 func NewStatusBuilder(queueManager *queue.Manager, s *session.Session) *StatusBuilder {
+	trainingMode := session.UserReviewMode.Get(s) == enum.ReviewModeTraining
 	return &StatusBuilder{
 		queueManager:        queueManager,
 		userID:              session.QueueUser.Get(s),
@@ -38,7 +40,8 @@ func NewStatusBuilder(queueManager *queue.Manager, s *session.Session) *StatusBu
 		highPriorityCount:   session.QueueHighCount.Get(s),
 		normalPriorityCount: session.QueueNormalCount.Get(s),
 		lowPriorityCount:    session.QueueLowCount.Get(s),
-		privacyMode:         session.UserReviewMode.Get(s) == enum.ReviewModeTraining || session.UserStreamerMode.Get(s),
+		trainingMode:        trainingMode,
+		privacyMode:         trainingMode || session.UserStreamerMode.Get(s),
 	}
 }
 
@@ -50,7 +53,7 @@ func (b *StatusBuilder) Build() *discord.MessageUpdateBuilder {
 
 	// Format user field based on review mode
 	userID := utils.CensorString(strconv.FormatUint(b.userID, 10), b.privacyMode)
-	if b.privacyMode {
+	if b.trainingMode {
 		embed.AddField("Current User", userID, true)
 	} else {
 		embed.AddField("Current User", fmt.Sprintf(

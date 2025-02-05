@@ -5,6 +5,7 @@ import (
 
 	"github.com/disgoorg/disgo/discord"
 	"github.com/robalyx/rotector/internal/bot/constants"
+	"github.com/robalyx/rotector/internal/bot/core/session"
 )
 
 // Builder creates the visual layout for managing queue operations.
@@ -17,11 +18,11 @@ type Builder struct {
 }
 
 // NewBuilder creates a new queue embed.
-func NewBuilder(highCount, normalCount, lowCount int) *Builder {
+func NewBuilder(s *session.Session) *Builder {
 	return &Builder{
-		highPriorityCount:   highCount,
-		normalPriorityCount: normalCount,
-		lowPriorityCount:    lowCount,
+		highPriorityCount:   session.QueueHighCount.Get(s),
+		normalPriorityCount: session.QueueNormalCount.Get(s),
+		lowPriorityCount:    session.QueueLowCount.Get(s),
 	}
 }
 

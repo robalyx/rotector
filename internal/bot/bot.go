@@ -46,8 +46,6 @@ type Bot struct {
 	logger            *zap.Logger
 	sessionManager    *session.Manager
 	paginationManager *pagination.Manager
-	dashboardLayout   interfaces.DashboardLayout
-	banLayout         interfaces.BanLayout
 }
 
 // New initializes a Bot instance by creating all required managers and layouts.
@@ -103,35 +101,34 @@ func New(app *setup.App) (*Bot, error) {
 	}
 	b.client = client
 
-	// Initialize layouts after bot instance is created
-	settingLayout := setting.New(app, sessionManager, paginationManager)
-	logLayout := log.New(app, sessionManager, paginationManager)
-	chatLayout := chat.New(app, sessionManager, paginationManager)
-	captchaLayout := captcha.New(app, sessionManager, paginationManager)
-	userReviewLayout := userReview.New(app, sessionManager, paginationManager, settingLayout, logLayout, chatLayout, captchaLayout)
-	groupReviewLayout := groupReview.New(app, sessionManager, paginationManager, settingLayout, logLayout, chatLayout, captchaLayout)
-	queueLayout := queue.New(app, sessionManager, paginationManager, userReviewLayout)
-	appealLayout := appeal.New(app, sessionManager, paginationManager, userReviewLayout)
-	adminLayout := admin.New(app, sessionManager, paginationManager, settingLayout)
-	leaderboardLayout := leaderboard.New(app, client, sessionManager, paginationManager)
-	statusLayout := status.New(app, sessionManager, paginationManager)
+	// Initialize layouts
+	settingLayout := setting.New(app)
+	logLayout := log.New(app)
+	chatLayout := chat.New(app)
+	captchaLayout := captcha.New(app)
+	userReviewLayout := userReview.New(app, paginationManager)
+	groupReviewLayout := groupReview.New(app, paginationManager)
+	queueLayout := queue.New(app)
+	appealLayout := appeal.New(app)
+	adminLayout := admin.New(app)
+	leaderboardLayout := leaderboard.New(app, client)
+	statusLayout := status.New(app)
+	dashboardLayout := dashboard.New(app, sessionManager)
+	banLayout := ban.New(app, sessionManager)
 
-	b.dashboardLayout = dashboard.New(
-		app,
-		sessionManager,
-		paginationManager,
-		userReviewLayout,
-		groupReviewLayout,
-		settingLayout,
-		logLayout,
-		queueLayout,
-		chatLayout,
-		appealLayout,
-		adminLayout,
-		leaderboardLayout,
-		statusLayout,
-	)
-	b.banLayout = ban.New(app, sessionManager, paginationManager, b.dashboardLayout)
+	paginationManager.AddPages(settingLayout.Pages())
+	paginationManager.AddPages(logLayout.Pages())
+	paginationManager.AddPages(chatLayout.Pages())
+	paginationManager.AddPages(captchaLayout.Pages())
+	paginationManager.AddPages(userReviewLayout.Pages())
+	paginationManager.AddPages(groupReviewLayout.Pages())
+	paginationManager.AddPages(queueLayout.Pages())
+	paginationManager.AddPages(appealLayout.Pages())
+	paginationManager.AddPages(adminLayout.Pages())
+	paginationManager.AddPages(leaderboardLayout.Pages())
+	paginationManager.AddPages(statusLayout.Pages())
+	paginationManager.AddPages(dashboardLayout.Pages())
+	paginationManager.AddPages(banLayout.Pages())
 
 	return b, nil
 }
@@ -217,13 +214,13 @@ func (b *Bot) handleApplicationCommandInteraction(event *events.ApplicationComma
 		page := b.paginationManager.GetPage(session.CurrentPage.Get(s))
 		if page == nil {
 			// If no valid page exists, reset to dashboard
-			b.dashboardLayout.Show(event, s, "New session created.")
+			b.paginationManager.Show(event, s, constants.DashboardPageName, "New session created.")
 			s.Touch(context.Background())
 			return
 		}
 
 		// Navigate to stored page
-		b.paginationManager.NavigateTo(event, s, page, "")
+		b.paginationManager.Show(event, s, page.Name, "")
 		s.Touch(context.Background())
 	}()
 }
@@ -296,7 +293,7 @@ func (b *Bot) handleComponentInteraction(event *events.ComponentInteractionCreat
 		// Check if the session has a valid current page
 		if page == nil {
 			// If no valid page exists, reset to dashboard
-			b.dashboardLayout.Show(event, s, "New session created.")
+			b.paginationManager.Show(event, s, constants.DashboardPageName, "New session created.")
 			s.Touch(context.Background())
 			return
 		}
@@ -307,7 +304,7 @@ func (b *Bot) handleComponentInteraction(event *events.ComponentInteractionCreat
 			b.logger.Debug("Interaction is outdated",
 				zap.String("session_message_id", sessionMessageID),
 				zap.Uint64("event_message_id", uint64(event.Message.ID)))
-			b.paginationManager.RespondWithMessage(event, "This interaction is outdated. Please use the latest interaction.")
+			b.paginationManager.RespondWithCancel(event, s, "This interaction is outdated. Please use the latest interaction.")
 			return
 		}
 
@@ -369,7 +366,7 @@ func (b *Bot) handleModalSubmit(event *events.ModalSubmitInteractionCreate) {
 		page := b.paginationManager.GetPage(session.CurrentPage.Get(s))
 		if page == nil {
 			// If no valid page exists, reset to dashboard
-			b.dashboardLayout.Show(event, s, "New session created.")
+			b.paginationManager.Show(event, s, constants.DashboardPageName, "New session created.")
 			s.Touch(context.Background())
 			return
 		}
@@ -399,7 +396,7 @@ func (b *Bot) checkBanStatus(event interfaces.CommonEvent, s *session.Session, u
 	}
 
 	// User is banned, show ban menu
-	b.banLayout.Show(event, s)
+	b.paginationManager.Show(event, s, constants.BanPageName, "")
 
 	// Delete session after
 	if closeSession {

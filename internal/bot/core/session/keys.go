@@ -11,12 +11,16 @@ import (
 
 // Key represents a strongly typed session key for storing arbitrary data.
 type Key[T any] struct {
-	name string
+	name    string
+	persist bool
 }
 
 // NewKey creates a new typed session key.
-func NewKey[T any](name string) Key[T] {
-	return Key[T]{name: name}
+func NewKey[T any](name string, persist bool) Key[T] {
+	return Key[T]{
+		name:    name,
+		persist: persist,
+	}
 }
 
 // Get retrieves the value for this key.
@@ -28,7 +32,7 @@ func (k Key[T]) Get(s *Session) T {
 
 // Set stores the value for this key.
 func (k Key[T]) Set(s *Session, value T) {
-	s.set(k.name, value)
+	s.set(k.name, value, k.persist)
 }
 
 // Delete removes the value for this key.
@@ -38,12 +42,16 @@ func (k Key[T]) Delete(s *Session) {
 
 // BufferKey represents a key for binary data.
 type BufferKey struct {
-	name string
+	name    string
+	persist bool
 }
 
 // NewBufferKey creates a new buffer key.
-func NewBufferKey(name string) BufferKey {
-	return BufferKey{name: name}
+func NewBufferKey(name string, persist bool) BufferKey {
+	return BufferKey{
+		name:    name,
+		persist: persist,
+	}
 }
 
 // Get retrieves the buffer for this key.
@@ -53,7 +61,7 @@ func (k BufferKey) Get(s *Session) *bytes.Buffer {
 
 // Set stores the buffer for this key.
 func (k BufferKey) Set(s *Session, value *bytes.Buffer) {
-	s.setBuffer(k.name, value)
+	s.setBuffer(k.name, value, k.persist)
 }
 
 // Delete removes the buffer for this key.

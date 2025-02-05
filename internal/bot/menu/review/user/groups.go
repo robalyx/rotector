@@ -13,6 +13,7 @@ import (
 	"github.com/robalyx/rotector/internal/bot/constants"
 	"github.com/robalyx/rotector/internal/bot/core/pagination"
 	"github.com/robalyx/rotector/internal/bot/core/session"
+	"github.com/robalyx/rotector/internal/bot/interfaces"
 	"github.com/robalyx/rotector/internal/common/storage/database/types"
 	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
 	"go.uber.org/zap"
@@ -24,9 +25,7 @@ type GroupsMenu struct {
 	page   *pagination.Page
 }
 
-// NewGroupsMenu creates a GroupsMenu and sets up its page with message builders
-// and interaction handlers. The page is configured to show group information
-// and handle navigation.
+// NewGroupsMenu creates a new groups menu.
 func NewGroupsMenu(layout *Layout) *GroupsMenu {
 	m := &GroupsMenu{layout: layout}
 	m.page = &pagination.Page{
@@ -34,18 +33,19 @@ func NewGroupsMenu(layout *Layout) *GroupsMenu {
 		Message: func(s *session.Session) *discord.MessageUpdateBuilder {
 			return builder.NewGroupsBuilder(s).Build()
 		},
+		ShowHandlerFunc:   m.Show,
 		ButtonHandlerFunc: m.handlePageNavigation,
 	}
 	return m
 }
 
 // Show prepares and displays the groups interface for a specific page.
-func (m *GroupsMenu) Show(event *events.ComponentInteractionCreate, s *session.Session, page int) {
+func (m *GroupsMenu) Show(event interfaces.CommonEvent, s *session.Session, r *pagination.Respond) {
 	user := session.UserTarget.Get(s)
 
 	// Return to review menu if user has no groups
 	if len(user.Groups) == 0 {
-		m.layout.reviewMenu.Show(event, s, "No groups found for this user.")
+		r.Cancel(event, s, "No groups found for this user.")
 		return
 	}
 
@@ -54,6 +54,8 @@ func (m *GroupsMenu) Show(event *events.ComponentInteractionCreate, s *session.S
 	sortedGroups := m.sortGroupsByStatus(user.Groups, flaggedGroups)
 
 	// Calculate page boundaries
+	page := session.PaginationPage.Get(s)
+
 	start := page * constants.GroupsPerPage
 	end := start + constants.GroupsPerPage
 	if end > len(sortedGroups) {
@@ -80,8 +82,6 @@ func (m *GroupsMenu) Show(event *events.ComponentInteractionCreate, s *session.S
 			session.ImageBuffer.Set(s, buf)
 		},
 	})
-
-	m.layout.paginationManager.NavigateTo(event, s, m.page, "")
 }
 
 // sortGroupsByStatus sorts groups into categories based on their status.
@@ -113,9 +113,8 @@ func (m *GroupsMenu) sortGroupsByStatus(groups []*apiTypes.UserGroupRoles, flagg
 	return sortedGroups
 }
 
-// handlePageNavigation processes navigation button clicks by calculating
-// the target page number and refreshing the display.
-func (m *GroupsMenu) handlePageNavigation(event *events.ComponentInteractionCreate, s *session.Session, customID string) {
+// handlePageNavigation processes navigation button clicks.
+func (m *GroupsMenu) handlePageNavigation(event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, customID string) {
 	action := session.ViewerAction(customID)
 	switch action {
 	case session.ViewerFirstPage, session.ViewerPrevPage, session.ViewerNextPage, session.ViewerLastPage:
@@ -125,14 +124,15 @@ func (m *GroupsMenu) handlePageNavigation(event *events.ComponentInteractionCrea
 		maxPage := (len(user.Groups) - 1) / constants.GroupsPerPage
 		page := action.ParsePageAction(s, action, maxPage)
 
-		m.Show(event, s, page)
+		session.PaginationPage.Set(s, page)
+		r.Reload(event, s, "")
 
 	case constants.BackButtonCustomID:
-		m.layout.paginationManager.NavigateBack(event, s, "")
+		r.NavigateBack(event, s, "")
 
 	default:
 		m.layout.logger.Warn("Invalid groups viewer action", zap.String("action", string(action)))
-		m.layout.paginationManager.RespondWithError(event, "Invalid interaction.")
+		r.Error(event, "Invalid interaction.")
 	}
 }
 

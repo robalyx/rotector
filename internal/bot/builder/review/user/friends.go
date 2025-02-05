@@ -26,11 +26,13 @@ type FriendsBuilder struct {
 	total          int
 	imageBuffer    *bytes.Buffer
 	isStreaming    bool
+	trainingMode   bool
 	privacyMode    bool
 }
 
 // NewFriendsBuilder creates a new friends builder.
 func NewFriendsBuilder(s *session.Session) *FriendsBuilder {
+	trainingMode := session.UserReviewMode.Get(s) == enum.ReviewModeTraining
 	return &FriendsBuilder{
 		user:           session.UserTarget.Get(s),
 		friends:        session.UserFriends.Get(s),
@@ -41,7 +43,8 @@ func NewFriendsBuilder(s *session.Session) *FriendsBuilder {
 		total:          session.PaginationTotalItems.Get(s),
 		imageBuffer:    session.ImageBuffer.Get(s),
 		isStreaming:    session.PaginationIsStreaming.Get(s),
-		privacyMode:    session.UserReviewMode.Get(s) == enum.ReviewModeTraining || session.UserStreamerMode.Get(s),
+		trainingMode:   trainingMode,
+		privacyMode:    trainingMode || session.UserStreamerMode.Get(s),
 	}
 }
 
@@ -136,7 +139,7 @@ func (b *FriendsBuilder) getFriendFieldValue(friend *apiTypes.ExtendedFriend) st
 
 	// Add friend name (with link in standard mode)
 	name := utils.CensorString(friend.Name, b.privacyMode)
-	if b.privacyMode {
+	if b.trainingMode {
 		info.WriteString(name)
 	} else {
 		info.WriteString(fmt.Sprintf(

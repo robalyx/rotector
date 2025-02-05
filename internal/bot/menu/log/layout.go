@@ -3,7 +3,6 @@ package log
 import (
 	"github.com/robalyx/rotector/internal/bot/core/pagination"
 	"github.com/robalyx/rotector/internal/bot/core/session"
-	"github.com/robalyx/rotector/internal/bot/interfaces"
 	"github.com/robalyx/rotector/internal/common/setup"
 	"github.com/robalyx/rotector/internal/common/storage/database"
 	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
@@ -12,43 +11,31 @@ import (
 
 // Layout handles log viewing operations and their interactions.
 type Layout struct {
-	db                database.Client
-	sessionManager    *session.Manager
-	paginationManager *pagination.Manager
-	mainMenu          *MainMenu
-	logger            *zap.Logger
+	db     database.Client
+	menu   *Menu
+	logger *zap.Logger
 }
 
-// New creates a Layout by initializing the log menu and registering its
-// page with the pagination manager.
-func New(
-	app *setup.App,
-	sessionManager *session.Manager,
-	paginationManager *pagination.Manager,
-) *Layout {
-	// Initialize layout
+// New creates a Layout by initializing the log menu.
+func New(app *setup.App) *Layout {
 	l := &Layout{
-		db:                app.DB,
-		sessionManager:    sessionManager,
-		paginationManager: paginationManager,
-		logger:            app.Logger,
+		db:     app.DB,
+		logger: app.Logger,
 	}
-	l.mainMenu = NewMainMenu(l)
-
-	// Initialize and register page
-	paginationManager.AddPage(l.mainMenu.page)
+	l.menu = NewMenu(l)
 
 	return l
 }
 
-// Show prepares and displays the log interface by initializing
-// session data with default values and loading user preferences.
-func (l *Layout) Show(event interfaces.CommonEvent, s *session.Session) {
-	l.mainMenu.Show(event, s)
+// Pages returns all the pages in the layout.
+func (l *Layout) Pages() []*pagination.Page {
+	return []*pagination.Page{
+		l.menu.page,
+	}
 }
 
 // ResetFilters resets all log filters to their default values in the given session.
-func (l *Layout) ResetFilters(s *session.Session) {
+func ResetFilters(s *session.Session) {
 	session.LogFilterDiscordID.Delete(s)
 	session.LogFilterUserID.Delete(s)
 	session.LogFilterGroupID.Delete(s)
@@ -60,7 +47,7 @@ func (l *Layout) ResetFilters(s *session.Session) {
 }
 
 // ResetLogs clears the logs from the session.
-func (l *Layout) ResetLogs(s *session.Session) {
+func ResetLogs(s *session.Session) {
 	session.LogActivities.Delete(s)
 	session.LogCursor.Delete(s)
 	session.LogNextCursor.Delete(s)

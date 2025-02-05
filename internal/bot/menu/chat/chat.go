@@ -28,10 +28,11 @@ type Menu struct {
 func NewMenu(layout *Layout) *Menu {
 	m := &Menu{layout: layout}
 	m.page = &pagination.Page{
-		Name: constants.ChatMenuPageName,
+		Name: constants.ChatPageName,
 		Message: func(s *session.Session) *discord.MessageUpdateBuilder {
 			return builder.NewBuilder(s).Build()
 		},
+		ShowHandlerFunc:   m.Show,
 		SelectHandlerFunc: m.handleSelectMenu,
 		ButtonHandlerFunc: m.handleButton,
 		ModalHandlerFunc:  m.handleModal,
@@ -40,12 +41,12 @@ func NewMenu(layout *Layout) *Menu {
 }
 
 // Show prepares and displays the chat interface.
-func (m *Menu) Show(event interfaces.CommonEvent, s *session.Session, content string) {
-	m.layout.paginationManager.NavigateTo(event, s, m.page, content)
+func (m *Menu) Show(_ interfaces.CommonEvent, _ *session.Session, _ *pagination.Respond) {
+	// Nothing needs to be done here
 }
 
 // handleButton processes button interactions.
-func (m *Menu) handleButton(event *events.ComponentInteractionCreate, s *session.Session, customID string) {
+func (m *Menu) handleButton(event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, customID string) {
 	action := session.ViewerAction(customID)
 	switch action {
 	case session.ViewerFirstPage, session.ViewerPrevPage, session.ViewerNextPage, session.ViewerLastPage:
@@ -55,7 +56,7 @@ func (m *Menu) handleButton(event *events.ComponentInteractionCreate, s *session
 		page := action.ParsePageAction(s, action, maxPage)
 
 		session.PaginationPage.Set(s, page)
-		m.Show(event, s, "")
+		r.Reload(event, s, "")
 
 	case constants.ChatSendButtonID:
 		modal := discord.NewModalCreateBuilder().
@@ -71,33 +72,33 @@ func (m *Menu) handleButton(event *events.ComponentInteractionCreate, s *session
 
 		if err := event.Modal(modal); err != nil {
 			m.layout.logger.Error("Failed to create modal", zap.Error(err))
-			m.layout.paginationManager.RespondWithError(event, "Failed to open chat input. Please try again.")
+			r.Error(event, "Failed to open chat input. Please try again.")
 		}
 
 	case constants.BackButtonCustomID:
-		m.layout.paginationManager.NavigateBack(event, s, "")
+		r.NavigateBack(event, s, "")
 
 	case constants.ChatClearHistoryButtonID:
 		// Clear chat history
 		session.ChatHistory.Set(s, ai.ChatHistory{Messages: make([]*ai.ChatMessage, 0)})
 		session.PaginationPage.Set(s, 0)
-		m.Show(event, s, "Chat history cleared.")
+		r.Reload(event, s, "Chat history cleared.")
 
 	case constants.ChatClearContextButtonID:
 		session.ChatContext.Delete(s)
-		m.Show(event, s, "Context cleared.")
+		r.Reload(event, s, "Context cleared.")
 	}
 }
 
 // handleSelectMenu processes select menu interactions.
-func (m *Menu) handleSelectMenu(event *events.ComponentInteractionCreate, s *session.Session, customID string, option string) {
+func (m *Menu) handleSelectMenu(event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, customID, option string) {
 	switch customID {
 	case constants.ChatModelSelectID:
 		// Parse option to chat model
 		chatModel, err := enum.ChatModelString(option)
 		if err != nil {
 			m.layout.logger.Error("Failed to parse chat model", zap.Error(err))
-			m.layout.paginationManager.RespondWithError(event, "Failed to parse chat model. Please try again.")
+			r.Error(event, "Failed to parse chat model. Please try again.")
 			return
 		}
 
@@ -105,23 +106,23 @@ func (m *Menu) handleSelectMenu(event *events.ComponentInteractionCreate, s *ses
 		session.UserChatModel.Set(s, chatModel)
 
 		// Refresh the menu
-		m.Show(event, s, fmt.Sprintf("Switched to %s model", chatModel.String()))
+		r.Reload(event, s, fmt.Sprintf("Switched to %s model", chatModel.String()))
 	}
 }
 
 // handleModal processes modal submissions for chat input.
-func (m *Menu) handleModal(event *events.ModalSubmitInteractionCreate, s *session.Session) {
+func (m *Menu) handleModal(event *events.ModalSubmitInteractionCreate, s *session.Session, r *pagination.Respond) {
 	switch event.Data.CustomID {
 	case constants.ChatInputModalID:
 		message := event.Data.Text(constants.ChatInputCustomID)
 		if message == "" {
-			m.layout.paginationManager.NavigateTo(event, s, m.page, "Message cannot be empty")
+			r.Cancel(event, s, "Message cannot be empty")
 			return
 		}
 
 		// Check message limits
 		if allowed, errMsg := m.checkMessageLimits(s); !allowed {
-			m.layout.paginationManager.NavigateTo(event, s, m.page, errMsg)
+			r.Cancel(event, s, errMsg)
 			return
 		}
 
@@ -136,7 +137,7 @@ func (m *Menu) handleModal(event *events.ModalSubmitInteractionCreate, s *sessio
 		session.PaginationIsStreaming.Set(s, true)
 
 		// Show "AI is typing..." message
-		m.layout.paginationManager.NavigateTo(event, s, m.page, "AI is typing...")
+		r.Reload(event, s, "AI is typing...")
 
 		// Stream AI response
 		history := session.ChatHistory.Get(s)
@@ -155,7 +156,7 @@ func (m *Menu) handleModal(event *events.ModalSubmitInteractionCreate, s *sessio
 
 			// Update message at most once per second to avoid rate limits
 			if time.Since(lastUpdate) > 1*time.Second {
-				m.layout.paginationManager.NavigateTo(event, s, m.page, "Receiving response...")
+				r.Reload(event, s, "Receiving response...")
 				lastUpdate = time.Now()
 			}
 		}
@@ -182,7 +183,7 @@ func (m *Menu) handleModal(event *events.ModalSubmitInteractionCreate, s *sessio
 		session.PaginationIsStreaming.Set(s, false)
 
 		// Show final message
-		m.layout.paginationManager.NavigateTo(event, s, m.page, "Response completed.")
+		r.Reload(event, s, "Response completed.")
 	}
 }
 

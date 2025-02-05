@@ -33,31 +33,17 @@ func NewTicketMenu(layout *Layout) *TicketMenu {
 		Message: func(s *session.Session) *discord.MessageUpdateBuilder {
 			return builder.NewTicketBuilder(s).Build()
 		},
-		ButtonHandlerFunc: m.handleButton,
-		ModalHandlerFunc:  m.handleModal,
+		CleanupHandlerFunc: m.Cleanup,
+		ShowHandlerFunc:    m.Show,
+		ButtonHandlerFunc:  m.handleButton,
+		ModalHandlerFunc:   m.handleModal,
 	}
 	return m
 }
 
 // Show prepares and displays the appeal ticket interface.
-func (m *TicketMenu) Show(event interfaces.CommonEvent, s *session.Session, appealID int64, content string) {
-	// Get appeals from session
-	appeals := session.AppealList.Get(s)
-
-	// Find the appeal in the session data
-	var appeal *types.Appeal
-	for _, a := range appeals {
-		if a.ID == appealID {
-			appeal = a
-			break
-		}
-	}
-
-	// If appeal not found in session, show overview
-	if appeal == nil {
-		m.layout.ShowOverview(event, s, "Appeal not found in current view")
-		return
-	}
+func (m *TicketMenu) Show(event interfaces.CommonEvent, s *session.Session, r *pagination.Respond) {
+	appeal := session.AppealSelected.Get(s)
 
 	// If appeal is pending, check if user's status has changed
 	if appeal.Status == enum.AppealStatusPending { //nolint:nestif
@@ -66,7 +52,7 @@ func (m *TicketMenu) Show(event interfaces.CommonEvent, s *session.Session, appe
 		if err != nil {
 			if !errors.Is(err, types.ErrUserNotFound) {
 				m.layout.logger.Error("Failed to get user status", zap.Error(err))
-				m.layout.paginationManager.RespondWithError(event, "Failed to verify user status. Please try again.")
+				r.Error(event, "Failed to verify user status. Please try again.")
 				return
 			}
 
@@ -74,7 +60,7 @@ func (m *TicketMenu) Show(event interfaces.CommonEvent, s *session.Session, appe
 			if err := m.layout.db.Models().Appeals().RejectAppeal(context.Background(), appeal.ID, 0, "User no longer exists in database."); err != nil {
 				m.layout.logger.Error("Failed to auto-reject appeal", zap.Error(err))
 			}
-			m.layout.ShowOverview(event, s, "Appeal automatically closed: User no longer exists in database.")
+			r.Show(event, s, constants.AppealOverviewPageName, "Appeal automatically closed: User no longer exists in database.")
 			return
 		}
 
@@ -84,16 +70,16 @@ func (m *TicketMenu) Show(event interfaces.CommonEvent, s *session.Session, appe
 			if err := m.layout.db.Models().Appeals().RejectAppeal(context.Background(), appeal.ID, 0, reason); err != nil {
 				m.layout.logger.Error("Failed to auto-reject appeal", zap.Error(err))
 			}
-			m.layout.ShowOverview(event, s, "Appeal automatically closed: User status changed to "+user.Status.String())
+			r.Show(event, s, constants.AppealOverviewPageName, "Appeal automatically closed: User status changed to "+user.Status.String())
 			return
 		}
 	}
 
 	// Get messages for the appeal
-	messages, err := m.layout.db.Models().Appeals().GetAppealMessages(context.Background(), appealID)
+	messages, err := m.layout.db.Models().Appeals().GetAppealMessages(context.Background(), appeal.ID)
 	if err != nil {
 		m.layout.logger.Error("Failed to get appeal messages", zap.Error(err))
-		m.layout.paginationManager.RespondWithError(event, "Failed to load appeal messages. Please try again.")
+		r.Error(event, "Failed to load appeal messages. Please try again.")
 		return
 	}
 
@@ -104,16 +90,20 @@ func (m *TicketMenu) Show(event interfaces.CommonEvent, s *session.Session, appe
 	}
 
 	// Store data in session
-	session.AppealSelected.Set(s, appeal)
 	session.AppealMessages.Set(s, messages)
 	session.PaginationTotalPages.Set(s, totalPages)
-	session.PaginationPage.Set(s, 0) // Reset to first page
+	session.PaginationPage.Set(s, 0)
+}
 
-	m.layout.paginationManager.NavigateTo(event, s, m.page, content)
+// Cleanup handles the cleanup of the appeal ticket interface.
+func (m *TicketMenu) Cleanup(s *session.Session) {
+	session.AppealMessages.Delete(s)
+	session.PaginationTotalPages.Delete(s)
+	session.PaginationPage.Delete(s)
 }
 
 // handleButton processes button interactions.
-func (m *TicketMenu) handleButton(event *events.ComponentInteractionCreate, s *session.Session, customID string) {
+func (m *TicketMenu) handleButton(event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, customID string) {
 	action := session.ViewerAction(customID)
 	switch action {
 	case session.ViewerFirstPage, session.ViewerPrevPage, session.ViewerNextPage, session.ViewerLastPage:
@@ -123,24 +113,24 @@ func (m *TicketMenu) handleButton(event *events.ComponentInteractionCreate, s *s
 		page := action.ParsePageAction(s, action, maxPage)
 
 		session.PaginationPage.Set(s, page)
-		m.layout.paginationManager.NavigateTo(event, s, m.page, "")
+		r.Cancel(event, s, "")
 	case constants.BackButtonCustomID:
-		m.layout.paginationManager.NavigateBack(event, s, "")
+		r.NavigateBack(event, s, "")
 	case constants.AppealRespondButtonCustomID:
-		m.handleRespond(event)
+		m.handleRespond(event, r)
 	case constants.AppealLookupUserButtonCustomID:
-		m.handleLookupUser(event, s)
+		m.handleLookupUser(event, s, r)
 	case constants.AcceptAppealButtonCustomID:
-		m.handleAcceptAppeal(event)
+		m.handleAcceptAppeal(event, r)
 	case constants.RejectAppealButtonCustomID:
-		m.handleRejectAppeal(event)
+		m.handleRejectAppeal(event, r)
 	case constants.AppealCloseButtonCustomID:
-		m.handleCloseAppeal(event, s)
+		m.handleCloseAppeal(event, s, r)
 	}
 }
 
 // handleRespond opens a modal for responding to the appeal.
-func (m *TicketMenu) handleRespond(event *events.ComponentInteractionCreate) {
+func (m *TicketMenu) handleRespond(event *events.ComponentInteractionCreate, r *pagination.Respond) {
 	modal := discord.NewModalCreateBuilder().
 		SetCustomID(constants.AppealRespondModalCustomID).
 		SetTitle("Respond to Appeal").
@@ -154,29 +144,29 @@ func (m *TicketMenu) handleRespond(event *events.ComponentInteractionCreate) {
 
 	if err := event.Modal(modal); err != nil {
 		m.layout.logger.Error("Failed to create response modal", zap.Error(err))
-		m.layout.paginationManager.RespondWithError(event, "Failed to open response modal. Please try again.")
+		r.Error(event, "Failed to open response modal. Please try again.")
 	}
 }
 
 // handleLookupUser opens the review menu for the appealed user.
-func (m *TicketMenu) handleLookupUser(event *events.ComponentInteractionCreate, s *session.Session) {
+func (m *TicketMenu) handleLookupUser(event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond) {
 	appeal := session.AppealSelected.Get(s)
 
 	// Get user from database
 	user, err := m.layout.db.Models().Users().GetUserByID(context.Background(), strconv.FormatUint(appeal.UserID, 10), types.UserFieldAll)
 	if err != nil {
 		if errors.Is(err, types.ErrUserNotFound) {
-			m.layout.paginationManager.NavigateTo(event, s, m.page, "Failed to find user. They may not be in our database.")
+			r.Cancel(event, s, "Failed to find user. They may not be in our database.")
 			return
 		}
 		m.layout.logger.Error("Failed to fetch user for review", zap.Error(err))
-		m.layout.paginationManager.RespondWithError(event, "Failed to fetch user for review. Please try again.")
+		r.Error(event, "Failed to fetch user for review. Please try again.")
 		return
 	}
 
 	// Store user in session and show review menu
 	session.UserTarget.Set(s, user)
-	m.layout.userReviewLayout.ShowReviewMenu(event, s)
+	r.Show(event, s, constants.UserReviewPageName, "")
 
 	// Log the lookup action
 	m.layout.db.Models().Activities().Log(context.Background(), &types.ActivityLog{
@@ -191,7 +181,7 @@ func (m *TicketMenu) handleLookupUser(event *events.ComponentInteractionCreate, 
 }
 
 // handleAcceptAppeal opens a modal for accepting the appeal with a reason.
-func (m *TicketMenu) handleAcceptAppeal(event *events.ComponentInteractionCreate) {
+func (m *TicketMenu) handleAcceptAppeal(event *events.ComponentInteractionCreate, r *pagination.Respond) {
 	modal := discord.NewModalCreateBuilder().
 		SetCustomID(constants.AcceptAppealModalCustomID).
 		SetTitle("Accept Appeal").
@@ -204,12 +194,12 @@ func (m *TicketMenu) handleAcceptAppeal(event *events.ComponentInteractionCreate
 
 	if err := event.Modal(modal); err != nil {
 		m.layout.logger.Error("Failed to create accept modal", zap.Error(err))
-		m.layout.paginationManager.RespondWithError(event, "Failed to open accept modal. Please try again.")
+		r.Error(event, "Failed to open accept modal. Please try again.")
 	}
 }
 
 // handleRejectAppeal opens a modal for rejecting the appeal with a reason.
-func (m *TicketMenu) handleRejectAppeal(event *events.ComponentInteractionCreate) {
+func (m *TicketMenu) handleRejectAppeal(event *events.ComponentInteractionCreate, r *pagination.Respond) {
 	modal := discord.NewModalCreateBuilder().
 		SetCustomID(constants.RejectAppealModalCustomID).
 		SetTitle("Reject Appeal").
@@ -222,18 +212,18 @@ func (m *TicketMenu) handleRejectAppeal(event *events.ComponentInteractionCreate
 
 	if err := event.Modal(modal); err != nil {
 		m.layout.logger.Error("Failed to create reject modal", zap.Error(err))
-		m.layout.paginationManager.RespondWithError(event, "Failed to open reject modal. Please try again.")
+		r.Error(event, "Failed to open reject modal. Please try again.")
 	}
 }
 
 // handleCloseAppeal handles the user closing their own appeal ticket.
-func (m *TicketMenu) handleCloseAppeal(event *events.ComponentInteractionCreate, s *session.Session) {
+func (m *TicketMenu) handleCloseAppeal(event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond) {
 	appeal := session.AppealSelected.Get(s)
 
 	// Verify the user is the appeal creator
 	userID := uint64(event.User().ID)
 	if userID != appeal.RequesterID {
-		m.layout.paginationManager.NavigateTo(event, s, m.page, "Only the appeal creator can close this ticket.")
+		r.Cancel(event, s, "Only the appeal creator can close this ticket.")
 		return
 	}
 
@@ -243,12 +233,12 @@ func (m *TicketMenu) handleCloseAppeal(event *events.ComponentInteractionCreate,
 		m.layout.logger.Error("Failed to close appeal",
 			zap.Error(err),
 			zap.Int64("appealID", appeal.ID))
-		m.layout.paginationManager.RespondWithError(event, "Failed to close appeal. Please try again.")
+		r.Error(event, "Failed to close appeal. Please try again.")
 		return
 	}
 
 	// Return to overview
-	m.layout.ShowOverview(event, s, "Appeal closed successfully.")
+	r.Show(event, s, constants.AppealOverviewPageName, "Appeal closed successfully.")
 
 	// Log the appeal closing
 	m.layout.db.Models().Activities().Log(context.Background(), &types.ActivityLog{
@@ -265,39 +255,39 @@ func (m *TicketMenu) handleCloseAppeal(event *events.ComponentInteractionCreate,
 }
 
 // handleModal processes modal submissions.
-func (m *TicketMenu) handleModal(event *events.ModalSubmitInteractionCreate, s *session.Session) {
+func (m *TicketMenu) handleModal(event *events.ModalSubmitInteractionCreate, s *session.Session, r *pagination.Respond) {
 	appeal := session.AppealSelected.Get(s)
 
 	// Use fresh appeal data from database
 	currentAppeal, err := m.layout.db.Models().Appeals().GetAppealByID(context.Background(), appeal.ID)
 	if err != nil {
-		m.layout.paginationManager.NavigateTo(event, s, m.page, "❌ Failed to verify appeal status.")
+		r.Error(event, "❌ Failed to verify appeal status.")
 		return
 	}
 	session.AppealSelected.Set(s, currentAppeal)
 
 	switch event.Data.CustomID {
 	case constants.AppealRespondModalCustomID:
-		m.handleRespondModalSubmit(event, s, currentAppeal)
+		m.handleRespondModalSubmit(event, s, r, currentAppeal)
 	case constants.AcceptAppealModalCustomID:
-		m.handleAcceptModalSubmit(event, s, currentAppeal)
+		m.handleAcceptModalSubmit(event, s, r, currentAppeal)
 	case constants.RejectAppealModalCustomID:
-		m.handleRejectModalSubmit(event, s, currentAppeal)
+		m.handleRejectModalSubmit(event, s, r, currentAppeal)
 	}
 }
 
 // handleRespondModalSubmit processes the response message submission.
-func (m *TicketMenu) handleRespondModalSubmit(event *events.ModalSubmitInteractionCreate, s *session.Session, appeal *types.Appeal) {
+func (m *TicketMenu) handleRespondModalSubmit(event *events.ModalSubmitInteractionCreate, s *session.Session, r *pagination.Respond, appeal *types.Appeal) {
 	// Only allow responses for pending appeals
 	if appeal.Status != enum.AppealStatusPending {
-		m.layout.paginationManager.NavigateTo(event, s, m.page, "❌ Cannot respond to a closed appeal.")
+		r.Cancel(event, s, "❌ Cannot respond to a closed appeal.")
 		return
 	}
 
 	// Check if response is empty
 	content := event.Data.Text(constants.AppealReasonInputCustomID)
 	if content == "" {
-		m.layout.paginationManager.NavigateTo(event, s, m.page, "Response cannot be empty.")
+		r.Cancel(event, s, "Response cannot be empty.")
 		return
 	}
 
@@ -311,7 +301,7 @@ func (m *TicketMenu) handleRespondModalSubmit(event *events.ModalSubmitInteracti
 		// Check if user is allowed to send a message
 		messages := session.AppealMessages.Get(s)
 		if allowed, errorMsg := m.isMessageAllowed(messages, userID); !allowed {
-			m.layout.paginationManager.NavigateTo(event, s, m.page, errorMsg)
+			r.Cancel(event, s, errorMsg)
 			return
 		}
 	}
@@ -329,25 +319,25 @@ func (m *TicketMenu) handleRespondModalSubmit(event *events.ModalSubmitInteracti
 	err := m.layout.db.Models().Appeals().AddAppealMessage(context.Background(), message, appeal)
 	if err != nil {
 		m.layout.logger.Error("Failed to add appeal message", zap.Error(err))
-		m.layout.paginationManager.RespondWithError(event, "Failed to save response. Please try again.")
+		r.Error(event, "Failed to save response. Please try again.")
 		return
 	}
 
 	// Refresh the ticket view
-	m.Show(event, s, appeal.ID, "Response added successfully.")
+	r.Reload(event, s, "Response added successfully.")
 }
 
 // handleAcceptModalSubmit processes the accept appeal submission.
-func (m *TicketMenu) handleAcceptModalSubmit(event *events.ModalSubmitInteractionCreate, s *session.Session, appeal *types.Appeal) {
+func (m *TicketMenu) handleAcceptModalSubmit(event *events.ModalSubmitInteractionCreate, s *session.Session, r *pagination.Respond, appeal *types.Appeal) {
 	// Prevent accepting already processed appeals
 	if appeal.Status != enum.AppealStatusPending {
-		m.layout.paginationManager.NavigateTo(event, s, m.page, "❌ This appeal has already been processed.")
+		r.Cancel(event, s, "❌ This appeal has already been processed.")
 		return
 	}
 
 	reason := event.Data.Text(constants.AppealReasonInputCustomID)
 	if reason == "" {
-		m.layout.paginationManager.NavigateTo(event, s, m.page, "Accept reason cannot be empty.")
+		r.Cancel(event, s, "Accept reason cannot be empty.")
 		return
 	}
 
@@ -355,11 +345,11 @@ func (m *TicketMenu) handleAcceptModalSubmit(event *events.ModalSubmitInteractio
 	user, err := m.layout.db.Models().Users().GetUserByID(context.Background(), strconv.FormatUint(appeal.UserID, 10), types.UserFieldAll)
 	if err != nil {
 		if errors.Is(err, types.ErrUserNotFound) {
-			m.layout.paginationManager.NavigateTo(event, s, m.page, "Failed to find user. They may no longer exist in our database.")
+			r.Cancel(event, s, "Failed to find user. They may no longer exist in our database.")
 			return
 		}
 		m.layout.logger.Error("Failed to get user for clearing", zap.Error(err))
-		m.layout.paginationManager.RespondWithError(event, "Failed to get user information. Please try again.")
+		r.Error(event, "Failed to get user information. Please try again.")
 		return
 	}
 
@@ -367,7 +357,7 @@ func (m *TicketMenu) handleAcceptModalSubmit(event *events.ModalSubmitInteractio
 	if user.Status != enum.UserTypeCleared {
 		if err := m.layout.db.Models().Users().ClearUser(context.Background(), user); err != nil {
 			m.layout.logger.Error("Failed to clear user", zap.Error(err))
-			m.layout.paginationManager.RespondWithError(event, "Failed to clear user. Please try again.")
+			r.Error(event, "Failed to clear user. Please try again.")
 			return
 		}
 	}
@@ -377,12 +367,12 @@ func (m *TicketMenu) handleAcceptModalSubmit(event *events.ModalSubmitInteractio
 	err = m.layout.db.Models().Appeals().AcceptAppeal(context.Background(), appeal.ID, userID, reason)
 	if err != nil {
 		m.layout.logger.Error("Failed to accept appeal", zap.Error(err))
-		m.layout.paginationManager.RespondWithError(event, "Failed to accept appeal. Please try again.")
+		r.Error(event, "Failed to accept appeal. Please try again.")
 		return
 	}
 
 	// Refresh the ticket view
-	m.layout.ShowOverview(event, s, "Appeal accepted and user cleared.")
+	r.Show(event, s, constants.AppealOverviewPageName, "Appeal accepted and user cleared.")
 
 	// Log the appeal acceptance
 	m.layout.db.Models().Activities().Log(context.Background(), &types.ActivityLog{
@@ -400,16 +390,16 @@ func (m *TicketMenu) handleAcceptModalSubmit(event *events.ModalSubmitInteractio
 }
 
 // handleRejectModalSubmit processes the reject appeal submission.
-func (m *TicketMenu) handleRejectModalSubmit(event *events.ModalSubmitInteractionCreate, s *session.Session, appeal *types.Appeal) {
+func (m *TicketMenu) handleRejectModalSubmit(event *events.ModalSubmitInteractionCreate, s *session.Session, r *pagination.Respond, appeal *types.Appeal) {
 	// Prevent rejecting already processed appeals
 	if appeal.Status != enum.AppealStatusPending {
-		m.layout.paginationManager.NavigateTo(event, s, m.page, "❌ This appeal has already been processed.")
+		r.Cancel(event, s, "❌ This appeal has already been processed.")
 		return
 	}
 
 	reason := event.Data.Text(constants.AppealReasonInputCustomID)
 	if reason == "" {
-		m.layout.paginationManager.NavigateTo(event, s, m.page, "Reject reason cannot be empty.")
+		r.Cancel(event, s, "Reject reason cannot be empty.")
 		return
 	}
 
@@ -418,12 +408,12 @@ func (m *TicketMenu) handleRejectModalSubmit(event *events.ModalSubmitInteractio
 	err := m.layout.db.Models().Appeals().RejectAppeal(context.Background(), appeal.ID, userID, reason)
 	if err != nil {
 		m.layout.logger.Error("Failed to reject appeal", zap.Error(err))
-		m.layout.paginationManager.RespondWithError(event, "Failed to reject appeal. Please try again.")
+		r.Error(event, "Failed to reject appeal. Please try again.")
 		return
 	}
 
 	// Refresh the ticket view
-	m.layout.ShowOverview(event, s, "Appeal rejected.")
+	r.Show(event, s, constants.AppealOverviewPageName, "Appeal rejected.")
 
 	// Log the appeal rejection
 	m.layout.db.Models().Activities().Log(context.Background(), &types.ActivityLog{

@@ -16,7 +16,6 @@ import (
 	"github.com/robalyx/rotector/internal/bot/utils"
 	"github.com/robalyx/rotector/internal/common/storage/database/types"
 	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
-	"github.com/robalyx/rotector/internal/worker/core"
 	"github.com/robalyx/rotector/internal/worker/stats"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
@@ -45,7 +44,6 @@ type Builder struct {
 	userStatsBuffer     *bytes.Buffer
 	groupStatsBuffer    *bytes.Buffer
 	activeUsers         []snowflake.ID
-	workerStatuses      []core.Status
 	voteStats           *types.VoteAccuracy
 	announcementType    enum.AnnouncementType
 	announcementMessage string
@@ -66,7 +64,6 @@ func NewBuilder(s *session.Session, redisClient rueidis.Client) *Builder {
 		userStatsBuffer:     userStatsBuffer,
 		groupStatsBuffer:    groupStatsBuffer,
 		activeUsers:         session.StatsActiveUsers.Get(s),
-		workerStatuses:      session.StatusWorkers.Get(s),
 		voteStats:           session.StatsVotes.Get(s),
 		announcementType:    session.BotAnnouncementType.Get(s),
 		announcementMessage: session.BotAnnouncementMessage.Get(s),

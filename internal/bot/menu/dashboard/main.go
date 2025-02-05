@@ -18,21 +18,21 @@ import (
 	"go.uber.org/zap"
 )
 
-// MainMenu handles dashboard operations and their interactions.
-type MainMenu struct {
+// Menu handles dashboard operations and their interactions.
+type Menu struct {
 	layout *Layout
 	page   *pagination.Page
 }
 
-// NewMainMenu creates a MainMenu by initializing the dashboard menu and registering its
-// page with the pagination manager.
-func NewMainMenu(layout *Layout) *MainMenu {
-	m := &MainMenu{layout: layout}
+// NewMenu creates a new dashboard menu.
+func NewMenu(layout *Layout) *Menu {
+	m := &Menu{layout: layout}
 	m.page = &pagination.Page{
 		Name: constants.DashboardPageName,
 		Message: func(s *session.Session) *discord.MessageUpdateBuilder {
 			return builder.NewBuilder(s, m.layout.redisClient).Build()
 		},
+		ShowHandlerFunc:   m.Show,
 		SelectHandlerFunc: m.handleSelectMenu,
 		ButtonHandlerFunc: m.handleButton,
 		ModalHandlerFunc:  m.handleModal,
@@ -41,10 +41,9 @@ func NewMainMenu(layout *Layout) *MainMenu {
 }
 
 // Show prepares and displays the dashboard interface.
-func (m *MainMenu) Show(event interfaces.CommonEvent, s *session.Session, content string) {
-	// If the dashboard is already refreshed, directly navigate to the page
+func (m *Menu) Show(event interfaces.CommonEvent, s *session.Session, _ *pagination.Respond) {
+	// Skip if dashboard is already refreshed
 	if session.StatsIsRefreshed.Get(s) {
-		m.layout.paginationManager.NavigateTo(event, s, m.page, content)
 		return
 	}
 
@@ -64,25 +63,16 @@ func (m *MainMenu) Show(event interfaces.CommonEvent, s *session.Session, conten
 	// Get list of currently active reviewers
 	activeUsers := m.layout.sessionManager.GetActiveUsers(context.Background())
 
-	// Get worker statuses
-	workerStatuses, err := m.layout.workerMonitor.GetAllStatuses(context.Background())
-	if err != nil {
-		m.layout.logger.Error("Failed to get worker statuses", zap.Error(err))
-	}
-
 	// Store data in session
 	session.StatsUserCounts.Set(s, userCounts)
 	session.StatsGroupCounts.Set(s, groupCounts)
 	session.StatsActiveUsers.Set(s, activeUsers)
-	session.StatusWorkers.Set(s, workerStatuses)
 	session.StatsVotes.Set(s, voteStats)
 	session.StatsIsRefreshed.Set(s, true)
-
-	m.layout.paginationManager.NavigateTo(event, s, m.page, content)
 }
 
 // handleSelectMenu processes select menu interactions.
-func (m *MainMenu) handleSelectMenu(event *events.ComponentInteractionCreate, s *session.Session, customID string, option string) {
+func (m *Menu) handleSelectMenu(event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, customID, option string) {
 	if customID != constants.ActionSelectMenuCustomID {
 		return
 	}
@@ -92,60 +82,60 @@ func (m *MainMenu) handleSelectMenu(event *events.ComponentInteractionCreate, s 
 
 	switch option {
 	case constants.StartUserReviewButtonCustomID:
-		m.layout.userReviewLayout.ShowReviewMenu(event, s)
+		r.Show(event, s, constants.UserReviewPageName, "")
 	case constants.StartGroupReviewButtonCustomID:
-		m.layout.groupReviewLayout.Show(event, s)
+		r.Show(event, s, constants.GroupReviewPageName, "")
 	case constants.LookupUserButtonCustomID:
-		m.handleLookupUser(event)
+		m.handleLookupUser(event, r)
 	case constants.LookupGroupButtonCustomID:
-		m.handleLookupGroup(event)
+		m.handleLookupGroup(event, r)
 	case constants.UserSettingsButtonCustomID:
-		m.layout.settingLayout.ShowUser(event, s)
+		r.Show(event, s, constants.UserSettingsPageName, "")
 	case constants.ActivityBrowserButtonCustomID:
 		if !isReviewer {
 			m.layout.logger.Error("User is not in reviewer list but somehow attempted to access log browser", zap.Uint64("user_id", uint64(event.User().ID)))
-			m.layout.paginationManager.RespondWithError(event, "You do not have permission to access log browser.")
+			r.Error(event, "You do not have permission to access log browser.")
 			return
 		}
-		m.layout.logLayout.Show(event, s)
+		r.Show(event, s, constants.LogPageName, "")
 	case constants.LeaderboardMenuButtonCustomID:
-		m.layout.leaderboardLayout.Show(event, s)
+		r.Show(event, s, constants.LeaderboardPageName, "")
 	case constants.QueueManagerButtonCustomID:
 		if !isReviewer {
 			m.layout.logger.Error("User is not in reviewer list but somehow attempted to access queue manager", zap.Uint64("user_id", uint64(event.User().ID)))
-			m.layout.paginationManager.RespondWithError(event, "You do not have permission to access queue manager.")
+			r.Error(event, "You do not have permission to access queue manager.")
 			return
 		}
-		m.layout.queueLayout.Show(event, s)
+		r.Show(event, s, constants.QueuePageName, "")
 	case constants.ChatAssistantButtonCustomID:
 		if !isReviewer {
 			m.layout.logger.Error("User is not in reviewer list but somehow attempted to access chat assistant", zap.Uint64("user_id", uint64(event.User().ID)))
-			m.layout.paginationManager.RespondWithError(event, "You do not have permission to access the chat assistant.")
+			r.Error(event, "You do not have permission to access the chat assistant.")
 			return
 		}
-		m.layout.chatLayout.Show(event, s)
+		r.Show(event, s, constants.ChatPageName, "")
 	case constants.WorkerStatusButtonCustomID:
 		if !isReviewer {
 			m.layout.logger.Error("User is not in reviewer list but somehow attempted to access worker status", zap.Uint64("user_id", uint64(event.User().ID)))
-			m.layout.paginationManager.RespondWithError(event, "You do not have permission to access worker status.")
+			r.Error(event, "You do not have permission to access worker status.")
 			return
 		}
-		m.layout.statusLayout.Show(event, s)
+		r.Show(event, s, constants.StatusPageName, "")
 	case constants.AppealMenuButtonCustomID:
-		m.layout.appealLayout.ShowOverview(event, s, "")
+		r.Show(event, s, constants.AppealOverviewPageName, "")
 	case constants.AdminMenuButtonCustomID:
 		if !isAdmin {
 			m.layout.logger.Error("Non-admin attempted to access admin menu",
 				zap.Uint64("user_id", uint64(event.User().ID)))
-			m.layout.paginationManager.RespondWithError(event, "You do not have permission to access admin tools.")
+			r.Error(event, "You do not have permission to access admin tools.")
 			return
 		}
-		m.layout.adminLayout.Show(event, s)
+		r.Show(event, s, constants.AdminPageName, "")
 	}
 }
 
 // handleLookupUser opens a modal for entering a specific user ID to lookup.
-func (m *MainMenu) handleLookupUser(event *events.ComponentInteractionCreate) {
+func (m *Menu) handleLookupUser(event *events.ComponentInteractionCreate, r *pagination.Respond) {
 	modal := discord.NewModalCreateBuilder().
 		SetCustomID(constants.LookupUserModalCustomID).
 		SetTitle("Lookup User").
@@ -157,12 +147,12 @@ func (m *MainMenu) handleLookupUser(event *events.ComponentInteractionCreate) {
 		Build()
 	if err := event.Modal(modal); err != nil {
 		m.layout.logger.Error("Failed to create user lookup modal", zap.Error(err))
-		m.layout.paginationManager.RespondWithError(event, "Failed to open the user lookup modal. Please try again.")
+		r.Error(event, "Failed to open the user lookup modal. Please try again.")
 	}
 }
 
 // handleLookupGroup opens a modal for entering a specific group ID to lookup.
-func (m *MainMenu) handleLookupGroup(event *events.ComponentInteractionCreate) {
+func (m *Menu) handleLookupGroup(event *events.ComponentInteractionCreate, r *pagination.Respond) {
 	modal := discord.NewModalCreateBuilder().
 		SetCustomID(constants.LookupGroupModalCustomID).
 		SetTitle("Lookup Group").
@@ -174,22 +164,22 @@ func (m *MainMenu) handleLookupGroup(event *events.ComponentInteractionCreate) {
 		Build()
 	if err := event.Modal(modal); err != nil {
 		m.layout.logger.Error("Failed to create group lookup modal", zap.Error(err))
-		m.layout.paginationManager.RespondWithError(event, "Failed to open the group lookup modal. Please try again.")
+		r.Error(event, "Failed to open the group lookup modal. Please try again.")
 	}
 }
 
 // handleModal processes modal submissions.
-func (m *MainMenu) handleModal(event *events.ModalSubmitInteractionCreate, s *session.Session) {
+func (m *Menu) handleModal(event *events.ModalSubmitInteractionCreate, s *session.Session, r *pagination.Respond) {
 	switch event.Data.CustomID {
 	case constants.LookupUserModalCustomID:
-		m.handleLookupUserModalSubmit(event, s)
+		m.handleLookupUserModalSubmit(event, s, r)
 	case constants.LookupGroupModalCustomID:
-		m.handleLookupGroupModalSubmit(event, s)
+		m.handleLookupGroupModalSubmit(event, s, r)
 	}
 }
 
 // handleLookupUserModalSubmit processes the user ID input and opens the review menu.
-func (m *MainMenu) handleLookupUserModalSubmit(event *events.ModalSubmitInteractionCreate, s *session.Session) {
+func (m *Menu) handleLookupUserModalSubmit(event *events.ModalSubmitInteractionCreate, s *session.Session, r *pagination.Respond) {
 	// Get the user ID input
 	userIDStr := event.Data.Text(constants.LookupUserInputCustomID)
 
@@ -198,7 +188,7 @@ func (m *MainMenu) handleLookupUserModalSubmit(event *events.ModalSubmitInteract
 		var err error
 		userIDStr, err = utils.ExtractUserIDFromURL(userIDStr)
 		if err != nil {
-			m.layout.paginationManager.NavigateTo(event, s, m.page, "Invalid Roblox profile URL. Please provide a valid URL or ID.")
+			r.Error(event, "Invalid Roblox profile URL. Please provide a valid URL or ID.")
 			return
 		}
 	}
@@ -208,19 +198,19 @@ func (m *MainMenu) handleLookupUserModalSubmit(event *events.ModalSubmitInteract
 	if err != nil {
 		switch {
 		case errors.Is(err, types.ErrUserNotFound):
-			m.layout.paginationManager.NavigateTo(event, s, m.page, "Failed to find user. They may not be in our database.")
+			r.Cancel(event, s, "Failed to find user. They may not be in our database.")
 		case errors.Is(err, types.ErrInvalidUserID):
-			m.layout.paginationManager.NavigateTo(event, s, m.page, "Please provide a valid user ID or UUID.")
+			r.Cancel(event, s, "Please provide a valid user ID or UUID.")
 		default:
 			m.layout.logger.Error("Failed to fetch user", zap.Error(err))
-			m.layout.paginationManager.RespondWithError(event, "Failed to fetch user for review. Please try again.")
+			r.Error(event, "Failed to fetch user for review. Please try again.")
 		}
 		return
 	}
 
 	// Store user in session and show review menu
 	session.UserTarget.Set(s, user)
-	m.layout.userReviewLayout.ShowReviewMenu(event, s)
+	r.Show(event, s, constants.UserReviewPageName, "")
 
 	// Log the lookup action
 	m.layout.db.Models().Activities().Log(context.Background(), &types.ActivityLog{
@@ -235,7 +225,7 @@ func (m *MainMenu) handleLookupUserModalSubmit(event *events.ModalSubmitInteract
 }
 
 // handleLookupGroupModalSubmit processes the group ID input and opens the review menu.
-func (m *MainMenu) handleLookupGroupModalSubmit(event *events.ModalSubmitInteractionCreate, s *session.Session) {
+func (m *Menu) handleLookupGroupModalSubmit(event *events.ModalSubmitInteractionCreate, s *session.Session, r *pagination.Respond) {
 	// Get the group ID input
 	groupIDStr := event.Data.Text(constants.LookupGroupInputCustomID)
 
@@ -244,7 +234,7 @@ func (m *MainMenu) handleLookupGroupModalSubmit(event *events.ModalSubmitInterac
 		var err error
 		groupIDStr, err = utils.ExtractGroupIDFromURL(groupIDStr)
 		if err != nil {
-			m.layout.paginationManager.NavigateTo(event, s, m.page, "Invalid Roblox group URL. Please provide a valid URL or ID.")
+			r.Error(event, "Invalid Roblox group URL. Please provide a valid URL or ID.")
 			return
 		}
 	}
@@ -254,19 +244,19 @@ func (m *MainMenu) handleLookupGroupModalSubmit(event *events.ModalSubmitInterac
 	if err != nil {
 		switch {
 		case errors.Is(err, types.ErrGroupNotFound):
-			m.layout.paginationManager.NavigateTo(event, s, m.page, "Failed to find group. It may not be in our database.")
+			r.Cancel(event, s, "Failed to find group. It may not be in our database.")
 		case errors.Is(err, types.ErrInvalidGroupID):
-			m.layout.paginationManager.NavigateTo(event, s, m.page, "Please provide a valid group ID or UUID.")
+			r.Cancel(event, s, "Please provide a valid group ID or UUID.")
 		default:
 			m.layout.logger.Error("Failed to fetch group", zap.Error(err))
-			m.layout.paginationManager.RespondWithError(event, "Failed to fetch group for review. Please try again.")
+			r.Error(event, "Failed to fetch group for review. Please try again.")
 		}
 		return
 	}
 
 	// Store group in session and show review menu
 	session.GroupTarget.Set(s, group)
-	m.layout.groupReviewLayout.Show(event, s)
+	r.Show(event, s, constants.GroupReviewPageName, "")
 
 	// Log the lookup action
 	m.layout.db.Models().Activities().Log(context.Background(), &types.ActivityLog{
@@ -282,9 +272,9 @@ func (m *MainMenu) handleLookupGroupModalSubmit(event *events.ModalSubmitInterac
 
 // handleButton processes button interactions, mainly handling refresh requests
 // to update the dashboard statistics.
-func (m *MainMenu) handleButton(event *events.ComponentInteractionCreate, s *session.Session, customID string) {
+func (m *Menu) handleButton(event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, customID string) {
 	if customID == constants.RefreshButtonCustomID {
 		session.StatsIsRefreshed.Set(s, false)
-		m.Show(event, s, "Refreshed dashboard.")
+		r.Reload(event, s, "Refreshed dashboard.")
 	}
 }

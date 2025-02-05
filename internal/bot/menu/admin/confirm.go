@@ -13,7 +13,6 @@ import (
 	"github.com/robalyx/rotector/internal/bot/constants"
 	"github.com/robalyx/rotector/internal/bot/core/pagination"
 	"github.com/robalyx/rotector/internal/bot/core/session"
-	"github.com/robalyx/rotector/internal/bot/interfaces"
 	"github.com/robalyx/rotector/internal/common/storage/database/types"
 	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
 	"go.uber.org/zap"
@@ -38,46 +37,40 @@ func NewConfirmMenu(layout *Layout) *ConfirmMenu {
 	return m
 }
 
-// Show prepares and displays the confirmation interface.
-func (m *ConfirmMenu) Show(event interfaces.CommonEvent, s *session.Session, action string, content string) {
-	session.AdminAction.Set(s, action)
-	m.layout.paginationManager.NavigateTo(event, s, m.page, content)
-}
-
 // handleButton processes button interactions.
-func (m *ConfirmMenu) handleButton(event *events.ComponentInteractionCreate, s *session.Session, customID string) {
+func (m *ConfirmMenu) handleButton(event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, customID string) {
 	switch customID {
 	case constants.BackButtonCustomID:
-		m.layout.paginationManager.NavigateBack(event, s, "")
+		r.NavigateBack(event, s, "")
 	case constants.ActionButtonCustomID:
-		m.handleConfirm(event, s)
+		m.handleConfirm(event, s, r)
 	}
 }
 
 // handleConfirm processes the confirmation action.
-func (m *ConfirmMenu) handleConfirm(event *events.ComponentInteractionCreate, s *session.Session) {
+func (m *ConfirmMenu) handleConfirm(event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond) {
 	action := session.AdminAction.Get(s)
 	id := session.AdminActionID.Get(s)
 	reason := session.AdminReason.Get(s)
 
 	switch action {
 	case constants.BanUserAction:
-		m.handleBanUser(event, s, id, reason)
+		m.handleBanUser(event, s, r, id, reason)
 	case constants.UnbanUserAction:
-		m.handleUnbanUser(event, s, id, reason)
+		m.handleUnbanUser(event, s, r, id, reason)
 	case constants.DeleteUserAction:
-		m.handleDeleteUser(event, s, id, reason)
+		m.handleDeleteUser(event, s, r, id, reason)
 	case constants.DeleteGroupAction:
-		m.handleDeleteGroup(event, s, id, reason)
+		m.handleDeleteGroup(event, s, r, id, reason)
 	}
 }
 
 // handleBanUser processes the user ban action.
-func (m *ConfirmMenu) handleBanUser(event *events.ComponentInteractionCreate, s *session.Session, userID string, notes string) {
+func (m *ConfirmMenu) handleBanUser(event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, userID string, notes string) {
 	// Parse user ID
 	id, err := strconv.ParseUint(userID, 10, 64)
 	if err != nil {
-		m.layout.paginationManager.RespondWithError(event, "Invalid user ID format.")
+		r.Error(event, "Invalid user ID format.")
 		return
 	}
 
@@ -101,7 +94,7 @@ func (m *ConfirmMenu) handleBanUser(event *events.ComponentInteractionCreate, s 
 			zap.Uint64("user_id", id),
 			zap.Uint64("admin_id", uint64(event.User().ID)),
 		)
-		m.layout.paginationManager.RespondWithError(event, "Failed to ban user. Please try again.")
+		r.Error(event, "Failed to ban user. Please try again.")
 		return
 	}
 
@@ -120,15 +113,15 @@ func (m *ConfirmMenu) handleBanUser(event *events.ComponentInteractionCreate, s 
 		},
 	})
 
-	m.layout.paginationManager.NavigateBack(event, s, fmt.Sprintf("Successfully banned user %d.", id))
+	r.NavigateBack(event, s, fmt.Sprintf("Successfully banned user %d.", id))
 }
 
 // handleUnbanUser processes the user unban action.
-func (m *ConfirmMenu) handleUnbanUser(event *events.ComponentInteractionCreate, s *session.Session, userID string, notes string) {
+func (m *ConfirmMenu) handleUnbanUser(event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, userID string, notes string) {
 	// Parse user ID
 	id, err := strconv.ParseUint(userID, 10, 64)
 	if err != nil {
-		m.layout.paginationManager.RespondWithError(event, "Invalid user ID format.")
+		r.Error(event, "Invalid user ID format.")
 		return
 	}
 
@@ -140,13 +133,13 @@ func (m *ConfirmMenu) handleUnbanUser(event *events.ComponentInteractionCreate, 
 			zap.Uint64("user_id", id),
 			zap.Uint64("admin_id", uint64(event.User().ID)),
 		)
-		m.layout.paginationManager.RespondWithError(event, "Failed to unban user. Please try again.")
+		r.Error(event, "Failed to unban user. Please try again.")
 		return
 	}
 
 	// Check if the user was actually banned
 	if !unbanned {
-		m.layout.paginationManager.NavigateBack(event, s, "User is not currently banned.")
+		r.NavigateBack(event, s, "User is not currently banned.")
 		return
 	}
 
@@ -163,15 +156,15 @@ func (m *ConfirmMenu) handleUnbanUser(event *events.ComponentInteractionCreate, 
 		},
 	})
 
-	m.layout.paginationManager.NavigateBack(event, s, fmt.Sprintf("Successfully unbanned user %d.", id))
+	r.NavigateBack(event, s, fmt.Sprintf("Successfully unbanned user %d.", id))
 }
 
 // handleDeleteUser processes the user deletion action.
-func (m *ConfirmMenu) handleDeleteUser(event *events.ComponentInteractionCreate, s *session.Session, idStr string, reason string) {
+func (m *ConfirmMenu) handleDeleteUser(event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, idStr string, reason string) {
 	// Parse ID from modal
 	id, err := strconv.ParseUint(idStr, 10, 64)
 	if err != nil {
-		m.layout.paginationManager.RespondWithError(event, "Invalid ID format.")
+		r.Error(event, "Invalid ID format.")
 		return
 	}
 
@@ -181,13 +174,13 @@ func (m *ConfirmMenu) handleDeleteUser(event *events.ComponentInteractionCreate,
 		m.layout.logger.Error("Failed to delete user",
 			zap.Error(err),
 			zap.Uint64("id", id))
-		m.layout.paginationManager.RespondWithError(event, "Failed to delete user. Please try again.")
+		r.Error(event, "Failed to delete user. Please try again.")
 		return
 	}
 
 	// Check if the ID was found in the database
 	if !found {
-		m.layout.paginationManager.NavigateBack(event, s, "User ID not found in the database.")
+		r.NavigateBack(event, s, "User ID not found in the database.")
 		return
 	}
 
@@ -204,15 +197,15 @@ func (m *ConfirmMenu) handleDeleteUser(event *events.ComponentInteractionCreate,
 		},
 	})
 
-	m.layout.paginationManager.NavigateBack(event, s, fmt.Sprintf("Successfully deleted user %d.", id))
+	r.NavigateBack(event, s, fmt.Sprintf("Successfully deleted user %d.", id))
 }
 
 // handleDeleteGroup processes the group deletion action.
-func (m *ConfirmMenu) handleDeleteGroup(event *events.ComponentInteractionCreate, s *session.Session, idStr string, reason string) {
+func (m *ConfirmMenu) handleDeleteGroup(event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, idStr string, reason string) {
 	// Parse ID from modal
 	id, err := strconv.ParseUint(idStr, 10, 64)
 	if err != nil {
-		m.layout.paginationManager.RespondWithError(event, "Invalid ID format.")
+		r.Error(event, "Invalid ID format.")
 		return
 	}
 
@@ -222,13 +215,13 @@ func (m *ConfirmMenu) handleDeleteGroup(event *events.ComponentInteractionCreate
 		m.layout.logger.Error("Failed to delete group",
 			zap.Error(err),
 			zap.Uint64("id", id))
-		m.layout.paginationManager.RespondWithError(event, "Failed to delete group. Please try again.")
+		r.Error(event, "Failed to delete group. Please try again.")
 		return
 	}
 
 	// Check if the ID was found in the database
 	if !found {
-		m.layout.paginationManager.NavigateBack(event, s, "Group ID not found in the database.")
+		r.NavigateBack(event, s, "Group ID not found in the database.")
 		return
 	}
 
@@ -245,5 +238,5 @@ func (m *ConfirmMenu) handleDeleteGroup(event *events.ComponentInteractionCreate
 		},
 	})
 
-	m.layout.paginationManager.NavigateBack(event, s, fmt.Sprintf("Successfully deleted group %d.", id))
+	r.NavigateBack(event, s, fmt.Sprintf("Successfully deleted group %d.", id))
 }

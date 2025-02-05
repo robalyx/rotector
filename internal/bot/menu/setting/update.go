@@ -31,6 +31,7 @@ func NewUpdateMenu(l *Layout) *UpdateMenu {
 		Message: func(s *session.Session) *discord.MessageUpdateBuilder {
 			return setting.NewUpdateBuilder(s).Build()
 		},
+		ShowHandlerFunc:   m.Show,
 		SelectHandlerFunc: m.handleSettingChange,
 		ButtonHandlerFunc: m.handleSettingButton,
 		ModalHandlerFunc:  m.handleSettingModal,
@@ -39,14 +40,14 @@ func NewUpdateMenu(l *Layout) *UpdateMenu {
 }
 
 // Show prepares and displays the settings change interface.
-func (m *UpdateMenu) Show(event interfaces.CommonEvent, s *session.Session, settingType, settingKey string) {
+func (m *UpdateMenu) Show(_ interfaces.CommonEvent, s *session.Session, _ *pagination.Respond) {
 	// Get the setting definition
+	settingType := session.SettingType.Get(s)
+	settingKey := session.SettingCustomID.Get(s)
 	setting := m.getSetting(settingType, settingKey)
 
 	// Store setting information in session
 	session.SettingName.Set(s, setting.Name)
-	session.SettingType.Set(s, settingType)
-	session.SettingCustomID.Set(s, settingKey)
 	session.SettingValue.Set(s, setting)
 	session.PaginationPage.Set(s, 0)
 	session.PaginationOffset.Set(s, 0)
@@ -55,43 +56,41 @@ func (m *UpdateMenu) Show(event interfaces.CommonEvent, s *session.Session, sett
 	// Get current value based on setting type
 	currentValue := setting.ValueGetter(s)
 	session.SettingDisplay.Set(s, currentValue)
-
-	m.layout.paginationManager.NavigateTo(event, s, m.page, "")
 }
 
 // handleSettingChange processes setting value changes.
-func (m *UpdateMenu) handleSettingChange(event *events.ComponentInteractionCreate, s *session.Session, customID string, option string) {
+func (m *UpdateMenu) handleSettingChange(event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, customID string, option string) {
 	settingType := session.SettingType.Get(s)
 	settingKey := session.SettingCustomID.Get(s)
 	setting := m.getSetting(settingType, settingKey)
 
 	// Special handling for API key settings
 	if setting.Type == enum.SettingTypeAPIKey {
-		m.handleAPIKeyModal(event, option)
+		m.handleAPIKeyModal(event, r, option)
 		return
 	}
 
 	// Validate the new value
 	if err := m.validateSettingValue(s, setting, option); err != nil {
-		m.layout.paginationManager.NavigateTo(event, s, m.page, fmt.Sprintf("Failed to validate setting value: %v", err))
+		r.Cancel(event, s, fmt.Sprintf("Failed to validate setting value: %v", err))
 		return
 	}
 
 	// Update the setting
 	if err := setting.ValueUpdater(customID, []string{option}, s); err != nil {
-		m.layout.paginationManager.NavigateTo(event, s, m.page, fmt.Sprintf("Failed to update setting: %v", err))
+		r.Cancel(event, s, fmt.Sprintf("Failed to update setting: %v", err))
 		return
 	}
 
-	m.Show(event, s, settingType, settingKey)
+	r.Reload(event, s, "")
 }
 
 // handleSettingButton processes button interactions.
-func (m *UpdateMenu) handleSettingButton(event *events.ComponentInteractionCreate, s *session.Session, customID string) {
+func (m *UpdateMenu) handleSettingButton(event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, customID string) {
 	// Handle back button
 	split := strings.Split(customID, "_")
 	if len(split) > 1 && split[1] == constants.BackButtonCustomID {
-		m.layout.paginationManager.NavigateBack(event, s, "")
+		r.NavigateBack(event, s, "")
 		return
 	}
 
@@ -102,18 +101,18 @@ func (m *UpdateMenu) handleSettingButton(event *events.ComponentInteractionCreat
 	switch customID {
 	case string(session.ViewerFirstPage), string(session.ViewerPrevPage),
 		string(session.ViewerNextPage), string(session.ViewerLastPage):
-		m.handlePageChange(event, s, setting, customID)
+		m.handlePageChange(event, s, r, setting, customID)
 		return
 	}
 
 	// Handle different setting types
 	switch setting.Type {
 	case enum.SettingTypeID:
-		m.handleIDModal(event, s, setting)
+		m.handleIDModal(event, s, r, setting)
 	case enum.SettingTypeNumber:
-		m.handleNumberModal(event, s, setting)
+		m.handleNumberModal(event, s, r, setting)
 	case enum.SettingTypeText:
-		m.handleTextModal(event, s, setting)
+		m.handleTextModal(event, s, r, setting)
 	case enum.SettingTypeBool, enum.SettingTypeEnum, enum.SettingTypeAPIKey:
 		m.layout.logger.Error("Button change not supported for this setting type",
 			zap.String("type", setting.Type.String()))
@@ -122,7 +121,7 @@ func (m *UpdateMenu) handleSettingButton(event *events.ComponentInteractionCreat
 }
 
 // handleIDModal handles the modal for ID type settings.
-func (m *UpdateMenu) handleIDModal(event *events.ComponentInteractionCreate, _ *session.Session, setting *session.Setting) {
+func (m *UpdateMenu) handleIDModal(event *events.ComponentInteractionCreate, _ *session.Session, r *pagination.Respond, setting *session.Setting) {
 	textInput := discord.NewTextInput("0", discord.TextInputStyleParagraph, setting.Name).
 		WithRequired(true).
 		WithPlaceholder("Enter the user ID to toggle...").
@@ -135,12 +134,12 @@ func (m *UpdateMenu) handleIDModal(event *events.ComponentInteractionCreate, _ *
 
 	if err := event.Modal(modal.Build()); err != nil {
 		m.layout.logger.Error("Failed to open the ID input form", zap.Error(err))
-		m.layout.paginationManager.RespondWithError(event, "Failed to open the form. Please try again.")
+		r.Error(event, "Failed to open the form. Please try again.")
 	}
 }
 
 // handleNumberModal handles the modal for number type settings.
-func (m *UpdateMenu) handleNumberModal(event *events.ComponentInteractionCreate, s *session.Session, setting *session.Setting) {
+func (m *UpdateMenu) handleNumberModal(event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, setting *session.Setting) {
 	textInput := discord.NewTextInput("0", discord.TextInputStyleParagraph, setting.Name).
 		WithRequired(true).
 		WithPlaceholder("Enter a number...").
@@ -154,12 +153,12 @@ func (m *UpdateMenu) handleNumberModal(event *events.ComponentInteractionCreate,
 
 	if err := event.Modal(modal.Build()); err != nil {
 		m.layout.logger.Error("Failed to open the number input form", zap.Error(err))
-		m.layout.paginationManager.RespondWithError(event, "Failed to open the form. Please try again.")
+		r.Error(event, "Failed to open the form. Please try again.")
 	}
 }
 
 // handleTextModal handles the modal for text type settings.
-func (m *UpdateMenu) handleTextModal(event *events.ComponentInteractionCreate, s *session.Session, setting *session.Setting) {
+func (m *UpdateMenu) handleTextModal(event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, setting *session.Setting) {
 	textInput := discord.NewTextInput("0", discord.TextInputStyleParagraph, setting.Name).
 		WithRequired(true).
 		WithPlaceholder("Enter your description...").
@@ -173,12 +172,12 @@ func (m *UpdateMenu) handleTextModal(event *events.ComponentInteractionCreate, s
 
 	if err := event.Modal(modal.Build()); err != nil {
 		m.layout.logger.Error("Failed to open the text input form", zap.Error(err))
-		m.layout.paginationManager.RespondWithError(event, "Failed to open the form. Please try again.")
+		r.Error(event, "Failed to open the form. Please try again.")
 	}
 }
 
 // handleAPIKeyModal handles the modal for API key type settings.
-func (m *UpdateMenu) handleAPIKeyModal(event *events.ComponentInteractionCreate, option string) {
+func (m *UpdateMenu) handleAPIKeyModal(event *events.ComponentInteractionCreate, r *pagination.Respond, option string) {
 	var modalTitle string
 	var inputs []discord.TextInputComponent
 
@@ -211,7 +210,7 @@ func (m *UpdateMenu) handleAPIKeyModal(event *events.ComponentInteractionCreate,
 		modalTitle = "Update API Key Description"
 
 	default:
-		m.layout.paginationManager.RespondWithError(event, "Invalid API key action")
+		r.Error(event, "Invalid API key action")
 		return
 	}
 
@@ -227,12 +226,12 @@ func (m *UpdateMenu) handleAPIKeyModal(event *events.ComponentInteractionCreate,
 
 	if err := event.Modal(builder.Build()); err != nil {
 		m.layout.logger.Error("Failed to open the API key form", zap.Error(err))
-		m.layout.paginationManager.RespondWithError(event, "Failed to open the form. Please try again.")
+		r.Error(event, "Failed to open the form. Please try again.")
 	}
 }
 
 // handlePageChange handles pagination for ID and text type settings.
-func (m *UpdateMenu) handlePageChange(event *events.ComponentInteractionCreate, s *session.Session, setting *session.Setting, customID string) {
+func (m *UpdateMenu) handlePageChange(event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, setting *session.Setting, customID string) {
 	// Calculate pagination first
 	if !m.calculatePagination(s) {
 		return
@@ -262,11 +261,11 @@ func (m *UpdateMenu) handlePageChange(event *events.ComponentInteractionCreate, 
 	session.PaginationOffset.Set(s, offset)
 
 	// Refresh the display
-	m.layout.paginationManager.NavigateTo(event, s, m.page, "")
+	r.Reload(event, s, "")
 }
 
 // handleSettingModal processes modal submissions.
-func (m *UpdateMenu) handleSettingModal(event *events.ModalSubmitInteractionCreate, s *session.Session) {
+func (m *UpdateMenu) handleSettingModal(event *events.ModalSubmitInteractionCreate, s *session.Session, r *pagination.Respond) {
 	settingType := session.SettingType.Get(s)
 	settingKey := session.SettingCustomID.Get(s)
 	setting := m.getSetting(settingType, settingKey)
@@ -284,19 +283,19 @@ func (m *UpdateMenu) handleSettingModal(event *events.ModalSubmitInteractionCrea
 	// Validate each input using the setting's validators
 	for _, input := range inputs {
 		if err := m.validateSettingValue(s, setting, input); err != nil {
-			m.layout.paginationManager.NavigateTo(event, s, m.page, fmt.Sprintf("Failed to validate setting value: %v", err))
+			r.Cancel(event, s, fmt.Sprintf("Failed to validate setting value: %v", err))
 			return
 		}
 	}
 
 	// Update the setting using ValueUpdater with the customID and inputs
 	if err := setting.ValueUpdater(event.Data.CustomID, inputs, s); err != nil {
-		m.layout.paginationManager.NavigateTo(event, s, m.page, fmt.Sprintf("Failed to update setting: %v", err))
+		r.Cancel(event, s, fmt.Sprintf("Failed to update setting: %v", err))
 		return
 	}
 
 	// Show updated settings
-	m.Show(event, s, settingType, settingKey)
+	r.Reload(event, s, "")
 }
 
 // getSetting returns the setting definition for the given type and key.

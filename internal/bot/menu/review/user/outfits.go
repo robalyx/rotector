@@ -13,6 +13,7 @@ import (
 	"github.com/robalyx/rotector/internal/bot/constants"
 	"github.com/robalyx/rotector/internal/bot/core/pagination"
 	"github.com/robalyx/rotector/internal/bot/core/session"
+	"github.com/robalyx/rotector/internal/bot/interfaces"
 	"go.uber.org/zap"
 )
 
@@ -22,9 +23,7 @@ type OutfitsMenu struct {
 	page   *pagination.Page
 }
 
-// NewOutfitsMenu creates an OutfitsMenu and sets up its page with message builders
-// and interaction handlers. The page is configured to show outfit information
-// and handle navigation.
+// NewOutfitsMenu creates a new outfits menu.
 func NewOutfitsMenu(layout *Layout) *OutfitsMenu {
 	m := &OutfitsMenu{layout: layout}
 	m.page = &pagination.Page{
@@ -32,22 +31,25 @@ func NewOutfitsMenu(layout *Layout) *OutfitsMenu {
 		Message: func(s *session.Session) *discord.MessageUpdateBuilder {
 			return builder.NewOutfitsBuilder(s).Build()
 		},
+		ShowHandlerFunc:   m.Show,
 		ButtonHandlerFunc: m.handlePageNavigation,
 	}
 	return m
 }
 
 // Show prepares and displays the outfits interface for a specific page.
-func (m *OutfitsMenu) Show(event *events.ComponentInteractionCreate, s *session.Session, page int) {
+func (m *OutfitsMenu) Show(event interfaces.CommonEvent, s *session.Session, r *pagination.Respond) {
 	user := session.UserTarget.Get(s)
 
 	// Return to review menu if user has no outfits
 	if len(user.Outfits) == 0 {
-		m.layout.reviewMenu.Show(event, s, "No outfits found for this user.")
+		r.Cancel(event, s, "No outfits found for this user.")
 		return
 	}
 
 	// Calculate page boundaries
+	page := session.PaginationPage.Get(s)
+
 	start := page * constants.OutfitsPerPage
 	end := start + constants.OutfitsPerPage
 	if end > len(user.Outfits) {
@@ -74,13 +76,10 @@ func (m *OutfitsMenu) Show(event *events.ComponentInteractionCreate, s *session.
 			session.ImageBuffer.Set(s, buf)
 		},
 	})
-
-	m.layout.paginationManager.NavigateTo(event, s, m.page, "")
 }
 
-// handlePageNavigation processes navigation button clicks by calculating
-// the target page number and refreshing the display.
-func (m *OutfitsMenu) handlePageNavigation(event *events.ComponentInteractionCreate, s *session.Session, customID string) {
+// handlePageNavigation processes navigation button clicks.
+func (m *OutfitsMenu) handlePageNavigation(event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, customID string) {
 	action := session.ViewerAction(customID)
 	switch action {
 	case session.ViewerFirstPage, session.ViewerPrevPage, session.ViewerNextPage, session.ViewerLastPage:
@@ -90,14 +89,15 @@ func (m *OutfitsMenu) handlePageNavigation(event *events.ComponentInteractionCre
 		maxPage := (len(user.Outfits) - 1) / constants.OutfitsPerPage
 		page := action.ParsePageAction(s, action, maxPage)
 
-		m.Show(event, s, page)
+		session.PaginationPage.Set(s, page)
+		r.Reload(event, s, "")
 
 	case constants.BackButtonCustomID:
-		m.layout.paginationManager.NavigateBack(event, s, "")
+		r.NavigateBack(event, s, "")
 
 	default:
 		m.layout.logger.Warn("Invalid outfits viewer action", zap.String("action", string(action)))
-		m.layout.paginationManager.RespondWithError(event, "Invalid interaction.")
+		r.Error(event, "Invalid interaction.")
 	}
 }
 

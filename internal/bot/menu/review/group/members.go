@@ -13,6 +13,7 @@ import (
 	"github.com/robalyx/rotector/internal/bot/constants"
 	"github.com/robalyx/rotector/internal/bot/core/pagination"
 	"github.com/robalyx/rotector/internal/bot/core/session"
+	"github.com/robalyx/rotector/internal/bot/interfaces"
 	"github.com/robalyx/rotector/internal/common/storage/database/types"
 	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
 	"go.uber.org/zap"
@@ -24,8 +25,7 @@ type MembersMenu struct {
 	page   *pagination.Page
 }
 
-// NewMembersMenu creates a MembersMenu and sets up its page with message builders
-// and interaction handlers.
+// NewMembersMenu creates a new members menu.
 func NewMembersMenu(layout *Layout) *MembersMenu {
 	m := &MembersMenu{layout: layout}
 	m.page = &pagination.Page{
@@ -33,18 +33,19 @@ func NewMembersMenu(layout *Layout) *MembersMenu {
 		Message: func(s *session.Session) *discord.MessageUpdateBuilder {
 			return builder.NewMembersBuilder(s).Build()
 		},
+		ShowHandlerFunc:   m.Show,
 		ButtonHandlerFunc: m.handlePageNavigation,
 	}
 	return m
 }
 
 // Show prepares and displays the members interface for a specific page.
-func (m *MembersMenu) Show(event *events.ComponentInteractionCreate, s *session.Session, page int) {
+func (m *MembersMenu) Show(event interfaces.CommonEvent, s *session.Session, r *pagination.Respond) {
 	memberIDs := session.GroupMemberIDs.Get(s)
 
 	// Return to review menu if group has no flagged members
 	if len(memberIDs) == 0 {
-		m.layout.reviewMenu.Show(event, s, "No flagged members found for this group.")
+		r.Cancel(event, s, "No flagged members found for this group.")
 		return
 	}
 
@@ -56,7 +57,7 @@ func (m *MembersMenu) Show(event *events.ComponentInteractionCreate, s *session.
 	)
 	if err != nil {
 		m.layout.logger.Error("Failed to get user data", zap.Error(err))
-		m.layout.paginationManager.RespondWithError(event, "Failed to fetch member data. Please try again.")
+		r.Error(event, "Failed to fetch member data. Please try again.")
 		return
 	}
 
@@ -64,6 +65,8 @@ func (m *MembersMenu) Show(event *events.ComponentInteractionCreate, s *session.
 	sortedMemberIDs := m.sortMembersByStatus(memberIDs, members)
 
 	// Calculate page boundaries
+	page := session.PaginationPage.Get(s)
+
 	start := page * constants.MembersPerPage
 	end := start + constants.MembersPerPage
 	if end > len(sortedMemberIDs) {
@@ -79,7 +82,7 @@ func (m *MembersMenu) Show(event *events.ComponentInteractionCreate, s *session.
 	session.GroupMembers.Set(s, members)
 	session.GroupPageMembers.Set(s, pageMembers)
 	session.PaginationOffset.Set(s, start)
-	session.PaginationPage.Set(s, page)
+	session.PaginationPage.Set(s, page+1)
 	session.PaginationTotalItems.Set(s, len(sortedMemberIDs))
 
 	// Start streaming images
@@ -99,11 +102,10 @@ func (m *MembersMenu) Show(event *events.ComponentInteractionCreate, s *session.
 	// Store presences when they arrive
 	presenceMap := <-presenceChan
 	session.UserPresences.Set(s, presenceMap)
-	m.layout.paginationManager.NavigateTo(event, s, m.page, "")
 }
 
 // handlePageNavigation processes navigation button clicks.
-func (m *MembersMenu) handlePageNavigation(event *events.ComponentInteractionCreate, s *session.Session, customID string) {
+func (m *MembersMenu) handlePageNavigation(event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, customID string) {
 	action := session.ViewerAction(customID)
 	switch action {
 	case session.ViewerFirstPage, session.ViewerPrevPage, session.ViewerNextPage, session.ViewerLastPage:
@@ -113,14 +115,15 @@ func (m *MembersMenu) handlePageNavigation(event *events.ComponentInteractionCre
 		maxPage := (len(memberIDs) - 1) / constants.MembersPerPage
 		page := action.ParsePageAction(s, action, maxPage)
 
-		m.Show(event, s, page)
+		session.PaginationPage.Set(s, page)
+		r.Reload(event, s, "")
 
 	case constants.BackButtonCustomID:
-		m.layout.paginationManager.NavigateBack(event, s, "")
+		r.NavigateBack(event, s, "")
 
 	default:
 		m.layout.logger.Warn("Invalid members viewer action", zap.String("action", string(action)))
-		m.layout.paginationManager.RespondWithError(event, "Invalid interaction.")
+		r.Error(event, "Invalid interaction.")
 	}
 }
 

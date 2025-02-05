@@ -29,6 +29,7 @@ type Session struct {
 	redis              rueidis.Client
 	key                string
 	data               map[string]interface{}
+	dataModified       map[string]bool
 	mu                 sync.RWMutex
 	logger             *zap.Logger
 	userID             uint64
@@ -54,6 +55,7 @@ func NewSession(
 		redis:              redis,
 		key:                key,
 		data:               data,
+		dataModified:       make(map[string]bool),
 		logger:             logger,
 		userID:             userID,
 	}
@@ -67,11 +69,19 @@ func (s *Session) UserID() uint64 {
 // Touch serializes the session data to JSON and updates the TTL in Redis to prevent expiration.
 // If serialization fails, the error is logged but the session continues.
 func (s *Session) Touch(ctx context.Context) {
-	// Serialize session data to JSON
+	// Create a map of only persistent data
+	persistentData := make(map[string]interface{})
 	s.mu.RLock()
-	data, err := sonic.MarshalString(s.data)
+	for key, value := range s.data {
+		isPersistent, ok := s.dataModified[key]
+		if !ok || (ok && isPersistent) {
+			persistentData[key] = value
+		}
+	}
 	s.mu.RUnlock()
 
+	// Serialize only persistent data to JSON
+	data, err := sonic.MarshalString(persistentData)
 	if err != nil {
 		s.logger.Error("Failed to marshal session data", zap.Error(err))
 		return
@@ -180,17 +190,19 @@ func (s *Session) getBuffer(key string) *bytes.Buffer {
 }
 
 // set sets the value for the given key.
-func (s *Session) set(key string, value interface{}) {
+func (s *Session) set(key string, value interface{}, persist bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	s.data[key] = value
+	s.dataModified[key] = persist
+
 	s.logger.Debug("Session key set", zap.String("key", key))
 }
 
 // setBuffer stores binary data by base64 encoding it first.
 // This allows binary data to be safely stored as strings in the session.
-func (s *Session) setBuffer(key string, buf *bytes.Buffer) {
+func (s *Session) setBuffer(key string, buf *bytes.Buffer, persist bool) {
 	if buf == nil {
 		s.logger.Warn("Attempted to set nil buffer", zap.String("key", key))
 		return
@@ -198,9 +210,13 @@ func (s *Session) setBuffer(key string, buf *bytes.Buffer) {
 
 	// Encode buffer to base64
 	encoded := base64.StdEncoding.EncodeToString(buf.Bytes())
+
 	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	s.data[key] = encoded
-	s.mu.Unlock()
+	s.dataModified[key] = persist
+
 	s.logger.Debug("Session key set with base64 encoded buffer", zap.String("key", key))
 }
 

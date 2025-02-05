@@ -16,21 +16,22 @@ import (
 	"go.uber.org/zap"
 )
 
-// MainMenu handles the display and interaction logic for viewing the leaderboard.
-type MainMenu struct {
+// Menu handles the display and interaction logic for viewing the leaderboard.
+type Menu struct {
 	layout *Layout
 	page   *pagination.Page
 }
 
-// NewMainMenu creates a MainMenu and sets up its page with message builders and
+// NewMenu creates a Menu and sets up its page with message builders and
 // interaction handlers.
-func NewMainMenu(l *Layout) *MainMenu {
-	m := &MainMenu{layout: l}
+func NewMenu(l *Layout) *Menu {
+	m := &Menu{layout: l}
 	m.page = &pagination.Page{
 		Name: constants.LeaderboardPageName,
 		Message: func(s *session.Session) *discord.MessageUpdateBuilder {
 			return builder.NewBuilder(s).Build()
 		},
+		ShowHandlerFunc:   m.Show,
 		SelectHandlerFunc: m.handleSelectMenu,
 		ButtonHandlerFunc: m.handleButton,
 	}
@@ -38,7 +39,7 @@ func NewMainMenu(l *Layout) *MainMenu {
 }
 
 // Show prepares and displays the leaderboard interface.
-func (m *MainMenu) Show(event interfaces.CommonEvent, s *session.Session) {
+func (m *Menu) Show(event interfaces.CommonEvent, s *session.Session, r *pagination.Respond) {
 	cursor := session.LeaderboardCursor.Get(s)
 	leaderboardPeriod := session.UserLeaderboardPeriod.Get(s)
 
@@ -51,7 +52,7 @@ func (m *MainMenu) Show(event interfaces.CommonEvent, s *session.Session) {
 	)
 	if err != nil {
 		m.layout.logger.Error("Failed to get leaderboard stats", zap.Error(err))
-		m.layout.paginationManager.NavigateTo(event, s, m.page, "Failed to retrieve leaderboard data. Please try again.")
+		r.Error(event, "Failed to retrieve leaderboard data. Please try again.")
 		return
 	}
 
@@ -59,6 +60,8 @@ func (m *MainMenu) Show(event interfaces.CommonEvent, s *session.Session) {
 	lastRefresh, nextRefresh, err := m.layout.db.Models().Views().GetRefreshInfo(context.Background(), leaderboardPeriod)
 	if err != nil {
 		m.layout.logger.Error("Failed to get refresh info", zap.Error(err))
+		r.Error(event, "Failed to retrieve leaderboard data. Please try again.")
+		return
 	}
 
 	// Fetch usernames for all users in stats
@@ -77,12 +80,10 @@ func (m *MainMenu) Show(event interfaces.CommonEvent, s *session.Session) {
 	session.PaginationHasPrevPage.Set(s, cursor != nil)
 	session.LeaderboardLastRefresh.Set(s, lastRefresh)
 	session.LeaderboardNextRefresh.Set(s, nextRefresh)
-
-	m.layout.paginationManager.NavigateTo(event, s, m.page, "")
 }
 
 // handleSelectMenu processes select menu interactions.
-func (m *MainMenu) handleSelectMenu(event *events.ComponentInteractionCreate, s *session.Session, customID string, option string) {
+func (m *Menu) handleSelectMenu(event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, customID, option string) {
 	if customID != constants.LeaderboardPeriodSelectMenuCustomID {
 		return
 	}
@@ -91,7 +92,7 @@ func (m *MainMenu) handleSelectMenu(event *events.ComponentInteractionCreate, s 
 	period, err := enum.LeaderboardPeriodString(option)
 	if err != nil {
 		m.layout.logger.Error("Failed to parse leaderboard period", zap.Error(err))
-		m.layout.paginationManager.RespondWithError(event, "Failed to save time period preference. Please try again.")
+		r.Error(event, "Failed to save time period preference. Please try again.")
 		return
 	}
 
@@ -99,25 +100,25 @@ func (m *MainMenu) handleSelectMenu(event *events.ComponentInteractionCreate, s 
 	session.UserLeaderboardPeriod.Set(s, period)
 
 	// Reset page and show updated leaderboard
-	m.layout.ResetStats(s)
-	m.Show(event, s)
+	ResetStats(s)
+	r.Reload(event, s, "")
 }
 
 // handleButton processes button interactions.
-func (m *MainMenu) handleButton(event *events.ComponentInteractionCreate, s *session.Session, customID string) {
+func (m *Menu) handleButton(event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, customID string) {
 	switch customID {
 	case constants.BackButtonCustomID:
-		m.layout.paginationManager.NavigateBack(event, s, "")
+		r.NavigateBack(event, s, "")
 	case constants.RefreshButtonCustomID:
-		m.layout.ResetStats(s)
-		m.Show(event, s)
+		ResetStats(s)
+		r.Reload(event, s, "")
 	case string(session.ViewerFirstPage), string(session.ViewerPrevPage), string(session.ViewerNextPage), string(session.ViewerLastPage):
-		m.handlePagination(event, s, session.ViewerAction(customID))
+		m.handlePagination(event, s, r, session.ViewerAction(customID))
 	}
 }
 
 // handlePagination processes page navigation.
-func (m *MainMenu) handlePagination(event *events.ComponentInteractionCreate, s *session.Session, action session.ViewerAction) {
+func (m *Menu) handlePagination(event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, action session.ViewerAction) {
 	switch action {
 	case session.ViewerNextPage:
 		cursor := session.LeaderboardCursor.Get(s)
@@ -127,7 +128,7 @@ func (m *MainMenu) handlePagination(event *events.ComponentInteractionCreate, s 
 		if session.PaginationHasNextPage.Get(s) {
 			session.LeaderboardCursor.Set(s, nextCursor)
 			session.LeaderboardPrevCursors.Set(s, append(prevCursors, cursor))
-			m.Show(event, s)
+			r.Reload(event, s, "")
 		}
 	case session.ViewerPrevPage:
 		prevCursors := session.LeaderboardPrevCursors.Get(s)
@@ -136,12 +137,12 @@ func (m *MainMenu) handlePagination(event *events.ComponentInteractionCreate, s 
 			lastIdx := len(prevCursors) - 1
 			session.LeaderboardPrevCursors.Set(s, prevCursors[:lastIdx])
 			session.LeaderboardCursor.Set(s, prevCursors[lastIdx])
-			m.Show(event, s)
+			r.Reload(event, s, "")
 		}
 	case session.ViewerFirstPage:
 		session.LeaderboardCursor.Set(s, nil)
 		session.LeaderboardPrevCursors.Set(s, []*types.LeaderboardCursor{})
-		m.Show(event, s)
+		r.Reload(event, s, "")
 	case session.ViewerLastPage:
 		return
 	}

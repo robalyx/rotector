@@ -4,7 +4,6 @@ import (
 	"github.com/redis/rueidis"
 	"github.com/robalyx/rotector/internal/bot/core/pagination"
 	"github.com/robalyx/rotector/internal/bot/core/session"
-	"github.com/robalyx/rotector/internal/bot/interfaces"
 	"github.com/robalyx/rotector/internal/common/setup"
 	"github.com/robalyx/rotector/internal/common/storage/database"
 	"github.com/robalyx/rotector/internal/common/storage/redis"
@@ -14,43 +13,16 @@ import (
 
 // Layout handles the display and interaction logic for the main dashboard.
 type Layout struct {
-	db                database.Client
-	redisClient       rueidis.Client
-	sessionManager    *session.Manager
-	paginationManager *pagination.Manager
-	workerMonitor     *core.Monitor
-	mainMenu          *MainMenu
-	logger            *zap.Logger
-	userReviewLayout  interfaces.UserReviewLayout
-	groupReviewLayout interfaces.GroupReviewLayout
-	settingLayout     interfaces.SettingLayout
-	logLayout         interfaces.LogLayout
-	queueLayout       interfaces.QueueLayout
-	chatLayout        interfaces.ChatLayout
-	appealLayout      interfaces.AppealLayout
-	adminLayout       interfaces.AdminLayout
-	leaderboardLayout interfaces.LeaderboardLayout
-	statusLayout      interfaces.StatusLayout
+	db             database.Client
+	redisClient    rueidis.Client
+	sessionManager *session.Manager
+	workerMonitor  *core.Monitor
+	menu           *Menu
+	logger         *zap.Logger
 }
 
-// New creates a Menu and sets up its page with message builders and
-// interaction handlers. The page is configured to show statistics and
-// handle navigation to other sections.
-func New(
-	app *setup.App,
-	sessionManager *session.Manager,
-	paginationManager *pagination.Manager,
-	userReviewLayout interfaces.UserReviewLayout,
-	groupReviewLayout interfaces.GroupReviewLayout,
-	settingLayout interfaces.SettingLayout,
-	logLayout interfaces.LogLayout,
-	queueLayout interfaces.QueueLayout,
-	chatLayout interfaces.ChatLayout,
-	appealLayout interfaces.AppealLayout,
-	adminLayout interfaces.AdminLayout,
-	leaderboardLayout interfaces.LeaderboardLayout,
-	statusLayout interfaces.StatusLayout,
-) *Layout {
+// New creates a Layout by initializing the dashboard menu.
+func New(app *setup.App, sessionManager *session.Manager) *Layout {
 	// Get Redis client for stats
 	statsClient, err := app.RedisManager.GetClient(redis.StatsDBIndex)
 	if err != nil {
@@ -65,33 +37,20 @@ func New(
 
 	// Initialize layout
 	l := &Layout{
-		db:                app.DB,
-		redisClient:       statsClient,
-		sessionManager:    sessionManager,
-		paginationManager: paginationManager,
-		logger:            app.Logger,
-		workerMonitor:     core.NewMonitor(statusClient, app.Logger),
-		userReviewLayout:  userReviewLayout,
-		groupReviewLayout: groupReviewLayout,
-		settingLayout:     settingLayout,
-		logLayout:         logLayout,
-		queueLayout:       queueLayout,
-		chatLayout:        chatLayout,
-		appealLayout:      appealLayout,
-		adminLayout:       adminLayout,
-		leaderboardLayout: leaderboardLayout,
-		statusLayout:      statusLayout,
+		db:             app.DB,
+		redisClient:    statsClient,
+		sessionManager: sessionManager,
+		logger:         app.Logger,
+		workerMonitor:  core.NewMonitor(statusClient, app.Logger),
 	}
-	l.mainMenu = NewMainMenu(l)
-
-	// Initialize and register page
-	paginationManager.AddPage(l.mainMenu.page)
+	l.menu = NewMenu(l)
 
 	return l
 }
 
-// Show prepares and displays the dashboard interface by loading
-// statistics and active user information into the session.
-func (l *Layout) Show(event interfaces.CommonEvent, s *session.Session, content string) {
-	l.mainMenu.Show(event, s, content)
+// Pages returns all the pages in the layout.
+func (l *Layout) Pages() []*pagination.Page {
+	return []*pagination.Page{
+		l.menu.page,
+	}
 }

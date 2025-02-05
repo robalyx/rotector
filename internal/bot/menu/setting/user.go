@@ -7,7 +7,6 @@ import (
 	"github.com/robalyx/rotector/internal/bot/constants"
 	"github.com/robalyx/rotector/internal/bot/core/pagination"
 	"github.com/robalyx/rotector/internal/bot/core/session"
-	"github.com/robalyx/rotector/internal/bot/interfaces"
 )
 
 // UserMenu handles the display and interaction logic for user-specific settings.
@@ -22,7 +21,7 @@ type UserMenu struct {
 func NewUserMenu(l *Layout) *UserMenu {
 	m := &UserMenu{layout: l}
 	m.page = &pagination.Page{
-		Name: constants.UserSettingPageName,
+		Name: constants.UserSettingsPageName,
 		Message: func(s *session.Session) *discord.MessageUpdateBuilder {
 			return setting.NewUserSettingsBuilder(s, l.registry).Build()
 		},
@@ -32,22 +31,17 @@ func NewUserMenu(l *Layout) *UserMenu {
 	return m
 }
 
-// Show loads user settings from the database into the session and
-// displays them through the pagination system.
-func (m *UserMenu) Show(event interfaces.CommonEvent, s *session.Session) {
-	m.layout.paginationManager.NavigateTo(event, s, m.page, "")
-}
-
-// handleUserSettingSelection processes select menu interactions by determining
-// which setting was chosen and showing the appropriate change menu.
-func (m *UserMenu) handleUserSettingSelection(event *events.ComponentInteractionCreate, s *session.Session, _ string, option string) {
+// handleUserSettingSelection processes select menu interactions.
+func (m *UserMenu) handleUserSettingSelection(event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, _ string, option string) {
 	// Show the change menu for the selected setting
-	m.layout.updateMenu.Show(event, s, constants.UserSettingPrefix, option)
+	session.SettingType.Set(s, constants.UserSettingPrefix)
+	session.SettingCustomID.Set(s, option)
+	r.Show(event, s, constants.SettingUpdatePageName, "")
 }
 
 // handleUserSettingButton processes button interactions.
-func (m *UserMenu) handleUserSettingButton(event *events.ComponentInteractionCreate, s *session.Session, customID string) {
+func (m *UserMenu) handleUserSettingButton(event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, customID string) {
 	if customID == constants.BackButtonCustomID {
-		m.layout.paginationManager.NavigateBack(event, s, "")
+		r.NavigateBack(event, s, "")
 	}
 }

@@ -32,6 +32,7 @@ func NewOverviewMenu(layout *Layout) *OverviewMenu {
 		Message: func(s *session.Session) *discord.MessageUpdateBuilder {
 			return builder.NewOverviewBuilder(s).Build()
 		},
+		ShowHandlerFunc:   m.Show,
 		SelectHandlerFunc: m.handleSelectMenu,
 		ButtonHandlerFunc: m.handleButton,
 		ModalHandlerFunc:  m.handleModal,
@@ -40,7 +41,7 @@ func NewOverviewMenu(layout *Layout) *OverviewMenu {
 }
 
 // Show prepares and displays the appeal overview interface.
-func (m *OverviewMenu) Show(event interfaces.CommonEvent, s *session.Session, content string) {
+func (m *OverviewMenu) Show(event interfaces.CommonEvent, s *session.Session, r *pagination.Respond) {
 	defaultSort := session.UserAppealDefaultSort.Get(s)
 	statusFilter := session.UserAppealStatusFilter.Get(s)
 	cursor := session.AppealCursor.Get(s)
@@ -73,7 +74,7 @@ func (m *OverviewMenu) Show(event interfaces.CommonEvent, s *session.Session, co
 	}
 	if err != nil {
 		m.layout.logger.Error("Failed to get appeals", zap.Error(err))
-		m.layout.paginationManager.RespondWithError(event, "Failed to get appeals. Please try again.")
+		r.Error(event, "Failed to get appeals. Please try again.")
 		return
 	}
 
@@ -86,19 +87,17 @@ func (m *OverviewMenu) Show(event interfaces.CommonEvent, s *session.Session, co
 	session.AppealNextCursor.Set(s, nextCursor)
 	session.PaginationHasNextPage.Set(s, nextCursor != nil)
 	session.PaginationHasPrevPage.Set(s, len(prevCursors) > 0)
-
-	m.layout.paginationManager.NavigateTo(event, s, m.page, content)
 }
 
 // handleSelectMenu processes select menu interactions.
-func (m *OverviewMenu) handleSelectMenu(event *events.ComponentInteractionCreate, s *session.Session, customID string, option string) {
+func (m *OverviewMenu) handleSelectMenu(event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, customID, option string) {
 	switch customID {
 	case constants.AppealStatusSelectID:
 		// Parse option to status
 		status, err := enum.AppealStatusString(option)
 		if err != nil {
 			m.layout.logger.Error("Failed to parse status", zap.Error(err))
-			m.layout.paginationManager.RespondWithError(event, "Failed to parse sort order. Please try again.")
+			r.Error(event, "Failed to parse sort order. Please try again.")
 			return
 		}
 
@@ -109,13 +108,13 @@ func (m *OverviewMenu) handleSelectMenu(event *events.ComponentInteractionCreate
 		session.AppealCursor.Delete(s)
 		session.AppealPrevCursors.Delete(s)
 
-		m.Show(event, s, "Filtered appeals by "+status.String())
+		r.Reload(event, s, "Filtered appeals by "+status.String())
 	case constants.AppealSortSelectID:
 		// Parse option to appeal sort
 		sortBy, err := enum.AppealSortByString(option)
 		if err != nil {
 			m.layout.logger.Error("Failed to parse sort order", zap.Error(err))
-			m.layout.paginationManager.RespondWithError(event, "Failed to parse sort order. Please try again.")
+			r.Error(event, "Failed to parse sort order. Please try again.")
 			return
 		}
 
@@ -126,38 +125,57 @@ func (m *OverviewMenu) handleSelectMenu(event *events.ComponentInteractionCreate
 		session.AppealCursor.Delete(s)
 		session.AppealPrevCursors.Delete(s)
 
-		m.Show(event, s, "Sorted appeals by "+option)
+		r.Reload(event, s, "Sorted appeals by "+option)
 	case constants.AppealSelectID:
 		// Convert option string to int64 for appeal ID
 		appealID, err := strconv.ParseInt(option, 10, 64)
 		if err != nil {
 			m.layout.logger.Error("Failed to parse appeal ID", zap.Error(err))
-			m.layout.paginationManager.RespondWithError(event, "Invalid appeal ID format")
+			r.Error(event, "Invalid appeal ID format")
 			return
 		}
+
+		// Find the appeal in the session data
+		appeals := session.AppealList.Get(s)
+
+		var appeal *types.Appeal
+		for _, a := range appeals {
+			if a.ID == appealID {
+				appeal = a
+				break
+			}
+		}
+
+		// Show error if appeal not found
+		if appeal == nil {
+			r.Error(event, "Appeal not found in current view")
+			return
+		}
+
 		// Show the selected appeal
-		m.layout.ShowTicket(event, s, appealID, "")
+		session.AppealSelected.Set(s, appeal)
+		r.Show(event, s, constants.AppealTicketPageName, "")
 	}
 }
 
 // handleButton processes button interactions.
-func (m *OverviewMenu) handleButton(event *events.ComponentInteractionCreate, s *session.Session, customID string) {
+func (m *OverviewMenu) handleButton(event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, customID string) {
 	switch customID {
 	case constants.BackButtonCustomID:
-		m.layout.paginationManager.NavigateBack(event, s, "")
+		r.NavigateBack(event, s, "")
 	case constants.RefreshButtonCustomID:
 		session.AppealCursor.Delete(s)
 		session.AppealPrevCursors.Delete(s)
-		m.Show(event, s, "Appeals refreshed.")
+		r.Reload(event, s, "Appeals refreshed.")
 	case constants.AppealCreateButtonCustomID:
-		m.handleCreateAppeal(event)
+		m.handleCreateAppeal(event, r)
 	case string(session.ViewerFirstPage), string(session.ViewerPrevPage), string(session.ViewerNextPage), string(session.ViewerLastPage):
-		m.handlePagination(event, s, session.ViewerAction(customID))
+		m.handlePagination(event, s, r, session.ViewerAction(customID))
 	}
 }
 
 // handleCreateAppeal opens a modal for creating a new appeal.
-func (m *OverviewMenu) handleCreateAppeal(event *events.ComponentInteractionCreate) {
+func (m *OverviewMenu) handleCreateAppeal(event *events.ComponentInteractionCreate, r *pagination.Respond) {
 	modal := discord.NewModalCreateBuilder().
 		SetCustomID(constants.AppealModalCustomID).
 		SetTitle("Submit Appeal").
@@ -176,12 +194,12 @@ func (m *OverviewMenu) handleCreateAppeal(event *events.ComponentInteractionCrea
 
 	if err := event.Modal(modal); err != nil {
 		m.layout.logger.Error("Failed to create appeal modal", zap.Error(err))
-		m.layout.paginationManager.RespondWithError(event, "Failed to open the appeal modal. Please try again.")
+		r.Error(event, "Failed to open the appeal modal. Please try again.")
 	}
 }
 
 // handlePagination processes page navigation.
-func (m *OverviewMenu) handlePagination(event *events.ComponentInteractionCreate, s *session.Session, action session.ViewerAction) {
+func (m *OverviewMenu) handlePagination(event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, action session.ViewerAction) {
 	switch action {
 	case session.ViewerNextPage:
 		if session.PaginationHasNextPage.Get(s) {
@@ -191,7 +209,7 @@ func (m *OverviewMenu) handlePagination(event *events.ComponentInteractionCreate
 
 			session.AppealCursor.Set(s, nextCursor)
 			session.AppealPrevCursors.Set(s, append(prevCursors, cursor))
-			m.Show(event, s, "")
+			r.Reload(event, s, "")
 		}
 	case session.ViewerPrevPage:
 		prevCursors := session.AppealPrevCursors.Get(s)
@@ -200,27 +218,27 @@ func (m *OverviewMenu) handlePagination(event *events.ComponentInteractionCreate
 			lastIdx := len(prevCursors) - 1
 			session.AppealCursor.Set(s, prevCursors[lastIdx])
 			session.AppealPrevCursors.Set(s, prevCursors[:lastIdx])
-			m.Show(event, s, "")
+			r.Reload(event, s, "")
 		}
 	case session.ViewerFirstPage:
 		session.AppealCursor.Delete(s)
 		session.AppealPrevCursors.Set(s, make([]*types.AppealTimeline, 0))
-		m.Show(event, s, "")
+		r.Reload(event, s, "")
 	case session.ViewerLastPage:
 		return
 	}
 }
 
 // handleModal processes modal submissions.
-func (m *OverviewMenu) handleModal(event *events.ModalSubmitInteractionCreate, s *session.Session) {
+func (m *OverviewMenu) handleModal(event *events.ModalSubmitInteractionCreate, s *session.Session, r *pagination.Respond) {
 	switch event.Data.CustomID {
 	case constants.AppealModalCustomID:
-		m.handleCreateAppealModalSubmit(event, s)
+		m.handleCreateAppealModalSubmit(event, s, r)
 	}
 }
 
 // handleCreateAppealModalSubmit processes the appeal creation form submission.
-func (m *OverviewMenu) handleCreateAppealModalSubmit(event *events.ModalSubmitInteractionCreate, s *session.Session) {
+func (m *OverviewMenu) handleCreateAppealModalSubmit(event *events.ModalSubmitInteractionCreate, s *session.Session, r *pagination.Respond) {
 	// Get user ID input
 	userIDStr := event.Data.Text(constants.AppealUserInputCustomID)
 
@@ -229,7 +247,7 @@ func (m *OverviewMenu) handleCreateAppealModalSubmit(event *events.ModalSubmitIn
 		var err error
 		userIDStr, err = utils.ExtractUserIDFromURL(userIDStr)
 		if err != nil {
-			m.layout.paginationManager.NavigateTo(event, s, m.page, "Invalid Roblox profile URL. Please provide a valid URL or ID.")
+			r.Cancel(event, s, "Invalid Roblox profile URL. Please provide a valid URL or ID.")
 			return
 		}
 	}
@@ -237,7 +255,7 @@ func (m *OverviewMenu) handleCreateAppealModalSubmit(event *events.ModalSubmitIn
 	// Parse the user ID
 	userID, err := strconv.ParseUint(userIDStr, 10, 64)
 	if err != nil {
-		m.layout.paginationManager.NavigateTo(event, s, m.page, "Invalid user ID format. Please enter a valid number.")
+		r.Cancel(event, s, "Invalid user ID format. Please enter a valid number.")
 		return
 	}
 
@@ -245,11 +263,11 @@ func (m *OverviewMenu) handleCreateAppealModalSubmit(event *events.ModalSubmitIn
 	exists, err := m.layout.db.Models().Appeals().HasPendingAppealByUserID(context.Background(), userID)
 	if err != nil {
 		m.layout.logger.Error("Failed to check pending appeals for user", zap.Error(err))
-		m.layout.paginationManager.RespondWithError(event, "Failed to check pending appeals. Please try again.")
+		r.Error(event, "Failed to check pending appeals. Please try again.")
 		return
 	}
 	if exists {
-		m.layout.paginationManager.NavigateTo(event, s, m.page, "This user ID already has a pending appeal. Please wait for it to be reviewed.")
+		r.Cancel(event, s, "This user ID already has a pending appeal. Please wait for it to be reviewed.")
 		return
 	}
 
@@ -257,11 +275,11 @@ func (m *OverviewMenu) handleCreateAppealModalSubmit(event *events.ModalSubmitIn
 	exists, err = m.layout.db.Models().Appeals().HasPendingAppealByRequester(context.Background(), uint64(event.User().ID))
 	if err != nil {
 		m.layout.logger.Error("Failed to check pending appeals", zap.Error(err))
-		m.layout.paginationManager.RespondWithError(event, "Failed to check pending appeals. Please try again.")
+		r.Error(event, "Failed to check pending appeals. Please try again.")
 		return
 	}
 	if exists {
-		m.layout.paginationManager.NavigateTo(event, s, m.page, "You already have a pending appeal. Please wait for it to be reviewed.")
+		r.Cancel(event, s, "You already have a pending appeal. Please wait for it to be reviewed.")
 		return
 	}
 
@@ -269,12 +287,11 @@ func (m *OverviewMenu) handleCreateAppealModalSubmit(event *events.ModalSubmitIn
 	hasRejection, err := m.layout.db.Models().Appeals().HasPreviousRejection(context.Background(), userID)
 	if err != nil {
 		m.layout.logger.Error("Failed to check previous rejections", zap.Error(err))
-		m.layout.paginationManager.RespondWithError(event, "Failed to check appeal history. Please try again.")
+		r.Error(event, "Failed to check appeal history. Please try again.")
 		return
 	}
 	if hasRejection {
-		m.layout.paginationManager.NavigateTo(event, s, m.page,
-			"This user ID has a rejected appeal in the last 7 days. Please wait before submitting a new appeal.")
+		r.Cancel(event, s, "This user ID has a rejected appeal in the last 7 days. Please wait before submitting a new appeal.")
 		return
 	}
 
@@ -282,27 +299,29 @@ func (m *OverviewMenu) handleCreateAppealModalSubmit(event *events.ModalSubmitIn
 	user, err := m.layout.db.Models().Users().GetUserByID(context.Background(), userIDStr, types.UserFieldAll)
 	if err != nil {
 		if errors.Is(err, types.ErrUserNotFound) {
-			m.layout.paginationManager.NavigateTo(event, s, m.page, "Cannot submit appeal - user is not in our database.")
+			r.Cancel(event, s, "Cannot submit appeal - user is not in our database.")
 			return
 		}
 		m.layout.logger.Error("Failed to verify user status", zap.Error(err))
-		m.layout.paginationManager.RespondWithError(event, "Failed to verify user status. Please try again.")
+		r.Error(event, "Failed to verify user status. Please try again.")
 		return
 	}
 
 	// Only allow appeals for confirmed/flagged users
 	if user.Status != enum.UserTypeConfirmed && user.Status != enum.UserTypeFlagged {
-		m.layout.paginationManager.NavigateTo(event, s, m.page, "Cannot submit appeal - user must be confirmed or flagged.")
+		r.Cancel(event, s, "Cannot submit appeal - user must be confirmed or flagged.")
 		return
 	}
 
 	// Get and validate the appeal reason
 	reason := event.Data.Text(constants.AppealReasonInputCustomID)
 	if reason == "" {
-		m.layout.paginationManager.NavigateTo(event, s, m.page, "Appeal reason cannot be empty. Please try again.")
+		r.Cancel(event, s, "Appeal reason cannot be empty. Please try again.")
 		return
 	}
 
 	// Show verification menu
-	m.layout.ShowVerify(event, s, userID, reason)
+	session.VerifyUserID.Set(s, userID)
+	session.VerifyReason.Set(s, reason)
+	r.Show(event, s, constants.AppealVerifyPageName, "")
 }

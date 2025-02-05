@@ -7,7 +7,6 @@ import (
 	"github.com/robalyx/rotector/internal/bot/constants"
 	"github.com/robalyx/rotector/internal/bot/core/pagination"
 	"github.com/robalyx/rotector/internal/bot/core/session"
-	"github.com/robalyx/rotector/internal/bot/interfaces"
 )
 
 // BotMenu handles the display and interaction logic for bot-wide settings.
@@ -20,7 +19,7 @@ type BotMenu struct {
 func NewBotMenu(l *Layout) *BotMenu {
 	m := &BotMenu{layout: l}
 	m.page = &pagination.Page{
-		Name: constants.BotSettingPageName,
+		Name: constants.BotSettingsPageName,
 		Message: func(s *session.Session) *discord.MessageUpdateBuilder {
 			return setting.NewBotSettingsBuilder(s, l.registry).Build()
 		},
@@ -30,21 +29,17 @@ func NewBotMenu(l *Layout) *BotMenu {
 	return m
 }
 
-// Show loads bot settings from the database into the session and
-// displays them through the pagination system.
-func (m *BotMenu) Show(event interfaces.CommonEvent, s *session.Session) {
-	m.layout.paginationManager.NavigateTo(event, s, m.page, "")
-}
-
 // handleBotSettingSelection processes select menu interactions.
-func (m *BotMenu) handleBotSettingSelection(event *events.ComponentInteractionCreate, s *session.Session, _ string, option string) {
+func (m *BotMenu) handleBotSettingSelection(event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, _ string, option string) {
 	// Show the change menu for the selected setting
-	m.layout.updateMenu.Show(event, s, constants.BotSettingPrefix, option)
+	session.SettingType.Set(s, constants.BotSettingPrefix)
+	session.SettingCustomID.Set(s, option)
+	r.Show(event, s, constants.SettingUpdatePageName, "")
 }
 
 // handleBotSettingButton processes button interactions.
-func (m *BotMenu) handleBotSettingButton(event *events.ComponentInteractionCreate, s *session.Session, customID string) {
+func (m *BotMenu) handleBotSettingButton(event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, customID string) {
 	if customID == constants.BackButtonCustomID {
-		m.layout.paginationManager.NavigateBack(event, s, "")
+		r.NavigateBack(event, s, "")
 	}
 }
