@@ -15,6 +15,7 @@ import (
 	"github.com/jaxron/axonet/middleware/retry"
 	"github.com/jaxron/axonet/middleware/singleflight"
 	"github.com/jaxron/axonet/pkg/client"
+	"github.com/jaxron/axonet/pkg/client/middleware"
 	"github.com/jaxron/roapi.go/pkg/api"
 	"github.com/robalyx/rotector/internal/common/setup/client/middleware/proxy"
 	"github.com/robalyx/rotector/internal/common/setup/config"
@@ -42,37 +43,30 @@ func GetRoAPIClient(cfg *config.CommonConfig, configDir string, redisManager *re
 		return nil, nil, err
 	}
 
-	// Initialize proxy middleware
-	proxyMiddleware := proxy.New(proxies, proxyClient, &cfg.Proxy, requestTimeout)
+	// Build middleware chain
+	proxyMiddleware := proxy.New(proxies, proxyClient, cfg, requestTimeout)
+	middlewares := []middleware.Middleware{
+		circuitbreaker.New(
+			cfg.CircuitBreaker.MaxFailures,
+			time.Duration(cfg.CircuitBreaker.FailureThreshold)*time.Millisecond,
+			time.Duration(cfg.CircuitBreaker.RecoveryTimeout)*time.Millisecond,
+		),
+		retry.New(
+			cfg.Retry.MaxRetries,
+			time.Duration(cfg.Retry.Delay)*time.Millisecond,
+			time.Duration(cfg.Retry.MaxDelay)*time.Millisecond,
+		),
+		singleflight.New(),
+		axonetRedis.New(redisClient, 1*time.Hour),
+		proxyMiddleware,
+	}
 
-	// Build client with middleware chain in priority order:
-	// 5. Circuit breaker prevents cascading failures
-	// 4. Retry handles transient failures
-	// 3. Single flight deduplicates concurrent requests
-	// 2. Redis caching reduces API load
-	// 1. Proxy routing with rate limiting
 	return api.New(cookies,
 		client.WithMarshalFunc(sonic.Marshal),
 		client.WithUnmarshalFunc(sonic.Unmarshal),
 		client.WithLogger(logger.New(zapLogger)),
 		client.WithTimeout(requestTimeout),
-		client.WithMiddleware(
-			circuitbreaker.New(
-				cfg.CircuitBreaker.MaxFailures,
-				time.Duration(cfg.CircuitBreaker.FailureThreshold)*time.Millisecond,
-				time.Duration(cfg.CircuitBreaker.RecoveryTimeout)*time.Millisecond,
-			),
-		),
-		client.WithMiddleware(
-			retry.New(
-				cfg.Retry.MaxRetries,
-				time.Duration(cfg.Retry.Delay)*time.Millisecond,
-				time.Duration(cfg.Retry.MaxDelay)*time.Millisecond,
-			),
-		),
-		client.WithMiddleware(singleflight.New()),
-		client.WithMiddleware(axonetRedis.New(redisClient, 1*time.Hour)),
-		client.WithMiddleware(proxyMiddleware),
+		client.WithMiddleware(middlewares...),
 	), proxyMiddleware, nil
 }
 

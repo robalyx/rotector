@@ -27,17 +27,24 @@ unhealthy_duration = 30000
 
 # Endpoint-specific cooldown periods in milliseconds
 [common.proxy.endpoints]
-following_count = { pattern = "friends.roblox.com/v1/users/{id}/followings/count", cooldown = 5000 }
-followers_count = { pattern = "friends.roblox.com/v1/users/{id}/followers/count", cooldown = 5000 }
 get_friend_count = { pattern = "friends.roblox.com/v1/users/{id}/friends/count", cooldown = 5000 }
 get_friends = { pattern = "friends.roblox.com/v1/users/{id}/friends", cooldown = 5000 }
 find_friends = { pattern = "friends.roblox.com/v1/users/{id}/friends/find", cooldown = 5000 }
 user_info = { pattern = "users.roblox.com/v1/users/{id}", cooldown = 5000 }
 user_info_batch = { pattern = "users.roblox.com/v1/users", cooldown = 5000 }
 user_games = { pattern = "games.roblox.com/v2/users/{id}/games", cooldown = 5000 }
-user_outfits = { pattern = "avatar.roblox.com/v2/avatar/users/{id}/outfits", cooldown = 5000 }
+user_outfits = { pattern = "avatar.roblox.com/v2/avatar/users/{id}/outfits", cooldown = 6000 }
 user_groups = { pattern = "groups.roblox.com/v1/users/{id}/groups/roles", cooldown = 5000 }
 thumbnail_batch = { pattern = "thumbnails.roblox.com/v1/batch", cooldown = 1000 }
+cdn_thumbnails = { pattern = "tr.rbxcdn.com/30DAY-Avatar-{hash}-Png/{id}/{id}/Avatar/Webp/noFilter", cooldown = 1000 }
+
+[common.roverse]
+# Domain for the roverse proxy service (leave empty to disable)
+domain = ""
+# Secret key for authentication
+secret_key = ""
+# Maximum concurrent requests to roverse
+max_concurrent = 100
 
 [common.circuit_breaker]
 # Number of failures before circuit opens
@@ -90,4 +97,4 @@ password = ""
 # API key for authentication
 api_key = ""
 # Model version to use
-model = "gemini-1.5-flash-8b-latest"
+model = "gemini-2.0-flash-001"

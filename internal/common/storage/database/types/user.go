@@ -30,8 +30,6 @@ type User struct {
 	Outfits             []*types.Outfit         `bun:"type:jsonb" json:"outfits"`
 	Friends             []*types.ExtendedFriend `bun:"type:jsonb" json:"friends"`
 	Games               []*types.Game           `bun:"type:jsonb" json:"games"`
-	FollowerCount       uint64                  `bun:",notnull"   json:"followerCount"`
-	FollowingCount      uint64                  `bun:",notnull"   json:"followingCount"`
 	Confidence          float64                 `bun:",notnull"   json:"confidence"`
 	LastScanned         time.Time               `bun:",notnull"   json:"lastScanned"`
 	LastUpdated         time.Time               `bun:",notnull"   json:"lastUpdated"`
@@ -94,9 +92,7 @@ const (
 	UserFieldGames   // Played games
 
 	// Statistics
-	UserFieldFollowerCount  // Follower count
-	UserFieldFollowingCount // Following count
-	UserFieldConfidence     // AI confidence score
+	UserFieldConfidence // AI confidence score
 
 	// Reputation
 	UserFieldReputation // Reputation fields (upvotes, downvotes, score)
@@ -127,9 +123,7 @@ const (
 		UserFieldGames
 
 	// UserFieldStats includes all statistical fields.
-	UserFieldStats = UserFieldFollowerCount |
-		UserFieldFollowingCount |
-		UserFieldConfidence
+	UserFieldStats = UserFieldConfidence
 
 	// UserFieldTimestamps includes all timestamp-related fields.
 	UserFieldTimestamps = UserFieldLastScanned |
@@ -163,8 +157,6 @@ var userFieldToColumns = map[UserField][]string{ //nolint:gochecknoglobals
 	UserFieldOutfits:             {"outfits"},
 	UserFieldFriends:             {"friends"},
 	UserFieldGames:               {"games"},
-	UserFieldFollowerCount:       {"follower_count"},
-	UserFieldFollowingCount:      {"following_count"},
 	UserFieldConfidence:          {"confidence"},
 	UserFieldLastScanned:         {"last_scanned"},
 	UserFieldLastUpdated:         {"last_updated"},

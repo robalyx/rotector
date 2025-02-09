@@ -139,9 +139,6 @@ Analyze the following user profiles in order:`
 
 var ErrBatchProcessing = errors.New("batch processing errors")
 
-// MaxFriendDataTokens is the maximum number of tokens allowed for friend data.
-const MaxFriendDataTokens = 400
-
 // FlaggedUsers holds a list of users that the AI has identified as inappropriate.
 // The JSON schema is used to ensure consistent responses from the AI.
 type FlaggedUsers struct {
@@ -226,13 +223,16 @@ func NewUserAnalyzer(app *setup.App, translator *translator.Translator, logger *
 
 // ProcessUsers analyzes user content for a batch of users.
 func (a *UserAnalyzer) ProcessUsers(userInfos []*fetcher.Info, flaggedUsers map[uint64]*types.User) {
+	// Track counts before processing
+	existingFlags := len(flaggedUsers)
 	numBatches := (len(userInfos) + a.batchSize - 1) / a.batchSize
+
+	// Process batches concurrently
 	var (
 		p  = pool.New().WithContext(context.Background())
 		mu sync.Mutex
 	)
 
-	// Process batches concurrently
 	for i := range numBatches {
 		start := i * a.batchSize
 		end := start + a.batchSize
@@ -240,6 +240,7 @@ func (a *UserAnalyzer) ProcessUsers(userInfos []*fetcher.Info, flaggedUsers map[
 			end = len(userInfos)
 		}
 
+		infoBatch := userInfos[start:end]
 		p.Go(func(ctx context.Context) error {
 			// Acquire semaphore before making AI request
 			if err := a.analysisSem.Acquire(ctx, 1); err != nil {
@@ -248,7 +249,7 @@ func (a *UserAnalyzer) ProcessUsers(userInfos []*fetcher.Info, flaggedUsers map[
 			defer a.analysisSem.Release(1)
 
 			// Process batch
-			if err := a.processBatch(ctx, userInfos[start:end], flaggedUsers, &mu); err != nil {
+			if err := a.processBatch(ctx, infoBatch, flaggedUsers, &mu); err != nil {
 				a.logger.Error("Failed to process batch",
 					zap.Error(err),
 					zap.Int("batchStart", start),
@@ -267,7 +268,7 @@ func (a *UserAnalyzer) ProcessUsers(userInfos []*fetcher.Info, flaggedUsers map[
 
 	a.logger.Info("Received AI user analysis",
 		zap.Int("totalUsers", len(userInfos)),
-		zap.Int("flaggedUsers", len(flaggedUsers)))
+		zap.Int("newFlags", len(flaggedUsers)-existingFlags))
 }
 
 // processBatch handles a single batch of users.
@@ -424,8 +425,6 @@ func (a *UserAnalyzer) validateAndUpdateFlaggedUsers(flaggedResults *FlaggedUser
 					Friends:             originalInfo.Friends.Data,
 					Games:               originalInfo.Games.Data,
 					Outfits:             originalInfo.Outfits.Data,
-					FollowerCount:       originalInfo.FollowerCount,
-					FollowingCount:      originalInfo.FollowingCount,
 					LastUpdated:         originalInfo.LastUpdated,
 					LastBanCheck:        originalInfo.LastBanCheck,
 					ThumbnailURL:        originalInfo.ThumbnailURL,

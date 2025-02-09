@@ -19,9 +19,7 @@ type UserChecker struct {
 	app            *setup.App
 	db             database.Client
 	userFetcher    *fetcher.UserFetcher
-	followFetcher  *fetcher.FollowFetcher
 	userAnalyzer   *ai.UserAnalyzer
-	imageAnalyzer  *ai.ImageAnalyzer
 	outfitAnalyzer *ai.OutfitAnalyzer
 	groupChecker   *GroupChecker
 	friendChecker  *FriendChecker
@@ -32,16 +30,13 @@ type UserChecker struct {
 func NewUserChecker(app *setup.App, userFetcher *fetcher.UserFetcher, logger *zap.Logger) *UserChecker {
 	translator := translator.New(app.RoAPI.GetClient())
 	userAnalyzer := ai.NewUserAnalyzer(app, translator, logger)
-	imageAnalyzer := ai.NewImageAnalyzer(app, logger)
 	outfitAnalyzer := ai.NewOutfitAnalyzer(app, logger)
 
 	return &UserChecker{
 		app:            app,
 		db:             app.DB,
 		userFetcher:    userFetcher,
-		followFetcher:  fetcher.NewFollowFetcher(app.RoAPI, logger),
 		userAnalyzer:   userAnalyzer,
-		imageAnalyzer:  imageAnalyzer,
 		outfitAnalyzer: outfitAnalyzer,
 		groupChecker: NewGroupChecker(app.DB, logger,
 			app.Config.Worker.ThresholdLimits.MaxGroupMembersTrack,
@@ -78,22 +73,6 @@ func (c *UserChecker) ProcessUsers(userInfos []*fetcher.Info) {
 		c.logger.Info("No flagged users found", zap.Int("userInfos", len(userInfos)))
 		return
 	}
-
-	// Create a list of flagged infos for image analysis
-	flaggedInfos := make([]*fetcher.Info, 0, len(flaggedUsers))
-	for _, userInfo := range userInfos {
-		if _, ok := flaggedUsers[userInfo.ID]; ok {
-			flaggedInfos = append(flaggedInfos, userInfo)
-		}
-	}
-
-	// Process image analysis results only for flagged users
-	if len(flaggedInfos) > 0 {
-		c.imageAnalyzer.ProcessImages(flaggedInfos, flaggedUsers)
-	}
-
-	// Add follow counts to flagged users
-	c.followFetcher.AddFollowCounts(context.Background(), flaggedUsers)
 
 	// Calculate final confidence scores
 	for _, user := range flaggedUsers {

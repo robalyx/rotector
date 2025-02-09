@@ -134,6 +134,9 @@ const docTemplate = `{
                 "id": {
                     "type": "integer"
                 },
+                "isLocked": {
+                    "type": "boolean"
+                },
                 "lastScanned": {
                     "type": "string"
                 },
@@ -149,8 +152,8 @@ const docTemplate = `{
                 "owner": {
                     "$ref": "#/definitions/types.GroupUser"
                 },
-                "reason": {
-                    "type": "string"
+                "reasons": {
+                    "$ref": "#/definitions/internal_rest_types.Reasons"
                 },
                 "reputation": {
                     "type": "integer"
@@ -164,6 +167,29 @@ const docTemplate = `{
                 "upvotes": {
                     "type": "integer"
                 }
+            }
+        },
+        "internal_rest_types.Reason": {
+            "type": "object",
+            "properties": {
+                "confidence": {
+                    "type": "number"
+                },
+                "evidence": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "message": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_rest_types.Reasons": {
+            "type": "object",
+            "additionalProperties": {
+                "$ref": "#/definitions/internal_rest_types.Reason"
             }
         },
         "internal_rest_types.User": {
@@ -196,22 +222,16 @@ const docTemplate = `{
                         "type": "integer"
                     }
                 },
-                "followerCount": {
-                    "type": "integer"
-                },
-                "followingCount": {
-                    "type": "integer"
-                },
                 "friends": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/types.Friend"
+                        "$ref": "#/definitions/types.UserFriend"
                     }
                 },
                 "games": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/types.Game"
+                        "$ref": "#/definitions/types.UserGame"
                     }
                 },
                 "groups": {
@@ -222,6 +242,9 @@ const docTemplate = `{
                 },
                 "id": {
                     "type": "integer"
+                },
+                "isBanned": {
+                    "type": "boolean"
                 },
                 "lastScanned": {
                     "type": "string"
@@ -235,8 +258,8 @@ const docTemplate = `{
                 "name": {
                     "type": "string"
                 },
-                "reason": {
-                    "type": "string"
+                "reasons": {
+                    "$ref": "#/definitions/internal_rest_types.Reasons"
                 },
                 "reputation": {
                     "type": "integer"
@@ -246,34 +269,6 @@ const docTemplate = `{
                 },
                 "upvotes": {
                     "type": "integer"
-                }
-            }
-        },
-        "types.Friend": {
-            "type": "object",
-            "properties": {
-                "displayName": {
-                    "type": "string"
-                },
-                "hasVerifiedBadge": {
-                    "type": "boolean"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "name": {
-                    "type": "string"
-                }
-            }
-        },
-        "types.Game": {
-            "type": "object",
-            "properties": {
-                "id": {
-                    "type": "integer"
-                },
-                "name": {
-                    "type": "string"
                 }
             }
         },
@@ -316,14 +311,12 @@ const docTemplate = `{
                 "flagged",
                 "confirmed",
                 "cleared",
-                "locked",
                 "unflagged"
             ],
             "x-enum-varnames": [
                 "GroupStatusFlagged",
                 "GroupStatusConfirmed",
                 "GroupStatusCleared",
-                "GroupStatusLocked",
                 "GroupStatusUnflagged"
             ]
         },
@@ -333,6 +326,34 @@ const docTemplate = `{
                 "displayName": {
                     "type": "string"
                 },
+                "id": {
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string"
+                }
+            }
+        },
+        "types.UserFriend": {
+            "type": "object",
+            "properties": {
+                "displayName": {
+                    "type": "string"
+                },
+                "hasVerifiedBadge": {
+                    "type": "boolean"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string"
+                }
+            }
+        },
+        "types.UserGame": {
+            "type": "object",
+            "properties": {
                 "id": {
                     "type": "integer"
                 },
@@ -361,14 +382,12 @@ const docTemplate = `{
                 "flagged",
                 "confirmed",
                 "cleared",
-                "banned",
                 "unflagged"
             ],
             "x-enum-varnames": [
                 "UserStatusFlagged",
                 "UserStatusConfirmed",
                 "UserStatusCleared",
-                "UserStatusBanned",
                 "UserStatusUnflagged"
             ]
         }

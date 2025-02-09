@@ -45,6 +45,7 @@ type CommonConfig struct {
 	Redis          Redis          `koanf:"redis"`
 	GeminiAI       GeminiAI       `koanf:"gemini_ai"`
 	Proxy          Proxy          `koanf:"proxy"`
+	Roverse        Roverse        `koanf:"roverse"`
 	Sentry         Sentry         `koanf:"sentry"`
 }
 
@@ -139,29 +140,28 @@ type ShardingConfig struct {
 
 // BatchSizes configures how many items to process in each batch.
 type BatchSizes struct {
-	FriendUsers       int `koanf:"friend_users"`        // Number of friends to process in one batch
-	GroupUsers        int `koanf:"group_users"`         // Number of group members to process in one batch
-	PurgeUsers        int `koanf:"purge_users"`         // Number of users to check for bans in one batch
-	PurgeGroups       int `koanf:"purge_groups"`        // Number of groups to check for bans in one batch
-	TrackGroups       int `koanf:"track_groups"`        // Number of group trackings to process in one batch
-	QueueItems        int `koanf:"queue_items"`         // Number of queue items to process in one batch
-	ThumbnailUsers    int `koanf:"thumbnail_users"`     // Number of users to update thumbnails in one batch
-	ThumbnailGroups   int `koanf:"thumbnail_groups"`    // Number of groups to update thumbnails in one batch
-	ImageAnalysis     int `koanf:"image_analysis"`      // Maximum concurrent AI requests for image analysis
-	OutfitAnalysis    int `koanf:"outfit_analysis"`     // Maximum concurrent AI requests for outfit analysis
-	UserAnalysis      int `koanf:"user_analysis"`       // Maximum concurrent AI requests for user analysis
-	UserAnalysisBatch int `koanf:"user_analysis_batch"` // Number of users to analyze in one AI request
-	FriendAnalysis    int `koanf:"friend_analysis"`     // Maximum concurrent AI requests for friend analysis
+	FriendUsers         int `koanf:"friend_users"`          // Number of friends to process in one batch
+	GroupUsers          int `koanf:"group_users"`           // Number of group members to process in one batch
+	PurgeUsers          int `koanf:"purge_users"`           // Number of users to check for bans in one batch
+	PurgeGroups         int `koanf:"purge_groups"`          // Number of groups to check for bans in one batch
+	TrackGroups         int `koanf:"track_groups"`          // Number of group trackings to process in one batch
+	QueueItems          int `koanf:"queue_items"`           // Number of queue items to process in one batch
+	ThumbnailUsers      int `koanf:"thumbnail_users"`       // Number of users to update thumbnails in one batch
+	ThumbnailGroups     int `koanf:"thumbnail_groups"`      // Number of groups to update thumbnails in one batch
+	OutfitAnalysis      int `koanf:"outfit_analysis"`       // Maximum concurrent AI requests for outfit analysis
+	UserAnalysis        int `koanf:"user_analysis"`         // Maximum concurrent AI requests for user analysis
+	FriendAnalysis      int `koanf:"friend_analysis"`       // Maximum concurrent AI requests for friend analysis
+	UserAnalysisBatch   int `koanf:"user_analysis_batch"`   // Number of users to analyze in one AI request
+	FriendAnalysisBatch int `koanf:"friend_analysis_batch"` // Number of users to analyze in one friend AI request
 }
 
 // ThresholdLimits configures various thresholds for worker operations.
 type ThresholdLimits struct {
-	FlaggedUsers           int     `koanf:"flagged_users"`                  // Maximum number of flagged users before stopping worker
-	MinGroupFlaggedUsers   int     `koanf:"min_group_flagged_users"`        // Minimum number of flagged users needed to consider flagging a group
-	MinFlaggedPercentage   float64 `koanf:"min_flagged_percentage"`         // Minimum percentage of flagged users needed to flag a group
-	MinFlaggedOverride     int     `koanf:"min_flagged_override"`           // Flag group if flagged users count exceeds this value
-	MinFollowersForPopular uint64  `koanf:"min_followers_for_popular_user"` // Minimum follower count to consider a user "popular"
-	MaxGroupMembersTrack   uint64  `koanf:"max_group_members_track"`        // Maximum group members before skipping tracking
+	FlaggedUsers         int     `koanf:"flagged_users"`           // Maximum number of flagged users before stopping worker
+	MinGroupFlaggedUsers int     `koanf:"min_group_flagged_users"` // Minimum number of flagged users needed to consider flagging a group
+	MinFlaggedPercentage float64 `koanf:"min_flagged_percentage"`  // Minimum percentage of flagged users needed to flag a group
+	MinFlaggedOverride   int     `koanf:"min_flagged_override"`    // Flag group if flagged users count exceeds this value
+	MaxGroupMembersTrack uint64  `koanf:"max_group_members_track"` // Maximum group members before skipping tracking
 }
 
 // APIServer contains server configuration options.
@@ -196,10 +196,17 @@ type Proxy struct {
 	Endpoints         map[string]EndpointLimit `koanf:"endpoints"`          // Endpoint-specific cooldowns
 }
 
-// EndpointCooldown defines the cooldown period for a specific endpoint.
+// EndpointLimit defines the cooldown period for a specific endpoint.
 type EndpointLimit struct {
 	Pattern  string `koanf:"pattern"`  // URL pattern with placeholders
 	Cooldown int    `koanf:"cooldown"` // Time in milliseconds until next request allowed
+}
+
+// Roverse contains roverse proxy configuration.
+type Roverse struct {
+	Domain        string `koanf:"domain"`         // Domain for the roverse proxy service
+	SecretKey     string `koanf:"secret_key"`     // Secret key for authentication
+	MaxConcurrent int64  `koanf:"max_concurrent"` // Maximum concurrent requests
 }
 
 // Sentry contains Sentry error tracking configuration.

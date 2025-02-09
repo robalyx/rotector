@@ -63,12 +63,6 @@ func (r *Respond) NavigateBack(event interfaces.CommonEvent, s *session.Session,
 	r.responded = true
 }
 
-// Display updates the page in the session and displays it to the user.
-func (r *Respond) Display(event interfaces.CommonEvent, s *session.Session, page *Page, content string) {
-	r.paginationManager.Display(event, s, page, content)
-	r.responded = true
-}
-
 // Cancel stops the loading of the new page in the session and refreshes with a new message.
 func (r *Respond) Cancel(event interfaces.CommonEvent, s *session.Session, message string) {
 	page := r.paginationManager.GetPage(session.CurrentPage.Get(s))

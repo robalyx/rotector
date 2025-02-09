@@ -59,8 +59,6 @@ type Info struct {
 	Friends             *UserFriendFetchResult  `json:"friends"`
 	Games               *UserGamesFetchResult   `json:"games"`
 	Outfits             *UserOutfitsFetchResult `json:"outfits"`
-	FollowerCount       uint64                  `json:"followerCount"`
-	FollowingCount      uint64                  `json:"followingCount"`
 	LastUpdated         time.Time               `json:"lastUpdated"`
 	LastBanCheck        time.Time               `json:"lastBanCheck"`
 	ThumbnailURL        string                  `json:"thumbnailUrl"`

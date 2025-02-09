@@ -14,24 +14,6 @@ import (
 	"go.uber.org/zap"
 )
 
-const (
-	// FriendSystemPrompt provides detailed instructions to the AI model for analyzing friend networks.
-	FriendSystemPrompt = `You are a network analysis specialist focusing on identifying networks of predatory users on Roblox.
-
-Task: Analyze friend networks to identify patterns of predatory behavior and connections between inappropriate users targeting minors.
-
-Context:
-- Review violation types and confirmation status of friends
-- Look for patterns of predatory behavior and inappropriate content
-- Focus on factual, verifiable connections
-- Do not include usernames in your analysis
-- Use general terms like "the user" or "their friends" instead of names`
-
-	// FriendUserPrompt is the prompt for analyzing a user's friend network.
-	FriendUserPrompt = `User: %s
-Friend data: %s`
-)
-
 // FriendAnalysis contains the result of analyzing a user's friend network.
 type FriendAnalysis struct {
 	Name     string `json:"name"`
@@ -64,6 +46,9 @@ func NewFriendChecker(app *setup.App, logger *zap.Logger) *FriendChecker {
 
 // ProcessUsers checks multiple users' friends concurrently and updates flaggedUsers map.
 func (c *FriendChecker) ProcessUsers(userInfos []*fetcher.Info, flaggedUsers map[uint64]*types.User) {
+	// Track counts before processing
+	existingFlags := len(flaggedUsers)
+
 	// Collect all unique friend IDs across all users
 	uniqueFriendIDs := make(map[uint64]struct{})
 	for _, userInfo := range userInfos {
@@ -156,8 +141,6 @@ func (c *FriendChecker) ProcessUsers(userInfos []*fetcher.Info, flaggedUsers map
 					Friends:             userInfo.Friends.Data,
 					Games:               userInfo.Games.Data,
 					Outfits:             userInfo.Outfits.Data,
-					FollowerCount:       userInfo.FollowerCount,
-					FollowingCount:      userInfo.FollowingCount,
 					Confidence:          math.Round(confidence*100) / 100,
 					LastUpdated:         userInfo.LastUpdated,
 					LastBanCheck:        userInfo.LastBanCheck,
@@ -166,7 +149,7 @@ func (c *FriendChecker) ProcessUsers(userInfos []*fetcher.Info, flaggedUsers map
 				}
 			}
 
-			c.logger.Info("User automatically flagged",
+			c.logger.Debug("User automatically flagged",
 				zap.Uint64("userID", userInfo.ID),
 				zap.Int("confirmedFriends", confirmedCount),
 				zap.Int("flaggedFriends", flaggedCount),
@@ -175,6 +158,10 @@ func (c *FriendChecker) ProcessUsers(userInfos []*fetcher.Info, flaggedUsers map
 				zap.String("reason", reason))
 		}
 	}
+
+	c.logger.Info("Finished processing friends",
+		zap.Int("totalUsers", len(userInfos)),
+		zap.Int("newFlags", len(flaggedUsers)-existingFlags))
 }
 
 // calculateConfidence computes a weighted confidence score based on friend relationships and account age.

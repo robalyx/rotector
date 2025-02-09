@@ -1,3 +1,4 @@
+--!df flags=allow-undeclared-keys
 local rotation_key = KEYS[1]
 local last_success_key = KEYS[2]
 
@@ -45,19 +46,18 @@ end
 -- Generate endpoint key for the selected proxy
 local endpoint_key = string.format("proxy_endpoints:%s:%d", proxy_hash, next_index)
 
--- If endpoint was used and still in cooldown, return index and ready timestamp
+-- Check if endpoint is in cooldown
 local last_used = redis.call('ZSCORE', endpoint_key, endpoint)
 if last_used then
     last_used = tonumber(last_used)
     if (timestamp - last_used) < cooldown then
-        local next_available = last_used + cooldown
-        update_proxy_state(next_index, endpoint_key, next_available)
-        return {next_index, next_available}
+        -- Return index and cooldown status
+        return {next_index, 1}
     end
 end
 
 -- Update state for immediate use
 update_proxy_state(next_index, endpoint_key, timestamp)
 
--- Return the index of the available proxy with no wait time
-return {next_index, timestamp}
+-- Return the index and cooldown status
+return {next_index, 0}

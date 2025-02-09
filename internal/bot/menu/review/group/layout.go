@@ -16,7 +16,6 @@ type Layout struct {
 	roAPI            *api.API
 	reviewMenu       *ReviewMenu
 	membersMenu      *MembersMenu
-	groupFetcher     *fetcher.GroupFetcher
 	thumbnailFetcher *fetcher.ThumbnailFetcher
 	presenceFetcher  *fetcher.PresenceFetcher
 	imageStreamer    *pagination.ImageStreamer
@@ -30,7 +29,6 @@ func New(app *setup.App, paginationManager *pagination.Manager) *Layout {
 	l := &Layout{
 		db:               app.DB,
 		roAPI:            app.RoAPI,
-		groupFetcher:     fetcher.NewGroupFetcher(app.RoAPI, app.Logger),
 		thumbnailFetcher: fetcher.NewThumbnailFetcher(app.RoAPI, app.Logger),
 		presenceFetcher:  fetcher.NewPresenceFetcher(app.RoAPI, app.Logger),
 		imageStreamer:    pagination.NewImageStreamer(paginationManager, app.Logger, app.RoAPI.GetClient()),

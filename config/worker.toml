@@ -2,7 +2,7 @@
 version = 1
 
 # Delay between worker startups in milliseconds
-startup_delay = 2000
+startup_delay = 5000
 # Request timeout in milliseconds
 request_timeout = 15000
 
@@ -28,16 +28,17 @@ thumbnail_users = 100
 # Number of groups to update thumbnails in one batch 
 thumbnail_groups = 100
 
-# Maximum concurrent AI requests for image analysis
-image_analysis = 20
 # Maximum concurrent AI requests for outfit analysis
-outfit_analysis = 50
+outfit_analysis = 10
 # Maximum concurrent AI requests for user analysis
-user_analysis = 20
-# Number of users to analyze in one AI request
-user_analysis_batch = 10
+user_analysis = 10
 # Maximum concurrent AI requests for friend analysis
-friend_analysis = 20
+friend_analysis = 10
+
+# Number of users to analyze in one AI request
+user_analysis_batch = 50
+# Number of users to analyze in one friend AI request
+friend_analysis_batch = 50
 
 [worker.threshold_limits]
 # Maximum number of flagged users before stopping worker
@@ -49,9 +50,6 @@ min_group_flagged_users = 5
 min_flagged_percentage = 50.0
 # Flag group if flagged users count exceeds this value, regardless of percentage
 min_flagged_override = 100
-
-# Minimum follower count to consider a user "popular"
-min_followers_for_popular_user = 10000
 
 # Maximum group members before skipping tracking
 max_group_members_track = 20000

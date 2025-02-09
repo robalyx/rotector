@@ -147,6 +147,9 @@ func (c *GroupChecker) calculateGroupConfidence(flaggedUsers []uint64, users map
 
 // ProcessUsers checks multiple users' groups concurrently and updates flaggedUsers map.
 func (c *GroupChecker) ProcessUsers(userInfos []*fetcher.Info, flaggedUsers map[uint64]*types.User) {
+	// Track counts before processing
+	existingFlags := len(flaggedUsers)
+
 	// Collect all unique group IDs across all users
 	uniqueGroupIDs := make(map[uint64]struct{})
 	for _, userInfo := range userInfos {
@@ -193,6 +196,10 @@ func (c *GroupChecker) ProcessUsers(userInfos []*fetcher.Info, flaggedUsers map[
 	if err := p.Wait(); err != nil {
 		c.logger.Error("Error during group processing", zap.Error(err))
 	}
+
+	c.logger.Info("Finished processing groups",
+		zap.Int("totalUsers", len(userInfos)),
+		zap.Int("newFlags", len(flaggedUsers)-existingFlags))
 }
 
 // processUserGroups checks if a user should be flagged based on their groups.
@@ -244,8 +251,6 @@ func (c *GroupChecker) processUserGroups(userInfo *fetcher.Info, existingGroups 
 			Friends:             userInfo.Friends.Data,
 			Games:               userInfo.Games.Data,
 			Outfits:             userInfo.Outfits.Data,
-			FollowerCount:       userInfo.FollowerCount,
-			FollowingCount:      userInfo.FollowingCount,
 			LastUpdated:         userInfo.LastUpdated,
 			LastBanCheck:        userInfo.LastBanCheck,
 			ThumbnailURL:        userInfo.ThumbnailURL,

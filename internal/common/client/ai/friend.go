@@ -30,26 +30,48 @@ Each friend's data includes:
 - Type (Confirmed or Flagged)
 - ReasonTypes: List of reasons they were flagged
   * "user" - Content analysis of user profile
-  * "friend" - Friend network analysis
-  * "image" - Profile image analysis
   * "outfit" - Outfit analysis
   * "group" - Group membership analysis
+  * "friend" - Friend network analysis
 
 Instructions:
-- Review violation types and confirmation status of friends
-- Look for patterns of predatory behavior and inappropriate content
+- Analyze the entire network of friends provided
+- Summarize the overall pattern of violations across all friends
+- Consider the total number of confirmed vs flagged friends
+- Look for common violation types across multiple friends
 - Focus on factual, verifiable connections
 - Keep your analysis concise and within 1 sentence
 - NEVER include usernames in your analysis
-- Use generic terms like "the user" or "this account" instead of usernames
-- Consider the types of violations when analyzing patterns`
+- Use generic terms like "the network" or "these accounts" instead of usernames
+- Emphasize patterns that appear across multiple accounts`
 
-	// FriendUserPrompt is the prompt for analyzing a user's friend network.
+	// FriendUserPrompt is the prompt for analyzing multiple users' friend networks.
 	FriendUserPrompt = `IMPORTANT: Do not include any usernames in your analysis.
 
-User: %s
-Friend data: %s`
+For each user, analyze their friend network to identify patterns of predatory behavior:
+- Look for common violation types across their friends
+- Consider the ratio of confirmed vs flagged friends
+- Focus on factual, verifiable connections
+- Keep each analysis concise and within 1 sentence
+- Use generic terms like "the network" or "these accounts" instead of usernames
+
+Analyze the following friend networks:
+%s`
 )
+
+const (
+	// MinFriends is the minimum number of friends needed for analysis.
+	MinFriends = 3
+	// MaxFriends is the maximum number of friends to include in analysis.
+	MaxFriends = 10
+)
+
+// FriendSummary contains a summary of a friend's data.
+type FriendSummary struct {
+	Name        string        `json:"name"`
+	Type        enum.UserType `json:"type"`
+	ReasonTypes []string      `json:"reasonTypes"`
+}
 
 // FriendAnalysis contains the result of analyzing a user's friend network.
 type FriendAnalysis struct {
@@ -57,11 +79,17 @@ type FriendAnalysis struct {
 	Analysis string `json:"analysis"`
 }
 
+// BatchFriendAnalysis contains results for multiple users' friend networks.
+type BatchFriendAnalysis struct {
+	Results []FriendAnalysis `json:"results"`
+}
+
 // FriendAnalyzer handles AI-based analysis of friend networks using Gemini models.
 type FriendAnalyzer struct {
 	genModel    *genai.GenerativeModel
 	minify      *minify.M
 	analysisSem *semaphore.Weighted
+	batchSize   int
 	logger      *zap.Logger
 }
 
@@ -74,16 +102,26 @@ func NewFriendAnalyzer(app *setup.App, logger *zap.Logger) *FriendAnalyzer {
 	friendModel.ResponseSchema = &genai.Schema{
 		Type: genai.TypeObject,
 		Properties: map[string]*genai.Schema{
-			"name": {
-				Type:        genai.TypeString,
-				Description: "Username being analyzed",
-			},
-			"analysis": {
-				Type:        genai.TypeString,
-				Description: `Analysis of friend network patterns`,
+			"results": {
+				Type: genai.TypeArray,
+				Items: &genai.Schema{
+					Type: genai.TypeObject,
+					Properties: map[string]*genai.Schema{
+						"name": {
+							Type:        genai.TypeString,
+							Description: "Username of the account being analyzed",
+						},
+						"analysis": {
+							Type:        genai.TypeString,
+							Description: "Analysis of friend network patterns for this user",
+						},
+					},
+					Required: []string{"name", "analysis"},
+				},
+				Description: "Array of friend network analyses for each user",
 			},
 		},
-		Required: []string{"name", "analysis"},
+		Required: []string{"results"},
 	}
 	friendModel.Temperature = utils.Ptr(float32(0.2))
 	friendModel.TopP = utils.Ptr(float32(0.4))
@@ -97,6 +135,7 @@ func NewFriendAnalyzer(app *setup.App, logger *zap.Logger) *FriendAnalyzer {
 		genModel:    friendModel,
 		minify:      m,
 		analysisSem: semaphore.NewWeighted(int64(app.Config.Worker.BatchSizes.FriendAnalysis)),
+		batchSize:   app.Config.Worker.BatchSizes.FriendAnalysisBatch,
 		logger:      logger,
 	}
 }
@@ -109,28 +148,44 @@ func (a *FriendAnalyzer) GenerateFriendReasons(ctx context.Context, userInfos []
 		results = make(map[uint64]string)
 	)
 
-	for _, userInfo := range userInfos {
-		// Skip users with very few friends
-		if len(userInfo.Friends.Data) < 3 {
-			continue
+	// Calculate number of batches
+	numBatches := (len(userInfos) + a.batchSize - 1) / a.batchSize
+
+	for i := range numBatches {
+		start := i * a.batchSize
+		end := start + a.batchSize
+		if end > len(userInfos) {
+			end = len(userInfos)
 		}
 
+		infoBatch := userInfos[start:end]
 		p.Go(func(ctx context.Context) error {
-			// Get confirmed and flagged friends for this user
-			confirmedFriends := confirmedFriendsMap[userInfo.ID]
-			flaggedFriends := flaggedFriendsMap[userInfo.ID]
+			// Acquire semaphore before making AI request
+			if err := a.analysisSem.Acquire(ctx, 1); err != nil {
+				return fmt.Errorf("failed to acquire semaphore: %w", err)
+			}
+			defer a.analysisSem.Release(1)
 
-			// Generate reason for this user
-			reason, err := a.GenerateFriendReason(ctx, userInfo, confirmedFriends, flaggedFriends)
+			// Process batch
+			batchResults, err := a.processBatch(ctx, infoBatch, confirmedFriendsMap, flaggedFriendsMap)
 			if err != nil {
-				a.logger.Error("Failed to generate friend reason",
+				a.logger.Error("Failed to process batch",
 					zap.Error(err),
-					zap.Uint64("userID", userInfo.ID))
+					zap.Int("batchStart", start),
+					zap.Int("batchEnd", end))
 				return err
 			}
 
+			// Store results
 			mu.Lock()
-			results[userInfo.ID] = reason
+			for _, result := range batchResults {
+				for _, info := range infoBatch {
+					if info.Name == result.Name {
+						results[info.ID] = result.Analysis
+						break
+					}
+				}
+			}
 			mu.Unlock()
 
 			return nil
@@ -144,92 +199,81 @@ func (a *FriendAnalyzer) GenerateFriendReasons(ctx context.Context, userInfos []
 	return results
 }
 
-// GenerateFriendReason generates a friend network analysis reason using the Gemini model.
-func (a *FriendAnalyzer) GenerateFriendReason(ctx context.Context, userInfo *fetcher.Info, confirmedFriends, flaggedFriends map[uint64]*types.User) (string, error) {
-	// Acquire semaphore before making AI request
-	if err := a.analysisSem.Acquire(ctx, 1); err != nil {
-		return "", fmt.Errorf("failed to acquire semaphore: %w", err)
-	}
-	defer a.analysisSem.Release(1)
-
-	// Create a summary of friend data for AI analysis
-	type FriendSummary struct {
-		Name        string        `json:"name"`
-		Type        enum.UserType `json:"type"`
-		ReasonTypes []string      `json:"reasonTypes"`
+// processBatch handles analysis for a batch of users.
+func (a *FriendAnalyzer) processBatch(ctx context.Context, userInfos []*fetcher.Info, confirmedFriendsMap, flaggedFriendsMap map[uint64]map[uint64]*types.User) ([]FriendAnalysis, error) {
+	// Create summaries for all users in batch
+	type UserFriendData struct {
+		Username string          `json:"username"`
+		Friends  []FriendSummary `json:"friends"`
 	}
 
-	// Collect friend summaries with token counting
-	friendSummaries := make([]FriendSummary, 0, len(confirmedFriends)+len(flaggedFriends))
+	batchData := make([]UserFriendData, 0, len(userInfos))
 
-	// Helper function to add friend if within token limit
-	currentTokens := int32(0)
-	addFriend := func(friend *types.User, friendType enum.UserType) bool {
-		reasonTypes := friend.Reasons.Types()
-		summary := FriendSummary{
-			Name:        friend.Name,
-			Type:        friendType,
-			ReasonTypes: reasonTypes,
+	for _, userInfo := range userInfos {
+		// Skip users with very few friends
+		if len(userInfo.Friends.Data) < MinFriends {
+			continue
 		}
 
-		// Convert to JSON to count tokens accurately
-		summaryJSON, err := sonic.Marshal(summary)
-		if err != nil {
-			a.logger.Warn("Failed to marshal friend summary",
-				zap.String("username", friend.Name),
-				zap.Error(err))
-			return false
+		// Get confirmed and flagged friends for this user
+		confirmedFriends := confirmedFriendsMap[userInfo.ID]
+		flaggedFriends := flaggedFriendsMap[userInfo.ID]
+
+		// Collect friend summaries
+		friendSummaries := make([]FriendSummary, 0, MaxFriends)
+
+		// Add confirmed friends first
+		for _, friend := range confirmedFriends {
+			if len(friendSummaries) >= MaxFriends {
+				break
+			}
+			friendSummaries = append(friendSummaries, FriendSummary{
+				Name:        friend.Name,
+				Type:        enum.UserTypeConfirmed,
+				ReasonTypes: friend.Reasons.Types(),
+			})
 		}
 
-		// Count and check token limit
-		tokenCount, err := a.genModel.CountTokens(ctx, genai.Text(summaryJSON))
-		if err != nil {
-			a.logger.Warn("Failed to count tokens for friend summary",
-				zap.String("username", friend.Name),
-				zap.Error(err))
-			return false
+		// Add flagged friends with remaining space
+		for _, friend := range flaggedFriends {
+			if len(friendSummaries) >= MaxFriends {
+				break
+			}
+			friendSummaries = append(friendSummaries, FriendSummary{
+				Name:        friend.Name,
+				Type:        enum.UserTypeFlagged,
+				ReasonTypes: friend.Reasons.Types(),
+			})
 		}
 
-		currentTokens += tokenCount.TotalTokens
-		if currentTokens > MaxFriendDataTokens {
-			return false
-		}
-
-		friendSummaries = append(friendSummaries, summary)
-		return true
+		batchData = append(batchData, UserFriendData{
+			Username: userInfo.Name,
+			Friends:  friendSummaries,
+		})
 	}
 
-	// Add confirmed friends first (they're usually more important)
-	for _, friend := range confirmedFriends {
-		if !addFriend(friend, enum.UserTypeConfirmed) {
-			break
-		}
-	}
-
-	// Add flagged friends if there's room
-	for _, friend := range flaggedFriends {
-		if !addFriend(friend, enum.UserTypeFlagged) {
-			break
-		}
+	// Skip if no valid users in batch
+	if len(batchData) == 0 {
+		return nil, nil
 	}
 
 	// Convert to JSON for the AI request
-	friendDataJSON, err := sonic.Marshal(friendSummaries)
+	batchDataJSON, err := sonic.Marshal(batchData)
 	if err != nil {
-		return "", fmt.Errorf("%w: %w", ErrJSONProcessing, err)
+		return nil, fmt.Errorf("%w: %w", ErrJSONProcessing, err)
 	}
 
 	// Minify JSON to reduce token usage
-	friendDataJSON, err = a.minify.Bytes(ApplicationJSON, friendDataJSON)
+	batchDataJSON, err = a.minify.Bytes(ApplicationJSON, batchDataJSON)
 	if err != nil {
-		return "", fmt.Errorf("%w: %w", ErrJSONProcessing, err)
+		return nil, fmt.Errorf("%w: %w", ErrJSONProcessing, err)
 	}
 
 	// Configure prompt for friend analysis
-	prompt := fmt.Sprintf(FriendUserPrompt, userInfo.Name, string(friendDataJSON))
+	prompt := fmt.Sprintf(FriendUserPrompt, string(batchDataJSON))
 
 	// Generate friend analysis using Gemini model with retry
-	friendAnalysis, err := withRetry(ctx, func() (*FriendAnalysis, error) {
+	batchAnalysis, err := withRetry(ctx, func() (*BatchFriendAnalysis, error) {
 		resp, err := a.genModel.GenerateContent(ctx, genai.Text(prompt))
 		if err != nil {
 			return nil, fmt.Errorf("gemini API error: %w", err)
@@ -241,7 +285,7 @@ func (a *FriendAnalyzer) GenerateFriendReason(ctx context.Context, userInfo *fet
 
 		// Extract and parse response
 		responseText := resp.Candidates[0].Content.Parts[0].(genai.Text)
-		var result FriendAnalysis
+		var result BatchFriendAnalysis
 		if err := sonic.Unmarshal([]byte(responseText), &result); err != nil {
 			return nil, fmt.Errorf("JSON unmarshal error: %w", err)
 		}
@@ -249,16 +293,25 @@ func (a *FriendAnalyzer) GenerateFriendReason(ctx context.Context, userInfo *fet
 		return &result, nil
 	})
 	if err != nil {
-		return "", fmt.Errorf("%w: %w", ErrModelResponse, err)
+		return nil, fmt.Errorf("%w: %w", ErrModelResponse, err)
 	}
 
-	reason := friendAnalysis.Analysis
-	a.logger.Debug("Generated friend network reason",
-		zap.String("username", userInfo.Name),
-		zap.Int("confirmedFriends", len(confirmedFriends)),
-		zap.Int("flaggedFriends", len(flaggedFriends)),
-		zap.Int32("totalTokens", currentTokens),
-		zap.String("generatedReason", reason))
+	// Verify we got results for all users in the batch
+	if len(batchAnalysis.Results) > 0 {
+		// Create map of usernames we got results for
+		resultUsers := make(map[string]struct{}, len(batchAnalysis.Results))
+		for _, result := range batchAnalysis.Results {
+			resultUsers[result.Name] = struct{}{}
+		}
 
-	return reason, nil
+		// Check if we got results for all users we sent
+		for _, data := range batchData {
+			if _, ok := resultUsers[data.Username]; !ok {
+				a.logger.Error("Missing friend analysis result",
+					zap.String("username", data.Username))
+			}
+		}
+	}
+
+	return batchAnalysis.Results, nil
 }

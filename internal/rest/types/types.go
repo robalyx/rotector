@@ -66,8 +66,6 @@ type User struct {
 	Games          []UserGame   `json:"games"`
 	FlaggedContent []string     `json:"flaggedContent"`
 	FlaggedGroups  []uint64     `json:"flaggedGroups"`
-	FollowerCount  uint64       `json:"followerCount"`
-	FollowingCount uint64       `json:"followingCount"`
 	Confidence     float64      `json:"confidence"`
 	LastScanned    time.Time    `json:"lastScanned"`
 	LastUpdated    time.Time    `json:"lastUpdated"`

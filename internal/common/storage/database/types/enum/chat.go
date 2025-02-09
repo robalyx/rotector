@@ -6,7 +6,7 @@ package enum
 type ChatModel int
 
 const (
-	ChatModelGeminiPro     ChatModel = iota // gemini-1.5-pro-latest
-	ChatModelGeminiFlash                    // gemini-1.5-flash-latest
-	ChatModelGeminiFlash8B                  // gemini-1.5-flash-8b-latest
+	ChatModelGeminiFlash2_0    ChatModel = iota // gemini-2.0-flash-001
+	ChatModelGeminiFlash1_5                     // gemini-1.5-flash
+	ChatModelGeminiFlash1_5_8B                  // gemini-1.5-flash-8b
 )

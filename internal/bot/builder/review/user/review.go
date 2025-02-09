@@ -141,8 +141,6 @@ func (b *ReviewBuilder) buildReviewBuilder() *discord.EmbedBuilder {
 	createdAt := fmt.Sprintf("<t:%d:R>", b.user.CreatedAt.Unix())
 	lastUpdated := fmt.Sprintf("<t:%d:R>", b.user.LastUpdated.Unix())
 	confidence := fmt.Sprintf("%.2f", b.user.Confidence)
-	followerCount := utils.FormatNumber(b.user.FollowerCount)
-	followingCount := utils.FormatNumber(b.user.FollowingCount)
 
 	// Censor reason if needed
 	reason := b.getReasonField()
@@ -152,8 +150,6 @@ func (b *ReviewBuilder) buildReviewBuilder() *discord.EmbedBuilder {
 		embed.AddField("ID", utils.CensorString(strconv.FormatUint(b.user.ID, 10), true), true).
 			AddField("Name", utils.CensorString(b.user.Name, true), true).
 			AddField("Display Name", utils.CensorString(b.user.DisplayName, true), true).
-			AddField("Followers", followerCount, true).
-			AddField("Following", followingCount, true).
 			AddField("Game Visits", b.getTotalVisits(), true).
 			AddField("Confidence", confidence, true).
 			AddField("Created At", createdAt, true).
@@ -174,8 +170,6 @@ func (b *ReviewBuilder) buildReviewBuilder() *discord.EmbedBuilder {
 		), true).
 			AddField("Name", utils.CensorString(b.user.Name, b.privacyMode), true).
 			AddField("Display Name", utils.CensorString(b.user.DisplayName, b.privacyMode), true).
-			AddField("Followers", followerCount, true).
-			AddField("Following", followingCount, true).
 			AddField("Game Visits", b.getTotalVisits(), true).
 			AddField("Confidence", confidence, true).
 			AddField("Created At", createdAt, true).
@@ -344,7 +338,6 @@ func (b *ReviewBuilder) getReasonField() string {
 	reasonTypes := []enum.ReasonType{
 		enum.ReasonTypeUser,
 		enum.ReasonTypeFriend,
-		enum.ReasonTypeImage,
 		enum.ReasonTypeOutfit,
 		enum.ReasonTypeGroup,
 	}
@@ -358,8 +351,6 @@ func (b *ReviewBuilder) getReasonField() string {
 				emoji = "👤"
 			case enum.ReasonTypeFriend:
 				emoji = "👥"
-			case enum.ReasonTypeImage:
-				emoji = "🖼️"
 			case enum.ReasonTypeOutfit:
 				emoji = "👕"
 			case enum.ReasonTypeGroup:

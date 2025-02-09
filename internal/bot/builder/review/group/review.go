@@ -315,7 +315,6 @@ func (b *ReviewBuilder) getReasonField() string {
 	reasonTypes := []enum.ReasonType{
 		enum.ReasonTypeUser,
 		enum.ReasonTypeFriend,
-		enum.ReasonTypeImage,
 		enum.ReasonTypeOutfit,
 		enum.ReasonTypeGroup,
 	}
@@ -331,7 +330,6 @@ func (b *ReviewBuilder) getReasonField() string {
 				emoji = "🔍"
 			case enum.ReasonTypeUser,
 				enum.ReasonTypeFriend,
-				enum.ReasonTypeImage,
 				enum.ReasonTypeOutfit,
 				enum.ReasonTypeGroup:
 				// Do nothing

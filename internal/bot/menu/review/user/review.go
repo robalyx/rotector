@@ -608,8 +608,6 @@ Basic Info:
 - Display Name: %s
 - Description: %s
 - Account Created: %s
-- Followers: %d
-- Following: %d
 - Reasons: %s
 - Confidence: %.2f
 
@@ -633,8 +631,6 @@ Games (%d total):
 		user.DisplayName,
 		user.Description,
 		user.CreatedAt.Format(time.RFC3339),
-		user.FollowerCount,
-		user.FollowingCount,
 		user.Reasons.Messages(),
 		user.Confidence,
 		user.Status.String(),

@@ -10,8 +10,6 @@ const (
 	ReasonTypeUser ReasonType = iota
 	// ReasonTypeFriend indicates friend network analysis.
 	ReasonTypeFriend
-	// ReasonTypeImage indicates profile image analysis.
-	ReasonTypeImage
 	// ReasonTypeOutfit indicates outfit analysis.
 	ReasonTypeOutfit
 	// ReasonTypeGroup indicates group membership analysis.

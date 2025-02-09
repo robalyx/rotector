@@ -118,8 +118,9 @@ func (f *FriendFetcher) GetFriends(ctx context.Context, userID uint64) ([]*apiTy
 			end = len(friendIDs)
 		}
 
+		batchIDs := friendIDs[i:end]
 		p.Go(func(ctx context.Context) error {
-			builder := users.NewUsersByIDsBuilder(friendIDs[i:end]...)
+			builder := users.NewUsersByIDsBuilder(batchIDs...)
 			userDetails, err := f.roAPI.Users().GetUsersByIDs(ctx, builder.Build())
 			if err != nil {
 				f.logger.Error("Failed to fetch user details",

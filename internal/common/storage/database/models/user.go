@@ -123,8 +123,6 @@ func (r *UserModel) SaveUsers(ctx context.Context, users map[uint64]*types.User)
 				Set("outfits = EXCLUDED.outfits").
 				Set("friends = EXCLUDED.friends").
 				Set("games = EXCLUDED.games").
-				Set("follower_count = EXCLUDED.follower_count").
-				Set("following_count = EXCLUDED.following_count").
 				Set("confidence = EXCLUDED.confidence").
 				Set("last_scanned = EXCLUDED.last_scanned").
 				Set("last_updated = EXCLUDED.last_updated").

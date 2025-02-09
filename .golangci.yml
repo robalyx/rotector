@@ -28,6 +28,7 @@ linters:
     - godot # Not needed
     - forbidigo # Not needed
     - gochecknoinits # Not needed
+    - gochecknoglobals # Not needed
     - exportloopref # Deprecated
 
 linters-settings:

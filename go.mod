@@ -12,7 +12,7 @@ require (
 	github.com/getsentry/sentry-go v0.31.1
 	github.com/google/generative-ai-go v0.19.0
 	github.com/google/uuid v1.6.0
-	github.com/jaxron/axonet v0.0.0-20250121121445-d83bd7750be7
+	github.com/jaxron/axonet v0.0.0-20250206054345-e0d103e3cde0
 	github.com/jaxron/axonet/middleware/circuitbreaker v0.0.0-20250121121445-d83bd7750be7
 	github.com/jaxron/axonet/middleware/redis v0.0.0-20250121121445-d83bd7750be7
 	github.com/jaxron/axonet/middleware/retry v0.0.0-20250121121445-d83bd7750be7

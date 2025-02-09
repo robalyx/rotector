@@ -7,11 +7,11 @@ import (
 	"strings"
 )
 
-const _ReasonTypeName = "UserFriendImageOutfitGroupMemberCustom"
+const _ReasonTypeName = "UserFriendOutfitGroupMemberCustom"
 
-var _ReasonTypeIndex = [...]uint8{0, 4, 10, 15, 21, 26, 32, 38}
+var _ReasonTypeIndex = [...]uint8{0, 4, 10, 16, 21, 27, 33}
 
-const _ReasonTypeLowerName = "userfriendimageoutfitgroupmembercustom"
+const _ReasonTypeLowerName = "userfriendoutfitgroupmembercustom"
 
 func (i ReasonType) String() string {
 	if i < 0 || i >= ReasonType(len(_ReasonTypeIndex)-1) {
@@ -26,40 +26,36 @@ func _ReasonTypeNoOp() {
 	var x [1]struct{}
 	_ = x[ReasonTypeUser-(0)]
 	_ = x[ReasonTypeFriend-(1)]
-	_ = x[ReasonTypeImage-(2)]
-	_ = x[ReasonTypeOutfit-(3)]
-	_ = x[ReasonTypeGroup-(4)]
-	_ = x[ReasonTypeMember-(5)]
-	_ = x[ReasonTypeCustom-(6)]
+	_ = x[ReasonTypeOutfit-(2)]
+	_ = x[ReasonTypeGroup-(3)]
+	_ = x[ReasonTypeMember-(4)]
+	_ = x[ReasonTypeCustom-(5)]
 }
 
-var _ReasonTypeValues = []ReasonType{ReasonTypeUser, ReasonTypeFriend, ReasonTypeImage, ReasonTypeOutfit, ReasonTypeGroup, ReasonTypeMember, ReasonTypeCustom}
+var _ReasonTypeValues = []ReasonType{ReasonTypeUser, ReasonTypeFriend, ReasonTypeOutfit, ReasonTypeGroup, ReasonTypeMember, ReasonTypeCustom}
 
 var _ReasonTypeNameToValueMap = map[string]ReasonType{
 	_ReasonTypeName[0:4]:        ReasonTypeUser,
 	_ReasonTypeLowerName[0:4]:   ReasonTypeUser,
 	_ReasonTypeName[4:10]:       ReasonTypeFriend,
 	_ReasonTypeLowerName[4:10]:  ReasonTypeFriend,
-	_ReasonTypeName[10:15]:      ReasonTypeImage,
-	_ReasonTypeLowerName[10:15]: ReasonTypeImage,
-	_ReasonTypeName[15:21]:      ReasonTypeOutfit,
-	_ReasonTypeLowerName[15:21]: ReasonTypeOutfit,
-	_ReasonTypeName[21:26]:      ReasonTypeGroup,
-	_ReasonTypeLowerName[21:26]: ReasonTypeGroup,
-	_ReasonTypeName[26:32]:      ReasonTypeMember,
-	_ReasonTypeLowerName[26:32]: ReasonTypeMember,
-	_ReasonTypeName[32:38]:      ReasonTypeCustom,
-	_ReasonTypeLowerName[32:38]: ReasonTypeCustom,
+	_ReasonTypeName[10:16]:      ReasonTypeOutfit,
+	_ReasonTypeLowerName[10:16]: ReasonTypeOutfit,
+	_ReasonTypeName[16:21]:      ReasonTypeGroup,
+	_ReasonTypeLowerName[16:21]: ReasonTypeGroup,
+	_ReasonTypeName[21:27]:      ReasonTypeMember,
+	_ReasonTypeLowerName[21:27]: ReasonTypeMember,
+	_ReasonTypeName[27:33]:      ReasonTypeCustom,
+	_ReasonTypeLowerName[27:33]: ReasonTypeCustom,
 }
 
 var _ReasonTypeNames = []string{
 	_ReasonTypeName[0:4],
 	_ReasonTypeName[4:10],
-	_ReasonTypeName[10:15],
-	_ReasonTypeName[15:21],
-	_ReasonTypeName[21:26],
-	_ReasonTypeName[26:32],
-	_ReasonTypeName[32:38],
+	_ReasonTypeName[10:16],
+	_ReasonTypeName[16:21],
+	_ReasonTypeName[21:27],
+	_ReasonTypeName[27:33],
 }
 
 // ReasonTypeString retrieves an enum value from the enum constants string name.

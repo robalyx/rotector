@@ -7,11 +7,11 @@ import (
 	"strings"
 )
 
-const _ChatModelName = "gemini-1.5-pro-latestgemini-1.5-flash-latestgemini-1.5-flash-8b-latest"
+const _ChatModelName = "gemini-2.0-flash-001gemini-1.5-flashgemini-1.5-flash-8b"
 
-var _ChatModelIndex = [...]uint8{0, 21, 44, 70}
+var _ChatModelIndex = [...]uint8{0, 20, 36, 55}
 
-const _ChatModelLowerName = "gemini-1.5-pro-latestgemini-1.5-flash-latestgemini-1.5-flash-8b-latest"
+const _ChatModelLowerName = "gemini-2.0-flash-001gemini-1.5-flashgemini-1.5-flash-8b"
 
 func (i ChatModel) String() string {
 	if i < 0 || i >= ChatModel(len(_ChatModelIndex)-1) {
@@ -24,26 +24,26 @@ func (i ChatModel) String() string {
 // Re-run the stringer command to generate them again.
 func _ChatModelNoOp() {
 	var x [1]struct{}
-	_ = x[ChatModelGeminiPro-(0)]
-	_ = x[ChatModelGeminiFlash-(1)]
-	_ = x[ChatModelGeminiFlash8B-(2)]
+	_ = x[ChatModelGeminiFlash2_0-(0)]
+	_ = x[ChatModelGeminiFlash1_5-(1)]
+	_ = x[ChatModelGeminiFlash1_5_8B-(2)]
 }
 
-var _ChatModelValues = []ChatModel{ChatModelGeminiPro, ChatModelGeminiFlash, ChatModelGeminiFlash8B}
+var _ChatModelValues = []ChatModel{ChatModelGeminiFlash2_0, ChatModelGeminiFlash1_5, ChatModelGeminiFlash1_5_8B}
 
 var _ChatModelNameToValueMap = map[string]ChatModel{
-	_ChatModelName[0:21]:       ChatModelGeminiPro,
-	_ChatModelLowerName[0:21]:  ChatModelGeminiPro,
-	_ChatModelName[21:44]:      ChatModelGeminiFlash,
-	_ChatModelLowerName[21:44]: ChatModelGeminiFlash,
-	_ChatModelName[44:70]:      ChatModelGeminiFlash8B,
-	_ChatModelLowerName[44:70]: ChatModelGeminiFlash8B,
+	_ChatModelName[0:20]:       ChatModelGeminiFlash2_0,
+	_ChatModelLowerName[0:20]:  ChatModelGeminiFlash2_0,
+	_ChatModelName[20:36]:      ChatModelGeminiFlash1_5,
+	_ChatModelLowerName[20:36]: ChatModelGeminiFlash1_5,
+	_ChatModelName[36:55]:      ChatModelGeminiFlash1_5_8B,
+	_ChatModelLowerName[36:55]: ChatModelGeminiFlash1_5_8B,
 }
 
 var _ChatModelNames = []string{
-	_ChatModelName[0:21],
-	_ChatModelName[21:44],
-	_ChatModelName[44:70],
+	_ChatModelName[0:20],
+	_ChatModelName[20:36],
+	_ChatModelName[36:55],
 }
 
 // ChatModelString retrieves an enum value from the enum constants string name.

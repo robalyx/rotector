@@ -65,17 +65,15 @@ message User {
   repeated UserFriend friends = 8;
   repeated UserGame games = 9;
   repeated uint64 flagged_groups = 11;
-  uint64 follower_count = 12;
-  uint64 following_count = 13;
-  double confidence = 14;
-  string last_scanned = 15;
-  string last_updated = 16;
-  string last_viewed = 17;
-  string thumbnail_url = 18;
-  int32 upvotes = 19;
-  int32 downvotes = 20;
-  int32 reputation = 21;
-  bool is_banned = 22;
+  double confidence = 12;
+  string last_scanned = 13;
+  string last_updated = 14;
+  string last_viewed = 15;
+  string thumbnail_url = 16;
+  int32 upvotes = 17;
+  int32 downvotes = 18;
+  int32 reputation = 19;
+  bool is_banned = 20;
 }
 
 // Group represents all group information

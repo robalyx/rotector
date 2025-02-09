@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"image"
-	"image/draw"
 	"image/png"
 	"strconv"
 	"sync"
@@ -24,6 +23,7 @@ import (
 	"github.com/robalyx/rotector/internal/common/utils"
 	"github.com/sourcegraph/conc/pool"
 	"go.uber.org/zap"
+	"golang.org/x/image/draw"
 	"golang.org/x/image/webp"
 	"golang.org/x/sync/semaphore"
 )
@@ -34,10 +34,12 @@ const (
 
 You will receive:
 1. A username
-2. Names of up to 16 outfits
-3. A grid image showing these outfits
+2. A grid image showing outfits where:
+   - Index 0 is the user's current profile thumbnail
+   - Remaining indices are the user's saved outfits
+3. Names of the outfits (index 0 is "Current Profile Image")
 
-Analyze the outfits for concerning content including:
+Analyze both the current profile image and outfits for concerning content including:
 - Outfits missing either a shirt OR pants
 - Outfits designed to appear unclothed or suggestive
 - Outfits with names containing inappropriate references
@@ -72,14 +74,15 @@ Remember to:
 )
 
 const (
-	MaxOutfits  = 16
-	GridColumns = 4
-	GridSize    = 150
+	MaxOutfits        = 15
+	OutfitGridColumns = 4
+	OutfitGridSize    = 150
 )
 
 var (
-	ErrNoViolations = errors.New("no violations found in outfits")
-	ErrNoOutfits    = errors.New("no outfit images downloaded successfully")
+	ErrNoViolations        = errors.New("no violations found in outfits")
+	ErrNoOutfits           = errors.New("no outfit images downloaded successfully")
+	ErrInvalidThumbnailURL = errors.New("invalid thumbnail URL")
 )
 
 // OutfitAnalysis contains the AI's analysis results for a user's outfits.
@@ -154,21 +157,30 @@ func NewOutfitAnalyzer(app *setup.App, logger *zap.Logger) *OutfitAnalyzer {
 
 // ProcessOutfits analyzes outfit images for a batch of users.
 func (a *OutfitAnalyzer) ProcessOutfits(userInfos []*fetcher.Info, flaggedUsers map[uint64]*types.User) {
+	// Track counts before processing
+	existingFlags := len(flaggedUsers)
+
+	// Get all outfit thumbnails organized by user
+	userOutfits, userThumbnails := a.getOutfitThumbnails(context.Background(), userInfos)
+
+	// Process each user's outfits concurrently
 	var (
 		p  = pool.New().WithContext(context.Background())
 		mu sync.Mutex
 	)
 
-	// Process each user's outfits concurrently
 	for _, userInfo := range userInfos {
-		// Skip users with no outfits
-		if len(userInfo.Outfits.Data) == 0 {
+		// Skip if user has no outfits
+		outfits, hasOutfits := userOutfits[userInfo.ID]
+		if !hasOutfits {
 			continue
 		}
 
+		thumbnails := userThumbnails[userInfo.ID]
+
 		p.Go(func(ctx context.Context) error {
 			// Analyze user's outfits
-			err := a.analyzeUserOutfits(ctx, userInfo, &mu, flaggedUsers)
+			err := a.analyzeUserOutfits(ctx, userInfo, &mu, flaggedUsers, outfits, thumbnails)
 			if err != nil && !errors.Is(err, ErrNoViolations) {
 				a.logger.Error("Failed to analyze outfits",
 					zap.Error(err),
@@ -187,11 +199,70 @@ func (a *OutfitAnalyzer) ProcessOutfits(userInfos []*fetcher.Info, flaggedUsers 
 
 	a.logger.Info("Received AI outfit analysis",
 		zap.Int("totalUsers", len(userInfos)),
-		zap.Int("flaggedUsers", len(flaggedUsers)))
+		zap.Int("newFlags", len(flaggedUsers)-existingFlags))
+}
+
+// getOutfitThumbnails fetches thumbnail URLs for outfits and organizes them by user.
+func (a *OutfitAnalyzer) getOutfitThumbnails(ctx context.Context, userInfos []*fetcher.Info) (map[uint64][]*apiTypes.Outfit, map[uint64]map[uint64]string) {
+	// Collect all outfits from all users
+	allOutfits := make([]*apiTypes.Outfit, 0)
+	outfitToUser := make(map[uint64]*fetcher.Info)
+
+	for _, userInfo := range userInfos {
+		// Skip users with no outfits
+		if len(userInfo.Outfits.Data) == 0 {
+			continue
+		}
+
+		// Limit outfits per user
+		userOutfits := userInfo.Outfits.Data
+		if len(userOutfits) > MaxOutfits {
+			userOutfits = userOutfits[:MaxOutfits]
+		}
+
+		// Add outfits to collection and map them back to user
+		for _, outfit := range userOutfits {
+			allOutfits = append(allOutfits, outfit)
+			outfitToUser[outfit.ID] = userInfo
+		}
+	}
+
+	// Build batch request for all outfits
+	requests := thumbnails.NewBatchThumbnailsBuilder()
+	for _, outfit := range allOutfits {
+		requests.AddRequest(apiTypes.ThumbnailRequest{
+			Type:      apiTypes.OutfitType,
+			TargetID:  outfit.ID,
+			RequestID: strconv.FormatUint(outfit.ID, 10),
+			Size:      apiTypes.Size150x150,
+			Format:    apiTypes.WEBP,
+		})
+	}
+
+	// Get thumbnails for all outfits
+	thumbnailMap := a.thumbnailFetcher.ProcessBatchThumbnails(ctx, requests)
+
+	// Group outfits and thumbnails by user
+	userOutfits := make(map[uint64][]*apiTypes.Outfit)
+	userThumbnails := make(map[uint64]map[uint64]string)
+
+	for _, outfit := range allOutfits {
+		if userInfo, exists := outfitToUser[outfit.ID]; exists {
+			userOutfits[userInfo.ID] = append(userOutfits[userInfo.ID], outfit)
+			if userThumbnails[userInfo.ID] == nil {
+				userThumbnails[userInfo.ID] = make(map[uint64]string)
+			}
+			if thumbnailURL, ok := thumbnailMap[outfit.ID]; ok {
+				userThumbnails[userInfo.ID][outfit.ID] = thumbnailURL
+			}
+		}
+	}
+
+	return userOutfits, userThumbnails
 }
 
 // analyzeUserOutfits handles the analysis of a single user's outfits.
-func (a *OutfitAnalyzer) analyzeUserOutfits(ctx context.Context, info *fetcher.Info, mu *sync.Mutex, flaggedUsers map[uint64]*types.User) error {
+func (a *OutfitAnalyzer) analyzeUserOutfits(ctx context.Context, info *fetcher.Info, mu *sync.Mutex, flaggedUsers map[uint64]*types.User, outfits []*apiTypes.Outfit, thumbnailMap map[uint64]string) error {
 	// Acquire semaphore before making AI request
 	if err := a.analysisSem.Acquire(ctx, 1); err != nil {
 		return fmt.Errorf("failed to acquire semaphore: %w", err)
@@ -201,7 +272,7 @@ func (a *OutfitAnalyzer) analyzeUserOutfits(ctx context.Context, info *fetcher.I
 	// Analyze outfits with retry
 	analysis, err := withRetry(ctx, func() (*OutfitAnalysis, error) {
 		// Create grid image from outfits
-		gridImage, outfitNames, err := a.createOutfitGrid(ctx, info)
+		gridImage, outfitNames, err := a.createOutfitGrid(ctx, info, outfits, thumbnailMap)
 		if err != nil {
 			if errors.Is(err, ErrNoOutfits) {
 				return nil, ErrNoViolations
@@ -285,8 +356,6 @@ func (a *OutfitAnalyzer) analyzeUserOutfits(ctx context.Context, info *fetcher.I
 			Friends:             info.Friends.Data,
 			Games:               info.Games.Data,
 			Outfits:             info.Outfits.Data,
-			FollowerCount:       info.FollowerCount,
-			FollowingCount:      info.FollowingCount,
 			LastUpdated:         info.LastUpdated,
 			LastBanCheck:        info.LastBanCheck,
 			ThumbnailURL:        info.ThumbnailURL,
@@ -299,12 +368,9 @@ func (a *OutfitAnalyzer) analyzeUserOutfits(ctx context.Context, info *fetcher.I
 }
 
 // createOutfitGrid downloads outfit images and creates a grid image
-func (a *OutfitAnalyzer) createOutfitGrid(ctx context.Context, userInfo *fetcher.Info) (*bytes.Buffer, []string, error) {
-	// Get outfit thumbnails
-	outfits, thumbnailMap := a.getOutfitThumbnails(ctx, userInfo.Outfits.Data)
-
+func (a *OutfitAnalyzer) createOutfitGrid(ctx context.Context, userInfo *fetcher.Info, outfits []*apiTypes.Outfit, thumbnailMap map[uint64]string) (*bytes.Buffer, []string, error) {
 	// Download outfit images concurrently
-	successfulDownloads, err := a.downloadOutfitImages(ctx, outfits, thumbnailMap)
+	successfulDownloads, err := a.downloadOutfitImages(ctx, userInfo, outfits, thumbnailMap)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -313,32 +379,26 @@ func (a *OutfitAnalyzer) createOutfitGrid(ctx context.Context, userInfo *fetcher
 	return a.createGridImage(successfulDownloads)
 }
 
-// getOutfitThumbnails fetches thumbnail URLs for outfits
-func (a *OutfitAnalyzer) getOutfitThumbnails(ctx context.Context, outfits []*apiTypes.Outfit) ([]*apiTypes.Outfit, map[uint64]string) {
-	if len(outfits) > MaxOutfits*2 {
-		outfits = outfits[:MaxOutfits*2] // Allow for some failures
-	}
-
-	requests := thumbnails.NewBatchThumbnailsBuilder()
-	for _, outfit := range outfits {
-		requests.AddRequest(apiTypes.ThumbnailRequest{
-			Type:      apiTypes.OutfitType,
-			TargetID:  outfit.ID,
-			RequestID: strconv.FormatUint(outfit.ID, 10),
-			Size:      apiTypes.Size150x150,
-			Format:    apiTypes.WEBP,
-		})
-	}
-
-	return outfits, a.thumbnailFetcher.ProcessBatchThumbnails(ctx, requests)
-}
-
 // downloadOutfitImages concurrently downloads outfit images until we have enough.
-func (a *OutfitAnalyzer) downloadOutfitImages(ctx context.Context, outfits []*apiTypes.Outfit, thumbnailMap map[uint64]string) ([]DownloadResult, error) {
+func (a *OutfitAnalyzer) downloadOutfitImages(ctx context.Context, userInfo *fetcher.Info, outfits []*apiTypes.Outfit, thumbnailMap map[uint64]string) ([]DownloadResult, error) {
+	// Download current user thumbnail
+	downloads := make([]DownloadResult, 0, MaxOutfits)
+	thumbnailURL := userInfo.ThumbnailURL
+	if thumbnailURL != "" && thumbnailURL != fetcher.ThumbnailPlaceholder {
+		thumbnailImg, ok := a.downloadImage(ctx, thumbnailURL)
+		if ok {
+			downloads = append(downloads, DownloadResult{
+				index: 0,
+				img:   thumbnailImg,
+				name:  "Current Profile Image",
+			})
+		}
+	}
+
+	// Process outfits concurrently
 	var (
-		successfulDownloads = make([]DownloadResult, 0, MaxOutfits)
-		p                   = pool.New().WithContext(ctx)
-		mu                  sync.Mutex
+		p  = pool.New().WithContext(ctx)
+		mu sync.Mutex
 	)
 
 	for i := range outfits {
@@ -348,43 +408,22 @@ func (a *OutfitAnalyzer) downloadOutfitImages(ctx context.Context, outfits []*ap
 			continue
 		}
 
-		// Check if we have enough successful downloads
-		mu.Lock()
-		if len(successfulDownloads) >= MaxOutfits {
-			mu.Unlock()
-			break
-		}
-		mu.Unlock()
-
-		currentIndex := i
+		currentIndex := i + 1
 		currentOutfit := outfits[i]
 		currentURL := thumbnailURL
 
 		p.Go(func(ctx context.Context) error {
-			// Download image
-			resp, err := a.httpClient.NewRequest().URL(currentURL).Do(ctx)
-			if err != nil {
-				a.logger.Warn("Failed to download outfit image",
-					zap.Error(err),
-					zap.String("url", currentURL))
-				return nil
-			}
-			defer resp.Body.Close()
-
-			// Decode image
-			img, err := webp.Decode(resp.Body)
-			if err != nil {
+			img, ok := a.downloadImage(ctx, currentURL)
+			if !ok {
 				return nil
 			}
 
 			mu.Lock()
-			if len(successfulDownloads) < MaxOutfits {
-				successfulDownloads = append(successfulDownloads, DownloadResult{
-					index: currentIndex,
-					img:   img,
-					name:  currentOutfit.Name,
-				})
-			}
+			downloads = append(downloads, DownloadResult{
+				index: currentIndex,
+				img:   img,
+				name:  currentOutfit.Name,
+			})
 			mu.Unlock()
 
 			return nil
@@ -392,23 +431,23 @@ func (a *OutfitAnalyzer) downloadOutfitImages(ctx context.Context, outfits []*ap
 	}
 
 	// Wait for all downloads to complete
-	if err := p.Wait(); err != nil {
+	if err := p.Wait(); err != nil && !errors.Is(err, ErrInvalidThumbnailURL) {
 		a.logger.Error("Error during outfit downloads", zap.Error(err))
 	}
 
 	// Check if we got any successful downloads
-	if len(successfulDownloads) == 0 {
+	if len(downloads) == 0 {
 		return nil, ErrNoOutfits
 	}
 
-	return successfulDownloads, nil
+	return downloads, nil
 }
 
 // createGridImage creates a grid from downloaded images.
 func (a *OutfitAnalyzer) createGridImage(downloads []DownloadResult) (*bytes.Buffer, []string, error) {
-	rows := (len(downloads) + GridColumns - 1) / GridColumns
-	gridWidth := GridSize * GridColumns
-	gridHeight := GridSize * rows
+	rows := (len(downloads) + OutfitGridColumns - 1) / OutfitGridColumns
+	gridWidth := OutfitGridSize * OutfitGridColumns
+	gridHeight := OutfitGridSize * rows
 
 	dst := image.NewRGBA(image.Rect(0, 0, gridWidth, gridHeight))
 	outfitNames := make([]string, len(downloads))
@@ -419,12 +458,12 @@ func (a *OutfitAnalyzer) createGridImage(downloads []DownloadResult) (*bytes.Buf
 		outfitNames[i] = result.name
 
 		// Calculate position in grid
-		x := (i % GridColumns) * GridSize
-		y := (i / GridColumns) * GridSize
+		x := (i % OutfitGridColumns) * OutfitGridSize
+		y := (i / OutfitGridColumns) * OutfitGridSize
 
 		// Draw image into grid
 		draw.Draw(dst,
-			image.Rect(x, y, x+GridSize, y+GridSize),
+			image.Rect(x, y, x+OutfitGridSize, y+OutfitGridSize),
 			result.img,
 			image.Point{},
 			draw.Over)
@@ -437,4 +476,37 @@ func (a *OutfitAnalyzer) createGridImage(downloads []DownloadResult) (*bytes.Buf
 	}
 
 	return buf, outfitNames, nil
+}
+
+// downloadImage downloads an image from a URL and resizes it to 150x150 if needed.
+func (a *OutfitAnalyzer) downloadImage(ctx context.Context, url string) (image.Image, bool) {
+	// Download image
+	resp, err := a.httpClient.NewRequest().URL(url).Do(ctx)
+	if err != nil {
+		a.logger.Warn("Failed to download outfit image",
+			zap.Error(err),
+			zap.String("url", url))
+		return nil, false
+	}
+	defer resp.Body.Close()
+
+	// Decode image
+	img, err := webp.Decode(resp.Body)
+	if err != nil {
+		return nil, false
+	}
+
+	// Check if image needs resizing
+	bounds := img.Bounds()
+	if bounds.Dx() != 150 || bounds.Dy() != 150 {
+		// Create a new 150x150 RGBA image
+		resized := image.NewRGBA(image.Rect(0, 0, 150, 150))
+
+		// Draw the original image into the resized image
+		draw.NearestNeighbor.Scale(resized, resized.Bounds(), img, bounds, draw.Over, nil)
+
+		return resized, true
+	}
+
+	return img, true
 }
