@@ -50,8 +50,10 @@ func (m *Rotector) BuildContainer(
 	// Install build dependencies
 	buildCtr = buildCtr.WithExec([]string{"apk", "add", "--no-cache", "upx", "ca-certificates"})
 
-	// Create bin directory
-	buildCtr = buildCtr.WithExec([]string{"mkdir", "-p", "/src/bin"})
+	// Create necessary directories
+	buildCtr = buildCtr.
+		WithExec([]string{"mkdir", "-p", "/src/bin"}).
+		WithExec([]string{"mkdir", "-p", "/src/logs"})
 
 	// Build binaries
 	binaries := []string{"bot", "worker", "entrypoint"}
@@ -73,7 +75,9 @@ func (m *Rotector) BuildContainer(
 	return dag.Container(dagger.ContainerOpts{Platform: buildPlatform}).
 		From("gcr.io/distroless/static-debian12:latest").
 		WithDirectory("/app/bin", buildCtr.Directory("/src/bin")).
+		WithDirectory("/app/logs", buildCtr.Directory("/src/logs")).
 		WithFile("/etc/ssl/certs/ca-certificates.crt", buildCtr.File("/etc/ssl/certs/ca-certificates.crt")).
+		WithWorkdir("/app").
 		WithEntrypoint([]string{"/app/bin/entrypoint"}).
 		WithEnvVariable("RUN_TYPE", "bot").
 		WithEnvVariable("WORKER_TYPE", "ai").
