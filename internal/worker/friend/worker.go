@@ -28,6 +28,7 @@ type Worker struct {
 	logger           *zap.Logger
 	batchSize        int
 	flaggedThreshold int
+	pendingFriendIDs []uint64
 }
 
 // New creates a new friend worker.
@@ -59,7 +60,6 @@ func (w *Worker) Start() {
 
 	w.bar.SetTotal(100)
 
-	var oldFriendIDs []uint64
 	for {
 		w.bar.Reset()
 		w.reporter.SetHealthy(true)
@@ -87,7 +87,7 @@ func (w *Worker) Start() {
 		// Step 1: Process friends batch (20%)
 		w.bar.SetStepMessage("Processing friends batch", 20)
 		w.reporter.UpdateStatus("Processing friends batch", 20)
-		friendIDs, err := w.processFriendsBatch(oldFriendIDs)
+		friendIDs, err := w.processFriendsBatch()
 		if err != nil {
 			w.reporter.SetHealthy(false)
 			time.Sleep(5 * time.Minute)
@@ -105,7 +105,7 @@ func (w *Worker) Start() {
 		w.userChecker.ProcessUsers(userInfos)
 
 		// Step 4: Prepare for next batch
-		oldFriendIDs = friendIDs[w.batchSize:]
+		w.pendingFriendIDs = friendIDs[w.batchSize:]
 
 		// Step 5: Completed (100%)
 		w.bar.SetStepMessage("Completed", 100)
@@ -117,7 +117,9 @@ func (w *Worker) Start() {
 }
 
 // processFriendsBatch builds a list of friend IDs to check.
-func (w *Worker) processFriendsBatch(friendIDs []uint64) ([]uint64, error) {
+func (w *Worker) processFriendsBatch() ([]uint64, error) {
+	friendIDs := w.pendingFriendIDs
+
 	for len(friendIDs) < w.batchSize {
 		// Get the next confirmed user
 		user, err := w.db.Models().Users().GetUserToScan(context.Background())

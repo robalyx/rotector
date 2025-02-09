@@ -28,6 +28,9 @@ type Worker struct {
 	logger           *zap.Logger
 	batchSize        int
 	flaggedThreshold int
+	currentGroupID   uint64
+	currentCursor    string
+	pendingUserIDs   []uint64
 }
 
 // New creates a new group worker.
@@ -57,7 +60,6 @@ func (w *Worker) Start() {
 
 	w.bar.SetTotal(100)
 
-	var oldUserIDs []uint64
 	for {
 		w.bar.Reset()
 		w.reporter.SetHealthy(true)
@@ -85,18 +87,22 @@ func (w *Worker) Start() {
 		// Step 1: Get next group to process (10%)
 		w.bar.SetStepMessage("Fetching next group to process", 10)
 		w.reporter.UpdateStatus("Fetching next group to process", 10)
-		group, err := w.db.Models().Groups().GetGroupToScan(context.Background())
-		if err != nil {
-			w.logger.Error("Error getting group to scan", zap.Error(err))
-			w.reporter.SetHealthy(false)
-			time.Sleep(5 * time.Minute)
-			continue
+
+		if w.currentGroupID == 0 {
+			group, err := w.db.Models().Groups().GetGroupToScan(context.Background())
+			if err != nil {
+				w.logger.Error("Error getting group to scan", zap.Error(err))
+				w.reporter.SetHealthy(false)
+				time.Sleep(5 * time.Minute)
+				continue
+			}
+			w.currentGroupID = group.ID
 		}
 
 		// Step 2: Get group users (40%)
 		w.bar.SetStepMessage("Processing group users", 40)
 		w.reporter.UpdateStatus("Processing group users", 40)
-		userIDs, err := w.processGroup(group.ID, oldUserIDs)
+		userIDs, err := w.processGroup()
 		if err != nil {
 			w.reporter.SetHealthy(false)
 			time.Sleep(5 * time.Minute)
@@ -114,7 +120,7 @@ func (w *Worker) Start() {
 		w.userChecker.ProcessUsers(userInfos)
 
 		// Step 5: Prepare for next batch
-		oldUserIDs = userIDs[w.batchSize:]
+		w.pendingUserIDs = userIDs[w.batchSize:]
 
 		// Step 6: Completed (100%)
 		w.bar.SetStepMessage("Completed", 100)
@@ -126,22 +132,32 @@ func (w *Worker) Start() {
 }
 
 // processGroup builds a list of member IDs to check.
-func (w *Worker) processGroup(groupID uint64, userIDs []uint64) ([]uint64, error) {
-	w.logger.Info("Processing group", zap.Uint64("groupID", groupID))
+func (w *Worker) processGroup() ([]uint64, error) {
+	userIDs := w.pendingUserIDs
 
-	cursor := ""
-	for len(userIDs) < w.batchSize {
+	for {
 		// Fetch group users with cursor pagination
-		builder := groups.NewGroupUsersBuilder(groupID).WithLimit(100).WithCursor(cursor)
+		builder := groups.NewGroupUsersBuilder(w.currentGroupID).WithLimit(100).WithCursor(w.currentCursor)
 		groupUsers, err := w.roAPI.Groups().GetGroupUsers(context.Background(), builder.Build())
 		if err != nil {
 			w.logger.Error("Error fetching group members", zap.Error(err))
 			return nil, err
 		}
 
-		// If the group has no users, skip it
+		// If the group has no users, get next group
 		if len(groupUsers.Data) == 0 {
-			break
+			// Reset state
+			w.currentGroupID = 0
+			w.currentCursor = ""
+
+			// Get next group
+			nextGroup, err := w.db.Models().Groups().GetGroupToScan(context.Background())
+			if err != nil {
+				w.logger.Error("Error getting next group to scan", zap.Error(err))
+				return nil, err
+			}
+			w.currentGroupID = nextGroup.ID
+			continue
 		}
 
 		// Extract user IDs from member list
@@ -165,18 +181,37 @@ func (w *Worker) processGroup(groupID uint64, userIDs []uint64) ([]uint64, error
 		}
 
 		w.logger.Info("Fetched group users",
-			zap.Uint64("groupID", groupID),
-			zap.String("cursor", cursor),
+			zap.Uint64("groupID", w.currentGroupID),
+			zap.String("cursor", w.currentCursor),
 			zap.Int("totalUsers", len(groupUsers.Data)),
 			zap.Int("newUsers", len(newUserIDs)-len(existingUsers)),
 			zap.Int("userIDs", len(userIDs)))
 
+		// Check if we've reached batch size
+		if len(userIDs) >= w.batchSize {
+			// Save state for next iteration if there are more pages
+			if groupUsers.NextPageCursor != nil {
+				w.currentCursor = *groupUsers.NextPageCursor
+			} else {
+				// Reset state if no more pages
+				w.currentGroupID = 0
+				w.currentCursor = ""
+			}
+			return userIDs, nil
+		}
+
 		// Move to next page if available
 		if groupUsers.NextPageCursor == nil {
-			break
+			nextGroup, err := w.db.Models().Groups().GetGroupToScan(context.Background())
+			if err != nil {
+				w.logger.Error("Error getting next group to scan", zap.Error(err))
+				return nil, err
+			}
+			w.currentGroupID = nextGroup.ID
+			w.currentCursor = ""
+			continue
 		}
-		cursor = *groupUsers.NextPageCursor
-	}
 
-	return userIDs, nil
+		w.currentCursor = *groupUsers.NextPageCursor
+	}
 }
