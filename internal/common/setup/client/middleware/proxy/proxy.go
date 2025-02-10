@@ -203,11 +203,11 @@ func (m *Proxies) Process(ctx context.Context, httpClient *http.Client, req *htt
 	// Try roverse as fallback
 	var roverseErr error
 	resp, roverseErr = m.tryRoverse(ctx, httpClient, req)
-	if err != nil {
-		if errors.Is(err, ErrMissingRoverseDomain) || errors.Is(err, ErrNotRobloxDomain) {
+	if roverseErr != nil {
+		if errors.Is(roverseErr, ErrMissingRoverseDomain) || errors.Is(roverseErr, ErrNotRobloxDomain) {
 			return nil, fmt.Errorf("%w: %w", axonetErrors.ErrTemporary, err)
 		}
-		return nil, fmt.Errorf("%w: %w", axonetErrors.ErrTemporary, roverseErr)
+		return nil, fmt.Errorf("%w: %w / %w", axonetErrors.ErrTemporary, err, roverseErr)
 	}
 
 	return resp, nil
