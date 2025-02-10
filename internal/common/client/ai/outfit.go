@@ -30,50 +30,78 @@ import (
 
 const (
 	// OutfitSystemPrompt provides detailed instructions to the AI model for analyzing user outfits
-	OutfitSystemPrompt = `You are a Roblox moderator focused on detecting outfits that may indicate predatory behavior targeting minors.
+	OutfitSystemPrompt = `You are a Roblox moderator analyzing outfits for predatory behavior targeting minors.
 
-You will receive:
-1. A username
-2. A grid image showing outfits where:
-   - Index 0 is the user's current profile thumbnail
-   - Remaining indices are the user's saved outfits
-3. Names of the outfits (index 0 is "Current Profile Image")
+Input format:
+{
+  "username": "string",
+  "outfits": [
+    {
+      "index": 0,
+      "name": "Current Profile Image",
+      "image": "grid position [0,0]"
+    },
+    {
+      "index": 1,
+      "name": "Outfit name",
+      "image": "grid position [0,1]"
+    }
+  ]
+}
 
-Analyze both the current profile image and outfits for concerning content including:
-- Outfits missing either a shirt OR pants
-- Outfits designed to appear unclothed or suggestive
-- Outfits with names containing inappropriate references
-- Outfits with names suggesting adult content
+Output format:
+{
+  "username": "string",
+  "reason": "Clear explanation in one sentence",
+  "evidence": ["exact outfit name 1", "exact outfit name 2"],
+  "confidence": 0.0-1.0
+}
 
-If you can see ANY clothing item fully covering the area, do not flag the outfit.
-Do not add users with no violations to the response.
+Confidence levels:
+0.0: No violations
+0.1-0.3: Two unclothed outfits
+0.4-0.6: Three unclothed outfits
+0.7-0.8: Four unclothed outfits
+0.9-1.0: Five+ unclothed outfits
 
-DO NOT flag Avatars with partial skin showing (neck, arms, etc.)
-DO NOT flag Thin or stylized clothing that still provides coverage
-DO NOT flag Any clothing that exists but appears transparent
-DO NOT flag Fashion choices or clothing styles
-DO NOT flag Any other clothing-related concerns
+Key rules:
+1. Flag ONLY completely unclothed outfits with NO clothing items
+2. Return ONLY users with 2+ violations
+3. Use "the outfit" instead of outfit names in reasons
+4. Include exact outfit names in evidence
+5. Skip empty/missing outfits
 
-Return:
-- username: The exact username provided
-- reason: Clear explanation of violations found in one sentence. Use exactly "NO_VIOLATIONS" if no clear concerns found
-- evidence: Array of outfit names that have violations
-- confidence: Level (0.0-1.0) based on severity
-  * Use 0.0 for no violations
-  * Use 0.1-1.0 ONLY when clear violations exist`
+DO NOT flag:
+- Template avatars used as base for outfit creation
+- Default Roblox clothing
+- Partial skin showing
+- Thin/transparent clothing
+- Fashion choices
+- Names without visual issues
+- Non-human avatars
+- Unnatural skin colors
+- Single violations
+
+Grid layout:
+[0] [1] [2] [3]
+[4] [5] [6] [7]
+[8] [9] ...`
 
 	// OutfitRequestPrompt provides a reminder to follow system guidelines for outfit analysis.
-	OutfitRequestPrompt = `Please analyze these outfits according to the detailed guidelines in your system prompt.
+	OutfitRequestPrompt = `Analyze these outfits for completely unclothed avatars.
 
-Remember to:
-- Check for missing clothing and inappropriate outfit designs
-- Consider outfit names for concerning content
-- Follow the confidence level guide strictly
-- Apply all STRICT RULES from the system prompt
-- Only flag clear violations with high confidence`
+Remember:
+1. Flag only outfits with NO clothing items
+2. Return only users with 2+ violations
+3. Use "the outfit" in reasons
+4. Include exact outfit names as evidence
+
+Outfits to analyze:
+`
 )
 
 const (
+	MinOutfits        = 3
 	MaxOutfits        = 15
 	OutfitGridColumns = 4
 	OutfitGridSize    = 150
@@ -157,11 +185,21 @@ func NewOutfitAnalyzer(app *setup.App, logger *zap.Logger) *OutfitAnalyzer {
 
 // ProcessOutfits analyzes outfit images for a batch of users.
 func (a *OutfitAnalyzer) ProcessOutfits(userInfos []*fetcher.Info, flaggedUsers map[uint64]*types.User) {
-	// Track counts before processing
-	existingFlags := len(flaggedUsers)
+	// Filter userInfos to only include already flagged users
+	var flaggedInfos []*fetcher.Info
+	for _, info := range userInfos {
+		if _, isFlagged := flaggedUsers[info.ID]; isFlagged {
+			flaggedInfos = append(flaggedInfos, info)
+		}
+	}
+
+	// Skip if no flagged users to process
+	if len(flaggedInfos) == 0 {
+		return
+	}
 
 	// Get all outfit thumbnails organized by user
-	userOutfits, userThumbnails := a.getOutfitThumbnails(context.Background(), userInfos)
+	userOutfits, userThumbnails := a.getOutfitThumbnails(context.Background(), flaggedInfos)
 
 	// Process each user's outfits concurrently
 	var (
@@ -169,10 +207,10 @@ func (a *OutfitAnalyzer) ProcessOutfits(userInfos []*fetcher.Info, flaggedUsers 
 		mu sync.Mutex
 	)
 
-	for _, userInfo := range userInfos {
+	for _, userInfo := range flaggedInfos {
 		// Skip if user has no outfits
 		outfits, hasOutfits := userOutfits[userInfo.ID]
-		if !hasOutfits {
+		if !hasOutfits || len(outfits) < MinOutfits {
 			continue
 		}
 
@@ -197,9 +235,8 @@ func (a *OutfitAnalyzer) ProcessOutfits(userInfos []*fetcher.Info, flaggedUsers 
 		return
 	}
 
-	a.logger.Info("Received AI outfit analysis",
-		zap.Int("totalUsers", len(userInfos)),
-		zap.Int("newFlags", len(flaggedUsers)-existingFlags))
+	a.logger.Info("Received AI outfit analysis for flagged users",
+		zap.Int("totalUsers", len(flaggedInfos)))
 }
 
 // getOutfitThumbnails fetches thumbnail URLs for outfits and organizes them by user.
@@ -210,7 +247,7 @@ func (a *OutfitAnalyzer) getOutfitThumbnails(ctx context.Context, userInfos []*f
 
 	for _, userInfo := range userInfos {
 		// Skip users with no outfits
-		if len(userInfo.Outfits.Data) == 0 {
+		if len(userInfo.Outfits.Data) < MinOutfits {
 			continue
 		}
 

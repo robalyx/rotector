@@ -65,7 +65,7 @@ func (c *UserChecker) ProcessUsers(userInfos []*fetcher.Info) {
 	// Process user analysis
 	c.userAnalyzer.ProcessUsers(userInfos, flaggedUsers)
 
-	// Process outfit analysis
+	// Process outfit analysis (only for flagged users)
 	c.outfitAnalyzer.ProcessOutfits(userInfos, flaggedUsers)
 
 	// Stop if no users were flagged

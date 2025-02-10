@@ -36,9 +36,9 @@ user_analysis = 10
 friend_analysis = 10
 
 # Number of users to analyze in one AI request
-user_analysis_batch = 50
+user_analysis_batch = 25
 # Number of users to analyze in one friend AI request
-friend_analysis_batch = 50
+friend_analysis_batch = 25
 
 [worker.threshold_limits]
 # Maximum number of flagged users before stopping worker

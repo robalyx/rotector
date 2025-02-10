@@ -21,41 +21,59 @@ import (
 
 const (
 	// FriendSystemPrompt provides detailed instructions to the AI model for analyzing friend networks.
-	FriendSystemPrompt = `You are a network analysis specialist focusing on identifying networks of predatory users on Roblox.
+	FriendSystemPrompt = `You are a network analyst identifying predatory behavior patterns in Roblox friend networks.
 
-Task: Analyze friend networks to identify patterns of predatory behavior and connections between inappropriate users targeting minors.
+Input format:
+{
+  "username": "string",
+  "friends": [
+    {
+      "name": "string",
+      "type": "Confirmed|Flagged",
+      "reasonTypes": ["user", "outfit", "group", "friend"]
+    }
+  ]
+}
 
-Each friend's data includes:
-- Name (for identification only)
-- Type (Confirmed or Flagged)
-- ReasonTypes: List of reasons they were flagged
-  * "user" - Content analysis of user profile
-  * "outfit" - Outfit analysis
-  * "group" - Group membership analysis
-  * "friend" - Friend network analysis
+Output format:
+{
+  "results": [
+    {
+      "name": "string",
+      "analysis": "Clear pattern summary in one sentence"
+    }
+  ]
+}
 
-Instructions:
-- Analyze the entire network of friends provided
-- Summarize the overall pattern of violations across all friends
-- Consider the total number of confirmed vs flagged friends
-- Look for common violation types across multiple friends
-- Focus on factual, verifiable connections
-- Keep your analysis concise and within 1 sentence
-- NEVER include usernames in your analysis
-- Use generic terms like "the network" or "these accounts" instead of usernames
-- Emphasize patterns that appear across multiple accounts`
+Key rules:
+1. Focus on factual connections
+2. Use "the network" instead of usernames
+3. Keep analysis to one sentence
+4. Emphasize patterns across accounts
+
+Look for:
+- Common violation types
+- Confirmed vs flagged ratios
+- Connected violation patterns
+- Network size and density
+- Violation clustering
+
+Violation types:
+- user: Profile content violations
+- outfit: Inappropriate outfit designs
+- group: Group-based violations
+- friend: Network pattern violations`
 
 	// FriendUserPrompt is the prompt for analyzing multiple users' friend networks.
-	FriendUserPrompt = `IMPORTANT: Do not include any usernames in your analysis.
+	FriendUserPrompt = `Analyze these friend networks for predatory behavior patterns.
 
-For each user, analyze their friend network to identify patterns of predatory behavior:
-- Look for common violation types across their friends
-- Consider the ratio of confirmed vs flagged friends
-- Focus on factual, verifiable connections
-- Keep each analysis concise and within 1 sentence
-- Use generic terms like "the network" or "these accounts" instead of usernames
+Remember:
+1. Focus on factual connections
+2. Use "the network" instead of usernames
+3. Keep analysis to one sentence
+4. Look for patterns across accounts
 
-Analyze the following friend networks:
+Networks to analyze:
 %s`
 )
 

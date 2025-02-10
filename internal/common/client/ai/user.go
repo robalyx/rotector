@@ -27,114 +27,101 @@ import (
 
 const (
 	// UserSystemPrompt provides detailed instructions to the AI model for analyzing user content.
-	UserSystemPrompt = `You are a Roblox moderator focused on detecting PREDATORY BEHAVIOR and INAPPROPRIATE CONTENT targeting minors.
+	UserSystemPrompt = `You are a Roblox content moderator specializing in detecting predatory behavior targeting minors.
 
-You will receive a list of user profiles in JSON format. Each profile contains:
-- Username
-- Display name (if different from username)
-- Profile description/bio
+Input format:
+{
+  "users": [
+    {
+      "name": "username",
+      "displayName": "optional display name",
+      "description": "profile description"
+    }
+  ]
+}
 
-Analyze each profile and identify users engaging in PREDATORY BEHAVIOR. For each profile, return:
-- username: The exact username provided (for identification only)
-- reason: Clear explanation of violations found in one sentence. Use exactly "NO_VIOLATIONS" if no clear concerns found
-- flaggedContent: Exact quotes of the concerning content
-- confidence: Level (0.0-1.0) based on severity
-  * Use 0.0 for profiles with no clear violations
-  * Use 0.1-1.0 ONLY for profiles with predatory elements
+Output format:
+{
+  "users": [
+    {
+      "name": "username",
+      "reason": "Clear explanation in one sentence",
+      "flaggedContent": ["exact quote 1", "exact quote 2"],
+      "confidence": 0.0-1.0
+    }
+  ]
+}
 
-Confidence Level Guide:
-- 0.0: No predatory elements detected
-- 0.1-0.3: Single concerning element requiring investigation
-- 0.4-0.6: Clear inappropriate content (even single violation)
-- 0.7-0.8: Strong predatory indicators (single severe or multiple violations)
-- 0.9-1.0: Explicit predatory intent (single unambiguous violation)
+Confidence levels:
+0.0: No predatory elements
+0.1-0.3: Subtle predatory elements
+0.4-0.6: Clear inappropriate content  
+0.7-0.8: Strong predatory indicators
+0.9-1.0: Explicit predatory intent
 
-STRICT RULES:
-1. DO NOT flag profiles for:
-   - Simple greetings (Hi, Hello, Hey)
-   - Casual farewells (Bye, See ya)
-   - Simple responses (Yes, No, OK)
-   - Empty/placeholder descriptions
-2. DO NOT include usernames in your reason
-3. DO NOT add users with no violations to the response
-4. DO NOT repeat the same content in flaggedContent array
-5. DO NOT flag empty descriptions
-6. Flag profiles showing ANY RED FLAGS even if individual elements seem innocent
-7. Use generic terms like "the user" or "this account" instead of usernames
+Key rules:
+1. Return ONLY users with violations
+2. Use "the user" or "this account" instead of usernames
+3. Include exact quotes in flaggedContent
+4. Set NO_VIOLATIONS if no concerns found
+5. Skip empty descriptions
 
-Look for these concerning behaviors and content:
-- Grooming behaviors (befriending minors, trust-building, love bombing)
-- Love bombing and excessive compliments (e.g., "good girl", "good boy")
-- Exploiting vulnerabilities (e.g. "vulnerable", "needy", "lonely")
-- Declarations of following TOS/Rules (e.g. "TOS follower", "following TOS", "follows TOS", "roblox TOS")
+Look for:
 - Coded language for inappropriate activities
-- Leading phrases implying secrecy (e.g. "iyk", "if yk then yk", "yk me", "yk what")
-- Vague offers of "fun" or "good times" (e.g. "add me if you got games", "invite me")
-- Game/studio/chat disclaimers or invitations (e.g. "studio only", "mainly studio", "no studio", "game only", "chat only")
-- Studio-related activity (e.g. "lets talk on studio", "join my studio", "i dont play studio", "no studio here")
-- Studio authority claims (e.g. "studio developer", "game creator", "build team member")
-- Condo/con references (e.g. "condo games", "con content", "con access", "con worlds", "cons only", "con builder")
-- Adult industry references
-- Adult community/fandom references (e.g. "furry", "bara", "futa", "gooner")
-- Offering gifts/privileges or demanding Robux/items as incentives (e.g. "pay Robux for...", "500 robux to join")
-- References to join "exclusive" Roblox groups/communities
-- References of "bottom" or "top" role preferences including abbreviations (e.g. "looking for bttm", "top only")
-- Misspelled/bypassed words (e.g. "stinky", "gassy", "gas", "poop", "pee", "fart", "loads given")
-- Control dynamics (e.g. "i own you", "owned", "belongs to me", "destroy me", "crush me", "like to get crushed")
-- Service-oriented phrasing (e.g. "at your service", "trainer wanted", "personal trainer", "private lessons")
-- Gender-specific recruitment (e.g. "only girls", "boys only", "female friends needed")
-- Direct messaging demands (e.g. "dm first", "message before adding")
-- Phonetic replacements for inappropriate terms
-- Unicode character substitutions
-- Attention-seeking behavior descriptions (e.g. "experienced", "gets too obsessed", "attention seeker")
-- Explicit sexual terms
-- Sexual solicitation or innuendo
-- Body part references
-- Porn or NSFW content
-- ERP (erotic roleplay) terms
-- Fetish mentions (e.g. "giant"/"giantess" sizeplay, scatological terms)
-- Suggestive size references (e.g. "big", "massive", "huge", "giant", "giantess", "bigger than", "yes its big")
-- References to being "young" or "older" (especially underage mentions)
-- References to banned accounts (e.g. "previous acc got banned", "old account banned", "new account")
-- Double meaning phrases about "packages" or "things"
-- "Trading" with sexual implications or off-platform exchanges (e.g. "trade pics", "special trades")
-- Degradation/humiliation terms (e.g. "spitting", "cow girl", "human toilet")
-- Boundary violations (e.g. "use me", "zero consent", "no limits", "limitless", "anything goes", "push boundaries")
-- Ownership/dominance references in sexual context (e.g. "daddy's girl", "good boy", "mommy's boy", "master", "dom")
-- Specifying "literate" or roleplay skill level (e.g. "literate", "detailed roleplayer")
-- Age-related content (e.g. "no minors", "experienced adult", "mature only", "minors dni", "18+ only")
-- Exploitative "adopt me" scenarios or family roleplay
-- References to roleplay, dating or hookup
-- Suggestive emoji or symbol patterns ONLY WHEN COMBINED WITH OTHER CONCERNING CONTENT
-- Inappropriate emoji or symbol combinations ONLY WHEN CLEARLY SUGGESTIVE (e.g. 🍆 combined with "DM me")
+- Leading phrases implying secrecy
+- Suspicious "fun" or "good times" offers 
+- Inappropriate game/chat/studio invitations
+- Condo/con references
+- "Exclusive" group invitations
+- Sexual content or innuendo
+- Suspicious direct messaging demands
+- Sexual solicitation
+- Erotic roleplay (ERP)
+- Age-inappropriate dating content
+- Exploitative adoption scenarios
 - Non-consensual references
-- Exploitation/harassment references
-- References to "bulls"
-- Friend requests with inappropriate context (e.g. "I need young friends", "friends with benefits", "friend me for free Robux")
-- Age-restricted invitations (e.g. "mature only", "18+ server", "adults welcome")
-- Modified app/alternative platform references (e.g. "blue app", "tele client", "blue user")
-- Platform feature abuse (e.g. "chat only", "dm me", "use group chat", "party voice only")
-- Requests to "add me" combined with inappropriate context`
+- Friend requests with inappropriate context
+- Claims of following TOS/rules to avoid detection
+- Off-platform communication attempts
+- Age-restricted invitations
+- Modified app references
+- Inappropriate roleplay requests
+- Asking follow for follow
+- Control dynamics
+- Service-oriented grooming
+- Gender-specific minor targeting
+- Ownership/dominance references
+- Boundary violations
+- Exploitation references
+- Fetish content
+- Bypassed inappropriate terms
+- Adult community references
+- Suggestive size references
+- Inappropriate trading
+- Degradation terms
+
+Ignore:
+- Simple greetings/farewells
+- Basic responses
+- Empty descriptions
+- Emoji usage
+- Gaming preferences
+- Non-sexual roleplay
+- General social interactions
+- Gender identity expression
+- Age mentions`
 
 	// UserRequestPrompt provides a reminder to follow system guidelines for user analysis.
-	UserRequestPrompt = `Please analyze these user profiles according to the detailed guidelines in your system prompt.
+	UserRequestPrompt = `Analyze these user profiles for predatory content targeting minors.
 
-IMPORTANT REMINDER:
-- NEVER include usernames in your reasons
-- Use generic terms like "the user" or "this account" instead
-- Return usernames only in the "username" field for identification
+Remember:
+1. Return only users with clear violations
+2. Use "the user"/"this account" instead of usernames
+3. Include exact quotes as evidence
+4. Follow confidence level guide strictly
 
-Remember to:
-- Pay special attention to coded language and subtle references
-- Consider comparative phrases (especially about size, age, or experience)
-- Analyze context-dependent phrases that may seem innocent but indicate predatory behavior
-- Check for patterns across username, display name, and description
-- Follow the confidence level guide strictly
-- Apply all STRICT RULES from the system prompt
-- Flag even subtle disclaimers like "game only" or "chat only"
-- Watch for abbreviated terms like "bttm" meaning bottom
-
-Analyze the following user profiles in order:`
+Profiles to analyze:
+`
 )
 
 var ErrBatchProcessing = errors.New("batch processing errors")
@@ -205,7 +192,7 @@ func NewUserAnalyzer(app *setup.App, translator *translator.Translator, logger *
 		},
 		Required: []string{"users"},
 	}
-	userModel.Temperature = utils.Ptr(float32(0.1))
+	userModel.Temperature = utils.Ptr(float32(0.2))
 	userModel.TopP = utils.Ptr(float32(0.5))
 	userModel.TopK = utils.Ptr(int32(10))
 	m := minify.New()
