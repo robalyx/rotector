@@ -160,10 +160,13 @@ func (m *ReviewMenu) handleActionSelection(event *events.ComponentInteractionCre
 
 	switch option {
 	case constants.OpenFriendsMenuButtonCustomID:
+		session.PaginationPage.Set(s, 0)
 		r.Show(event, s, constants.UserFriendsPageName, "")
 	case constants.OpenGroupsMenuButtonCustomID:
+		session.PaginationPage.Set(s, 0)
 		r.Show(event, s, constants.UserGroupsPageName, "")
 	case constants.OpenOutfitsMenuButtonCustomID:
+		session.PaginationPage.Set(s, 0)
 		r.Show(event, s, constants.UserOutfitsPageName, "")
 	case constants.OpenAIChatButtonCustomID:
 		if !isReviewer {

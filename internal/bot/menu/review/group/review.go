@@ -125,6 +125,7 @@ func (m *ReviewMenu) handleActionSelection(event *events.ComponentInteractionCre
 
 	switch option {
 	case constants.GroupViewMembersButtonCustomID:
+		session.PaginationPage.Set(s, 0)
 		r.Show(event, s, constants.GroupMembersPageName, "")
 	case constants.OpenAIChatButtonCustomID:
 		if !isReviewer {
