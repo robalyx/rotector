@@ -50,6 +50,7 @@ Key rules:
 2. Use "the network" instead of usernames
 3. Keep analysis to one sentence
 4. Emphasize patterns across accounts
+5. Return a result for each user
 
 Look for:
 - Common violation types
@@ -72,6 +73,7 @@ Remember:
 2. Use "the network" instead of usernames
 3. Keep analysis to one sentence
 4. Look for patterns across accounts
+5. Return a result for each user
 
 Networks to analyze:
 %s`
@@ -297,7 +299,7 @@ func (a *FriendAnalyzer) processBatch(ctx context.Context, userInfos []*fetcher.
 			return nil, fmt.Errorf("gemini API error: %w", err)
 		}
 
-		if len(resp.Candidates) == 0 || len(resp.Candidates[0].Content.Parts) == 0 {
+		if len(resp.Candidates) == 0 || resp.Candidates[0].Content == nil || len(resp.Candidates[0].Content.Parts) == 0 {
 			return nil, fmt.Errorf("%w: no response from Gemini", ErrModelResponse)
 		}
 
