@@ -66,7 +66,7 @@ Confidence levels:
 
 Key rules:
 1. Flag ONLY completely unclothed outfits with NO clothing items
-2. Return ONLY users with 2+ violations
+2. Return ONLY users with 3+ violations
 3. Use "the outfit" instead of outfit names in reasons
 4. Include exact outfit names in evidence
 5. Skip empty/missing outfits
@@ -92,7 +92,7 @@ Grid layout:
 
 Remember:
 1. Flag only outfits with NO clothing items
-2. Return only users with 2+ violations
+2. Return only users with 3+ violations
 3. Use "the outfit" in reasons
 4. Include exact outfit names as evidence
 
