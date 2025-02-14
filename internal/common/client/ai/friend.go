@@ -51,6 +51,7 @@ Key rules:
 3. Keep analysis to one sentence
 4. Emphasize patterns across accounts
 5. Return a result for each user
+6. Consider accounts with few friends as potential alt accounts
 
 Look for:
 - Common violation types
@@ -80,8 +81,6 @@ Networks to analyze:
 )
 
 const (
-	// MinFriends is the minimum number of friends needed for analysis.
-	MinFriends = 3
 	// MaxFriends is the maximum number of friends to include in analysis.
 	MaxFriends = 10
 )
@@ -230,11 +229,6 @@ func (a *FriendAnalyzer) processBatch(ctx context.Context, userInfos []*fetcher.
 	batchData := make([]UserFriendData, 0, len(userInfos))
 
 	for _, userInfo := range userInfos {
-		// Skip users with very few friends
-		if len(userInfo.Friends.Data) < MinFriends {
-			continue
-		}
-
 		// Get confirmed and flagged friends for this user
 		confirmedFriends := confirmedFriendsMap[userInfo.ID]
 		flaggedFriends := flaggedFriendsMap[userInfo.ID]
@@ -272,7 +266,7 @@ func (a *FriendAnalyzer) processBatch(ctx context.Context, userInfos []*fetcher.
 		})
 	}
 
-	// Skip if no valid users in batch
+	// Skip if no users in batch
 	if len(batchData) == 0 {
 		return nil, nil
 	}
