@@ -98,19 +98,14 @@ func (c *FriendChecker) ProcessUsers(userInfos []*fetcher.Info, flaggedUsers map
 
 	// Process results
 	for _, userInfo := range userInfos {
-		// Skip users with very few friends
-		if len(userInfo.Friends.Data) < 3 {
-			continue
-		}
-
 		confirmedCount := len(confirmedFriendsMap[userInfo.ID])
 		flaggedCount := len(flaggedFriendsMap[userInfo.ID])
 
 		// Calculate confidence score
-		confidence := c.calculateConfidence(confirmedCount, flaggedCount, len(userInfo.Friends.Data), userInfo.CreatedAt)
+		confidence := c.calculateConfidence(confirmedCount, flaggedCount, len(userInfo.Friends.Data))
 
 		// Flag user if confidence exceeds threshold
-		if confidence >= 0.4 {
+		if confidence >= 0.55 {
 			reason := reasons[userInfo.ID]
 			if reason == "" {
 				// Fallback to default reason format if AI generation failed
@@ -123,7 +118,6 @@ func (c *FriendChecker) ProcessUsers(userInfos []*fetcher.Info, flaggedUsers map
 					Message:    reason,
 					Confidence: confidence,
 				}
-				existingUser.Confidence = 1.0
 			} else {
 				flaggedUsers[userInfo.ID] = &types.User{
 					ID:          userInfo.ID,
@@ -164,28 +158,23 @@ func (c *FriendChecker) ProcessUsers(userInfos []*fetcher.Info, flaggedUsers map
 		zap.Int("newFlags", len(flaggedUsers)-existingFlags))
 }
 
-// calculateConfidence computes a weighted confidence score based on friend relationships and account age.
-// The score prioritizes absolute numbers while still considering ratios as a secondary factor.
-func (c *FriendChecker) calculateConfidence(confirmedCount, flaggedCount int, totalFriends int, createdAt time.Time) float64 {
+// calculateConfidence computes a weighted confidence score based on friend relationships.
+// The score considers both ratios and absolute numbers.
+func (c *FriendChecker) calculateConfidence(confirmedCount, flaggedCount, totalFriends int) float64 {
 	var confidence float64
 
-	// Factor 1: Absolute number of inappropriate friends - 60% weight
-	inappropriateWeight := c.calculateInappropriateWeight(confirmedCount, flaggedCount)
-	confidence += inappropriateWeight * 0.60
-
-	// Factor 2: Ratio of inappropriate friends - 30% weight
+	// Factor 1: Ratio of inappropriate friends - 50% weight
 	// This helps catch users with a high concentration of inappropriate friends
 	// even if they don't meet the absolute number thresholds
 	if totalFriends > 0 {
 		totalInappropriate := float64(confirmedCount) + (float64(flaggedCount) * 0.5)
 		ratioWeight := math.Min(totalInappropriate/float64(totalFriends), 1.0)
-		confidence += ratioWeight * 0.30
+		confidence += ratioWeight * 0.50
 	}
 
-	// Factor 3: Account age weight - 10% weight
-	accountAge := time.Since(createdAt)
-	ageWeight := c.calculateAgeWeight(accountAge)
-	confidence += ageWeight * 0.10
+	// Factor 2: Absolute number of inappropriate friends - 50% weight
+	inappropriateWeight := c.calculateInappropriateWeight(confirmedCount, flaggedCount)
+	confidence += inappropriateWeight * 0.50
 
 	return confidence
 }
@@ -196,33 +185,17 @@ func (c *FriendChecker) calculateInappropriateWeight(confirmedCount, flaggedCoun
 	totalWeight := float64(confirmedCount) + (float64(flaggedCount) * 0.5)
 
 	switch {
-	case confirmedCount >= 8 || totalWeight >= 12:
+	case confirmedCount >= 10 || totalWeight >= 15:
 		return 1.0
-	case confirmedCount >= 6 || totalWeight >= 9:
+	case confirmedCount >= 8 || totalWeight >= 12:
 		return 0.8
-	case confirmedCount >= 4 || totalWeight >= 6:
+	case confirmedCount >= 6 || totalWeight >= 9:
 		return 0.6
-	case confirmedCount >= 2 || totalWeight >= 3:
+	case confirmedCount >= 4 || totalWeight >= 6:
 		return 0.4
-	case confirmedCount >= 1 || totalWeight >= 1:
+	case confirmedCount >= 2 || totalWeight >= 3:
 		return 0.2
 	default:
 		return 0.0
-	}
-}
-
-// calculateAgeWeight returns a weight between 0 and 1 based on account age.
-func (c *FriendChecker) calculateAgeWeight(accountAge time.Duration) float64 {
-	switch {
-	case accountAge < 30*24*time.Hour: // Less than 1 month
-		return 1.0
-	case accountAge < 180*24*time.Hour: // 1-6 months
-		return 0.8
-	case accountAge < 365*24*time.Hour: // 6-12 months
-		return 0.6
-	case accountAge < 2*365*24*time.Hour: // 1-2 years
-		return 0.4
-	default: // 2+ years
-		return 0.2
 	}
 }
