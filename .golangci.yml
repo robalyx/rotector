@@ -3,7 +3,7 @@ run:
   allow-parallel-runners: true
   allow-serial-runners: true
   tests: false
-  go: '1.23'
+  go: '1.24'
 
 linters:
   enable-all: true
@@ -29,7 +29,7 @@ linters:
     - forbidigo # Not needed
     - gochecknoinits # Not needed
     - gochecknoglobals # Not needed
-    - exportloopref # Deprecated
+    - tenv # Deprecated
 
 linters-settings:
   lll:

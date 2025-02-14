@@ -38,7 +38,7 @@ func (m *Rotector) BuildContainer(
 
 	// Create build container
 	buildCtr := dag.Container().
-		From("golang:1.23.5-alpine").
+		From("golang:1.24-alpine").
 		WithMountedCache("/go/pkg/mod", dag.CacheVolume("go-mod")).
 		WithMountedCache("/root/.cache/go-build", dag.CacheVolume("go-build")).
 		WithDirectory("/src", src).
@@ -149,7 +149,7 @@ func (m *Rotector) Test(
 	src *dagger.Directory,
 ) (string, error) {
 	return dag.Container().
-		From("golang:1.23.5-alpine").
+		From("golang:1.24-alpine").
 		WithMountedCache("/go/pkg/mod", dag.CacheVolume("go-mod")).
 		WithMountedCache("/root/.cache/go-build", dag.CacheVolume("go-build")).
 		WithDirectory("/src", src).
@@ -198,7 +198,7 @@ func (m *Rotector) Run(
 ) *dagger.Container {
 	// Create run container
 	runCtr := dag.Container().
-		From("golang:1.23.5-alpine").
+		From("golang:1.24-alpine").
 		WithMountedCache("/go/pkg/mod", dag.CacheVolume("go-mod")).
 		WithMountedCache("/root/.cache/go-build", dag.CacheVolume("go-build")).
 		WithDirectory("/src", src).
