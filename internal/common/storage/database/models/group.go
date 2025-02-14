@@ -751,7 +751,7 @@ func (r *GroupModel) GetGroupToScan(ctx context.Context) (*types.Group, error) {
 		var confirmedGroup types.ConfirmedGroup
 		err := tx.NewSelect().Model(&confirmedGroup).
 			Where("last_scanned < NOW() - INTERVAL '1 day'").
-			Order("last_scanned ASC").
+			OrderExpr("last_scanned ASC, confidence DESC").
 			Limit(1).
 			For("UPDATE SKIP LOCKED").
 			Scan(ctx)
@@ -775,7 +775,7 @@ func (r *GroupModel) GetGroupToScan(ctx context.Context) (*types.Group, error) {
 		var flaggedGroup types.FlaggedGroup
 		err = tx.NewSelect().Model(&flaggedGroup).
 			Where("last_scanned < NOW() - INTERVAL '1 day'").
-			Order("last_scanned ASC").
+			OrderExpr("last_scanned ASC, confidence DESC").
 			Limit(1).
 			For("UPDATE SKIP LOCKED").
 			Scan(ctx)

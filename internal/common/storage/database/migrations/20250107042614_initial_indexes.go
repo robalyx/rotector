@@ -72,10 +72,15 @@ func init() { //nolint:funlen
 			ON appeal_messages (appeal_id, created_at ASC);
 
 			-- Scanning indexes for users and groups
-			CREATE INDEX IF NOT EXISTS idx_confirmed_users_scan_time ON confirmed_users (last_scanned ASC);
-			CREATE INDEX IF NOT EXISTS idx_flagged_users_scan_time ON flagged_users (last_scanned ASC);
-			CREATE INDEX IF NOT EXISTS idx_confirmed_groups_scan_time ON confirmed_groups (last_scanned ASC);
-			CREATE INDEX IF NOT EXISTS idx_flagged_groups_scan_time ON flagged_groups (last_scanned ASC);
+			CREATE INDEX IF NOT EXISTS idx_confirmed_users_scan_time 
+			ON confirmed_users (last_scanned ASC, confidence DESC);
+			CREATE INDEX IF NOT EXISTS idx_flagged_users_scan_time 
+			ON flagged_users (confidence DESC, last_scanned ASC)
+			WHERE confidence >= 0.8;
+			CREATE INDEX IF NOT EXISTS idx_confirmed_groups_scan_time 
+			ON confirmed_groups (last_scanned ASC, confidence DESC);
+			CREATE INDEX IF NOT EXISTS idx_flagged_groups_scan_time 
+			ON flagged_groups (last_scanned ASC, confidence DESC);
 			
 			-- Group tracking indexes
 			CREATE INDEX IF NOT EXISTS idx_group_member_trackings_check 

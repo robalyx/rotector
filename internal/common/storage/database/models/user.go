@@ -825,7 +825,7 @@ func (r *UserModel) GetUserToScan(ctx context.Context) (*types.User, error) {
 		var confirmedUser types.ConfirmedUser
 		err := tx.NewSelect().Model(&confirmedUser).
 			Where("last_scanned < NOW() - INTERVAL '1 day'").
-			Order("last_scanned ASC").
+			OrderExpr("last_scanned ASC, confidence DESC").
 			Limit(1).
 			For("UPDATE SKIP LOCKED").
 			Scan(ctx)
@@ -854,7 +854,8 @@ func (r *UserModel) GetUserToScan(ctx context.Context) (*types.User, error) {
 		var flaggedUser types.FlaggedUser
 		err = tx.NewSelect().Model(&flaggedUser).
 			Where("last_scanned < NOW() - INTERVAL '1 day'").
-			Order("last_scanned ASC").
+			Where("confidence >= 0.8").
+			OrderExpr("last_scanned ASC, confidence DESC").
 			Limit(1).
 			For("UPDATE SKIP LOCKED").
 			Scan(ctx)
