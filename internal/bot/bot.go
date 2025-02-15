@@ -304,7 +304,7 @@ func (b *Bot) handleComponentInteraction(event *events.ComponentInteractionCreat
 			b.logger.Debug("Interaction is outdated",
 				zap.String("session_message_id", sessionMessageID),
 				zap.Uint64("event_message_id", uint64(event.Message.ID)))
-			b.paginationManager.RespondWithCancel(event, s, "This interaction is outdated. Please use the latest interaction.")
+			b.paginationManager.RespondWithClear(event, "This interaction is outdated. Please use the latest interaction.")
 			return
 		}
 

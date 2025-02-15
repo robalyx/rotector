@@ -40,6 +40,20 @@ func (r *Respond) Error(event interfaces.CommonEvent, message string) {
 	r.responded = true
 }
 
+// Clear updates the interaction response with a clear message.
+func (r *Respond) Clear(event interfaces.CommonEvent, content string) {
+	messageUpdate := discord.NewMessageUpdateBuilder().
+		SetContent(content).
+		ClearEmbeds().
+		ClearFiles().
+		ClearContainerComponents().
+		RetainAttachments().
+		Build()
+
+	_, _ = event.Client().Rest().UpdateInteractionResponse(event.ApplicationID(), event.Token(), messageUpdate)
+	r.responded = true
+}
+
 // NavigateBack navigates back to the previous page in the history.
 func (r *Respond) NavigateBack(event interfaces.CommonEvent, s *session.Session, content string) {
 	previousPages := session.PreviousPages.Get(s)
