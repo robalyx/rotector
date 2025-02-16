@@ -2,6 +2,7 @@ package csv
 
 import (
 	"encoding/csv"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -25,7 +26,7 @@ func verifyCSVFile(t *testing.T, filepath string, expectedRecords []*types.Expor
 	// Read and verify header
 	header, err := reader.Read()
 	require.NoError(t, err)
-	assert.Equal(t, []string{"hash", "status", "reason"}, header)
+	assert.Equal(t, []string{"hash", "status", "reason", "confidence"}, header)
 
 	// Read and verify each record
 	for _, expected := range expectedRecords {
@@ -34,6 +35,7 @@ func verifyCSVFile(t *testing.T, filepath string, expectedRecords []*types.Expor
 		assert.Equal(t, expected.Hash, record[0])
 		assert.Equal(t, expected.Status, record[1])
 		assert.Equal(t, expected.Reason, record[2])
+		assert.Equal(t, fmt.Sprintf("%.2f", expected.Confidence), record[3])
 	}
 
 	// Verify we're at the end
@@ -54,26 +56,30 @@ func TestExporter_Export(t *testing.T) {
 			name: "basic export",
 			userRecords: []*types.ExportRecord{
 				{
-					Hash:   "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
-					Status: "confirmed",
-					Reason: "test reason",
+					Hash:       "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+					Status:     "confirmed",
+					Reason:     "test reason",
+					Confidence: 0.95,
 				},
 				{
-					Hash:   "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210",
-					Status: "flagged",
-					Reason: "another reason",
+					Hash:       "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210",
+					Status:     "flagged",
+					Reason:     "another reason",
+					Confidence: 0.75,
 				},
 			},
 			groupRecords: []*types.ExportRecord{
 				{
-					Hash:   "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa1",
-					Status: "flagged",
-					Reason: "group test reason",
+					Hash:       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa1",
+					Status:     "flagged",
+					Reason:     "group test reason",
+					Confidence: 0.85,
 				},
 				{
-					Hash:   "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb2",
-					Status: "confirmed",
-					Reason: "another group reason",
+					Hash:       "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb2",
+					Status:     "confirmed",
+					Reason:     "another group reason",
+					Confidence: 0.92,
 				},
 			},
 			wantErr: false,

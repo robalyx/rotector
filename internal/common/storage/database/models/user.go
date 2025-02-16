@@ -505,7 +505,7 @@ func (r *UserModel) GetFlaggedAndConfirmedUsers(ctx context.Context) ([]*types.R
 		var flaggedUsers []types.FlaggedUser
 		err := tx.NewSelect().
 			Model(&flaggedUsers).
-			Column("id", "reasons").
+			Column("id", "reasons", "confidence").
 			Scan(ctx)
 		if err != nil {
 			return fmt.Errorf("failed to get flagged users: %w", err)
@@ -521,7 +521,7 @@ func (r *UserModel) GetFlaggedAndConfirmedUsers(ctx context.Context) ([]*types.R
 		var confirmedUsers []types.ConfirmedUser
 		err = tx.NewSelect().
 			Model(&confirmedUsers).
-			Column("id", "reasons").
+			Column("id", "reasons", "confidence").
 			Scan(ctx)
 		if err != nil {
 			return fmt.Errorf("failed to get confirmed users: %w", err)

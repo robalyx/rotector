@@ -21,12 +21,13 @@ func verifySQLiteFile(t *testing.T, filepath string, tableName string, expectedR
 
 	// Query all records
 	var records []*types.ExportRecord
-	err = sqlitex.ExecuteTransient(conn, "SELECT hash, status, reason FROM "+tableName+" ORDER BY hash", &sqlitex.ExecOptions{
+	err = sqlitex.ExecuteTransient(conn, "SELECT hash, status, reason, confidence FROM "+tableName+" ORDER BY hash", &sqlitex.ExecOptions{
 		ResultFunc: func(stmt *sqlite.Stmt) error {
 			records = append(records, &types.ExportRecord{
-				Hash:   stmt.ColumnText(0),
-				Status: stmt.ColumnText(1),
-				Reason: stmt.ColumnText(2),
+				Hash:       stmt.ColumnText(0),
+				Status:     stmt.ColumnText(1),
+				Reason:     stmt.ColumnText(2),
+				Confidence: stmt.ColumnFloat(3),
 			})
 			return nil
 		},
@@ -41,6 +42,7 @@ func verifySQLiteFile(t *testing.T, filepath string, tableName string, expectedR
 		assert.Equal(t, expected.Hash, records[i].Hash)
 		assert.Equal(t, expected.Status, records[i].Status)
 		assert.Equal(t, expected.Reason, records[i].Reason)
+		assert.Equal(t, expected.Confidence, records[i].Confidence)
 	}
 }
 
@@ -57,26 +59,30 @@ func TestExporter_Export(t *testing.T) {
 			name: "basic export",
 			userRecords: []*types.ExportRecord{
 				{
-					Hash:   "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
-					Status: "confirmed",
-					Reason: "test reason",
+					Hash:       "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+					Status:     "confirmed",
+					Reason:     "test reason",
+					Confidence: 0.95,
 				},
 				{
-					Hash:   "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210",
-					Status: "flagged",
-					Reason: "another reason",
+					Hash:       "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210",
+					Status:     "flagged",
+					Reason:     "another reason",
+					Confidence: 0.75,
 				},
 			},
 			groupRecords: []*types.ExportRecord{
 				{
-					Hash:   "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa1",
-					Status: "flagged",
-					Reason: "group test reason",
+					Hash:       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa1",
+					Status:     "flagged",
+					Reason:     "group test reason",
+					Confidence: 0.85,
 				},
 				{
-					Hash:   "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb2",
-					Status: "confirmed",
-					Reason: "another group reason",
+					Hash:       "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb2",
+					Status:     "confirmed",
+					Reason:     "another group reason",
+					Confidence: 0.92,
 				},
 			},
 			wantErr: false,
@@ -91,14 +97,16 @@ func TestExporter_Export(t *testing.T) {
 			name: "records with special characters",
 			userRecords: []*types.ExportRecord{
 				{
-					Hash:   "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc3",
-					Status: "confirmed",
-					Reason: "reason with ' single quote",
+					Hash:       "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc3",
+					Status:     "confirmed",
+					Reason:     "reason with ' single quote",
+					Confidence: 0.88,
 				},
 				{
-					Hash:   "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd4",
-					Status: "flagged",
-					Reason: "reason with \" double quote",
+					Hash:       "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd4",
+					Status:     "flagged",
+					Reason:     "reason with \" double quote",
+					Confidence: 0.77,
 				},
 			},
 			groupRecords: []*types.ExportRecord{},
@@ -108,14 +116,16 @@ func TestExporter_Export(t *testing.T) {
 			name: "duplicate hash",
 			userRecords: []*types.ExportRecord{
 				{
-					Hash:   "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
-					Status: "confirmed",
-					Reason: "test reason",
+					Hash:       "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+					Status:     "confirmed",
+					Reason:     "test reason",
+					Confidence: 0.95,
 				},
 				{
-					Hash:   "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
-					Status: "flagged",
-					Reason: "duplicate hash",
+					Hash:       "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+					Status:     "flagged",
+					Reason:     "duplicate hash",
+					Confidence: 0.85,
 				},
 			},
 			groupRecords: []*types.ExportRecord{},
@@ -165,9 +175,10 @@ func TestExporter_ExistingFiles(t *testing.T) {
 
 	records := []*types.ExportRecord{
 		{
-			Hash:   "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
-			Status: "confirmed",
-			Reason: "test reason",
+			Hash:       "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+			Status:     "confirmed",
+			Reason:     "test reason",
+			Confidence: 0.95,
 		},
 	}
 
@@ -187,9 +198,10 @@ func TestExporter_DatabaseSchema(t *testing.T) {
 	// Create a test record
 	records := []*types.ExportRecord{
 		{
-			Hash:   "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
-			Status: "confirmed",
-			Reason: "test reason",
+			Hash:       "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+			Status:     "confirmed",
+			Reason:     "test reason",
+			Confidence: 0.95,
 		},
 	}
 
@@ -213,7 +225,7 @@ func TestExporter_DatabaseSchema(t *testing.T) {
 	require.NoError(t, err)
 
 	// Verify schema
-	expectedColumns := []string{"hash", "status", "reason"}
+	expectedColumns := []string{"hash", "status", "reason", "confidence"}
 	assert.Equal(t, expectedColumns, columns)
 
 	// Verify primary key

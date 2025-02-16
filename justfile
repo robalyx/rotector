@@ -41,9 +41,20 @@ run-rpc:
 run-db *args:
     go run ./cmd/db {{args}}
 
-# Run data export
-run-export *args:
-    go run ./cmd/export {{args}}
+# Run data export with standardized settings
+run-export description="Export" version="1.0.1":
+    # Create exports directory if it doesn't exist
+    mkdir -p exports
+    # Run export command with standardized settings
+    go run ./cmd/export \
+        -o exports \
+        --salt "r0t3ct0r_$(date +%Y%m%d)_$RANDOM" \
+        --export-version {{version}} \
+        --description "{{description}}" \
+        --hash-type argon2id \
+        --c 10 \
+        --i 16 \
+        -m 32
 
 # Clean build artifacts
 clean:

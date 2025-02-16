@@ -54,7 +54,7 @@ func (e *Exporter) writeFile(filename string, records []*types.ExportRecord) err
 	defer writer.Flush()
 
 	// Write header
-	if err := writer.Write([]string{"hash", "status", "reason"}); err != nil {
+	if err := writer.Write([]string{"hash", "status", "reason", "confidence"}); err != nil {
 		return fmt.Errorf("failed to write header: %w", err)
 	}
 
@@ -64,6 +64,7 @@ func (e *Exporter) writeFile(filename string, records []*types.ExportRecord) err
 			record.Hash,
 			record.Status,
 			record.Reason,
+			fmt.Sprintf("%.2f", record.Confidence),
 		}); err != nil {
 			return fmt.Errorf("failed to write record: %w", err)
 		}

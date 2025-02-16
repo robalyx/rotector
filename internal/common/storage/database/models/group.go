@@ -428,7 +428,7 @@ func (r *GroupModel) GetFlaggedAndConfirmedGroups(ctx context.Context) ([]*types
 		var flaggedGroups []types.FlaggedGroup
 		err := tx.NewSelect().
 			Model(&flaggedGroups).
-			Column("id", "reasons").
+			Column("id", "reasons", "confidence").
 			Scan(ctx)
 		if err != nil {
 			return fmt.Errorf("failed to get flagged groups: %w", err)
@@ -444,7 +444,7 @@ func (r *GroupModel) GetFlaggedAndConfirmedGroups(ctx context.Context) ([]*types
 		var confirmedGroups []types.ConfirmedGroup
 		err = tx.NewSelect().
 			Model(&confirmedGroups).
-			Column("id", "reasons").
+			Column("id", "reasons", "confidence").
 			Scan(ctx)
 		if err != nil {
 			return fmt.Errorf("failed to get confirmed groups: %w", err)

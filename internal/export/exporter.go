@@ -31,7 +31,7 @@ const (
 const (
 	// EngineVersion represents the version of the export engine.
 	// This should be updated when making breaking changes to the export format.
-	EngineVersion = "1.0.0"
+	EngineVersion = "2.0.0"
 )
 
 // Config holds the configuration for exports.
@@ -137,6 +137,7 @@ func (e *Exporter) hashRecords(items interface{}, salt string, hashType HashType
 	var ids []uint64
 	var reasons []string
 	var statuses []string
+	var confidences []float64
 
 	// Extract data based on type
 	switch v := items.(type) {
@@ -144,19 +145,23 @@ func (e *Exporter) hashRecords(items interface{}, salt string, hashType HashType
 		ids = make([]uint64, len(v))
 		reasons = make([]string, len(v))
 		statuses = make([]string, len(v))
+		confidences = make([]float64, len(v))
 		for i, user := range v {
 			ids[i] = user.ID
 			reasons[i] = strings.Join(user.Reasons.Messages(), "; ")
 			statuses[i] = user.Status.String()
+			confidences[i] = user.Confidence
 		}
 	case []*dbTypes.ReviewGroup:
 		ids = make([]uint64, len(v))
 		reasons = make([]string, len(v))
 		statuses = make([]string, len(v))
+		confidences = make([]float64, len(v))
 		for i, group := range v {
 			ids[i] = group.ID
 			reasons[i] = strings.Join(group.Reasons.Messages(), "; ")
 			statuses[i] = group.Status.String()
+			confidences[i] = group.Confidence
 		}
 	}
 
@@ -167,9 +172,10 @@ func (e *Exporter) hashRecords(items interface{}, salt string, hashType HashType
 	records := make([]*types.ExportRecord, len(ids))
 	for i := range ids {
 		records[i] = &types.ExportRecord{
-			Hash:   hashes[i],
-			Status: statuses[i],
-			Reason: reasons[i],
+			Hash:       hashes[i],
+			Status:     statuses[i],
+			Reason:     reasons[i],
+			Confidence: confidences[i],
 		}
 	}
 

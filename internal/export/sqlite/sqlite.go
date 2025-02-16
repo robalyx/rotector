@@ -56,7 +56,8 @@ func (e *Exporter) createDB(filename, table string, records []*types.ExportRecor
 		CREATE TABLE %s (
 			hash TEXT PRIMARY KEY,
 			status TEXT NOT NULL,
-			reason TEXT NOT NULL
+			reason TEXT NOT NULL,
+			confidence REAL NOT NULL
 		)
 	`, table), nil)
 	if err != nil {
@@ -80,9 +81,9 @@ func (e *Exporter) createDB(filename, table string, records []*types.ExportRecor
 		// Insert batch
 		for _, record := range records[i:end] {
 			err = sqlitex.Execute(conn, fmt.Sprintf(
-				"INSERT INTO %s (hash, status, reason) VALUES (?, ?, ?)", table,
+				"INSERT INTO %s (hash, status, reason, confidence) VALUES (?, ?, ?, ?)", table,
 			), &sqlitex.ExecOptions{
-				Args: []interface{}{record.Hash, record.Status, record.Reason},
+				Args: []interface{}{record.Hash, record.Status, record.Reason, record.Confidence},
 			})
 			if err != nil {
 				return fmt.Errorf("failed to insert record: %w", err)

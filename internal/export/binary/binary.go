@@ -86,6 +86,11 @@ func (e *Exporter) writeFile(filename string, records []*types.ExportRecord) err
 		if _, err := file.Write(reasonBytes); err != nil {
 			return fmt.Errorf("failed to write reason: %w", err)
 		}
+
+		// Write confidence
+		if err := binary.Write(file, binary.LittleEndian, record.Confidence); err != nil {
+			return fmt.Errorf("failed to write confidence: %w", err)
+		}
 	}
 
 	return nil

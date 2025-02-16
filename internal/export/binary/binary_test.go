@@ -51,6 +51,12 @@ func verifyBinaryFile(t *testing.T, filepath string, expectedRecords []*types.Ex
 		_, err = file.Read(reasonBytes)
 		require.NoError(t, err)
 		assert.Equal(t, expected.Reason, string(reasonBytes))
+
+		// Read confidence
+		var confidence float64
+		err = binary.Read(file, binary.LittleEndian, &confidence)
+		require.NoError(t, err)
+		assert.Equal(t, expected.Confidence, confidence)
 	}
 
 	// Verify we're at EOF
@@ -72,16 +78,18 @@ func TestExporter_Export(t *testing.T) {
 			name: "basic export",
 			userRecords: []*types.ExportRecord{
 				{
-					Hash:   "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
-					Status: "confirmed",
-					Reason: "test reason",
+					Hash:       "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+					Status:     "confirmed",
+					Reason:     "test reason",
+					Confidence: 0.95,
 				},
 			},
 			groupRecords: []*types.ExportRecord{
 				{
-					Hash:   "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210",
-					Status: "flagged",
-					Reason: "group test reason",
+					Hash:       "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210",
+					Status:     "flagged",
+					Reason:     "group test reason",
+					Confidence: 0.85,
 				},
 			},
 			wantErr: false,
