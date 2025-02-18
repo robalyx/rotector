@@ -123,38 +123,33 @@ func (m *ReviewMenu) handleActionSelection(event *events.ComponentInteractionCre
 	userID := uint64(event.User().ID)
 	isReviewer := s.BotSettings().IsReviewer(userID)
 
+	// Check reviewer-only options
+	switch option {
+	case constants.OpenAIChatButtonCustomID,
+		constants.GroupViewLogsButtonCustomID,
+		constants.GroupConfirmWithReasonButtonCustomID,
+		constants.ReviewModeOption:
+		if !isReviewer {
+			m.layout.logger.Error("Non-reviewer attempted restricted action",
+				zap.Uint64("user_id", userID),
+				zap.String("action", option))
+			r.Error(event, "You do not have permission to perform this action.")
+			return
+		}
+	}
+
+	// Process selected option
 	switch option {
 	case constants.GroupViewMembersButtonCustomID:
 		session.PaginationPage.Set(s, 0)
 		r.Show(event, s, constants.GroupMembersPageName, "")
 	case constants.OpenAIChatButtonCustomID:
-		if !isReviewer {
-			m.layout.logger.Error("Non-reviewer attempted to open AI chat", zap.Uint64("user_id", userID))
-			r.Error(event, "You do not have permission to open the AI chat.")
-			return
-		}
 		m.handleOpenAIChat(event, s, r)
 	case constants.GroupViewLogsButtonCustomID:
-		if !isReviewer {
-			m.layout.logger.Error("Non-reviewer attempted to view logs", zap.Uint64("user_id", userID))
-			r.Error(event, "You do not have permission to view activity logs.")
-			return
-		}
 		m.handleViewGroupLogs(event, s, r)
 	case constants.GroupConfirmWithReasonButtonCustomID:
-		if !isReviewer {
-			m.layout.logger.Error("Non-reviewer attempted to use confirm with reason", zap.Uint64("user_id", userID))
-			r.Error(event, "You do not have permission to confirm groups with custom reasons.")
-			return
-		}
 		m.handleConfirmWithReason(event, r)
 	case constants.ReviewModeOption:
-		if !isReviewer {
-			m.layout.logger.Error("Non-reviewer attempted to change review mode", zap.Uint64("user_id", userID))
-			r.Error(event, "You do not have permission to change review mode.")
-			return
-		}
-
 		session.SettingType.Set(s, constants.UserSettingPrefix)
 		session.SettingCustomID.Set(s, constants.ReviewModeOption)
 		r.Show(event, s, constants.SettingUpdatePageName, "")

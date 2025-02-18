@@ -158,6 +158,23 @@ func (m *ReviewMenu) handleActionSelection(event *events.ComponentInteractionCre
 	userID := uint64(event.User().ID)
 	isReviewer := s.BotSettings().IsReviewer(userID)
 
+	// Check reviewer-only options
+	switch option {
+	case constants.OpenAIChatButtonCustomID,
+		constants.ViewUserLogsButtonCustomID,
+		constants.RecheckButtonCustomID,
+		constants.ConfirmWithReasonButtonCustomID,
+		constants.ReviewModeOption:
+		if !isReviewer {
+			m.layout.logger.Error("Non-reviewer attempted restricted action",
+				zap.Uint64("user_id", userID),
+				zap.String("action", option))
+			r.Error(event, "You do not have permission to perform this action.")
+			return
+		}
+	}
+
+	// Process selected option
 	switch option {
 	case constants.OpenFriendsMenuButtonCustomID:
 		session.PaginationPage.Set(s, 0)
@@ -169,39 +186,14 @@ func (m *ReviewMenu) handleActionSelection(event *events.ComponentInteractionCre
 		session.PaginationPage.Set(s, 0)
 		r.Show(event, s, constants.UserOutfitsPageName, "")
 	case constants.OpenAIChatButtonCustomID:
-		if !isReviewer {
-			m.layout.logger.Error("Non-reviewer attempted to open AI chat", zap.Uint64("user_id", userID))
-			r.Error(event, "You do not have permission to open the AI chat.")
-			return
-		}
 		m.handleOpenAIChat(event, s, r)
 	case constants.ViewUserLogsButtonCustomID:
-		if !isReviewer {
-			m.layout.logger.Error("Non-reviewer attempted to view logs", zap.Uint64("user_id", userID))
-			r.Error(event, "You do not have permission to view activity logs.")
-			return
-		}
 		m.handleViewUserLogs(event, s, r)
 	case constants.RecheckButtonCustomID:
-		if !isReviewer {
-			m.layout.logger.Error("Non-reviewer attempted to recheck user", zap.Uint64("user_id", userID))
-			r.Error(event, "You do not have permission to recheck users.")
-			return
-		}
 		m.handleRecheck(event, s, r)
 	case constants.ConfirmWithReasonButtonCustomID:
-		if !isReviewer {
-			m.layout.logger.Error("Non-reviewer attempted to use confirm with reason", zap.Uint64("user_id", userID))
-			r.Error(event, "You do not have permission to confirm users with custom reasons.")
-			return
-		}
 		m.handleConfirmWithReason(event, r)
 	case constants.ReviewModeOption:
-		if !isReviewer {
-			m.layout.logger.Error("Non-reviewer attempted to change review mode", zap.Uint64("user_id", userID))
-			r.Error(event, "You do not have permission to change review mode.")
-			return
-		}
 		session.SettingType.Set(s, constants.UserSettingPrefix)
 		session.SettingCustomID.Set(s, constants.ReviewModeOption)
 		r.Show(event, s, constants.SettingUpdatePageName, "")
