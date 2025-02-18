@@ -43,7 +43,7 @@ func (r *Respond) Error(event interfaces.CommonEvent, message string) {
 // Clear updates the interaction response with a clear message.
 func (r *Respond) Clear(event interfaces.CommonEvent, content string) {
 	messageUpdate := discord.NewMessageUpdateBuilder().
-		SetContent(content).
+		SetContent(utils.GetTimestampedSubtext(content)).
 		ClearEmbeds().
 		ClearFiles().
 		ClearContainerComponents().
@@ -71,6 +71,7 @@ func (r *Respond) NavigateBack(event interfaces.CommonEvent, s *session.Session,
 
 		// Navigate to the previous page
 		r.paginationManager.Show(event, s, previousPage, content)
+		s.Touch(context.Background())
 	} else {
 		r.Cancel(event, s, content)
 	}
@@ -88,12 +89,14 @@ func (r *Respond) Cancel(event interfaces.CommonEvent, s *session.Session, messa
 func (r *Respond) Reload(event interfaces.CommonEvent, s *session.Session, content string) {
 	pageName := session.CurrentPage.Get(s)
 	r.paginationManager.Show(event, s, pageName, content)
+	s.Touch(context.Background())
 	r.responded = true
 }
 
 // Show updates the Discord message with new content and components for the target page.
 func (r *Respond) Show(event interfaces.CommonEvent, s *session.Session, pageName, content string) {
 	r.paginationManager.Show(event, s, pageName, content)
+	s.Touch(context.Background())
 	r.responded = true
 }
 

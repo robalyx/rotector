@@ -64,6 +64,7 @@ func init() { //nolint:funlen
 			(*types.DiscordBan)(nil),
 			(*types.VoteStats)(nil),
 			(*types.MaterializedViewRefresh)(nil),
+			(*types.UserConsent)(nil),
 		}
 
 		for _, model := range models {
@@ -95,6 +96,7 @@ func init() { //nolint:funlen
 			(*types.BotSetting)(nil),
 			(*types.UserSetting)(nil),
 			(*types.HourlyStats)(nil),
+			(*types.UserConsent)(nil),
 		}
 
 		for _, model := range models {

@@ -19,6 +19,7 @@ type Repository struct {
 	reputation *models.ReputationModel
 	votes      *models.VoteModel
 	views      *models.MaterializedViewModel
+	consent    *models.ConsentModel
 }
 
 // NewRepository creates a new repository instance with all models.
@@ -31,6 +32,7 @@ func NewRepository(db *bun.DB, logger *zap.Logger) *Repository {
 	tracking := models.NewTracking(db, logger)
 	users := models.NewUser(db, tracking, activities, reputation, votes, logger)
 	groups := models.NewGroup(db, activities, reputation, votes, logger)
+	consent := models.NewConsent(db, logger)
 
 	return &Repository{
 		users:      users,
@@ -44,6 +46,7 @@ func NewRepository(db *bun.DB, logger *zap.Logger) *Repository {
 		reputation: reputation,
 		votes:      votes,
 		views:      views,
+		consent:    consent,
 	}
 }
 
@@ -100,4 +103,9 @@ func (r *Repository) Votes() *models.VoteModel {
 // Views returns the materialized views model repository.
 func (r *Repository) Views() *models.MaterializedViewModel {
 	return r.views
+}
+
+// Consent returns the consent model repository.
+func (r *Repository) Consent() *models.ConsentModel {
+	return r.consent
 }

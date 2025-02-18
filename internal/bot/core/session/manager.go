@@ -64,13 +64,12 @@ func NewManager(db database.Client, redisManager *redis.Manager, logger *zap.Log
 }
 
 // GetOrCreateSession loads or initializes a session for a given user.
-// New sessions are populated with user settings from the database.
-// Existing sessions are refreshed with the latest user settings.
-func (m *Manager) GetOrCreateSession(ctx context.Context, userID snowflake.ID) (*Session, error) {
+// Returns the session and a boolean indicating if it's a new session.
+func (m *Manager) GetOrCreateSession(ctx context.Context, userID snowflake.ID) (*Session, bool, error) {
 	// Load bot settings
 	botSettings, err := m.db.Models().Settings().GetBotSettings(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("%w: %w", ErrFailedToLoadSettings, err)
+		return nil, false, fmt.Errorf("%w: %w", ErrFailedToLoadSettings, err)
 	}
 
 	// Try loading existing session first
@@ -82,42 +81,42 @@ func (m *Manager) GetOrCreateSession(ctx context.Context, userID snowflake.ID) (
 	if !sessionExists && botSettings.SessionLimit > 0 && !botSettings.IsAdmin(uint64(userID)) {
 		activeCount, err := m.GetActiveSessionCount(ctx)
 		if err != nil {
-			return nil, fmt.Errorf("%w: %w", ErrFailedToGetCount, err)
+			return nil, false, fmt.Errorf("%w: %w", ErrFailedToGetCount, err)
 		}
 
 		if activeCount >= botSettings.SessionLimit {
 			m.logger.Debug("Session limit reached",
 				zap.Uint64("active_count", activeCount),
 				zap.Uint64("limit", botSettings.SessionLimit))
-			return nil, ErrSessionLimitReached
+			return nil, false, ErrSessionLimitReached
 		}
 	}
 
 	// Load user settings
 	userSettings, err := m.db.Models().Settings().GetUserSettings(ctx, userID)
 	if err != nil {
-		return nil, fmt.Errorf("%w: %w", ErrFailedToLoadSettings, err)
+		return nil, false, fmt.Errorf("%w: %w", ErrFailedToLoadSettings, err)
 	}
 
 	// If session exists, update it
 	if sessionExists {
 		data, err := result.AsBytes()
 		if err != nil {
-			return nil, fmt.Errorf("%w: %w", ErrFailedToGetSession, err)
+			return nil, false, fmt.Errorf("%w: %w", ErrFailedToGetSession, err)
 		}
 
 		var sessionData map[string]interface{}
 		if err := sonic.Unmarshal(data, &sessionData); err != nil {
-			return nil, fmt.Errorf("%w: %w", ErrFailedToParseSession, err)
+			return nil, false, fmt.Errorf("%w: %w", ErrFailedToParseSession, err)
 		}
 
 		session := NewSession(userSettings, botSettings, m.db, m.redis, key, sessionData, m.logger, uint64(userID))
-		return session, nil
+		return session, false, nil
 	}
 
 	// Initialize new session with fresh settings
 	session := NewSession(userSettings, botSettings, m.db, m.redis, key, make(map[string]interface{}), m.logger, uint64(userID))
-	return session, nil
+	return session, true, nil
 }
 
 // CloseSession removes a user's session from Redis immediately rather than

@@ -26,6 +26,7 @@ import (
 	"github.com/robalyx/rotector/internal/bot/menu/ban"
 	"github.com/robalyx/rotector/internal/bot/menu/captcha"
 	"github.com/robalyx/rotector/internal/bot/menu/chat"
+	"github.com/robalyx/rotector/internal/bot/menu/consent"
 	"github.com/robalyx/rotector/internal/bot/menu/dashboard"
 	"github.com/robalyx/rotector/internal/bot/menu/leaderboard"
 	"github.com/robalyx/rotector/internal/bot/menu/log"
@@ -114,6 +115,7 @@ func New(app *setup.App) (*Bot, error) {
 	leaderboardLayout := leaderboard.New(app, client)
 	statusLayout := status.New(app)
 	dashboardLayout := dashboard.New(app, sessionManager)
+	consentLayout := consent.New(app)
 	banLayout := ban.New(app, sessionManager)
 
 	paginationManager.AddPages(settingLayout.Pages())
@@ -128,6 +130,7 @@ func New(app *setup.App) (*Bot, error) {
 	paginationManager.AddPages(leaderboardLayout.Pages())
 	paginationManager.AddPages(statusLayout.Pages())
 	paginationManager.AddPages(dashboardLayout.Pages())
+	paginationManager.AddPages(consentLayout.Pages())
 	paginationManager.AddPages(banLayout.Pages())
 
 	return b, nil
@@ -200,13 +203,18 @@ func (b *Bot) handleApplicationCommandInteraction(event *events.ApplicationComma
 		}()
 
 		// Validate session but return early if session creation failed or session expired
-		s, ok := b.validateAndGetSession(event, event.User().ID)
+		s, isNewSession, ok := b.validateAndGetSession(event, event.User().ID)
 		if !ok {
 			return
 		}
 
 		// Check if user is banned
 		if b.checkBanStatus(event, s, event.User().ID, false) {
+			return
+		}
+
+		// Check consent for new sessions
+		if isNewSession && b.checkConsentStatus(event, s) {
 			return
 		}
 
@@ -248,7 +256,7 @@ func (b *Bot) handleComponentInteraction(event *events.ComponentInteractionCreat
 		}()
 
 		// Validate session but return early if session creation failed or session expired
-		s, ok := b.validateAndGetSession(event, event.User().ID)
+		s, isNewSession, ok := b.validateAndGetSession(event, event.User().ID)
 		if !ok {
 			return
 		}
@@ -290,6 +298,11 @@ func (b *Bot) handleComponentInteraction(event *events.ComponentInteractionCreat
 			return
 		}
 
+		// Check consent for new sessions
+		if isNewSession && b.checkConsentStatus(event, s) {
+			return
+		}
+
 		// Check if the session has a valid current page
 		if page == nil {
 			// If no valid page exists, reset to dashboard
@@ -310,7 +323,6 @@ func (b *Bot) handleComponentInteraction(event *events.ComponentInteractionCreat
 
 		// Handle interaction and update session
 		b.paginationManager.HandleInteraction(event, s)
-		s.Touch(context.Background())
 	}()
 }
 
@@ -352,13 +364,18 @@ func (b *Bot) handleModalSubmit(event *events.ModalSubmitInteractionCreate) {
 		}()
 
 		// Validate session but return early if session creation failed or session expired
-		s, ok := b.validateAndGetSession(event, event.User().ID)
+		s, isNewSession, ok := b.validateAndGetSession(event, event.User().ID)
 		if !ok {
 			return
 		}
 
 		// Check if user is banned
 		if b.checkBanStatus(event, s, event.User().ID, true) {
+			return
+		}
+
+		// Check consent for new sessions
+		if isNewSession && b.checkConsentStatus(event, s) {
 			return
 		}
 
@@ -373,7 +390,6 @@ func (b *Bot) handleModalSubmit(event *events.ModalSubmitInteractionCreate) {
 
 		// Handle submission and update session
 		b.paginationManager.HandleInteraction(event, s)
-		s.Touch(context.Background())
 	}()
 }
 
@@ -405,10 +421,29 @@ func (b *Bot) checkBanStatus(event interfaces.CommonEvent, s *session.Session, u
 	return true
 }
 
+// checkConsentStatus checks if a user has consented and shows the consent menu if not.
+// Returns true if the user needs to consent (hasn't consented yet).
+func (b *Bot) checkConsentStatus(event interfaces.CommonEvent, s *session.Session) bool {
+	hasConsented, err := b.db.Models().Consent().HasConsented(context.Background(), uint64(event.User().ID))
+	if err != nil {
+		b.logger.Error("Failed to check consent status", zap.Error(err))
+		return true
+	}
+
+	if !hasConsented {
+		// Show consent menu first
+		b.paginationManager.Show(event, s, constants.ConsentPageName, "")
+		s.Touch(context.Background())
+		return true
+	}
+
+	return false
+}
+
 // validateAndGetSession retrieves or creates a session for the given user and validates its state.
-func (b *Bot) validateAndGetSession(event interfaces.CommonEvent, userID snowflake.ID) (*session.Session, bool) {
+func (b *Bot) validateAndGetSession(event interfaces.CommonEvent, userID snowflake.ID) (*session.Session, bool, bool) {
 	// Get or create user session
-	s, err := b.sessionManager.GetOrCreateSession(context.Background(), userID)
+	s, isNewSession, err := b.sessionManager.GetOrCreateSession(context.Background(), userID)
 	if err != nil {
 		if errors.Is(err, session.ErrSessionLimitReached) {
 			b.paginationManager.RespondWithError(event, "Session limit reached. Please try again later.")
@@ -416,8 +451,8 @@ func (b *Bot) validateAndGetSession(event interfaces.CommonEvent, userID snowfla
 			b.logger.Error("Failed to get or create session", zap.Error(err))
 			b.paginationManager.RespondWithError(event, "Failed to get or create session.")
 		}
-		return nil, false
+		return nil, false, false
 	}
 
-	return s, true
+	return s, isNewSession, true
 }

@@ -22,6 +22,7 @@ const (
 // Page Names.
 const (
 	DashboardPageName = "Dashboard"
+	ConsentPageName   = "Terms of Service"
 
 	GroupReviewPageName  = "Group Review"
 	GroupMembersPageName = "Group Members"
@@ -71,6 +72,56 @@ const (
 	LookupUserInputCustomID  = "lookup_user_input"
 	LookupGroupModalCustomID = "lookup_group_modal"
 	LookupGroupInputCustomID = "lookup_group_input"
+)
+
+// Consent Menu.
+const (
+	ConsentAcceptButtonCustomID = "consent_accept"
+	ConsentRejectButtonCustomID = "consent_reject"
+
+	TermsOfServiceText = `Before using Rotector, please read and accept our Terms of Service:
+
+1. Purpose & Eligibility
+   - Rotector is designed to help moderate Roblox content for child safety
+   - You confirm that you are at least 18 years old
+   - You agree to provide accurate information about your identity
+   - You understand this is a serious moderation tool, not a game
+
+2. User Responsibilities
+   - You will use the bot responsibly and ethically
+   - You will maintain strict confidentiality of sensitive information
+   - You will not share access or information with unauthorized users
+   - You will report bugs, security issues, and suspicious content immediately
+   - You will make moderation decisions carefully and impartially
+   - You will not use the bot for harassment or personal gain
+   - You understand the critical nature of child safety moderation
+
+3. Data Collection & Privacy
+   - We collect and store Discord user IDs
+   - We track all user actions for accountability
+   - We may collect age verification information
+   - We may share violation data with relevant authorities
+   - You agree to our data collection and monitoring practices
+
+4. Liability & Disclaimer
+   - The bot is provided "as is" without warranty
+   - We are not liable for any damages or losses
+   - You accept full responsibility for your moderation decisions
+   - You agree to indemnify us against claims arising from your actions
+   - Technical issues may impact service availability
+
+5. Termination & Enforcement
+   - We reserve the right to terminate access at any time
+   - Violations may result in permanent ban without notice
+   - False age verification will result in immediate ban
+   - Abuse of the system will result in permanent ban
+   - We may report serious violations to relevant authorities
+
+By clicking Accept, you:
+- Confirm you are at least 18 years old
+- Understand the serious responsibility of child safety moderation
+- Accept all terms and conditions listed above
+- Agree to be bound by these terms of service`
 )
 
 // Common Review Menu.
