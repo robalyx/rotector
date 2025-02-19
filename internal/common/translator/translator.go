@@ -2,19 +2,10 @@ package translator
 
 import (
 	"context"
-	"errors"
-	"fmt"
-	"io"
-	"net/http"
-	"strconv"
 	"strings"
 
-	"github.com/bytedance/sonic"
 	"github.com/jaxron/axonet/pkg/client"
 )
-
-// ErrInvalidBinary is returned when the binary input is malformed or incomplete.
-var ErrInvalidBinary = errors.New("invalid binary string")
 
 // Translator handles text translation between different formats.
 type Translator struct {
@@ -54,14 +45,14 @@ func (t *Translator) Translate(ctx context.Context, input, sourceLang, targetLan
 	lines := strings.Split(strings.TrimSpace(input), "\n")
 	var result strings.Builder
 
-	// First pass: translate morse and binary segments
+	// First pass: translate morse, binary, and caesar cipher segments
 	for i, line := range lines {
 		if i > 0 {
 			result.WriteString("\n")
 		}
 
 		// Split line into segments based on format boundaries
-		segments := t.splitIntoSegments(line)
+		segments := splitIntoSegments(line)
 
 		// Translate each segment
 		for j, segment := range segments {
@@ -69,7 +60,7 @@ func (t *Translator) Translate(ctx context.Context, input, sourceLang, targetLan
 				result.WriteString(" ")
 			}
 
-			// Translate morse and binary segments
+			// Translate morse, binary, and caesar segments
 			segment = strings.TrimSpace(segment)
 			if segment == "" {
 				continue
@@ -103,104 +94,9 @@ func (t *Translator) Translate(ctx context.Context, input, sourceLang, targetLan
 	return result.String(), nil
 }
 
-// TranslateLanguage translates text between natural languages using Google Translate API.
-// sourceLang and targetLang should be ISO 639-1 language codes (e.g., "en" for English).
-// Returns the original text for simple content, otherwise returns the translated text.
-func (t *Translator) TranslateLanguage(ctx context.Context, text, sourceLang, targetLang string) (string, error) {
-	// Send request to Google Translate API
-	resp, err := t.client.NewRequest().
-		Method(http.MethodGet).
-		URL("https://translate.google.com/translate_a/single").
-		Query("client", "gtx").
-		Query("sl", sourceLang).
-		Query("tl", targetLang).
-		Query("dt", "t").
-		Query("q", text).
-		Do(ctx)
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-
-	// Read and parse the response
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", err
-	}
-
-	var result []interface{}
-	if err := sonic.Unmarshal(body, &result); err != nil {
-		return "", err
-	}
-
-	// Extract translated text from the response
-	var translatedText strings.Builder
-	for _, slice := range result[0].([]interface{}) {
-		translatedText.WriteString(slice.([]interface{})[0].(string))
-	}
-
-	return translatedText.String(), nil
-}
-
-// TranslateMorse converts Morse code to text.
-func (t *Translator) TranslateMorse(morse string) string {
-	var result strings.Builder
-
-	// Split into words by forward slash
-	words := strings.Split(morse, "/")
-
-	for i, word := range words {
-		if i > 0 {
-			result.WriteString(" ")
-		}
-
-		// Process each letter in the word
-		word = strings.TrimSpace(word)
-		letters := strings.Split(word, " ")
-
-		for _, letter := range letters {
-			letter = strings.TrimSpace(letter)
-			if letter == "" {
-				continue
-			}
-			if text, ok := t.morseToText[letter]; ok {
-				result.WriteString(text)
-			}
-		}
-	}
-
-	return result.String()
-}
-
-// TranslateBinary converts binary strings to text.
-// Input should be space-separated 8-bit binary sequences.
-// Each sequence is converted to its ASCII character representation.
-func (t *Translator) TranslateBinary(binary string) (string, error) {
-	// Remove all spaces
-	binary = strings.ReplaceAll(binary, " ", "")
-
-	var result strings.Builder
-	// Process 8 bits at a time
-	for i := 0; i < len(binary); i += 8 {
-		if i+8 > len(binary) {
-			return "", fmt.Errorf("%w: incomplete byte", ErrInvalidBinary)
-		}
-
-		// Convert binary byte to character
-		num, err := strconv.ParseUint(binary[i:i+8], 2, 8)
-		if err != nil {
-			return "", err
-		}
-
-		result.WriteRune(rune(num))
-	}
-
-	return result.String(), nil
-}
-
 // splitIntoSegments splits a line into segments based on format boundaries.
 // Spaces between segments are preserved in the output.
-func (t *Translator) splitIntoSegments(line string) []string {
+func splitIntoSegments(line string) []string {
 	var segments []string
 	var currentSegment strings.Builder
 	words := strings.Fields(line)
@@ -232,38 +128,8 @@ func (t *Translator) splitIntoSegments(line string) []string {
 	return segments
 }
 
-// isMorseFormat checks if text appears to be in Morse code format.
-func isMorseFormat(text string) bool {
-	// Check if text contains only valid morse characters
-	cleaned := strings.Map(func(r rune) rune {
-		switch r {
-		case '.', '-', '/', ' ':
-			return -1
-		default:
-			return r
-		}
-	}, text)
-
-	return cleaned == "" && (strings.Contains(text, ".") || strings.Contains(text, "-"))
-}
-
-// isBinaryFormat checks if text appears to be in binary format.
-func isBinaryFormat(text string) bool {
-	// Remove spaces and check for valid binary string
-	cleaned := strings.ReplaceAll(text, " ", "")
-	if len(cleaned)%8 != 0 {
-		return false
-	}
-
-	return strings.IndexFunc(cleaned, func(r rune) bool {
-		return r != '0' && r != '1'
-	}) == -1
-}
-
 // shouldSkipTranslation checks if the content is too simple or formatted in a way
 // that doesn't require translation.
-// Returns true for content with 3 or fewer characters, "[ Content Deleted ]",
-// or content with repeated characters (e.g., "####" or "----").
 func shouldSkipTranslation(text string) bool {
 	// Skip short content
 	if len(text) <= 4 {

@@ -69,7 +69,6 @@ Key rules:
 Look for:
 - Coded language for inappropriate activities
 - Leading phrases implying secrecy
-- Suspicious "fun" or "good times" offers 
 - Inappropriate game/chat/studio invitations
 - Condo/con references
 - "Exclusive" group invitations
@@ -82,11 +81,10 @@ Look for:
 - Non-consensual references
 - Friend requests with inappropriate context
 - Claims of following TOS/rules to avoid detection
-- Off-platform communication attempts
+- Mentions of Telegram/"blue app" for off-platform chat
 - Age-restricted invitations
 - Modified app references
 - Inappropriate roleplay requests
-- Asking follow for follow
 - Control dynamics
 - Service-oriented grooming
 - Gender-specific minor targeting
@@ -106,10 +104,20 @@ Ignore:
 - Empty descriptions
 - Emoji usage
 - Gaming preferences
+- Non-inappropriate content
 - Non-sexual roleplay
 - General social interactions
+- Age mentions
+- Compliments on outfits/avatars
+- Any follow or friend making requests
+- Advertisements to join games, communities, channels, tournaments, etc.
+- Off-platform handles without inappropriate context
+- Friend making attempts without inappropriate context
 - Gender identity expression
-- Age mentions`
+- Bypass of appropriate terms
+- Self-harm or suicide-related content
+- Violence, gore, or disturbing content
+- Sharing of personal information`
 
 	// UserRequestPrompt provides a reminder to follow system guidelines for user analysis.
 	UserRequestPrompt = `Analyze these user profiles for predatory content targeting minors.

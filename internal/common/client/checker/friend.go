@@ -105,7 +105,7 @@ func (c *FriendChecker) ProcessUsers(userInfos []*fetcher.Info, flaggedUsers map
 		confidence := c.calculateConfidence(confirmedCount, flaggedCount, len(userInfo.Friends.Data))
 
 		// Flag user if confidence exceeds threshold
-		if confidence >= 0.55 {
+		if confidence >= 0.50 {
 			reason := reasons[userInfo.ID]
 			if reason == "" {
 				// Fallback to default reason format if AI generation failed
