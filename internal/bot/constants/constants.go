@@ -46,6 +46,7 @@ const (
 
 	BanPageName           = "Ban Information"
 	CaptchaPageName       = "CAPTCHA Verification"
+	TimeoutPageName       = "Timeout"
 	ChatPageName          = "AI Chat"
 	LeaderboardPageName   = "Leaderboard"
 	LogPageName           = "Activity Logs"
@@ -321,6 +322,13 @@ const (
 	CaptchaRefreshButtonCustomID = "captcha_refresh"
 	CaptchaAnswerModalCustomID   = "captcha_answer_modal"
 	CaptchaAnswerInputCustomID   = "captcha_answer_input"
+)
+
+// Timeout Menu.
+const (
+	MaxReviewsBeforeBreak = 50               // Maximum reviews before requiring a break
+	MinBreakDuration      = 15 * time.Minute // Minimum break duration
+	ReviewSessionWindow   = 4 * time.Hour    // Window to track review count
 )
 
 // Admin Menu.

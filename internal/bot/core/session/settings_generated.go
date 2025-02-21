@@ -34,8 +34,14 @@ var (
 	UserChatMessageUsageFirstMessageTime = NewUserSettingKey[time.Time]("ChatMessageUsage.FirstMessageTime")
 	// ChatMessageUsageMessageCount tracks message count in 24h period
 	UserChatMessageUsageMessageCount = NewUserSettingKey[int]("ChatMessageUsage.MessageCount")
-	// CaptchaUsageReviewCount tracks reviews since last CAPTCHA
-	UserCaptchaUsageReviewCount = NewUserSettingKey[int]("CaptchaUsage.ReviewCount")
+	// CaptchaUsageCaptchaReviewCount tracks reviews since last CAPTCHA
+	UserCaptchaUsageCaptchaReviewCount = NewUserSettingKey[int]("CaptchaUsage.CaptchaReviewCount")
+	// ReviewBreakNextReviewTime tracks when user can resume reviewing
+	UserReviewBreakNextReviewTime = NewUserSettingKey[time.Time]("ReviewBreak.NextReviewTime")
+	// ReviewBreakSessionReviews tracks reviews in current session
+	UserReviewBreakSessionReviews = NewUserSettingKey[int]("ReviewBreak.SessionReviews")
+	// ReviewBreakSessionStartTime tracks when review session started
+	UserReviewBreakSessionStartTime = NewUserSettingKey[time.Time]("ReviewBreak.SessionStartTime")
 
 	// ReviewerIDs stores authorized reviewer IDs
 	BotReviewerIDs = NewBotSettingKey[[]uint64]("ReviewerIDs")

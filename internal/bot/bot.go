@@ -36,6 +36,7 @@ import (
 	"github.com/robalyx/rotector/internal/bot/menu/reviewer"
 	"github.com/robalyx/rotector/internal/bot/menu/setting"
 	"github.com/robalyx/rotector/internal/bot/menu/status"
+	"github.com/robalyx/rotector/internal/bot/menu/timeout"
 	"github.com/robalyx/rotector/internal/bot/utils"
 	"github.com/robalyx/rotector/internal/common/setup"
 	"github.com/robalyx/rotector/internal/common/storage/database"
@@ -108,6 +109,7 @@ func New(app *setup.App) (*Bot, error) {
 	logLayout := log.New(app)
 	chatLayout := chat.New(app)
 	captchaLayout := captcha.New(app)
+	timeoutLayout := timeout.New(app)
 	userReviewLayout := userReview.New(app, paginationManager)
 	groupReviewLayout := groupReview.New(app, paginationManager)
 	queueLayout := queue.New(app)
@@ -124,6 +126,7 @@ func New(app *setup.App) (*Bot, error) {
 	paginationManager.AddPages(logLayout.Pages())
 	paginationManager.AddPages(chatLayout.Pages())
 	paginationManager.AddPages(captchaLayout.Pages())
+	paginationManager.AddPages(timeoutLayout.Pages())
 	paginationManager.AddPages(userReviewLayout.Pages())
 	paginationManager.AddPages(groupReviewLayout.Pages())
 	paginationManager.AddPages(queueLayout.Pages())

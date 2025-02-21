@@ -22,8 +22,9 @@ import (
 	"go.uber.org/zap"
 )
 
-// ReviewMenu handles the main review interface where moderators can view and take
-// action on flagged groups.
+var ErrBreakRequired = errors.New("break required")
+
+// ReviewMenu handles the display and interaction logic for the review interface.
 type ReviewMenu struct {
 	layout *Layout
 	page   *pagination.Page
@@ -57,10 +58,13 @@ func (m *ReviewMenu) Show(event interfaces.CommonEvent, s *session.Session, r *p
 	if group == nil {
 		var isBanned bool
 		var err error
-		group, isBanned, err = m.fetchNewTarget(event, s, uint64(event.User().ID))
+		group, isBanned, err = m.fetchNewTarget(event, s, r)
 		if err != nil {
 			if errors.Is(err, types.ErrNoGroupsToReview) {
 				r.Cancel(event, s, "No groups to review. Please check back later.")
+				return
+			}
+			if errors.Is(err, ErrBreakRequired) {
 				return
 			}
 			m.layout.logger.Error("Failed to fetch a new group", zap.Error(err))
@@ -158,50 +162,6 @@ func (m *ReviewMenu) handleActionSelection(event *events.ComponentInteractionCre
 		session.SettingCustomID.Set(s, constants.ReviewTargetModeOption)
 		r.Show(event, s, constants.SettingUpdatePageName, "")
 	}
-}
-
-// fetchNewTarget gets a new group to review based on the current sort order.
-func (m *ReviewMenu) fetchNewTarget(event interfaces.CommonEvent, s *session.Session, reviewerID uint64) (*types.ReviewGroup, bool, error) {
-	// Check if user is banned for low accuracy
-	isBanned, err := m.layout.db.Models().Votes().CheckVoteAccuracy(context.Background(), uint64(event.User().ID))
-	if err != nil {
-		m.layout.logger.Error("Failed to check vote accuracy",
-			zap.Error(err),
-			zap.Uint64("user_id", uint64(event.User().ID)))
-		// Continue anyway - not a big requirement
-	}
-
-	// Get the next group to review
-	defaultSort := session.UserGroupDefaultSort.Get(s)
-	reviewTargetMode := session.UserReviewTargetMode.Get(s)
-
-	group, err := m.layout.db.Models().Groups().GetGroupToReview(context.Background(), defaultSort, reviewTargetMode, reviewerID)
-	if err != nil {
-		return nil, isBanned, err
-	}
-
-	// Get flagged users from tracking
-	flaggedUsers, err := m.layout.db.Models().Tracking().GetFlaggedUsers(context.Background(), group.ID)
-	if err != nil {
-		return nil, isBanned, err
-	}
-
-	// Store the group and flagged users in session
-	session.GroupTarget.Set(s, group)
-	session.GroupMemberIDs.Set(s, flaggedUsers)
-
-	// Log the view action
-	go m.layout.db.Models().Activities().Log(context.Background(), &types.ActivityLog{
-		ActivityTarget: types.ActivityTarget{
-			GroupID: group.ID,
-		},
-		ReviewerID:        reviewerID,
-		ActivityType:      enum.ActivityTypeGroupViewed,
-		ActivityTimestamp: time.Now(),
-		Details:           map[string]interface{}{},
-	})
-
-	return group, isBanned, nil
 }
 
 // handleButton processes button clicks.
@@ -534,15 +494,17 @@ func (m *ReviewMenu) handleSkipGroup(event interfaces.CommonEvent, s *session.Se
 
 	// Log the skip action
 	group := session.GroupTarget.Get(s)
-	m.layout.db.Models().Activities().Log(context.Background(), &types.ActivityLog{
-		ActivityTarget: types.ActivityTarget{
-			GroupID: group.ID,
-		},
-		ReviewerID:        uint64(event.User().ID),
-		ActivityType:      enum.ActivityTypeGroupSkipped,
-		ActivityTimestamp: time.Now(),
-		Details:           map[string]interface{}{},
-	})
+	if group != nil {
+		m.layout.db.Models().Activities().Log(context.Background(), &types.ActivityLog{
+			ActivityTarget: types.ActivityTarget{
+				GroupID: group.ID,
+			},
+			ReviewerID:        uint64(event.User().ID),
+			ActivityType:      enum.ActivityTypeGroupSkipped,
+			ActivityTimestamp: time.Now(),
+			Details:           map[string]interface{}{},
+		})
+	}
 }
 
 // handleConfirmWithReasonModalSubmit processes the custom confirm reason from the modal.
@@ -599,6 +561,92 @@ func (m *ReviewMenu) handleConfirmWithReasonModalSubmit(event *events.ModalSubmi
 			"confidence": group.Confidence,
 		},
 	})
+}
+
+// fetchNewTarget gets a new group to review based on the current sort order.
+func (m *ReviewMenu) fetchNewTarget(event interfaces.CommonEvent, s *session.Session, r *pagination.Respond) (*types.ReviewGroup, bool, error) {
+	if m.checkBreakRequired(event, s, r) {
+		return nil, false, ErrBreakRequired
+	}
+
+	// Check if user is banned for low accuracy
+	isBanned, err := m.layout.db.Models().Votes().CheckVoteAccuracy(context.Background(), uint64(event.User().ID))
+	if err != nil {
+		m.layout.logger.Error("Failed to check vote accuracy",
+			zap.Error(err),
+			zap.Uint64("user_id", uint64(event.User().ID)))
+		// Continue anyway - not a big requirement
+	}
+
+	// Get the next group to review
+	reviewerID := uint64(event.User().ID)
+	defaultSort := session.UserGroupDefaultSort.Get(s)
+	reviewTargetMode := session.UserReviewTargetMode.Get(s)
+
+	group, err := m.layout.db.Models().Groups().GetGroupToReview(context.Background(), defaultSort, reviewTargetMode, reviewerID)
+	if err != nil {
+		return nil, isBanned, err
+	}
+
+	// Get flagged users from tracking
+	flaggedUsers, err := m.layout.db.Models().Tracking().GetFlaggedUsers(context.Background(), group.ID)
+	if err != nil {
+		return nil, isBanned, err
+	}
+
+	// Store the group and flagged users in session
+	session.GroupTarget.Set(s, group)
+	session.GroupMemberIDs.Set(s, flaggedUsers)
+
+	// Log the view action
+	go m.layout.db.Models().Activities().Log(context.Background(), &types.ActivityLog{
+		ActivityTarget: types.ActivityTarget{
+			GroupID: group.ID,
+		},
+		ReviewerID:        reviewerID,
+		ActivityType:      enum.ActivityTypeGroupViewed,
+		ActivityTimestamp: time.Now(),
+		Details:           map[string]interface{}{},
+	})
+
+	return group, isBanned, nil
+}
+
+// checkBreakRequired checks if a break is needed.
+func (m *ReviewMenu) checkBreakRequired(event interfaces.CommonEvent, s *session.Session, r *pagination.Respond) bool {
+	// Check if user needs a break
+	nextReviewTime := session.UserReviewBreakNextReviewTime.Get(s)
+	if !nextReviewTime.IsZero() && time.Now().Before(nextReviewTime) {
+		// Show timeout menu if break time hasn't passed
+		r.Show(event, s, constants.TimeoutPageName, "")
+		return true
+	}
+
+	// Check review count
+	sessionReviews := session.UserReviewBreakSessionReviews.Get(s)
+	sessionStartTime := session.UserReviewBreakSessionStartTime.Get(s)
+
+	// Reset count if outside window
+	if time.Since(sessionStartTime) > constants.ReviewSessionWindow {
+		sessionReviews = 0
+		sessionStartTime = time.Now()
+		session.UserReviewBreakSessionStartTime.Set(s, sessionStartTime)
+	}
+
+	// Check if break needed
+	if sessionReviews >= constants.MaxReviewsBeforeBreak {
+		nextTime := time.Now().Add(constants.MinBreakDuration)
+		session.UserReviewBreakSessionStartTime.Set(s, nextTime)
+		session.UserReviewBreakNextReviewTime.Set(s, nextTime)
+		session.UserReviewBreakSessionReviews.Set(s, 0) // Reset count
+		r.Show(event, s, constants.TimeoutPageName, "")
+		return true
+	}
+
+	// Increment review count
+	session.UserReviewBreakSessionReviews.Set(s, sessionReviews+1)
+
+	return false
 }
 
 // checkCaptchaRequired checks if CAPTCHA verification is needed.

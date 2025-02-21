@@ -116,7 +116,7 @@ func (m *Menu) handleModal(event *events.ModalSubmitInteractionCreate, s *sessio
 	}
 
 	// Reset reviews counter
-	session.UserCaptchaUsageReviewCount.Set(s, 0)
+	session.UserCaptchaUsageCaptchaReviewCount.Set(s, 0)
 
 	// Return to previous page
 	r.NavigateBack(event, s, "✅ CAPTCHA verified successfully!")

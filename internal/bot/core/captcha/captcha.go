@@ -57,8 +57,8 @@ func (m *Manager) GenerateImage() ([]byte, *bytes.Buffer, error) {
 func (m *Manager) IncrementReviewCounter(s *session.Session) error {
 	// Only increment for non-reviewers in training mode
 	if !s.BotSettings().IsReviewer(s.UserID()) && session.UserReviewMode.Get(s) == enum.ReviewModeTraining {
-		reviewCount := session.UserCaptchaUsageReviewCount.Get(s)
-		session.UserCaptchaUsageReviewCount.Set(s, reviewCount+1)
+		reviewCount := session.UserCaptchaUsageCaptchaReviewCount.Get(s)
+		session.UserCaptchaUsageCaptchaReviewCount.Set(s, reviewCount+1)
 	}
 	return nil
 }
@@ -67,5 +67,5 @@ func (m *Manager) IncrementReviewCounter(s *session.Session) error {
 func (m *Manager) IsRequired(s *session.Session) bool {
 	return session.UserReviewMode.Get(s) == enum.ReviewModeTraining &&
 		!s.BotSettings().IsReviewer(s.UserID()) &&
-		session.UserCaptchaUsageReviewCount.Get(s) >= 10
+		session.UserCaptchaUsageCaptchaReviewCount.Get(s) >= 10
 }

@@ -23,6 +23,8 @@ import (
 	"go.uber.org/zap"
 )
 
+var ErrBreakRequired = errors.New("break required")
+
 // ReviewMenu handles the display and interaction logic for the review interface.
 type ReviewMenu struct {
 	layout *Layout
@@ -57,10 +59,13 @@ func (m *ReviewMenu) Show(event interfaces.CommonEvent, s *session.Session, r *p
 	if user == nil {
 		var isBanned bool
 		var err error
-		user, isBanned, err = m.fetchNewTarget(event, s, uint64(event.User().ID))
+		user, isBanned, err = m.fetchNewTarget(event, s, r)
 		if err != nil {
 			if errors.Is(err, types.ErrNoUsersToReview) {
 				r.Cancel(event, s, "No users to review. Please check back later.")
+				return
+			}
+			if errors.Is(err, ErrBreakRequired) {
 				return
 			}
 			m.layout.logger.Error("Failed to fetch a new user", zap.Error(err))
@@ -532,16 +537,17 @@ func (m *ReviewMenu) handleSkipUser(event interfaces.CommonEvent, s *session.Ses
 
 	// Log the skip action
 	user := session.UserTarget.Get(s)
-
-	m.layout.db.Models().Activities().Log(context.Background(), &types.ActivityLog{
-		ActivityTarget: types.ActivityTarget{
-			UserID: user.ID,
-		},
-		ReviewerID:        uint64(event.User().ID),
-		ActivityType:      enum.ActivityTypeUserSkipped,
-		ActivityTimestamp: time.Now(),
-		Details:           map[string]interface{}{},
-	})
+	if user != nil {
+		m.layout.db.Models().Activities().Log(context.Background(), &types.ActivityLog{
+			ActivityTarget: types.ActivityTarget{
+				UserID: user.ID,
+			},
+			ReviewerID:        uint64(event.User().ID),
+			ActivityType:      enum.ActivityTypeUserSkipped,
+			ActivityTimestamp: time.Now(),
+			Details:           map[string]interface{}{},
+		})
+	}
 }
 
 // handleOpenAIChat handles the button to open the AI chat for the current user.
@@ -732,7 +738,11 @@ func (m *ReviewMenu) handleConfirmWithReasonModalSubmit(event *events.ModalSubmi
 }
 
 // fetchNewTarget gets a new user to review based on the current sort order.
-func (m *ReviewMenu) fetchNewTarget(event interfaces.CommonEvent, s *session.Session, reviewerID uint64) (*types.ReviewUser, bool, error) {
+func (m *ReviewMenu) fetchNewTarget(event interfaces.CommonEvent, s *session.Session, r *pagination.Respond) (*types.ReviewUser, bool, error) {
+	if m.checkBreakRequired(event, s, r) {
+		return nil, false, ErrBreakRequired
+	}
+
 	// Check if user is banned for low accuracy
 	isBanned, err := m.layout.db.Models().Votes().CheckVoteAccuracy(context.Background(), uint64(event.User().ID))
 	if err != nil {
@@ -743,6 +753,7 @@ func (m *ReviewMenu) fetchNewTarget(event interfaces.CommonEvent, s *session.Ses
 	}
 
 	// Get the next user to review
+	reviewerID := uint64(event.User().ID)
 	defaultSort := session.UserUserDefaultSort.Get(s)
 	reviewTargetMode := session.UserReviewTargetMode.Get(s)
 
@@ -766,6 +777,43 @@ func (m *ReviewMenu) fetchNewTarget(event interfaces.CommonEvent, s *session.Ses
 	})
 
 	return user, isBanned, nil
+}
+
+// checkBreakRequired checks if a break is needed.
+func (m *ReviewMenu) checkBreakRequired(event interfaces.CommonEvent, s *session.Session, r *pagination.Respond) bool {
+	// Check if user needs a break
+	nextReviewTime := session.UserReviewBreakNextReviewTime.Get(s)
+	if !nextReviewTime.IsZero() && time.Now().Before(nextReviewTime) {
+		// Show timeout menu if break time hasn't passed
+		r.Show(event, s, constants.TimeoutPageName, "")
+		return true
+	}
+
+	// Check review count
+	sessionReviews := session.UserReviewBreakSessionReviews.Get(s)
+	sessionStartTime := session.UserReviewBreakSessionStartTime.Get(s)
+
+	// Reset count if outside window
+	if time.Since(sessionStartTime) > constants.ReviewSessionWindow {
+		sessionReviews = 0
+		sessionStartTime = time.Now()
+		session.UserReviewBreakSessionStartTime.Set(s, sessionStartTime)
+	}
+
+	// Check if break needed
+	if sessionReviews >= constants.MaxReviewsBeforeBreak {
+		nextTime := time.Now().Add(constants.MinBreakDuration)
+		session.UserReviewBreakSessionStartTime.Set(s, nextTime)
+		session.UserReviewBreakNextReviewTime.Set(s, nextTime)
+		session.UserReviewBreakSessionReviews.Set(s, 0) // Reset count
+		r.Show(event, s, constants.TimeoutPageName, "")
+		return true
+	}
+
+	// Increment review count
+	session.UserReviewBreakSessionReviews.Set(s, sessionReviews+1)
+
+	return false
 }
 
 // checkCaptchaRequired checks if CAPTCHA verification is needed.

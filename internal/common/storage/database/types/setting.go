@@ -15,7 +15,14 @@ type ChatMessageUsage struct {
 
 // CaptchaUsage keeps track of reviews since last CAPTCHA verification.
 type CaptchaUsage struct {
-	ReviewCount int `bun:",notnull"`
+	CaptchaReviewCount int `bun:",notnull"`
+}
+
+// ReviewBreak stores information about the session review.
+type ReviewBreak struct {
+	NextReviewTime   time.Time `bun:",notnull"`
+	SessionReviews   int       `bun:",notnull"`
+	SessionStartTime time.Time `bun:",notnull"`
 }
 
 // UserSetting stores user-specific preferences.
@@ -31,6 +38,7 @@ type UserSetting struct {
 	ReviewTargetMode    enum.ReviewTargetMode    `bun:",notnull"`
 	ChatMessageUsage    ChatMessageUsage         `bun:",embed"`
 	CaptchaUsage        CaptchaUsage             `bun:",embed"`
+	ReviewBreak         ReviewBreak              `bun:",embed"`
 	LeaderboardPeriod   enum.LeaderboardPeriod   `bun:",notnull"`
 	ReviewerStatsPeriod enum.ReviewerStatsPeriod `bun:",notnull"`
 }

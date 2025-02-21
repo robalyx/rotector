@@ -61,7 +61,12 @@ func main() {
 		{Name: "ChatMessageUsage.MessageCount", Type: "int", Doc: "ChatMessageUsageMessageCount tracks message count in 24h period"},
 
 		// CAPTCHA usage settings
-		{Name: "CaptchaUsage.ReviewCount", Type: "int", Doc: "CaptchaUsageReviewCount tracks reviews since last CAPTCHA"},
+		{Name: "CaptchaUsage.CaptchaReviewCount", Type: "int", Doc: "CaptchaUsageCaptchaReviewCount tracks reviews since last CAPTCHA"},
+
+		// Review break settings
+		{Name: "ReviewBreak.NextReviewTime", Type: "time.Time", Doc: "ReviewBreakNextReviewTime tracks when user can resume reviewing"},
+		{Name: "ReviewBreak.SessionReviews", Type: "int", Doc: "ReviewBreakSessionReviews tracks reviews in current session"},
+		{Name: "ReviewBreak.SessionStartTime", Type: "time.Time", Doc: "ReviewBreakSessionStartTime tracks when review session started"},
 	}
 
 	botSettings := []SettingDef{
