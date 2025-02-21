@@ -39,34 +39,3 @@ func TestGenerateRandomWords(t *testing.T) {
 		})
 	}
 }
-
-func TestGenerateSecureToken(t *testing.T) {
-	tests := []struct {
-		name   string
-		length int
-	}{
-		{
-			name:   "short token",
-			length: 10,
-		},
-		{
-			name:   "medium token",
-			length: 32,
-		},
-		{
-			name:   "long token",
-			length: 64,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := GenerateSecureToken(tt.length)
-			assert.Len(t, got, tt.length)
-
-			// Generate another token to ensure they're different
-			got2 := GenerateSecureToken(tt.length)
-			assert.NotEqual(t, got, got2, "tokens should be random")
-		})
-	}
-}

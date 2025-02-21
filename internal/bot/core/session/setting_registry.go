@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/robalyx/rotector/internal/bot/constants"
-	"github.com/robalyx/rotector/internal/bot/utils"
 	"github.com/robalyx/rotector/internal/common/storage/database"
 	"github.com/robalyx/rotector/internal/common/storage/database/types"
 	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
@@ -139,7 +138,6 @@ func (r *SettingRegistry) registerBotSettings() {
 	r.BotSettings[constants.WelcomeMessageOption] = r.createWelcomeMessageSetting()
 	r.BotSettings[constants.AnnouncementTypeOption] = r.createAnnouncementTypeSetting()
 	r.BotSettings[constants.AnnouncementMessageOption] = r.createAnnouncementMessageSetting()
-	r.BotSettings[constants.APIKeysOption] = r.createAPIKeysSetting()
 }
 
 // createStreamerModeSetting creates the streamer mode setting.
@@ -560,107 +558,6 @@ func (r *SettingRegistry) createAnnouncementMessageSetting() *Setting {
 				constants.AnnouncementMessageOption,
 				oldValue,
 				inputs[0])
-
-			return nil
-		},
-	}
-}
-
-// createAPIKeysSetting creates the API keys setting.
-func (r *SettingRegistry) createAPIKeysSetting() *Setting {
-	return &Setting{
-		Key:          constants.APIKeysOption,
-		Name:         "API Keys",
-		Description:  "Manage API keys for REST API access",
-		Type:         enum.SettingTypeAPIKey,
-		DefaultValue: []types.APIKeyInfo{},
-		Options: []types.SettingOption{
-			{
-				Value:       constants.APIKeyCreateIDOption,
-				Label:       "Create New Key",
-				Description: "Generate a new API key",
-				Emoji:       "🔑",
-			},
-			{
-				Value:       constants.APIKeyDeleteIDOption,
-				Label:       "Delete Key",
-				Description: "Remove an existing API key",
-				Emoji:       "🗑️",
-			},
-			{
-				Value:       constants.APIKeyUpdateIDOption,
-				Label:       "Update Description",
-				Description: "Change an API key's description",
-				Emoji:       "✏️",
-			},
-		},
-		Validators: []Validator{
-			func(value string, _ uint64) error {
-				if len(value) > 100 {
-					return ErrDescriptionTooLong
-				}
-				return nil
-			},
-		},
-		ValueGetter: func(s *Session) string {
-			apiKeys := BotAPIKeys.Get(s)
-			return fmt.Sprintf("%d API key(s) configured", len(apiKeys))
-		},
-		ValueUpdater: func(customID string, inputs []string, s *Session) error {
-			// Get old keys for logging
-			oldKeys := BotAPIKeys.Get(s)
-			apiKeys := BotAPIKeys.Get(s)
-
-			var oldValue, newValue string
-			switch customID {
-			case constants.APIKeyCreateIDOption:
-				if len(inputs) < 1 {
-					return ErrMissingInput
-				}
-				newKey := types.APIKeyInfo{
-					Key:         utils.GenerateSecureToken(32),
-					Description: inputs[0],
-					CreatedAt:   time.Now(),
-				}
-				apiKeys = append(apiKeys, newKey)
-				oldValue = fmt.Sprintf("%d keys", len(oldKeys))
-				newValue = fmt.Sprintf("%d keys", len(apiKeys))
-
-			case constants.APIKeyDeleteIDOption:
-				if len(inputs) < 1 {
-					return ErrMissingInput
-				}
-				for i, key := range apiKeys {
-					if key.Key == inputs[0] {
-						oldValue = key.Description
-						newValue = "deleted"
-						apiKeys = append(apiKeys[:i], apiKeys[i+1:]...)
-						break
-					}
-				}
-
-			case constants.APIKeyUpdateIDOption:
-				if len(inputs) < 2 {
-					return ErrMissingInput
-				}
-				for i := range apiKeys {
-					if apiKeys[i].Key == inputs[0] {
-						oldValue = apiKeys[i].Description
-						newValue = inputs[1]
-						apiKeys[i].Description = inputs[1]
-						break
-					}
-				}
-			}
-
-			// Update the setting
-			BotAPIKeys.Set(s, apiKeys)
-
-			// Log the change
-			r.logBotSettingChange(context.Background(), s.db, s.UserID(),
-				customID,
-				oldValue,
-				newValue)
 
 			return nil
 		},

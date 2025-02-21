@@ -32,7 +32,6 @@ type Config struct {
 	Common CommonConfig
 	Bot    BotConfig
 	Worker WorkerConfig
-	API    APIConfig
 }
 
 // CommonConfig contains configuration shared between bot and worker.
@@ -63,15 +62,6 @@ type WorkerConfig struct {
 	StartupDelay    int             `koanf:"startup_delay"`
 	BatchSizes      BatchSizes      `koanf:"batch_sizes"`
 	ThresholdLimits ThresholdLimits `koanf:"threshold_limits"`
-}
-
-// APIConfig contains RPC server specific configuration.
-type APIConfig struct {
-	Version        int       `koanf:"version"`
-	RequestTimeout int       `koanf:"request_timeout"` // Request timeout in milliseconds
-	Server         APIServer `koanf:"server"`
-	IP             IPConfig  `koanf:"ip"`
-	RateLimit      RateLimit `koanf:"rate_limit"`
 }
 
 // Debug contains debug-related configuration.
@@ -164,31 +154,6 @@ type ThresholdLimits struct {
 	MaxGroupMembersTrack uint64  `koanf:"max_group_members_track"` // Maximum group members before skipping tracking
 }
 
-// APIServer contains server configuration options.
-type APIServer struct {
-	Host string `koanf:"host"` // Host address to listen on
-	Port int    `koanf:"port"` // Port number to listen on
-}
-
-// IPConfig contains IP validation configuration.
-type IPConfig struct {
-	// Enable checking of forwarded headers (X-Forwarded-For, etc.)
-	EnableHeaderCheck bool     `koanf:"enable_header_check"` // Enable checking of forwarded headers (X-Forwarded-For, etc.)
-	TrustedProxies    []string `koanf:"trusted_proxies"`     // List of trusted proxy IPs that can set forwarded headers
-	CustomHeaders     []string `koanf:"custom_headers"`      // Headers to check for client IP, in order of precedence
-	AllowLocalIPs     bool     `koanf:"allow_local_ips"`     // Allow local IPs (127.0.0.1, etc.) for development/testing
-}
-
-// RateLimit contains rate limiting configuration for the RPC server.
-type RateLimit struct {
-	RequestsPerSecond    float64 `koanf:"requests_per_second"`      // Maximum number of requests per second per IP
-	BurstSize            int     `koanf:"burst_size"`               // Maximum burst size for rate limiting
-	APIKeyRequestsPerSec float64 `koanf:"api_key_requests_per_sec"` // Maximum number of requests per second for API key users
-	APIKeyBurstSize      int     `koanf:"api_key_burst_size"`       // Maximum burst size for API key users
-	BlockDuration        int     `koanf:"block_duration"`           // Duration in seconds to block IPs that continue sending requests while rate limited
-	StrikeLimit          int     `koanf:"strike_limit"`             // Number of rate limit violations before applying block duration
-}
-
 // Proxy contains proxy-related configuration.
 type Proxy struct {
 	DefaultCooldown   int                      `koanf:"default_cooldown"`   // Default cooldown in milliseconds
@@ -271,15 +236,12 @@ func LoadConfig() (*Config, string, error) {
 	if err := checkConfigVersion("worker", config.Worker.Version, CurrentWorkerVersion); err != nil {
 		return nil, "", err
 	}
-	if err := checkConfigVersion("api", config.API.Version, CurrentAPIVersion); err != nil {
-		return nil, "", err
-	}
 
 	return &config, usedConfigPath, nil
 }
 
 // checkConfigVersion checks if the config file version is correct.
-func checkConfigVersion(name string, current, expected int) error { //nolint:unparam
+func checkConfigVersion(name string, current, expected int) error {
 	if current == 0 {
 		return fmt.Errorf("%w: %s.toml", ErrConfigVersionMissing, name)
 	}

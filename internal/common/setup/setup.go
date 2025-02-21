@@ -28,9 +28,7 @@ import (
 type ServiceType int
 
 const (
-	ServiceREST ServiceType = iota
-	ServiceRPC
-	ServiceBot
+	ServiceBot ServiceType = iota
 	ServiceWorker
 	ServiceExport
 )
@@ -43,8 +41,6 @@ func (s ServiceType) GetRequestTimeout(cfg *config.Config) time.Duration {
 		timeout = cfg.Worker.RequestTimeout
 	case ServiceBot:
 		timeout = cfg.Bot.RequestTimeout
-	case ServiceREST, ServiceRPC:
-		timeout = cfg.API.RequestTimeout
 	case ServiceExport:
 		timeout = 30000
 	default:

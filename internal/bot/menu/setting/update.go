@@ -64,12 +64,6 @@ func (m *UpdateMenu) handleSettingChange(event *events.ComponentInteractionCreat
 	settingKey := session.SettingCustomID.Get(s)
 	setting := m.getSetting(settingType, settingKey)
 
-	// Special handling for API key settings
-	if setting.Type == enum.SettingTypeAPIKey {
-		m.handleAPIKeyModal(event, r, option)
-		return
-	}
-
 	// Validate the new value
 	if err := m.validateSettingValue(s, setting, option); err != nil {
 		r.Cancel(event, s, fmt.Sprintf("Failed to validate setting value: %v", err))
@@ -113,7 +107,7 @@ func (m *UpdateMenu) handleSettingButton(event *events.ComponentInteractionCreat
 		m.handleNumberModal(event, s, r, setting)
 	case enum.SettingTypeText:
 		m.handleTextModal(event, s, r, setting)
-	case enum.SettingTypeBool, enum.SettingTypeEnum, enum.SettingTypeAPIKey:
+	case enum.SettingTypeBool, enum.SettingTypeEnum:
 		m.layout.logger.Error("Button change not supported for this setting type",
 			zap.String("type", setting.Type.String()))
 		return
@@ -176,60 +170,6 @@ func (m *UpdateMenu) handleTextModal(event *events.ComponentInteractionCreate, s
 	}
 }
 
-// handleAPIKeyModal handles the modal for API key type settings.
-func (m *UpdateMenu) handleAPIKeyModal(event *events.ComponentInteractionCreate, r *pagination.Respond, option string) {
-	var modalTitle string
-	var inputs []discord.TextInputComponent
-
-	switch option {
-	case constants.APIKeyCreateIDOption:
-		inputs = []discord.TextInputComponent{
-			discord.NewTextInput("0", discord.TextInputStyleParagraph, "Key Description").
-				WithPlaceholder("Enter a description for the new API key...").
-				WithRequired(true),
-		}
-		modalTitle = "Create New API Key"
-
-	case constants.APIKeyDeleteIDOption:
-		inputs = []discord.TextInputComponent{
-			discord.NewTextInput("0", discord.TextInputStyleParagraph, "API Key").
-				WithPlaceholder("Enter the API key to delete...").
-				WithRequired(true),
-		}
-		modalTitle = "Delete API Key"
-
-	case constants.APIKeyUpdateIDOption:
-		inputs = []discord.TextInputComponent{
-			discord.NewTextInput("0", discord.TextInputStyleParagraph, "API Key").
-				WithPlaceholder("Enter the API key to update...").
-				WithRequired(true),
-			discord.NewTextInput("1", discord.TextInputStyleParagraph, "New Description").
-				WithPlaceholder("Enter the new description...").
-				WithRequired(true),
-		}
-		modalTitle = "Update API Key Description"
-
-	default:
-		r.Error(event, "Invalid API key action")
-		return
-	}
-
-	// Create the modal builder
-	builder := discord.NewModalCreateBuilder().
-		SetCustomID(option).
-		SetTitle(modalTitle)
-
-	// Add each text input in its own action row
-	for _, input := range inputs {
-		builder.AddActionRow(input)
-	}
-
-	if err := event.Modal(builder.Build()); err != nil {
-		m.layout.logger.Error("Failed to open the API key form", zap.Error(err))
-		r.Error(event, "Failed to open the form. Please try again.")
-	}
-}
-
 // handlePageChange handles pagination for ID and text type settings.
 func (m *UpdateMenu) handlePageChange(event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, setting *session.Setting, customID string) {
 	// Calculate pagination first
@@ -252,8 +192,6 @@ func (m *UpdateMenu) handlePageChange(event *events.ComponentInteractionCreate, 
 	switch setting.Type {
 	case enum.SettingTypeID:
 		itemsPerPage = constants.SettingsIDsPerPage
-	case enum.SettingTypeAPIKey:
-		itemsPerPage = constants.SettingsKeysPerPage
 	case enum.SettingTypeBool, enum.SettingTypeEnum, enum.SettingTypeNumber, enum.SettingTypeText:
 		return
 	}
@@ -333,10 +271,6 @@ func (m *UpdateMenu) calculatePagination(s *session.Session) bool {
 			totalItems = len(session.BotAdminIDs.Get(s))
 		}
 		itemsPerPage = constants.SettingsIDsPerPage
-
-	case enum.SettingTypeAPIKey:
-		totalItems = len(session.BotAPIKeys.Get(s))
-		itemsPerPage = constants.SettingsKeysPerPage
 
 	case enum.SettingTypeBool, enum.SettingTypeEnum, enum.SettingTypeNumber, enum.SettingTypeText:
 		return false

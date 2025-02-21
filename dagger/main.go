@@ -185,7 +185,7 @@ func (m *Rotector) Run(
 	// Config directory path
 	// +required
 	configDir *dagger.Directory,
-	// Command to run: "bot", "worker", "export", "db", "rest", or "rpc"
+	// Command to run: "bot", "worker", "export" or "db"
 	// +required
 	cmd string,
 	// Worker type for worker command (e.g. "friend", "group", "maintenance", "queue", "stats")
@@ -228,7 +228,7 @@ func (m *Rotector) Run(
 		if workerCount != nil {
 			args = append(args, "--workers", *workerCount)
 		}
-	case "bot", "export", "db", "rest", "rpc":
+	case "bot", "export", "db":
 		// These commands don't need additional arguments
 	}
 

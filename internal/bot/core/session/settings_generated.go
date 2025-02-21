@@ -4,7 +4,6 @@ package session
 import (
 	"time"
 
-	"github.com/robalyx/rotector/internal/common/storage/database/types"
 	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
 )
 
@@ -55,6 +54,4 @@ var (
 	BotAnnouncementType = NewBotSettingKey[enum.AnnouncementType]("Announcement.Type")
 	// AnnouncementMessage sets the announcement message
 	BotAnnouncementMessage = NewBotSettingKey[string]("Announcement.Message")
-	// APIKeys stores API key information
-	BotAPIKeys = NewBotSettingKey[[]types.APIKeyInfo]("APIKeys")
 )

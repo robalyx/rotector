@@ -243,8 +243,7 @@ const (
 
 // Bot Settings.
 const (
-	SettingsIDsPerPage  = 15
-	SettingsKeysPerPage = 9
+	SettingsIDsPerPage = 15
 
 	BotSettingPrefix          = "bot"
 	BotSettingSelectID        = "bot_setting_select"
@@ -254,11 +253,6 @@ const (
 	WelcomeMessageOption      = "welcome_message"
 	AnnouncementTypeOption    = "announcement_type"
 	AnnouncementMessageOption = "announcement_message"
-
-	APIKeysOption        = "api_keys"
-	APIKeyCreateIDOption = "api_key_create" + ModalOpenSuffix
-	APIKeyDeleteIDOption = "api_key_delete" + ModalOpenSuffix
-	APIKeyUpdateIDOption = "api_key_update" + ModalOpenSuffix
 )
 
 // Logs Menu.

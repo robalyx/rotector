@@ -49,25 +49,16 @@ type Announcement struct {
 	Message string                `bun:"announcement_message,notnull,default:''"`
 }
 
-// APIKeyInfo stores information about an API key
-type APIKeyInfo struct {
-	Key         string    `json:"key"`         // The API key
-	Description string    `json:"description"` // Description of what the key is used for
-	CreatedAt   time.Time `json:"createdAt"`   // When the key was created
-}
-
 // BotSetting stores bot-wide configuration options.
 type BotSetting struct {
-	ID             uint64                 `bun:",pk,autoincrement"`
-	ReviewerIDs    []uint64               `bun:"reviewer_ids,type:bigint[]"`
-	AdminIDs       []uint64               `bun:"admin_ids,type:bigint[]"`
-	SessionLimit   uint64                 `bun:",notnull"`
-	WelcomeMessage string                 `bun:",notnull,default:''"`
-	Announcement   Announcement           `bun:",embed"`
-	APIKeys        []APIKeyInfo           `bun:"api_keys,type:jsonb"`
-	reviewerMap    map[uint64]struct{}    // In-memory map for O(1) lookups
-	adminMap       map[uint64]struct{}    // In-memory map for O(1) lookups
-	apiKeyMap      map[string]*APIKeyInfo // In-memory map for O(1) lookups
+	ID             uint64              `bun:",pk,autoincrement"`
+	ReviewerIDs    []uint64            `bun:"reviewer_ids,type:bigint[]"`
+	AdminIDs       []uint64            `bun:"admin_ids,type:bigint[]"`
+	SessionLimit   uint64              `bun:",notnull"`
+	WelcomeMessage string              `bun:",notnull,default:''"`
+	Announcement   Announcement        `bun:",embed"`
+	reviewerMap    map[uint64]struct{} // In-memory map for O(1) lookups
+	adminMap       map[uint64]struct{} // In-memory map for O(1) lookups
 	lastRefresh    time.Time
 }
 
@@ -95,19 +86,6 @@ func (s *BotSetting) IsReviewer(userID uint64) bool {
 
 	_, exists := s.reviewerMap[userID]
 	return exists
-}
-
-// IsAPIKey checks if the given key is valid.
-func (s *BotSetting) IsAPIKey(key string) (*APIKeyInfo, bool) {
-	if s.apiKeyMap == nil || len(s.APIKeys) != len(s.apiKeyMap) {
-		s.apiKeyMap = make(map[string]*APIKeyInfo, len(s.APIKeys))
-		for i := range s.APIKeys {
-			s.apiKeyMap[s.APIKeys[i].Key] = &s.APIKeys[i]
-		}
-	}
-
-	info, exists := s.apiKeyMap[key]
-	return info, exists
 }
 
 // NeedsRefresh checks if the settings need to be refreshed.

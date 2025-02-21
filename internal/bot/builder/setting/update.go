@@ -49,8 +49,6 @@ func (b *UpdateBuilder) Build() *discord.MessageUpdateBuilder {
 	switch b.setting.Type {
 	case enum.SettingTypeID:
 		b.addIDFields(embed)
-	case enum.SettingTypeAPIKey:
-		b.addAPIKeyFields(embed)
 	case enum.SettingTypeBool, enum.SettingTypeEnum, enum.SettingTypeNumber, enum.SettingTypeText:
 		embed.AddField("Current Value", b.currentValue, false)
 	}
@@ -98,32 +96,6 @@ func (b *UpdateBuilder) addIDFields(embed *discord.EmbedBuilder) {
 	}
 }
 
-// addAPIKeyFields adds the API key fields to the embed.
-func (b *UpdateBuilder) addAPIKeyFields(embed *discord.EmbedBuilder) {
-	apiKeys := session.BotAPIKeys.Get(b.session)
-	if len(apiKeys) == 0 {
-		embed.AddField("No API Keys", "Use the button below to add keys", false)
-		return
-	}
-
-	// Calculate pagination
-	start := b.page * constants.SettingsKeysPerPage
-	end := start + constants.SettingsKeysPerPage
-	if end > len(apiKeys) {
-		end = len(apiKeys)
-	}
-
-	// Add fields for this page
-	for _, key := range apiKeys[start:end] {
-		maskedKey := fmt.Sprintf("||%s||", key.Key)
-		description := fmt.Sprintf("Created: %s\nNotes: %s",
-			key.CreatedAt.Format("2006-01-02"),
-			key.Description,
-		)
-		embed.AddField(maskedKey, description, false)
-	}
-}
-
 // buildComponents creates the interactive components based on setting type.
 func (b *UpdateBuilder) buildComponents() []discord.ContainerComponent {
 	var components []discord.ContainerComponent
@@ -138,39 +110,12 @@ func (b *UpdateBuilder) buildComponents() []discord.ContainerComponent {
 
 	case enum.SettingTypeID, enum.SettingTypeNumber, enum.SettingTypeText:
 		components = append(components, b.buildModalComponents()...)
-
-	case enum.SettingTypeAPIKey:
-		components = append(components, b.buildAPIKeyComponents()...)
 	}
 
 	// Add back button
 	components = append(components, discord.NewActionRow(
 		discord.NewSecondaryButton("Back", fmt.Sprintf("%s_%s", b.settingType, constants.BackButtonCustomID)),
 	))
-
-	return components
-}
-
-// buildAPIKeyComponents creates the components for API key settings.
-func (b *UpdateBuilder) buildAPIKeyComponents() []discord.ContainerComponent {
-	var components []discord.ContainerComponent
-
-	// Add API key action select menu
-	options := make([]discord.StringSelectMenuOption, 0, len(b.setting.Options))
-	for _, opt := range b.setting.Options {
-		option := discord.NewStringSelectMenuOption(opt.Label, opt.Value).
-			WithDescription(opt.Description)
-		if opt.Emoji != "" {
-			option = option.WithEmoji(discord.ComponentEmoji{Name: opt.Emoji})
-		}
-		options = append(options, option)
-	}
-	components = append(components, discord.NewActionRow(
-		discord.NewStringSelectMenu(b.customID, "Select action", options...),
-	))
-
-	// Add pagination buttons
-	components = append(components, b.buildPaginationButtons())
 
 	return components
 }

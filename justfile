@@ -10,8 +10,6 @@ build:
     go build -o bin/worker ./cmd/worker
     go build -o bin/export ./cmd/export
     go build -o bin/db ./cmd/db
-    go build -o bin/rest ./cmd/rest
-    go build -o bin/rpc ./cmd/rpc
 
 # Run tests with coverage
 test:
@@ -28,14 +26,6 @@ run-bot:
 # Run the worker service with specified type and count
 run-worker type="friend" count="1":
     go run ./cmd/worker {{type}} --workers {{count}}
-
-# Run the REST API service
-run-rest:
-    go run ./cmd/rest
-
-# Run the RPC service
-run-rpc:
-    go run ./cmd/rpc
 
 # Run database migrations
 run-db *args:

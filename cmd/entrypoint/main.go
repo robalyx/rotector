@@ -24,12 +24,8 @@ func main() {
 		execBinary("/app/bin/export", os.Args[1:]...)
 	case "db":
 		execBinary("/app/bin/db", os.Args[1:]...)
-	case "rest":
-		execBinary("/app/bin/rest")
-	case "rpc":
-		execBinary("/app/bin/rpc")
 	default:
-		fmt.Fprintf(os.Stderr, "Invalid RUN_TYPE. Must be one of: 'bot', 'worker', 'export', 'db', 'rest', 'rpc'\n")
+		fmt.Fprintf(os.Stderr, "Invalid RUN_TYPE. Must be one of: 'bot', 'worker', 'export', 'db'\n")
 		fmt.Fprintf(os.Stderr, "Usage:\n")
 		fmt.Fprintf(os.Stderr, "  RUN_TYPE=worker WORKER_TYPE=<type> WORKERS_COUNT=<count>\n")
 		fmt.Fprintf(os.Stderr, "  RUN_TYPE=<other_type>\n")

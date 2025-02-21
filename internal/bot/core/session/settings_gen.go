@@ -17,7 +17,6 @@ package session
 import (
 	"time"
 	
-	"github.com/robalyx/rotector/internal/common/storage/database/types"
 	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
 )
 
@@ -79,9 +78,6 @@ func main() {
 		// Announcement settings
 		{Name: "Announcement.Type", Type: "enum.AnnouncementType", Doc: "AnnouncementType sets the announcement type"},
 		{Name: "Announcement.Message", Type: "string", Doc: "AnnouncementMessage sets the announcement message"},
-
-		// API settings
-		{Name: "APIKeys", Type: "[]types.APIKeyInfo", Doc: "APIKeys stores API key information"},
 	}
 
 	// Create template
