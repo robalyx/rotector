@@ -86,7 +86,8 @@ func (m *Menu) handleSelectMenu(event *events.ComponentInteractionCreate, s *ses
 	case constants.ActivityBrowserButtonCustomID,
 		constants.QueueManagerButtonCustomID,
 		constants.ChatAssistantButtonCustomID,
-		constants.WorkerStatusButtonCustomID:
+		constants.WorkerStatusButtonCustomID,
+		constants.ReviewerStatsButtonCustomID:
 		if !isReviewer {
 			m.layout.logger.Error("Non-reviewer attempted restricted action",
 				zap.Uint64("user_id", userID),
@@ -130,6 +131,8 @@ func (m *Menu) handleSelectMenu(event *events.ComponentInteractionCreate, s *ses
 		r.Show(event, s, constants.AppealOverviewPageName, "")
 	case constants.AdminMenuButtonCustomID:
 		r.Show(event, s, constants.AdminPageName, "")
+	case constants.ReviewerStatsButtonCustomID:
+		r.Show(event, s, constants.ReviewerStatsPageName, "")
 	}
 }
 

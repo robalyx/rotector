@@ -38,7 +38,7 @@ func (r *SettingModel) GetUserSettings(ctx context.Context, userID snowflake.ID)
 		GroupDefaultSort:   enum.ReviewSortByRandom,
 		AppealDefaultSort:  enum.AppealSortByNewest,
 		AppealStatusFilter: enum.AppealStatusPending,
-		ChatModel:          enum.ChatModelGeminiFlash2_0,
+		ChatModel:          enum.ChatModelGeminiFlash1_5_8B,
 		ReviewMode:         enum.ReviewModeStandard,
 		ReviewTargetMode:   enum.ReviewTargetModeFlagged,
 		ChatMessageUsage: types.ChatMessageUsage{
@@ -48,7 +48,8 @@ func (r *SettingModel) GetUserSettings(ctx context.Context, userID snowflake.ID)
 		CaptchaUsage: types.CaptchaUsage{
 			ReviewCount: 0,
 		},
-		LeaderboardPeriod: enum.LeaderboardPeriodAllTime,
+		LeaderboardPeriod:   enum.LeaderboardPeriodAllTime,
+		ReviewerStatsPeriod: enum.ReviewerStatsPeriodDaily,
 	}
 
 	err := r.db.NewSelect().Model(settings).
@@ -85,6 +86,7 @@ func (r *SettingModel) SaveUserSettings(ctx context.Context, settings *types.Use
 		Set("message_count = EXCLUDED.message_count").
 		Set("review_count = EXCLUDED.review_count").
 		Set("leaderboard_period = EXCLUDED.leaderboard_period").
+		Set("reviewer_stats_period = EXCLUDED.reviewer_stats_period").
 		Exec(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to save user settings: %w (userID=%d)", err, settings.UserID)

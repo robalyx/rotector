@@ -14,35 +14,35 @@ import (
 
 // Builder creates the visual layout for viewing the voting leaderboard.
 type Builder struct {
-	stats             []*types.VoteAccuracy
-	usernames         map[uint64]string
-	hasNextPage       bool
-	hasPrevPage       bool
-	lastRefresh       time.Time
-	nextRefresh       time.Time
-	leaderboardPeriod enum.LeaderboardPeriod
-	privacyMode       bool
+	stats       []*types.VoteAccuracy
+	usernames   map[uint64]string
+	hasNextPage bool
+	hasPrevPage bool
+	lastRefresh time.Time
+	nextRefresh time.Time
+	period      enum.LeaderboardPeriod
+	privacyMode bool
 }
 
 // NewBuilder creates a new leaderboard builder.
 func NewBuilder(s *session.Session) *Builder {
 	return &Builder{
-		stats:             session.LeaderboardStats.Get(s),
-		usernames:         session.LeaderboardUsernames.Get(s),
-		hasNextPage:       session.PaginationHasNextPage.Get(s),
-		hasPrevPage:       session.PaginationHasPrevPage.Get(s),
-		lastRefresh:       session.LeaderboardLastRefresh.Get(s),
-		nextRefresh:       session.LeaderboardNextRefresh.Get(s),
-		leaderboardPeriod: session.UserLeaderboardPeriod.Get(s),
-		privacyMode:       session.UserReviewMode.Get(s) == enum.ReviewModeTraining || session.UserStreamerMode.Get(s),
+		stats:       session.LeaderboardStats.Get(s),
+		usernames:   session.LeaderboardUsernames.Get(s),
+		hasNextPage: session.PaginationHasNextPage.Get(s),
+		hasPrevPage: session.PaginationHasPrevPage.Get(s),
+		lastRefresh: session.LeaderboardLastRefresh.Get(s),
+		nextRefresh: session.LeaderboardNextRefresh.Get(s),
+		period:      session.UserLeaderboardPeriod.Get(s),
+		privacyMode: session.UserReviewMode.Get(s) == enum.ReviewModeTraining || session.UserStreamerMode.Get(s),
 	}
 }
 
 // Build creates a Discord message showing the leaderboard entries.
 func (b *Builder) Build() *discord.MessageUpdateBuilder {
 	embed := discord.NewEmbedBuilder().
-		SetTitle("🏆 Voting Leaderboard").
-		SetDescription(fmt.Sprintf("Top voters for `%s` period", b.leaderboardPeriod.String())).
+		SetTitle("Voting Leaderboard").
+		SetDescription(fmt.Sprintf("Top voters for `%s` period", b.period.String())).
 		SetColor(utils.GetMessageEmbedColor(b.privacyMode))
 
 	if !b.lastRefresh.IsZero() {
@@ -115,19 +115,19 @@ func (b *Builder) buildComponents() []discord.ContainerComponent {
 func (b *Builder) buildPeriodOptions() []discord.StringSelectMenuOption {
 	return []discord.StringSelectMenuOption{
 		discord.NewStringSelectMenuOption("Daily", enum.LeaderboardPeriodDaily.String()).
-			WithDefault(b.leaderboardPeriod == enum.LeaderboardPeriodDaily),
+			WithDefault(b.period == enum.LeaderboardPeriodDaily),
 		discord.NewStringSelectMenuOption("Weekly", enum.LeaderboardPeriodWeekly.String()).
-			WithDefault(b.leaderboardPeriod == enum.LeaderboardPeriodWeekly),
+			WithDefault(b.period == enum.LeaderboardPeriodWeekly),
 		discord.NewStringSelectMenuOption("Bi-Weekly", enum.LeaderboardPeriodBiWeekly.String()).
-			WithDefault(b.leaderboardPeriod == enum.LeaderboardPeriodBiWeekly),
+			WithDefault(b.period == enum.LeaderboardPeriodBiWeekly),
 		discord.NewStringSelectMenuOption("Monthly", enum.LeaderboardPeriodMonthly.String()).
-			WithDefault(b.leaderboardPeriod == enum.LeaderboardPeriodMonthly),
+			WithDefault(b.period == enum.LeaderboardPeriodMonthly),
 		discord.NewStringSelectMenuOption("Bi-Annually", enum.LeaderboardPeriodBiAnnually.String()).
-			WithDefault(b.leaderboardPeriod == enum.LeaderboardPeriodBiAnnually),
+			WithDefault(b.period == enum.LeaderboardPeriodBiAnnually),
 		discord.NewStringSelectMenuOption("Annually", enum.LeaderboardPeriodAnnually.String()).
-			WithDefault(b.leaderboardPeriod == enum.LeaderboardPeriodAnnually),
+			WithDefault(b.period == enum.LeaderboardPeriodAnnually),
 		discord.NewStringSelectMenuOption("All Time", enum.LeaderboardPeriodAllTime.String()).
-			WithDefault(b.leaderboardPeriod == enum.LeaderboardPeriodAllTime),
+			WithDefault(b.period == enum.LeaderboardPeriodAllTime),
 	}
 }
 

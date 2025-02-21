@@ -24,6 +24,8 @@ var (
 	UserReviewTargetMode = NewUserSettingKey[enum.ReviewTargetMode]("ReviewTargetMode")
 	// LeaderboardPeriod sets the leaderboard time period
 	UserLeaderboardPeriod = NewUserSettingKey[enum.LeaderboardPeriod]("LeaderboardPeriod")
+	// ReviewerStatsPeriod sets the reviewer stats time period
+	UserReviewerStatsPeriod = NewUserSettingKey[enum.ReviewerStatsPeriod]("ReviewerStatsPeriod")
 	// AppealDefaultSort sets default appeal sorting
 	UserAppealDefaultSort = NewUserSettingKey[enum.AppealSortBy]("AppealDefaultSort")
 	// AppealStatusFilter sets appeal status filtering

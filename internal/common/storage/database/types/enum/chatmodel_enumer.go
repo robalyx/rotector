@@ -7,11 +7,11 @@ import (
 	"strings"
 )
 
-const _ChatModelName = "gemini-2.0-flash-001gemini-1.5-flashgemini-1.5-flash-8b"
+const _ChatModelName = "gemini-1.5-flash-8b"
 
-var _ChatModelIndex = [...]uint8{0, 20, 36, 55}
+var _ChatModelIndex = [...]uint8{0, 19}
 
-const _ChatModelLowerName = "gemini-2.0-flash-001gemini-1.5-flashgemini-1.5-flash-8b"
+const _ChatModelLowerName = "gemini-1.5-flash-8b"
 
 func (i ChatModel) String() string {
 	if i < 0 || i >= ChatModel(len(_ChatModelIndex)-1) {
@@ -24,26 +24,18 @@ func (i ChatModel) String() string {
 // Re-run the stringer command to generate them again.
 func _ChatModelNoOp() {
 	var x [1]struct{}
-	_ = x[ChatModelGeminiFlash2_0-(0)]
-	_ = x[ChatModelGeminiFlash1_5-(1)]
-	_ = x[ChatModelGeminiFlash1_5_8B-(2)]
+	_ = x[ChatModelGeminiFlash1_5_8B-(0)]
 }
 
-var _ChatModelValues = []ChatModel{ChatModelGeminiFlash2_0, ChatModelGeminiFlash1_5, ChatModelGeminiFlash1_5_8B}
+var _ChatModelValues = []ChatModel{ChatModelGeminiFlash1_5_8B}
 
 var _ChatModelNameToValueMap = map[string]ChatModel{
-	_ChatModelName[0:20]:       ChatModelGeminiFlash2_0,
-	_ChatModelLowerName[0:20]:  ChatModelGeminiFlash2_0,
-	_ChatModelName[20:36]:      ChatModelGeminiFlash1_5,
-	_ChatModelLowerName[20:36]: ChatModelGeminiFlash1_5,
-	_ChatModelName[36:55]:      ChatModelGeminiFlash1_5_8B,
-	_ChatModelLowerName[36:55]: ChatModelGeminiFlash1_5_8B,
+	_ChatModelName[0:19]:      ChatModelGeminiFlash1_5_8B,
+	_ChatModelLowerName[0:19]: ChatModelGeminiFlash1_5_8B,
 }
 
 var _ChatModelNames = []string{
-	_ChatModelName[0:20],
-	_ChatModelName[20:36],
-	_ChatModelName[36:55],
+	_ChatModelName[0:19],
 }
 
 // ChatModelString retrieves an enum value from the enum constants string name.

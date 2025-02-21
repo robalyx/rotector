@@ -15,7 +15,7 @@ build:
 
 # Run tests with coverage
 test:
-    go test -v ./...
+    go test -v -race -cover ./...
 
 # Run linter
 lint:

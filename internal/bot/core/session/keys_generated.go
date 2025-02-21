@@ -169,6 +169,20 @@ var (
 	LeaderboardLastRefresh = NewKey[time.Time]("LeaderboardLastRefresh", true)
 	// LeaderboardNextRefresh stores the next refresh time
 	LeaderboardNextRefresh = NewKey[time.Time]("LeaderboardNextRefresh", true)
+	// ReviewerStats stores reviewer statistics
+	ReviewerStats = NewKey[map[uint64]*types.ReviewerStats]("ReviewerStats", true)
+	// ReviewerUsernames stores usernames for reviewers
+	ReviewerUsernames = NewKey[map[uint64]string]("ReviewerUsernames", true)
+	// ReviewerStatsCursor stores the current reviewer stats cursor
+	ReviewerStatsCursor = NewKey[*types.ReviewerStatsCursor]("ReviewerStatsCursor", true)
+	// ReviewerStatsNextCursor stores the next reviewer stats cursor
+	ReviewerStatsNextCursor = NewKey[*types.ReviewerStatsCursor]("ReviewerStatsNextCursor", true)
+	// ReviewerStatsPrevCursors stores previous reviewer stats cursors
+	ReviewerStatsPrevCursors = NewKey[[]*types.ReviewerStatsCursor]("ReviewerStatsPrevCursors", true)
+	// ReviewerStatsLastRefresh stores the last refresh time
+	ReviewerStatsLastRefresh = NewKey[time.Time]("ReviewerStatsLastRefresh", true)
+	// ReviewerStatsNextRefresh stores the next refresh time
+	ReviewerStatsNextRefresh = NewKey[time.Time]("ReviewerStatsNextRefresh", true)
 
 	// ImageBuffer stores binary image data
 	ImageBuffer = NewBufferKey("ImageBuffer", false)

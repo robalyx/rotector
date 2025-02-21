@@ -38,7 +38,7 @@ func (v *VoteModel) GetUserVoteStats(ctx context.Context, discordUserID uint64, 
 	var stats types.VoteAccuracy
 
 	// Try to refresh the materialized view if stale
-	err := v.views.RefreshIfStale(ctx, period)
+	err := v.views.RefreshLeaderboardView(ctx, period)
 	if err != nil {
 		v.logger.Warn("Failed to refresh materialized view",
 			zap.Error(err),
@@ -78,7 +78,7 @@ func (v *VoteModel) GetLeaderboard(ctx context.Context, period enum.LeaderboardP
 	var nextCursor *types.LeaderboardCursor
 
 	// Try to refresh the materialized view if stale
-	err := v.views.RefreshIfStale(ctx, period)
+	err := v.views.RefreshLeaderboardView(ctx, period)
 	if err != nil {
 		v.logger.Warn("Failed to refresh materialized view",
 			zap.Error(err),

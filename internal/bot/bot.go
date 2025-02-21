@@ -33,6 +33,7 @@ import (
 	"github.com/robalyx/rotector/internal/bot/menu/queue"
 	groupReview "github.com/robalyx/rotector/internal/bot/menu/review/group"
 	userReview "github.com/robalyx/rotector/internal/bot/menu/review/user"
+	"github.com/robalyx/rotector/internal/bot/menu/reviewer"
 	"github.com/robalyx/rotector/internal/bot/menu/setting"
 	"github.com/robalyx/rotector/internal/bot/menu/status"
 	"github.com/robalyx/rotector/internal/bot/utils"
@@ -117,6 +118,7 @@ func New(app *setup.App) (*Bot, error) {
 	dashboardLayout := dashboard.New(app, sessionManager)
 	consentLayout := consent.New(app)
 	banLayout := ban.New(app, sessionManager)
+	reviewerLayout := reviewer.New(app, client)
 
 	paginationManager.AddPages(settingLayout.Pages())
 	paginationManager.AddPages(logLayout.Pages())
@@ -132,6 +134,7 @@ func New(app *setup.App) (*Bot, error) {
 	paginationManager.AddPages(dashboardLayout.Pages())
 	paginationManager.AddPages(consentLayout.Pages())
 	paginationManager.AddPages(banLayout.Pages())
+	paginationManager.AddPages(reviewerLayout.Pages())
 
 	return b, nil
 }

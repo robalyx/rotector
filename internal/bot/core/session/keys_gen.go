@@ -145,7 +145,7 @@ func main() {
 		{Name: "AdminBanExpiry", Type: "*time.Time", Doc: "AdminBanExpiry stores the ban expiry time", Persist: true},
 		{Name: "AdminBanInfo", Type: "*types.DiscordBan", Doc: "AdminBanInfo stores ban information", Persist: true},
 
-		// Leaderboard related keys
+		// Leaderboard stats related keys
 		{Name: "LeaderboardStats", Type: "[]*types.VoteAccuracy", Doc: "LeaderboardStats stores leaderboard statistics", Persist: true},
 		{Name: "LeaderboardUsernames", Type: "map[uint64]string", Doc: "LeaderboardUsernames stores usernames for the leaderboard", Persist: true},
 		{Name: "LeaderboardCursor", Type: "*types.LeaderboardCursor", Doc: "LeaderboardCursor stores the current leaderboard cursor", Persist: true},
@@ -153,6 +153,15 @@ func main() {
 		{Name: "LeaderboardPrevCursors", Type: "[]*types.LeaderboardCursor", Doc: "LeaderboardPrevCursors stores previous leaderboard cursors", Persist: true},
 		{Name: "LeaderboardLastRefresh", Type: "time.Time", Doc: "LeaderboardLastRefresh stores the last refresh time", Persist: true},
 		{Name: "LeaderboardNextRefresh", Type: "time.Time", Doc: "LeaderboardNextRefresh stores the next refresh time", Persist: true},
+
+		// Reviewer stats related keys
+		{Name: "ReviewerStats", Type: "map[uint64]*types.ReviewerStats", Doc: "ReviewerStats stores reviewer statistics", Persist: true},
+		{Name: "ReviewerUsernames", Type: "map[uint64]string", Doc: "ReviewerUsernames stores usernames for reviewers", Persist: true},
+		{Name: "ReviewerStatsCursor", Type: "*types.ReviewerStatsCursor", Doc: "ReviewerStatsCursor stores the current reviewer stats cursor", Persist: true},
+		{Name: "ReviewerStatsNextCursor", Type: "*types.ReviewerStatsCursor", Doc: "ReviewerStatsNextCursor stores the next reviewer stats cursor", Persist: true},
+		{Name: "ReviewerStatsPrevCursors", Type: "[]*types.ReviewerStatsCursor", Doc: "ReviewerStatsPrevCursors stores previous reviewer stats cursors", Persist: true},
+		{Name: "ReviewerStatsLastRefresh", Type: "time.Time", Doc: "ReviewerStatsLastRefresh stores the last refresh time", Persist: true},
+		{Name: "ReviewerStatsNextRefresh", Type: "time.Time", Doc: "ReviewerStatsNextRefresh stores the next refresh time", Persist: true},
 	}
 
 	bufferKeys := []KeyDef{

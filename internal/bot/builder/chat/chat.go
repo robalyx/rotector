@@ -108,12 +108,6 @@ func (b *Builder) Build() *discord.MessageUpdateBuilder {
 		components := []discord.ContainerComponent{
 			discord.NewActionRow(
 				discord.NewStringSelectMenu(constants.ChatModelSelectID, "Select Model",
-					discord.NewStringSelectMenuOption("Gemini 2.0 Flash", enum.ChatModelGeminiFlash2_0.String()).
-						WithDescription("Best for advanced reasoning and conversations").
-						WithDefault(b.model == enum.ChatModelGeminiFlash2_0),
-					discord.NewStringSelectMenuOption("Gemini 1.5 Flash", enum.ChatModelGeminiFlash1_5.String()).
-						WithDescription("Best for fast reasoning and conversations").
-						WithDefault(b.model == enum.ChatModelGeminiFlash1_5),
 					discord.NewStringSelectMenuOption("Gemini 1.5 Flash 8B", enum.ChatModelGeminiFlash1_5_8B.String()).
 						WithDescription("Smaller model for fast reasoning and conversations").
 						WithDefault(b.model == enum.ChatModelGeminiFlash1_5_8B),

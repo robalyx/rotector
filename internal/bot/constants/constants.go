@@ -44,13 +44,14 @@ const (
 	UserSettingsPageName  = "User Settings"
 	SettingUpdatePageName = "Setting Update"
 
-	BanPageName         = "Ban Information"
-	CaptchaPageName     = "CAPTCHA Verification"
-	ChatPageName        = "AI Chat"
-	LeaderboardPageName = "Leaderboard"
-	LogPageName         = "Activity Logs"
-	QueuePageName       = "Queue Manager"
-	StatusPageName      = "Status"
+	BanPageName           = "Ban Information"
+	CaptchaPageName       = "CAPTCHA Verification"
+	ChatPageName          = "AI Chat"
+	LeaderboardPageName   = "Leaderboard"
+	LogPageName           = "Activity Logs"
+	QueuePageName         = "Queue Manager"
+	StatusPageName        = "Status"
+	ReviewerStatsPageName = "Reviewer Stats"
 )
 
 // Dashboard Menu.
@@ -67,6 +68,7 @@ const (
 	WorkerStatusButtonCustomID     = "worker_status"
 	LookupUserButtonCustomID       = "lookup_user" + ModalOpenSuffix
 	LookupGroupButtonCustomID      = "lookup_group" + ModalOpenSuffix
+	ReviewerStatsButtonCustomID    = "reviewer_stats"
 
 	LookupUserModalCustomID  = "lookup_user_modal"
 	LookupUserInputCustomID  = "lookup_user_input"
@@ -350,8 +352,14 @@ const (
 	DeleteGroupAction = "delete_group"
 )
 
-// Leaderboard Menu
+// Leaderboard Stats Menu.
 const (
 	LeaderboardEntriesPerPage           = 10
 	LeaderboardPeriodSelectMenuCustomID = "leaderboard_period"
+)
+
+// Reviewer Stats Menu.
+const (
+	ReviewerStatsPerPage                  = 5
+	ReviewerStatsPeriodSelectMenuCustomID = "reviewer_stats_period"
 )

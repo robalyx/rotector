@@ -135,6 +135,9 @@ func (b *Builder) Build() *discord.MessageUpdateBuilder {
 			discord.NewStringSelectMenuOption("Worker Status", constants.WorkerStatusButtonCustomID).
 				WithEmoji(discord.ComponentEmoji{Name: "🔧"}).
 				WithDescription("View worker status and health"),
+			discord.NewStringSelectMenuOption("Reviewer Stats", constants.ReviewerStatsButtonCustomID).
+				WithEmoji(discord.ComponentEmoji{Name: "📊"}).
+				WithDescription("View reviewer activity statistics"),
 		)
 	}
 

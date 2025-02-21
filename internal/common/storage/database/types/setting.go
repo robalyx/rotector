@@ -20,18 +20,19 @@ type CaptchaUsage struct {
 
 // UserSetting stores user-specific preferences.
 type UserSetting struct {
-	UserID             snowflake.ID           `bun:",pk"`
-	StreamerMode       bool                   `bun:",notnull"`
-	UserDefaultSort    enum.ReviewSortBy      `bun:",notnull"`
-	GroupDefaultSort   enum.ReviewSortBy      `bun:",notnull"`
-	AppealDefaultSort  enum.AppealSortBy      `bun:",notnull"`
-	AppealStatusFilter enum.AppealStatus      `bun:",notnull"`
-	ChatModel          enum.ChatModel         `bun:",notnull"`
-	ReviewMode         enum.ReviewMode        `bun:",notnull"`
-	ReviewTargetMode   enum.ReviewTargetMode  `bun:",notnull"`
-	ChatMessageUsage   ChatMessageUsage       `bun:",embed"`
-	CaptchaUsage       CaptchaUsage           `bun:",embed"`
-	LeaderboardPeriod  enum.LeaderboardPeriod `bun:",notnull"`
+	UserID              snowflake.ID             `bun:",pk"`
+	StreamerMode        bool                     `bun:",notnull"`
+	UserDefaultSort     enum.ReviewSortBy        `bun:",notnull"`
+	GroupDefaultSort    enum.ReviewSortBy        `bun:",notnull"`
+	AppealDefaultSort   enum.AppealSortBy        `bun:",notnull"`
+	AppealStatusFilter  enum.AppealStatus        `bun:",notnull"`
+	ChatModel           enum.ChatModel           `bun:",notnull"`
+	ReviewMode          enum.ReviewMode          `bun:",notnull"`
+	ReviewTargetMode    enum.ReviewTargetMode    `bun:",notnull"`
+	ChatMessageUsage    ChatMessageUsage         `bun:",embed"`
+	CaptchaUsage        CaptchaUsage             `bun:",embed"`
+	LeaderboardPeriod   enum.LeaderboardPeriod   `bun:",notnull"`
+	ReviewerStatsPeriod enum.ReviewerStatsPeriod `bun:",notnull"`
 }
 
 // Announcement stores the dashboard announcement configuration.
