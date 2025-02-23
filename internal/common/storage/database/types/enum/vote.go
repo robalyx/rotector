@@ -2,7 +2,7 @@ package enum
 
 // VoteType represents the type of entity being voted on.
 //
-//go:generate enumer -type=VoteType -trimprefix=VoteType
+//go:generate go tool enumer -type=VoteType -trimprefix=VoteType
 type VoteType int
 
 const (

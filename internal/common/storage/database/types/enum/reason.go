@@ -2,7 +2,7 @@ package enum
 
 // ReasonType represents the source of a flagging reason.
 //
-//go:generate enumer -type=ReasonType -trimprefix=ReasonType
+//go:generate go tool enumer -type=ReasonType -trimprefix=ReasonType
 type ReasonType int
 
 const (

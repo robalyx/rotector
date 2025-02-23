@@ -2,7 +2,7 @@ package enum
 
 // GroupType represents the different states a group can be in.
 //
-//go:generate enumer -type=GroupType -trimprefix=GroupType
+//go:generate go tool enumer -type=GroupType -trimprefix=GroupType
 type GroupType int
 
 const (

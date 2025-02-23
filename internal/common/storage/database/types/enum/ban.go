@@ -2,7 +2,7 @@ package enum
 
 // BanReason represents the reason for a Discord user ban.
 //
-//go:generate enumer -type=BanReason -trimprefix=BanReason
+//go:generate go tool enumer -type=BanReason -trimprefix=BanReason
 type BanReason int
 
 const (
@@ -13,7 +13,7 @@ const (
 
 // BanSource indicates what triggered a ban.
 //
-//go:generate enumer -type=BanSource -trimprefix=BanSource
+//go:generate go tool enumer -type=BanSource -trimprefix=BanSource
 type BanSource int
 
 const (

@@ -2,7 +2,7 @@ package enum
 
 // AppealSortBy represents different ways to sort appeals.
 //
-//go:generate enumer -type=AppealSortBy -trimprefix=AppealSortBy
+//go:generate go tool enumer -type=AppealSortBy -trimprefix=AppealSortBy
 type AppealSortBy int
 
 const (
@@ -16,7 +16,7 @@ const (
 
 // AppealStatus represents the status of an appeal.
 //
-//go:generate enumer -type=AppealStatus -trimprefix=AppealStatus
+//go:generate go tool enumer -type=AppealStatus -trimprefix=AppealStatus
 type AppealStatus int
 
 const (
@@ -27,7 +27,7 @@ const (
 
 // MessageRole represents the role of the message sender.
 //
-//go:generate enumer -type=MessageRole -trimprefix=MessageRole
+//go:generate go tool enumer -type=MessageRole -trimprefix=MessageRole
 type MessageRole int
 
 const (

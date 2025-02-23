@@ -2,7 +2,7 @@ package enum
 
 // ActivityType represents different kinds of user actions in the system.
 //
-//go:generate enumer -type=ActivityType -trimprefix=ActivityType
+//go:generate go tool enumer -type=ActivityType -trimprefix=ActivityType
 type ActivityType int
 
 const (

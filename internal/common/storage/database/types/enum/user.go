@@ -2,7 +2,7 @@ package enum
 
 // UserType represents the different states a user can be in.
 //
-//go:generate enumer -type=UserType -trimprefix=UserType
+//go:generate go tool enumer -type=UserType -trimprefix=UserType
 type UserType int
 
 const (

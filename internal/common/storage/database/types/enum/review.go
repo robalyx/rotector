@@ -2,7 +2,7 @@ package enum
 
 // ReviewSortBy represents different ways to sort reviews.
 //
-//go:generate enumer -type=ReviewSortBy -trimprefix=ReviewSortBy
+//go:generate go tool enumer -type=ReviewSortBy -trimprefix=ReviewSortBy
 type ReviewSortBy int
 
 const (
@@ -20,7 +20,7 @@ const (
 
 // ReviewMode represents different modes of reviewing items.
 //
-//go:generate enumer -type=ReviewMode -trimprefix=ReviewMode
+//go:generate go tool enumer -type=ReviewMode -trimprefix=ReviewMode
 type ReviewMode int
 
 const (
@@ -32,7 +32,7 @@ const (
 
 // ReviewTargetMode represents what type of items to review.
 //
-//go:generate enumer -type=ReviewTargetMode -trimprefix=ReviewTargetMode
+//go:generate go tool enumer -type=ReviewTargetMode -trimprefix=ReviewTargetMode
 type ReviewTargetMode int
 
 const (

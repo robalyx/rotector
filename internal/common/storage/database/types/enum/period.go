@@ -2,7 +2,7 @@ package enum
 
 // LeaderboardPeriod represents different time periods for the leaderboard.
 //
-//go:generate enumer -type=LeaderboardPeriod -trimprefix=LeaderboardPeriod
+//go:generate go tool enumer -type=LeaderboardPeriod -trimprefix=LeaderboardPeriod
 type LeaderboardPeriod int
 
 const (
@@ -17,7 +17,7 @@ const (
 
 // ReviewerStatsPeriod represents different time periods for reviewer statistics.
 //
-//go:generate enumer -type=ReviewerStatsPeriod -trimprefix=ReviewerStatsPeriod
+//go:generate go tool enumer -type=ReviewerStatsPeriod -trimprefix=ReviewerStatsPeriod
 type ReviewerStatsPeriod int
 
 const (

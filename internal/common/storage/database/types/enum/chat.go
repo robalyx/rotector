@@ -2,7 +2,7 @@ package enum
 
 // ChatModel represents different chat models.
 //
-//go:generate enumer -type=ChatModel -trimprefix=ChatModel -linecomment
+//go:generate go tool enumer -type=ChatModel -trimprefix=ChatModel -linecomment
 type ChatModel int
 
 const (

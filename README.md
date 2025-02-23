@@ -68,7 +68,7 @@
 
 ### Essential
 
-- [Go](https://go.dev/) 1.23.2 and above
+- [Go](https://go.dev/) 1.24 and above
 - [PostgreSQL](https://www.postgresql.org/) 17.2 (with [TimescaleDB](https://www.timescale.com/) 2.17.X extension)
 - [DragonflyDB](https://dragonflydb.io/) 1.25.X
 - [Google AI Studio](https://aistudio.google.com/) Paid API key (uses [Gemini 2.0 Flash](https://ai.google.dev/gemini-api/docs/models/gemini#gemini-2.0-flash) by default)
