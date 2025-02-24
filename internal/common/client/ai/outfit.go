@@ -6,13 +6,12 @@ import (
 	"errors"
 	"fmt"
 	"image"
-	"image/png"
 	"strconv"
 	"sync"
 
+	"github.com/HugoSmits86/nativewebp"
 	"github.com/bytedance/sonic"
 	"github.com/google/generative-ai-go/genai"
-	"github.com/google/uuid"
 	"github.com/jaxron/axonet/pkg/client"
 	"github.com/jaxron/roapi.go/pkg/api/resources/thumbnails"
 	apiTypes "github.com/jaxron/roapi.go/pkg/api/types"
@@ -124,7 +123,6 @@ type OutfitAnalysis struct {
 // OutfitAnalyzer handles AI-based outfit analysis using Gemini models.
 type OutfitAnalyzer struct {
 	httpClient       *client.Client
-	genAIClient      *genai.Client
 	outfitModel      *genai.GenerativeModel
 	thumbnailFetcher *fetcher.ThumbnailFetcher
 	analysisSem      *semaphore.Weighted
@@ -175,7 +173,6 @@ func NewOutfitAnalyzer(app *setup.App, logger *zap.Logger) *OutfitAnalyzer {
 
 	return &OutfitAnalyzer{
 		httpClient:       app.RoAPI.GetClient(),
-		genAIClient:      app.GenAIClient,
 		outfitModel:      outfitModel,
 		thumbnailFetcher: fetcher.NewThumbnailFetcher(app.RoAPI, logger),
 		analysisSem:      semaphore.NewWeighted(int64(app.Config.Worker.BatchSizes.OutfitAnalysis)),
@@ -317,22 +314,13 @@ func (a *OutfitAnalyzer) analyzeUserOutfits(ctx context.Context, info *fetcher.I
 			return nil, fmt.Errorf("failed to create outfit grid: %w", err)
 		}
 
-		// Upload grid image to Gemini
-		file, err := a.genAIClient.UploadFile(ctx, uuid.New().String(), gridImage, &genai.UploadFileOptions{
-			MIMEType: "image/png",
-		})
-		if err != nil {
-			return nil, fmt.Errorf("failed to upload grid image: %w", err)
-		}
-		defer a.genAIClient.DeleteFile(ctx, file.Name) //nolint:errcheck
-
 		// Prepare prompt with outfit information
 		prompt := fmt.Sprintf("%s\n\nAnalyze outfits for user %q.\nOutfit names: %v", OutfitRequestPrompt, info.Name, outfitNames)
 
 		// Send request to Gemini
 		resp, err := a.outfitModel.GenerateContent(ctx,
+			genai.ImageData("webp", gridImage.Bytes()),
 			genai.Text(prompt),
-			genai.FileData{URI: file.URI},
 		)
 		if err != nil {
 			return nil, fmt.Errorf("gemini API error: %w", err)
@@ -508,7 +496,7 @@ func (a *OutfitAnalyzer) createGridImage(downloads []DownloadResult) (*bytes.Buf
 
 	// Encode final grid image
 	buf := new(bytes.Buffer)
-	if err := png.Encode(buf, dst); err != nil {
+	if err := nativewebp.Encode(buf, dst, &nativewebp.Options{}); err != nil {
 		return nil, nil, fmt.Errorf("failed to encode grid image: %w", err)
 	}
 
