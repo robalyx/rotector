@@ -4,10 +4,8 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"runtime"
 	"time"
 
-	"github.com/getsentry/sentry-go"
 	"github.com/google/generative-ai-go/genai"
 	"github.com/jaxron/roapi.go/pkg/api"
 	"github.com/redis/rueidis"
@@ -20,6 +18,7 @@ import (
 	"github.com/robalyx/rotector/internal/common/storage/database/migrations"
 	"github.com/robalyx/rotector/internal/common/storage/redis"
 	"github.com/uptrace/bun/migrate"
+	"github.com/uptrace/uptrace-go/uptrace"
 	"go.uber.org/zap"
 	"google.golang.org/api/option"
 )
@@ -77,19 +76,14 @@ func InitializeApp(ctx context.Context, serviceType ServiceType, logDir string) 
 		return nil, err
 	}
 
-	// Initialize Sentry if DSN is provided
-	if cfg.Common.Sentry.DSN != "" {
-		err := sentry.Init(sentry.ClientOptions{
-			Dsn: cfg.Common.Sentry.DSN,
-			BeforeSend: func(event *sentry.Event, _ *sentry.EventHint) *sentry.Event {
-				event.Tags["go_version"] = runtime.Version()
-				return event
-			},
-		})
-		if err != nil {
-			return nil, fmt.Errorf("failed to initialize Sentry: %w", err)
-		}
-		defer sentry.Flush(2 * time.Second)
+	// Configure OpenTelemetry with Uptrace if enabled
+	if cfg.Common.Uptrace.DSN != "" {
+		uptrace.ConfigureOpentelemetry(
+			uptrace.WithDSN(cfg.Common.Uptrace.DSN),
+			uptrace.WithServiceName(cfg.Common.Uptrace.ServiceName),
+			uptrace.WithServiceVersion(cfg.Common.Uptrace.ServiceVersion),
+			uptrace.WithDeploymentEnvironment(cfg.Common.Uptrace.DeployEnvironment),
+		)
 	}
 
 	// Logging system is initialized next to capture setup issues
@@ -167,6 +161,13 @@ func InitializeApp(ctx context.Context, serviceType ServiceType, logDir string) 
 // Cleanup ensures graceful shutdown of all components in reverse initialization order.
 // Logs but does not fail on cleanup errors to ensure all components get cleanup attempts.
 func (s *App) Cleanup(ctx context.Context) {
+	// Shutdown OpenTelemetry to ensure all telemetry is flushed
+	if s.Config.Common.Uptrace.DSN != "" {
+		if err := uptrace.Shutdown(ctx); err != nil {
+			s.Logger.Error("Failed to shutdown OpenTelemetry", zap.Error(err))
+		}
+	}
+
 	// Shutdown pprof server if running
 	if s.pprofServer != nil {
 		if err := s.pprofServer.srv.Shutdown(ctx); err != nil {

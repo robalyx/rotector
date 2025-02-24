@@ -45,7 +45,7 @@ type CommonConfig struct {
 	GeminiAI       GeminiAI       `koanf:"gemini_ai"`
 	Proxy          Proxy          `koanf:"proxy"`
 	Roverse        Roverse        `koanf:"roverse"`
-	Sentry         Sentry         `koanf:"sentry"`
+	Uptrace        Uptrace        `koanf:"uptrace"`
 }
 
 // BotConfig contains Discord bot specific configuration.
@@ -174,9 +174,12 @@ type Roverse struct {
 	MaxConcurrent int64  `koanf:"max_concurrent"` // Maximum concurrent requests
 }
 
-// Sentry contains Sentry error tracking configuration.
-type Sentry struct {
-	DSN string `koanf:"dsn"` // Sentry DSN for error reporting
+// Uptrace contains Uptrace telemetry configuration.
+type Uptrace struct {
+	DSN               string `koanf:"dsn"`                // Uptrace DSN for telemetry
+	ServiceName       string `koanf:"service_name"`       // Service name for telemetry
+	ServiceVersion    string `koanf:"service_version"`    // Service version for telemetry
+	DeployEnvironment string `koanf:"deploy_environment"` // Deployment environment
 }
 
 // LoadConfig loads the configuration from the specified file.

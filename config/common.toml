@@ -15,9 +15,15 @@ enable_pprof = false
 # Port for pprof HTTP server if enabled
 pprof_port = 6060
 
-[common.sentry]
-# Sentry DSN for error tracking (leave empty to disable)
+[common.uptrace]
+# Uptrace DSN for telemetry (leave empty to disable)
 dsn = ""
+# Service name for telemetry
+service_name = "rotector"
+# Service version for telemetry
+service_version = "1.0.0"
+# Deployment environment (development, staging, production)
+deploy_environment = "development"
 
 [common.proxy]
 # Default cooldown period in milliseconds for unspecified endpoints
