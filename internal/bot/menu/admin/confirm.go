@@ -8,7 +8,6 @@ import (
 
 	"github.com/disgoorg/disgo/discord"
 	"github.com/disgoorg/disgo/events"
-	"github.com/disgoorg/snowflake/v2"
 	builder "github.com/robalyx/rotector/internal/bot/builder/admin"
 	"github.com/robalyx/rotector/internal/bot/constants"
 	"github.com/robalyx/rotector/internal/bot/core/pagination"
@@ -80,7 +79,7 @@ func (m *ConfirmMenu) handleBanUser(event *events.ComponentInteractionCreate, s 
 	now := time.Now()
 	expiresAt := session.AdminBanExpiry.Get(s)
 	if err := m.layout.db.Models().Bans().BanUser(context.Background(), &types.DiscordBan{
-		ID:        snowflake.ID(id),
+		ID:        id,
 		Reason:    banReason,
 		Source:    enum.BanSourceAdmin,
 		Notes:     notes,

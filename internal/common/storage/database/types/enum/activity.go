@@ -47,6 +47,9 @@ const (
 	// ActivityTypeGroupDeleted tracks when an admin deletes a group from the database.
 	ActivityTypeGroupDeleted
 
+	// ActivityTypeUserLookupDiscord tracks when a moderator looks up a Discord user's profile.
+	ActivityTypeUserLookupDiscord
+
 	// ActivityTypeAppealSubmitted tracks when a moderator submits an appeal.
 	ActivityTypeAppealSubmitted
 	// ActivityTypeAppealSkipped tracks when a moderator skips reviewing an appeal.
@@ -65,4 +68,7 @@ const (
 
 	// ActivityTypeBotSettingUpdated tracks when a bot setting is updated.
 	ActivityTypeBotSettingUpdated
+
+	// ActivityTypeGuildBans tracks when a guild bans a set of users.
+	ActivityTypeGuildBans
 )

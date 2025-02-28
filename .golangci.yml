@@ -44,6 +44,7 @@ linters-settings:
     min-complexity: 35
   goconst:
     min-len: 4
+    min-occurrences: 4
   nestif:
     min-complexity: 8
   gosec:

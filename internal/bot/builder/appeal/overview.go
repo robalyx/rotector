@@ -31,7 +31,7 @@ func NewOverviewBuilder(s *session.Session) *OverviewBuilder {
 		statusFilter: session.UserAppealStatusFilter.Get(s),
 		hasNextPage:  session.PaginationHasNextPage.Get(s),
 		hasPrevPage:  session.PaginationHasPrevPage.Get(s),
-		isReviewer:   s.BotSettings().IsReviewer(s.UserID()),
+		isReviewer:   s.BotSettings().IsReviewer(session.UserID.Get(s)),
 		streamerMode: session.UserStreamerMode.Get(s),
 	}
 }

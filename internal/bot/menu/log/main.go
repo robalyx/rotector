@@ -44,6 +44,7 @@ func NewMenu(l *Layout) *Menu {
 func (m *Menu) Show(event interfaces.CommonEvent, s *session.Session, r *pagination.Respond) {
 	// Get query parameters from session
 	activityFilter := types.ActivityFilter{
+		GuildID:      session.LogFilterGuildID.Get(s),
 		DiscordID:    session.LogFilterDiscordID.Get(s),
 		UserID:       session.LogFilterUserID.Get(s),
 		GroupID:      session.LogFilterGroupID.Get(s),
@@ -94,6 +95,8 @@ func (m *Menu) handleSelectMenu(event *events.ComponentInteractionCreate, s *ses
 	switch customID {
 	case constants.ActionSelectMenuCustomID:
 		switch option {
+		case constants.LogsQueryGuildIDOption:
+			m.showQueryModal(event, option, "Guild ID", "ID", "Enter the Guild ID to query logs")
 		case constants.LogsQueryDiscordIDOption:
 			m.showQueryModal(event, option, "Discord ID", "ID", "Enter the Discord ID to query logs")
 		case constants.LogsQueryUserIDOption:
@@ -151,7 +154,8 @@ func (m *Menu) handleButton(event *events.ComponentInteractionCreate, s *session
 func (m *Menu) handleModal(event *events.ModalSubmitInteractionCreate, s *session.Session, r *pagination.Respond) {
 	customID := event.Data.CustomID
 	switch customID {
-	case constants.LogsQueryDiscordIDOption,
+	case constants.LogsQueryGuildIDOption,
+		constants.LogsQueryDiscordIDOption,
 		constants.LogsQueryUserIDOption,
 		constants.LogsQueryGroupIDOption,
 		constants.LogsQueryReviewerIDOption:
@@ -189,6 +193,8 @@ func (m *Menu) handleIDModalSubmit(event *events.ModalSubmitInteractionCreate, s
 
 	// Store ID in appropriate session key based on query type
 	switch queryType {
+	case constants.LogsQueryGuildIDOption:
+		session.LogFilterGuildID.Set(s, id)
 	case constants.LogsQueryDiscordIDOption:
 		session.LogFilterDiscordID.Set(s, id)
 	case constants.LogsQueryUserIDOption:

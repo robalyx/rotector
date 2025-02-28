@@ -37,16 +37,17 @@ type ReviewBuilder struct {
 // NewReviewBuilder creates a new review builder.
 func NewReviewBuilder(s *session.Session, translator *translator.Translator, db database.Client) *ReviewBuilder {
 	trainingMode := session.UserReviewMode.Get(s) == enum.ReviewModeTraining
+	userID := session.UserID.Get(s)
 	return &ReviewBuilder{
 		db:             db,
-		userID:         s.UserID(),
+		userID:         userID,
 		user:           session.UserTarget.Get(s),
 		flaggedFriends: session.UserFlaggedFriends.Get(s),
 		flaggedGroups:  session.UserFlaggedGroups.Get(s),
 		translator:     translator,
 		reviewMode:     session.UserReviewMode.Get(s),
 		defaultSort:    session.UserUserDefaultSort.Get(s),
-		isReviewer:     s.BotSettings().IsReviewer(s.UserID()),
+		isReviewer:     s.BotSettings().IsReviewer(userID),
 		trainingMode:   trainingMode,
 		privacyMode:    trainingMode || session.UserStreamerMode.Get(s),
 	}

@@ -25,13 +25,14 @@ type TicketBuilder struct {
 
 // NewTicketBuilder creates a new ticket builder.
 func NewTicketBuilder(s *session.Session) *TicketBuilder {
+	userID := session.UserID.Get(s)
 	return &TicketBuilder{
 		appeal:       session.AppealSelected.Get(s),
 		messages:     session.AppealMessages.Get(s),
 		page:         session.PaginationPage.Get(s),
 		totalPages:   session.PaginationTotalPages.Get(s),
-		userID:       s.UserID(),
-		isReviewer:   s.BotSettings().IsReviewer(s.UserID()),
+		userID:       userID,
+		isReviewer:   s.BotSettings().IsReviewer(userID),
 		streamerMode: session.UserStreamerMode.Get(s),
 	}
 }

@@ -33,7 +33,6 @@ func (m *BanModel) BanUser(ctx context.Context, record *types.DiscordBan) error 
 		Set("source = EXCLUDED.source").
 		Set("notes = EXCLUDED.notes").
 		Set("banned_by = EXCLUDED.banned_by").
-		Set("banned_at = EXCLUDED.banned_at").
 		Set("expires_at = EXCLUDED.expires_at").
 		Set("updated_at = EXCLUDED.updated_at").
 		Exec(ctx)
@@ -41,6 +40,26 @@ func (m *BanModel) BanUser(ctx context.Context, record *types.DiscordBan) error 
 		return err
 	}
 	return nil
+}
+
+// BulkBanUsers creates or updates multiple ban records in a single operation.
+func (m *BanModel) BulkBanUsers(ctx context.Context, records []*types.DiscordBan) error {
+	if len(records) == 0 {
+		return nil
+	}
+
+	_, err := m.db.NewInsert().
+		Model(&records).
+		On("CONFLICT (id) DO UPDATE").
+		Set("reason = EXCLUDED.reason").
+		Set("source = EXCLUDED.source").
+		Set("notes = EXCLUDED.notes").
+		Set("banned_by = EXCLUDED.banned_by").
+		Set("expires_at = EXCLUDED.expires_at").
+		Set("updated_at = EXCLUDED.updated_at").
+		Exec(ctx)
+
+	return err
 }
 
 // UnbanUser removes a ban record for a Discord user.
@@ -73,6 +92,41 @@ func (m *BanModel) IsBanned(ctx context.Context, userID uint64) (bool, error) {
 	}
 
 	return exists, nil
+}
+
+// BulkCheckBanned efficiently checks whether multiple users are banned.
+// Returns a map of user IDs to their banned status.
+func (m *BanModel) BulkCheckBanned(ctx context.Context, userIDs []uint64) (map[uint64]bool, error) {
+	if len(userIDs) == 0 {
+		return map[uint64]bool{}, nil
+	}
+
+	// Initialize result map with all users set to not banned
+	result := make(map[uint64]bool, len(userIDs))
+	for _, id := range userIDs {
+		result[id] = false
+	}
+
+	// Query to find all banned users from the input list
+	var bannedUsers []struct {
+		ID uint64 `bun:"id"`
+	}
+
+	err := m.db.NewSelect().
+		Model((*types.DiscordBan)(nil)).
+		Column("id").
+		Where("id IN (?)", bun.In(userIDs)).
+		Scan(ctx, &bannedUsers)
+	if err != nil {
+		return nil, err
+	}
+
+	// Mark users as banned in the result map
+	for _, user := range bannedUsers {
+		result[user.ID] = true
+	}
+
+	return result, nil
 }
 
 // GetBan retrieves the ban record for a Discord user.

@@ -204,7 +204,7 @@ func (r *SettingRegistry) createReviewModeSetting() *Setting {
 			}
 
 			// Only allow changing to standard mode if user is a reviewer
-			if reviewMode == enum.ReviewModeStandard && !s.BotSettings().IsReviewer(s.UserID()) {
+			if reviewMode == enum.ReviewModeStandard && !s.BotSettings().IsReviewer(UserID.Get(s)) {
 				return ErrNotReviewer
 			}
 
@@ -296,7 +296,7 @@ func (r *SettingRegistry) createSessionLimitSetting() *Setting {
 			BotSessionLimit.Set(s, limit)
 
 			// Log the change
-			r.logBotSettingChange(context.Background(), s.db, s.UserID(),
+			r.logBotSettingChange(context.Background(), s.db, UserID.Get(s),
 				constants.SessionLimitOption,
 				strconv.FormatUint(oldValue, 10),
 				strconv.FormatUint(limit, 10))
@@ -353,7 +353,7 @@ func (r *SettingRegistry) createReviewerIDsSetting() *Setting {
 			BotReviewerIDs.Set(s, reviewerIDs)
 
 			// Log the change
-			r.logBotSettingChange(context.Background(), s.db, s.UserID(),
+			r.logBotSettingChange(context.Background(), s.db, UserID.Get(s),
 				constants.ReviewerIDsOption,
 				fmt.Sprintf("%v", oldIDs),
 				fmt.Sprintf("%v", reviewerIDs))
@@ -410,7 +410,7 @@ func (r *SettingRegistry) createAdminIDsSetting() *Setting {
 			BotAdminIDs.Set(s, adminIDs)
 
 			// Log the change
-			r.logBotSettingChange(context.Background(), s.db, s.UserID(),
+			r.logBotSettingChange(context.Background(), s.db, UserID.Get(s),
 				constants.AdminIDsOption,
 				fmt.Sprintf("%v", oldIDs),
 				fmt.Sprintf("%v", adminIDs))
@@ -455,7 +455,7 @@ func (r *SettingRegistry) createWelcomeMessageSetting() *Setting {
 			BotWelcomeMessage.Set(s, inputs[0])
 
 			// Log the change
-			r.logBotSettingChange(context.Background(), s.db, s.UserID(),
+			r.logBotSettingChange(context.Background(), s.db, UserID.Get(s),
 				constants.WelcomeMessageOption,
 				oldValue,
 				inputs[0])
@@ -509,7 +509,7 @@ func (r *SettingRegistry) createAnnouncementTypeSetting() *Setting {
 			BotAnnouncementType.Set(s, announcementType)
 
 			// Log the change
-			r.logBotSettingChange(context.Background(), s.db, s.UserID(),
+			r.logBotSettingChange(context.Background(), s.db, UserID.Get(s),
 				constants.AnnouncementTypeOption,
 				oldValue.String(),
 				announcementType.String())
@@ -554,7 +554,7 @@ func (r *SettingRegistry) createAnnouncementMessageSetting() *Setting {
 			BotAnnouncementMessage.Set(s, inputs[0])
 
 			// Log the change
-			r.logBotSettingChange(context.Background(), s.db, s.UserID(),
+			r.logBotSettingChange(context.Background(), s.db, UserID.Get(s),
 				constants.AnnouncementMessageOption,
 				oldValue,
 				inputs[0])

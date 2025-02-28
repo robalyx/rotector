@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/bytedance/sonic"
@@ -65,7 +66,7 @@ func NewManager(db database.Client, redisManager *redis.Manager, logger *zap.Log
 
 // GetOrCreateSession loads or initializes a session for a given user.
 // Returns the session and a boolean indicating if it's a new session.
-func (m *Manager) GetOrCreateSession(ctx context.Context, userID snowflake.ID) (*Session, bool, error) {
+func (m *Manager) GetOrCreateSession(ctx context.Context, userID snowflake.ID, isGuildOwner bool) (*Session, bool, error) {
 	// Load bot settings
 	botSettings, err := m.db.Models().Settings().GetBotSettings(ctx)
 	if err != nil {
@@ -110,12 +111,16 @@ func (m *Manager) GetOrCreateSession(ctx context.Context, userID snowflake.ID) (
 			return nil, false, fmt.Errorf("%w: %w", ErrFailedToParseSession, err)
 		}
 
-		session := NewSession(userSettings, botSettings, m.db, m.redis, key, sessionData, m.logger, uint64(userID))
+		session := NewSession(userSettings, botSettings, m.db, m.redis, key, sessionData, m.logger)
+		UserID.Set(session, uint64(userID))
+		IsGuildOwner.Set(session, isGuildOwner)
 		return session, false, nil
 	}
 
 	// Initialize new session with fresh settings
-	session := NewSession(userSettings, botSettings, m.db, m.redis, key, make(map[string]interface{}), m.logger, uint64(userID))
+	session := NewSession(userSettings, botSettings, m.db, m.redis, key, make(map[string]interface{}), m.logger)
+	UserID.Set(session, uint64(userID))
+	IsGuildOwner.Set(session, isGuildOwner)
 	return session, true, nil
 }
 
@@ -130,9 +135,9 @@ func (m *Manager) CloseSession(ctx context.Context, userID uint64) {
 
 // GetActiveUsers scans Redis for all session keys and extracts the user IDs.
 // Uses cursor-based scanning to handle large numbers of sessions.
-func (m *Manager) GetActiveUsers(ctx context.Context) []snowflake.ID {
+func (m *Manager) GetActiveUsers(ctx context.Context) []uint64 {
 	pattern := SessionPrefix + "*"
-	var activeUsers []snowflake.ID
+	var activeUsers []uint64
 	cursor := uint64(0)
 
 	for {
@@ -152,7 +157,7 @@ func (m *Manager) GetActiveUsers(ctx context.Context) []snowflake.ID {
 		// Extract user IDs from key names
 		for _, key := range keys.Elements {
 			userIDStr := key[len(SessionPrefix):]
-			if userID, err := snowflake.Parse(userIDStr); err == nil {
+			if userID, err := strconv.ParseUint(userIDStr, 10, 64); err == nil {
 				activeUsers = append(activeUsers, userID)
 			}
 		}

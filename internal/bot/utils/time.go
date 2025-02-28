@@ -18,6 +18,10 @@ var (
 	ErrEndDateBeforeStartDate = errors.New("end date cannot be before start date")
 	// ErrPermanentBan indicates that no duration was specified, meaning a permanent ban.
 	ErrPermanentBan = errors.New("permanent ban")
+	// ErrInvalidDurationFormat indicates that the duration string is not in the correct format.
+	ErrInvalidDurationFormat = errors.New("invalid duration format")
+	// ErrInvalidNumberFormat indicates that the number string is not in the correct format.
+	ErrInvalidNumberFormat = errors.New("invalid number format")
 )
 
 // ParseDateRange converts a date range string into start and end time.Time values.
@@ -81,6 +85,145 @@ func ParseBanDuration(durationStr string) (*time.Time, error) {
 	return &expiresAt, nil
 }
 
+// ParseCombinedDuration parses a duration string that may contain days (d) along with
+// other time units. It supports formats like "1d", "24h", "1d12h", "1d12h30m", etc.
+// This is more flexible than Go's standard time.ParseDuration which doesn't support days.
+func ParseCombinedDuration(s string) (time.Duration, error) {
+	// Trim spaces and convert to lowercase
+	s = strings.TrimSpace(strings.ToLower(s))
+	if s == "" {
+		return 0, ErrInvalidDurationFormat
+	}
+
+	// Remove all whitespace for easier parsing
+	s = strings.ReplaceAll(s, " ", "")
+
+	// Simple case: standard Go duration without days
+	if !strings.Contains(s, "d") {
+		return time.ParseDuration(s)
+	}
+
+	// Simple case: just days
+	if strings.HasSuffix(s, "d") && !strings.Contains(s[:len(s)-1], "d") {
+		daysStr := s[:len(s)-1]
+		days, err := parseFloat(daysStr)
+		if err != nil {
+			return 0, fmt.Errorf("invalid days value: %w", err)
+		}
+		return time.Duration(days * 24 * float64(time.Hour)), nil
+	}
+
+	// For combined durations with days, use token-based parsing
+	var totalDuration time.Duration
+	currentNumber := ""
+
+	for i := 0; i < len(s); i++ {
+		char := s[i]
+
+		// Collect digits for the current number
+		if isDigit(char) || char == '.' {
+			currentNumber += string(char)
+			continue
+		}
+
+		// We've reached a unit designator
+		if currentNumber == "" {
+			return 0, fmt.Errorf("%w: unexpected character %c", ErrInvalidDurationFormat, char)
+		}
+
+		// Identify the unit (support for multi-character units)
+		unit := string(char)
+		if i+1 < len(s) && !isDigit(s[i+1]) && s[i+1] != '.' {
+			unit += string(s[i+1])
+			i++
+		}
+
+		// Parse the number value
+		value, err := parseFloat(currentNumber)
+		if err != nil {
+			return 0, fmt.Errorf("invalid duration value: %w", err)
+		}
+		currentNumber = ""
+
+		// Add to total duration based on unit
+		switch unit {
+		case "d":
+			totalDuration += time.Duration(value * 24 * float64(time.Hour))
+		case "h":
+			totalDuration += time.Duration(value * float64(time.Hour))
+		case "m":
+			totalDuration += time.Duration(value * float64(time.Minute))
+		case "s":
+			totalDuration += time.Duration(value * float64(time.Second))
+		case "ms":
+			totalDuration += time.Duration(value * float64(time.Millisecond))
+		case "us", "µs":
+			totalDuration += time.Duration(value * float64(time.Microsecond))
+		case "ns":
+			totalDuration += time.Duration(value * float64(time.Nanosecond))
+		default:
+			return 0, fmt.Errorf("%w: unknown unit %s", ErrInvalidDurationFormat, unit)
+		}
+	}
+
+	// Check if we ended with a number without a unit
+	if currentNumber != "" {
+		return 0, fmt.Errorf("%w: missing unit after number", ErrInvalidDurationFormat)
+	}
+
+	return totalDuration, nil
+}
+
+func isDigit(c byte) bool {
+	return '0' <= c && c <= '9'
+}
+
+func parseFloat(s string) (float64, error) {
+	// Simple string to float conversion that handles leading/trailing spaces
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return 0, ErrInvalidNumberFormat
+	}
+
+	var result float64
+	var isNegative bool
+
+	// Handle negative numbers
+	if s[0] == '-' {
+		isNegative = true
+		s = s[1:]
+	}
+
+	// Parse digits before decimal point
+	i := 0
+	for i < len(s) && isDigit(s[i]) {
+		result = result*10 + float64(s[i]-'0')
+		i++
+	}
+
+	// Handle decimal point
+	if i < len(s) && s[i] == '.' {
+		i++
+		divisor := 10.0
+		for i < len(s) && isDigit(s[i]) {
+			result += float64(s[i]-'0') / divisor
+			divisor *= 10
+			i++
+		}
+	}
+
+	// Check if there are any remaining characters
+	if i < len(s) {
+		return 0, fmt.Errorf("%w: %s", ErrInvalidNumberFormat, s)
+	}
+
+	if isNegative {
+		result = -result
+	}
+
+	return result, nil
+}
+
 // FormatTimeAgo returns a human-readable string representing how long ago a time was.
 func FormatTimeAgo(t time.Time) string {
 	if t.IsZero() {
@@ -88,7 +231,7 @@ func FormatTimeAgo(t time.Time) string {
 	}
 
 	duration := time.Since(t)
-	return formatDuration(duration) + " ago"
+	return FormatDuration(duration) + " ago"
 }
 
 // FormatTimeUntil returns a human-readable string representing how long until a time.
@@ -98,11 +241,11 @@ func FormatTimeUntil(t time.Time) string {
 	}
 
 	duration := time.Until(t)
-	return "in " + formatDuration(duration)
+	return "in " + FormatDuration(duration)
 }
 
-// formatDuration converts a duration to a human-readable string.
-func formatDuration(d time.Duration) string {
+// FormatDuration converts a duration to a human-readable string.
+func FormatDuration(d time.Duration) string {
 	seconds := int(d.Seconds())
 
 	if seconds < 60 {

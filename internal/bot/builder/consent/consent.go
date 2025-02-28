@@ -14,7 +14,7 @@ type Builder struct {
 // NewBuilder creates a new consent builder.
 func NewBuilder(s *session.Session) *Builder {
 	return &Builder{
-		userID: s.UserID(),
+		userID: session.UserID.Get(s),
 	}
 }
 

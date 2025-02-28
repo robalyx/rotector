@@ -72,7 +72,7 @@ func (b *OutfitsBuilder) Build() *discord.MessageUpdateBuilder {
 	if !b.isStreaming {
 		builder.AddContainerComponents([]discord.ContainerComponent{
 			discord.NewActionRow(
-				discord.NewSecondaryButton("◀️", string(constants.BackButtonCustomID)),
+				discord.NewSecondaryButton("◀️", constants.BackButtonCustomID),
 				discord.NewSecondaryButton("⏮️", string(session.ViewerFirstPage)).WithDisabled(b.page == 0),
 				discord.NewSecondaryButton("◀️", string(session.ViewerPrevPage)).WithDisabled(b.page == 0),
 				discord.NewSecondaryButton("▶️", string(session.ViewerNextPage)).WithDisabled(b.page == totalPages-1),

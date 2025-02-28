@@ -10,21 +10,24 @@ import (
 // CommonEvent extracts shared functionality from different Discord event types.
 // This allows pagination to work with any interaction event without type checking.
 type CommonEvent interface {
-	// Client returns the Discord client instance handling this event
+	// Client returns the Discord client instance handling this event.
 	Client() bot.Client
 
-	// ApplicationID returns the bot's application ID for API requests
+	// ApplicationID returns the bot's application ID for API requests.
 	ApplicationID() snowflake.ID
 
-	// Token returns the interaction token for responding to the event
+	// Token returns the interaction token for responding to the event.
 	Token() string
 
-	// User returns the Discord user who triggered this event
+	// User returns the Discord user who triggered this event.
 	User() discord.User
 
-	// GuildID returns the ID of the guild where the event occurred
-	// Returns nil for direct message events
+	// GuildID returns the ID of the guild where the event occurred.
+	// Returns nil for direct message events.
 	GuildID() *snowflake.ID
+
+	// Member returns the member who triggered this event.
+	Member() *discord.ResolvedMember
 }
 
 // These type assertions ensure that all event types properly implement

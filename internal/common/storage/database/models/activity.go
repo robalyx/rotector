@@ -35,6 +35,8 @@ func (r *ActivityModel) Log(ctx context.Context, log *types.ActivityLog) {
 	if err != nil {
 		r.logger.Error("Failed to log activity",
 			zap.Error(err),
+			zap.Uint64("guildID", log.ActivityTarget.GuildID),
+			zap.Uint64("discordID", log.ActivityTarget.DiscordID),
 			zap.Uint64("userID", log.ActivityTarget.UserID),
 			zap.Uint64("groupID", log.ActivityTarget.GroupID),
 			zap.Uint64("reviewerID", log.ReviewerID),
@@ -43,6 +45,8 @@ func (r *ActivityModel) Log(ctx context.Context, log *types.ActivityLog) {
 	}
 
 	r.logger.Debug("Logged activity",
+		zap.Uint64("guildID", log.ActivityTarget.GuildID),
+		zap.Uint64("discordID", log.ActivityTarget.DiscordID),
 		zap.Uint64("userID", log.ActivityTarget.UserID),
 		zap.Uint64("groupID", log.ActivityTarget.GroupID),
 		zap.Uint64("reviewerID", log.ReviewerID),
@@ -56,6 +60,9 @@ func (r *ActivityModel) GetLogs(ctx context.Context, filter types.ActivityFilter
 	// Build base query conditions
 	query := r.db.NewSelect().Model(&logs)
 
+	if filter.GuildID != 0 {
+		query = query.Where("guild_id = ?", filter.GuildID)
+	}
 	if filter.DiscordID != 0 {
 		query = query.Where("discord_id = ?", filter.DiscordID)
 	}

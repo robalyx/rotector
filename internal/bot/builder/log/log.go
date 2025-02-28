@@ -17,6 +17,7 @@ import (
 // Builder creates the visual layout for viewing activity logs.
 type Builder struct {
 	logs               []*types.ActivityLog
+	guildID            uint64
 	discordID          uint64
 	userID             uint64
 	groupID            uint64
@@ -34,6 +35,7 @@ type Builder struct {
 func NewBuilder(s *session.Session) *Builder {
 	return &Builder{
 		logs:               session.LogActivities.Get(s),
+		guildID:            session.LogFilterGuildID.Get(s),
 		discordID:          session.LogFilterDiscordID.Get(s),
 		userID:             session.LogFilterUserID.Get(s),
 		groupID:            session.LogFilterGroupID.Get(s),
@@ -56,6 +58,9 @@ func (b *Builder) Build() *discord.MessageUpdateBuilder {
 		SetColor(utils.GetMessageEmbedColor(b.privacyMode))
 
 	// Add fields for each active query condition
+	if b.guildID != 0 {
+		embed.AddField("Guild ID", fmt.Sprintf("`%s`", utils.CensorString(strconv.FormatUint(b.guildID, 10), b.privacyMode)), true)
+	}
 	if b.discordID != 0 {
 		embed.AddField("Discord ID", fmt.Sprintf("`%s`", utils.CensorString(strconv.FormatUint(b.discordID, 10), b.privacyMode)), true)
 	}
@@ -86,6 +91,10 @@ func (b *Builder) Build() *discord.MessageUpdateBuilder {
 			}
 
 			description := fmt.Sprintf("Activity: `%s`", log.ActivityType.String())
+
+			if log.ActivityTarget.GuildID != 0 {
+				description += fmt.Sprintf("\nGuild: %d", log.ActivityTarget.GuildID)
+			}
 
 			if log.ActivityTarget.DiscordID != 0 {
 				description += fmt.Sprintf("\nDiscord: <@%d>", log.ActivityTarget.DiscordID)
@@ -130,6 +139,8 @@ func (b *Builder) buildComponents() []discord.ContainerComponent {
 		// Query condition selection menu
 		discord.NewActionRow(
 			discord.NewStringSelectMenu(constants.ActionSelectMenuCustomID, "Set Filter Condition",
+				discord.NewStringSelectMenuOption("Filter by Guild ID", constants.LogsQueryGuildIDOption).
+					WithDescription(utils.CensorString(strconv.FormatUint(b.guildID, 10), b.privacyMode)),
 				discord.NewStringSelectMenuOption("Filter by Discord ID", constants.LogsQueryDiscordIDOption).
 					WithDescription(utils.CensorString(strconv.FormatUint(b.discordID, 10), b.privacyMode)),
 				discord.NewStringSelectMenuOption("Filter by User ID", constants.LogsQueryUserIDOption).
@@ -227,6 +238,8 @@ func (b *Builder) buildActivityTypeOptions() []discord.StringSelectMenuOption {
 			WithDefault(b.activityTypeFilter == enum.ActivityTypeDiscordUserUnbanned),
 		discord.NewStringSelectMenuOption("Bot Setting Updated", strconv.Itoa(int(enum.ActivityTypeBotSettingUpdated))).
 			WithDefault(b.activityTypeFilter == enum.ActivityTypeBotSettingUpdated),
+		discord.NewStringSelectMenuOption("Guild Bans", strconv.Itoa(int(enum.ActivityTypeGuildBans))).
+			WithDefault(b.activityTypeFilter == enum.ActivityTypeGuildBans),
 	}
 
 	// Add options based on current category or activity type

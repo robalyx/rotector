@@ -53,28 +53,38 @@ const (
 	QueuePageName         = "Queue Manager"
 	StatusPageName        = "Status"
 	ReviewerStatsPageName = "Reviewer Stats"
+
+	GuildOwnerPageName  = "Guild Owner Menu"
+	GuildScanPageName   = "Guild Scan Results"
+	GuildLogsPageName   = "Guild Ban Logs"
+	GuildLookupPageName = "Guild User Lookup"
 )
 
 // Dashboard Menu.
 const (
-	StartUserReviewButtonCustomID  = "start_user_review"
-	StartGroupReviewButtonCustomID = "start_group_review"
-	UserSettingsButtonCustomID     = "user_settings"
-	ActivityBrowserButtonCustomID  = "activity_browser"
-	LeaderboardMenuButtonCustomID  = "leaderboard_menu"
-	QueueManagerButtonCustomID     = "queue_manager"
-	AdminMenuButtonCustomID        = "admin_menu"
-	AppealMenuButtonCustomID       = "appeal_menu"
-	ChatAssistantButtonCustomID    = "chat_assistant"
-	WorkerStatusButtonCustomID     = "worker_status"
-	LookupUserButtonCustomID       = "lookup_user" + ModalOpenSuffix
-	LookupGroupButtonCustomID      = "lookup_group" + ModalOpenSuffix
-	ReviewerStatsButtonCustomID    = "reviewer_stats"
+	StartUserReviewButtonCustomID   = "start_user_review"
+	StartGroupReviewButtonCustomID  = "start_group_review"
+	UserSettingsButtonCustomID      = "user_settings"
+	ActivityBrowserButtonCustomID   = "activity_browser"
+	LeaderboardMenuButtonCustomID   = "leaderboard_menu"
+	QueueManagerButtonCustomID      = "queue_manager"
+	AdminMenuButtonCustomID         = "admin_menu"
+	AppealMenuButtonCustomID        = "appeal_menu"
+	ChatAssistantButtonCustomID     = "chat_assistant"
+	WorkerStatusButtonCustomID      = "worker_status"
+	LookupRobloxUserButtonCustomID  = "lookup_roblox_user" + ModalOpenSuffix
+	LookupRobloxGroupButtonCustomID = "lookup_roblox_group" + ModalOpenSuffix
+	LookupDiscordUserButtonCustomID = "lookup_discord_user" + ModalOpenSuffix
+	ReviewerStatsButtonCustomID     = "reviewer_stats"
 
-	LookupUserModalCustomID  = "lookup_user_modal"
-	LookupUserInputCustomID  = "lookup_user_input"
-	LookupGroupModalCustomID = "lookup_group_modal"
-	LookupGroupInputCustomID = "lookup_group_input"
+	LookupRobloxUserModalCustomID = "lookup_roblox_user_modal"
+	LookupRobloxUserInputCustomID = "lookup_roblox_user_input"
+
+	LookupRobloxGroupModalCustomID = "lookup_roblox_group_modal"
+	LookupRobloxGroupInputCustomID = "lookup_roblox_group_input"
+
+	LookupDiscordUserModalCustomID = "lookup_discord_user_modal"
+	LookupDiscordUserInputCustomID = "lookup_discord_user_input"
 )
 
 // Consent Menu.
@@ -259,6 +269,7 @@ const (
 const (
 	LogsPerPage                         = 10
 	LogsQueryInputCustomID              = "query_input"
+	LogsQueryGuildIDOption              = "query_guild_id" + ModalOpenSuffix
 	LogsQueryDiscordIDOption            = "query_discord_id" + ModalOpenSuffix
 	LogsQueryUserIDOption               = "query_user_id" + ModalOpenSuffix
 	LogsQueryGroupIDOption              = "query_group_id" + ModalOpenSuffix
@@ -364,4 +375,25 @@ const (
 const (
 	ReviewerStatsPerPage                  = 5
 	ReviewerStatsPeriodSelectMenuCustomID = "reviewer_stats_period"
+)
+
+// Guild Owner Menu.
+const (
+	GuildScanUsersPerPage = 10
+
+	GuildOwnerMenuButtonCustomID   = "guild_owner_menu"
+	StartGuildScanButtonCustomID   = "start_guild_scan"
+	ViewGuildBanLogsButtonCustomID = "view_guild_ban_logs"
+	ConfirmGuildBansButtonCustomID = "confirm_guild_bans" + ModalOpenSuffix
+
+	GuildBanConfirmModalCustomID = "guild_ban_confirm_modal"
+	GuildBanReasonInputCustomID  = "guild_ban_reason_input"
+
+	GuildScanFilterSelectMenuCustomID  = "guild_scan_filter_select"
+	GuildScanMinGuildsOption           = "guild_scan_min_guilds" + ModalOpenSuffix
+	GuildScanMinGuildsModalCustomID    = "guild_scan_min_guilds_modal"
+	GuildScanMinGuildsInputCustomID    = "guild_scan_min_guilds_input"
+	GuildScanJoinDurationOption        = "guild_scan_join_duration" + ModalOpenSuffix
+	GuildScanJoinDurationModalCustomID = "guild_scan_join_duration_modal"
+	GuildScanJoinDurationInputCustomID = "guild_scan_join_duration_input"
 )

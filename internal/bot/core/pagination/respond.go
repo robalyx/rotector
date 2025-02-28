@@ -40,7 +40,7 @@ func (r *Respond) Error(event interfaces.CommonEvent, message string) {
 	r.responded = true
 }
 
-// Clear updates the interaction response with a clear message.
+// Clear updates the interaction response with a message and clears the embeds, files, and components.
 func (r *Respond) Clear(event interfaces.CommonEvent, content string) {
 	messageUpdate := discord.NewMessageUpdateBuilder().
 		SetContent(utils.GetTimestampedSubtext(content)).

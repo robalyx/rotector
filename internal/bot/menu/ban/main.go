@@ -35,8 +35,10 @@ func NewMenu(layout *Layout) *Menu {
 
 // Show displays the ban information to the user.
 func (m *Menu) Show(event interfaces.CommonEvent, s *session.Session, r *pagination.Respond) {
+	userID := session.UserID.Get(s)
+
 	// Get ban information
-	ban, err := m.layout.db.Models().Bans().GetBan(context.Background(), s.UserID())
+	ban, err := m.layout.db.Models().Bans().GetBan(context.Background(), userID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			r.Show(event, s, constants.DashboardPageName, "")
@@ -45,17 +47,17 @@ func (m *Menu) Show(event interfaces.CommonEvent, s *session.Session, r *paginat
 
 		m.layout.logger.Error("Failed to get ban information",
 			zap.Error(err),
-			zap.Uint64("user_id", s.UserID()))
+			zap.Uint64("user_id", userID))
 		r.Error(event, "Failed to retrieve ban information. Please try again later.")
 		return
 	}
 
 	// If ban is expired, remove it and return to dashboard
 	if ban.IsExpired() {
-		if _, err := m.layout.db.Models().Bans().UnbanUser(context.Background(), s.UserID()); err != nil {
+		if _, err := m.layout.db.Models().Bans().UnbanUser(context.Background(), userID); err != nil {
 			m.layout.logger.Error("Failed to remove expired ban",
 				zap.Error(err),
-				zap.Uint64("user_id", s.UserID()))
+				zap.Uint64("user_id", userID))
 		}
 		r.Show(event, s, constants.DashboardPageName, "Your ban has expired. You may now use the bot.")
 		return

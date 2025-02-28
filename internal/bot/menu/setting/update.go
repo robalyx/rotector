@@ -247,7 +247,7 @@ func (m *UpdateMenu) getSetting(settingType, settingKey string) *session.Setting
 // validateSettingValue validates a setting value.
 func (m *UpdateMenu) validateSettingValue(s *session.Session, setting *session.Setting, value string) error {
 	for _, validator := range setting.Validators {
-		if err := validator(value, s.UserID()); err != nil {
+		if err := validator(value, session.UserID.Get(s)); err != nil {
 			return err
 		}
 	}

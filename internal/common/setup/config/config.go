@@ -46,6 +46,12 @@ type CommonConfig struct {
 	Proxy          Proxy          `koanf:"proxy"`
 	Roverse        Roverse        `koanf:"roverse"`
 	Uptrace        Uptrace        `koanf:"uptrace"`
+	Discord        DiscordConfig  `koanf:"discord"`
+}
+
+// DiscordConfig contains Discord-related configuration.
+type DiscordConfig struct {
+	SyncToken string `koanf:"sync_token"` // Self-bot token for server scanning
 }
 
 // BotConfig contains Discord bot specific configuration.

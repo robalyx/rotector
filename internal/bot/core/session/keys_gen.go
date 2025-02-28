@@ -29,7 +29,6 @@ import (
 	"github.com/robalyx/rotector/internal/common/queue"
 	"github.com/robalyx/rotector/internal/worker/core"
 	apiTypes "github.com/jaxron/roapi.go/pkg/api/types"
-	"github.com/disgoorg/snowflake/v2"
 )
 
 var (
@@ -47,8 +46,12 @@ var (
 
 func main() {
 	keys := []KeyDef{
+		// Required keys
+		{Name: "UserID", Type: "uint64", Doc: "UserID stores the user ID", Persist: false},
+		{Name: "IsGuildOwner", Type: "bool", Doc: "IsGuildOwner indicates if the user is a guild owner", Persist: false},
+
 		// Navigation related keys
-		{Name: "MessageID", Type: "string", Doc: "MessageID stores the ID of the current message", Persist: true},
+		{Name: "MessageID", Type: "uint64", Doc: "MessageID stores the ID of the current message", Persist: true},
 		{Name: "CurrentPage", Type: "string", Doc: "CurrentPage stores the current page identifier", Persist: true},
 		{Name: "PreviousPages", Type: "[]string", Doc: "PreviousPages stores the navigation history", Persist: true},
 
@@ -65,7 +68,7 @@ func main() {
 		{Name: "StatsIsRefreshed", Type: "bool", Doc: "StatsIsRefreshed indicates if the data has been refreshed", Persist: true},
 		{Name: "StatsUserCounts", Type: "*types.UserCounts", Doc: "StatsUserCounts stores user statistics", Persist: true},
 		{Name: "StatsGroupCounts", Type: "*types.GroupCounts", Doc: "StatsGroupCounts stores group statistics", Persist: true},
-		{Name: "StatsActiveUsers", Type: "[]snowflake.ID", Doc: "StatsActiveUsers stores the list of active reviewers", Persist: true},
+		{Name: "StatsActiveUsers", Type: "[]uint64", Doc: "StatsActiveUsers stores the list of active reviewers", Persist: true},
 		{Name: "StatsVotes", Type: "*types.VoteAccuracy", Doc: "StatsVotes stores a user's voting statistics", Persist: true},
 
 		// Status related keys
@@ -94,6 +97,12 @@ func main() {
 		{Name: "GroupMembers", Type: "map[uint64]*types.ReviewUser", Doc: "GroupMembers stores member details for the current group", Persist: false},
 		{Name: "GroupPageMembers", Type: "[]uint64", Doc: "GroupPageMembers stores the current page of group members", Persist: false},
 
+		// Discord user lookup related keys
+		{Name: "DiscordUserLookupID", Type: "uint64", Doc: "DiscordUserLookupID stores the Discord user ID being looked up", Persist: true},
+		{Name: "DiscordUserLookupName", Type: "string", Doc: "DiscordUserLookupName stores the Discord username", Persist: true},
+		{Name: "DiscordUserGuilds", Type: "[]*types.UserGuildInfo", Doc: "DiscordUserGuilds stores a Discord user's guild memberships", Persist: true},
+		{Name: "DiscordUserGuildNames", Type: "map[uint64]string", Doc: "DiscordUserGuildNames stores guild names for a Discord user", Persist: true},
+
 		// Chat related keys
 		{Name: "ChatHistory", Type: "ai.ChatHistory", Doc: "ChatHistory stores the conversation history", Persist: true},
 		{Name: "ChatContext", Type: "string", Doc: "ChatContext stores chat context information", Persist: true},
@@ -103,6 +112,7 @@ func main() {
 		{Name: "LogCursor", Type: "*types.LogCursor", Doc: "LogCursor stores the current log cursor", Persist: false},
 		{Name: "LogNextCursor", Type: "*types.LogCursor", Doc: "LogNextCursor stores the next log cursor", Persist: true},
 		{Name: "LogPrevCursors", Type: "[]*types.LogCursor", Doc: "LogPrevCursors stores previous log cursors", Persist: true},
+		{Name: "LogFilterGuildID", Type: "uint64", Doc: "LogFilterGuildID stores guild ID filter", Persist: true},
 		{Name: "LogFilterDiscordID", Type: "uint64", Doc: "LogFilterDiscordID stores Discord ID filter", Persist: true},
 		{Name: "LogFilterUserID", Type: "uint64", Doc: "LogFilterUserID stores user ID filter", Persist: true},
 		{Name: "LogFilterGroupID", Type: "uint64", Doc: "LogFilterGroupID stores group ID filter", Persist: true},
@@ -162,6 +172,18 @@ func main() {
 		{Name: "ReviewerStatsPrevCursors", Type: "[]*types.ReviewerStatsCursor", Doc: "ReviewerStatsPrevCursors stores previous reviewer stats cursors", Persist: true},
 		{Name: "ReviewerStatsLastRefresh", Type: "time.Time", Doc: "ReviewerStatsLastRefresh stores the last refresh time", Persist: true},
 		{Name: "ReviewerStatsNextRefresh", Type: "time.Time", Doc: "ReviewerStatsNextRefresh stores the next refresh time", Persist: true},
+
+		// Guild owner related keys
+		{Name: "GuildStatsID", Type: "uint64", Doc: "GuildStatsID stores the current guild ID", Persist: true},
+		{Name: "GuildStatsName", Type: "string", Doc: "GuildStatsName stores the current guild name", Persist: true},
+		{Name: "GuildStatsUniqueGuilds", Type: "int", Doc: "GuildStatsUniqueGuilds stores the count of unique guilds in the database", Persist: true},
+		{Name: "GuildStatsUniqueUsers", Type: "int", Doc: "GuildStatsUniqueUsers stores the count of unique users in the database", Persist: true},
+		{Name: "GuildScanUserGuilds", Type: "map[uint64][]*types.UserGuildInfo", Doc: "GuildScanUserGuilds stores users and their guilds", Persist: true},
+		{Name: "GuildScanGuildNames", Type: "map[uint64]string", Doc: "GuildScanGuildNames stores guild names for flagged users", Persist: true},
+		{Name: "GuildScanMinGuilds", Type: "int", Doc: "GuildScanMinGuilds stores the minimum guilds filter value", Persist: true},
+		{Name: "GuildScanMinJoinDuration", Type: "time.Duration", Doc: "GuildScanMinJoinDuration stores the minimum join duration filter value", Persist: true},
+		{Name: "GuildScanFilteredUsers", Type: "map[uint64][]*types.UserGuildInfo", Doc: "GuildScanFilteredUsers stores users filtered by criteria", Persist: true},
+		{Name: "GuildScanTopGuilds", Type: "[]*types.GuildCount", Doc: "GuildScanTopGuilds stores the most common flagged guilds and their counts", Persist: true},
 	}
 
 	bufferKeys := []KeyDef{

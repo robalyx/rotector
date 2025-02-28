@@ -9,6 +9,7 @@ import (
 // ActivityTarget identifies the target of an activity log entry.
 // Only one of the fields should be set.
 type ActivityTarget struct {
+	GuildID   uint64 `bun:",nullzero"`
 	DiscordID uint64 `bun:",nullzero"`
 	UserID    uint64 `bun:",nullzero"`
 	GroupID   uint64 `bun:",nullzero"`
@@ -16,6 +17,7 @@ type ActivityTarget struct {
 
 // ActivityFilter is used to provide a filter criteria for retrieving activity logs.
 type ActivityFilter struct {
+	GuildID      uint64
 	DiscordID    uint64
 	UserID       uint64
 	GroupID      uint64

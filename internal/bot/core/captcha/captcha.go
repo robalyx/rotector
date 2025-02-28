@@ -56,7 +56,7 @@ func (m *Manager) GenerateImage() ([]byte, *bytes.Buffer, error) {
 // IncrementReviewCounter increments the review counter and updates settings.
 func (m *Manager) IncrementReviewCounter(s *session.Session) error {
 	// Only increment for non-reviewers in training mode
-	if !s.BotSettings().IsReviewer(s.UserID()) && session.UserReviewMode.Get(s) == enum.ReviewModeTraining {
+	if !s.BotSettings().IsReviewer(session.UserID.Get(s)) && session.UserReviewMode.Get(s) == enum.ReviewModeTraining {
 		reviewCount := session.UserCaptchaUsageCaptchaReviewCount.Get(s)
 		session.UserCaptchaUsageCaptchaReviewCount.Set(s, reviewCount+1)
 	}
@@ -66,6 +66,6 @@ func (m *Manager) IncrementReviewCounter(s *session.Session) error {
 // IsRequired checks if CAPTCHA verification is needed.
 func (m *Manager) IsRequired(s *session.Session) bool {
 	return session.UserReviewMode.Get(s) == enum.ReviewModeTraining &&
-		!s.BotSettings().IsReviewer(s.UserID()) &&
+		!s.BotSettings().IsReviewer(session.UserID.Get(s)) &&
 		session.UserCaptchaUsageCaptchaReviewCount.Get(s) >= 10
 }

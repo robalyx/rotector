@@ -40,8 +40,8 @@ func (b *Builder) Build() *discord.MessageUpdateBuilder {
 	return discord.NewMessageUpdateBuilder().
 		SetEmbeds(embed).
 		AddActionRow(
-			discord.NewSecondaryButton("◀️", string(constants.BackButtonCustomID)),
-			discord.NewSecondaryButton("🔄 Refresh", string(constants.RefreshButtonCustomID)),
+			discord.NewSecondaryButton("◀️", constants.BackButtonCustomID),
+			discord.NewSecondaryButton("🔄 Refresh", constants.RefreshButtonCustomID),
 		)
 }
 

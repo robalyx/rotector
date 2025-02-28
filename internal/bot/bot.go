@@ -28,6 +28,7 @@ import (
 	"github.com/robalyx/rotector/internal/bot/menu/chat"
 	"github.com/robalyx/rotector/internal/bot/menu/consent"
 	"github.com/robalyx/rotector/internal/bot/menu/dashboard"
+	"github.com/robalyx/rotector/internal/bot/menu/guild"
 	"github.com/robalyx/rotector/internal/bot/menu/leaderboard"
 	"github.com/robalyx/rotector/internal/bot/menu/log"
 	"github.com/robalyx/rotector/internal/bot/menu/queue"
@@ -91,6 +92,7 @@ func New(app *setup.App) (*Bot, error) {
 				gateway.IntentGuilds,
 				gateway.IntentGuildMessages,
 				gateway.IntentDirectMessages,
+				gateway.IntentGuildMembers,
 			),
 		),
 		bot.WithEventListeners(&events.ListenerAdapter{
@@ -121,6 +123,7 @@ func New(app *setup.App) (*Bot, error) {
 	consentLayout := consent.New(app)
 	banLayout := ban.New(app, sessionManager)
 	reviewerLayout := reviewer.New(app, client)
+	guildLayout := guild.New(app)
 
 	paginationManager.AddPages(settingLayout.Pages())
 	paginationManager.AddPages(logLayout.Pages())
@@ -138,7 +141,7 @@ func New(app *setup.App) (*Bot, error) {
 	paginationManager.AddPages(consentLayout.Pages())
 	paginationManager.AddPages(banLayout.Pages())
 	paginationManager.AddPages(reviewerLayout.Pages())
-
+	paginationManager.AddPages(guildLayout.Pages())
 	return b, nil
 }
 
@@ -319,9 +322,9 @@ func (b *Bot) handleComponentInteraction(event *events.ComponentInteractionCreat
 
 		// Verify interaction is for latest message
 		sessionMessageID := session.MessageID.Get(s)
-		if sessionMessageID != event.Message.ID.String() {
+		if sessionMessageID != uint64(event.Message.ID) {
 			b.logger.Debug("Interaction is outdated",
-				zap.String("session_message_id", sessionMessageID),
+				zap.Uint64("session_message_id", sessionMessageID),
 				zap.Uint64("event_message_id", uint64(event.Message.ID)))
 			b.paginationManager.RespondWithClear(event, "This interaction is outdated. Please use the latest interaction.")
 			return
@@ -422,7 +425,7 @@ func (b *Bot) checkBanStatus(event interfaces.CommonEvent, s *session.Session, u
 
 	// Delete session after
 	if closeSession {
-		b.sessionManager.CloseSession(context.Background(), s.UserID())
+		b.sessionManager.CloseSession(context.Background(), session.UserID.Get(s))
 	}
 	return true
 }
@@ -448,8 +451,16 @@ func (b *Bot) checkConsentStatus(event interfaces.CommonEvent, s *session.Sessio
 
 // validateAndGetSession retrieves or creates a session for the given user and validates its state.
 func (b *Bot) validateAndGetSession(event interfaces.CommonEvent, userID snowflake.ID) (*session.Session, bool, bool) {
+	// Check if user is a guild owner if bot is in the guild
+	isGuildOwner := false
+	if guildID := event.GuildID(); guildID != nil {
+		if _, err := event.Client().Rest().GetGuild(*guildID, false); err == nil {
+			isGuildOwner = event.Member().Permissions.Has(discord.PermissionAdministrator)
+		}
+	}
+
 	// Get or create user session
-	s, isNewSession, err := b.sessionManager.GetOrCreateSession(context.Background(), userID)
+	s, isNewSession, err := b.sessionManager.GetOrCreateSession(context.Background(), userID, isGuildOwner)
 	if err != nil {
 		if errors.Is(err, session.ErrSessionLimitReached) {
 			b.paginationManager.RespondWithError(event, "Session limit reached. Please try again later.")

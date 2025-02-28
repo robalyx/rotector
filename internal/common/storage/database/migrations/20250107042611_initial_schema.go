@@ -27,6 +27,7 @@ func init() { //nolint:funlen
 			{(*types.GroupReputation)(nil), "group_reputations"},
 			{(*types.UserVote)(nil), "user_votes"},
 			{(*types.GroupVote)(nil), "group_votes"},
+			{(*types.DiscordServerMember)(nil), "discord_server_members"},
 		}
 
 		for _, table := range tables {
@@ -65,6 +66,7 @@ func init() { //nolint:funlen
 			(*types.VoteStats)(nil),
 			(*types.MaterializedViewRefresh)(nil),
 			(*types.UserConsent)(nil),
+			(*types.DiscordServerInfo)(nil),
 		}
 
 		for _, model := range models {
@@ -81,6 +83,8 @@ func init() { //nolint:funlen
 	}, func(ctx context.Context, db *bun.DB) error {
 		// Down migration - drop all tables
 		models := []interface{}{
+			(*types.DiscordServerInfo)(nil),
+			(*types.UserConsent)(nil),
 			(*types.MaterializedViewRefresh)(nil),
 			(*types.VoteStats)(nil),
 			(*types.DiscordBan)(nil),
@@ -96,7 +100,6 @@ func init() { //nolint:funlen
 			(*types.BotSetting)(nil),
 			(*types.UserSetting)(nil),
 			(*types.HourlyStats)(nil),
-			(*types.UserConsent)(nil),
 		}
 
 		for _, model := range models {
@@ -112,6 +115,7 @@ func init() { //nolint:funlen
 
 		// Drop partitioned tables
 		partitionedTables := []string{
+			"discord_server_members",
 			"group_votes",
 			"user_votes",
 			"group_reputations",

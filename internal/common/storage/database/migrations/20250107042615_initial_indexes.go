@@ -181,6 +181,10 @@ func init() { //nolint:funlen
 			-- Vote statistics index
 			CREATE INDEX IF NOT EXISTS idx_vote_stats_voted_at 
 			ON vote_stats (voted_at DESC);
+
+			-- Discord server member indexes
+			CREATE INDEX IF NOT EXISTS idx_server_members_user_joined
+			ON discord_server_members (user_id, joined_at DESC);
 		`, enum.ActivityTypeUserViewed, enum.ActivityTypeGroupViewed).Exec(ctx)
 		if err != nil {
 			return fmt.Errorf("failed to create indexes: %w", err)
@@ -315,6 +319,9 @@ func init() { //nolint:funlen
 
 			-- Vote statistics index
 			DROP INDEX IF EXISTS idx_vote_stats_voted_at;
+
+			-- Discord server member indexes
+			DROP INDEX IF EXISTS idx_server_members_user_joined;
 		`).Exec(ctx)
 		if err != nil {
 			return fmt.Errorf("failed to drop indexes: %w", err)

@@ -114,7 +114,7 @@ func (b *Builder) Build() *discord.MessageUpdateBuilder {
 				),
 			),
 			discord.NewActionRow(
-				discord.NewSecondaryButton("◀️", string(constants.BackButtonCustomID)),
+				discord.NewSecondaryButton("◀️", constants.BackButtonCustomID),
 				discord.NewSecondaryButton("⏮️", string(session.ViewerFirstPage)).WithDisabled(b.page == 0),
 				discord.NewSecondaryButton("◀️", string(session.ViewerPrevPage)).WithDisabled(b.page == 0),
 				discord.NewSecondaryButton("▶️", string(session.ViewerNextPage)).WithDisabled(b.page == totalPages),

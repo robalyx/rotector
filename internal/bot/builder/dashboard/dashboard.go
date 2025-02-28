@@ -9,7 +9,6 @@ import (
 	"strconv"
 
 	"github.com/disgoorg/disgo/discord"
-	"github.com/disgoorg/snowflake/v2"
 	"github.com/redis/rueidis"
 	"github.com/robalyx/rotector/internal/bot/constants"
 	"github.com/robalyx/rotector/internal/bot/core/session"
@@ -43,11 +42,12 @@ type Builder struct {
 	groupCounts         *types.GroupCounts
 	userStatsBuffer     *bytes.Buffer
 	groupStatsBuffer    *bytes.Buffer
-	activeUsers         []snowflake.ID
+	activeUsers         []uint64
 	voteStats           *types.VoteAccuracy
 	announcementType    enum.AnnouncementType
 	announcementMessage string
 	welcomeMessage      string
+	isGuildOwner        bool
 	isReviewer          bool
 	isAdmin             bool
 	titleCaser          cases.Caser
@@ -57,8 +57,9 @@ type Builder struct {
 func NewBuilder(s *session.Session, redisClient rueidis.Client) *Builder {
 	userStatsBuffer, groupStatsBuffer := getChartBuffers(redisClient)
 	botSettings := s.BotSettings()
+	userID := session.UserID.Get(s)
 	return &Builder{
-		userID:              s.UserID(),
+		userID:              userID,
 		userCounts:          session.StatsUserCounts.Get(s),
 		groupCounts:         session.StatsGroupCounts.Get(s),
 		userStatsBuffer:     userStatsBuffer,
@@ -68,8 +69,9 @@ func NewBuilder(s *session.Session, redisClient rueidis.Client) *Builder {
 		announcementType:    session.BotAnnouncementType.Get(s),
 		announcementMessage: session.BotAnnouncementMessage.Get(s),
 		welcomeMessage:      session.BotWelcomeMessage.Get(s),
-		isReviewer:          botSettings.IsReviewer(s.UserID()),
-		isAdmin:             botSettings.IsAdmin(s.UserID()),
+		isGuildOwner:        session.IsGuildOwner.Get(s),
+		isReviewer:          botSettings.IsReviewer(userID),
+		isAdmin:             botSettings.IsAdmin(userID),
 		titleCaser:          cases.Title(language.English),
 	}
 }
@@ -109,12 +111,15 @@ func (b *Builder) Build() *discord.MessageUpdateBuilder {
 		discord.NewStringSelectMenuOption("Review Groups", constants.StartGroupReviewButtonCustomID).
 			WithEmoji(discord.ComponentEmoji{Name: "📝"}).
 			WithDescription("Start reviewing flagged groups"),
-		discord.NewStringSelectMenuOption("Lookup User", constants.LookupUserButtonCustomID).
+		discord.NewStringSelectMenuOption("Lookup Roblox User", constants.LookupRobloxUserButtonCustomID).
 			WithEmoji(discord.ComponentEmoji{Name: "🔍"}).
-			WithDescription("Look up specific user by ID or UUID"),
-		discord.NewStringSelectMenuOption("Lookup Group", constants.LookupGroupButtonCustomID).
+			WithDescription("Look up specific Roblox user by ID or UUID"),
+		discord.NewStringSelectMenuOption("Lookup Roblox Group", constants.LookupRobloxGroupButtonCustomID).
 			WithEmoji(discord.ComponentEmoji{Name: "🔍"}).
-			WithDescription("Look up specific group by ID or UUID"),
+			WithDescription("Look up specific Roblox group by ID or UUID"),
+		discord.NewStringSelectMenuOption("Lookup Discord User", constants.LookupDiscordUserButtonCustomID).
+			WithEmoji(discord.ComponentEmoji{Name: "🔍"}).
+			WithDescription("Look up Discord user and their flagged servers"),
 		discord.NewStringSelectMenuOption("View Leaderboard", constants.LeaderboardMenuButtonCustomID).
 			WithEmoji(discord.ComponentEmoji{Name: "🏆"}).
 			WithDescription("View voting leaderboard"),
@@ -151,6 +156,15 @@ func (b *Builder) Build() *discord.MessageUpdateBuilder {
 			WithDescription("Configure your personal settings"),
 	)
 
+	// Add guild owner option if user is a guild owner or admin
+	if b.isGuildOwner || b.isAdmin {
+		options = append(options,
+			discord.NewStringSelectMenuOption("Guild Owner Tools", constants.GuildOwnerMenuButtonCustomID).
+				WithEmoji(discord.ComponentEmoji{Name: "🛡️"}).
+				WithDescription("Access guild owner tools"),
+		)
+	}
+
 	// Add admin tools option only for admins
 	if b.isAdmin {
 		options = append(options,
@@ -182,7 +196,7 @@ func (b *Builder) Build() *discord.MessageUpdateBuilder {
 				discord.NewStringSelectMenu(constants.ActionSelectMenuCustomID, "Select an action", options...),
 			),
 			discord.NewActionRow(
-				discord.NewSecondaryButton("🔄 Refresh", string(constants.RefreshButtonCustomID)),
+				discord.NewSecondaryButton("🔄 Refresh", constants.RefreshButtonCustomID),
 			),
 		)
 
@@ -214,7 +228,7 @@ func (b *Builder) buildWelcomeEmbed() discord.Embed {
 		displayIDs := make([]uint64, 0, 10)
 		for _, userID := range b.activeUsers {
 			if b.isReviewer {
-				displayIDs = append(displayIDs, uint64(userID))
+				displayIDs = append(displayIDs, userID)
 			}
 		}
 

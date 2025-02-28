@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"sync"
+	stdSync "sync"
 	"time"
 
 	"github.com/robalyx/rotector/internal/common/progress"
@@ -15,6 +15,7 @@ import (
 	"github.com/robalyx/rotector/internal/worker/maintenance"
 	"github.com/robalyx/rotector/internal/worker/queue"
 	"github.com/robalyx/rotector/internal/worker/stats"
+	"github.com/robalyx/rotector/internal/worker/sync"
 	"github.com/urfave/cli/v3"
 	"go.uber.org/zap"
 )
@@ -28,6 +29,7 @@ const (
 	MaintenanceWorker = "maintenance"
 	StatsWorker       = "stats"
 	QueueWorker       = "queue"
+	SyncWorker        = "sync"
 )
 
 func main() {
@@ -90,6 +92,14 @@ func run() error {
 					return nil
 				},
 			},
+			{
+				Name:  SyncWorker,
+				Usage: "Start sync worker",
+				Action: func(ctx context.Context, c *cli.Command) error {
+					runWorkers(ctx, SyncWorker, c.Int("workers"))
+					return nil
+				},
+			},
 		},
 	}
 
@@ -121,7 +131,7 @@ func runWorkers(ctx context.Context, workerType string, count int64) {
 	}
 
 	// Start workers
-	var wg sync.WaitGroup
+	var wg stdSync.WaitGroup
 	for i := range count {
 		wg.Add(1)
 		go func(workerID int64) {
@@ -155,6 +165,8 @@ func runWorkers(ctx context.Context, workerType string, count int64) {
 				w = stats.New(app, bar, workerLogger)
 			case QueueWorker:
 				w = queue.New(app, bar, workerLogger)
+			case SyncWorker:
+				w = sync.New(app, bar, workerLogger)
 			default:
 				log.Fatalf("Invalid worker type: %s", workerType)
 			}

@@ -4,7 +4,6 @@ package session
 import (
 	"time"
 
-	"github.com/disgoorg/snowflake/v2"
 	apiTypes "github.com/jaxron/roapi.go/pkg/api/types"
 	"github.com/robalyx/rotector/internal/common/client/ai"
 	"github.com/robalyx/rotector/internal/common/queue"
@@ -15,8 +14,12 @@ import (
 
 var (
 
+	// UserID stores the user ID
+	UserID = NewKey[uint64]("UserID", false)
+	// IsGuildOwner indicates if the user is a guild owner
+	IsGuildOwner = NewKey[bool]("IsGuildOwner", false)
 	// MessageID stores the ID of the current message
-	MessageID = NewKey[string]("MessageID", true)
+	MessageID = NewKey[uint64]("MessageID", true)
 	// CurrentPage stores the current page identifier
 	CurrentPage = NewKey[string]("CurrentPage", true)
 	// PreviousPages stores the navigation history
@@ -42,7 +45,7 @@ var (
 	// StatsGroupCounts stores group statistics
 	StatsGroupCounts = NewKey[*types.GroupCounts]("StatsGroupCounts", true)
 	// StatsActiveUsers stores the list of active reviewers
-	StatsActiveUsers = NewKey[[]snowflake.ID]("StatsActiveUsers", true)
+	StatsActiveUsers = NewKey[[]uint64]("StatsActiveUsers", true)
 	// StatsVotes stores a user's voting statistics
 	StatsVotes = NewKey[*types.VoteAccuracy]("StatsVotes", true)
 	// StatusWorkers stores worker status information
@@ -81,6 +84,14 @@ var (
 	GroupMembers = NewKey[map[uint64]*types.ReviewUser]("GroupMembers", false)
 	// GroupPageMembers stores the current page of group members
 	GroupPageMembers = NewKey[[]uint64]("GroupPageMembers", false)
+	// DiscordUserLookupID stores the Discord user ID being looked up
+	DiscordUserLookupID = NewKey[uint64]("DiscordUserLookupID", true)
+	// DiscordUserLookupName stores the Discord username
+	DiscordUserLookupName = NewKey[string]("DiscordUserLookupName", true)
+	// DiscordUserGuilds stores a Discord user's guild memberships
+	DiscordUserGuilds = NewKey[[]*types.UserGuildInfo]("DiscordUserGuilds", true)
+	// DiscordUserGuildNames stores guild names for a Discord user
+	DiscordUserGuildNames = NewKey[map[uint64]string]("DiscordUserGuildNames", true)
 	// ChatHistory stores the conversation history
 	ChatHistory = NewKey[ai.ChatHistory]("ChatHistory", true)
 	// ChatContext stores chat context information
@@ -93,6 +104,8 @@ var (
 	LogNextCursor = NewKey[*types.LogCursor]("LogNextCursor", true)
 	// LogPrevCursors stores previous log cursors
 	LogPrevCursors = NewKey[[]*types.LogCursor]("LogPrevCursors", true)
+	// LogFilterGuildID stores guild ID filter
+	LogFilterGuildID = NewKey[uint64]("LogFilterGuildID", true)
 	// LogFilterDiscordID stores Discord ID filter
 	LogFilterDiscordID = NewKey[uint64]("LogFilterDiscordID", true)
 	// LogFilterUserID stores user ID filter
@@ -183,6 +196,26 @@ var (
 	ReviewerStatsLastRefresh = NewKey[time.Time]("ReviewerStatsLastRefresh", true)
 	// ReviewerStatsNextRefresh stores the next refresh time
 	ReviewerStatsNextRefresh = NewKey[time.Time]("ReviewerStatsNextRefresh", true)
+	// GuildStatsID stores the current guild ID
+	GuildStatsID = NewKey[uint64]("GuildStatsID", true)
+	// GuildStatsName stores the current guild name
+	GuildStatsName = NewKey[string]("GuildStatsName", true)
+	// GuildStatsUniqueGuilds stores the count of unique guilds in the database
+	GuildStatsUniqueGuilds = NewKey[int]("GuildStatsUniqueGuilds", true)
+	// GuildStatsUniqueUsers stores the count of unique users in the database
+	GuildStatsUniqueUsers = NewKey[int]("GuildStatsUniqueUsers", true)
+	// GuildScanUserGuilds stores users and their guilds
+	GuildScanUserGuilds = NewKey[map[uint64][]*types.UserGuildInfo]("GuildScanUserGuilds", true)
+	// GuildScanGuildNames stores guild names for flagged users
+	GuildScanGuildNames = NewKey[map[uint64]string]("GuildScanGuildNames", true)
+	// GuildScanMinGuilds stores the minimum guilds filter value
+	GuildScanMinGuilds = NewKey[int]("GuildScanMinGuilds", true)
+	// GuildScanMinJoinDuration stores the minimum join duration filter value
+	GuildScanMinJoinDuration = NewKey[time.Duration]("GuildScanMinJoinDuration", true)
+	// GuildScanFilteredUsers stores users filtered by criteria
+	GuildScanFilteredUsers = NewKey[map[uint64][]*types.UserGuildInfo]("GuildScanFilteredUsers", true)
+	// GuildScanTopGuilds stores the most common flagged guilds and their counts
+	GuildScanTopGuilds = NewKey[[]*types.GuildCount]("GuildScanTopGuilds", true)
 
 	// ImageBuffer stores binary image data
 	ImageBuffer = NewBufferKey("ImageBuffer", false)

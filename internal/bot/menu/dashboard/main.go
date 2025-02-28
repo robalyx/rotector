@@ -3,10 +3,12 @@ package dashboard
 import (
 	"context"
 	"errors"
+	"strconv"
 	"time"
 
 	"github.com/disgoorg/disgo/discord"
 	"github.com/disgoorg/disgo/events"
+	"github.com/disgoorg/snowflake/v2"
 	builder "github.com/robalyx/rotector/internal/bot/builder/dashboard"
 	"github.com/robalyx/rotector/internal/bot/constants"
 	"github.com/robalyx/rotector/internal/bot/core/pagination"
@@ -111,10 +113,12 @@ func (m *Menu) handleSelectMenu(event *events.ComponentInteractionCreate, s *ses
 		r.Show(event, s, constants.UserReviewPageName, "")
 	case constants.StartGroupReviewButtonCustomID:
 		r.Show(event, s, constants.GroupReviewPageName, "")
-	case constants.LookupUserButtonCustomID:
-		m.handleLookupUser(event, r)
-	case constants.LookupGroupButtonCustomID:
-		m.handleLookupGroup(event, r)
+	case constants.LookupRobloxUserButtonCustomID:
+		m.handleLookupRobloxUser(event, r)
+	case constants.LookupRobloxGroupButtonCustomID:
+		m.handleLookupRobloxGroup(event, r)
+	case constants.LookupDiscordUserButtonCustomID:
+		m.handleLookupDiscordUser(event, r)
 	case constants.UserSettingsButtonCustomID:
 		r.Show(event, s, constants.UserSettingsPageName, "")
 	case constants.ActivityBrowserButtonCustomID:
@@ -133,16 +137,31 @@ func (m *Menu) handleSelectMenu(event *events.ComponentInteractionCreate, s *ses
 		r.Show(event, s, constants.AdminPageName, "")
 	case constants.ReviewerStatsButtonCustomID:
 		r.Show(event, s, constants.ReviewerStatsPageName, "")
+	case constants.GuildOwnerMenuButtonCustomID:
+		if !session.IsGuildOwner.Get(s) && !isAdmin {
+			r.Error(event, "You must be a guild owner to access these tools.")
+			return
+		}
+
+		// Set guild ID and name in session
+		guildID := uint64(*event.GuildID())
+		session.GuildStatsID.Set(s, guildID)
+
+		if guild, err := event.Client().Rest().GetGuild(*event.GuildID(), false); err == nil {
+			session.GuildStatsName.Set(s, guild.Name)
+		}
+
+		r.Show(event, s, constants.GuildOwnerPageName, "")
 	}
 }
 
-// handleLookupUser opens a modal for entering a specific user ID to lookup.
-func (m *Menu) handleLookupUser(event *events.ComponentInteractionCreate, r *pagination.Respond) {
+// handleLookupRobloxUser opens a modal for entering a specific Roblox user ID to lookup.
+func (m *Menu) handleLookupRobloxUser(event *events.ComponentInteractionCreate, r *pagination.Respond) {
 	modal := discord.NewModalCreateBuilder().
-		SetCustomID(constants.LookupUserModalCustomID).
+		SetCustomID(constants.LookupRobloxUserModalCustomID).
 		SetTitle("Lookup User").
 		AddActionRow(
-			discord.NewTextInput(constants.LookupUserInputCustomID, discord.TextInputStyleShort, "User ID or UUID").
+			discord.NewTextInput(constants.LookupRobloxUserInputCustomID, discord.TextInputStyleShort, "User ID or UUID").
 				WithRequired(true).
 				WithPlaceholder("Enter the user ID or UUID to lookup..."),
 		).
@@ -153,13 +172,13 @@ func (m *Menu) handleLookupUser(event *events.ComponentInteractionCreate, r *pag
 	}
 }
 
-// handleLookupGroup opens a modal for entering a specific group ID to lookup.
-func (m *Menu) handleLookupGroup(event *events.ComponentInteractionCreate, r *pagination.Respond) {
+// handleLookupRobloxGroup opens a modal for entering a specific Roblox group ID to lookup.
+func (m *Menu) handleLookupRobloxGroup(event *events.ComponentInteractionCreate, r *pagination.Respond) {
 	modal := discord.NewModalCreateBuilder().
-		SetCustomID(constants.LookupGroupModalCustomID).
+		SetCustomID(constants.LookupRobloxGroupModalCustomID).
 		SetTitle("Lookup Group").
 		AddActionRow(
-			discord.NewTextInput(constants.LookupGroupInputCustomID, discord.TextInputStyleShort, "Group ID or UUID").
+			discord.NewTextInput(constants.LookupRobloxGroupInputCustomID, discord.TextInputStyleShort, "Group ID or UUID").
 				WithRequired(true).
 				WithPlaceholder("Enter the group ID or UUID to lookup..."),
 		).
@@ -170,20 +189,39 @@ func (m *Menu) handleLookupGroup(event *events.ComponentInteractionCreate, r *pa
 	}
 }
 
-// handleModal processes modal submissions.
-func (m *Menu) handleModal(event *events.ModalSubmitInteractionCreate, s *session.Session, r *pagination.Respond) {
-	switch event.Data.CustomID {
-	case constants.LookupUserModalCustomID:
-		m.handleLookupUserModalSubmit(event, s, r)
-	case constants.LookupGroupModalCustomID:
-		m.handleLookupGroupModalSubmit(event, s, r)
+// handleLookupDiscordUser opens a modal for entering a specific Discord user ID to lookup.
+func (m *Menu) handleLookupDiscordUser(event *events.ComponentInteractionCreate, r *pagination.Respond) {
+	modal := discord.NewModalCreateBuilder().
+		SetCustomID(constants.LookupDiscordUserModalCustomID).
+		SetTitle("Lookup Discord User").
+		AddActionRow(
+			discord.NewTextInput(constants.LookupDiscordUserInputCustomID, discord.TextInputStyleShort, "Discord User ID").
+				WithRequired(true).
+				WithPlaceholder("Enter the Discord user ID to lookup..."),
+		).
+		Build()
+	if err := event.Modal(modal); err != nil {
+		m.layout.logger.Error("Failed to create Discord user lookup modal", zap.Error(err))
+		r.Error(event, "Failed to open the Discord user lookup modal. Please try again.")
 	}
 }
 
-// handleLookupUserModalSubmit processes the user ID input and opens the review menu.
-func (m *Menu) handleLookupUserModalSubmit(event *events.ModalSubmitInteractionCreate, s *session.Session, r *pagination.Respond) {
+// handleModal processes modal submissions.
+func (m *Menu) handleModal(event *events.ModalSubmitInteractionCreate, s *session.Session, r *pagination.Respond) {
+	switch event.Data.CustomID {
+	case constants.LookupRobloxUserModalCustomID:
+		m.handleLookupRobloxUserModalSubmit(event, s, r)
+	case constants.LookupRobloxGroupModalCustomID:
+		m.handleLookupRobloxGroupModalSubmit(event, s, r)
+	case constants.LookupDiscordUserModalCustomID:
+		m.handleLookupDiscordUserModalSubmit(event, s, r)
+	}
+}
+
+// handleLookupRobloxUserModalSubmit processes the user ID input and opens the review menu.
+func (m *Menu) handleLookupRobloxUserModalSubmit(event *events.ModalSubmitInteractionCreate, s *session.Session, r *pagination.Respond) {
 	// Get the user ID input
-	userIDStr := event.Data.Text(constants.LookupUserInputCustomID)
+	userIDStr := event.Data.Text(constants.LookupRobloxUserInputCustomID)
 
 	// Parse profile URL if provided
 	if utils.IsRobloxProfileURL(userIDStr) {
@@ -226,10 +264,10 @@ func (m *Menu) handleLookupUserModalSubmit(event *events.ModalSubmitInteractionC
 	})
 }
 
-// handleLookupGroupModalSubmit processes the group ID input and opens the review menu.
-func (m *Menu) handleLookupGroupModalSubmit(event *events.ModalSubmitInteractionCreate, s *session.Session, r *pagination.Respond) {
+// handleLookupRobloxGroupModalSubmit processes the group ID input and opens the review menu.
+func (m *Menu) handleLookupRobloxGroupModalSubmit(event *events.ModalSubmitInteractionCreate, s *session.Session, r *pagination.Respond) {
 	// Get the group ID input
-	groupIDStr := event.Data.Text(constants.LookupGroupInputCustomID)
+	groupIDStr := event.Data.Text(constants.LookupRobloxGroupInputCustomID)
 
 	// Parse group URL if provided
 	if utils.IsRobloxGroupURL(groupIDStr) {
@@ -269,6 +307,43 @@ func (m *Menu) handleLookupGroupModalSubmit(event *events.ModalSubmitInteraction
 		ActivityType:      enum.ActivityTypeGroupLookup,
 		ActivityTimestamp: time.Now(),
 		Details:           map[string]interface{}{},
+	})
+}
+
+// handleLookupDiscordUserModalSubmit processes the Discord user ID input and shows the user's flagged servers.
+func (m *Menu) handleLookupDiscordUserModalSubmit(event *events.ModalSubmitInteractionCreate, s *session.Session, r *pagination.Respond) {
+	// Get the Discord user ID input
+	discordUserIDStr := event.Data.Text(constants.LookupDiscordUserInputCustomID)
+
+	// Parse the Discord user ID
+	discordUserID, err := strconv.ParseUint(discordUserIDStr, 10, 64)
+	if err != nil {
+		r.Cancel(event, s, "Please provide a valid Discord user ID.")
+		return
+	}
+
+	// Store the Discord user ID in session
+	session.DiscordUserLookupID.Set(s, discordUserID)
+
+	// Attempt to get Discord username if possible
+	var username string
+	if user, err := event.Client().Rest().GetUser(snowflake.ID(discordUserID)); err == nil {
+		username = user.Username
+		session.DiscordUserLookupName.Set(s, username)
+	}
+
+	// Show Discord user details page
+	r.Show(event, s, constants.GuildLookupPageName, "")
+
+	// Log the lookup action
+	m.layout.db.Models().Activities().Log(context.Background(), &types.ActivityLog{
+		ActivityTarget:    types.ActivityTarget{},
+		ReviewerID:        uint64(event.User().ID),
+		ActivityType:      enum.ActivityTypeUserLookupDiscord,
+		ActivityTimestamp: time.Now(),
+		Details: map[string]interface{}{
+			"discord_user_id": discordUserID,
+		},
 	})
 }
 

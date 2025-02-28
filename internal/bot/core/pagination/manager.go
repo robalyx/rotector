@@ -1,8 +1,6 @@
 package pagination
 
 import (
-	"strconv"
-
 	"github.com/disgoorg/disgo/discord"
 	"github.com/disgoorg/disgo/events"
 	"github.com/robalyx/rotector/internal/bot/core/session"
@@ -158,7 +156,7 @@ func (m *Manager) Display(event interfaces.CommonEvent, s *session.Session, page
 	m.UpdatePage(s, page)
 
 	// Set the message ID in the session
-	session.MessageID.Set(s, strconv.FormatUint(uint64(message.ID), 10))
+	session.MessageID.Set(s, uint64(message.ID))
 
 	m.logger.Debug("Updated message",
 		zap.String("page", page.Name),

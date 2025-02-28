@@ -55,8 +55,8 @@ func (b *Builder) Build() *discord.MessageUpdateBuilder {
 		),
 		// Navigation and refresh buttons
 		discord.NewActionRow(
-			discord.NewSecondaryButton("◀️", string(constants.BackButtonCustomID)),
-			discord.NewSecondaryButton("🔄", string(constants.RefreshButtonCustomID)),
+			discord.NewSecondaryButton("◀️", constants.BackButtonCustomID),
+			discord.NewSecondaryButton("🔄", constants.RefreshButtonCustomID),
 		),
 	}
 

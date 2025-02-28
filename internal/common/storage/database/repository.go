@@ -21,6 +21,7 @@ type Repository struct {
 	views      *models.MaterializedViewModel
 	consent    *models.ConsentModel
 	reviewers  *models.ReviewerModel
+	sync       *models.SyncModel
 }
 
 // NewRepository creates a new repository instance with all models.
@@ -50,6 +51,7 @@ func NewRepository(db *bun.DB, logger *zap.Logger) *Repository {
 		views:      views,
 		consent:    consent,
 		reviewers:  reviewers,
+		sync:       models.NewSync(db, logger),
 	}
 }
 
@@ -116,4 +118,9 @@ func (r *Repository) Consent() *models.ConsentModel {
 // Reviewers returns the reviewer model repository.
 func (r *Repository) Reviewers() *models.ReviewerModel {
 	return r.reviewers
+}
+
+// Sync returns the sync model repository.
+func (r *Repository) Sync() *models.SyncModel {
+	return r.sync
 }

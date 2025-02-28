@@ -8,7 +8,6 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/disgoorg/snowflake/v2"
 	"github.com/robalyx/rotector/internal/common/storage/database/types"
 	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
 	"github.com/uptrace/bun"
@@ -257,7 +256,7 @@ func (v *VoteModel) CheckVoteAccuracy(ctx context.Context, discordUserID uint64)
 
 	// Create ban record
 	ban := &types.DiscordBan{
-		ID:       snowflake.ID(discordUserID),
+		ID:       discordUserID,
 		Reason:   enum.BanReasonAbuse,
 		Source:   enum.BanSourceSystem,
 		Notes:    "Automated system detection - suspicious voting patterns",

@@ -3,13 +3,12 @@ package types
 import (
 	"time"
 
-	"github.com/disgoorg/snowflake/v2"
 	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
 )
 
 // DiscordBan represents a banned Discord user.
 type DiscordBan struct {
-	ID        snowflake.ID   `bun:",pk"`        // Discord user ID
+	ID        uint64         `bun:",pk"`        // Discord user ID
 	Reason    enum.BanReason `bun:",notnull"`   // Reason for the ban
 	Source    enum.BanSource `bun:",notnull"`   // What triggered the ban
 	Notes     string         `bun:",type:text"` // Administrative notes about the ban
