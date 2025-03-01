@@ -35,7 +35,7 @@
 
 - [🚀 Features](#-features)
 - [📦 Prerequisites](#-prerequisites)
-- [📚 Documentation](#-documentation)
+- [📚 Guides](#-guides)
 - [⚡ Efficiency](#-efficiency)
 - [🛠️ Community Tools](#%EF%B8%8F-community-tools)
 - [❓ FAQ](#-faq)
@@ -72,19 +72,31 @@
 - [PostgreSQL](https://www.postgresql.org/) 17.2 (with [TimescaleDB](https://www.timescale.com/) 2.17.X extension)
 - [DragonflyDB](https://dragonflydb.io/) 1.25.X
 - [Google AI Studio](https://aistudio.google.com/) Paid API key (uses [Gemini 2.0 Flash](https://ai.google.dev/gemini-api/docs/models/gemini#gemini-2.0-flash) by default)
-- Proxies to avoid rate limits (recommended 60-80 per worker)
+- Proxy lists:
+  - HTTP proxies for API requests (recommended 60-80 per worker)
+  - HTTP proxies for [Roverse](https://github.com/robalyx/roverse)  in different locations to leverage Cloudflare's edge network
 - [.ROBLOSECURITY](https://roblox.fandom.com/wiki/.ROBLOSECURITY) Cookie (for lower rate limits)
 - Initial set of confirmed inappropriate accounts (minimum 100 recommended)
-- Discord Bot token
+- Discord bot token
+- Discord user token
+
+### Developer Tools
+
+- [Just](https://github.com/casey/just) (command runner for development tasks)
+- [Docker](https://www.docker.com/) or [Podman](https://podman.io/) (container runtime)
+- [Dagger](https://dagger.io/) (CI/CD pipeline tool)
 
 ### Optional
 
-- [GlitchTip](https://glitchtip.com/), [Uptrace](https://uptrace.dev/), or [Sentry](https://sentry.io) (recommended for production)
+- [Uptrace](https://uptrace.dev/) (recommended for production)
 - [Roverse](https://github.com/robalyx/roverse) proxy (fallback to offload requests)
 
-## 📚 Documentation
+## 📚 Guides
 
-Detailed documentation including usage instructions will be available during the beta phase. Stay tuned!
+> [!NOTE]
+> We do not provide public documentation to prevent misuse. However, developers can copy the `config` directory to `.rotector` and modify the configuration files as needed. For deployment instructions, refer to the `justfile` which contains commands for building and deploying using Dagger.
+
+Detailed guides for moderators will be available during the beta phase. Stay tuned!
 
 ## ⚡ Efficiency
 
@@ -113,7 +125,7 @@ Rotector is built to efficiently handle large amounts of data while keeping reso
   - 1 maintenance worker
 - Proxies:
   - 600 shared proxies
-  - 1 [roverse](https://github.com/robalyx/roverse) instance
+  - 0 roverse proxies
 
 ### Test Results
 
@@ -137,7 +149,7 @@ A brief analysis of the results shows that users flagged with **high confidence 
 
 Users flagged in the **0.6 to 0.8 confidence range** showed increased false positives, particularly for vague or borderline content. While many accounts in this range were still correctly identified, moderators would need to review these cases more carefully.
 
-The **0.1 to 0.6 confidence range** had the lowest accuracy rate, with a significant number of benign accounts being flagged. These flags were often triggered by loose associations or ambiguous content that could be interpreted multiple ways.
+The **0.1 to 0.6 confidence range** had the lowest accuracy rate, with a larger number of false flags, which were often triggered by ambiguous content that could be interpreted multiple ways.
 
 #### Group Detection
 
@@ -161,7 +173,7 @@ The primary constraint on the system's performance is the **availability and cos
 
 Another significant factor is the **cost of AI processing** as AI analysis still represents a large portion of operational expenses. Despite evaluating other alternatives, **Gemini 2.0 Flash** currently offers the best price-to-performance ratio for our specific use case, making it the most practical choice for sustainable operation.
 
-With additional proxies or an alternative method to get past rate limits, we could potentially achieve **10 times more users scanned per hour** with the current VPS resources. This significant scaling potential exists within Rotector's performant architecture, but remains limited by these constraints.
+With additional proxies or an alternative method to get past rate limits, we could potentially achieve **10 times more users scanned per hour** with the current VPS resourcesdue to Rotector's performant architecture, but remains limited by these constraints.
 
 ## 🛠️ Community Tools
 
@@ -181,13 +193,6 @@ While **no automated system is perfect**, Rotector uses several measures to ensu
 However, these false positives **don't affect the accuracy of future results**. We've implemented safeguards to prevent this - for example, when the friend worker processes connections, it will only scan the friends of users that were flagged with a **high confidence level of 0.8 or above**. This strict threshold helps ensure that only the most certain cases are used to expand our search. For confirmed inappropriate accounts that have been manually verified, this confidence threshold doesn't apply since we have human verification of their status.
 
 The system's accuracy is also continuously monitored and improved through moderator feedback.
-
-</details>
-
-<details>
-<summary>How do I set this up myself?</summary>
-
-To prevent abuse and ensure proper deployment, we do not provide public setup instructions. If you're interested in running Rotector or contributing to the project, please reach out to us directly.
 
 </details>
 
@@ -214,7 +219,7 @@ If you're interested in contributing to the project, please reach out to us dire
 </details>
 
 <details>
-<summary>Why did we choose Gemini over other AI models?</summary>
+<summary>Why choose Gemini over other AI models?</summary>
 
 After testing various AI models, we chose Gemini for its combination of performance and cost-effectiveness. These advantages allow us to process more content while maintaining high accuracy, making advanced features more accessible and ensuring the project's long-term sustainability.
 
