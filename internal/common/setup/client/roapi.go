@@ -19,6 +19,7 @@ import (
 	"github.com/jaxron/axonet/pkg/client/middleware"
 	"github.com/jaxron/roapi.go/pkg/api"
 	"github.com/robalyx/rotector/internal/common/setup/client/middleware/proxy"
+	"github.com/robalyx/rotector/internal/common/setup/client/middleware/roverse"
 	"github.com/robalyx/rotector/internal/common/setup/config"
 	"github.com/robalyx/rotector/internal/common/setup/logger"
 	"github.com/robalyx/rotector/internal/common/storage/redis"
@@ -31,18 +32,53 @@ var (
 	ErrNoCookies          = errors.New("no valid cookies found in cookie file")
 )
 
+// Middlewares contains the middleware instances used in the client.
+type Middlewares struct {
+	Proxy   *proxy.Middleware
+	Roverse *roverse.Middleware
+}
+
 // GetRoAPIClient constructs an HTTP client with a middleware chain for reliability and performance.
 // Middleware order is important - each layer wraps the next in specified priority.
-func GetRoAPIClient(cfg *config.CommonConfig, configDir string, redisManager *redis.Manager, zapLogger *zap.Logger, requestTimeout time.Duration) (*api.API, *proxy.Proxies, error) {
+func GetRoAPIClient(cfg *config.CommonConfig, configDir string, redisManager *redis.Manager, zapLogger *zap.Logger, requestTimeout time.Duration) (*api.API, *Middlewares, error) {
 	// Load authentication and proxy configuration
 	cookies, err := readCookies(configDir)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to read cookies: %w", err)
 	}
 
-	proxies, err := readProxies(configDir)
+	// Load regular proxies
+	proxiesPath := configDir + "/credentials/regular_proxies"
+	proxies, err := readProxiesFromFile(proxiesPath)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to read proxies: %w", err)
+	}
+
+	// Load Roverse-specific proxies if the file exists
+	roverseProxiesPath := configDir + "/credentials/roverse_proxies"
+	roverseProxies, err := readProxiesFromFile(roverseProxiesPath)
+	if err != nil && !errors.Is(err, os.ErrNotExist) && !errors.Is(err, ErrNoProxies) {
+		return nil, nil, fmt.Errorf("failed to read roverse proxies: %w", err)
+	}
+
+	// Merge roverse proxies into regular proxies if they don't already exist
+	if len(roverseProxies) > 0 {
+		// Create a map for quick lookup of regular proxy URLs
+		proxyMap := make(map[string]struct{}, len(proxies))
+		for _, proxy := range proxies {
+			proxyMap[proxy.String()] = struct{}{}
+		}
+
+		// Add roverse proxies that don't already exist in the regular proxies list
+		added := 0
+		for _, roverseProxy := range roverseProxies {
+			if _, exists := proxyMap[roverseProxy.String()]; !exists {
+				proxies = append(proxies, roverseProxy)
+				added++
+			}
+		}
+
+		zapLogger.Debug("Added roverse proxies to regular proxies list", zap.Int("count", added))
 	}
 
 	// Get Redis client for caching
@@ -57,8 +93,11 @@ func GetRoAPIClient(cfg *config.CommonConfig, configDir string, redisManager *re
 		return nil, nil, err
 	}
 
-	// Build middleware chain
+	// Initialize middleware instances
 	proxyMiddleware := proxy.New(proxies, proxyClient, cfg, requestTimeout)
+	roverseMiddleware := roverse.New(roverseProxies, proxyClient, cfg, requestTimeout)
+
+	// Build middleware chain - order matters!
 	middlewares := []middleware.Middleware{
 		circuitbreaker.New(
 			cfg.CircuitBreaker.MaxFailures,
@@ -73,6 +112,13 @@ func GetRoAPIClient(cfg *config.CommonConfig, configDir string, redisManager *re
 		singleflight.New(),
 		axonetRedis.New(redisClient, 1*time.Hour),
 		proxyMiddleware,
+		roverseMiddleware,
+	}
+
+	// Create middleware wrapper
+	middlewareWrapper := &Middlewares{
+		Proxy:   proxyMiddleware,
+		Roverse: roverseMiddleware,
 	}
 
 	return api.New(cookies,
@@ -81,29 +127,34 @@ func GetRoAPIClient(cfg *config.CommonConfig, configDir string, redisManager *re
 		client.WithLogger(logger.New(zapLogger)),
 		client.WithTimeout(requestTimeout),
 		client.WithMiddleware(middlewares...),
-	), proxyMiddleware, nil
+	), middlewareWrapper, nil
 }
 
-// readProxies parses proxy configuration from a file in IP:Port:Username:Password format.
-// Returns error if no valid proxies are found.
-func readProxies(configDir string) ([]*url.URL, error) {
+// readProxiesFromFile loads proxy configuration from a file in IP:Port:Username:Password format.
+// Returns error if no valid proxies are found or if the file doesn't exist.
+func readProxiesFromFile(filePath string) ([]*url.URL, error) {
 	var proxies []*url.URL
 
 	// Load proxy configuration file
-	proxiesFile := configDir + "/credentials/proxies"
-	file, err := os.Open(proxiesFile)
+	file, err := os.Open(filePath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to open proxy file: %w", err)
+		return nil, err
 	}
 	defer file.Close()
 
 	// Process each proxy line
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		// Skip empty lines and comments
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+
 		// Split the line into parts (IP:Port:Username:Password)
-		parts := strings.Split(scanner.Text(), ":")
+		parts := strings.Split(line, ":")
 		if len(parts) != 4 {
-			return nil, fmt.Errorf("%w: %s", ErrInvalidProxyFormat, scanner.Text())
+			return nil, fmt.Errorf("%w: %s", ErrInvalidProxyFormat, line)
 		}
 
 		// Build proxy URL with authentication

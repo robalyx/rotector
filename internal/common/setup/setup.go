@@ -11,7 +11,6 @@ import (
 	"github.com/redis/rueidis"
 	"github.com/robalyx/rotector/internal/common/queue"
 	"github.com/robalyx/rotector/internal/common/setup/client"
-	"github.com/robalyx/rotector/internal/common/setup/client/middleware/proxy"
 	"github.com/robalyx/rotector/internal/common/setup/config"
 	"github.com/robalyx/rotector/internal/common/setup/logger"
 	"github.com/robalyx/rotector/internal/common/storage/database"
@@ -52,19 +51,19 @@ func (s ServiceType) GetRequestTimeout(cfg *config.Config) time.Duration {
 // App bundles all core dependencies and services needed by the application.
 // Each field represents a major subsystem that needs initialization and cleanup.
 type App struct {
-	Config       *config.Config  // Application configuration
-	Logger       *zap.Logger     // Main application logger
-	DBLogger     *zap.Logger     // Database-specific logger
-	DB           database.Client // Database connection pool
-	GenAIClient  *genai.Client   // Generative AI client
-	GenAIModel   string          // Generative AI model
-	RoAPI        *api.API        // RoAPI HTTP client
-	Queue        *queue.Manager  // Background job queue
-	RedisManager *redis.Manager  // Redis connection manager
-	StatusClient rueidis.Client  // Redis client for worker status reporting
-	LogManager   *logger.Manager // Log management system
-	pprofServer  *pprofServer    // Debug HTTP server for pprof
-	proxies      *proxy.Proxies  // Proxy middleware
+	Config       *config.Config      // Application configuration
+	Logger       *zap.Logger         // Main application logger
+	DBLogger     *zap.Logger         // Database-specific logger
+	DB           database.Client     // Database connection pool
+	GenAIClient  *genai.Client       // Generative AI client
+	GenAIModel   string              // Generative AI model
+	RoAPI        *api.API            // RoAPI HTTP client
+	Queue        *queue.Manager      // Background job queue
+	RedisManager *redis.Manager      // Redis connection manager
+	StatusClient rueidis.Client      // Redis client for worker status reporting
+	LogManager   *logger.Manager     // Log management system
+	pprofServer  *pprofServer        // Debug HTTP server for pprof
+	middlewares  *client.Middlewares // HTTP client middleware instances
 }
 
 // InitializeApp bootstraps all application dependencies in the correct order,
@@ -110,9 +109,17 @@ func InitializeApp(ctx context.Context, serviceType ServiceType, logDir string) 
 
 	// RoAPI client is configured with middleware chain
 	requestTimeout := serviceType.GetRequestTimeout(cfg)
-	roAPI, proxies, err := client.GetRoAPIClient(&cfg.Common, configDir, redisManager, logger, requestTimeout)
+	roAPI, middlewares, err := client.GetRoAPIClient(&cfg.Common, configDir, redisManager, logger, requestTimeout)
 	if err != nil {
 		return nil, err
+	}
+
+	// Log information about proxy configuration
+	if len(middlewares.Proxy.GetProxies()) > 0 {
+		logger.Info("Initialized regular proxies", zap.Int("count", len(middlewares.Proxy.GetProxies())))
+	}
+	if len(middlewares.Roverse.GetProxies()) > 0 {
+		logger.Info("Initialized roverse proxies", zap.Int("count", len(middlewares.Roverse.GetProxies())))
 	}
 
 	// Queue manager creates its own Redis database for job storage
@@ -154,7 +161,7 @@ func InitializeApp(ctx context.Context, serviceType ServiceType, logDir string) 
 		StatusClient: statusClient,
 		LogManager:   logManager,
 		pprofServer:  pprofSrv,
-		proxies:      proxies,
+		middlewares:  middlewares,
 	}, nil
 }
 
@@ -189,8 +196,9 @@ func (s *App) Cleanup(ctx context.Context) {
 		log.Printf("Failed to close database connection: %v", err)
 	}
 
-	// Cleanup proxy transports
-	s.proxies.Cleanup()
+	// Cleanup proxy and roverse middlewares
+	s.middlewares.Proxy.Cleanup()
+	s.middlewares.Roverse.Cleanup()
 
 	// Close Gemini AI client
 	s.GenAIClient.Close()
