@@ -477,7 +477,7 @@ func (m *ScanMenu) handleBanConfirmModal(event *events.ModalSubmitInteractionCre
 		ReviewerID:        uint64(event.User().ID),
 		ActivityType:      enum.ActivityTypeGuildBans,
 		ActivityTimestamp: time.Now(),
-		Details: map[string]interface{}{
+		Details: map[string]any{
 			"reason":            banReason,
 			"banned_count":      totalBanned,
 			"failed_count":      totalFailed,

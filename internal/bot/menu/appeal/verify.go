@@ -110,7 +110,7 @@ func (m *VerifyMenu) verifyDescription(event *events.ComponentInteractionCreate,
 		ReviewerID:        uint64(event.User().ID),
 		ActivityType:      enum.ActivityTypeAppealSubmitted,
 		ActivityTimestamp: time.Now(),
-		Details: map[string]interface{}{
+		Details: map[string]any{
 			"reason": reason,
 		},
 	})

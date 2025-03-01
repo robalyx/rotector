@@ -71,7 +71,7 @@ func (m *StatusMenu) Show(event interfaces.CommonEvent, s *session.Session, r *p
 			ReviewerID:        uint64(event.User().ID),
 			ActivityType:      enum.ActivityTypeUserViewed,
 			ActivityTimestamp: time.Now(),
-			Details:           map[string]interface{}{},
+			Details:           map[string]any{},
 		})
 		return
 	}

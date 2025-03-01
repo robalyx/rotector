@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"maps"
 	"net"
 	"net/http"
 	"net/url"
@@ -22,6 +23,7 @@ import (
 	"github.com/redis/rueidis"
 	"github.com/robalyx/rotector/internal/common/setup/client/middleware/proxy/scripts"
 	"github.com/robalyx/rotector/internal/common/setup/config"
+
 	"golang.org/x/sync/semaphore"
 )
 
@@ -288,9 +290,7 @@ func (m *Proxies) tryRoverse(ctx context.Context, httpClient *http.Client, req *
 
 	// Copy all headers from original request
 	proxyReq.Header = make(http.Header, len(req.Header))
-	for key, values := range req.Header {
-		proxyReq.Header[key] = values
-	}
+	maps.Copy(proxyReq.Header, req.Header)
 
 	// Add authentication header
 	proxyReq.Header.Set(RoverseAuthHeaderName, m.roverseSecretKey)

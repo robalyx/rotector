@@ -113,10 +113,7 @@ func (f *FriendFetcher) GetFriends(ctx context.Context, userID uint64) ([]*apiTy
 
 	// Process batches concurrently
 	for i := 0; i < len(friendIDs); i += batchSize {
-		end := i + batchSize
-		if end > len(friendIDs) {
-			end = len(friendIDs)
-		}
+		end := min(i+batchSize, len(friendIDs))
 
 		batchIDs := friendIDs[i:end]
 		p.Go(func(ctx context.Context) error {

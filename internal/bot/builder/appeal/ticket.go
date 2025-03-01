@@ -140,10 +140,7 @@ func (b *TicketBuilder) buildConversationEmbed() *discord.EmbedBuilder {
 
 	// Calculate page boundaries
 	start := b.page * constants.AppealMessagesPerPage
-	end := start + constants.AppealMessagesPerPage
-	if end > len(b.messages) {
-		end = len(b.messages)
-	}
+	end := min(start+constants.AppealMessagesPerPage, len(b.messages))
 
 	// Add messages
 	if len(b.messages) == 0 {

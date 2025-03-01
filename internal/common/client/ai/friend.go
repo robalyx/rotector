@@ -172,10 +172,7 @@ func (a *FriendAnalyzer) GenerateFriendReasons(ctx context.Context, userInfos []
 
 	for i := range numBatches {
 		start := i * a.batchSize
-		end := start + a.batchSize
-		if end > len(userInfos) {
-			end = len(userInfos)
-		}
+		end := min(start+a.batchSize, len(userInfos))
 
 		infoBatch := userInfos[start:end]
 		p.Go(func(ctx context.Context) error {

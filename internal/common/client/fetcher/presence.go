@@ -46,10 +46,7 @@ func (p *PresenceFetcher) FetchPresences(ctx context.Context, userIDs []uint64) 
 	// Process batches concurrently
 	for i := 0; i < len(userIDs); i += batchSize {
 		pool.Go(func(ctx context.Context) error {
-			end := i + batchSize
-			if end > len(userIDs) {
-				end = len(userIDs)
-			}
+			end := min(i+batchSize, len(userIDs))
 
 			// Fetch presences for the batch
 			params := presence.NewUserPresencesBuilder(userIDs[i:end]...).Build()

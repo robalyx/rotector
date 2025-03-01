@@ -330,7 +330,7 @@ func (m *ReviewMenu) handleRecheckModalSubmit(event *events.ModalSubmitInteracti
 		ReviewerID:        uint64(event.User().ID),
 		ActivityType:      enum.ActivityTypeUserRechecked,
 		ActivityTimestamp: time.Now(),
-		Details:           map[string]interface{}{"reason": reason},
+		Details:           map[string]any{"reason": reason},
 	})
 }
 
@@ -375,7 +375,7 @@ func (m *ReviewMenu) handleConfirmUser(event interfaces.CommonEvent, s *session.
 			ReviewerID:        uint64(event.User().ID),
 			ActivityType:      enum.ActivityTypeUserTrainingDownvote,
 			ActivityTimestamp: time.Now(),
-			Details: map[string]interface{}{
+			Details: map[string]any{
 				"upvotes":   user.Reputation.Upvotes,
 				"downvotes": user.Reputation.Downvotes,
 			},
@@ -418,7 +418,7 @@ func (m *ReviewMenu) handleConfirmUser(event interfaces.CommonEvent, s *session.
 			ReviewerID:        uint64(event.User().ID),
 			ActivityType:      enum.ActivityTypeUserConfirmed,
 			ActivityTimestamp: time.Now(),
-			Details: map[string]interface{}{
+			Details: map[string]any{
 				"reasons":    user.Reasons.Messages(),
 				"confidence": user.Confidence,
 			},
@@ -460,7 +460,7 @@ func (m *ReviewMenu) handleClearUser(event interfaces.CommonEvent, s *session.Se
 			ReviewerID:        uint64(event.User().ID),
 			ActivityType:      enum.ActivityTypeUserTrainingUpvote,
 			ActivityTimestamp: time.Now(),
-			Details: map[string]interface{}{
+			Details: map[string]any{
 				"upvotes":   user.Reputation.Upvotes,
 				"downvotes": user.Reputation.Downvotes,
 			},
@@ -506,7 +506,7 @@ func (m *ReviewMenu) handleClearUser(event interfaces.CommonEvent, s *session.Se
 			ReviewerID:        uint64(event.User().ID),
 			ActivityType:      enum.ActivityTypeUserCleared,
 			ActivityTimestamp: time.Now(),
-			Details:           map[string]interface{}{},
+			Details:           map[string]any{},
 		})
 	}
 
@@ -545,7 +545,7 @@ func (m *ReviewMenu) handleSkipUser(event interfaces.CommonEvent, s *session.Ses
 			ReviewerID:        uint64(event.User().ID),
 			ActivityType:      enum.ActivityTypeUserSkipped,
 			ActivityTimestamp: time.Now(),
-			Details:           map[string]interface{}{},
+			Details:           map[string]any{},
 		})
 	}
 }
@@ -730,7 +730,7 @@ func (m *ReviewMenu) handleConfirmWithReasonModalSubmit(event *events.ModalSubmi
 		ReviewerID:        uint64(event.User().ID),
 		ActivityType:      enum.ActivityTypeUserConfirmed,
 		ActivityTimestamp: time.Now(),
-		Details: map[string]interface{}{
+		Details: map[string]any{
 			"reasons":    user.Reasons.Messages(),
 			"confidence": confidence,
 		},
@@ -773,7 +773,7 @@ func (m *ReviewMenu) fetchNewTarget(event interfaces.CommonEvent, s *session.Ses
 		ReviewerID:        reviewerID,
 		ActivityType:      enum.ActivityTypeUserViewed,
 		ActivityTimestamp: time.Now(),
-		Details:           map[string]interface{}{},
+		Details:           map[string]any{},
 	})
 
 	return user, isBanned, nil

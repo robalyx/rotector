@@ -39,10 +39,10 @@ func (w *LogRotator) Write(p []byte) (n int, err error) {
 
 	// Split the input into lines
 	data := string(p)
-	newLines := strings.Split(strings.TrimRight(data, "\n"), "\n")
+	newLines := strings.SplitSeq(strings.TrimRight(data, "\n"), "\n")
 
 	// Add non-empty lines to the buffer
-	for _, line := range newLines {
+	for line := range newLines {
 		if line != "" {
 			w.buffer.add(line)
 

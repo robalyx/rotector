@@ -81,10 +81,7 @@ func (b *UpdateBuilder) addIDFields(embed *discord.EmbedBuilder) {
 
 	// Use stored pagination state
 	start := b.page * constants.SettingsIDsPerPage
-	end := start + constants.SettingsIDsPerPage
-	if end > len(ids) {
-		end = len(ids)
-	}
+	end := min(start+constants.SettingsIDsPerPage, len(ids))
 
 	// Add fields for this page
 	for _, id := range ids[start:end] {

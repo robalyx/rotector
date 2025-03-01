@@ -142,7 +142,7 @@ type settingField struct {
 }
 
 // getSettingField safely gets a field from a settings struct using dot notation.
-func getSettingField(settings interface{}, fieldPath string, logger *zap.Logger) settingField {
+func getSettingField(settings any, fieldPath string, logger *zap.Logger) settingField {
 	v := reflect.ValueOf(settings)
 	if v.Kind() == reflect.Ptr {
 		v = v.Elem() // Dereference pointer
@@ -187,7 +187,7 @@ func (f settingField) isValid() bool {
 }
 
 // setValue safely sets a value to the field.
-func (f settingField) setValue(value interface{}) bool {
+func (f settingField) setValue(value any) bool {
 	if !f.isValid() {
 		return false
 	}
@@ -213,7 +213,7 @@ func (f settingField) setValue(value interface{}) bool {
 }
 
 // getValue safely gets a value from the field.
-func (f settingField) getValue(zero interface{}) interface{} {
+func (f settingField) getValue(zero any) any {
 	if !f.isValid() {
 		return zero
 	}

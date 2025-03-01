@@ -36,10 +36,7 @@ func NewBuilder(s *session.Session) *Builder {
 func (b *Builder) Build() *discord.MessageUpdateBuilder {
 	// Calculate message pairs and total pages
 	messageCount := len(b.history.Messages) / 2
-	totalPages := (messageCount - 1) / constants.ChatMessagesPerPage
-	if totalPages < 0 {
-		totalPages = 0
-	}
+	totalPages := max((messageCount-1)/constants.ChatMessagesPerPage, 0)
 
 	// Create embeds
 	embedBuilders := []*discord.EmbedBuilder{discord.NewEmbedBuilder().
@@ -48,14 +45,8 @@ func (b *Builder) Build() *discord.MessageUpdateBuilder {
 		SetColor(constants.DefaultEmbedColor)}
 
 	// Calculate page boundaries (showing latest messages first)
-	end := len(b.history.Messages) - (b.page * constants.ChatMessagesPerPage * 2)
-	start := end - (constants.ChatMessagesPerPage * 2)
-	if start < 0 {
-		start = 0
-	}
-	if end < 0 {
-		end = 0
-	}
+	end := max(len(b.history.Messages)-(b.page*constants.ChatMessagesPerPage*2), 0)
+	start := max(end-(constants.ChatMessagesPerPage*2), 0)
 	if end > len(b.history.Messages) {
 		end = len(b.history.Messages)
 	}

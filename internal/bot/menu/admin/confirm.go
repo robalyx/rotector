@@ -105,7 +105,7 @@ func (m *ConfirmMenu) handleBanUser(event *events.ComponentInteractionCreate, s 
 		ReviewerID:        uint64(event.User().ID),
 		ActivityType:      enum.ActivityTypeDiscordUserBanned,
 		ActivityTimestamp: time.Now(),
-		Details: map[string]interface{}{
+		Details: map[string]any{
 			"notes":      notes,
 			"ban_reason": banReason.String(),
 			"expires_at": expiresAt,
@@ -150,7 +150,7 @@ func (m *ConfirmMenu) handleUnbanUser(event *events.ComponentInteractionCreate, 
 		ReviewerID:        uint64(event.User().ID),
 		ActivityType:      enum.ActivityTypeDiscordUserUnbanned,
 		ActivityTimestamp: time.Now(),
-		Details: map[string]interface{}{
+		Details: map[string]any{
 			"notes": notes,
 		},
 	})
@@ -191,7 +191,7 @@ func (m *ConfirmMenu) handleDeleteUser(event *events.ComponentInteractionCreate,
 		ReviewerID:        uint64(event.User().ID),
 		ActivityType:      enum.ActivityTypeUserDeleted,
 		ActivityTimestamp: time.Now(),
-		Details: map[string]interface{}{
+		Details: map[string]any{
 			"reason": reason,
 		},
 	})
@@ -232,7 +232,7 @@ func (m *ConfirmMenu) handleDeleteGroup(event *events.ComponentInteractionCreate
 		ReviewerID:        uint64(event.User().ID),
 		ActivityType:      enum.ActivityTypeGroupDeleted,
 		ActivityTimestamp: time.Now(),
-		Details: map[string]interface{}{
+		Details: map[string]any{
 			"reason": reason,
 		},
 	})

@@ -34,15 +34,15 @@ func (t *Translator) TranslateLanguage(ctx context.Context, text, sourceLang, ta
 		return "", err
 	}
 
-	var result []interface{}
+	var result []any
 	if err := sonic.Unmarshal(body, &result); err != nil {
 		return "", err
 	}
 
 	// Extract translated text from the response
 	var translatedText strings.Builder
-	for _, slice := range result[0].([]interface{}) {
-		translatedText.WriteString(slice.([]interface{})[0].(string))
+	for _, slice := range result[0].([]any) {
+		translatedText.WriteString(slice.([]any)[0].(string))
 	}
 
 	return translatedText.String(), nil

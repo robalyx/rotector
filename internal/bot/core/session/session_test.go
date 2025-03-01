@@ -17,8 +17,8 @@ func TestProcessValue(t *testing.T) {
 
 	tests := []struct {
 		name     string
-		input    interface{}
-		expected interface{}
+		input    any
+		expected any
 	}{
 		{
 			name:     "nil value",
@@ -67,18 +67,18 @@ func TestProcessValue(t *testing.T) {
 		},
 		{
 			name:     "slice of mixed types",
-			input:    []interface{}{"string", uint64(123), 42, true},
-			expected: []interface{}{"string", "123", 42, true},
+			input:    []any{"string", uint64(123), 42, true},
+			expected: []any{"string", "123", 42, true},
 		},
 		{
 			name:     "map with string keys",
-			input:    map[string]interface{}{"str": "value", "uint": uint64(123), "int": 42},
-			expected: map[string]interface{}{"str": "value", "uint": "123", "int": 42},
+			input:    map[string]any{"str": "value", "uint": uint64(123), "int": 42},
+			expected: map[string]any{"str": "value", "uint": "123", "int": 42},
 		},
 		{
 			name:     "nested map and slice",
-			input:    map[string]interface{}{"items": []interface{}{uint64(1), "test", map[string]interface{}{"nestedUint": uint64(12345)}}},
-			expected: map[string]interface{}{"items": []interface{}{"1", "test", map[string]interface{}{"nestedUint": "12345"}}},
+			input:    map[string]any{"items": []any{uint64(1), "test", map[string]any{"nestedUint": uint64(12345)}}},
+			expected: map[string]any{"items": []any{"1", "test", map[string]any{"nestedUint": "12345"}}},
 		},
 	}
 
@@ -104,7 +104,7 @@ func TestProcessValue(t *testing.T) {
 		}
 
 		result := processValue(input)
-		resultMap, ok := result.(map[string]interface{})
+		resultMap, ok := result.(map[string]any)
 		require.True(t, ok, "Expected result to be a map")
 		assert.Equal(t, "18446744073709551615", resultMap["ID"])
 		assert.Equal(t, "Test", resultMap["Name"])
@@ -123,8 +123,8 @@ func TestProcessValue(t *testing.T) {
 func TestPreserveNumericPrecision(t *testing.T) {
 	tests := []struct {
 		name     string
-		input    interface{}
-		expected interface{}
+		input    any
+		expected any
 	}{
 		{
 			name:     "nil value",
@@ -168,13 +168,13 @@ func TestPreserveNumericPrecision(t *testing.T) {
 		},
 		{
 			name: "map with mixed values",
-			input: map[string]interface{}{
+			input: map[string]any{
 				"uint_str":  "12345",
 				"uint_json": json.Number("9876543210"),
 				"float":     json.Number("123.45"),
 				"regular":   "string",
 			},
-			expected: map[string]interface{}{
+			expected: map[string]any{
 				"uint_str":  uint64(12345),
 				"uint_json": uint64(9876543210),
 				"float":     123.45,
@@ -183,13 +183,13 @@ func TestPreserveNumericPrecision(t *testing.T) {
 		},
 		{
 			name: "slice with mixed values",
-			input: []interface{}{
+			input: []any{
 				"12345",
 				json.Number("9876543210"),
 				json.Number("123.45"),
 				"string",
 			},
-			expected: []interface{}{
+			expected: []any{
 				uint64(12345),
 				uint64(9876543210),
 				123.45,
@@ -198,18 +198,18 @@ func TestPreserveNumericPrecision(t *testing.T) {
 		},
 		{
 			name: "nested structures",
-			input: map[string]interface{}{
-				"items": []interface{}{
+			input: map[string]any{
+				"items": []any{
 					"123",
-					map[string]interface{}{
+					map[string]any{
 						"nested": json.Number("18446744073709551615"),
 					},
 				},
 			},
-			expected: map[string]interface{}{
-				"items": []interface{}{
+			expected: map[string]any{
+				"items": []any{
 					uint64(123),
-					map[string]interface{}{
+					map[string]any{
 						"nested": uint64(18446744073709551615),
 					},
 				},
@@ -245,7 +245,7 @@ func TestPreserveNumericPrecision(t *testing.T) {
 func BenchmarkProcessValue(b *testing.B) {
 	benchmarks := []struct {
 		name  string
-		input interface{}
+		input any
 	}{
 		{
 			name:  "simple uint64",
@@ -257,29 +257,29 @@ func BenchmarkProcessValue(b *testing.B) {
 		},
 		{
 			name:  "simple map",
-			input: map[string]interface{}{"str": "value", "uint": uint64(123), "int": 42},
+			input: map[string]any{"str": "value", "uint": uint64(123), "int": 42},
 		},
 		{
 			name: "complex nested structure",
-			input: map[string]interface{}{
+			input: map[string]any{
 				"id":   uint64(18446744073709551615),
 				"name": "test",
-				"metadata": map[string]interface{}{
+				"metadata": map[string]any{
 					"created": time.Now(),
 					"tags":    []string{"test", "benchmark"},
 					"counts":  []uint64{1, 2, 3, 4, 5, 6, 7, 8, 9, 10},
-					"nested": map[string]interface{}{
-						"deep": map[string]interface{}{
-							"deeper": map[string]interface{}{
+					"nested": map[string]any{
+						"deep": map[string]any{
+							"deeper": map[string]any{
 								"deepest": uint64(9876543210),
 							},
 						},
 					},
 				},
-				"items": []interface{}{
+				"items": []any{
 					uint64(1),
 					"test",
-					map[string]interface{}{
+					map[string]any{
 						"nestedUint": uint64(12345),
 						"nestedTime": time.Now(),
 					},
@@ -302,7 +302,7 @@ func BenchmarkProcessValue(b *testing.B) {
 func BenchmarkPreserveNumericPrecision(b *testing.B) {
 	benchmarks := []struct {
 		name  string
-		input interface{}
+		input any
 	}{
 		{
 			name:  "simple string uint64",
@@ -318,7 +318,7 @@ func BenchmarkPreserveNumericPrecision(b *testing.B) {
 		},
 		{
 			name: "simple map",
-			input: map[string]interface{}{
+			input: map[string]any{
 				"uint_str":  "12345",
 				"uint_json": json.Number("9876543210"),
 				"float":     json.Number("123.45"),
@@ -327,31 +327,31 @@ func BenchmarkPreserveNumericPrecision(b *testing.B) {
 		},
 		{
 			name: "complex nested structure",
-			input: map[string]interface{}{
+			input: map[string]any{
 				"id":   json.Number("18446744073709551615"),
 				"name": "test",
-				"metadata": map[string]interface{}{
+				"metadata": map[string]any{
 					"created": "2023-10-15T12:00:00Z",
 					"tags":    []string{"test", "benchmark"},
-					"counts": []interface{}{
+					"counts": []any{
 						json.Number("1"),
 						json.Number("2"),
 						json.Number("3"),
 						json.Number("4"),
 						json.Number("5"),
 					},
-					"nested": map[string]interface{}{
-						"deep": map[string]interface{}{
-							"deeper": map[string]interface{}{
+					"nested": map[string]any{
+						"deep": map[string]any{
+							"deeper": map[string]any{
 								"deepest": json.Number("9876543210"),
 							},
 						},
 					},
 				},
-				"items": []interface{}{
+				"items": []any{
 					"123",
 					"test",
-					map[string]interface{}{
+					map[string]any{
 						"nestedUint":   json.Number("12345"),
 						"nestedBigInt": json.Number("18446744073709551615"),
 					},
@@ -376,24 +376,24 @@ func BenchmarkPreserveNumericPrecision(b *testing.B) {
 func BenchmarkDoubleMarshaling(b *testing.B) {
 	benchmarks := []struct {
 		name  string
-		input interface{}
+		input any
 	}{
 		{
 			name:  "simple map",
-			input: map[string]interface{}{"id": json.Number("12345"), "name": "test"},
+			input: map[string]any{"id": json.Number("12345"), "name": "test"},
 		},
 		{
 			name: "complex nested structure",
-			input: map[string]interface{}{
+			input: map[string]any{
 				"id":   json.Number("18446744073709551615"),
 				"name": "test",
-				"metadata": map[string]interface{}{
-					"counts": []interface{}{
+				"metadata": map[string]any{
+					"counts": []any{
 						json.Number("1"),
 						json.Number("2"),
 						json.Number("3"),
 					},
-					"nested": map[string]interface{}{
+					"nested": map[string]any{
 						"deepest": json.Number("9876543210"),
 					},
 				},
@@ -408,7 +408,7 @@ func BenchmarkDoubleMarshaling(b *testing.B) {
 				// Simulate the double marshaling process from getInterface
 				jsonBytes, _ := json.Marshal(bm.input)
 
-				var rawData interface{}
+				var rawData any
 				decoder := json.NewDecoder(bytes.NewReader(jsonBytes))
 				decoder.UseNumber()
 				_ = decoder.Decode(&rawData)
@@ -417,7 +417,7 @@ func BenchmarkDoubleMarshaling(b *testing.B) {
 
 				processedBytes, _ := json.Marshal(processedData)
 
-				var result map[string]interface{}
+				var result map[string]any
 				_ = json.Unmarshal(processedBytes, &result)
 			}
 		})

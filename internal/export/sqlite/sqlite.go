@@ -67,10 +67,7 @@ func (e *Exporter) createDB(filename, table string, records []*types.ExportRecor
 	// Insert records in batches
 	const batchSize = 1000
 	for i := 0; i < len(records); i += batchSize {
-		end := i + batchSize
-		if end > len(records) {
-			end = len(records)
-		}
+		end := min(i+batchSize, len(records))
 
 		// Begin transaction
 		err = sqlitex.Execute(conn, "BEGIN TRANSACTION", nil)
@@ -83,7 +80,7 @@ func (e *Exporter) createDB(filename, table string, records []*types.ExportRecor
 			err = sqlitex.Execute(conn, fmt.Sprintf(
 				"INSERT INTO %s (hash, status, reason, confidence) VALUES (?, ?, ?, ?)", table,
 			), &sqlitex.ExecOptions{
-				Args: []interface{}{record.Hash, record.Status, record.Reason, record.Confidence},
+				Args: []any{record.Hash, record.Status, record.Reason, record.Confidence},
 			})
 			if err != nil {
 				return fmt.Errorf("failed to insert record: %w", err)

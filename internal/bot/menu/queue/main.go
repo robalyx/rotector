@@ -160,6 +160,6 @@ func (m *Menu) handleModal(event *events.ModalSubmitInteractionCreate, s *sessio
 		ReviewerID:        uint64(event.User().ID),
 		ActivityType:      enum.ActivityTypeUserRechecked,
 		ActivityTimestamp: time.Now(),
-		Details:           map[string]interface{}{"reason": reason},
+		Details:           map[string]any{"reason": reason},
 	})
 }

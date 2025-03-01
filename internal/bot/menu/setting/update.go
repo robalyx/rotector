@@ -277,10 +277,7 @@ func (m *UpdateMenu) calculatePagination(s *session.Session) bool {
 	}
 
 	// Calculate total pages
-	totalPages := (totalItems + itemsPerPage - 1) / itemsPerPage
-	if totalPages < 1 {
-		totalPages = 1
-	}
+	totalPages := max((totalItems+itemsPerPage-1)/itemsPerPage, 1)
 
 	// Store pagination state in session
 	session.PaginationTotalItems.Set(s, totalItems)

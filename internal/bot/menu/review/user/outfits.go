@@ -51,10 +51,7 @@ func (m *OutfitsMenu) Show(event interfaces.CommonEvent, s *session.Session, r *
 	page := session.PaginationPage.Get(s)
 
 	start := page * constants.OutfitsPerPage
-	end := start + constants.OutfitsPerPage
-	if end > len(user.Outfits) {
-		end = len(user.Outfits)
-	}
+	end := min(start+constants.OutfitsPerPage, len(user.Outfits))
 	pageOutfits := user.Outfits[start:end]
 
 	// Store data in session for the message builder

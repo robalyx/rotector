@@ -32,7 +32,7 @@ type Session struct {
 	db                 database.Client
 	redis              rueidis.Client
 	key                string
-	data               map[string]interface{}
+	data               map[string]any
 	dataModified       map[string]bool
 	mu                 sync.RWMutex
 	logger             *zap.Logger
@@ -45,7 +45,7 @@ func NewSession(
 	db database.Client,
 	redis rueidis.Client,
 	key string,
-	data map[string]interface{},
+	data map[string]any,
 	logger *zap.Logger,
 ) *Session {
 	return &Session{
@@ -66,7 +66,7 @@ func NewSession(
 // If serialization fails, the error is logged but the session continues.
 func (s *Session) Touch(ctx context.Context) {
 	// Create a map of only persistent data
-	persistentData := make(map[string]interface{})
+	persistentData := make(map[string]any)
 	s.mu.RLock()
 	for key, value := range s.data {
 		isPersistent, ok := s.dataModified[key]
@@ -122,7 +122,7 @@ func (s *Session) BotSettings() *types.BotSetting {
 
 // get retrieves a raw string value from the in-memory session cache.
 // Returns empty string if key doesn't exist.
-func (s *Session) get(key string) interface{} {
+func (s *Session) get(key string) any {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -134,7 +134,7 @@ func (s *Session) get(key string) interface{} {
 }
 
 // getInterface unmarshals the stored value into the provided interface.
-func (s *Session) getInterface(key string, v interface{}) {
+func (s *Session) getInterface(key string, v any) {
 	value := s.get(key)
 	if value == nil {
 		return
@@ -193,7 +193,7 @@ func (s *Session) getInterface(key string, v interface{}) {
 	//
 	// WHY DOUBLE MARSHALING:
 	// We can't simply use decoder.UseNumber() when unmarshaling directly into the target type
-	// because UseNumber only affects how numbers are stored in map[string]interface{} and []interface{}.
+	// because UseNumber only affects how numbers are stored in map[string]any and []any.
 	// The preserveNumericPrecision function is needed to recursively convert these to actual uint64 values.
 
 	// First marshal to JSON
@@ -207,7 +207,7 @@ func (s *Session) getInterface(key string, v interface{}) {
 	}
 
 	// First unmarshal with number precision preservation
-	var rawData interface{}
+	var rawData any
 	decoder := sonic.ConfigStd.NewDecoder(bytes.NewReader(jsonBytes))
 	decoder.UseNumber() // This ensures numbers are decoded as json.Number to preserve precision
 	if err := decoder.Decode(&rawData); err != nil {
@@ -265,7 +265,7 @@ func (s *Session) getBuffer(key string) *bytes.Buffer {
 }
 
 // set sets the value for the given key.
-func (s *Session) set(key string, value interface{}, persist bool) {
+func (s *Session) set(key string, value any, persist bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -305,7 +305,7 @@ func (s *Session) delete(key string) {
 }
 
 // processValue recursively processes values to convert uint64 to string.
-func processValue(value interface{}) interface{} {
+func processValue(value any) any {
 	if value == nil {
 		return nil
 	}
@@ -333,7 +333,7 @@ func processValue(value interface{}) interface{} {
 			return result
 		}
 		// Process each element in the slice
-		result := make([]interface{}, refValue.Len())
+		result := make([]any, refValue.Len())
 		for i := range refValue.Len() {
 			if i < refValue.Len() {
 				result[i] = processValue(refValue.Index(i).Interface())
@@ -343,7 +343,7 @@ func processValue(value interface{}) interface{} {
 
 	case reflect.Map:
 		// Process map keys and values
-		result := make(map[string]interface{})
+		result := make(map[string]any)
 		for _, key := range refValue.MapKeys() {
 			// Convert map keys to strings
 			var keyStr string
@@ -364,7 +364,7 @@ func processValue(value interface{}) interface{} {
 		}
 
 		// Process struct fields
-		result := make(map[string]interface{})
+		result := make(map[string]any)
 		for i := range refValue.NumField() {
 			field := refValue.Type().Field(i)
 			if field.IsExported() {
@@ -385,7 +385,7 @@ func processValue(value interface{}) interface{} {
 // preserveNumericPrecision recursively processes a data structure and converts
 // json.Number and numeric strings to uint64 where appropriate, maintaining
 // precision for large integer values.
-func preserveNumericPrecision(data interface{}) interface{} {
+func preserveNumericPrecision(data any) any {
 	switch v := data.(type) {
 	case string:
 		// Try to convert string to uint64 if it looks like a number
@@ -417,13 +417,13 @@ func preserveNumericPrecision(data interface{}) interface{} {
 			return uint64(v)
 		}
 		return v
-	case map[string]interface{}:
+	case map[string]any:
 		// Process each map value recursively
 		for k, item := range v {
 			v[k] = preserveNumericPrecision(item)
 		}
 		return v
-	case []interface{}:
+	case []any:
 		// Process each slice item recursively
 		for i, item := range v {
 			v[i] = preserveNumericPrecision(item)

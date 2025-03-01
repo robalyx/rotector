@@ -105,7 +105,7 @@ func (r *UserModel) SaveUsers(ctx context.Context, users map[uint64]*types.User)
 	// Update each table
 	err = r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
 		// Helper function to update a table
-		updateTable := func(users interface{}, status enum.UserType) error {
+		updateTable := func(users any, status enum.UserType) error {
 			if counts[status] == 0 {
 				return nil
 			}
@@ -335,7 +335,7 @@ func (r *UserModel) GetUserByID(ctx context.Context, userID string, fields types
 	var result types.ReviewUser
 	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
 		// Try each model in order until we find a user
-		models := []interface{}{
+		models := []any{
 			&types.FlaggedUser{},
 			&types.ConfirmedUser{},
 			&types.ClearedUser{},
@@ -746,7 +746,7 @@ func (r *UserModel) GetUsersForThumbnailUpdate(ctx context.Context, limit int) (
 
 	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
 		// Query users from each table that need thumbnail updates
-		for _, model := range []interface{}{
+		for _, model := range []any{
 			(*types.FlaggedUser)(nil),
 			(*types.ConfirmedUser)(nil),
 			(*types.ClearedUser)(nil),
@@ -901,22 +901,22 @@ func (r *UserModel) GetUserToReview(ctx context.Context, sortBy enum.ReviewSortB
 	}
 
 	// Define models in priority order based on target mode
-	var models []interface{}
+	var models []any
 	switch targetMode {
 	case enum.ReviewTargetModeFlagged:
-		models = []interface{}{
+		models = []any{
 			&types.FlaggedUser{},   // Primary target
 			&types.ConfirmedUser{}, // First fallback
 			&types.ClearedUser{},   // Second fallback
 		}
 	case enum.ReviewTargetModeConfirmed:
-		models = []interface{}{
+		models = []any{
 			&types.ConfirmedUser{}, // Primary target
 			&types.FlaggedUser{},   // First fallback
 			&types.ClearedUser{},   // Second fallback
 		}
 	case enum.ReviewTargetModeCleared:
-		models = []interface{}{
+		models = []any{
 			&types.ClearedUser{},   // Primary target
 			&types.FlaggedUser{},   // First fallback
 			&types.ConfirmedUser{}, // Second fallback
@@ -938,7 +938,7 @@ func (r *UserModel) GetUserToReview(ctx context.Context, sortBy enum.ReviewSortB
 }
 
 // getNextToReview handles the common logic for getting the next item to review.
-func (r *UserModel) getNextToReview(ctx context.Context, model interface{}, sortBy enum.ReviewSortBy, recentIDs []uint64) (*types.ReviewUser, error) {
+func (r *UserModel) getNextToReview(ctx context.Context, model any, sortBy enum.ReviewSortBy, recentIDs []uint64) (*types.ReviewUser, error) {
 	var result types.ReviewUser
 	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
 		// Build subquery to get ID

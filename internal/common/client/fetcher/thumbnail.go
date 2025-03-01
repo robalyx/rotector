@@ -106,10 +106,7 @@ func (t *ThumbnailFetcher) ProcessBatchThumbnails(ctx context.Context, requests 
 	// Process batches concurrently
 	for i := 0; i < len(requestList.Requests); i += batchSize {
 		p.Go(func(ctx context.Context) error {
-			end := i + batchSize
-			if end > len(requestList.Requests) {
-				end = len(requestList.Requests)
-			}
+			end := min(i+batchSize, len(requestList.Requests))
 
 			// Create new batch request
 			batchRequests := thumbnails.NewBatchThumbnailsBuilder()

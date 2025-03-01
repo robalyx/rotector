@@ -26,16 +26,10 @@ func (h *ViewerAction) ParsePageAction(s *Session, action ViewerAction, maxPage 
 		PaginationPage.Set(s, 0)
 		page = 0
 	case ViewerPrevPage:
-		page = PaginationPage.Get(s) - 1
-		if page < 0 {
-			page = 0
-		}
+		page = max(PaginationPage.Get(s)-1, 0)
 		PaginationPage.Set(s, page)
 	case ViewerNextPage:
-		page = PaginationPage.Get(s) + 1
-		if page > maxPage {
-			page = maxPage
-		}
+		page = min(PaginationPage.Get(s)+1, maxPage)
 		PaginationPage.Set(s, page)
 	case ViewerLastPage:
 		PaginationPage.Set(s, maxPage)

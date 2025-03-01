@@ -354,7 +354,7 @@ func (m *ReviewMenu) handleConfirmGroup(event interfaces.CommonEvent, s *session
 			ReviewerID:        uint64(event.User().ID),
 			ActivityType:      enum.ActivityTypeGroupTrainingDownvote,
 			ActivityTimestamp: time.Now(),
-			Details: map[string]interface{}{
+			Details: map[string]any{
 				"upvotes":   group.Reputation.Upvotes,
 				"downvotes": group.Reputation.Downvotes,
 			},
@@ -397,7 +397,7 @@ func (m *ReviewMenu) handleConfirmGroup(event interfaces.CommonEvent, s *session
 			ReviewerID:        uint64(event.User().ID),
 			ActivityType:      enum.ActivityTypeGroupConfirmed,
 			ActivityTimestamp: time.Now(),
-			Details: map[string]interface{}{
+			Details: map[string]any{
 				"reasons": group.Reasons.Messages(),
 			},
 		})
@@ -432,7 +432,7 @@ func (m *ReviewMenu) handleClearGroup(event interfaces.CommonEvent, s *session.S
 			ReviewerID:        uint64(event.User().ID),
 			ActivityType:      enum.ActivityTypeGroupTrainingUpvote,
 			ActivityTimestamp: time.Now(),
-			Details: map[string]interface{}{
+			Details: map[string]any{
 				"upvotes":   group.Reputation.Upvotes,
 				"downvotes": group.Reputation.Downvotes,
 			},
@@ -475,7 +475,7 @@ func (m *ReviewMenu) handleClearGroup(event interfaces.CommonEvent, s *session.S
 			ReviewerID:        uint64(event.User().ID),
 			ActivityType:      enum.ActivityTypeGroupCleared,
 			ActivityTimestamp: time.Now(),
-			Details:           map[string]interface{}{},
+			Details:           map[string]any{},
 		})
 	}
 
@@ -502,7 +502,7 @@ func (m *ReviewMenu) handleSkipGroup(event interfaces.CommonEvent, s *session.Se
 			ReviewerID:        uint64(event.User().ID),
 			ActivityType:      enum.ActivityTypeGroupSkipped,
 			ActivityTimestamp: time.Now(),
-			Details:           map[string]interface{}{},
+			Details:           map[string]any{},
 		})
 	}
 }
@@ -556,7 +556,7 @@ func (m *ReviewMenu) handleConfirmWithReasonModalSubmit(event *events.ModalSubmi
 		ReviewerID:        uint64(event.User().ID),
 		ActivityType:      enum.ActivityTypeGroupConfirmed,
 		ActivityTimestamp: time.Now(),
-		Details: map[string]interface{}{
+		Details: map[string]any{
 			"reasons":    group.Reasons.Messages(),
 			"confidence": group.Confidence,
 		},
@@ -606,7 +606,7 @@ func (m *ReviewMenu) fetchNewTarget(event interfaces.CommonEvent, s *session.Ses
 		ReviewerID:        reviewerID,
 		ActivityType:      enum.ActivityTypeGroupViewed,
 		ActivityTimestamp: time.Now(),
-		Details:           map[string]interface{}{},
+		Details:           map[string]any{},
 	})
 
 	return group, isBanned, nil

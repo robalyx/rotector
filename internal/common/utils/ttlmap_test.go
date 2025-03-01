@@ -69,14 +69,14 @@ func TestTTLMapConcurrent(t *testing.T) {
 	t.Run("concurrent access", func(t *testing.T) {
 		done := make(chan bool)
 		go func() {
-			for i := 0; i < 100; i++ {
+			for i := range 100 {
 				m.Set("key", i)
 			}
 			done <- true
 		}()
 
 		go func() {
-			for i := 0; i < 100; i++ {
+			for range 100 {
 				m.Get("key")
 			}
 			done <- true

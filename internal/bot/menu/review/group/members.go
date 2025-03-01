@@ -68,10 +68,7 @@ func (m *MembersMenu) Show(event interfaces.CommonEvent, s *session.Session, r *
 	page := session.PaginationPage.Get(s)
 
 	start := page * constants.MembersPerPage
-	end := start + constants.MembersPerPage
-	if end > len(sortedMemberIDs) {
-		end = len(sortedMemberIDs)
-	}
+	end := min(start+constants.MembersPerPage, len(sortedMemberIDs))
 	pageMembers := sortedMemberIDs[start:end]
 
 	// Start fetching presences for visible members in background

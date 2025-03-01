@@ -260,7 +260,7 @@ func (m *Menu) handleLookupRobloxUserModalSubmit(event *events.ModalSubmitIntera
 		ReviewerID:        uint64(event.User().ID),
 		ActivityType:      enum.ActivityTypeUserLookup,
 		ActivityTimestamp: time.Now(),
-		Details:           map[string]interface{}{},
+		Details:           map[string]any{},
 	})
 }
 
@@ -306,7 +306,7 @@ func (m *Menu) handleLookupRobloxGroupModalSubmit(event *events.ModalSubmitInter
 		ReviewerID:        uint64(event.User().ID),
 		ActivityType:      enum.ActivityTypeGroupLookup,
 		ActivityTimestamp: time.Now(),
-		Details:           map[string]interface{}{},
+		Details:           map[string]any{},
 	})
 }
 
@@ -341,7 +341,7 @@ func (m *Menu) handleLookupDiscordUserModalSubmit(event *events.ModalSubmitInter
 		ReviewerID:        uint64(event.User().ID),
 		ActivityType:      enum.ActivityTypeUserLookupDiscord,
 		ActivityTimestamp: time.Now(),
-		Details: map[string]interface{}{
+		Details: map[string]any{
 			"discord_user_id": discordUserID,
 		},
 	})

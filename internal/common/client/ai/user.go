@@ -110,7 +110,7 @@ Ignore:
 - Age mentions
 - Compliments on outfits/avatars
 - Any follow or friend making requests
-- Advertisements to join games, communities, channels, tournaments, etc.
+- Advertisements to join games, communities, channels, or tournaments
 - Off-platform handles without inappropriate context
 - Friend making attempts without inappropriate context
 - Gender identity expression
@@ -230,10 +230,7 @@ func (a *UserAnalyzer) ProcessUsers(userInfos []*fetcher.Info, flaggedUsers map[
 
 	for i := range numBatches {
 		start := i * a.batchSize
-		end := start + a.batchSize
-		if end > len(userInfos) {
-			end = len(userInfos)
-		}
+		end := min(start+a.batchSize, len(userInfos))
 
 		infoBatch := userInfos[start:end]
 		p.Go(func(ctx context.Context) error {

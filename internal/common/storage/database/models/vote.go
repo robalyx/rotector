@@ -277,7 +277,7 @@ func (v *VoteModel) CheckVoteAccuracy(ctx context.Context, discordUserID uint64)
 		ReviewerID:        0,
 		ActivityType:      enum.ActivityTypeDiscordUserBanned,
 		ActivityTimestamp: time.Now(),
-		Details: map[string]interface{}{
+		Details: map[string]any{
 			"notes":      "Automated system detection - suspicious voting patterns",
 			"accuracy":   stats.Accuracy,
 			"totalVotes": stats.TotalVotes,

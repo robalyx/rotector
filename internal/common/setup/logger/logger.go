@@ -16,14 +16,14 @@ func New(zapLogger *zap.Logger) logger.Logger {
 	return &Logger{zap: zapLogger}
 }
 
-func (l *Logger) Debug(msg string)                          { l.zap.Debug(msg) }
-func (l *Logger) Info(msg string)                           { l.zap.Info(msg) }
-func (l *Logger) Warn(msg string)                           { l.zap.Warn(msg) }
-func (l *Logger) Error(msg string)                          { l.zap.Error(msg) }
-func (l *Logger) Debugf(format string, args ...interface{}) { l.zap.Sugar().Debugf(format, args...) }
-func (l *Logger) Infof(format string, args ...interface{})  { l.zap.Sugar().Infof(format, args...) }
-func (l *Logger) Warnf(format string, args ...interface{})  { l.zap.Sugar().Warnf(format, args...) }
-func (l *Logger) Errorf(format string, args ...interface{}) { l.zap.Sugar().Errorf(format, args...) }
+func (l *Logger) Debug(msg string)                  { l.zap.Debug(msg) }
+func (l *Logger) Info(msg string)                   { l.zap.Info(msg) }
+func (l *Logger) Warn(msg string)                   { l.zap.Warn(msg) }
+func (l *Logger) Error(msg string)                  { l.zap.Error(msg) }
+func (l *Logger) Debugf(format string, args ...any) { l.zap.Sugar().Debugf(format, args...) }
+func (l *Logger) Infof(format string, args ...any)  { l.zap.Sugar().Infof(format, args...) }
+func (l *Logger) Warnf(format string, args ...any)  { l.zap.Sugar().Warnf(format, args...) }
+func (l *Logger) Errorf(format string, args ...any) { l.zap.Sugar().Errorf(format, args...) }
 
 // WithFields creates a new logger with additional context fields.
 // It converts axonet fields to zap fields and creates a new logger instance.

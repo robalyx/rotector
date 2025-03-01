@@ -63,8 +63,8 @@ type ClearedUser struct {
 // ReviewUser combines all possible user states into a single structure for review.
 type ReviewUser struct {
 	User       `json:"user"`
-	VerifiedAt time.Time     `json:"verifiedAt,omitempty"`
-	ClearedAt  time.Time     `json:"clearedAt,omitempty"`
+	VerifiedAt time.Time     `json:"verifiedAt"`
+	ClearedAt  time.Time     `json:"clearedAt"`
 	Status     enum.UserType `json:"status"`
 	Reputation *Reputation   `json:"reputation"`
 }

@@ -57,10 +57,7 @@ func (m *GroupsMenu) Show(event interfaces.CommonEvent, s *session.Session, r *p
 	page := session.PaginationPage.Get(s)
 
 	start := page * constants.GroupsPerPage
-	end := start + constants.GroupsPerPage
-	if end > len(sortedGroups) {
-		end = len(sortedGroups)
-	}
+	end := min(start+constants.GroupsPerPage, len(sortedGroups))
 	pageGroups := sortedGroups[start:end]
 
 	// Store data in session for the message builder

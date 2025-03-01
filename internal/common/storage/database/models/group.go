@@ -97,7 +97,7 @@ func (r *GroupModel) SaveGroups(ctx context.Context, groups map[uint64]*types.Gr
 	// Update each table
 	err = r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
 		// Helper function to update a table
-		updateTable := func(groups interface{}, status enum.GroupType) error {
+		updateTable := func(groups any, status enum.GroupType) error {
 			if counts[status] == 0 {
 				return nil
 			}
@@ -258,7 +258,7 @@ func (r *GroupModel) GetGroupByID(ctx context.Context, groupID string, fields ty
 
 	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
 		// Try each model in order until we find a group
-		models := []interface{}{
+		models := []any{
 			&types.FlaggedGroup{},
 			&types.ConfirmedGroup{},
 			&types.ClearedGroup{},
@@ -672,7 +672,7 @@ func (r *GroupModel) GetGroupsForThumbnailUpdate(ctx context.Context, limit int)
 
 	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
 		// Query groups from each table that need thumbnail updates
-		for _, model := range []interface{}{
+		for _, model := range []any{
 			(*types.FlaggedGroup)(nil),
 			(*types.ConfirmedGroup)(nil),
 			(*types.ClearedGroup)(nil),
@@ -837,22 +837,22 @@ func (r *GroupModel) GetGroupToReview(ctx context.Context, sortBy enum.ReviewSor
 	}
 
 	// Define models in priority order based on target mode
-	var models []interface{}
+	var models []any
 	switch targetMode {
 	case enum.ReviewTargetModeFlagged:
-		models = []interface{}{
+		models = []any{
 			&types.FlaggedGroup{},   // Primary target
 			&types.ConfirmedGroup{}, // First fallback
 			&types.ClearedGroup{},   // Second fallback
 		}
 	case enum.ReviewTargetModeConfirmed:
-		models = []interface{}{
+		models = []any{
 			&types.ConfirmedGroup{}, // Primary target
 			&types.FlaggedGroup{},   // First fallback
 			&types.ClearedGroup{},   // Second fallback
 		}
 	case enum.ReviewTargetModeCleared:
-		models = []interface{}{
+		models = []any{
 			&types.ClearedGroup{},   // Primary target
 			&types.FlaggedGroup{},   // First fallback
 			&types.ConfirmedGroup{}, // Second fallback
@@ -874,7 +874,7 @@ func (r *GroupModel) GetGroupToReview(ctx context.Context, sortBy enum.ReviewSor
 }
 
 // getNextToReview handles the common logic for getting the next item to review.
-func (r *GroupModel) getNextToReview(ctx context.Context, model interface{}, sortBy enum.ReviewSortBy, recentIDs []uint64) (*types.ReviewGroup, error) {
+func (r *GroupModel) getNextToReview(ctx context.Context, model any, sortBy enum.ReviewSortBy, recentIDs []uint64) (*types.ReviewGroup, error) {
 	var result types.ReviewGroup
 	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
 		// Build subquery to get ID

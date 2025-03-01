@@ -26,11 +26,11 @@ const PartitionCount = 8
 // sonicProvider is a JSON provider that uses Sonic for encoding and decoding.
 type sonicProvider struct{}
 
-func (sonicProvider) Marshal(v interface{}) ([]byte, error) {
+func (sonicProvider) Marshal(v any) ([]byte, error) {
 	return sonic.Marshal(v)
 }
 
-func (sonicProvider) Unmarshal(data []byte, v interface{}) error {
+func (sonicProvider) Unmarshal(data []byte, v any) error {
 	return sonic.Unmarshal(data, v)
 }
 

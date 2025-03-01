@@ -13,7 +13,7 @@ func init() { //nolint:funlen
 	Migrations.MustRegister(func(ctx context.Context, db *bun.DB) error {
 		// Create partitioned tables
 		tables := []struct {
-			model interface{}
+			model any
 			name  string
 		}{
 			{(*types.FlaggedUser)(nil), "flagged_users"},
@@ -54,7 +54,7 @@ func init() { //nolint:funlen
 		}
 
 		// Create other tables
-		models := []interface{}{
+		models := []any{
 			(*types.HourlyStats)(nil),
 			(*types.UserSetting)(nil),
 			(*types.BotSetting)(nil),
@@ -82,7 +82,7 @@ func init() { //nolint:funlen
 		return nil
 	}, func(ctx context.Context, db *bun.DB) error {
 		// Down migration - drop all tables
-		models := []interface{}{
+		models := []any{
 			(*types.DiscordServerInfo)(nil),
 			(*types.UserConsent)(nil),
 			(*types.MaterializedViewRefresh)(nil),

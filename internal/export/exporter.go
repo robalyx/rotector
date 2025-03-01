@@ -133,7 +133,7 @@ func (e *Exporter) ExportAll(ctx context.Context) error {
 }
 
 // hashRecords converts items to export records with concurrent hashing
-func (e *Exporter) hashRecords(items interface{}, salt string, hashType HashType) []*types.ExportRecord {
+func (e *Exporter) hashRecords(items any, salt string, hashType HashType) []*types.ExportRecord {
 	var ids []uint64
 	var reasons []string
 	var statuses []string

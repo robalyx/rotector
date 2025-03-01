@@ -35,10 +35,10 @@ type LogCursor struct {
 
 // ActivityLog stores information about moderator actions.
 type ActivityLog struct {
-	Sequence          int64                  `bun:",pk,autoincrement"`
-	ReviewerID        uint64                 `bun:",notnull"`
-	ActivityTarget    ActivityTarget         `bun:",embed"`
-	ActivityType      enum.ActivityType      `bun:",notnull"`
-	ActivityTimestamp time.Time              `bun:",notnull,pk"`
-	Details           map[string]interface{} `bun:"type:jsonb"`
+	Sequence          int64             `bun:",pk,autoincrement"`
+	ReviewerID        uint64            `bun:",notnull"`
+	ActivityTarget    ActivityTarget    `bun:",embed"`
+	ActivityType      enum.ActivityType `bun:",notnull"`
+	ActivityTimestamp time.Time         `bun:",notnull,pk"`
+	Details           map[string]any    `bun:"type:jsonb"`
 }

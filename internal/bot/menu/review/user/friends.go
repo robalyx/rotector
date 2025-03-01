@@ -57,10 +57,7 @@ func (m *FriendsMenu) Show(event interfaces.CommonEvent, s *session.Session, r *
 	page := session.PaginationPage.Get(s)
 
 	start := page * constants.FriendsPerPage
-	end := start + constants.FriendsPerPage
-	if end > len(sortedFriends) {
-		end = len(sortedFriends)
-	}
+	end := min(start+constants.FriendsPerPage, len(sortedFriends))
 	pageFriends := sortedFriends[start:end]
 
 	// Start fetching presences for visible friends in background

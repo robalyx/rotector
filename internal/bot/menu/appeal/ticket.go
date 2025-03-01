@@ -84,10 +84,7 @@ func (m *TicketMenu) Show(event interfaces.CommonEvent, s *session.Session, r *p
 	}
 
 	// Calculate total pages
-	totalPages := (len(messages) - 1) / constants.AppealMessagesPerPage
-	if totalPages < 0 {
-		totalPages = 0
-	}
+	totalPages := max((len(messages)-1)/constants.AppealMessagesPerPage, 0)
 
 	// Store data in session
 	session.AppealMessages.Set(s, messages)
@@ -176,7 +173,7 @@ func (m *TicketMenu) handleLookupUser(event *events.ComponentInteractionCreate, 
 		ReviewerID:        uint64(event.User().ID),
 		ActivityType:      enum.ActivityTypeUserLookup,
 		ActivityTimestamp: time.Now(),
-		Details:           map[string]interface{}{},
+		Details:           map[string]any{},
 	})
 }
 
@@ -248,7 +245,7 @@ func (m *TicketMenu) handleCloseAppeal(event *events.ComponentInteractionCreate,
 		ReviewerID:        userID,
 		ActivityType:      enum.ActivityTypeAppealClosed,
 		ActivityTimestamp: time.Now(),
-		Details: map[string]interface{}{
+		Details: map[string]any{
 			"appeal_id": appeal.ID,
 		},
 	})
@@ -382,7 +379,7 @@ func (m *TicketMenu) handleAcceptModalSubmit(event *events.ModalSubmitInteractio
 		ReviewerID:        userID,
 		ActivityType:      enum.ActivityTypeAppealAccepted,
 		ActivityTimestamp: time.Now(),
-		Details: map[string]interface{}{
+		Details: map[string]any{
 			"reason":    reason,
 			"appeal_id": appeal.ID,
 		},
@@ -423,7 +420,7 @@ func (m *TicketMenu) handleRejectModalSubmit(event *events.ModalSubmitInteractio
 		ReviewerID:        userID,
 		ActivityType:      enum.ActivityTypeAppealRejected,
 		ActivityTimestamp: time.Now(),
-		Details: map[string]interface{}{
+		Details: map[string]any{
 			"reason":    reason,
 			"appeal_id": appeal.ID,
 		},

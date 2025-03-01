@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strconv"
 	"time"
 
@@ -44,7 +45,7 @@ type Setting struct {
 	Name         string                `json:"name"`         // Display name
 	Description  string                `json:"description"`  // Help text explaining the setting
 	Type         enum.SettingType      `json:"type"`         // Data type of the setting
-	DefaultValue interface{}           `json:"defaultValue"` // Default value
+	DefaultValue any                   `json:"defaultValue"` // Default value
 	Options      []types.SettingOption `json:"options"`      // Available options for enum types
 	Validators   []Validator           `json:"-"`            // Functions to validate input
 	ValueGetter  ValueGetter           `json:"-"`            // Function to retrieve the value
@@ -339,7 +340,7 @@ func (r *SettingRegistry) createReviewerIDsSetting() *Setting {
 			found := false
 			for i, reviewerID := range reviewerIDs {
 				if reviewerID == id {
-					reviewerIDs = append(reviewerIDs[:i], reviewerIDs[i+1:]...)
+					reviewerIDs = slices.Delete(reviewerIDs, i, i+1)
 					found = true
 					break
 				}
@@ -396,7 +397,7 @@ func (r *SettingRegistry) createAdminIDsSetting() *Setting {
 			found := false
 			for i, adminID := range adminIDs {
 				if adminID == id {
-					adminIDs = append(adminIDs[:i], adminIDs[i+1:]...)
+					adminIDs = slices.Delete(adminIDs, i, i+1)
 					found = true
 					break
 				}
@@ -566,7 +567,7 @@ func (r *SettingRegistry) createAnnouncementMessageSetting() *Setting {
 
 // logBotSettingChange is a helper method to handle logging changes to bot settings
 func (r *SettingRegistry) logBotSettingChange(ctx context.Context, db database.Client, reviewerID uint64, settingKey, oldValue, newValue string) {
-	details := map[string]interface{}{
+	details := map[string]any{
 		"setting": settingKey,
 		"old":     oldValue,
 		"new":     newValue,

@@ -3,7 +3,7 @@ package models
 import (
 	"context"
 	"fmt"
-	"sort"
+	"slices"
 	"time"
 
 	apiTypes "github.com/jaxron/roapi.go/pkg/api/types"
@@ -48,7 +48,7 @@ func (r *TrackingModel) AddUsersToGroupsTracking(ctx context.Context, groupToUse
 		for groupID := range groupToUsers {
 			groupIDs = append(groupIDs, groupID)
 		}
-		sort.Slice(groupIDs, func(i, j int) bool { return groupIDs[i] < groupIDs[j] })
+		slices.Sort(groupIDs)
 
 		// Lock the rows we're going to update
 		var existing []types.GroupMemberTracking

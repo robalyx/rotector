@@ -16,9 +16,9 @@ func (t *Translator) TranslateMorse(morse string) string {
 
 		// Process each letter in the word
 		word = strings.TrimSpace(word)
-		letters := strings.Split(word, " ")
+		letters := strings.SplitSeq(word, " ")
 
-		for _, letter := range letters {
+		for letter := range letters {
 			letter = strings.TrimSpace(letter)
 			if letter == "" {
 				continue

@@ -269,7 +269,7 @@ func (b *ChartBuilder) getYAxis() chart.YAxis {
 			StrokeColor: chart.ColorAlternateGray,
 			StrokeWidth: gridLineWidth,
 		},
-		ValueFormatter: func(v interface{}) string {
+		ValueFormatter: func(v any) string {
 			if f, ok := v.(float64); ok {
 				return fmt.Sprintf("%.0f", f)
 			}

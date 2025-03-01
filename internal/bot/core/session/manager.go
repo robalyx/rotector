@@ -106,7 +106,7 @@ func (m *Manager) GetOrCreateSession(ctx context.Context, userID snowflake.ID, i
 			return nil, false, fmt.Errorf("%w: %w", ErrFailedToGetSession, err)
 		}
 
-		var sessionData map[string]interface{}
+		var sessionData map[string]any
 		if err := sonic.Unmarshal(data, &sessionData); err != nil {
 			return nil, false, fmt.Errorf("%w: %w", ErrFailedToParseSession, err)
 		}
@@ -118,7 +118,7 @@ func (m *Manager) GetOrCreateSession(ctx context.Context, userID snowflake.ID, i
 	}
 
 	// Initialize new session with fresh settings
-	session := NewSession(userSettings, botSettings, m.db, m.redis, key, make(map[string]interface{}), m.logger)
+	session := NewSession(userSettings, botSettings, m.db, m.redis, key, make(map[string]any), m.logger)
 	UserID.Set(session, uint64(userID))
 	IsGuildOwner.Set(session, isGuildOwner)
 	return session, true, nil
