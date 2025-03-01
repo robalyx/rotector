@@ -153,14 +153,13 @@ func (b *FriendsBuilder) getFriendFieldValue(friend *apiTypes.ExtendedFriend) st
 	if presence, ok := b.presences[friend.ID]; ok {
 		if presence.UserPresenceType != apiTypes.Offline {
 			info.WriteString("\n" + presence.LastLocation)
-		} else {
+		} else if presence.LastOnline != nil {
 			info.WriteString(fmt.Sprintf("\nLast Online: <t:%d:R>", presence.LastOnline.Unix()))
 		}
 	}
 
 	// Add confidence and reason if available
-	flaggedFriend := b.flaggedFriends[friend.ID]
-	if len(flaggedFriend.Reasons) > 0 {
+	if flaggedFriend, ok := b.flaggedFriends[friend.ID]; ok && len(flaggedFriend.Reasons) > 0 {
 		reasonTypes := flaggedFriend.Reasons.Types()
 		info.WriteString(fmt.Sprintf("\n(%.2f) [%s]", flaggedFriend.Confidence, strings.Join(reasonTypes, ", ")))
 	}
