@@ -47,6 +47,11 @@ func TestValueProcessor_ProcessValue(t *testing.T) {
 			expected: now.Format(time.RFC3339Nano),
 		},
 		{
+			name:     "zero time.Time value",
+			input:    time.Time{},
+			expected: time.Time{}.Format(time.RFC3339Nano),
+		},
+		{
 			name:     "string value (unchanged)",
 			input:    "test string",
 			expected: "test string",
@@ -67,6 +72,11 @@ func TestValueProcessor_ProcessValue(t *testing.T) {
 			expected: true,
 		},
 		{
+			name:     "empty slice",
+			input:    []uint64{},
+			expected: []any{},
+		},
+		{
 			name:  "slice of uint64",
 			input: []uint64{1, 2, 18446744073709551615},
 			expected: []any{
@@ -84,6 +94,11 @@ func TestValueProcessor_ProcessValue(t *testing.T) {
 				42,
 				true,
 			},
+		},
+		{
+			name:     "empty map",
+			input:    map[string]any{},
+			expected: map[string]any{},
 		},
 		{
 			name:  "map with string keys",
@@ -106,6 +121,11 @@ func TestValueProcessor_ProcessValue(t *testing.T) {
 					},
 				},
 			},
+		},
+		{
+			name:     "nil pointer",
+			input:    (*string)(nil),
+			expected: nil,
 		},
 	}
 
@@ -146,6 +166,139 @@ func TestValueProcessor_ProcessValue(t *testing.T) {
 		assert.Equal(t, now.Format(time.RFC3339Nano), resultMap["CreatedAt"])
 	})
 
+	t.Run("struct with zero-valued fields", func(t *testing.T) {
+		type ZeroTestStruct struct {
+			ID        uint64
+			Name      string
+			Empty     string
+			ZeroInt   int
+			CreatedAt time.Time
+			Tags      []string
+			Metadata  map[string]string
+		}
+
+		input := ZeroTestStruct{
+			ID:        18446744073709551615,
+			Name:      "Test",
+			Empty:     "", // Zero value for string
+			ZeroInt:   0,  // Zero value for int
+			CreatedAt: now,
+			Tags:      nil, // Zero value for slice
+			Metadata:  nil, // Zero value for map
+		}
+
+		result := processor.ProcessValue(input)
+		resultMap, ok := result.(map[string]any)
+		require.True(t, ok, "Expected result to be a map")
+
+		// Only non-zero fields should be present
+		assert.Contains(t, resultMap, "ID")
+		assert.Contains(t, resultMap, "Name")
+		assert.Contains(t, resultMap, "CreatedAt")
+
+		// Zero-valued fields should be skipped
+		assert.NotContains(t, resultMap, "Empty")
+		assert.NotContains(t, resultMap, "ZeroInt")
+		assert.NotContains(t, resultMap, "Tags")
+		assert.NotContains(t, resultMap, "Metadata")
+	})
+
+	t.Run("nested struct with zero values", func(t *testing.T) {
+		type Address struct {
+			Street  string
+			City    string
+			Country string
+			ZipCode string
+		}
+
+		type Person struct {
+			Name    string
+			Age     int
+			Address Address
+			Contact *Address
+		}
+
+		// Case 1: Some fields populated, others zero
+		t.Run("mixed values", func(t *testing.T) {
+			input := Person{
+				Name: "Test Person",
+				Age:  30,
+				Address: Address{
+					Street:  "123 Main St",
+					Country: "USA",
+					// City and ZipCode are zero-valued
+				},
+				// Contact is nil
+			}
+
+			result := processor.ProcessValue(input)
+			resultMap, ok := result.(map[string]any)
+			require.True(t, ok, "Expected result to be a map")
+
+			// Check top-level fields
+			assert.Contains(t, resultMap, "Name")
+			assert.Contains(t, resultMap, "Age")
+			assert.Contains(t, resultMap, "Address")
+			assert.NotContains(t, resultMap, "Contact")
+
+			// Check nested Address fields
+			addressMap, ok := resultMap["Address"].(map[string]any)
+			require.True(t, ok, "Expected Address to be a map")
+			assert.Contains(t, addressMap, "Street")
+			assert.Contains(t, addressMap, "Country")
+			assert.NotContains(t, addressMap, "City")
+			assert.NotContains(t, addressMap, "ZipCode")
+		})
+
+		// Case 2: All fields populated
+		t.Run("all fields populated", func(t *testing.T) {
+			contactInfo := &Address{
+				Street:  "456 Work St",
+				City:    "Work City",
+				Country: "Canada",
+				ZipCode: "W1234",
+			}
+
+			input := Person{
+				Name: "Test Person",
+				Age:  30,
+				Address: Address{
+					Street:  "123 Main St",
+					City:    "Home City",
+					Country: "USA",
+					ZipCode: "H5678",
+				},
+				Contact: contactInfo,
+			}
+
+			result := processor.ProcessValue(input)
+			resultMap, ok := result.(map[string]any)
+			require.True(t, ok, "Expected result to be a map")
+
+			// All fields should be present
+			assert.Contains(t, resultMap, "Name")
+			assert.Contains(t, resultMap, "Age")
+			assert.Contains(t, resultMap, "Address")
+			assert.Contains(t, resultMap, "Contact")
+
+			// Check nested Address fields
+			addressMap, ok := resultMap["Address"].(map[string]any)
+			require.True(t, ok, "Expected Address to be a map")
+			assert.Contains(t, addressMap, "Street")
+			assert.Contains(t, addressMap, "City")
+			assert.Contains(t, addressMap, "Country")
+			assert.Contains(t, addressMap, "ZipCode")
+
+			// Check nested Contact fields
+			contactMap, ok := resultMap["Contact"].(map[string]any)
+			require.True(t, ok, "Expected Contact to be a map")
+			assert.Contains(t, contactMap, "Street")
+			assert.Contains(t, contactMap, "City")
+			assert.Contains(t, contactMap, "Country")
+			assert.Contains(t, contactMap, "ZipCode")
+		})
+	})
+
 	t.Run("pointer to uint64", func(t *testing.T) {
 		val := uint64(18446744073709551615)
 		ptr := &val
@@ -156,6 +309,75 @@ func TestValueProcessor_ProcessValue(t *testing.T) {
 		require.True(t, ok, "Expected result to be a map with metadata")
 		assert.Equal(t, "18446744073709551615", resultMap["value"])
 		assert.Equal(t, NumericTypeMeta, resultMap[TypeMetadataPrefix+"0"])
+	})
+
+	t.Run("mock User structure", func(t *testing.T) {
+		type MockUser struct {
+			ID             uint64
+			Name           string
+			DisplayName    string
+			Description    string
+			LastViewed     time.Time
+			IsBanned       bool
+			ThumbnailURL   string
+			Confidence     float64
+			Reasons        map[string]string
+			Friends        []uint64
+			Groups         []uint64
+			EmptySlice     []string
+			ZeroConfidence float64
+			EmptyMap       map[string]int
+		}
+
+		// Create test user with mix of zero and non-zero values
+		input := MockUser{
+			ID:             12345,
+			Name:           "TestUser",
+			DisplayName:    "Test User",
+			Description:    "", // Zero-valued - should be skipped
+			LastViewed:     now,
+			IsBanned:       false, // Zero-valued - should be skipped
+			ThumbnailURL:   "https://example.com/avatar.png",
+			Confidence:     0.95,
+			Reasons:        map[string]string{"reason1": "test reason"},
+			Friends:        []uint64{1, 2, 3},
+			Groups:         []uint64{}, // Empty slice - the current implementation preserves this
+			EmptySlice:     nil,        // Nil slice - should be skipped
+			ZeroConfidence: 0.0,        // Zero float - should be skipped
+			EmptyMap:       nil,        // Nil map - should be skipped
+		}
+
+		result := processor.ProcessValue(input)
+		resultMap, ok := result.(map[string]any)
+		require.True(t, ok, "Expected result to be a map")
+
+		// Fields that should be present
+		assert.Contains(t, resultMap, "ID")
+		assert.Contains(t, resultMap, "Name")
+		assert.Contains(t, resultMap, "DisplayName")
+		assert.Contains(t, resultMap, "LastViewed")
+		assert.Contains(t, resultMap, "ThumbnailURL")
+		assert.Contains(t, resultMap, "Confidence")
+		assert.Contains(t, resultMap, "Reasons")
+		assert.Contains(t, resultMap, "Friends")
+		assert.Contains(t, resultMap, "Groups")
+
+		// Fields that should be skipped
+		assert.NotContains(t, resultMap, "Description")
+		assert.NotContains(t, resultMap, "IsBanned")
+		assert.NotContains(t, resultMap, "EmptySlice") // Nil slices are skipped
+		assert.NotContains(t, resultMap, "ZeroConfidence")
+		assert.NotContains(t, resultMap, "EmptyMap")
+
+		// Verify Friends is properly converted
+		friends, ok := resultMap["Friends"].([]any)
+		require.True(t, ok, "Expected Friends to be an array")
+		assert.Equal(t, 3, len(friends))
+
+		// Verify Groups is an empty array
+		groups, ok := resultMap["Groups"].([]any)
+		require.True(t, ok, "Expected Groups to be an array")
+		assert.Equal(t, 0, len(groups))
 	})
 }
 
@@ -210,6 +432,43 @@ func TestValueProcessor_EmbeddedStructHandling(t *testing.T) {
 		require.Equal(t, NumericTypeMeta, idValue[TypeMetadataPrefix+"0"], "Expected numeric type metadata")
 
 		require.NotContains(t, result[0], "Friend", "Friend struct should be flattened")
+	})
+
+	t.Run("embedded struct with zero values", func(t *testing.T) {
+		type BaseInfo struct {
+			ID      uint64    `json:"id"`
+			Created time.Time `json:"created"`
+			Updated time.Time `json:"updated"` // Will be zero
+		}
+
+		type User struct {
+			BaseInfo
+			Username string `json:"username"`
+			Email    string `json:"email"` // Will be zero
+		}
+
+		input := User{
+			BaseInfo: BaseInfo{
+				ID:      12345,
+				Created: time.Now(),
+				// Updated is zero
+			},
+			Username: "testuser",
+			// Email is zero
+		}
+
+		result := processor.ProcessValue(input)
+		resultMap, ok := result.(map[string]any)
+		require.True(t, ok, "Expected result to be a map")
+
+		// Fields that should be present
+		assert.Contains(t, resultMap, "id")
+		assert.Contains(t, resultMap, "created")
+		assert.Contains(t, resultMap, "username")
+
+		// Fields that should be skipped
+		assert.NotContains(t, resultMap, "updated")
+		assert.NotContains(t, resultMap, "email")
 	})
 
 	t.Run("explicit JSON tag on embedded struct", func(t *testing.T) {
@@ -434,22 +693,27 @@ func TestValueProcessor_JSONTagHandling(t *testing.T) {
 			RequiredField       string `json:"required_field,required"`
 			OmitemptyField      string `json:"omitempty_field,omitempty"`
 			EmptyOmitemptyField string `json:"empty_omitempty,omitempty"`
+			NonEmptyWithTag     string `json:"non_empty,omitempty"`
 		}
 
 		input := TestStruct{
 			RequiredField:       "required",
 			OmitemptyField:      "not empty",
 			EmptyOmitemptyField: "",
+			NonEmptyWithTag:     "present",
 		}
 
 		result := processor.ProcessValue(input)
 		resultMap, ok := result.(map[string]any)
 		require.True(t, ok, "Expected result to be a map")
 
-		// Tag options should be ignored by our processor, we just extract the field name
+		// Fields with values should be present
 		assert.Equal(t, "required", resultMap["required_field"])
 		assert.Equal(t, "not empty", resultMap["omitempty_field"])
-		assert.Equal(t, "", resultMap["empty_omitempty"])
+		assert.Equal(t, "present", resultMap["non_empty"])
+
+		// Empty string fields are skipped regardless of tag options
+		assert.NotContains(t, resultMap, "empty_omitempty", "Empty strings are skipped by our implementation")
 	})
 }
 

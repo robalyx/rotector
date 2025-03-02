@@ -17,6 +17,7 @@ const (
 
 // ValueProcessor encapsulates the logic for processing values before serialization.
 // It converts special types like uint64 to string and properly handles embedded structs.
+// It also skips zero-valued fields to optimize storage in Redis.
 type ValueProcessor struct{}
 
 // NewValueProcessor creates a new instance of the value processor.
@@ -48,6 +49,11 @@ func (p *ValueProcessor) ProcessValue(value any) any {
 	refValue := reflect.ValueOf(value)
 	switch refValue.Kind() {
 	case reflect.Slice:
+		// Skip empty slices
+		if refValue.IsZero() {
+			return nil
+		}
+
 		if refValue.Type().Elem().Kind() == reflect.Uint64 {
 			// Special case for []uint64
 			result := make([]any, refValue.Len())
@@ -68,6 +74,11 @@ func (p *ValueProcessor) ProcessValue(value any) any {
 		return result
 
 	case reflect.Map:
+		// Skip empty maps
+		if refValue.IsZero() {
+			return nil
+		}
+
 		// Process map keys and values
 		result := make(map[string]any)
 		for _, key := range refValue.MapKeys() {
@@ -107,6 +118,11 @@ func (p *ValueProcessor) ProcessValue(value any) any {
 
 			fieldValue := refValue.Field(i)
 
+			// Skip zero-valued fields
+			if fieldValue.IsZero() {
+				continue
+			}
+
 			// Handle embedded or regular fields
 			if field.Anonymous {
 				p.handleEmbeddedField(field, fieldValue, result)
@@ -120,6 +136,7 @@ func (p *ValueProcessor) ProcessValue(value any) any {
 		if !refValue.IsNil() {
 			return p.ProcessValue(refValue.Elem().Interface())
 		}
+		return nil
 	} //exhaustive:ignore
 
 	return value
