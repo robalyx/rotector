@@ -7,9 +7,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
-	"encoding/json"
 	"fmt"
-	"reflect"
 	"strconv"
 	"sync"
 	"time"
@@ -25,6 +23,8 @@ import (
 // Session maintains user state through a Redis-backed key-value store where values are
 // serialized as JSON strings. The session automatically expires after a configured timeout.
 type Session struct {
+	valueProcessor     *ValueProcessor
+	numericProcessor   *NumericProcessor
 	userSettings       *types.UserSetting
 	botSettings        *types.BotSetting
 	userSettingsUpdate bool
@@ -49,6 +49,8 @@ func NewSession(
 	logger *zap.Logger,
 ) *Session {
 	return &Session{
+		valueProcessor:     NewValueProcessor(),
+		numericProcessor:   NewNumericProcessor(),
 		userSettings:       userSettings,
 		botSettings:        botSettings,
 		userSettingsUpdate: false,
@@ -71,7 +73,7 @@ func (s *Session) Touch(ctx context.Context) {
 	for key, value := range s.data {
 		isPersistent, ok := s.dataModified[key]
 		if !ok || (ok && isPersistent) {
-			persistentData[key] = processValue(value)
+			persistentData[key] = s.valueProcessor.ProcessValue(value)
 		}
 	}
 	s.mu.RUnlock()
@@ -179,7 +181,7 @@ func (s *Session) getInterface(key string, v any) {
 	// uint64 value 18446744073709551615 would lose precision if converted to float64.
 	//
 	// OUR SOLUTION:
-	// 1. When storing in Redis: We convert uint64 values to strings to preserve their exact value
+	// 1. When storing in Redis: We convert uint64 values to strings with type metadata
 	// 2. When retrieving simple values: The switch statement above handles direct string-to-uint64 conversion
 	// 3. For complex nested structures: We need the process below
 	//
@@ -188,13 +190,9 @@ func (s *Session) getInterface(key string, v any) {
 	// 2. Unmarshal with decoder.UseNumber() to preserve numeric precision as json.Number
 	//    (This avoids automatic float64 conversion that would lose precision)
 	// 3. Recursively process the structure to convert json.Number and string representations to uint64
+	//    based on type metadata
 	// 4. Re-marshal the processed structure with proper types
 	// 5. Unmarshal again into the target type with all precision preserved
-	//
-	// WHY DOUBLE MARSHALING:
-	// We can't simply use decoder.UseNumber() when unmarshaling directly into the target type
-	// because UseNumber only affects how numbers are stored in map[string]any and []any.
-	// The preserveNumericPrecision function is needed to recursively convert these to actual uint64 values.
 
 	// First marshal to JSON
 	jsonBytes, err := sonic.Marshal(value)
@@ -218,7 +216,7 @@ func (s *Session) getInterface(key string, v any) {
 	}
 
 	// Process the raw data to handle uint64 conversions
-	processedData := preserveNumericPrecision(rawData)
+	processedData := s.numericProcessor.PreserveNumericPrecision(rawData)
 
 	// Second marshal of the processed data
 	processedBytes, err := sonic.Marshal(processedData)
@@ -302,134 +300,4 @@ func (s *Session) delete(key string) {
 
 	delete(s.data, key)
 	s.logger.Debug("Session key deleted", zap.String("key", key))
-}
-
-// processValue recursively processes values to convert uint64 to string.
-func processValue(value any) any {
-	if value == nil {
-		return nil
-	}
-
-	// Direct uint64 conversion
-	if uintValue, ok := value.(uint64); ok {
-		return strconv.FormatUint(uintValue, 10)
-	}
-
-	// Handle time.Time values
-	if timeValue, ok := value.(time.Time); ok {
-		return timeValue.Format(time.RFC3339Nano)
-	}
-
-	// Handle slices
-	refValue := reflect.ValueOf(value)
-	switch refValue.Kind() {
-	case reflect.Slice:
-		if refValue.Type().Elem().Kind() == reflect.Uint64 {
-			// Special case for []uint64
-			result := make([]string, refValue.Len())
-			for i := range refValue.Len() {
-				result[i] = strconv.FormatUint(refValue.Index(i).Uint(), 10)
-			}
-			return result
-		}
-		// Process each element in the slice
-		result := make([]any, refValue.Len())
-		for i := range refValue.Len() {
-			if i < refValue.Len() {
-				result[i] = processValue(refValue.Index(i).Interface())
-			}
-		}
-		return result
-
-	case reflect.Map:
-		// Process map keys and values
-		result := make(map[string]any)
-		for _, key := range refValue.MapKeys() {
-			// Convert map keys to strings
-			var keyStr string
-			if key.Kind() == reflect.Uint64 {
-				keyStr = strconv.FormatUint(key.Uint(), 10)
-			} else {
-				keyStr = fmt.Sprintf("%v", key.Interface())
-			}
-			// Process map values
-			result[keyStr] = processValue(refValue.MapIndex(key).Interface())
-		}
-		return result
-
-	case reflect.Struct:
-		// Special case for time.Time struct
-		if t, ok := value.(time.Time); ok {
-			return t.Format(time.RFC3339Nano)
-		}
-
-		// Process struct fields
-		result := make(map[string]any)
-		for i := range refValue.NumField() {
-			field := refValue.Type().Field(i)
-			if field.IsExported() {
-				result[field.Name] = processValue(refValue.Field(i).Interface())
-			}
-		}
-		return result
-
-	case reflect.Ptr:
-		if !refValue.IsNil() {
-			return processValue(refValue.Elem().Interface())
-		}
-	} //exhaustive:ignore
-
-	return value
-}
-
-// preserveNumericPrecision recursively processes a data structure and converts
-// json.Number and numeric strings to uint64 where appropriate, maintaining
-// precision for large integer values.
-func preserveNumericPrecision(data any) any {
-	switch v := data.(type) {
-	case string:
-		// Try to convert string to uint64 if it looks like a number
-		if val, err := strconv.ParseUint(v, 10, 64); err == nil {
-			return val
-		}
-		return v
-	case json.Number:
-		// Convert json.Number to uint64 if possible
-		if val, err := v.Int64(); err == nil {
-			if val >= 0 {
-				return uint64(val)
-			}
-		}
-		// If it can't be converted to Int64 (maybe too large) or is negative,
-		// try parsing directly as uint64
-		if val, err := strconv.ParseUint(v.String(), 10, 64); err == nil {
-			return val
-		}
-		// If conversion to uint64 fails, try to preserve original number
-		if f, err := v.Float64(); err == nil {
-			return f
-		}
-		return v.String() // fallback to string representation
-	case float64:
-		// JSON unmarshal may convert large integers to float64, leading to precision loss
-		// Convert to uint64 if it appears to be an integer
-		if v == float64(uint64(v)) {
-			return uint64(v)
-		}
-		return v
-	case map[string]any:
-		// Process each map value recursively
-		for k, item := range v {
-			v[k] = preserveNumericPrecision(item)
-		}
-		return v
-	case []any:
-		// Process each slice item recursively
-		for i, item := range v {
-			v[i] = preserveNumericPrecision(item)
-		}
-		return v
-	default:
-		return v
-	}
 }
