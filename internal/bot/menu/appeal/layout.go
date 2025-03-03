@@ -3,6 +3,7 @@ package appeal
 import (
 	"github.com/jaxron/roapi.go/pkg/api"
 	"github.com/robalyx/rotector/internal/bot/core/pagination"
+	"github.com/robalyx/rotector/internal/bot/core/session"
 	"github.com/robalyx/rotector/internal/common/setup"
 	"github.com/robalyx/rotector/internal/common/storage/database"
 	"go.uber.org/zap"
@@ -42,4 +43,13 @@ func (l *Layout) Pages() []*pagination.Page {
 		l.ticketMenu.page,
 		l.verifyMenu.page,
 	}
+}
+
+// ResetAppealData resets the appeal data in the session.
+func ResetAppealData(s *session.Session) {
+	session.AppealList.Delete(s)
+	session.AppealCursor.Delete(s)
+	session.AppealNextCursor.Delete(s)
+	session.AppealPrevCursors.Delete(s)
+	session.AppealSelected.Delete(s)
 }

@@ -137,9 +137,9 @@ var (
 	// QueueLowCount stores low priority queue count
 	QueueLowCount = NewKey[int]("QueueLowCount", false)
 	// AppealList stores the current page of appeals
-	AppealList = NewKey[[]*types.Appeal]("AppealList", true)
+	AppealList = NewKey[[]*types.FullAppeal]("AppealList", true)
 	// AppealSelected stores the currently selected appeal
-	AppealSelected = NewKey[*types.Appeal]("AppealSelected", true)
+	AppealSelected = NewKey[*types.FullAppeal]("AppealSelected", true)
 	// AppealMessages stores messages for the current appeal
 	AppealMessages = NewKey[[]*types.AppealMessage]("AppealMessages", true)
 	// AppealCursor stores the current cursor position

@@ -42,12 +42,17 @@ func NewOverviewMenu(layout *Layout) *OverviewMenu {
 
 // Show prepares and displays the appeal overview interface.
 func (m *OverviewMenu) Show(event interfaces.CommonEvent, s *session.Session, r *pagination.Respond) {
+	// If the appeal list is already set, don't fetch again
+	if session.AppealList.Get(s) != nil {
+		return
+	}
+
 	defaultSort := session.UserAppealDefaultSort.Get(s)
 	statusFilter := session.UserAppealStatusFilter.Get(s)
 	cursor := session.AppealCursor.Get(s)
 
 	// Get appeals based on user role and sort preference
-	var appeals []*types.Appeal
+	var appeals []*types.FullAppeal
 	var firstCursor, nextCursor *types.AppealTimeline
 	var err error
 
@@ -103,10 +108,7 @@ func (m *OverviewMenu) handleSelectMenu(event *events.ComponentInteractionCreate
 
 		// Update user's default sort preference
 		session.UserAppealStatusFilter.Set(s, status)
-
-		// Delete cursors
-		session.AppealCursor.Delete(s)
-		session.AppealPrevCursors.Delete(s)
+		ResetAppealData(s)
 
 		r.Reload(event, s, "Filtered appeals by "+status.String())
 	case constants.AppealSortSelectID:
@@ -120,10 +122,7 @@ func (m *OverviewMenu) handleSelectMenu(event *events.ComponentInteractionCreate
 
 		// Update user's default sort preference
 		session.UserAppealDefaultSort.Set(s, sortBy)
-
-		// Delete cursors
-		session.AppealCursor.Delete(s)
-		session.AppealPrevCursors.Delete(s)
+		ResetAppealData(s)
 
 		r.Reload(event, s, "Sorted appeals by "+option)
 	case constants.AppealSelectID:
@@ -138,7 +137,7 @@ func (m *OverviewMenu) handleSelectMenu(event *events.ComponentInteractionCreate
 		// Find the appeal in the session data
 		appeals := session.AppealList.Get(s)
 
-		var appeal *types.Appeal
+		var appeal *types.FullAppeal
 		for _, a := range appeals {
 			if a.ID == appealID {
 				appeal = a
@@ -164,8 +163,7 @@ func (m *OverviewMenu) handleButton(event *events.ComponentInteractionCreate, s 
 	case constants.BackButtonCustomID:
 		r.NavigateBack(event, s, "")
 	case constants.RefreshButtonCustomID:
-		session.AppealCursor.Delete(s)
-		session.AppealPrevCursors.Delete(s)
+		ResetAppealData(s)
 		r.Reload(event, s, "Appeals refreshed.")
 	case constants.AppealCreateButtonCustomID:
 		m.handleCreateAppeal(event, r)

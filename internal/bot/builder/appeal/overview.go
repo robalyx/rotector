@@ -14,7 +14,7 @@ import (
 
 // OverviewBuilder creates the visual layout for the appeal overview interface.
 type OverviewBuilder struct {
-	appeals      []*types.Appeal
+	appeals      []*types.FullAppeal
 	sortBy       enum.AppealSortBy
 	statusFilter enum.AppealStatus
 	hasNextPage  bool
@@ -78,7 +78,7 @@ func (b *OverviewBuilder) buildEmbed() *discord.EmbedBuilder {
 }
 
 // formatAppealField formats a single appeal entry for the embed.
-func (b *OverviewBuilder) formatAppealField(appeal *types.Appeal) (string, string) {
+func (b *OverviewBuilder) formatAppealField(appeal *types.FullAppeal) (string, string) {
 	// Format status with emoji
 	var statusEmoji string
 	switch appeal.Status {
@@ -97,9 +97,20 @@ func (b *OverviewBuilder) formatAppealField(appeal *types.Appeal) (string, strin
 	}
 
 	// Format timestamps
-	submitted := fmt.Sprintf("<t:%d:R>", appeal.Timestamp.Unix())
-	lastViewed := fmt.Sprintf("<t:%d:R>", appeal.LastViewed.Unix())
-	lastActivity := fmt.Sprintf("<t:%d:R>", appeal.LastActivity.Unix())
+	submitted := "N/A"
+	if !appeal.Timestamp.IsZero() {
+		submitted = fmt.Sprintf("<t:%d:R>", appeal.Timestamp.Unix())
+	}
+
+	lastViewed := "N/A"
+	if !appeal.LastViewed.IsZero() {
+		lastViewed = fmt.Sprintf("<t:%d:R>", appeal.LastViewed.Unix())
+	}
+
+	lastActivity := "N/A"
+	if !appeal.LastActivity.IsZero() {
+		lastActivity = fmt.Sprintf("<t:%d:R>", appeal.LastActivity.Unix())
+	}
 
 	fieldName := fmt.Sprintf("%s Appeal `#%d`", statusEmoji, appeal.ID)
 	fieldValue := fmt.Sprintf(

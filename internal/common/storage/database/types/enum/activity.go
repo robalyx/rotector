@@ -52,6 +52,8 @@ const (
 
 	// ActivityTypeAppealSubmitted tracks when a moderator submits an appeal.
 	ActivityTypeAppealSubmitted
+	// ActivityTypeAppealClaimed tracks when a moderator claims an appeal.
+	ActivityTypeAppealClaimed
 	// ActivityTypeAppealSkipped tracks when a moderator skips reviewing an appeal.
 	ActivityTypeAppealSkipped
 	// ActivityTypeAppealAccepted tracks when a moderator accepts an appeal.

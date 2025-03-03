@@ -55,7 +55,10 @@ func init() { //nolint:funlen
 			CREATE INDEX IF NOT EXISTS idx_appeals_requester_id ON appeals (requester_id);
 			CREATE INDEX IF NOT EXISTS idx_appeals_status ON appeals (status);
 			CREATE INDEX IF NOT EXISTS idx_appeals_claimed_by ON appeals (claimed_by) WHERE claimed_by > 0;
-			CREATE INDEX IF NOT EXISTS idx_appeals_rejected_reviewed_at ON appeals (reviewed_at DESC);
+			CREATE INDEX IF NOT EXISTS idx_appeals_timestamp ON appeals (timestamp DESC);
+			CREATE INDEX IF NOT EXISTS idx_appeals_status_timestamp ON appeals (status, timestamp DESC);
+			CREATE INDEX IF NOT EXISTS idx_appeals_rejected_claimed_at ON appeals (claimed_at DESC) WHERE status = 2;
+			CREATE INDEX IF NOT EXISTS idx_appeals_pending_unclaimed ON appeals (id) WHERE status = 0 ;
 
 			-- Appeal timeline indexes
 			CREATE INDEX IF NOT EXISTS idx_appeal_timelines_timestamp_asc 
@@ -245,7 +248,10 @@ func init() { //nolint:funlen
 			DROP INDEX IF EXISTS idx_appeals_requester_id;
 			DROP INDEX IF EXISTS idx_appeals_status;
 			DROP INDEX IF EXISTS idx_appeals_claimed_by;
-			DROP INDEX IF EXISTS idx_appeals_rejected_reviewed_at;
+			DROP INDEX IF EXISTS idx_appeals_timestamp;
+			DROP INDEX IF EXISTS idx_appeals_status_timestamp;
+			DROP INDEX IF EXISTS idx_appeals_rejected_claimed_at;
+			DROP INDEX IF EXISTS idx_appeals_pending_unclaimed;
 
 			-- Appeal timeline indexes
 			DROP INDEX IF EXISTS idx_appeal_timelines_timestamp_asc;

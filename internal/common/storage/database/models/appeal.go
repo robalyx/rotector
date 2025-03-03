@@ -13,16 +13,6 @@ import (
 	"go.uber.org/zap"
 )
 
-// appealResult is a struct that holds an appeal and its timeline.
-type appealResult struct {
-	*types.Appeal `bun:"embed:"`
-	Timeline      struct {
-		Timestamp    time.Time `bun:",pk,notnull"`
-		LastViewed   time.Time `bun:",notnull"`
-		LastActivity time.Time `bun:",notnull"`
-	} `bun:"embed:"`
-}
-
 // AppealModel handles database operations for appeal records.
 type AppealModel struct {
 	db     *bun.DB
@@ -40,6 +30,11 @@ func NewAppeal(db *bun.DB, logger *zap.Logger) *AppealModel {
 // CreateAppeal submits a new appeal request.
 func (r *AppealModel) CreateAppeal(ctx context.Context, appeal *types.Appeal, reason string) error {
 	return r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+		now := time.Now()
+
+		// Set creation timestamp
+		appeal.Timestamp = now
+
 		// Create the appeal
 		_, err := tx.NewInsert().Model(appeal).Exec(ctx)
 		if err != nil {
@@ -50,7 +45,6 @@ func (r *AppealModel) CreateAppeal(ctx context.Context, appeal *types.Appeal, re
 		}
 
 		// Create timeline entry
-		now := time.Now()
 		timeline := &types.AppealTimeline{
 			ID:           appeal.ID,
 			Timestamp:    now,
@@ -85,15 +79,13 @@ func (r *AppealModel) CreateAppeal(ctx context.Context, appeal *types.Appeal, re
 }
 
 // AcceptAppeal marks an appeal as accepted and updates its status.
-func (r *AppealModel) AcceptAppeal(ctx context.Context, appealID int64, reviewerID uint64, reason string) error {
+func (r *AppealModel) AcceptAppeal(ctx context.Context, appealID int64, timestamp time.Time, reason string) error {
 	now := time.Now()
 	return r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
 		// Update appeal status
 		_, err := tx.NewUpdate().
 			Model((*types.Appeal)(nil)).
 			Set("status = ?", enum.AppealStatusAccepted).
-			Set("reviewer_id = ?", reviewerID).
-			Set("reviewed_at = ?", now).
 			Set("review_reason = ?", reason).
 			Where("id = ?", appealID).
 			Where("status = ?", enum.AppealStatusPending).
@@ -107,28 +99,26 @@ func (r *AppealModel) AcceptAppeal(ctx context.Context, appealID int64, reviewer
 			Model((*types.AppealTimeline)(nil)).
 			Set("last_activity = ?", now).
 			Where("id = ?", appealID).
+			Where("timestamp = ?", timestamp).
 			Exec(ctx)
 		if err != nil {
 			return fmt.Errorf("failed to update appeal timeline: %w (appealID=%d)", err, appealID)
 		}
 
 		r.logger.Debug("Accepted appeal",
-			zap.Int64("appealID", appealID),
-			zap.Uint64("reviewerID", reviewerID))
+			zap.Int64("appealID", appealID))
 		return nil
 	})
 }
 
 // RejectAppeal marks an appeal as rejected and updates its status.
-func (r *AppealModel) RejectAppeal(ctx context.Context, appealID int64, reviewerID uint64, reason string) error {
+func (r *AppealModel) RejectAppeal(ctx context.Context, appealID int64, timestamp time.Time, reason string) error {
 	now := time.Now()
 	return r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
 		// Update appeal status
 		_, err := tx.NewUpdate().
 			Model((*types.Appeal)(nil)).
 			Set("status = ?", enum.AppealStatusRejected).
-			Set("reviewer_id = ?", reviewerID).
-			Set("reviewed_at = ?", now).
 			Set("review_reason = ?", reason).
 			Where("id = ?", appealID).
 			Where("status = ?", enum.AppealStatusPending).
@@ -142,14 +132,14 @@ func (r *AppealModel) RejectAppeal(ctx context.Context, appealID int64, reviewer
 			Model((*types.AppealTimeline)(nil)).
 			Set("last_activity = ?", now).
 			Where("id = ?", appealID).
+			Where("timestamp = ?", timestamp).
 			Exec(ctx)
 		if err != nil {
 			return fmt.Errorf("failed to update appeal timeline: %w (appealID=%d)", err, appealID)
 		}
 
 		r.logger.Debug("Rejected appeal",
-			zap.Int64("appealID", appealID),
-			zap.Uint64("reviewerID", reviewerID))
+			zap.Int64("appealID", appealID))
 		return nil
 	})
 }
@@ -167,20 +157,28 @@ func (r *AppealModel) HasPendingAppealByRequester(ctx context.Context, requester
 	return exists, nil
 }
 
-// GetAppealByID retrieves an appeal by its ID with fresh database state
-func (r *AppealModel) GetAppealByID(ctx context.Context, appealID int64) (*types.Appeal, error) {
-	var appeal types.Appeal
+// GetAppealByID retrieves an appeal by its ID with fresh database state.
+func (r *AppealModel) GetAppealByID(ctx context.Context, appealID int64) (*types.FullAppeal, error) {
+	var fullAppeal types.FullAppeal
+	fullAppeal.Appeal = new(types.Appeal)
+
+	// Query both appeal and its timeline
 	err := r.db.NewSelect().
-		Model(&appeal).
-		Where("id = ?", appealID).
-		Scan(ctx)
+		Model((*types.Appeal)(nil)).
+		Column("appeal.*").
+		ColumnExpr("t.last_viewed, t.last_activity").
+		Join("JOIN appeal_timelines AS t ON t.id = appeal.id AND t.timestamp = appeal.timestamp").
+		Where("appeal.id = ?", appealID).
+		Scan(ctx, &fullAppeal)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, types.ErrNoAppealsFound
 		}
+		r.logger.Error("Failed to get appeal", zap.Error(err))
 		return nil, fmt.Errorf("failed to get appeal: %w", err)
 	}
-	return &appeal, nil
+
+	return &fullAppeal, nil
 }
 
 // HasPreviousRejection checks if a user ID has any rejected appeals within the last 7 days.
@@ -189,7 +187,7 @@ func (r *AppealModel) HasPreviousRejection(ctx context.Context, userID uint64) (
 		Model((*types.Appeal)(nil)).
 		Where("user_id = ?", userID).
 		Where("status = ?", enum.AppealStatusRejected).
-		Where("reviewed_at > ?", time.Now().AddDate(0, 0, -7)).
+		Where("claimed_at > ?", time.Now().AddDate(0, 0, -7)).
 		Exists(ctx)
 	if err != nil {
 		return false, fmt.Errorf("failed to check previous rejections: %w (userID=%d)", err, userID)
@@ -220,13 +218,13 @@ func (r *AppealModel) GetAppealsToReview(
 	reviewerID uint64,
 	cursor *types.AppealTimeline,
 	limit int,
-) ([]*types.Appeal, *types.AppealTimeline, *types.AppealTimeline, error) {
+) ([]*types.FullAppeal, *types.AppealTimeline, *types.AppealTimeline, error) {
 	// Build base query with timeline join
 	query := r.db.NewSelect().
 		Model((*types.Appeal)(nil)).
-		Join("JOIN appeal_timelines AS t ON t.id = appeal.id").
+		Join("JOIN appeal_timelines AS t ON t.id = appeal.id AND t.timestamp = appeal.timestamp").
 		ColumnExpr("appeal.*").
-		ColumnExpr("t.timestamp, t.last_viewed, t.last_activity")
+		ColumnExpr("t.last_viewed, t.last_activity")
 
 	// Apply status filter if not showing all
 	query.Where("status = ?", statusFilter)
@@ -235,9 +233,9 @@ func (r *AppealModel) GetAppealsToReview(
 	switch sortBy {
 	case enum.AppealSortByOldest:
 		if cursor != nil {
-			query.Where("(t.timestamp, appeal.id) > (?, ?)", cursor.Timestamp, cursor.ID)
+			query.Where("(appeal.timestamp, appeal.id) > (?, ?)", cursor.Timestamp, cursor.ID)
 		}
-		query.Order("t.timestamp ASC", "appeal.id ASC")
+		query.Order("appeal.timestamp ASC", "appeal.id ASC")
 	case enum.AppealSortByClaimed:
 		query.Where("status = ?", enum.AppealStatusPending) // Only show pending appeals for claimed view
 		query.Where("claimed_by = ?", reviewerID)
@@ -247,15 +245,15 @@ func (r *AppealModel) GetAppealsToReview(
 		query.Order("t.last_activity DESC", "appeal.id DESC")
 	case enum.AppealSortByNewest:
 		if cursor != nil {
-			query.Where("(t.timestamp, appeal.id) < (?, ?)", cursor.Timestamp, cursor.ID)
+			query.Where("(appeal.timestamp, appeal.id) < (?, ?)", cursor.Timestamp, cursor.ID)
 		}
-		query.Order("t.timestamp DESC", "appeal.id DESC")
+		query.Order("appeal.timestamp DESC", "appeal.id DESC")
 	}
 
 	// Get one extra to determine if there are more results
 	query.Limit(limit + 1)
 
-	var results []appealResult
+	var results []*types.FullAppeal
 	err := query.Scan(ctx, &results)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf(
@@ -265,8 +263,8 @@ func (r *AppealModel) GetAppealsToReview(
 	}
 
 	// Process results to get appeals and cursors for pagination
-	appeals, firstCursor, nextCursor := processAppealResults(results, limit)
-	return appeals, firstCursor, nextCursor, nil
+	firstCursor, nextCursor := processAppealResults(results, limit)
+	return results, firstCursor, nextCursor, nil
 }
 
 // GetAppealsByRequester gets all appeals submitted by a specific user.
@@ -276,27 +274,26 @@ func (r *AppealModel) GetAppealsByRequester(
 	requesterID uint64,
 	cursor *types.AppealTimeline,
 	limit int,
-) ([]*types.Appeal, *types.AppealTimeline, *types.AppealTimeline, error) {
+) ([]*types.FullAppeal, *types.AppealTimeline, *types.AppealTimeline, error) {
 	query := r.db.NewSelect().
 		Model((*types.Appeal)(nil)).
-		Join("JOIN appeal_timelines AS t ON t.id = appeal.id").
+		Join("JOIN appeal_timelines AS t ON t.id = appeal.id AND t.timestamp = appeal.timestamp").
 		ColumnExpr("appeal.*").
-		ColumnExpr("t.timestamp, t.last_viewed, t.last_activity").
+		ColumnExpr("t.last_viewed, t.last_activity").
 		Where("requester_id = ?", requesterID)
 
-		// Apply status filter if not showing all
+	// Apply status filter if not showing all
 	query.Where("status = ?", statusFilter)
 
 	// Apply cursor conditions if cursor exists
 	if cursor != nil {
-		query = query.Where("(t.timestamp, appeal.id) < (?, ?)", cursor.Timestamp, cursor.ID)
+		query = query.Where("(appeal.timestamp, appeal.id) < (?, ?)", cursor.Timestamp, cursor.ID)
 	}
 
-	query.Order("t.timestamp DESC", "appeal.id DESC").
+	query.Order("appeal.timestamp DESC", "appeal.id DESC").
 		Limit(limit + 1) // Get one extra to determine if there are more results
 
-	var results []appealResult
-
+	var results []*types.FullAppeal
 	err := query.Scan(ctx, &results)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf(
@@ -305,9 +302,9 @@ func (r *AppealModel) GetAppealsByRequester(
 		)
 	}
 
-	// Process results to get appeals and cursors for pagination
-	appeals, firstCursor, nextCursor := processAppealResults(results, limit)
-	return appeals, firstCursor, nextCursor, nil
+	// Process results to get cursors for pagination
+	firstCursor, nextCursor := processAppealResults(results, limit)
+	return results, firstCursor, nextCursor, nil
 }
 
 // GetAppealMessages gets the messages for an appeal.
@@ -326,37 +323,24 @@ func (r *AppealModel) GetAppealMessages(ctx context.Context, appealID int64) ([]
 }
 
 // AddAppealMessage adds a new message to an appeal and updates the appeal's last activity.
-// If the message is from a moderator and the appeal isn't claimed, it will also claim the appeal.
-func (r *AppealModel) AddAppealMessage(ctx context.Context, message *types.AppealMessage, appeal *types.Appeal) error {
+func (r *AppealModel) AddAppealMessage(ctx context.Context, message *types.AppealMessage, appealID int64, timestamp time.Time) error {
 	return r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
 		// Insert the new message
 		if _, err := tx.NewInsert().Model(message).Exec(ctx); err != nil {
-			return fmt.Errorf("failed to insert appeal message: %w (appealID=%d)", err, appeal.ID)
+			return fmt.Errorf("failed to insert appeal message: %w (appealID=%d)", err, appealID)
 		}
 
 		now := time.Now()
-
-		// Auto-claim appeal for moderator messages if not already claimed
-		if message.Role == enum.MessageRoleModerator && appeal.ClaimedBy == 0 {
-			_, err := tx.NewUpdate().
-				Model(appeal).
-				Set("claimed_by = ?", message.UserID).
-				Set("claimed_at = ?", now).
-				Where("id = ?", appeal.ID).
-				Exec(ctx)
-			if err != nil {
-				return fmt.Errorf("failed to update appeal: %w (appealID=%d)", err, appeal.ID)
-			}
-		}
 
 		// Update the appeal's last activity timestamp
 		_, err := tx.NewUpdate().
 			Model((*types.AppealTimeline)(nil)).
 			Set("last_activity = ?", now).
-			Where("id = ?", appeal.ID).
+			Where("id = ?", appealID).
+			Where("timestamp = ?", timestamp).
 			Exec(ctx)
 		if err != nil {
-			return fmt.Errorf("failed to update appeal timeline: %w (appealID=%d)", err, appeal.ID)
+			return fmt.Errorf("failed to update appeal timeline: %w (appealID=%d)", err, appealID)
 		}
 
 		return nil
@@ -364,8 +348,7 @@ func (r *AppealModel) AddAppealMessage(ctx context.Context, message *types.Appea
 }
 
 // processAppealResults handles pagination and data transformation for appeal results.
-func processAppealResults(results []appealResult, limit int) ([]*types.Appeal, *types.AppealTimeline, *types.AppealTimeline) {
-	var appeals []*types.Appeal
+func processAppealResults(results []*types.FullAppeal, limit int) (*types.AppealTimeline, *types.AppealTimeline) {
 	var nextCursor *types.AppealTimeline
 	var firstCursor *types.AppealTimeline
 
@@ -374,20 +357,11 @@ func processAppealResults(results []appealResult, limit int) ([]*types.Appeal, *
 		last := results[limit-1]
 		nextCursor = &types.AppealTimeline{
 			ID:           last.Appeal.ID,
-			Timestamp:    last.Timeline.Timestamp,
-			LastViewed:   last.Timeline.LastViewed,
-			LastActivity: last.Timeline.LastActivity,
+			Timestamp:    last.Appeal.Timestamp,
+			LastViewed:   last.LastViewed,
+			LastActivity: last.LastActivity,
 		}
 		results = results[:limit] // Remove the extra item from results
-	}
-
-	// Transform appeal results into appeal objects with timeline data
-	appeals = make([]*types.Appeal, len(results))
-	for i, result := range results {
-		appeals[i] = result.Appeal
-		appeals[i].Timestamp = result.Timeline.Timestamp
-		appeals[i].LastViewed = result.Timeline.LastViewed
-		appeals[i].LastActivity = result.Timeline.LastActivity
 	}
 
 	if len(results) > 0 {
@@ -395,11 +369,42 @@ func processAppealResults(results []appealResult, limit int) ([]*types.Appeal, *
 		first := results[0]
 		firstCursor = &types.AppealTimeline{
 			ID:           first.Appeal.ID,
-			Timestamp:    first.Timeline.Timestamp,
-			LastViewed:   first.Timeline.LastViewed,
-			LastActivity: first.Timeline.LastActivity,
+			Timestamp:    first.Appeal.Timestamp,
+			LastViewed:   first.LastViewed,
+			LastActivity: first.LastActivity,
 		}
 	}
 
-	return appeals, firstCursor, nextCursor
+	return firstCursor, nextCursor
+}
+
+// ClaimAppeal claims an appeal by setting the reviewer ID and timestamp.
+func (r *AppealModel) ClaimAppeal(ctx context.Context, appealID int64, timestamp time.Time, reviewerID uint64) error {
+	now := time.Now()
+	return r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+		// Update the appeal to set claimed by and claimed at
+		_, err := tx.NewUpdate().
+			Model((*types.Appeal)(nil)).
+			Set("claimed_by = ?", reviewerID).
+			Set("claimed_at = ?", now).
+			Where("id = ?", appealID).
+			Where("status = ?", enum.AppealStatusPending).
+			Exec(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to claim appeal: %w (appealID=%d)", err, appealID)
+		}
+
+		// Update the appeal timeline to set last viewed
+		_, err = tx.NewUpdate().
+			Model((*types.AppealTimeline)(nil)).
+			Set("last_viewed = ?", now).
+			Where("id = ?", appealID).
+			Where("timestamp = ?", timestamp).
+			Exec(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to update appeal timeline: %w (appealID=%d)", err, appealID)
+		}
+
+		return nil
+	})
 }

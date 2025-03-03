@@ -132,8 +132,8 @@ func main() {
 		{Name: "QueueLowCount", Type: "int", Doc: "QueueLowCount stores low priority queue count", Persist: false},
 
 		// Appeal related keys
-		{Name: "AppealList", Type: "[]*types.Appeal", Doc: "AppealList stores the current page of appeals", Persist: true},
-		{Name: "AppealSelected", Type: "*types.Appeal", Doc: "AppealSelected stores the currently selected appeal", Persist: true},
+		{Name: "AppealList", Type: "[]*types.FullAppeal", Doc: "AppealList stores the current page of appeals", Persist: true},
+		{Name: "AppealSelected", Type: "*types.FullAppeal", Doc: "AppealSelected stores the currently selected appeal", Persist: true},
 		{Name: "AppealMessages", Type: "[]*types.AppealMessage", Doc: "AppealMessages stores messages for the current appeal", Persist: true},
 		{Name: "AppealCursor", Type: "*types.AppealTimeline", Doc: "AppealCursor stores the current cursor position", Persist: true},
 		{Name: "AppealNextCursor", Type: "*types.AppealTimeline", Doc: "AppealNextCursor stores the next cursor position", Persist: true},

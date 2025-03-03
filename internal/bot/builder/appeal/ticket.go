@@ -14,7 +14,7 @@ import (
 
 // TicketBuilder creates the visual layout for an individual appeal ticket.
 type TicketBuilder struct {
-	appeal       *types.Appeal
+	appeal       *types.FullAppeal
 	messages     []*types.AppealMessage
 	page         int
 	totalPages   int
@@ -69,8 +69,16 @@ func (b *TicketBuilder) Build() *discord.MessageUpdateBuilder {
 
 		// Add reviewer buttons if user is a reviewer
 		if b.isReviewer {
+			// Add claim button if the appeal is not claimed yet
+			if b.appeal.ClaimedBy == 0 {
+				actionButtons = append(actionButtons,
+					discord.NewPrimaryButton("Claim", constants.AppealClaimButtonCustomID),
+				)
+			}
+
+			// Add lookup and review action buttons
 			actionButtons = append(actionButtons,
-				discord.NewPrimaryButton("Lookup User", constants.AppealLookupUserButtonCustomID),
+				discord.NewPrimaryButton("Lookup", constants.AppealLookupUserButtonCustomID),
 				discord.NewSuccessButton("Accept", constants.AcceptAppealButtonCustomID),
 				discord.NewDangerButton("Reject", constants.RejectAppealButtonCustomID),
 			)
@@ -101,9 +109,24 @@ func (b *TicketBuilder) buildHeaderEmbed() *discord.EmbedBuilder {
 		statusEmoji = "❌"
 	}
 
+	// Format timestamps
+	submitted := "N/A"
+	if !b.appeal.Timestamp.IsZero() {
+		submitted = fmt.Sprintf("<t:%d:R>", b.appeal.Timestamp.Unix())
+	}
+
+	lastViewed := "N/A"
+	if !b.appeal.LastViewed.IsZero() {
+		lastViewed = fmt.Sprintf("<t:%d:R>", b.appeal.LastViewed.Unix())
+	}
+
+	lastActivity := "N/A"
+	if !b.appeal.LastActivity.IsZero() {
+		lastActivity = fmt.Sprintf("<t:%d:R>", b.appeal.LastActivity.Unix())
+	}
+
 	// Create embed
 	userIDStr := strconv.FormatUint(b.appeal.UserID, 10)
-
 	embed := discord.NewEmbedBuilder().
 		SetTitle(fmt.Sprintf("%s Appeal `#%d`", statusEmoji, b.appeal.ID)).
 		SetColor(utils.GetMessageEmbedColor(b.streamerMode)).
@@ -111,23 +134,28 @@ func (b *TicketBuilder) buildHeaderEmbed() *discord.EmbedBuilder {
 			utils.CensorString(userIDStr, b.streamerMode), b.appeal.UserID), true).
 		AddField("Requester", fmt.Sprintf("<@%d>", b.appeal.RequesterID), true).
 		AddField("Status", b.appeal.Status.String(), true).
-		AddField("Submitted", fmt.Sprintf("<t:%d:R>", b.appeal.Timestamp.Unix()), true).
-		AddField("Last Viewed", fmt.Sprintf("<t:%d:R>", b.appeal.LastViewed.Unix()), true).
-		AddField("Last Activity", fmt.Sprintf("<t:%d:R>", b.appeal.LastActivity.Unix()), true)
+		AddField("Submitted", submitted, true).
+		AddField("Last Viewed", lastViewed, true).
+		AddField("Last Activity", lastActivity, true)
 
 	if b.appeal.ClaimedBy != 0 {
+		// Add claimed information
 		embed.AddField("Claimed By", fmt.Sprintf("<@%d>", b.appeal.ClaimedBy), true)
-	}
 
-	if b.appeal.ReviewerID != 0 {
-		embed.AddField("Reviewed By", fmt.Sprintf("<@%d>", b.appeal.ReviewerID), true)
+		// Show claimed time if available
+		if !b.appeal.ClaimedAt.IsZero() {
+			embed.AddField("Claimed At", fmt.Sprintf("<t:%d:R>", b.appeal.ClaimedAt.Unix()), true)
+		}
+
 		// Censor any sensitive information in the review reason
-		censoredReason := utils.CensorStringsInText(
-			b.appeal.ReviewReason,
-			b.streamerMode,
-			userIDStr,
-		)
-		embed.AddField("Review Reason", censoredReason, false)
+		if b.appeal.ReviewReason != "" {
+			censoredReason := utils.CensorStringsInText(
+				b.appeal.ReviewReason,
+				b.streamerMode,
+				userIDStr,
+			)
+			embed.AddField("Review Reason", censoredReason, false)
+		}
 	}
 
 	return embed

@@ -15,17 +15,13 @@ var (
 // Appeal represents a user appeal request in the database.
 type Appeal struct {
 	ID           int64             `bun:",pk,autoincrement"` // Unique numeric identifier
+	Timestamp    time.Time         `bun:",notnull"`          // When the appeal was created
 	UserID       uint64            `bun:",notnull"`          // The Roblox user ID being appealed
 	RequesterID  uint64            `bun:",notnull"`          // The Discord user ID who submitted the appeal
-	ReviewerID   uint64            `bun:",nullzero"`         // The Discord user ID who reviewed the appeal
-	ReviewedAt   time.Time         `bun:",nullzero"`         // When the appeal was reviewed
-	ReviewReason string            `bun:",nullzero"`         // The reason for accepting/rejecting the appeal
-	Status       enum.AppealStatus `bun:",notnull"`          // Status of the appeal (pending, accepted, rejected)
 	ClaimedBy    uint64            `bun:",nullzero"`         // Discord ID of reviewer who claimed the appeal
 	ClaimedAt    time.Time         `bun:",nullzero"`         // When the appeal was claimed
-	Timestamp    time.Time         `bun:"-"`                 // When the appeal was submitted
-	LastViewed   time.Time         `bun:"-"`                 // When the appeal was last viewed
-	LastActivity time.Time         `bun:"-"`                 // When the last message was sent
+	ReviewReason string            `bun:",nullzero"`         // The reason for accepting/rejecting the appeal
+	Status       enum.AppealStatus `bun:",notnull"`          // Status of the appeal (pending, accepted, rejected)
 }
 
 // AppealTimeline represents the time-series data for appeals in the hypertable.
@@ -34,6 +30,13 @@ type AppealTimeline struct {
 	Timestamp    time.Time `bun:",pk,notnull"` // When the event occurred
 	LastViewed   time.Time `bun:",notnull"`    // When the appeal was last viewed
 	LastActivity time.Time `bun:",notnull"`    // When the last message was sent
+}
+
+// FullAppeal combines the Appeal data with timeline information.
+type FullAppeal struct {
+	*Appeal
+	LastViewed   time.Time // When the appeal was last viewed
+	LastActivity time.Time // When the last message was sent
 }
 
 // AppealMessage represents a message in an appeal conversation.

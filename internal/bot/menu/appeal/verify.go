@@ -81,14 +81,11 @@ func (m *VerifyMenu) verifyDescription(event *events.ComponentInteractionCreate,
 	}
 
 	// Create appeal
-	now := time.Now()
 	appeal := &types.Appeal{
-		UserID:       userID,
-		RequesterID:  uint64(event.User().ID),
-		Status:       enum.AppealStatusPending,
-		Timestamp:    now,
-		LastViewed:   now,
-		LastActivity: now,
+		UserID:      userID,
+		RequesterID: uint64(event.User().ID),
+		Status:      enum.AppealStatusPending,
+		Timestamp:   time.Now(),
 	}
 
 	// Submit appeal
