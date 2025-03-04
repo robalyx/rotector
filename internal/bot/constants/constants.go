@@ -9,6 +9,7 @@ const (
 
 // Common.
 const (
+	UnknownServer            = "Unknown Server"
 	NotApplicable            = "N/A"
 	ActionSelectMenuCustomID = "action"
 	RefreshButtonCustomID    = "refresh"
@@ -54,10 +55,11 @@ const (
 	StatusPageName        = "Status"
 	ReviewerStatsPageName = "Reviewer Stats"
 
-	GuildOwnerPageName  = "Guild Owner Menu"
-	GuildScanPageName   = "Guild Scan Results"
-	GuildLogsPageName   = "Guild Ban Logs"
-	GuildLookupPageName = "Guild User Lookup"
+	GuildOwnerPageName    = "Guild Owner Menu"
+	GuildScanPageName     = "Guild Scan Results"
+	GuildLogsPageName     = "Guild Ban Logs"
+	GuildLookupPageName   = "Guild User Lookup"
+	GuildMessagesPageName = "Guild Messages"
 )
 
 // Dashboard Menu.
@@ -302,6 +304,7 @@ const (
 	AppealLookupUserButtonCustomID = "appeal_lookup_user"
 	AcceptAppealButtonCustomID     = "accept_appeal" + ModalOpenSuffix
 	RejectAppealButtonCustomID     = "reject_appeal" + ModalOpenSuffix
+	AppealClaimButtonCustomID      = "appeal_claim"
 	AppealCloseButtonCustomID      = "appeal_close"
 
 	AcceptAppealModalCustomID  = "accept_appeal_modal"
@@ -379,10 +382,16 @@ const (
 
 // Guild Owner Menu.
 const (
-	GuildScanUsersPerPage = 10
+	GuildMembershipsPerPage = 10
+	GuildScanUsersPerPage   = 10
+	GuildMessagesPerPage    = 10
+
+	GuildScanTypeCondo    = "condo"
+	GuildScanTypeMessages = "messages"
 
 	GuildOwnerMenuButtonCustomID   = "guild_owner_menu"
 	StartGuildScanButtonCustomID   = "start_guild_scan"
+	StartMessageScanButtonCustomID = "start_message_scan"
 	ViewGuildBanLogsButtonCustomID = "view_guild_ban_logs"
 	ConfirmGuildBansButtonCustomID = "confirm_guild_bans" + ModalOpenSuffix
 
@@ -396,4 +405,6 @@ const (
 	GuildScanJoinDurationOption        = "guild_scan_join_duration" + ModalOpenSuffix
 	GuildScanJoinDurationModalCustomID = "guild_scan_join_duration_modal"
 	GuildScanJoinDurationInputCustomID = "guild_scan_join_duration_input"
+
+	GuildMessageSelectMenuCustomID = "guild_message_select"
 )

@@ -13,21 +13,24 @@ func init() { //nolint:funlen
 	Migrations.MustRegister(func(ctx context.Context, db *bun.DB) error {
 		// Create partitioned tables
 		tables := []struct {
-			model any
-			name  string
+			model        any
+			name         string
+			partitionKey string
 		}{
-			{(*types.FlaggedUser)(nil), "flagged_users"},
-			{(*types.ConfirmedUser)(nil), "confirmed_users"},
-			{(*types.ClearedUser)(nil), "cleared_users"},
-			{(*types.FlaggedGroup)(nil), "flagged_groups"},
-			{(*types.ConfirmedGroup)(nil), "confirmed_groups"},
-			{(*types.ClearedGroup)(nil), "cleared_groups"},
-			{(*types.GroupMemberTracking)(nil), "group_member_trackings"},
-			{(*types.UserReputation)(nil), "user_reputations"},
-			{(*types.GroupReputation)(nil), "group_reputations"},
-			{(*types.UserVote)(nil), "user_votes"},
-			{(*types.GroupVote)(nil), "group_votes"},
-			{(*types.DiscordServerMember)(nil), "discord_server_members"},
+			{(*types.FlaggedUser)(nil), "flagged_users", "id"},
+			{(*types.ConfirmedUser)(nil), "confirmed_users", "id"},
+			{(*types.ClearedUser)(nil), "cleared_users", "id"},
+			{(*types.FlaggedGroup)(nil), "flagged_groups", "id"},
+			{(*types.ConfirmedGroup)(nil), "confirmed_groups", "id"},
+			{(*types.ClearedGroup)(nil), "cleared_groups", "id"},
+			{(*types.GroupMemberTracking)(nil), "group_member_trackings", "id"},
+			{(*types.UserReputation)(nil), "user_reputations", "id"},
+			{(*types.GroupReputation)(nil), "group_reputations", "id"},
+			{(*types.UserVote)(nil), "user_votes", "id"},
+			{(*types.GroupVote)(nil), "group_votes", "id"},
+			{(*types.DiscordServerMember)(nil), "discord_server_members", "user_id"},
+			{(*types.InappropriateMessage)(nil), "inappropriate_messages", "user_id"},
+			{(*types.InappropriateUserSummary)(nil), "inappropriate_user_summaries", "user_id"},
 		}
 
 		for _, table := range tables {
@@ -35,7 +38,7 @@ func init() { //nolint:funlen
 				Model(table.model).
 				ModelTableExpr(table.name).
 				IfNotExists().
-				PartitionBy(`HASH (id)`).
+				PartitionBy(fmt.Sprintf(`HASH (%s)`, table.partitionKey)).
 				Exec(ctx)
 			if err != nil {
 				return fmt.Errorf("failed to create parent table %s: %w", table.name, err)
@@ -115,6 +118,8 @@ func init() { //nolint:funlen
 
 		// Drop partitioned tables
 		partitionedTables := []string{
+			"inappropriate_user_summaries",
+			"inappropriate_messages",
 			"discord_server_members",
 			"group_votes",
 			"user_votes",

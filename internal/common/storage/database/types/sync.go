@@ -31,3 +31,9 @@ type GuildCount struct {
 	ServerID uint64 `json:"serverId"` // Discord server ID
 	Count    int    `json:"count"`    // Number of flagged users in the guild
 }
+
+// GuildCursor represents a cursor for paginating through guild memberships.
+type GuildCursor struct {
+	JoinedAt time.Time `json:"joinedAt"` // Timestamp for cursor position
+	ServerID uint64    `json:"serverId"` // Server ID for cursor position
+}

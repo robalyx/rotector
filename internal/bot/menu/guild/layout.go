@@ -9,12 +9,13 @@ import (
 
 // Layout handles the display and interaction logic for the guild menu.
 type Layout struct {
-	db     database.Client
-	menu   *Menu
-	scan   *ScanMenu
-	logs   *LogsMenu
-	lookup *LookupMenu
-	logger *zap.Logger
+	db       database.Client
+	menu     *Menu
+	scan     *ScanMenu
+	logs     *LogsMenu
+	lookup   *LookupMenu
+	messages *MessagesMenu
+	logger   *zap.Logger
 }
 
 // New creates a Layout by initializing the guild menu.
@@ -28,6 +29,7 @@ func New(app *setup.App) *Layout {
 	l.scan = NewScanMenu(l)
 	l.logs = NewLogsMenu(l)
 	l.lookup = NewLookupMenu(l)
+	l.messages = NewMessagesMenu(l)
 
 	return l
 }
@@ -39,5 +41,6 @@ func (l *Layout) Pages() []*pagination.Page {
 		l.scan.page,
 		l.logs.page,
 		l.lookup.page,
+		l.messages.page,
 	}
 }

@@ -10,7 +10,7 @@ func GenerateRandomWords(count int) string {
 	words := []string{
 		"apple", "banana", "cherry", "dragon", "elephant",
 		"flower", "guitar", "hammer", "island", "jungle",
-		"kettle", "lemon", "monkey", "needle", "orange",
+		"kettle", "lemon", "mango", "needle", "orange",
 		"pencil", "queen", "rabbit", "sunset", "tiger",
 		"umbrella", "violin", "window", "yellow", "zebra",
 	}

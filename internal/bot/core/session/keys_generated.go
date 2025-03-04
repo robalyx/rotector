@@ -92,6 +92,26 @@ var (
 	DiscordUserGuilds = NewKey[[]*types.UserGuildInfo]("DiscordUserGuilds", true)
 	// DiscordUserGuildNames stores guild names for a Discord user
 	DiscordUserGuildNames = NewKey[map[uint64]string]("DiscordUserGuildNames", true)
+	// DiscordUserMessageSummary stores the user's inappropriate message summary
+	DiscordUserMessageSummary = NewKey[*types.InappropriateUserSummary]("DiscordUserMessageSummary", true)
+	// DiscordUserTotalGuilds stores the total number of flagged guilds for the user
+	DiscordUserTotalGuilds = NewKey[int]("DiscordUserTotalGuilds", true)
+	// GuildLookupCursor stores the current guild lookup cursor
+	GuildLookupCursor = NewKey[*types.GuildCursor]("GuildLookupCursor", true)
+	// GuildLookupNextCursor stores the next guild lookup cursor
+	GuildLookupNextCursor = NewKey[*types.GuildCursor]("GuildLookupNextCursor", true)
+	// GuildLookupPrevCursors stores previous guild lookup cursors
+	GuildLookupPrevCursors = NewKey[[]*types.GuildCursor]("GuildLookupPrevCursors", true)
+	// DiscordUserMessages stores the current page of messages
+	DiscordUserMessages = NewKey[[]*types.InappropriateMessage]("DiscordUserMessages", true)
+	// DiscordUserMessageCursor stores the current message cursor
+	DiscordUserMessageCursor = NewKey[*types.MessageCursor]("DiscordUserMessageCursor", true)
+	// DiscordUserMessageNextCursor stores the next message cursor
+	DiscordUserMessageNextCursor = NewKey[*types.MessageCursor]("DiscordUserMessageNextCursor", true)
+	// DiscordUserMessagePrevCursors stores previous message cursors
+	DiscordUserMessagePrevCursors = NewKey[[]*types.MessageCursor]("DiscordUserMessagePrevCursors", true)
+	// DiscordUserMessageGuildID stores the currently selected guild ID for messages
+	DiscordUserMessageGuildID = NewKey[uint64]("DiscordUserMessageGuildID", true)
 	// ChatHistory stores the conversation history
 	ChatHistory = NewKey[ai.ChatHistory]("ChatHistory", true)
 	// ChatContext stores chat context information
@@ -196,26 +216,32 @@ var (
 	ReviewerStatsLastRefresh = NewKey[time.Time]("ReviewerStatsLastRefresh", true)
 	// ReviewerStatsNextRefresh stores the next refresh time
 	ReviewerStatsNextRefresh = NewKey[time.Time]("ReviewerStatsNextRefresh", true)
+	// GuildScanType stores the type of guild scan selected (messages or servers)
+	GuildScanType = NewKey[string]("GuildScanType", true)
 	// GuildStatsID stores the current guild ID
 	GuildStatsID = NewKey[uint64]("GuildStatsID", true)
 	// GuildStatsName stores the current guild name
 	GuildStatsName = NewKey[string]("GuildStatsName", true)
 	// GuildStatsUniqueGuilds stores the count of unique guilds in the database
-	GuildStatsUniqueGuilds = NewKey[int]("GuildStatsUniqueGuilds", true)
+	GuildStatsUniqueGuilds = NewKey[int]("GuildStatsUniqueGuilds", false)
 	// GuildStatsUniqueUsers stores the count of unique users in the database
-	GuildStatsUniqueUsers = NewKey[int]("GuildStatsUniqueUsers", true)
-	// GuildScanUserGuilds stores users and their guilds
-	GuildScanUserGuilds = NewKey[map[uint64][]*types.UserGuildInfo]("GuildScanUserGuilds", true)
+	GuildStatsUniqueUsers = NewKey[int]("GuildStatsUniqueUsers", false)
+	// GuildStatsInappropriateUsers stores the count of users with inappropriate messages
+	GuildStatsInappropriateUsers = NewKey[int]("GuildStatsInappropriateUsers", false)
 	// GuildScanGuildNames stores guild names for flagged users
 	GuildScanGuildNames = NewKey[map[uint64]string]("GuildScanGuildNames", true)
+	// GuildScanUserGuilds stores users and their guilds
+	GuildScanUserGuilds = NewKey[map[uint64][]*types.UserGuildInfo]("GuildScanUserGuilds", true)
+	// GuildScanMessageSummaries stores message summaries for users
+	GuildScanMessageSummaries = NewKey[map[uint64]*types.InappropriateUserSummary]("GuildScanMessageSummaries", true)
+	// GuildScanFilteredUsers stores users filtered by criteria
+	GuildScanFilteredUsers = NewKey[map[uint64][]*types.UserGuildInfo]("GuildScanFilteredUsers", true)
+	// GuildScanFilteredSummaries stores filtered message summaries
+	GuildScanFilteredSummaries = NewKey[map[uint64]*types.InappropriateUserSummary]("GuildScanFilteredSummaries", true)
 	// GuildScanMinGuilds stores the minimum guilds filter value
 	GuildScanMinGuilds = NewKey[int]("GuildScanMinGuilds", true)
 	// GuildScanMinJoinDuration stores the minimum join duration filter value
 	GuildScanMinJoinDuration = NewKey[time.Duration]("GuildScanMinJoinDuration", true)
-	// GuildScanFilteredUsers stores users filtered by criteria
-	GuildScanFilteredUsers = NewKey[map[uint64][]*types.UserGuildInfo]("GuildScanFilteredUsers", true)
-	// GuildScanTopGuilds stores the most common flagged guilds and their counts
-	GuildScanTopGuilds = NewKey[[]*types.GuildCount]("GuildScanTopGuilds", true)
 
 	// ImageBuffer stores binary image data
 	ImageBuffer = NewBufferKey("ImageBuffer", false)

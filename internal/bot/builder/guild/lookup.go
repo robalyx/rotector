@@ -2,7 +2,7 @@ package guild
 
 import (
 	"fmt"
-	"strings"
+	"strconv"
 
 	"github.com/disgoorg/disgo/discord"
 	"github.com/robalyx/rotector/internal/bot/constants"
@@ -12,19 +12,27 @@ import (
 
 // LookupBuilder creates the visual layout for the Discord user lookup interface.
 type LookupBuilder struct {
-	userID     uint64
-	username   string
-	userGuilds []*types.UserGuildInfo
-	guildNames map[uint64]string
+	userID         uint64
+	username       string
+	userGuilds     []*types.UserGuildInfo
+	guildNames     map[uint64]string
+	messageSummary *types.InappropriateUserSummary
+	totalGuilds    int
+	hasNextPage    bool
+	hasPrevPage    bool
 }
 
 // NewLookupBuilder creates a new Discord user builder.
 func NewLookupBuilder(s *session.Session) *LookupBuilder {
 	return &LookupBuilder{
-		userID:     session.DiscordUserLookupID.Get(s),
-		username:   session.DiscordUserLookupName.Get(s),
-		userGuilds: session.DiscordUserGuilds.Get(s),
-		guildNames: session.DiscordUserGuildNames.Get(s),
+		userID:         session.DiscordUserLookupID.Get(s),
+		username:       session.DiscordUserLookupName.Get(s),
+		userGuilds:     session.DiscordUserGuilds.Get(s),
+		guildNames:     session.DiscordUserGuildNames.Get(s),
+		messageSummary: session.DiscordUserMessageSummary.Get(s),
+		totalGuilds:    session.DiscordUserTotalGuilds.Get(s),
+		hasNextPage:    session.PaginationHasNextPage.Get(s),
+		hasPrevPage:    session.PaginationHasPrevPage.Get(s),
 	}
 }
 
@@ -32,34 +40,41 @@ func NewLookupBuilder(s *session.Session) *LookupBuilder {
 func (b *LookupBuilder) Build() *discord.MessageUpdateBuilder {
 	userEmbed := b.buildUserEmbed()
 	guildsEmbed := b.buildGuildsEmbed()
+	components := b.buildComponents()
 
 	return discord.NewMessageUpdateBuilder().
 		SetEmbeds(userEmbed.Build(), guildsEmbed.Build()).
-		AddContainerComponents(
-			discord.NewActionRow(
-				discord.NewSecondaryButton("◀️", constants.BackButtonCustomID),
-				discord.NewSecondaryButton("🔄 Refresh", constants.RefreshButtonCustomID),
-			),
-		)
+		AddContainerComponents(components...)
 }
 
 // buildUserEmbed creates the embed with user information.
 func (b *LookupBuilder) buildUserEmbed() *discord.EmbedBuilder {
-	description := "Displaying information about this Discord user and their memberships in flagged servers."
-
 	userID := b.userID
+
 	username := b.username
 	if username == "" {
 		username = fmt.Sprintf("Unknown User (%d)", userID)
 	}
 
-	return discord.NewEmbedBuilder().
+	embed := discord.NewEmbedBuilder().
 		SetTitle("Discord User: "+username).
-		SetDescription(description).
+		SetDescription("Displaying information about this Discord user and their memberships in flagged servers.").
 		AddField("User ID", fmt.Sprintf("`%d`", userID), true).
-		AddField("Flagged Servers", fmt.Sprintf("`%d`", len(b.userGuilds)), true).
+		AddField("Flagged Servers", fmt.Sprintf("`%d`", b.totalGuilds), true).
 		AddField("Mention", fmt.Sprintf("<@%d>", userID), true).
 		SetColor(constants.DefaultEmbedColor)
+
+	// Add message summary information if available
+	if b.messageSummary != nil {
+		embed.AddField("Recent Activity", fmt.Sprintf(
+			"Total Messages: `%d`\nLast Flagged: <t:%d:R>\nReason: `%s`",
+			b.messageSummary.MessageCount,
+			b.messageSummary.LastDetected.Unix(),
+			b.messageSummary.Reason,
+		), false)
+	}
+
+	return embed
 }
 
 // buildGuildsEmbed creates the embed showing detailed server membership information.
@@ -74,29 +89,71 @@ func (b *LookupBuilder) buildGuildsEmbed() *discord.EmbedBuilder {
 		return embed
 	}
 
-	// Create a list of all guild entries
-	guildEntries := make([]string, len(b.userGuilds))
-	for i, guild := range b.userGuilds {
+	// Create a field for each guild
+	for _, guild := range b.userGuilds {
 		guildName := b.guildNames[guild.ServerID]
 		if guildName == "" {
-			guildName = "Unknown Server"
+			guildName = constants.UnknownServer
 		}
 
 		joinedTimestamp := guild.JoinedAt.Unix()
-		guildEntries[i] = fmt.Sprintf("%d. **%s** (ID: `%d`) - Joined <t:%d:R>",
-			i+1,
-			guildName,
+		content := fmt.Sprintf("Server ID: `%d`\nJoined: <t:%d:R>",
 			guild.ServerID,
 			joinedTimestamp,
 		)
+
+		embed.AddField(guildName, content, false)
 	}
 
-	// Set guild entries in the description
-	description := fmt.Sprintf("This user is a member of %d flagged servers:\n\n%s",
-		len(b.userGuilds),
-		strings.Join(guildEntries, "\n"))
-
-	embed.SetDescription(description)
+	// Add pagination info if available
+	if len(b.userGuilds) > 0 {
+		embed.SetFooterText(fmt.Sprintf("Showing %d of %d servers", len(b.userGuilds), b.totalGuilds))
+	}
 
 	return embed
+}
+
+// buildComponents creates all interactive components for the lookup menu.
+func (b *LookupBuilder) buildComponents() []discord.ContainerComponent {
+	// Create select menu options for guilds with messages
+	var options []discord.StringSelectMenuOption
+	if b.messageSummary != nil && b.messageSummary.MessageCount > 0 {
+		for _, guild := range b.userGuilds {
+			guildName := b.guildNames[guild.ServerID]
+			if guildName == "" {
+				guildName = constants.UnknownServer
+			}
+
+			options = append(options, discord.NewStringSelectMenuOption(
+				guildName,
+				strconv.FormatUint(guild.ServerID, 10),
+			).WithDescription("View message history in "+guildName))
+		}
+	}
+
+	components := []discord.ContainerComponent{
+		// Navigation buttons
+		discord.NewActionRow(
+			discord.NewSecondaryButton("◀️ Back", constants.BackButtonCustomID),
+			discord.NewSecondaryButton("⏮️", string(session.ViewerFirstPage)).WithDisabled(!b.hasPrevPage),
+			discord.NewSecondaryButton("◀️", string(session.ViewerPrevPage)).WithDisabled(!b.hasPrevPage),
+			discord.NewSecondaryButton("▶️", string(session.ViewerNextPage)).WithDisabled(!b.hasNextPage),
+			discord.NewSecondaryButton("⏭️", string(session.ViewerLastPage)).WithDisabled(true), // This is disabled on purpose
+		),
+		// Refresh button
+		discord.NewActionRow(
+			discord.NewSecondaryButton("🔄 Refresh", constants.RefreshButtonCustomID),
+		),
+	}
+
+	// Add select menu if we have options
+	if len(options) > 0 {
+		components = append([]discord.ContainerComponent{
+			discord.NewActionRow(
+				discord.NewStringSelectMenu(constants.GuildMessageSelectMenuCustomID, "View Message History", options...),
+			),
+		}, components...)
+	}
+
+	return components
 }

@@ -188,6 +188,20 @@ func init() { //nolint:funlen
 			-- Discord server member indexes
 			CREATE INDEX IF NOT EXISTS idx_server_members_user_joined
 			ON discord_server_members (user_id, joined_at DESC);
+			
+			-- Inappropriate messages indexes
+			CREATE INDEX IF NOT EXISTS idx_inappropriate_messages_detected 
+			ON inappropriate_messages (server_id, channel_id, detected_at DESC);
+			
+			CREATE INDEX IF NOT EXISTS idx_inappropriate_messages_user_detected
+			ON inappropriate_messages (server_id, channel_id, user_id, detected_at DESC);
+			
+			-- Inappropriate user summaries indexes
+			CREATE INDEX IF NOT EXISTS idx_inappropriate_summaries_message_count
+			ON inappropriate_user_summaries (message_count DESC);
+			
+			CREATE INDEX IF NOT EXISTS idx_inappropriate_summaries_last_detected
+			ON inappropriate_user_summaries (last_detected DESC);
 		`, enum.ActivityTypeUserViewed, enum.ActivityTypeGroupViewed).Exec(ctx)
 		if err != nil {
 			return fmt.Errorf("failed to create indexes: %w", err)
@@ -328,6 +342,14 @@ func init() { //nolint:funlen
 
 			-- Discord server member indexes
 			DROP INDEX IF EXISTS idx_server_members_user_joined;
+
+			-- Inappropriate messages indexes
+			DROP INDEX IF EXISTS idx_inappropriate_messages_detected;
+			DROP INDEX IF EXISTS idx_inappropriate_messages_user_detected;
+
+			-- Inappropriate user summaries indexes
+			DROP INDEX IF EXISTS idx_inappropriate_summaries_message_count;
+			DROP INDEX IF EXISTS idx_inappropriate_summaries_last_detected;
 		`).Exec(ctx)
 		if err != nil {
 			return fmt.Errorf("failed to drop indexes: %w", err)

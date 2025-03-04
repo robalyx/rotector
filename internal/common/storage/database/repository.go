@@ -22,6 +22,7 @@ type Repository struct {
 	consent    *models.ConsentModel
 	reviewers  *models.ReviewerModel
 	sync       *models.SyncModel
+	message    *models.MessageModel
 }
 
 // NewRepository creates a new repository instance with all models.
@@ -52,6 +53,7 @@ func NewRepository(db *bun.DB, logger *zap.Logger) *Repository {
 		consent:    consent,
 		reviewers:  reviewers,
 		sync:       models.NewSync(db, logger),
+		message:    models.NewMessage(db, logger),
 	}
 }
 
@@ -123,4 +125,9 @@ func (r *Repository) Reviewers() *models.ReviewerModel {
 // Sync returns the sync model repository.
 func (r *Repository) Sync() *models.SyncModel {
 	return r.sync
+}
+
+// Message returns the message model repository.
+func (r *Repository) Message() *models.MessageModel {
+	return r.message
 }

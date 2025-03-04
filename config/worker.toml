@@ -34,11 +34,15 @@ outfit_analysis = 10
 user_analysis = 10
 # Maximum concurrent AI requests for friend analysis
 friend_analysis = 10
+# Maximum concurrent AI requests for message analysis
+message_analysis = 5
 
 # Number of users to analyze in one AI request
 user_analysis_batch = 25
 # Number of users to analyze in one friend AI request
 friend_analysis_batch = 25
+# Number of messages to analyze in one AI request
+message_analysis_batch = 25
 
 [worker.threshold_limits]
 # Maximum number of flagged users before stopping worker
@@ -53,3 +57,6 @@ min_flagged_override = 1000
 
 # Maximum group members before skipping tracking
 max_group_members_track = 20000
+
+# Number of messages to accumulate before processing a channel batch
+channel_process_threshold = 25

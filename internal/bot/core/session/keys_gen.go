@@ -102,6 +102,18 @@ func main() {
 		{Name: "DiscordUserLookupName", Type: "string", Doc: "DiscordUserLookupName stores the Discord username", Persist: true},
 		{Name: "DiscordUserGuilds", Type: "[]*types.UserGuildInfo", Doc: "DiscordUserGuilds stores a Discord user's guild memberships", Persist: true},
 		{Name: "DiscordUserGuildNames", Type: "map[uint64]string", Doc: "DiscordUserGuildNames stores guild names for a Discord user", Persist: true},
+		{Name: "DiscordUserMessageSummary", Type: "*types.InappropriateUserSummary", Doc: "DiscordUserMessageSummary stores the user's inappropriate message summary", Persist: true},
+		{Name: "DiscordUserTotalGuilds", Type: "int", Doc: "DiscordUserTotalGuilds stores the total number of flagged guilds for the user", Persist: true},
+		{Name: "GuildLookupCursor", Type: "*types.GuildCursor", Doc: "GuildLookupCursor stores the current guild lookup cursor", Persist: true},
+		{Name: "GuildLookupNextCursor", Type: "*types.GuildCursor", Doc: "GuildLookupNextCursor stores the next guild lookup cursor", Persist: true},
+		{Name: "GuildLookupPrevCursors", Type: "[]*types.GuildCursor", Doc: "GuildLookupPrevCursors stores previous guild lookup cursors", Persist: true},
+
+		// Discord user messages related keys
+		{Name: "DiscordUserMessages", Type: "[]*types.InappropriateMessage", Doc: "DiscordUserMessages stores the current page of messages", Persist: true},
+		{Name: "DiscordUserMessageCursor", Type: "*types.MessageCursor", Doc: "DiscordUserMessageCursor stores the current message cursor", Persist: true},
+		{Name: "DiscordUserMessageNextCursor", Type: "*types.MessageCursor", Doc: "DiscordUserMessageNextCursor stores the next message cursor", Persist: true},
+		{Name: "DiscordUserMessagePrevCursors", Type: "[]*types.MessageCursor", Doc: "DiscordUserMessagePrevCursors stores previous message cursors", Persist: true},
+		{Name: "DiscordUserMessageGuildID", Type: "uint64", Doc: "DiscordUserMessageGuildID stores the currently selected guild ID for messages", Persist: true},
 
 		// Chat related keys
 		{Name: "ChatHistory", Type: "ai.ChatHistory", Doc: "ChatHistory stores the conversation history", Persist: true},
@@ -174,16 +186,19 @@ func main() {
 		{Name: "ReviewerStatsNextRefresh", Type: "time.Time", Doc: "ReviewerStatsNextRefresh stores the next refresh time", Persist: true},
 
 		// Guild owner related keys
+		{Name: "GuildScanType", Type: "string", Doc: "GuildScanType stores the type of guild scan selected (messages or servers)", Persist: true},
 		{Name: "GuildStatsID", Type: "uint64", Doc: "GuildStatsID stores the current guild ID", Persist: true},
 		{Name: "GuildStatsName", Type: "string", Doc: "GuildStatsName stores the current guild name", Persist: true},
-		{Name: "GuildStatsUniqueGuilds", Type: "int", Doc: "GuildStatsUniqueGuilds stores the count of unique guilds in the database", Persist: true},
-		{Name: "GuildStatsUniqueUsers", Type: "int", Doc: "GuildStatsUniqueUsers stores the count of unique users in the database", Persist: true},
-		{Name: "GuildScanUserGuilds", Type: "map[uint64][]*types.UserGuildInfo", Doc: "GuildScanUserGuilds stores users and their guilds", Persist: true},
+		{Name: "GuildStatsUniqueGuilds", Type: "int", Doc: "GuildStatsUniqueGuilds stores the count of unique guilds in the database", Persist: false},
+		{Name: "GuildStatsUniqueUsers", Type: "int", Doc: "GuildStatsUniqueUsers stores the count of unique users in the database", Persist: false},
+		{Name: "GuildStatsInappropriateUsers", Type: "int", Doc: "GuildStatsInappropriateUsers stores the count of users with inappropriate messages", Persist: false},
 		{Name: "GuildScanGuildNames", Type: "map[uint64]string", Doc: "GuildScanGuildNames stores guild names for flagged users", Persist: true},
+		{Name: "GuildScanUserGuilds", Type: "map[uint64][]*types.UserGuildInfo", Doc: "GuildScanUserGuilds stores users and their guilds", Persist: true},
+		{Name: "GuildScanMessageSummaries", Type: "map[uint64]*types.InappropriateUserSummary", Doc: "GuildScanMessageSummaries stores message summaries for users", Persist: true},
+		{Name: "GuildScanFilteredUsers", Type: "map[uint64][]*types.UserGuildInfo", Doc: "GuildScanFilteredUsers stores users filtered by criteria", Persist: true},
+		{Name: "GuildScanFilteredSummaries", Type: "map[uint64]*types.InappropriateUserSummary", Doc: "GuildScanFilteredSummaries stores filtered message summaries", Persist: true},
 		{Name: "GuildScanMinGuilds", Type: "int", Doc: "GuildScanMinGuilds stores the minimum guilds filter value", Persist: true},
 		{Name: "GuildScanMinJoinDuration", Type: "time.Duration", Doc: "GuildScanMinJoinDuration stores the minimum join duration filter value", Persist: true},
-		{Name: "GuildScanFilteredUsers", Type: "map[uint64][]*types.UserGuildInfo", Doc: "GuildScanFilteredUsers stores users filtered by criteria", Persist: true},
-		{Name: "GuildScanTopGuilds", Type: "[]*types.GuildCount", Doc: "GuildScanTopGuilds stores the most common flagged guilds and their counts", Persist: true},
 	}
 
 	bufferKeys := []KeyDef{

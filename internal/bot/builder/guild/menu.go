@@ -11,17 +11,19 @@ import (
 
 // MenuBuilder creates the visual layout for the guild owner tools menu.
 type MenuBuilder struct {
-	guildName    string
-	uniqueGuilds int
-	uniqueUsers  int
+	guildName          string
+	uniqueGuilds       int
+	uniqueUsers        int
+	inappropriateUsers int
 }
 
 // NewMenuBuilder creates a new menu builder.
 func NewMenuBuilder(s *session.Session) *MenuBuilder {
 	return &MenuBuilder{
-		guildName:    session.GuildStatsName.Get(s),
-		uniqueGuilds: session.GuildStatsUniqueGuilds.Get(s),
-		uniqueUsers:  session.GuildStatsUniqueUsers.Get(s),
+		guildName:          session.GuildStatsName.Get(s),
+		uniqueGuilds:       session.GuildStatsUniqueGuilds.Get(s),
+		uniqueUsers:        session.GuildStatsUniqueUsers.Get(s),
+		inappropriateUsers: session.GuildStatsInappropriateUsers.Get(s),
 	}
 }
 
@@ -33,9 +35,12 @@ func (b *MenuBuilder) Build() *discord.MessageUpdateBuilder {
 
 	// Create action menu
 	options := []discord.StringSelectMenuOption{
-		discord.NewStringSelectMenuOption("Scan Server", constants.StartGuildScanButtonCustomID).
+		discord.NewStringSelectMenuOption("Ban Users in Condo Servers", constants.StartGuildScanButtonCustomID).
 			WithEmoji(discord.ComponentEmoji{Name: "🔍"}).
-			WithDescription("Scan and remove users involved in ERP content"),
+			WithDescription("Scan and remove users who are members of flagged servers"),
+		discord.NewStringSelectMenuOption("Ban Users with Inappropriate Messages", constants.StartMessageScanButtonCustomID).
+			WithEmoji(discord.ComponentEmoji{Name: "💬"}).
+			WithDescription("Scan and remove users who sent inappropriate messages (Recommended)"),
 		discord.NewStringSelectMenuOption("View Ban Logs", constants.ViewGuildBanLogsButtonCustomID).
 			WithEmoji(discord.ComponentEmoji{Name: "📜"}).
 			WithDescription("View history of ban operations"),
@@ -75,11 +80,13 @@ func (b *MenuBuilder) buildMainEmbed() *discord.EmbedBuilder {
 func (b *MenuBuilder) buildStatsEmbed() *discord.EmbedBuilder {
 	guildCountText := strconv.Itoa(b.uniqueGuilds)
 	userCountText := strconv.Itoa(b.uniqueUsers)
+	inappropriateUsersText := strconv.Itoa(b.inappropriateUsers)
 
 	return discord.NewEmbedBuilder().
 		SetTitle("Sync Statistics").
 		SetDescription("Current tracking information from our database.").
 		AddField("Tracked Discord Servers", guildCountText, true).
 		AddField("Tracked Discord Users", userCountText, true).
+		AddField("Inappropriate Discord Users", inappropriateUsersText, true).
 		SetColor(constants.DefaultEmbedColor)
 }
