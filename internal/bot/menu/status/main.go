@@ -46,7 +46,9 @@ func (m *Menu) Show(_ interfaces.CommonEvent, s *session.Session, _ *pagination.
 }
 
 // handleButton processes button interactions, mainly handling refresh requests.
-func (m *Menu) handleButton(event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, customID string) {
+func (m *Menu) handleButton(
+	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, customID string,
+) {
 	switch customID {
 	case constants.BackButtonCustomID:
 		r.NavigateBack(event, s, "")

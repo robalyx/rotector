@@ -75,8 +75,14 @@ func (w *Worker) Start() {
 
 		// If above threshold, pause processing
 		if flaggedCount >= w.flaggedThreshold {
-			w.bar.SetStepMessage(fmt.Sprintf("Paused - %d flagged users exceeds threshold of %d", flaggedCount, w.flaggedThreshold), 0)
-			w.reporter.UpdateStatus(fmt.Sprintf("Paused - %d flagged users exceeds threshold", flaggedCount), 0)
+			w.bar.SetStepMessage(fmt.Sprintf(
+				"Paused - %d flagged users exceeds threshold of %d",
+				flaggedCount, w.flaggedThreshold,
+			), 0)
+			w.reporter.UpdateStatus(fmt.Sprintf(
+				"Paused - %d flagged users exceeds threshold",
+				flaggedCount,
+			), 0)
 			w.logger.Info("Pausing worker - flagged users threshold exceeded",
 				zap.Int("flaggedCount", flaggedCount),
 				zap.Int("threshold", w.flaggedThreshold))

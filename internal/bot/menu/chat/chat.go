@@ -46,7 +46,9 @@ func (m *Menu) Show(_ interfaces.CommonEvent, _ *session.Session, _ *pagination.
 }
 
 // handleButton processes button interactions.
-func (m *Menu) handleButton(event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, customID string) {
+func (m *Menu) handleButton(
+	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, customID string,
+) {
 	action := session.ViewerAction(customID)
 	switch action {
 	case session.ViewerFirstPage, session.ViewerPrevPage, session.ViewerNextPage, session.ViewerLastPage:
@@ -57,7 +59,10 @@ func (m *Menu) handleButton(event *events.ComponentInteractionCreate, s *session
 
 		session.PaginationPage.Set(s, page)
 		r.Reload(event, s, "")
+		return
+	}
 
+	switch customID {
 	case constants.ChatSendButtonID:
 		modal := discord.NewModalCreateBuilder().
 			SetCustomID(constants.ChatInputModalID).
@@ -91,7 +96,9 @@ func (m *Menu) handleButton(event *events.ComponentInteractionCreate, s *session
 }
 
 // handleSelectMenu processes select menu interactions.
-func (m *Menu) handleSelectMenu(event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, customID, option string) {
+func (m *Menu) handleSelectMenu(
+	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, customID, option string,
+) {
 	switch customID {
 	case constants.ChatModelSelectID:
 		// Parse option to chat model
@@ -111,7 +118,9 @@ func (m *Menu) handleSelectMenu(event *events.ComponentInteractionCreate, s *ses
 }
 
 // handleModal processes modal submissions for chat input.
-func (m *Menu) handleModal(event *events.ModalSubmitInteractionCreate, s *session.Session, r *pagination.Respond) {
+func (m *Menu) handleModal(
+	event *events.ModalSubmitInteractionCreate, s *session.Session, r *pagination.Respond,
+) {
 	switch event.Data.CustomID {
 	case constants.ChatInputModalID:
 		message := event.Data.Text(constants.ChatInputCustomID)

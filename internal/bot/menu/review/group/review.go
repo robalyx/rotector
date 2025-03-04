@@ -93,7 +93,9 @@ func (m *ReviewMenu) Show(event interfaces.CommonEvent, s *session.Session, r *p
 }
 
 // handleSelectMenu processes select menu interactions.
-func (m *ReviewMenu) handleSelectMenu(event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, customID, option string) {
+func (m *ReviewMenu) handleSelectMenu(
+	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, customID, option string,
+) {
 	if m.checkCaptchaRequired(event, s, r) {
 		return
 	}
@@ -107,7 +109,9 @@ func (m *ReviewMenu) handleSelectMenu(event *events.ComponentInteractionCreate, 
 }
 
 // handleSortOrderSelection processes sort order menu selections.
-func (m *ReviewMenu) handleSortOrderSelection(event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, option string) {
+func (m *ReviewMenu) handleSortOrderSelection(
+	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, option string,
+) {
 	// Parse option to review sort
 	sortBy, err := enum.ReviewSortByString(option)
 	if err != nil {
@@ -123,7 +127,9 @@ func (m *ReviewMenu) handleSortOrderSelection(event *events.ComponentInteraction
 }
 
 // handleActionSelection processes action menu selections.
-func (m *ReviewMenu) handleActionSelection(event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, option string) {
+func (m *ReviewMenu) handleActionSelection(
+	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, option string,
+) {
 	userID := uint64(event.User().ID)
 	isReviewer := s.BotSettings().IsReviewer(userID)
 
@@ -165,7 +171,9 @@ func (m *ReviewMenu) handleActionSelection(event *events.ComponentInteractionCre
 }
 
 // handleButton processes button clicks.
-func (m *ReviewMenu) handleButton(event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, customID string) {
+func (m *ReviewMenu) handleButton(
+	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, customID string,
+) {
 	if m.checkCaptchaRequired(event, s, r) {
 		return
 	}
@@ -290,7 +298,9 @@ Flagged Members (%d total, showing first %d):
 }
 
 // handleViewGroupLogs handles the shortcut to view group logs.
-func (m *ReviewMenu) handleViewGroupLogs(event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond) {
+func (m *ReviewMenu) handleViewGroupLogs(
+	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond,
+) {
 	group := session.GroupTarget.Get(s)
 	if group == nil {
 		r.Error(event, "No group selected to view logs.")
@@ -338,7 +348,9 @@ func (m *ReviewMenu) handleConfirmGroup(event interfaces.CommonEvent, s *session
 	var actionMsg string
 	if session.UserReviewMode.Get(s) == enum.ReviewModeTraining {
 		// Training mode - increment downvotes
-		if err := m.layout.db.Models().Reputation().UpdateGroupVotes(context.Background(), group.ID, uint64(event.User().ID), false); err != nil {
+		if err := m.layout.db.Models().Reputation().UpdateGroupVotes(
+			context.Background(), group.ID, uint64(event.User().ID), false,
+		); err != nil {
 			m.layout.logger.Error("Failed to update downvotes", zap.Error(err))
 			r.Error(event, "Failed to update downvotes. Please try again.")
 			return
@@ -416,7 +428,9 @@ func (m *ReviewMenu) handleClearGroup(event interfaces.CommonEvent, s *session.S
 	var actionMsg string
 	if session.UserReviewMode.Get(s) == enum.ReviewModeTraining {
 		// Training mode - increment upvotes
-		if err := m.layout.db.Models().Reputation().UpdateGroupVotes(context.Background(), group.ID, uint64(event.User().ID), true); err != nil {
+		if err := m.layout.db.Models().Reputation().UpdateGroupVotes(
+			context.Background(), group.ID, uint64(event.User().ID), true,
+		); err != nil {
 			m.layout.logger.Error("Failed to update upvotes", zap.Error(err))
 			r.Error(event, "Failed to update upvotes. Please try again.")
 			return
@@ -508,7 +522,9 @@ func (m *ReviewMenu) handleSkipGroup(event interfaces.CommonEvent, s *session.Se
 }
 
 // handleConfirmWithReasonModalSubmit processes the custom confirm reason from the modal.
-func (m *ReviewMenu) handleConfirmWithReasonModalSubmit(event *events.ModalSubmitInteractionCreate, s *session.Session, r *pagination.Respond) {
+func (m *ReviewMenu) handleConfirmWithReasonModalSubmit(
+	event *events.ModalSubmitInteractionCreate, s *session.Session, r *pagination.Respond,
+) {
 	// Get and validate the confirm reason
 	reason := event.Data.Text(constants.ConfirmReasonInputCustomID)
 	if reason == "" {
@@ -564,7 +580,9 @@ func (m *ReviewMenu) handleConfirmWithReasonModalSubmit(event *events.ModalSubmi
 }
 
 // fetchNewTarget gets a new group to review based on the current sort order.
-func (m *ReviewMenu) fetchNewTarget(event interfaces.CommonEvent, s *session.Session, r *pagination.Respond) (*types.ReviewGroup, bool, error) {
+func (m *ReviewMenu) fetchNewTarget(
+	event interfaces.CommonEvent, s *session.Session, r *pagination.Respond,
+) (*types.ReviewGroup, bool, error) {
 	if m.checkBreakRequired(event, s, r) {
 		return nil, false, ErrBreakRequired
 	}
@@ -583,7 +601,9 @@ func (m *ReviewMenu) fetchNewTarget(event interfaces.CommonEvent, s *session.Ses
 	defaultSort := session.UserGroupDefaultSort.Get(s)
 	reviewTargetMode := session.UserReviewTargetMode.Get(s)
 
-	group, err := m.layout.db.Models().Groups().GetGroupToReview(context.Background(), defaultSort, reviewTargetMode, reviewerID)
+	group, err := m.layout.db.Models().Groups().GetGroupToReview(
+		context.Background(), defaultSort, reviewTargetMode, reviewerID,
+	)
 	if err != nil {
 		return nil, isBanned, err
 	}

@@ -143,7 +143,9 @@ func (p *ValueProcessor) ProcessValue(value any) any {
 }
 
 // handleEmbeddedField processes an anonymous (embedded) struct field.
-func (p *ValueProcessor) handleEmbeddedField(field reflect.StructField, fieldValue reflect.Value, result map[string]any) {
+func (p *ValueProcessor) handleEmbeddedField(
+	field reflect.StructField, fieldValue reflect.Value, result map[string]any,
+) {
 	// Skip handling zero-valued embedded fields
 	if fieldValue.IsZero() {
 		return
@@ -171,7 +173,9 @@ func (p *ValueProcessor) handleEmbeddedField(field reflect.StructField, fieldVal
 }
 
 // handleNonEmbeddedField processes a regular (non-embedded) struct field.
-func (p *ValueProcessor) handleNonEmbeddedField(field reflect.StructField, fieldValue reflect.Value, result map[string]any) {
+func (p *ValueProcessor) handleNonEmbeddedField(
+	field reflect.StructField, fieldValue reflect.Value, result map[string]any,
+) {
 	jsonTag := field.Tag.Get("json")
 
 	// Skip fields marked with json:"-"

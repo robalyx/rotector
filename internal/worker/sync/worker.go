@@ -12,16 +12,15 @@ import (
 	"github.com/diamondburned/arikawa/v3/state"
 	"github.com/diamondburned/ningen/v3"
 	"github.com/diamondburned/ningen/v3/states/member"
-	"go.uber.org/zap"
-
+	"github.com/robalyx/rotector/internal/common/client/ai"
 	"github.com/robalyx/rotector/internal/common/progress"
 	"github.com/robalyx/rotector/internal/common/setup"
 	"github.com/robalyx/rotector/internal/common/setup/config"
 	"github.com/robalyx/rotector/internal/common/storage/database"
 	"github.com/robalyx/rotector/internal/common/storage/database/types"
-	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
 	"github.com/robalyx/rotector/internal/worker/core"
 	"github.com/robalyx/rotector/internal/worker/sync/events"
+	"go.uber.org/zap"
 )
 
 var (
@@ -33,13 +32,14 @@ var (
 
 // Worker handles syncing Discord server members.
 type Worker struct {
-	db           database.Client
-	state        *ningen.State
-	bar          *progress.Bar
-	reporter     *core.StatusReporter
-	logger       *zap.Logger
-	config       *config.Config
-	eventHandler *events.Handler
+	db              database.Client
+	state           *ningen.State
+	bar             *progress.Bar
+	reporter        *core.StatusReporter
+	logger          *zap.Logger
+	config          *config.Config
+	messageAnalyzer *ai.MessageAnalyzer
+	eventHandler    *events.Handler
 }
 
 // New creates a new sync worker.
@@ -47,7 +47,7 @@ func New(app *setup.App, bar *progress.Bar, logger *zap.Logger) *Worker {
 	// Create Discord state with sync token and required intents
 	s := state.NewWithIntents(app.Config.Common.Discord.SyncToken,
 		gateway.IntentGuilds|gateway.IntentGuildMembers|gateway.IntentGuildPresences|
-			gateway.IntentGuildMessages|gateway.IntentGuildMessageTyping|gateway.IntentGuildVoiceStates)
+			gateway.IntentGuildMessages|gateway.IntentMessageContent)
 
 	// Create ningen state from discord state
 	n := ningen.FromState(s)
@@ -58,17 +58,22 @@ func New(app *setup.App, bar *progress.Bar, logger *zap.Logger) *Worker {
 	// Create status reporter
 	reporter := core.NewStatusReporter(app.StatusClient, "sync", logger)
 
+	// Create message analyzer
+	messageAnalyzer := ai.NewMessageAnalyzer(app, logger)
+
 	// Create event handler
-	eventHandler := events.New(app.DB, n, logger.Named("events"))
+	eventHandler := events.New(app, n, messageAnalyzer, logger)
+	eventHandler.Setup()
 
 	return &Worker{
-		db:           app.DB,
-		state:        n,
-		bar:          bar,
-		reporter:     reporter,
-		logger:       logger,
-		config:       app.Config,
-		eventHandler: eventHandler,
+		db:              app.DB,
+		state:           n,
+		bar:             bar,
+		reporter:        reporter,
+		logger:          logger,
+		config:          app.Config,
+		messageAnalyzer: messageAnalyzer,
+		eventHandler:    eventHandler,
 	}
 }
 
@@ -192,11 +197,11 @@ func (w *Worker) syncCycle() error {
 		}
 
 		// Process bans for this guild's members
-		if err := w.banSyncedUsers(guildID, members); err != nil {
-			w.logger.Error("Failed to process automatic bans for users in guild",
-				zap.String("guild_name", guild.Name),
-				zap.Error(err))
+		userIDs := make([]uint64, 0, len(members))
+		for _, member := range members {
+			userIDs = append(userIDs, member.UserID)
 		}
+		w.eventHandler.CreateBansForUsers(ctx, userIDs)
 
 		totalMembers += len(members)
 		successfulGuilds++
@@ -217,68 +222,6 @@ func (w *Worker) syncCycle() error {
 
 	w.bar.SetStepMessage(fmt.Sprintf("Synced %d servers (%d failed)", successfulGuilds, failedGuilds), 100)
 	w.reporter.UpdateStatus(fmt.Sprintf("Sync complete: %d OK, %d failed", successfulGuilds, failedGuilds), 100)
-
-	return nil
-}
-
-// banSyncedUsers creates ban records for members in a specific guild who aren't already banned.
-func (w *Worker) banSyncedUsers(serverID uint64, members []*types.DiscordServerMember) error {
-	ctx := context.Background()
-
-	// Skip if no members to process
-	if len(members) == 0 {
-		return nil
-	}
-
-	// Extract user IDs from members
-	userIDs := make([]uint64, 0, len(members))
-	for _, member := range members {
-		userIDs = append(userIDs, member.UserID)
-	}
-
-	// Efficiently check which users are already banned
-	bannedStatus, err := w.db.Models().Bans().BulkCheckBanned(ctx, userIDs)
-	if err != nil {
-		return fmt.Errorf("failed to check banned status of users: %w", err)
-	}
-
-	// Create ban records only for users who aren't banned yet
-	now := time.Now()
-	bansToCreate := make([]*types.DiscordBan, 0, len(members))
-
-	for _, member := range members {
-		userID := member.UserID
-
-		// Skip users who are already banned
-		if banned, exists := bannedStatus[userID]; exists && banned {
-			continue
-		}
-
-		bansToCreate = append(bansToCreate, &types.DiscordBan{
-			ID:        userID,
-			Reason:    enum.BanReasonInappropriate,
-			Source:    enum.BanSourceSystem,
-			Notes:     "Automatically banned for being in flagged guilds",
-			BannedBy:  0, // System ban
-			BannedAt:  now,
-			ExpiresAt: nil, // Permanent ban
-			UpdatedAt: now,
-		})
-	}
-
-	// Skip if no new bans to create
-	if len(bansToCreate) == 0 {
-		return nil
-	}
-
-	// Bulk insert/update ban records
-	if err := w.db.Models().Bans().BulkBanUsers(ctx, bansToCreate); err != nil {
-		return fmt.Errorf("failed to create bulk ban records: %w", err)
-	}
-
-	w.logger.Info("Processed automatic bans for users in guild",
-		zap.Uint64("server_id", serverID),
-		zap.Int("processed_count", len(bansToCreate)))
 
 	return nil
 }
@@ -347,7 +290,9 @@ func (w *Worker) syncServerMembers(guildID discord.GuildID) ([]*types.DiscordSer
 
 // findTextChannel locates a suitable text channel in the guild for member list requests.
 // The attemptedChannels map tracks channels that have already been tried to avoid repetition.
-func (w *Worker) findTextChannel(guildID discord.GuildID, attemptedChannels map[discord.ChannelID]struct{}) (discord.ChannelID, error) {
+func (w *Worker) findTextChannel(
+	guildID discord.GuildID, attemptedChannels map[discord.ChannelID]struct{},
+) (discord.ChannelID, error) {
 	channels, err := w.state.Channels(guildID, []discord.ChannelType{discord.GuildText})
 	if err != nil {
 		return 0, fmt.Errorf("failed to get guild channels: %w", err)

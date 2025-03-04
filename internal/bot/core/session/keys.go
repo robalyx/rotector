@@ -121,7 +121,7 @@ func (k BotSettingKey[T]) Set(s *Session, value T) {
 	}
 }
 
-// Get retrieves the bot setting value
+// Get retrieves the bot setting value.
 func (k BotSettingKey[T]) Get(s *Session) T {
 	var zero T
 	if s.botSettings == nil {

@@ -137,7 +137,9 @@ func (m *Middleware) Cleanup() {
 }
 
 // Process applies proxy logic before passing the request to the next middleware.
-func (m *Middleware) Process(ctx context.Context, httpClient *http.Client, req *http.Request, next middleware.NextFunc) (*http.Response, error) {
+func (m *Middleware) Process(
+	ctx context.Context, httpClient *http.Client, req *http.Request, next middleware.NextFunc,
+) (*http.Response, error) {
 	// Skip if no proxies are available
 	if len(m.proxies) == 0 {
 		return next(ctx, httpClient, req)
@@ -161,7 +163,7 @@ func (m *Middleware) Process(ctx context.Context, httpClient *http.Client, req *
 // tryProxy attempts to use a proxy for the given endpoint.
 func (m *Middleware) tryProxy(ctx context.Context, httpClient *http.Client, req *http.Request) (*http.Response, error) {
 	// Get normalized endpoint path
-	endpoint := fmt.Sprintf("%s%s", req.Host, getNormalizedPath(req.URL.Path))
+	endpoint := fmt.Sprintf("%s%s", req.Host, GetNormalizedPath(req.URL.Path))
 
 	// Select proxy for endpoint
 	proxy, proxyIndex, err := m.selectProxyForEndpoint(ctx, endpoint)
@@ -212,7 +214,7 @@ func (m *Middleware) getCooldown(endpoint string) time.Duration {
 	return m.defaultCooldown
 }
 
-// selectProxyForEndpoint chooses an appropriate proxy for the given endpoint
+// selectProxyForEndpoint chooses an appropriate proxy for the given endpoint.
 func (m *Middleware) selectProxyForEndpoint(ctx context.Context, endpoint string) (*url.URL, int64, error) {
 	now := time.Now().Unix()
 	lastSuccessKey := fmt.Sprintf("%s:%s:%s", LastSuccessKeyPrefix, m.proxyHash, endpoint)
@@ -310,8 +312,8 @@ func (m *Middleware) GetProxies() []*url.URL {
 	return m.proxies
 }
 
-// getNormalizedPath returns a normalized path where numeric IDs and CDN hashes are replaced with placeholders.
-func getNormalizedPath(path string) string {
+// GetNormalizedPath returns a normalized path where numeric IDs and CDN hashes are replaced with placeholders.
+func GetNormalizedPath(path string) string {
 	// Normalize any CDN hash patterns in the full path
 	path = CDNHashPattern.ReplaceAllString(path, "30DAY-Avatar-{hash}-Png")
 

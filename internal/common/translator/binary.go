@@ -36,8 +36,8 @@ func (t *Translator) TranslateBinary(binary string) (string, error) {
 	return result.String(), nil
 }
 
-// isBinaryFormat checks if text appears to be in binary format.
-func isBinaryFormat(text string) bool {
+// IsBinaryFormat checks if text appears to be in binary format.
+func IsBinaryFormat(text string) bool {
 	// Remove spaces and check for valid binary string
 	cleaned := strings.ReplaceAll(text, " ", "")
 	if len(cleaned) == 0 || len(cleaned)%8 != 0 {

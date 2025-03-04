@@ -70,15 +70,6 @@ func (m *Menu) Show(event interfaces.CommonEvent, s *session.Session, r *paginat
 		return
 	}
 
-	// If this is the first page (cursor is nil), create a cursor from the first log
-	if cursor == nil && len(logs) > 0 {
-		log := logs[0]
-		cursor = &types.LogCursor{
-			Timestamp: log.ActivityTimestamp,
-			Sequence:  log.Sequence,
-		}
-	}
-
 	// Get previous cursors array
 	prevCursors := session.LogPrevCursors.Get(s)
 
@@ -91,7 +82,9 @@ func (m *Menu) Show(event interfaces.CommonEvent, s *session.Session, r *paginat
 }
 
 // handleSelectMenu processes select menu interactions.
-func (m *Menu) handleSelectMenu(event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, customID, option string) {
+func (m *Menu) handleSelectMenu(
+	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, customID, option string,
+) {
 	switch customID {
 	case constants.ActionSelectMenuCustomID:
 		switch option {
@@ -134,7 +127,9 @@ func (m *Menu) handleSelectMenu(event *events.ComponentInteractionCreate, s *ses
 }
 
 // handleButton processes button interactions.
-func (m *Menu) handleButton(event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, customID string) {
+func (m *Menu) handleButton(
+	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, customID string,
+) {
 	switch customID {
 	case constants.BackButtonCustomID:
 		r.NavigateBack(event, s, "")
@@ -144,7 +139,10 @@ func (m *Menu) handleButton(event *events.ComponentInteractionCreate, s *session
 	case constants.ClearFiltersButtonCustomID:
 		ResetFilters(s)
 		r.Reload(event, s, "")
-	case string(session.ViewerFirstPage), string(session.ViewerPrevPage), string(session.ViewerNextPage), string(session.ViewerLastPage):
+	case string(session.ViewerFirstPage),
+		string(session.ViewerPrevPage),
+		string(session.ViewerNextPage),
+		string(session.ViewerLastPage):
 		m.handlePagination(event, s, r, session.ViewerAction(customID))
 	}
 }
@@ -183,7 +181,9 @@ func (m *Menu) showQueryModal(event *events.ComponentInteractionCreate, option, 
 }
 
 // handleIDModalSubmit processes ID-based query modal submissions.
-func (m *Menu) handleIDModalSubmit(event *events.ModalSubmitInteractionCreate, s *session.Session, r *pagination.Respond, queryType string) {
+func (m *Menu) handleIDModalSubmit(
+	event *events.ModalSubmitInteractionCreate, s *session.Session, r *pagination.Respond, queryType string,
+) {
 	idStr := event.Data.Text(constants.LogsQueryInputCustomID)
 	id, err := strconv.ParseUint(idStr, 10, 64)
 	if err != nil {
@@ -209,7 +209,9 @@ func (m *Menu) handleIDModalSubmit(event *events.ModalSubmitInteractionCreate, s
 }
 
 // handleDateRangeModalSubmit processes date range modal submissions.
-func (m *Menu) handleDateRangeModalSubmit(event *events.ModalSubmitInteractionCreate, s *session.Session, r *pagination.Respond) {
+func (m *Menu) handleDateRangeModalSubmit(
+	event *events.ModalSubmitInteractionCreate, s *session.Session, r *pagination.Respond,
+) {
 	dateRangeStr := event.Data.Text(constants.LogsQueryInputCustomID)
 	startDate, endDate, err := utils.ParseDateRange(dateRangeStr)
 	if err != nil {
@@ -224,7 +226,9 @@ func (m *Menu) handleDateRangeModalSubmit(event *events.ModalSubmitInteractionCr
 }
 
 // handlePagination processes page navigation.
-func (m *Menu) handlePagination(event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, action session.ViewerAction) {
+func (m *Menu) handlePagination(
+	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, action session.ViewerAction,
+) {
 	switch action {
 	case session.ViewerNextPage:
 		if session.PaginationHasNextPage.Get(s) {

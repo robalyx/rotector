@@ -3,7 +3,6 @@ package guild
 import (
 	"context"
 	"fmt"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -45,7 +44,7 @@ func NewScanMenu(layout *Layout) *ScanMenu {
 	return m
 }
 
-// Show prepares and displays the scan results interface.
+// Show prepares and displays the guild scan interface.
 func (m *ScanMenu) Show(event interfaces.CommonEvent, s *session.Session, r *pagination.Respond) {
 	// Skip scanning if we already have results
 	if session.GuildScanUserGuilds.Get(s) != nil {
@@ -54,118 +53,164 @@ func (m *ScanMenu) Show(event interfaces.CommonEvent, s *session.Session, r *pag
 		return
 	}
 
+	// Get guild ID from session
 	guildID := session.GuildStatsID.Get(s)
 	if guildID == 0 {
 		r.Error(event, "Invalid guild ID.")
 		return
 	}
 
-	// Get all guild members
-	var allMembers []discord.Member
+	// Get scan type from session
+	scanType := session.GuildScanType.Get(s)
+
+	// Get all guild members using Discord API
+	var members []discord.Member
 	var after snowflake.ID
-	limit := 1000 // Discord's max limit per request
 
 	for {
-		members, err := event.Client().Rest().GetMembers(snowflake.ID(guildID), limit, after)
+		chunk, err := event.Client().Rest().GetMembers(snowflake.ID(guildID), 1000, after)
 		if err != nil {
 			m.layout.logger.Error("Failed to get guild members",
 				zap.Error(err),
-				zap.Uint64("guild_id", guildID),
-				zap.Uint64("after", uint64(after)))
-			r.Error(event, "Failed to fetch guild members. Please try again.")
+				zap.Uint64("guild_id", guildID))
+			r.Error(event, "Failed to get guild members. Please try again.")
 			return
 		}
 
-		allMembers = append(allMembers, members...)
+		members = append(members, chunk...)
 
-		// Break if we got less than the limit (means we've reached the end)
-		if len(members) < limit {
+		// Check if we got less than 1000 members (last page)
+		if len(chunk) < 1000 {
 			break
 		}
 
-		// Set after to the last member's ID for next page
-		after = members[len(members)-1].User.ID
+		// Update after for next page
+		after = chunk[len(chunk)-1].User.ID
 	}
 
 	// Extract member IDs
-	memberIDs := make([]uint64, len(allMembers))
-	for i, member := range allMembers {
+	memberIDs := make([]uint64, len(members))
+	for i, member := range members {
 		memberIDs[i] = uint64(member.User.ID)
 	}
 
-	// Get flagged members
-	userGuilds, err := m.layout.db.Models().Sync().GetFlaggedServerMembers(context.Background(), memberIDs)
+	ctx := context.Background()
+
+	switch scanType {
+	case constants.GuildScanTypeCondo:
+		// Handle condo server scan
+		if err := m.handleCondoScan(ctx, s, memberIDs); err != nil {
+			m.layout.logger.Error("Failed to handle condo scan",
+				zap.Error(err),
+				zap.Uint64("guild_id", guildID))
+			r.Error(event, "Failed to scan guild members. Please try again.")
+		}
+
+	case constants.GuildScanTypeMessages:
+		// Handle message scan
+		if err := m.handleMessageScan(ctx, s, memberIDs); err != nil {
+			m.layout.logger.Error("Failed to handle message scan",
+				zap.Error(err),
+				zap.Uint64("guild_id", guildID))
+			r.Error(event, "Failed to scan messages. Please try again.")
+		}
+
+	default:
+		r.Error(event, "Invalid scan type.")
+	}
+}
+
+// handleCondoScan processes the condo server scan.
+func (m *ScanMenu) handleCondoScan(ctx context.Context, s *session.Session, memberIDs []uint64) error {
+	// Get flagged server memberships for these users
+	flaggedMembers, err := m.layout.db.Models().Sync().GetFlaggedServerMembers(ctx, memberIDs)
 	if err != nil {
-		m.layout.logger.Error("Failed to get flagged members",
-			zap.Error(err),
-			zap.Uint64("guild_id", guildID))
-		r.Error(event, "Failed to check member statuses. Please try again.")
-		return
+		return fmt.Errorf("failed to get flagged members: %w", err)
 	}
 
-	// If no flagged users found, show message
-	if len(userGuilds) == 0 {
-		r.Cancel(event, s, "No flagged users found in this server.")
-		return
-	}
-
-	// Get server names for all flagged users
-	serverIDs := make([]uint64, 0)
-	for _, guilds := range userGuilds {
+	// Get server names for all flagged servers
+	var serverIDs []uint64
+	for _, guilds := range flaggedMembers {
 		for _, guild := range guilds {
 			serverIDs = append(serverIDs, guild.ServerID)
 		}
 	}
 
 	// Get server info from database
-	servers, err := m.layout.db.Models().Sync().GetServerInfo(context.Background(), serverIDs)
+	serverInfo, err := m.layout.db.Models().Sync().GetServerInfo(ctx, serverIDs)
 	if err != nil {
-		m.layout.logger.Error("Failed to get server info",
-			zap.Error(err),
-			zap.Uint64s("server_ids", serverIDs))
-		r.Error(event, "Failed to get server information. Please try again.")
-		return
+		return fmt.Errorf("failed to get server info: %w", err)
 	}
 
-	// Create map of server IDs to names
-	serverNames := make(map[uint64]string)
-	for _, server := range servers {
-		serverNames[server.ServerID] = server.Name
-		m.layout.logger.Info("Server info",
-			zap.Uint64("server_id", server.ServerID),
-			zap.String("server_name", server.Name))
+	// Convert server info to name map
+	guildNames := make(map[uint64]string)
+	for _, info := range serverInfo {
+		guildNames[info.ServerID] = info.Name
 	}
 
 	// Store results in session
-	session.GuildScanUserGuilds.Set(s, userGuilds)
-	session.GuildScanGuildNames.Set(s, serverNames)
-	session.PaginationPage.Set(s, 0)
+	session.GuildScanUserGuilds.Set(s, flaggedMembers)
+	session.GuildScanGuildNames.Set(s, guildNames)
+	session.PaginationTotalItems.Set(s, len(flaggedMembers))
 
-	// Initialize or reset filters
-	if session.GuildScanMinGuilds.Get(s) == 0 {
-		session.GuildScanMinGuilds.Set(s, 1) // Default to minimum 1 guild
+	// Apply filters
+	m.applyFilters(s)
+	return nil
+}
+
+// handleMessageScan processes the message-based scan.
+func (m *ScanMenu) handleMessageScan(ctx context.Context, s *session.Session, memberIDs []uint64) error {
+	// Get message summaries for all members in the guild
+	summaries, err := m.layout.db.Models().Message().GetUserMessageSummaries(ctx, memberIDs)
+	if err != nil {
+		return fmt.Errorf("failed to get message summaries: %w", err)
 	}
 
-	// Apply filters to get the filtered results
-	m.applyFilters(s)
+	// Store results in session
+	session.GuildScanMessageSummaries.Set(s, summaries)
+	session.PaginationTotalItems.Set(s, len(summaries))
 
-	m.layout.logger.Info("Guild scan completed",
-		zap.Uint64("guild_id", guildID),
-		zap.Int("total_members", len(allMembers)),
-		zap.Int("flagged_users", len(userGuilds)))
+	// Apply filters
+	m.applyFilters(s)
+	return nil
 }
 
 // applyFilters applies the current filters to the scan results.
 func (m *ScanMenu) applyFilters(s *session.Session) {
-	userGuilds := session.GuildScanUserGuilds.Get(s)
-	minGuilds := session.GuildScanMinGuilds.Get(s)
+	scanType := session.GuildScanType.Get(s)
 	minJoinDuration := session.GuildScanMinJoinDuration.Get(s)
 
-	// Calculate the minimum join date based on duration
-	var minJoinDate time.Time
+	// Calculate the minimum join/detection date based on duration
+	var minDate time.Time
 	if minJoinDuration > 0 {
-		minJoinDate = time.Now().Add(-minJoinDuration)
+		minDate = time.Now().Add(-minJoinDuration)
 	}
+
+	// Apply filters to message summaries
+	if scanType == constants.GuildScanTypeMessages {
+		summaries := session.GuildScanMessageSummaries.Get(s)
+		filteredSummaries := make(map[uint64]*types.InappropriateUserSummary)
+
+		for userID, summary := range summaries {
+			// If min duration is set, check last message date
+			if minJoinDuration > 0 {
+				if summary.LastDetected.Before(minDate) {
+					filteredSummaries[userID] = summary
+				}
+			} else {
+				filteredSummaries[userID] = summary
+			}
+		}
+
+		// Update session with filtered results
+		session.GuildScanFilteredSummaries.Set(s, filteredSummaries)
+		session.PaginationTotalItems.Set(s, len(filteredSummaries))
+		return
+	}
+
+	// Apply filters to guild memberships
+	userGuilds := session.GuildScanUserGuilds.Get(s)
+	minGuilds := session.GuildScanMinGuilds.Get(s)
 
 	// Apply filters to each user
 	filteredUsers := make(map[uint64][]*types.UserGuildInfo)
@@ -176,8 +221,8 @@ func (m *ScanMenu) applyFilters(s *session.Session) {
 		for _, guild := range guilds {
 			// If min join duration is set, check join date
 			if minJoinDuration > 0 {
-				// Only include guilds where the user joined before the min join date
-				if guild.JoinedAt.Before(minJoinDate) {
+				// Only include guilds where the user joined before the min date
+				if guild.JoinedAt.Before(minDate) {
 					filteredGuilds = append(filteredGuilds, guild)
 				}
 			} else {
@@ -195,35 +240,24 @@ func (m *ScanMenu) applyFilters(s *session.Session) {
 	// Update session with filtered results
 	session.GuildScanFilteredUsers.Set(s, filteredUsers)
 	session.PaginationTotalItems.Set(s, len(filteredUsers))
-
-	// Count occurrences of each guild
-	guildCounts := make(map[uint64]int)
-	for _, guilds := range filteredUsers {
-		for _, guild := range guilds {
-			guildCounts[guild.ServerID]++
-		}
-	}
-
-	// Convert to slice for sorting
-	topGuilds := make([]*types.GuildCount, 0, len(guildCounts))
-	for guildID, count := range guildCounts {
-		topGuilds = append(topGuilds, &types.GuildCount{
-			ServerID: guildID,
-			Count:    count,
-		})
-	}
-
-	// Sort by count in descending order
-	sort.Slice(topGuilds, func(i, j int) bool {
-		return topGuilds[i].Count > topGuilds[j].Count
-	})
-
-	// Store top guilds in session
-	session.GuildScanTopGuilds.Set(s, topGuilds)
 }
 
 // handleButton processes button interactions.
-func (m *ScanMenu) handleButton(event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, customID string) {
+func (m *ScanMenu) handleButton(
+	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, customID string,
+) {
+	action := session.ViewerAction(customID)
+	switch action {
+	case session.ViewerFirstPage, session.ViewerPrevPage, session.ViewerNextPage, session.ViewerLastPage:
+		total := session.PaginationTotalItems.Get(s)
+		maxPage := max((total+constants.GuildScanUsersPerPage-1)/constants.GuildScanUsersPerPage - 1)
+
+		action := session.ViewerAction(customID)
+		action.ParsePageAction(s, action, maxPage)
+		r.Reload(event, s, "")
+		return
+	}
+
 	switch customID {
 	case constants.BackButtonCustomID:
 		r.NavigateBack(event, s, "")
@@ -235,20 +269,13 @@ func (m *ScanMenu) handleButton(event *events.ComponentInteractionCreate, s *ses
 		r.Reload(event, s, "Filters reset to default values.")
 	case constants.ConfirmGuildBansButtonCustomID:
 		m.handleConfirmBans(event, s, r)
-	case string(session.ViewerFirstPage), string(session.ViewerPrevPage), string(session.ViewerNextPage), string(session.ViewerLastPage):
-		// Handle pagination actions
-		// Calculate max page and validate navigation action
-		total := session.PaginationTotalItems.Get(s)
-		maxPage := max((total+constants.GuildScanUsersPerPage-1)/constants.GuildScanUsersPerPage - 1)
-
-		action := session.ViewerAction(customID)
-		action.ParsePageAction(s, action, maxPage)
-		r.Reload(event, s, "")
 	}
 }
 
 // handleSelectMenu processes select menu interactions.
-func (m *ScanMenu) handleSelectMenu(event *events.ComponentInteractionCreate, s *session.Session, _ *pagination.Respond, customID, option string) {
+func (m *ScanMenu) handleSelectMenu(
+	event *events.ComponentInteractionCreate, s *session.Session, _ *pagination.Respond, customID, option string,
+) {
 	if customID != constants.GuildScanFilterSelectMenuCustomID {
 		return
 	}
@@ -344,7 +371,8 @@ func (m *ScanMenu) handleModal(event *events.ModalSubmitInteractionCreate, s *se
 		// Parse the duration string (e.g., "30m", "24h", "7d", "1d12h")
 		duration, err := utils.ParseCombinedDuration(durationInput)
 		if err != nil || duration <= 0 {
-			r.Cancel(event, s, "Invalid duration format. Please use formats like '30m' for 30 minutes, '24h' for 24 hours, '7d' for 7 days, or combined formats like '1d12h'.")
+			r.Cancel(event, s, "Invalid duration format. Please use formats like '30m' for 30 minutes, "+
+				"'24h' for 24 hours, '7d' for 7 days, or combined formats like '1d12h'.")
 			return
 		}
 
@@ -352,7 +380,10 @@ func (m *ScanMenu) handleModal(event *events.ModalSubmitInteractionCreate, s *se
 		session.GuildScanMinJoinDuration.Set(s, duration)
 		session.PaginationPage.Set(s, 0) // Reset to first page when filter changes
 		m.applyFilters(s)
-		r.Reload(event, s, fmt.Sprintf("Set minimum join duration to %s. Users must be in guilds for at least this long to be counted.", utils.FormatDuration(duration)))
+		r.Reload(event, s, fmt.Sprintf(
+			"Set minimum join duration to %s. Users must be in guilds for at least this long to be counted.",
+			utils.FormatDuration(duration),
+		))
 
 	case constants.GuildBanConfirmModalCustomID:
 		m.handleBanConfirmModal(event, s, r)
@@ -360,7 +391,9 @@ func (m *ScanMenu) handleModal(event *events.ModalSubmitInteractionCreate, s *se
 }
 
 // handleConfirmBans processes the ban confirmation.
-func (m *ScanMenu) handleConfirmBans(event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond) {
+func (m *ScanMenu) handleConfirmBans(
+	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond,
+) {
 	filteredUsers := session.GuildScanFilteredUsers.Get(s)
 	if len(filteredUsers) == 0 {
 		r.Error(event, "No users to ban after applying filters.")
@@ -395,7 +428,9 @@ func (m *ScanMenu) handleConfirmBans(event *events.ComponentInteractionCreate, s
 }
 
 // handleBanConfirmModal processes the ban confirmation modal submission.
-func (m *ScanMenu) handleBanConfirmModal(event *events.ModalSubmitInteractionCreate, s *session.Session, r *pagination.Respond) {
+func (m *ScanMenu) handleBanConfirmModal(
+	event *events.ModalSubmitInteractionCreate, s *session.Session, r *pagination.Respond,
+) {
 	if event.Data.CustomID != constants.GuildBanConfirmModalCustomID {
 		return
 	}
@@ -488,7 +523,10 @@ func (m *ScanMenu) handleBanConfirmModal(event *events.ModalSubmitInteractionCre
 	// Format response message
 	msg := fmt.Sprintf("Successfully banned %d users.", totalBanned)
 	if totalFailed > 0 {
-		msg += fmt.Sprintf(" Failed to ban %d users - please check if the bot's role is higher than these users.", totalFailed)
+		msg += fmt.Sprintf(
+			" Failed to ban %d users - please check if the bot's role is higher than these users.",
+			totalFailed,
+		)
 	}
 
 	// Reset session

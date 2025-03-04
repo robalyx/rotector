@@ -56,7 +56,9 @@ func (t *ThumbnailFetcher) GetImageURLs(ctx context.Context, users map[uint64]*t
 }
 
 // AddGroupImageURLs fetches thumbnails for groups and adds them to the group records.
-func (t *ThumbnailFetcher) AddGroupImageURLs(ctx context.Context, groups map[uint64]*types.Group) map[uint64]*types.Group {
+func (t *ThumbnailFetcher) AddGroupImageURLs(
+	ctx context.Context, groups map[uint64]*types.Group,
+) map[uint64]*types.Group {
 	// Create batch request for group icons
 	requests := thumbnails.NewBatchThumbnailsBuilder()
 	for _, group := range groups {
@@ -92,7 +94,9 @@ func (t *ThumbnailFetcher) AddGroupImageURLs(ctx context.Context, groups map[uin
 
 // ProcessBatchThumbnails handles batched thumbnail requests, processing them in groups of 100.
 // It returns a map of target IDs to their thumbnail URLs.
-func (t *ThumbnailFetcher) ProcessBatchThumbnails(ctx context.Context, requests *thumbnails.BatchThumbnailsBuilder) map[uint64]string {
+func (t *ThumbnailFetcher) ProcessBatchThumbnails(
+	ctx context.Context, requests *thumbnails.BatchThumbnailsBuilder,
+) map[uint64]string {
 	ctx = context.WithValue(ctx, auth.KeyAddCookie, true)
 
 	var (

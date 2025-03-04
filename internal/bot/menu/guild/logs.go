@@ -66,15 +66,6 @@ func (m *LogsMenu) Show(event interfaces.CommonEvent, s *session.Session, r *pag
 		return
 	}
 
-	// If this is the first page (cursor is nil), create a cursor from the first log
-	if cursor == nil && len(logs) > 0 {
-		log := logs[0]
-		cursor = &types.LogCursor{
-			Timestamp: log.ActivityTimestamp,
-			Sequence:  log.Sequence,
-		}
-	}
-
 	// Get previous cursors array
 	prevCursors := session.LogPrevCursors.Get(s)
 
@@ -84,14 +75,12 @@ func (m *LogsMenu) Show(event interfaces.CommonEvent, s *session.Session, r *pag
 	session.LogNextCursor.Set(s, nextCursor)
 	session.PaginationHasNextPage.Set(s, nextCursor != nil)
 	session.PaginationHasPrevPage.Set(s, len(prevCursors) > 0)
-
-	m.layout.logger.Debug("Loaded guild ban logs",
-		zap.Uint64("guild_id", guildID),
-		zap.Int("logs_count", len(logs)))
 }
 
 // handleButton processes button interactions.
-func (m *LogsMenu) handleButton(event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, customID string) {
+func (m *LogsMenu) handleButton(
+	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, customID string,
+) {
 	switch customID {
 	case constants.BackButtonCustomID:
 		r.NavigateBack(event, s, "")
@@ -103,13 +92,18 @@ func (m *LogsMenu) handleButton(event *events.ComponentInteractionCreate, s *ses
 		session.PaginationHasNextPage.Delete(s)
 		session.PaginationHasPrevPage.Delete(s)
 		r.Reload(event, s, "")
-	case string(session.ViewerFirstPage), string(session.ViewerPrevPage), string(session.ViewerNextPage), string(session.ViewerLastPage):
+	case string(session.ViewerFirstPage),
+		string(session.ViewerPrevPage),
+		string(session.ViewerNextPage),
+		string(session.ViewerLastPage):
 		m.handlePagination(event, s, r, session.ViewerAction(customID))
 	}
 }
 
 // handlePagination processes page navigation for logs.
-func (m *LogsMenu) handlePagination(event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, action session.ViewerAction) {
+func (m *LogsMenu) handlePagination(
+	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, action session.ViewerAction,
+) {
 	switch action {
 	case session.ViewerNextPage:
 		if session.PaginationHasNextPage.Get(s) {

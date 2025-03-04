@@ -38,7 +38,9 @@ func NewMainMenu(layout *Layout) *MainMenu {
 }
 
 // handleSelectMenu processes select menu interactions.
-func (m *MainMenu) handleSelectMenu(event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, _ string, option string) {
+func (m *MainMenu) handleSelectMenu(
+	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, _ string, option string,
+) {
 	switch option {
 	case constants.BotSettingsButtonCustomID:
 		r.Show(event, s, constants.BotSettingsPageName, "")
@@ -162,7 +164,9 @@ func (m *MainMenu) handleDeleteGroupModal(event *events.ComponentInteractionCrea
 }
 
 // handleButton processes button interactions.
-func (m *MainMenu) handleButton(event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, customID string) {
+func (m *MainMenu) handleButton(
+	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, customID string,
+) {
 	switch customID {
 	case constants.BackButtonCustomID:
 		r.NavigateBack(event, s, "")
@@ -170,7 +174,9 @@ func (m *MainMenu) handleButton(event *events.ComponentInteractionCreate, s *ses
 }
 
 // handleModal processes modal submissions.
-func (m *MainMenu) handleModal(event *events.ModalSubmitInteractionCreate, s *session.Session, r *pagination.Respond) {
+func (m *MainMenu) handleModal(
+	event *events.ModalSubmitInteractionCreate, s *session.Session, r *pagination.Respond,
+) {
 	switch event.Data.CustomID {
 	case constants.BanUserModalCustomID:
 		m.handleBanUserModalSubmit(event, s, r)
@@ -184,7 +190,9 @@ func (m *MainMenu) handleModal(event *events.ModalSubmitInteractionCreate, s *se
 }
 
 // handleBanUserModalSubmit processes the user ID input and shows confirmation menu.
-func (m *MainMenu) handleBanUserModalSubmit(event *events.ModalSubmitInteractionCreate, s *session.Session, r *pagination.Respond) {
+func (m *MainMenu) handleBanUserModalSubmit(
+	event *events.ModalSubmitInteractionCreate, s *session.Session, r *pagination.Respond,
+) {
 	userID := event.Data.Text(constants.BanUserInputCustomID)
 	banType := event.Data.Text(constants.BanTypeInputCustomID)
 	notes := event.Data.Text(constants.AdminReasonInputCustomID)
@@ -213,7 +221,9 @@ func (m *MainMenu) handleBanUserModalSubmit(event *events.ModalSubmitInteraction
 }
 
 // handleUnbanUserModalSubmit processes the user ID input and shows confirmation menu.
-func (m *MainMenu) handleUnbanUserModalSubmit(event *events.ModalSubmitInteractionCreate, s *session.Session, r *pagination.Respond) {
+func (m *MainMenu) handleUnbanUserModalSubmit(
+	event *events.ModalSubmitInteractionCreate, s *session.Session, r *pagination.Respond,
+) {
 	userID := event.Data.Text(constants.UnbanUserInputCustomID)
 	notes := event.Data.Text(constants.AdminReasonInputCustomID)
 
@@ -224,7 +234,9 @@ func (m *MainMenu) handleUnbanUserModalSubmit(event *events.ModalSubmitInteracti
 }
 
 // handleDeleteUserModalSubmit processes the user ID input and shows confirmation menu.
-func (m *MainMenu) handleDeleteUserModalSubmit(event *events.ModalSubmitInteractionCreate, s *session.Session, r *pagination.Respond) {
+func (m *MainMenu) handleDeleteUserModalSubmit(
+	event *events.ModalSubmitInteractionCreate, s *session.Session, r *pagination.Respond,
+) {
 	userID := event.Data.Text(constants.DeleteUserInputCustomID)
 	reason := event.Data.Text(constants.AdminReasonInputCustomID)
 
@@ -235,7 +247,9 @@ func (m *MainMenu) handleDeleteUserModalSubmit(event *events.ModalSubmitInteract
 }
 
 // handleDeleteGroupModalSubmit processes the group ID input and shows confirmation menu.
-func (m *MainMenu) handleDeleteGroupModalSubmit(event *events.ModalSubmitInteractionCreate, s *session.Session, r *pagination.Respond) {
+func (m *MainMenu) handleDeleteGroupModalSubmit(
+	event *events.ModalSubmitInteractionCreate, s *session.Session, r *pagination.Respond,
+) {
 	groupID := event.Data.Text(constants.DeleteGroupInputCustomID)
 	reason := event.Data.Text(constants.AdminReasonInputCustomID)
 

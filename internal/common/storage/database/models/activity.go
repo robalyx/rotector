@@ -54,7 +54,9 @@ func (r *ActivityModel) Log(ctx context.Context, log *types.ActivityLog) {
 }
 
 // GetLogs retrieves activity logs based on filter criteria.
-func (r *ActivityModel) GetLogs(ctx context.Context, filter types.ActivityFilter, cursor *types.LogCursor, limit int) ([]*types.ActivityLog, *types.LogCursor, error) {
+func (r *ActivityModel) GetLogs(
+	ctx context.Context, filter types.ActivityFilter, cursor *types.LogCursor, limit int,
+) ([]*types.ActivityLog, *types.LogCursor, error) {
 	var logs []*types.ActivityLog
 
 	// Build base query conditions
@@ -111,7 +113,9 @@ func (r *ActivityModel) GetLogs(ctx context.Context, filter types.ActivityFilter
 }
 
 // GetRecentlyReviewedIDs returns the IDs of users or groups that were recently reviewed by a specific reviewer.
-func (r *ActivityModel) GetRecentlyReviewedIDs(ctx context.Context, reviewerID uint64, isGroup bool, limit int) ([]uint64, error) {
+func (r *ActivityModel) GetRecentlyReviewedIDs(
+	ctx context.Context, reviewerID uint64, isGroup bool, limit int,
+) ([]uint64, error) {
 	var logs []*types.ActivityLog
 
 	// Build query to get recently reviewed IDs

@@ -87,15 +87,12 @@ func (b *ReviewBuilder) buildModeEmbed() *discord.EmbedBuilder {
 	switch b.reviewMode {
 	case enum.ReviewModeTraining:
 		mode = "🎓 Training Mode"
-		description += `
-		**You are not an official reviewer.**
-		You may help moderators by downvoting to indicate inappropriate activity. Information is censored and external links are disabled.
-		`
+		description += "**You are not an official reviewer.**\n" +
+			"You may help moderators by downvoting to indicate inappropriate activity.\n" +
+			"Information is censored and external links are disabled."
 	case enum.ReviewModeStandard:
 		mode = "⚠️ Standard Mode"
-		description += `
-		Your actions are recorded and affect the database. Please review carefully before taking action.
-		`
+		description += "Your actions are recorded and affect the database. Please review carefully before taking action."
 	default:
 		mode = "❌ Unknown Mode"
 		description = "Error encountered. Please check your settings."
@@ -125,8 +122,6 @@ func (b *ReviewBuilder) buildReviewEmbed() *discord.EmbedBuilder {
 		status = "⏳ Pending Review"
 	case enum.GroupTypeCleared:
 		status = "✅ Cleared"
-	case enum.GroupTypeUnflagged:
-		status = "🔄 Unflagged"
 	}
 
 	// Add locked status if applicable
@@ -135,7 +130,7 @@ func (b *ReviewBuilder) buildReviewEmbed() *discord.EmbedBuilder {
 	}
 
 	lastUpdated := fmt.Sprintf("<t:%d:R>", b.group.LastUpdated.Unix())
-	confidence := fmt.Sprintf("%.2f", b.group.Confidence)
+	confidence := fmt.Sprintf("%.2f%%", b.group.Confidence*100)
 	memberCount := strconv.FormatUint(b.groupInfo.MemberCount, 10)
 	flaggedMembers := strconv.Itoa(len(b.memberIDs))
 

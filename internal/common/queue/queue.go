@@ -185,7 +185,9 @@ func (m *Manager) GetQueueInfo(ctx context.Context, userID uint64) (Status, Prio
 }
 
 // SetQueueInfo sets the queue status, position, and priority for a user with expiry.
-func (m *Manager) SetQueueInfo(ctx context.Context, userID uint64, status Status, priority Priority, position int) error {
+func (m *Manager) SetQueueInfo(
+	ctx context.Context, userID uint64, status Status, priority Priority, position int,
+) error {
 	// Set status with expiry
 	if err := m.client.Do(ctx, m.client.B().Set().Key(
 		fmt.Sprintf("%s%d", QueueStatusPrefix, userID)).

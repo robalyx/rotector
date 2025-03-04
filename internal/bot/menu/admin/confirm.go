@@ -37,7 +37,9 @@ func NewConfirmMenu(layout *Layout) *ConfirmMenu {
 }
 
 // handleButton processes button interactions.
-func (m *ConfirmMenu) handleButton(event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, customID string) {
+func (m *ConfirmMenu) handleButton(
+	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, customID string,
+) {
 	switch customID {
 	case constants.BackButtonCustomID:
 		r.NavigateBack(event, s, "")
@@ -47,7 +49,9 @@ func (m *ConfirmMenu) handleButton(event *events.ComponentInteractionCreate, s *
 }
 
 // handleConfirm processes the confirmation action.
-func (m *ConfirmMenu) handleConfirm(event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond) {
+func (m *ConfirmMenu) handleConfirm(
+	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond,
+) {
 	action := session.AdminAction.Get(s)
 	id := session.AdminActionID.Get(s)
 	reason := session.AdminReason.Get(s)
@@ -65,7 +69,9 @@ func (m *ConfirmMenu) handleConfirm(event *events.ComponentInteractionCreate, s 
 }
 
 // handleBanUser processes the user ban action.
-func (m *ConfirmMenu) handleBanUser(event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, userID string, notes string) {
+func (m *ConfirmMenu) handleBanUser(
+	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, userID string, notes string,
+) {
 	// Parse user ID
 	id, err := strconv.ParseUint(userID, 10, 64)
 	if err != nil {
@@ -116,7 +122,9 @@ func (m *ConfirmMenu) handleBanUser(event *events.ComponentInteractionCreate, s 
 }
 
 // handleUnbanUser processes the user unban action.
-func (m *ConfirmMenu) handleUnbanUser(event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, userID string, notes string) {
+func (m *ConfirmMenu) handleUnbanUser(
+	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, userID string, notes string,
+) {
 	// Parse user ID
 	id, err := strconv.ParseUint(userID, 10, 64)
 	if err != nil {
@@ -159,7 +167,9 @@ func (m *ConfirmMenu) handleUnbanUser(event *events.ComponentInteractionCreate, 
 }
 
 // handleDeleteUser processes the user deletion action.
-func (m *ConfirmMenu) handleDeleteUser(event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, idStr string, reason string) {
+func (m *ConfirmMenu) handleDeleteUser(
+	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, idStr string, reason string,
+) {
 	// Parse ID from modal
 	id, err := strconv.ParseUint(idStr, 10, 64)
 	if err != nil {
@@ -200,7 +210,9 @@ func (m *ConfirmMenu) handleDeleteUser(event *events.ComponentInteractionCreate,
 }
 
 // handleDeleteGroup processes the group deletion action.
-func (m *ConfirmMenu) handleDeleteGroup(event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, idStr string, reason string) {
+func (m *ConfirmMenu) handleDeleteGroup(
+	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, idStr string, reason string,
+) {
 	// Parse ID from modal
 	id, err := strconv.ParseUint(idStr, 10, 64)
 	if err != nil {

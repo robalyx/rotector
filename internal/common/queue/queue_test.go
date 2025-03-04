@@ -1,18 +1,19 @@
-package queue
+package queue_test
 
 import (
-	"context"
 	"testing"
 	"time"
 
 	"github.com/alicebob/miniredis/v2"
 	"github.com/redis/rueidis"
+	"github.com/robalyx/rotector/internal/common/queue"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 )
 
-func setupTest(t *testing.T) (*Manager, *miniredis.Miniredis, func()) {
+func setupTest(t *testing.T) (*queue.Manager, func()) {
+	t.Helper()
 	// Start miniredis server
 	mr, err := miniredis.Run()
 	require.NoError(t, err)
@@ -29,7 +30,7 @@ func setupTest(t *testing.T) (*Manager, *miniredis.Miniredis, func()) {
 	require.NoError(t, err)
 
 	// Create queue manager
-	manager := NewManager(client, logger)
+	manager := queue.NewManager(client, logger)
 
 	cleanup := func() {
 		mr.Close()
@@ -37,21 +38,22 @@ func setupTest(t *testing.T) (*Manager, *miniredis.Miniredis, func()) {
 		logger.Sync()
 	}
 
-	return manager, mr, cleanup
+	return manager, cleanup
 }
 
 func TestAddToQueue(t *testing.T) {
-	manager, _, cleanup := setupTest(t)
+	t.Parallel()
+	manager, cleanup := setupTest(t)
 	defer cleanup()
 
-	ctx := context.Background()
-	testItem := &Item{
+	ctx := t.Context()
+	testItem := &queue.Item{
 		UserID:      123,
-		Priority:    PriorityNormal,
+		Priority:    queue.PriorityNormal,
 		Reason:      "test",
 		AddedBy:     456,
 		AddedAt:     time.Now(),
-		Status:      StatusPending,
+		Status:      queue.StatusPending,
 		CheckExists: true,
 	}
 
@@ -59,22 +61,23 @@ func TestAddToQueue(t *testing.T) {
 	require.NoError(t, err)
 
 	// Verify queue length
-	length := manager.GetQueueLength(ctx, PriorityNormal)
+	length := manager.GetQueueLength(ctx, queue.PriorityNormal)
 	assert.Equal(t, 1, length)
 }
 
 func TestGetQueueItems(t *testing.T) {
-	manager, _, cleanup := setupTest(t)
+	t.Parallel()
+	manager, cleanup := setupTest(t)
 	defer cleanup()
 
-	ctx := context.Background()
-	testItem := &Item{
+	ctx := t.Context()
+	testItem := &queue.Item{
 		UserID:      123,
-		Priority:    PriorityNormal,
+		Priority:    queue.PriorityNormal,
 		Reason:      "test",
 		AddedBy:     456,
 		AddedAt:     time.Now(),
-		Status:      StatusPending,
+		Status:      queue.StatusPending,
 		CheckExists: true,
 	}
 
@@ -90,17 +93,18 @@ func TestGetQueueItems(t *testing.T) {
 }
 
 func TestRemoveQueueItem(t *testing.T) {
-	manager, _, cleanup := setupTest(t)
+	t.Parallel()
+	manager, cleanup := setupTest(t)
 	defer cleanup()
 
-	ctx := context.Background()
-	testItem := &Item{
+	ctx := t.Context()
+	testItem := &queue.Item{
 		UserID:      123,
-		Priority:    PriorityNormal,
+		Priority:    queue.PriorityNormal,
 		Reason:      "test",
 		AddedBy:     456,
 		AddedAt:     time.Now(),
-		Status:      StatusPending,
+		Status:      queue.StatusPending,
 		CheckExists: true,
 	}
 
@@ -113,18 +117,19 @@ func TestRemoveQueueItem(t *testing.T) {
 	require.NoError(t, err)
 
 	// Verify queue is empty
-	length := manager.GetQueueLength(ctx, PriorityNormal)
+	length := manager.GetQueueLength(ctx, queue.PriorityNormal)
 	assert.Equal(t, 0, length)
 }
 
 func TestQueueInfo(t *testing.T) {
-	manager, _, cleanup := setupTest(t)
+	t.Parallel()
+	manager, cleanup := setupTest(t)
 	defer cleanup()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	userID := uint64(123)
-	status := StatusPending
-	priority := PriorityNormal
+	status := queue.StatusPending
+	priority := queue.PriorityNormal
 	position := 1
 
 	// Set queue info
@@ -141,17 +146,18 @@ func TestQueueInfo(t *testing.T) {
 }
 
 func TestUpdateQueueItem(t *testing.T) {
-	manager, _, cleanup := setupTest(t)
+	t.Parallel()
+	manager, cleanup := setupTest(t)
 	defer cleanup()
 
-	ctx := context.Background()
-	testItem := &Item{
+	ctx := t.Context()
+	testItem := &queue.Item{
 		UserID:      123,
-		Priority:    PriorityNormal,
+		Priority:    queue.PriorityNormal,
 		Reason:      "test",
 		AddedBy:     456,
 		AddedAt:     time.Now(),
-		Status:      StatusPending,
+		Status:      queue.StatusPending,
 		CheckExists: true,
 	}
 

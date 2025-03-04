@@ -176,7 +176,9 @@ func (u *UserFetcher) FetchInfos(ctx context.Context, userIDs []uint64) []*Info 
 }
 
 // fetchUserData retrieves a user's group memberships, friend list, and games concurrently.
-func (u *UserFetcher) fetchUserData(ctx context.Context, userID uint64) (*UserGroupFetchResult, *UserFriendFetchResult, *UserGamesFetchResult, *UserOutfitsFetchResult) {
+func (u *UserFetcher) fetchUserData(
+	ctx context.Context, userID uint64,
+) (*UserGroupFetchResult, *UserFriendFetchResult, *UserGamesFetchResult, *UserOutfitsFetchResult) {
 	var (
 		groupResult  *UserGroupFetchResult
 		friendResult *UserFriendFetchResult
@@ -220,7 +222,7 @@ func (u *UserFetcher) fetchUserData(ctx context.Context, userID uint64) (*UserGr
 		outfits, err := u.outfitFetcher.GetOutfits(ctx, userID)
 		if err != nil {
 			outfitResult = &UserOutfitsFetchResult{Error: err}
-			return nil //nolint:nilerr
+			return nil //nolint:nilerr // endpoint gets ratelimited a lot so it's okay to ignore
 		}
 
 		// Convert outfits to slice of pointers

@@ -1,13 +1,16 @@
-package utils
+package utils_test
 
 import (
 	"testing"
 	"time"
 
+	"github.com/robalyx/rotector/internal/bot/utils"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestParseDateRange(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name      string
 		dateRange string
@@ -30,19 +33,20 @@ func TestParseDateRange(t *testing.T) {
 		{
 			name:      "invalid format",
 			dateRange: "invalid",
-			wantErr:   ErrInvalidDateRangeFormat,
+			wantErr:   utils.ErrInvalidDateRangeFormat,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			start, end, err := ParseDateRange(tt.dateRange)
+			t.Parallel()
+			start, end, err := utils.ParseDateRange(tt.dateRange)
 			if tt.wantErr != nil {
 				assert.ErrorIs(t, err, tt.wantErr)
 				return
 			}
 
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.Equal(t, tt.wantStart, start.UTC().String())
 			assert.Equal(t, tt.wantEnd, end.UTC().String())
 		})
@@ -50,6 +54,7 @@ func TestParseDateRange(t *testing.T) {
 }
 
 func TestParseBanDuration(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name       string
 		duration   string
@@ -64,7 +69,7 @@ func TestParseBanDuration(t *testing.T) {
 		{
 			name:       "permanent ban",
 			duration:   "",
-			wantErr:    ErrPermanentBan,
+			wantErr:    utils.ErrPermanentBan,
 			wantExpiry: false,
 		},
 		{
@@ -77,7 +82,8 @@ func TestParseBanDuration(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			expiry, err := ParseBanDuration(tt.duration)
+			t.Parallel()
+			expiry, err := utils.ParseBanDuration(tt.duration)
 			if tt.wantErr != nil {
 				assert.ErrorIs(t, err, tt.wantErr)
 				return
@@ -94,6 +100,7 @@ func TestParseBanDuration(t *testing.T) {
 }
 
 func TestParseCombinedDuration(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name     string
 		input    string
@@ -164,20 +171,22 @@ func TestParseCombinedDuration(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			duration, err := ParseCombinedDuration(tt.input)
+			t.Parallel()
+			duration, err := utils.ParseCombinedDuration(tt.input)
 
 			if tt.wantErr {
-				assert.Error(t, err)
+				require.Error(t, err)
 				return
 			}
 
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.Equal(t, tt.expected, duration)
 		})
 	}
 }
 
 func TestFormatTimeAgo(t *testing.T) {
+	t.Parallel()
 	now := time.Now()
 	tests := []struct {
 		name string
@@ -203,7 +212,8 @@ func TestFormatTimeAgo(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := FormatTimeAgo(tt.time)
+			t.Parallel()
+			got := utils.FormatTimeAgo(tt.time)
 			assert.Equal(t, tt.want, got)
 		})
 	}

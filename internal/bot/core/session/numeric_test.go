@@ -1,16 +1,18 @@
-package session
+package session_test
 
 import (
 	"bytes"
 	"encoding/json"
 	"testing"
 
+	"github.com/robalyx/rotector/internal/bot/core/session"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func TestPreserveNumericPrecision(t *testing.T) {
-	processor := NewNumericProcessor()
+	t.Parallel()
+	processor := session.NewNumericProcessor()
 
 	tests := []struct {
 		name     string
@@ -124,18 +126,18 @@ func TestPreserveNumericPrecision(t *testing.T) {
 		{
 			name: "string with type metadata",
 			input: map[string]any{
-				"value":                  "12345",
-				TypeMetadataPrefix + "0": NumericTypeMeta,
+				"value":                          "12345",
+				session.TypeMetadataPrefix + "0": session.NumericTypeMeta,
 			},
 			expected: uint64(12345), // Convert with type metadata
 		},
 		{
 			name: "map with numeric keys with metadata",
 			input: map[string]any{
-				"1":                      "value1",
-				"2":                      "value2",
-				TypeMetadataPrefix + "1": NumericTypeMeta,
-				TypeMetadataPrefix + "2": NumericTypeMeta,
+				"1":                              "value1",
+				"2":                              "value2",
+				session.TypeMetadataPrefix + "1": session.NumericTypeMeta,
+				session.TypeMetadataPrefix + "2": session.NumericTypeMeta,
 			},
 			expected: map[int]any{
 				1: "value1",
@@ -145,9 +147,9 @@ func TestPreserveNumericPrecision(t *testing.T) {
 		{
 			name: "map with mixed key types",
 			input: map[string]any{
-				"1":                      "value1",
-				"key":                    "value2",
-				TypeMetadataPrefix + "1": NumericTypeMeta,
+				"1":                              "value1",
+				"key":                            "value2",
+				session.TypeMetadataPrefix + "1": session.NumericTypeMeta,
 			},
 			expected: map[string]any{
 				"1":   "value1", // Not converted (original map returned because not all keys have metadata)
@@ -158,8 +160,8 @@ func TestPreserveNumericPrecision(t *testing.T) {
 			name: "slice with metadata objects",
 			input: []any{
 				map[string]any{
-					"value":                  "12345",
-					TypeMetadataPrefix + "0": NumericTypeMeta,
+					"value":                          "12345",
+					session.TypeMetadataPrefix + "0": session.NumericTypeMeta,
 				},
 				"67890",
 				json.Number("123"),
@@ -174,6 +176,7 @@ func TestPreserveNumericPrecision(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			result := processor.PreserveNumericPrecision(tt.input)
 			assert.Equal(t, tt.expected, result,
 				"processor.PreserveNumericPrecision(%v) = %v, want %v (types: %T vs %T)",
@@ -197,7 +200,8 @@ func TestPreserveNumericPrecision(t *testing.T) {
 }
 
 func TestAnalyzeNumeric(t *testing.T) {
-	processor := NewNumericProcessor()
+	t.Parallel()
+	processor := session.NewNumericProcessor()
 
 	tests := []struct {
 		input     string
@@ -217,20 +221,23 @@ func TestAnalyzeNumeric(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.input, func(t *testing.T) {
-			meta := processor.analyzeNumeric(tt.input)
-			assert.Equal(t, tt.isNumeric, meta.isNumeric, "isNumeric")
-			assert.Equal(t, tt.isUint64, meta.isUint64, "isUint64")
-			assert.Equal(t, tt.isInt64, meta.isInt64, "isInt64")
-			assert.Equal(t, tt.isFloat, meta.isFloat, "isFloat")
+			t.Parallel()
+			meta := processor.AnalyzeNumeric(tt.input)
+			assert.Equal(t, tt.isNumeric, meta.IsNumeric, "IsNumeric")
+			assert.Equal(t, tt.isUint64, meta.IsUint64, "IsUint64")
+			assert.Equal(t, tt.isInt64, meta.IsInt64, "IsInt64")
+			assert.Equal(t, tt.isFloat, meta.IsFloat, "IsFloat")
 		})
 	}
 }
 
 func TestTypeMetadata(t *testing.T) {
-	processor := NewNumericProcessor()
-	valueProcessor := NewValueProcessor()
+	t.Parallel()
+	processor := session.NewNumericProcessor()
+	valueProcessor := session.NewValueProcessor()
 
 	t.Run("ValueProcessor adds metadata for uint64", func(t *testing.T) {
+		t.Parallel()
 		original := uint64(12345)
 		processed := valueProcessor.ProcessValue(original)
 
@@ -242,12 +249,13 @@ func TestTypeMetadata(t *testing.T) {
 		require.True(t, hasValue, "Expected 'value' key in processed map")
 		assert.Equal(t, "12345", value)
 
-		typeMeta, hasTypeMeta := processedMap[TypeMetadataPrefix+"0"]
+		typeMeta, hasTypeMeta := processedMap[session.TypeMetadataPrefix+"0"]
 		require.True(t, hasTypeMeta, "Expected type metadata key in processed map")
-		assert.Equal(t, NumericTypeMeta, typeMeta)
+		assert.Equal(t, session.NumericTypeMeta, typeMeta)
 	})
 
 	t.Run("NumericProcessor respects type metadata", func(t *testing.T) {
+		t.Parallel()
 		// First convert a uint64 to a string with metadata
 		original := uint64(12345)
 		processed := valueProcessor.ProcessValue(original)
@@ -261,6 +269,7 @@ func TestTypeMetadata(t *testing.T) {
 	})
 
 	t.Run("NumericProcessor without metadata", func(t *testing.T) {
+		t.Parallel()
 		// Create a string value without metadata
 		original := "12345"
 
@@ -273,6 +282,7 @@ func TestTypeMetadata(t *testing.T) {
 	})
 
 	t.Run("End-to-end conversion", func(t *testing.T) {
+		t.Parallel()
 		// Original complex structure with uint64 values
 		original := map[string]any{
 			"id": uint64(18446744073709551615),
@@ -318,17 +328,18 @@ func TestTypeMetadata(t *testing.T) {
 }
 
 func TestEnumMapConversion(t *testing.T) {
-	processor := NewNumericProcessor()
-	valueProcessor := NewValueProcessor()
+	t.Parallel()
+	processor := session.NewNumericProcessor()
+	valueProcessor := session.NewValueProcessor()
 
 	type ReasonType int
 	const (
-		ReasonTypeUser ReasonType = iota
-		ReasonTypeFriend
-		ReasonTypeOutfit
-		ReasonTypeGroup
-		ReasonTypeMember
-		ReasonTypeCustom
+		reasonTypeUser ReasonType = iota
+		reasonTypeFriend
+		reasonTypeOutfit
+		reasonTypeGroup
+		reasonTypeMember
+		reasonTypeCustom
 	)
 
 	type Reason struct {
@@ -339,17 +350,17 @@ func TestEnumMapConversion(t *testing.T) {
 
 	// Create test data with enum map keys
 	original := map[ReasonType]*Reason{
-		ReasonTypeUser: {
+		reasonTypeUser: {
 			Message:    "User has inappropriate content",
 			Confidence: 0.85,
 			Evidence:   []string{"profile text", "username"},
 		},
-		ReasonTypeFriend: {
+		reasonTypeFriend: {
 			Message:    "User has flagged friends",
 			Confidence: 0.75,
 			Evidence:   []string{"friend1", "friend2"},
 		},
-		ReasonTypeOutfit: nil,
+		reasonTypeOutfit: nil,
 	}
 
 	// Process with ValueProcessor
@@ -381,12 +392,12 @@ func TestEnumMapConversion(t *testing.T) {
 	reason0, ok := processedMap[0].(map[string]any)
 	require.True(t, ok, "Expected reason to be map[string]any")
 	require.Equal(t, "User has inappropriate content", reason0["message"])
-	require.Equal(t, 0.85, reason0["confidence"])
+	require.InEpsilon(t, 0.85, reason0["confidence"], 0.01)
 }
 
 func BenchmarkNumericProcessor(b *testing.B) {
-	processor := NewNumericProcessor()
-	valueProcessor := NewValueProcessor()
+	processor := session.NewNumericProcessor()
+	valueProcessor := session.NewValueProcessor()
 
 	benchmarks := []struct {
 		name  string
@@ -435,11 +446,9 @@ func BenchmarkNumericProcessor(b *testing.B) {
 	}
 }
 
-// BenchmarkDoubleMarshaling simulates the full double marshal/unmarshal process
-// that happens in getInterface to handle uint64 values
 func BenchmarkDoubleMarshaling(b *testing.B) {
-	processor := NewNumericProcessor()
-	valueProcessor := NewValueProcessor()
+	processor := session.NewNumericProcessor()
+	valueProcessor := session.NewValueProcessor()
 
 	benchmarks := []struct {
 		name  string

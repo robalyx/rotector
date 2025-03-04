@@ -60,7 +60,9 @@ type clientImpl struct {
 }
 
 // NewConnection establishes a new database connection and returns a Client instance.
-func NewConnection(ctx context.Context, config *config.PostgreSQL, logger *zap.Logger, autoMigrate bool) (Client, error) {
+func NewConnection(
+	ctx context.Context, config *config.PostgreSQL, logger *zap.Logger, autoMigrate bool,
+) (Client, error) {
 	// Initialize database connection with config values
 	sqldb := sql.OpenDB(pgdriver.NewConnector(
 		pgdriver.WithAddr(fmt.Sprintf("%s:%d", config.Host, config.Port)),

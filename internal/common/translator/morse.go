@@ -32,8 +32,8 @@ func (t *Translator) TranslateMorse(morse string) string {
 	return result.String()
 }
 
-// isMorseFormat checks if text appears to be in Morse code format.
-func isMorseFormat(text string) bool {
+// IsMorseFormat checks if text appears to be in Morse code format.
+func IsMorseFormat(text string) bool {
 	// Check if text contains only valid morse characters
 	cleaned := strings.Map(func(r rune) rune {
 		switch r {

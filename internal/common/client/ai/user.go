@@ -264,7 +264,9 @@ func (a *UserAnalyzer) ProcessUsers(userInfos []*fetcher.Info, flaggedUsers map[
 }
 
 // processBatch handles a single batch of users.
-func (a *UserAnalyzer) processBatch(ctx context.Context, userInfos []*fetcher.Info, flaggedUsers map[uint64]*types.User, mu *sync.Mutex) error {
+func (a *UserAnalyzer) processBatch(
+	ctx context.Context, userInfos []*fetcher.Info, flaggedUsers map[uint64]*types.User, mu *sync.Mutex,
+) error {
 	// Translate all descriptions concurrently
 	translatedInfos, originalInfos := a.prepareUserInfos(ctx, userInfos)
 
@@ -323,8 +325,13 @@ func (a *UserAnalyzer) processBatch(ctx context.Context, userInfos []*fetcher.In
 			return nil, fmt.Errorf("%w: no response from Gemini", ErrModelResponse)
 		}
 
-		// Extract and parse response
-		responseText := resp.Candidates[0].Content.Parts[0].(genai.Text)
+		// Parse response from AI
+		responseText, ok := resp.Candidates[0].Content.Parts[0].(genai.Text)
+		if !ok {
+			return nil, fmt.Errorf("%w: unexpected response format from AI", ErrModelResponse)
+		}
+
+		// Parse the JSON response
 		var result FlaggedUsers
 		if err := sonic.Unmarshal([]byte(responseText), &result); err != nil {
 			return nil, fmt.Errorf("JSON unmarshal error: %w", err)
@@ -343,7 +350,10 @@ func (a *UserAnalyzer) processBatch(ctx context.Context, userInfos []*fetcher.In
 }
 
 // validateAndUpdateFlaggedUsers validates the flagged users and updates the flaggedUsers map.
-func (a *UserAnalyzer) validateAndUpdateFlaggedUsers(flaggedResults *FlaggedUsers, translatedInfos, originalInfos map[string]*fetcher.Info, flaggedUsers map[uint64]*types.User, mu *sync.Mutex) {
+func (a *UserAnalyzer) validateAndUpdateFlaggedUsers(
+	flaggedResults *FlaggedUsers, translatedInfos,
+	originalInfos map[string]*fetcher.Info, flaggedUsers map[uint64]*types.User, mu *sync.Mutex,
+) {
 	normalizer := transform.Chain(
 		norm.NFKD,                             // Decompose with compatibility decomposition
 		runes.Remove(runes.In(unicode.Mn)),    // Remove non-spacing marks
@@ -437,7 +447,9 @@ func (a *UserAnalyzer) validateAndUpdateFlaggedUsers(flaggedResults *FlaggedUser
 
 // prepareUserInfos translates user descriptions for different languages and encodings.
 // Returns maps of both translated and original user infos for validation.
-func (a *UserAnalyzer) prepareUserInfos(ctx context.Context, userInfos []*fetcher.Info) (map[string]*fetcher.Info, map[string]*fetcher.Info) {
+func (a *UserAnalyzer) prepareUserInfos(
+	ctx context.Context, userInfos []*fetcher.Info,
+) (map[string]*fetcher.Info, map[string]*fetcher.Info) {
 	var (
 		originalInfos   = make(map[string]*fetcher.Info)
 		translatedInfos = make(map[string]*fetcher.Info)

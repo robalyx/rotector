@@ -121,7 +121,6 @@ func (b *MembersBuilder) getMemberFieldName(index int, memberID uint64) string {
 			fieldName += " ⏳"
 		case enum.UserTypeCleared:
 			fieldName += " ✅"
-		case enum.UserTypeUnflagged:
 		}
 
 		// Add banned status if applicable
@@ -139,12 +138,7 @@ func (b *MembersBuilder) getMemberFieldValue(memberID uint64) string {
 	member := b.members[memberID]
 
 	// Add member name (with link in standard mode)
-	memberName := member.Name
-	if member.Status == enum.UserTypeUnflagged {
-		memberName = "Unflagged"
-	}
-
-	name := utils.CensorString(memberName, b.privacyMode)
+	name := utils.CensorString(member.Name, b.privacyMode)
 	if b.trainingMode {
 		info.WriteString(name)
 	} else {

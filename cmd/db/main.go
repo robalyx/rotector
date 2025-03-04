@@ -50,7 +50,7 @@ func run() error {
 					if err := migrator.Lock(ctx); err != nil {
 						return err
 					}
-					defer migrator.Unlock(ctx) //nolint:errcheck
+					defer migrator.Unlock(ctx) //nolint:errcheck // -
 
 					group, err := migrator.Migrate(ctx)
 					if err != nil {
@@ -75,7 +75,7 @@ func run() error {
 					if err := migrator.Lock(ctx); err != nil {
 						return err
 					}
-					defer migrator.Unlock(ctx) //nolint:errcheck
+					defer migrator.Unlock(ctx) //nolint:errcheck // -
 
 					group, err := migrator.Rollback(ctx)
 					if err != nil {

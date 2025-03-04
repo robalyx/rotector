@@ -35,8 +35,7 @@ type Validator func(value string, userID uint64) error
 // ValueGetter is a function that retrieves the value of a setting.
 type ValueGetter func(s *Session) string
 
-// ValueUpdater is a function that updates the value of a setting.
-// customID is provided to identify which action is being performed
+// customID is provided to identify which action is being performed.
 type ValueUpdater func(customID string, inputs []string, s *Session) error
 
 // Setting defines the structure and behavior of a single setting.
@@ -565,8 +564,10 @@ func (r *SettingRegistry) createAnnouncementMessageSetting() *Setting {
 	}
 }
 
-// logBotSettingChange is a helper method to handle logging changes to bot settings
-func (r *SettingRegistry) logBotSettingChange(ctx context.Context, db database.Client, reviewerID uint64, settingKey, oldValue, newValue string) {
+// logBotSettingChange is a helper method to handle logging changes to bot settings.
+func (r *SettingRegistry) logBotSettingChange(
+	ctx context.Context, db database.Client, reviewerID uint64, settingKey, oldValue, newValue string,
+) {
 	details := map[string]any{
 		"setting": settingKey,
 		"old":     oldValue,

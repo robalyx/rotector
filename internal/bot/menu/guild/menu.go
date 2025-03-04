@@ -52,24 +52,48 @@ func (m *Menu) Show(_ interfaces.CommonEvent, s *session.Session, _ *pagination.
 		uniqueUsers = 0 // Default to 0 if there's an error
 	}
 
+	// Fetch inappropriate user count
+	inappropriateUsers, err := m.layout.db.Models().Message().GetUniqueInappropriateUserCount(ctx)
+	if err != nil {
+		m.layout.logger.Error("Failed to get inappropriate user count", zap.Error(err))
+		inappropriateUsers = 0 // Default to 0 if there's an error
+	}
+
 	// Store the statistics in session keys
 	session.GuildStatsUniqueGuilds.Set(s, uniqueGuilds)
 	session.GuildStatsUniqueUsers.Set(s, uniqueUsers)
+	session.GuildStatsInappropriateUsers.Set(s, inappropriateUsers)
 }
 
 // handleSelectMenu processes select menu interactions.
-func (m *Menu) handleSelectMenu(event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, customID, option string) {
+func (m *Menu) handleSelectMenu(
+	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, customID, option string,
+) {
 	if customID != constants.ActionSelectMenuCustomID {
 		return
 	}
 
 	switch option {
 	case constants.StartGuildScanButtonCustomID:
+		// Set scan type to condo-based
+		session.GuildScanType.Set(s, constants.GuildScanTypeCondo)
+
 		// Reset scan page
 		session.PaginationPage.Set(s, 0)
 		session.PaginationTotalItems.Set(s, 0)
 
 		r.Show(event, s, constants.GuildScanPageName, "")
+
+	case constants.StartMessageScanButtonCustomID:
+		// Set scan type to message-based
+		session.GuildScanType.Set(s, constants.GuildScanTypeMessages)
+
+		// Reset scan page
+		session.PaginationPage.Set(s, 0)
+		session.PaginationTotalItems.Set(s, 0)
+
+		r.Show(event, s, constants.GuildScanPageName, "")
+
 	case constants.ViewGuildBanLogsButtonCustomID:
 		// Reset logs page
 		session.LogCursor.Delete(s)
@@ -81,7 +105,9 @@ func (m *Menu) handleSelectMenu(event *events.ComponentInteractionCreate, s *ses
 }
 
 // handleButton processes button interactions.
-func (m *Menu) handleButton(event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, customID string) {
+func (m *Menu) handleButton(
+	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, customID string,
+) {
 	switch customID {
 	case constants.BackButtonCustomID:
 		r.NavigateBack(event, s, "")

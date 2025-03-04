@@ -1,4 +1,4 @@
-package binary
+package binary_test
 
 import (
 	"encoding/binary"
@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	exportBinary "github.com/robalyx/rotector/internal/export/binary"
+
 	"github.com/robalyx/rotector/internal/export/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -15,6 +17,7 @@ import (
 
 // verifyBinaryFile reads a binary file and verifies its contents match the expected records.
 func verifyBinaryFile(t *testing.T, filepath string, expectedRecords []*types.ExportRecord) {
+	t.Helper()
 	// Open file
 	file, err := os.Open(filepath)
 	require.NoError(t, err)
@@ -56,7 +59,7 @@ func verifyBinaryFile(t *testing.T, filepath string, expectedRecords []*types.Ex
 		var confidence float64
 		err = binary.Read(file, binary.LittleEndian, &confidence)
 		require.NoError(t, err)
-		assert.Equal(t, expected.Confidence, confidence)
+		assert.InEpsilon(t, expected.Confidence, confidence, 0.01)
 	}
 
 	// Verify we're at EOF
@@ -65,7 +68,7 @@ func verifyBinaryFile(t *testing.T, filepath string, expectedRecords []*types.Ex
 }
 
 func TestExporter_Export(t *testing.T) {
-	tempDir := t.TempDir()
+	t.Parallel()
 
 	tests := []struct {
 		name         string
@@ -117,14 +120,17 @@ func TestExporter_Export(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			tempDir := t.TempDir()
+
 			// Create new exporter
-			e := New(tempDir)
+			e := exportBinary.New(tempDir)
 
 			// Perform export
 			err := e.Export(tt.userRecords, tt.groupRecords)
 
 			if tt.wantErr {
-				assert.Error(t, err)
+				require.Error(t, err)
 				if tt.errMsg != "" {
 					assert.Contains(t, err.Error(), tt.errMsg)
 				}

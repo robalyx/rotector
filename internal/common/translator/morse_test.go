@@ -1,13 +1,15 @@
-package translator
+package translator_test
 
 import (
 	"testing"
 
+	"github.com/robalyx/rotector/internal/common/translator"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestTranslateMorse(t *testing.T) {
-	translator := New(nil)
+	t.Parallel()
+	translator := translator.New(nil)
 
 	tests := []struct {
 		name     string
@@ -53,6 +55,7 @@ func TestTranslateMorse(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			result := translator.TranslateMorse(tt.input)
 			assert.Equal(t, tt.expected, result)
 		})
@@ -60,6 +63,7 @@ func TestTranslateMorse(t *testing.T) {
 }
 
 func TestIsMorseFormat(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name     string
 		input    string
@@ -109,7 +113,8 @@ func TestIsMorseFormat(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := isMorseFormat(tt.input)
+			t.Parallel()
+			result := translator.IsMorseFormat(tt.input)
 			assert.Equal(t, tt.expected, result)
 		})
 	}

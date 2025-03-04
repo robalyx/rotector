@@ -28,7 +28,9 @@ func NewMaterializedView(db *bun.DB, logger *zap.Logger) *MaterializedViewModel 
 }
 
 // RefreshIfStale refreshes a materialized view if it hasn't been refreshed in the given duration.
-func (m *MaterializedViewModel) RefreshIfStale(ctx context.Context, viewName string, staleDuration time.Duration) error {
+func (m *MaterializedViewModel) RefreshIfStale(
+	ctx context.Context, viewName string, staleDuration time.Duration,
+) error {
 	return m.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
 		// Get last refresh time
 		var refresh types.MaterializedViewRefresh
@@ -66,7 +68,9 @@ func (m *MaterializedViewModel) RefreshIfStale(ctx context.Context, viewName str
 }
 
 // GetRefreshInfo returns the last refresh time and next scheduled refresh for a view.
-func (m *MaterializedViewModel) GetRefreshInfo(ctx context.Context, viewName string) (lastRefresh time.Time, err error) {
+func (m *MaterializedViewModel) GetRefreshInfo(
+	ctx context.Context, viewName string,
+) (lastRefresh time.Time, err error) {
 	var refresh types.MaterializedViewRefresh
 	err = m.db.NewSelect().
 		Model(&refresh).
@@ -90,7 +94,9 @@ func (m *MaterializedViewModel) RefreshLeaderboardView(ctx context.Context, peri
 }
 
 // GetLeaderboardRefreshInfo returns the last refresh time and next scheduled refresh for a leaderboard view.
-func (m *MaterializedViewModel) GetLeaderboardRefreshInfo(ctx context.Context, period enum.LeaderboardPeriod) (lastRefresh, nextRefresh time.Time, err error) {
+func (m *MaterializedViewModel) GetLeaderboardRefreshInfo(
+	ctx context.Context, period enum.LeaderboardPeriod,
+) (lastRefresh, nextRefresh time.Time, err error) {
 	viewName := fmt.Sprintf("vote_leaderboard_stats_%s", period)
 	staleDuration := getLeaderboardStaleDuration(period)
 
@@ -132,7 +138,9 @@ func (m *MaterializedViewModel) RefreshReviewerStatsView(ctx context.Context, pe
 }
 
 // GetReviewerStatsRefreshInfo returns the last refresh time and next scheduled refresh for a reviewer stats view.
-func (m *MaterializedViewModel) GetReviewerStatsRefreshInfo(ctx context.Context, period enum.ReviewerStatsPeriod) (lastRefresh, nextRefresh time.Time, err error) {
+func (m *MaterializedViewModel) GetReviewerStatsRefreshInfo(
+	ctx context.Context, period enum.ReviewerStatsPeriod,
+) (lastRefresh, nextRefresh time.Time, err error) {
 	viewName := fmt.Sprintf("reviewer_stats_%s", period)
 	staleDuration := 30 * time.Minute
 

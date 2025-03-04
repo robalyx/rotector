@@ -64,7 +64,9 @@ func (c *FriendChecker) ProcessUsers(userInfos []*fetcher.Info, flaggedUsers map
 	}
 
 	// Fetch all existing friends
-	existingFriends, err := c.db.Models().Users().GetUsersByIDs(context.Background(), friendIDs, types.UserFieldBasic|types.UserFieldReasons)
+	existingFriends, err := c.db.Models().Users().GetUsersByIDs(
+		context.Background(), friendIDs, types.UserFieldBasic|types.UserFieldReasons,
+	)
 	if err != nil {
 		c.logger.Error("Failed to fetch existing friends", zap.Error(err))
 		return

@@ -102,7 +102,9 @@ func (m *MembersMenu) Show(event interfaces.CommonEvent, s *session.Session, r *
 }
 
 // handlePageNavigation processes navigation button clicks.
-func (m *MembersMenu) handlePageNavigation(event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, customID string) {
+func (m *MembersMenu) handlePageNavigation(
+	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, customID string,
+) {
 	action := session.ViewerAction(customID)
 	switch action {
 	case session.ViewerFirstPage, session.ViewerPrevPage, session.ViewerNextPage, session.ViewerLastPage:
@@ -114,7 +116,10 @@ func (m *MembersMenu) handlePageNavigation(event *events.ComponentInteractionCre
 
 		session.PaginationPage.Set(s, page)
 		r.Reload(event, s, "")
+		return
+	}
 
+	switch customID {
 	case constants.BackButtonCustomID:
 		r.NavigateBack(event, s, "")
 
@@ -128,12 +133,15 @@ func (m *MembersMenu) handlePageNavigation(event *events.ComponentInteractionCre
 func (m *MembersMenu) sortMembersByStatus(memberIDs []uint64, flaggedUsers map[uint64]*types.ReviewUser) []uint64 {
 	// Group members by status
 	groupedMembers := make(map[enum.UserType][]uint64)
+	var unflaggedMembers []uint64
+
+	// Separate flagged and unflagged members
 	for _, memberID := range memberIDs {
-		status := enum.UserTypeUnflagged
 		if member, exists := flaggedUsers[memberID]; exists {
-			status = member.Status
+			groupedMembers[member.Status] = append(groupedMembers[member.Status], memberID)
+		} else {
+			unflaggedMembers = append(unflaggedMembers, memberID)
 		}
-		groupedMembers[status] = append(groupedMembers[status], memberID)
 	}
 
 	// Define status priority order
@@ -141,7 +149,6 @@ func (m *MembersMenu) sortMembersByStatus(memberIDs []uint64, flaggedUsers map[u
 		enum.UserTypeConfirmed,
 		enum.UserTypeFlagged,
 		enum.UserTypeCleared,
-		enum.UserTypeUnflagged,
 	}
 
 	// Combine members in priority order
@@ -149,6 +156,9 @@ func (m *MembersMenu) sortMembersByStatus(memberIDs []uint64, flaggedUsers map[u
 	for _, status := range statusOrder {
 		sortedMembers = append(sortedMembers, groupedMembers[status]...)
 	}
+
+	// Append unflagged members last
+	sortedMembers = append(sortedMembers, unflaggedMembers...)
 
 	return sortedMembers
 }

@@ -30,7 +30,9 @@ func NewReputation(db *bun.DB, votes *VoteModel, logger *zap.Logger) *Reputation
 }
 
 // UpdateUserVotes updates the upvotes or downvotes count for a user in training mode.
-func (r *ReputationModel) UpdateUserVotes(ctx context.Context, userID uint64, discordUserID uint64, isUpvote bool) error {
+func (r *ReputationModel) UpdateUserVotes(
+	ctx context.Context, userID uint64, discordUserID uint64, isUpvote bool,
+) error {
 	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
 		var reputation types.UserReputation
 		err := tx.NewSelect().
@@ -68,7 +70,7 @@ func (r *ReputationModel) UpdateUserVotes(ctx context.Context, userID uint64, di
 		return nil
 	})
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to update user reputation: %w", err)
 	}
 
 	// Save the vote
@@ -80,7 +82,9 @@ func (r *ReputationModel) UpdateUserVotes(ctx context.Context, userID uint64, di
 }
 
 // UpdateGroupVotes updates the upvotes or downvotes count for a group in training mode.
-func (r *ReputationModel) UpdateGroupVotes(ctx context.Context, groupID uint64, discordUserID uint64, isUpvote bool) error {
+func (r *ReputationModel) UpdateGroupVotes(
+	ctx context.Context, groupID uint64, discordUserID uint64, isUpvote bool,
+) error {
 	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
 		var reputation types.GroupReputation
 		err := tx.NewSelect().
@@ -118,7 +122,7 @@ func (r *ReputationModel) UpdateGroupVotes(ctx context.Context, groupID uint64, 
 		return nil
 	})
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to update group reputation: %w", err)
 	}
 
 	// Save the vote

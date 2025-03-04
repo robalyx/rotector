@@ -16,10 +16,10 @@ var (
 	ErrConfigVersionMismatch = errors.New("config file version mismatch")
 )
 
-// Repository version tag for config file references
+// Repository version tag for config file references.
 const RepositoryVersion = "v1.0.0-beta.1"
 
-// Current version of the config file
+// Current version of the config file.
 const (
 	CurrentCommonVersion = 1
 	CurrentBotVersion    = 1
@@ -36,6 +36,7 @@ type Config struct {
 
 // CommonConfig contains configuration shared between bot and worker.
 type CommonConfig struct {
+	// Version of the common config.
 	Version        int            `koanf:"version"`
 	Debug          Debug          `koanf:"debug"`
 	CircuitBreaker CircuitBreaker `koanf:"circuit_breaker"`
@@ -51,141 +52,218 @@ type CommonConfig struct {
 
 // DiscordConfig contains Discord-related configuration.
 type DiscordConfig struct {
-	SyncToken string `koanf:"sync_token"` // Self-bot token for server scanning
+	// Self-bot token for server scanning.
+	SyncToken string `koanf:"sync_token"`
 }
 
 // BotConfig contains Discord bot specific configuration.
 type BotConfig struct {
-	Version        int     `koanf:"version"`
-	RequestTimeout int     `koanf:"request_timeout"` // Request timeout in milliseconds
-	Discord        Discord `koanf:"discord"`
+	// Version of the bot config.
+	Version int `koanf:"version"`
+	// Request timeout in milliseconds.
+	RequestTimeout int `koanf:"request_timeout"`
+	// Discord configuration.
+	Discord Discord `koanf:"discord"`
 }
 
 // WorkerConfig contains worker specific configuration.
 type WorkerConfig struct {
-	Version         int             `koanf:"version"`
-	RequestTimeout  int             `koanf:"request_timeout"` // Request timeout in milliseconds
-	StartupDelay    int             `koanf:"startup_delay"`
-	BatchSizes      BatchSizes      `koanf:"batch_sizes"`
+	// Version of the worker config.
+	Version int `koanf:"version"`
+	// Request timeout in milliseconds.
+	RequestTimeout int `koanf:"request_timeout"`
+	// Startup delay in milliseconds.
+	StartupDelay int `koanf:"startup_delay"`
+	// Batch sizes for worker operations.
+	BatchSizes BatchSizes `koanf:"batch_sizes"`
+	// Threshold limits for worker operations.
 	ThresholdLimits ThresholdLimits `koanf:"threshold_limits"`
 }
 
 // Debug contains debug-related configuration.
 type Debug struct {
-	LogLevel      string `koanf:"log_level"`        // Log level (debug, info, warn, error)
-	MaxLogsToKeep int    `koanf:"max_logs_to_keep"` // Maximum log files to keep
-	MaxLogLines   int    `koanf:"max_log_lines"`    // Maximum lines per log file
-	EnablePprof   bool   `koanf:"enable_pprof"`     // Enable pprof debugging
-	PprofPort     int    `koanf:"pprof_port"`       // pprof server port
+	// Log level (debug, info, warn, error).
+	LogLevel string `koanf:"log_level"`
+	// Maximum log files to keep.
+	MaxLogsToKeep int `koanf:"max_logs_to_keep"`
+	// Maximum lines per log file.
+	MaxLogLines int `koanf:"max_log_lines"`
+	// Enable pprof debugging.
+	EnablePprof bool `koanf:"enable_pprof"`
+	// pprof server port.
+	PprofPort int `koanf:"pprof_port"`
 }
 
 // CircuitBreaker contains circuit breaker configuration.
 type CircuitBreaker struct {
-	MaxFailures      uint32 `koanf:"max_failures"`      // Number of failures before circuit opens
-	FailureThreshold int    `koanf:"failure_threshold"` // Request timeout in milliseconds
-	RecoveryTimeout  int    `koanf:"recovery_timeout"`  // Recovery delay in milliseconds
+	// Number of failures before circuit opens.
+	MaxFailures uint32 `koanf:"max_failures"`
+	// Request timeout in milliseconds.
+	FailureThreshold int `koanf:"failure_threshold"`
+	// Recovery delay in milliseconds.
+	RecoveryTimeout int `koanf:"recovery_timeout"`
 }
 
 // Retry contains retry configuration.
 type Retry struct {
-	MaxRetries uint64 `koanf:"max_retries"` // Maximum retry attempts
-	Delay      int    `koanf:"delay"`       // Initial retry delay in milliseconds
-	MaxDelay   int    `koanf:"max_delay"`   // Maximum retry delay in milliseconds
+	// Maximum retry attempts.
+	MaxRetries uint64 `koanf:"max_retries"`
+	// Initial retry delay in milliseconds.
+	Delay int `koanf:"delay"`
+	// Maximum retry delay in milliseconds.
+	MaxDelay int `koanf:"max_delay"`
 }
 
 // PostgreSQL contains database connection configuration.
 type PostgreSQL struct {
-	Host         string `koanf:"host"`           // Database hostname
-	Port         int    `koanf:"port"`           // Database port
-	User         string `koanf:"user"`           // Database username
-	Password     string `koanf:"password"`       // Database password
-	DBName       string `koanf:"db_name"`        // Database name
-	MaxOpenConns int    `koanf:"max_open_conns"` // Maximum open connections
-	MaxIdleConns int    `koanf:"max_idle_conns"` // Maximum idle connections
-	MaxLifetime  int    `koanf:"max_lifetime"`   // Connection lifetime in minutes
-	MaxIdleTime  int    `koanf:"max_idle_time"`  // Idle timeout in minutes
+	// Database hostname.
+	Host string `koanf:"host"`
+	// Database port.
+	Port int `koanf:"port"`
+	// Database username.
+	User string `koanf:"user"`
+	// Database password.
+	Password string `koanf:"password"`
+	// Database name.
+	DBName string `koanf:"db_name"`
+	// Maximum open connections.
+	MaxOpenConns int `koanf:"max_open_conns"`
+	// Maximum idle connections.
+	MaxIdleConns int `koanf:"max_idle_conns"`
+	// Connection lifetime in minutes.
+	MaxLifetime int `koanf:"max_lifetime"`
+	// Idle timeout in minutes.
+	MaxIdleTime int `koanf:"max_idle_time"`
 }
 
 // Redis contains Redis connection configuration.
 type Redis struct {
-	Host     string `koanf:"host"`     // Redis hostname
-	Port     int    `koanf:"port"`     // Redis port
-	Username string `koanf:"username"` // Redis username
-	Password string `koanf:"password"` // Redis password
+	// Redis hostname.
+	Host string `koanf:"host"`
+	// Redis port.
+	Port int `koanf:"port"`
+	// Redis username.
+	Username string `koanf:"username"`
+	// Redis password.
+	Password string `koanf:"password"`
 }
 
 // GeminiAI contains GeminiAI API configuration.
 type GeminiAI struct {
-	APIKey string `koanf:"api_key"` // API key for authentication
-	Model  string `koanf:"model"`   // Model version to use
+	// API key for authentication.
+	APIKey string `koanf:"api_key"`
+	// Model version to use.
+	Model string `koanf:"model"`
 }
 
 // Discord contains Discord bot configuration.
 type Discord struct {
-	Token    string         `koanf:"token"`    // Discord bot token for authentication
-	Sharding ShardingConfig `koanf:"sharding"` // Sharding configuration
+	// Discord bot token for authentication.
+	Token string `koanf:"token"`
+	// Sharding configuration.
+	Sharding ShardingConfig `koanf:"sharding"`
 }
 
 // ShardingConfig contains Discord sharding configuration.
 type ShardingConfig struct {
-	Count      int    `koanf:"count"`       // Number of shards (0 for auto)
-	AutoScale  bool   `koanf:"auto_scale"`  // Enable automatic sharding
-	SplitCount int    `koanf:"split_count"` // Count to split large shards into (when auto_scale is true)
-	ShardIDs   string `koanf:"shard_ids"`   // Comma-separated list of shard IDs to manage (empty for all)
+	// Number of shards (0 for auto).
+	Count int `koanf:"count"`
+	// Enable automatic sharding.
+	AutoScale bool `koanf:"auto_scale"`
+	// Count to split large shards into (when auto_scale is true).
+	SplitCount int `koanf:"split_count"`
+	// Comma-separated list of shard IDs to manage (empty for all).
+	ShardIDs string `koanf:"shard_ids"`
 }
 
 // BatchSizes configures how many items to process in each batch.
 type BatchSizes struct {
-	FriendUsers         int `koanf:"friend_users"`          // Number of friends to process in one batch
-	GroupUsers          int `koanf:"group_users"`           // Number of group members to process in one batch
-	PurgeUsers          int `koanf:"purge_users"`           // Number of users to check for bans in one batch
-	PurgeGroups         int `koanf:"purge_groups"`          // Number of groups to check for bans in one batch
-	TrackGroups         int `koanf:"track_groups"`          // Number of group trackings to process in one batch
-	QueueItems          int `koanf:"queue_items"`           // Number of queue items to process in one batch
-	ThumbnailUsers      int `koanf:"thumbnail_users"`       // Number of users to update thumbnails in one batch
-	ThumbnailGroups     int `koanf:"thumbnail_groups"`      // Number of groups to update thumbnails in one batch
-	OutfitAnalysis      int `koanf:"outfit_analysis"`       // Maximum concurrent AI requests for outfit analysis
-	UserAnalysis        int `koanf:"user_analysis"`         // Maximum concurrent AI requests for user analysis
-	FriendAnalysis      int `koanf:"friend_analysis"`       // Maximum concurrent AI requests for friend analysis
-	UserAnalysisBatch   int `koanf:"user_analysis_batch"`   // Number of users to analyze in one AI request
-	FriendAnalysisBatch int `koanf:"friend_analysis_batch"` // Number of users to analyze in one friend AI request
+	// Number of friends to process in one batch.
+	FriendUsers int `koanf:"friend_users"`
+	// Number of group members to process in one batch.
+	GroupUsers int `koanf:"group_users"`
+	// Number of users to check for bans in one batch.
+	PurgeUsers int `koanf:"purge_users"`
+	// Number of groups to check for bans in one batch.
+	PurgeGroups int `koanf:"purge_groups"`
+	// Number of group trackings to process in one batch.
+	TrackGroups int `koanf:"track_groups"`
+	// Number of queue items to process in one batch.
+	QueueItems int `koanf:"queue_items"`
+	// Number of users to update thumbnails in one batch.
+	ThumbnailUsers int `koanf:"thumbnail_users"`
+	// Number of groups to update thumbnails in one batch.
+	ThumbnailGroups int `koanf:"thumbnail_groups"`
+	// Maximum concurrent AI requests for outfit analysis.
+	OutfitAnalysis int `koanf:"outfit_analysis"`
+	// Maximum concurrent AI requests for user analysis.
+	UserAnalysis int `koanf:"user_analysis"`
+	// Maximum concurrent AI requests for friend analysis.
+	FriendAnalysis int `koanf:"friend_analysis"`
+	// Maximum concurrent AI requests for message analysis.
+	MessageAnalysis int `koanf:"message_analysis"`
+	// Number of users to analyze in one AI request.
+	UserAnalysisBatch int `koanf:"user_analysis_batch"`
+	// Number of users to analyze in one friend AI request.
+	FriendAnalysisBatch int `koanf:"friend_analysis_batch"`
+	// Number of messages to analyze in one AI request.
+	MessageAnalysisBatch int `koanf:"message_analysis_batch"`
 }
 
 // ThresholdLimits configures various thresholds for worker operations.
 type ThresholdLimits struct {
-	FlaggedUsers         int     `koanf:"flagged_users"`           // Maximum number of flagged users before stopping worker
-	MinGroupFlaggedUsers int     `koanf:"min_group_flagged_users"` // Minimum number of flagged users needed to consider flagging a group
-	MinFlaggedPercentage float64 `koanf:"min_flagged_percentage"`  // Minimum percentage of flagged users needed to flag a group
-	MinFlaggedOverride   int     `koanf:"min_flagged_override"`    // Flag group if flagged users count exceeds this value
-	MaxGroupMembersTrack uint64  `koanf:"max_group_members_track"` // Maximum group members before skipping tracking
+	// Maximum number of flagged users before stopping worker.
+	FlaggedUsers int `koanf:"flagged_users"`
+	// Minimum number of flagged users needed to consider flagging a group.
+	MinGroupFlaggedUsers int `koanf:"min_group_flagged_users"`
+	// Minimum percentage of flagged users needed to flag a group.
+	MinFlaggedPercentage float64 `koanf:"min_flagged_percentage"`
+	// Flag group if flagged users count exceeds this value.
+	MinFlaggedOverride int `koanf:"min_flagged_override"`
+	// Maximum group members before skipping tracking.
+	MaxGroupMembersTrack uint64 `koanf:"max_group_members_track"`
+	// Number of messages to accumulate before processing a channel.
+	ChannelProcessThreshold int `koanf:"channel_process_threshold"`
 }
 
 // Proxy contains proxy-related configuration.
 type Proxy struct {
-	DefaultCooldown   int                      `koanf:"default_cooldown"`   // Default cooldown in milliseconds
-	UnhealthyDuration int                      `koanf:"unhealthy_duration"` // Duration to mark proxy as unhealthy in milliseconds
-	Endpoints         map[string]EndpointLimit `koanf:"endpoints"`          // Endpoint-specific cooldowns
+	// Default cooldown in milliseconds.
+	DefaultCooldown int `koanf:"default_cooldown"`
+	// Duration to mark proxy as unhealthy in milliseconds.
+	UnhealthyDuration int `koanf:"unhealthy_duration"`
+	// Endpoint-specific cooldowns.
+	Endpoints map[string]EndpointLimit `koanf:"endpoints"`
 }
 
 // EndpointLimit defines the cooldown period for a specific endpoint.
 type EndpointLimit struct {
-	Pattern  string `koanf:"pattern"`  // URL pattern with placeholders
-	Cooldown int    `koanf:"cooldown"` // Time in milliseconds until next request allowed
+	// URL pattern with placeholders.
+	Pattern string `koanf:"pattern"`
+	// Time in milliseconds until next request allowed.
+	Cooldown int `koanf:"cooldown"`
 }
 
 // Roverse contains roverse proxy configuration.
 type Roverse struct {
-	Domain        string `koanf:"domain"`         // Domain for the roverse proxy service
-	SecretKey     string `koanf:"secret_key"`     // Secret key for authentication
-	MaxConcurrent int64  `koanf:"max_concurrent"` // Maximum concurrent requests
+	// Domain for the roverse proxy service.
+	Domain string `koanf:"domain"`
+	// Secret key for authentication.
+	SecretKey string `koanf:"secret_key"`
+	// Maximum concurrent requests.
+	MaxConcurrent int64 `koanf:"max_concurrent"`
 }
 
 // Uptrace contains Uptrace telemetry configuration.
 type Uptrace struct {
-	DSN               string `koanf:"dsn"`                // Uptrace DSN for telemetry
-	ServiceName       string `koanf:"service_name"`       // Service name for telemetry
-	ServiceVersion    string `koanf:"service_version"`    // Service version for telemetry
-	DeployEnvironment string `koanf:"deploy_environment"` // Deployment environment
+	// Uptrace DSN for telemetry.
+	DSN string `koanf:"dsn"`
+	// Service name for telemetry.
+	ServiceName string `koanf:"service_name"`
+	// Service version for telemetry.
+	ServiceVersion string `koanf:"service_version"`
+	// Deployment environment.
+	DeployEnvironment string `koanf:"deploy_environment"`
 }
 
 // LoadConfig loads the configuration from the specified file.
@@ -256,7 +334,8 @@ func checkConfigVersion(name string, current, expected int) error {
 	}
 	if current != expected {
 		return fmt.Errorf(
-			"%w: %s.toml (got: %d, expected: %d)\nPlease update your config file from: https://github.com/robalyx/rotector/tree/%s/config/%s.toml",
+			"%w: %s.toml (got: %d, expected: %d)\n"+
+				"Please update your config file from: https://github.com/robalyx/rotector/tree/%s/config/%s.toml",
 			ErrConfigVersionMismatch,
 			name,
 			current,

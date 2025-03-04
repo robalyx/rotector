@@ -15,46 +15,46 @@ func NewNumericProcessor() *NumericProcessor {
 	return &NumericProcessor{}
 }
 
-// numericMetadata tracks information about numeric conversions to help
+// NumericMetadata tracks information about numeric conversions to help
 // determine whether values should be converted to integers or remain as strings.
-type numericMetadata struct {
-	// isNumeric indicates if the string represents a numeric value
-	isNumeric bool
-	// isUint64 indicates if the string can be parsed as a uint64
-	isUint64 bool
-	// isInt64 indicates if the string can be parsed as an int64
-	isInt64 bool
-	// isFloat indicates if the string should remain as a float
-	isFloat bool
+type NumericMetadata struct {
+	// IsNumeric indicates if the string represents a numeric value
+	IsNumeric bool
+	// IsUint64 indicates if the string can be parsed as a uint64
+	IsUint64 bool
+	// IsInt64 indicates if the string can be parsed as an int64
+	IsInt64 bool
+	// IsFloat indicates if the string should remain as a float
+	IsFloat bool
 }
 
-// analyzeNumeric examines a string to determine its numeric properties.
-func (p *NumericProcessor) analyzeNumeric(s string) numericMetadata {
-	meta := numericMetadata{}
+// AnalyzeNumeric examines a string to determine its numeric properties.
+func (p *NumericProcessor) AnalyzeNumeric(s string) NumericMetadata {
+	meta := NumericMetadata{}
 
 	// Try parsing as uint64 first (most common case for IDs)
 	if u, err := strconv.ParseUint(s, 10, 64); err == nil {
-		meta.isNumeric = true
-		meta.isUint64 = true
+		meta.IsNumeric = true
+		meta.IsUint64 = true
 		// Check if this is actually a small value that could be an enum
 		if u < 1000 {
 			// Small values might be enums, so we'll mark them for conversion
-			meta.isInt64 = true
+			meta.IsInt64 = true
 		}
 		return meta
 	}
 
 	// Try parsing as int64 next
 	if _, err := strconv.ParseInt(s, 10, 64); err == nil {
-		meta.isNumeric = true
-		meta.isInt64 = true
+		meta.IsNumeric = true
+		meta.IsInt64 = true
 		return meta
 	}
 
 	// Check if it's a float
 	if _, err := strconv.ParseFloat(s, 64); err == nil {
-		meta.isNumeric = true
-		meta.isFloat = true
+		meta.IsNumeric = true
+		meta.IsFloat = true
 	}
 
 	return meta
@@ -93,13 +93,13 @@ func (p *NumericProcessor) processString(v string, hasTypeMetadata bool) any {
 	}
 
 	// When we have type metadata, attempt conversion
-	meta := p.analyzeNumeric(v)
+	meta := p.AnalyzeNumeric(v)
 	switch {
-	case meta.isUint64:
+	case meta.IsUint64:
 		if u, err := strconv.ParseUint(v, 10, 64); err == nil {
 			return u
 		}
-	case meta.isInt64:
+	case meta.IsInt64:
 		if i, err := strconv.ParseInt(v, 10, 64); err == nil {
 			return i
 		}
@@ -120,19 +120,19 @@ func (p *NumericProcessor) processJSONNumber(v json.Number) any {
 
 	// Process json.Number with type information (for backward compatibility)
 	// since json.Number is explicitly marked as numeric in the JSON
-	meta := p.analyzeNumeric(s)
+	meta := p.AnalyzeNumeric(s)
 
 	// Convert based on metadata
 	switch {
-	case meta.isUint64:
+	case meta.IsUint64:
 		if u, err := strconv.ParseUint(s, 10, 64); err == nil {
 			return u
 		}
-	case meta.isInt64:
+	case meta.IsInt64:
 		if i, err := v.Int64(); err == nil {
 			return i
 		}
-	case meta.isFloat:
+	case meta.IsFloat:
 		if f, err := v.Float64(); err == nil {
 			return f
 		}

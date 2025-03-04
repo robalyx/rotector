@@ -59,7 +59,9 @@ func (m *UpdateMenu) Show(_ interfaces.CommonEvent, s *session.Session, _ *pagin
 }
 
 // handleSettingChange processes setting value changes.
-func (m *UpdateMenu) handleSettingChange(event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, customID string, option string) {
+func (m *UpdateMenu) handleSettingChange(
+	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, customID string, option string,
+) {
 	settingType := session.SettingType.Get(s)
 	settingKey := session.SettingCustomID.Get(s)
 	setting := m.getSetting(settingType, settingKey)
@@ -80,7 +82,9 @@ func (m *UpdateMenu) handleSettingChange(event *events.ComponentInteractionCreat
 }
 
 // handleSettingButton processes button interactions.
-func (m *UpdateMenu) handleSettingButton(event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, customID string) {
+func (m *UpdateMenu) handleSettingButton(
+	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, customID string,
+) {
 	// Handle back button
 	split := strings.Split(customID, "_")
 	if len(split) > 1 && split[1] == constants.BackButtonCustomID {
@@ -92,17 +96,17 @@ func (m *UpdateMenu) handleSettingButton(event *events.ComponentInteractionCreat
 	setting := session.SettingValue.Get(s)
 
 	// Handle pagination buttons
-	switch customID {
-	case string(session.ViewerFirstPage), string(session.ViewerPrevPage),
-		string(session.ViewerNextPage), string(session.ViewerLastPage):
-		m.handlePageChange(event, s, r, setting, customID)
+	action := session.ViewerAction(customID)
+	switch action {
+	case session.ViewerFirstPage, session.ViewerPrevPage, session.ViewerNextPage, session.ViewerLastPage:
+		m.handlePageChange(event, s, r, setting, action)
 		return
 	}
 
 	// Handle different setting types
 	switch setting.Type {
 	case enum.SettingTypeID:
-		m.handleIDModal(event, s, r, setting)
+		m.handleIDModal(event, r, setting)
 	case enum.SettingTypeNumber:
 		m.handleNumberModal(event, s, r, setting)
 	case enum.SettingTypeText:
@@ -115,7 +119,9 @@ func (m *UpdateMenu) handleSettingButton(event *events.ComponentInteractionCreat
 }
 
 // handleIDModal handles the modal for ID type settings.
-func (m *UpdateMenu) handleIDModal(event *events.ComponentInteractionCreate, _ *session.Session, r *pagination.Respond, setting *session.Setting) {
+func (m *UpdateMenu) handleIDModal(
+	event *events.ComponentInteractionCreate, r *pagination.Respond, setting *session.Setting,
+) {
 	textInput := discord.NewTextInput("0", discord.TextInputStyleParagraph, setting.Name).
 		WithRequired(true).
 		WithPlaceholder("Enter the user ID to toggle...").
@@ -133,7 +139,9 @@ func (m *UpdateMenu) handleIDModal(event *events.ComponentInteractionCreate, _ *
 }
 
 // handleNumberModal handles the modal for number type settings.
-func (m *UpdateMenu) handleNumberModal(event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, setting *session.Setting) {
+func (m *UpdateMenu) handleNumberModal(
+	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, setting *session.Setting,
+) {
 	textInput := discord.NewTextInput("0", discord.TextInputStyleParagraph, setting.Name).
 		WithRequired(true).
 		WithPlaceholder("Enter a number...").
@@ -152,7 +160,9 @@ func (m *UpdateMenu) handleNumberModal(event *events.ComponentInteractionCreate,
 }
 
 // handleTextModal handles the modal for text type settings.
-func (m *UpdateMenu) handleTextModal(event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, setting *session.Setting) {
+func (m *UpdateMenu) handleTextModal(
+	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, setting *session.Setting,
+) {
 	textInput := discord.NewTextInput("0", discord.TextInputStyleParagraph, setting.Name).
 		WithRequired(true).
 		WithPlaceholder("Enter your description...").
@@ -171,7 +181,10 @@ func (m *UpdateMenu) handleTextModal(event *events.ComponentInteractionCreate, s
 }
 
 // handlePageChange handles pagination for ID and text type settings.
-func (m *UpdateMenu) handlePageChange(event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, setting *session.Setting, customID string) {
+func (m *UpdateMenu) handlePageChange(
+	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond,
+	setting *session.Setting, action session.ViewerAction,
+) {
 	// Calculate pagination first
 	if !m.calculatePagination(s) {
 		return
@@ -181,7 +194,6 @@ func (m *UpdateMenu) handlePageChange(event *events.ComponentInteractionCreate, 
 	totalPages := session.PaginationTotalPages.Get(s)
 
 	// Handle navigation action
-	action := session.ViewerAction(customID)
 	newPage := action.ParsePageAction(s, action, totalPages-1)
 
 	// Update session state
@@ -203,7 +215,9 @@ func (m *UpdateMenu) handlePageChange(event *events.ComponentInteractionCreate, 
 }
 
 // handleSettingModal processes modal submissions.
-func (m *UpdateMenu) handleSettingModal(event *events.ModalSubmitInteractionCreate, s *session.Session, r *pagination.Respond) {
+func (m *UpdateMenu) handleSettingModal(
+	event *events.ModalSubmitInteractionCreate, s *session.Session, r *pagination.Respond,
+) {
 	settingType := session.SettingType.Get(s)
 	settingKey := session.SettingCustomID.Get(s)
 	setting := m.getSetting(settingType, settingKey)

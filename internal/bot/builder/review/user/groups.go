@@ -105,7 +105,6 @@ func (b *GroupsBuilder) getGroupFieldName(index int, group *apiTypes.UserGroupRo
 			fieldName += " ⏳"
 		case enum.GroupTypeCleared:
 			fieldName += " ✅"
-		case enum.GroupTypeUnflagged:
 		}
 
 		// Add locked status if applicable

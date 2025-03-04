@@ -59,7 +59,9 @@ func (m *Menu) Cleanup(s *session.Session) {
 }
 
 // handleButton processes button interactions.
-func (m *Menu) handleButton(event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, customID string) {
+func (m *Menu) handleButton(
+	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, customID string,
+) {
 	switch customID {
 	case constants.BackButtonCustomID:
 		r.NavigateBack(event, s, "")
@@ -86,7 +88,9 @@ func (m *Menu) handleButton(event *events.ComponentInteractionCreate, s *session
 }
 
 // handleModal processes modal submissions.
-func (m *Menu) handleModal(event *events.ModalSubmitInteractionCreate, s *session.Session, r *pagination.Respond) {
+func (m *Menu) handleModal(
+	event *events.ModalSubmitInteractionCreate, s *session.Session, r *pagination.Respond,
+) {
 	if event.Data.CustomID != constants.CaptchaAnswerModalCustomID {
 		return
 	}

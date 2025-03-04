@@ -124,8 +124,8 @@ func getExportConfig(c *cli.Command) (*export.Config, error) {
 		Description:   c.String("description"),
 		HashType:      c.String("hash-type"),
 		Concurrency:   c.Int("concurrency"),
-		Iterations:    uint32(c.Uint("iterations")), //nolint:gosec
-		Memory:        uint32(c.Uint("memory")),     //nolint:gosec
+		Iterations:    uint32(c.Uint("iterations")), //nolint:gosec // -
+		Memory:        uint32(c.Uint("memory")),     //nolint:gosec // -
 	}
 
 	reader := bufio.NewReader(os.Stdin)

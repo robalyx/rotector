@@ -33,7 +33,9 @@ func NewVote(db *bun.DB, activity *ActivityModel, views *MaterializedViewModel, 
 }
 
 // GetUserVoteStats retrieves vote statistics for a Discord user.
-func (v *VoteModel) GetUserVoteStats(ctx context.Context, discordUserID uint64, period enum.LeaderboardPeriod) (*types.VoteAccuracy, error) {
+func (v *VoteModel) GetUserVoteStats(
+	ctx context.Context, discordUserID uint64, period enum.LeaderboardPeriod,
+) (*types.VoteAccuracy, error) {
 	var stats types.VoteAccuracy
 
 	// Try to refresh the materialized view if stale
@@ -72,7 +74,9 @@ func (v *VoteModel) GetUserVoteStats(ctx context.Context, discordUserID uint64, 
 }
 
 // GetLeaderboard retrieves the top voters for a given time period.
-func (v *VoteModel) GetLeaderboard(ctx context.Context, period enum.LeaderboardPeriod, cursor *types.LeaderboardCursor, limit int) ([]*types.VoteAccuracy, *types.LeaderboardCursor, error) {
+func (v *VoteModel) GetLeaderboard(
+	ctx context.Context, period enum.LeaderboardPeriod, cursor *types.LeaderboardCursor, limit int,
+) ([]*types.VoteAccuracy, *types.LeaderboardCursor, error) {
 	var stats []*types.VoteAccuracy
 	var nextCursor *types.LeaderboardCursor
 
@@ -152,7 +156,9 @@ func (v *VoteModel) getUserRank(ctx context.Context, discordUserID uint64, perio
 }
 
 // SaveVote records a new vote from a Discord user.
-func (v *VoteModel) SaveVote(ctx context.Context, targetID uint64, discordUserID uint64, isUpvote bool, voteType enum.VoteType) error {
+func (v *VoteModel) SaveVote(
+	ctx context.Context, targetID uint64, discordUserID uint64, isUpvote bool, voteType enum.VoteType,
+) error {
 	vote := types.Vote{
 		ID:            targetID,
 		DiscordUserID: discordUserID,
@@ -187,7 +193,9 @@ func (v *VoteModel) SaveVote(ctx context.Context, targetID uint64, discordUserID
 }
 
 // VerifyVotes verifies all unverified votes for a target and updates vote statistics.
-func (v *VoteModel) VerifyVotes(ctx context.Context, targetID uint64, wasInappropriate bool, voteType enum.VoteType) error {
+func (v *VoteModel) VerifyVotes(
+	ctx context.Context, targetID uint64, wasInappropriate bool, voteType enum.VoteType,
+) error {
 	// First handle the vote verification in a transaction
 	err := v.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
 		// Use the appropriate model for the query
@@ -242,14 +250,14 @@ func (v *VoteModel) CheckVoteAccuracy(ctx context.Context, discordUserID uint64)
 	}
 
 	// Check if user has enough votes to be evaluated
-	const MinVotesRequired = 10 // Minimum votes before checking accuracy
-	if stats.TotalVotes < MinVotesRequired {
+	const minVotesRequired = 10 // Minimum votes before checking accuracy
+	if stats.TotalVotes < minVotesRequired {
 		return false, nil
 	}
 
 	// Check if accuracy is below threshold
-	const MinAccuracyRequired = 0.40 // 40% minimum accuracy required
-	shouldBan := stats.Accuracy < MinAccuracyRequired
+	const minAccuracyRequired = 0.40 // 40% minimum accuracy required
+	shouldBan := stats.Accuracy < minAccuracyRequired
 	if !shouldBan {
 		return false, nil
 	}

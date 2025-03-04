@@ -15,8 +15,6 @@ import (
 	"github.com/disgoorg/disgo/gateway"
 	"github.com/disgoorg/disgo/sharding"
 	"github.com/disgoorg/snowflake/v2"
-	"go.uber.org/zap"
-
 	"github.com/robalyx/rotector/internal/bot/constants"
 	"github.com/robalyx/rotector/internal/bot/core/pagination"
 	"github.com/robalyx/rotector/internal/bot/core/session"
@@ -41,6 +39,7 @@ import (
 	"github.com/robalyx/rotector/internal/bot/utils"
 	"github.com/robalyx/rotector/internal/common/setup"
 	"github.com/robalyx/rotector/internal/common/storage/database"
+	"go.uber.org/zap"
 )
 
 // Bot handles all the layouts and managers needed for Discord interaction.
@@ -78,8 +77,8 @@ func New(app *setup.App) (*Bot, error) {
 			func(config *sharding.Config) {
 				// Parse shard IDs if specified
 				if app.Config.Bot.Discord.Sharding.ShardIDs != "" {
-					shardIDStrs := strings.Split(app.Config.Bot.Discord.Sharding.ShardIDs, ",")
-					for _, idStr := range shardIDStrs {
+					shardIDStrs := strings.SplitSeq(app.Config.Bot.Discord.Sharding.ShardIDs, ",")
+					for idStr := range shardIDStrs {
 						if id, err := strconv.Atoi(strings.TrimSpace(idStr)); err == nil {
 							sharding.WithShardIDs(id)(config)
 						}

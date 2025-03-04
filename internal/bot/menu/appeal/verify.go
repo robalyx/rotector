@@ -46,7 +46,9 @@ func (m *VerifyMenu) Show(_ interfaces.CommonEvent, s *session.Session, _ *pagin
 }
 
 // handleButton processes button interactions.
-func (m *VerifyMenu) handleButton(event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, customID string) {
+func (m *VerifyMenu) handleButton(
+	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, customID string,
+) {
 	switch customID {
 	case constants.BackButtonCustomID:
 		r.NavigateBack(event, s, "Verification cancelled.")
@@ -56,7 +58,9 @@ func (m *VerifyMenu) handleButton(event *events.ComponentInteractionCreate, s *s
 }
 
 // verifyDescription checks if the user has updated their description with the verification code.
-func (m *VerifyMenu) verifyDescription(event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond) {
+func (m *VerifyMenu) verifyDescription(
+	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond,
+) {
 	userID := session.VerifyUserID.Get(s)
 	expectedCode := session.VerifyCode.Get(s)
 	reason := session.VerifyReason.Get(s)

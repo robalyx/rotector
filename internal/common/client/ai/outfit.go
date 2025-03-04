@@ -28,7 +28,7 @@ import (
 )
 
 const (
-	// OutfitSystemPrompt provides detailed instructions to the AI model for analyzing user outfits
+	// OutfitSystemPrompt provides detailed instructions to the AI model for analyzing user outfits.
 	OutfitSystemPrompt = `You are a Roblox moderator analyzing outfits for predatory behavior targeting minors.
 
 Input format:
@@ -237,7 +237,9 @@ func (a *OutfitAnalyzer) ProcessOutfits(userInfos []*fetcher.Info, flaggedUsers 
 }
 
 // getOutfitThumbnails fetches thumbnail URLs for outfits and organizes them by user.
-func (a *OutfitAnalyzer) getOutfitThumbnails(ctx context.Context, userInfos []*fetcher.Info) (map[uint64][]*apiTypes.Outfit, map[uint64]map[uint64]string) {
+func (a *OutfitAnalyzer) getOutfitThumbnails(
+	ctx context.Context, userInfos []*fetcher.Info,
+) (map[uint64][]*apiTypes.Outfit, map[uint64]map[uint64]string) {
 	// Collect all outfits from all users
 	allOutfits := make([]*apiTypes.Outfit, 0)
 	outfitToUser := make(map[uint64]*fetcher.Info)
@@ -296,7 +298,10 @@ func (a *OutfitAnalyzer) getOutfitThumbnails(ctx context.Context, userInfos []*f
 }
 
 // analyzeUserOutfits handles the analysis of a single user's outfits.
-func (a *OutfitAnalyzer) analyzeUserOutfits(ctx context.Context, info *fetcher.Info, mu *sync.Mutex, flaggedUsers map[uint64]*types.User, outfits []*apiTypes.Outfit, thumbnailMap map[uint64]string) error {
+func (a *OutfitAnalyzer) analyzeUserOutfits(
+	ctx context.Context, info *fetcher.Info, mu *sync.Mutex,
+	flaggedUsers map[uint64]*types.User, outfits []*apiTypes.Outfit, thumbnailMap map[uint64]string,
+) error {
 	// Acquire semaphore before making AI request
 	if err := a.analysisSem.Acquire(ctx, 1); err != nil {
 		return fmt.Errorf("failed to acquire semaphore: %w", err)
@@ -315,7 +320,12 @@ func (a *OutfitAnalyzer) analyzeUserOutfits(ctx context.Context, info *fetcher.I
 		}
 
 		// Prepare prompt with outfit information
-		prompt := fmt.Sprintf("%s\n\nAnalyze outfits for user %q.\nOutfit names: %v", OutfitRequestPrompt, info.Name, outfitNames)
+		prompt := fmt.Sprintf(
+			"%s\n\nAnalyze outfits for user %q.\nOutfit names: %v",
+			OutfitRequestPrompt,
+			info.Name,
+			outfitNames,
+		)
 
 		// Send request to Gemini
 		resp, err := a.outfitModel.GenerateContent(ctx,
@@ -326,11 +336,18 @@ func (a *OutfitAnalyzer) analyzeUserOutfits(ctx context.Context, info *fetcher.I
 			return nil, fmt.Errorf("gemini API error: %w", err)
 		}
 
+		// Check for empty response
 		if len(resp.Candidates) == 0 || resp.Candidates[0].Content == nil || len(resp.Candidates[0].Content.Parts) == 0 {
 			return nil, fmt.Errorf("%w: no response from Gemini", ErrModelResponse)
 		}
 
-		responseText := resp.Candidates[0].Content.Parts[0].(genai.Text)
+		// Parse response from AI
+		responseText, ok := resp.Candidates[0].Content.Parts[0].(genai.Text)
+		if !ok {
+			return nil, fmt.Errorf("%w: unexpected response format from AI", ErrModelResponse)
+		}
+
+		// Parse the JSON response
 		var result OutfitAnalysis
 		if err := sonic.Unmarshal([]byte(responseText), &result); err != nil {
 			return nil, fmt.Errorf("JSON unmarshal error: %w", err)
@@ -392,8 +409,10 @@ func (a *OutfitAnalyzer) analyzeUserOutfits(ctx context.Context, info *fetcher.I
 	return nil
 }
 
-// createOutfitGrid downloads outfit images and creates a grid image
-func (a *OutfitAnalyzer) createOutfitGrid(ctx context.Context, userInfo *fetcher.Info, outfits []*apiTypes.Outfit, thumbnailMap map[uint64]string) (*bytes.Buffer, []string, error) {
+// createOutfitGrid downloads outfit images and creates a grid image.
+func (a *OutfitAnalyzer) createOutfitGrid(
+	ctx context.Context, userInfo *fetcher.Info, outfits []*apiTypes.Outfit, thumbnailMap map[uint64]string,
+) (*bytes.Buffer, []string, error) {
 	// Download outfit images concurrently
 	successfulDownloads, err := a.downloadOutfitImages(ctx, userInfo, outfits, thumbnailMap)
 	if err != nil {
@@ -405,7 +424,9 @@ func (a *OutfitAnalyzer) createOutfitGrid(ctx context.Context, userInfo *fetcher
 }
 
 // downloadOutfitImages concurrently downloads outfit images until we have enough.
-func (a *OutfitAnalyzer) downloadOutfitImages(ctx context.Context, userInfo *fetcher.Info, outfits []*apiTypes.Outfit, thumbnailMap map[uint64]string) ([]DownloadResult, error) {
+func (a *OutfitAnalyzer) downloadOutfitImages(
+	ctx context.Context, userInfo *fetcher.Info, outfits []*apiTypes.Outfit, thumbnailMap map[uint64]string,
+) ([]DownloadResult, error) {
 	// Download current user thumbnail
 	downloads := make([]DownloadResult, 0, MaxOutfits)
 	thumbnailURL := userInfo.ThumbnailURL

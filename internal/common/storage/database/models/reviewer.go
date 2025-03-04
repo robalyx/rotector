@@ -78,7 +78,7 @@ func (r *ReviewerModel) GetReviewerStats(
 		var stats []*types.ReviewerStats
 		err = query.Scan(ctx, &stats)
 		if err != nil {
-			return fmt.Errorf("failed to get reviewer stats: %w", err)
+			return fmt.Errorf("failed to scan reviewer stats: %w", err)
 		}
 
 		// Check if there are more results
@@ -99,5 +99,5 @@ func (r *ReviewerModel) GetReviewerStats(
 		return nil
 	})
 
-	return results, nextCursor, err
+	return results, nextCursor, fmt.Errorf("failed to get reviewer stats: %w", err)
 }

@@ -16,7 +16,8 @@ import (
 const (
 	ChatSystemPrompt = `You are an AI assistant integrated into Rotector.
 	
-Rotector is a third-party review system developed by jaxron for monitoring and reviewing potentially inappropriate content on the Roblox platform.
+Rotector is a third-party review system developed by robalyx.
+Rotector monitors and reviews potentially inappropriate content on the Roblox platform.
 Rotector is not affiliated with or sponsored by Roblox Corporation.
 
 Rotector uses AI techniques to flag suspicious users, and you are here to assist human moderators in:
@@ -61,7 +62,9 @@ func NewChatHandler(genAIClient *genai.Client, logger *zap.Logger) *ChatHandler 
 }
 
 // StreamResponse sends a message to the AI and streams both the response and history through channels.
-func (h *ChatHandler) StreamResponse(ctx context.Context, history []*genai.Content, model enum.ChatModel, message string) (chan string, chan []*genai.Content) {
+func (h *ChatHandler) StreamResponse(
+	ctx context.Context, history []*genai.Content, model enum.ChatModel, message string,
+) (chan string, chan []*genai.Content) {
 	responseChan := make(chan string)
 	historyChan := make(chan []*genai.Content, 1)
 

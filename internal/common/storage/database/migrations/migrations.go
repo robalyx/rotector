@@ -5,4 +5,4 @@ import (
 )
 
 // Migrations holds all database migrations.
-var Migrations = migrate.NewMigrations() //nolint:gochecknoglobals
+var Migrations = migrate.NewMigrations() //nolint:gochecknoglobals // -

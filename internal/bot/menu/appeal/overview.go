@@ -95,7 +95,9 @@ func (m *OverviewMenu) Show(event interfaces.CommonEvent, s *session.Session, r 
 }
 
 // handleSelectMenu processes select menu interactions.
-func (m *OverviewMenu) handleSelectMenu(event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, customID, option string) {
+func (m *OverviewMenu) handleSelectMenu(
+	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, customID, option string,
+) {
 	switch customID {
 	case constants.AppealStatusSelectID:
 		// Parse option to status
@@ -158,7 +160,9 @@ func (m *OverviewMenu) handleSelectMenu(event *events.ComponentInteractionCreate
 }
 
 // handleButton processes button interactions.
-func (m *OverviewMenu) handleButton(event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, customID string) {
+func (m *OverviewMenu) handleButton(
+	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, customID string,
+) {
 	switch customID {
 	case constants.BackButtonCustomID:
 		r.NavigateBack(event, s, "")
@@ -167,7 +171,10 @@ func (m *OverviewMenu) handleButton(event *events.ComponentInteractionCreate, s 
 		r.Reload(event, s, "Appeals refreshed.")
 	case constants.AppealCreateButtonCustomID:
 		m.handleCreateAppeal(event, r)
-	case string(session.ViewerFirstPage), string(session.ViewerPrevPage), string(session.ViewerNextPage), string(session.ViewerLastPage):
+	case string(session.ViewerFirstPage),
+		string(session.ViewerPrevPage),
+		string(session.ViewerNextPage),
+		string(session.ViewerLastPage):
 		m.handlePagination(event, s, r, session.ViewerAction(customID))
 	}
 }
@@ -197,7 +204,9 @@ func (m *OverviewMenu) handleCreateAppeal(event *events.ComponentInteractionCrea
 }
 
 // handlePagination processes page navigation.
-func (m *OverviewMenu) handlePagination(event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, action session.ViewerAction) {
+func (m *OverviewMenu) handlePagination(
+	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, action session.ViewerAction,
+) {
 	switch action {
 	case session.ViewerNextPage:
 		if session.PaginationHasNextPage.Get(s) {
@@ -228,7 +237,9 @@ func (m *OverviewMenu) handlePagination(event *events.ComponentInteractionCreate
 }
 
 // handleModal processes modal submissions.
-func (m *OverviewMenu) handleModal(event *events.ModalSubmitInteractionCreate, s *session.Session, r *pagination.Respond) {
+func (m *OverviewMenu) handleModal(
+	event *events.ModalSubmitInteractionCreate, s *session.Session, r *pagination.Respond,
+) {
 	switch event.Data.CustomID {
 	case constants.AppealModalCustomID:
 		m.handleCreateAppealModalSubmit(event, s, r)
@@ -236,7 +247,9 @@ func (m *OverviewMenu) handleModal(event *events.ModalSubmitInteractionCreate, s
 }
 
 // handleCreateAppealModalSubmit processes the appeal creation form submission.
-func (m *OverviewMenu) handleCreateAppealModalSubmit(event *events.ModalSubmitInteractionCreate, s *session.Session, r *pagination.Respond) {
+func (m *OverviewMenu) handleCreateAppealModalSubmit(
+	event *events.ModalSubmitInteractionCreate, s *session.Session, r *pagination.Respond,
+) {
 	// Get user ID input
 	userIDStr := event.Data.Text(constants.AppealUserInputCustomID)
 
@@ -289,7 +302,7 @@ func (m *OverviewMenu) handleCreateAppealModalSubmit(event *events.ModalSubmitIn
 		return
 	}
 	if hasRejection {
-		r.Cancel(event, s, "This user ID has a rejected appeal in the last 7 days. Please wait before submitting a new appeal.")
+		r.Cancel(event, s, "This user ID has a rejected appeal recently. Please wait before submitting a new appeal.")
 		return
 	}
 

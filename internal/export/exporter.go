@@ -132,7 +132,7 @@ func (e *Exporter) ExportAll(ctx context.Context) error {
 	return nil
 }
 
-// hashRecords converts items to export records with concurrent hashing
+// hashRecords converts items to export records with concurrent hashing.
 func (e *Exporter) hashRecords(items any, salt string, hashType HashType) []*types.ExportRecord {
 	var ids []uint64
 	var reasons []string
@@ -183,7 +183,9 @@ func (e *Exporter) hashRecords(items any, salt string, hashType HashType) []*typ
 }
 
 // getFlaggedData retrieves all flagged and confirmed users and groups from the database.
-func (e *Exporter) getFlaggedData(ctx context.Context) (users []*dbTypes.ReviewUser, groups []*dbTypes.ReviewGroup, err error) {
+func (e *Exporter) getFlaggedData(
+	ctx context.Context,
+) (users []*dbTypes.ReviewUser, groups []*dbTypes.ReviewGroup, err error) {
 	users, err = e.app.DB.Models().Users().GetFlaggedAndConfirmedUsers(ctx)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to get users: %w", err)

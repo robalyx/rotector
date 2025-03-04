@@ -92,15 +92,12 @@ func (b *ReviewBuilder) buildModeEmbed() *discord.EmbedBuilder {
 	switch b.reviewMode {
 	case enum.ReviewModeTraining:
 		mode = "🎓 Training Mode"
-		description += `
-		**You are not an official reviewer.**
-		You may help moderators by downvoting to indicate inappropriate activity. Information is censored and external links are disabled.
-		`
+		description += "**You are not an official reviewer.**\n" +
+			"You may help moderators by downvoting to indicate inappropriate activity.\n" +
+			"Information is censored and external links are disabled."
 	case enum.ReviewModeStandard:
 		mode = "⚠️ Standard Mode"
-		description += `
-		Your actions are recorded and affect the database. Please review carefully before taking action.
-		`
+		description += "Your actions are recorded and affect the database. Please review carefully before taking action."
 	default:
 		mode = "❌ Unknown Mode"
 		description += "Error encountered. Please check your settings."
@@ -130,8 +127,6 @@ func (b *ReviewBuilder) buildReviewBuilder() *discord.EmbedBuilder {
 		status = "⏳ Pending Review"
 	case enum.UserTypeCleared:
 		status = "✅ Cleared"
-	case enum.UserTypeUnflagged:
-		status = "🔄 Unflagged"
 	}
 
 	// Add banned status if applicable
@@ -141,7 +136,7 @@ func (b *ReviewBuilder) buildReviewBuilder() *discord.EmbedBuilder {
 
 	createdAt := fmt.Sprintf("<t:%d:R>", b.user.CreatedAt.Unix())
 	lastUpdated := fmt.Sprintf("<t:%d:R>", b.user.LastUpdated.Unix())
-	confidence := fmt.Sprintf("%.2f", b.user.Confidence)
+	confidence := fmt.Sprintf("%.2f%%", b.user.Confidence*100)
 
 	// Censor reason if needed
 	reason := b.getReasonField()

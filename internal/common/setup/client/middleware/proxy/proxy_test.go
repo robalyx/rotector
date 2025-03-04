@@ -1,12 +1,14 @@
-package proxy
+package proxy_test
 
 import (
 	"testing"
 
+	"github.com/robalyx/rotector/internal/common/setup/client/middleware/proxy"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestGetNormalizedPath(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name     string
 		path     string
@@ -46,7 +48,8 @@ func TestGetNormalizedPath(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := getNormalizedPath(tt.path)
+			t.Parallel()
+			result := proxy.GetNormalizedPath(tt.path)
 			assert.Equal(t, tt.expected, result)
 		})
 	}

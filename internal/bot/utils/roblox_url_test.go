@@ -1,12 +1,14 @@
-package utils
+package utils_test
 
 import (
 	"testing"
 
+	"github.com/robalyx/rotector/internal/bot/utils"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestIsRobloxProfileURL(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name  string
 		input string
@@ -66,13 +68,15 @@ func TestIsRobloxProfileURL(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := IsRobloxProfileURL(tt.input)
+			t.Parallel()
+			got := utils.IsRobloxProfileURL(tt.input)
 			assert.Equal(t, tt.want, got)
 		})
 	}
 }
 
 func TestIsRobloxGroupURL(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name  string
 		input string
@@ -142,13 +146,15 @@ func TestIsRobloxGroupURL(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := IsRobloxGroupURL(tt.input)
+			t.Parallel()
+			got := utils.IsRobloxGroupURL(tt.input)
 			assert.Equal(t, tt.want, got)
 		})
 	}
 }
 
 func TestExtractUserIDFromURL(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name    string
 		input   string
@@ -183,31 +189,32 @@ func TestExtractUserIDFromURL(t *testing.T) {
 			name:    "invalid URL - singular user",
 			input:   "roblox.com/user/123456789",
 			want:    "",
-			wantErr: ErrInvalidProfileURL,
+			wantErr: utils.ErrInvalidProfileURL,
 		},
 		{
 			name:    "invalid URL - wrong domain",
 			input:   "https://example.com/users/123456789",
 			want:    "",
-			wantErr: ErrInvalidProfileURL,
+			wantErr: utils.ErrInvalidProfileURL,
 		},
 		{
 			name:    "empty string",
 			input:   "",
 			want:    "",
-			wantErr: ErrInvalidProfileURL,
+			wantErr: utils.ErrInvalidProfileURL,
 		},
 		{
 			name:    "just ID",
 			input:   "123456789",
 			want:    "",
-			wantErr: ErrInvalidProfileURL,
+			wantErr: utils.ErrInvalidProfileURL,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := ExtractUserIDFromURL(tt.input)
+			t.Parallel()
+			got, err := utils.ExtractUserIDFromURL(tt.input)
 			assert.Equal(t, tt.want, got)
 			assert.ErrorIs(t, err, tt.wantErr)
 		})
@@ -215,6 +222,7 @@ func TestExtractUserIDFromURL(t *testing.T) {
 }
 
 func TestExtractGroupIDFromURL(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name    string
 		input   string
@@ -261,31 +269,32 @@ func TestExtractGroupIDFromURL(t *testing.T) {
 			name:    "invalid URL - singular group",
 			input:   "roblox.com/group/123456789",
 			want:    "",
-			wantErr: ErrInvalidGroupURL,
+			wantErr: utils.ErrInvalidGroupURL,
 		},
 		{
 			name:    "invalid URL - wrong domain",
 			input:   "https://example.com/groups/123456789",
 			want:    "",
-			wantErr: ErrInvalidGroupURL,
+			wantErr: utils.ErrInvalidGroupURL,
 		},
 		{
 			name:    "empty string",
 			input:   "",
 			want:    "",
-			wantErr: ErrInvalidGroupURL,
+			wantErr: utils.ErrInvalidGroupURL,
 		},
 		{
 			name:    "just ID",
 			input:   "123456789",
 			want:    "",
-			wantErr: ErrInvalidGroupURL,
+			wantErr: utils.ErrInvalidGroupURL,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := ExtractGroupIDFromURL(tt.input)
+			t.Parallel()
+			got, err := utils.ExtractGroupIDFromURL(tt.input)
 			assert.Equal(t, tt.want, got)
 			assert.ErrorIs(t, err, tt.wantErr)
 		})

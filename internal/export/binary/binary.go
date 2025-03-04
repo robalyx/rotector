@@ -51,7 +51,7 @@ func (e *Exporter) writeFile(filename string, records []*types.ExportRecord) err
 	}
 	defer file.Close()
 
-	count := uint32(len(records)) //nolint:gosec
+	count := uint32(len(records)) //nolint:gosec // unlikely to overflow
 	if err := binary.Write(file, binary.LittleEndian, count); err != nil {
 		return fmt.Errorf("failed to write record count: %w", err)
 	}
@@ -69,7 +69,7 @@ func (e *Exporter) writeFile(filename string, records []*types.ExportRecord) err
 
 		// Write status length and string
 		statusBytes := []byte(record.Status)
-		statusLen := uint16(len(statusBytes)) //nolint:gosec
+		statusLen := uint16(len(statusBytes)) //nolint:gosec // unlikely to overflow
 		if err := binary.Write(file, binary.LittleEndian, statusLen); err != nil {
 			return fmt.Errorf("failed to write status length: %w", err)
 		}
@@ -79,7 +79,7 @@ func (e *Exporter) writeFile(filename string, records []*types.ExportRecord) err
 
 		// Write reason length and string
 		reasonBytes := []byte(record.Reason)
-		reasonLen := uint16(len(reasonBytes)) //nolint:gosec
+		reasonLen := uint16(len(reasonBytes)) //nolint:gosec // unlikely to overflow
 		if err := binary.Write(file, binary.LittleEndian, reasonLen); err != nil {
 			return fmt.Errorf("failed to write reason length: %w", err)
 		}

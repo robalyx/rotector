@@ -48,7 +48,9 @@ func (m *Menu) Show(_ interfaces.CommonEvent, s *session.Session, _ *pagination.
 }
 
 // handleSelectMenu processes select menu interactions.
-func (m *Menu) handleSelectMenu(event *events.ComponentInteractionCreate, _ *session.Session, r *pagination.Respond, customID, option string) {
+func (m *Menu) handleSelectMenu(
+	event *events.ComponentInteractionCreate, _ *session.Session, r *pagination.Respond, customID, option string,
+) {
 	if customID != constants.ActionSelectMenuCustomID {
 		return
 	}
@@ -76,7 +78,9 @@ func (m *Menu) handleSelectMenu(event *events.ComponentInteractionCreate, _ *ses
 }
 
 // handleButton processes button interactions.
-func (m *Menu) handleButton(event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, customID string) {
+func (m *Menu) handleButton(
+	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, customID string,
+) {
 	switch customID {
 	case constants.BackButtonCustomID:
 		r.NavigateBack(event, s, "")

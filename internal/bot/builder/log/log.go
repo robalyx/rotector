@@ -59,25 +59,46 @@ func (b *Builder) Build() *discord.MessageUpdateBuilder {
 
 	// Add fields for each active query condition
 	if b.guildID != 0 {
-		embed.AddField("Guild ID", fmt.Sprintf("`%s`", utils.CensorString(strconv.FormatUint(b.guildID, 10), b.privacyMode)), true)
+		embed.AddField("Guild ID",
+			fmt.Sprintf("`%s`", utils.CensorString(strconv.FormatUint(b.guildID, 10), b.privacyMode)),
+			true,
+		)
 	}
 	if b.discordID != 0 {
-		embed.AddField("Discord ID", fmt.Sprintf("`%s`", utils.CensorString(strconv.FormatUint(b.discordID, 10), b.privacyMode)), true)
+		embed.AddField("Discord ID",
+			fmt.Sprintf("`%s`", utils.CensorString(strconv.FormatUint(b.discordID, 10), b.privacyMode)),
+			true,
+		)
 	}
 	if b.userID != 0 {
-		embed.AddField("User ID", fmt.Sprintf("`%s`", utils.CensorString(strconv.FormatUint(b.userID, 10), b.privacyMode)), true)
+		embed.AddField("User ID",
+			fmt.Sprintf("`%s`", utils.CensorString(strconv.FormatUint(b.userID, 10), b.privacyMode)),
+			true,
+		)
 	}
 	if b.groupID != 0 {
-		embed.AddField("Group ID", fmt.Sprintf("`%s`", utils.CensorString(strconv.FormatUint(b.groupID, 10), b.privacyMode)), true)
+		embed.AddField("Group ID",
+			fmt.Sprintf("`%s`", utils.CensorString(strconv.FormatUint(b.groupID, 10), b.privacyMode)),
+			true,
+		)
 	}
 	if b.reviewerID != 0 {
-		embed.AddField("Reviewer ID", fmt.Sprintf("`%d`", b.reviewerID), true)
+		embed.AddField("Reviewer ID",
+			fmt.Sprintf("`%d`", b.reviewerID),
+			true,
+		)
 	}
 	if b.activityTypeFilter != enum.ActivityTypeAll {
-		embed.AddField("Activity Type", fmt.Sprintf("`%s`", b.activityTypeFilter), true)
+		embed.AddField("Activity Type",
+			fmt.Sprintf("`%s`", b.activityTypeFilter),
+			true,
+		)
 	}
 	if !b.startDate.IsZero() && !b.endDate.IsZero() {
-		embed.AddField("Date Range", fmt.Sprintf("`%s` to `%s`", b.startDate.Format("2006-01-02"), b.endDate.Format("2006-01-02")), true)
+		embed.AddField("Date Range",
+			fmt.Sprintf("`%s` to `%s`", b.startDate.Format("2006-01-02"), b.endDate.Format("2006-01-02")),
+			true,
+		)
 	}
 
 	// Add log entries with details
@@ -224,8 +245,8 @@ func (b *Builder) buildActivityTypeOptions() []discord.StringSelectMenuOption {
 	otherOptions := []discord.StringSelectMenuOption{
 		discord.NewStringSelectMenuOption("Appeal Submitted", strconv.Itoa(int(enum.ActivityTypeAppealSubmitted))).
 			WithDefault(b.activityTypeFilter == enum.ActivityTypeAppealSubmitted),
-		discord.NewStringSelectMenuOption("Appeal Skipped", strconv.Itoa(int(enum.ActivityTypeAppealSkipped))).
-			WithDefault(b.activityTypeFilter == enum.ActivityTypeAppealSkipped),
+		discord.NewStringSelectMenuOption("Appeal Claimed", strconv.Itoa(int(enum.ActivityTypeAppealClaimed))).
+			WithDefault(b.activityTypeFilter == enum.ActivityTypeAppealClaimed),
 		discord.NewStringSelectMenuOption("Appeal Accepted", strconv.Itoa(int(enum.ActivityTypeAppealAccepted))).
 			WithDefault(b.activityTypeFilter == enum.ActivityTypeAppealAccepted),
 		discord.NewStringSelectMenuOption("Appeal Rejected", strconv.Itoa(int(enum.ActivityTypeAppealRejected))).

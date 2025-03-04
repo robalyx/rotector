@@ -1,10 +1,12 @@
-package sqlite
+package sqlite_test
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
 
+	exportSQLite "github.com/robalyx/rotector/internal/export/sqlite"
 	"github.com/robalyx/rotector/internal/export/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -13,7 +15,8 @@ import (
 )
 
 // verifySQLiteFile reads a SQLite database file and verifies its contents match the expected records.
-func verifySQLiteFile(t *testing.T, filepath string, tableName string, expectedRecords []*types.ExportRecord) {
+func verifySQLiteFile(t *testing.T, filepath, tableName string, expectedRecords []*types.ExportRecord) {
+	t.Helper()
 	// Open database
 	conn, err := sqlite.OpenConn(filepath, sqlite.OpenReadOnly)
 	require.NoError(t, err)
@@ -21,17 +24,21 @@ func verifySQLiteFile(t *testing.T, filepath string, tableName string, expectedR
 
 	// Query all records
 	var records []*types.ExportRecord
-	err = sqlitex.ExecuteTransient(conn, "SELECT hash, status, reason, confidence FROM "+tableName+" ORDER BY hash", &sqlitex.ExecOptions{
-		ResultFunc: func(stmt *sqlite.Stmt) error {
-			records = append(records, &types.ExportRecord{
-				Hash:       stmt.ColumnText(0),
-				Status:     stmt.ColumnText(1),
-				Reason:     stmt.ColumnText(2),
-				Confidence: stmt.ColumnFloat(3),
-			})
-			return nil
+	err = sqlitex.ExecuteTransient(
+		conn,
+		fmt.Sprintf("SELECT hash, status, reason, confidence FROM %s ORDER BY hash", tableName),
+		&sqlitex.ExecOptions{
+			ResultFunc: func(stmt *sqlite.Stmt) error {
+				records = append(records, &types.ExportRecord{
+					Hash:       stmt.ColumnText(0),
+					Status:     stmt.ColumnText(1),
+					Reason:     stmt.ColumnText(2),
+					Confidence: stmt.ColumnFloat(3),
+				})
+				return nil
+			},
 		},
-	})
+	)
 	require.NoError(t, err)
 
 	// Verify record count
@@ -42,12 +49,12 @@ func verifySQLiteFile(t *testing.T, filepath string, tableName string, expectedR
 		assert.Equal(t, expected.Hash, records[i].Hash)
 		assert.Equal(t, expected.Status, records[i].Status)
 		assert.Equal(t, expected.Reason, records[i].Reason)
-		assert.Equal(t, expected.Confidence, records[i].Confidence)
+		assert.InEpsilon(t, expected.Confidence, records[i].Confidence, 0.01)
 	}
 }
 
 func TestExporter_Export(t *testing.T) {
-	tempDir := t.TempDir()
+	t.Parallel()
 
 	tests := []struct {
 		name         string
@@ -135,14 +142,17 @@ func TestExporter_Export(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			tempDir := t.TempDir()
+
 			// Create new exporter
-			e := New(tempDir)
+			e := exportSQLite.New(tempDir)
 
 			// Perform export
 			err := e.Export(tt.userRecords, tt.groupRecords)
 
 			if tt.wantErr {
-				assert.Error(t, err)
+				require.Error(t, err)
 				return
 			}
 
@@ -162,6 +172,7 @@ func TestExporter_Export(t *testing.T) {
 }
 
 func TestExporter_ExistingFiles(t *testing.T) {
+	t.Parallel()
 	tempDir := t.TempDir()
 
 	// Create existing files
@@ -171,7 +182,7 @@ func TestExporter_ExistingFiles(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	e := New(tempDir)
+	e := exportSQLite.New(tempDir)
 
 	records := []*types.ExportRecord{
 		{
@@ -192,8 +203,9 @@ func TestExporter_ExistingFiles(t *testing.T) {
 }
 
 func TestExporter_DatabaseSchema(t *testing.T) {
+	t.Parallel()
 	tempDir := t.TempDir()
-	e := New(tempDir)
+	e := exportSQLite.New(tempDir)
 
 	// Create a test record
 	records := []*types.ExportRecord{

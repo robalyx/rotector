@@ -111,7 +111,9 @@ func (r *TrackingModel) PurgeOldTrackings(ctx context.Context, cutoffDate time.T
 
 // GetGroupTrackingsToCheck finds groups that haven't been checked recently
 // with priority for groups with more flagged users.
-func (r *TrackingModel) GetGroupTrackingsToCheck(ctx context.Context, batchSize int, minFlaggedUsers int, minFlaggedOverride int) (map[uint64][]uint64, error) {
+func (r *TrackingModel) GetGroupTrackingsToCheck(
+	ctx context.Context, batchSize int, minFlaggedUsers int, minFlaggedOverride int,
+) (map[uint64][]uint64, error) {
 	result := make(map[uint64][]uint64)
 
 	now := time.Now()
@@ -127,7 +129,8 @@ func (r *TrackingModel) GetGroupTrackingsToCheck(ctx context.Context, batchSize 
 			Column("id").
 			Where("is_flagged = FALSE").
 			Where("cardinality(flagged_users) >= ?", minFlaggedUsers).
-			Where("(last_checked < ? AND cardinality(flagged_users) >= ?) OR (last_checked < ? AND cardinality(flagged_users) >= ? / 2)",
+			Where("(last_checked < ? AND cardinality(flagged_users) >= ?) OR "+
+				"(last_checked < ? AND cardinality(flagged_users) >= ? / 2)",
 				tenMinutesAgo, minFlaggedOverride,
 				oneMinuteAgo, minFlaggedOverride).
 			OrderExpr("cardinality(flagged_users) DESC").

@@ -1,12 +1,14 @@
-package utils
+package utils_test
 
 import (
 	"testing"
 
+	"github.com/robalyx/rotector/internal/bot/utils"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestFormatNumber(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name string
 		n    uint64
@@ -46,7 +48,8 @@ func TestFormatNumber(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := FormatNumber(tt.n)
+			t.Parallel()
+			got := utils.FormatNumber(tt.n)
 			assert.Equal(t, tt.want, got)
 		})
 	}

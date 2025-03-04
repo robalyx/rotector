@@ -1,13 +1,15 @@
-package utils
+package utils_test
 
 import (
 	"strings"
 	"testing"
 
+	"github.com/robalyx/rotector/internal/bot/utils"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestGenerateRandomWords(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name  string
 		count int
@@ -28,7 +30,8 @@ func TestGenerateRandomWords(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := GenerateRandomWords(tt.count)
+			t.Parallel()
+			got := utils.GenerateRandomWords(tt.count)
 			words := strings.Split(got, " ")
 
 			if tt.count == 0 {

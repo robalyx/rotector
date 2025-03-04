@@ -47,7 +47,9 @@ func (m *StatusMenu) Show(event interfaces.CommonEvent, s *session.Session, r *p
 	// Check if processing is complete
 	if err == nil && status == queue.StatusComplete {
 		// Check if user was flagged after recheck
-		user, err := m.layout.db.Models().Users().GetUserByID(context.Background(), strconv.FormatUint(userID, 10), types.UserFieldAll)
+		user, err := m.layout.db.Models().Users().GetUserByID(
+			context.Background(), strconv.FormatUint(userID, 10), types.UserFieldAll,
+		)
 		if err != nil {
 			if errors.Is(err, types.ErrUserNotFound) {
 				r.NavigateBack(event, s, "User was not flagged by AI after recheck.")
@@ -88,7 +90,9 @@ func (m *StatusMenu) Show(event interfaces.CommonEvent, s *session.Session, r *p
 }
 
 // handleButton processes refresh and abort button clicks.
-func (m *StatusMenu) handleButton(event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, customID string) {
+func (m *StatusMenu) handleButton(
+	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, customID string,
+) {
 	switch customID {
 	case constants.RefreshButtonCustomID:
 		r.Reload(event, s, "")

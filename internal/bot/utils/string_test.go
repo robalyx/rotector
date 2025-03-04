@@ -1,12 +1,14 @@
-package utils
+package utils_test
 
 import (
 	"testing"
 
+	"github.com/robalyx/rotector/internal/bot/utils"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestTruncateString(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name      string
 		input     string
@@ -35,13 +37,15 @@ func TestTruncateString(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := TruncateString(tt.input, tt.maxLength)
+			t.Parallel()
+			got := utils.TruncateString(tt.input, tt.maxLength)
 			assert.Equal(t, tt.want, got)
 		})
 	}
 }
 
 func TestFormatString(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name  string
 		input string
@@ -66,13 +70,15 @@ func TestFormatString(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := FormatString(tt.input)
+			t.Parallel()
+			got := utils.FormatString(tt.input)
 			assert.Equal(t, tt.want, got)
 		})
 	}
 }
 
 func TestCensorString(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name         string
 		input        string
@@ -101,13 +107,15 @@ func TestCensorString(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := CensorString(tt.input, tt.streamerMode)
+			t.Parallel()
+			got := utils.CensorString(tt.input, tt.streamerMode)
 			assert.Equal(t, tt.want, got)
 		})
 	}
 }
 
 func TestCensorStringsInText(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name         string
 		text         string
@@ -140,7 +148,8 @@ func TestCensorStringsInText(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := CensorStringsInText(tt.text, tt.streamerMode, tt.targets...)
+			t.Parallel()
+			got := utils.CensorStringsInText(tt.text, tt.streamerMode, tt.targets...)
 			assert.Equal(t, tt.want, got)
 		})
 	}

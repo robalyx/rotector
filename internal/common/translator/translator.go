@@ -66,12 +66,12 @@ func (t *Translator) Translate(ctx context.Context, input, sourceLang, targetLan
 				continue
 			}
 
-			if isMorseFormat(segment) {
+			if IsMorseFormat(segment) {
 				result.WriteString(t.TranslateMorse(segment))
 				continue
 			}
 
-			if isBinaryFormat(segment) {
+			if IsBinaryFormat(segment) {
 				if translated, err := t.TranslateBinary(segment); err == nil {
 					result.WriteString(translated)
 					continue
@@ -104,10 +104,10 @@ func splitIntoSegments(line string) []string {
 	for i, word := range words {
 		// Compare current and previous word formats directly
 		if i > 0 {
-			prevIsMorse := isMorseFormat(words[i-1])
-			prevIsBinary := isBinaryFormat(words[i-1])
-			currIsMorse := isMorseFormat(word)
-			currIsBinary := isBinaryFormat(word)
+			prevIsMorse := IsMorseFormat(words[i-1])
+			prevIsBinary := IsBinaryFormat(words[i-1])
+			currIsMorse := IsMorseFormat(word)
+			currIsBinary := IsBinaryFormat(word)
 
 			if (prevIsMorse != currIsMorse || prevIsBinary != currIsBinary) && currentSegment.Len() > 0 {
 				segments = append(segments, strings.TrimSpace(currentSegment.String()))

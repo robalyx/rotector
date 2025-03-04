@@ -2,6 +2,7 @@ package guild
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -14,27 +15,31 @@ import (
 
 // ScanBuilder creates the visual layout for the guild scan interface.
 type ScanBuilder struct {
-	userGuilds      map[uint64][]*types.UserGuildInfo
-	filteredUsers   map[uint64][]*types.UserGuildInfo
-	guildNames      map[uint64]string
-	topGuilds       []*types.GuildCount
-	page            int
-	total           int
-	minGuilds       int
-	minJoinDuration time.Duration
+	scanType          string
+	userGuilds        map[uint64][]*types.UserGuildInfo
+	messageSummaries  map[uint64]*types.InappropriateUserSummary
+	filteredUsers     map[uint64][]*types.UserGuildInfo
+	filteredSummaries map[uint64]*types.InappropriateUserSummary
+	guildNames        map[uint64]string
+	page              int
+	total             int
+	minGuilds         int
+	minJoinDuration   time.Duration
 }
 
 // NewScanBuilder creates a new scan builder.
 func NewScanBuilder(s *session.Session) *ScanBuilder {
 	return &ScanBuilder{
-		userGuilds:      session.GuildScanUserGuilds.Get(s),
-		filteredUsers:   session.GuildScanFilteredUsers.Get(s),
-		guildNames:      session.GuildScanGuildNames.Get(s),
-		topGuilds:       session.GuildScanTopGuilds.Get(s),
-		page:            session.PaginationPage.Get(s),
-		total:           session.PaginationTotalItems.Get(s),
-		minGuilds:       session.GuildScanMinGuilds.Get(s),
-		minJoinDuration: session.GuildScanMinJoinDuration.Get(s),
+		scanType:          session.GuildScanType.Get(s),
+		userGuilds:        session.GuildScanUserGuilds.Get(s),
+		messageSummaries:  session.GuildScanMessageSummaries.Get(s),
+		filteredUsers:     session.GuildScanFilteredUsers.Get(s),
+		filteredSummaries: session.GuildScanFilteredSummaries.Get(s),
+		guildNames:        session.GuildScanGuildNames.Get(s),
+		page:              session.PaginationPage.Get(s),
+		total:             session.PaginationTotalItems.Get(s),
+		minGuilds:         session.GuildScanMinGuilds.Get(s),
+		minJoinDuration:   session.GuildScanMinJoinDuration.Get(s),
 	}
 }
 
@@ -45,25 +50,36 @@ func (b *ScanBuilder) Build() *discord.MessageUpdateBuilder {
 
 	// Build the embeds
 	infoEmbed := b.buildInfoEmbed()
-	summaryEmbed := b.buildSummaryEmbed()
+	warningEmbed := b.buildWarningEmbed()
 	resultsEmbed := b.buildResultsEmbed(totalPages)
 
 	// Build the components
 	components := b.buildComponents(totalPages)
 
 	return discord.NewMessageUpdateBuilder().
-		SetEmbeds(infoEmbed.Build(), summaryEmbed.Build(), resultsEmbed.Build()).
+		SetEmbeds(infoEmbed.Build(), warningEmbed.Build(), resultsEmbed.Build()).
 		AddContainerComponents(components...)
 }
 
 // buildInfoEmbed creates the embed showing active filters and requirements.
 func (b *ScanBuilder) buildInfoEmbed() *discord.EmbedBuilder {
+	var totalUsers int
+	var filteredUsers int
+
+	if b.scanType == constants.GuildScanTypeMessages {
+		totalUsers = len(b.messageSummaries)
+		filteredUsers = len(b.filteredSummaries)
+	} else {
+		totalUsers = len(b.userGuilds)
+		filteredUsers = len(b.filteredUsers)
+	}
+
 	description := fmt.Sprintf(
-		"These filters determine which users will be included in the ban operation.\n\n"+
+		"Filters determine which users will be included in the ban operation.\n\n"+
 			"Total flagged users: `%d`\n"+
 			"Users meeting filter criteria: `%d`",
-		len(b.userGuilds),
-		len(b.filteredUsers),
+		totalUsers,
+		filteredUsers,
 	)
 
 	filterEmbed := discord.NewEmbedBuilder().
@@ -71,20 +87,40 @@ func (b *ScanBuilder) buildInfoEmbed() *discord.EmbedBuilder {
 		SetDescription(description).
 		SetColor(0x3498DB) // Blue color for filter embed
 
-	// Add guilds filter information
-	filterText := fmt.Sprintf("Minimum Guilds: `%d` (Users must appear in at least this many flagged guilds)", b.minGuilds)
+	// Build filter text
+	var filterParts []string
 
-	// Add join duration information if set
-	minJoinDuration := b.minJoinDuration
-	if minJoinDuration > 0 {
-		filterText += fmt.Sprintf("\nMinimum Join Duration: `%s` (Users must be in guilds for at least this long)", utils.FormatDuration(minJoinDuration))
+	// Add guilds filter information
+	if b.scanType == constants.GuildScanTypeCondo && b.minGuilds > 1 {
+		filterParts = append(filterParts, fmt.Sprintf(
+			"Minimum Guilds: `%d` (Users must appear in at least this many flagged guilds)",
+			b.minGuilds,
+		))
 	}
 
-	filterEmbed.AddField(
-		"Filters",
-		filterText,
-		false,
-	)
+	// Add join duration information
+	if b.minJoinDuration > 0 {
+		if b.scanType == constants.GuildScanTypeMessages {
+			filterParts = append(filterParts, fmt.Sprintf(
+				"Minimum Message Age: `%s` (Only show messages older than this)",
+				utils.FormatDuration(b.minJoinDuration),
+			))
+		} else {
+			filterParts = append(filterParts, fmt.Sprintf(
+				"Minimum Join Duration: `%s` (Users must be in guilds for at least this long)",
+				utils.FormatDuration(b.minJoinDuration),
+			))
+		}
+	}
+
+	// Add filters field if we have any active filters
+	if len(filterParts) > 0 {
+		filterEmbed.AddField(
+			"Active Filters",
+			strings.Join(filterParts, "\n"),
+			false,
+		)
+	}
 
 	// Add permission requirements
 	filterEmbed.AddField(
@@ -98,44 +134,45 @@ func (b *ScanBuilder) buildInfoEmbed() *discord.EmbedBuilder {
 	return filterEmbed
 }
 
-// buildSummaryEmbed creates the embed showing summary statistics about flagged guilds.
-func (b *ScanBuilder) buildSummaryEmbed() *discord.EmbedBuilder {
-	summaryEmbed := discord.NewEmbedBuilder().
-		SetTitle("Guilds Summary").
-		SetDescription("Most common flagged guilds found in this scan.").
-		SetColor(0xE67E22) // Orange color for summary embed
+// buildWarningEmbed creates the warning embed based on scan type.
+func (b *ScanBuilder) buildWarningEmbed() *discord.EmbedBuilder {
+	warningEmbed := discord.NewEmbedBuilder()
 
-	// Add top 5 guilds to summary embed
-	if len(b.topGuilds) > 0 {
-		// Show top 5 guilds
-		topCount := min(5, len(b.topGuilds))
-
-		summaryContent := ""
-		for i := range topCount {
-			gc := b.topGuilds[i]
-			guildName := b.guildNames[gc.ServerID]
-			if guildName == "" {
-				guildName = "Unknown Server"
-			}
-
-			summaryContent += fmt.Sprintf("- **%s**: %d users\n", guildName, gc.Count)
-		}
-
-		summaryEmbed.AddField("Top Flagged Guilds", summaryContent, false)
-
-		// Add recommendation
-		if b.minGuilds == 1 && len(b.topGuilds) > 3 {
-			summaryEmbed.AddField(
+	if b.scanType == constants.GuildScanTypeCondo {
+		// Warning for condo server scan
+		warningEmbed.SetTitle("⚠️ Warning: Less Reliable Method").
+			SetDescription(
+				"You are using the server membership scan method, which is less reliable for identifying inappropriate users. "+
+					"Many users may be in these servers without participating in inappropriate activities.",
+			).
+			SetColor(0xFF0000). // Red color for warning
+			AddField(
 				"Recommendation",
-				"Consider increasing the minimum guilds filter to reduce false positives. Users in multiple flagged guilds are more likely to be inappropriate.",
+				"Use the 'Ban Users with Inappropriate Messages' option instead for more accurate results.",
+				false,
+			)
+
+		// Add recommendation if there are many flagged guilds
+		if b.minGuilds == 1 && len(b.guildNames) > 3 {
+			warningEmbed.AddField(
+				"Filter Recommendation",
+				"Consider increasing the minimum guilds filter to reduce false positives. "+
+					"Users in multiple flagged servers are more likely to be inappropriate.",
 				false,
 			)
 		}
 	} else {
-		summaryEmbed.AddField("No Flagged Guilds Found", "No users match the current filter criteria.", false)
+		// Info for message scan
+		warningEmbed.SetTitle("💬 Message-Based Scan").
+			SetDescription("You are using the recommended message-based scan method.").
+			SetColor(0x00FF00). // Green color for info
+			AddField("About This Method",
+				"This scan identifies users based on their actual inappropriate messages, "+
+					"providing more accurate results than server membership alone.",
+				false)
 	}
 
-	return summaryEmbed
+	return warningEmbed
 }
 
 // buildResultsEmbed creates the embed showing detailed user results for the current page.
@@ -144,20 +181,25 @@ func (b *ScanBuilder) buildResultsEmbed(totalPages int) *discord.EmbedBuilder {
 		SetTitle(fmt.Sprintf("Scan Results (Page %d/%d)", b.page+1, totalPages)).
 		SetColor(constants.DefaultEmbedColor)
 
-	// Only add user fields if there are filtered results
-	if len(b.filteredUsers) > 0 {
-		// Add paginated user results
+	if b.scanType == constants.GuildScanTypeMessages {
+		// Show message scan results
+		if len(b.filteredSummaries) > 0 {
+			b.addPaginatedMessageResults(resultsEmbed)
+			resultsEmbed.SetFooter("⚠️ Review the list carefully before confirming bans", "")
+			return resultsEmbed
+		}
+	} else if len(b.filteredUsers) > 0 {
+		// Show condo scan results
 		b.addPaginatedUserResults(resultsEmbed)
-
-		// Add warning footer
 		resultsEmbed.SetFooter("⚠️ Review the list carefully before confirming bans", "")
-	} else {
-		resultsEmbed.AddField(
-			"No Users Match Filter Criteria",
-			"Adjust your filters to include more users in the ban operation.",
-			false,
-		)
+		return resultsEmbed
 	}
+
+	resultsEmbed.AddField(
+		"No Users Match Filter Criteria",
+		"Adjust your filters to include more users in the ban operation.",
+		false,
+	)
 
 	return resultsEmbed
 }
@@ -195,7 +237,7 @@ func (b *ScanBuilder) addPaginatedUserResults(embed *discord.EmbedBuilder) {
 			guild := guilds[j]
 			guildName := b.guildNames[guild.ServerID]
 			if guildName == "" {
-				guildName = "Unknown Server"
+				guildName = constants.UnknownServer
 			}
 
 			joinedAgo := utils.FormatTimeAgo(guild.JoinedAt)
@@ -225,6 +267,48 @@ func (b *ScanBuilder) addPaginatedUserResults(embed *discord.EmbedBuilder) {
 	}
 }
 
+// addPaginatedMessageResults adds message summary entries to the results embed for the current page.
+func (b *ScanBuilder) addPaginatedMessageResults(embed *discord.EmbedBuilder) {
+	// Convert map to slice for pagination
+	type summaryEntry struct {
+		userID  uint64
+		summary *types.InappropriateUserSummary
+	}
+
+	summaries := make([]summaryEntry, 0, len(b.filteredSummaries))
+	for userID, summary := range b.filteredSummaries {
+		summaries = append(summaries, summaryEntry{
+			userID:  userID,
+			summary: summary,
+		})
+	}
+
+	// Sort by message count descending
+	sort.Slice(summaries, func(i, j int) bool {
+		return summaries[i].summary.MessageCount > summaries[j].summary.MessageCount
+	})
+
+	// Calculate page boundaries
+	start := b.page * constants.GuildScanUsersPerPage
+	end := min(start+constants.GuildScanUsersPerPage, len(summaries))
+
+	// Add fields for each user
+	for i, entry := range summaries[start:end] {
+		content := fmt.Sprintf("<@%d>\nInappropriate Messages: `%d`\nLast Detected: <t:%d:R>\nReason: `%s`",
+			entry.userID,
+			entry.summary.MessageCount,
+			entry.summary.LastDetected.Unix(),
+			entry.summary.Reason,
+		)
+
+		embed.AddField(
+			fmt.Sprintf("User %d", start+i+1),
+			content,
+			false,
+		)
+	}
+}
+
 // buildComponents creates the interactive components for the scan interface.
 func (b *ScanBuilder) buildComponents(totalPages int) []discord.ContainerComponent {
 	// Add join duration option with appropriate description
@@ -234,11 +318,22 @@ func (b *ScanBuilder) buildComponents(totalPages int) []discord.ContainerCompone
 	}
 
 	// Create filter dropdown options
-	filterOptions := []discord.StringSelectMenuOption{
-		discord.NewStringSelectMenuOption("Minimum Guilds", constants.GuildScanMinGuildsOption).
-			WithDescription(fmt.Sprintf("Current: %d", b.minGuilds)),
-		discord.NewStringSelectMenuOption("Minimum Join Duration", constants.GuildScanJoinDurationOption).
-			WithDescription(joinDurationDesc),
+	var filterOptions []discord.StringSelectMenuOption
+
+	if b.scanType == constants.GuildScanTypeMessages {
+		// Message scan filters
+		filterOptions = []discord.StringSelectMenuOption{
+			discord.NewStringSelectMenuOption("Minimum Message Age", constants.GuildScanJoinDurationOption).
+				WithDescription(joinDurationDesc),
+		}
+	} else {
+		// Condo scan filters
+		filterOptions = []discord.StringSelectMenuOption{
+			discord.NewStringSelectMenuOption("Minimum Guilds", constants.GuildScanMinGuildsOption).
+				WithDescription(fmt.Sprintf("Current: %d", b.minGuilds)),
+			discord.NewStringSelectMenuOption("Minimum Join Duration", constants.GuildScanJoinDurationOption).
+				WithDescription(joinDurationDesc),
+		}
 	}
 
 	return []discord.ContainerComponent{
@@ -258,7 +353,12 @@ func (b *ScanBuilder) buildComponents(totalPages int) []discord.ContainerCompone
 		discord.NewActionRow(
 			discord.NewDangerButton("Reset Filters", constants.ClearFiltersButtonCustomID),
 			discord.NewDangerButton("Confirm Bans", constants.ConfirmGuildBansButtonCustomID).
-				WithDisabled(len(b.filteredUsers) == 0),
+				WithDisabled(func() bool {
+					if b.scanType == constants.GuildScanTypeMessages {
+						return len(b.filteredSummaries) == 0
+					}
+					return len(b.filteredUsers) == 0
+				}()),
 		),
 	}
 }

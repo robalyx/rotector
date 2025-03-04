@@ -41,7 +41,8 @@ func (b *Builder) Build() *discord.MessageUpdateBuilder {
 	// Create embeds
 	embedBuilders := []*discord.EmbedBuilder{discord.NewEmbedBuilder().
 		SetTitle("⚠️ AI Chat - Experimental Feature").
-		SetDescription("This chat feature is experimental and may not work as expected. Chat histories are stored temporarily and will be cleared when your session expires.").
+		SetDescription("This chat feature is experimental and may not work as expected. " +
+			"Chat histories are stored temporarily and will be cleared when your session expires.").
 		SetColor(constants.DefaultEmbedColor)}
 
 	// Calculate page boundaries (showing latest messages first)
@@ -75,7 +76,10 @@ func (b *Builder) Build() *discord.MessageUpdateBuilder {
 			SetColor(constants.DefaultEmbedColor)
 
 		// Add a message showing that context is ready
-		b.addPaddedMessage(contextEmbed, fmt.Sprintf("User (%d)", len(b.history.Messages)/2+1), "📋 [Context information ready]", true)
+		b.addPaddedMessage(
+			contextEmbed, fmt.Sprintf("User (%d)", len(b.history.Messages)/2+1),
+			"📋 [Context information ready]", true,
+		)
 
 		embedBuilders = append(embedBuilders, contextEmbed)
 	}

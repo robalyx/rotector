@@ -82,15 +82,20 @@ func (m *GroupsMenu) Show(event interfaces.CommonEvent, s *session.Session, r *p
 }
 
 // sortGroupsByStatus sorts groups into categories based on their status.
-func (m *GroupsMenu) sortGroupsByStatus(groups []*apiTypes.UserGroupRoles, flaggedGroups map[uint64]*types.ReviewGroup) []*apiTypes.UserGroupRoles {
+func (m *GroupsMenu) sortGroupsByStatus(
+	groups []*apiTypes.UserGroupRoles, flaggedGroups map[uint64]*types.ReviewGroup,
+) []*apiTypes.UserGroupRoles {
 	// Group groups by their status
 	groupedGroups := make(map[enum.GroupType][]*apiTypes.UserGroupRoles)
+	var unflaggedGroups []*apiTypes.UserGroupRoles
+
+	// Separate flagged and unflagged groups
 	for _, group := range groups {
-		status := enum.GroupTypeUnflagged
 		if reviewGroup, exists := flaggedGroups[group.Group.ID]; exists {
-			status = reviewGroup.Status
+			groupedGroups[reviewGroup.Status] = append(groupedGroups[reviewGroup.Status], group)
+		} else {
+			unflaggedGroups = append(unflaggedGroups, group)
 		}
-		groupedGroups[status] = append(groupedGroups[status], group)
 	}
 
 	// Define status priority order
@@ -98,7 +103,6 @@ func (m *GroupsMenu) sortGroupsByStatus(groups []*apiTypes.UserGroupRoles, flagg
 		enum.GroupTypeConfirmed,
 		enum.GroupTypeFlagged,
 		enum.GroupTypeCleared,
-		enum.GroupTypeUnflagged,
 	}
 
 	// Combine groups in priority order
@@ -107,11 +111,16 @@ func (m *GroupsMenu) sortGroupsByStatus(groups []*apiTypes.UserGroupRoles, flagg
 		sortedGroups = append(sortedGroups, groupedGroups[status]...)
 	}
 
+	// Append unflagged groups last
+	sortedGroups = append(sortedGroups, unflaggedGroups...)
+
 	return sortedGroups
 }
 
 // handlePageNavigation processes navigation button clicks.
-func (m *GroupsMenu) handlePageNavigation(event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, customID string) {
+func (m *GroupsMenu) handlePageNavigation(
+	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, customID string,
+) {
 	action := session.ViewerAction(customID)
 	switch action {
 	case session.ViewerFirstPage, session.ViewerPrevPage, session.ViewerNextPage, session.ViewerLastPage:
@@ -123,10 +132,12 @@ func (m *GroupsMenu) handlePageNavigation(event *events.ComponentInteractionCrea
 
 		session.PaginationPage.Set(s, page)
 		r.Reload(event, s, "")
+		return
+	}
 
+	switch customID {
 	case constants.BackButtonCustomID:
 		r.NavigateBack(event, s, "")
-
 	default:
 		m.layout.logger.Warn("Invalid groups viewer action", zap.String("action", string(action)))
 		r.Error(event, "Invalid interaction.")

@@ -26,7 +26,9 @@ type GroupModel struct {
 
 // NewGroup creates a GroupModel with database access for
 // storing and retrieving group information.
-func NewGroup(db *bun.DB, activity *ActivityModel, reputation *ReputationModel, votes *VoteModel, logger *zap.Logger) *GroupModel {
+func NewGroup(
+	db *bun.DB, activity *ActivityModel, reputation *ReputationModel, votes *VoteModel, logger *zap.Logger,
+) *GroupModel {
 	return &GroupModel{
 		db:         db,
 		activity:   activity,
@@ -64,14 +66,8 @@ func (r *GroupModel) SaveGroups(ctx context.Context, groups map[uint64]*types.Gr
 		}
 
 		// Get existing group data if available
-		var status enum.GroupType
 		existingGroup := existingGroups[id]
-		if existingGroup.Status != enum.GroupTypeUnflagged {
-			status = existingGroup.Status
-		} else {
-			// Default to flagged_groups for new groups
-			status = enum.GroupTypeFlagged
-		}
+		status := existingGroup.Status
 
 		switch status {
 		case enum.GroupTypeConfirmed:
@@ -88,9 +84,7 @@ func (r *GroupModel) SaveGroups(ctx context.Context, groups map[uint64]*types.Gr
 				Group:     *group,
 				ClearedAt: existingGroup.ClearedAt,
 			})
-		case enum.GroupTypeUnflagged:
-			continue
-		}
+		} //exhaustive:ignore // other cases are impossible
 		counts[status]++
 	}
 
@@ -253,7 +247,9 @@ func (r *GroupModel) ClearGroup(ctx context.Context, group *types.ReviewGroup) e
 }
 
 // GetGroupByID retrieves a group by either their numeric ID or UUID.
-func (r *GroupModel) GetGroupByID(ctx context.Context, groupID string, fields types.GroupField) (*types.ReviewGroup, error) {
+func (r *GroupModel) GetGroupByID(
+	ctx context.Context, groupID string, fields types.GroupField,
+) (*types.ReviewGroup, error) {
 	var result types.ReviewGroup
 
 	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
@@ -336,7 +332,9 @@ func (r *GroupModel) GetGroupByID(ctx context.Context, groupID string, fields ty
 
 // GetGroupsByIDs retrieves specified group information for a list of group IDs.
 // Returns a map of group IDs to review groups.
-func (r *GroupModel) GetGroupsByIDs(ctx context.Context, groupIDs []uint64, fields types.GroupField) (map[uint64]*types.ReviewGroup, error) {
+func (r *GroupModel) GetGroupsByIDs(
+	ctx context.Context, groupIDs []uint64, fields types.GroupField,
+) (map[uint64]*types.ReviewGroup, error) {
 	groups := make(map[uint64]*types.ReviewGroup)
 
 	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
@@ -393,16 +391,6 @@ func (r *GroupModel) GetGroupsByIDs(ctx context.Context, groupIDs []uint64, fiel
 				Group:     group.Group,
 				ClearedAt: group.ClearedAt,
 				Status:    enum.GroupTypeCleared,
-			}
-		}
-
-		// Mark remaining IDs as unflagged
-		for _, id := range groupIDs {
-			if _, ok := groups[id]; !ok {
-				groups[id] = &types.ReviewGroup{
-					Group:  types.Group{ID: id},
-					Status: enum.GroupTypeUnflagged,
-				}
 			}
 		}
 
@@ -580,7 +568,7 @@ func (r *GroupModel) MarkGroupsLockStatus(ctx context.Context, groupIDs []uint64
 	})
 }
 
-// GetLockedCount returns the total number of locked groups across all tables
+// GetLockedCount returns the total number of locked groups across all tables.
 func (r *GroupModel) GetLockedCount(ctx context.Context) (int, error) {
 	count, err := r.db.NewSelect().
 		TableExpr("(?) AS locked_groups", r.db.NewSelect().
@@ -602,7 +590,7 @@ func (r *GroupModel) GetLockedCount(ctx context.Context) (int, error) {
 	return count, nil
 }
 
-// GetGroupCounts returns counts for all group statuses
+// GetGroupCounts returns counts for all group statuses.
 func (r *GroupModel) GetGroupCounts(ctx context.Context) (*types.GroupCounts, error) {
 	var counts types.GroupCounts
 
@@ -827,7 +815,9 @@ func (r *GroupModel) CheckConfirmedGroups(ctx context.Context, groupIDs []uint64
 }
 
 // GetGroupToReview finds a group to review based on the sort method and target mode.
-func (r *GroupModel) GetGroupToReview(ctx context.Context, sortBy enum.ReviewSortBy, targetMode enum.ReviewTargetMode, reviewerID uint64) (*types.ReviewGroup, error) {
+func (r *GroupModel) GetGroupToReview(
+	ctx context.Context, sortBy enum.ReviewSortBy, targetMode enum.ReviewTargetMode, reviewerID uint64,
+) (*types.ReviewGroup, error) {
 	// Get recently reviewed group IDs
 	recentIDs, err := r.activity.GetRecentlyReviewedIDs(ctx, reviewerID, true, 100)
 	if err != nil {
@@ -874,7 +864,9 @@ func (r *GroupModel) GetGroupToReview(ctx context.Context, sortBy enum.ReviewSor
 }
 
 // getNextToReview handles the common logic for getting the next item to review.
-func (r *GroupModel) getNextToReview(ctx context.Context, model any, sortBy enum.ReviewSortBy, recentIDs []uint64) (*types.ReviewGroup, error) {
+func (r *GroupModel) getNextToReview(
+	ctx context.Context, model any, sortBy enum.ReviewSortBy, recentIDs []uint64,
+) (*types.ReviewGroup, error) {
 	var result types.ReviewGroup
 	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
 		// Build subquery to get ID

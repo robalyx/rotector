@@ -1,13 +1,15 @@
-package middlewareutil
+package middlewareutil_test
 
 import (
 	"net/url"
 	"testing"
 
+	"github.com/robalyx/rotector/internal/common/setup/client/middleware/middlewareutil"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestGenerateProxyHash(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name     string
 		proxies  []*url.URL
@@ -45,20 +47,21 @@ func TestGenerateProxyHash(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			if tt.name == "Multiple proxies - order independent" {
 				// Test both orders to ensure hash is consistent
-				result1 := GenerateProxyHash(tt.proxies)
+				result1 := middlewareutil.GenerateProxyHash(tt.proxies)
 
 				// Reverse the slice
 				for i, j := 0, len(tt.proxies)-1; i < j; i, j = i+1, j-1 {
 					tt.proxies[i], tt.proxies[j] = tt.proxies[j], tt.proxies[i]
 				}
-				result2 := GenerateProxyHash(tt.proxies)
+				result2 := middlewareutil.GenerateProxyHash(tt.proxies)
 
 				assert.Equal(t, result1, result2, "Hash should be consistent regardless of proxy order")
 			}
 
-			result := GenerateProxyHash(tt.proxies)
+			result := middlewareutil.GenerateProxyHash(tt.proxies)
 			if tt.name == "Empty proxy list" {
 				assert.Equal(t, tt.expected, result)
 			} else {
@@ -69,6 +72,7 @@ func TestGenerateProxyHash(t *testing.T) {
 }
 
 func TestIsTimeoutError(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name     string
 		err      error
@@ -108,7 +112,8 @@ func TestIsTimeoutError(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := IsTimeoutError(tt.err)
+			t.Parallel()
+			result := middlewareutil.IsTimeoutError(tt.err)
 			assert.Equal(t, tt.expected, result)
 		})
 	}

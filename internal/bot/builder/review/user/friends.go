@@ -121,7 +121,6 @@ func (b *FriendsBuilder) getFriendFieldName(index int, friend *apiTypes.Extended
 			fieldName += " ⏳"
 		case enum.UserTypeCleared:
 			fieldName += " ✅"
-		case enum.UserTypeUnflagged:
 		}
 
 		// Add banned status if applicable

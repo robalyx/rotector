@@ -1,13 +1,15 @@
-package utils
+package utils_test
 
 import (
 	"testing"
 
 	"github.com/robalyx/rotector/internal/bot/constants"
+	"github.com/robalyx/rotector/internal/bot/utils"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestGetMessageEmbedColor(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name         string
 		streamerMode bool
@@ -27,7 +29,8 @@ func TestGetMessageEmbedColor(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := GetMessageEmbedColor(tt.streamerMode)
+			t.Parallel()
+			got := utils.GetMessageEmbedColor(tt.streamerMode)
 			assert.Equal(t, tt.want, got)
 		})
 	}

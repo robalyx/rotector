@@ -1,13 +1,16 @@
-package translator
+package translator_test
 
 import (
 	"testing"
 
+	"github.com/robalyx/rotector/internal/common/translator"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestTranslateBinary(t *testing.T) {
-	translator := &Translator{}
+	t.Parallel()
+	translator := &translator.Translator{}
 
 	tests := []struct {
 		name        string
@@ -49,11 +52,12 @@ func TestTranslateBinary(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			result, err := translator.TranslateBinary(tt.input)
 			if tt.expectError {
-				assert.Error(t, err)
+				require.Error(t, err)
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.Equal(t, tt.expected, result)
 			}
 		})
@@ -61,6 +65,7 @@ func TestTranslateBinary(t *testing.T) {
 }
 
 func TestIsBinaryFormat(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name     string
 		input    string
@@ -100,7 +105,8 @@ func TestIsBinaryFormat(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := isBinaryFormat(tt.input)
+			t.Parallel()
+			result := translator.IsBinaryFormat(tt.input)
 			assert.Equal(t, tt.expected, result)
 		})
 	}

@@ -93,7 +93,9 @@ func (m *FriendsMenu) Show(event interfaces.CommonEvent, s *session.Session, r *
 }
 
 // handlePageNavigation processes navigation button clicks.
-func (m *FriendsMenu) handlePageNavigation(event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, customID string) {
+func (m *FriendsMenu) handlePageNavigation(
+	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, customID string,
+) {
 	action := session.ViewerAction(customID)
 	switch action {
 	case session.ViewerFirstPage, session.ViewerPrevPage, session.ViewerNextPage, session.ViewerLastPage:
@@ -105,10 +107,12 @@ func (m *FriendsMenu) handlePageNavigation(event *events.ComponentInteractionCre
 
 		session.PaginationPage.Set(s, page)
 		r.Reload(event, s, "")
+		return
+	}
 
+	switch customID {
 	case constants.BackButtonCustomID:
 		r.NavigateBack(event, s, "")
-
 	default:
 		m.layout.logger.Warn("Invalid friends viewer action", zap.String("action", string(action)))
 		r.Error(event, "Invalid interaction.")
@@ -116,15 +120,20 @@ func (m *FriendsMenu) handlePageNavigation(event *events.ComponentInteractionCre
 }
 
 // sortFriendsByStatus sorts friends into categories based on their status.
-func (m *FriendsMenu) sortFriendsByStatus(friends []*apiTypes.ExtendedFriend, flaggedFriends map[uint64]*types.ReviewUser) []*apiTypes.ExtendedFriend {
+func (m *FriendsMenu) sortFriendsByStatus(
+	friends []*apiTypes.ExtendedFriend, flaggedFriends map[uint64]*types.ReviewUser,
+) []*apiTypes.ExtendedFriend {
 	// Group friends by their status
 	groupedFriends := make(map[enum.UserType][]*apiTypes.ExtendedFriend)
+	var unflaggedFriends []*apiTypes.ExtendedFriend
+
+	// Separate flagged and unflagged friends
 	for _, friend := range friends {
-		status := enum.UserTypeUnflagged
 		if reviewUser, exists := flaggedFriends[friend.ID]; exists {
-			status = reviewUser.Status
+			groupedFriends[reviewUser.Status] = append(groupedFriends[reviewUser.Status], friend)
+		} else {
+			unflaggedFriends = append(unflaggedFriends, friend)
 		}
-		groupedFriends[status] = append(groupedFriends[status], friend)
 	}
 
 	// Define status priority order
@@ -132,7 +141,6 @@ func (m *FriendsMenu) sortFriendsByStatus(friends []*apiTypes.ExtendedFriend, fl
 		enum.UserTypeConfirmed,
 		enum.UserTypeFlagged,
 		enum.UserTypeCleared,
-		enum.UserTypeUnflagged,
 	}
 
 	// Combine friends in priority order
@@ -140,6 +148,9 @@ func (m *FriendsMenu) sortFriendsByStatus(friends []*apiTypes.ExtendedFriend, fl
 	for _, status := range statusOrder {
 		sortedFriends = append(sortedFriends, groupedFriends[status]...)
 	}
+
+	// Append unflagged friends last
+	sortedFriends = append(sortedFriends, unflaggedFriends...)
 
 	return sortedFriends
 }

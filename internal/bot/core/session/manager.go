@@ -66,7 +66,9 @@ func NewManager(db database.Client, redisManager *redis.Manager, logger *zap.Log
 
 // GetOrCreateSession loads or initializes a session for a given user.
 // Returns the session and a boolean indicating if it's a new session.
-func (m *Manager) GetOrCreateSession(ctx context.Context, userID snowflake.ID, isGuildOwner bool) (*Session, bool, error) {
+func (m *Manager) GetOrCreateSession(
+	ctx context.Context, userID snowflake.ID, isGuildOwner bool,
+) (*Session, bool, error) {
 	// Load bot settings
 	botSettings, err := m.db.Models().Settings().GetBotSettings(ctx)
 	if err != nil {

@@ -12,6 +12,4 @@ const (
 	UserTypeFlagged
 	// UserTypeCleared indicates a user was reviewed and found to be appropriate.
 	UserTypeCleared
-	// UserTypeUnflagged indicates a user was not found in the database.
-	UserTypeUnflagged
 )

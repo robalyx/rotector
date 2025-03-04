@@ -4,7 +4,7 @@ import (
 	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
 )
 
-// Reason represents a structured reason for flagging a user or group
+// Reason represents a structured reason for flagging a user or group.
 type Reason struct {
 	Message    string   `json:"message"`    // The actual reason message
 	Confidence float64  `json:"confidence"` // Confidence score for this specific reason

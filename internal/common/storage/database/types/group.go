@@ -67,7 +67,6 @@ type GroupField uint32
 const (
 	GroupFieldNone GroupField = 0
 
-	// Basic group information
 	GroupFieldID           GroupField = 1 << iota // Group ID
 	GroupFieldUUID                                // Group UUID
 	GroupFieldName                                // Group name
@@ -78,13 +77,10 @@ const (
 	GroupFieldThumbnail                           // ThumbnailURL
 	GroupFieldFlaggedUsers                        // FlaggedUsers list
 
-	// Statistics
 	GroupFieldConfidence // AI confidence score
 
-	// Reputation
 	GroupFieldReputation // Reputation fields (upvotes, downvotes, score)
 
-	// Timestamps
 	GroupFieldLastScanned         // Last scan time
 	GroupFieldLastUpdated         // Last update time
 	GroupFieldLastViewed          // Last view time
@@ -119,7 +115,7 @@ const (
 )
 
 // fieldToColumns maps GroupField bits to their corresponding database columns.
-var groupFieldToColumns = map[GroupField][]string{ //nolint:gochecknoglobals
+var groupFieldToColumns = map[GroupField][]string{ //nolint:gochecknoglobals // -
 	GroupFieldID:                  {"id"},
 	GroupFieldUUID:                {"uuid"},
 	GroupFieldName:                {"name"},
@@ -138,7 +134,7 @@ var groupFieldToColumns = map[GroupField][]string{ //nolint:gochecknoglobals
 	GroupFieldLastThumbnailUpdate: {"last_thumbnail_update"},
 }
 
-// HasReputation returns true if the reputation fields should be included
+// HasReputation returns true if the reputation fields should be included.
 func (f GroupField) HasReputation() bool {
 	return f&GroupFieldReputation != 0
 }

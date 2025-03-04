@@ -19,7 +19,6 @@ import (
 	"github.com/robalyx/rotector/internal/common/setup/client/middleware/middlewareutil"
 	"github.com/robalyx/rotector/internal/common/setup/client/middleware/roverse/scripts"
 	"github.com/robalyx/rotector/internal/common/setup/config"
-
 	"golang.org/x/sync/semaphore"
 )
 
@@ -49,7 +48,9 @@ type Middleware struct {
 }
 
 // New creates a new Roverse middleware instance.
-func New(proxies []*url.URL, client rueidis.Client, cfg *config.CommonConfig, requestTimeout time.Duration) *Middleware {
+func New(
+	proxies []*url.URL, client rueidis.Client, cfg *config.CommonConfig, requestTimeout time.Duration,
+) *Middleware {
 	proxyHash := middlewareutil.GenerateProxyHash(proxies)
 
 	// Create HTTP clients for all proxies
@@ -121,7 +122,9 @@ func (m *Middleware) Cleanup() {
 }
 
 // Process applies Roverse proxy logic and causes a temporary error if it fails.
-func (m *Middleware) Process(ctx context.Context, httpClient *http.Client, req *http.Request, _ middleware.NextFunc) (*http.Response, error) {
+func (m *Middleware) Process(
+	ctx context.Context, httpClient *http.Client, req *http.Request, _ middleware.NextFunc,
+) (*http.Response, error) {
 	// Skip if Roverse is not configured
 	if m.domain == "" {
 		return nil, fmt.Errorf("%w: roverse not configured", axonetErrors.ErrTemporary)
@@ -147,7 +150,9 @@ func (m *Middleware) Process(ctx context.Context, httpClient *http.Client, req *
 }
 
 // routeRequest attempts to route the request through the Roverse proxy.
-func (m *Middleware) routeRequest(ctx context.Context, httpClient *http.Client, req *http.Request) (*http.Response, error) {
+func (m *Middleware) routeRequest(
+	ctx context.Context, httpClient *http.Client, req *http.Request,
+) (*http.Response, error) {
 	// Try to acquire a slot
 	if err := m.requestSem.Acquire(ctx, 1); err != nil {
 		return nil, err

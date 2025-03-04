@@ -52,8 +52,8 @@ func (b *Builder) Build() *discord.MessageUpdateBuilder {
 	embed.AddField("Banned On", fmt.Sprintf("<t:%d:f>", b.ban.BannedAt.Unix()), true)
 
 	// Add appeal instructions
-	embed.AddField("Appeals",
-		"Bans are non-appealable. If you believe this ban was caused by a system error, please contact a staff member.", false)
+	embed.AddField("Appeals", "Bans are non-appealable. "+
+		"If you believe this ban was caused by a system error, please contact a staff member.", false)
 
 	embed.SetColor(constants.ErrorEmbedColor)
 

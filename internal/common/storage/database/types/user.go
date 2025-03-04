@@ -75,7 +75,6 @@ type UserField uint32
 const (
 	UserFieldNone UserField = 0
 
-	// Basic user information
 	UserFieldID          UserField = 1 << iota // User ID
 	UserFieldUUID                              // User UUID
 	UserFieldName                              // Username
@@ -85,19 +84,15 @@ const (
 	UserFieldReasons                           // Reasons for flagging
 	UserFieldThumbnail                         // ThumbnailURL
 
-	// Relationships and content
 	UserFieldGroups  // Group memberships
 	UserFieldOutfits // User outfits
 	UserFieldFriends // Friend list
 	UserFieldGames   // Played games
 
-	// Statistics
 	UserFieldConfidence // AI confidence score
 
-	// Reputation
 	UserFieldReputation // Reputation fields (upvotes, downvotes, score)
 
-	// Timestamps
 	UserFieldLastScanned         // Last scan time
 	UserFieldLastUpdated         // Last update time
 	UserFieldLastViewed          // Last view time
@@ -105,7 +100,7 @@ const (
 	UserFieldIsBanned            // Ban status
 	UserFieldLastThumbnailUpdate // Last thumbnail update
 
-	// Common combinations
+	// Common combinations.
 	UserFieldBasic = UserFieldID |
 		UserFieldUUID |
 		UserFieldName |
@@ -144,7 +139,7 @@ const (
 )
 
 // userFieldToColumns maps UserField bits to their corresponding database columns.
-var userFieldToColumns = map[UserField][]string{ //nolint:gochecknoglobals
+var userFieldToColumns = map[UserField][]string{ //nolint:gochecknoglobals // -
 	UserFieldID:                  {"id"},
 	UserFieldUUID:                {"uuid"},
 	UserFieldName:                {"name"},

@@ -1,4 +1,4 @@
-package csv
+package csv_test
 
 import (
 	"encoding/csv"
@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	exportCSV "github.com/robalyx/rotector/internal/export/csv"
 	"github.com/robalyx/rotector/internal/export/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -15,6 +16,7 @@ import (
 
 // verifyCSVFile reads a CSV file and verifies its contents match the expected records.
 func verifyCSVFile(t *testing.T, filepath string, expectedRecords []*types.ExportRecord) {
+	t.Helper()
 	// Open file
 	file, err := os.Open(filepath)
 	require.NoError(t, err)
@@ -44,7 +46,7 @@ func verifyCSVFile(t *testing.T, filepath string, expectedRecords []*types.Expor
 }
 
 func TestExporter_Export(t *testing.T) {
-	tempDir := t.TempDir()
+	t.Parallel()
 
 	tests := []struct {
 		name         string
@@ -111,14 +113,17 @@ func TestExporter_Export(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			tempDir := t.TempDir()
+
 			// Create new exporter
-			e := New(tempDir)
+			e := exportCSV.New(tempDir)
 
 			// Perform export
 			err := e.Export(tt.userRecords, tt.groupRecords)
 
 			if tt.wantErr {
-				assert.Error(t, err)
+				require.Error(t, err)
 				return
 			}
 
@@ -138,6 +143,7 @@ func TestExporter_Export(t *testing.T) {
 }
 
 func TestExporter_ExistingFiles(t *testing.T) {
+	t.Parallel()
 	tempDir := t.TempDir()
 
 	// Create existing files
@@ -147,7 +153,7 @@ func TestExporter_ExistingFiles(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	e := New(tempDir)
+	e := exportCSV.New(tempDir)
 
 	records := []*types.ExportRecord{
 		{

@@ -1,8 +1,9 @@
 run:
+  timeout: 5m
+  relative-path-mode: gomod
   concurrency: 0
   allow-parallel-runners: true
   allow-serial-runners: true
-  tests: false
   go: '1.24'
 
 linters:
@@ -20,33 +21,204 @@ linters:
     - forcetypeassert # Not needed
     - mnd # Not needed
     - exhaustruct # Not needed
-    - cyclop # Not needed
     - dupl # Not needed
     - varnamelen # Not needed
     - nonamedreturns # Not needed
     - iface # Not needed
-    - godot # Not needed
     - forbidigo # Not needed
     - gochecknoinits # Not needed
     - gochecknoglobals # Not needed
+    - maintidx # Not needed
     - tenv # Deprecated
 
 linters-settings:
-  lll:
-    line-length: 205
-  funlen:
-    lines: 130
-    statements: 55
+  cyclop:
+    # The maximal code complexity to report.
+    # Default: 10
+    max-complexity: 30
+    # The maximal average package complexity.
+    # If it's higher than 0.0 (float) the check is enabled
+    # Default: 0.0
+    package-average: 10.0
+
+  exhaustruct:
+    # List of regular expressions to exclude struct packages and their names from checks.
+    # Regular expressions must match complete canonical struct package/name/structname.
+    # Default: []
+    exclude:
+      # std libs
+      - "^net/http.Client$"
+      - "^net/http.Cookie$"
+      - "^net/http.Request$"
+      - "^net/http.Response$"
+      - "^net/http.Server$"
+      - "^net/http.Transport$"
+      - "^net/url.URL$"
+      - "^os/exec.Cmd$"
+      - "^reflect.StructField$"
+      # public libs
+      - "^github.com/Shopify/sarama.Config$"
+      - "^github.com/Shopify/sarama.ProducerMessage$"
+      - "^github.com/mitchellh/mapstructure.DecoderConfig$"
+      - "^github.com/prometheus/client_golang/.+Opts$"
+      - "^github.com/spf13/cobra.Command$"
+      - "^github.com/spf13/cobra.CompletionOptions$"
+      - "^github.com/stretchr/testify/mock.Mock$"
+      - "^github.com/testcontainers/testcontainers-go.+Request$"
+      - "^github.com/testcontainers/testcontainers-go.FromDockerfile$"
+      - "^golang.org/x/tools/go/analysis.Analyzer$"
+      - "^google.golang.org/protobuf/.+Options$"
+      - "^gopkg.in/yaml.v3.Node$"
+
+  gochecksumtype:
+    # Presence of `default` case in switch statements satisfies exhaustiveness, if all members are not listed.
+    # Default: true
+    default-signifies-exhaustive: false
+
   gocritic:
+    # Settings passed to gocritic.
+    # The settings key is the name of a supported gocritic checker.
+    # The list of supported checkers can be find in https://go-critic.github.io/overview.
+    settings:
+      captLocal:
+        # Whether to restrict checker to params only.
+        # Default: true
+        paramsOnly: false
+      underef:
+        # Whether to skip (*x).method() calls where x is a pointer receiver.
+        # Default: true
+        skipRecvDeref: false
     disabled-checks:
       - singleCaseSwitch
+
+  govet:
+    # Enable all analyzers.
+    # Default: false
+    enable-all: true
+    # Disable analyzers by name.
+    # Run `go tool vet help` to see all analyzers.
+    # Default: []
+    disable:
+      - fieldalignment # too strict
+      - errorsas # too strict
+
+  inamedparam:
+    # Skips check for interface methods with only a single parameter.
+    # Default: false
+    skip-single-param: true
+
+  mnd:
+    # List of function patterns to exclude from analysis.
+    # Values always ignored: `time.Date`,
+    # `strconv.FormatInt`, `strconv.FormatUint`, `strconv.FormatFloat`,
+    # `strconv.ParseInt`, `strconv.ParseUint`, `strconv.ParseFloat`.
+    # Default: []
+    ignored-functions:
+      - args.Error
+      - flag.Arg
+      - flag.Duration.*
+      - flag.Float.*
+      - flag.Int.*
+      - flag.Uint.*
+      - os.Chmod
+      - os.Mkdir.*
+      - os.OpenFile
+      - os.WriteFile
+      - prometheus.ExponentialBuckets.*
+      - prometheus.LinearBuckets
+
+  nakedret:
+    # Make an issue if func has more lines of code than this setting, and it has naked returns.
+    # Default: 30
+    max-func-lines: 0
+
+  nolintlint:
+    # Exclude following linters from requiring an explanation.
+    # Default: []
+    allow-no-explanation: [ funlen, gocognit, lll ]
+    # Enable to require an explanation of nonzero length after each nolint directive.
+    # Default: false
+    require-explanation: true
+    # Enable to require nolint directives to mention the specific linter being suppressed.
+    # Default: false
+    require-specific: true
+
+  reassign:
+    # Patterns for global variable names that are checked for reassignment.
+    # See https://github.com/curioswitch/go-reassign#usage
+    # Default: ["EOF", "Err.*"]
+    patterns:
+      - ".*"
+
+  usetesting:
+    # Enable/disable `os.TempDir()` detections.
+    # Default: false
+    os-temp-dir: true
+
   gocognit:
+    # Minimal code complexity to report.
+    # Default: 30 (but we recommend 10-20)
     min-complexity: 35
+  
   goconst:
+    # Minimal length of string constant.
+    # Default: 3
     min-len: 4
+    # Minimum occurrences of constant string count to trigger issue.
+    # Default: 3
     min-occurrences: 4
+
+  funlen:
+    # Checks the number of lines in a function.
+    # If lower than 0, disable the check.
+    # Default: 60
+    lines: 120
+    # Checks the number of statements in a function.
+    # If lower than 0, disable the check.
+    # Default: 40
+    statements: 55
+    # Ignore comments when counting lines.
+    # Default: false
+    ignore-comments: true
+
+  lll:
+    # Max line length, lines longer will be reported.
+    # '\t' is counted as 1 character by default, and can be changed with the tab-width option.
+    # Default: 120.
+    line-length: 125
+
   nestif:
-    min-complexity: 8
+    # Minimal complexity of if statements to report.
+    # Default: 5
+    min-complexity: 10
+    
   gosec:
+    # To specify a set of rules to explicitly exclude.
+    # Available rules: https://github.com/securego/gosec#available-rules
+    # Default: []
     excludes:
       - G404 # Insecure random number source (rand)
+
+issues:
+  # Maximum count of issues with the same text.
+  # Set to 0 to disable.
+  # Default: 3
+  max-same-issues: 50
+
+  exclude-rules:
+    - source: "(noinspection|TODO)"
+      linters: [ godot ]
+    - source: "//noinspection"
+      linters: [ gocritic ]
+    - text: 'shadow: declaration of "(err|ctx)" shadows declaration at'
+      linters: [ govet ]
+    - path: "_test\\.go"
+      linters:
+        - bodyclose
+        - dupl
+        - errcheck
+        - funlen
+        - goconst
+        - gosec
+        - noctx
+        - wrapcheck

@@ -30,7 +30,9 @@ func NewBotMenu(l *Layout) *BotMenu {
 }
 
 // handleBotSettingSelection processes select menu interactions.
-func (m *BotMenu) handleBotSettingSelection(event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, _ string, option string) {
+func (m *BotMenu) handleBotSettingSelection(
+	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, _ string, option string,
+) {
 	// Show the change menu for the selected setting
 	session.SettingType.Set(s, constants.BotSettingPrefix)
 	session.SettingCustomID.Set(s, option)
@@ -38,7 +40,9 @@ func (m *BotMenu) handleBotSettingSelection(event *events.ComponentInteractionCr
 }
 
 // handleBotSettingButton processes button interactions.
-func (m *BotMenu) handleBotSettingButton(event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, customID string) {
+func (m *BotMenu) handleBotSettingButton(
+	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, customID string,
+) {
 	if customID == constants.BackButtonCustomID {
 		r.NavigateBack(event, s, "")
 	}

@@ -6,6 +6,11 @@ import (
 	"strings"
 )
 
+const (
+	// Number of matches required to extract a URL from a string.
+	requiredURLMatches = 2
+)
+
 var (
 	userURLPattern  = regexp.MustCompile(`(?i)(?:https?://)?(?:www\.)?roblox\.com/users/(\d+)(?:/.*)?`)
 	groupURLPattern = regexp.MustCompile(`(?i)(?:https?://)?(?:www\.)?roblox\.com/(?:groups|communities)/(\d+)(?:/.*)?`)
@@ -27,7 +32,7 @@ func IsRobloxGroupURL(input string) bool {
 // ExtractUserIDFromURL extracts the user ID from a Roblox profile URL.
 func ExtractUserIDFromURL(url string) (string, error) {
 	matches := userURLPattern.FindStringSubmatch(strings.TrimSpace(url))
-	if len(matches) < 2 {
+	if len(matches) < requiredURLMatches {
 		return "", ErrInvalidProfileURL
 	}
 	return matches[1], nil
@@ -36,7 +41,7 @@ func ExtractUserIDFromURL(url string) (string, error) {
 // ExtractGroupIDFromURL extracts the group ID from a Roblox group URL.
 func ExtractGroupIDFromURL(url string) (string, error) {
 	matches := groupURLPattern.FindStringSubmatch(strings.TrimSpace(url))
-	if len(matches) < 2 {
+	if len(matches) < requiredURLMatches {
 		return "", ErrInvalidGroupURL
 	}
 	return matches[1], nil

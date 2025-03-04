@@ -27,8 +27,8 @@ type HashResult struct {
 	Hash  string
 }
 
-// hashID converts a single ID to a hash using the specified algorithm with the provided salt.
-func hashID(id uint64, salt string, hashType HashType, iterations uint32, memory uint32) string {
+// HashID converts a single ID to a hash using the specified algorithm with the provided salt.
+func HashID(id uint64, salt string, hashType HashType, iterations uint32, memory uint32) string {
 	// Convert ID to bytes in little-endian format
 	idBytes := make([]byte, 8)
 	binary.LittleEndian.PutUint64(idBytes, id)
@@ -81,7 +81,7 @@ func hashIDs(ids []uint64, salt string, hashType HashType, concurrency int64, it
 		go func() {
 			defer wg.Done()
 			for idx := range work {
-				hash := hashID(ids[idx], salt, hashType, iterations, memory)
+				hash := HashID(ids[idx], salt, hashType, iterations, memory)
 				results <- HashResult{idx, hash}
 				progress <- struct{}{}
 			}

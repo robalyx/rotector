@@ -21,7 +21,7 @@ import (
 )
 
 // Tips for users shown in the welcome embed footer.
-var tips = []string{ //nolint:gochecknoglobals
+var tips = []string{ //nolint:gochecknoglobals // -
 	"Check out the leaderboard to see our top reviewers",
 	"Track your performance through your vote statistics",
 	"Use streamer mode to hide sensitive information",
@@ -81,7 +81,10 @@ func getChartBuffers(client rueidis.Client) (*bytes.Buffer, *bytes.Buffer) {
 	var userStatsChart, groupStatsChart *bytes.Buffer
 
 	// Get user stats chart
-	if result := client.Do(context.Background(), client.B().Get().Key(stats.UserStatsChartKey).Build()); result.Error() == nil {
+	if result := client.Do(
+		context.Background(),
+		client.B().Get().Key(stats.UserStatsChartKey).Build(),
+	); result.Error() == nil {
 		if data, err := result.AsBytes(); err == nil {
 			if decoded, err := base64.StdEncoding.DecodeString(string(data)); err == nil {
 				userStatsChart = bytes.NewBuffer(decoded)
@@ -90,7 +93,10 @@ func getChartBuffers(client rueidis.Client) (*bytes.Buffer, *bytes.Buffer) {
 	}
 
 	// Get group stats chart
-	if result := client.Do(context.Background(), client.B().Get().Key(stats.GroupStatsChartKey).Build()); result.Error() == nil {
+	if result := client.Do(
+		context.Background(),
+		client.B().Get().Key(stats.GroupStatsChartKey).Build(),
+	); result.Error() == nil {
 		if data, err := result.AsBytes(); err == nil {
 			if decoded, err := base64.StdEncoding.DecodeString(string(data)); err == nil {
 				groupStatsChart = bytes.NewBuffer(decoded)

@@ -86,7 +86,9 @@ func (m *Menu) Show(event interfaces.CommonEvent, s *session.Session, r *paginat
 }
 
 // handleSelectMenu processes select menu interactions.
-func (m *Menu) handleSelectMenu(event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, customID, option string) {
+func (m *Menu) handleSelectMenu(
+	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, customID, option string,
+) {
 	if customID != constants.LeaderboardPeriodSelectMenuCustomID {
 		return
 	}
@@ -108,20 +110,27 @@ func (m *Menu) handleSelectMenu(event *events.ComponentInteractionCreate, s *ses
 }
 
 // handleButton processes button interactions.
-func (m *Menu) handleButton(event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, customID string) {
+func (m *Menu) handleButton(
+	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, customID string,
+) {
 	switch customID {
 	case constants.BackButtonCustomID:
 		r.NavigateBack(event, s, "")
 	case constants.RefreshButtonCustomID:
 		ResetStats(s)
 		r.Reload(event, s, "")
-	case string(session.ViewerFirstPage), string(session.ViewerPrevPage), string(session.ViewerNextPage), string(session.ViewerLastPage):
+	case string(session.ViewerFirstPage),
+		string(session.ViewerPrevPage),
+		string(session.ViewerNextPage),
+		string(session.ViewerLastPage):
 		m.handlePagination(event, s, r, session.ViewerAction(customID))
 	}
 }
 
 // handlePagination processes page navigation.
-func (m *Menu) handlePagination(event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, action session.ViewerAction) {
+func (m *Menu) handlePagination(
+	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, action session.ViewerAction,
+) {
 	switch action {
 	case session.ViewerNextPage:
 		cursor := session.LeaderboardCursor.Get(s)

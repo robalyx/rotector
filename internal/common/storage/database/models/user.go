@@ -72,14 +72,8 @@ func (r *UserModel) SaveUsers(ctx context.Context, users map[uint64]*types.User)
 		}
 
 		// Get existing user data if available
-		var status enum.UserType
 		existingUser := existingUsers[id]
-		if existingUser.Status != enum.UserTypeUnflagged {
-			status = existingUser.Status
-		} else {
-			// Default to flagged_users for new users
-			status = enum.UserTypeFlagged
-		}
+		status := existingUser.Status
 
 		switch status {
 		case enum.UserTypeConfirmed:
@@ -96,8 +90,6 @@ func (r *UserModel) SaveUsers(ctx context.Context, users map[uint64]*types.User)
 				User:      *user,
 				ClearedAt: existingUser.ClearedAt,
 			})
-		case enum.UserTypeUnflagged:
-			continue
 		}
 		counts[status]++
 	}
@@ -413,7 +405,9 @@ func (r *UserModel) GetUserByID(ctx context.Context, userID string, fields types
 
 // GetUsersByIDs retrieves specified user information for a list of user IDs.
 // Returns a map of user IDs to review users.
-func (r *UserModel) GetUsersByIDs(ctx context.Context, userIDs []uint64, fields types.UserField) (map[uint64]*types.ReviewUser, error) {
+func (r *UserModel) GetUsersByIDs(
+	ctx context.Context, userIDs []uint64, fields types.UserField,
+) (map[uint64]*types.ReviewUser, error) {
 	users := make(map[uint64]*types.ReviewUser)
 
 	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
@@ -470,16 +464,6 @@ func (r *UserModel) GetUsersByIDs(ctx context.Context, userIDs []uint64, fields 
 				User:      user.User,
 				ClearedAt: user.ClearedAt,
 				Status:    enum.UserTypeCleared,
-			}
-		}
-
-		// Mark remaining IDs as unflagged
-		for _, id := range userIDs {
-			if _, ok := users[id]; !ok {
-				users[id] = &types.ReviewUser{
-					User:   types.User{ID: id},
-					Status: enum.UserTypeUnflagged,
-				}
 			}
 		}
 
@@ -657,7 +641,7 @@ func (r *UserModel) MarkUsersBanStatus(ctx context.Context, userIDs []uint64, is
 	})
 }
 
-// GetBannedCount returns the total number of banned users across all tables
+// GetBannedCount returns the total number of banned users across all tables.
 func (r *UserModel) GetBannedCount(ctx context.Context) (int, error) {
 	count, err := r.db.NewSelect().
 		TableExpr("(?) AS banned_users", r.db.NewSelect().
@@ -679,7 +663,7 @@ func (r *UserModel) GetBannedCount(ctx context.Context) (int, error) {
 	return count, nil
 }
 
-// GetUserCounts returns counts for all user statuses
+// GetUserCounts returns counts for all user statuses.
 func (r *UserModel) GetUserCounts(ctx context.Context) (*types.UserCounts, error) {
 	var counts types.UserCounts
 
@@ -891,7 +875,9 @@ func (r *UserModel) GetUserToScan(ctx context.Context) (*types.User, error) {
 }
 
 // GetUserToReview finds a user to review based on the sort method and target mode.
-func (r *UserModel) GetUserToReview(ctx context.Context, sortBy enum.ReviewSortBy, targetMode enum.ReviewTargetMode, reviewerID uint64) (*types.ReviewUser, error) {
+func (r *UserModel) GetUserToReview(
+	ctx context.Context, sortBy enum.ReviewSortBy, targetMode enum.ReviewTargetMode, reviewerID uint64,
+) (*types.ReviewUser, error) {
 	// Get recently reviewed user IDs
 	recentIDs, err := r.activity.GetRecentlyReviewedIDs(ctx, reviewerID, false, 100)
 	if err != nil {
@@ -938,7 +924,9 @@ func (r *UserModel) GetUserToReview(ctx context.Context, sortBy enum.ReviewSortB
 }
 
 // getNextToReview handles the common logic for getting the next item to review.
-func (r *UserModel) getNextToReview(ctx context.Context, model any, sortBy enum.ReviewSortBy, recentIDs []uint64) (*types.ReviewUser, error) {
+func (r *UserModel) getNextToReview(
+	ctx context.Context, model any, sortBy enum.ReviewSortBy, recentIDs []uint64,
+) (*types.ReviewUser, error) {
 	var result types.ReviewUser
 	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
 		// Build subquery to get ID

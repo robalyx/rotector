@@ -4,13 +4,12 @@ import (
 	"fmt"
 	"strconv"
 
+	"github.com/disgoorg/disgo/discord"
 	"github.com/robalyx/rotector/internal/bot/constants"
 	"github.com/robalyx/rotector/internal/bot/core/session"
 	"github.com/robalyx/rotector/internal/bot/utils"
 	"github.com/robalyx/rotector/internal/common/queue"
 	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
-
-	"github.com/disgoorg/disgo/discord"
 )
 
 // StatusBuilder creates the visual layout for viewing queue status information.

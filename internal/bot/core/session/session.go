@@ -12,9 +12,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/redis/rueidis"
-
 	"github.com/bytedance/sonic"
+	"github.com/redis/rueidis"
 	"github.com/robalyx/rotector/internal/common/storage/database"
 	"github.com/robalyx/rotector/internal/common/storage/database/types"
 	"go.uber.org/zap"

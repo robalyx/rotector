@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net"
 	"net/http"
-
 	// #nosec G108 -- pprof debugging is intentionally enabled only on localhost
 	_ "net/http/pprof"
 	"time"

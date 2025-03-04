@@ -323,7 +323,9 @@ func (r *AppealModel) GetAppealMessages(ctx context.Context, appealID int64) ([]
 }
 
 // AddAppealMessage adds a new message to an appeal and updates the appeal's last activity.
-func (r *AppealModel) AddAppealMessage(ctx context.Context, message *types.AppealMessage, appealID int64, timestamp time.Time) error {
+func (r *AppealModel) AddAppealMessage(
+	ctx context.Context, message *types.AppealMessage, appealID int64, timestamp time.Time,
+) error {
 	return r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
 		// Insert the new message
 		if _, err := tx.NewInsert().Model(message).Exec(ctx); err != nil {

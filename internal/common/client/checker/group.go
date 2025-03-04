@@ -34,7 +34,10 @@ type GroupChecker struct {
 
 // NewGroupChecker creates a GroupChecker with database access for looking up
 // flagged group information.
-func NewGroupChecker(db database.Client, logger *zap.Logger, maxGroupMembersTrack uint64, minFlaggedOverride int, minFlaggedPercentage float64) *GroupChecker {
+func NewGroupChecker(
+	db database.Client, logger *zap.Logger, maxGroupMembersTrack uint64,
+	minFlaggedOverride int, minFlaggedPercentage float64,
+) *GroupChecker {
 	return &GroupChecker{
 		db:                   db,
 		logger:               logger,
@@ -45,7 +48,9 @@ func NewGroupChecker(db database.Client, logger *zap.Logger, maxGroupMembersTrac
 }
 
 // CheckGroupPercentages analyzes groups to find those exceeding the flagged user threshold.
-func (c *GroupChecker) CheckGroupPercentages(groupInfos []*apiTypes.GroupResponse, groupToFlaggedUsers map[uint64][]uint64) map[uint64]*types.Group {
+func (c *GroupChecker) CheckGroupPercentages(
+	groupInfos []*apiTypes.GroupResponse, groupToFlaggedUsers map[uint64][]uint64,
+) map[uint64]*types.Group {
 	flaggedGroups := make(map[uint64]*types.Group)
 
 	// Identify groups that exceed thresholds
@@ -99,7 +104,9 @@ func (c *GroupChecker) CheckGroupPercentages(groupInfos []*apiTypes.GroupRespons
 	}
 
 	// Get user data for confidence calculation
-	users, err := c.db.Models().Users().GetUsersByIDs(context.Background(), allFlaggedUserIDs, types.UserFieldBasic|types.UserFieldConfidence)
+	users, err := c.db.Models().Users().GetUsersByIDs(
+		context.Background(), allFlaggedUserIDs, types.UserFieldBasic|types.UserFieldConfidence,
+	)
 	if err != nil {
 		c.logger.Error("Failed to get user confidence data", zap.Error(err))
 		return flaggedGroups
@@ -119,7 +126,7 @@ func (c *GroupChecker) calculateGroupConfidence(flaggedUsers []uint64, users map
 	var validUserCount int
 
 	for _, userID := range flaggedUsers {
-		if user, exists := users[userID]; exists && user.Status != enum.UserTypeUnflagged {
+		if user, exists := users[userID]; exists {
 			totalConfidence += user.Confidence
 			validUserCount++
 		}
@@ -165,7 +172,9 @@ func (c *GroupChecker) ProcessUsers(userInfos []*fetcher.Info, flaggedUsers map[
 	}
 
 	// Fetch all existing groups
-	existingGroups, err := c.db.Models().Groups().GetGroupsByIDs(context.Background(), groupIDs, types.GroupFieldBasic|types.GroupFieldReasons)
+	existingGroups, err := c.db.Models().Groups().GetGroupsByIDs(
+		context.Background(), groupIDs, types.GroupFieldBasic|types.GroupFieldReasons,
+	)
 	if err != nil {
 		c.logger.Error("Failed to fetch existing groups", zap.Error(err))
 		return
@@ -203,7 +212,9 @@ func (c *GroupChecker) ProcessUsers(userInfos []*fetcher.Info, flaggedUsers map[
 }
 
 // processUserGroups checks if a user should be flagged based on their groups.
-func (c *GroupChecker) processUserGroups(userInfo *fetcher.Info, existingGroups map[uint64]*types.ReviewGroup) (*types.User, bool) {
+func (c *GroupChecker) processUserGroups(
+	userInfo *fetcher.Info, existingGroups map[uint64]*types.ReviewGroup,
+) (*types.User, bool) {
 	// Skip users with very few groups to avoid false positives
 	if len(userInfo.Groups.Data) < 2 {
 		return nil, false

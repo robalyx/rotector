@@ -15,7 +15,9 @@ import (
 )
 
 // StatsSystemPrompt is the system prompt for the stats analyzer.
-const StatsSystemPrompt = `You are a witty assistant analyzing moderation statistics. Generate a short, engaging welcome message (max 512 characters) for moderators based on statistical trends. 
+const StatsSystemPrompt = `You are a witty assistant analyzing moderation statistics.
+
+Generate a short, engaging welcome message (max 512 characters) for moderators based on statistical trends. 
 
 Instructions:
 - Look for patterns and spikes in activity
@@ -40,9 +42,15 @@ Writing style:
 - Keep jokes simple and direct, no complex metaphors
 
 Example responses (format reference only):
-- "Our algorithms caught another wave of predators trying their tired old tricks while attempts to hide got more pathetic by the hour and their desperate messages never made it past our filters."
-- "The detection system effortlessly caught today's batch of predators as they fumbled through increasingly obvious tactics and failed to realize how transparent their pathetic attempts had become."
-- "While predators kept trying to outsmart our system with their predictable patterns and desperate tactics, our algorithms were already three steps ahead and swiftly removed their accounts."`
+- "Our algorithms caught another wave of predators trying their tired old tricks 
+  while attempts to hide got more pathetic by the hour 
+  and their desperate messages never made it past our filters."
+- "The detection system effortlessly caught today's batch of predators 
+  as they fumbled through increasingly obvious tactics 
+  and failed to realize how transparent their pathetic attempts had become."
+- "While predators kept trying to outsmart our system with their predictable patterns 
+  and desperate tactics, our algorithms were already three steps ahead 
+  and swiftly removed their accounts."`
 
 // MaxOutputTokens is the maximum number of tokens in the response.
 const MaxOutputTokens = 512
@@ -82,7 +90,9 @@ func NewStatsAnalyzer(app *setup.App, logger *zap.Logger) *StatsAnalyzer {
 }
 
 // GenerateWelcomeMessage analyzes current and historical stats to generate a contextual welcome message.
-func (a *StatsAnalyzer) GenerateWelcomeMessage(ctx context.Context, historicalStats []*types.HourlyStats) (string, error) {
+func (a *StatsAnalyzer) GenerateWelcomeMessage(
+	ctx context.Context, historicalStats []*types.HourlyStats,
+) (string, error) {
 	// Format stats data for AI analysis
 	data := StatsData{
 		History: historicalStats,

@@ -160,7 +160,10 @@ func NewFriendAnalyzer(app *setup.App, logger *zap.Logger) *FriendAnalyzer {
 }
 
 // GenerateFriendReasons generates friend network analysis reasons for multiple users using the Gemini model.
-func (a *FriendAnalyzer) GenerateFriendReasons(ctx context.Context, userInfos []*fetcher.Info, confirmedFriendsMap, flaggedFriendsMap map[uint64]map[uint64]*types.User) map[uint64]string {
+func (a *FriendAnalyzer) GenerateFriendReasons(
+	ctx context.Context, userInfos []*fetcher.Info,
+	confirmedFriendsMap, flaggedFriendsMap map[uint64]map[uint64]*types.User,
+) map[uint64]string {
 	var (
 		p       = pool.New().WithContext(ctx)
 		mu      sync.Mutex
@@ -216,7 +219,10 @@ func (a *FriendAnalyzer) GenerateFriendReasons(ctx context.Context, userInfos []
 }
 
 // processBatch handles analysis for a batch of users.
-func (a *FriendAnalyzer) processBatch(ctx context.Context, userInfos []*fetcher.Info, confirmedFriendsMap, flaggedFriendsMap map[uint64]map[uint64]*types.User) ([]FriendAnalysis, error) {
+func (a *FriendAnalyzer) processBatch(
+	ctx context.Context, userInfos []*fetcher.Info,
+	confirmedFriendsMap, flaggedFriendsMap map[uint64]map[uint64]*types.User,
+) ([]FriendAnalysis, error) {
 	// Create summaries for all users in batch
 	type UserFriendData struct {
 		Username string          `json:"username"`
@@ -294,8 +300,13 @@ func (a *FriendAnalyzer) processBatch(ctx context.Context, userInfos []*fetcher.
 			return nil, fmt.Errorf("%w: no response from Gemini", ErrModelResponse)
 		}
 
-		// Extract and parse response
-		responseText := resp.Candidates[0].Content.Parts[0].(genai.Text)
+		// Parse response from AI
+		responseText, ok := resp.Candidates[0].Content.Parts[0].(genai.Text)
+		if !ok {
+			return nil, fmt.Errorf("%w: unexpected response format from AI", ErrModelResponse)
+		}
+
+		// Parse the JSON response
 		var result BatchFriendAnalysis
 		if err := sonic.Unmarshal([]byte(responseText), &result); err != nil {
 			return nil, fmt.Errorf("JSON unmarshal error: %w", err)

@@ -32,7 +32,9 @@ func NewUserMenu(l *Layout) *UserMenu {
 }
 
 // handleUserSettingSelection processes select menu interactions.
-func (m *UserMenu) handleUserSettingSelection(event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, _ string, option string) {
+func (m *UserMenu) handleUserSettingSelection(
+	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, _ string, option string,
+) {
 	// Show the change menu for the selected setting
 	session.SettingType.Set(s, constants.UserSettingPrefix)
 	session.SettingCustomID.Set(s, option)
@@ -40,7 +42,9 @@ func (m *UserMenu) handleUserSettingSelection(event *events.ComponentInteraction
 }
 
 // handleUserSettingButton processes button interactions.
-func (m *UserMenu) handleUserSettingButton(event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, customID string) {
+func (m *UserMenu) handleUserSettingButton(
+	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, customID string,
+) {
 	if customID == constants.BackButtonCustomID {
 		r.NavigateBack(event, s, "")
 	}

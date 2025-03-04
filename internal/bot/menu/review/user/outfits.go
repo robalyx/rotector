@@ -76,7 +76,9 @@ func (m *OutfitsMenu) Show(event interfaces.CommonEvent, s *session.Session, r *
 }
 
 // handlePageNavigation processes navigation button clicks.
-func (m *OutfitsMenu) handlePageNavigation(event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, customID string) {
+func (m *OutfitsMenu) handlePageNavigation(
+	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, customID string,
+) {
 	action := session.ViewerAction(customID)
 	switch action {
 	case session.ViewerFirstPage, session.ViewerPrevPage, session.ViewerNextPage, session.ViewerLastPage:
@@ -88,10 +90,12 @@ func (m *OutfitsMenu) handlePageNavigation(event *events.ComponentInteractionCre
 
 		session.PaginationPage.Set(s, page)
 		r.Reload(event, s, "")
+		return
+	}
 
+	switch customID {
 	case constants.BackButtonCustomID:
 		r.NavigateBack(event, s, "")
-
 	default:
 		m.layout.logger.Warn("Invalid outfits viewer action", zap.String("action", string(action)))
 		r.Error(event, "Invalid interaction.")

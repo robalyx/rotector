@@ -56,7 +56,11 @@ func (m *Menu) Show(event interfaces.CommonEvent, s *session.Session, _ *paginat
 	}
 
 	// Get vote statistics for the user
-	voteStats, err := m.layout.db.Models().Votes().GetUserVoteStats(context.Background(), uint64(event.User().ID), enum.LeaderboardPeriodAllTime)
+	voteStats, err := m.layout.db.Models().Votes().GetUserVoteStats(
+		context.Background(),
+		uint64(event.User().ID),
+		enum.LeaderboardPeriodAllTime,
+	)
 	if err != nil {
 		m.layout.logger.Error("Failed to get vote statistics", zap.Error(err))
 		voteStats = &types.VoteAccuracy{DiscordUserID: uint64(event.User().ID)} // Use empty stats on error
@@ -74,7 +78,9 @@ func (m *Menu) Show(event interfaces.CommonEvent, s *session.Session, _ *paginat
 }
 
 // handleSelectMenu processes select menu interactions.
-func (m *Menu) handleSelectMenu(event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, customID, option string) {
+func (m *Menu) handleSelectMenu(
+	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, customID, option string,
+) {
 	if customID != constants.ActionSelectMenuCustomID {
 		return
 	}
@@ -159,7 +165,7 @@ func (m *Menu) handleSelectMenu(event *events.ComponentInteractionCreate, s *ses
 func (m *Menu) handleLookupRobloxUser(event *events.ComponentInteractionCreate, r *pagination.Respond) {
 	modal := discord.NewModalCreateBuilder().
 		SetCustomID(constants.LookupRobloxUserModalCustomID).
-		SetTitle("Lookup User").
+		SetTitle("Lookup Roblox User").
 		AddActionRow(
 			discord.NewTextInput(constants.LookupRobloxUserInputCustomID, discord.TextInputStyleShort, "User ID or UUID").
 				WithRequired(true).
@@ -176,7 +182,7 @@ func (m *Menu) handleLookupRobloxUser(event *events.ComponentInteractionCreate, 
 func (m *Menu) handleLookupRobloxGroup(event *events.ComponentInteractionCreate, r *pagination.Respond) {
 	modal := discord.NewModalCreateBuilder().
 		SetCustomID(constants.LookupRobloxGroupModalCustomID).
-		SetTitle("Lookup Group").
+		SetTitle("Lookup Roblox Group").
 		AddActionRow(
 			discord.NewTextInput(constants.LookupRobloxGroupInputCustomID, discord.TextInputStyleShort, "Group ID or UUID").
 				WithRequired(true).
@@ -219,7 +225,9 @@ func (m *Menu) handleModal(event *events.ModalSubmitInteractionCreate, s *sessio
 }
 
 // handleLookupRobloxUserModalSubmit processes the user ID input and opens the review menu.
-func (m *Menu) handleLookupRobloxUserModalSubmit(event *events.ModalSubmitInteractionCreate, s *session.Session, r *pagination.Respond) {
+func (m *Menu) handleLookupRobloxUserModalSubmit(
+	event *events.ModalSubmitInteractionCreate, s *session.Session, r *pagination.Respond,
+) {
 	// Get the user ID input
 	userIDStr := event.Data.Text(constants.LookupRobloxUserInputCustomID)
 
@@ -265,7 +273,9 @@ func (m *Menu) handleLookupRobloxUserModalSubmit(event *events.ModalSubmitIntera
 }
 
 // handleLookupRobloxGroupModalSubmit processes the group ID input and opens the review menu.
-func (m *Menu) handleLookupRobloxGroupModalSubmit(event *events.ModalSubmitInteractionCreate, s *session.Session, r *pagination.Respond) {
+func (m *Menu) handleLookupRobloxGroupModalSubmit(
+	event *events.ModalSubmitInteractionCreate, s *session.Session, r *pagination.Respond,
+) {
 	// Get the group ID input
 	groupIDStr := event.Data.Text(constants.LookupRobloxGroupInputCustomID)
 
@@ -311,7 +321,9 @@ func (m *Menu) handleLookupRobloxGroupModalSubmit(event *events.ModalSubmitInter
 }
 
 // handleLookupDiscordUserModalSubmit processes the Discord user ID input and shows the user's flagged servers.
-func (m *Menu) handleLookupDiscordUserModalSubmit(event *events.ModalSubmitInteractionCreate, s *session.Session, r *pagination.Respond) {
+func (m *Menu) handleLookupDiscordUserModalSubmit(
+	event *events.ModalSubmitInteractionCreate, s *session.Session, r *pagination.Respond,
+) {
 	// Get the Discord user ID input
 	discordUserIDStr := event.Data.Text(constants.LookupDiscordUserInputCustomID)
 
@@ -332,7 +344,14 @@ func (m *Menu) handleLookupDiscordUserModalSubmit(event *events.ModalSubmitInter
 		session.DiscordUserLookupName.Set(s, username)
 	}
 
-	// Show Discord user details page
+	// Reset cursors
+	session.GuildLookupCursor.Delete(s)
+	session.GuildLookupNextCursor.Delete(s)
+	session.GuildLookupPrevCursors.Delete(s)
+	session.PaginationHasNextPage.Delete(s)
+	session.PaginationHasPrevPage.Delete(s)
+
+	// Show the guild lookup page
 	r.Show(event, s, constants.GuildLookupPageName, "")
 
 	// Log the lookup action
@@ -349,7 +368,9 @@ func (m *Menu) handleLookupDiscordUserModalSubmit(event *events.ModalSubmitInter
 
 // handleButton processes button interactions, mainly handling refresh requests
 // to update the dashboard statistics.
-func (m *Menu) handleButton(event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, customID string) {
+func (m *Menu) handleButton(
+	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, customID string,
+) {
 	if customID == constants.RefreshButtonCustomID {
 		session.StatsIsRefreshed.Set(s, false)
 		r.Reload(event, s, "Refreshed dashboard.")

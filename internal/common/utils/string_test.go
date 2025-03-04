@@ -1,10 +1,10 @@
-package utils
+package utils_test
 
 import (
 	"testing"
-
 	"unicode"
 
+	"github.com/robalyx/rotector/internal/common/utils"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/text/runes"
 	"golang.org/x/text/transform"
@@ -23,6 +23,7 @@ func newTestNormalizer() transform.Transformer {
 }
 
 func TestNormalizeString(t *testing.T) {
+	t.Parallel()
 	normalizer := newTestNormalizer()
 	tests := []struct {
 		name  string
@@ -58,13 +59,15 @@ func TestNormalizeString(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := NormalizeString(tt.input, normalizer)
+			t.Parallel()
+			got := utils.NormalizeString(tt.input, normalizer)
 			assert.Equal(t, tt.want, got)
 		})
 	}
 }
 
 func TestContainsNormalized(t *testing.T) {
+	t.Parallel()
 	normalizer := newTestNormalizer()
 	tests := []struct {
 		name   string
@@ -112,13 +115,15 @@ func TestContainsNormalized(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := ContainsNormalized(tt.s, tt.substr, normalizer)
+			t.Parallel()
+			got := utils.ContainsNormalized(tt.s, tt.substr, normalizer)
 			assert.Equal(t, tt.want, got)
 		})
 	}
 }
 
 func TestCleanupText(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name  string
 		input string
@@ -158,13 +163,15 @@ func TestCleanupText(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := CleanupText(tt.input)
+			t.Parallel()
+			got := utils.CleanupText(tt.input)
 			assert.Equal(t, tt.want, got)
 		})
 	}
 }
 
 func TestValidateFlaggedWords(t *testing.T) {
+	t.Parallel()
 	normalizer := newTestNormalizer()
 	tests := []struct {
 		name         string
@@ -212,7 +219,8 @@ func TestValidateFlaggedWords(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := ValidateFlaggedWords(tt.flaggedWords, normalizer, tt.targetTexts...)
+			t.Parallel()
+			got := utils.ValidateFlaggedWords(tt.flaggedWords, normalizer, tt.targetTexts...)
 			assert.Equal(t, tt.want, got)
 		})
 	}

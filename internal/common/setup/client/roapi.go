@@ -40,7 +40,10 @@ type Middlewares struct {
 
 // GetRoAPIClient constructs an HTTP client with a middleware chain for reliability and performance.
 // Middleware order is important - each layer wraps the next in specified priority.
-func GetRoAPIClient(cfg *config.CommonConfig, configDir string, redisManager *redis.Manager, zapLogger *zap.Logger, requestTimeout time.Duration) (*api.API, *Middlewares, error) {
+func GetRoAPIClient(
+	cfg *config.CommonConfig, configDir string, redisManager *redis.Manager,
+	zapLogger *zap.Logger, requestTimeout time.Duration,
+) (*api.API, *Middlewares, error) {
 	// Load authentication and proxy configuration
 	cookies, err := readCookies(configDir)
 	if err != nil {

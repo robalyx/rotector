@@ -51,9 +51,11 @@ func (m *TicketMenu) Show(event interfaces.CommonEvent, s *session.Session, r *p
 	}
 
 	// If appeal is pending, check if user's status has changed
-	if appeal.Status == enum.AppealStatusPending { //nolint:nestif
+	if appeal.Status == enum.AppealStatusPending {
 		// Get current user status
-		user, err := m.layout.db.Models().Users().GetUserByID(context.Background(), strconv.FormatUint(appeal.UserID, 10), types.UserFieldAll)
+		user, err := m.layout.db.Models().Users().GetUserByID(
+			context.Background(), strconv.FormatUint(appeal.UserID, 10), types.UserFieldAll,
+		)
 		if err != nil {
 			if !errors.Is(err, types.ErrUserNotFound) {
 				m.layout.logger.Error("Failed to get user status", zap.Error(err))
@@ -62,7 +64,9 @@ func (m *TicketMenu) Show(event interfaces.CommonEvent, s *session.Session, r *p
 			}
 
 			// User no longer exists, auto-reject the appeal
-			if err := m.layout.db.Models().Appeals().RejectAppeal(context.Background(), appeal.ID, appeal.Timestamp, "User no longer exists in database."); err != nil {
+			if err := m.layout.db.Models().Appeals().RejectAppeal(
+				context.Background(), appeal.ID, appeal.Timestamp, "User no longer exists in database.",
+			); err != nil {
 				m.layout.logger.Error("Failed to auto-reject appeal", zap.Error(err))
 			}
 
@@ -74,7 +78,9 @@ func (m *TicketMenu) Show(event interfaces.CommonEvent, s *session.Session, r *p
 		if user.Status != enum.UserTypeConfirmed && user.Status != enum.UserTypeFlagged {
 			// User is no longer flagged or confirmed, auto-reject the appeal
 			reason := fmt.Sprintf("User status changed to %s", user.Status)
-			if err := m.layout.db.Models().Appeals().RejectAppeal(context.Background(), appeal.ID, appeal.Timestamp, reason); err != nil {
+			if err := m.layout.db.Models().Appeals().RejectAppeal(
+				context.Background(), appeal.ID, appeal.Timestamp, reason,
+			); err != nil {
 				m.layout.logger.Error("Failed to auto-reject appeal", zap.Error(err))
 			}
 
@@ -109,7 +115,9 @@ func (m *TicketMenu) Cleanup(s *session.Session) {
 }
 
 // handleButton processes button interactions.
-func (m *TicketMenu) handleButton(event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, customID string) {
+func (m *TicketMenu) handleButton(
+	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, customID string,
+) {
 	action := session.ViewerAction(customID)
 	switch action {
 	case session.ViewerFirstPage, session.ViewerPrevPage, session.ViewerNextPage, session.ViewerLastPage:
@@ -149,7 +157,9 @@ func (m *TicketMenu) handleButton(event *events.ComponentInteractionCreate, s *s
 }
 
 // handleRespond opens a modal for responding to the appeal.
-func (m *TicketMenu) handleRespond(event *events.ComponentInteractionCreate, r *pagination.Respond) {
+func (m *TicketMenu) handleRespond(
+	event *events.ComponentInteractionCreate, r *pagination.Respond,
+) {
 	modal := discord.NewModalCreateBuilder().
 		SetCustomID(constants.AppealRespondModalCustomID).
 		SetTitle("Respond to Appeal").
@@ -168,9 +178,13 @@ func (m *TicketMenu) handleRespond(event *events.ComponentInteractionCreate, r *
 }
 
 // handleLookupUser opens the review menu for the appealed user.
-func (m *TicketMenu) handleLookupUser(event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, appeal *types.FullAppeal) {
+func (m *TicketMenu) handleLookupUser(
+	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, appeal *types.FullAppeal,
+) {
 	// Get user from database
-	user, err := m.layout.db.Models().Users().GetUserByID(context.Background(), strconv.FormatUint(appeal.UserID, 10), types.UserFieldAll)
+	user, err := m.layout.db.Models().Users().GetUserByID(
+		context.Background(), strconv.FormatUint(appeal.UserID, 10), types.UserFieldAll,
+	)
 	if err != nil {
 		if errors.Is(err, types.ErrUserNotFound) {
 			r.Cancel(event, s, "Failed to find user. They may not be in our database.")
@@ -198,7 +212,9 @@ func (m *TicketMenu) handleLookupUser(event *events.ComponentInteractionCreate, 
 }
 
 // handleClaimAppeal handles claiming an appeal by a reviewer.
-func (m *TicketMenu) handleClaimAppeal(event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, appeal *types.FullAppeal) {
+func (m *TicketMenu) handleClaimAppeal(
+	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, appeal *types.FullAppeal,
+) {
 	// Verify the appeal is not already claimed
 	if appeal.ClaimedBy != 0 {
 		r.Cancel(event, s, "This appeal is already claimed by another reviewer.")
@@ -274,7 +290,9 @@ func (m *TicketMenu) handleRejectAppeal(event *events.ComponentInteractionCreate
 }
 
 // handleCloseAppeal handles the user closing their own appeal ticket.
-func (m *TicketMenu) handleCloseAppeal(event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, appeal *types.FullAppeal) {
+func (m *TicketMenu) handleCloseAppeal(
+	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, appeal *types.FullAppeal,
+) {
 	// Verify the user is the appeal creator
 	userID := uint64(event.User().ID)
 	if userID != appeal.RequesterID {
@@ -283,7 +301,9 @@ func (m *TicketMenu) handleCloseAppeal(event *events.ComponentInteractionCreate,
 	}
 
 	// Close the appeal by rejecting it
-	err := m.layout.db.Models().Appeals().RejectAppeal(context.Background(), appeal.ID, appeal.Timestamp, "Closed by appeal creator")
+	err := m.layout.db.Models().Appeals().RejectAppeal(
+		context.Background(), appeal.ID, appeal.Timestamp, "Closed by appeal creator",
+	)
 	if err != nil {
 		m.layout.logger.Error("Failed to close appeal",
 			zap.Error(err),
@@ -311,7 +331,9 @@ func (m *TicketMenu) handleCloseAppeal(event *events.ComponentInteractionCreate,
 }
 
 // handleModal processes modal submissions.
-func (m *TicketMenu) handleModal(event *events.ModalSubmitInteractionCreate, s *session.Session, r *pagination.Respond) {
+func (m *TicketMenu) handleModal(
+	event *events.ModalSubmitInteractionCreate, s *session.Session, r *pagination.Respond,
+) {
 	// Use fresh appeal data from database
 	appeal, err := m.useFreshAppeal(s)
 	if err != nil {
@@ -330,7 +352,9 @@ func (m *TicketMenu) handleModal(event *events.ModalSubmitInteractionCreate, s *
 }
 
 // handleRespondModalSubmit processes the response modal submission.
-func (m *TicketMenu) handleRespondModalSubmit(event *events.ModalSubmitInteractionCreate, s *session.Session, r *pagination.Respond, appeal *types.FullAppeal) {
+func (m *TicketMenu) handleRespondModalSubmit(
+	event *events.ModalSubmitInteractionCreate, s *session.Session, r *pagination.Respond, appeal *types.FullAppeal,
+) {
 	// Only allow responses for pending appeals
 	if appeal.Status != enum.AppealStatusPending {
 		r.Cancel(event, s, "Cannot respond to a closed appeal.")
@@ -381,7 +405,9 @@ func (m *TicketMenu) handleRespondModalSubmit(event *events.ModalSubmitInteracti
 }
 
 // handleAcceptModalSubmit processes the accept appeal submission.
-func (m *TicketMenu) handleAcceptModalSubmit(event *events.ModalSubmitInteractionCreate, s *session.Session, r *pagination.Respond, appeal *types.FullAppeal) {
+func (m *TicketMenu) handleAcceptModalSubmit(
+	event *events.ModalSubmitInteractionCreate, s *session.Session, r *pagination.Respond, appeal *types.FullAppeal,
+) {
 	// Prevent accepting already processed appeals
 	if appeal.Status != enum.AppealStatusPending {
 		r.Cancel(event, s, "This appeal has already been processed.")
@@ -395,7 +421,9 @@ func (m *TicketMenu) handleAcceptModalSubmit(event *events.ModalSubmitInteractio
 	}
 
 	// Get user to clear
-	user, err := m.layout.db.Models().Users().GetUserByID(context.Background(), strconv.FormatUint(appeal.UserID, 10), types.UserFieldAll)
+	user, err := m.layout.db.Models().Users().GetUserByID(
+		context.Background(), strconv.FormatUint(appeal.UserID, 10), types.UserFieldAll,
+	)
 	if err != nil {
 		if errors.Is(err, types.ErrUserNotFound) {
 			r.Cancel(event, s, "Failed to find user. They may no longer exist in our database.")
@@ -443,7 +471,9 @@ func (m *TicketMenu) handleAcceptModalSubmit(event *events.ModalSubmitInteractio
 }
 
 // handleRejectModalSubmit processes the reject appeal submission.
-func (m *TicketMenu) handleRejectModalSubmit(event *events.ModalSubmitInteractionCreate, s *session.Session, r *pagination.Respond, appeal *types.FullAppeal) {
+func (m *TicketMenu) handleRejectModalSubmit(
+	event *events.ModalSubmitInteractionCreate, s *session.Session, r *pagination.Respond, appeal *types.FullAppeal,
+) {
 	// Prevent rejecting already processed appeals
 	if appeal.Status != enum.AppealStatusPending {
 		r.Cancel(event, s, "This appeal has already been processed.")
