@@ -120,7 +120,7 @@ func TestCalculateConfidence(t *testing.T) {
 			t.Parallel()
 			got := utils.CalculateConfidence(tt.reasons)
 			if tt.want == 0 {
-				assert.Equal(t, tt.want, got, "expected zero confidence")
+				assert.InDelta(t, tt.want, got, 1e-10, "expected zero confidence")
 			} else {
 				assert.InEpsilon(t, tt.want, got, 0.01)
 			}
