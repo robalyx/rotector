@@ -194,6 +194,7 @@ func (m *OverviewMenu) handleCreateAppeal(
 		AddActionRow(
 			discord.NewTextInput(constants.AppealReasonInputCustomID, discord.TextInputStyleParagraph, "Appeal Reason").
 				WithRequired(true).
+				WithMinLength(128).
 				WithMaxLength(512).
 				WithPlaceholder("Enter the reason for appealing this user..."),
 		)
