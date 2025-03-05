@@ -61,6 +61,17 @@ func (r *Respond) Clear(event interfaces.CommonEvent, content string) {
 	r.responded = true
 }
 
+// ClearComponents updates the interaction response with a message and clears the components.
+func (r *Respond) ClearComponents(event interfaces.CommonEvent, content string) {
+	messageUpdate := discord.NewMessageUpdateBuilder().
+		SetContent(utils.GetTimestampedSubtext(content)).
+		ClearContainerComponents().
+		Build()
+
+	_, _ = event.Client().Rest().UpdateInteractionResponse(event.ApplicationID(), event.Token(), messageUpdate)
+	r.responded = true
+}
+
 // NavigateBack navigates back to the previous page in the history.
 func (r *Respond) NavigateBack(event interfaces.CommonEvent, s *session.Session, content string) {
 	previousPages := session.PreviousPages.Get(s)

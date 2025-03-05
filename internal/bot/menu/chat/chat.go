@@ -129,7 +129,7 @@ func (m *Menu) handleModal(
 		session.PaginationIsStreaming.Set(s, true)
 
 		// Show "AI is typing..." message
-		r.Reload(event, s, "AI is typing...")
+		r.ClearComponents(event, "AI is typing...")
 
 		// Stream AI response
 		history := session.ChatHistory.Get(s)
@@ -148,7 +148,7 @@ func (m *Menu) handleModal(
 
 			// Update message at most once per second to avoid rate limits
 			if time.Since(lastUpdate) > 1*time.Second {
-				r.Reload(event, s, "Receiving response...")
+				r.ClearComponents(event, "Receiving response...")
 				lastUpdate = time.Now()
 			}
 		}

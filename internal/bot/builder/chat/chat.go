@@ -3,6 +3,7 @@ package chat
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/disgoorg/disgo/discord"
 	"github.com/robalyx/rotector/internal/bot/constants"
@@ -14,36 +15,60 @@ import (
 
 // Builder creates the visual layout for the chat interface.
 type Builder struct {
-	model       enum.ChatModel
-	history     ai.ChatHistory
-	page        int
-	isStreaming bool
-	context     string
+	model        enum.ChatModel
+	history      ai.ChatHistory
+	firstMessage time.Time
+	messageCount int
+	page         int
+	isStreaming  bool
+	context      string
 }
 
 // NewBuilder creates a new chat builder.
 func NewBuilder(s *session.Session) *Builder {
 	return &Builder{
-		model:       session.UserChatModel.Get(s),
-		history:     session.ChatHistory.Get(s),
-		page:        session.PaginationPage.Get(s),
-		isStreaming: session.PaginationIsStreaming.Get(s),
-		context:     session.ChatContext.Get(s),
+		model:        session.UserChatModel.Get(s),
+		history:      session.ChatHistory.Get(s),
+		firstMessage: session.UserChatMessageUsageFirstMessageTime.Get(s),
+		messageCount: session.UserChatMessageUsageMessageCount.Get(s),
+		page:         session.PaginationPage.Get(s),
+		isStreaming:  session.PaginationIsStreaming.Get(s),
+		context:      session.ChatContext.Get(s),
 	}
 }
 
 // Build creates a Discord message showing the chat history and controls.
 func (b *Builder) Build() *discord.MessageUpdateBuilder {
+	return discord.NewMessageUpdateBuilder().
+		SetEmbeds(b.buildEmbeds()...).
+		AddContainerComponents(b.buildComponents()...)
+}
+
+// buildEmbeds creates all the embeds for the chat interface.
+func (b *Builder) buildEmbeds() []discord.Embed {
 	// Calculate message pairs and total pages
 	messageCount := len(b.history.Messages) / 2
 	totalPages := max((messageCount-1)/constants.ChatMessagesPerPage, 0)
 
 	// Create embeds
 	embedBuilders := []*discord.EmbedBuilder{discord.NewEmbedBuilder().
-		SetTitle("⚠️ AI Chat - Experimental Feature").
-		SetDescription("This chat feature is experimental and may not work as expected. " +
-			"Chat histories are stored temporarily and will be cleared when your session expires.").
-		SetColor(constants.DefaultEmbedColor)}
+		SetTitle("⚠️ AI Chat - Experimental Feature")}
+
+	// Add message credits info
+	messageCreditsInfo := fmt.Sprintf("This chat feature is experimental and may not work as expected. "+
+		"Chat histories are stored temporarily and will be cleared when your session expires.\n\n"+
+		"💬 **Messages:** %d/%d remaining", constants.MaxChatMessagesPerDay-b.messageCount, constants.MaxChatMessagesPerDay)
+
+	// Add reset time if messages have been used
+	if b.messageCount > 0 {
+		resetTime := b.firstMessage.Add(constants.ChatMessageResetLimit)
+		if time.Now().Before(resetTime) {
+			messageCreditsInfo += fmt.Sprintf("\n⏰ **Credits reset in:** %s", time.Until(resetTime).Round(time.Minute))
+		}
+	}
+
+	embedBuilders[0].SetDescription(messageCreditsInfo).
+		SetColor(constants.DefaultEmbedColor)
 
 	// Calculate page boundaries (showing latest messages first)
 	end := max(len(b.history.Messages)-(b.page*constants.ChatMessagesPerPage*2), 0)
@@ -94,45 +119,44 @@ func (b *Builder) Build() *discord.MessageUpdateBuilder {
 		embeds[i] = builder.Build()
 	}
 
-	// Build message
-	builder := discord.NewMessageUpdateBuilder().
-		SetEmbeds(embeds...)
+	return embeds
+}
 
-	// Only add components if not streaming
-	if !b.isStreaming {
-		components := []discord.ContainerComponent{
-			discord.NewActionRow(
-				discord.NewStringSelectMenu(constants.ChatModelSelectID, "Select Model",
-					discord.NewStringSelectMenuOption("Gemini 1.5 Flash 8B", enum.ChatModelGeminiFlash1_5_8B.String()).
-						WithDescription("Smaller model for fast reasoning and conversations").
-						WithDefault(b.model == enum.ChatModelGeminiFlash1_5_8B),
-				),
+// buildComponents creates all the interactive components.
+func (b *Builder) buildComponents() []discord.ContainerComponent {
+	messageCount := len(b.history.Messages) / 2
+	totalPages := max((messageCount-1)/constants.ChatMessagesPerPage, 0)
+
+	components := []discord.ContainerComponent{
+		discord.NewActionRow(
+			discord.NewStringSelectMenu(constants.ChatModelSelectID, "Select Model",
+				discord.NewStringSelectMenuOption("Gemini 1.5 Flash 8B", enum.ChatModelGeminiFlash1_5_8B.String()).
+					WithDescription("Smaller model for fast reasoning and conversations").
+					WithDefault(b.model == enum.ChatModelGeminiFlash1_5_8B),
 			),
-			discord.NewActionRow(
-				discord.NewSecondaryButton("◀️", constants.BackButtonCustomID),
-				discord.NewSecondaryButton("⏮️", string(session.ViewerFirstPage)).WithDisabled(b.page == 0),
-				discord.NewSecondaryButton("◀️", string(session.ViewerPrevPage)).WithDisabled(b.page == 0),
-				discord.NewSecondaryButton("▶️", string(session.ViewerNextPage)).WithDisabled(b.page == totalPages),
-				discord.NewSecondaryButton("⏭️", string(session.ViewerLastPage)).WithDisabled(b.page == totalPages),
-			),
-		}
-
-		// Add action buttons row with conditional clear context button
-		actionButtons := []discord.InteractiveComponent{
-			discord.NewPrimaryButton("Send Message", constants.ChatSendButtonID),
-			discord.NewDangerButton("Clear Chat", constants.ChatClearHistoryButtonID),
-		}
-		if b.context != "" {
-			actionButtons = append(actionButtons,
-				discord.NewDangerButton("Clear Context", constants.ChatClearContextButtonID),
-			)
-		}
-		components = append(components, discord.NewActionRow(actionButtons...))
-
-		builder.AddContainerComponents(components...)
+		),
+		discord.NewActionRow(
+			discord.NewSecondaryButton("◀️", constants.BackButtonCustomID),
+			discord.NewSecondaryButton("⏮️", string(session.ViewerFirstPage)).WithDisabled(b.page == 0),
+			discord.NewSecondaryButton("◀️", string(session.ViewerPrevPage)).WithDisabled(b.page == 0),
+			discord.NewSecondaryButton("▶️", string(session.ViewerNextPage)).WithDisabled(b.page == totalPages),
+			discord.NewSecondaryButton("⏭️", string(session.ViewerLastPage)).WithDisabled(b.page == totalPages),
+		),
 	}
 
-	return builder
+	// Add action buttons row with conditional clear context button
+	actionButtons := []discord.InteractiveComponent{
+		discord.NewPrimaryButton("Send Message", constants.ChatSendButtonID),
+		discord.NewDangerButton("Clear Chat", constants.ChatClearHistoryButtonID),
+	}
+	if b.context != "" {
+		actionButtons = append(actionButtons,
+			discord.NewDangerButton("Clear Context", constants.ChatClearContextButtonID),
+		)
+	}
+	components = append(components, discord.NewActionRow(actionButtons...))
+
+	return components
 }
 
 // addPaddedMessage adds a message to the embed with proper padding fields.
