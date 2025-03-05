@@ -45,18 +45,18 @@ func (m *MainMenu) handleSelectMenu(
 	case constants.BotSettingsButtonCustomID:
 		r.Show(event, s, constants.BotSettingsPageName, "")
 	case constants.BanUserButtonCustomID:
-		m.handleBanUserModal(event, r)
+		m.handleBanUserModal(event, s, r)
 	case constants.UnbanUserButtonCustomID:
-		m.handleUnbanUserModal(event, r)
+		m.handleUnbanUserModal(event, s, r)
 	case constants.DeleteUserButtonCustomID:
-		m.handleDeleteUserModal(event, r)
+		m.handleDeleteUserModal(event, s, r)
 	case constants.DeleteGroupButtonCustomID:
-		m.handleDeleteGroupModal(event, r)
+		m.handleDeleteGroupModal(event, s, r)
 	}
 }
 
 // handleBanUserModal opens a modal for entering a user ID to ban.
-func (m *MainMenu) handleBanUserModal(event *events.ComponentInteractionCreate, r *pagination.Respond) {
+func (m *MainMenu) handleBanUserModal(event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond) {
 	modal := discord.NewModalCreateBuilder().
 		SetCustomID(constants.BanUserModalCustomID).
 		SetTitle("Ban User").
@@ -82,17 +82,15 @@ func (m *MainMenu) handleBanUserModal(event *events.ComponentInteractionCreate, 
 				WithRequired(true).
 				WithPlaceholder("Enter notes about this ban...").
 				WithMaxLength(512),
-		).
-		Build()
+		)
 
-	if err := event.Modal(modal); err != nil {
-		m.layout.logger.Error("Failed to create ban user modal", zap.Error(err))
-		r.Error(event, "Failed to open the ban user modal. Please try again.")
-	}
+	r.Modal(event, s, modal)
 }
 
 // handleUnbanUserModal opens a modal for entering a user ID to unban.
-func (m *MainMenu) handleUnbanUserModal(event *events.ComponentInteractionCreate, r *pagination.Respond) {
+func (m *MainMenu) handleUnbanUserModal(
+	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond,
+) {
 	modal := discord.NewModalCreateBuilder().
 		SetCustomID(constants.UnbanUserModalCustomID).
 		SetTitle("Unban User").
@@ -106,17 +104,15 @@ func (m *MainMenu) handleUnbanUserModal(event *events.ComponentInteractionCreate
 				WithRequired(true).
 				WithPlaceholder("Enter notes about this unban...").
 				WithMaxLength(512),
-		).
-		Build()
+		)
 
-	if err := event.Modal(modal); err != nil {
-		m.layout.logger.Error("Failed to create unban user modal", zap.Error(err))
-		r.Error(event, "Failed to open the unban user modal. Please try again.")
-	}
+	r.Modal(event, s, modal)
 }
 
 // handleDeleteUserModal opens a modal for entering a user ID to delete.
-func (m *MainMenu) handleDeleteUserModal(event *events.ComponentInteractionCreate, r *pagination.Respond) {
+func (m *MainMenu) handleDeleteUserModal(
+	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond,
+) {
 	modal := discord.NewModalCreateBuilder().
 		SetCustomID(constants.DeleteUserModalCustomID).
 		SetTitle("Delete User").
@@ -130,17 +126,15 @@ func (m *MainMenu) handleDeleteUserModal(event *events.ComponentInteractionCreat
 				WithRequired(true).
 				WithPlaceholder("Enter the reason for deletion...").
 				WithMaxLength(512),
-		).
-		Build()
+		)
 
-	if err := event.Modal(modal); err != nil {
-		m.layout.logger.Error("Failed to create delete user modal", zap.Error(err))
-		r.Error(event, "Failed to open the delete user modal. Please try again.")
-	}
+	r.Modal(event, s, modal)
 }
 
 // handleDeleteGroupModal opens a modal for entering a group ID to delete.
-func (m *MainMenu) handleDeleteGroupModal(event *events.ComponentInteractionCreate, r *pagination.Respond) {
+func (m *MainMenu) handleDeleteGroupModal(
+	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond,
+) {
 	modal := discord.NewModalCreateBuilder().
 		SetCustomID(constants.DeleteGroupModalCustomID).
 		SetTitle("Delete Group").
@@ -154,13 +148,9 @@ func (m *MainMenu) handleDeleteGroupModal(event *events.ComponentInteractionCrea
 				WithRequired(true).
 				WithPlaceholder("Enter the reason for deletion...").
 				WithMaxLength(512),
-		).
-		Build()
+		)
 
-	if err := event.Modal(modal); err != nil {
-		m.layout.logger.Error("Failed to create delete group modal", zap.Error(err))
-		r.Error(event, "Failed to open the delete group modal. Please try again.")
-	}
+	r.Modal(event, s, modal)
 }
 
 // handleButton processes button interactions.

@@ -79,8 +79,8 @@ func (c *GroupChecker) CheckGroupPercentages(
 			Description: groupInfo.Description,
 			Owner:       groupInfo.Owner,
 			Shout:       groupInfo.Shout,
-			Reasons: types.Reasons{
-				enum.ReasonTypeGroup: &types.Reason{
+			Reasons: types.Reasons[enum.GroupReasonType]{
+				enum.GroupReasonTypeMember: &types.Reason{
 					Message:    reason,
 					Confidence: 0, // NOTE: Confidence will be updated later
 				},
@@ -252,8 +252,8 @@ func (c *GroupChecker) processUserGroups(
 			DisplayName: userInfo.DisplayName,
 			Description: userInfo.Description,
 			CreatedAt:   userInfo.CreatedAt,
-			Reasons: types.Reasons{
-				enum.ReasonTypeGroup: &types.Reason{
+			Reasons: types.Reasons[enum.UserReasonType]{
+				enum.UserReasonTypeGroup: &types.Reason{
 					Message:    "Member of multiple inappropriate groups.",
 					Confidence: math.Round(confidence*100) / 100,
 				},

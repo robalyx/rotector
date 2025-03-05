@@ -97,6 +97,9 @@ func main() {
 		{Name: "GroupMembers", Type: "map[uint64]*types.ReviewUser", Doc: "GroupMembers stores member details for the current group", Persist: false},
 		{Name: "GroupPageMembers", Type: "[]uint64", Doc: "GroupPageMembers stores the current page of group members", Persist: false},
 
+		// Reason related keys
+		{Name: "SelectedReasonType", Type: "string", Doc: "SelectedReasonType stores the currently selected reason type for modal handling", Persist: true},
+
 		// Discord user lookup related keys
 		{Name: "DiscordUserLookupID", Type: "uint64", Doc: "DiscordUserLookupID stores the Discord user ID being looked up", Persist: true},
 		{Name: "DiscordUserLookupName", Type: "string", Doc: "DiscordUserLookupName stores the Discord username", Persist: true},

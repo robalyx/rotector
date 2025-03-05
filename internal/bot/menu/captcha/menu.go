@@ -70,20 +70,7 @@ func (m *Menu) handleButton(
 	case constants.CaptchaRefreshButtonCustomID:
 		r.Reload(event, s, "Generated new CAPTCHA.")
 	case constants.CaptchaAnswerButtonCustomID:
-		modal := discord.NewModalCreateBuilder().
-			SetCustomID(constants.CaptchaAnswerModalCustomID).
-			SetTitle("Enter CAPTCHA Answer").
-			AddActionRow(
-				discord.NewTextInput(constants.CaptchaAnswerInputCustomID, discord.TextInputStyleShort, "Answer").
-					WithRequired(true).
-					WithPlaceholder("Enter the 6 digits you see..."),
-			).
-			Build()
-
-		if err := event.Modal(modal); err != nil {
-			m.layout.logger.Error("Failed to show CAPTCHA modal", zap.Error(err))
-			r.Error(event, "Failed to open CAPTCHA input form. Please try again.")
-		}
+		m.handleCaptchaAnswer(event, s, r)
 	}
 }
 
@@ -126,4 +113,18 @@ func (m *Menu) handleModal(
 	r.NavigateBack(event, s, "✅ CAPTCHA verified successfully!")
 	session.CaptchaAnswer.Delete(s)
 	session.ImageBuffer.Delete(s)
+}
+
+// handleCaptchaAnswer handles the modal for the CAPTCHA answer.
+func (m *Menu) handleCaptchaAnswer(event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond) {
+	modal := discord.NewModalCreateBuilder().
+		SetCustomID(constants.CaptchaAnswerModalCustomID).
+		SetTitle("Enter CAPTCHA Answer").
+		AddActionRow(
+			discord.NewTextInput(constants.CaptchaAnswerInputCustomID, discord.TextInputStyleShort, "Answer").
+				WithRequired(true).
+				WithPlaceholder("Enter the 6 digits you see..."),
+		)
+
+	r.Modal(event, s, modal)
 }

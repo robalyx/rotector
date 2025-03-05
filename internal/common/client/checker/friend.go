@@ -116,7 +116,7 @@ func (c *FriendChecker) ProcessUsers(userInfos []*fetcher.Info, flaggedUsers map
 
 			if existingUser, ok := flaggedUsers[userInfo.ID]; ok {
 				// Add new reason
-				existingUser.Reasons[enum.ReasonTypeFriend] = &types.Reason{
+				existingUser.Reasons[enum.UserReasonTypeFriend] = &types.Reason{
 					Message:    reason,
 					Confidence: confidence,
 				}
@@ -127,8 +127,8 @@ func (c *FriendChecker) ProcessUsers(userInfos []*fetcher.Info, flaggedUsers map
 					DisplayName: userInfo.DisplayName,
 					Description: userInfo.Description,
 					CreatedAt:   userInfo.CreatedAt,
-					Reasons: types.Reasons{
-						enum.ReasonTypeFriend: &types.Reason{
+					Reasons: types.Reasons[enum.UserReasonType]{
+						enum.UserReasonTypeFriend: &types.Reason{
 							Message:    reason,
 							Confidence: confidence,
 						},

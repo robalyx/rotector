@@ -17,21 +17,21 @@ var (
 
 // Group combines all the information needed to review a group.
 type Group struct {
-	ID                  uint64            `bun:",pk"        json:"id"`
-	UUID                uuid.UUID         `bun:",notnull"   json:"uuid"`
-	Name                string            `bun:",notnull"   json:"name"`
-	Description         string            `bun:",notnull"   json:"description"`
-	Owner               *types.GroupUser  `bun:"type:jsonb" json:"owner"`
-	Shout               *types.GroupShout `bun:"type:jsonb" json:"shout"`
-	Reasons             Reasons           `bun:"type:jsonb" json:"reasons"`
-	Confidence          float64           `bun:",notnull"   json:"confidence"`
-	LastScanned         time.Time         `bun:",notnull"   json:"lastScanned"`
-	LastUpdated         time.Time         `bun:",notnull"   json:"lastUpdated"`
-	LastViewed          time.Time         `bun:",notnull"   json:"lastViewed"`
-	LastLockCheck       time.Time         `bun:",notnull"   json:"lastLockCheck"`
-	IsLocked            bool              `bun:",notnull"   json:"isLocked"`
-	ThumbnailURL        string            `bun:",notnull"   json:"thumbnailUrl"`
-	LastThumbnailUpdate time.Time         `bun:",notnull"   json:"lastThumbnailUpdate"`
+	ID                  uint64                        `bun:",pk"        json:"id"`
+	UUID                uuid.UUID                     `bun:",notnull"   json:"uuid"`
+	Name                string                        `bun:",notnull"   json:"name"`
+	Description         string                        `bun:",notnull"   json:"description"`
+	Owner               *types.GroupUser              `bun:"type:jsonb" json:"owner"`
+	Shout               *types.GroupShout             `bun:"type:jsonb" json:"shout"`
+	Reasons             Reasons[enum.GroupReasonType] `bun:"type:jsonb" json:"reasons"`
+	Confidence          float64                       `bun:",notnull"   json:"confidence"`
+	LastScanned         time.Time                     `bun:",notnull"   json:"lastScanned"`
+	LastUpdated         time.Time                     `bun:",notnull"   json:"lastUpdated"`
+	LastViewed          time.Time                     `bun:",notnull"   json:"lastViewed"`
+	LastLockCheck       time.Time                     `bun:",notnull"   json:"lastLockCheck"`
+	IsLocked            bool                          `bun:",notnull"   json:"isLocked"`
+	ThumbnailURL        string                        `bun:",notnull"   json:"thumbnailUrl"`
+	LastThumbnailUpdate time.Time                     `bun:",notnull"   json:"lastThumbnailUpdate"`
 }
 
 // FlaggedGroup extends Group to track groups that need review.

@@ -404,7 +404,7 @@ func (a *UserAnalyzer) validateAndUpdateFlaggedUsers(
 		if isValid {
 			mu.Lock()
 			if existingUser, ok := flaggedUsers[originalInfo.ID]; ok {
-				existingUser.Reasons[enum.ReasonTypeUser] = &types.Reason{
+				existingUser.Reasons[enum.UserReasonTypeDescription] = &types.Reason{
 					Message:    flaggedUser.Reason,
 					Confidence: flaggedUser.Confidence,
 					Evidence:   flaggedUser.FlaggedContent,
@@ -416,8 +416,8 @@ func (a *UserAnalyzer) validateAndUpdateFlaggedUsers(
 					DisplayName: originalInfo.DisplayName,
 					Description: originalInfo.Description,
 					CreatedAt:   originalInfo.CreatedAt,
-					Reasons: types.Reasons{
-						enum.ReasonTypeUser: &types.Reason{
+					Reasons: types.Reasons[enum.UserReasonType]{
+						enum.UserReasonTypeDescription: &types.Reason{
 							Message:    flaggedUser.Reason,
 							Confidence: flaggedUser.Confidence,
 							Evidence:   flaggedUser.FlaggedContent,

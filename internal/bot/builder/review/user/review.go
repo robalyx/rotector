@@ -242,9 +242,6 @@ func (b *ReviewBuilder) buildActionOptions() []discord.StringSelectMenuOption {
 			discord.NewStringSelectMenuOption("Recheck user", constants.RecheckButtonCustomID).
 				WithEmoji(discord.ComponentEmoji{Name: "🔄"}).
 				WithDescription("Add user to high priority queue for recheck"),
-			discord.NewStringSelectMenuOption("Confirm with reason", constants.ConfirmWithReasonButtonCustomID).
-				WithEmoji(discord.ComponentEmoji{Name: "🚫"}).
-				WithDescription("Confirm the user with a custom reason"),
 			discord.NewStringSelectMenuOption("Change Review Mode", constants.ReviewModeOption).
 				WithEmoji(discord.ComponentEmoji{Name: "🎓"}).
 				WithDescription("Switch between training and standard modes"),
@@ -273,6 +270,15 @@ func (b *ReviewBuilder) buildComponents() []discord.ContainerComponent {
 		),
 	)
 
+	// Add reason management dropdown for reviewers
+	if b.isReviewer && b.reviewMode != enum.ReviewModeTraining {
+		components = append(components,
+			discord.NewActionRow(
+				discord.NewStringSelectMenu(constants.ReasonSelectMenuCustomID, "Manage Reasons", b.buildReasonOptions()...),
+			),
+		)
+	}
+
 	// Add action options menu
 	components = append(components,
 		discord.NewActionRow(
@@ -289,6 +295,40 @@ func (b *ReviewBuilder) buildComponents() []discord.ContainerComponent {
 	))
 
 	return components
+}
+
+// buildReasonOptions creates the reason management options.
+func (b *ReviewBuilder) buildReasonOptions() []discord.StringSelectMenuOption {
+	options := make([]discord.StringSelectMenuOption, 0)
+
+	// Define available reason types for users
+	reasonTypes := []enum.UserReasonType{
+		enum.UserReasonTypeDescription,
+		enum.UserReasonTypeFriend,
+		enum.UserReasonTypeOutfit,
+		enum.UserReasonTypeGroup,
+	}
+
+	for _, reasonType := range reasonTypes {
+		// Check if this reason type exists
+		_, exists := b.user.Reasons[reasonType]
+
+		var action string
+		optionValue := reasonType.String()
+		if exists {
+			action = "Remove"
+		} else {
+			action = "Add"
+			optionValue += constants.ModalOpenSuffix
+		}
+
+		options = append(options, discord.NewStringSelectMenuOption(
+			fmt.Sprintf("%s %s reason", action, reasonType.String()),
+			optionValue,
+		).WithEmoji(discord.ComponentEmoji{Name: getReasonEmoji(reasonType)}))
+	}
+
+	return options
 }
 
 // getConfirmButtonLabel returns the appropriate label for the confirm button based on review mode.
@@ -331,35 +371,18 @@ func (b *ReviewBuilder) getReasonField() string {
 	var formattedReasons []string
 
 	// Order of reason types to display
-	reasonTypes := []enum.ReasonType{
-		enum.ReasonTypeUser,
-		enum.ReasonTypeFriend,
-		enum.ReasonTypeOutfit,
-		enum.ReasonTypeGroup,
+	reasonTypes := []enum.UserReasonType{
+		enum.UserReasonTypeDescription,
+		enum.UserReasonTypeFriend,
+		enum.UserReasonTypeOutfit,
+		enum.UserReasonTypeGroup,
 	}
 
 	for _, reasonType := range reasonTypes {
 		if reason, ok := b.user.Reasons[reasonType]; ok {
-			// Add section header with emoji based on type
-			var emoji string
-			switch reasonType {
-			case enum.ReasonTypeUser:
-				emoji = "👤"
-			case enum.ReasonTypeFriend:
-				emoji = "👥"
-			case enum.ReasonTypeOutfit:
-				emoji = "👕"
-			case enum.ReasonTypeGroup:
-				emoji = "🌐"
-			case enum.ReasonTypeCustom:
-				emoji = "🔍"
-			case enum.ReasonTypeMember:
-				// Do nothing
-			}
-
 			// Join all reasons of this type
 			section := fmt.Sprintf("%s **%s**\n%s",
-				emoji,
+				getReasonEmoji(reasonType),
 				reasonType.String(),
 				reason.Message,
 			)
@@ -695,4 +718,20 @@ func (b *ReviewBuilder) getGroupsField() string {
 		return "Groups (" + strings.Join(parts, ", ") + ")"
 	}
 	return "Groups"
+}
+
+// getReasonEmoji returns the appropriate emoji for a reason type.
+func getReasonEmoji(reasonType enum.UserReasonType) string {
+	switch reasonType {
+	case enum.UserReasonTypeDescription:
+		return "🔞"
+	case enum.UserReasonTypeFriend:
+		return "👥"
+	case enum.UserReasonTypeOutfit:
+		return "👕"
+	case enum.UserReasonTypeGroup:
+		return "🌐"
+	default:
+		return "❓"
+	}
 }

@@ -201,9 +201,3 @@ func (m *Manager) RespondWithClear(event interfaces.CommonEvent, message string)
 	respond := NewRespond(m.sessionManager, m)
 	respond.Clear(event, message)
 }
-
-// RespondWithCancel updates the interaction response with a cancel message.
-func (m *Manager) RespondWithCancel(event interfaces.CommonEvent, s *session.Session, message string) {
-	respond := NewRespond(m.sessionManager, m)
-	respond.Cancel(event, s, message)
-}

@@ -142,15 +142,15 @@ func (m *TicketMenu) handleButton(
 	case constants.BackButtonCustomID:
 		r.NavigateBack(event, s, "")
 	case constants.AppealRespondButtonCustomID:
-		m.handleRespond(event, r)
+		m.handleRespond(event, s, r)
 	case constants.AppealLookupUserButtonCustomID:
 		m.handleLookupUser(event, s, r, appeal)
 	case constants.AppealClaimButtonCustomID:
 		m.handleClaimAppeal(event, s, r, appeal)
 	case constants.AcceptAppealButtonCustomID:
-		m.handleAcceptAppeal(event, r)
+		m.handleAcceptAppeal(event, s, r)
 	case constants.RejectAppealButtonCustomID:
-		m.handleRejectAppeal(event, r)
+		m.handleRejectAppeal(event, s, r)
 	case constants.AppealCloseButtonCustomID:
 		m.handleCloseAppeal(event, s, r, appeal)
 	}
@@ -158,7 +158,7 @@ func (m *TicketMenu) handleButton(
 
 // handleRespond opens a modal for responding to the appeal.
 func (m *TicketMenu) handleRespond(
-	event *events.ComponentInteractionCreate, r *pagination.Respond,
+	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond,
 ) {
 	modal := discord.NewModalCreateBuilder().
 		SetCustomID(constants.AppealRespondModalCustomID).
@@ -168,13 +168,9 @@ func (m *TicketMenu) handleRespond(
 				WithRequired(true).
 				WithMaxLength(512).
 				WithPlaceholder("Type your response..."),
-		).
-		Build()
+		)
 
-	if err := event.Modal(modal); err != nil {
-		m.layout.logger.Error("Failed to create response modal", zap.Error(err))
-		r.Error(event, "Failed to open response modal. Please try again.")
-	}
+	r.Modal(event, s, modal)
 }
 
 // handleLookupUser opens the review menu for the appealed user.
@@ -254,7 +250,9 @@ func (m *TicketMenu) handleClaimAppeal(
 }
 
 // handleAcceptAppeal opens a modal for accepting the appeal with a reason.
-func (m *TicketMenu) handleAcceptAppeal(event *events.ComponentInteractionCreate, r *pagination.Respond) {
+func (m *TicketMenu) handleAcceptAppeal(
+	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond,
+) {
 	modal := discord.NewModalCreateBuilder().
 		SetCustomID(constants.AcceptAppealModalCustomID).
 		SetTitle("Accept Appeal").
@@ -262,17 +260,15 @@ func (m *TicketMenu) handleAcceptAppeal(event *events.ComponentInteractionCreate
 			discord.NewTextInput(constants.AppealReasonInputCustomID, discord.TextInputStyleParagraph, "Accept Reason").
 				WithRequired(true).
 				WithPlaceholder("Enter the reason for accepting this appeal..."),
-		).
-		Build()
+		)
 
-	if err := event.Modal(modal); err != nil {
-		m.layout.logger.Error("Failed to create accept modal", zap.Error(err))
-		r.Error(event, "Failed to open accept modal. Please try again.")
-	}
+	r.Modal(event, s, modal)
 }
 
 // handleRejectAppeal opens a modal for rejecting the appeal with a reason.
-func (m *TicketMenu) handleRejectAppeal(event *events.ComponentInteractionCreate, r *pagination.Respond) {
+func (m *TicketMenu) handleRejectAppeal(
+	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond,
+) {
 	modal := discord.NewModalCreateBuilder().
 		SetCustomID(constants.RejectAppealModalCustomID).
 		SetTitle("Reject Appeal").
@@ -280,13 +276,9 @@ func (m *TicketMenu) handleRejectAppeal(event *events.ComponentInteractionCreate
 			discord.NewTextInput(constants.AppealReasonInputCustomID, discord.TextInputStyleParagraph, "Reject Reason").
 				WithRequired(true).
 				WithPlaceholder("Enter the reason for rejecting this appeal..."),
-		).
-		Build()
+		)
 
-	if err := event.Modal(modal); err != nil {
-		m.layout.logger.Error("Failed to create reject modal", zap.Error(err))
-		r.Error(event, "Failed to open reject modal. Please try again.")
-	}
+	r.Modal(event, s, modal)
 }
 
 // handleCloseAppeal handles the user closing their own appeal ticket.

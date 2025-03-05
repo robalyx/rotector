@@ -64,31 +64,14 @@ func (m *Menu) handleButton(
 
 	switch customID {
 	case constants.ChatSendButtonID:
-		modal := discord.NewModalCreateBuilder().
-			SetCustomID(constants.ChatInputModalID).
-			SetTitle("Chat with AI").
-			AddActionRow(
-				discord.NewTextInput(constants.ChatInputCustomID, discord.TextInputStyleParagraph, "Message").
-					WithRequired(true).
-					WithMaxLength(512).
-					WithPlaceholder("Type your message here..."),
-			).
-			Build()
-
-		if err := event.Modal(modal); err != nil {
-			m.layout.logger.Error("Failed to create modal", zap.Error(err))
-			r.Error(event, "Failed to open chat input. Please try again.")
-		}
-
+		m.handleChatSend(event, s, r)
 	case constants.BackButtonCustomID:
 		r.NavigateBack(event, s, "")
-
 	case constants.ChatClearHistoryButtonID:
 		// Clear chat history
 		session.ChatHistory.Set(s, ai.ChatHistory{Messages: make([]*ai.ChatMessage, 0)})
 		session.PaginationPage.Set(s, 0)
 		r.Reload(event, s, "Chat history cleared.")
-
 	case constants.ChatClearContextButtonID:
 		session.ChatContext.Delete(s)
 		r.Reload(event, s, "Context cleared.")
@@ -194,6 +177,21 @@ func (m *Menu) handleModal(
 		// Show final message
 		r.Reload(event, s, "Response completed.")
 	}
+}
+
+// handleChatSend handles the chat send button.
+func (m *Menu) handleChatSend(event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond) {
+	modal := discord.NewModalCreateBuilder().
+		SetCustomID(constants.ChatInputModalID).
+		SetTitle("Chat with AI").
+		AddActionRow(
+			discord.NewTextInput(constants.ChatInputCustomID, discord.TextInputStyleParagraph, "Message").
+				WithRequired(true).
+				WithMaxLength(512).
+				WithPlaceholder("Type your message here..."),
+		)
+
+	r.Modal(event, s, modal)
 }
 
 // checkMessageLimits checks if the user has exceeded their daily message limit.

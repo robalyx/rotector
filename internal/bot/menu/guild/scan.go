@@ -274,7 +274,7 @@ func (m *ScanMenu) handleButton(
 
 // handleSelectMenu processes select menu interactions.
 func (m *ScanMenu) handleSelectMenu(
-	event *events.ComponentInteractionCreate, s *session.Session, _ *pagination.Respond, customID, option string,
+	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, customID, option string,
 ) {
 	if customID != constants.GuildScanFilterSelectMenuCustomID {
 		return
@@ -282,14 +282,14 @@ func (m *ScanMenu) handleSelectMenu(
 
 	switch option {
 	case constants.GuildScanMinGuildsOption:
-		m.showMinGuildsModal(event)
+		m.showMinGuildsModal(event, s, r)
 	case constants.GuildScanJoinDurationOption:
-		m.showJoinDurationModal(event, s)
+		m.showJoinDurationModal(event, s, r)
 	}
 }
 
 // showMinGuildsModal displays a modal for entering the minimum guilds filter.
-func (m *ScanMenu) showMinGuildsModal(event *events.ComponentInteractionCreate) {
+func (m *ScanMenu) showMinGuildsModal(event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond) {
 	modal := discord.NewModalCreateBuilder().
 		SetCustomID(constants.GuildScanMinGuildsModalCustomID).
 		SetTitle("Set Minimum Guilds Filter").
@@ -298,17 +298,15 @@ func (m *ScanMenu) showMinGuildsModal(event *events.ComponentInteractionCreate) 
 				WithPlaceholder("Enter minimum number of flagged guilds required").
 				WithRequired(true).
 				WithValue("1"),
-		).
-		Build()
+		)
 
-	if err := event.Modal(modal); err != nil {
-		m.layout.logger.Error("Failed to create min guilds modal",
-			zap.Error(err))
-	}
+	r.Modal(event, s, modal)
 }
 
 // showJoinDurationModal displays a modal for setting the minimum join duration filter.
-func (m *ScanMenu) showJoinDurationModal(event *events.ComponentInteractionCreate, s *session.Session) {
+func (m *ScanMenu) showJoinDurationModal(
+	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond,
+) {
 	// Get current minimum join duration
 	minJoinDuration := session.GuildScanMinJoinDuration.Get(s)
 
@@ -330,11 +328,9 @@ func (m *ScanMenu) showJoinDurationModal(event *events.ComponentInteractionCreat
 				Placeholder: placeholder,
 				Required:    false,
 			},
-		).
-		Build()
-	if err := event.Modal(modal); err != nil {
-		m.layout.logger.Error("Failed to create join duration modal", zap.Error(err))
-	}
+		)
+
+	r.Modal(event, s, modal)
 }
 
 // handleModal processes modal submissions.
@@ -415,16 +411,9 @@ func (m *ScanMenu) handleConfirmBans(
 				WithRequired(true).
 				WithPlaceholder("Enter the reason for banning these users...").
 				WithValue("Rotector: Banned for being in inappropriate guilds"),
-		).
-		Build()
+		)
 
-	if err := event.Modal(modal); err != nil {
-		m.layout.logger.Error("Failed to create ban confirmation modal",
-			zap.Error(err),
-			zap.Uint64("guild_id", guildID))
-		r.Error(event, "Failed to open confirmation dialog. Please try again.")
-		return
-	}
+	r.Modal(event, s, modal)
 }
 
 // handleBanConfirmModal processes the ban confirmation modal submission.

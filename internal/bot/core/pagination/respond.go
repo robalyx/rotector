@@ -4,9 +4,11 @@ import (
 	"context"
 
 	"github.com/disgoorg/disgo/discord"
+	"github.com/disgoorg/disgo/events"
 	"github.com/robalyx/rotector/internal/bot/core/session"
 	"github.com/robalyx/rotector/internal/bot/interfaces"
 	"github.com/robalyx/rotector/internal/bot/utils"
+	"go.uber.org/zap"
 )
 
 // Respond is a helper struct that handles responding to Discord interactions.
@@ -38,6 +40,11 @@ func (r *Respond) Error(event interfaces.CommonEvent, message string) {
 	_, _ = event.Client().Rest().UpdateInteractionResponse(event.ApplicationID(), event.Token(), messageUpdate)
 	r.sessionManager.CloseSession(context.Background(), uint64(event.User().ID))
 	r.responded = true
+
+	r.paginationManager.logger.Debug("Fatal error",
+		zap.Uint64("user_id", uint64(event.User().ID)),
+		zap.String("message", message),
+	)
 }
 
 // Clear updates the interaction response with a message and clears the embeds, files, and components.
@@ -105,5 +112,20 @@ func (r *Respond) Show(event interfaces.CommonEvent, s *session.Session, pageNam
 func (r *Respond) UpdatePage(s *session.Session, pageName string) {
 	page := r.paginationManager.GetPage(pageName)
 	r.paginationManager.UpdatePage(s, page)
+	r.responded = true
+}
+
+// Modal updates the interaction response with a modal.
+func (r *Respond) Modal(event *events.ComponentInteractionCreate, s *session.Session, modal *discord.ModalCreateBuilder) {
+	if err := event.Modal(modal.Build()); err != nil {
+		r.paginationManager.logger.Error("Failed to create modal",
+			zap.Error(err),
+			zap.String("custom_id", modal.CustomID),
+			zap.String("title", modal.Title),
+		)
+		r.Error(event, "Failed to open the modal. Please try again.")
+		return
+	}
+	s.Touch(context.Background())
 	r.responded = true
 }

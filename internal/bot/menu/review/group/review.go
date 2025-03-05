@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math"
 	"strconv"
 	"strings"
 	"time"
@@ -19,6 +18,7 @@ import (
 	"github.com/robalyx/rotector/internal/bot/menu/log"
 	"github.com/robalyx/rotector/internal/common/storage/database/types"
 	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
+	"github.com/robalyx/rotector/internal/common/utils"
 	"go.uber.org/zap"
 )
 
@@ -105,6 +105,8 @@ func (m *ReviewMenu) handleSelectMenu(
 		m.handleSortOrderSelection(event, s, r, option)
 	case constants.ActionSelectMenuCustomID:
 		m.handleActionSelection(event, s, r, option)
+	case constants.ReasonSelectMenuCustomID:
+		m.handleReasonSelection(event, s, r, option)
 	}
 }
 
@@ -137,7 +139,6 @@ func (m *ReviewMenu) handleActionSelection(
 	switch option {
 	case constants.OpenAIChatButtonCustomID,
 		constants.GroupViewLogsButtonCustomID,
-		constants.GroupConfirmWithReasonButtonCustomID,
 		constants.ReviewModeOption:
 		if !isReviewer {
 			m.layout.logger.Error("Non-reviewer attempted restricted action",
@@ -157,8 +158,6 @@ func (m *ReviewMenu) handleActionSelection(
 		m.handleOpenAIChat(event, s, r)
 	case constants.GroupViewLogsButtonCustomID:
 		m.handleViewGroupLogs(event, s, r)
-	case constants.GroupConfirmWithReasonButtonCustomID:
-		m.handleConfirmWithReason(event, r)
 	case constants.ReviewModeOption:
 		session.SettingType.Set(s, constants.UserSettingPrefix)
 		session.SettingCustomID.Set(s, constants.ReviewModeOption)
@@ -190,15 +189,15 @@ func (m *ReviewMenu) handleButton(
 	}
 }
 
-// handleModal processes modal submissions.
+// handleModal handles modal submissions for the review menu.
 func (m *ReviewMenu) handleModal(event *events.ModalSubmitInteractionCreate, s *session.Session, r *pagination.Respond) {
 	if m.checkCaptchaRequired(event, s, r) {
 		return
 	}
 
 	switch event.Data.CustomID {
-	case constants.ConfirmWithReasonModalCustomID:
-		m.handleConfirmWithReasonModalSubmit(event, s, r)
+	case constants.AddReasonModalCustomID:
+		m.handleReasonModalSubmit(event, s, r)
 	}
 }
 
@@ -314,31 +313,6 @@ func (m *ReviewMenu) handleViewGroupLogs(
 
 	// Show the logs menu
 	r.Show(event, s, constants.LogPageName, "")
-}
-
-// handleConfirmWithReason opens a modal for entering a custom confirm reason.
-func (m *ReviewMenu) handleConfirmWithReason(event *events.ComponentInteractionCreate, r *pagination.Respond) {
-	// Create modal with pre-filled reason and confidence fields
-	modal := discord.NewModalCreateBuilder().
-		SetCustomID(constants.ConfirmWithReasonModalCustomID).
-		SetTitle("Confirm Group with Reason").
-		AddActionRow(
-			discord.NewTextInput(constants.ConfirmConfidenceInputCustomID, discord.TextInputStyleShort, "Confidence").
-				WithRequired(true).
-				WithPlaceholder("Enter confidence value (0.0-1.0)"),
-		).
-		AddActionRow(
-			discord.NewTextInput(constants.ConfirmReasonInputCustomID, discord.TextInputStyleParagraph, "Confirm Reason").
-				WithRequired(true).
-				WithPlaceholder("Enter the reason for confirming this group..."),
-		).
-		Build()
-
-	// Show modal to user
-	if err := event.Modal(modal); err != nil {
-		m.layout.logger.Error("Failed to create modal", zap.Error(err))
-		r.Error(event, "Failed to open the confirm reason form. Please try again.")
-	}
 }
 
 // handleConfirmGroup moves a group to the confirmed state and logs the action.
@@ -521,62 +495,175 @@ func (m *ReviewMenu) handleSkipGroup(event interfaces.CommonEvent, s *session.Se
 	}
 }
 
-// handleConfirmWithReasonModalSubmit processes the custom confirm reason from the modal.
-func (m *ReviewMenu) handleConfirmWithReasonModalSubmit(
+// handleReasonModalSubmit processes the reason message from the modal.
+func (m *ReviewMenu) handleReasonModalSubmit(
 	event *events.ModalSubmitInteractionCreate, s *session.Session, r *pagination.Respond,
 ) {
-	// Get and validate the confirm reason
-	reason := event.Data.Text(constants.ConfirmReasonInputCustomID)
-	if reason == "" {
-		r.Cancel(event, s, "Confirm reason cannot be empty. Please try again.")
+	// Get the reason type from session
+	reasonTypeStr := session.SelectedReasonType.Get(s)
+	reasonType, err := enum.GroupReasonTypeString(reasonTypeStr)
+	if err != nil {
+		r.Error(event, "Invalid reason type: "+reasonTypeStr)
 		return
 	}
 
-	// Get and validate the confidence value
-	confidenceStr := event.Data.Text(constants.ConfirmConfidenceInputCustomID)
+	// Get the reason message from the modal
+	reasonMessage := event.Data.Text(constants.AddReasonInputCustomID)
+	if reasonMessage == "" {
+		r.Cancel(event, s, "Reason message cannot be empty. Please try again.")
+		return
+	}
+
+	// Get and validate confidence value
+	confidenceStr := event.Data.Text(constants.AddReasonConfidenceInputCustomID)
 	confidence, err := strconv.ParseFloat(confidenceStr, 64)
-	if err != nil || confidence < 0 || confidence > 1 {
-		r.Cancel(event, s, "Invalid confidence value. Must be between 0.0 and 1.0")
+	if err != nil || confidence < 0.01 || confidence > 1.0 {
+		r.Cancel(event, s, "Invalid confidence value. Please enter a number between 0.01 and 1.00.")
 		return
 	}
 
-	// Round confidence to 2 decimal places
-	confidence = math.Round(confidence*100) / 100
-
-	// Update group's reason and confidence with the custom input
+	// Get current group
 	group := session.GroupTarget.Get(s)
-	group.Reasons = types.Reasons{
-		enum.ReasonTypeCustom: &types.Reason{
-			Message:    reason,
-			Confidence: confidence,
-		},
-	}
-
-	// Update group status in database
-	if err := m.layout.db.Models().Groups().ConfirmGroup(context.Background(), group); err != nil {
-		m.layout.logger.Error("Failed to confirm group", zap.Error(err))
-		r.Error(event, "Failed to confirm the group. Please try again.")
+	if group == nil {
+		r.Error(event, "No group selected")
 		return
 	}
 
-	// Clear current group and load next one
-	session.GroupTarget.Delete(s)
-	r.Reload(event, s, "Group confirmed.")
-	m.updateCounters(s)
+	// Initialize reasons map if nil
+	if group.Reasons == nil {
+		group.Reasons = make(types.Reasons[enum.GroupReasonType])
+	}
 
-	// Log the custom confirm action
+	// Add the reason
+	group.Reasons[reasonType] = &types.Reason{
+		Message:    reasonMessage,
+		Confidence: confidence,
+	}
+
+	// Recalculate overall confidence
+	group.Confidence = utils.CalculateConfidence(group.Reasons)
+
+	// Update group in database
+	if err := m.layout.db.Models().Groups().SaveGroups(context.Background(), map[uint64]*types.Group{
+		group.ID: &group.Group,
+	}); err != nil {
+		m.layout.logger.Error("Failed to update group reasons", zap.Error(err))
+		r.Error(event, "Failed to update group reasons")
+		return
+	}
+
+	// Update session
+	session.GroupTarget.Set(s, group)
+	session.SelectedReasonType.Delete(s)
+
+	// Log the action
 	m.layout.db.Models().Activities().Log(context.Background(), &types.ActivityLog{
 		ActivityTarget: types.ActivityTarget{
 			GroupID: group.ID,
 		},
 		ReviewerID:        uint64(event.User().ID),
-		ActivityType:      enum.ActivityTypeGroupConfirmed,
+		ActivityType:      enum.ActivityTypeGroupReasonUpdated,
 		ActivityTimestamp: time.Now(),
 		Details: map[string]any{
-			"reasons":    group.Reasons.Messages(),
-			"confidence": group.Confidence,
+			"action":     "add",
+			"reasonType": reasonType.String(),
+			"message":    reasonMessage,
 		},
 	})
+
+	r.Reload(event, s, fmt.Sprintf("Successfully added %s reason", reasonType.String()))
+}
+
+// handleReasonSelection processes reason management dropdown selections.
+func (m *ReviewMenu) handleReasonSelection(
+	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, option string,
+) {
+	// Check if user is a reviewer
+	if !s.BotSettings().IsReviewer(uint64(event.User().ID)) {
+		m.layout.logger.Error("Non-reviewer attempted to manage reasons",
+			zap.Uint64("user_id", uint64(event.User().ID)))
+		r.Error(event, "You do not have permission to manage reasons.")
+		return
+	}
+
+	// Parse reason type
+	option = strings.TrimSuffix(option, constants.ModalOpenSuffix)
+	reasonType, err := enum.GroupReasonTypeString(option)
+	if err != nil {
+		r.Error(event, "Invalid reason type: "+option)
+		return
+	}
+
+	// Get current group
+	group := session.GroupTarget.Get(s)
+
+	// Initialize reasons map if nil
+	if group.Reasons == nil {
+		group.Reasons = make(types.Reasons[enum.GroupReasonType])
+	}
+
+	// Check if reason exists
+	if _, exists := group.Reasons[reasonType]; exists {
+		// Remove existing reason
+		delete(group.Reasons, reasonType)
+
+		// Recalculate overall confidence
+		group.Confidence = utils.CalculateConfidence(group.Reasons)
+
+		// Update group in database
+		if err := m.layout.db.Models().Groups().SaveGroups(context.Background(), map[uint64]*types.Group{
+			group.ID: &group.Group,
+		}); err != nil {
+			m.layout.logger.Error("Failed to update group reasons", zap.Error(err))
+			r.Error(event, "Failed to update group reasons")
+			return
+		}
+
+		// Update session
+		session.GroupTarget.Set(s, group)
+
+		// Log the action
+		m.layout.db.Models().Activities().Log(context.Background(), &types.ActivityLog{
+			ActivityTarget: types.ActivityTarget{
+				GroupID: group.ID,
+			},
+			ReviewerID:        uint64(event.User().ID),
+			ActivityType:      enum.ActivityTypeGroupReasonUpdated,
+			ActivityTimestamp: time.Now(),
+			Details: map[string]any{
+				"action":     "remove",
+				"reasonType": reasonType.String(),
+			},
+		})
+
+		r.Reload(event, s, fmt.Sprintf("Successfully removed %s reason", reasonType.String()))
+		return
+	}
+
+	// Store the selected reason type in session
+	session.SelectedReasonType.Set(s, option)
+
+	// Create modal for reason input
+	modal := discord.NewModalCreateBuilder().
+		SetCustomID(constants.AddReasonModalCustomID).
+		SetTitle(fmt.Sprintf("Add %s Reason", reasonType.String())).
+		AddActionRow(
+			discord.NewTextInput(constants.AddReasonInputCustomID, discord.TextInputStyleParagraph, "Reason").
+				WithRequired(true).
+				WithMinLength(32).
+				WithMaxLength(256).
+				WithPlaceholder("Enter the reason for flagging this group..."),
+		).
+		AddActionRow(
+			discord.NewTextInput(constants.AddReasonConfidenceInputCustomID, discord.TextInputStyleShort, "Confidence").
+				WithRequired(true).
+				WithMinLength(1).
+				WithMaxLength(4).
+				WithPlaceholder("Enter confidence (0.01-1.00)..."),
+		)
+
+	// Show modal to user
+	r.Modal(event, s, modal)
 }
 
 // fetchNewTarget gets a new group to review based on the current sort order.

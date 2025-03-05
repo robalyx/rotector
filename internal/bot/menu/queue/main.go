@@ -49,7 +49,7 @@ func (m *Menu) Show(_ interfaces.CommonEvent, s *session.Session, _ *pagination.
 
 // handleSelectMenu processes select menu interactions.
 func (m *Menu) handleSelectMenu(
-	event *events.ComponentInteractionCreate, _ *session.Session, r *pagination.Respond, customID, option string,
+	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, customID, option string,
 ) {
 	if customID != constants.ActionSelectMenuCustomID {
 		return
@@ -68,13 +68,9 @@ func (m *Menu) handleSelectMenu(
 			discord.NewTextInput(constants.ReasonInputCustomID, discord.TextInputStyleParagraph, "Reason").
 				WithRequired(true).
 				WithPlaceholder("Enter the reason for adding this user"),
-		).
-		Build()
+		)
 
-	if err := event.Modal(modal); err != nil {
-		m.layout.logger.Error("Failed to show modal", zap.Error(err))
-		r.Error(event, "Failed to show modal")
-	}
+	r.Modal(event, s, modal)
 }
 
 // handleButton processes button interactions.

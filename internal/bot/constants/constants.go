@@ -164,12 +164,14 @@ const (
 	ReviewOutfitsLimit = 10
 
 	SortOrderSelectMenuCustomID = "sort_order"
+	ReasonSelectMenuCustomID    = "reason_select"
 
-	ConfirmWithReasonModalCustomID = "confirm_with_reason_modal"
-	ConfirmConfidenceInputCustomID = "confirm_confidence"
-	ConfirmReasonInputCustomID     = "confirm_reason"
-	RecheckReasonModalCustomID     = "recheck_reason_modal"
-	RecheckReasonInputCustomID     = "recheck_reason"
+	AddReasonModalCustomID           = "add_reason_modal"
+	AddReasonInputCustomID           = "add_reason"
+	AddReasonConfidenceInputCustomID = "add_reason_confidence"
+
+	RecheckReasonModalCustomID = "recheck_reason_modal"
+	RecheckReasonInputCustomID = "recheck_reason"
 
 	ConfirmButtonCustomID = "confirm"
 	ClearButtonCustomID   = "clear"
@@ -178,14 +180,13 @@ const (
 
 // User Review Menu.
 const (
-	OpenAIChatButtonCustomID        = "open_ai_chat"
-	ConfirmWithReasonButtonCustomID = "confirm_with_reason" + ModalOpenSuffix
-	RecheckButtonCustomID           = "recheck" + ModalOpenSuffix
-	ViewUserLogsButtonCustomID      = "view_user_logs"
-	OpenOutfitsMenuButtonCustomID   = "open_outfits_menu"
-	OpenFriendsMenuButtonCustomID   = "open_friends_menu"
-	OpenGroupsMenuButtonCustomID    = "open_groups_menu"
-	AbortButtonCustomID             = "abort"
+	OpenAIChatButtonCustomID      = "open_ai_chat"
+	RecheckButtonCustomID         = "recheck" + ModalOpenSuffix
+	ViewUserLogsButtonCustomID    = "view_user_logs"
+	OpenOutfitsMenuButtonCustomID = "open_outfits_menu"
+	OpenFriendsMenuButtonCustomID = "open_friends_menu"
+	OpenGroupsMenuButtonCustomID  = "open_groups_menu"
+	AbortButtonCustomID           = "abort"
 )
 
 // User Review Menu - Friends Viewer.
@@ -211,10 +212,9 @@ const (
 
 // Group Review Menu.
 const (
-	GroupConfirmWithReasonButtonCustomID = "group_confirm_with_reason" + ModalOpenSuffix
-	GroupRecheckButtonCustomID           = "group_recheck" + ModalOpenSuffix
-	GroupViewMembersButtonCustomID       = "group_view_members"
-	GroupViewLogsButtonCustomID          = "group_view_logs"
+	GroupRecheckButtonCustomID     = "group_recheck" + ModalOpenSuffix
+	GroupViewMembersButtonCustomID = "group_view_members"
+	GroupViewLogsButtonCustomID    = "group_view_logs"
 )
 
 // Group Review Menu - Members Viewer.

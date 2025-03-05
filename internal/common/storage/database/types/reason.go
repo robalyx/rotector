@@ -1,6 +1,8 @@
 package types
 
 import (
+	"fmt"
+
 	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
 )
 
@@ -12,10 +14,13 @@ type Reason struct {
 }
 
 // Reasons maps reason types to their corresponding reason details.
-type Reasons map[enum.ReasonType]*Reason
+type Reasons[T interface {
+	enum.UserReasonType | enum.GroupReasonType
+	fmt.Stringer
+}] map[T]*Reason
 
 // Messages returns an array of all reason messages.
-func (r Reasons) Messages() []string {
+func (r Reasons[T]) Messages() []string {
 	messages := make([]string, 0, len(r))
 	for _, reason := range r {
 		messages = append(messages, reason.Message)
@@ -24,7 +29,7 @@ func (r Reasons) Messages() []string {
 }
 
 // Types returns an array of all reason types.
-func (r Reasons) Types() []string {
+func (r Reasons[T]) Types() []string {
 	types := make([]string, 0, len(r))
 	for reasonType := range r {
 		types = append(types, reasonType.String())

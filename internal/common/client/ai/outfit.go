@@ -375,7 +375,7 @@ func (a *OutfitAnalyzer) analyzeUserOutfits(
 	// If analysis is successful and violations found, update flaggedUsers map
 	mu.Lock()
 	if existingUser, ok := flaggedUsers[info.ID]; ok {
-		existingUser.Reasons[enum.ReasonTypeOutfit] = &types.Reason{
+		existingUser.Reasons[enum.UserReasonTypeOutfit] = &types.Reason{
 			Message:    analysis.Reason,
 			Confidence: analysis.Confidence,
 			Evidence:   analysis.Evidence,
@@ -387,8 +387,8 @@ func (a *OutfitAnalyzer) analyzeUserOutfits(
 			DisplayName: info.DisplayName,
 			Description: info.Description,
 			CreatedAt:   info.CreatedAt,
-			Reasons: types.Reasons{
-				enum.ReasonTypeOutfit: &types.Reason{
+			Reasons: types.Reasons[enum.UserReasonType]{
+				enum.UserReasonTypeOutfit: &types.Reason{
 					Message:    analysis.Reason,
 					Confidence: analysis.Confidence,
 					Evidence:   analysis.Evidence,

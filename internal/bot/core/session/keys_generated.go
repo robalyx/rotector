@@ -84,6 +84,8 @@ var (
 	GroupMembers = NewKey[map[uint64]*types.ReviewUser]("GroupMembers", false)
 	// GroupPageMembers stores the current page of group members
 	GroupPageMembers = NewKey[[]uint64]("GroupPageMembers", false)
+	// SelectedReasonType stores the currently selected reason type for modal handling
+	SelectedReasonType = NewKey[string]("SelectedReasonType", true)
 	// DiscordUserLookupID stores the Discord user ID being looked up
 	DiscordUserLookupID = NewKey[uint64]("DiscordUserLookupID", true)
 	// DiscordUserLookupName stores the Discord username

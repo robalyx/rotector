@@ -120,11 +120,11 @@ func (m *Menu) handleSelectMenu(
 	case constants.StartGroupReviewButtonCustomID:
 		r.Show(event, s, constants.GroupReviewPageName, "")
 	case constants.LookupRobloxUserButtonCustomID:
-		m.handleLookupRobloxUser(event, r)
+		m.handleLookupRobloxUser(event, s, r)
 	case constants.LookupRobloxGroupButtonCustomID:
-		m.handleLookupRobloxGroup(event, r)
+		m.handleLookupRobloxGroup(event, s, r)
 	case constants.LookupDiscordUserButtonCustomID:
-		m.handleLookupDiscordUser(event, r)
+		m.handleLookupDiscordUser(event, s, r)
 	case constants.UserSettingsButtonCustomID:
 		r.Show(event, s, constants.UserSettingsPageName, "")
 	case constants.ActivityBrowserButtonCustomID:
@@ -162,7 +162,7 @@ func (m *Menu) handleSelectMenu(
 }
 
 // handleLookupRobloxUser opens a modal for entering a specific Roblox user ID to lookup.
-func (m *Menu) handleLookupRobloxUser(event *events.ComponentInteractionCreate, r *pagination.Respond) {
+func (m *Menu) handleLookupRobloxUser(event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond) {
 	modal := discord.NewModalCreateBuilder().
 		SetCustomID(constants.LookupRobloxUserModalCustomID).
 		SetTitle("Lookup Roblox User").
@@ -170,16 +170,13 @@ func (m *Menu) handleLookupRobloxUser(event *events.ComponentInteractionCreate, 
 			discord.NewTextInput(constants.LookupRobloxUserInputCustomID, discord.TextInputStyleShort, "User ID or UUID").
 				WithRequired(true).
 				WithPlaceholder("Enter the user ID or UUID to lookup..."),
-		).
-		Build()
-	if err := event.Modal(modal); err != nil {
-		m.layout.logger.Error("Failed to create user lookup modal", zap.Error(err))
-		r.Error(event, "Failed to open the user lookup modal. Please try again.")
-	}
+		)
+
+	r.Modal(event, s, modal)
 }
 
 // handleLookupRobloxGroup opens a modal for entering a specific Roblox group ID to lookup.
-func (m *Menu) handleLookupRobloxGroup(event *events.ComponentInteractionCreate, r *pagination.Respond) {
+func (m *Menu) handleLookupRobloxGroup(event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond) {
 	modal := discord.NewModalCreateBuilder().
 		SetCustomID(constants.LookupRobloxGroupModalCustomID).
 		SetTitle("Lookup Roblox Group").
@@ -187,16 +184,13 @@ func (m *Menu) handleLookupRobloxGroup(event *events.ComponentInteractionCreate,
 			discord.NewTextInput(constants.LookupRobloxGroupInputCustomID, discord.TextInputStyleShort, "Group ID or UUID").
 				WithRequired(true).
 				WithPlaceholder("Enter the group ID or UUID to lookup..."),
-		).
-		Build()
-	if err := event.Modal(modal); err != nil {
-		m.layout.logger.Error("Failed to create group lookup modal", zap.Error(err))
-		r.Error(event, "Failed to open the group lookup modal. Please try again.")
-	}
+		)
+
+	r.Modal(event, s, modal)
 }
 
 // handleLookupDiscordUser opens a modal for entering a specific Discord user ID to lookup.
-func (m *Menu) handleLookupDiscordUser(event *events.ComponentInteractionCreate, r *pagination.Respond) {
+func (m *Menu) handleLookupDiscordUser(event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond) {
 	modal := discord.NewModalCreateBuilder().
 		SetCustomID(constants.LookupDiscordUserModalCustomID).
 		SetTitle("Lookup Discord User").
@@ -204,12 +198,9 @@ func (m *Menu) handleLookupDiscordUser(event *events.ComponentInteractionCreate,
 			discord.NewTextInput(constants.LookupDiscordUserInputCustomID, discord.TextInputStyleShort, "Discord User ID").
 				WithRequired(true).
 				WithPlaceholder("Enter the Discord user ID to lookup..."),
-		).
-		Build()
-	if err := event.Modal(modal); err != nil {
-		m.layout.logger.Error("Failed to create Discord user lookup modal", zap.Error(err))
-		r.Error(event, "Failed to open the Discord user lookup modal. Please try again.")
-	}
+		)
+
+	r.Modal(event, s, modal)
 }
 
 // handleModal processes modal submissions.

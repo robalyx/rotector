@@ -106,7 +106,7 @@ func (m *UpdateMenu) handleSettingButton(
 	// Handle different setting types
 	switch setting.Type {
 	case enum.SettingTypeID:
-		m.handleIDModal(event, r, setting)
+		m.handleIDModal(event, s, r, setting)
 	case enum.SettingTypeNumber:
 		m.handleNumberModal(event, s, r, setting)
 	case enum.SettingTypeText:
@@ -120,64 +120,55 @@ func (m *UpdateMenu) handleSettingButton(
 
 // handleIDModal handles the modal for ID type settings.
 func (m *UpdateMenu) handleIDModal(
-	event *events.ComponentInteractionCreate, r *pagination.Respond, setting *session.Setting,
+	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, setting *session.Setting,
 ) {
-	textInput := discord.NewTextInput("0", discord.TextInputStyleParagraph, setting.Name).
-		WithRequired(true).
-		WithPlaceholder("Enter the user ID to toggle...").
-		WithMaxLength(128)
-
 	modal := discord.NewModalCreateBuilder().
 		SetCustomID(setting.Key).
 		SetTitle("Toggle " + setting.Name).
-		AddActionRow(textInput)
+		AddActionRow(
+			discord.NewTextInput("0", discord.TextInputStyleParagraph, setting.Name).
+				WithRequired(true).
+				WithPlaceholder("Enter the user ID to toggle...").
+				WithMaxLength(128),
+		)
 
-	if err := event.Modal(modal.Build()); err != nil {
-		m.layout.logger.Error("Failed to open the ID input form", zap.Error(err))
-		r.Error(event, "Failed to open the form. Please try again.")
-	}
+	r.Modal(event, s, modal)
 }
 
 // handleNumberModal handles the modal for number type settings.
 func (m *UpdateMenu) handleNumberModal(
 	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, setting *session.Setting,
 ) {
-	textInput := discord.NewTextInput("0", discord.TextInputStyleParagraph, setting.Name).
-		WithRequired(true).
-		WithPlaceholder("Enter a number...").
-		WithMaxLength(128).
-		WithValue(session.SettingDisplay.Get(s))
-
 	modal := discord.NewModalCreateBuilder().
 		SetCustomID(setting.Key).
 		SetTitle("Set " + setting.Name).
-		AddActionRow(textInput)
+		AddActionRow(
+			discord.NewTextInput("0", discord.TextInputStyleParagraph, setting.Name).
+				WithRequired(true).
+				WithPlaceholder("Enter a number...").
+				WithMaxLength(128).
+				WithValue(session.SettingDisplay.Get(s)),
+		)
 
-	if err := event.Modal(modal.Build()); err != nil {
-		m.layout.logger.Error("Failed to open the number input form", zap.Error(err))
-		r.Error(event, "Failed to open the form. Please try again.")
-	}
+	r.Modal(event, s, modal)
 }
 
 // handleTextModal handles the modal for text type settings.
 func (m *UpdateMenu) handleTextModal(
 	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, setting *session.Setting,
 ) {
-	textInput := discord.NewTextInput("0", discord.TextInputStyleParagraph, setting.Name).
-		WithRequired(true).
-		WithPlaceholder("Enter your description...").
-		WithMaxLength(128).
-		WithValue(session.SettingDisplay.Get(s))
-
 	modal := discord.NewModalCreateBuilder().
 		SetCustomID(setting.Key).
 		SetTitle("Set " + setting.Name).
-		AddActionRow(textInput)
+		AddActionRow(
+			discord.NewTextInput("0", discord.TextInputStyleParagraph, setting.Name).
+				WithRequired(true).
+				WithPlaceholder("Enter your description...").
+				WithMaxLength(128).
+				WithValue(session.SettingDisplay.Get(s)),
+		)
 
-	if err := event.Modal(modal.Build()); err != nil {
-		m.layout.logger.Error("Failed to open the text input form", zap.Error(err))
-		r.Error(event, "Failed to open the form. Please try again.")
-	}
+	r.Modal(event, s, modal)
 }
 
 // handlePageChange handles pagination for ID and text type settings.

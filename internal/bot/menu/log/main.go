@@ -89,17 +89,17 @@ func (m *Menu) handleSelectMenu(
 	case constants.ActionSelectMenuCustomID:
 		switch option {
 		case constants.LogsQueryGuildIDOption:
-			m.showQueryModal(event, option, "Guild ID", "ID", "Enter the Guild ID to query logs")
+			m.showQueryModal(event, s, r, option, "Guild ID", "ID", "Enter the Guild ID to query logs")
 		case constants.LogsQueryDiscordIDOption:
-			m.showQueryModal(event, option, "Discord ID", "ID", "Enter the Discord ID to query logs")
+			m.showQueryModal(event, s, r, option, "Discord ID", "ID", "Enter the Discord ID to query logs")
 		case constants.LogsQueryUserIDOption:
-			m.showQueryModal(event, option, "User ID", "ID", "Enter the User ID to query logs")
+			m.showQueryModal(event, s, r, option, "User ID", "ID", "Enter the User ID to query logs")
 		case constants.LogsQueryGroupIDOption:
-			m.showQueryModal(event, option, "Group ID", "ID", "Enter the Group ID to query logs")
+			m.showQueryModal(event, s, r, option, "Group ID", "ID", "Enter the Group ID to query logs")
 		case constants.LogsQueryReviewerIDOption:
-			m.showQueryModal(event, option, "Reviewer ID", "ID", "Enter the Reviewer ID to query logs")
+			m.showQueryModal(event, s, r, option, "Reviewer ID", "ID", "Enter the Reviewer ID to query logs")
 		case constants.LogsQueryDateRangeOption:
-			m.showQueryModal(event, constants.LogsQueryDateRangeOption, "Date Range", "Date Range", "YYYY-MM-DD to YYYY-MM-DD")
+			m.showQueryModal(event, s, r, constants.LogsQueryDateRangeOption, "Date Range", "Date Range", "YYYY-MM-DD to YYYY-MM-DD")
 		}
 
 	case constants.LogsQueryActivityTypeFilterCustomID:
@@ -164,7 +164,10 @@ func (m *Menu) handleModal(event *events.ModalSubmitInteractionCreate, s *sessio
 }
 
 // showQueryModal creates and displays a modal for entering query parameters.
-func (m *Menu) showQueryModal(event *events.ComponentInteractionCreate, option, title, label, placeholder string) {
+func (m *Menu) showQueryModal(
+	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond,
+	option, title, label, placeholder string,
+) {
 	modal := discord.NewModalCreateBuilder().
 		SetCustomID(option).
 		SetTitle(title).
@@ -172,12 +175,9 @@ func (m *Menu) showQueryModal(event *events.ComponentInteractionCreate, option, 
 			discord.NewTextInput(constants.LogsQueryInputCustomID, discord.TextInputStyleShort, label).
 				WithPlaceholder(placeholder).
 				WithRequired(true),
-		).
-		Build()
+		)
 
-	if err := event.Modal(modal); err != nil {
-		m.layout.logger.Error("Failed to show query modal", zap.Error(err))
-	}
+	r.Modal(event, s, modal)
 }
 
 // handleIDModalSubmit processes ID-based query modal submissions.

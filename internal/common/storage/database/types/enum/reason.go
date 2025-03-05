@@ -1,21 +1,27 @@
 package enum
 
-// ReasonType represents the source of a flagging reason.
+// UserReasonType represents the source of a flagging reason.
 //
-//go:generate go tool enumer -type=ReasonType -trimprefix=ReasonType
-type ReasonType int
+//go:generate go tool enumer -type=UserReasonType -trimprefix=UserReasonType
+type UserReasonType int
 
 const (
-	// ReasonTypeUser indicates content analysis of user profile.
-	ReasonTypeUser ReasonType = iota
-	// ReasonTypeFriend indicates friend network analysis.
-	ReasonTypeFriend
-	// ReasonTypeOutfit indicates outfit analysis.
-	ReasonTypeOutfit
-	// ReasonTypeGroup indicates group membership analysis.
-	ReasonTypeGroup
-	// ReasonTypeMember indicates member analysis.
-	ReasonTypeMember
-	// ReasonTypeCustom indicates a custom reason.
-	ReasonTypeCustom
+	// UserReasonTypeDescription indicates content analysis of user profile.
+	UserReasonTypeDescription UserReasonType = iota
+	// UserReasonTypeFriend indicates friend network analysis.
+	UserReasonTypeFriend
+	// UserReasonTypeOutfit indicates outfit analysis.
+	UserReasonTypeOutfit
+	// UserReasonTypeGroup indicates group membership analysis.
+	UserReasonTypeGroup
+)
+
+// GroupReasonType represents the source of a flagging reason.
+//
+//go:generate go tool enumer -type=GroupReasonType -trimprefix=GroupReasonType
+type GroupReasonType int
+
+const (
+	// GroupReasonTypeMember indicates member analysis.
+	GroupReasonTypeMember GroupReasonType = iota
 )

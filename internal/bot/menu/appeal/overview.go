@@ -170,7 +170,7 @@ func (m *OverviewMenu) handleButton(
 		ResetAppealData(s)
 		r.Reload(event, s, "Appeals refreshed.")
 	case constants.AppealCreateButtonCustomID:
-		m.handleCreateAppeal(event, r)
+		m.handleCreateAppeal(event, s, r)
 	case string(session.ViewerFirstPage),
 		string(session.ViewerPrevPage),
 		string(session.ViewerNextPage),
@@ -180,7 +180,9 @@ func (m *OverviewMenu) handleButton(
 }
 
 // handleCreateAppeal opens a modal for creating a new appeal.
-func (m *OverviewMenu) handleCreateAppeal(event *events.ComponentInteractionCreate, r *pagination.Respond) {
+func (m *OverviewMenu) handleCreateAppeal(
+	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond,
+) {
 	modal := discord.NewModalCreateBuilder().
 		SetCustomID(constants.AppealModalCustomID).
 		SetTitle("Submit Appeal").
@@ -194,13 +196,9 @@ func (m *OverviewMenu) handleCreateAppeal(event *events.ComponentInteractionCrea
 				WithRequired(true).
 				WithMaxLength(512).
 				WithPlaceholder("Enter the reason for appealing this user..."),
-		).
-		Build()
+		)
 
-	if err := event.Modal(modal); err != nil {
-		m.layout.logger.Error("Failed to create appeal modal", zap.Error(err))
-		r.Error(event, "Failed to open the appeal modal. Please try again.")
-	}
+	r.Modal(event, s, modal)
 }
 
 // handlePagination processes page navigation.
