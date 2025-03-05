@@ -311,6 +311,9 @@ const (
 	RejectAppealModalCustomID  = "reject_appeal_modal"
 	AppealRespondModalCustomID = "appeal_respond_modal"
 
+	AppealSearchModalCustomID = "appeal_search_modal"
+	AppealIDInputCustomID     = "appeal_id_input"
+
 	AppealsPerPage              = 5
 	AppealMessagesPerPage       = 5
 	AppealSelectID              = "appeal_select"
@@ -318,6 +321,7 @@ const (
 	AppealSortSelectID          = "appeal_sort"
 	AppealCreateButtonCustomID  = "appeal_create" + ModalOpenSuffix
 	AppealRespondButtonCustomID = "appeal_respond" + ModalOpenSuffix
+	AppealSearchCustomID        = "appeal_search" + ModalOpenSuffix
 
 	VerifyDescriptionButtonID = "verify_description"
 )

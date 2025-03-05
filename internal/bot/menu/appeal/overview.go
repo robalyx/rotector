@@ -128,6 +128,20 @@ func (m *OverviewMenu) handleSelectMenu(
 
 		r.Reload(event, s, "Sorted appeals by "+option)
 	case constants.AppealSelectID:
+		// Check if this is a modal open request
+		if option == constants.AppealSearchCustomID {
+			modal := discord.NewModalCreateBuilder().
+				SetCustomID(constants.AppealSearchModalCustomID).
+				SetTitle("Search Appeal").
+				AddActionRow(
+					discord.NewTextInput(constants.AppealIDInputCustomID, discord.TextInputStyleShort, "Appeal ID").
+						WithRequired(true).
+						WithPlaceholder("Enter the appeal ID..."),
+				)
+			r.Modal(event, s, modal)
+			return
+		}
+
 		// Convert option string to int64 for appeal ID
 		appealID, err := strconv.ParseInt(option, 10, 64)
 		if err != nil {
@@ -242,6 +256,8 @@ func (m *OverviewMenu) handleModal(
 	switch event.Data.CustomID {
 	case constants.AppealModalCustomID:
 		m.handleCreateAppealModalSubmit(event, s, r)
+	case constants.AppealSearchModalCustomID:
+		m.handleSearchAppealModalSubmit(event, s, r)
 	}
 }
 
@@ -334,4 +350,33 @@ func (m *OverviewMenu) handleCreateAppealModalSubmit(
 	session.VerifyUserID.Set(s, userID)
 	session.VerifyReason.Set(s, reason)
 	r.Show(event, s, constants.AppealVerifyPageName, "")
+}
+
+// handleSearchAppealModalSubmit processes the appeal search form submission.
+func (m *OverviewMenu) handleSearchAppealModalSubmit(
+	event *events.ModalSubmitInteractionCreate, s *session.Session, r *pagination.Respond,
+) {
+	// Get appeal ID input
+	appealIDStr := event.Data.Text(constants.AppealIDInputCustomID)
+	appealID, err := strconv.ParseInt(appealIDStr, 10, 64)
+	if err != nil {
+		r.Cancel(event, s, "Invalid appeal ID format. Please enter a valid number.")
+		return
+	}
+
+	// Get the appeal
+	appeal, err := m.layout.db.Models().Appeals().GetAppealByID(context.Background(), appealID)
+	if err != nil {
+		if errors.Is(err, types.ErrNoAppealsFound) {
+			r.Cancel(event, s, "Appeal not found.")
+			return
+		}
+		m.layout.logger.Error("Failed to get appeal", zap.Error(err))
+		r.Error(event, "Failed to get appeal. Please try again.")
+		return
+	}
+
+	// Show the selected appeal
+	session.AppealSelected.Set(s, appeal)
+	r.Show(event, s, constants.AppealTicketPageName, "")
 }

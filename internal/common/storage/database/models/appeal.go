@@ -237,7 +237,6 @@ func (r *AppealModel) GetAppealsToReview(
 		}
 		query.Order("appeal.timestamp ASC", "appeal.id ASC")
 	case enum.AppealSortByClaimed:
-		query.Where("status = ?", enum.AppealStatusPending) // Only show pending appeals for claimed view
 		query.Where("claimed_by = ?", reviewerID)
 		if cursor != nil {
 			query.Where("(t.last_activity, appeal.id) < (?, ?)", cursor.LastActivity, cursor.ID)

@@ -137,7 +137,13 @@ func (b *OverviewBuilder) buildComponents() []discord.ContainerComponent {
 
 	// Add appeal selector
 	if len(b.appeals) > 0 {
-		options := make([]discord.StringSelectMenuOption, 0, len(b.appeals))
+		options := make([]discord.StringSelectMenuOption, 0, len(b.appeals)+1)
+
+		// Add search option at the top
+		options = append(options, discord.NewStringSelectMenuOption(
+			"🔍 Search by ID", constants.AppealSearchCustomID,
+		).WithDescription("Look up a specific appeal by ID"))
+
 		for _, appeal := range b.appeals {
 			// Format status emoji
 			var statusEmoji string
