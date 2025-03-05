@@ -28,7 +28,7 @@ func NewVote(db *bun.DB, activity *ActivityModel, views *MaterializedViewModel, 
 		db:       db,
 		activity: activity,
 		views:    views,
-		logger:   logger,
+		logger:   logger.Named("db_vote"),
 	}
 }
 

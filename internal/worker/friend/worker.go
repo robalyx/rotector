@@ -46,7 +46,7 @@ func New(app *setup.App, bar *progress.Bar, logger *zap.Logger) *Worker {
 		userChecker:      userChecker,
 		friendFetcher:    friendFetcher,
 		reporter:         reporter,
-		logger:           logger,
+		logger:           logger.Named("friend_worker"),
 		batchSize:        app.Config.Worker.BatchSizes.FriendUsers,
 		flaggedThreshold: app.Config.Worker.ThresholdLimits.FlaggedUsers,
 	}

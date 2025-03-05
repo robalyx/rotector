@@ -27,7 +27,7 @@ type ThumbnailFetcher struct {
 func NewThumbnailFetcher(roAPI *api.API, logger *zap.Logger) *ThumbnailFetcher {
 	return &ThumbnailFetcher{
 		roAPI:  roAPI,
-		logger: logger,
+		logger: logger.Named("thumbnail_fetcher"),
 	}
 }
 

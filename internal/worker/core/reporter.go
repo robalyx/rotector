@@ -30,7 +30,7 @@ func NewStatusReporter(client rueidis.Client, workerType string, logger *zap.Log
 			IsHealthy:  true,
 		},
 		stopChan: make(chan struct{}),
-		logger:   logger,
+		logger:   logger.Named("status_reporter"),
 	}
 }
 

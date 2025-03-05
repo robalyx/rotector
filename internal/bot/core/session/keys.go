@@ -172,8 +172,8 @@ func getSettingField(settings any, fieldPath string, logger *zap.Logger) setting
 	return settingField{
 		value:  v,
 		field:  field,
-		logger: logger,
 		name:   fieldPath,
+		logger: logger.Named("session_keys"),
 	}
 }
 

@@ -151,7 +151,7 @@ func InitializeApp(ctx context.Context, serviceType ServiceType, logDir string) 
 	return &App{
 		Config:       cfg,
 		Logger:       logger,
-		DBLogger:     dbLogger,
+		DBLogger:     dbLogger.Named("database"),
 		DB:           db,
 		GenAIClient:  genAIClient,
 		GenAIModel:   cfg.Common.GeminiAI.Model,

@@ -54,7 +54,7 @@ func New(config *Config, logger *zap.Logger) *Limiter {
 	now := time.Now()
 	return &Limiter{
 		config:        config,
-		logger:        logger,
+		logger:        logger.Named("ratelimit"),
 		userCounters:  utils.NewTTLMap[uint64, int](config.PerUserResetPeriod),
 		guildCounters: utils.NewTTLMap[uint64, int](config.PerGuildResetPeriod),
 		globalCounter: 0,

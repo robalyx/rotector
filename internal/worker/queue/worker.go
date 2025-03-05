@@ -44,7 +44,7 @@ func New(app *setup.App, bar *progress.Bar, logger *zap.Logger) *Worker {
 		userFetcher: userFetcher,
 		userChecker: userChecker,
 		reporter:    reporter,
-		logger:      logger,
+		logger:      logger.Named("queue_worker"),
 		batchSize:   app.Config.Worker.BatchSizes.QueueItems,
 	}
 }

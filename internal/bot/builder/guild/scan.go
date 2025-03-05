@@ -140,15 +140,15 @@ func (b *ScanBuilder) buildWarningEmbed() *discord.EmbedBuilder {
 
 	if b.scanType == constants.GuildScanTypeCondo {
 		// Warning for condo server scan
-		warningEmbed.SetTitle("⚠️ Warning: Less Reliable Method").
+		warningEmbed.SetTitle("⚠️ Warning: Unreliable Method").
 			SetDescription(
-				"You are using the server membership scan method, which is less reliable for identifying inappropriate users. "+
-					"Many users may be in these servers without participating in inappropriate activities.",
+				"**This method WILL result in lots of false positives.** Many users in these servers are innocent, "+
+					"including ERP investigators and non-participating members.",
 			).
 			SetColor(0xFF0000). // Red color for warning
 			AddField(
 				"Recommendation",
-				"Use the 'Ban Users with Inappropriate Messages' option instead for more accurate results.",
+				"Use the 'Ban Users with Inappropriate Messages' option for more accurate results.",
 				false,
 			)
 

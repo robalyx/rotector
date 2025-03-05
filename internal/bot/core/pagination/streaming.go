@@ -61,7 +61,7 @@ func NewImageStreamer(paginationManager *Manager, logger *zap.Logger, client *cl
 
 	return &ImageStreamer{
 		paginationManager: paginationManager,
-		logger:            logger,
+		logger:            logger.Named("streaming"),
 		client:            client,
 		placeholderImg:    placeholderImg,
 	}

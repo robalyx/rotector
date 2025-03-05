@@ -49,7 +49,7 @@ func NewManager(config *config.Redis, logger *zap.Logger) *Manager {
 	return &Manager{
 		clients: make(map[int]rueidis.Client),
 		config:  config,
-		logger:  logger,
+		logger:  logger.Named("redis"),
 	}
 }
 

@@ -40,7 +40,7 @@ func NewGroupChecker(
 ) *GroupChecker {
 	return &GroupChecker{
 		db:                   db,
-		logger:               logger,
+		logger:               logger.Named("group_checker"),
 		maxGroupMembersTrack: maxGroupMembersTrack,
 		minFlaggedOverride:   minFlaggedOverride,
 		minFlaggedPercentage: minFlaggedPercentage,

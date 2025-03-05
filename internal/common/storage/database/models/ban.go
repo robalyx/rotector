@@ -20,7 +20,7 @@ type BanModel struct {
 func NewBan(db *bun.DB, logger *zap.Logger) *BanModel {
 	return &BanModel{
 		db:     db,
-		logger: logger,
+		logger: logger.Named("db_ban"),
 	}
 }
 

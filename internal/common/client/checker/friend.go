@@ -40,7 +40,7 @@ func NewFriendChecker(app *setup.App, logger *zap.Logger) *FriendChecker {
 	return &FriendChecker{
 		db:             app.DB,
 		friendAnalyzer: ai.NewFriendAnalyzer(app, logger),
-		logger:         logger,
+		logger:         logger.Named("friend_checker"),
 	}
 }
 

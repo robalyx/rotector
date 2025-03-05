@@ -23,7 +23,7 @@ type AppealModel struct {
 func NewAppeal(db *bun.DB, logger *zap.Logger) *AppealModel {
 	return &AppealModel{
 		db:     db,
-		logger: logger,
+		logger: logger.Named("db_appeal"),
 	}
 }
 

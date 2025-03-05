@@ -68,7 +68,7 @@ type Manager struct {
 func NewManager(client rueidis.Client, logger *zap.Logger) *Manager {
 	return &Manager{
 		client: client,
-		logger: logger,
+		logger: logger.Named("queue_manager"),
 	}
 }
 

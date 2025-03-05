@@ -176,7 +176,7 @@ func NewOutfitAnalyzer(app *setup.App, logger *zap.Logger) *OutfitAnalyzer {
 		outfitModel:      outfitModel,
 		thumbnailFetcher: fetcher.NewThumbnailFetcher(app.RoAPI, logger),
 		analysisSem:      semaphore.NewWeighted(int64(app.Config.Worker.BatchSizes.OutfitAnalysis)),
-		logger:           logger,
+		logger:           logger.Named("ai_outfit"),
 	}
 }
 

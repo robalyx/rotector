@@ -85,7 +85,7 @@ func NewStatsAnalyzer(app *setup.App, logger *zap.Logger) *StatsAnalyzer {
 	return &StatsAnalyzer{
 		genModel: model,
 		minify:   m,
-		logger:   logger,
+		logger:   logger.Named("ai_stats"),
 	}
 }
 

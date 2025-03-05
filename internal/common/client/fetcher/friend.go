@@ -23,7 +23,7 @@ type FriendFetcher struct {
 func NewFriendFetcher(roAPI *api.API, logger *zap.Logger) *FriendFetcher {
 	return &FriendFetcher{
 		roAPI:  roAPI,
-		logger: logger,
+		logger: logger.Named("friend_fetcher"),
 	}
 }
 

@@ -25,7 +25,7 @@ func New(app *setup.App) *Layout {
 	l := &Layout{
 		db:     app.DB,
 		roAPI:  app.RoAPI,
-		logger: app.Logger,
+		logger: app.Logger.Named("appeal_menu"),
 	}
 
 	// Initialize menus with reference to this layout

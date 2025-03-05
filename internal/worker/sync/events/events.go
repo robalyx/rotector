@@ -36,7 +36,7 @@ func New(app *setup.App, state *ningen.State, messageAnalyzer *ai.MessageAnalyze
 	return &Handler{
 		db:               app.DB,
 		state:            state,
-		logger:           logger.Named("events"),
+		logger:           logger.Named("sync_events"),
 		rateLimiter:      rateLimiter,
 		messageAnalyzer:  messageAnalyzer,
 		guildMessages:    make(map[uint64][]*ai.MessageContent),

@@ -24,7 +24,7 @@ type Manager struct {
 func NewManager(db database.Client, logger *zap.Logger) *Manager {
 	return &Manager{
 		db:     db,
-		logger: logger,
+		logger: logger.Named("captcha"),
 	}
 }
 

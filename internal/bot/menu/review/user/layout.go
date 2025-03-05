@@ -42,7 +42,7 @@ func New(app *setup.App, paginationManager *pagination.Manager) *Layout {
 		presenceFetcher:  fetcher.NewPresenceFetcher(app.RoAPI, app.Logger),
 		imageStreamer:    pagination.NewImageStreamer(paginationManager, app.Logger, app.RoAPI.GetClient()),
 		captcha:          captcha.NewManager(app.DB, app.Logger),
-		logger:           app.Logger,
+		logger:           app.Logger.Named("user_menu"),
 	}
 
 	// Initialize all menus with references to this layout

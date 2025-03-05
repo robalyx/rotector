@@ -44,7 +44,7 @@ func NewUserChecker(app *setup.App, userFetcher *fetcher.UserFetcher, logger *za
 			app.Config.Worker.ThresholdLimits.MinFlaggedPercentage,
 		),
 		friendChecker: NewFriendChecker(app, logger),
-		logger:        logger,
+		logger:        logger.Named("user_checker"),
 	}
 }
 

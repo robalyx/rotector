@@ -155,7 +155,7 @@ func NewFriendAnalyzer(app *setup.App, logger *zap.Logger) *FriendAnalyzer {
 		minify:      m,
 		analysisSem: semaphore.NewWeighted(int64(app.Config.Worker.BatchSizes.FriendAnalysis)),
 		batchSize:   app.Config.Worker.BatchSizes.FriendAnalysisBatch,
-		logger:      logger,
+		logger:      logger.Named("ai_friend"),
 	}
 }
 

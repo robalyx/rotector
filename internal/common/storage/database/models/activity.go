@@ -25,7 +25,7 @@ type ActivityModel struct {
 func NewActivity(db *bun.DB, logger *zap.Logger) *ActivityModel {
 	return &ActivityModel{
 		db:     db,
-		logger: logger,
+		logger: logger.Named("db_activity"),
 	}
 }
 

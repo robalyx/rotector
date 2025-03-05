@@ -70,7 +70,7 @@ func New(app *setup.App, bar *progress.Bar, logger *zap.Logger) *Worker {
 		state:           n,
 		bar:             bar,
 		reporter:        reporter,
-		logger:          logger,
+		logger:          logger.Named("sync_worker"),
 		config:          app.Config,
 		messageAnalyzer: messageAnalyzer,
 		eventHandler:    eventHandler,

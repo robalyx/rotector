@@ -41,7 +41,7 @@ type Monitor struct {
 func NewMonitor(client rueidis.Client, logger *zap.Logger) *Monitor {
 	return &Monitor{
 		client: client,
-		logger: logger,
+		logger: logger.Named("status_monitor"),
 	}
 }
 

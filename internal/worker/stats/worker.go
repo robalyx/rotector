@@ -47,7 +47,7 @@ func New(app *setup.App, bar *progress.Bar, logger *zap.Logger) *Worker {
 		reporter:    core.NewStatusReporter(app.StatusClient, "stats", logger),
 		analyzer:    ai.NewStatsAnalyzer(app, logger),
 		redisClient: statsClient,
-		logger:      logger,
+		logger:      logger.Named("stats_worker"),
 	}
 }
 

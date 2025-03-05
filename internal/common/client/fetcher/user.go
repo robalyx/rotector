@@ -80,7 +80,7 @@ type UserFetcher struct {
 func NewUserFetcher(app *setup.App, logger *zap.Logger) *UserFetcher {
 	return &UserFetcher{
 		roAPI:            app.RoAPI,
-		logger:           logger,
+		logger:           logger.Named("user_fetcher"),
 		groupFetcher:     NewGroupFetcher(app.RoAPI, logger),
 		gameFetcher:      NewGameFetcher(app.RoAPI, logger),
 		friendFetcher:    NewFriendFetcher(app.RoAPI, logger),

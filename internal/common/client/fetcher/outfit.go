@@ -20,7 +20,7 @@ type OutfitFetcher struct {
 func NewOutfitFetcher(roAPI *api.API, logger *zap.Logger) *OutfitFetcher {
 	return &OutfitFetcher{
 		roAPI:  roAPI,
-		logger: logger,
+		logger: logger.Named("outfit_fetcher"),
 	}
 }
 

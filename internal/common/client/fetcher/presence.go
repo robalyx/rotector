@@ -28,7 +28,7 @@ type PresenceFetcher struct {
 func NewPresenceFetcher(roAPI *api.API, logger *zap.Logger) *PresenceFetcher {
 	return &PresenceFetcher{
 		roAPI:  roAPI,
-		logger: logger,
+		logger: logger.Named("presence_fetcher"),
 	}
 }
 

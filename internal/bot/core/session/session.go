@@ -59,7 +59,7 @@ func NewSession(
 		key:                key,
 		data:               data,
 		dataModified:       make(map[string]bool),
-		logger:             logger,
+		logger:             logger.Named("session"),
 	}
 }
 

@@ -23,7 +23,7 @@ type MaterializedViewModel struct {
 func NewMaterializedView(db *bun.DB, logger *zap.Logger) *MaterializedViewModel {
 	return &MaterializedViewModel{
 		db:     db,
-		logger: logger,
+		logger: logger.Named("db_materialized_view"),
 	}
 }
 

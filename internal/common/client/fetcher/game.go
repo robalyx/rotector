@@ -25,7 +25,7 @@ type GameFetcher struct {
 func NewGameFetcher(roAPI *api.API, logger *zap.Logger) *GameFetcher {
 	return &GameFetcher{
 		roAPI:  roAPI,
-		logger: logger,
+		logger: logger.Named("game_fetcher"),
 	}
 }
 

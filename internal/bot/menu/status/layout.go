@@ -28,7 +28,7 @@ func New(app *setup.App) *Layout {
 	// Initialize layout
 	l := &Layout{
 		redisClient:   statusClient,
-		logger:        app.Logger,
+		logger:        app.Logger.Named("status_menu"),
 		workerMonitor: core.NewMonitor(statusClient, app.Logger),
 	}
 	l.menu = NewMenu(l)

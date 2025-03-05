@@ -21,7 +21,7 @@ func New(app *setup.App) *Layout {
 	// Initialize layout
 	l := &Layout{
 		db:     app.DB,
-		logger: app.Logger,
+		logger: app.Logger.Named("admin_menu"),
 	}
 
 	// Initialize menus with reference to this layout

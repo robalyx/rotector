@@ -19,7 +19,7 @@ type SyncModel struct {
 func NewSync(db *bun.DB, logger *zap.Logger) *SyncModel {
 	return &SyncModel{
 		db:     db,
-		logger: logger,
+		logger: logger.Named("db_sync"),
 	}
 }
 

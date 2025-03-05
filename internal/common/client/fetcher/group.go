@@ -26,7 +26,7 @@ type GroupFetcher struct {
 func NewGroupFetcher(roAPI *api.API, logger *zap.Logger) *GroupFetcher {
 	return &GroupFetcher{
 		roAPI:  roAPI,
-		logger: logger,
+		logger: logger.Named("group_fetcher"),
 	}
 }
 

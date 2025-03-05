@@ -53,17 +53,19 @@ type Bot struct {
 
 // New initializes a Bot instance by creating all required managers and layouts.
 func New(app *setup.App) (*Bot, error) {
+	logger := app.Logger.Named("bot")
+
 	// Initialize session manager for persistent storage
-	sessionManager, err := session.NewManager(app.DB, app.RedisManager, app.Logger)
+	sessionManager, err := session.NewManager(app.DB, app.RedisManager, logger)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create session manager: %w", err)
 	}
-	paginationManager := pagination.NewManager(sessionManager, app.Logger)
+	paginationManager := pagination.NewManager(sessionManager, logger)
 
 	// Create bot instance
 	b := &Bot{
 		db:                app.DB,
-		logger:            app.Logger,
+		logger:            logger,
 		sessionManager:    sessionManager,
 		paginationManager: paginationManager,
 	}

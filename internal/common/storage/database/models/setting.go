@@ -25,7 +25,7 @@ type SettingModel struct {
 func NewSetting(db *bun.DB, logger *zap.Logger) *SettingModel {
 	return &SettingModel{
 		db:     db,
-		logger: logger,
+		logger: logger.Named("db_setting"),
 	}
 }
 

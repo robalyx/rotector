@@ -24,7 +24,7 @@ func NewStats(db *bun.DB, users *UserModel, groups *GroupModel, logger *zap.Logg
 		db:     db,
 		users:  users,
 		groups: groups,
-		logger: logger,
+		logger: logger.Named("db_stats"),
 	}
 }
 

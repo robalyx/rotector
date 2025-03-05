@@ -56,7 +56,7 @@ func New(app *setup.App, bar *progress.Bar, logger *zap.Logger) *Worker {
 		thumbnailFetcher:        thumbnailFetcher,
 		groupChecker:            groupChecker,
 		reporter:                reporter,
-		logger:                  logger,
+		logger:                  logger.Named("maintenance_worker"),
 		userBatchSize:           app.Config.Worker.BatchSizes.PurgeUsers,
 		groupBatchSize:          app.Config.Worker.BatchSizes.PurgeGroups,
 		trackBatchSize:          app.Config.Worker.BatchSizes.TrackGroups,

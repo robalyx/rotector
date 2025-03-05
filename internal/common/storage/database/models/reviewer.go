@@ -23,7 +23,7 @@ func NewReviewer(db *bun.DB, views *MaterializedViewModel, logger *zap.Logger) *
 	return &ReviewerModel{
 		db:     db,
 		views:  views,
-		logger: logger,
+		logger: logger.Named("db_reviewer"),
 	}
 }
 
@@ -98,6 +98,9 @@ func (r *ReviewerModel) GetReviewerStats(
 
 		return nil
 	})
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to get reviewer stats: %w", err)
+	}
 
-	return results, nextCursor, fmt.Errorf("failed to get reviewer stats: %w", err)
+	return results, nextCursor, nil
 }

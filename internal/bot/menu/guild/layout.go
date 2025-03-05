@@ -22,7 +22,7 @@ type Layout struct {
 func New(app *setup.App) *Layout {
 	l := &Layout{
 		db:     app.DB,
-		logger: app.Logger,
+		logger: app.Logger.Named("guild_menu"),
 	}
 
 	l.menu = NewMenu(l)

@@ -40,7 +40,7 @@ func NewUser(
 		activity:   activity,
 		reputation: reputation,
 		votes:      votes,
-		logger:     logger,
+		logger:     logger.Named("db_user"),
 	}
 }
 

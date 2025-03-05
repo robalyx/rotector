@@ -25,7 +25,7 @@ func NewReputation(db *bun.DB, votes *VoteModel, logger *zap.Logger) *Reputation
 	return &ReputationModel{
 		db:     db,
 		votes:  votes,
-		logger: logger,
+		logger: logger.Named("db_reputation"),
 	}
 }
 

@@ -40,7 +40,7 @@ func New(app *setup.App, sessionManager *session.Manager) *Layout {
 		db:             app.DB,
 		redisClient:    statsClient,
 		sessionManager: sessionManager,
-		logger:         app.Logger,
+		logger:         app.Logger.Named("dashboard_menu"),
 		workerMonitor:  core.NewMonitor(statusClient, app.Logger),
 	}
 	l.menu = NewMenu(l)

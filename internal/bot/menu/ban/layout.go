@@ -22,7 +22,7 @@ func New(app *setup.App, sessionManager *session.Manager) *Layout {
 	l := &Layout{
 		db:             app.DB,
 		sessionManager: sessionManager,
-		logger:         app.Logger,
+		logger:         app.Logger.Named("ban_menu"),
 	}
 
 	// Initialize menu with reference to this layout

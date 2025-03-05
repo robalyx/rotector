@@ -25,7 +25,7 @@ func New(app *setup.App, client bot.Client) *Layout {
 	l := &Layout{
 		db:     app.DB,
 		client: client,
-		logger: app.Logger,
+		logger: app.Logger.Named("leaderboard_menu"),
 	}
 	l.menu = NewMenu(l)
 

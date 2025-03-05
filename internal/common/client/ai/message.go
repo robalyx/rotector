@@ -221,7 +221,7 @@ func NewMessageAnalyzer(app *setup.App, logger *zap.Logger) *MessageAnalyzer {
 		minify:       m,
 		analysisSem:  semaphore.NewWeighted(int64(app.Config.Worker.BatchSizes.MessageAnalysis)),
 		batchSize:    app.Config.Worker.BatchSizes.MessageAnalysisBatch,
-		logger:       logger,
+		logger:       logger.Named("ai_message"),
 	}
 }
 

@@ -55,7 +55,7 @@ type ChatHandler struct {
 func NewChatHandler(genAIClient *genai.Client, logger *zap.Logger) *ChatHandler {
 	return &ChatHandler{
 		genAIClient:     genAIClient,
-		logger:          logger,
+		logger:          logger.Named("ai_chat"),
 		maxOutputTokens: 200,
 		temperature:     0.5,
 	}

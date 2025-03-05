@@ -23,7 +23,7 @@ type TrackingModel struct {
 func NewTracking(db *bun.DB, logger *zap.Logger) *TrackingModel {
 	return &TrackingModel{
 		db:     db,
-		logger: logger,
+		logger: logger.Named("db_tracking"),
 	}
 }
 

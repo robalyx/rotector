@@ -60,7 +60,7 @@ func NewManager(db database.Client, redisManager *redis.Manager, logger *zap.Log
 	return &Manager{
 		db:     db,
 		redis:  redisClient,
-		logger: logger,
+		logger: logger.Named("session_manager"),
 	}, nil
 }
 

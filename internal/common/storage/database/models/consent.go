@@ -19,7 +19,7 @@ type ConsentModel struct {
 func NewConsent(db *bun.DB, logger *zap.Logger) *ConsentModel {
 	return &ConsentModel{
 		db:     db,
-		logger: logger,
+		logger: logger.Named("db_consent"),
 	}
 }
 

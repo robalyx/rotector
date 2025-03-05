@@ -23,7 +23,7 @@ func New(app *setup.App) *Layout {
 	// Initialize layout
 	l := &Layout{
 		db:       app.DB,
-		logger:   app.Logger,
+		logger:   app.Logger.Named("setting_menu"),
 		registry: session.NewSettingRegistry(),
 	}
 

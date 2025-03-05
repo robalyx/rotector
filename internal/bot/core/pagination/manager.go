@@ -63,7 +63,7 @@ func NewManager(sessionManager *session.Manager, logger *zap.Logger) *Manager {
 	return &Manager{
 		sessionManager: sessionManager,
 		pages:          make(map[string]*Page),
-		logger:         logger,
+		logger:         logger.Named("pagination"),
 	}
 }
 

@@ -34,7 +34,7 @@ func NewGroup(
 		activity:   activity,
 		reputation: reputation,
 		votes:      votes,
-		logger:     logger,
+		logger:     logger.Named("db_group"),
 	}
 }
 

@@ -18,7 +18,7 @@ type MessageModel struct {
 func NewMessage(db *bun.DB, logger *zap.Logger) *MessageModel {
 	return &MessageModel{
 		db:     db,
-		logger: logger,
+		logger: logger.Named("db_message"),
 	}
 }
 
