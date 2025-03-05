@@ -24,7 +24,7 @@ func newTestNormalizer() transform.Transformer {
 
 func TestNormalizeString(t *testing.T) {
 	t.Parallel()
-	normalizer := newTestNormalizer()
+
 	tests := []struct {
 		name  string
 		input string
@@ -60,6 +60,7 @@ func TestNormalizeString(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+			normalizer := newTestNormalizer()
 			got := utils.NormalizeString(tt.input, normalizer)
 			assert.Equal(t, tt.want, got)
 		})
@@ -68,7 +69,7 @@ func TestNormalizeString(t *testing.T) {
 
 func TestContainsNormalized(t *testing.T) {
 	t.Parallel()
-	normalizer := newTestNormalizer()
+
 	tests := []struct {
 		name   string
 		s      string
@@ -116,6 +117,7 @@ func TestContainsNormalized(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+			normalizer := newTestNormalizer()
 			got := utils.ContainsNormalized(tt.s, tt.substr, normalizer)
 			assert.Equal(t, tt.want, got)
 		})
@@ -172,7 +174,7 @@ func TestCleanupText(t *testing.T) {
 
 func TestValidateFlaggedWords(t *testing.T) {
 	t.Parallel()
-	normalizer := newTestNormalizer()
+
 	tests := []struct {
 		name         string
 		flaggedWords []string
@@ -220,6 +222,7 @@ func TestValidateFlaggedWords(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+			normalizer := newTestNormalizer()
 			got := utils.ValidateFlaggedWords(tt.flaggedWords, normalizer, tt.targetTexts...)
 			assert.Equal(t, tt.want, got)
 		})
