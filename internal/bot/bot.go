@@ -280,7 +280,6 @@ func (b *Bot) handleComponentInteraction(event *events.ComponentInteractionCreat
 		// Special handling for modal interactions to prevent response conflicts.
 		// If we are opening a modal and we try to defer, there will be an error
 		// that the interaction is already responded to.
-		// Please open a PR if you have a better solution or a fix for this.
 		isModal := false
 
 		// Check conditions for modal interaction

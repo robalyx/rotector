@@ -139,4 +139,22 @@ func (r *Respond) Modal(event *events.ComponentInteractionCreate, s *session.Ses
 	}
 	s.Touch(context.Background())
 	r.responded = true
+
+	// WORKAROUND:
+	// This fixes a problem with Discord's select menu behavior. When a modal is opened,
+	// the selected option in the dropdown remains selected even if the user exits the modal.
+	// This prevents the user from selecting the same option again since Discord doesn't
+	// automatically reset the selection. By updating the message after opening a modal,
+	// we force the select menu to reset to its default state.
+	page := r.paginationManager.GetPage(session.CurrentPage.Get(s))
+	_, err := event.Client().Rest().UpdateInteractionResponse(
+		event.ApplicationID(),
+		event.Token(),
+		page.Message(s).Build(),
+	)
+	if err != nil {
+		r.Error(event,
+			"Failed to implement workaround for Discord's select menu behavior. Please report this issue.",
+		)
+	}
 }
