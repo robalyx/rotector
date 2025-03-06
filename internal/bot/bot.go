@@ -219,7 +219,8 @@ func (b *Bot) handleApplicationCommandInteraction(event *events.ApplicationComma
 		}
 
 		// Check if user is banned
-		if b.checkBanStatus(event, s, event.User().ID, false) {
+		pageName := session.CurrentPage.Get(s)
+		if b.checkBanStatus(event, s, pageName) {
 			return
 		}
 
@@ -229,7 +230,7 @@ func (b *Bot) handleApplicationCommandInteraction(event *events.ApplicationComma
 		}
 
 		// Check if the session has a valid current page
-		page := b.paginationManager.GetPage(session.CurrentPage.Get(s))
+		page := b.paginationManager.GetPage(pageName)
 		if page == nil {
 			// If no valid page exists, reset to dashboard
 			b.paginationManager.Show(event, s, constants.DashboardPageName, "New session created.")
@@ -272,7 +273,8 @@ func (b *Bot) handleComponentInteraction(event *events.ComponentInteractionCreat
 		}
 
 		// Get current page
-		page := b.paginationManager.GetPage(session.CurrentPage.Get(s))
+		pageName := session.CurrentPage.Get(s)
+		page := b.paginationManager.GetPage(pageName)
 
 		// WORKAROUND:
 		// Special handling for modal interactions to prevent response conflicts.
@@ -304,7 +306,7 @@ func (b *Bot) handleComponentInteraction(event *events.ComponentInteractionCreat
 		}
 
 		// Check if user is banned
-		if b.checkBanStatus(event, s, event.User().ID, true) {
+		if b.checkBanStatus(event, s, pageName) {
 			return
 		}
 
@@ -380,7 +382,8 @@ func (b *Bot) handleModalSubmit(event *events.ModalSubmitInteractionCreate) {
 		}
 
 		// Check if user is banned
-		if b.checkBanStatus(event, s, event.User().ID, true) {
+		pageName := session.CurrentPage.Get(s)
+		if b.checkBanStatus(event, s, pageName) {
 			return
 		}
 
@@ -390,7 +393,7 @@ func (b *Bot) handleModalSubmit(event *events.ModalSubmitInteractionCreate) {
 		}
 
 		// Check if the session has a valid current page
-		page := b.paginationManager.GetPage(session.CurrentPage.Get(s))
+		page := b.paginationManager.GetPage(pageName)
 		if page == nil {
 			// If no valid page exists, reset to dashboard
 			b.paginationManager.Show(event, s, constants.DashboardPageName, "New session created.")
@@ -405,13 +408,15 @@ func (b *Bot) handleModalSubmit(event *events.ModalSubmitInteractionCreate) {
 
 // checkBanStatus checks if a user is banned and shows the ban menu if they are.
 // Returns true if the user is banned and should not proceed.
-func (b *Bot) checkBanStatus(event interfaces.CommonEvent, s *session.Session, userID snowflake.ID, closeSession bool) bool {
+func (b *Bot) checkBanStatus(event interfaces.CommonEvent, s *session.Session, pageName string) bool {
+	userID := uint64(event.User().ID)
+
 	// Check if user is banned
-	banned, err := b.db.Models().Bans().IsBanned(context.Background(), uint64(userID))
+	banned, err := b.db.Models().Bans().IsBanned(context.Background(), userID)
 	if err != nil {
 		b.logger.Error("Failed to check ban status",
 			zap.Error(err),
-			zap.Uint64("user_id", uint64(userID)))
+			zap.Uint64("user_id", userID))
 		b.paginationManager.RespondWithError(event, "Failed to verify access status. Please try again later.")
 		return true
 	}
@@ -421,13 +426,18 @@ func (b *Bot) checkBanStatus(event interfaces.CommonEvent, s *session.Session, u
 		return false
 	}
 
+	// Handle banned user interactions
+	if pageName == constants.BanPageName ||
+		pageName == constants.AppealOverviewPageName ||
+		pageName == constants.AppealTicketPageName ||
+		pageName == constants.AppealVerifyPageName {
+		b.paginationManager.HandleInteraction(event, s)
+		return true
+	}
+
 	// User is banned, show ban menu
 	b.paginationManager.Show(event, s, constants.BanPageName, "")
-
-	// Delete session after
-	if closeSession {
-		b.sessionManager.CloseSession(context.Background(), session.UserID.Get(s))
-	}
+	s.Touch(context.Background())
 	return true
 }
 

@@ -52,11 +52,17 @@ func (b *Builder) Build() *discord.MessageUpdateBuilder {
 	embed.AddField("Banned On", fmt.Sprintf("<t:%d:f>", b.ban.BannedAt.Unix()), true)
 
 	// Add appeal instructions
-	embed.AddField("Appeals", "Bans are non-appealable. "+
-		"If you believe this ban was caused by a system error, please contact a staff member.", false)
+	embed.AddField("Appeals", "Discord bot bans are non-appealable. "+
+		"If you believe this ban was caused by a system error, please contact a staff member.\n\n"+
+		"Note: This only affects your access to the Discord bot. If you have been banned on Roblox, "+
+		"you can still submit and manage appeals using the button below.", false)
 
 	embed.SetColor(constants.ErrorEmbedColor)
 
+	// Create message with embed and appeals button
 	return discord.NewMessageUpdateBuilder().
-		SetEmbeds(embed.Build())
+		SetEmbeds(embed.Build()).
+		AddActionRow(
+			discord.NewPrimaryButton("View Appeals", constants.AppealMenuButtonCustomID),
+		)
 }

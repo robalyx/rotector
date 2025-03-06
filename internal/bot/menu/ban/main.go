@@ -6,6 +6,7 @@ import (
 	"errors"
 
 	"github.com/disgoorg/disgo/discord"
+	"github.com/disgoorg/disgo/events"
 	"github.com/robalyx/rotector/internal/bot/builder/ban"
 	"github.com/robalyx/rotector/internal/bot/constants"
 	"github.com/robalyx/rotector/internal/bot/core/pagination"
@@ -28,7 +29,8 @@ func NewMenu(layout *Layout) *Menu {
 		Message: func(s *session.Session) *discord.MessageUpdateBuilder {
 			return ban.NewBuilder(s).Build()
 		},
-		ShowHandlerFunc: m.Show,
+		ShowHandlerFunc:   m.Show,
+		ButtonHandlerFunc: m.handleButton,
 	}
 	return m
 }
@@ -65,4 +67,14 @@ func (m *Menu) Show(event interfaces.CommonEvent, s *session.Session, r *paginat
 
 	// Store ban in session and show the menu
 	session.AdminBanInfo.Set(s, ban)
+}
+
+// handleButton processes button interactions.
+func (m *Menu) handleButton(
+	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, customID string,
+) {
+	switch customID {
+	case constants.AppealMenuButtonCustomID:
+		r.Show(event, s, constants.AppealOverviewPageName, "")
+	}
 }
