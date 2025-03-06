@@ -58,7 +58,7 @@ func init() { //nolint:funlen
 			CREATE INDEX IF NOT EXISTS idx_appeals_timestamp ON appeals (timestamp DESC);
 			CREATE INDEX IF NOT EXISTS idx_appeals_status_timestamp ON appeals (status, timestamp DESC);
 			CREATE INDEX IF NOT EXISTS idx_appeals_rejected_claimed_at ON appeals (claimed_at DESC) WHERE status = 2;
-			CREATE INDEX IF NOT EXISTS idx_appeals_pending_unclaimed ON appeals (id) WHERE status = 0 ;
+			CREATE INDEX IF NOT EXISTS idx_appeals_pending_unclaimed ON appeals (id) WHERE status = 0;
 
 			-- Appeal timeline indexes
 			CREATE INDEX IF NOT EXISTS idx_appeal_timelines_timestamp_asc 
@@ -99,39 +99,63 @@ func init() { //nolint:funlen
 			
 			-- Group review sorting indexes
 			CREATE INDEX IF NOT EXISTS idx_flagged_groups_confidence
-			ON flagged_groups (confidence DESC);
+			ON flagged_groups (confidence DESC, last_viewed ASC);
 			CREATE INDEX IF NOT EXISTS idx_confirmed_groups_confidence
-			ON confirmed_groups (confidence DESC);
+			ON confirmed_groups (confidence DESC, last_viewed ASC);
 			CREATE INDEX IF NOT EXISTS idx_cleared_groups_confidence
-			ON cleared_groups (confidence DESC);
+			ON cleared_groups (confidence DESC, last_viewed ASC);
 
 			CREATE INDEX IF NOT EXISTS idx_flagged_groups_updated
-			ON flagged_groups (last_updated ASC);
+			ON flagged_groups (last_updated ASC, last_viewed ASC);
 			CREATE INDEX IF NOT EXISTS idx_confirmed_groups_updated
-			ON confirmed_groups (last_updated ASC);
+			ON confirmed_groups (last_updated ASC, last_viewed ASC);
 			CREATE INDEX IF NOT EXISTS idx_cleared_groups_updated
-			ON cleared_groups (last_updated ASC);
-			
-			CREATE INDEX IF NOT EXISTS idx_group_reputations_id_score 
-			ON group_reputations (id, score);
+			ON cleared_groups (last_updated ASC, last_viewed ASC);
 
 			-- User review sorting indexes
 			CREATE INDEX IF NOT EXISTS idx_flagged_users_confidence
-			ON flagged_users (confidence DESC);
+			ON flagged_users (confidence DESC, last_viewed ASC);
 			CREATE INDEX IF NOT EXISTS idx_confirmed_users_confidence
-			ON confirmed_users (confidence DESC);
+			ON confirmed_users (confidence DESC, last_viewed ASC);
 			CREATE INDEX IF NOT EXISTS idx_cleared_users_confidence
-			ON cleared_users (confidence DESC);
+			ON cleared_users (confidence DESC, last_viewed ASC);
 
 			CREATE INDEX IF NOT EXISTS idx_flagged_users_updated
-			ON flagged_users (last_updated ASC);
+			ON flagged_users (last_updated ASC, last_viewed ASC);
 			CREATE INDEX IF NOT EXISTS idx_confirmed_users_updated
-			ON confirmed_users (last_updated ASC);
+			ON confirmed_users (last_updated ASC, last_viewed ASC);
 			CREATE INDEX IF NOT EXISTS idx_cleared_users_updated
-			ON cleared_users (last_updated ASC);
+			ON cleared_users (last_updated ASC, last_viewed ASC);
 
-			CREATE INDEX IF NOT EXISTS idx_user_reputations_id_score 
-			ON user_reputations (id, score);
+			-- User reputation sorting indexes
+			CREATE INDEX IF NOT EXISTS idx_user_reputations_score_viewed
+			ON user_reputations (score ASC)
+			INCLUDE (id);
+
+			CREATE INDEX IF NOT EXISTS idx_flagged_users_last_viewed_rep
+			ON flagged_users (last_viewed ASC)
+			INCLUDE (id);
+			CREATE INDEX IF NOT EXISTS idx_confirmed_users_last_viewed_rep
+			ON confirmed_users (last_viewed ASC)
+			INCLUDE (id);
+			CREATE INDEX IF NOT EXISTS idx_cleared_users_last_viewed_rep
+			ON cleared_users (last_viewed ASC)
+			INCLUDE (id);
+
+			-- Group reputation sorting indexes
+			CREATE INDEX IF NOT EXISTS idx_group_reputations_score_viewed
+			ON group_reputations (score ASC)
+			INCLUDE (id);
+
+			CREATE INDEX IF NOT EXISTS idx_flagged_groups_last_viewed_rep
+			ON flagged_groups (last_viewed ASC)
+			INCLUDE (id);
+			CREATE INDEX IF NOT EXISTS idx_confirmed_groups_last_viewed_rep
+			ON confirmed_groups (last_viewed ASC)
+			INCLUDE (id);
+			CREATE INDEX IF NOT EXISTS idx_cleared_groups_last_viewed_rep
+			ON cleared_groups (last_viewed ASC)
+			INCLUDE (id);
 
 			-- User thumbnail update indexes
 			CREATE INDEX IF NOT EXISTS idx_flagged_users_thumbnail_update 
@@ -307,6 +331,18 @@ func init() { //nolint:funlen
 			DROP INDEX IF EXISTS idx_cleared_users_updated;
 
 			DROP INDEX IF EXISTS idx_user_reputations_id_score;
+
+			-- User reputation sorting indexes
+			DROP INDEX IF EXISTS idx_user_reputations_score_viewed;
+			DROP INDEX IF EXISTS idx_flagged_users_last_viewed_rep;
+			DROP INDEX IF EXISTS idx_confirmed_users_last_viewed_rep;
+			DROP INDEX IF EXISTS idx_cleared_users_last_viewed_rep;
+
+			-- Group reputation sorting indexes
+			DROP INDEX IF EXISTS idx_group_reputations_score_viewed;
+			DROP INDEX IF EXISTS idx_flagged_groups_last_viewed_rep;
+			DROP INDEX IF EXISTS idx_confirmed_groups_last_viewed_rep;
+			DROP INDEX IF EXISTS idx_cleared_groups_last_viewed_rep;
 
 			-- User status indexes
 			DROP INDEX IF EXISTS idx_cleared_users_purged_at;

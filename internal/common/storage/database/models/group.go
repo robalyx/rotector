@@ -882,12 +882,12 @@ func (r *GroupModel) getNextToReview(
 		// Apply sort order to subquery
 		switch sortBy {
 		case enum.ReviewSortByConfidence:
-			subq.Order("confidence DESC")
+			subq.OrderExpr("confidence DESC, last_viewed ASC")
 		case enum.ReviewSortByLastUpdated:
-			subq.Order("last_updated ASC")
+			subq.OrderExpr("last_updated ASC, last_viewed ASC")
 		case enum.ReviewSortByReputation:
 			subq.Join("LEFT JOIN group_reputations ON group_reputations.id = ?TableAlias.id").
-				OrderExpr("COALESCE(group_reputations.score, 0) ASC")
+				OrderExpr("COALESCE(group_reputations.score, 0) ASC, last_viewed ASC")
 		case enum.ReviewSortByLastViewed:
 			subq.Order("last_viewed ASC")
 		case enum.ReviewSortByRandom:
