@@ -60,39 +60,59 @@ func (b *TicketBuilder) Build() *discord.MessageUpdateBuilder {
 		),
 	}
 
-	// Add components if appeal is pending
-	if b.appeal.Status == enum.AppealStatusPending {
-		// Create action buttons
-		actionButtons := []discord.InteractiveComponent{
-			discord.NewPrimaryButton("Respond", constants.AppealRespondButtonCustomID),
-		}
+	// Add actions based on user role and appeal status
+	baseActions := []discord.InteractiveComponent{}
 
-		// Add reviewer buttons if user is a reviewer
+	switch b.appeal.Status {
+	case enum.AppealStatusPending:
+		// Add respond button
+		baseActions = append(baseActions,
+			discord.NewPrimaryButton("Respond", constants.AppealRespondButtonCustomID),
+		)
+
 		if b.isReviewer {
-			// Add claim button if the appeal is not claimed yet
+			// Add reviewer-specific buttons
+			baseActions = append(baseActions,
+				discord.NewPrimaryButton("Lookup", constants.AppealLookupUserButtonCustomID))
+
+			// Add claim button if appeal is unclaimed
 			if b.appeal.ClaimedBy == 0 {
-				actionButtons = append(actionButtons,
+				baseActions = append(baseActions,
 					discord.NewPrimaryButton("Claim", constants.AppealClaimButtonCustomID),
 				)
 			}
 
-			// Add lookup and review action buttons
-			actionButtons = append(actionButtons,
-				discord.NewPrimaryButton("Lookup", constants.AppealLookupUserButtonCustomID),
+			// Add review action buttons
+			reviewActions := []discord.InteractiveComponent{
 				discord.NewSuccessButton("Accept", constants.AcceptAppealButtonCustomID),
 				discord.NewDangerButton("Reject", constants.RejectAppealButtonCustomID),
+				discord.NewDangerButton("Delete Data", constants.DeleteUserDataButtonCustomID),
+			}
+
+			components = append(components,
+				discord.NewActionRow(baseActions...),
+				discord.NewActionRow(reviewActions...),
 			)
 		} else {
 			// Add close button for regular users
-			actionButtons = append(actionButtons,
+			baseActions = append(baseActions,
 				discord.NewDangerButton("Close Ticket", constants.AppealCloseButtonCustomID),
 			)
+			components = append(components, discord.NewActionRow(baseActions...))
 		}
-
-		components = append(components, discord.NewActionRow(actionButtons...))
+	case enum.AppealStatusRejected, enum.AppealStatusAccepted:
+		if b.isReviewer {
+			// Add lookup and reopen buttons for rejected/accepted appeals for reviewers
+			baseActions = append(baseActions,
+				discord.NewPrimaryButton("Lookup", constants.AppealLookupUserButtonCustomID),
+				discord.NewSuccessButton("Reopen Appeal", constants.ReopenAppealButtonCustomID),
+			)
+			components = append(components, discord.NewActionRow(baseActions...))
+		}
 	}
 
 	builder.AddContainerComponents(components...)
+
 	return builder
 }
 

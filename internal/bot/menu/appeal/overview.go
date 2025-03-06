@@ -356,6 +356,12 @@ func (m *OverviewMenu) handleCreateAppealModalSubmit(
 func (m *OverviewMenu) handleSearchAppealModalSubmit(
 	event *events.ModalSubmitInteractionCreate, s *session.Session, r *pagination.Respond,
 ) {
+	// Verify user is a reviewer
+	if !s.BotSettings().IsReviewer(uint64(event.User().ID)) {
+		r.Cancel(event, s, "Only reviewers can search appeals by ID.")
+		return
+	}
+
 	// Get appeal ID input
 	appealIDStr := event.Data.Text(constants.AppealIDInputCustomID)
 	appealID, err := strconv.ParseInt(appealIDStr, 10, 64)

@@ -304,6 +304,7 @@ const (
 	AppealLookupUserButtonCustomID = "appeal_lookup_user"
 	AcceptAppealButtonCustomID     = "accept_appeal" + ModalOpenSuffix
 	RejectAppealButtonCustomID     = "reject_appeal" + ModalOpenSuffix
+	ReopenAppealButtonCustomID     = "reopen_appeal"
 	AppealClaimButtonCustomID      = "appeal_claim"
 	AppealCloseButtonCustomID      = "appeal_close"
 
@@ -313,6 +314,10 @@ const (
 
 	AppealSearchModalCustomID = "appeal_search_modal"
 	AppealIDInputCustomID     = "appeal_id_input"
+
+	DeleteUserDataButtonCustomID      = "delete_user_data" + ModalOpenSuffix
+	DeleteUserDataModalCustomID       = "delete_user_data_modal"
+	DeleteUserDataReasonInputCustomID = "delete_user_data_reason_input"
 
 	AppealsPerPage              = 5
 	AppealMessagesPerPage       = 5

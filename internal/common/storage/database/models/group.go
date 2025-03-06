@@ -111,6 +111,7 @@ func (r *GroupModel) SaveGroups(ctx context.Context, groups map[uint64]*types.Gr
 				Set("last_viewed = EXCLUDED.last_viewed").
 				Set("last_lock_check = EXCLUDED.last_lock_check").
 				Set("is_locked = EXCLUDED.is_locked").
+				Set("is_deleted = EXCLUDED.is_deleted").
 				Set("thumbnail_url = EXCLUDED.thumbnail_url").
 				Set("last_thumbnail_update = EXCLUDED.last_thumbnail_update").
 				Exec(ctx)
@@ -669,6 +670,7 @@ func (r *GroupModel) GetGroupsForThumbnailUpdate(ctx context.Context, limit int)
 			err := tx.NewSelect().
 				Model(model).
 				Where("last_thumbnail_update < NOW() - INTERVAL '7 days'").
+				Where("is_deleted = false").
 				OrderExpr("last_thumbnail_update ASC").
 				Limit(limit).
 				Scan(ctx, &reviewGroups)

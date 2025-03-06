@@ -59,6 +59,7 @@ func init() { //nolint:funlen
 			CREATE INDEX IF NOT EXISTS idx_appeals_status_timestamp ON appeals (status, timestamp DESC);
 			CREATE INDEX IF NOT EXISTS idx_appeals_rejected_claimed_at ON appeals (claimed_at DESC) WHERE status = 2;
 			CREATE INDEX IF NOT EXISTS idx_appeals_pending_unclaimed ON appeals (id) WHERE status = 0;
+			CREATE INDEX IF NOT EXISTS idx_appeals_id_status ON appeals (id, status);
 
 			-- Appeal timeline indexes
 			CREATE INDEX IF NOT EXISTS idx_appeal_timelines_timestamp_asc 
@@ -159,19 +160,25 @@ func init() { //nolint:funlen
 
 			-- User thumbnail update indexes
 			CREATE INDEX IF NOT EXISTS idx_flagged_users_thumbnail_update 
-			ON flagged_users (last_thumbnail_update ASC);
+			ON flagged_users (is_deleted, last_thumbnail_update ASC)
+			WHERE is_deleted = false;
 			CREATE INDEX IF NOT EXISTS idx_confirmed_users_thumbnail_update 
-			ON confirmed_users (last_thumbnail_update ASC);
+			ON confirmed_users (is_deleted, last_thumbnail_update ASC)
+			WHERE is_deleted = false;
 			CREATE INDEX IF NOT EXISTS idx_cleared_users_thumbnail_update 
-			ON cleared_users (last_thumbnail_update ASC);
+			ON cleared_users (is_deleted, last_thumbnail_update ASC)
+			WHERE is_deleted = false;
 
 			-- Group thumbnail update indexes
 			CREATE INDEX IF NOT EXISTS idx_flagged_groups_thumbnail_update 
-			ON flagged_groups (last_thumbnail_update ASC);
+			ON flagged_groups (is_deleted, last_thumbnail_update ASC)
+			WHERE is_deleted = false;
 			CREATE INDEX IF NOT EXISTS idx_confirmed_groups_thumbnail_update 
-			ON confirmed_groups (last_thumbnail_update ASC);
+			ON confirmed_groups (is_deleted, last_thumbnail_update ASC)
+			WHERE is_deleted = false;
 			CREATE INDEX IF NOT EXISTS idx_cleared_groups_thumbnail_update 
-			ON cleared_groups (last_thumbnail_update ASC);
+			ON cleared_groups (is_deleted, last_thumbnail_update ASC)
+			WHERE is_deleted = false;
 
 			-- User status indexes
 			CREATE INDEX IF NOT EXISTS idx_cleared_users_purged_at ON cleared_users (cleared_at);
@@ -290,6 +297,7 @@ func init() { //nolint:funlen
 			DROP INDEX IF EXISTS idx_appeals_status_timestamp;
 			DROP INDEX IF EXISTS idx_appeals_rejected_claimed_at;
 			DROP INDEX IF EXISTS idx_appeals_pending_unclaimed;
+			DROP INDEX IF EXISTS idx_appeals_id_status;
 
 			-- Appeal timeline indexes
 			DROP INDEX IF EXISTS idx_appeal_timelines_timestamp_asc;

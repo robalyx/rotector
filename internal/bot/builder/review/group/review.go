@@ -57,10 +57,7 @@ func (b *ReviewBuilder) Build() *discord.MessageUpdateBuilder {
 	modeEmbed := b.buildModeEmbed()
 	reviewEmbed := b.buildReviewEmbed()
 
-	// Create components
-	components := b.buildComponents()
-
-	// Create builder and handle thumbnail
+	// Handle thumbnail
 	if b.group.ThumbnailURL != "" && b.group.ThumbnailURL != fetcher.ThumbnailPlaceholder {
 		reviewEmbed.SetThumbnail(b.group.ThumbnailURL)
 	} else {
@@ -68,14 +65,23 @@ func (b *ReviewBuilder) Build() *discord.MessageUpdateBuilder {
 		placeholderImage, err := assets.Images.Open("images/content_deleted.png")
 		if err == nil {
 			builder.SetFiles(discord.NewFile("content_deleted.png", "", placeholderImage))
+			reviewEmbed.SetThumbnail("attachment://content_deleted.png")
 			_ = placeholderImage.Close()
 		}
-		reviewEmbed.SetThumbnail("attachment://content_deleted.png")
 	}
 
-	return builder.
-		AddEmbeds(modeEmbed.Build(), reviewEmbed.Build()).
-		AddContainerComponents(components...)
+	// Add deletion notice if group is deleted
+	if b.group.IsDeleted {
+		deletionEmbed := b.buildDeletionEmbed()
+		builder.AddEmbeds(modeEmbed.Build(), reviewEmbed.Build(), deletionEmbed.Build())
+	} else {
+		builder.AddEmbeds(modeEmbed.Build(), reviewEmbed.Build())
+	}
+
+	// Create components
+	components := b.buildComponents()
+
+	return builder.AddContainerComponents(components...)
 }
 
 // buildModeEmbed creates the review mode info embed.
@@ -186,6 +192,14 @@ func (b *ReviewBuilder) buildReviewEmbed() *discord.EmbedBuilder {
 	embed.SetFooter(fmt.Sprintf("%s • UUID: %s", status, b.group.UUID.String()), "")
 
 	return embed
+}
+
+// buildDeletionEmbed creates an embed notifying that the group has requested data deletion.
+func (b *ReviewBuilder) buildDeletionEmbed() *discord.EmbedBuilder {
+	return discord.NewEmbedBuilder().
+		SetTitle("🗑️ Data Deletion Notice").
+		SetDescription("This group has requested deletion of their data. Some information may be missing or incomplete.").
+		SetColor(constants.ErrorEmbedColor)
 }
 
 // buildSortingOptions creates the sorting options.

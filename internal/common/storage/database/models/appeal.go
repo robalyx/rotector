@@ -409,3 +409,38 @@ func (r *AppealModel) ClaimAppeal(ctx context.Context, appealID int64, timestamp
 		return nil
 	})
 }
+
+// ReopenAppeal changes a rejected or accepted appeal back to pending status.
+func (r *AppealModel) ReopenAppeal(ctx context.Context, appealID int64, timestamp time.Time) error {
+	now := time.Now()
+	return r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+		// Update appeal status
+		_, err := tx.NewUpdate().
+			Model((*types.Appeal)(nil)).
+			Set("status = ?", enum.AppealStatusPending).
+			Set("claimed_by = NULL").
+			Set("claimed_at = NULL").
+			Set("review_reason = NULL").
+			Where("id = ?", appealID).
+			Where("status IN (?, ?)", enum.AppealStatusRejected, enum.AppealStatusAccepted).
+			Exec(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to reopen appeal: %w (appealID=%d)", err, appealID)
+		}
+
+		// Update timeline
+		_, err = tx.NewUpdate().
+			Model((*types.AppealTimeline)(nil)).
+			Set("last_activity = ?", now).
+			Where("id = ?", appealID).
+			Where("timestamp = ?", timestamp).
+			Exec(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to update appeal timeline: %w (appealID=%d)", err, appealID)
+		}
+
+		r.logger.Debug("Reopened appeal",
+			zap.Int64("appealID", appealID))
+		return nil
+	})
+}

@@ -19,25 +19,26 @@ var (
 // User combines all the information needed to review a user.
 // This base structure is embedded in other user types (Flagged, Confirmed).
 type User struct {
-	ID                  uint64                       `bun:",pk"        json:"id"`
-	UUID                uuid.UUID                    `bun:",notnull"   json:"uuid"`
-	Name                string                       `bun:",notnull"   json:"name"`
-	DisplayName         string                       `bun:",notnull"   json:"displayName"`
-	Description         string                       `bun:",notnull"   json:"description"`
-	CreatedAt           time.Time                    `bun:",notnull"   json:"createdAt"`
-	Reasons             Reasons[enum.UserReasonType] `bun:"type:jsonb" json:"reasons"`
-	Groups              []*types.UserGroupRoles      `bun:"type:jsonb" json:"groups"`
-	Outfits             []*types.Outfit              `bun:"type:jsonb" json:"outfits"`
-	Friends             []*types.ExtendedFriend      `bun:"type:jsonb" json:"friends"`
-	Games               []*types.Game                `bun:"type:jsonb" json:"games"`
-	Confidence          float64                      `bun:",notnull"   json:"confidence"`
-	LastScanned         time.Time                    `bun:",notnull"   json:"lastScanned"`
-	LastUpdated         time.Time                    `bun:",notnull"   json:"lastUpdated"`
-	LastViewed          time.Time                    `bun:",notnull"   json:"lastViewed"`
-	LastBanCheck        time.Time                    `bun:",notnull"   json:"lastBanCheck"`
-	IsBanned            bool                         `bun:",notnull"   json:"isBanned"`
-	ThumbnailURL        string                       `bun:",notnull"   json:"thumbnailUrl"`
-	LastThumbnailUpdate time.Time                    `bun:",notnull"   json:"lastThumbnailUpdate"`
+	ID                  uint64                       `bun:",pk"                    json:"id"`
+	UUID                uuid.UUID                    `bun:",notnull"               json:"uuid"`
+	Name                string                       `bun:",notnull"               json:"name"`
+	DisplayName         string                       `bun:",notnull"               json:"displayName"`
+	Description         string                       `bun:",notnull"               json:"description"`
+	CreatedAt           time.Time                    `bun:",notnull"               json:"createdAt"`
+	Reasons             Reasons[enum.UserReasonType] `bun:"type:jsonb"             json:"reasons"`
+	Groups              []*types.UserGroupRoles      `bun:"type:jsonb"             json:"groups"`
+	Outfits             []*types.Outfit              `bun:"type:jsonb"             json:"outfits"`
+	Friends             []*types.ExtendedFriend      `bun:"type:jsonb"             json:"friends"`
+	Games               []*types.Game                `bun:"type:jsonb"             json:"games"`
+	Confidence          float64                      `bun:",notnull"               json:"confidence"`
+	LastScanned         time.Time                    `bun:",notnull"               json:"lastScanned"`
+	LastUpdated         time.Time                    `bun:",notnull"               json:"lastUpdated"`
+	LastViewed          time.Time                    `bun:",notnull"               json:"lastViewed"`
+	LastBanCheck        time.Time                    `bun:",notnull"               json:"lastBanCheck"`
+	IsBanned            bool                         `bun:",notnull,default:false" json:"isBanned"`
+	IsDeleted           bool                         `bun:",notnull,default:false" json:"isDeleted"`
+	ThumbnailURL        string                       `bun:",notnull"               json:"thumbnailUrl"`
+	LastThumbnailUpdate time.Time                    `bun:",notnull"               json:"lastThumbnailUpdate"`
 }
 
 // FlaggedUser extends User to track users that need review.
@@ -98,6 +99,7 @@ const (
 	UserFieldLastViewed          // Last view time
 	UserFieldLastBanCheck        // Last ban check time
 	UserFieldIsBanned            // Ban status
+	UserFieldIsDeleted           // Deletion status
 	UserFieldLastThumbnailUpdate // Last thumbnail update
 
 	// Common combinations.
@@ -109,7 +111,9 @@ const (
 	// UserFieldProfile includes all profile-related fields.
 	UserFieldProfile = UserFieldDescription |
 		UserFieldCreatedAt |
-		UserFieldThumbnail
+		UserFieldThumbnail |
+		UserFieldIsBanned |
+		UserFieldIsDeleted
 
 	// UserFieldRelationships includes all relationship-related fields.
 	UserFieldRelationships = UserFieldGroups |
@@ -125,7 +129,6 @@ const (
 		UserFieldLastUpdated |
 		UserFieldLastViewed |
 		UserFieldLastBanCheck |
-		UserFieldIsBanned |
 		UserFieldLastThumbnailUpdate
 
 	// UserFieldAll includes all available fields.
@@ -158,6 +161,7 @@ var userFieldToColumns = map[UserField][]string{ //nolint:gochecknoglobals // -
 	UserFieldLastViewed:          {"last_viewed"},
 	UserFieldLastBanCheck:        {"last_ban_check"},
 	UserFieldIsBanned:            {"is_banned"},
+	UserFieldIsDeleted:           {"is_deleted"},
 	UserFieldLastThumbnailUpdate: {"last_thumbnail_update"},
 }
 

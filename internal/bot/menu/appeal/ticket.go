@@ -9,6 +9,7 @@ import (
 
 	"github.com/disgoorg/disgo/discord"
 	"github.com/disgoorg/disgo/events"
+	apiTypes "github.com/jaxron/roapi.go/pkg/api/types"
 	builder "github.com/robalyx/rotector/internal/bot/builder/appeal"
 	"github.com/robalyx/rotector/internal/bot/constants"
 	"github.com/robalyx/rotector/internal/bot/core/pagination"
@@ -153,6 +154,10 @@ func (m *TicketMenu) handleButton(
 		m.handleRejectAppeal(event, s, r)
 	case constants.AppealCloseButtonCustomID:
 		m.handleCloseAppeal(event, s, r, appeal)
+	case constants.ReopenAppealButtonCustomID:
+		m.handleReopenAppeal(event, s, r, appeal)
+	case constants.DeleteUserDataButtonCustomID:
+		m.handleDeleteUserData(event, s, r)
 	}
 }
 
@@ -322,6 +327,69 @@ func (m *TicketMenu) handleCloseAppeal(
 	})
 }
 
+// handleReopenAppeal handles reopening a closed appeal.
+func (m *TicketMenu) handleReopenAppeal(
+	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, appeal *types.FullAppeal,
+) {
+	// Verify user is a reviewer
+	if !s.BotSettings().IsReviewer(uint64(event.User().ID)) {
+		r.Cancel(event, s, "Only reviewers can reopen appeals.")
+		return
+	}
+
+	// Verify appeal is rejected or accepted
+	if appeal.Status != enum.AppealStatusRejected && appeal.Status != enum.AppealStatusAccepted {
+		r.Cancel(event, s, "Only rejected or accepted appeals can be reopened.")
+		return
+	}
+
+	// Update appeal status to pending
+	ctx := context.Background()
+	err := m.layout.db.Models().Appeals().ReopenAppeal(ctx, appeal.ID, appeal.Timestamp)
+	if err != nil {
+		m.layout.logger.Error("Failed to reopen appeal",
+			zap.Error(err),
+			zap.Int64("appealID", appeal.ID))
+		r.Error(event, "Failed to reopen appeal. Please try again.")
+		return
+	}
+
+	// Return to overview
+	ResetAppealData(s)
+	r.NavigateBack(event, s, "Appeal reopened successfully.")
+
+	// Log the appeal reopening
+	m.layout.db.Models().Activities().Log(ctx, &types.ActivityLog{
+		ActivityTarget: types.ActivityTarget{
+			UserID: appeal.UserID,
+		},
+		ReviewerID:        uint64(event.User().ID),
+		ActivityType:      enum.ActivityTypeAppealReopened,
+		ActivityTimestamp: time.Now(),
+		Details: map[string]any{
+			"appeal_id": appeal.ID,
+		},
+	})
+}
+
+// handleDeleteUserData opens a modal for confirming user data deletion.
+func (m *TicketMenu) handleDeleteUserData(
+	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond,
+) {
+	modal := discord.NewModalCreateBuilder().
+		SetCustomID(constants.DeleteUserDataModalCustomID).
+		SetTitle("Delete User Data").
+		AddActionRow(
+			discord.NewTextInput(constants.DeleteUserDataReasonInputCustomID, discord.TextInputStyleParagraph, "Deletion Reason").
+				WithRequired(true).
+				WithPlaceholder("Enter the reason for deleting this user's data...").
+				WithMinLength(10).
+				WithMaxLength(512),
+		)
+
+	r.Modal(event, s, modal)
+}
+
 // handleModal processes modal submissions.
 func (m *TicketMenu) handleModal(
 	event *events.ModalSubmitInteractionCreate, s *session.Session, r *pagination.Respond,
@@ -340,6 +408,8 @@ func (m *TicketMenu) handleModal(
 		m.handleAcceptModalSubmit(event, s, r, appeal)
 	case constants.RejectAppealModalCustomID:
 		m.handleRejectModalSubmit(event, s, r, appeal)
+	case constants.DeleteUserDataModalCustomID:
+		m.handleDeleteUserDataModalSubmit(event, s, r, appeal)
 	}
 }
 
@@ -400,6 +470,12 @@ func (m *TicketMenu) handleRespondModalSubmit(
 func (m *TicketMenu) handleAcceptModalSubmit(
 	event *events.ModalSubmitInteractionCreate, s *session.Session, r *pagination.Respond, appeal *types.FullAppeal,
 ) {
+	// Verify user is a reviewer
+	if !s.BotSettings().IsReviewer(uint64(event.User().ID)) {
+		r.Cancel(event, s, "Only reviewers can accept appeals.")
+		return
+	}
+
 	// Prevent accepting already processed appeals
 	if appeal.Status != enum.AppealStatusPending {
 		r.Cancel(event, s, "This appeal has already been processed.")
@@ -466,6 +542,12 @@ func (m *TicketMenu) handleAcceptModalSubmit(
 func (m *TicketMenu) handleRejectModalSubmit(
 	event *events.ModalSubmitInteractionCreate, s *session.Session, r *pagination.Respond, appeal *types.FullAppeal,
 ) {
+	// Verify user is a reviewer
+	if !s.BotSettings().IsReviewer(uint64(event.User().ID)) {
+		r.Cancel(event, s, "Only reviewers can reject appeals.")
+		return
+	}
+
 	// Prevent rejecting already processed appeals
 	if appeal.Status != enum.AppealStatusPending {
 		r.Cancel(event, s, "This appeal has already been processed.")
@@ -497,6 +579,93 @@ func (m *TicketMenu) handleRejectModalSubmit(
 		},
 		ReviewerID:        uint64(event.User().ID),
 		ActivityType:      enum.ActivityTypeAppealRejected,
+		ActivityTimestamp: time.Now(),
+		Details: map[string]any{
+			"reason":    reason,
+			"appeal_id": appeal.ID,
+		},
+	})
+}
+
+// handleDeleteUserDataModalSubmit processes the data deletion confirmation.
+func (m *TicketMenu) handleDeleteUserDataModalSubmit(
+	event *events.ModalSubmitInteractionCreate, s *session.Session, r *pagination.Respond, appeal *types.FullAppeal,
+) {
+	// Verify user is a reviewer
+	if !s.BotSettings().IsReviewer(uint64(event.User().ID)) {
+		r.Cancel(event, s, "Only reviewers can process data deletion requests.")
+		return
+	}
+
+	// Prevent processing already processed appeals
+	if appeal.Status != enum.AppealStatusPending {
+		r.Cancel(event, s, "This appeal has already been processed.")
+		return
+	}
+
+	// Get deletion reason
+	reason := event.Data.Text(constants.DeleteUserDataReasonInputCustomID)
+	if reason == "" {
+		r.Cancel(event, s, "Deletion reason cannot be empty.")
+		return
+	}
+
+	// Get user from database
+	user, err := m.layout.db.Models().Users().GetUserByID(
+		context.Background(), strconv.FormatUint(appeal.UserID, 10), types.UserFieldAll,
+	)
+	if err != nil {
+		if errors.Is(err, types.ErrUserNotFound) {
+			r.Cancel(event, s, "Failed to find user. They may no longer exist in our database.")
+			return
+		}
+		m.layout.logger.Error("Failed to get user for deletion", zap.Error(err))
+		r.Error(event, "Failed to get user information. Please try again.")
+		return
+	}
+
+	// Redact user data while preserving essential information
+	user.Name = "-----"
+	user.DisplayName = "-----"
+	user.Description = "[user requested data deletion]"
+	user.Groups = []*apiTypes.UserGroupRoles{}
+	user.Outfits = []*apiTypes.Outfit{}
+	user.Friends = []*apiTypes.ExtendedFriend{}
+	user.Games = []*apiTypes.Game{}
+	user.IsDeleted = true
+	user.ThumbnailURL = ""
+	user.LastThumbnailUpdate = time.Now()
+
+	// Update the user with redacted data
+	if err := m.layout.db.Models().Users().SaveUsers(
+		context.Background(), map[uint64]*types.User{user.ID: &user.User},
+	); err != nil {
+		m.layout.logger.Error("Failed to update user with redacted data", zap.Error(err))
+		r.Error(event, "Failed to redact user data. Please try again.")
+		return
+	}
+
+	// Accept the appeal
+	if err = m.layout.db.Models().Appeals().AcceptAppeal(
+		context.Background(), appeal.ID, appeal.Timestamp,
+		"Data deletion request processed: "+reason,
+	); err != nil {
+		m.layout.logger.Error("Failed to accept appeal after data deletion", zap.Error(err))
+		r.Error(event, "Failed to update appeal status. Please try again.")
+		return
+	}
+
+	// Refresh the ticket view
+	ResetAppealData(s)
+	r.NavigateBack(event, s, "User data has been deleted and appeal accepted.")
+
+	// Log the data deletion
+	m.layout.db.Models().Activities().Log(context.Background(), &types.ActivityLog{
+		ActivityTarget: types.ActivityTarget{
+			UserID: appeal.UserID,
+		},
+		ReviewerID:        uint64(event.User().ID),
+		ActivityType:      enum.ActivityTypeUserDataDeleted,
 		ActivityTimestamp: time.Now(),
 		Details: map[string]any{
 			"reason":    reason,

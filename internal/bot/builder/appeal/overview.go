@@ -38,18 +38,31 @@ func NewOverviewBuilder(s *session.Session) *OverviewBuilder {
 
 // Build creates a Discord message showing the appeals list and controls.
 func (b *OverviewBuilder) Build() *discord.MessageUpdateBuilder {
-	embed := b.buildEmbed()
-	components := b.buildComponents()
-
 	return discord.NewMessageUpdateBuilder().
-		SetEmbeds(embed.Build()).
-		AddContainerComponents(components...)
+		SetEmbeds(
+			b.buildInfoEmbed().Build(),
+			b.buildListEmbed().Build(),
+		).
+		AddContainerComponents(b.buildComponents()...)
 }
 
-// buildEmbed creates the main embed showing appeal information.
-func (b *OverviewBuilder) buildEmbed() *discord.EmbedBuilder {
+// buildInfoEmbed creates the informational embed on the appeal system.
+func (b *OverviewBuilder) buildInfoEmbed() *discord.EmbedBuilder {
+	return discord.NewEmbedBuilder().
+		SetTitle("Appeal System").
+		SetDescription(
+			"Welcome to the appeal system. Here you can:\n\n" +
+				"- Submit appeals for flagged or confirmed users\n" +
+				"- Track the status of your appeals\n" +
+				"- Request data deletion under privacy laws\n" +
+				"- Communicate with moderators about your case").
+		SetColor(utils.GetMessageEmbedColor(b.streamerMode))
+}
+
+// buildListEmbed creates the embed showing the list of appeals.
+func (b *OverviewBuilder) buildListEmbed() *discord.EmbedBuilder {
 	embed := discord.NewEmbedBuilder().
-		SetTitle("Appeal Tickets").
+		SetTitle("Active Appeals").
 		SetColor(utils.GetMessageEmbedColor(b.streamerMode))
 
 	if len(b.appeals) == 0 {
@@ -139,10 +152,12 @@ func (b *OverviewBuilder) buildComponents() []discord.ContainerComponent {
 	if len(b.appeals) > 0 {
 		options := make([]discord.StringSelectMenuOption, 0, len(b.appeals)+1)
 
-		// Add search option at the top
-		options = append(options, discord.NewStringSelectMenuOption(
-			"🔍 Search by ID", constants.AppealSearchCustomID,
-		).WithDescription("Look up a specific appeal by ID"))
+		// Add search option for reviewers only
+		if b.isReviewer {
+			options = append(options, discord.NewStringSelectMenuOption(
+				"🔍 Search by ID", constants.AppealSearchCustomID,
+			).WithDescription("Look up a specific appeal by ID"))
+		}
 
 		for _, appeal := range b.appeals {
 			// Format status emoji

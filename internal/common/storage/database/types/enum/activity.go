@@ -64,6 +64,10 @@ const (
 	ActivityTypeAppealRejected
 	// ActivityTypeAppealClosed tracks when a user closes an appeal.
 	ActivityTypeAppealClosed
+	// ActivityTypeAppealReopened tracks when a user reopens an appeal.
+	ActivityTypeAppealReopened
+	// ActivityTypeUserDataDeleted tracks when user data is deleted.
+	ActivityTypeUserDataDeleted
 
 	// ActivityTypeDiscordUserBanned tracks when a Discord user is banned.
 	ActivityTypeDiscordUserBanned

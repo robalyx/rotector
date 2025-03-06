@@ -62,10 +62,7 @@ func (b *ReviewBuilder) Build() *discord.MessageUpdateBuilder {
 	modeEmbed := b.buildModeEmbed()
 	reviewEmbed := b.buildReviewBuilder()
 
-	// Create components
-	components := b.buildComponents()
-
-	// Create builder and handle thumbnail
+	// Handle thumbnail
 	if b.user.ThumbnailURL != "" && b.user.ThumbnailURL != fetcher.ThumbnailPlaceholder {
 		reviewEmbed.SetThumbnail(b.user.ThumbnailURL)
 	} else {
@@ -73,14 +70,23 @@ func (b *ReviewBuilder) Build() *discord.MessageUpdateBuilder {
 		placeholderImage, err := assets.Images.Open("images/content_deleted.png")
 		if err == nil {
 			builder.SetFiles(discord.NewFile("content_deleted.png", "", placeholderImage))
+			reviewEmbed.SetThumbnail("attachment://content_deleted.png")
 			_ = placeholderImage.Close()
 		}
-		reviewEmbed.SetThumbnail("attachment://content_deleted.png")
 	}
 
-	return builder.
-		AddEmbeds(modeEmbed.Build(), reviewEmbed.Build()).
-		AddContainerComponents(components...)
+	// Add deletion notice if user is deleted
+	if b.user.IsDeleted {
+		deletionEmbed := b.buildDeletionEmbed()
+		builder.AddEmbeds(modeEmbed.Build(), reviewEmbed.Build(), deletionEmbed.Build())
+	} else {
+		builder.AddEmbeds(modeEmbed.Build(), reviewEmbed.Build())
+	}
+
+	// Create components
+	components := b.buildComponents()
+
+	return builder.AddContainerComponents(components...)
 }
 
 // buildModeEmbed creates the review mode info embed.
@@ -192,6 +198,14 @@ func (b *ReviewBuilder) buildReviewBuilder() *discord.EmbedBuilder {
 	embed.SetFooter(fmt.Sprintf("%s • UUID: %s", status, b.user.UUID.String()), "")
 
 	return embed
+}
+
+// buildDeletionEmbed creates an embed notifying that the user has requested data deletion.
+func (b *ReviewBuilder) buildDeletionEmbed() *discord.EmbedBuilder {
+	return discord.NewEmbedBuilder().
+		SetTitle("🗑️ Data Deletion Notice").
+		SetDescription("This user has requested deletion of their data. Some information may be missing or incomplete.").
+		SetColor(constants.ErrorEmbedColor)
 }
 
 // buildSortingOptions creates the sorting options.

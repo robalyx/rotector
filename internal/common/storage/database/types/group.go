@@ -17,21 +17,22 @@ var (
 
 // Group combines all the information needed to review a group.
 type Group struct {
-	ID                  uint64                        `bun:",pk"        json:"id"`
-	UUID                uuid.UUID                     `bun:",notnull"   json:"uuid"`
-	Name                string                        `bun:",notnull"   json:"name"`
-	Description         string                        `bun:",notnull"   json:"description"`
-	Owner               *types.GroupUser              `bun:"type:jsonb" json:"owner"`
-	Shout               *types.GroupShout             `bun:"type:jsonb" json:"shout"`
-	Reasons             Reasons[enum.GroupReasonType] `bun:"type:jsonb" json:"reasons"`
-	Confidence          float64                       `bun:",notnull"   json:"confidence"`
-	LastScanned         time.Time                     `bun:",notnull"   json:"lastScanned"`
-	LastUpdated         time.Time                     `bun:",notnull"   json:"lastUpdated"`
-	LastViewed          time.Time                     `bun:",notnull"   json:"lastViewed"`
-	LastLockCheck       time.Time                     `bun:",notnull"   json:"lastLockCheck"`
-	IsLocked            bool                          `bun:",notnull"   json:"isLocked"`
-	ThumbnailURL        string                        `bun:",notnull"   json:"thumbnailUrl"`
-	LastThumbnailUpdate time.Time                     `bun:",notnull"   json:"lastThumbnailUpdate"`
+	ID                  uint64                        `bun:",pk"                    json:"id"`
+	UUID                uuid.UUID                     `bun:",notnull"               json:"uuid"`
+	Name                string                        `bun:",notnull"               json:"name"`
+	Description         string                        `bun:",notnull"               json:"description"`
+	Owner               *types.GroupUser              `bun:"type:jsonb"             json:"owner"`
+	Shout               *types.GroupShout             `bun:"type:jsonb"             json:"shout"`
+	Reasons             Reasons[enum.GroupReasonType] `bun:"type:jsonb"             json:"reasons"`
+	Confidence          float64                       `bun:",notnull"               json:"confidence"`
+	LastScanned         time.Time                     `bun:",notnull"               json:"lastScanned"`
+	LastUpdated         time.Time                     `bun:",notnull"               json:"lastUpdated"`
+	LastViewed          time.Time                     `bun:",notnull"               json:"lastViewed"`
+	LastLockCheck       time.Time                     `bun:",notnull"               json:"lastLockCheck"`
+	IsLocked            bool                          `bun:",notnull,default:false" json:"isLocked"`
+	IsDeleted           bool                          `bun:",notnull,default:false" json:"isDeleted"`
+	ThumbnailURL        string                        `bun:",notnull"               json:"thumbnailUrl"`
+	LastThumbnailUpdate time.Time                     `bun:",notnull"               json:"lastThumbnailUpdate"`
 }
 
 // FlaggedGroup extends Group to track groups that need review.
@@ -86,6 +87,7 @@ const (
 	GroupFieldLastViewed          // Last view time
 	GroupFieldLastLockCheck       // Last lock check time
 	GroupFieldIsLocked            // Lock status
+	GroupFieldIsDeleted           // Deletion status
 	GroupFieldLastThumbnailUpdate // Last thumbnail update
 
 	// GroupFieldBasic includes the essential group identification fields.
@@ -99,7 +101,6 @@ const (
 		GroupFieldLastUpdated |
 		GroupFieldLastViewed |
 		GroupFieldLastLockCheck |
-		GroupFieldIsLocked |
 		GroupFieldLastThumbnailUpdate
 
 	// GroupFieldAll includes all available fields.
@@ -111,7 +112,9 @@ const (
 		GroupFieldFlaggedUsers |
 		GroupFieldConfidence |
 		GroupFieldReputation |
-		GroupFieldTimestamps
+		GroupFieldTimestamps |
+		GroupFieldIsLocked |
+		GroupFieldIsDeleted
 )
 
 // fieldToColumns maps GroupField bits to their corresponding database columns.
@@ -131,6 +134,7 @@ var groupFieldToColumns = map[GroupField][]string{ //nolint:gochecknoglobals // 
 	GroupFieldLastViewed:          {"last_viewed"},
 	GroupFieldLastLockCheck:       {"last_lock_check"},
 	GroupFieldIsLocked:            {"is_locked"},
+	GroupFieldIsDeleted:           {"is_deleted"},
 	GroupFieldLastThumbnailUpdate: {"last_thumbnail_update"},
 }
 
