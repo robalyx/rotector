@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
-	"time"
 
 	"github.com/bytedance/sonic"
 	"github.com/disgoorg/snowflake/v2"
@@ -16,13 +15,6 @@ import (
 )
 
 const (
-	// BotSettingsRefreshInterval defines how often bot settings should be reloaded.
-	BotSettingsRefreshInterval = time.Minute
-
-	// SessionTimeout defines how long a session remains valid before expiring.
-	// After this duration, Redis will automatically delete the session data.
-	SessionTimeout = 10 * time.Minute
-
 	// SessionPrefix is prepended to all session keys in Redis to namespace them
 	// and avoid conflicts with other data stored in the same Redis instance.
 	SessionPrefix = "session:"

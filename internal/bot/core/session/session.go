@@ -19,6 +19,16 @@ import (
 	"go.uber.org/zap"
 )
 
+const (
+	// SessionTimeout defines how long a session remains valid before expiring.
+	// After this duration, Redis will automatically delete the session data.
+	SessionTimeout = 5 * time.Minute
+
+	// ReviewerSessionTimeout defines how long a reviewer's session remains valid.
+	// Reviewers get a longer timeout due to their trusted status.
+	ReviewerSessionTimeout = 30 * time.Minute
+)
+
 // Session maintains user state through a Redis-backed key-value store where values are
 // serialized as JSON strings. The session automatically expires after a configured timeout.
 type Session struct {
@@ -26,15 +36,15 @@ type Session struct {
 	numericProcessor   *NumericProcessor
 	userSettings       *types.UserSetting
 	botSettings        *types.BotSetting
-	userSettingsUpdate bool
-	botSettingsUpdate  bool
 	db                 database.Client
 	redis              rueidis.Client
-	key                string
+	logger             *zap.Logger
 	data               map[string]any
 	dataModified       map[string]bool
 	mu                 sync.RWMutex
-	logger             *zap.Logger
+	key                string
+	userSettingsUpdate bool
+	botSettingsUpdate  bool
 }
 
 // NewSession creates a new session for the given user.
@@ -84,9 +94,15 @@ func (s *Session) Touch(ctx context.Context) {
 		return
 	}
 
+	// Determine the appropriate timeout based on reviewer status
+	timeout := SessionTimeout
+	if s.botSettings.IsReviewer(UserID.Get(s)) {
+		timeout = ReviewerSessionTimeout
+	}
+
 	// Update Redis with new data and expiration
 	err = s.redis.Do(ctx,
-		s.redis.B().Set().Key(s.key).Value(data).Ex(SessionTimeout).Build(),
+		s.redis.B().Set().Key(s.key).Value(data).Ex(timeout).Build(),
 	).Error()
 	if err != nil {
 		s.logger.Error("Failed to update session in Redis", zap.Error(err))
