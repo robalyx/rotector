@@ -84,6 +84,12 @@ var (
 	GroupMembers = NewKey[map[uint64]*types.ReviewUser]("GroupMembers", false)
 	// GroupPageMembers stores the current page of group members
 	GroupPageMembers = NewKey[[]uint64]("GroupPageMembers", false)
+	// ReasonsChanged indicates if reasons have been modified
+	ReasonsChanged = NewKey[bool]("ReasonsChanged", true)
+	// OriginalUserReasons stores the initial user reasons
+	OriginalUserReasons = NewKey[types.Reasons[enum.UserReasonType]]("OriginalUserReasons", true)
+	// OriginalGroupReasons stores the initial group reasons
+	OriginalGroupReasons = NewKey[types.Reasons[enum.GroupReasonType]]("OriginalGroupReasons", true)
 	// SelectedReasonType stores the currently selected reason type for modal handling
 	SelectedReasonType = NewKey[string]("SelectedReasonType", true)
 	// DiscordUserLookupID stores the Discord user ID being looked up

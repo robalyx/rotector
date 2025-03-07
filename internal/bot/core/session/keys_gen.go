@@ -97,7 +97,10 @@ func main() {
 		{Name: "GroupMembers", Type: "map[uint64]*types.ReviewUser", Doc: "GroupMembers stores member details for the current group", Persist: false},
 		{Name: "GroupPageMembers", Type: "[]uint64", Doc: "GroupPageMembers stores the current page of group members", Persist: false},
 
-		// Reason related keys
+		// Review related keys
+		{Name: "ReasonsChanged", Type: "bool", Doc: "ReasonsChanged indicates if reasons have been modified", Persist: true},
+		{Name: "OriginalUserReasons", Type: "types.Reasons[enum.UserReasonType]", Doc: "OriginalUserReasons stores the initial user reasons", Persist: true},
+		{Name: "OriginalGroupReasons", Type: "types.Reasons[enum.GroupReasonType]", Doc: "OriginalGroupReasons stores the initial group reasons", Persist: true},
 		{Name: "SelectedReasonType", Type: "string", Doc: "SelectedReasonType stores the currently selected reason type for modal handling", Persist: true},
 
 		// Discord user lookup related keys

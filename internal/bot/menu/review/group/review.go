@@ -375,6 +375,23 @@ func (m *ReviewMenu) handleConfirmGroup(event interfaces.CommonEvent, s *session
 		}
 		actionMsg = "confirmed"
 
+		// Log reason changes if any were made
+		if session.ReasonsChanged.Get(s) {
+			originalReasons := session.OriginalGroupReasons.Get(s)
+			go m.layout.db.Models().Activities().Log(context.Background(), &types.ActivityLog{
+				ActivityTarget: types.ActivityTarget{
+					GroupID: group.ID,
+				},
+				ReviewerID:        uint64(event.User().ID),
+				ActivityType:      enum.ActivityTypeGroupReasonUpdated,
+				ActivityTimestamp: time.Now(),
+				Details: map[string]any{
+					"originalReasons": originalReasons.Messages(),
+					"updatedReasons":  group.Reasons.Messages(),
+				},
+			})
+		}
+
 		// Log the confirm action
 		go m.layout.db.Models().Activities().Log(context.Background(), &types.ActivityLog{
 			ActivityTarget: types.ActivityTarget{
@@ -445,6 +462,23 @@ func (m *ReviewMenu) handleClearGroup(event interfaces.CommonEvent, s *session.S
 					downvotePercentage*100, int(totalVotes)))
 				return
 			}
+		}
+
+		// Log reason changes if any were made
+		if session.ReasonsChanged.Get(s) {
+			originalReasons := session.OriginalGroupReasons.Get(s)
+			go m.layout.db.Models().Activities().Log(context.Background(), &types.ActivityLog{
+				ActivityTarget: types.ActivityTarget{
+					GroupID: group.ID,
+				},
+				ReviewerID:        uint64(event.User().ID),
+				ActivityType:      enum.ActivityTypeGroupReasonUpdated,
+				ActivityTimestamp: time.Now(),
+				Details: map[string]any{
+					"originalReasons": originalReasons.Messages(),
+					"updatedReasons":  group.Reasons.Messages(),
+				},
+			})
 		}
 
 		// Clear the group
@@ -543,33 +577,10 @@ func (m *ReviewMenu) handleReasonModalSubmit(
 	// Recalculate overall confidence
 	group.Confidence = utils.CalculateConfidence(group.Reasons)
 
-	// Update group in database
-	if err := m.layout.db.Models().Groups().SaveGroups(context.Background(), map[uint64]*types.Group{
-		group.ID: &group.Group,
-	}); err != nil {
-		m.layout.logger.Error("Failed to update group reasons", zap.Error(err))
-		r.Error(event, "Failed to update group reasons")
-		return
-	}
-
 	// Update session
 	session.GroupTarget.Set(s, group)
 	session.SelectedReasonType.Delete(s)
-
-	// Log the action
-	m.layout.db.Models().Activities().Log(context.Background(), &types.ActivityLog{
-		ActivityTarget: types.ActivityTarget{
-			GroupID: group.ID,
-		},
-		ReviewerID:        uint64(event.User().ID),
-		ActivityType:      enum.ActivityTypeGroupReasonUpdated,
-		ActivityTimestamp: time.Now(),
-		Details: map[string]any{
-			"action":     "add",
-			"reasonType": reasonType.String(),
-			"message":    reasonMessage,
-		},
-	})
+	session.ReasonsChanged.Set(s, true)
 
 	r.Reload(event, s, fmt.Sprintf("Successfully added %s reason", reasonType.String()))
 }
@@ -586,6 +597,27 @@ func (m *ReviewMenu) handleReasonSelection(
 		return
 	}
 
+	// Handle refresh option
+	if option == constants.RefreshButtonCustomID {
+		group := session.GroupTarget.Get(s)
+		if group == nil {
+			r.Error(event, "No group selected")
+			return
+		}
+
+		// Restore original reasons
+		originalReasons := session.OriginalGroupReasons.Get(s)
+		group.Reasons = originalReasons
+		group.Confidence = utils.CalculateConfidence(group.Reasons)
+
+		// Update session
+		session.GroupTarget.Set(s, group)
+		session.ReasonsChanged.Set(s, false)
+
+		r.Reload(event, s, "Successfully restored original reasons")
+		return
+	}
+
 	// Parse reason type
 	option = strings.TrimSuffix(option, constants.ModalOpenSuffix)
 	reasonType, err := enum.GroupReasonTypeString(option)
@@ -596,6 +628,10 @@ func (m *ReviewMenu) handleReasonSelection(
 
 	// Get current group
 	group := session.GroupTarget.Get(s)
+	if group == nil {
+		r.Error(event, "No group selected")
+		return
+	}
 
 	// Initialize reasons map if nil
 	if group.Reasons == nil {
@@ -610,31 +646,9 @@ func (m *ReviewMenu) handleReasonSelection(
 		// Recalculate overall confidence
 		group.Confidence = utils.CalculateConfidence(group.Reasons)
 
-		// Update group in database
-		if err := m.layout.db.Models().Groups().SaveGroups(context.Background(), map[uint64]*types.Group{
-			group.ID: &group.Group,
-		}); err != nil {
-			m.layout.logger.Error("Failed to update group reasons", zap.Error(err))
-			r.Error(event, "Failed to update group reasons")
-			return
-		}
-
 		// Update session
 		session.GroupTarget.Set(s, group)
-
-		// Log the action
-		m.layout.db.Models().Activities().Log(context.Background(), &types.ActivityLog{
-			ActivityTarget: types.ActivityTarget{
-				GroupID: group.ID,
-			},
-			ReviewerID:        uint64(event.User().ID),
-			ActivityType:      enum.ActivityTypeGroupReasonUpdated,
-			ActivityTimestamp: time.Now(),
-			Details: map[string]any{
-				"action":     "remove",
-				"reasonType": reasonType.String(),
-			},
-		})
+		session.ReasonsChanged.Set(s, true)
 
 		r.Reload(event, s, fmt.Sprintf("Successfully removed %s reason", reasonType.String()))
 		return
@@ -701,9 +715,11 @@ func (m *ReviewMenu) fetchNewTarget(
 		return nil, isBanned, err
 	}
 
-	// Store the group and flagged users in session
+	// Store the group, flagged users, and original reasons in session
 	session.GroupTarget.Set(s, group)
 	session.GroupMemberIDs.Set(s, flaggedUsers)
+	session.OriginalGroupReasons.Set(s, group.Reasons)
+	session.ReasonsChanged.Set(s, false)
 
 	// Log the view action
 	go m.layout.db.Models().Activities().Log(context.Background(), &types.ActivityLog{

@@ -29,6 +29,7 @@ type ReviewBuilder struct {
 	translator     *translator.Translator
 	reviewMode     enum.ReviewMode
 	defaultSort    enum.ReviewSortBy
+	reasonsChanged bool
 	isReviewer     bool
 	trainingMode   bool
 	privacyMode    bool
@@ -47,6 +48,7 @@ func NewReviewBuilder(s *session.Session, translator *translator.Translator, db 
 		translator:     translator,
 		reviewMode:     session.UserReviewMode.Get(s),
 		defaultSort:    session.UserUserDefaultSort.Get(s),
+		reasonsChanged: session.ReasonsChanged.Get(s),
 		isReviewer:     s.BotSettings().IsReviewer(userID),
 		trainingMode:   trainingMode,
 		privacyMode:    trainingMode || session.UserStreamerMode.Get(s),
@@ -314,6 +316,15 @@ func (b *ReviewBuilder) buildComponents() []discord.ContainerComponent {
 // buildReasonOptions creates the reason management options.
 func (b *ReviewBuilder) buildReasonOptions() []discord.StringSelectMenuOption {
 	options := make([]discord.StringSelectMenuOption, 0)
+
+	// Add refresh option if reasons have been changed
+	if b.reasonsChanged {
+		options = append(options, discord.NewStringSelectMenuOption(
+			"Restore original reasons",
+			constants.RefreshButtonCustomID,
+		).WithEmoji(discord.ComponentEmoji{Name: "🔄"}).
+			WithDescription("Reset all reasons back to their original state"))
+	}
 
 	// Define available reason types for users
 	reasonTypes := []enum.UserReasonType{

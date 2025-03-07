@@ -21,30 +21,32 @@ import (
 
 // ReviewBuilder creates the visual layout for reviewing a group.
 type ReviewBuilder struct {
-	db          database.Client
-	userID      uint64
-	group       *types.ReviewGroup
-	groupInfo   *apiTypes.GroupResponse
-	memberIDs   []uint64
-	reviewMode  enum.ReviewMode
-	defaultSort enum.ReviewSortBy
-	isReviewer  bool
-	privacyMode bool
+	db             database.Client
+	userID         uint64
+	group          *types.ReviewGroup
+	groupInfo      *apiTypes.GroupResponse
+	memberIDs      []uint64
+	reviewMode     enum.ReviewMode
+	defaultSort    enum.ReviewSortBy
+	reasonsChanged bool
+	isReviewer     bool
+	privacyMode    bool
 }
 
 // NewReviewBuilder creates a new review builder.
 func NewReviewBuilder(s *session.Session, db database.Client) *ReviewBuilder {
 	userID := session.UserID.Get(s)
 	return &ReviewBuilder{
-		db:          db,
-		userID:      userID,
-		group:       session.GroupTarget.Get(s),
-		groupInfo:   session.GroupInfo.Get(s),
-		memberIDs:   session.GroupMemberIDs.Get(s),
-		reviewMode:  session.UserReviewMode.Get(s),
-		defaultSort: session.UserGroupDefaultSort.Get(s),
-		isReviewer:  s.BotSettings().IsReviewer(userID),
-		privacyMode: session.UserReviewMode.Get(s) == enum.ReviewModeTraining || session.UserStreamerMode.Get(s),
+		db:             db,
+		userID:         userID,
+		group:          session.GroupTarget.Get(s),
+		groupInfo:      session.GroupInfo.Get(s),
+		memberIDs:      session.GroupMemberIDs.Get(s),
+		reviewMode:     session.UserReviewMode.Get(s),
+		defaultSort:    session.UserGroupDefaultSort.Get(s),
+		reasonsChanged: session.ReasonsChanged.Get(s),
+		isReviewer:     s.BotSettings().IsReviewer(userID),
+		privacyMode:    session.UserReviewMode.Get(s) == enum.ReviewModeTraining || session.UserStreamerMode.Get(s),
 	}
 }
 
@@ -298,6 +300,15 @@ func (b *ReviewBuilder) buildComponents() []discord.ContainerComponent {
 // buildReasonOptions creates the reason management options.
 func (b *ReviewBuilder) buildReasonOptions() []discord.StringSelectMenuOption {
 	options := make([]discord.StringSelectMenuOption, 0)
+
+	// Add refresh option if reasons have been changed
+	if b.reasonsChanged {
+		options = append(options, discord.NewStringSelectMenuOption(
+			"Restore original reasons",
+			constants.RefreshButtonCustomID,
+		).WithEmoji(discord.ComponentEmoji{Name: "🔄"}).
+			WithDescription("Reset all reasons back to their original state"))
+	}
 
 	// Define available reason types for groups
 	reasonTypes := []enum.GroupReasonType{

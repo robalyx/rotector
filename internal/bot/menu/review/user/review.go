@@ -419,6 +419,23 @@ func (m *ReviewMenu) handleConfirmUser(event interfaces.CommonEvent, s *session.
 		}
 		actionMsg = "confirmed"
 
+		// Log reason changes if any were made
+		if session.ReasonsChanged.Get(s) {
+			originalReasons := session.OriginalUserReasons.Get(s)
+			go m.layout.db.Models().Activities().Log(context.Background(), &types.ActivityLog{
+				ActivityTarget: types.ActivityTarget{
+					UserID: user.ID,
+				},
+				ReviewerID:        uint64(event.User().ID),
+				ActivityType:      enum.ActivityTypeUserReasonUpdated,
+				ActivityTimestamp: time.Now(),
+				Details: map[string]any{
+					"originalReasons": originalReasons.Messages(),
+					"updatedReasons":  user.Reasons.Messages(),
+				},
+			})
+		}
+
 		// Log the confirm action
 		go m.layout.db.Models().Activities().Log(context.Background(), &types.ActivityLog{
 			ActivityTarget: types.ActivityTarget{
@@ -496,6 +513,23 @@ func (m *ReviewMenu) handleClearUser(event interfaces.CommonEvent, s *session.Se
 					downvotePercentage*100, int(totalVotes)))
 				return
 			}
+		}
+
+		// Log reason changes if any were made
+		if session.ReasonsChanged.Get(s) {
+			originalReasons := session.OriginalUserReasons.Get(s)
+			go m.layout.db.Models().Activities().Log(context.Background(), &types.ActivityLog{
+				ActivityTarget: types.ActivityTarget{
+					UserID: user.ID,
+				},
+				ReviewerID:        uint64(event.User().ID),
+				ActivityType:      enum.ActivityTypeUserReasonUpdated,
+				ActivityTimestamp: time.Now(),
+				Details: map[string]any{
+					"originalReasons": originalReasons.Messages(),
+					"updatedReasons":  user.Reasons.Messages(),
+				},
+			})
 		}
 
 		// Clear the user
@@ -715,33 +749,10 @@ func (m *ReviewMenu) handleReasonModalSubmit(
 	// Recalculate overall confidence
 	user.Confidence = utils.CalculateConfidence(user.Reasons)
 
-	// Update user in database
-	if err := m.layout.db.Models().Users().SaveUsers(context.Background(), map[uint64]*types.User{
-		user.ID: &user.User,
-	}); err != nil {
-		m.layout.logger.Error("Failed to update user reasons", zap.Error(err))
-		r.Error(event, "Failed to update user reasons")
-		return
-	}
-
 	// Update session
 	session.UserTarget.Set(s, user)
 	session.SelectedReasonType.Delete(s)
-
-	// Log the action
-	m.layout.db.Models().Activities().Log(context.Background(), &types.ActivityLog{
-		ActivityTarget: types.ActivityTarget{
-			UserID: user.ID,
-		},
-		ReviewerID:        uint64(event.User().ID),
-		ActivityType:      enum.ActivityTypeUserReasonUpdated,
-		ActivityTimestamp: time.Now(),
-		Details: map[string]any{
-			"action":     "add",
-			"reasonType": reasonType.String(),
-			"message":    reasonMessage,
-		},
-	})
+	session.ReasonsChanged.Set(s, true)
 
 	r.Reload(event, s, fmt.Sprintf("Successfully added %s reason", reasonType.String()))
 }
@@ -755,6 +766,27 @@ func (m *ReviewMenu) handleReasonSelection(
 		m.layout.logger.Error("Non-reviewer attempted to manage reasons",
 			zap.Uint64("user_id", uint64(event.User().ID)))
 		r.Error(event, "You do not have permission to manage reasons.")
+		return
+	}
+
+	// Handle refresh option
+	if option == constants.RefreshButtonCustomID {
+		user := session.UserTarget.Get(s)
+		if user == nil {
+			r.Error(event, "No user selected")
+			return
+		}
+
+		// Restore original reasons
+		originalReasons := session.OriginalUserReasons.Get(s)
+		user.Reasons = originalReasons
+		user.Confidence = utils.CalculateConfidence(user.Reasons)
+
+		// Update session
+		session.UserTarget.Set(s, user)
+		session.ReasonsChanged.Set(s, false)
+
+		r.Reload(event, s, "Successfully restored original reasons")
 		return
 	}
 
@@ -786,31 +818,9 @@ func (m *ReviewMenu) handleReasonSelection(
 		// Recalculate overall confidence
 		user.Confidence = utils.CalculateConfidence(user.Reasons)
 
-		// Update user in database
-		if err := m.layout.db.Models().Users().SaveUsers(context.Background(), map[uint64]*types.User{
-			user.ID: &user.User,
-		}); err != nil {
-			m.layout.logger.Error("Failed to update user reasons", zap.Error(err))
-			r.Error(event, "Failed to update user reasons")
-			return
-		}
-
 		// Update session
 		session.UserTarget.Set(s, user)
-
-		// Log the action
-		m.layout.db.Models().Activities().Log(context.Background(), &types.ActivityLog{
-			ActivityTarget: types.ActivityTarget{
-				UserID: user.ID,
-			},
-			ReviewerID:        uint64(event.User().ID),
-			ActivityType:      enum.ActivityTypeUserReasonUpdated,
-			ActivityTimestamp: time.Now(),
-			Details: map[string]any{
-				"action":     "remove",
-				"reasonType": reasonType.String(),
-			},
-		})
+		session.ReasonsChanged.Set(s, true)
 
 		r.Reload(event, s, fmt.Sprintf("Successfully removed %s reason", reasonType.String()))
 		return
@@ -869,8 +879,10 @@ func (m *ReviewMenu) fetchNewTarget(
 		return nil, isBanned, err
 	}
 
-	// Store the user in session for the message builder
+	// Store the user and their original reasons in session
 	session.UserTarget.Set(s, user)
+	session.OriginalUserReasons.Set(s, user.Reasons)
+	session.ReasonsChanged.Set(s, false)
 
 	// Log the view action
 	go m.layout.db.Models().Activities().Log(context.Background(), &types.ActivityLog{
