@@ -104,7 +104,7 @@ func (m *Menu) handleModal(event *events.ModalSubmitInteractionCreate, s *sessio
 	status, _, _, err := m.layout.queueManager.GetQueueInfo(context.Background(), userID)
 	if err == nil && status != "" {
 		// Show status menu if already queued
-		r.Show(event, s, constants.StatusPageName, "")
+		r.Show(event, s, constants.UserStatusPageName, "")
 		return
 	}
 
@@ -150,7 +150,7 @@ func (m *Menu) handleModal(event *events.ModalSubmitInteractionCreate, s *sessio
 	}
 
 	// Show status menu to track progress
-	r.Show(event, s, constants.StatusPageName, "")
+	r.Show(event, s, constants.UserStatusPageName, "")
 
 	// Log the activity
 	m.layout.db.Models().Activities().Log(context.Background(), &types.ActivityLog{
