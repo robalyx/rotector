@@ -22,6 +22,7 @@ type Layout struct {
 	outfitsMenu      *OutfitsMenu
 	friendsMenu      *FriendsMenu
 	groupsMenu       *GroupsMenu
+	caesarMenu       *CaesarMenu
 	statusMenu       *StatusMenu
 	thumbnailFetcher *fetcher.ThumbnailFetcher
 	presenceFetcher  *fetcher.PresenceFetcher
@@ -50,6 +51,7 @@ func New(app *setup.App, paginationManager *pagination.Manager) *Layout {
 	l.outfitsMenu = NewOutfitsMenu(l)
 	l.friendsMenu = NewFriendsMenu(l)
 	l.groupsMenu = NewGroupsMenu(l)
+	l.caesarMenu = NewCaesarMenu(l)
 	l.statusMenu = NewStatusMenu(l)
 
 	return l
@@ -62,6 +64,7 @@ func (l *Layout) Pages() []*pagination.Page {
 		l.outfitsMenu.page,
 		l.friendsMenu.page,
 		l.groupsMenu.page,
+		l.caesarMenu.page,
 		l.statusMenu.page,
 	}
 }

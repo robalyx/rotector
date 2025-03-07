@@ -97,6 +97,7 @@ Look for:
 - Suggestive size references
 - Inappropriate trading
 - Degradation terms
+- Caesar cipher (ROT13 and other rotations)
 
 Ignore:
 - Simple greetings/farewells

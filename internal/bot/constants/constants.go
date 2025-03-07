@@ -33,6 +33,7 @@ const (
 	UserGroupsPageName  = "Groups Menu"
 	UserOutfitsPageName = "Outfits Menu"
 	UserStatusPageName  = "Status Menu"
+	UserCaesarPageName  = "Caesar Cipher Menu"
 
 	AdminPageName              = "Admin Menu"
 	AdminActionConfirmPageName = "Action Confirmation"
@@ -181,6 +182,7 @@ const (
 
 // User Review Menu.
 const (
+	CaesarCipherButtonCustomID    = "caesar_cipher"
 	OpenAIChatButtonCustomID      = "open_ai_chat"
 	RecheckButtonCustomID         = "recheck" + ModalOpenSuffix
 	ViewUserLogsButtonCustomID    = "view_user_logs"
@@ -249,7 +251,6 @@ const (
 	GroupDefaultSortOption   = "group_default_sort"
 	AppealDefaultSortOption  = "appeal_default_sort"
 	AppealStatusFilterOption = "appeal_status_filter"
-	ChatModelOption          = "chat_model"
 	ReviewModeOption         = "review_mode"
 	ReviewTargetModeOption   = "review_target_mode"
 )

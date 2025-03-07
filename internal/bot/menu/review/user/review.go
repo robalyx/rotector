@@ -197,6 +197,8 @@ func (m *ReviewMenu) handleActionSelection(
 	case constants.OpenOutfitsMenuButtonCustomID:
 		session.PaginationPage.Set(s, 0)
 		r.Show(event, s, constants.UserOutfitsPageName, "")
+	case constants.CaesarCipherButtonCustomID:
+		r.Show(event, s, constants.UserCaesarPageName, "")
 	case constants.OpenAIChatButtonCustomID:
 		m.handleOpenAIChat(event, s, r)
 	case constants.ViewUserLogsButtonCustomID:

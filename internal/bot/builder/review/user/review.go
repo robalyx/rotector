@@ -243,6 +243,9 @@ func (b *ReviewBuilder) buildActionOptions() []discord.StringSelectMenuOption {
 		discord.NewStringSelectMenuOption("Open outfit viewer", constants.OpenOutfitsMenuButtonCustomID).
 			WithEmoji(discord.ComponentEmoji{Name: "👕"}).
 			WithDescription("View all user outfits"),
+		discord.NewStringSelectMenuOption("Translate caesar cipher", constants.CaesarCipherButtonCustomID).
+			WithEmoji(discord.ComponentEmoji{Name: "🔍"}).
+			WithDescription("View Caesar cipher analysis of description"),
 	}
 
 	// Add reviewer-only options
