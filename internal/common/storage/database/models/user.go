@@ -72,8 +72,13 @@ func (r *UserModel) SaveUsers(ctx context.Context, users map[uint64]*types.User)
 		}
 
 		// Get existing user data if available
-		existingUser := existingUsers[id]
-		status := existingUser.Status
+		var status enum.UserType
+		existingUser, ok := existingUsers[id]
+		if !ok {
+			status = enum.UserTypeFlagged
+		} else {
+			status = existingUser.Status
+		}
 
 		switch status {
 		case enum.UserTypeConfirmed:

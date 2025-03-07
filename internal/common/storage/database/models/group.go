@@ -66,8 +66,13 @@ func (r *GroupModel) SaveGroups(ctx context.Context, groups map[uint64]*types.Gr
 		}
 
 		// Get existing group data if available
-		existingGroup := existingGroups[id]
-		status := existingGroup.Status
+		var status enum.GroupType
+		existingGroup, ok := existingGroups[id]
+		if !ok {
+			status = enum.GroupTypeFlagged
+		} else {
+			status = existingGroup.Status
+		}
 
 		switch status {
 		case enum.GroupTypeConfirmed:
