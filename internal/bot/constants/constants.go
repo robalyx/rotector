@@ -169,6 +169,7 @@ const (
 	AddReasonModalCustomID           = "add_reason_modal"
 	AddReasonInputCustomID           = "add_reason"
 	AddReasonConfidenceInputCustomID = "add_reason_confidence"
+	AddReasonEvidenceInputCustomID   = "add_reason_evidence"
 
 	RecheckReasonModalCustomID = "recheck_reason_modal"
 	RecheckReasonInputCustomID = "recheck_reason"

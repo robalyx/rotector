@@ -322,7 +322,8 @@ func (b *ReviewBuilder) buildReasonOptions() []discord.StringSelectMenuOption {
 		var action string
 		optionValue := reasonType.String()
 		if exists {
-			action = "Remove"
+			action = "Edit"
+			optionValue += constants.ModalOpenSuffix
 		} else {
 			action = "Add"
 			optionValue += constants.ModalOpenSuffix
