@@ -51,15 +51,24 @@ func init() { //nolint:funlen
 			ON activity_logs (activity_type, activity_timestamp DESC, sequence DESC);
 
 			-- Appeal indexes
-			CREATE INDEX IF NOT EXISTS idx_appeals_user_id ON appeals (user_id);
-			CREATE INDEX IF NOT EXISTS idx_appeals_requester_id ON appeals (requester_id);
-			CREATE INDEX IF NOT EXISTS idx_appeals_status ON appeals (status);
-			CREATE INDEX IF NOT EXISTS idx_appeals_claimed_by ON appeals (claimed_by) WHERE claimed_by > 0;
-			CREATE INDEX IF NOT EXISTS idx_appeals_timestamp ON appeals (timestamp DESC);
-			CREATE INDEX IF NOT EXISTS idx_appeals_status_timestamp ON appeals (status, timestamp DESC);
-			CREATE INDEX IF NOT EXISTS idx_appeals_rejected_claimed_at ON appeals (claimed_at DESC) WHERE status = 2;
-			CREATE INDEX IF NOT EXISTS idx_appeals_pending_unclaimed ON appeals (id) WHERE status = 0;
-			CREATE INDEX IF NOT EXISTS idx_appeals_id_status ON appeals (id, status);
+			CREATE INDEX IF NOT EXISTS idx_appeals_user_id
+			ON appeals (user_id);
+			CREATE INDEX IF NOT EXISTS idx_appeals_requester_id
+			ON appeals (requester_id);
+			CREATE INDEX IF NOT EXISTS idx_appeals_status
+			ON appeals (status);
+			CREATE INDEX IF NOT EXISTS idx_appeals_claimed_by
+			ON appeals (claimed_by) WHERE claimed_by > 0;
+			CREATE INDEX IF NOT EXISTS idx_appeals_timestamp
+			ON appeals (timestamp DESC);
+			CREATE INDEX IF NOT EXISTS idx_appeals_status_timestamp
+			ON appeals (status, timestamp DESC);
+			CREATE INDEX IF NOT EXISTS idx_appeals_rejected_claimed_at
+			ON appeals (claimed_at DESC) WHERE status = 2;
+			CREATE INDEX IF NOT EXISTS idx_appeals_pending_unclaimed
+			ON appeals (id) WHERE status = 0;
+			CREATE INDEX IF NOT EXISTS idx_appeals_id_status
+			ON appeals (id, status);
 
 			-- Appeal timeline indexes
 			CREATE INDEX IF NOT EXISTS idx_appeal_timelines_timestamp_asc 
@@ -181,21 +190,24 @@ func init() { //nolint:funlen
 			WHERE is_deleted = false;
 
 			-- User status indexes
-			CREATE INDEX IF NOT EXISTS idx_cleared_users_purged_at ON cleared_users (cleared_at);
+			CREATE INDEX IF NOT EXISTS idx_cleared_users_purged_at
+			ON cleared_users (cleared_at);
 			CREATE INDEX IF NOT EXISTS idx_flagged_users_ban_check 
 			ON flagged_users (last_ban_check ASC);
 			CREATE INDEX IF NOT EXISTS idx_confirmed_users_ban_check 
 			ON confirmed_users (last_ban_check ASC);
 			
 			-- Group status indexes
-			CREATE INDEX IF NOT EXISTS idx_cleared_groups_purged_at ON cleared_groups (cleared_at);
+			CREATE INDEX IF NOT EXISTS idx_cleared_groups_purged_at
+			ON cleared_groups (cleared_at);
 			CREATE INDEX IF NOT EXISTS idx_flagged_groups_lock_check 
 			ON flagged_groups (last_lock_check ASC);
 			CREATE INDEX IF NOT EXISTS idx_confirmed_groups_lock_check 
 			ON confirmed_groups (last_lock_check ASC);
 			
 			-- Statistics indexes
-			CREATE INDEX IF NOT EXISTS idx_hourly_stats_timestamp ON hourly_stats (timestamp DESC);
+			CREATE INDEX IF NOT EXISTS idx_hourly_stats_timestamp
+			ON hourly_stats (timestamp DESC);
 
 			-- Vote indexes
 			CREATE INDEX IF NOT EXISTS idx_user_votes_id_discord 
@@ -220,6 +232,9 @@ func init() { //nolint:funlen
 			CREATE INDEX IF NOT EXISTS idx_server_members_user_joined
 			ON discord_server_members (user_id, joined_at DESC);
 			
+			CREATE INDEX IF NOT EXISTS idx_server_members_updated_at
+			ON discord_server_members (updated_at);
+
 			-- Inappropriate messages indexes
 			CREATE INDEX IF NOT EXISTS idx_inappropriate_messages_detected 
 			ON inappropriate_messages (server_id, channel_id, detected_at DESC);
@@ -386,6 +401,7 @@ func init() { //nolint:funlen
 
 			-- Discord server member indexes
 			DROP INDEX IF EXISTS idx_server_members_user_joined;
+			DROP INDEX IF EXISTS idx_server_members_updated_at;
 
 			-- Inappropriate messages indexes
 			DROP INDEX IF EXISTS idx_inappropriate_messages_detected;

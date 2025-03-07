@@ -3,6 +3,7 @@ package models
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/robalyx/rotector/internal/common/storage/database/types"
 	"github.com/uptrace/bun"
@@ -219,4 +220,26 @@ func (m *SyncModel) GetDiscordUserGuildCount(ctx context.Context, discordUserID 
 		return 0, fmt.Errorf("failed to get Discord user guild count: %w", err)
 	}
 	return count, nil
+}
+
+// PurgeOldServerMembers removes Discord server member records older than the specified cutoff date.
+func (m *SyncModel) PurgeOldServerMembers(ctx context.Context, cutoffDate time.Time) (int, error) {
+	result, err := m.db.NewDelete().
+		Model((*types.DiscordServerMember)(nil)).
+		Where("updated_at < ?", cutoffDate).
+		Exec(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("failed to purge old server members: %w", err)
+	}
+
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return 0, fmt.Errorf("failed to get affected rows: %w", err)
+	}
+
+	m.logger.Debug("Purged old server members",
+		zap.Int64("rowsAffected", affected),
+		zap.Time("cutoffDate", cutoffDate))
+
+	return int(affected), nil
 }

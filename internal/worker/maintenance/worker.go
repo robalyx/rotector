@@ -80,28 +80,31 @@ func (w *Worker) Start() {
 		w.bar.Reset()
 		w.reporter.SetHealthy(true)
 
-		// Step 1: Process banned users (20%)
+		// Step 1: Process banned users (12%)
 		w.processBannedUsers()
 
-		// Step 2: Process locked groups (30%)
+		// Step 2: Process locked groups (24%)
 		w.processLockedGroups()
 
-		// Step 3: Process cleared users (40%)
+		// Step 3: Process cleared users (36%)
 		w.processClearedUsers()
 
-		// Step 4: Process cleared groups (50%)
+		// Step 4: Process cleared groups (48%)
 		w.processClearedGroups()
 
-		// Step 5: Process group tracking (65%)
+		// Step 5: Process group tracking (60%)
 		w.processGroupTracking()
 
-		// Step 6: Process user thumbnails (80%)
+		// Step 6: Process user thumbnails (72%)
 		w.processUserThumbnails()
 
-		// Step 7: Process group thumbnails (95%)
+		// Step 7: Process group thumbnails (84%)
 		w.processGroupThumbnails()
 
-		// Step 8: Completed (100%)
+		// Step 8: Process old Discord server members (96%)
+		w.processOldServerMembers()
+
+		// Step 9: Completed (100%)
 		w.bar.SetStepMessage("Completed", 100)
 		w.reporter.UpdateStatus("Completed", 100)
 
@@ -112,8 +115,8 @@ func (w *Worker) Start() {
 
 // processBannedUsers checks for and marks banned users.
 func (w *Worker) processBannedUsers() {
-	w.bar.SetStepMessage("Processing banned users", 20)
-	w.reporter.UpdateStatus("Processing banned users", 20)
+	w.bar.SetStepMessage("Processing banned users", 12)
+	w.reporter.UpdateStatus("Processing banned users", 12)
 
 	// Get users to check
 	users, currentlyBanned, err := w.db.Models().Users().GetUsersToCheck(context.Background(), w.userBatchSize)
@@ -175,8 +178,8 @@ func (w *Worker) processBannedUsers() {
 
 // processLockedGroups checks for and marks locked groups.
 func (w *Worker) processLockedGroups() {
-	w.bar.SetStepMessage("Processing locked groups", 30)
-	w.reporter.UpdateStatus("Processing locked groups", 30)
+	w.bar.SetStepMessage("Processing locked groups", 24)
+	w.reporter.UpdateStatus("Processing locked groups", 24)
 
 	// Get groups to check
 	groups, currentlyLocked, err := w.db.Models().Groups().GetGroupsToCheck(context.Background(), w.groupBatchSize)
@@ -238,8 +241,8 @@ func (w *Worker) processLockedGroups() {
 
 // processClearedUsers removes old cleared users.
 func (w *Worker) processClearedUsers() {
-	w.bar.SetStepMessage("Processing cleared users", 40)
-	w.reporter.UpdateStatus("Processing cleared users", 40)
+	w.bar.SetStepMessage("Processing cleared users", 36)
+	w.reporter.UpdateStatus("Processing cleared users", 36)
 
 	cutoffDate := time.Now().AddDate(0, 0, -30) // 30 days ago
 	affected, err := w.db.Models().Users().PurgeOldClearedUsers(context.Background(), cutoffDate)
@@ -258,8 +261,8 @@ func (w *Worker) processClearedUsers() {
 
 // processClearedGroups removes old cleared groups.
 func (w *Worker) processClearedGroups() {
-	w.bar.SetStepMessage("Processing cleared groups", 50)
-	w.reporter.UpdateStatus("Processing cleared groups", 50)
+	w.bar.SetStepMessage("Processing cleared groups", 48)
+	w.reporter.UpdateStatus("Processing cleared groups", 48)
 
 	cutoffDate := time.Now().AddDate(0, 0, -30) // 30 days ago
 	affected, err := w.db.Models().Groups().PurgeOldClearedGroups(context.Background(), cutoffDate)
@@ -278,8 +281,8 @@ func (w *Worker) processClearedGroups() {
 
 // processGroupTracking manages group tracking data.
 func (w *Worker) processGroupTracking() {
-	w.bar.SetStepMessage("Processing group tracking", 65)
-	w.reporter.UpdateStatus("Processing group tracking", 65)
+	w.bar.SetStepMessage("Processing group tracking", 60)
+	w.reporter.UpdateStatus("Processing group tracking", 60)
 
 	// Get groups to check
 	groupsWithUsers, err := w.db.Models().Tracking().GetGroupTrackingsToCheck(
@@ -346,8 +349,8 @@ func (w *Worker) processGroupTracking() {
 
 // processUserThumbnails updates user thumbnails.
 func (w *Worker) processUserThumbnails() {
-	w.bar.SetStepMessage("Processing user thumbnails", 80)
-	w.reporter.UpdateStatus("Processing user thumbnails", 80)
+	w.bar.SetStepMessage("Processing user thumbnails", 72)
+	w.reporter.UpdateStatus("Processing user thumbnails", 72)
 
 	// Get users that need thumbnail updates
 	users, err := w.db.Models().Users().GetUsersForThumbnailUpdate(context.Background(), w.thumbnailUserBatchSize)
@@ -388,8 +391,8 @@ func (w *Worker) processUserThumbnails() {
 
 // processGroupThumbnails updates group thumbnails.
 func (w *Worker) processGroupThumbnails() {
-	w.bar.SetStepMessage("Processing group thumbnails", 95)
-	w.reporter.UpdateStatus("Processing group thumbnails", 95)
+	w.bar.SetStepMessage("Processing group thumbnails", 84)
+	w.reporter.UpdateStatus("Processing group thumbnails", 84)
 
 	// Get groups that need thumbnail updates
 	groups, err := w.db.Models().Groups().GetGroupsForThumbnailUpdate(context.Background(), w.thumbnailGroupBatchSize)
@@ -417,4 +420,24 @@ func (w *Worker) processGroupThumbnails() {
 	w.logger.Info("Updated group thumbnails",
 		zap.Int("processedCount", len(groups)),
 		zap.Int("updatedCount", len(updatedGroups)))
+}
+
+// processOldServerMembers removes Discord server member records older than 30 days.
+func (w *Worker) processOldServerMembers() {
+	w.bar.SetStepMessage("Processing old Discord server members", 96)
+	w.reporter.UpdateStatus("Processing old Discord server members", 96)
+
+	cutoffDate := time.Now().AddDate(0, 0, -30) // 30 days ago
+	affected, err := w.db.Models().Sync().PurgeOldServerMembers(context.Background(), cutoffDate)
+	if err != nil {
+		w.logger.Error("Error purging old Discord server members", zap.Error(err))
+		w.reporter.SetHealthy(false)
+		return
+	}
+
+	if affected > 0 {
+		w.logger.Info("Purged old Discord server members",
+			zap.Int("affected", affected),
+			zap.Time("cutoffDate", cutoffDate))
+	}
 }
