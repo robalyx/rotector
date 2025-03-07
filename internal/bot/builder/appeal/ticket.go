@@ -61,53 +61,72 @@ func (b *TicketBuilder) Build() *discord.MessageUpdateBuilder {
 	}
 
 	// Add actions based on user role and appeal status
-	baseActions := []discord.InteractiveComponent{}
-
 	switch b.appeal.Status {
 	case enum.AppealStatusPending:
-		// Add respond button
-		baseActions = append(baseActions,
-			discord.NewPrimaryButton("Respond", constants.AppealRespondButtonCustomID),
-		)
+		// Create options array for the actions dropdown
+		options := []discord.StringSelectMenuOption{
+			discord.NewStringSelectMenuOption("Respond to Appeal", constants.AppealRespondButtonCustomID).
+				WithEmoji(discord.ComponentEmoji{Name: "💬"}).
+				WithDescription("Send a message in this appeal"),
+		}
 
 		if b.isReviewer {
-			// Add reviewer-specific buttons
-			baseActions = append(baseActions,
-				discord.NewPrimaryButton("Lookup", constants.AppealLookupUserButtonCustomID))
+			// Add reviewer-specific options
+			options = append(options,
+				discord.NewStringSelectMenuOption("Lookup User", constants.AppealLookupUserButtonCustomID).
+					WithEmoji(discord.ComponentEmoji{Name: "🔍"}).
+					WithDescription("View detailed user information"),
+			)
 
-			// Add claim button if appeal is unclaimed
+			// Add claim option if appeal is unclaimed
 			if b.appeal.ClaimedBy == 0 {
-				baseActions = append(baseActions,
-					discord.NewPrimaryButton("Claim", constants.AppealClaimButtonCustomID),
+				options = append(options,
+					discord.NewStringSelectMenuOption("Claim Appeal", constants.AppealClaimButtonCustomID).
+						WithEmoji(discord.ComponentEmoji{Name: "📌"}).
+						WithDescription("Claim this appeal for review"),
 				)
 			}
 
-			// Add review action buttons
-			reviewActions := []discord.InteractiveComponent{
-				discord.NewSuccessButton("Accept", constants.AcceptAppealButtonCustomID),
-				discord.NewDangerButton("Reject", constants.RejectAppealButtonCustomID),
-				discord.NewDangerButton("Delete Data", constants.DeleteUserDataButtonCustomID),
-			}
-
-			components = append(components,
-				discord.NewActionRow(baseActions...),
-				discord.NewActionRow(reviewActions...),
+			// Add review action options
+			options = append(options,
+				discord.NewStringSelectMenuOption("Accept Appeal & Delete Data", constants.AcceptAppealButtonCustomID).
+					WithEmoji(discord.ComponentEmoji{Name: "✅"}).
+					WithDescription("Clear the user from the system and delete user data"),
+				discord.NewStringSelectMenuOption("Reject Appeal", constants.RejectAppealButtonCustomID).
+					WithEmoji(discord.ComponentEmoji{Name: "❌"}).
+					WithDescription("Reject this appeal"),
+				discord.NewStringSelectMenuOption("Delete Data", constants.DeleteUserDataButtonCustomID).
+					WithEmoji(discord.ComponentEmoji{Name: "🗑️"}).
+					WithDescription("Delete user data without clearing appeal"),
 			)
 		} else {
-			// Add close button for regular users
-			baseActions = append(baseActions,
-				discord.NewDangerButton("Close Ticket", constants.AppealCloseButtonCustomID),
+			// Add close option for regular users
+			options = append(options,
+				discord.NewStringSelectMenuOption("Close Ticket", constants.AppealCloseButtonCustomID).
+					WithEmoji(discord.ComponentEmoji{Name: "❌"}).
+					WithDescription("Close this appeal ticket"),
 			)
-			components = append(components, discord.NewActionRow(baseActions...))
 		}
+
+		components = append(components, discord.NewActionRow(
+			discord.NewStringSelectMenu(constants.AppealActionSelectID, "Appeal Actions", options...),
+		))
+
 	case enum.AppealStatusRejected, enum.AppealStatusAccepted:
 		if b.isReviewer {
-			// Add lookup and reopen buttons for rejected/accepted appeals for reviewers
-			baseActions = append(baseActions,
-				discord.NewPrimaryButton("Lookup", constants.AppealLookupUserButtonCustomID),
-				discord.NewSuccessButton("Reopen Appeal", constants.ReopenAppealButtonCustomID),
-			)
-			components = append(components, discord.NewActionRow(baseActions...))
+			// Add reviewer options for closed appeals
+			options := []discord.StringSelectMenuOption{
+				discord.NewStringSelectMenuOption("Lookup User", constants.AppealLookupUserButtonCustomID).
+					WithEmoji(discord.ComponentEmoji{Name: "🔍"}).
+					WithDescription("View detailed user information"),
+				discord.NewStringSelectMenuOption("Reopen Appeal", constants.ReopenAppealButtonCustomID).
+					WithEmoji(discord.ComponentEmoji{Name: "🔄"}).
+					WithDescription("Reopen this appeal"),
+			}
+
+			components = append(components, discord.NewActionRow(
+				discord.NewStringSelectMenu(constants.AppealActionSelectID, "Appeal Actions", options...),
+			))
 		}
 	}
 

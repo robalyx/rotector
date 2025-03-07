@@ -410,16 +410,16 @@ func (r *AppealModel) ClaimAppeal(ctx context.Context, appealID int64, timestamp
 	})
 }
 
-// ReopenAppeal changes a rejected or accepted appeal back to pending status.
-func (r *AppealModel) ReopenAppeal(ctx context.Context, appealID int64, timestamp time.Time) error {
+// ReopenAppeal changes a rejected or accepted appeal back to pending status and claims it for the reviewer.
+func (r *AppealModel) ReopenAppeal(ctx context.Context, appealID int64, timestamp time.Time, reviewerID uint64) error {
 	now := time.Now()
 	return r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
 		// Update appeal status
 		_, err := tx.NewUpdate().
 			Model((*types.Appeal)(nil)).
 			Set("status = ?", enum.AppealStatusPending).
-			Set("claimed_by = NULL").
-			Set("claimed_at = NULL").
+			Set("claimed_by = ?", reviewerID).
+			Set("claimed_at = ?", now).
 			Set("review_reason = NULL").
 			Where("id = ?", appealID).
 			Where("status IN (?, ?)", enum.AppealStatusRejected, enum.AppealStatusAccepted).
@@ -432,6 +432,7 @@ func (r *AppealModel) ReopenAppeal(ctx context.Context, appealID int64, timestam
 		_, err = tx.NewUpdate().
 			Model((*types.AppealTimeline)(nil)).
 			Set("last_activity = ?", now).
+			Set("last_viewed = ?", now).
 			Where("id = ?", appealID).
 			Where("timestamp = ?", timestamp).
 			Exec(ctx)

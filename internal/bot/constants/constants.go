@@ -326,6 +326,7 @@ const (
 	AppealSelectID              = "appeal_select"
 	AppealStatusSelectID        = "appeal_status"
 	AppealSortSelectID          = "appeal_sort"
+	AppealActionSelectID        = "appeal_action"
 	AppealCreateButtonCustomID  = "appeal_create" + ModalOpenSuffix
 	AppealRespondButtonCustomID = "appeal_respond" + ModalOpenSuffix
 	AppealSearchCustomID        = "appeal_search" + ModalOpenSuffix

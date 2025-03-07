@@ -37,6 +37,7 @@ func NewTicketMenu(layout *Layout) *TicketMenu {
 		CleanupHandlerFunc: m.Cleanup,
 		ShowHandlerFunc:    m.Show,
 		ButtonHandlerFunc:  m.handleButton,
+		SelectHandlerFunc:  m.handleSelectMenu,
 		ModalHandlerFunc:   m.handleModal,
 	}
 	return m
@@ -51,11 +52,13 @@ func (m *TicketMenu) Show(event interfaces.CommonEvent, s *session.Session, r *p
 		return
 	}
 
+	ctx := context.Background()
+
 	// If appeal is pending, check if user's status has changed
 	if appeal.Status == enum.AppealStatusPending {
 		// Get current user status
 		user, err := m.layout.db.Models().Users().GetUserByID(
-			context.Background(), strconv.FormatUint(appeal.UserID, 10), types.UserFieldAll,
+			ctx, strconv.FormatUint(appeal.UserID, 10), types.UserFieldAll,
 		)
 		if err != nil {
 			if !errors.Is(err, types.ErrUserNotFound) {
@@ -66,7 +69,7 @@ func (m *TicketMenu) Show(event interfaces.CommonEvent, s *session.Session, r *p
 
 			// User no longer exists, auto-reject the appeal
 			if err := m.layout.db.Models().Appeals().RejectAppeal(
-				context.Background(), appeal.ID, appeal.Timestamp, "User no longer exists in database.",
+				ctx, appeal.ID, appeal.Timestamp, "User no longer exists in database.",
 			); err != nil {
 				m.layout.logger.Error("Failed to auto-reject appeal", zap.Error(err))
 			}
@@ -80,7 +83,7 @@ func (m *TicketMenu) Show(event interfaces.CommonEvent, s *session.Session, r *p
 			// User is no longer flagged or confirmed, auto-reject the appeal
 			reason := fmt.Sprintf("User status changed to %s", user.Status)
 			if err := m.layout.db.Models().Appeals().RejectAppeal(
-				context.Background(), appeal.ID, appeal.Timestamp, reason,
+				ctx, appeal.ID, appeal.Timestamp, reason,
 			); err != nil {
 				m.layout.logger.Error("Failed to auto-reject appeal", zap.Error(err))
 			}
@@ -92,7 +95,7 @@ func (m *TicketMenu) Show(event interfaces.CommonEvent, s *session.Session, r *p
 	}
 
 	// Get messages for the appeal
-	messages, err := m.layout.db.Models().Appeals().GetAppealMessages(context.Background(), appeal.ID)
+	messages, err := m.layout.db.Models().Appeals().GetAppealMessages(ctx, appeal.ID)
 	if err != nil {
 		m.layout.logger.Error("Failed to get appeal messages", zap.Error(err))
 		r.Error(event, "Failed to load appeal messages. Please try again.")
@@ -132,6 +135,16 @@ func (m *TicketMenu) handleButton(
 		return
 	}
 
+	switch customID {
+	case constants.BackButtonCustomID:
+		r.NavigateBack(event, s, "")
+	}
+}
+
+// handleSelectMenu processes select menu interactions.
+func (m *TicketMenu) handleSelectMenu(
+	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, customID, option string,
+) {
 	// Use fresh appeal data from database
 	appeal, err := m.useFreshAppeal(s)
 	if err != nil {
@@ -140,24 +153,25 @@ func (m *TicketMenu) handleButton(
 	}
 
 	switch customID {
-	case constants.BackButtonCustomID:
-		r.NavigateBack(event, s, "")
-	case constants.AppealRespondButtonCustomID:
-		m.handleRespond(event, s, r)
-	case constants.AppealLookupUserButtonCustomID:
-		m.handleLookupUser(event, s, r, appeal)
-	case constants.AppealClaimButtonCustomID:
-		m.handleClaimAppeal(event, s, r, appeal)
-	case constants.AcceptAppealButtonCustomID:
-		m.handleAcceptAppeal(event, s, r)
-	case constants.RejectAppealButtonCustomID:
-		m.handleRejectAppeal(event, s, r)
-	case constants.AppealCloseButtonCustomID:
-		m.handleCloseAppeal(event, s, r, appeal)
-	case constants.ReopenAppealButtonCustomID:
-		m.handleReopenAppeal(event, s, r, appeal)
-	case constants.DeleteUserDataButtonCustomID:
-		m.handleDeleteUserData(event, s, r)
+	case constants.AppealActionSelectID:
+		switch option {
+		case constants.AppealRespondButtonCustomID:
+			m.handleRespond(event, s, r)
+		case constants.AppealLookupUserButtonCustomID:
+			m.handleLookupUser(event, s, r, appeal)
+		case constants.AppealClaimButtonCustomID:
+			m.handleClaimAppeal(event, s, r, appeal)
+		case constants.AcceptAppealButtonCustomID:
+			m.handleAcceptAppeal(event, s, r)
+		case constants.RejectAppealButtonCustomID:
+			m.handleRejectAppeal(event, s, r)
+		case constants.AppealCloseButtonCustomID:
+			m.handleCloseAppeal(event, s, r, appeal)
+		case constants.ReopenAppealButtonCustomID:
+			m.handleReopenAppeal(event, s, r, appeal)
+		case constants.DeleteUserDataButtonCustomID:
+			m.handleDeleteUserData(event, s, r)
+		}
 	}
 }
 
@@ -182,9 +196,11 @@ func (m *TicketMenu) handleRespond(
 func (m *TicketMenu) handleLookupUser(
 	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, appeal *types.FullAppeal,
 ) {
+	ctx := context.Background()
+
 	// Get user from database
 	user, err := m.layout.db.Models().Users().GetUserByID(
-		context.Background(), strconv.FormatUint(appeal.UserID, 10), types.UserFieldAll,
+		ctx, strconv.FormatUint(appeal.UserID, 10), types.UserFieldAll,
 	)
 	if err != nil {
 		if errors.Is(err, types.ErrUserNotFound) {
@@ -201,7 +217,7 @@ func (m *TicketMenu) handleLookupUser(
 	r.Show(event, s, constants.UserReviewPageName, "")
 
 	// Log the lookup action
-	m.layout.db.Models().Activities().Log(context.Background(), &types.ActivityLog{
+	m.layout.db.Models().Activities().Log(ctx, &types.ActivityLog{
 		ActivityTarget: types.ActivityTarget{
 			UserID: user.ID,
 		},
@@ -222,7 +238,6 @@ func (m *TicketMenu) handleClaimAppeal(
 		return
 	}
 
-	// Claim the appeal
 	ctx := context.Background()
 	reviewerID := uint64(event.User().ID)
 
@@ -260,11 +275,11 @@ func (m *TicketMenu) handleAcceptAppeal(
 ) {
 	modal := discord.NewModalCreateBuilder().
 		SetCustomID(constants.AcceptAppealModalCustomID).
-		SetTitle("Accept Appeal").
+		SetTitle("Accept Appeal & Delete Data").
 		AddActionRow(
 			discord.NewTextInput(constants.AppealReasonInputCustomID, discord.TextInputStyleParagraph, "Accept Reason").
 				WithRequired(true).
-				WithPlaceholder("Enter the reason for accepting this appeal..."),
+				WithPlaceholder("Enter the reason for accepting this appeal and deleting user data..."),
 		)
 
 	r.Modal(event, s, modal)
@@ -297,9 +312,11 @@ func (m *TicketMenu) handleCloseAppeal(
 		return
 	}
 
+	ctx := context.Background()
+
 	// Close the appeal by rejecting it
 	err := m.layout.db.Models().Appeals().RejectAppeal(
-		context.Background(), appeal.ID, appeal.Timestamp, "Closed by appeal creator",
+		ctx, appeal.ID, appeal.Timestamp, "Closed by appeal creator",
 	)
 	if err != nil {
 		m.layout.logger.Error("Failed to close appeal",
@@ -314,7 +331,7 @@ func (m *TicketMenu) handleCloseAppeal(
 	r.NavigateBack(event, s, "Appeal closed successfully.")
 
 	// Log the appeal closing
-	m.layout.db.Models().Activities().Log(context.Background(), &types.ActivityLog{
+	m.layout.db.Models().Activities().Log(ctx, &types.ActivityLog{
 		ActivityTarget: types.ActivityTarget{
 			UserID: appeal.UserID,
 		},
@@ -332,7 +349,8 @@ func (m *TicketMenu) handleReopenAppeal(
 	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, appeal *types.FullAppeal,
 ) {
 	// Verify user is a reviewer
-	if !s.BotSettings().IsReviewer(uint64(event.User().ID)) {
+	reviewerID := uint64(event.User().ID)
+	if !s.BotSettings().IsReviewer(reviewerID) {
 		r.Cancel(event, s, "Only reviewers can reopen appeals.")
 		return
 	}
@@ -343,10 +361,10 @@ func (m *TicketMenu) handleReopenAppeal(
 		return
 	}
 
-	// Update appeal status to pending
 	ctx := context.Background()
-	err := m.layout.db.Models().Appeals().ReopenAppeal(ctx, appeal.ID, appeal.Timestamp)
-	if err != nil {
+
+	// Reopen and claim the appeal
+	if err := m.layout.db.Models().Appeals().ReopenAppeal(ctx, appeal.ID, appeal.Timestamp, reviewerID); err != nil {
 		m.layout.logger.Error("Failed to reopen appeal",
 			zap.Error(err),
 			zap.Int64("appealID", appeal.ID))
@@ -356,14 +374,14 @@ func (m *TicketMenu) handleReopenAppeal(
 
 	// Return to overview
 	ResetAppealData(s)
-	r.NavigateBack(event, s, "Appeal reopened successfully.")
+	r.NavigateBack(event, s, "Appeal reopened and claimed successfully.")
 
 	// Log the appeal reopening
 	m.layout.db.Models().Activities().Log(ctx, &types.ActivityLog{
 		ActivityTarget: types.ActivityTarget{
 			UserID: appeal.UserID,
 		},
-		ReviewerID:        uint64(event.User().ID),
+		ReviewerID:        reviewerID,
 		ActivityType:      enum.ActivityTypeAppealReopened,
 		ActivityTimestamp: time.Now(),
 		Details: map[string]any{
@@ -471,7 +489,8 @@ func (m *TicketMenu) handleAcceptModalSubmit(
 	event *events.ModalSubmitInteractionCreate, s *session.Session, r *pagination.Respond, appeal *types.FullAppeal,
 ) {
 	// Verify user is a reviewer
-	if !s.BotSettings().IsReviewer(uint64(event.User().ID)) {
+	reviewerID := uint64(event.User().ID)
+	if !s.BotSettings().IsReviewer(reviewerID) {
 		r.Cancel(event, s, "Only reviewers can accept appeals.")
 		return
 	}
@@ -488,9 +507,11 @@ func (m *TicketMenu) handleAcceptModalSubmit(
 		return
 	}
 
+	ctx := context.Background()
+
 	// Get user to clear
 	user, err := m.layout.db.Models().Users().GetUserByID(
-		context.Background(), strconv.FormatUint(appeal.UserID, 10), types.UserFieldAll,
+		ctx, strconv.FormatUint(appeal.UserID, 10), types.UserFieldAll,
 	)
 	if err != nil {
 		if errors.Is(err, types.ErrUserNotFound) {
@@ -502,17 +523,24 @@ func (m *TicketMenu) handleAcceptModalSubmit(
 		return
 	}
 
-	// Clear the user
+	// Clear the user if not already cleared
 	if user.Status != enum.UserTypeCleared {
-		if err := m.layout.db.Models().Users().ClearUser(context.Background(), user); err != nil {
+		if err := m.layout.db.Models().Users().ClearUser(ctx, user); err != nil {
 			m.layout.logger.Error("Failed to clear user", zap.Error(err))
 			r.Error(event, "Failed to clear user. Please try again.")
 			return
 		}
 	}
 
+	// Redact user data and log the action
+	if err := m.redactUserData(ctx, user, reviewerID, reason, appeal.ID); err != nil {
+		m.layout.logger.Error("Failed to redact user data", zap.Error(err))
+		r.Error(event, "Failed to process user data. Please try again.")
+		return
+	}
+
 	// Accept the appeal
-	err = m.layout.db.Models().Appeals().AcceptAppeal(context.Background(), appeal.ID, appeal.Timestamp, reason)
+	err = m.layout.db.Models().Appeals().AcceptAppeal(ctx, appeal.ID, appeal.Timestamp, reason)
 	if err != nil {
 		m.layout.logger.Error("Failed to accept appeal", zap.Error(err))
 		r.Error(event, "Failed to accept appeal. Please try again.")
@@ -521,19 +549,20 @@ func (m *TicketMenu) handleAcceptModalSubmit(
 
 	// Refresh the ticket view
 	ResetAppealData(s)
-	r.NavigateBack(event, s, "Appeal accepted and user cleared.")
+	r.NavigateBack(event, s, "Appeal accepted, user cleared and user data deleted.")
 
 	// Log the appeal acceptance
-	m.layout.db.Models().Activities().Log(context.Background(), &types.ActivityLog{
+	m.layout.db.Models().Activities().Log(ctx, &types.ActivityLog{
 		ActivityTarget: types.ActivityTarget{
 			UserID: appeal.UserID,
 		},
-		ReviewerID:        uint64(event.User().ID),
+		ReviewerID:        reviewerID,
 		ActivityType:      enum.ActivityTypeAppealAccepted,
 		ActivityTimestamp: time.Now(),
 		Details: map[string]any{
-			"reason":    reason,
-			"appeal_id": appeal.ID,
+			"reason":       reason,
+			"appeal_id":    appeal.ID,
+			"data_deleted": true,
 		},
 	})
 }
@@ -543,7 +572,8 @@ func (m *TicketMenu) handleRejectModalSubmit(
 	event *events.ModalSubmitInteractionCreate, s *session.Session, r *pagination.Respond, appeal *types.FullAppeal,
 ) {
 	// Verify user is a reviewer
-	if !s.BotSettings().IsReviewer(uint64(event.User().ID)) {
+	reviewerID := uint64(event.User().ID)
+	if !s.BotSettings().IsReviewer(reviewerID) {
 		r.Cancel(event, s, "Only reviewers can reject appeals.")
 		return
 	}
@@ -560,8 +590,10 @@ func (m *TicketMenu) handleRejectModalSubmit(
 		return
 	}
 
+	ctx := context.Background()
+
 	// Reject the appeal
-	err := m.layout.db.Models().Appeals().RejectAppeal(context.Background(), appeal.ID, appeal.Timestamp, reason)
+	err := m.layout.db.Models().Appeals().RejectAppeal(ctx, appeal.ID, appeal.Timestamp, reason)
 	if err != nil {
 		m.layout.logger.Error("Failed to reject appeal", zap.Error(err))
 		r.Error(event, "Failed to reject appeal. Please try again.")
@@ -573,11 +605,11 @@ func (m *TicketMenu) handleRejectModalSubmit(
 	r.NavigateBack(event, s, "Appeal rejected.")
 
 	// Log the appeal rejection
-	m.layout.db.Models().Activities().Log(context.Background(), &types.ActivityLog{
+	m.layout.db.Models().Activities().Log(ctx, &types.ActivityLog{
 		ActivityTarget: types.ActivityTarget{
 			UserID: appeal.UserID,
 		},
-		ReviewerID:        uint64(event.User().ID),
+		ReviewerID:        reviewerID,
 		ActivityType:      enum.ActivityTypeAppealRejected,
 		ActivityTimestamp: time.Now(),
 		Details: map[string]any{
@@ -592,7 +624,8 @@ func (m *TicketMenu) handleDeleteUserDataModalSubmit(
 	event *events.ModalSubmitInteractionCreate, s *session.Session, r *pagination.Respond, appeal *types.FullAppeal,
 ) {
 	// Verify user is a reviewer
-	if !s.BotSettings().IsReviewer(uint64(event.User().ID)) {
+	reviewerID := uint64(event.User().ID)
+	if !s.BotSettings().IsReviewer(reviewerID) {
 		r.Cancel(event, s, "Only reviewers can process data deletion requests.")
 		return
 	}
@@ -610,9 +643,11 @@ func (m *TicketMenu) handleDeleteUserDataModalSubmit(
 		return
 	}
 
+	ctx := context.Background()
+
 	// Get user from database
 	user, err := m.layout.db.Models().Users().GetUserByID(
-		context.Background(), strconv.FormatUint(appeal.UserID, 10), types.UserFieldAll,
+		ctx, strconv.FormatUint(appeal.UserID, 10), types.UserFieldAll,
 	)
 	if err != nil {
 		if errors.Is(err, types.ErrUserNotFound) {
@@ -624,30 +659,16 @@ func (m *TicketMenu) handleDeleteUserDataModalSubmit(
 		return
 	}
 
-	// Redact user data while preserving essential information
-	user.Name = "-----"
-	user.DisplayName = "-----"
-	user.Description = "[user requested data deletion]"
-	user.Groups = []*apiTypes.UserGroupRoles{}
-	user.Outfits = []*apiTypes.Outfit{}
-	user.Friends = []*apiTypes.ExtendedFriend{}
-	user.Games = []*apiTypes.Game{}
-	user.IsDeleted = true
-	user.ThumbnailURL = ""
-	user.LastThumbnailUpdate = time.Now()
-
-	// Update the user with redacted data
-	if err := m.layout.db.Models().Users().SaveUsers(
-		context.Background(), map[uint64]*types.User{user.ID: &user.User},
-	); err != nil {
-		m.layout.logger.Error("Failed to update user with redacted data", zap.Error(err))
-		r.Error(event, "Failed to redact user data. Please try again.")
+	// Redact user data and log the action
+	if err := m.redactUserData(ctx, user, reviewerID, reason, appeal.ID); err != nil {
+		m.layout.logger.Error("Failed to redact user data", zap.Error(err))
+		r.Error(event, "Failed to process user data. Please try again.")
 		return
 	}
 
 	// Accept the appeal
 	if err = m.layout.db.Models().Appeals().AcceptAppeal(
-		context.Background(), appeal.ID, appeal.Timestamp,
+		ctx, appeal.ID, appeal.Timestamp,
 		"Data deletion request processed: "+reason,
 	); err != nil {
 		m.layout.logger.Error("Failed to accept appeal after data deletion", zap.Error(err))
@@ -658,20 +679,46 @@ func (m *TicketMenu) handleDeleteUserDataModalSubmit(
 	// Refresh the ticket view
 	ResetAppealData(s)
 	r.NavigateBack(event, s, "User data has been deleted and appeal accepted.")
+}
+
+// redactUserData handles redacting a user's data and logs the action.
+func (m *TicketMenu) redactUserData(
+	ctx context.Context, user *types.ReviewUser, reviewerID uint64, reason string, appealID int64,
+) error {
+	// Redact user data
+	user.Name = "-----"
+	user.DisplayName = "-----"
+	user.Description = "[data deleted per user request]"
+	user.Groups = []*apiTypes.UserGroupRoles{}
+	user.Outfits = []*apiTypes.Outfit{}
+	user.Friends = []*apiTypes.ExtendedFriend{}
+	user.Games = []*apiTypes.Game{}
+	user.IsDeleted = true
+	user.ThumbnailURL = ""
+	user.LastThumbnailUpdate = time.Now()
+
+	// Update the user with redacted data
+	if err := m.layout.db.Models().Users().SaveUsers(
+		ctx, map[uint64]*types.User{user.ID: &user.User},
+	); err != nil {
+		return fmt.Errorf("failed to save redacted user data: %w", err)
+	}
 
 	// Log the data deletion
-	m.layout.db.Models().Activities().Log(context.Background(), &types.ActivityLog{
+	m.layout.db.Models().Activities().Log(ctx, &types.ActivityLog{
 		ActivityTarget: types.ActivityTarget{
-			UserID: appeal.UserID,
+			UserID: user.ID,
 		},
-		ReviewerID:        uint64(event.User().ID),
+		ReviewerID:        reviewerID,
 		ActivityType:      enum.ActivityTypeUserDataDeleted,
 		ActivityTimestamp: time.Now(),
 		Details: map[string]any{
 			"reason":    reason,
-			"appeal_id": appeal.ID,
+			"appeal_id": appealID,
 		},
 	})
+
+	return nil
 }
 
 // isMessageAllowed checks if a user is allowed to send a message based on spam prevention rules.
