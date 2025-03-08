@@ -20,18 +20,46 @@ import (
 	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
 )
 
-var (
-	{{ range .UserSettings }}
-	// {{ .Doc }}
-	User{{ replace .Name "." "" }} = NewUserSettingKey[{{ .Type }}]("{{ .Name }}")
-	{{- end }}
+var ({{range .UserSettings}}
 
-	{{ range .BotSettings }}
-	// {{ .Doc }}
-	Bot{{ replace .Name "." "" }} = NewBotSettingKey[{{ .Type }}]("{{ .Name }}")
-	{{- end }}
-)
-`
+	// {{.Doc}}
+	User{{replace .Name "." ""}} = NewUserSettingKey("{{.Name}}", func(s *Session) {{.Type}} {
+		{{- if contains .Name "."}}
+		return s.userSettings.{{.Name}}
+		{{- else}}
+		return s.userSettings.{{.Name}}
+		{{- end}}
+	}, func(s *Session, value {{.Type}}) {
+		{{- if contains .Name "."}}
+		s.userSettings.{{.Name}} = value
+		{{- else}}
+		s.userSettings.{{.Name}} = value
+		{{- end}}
+		s.userSettingsUpdate = true
+	}){{end}}{{range .BotSettings}}
+
+	// {{.Doc}}
+	Bot{{replace .Name "." ""}} = NewBotSettingKey("{{.Name}}", func(s *Session) {{.Type}} {
+		{{- if contains .Name "."}}
+		return s.botSettings.{{.Name}}
+		{{- else}}
+		return s.botSettings.{{.Name}}
+		{{- end}}
+	}, func(s *Session, value {{.Type}}) {
+		{{- if contains .Name "."}}
+		s.botSettings.{{.Name}} = value
+		{{- else}}
+		s.botSettings.{{.Name}} = value
+		{{- if eq .Name "ReviewerIDs"}}
+		s.botSettings.ReviewerMap = nil  // Clear cached map
+		{{- end}}
+		{{- if eq .Name "AdminIDs"}}
+		s.botSettings.AdminMap = nil  // Clear cached map
+		{{- end}}
+		{{- end}}
+		s.botSettingsUpdate = true
+	}){{end}}
+)`
 
 type SettingDef struct {
 	Name string
@@ -81,9 +109,12 @@ func main() {
 	}
 
 	// Create template
-	t := template.Must(template.New("settings").Funcs(template.FuncMap{
-		"replace": strings.ReplaceAll,
-	}).Parse(tmpl))
+	funcMap := template.FuncMap{
+		"replace":  strings.ReplaceAll,
+		"contains": strings.Contains,
+	}
+
+	t := template.Must(template.New("settings").Funcs(funcMap).Parse(tmpl))
 
 	data := struct {
 		UserSettings []SettingDef

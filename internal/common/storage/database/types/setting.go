@@ -57,34 +57,34 @@ type BotSetting struct {
 	SessionLimit   uint64              `bun:",notnull"`
 	WelcomeMessage string              `bun:",notnull,default:''"`
 	Announcement   Announcement        `bun:",embed"`
-	reviewerMap    map[uint64]struct{} // In-memory map for O(1) lookups
-	adminMap       map[uint64]struct{} // In-memory map for O(1) lookups
-	lastRefresh    time.Time
+	ReviewerMap    map[uint64]struct{} `bun:"-"` // In-memory map for O(1) lookups
+	AdminMap       map[uint64]struct{} `bun:"-"` // In-memory map for O(1) lookups
+	lastRefresh    time.Time           `bun:"-"` // In-memory cache control
 }
 
 // IsAdmin checks if the given user ID is in the admin list.
 func (s *BotSetting) IsAdmin(userID uint64) bool {
-	if s.adminMap == nil || len(s.AdminIDs) != len(s.adminMap) {
-		s.adminMap = make(map[uint64]struct{}, len(s.AdminIDs))
+	if s.AdminMap == nil || len(s.AdminIDs) != len(s.AdminMap) {
+		s.AdminMap = make(map[uint64]struct{}, len(s.AdminIDs))
 		for _, id := range s.AdminIDs {
-			s.adminMap[id] = struct{}{}
+			s.AdminMap[id] = struct{}{}
 		}
 	}
 
-	_, exists := s.adminMap[userID]
+	_, exists := s.AdminMap[userID]
 	return exists
 }
 
 // IsReviewer checks if the given user ID is in the reviewer list.
 func (s *BotSetting) IsReviewer(userID uint64) bool {
-	if s.reviewerMap == nil || len(s.ReviewerIDs) != len(s.reviewerMap) {
-		s.reviewerMap = make(map[uint64]struct{}, len(s.ReviewerIDs))
+	if s.ReviewerMap == nil || len(s.ReviewerIDs) != len(s.ReviewerMap) {
+		s.ReviewerMap = make(map[uint64]struct{}, len(s.ReviewerIDs))
 		for _, id := range s.ReviewerIDs {
-			s.reviewerMap[id] = struct{}{}
+			s.ReviewerMap[id] = struct{}{}
 		}
 	}
 
-	_, exists := s.reviewerMap[userID]
+	_, exists := s.ReviewerMap[userID]
 	return exists
 }
 

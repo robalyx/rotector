@@ -2,11 +2,6 @@ package session
 
 import (
 	"bytes"
-	"reflect"
-	"strings"
-
-	"github.com/robalyx/rotector/internal/common/storage/database/types"
-	"go.uber.org/zap"
 )
 
 // Key represents a strongly typed session key for storing arbitrary data.
@@ -71,155 +66,52 @@ func (k BufferKey) Delete(s *Session) {
 
 // UserSettingKey represents a strongly typed key for user settings.
 type UserSettingKey[T any] struct {
-	name string
+	name   string
+	getter func(*Session) T
+	setter func(*Session, T)
 }
 
 // NewUserSettingKey creates a new user setting key.
-func NewUserSettingKey[T any](name string) UserSettingKey[T] {
-	return UserSettingKey[T]{name: name}
+func NewUserSettingKey[T any](name string, getter func(*Session) T, setter func(*Session, T)) UserSettingKey[T] {
+	return UserSettingKey[T]{
+		name:   name,
+		getter: getter,
+		setter: setter,
+	}
 }
 
-// Set updates the user setting value and marks it for update.
+// Set updates the user setting value.
 func (k UserSettingKey[T]) Set(s *Session, value T) {
-	if s.userSettings == nil {
-		s.userSettings = &types.UserSetting{}
-	}
-	if getSettingField(s.userSettings, k.name, s.logger).setValue(value) {
-		s.userSettingsUpdate = true // Mark settings for update
-	}
+	k.setter(s, value)
 }
 
 // Get retrieves the user setting value.
 func (k UserSettingKey[T]) Get(s *Session) T {
-	var zero T
-	if s.userSettings == nil {
-		return zero
-	}
-	if val, ok := getSettingField(s.userSettings, k.name, s.logger).getValue(zero).(T); ok {
-		return val
-	}
-	return zero
+	return k.getter(s)
 }
 
 // BotSettingKey represents a strongly typed key for bot settings.
 type BotSettingKey[T any] struct {
-	name string
+	name   string
+	getter func(*Session) T
+	setter func(*Session, T)
 }
 
 // NewBotSettingKey creates a new bot setting key.
-func NewBotSettingKey[T any](name string) BotSettingKey[T] {
-	return BotSettingKey[T]{name: name}
+func NewBotSettingKey[T any](name string, getter func(*Session) T, setter func(*Session, T)) BotSettingKey[T] {
+	return BotSettingKey[T]{
+		name:   name,
+		getter: getter,
+		setter: setter,
+	}
 }
 
-// Set updates the bot setting value and marks it for update.
+// Set updates the bot setting value.
 func (k BotSettingKey[T]) Set(s *Session, value T) {
-	if s.botSettings == nil {
-		s.botSettings = &types.BotSetting{}
-	}
-	if getSettingField(s.botSettings, k.name, s.logger).setValue(value) {
-		s.botSettingsUpdate = true // Mark settings for update
-	}
+	k.setter(s, value)
 }
 
 // Get retrieves the bot setting value.
 func (k BotSettingKey[T]) Get(s *Session) T {
-	var zero T
-	if s.botSettings == nil {
-		return zero
-	}
-	if val, ok := getSettingField(s.botSettings, k.name, s.logger).getValue(zero).(T); ok {
-		return val
-	}
-	return zero
-}
-
-// settingField represents a field in a settings struct.
-type settingField struct {
-	value  reflect.Value // Parent struct value
-	field  reflect.Value // Target field value
-	name   string        // Field path
-	logger *zap.Logger
-}
-
-// getSettingField safely gets a field from a settings struct using dot notation.
-func getSettingField(settings any, fieldPath string, logger *zap.Logger) settingField {
-	v := reflect.ValueOf(settings)
-	if v.Kind() == reflect.Ptr {
-		v = v.Elem() // Dereference pointer
-	}
-
-	parts := strings.Split(fieldPath, ".") // Split path into parts
-	field := v
-	for _, part := range parts {
-		if !field.IsValid() {
-			return settingField{logger: logger, name: fieldPath}
-		}
-
-		nextField := field.FieldByName(part)
-		if !nextField.IsValid() {
-			return settingField{logger: logger, name: fieldPath}
-		}
-		field = nextField
-
-		if field.Kind() == reflect.Ptr {
-			if field.IsNil() {
-				field.Set(reflect.New(field.Type().Elem())) // Initialize nil pointer
-			}
-			field = field.Elem()
-		}
-	}
-
-	return settingField{
-		value:  v,
-		field:  field,
-		name:   fieldPath,
-		logger: logger.Named("session_keys"),
-	}
-}
-
-// isValid checks if the field exists and logs an error if not.
-func (f settingField) isValid() bool {
-	if !f.field.IsValid() {
-		f.logger.Error("Invalid setting field path", zap.String("field", f.name))
-		return false
-	}
-	return true
-}
-
-// setValue safely sets a value to the field.
-func (f settingField) setValue(value any) bool {
-	if !f.isValid() {
-		return false
-	}
-
-	// Check if the value is assignable to the field type
-	val := reflect.ValueOf(value)
-	if !val.Type().AssignableTo(f.field.Type()) {
-		f.logger.Error("Invalid setting value type",
-			zap.String("field", f.name),
-			zap.String("expected", f.field.Type().String()),
-			zap.String("got", val.Type().String()))
-		return false
-	}
-
-	// Ensure the field is settable
-	if !f.field.CanSet() {
-		f.logger.Error("Field is not settable", zap.String("field", f.name))
-		return false
-	}
-
-	f.field.Set(val)
-	return true
-}
-
-// getValue safely gets a value from the field.
-func (f settingField) getValue(zero any) any {
-	if !f.isValid() {
-		return zero
-	}
-
-	if !f.field.IsZero() {
-		return f.field.Interface()
-	}
-	return zero
+	return k.getter(s)
 }

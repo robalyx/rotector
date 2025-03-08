@@ -10,48 +10,180 @@ import (
 var (
 
 	// StreamerMode controls streamer-friendly display
-	UserStreamerMode = NewUserSettingKey[bool]("StreamerMode")
+	UserStreamerMode = NewUserSettingKey("StreamerMode", func(s *Session) bool {
+		return s.userSettings.StreamerMode
+	}, func(s *Session, value bool) {
+		s.userSettings.StreamerMode = value
+		s.userSettingsUpdate = true
+	})
+
 	// UserDefaultSort sets default user review sorting
-	UserUserDefaultSort = NewUserSettingKey[enum.ReviewSortBy]("UserDefaultSort")
+	UserUserDefaultSort = NewUserSettingKey("UserDefaultSort", func(s *Session) enum.ReviewSortBy {
+		return s.userSettings.UserDefaultSort
+	}, func(s *Session, value enum.ReviewSortBy) {
+		s.userSettings.UserDefaultSort = value
+		s.userSettingsUpdate = true
+	})
+
 	// GroupDefaultSort sets default group review sorting
-	UserGroupDefaultSort = NewUserSettingKey[enum.ReviewSortBy]("GroupDefaultSort")
+	UserGroupDefaultSort = NewUserSettingKey("GroupDefaultSort", func(s *Session) enum.ReviewSortBy {
+		return s.userSettings.GroupDefaultSort
+	}, func(s *Session, value enum.ReviewSortBy) {
+		s.userSettings.GroupDefaultSort = value
+		s.userSettingsUpdate = true
+	})
+
 	// ChatModel sets the AI chat model
-	UserChatModel = NewUserSettingKey[enum.ChatModel]("ChatModel")
+	UserChatModel = NewUserSettingKey("ChatModel", func(s *Session) enum.ChatModel {
+		return s.userSettings.ChatModel
+	}, func(s *Session, value enum.ChatModel) {
+		s.userSettings.ChatModel = value
+		s.userSettingsUpdate = true
+	})
+
 	// ReviewMode sets the review mode
-	UserReviewMode = NewUserSettingKey[enum.ReviewMode]("ReviewMode")
+	UserReviewMode = NewUserSettingKey("ReviewMode", func(s *Session) enum.ReviewMode {
+		return s.userSettings.ReviewMode
+	}, func(s *Session, value enum.ReviewMode) {
+		s.userSettings.ReviewMode = value
+		s.userSettingsUpdate = true
+	})
+
 	// ReviewTargetMode sets the review target mode
-	UserReviewTargetMode = NewUserSettingKey[enum.ReviewTargetMode]("ReviewTargetMode")
+	UserReviewTargetMode = NewUserSettingKey("ReviewTargetMode", func(s *Session) enum.ReviewTargetMode {
+		return s.userSettings.ReviewTargetMode
+	}, func(s *Session, value enum.ReviewTargetMode) {
+		s.userSettings.ReviewTargetMode = value
+		s.userSettingsUpdate = true
+	})
+
 	// LeaderboardPeriod sets the leaderboard time period
-	UserLeaderboardPeriod = NewUserSettingKey[enum.LeaderboardPeriod]("LeaderboardPeriod")
+	UserLeaderboardPeriod = NewUserSettingKey("LeaderboardPeriod", func(s *Session) enum.LeaderboardPeriod {
+		return s.userSettings.LeaderboardPeriod
+	}, func(s *Session, value enum.LeaderboardPeriod) {
+		s.userSettings.LeaderboardPeriod = value
+		s.userSettingsUpdate = true
+	})
+
 	// ReviewerStatsPeriod sets the reviewer stats time period
-	UserReviewerStatsPeriod = NewUserSettingKey[enum.ReviewerStatsPeriod]("ReviewerStatsPeriod")
+	UserReviewerStatsPeriod = NewUserSettingKey("ReviewerStatsPeriod", func(s *Session) enum.ReviewerStatsPeriod {
+		return s.userSettings.ReviewerStatsPeriod
+	}, func(s *Session, value enum.ReviewerStatsPeriod) {
+		s.userSettings.ReviewerStatsPeriod = value
+		s.userSettingsUpdate = true
+	})
+
 	// AppealDefaultSort sets default appeal sorting
-	UserAppealDefaultSort = NewUserSettingKey[enum.AppealSortBy]("AppealDefaultSort")
+	UserAppealDefaultSort = NewUserSettingKey("AppealDefaultSort", func(s *Session) enum.AppealSortBy {
+		return s.userSettings.AppealDefaultSort
+	}, func(s *Session, value enum.AppealSortBy) {
+		s.userSettings.AppealDefaultSort = value
+		s.userSettingsUpdate = true
+	})
+
 	// AppealStatusFilter sets appeal status filtering
-	UserAppealStatusFilter = NewUserSettingKey[enum.AppealStatus]("AppealStatusFilter")
+	UserAppealStatusFilter = NewUserSettingKey("AppealStatusFilter", func(s *Session) enum.AppealStatus {
+		return s.userSettings.AppealStatusFilter
+	}, func(s *Session, value enum.AppealStatus) {
+		s.userSettings.AppealStatusFilter = value
+		s.userSettingsUpdate = true
+	})
+
 	// ChatMessageUsageFirstMessageTime tracks first message time in 24h period
-	UserChatMessageUsageFirstMessageTime = NewUserSettingKey[time.Time]("ChatMessageUsage.FirstMessageTime")
+	UserChatMessageUsageFirstMessageTime = NewUserSettingKey("ChatMessageUsage.FirstMessageTime", func(s *Session) time.Time {
+		return s.userSettings.ChatMessageUsage.FirstMessageTime
+	}, func(s *Session, value time.Time) {
+		s.userSettings.ChatMessageUsage.FirstMessageTime = value
+		s.userSettingsUpdate = true
+	})
+
 	// ChatMessageUsageMessageCount tracks message count in 24h period
-	UserChatMessageUsageMessageCount = NewUserSettingKey[int]("ChatMessageUsage.MessageCount")
+	UserChatMessageUsageMessageCount = NewUserSettingKey("ChatMessageUsage.MessageCount", func(s *Session) int {
+		return s.userSettings.ChatMessageUsage.MessageCount
+	}, func(s *Session, value int) {
+		s.userSettings.ChatMessageUsage.MessageCount = value
+		s.userSettingsUpdate = true
+	})
+
 	// CaptchaUsageCaptchaReviewCount tracks reviews since last CAPTCHA
-	UserCaptchaUsageCaptchaReviewCount = NewUserSettingKey[int]("CaptchaUsage.CaptchaReviewCount")
+	UserCaptchaUsageCaptchaReviewCount = NewUserSettingKey("CaptchaUsage.CaptchaReviewCount", func(s *Session) int {
+		return s.userSettings.CaptchaUsage.CaptchaReviewCount
+	}, func(s *Session, value int) {
+		s.userSettings.CaptchaUsage.CaptchaReviewCount = value
+		s.userSettingsUpdate = true
+	})
+
 	// ReviewBreakNextReviewTime tracks when user can resume reviewing
-	UserReviewBreakNextReviewTime = NewUserSettingKey[time.Time]("ReviewBreak.NextReviewTime")
+	UserReviewBreakNextReviewTime = NewUserSettingKey("ReviewBreak.NextReviewTime", func(s *Session) time.Time {
+		return s.userSettings.ReviewBreak.NextReviewTime
+	}, func(s *Session, value time.Time) {
+		s.userSettings.ReviewBreak.NextReviewTime = value
+		s.userSettingsUpdate = true
+	})
+
 	// ReviewBreakSessionReviews tracks reviews in current session
-	UserReviewBreakSessionReviews = NewUserSettingKey[int]("ReviewBreak.SessionReviews")
+	UserReviewBreakSessionReviews = NewUserSettingKey("ReviewBreak.SessionReviews", func(s *Session) int {
+		return s.userSettings.ReviewBreak.SessionReviews
+	}, func(s *Session, value int) {
+		s.userSettings.ReviewBreak.SessionReviews = value
+		s.userSettingsUpdate = true
+	})
+
 	// ReviewBreakSessionStartTime tracks when review session started
-	UserReviewBreakSessionStartTime = NewUserSettingKey[time.Time]("ReviewBreak.SessionStartTime")
+	UserReviewBreakSessionStartTime = NewUserSettingKey("ReviewBreak.SessionStartTime", func(s *Session) time.Time {
+		return s.userSettings.ReviewBreak.SessionStartTime
+	}, func(s *Session, value time.Time) {
+		s.userSettings.ReviewBreak.SessionStartTime = value
+		s.userSettingsUpdate = true
+	})
 
 	// ReviewerIDs stores authorized reviewer IDs
-	BotReviewerIDs = NewBotSettingKey[[]uint64]("ReviewerIDs")
+	BotReviewerIDs = NewBotSettingKey("ReviewerIDs", func(s *Session) []uint64 {
+		return s.botSettings.ReviewerIDs
+	}, func(s *Session, value []uint64) {
+		s.botSettings.ReviewerIDs = value
+		s.botSettings.ReviewerMap = nil // Clear cached map
+		s.botSettingsUpdate = true
+	})
+
 	// AdminIDs stores authorized admin IDs
-	BotAdminIDs = NewBotSettingKey[[]uint64]("AdminIDs")
+	BotAdminIDs = NewBotSettingKey("AdminIDs", func(s *Session) []uint64 {
+		return s.botSettings.AdminIDs
+	}, func(s *Session, value []uint64) {
+		s.botSettings.AdminIDs = value
+		s.botSettings.AdminMap = nil // Clear cached map
+		s.botSettingsUpdate = true
+	})
+
 	// SessionLimit sets maximum concurrent sessions
-	BotSessionLimit = NewBotSettingKey[uint64]("SessionLimit")
+	BotSessionLimit = NewBotSettingKey("SessionLimit", func(s *Session) uint64 {
+		return s.botSettings.SessionLimit
+	}, func(s *Session, value uint64) {
+		s.botSettings.SessionLimit = value
+		s.botSettingsUpdate = true
+	})
+
 	// WelcomeMessage sets the welcome message
-	BotWelcomeMessage = NewBotSettingKey[string]("WelcomeMessage")
+	BotWelcomeMessage = NewBotSettingKey("WelcomeMessage", func(s *Session) string {
+		return s.botSettings.WelcomeMessage
+	}, func(s *Session, value string) {
+		s.botSettings.WelcomeMessage = value
+		s.botSettingsUpdate = true
+	})
+
 	// AnnouncementType sets the announcement type
-	BotAnnouncementType = NewBotSettingKey[enum.AnnouncementType]("Announcement.Type")
+	BotAnnouncementType = NewBotSettingKey("Announcement.Type", func(s *Session) enum.AnnouncementType {
+		return s.botSettings.Announcement.Type
+	}, func(s *Session, value enum.AnnouncementType) {
+		s.botSettings.Announcement.Type = value
+		s.botSettingsUpdate = true
+	})
+
 	// AnnouncementMessage sets the announcement message
-	BotAnnouncementMessage = NewBotSettingKey[string]("Announcement.Message")
+	BotAnnouncementMessage = NewBotSettingKey("Announcement.Message", func(s *Session) string {
+		return s.botSettings.Announcement.Message
+	}, func(s *Session, value string) {
+		s.botSettings.Announcement.Message = value
+		s.botSettingsUpdate = true
+	})
 )
