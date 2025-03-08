@@ -47,13 +47,12 @@ const (
 
 // Item encapsulates all metadata needed to process a queued task.
 type Item struct {
-	UserID      uint64    `json:"userId"`      // Target user for the queued operation
-	Priority    Priority  `json:"priority"`    // Processing priority level
-	Reason      string    `json:"reason"`      // Why the item was queued
-	AddedBy     uint64    `json:"addedBy"`     // User ID who initiated the queue operation
-	AddedAt     time.Time `json:"addedAt"`     // Timestamp for FIFO ordering within priority
-	Status      Status    `json:"status"`      // Current processing status
-	CheckExists bool      `json:"checkExists"` // Whether to verify user exists before processing
+	UserID   uint64    `json:"userId"`   // Target user for the queued operation
+	Priority Priority  `json:"priority"` // Processing priority level
+	Reason   string    `json:"reason"`   // Why the item was queued
+	AddedBy  uint64    `json:"addedBy"`  // User ID who initiated the queue operation
+	AddedAt  time.Time `json:"addedAt"`  // Timestamp for FIFO ordering within priority
+	Status   Status    `json:"status"`   // Current processing status
 }
 
 // Manager orchestrates queue operations using Redis sorted sets for priority queues

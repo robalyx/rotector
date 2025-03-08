@@ -129,13 +129,12 @@ func (m *Menu) handleModal(event *events.ModalSubmitInteractionCreate, s *sessio
 
 	// Add to queue with selected priority
 	err = m.layout.queueManager.AddToQueue(context.Background(), &queue.Item{
-		UserID:      userID,
-		Priority:    priority,
-		Reason:      reason,
-		AddedBy:     uint64(event.User().ID),
-		AddedAt:     time.Now(),
-		Status:      queue.StatusPending,
-		CheckExists: false,
+		UserID:   userID,
+		Priority: priority,
+		Reason:   reason,
+		AddedBy:  uint64(event.User().ID),
+		AddedAt:  time.Now(),
+		Status:   queue.StatusPending,
 	})
 	if err != nil {
 		m.layout.logger.Error("Failed to add user to queue", zap.Error(err))

@@ -297,13 +297,12 @@ func (m *ReviewMenu) handleRecheckModalSubmit(
 
 	// Add to queue with reviewer information
 	err := m.layout.queueManager.AddToQueue(context.Background(), &queue.Item{
-		UserID:      user.ID,
-		Priority:    priority,
-		Reason:      reason,
-		AddedBy:     uint64(event.User().ID),
-		AddedAt:     time.Now(),
-		Status:      queue.StatusPending,
-		CheckExists: true,
+		UserID:   user.ID,
+		Priority: priority,
+		Reason:   reason,
+		AddedBy:  uint64(event.User().ID),
+		AddedAt:  time.Now(),
+		Status:   queue.StatusPending,
 	})
 	if err != nil {
 		m.layout.logger.Error("Failed to add user to queue", zap.Error(err))

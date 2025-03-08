@@ -48,13 +48,12 @@ func TestAddToQueue(t *testing.T) {
 
 	ctx := t.Context()
 	testItem := &queue.Item{
-		UserID:      123,
-		Priority:    queue.PriorityNormal,
-		Reason:      "test",
-		AddedBy:     456,
-		AddedAt:     time.Now(),
-		Status:      queue.StatusPending,
-		CheckExists: true,
+		UserID:   123,
+		Priority: queue.PriorityNormal,
+		Reason:   "test",
+		AddedBy:  456,
+		AddedAt:  time.Now(),
+		Status:   queue.StatusPending,
 	}
 
 	err := manager.AddToQueue(ctx, testItem)
@@ -72,13 +71,12 @@ func TestGetQueueItems(t *testing.T) {
 
 	ctx := t.Context()
 	testItem := &queue.Item{
-		UserID:      123,
-		Priority:    queue.PriorityNormal,
-		Reason:      "test",
-		AddedBy:     456,
-		AddedAt:     time.Now(),
-		Status:      queue.StatusPending,
-		CheckExists: true,
+		UserID:   123,
+		Priority: queue.PriorityNormal,
+		Reason:   "test",
+		AddedBy:  456,
+		AddedAt:  time.Now(),
+		Status:   queue.StatusPending,
 	}
 
 	// Add item to queue
@@ -99,13 +97,12 @@ func TestRemoveQueueItem(t *testing.T) {
 
 	ctx := t.Context()
 	testItem := &queue.Item{
-		UserID:      123,
-		Priority:    queue.PriorityNormal,
-		Reason:      "test",
-		AddedBy:     456,
-		AddedAt:     time.Now(),
-		Status:      queue.StatusPending,
-		CheckExists: true,
+		UserID:   123,
+		Priority: queue.PriorityNormal,
+		Reason:   "test",
+		AddedBy:  456,
+		AddedAt:  time.Now(),
+		Status:   queue.StatusPending,
 	}
 
 	// Add and then remove item
@@ -152,13 +149,12 @@ func TestUpdateQueueItem(t *testing.T) {
 
 	ctx := t.Context()
 	testItem := &queue.Item{
-		UserID:      123,
-		Priority:    queue.PriorityNormal,
-		Reason:      "test",
-		AddedBy:     456,
-		AddedAt:     time.Now(),
-		Status:      queue.StatusPending,
-		CheckExists: true,
+		UserID:   123,
+		Priority: queue.PriorityNormal,
+		Reason:   "test",
+		AddedBy:  456,
+		AddedAt:  time.Now(),
+		Status:   queue.StatusPending,
 	}
 
 	// Add item
