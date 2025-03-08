@@ -7,7 +7,6 @@ import (
 	"time"
 
 	apiTypes "github.com/jaxron/roapi.go/pkg/api/types"
-	"github.com/robalyx/rotector/internal/common/client/fetcher"
 	"github.com/robalyx/rotector/internal/common/storage/database"
 	"github.com/robalyx/rotector/internal/common/storage/database/types"
 	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
@@ -153,14 +152,14 @@ func (c *GroupChecker) calculateGroupConfidence(flaggedUsers []uint64, users map
 }
 
 // ProcessUsers checks multiple users' groups concurrently and updates flaggedUsers map.
-func (c *GroupChecker) ProcessUsers(userInfos []*fetcher.Info, flaggedUsers map[uint64]*types.User) {
+func (c *GroupChecker) ProcessUsers(userInfos []*types.User, reasonsMap map[uint64]types.Reasons[enum.UserReasonType]) {
 	// Track counts before processing
-	existingFlags := len(flaggedUsers)
+	existingFlags := len(reasonsMap)
 
 	// Collect all unique group IDs across all users
 	uniqueGroupIDs := make(map[uint64]struct{})
 	for _, userInfo := range userInfos {
-		for _, group := range userInfo.Groups.Data {
+		for _, group := range userInfo.Groups {
 			uniqueGroupIDs[group.Group.ID] = struct{}{}
 		}
 	}
@@ -189,11 +188,14 @@ func (c *GroupChecker) ProcessUsers(userInfos []*fetcher.Info, flaggedUsers map[
 	for _, userInfo := range userInfos {
 		p.Go(func(_ context.Context) error {
 			// Process user groups
-			user, autoFlagged := c.processUserGroups(userInfo, existingGroups)
+			reason, autoFlagged := c.processUserGroups(userInfo, existingGroups)
 
 			if autoFlagged {
 				mu.Lock()
-				flaggedUsers[userInfo.ID] = user
+				if _, exists := reasonsMap[userInfo.ID]; !exists {
+					reasonsMap[userInfo.ID] = make(types.Reasons[enum.UserReasonType])
+				}
+				reasonsMap[userInfo.ID].Add(enum.UserReasonTypeGroup, reason)
 				mu.Unlock()
 			}
 
@@ -208,15 +210,15 @@ func (c *GroupChecker) ProcessUsers(userInfos []*fetcher.Info, flaggedUsers map[
 
 	c.logger.Info("Finished processing groups",
 		zap.Int("totalUsers", len(userInfos)),
-		zap.Int("newFlags", len(flaggedUsers)-existingFlags))
+		zap.Int("newFlags", len(reasonsMap)-existingFlags))
 }
 
 // processUserGroups checks if a user should be flagged based on their groups.
 func (c *GroupChecker) processUserGroups(
-	userInfo *fetcher.Info, existingGroups map[uint64]*types.ReviewGroup,
-) (*types.User, bool) {
+	userInfo *types.User, existingGroups map[uint64]*types.ReviewGroup,
+) (*types.Reason, bool) {
 	// Skip users with very few groups to avoid false positives
-	if len(userInfo.Groups.Data) < 2 {
+	if len(userInfo.Groups) < 2 {
 		return nil, false
 	}
 
@@ -224,7 +226,7 @@ func (c *GroupChecker) processUserGroups(
 	confirmedCount := 0
 	flaggedCount := 0
 
-	for _, group := range userInfo.Groups.Data {
+	for _, group := range userInfo.Groups {
 		if reviewGroup, exists := existingGroups[group.Group.ID]; exists {
 			switch reviewGroup.Status {
 			case enum.GroupTypeConfirmed:
@@ -236,7 +238,7 @@ func (c *GroupChecker) processUserGroups(
 	}
 
 	// Calculate confidence score
-	confidence := c.calculateConfidence(confirmedCount, flaggedCount, len(userInfo.Groups.Data))
+	confidence := c.calculateConfidence(confirmedCount, flaggedCount, len(userInfo.Groups))
 
 	// Flag user if confidence exceeds threshold
 	if confidence >= 0.4 {
@@ -246,26 +248,9 @@ func (c *GroupChecker) processUserGroups(
 			zap.Int("flaggedGroups", flaggedCount),
 			zap.Float64("confidence", confidence))
 
-		return &types.User{
-			ID:          userInfo.ID,
-			Name:        userInfo.Name,
-			DisplayName: userInfo.DisplayName,
-			Description: userInfo.Description,
-			CreatedAt:   userInfo.CreatedAt,
-			Reasons: types.Reasons[enum.UserReasonType]{
-				enum.UserReasonTypeGroup: &types.Reason{
-					Message:    "Member of multiple inappropriate groups.",
-					Confidence: math.Round(confidence*100) / 100,
-				},
-			},
-			Groups:              userInfo.Groups.Data,
-			Friends:             userInfo.Friends.Data,
-			Games:               userInfo.Games.Data,
-			Outfits:             userInfo.Outfits.Data,
-			LastUpdated:         userInfo.LastUpdated,
-			LastBanCheck:        userInfo.LastBanCheck,
-			ThumbnailURL:        userInfo.ThumbnailURL,
-			LastThumbnailUpdate: userInfo.LastThumbnailUpdate,
+		return &types.Reason{
+			Message:    "Member of multiple inappropriate groups.",
+			Confidence: confidence,
 		}, true
 	}
 

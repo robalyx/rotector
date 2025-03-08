@@ -19,6 +19,12 @@ type Reasons[T interface {
 	fmt.Stringer
 }] map[T]*Reason
 
+// Add adds or updates a reason in the reasons map.
+// If the reason type already exists, it updates the existing entry.
+func (r Reasons[T]) Add(reasonType T, reason *Reason) {
+	r[reasonType] = reason
+}
+
 // Messages returns an array of all reason messages.
 func (r Reasons[T]) Messages() []string {
 	messages := make([]string, 0, len(r))

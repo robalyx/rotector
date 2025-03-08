@@ -181,11 +181,11 @@ func NewOutfitAnalyzer(app *setup.App, logger *zap.Logger) *OutfitAnalyzer {
 }
 
 // ProcessOutfits analyzes outfit images for a batch of users.
-func (a *OutfitAnalyzer) ProcessOutfits(userInfos []*fetcher.Info, flaggedUsers map[uint64]*types.User) {
+func (a *OutfitAnalyzer) ProcessOutfits(userInfos []*types.User, reasonsMap map[uint64]types.Reasons[enum.UserReasonType]) {
 	// Filter userInfos to only include already flagged users
-	var flaggedInfos []*fetcher.Info
+	var flaggedInfos []*types.User
 	for _, info := range userInfos {
-		if _, isFlagged := flaggedUsers[info.ID]; isFlagged {
+		if _, isFlagged := reasonsMap[info.ID]; isFlagged {
 			flaggedInfos = append(flaggedInfos, info)
 		}
 	}
@@ -215,7 +215,7 @@ func (a *OutfitAnalyzer) ProcessOutfits(userInfos []*fetcher.Info, flaggedUsers 
 
 		p.Go(func(ctx context.Context) error {
 			// Analyze user's outfits
-			err := a.analyzeUserOutfits(ctx, userInfo, &mu, flaggedUsers, outfits, thumbnails)
+			err := a.analyzeUserOutfits(ctx, userInfo, &mu, reasonsMap, outfits, thumbnails)
 			if err != nil && !errors.Is(err, ErrNoViolations) {
 				a.logger.Error("Failed to analyze outfits",
 					zap.Error(err),
@@ -238,20 +238,20 @@ func (a *OutfitAnalyzer) ProcessOutfits(userInfos []*fetcher.Info, flaggedUsers 
 
 // getOutfitThumbnails fetches thumbnail URLs for outfits and organizes them by user.
 func (a *OutfitAnalyzer) getOutfitThumbnails(
-	ctx context.Context, userInfos []*fetcher.Info,
+	ctx context.Context, userInfos []*types.User,
 ) (map[uint64][]*apiTypes.Outfit, map[uint64]map[uint64]string) {
 	// Collect all outfits from all users
 	allOutfits := make([]*apiTypes.Outfit, 0)
-	outfitToUser := make(map[uint64]*fetcher.Info)
+	outfitToUser := make(map[uint64]*types.User)
 
 	for _, userInfo := range userInfos {
 		// Skip users with no outfits
-		if len(userInfo.Outfits.Data) < MinOutfits {
+		if len(userInfo.Outfits) < MinOutfits {
 			continue
 		}
 
 		// Limit outfits per user
-		userOutfits := userInfo.Outfits.Data
+		userOutfits := userInfo.Outfits
 		if len(userOutfits) > MaxOutfits {
 			userOutfits = userOutfits[:MaxOutfits]
 		}
@@ -299,8 +299,8 @@ func (a *OutfitAnalyzer) getOutfitThumbnails(
 
 // analyzeUserOutfits handles the analysis of a single user's outfits.
 func (a *OutfitAnalyzer) analyzeUserOutfits(
-	ctx context.Context, info *fetcher.Info, mu *sync.Mutex,
-	flaggedUsers map[uint64]*types.User, outfits []*apiTypes.Outfit, thumbnailMap map[uint64]string,
+	ctx context.Context, info *types.User, mu *sync.Mutex, reasonsMap map[uint64]types.Reasons[enum.UserReasonType],
+	outfits []*apiTypes.Outfit, thumbnailMap map[uint64]string,
 ) error {
 	// Acquire semaphore before making AI request
 	if err := a.analysisSem.Acquire(ctx, 1); err != nil {
@@ -372,38 +372,16 @@ func (a *OutfitAnalyzer) analyzeUserOutfits(
 		return nil
 	}
 
-	// If analysis is successful and violations found, update flaggedUsers map
+	// If analysis is successful and violations found, update reasons map
 	mu.Lock()
-	if existingUser, ok := flaggedUsers[info.ID]; ok {
-		existingUser.Reasons[enum.UserReasonTypeOutfit] = &types.Reason{
-			Message:    analysis.Reason,
-			Confidence: analysis.Confidence,
-			Evidence:   analysis.Evidence,
-		}
-	} else {
-		flaggedUsers[info.ID] = &types.User{
-			ID:          info.ID,
-			Name:        info.Name,
-			DisplayName: info.DisplayName,
-			Description: info.Description,
-			CreatedAt:   info.CreatedAt,
-			Reasons: types.Reasons[enum.UserReasonType]{
-				enum.UserReasonTypeOutfit: &types.Reason{
-					Message:    analysis.Reason,
-					Confidence: analysis.Confidence,
-					Evidence:   analysis.Evidence,
-				},
-			},
-			Groups:              info.Groups.Data,
-			Friends:             info.Friends.Data,
-			Games:               info.Games.Data,
-			Outfits:             info.Outfits.Data,
-			LastUpdated:         info.LastUpdated,
-			LastBanCheck:        info.LastBanCheck,
-			ThumbnailURL:        info.ThumbnailURL,
-			LastThumbnailUpdate: info.LastThumbnailUpdate,
-		}
+	if _, exists := reasonsMap[info.ID]; !exists {
+		reasonsMap[info.ID] = make(types.Reasons[enum.UserReasonType])
 	}
+	reasonsMap[info.ID].Add(enum.UserReasonTypeOutfit, &types.Reason{
+		Message:    analysis.Reason,
+		Confidence: analysis.Confidence,
+		Evidence:   analysis.Evidence,
+	})
 	mu.Unlock()
 
 	return nil
@@ -411,7 +389,7 @@ func (a *OutfitAnalyzer) analyzeUserOutfits(
 
 // createOutfitGrid downloads outfit images and creates a grid image.
 func (a *OutfitAnalyzer) createOutfitGrid(
-	ctx context.Context, userInfo *fetcher.Info, outfits []*apiTypes.Outfit, thumbnailMap map[uint64]string,
+	ctx context.Context, userInfo *types.User, outfits []*apiTypes.Outfit, thumbnailMap map[uint64]string,
 ) (*bytes.Buffer, []string, error) {
 	// Download outfit images concurrently
 	successfulDownloads, err := a.downloadOutfitImages(ctx, userInfo, outfits, thumbnailMap)
@@ -425,7 +403,7 @@ func (a *OutfitAnalyzer) createOutfitGrid(
 
 // downloadOutfitImages concurrently downloads outfit images until we have enough.
 func (a *OutfitAnalyzer) downloadOutfitImages(
-	ctx context.Context, userInfo *fetcher.Info, outfits []*apiTypes.Outfit, thumbnailMap map[uint64]string,
+	ctx context.Context, userInfo *types.User, outfits []*apiTypes.Outfit, thumbnailMap map[uint64]string,
 ) ([]DownloadResult, error) {
 	// Download current user thumbnail
 	downloads := make([]DownloadResult, 0, MaxOutfits)

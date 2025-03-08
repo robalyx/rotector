@@ -7,7 +7,6 @@ import (
 
 	"github.com/bytedance/sonic"
 	"github.com/google/generative-ai-go/genai"
-	"github.com/robalyx/rotector/internal/common/client/fetcher"
 	"github.com/robalyx/rotector/internal/common/setup"
 	"github.com/robalyx/rotector/internal/common/storage/database/types"
 	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
@@ -161,7 +160,7 @@ func NewFriendAnalyzer(app *setup.App, logger *zap.Logger) *FriendAnalyzer {
 
 // GenerateFriendReasons generates friend network analysis reasons for multiple users using the Gemini model.
 func (a *FriendAnalyzer) GenerateFriendReasons(
-	ctx context.Context, userInfos []*fetcher.Info,
+	ctx context.Context, userInfos []*types.User,
 	confirmedFriendsMap, flaggedFriendsMap map[uint64]map[uint64]*types.User,
 ) map[uint64]string {
 	var (
@@ -220,7 +219,7 @@ func (a *FriendAnalyzer) GenerateFriendReasons(
 
 // processBatch handles analysis for a batch of users.
 func (a *FriendAnalyzer) processBatch(
-	ctx context.Context, userInfos []*fetcher.Info,
+	ctx context.Context, userInfos []*types.User,
 	confirmedFriendsMap, flaggedFriendsMap map[uint64]map[uint64]*types.User,
 ) ([]FriendAnalysis, error) {
 	// Create summaries for all users in batch

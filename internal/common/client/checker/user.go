@@ -8,6 +8,7 @@ import (
 	"github.com/robalyx/rotector/internal/common/setup"
 	"github.com/robalyx/rotector/internal/common/storage/database"
 	"github.com/robalyx/rotector/internal/common/storage/database/types"
+	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
 	"github.com/robalyx/rotector/internal/common/translator"
 	"github.com/robalyx/rotector/internal/common/utils"
 	"go.uber.org/zap"
@@ -49,34 +50,42 @@ func NewUserChecker(app *setup.App, userFetcher *fetcher.UserFetcher, logger *za
 }
 
 // ProcessUsers runs users through multiple checking stage.
-// Returns IDs of users that failed AI validation for retry.
-func (c *UserChecker) ProcessUsers(userInfos []*fetcher.Info) {
+func (c *UserChecker) ProcessUsers(userInfos []*types.User) {
 	c.logger.Info("Processing users", zap.Int("userInfos", len(userInfos)))
 
-	// Initialize map to store flagged users
-	flaggedUsers := make(map[uint64]*types.User)
+	// Initialize map to store reasons
+	reasonsMap := make(map[uint64]types.Reasons[enum.UserReasonType])
 
 	// Process group checker
-	c.groupChecker.ProcessUsers(userInfos, flaggedUsers)
+	c.groupChecker.ProcessUsers(userInfos, reasonsMap)
 
 	// Process friend checker
-	c.friendChecker.ProcessUsers(userInfos, flaggedUsers)
+	c.friendChecker.ProcessUsers(userInfos, reasonsMap)
 
 	// Process user analysis
-	c.userAnalyzer.ProcessUsers(userInfos, flaggedUsers)
+	c.userAnalyzer.ProcessUsers(userInfos, reasonsMap)
 
 	// Process outfit analysis (only for flagged users)
-	c.outfitAnalyzer.ProcessOutfits(userInfos, flaggedUsers)
+	c.outfitAnalyzer.ProcessOutfits(userInfos, reasonsMap)
 
 	// Stop if no users were flagged
-	if len(flaggedUsers) == 0 {
+	if len(reasonsMap) == 0 {
 		c.logger.Info("No flagged users found", zap.Int("userInfos", len(userInfos)))
 		return
 	}
 
-	// Calculate final confidence scores
-	for _, user := range flaggedUsers {
-		user.Confidence = utils.CalculateConfidence(user.Reasons)
+	// Create final flagged users map with complete user copies
+	flaggedUsers := make(map[uint64]*types.User, len(reasonsMap))
+	for _, userInfo := range userInfos {
+		if reasons, ok := reasonsMap[userInfo.ID]; ok {
+			// Create a copy of the user
+			user := *userInfo
+			// Copy over the reasons we collected
+			user.Reasons = reasons
+			// Calculate final confidence score
+			user.Confidence = utils.CalculateConfidence(reasons)
+			flaggedUsers[userInfo.ID] = &user
+		}
 	}
 
 	// Save flagged users to database

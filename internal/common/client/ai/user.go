@@ -9,7 +9,6 @@ import (
 
 	"github.com/bytedance/sonic"
 	"github.com/google/generative-ai-go/genai"
-	"github.com/robalyx/rotector/internal/common/client/fetcher"
 	"github.com/robalyx/rotector/internal/common/setup"
 	"github.com/robalyx/rotector/internal/common/storage/database/types"
 	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
@@ -218,9 +217,9 @@ func NewUserAnalyzer(app *setup.App, translator *translator.Translator, logger *
 }
 
 // ProcessUsers analyzes user content for a batch of users.
-func (a *UserAnalyzer) ProcessUsers(userInfos []*fetcher.Info, flaggedUsers map[uint64]*types.User) {
+func (a *UserAnalyzer) ProcessUsers(userInfos []*types.User, reasonsMap map[uint64]types.Reasons[enum.UserReasonType]) {
 	// Track counts before processing
-	existingFlags := len(flaggedUsers)
+	existingFlags := len(reasonsMap)
 	numBatches := (len(userInfos) + a.batchSize - 1) / a.batchSize
 
 	// Process batches concurrently
@@ -242,7 +241,7 @@ func (a *UserAnalyzer) ProcessUsers(userInfos []*fetcher.Info, flaggedUsers map[
 			defer a.analysisSem.Release(1)
 
 			// Process batch
-			if err := a.processBatch(ctx, infoBatch, flaggedUsers, &mu); err != nil {
+			if err := a.processBatch(ctx, infoBatch, reasonsMap, &mu); err != nil {
 				a.logger.Error("Failed to process batch",
 					zap.Error(err),
 					zap.Int("batchStart", start),
@@ -261,12 +260,12 @@ func (a *UserAnalyzer) ProcessUsers(userInfos []*fetcher.Info, flaggedUsers map[
 
 	a.logger.Info("Received AI user analysis",
 		zap.Int("totalUsers", len(userInfos)),
-		zap.Int("newFlags", len(flaggedUsers)-existingFlags))
+		zap.Int("newFlags", len(reasonsMap)-existingFlags))
 }
 
 // processBatch handles a single batch of users.
 func (a *UserAnalyzer) processBatch(
-	ctx context.Context, userInfos []*fetcher.Info, flaggedUsers map[uint64]*types.User, mu *sync.Mutex,
+	ctx context.Context, userInfos []*types.User, reasonsMap map[uint64]types.Reasons[enum.UserReasonType], mu *sync.Mutex,
 ) error {
 	// Translate all descriptions concurrently
 	translatedInfos, originalInfos := a.prepareUserInfos(ctx, userInfos)
@@ -345,15 +344,15 @@ func (a *UserAnalyzer) processBatch(
 	}
 
 	// Validate AI responses
-	a.validateAndUpdateFlaggedUsers(flaggedResults, translatedInfos, originalInfos, flaggedUsers, mu)
+	a.validateAndUpdateFlaggedUsers(flaggedResults, translatedInfos, originalInfos, reasonsMap, mu)
 
 	return nil
 }
 
 // validateAndUpdateFlaggedUsers validates the flagged users and updates the flaggedUsers map.
 func (a *UserAnalyzer) validateAndUpdateFlaggedUsers(
-	flaggedResults *FlaggedUsers, translatedInfos,
-	originalInfos map[string]*fetcher.Info, flaggedUsers map[uint64]*types.User, mu *sync.Mutex,
+	flaggedResults *FlaggedUsers, translatedInfos, originalInfos map[string]*types.User,
+	reasonsMap map[uint64]types.Reasons[enum.UserReasonType], mu *sync.Mutex,
 ) {
 	normalizer := transform.Chain(
 		norm.NFKD,                             // Decompose with compatibility decomposition
@@ -401,39 +400,18 @@ func (a *UserAnalyzer) validateAndUpdateFlaggedUsers(
 			translatedInfo.DisplayName,
 			translatedInfo.Description)
 
-		// If the flagged user is valid, update the flaggedUsers map
+		// If the flagged user is valid, update the reasons map
 		if isValid {
 			mu.Lock()
-			if existingUser, ok := flaggedUsers[originalInfo.ID]; ok {
-				existingUser.Reasons[enum.UserReasonTypeDescription] = &types.Reason{
-					Message:    flaggedUser.Reason,
-					Confidence: flaggedUser.Confidence,
-					Evidence:   flaggedUser.FlaggedContent,
-				}
-			} else {
-				flaggedUsers[originalInfo.ID] = &types.User{
-					ID:          originalInfo.ID,
-					Name:        originalInfo.Name,
-					DisplayName: originalInfo.DisplayName,
-					Description: originalInfo.Description,
-					CreatedAt:   originalInfo.CreatedAt,
-					Reasons: types.Reasons[enum.UserReasonType]{
-						enum.UserReasonTypeDescription: &types.Reason{
-							Message:    flaggedUser.Reason,
-							Confidence: flaggedUser.Confidence,
-							Evidence:   flaggedUser.FlaggedContent,
-						},
-					},
-					Groups:              originalInfo.Groups.Data,
-					Friends:             originalInfo.Friends.Data,
-					Games:               originalInfo.Games.Data,
-					Outfits:             originalInfo.Outfits.Data,
-					LastUpdated:         originalInfo.LastUpdated,
-					LastBanCheck:        originalInfo.LastBanCheck,
-					ThumbnailURL:        originalInfo.ThumbnailURL,
-					LastThumbnailUpdate: originalInfo.LastThumbnailUpdate,
-				}
+			if _, exists := reasonsMap[originalInfo.ID]; !exists {
+				reasonsMap[originalInfo.ID] = make(types.Reasons[enum.UserReasonType])
 			}
+
+			reasonsMap[originalInfo.ID].Add(enum.UserReasonTypeDescription, &types.Reason{
+				Message:    flaggedUser.Reason,
+				Confidence: flaggedUser.Confidence,
+				Evidence:   flaggedUser.FlaggedContent,
+			})
 			mu.Unlock()
 		} else {
 			a.logger.Warn("AI flagged content did not pass validation",
@@ -449,11 +427,11 @@ func (a *UserAnalyzer) validateAndUpdateFlaggedUsers(
 // prepareUserInfos translates user descriptions for different languages and encodings.
 // Returns maps of both translated and original user infos for validation.
 func (a *UserAnalyzer) prepareUserInfos(
-	ctx context.Context, userInfos []*fetcher.Info,
-) (map[string]*fetcher.Info, map[string]*fetcher.Info) {
+	ctx context.Context, userInfos []*types.User,
+) (map[string]*types.User, map[string]*types.User) {
 	var (
-		originalInfos   = make(map[string]*fetcher.Info)
-		translatedInfos = make(map[string]*fetcher.Info)
+		originalInfos   = make(map[string]*types.User)
+		translatedInfos = make(map[string]*types.User)
 		p               = pool.New().WithContext(ctx)
 		mu              sync.Mutex
 	)

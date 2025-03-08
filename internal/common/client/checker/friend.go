@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/robalyx/rotector/internal/common/client/ai"
-	"github.com/robalyx/rotector/internal/common/client/fetcher"
 	"github.com/robalyx/rotector/internal/common/setup"
 	"github.com/robalyx/rotector/internal/common/storage/database"
 	"github.com/robalyx/rotector/internal/common/storage/database/types"
@@ -44,15 +43,15 @@ func NewFriendChecker(app *setup.App, logger *zap.Logger) *FriendChecker {
 	}
 }
 
-// ProcessUsers checks multiple users' friends concurrently and updates flaggedUsers map.
-func (c *FriendChecker) ProcessUsers(userInfos []*fetcher.Info, flaggedUsers map[uint64]*types.User) {
+// ProcessUsers checks multiple users' friends concurrently and updates reasonsMap.
+func (c *FriendChecker) ProcessUsers(userInfos []*types.User, reasonsMap map[uint64]types.Reasons[enum.UserReasonType]) {
 	// Track counts before processing
-	existingFlags := len(flaggedUsers)
+	existingFlags := len(reasonsMap)
 
 	// Collect all unique friend IDs across all users
 	uniqueFriendIDs := make(map[uint64]struct{})
 	for _, userInfo := range userInfos {
-		for _, friend := range userInfo.Friends.Data {
+		for _, friend := range userInfo.Friends {
 			uniqueFriendIDs[friend.ID] = struct{}{}
 		}
 	}
@@ -80,7 +79,7 @@ func (c *FriendChecker) ProcessUsers(userInfos []*fetcher.Info, flaggedUsers map
 		confirmedFriends := make(map[uint64]*types.User)
 		flaggedFriends := make(map[uint64]*types.User)
 
-		for _, friend := range userInfo.Friends.Data {
+		for _, friend := range userInfo.Friends {
 			if reviewUser, exists := existingFriends[friend.ID]; exists {
 				switch reviewUser.Status {
 				case enum.UserTypeConfirmed:
@@ -104,7 +103,7 @@ func (c *FriendChecker) ProcessUsers(userInfos []*fetcher.Info, flaggedUsers map
 		flaggedCount := len(flaggedFriendsMap[userInfo.ID])
 
 		// Calculate confidence score
-		confidence := c.calculateConfidence(confirmedCount, flaggedCount, len(userInfo.Friends.Data))
+		confidence := c.calculateConfidence(confirmedCount, flaggedCount, len(userInfo.Friends))
 
 		// Flag user if confidence exceeds threshold
 		if confidence >= 0.50 {
@@ -114,36 +113,14 @@ func (c *FriendChecker) ProcessUsers(userInfos []*fetcher.Info, flaggedUsers map
 				reason = "User has flagged friends."
 			}
 
-			if existingUser, ok := flaggedUsers[userInfo.ID]; ok {
-				// Add new reason
-				existingUser.Reasons[enum.UserReasonTypeFriend] = &types.Reason{
-					Message:    reason,
-					Confidence: confidence,
-				}
-			} else {
-				flaggedUsers[userInfo.ID] = &types.User{
-					ID:          userInfo.ID,
-					Name:        userInfo.Name,
-					DisplayName: userInfo.DisplayName,
-					Description: userInfo.Description,
-					CreatedAt:   userInfo.CreatedAt,
-					Reasons: types.Reasons[enum.UserReasonType]{
-						enum.UserReasonTypeFriend: &types.Reason{
-							Message:    reason,
-							Confidence: confidence,
-						},
-					},
-					Groups:              userInfo.Groups.Data,
-					Friends:             userInfo.Friends.Data,
-					Games:               userInfo.Games.Data,
-					Outfits:             userInfo.Outfits.Data,
-					Confidence:          math.Round(confidence*100) / 100,
-					LastUpdated:         userInfo.LastUpdated,
-					LastBanCheck:        userInfo.LastBanCheck,
-					ThumbnailURL:        userInfo.ThumbnailURL,
-					LastThumbnailUpdate: userInfo.LastThumbnailUpdate,
-				}
+			// Add new reason to reasons map
+			if _, exists := reasonsMap[userInfo.ID]; !exists {
+				reasonsMap[userInfo.ID] = make(types.Reasons[enum.UserReasonType])
 			}
+			reasonsMap[userInfo.ID].Add(enum.UserReasonTypeFriend, &types.Reason{
+				Message:    reason,
+				Confidence: confidence,
+			})
 
 			c.logger.Debug("User automatically flagged",
 				zap.Uint64("userID", userInfo.ID),
@@ -157,7 +134,7 @@ func (c *FriendChecker) ProcessUsers(userInfos []*fetcher.Info, flaggedUsers map
 
 	c.logger.Info("Finished processing friends",
 		zap.Int("totalUsers", len(userInfos)),
-		zap.Int("newFlags", len(flaggedUsers)-existingFlags))
+		zap.Int("newFlags", len(reasonsMap)-existingFlags))
 }
 
 // calculateConfidence computes a weighted confidence score based on friend relationships.

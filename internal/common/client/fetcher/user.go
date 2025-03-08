@@ -20,7 +20,7 @@ var ErrUserBanned = errors.New("user is banned")
 // UserFetchResult contains the result of fetching a user's information.
 type UserFetchResult struct {
 	ID    uint64
-	Info  *Info
+	Info  *types.User
 	Error error
 }
 
@@ -48,23 +48,6 @@ type UserOutfitsFetchResult struct {
 	Error error
 }
 
-// Info combines user profile data with their group memberships and friend list.
-type Info struct {
-	ID                  uint64                  `json:"id"`
-	Name                string                  `json:"name"`
-	DisplayName         string                  `json:"displayName"`
-	Description         string                  `json:"description"`
-	CreatedAt           time.Time               `json:"createdAt"`
-	Groups              *UserGroupFetchResult   `json:"groupIds"`
-	Friends             *UserFriendFetchResult  `json:"friends"`
-	Games               *UserGamesFetchResult   `json:"games"`
-	Outfits             *UserOutfitsFetchResult `json:"outfits"`
-	LastUpdated         time.Time               `json:"lastUpdated"`
-	LastBanCheck        time.Time               `json:"lastBanCheck"`
-	ThumbnailURL        string                  `json:"thumbnailUrl"`
-	LastThumbnailUpdate time.Time               `json:"lastThumbnailUpdate"`
-}
-
 // UserFetcher handles concurrent retrieval of user information from the Roblox API.
 type UserFetcher struct {
 	roAPI            *api.API
@@ -90,9 +73,9 @@ func NewUserFetcher(app *setup.App, logger *zap.Logger) *UserFetcher {
 }
 
 // FetchInfos retrieves complete user information for a batch of user IDs.
-func (u *UserFetcher) FetchInfos(ctx context.Context, userIDs []uint64) []*Info {
+func (u *UserFetcher) FetchInfos(ctx context.Context, userIDs []uint64) []*types.User {
 	var (
-		validUsers = make([]*Info, 0, len(userIDs))
+		validUsers = make([]*types.User, 0, len(userIDs))
 		userMap    = make(map[uint64]*types.User)
 		p          = pool.New().WithContext(ctx)
 		mu         sync.Mutex
@@ -125,22 +108,22 @@ func (u *UserFetcher) FetchInfos(ctx context.Context, userIDs []uint64) []*Info 
 
 			// Add the user info to valid users
 			now := time.Now()
-			info := &Info{
+			user := &types.User{
 				ID:           userInfo.ID,
 				Name:         userInfo.Name,
 				DisplayName:  userInfo.DisplayName,
 				Description:  userInfo.Description,
 				CreatedAt:    userInfo.Created,
-				Groups:       groups,
-				Friends:      friends,
-				Games:        games,
-				Outfits:      outfits,
+				Groups:       groups.Data,
+				Friends:      friends.Data,
+				Games:        games.Data,
+				Outfits:      outfits.Data,
 				LastUpdated:  now,
 				LastBanCheck: now,
 			}
 
 			mu.Lock()
-			validUsers = append(validUsers, info)
+			validUsers = append(validUsers, user)
 			mu.Unlock()
 
 			return nil
@@ -161,10 +144,10 @@ func (u *UserFetcher) FetchInfos(ctx context.Context, userIDs []uint64) []*Info 
 	thumbnails := u.thumbnailFetcher.GetImageURLs(ctx, userMap)
 
 	// Add thumbnails to the corresponding user info
-	for _, info := range validUsers {
-		if thumbnailURL, ok := thumbnails[info.ID]; ok {
-			info.ThumbnailURL = thumbnailURL
-			info.LastThumbnailUpdate = time.Now()
+	for _, user := range validUsers {
+		if thumbnailURL, ok := thumbnails[user.ID]; ok {
+			user.ThumbnailURL = thumbnailURL
+			user.LastThumbnailUpdate = time.Now()
 		}
 	}
 
