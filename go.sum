@@ -114,6 +114,8 @@ github.com/jaxron/roapi.go v0.0.0-20250228115235-a35fb4dec4b6 h1:QS9UXXPo2TdQg1C
 github.com/jaxron/roapi.go v0.0.0-20250228115235-a35fb4dec4b6/go.mod h1:1t2qfEzjcYvqXPLMvboyaYxSMomYF+SltIbmozAsmpE=
 github.com/jaxron/roapi.go v0.0.0-20250228143012-929194a81062 h1:LQpZqeqPYM/KLUSg2PD1TJKzd2JBPLaYtmiLEOd/eso=
 github.com/jaxron/roapi.go v0.0.0-20250228143012-929194a81062/go.mod h1:1t2qfEzjcYvqXPLMvboyaYxSMomYF+SltIbmozAsmpE=
+github.com/jaxron/roapi.go v0.0.0-20250308094602-77901682b39b h1:llDlF7f7pe9w5vbfluhlY0GTuIor5gnJoy9I1LUpAYU=
+github.com/jaxron/roapi.go v0.0.0-20250308094602-77901682b39b/go.mod h1:1t2qfEzjcYvqXPLMvboyaYxSMomYF+SltIbmozAsmpE=
 github.com/jinzhu/inflection v1.0.0 h1:K317FqzuhWc8YvSVlFMCCUb36O/S9MCKRDI7QkRKD/E=
 github.com/jinzhu/inflection v1.0.0/go.mod h1:h+uFLlag+Qp1Va5pdKtLDYj+kHp5pxUVkryuEj+Srlc=
 github.com/klauspost/cpuid/v2 v2.0.9/go.mod h1:FInQzS24/EEf25PyTYn52gqo7WaD8xa0213Md/qVLRg=

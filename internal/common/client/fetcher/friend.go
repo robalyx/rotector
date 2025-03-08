@@ -93,12 +93,33 @@ func (f *FriendFetcher) GetFriends(ctx context.Context, userID uint64) ([]*apiTy
 		return nil, fmt.Errorf("failed to get friend count: %w", err)
 	}
 
-	// For users with ≤200 friends, use the legacy endpoint which includes all details
+	// For users with ≤200 friends, try the legacy endpoint first
 	if friendCount <= 200 {
-		return f.getFriendsLegacy(ctx, userID)
+		friends, err := f.getFriendsLegacy(ctx, userID)
+		if err != nil {
+			return nil, err
+		}
+
+		// Check if any friends are missing name or display name
+		hasIncompleteData := false
+		for _, friend := range friends {
+			if friend.Name == "" || friend.DisplayName == "" {
+				hasIncompleteData = true
+				break
+			}
+		}
+
+		// If all data is complete, return the legacy results
+		if !hasIncompleteData {
+			return friends, nil
+		}
+
+		// Otherwise, fall back to pagination to get complete data
+		f.logger.Debug("Legacy endpoint returned incomplete data, falling back to pagination",
+			zap.Uint64("userID", userID))
 	}
 
-	// For users with >200 friends, get IDs then fetch details
+	// For users with >200 friends or incomplete legacy data, get IDs then fetch details
 	friendIDs, err := f.GetFriendIDs(ctx, userID)
 	if err != nil {
 		return nil, err

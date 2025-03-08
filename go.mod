@@ -21,7 +21,7 @@ require (
 	github.com/jaxron/axonet/middleware/redis v0.0.0-20250206054345-e0d103e3cde0
 	github.com/jaxron/axonet/middleware/retry v0.0.0-20250206054345-e0d103e3cde0
 	github.com/jaxron/axonet/middleware/singleflight v0.0.0-20250206054345-e0d103e3cde0
-	github.com/jaxron/roapi.go v0.0.0-20250228143012-929194a81062
+	github.com/jaxron/roapi.go v0.0.0-20250308094602-77901682b39b
 	github.com/knadh/koanf/parsers/toml/v2 v2.1.0
 	github.com/knadh/koanf/providers/file v1.1.2
 	github.com/knadh/koanf/v2 v2.1.2
