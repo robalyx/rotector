@@ -453,45 +453,8 @@ func (m *ScanMenu) handleBanConfirmModal(
 	// Get ban reason from modal input
 	banReason := event.Data.Text(constants.GuildBanReasonInputCustomID)
 
-	// Create list of unique user IDs to ban
-	userIDs := make([]snowflake.ID, 0, len(filteredUsers))
-	for userID := range filteredUsers {
-		userIDs = append(userIDs, snowflake.ID(userID))
-	}
-
-	// Define batch size for banning users
-	const batchSize = 200 // Discord's max batch size
-	totalBanned := 0
-	totalFailed := 0
-
-	// Acknowledge the interaction before the potentially long operation
-	r.Clear(event, "Processing bans... This may take a moment.")
-
-	// Process bans in batches
-	for i := 0; i < len(userIDs); i += batchSize {
-		end := min(i+batchSize, len(userIDs))
-		batchUserIDs := userIDs[i:end]
-
-		bulkBan := discord.BulkBan{
-			UserIDs:              batchUserIDs,
-			DeleteMessageSeconds: 0,
-		}
-
-		// Execute batch ban
-		result, err := event.Client().Rest().BulkBan(snowflake.ID(guildID), bulkBan, rest.WithReason(banReason))
-		if err != nil {
-			m.layout.logger.Error("Failed to execute bulk ban batch",
-				zap.Error(err),
-				zap.Uint64("guild_id", guildID),
-				zap.Int("batch_start", i),
-				zap.Int("batch_end", end))
-			// Continue with next batch even if this one failed
-			continue
-		}
-
-		totalBanned += len(result.BannedUsers)
-		totalFailed += len(result.FailedUsers)
-	}
+	// Execute the bans
+	totalBanned, totalFailed := m.executeBans(event, guildID, filteredUsers, banReason)
 
 	// Log the ban actions
 	m.layout.db.Models().Activities().Log(context.Background(), &types.ActivityLog{
@@ -527,4 +490,92 @@ func (m *ScanMenu) handleBanConfirmModal(
 	session.PaginationPage.Delete(s)
 
 	r.Show(event, s, constants.GuildOwnerPageName, msg)
+}
+
+// executeBans performs the actual banning of users and sends them DM notifications.
+func (m *ScanMenu) executeBans(
+	event interfaces.CommonEvent, guildID uint64, filteredUsers map[uint64][]*types.UserGuildInfo, banReason string,
+) (totalBanned, totalFailed int) {
+	// Create list of unique user IDs to ban
+	userIDs := make([]snowflake.ID, 0, len(filteredUsers))
+	for userID := range filteredUsers {
+		userIDs = append(userIDs, snowflake.ID(userID))
+	}
+
+	// Define batch size for banning users
+	const batchSize = 200 // Discord's max batch size
+
+	// Process bans in batches
+	for i := 0; i < len(userIDs); i += batchSize {
+		end := min(i+batchSize, len(userIDs))
+		batchUserIDs := userIDs[i:end]
+
+		bulkBan := discord.BulkBan{
+			UserIDs:              batchUserIDs,
+			DeleteMessageSeconds: 0,
+		}
+
+		// Execute batch ban
+		result, err := event.Client().Rest().BulkBan(snowflake.ID(guildID), bulkBan, rest.WithReason(banReason))
+		if err != nil {
+			m.layout.logger.Error("Failed to execute bulk ban batch",
+				zap.Error(err),
+				zap.Uint64("guild_id", guildID),
+				zap.Int("batch_start", i),
+				zap.Int("batch_end", end))
+			continue
+		}
+
+		totalBanned += len(result.BannedUsers)
+		totalFailed += len(result.FailedUsers)
+
+		// Send DM notifications to successfully banned users
+		for _, userID := range result.BannedUsers {
+			// Create DM channel
+			channel, err := event.Client().Rest().CreateDMChannel(userID)
+			if err != nil {
+				m.layout.logger.Error("Failed to create DM channel",
+					zap.Error(err),
+					zap.Uint64("user_id", uint64(userID)))
+				continue
+			}
+
+			// Get guild information
+			guild, err := event.Client().Rest().GetGuild(snowflake.ID(guildID), false)
+			if err != nil {
+				m.layout.logger.Error("Failed to get guild information",
+					zap.Error(err),
+					zap.Uint64("guild_id", guildID))
+				continue
+			}
+
+			// Send ban notification with detailed information
+			embed := discord.NewEmbedBuilder().
+				SetTitle("🚫 Server Ban Notice").
+				SetDescription(fmt.Sprintf("You have been banned from **%s**", guild.Name)).
+				AddField("Reason", utils.FormatString(banReason), false).
+				AddField("Server ID", fmt.Sprintf("`%d`", guildID), true).
+				AddField("Ban Date", fmt.Sprintf("<t:%d:F>", time.Now().Unix()), true).
+				SetColor(constants.ErrorEmbedColor).
+				SetFooter("This is an automated message. If you believe this ban was in error, "+
+					"please contact the server administrators.", "")
+
+			// Add server icon if available
+			if guild.Icon != nil {
+				embed.SetThumbnail(*guild.Icon)
+			}
+
+			// Send the embed to the DM channel
+			_, err = event.Client().Rest().CreateMessage(channel.ID(), discord.NewMessageCreateBuilder().
+				SetEmbeds(embed.Build()).
+				Build())
+			if err != nil {
+				m.layout.logger.Error("Failed to send ban notification",
+					zap.Error(err),
+					zap.Uint64("user_id", uint64(userID)))
+			}
+		}
+	}
+
+	return totalBanned, totalFailed
 }

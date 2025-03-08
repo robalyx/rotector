@@ -395,7 +395,7 @@ const (
 // Guild Owner Menu.
 const (
 	GuildMembershipsPerPage = 10
-	GuildScanUsersPerPage   = 10
+	GuildScanUsersPerPage   = 6
 	GuildMessagesPerPage    = 10
 
 	GuildScanTypeCondo    = "condo"

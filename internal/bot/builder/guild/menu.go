@@ -1,4 +1,3 @@
-//nolint:lll
 package guild
 
 import (
@@ -62,12 +61,10 @@ func (b *MenuBuilder) Build() *discord.MessageUpdateBuilder {
 func (b *MenuBuilder) buildMainEmbed() *discord.EmbedBuilder {
 	embed := discord.NewEmbedBuilder().
 		SetTitle("Guild Owner Tools").
-		SetDescription("These tools help you maintain a safe server environment by managing Discord users in your server who may be participating in ERP (erotic roleplay) across multiple Discord servers.").
-		AddField("Getting Started",
-			"Select an option from the dropdown menu below to begin. The scan tool will check your server members against our database of flagged users, allowing you to identify and remove those participating in inappropriate content. The logs will show you a history of previous ban operations.",
-			false).
-		SetColor(constants.DefaultEmbedColor).
-		SetFooter("Inspired by Ruben Sim's Ro-Cleaner bot", "")
+		SetDescription("These tools help you maintain a safe server environment by managing " +
+			"Discord users in your server who may be participating in ERP (erotic roleplay) " +
+			"across multiple Discord servers.").
+		SetColor(constants.DefaultEmbedColor)
 
 	if b.guildName != "" {
 		embed.AddField("Current Guild", b.guildName, false)

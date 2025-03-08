@@ -49,15 +49,15 @@ func (b *ScanBuilder) Build() *discord.MessageUpdateBuilder {
 	totalPages := max(1, (b.total+constants.GuildScanUsersPerPage-1)/constants.GuildScanUsersPerPage)
 
 	// Build the embeds
-	infoEmbed := b.buildInfoEmbed()
 	warningEmbed := b.buildWarningEmbed()
+	infoEmbed := b.buildInfoEmbed()
 	resultsEmbed := b.buildResultsEmbed(totalPages)
 
 	// Build the components
 	components := b.buildComponents(totalPages)
 
 	return discord.NewMessageUpdateBuilder().
-		SetEmbeds(infoEmbed.Build(), warningEmbed.Build(), resultsEmbed.Build()).
+		SetEmbeds(warningEmbed.Build(), infoEmbed.Build(), resultsEmbed.Build()).
 		AddContainerComponents(components...)
 }
 
@@ -142,15 +142,22 @@ func (b *ScanBuilder) buildWarningEmbed() *discord.EmbedBuilder {
 		// Warning for condo server scan
 		warningEmbed.SetTitle("⚠️ Warning: Unreliable Method").
 			SetDescription(
-				"**This method WILL result in lots of false positives.** Many users in these servers are innocent, "+
-					"including ERP investigators and non-participating members.",
+				"**This method WILL result in lots of false positives** - one of the major criticisms of Ruben's RoCleaner bot. "+
+					"This method which RoCleaner uses bans everyone in flagged servers without checking what they actually did.\n\n"+
+					"Many innocent users could be banned, including:\n"+
+					"- Investigators and reporters\n"+
+					"- Non-participating members\n"+
+					"- Victims who joined unknowingly\n"+
+					"- Accounts that were compromised\n"+
+					"- Users who joined through misleading invites",
 			).
 			SetColor(0xFF0000). // Red color for warning
 			AddField(
 				"Recommendation",
 				"Use the 'Ban Users with Inappropriate Messages' option for more accurate results.",
 				false,
-			)
+			).
+			SetFooter("⚠️ Review the list carefully before confirming bans", "")
 
 		// Add recommendation if there are many flagged guilds
 		if b.minGuilds == 1 && len(b.guildNames) > 3 {
@@ -164,12 +171,10 @@ func (b *ScanBuilder) buildWarningEmbed() *discord.EmbedBuilder {
 	} else {
 		// Info for message scan
 		warningEmbed.SetTitle("💬 Message-Based Scan").
-			SetDescription("You are using the recommended message-based scan method.").
-			SetColor(0x00FF00). // Green color for info
-			AddField("About This Method",
-				"This scan identifies users based on their actual inappropriate messages, "+
-					"providing more accurate results than server membership alone.",
-				false)
+			SetDescription("You are using the recommended message-based scan method.\n\n" +
+				"This scan identifies users based on their actual inappropriate messages, " +
+						"providing more accurate results than server membership alone.").
+			SetColor(0x00FF00) // Green color
 	}
 
 	return warningEmbed
@@ -185,13 +190,11 @@ func (b *ScanBuilder) buildResultsEmbed(totalPages int) *discord.EmbedBuilder {
 		// Show message scan results
 		if len(b.filteredSummaries) > 0 {
 			b.addPaginatedMessageResults(resultsEmbed)
-			resultsEmbed.SetFooter("⚠️ Review the list carefully before confirming bans", "")
 			return resultsEmbed
 		}
 	} else if len(b.filteredUsers) > 0 {
 		// Show condo scan results
 		b.addPaginatedUserResults(resultsEmbed)
-		resultsEmbed.SetFooter("⚠️ Review the list carefully before confirming bans", "")
 		return resultsEmbed
 	}
 
