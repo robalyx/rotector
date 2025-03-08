@@ -59,9 +59,12 @@ func (m *StatusMenu) Show(event interfaces.CommonEvent, s *session.Session, r *p
 			return
 		}
 
-		// User is still flagged, show updated information
-		r.UpdatePage(s, constants.UserReviewPageName)
+		// WORKAROUND:
+		// Update the current page to dashboard so that when user navigates back,
+		// they return to the dashboard instead of this status page
+		r.UpdatePage(s, constants.DashboardPageName)
 
+		// User is flagged, show updated information
 		session.UserTarget.Set(s, user)
 		r.Show(event, s, constants.UserReviewPageName, "User has been rechecked. Showing updated information.")
 
