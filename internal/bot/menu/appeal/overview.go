@@ -269,13 +269,10 @@ func (m *OverviewMenu) handleCreateAppealModalSubmit(
 	userIDStr := event.Data.Text(constants.AppealUserInputCustomID)
 
 	// Parse profile URL if provided
-	if utils.IsRobloxProfileURL(userIDStr) {
-		var err error
-		userIDStr, err = utils.ExtractUserIDFromURL(userIDStr)
-		if err != nil {
-			r.Cancel(event, s, "Invalid Roblox profile URL. Please provide a valid URL or ID.")
-			return
-		}
+	userIDStr, err := utils.ExtractUserIDFromURL(userIDStr)
+	if err != nil {
+		r.Cancel(event, s, "Invalid Roblox profile URL. Please provide a valid URL or ID.")
+		return
 	}
 
 	// Parse the user ID

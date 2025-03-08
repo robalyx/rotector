@@ -12,6 +12,7 @@ import (
 	"github.com/robalyx/rotector/internal/bot/core/pagination"
 	"github.com/robalyx/rotector/internal/bot/core/session"
 	"github.com/robalyx/rotector/internal/bot/interfaces"
+	"github.com/robalyx/rotector/internal/bot/utils"
 	"github.com/robalyx/rotector/internal/common/queue"
 	"github.com/robalyx/rotector/internal/common/storage/database/types"
 	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
@@ -87,10 +88,17 @@ func (m *Menu) handleButton(
 
 // handleModal processes modal submissions.
 func (m *Menu) handleModal(event *events.ModalSubmitInteractionCreate, s *session.Session, r *pagination.Respond) {
-	// Parse user ID and get reason from modal
 	userIDStr := event.Data.Text(constants.UserIDInputCustomID)
 	reason := event.Data.Text(constants.ReasonInputCustomID)
 
+	// Parse profile URL if provided
+	userIDStr, err := utils.ExtractUserIDFromURL(userIDStr)
+	if err != nil {
+		r.Cancel(event, s, "Invalid Roblox profile URL. Please provide a valid URL or ID.")
+		return
+	}
+
+	// Parse the user ID
 	userID, err := strconv.ParseUint(userIDStr, 10, 64)
 	if err != nil {
 		r.Cancel(event, s, "Invalid user ID format.")

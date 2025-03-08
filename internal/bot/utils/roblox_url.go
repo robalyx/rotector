@@ -31,6 +31,10 @@ func IsRobloxGroupURL(input string) bool {
 
 // ExtractUserIDFromURL extracts the user ID from a Roblox profile URL.
 func ExtractUserIDFromURL(url string) (string, error) {
+	if !IsRobloxProfileURL(url) {
+		return "", ErrInvalidProfileURL
+	}
+
 	matches := userURLPattern.FindStringSubmatch(strings.TrimSpace(url))
 	if len(matches) < requiredURLMatches {
 		return "", ErrInvalidProfileURL
@@ -40,6 +44,10 @@ func ExtractUserIDFromURL(url string) (string, error) {
 
 // ExtractGroupIDFromURL extracts the group ID from a Roblox group URL.
 func ExtractGroupIDFromURL(url string) (string, error) {
+	if !IsRobloxGroupURL(url) {
+		return "", ErrInvalidGroupURL
+	}
+
 	matches := groupURLPattern.FindStringSubmatch(strings.TrimSpace(url))
 	if len(matches) < requiredURLMatches {
 		return "", ErrInvalidGroupURL
