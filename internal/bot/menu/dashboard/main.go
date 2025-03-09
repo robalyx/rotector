@@ -223,10 +223,9 @@ func (m *Menu) handleLookupRobloxUserModalSubmit(
 	userIDStr := event.Data.Text(constants.LookupRobloxUserInputCustomID)
 
 	// Parse profile URL if provided
-	userIDStr, err := utils.ExtractUserIDFromURL(userIDStr)
-	if err != nil {
-		r.Cancel(event, s, "Invalid Roblox profile URL. Please provide a valid URL or ID.")
-		return
+	parsedURL, err := utils.ExtractUserIDFromURL(userIDStr)
+	if err == nil {
+		userIDStr = parsedURL
 	}
 
 	// Get user from database
