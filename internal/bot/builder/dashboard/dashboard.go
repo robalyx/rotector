@@ -109,6 +109,47 @@ func getChartBuffers(client rueidis.Client) (*bytes.Buffer, *bytes.Buffer) {
 
 // Build creates a Discord message showing statistics and worker status.
 func (b *Builder) Build() *discord.MessageUpdateBuilder {
+	// Create embeds
+	var embeds []discord.Embed
+
+	// Show all embeds if not in maintenance mode or if user is admin
+	if b.announcementType != enum.AnnouncementTypeMaintenance || b.isAdmin {
+		embeds = []discord.Embed{
+			b.buildWelcomeEmbed(),
+			b.buildVoteStatsEmbed(),
+			b.buildUserGraphEmbed(),
+			b.buildGroupGraphEmbed(),
+		}
+
+		// Add announcement if exists
+		if b.announcementType != enum.AnnouncementTypeNone && b.announcementMessage != "" {
+			embeds = append(embeds, b.buildAnnouncementEmbed())
+		}
+	} else {
+		// Only show maintenance announcement for non-admins during maintenance
+		embeds = []discord.Embed{b.buildAnnouncementEmbed()}
+	}
+
+	// Create message builder
+	builder := discord.NewMessageUpdateBuilder().
+		SetEmbeds(embeds...).
+		AddContainerComponents(b.buildComponents()...)
+
+	// Attach both chart files if available
+	if b.userStatsBuffer != nil {
+		builder.AddFile("user_stats_chart.png", "image/png", b.userStatsBuffer)
+	}
+	if b.groupStatsBuffer != nil {
+		builder.AddFile("group_stats_chart.png", "image/png", b.groupStatsBuffer)
+	}
+
+	return builder
+}
+
+// buildComponents creates all interactive components for the dashboard.
+func (b *Builder) buildComponents() []discord.ContainerComponent {
+	components := []discord.ContainerComponent{}
+
 	// Create base options
 	options := []discord.StringSelectMenuOption{
 		discord.NewStringSelectMenuOption("Review Users", constants.StartUserReviewButtonCustomID).
@@ -180,24 +221,10 @@ func (b *Builder) Build() *discord.MessageUpdateBuilder {
 		)
 	}
 
-	// Create embeds
-	embeds := []discord.Embed{
-		b.buildWelcomeEmbed(),
-		b.buildVoteStatsEmbed(),
-		b.buildUserGraphEmbed(),
-		b.buildGroupGraphEmbed(),
-	}
-
-	// Add announcement embed if type is not none
-	if b.announcementType != enum.AnnouncementTypeNone &&
-		b.announcementMessage != "" {
-		embeds = append(embeds, b.buildAnnouncementEmbed())
-	}
-
-	// Create message builder
-	builder := discord.NewMessageUpdateBuilder().
-		SetEmbeds(embeds...).
-		AddContainerComponents(
+	// Add components based on maintenance mode and admin status
+	if b.announcementType != enum.AnnouncementTypeMaintenance || b.isAdmin {
+		// Show all components for admins or when not in maintenance
+		components = append(components,
 			discord.NewActionRow(
 				discord.NewStringSelectMenu(constants.ActionSelectMenuCustomID, "Select an action", options...),
 			),
@@ -205,16 +232,16 @@ func (b *Builder) Build() *discord.MessageUpdateBuilder {
 				discord.NewSecondaryButton("🔄 Refresh", constants.RefreshButtonCustomID),
 			),
 		)
-
-	// Attach both chart files if available
-	if b.userStatsBuffer != nil {
-		builder.AddFile("user_stats_chart.png", "image/png", b.userStatsBuffer)
+	} else {
+		// Only show refresh button during maintenance for non-admins
+		components = append(components,
+			discord.NewActionRow(
+				discord.NewSecondaryButton("🔄 Refresh", constants.RefreshButtonCustomID),
+			),
+		)
 	}
-	if b.groupStatsBuffer != nil {
-		builder.AddFile("group_stats_chart.png", "image/png", b.groupStatsBuffer)
-	}
 
-	return builder
+	return components
 }
 
 // buildWelcomeEmbed creates the main welcome embed.
@@ -307,6 +334,9 @@ func (b *Builder) buildAnnouncementEmbed() discord.Embed {
 	case enum.AnnouncementTypeError:
 		color = 0xE74C3C // Red
 		title = "🚫 Alert"
+	case enum.AnnouncementTypeMaintenance:
+		color = 0x95A5A6 // Gray
+		title = "🔧 System Maintenance"
 	case enum.AnnouncementTypeNone:
 	}
 

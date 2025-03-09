@@ -7,11 +7,11 @@ import (
 	"strings"
 )
 
-const _AnnouncementTypeName = "NoneInfoWarningSuccessError"
+const _AnnouncementTypeName = "NoneInfoWarningSuccessErrorMaintenance"
 
-var _AnnouncementTypeIndex = [...]uint8{0, 4, 8, 15, 22, 27}
+var _AnnouncementTypeIndex = [...]uint8{0, 4, 8, 15, 22, 27, 38}
 
-const _AnnouncementTypeLowerName = "noneinfowarningsuccesserror"
+const _AnnouncementTypeLowerName = "noneinfowarningsuccesserrormaintenance"
 
 func (i AnnouncementType) String() string {
 	if i < 0 || i >= AnnouncementType(len(_AnnouncementTypeIndex)-1) {
@@ -29,9 +29,10 @@ func _AnnouncementTypeNoOp() {
 	_ = x[AnnouncementTypeWarning-(2)]
 	_ = x[AnnouncementTypeSuccess-(3)]
 	_ = x[AnnouncementTypeError-(4)]
+	_ = x[AnnouncementTypeMaintenance-(5)]
 }
 
-var _AnnouncementTypeValues = []AnnouncementType{AnnouncementTypeNone, AnnouncementTypeInfo, AnnouncementTypeWarning, AnnouncementTypeSuccess, AnnouncementTypeError}
+var _AnnouncementTypeValues = []AnnouncementType{AnnouncementTypeNone, AnnouncementTypeInfo, AnnouncementTypeWarning, AnnouncementTypeSuccess, AnnouncementTypeError, AnnouncementTypeMaintenance}
 
 var _AnnouncementTypeNameToValueMap = map[string]AnnouncementType{
 	_AnnouncementTypeName[0:4]:        AnnouncementTypeNone,
@@ -44,6 +45,8 @@ var _AnnouncementTypeNameToValueMap = map[string]AnnouncementType{
 	_AnnouncementTypeLowerName[15:22]: AnnouncementTypeSuccess,
 	_AnnouncementTypeName[22:27]:      AnnouncementTypeError,
 	_AnnouncementTypeLowerName[22:27]: AnnouncementTypeError,
+	_AnnouncementTypeName[27:38]:      AnnouncementTypeMaintenance,
+	_AnnouncementTypeLowerName[27:38]: AnnouncementTypeMaintenance,
 }
 
 var _AnnouncementTypeNames = []string{
@@ -52,6 +55,7 @@ var _AnnouncementTypeNames = []string{
 	_AnnouncementTypeName[8:15],
 	_AnnouncementTypeName[15:22],
 	_AnnouncementTypeName[22:27],
+	_AnnouncementTypeName[27:38],
 }
 
 // AnnouncementTypeString retrieves an enum value from the enum constants string name.

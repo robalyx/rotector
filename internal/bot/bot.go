@@ -39,6 +39,7 @@ import (
 	"github.com/robalyx/rotector/internal/bot/utils"
 	"github.com/robalyx/rotector/internal/common/setup"
 	"github.com/robalyx/rotector/internal/common/storage/database"
+	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
 	"go.uber.org/zap"
 )
 
@@ -218,28 +219,14 @@ func (b *Bot) handleApplicationCommandInteraction(event *events.ApplicationComma
 			return
 		}
 
-		// Check if user is banned
-		pageName := session.CurrentPage.Get(s)
-		if b.checkBanStatus(event, s, pageName) {
-			return
-		}
-
-		// Check consent for new sessions
-		if isNewSession && b.checkConsentStatus(event, s) {
-			return
-		}
-
-		// Check if the session has a valid current page
-		page := b.paginationManager.GetPage(pageName)
-		if page == nil {
-			// If no valid page exists, reset to dashboard
-			b.paginationManager.Show(event, s, constants.DashboardPageName, "New session created.")
-			s.Touch(context.Background())
+		// Run common validation checks
+		if !b.validateInteraction(event, s, isNewSession, true, "") {
 			return
 		}
 
 		// Navigate to stored page
-		b.paginationManager.Show(event, s, page.Name, "")
+		pageName := session.CurrentPage.Get(s)
+		b.paginationManager.Show(event, s, pageName, "")
 		s.Touch(context.Background())
 	}()
 }
@@ -273,8 +260,7 @@ func (b *Bot) handleComponentInteraction(event *events.ComponentInteractionCreat
 		}
 
 		// Get current page
-		pageName := session.CurrentPage.Get(s)
-		page := b.paginationManager.GetPage(pageName)
+		page := b.paginationManager.GetPage(session.CurrentPage.Get(s))
 
 		// WORKAROUND:
 		// Special handling for modal interactions to prevent response conflicts.
@@ -304,31 +290,8 @@ func (b *Bot) handleComponentInteraction(event *events.ComponentInteractionCreat
 			}
 		}
 
-		// Check if user is banned
-		if b.checkBanStatus(event, s, pageName) {
-			return
-		}
-
-		// Check consent for new sessions
-		if isNewSession && b.checkConsentStatus(event, s) {
-			return
-		}
-
-		// Check if the session has a valid current page
-		if page == nil {
-			// If no valid page exists, reset to dashboard
-			b.paginationManager.Show(event, s, constants.DashboardPageName, "New session created.")
-			s.Touch(context.Background())
-			return
-		}
-
-		// Verify interaction is for latest message
-		sessionMessageID := session.MessageID.Get(s)
-		if sessionMessageID != uint64(event.Message.ID) {
-			b.logger.Debug("Interaction is outdated",
-				zap.Uint64("session_message_id", sessionMessageID),
-				zap.Uint64("event_message_id", uint64(event.Message.ID)))
-			b.paginationManager.RespondWithClear(event, "This interaction is outdated. Please use the latest interaction.")
+		// Run common validation checks
+		if !b.validateInteraction(event, s, isNewSession, false, event.Data.CustomID()) {
 			return
 		}
 
@@ -380,23 +343,8 @@ func (b *Bot) handleModalSubmit(event *events.ModalSubmitInteractionCreate) {
 			return
 		}
 
-		// Check if user is banned
-		pageName := session.CurrentPage.Get(s)
-		if b.checkBanStatus(event, s, pageName) {
-			return
-		}
-
-		// Check consent for new sessions
-		if isNewSession && b.checkConsentStatus(event, s) {
-			return
-		}
-
-		// Check if the session has a valid current page
-		page := b.paginationManager.GetPage(pageName)
-		if page == nil {
-			// If no valid page exists, reset to dashboard
-			b.paginationManager.Show(event, s, constants.DashboardPageName, "New session created.")
-			s.Touch(context.Background())
+		// Run common validation checks
+		if !b.validateInteraction(event, s, isNewSession, false, "") {
 			return
 		}
 
@@ -405,9 +353,46 @@ func (b *Bot) handleModalSubmit(event *events.ModalSubmitInteractionCreate) {
 	}()
 }
 
+// validateInteraction performs common validation checks for all interaction types.
+// Returns true if the interaction should proceed, false if it should be stopped.
+func (b *Bot) validateInteraction(
+	event interfaces.CommonEvent, s *session.Session, isNewSession, isCommandEvent bool, customID string,
+) bool {
+	// Check if system is in maintenance mode
+	pageName := session.CurrentPage.Get(s)
+	if session.BotAnnouncementType.Get(s) == enum.AnnouncementTypeMaintenance {
+		isAdmin := s.BotSettings().IsAdmin(uint64(event.User().ID))
+		if !isAdmin && (pageName != constants.DashboardPageName || customID != constants.RefreshButtonCustomID) {
+			b.paginationManager.Show(event, s, constants.DashboardPageName, "System is currently under maintenance.")
+			return false
+		}
+	}
+
+	// Check if user is banned
+	if b.checkBanStatus(event, s, pageName, isCommandEvent) {
+		return false
+	}
+
+	// Check consent for new sessions
+	if isNewSession && b.checkConsentStatus(event, s) {
+		return false
+	}
+
+	// Check if the session has a valid current page
+	page := b.paginationManager.GetPage(pageName)
+	if page == nil {
+		// If no valid page exists, reset to dashboard
+		b.paginationManager.Show(event, s, constants.DashboardPageName, "New session created.")
+		s.Touch(context.Background())
+		return false
+	}
+
+	return true
+}
+
 // checkBanStatus checks if a user is banned and shows the ban menu if they are.
 // Returns true if the user is banned and should not proceed.
-func (b *Bot) checkBanStatus(event interfaces.CommonEvent, s *session.Session, pageName string) bool {
+func (b *Bot) checkBanStatus(event interfaces.CommonEvent, s *session.Session, pageName string, isCommandEvent bool) bool {
 	userID := uint64(event.User().ID)
 
 	// Check if user is banned
@@ -426,10 +411,10 @@ func (b *Bot) checkBanStatus(event interfaces.CommonEvent, s *session.Session, p
 	}
 
 	// Handle banned user interactions
-	if pageName == constants.BanPageName ||
+	if !isCommandEvent && (pageName == constants.BanPageName ||
 		pageName == constants.AppealOverviewPageName ||
 		pageName == constants.AppealTicketPageName ||
-		pageName == constants.AppealVerifyPageName {
+		pageName == constants.AppealVerifyPageName) {
 		b.paginationManager.HandleInteraction(event, s)
 		return true
 	}

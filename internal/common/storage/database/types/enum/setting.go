@@ -24,4 +24,5 @@ const (
 	AnnouncementTypeWarning
 	AnnouncementTypeSuccess
 	AnnouncementTypeError
+	AnnouncementTypeMaintenance
 )

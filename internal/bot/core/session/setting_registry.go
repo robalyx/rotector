@@ -479,6 +479,7 @@ func (r *SettingRegistry) createAnnouncementTypeSetting() *Setting {
 			{Value: enum.AnnouncementTypeWarning.String(), Label: "Warning", Description: "Warning announcement", Emoji: "⚠️"},
 			{Value: enum.AnnouncementTypeSuccess.String(), Label: "Success", Description: "Success announcement", Emoji: "✅"},
 			{Value: enum.AnnouncementTypeError.String(), Label: "Error", Description: "Error announcement", Emoji: "🚫"},
+			{Value: enum.AnnouncementTypeMaintenance.String(), Label: "Maintenance", Description: "System maintenance", Emoji: "🔧"},
 		},
 		Validators: []Validator{
 			validateEnum([]string{
@@ -487,6 +488,7 @@ func (r *SettingRegistry) createAnnouncementTypeSetting() *Setting {
 				enum.AnnouncementTypeWarning.String(),
 				enum.AnnouncementTypeSuccess.String(),
 				enum.AnnouncementTypeError.String(),
+				enum.AnnouncementTypeMaintenance.String(),
 			}),
 		},
 		ValueGetter: func(s *Session) string {

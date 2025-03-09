@@ -9,17 +9,20 @@ import (
 	"github.com/robalyx/rotector/internal/bot/core/session"
 	"github.com/robalyx/rotector/internal/bot/utils"
 	"github.com/robalyx/rotector/internal/common/storage/database/types"
+	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
 )
 
 // Builder creates the visual layout for the ban information menu.
 type Builder struct {
-	ban *types.DiscordBan
+	ban         *types.DiscordBan
+	maintenance bool
 }
 
 // NewBuilder creates a new ban menu builder.
 func NewBuilder(s *session.Session) *Builder {
 	return &Builder{
-		ban: session.AdminBanInfo.Get(s),
+		ban:         session.AdminBanInfo.Get(s),
+		maintenance: session.BotAnnouncementType.Get(s) == enum.AnnouncementTypeMaintenance,
 	}
 }
 
@@ -60,9 +63,15 @@ func (b *Builder) Build() *discord.MessageUpdateBuilder {
 	embed.SetColor(constants.ErrorEmbedColor)
 
 	// Create message with embed and appeals button
-	return discord.NewMessageUpdateBuilder().
-		SetEmbeds(embed.Build()).
-		AddActionRow(
+	builder := discord.NewMessageUpdateBuilder().
+		SetEmbeds(embed.Build())
+
+	// Only show appeals button if not in maintenance mode
+	if !b.maintenance {
+		builder.AddActionRow(
 			discord.NewPrimaryButton("View Appeals", constants.AppealMenuButtonCustomID),
 		)
+	}
+
+	return builder
 }
