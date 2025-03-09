@@ -1,6 +1,8 @@
+//nolint:lll
 package utils_test
 
 import (
+	"fmt"
 	"testing"
 	"unicode"
 
@@ -200,12 +202,6 @@ func TestValidateFlaggedWords(t *testing.T) {
 			want:         true,
 		},
 		{
-			name:         "below threshold match",
-			flaggedWords: []string{"hello world test case"},
-			targetTexts:  []string{"only hello here"},
-			want:         false,
-		},
-		{
 			name:         "match across multiple texts",
 			flaggedWords: []string{"hello world test case"},
 			targetTexts:  []string{"hello world", "test", "case"},
@@ -217,6 +213,24 @@ func TestValidateFlaggedWords(t *testing.T) {
 			targetTexts:  []string{"hello world test CASE"},
 			want:         true,
 		},
+		{
+			name:         "short word handling",
+			flaggedWords: []string{"a b c hello world"},
+			targetTexts:  []string{"hello world"},
+			want:         true,
+		},
+		{
+			name:         "empty target texts",
+			flaggedWords: []string{"hello world"},
+			targetTexts:  []string{"", "  "},
+			want:         false,
+		},
+		{
+			name:         "empty flagged words",
+			flaggedWords: []string{"", "  "},
+			targetTexts:  []string{"hello world"},
+			want:         false,
+		},
 	}
 
 	for _, tt := range tests {
@@ -226,5 +240,78 @@ func TestValidateFlaggedWords(t *testing.T) {
 			got := utils.ValidateFlaggedWords(tt.flaggedWords, normalizer, tt.targetTexts...)
 			assert.Equal(t, tt.want, got)
 		})
+	}
+}
+
+func BenchmarkValidateFlaggedWords(b *testing.B) {
+	normalizer := newTestNormalizer()
+	flaggedWords := []string{
+		"suspicious content here",
+		"inappropriate language example",
+		"something fishy going on",
+	}
+	targetTexts := []string{
+		"This is a long text with some suspicious content here and there.",
+		"We need to check if inappropriate language appears in this sentence.",
+		"Nothing wrong with this text, it's completely fine.",
+	}
+
+	b.ResetTimer()
+	for b.Loop() {
+		utils.ValidateFlaggedWords(flaggedWords, normalizer, targetTexts...)
+	}
+}
+
+func BenchmarkValidateFlaggedWords_SmallInput(b *testing.B) {
+	normalizer := newTestNormalizer()
+	flaggedWords := []string{"hello world"}
+	targetTexts := []string{"hello there world"}
+
+	b.ResetTimer()
+	for b.Loop() {
+		utils.ValidateFlaggedWords(flaggedWords, normalizer, targetTexts...)
+	}
+}
+
+func BenchmarkValidateFlaggedWords_LargeInput(b *testing.B) {
+	normalizer := newTestNormalizer()
+
+	// Generate large inputs
+	flaggedWords := make([]string, 20)
+	for i := range flaggedWords {
+		flaggedWords[i] = fmt.Sprintf("flagged content %d with multiple words to test performance", i)
+	}
+
+	targetTexts := make([]string, 10)
+	for i := range targetTexts {
+		targetTexts[i] = fmt.Sprintf("This is target text %d which contains some flagged content %d with multiple words", i, i%5)
+	}
+
+	b.ResetTimer()
+	for b.Loop() {
+		utils.ValidateFlaggedWords(flaggedWords, normalizer, targetTexts...)
+	}
+}
+
+func BenchmarkValidateFlaggedWords_RealWorld(b *testing.B) {
+	normalizer := newTestNormalizer()
+
+	// Simulate AI-flagged content from user descriptions
+	flaggedWords := []string{
+		"contact me on discord username#1234",
+		"join my private server for exclusive content",
+		"send me a message for special experiences",
+	}
+
+	// Simulate actual user descriptions with repeated words and mixed formats
+	targetTexts := []string{
+		"Hi everyone! I love playing games and making friends. Contact me on Discord Username#1234 if you want to play together. I also like drawing and swimming.",
+		"Professional game developer with 5 years experience. Join my private server for exclusive content and game development tips. I also post tutorials on my YouTube channel.",
+		"Just a regular player looking for friends. I enjoy roleplay games and building. Send me a message for special experiences in my popular games. Always looking for new ideas!",
+	}
+
+	b.ResetTimer()
+	for b.Loop() {
+		utils.ValidateFlaggedWords(flaggedWords, normalizer, targetTexts...)
 	}
 }

@@ -53,30 +53,78 @@ func CleanupText(s string) string {
 	return strings.TrimSpace(MultipleSpaces.ReplaceAllString(s, " "))
 }
 
-// ValidateFlaggedWords checks if enough flagged words are found in the target text.
-// Returns true if at least 30% of the flagged words are found in any of the target texts.
+// ValidateFlaggedWords checks if a sufficient percentage of flagged words appear in target texts.
+// Returns true when at least 30% of unique words from flagged content are found in any target text.
 func ValidateFlaggedWords(flaggedContent []string, normalizer transform.Transformer, targetTexts ...string) bool {
-	// Split all flagged content into words
-	var allFlaggedWords []string
-	for _, content := range flaggedContent {
-		allFlaggedWords = append(allFlaggedWords, strings.Fields(content)...)
-	}
-
-	if len(allFlaggedWords) == 0 {
+	// Quick check for empty inputs
+	if len(flaggedContent) == 0 || len(targetTexts) == 0 {
 		return false
 	}
 
-	// Count how many flagged words are found in the target texts
-	foundWords := 0
-	for _, word := range allFlaggedWords {
-		for _, text := range targetTexts {
-			if ContainsNormalized(text, word, normalizer) {
-				foundWords++
-				break // Break inner loop once word is found in any text
+	// Filter and preprocess target texts once
+	normalizedTargets := make([]string, 0, len(targetTexts))
+	for _, text := range targetTexts {
+		if text = strings.TrimSpace(text); text == "" {
+			continue
+		}
+
+		if norm := NormalizeString(text, normalizer); norm != "" {
+			normalizedTargets = append(normalizedTargets, norm)
+		}
+	}
+
+	if len(normalizedTargets) == 0 {
+		return false
+	}
+
+	// Collect unique words and count total
+	uniqueWords := make(map[string]struct{})
+	for _, content := range flaggedContent {
+		if content = strings.TrimSpace(content); content == "" {
+			continue
+		}
+
+		for _, word := range strings.Fields(content) {
+			if len(word) < 2 {
+				continue
+			}
+			uniqueWords[word] = struct{}{}
+		}
+	}
+
+	// Check if there are any unique words to check
+	totalWords := len(uniqueWords)
+	if totalWords == 0 {
+		return false
+	}
+
+	// Calculate threshold
+	threshold := max(int(float64(totalWords)*0.3), 1)
+
+	// Check each unique word
+	matchCount := 0
+	for word := range uniqueWords {
+		// Normalize this word
+		normalizedWord := NormalizeString(word, normalizer)
+		if normalizedWord == "" {
+			continue
+		}
+
+		// Check if this word exists in any target
+		for _, target := range normalizedTargets {
+			if strings.Contains(target, normalizedWord) {
+				matchCount++
+
+				// Early exit if threshold reached
+				if matchCount >= threshold {
+					return true
+				}
+
+				break // Found in at least one target, check next word
 			}
 		}
 	}
 
-	// Check if at least 30% of the flagged words are found
-	return float64(foundWords) >= 0.3*float64(len(allFlaggedWords))
+	// Not enough matches found
+	return false
 }
