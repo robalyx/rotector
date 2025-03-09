@@ -46,26 +46,30 @@ Output format:
       "name": "username",
       "reason": "Clear explanation in one sentence",
       "flaggedContent": ["exact quote 1", "exact quote 2"],
-      "confidence": 0.0-1.0
+      "confidence": 0.0-1.0,
+      "hasSocials": true/false
     }
   ]
 }
 
-Confidence levels:
+Key rules:
+1. Return ALL users that either have violations OR contain social media links
+2. Use "the user" or "this account" instead of usernames
+3. Include exact quotes in flaggedContent
+4. Set reason to NO_VIOLATIONS if no violations found
+5. Skip empty descriptions
+6. Set hasSocials to true if description contains any social media handles/links
+7. If user has no violations but has socials, only include name and hasSocials fields
+8. Social media presence alone is NOT a violation - it's just informational
+
+Confidence levels (only for inappropriate content):
 0.0: No predatory elements
 0.1-0.3: Subtle predatory elements
 0.4-0.6: Clear inappropriate content  
 0.7-0.8: Strong predatory indicators
 0.9-1.0: Explicit predatory intent
 
-Key rules:
-1. Return ONLY users with violations
-2. Use "the user" or "this account" instead of usernames
-3. Include exact quotes in flaggedContent
-4. Set NO_VIOLATIONS if no concerns found
-5. Skip empty descriptions
-
-Look for:
+Look for inappropriate content:
 - Coded language for inappropriate activities
 - Leading phrases implying secrecy
 - Inappropriate game/chat/studio invitations
@@ -80,7 +84,6 @@ Look for:
 - Non-consensual references
 - Friend requests with inappropriate context
 - Claims of following TOS/rules to avoid detection
-- Mentions of Telegram/"blue app" for off-platform chat
 - Age-restricted invitations
 - Modified app references
 - Inappropriate roleplay requests
@@ -97,6 +100,15 @@ Look for:
 - Inappropriate trading
 - Degradation terms
 - Caesar cipher (ROT13 and other rotations)
+
+Look for social media (not violations, just detect presence):
+- Discord tags/handles/servers
+- Telegram usernames/links
+- Instagram handles
+- TikTok usernames
+- Snapchat usernames
+- Twitter/X handles
+- Any other social media platforms
 
 Ignore:
 - Simple greetings/farewells
@@ -120,13 +132,15 @@ Ignore:
 - Sharing of personal information`
 
 	// UserRequestPrompt provides a reminder to follow system guidelines for user analysis.
-	UserRequestPrompt = `Analyze these user profiles for predatory content targeting minors.
+	UserRequestPrompt = `Analyze these user profiles for predatory content and social media links.
 
 Remember:
-1. Return only users with clear violations
+1. Return ALL users that either have violations OR contain social media links
 2. Use "the user"/"this account" instead of usernames
-3. Include exact quotes as evidence
+3. Include exact quotes as evidence for violations
 4. Follow confidence level guide strictly
+5. Always set hasSocials field accurately
+6. For users with only social media links (no violations), include only name and hasSocials fields
 
 Profiles to analyze:
 `
@@ -147,6 +161,7 @@ type FlaggedUser struct {
 	Reason         string   `json:"reason"`
 	FlaggedContent []string `json:"flaggedContent"`
 	Confidence     float64  `json:"confidence"`
+	HasSocials     bool     `json:"hasSocials"`
 }
 
 // UserAnalyzer handles AI-based content analysis using Gemini models.
@@ -192,8 +207,12 @@ func NewUserAnalyzer(app *setup.App, translator *translator.Translator, logger *
 							Type:        genai.TypeNumber,
 							Description: `Confidence level of moderator's assessment based on severity and number of violations found`,
 						},
+						"hasSocials": {
+							Type:        genai.TypeBoolean,
+							Description: "Indicates whether the user's description contains social media handles/links",
+						},
 					},
-					Required: []string{"name", "reason", "flaggedContent", "confidence"},
+					Required: []string{"name", "reason", "flaggedContent", "confidence", "hasSocials"},
 				},
 				Description: "Array of users with clear violations. Leave empty if no violations found in any profiles",
 			},
@@ -373,8 +392,13 @@ func (a *UserAnalyzer) validateAndUpdateFlaggedUsers(
 			continue
 		}
 
+		// Check if the user has social media links
+		mu.Lock()
+		originalInfo.HasSocials = flaggedUser.HasSocials
+		mu.Unlock()
+
 		// Skip results with no violations
-		if flaggedUser.Reason == "NO_VIOLATIONS" {
+		if flaggedUser.Reason == "" || flaggedUser.Reason == "NO_VIOLATIONS" {
 			continue
 		}
 

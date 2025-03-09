@@ -31,6 +31,7 @@ type User struct {
 	Friends             []*types.ExtendedFriend      `bun:"type:jsonb"             json:"friends"`
 	Games               []*types.Game                `bun:"type:jsonb"             json:"games"`
 	Confidence          float64                      `bun:",notnull"               json:"confidence"`
+	HasSocials          bool                         `bun:",notnull,default:false" json:"hasSocials"`
 	LastScanned         time.Time                    `bun:",notnull"               json:"lastScanned"`
 	LastUpdated         time.Time                    `bun:",notnull"               json:"lastUpdated"`
 	LastViewed          time.Time                    `bun:",notnull"               json:"lastViewed"`
@@ -84,6 +85,7 @@ const (
 	UserFieldCreatedAt                         // Account creation date
 	UserFieldReasons                           // Reasons for flagging
 	UserFieldThumbnail                         // ThumbnailURL
+	UserFieldHasSocials                        // Has social media links
 
 	UserFieldGroups  // Group memberships
 	UserFieldOutfits // User outfits
@@ -112,6 +114,7 @@ const (
 	UserFieldProfile = UserFieldDescription |
 		UserFieldCreatedAt |
 		UserFieldThumbnail |
+		UserFieldHasSocials |
 		UserFieldIsBanned |
 		UserFieldIsDeleted
 
