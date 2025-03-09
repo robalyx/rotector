@@ -17,6 +17,10 @@ import (
 type CaesarBuilder struct {
 	user         *types.ReviewUser
 	translator   *translator.Translator
+	page         int
+	offset       int
+	totalItems   int
+	totalPages   int
 	trainingMode bool
 	privacyMode  bool
 }
@@ -27,12 +31,16 @@ func NewCaesarBuilder(s *session.Session, translator *translator.Translator) *Ca
 	return &CaesarBuilder{
 		user:         session.UserTarget.Get(s),
 		translator:   translator,
+		page:         session.PaginationPage.Get(s),
+		offset:       session.PaginationOffset.Get(s),
+		totalItems:   session.PaginationTotalItems.Get(s),
+		totalPages:   session.PaginationTotalPages.Get(s),
 		trainingMode: trainingMode,
 		privacyMode:  trainingMode || session.UserStreamerMode.Get(s),
 	}
 }
 
-// Build creates a Discord message with all Caesar cipher translations.
+// Build creates a Discord message with Caesar cipher translations for the current page.
 func (b *CaesarBuilder) Build() *discord.MessageUpdateBuilder {
 	// Get original description
 	description := b.user.Description
@@ -41,11 +49,11 @@ func (b *CaesarBuilder) Build() *discord.MessageUpdateBuilder {
 	}
 
 	// Format original description
-	formattedDescription := utils.FormatString(utils.TruncateString(description, 200))
+	formattedDescription := utils.FormatString(utils.TruncateString(description, 600))
 
 	// Create embed for translations
 	embed := discord.NewEmbedBuilder().
-		SetTitle(constants.UserCaesarPageName).
+		SetTitle(fmt.Sprintf("%s (Page %d/%d)", constants.UserCaesarPageName, b.page+1, b.totalPages)).
 		SetDescription(fmt.Sprintf(
 			"Analyzing description for %s (%s)\n\n**Original Text:**\n%s",
 			utils.CensorString(b.user.Name, b.privacyMode),
@@ -54,19 +62,33 @@ func (b *CaesarBuilder) Build() *discord.MessageUpdateBuilder {
 		)).
 		SetColor(utils.GetMessageEmbedColor(b.privacyMode))
 
-	// Add all 25 possible shifts
-	for shift := 1; shift <= 25; shift++ {
+	// Calculate range for current page
+	startShift := b.offset + 1
+	endShift := min(startShift+constants.CaesarTranslationsPerPage-1, b.totalItems)
+
+	// Add translations for current page
+	for shift := startShift; shift <= endShift; shift++ {
 		translated := b.translator.TranslateCaesar(description, shift)
-		formattedTranslation := utils.FormatString(utils.TruncateString(translated, 200))
+		formattedTranslation := utils.FormatString(utils.TruncateString(translated, 600))
 		embed.AddField(
 			fmt.Sprintf("Shift %d", shift),
 			formattedTranslation,
-			true,
+			false,
 		)
 	}
 
 	// Create message with navigation
-	return discord.NewMessageUpdateBuilder().
-		SetEmbeds(embed.Build()).
-		AddActionRow(discord.NewSecondaryButton("◀️ Back", constants.BackButtonCustomID))
+	builder := discord.NewMessageUpdateBuilder().
+		SetEmbeds(embed.Build())
+
+	// Add navigation buttons
+	builder.AddActionRow(
+		discord.NewSecondaryButton("◀️ Back", constants.BackButtonCustomID),
+		discord.NewSecondaryButton("⏮️", string(session.ViewerFirstPage)).WithDisabled(b.page == 0),
+		discord.NewSecondaryButton("◀️", string(session.ViewerPrevPage)).WithDisabled(b.page == 0),
+		discord.NewSecondaryButton("▶️", string(session.ViewerNextPage)).WithDisabled(b.page == b.totalPages-1),
+		discord.NewSecondaryButton("⏭️", string(session.ViewerLastPage)).WithDisabled(b.page == b.totalPages-1),
+	)
+
+	return builder
 }

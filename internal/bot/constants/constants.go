@@ -213,6 +213,12 @@ const (
 	GroupsGridRows    = 3
 )
 
+// User Review Menu - Caesar Cipher Menu.
+const (
+	CaesarTotalTranslations   = 25
+	CaesarTranslationsPerPage = 5
+)
+
 // Group Review Menu.
 const (
 	GroupRecheckButtonCustomID     = "group_recheck" + ModalOpenSuffix

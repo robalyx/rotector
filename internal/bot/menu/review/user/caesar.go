@@ -37,13 +37,43 @@ func (m *CaesarMenu) Show(event interfaces.CommonEvent, s *session.Session, r *p
 	user := session.UserTarget.Get(s)
 	if strings.TrimSpace(user.Description) == "" {
 		r.Cancel(event, s, "No description available for analysis.")
+		return
 	}
+
+	// Calculate page boundaries
+	totalPages := (constants.CaesarTotalTranslations + constants.CaesarTranslationsPerPage - 1) /
+		constants.CaesarTranslationsPerPage
+
+	page := session.PaginationPage.Get(s)
+	if page < 0 || page >= totalPages {
+		page = 0 // Reset to first page if out of bounds
+	}
+
+	start := page * constants.CaesarTranslationsPerPage
+
+	// Store pagination data in session
+	session.PaginationPage.Set(s, page)
+	session.PaginationOffset.Set(s, start)
+	session.PaginationTotalItems.Set(s, constants.CaesarTotalTranslations)
+	session.PaginationTotalPages.Set(s, totalPages)
 }
 
 // handleButton processes button interactions.
 func (m *CaesarMenu) handleButton(
 	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, customID string,
 ) {
+	action := session.ViewerAction(customID)
+	switch action {
+	case session.ViewerFirstPage, session.ViewerPrevPage, session.ViewerNextPage, session.ViewerLastPage:
+		// Calculate max page
+		totalPages := session.PaginationTotalPages.Get(s)
+		page := action.ParsePageAction(s, action, totalPages-1)
+
+		session.PaginationPage.Set(s, page)
+		r.Reload(event, s, "")
+		return
+	}
+
 	switch customID {
 	case constants.BackButtonCustomID:
 		r.NavigateBack(event, s, "")
