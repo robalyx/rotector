@@ -18,6 +18,7 @@ import (
 	"github.com/robalyx/rotector/internal/bot/constants"
 	"github.com/robalyx/rotector/internal/bot/core/pagination"
 	"github.com/robalyx/rotector/internal/bot/core/session"
+	botEvents "github.com/robalyx/rotector/internal/bot/events"
 	"github.com/robalyx/rotector/internal/bot/interfaces"
 	"github.com/robalyx/rotector/internal/bot/menu/admin"
 	"github.com/robalyx/rotector/internal/bot/menu/appeal"
@@ -50,6 +51,7 @@ type Bot struct {
 	logger            *zap.Logger
 	sessionManager    *session.Manager
 	paginationManager *pagination.Manager
+	guildEventHandler *botEvents.GuildEventHandler
 }
 
 // New initializes a Bot instance by creating all required managers and layouts.
@@ -62,6 +64,7 @@ func New(app *setup.App) (*Bot, error) {
 		return nil, fmt.Errorf("failed to create session manager: %w", err)
 	}
 	paginationManager := pagination.NewManager(sessionManager, logger)
+	guildEventHandler := botEvents.NewGuildEventHandler(logger)
 
 	// Create bot instance
 	b := &Bot{
@@ -69,6 +72,7 @@ func New(app *setup.App) (*Bot, error) {
 		logger:            logger,
 		sessionManager:    sessionManager,
 		paginationManager: paginationManager,
+		guildEventHandler: guildEventHandler,
 	}
 
 	// Create Discord client
@@ -101,6 +105,7 @@ func New(app *setup.App) (*Bot, error) {
 			OnApplicationCommandInteraction: b.handleApplicationCommandInteraction,
 			OnComponentInteraction:          b.handleComponentInteraction,
 			OnModalSubmit:                   b.handleModalSubmit,
+			OnGuildJoin:                     b.guildEventHandler.OnGuildJoin,
 		}),
 	)
 	if err != nil {
@@ -148,12 +153,10 @@ func New(app *setup.App) (*Bot, error) {
 }
 
 // Start registers global commands with Discord and opens the gateway connection.
-// It first ensures the dashboard command is registered globally before starting
-// the bot's gateway connection to receive events.
 func (b *Bot) Start() error {
 	b.logger.Info("Registering commands")
 
-	// Register the dashboard command globally for all guilds
+	// Register the dashboard command globally
 	_, err := b.client.Rest().SetGlobalCommands(b.client.ApplicationID(), []discord.ApplicationCommandCreate{
 		discord.SlashCommandCreate{
 			Name:        constants.RotectorCommandName,
