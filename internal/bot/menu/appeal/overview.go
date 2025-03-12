@@ -346,6 +346,18 @@ func (m *OverviewMenu) handleRobloxAppealSubmit(
 		return
 	}
 
+	// Check if the user is blacklisted
+	blacklisted, err := m.layout.db.Models().Appeals().IsUserBlacklisted(ctx, userID, enum.AppealTypeRoblox)
+	if err != nil {
+		m.layout.logger.Error("Failed to check user blacklist status", zap.Error(err))
+		r.Error(event, "Failed to verify user status. Please try again.")
+		return
+	}
+	if blacklisted {
+		r.Cancel(event, s, "This user has been blacklisted from submitting appeals.")
+		return
+	}
+
 	// Check if the Discord user already has a pending appeal
 	exists, err = m.layout.db.Models().Appeals().HasPendingAppealByRequester(
 		ctx, uint64(event.User().ID), enum.AppealTypeRoblox,
@@ -421,6 +433,18 @@ func (m *OverviewMenu) handleDiscordAppealSubmit(
 	// Check if user is actually flagged
 	if totalGuilds == 0 && (messageSummary == nil || messageSummary.MessageCount == 0) {
 		r.Cancel(event, s, "Your Discord account is not flagged in our system.")
+		return
+	}
+
+	// Check if user is blacklisted
+	blacklisted, err := m.layout.db.Models().Appeals().IsUserBlacklisted(ctx, userID, enum.AppealTypeDiscord)
+	if err != nil {
+		m.layout.logger.Error("Failed to check user blacklist status", zap.Error(err))
+		r.Error(event, "Failed to verify user status. Please try again.")
+		return
+	}
+	if blacklisted {
+		r.Cancel(event, s, "Your account has been blacklisted from submitting appeals.")
 		return
 	}
 

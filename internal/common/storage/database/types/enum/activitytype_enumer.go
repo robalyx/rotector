@@ -7,11 +7,11 @@ import (
 	"strings"
 )
 
-const _ActivityTypeName = "AllUserViewedUserLookupUserReasonUpdatedUserConfirmedUserClearedUserSkippedUserRecheckedUserTrainingUpvoteUserTrainingDownvoteUserDeletedGroupViewedGroupLookupGroupReasonUpdatedGroupConfirmedGroupConfirmedCustomGroupClearedGroupSkippedGroupTrainingUpvoteGroupTrainingDownvoteGroupDeletedUserLookupDiscordAppealSubmittedAppealClaimedAppealAcceptedAppealRejectedAppealClosedAppealReopenedUserDataDeletedDiscordUserBannedDiscordUserUnbannedBotSettingUpdatedGuildBans"
+const _ActivityTypeName = "AllUserViewedUserLookupUserReasonUpdatedUserConfirmedUserClearedUserSkippedUserRecheckedUserTrainingUpvoteUserTrainingDownvoteUserDeletedGroupViewedGroupLookupGroupReasonUpdatedGroupConfirmedGroupConfirmedCustomGroupClearedGroupSkippedGroupTrainingUpvoteGroupTrainingDownvoteGroupDeletedUserLookupDiscordAppealSubmittedAppealClaimedAppealAcceptedAppealRejectedAppealClosedAppealReopenedUserDataDeletedUserBlacklistedDiscordUserBannedDiscordUserUnbannedBotSettingUpdatedGuildBans"
 
-var _ActivityTypeIndex = [...]uint16{0, 3, 13, 23, 40, 53, 64, 75, 88, 106, 126, 137, 148, 159, 177, 191, 211, 223, 235, 254, 275, 287, 304, 319, 332, 346, 360, 372, 386, 401, 418, 437, 454, 463}
+var _ActivityTypeIndex = [...]uint16{0, 3, 13, 23, 40, 53, 64, 75, 88, 106, 126, 137, 148, 159, 177, 191, 211, 223, 235, 254, 275, 287, 304, 319, 332, 346, 360, 372, 386, 401, 416, 433, 452, 469, 478}
 
-const _ActivityTypeLowerName = "alluservieweduserlookupuserreasonupdateduserconfirmedusercleareduserskippeduserrecheckedusertrainingupvoteusertrainingdownvoteuserdeletedgroupviewedgrouplookupgroupreasonupdatedgroupconfirmedgroupconfirmedcustomgroupclearedgroupskippedgrouptrainingupvotegrouptrainingdownvotegroupdeleteduserlookupdiscordappealsubmittedappealclaimedappealacceptedappealrejectedappealclosedappealreopeneduserdatadeleteddiscorduserbanneddiscorduserunbannedbotsettingupdatedguildbans"
+const _ActivityTypeLowerName = "alluservieweduserlookupuserreasonupdateduserconfirmedusercleareduserskippeduserrecheckedusertrainingupvoteusertrainingdownvoteuserdeletedgroupviewedgrouplookupgroupreasonupdatedgroupconfirmedgroupconfirmedcustomgroupclearedgroupskippedgrouptrainingupvotegrouptrainingdownvotegroupdeleteduserlookupdiscordappealsubmittedappealclaimedappealacceptedappealrejectedappealclosedappealreopeneduserdatadeleteduserblacklisteddiscorduserbanneddiscorduserunbannedbotsettingupdatedguildbans"
 
 func (i ActivityType) String() string {
 	if i < 0 || i >= ActivityType(len(_ActivityTypeIndex)-1) {
@@ -53,13 +53,14 @@ func _ActivityTypeNoOp() {
 	_ = x[ActivityTypeAppealClosed-(26)]
 	_ = x[ActivityTypeAppealReopened-(27)]
 	_ = x[ActivityTypeUserDataDeleted-(28)]
-	_ = x[ActivityTypeDiscordUserBanned-(29)]
-	_ = x[ActivityTypeDiscordUserUnbanned-(30)]
-	_ = x[ActivityTypeBotSettingUpdated-(31)]
-	_ = x[ActivityTypeGuildBans-(32)]
+	_ = x[ActivityTypeUserBlacklisted-(29)]
+	_ = x[ActivityTypeDiscordUserBanned-(30)]
+	_ = x[ActivityTypeDiscordUserUnbanned-(31)]
+	_ = x[ActivityTypeBotSettingUpdated-(32)]
+	_ = x[ActivityTypeGuildBans-(33)]
 }
 
-var _ActivityTypeValues = []ActivityType{ActivityTypeAll, ActivityTypeUserViewed, ActivityTypeUserLookup, ActivityTypeUserReasonUpdated, ActivityTypeUserConfirmed, ActivityTypeUserCleared, ActivityTypeUserSkipped, ActivityTypeUserRechecked, ActivityTypeUserTrainingUpvote, ActivityTypeUserTrainingDownvote, ActivityTypeUserDeleted, ActivityTypeGroupViewed, ActivityTypeGroupLookup, ActivityTypeGroupReasonUpdated, ActivityTypeGroupConfirmed, ActivityTypeGroupConfirmedCustom, ActivityTypeGroupCleared, ActivityTypeGroupSkipped, ActivityTypeGroupTrainingUpvote, ActivityTypeGroupTrainingDownvote, ActivityTypeGroupDeleted, ActivityTypeUserLookupDiscord, ActivityTypeAppealSubmitted, ActivityTypeAppealClaimed, ActivityTypeAppealAccepted, ActivityTypeAppealRejected, ActivityTypeAppealClosed, ActivityTypeAppealReopened, ActivityTypeUserDataDeleted, ActivityTypeDiscordUserBanned, ActivityTypeDiscordUserUnbanned, ActivityTypeBotSettingUpdated, ActivityTypeGuildBans}
+var _ActivityTypeValues = []ActivityType{ActivityTypeAll, ActivityTypeUserViewed, ActivityTypeUserLookup, ActivityTypeUserReasonUpdated, ActivityTypeUserConfirmed, ActivityTypeUserCleared, ActivityTypeUserSkipped, ActivityTypeUserRechecked, ActivityTypeUserTrainingUpvote, ActivityTypeUserTrainingDownvote, ActivityTypeUserDeleted, ActivityTypeGroupViewed, ActivityTypeGroupLookup, ActivityTypeGroupReasonUpdated, ActivityTypeGroupConfirmed, ActivityTypeGroupConfirmedCustom, ActivityTypeGroupCleared, ActivityTypeGroupSkipped, ActivityTypeGroupTrainingUpvote, ActivityTypeGroupTrainingDownvote, ActivityTypeGroupDeleted, ActivityTypeUserLookupDiscord, ActivityTypeAppealSubmitted, ActivityTypeAppealClaimed, ActivityTypeAppealAccepted, ActivityTypeAppealRejected, ActivityTypeAppealClosed, ActivityTypeAppealReopened, ActivityTypeUserDataDeleted, ActivityTypeUserBlacklisted, ActivityTypeDiscordUserBanned, ActivityTypeDiscordUserUnbanned, ActivityTypeBotSettingUpdated, ActivityTypeGuildBans}
 
 var _ActivityTypeNameToValueMap = map[string]ActivityType{
 	_ActivityTypeName[0:3]:          ActivityTypeAll,
@@ -120,14 +121,16 @@ var _ActivityTypeNameToValueMap = map[string]ActivityType{
 	_ActivityTypeLowerName[372:386]: ActivityTypeAppealReopened,
 	_ActivityTypeName[386:401]:      ActivityTypeUserDataDeleted,
 	_ActivityTypeLowerName[386:401]: ActivityTypeUserDataDeleted,
-	_ActivityTypeName[401:418]:      ActivityTypeDiscordUserBanned,
-	_ActivityTypeLowerName[401:418]: ActivityTypeDiscordUserBanned,
-	_ActivityTypeName[418:437]:      ActivityTypeDiscordUserUnbanned,
-	_ActivityTypeLowerName[418:437]: ActivityTypeDiscordUserUnbanned,
-	_ActivityTypeName[437:454]:      ActivityTypeBotSettingUpdated,
-	_ActivityTypeLowerName[437:454]: ActivityTypeBotSettingUpdated,
-	_ActivityTypeName[454:463]:      ActivityTypeGuildBans,
-	_ActivityTypeLowerName[454:463]: ActivityTypeGuildBans,
+	_ActivityTypeName[401:416]:      ActivityTypeUserBlacklisted,
+	_ActivityTypeLowerName[401:416]: ActivityTypeUserBlacklisted,
+	_ActivityTypeName[416:433]:      ActivityTypeDiscordUserBanned,
+	_ActivityTypeLowerName[416:433]: ActivityTypeDiscordUserBanned,
+	_ActivityTypeName[433:452]:      ActivityTypeDiscordUserUnbanned,
+	_ActivityTypeLowerName[433:452]: ActivityTypeDiscordUserUnbanned,
+	_ActivityTypeName[452:469]:      ActivityTypeBotSettingUpdated,
+	_ActivityTypeLowerName[452:469]: ActivityTypeBotSettingUpdated,
+	_ActivityTypeName[469:478]:      ActivityTypeGuildBans,
+	_ActivityTypeLowerName[469:478]: ActivityTypeGuildBans,
 }
 
 var _ActivityTypeNames = []string{
@@ -160,10 +163,11 @@ var _ActivityTypeNames = []string{
 	_ActivityTypeName[360:372],
 	_ActivityTypeName[372:386],
 	_ActivityTypeName[386:401],
-	_ActivityTypeName[401:418],
-	_ActivityTypeName[418:437],
-	_ActivityTypeName[437:454],
-	_ActivityTypeName[454:463],
+	_ActivityTypeName[401:416],
+	_ActivityTypeName[416:433],
+	_ActivityTypeName[433:452],
+	_ActivityTypeName[452:469],
+	_ActivityTypeName[469:478],
 }
 
 // ActivityTypeString retrieves an enum value from the enum constants string name.

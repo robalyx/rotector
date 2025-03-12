@@ -226,6 +226,8 @@ func (m *TicketMenu) handleSelectMenu(
 			m.handleReopenAppeal(event, s, r, appeal)
 		case constants.DeleteUserDataButtonCustomID:
 			m.handleDeleteUserData(event, s, r)
+		case constants.BlacklistUserButtonCustomID:
+			m.handleBlacklistUser(event, s, r)
 		}
 	}
 }
@@ -482,6 +484,24 @@ func (m *TicketMenu) handleDeleteUserData(
 	r.Modal(event, s, modal)
 }
 
+// handleBlacklistUser opens a modal for confirming user blacklist.
+func (m *TicketMenu) handleBlacklistUser(
+	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond,
+) {
+	modal := discord.NewModalCreateBuilder().
+		SetCustomID(constants.BlacklistUserModalCustomID).
+		SetTitle("Blacklist User").
+		AddActionRow(
+			discord.NewTextInput(constants.BlacklistUserReasonInputCustomID, discord.TextInputStyleParagraph, "Blacklist Reason").
+				WithRequired(true).
+				WithPlaceholder("Enter the reason for blacklisting this user from appeals...").
+				WithMinLength(10).
+				WithMaxLength(512),
+		)
+
+	r.Modal(event, s, modal)
+}
+
 // handleModal processes modal submissions.
 func (m *TicketMenu) handleModal(
 	event *events.ModalSubmitInteractionCreate, s *session.Session, r *pagination.Respond,
@@ -502,6 +522,8 @@ func (m *TicketMenu) handleModal(
 		m.handleRejectModalSubmit(event, s, r, appeal)
 	case constants.DeleteUserDataModalCustomID:
 		m.handleDeleteUserDataModalSubmit(event, s, r, appeal)
+	case constants.BlacklistUserModalCustomID:
+		m.handleBlacklistUserModalSubmit(event, s, r, appeal)
 	}
 }
 
@@ -796,6 +818,73 @@ func (m *TicketMenu) handleDeleteUserDataModalSubmit(
 	// Refresh the ticket view
 	ResetAppealData(s)
 	r.NavigateBack(event, s, "User data has been deleted and appeal accepted.")
+}
+
+// handleBlacklistUserModalSubmit processes the blacklist confirmation modal submission.
+func (m *TicketMenu) handleBlacklistUserModalSubmit(
+	event *events.ModalSubmitInteractionCreate, s *session.Session, r *pagination.Respond, appeal *types.FullAppeal,
+) {
+	// Verify user is a reviewer
+	reviewerID := uint64(event.User().ID)
+	if !s.BotSettings().IsReviewer(reviewerID) {
+		r.Cancel(event, s, "Only reviewers can blacklist users.")
+		return
+	}
+
+	// Get blacklist reason
+	reason := event.Data.Text(constants.BlacklistUserReasonInputCustomID)
+	if reason == "" {
+		r.Cancel(event, s, "Blacklist reason cannot be empty.")
+		return
+	}
+
+	ctx := context.Background()
+	now := time.Now()
+
+	// Create blacklist entry
+	blacklist := &types.AppealBlacklist{
+		UserID:     appeal.UserID,
+		Type:       appeal.Type,
+		ReviewerID: reviewerID,
+		Reason:     reason,
+		CreatedAt:  now,
+		AppealID:   appeal.ID,
+	}
+
+	if err := m.layout.db.Models().Appeals().BlacklistUser(ctx, blacklist); err != nil {
+		m.layout.logger.Error("Failed to blacklist user", zap.Error(err))
+		r.Error(event, "Failed to blacklist user. Please try again.")
+		return
+	}
+
+	// Reject the appeal with the blacklist reason
+	if err := m.layout.db.Models().Appeals().RejectAppeal(
+		ctx, appeal.ID, appeal.Timestamp,
+		"User blacklisted from appeals: "+reason,
+	); err != nil {
+		m.layout.logger.Error("Failed to reject appeal after blacklisting", zap.Error(err))
+		r.Error(event, "Failed to update appeal status. Please try again.")
+		return
+	}
+
+	// Return to overview
+	ResetAppealData(s)
+	r.NavigateBack(event, s, "User has been blacklisted from submitting appeals.")
+
+	// Log the blacklist action
+	m.layout.db.Models().Activities().Log(ctx, &types.ActivityLog{
+		ActivityTarget: types.ActivityTarget{
+			UserID: appeal.UserID,
+		},
+		ReviewerID:        reviewerID,
+		ActivityType:      enum.ActivityTypeUserBlacklisted,
+		ActivityTimestamp: now,
+		Details: map[string]any{
+			"reason":      reason,
+			"appeal_id":   appeal.ID,
+			"appeal_type": appeal.Type.String(),
+		},
+	})
 }
 
 // redactRobloxUserData handles redacting a Roblox user's data and logs the action.

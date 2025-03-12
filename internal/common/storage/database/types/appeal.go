@@ -49,3 +49,13 @@ type AppealMessage struct {
 	Content   string           `bun:",notnull"`          // Message content
 	CreatedAt time.Time        `bun:",notnull"`          // When the message was sent
 }
+
+// AppealBlacklist represents a user ID that is blacklisted from submitting appeals.
+type AppealBlacklist struct {
+	UserID     uint64          `bun:",pk"`      // User ID that is blacklisted (Roblox or Discord)
+	Type       enum.AppealType `bun:",pk"`      // Type of appeal (Roblox or Discord)
+	ReviewerID uint64          `bun:",notnull"` // Discord ID of the reviewer who added the blacklist
+	Reason     string          `bun:",notnull"` // Reason for blacklisting
+	CreatedAt  time.Time       `bun:",notnull"` // When the blacklist was added
+	AppealID   int64           `bun:",notnull"` // ID of the appeal that triggered the blacklist
+}

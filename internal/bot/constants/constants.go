@@ -331,6 +331,10 @@ const (
 	DeleteUserDataModalCustomID       = "delete_user_data_modal"
 	DeleteUserDataReasonInputCustomID = "delete_user_data_reason_input"
 
+	BlacklistUserButtonCustomID      = "blacklist_user" + ModalOpenSuffix
+	BlacklistUserModalCustomID       = "blacklist_user_modal"
+	BlacklistUserReasonInputCustomID = "blacklist_user_reason_input"
+
 	AppealsPerPage              = 5
 	AppealMessagesPerPage       = 5
 	AppealSelectID              = "appeal_select"

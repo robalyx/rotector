@@ -68,6 +68,8 @@ const (
 	ActivityTypeAppealReopened
 	// ActivityTypeUserDataDeleted tracks when user data is deleted.
 	ActivityTypeUserDataDeleted
+	// ActivityTypeUserBlacklisted tracks when a user is blacklisted from submitting appeals.
+	ActivityTypeUserBlacklisted
 
 	// ActivityTypeDiscordUserBanned tracks when a Discord user is banned.
 	ActivityTypeDiscordUserBanned

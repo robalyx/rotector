@@ -326,6 +326,36 @@ func (r *AppealModel) GetRejectedAppealsCount(ctx context.Context, userID uint64
 	return count, nil
 }
 
+// IsUserBlacklisted checks if a user ID is blacklisted from submitting appeals of a specific type.
+func (r *AppealModel) IsUserBlacklisted(ctx context.Context, userID uint64, appealType enum.AppealType) (bool, error) {
+	exists, err := r.db.NewSelect().
+		Model((*types.AppealBlacklist)(nil)).
+		Where("user_id = ?", userID).
+		Where("type = ?", appealType).
+		Exists(ctx)
+	if err != nil {
+		return false, fmt.Errorf("failed to check appeal blacklist: %w (userID=%d, type=%s)", err, userID, appealType)
+	}
+	return exists, nil
+}
+
+// BlacklistUser adds a user ID to the appeal blacklist.
+func (r *AppealModel) BlacklistUser(ctx context.Context, blacklist *types.AppealBlacklist) error {
+	_, err := r.db.NewInsert().
+		Model(blacklist).
+		Exec(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to blacklist user: %w (userID=%d, type=%s)", err, blacklist.UserID, blacklist.Type)
+	}
+
+	r.logger.Debug("Added user to appeal blacklist",
+		zap.Uint64("userID", blacklist.UserID),
+		zap.String("type", blacklist.Type.String()),
+		zap.Uint64("reviewerID", blacklist.ReviewerID),
+		zap.Int64("appealID", blacklist.AppealID))
+	return nil
+}
+
 // GetAppealMessages gets the messages for an appeal.
 func (r *AppealModel) GetAppealMessages(ctx context.Context, appealID int64) ([]*types.AppealMessage, error) {
 	var messages []*types.AppealMessage

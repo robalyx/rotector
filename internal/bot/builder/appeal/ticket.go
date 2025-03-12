@@ -100,6 +100,9 @@ func (b *TicketBuilder) Build() *discord.MessageUpdateBuilder {
 				discord.NewStringSelectMenuOption("Delete Data & Opt-Out", constants.DeleteUserDataButtonCustomID).
 					WithEmoji(discord.ComponentEmoji{Name: "🗑️"}).
 					WithDescription("Delete user data without clearing user"),
+				discord.NewStringSelectMenuOption("Blacklist User", constants.BlacklistUserButtonCustomID).
+					WithEmoji(discord.ComponentEmoji{Name: "⛔"}).
+					WithDescription("Reject this appeal and blacklist user from creating future appeals"),
 			)
 		} else {
 			// Add close option for regular users
