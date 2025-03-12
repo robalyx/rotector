@@ -50,6 +50,7 @@ type Builder struct {
 	isGuildOwner        bool
 	isReviewer          bool
 	isAdmin             bool
+	showMaintenance     bool
 	titleCaser          cases.Caser
 }
 
@@ -58,6 +59,8 @@ func NewBuilder(s *session.Session, redisClient rueidis.Client) *Builder {
 	userStatsBuffer, groupStatsBuffer := getChartBuffers(redisClient)
 	botSettings := s.BotSettings()
 	userID := session.UserID.Get(s)
+	announcementType := session.BotAnnouncementType.Get(s)
+	isAdmin := botSettings.IsAdmin(userID)
 	return &Builder{
 		userID:              userID,
 		userCounts:          session.StatsUserCounts.Get(s),
@@ -66,12 +69,13 @@ func NewBuilder(s *session.Session, redisClient rueidis.Client) *Builder {
 		groupStatsBuffer:    groupStatsBuffer,
 		activeUsers:         session.StatsActiveUsers.Get(s),
 		voteStats:           session.StatsVotes.Get(s),
-		announcementType:    session.BotAnnouncementType.Get(s),
+		announcementType:    announcementType,
 		announcementMessage: session.BotAnnouncementMessage.Get(s),
 		welcomeMessage:      session.BotWelcomeMessage.Get(s),
 		isGuildOwner:        session.IsGuildOwner.Get(s),
 		isReviewer:          botSettings.IsReviewer(userID),
-		isAdmin:             botSettings.IsAdmin(userID),
+		isAdmin:             isAdmin,
+		showMaintenance:     announcementType == enum.AnnouncementTypeMaintenance && !isAdmin,
 		titleCaser:          cases.Title(language.English),
 	}
 }
@@ -113,7 +117,7 @@ func (b *Builder) Build() *discord.MessageUpdateBuilder {
 	var embeds []discord.Embed
 
 	// Show all embeds if not in maintenance mode or if user is admin
-	if b.announcementType != enum.AnnouncementTypeMaintenance || b.isAdmin {
+	if !b.showMaintenance {
 		embeds = []discord.Embed{
 			b.buildWelcomeEmbed(),
 			b.buildVoteStatsEmbed(),
@@ -136,10 +140,10 @@ func (b *Builder) Build() *discord.MessageUpdateBuilder {
 		AddContainerComponents(b.buildComponents()...)
 
 	// Attach both chart files if available
-	if b.userStatsBuffer != nil {
+	if b.userStatsBuffer != nil && !b.showMaintenance {
 		builder.AddFile("user_stats_chart.png", "image/png", b.userStatsBuffer)
 	}
-	if b.groupStatsBuffer != nil {
+	if b.groupStatsBuffer != nil && !b.showMaintenance {
 		builder.AddFile("group_stats_chart.png", "image/png", b.groupStatsBuffer)
 	}
 
@@ -222,7 +226,7 @@ func (b *Builder) buildComponents() []discord.ContainerComponent {
 	}
 
 	// Add components based on maintenance mode and admin status
-	if b.announcementType != enum.AnnouncementTypeMaintenance || b.isAdmin {
+	if !b.showMaintenance {
 		// Show all components for admins or when not in maintenance
 		components = append(components,
 			discord.NewActionRow(
