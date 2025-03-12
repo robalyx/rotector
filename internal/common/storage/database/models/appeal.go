@@ -184,14 +184,14 @@ func (r *AppealModel) GetAppealByID(ctx context.Context, appealID int64) (*types
 	return &fullAppeal, nil
 }
 
-// HasPreviousRejection checks if a user ID has any rejected appeals within the last 7 days.
+// HasPreviousRejection checks if a user ID has any rejected appeals within the last 3 days.
 func (r *AppealModel) HasPreviousRejection(ctx context.Context, userID uint64, appealType enum.AppealType) (bool, error) {
 	exists, err := r.db.NewSelect().
 		Model((*types.Appeal)(nil)).
 		Where("user_id = ?", userID).
 		Where("status = ?", enum.AppealStatusRejected).
 		Where("type = ?", appealType).
-		Where("claimed_at > ?", time.Now().AddDate(0, 0, -7)).
+		Where("claimed_at > ?", time.Now().AddDate(0, 0, -3)).
 		Exists(ctx)
 	if err != nil {
 		return false, fmt.Errorf("failed to check previous rejections: %w (userID=%d)", err, userID)
@@ -311,6 +311,19 @@ func (r *AppealModel) GetAppealsByRequester(
 	// Process results to get cursors for pagination
 	firstCursor, nextCursor := processAppealResults(results, limit)
 	return results, firstCursor, nextCursor, nil
+}
+
+// GetRejectedAppealsCount returns the total number of rejected appeals for a user ID.
+func (r *AppealModel) GetRejectedAppealsCount(ctx context.Context, userID uint64) (int, error) {
+	count, err := r.db.NewSelect().
+		Model((*types.Appeal)(nil)).
+		Where("user_id = ?", userID).
+		Where("status = ?", enum.AppealStatusRejected).
+		Count(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("failed to count rejected appeals: %w (userID=%d)", err, userID)
+	}
+	return count, nil
 }
 
 // GetAppealMessages gets the messages for an appeal.

@@ -159,6 +159,7 @@ func main() {
 		{Name: "AppealNextCursor", Type: "*types.AppealTimeline", Doc: "AppealNextCursor stores the next cursor position", Persist: true},
 		{Name: "AppealPrevCursors", Type: "[]*types.AppealTimeline", Doc: "AppealPrevCursors stores previous cursor positions", Persist: true},
 		{Name: "AppealType", Type: "enum.AppealType", Doc: "AppealType stores the type of appeal being created", Persist: true},
+		{Name: "AppealRejectedCount", Type: "int", Doc: "AppealRejectedCount stores the total number of rejected appeals for the user", Persist: true},
 
 		// Verify related keys
 		{Name: "VerifyUserID", Type: "uint64", Doc: "VerifyUserID stores the user ID being verified", Persist: true},

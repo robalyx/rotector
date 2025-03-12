@@ -182,6 +182,8 @@ var (
 	AppealPrevCursors = NewKey[[]*types.AppealTimeline]("AppealPrevCursors", true)
 	// AppealType stores the type of appeal being created
 	AppealType = NewKey[enum.AppealType]("AppealType", true)
+	// AppealRejectedCount stores the total number of rejected appeals for the user
+	AppealRejectedCount = NewKey[int]("AppealRejectedCount", true)
 	// VerifyUserID stores the user ID being verified
 	VerifyUserID = NewKey[uint64]("VerifyUserID", true)
 	// VerifyReason stores the verification reason

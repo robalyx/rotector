@@ -69,6 +69,13 @@ func (m *TicketMenu) Show(event interfaces.CommonEvent, s *session.Session, r *p
 		return
 	}
 
+	// Get rejected appeals count for this user
+	rejectedCount, err := m.layout.db.Models().Appeals().GetRejectedAppealsCount(context.Background(), appeal.UserID)
+	if err != nil {
+		m.layout.logger.Error("Failed to get rejected appeals count", zap.Error(err))
+	}
+	session.AppealRejectedCount.Set(s, rejectedCount)
+
 	// Calculate total pages
 	totalPages := max((len(messages)-1)/constants.AppealMessagesPerPage, 0)
 

@@ -14,26 +14,28 @@ import (
 
 // TicketBuilder creates the visual layout for an individual appeal ticket.
 type TicketBuilder struct {
-	appeal       *types.FullAppeal
-	messages     []*types.AppealMessage
-	page         int
-	totalPages   int
-	userID       uint64
-	isReviewer   bool
-	streamerMode bool
+	appeal        *types.FullAppeal
+	messages      []*types.AppealMessage
+	rejectedCount int
+	page          int
+	totalPages    int
+	userID        uint64
+	isReviewer    bool
+	streamerMode  bool
 }
 
 // NewTicketBuilder creates a new ticket builder.
 func NewTicketBuilder(s *session.Session) *TicketBuilder {
 	userID := session.UserID.Get(s)
 	return &TicketBuilder{
-		appeal:       session.AppealSelected.Get(s),
-		messages:     session.AppealMessages.Get(s),
-		page:         session.PaginationPage.Get(s),
-		totalPages:   session.PaginationTotalPages.Get(s),
-		userID:       userID,
-		isReviewer:   s.BotSettings().IsReviewer(userID),
-		streamerMode: session.UserStreamerMode.Get(s),
+		appeal:        session.AppealSelected.Get(s),
+		messages:      session.AppealMessages.Get(s),
+		rejectedCount: session.AppealRejectedCount.Get(s),
+		page:          session.PaginationPage.Get(s),
+		totalPages:    session.PaginationTotalPages.Get(s),
+		userID:        userID,
+		isReviewer:    s.BotSettings().IsReviewer(userID),
+		streamerMode:  session.UserStreamerMode.Get(s),
 	}
 }
 
@@ -177,6 +179,11 @@ func (b *TicketBuilder) buildHeaderEmbed() *discord.EmbedBuilder {
 		AddField("Submitted", submitted, true).
 		AddField("Last Viewed", lastViewed, true).
 		AddField("Last Activity", lastActivity, true)
+
+	// Add rejected appeals count if available
+	if b.rejectedCount > 0 {
+		embed.AddField("Rejected Appeals", fmt.Sprintf("`%d`", b.rejectedCount), true)
+	}
 
 	if b.appeal.ClaimedBy != 0 {
 		// Add claimed information

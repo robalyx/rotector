@@ -368,7 +368,7 @@ func (m *OverviewMenu) handleRobloxAppealSubmit(
 		return
 	}
 	if hasRejection {
-		r.Cancel(event, s, "This user ID has a rejected appeal recently. Please wait at least 7 days.")
+		r.Cancel(event, s, "This user ID has a rejected appeal recently. Please wait at least 3 days.")
 		return
 	}
 
@@ -444,7 +444,7 @@ func (m *OverviewMenu) handleDiscordAppealSubmit(
 		return
 	}
 	if hasRejection {
-		r.Cancel(event, s, "You have a rejected appeal recently. Please wait at least 7 days.")
+		r.Cancel(event, s, "You have a rejected appeal recently. Please wait at least 3 days.")
 		return
 	}
 

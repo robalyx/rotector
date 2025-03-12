@@ -57,6 +57,8 @@ func init() { //nolint:funlen
 			ON appeals (requester_id, type) WHERE status = 0;
 			CREATE INDEX IF NOT EXISTS idx_appeals_user_rejected_type
 			ON appeals (user_id, type, claimed_at DESC) WHERE status = 2;
+			CREATE INDEX IF NOT EXISTS idx_appeals_user_rejected_count
+			ON appeals (user_id, status) WHERE status = 2;
 			CREATE INDEX IF NOT EXISTS idx_appeals_claimed_by
 			ON appeals (claimed_by) WHERE claimed_by > 0;
 			CREATE INDEX IF NOT EXISTS idx_appeals_timestamp
@@ -312,6 +314,7 @@ func init() { //nolint:funlen
 			DROP INDEX IF EXISTS idx_appeals_user_pending_type;
 			DROP INDEX IF EXISTS idx_appeals_requester_pending_type;
 			DROP INDEX IF EXISTS idx_appeals_user_rejected_type;
+			DROP INDEX IF EXISTS idx_appeals_user_rejected_count;
 			DROP INDEX IF EXISTS idx_appeals_claimed_by;
 			DROP INDEX IF EXISTS idx_appeals_timestamp;
 			DROP INDEX IF EXISTS idx_appeals_status_timestamp;
