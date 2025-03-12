@@ -14,6 +14,30 @@ const (
 	AppealSortByClaimed
 )
 
+// AppealType represents the type of user being appealed.
+//
+//go:generate go tool enumer -type=AppealType -trimprefix=AppealType
+type AppealType int
+
+const (
+	// AppealTypeRoblox indicates a Roblox user ID appeal.
+	AppealTypeRoblox AppealType = iota
+	// AppealTypeDiscord indicates a Discord user ID appeal.
+	AppealTypeDiscord
+)
+
+// Emoji returns the appropriate emoji for an appeal type.
+func (a AppealType) Emoji() string {
+	switch a {
+	case AppealTypeRoblox:
+		return "🎮"
+	case AppealTypeDiscord:
+		return "💬"
+	default:
+		return "❔"
+	}
+}
+
 // AppealStatus represents the status of an appeal.
 //
 //go:generate go tool enumer -type=AppealStatus -trimprefix=AppealStatus
@@ -24,6 +48,20 @@ const (
 	AppealStatusAccepted
 	AppealStatusRejected
 )
+
+// Emoji returns the appropriate emoji for an appeal status.
+func (a AppealStatus) Emoji() string {
+	switch a {
+	case AppealStatusPending:
+		return "⏳"
+	case AppealStatusAccepted:
+		return "✅"
+	case AppealStatusRejected:
+		return "❌"
+	default:
+		return "❔"
+	}
+}
 
 // MessageRole represents the role of the message sender.
 //

@@ -120,14 +120,16 @@ func main() {
 		{Name: "DiscordUserMessageNextCursor", Type: "*types.MessageCursor", Doc: "DiscordUserMessageNextCursor stores the next message cursor", Persist: true},
 		{Name: "DiscordUserMessagePrevCursors", Type: "[]*types.MessageCursor", Doc: "DiscordUserMessagePrevCursors stores previous message cursors", Persist: true},
 		{Name: "DiscordUserMessageGuildID", Type: "uint64", Doc: "DiscordUserMessageGuildID stores the currently selected guild ID for messages", Persist: true},
+		{Name: "DiscordUserDataRedacted", Type: "bool", Doc: "DiscordUserDataRedacted indicates if the user has requested data deletion", Persist: true},
+		{Name: "DiscordUserMessageGuilds", Type: "map[uint64]bool", Doc: "DiscordUserMessageGuilds stores a map of guild IDs where the user has inappropriate messages", Persist: true},
 
 		// Chat related keys
 		{Name: "ChatHistory", Type: "ai.ChatHistory", Doc: "ChatHistory stores the conversation history", Persist: true},
 		{Name: "ChatContext", Type: "string", Doc: "ChatContext stores chat context information", Persist: true},
 
 		// Log related keys
-		{Name: "LogActivities", Type: "[]*types.ActivityLog", Doc: "LogActivities stores activity logs", Persist: false},
-		{Name: "LogCursor", Type: "*types.LogCursor", Doc: "LogCursor stores the current log cursor", Persist: false},
+		{Name: "LogActivities", Type: "[]*types.ActivityLog", Doc: "LogActivities stores activity logs", Persist: true},
+		{Name: "LogCursor", Type: "*types.LogCursor", Doc: "LogCursor stores the current log cursor", Persist: true},
 		{Name: "LogNextCursor", Type: "*types.LogCursor", Doc: "LogNextCursor stores the next log cursor", Persist: true},
 		{Name: "LogPrevCursors", Type: "[]*types.LogCursor", Doc: "LogPrevCursors stores previous log cursors", Persist: true},
 		{Name: "LogFilterGuildID", Type: "uint64", Doc: "LogFilterGuildID stores guild ID filter", Persist: true},
@@ -156,6 +158,7 @@ func main() {
 		{Name: "AppealCursor", Type: "*types.AppealTimeline", Doc: "AppealCursor stores the current cursor position", Persist: true},
 		{Name: "AppealNextCursor", Type: "*types.AppealTimeline", Doc: "AppealNextCursor stores the next cursor position", Persist: true},
 		{Name: "AppealPrevCursors", Type: "[]*types.AppealTimeline", Doc: "AppealPrevCursors stores previous cursor positions", Persist: true},
+		{Name: "AppealType", Type: "enum.AppealType", Doc: "AppealType stores the type of appeal being created", Persist: true},
 
 		// Verify related keys
 		{Name: "VerifyUserID", Type: "uint64", Doc: "VerifyUserID stores the user ID being verified", Persist: true},

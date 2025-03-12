@@ -32,6 +32,20 @@ func (h *Handler) addMessageToQueue(message *discord.Message) {
 		return
 	}
 
+	// Check if user's data is redacted
+	isRedacted, err := h.db.Models().Sync().IsUserDataRedacted(context.Background(), userID)
+	if err != nil {
+		h.logger.Error("Failed to check user redaction status",
+			zap.Uint64("user_id", userID),
+			zap.Error(err))
+		return
+	}
+	if isRedacted {
+		h.logger.Debug("Skipping message from redacted user",
+			zap.Uint64("user_id", userID))
+		return
+	}
+
 	h.messageMu.Lock()
 	defer h.messageMu.Unlock()
 

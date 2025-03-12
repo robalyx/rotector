@@ -92,16 +92,9 @@ func (b *OverviewBuilder) buildListEmbed() *discord.EmbedBuilder {
 
 // formatAppealField formats a single appeal entry for the embed.
 func (b *OverviewBuilder) formatAppealField(appeal *types.FullAppeal) (string, string) {
-	// Format status with emoji
-	var statusEmoji string
-	switch appeal.Status {
-	case enum.AppealStatusPending:
-		statusEmoji = "⏳"
-	case enum.AppealStatusAccepted:
-		statusEmoji = "✅"
-	case enum.AppealStatusRejected:
-		statusEmoji = "❌"
-	}
+	// Get status and type emojis
+	statusEmoji := appeal.Status.Emoji()
+	typeEmoji := appeal.Type.Emoji()
 
 	// Format claimed status
 	claimedInfo := ""
@@ -125,15 +118,24 @@ func (b *OverviewBuilder) formatAppealField(appeal *types.FullAppeal) (string, s
 		lastActivity = fmt.Sprintf("<t:%d:R>", appeal.LastActivity.Unix())
 	}
 
-	fieldName := fmt.Sprintf("%s Appeal `#%d`", statusEmoji, appeal.ID)
+	// Format user ID based on appeal type
+	var userInfo string
+	if appeal.Type == enum.AppealTypeRoblox {
+		userInfo = fmt.Sprintf("[%s](https://www.roblox.com/users/%d/profile)",
+			utils.CensorString(strconv.FormatUint(appeal.UserID, 10), b.streamerMode),
+			appeal.UserID)
+	} else {
+		userInfo = fmt.Sprintf("<@%d>", appeal.UserID)
+	}
+
+	fieldName := fmt.Sprintf("%s %s Appeal `#%d`", statusEmoji, typeEmoji, appeal.ID)
 	fieldValue := fmt.Sprintf(
-		"User: [%s](https://www.roblox.com/users/%d/profile)\n"+
+		"User: %s\n"+
 			"Requester: <@%d>%s\n"+
 			"Submitted: %s\n"+
 			"Last Viewed: %s\n"+
 			"Last Activity: %s",
-		utils.CensorString(strconv.FormatUint(appeal.UserID, 10), b.streamerMode),
-		appeal.UserID,
+		userInfo,
 		appeal.RequesterID,
 		claimedInfo,
 		submitted,
@@ -147,33 +149,25 @@ func (b *OverviewBuilder) formatAppealField(appeal *types.FullAppeal) (string, s
 // buildComponents creates all the interactive components.
 func (b *OverviewBuilder) buildComponents() []discord.ContainerComponent {
 	var components []discord.ContainerComponent
+	options := make([]discord.StringSelectMenuOption, 0, len(b.appeals)+1)
+
+	// Add search option for reviewers only
+	if b.isReviewer {
+		options = append(options, discord.NewStringSelectMenuOption(
+			"🔍 Search by ID", constants.AppealSearchCustomID,
+		).WithDescription("Look up a specific appeal by ID"))
+	}
 
 	// Add appeal selector
 	if len(b.appeals) > 0 {
-		options := make([]discord.StringSelectMenuOption, 0, len(b.appeals)+1)
-
-		// Add search option for reviewers only
-		if b.isReviewer {
-			options = append(options, discord.NewStringSelectMenuOption(
-				"🔍 Search by ID", constants.AppealSearchCustomID,
-			).WithDescription("Look up a specific appeal by ID"))
-		}
-
 		for _, appeal := range b.appeals {
-			// Format status emoji
-			var statusEmoji string
-			switch appeal.Status {
-			case enum.AppealStatusPending:
-				statusEmoji = "⏳"
-			case enum.AppealStatusAccepted:
-				statusEmoji = "✅"
-			case enum.AppealStatusRejected:
-				statusEmoji = "❌"
-			}
+			// Get status and type emojis
+			statusEmoji := appeal.Status.Emoji()
+			typeEmoji := appeal.Type.Emoji()
 
 			// Create option for each appeal
 			option := discord.NewStringSelectMenuOption(
-				fmt.Sprintf("%s Appeal #%d", statusEmoji, appeal.ID),
+				fmt.Sprintf("%s %s Appeal #%d", statusEmoji, typeEmoji, appeal.ID),
 				strconv.FormatInt(appeal.ID, 10),
 			).WithDescription(
 				"View appeal for User ID: " +
@@ -182,7 +176,9 @@ func (b *OverviewBuilder) buildComponents() []discord.ContainerComponent {
 
 			options = append(options, option)
 		}
+	}
 
+	if len(options) > 0 {
 		components = append(components, discord.NewActionRow(
 			discord.NewStringSelectMenu(constants.AppealSelectID, "Select Appeal", options...),
 		))
@@ -226,10 +222,18 @@ func (b *OverviewBuilder) buildComponents() []discord.ContainerComponent {
 	actionButtons = append(actionButtons,
 		discord.NewSecondaryButton("🔄 Refresh", constants.RefreshButtonCustomID))
 
-	// Add new appeal button only for non-reviewers
+	// Add new appeal dropdown only for non-reviewers
 	if !b.isReviewer {
-		actionButtons = append(actionButtons,
-			discord.NewPrimaryButton("New Appeal", constants.AppealCreateButtonCustomID))
+		components = append(components, discord.NewActionRow(
+			discord.NewStringSelectMenu(constants.AppealCreateSelectID, "Create New Appeal",
+				discord.NewStringSelectMenuOption("Appeal Roblox User", constants.AppealCreateRobloxButtonCustomID).
+					WithDescription("Submit an appeal for a Roblox user").
+					WithEmoji(discord.ComponentEmoji{Name: "🎮"}),
+				discord.NewStringSelectMenuOption("Appeal Discord User", constants.AppealCreateDiscordButtonCustomID).
+					WithDescription("Submit an appeal for a Discord user").
+					WithEmoji(discord.ComponentEmoji{Name: "💬"}),
+			),
+		))
 	}
 
 	components = append(components, discord.NewActionRow(actionButtons...))

@@ -2,10 +2,13 @@ package guild
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"strconv"
 
 	"github.com/disgoorg/disgo/discord"
 	"github.com/disgoorg/disgo/events"
+	"github.com/disgoorg/snowflake/v2"
 	builder "github.com/robalyx/rotector/internal/bot/builder/guild"
 	"github.com/robalyx/rotector/internal/bot/constants"
 	"github.com/robalyx/rotector/internal/bot/core/pagination"
@@ -30,6 +33,7 @@ func NewLookupMenu(layout *Layout) *LookupMenu {
 			return builder.NewLookupBuilder(s).Build()
 		},
 		ShowHandlerFunc:   m.Show,
+		ResetHandlerFunc:  m.Reset,
 		ButtonHandlerFunc: m.handleButton,
 		SelectHandlerFunc: m.handleSelectMenu,
 	}
@@ -40,6 +44,23 @@ func NewLookupMenu(layout *Layout) *LookupMenu {
 func (m *LookupMenu) Show(event interfaces.CommonEvent, s *session.Session, r *pagination.Respond) {
 	// Get Discord user ID from session
 	discordUserID := session.DiscordUserLookupID.Get(s)
+
+	// Check if user has requested data deletion
+	isRedacted, err := m.layout.db.Models().Sync().IsUserDataRedacted(context.Background(), discordUserID)
+	if err != nil {
+		m.layout.logger.Error("Failed to check data redaction status",
+			zap.Error(err),
+			zap.Uint64("discord_user_id", discordUserID))
+		isRedacted = false // Default to false if there's an error
+	}
+	session.DiscordUserDataRedacted.Set(s, isRedacted)
+
+	// Attempt to get Discord username if possible
+	var username string
+	if user, err := event.Client().Rest().GetUser(snowflake.ID(discordUserID)); err == nil {
+		username = user.Username
+		session.DiscordUserLookupName.Set(s, username)
+	}
 
 	// Get total guild count
 	totalGuilds, err := m.layout.db.Models().Sync().GetDiscordUserGuildCount(
@@ -52,9 +73,26 @@ func (m *LookupMenu) Show(event interfaces.CommonEvent, s *session.Session, r *p
 			zap.Uint64("discord_user_id", discordUserID))
 		totalGuilds = 0 // Default to 0 if there's an error
 	}
-
-	// Store total guild count in session
 	session.DiscordUserTotalGuilds.Set(s, totalGuilds)
+
+	// Get guilds where the user has inappropriate messages
+	messageGuildIDs, err := m.layout.db.Models().Message().GetUserMessageGuilds(
+		context.Background(),
+		discordUserID,
+	)
+	if err != nil {
+		m.layout.logger.Error("Failed to get user message guilds",
+			zap.Error(err),
+			zap.Uint64("discord_user_id", discordUserID))
+		messageGuildIDs = []uint64{} // Default to empty if there's an error
+	}
+
+	// Convert slice to map for O(1) lookups
+	messageGuilds := make(map[uint64]bool)
+	for _, guildID := range messageGuildIDs {
+		messageGuilds[guildID] = true
+	}
+	session.DiscordUserMessageGuilds.Set(s, messageGuilds)
 
 	// Get cursor from session if it exists
 	cursor := session.GuildLookupCursor.Get(s)
@@ -99,15 +137,17 @@ func (m *LookupMenu) Show(event interfaces.CommonEvent, s *session.Session, r *p
 			}
 		}
 
-		// Get message summary for the user
-		messageSummary, err = m.layout.db.Models().Message().GetUserInappropriateMessageSummary(
-			context.Background(),
-			discordUserID,
-		)
-		if err != nil {
-			m.layout.logger.Error("Failed to get message summary",
-				zap.Error(err),
-				zap.Uint64("discord_user_id", discordUserID))
+		// Only get message summary if data isn't redacted
+		if !isRedacted {
+			messageSummary, err = m.layout.db.Models().Message().GetUserInappropriateMessageSummary(
+				context.Background(),
+				discordUserID,
+			)
+			if err != nil && !errors.Is(err, sql.ErrNoRows) {
+				m.layout.logger.Error("Failed to get message summary",
+					zap.Error(err),
+					zap.Uint64("discord_user_id", discordUserID))
+			}
 		}
 	}
 
@@ -124,6 +164,15 @@ func (m *LookupMenu) Show(event interfaces.CommonEvent, s *session.Session, r *p
 	session.PaginationHasPrevPage.Set(s, len(prevCursors) > 0)
 }
 
+// Reset resets the lookup menu.
+func (m *LookupMenu) Reset(s *session.Session) {
+	session.GuildLookupCursor.Delete(s)
+	session.GuildLookupNextCursor.Delete(s)
+	session.GuildLookupPrevCursors.Delete(s)
+	session.PaginationHasNextPage.Delete(s)
+	session.PaginationHasPrevPage.Delete(s)
+}
+
 // handleButton processes button interactions.
 func (m *LookupMenu) handleButton(
 	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, customID string,
@@ -132,12 +181,7 @@ func (m *LookupMenu) handleButton(
 	case constants.BackButtonCustomID:
 		r.NavigateBack(event, s, "")
 	case constants.RefreshButtonCustomID:
-		// Reset cursors and reload
-		session.GuildLookupCursor.Delete(s)
-		session.GuildLookupNextCursor.Delete(s)
-		session.GuildLookupPrevCursors.Delete(s)
-		session.PaginationHasNextPage.Delete(s)
-		session.PaginationHasPrevPage.Delete(s)
+		m.Reset(s)
 		r.Reload(event, s, "")
 	case string(session.ViewerFirstPage),
 		string(session.ViewerPrevPage),
@@ -161,13 +205,6 @@ func (m *LookupMenu) handleSelectMenu(
 		r.Error(event, "Failed to parse guild ID.")
 		return
 	}
-
-	// Reset message cursors
-	session.DiscordUserMessageCursor.Delete(s)
-	session.DiscordUserMessageNextCursor.Delete(s)
-	session.DiscordUserMessagePrevCursors.Delete(s)
-	session.PaginationHasNextPage.Delete(s)
-	session.PaginationHasPrevPage.Delete(s)
 
 	// Store selected guild ID
 	session.DiscordUserMessageGuildID.Set(s, guildID)

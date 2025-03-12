@@ -8,7 +8,6 @@ import (
 
 	"github.com/disgoorg/disgo/discord"
 	"github.com/disgoorg/disgo/events"
-	"github.com/disgoorg/snowflake/v2"
 	builder "github.com/robalyx/rotector/internal/bot/builder/dashboard"
 	"github.com/robalyx/rotector/internal/bot/constants"
 	"github.com/robalyx/rotector/internal/bot/core/pagination"
@@ -324,32 +323,18 @@ func (m *Menu) handleLookupDiscordUserModalSubmit(
 	// Store the Discord user ID in session
 	session.DiscordUserLookupID.Set(s, discordUserID)
 
-	// Attempt to get Discord username if possible
-	var username string
-	if user, err := event.Client().Rest().GetUser(snowflake.ID(discordUserID)); err == nil {
-		username = user.Username
-		session.DiscordUserLookupName.Set(s, username)
-	}
-
-	// Reset cursors
-	session.GuildLookupCursor.Delete(s)
-	session.GuildLookupNextCursor.Delete(s)
-	session.GuildLookupPrevCursors.Delete(s)
-	session.PaginationHasNextPage.Delete(s)
-	session.PaginationHasPrevPage.Delete(s)
-
 	// Show the guild lookup page
 	r.Show(event, s, constants.GuildLookupPageName, "")
 
 	// Log the lookup action
 	m.layout.db.Models().Activities().Log(context.Background(), &types.ActivityLog{
-		ActivityTarget:    types.ActivityTarget{},
+		ActivityTarget: types.ActivityTarget{
+			UserID: discordUserID,
+		},
 		ReviewerID:        uint64(event.User().ID),
 		ActivityType:      enum.ActivityTypeUserLookupDiscord,
 		ActivityTimestamp: time.Now(),
-		Details: map[string]any{
-			"discord_user_id": discordUserID,
-		},
+		Details:           map[string]any{},
 	})
 }
 

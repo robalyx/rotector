@@ -2,8 +2,10 @@ package appeal
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"strconv"
+	"time"
 
 	"github.com/disgoorg/disgo/discord"
 	"github.com/disgoorg/disgo/events"
@@ -170,6 +172,15 @@ func (m *OverviewMenu) handleSelectMenu(
 		// Show the selected appeal
 		session.AppealSelected.Set(s, appeal)
 		r.Show(event, s, constants.AppealTicketPageName, "")
+	case constants.AppealCreateSelectID:
+		switch option {
+		case constants.AppealCreateRobloxButtonCustomID:
+			session.AppealType.Set(s, enum.AppealTypeRoblox)
+			m.handleCreateRobloxAppeal(event, s, r)
+		case constants.AppealCreateDiscordButtonCustomID:
+			session.AppealType.Set(s, enum.AppealTypeDiscord)
+			m.handleCreateDiscordAppeal(event, s, r)
+		}
 	}
 }
 
@@ -183,37 +194,12 @@ func (m *OverviewMenu) handleButton(
 	case constants.RefreshButtonCustomID:
 		ResetAppealData(s)
 		r.Reload(event, s, "Appeals refreshed.")
-	case constants.AppealCreateButtonCustomID:
-		m.handleCreateAppeal(event, s, r)
 	case string(session.ViewerFirstPage),
 		string(session.ViewerPrevPage),
 		string(session.ViewerNextPage),
 		string(session.ViewerLastPage):
 		m.handlePagination(event, s, r, session.ViewerAction(customID))
 	}
-}
-
-// handleCreateAppeal opens a modal for creating a new appeal.
-func (m *OverviewMenu) handleCreateAppeal(
-	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond,
-) {
-	modal := discord.NewModalCreateBuilder().
-		SetCustomID(constants.AppealModalCustomID).
-		SetTitle("Submit Appeal").
-		AddActionRow(
-			discord.NewTextInput(constants.AppealUserInputCustomID, discord.TextInputStyleShort, "User ID").
-				WithRequired(true).
-				WithPlaceholder("Enter the user ID to appeal..."),
-		).
-		AddActionRow(
-			discord.NewTextInput(constants.AppealReasonInputCustomID, discord.TextInputStyleParagraph, "Appeal Reason").
-				WithRequired(true).
-				WithMinLength(128).
-				WithMaxLength(512).
-				WithPlaceholder("Enter the reason for appealing this user..."),
-		)
-
-	r.Modal(event, s, modal)
 }
 
 // handlePagination processes page navigation.
@@ -261,13 +247,78 @@ func (m *OverviewMenu) handleModal(
 	}
 }
 
+// handleCreateRobloxAppeal opens a modal for creating a new Roblox user appeal.
+func (m *OverviewMenu) handleCreateRobloxAppeal(
+	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond,
+) {
+	modal := discord.NewModalCreateBuilder().
+		SetCustomID(constants.AppealModalCustomID).
+		SetTitle("Submit Roblox User Appeal").
+		AddActionRow(
+			discord.NewTextInput(constants.AppealUserInputCustomID, discord.TextInputStyleShort, "Roblox User ID").
+				WithRequired(true).
+				WithPlaceholder("Enter the Roblox user ID to appeal..."),
+		).
+		AddActionRow(
+			discord.NewTextInput(constants.AppealReasonInputCustomID, discord.TextInputStyleParagraph, "Appeal Reason").
+				WithRequired(true).
+				WithMinLength(128).
+				WithMaxLength(512).
+				WithPlaceholder("Enter the reason for appealing this user..."),
+		)
+
+	r.Modal(event, s, modal)
+}
+
+// handleCreateDiscordAppeal opens a modal for creating a new Discord user appeal.
+func (m *OverviewMenu) handleCreateDiscordAppeal(
+	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond,
+) {
+	modal := discord.NewModalCreateBuilder().
+		SetCustomID(constants.AppealModalCustomID).
+		SetTitle("Submit Discord User Appeal").
+		AddActionRow(
+			discord.NewTextInput(constants.AppealReasonInputCustomID, discord.TextInputStyleParagraph, "Appeal Reason").
+				WithRequired(true).
+				WithMinLength(128).
+				WithMaxLength(512).
+				WithPlaceholder("Enter the reason for appealing your Discord account..."),
+		)
+
+	r.Modal(event, s, modal)
+}
+
 // handleCreateAppealModalSubmit processes the appeal creation form submission.
 func (m *OverviewMenu) handleCreateAppealModalSubmit(
 	event *events.ModalSubmitInteractionCreate, s *session.Session, r *pagination.Respond,
 ) {
-	// Get user ID input
-	userIDStr := event.Data.Text(constants.AppealUserInputCustomID)
+	// Get reason input
+	reason := event.Data.Text(constants.AppealReasonInputCustomID)
 
+	// Check if reason is empty
+	if reason == "" {
+		r.Cancel(event, s, "Appeal reason cannot be empty.")
+		return
+	}
+
+	// Route to appropriate handler based on appeal type
+	appealType := session.AppealType.Get(s)
+	switch appealType {
+	case enum.AppealTypeRoblox:
+		userIDStr := event.Data.Text(constants.AppealUserInputCustomID)
+		m.handleRobloxAppealSubmit(event, s, r, userIDStr, reason)
+	case enum.AppealTypeDiscord:
+		m.handleDiscordAppealSubmit(event, s, r, reason)
+	default:
+		r.Error(event, "Invalid appeal type. Please try again.")
+	}
+}
+
+// handleRobloxAppealSubmit processes a Roblox user ID appeal submission.
+func (m *OverviewMenu) handleRobloxAppealSubmit(
+	event *events.ModalSubmitInteractionCreate, s *session.Session, r *pagination.Respond,
+	userIDStr string, reason string,
+) {
 	// Parse profile URL if provided
 	parsedURL, err := utils.ExtractUserIDFromURL(userIDStr)
 	if err == nil {
@@ -277,12 +328,14 @@ func (m *OverviewMenu) handleCreateAppealModalSubmit(
 	// Parse the user ID
 	userID, err := strconv.ParseUint(userIDStr, 10, 64)
 	if err != nil {
-		r.Cancel(event, s, "Invalid user ID format. Please enter a valid number.")
+		r.Cancel(event, s, "Invalid Roblox user ID format. Please enter a valid number.")
 		return
 	}
 
+	ctx := context.Background()
+
 	// Check if the user ID already has a pending appeal
-	exists, err := m.layout.db.Models().Appeals().HasPendingAppealByUserID(context.Background(), userID)
+	exists, err := m.layout.db.Models().Appeals().HasPendingAppealByUserID(ctx, userID, enum.AppealTypeRoblox)
 	if err != nil {
 		m.layout.logger.Error("Failed to check pending appeals for user", zap.Error(err))
 		r.Error(event, "Failed to check pending appeals. Please try again.")
@@ -294,7 +347,9 @@ func (m *OverviewMenu) handleCreateAppealModalSubmit(
 	}
 
 	// Check if the Discord user already has a pending appeal
-	exists, err = m.layout.db.Models().Appeals().HasPendingAppealByRequester(context.Background(), uint64(event.User().ID))
+	exists, err = m.layout.db.Models().Appeals().HasPendingAppealByRequester(
+		ctx, uint64(event.User().ID), enum.AppealTypeRoblox,
+	)
 	if err != nil {
 		m.layout.logger.Error("Failed to check pending appeals", zap.Error(err))
 		r.Error(event, "Failed to check pending appeals. Please try again.")
@@ -306,19 +361,19 @@ func (m *OverviewMenu) handleCreateAppealModalSubmit(
 	}
 
 	// Check if the user ID has been previously rejected
-	hasRejection, err := m.layout.db.Models().Appeals().HasPreviousRejection(context.Background(), userID)
+	hasRejection, err := m.layout.db.Models().Appeals().HasPreviousRejection(ctx, userID, enum.AppealTypeRoblox)
 	if err != nil {
 		m.layout.logger.Error("Failed to check previous rejections", zap.Error(err))
 		r.Error(event, "Failed to check appeal history. Please try again.")
 		return
 	}
 	if hasRejection {
-		r.Cancel(event, s, "This user ID has a rejected appeal recently. Please wait before submitting a new appeal.")
+		r.Cancel(event, s, "This user ID has a rejected appeal recently. Please wait at least 7 days.")
 		return
 	}
 
 	// Verify user exists in database
-	user, err := m.layout.db.Models().Users().GetUserByID(context.Background(), userIDStr, types.UserFieldAll)
+	user, err := m.layout.db.Models().Users().GetUserByID(ctx, userIDStr, types.UserFieldAll)
 	if err != nil {
 		if errors.Is(err, types.ErrUserNotFound) {
 			r.Cancel(event, s, "Cannot submit appeal - user is not in our database.")
@@ -335,17 +390,97 @@ func (m *OverviewMenu) handleCreateAppealModalSubmit(
 		return
 	}
 
-	// Get and validate the appeal reason
-	reason := event.Data.Text(constants.AppealReasonInputCustomID)
-	if reason == "" {
-		r.Cancel(event, s, "Appeal reason cannot be empty. Please try again.")
-		return
-	}
-
 	// Show verification menu
 	session.VerifyUserID.Set(s, userID)
 	session.VerifyReason.Set(s, reason)
 	r.Show(event, s, constants.AppealVerifyPageName, "")
+}
+
+// handleDiscordAppealSubmit processes a Discord user ID appeal submission.
+func (m *OverviewMenu) handleDiscordAppealSubmit(
+	event *events.ModalSubmitInteractionCreate, s *session.Session, r *pagination.Respond, reason string,
+) {
+	userID := uint64(event.User().ID)
+	ctx := context.Background()
+
+	// Check if user has any flags in the system
+	totalGuilds, err := m.layout.db.Models().Sync().GetDiscordUserGuildCount(ctx, userID)
+	if err != nil {
+		m.layout.logger.Error("Failed to get Discord user guild count", zap.Error(err))
+		r.Error(event, "Failed to verify Discord user status. Please try again.")
+		return
+	}
+
+	messageSummary, err := m.layout.db.Models().Message().GetUserInappropriateMessageSummary(ctx, userID)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		m.layout.logger.Error("Failed to get message summary", zap.Error(err))
+		r.Error(event, "Failed to verify Discord user status. Please try again.")
+		return
+	}
+
+	// Check if user is actually flagged
+	if totalGuilds == 0 && (messageSummary == nil || messageSummary.MessageCount == 0) {
+		r.Cancel(event, s, "Your Discord account is not flagged in our system.")
+		return
+	}
+
+	// Check for existing pending appeals
+	exists, err := m.layout.db.Models().Appeals().HasPendingAppealByUserID(ctx, userID, enum.AppealTypeDiscord)
+	if err != nil {
+		m.layout.logger.Error("Failed to check pending appeals", zap.Error(err))
+		r.Error(event, "Failed to check pending appeals. Please try again.")
+		return
+	}
+	if exists {
+		r.Cancel(event, s, "You already have a pending appeal. Please wait for it to be reviewed.")
+		return
+	}
+
+	// Check for previous rejections
+	hasRejection, err := m.layout.db.Models().Appeals().HasPreviousRejection(ctx, userID, enum.AppealTypeDiscord)
+	if err != nil {
+		m.layout.logger.Error("Failed to check previous rejections", zap.Error(err))
+		r.Error(event, "Failed to check appeal history. Please try again.")
+		return
+	}
+	if hasRejection {
+		r.Cancel(event, s, "You have a rejected appeal recently. Please wait at least 7 days.")
+		return
+	}
+
+	// Create the appeal
+	appeal := &types.Appeal{
+		UserID:      userID,
+		RequesterID: userID, // Same as UserID for Discord appeals
+		Status:      enum.AppealStatusPending,
+		Type:        enum.AppealTypeDiscord,
+		Timestamp:   time.Now(),
+	}
+
+	// Submit appeal
+	if err := m.layout.db.Models().Appeals().CreateAppeal(ctx, appeal, reason); err != nil {
+		m.layout.logger.Error("Failed to create appeal", zap.Error(err))
+		r.Error(event, "Failed to submit appeal. Please try again.")
+		return
+	}
+
+	session.AppealCursor.Delete(s)
+	session.AppealPrevCursors.Delete(s)
+	r.Show(event, s, constants.AppealOverviewPageName, "✅ Appeal submitted successfully!")
+
+	// Log the appeal submission
+	m.layout.db.Models().Activities().Log(ctx, &types.ActivityLog{
+		ActivityTarget: types.ActivityTarget{
+			UserID: userID,
+		},
+		ReviewerID:        userID,
+		ActivityType:      enum.ActivityTypeAppealSubmitted,
+		ActivityTimestamp: time.Now(),
+		Details: map[string]any{
+			"reason": reason,
+			"type":   enum.AppealTypeDiscord.String(),
+		},
+	})
 }
 
 // handleSearchAppealModalSubmit processes the appeal search form submission.

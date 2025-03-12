@@ -2,6 +2,8 @@ package models
 
 import (
 	"context"
+	"fmt"
+	"time"
 
 	"github.com/robalyx/rotector/internal/common/storage/database/types"
 	"github.com/uptrace/bun"
@@ -153,6 +155,20 @@ func (m *MessageModel) GetUserMessagesByCursor(
 	return messages, nextCursor, nil
 }
 
+// GetUserMessageGuilds returns a list of guild IDs where a user has inappropriate messages.
+func (m *MessageModel) GetUserMessageGuilds(ctx context.Context, userID uint64) ([]uint64, error) {
+	var guildIDs []uint64
+	err := m.db.NewSelect().
+		Model((*types.InappropriateMessage)(nil)).
+		ColumnExpr("DISTINCT server_id").
+		Where("user_id = ?", userID).
+		Scan(ctx, &guildIDs)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get user message guilds: %w", err)
+	}
+	return guildIDs, nil
+}
+
 // GetUserInappropriateMessageSummary retrieves the inappropriate message summary for a specific user.
 func (m *MessageModel) GetUserInappropriateMessageSummary(
 	ctx context.Context, userID uint64,
@@ -203,4 +219,56 @@ func (m *MessageModel) GetUniqueInappropriateUserCount(ctx context.Context) (int
 		return 0, err
 	}
 	return count, nil
+}
+
+// DeleteUserMessages deletes all inappropriate messages for a specific user.
+func (m *MessageModel) DeleteUserMessages(ctx context.Context, userID uint64) error {
+	// Delete from inappropriate_messages table
+	_, err := m.db.NewDelete().
+		Model((*types.InappropriateMessage)(nil)).
+		Where("user_id = ?", userID).
+		Exec(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to delete user messages: %w", err)
+	}
+
+	// Delete from inappropriate_user_summaries table
+	_, err = m.db.NewDelete().
+		Model((*types.InappropriateUserSummary)(nil)).
+		Where("user_id = ?", userID).
+		Exec(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to delete user message summary: %w", err)
+	}
+
+	return nil
+}
+
+// RedactUserMessages redacts the content of all inappropriate messages for a specific user.
+func (m *MessageModel) RedactUserMessages(ctx context.Context, userID uint64) error {
+	// Update message content and detected_at in inappropriate_messages table
+	_, err := m.db.NewUpdate().
+		Model((*types.InappropriateMessage)(nil)).
+		Set("content = '[redacted]'").
+		Set("detected_at = ?", time.Time{}).
+		Set("updated_at = ?", time.Now()).
+		Where("user_id = ?", userID).
+		Exec(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to redact user messages: %w", err)
+	}
+
+	// Update user summary
+	_, err = m.db.NewUpdate().
+		Model((*types.InappropriateUserSummary)(nil)).
+		Set("message_count = 0").
+		Set("last_detected = ?", time.Time{}).
+		Set("updated_at = ?", time.Now()).
+		Where("user_id = ?", userID).
+		Exec(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to update user message summary: %w", err)
+	}
+
+	return nil
 }

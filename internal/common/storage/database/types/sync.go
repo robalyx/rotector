@@ -19,6 +19,13 @@ type DiscordServerInfo struct {
 	UpdatedAt time.Time `bun:",notnull" json:"updatedAt"` // Last update time
 }
 
+// DiscordUserRedaction represents a user's data deletion request.
+type DiscordUserRedaction struct {
+	UserID     uint64    `bun:",pk"      json:"userId"`     // Discord user ID
+	RedactedAt time.Time `bun:",notnull" json:"redactedAt"` // When the data was redacted
+	UpdatedAt  time.Time `bun:",notnull" json:"updatedAt"`  // Last update time
+}
+
 // UserGuildInfo represents a guild a user is a member of for tracking purposes.
 type UserGuildInfo struct {
 	ServerID  uint64    `json:"serverId"`  // Discord server ID

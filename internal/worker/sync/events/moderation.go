@@ -12,10 +12,7 @@ import (
 
 // storeInappropriateMessages stores flagged messages in the database and updates user summaries.
 func (h *Handler) storeInappropriateMessages(
-	ctx context.Context,
-	serverID uint64,
-	channelID uint64,
-	flaggedUsers map[uint64]*ai.FlaggedMessageUser,
+	ctx context.Context, serverID uint64, channelID uint64, flaggedUsers map[uint64]*ai.FlaggedMessageUser,
 ) error {
 	// Create a batch of inappropriate messages
 	var messages []*types.InappropriateMessage

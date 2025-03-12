@@ -145,11 +145,14 @@ func (r *AppealModel) RejectAppeal(ctx context.Context, appealID int64, timestam
 }
 
 // HasPendingAppealByRequester checks if a requester already has any pending appeals.
-func (r *AppealModel) HasPendingAppealByRequester(ctx context.Context, requesterID uint64) (bool, error) {
+func (r *AppealModel) HasPendingAppealByRequester(
+	ctx context.Context, requesterID uint64, appealType enum.AppealType,
+) (bool, error) {
 	exists, err := r.db.NewSelect().
 		Model((*types.Appeal)(nil)).
 		Where("requester_id = ?", requesterID).
 		Where("status = ?", enum.AppealStatusPending).
+		Where("type = ?", appealType).
 		Exists(ctx)
 	if err != nil {
 		return false, fmt.Errorf("failed to check pending appeals: %w (requesterID=%d)", err, requesterID)
@@ -182,11 +185,12 @@ func (r *AppealModel) GetAppealByID(ctx context.Context, appealID int64) (*types
 }
 
 // HasPreviousRejection checks if a user ID has any rejected appeals within the last 7 days.
-func (r *AppealModel) HasPreviousRejection(ctx context.Context, userID uint64) (bool, error) {
+func (r *AppealModel) HasPreviousRejection(ctx context.Context, userID uint64, appealType enum.AppealType) (bool, error) {
 	exists, err := r.db.NewSelect().
 		Model((*types.Appeal)(nil)).
 		Where("user_id = ?", userID).
 		Where("status = ?", enum.AppealStatusRejected).
+		Where("type = ?", appealType).
 		Where("claimed_at > ?", time.Now().AddDate(0, 0, -7)).
 		Exists(ctx)
 	if err != nil {
@@ -197,11 +201,14 @@ func (r *AppealModel) HasPreviousRejection(ctx context.Context, userID uint64) (
 }
 
 // HasPendingAppealByUserID checks if a user ID already has any pending appeals.
-func (r *AppealModel) HasPendingAppealByUserID(ctx context.Context, userID uint64) (bool, error) {
+func (r *AppealModel) HasPendingAppealByUserID(
+	ctx context.Context, userID uint64, appealType enum.AppealType,
+) (bool, error) {
 	exists, err := r.db.NewSelect().
 		Model((*types.Appeal)(nil)).
 		Where("user_id = ?", userID).
 		Where("status = ?", enum.AppealStatusPending).
+		Where("type = ?", appealType).
 		Exists(ctx)
 	if err != nil {
 		return false, fmt.Errorf("failed to check pending appeals: %w (userID=%d)", err, userID)

@@ -22,6 +22,11 @@ type Page struct {
 		s *session.Session,
 		r *Respond,
 	)
+
+	// ResetHandlerFunc is called when the page is opened for the first time.
+	ResetHandlerFunc func(
+		s *session.Session,
+	)
 	// CleanupHandlerFunc is called when the page is closed.
 	CleanupHandlerFunc func(
 		s *session.Session,
@@ -184,6 +189,11 @@ func (m *Manager) UpdatePage(s *session.Session, newPage *Page) {
 		// Page not in history, append current page
 		previousPages = append(previousPages, currentPage)
 		session.PreviousPages.Set(s, previousPages)
+
+		// Reset the page if it has a reset handler
+		if newPage.ResetHandlerFunc != nil {
+			newPage.ResetHandlerFunc(s)
+		}
 	}
 
 	session.CurrentPage.Set(s, newPage.Name)

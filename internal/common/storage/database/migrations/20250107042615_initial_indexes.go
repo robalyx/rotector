@@ -51,22 +51,18 @@ func init() { //nolint:funlen
 			ON activity_logs (activity_type, activity_timestamp DESC, sequence DESC);
 
 			-- Appeal indexes
-			CREATE INDEX IF NOT EXISTS idx_appeals_user_id
-			ON appeals (user_id);
-			CREATE INDEX IF NOT EXISTS idx_appeals_requester_id
-			ON appeals (requester_id);
-			CREATE INDEX IF NOT EXISTS idx_appeals_status
-			ON appeals (status);
+			CREATE INDEX IF NOT EXISTS idx_appeals_user_pending_type
+			ON appeals (user_id, type) WHERE status = 0;
+			CREATE INDEX IF NOT EXISTS idx_appeals_requester_pending_type
+			ON appeals (requester_id, type) WHERE status = 0;
+			CREATE INDEX IF NOT EXISTS idx_appeals_user_rejected_type
+			ON appeals (user_id, type, claimed_at DESC) WHERE status = 2;
 			CREATE INDEX IF NOT EXISTS idx_appeals_claimed_by
 			ON appeals (claimed_by) WHERE claimed_by > 0;
 			CREATE INDEX IF NOT EXISTS idx_appeals_timestamp
 			ON appeals (timestamp DESC);
 			CREATE INDEX IF NOT EXISTS idx_appeals_status_timestamp
 			ON appeals (status, timestamp DESC);
-			CREATE INDEX IF NOT EXISTS idx_appeals_rejected_claimed_at
-			ON appeals (claimed_at DESC) WHERE status = 2;
-			CREATE INDEX IF NOT EXISTS idx_appeals_pending_unclaimed
-			ON appeals (id) WHERE status = 0;
 			CREATE INDEX IF NOT EXISTS idx_appeals_id_status
 			ON appeals (id, status);
 
@@ -235,13 +231,22 @@ func init() { //nolint:funlen
 			CREATE INDEX IF NOT EXISTS idx_server_members_updated_at
 			ON discord_server_members (updated_at);
 
+			CREATE INDEX IF NOT EXISTS idx_server_members_user_id
+			ON discord_server_members (user_id);
+
 			-- Inappropriate messages indexes
 			CREATE INDEX IF NOT EXISTS idx_inappropriate_messages_detected 
 			ON inappropriate_messages (server_id, channel_id, detected_at DESC);
 			
 			CREATE INDEX IF NOT EXISTS idx_inappropriate_messages_user_detected
 			ON inappropriate_messages (server_id, channel_id, user_id, detected_at DESC);
-			
+
+			CREATE INDEX IF NOT EXISTS idx_inappropriate_messages_user_id
+			ON inappropriate_messages (user_id);
+
+			CREATE INDEX IF NOT EXISTS idx_inappropriate_messages_user_servers
+			ON inappropriate_messages (user_id, server_id);
+
 			-- Inappropriate user summaries indexes
 			CREATE INDEX IF NOT EXISTS idx_inappropriate_summaries_message_count
 			ON inappropriate_user_summaries (message_count DESC);
@@ -304,14 +309,12 @@ func init() { //nolint:funlen
 			DROP INDEX IF EXISTS idx_activity_logs_type_time;
 
 			-- Appeal indexes
-			DROP INDEX IF EXISTS idx_appeals_user_id;
-			DROP INDEX IF EXISTS idx_appeals_requester_id;
-			DROP INDEX IF EXISTS idx_appeals_status;
+			DROP INDEX IF EXISTS idx_appeals_user_pending_type;
+			DROP INDEX IF EXISTS idx_appeals_requester_pending_type;
+			DROP INDEX IF EXISTS idx_appeals_user_rejected_type;
 			DROP INDEX IF EXISTS idx_appeals_claimed_by;
 			DROP INDEX IF EXISTS idx_appeals_timestamp;
 			DROP INDEX IF EXISTS idx_appeals_status_timestamp;
-			DROP INDEX IF EXISTS idx_appeals_rejected_claimed_at;
-			DROP INDEX IF EXISTS idx_appeals_pending_unclaimed;
 			DROP INDEX IF EXISTS idx_appeals_id_status;
 
 			-- Appeal timeline indexes
@@ -402,10 +405,13 @@ func init() { //nolint:funlen
 			-- Discord server member indexes
 			DROP INDEX IF EXISTS idx_server_members_user_joined;
 			DROP INDEX IF EXISTS idx_server_members_updated_at;
+			DROP INDEX IF EXISTS idx_server_members_user_id;
 
 			-- Inappropriate messages indexes
 			DROP INDEX IF EXISTS idx_inappropriate_messages_detected;
 			DROP INDEX IF EXISTS idx_inappropriate_messages_user_detected;
+			DROP INDEX IF EXISTS idx_inappropriate_messages_user_id;
+			DROP INDEX IF EXISTS idx_inappropriate_messages_user_servers;
 
 			-- Inappropriate user summaries indexes
 			DROP INDEX IF EXISTS idx_inappropriate_summaries_message_count;

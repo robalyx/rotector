@@ -2,6 +2,7 @@ package appeal
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"strconv"
@@ -52,50 +53,16 @@ func (m *TicketMenu) Show(event interfaces.CommonEvent, s *session.Session, r *p
 		return
 	}
 
-	ctx := context.Background()
-
 	// If appeal is pending, check if user's status has changed
 	if appeal.Status == enum.AppealStatusPending {
-		// Get current user status
-		user, err := m.layout.db.Models().Users().GetUserByID(
-			ctx, strconv.FormatUint(appeal.UserID, 10), types.UserFieldAll,
-		)
-		if err != nil {
-			if !errors.Is(err, types.ErrUserNotFound) {
-				m.layout.logger.Error("Failed to get user status", zap.Error(err))
-				r.Error(event, "Failed to verify user status. Please try again.")
-				return
-			}
-
-			// User no longer exists, auto-reject the appeal
-			if err := m.layout.db.Models().Appeals().RejectAppeal(
-				ctx, appeal.ID, appeal.Timestamp, "User no longer exists in database.",
-			); err != nil {
-				m.layout.logger.Error("Failed to auto-reject appeal", zap.Error(err))
-			}
-
-			ResetAppealData(s)
-			r.Reload(event, s, "Appeal automatically closed: User no longer exists in database.")
-			return
-		}
-
-		if user.Status != enum.UserTypeConfirmed && user.Status != enum.UserTypeFlagged {
-			// User is no longer flagged or confirmed, auto-reject the appeal
-			reason := fmt.Sprintf("User status changed to %s", user.Status)
-			if err := m.layout.db.Models().Appeals().RejectAppeal(
-				ctx, appeal.ID, appeal.Timestamp, reason,
-			); err != nil {
-				m.layout.logger.Error("Failed to auto-reject appeal", zap.Error(err))
-			}
-
-			ResetAppealData(s)
-			r.Reload(event, s, "Appeal automatically closed: User status changed to "+user.Status.String())
+		shouldContinue := m.handlePendingAppeal(event, appeal, s, r)
+		if !shouldContinue {
 			return
 		}
 	}
 
 	// Get messages for the appeal
-	messages, err := m.layout.db.Models().Appeals().GetAppealMessages(ctx, appeal.ID)
+	messages, err := m.layout.db.Models().Appeals().GetAppealMessages(context.Background(), appeal.ID)
 	if err != nil {
 		m.layout.logger.Error("Failed to get appeal messages", zap.Error(err))
 		r.Error(event, "Failed to load appeal messages. Please try again.")
@@ -109,6 +76,87 @@ func (m *TicketMenu) Show(event interfaces.CommonEvent, s *session.Session, r *p
 	session.AppealMessages.Set(s, messages)
 	session.PaginationTotalPages.Set(s, totalPages)
 	session.PaginationPage.Set(s, 0)
+}
+
+// handlePendingAppeal checks the status of a pending appeal and handles any necessary auto-actions.
+// Returns false if the appeal was auto-handled and the caller should stop processing.
+func (m *TicketMenu) handlePendingAppeal(
+	event interfaces.CommonEvent, appeal *types.FullAppeal, s *session.Session, r *pagination.Respond,
+) bool {
+	ctx := context.Background()
+
+	switch appeal.Type {
+	case enum.AppealTypeRoblox:
+		// Get current Roblox user status
+		user, err := m.layout.db.Models().Users().GetUserByID(
+			ctx, strconv.FormatUint(appeal.UserID, 10), types.UserFieldAll,
+		)
+		if err != nil {
+			if errors.Is(err, types.ErrUserNotFound) {
+				// User no longer exists, auto-reject the appeal
+				if err := m.layout.db.Models().Appeals().RejectAppeal(
+					ctx, appeal.ID, appeal.Timestamp, "Roblox user no longer exists in database.",
+				); err != nil {
+					m.layout.logger.Error("Failed to auto-reject appeal", zap.Error(err))
+				}
+
+				ResetAppealData(s)
+				r.Reload(event, s, "Appeal automatically closed: Roblox user no longer exists in database.")
+				return false
+			}
+
+			m.layout.logger.Error("Failed to verify Roblox user status", zap.Error(err))
+			r.Error(event, "Failed to verify user status. Please try again.")
+			return false
+		}
+
+		if user.Status != enum.UserTypeConfirmed && user.Status != enum.UserTypeFlagged {
+			// User is no longer flagged or confirmed, auto-reject the appeal
+			reason := fmt.Sprintf("Roblox user status changed to %s", user.Status)
+			if err := m.layout.db.Models().Appeals().RejectAppeal(
+				ctx, appeal.ID, appeal.Timestamp, reason,
+			); err != nil {
+				m.layout.logger.Error("Failed to auto-reject appeal", zap.Error(err))
+			}
+
+			ResetAppealData(s)
+			r.Reload(event, s, "Appeal automatically closed: Roblox user status changed to "+user.Status.String())
+			return false
+		}
+
+	case enum.AppealTypeDiscord:
+		// Check if Discord user still has flags
+		totalGuilds, err := m.layout.db.Models().Sync().GetDiscordUserGuildCount(ctx, appeal.UserID)
+		if err != nil {
+			m.layout.logger.Error("Failed to get Discord user guild count", zap.Error(err))
+			r.Error(event, "Failed to verify Discord user status. Please try again.")
+			return false
+		}
+
+		messageSummary, err := m.layout.db.Models().Message().GetUserInappropriateMessageSummary(ctx, appeal.UserID)
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			m.layout.logger.Error("Failed to get message summary", zap.Error(err))
+			r.Error(event, "Failed to verify Discord user status. Please try again.")
+			return false
+		}
+
+		// Check if user is still flagged
+		if totalGuilds == 0 && (messageSummary == nil || messageSummary.MessageCount == 0) {
+			// User is no longer flagged, auto-accept the appeal
+			reason := "Discord user is no longer flagged in the system"
+			if err := m.layout.db.Models().Appeals().AcceptAppeal(
+				ctx, appeal.ID, appeal.Timestamp, reason,
+			); err != nil {
+				m.layout.logger.Error("Failed to auto-accept appeal", zap.Error(err))
+			}
+
+			ResetAppealData(s)
+			r.Reload(event, s, "Appeal automatically accepted: Discord user is no longer flagged.")
+			return false
+		}
+	}
+
+	return true
 }
 
 // Cleanup handles the cleanup of the appeal ticket interface.
@@ -198,34 +246,53 @@ func (m *TicketMenu) handleLookupUser(
 ) {
 	ctx := context.Background()
 
-	// Get user from database
-	user, err := m.layout.db.Models().Users().GetUserByID(
-		ctx, strconv.FormatUint(appeal.UserID, 10), types.UserFieldAll,
-	)
-	if err != nil {
-		if errors.Is(err, types.ErrUserNotFound) {
-			r.Cancel(event, s, "Failed to find user. They may not be in our database.")
+	switch appeal.Type {
+	case enum.AppealTypeRoblox:
+		// Get Roblox user from database
+		user, err := m.layout.db.Models().Users().GetUserByID(
+			ctx, strconv.FormatUint(appeal.UserID, 10), types.UserFieldAll,
+		)
+		if err != nil {
+			if errors.Is(err, types.ErrUserNotFound) {
+				r.Cancel(event, s, "Failed to find Roblox user. They may not be in our database.")
+				return
+			}
+			m.layout.logger.Error("Failed to fetch Roblox user for review", zap.Error(err))
+			r.Error(event, "Failed to fetch user for review. Please try again.")
 			return
 		}
-		m.layout.logger.Error("Failed to fetch user for review", zap.Error(err))
-		r.Error(event, "Failed to fetch user for review. Please try again.")
-		return
+
+		// Store user in session and show review menu
+		session.UserTarget.Set(s, user)
+		r.Show(event, s, constants.UserReviewPageName, "")
+
+		// Log the lookup action
+		m.layout.db.Models().Activities().Log(ctx, &types.ActivityLog{
+			ActivityTarget: types.ActivityTarget{
+				UserID: user.ID,
+			},
+			ReviewerID:        uint64(event.User().ID),
+			ActivityType:      enum.ActivityTypeUserLookup,
+			ActivityTimestamp: time.Now(),
+			Details:           map[string]any{},
+		})
+
+	case enum.AppealTypeDiscord:
+		// Lookup the Discord user
+		session.DiscordUserLookupID.Set(s, appeal.UserID)
+		r.Show(event, s, constants.GuildLookupPageName, "")
+
+		// Log the lookup action
+		m.layout.db.Models().Activities().Log(context.Background(), &types.ActivityLog{
+			ActivityTarget: types.ActivityTarget{
+				UserID: appeal.UserID,
+			},
+			ReviewerID:        uint64(event.User().ID),
+			ActivityType:      enum.ActivityTypeUserLookupDiscord,
+			ActivityTimestamp: time.Now(),
+			Details:           map[string]any{},
+		})
 	}
-
-	// Store user in session and show review menu
-	session.UserTarget.Set(s, user)
-	r.Show(event, s, constants.UserReviewPageName, "")
-
-	// Log the lookup action
-	m.layout.db.Models().Activities().Log(ctx, &types.ActivityLog{
-		ActivityTarget: types.ActivityTarget{
-			UserID: user.ID,
-		},
-		ReviewerID:        uint64(event.User().ID),
-		ActivityType:      enum.ActivityTypeUserLookup,
-		ActivityTimestamp: time.Now(),
-		Details:           map[string]any{},
-	})
 }
 
 // handleClaimAppeal handles claiming an appeal by a reviewer.
@@ -509,38 +576,70 @@ func (m *TicketMenu) handleAcceptModalSubmit(
 
 	ctx := context.Background()
 
-	// Get user to clear
-	user, err := m.layout.db.Models().Users().GetUserByID(
-		ctx, strconv.FormatUint(appeal.UserID, 10), types.UserFieldAll,
-	)
-	if err != nil {
-		if errors.Is(err, types.ErrUserNotFound) {
-			r.Cancel(event, s, "Failed to find user. They may no longer exist in our database.")
+	switch appeal.Type {
+	case enum.AppealTypeRoblox:
+		// Get Roblox user to clear
+		user, err := m.layout.db.Models().Users().GetUserByID(
+			ctx, strconv.FormatUint(appeal.UserID, 10), types.UserFieldAll,
+		)
+		if err != nil {
+			if errors.Is(err, types.ErrUserNotFound) {
+				r.Cancel(event, s, "Failed to find Roblox user. They may no longer exist in our database.")
+				return
+			}
+			m.layout.logger.Error("Failed to get Roblox user for clearing", zap.Error(err))
+			r.Error(event, "Failed to get user information. Please try again.")
 			return
 		}
-		m.layout.logger.Error("Failed to get user for clearing", zap.Error(err))
-		r.Error(event, "Failed to get user information. Please try again.")
-		return
-	}
 
-	// Clear the user if not already cleared
-	if user.Status != enum.UserTypeCleared {
-		if err := m.layout.db.Models().Users().ClearUser(ctx, user); err != nil {
-			m.layout.logger.Error("Failed to clear user", zap.Error(err))
-			r.Error(event, "Failed to clear user. Please try again.")
+		// Clear the user if not already cleared
+		if user.Status != enum.UserTypeCleared {
+			if err := m.layout.db.Models().Users().ClearUser(ctx, user); err != nil {
+				m.layout.logger.Error("Failed to clear user", zap.Error(err))
+				r.Error(event, "Failed to clear user. Please try again.")
+				return
+			}
+		}
+
+		// Redact Roblox user data and log the action
+		if err := m.redactRobloxUserData(ctx, user, reviewerID, reason, appeal.ID); err != nil {
+			m.layout.logger.Error("Failed to redact Roblox user data", zap.Error(err))
+			r.Error(event, "Failed to process user data. Please try again.")
 			return
 		}
-	}
 
-	// Redact user data and log the action
-	if err := m.redactUserData(ctx, user, reviewerID, reason, appeal.ID); err != nil {
-		m.layout.logger.Error("Failed to redact user data", zap.Error(err))
-		r.Error(event, "Failed to process user data. Please try again.")
-		return
+	case enum.AppealTypeDiscord:
+		// Delete all inappropriate messages and guild memberships
+		if err := m.layout.db.Models().Message().DeleteUserMessages(ctx, appeal.UserID); err != nil {
+			m.layout.logger.Error("Failed to delete Discord user messages", zap.Error(err))
+			r.Error(event, "Failed to delete user messages. Please try again.")
+			return
+		}
+
+		if err := m.layout.db.Models().Sync().DeleteUserGuildMemberships(ctx, appeal.UserID); err != nil {
+			m.layout.logger.Error("Failed to delete Discord user guild memberships", zap.Error(err))
+			r.Error(event, "Failed to delete user guild memberships. Please try again.")
+			return
+		}
+
+		// Log the data deletion
+		m.layout.db.Models().Activities().Log(ctx, &types.ActivityLog{
+			ActivityTarget: types.ActivityTarget{
+				UserID: appeal.UserID,
+			},
+			ReviewerID:        reviewerID,
+			ActivityType:      enum.ActivityTypeUserDataDeleted,
+			ActivityTimestamp: time.Now(),
+			Details: map[string]any{
+				"reason":      reason,
+				"appeal_id":   appeal.ID,
+				"appeal_type": enum.AppealTypeDiscord.String(),
+			},
+		})
 	}
 
 	// Accept the appeal
-	err = m.layout.db.Models().Appeals().AcceptAppeal(ctx, appeal.ID, appeal.Timestamp, reason)
+	err := m.layout.db.Models().Appeals().AcceptAppeal(ctx, appeal.ID, appeal.Timestamp, reason)
 	if err != nil {
 		m.layout.logger.Error("Failed to accept appeal", zap.Error(err))
 		r.Error(event, "Failed to accept appeal. Please try again.")
@@ -549,7 +648,7 @@ func (m *TicketMenu) handleAcceptModalSubmit(
 
 	// Refresh the ticket view
 	ResetAppealData(s)
-	r.NavigateBack(event, s, "Appeal accepted, user cleared and user data deleted.")
+	r.NavigateBack(event, s, "Appeal accepted and user data deleted.")
 
 	// Log the appeal acceptance
 	m.layout.db.Models().Activities().Log(ctx, &types.ActivityLog{
@@ -560,8 +659,9 @@ func (m *TicketMenu) handleAcceptModalSubmit(
 		ActivityType:      enum.ActivityTypeAppealAccepted,
 		ActivityTimestamp: time.Now(),
 		Details: map[string]any{
-			"reason":       reason,
 			"appeal_id":    appeal.ID,
+			"appeal_type":  appeal.Type.String(),
+			"reason":       reason,
 			"data_deleted": true,
 		},
 	})
@@ -645,29 +745,39 @@ func (m *TicketMenu) handleDeleteUserDataModalSubmit(
 
 	ctx := context.Background()
 
-	// Get user from database
-	user, err := m.layout.db.Models().Users().GetUserByID(
-		ctx, strconv.FormatUint(appeal.UserID, 10), types.UserFieldAll,
-	)
-	if err != nil {
-		if errors.Is(err, types.ErrUserNotFound) {
-			r.Cancel(event, s, "Failed to find user. They may no longer exist in our database.")
+	var redactErr error
+	switch appeal.Type {
+	case enum.AppealTypeRoblox:
+		// Get Roblox user from database
+		user, err := m.layout.db.Models().Users().GetUserByID(
+			ctx, strconv.FormatUint(appeal.UserID, 10), types.UserFieldAll,
+		)
+		if err != nil {
+			if errors.Is(err, types.ErrUserNotFound) {
+				r.Cancel(event, s, "Failed to find Roblox user. They may no longer exist in our database.")
+				return
+			}
+			m.layout.logger.Error("Failed to get Roblox user for deletion", zap.Error(err))
+			r.Error(event, "Failed to get user information. Please try again.")
 			return
 		}
-		m.layout.logger.Error("Failed to get user for deletion", zap.Error(err))
-		r.Error(event, "Failed to get user information. Please try again.")
-		return
+
+		// Redact Roblox user data and log the action
+		redactErr = m.redactRobloxUserData(ctx, user, reviewerID, reason, appeal.ID)
+
+	case enum.AppealTypeDiscord:
+		// Redact Discord user data and log the action
+		redactErr = m.redactDiscordUserData(ctx, appeal.UserID, reviewerID, reason, appeal.ID)
 	}
 
-	// Redact user data and log the action
-	if err := m.redactUserData(ctx, user, reviewerID, reason, appeal.ID); err != nil {
-		m.layout.logger.Error("Failed to redact user data", zap.Error(err))
+	if redactErr != nil {
+		m.layout.logger.Error("Failed to redact user data", zap.Error(redactErr))
 		r.Error(event, "Failed to process user data. Please try again.")
 		return
 	}
 
 	// Accept the appeal
-	if err = m.layout.db.Models().Appeals().AcceptAppeal(
+	if err := m.layout.db.Models().Appeals().AcceptAppeal(
 		ctx, appeal.ID, appeal.Timestamp,
 		"Data deletion request processed: "+reason,
 	); err != nil {
@@ -681,8 +791,8 @@ func (m *TicketMenu) handleDeleteUserDataModalSubmit(
 	r.NavigateBack(event, s, "User data has been deleted and appeal accepted.")
 }
 
-// redactUserData handles redacting a user's data and logs the action.
-func (m *TicketMenu) redactUserData(
+// redactRobloxUserData handles redacting a Roblox user's data and logs the action.
+func (m *TicketMenu) redactRobloxUserData(
 	ctx context.Context, user *types.ReviewUser, reviewerID uint64, reason string, appealID int64,
 ) error {
 	// Redact user data
@@ -713,8 +823,41 @@ func (m *TicketMenu) redactUserData(
 		ActivityType:      enum.ActivityTypeUserDataDeleted,
 		ActivityTimestamp: time.Now(),
 		Details: map[string]any{
-			"reason":    reason,
-			"appeal_id": appealID,
+			"reason":      reason,
+			"appeal_id":   appealID,
+			"appeal_type": enum.AppealTypeRoblox.String(),
+		},
+	})
+
+	return nil
+}
+
+// redactDiscordUserData handles redacting a Discord user's data and logs the action.
+func (m *TicketMenu) redactDiscordUserData(
+	ctx context.Context, userID uint64, reviewerID uint64, reason string, appealID int64,
+) error {
+	// Redact message content
+	if err := m.layout.db.Models().Message().RedactUserMessages(ctx, userID); err != nil {
+		return fmt.Errorf("failed to redact Discord user messages: %w", err)
+	}
+
+	// Mark user data as redacted
+	if err := m.layout.db.Models().Sync().MarkUserDataRedacted(ctx, userID); err != nil {
+		return fmt.Errorf("failed to mark Discord user data as redacted: %w", err)
+	}
+
+	// Log the data deletion
+	m.layout.db.Models().Activities().Log(ctx, &types.ActivityLog{
+		ActivityTarget: types.ActivityTarget{
+			UserID: userID,
+		},
+		ReviewerID:        reviewerID,
+		ActivityType:      enum.ActivityTypeUserDataDeleted,
+		ActivityTimestamp: time.Now(),
+		Details: map[string]any{
+			"reason":      reason,
+			"appeal_id":   appealID,
+			"appeal_type": enum.AppealTypeDiscord.String(),
 		},
 	})
 

@@ -89,15 +89,15 @@ func (b *TicketBuilder) Build() *discord.MessageUpdateBuilder {
 
 			// Add review action options
 			options = append(options,
-				discord.NewStringSelectMenuOption("Accept Appeal & Delete Data", constants.AcceptAppealButtonCustomID).
+				discord.NewStringSelectMenuOption("Accept Appeal", constants.AcceptAppealButtonCustomID).
 					WithEmoji(discord.ComponentEmoji{Name: "✅"}).
 					WithDescription("Clear the user from the system and delete user data"),
 				discord.NewStringSelectMenuOption("Reject Appeal", constants.RejectAppealButtonCustomID).
 					WithEmoji(discord.ComponentEmoji{Name: "❌"}).
 					WithDescription("Reject this appeal"),
-				discord.NewStringSelectMenuOption("Delete Data", constants.DeleteUserDataButtonCustomID).
+				discord.NewStringSelectMenuOption("Delete Data & Opt-Out", constants.DeleteUserDataButtonCustomID).
 					WithEmoji(discord.ComponentEmoji{Name: "🗑️"}).
-					WithDescription("Delete user data without clearing appeal"),
+					WithDescription("Delete user data without clearing user"),
 			)
 		} else {
 			// Add close option for regular users
@@ -137,16 +137,9 @@ func (b *TicketBuilder) Build() *discord.MessageUpdateBuilder {
 
 // buildHeaderEmbed creates the embed showing appeal information.
 func (b *TicketBuilder) buildHeaderEmbed() *discord.EmbedBuilder {
-	// Format status with emoji
-	var statusEmoji string
-	switch b.appeal.Status {
-	case enum.AppealStatusPending:
-		statusEmoji = "⏳"
-	case enum.AppealStatusAccepted:
-		statusEmoji = "✅"
-	case enum.AppealStatusRejected:
-		statusEmoji = "❌"
-	}
+	// Get status and type emojis
+	statusEmoji := b.appeal.Status.Emoji()
+	typeEmoji := b.appeal.Type.Emoji()
 
 	// Format timestamps
 	submitted := "N/A"
@@ -164,14 +157,22 @@ func (b *TicketBuilder) buildHeaderEmbed() *discord.EmbedBuilder {
 		lastActivity = fmt.Sprintf("<t:%d:R>", b.appeal.LastActivity.Unix())
 	}
 
+	// Format user info based on appeal type
+	var userInfo string
+	if b.appeal.Type == enum.AppealTypeRoblox {
+		userIDStr := strconv.FormatUint(b.appeal.UserID, 10)
+		userInfo = fmt.Sprintf("[%s](https://www.roblox.com/users/%d/profile)",
+			utils.CensorString(userIDStr, b.streamerMode), b.appeal.UserID)
+	} else {
+		userInfo = fmt.Sprintf("<@%d>", b.appeal.UserID)
+	}
+
 	// Create embed
-	userIDStr := strconv.FormatUint(b.appeal.UserID, 10)
 	embed := discord.NewEmbedBuilder().
-		SetTitle(fmt.Sprintf("%s Appeal `#%d`", statusEmoji, b.appeal.ID)).
+		SetTitle(fmt.Sprintf("%s %s Appeal `#%d`", statusEmoji, typeEmoji, b.appeal.ID)).
 		SetColor(utils.GetMessageEmbedColor(b.streamerMode)).
-		AddField("User", fmt.Sprintf("[%s](https://www.roblox.com/users/%d/profile)",
-			utils.CensorString(userIDStr, b.streamerMode), b.appeal.UserID), true).
-		AddField("Requester", fmt.Sprintf("<@%d>", b.appeal.RequesterID), true).
+		AddField("User", userInfo, true).
+		AddField("Type", b.appeal.Type.String(), true).
 		AddField("Status", b.appeal.Status.String(), true).
 		AddField("Submitted", submitted, true).
 		AddField("Last Viewed", lastViewed, true).
@@ -191,7 +192,7 @@ func (b *TicketBuilder) buildHeaderEmbed() *discord.EmbedBuilder {
 			censoredReason := utils.CensorStringsInText(
 				b.appeal.ReviewReason,
 				b.streamerMode,
-				userIDStr,
+				strconv.FormatUint(b.appeal.UserID, 10),
 			)
 			embed.AddField("Review Reason", censoredReason, false)
 		}

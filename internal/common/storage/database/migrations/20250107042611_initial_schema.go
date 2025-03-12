@@ -29,6 +29,7 @@ func init() { //nolint:funlen
 			{(*types.UserVote)(nil), "user_votes", "id"},
 			{(*types.GroupVote)(nil), "group_votes", "id"},
 			{(*types.DiscordServerMember)(nil), "discord_server_members", "user_id"},
+			{(*types.DiscordUserRedaction)(nil), "discord_user_redactions", "user_id"},
 			{(*types.InappropriateMessage)(nil), "inappropriate_messages", "user_id"},
 			{(*types.InappropriateUserSummary)(nil), "inappropriate_user_summaries", "user_id"},
 		}
@@ -120,6 +121,7 @@ func init() { //nolint:funlen
 		partitionedTables := []string{
 			"inappropriate_user_summaries",
 			"inappropriate_messages",
+			"discord_user_redactions",
 			"discord_server_members",
 			"group_votes",
 			"user_votes",

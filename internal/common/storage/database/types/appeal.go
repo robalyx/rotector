@@ -15,8 +15,9 @@ var (
 // Appeal represents a user appeal request in the database.
 type Appeal struct {
 	ID           int64             `bun:",pk,autoincrement"` // Unique numeric identifier
+	Type         enum.AppealType   `bun:",notnull"`          // Type of appeal (Roblox or Discord)
 	Timestamp    time.Time         `bun:",notnull"`          // When the appeal was created
-	UserID       uint64            `bun:",notnull"`          // The Roblox user ID being appealed
+	UserID       uint64            `bun:",notnull"`          // The user ID being appealed (Roblox or Discord)
 	RequesterID  uint64            `bun:",notnull"`          // The Discord user ID who submitted the appeal
 	ClaimedBy    uint64            `bun:",nullzero"`         // Discord ID of reviewer who claimed the appeal
 	ClaimedAt    time.Time         `bun:",nullzero"`         // When the appeal was claimed

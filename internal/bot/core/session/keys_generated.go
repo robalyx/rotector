@@ -120,14 +120,18 @@ var (
 	DiscordUserMessagePrevCursors = NewKey[[]*types.MessageCursor]("DiscordUserMessagePrevCursors", true)
 	// DiscordUserMessageGuildID stores the currently selected guild ID for messages
 	DiscordUserMessageGuildID = NewKey[uint64]("DiscordUserMessageGuildID", true)
+	// DiscordUserDataRedacted indicates if the user has requested data deletion
+	DiscordUserDataRedacted = NewKey[bool]("DiscordUserDataRedacted", true)
+	// DiscordUserMessageGuilds stores a map of guild IDs where the user has inappropriate messages
+	DiscordUserMessageGuilds = NewKey[map[uint64]bool]("DiscordUserMessageGuilds", true)
 	// ChatHistory stores the conversation history
 	ChatHistory = NewKey[ai.ChatHistory]("ChatHistory", true)
 	// ChatContext stores chat context information
 	ChatContext = NewKey[string]("ChatContext", true)
 	// LogActivities stores activity logs
-	LogActivities = NewKey[[]*types.ActivityLog]("LogActivities", false)
+	LogActivities = NewKey[[]*types.ActivityLog]("LogActivities", true)
 	// LogCursor stores the current log cursor
-	LogCursor = NewKey[*types.LogCursor]("LogCursor", false)
+	LogCursor = NewKey[*types.LogCursor]("LogCursor", true)
 	// LogNextCursor stores the next log cursor
 	LogNextCursor = NewKey[*types.LogCursor]("LogNextCursor", true)
 	// LogPrevCursors stores previous log cursors
@@ -176,6 +180,8 @@ var (
 	AppealNextCursor = NewKey[*types.AppealTimeline]("AppealNextCursor", true)
 	// AppealPrevCursors stores previous cursor positions
 	AppealPrevCursors = NewKey[[]*types.AppealTimeline]("AppealPrevCursors", true)
+	// AppealType stores the type of appeal being created
+	AppealType = NewKey[enum.AppealType]("AppealType", true)
 	// VerifyUserID stores the user ID being verified
 	VerifyUserID = NewKey[uint64]("VerifyUserID", true)
 	// VerifyReason stores the verification reason

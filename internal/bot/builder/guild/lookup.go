@@ -17,9 +17,11 @@ type LookupBuilder struct {
 	userGuilds     []*types.UserGuildInfo
 	guildNames     map[uint64]string
 	messageSummary *types.InappropriateUserSummary
+	messageGuilds  map[uint64]bool
 	totalGuilds    int
 	hasNextPage    bool
 	hasPrevPage    bool
+	isDataRedacted bool
 }
 
 // NewLookupBuilder creates a new Discord user builder.
@@ -30,21 +32,43 @@ func NewLookupBuilder(s *session.Session) *LookupBuilder {
 		userGuilds:     session.DiscordUserGuilds.Get(s),
 		guildNames:     session.DiscordUserGuildNames.Get(s),
 		messageSummary: session.DiscordUserMessageSummary.Get(s),
+		messageGuilds:  session.DiscordUserMessageGuilds.Get(s),
 		totalGuilds:    session.DiscordUserTotalGuilds.Get(s),
 		hasNextPage:    session.PaginationHasNextPage.Get(s),
 		hasPrevPage:    session.PaginationHasPrevPage.Get(s),
+		isDataRedacted: session.DiscordUserDataRedacted.Get(s),
 	}
 }
 
 // Build creates a Discord message showing the user's flagged guild memberships.
 func (b *LookupBuilder) Build() *discord.MessageUpdateBuilder {
-	userEmbed := b.buildUserEmbed()
-	guildsEmbed := b.buildGuildsEmbed()
-	components := b.buildComponents()
+	builder := discord.NewMessageUpdateBuilder()
 
-	return discord.NewMessageUpdateBuilder().
-		SetEmbeds(userEmbed.Build(), guildsEmbed.Build()).
-		AddContainerComponents(components...)
+	// Add data deletion notice if data is redacted
+	if b.isDataRedacted {
+		builder.AddEmbeds(b.buildDeletionEmbed().Build())
+	}
+
+	// Add main embeds
+	builder.AddEmbeds(
+		b.buildUserEmbed().Build(),
+		b.buildGuildsEmbed().Build(),
+	)
+
+	// Add components
+	builder.AddContainerComponents(b.buildComponents()...)
+
+	return builder
+}
+
+// buildDeletionEmbed creates an embed notifying that the user has requested data deletion.
+func (b *LookupBuilder) buildDeletionEmbed() *discord.EmbedBuilder {
+	return discord.NewEmbedBuilder().
+		SetTitle("🗑️ Data Deletion Notice").
+		SetDescription(
+			"This user has requested deletion of their data under privacy laws. While we continue to monitor " +
+				"server memberships for safety purposes, message history and other details have been redacted.").
+		SetColor(constants.ErrorEmbedColor)
 }
 
 // buildUserEmbed creates the embed with user information.
@@ -117,8 +141,9 @@ func (b *LookupBuilder) buildGuildsEmbed() *discord.EmbedBuilder {
 func (b *LookupBuilder) buildComponents() []discord.ContainerComponent {
 	// Create select menu options for guilds with messages
 	var options []discord.StringSelectMenuOption
-	if b.messageSummary != nil && b.messageSummary.MessageCount > 0 {
-		for _, guild := range b.userGuilds {
+	for _, guild := range b.userGuilds {
+		// Only add option if the guild has messages
+		if b.messageGuilds[guild.ServerID] {
 			guildName := b.guildNames[guild.ServerID]
 			if guildName == "" {
 				guildName = constants.UnknownServer

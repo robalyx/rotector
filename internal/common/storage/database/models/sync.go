@@ -186,6 +186,22 @@ func (m *SyncModel) GetFlaggedServerMembers(
 	return result, nil
 }
 
+// DeleteUserGuildMemberships deletes all guild memberships for a specific user.
+func (m *SyncModel) DeleteUserGuildMemberships(ctx context.Context, userID uint64) error {
+	_, err := m.db.NewDelete().
+		Model((*types.DiscordServerMember)(nil)).
+		Where("user_id = ?", userID).
+		Exec(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to delete user guild memberships: %w", err)
+	}
+
+	m.logger.Debug("Deleted user guild memberships",
+		zap.Uint64("user_id", userID))
+
+	return nil
+}
+
 // GetUniqueGuildCount returns the number of unique guilds in the database.
 func (m *SyncModel) GetUniqueGuildCount(ctx context.Context) (int, error) {
 	count, err := m.db.NewSelect().
@@ -242,4 +258,40 @@ func (m *SyncModel) PurgeOldServerMembers(ctx context.Context, cutoffDate time.T
 		zap.Time("cutoffDate", cutoffDate))
 
 	return int(affected), nil
+}
+
+// MarkUserDataRedacted marks a user's data as redacted.
+func (m *SyncModel) MarkUserDataRedacted(ctx context.Context, userID uint64) error {
+	now := time.Now()
+	redaction := &types.DiscordUserRedaction{
+		UserID:     userID,
+		RedactedAt: now,
+		UpdatedAt:  now,
+	}
+
+	_, err := m.db.NewInsert().
+		Model(redaction).
+		On("CONFLICT (user_id) DO UPDATE").
+		Set("updated_at = EXCLUDED.updated_at").
+		Exec(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to mark user data as redacted: %w", err)
+	}
+
+	m.logger.Debug("Marked user data as redacted",
+		zap.Uint64("user_id", userID))
+
+	return nil
+}
+
+// IsUserDataRedacted checks if a user's data has been redacted.
+func (m *SyncModel) IsUserDataRedacted(ctx context.Context, userID uint64) (bool, error) {
+	exists, err := m.db.NewSelect().
+		Model((*types.DiscordUserRedaction)(nil)).
+		Where("user_id = ?", userID).
+		Exists(ctx)
+	if err != nil {
+		return false, fmt.Errorf("failed to check if user data is redacted: %w", err)
+	}
+	return exists, nil
 }

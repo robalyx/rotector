@@ -309,6 +309,10 @@ const (
 	AppealUserInputCustomID   = "appeal_user_input"
 	AppealReasonInputCustomID = "appeal_reason_input"
 
+	AppealCreateSelectID              = "appeal_create_select"
+	AppealCreateRobloxButtonCustomID  = "appeal_create_roblox" + ModalOpenSuffix
+	AppealCreateDiscordButtonCustomID = "appeal_create_discord" + ModalOpenSuffix
+
 	AppealLookupUserButtonCustomID = "appeal_lookup_user"
 	AcceptAppealButtonCustomID     = "accept_appeal" + ModalOpenSuffix
 	RejectAppealButtonCustomID     = "reject_appeal" + ModalOpenSuffix
@@ -333,7 +337,6 @@ const (
 	AppealStatusSelectID        = "appeal_status"
 	AppealSortSelectID          = "appeal_sort"
 	AppealActionSelectID        = "appeal_action"
-	AppealCreateButtonCustomID  = "appeal_create" + ModalOpenSuffix
 	AppealRespondButtonCustomID = "appeal_respond" + ModalOpenSuffix
 	AppealSearchCustomID        = "appeal_search" + ModalOpenSuffix
 

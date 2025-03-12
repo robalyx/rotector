@@ -164,7 +164,7 @@ func (m *UpdateMenu) handleTextModal(
 			discord.NewTextInput("0", discord.TextInputStyleParagraph, setting.Name).
 				WithRequired(true).
 				WithPlaceholder("Enter your description...").
-				WithMaxLength(128).
+				WithMaxLength(512).
 				WithValue(session.SettingDisplay.Get(s)),
 		)
 
