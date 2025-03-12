@@ -118,6 +118,8 @@ const (
    - We may collect age verification information
    - We may share violation data with relevant authorities
    - You agree to our data collection and monitoring practices
+   - You have the right to request deletion of your personal data
+   - Some data may be retained if required by law or legitimate business purposes
 
 4. Liability & Disclaimer
    - The bot is provided "as is" without warranty
@@ -359,9 +361,9 @@ const (
 
 // Timeout Menu.
 const (
-	MaxReviewsBeforeBreak = 50               // Maximum reviews before requiring a break
+	MaxReviewsBeforeBreak = 25               // Maximum reviews before requiring a break
 	MinBreakDuration      = 15 * time.Minute // Minimum break duration
-	ReviewSessionWindow   = 4 * time.Hour    // Window to track review count
+	ReviewSessionWindow   = 1 * time.Hour    // Window to track review count
 )
 
 // Admin Menu.
@@ -431,5 +433,6 @@ const (
 	GuildScanJoinDurationModalCustomID = "guild_scan_join_duration_modal"
 	GuildScanJoinDurationInputCustomID = "guild_scan_join_duration_input"
 
-	GuildMessageSelectMenuCustomID = "guild_message_select"
+	GuildMessageSelectMenuCustomID      = "guild_message_select"
+	GuildBanLogReportSelectMenuCustomID = "guild_ban_log_report"
 )

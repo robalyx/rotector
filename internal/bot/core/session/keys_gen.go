@@ -121,7 +121,7 @@ func main() {
 		{Name: "DiscordUserMessagePrevCursors", Type: "[]*types.MessageCursor", Doc: "DiscordUserMessagePrevCursors stores previous message cursors", Persist: true},
 		{Name: "DiscordUserMessageGuildID", Type: "uint64", Doc: "DiscordUserMessageGuildID stores the currently selected guild ID for messages", Persist: true},
 		{Name: "DiscordUserDataRedacted", Type: "bool", Doc: "DiscordUserDataRedacted indicates if the user has requested data deletion", Persist: true},
-		{Name: "DiscordUserMessageGuilds", Type: "map[uint64]bool", Doc: "DiscordUserMessageGuilds stores a map of guild IDs where the user has inappropriate messages", Persist: true},
+		{Name: "DiscordUserMessageGuilds", Type: "map[uint64]struct{}", Doc: "DiscordUserMessageGuilds stores a map of guild IDs where the user has inappropriate messages", Persist: true},
 
 		// Chat related keys
 		{Name: "ChatHistory", Type: "ai.ChatHistory", Doc: "ChatHistory stores the conversation history", Persist: true},
@@ -209,6 +209,12 @@ func main() {
 		{Name: "GuildScanFilteredSummaries", Type: "map[uint64]*types.InappropriateUserSummary", Doc: "GuildScanFilteredSummaries stores filtered message summaries", Persist: true},
 		{Name: "GuildScanMinGuilds", Type: "int", Doc: "GuildScanMinGuilds stores the minimum guilds filter value", Persist: true},
 		{Name: "GuildScanMinJoinDuration", Type: "time.Duration", Doc: "GuildScanMinJoinDuration stores the minimum join duration filter value", Persist: true},
+
+		// Guild ban logs related keys
+		{Name: "GuildBanLogs", Type: "[]*types.GuildBanLog", Doc: "GuildBanLogs stores guild ban operation logs", Persist: true},
+		{Name: "GuildBanLogCursor", Type: "*types.LogCursor", Doc: "GuildBanLogCursor stores the current guild ban log cursor", Persist: true},
+		{Name: "GuildBanLogNextCursor", Type: "*types.LogCursor", Doc: "GuildBanLogNextCursor stores the next guild ban log cursor", Persist: true},
+		{Name: "GuildBanLogPrevCursors", Type: "[]*types.LogCursor", Doc: "GuildBanLogPrevCursors stores previous guild ban log cursors", Persist: true},
 	}
 
 	bufferKeys := []KeyDef{

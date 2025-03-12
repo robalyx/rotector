@@ -17,7 +17,7 @@ type LookupBuilder struct {
 	userGuilds     []*types.UserGuildInfo
 	guildNames     map[uint64]string
 	messageSummary *types.InappropriateUserSummary
-	messageGuilds  map[uint64]bool
+	messageGuilds  map[uint64]struct{}
 	totalGuilds    int
 	hasNextPage    bool
 	hasPrevPage    bool
@@ -143,7 +143,7 @@ func (b *LookupBuilder) buildComponents() []discord.ContainerComponent {
 	var options []discord.StringSelectMenuOption
 	for _, guild := range b.userGuilds {
 		// Only add option if the guild has messages
-		if b.messageGuilds[guild.ServerID] {
+		if _, ok := b.messageGuilds[guild.ServerID]; ok {
 			guildName := b.guildNames[guild.ServerID]
 			if guildName == "" {
 				guildName = constants.UnknownServer

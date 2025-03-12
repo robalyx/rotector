@@ -18,7 +18,6 @@ import (
 	"github.com/robalyx/rotector/internal/bot/interfaces"
 	"github.com/robalyx/rotector/internal/bot/utils"
 	"github.com/robalyx/rotector/internal/common/storage/database/types"
-	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
 	"go.uber.org/zap"
 )
 
@@ -454,23 +453,24 @@ func (m *ScanMenu) handleBanConfirmModal(
 	banReason := event.Data.Text(constants.GuildBanReasonInputCustomID)
 
 	// Execute the bans
-	totalBanned, totalFailed := m.executeBans(event, guildID, filteredUsers, banReason)
+	totalBanned, totalFailed, bannedUserIDs := m.executeBans(event, guildID, filteredUsers, banReason)
 
-	// Log the ban actions
-	m.layout.db.Models().Activities().Log(context.Background(), &types.ActivityLog{
-		ActivityTarget: types.ActivityTarget{
-			GuildID: guildID,
-		},
-		ReviewerID:        uint64(event.User().ID),
-		ActivityType:      enum.ActivityTypeGuildBans,
-		ActivityTimestamp: time.Now(),
-		Details: map[string]any{
-			"reason":            banReason,
-			"banned_count":      totalBanned,
-			"failed_count":      totalFailed,
-			"min_guilds_filter": session.GuildScanMinGuilds.Get(s),
-		},
+	// Log the ban operation
+	err := m.layout.db.Models().GuildBans().LogBanOperation(context.Background(), &types.GuildBanLog{
+		GuildID:         guildID,
+		ReviewerID:      uint64(event.User().ID),
+		BannedCount:     totalBanned,
+		FailedCount:     totalFailed,
+		BannedUserIDs:   bannedUserIDs,
+		Reason:          banReason,
+		MinGuildsFilter: session.GuildScanMinGuilds.Get(s),
+		Timestamp:       time.Now(),
 	})
+	if err != nil {
+		m.layout.logger.Error("Failed to log guild ban operation",
+			zap.Error(err),
+			zap.Uint64("guild_id", guildID))
+	}
 
 	// Format response message
 	msg := fmt.Sprintf("Successfully banned %d users.", totalBanned)
@@ -495,12 +495,14 @@ func (m *ScanMenu) handleBanConfirmModal(
 // executeBans performs the actual banning of users and sends them DM notifications.
 func (m *ScanMenu) executeBans(
 	event interfaces.CommonEvent, guildID uint64, filteredUsers map[uint64][]*types.UserGuildInfo, banReason string,
-) (totalBanned, totalFailed int) {
+) (totalBanned, totalFailed int, bannedUserIDs []uint64) {
 	// Create list of unique user IDs to ban
 	userIDs := make([]snowflake.ID, 0, len(filteredUsers))
 	for userID := range filteredUsers {
 		userIDs = append(userIDs, snowflake.ID(userID))
 	}
+
+	bannedUserIDs = make([]uint64, 0, len(filteredUsers))
 
 	// Define batch size for banning users
 	const batchSize = 200 // Discord's max batch size
@@ -528,6 +530,11 @@ func (m *ScanMenu) executeBans(
 
 		totalBanned += len(result.BannedUsers)
 		totalFailed += len(result.FailedUsers)
+
+		// Add successfully banned users to the list
+		for _, userID := range result.BannedUsers {
+			bannedUserIDs = append(bannedUserIDs, uint64(userID))
+		}
 
 		// Send DM notifications to successfully banned users
 		for _, userID := range result.BannedUsers {
@@ -558,7 +565,7 @@ func (m *ScanMenu) executeBans(
 				AddField("Ban Date", fmt.Sprintf("<t:%d:F>", time.Now().Unix()), true).
 				SetColor(constants.ErrorEmbedColor).
 				SetFooter("This is an automated message. If you believe this ban was in error, "+
-					"please contact the server administrators.", "")
+					"please use this bot to appeal.", "")
 
 			// Add server icon if available
 			if guild.Icon != nil {
@@ -577,5 +584,5 @@ func (m *ScanMenu) executeBans(
 		}
 	}
 
-	return totalBanned, totalFailed
+	return totalBanned, totalFailed, bannedUserIDs
 }

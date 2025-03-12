@@ -255,6 +255,10 @@ func init() { //nolint:funlen
 			
 			CREATE INDEX IF NOT EXISTS idx_inappropriate_summaries_last_detected
 			ON inappropriate_user_summaries (last_detected DESC);
+
+			-- Guild ban logs indexes
+			CREATE INDEX IF NOT EXISTS idx_guild_ban_logs_time_id
+			ON guild_ban_logs (timestamp DESC, id DESC);
 		`, enum.ActivityTypeUserViewed, enum.ActivityTypeGroupViewed).Exec(ctx)
 		if err != nil {
 			return fmt.Errorf("failed to create indexes: %w", err)
@@ -419,6 +423,9 @@ func init() { //nolint:funlen
 			-- Inappropriate user summaries indexes
 			DROP INDEX IF EXISTS idx_inappropriate_summaries_message_count;
 			DROP INDEX IF EXISTS idx_inappropriate_summaries_last_detected;
+
+			-- Guild ban logs indexes
+			DROP INDEX IF EXISTS idx_guild_ban_logs_time_id;
 		`).Exec(ctx)
 		if err != nil {
 			return fmt.Errorf("failed to drop indexes: %w", err)

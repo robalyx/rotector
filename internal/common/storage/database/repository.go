@@ -13,6 +13,7 @@ type Repository struct {
 	stats      *models.StatsModel
 	settings   *models.SettingModel
 	activities *models.ActivityModel
+	guildBans  *models.GuildBanModel
 	tracking   *models.TrackingModel
 	appeals    *models.AppealModel
 	bans       *models.BanModel
@@ -44,6 +45,7 @@ func NewRepository(db *bun.DB, logger *zap.Logger) *Repository {
 		stats:      models.NewStats(db, users, groups, logger),
 		settings:   models.NewSetting(db, logger),
 		activities: activities,
+		guildBans:  models.NewGuildBan(db, logger),
 		tracking:   tracking,
 		appeals:    models.NewAppeal(db, logger),
 		bans:       models.NewBan(db, logger),
@@ -80,6 +82,11 @@ func (r *Repository) Settings() *models.SettingModel {
 // Activities returns the activities model repository.
 func (r *Repository) Activities() *models.ActivityModel {
 	return r.activities
+}
+
+// GuildBans returns the guild bans model repository.
+func (r *Repository) GuildBans() *models.GuildBanModel {
+	return r.guildBans
 }
 
 // Tracking returns the tracking model repository.

@@ -2,6 +2,7 @@ package guild
 
 import (
 	"fmt"
+	"strconv"
 
 	"github.com/disgoorg/disgo/discord"
 	"github.com/robalyx/rotector/internal/bot/constants"
@@ -12,7 +13,7 @@ import (
 
 // LogsBuilder creates the visual layout for the guild ban logs interface.
 type LogsBuilder struct {
-	logs        []*types.ActivityLog
+	logs        []*types.GuildBanLog
 	hasNextPage bool
 	hasPrevPage bool
 	privacyMode bool
@@ -21,7 +22,7 @@ type LogsBuilder struct {
 // NewLogsBuilder creates a new logs builder.
 func NewLogsBuilder(s *session.Session) *LogsBuilder {
 	return &LogsBuilder{
-		logs:        session.LogActivities.Get(s),
+		logs:        session.GuildBanLogs.Get(s),
 		hasNextPage: session.PaginationHasNextPage.Get(s),
 		hasPrevPage: session.PaginationHasPrevPage.Get(s),
 		privacyMode: session.UserStreamerMode.Get(s),
@@ -30,7 +31,13 @@ func NewLogsBuilder(s *session.Session) *LogsBuilder {
 
 // Build creates a Discord message showing the guild ban logs.
 func (b *LogsBuilder) Build() *discord.MessageUpdateBuilder {
-	// Create embed
+	return discord.NewMessageUpdateBuilder().
+		SetEmbeds(b.buildEmbed().Build()).
+		AddContainerComponents(b.buildComponents()...)
+}
+
+// buildEmbed creates the embed showing guild ban logs.
+func (b *LogsBuilder) buildEmbed() *discord.EmbedBuilder {
 	embed := discord.NewEmbedBuilder().
 		SetTitle("Guild Ban Operations").
 		SetDescription("View history of ban operations performed in this server.").
@@ -39,33 +46,24 @@ func (b *LogsBuilder) Build() *discord.MessageUpdateBuilder {
 	// Add log entries with details
 	if len(b.logs) > 0 {
 		for _, log := range b.logs {
-			reason := "No reason provided"
-			bannedCount := 0
-			failedCount := 0
-
-			// Extract details from the log
-			if r, ok := log.Details["reason"].(string); ok && r != "" {
-				reason = r
-			}
-			if c, ok := log.Details["banned_count"].(float64); ok {
-				bannedCount = int(c)
-			}
-			if c, ok := log.Details["failed_count"].(float64); ok {
-				failedCount = int(c)
-			}
-
 			// Create field content
-			content := fmt.Sprintf("**Ban Operation**\nReason: `%s`\nBanned Users: `%d`\nFailed Users: `%d`",
-				reason,
-				bannedCount,
-				failedCount,
+			content := fmt.Sprintf("Timestamp: <t:%d:F>\nReason: `%s`\nBanned Users: `%d`\nFailed Users: `%d`",
+				log.Timestamp.Unix(),
+				log.Reason,
+				log.BannedCount,
+				log.FailedCount,
 			)
 
 			// Add reviewer info
 			content += fmt.Sprintf("\nExecuted by: <@%d>", log.ReviewerID)
 
+			// Add minimum guilds filter info if applicable
+			if log.MinGuildsFilter > 1 {
+				content += fmt.Sprintf("\nMinimum Guilds Filter: `%d`", log.MinGuildsFilter)
+			}
+
 			embed.AddField(
-				fmt.Sprintf("<t:%d:F>", log.ActivityTimestamp.Unix()),
+				fmt.Sprintf("Ban #%d", log.ID),
 				content,
 				false,
 			)
@@ -73,34 +71,47 @@ func (b *LogsBuilder) Build() *discord.MessageUpdateBuilder {
 
 		// Add footer with pagination info
 		if len(b.logs) > 0 {
-			embed.SetFooterText(fmt.Sprintf("Sequence %d | %d logs shown", b.logs[0].Sequence, len(b.logs)))
+			embed.SetFooterText(fmt.Sprintf("%d logs shown", len(b.logs)))
 		}
 	} else {
 		embed.AddField("No Ban Operations Found", "No ban operations have been performed in this server yet.", false)
 	}
 
-	// Create components
-	components := b.buildComponents()
-
-	return discord.NewMessageUpdateBuilder().
-		SetEmbeds(embed.Build()).
-		AddContainerComponents(components...)
+	return embed
 }
 
 // buildComponents creates all interactive components for the logs viewer.
 func (b *LogsBuilder) buildComponents() []discord.ContainerComponent {
-	return []discord.ContainerComponent{
-		// Refresh button
-		discord.NewActionRow(
-			discord.NewSecondaryButton("Refresh Logs", constants.RefreshButtonCustomID),
-		),
-		// Navigation buttons
-		discord.NewActionRow(
-			discord.NewSecondaryButton("◀️ Back", constants.BackButtonCustomID),
-			discord.NewSecondaryButton("⏮️", string(session.ViewerFirstPage)).WithDisabled(!b.hasPrevPage),
-			discord.NewSecondaryButton("◀️", string(session.ViewerPrevPage)).WithDisabled(!b.hasPrevPage),
-			discord.NewSecondaryButton("▶️", string(session.ViewerNextPage)).WithDisabled(!b.hasNextPage),
-			discord.NewSecondaryButton("⏭️", string(session.ViewerLastPage)).WithDisabled(true), // This is disabled on purpose
-		),
+	var components []discord.ContainerComponent
+
+	// Add CSV report select menu if we have logs
+	if len(b.logs) > 0 {
+		var options []discord.StringSelectMenuOption
+		for _, log := range b.logs {
+			options = append(options, discord.NewStringSelectMenuOption(
+				fmt.Sprintf("Ban #%d", log.ID),
+				strconv.FormatInt(log.ID, 10),
+			).WithDescription(fmt.Sprintf("Get CSV report for %d banned users", log.BannedCount)))
+		}
+
+		components = append(components, discord.NewActionRow(
+			discord.NewStringSelectMenu(constants.GuildBanLogReportSelectMenuCustomID, "Get CSV Report", options...),
+		))
 	}
+
+	// Add refresh button
+	components = append(components, discord.NewActionRow(
+		discord.NewSecondaryButton("Refresh Logs", constants.RefreshButtonCustomID),
+	))
+
+	// Add navigation buttons
+	components = append(components, discord.NewActionRow(
+		discord.NewSecondaryButton("◀️ Back", constants.BackButtonCustomID),
+		discord.NewSecondaryButton("⏮️", string(session.ViewerFirstPage)).WithDisabled(!b.hasPrevPage),
+		discord.NewSecondaryButton("◀️", string(session.ViewerPrevPage)).WithDisabled(!b.hasPrevPage),
+		discord.NewSecondaryButton("▶️", string(session.ViewerNextPage)).WithDisabled(!b.hasNextPage),
+		discord.NewSecondaryButton("⏭️", string(session.ViewerLastPage)).WithDisabled(true), // This is disabled on purpose
+	))
+
+	return components
 }

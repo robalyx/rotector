@@ -88,9 +88,9 @@ func (m *LookupMenu) Show(event interfaces.CommonEvent, s *session.Session, r *p
 	}
 
 	// Convert slice to map for O(1) lookups
-	messageGuilds := make(map[uint64]bool)
+	messageGuilds := make(map[uint64]struct{})
 	for _, guildID := range messageGuildIDs {
-		messageGuilds[guildID] = true
+		messageGuilds[guildID] = struct{}{}
 	}
 	session.DiscordUserMessageGuilds.Set(s, messageGuilds)
 

@@ -72,6 +72,7 @@ func init() { //nolint:funlen
 			(*types.MaterializedViewRefresh)(nil),
 			(*types.UserConsent)(nil),
 			(*types.DiscordServerInfo)(nil),
+			(*types.GuildBanLog)(nil),
 		}
 
 		for _, model := range models {

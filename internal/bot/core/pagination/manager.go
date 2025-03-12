@@ -145,11 +145,14 @@ func (m *Manager) Show(event interfaces.CommonEvent, s *session.Session, pageNam
 }
 
 // Display updates the page in the session and displays it to the user.
-func (m *Manager) Display(event interfaces.CommonEvent, s *session.Session, page *Page, content string) {
+func (m *Manager) Display(
+	event interfaces.CommonEvent, s *session.Session, page *Page, content string, files ...*discord.File,
+) {
 	// Update the message with the new content and components
 	messageUpdate := page.Message(s).
 		SetContent(utils.GetTimestampedSubtext(content)).
 		RetainAttachments().
+		AddFiles(files...).
 		Build()
 
 	message, err := event.Client().Rest().UpdateInteractionResponse(event.ApplicationID(), event.Token(), messageUpdate)

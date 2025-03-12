@@ -2,6 +2,9 @@ package guild
 
 import (
 	"context"
+	"fmt"
+	"strconv"
+	"strings"
 
 	"github.com/disgoorg/disgo/discord"
 	"github.com/disgoorg/disgo/events"
@@ -11,7 +14,6 @@ import (
 	"github.com/robalyx/rotector/internal/bot/core/session"
 	"github.com/robalyx/rotector/internal/bot/interfaces"
 	"github.com/robalyx/rotector/internal/common/storage/database/types"
-	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
 	"go.uber.org/zap"
 )
 
@@ -31,6 +33,7 @@ func NewLogsMenu(layout *Layout) *LogsMenu {
 		},
 		ShowHandlerFunc:   m.Show,
 		ButtonHandlerFunc: m.handleButton,
+		SelectHandlerFunc: m.handleSelectMenu,
 	}
 	return m
 }
@@ -44,19 +47,13 @@ func (m *LogsMenu) Show(event interfaces.CommonEvent, s *session.Session, r *pag
 		return
 	}
 
-	// Set up activity filter for guild ban logs
-	activityFilter := types.ActivityFilter{
-		GuildID:      guildID,
-		ActivityType: enum.ActivityTypeGuildBans,
-	}
-
 	// Get cursor from session if it exists
-	cursor := session.LogCursor.Get(s)
+	cursor := session.GuildBanLogCursor.Get(s)
 
 	// Fetch filtered logs from database
-	logs, nextCursor, err := m.layout.db.Models().Activities().GetLogs(
+	logs, nextCursor, err := m.layout.db.Models().GuildBans().GetGuildBanLogs(
 		context.Background(),
-		activityFilter,
+		guildID,
 		cursor,
 		constants.LogsPerPage,
 	)
@@ -67,12 +64,12 @@ func (m *LogsMenu) Show(event interfaces.CommonEvent, s *session.Session, r *pag
 	}
 
 	// Get previous cursors array
-	prevCursors := session.LogPrevCursors.Get(s)
+	prevCursors := session.GuildBanLogPrevCursors.Get(s)
 
 	// Store results and cursor in session
-	session.LogActivities.Set(s, logs)
-	session.LogCursor.Set(s, cursor)
-	session.LogNextCursor.Set(s, nextCursor)
+	session.GuildBanLogs.Set(s, logs)
+	session.GuildBanLogCursor.Set(s, cursor)
+	session.GuildBanLogNextCursor.Set(s, nextCursor)
 	session.PaginationHasNextPage.Set(s, nextCursor != nil)
 	session.PaginationHasPrevPage.Set(s, len(prevCursors) > 0)
 }
@@ -86,9 +83,9 @@ func (m *LogsMenu) handleButton(
 		r.NavigateBack(event, s, "")
 	case constants.RefreshButtonCustomID:
 		// Reset logs and reload
-		session.LogCursor.Delete(s)
-		session.LogNextCursor.Delete(s)
-		session.LogPrevCursors.Delete(s)
+		session.GuildBanLogCursor.Delete(s)
+		session.GuildBanLogNextCursor.Delete(s)
+		session.GuildBanLogPrevCursors.Delete(s)
 		session.PaginationHasNextPage.Delete(s)
 		session.PaginationHasPrevPage.Delete(s)
 		r.Reload(event, s, "")
@@ -107,29 +104,138 @@ func (m *LogsMenu) handlePagination(
 	switch action {
 	case session.ViewerNextPage:
 		if session.PaginationHasNextPage.Get(s) {
-			cursor := session.LogCursor.Get(s)
-			nextCursor := session.LogNextCursor.Get(s)
-			prevCursors := session.LogPrevCursors.Get(s)
+			cursor := session.GuildBanLogCursor.Get(s)
+			nextCursor := session.GuildBanLogNextCursor.Get(s)
+			prevCursors := session.GuildBanLogPrevCursors.Get(s)
 
-			session.LogCursor.Set(s, nextCursor)
-			session.LogPrevCursors.Set(s, append(prevCursors, cursor))
+			session.GuildBanLogCursor.Set(s, nextCursor)
+			session.GuildBanLogPrevCursors.Set(s, append(prevCursors, cursor))
 			r.Reload(event, s, "")
 		}
 	case session.ViewerPrevPage:
-		prevCursors := session.LogPrevCursors.Get(s)
+		prevCursors := session.GuildBanLogPrevCursors.Get(s)
 
 		if len(prevCursors) > 0 {
 			lastIdx := len(prevCursors) - 1
-			session.LogPrevCursors.Set(s, prevCursors[:lastIdx])
-			session.LogCursor.Set(s, prevCursors[lastIdx])
+			session.GuildBanLogPrevCursors.Set(s, prevCursors[:lastIdx])
+			session.GuildBanLogCursor.Set(s, prevCursors[lastIdx])
 			r.Reload(event, s, "")
 		}
 	case session.ViewerFirstPage:
-		session.LogCursor.Set(s, nil)
-		session.LogPrevCursors.Set(s, make([]*types.LogCursor, 0))
+		session.GuildBanLogCursor.Set(s, nil)
+		session.GuildBanLogPrevCursors.Set(s, make([]*types.LogCursor, 0))
 		r.Reload(event, s, "")
 	case session.ViewerLastPage:
 		// Not currently supported
 		return
 	}
+}
+
+// handleSelectMenu processes select menu interactions.
+func (m *LogsMenu) handleSelectMenu(
+	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, customID, option string,
+) {
+	if customID != constants.GuildBanLogReportSelectMenuCustomID {
+		return
+	}
+
+	// Parse log ID from option
+	logID, err := strconv.ParseInt(option, 10, 64)
+	if err != nil {
+		r.Error(event, "Invalid log ID selected.")
+		return
+	}
+
+	// Get logs from session
+	logs := session.GuildBanLogs.Get(s)
+	if logs == nil {
+		r.Error(event, "No logs available.")
+		return
+	}
+
+	// Find the selected log
+	var selectedLog *types.GuildBanLog
+	for _, log := range logs {
+		if log.ID == logID {
+			selectedLog = log
+			break
+		}
+	}
+
+	if selectedLog == nil {
+		r.Error(event, "Selected log not found.")
+		return
+	}
+
+	// Get guild memberships for banned users
+	userGuilds, err := m.layout.db.Models().Sync().GetFlaggedServerMembers(
+		context.Background(),
+		selectedLog.BannedUserIDs,
+	)
+	if err != nil {
+		m.layout.logger.Error("Failed to get banned user guild memberships",
+			zap.Error(err),
+			zap.Int64("log_id", logID))
+		r.Error(event, "Failed to generate report. Please try again.")
+		return
+	}
+
+	// Get unique server IDs
+	serverIDSet := make(map[uint64]struct{})
+	for _, guilds := range userGuilds {
+		for _, guild := range guilds {
+			serverIDSet[guild.ServerID] = struct{}{}
+		}
+	}
+
+	// Get server names in a database query
+	serverIDs := make([]uint64, 0, len(serverIDSet))
+	for serverID := range serverIDSet {
+		serverIDs = append(serverIDs, serverID)
+	}
+
+	serverInfo, err := m.layout.db.Models().Sync().GetServerInfo(context.Background(), serverIDs)
+	if err != nil {
+		m.layout.logger.Error("Failed to get server names",
+			zap.Error(err),
+			zap.Int64("log_id", logID))
+		r.Error(event, "Failed to generate report. Please try again.")
+		return
+	}
+
+	// Create server name map
+	serverNames := make(map[uint64]string)
+	for _, info := range serverInfo {
+		serverNames[info.ServerID] = info.Name
+	}
+
+	// Generate CSV content
+	var csvContent strings.Builder
+	csvContent.WriteString("User ID,Server Names\n")
+
+	for userID, guilds := range userGuilds {
+		var serverList []string
+		for _, guild := range guilds {
+			serverName := serverNames[guild.ServerID]
+			if serverName == "" {
+				serverName = constants.UnknownServer
+			}
+			// Escape quotes in server names for CSV
+			serverList = append(serverList, strings.ReplaceAll(serverName, "\"", "\"\""))
+		}
+
+		// Write user ID and their server list
+		csvContent.WriteString(fmt.Sprintf("%d,\"%s\"\n",
+			userID,
+			strings.Join(serverList, ", "),
+		))
+	}
+
+	// Create filename with timestamp
+	filename := fmt.Sprintf("ban_report_%s.csv",
+		selectedLog.Timestamp.Format("2006-01-02_15-04-05"))
+
+	// Send response with CSV file
+	file := discord.NewFile(filename, "text/csv", strings.NewReader(csvContent.String()))
+	r.RespondWithFiles(event, s, fmt.Sprintf("Attached CSV report for ban operation #%d", selectedLog.ID), file)
 }

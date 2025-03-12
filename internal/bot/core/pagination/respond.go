@@ -72,6 +72,15 @@ func (r *Respond) ClearComponents(event interfaces.CommonEvent, content string) 
 	r.responded = true
 }
 
+// RespondWithFiles updates the interaction response with a message and file attachments.
+func (r *Respond) RespondWithFiles(
+	event interfaces.CommonEvent, s *session.Session, content string, files ...*discord.File,
+) {
+	page := r.paginationManager.GetPage(session.CurrentPage.Get(s))
+	r.paginationManager.Display(event, s, page, content, files...)
+	r.responded = true
+}
+
 // NavigateBack navigates back to the previous page in the history.
 func (r *Respond) NavigateBack(event interfaces.CommonEvent, s *session.Session, content string) {
 	previousPages := session.PreviousPages.Get(s)

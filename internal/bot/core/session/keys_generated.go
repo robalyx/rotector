@@ -123,7 +123,7 @@ var (
 	// DiscordUserDataRedacted indicates if the user has requested data deletion
 	DiscordUserDataRedacted = NewKey[bool]("DiscordUserDataRedacted", true)
 	// DiscordUserMessageGuilds stores a map of guild IDs where the user has inappropriate messages
-	DiscordUserMessageGuilds = NewKey[map[uint64]bool]("DiscordUserMessageGuilds", true)
+	DiscordUserMessageGuilds = NewKey[map[uint64]struct{}]("DiscordUserMessageGuilds", true)
 	// ChatHistory stores the conversation history
 	ChatHistory = NewKey[ai.ChatHistory]("ChatHistory", true)
 	// ChatContext stores chat context information
@@ -258,6 +258,14 @@ var (
 	GuildScanMinGuilds = NewKey[int]("GuildScanMinGuilds", true)
 	// GuildScanMinJoinDuration stores the minimum join duration filter value
 	GuildScanMinJoinDuration = NewKey[time.Duration]("GuildScanMinJoinDuration", true)
+	// GuildBanLogs stores guild ban operation logs
+	GuildBanLogs = NewKey[[]*types.GuildBanLog]("GuildBanLogs", true)
+	// GuildBanLogCursor stores the current guild ban log cursor
+	GuildBanLogCursor = NewKey[*types.LogCursor]("GuildBanLogCursor", true)
+	// GuildBanLogNextCursor stores the next guild ban log cursor
+	GuildBanLogNextCursor = NewKey[*types.LogCursor]("GuildBanLogNextCursor", true)
+	// GuildBanLogPrevCursors stores previous guild ban log cursors
+	GuildBanLogPrevCursors = NewKey[[]*types.LogCursor]("GuildBanLogPrevCursors", true)
 
 	// ImageBuffer stores binary image data
 	ImageBuffer = NewBufferKey("ImageBuffer", false)
