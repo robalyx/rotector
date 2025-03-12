@@ -49,6 +49,8 @@ func (m *Menu) handleButton(
 		m.handleAccept(event, s, r)
 	case constants.ConsentRejectButtonCustomID:
 		m.handleReject(event, r)
+	case constants.AppealMenuButtonCustomID:
+		r.Show(event, s, constants.AppealOverviewPageName, "")
 	}
 }
 

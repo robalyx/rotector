@@ -31,5 +31,6 @@ func (b *Builder) Build() *discord.MessageUpdateBuilder {
 		AddActionRow(
 			discord.NewSuccessButton("Accept", constants.ConsentAcceptButtonCustomID),
 			discord.NewDangerButton("Reject", constants.ConsentRejectButtonCustomID),
+			discord.NewSecondaryButton("Appeals", constants.AppealMenuButtonCustomID),
 		)
 }
