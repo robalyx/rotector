@@ -2,6 +2,8 @@ package fetcher
 
 import (
 	"context"
+	"errors"
+	"maps"
 	"strconv"
 	"sync"
 	"time"
@@ -11,11 +13,16 @@ import (
 	"github.com/jaxron/roapi.go/pkg/api/resources/thumbnails"
 	apiTypes "github.com/jaxron/roapi.go/pkg/api/types"
 	"github.com/robalyx/rotector/internal/common/storage/database/types"
+	"github.com/robalyx/rotector/internal/common/utils"
 	"github.com/sourcegraph/conc/pool"
 	"go.uber.org/zap"
 )
 
+// ThumbnailPlaceholder represents a placeholder value used when a thumbnail is unavailable or in an error state.
 const ThumbnailPlaceholder = "-"
+
+// ErrPendingThumbnails is an error returned when some thumbnails are still pending.
+var ErrPendingThumbnails = errors.New("some thumbnails still pending")
 
 // ThumbnailFetcher handles retrieval of user and group thumbnails from the Roblox API.
 type ThumbnailFetcher struct {
@@ -111,15 +118,16 @@ func (t *ThumbnailFetcher) ProcessBatchThumbnails(
 	for i := 0; i < len(requestList.Requests); i += batchSize {
 		p.Go(func(ctx context.Context) error {
 			end := min(i+batchSize, len(requestList.Requests))
+			batchRequests := requestList.Requests[i:end]
 
 			// Create new batch request
-			batchRequests := thumbnails.NewBatchThumbnailsBuilder()
-			for _, request := range requestList.Requests[i:end] {
-				batchRequests.AddRequest(request)
+			initialBatch := thumbnails.NewBatchThumbnailsBuilder()
+			for _, request := range batchRequests {
+				initialBatch.AddRequest(request)
 			}
 
-			// Send batch request to Roblox API
-			thumbnailResponses, err := t.roAPI.Thumbnails().GetBatchThumbnails(ctx, batchRequests.Build())
+			// Initial batch request
+			thumbnailResponses, err := t.roAPI.Thumbnails().GetBatchThumbnails(ctx, initialBatch.Build())
 			if err != nil {
 				t.logger.Error("Error fetching batch thumbnails",
 					zap.Error(err),
@@ -127,16 +135,42 @@ func (t *ThumbnailFetcher) ProcessBatchThumbnails(
 				return nil // Don't fail the whole batch for one error
 			}
 
-			// Process responses and store URLs
+			// Process initial responses
+			pendingRequests, results := t.processBatchResponse(thumbnailResponses.Data, batchRequests)
 			mu.Lock()
-			for _, response := range thumbnailResponses.Data {
-				if response.State == apiTypes.ThumbnailStateCompleted && response.ImageURL != nil {
-					thumbnailURLs[response.TargetID] = *response.ImageURL
-				} else {
-					thumbnailURLs[response.TargetID] = ThumbnailPlaceholder
+			maps.Copy(thumbnailURLs, results)
+			mu.Unlock()
+
+			// Retry pending thumbnails with exponential backoff
+			pendingBatch := pendingRequests.Build()
+			if len(pendingBatch.Requests) > 0 {
+				_, err = utils.WithRetry(ctx, func() (map[uint64]string, error) {
+					// Fetch batch thumbnails
+					resp, err := t.roAPI.Thumbnails().GetBatchThumbnails(ctx, pendingBatch)
+					if err != nil {
+						return nil, err
+					}
+
+					// Process batch response
+					pendingRequests, results := t.processBatchResponse(resp.Data, pendingBatch.Requests)
+					mu.Lock()
+					maps.Copy(thumbnailURLs, results)
+					mu.Unlock()
+
+					// If there are still pending requests, return error to trigger retry
+					pendingBatch = pendingRequests.Build()
+					if len(pendingBatch.Requests) > 0 {
+						return nil, ErrPendingThumbnails
+					}
+
+					return results, nil
+				}, utils.GetThumbnailRetryOptions())
+				if err != nil {
+					t.logger.Warn("Failed to fetch pending thumbnails after retries",
+						zap.Error(err),
+						zap.Int("pendingCount", len(pendingBatch.Requests)))
 				}
 			}
-			mu.Unlock()
 
 			return nil
 		})
@@ -152,4 +186,41 @@ func (t *ThumbnailFetcher) ProcessBatchThumbnails(
 		zap.Int("successfulFetches", len(thumbnailURLs)))
 
 	return thumbnailURLs
+}
+
+// processBatchResponse processes thumbnail responses and returns pending requests and results.
+func (t *ThumbnailFetcher) processBatchResponse(
+	responses []apiTypes.ThumbnailData, requests []apiTypes.ThumbnailRequest,
+) (*thumbnails.BatchThumbnailsBuilder, map[uint64]string) {
+	pendingRequests := thumbnails.NewBatchThumbnailsBuilder()
+	results := make(map[uint64]string)
+
+	// Create map of targetID to request for O(1) lookup
+	requestMap := make(map[uint64]apiTypes.ThumbnailRequest, len(requests))
+	for _, req := range requests {
+		requestMap[req.TargetID] = req
+	}
+
+	for _, response := range responses {
+		switch response.State {
+		case apiTypes.ThumbnailStateCompleted:
+			// If thumbnail is processed successfully, add it to the results
+			if response.ImageURL != nil {
+				results[response.TargetID] = *response.ImageURL
+			}
+		case apiTypes.ThumbnailStatePending:
+			// Add to pending requests for retry if found in original requests
+			if req, ok := requestMap[response.TargetID]; ok {
+				pendingRequests.AddRequest(req)
+			}
+		case apiTypes.ThumbnailStateError,
+			apiTypes.ThumbnailStateInReview,
+			apiTypes.ThumbnailStateBlocked,
+			apiTypes.ThumbnailStateUnavailable:
+			// If thumbnail is in a bad state, add a placeholder to the results
+			results[response.TargetID] = ThumbnailPlaceholder
+		}
+	}
+
+	return pendingRequests, results
 }

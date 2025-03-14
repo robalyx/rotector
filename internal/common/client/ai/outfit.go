@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"image"
 	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/HugoSmits86/nativewebp"
@@ -22,8 +23,6 @@ import (
 	"github.com/robalyx/rotector/internal/common/utils"
 	"github.com/sourcegraph/conc/pool"
 	"go.uber.org/zap"
-	"golang.org/x/image/draw"
-	"golang.org/x/image/webp"
 	"golang.org/x/sync/semaphore"
 )
 
@@ -31,22 +30,9 @@ const (
 	// OutfitSystemPrompt provides detailed instructions to the AI model for analyzing user outfits.
 	OutfitSystemPrompt = `You are a Roblox moderator analyzing outfits for predatory behavior targeting minors.
 
-Input format:
-{
-  "username": "string",
-  "outfits": [
-    {
-      "index": 0,
-      "name": "Current Profile Image",
-      "image": "grid position [0,0]"
-    },
-    {
-      "index": 1,
-      "name": "Outfit name",
-      "image": "grid position [0,1]"
-    }
-  ]
-}
+Each outfit image is provided as a separate image part along with this prompt.
+The first image (if present) is the user's current outfit, followed by their outfit images.
+You will receive a list of outfit names that correspond to the images in order.
 
 Output format:
 {
@@ -58,52 +44,64 @@ Output format:
 
 Confidence levels:
 0.0: No violations
-0.1-0.3: Two unclothed outfits
-0.4-0.6: Three unclothed outfits
-0.7-0.8: Four unclothed outfits
-0.9-1.0: Five+ unclothed outfits
+0.1-0.3: One inappropriate outfit
+0.4-0.6: Two inappropriate outfits
+0.7-0.8: Three inappropriate outfits
+0.9-1.0: Four+ inappropriate outfits
 
 Key rules:
-1. Flag ONLY completely unclothed outfits with NO clothing items
-2. Return ONLY users with 3+ violations
-3. Use "the outfit" instead of outfit names in reasons
-4. Include exact outfit names in evidence
-5. Skip empty/missing outfits
+1. Return ONLY users with violations
+2. Use "the outfit" instead of outfit names in reasons
+3. Include exact outfit names in evidence ONLY if their images violate guidelines
+4. Each evidence entry must be a single, complete outfit name - do not combine names
+5. NEVER flag an outfit based on its name alone - analyze only the visual content
+6. Ensure outfit names in evidence match exactly with the provided names
+7. Do not modify, combine, or alter outfit names in any way
 
-DO NOT flag:
-- Template avatars used as base for outfit creation
-- Default Roblox clothing
-- Partial skin showing
-- Thin/transparent clothing
-- Fashion choices
-- Names without visual issues
-- Non-human avatars
-- Unnatural skin colors
-- Single violations
+Flag outfits containing:
+- Inappropriate or overly revealing swimwear
+- Skintight or suggestive bodysuits designed to mimic nudity
+- Oversized or emphasized chest/breast areas
+- Exaggerated sexual characteristics
+- Unrealistic body proportions meant to be suggestive
+- Outfits with suggestive protrusions or attachments mimicking genitalia
+- Bondage, BDSM, or fetish-themed clothing and accessories
+- Explicit roleplay outfits (e.g., suggestive maid, nurse, etc.)
+- Collar and leash combinations
+- Outfits designed to simulate sexual acts or positions
+- Clothing with explicit or suggestive text/imagery
+- Outfits that deliberately expose or emphasize genital or chest areas
+- Revealing "cow girl" or similar animal costumes
+- Provocative furry or anthropomorphic designs
 
-Grid layout:
-[0] [1] [2] [3]
-[4] [5] [6] [7]
-[8] [9] ...`
+Do NOT Flag:
+- Outfits based on their names alone
+- Standard, appropriately designed swimwear or athletic wear
+- Regular, non-revealing casual clothing or fashion items
+- Default Roblox clothing and official outfits
+- Non-suggestive costumes, uniforms, or roleplay outfits
+- Standard or proportionate body types and avatars
+- Non-human avatars, including animals, robots, or fantasy characters
+- Sci-fi, medieval, or artistic designs that are non-explicit
+- Single minor violations that do not suggest inappropriate intent
+- Accessories that are clearly weapons, tools, or non-sexual objects`
 
 	// OutfitRequestPrompt provides a reminder to follow system guidelines for outfit analysis.
-	OutfitRequestPrompt = `Analyze these outfits for completely unclothed avatars.
+	OutfitRequestPrompt = `Analyze these outfits for inappropriate content.
 
 Remember:
-1. Flag only outfits with NO clothing items
-2. Return only users with 3+ violations
-3. Use "the outfit" in reasons
-4. Include exact outfit names as evidence
+1. Each image part corresponds to the outfit name at the same position in the list
+2. The first image (if present) is always the current outfit
+3. Use exact outfit names when providing evidence
+4. Include only outfits whose IMAGES clearly violate the guidelines
+5. DO NOT flag outfits based on their names - analyze only the visual content
 
-Outfits to analyze:
+Outfits to analyze (in order of corresponding images):
 `
 )
 
 const (
-	MinOutfits        = 3
-	MaxOutfits        = 15
-	OutfitGridColumns = 4
-	OutfitGridSize    = 150
+	MaxOutfits = 9
 )
 
 var (
@@ -131,9 +129,8 @@ type OutfitAnalyzer struct {
 
 // DownloadResult contains the result of a single outfit image download.
 type DownloadResult struct {
-	index int
-	img   image.Image
-	name  string
+	img  image.Image
+	name string
 }
 
 // NewOutfitAnalyzer creates an OutfitAnalyzer instance.
@@ -207,7 +204,7 @@ func (a *OutfitAnalyzer) ProcessOutfits(userInfos []*types.User, reasonsMap map[
 	for _, userInfo := range flaggedInfos {
 		// Skip if user has no outfits
 		outfits, hasOutfits := userOutfits[userInfo.ID]
-		if !hasOutfits || len(outfits) < MinOutfits {
+		if !hasOutfits {
 			continue
 		}
 
@@ -240,58 +237,44 @@ func (a *OutfitAnalyzer) ProcessOutfits(userInfos []*types.User, reasonsMap map[
 func (a *OutfitAnalyzer) getOutfitThumbnails(
 	ctx context.Context, userInfos []*types.User,
 ) (map[uint64][]*apiTypes.Outfit, map[uint64]map[uint64]string) {
-	// Collect all outfits from all users
-	allOutfits := make([]*apiTypes.Outfit, 0)
-	outfitToUser := make(map[uint64]*types.User)
-
-	for _, userInfo := range userInfos {
-		// Skip users with no outfits
-		if len(userInfo.Outfits) < MinOutfits {
-			continue
-		}
-
-		// Limit outfits per user
-		userOutfits := userInfo.Outfits
-		if len(userOutfits) > MaxOutfits {
-			userOutfits = userOutfits[:MaxOutfits]
-		}
-
-		// Add outfits to collection and map them back to user
-		for _, outfit := range userOutfits {
-			allOutfits = append(allOutfits, outfit)
-			outfitToUser[outfit.ID] = userInfo
-		}
-	}
-
-	// Build batch request for all outfits
+	userOutfits := make(map[uint64][]*apiTypes.Outfit)
 	requests := thumbnails.NewBatchThumbnailsBuilder()
-	for _, outfit := range allOutfits {
-		requests.AddRequest(apiTypes.ThumbnailRequest{
-			Type:      apiTypes.OutfitType,
-			TargetID:  outfit.ID,
-			RequestID: strconv.FormatUint(outfit.ID, 10),
-			Size:      apiTypes.Size150x150,
-			Format:    apiTypes.WEBP,
-		})
+
+	// Organize outfits by user and build thumbnail requests
+	for _, userInfo := range userInfos {
+		// Limit outfits per user
+		outfits := userInfo.Outfits
+		if len(outfits) > MaxOutfits {
+			outfits = outfits[:MaxOutfits]
+		}
+
+		userOutfits[userInfo.ID] = outfits
+
+		// Add thumbnail requests for each outfit
+		for _, outfit := range outfits {
+			requests.AddRequest(apiTypes.ThumbnailRequest{
+				Type:      apiTypes.OutfitType,
+				TargetID:  outfit.ID,
+				RequestID: strconv.FormatUint(outfit.ID, 10),
+				Size:      apiTypes.Size150x150,
+				Format:    apiTypes.JPEG,
+			})
+		}
 	}
 
 	// Get thumbnails for all outfits
 	thumbnailMap := a.thumbnailFetcher.ProcessBatchThumbnails(ctx, requests)
 
-	// Group outfits and thumbnails by user
-	userOutfits := make(map[uint64][]*apiTypes.Outfit)
+	// Create user thumbnail map
 	userThumbnails := make(map[uint64]map[uint64]string)
-
-	for _, outfit := range allOutfits {
-		if userInfo, exists := outfitToUser[outfit.ID]; exists {
-			userOutfits[userInfo.ID] = append(userOutfits[userInfo.ID], outfit)
-			if userThumbnails[userInfo.ID] == nil {
-				userThumbnails[userInfo.ID] = make(map[uint64]string)
-			}
-			if thumbnailURL, ok := thumbnailMap[outfit.ID]; ok {
-				userThumbnails[userInfo.ID][outfit.ID] = thumbnailURL
+	for userID, outfits := range userOutfits {
+		thumbnails := make(map[uint64]string)
+		for _, outfit := range outfits {
+			if url, ok := thumbnailMap[outfit.ID]; ok {
+				thumbnails[outfit.ID] = url
 			}
 		}
+		userThumbnails[userID] = thumbnails
 	}
 
 	return userOutfits, userThumbnails
@@ -309,29 +292,41 @@ func (a *OutfitAnalyzer) analyzeUserOutfits(
 	defer a.analysisSem.Release(1)
 
 	// Analyze outfits with retry
-	analysis, err := withRetry(ctx, func() (*OutfitAnalysis, error) {
-		// Create grid image from outfits
-		gridImage, outfitNames, err := a.createOutfitGrid(ctx, info, outfits, thumbnailMap)
+	analysis, err := utils.WithRetry(ctx, func() (*OutfitAnalysis, error) {
+		// Create separate image parts from outfits
+		var parts []genai.Part
+		outfitNames := make([]string, 0, len(outfits))
+
+		// Download and process each outfit image
+		downloads, err := a.downloadOutfitImages(ctx, info, outfits, thumbnailMap)
 		if err != nil {
 			if errors.Is(err, ErrNoOutfits) {
 				return nil, ErrNoViolations
 			}
-			return nil, fmt.Errorf("failed to create outfit grid: %w", err)
+			return nil, fmt.Errorf("failed to download outfit images: %w", err)
+		}
+
+		// Process each downloaded image
+		for _, result := range downloads {
+			buf := new(bytes.Buffer)
+			if err := nativewebp.Encode(buf, result.img, nil); err != nil {
+				continue
+			}
+			parts = append(parts, genai.ImageData("webp", buf.Bytes()))
+			outfitNames = append(outfitNames, result.name)
 		}
 
 		// Prepare prompt with outfit information
 		prompt := fmt.Sprintf(
-			"%s\n\nAnalyze outfits for user %q.\nOutfit names: %v",
+			"%s\n\nAnalyze outfits for user %q.\nOutfit names: %s",
 			OutfitRequestPrompt,
 			info.Name,
-			outfitNames,
+			strings.Join(outfitNames, ", "),
 		)
 
-		// Send request to Gemini
-		resp, err := a.outfitModel.GenerateContent(ctx,
-			genai.ImageData("webp", gridImage.Bytes()),
-			genai.Text(prompt),
-		)
+		// Send request to Gemini with all image parts
+		modelParts := append([]genai.Part{genai.Text(prompt)}, parts...)
+		resp, err := a.outfitModel.GenerateContent(ctx, modelParts...)
 		if err != nil {
 			return nil, fmt.Errorf("gemini API error: %w", err)
 		}
@@ -354,7 +349,7 @@ func (a *OutfitAnalyzer) analyzeUserOutfits(
 		}
 
 		return &result, nil
-	})
+	}, utils.GetAIRetryOptions())
 	if err != nil {
 		return err
 	}
@@ -384,37 +379,28 @@ func (a *OutfitAnalyzer) analyzeUserOutfits(
 	})
 	mu.Unlock()
 
+	a.logger.Info("AI flagged user with outfit violations",
+		zap.Uint64("userID", info.ID),
+		zap.String("username", info.Name),
+		zap.String("reason", analysis.Reason),
+		zap.Float64("confidence", analysis.Confidence))
+
 	return nil
-}
-
-// createOutfitGrid downloads outfit images and creates a grid image.
-func (a *OutfitAnalyzer) createOutfitGrid(
-	ctx context.Context, userInfo *types.User, outfits []*apiTypes.Outfit, thumbnailMap map[uint64]string,
-) (*bytes.Buffer, []string, error) {
-	// Download outfit images concurrently
-	successfulDownloads, err := a.downloadOutfitImages(ctx, userInfo, outfits, thumbnailMap)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	// Create and save grid image
-	return a.createGridImage(successfulDownloads)
 }
 
 // downloadOutfitImages concurrently downloads outfit images until we have enough.
 func (a *OutfitAnalyzer) downloadOutfitImages(
 	ctx context.Context, userInfo *types.User, outfits []*apiTypes.Outfit, thumbnailMap map[uint64]string,
 ) ([]DownloadResult, error) {
+	var downloads []DownloadResult
+
 	// Download current user thumbnail
-	downloads := make([]DownloadResult, 0, MaxOutfits)
 	thumbnailURL := userInfo.ThumbnailURL
 	if thumbnailURL != "" && thumbnailURL != fetcher.ThumbnailPlaceholder {
-		thumbnailImg, ok := a.downloadImage(ctx, thumbnailURL)
-		if ok {
+		if thumbnailImg, ok := a.downloadImage(ctx, thumbnailURL); ok {
 			downloads = append(downloads, DownloadResult{
-				index: 0,
-				img:   thumbnailImg,
-				name:  "Current Profile Image",
+				img:  thumbnailImg,
+				name: "Current Outfit",
 			})
 		}
 	}
@@ -425,28 +411,23 @@ func (a *OutfitAnalyzer) downloadOutfitImages(
 		mu sync.Mutex
 	)
 
-	for i := range outfits {
+	for _, outfit := range outfits {
 		// Check if thumbnail is valid
-		thumbnailURL, ok := thumbnailMap[outfits[i].ID]
+		thumbnailURL, ok := thumbnailMap[outfit.ID]
 		if !ok || thumbnailURL == "" || thumbnailURL == fetcher.ThumbnailPlaceholder {
 			continue
 		}
 
-		currentIndex := i + 1
-		currentOutfit := outfits[i]
-		currentURL := thumbnailURL
-
 		p.Go(func(ctx context.Context) error {
-			img, ok := a.downloadImage(ctx, currentURL)
+			img, ok := a.downloadImage(ctx, thumbnailURL)
 			if !ok {
 				return nil
 			}
 
 			mu.Lock()
 			downloads = append(downloads, DownloadResult{
-				index: currentIndex,
-				img:   img,
-				name:  currentOutfit.Name,
+				img:  img,
+				name: outfit.Name,
 			})
 			mu.Unlock()
 
@@ -455,7 +436,7 @@ func (a *OutfitAnalyzer) downloadOutfitImages(
 	}
 
 	// Wait for all downloads to complete
-	if err := p.Wait(); err != nil && !errors.Is(err, ErrInvalidThumbnailURL) {
+	if err := p.Wait(); err != nil {
 		a.logger.Error("Error during outfit downloads", zap.Error(err))
 	}
 
@@ -467,42 +448,7 @@ func (a *OutfitAnalyzer) downloadOutfitImages(
 	return downloads, nil
 }
 
-// createGridImage creates a grid from downloaded images.
-func (a *OutfitAnalyzer) createGridImage(downloads []DownloadResult) (*bytes.Buffer, []string, error) {
-	rows := (len(downloads) + OutfitGridColumns - 1) / OutfitGridColumns
-	gridWidth := OutfitGridSize * OutfitGridColumns
-	gridHeight := OutfitGridSize * rows
-
-	dst := image.NewRGBA(image.Rect(0, 0, gridWidth, gridHeight))
-	outfitNames := make([]string, len(downloads))
-
-	// Draw images into grid
-	for i, result := range downloads {
-		// Store outfit name
-		outfitNames[i] = result.name
-
-		// Calculate position in grid
-		x := (i % OutfitGridColumns) * OutfitGridSize
-		y := (i / OutfitGridColumns) * OutfitGridSize
-
-		// Draw image into grid
-		draw.Draw(dst,
-			image.Rect(x, y, x+OutfitGridSize, y+OutfitGridSize),
-			result.img,
-			image.Point{},
-			draw.Over)
-	}
-
-	// Encode final grid image
-	buf := new(bytes.Buffer)
-	if err := nativewebp.Encode(buf, dst, &nativewebp.Options{}); err != nil {
-		return nil, nil, fmt.Errorf("failed to encode grid image: %w", err)
-	}
-
-	return buf, outfitNames, nil
-}
-
-// downloadImage downloads an image from a URL and resizes it to 150x150 if needed.
+// downloadImage downloads an image from a URL.
 func (a *OutfitAnalyzer) downloadImage(ctx context.Context, url string) (image.Image, bool) {
 	// Download image
 	resp, err := a.httpClient.NewRequest().URL(url).Do(ctx)
@@ -515,21 +461,9 @@ func (a *OutfitAnalyzer) downloadImage(ctx context.Context, url string) (image.I
 	defer resp.Body.Close()
 
 	// Decode image
-	img, err := webp.Decode(resp.Body)
+	img, err := nativewebp.Decode(resp.Body)
 	if err != nil {
 		return nil, false
-	}
-
-	// Check if image needs resizing
-	bounds := img.Bounds()
-	if bounds.Dx() != 150 || bounds.Dy() != 150 {
-		// Create a new 150x150 RGBA image
-		resized := image.NewRGBA(image.Rect(0, 0, 150, 150))
-
-		// Draw the original image into the resized image
-		draw.NearestNeighbor.Scale(resized, resized.Bounds(), img, bounds, draw.Over, nil)
-
-		return resized, true
 	}
 
 	return img, true

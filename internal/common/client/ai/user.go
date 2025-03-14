@@ -57,6 +57,8 @@ Key rules:
 6. Set hasSocials to true if description contains any social media handles/links
 7. If user has no violations but has socials, only include name and hasSocials fields
 8. Social media presence alone is NOT a violation - it's just informational
+9. DO NOT flag users for being potential victims
+10. ONLY flag users exhibiting predatory or inappropriate behavior
 
 Confidence levels (only for inappropriate content):
 0.0: No predatory elements
@@ -65,7 +67,7 @@ Confidence levels (only for inappropriate content):
 0.7-0.8: Strong predatory indicators
 0.9-1.0: Explicit predatory intent
 
-Look for inappropriate content:
+Look for inappropriate content FROM PREDATORS:
 - Coded language for inappropriate activities
 - Leading phrases implying secrecy
 - Inappropriate game/chat/studio invitations
@@ -115,7 +117,7 @@ Ignore:
 - Non-inappropriate content
 - Non-sexual roleplay
 - General social interactions
-- Age mentions
+- Age mentions or bypasses
 - Compliments on outfits/avatars
 - Any follow or friend making requests
 - Advertisements to join games, communities, channels, or tournaments
@@ -329,7 +331,7 @@ func (a *UserAnalyzer) processBatch(
 	requestPrompt := UserRequestPrompt + string(userInfoJSON)
 
 	// Generate content and parse response using Gemini model with retry
-	flaggedResults, err := withRetry(ctx, func() (*FlaggedUsers, error) {
+	flaggedResults, err := utils.WithRetry(ctx, func() (*FlaggedUsers, error) {
 		resp, err := a.userModel.GenerateContent(ctx, genai.Text(requestPrompt))
 		if err != nil {
 			return nil, fmt.Errorf("gemini API error: %w", err)
@@ -353,7 +355,7 @@ func (a *UserAnalyzer) processBatch(
 		}
 
 		return &result, nil
-	})
+	}, utils.GetAIRetryOptions())
 	if err != nil {
 		return fmt.Errorf("%w: %w", ErrModelResponse, err)
 	}
@@ -461,14 +463,14 @@ func (a *UserAnalyzer) prepareUserInfos(
 			}
 
 			// Translate the description with retry
-			translated, err := withRetry(ctx, func() (string, error) {
+			translated, err := utils.WithRetry(ctx, func() (string, error) {
 				return a.translator.Translate(
 					ctx,
 					info.Description,
 					"auto", // Auto-detect source language
 					"en",   // Translate to English
 				)
-			})
+			}, utils.GetAIRetryOptions())
 			if err != nil {
 				// Use original userInfo if translation fails
 				mu.Lock()

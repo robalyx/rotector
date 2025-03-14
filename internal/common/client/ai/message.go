@@ -8,6 +8,7 @@ import (
 	"github.com/bytedance/sonic"
 	"github.com/google/generative-ai-go/genai"
 	"github.com/robalyx/rotector/internal/common/setup"
+	"github.com/robalyx/rotector/internal/common/utils"
 	"github.com/sourcegraph/conc/pool"
 	"github.com/tdewolff/minify/v2"
 	"github.com/tdewolff/minify/v2/json"
@@ -93,10 +94,8 @@ Key rules:
 4. Skip empty messages or messages with only non-sexual offensive content
 5. Focus on protecting minors from inappropriate sexual content
 6. Avoid flagging messages from potential victims
-7. Ignore offensive/racist content that is not sexual in nature
-8. Do not flag users who are confronting or reporting inappropriate behavior in condo servers
-9. Do not flag messages that are calling out, exposing, or reporting inappropriate users/behavior
-10. Focus on flagging the actual inappropriate content, not reactions to it`
+7. DO NOT flag users who are warning, confronting, expressing concern, or calling out inappropriate behavior
+8. Ignore offensive/racist content that is not sexual in nature`
 
 	// MessageAnalysisPrompt provides a reminder to follow system guidelines for message analysis.
 	MessageAnalysisPrompt = `Analyze these messages for inappropriate content.
@@ -341,7 +340,7 @@ func (a *MessageAnalyzer) processBatch(
 	prompt := fmt.Sprintf(MessageAnalysisPrompt, serverName, minifiedJSON)
 
 	// Call the AI with retry mechanism
-	flaggedResults, err := withRetry(ctx, func() (*FlaggedMessagesResponse, error) {
+	flaggedResults, err := utils.WithRetry(ctx, func() (*FlaggedMessagesResponse, error) {
 		response, err := a.messageModel.GenerateContent(ctx, genai.Text(prompt))
 		if err != nil {
 			return nil, fmt.Errorf("AI generation failed: %w", err)
@@ -367,7 +366,7 @@ func (a *MessageAnalyzer) processBatch(
 		}
 
 		return &results, nil
-	})
+	}, utils.GetAIRetryOptions())
 	if err != nil {
 		return nil, err
 	}

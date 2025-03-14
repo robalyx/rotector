@@ -15,6 +15,7 @@ import (
 	"github.com/robalyx/rotector/assets"
 	"github.com/robalyx/rotector/internal/bot/core/session"
 	"github.com/robalyx/rotector/internal/bot/interfaces"
+	"github.com/robalyx/rotector/internal/common/client/fetcher"
 	"go.uber.org/zap"
 	"golang.org/x/image/webp"
 )
@@ -91,14 +92,14 @@ func (is *ImageStreamer) Stream(req StreamRequest) {
 	)
 
 	// Create request context with timeout
-	ctx, cancel := context.WithTimeout(context.Background(), 6*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	// Start downloading images concurrently
 	for i, url := range urls {
 		go func(index int, url string) {
-			// Skip if the URL is empty
-			if url == "" {
+			// Skip if the URL is invalid
+			if url == "" || url == fetcher.ThumbnailPlaceholder {
 				resultChan <- DownloadResult{index: index}
 				return
 			}

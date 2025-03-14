@@ -289,7 +289,7 @@ func (a *FriendAnalyzer) processBatch(
 	prompt := fmt.Sprintf(FriendUserPrompt, string(batchDataJSON))
 
 	// Generate friend analysis using Gemini model with retry
-	batchAnalysis, err := withRetry(ctx, func() (*BatchFriendAnalysis, error) {
+	batchAnalysis, err := utils.WithRetry(ctx, func() (*BatchFriendAnalysis, error) {
 		resp, err := a.genModel.GenerateContent(ctx, genai.Text(prompt))
 		if err != nil {
 			return nil, fmt.Errorf("gemini API error: %w", err)
@@ -312,7 +312,7 @@ func (a *FriendAnalyzer) processBatch(
 		}
 
 		return &result, nil
-	})
+	}, utils.GetAIRetryOptions())
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrModelResponse, err)
 	}

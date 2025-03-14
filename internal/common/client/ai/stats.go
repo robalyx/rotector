@@ -113,7 +113,7 @@ func (a *StatsAnalyzer) GenerateWelcomeMessage(
 	}
 
 	// Generate welcome message using Gemini model with retry
-	message, err := withRetry(ctx, func() (string, error) {
+	message, err := utils.WithRetry(ctx, func() (string, error) {
 		resp, err := a.genModel.GenerateContent(ctx, genai.Text(string(statsJSON)))
 		if err != nil {
 			return "", fmt.Errorf("gemini API error: %w", err)
@@ -129,7 +129,7 @@ func (a *StatsAnalyzer) GenerateWelcomeMessage(
 		cleanMessage := utils.CompressAllWhitespace(text)
 
 		return cleanMessage, nil
-	})
+	}, utils.GetAIRetryOptions())
 	if err != nil {
 		return "", err
 	}
