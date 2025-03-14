@@ -47,51 +47,15 @@ func (r *GroupModel) SaveGroups(ctx context.Context, groups map[uint64]*types.Gr
 	}
 
 	// Get existing groups with all their data
-	existingGroups, err := r.GetGroupsByIDs(ctx, groupIDs, types.GroupFieldBasic|types.GroupFieldTimestamps)
+	existingGroups, err := r.GetGroupsByIDs(
+		ctx, groupIDs, types.GroupFieldBasic|types.GroupFieldTimestamps|types.GroupFieldReasons,
+	)
 	if err != nil {
 		return fmt.Errorf("failed to get existing groups: %w", err)
 	}
 
-	// Initialize slices for each table
-	flaggedGroups := make([]*types.FlaggedGroup, 0)
-	confirmedGroups := make([]*types.ConfirmedGroup, 0)
-	clearedGroups := make([]*types.ClearedGroup, 0)
-	counts := make(map[enum.GroupType]int)
-
-	// Group groups by their target tables
-	for id, group := range groups {
-		// Generate UUID for new groups
-		if group.UUID == uuid.Nil {
-			group.UUID = uuid.New()
-		}
-
-		// Get existing group data if available
-		var status enum.GroupType
-		existingGroup, ok := existingGroups[id]
-		if !ok {
-			status = enum.GroupTypeFlagged
-		} else {
-			status = existingGroup.Status
-		}
-
-		switch status {
-		case enum.GroupTypeConfirmed:
-			confirmedGroups = append(confirmedGroups, &types.ConfirmedGroup{
-				Group:      *group,
-				VerifiedAt: existingGroup.VerifiedAt,
-			})
-		case enum.GroupTypeFlagged:
-			flaggedGroups = append(flaggedGroups, &types.FlaggedGroup{
-				Group: *group,
-			})
-		case enum.GroupTypeCleared:
-			clearedGroups = append(clearedGroups, &types.ClearedGroup{
-				Group:     *group,
-				ClearedAt: existingGroup.ClearedAt,
-			})
-		} //exhaustive:ignore // other cases are impossible
-		counts[status]++
-	}
+	// Group groups by their status
+	flaggedGroups, confirmedGroups, clearedGroups, counts := r.groupGroupsByStatus(groups, existingGroups)
 
 	// Update each table
 	err = r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
@@ -150,6 +114,63 @@ func (r *GroupModel) SaveGroups(ctx context.Context, groups map[uint64]*types.Gr
 		zap.Int("clearedGroups", counts[enum.GroupTypeCleared]))
 
 	return nil
+}
+
+// groupGroupsByStatus groups by their status and merges reasons.
+func (r *GroupModel) groupGroupsByStatus(
+	groups map[uint64]*types.Group, existingGroups map[uint64]*types.ReviewGroup,
+) ([]*types.FlaggedGroup, []*types.ConfirmedGroup, []*types.ClearedGroup, map[enum.GroupType]int) {
+	flaggedGroups := make([]*types.FlaggedGroup, 0)
+	confirmedGroups := make([]*types.ConfirmedGroup, 0)
+	clearedGroups := make([]*types.ClearedGroup, 0)
+	counts := make(map[enum.GroupType]int)
+
+	for id, group := range groups {
+		// Generate UUID for new groups
+		if group.UUID == uuid.Nil {
+			group.UUID = uuid.New()
+		}
+
+		// Handle reasons merging and determine status
+		status := enum.GroupTypeFlagged
+		existingGroup, ok := existingGroups[id]
+		if ok {
+			status = existingGroup.Status
+
+			// Create new reasons map if it doesn't exist
+			if group.Reasons == nil {
+				group.Reasons = make(types.Reasons[enum.GroupReasonType])
+			}
+
+			// Copy over existing reasons, only adding new ones
+			for reasonType, reason := range existingGroup.Group.Reasons {
+				if _, exists := group.Reasons[reasonType]; !exists {
+					group.Reasons[reasonType] = reason
+				}
+			}
+		}
+
+		// Group groups by their target tables
+		switch status {
+		case enum.GroupTypeConfirmed:
+			confirmedGroups = append(confirmedGroups, &types.ConfirmedGroup{
+				Group:      *group,
+				VerifiedAt: existingGroup.VerifiedAt,
+			})
+		case enum.GroupTypeFlagged:
+			flaggedGroups = append(flaggedGroups, &types.FlaggedGroup{
+				Group: *group,
+			})
+		case enum.GroupTypeCleared:
+			clearedGroups = append(clearedGroups, &types.ClearedGroup{
+				Group:     *group,
+				ClearedAt: existingGroup.ClearedAt,
+			})
+		}
+		counts[status]++
+	}
+
+	return flaggedGroups, confirmedGroups, clearedGroups, counts
 }
 
 // ConfirmGroup moves a group from other group tables to confirmed_groups.

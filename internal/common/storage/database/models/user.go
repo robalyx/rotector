@@ -53,51 +53,15 @@ func (r *UserModel) SaveUsers(ctx context.Context, users map[uint64]*types.User)
 	}
 
 	// Get existing users with all their data
-	existingUsers, err := r.GetUsersByIDs(ctx, userIDs, types.UserFieldBasic|types.UserFieldTimestamps)
+	existingUsers, err := r.GetUsersByIDs(
+		ctx, userIDs, types.UserFieldBasic|types.UserFieldTimestamps|types.UserFieldReasons,
+	)
 	if err != nil {
 		return fmt.Errorf("failed to get existing users: %w", err)
 	}
 
-	// Initialize slices for each table
-	flaggedUsers := make([]*types.FlaggedUser, 0)
-	confirmedUsers := make([]*types.ConfirmedUser, 0)
-	clearedUsers := make([]*types.ClearedUser, 0)
-	counts := make(map[enum.UserType]int)
-
-	// Group users by their target tables
-	for id, user := range users {
-		// Generate UUID for new users
-		if user.UUID == uuid.Nil {
-			user.UUID = uuid.New()
-		}
-
-		// Get existing user data if available
-		var status enum.UserType
-		existingUser, ok := existingUsers[id]
-		if !ok {
-			status = enum.UserTypeFlagged
-		} else {
-			status = existingUser.Status
-		}
-
-		switch status {
-		case enum.UserTypeConfirmed:
-			confirmedUsers = append(confirmedUsers, &types.ConfirmedUser{
-				User:       *user,
-				VerifiedAt: existingUser.VerifiedAt,
-			})
-		case enum.UserTypeFlagged:
-			flaggedUsers = append(flaggedUsers, &types.FlaggedUser{
-				User: *user,
-			})
-		case enum.UserTypeCleared:
-			clearedUsers = append(clearedUsers, &types.ClearedUser{
-				User:      *user,
-				ClearedAt: existingUser.ClearedAt,
-			})
-		}
-		counts[status]++
-	}
+	// Group users by their status
+	flaggedUsers, confirmedUsers, clearedUsers, counts := r.groupUsersByStatus(users, existingUsers)
 
 	// Update each table
 	err = r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
@@ -161,6 +125,63 @@ func (r *UserModel) SaveUsers(ctx context.Context, users map[uint64]*types.User)
 		zap.Int("clearedUsers", counts[enum.UserTypeCleared]))
 
 	return nil
+}
+
+// groupUsersByStatus groups users by their status and merges reasons.
+func (r *UserModel) groupUsersByStatus(
+	users map[uint64]*types.User, existingUsers map[uint64]*types.ReviewUser,
+) ([]*types.FlaggedUser, []*types.ConfirmedUser, []*types.ClearedUser, map[enum.UserType]int) {
+	flaggedUsers := make([]*types.FlaggedUser, 0)
+	confirmedUsers := make([]*types.ConfirmedUser, 0)
+	clearedUsers := make([]*types.ClearedUser, 0)
+	counts := make(map[enum.UserType]int)
+
+	for id, user := range users {
+		// Generate UUID for new users
+		if user.UUID == uuid.Nil {
+			user.UUID = uuid.New()
+		}
+
+		// Handle reasons merging and determine status
+		status := enum.UserTypeFlagged
+		existingUser, ok := existingUsers[id]
+		if ok {
+			status = existingUser.Status
+
+			// Create new reasons map if it doesn't exist
+			if user.Reasons == nil {
+				user.Reasons = make(types.Reasons[enum.UserReasonType])
+			}
+
+			// Copy over existing reasons, only adding new ones
+			for reasonType, reason := range existingUser.User.Reasons {
+				if _, exists := user.Reasons[reasonType]; !exists {
+					user.Reasons[reasonType] = reason
+				}
+			}
+		}
+
+		// Group users by their target tables
+		switch status {
+		case enum.UserTypeConfirmed:
+			confirmedUsers = append(confirmedUsers, &types.ConfirmedUser{
+				User:       *user,
+				VerifiedAt: existingUser.VerifiedAt,
+			})
+		case enum.UserTypeFlagged:
+			flaggedUsers = append(flaggedUsers, &types.FlaggedUser{
+				User: *user,
+			})
+		case enum.UserTypeCleared:
+			clearedUsers = append(clearedUsers, &types.ClearedUser{
+				User:      *user,
+				ClearedAt: existingUser.ClearedAt,
+			})
+		}
+		counts[status]++
+	}
+
+	return flaggedUsers, confirmedUsers, clearedUsers, counts
 }
 
 // ConfirmUser moves a user from other user tables to confirmed_users.
