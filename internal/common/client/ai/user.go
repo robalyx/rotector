@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"sync"
-	"unicode"
 
 	"github.com/bytedance/sonic"
 	"github.com/google/generative-ai-go/genai"
@@ -19,9 +18,6 @@ import (
 	"github.com/tdewolff/minify/v2/json"
 	"go.uber.org/zap"
 	"golang.org/x/sync/semaphore"
-	"golang.org/x/text/runes"
-	"golang.org/x/text/transform"
-	"golang.org/x/text/unicode/norm"
 )
 
 const (
@@ -373,15 +369,7 @@ func (a *UserAnalyzer) validateAndUpdateFlaggedUsers(
 	flaggedResults *FlaggedUsers, translatedInfos, originalInfos map[string]*types.User,
 	reasonsMap map[uint64]types.Reasons[enum.UserReasonType], mu *sync.Mutex,
 ) {
-	normalizer := transform.Chain(
-		norm.NFKD,                             // Decompose with compatibility decomposition
-		runes.Remove(runes.In(unicode.Mn)),    // Remove non-spacing marks
-		runes.Remove(runes.In(unicode.P)),     // Remove punctuation
-		runes.Map(unicode.ToLower),            // Convert to lowercase before normalization
-		norm.NFKC,                             // Normalize with compatibility composition
-		runes.Remove(runes.In(unicode.Space)), // Remove spaces
-	)
-
+	normalizer := utils.NewTextNormalizer()
 	for _, flaggedUser := range flaggedResults.Users {
 		translatedInfo, exists := translatedInfos[flaggedUser.Name]
 		originalInfo, hasOriginal := originalInfos[flaggedUser.Name]
@@ -418,8 +406,7 @@ func (a *UserAnalyzer) validateAndUpdateFlaggedUsers(
 		}
 
 		// Validate flagged content against user texts
-		isValid := utils.ValidateFlaggedWords(flaggedUser.FlaggedContent,
-			normalizer,
+		isValid := normalizer.ValidateWords(flaggedUser.FlaggedContent,
 			translatedInfo.Name,
 			translatedInfo.DisplayName,
 			translatedInfo.Description)

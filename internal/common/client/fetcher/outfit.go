@@ -7,6 +7,7 @@ import (
 	"github.com/jaxron/roapi.go/pkg/api/middleware/auth"
 	"github.com/jaxron/roapi.go/pkg/api/resources/avatar"
 	apiTypes "github.com/jaxron/roapi.go/pkg/api/types"
+	"github.com/robalyx/rotector/internal/common/utils"
 	"go.uber.org/zap"
 )
 
@@ -35,6 +36,12 @@ func (o *OutfitFetcher) GetOutfits(ctx context.Context, userID uint64) (*apiType
 			zap.Error(err),
 			zap.Uint64("userID", userID))
 		return nil, err
+	}
+
+	// Normalize outfit names
+	normalizer := utils.NewTextNormalizer()
+	for i := range outfits.Data {
+		outfits.Data[i].Name = normalizer.Normalize(outfits.Data[i].Name)
 	}
 
 	o.logger.Debug("Successfully fetched user outfits",

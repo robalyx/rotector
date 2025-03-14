@@ -9,6 +9,7 @@ import (
 	"github.com/jaxron/roapi.go/pkg/api/middleware/auth"
 	"github.com/jaxron/roapi.go/pkg/api/resources/groups"
 	apiTypes "github.com/jaxron/roapi.go/pkg/api/types"
+	"github.com/robalyx/rotector/internal/common/utils"
 	"github.com/sourcegraph/conc/pool"
 	"go.uber.org/zap"
 )
@@ -62,6 +63,19 @@ func (g *GroupFetcher) FetchGroupInfos(ctx context.Context, groupIDs []uint64) [
 			// Check for locked groups
 			if groupInfo.IsLocked != nil && *groupInfo.IsLocked {
 				return nil
+			}
+
+			// Normalize text fields
+			normalizer := utils.NewTextNormalizer()
+
+			groupInfo.Name = normalizer.Normalize(groupInfo.Name)
+			groupInfo.Description = normalizer.Normalize(groupInfo.Description)
+			if groupInfo.Owner != nil {
+				groupInfo.Owner.DisplayName = normalizer.Normalize(groupInfo.Owner.DisplayName)
+			}
+			if groupInfo.Shout != nil {
+				groupInfo.Shout.Body = normalizer.Normalize(groupInfo.Shout.Body)
+				groupInfo.Shout.Poster.DisplayName = normalizer.Normalize(groupInfo.Shout.Poster.DisplayName)
 			}
 
 			mu.Lock()

@@ -7,6 +7,7 @@ import (
 	"github.com/jaxron/roapi.go/pkg/api/middleware/auth"
 	"github.com/jaxron/roapi.go/pkg/api/resources/games"
 	"github.com/jaxron/roapi.go/pkg/api/types"
+	"github.com/robalyx/rotector/internal/common/utils"
 	"go.uber.org/zap"
 )
 
@@ -34,8 +35,9 @@ func (g *GameFetcher) FetchGamesForUser(ctx context.Context, userID uint64) ([]*
 	ctx = context.WithValue(ctx, auth.KeyAddCookie, true)
 
 	var (
-		allGames = make([]*types.Game, 0, 50)
-		cursor   string
+		allGames   = make([]*types.Game, 0, 50)
+		cursor     string
+		normalizer = utils.NewTextNormalizer()
 	)
 
 	for {
@@ -57,7 +59,10 @@ func (g *GameFetcher) FetchGamesForUser(ctx context.Context, userID uint64) ([]*
 
 		// Append games from this page
 		for _, game := range response.Data {
-			allGames = append(allGames, &game)
+			normalizedGame := game
+			normalizedGame.Name = normalizer.Normalize(game.Name)
+			normalizedGame.Description = normalizer.Normalize(game.Description)
+			allGames = append(allGames, &normalizedGame)
 		}
 
 		// Check if there are more pages

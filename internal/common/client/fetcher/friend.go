@@ -9,6 +9,7 @@ import (
 	"github.com/jaxron/roapi.go/pkg/api/resources/friends"
 	"github.com/jaxron/roapi.go/pkg/api/resources/users"
 	apiTypes "github.com/jaxron/roapi.go/pkg/api/types"
+	"github.com/robalyx/rotector/internal/common/utils"
 	"github.com/sourcegraph/conc/pool"
 	"go.uber.org/zap"
 )
@@ -149,13 +150,14 @@ func (f *FriendFetcher) GetFriends(ctx context.Context, userID uint64) ([]*apiTy
 			}
 
 			batchFriends := make([]*apiTypes.ExtendedFriend, 0, len(userDetails.Data))
+			normalizer := utils.NewTextNormalizer()
 			for _, user := range userDetails.Data {
 				batchFriends = append(batchFriends, &apiTypes.ExtendedFriend{
 					Friend: apiTypes.Friend{
 						ID: user.ID,
 					},
-					Name:        user.Name,
-					DisplayName: user.DisplayName,
+					Name:        normalizer.Normalize(user.Name),
+					DisplayName: normalizer.Normalize(user.DisplayName),
 				})
 			}
 
@@ -188,9 +190,17 @@ func (f *FriendFetcher) getFriendsLegacy(ctx context.Context, userID uint64) ([]
 		return nil, fmt.Errorf("failed to get friends: %w", err)
 	}
 
+	normalizer := utils.NewTextNormalizer()
 	friends := make([]*apiTypes.ExtendedFriend, 0, len(response.Data))
+
 	for _, friend := range response.Data {
-		friends = append(friends, &friend)
+		friends = append(friends, &apiTypes.ExtendedFriend{
+			Friend: apiTypes.Friend{
+				ID: friend.ID,
+			},
+			Name:        normalizer.Normalize(friend.Name),
+			DisplayName: normalizer.Normalize(friend.DisplayName),
+		})
 	}
 
 	f.logger.Debug("Finished fetching friends using legacy endpoint",

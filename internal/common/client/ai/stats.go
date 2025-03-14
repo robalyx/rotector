@@ -126,7 +126,7 @@ func (a *StatsAnalyzer) GenerateWelcomeMessage(
 
 		// Extract response text
 		text := string(resp.Candidates[0].Content.Parts[0].(genai.Text))
-		cleanMessage := utils.CleanupText(text)
+		cleanMessage := utils.CompressAllWhitespace(text)
 
 		return cleanMessage, nil
 	})

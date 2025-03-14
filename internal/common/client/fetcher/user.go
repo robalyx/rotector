@@ -10,6 +10,7 @@ import (
 	apiTypes "github.com/jaxron/roapi.go/pkg/api/types"
 	"github.com/robalyx/rotector/internal/common/setup"
 	"github.com/robalyx/rotector/internal/common/storage/database/types"
+	"github.com/robalyx/rotector/internal/common/utils"
 	"github.com/sourcegraph/conc/pool"
 	"go.uber.org/zap"
 )
@@ -107,12 +108,13 @@ func (u *UserFetcher) FetchInfos(ctx context.Context, userIDs []uint64) []*types
 			mu.Unlock()
 
 			// Add the user info to valid users
+			normalizer := utils.NewTextNormalizer()
 			now := time.Now()
 			user := &types.User{
 				ID:           userInfo.ID,
-				Name:         userInfo.Name,
-				DisplayName:  userInfo.DisplayName,
-				Description:  userInfo.Description,
+				Name:         normalizer.Normalize(userInfo.Name),
+				DisplayName:  normalizer.Normalize(userInfo.DisplayName),
+				Description:  normalizer.Normalize(userInfo.Description),
 				CreatedAt:    userInfo.Created,
 				Groups:       groups.Data,
 				Friends:      friends.Data,
