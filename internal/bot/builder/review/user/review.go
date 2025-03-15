@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/disgoorg/disgo/discord"
 	"github.com/robalyx/rotector/assets"
@@ -21,6 +22,7 @@ import (
 // ReviewBuilder creates the visual layout for reviewing a user.
 type ReviewBuilder struct {
 	db             database.Client
+	botSettings    *types.BotSetting
 	userID         uint64
 	user           *types.ReviewUser
 	logs           []*types.ActivityLog
@@ -42,6 +44,7 @@ func NewReviewBuilder(s *session.Session, translator *translator.Translator, db 
 	userID := session.UserID.Get(s)
 	return &ReviewBuilder{
 		db:             db,
+		botSettings:    s.BotSettings(),
 		userID:         userID,
 		user:           session.UserTarget.Get(s),
 		logs:           session.ReviewLogs.Get(s),
@@ -86,6 +89,11 @@ func (b *ReviewBuilder) Build() *discord.MessageUpdateBuilder {
 		builder.AddEmbeds(modeEmbed.Build(), reviewEmbed.Build(), deletionEmbed.Build())
 	} else {
 		builder.AddEmbeds(modeEmbed.Build(), reviewEmbed.Build())
+	}
+
+	// Add warning embed if there are recent reviewers
+	if warningEmbed := b.buildReviewWarningEmbed(); warningEmbed != nil {
+		builder.AddEmbeds(warningEmbed.Build())
 	}
 
 	// Create components
@@ -210,6 +218,42 @@ func (b *ReviewBuilder) buildDeletionEmbed() *discord.EmbedBuilder {
 	return discord.NewEmbedBuilder().
 		SetTitle("🗑️ Data Deletion Notice").
 		SetDescription("This user has requested deletion of their data. Some information may be missing or incomplete.").
+		SetColor(constants.ErrorEmbedColor)
+}
+
+// buildReviewWarningEmbed creates a warning embed if another reviewer is reviewing the user.
+func (b *ReviewBuilder) buildReviewWarningEmbed() *discord.EmbedBuilder {
+	// Check for recent views in the logs
+	fiveMinutesAgo := time.Now().Add(-5 * time.Minute)
+	var recentReviewers []uint64
+
+	for _, log := range b.logs {
+		if log.ActivityType == enum.ActivityTypeUserViewed &&
+			log.ActivityTimestamp.After(fiveMinutesAgo) &&
+			log.ReviewerID != b.userID &&
+			b.botSettings.IsReviewer(log.ReviewerID) {
+			recentReviewers = append(recentReviewers, log.ReviewerID)
+		}
+	}
+
+	if len(recentReviewers) == 0 {
+		return nil
+	}
+
+	// Create reviewer mentions
+	mentions := make([]string, len(recentReviewers))
+	for i, reviewerID := range recentReviewers {
+		mentions[i] = fmt.Sprintf("<@%d>", reviewerID)
+	}
+
+	return discord.NewEmbedBuilder().
+		SetTitle("⚠️ Active Review Warning").
+		SetDescription(fmt.Sprintf(
+			"This user was recently viewed by official reviewer%s %s. They may be actively reviewing this user. "+
+				"Please coordinate with them before taking any actions to avoid conflicts.",
+			map[bool]string{true: "s", false: ""}[len(recentReviewers) > 1],
+			strings.Join(mentions, ", "),
+		)).
 		SetColor(constants.ErrorEmbedColor)
 }
 
