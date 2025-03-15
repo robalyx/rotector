@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/disgoorg/disgo/discord"
 	"github.com/robalyx/rotector/assets"
@@ -24,6 +23,8 @@ type ReviewBuilder struct {
 	db             database.Client
 	userID         uint64
 	user           *types.ReviewUser
+	logs           []*types.ActivityLog
+	logsHasMore    bool
 	flaggedFriends map[uint64]*types.ReviewUser
 	flaggedGroups  map[uint64]*types.ReviewGroup
 	translator     *translator.Translator
@@ -43,6 +44,8 @@ func NewReviewBuilder(s *session.Session, translator *translator.Translator, db 
 		db:             db,
 		userID:         userID,
 		user:           session.UserTarget.Get(s),
+		logs:           session.ReviewLogs.Get(s),
+		logsHasMore:    session.ReviewLogsHasMore.Get(s),
 		flaggedFriends: session.UserFlaggedFriends.Get(s),
 		flaggedGroups:  session.UserFlaggedGroups.Get(s),
 		translator:     translator,
@@ -62,7 +65,7 @@ func (b *ReviewBuilder) Build() *discord.MessageUpdateBuilder {
 
 	// Create embeds
 	modeEmbed := b.buildModeEmbed()
-	reviewEmbed := b.buildReviewBuilder()
+	reviewEmbed := b.buildReviewEmbed()
 
 	// Handle thumbnail
 	if b.user.ThumbnailURL != "" && b.user.ThumbnailURL != fetcher.ThumbnailPlaceholder {
@@ -117,8 +120,8 @@ func (b *ReviewBuilder) buildModeEmbed() *discord.EmbedBuilder {
 		SetColor(utils.GetMessageEmbedColor(b.privacyMode))
 }
 
-// buildReviewBuilder creates the main review information embed.
-func (b *ReviewBuilder) buildReviewBuilder() *discord.EmbedBuilder {
+// buildReviewEmbed creates the main review information embed.
+func (b *ReviewBuilder) buildReviewEmbed() *discord.EmbedBuilder {
 	embed := discord.NewEmbedBuilder().
 		SetColor(utils.GetMessageEmbedColor(b.privacyMode)).
 		SetTitle(fmt.Sprintf("⚠️ %d Reports • 🛡️ %d Safe",
@@ -529,34 +532,17 @@ func (b *ReviewBuilder) getDescription() string {
 
 // getReviewHistory returns the review history field for the embed.
 func (b *ReviewBuilder) getReviewHistory() string {
-	logs, nextCursor, err := b.db.Models().Activities().GetLogs(
-		context.Background(),
-		types.ActivityFilter{
-			UserID:       b.user.ID,
-			GroupID:      0,
-			ReviewerID:   0,
-			ActivityType: enum.ActivityTypeAll,
-			StartDate:    time.Time{},
-			EndDate:      time.Time{},
-		},
-		nil,
-		constants.ReviewHistoryLimit,
-	)
-	if err != nil {
-		return "Failed to fetch review history"
-	}
-
-	if len(logs) == 0 {
+	if len(b.logs) == 0 {
 		return constants.NotApplicable
 	}
 
-	history := make([]string, 0, len(logs))
-	for _, log := range logs {
+	history := make([]string, 0, len(b.logs))
+	for _, log := range b.logs {
 		history = append(history, fmt.Sprintf("- <@%d> (%s) - <t:%d:R>",
 			log.ReviewerID, log.ActivityType.String(), log.ActivityTimestamp.Unix()))
 	}
 
-	if nextCursor != nil {
+	if b.logsHasMore {
 		history = append(history, "... and more")
 	}
 

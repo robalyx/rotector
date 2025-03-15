@@ -1,11 +1,9 @@
 package group
 
 import (
-	"context"
 	"fmt"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/disgoorg/disgo/discord"
 	apiTypes "github.com/jaxron/roapi.go/pkg/api/types"
@@ -25,6 +23,8 @@ type ReviewBuilder struct {
 	userID         uint64
 	group          *types.ReviewGroup
 	groupInfo      *apiTypes.GroupResponse
+	logs           []*types.ActivityLog
+	logsHasMore    bool
 	memberIDs      []uint64
 	reviewMode     enum.ReviewMode
 	defaultSort    enum.ReviewSortBy
@@ -41,6 +41,8 @@ func NewReviewBuilder(s *session.Session, db database.Client) *ReviewBuilder {
 		userID:         userID,
 		group:          session.GroupTarget.Get(s),
 		groupInfo:      session.GroupInfo.Get(s),
+		logs:           session.ReviewLogs.Get(s),
+		logsHasMore:    session.ReviewLogsHasMore.Get(s),
 		memberIDs:      session.GroupMemberIDs.Get(s),
 		reviewMode:     session.UserReviewMode.Get(s),
 		defaultSort:    session.UserGroupDefaultSort.Get(s),
@@ -480,33 +482,17 @@ func (b *ReviewBuilder) getShout() string {
 
 // getReviewHistory returns the review history field for the embed.
 func (b *ReviewBuilder) getReviewHistory() string {
-	logs, nextCursor, err := b.db.Models().Activities().GetLogs(
-		context.Background(),
-		types.ActivityFilter{
-			GroupID:      b.group.ID,
-			ReviewerID:   0,
-			ActivityType: enum.ActivityTypeAll,
-			StartDate:    time.Time{},
-			EndDate:      time.Time{},
-		},
-		nil,
-		constants.ReviewHistoryLimit,
-	)
-	if err != nil {
-		return "Failed to fetch review history"
-	}
-
-	if len(logs) == 0 {
+	if len(b.logs) == 0 {
 		return constants.NotApplicable
 	}
 
-	history := make([]string, 0, len(logs))
-	for _, log := range logs {
+	history := make([]string, 0, len(b.logs))
+	for _, log := range b.logs {
 		history = append(history, fmt.Sprintf("- <@%d> (%s) - <t:%d:R>",
 			log.ReviewerID, log.ActivityType.String(), log.ActivityTimestamp.Unix()))
 	}
 
-	if nextCursor != nil {
+	if b.logsHasMore {
 		history = append(history, "... and more")
 	}
 

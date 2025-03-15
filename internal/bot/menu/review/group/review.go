@@ -90,6 +90,28 @@ func (m *ReviewMenu) Show(event interfaces.CommonEvent, s *session.Session, r *p
 
 	// Store group info in session
 	session.GroupInfo.Set(s, groupInfo)
+
+	// Fetch review logs for the group
+	logs, nextCursor, err := m.layout.db.Models().Activities().GetLogs(
+		context.Background(),
+		types.ActivityFilter{
+			GroupID:      group.ID,
+			ReviewerID:   0,
+			ActivityType: enum.ActivityTypeAll,
+			StartDate:    time.Time{},
+			EndDate:      time.Time{},
+		},
+		nil,
+		constants.ReviewHistoryLimit,
+	)
+	if err != nil {
+		m.layout.logger.Error("Failed to fetch review logs", zap.Error(err))
+		logs = []*types.ActivityLog{} // Continue without logs - not critical
+	}
+
+	// Store logs in session
+	session.ReviewLogs.Set(s, logs)
+	session.ReviewLogsHasMore.Set(s, nextCursor != nil)
 }
 
 // handleSelectMenu processes select menu interactions.

@@ -92,6 +92,10 @@ var (
 	OriginalGroupReasons = NewKey[types.Reasons[enum.GroupReasonType]]("OriginalGroupReasons", true)
 	// SelectedReasonType stores the currently selected reason type for modal handling
 	SelectedReasonType = NewKey[string]("SelectedReasonType", true)
+	// ReviewLogs stores the current review logs
+	ReviewLogs = NewKey[[]*types.ActivityLog]("ReviewLogs", true)
+	// ReviewLogsHasMore indicates if there are more logs available
+	ReviewLogsHasMore = NewKey[bool]("ReviewLogsHasMore", true)
 	// DiscordUserLookupID stores the Discord user ID being looked up
 	DiscordUserLookupID = NewKey[uint64]("DiscordUserLookupID", true)
 	// DiscordUserLookupName stores the Discord username
