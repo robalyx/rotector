@@ -96,6 +96,8 @@ github.com/grpc-ecosystem/grpc-gateway/v2 v2.26.1 h1:e9Rjr40Z98/clHv5Yg79Is0Ntos
 github.com/grpc-ecosystem/grpc-gateway/v2 v2.26.1/go.mod h1:tIxuGz/9mpox++sgp9fJjHO0+q1X9/UOWd798aAm22M=
 github.com/jaxron/axonet v0.0.0-20250206054345-e0d103e3cde0 h1:cy/WSXAW5GbR7HyCdHUgi9nOVI2hCOD98g4fDNfewgg=
 github.com/jaxron/axonet v0.0.0-20250206054345-e0d103e3cde0/go.mod h1:92DgyJvbzpypIYiDDCbdEQiyDKQ6vUJN/i948GmChhI=
+github.com/jaxron/axonet v0.0.0-20250316044721-2d660b2bcf59 h1:0r6Qv+zoWV9Rbphi8x7g4SAsfK6/QjdIOVFaEpooHvc=
+github.com/jaxron/axonet v0.0.0-20250316044721-2d660b2bcf59/go.mod h1:92DgyJvbzpypIYiDDCbdEQiyDKQ6vUJN/i948GmChhI=
 github.com/jaxron/axonet/middleware/circuitbreaker v0.0.0-20250206054345-e0d103e3cde0 h1:u//zWyff6d/bposwxlVL3p1Es2UXoq3+tHZWPGAFg1w=
 github.com/jaxron/axonet/middleware/circuitbreaker v0.0.0-20250206054345-e0d103e3cde0/go.mod h1:6VvCTkc3uCGlaca4jEHpW7pKulTENvhS/6qpt60/v7Y=
 github.com/jaxron/axonet/middleware/proxy v0.0.0-20250114032231-268d997709d2 h1:HCBwaf2pUmiZzKtnJrAb26e2BTF1dth8zQNWl0slKlg=
@@ -106,8 +108,14 @@ github.com/jaxron/axonet/middleware/retry v0.0.0-20250206054345-e0d103e3cde0 h1:
 github.com/jaxron/axonet/middleware/retry v0.0.0-20250206054345-e0d103e3cde0/go.mod h1:1uoJP0s4UjtaowGeM3WuYfonFzyp4IW+dbUtK4FxDkY=
 github.com/jaxron/axonet/middleware/singleflight v0.0.0-20250206054345-e0d103e3cde0 h1:Us/ufxlCot1/z0c/aq6tOeVYoBHlmCzFb7NpmkyrbfM=
 github.com/jaxron/axonet/middleware/singleflight v0.0.0-20250206054345-e0d103e3cde0/go.mod h1:ayL5YEn44i8T7HnugdmqF5gv5b7oGI+w5HNSU7Mcq3s=
-github.com/jaxron/roapi.go v0.0.0-20250308094602-77901682b39b h1:llDlF7f7pe9w5vbfluhlY0GTuIor5gnJoy9I1LUpAYU=
-github.com/jaxron/roapi.go v0.0.0-20250308094602-77901682b39b/go.mod h1:1t2qfEzjcYvqXPLMvboyaYxSMomYF+SltIbmozAsmpE=
+github.com/jaxron/roapi.go v0.0.0-20250314054947-55ce060c605b h1:EdZMfM7kS+ZrCqUFU+S4zErQ/ggY1o0VaOHjt6SQjfs=
+github.com/jaxron/roapi.go v0.0.0-20250314054947-55ce060c605b/go.mod h1:1t2qfEzjcYvqXPLMvboyaYxSMomYF+SltIbmozAsmpE=
+github.com/jaxron/roapi.go v0.0.0-20250314135157-5f83878b0017 h1:eEq9QQVlYSNRpwSL/SglhVxVB0DseVHsya5OMMxscqc=
+github.com/jaxron/roapi.go v0.0.0-20250314135157-5f83878b0017/go.mod h1:1t2qfEzjcYvqXPLMvboyaYxSMomYF+SltIbmozAsmpE=
+github.com/jaxron/roapi.go v0.0.0-20250315032641-8e8f7a8e7045 h1:hgsFeq4WYuFCC4hrnjfJtbuZmx+Jj0Y3zAVbQoWEx8I=
+github.com/jaxron/roapi.go v0.0.0-20250315032641-8e8f7a8e7045/go.mod h1:1t2qfEzjcYvqXPLMvboyaYxSMomYF+SltIbmozAsmpE=
+github.com/jaxron/roapi.go v0.0.0-20250315042935-236f4daf30ec h1:rc4pCFMPxl2HLnDheAfwjex7OtXgRLcMh/gND+D1kxc=
+github.com/jaxron/roapi.go v0.0.0-20250315042935-236f4daf30ec/go.mod h1:1t2qfEzjcYvqXPLMvboyaYxSMomYF+SltIbmozAsmpE=
 github.com/jinzhu/inflection v1.0.0 h1:K317FqzuhWc8YvSVlFMCCUb36O/S9MCKRDI7QkRKD/E=
 github.com/jinzhu/inflection v1.0.0/go.mod h1:h+uFLlag+Qp1Va5pdKtLDYj+kHp5pxUVkryuEj+Srlc=
 github.com/klauspost/cpuid/v2 v2.0.9/go.mod h1:FInQzS24/EEf25PyTYn52gqo7WaD8xa0213Md/qVLRg=

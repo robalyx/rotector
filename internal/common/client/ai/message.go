@@ -60,22 +60,20 @@ Focus on detecting:
 
 1. Sexually explicit content or references
 2. Suggestive language, sexual innuendos, or double entendres
-3. Sharing or requesting links to Roblox condo games
-4. References to condo games or similar euphemisms related to inappropriate Roblox content
-5. Roblox game links with suspicious or suggestive names that may indicate condo games
-6. Coordination or planning of inappropriate activities within Roblox games
-7. References to r34 content or Rule 34
-8. Attempts to move conversations to DMs or "opened DMs"
-9. Coded language or euphemisms for inappropriate activities
-10. Requesting Discord servers known for condo content
-11. References to "exclusive" or "private" game access
-12. Discussions about age-restricted or adult content
-13. Sharing or requesting inappropriate avatar/character modifications
-14. References to inappropriate trading or exchanges
-15. Sharing or requesting inappropriate scripts, game assets or models
-16. References to inappropriate roleplay or ERP
-17. References to inappropriate group activities
-18. Requesting to look in their bio
+3. References to condo games or similar euphemisms related to inappropriate Roblox content
+4. Coordination or planning of inappropriate activities within Roblox games
+5. References to r34 content or Rule 34
+6. Attempts to move conversations to DMs or "opened DMs"
+7. Coded language or euphemisms for inappropriate activities
+8. Requesting Discord servers known for condo content
+9. References to "exclusive" or "private" game access
+10. Discussions about age-restricted or adult content
+11. Sharing or requesting inappropriate avatar/character modifications
+12. References to inappropriate trading or exchanges
+13. Sharing or requesting inappropriate scripts, game assets or models
+14. References to inappropriate roleplay or ERP
+15. References to inappropriate group activities
+16. Requesting to look in their bio
 
 Remember that Roblox is primarily used by children and young teenagers.
 So be especially vigilant about content that may expose minors to inappropriate material.
@@ -94,8 +92,14 @@ Key rules:
 4. Skip empty messages or messages with only non-sexual offensive content
 5. Focus on protecting minors from inappropriate sexual content
 6. Avoid flagging messages from potential victims
-7. DO NOT flag users who are warning, confronting, expressing concern, or calling out inappropriate behavior
-8. Ignore offensive/racist content that is not sexual in nature`
+7. Ignore offensive/racist content that is not sexual in nature
+
+Ignore:
+1. Users warning others, mentioning/confronting pedophiles, expressing concern, or calling out inappropriate behavior
+2. General profanity or curse words that aren't sexual in nature
+3. Non-sexual bullying or harassment
+4. Spam messages without inappropriate content
+5. Image, game or video links without inappropriate context`
 
 	// MessageAnalysisPrompt provides a reminder to follow system guidelines for message analysis.
 	MessageAnalysisPrompt = `Analyze these messages for inappropriate content.

@@ -96,6 +96,11 @@ func (b *ReviewBuilder) Build() *discord.MessageUpdateBuilder {
 		builder.AddEmbeds(warningEmbed.Build())
 	}
 
+	// Add condo warning embed if applicable
+	if condoWarningEmbed := b.buildCondoWarningEmbed(); condoWarningEmbed != nil {
+		builder.AddEmbeds(condoWarningEmbed.Build())
+	}
+
 	// Create components
 	components := b.buildComponents()
 
@@ -257,6 +262,33 @@ func (b *ReviewBuilder) buildReviewWarningEmbed() *discord.EmbedBuilder {
 		SetColor(constants.ErrorEmbedColor)
 }
 
+// buildCondoWarningEmbed creates a warning embed if the user only has condo-related reasons.
+func (b *ReviewBuilder) buildCondoWarningEmbed() *discord.EmbedBuilder {
+	// Check if the user has only one reason
+	if len(b.user.Reasons) != 1 {
+		return nil
+	}
+
+	// Check if the only reason is a condo reason
+	if _, hasCondoReason := b.user.Reasons[enum.UserReasonTypeCondo]; !hasCondoReason {
+		return nil
+	}
+
+	description := "This user has been flagged **only** for joining known condo games. " +
+		"Our detection method for condo visits is not always reliable and may incorrectly flag users, " +
+		"especially those with default avatars.\n\n" +
+		"**Review Guidelines:**\n" +
+		"- You cannot accept or reject users based solely on condo visits\n" +
+		"- If this is a default avatar user, please **skip** this review - our system will handle these false positives\n" +
+		"- For established accounts, please check their profiles thoroughly as AI could have missed something\n" +
+		"- Additional evidence types (description, outfits, groups, etc.) are required to take action"
+
+	return discord.NewEmbedBuilder().
+		SetTitle("⚠️ Condo Visit Notice").
+		SetDescription(description).
+		SetColor(constants.ErrorEmbedColor)
+}
+
 // buildSortingOptions creates the sorting options.
 func (b *ReviewBuilder) buildSortingOptions() []discord.StringSelectMenuOption {
 	return []discord.StringSelectMenuOption{
@@ -353,10 +385,19 @@ func (b *ReviewBuilder) buildComponents() []discord.ContainerComponent {
 	)
 
 	// Add navigation/action buttons
+	confirmButton := discord.NewDangerButton(b.getConfirmButtonLabel(), constants.ConfirmButtonCustomID)
+	clearButton := discord.NewSuccessButton(b.getClearButtonLabel(), constants.ClearButtonCustomID)
+
+	// Disable confirm/clear buttons for condo-only cases
+	if len(b.user.Reasons) == 1 && b.user.Reasons[enum.UserReasonTypeCondo] != nil {
+		confirmButton = confirmButton.WithDisabled(true)
+		clearButton = clearButton.WithDisabled(true)
+	}
+
 	components = append(components, discord.NewActionRow(
 		discord.NewSecondaryButton("◀️", constants.BackButtonCustomID),
-		discord.NewDangerButton(b.getConfirmButtonLabel(), constants.ConfirmButtonCustomID),
-		discord.NewSuccessButton(b.getClearButtonLabel(), constants.ClearButtonCustomID),
+		confirmButton,
+		clearButton,
 		discord.NewSecondaryButton("Skip", constants.SkipButtonCustomID),
 	))
 
@@ -382,6 +423,7 @@ func (b *ReviewBuilder) buildReasonOptions() []discord.StringSelectMenuOption {
 		enum.UserReasonTypeFriend,
 		enum.UserReasonTypeOutfit,
 		enum.UserReasonTypeGroup,
+		enum.UserReasonTypeCondo,
 	}
 
 	for _, reasonType := range reasonTypes {
@@ -452,6 +494,7 @@ func (b *ReviewBuilder) getReasonField() string {
 		enum.UserReasonTypeFriend,
 		enum.UserReasonTypeOutfit,
 		enum.UserReasonTypeGroup,
+		enum.UserReasonTypeCondo,
 	}
 
 	for _, reasonType := range reasonTypes {
@@ -790,6 +833,8 @@ func getReasonEmoji(reasonType enum.UserReasonType) string {
 		return "👕"
 	case enum.UserReasonTypeGroup:
 		return "🌐"
+	case enum.UserReasonTypeCondo:
+		return "🏠"
 	default:
 		return "❓"
 	}

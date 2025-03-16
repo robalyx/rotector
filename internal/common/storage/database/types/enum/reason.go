@@ -14,6 +14,8 @@ const (
 	UserReasonTypeOutfit
 	// UserReasonTypeGroup indicates group membership analysis.
 	UserReasonTypeGroup
+	// UserReasonTypeCondo indicates condo game analysis.
+	UserReasonTypeCondo
 )
 
 // GroupReasonType represents the source of a flagging reason.

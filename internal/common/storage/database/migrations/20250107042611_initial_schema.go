@@ -23,6 +23,7 @@ func init() { //nolint:funlen
 			{(*types.FlaggedGroup)(nil), "flagged_groups", "id"},
 			{(*types.ConfirmedGroup)(nil), "confirmed_groups", "id"},
 			{(*types.ClearedGroup)(nil), "cleared_groups", "id"},
+			{(*types.CondoGame)(nil), "condo_games", "id"},
 			{(*types.GroupMemberTracking)(nil), "group_member_trackings", "id"},
 			{(*types.UserReputation)(nil), "user_reputations", "id"},
 			{(*types.GroupReputation)(nil), "group_reputations", "id"},
@@ -73,6 +74,7 @@ func init() { //nolint:funlen
 			(*types.UserConsent)(nil),
 			(*types.DiscordServerInfo)(nil),
 			(*types.GuildBanLog)(nil),
+			(*types.CondoPlayer)(nil),
 		}
 
 		for _, model := range models {
@@ -89,6 +91,8 @@ func init() { //nolint:funlen
 	}, func(ctx context.Context, db *bun.DB) error {
 		// Down migration - drop all tables
 		models := []any{
+			(*types.CondoPlayer)(nil),
+			(*types.GuildBanLog)(nil),
 			(*types.DiscordServerInfo)(nil),
 			(*types.UserConsent)(nil),
 			(*types.MaterializedViewRefresh)(nil),
@@ -133,6 +137,7 @@ func init() { //nolint:funlen
 			"group_reputations",
 			"user_reputations",
 			"group_member_trackings",
+			"condo_games",
 			"cleared_groups",
 			"confirmed_groups",
 			"flagged_groups",

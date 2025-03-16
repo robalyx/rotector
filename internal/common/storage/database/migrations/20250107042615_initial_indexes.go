@@ -140,13 +140,13 @@ func init() { //nolint:funlen
 			ON user_reputations (score ASC)
 			INCLUDE (id);
 
-			CREATE INDEX IF NOT EXISTS idx_flagged_users_last_viewed_rep
+			CREATE INDEX IF NOT EXISTS idx_flagged_users_last_viewed
 			ON flagged_users (last_viewed ASC)
 			INCLUDE (id);
-			CREATE INDEX IF NOT EXISTS idx_confirmed_users_last_viewed_rep
+			CREATE INDEX IF NOT EXISTS idx_confirmed_users_last_viewed
 			ON confirmed_users (last_viewed ASC)
 			INCLUDE (id);
-			CREATE INDEX IF NOT EXISTS idx_cleared_users_last_viewed_rep
+			CREATE INDEX IF NOT EXISTS idx_cleared_users_last_viewed
 			ON cleared_users (last_viewed ASC)
 			INCLUDE (id);
 
@@ -155,13 +155,13 @@ func init() { //nolint:funlen
 			ON group_reputations (score ASC)
 			INCLUDE (id);
 
-			CREATE INDEX IF NOT EXISTS idx_flagged_groups_last_viewed_rep
+			CREATE INDEX IF NOT EXISTS idx_flagged_groups_last_viewed
 			ON flagged_groups (last_viewed ASC)
 			INCLUDE (id);
-			CREATE INDEX IF NOT EXISTS idx_confirmed_groups_last_viewed_rep
+			CREATE INDEX IF NOT EXISTS idx_confirmed_groups_last_viewed
 			ON confirmed_groups (last_viewed ASC)
 			INCLUDE (id);
-			CREATE INDEX IF NOT EXISTS idx_cleared_groups_last_viewed_rep
+			CREATE INDEX IF NOT EXISTS idx_cleared_groups_last_viewed
 			ON cleared_groups (last_viewed ASC)
 			INCLUDE (id);
 
@@ -202,7 +202,7 @@ func init() { //nolint:funlen
 			ON flagged_groups (last_lock_check ASC);
 			CREATE INDEX IF NOT EXISTS idx_confirmed_groups_lock_check 
 			ON confirmed_groups (last_lock_check ASC);
-			
+
 			-- Statistics indexes
 			CREATE INDEX IF NOT EXISTS idx_hourly_stats_timestamp
 			ON hourly_stats (timestamp DESC);
@@ -259,6 +259,16 @@ func init() { //nolint:funlen
 			-- Guild ban logs indexes
 			CREATE INDEX IF NOT EXISTS idx_guild_ban_logs_time_id
 			ON guild_ban_logs (timestamp DESC, id DESC);
+
+			-- Condo player indexes
+			CREATE INDEX IF NOT EXISTS idx_condo_players_blacklisted_url
+			ON condo_players (thumbnail_url)
+			WHERE is_blacklisted = false;
+
+			-- Condo game indexes
+			CREATE INDEX IF NOT EXISTS idx_condo_games_scan_time
+			ON condo_games (is_deleted, last_scanned ASC)
+			WHERE is_deleted = false;
 		`, enum.ActivityTypeUserViewed, enum.ActivityTypeGroupViewed).Exec(ctx)
 		if err != nil {
 			return fmt.Errorf("failed to create indexes: %w", err)
@@ -367,15 +377,15 @@ func init() { //nolint:funlen
 
 			-- User reputation sorting indexes
 			DROP INDEX IF EXISTS idx_user_reputations_score_viewed;
-			DROP INDEX IF EXISTS idx_flagged_users_last_viewed_rep;
-			DROP INDEX IF EXISTS idx_confirmed_users_last_viewed_rep;
-			DROP INDEX IF EXISTS idx_cleared_users_last_viewed_rep;
+			DROP INDEX IF EXISTS idx_flagged_users_last_viewed;
+			DROP INDEX IF EXISTS idx_confirmed_users_last_viewed;
+			DROP INDEX IF EXISTS idx_cleared_users_last_viewed;
 
 			-- Group reputation sorting indexes
 			DROP INDEX IF EXISTS idx_group_reputations_score_viewed;
-			DROP INDEX IF EXISTS idx_flagged_groups_last_viewed_rep;
-			DROP INDEX IF EXISTS idx_confirmed_groups_last_viewed_rep;
-			DROP INDEX IF EXISTS idx_cleared_groups_last_viewed_rep;
+			DROP INDEX IF EXISTS idx_flagged_groups_last_viewed;
+			DROP INDEX IF EXISTS idx_confirmed_groups_last_viewed;
+			DROP INDEX IF EXISTS idx_cleared_groups_last_viewed;
 
 			-- User status indexes
 			DROP INDEX IF EXISTS idx_cleared_users_purged_at;
@@ -426,6 +436,12 @@ func init() { //nolint:funlen
 
 			-- Guild ban logs indexes
 			DROP INDEX IF EXISTS idx_guild_ban_logs_time_id;
+
+			-- Condo player indexes
+			DROP INDEX IF EXISTS idx_condo_players_blacklisted_url;
+
+			-- Condo game indexes
+			DROP INDEX IF EXISTS idx_condo_games_scan_time;
 		`).Exec(ctx)
 		if err != nil {
 			return fmt.Errorf("failed to drop indexes: %w", err)

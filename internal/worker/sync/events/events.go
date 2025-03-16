@@ -7,6 +7,7 @@ import (
 
 	"github.com/diamondburned/arikawa/v3/gateway"
 	"github.com/diamondburned/ningen/v3"
+	"github.com/jaxron/roapi.go/pkg/api"
 	"github.com/robalyx/rotector/internal/common/client/ai"
 	"github.com/robalyx/rotector/internal/common/setup"
 	"github.com/robalyx/rotector/internal/common/storage/database"
@@ -18,6 +19,7 @@ import (
 // Handler manages Discord events and processes messages for analysis.
 type Handler struct {
 	db               database.Client
+	roAPI            *api.API
 	state            *ningen.State
 	logger           *zap.Logger
 	rateLimiter      *ratelimit.Limiter
@@ -35,6 +37,7 @@ func New(app *setup.App, state *ningen.State, messageAnalyzer *ai.MessageAnalyze
 	// Return a new handler instance
 	return &Handler{
 		db:               app.DB,
+		roAPI:            app.RoAPI,
 		state:            state,
 		logger:           logger.Named("sync_events"),
 		rateLimiter:      rateLimiter,
@@ -88,5 +91,6 @@ func (h *Handler) handleMessageCreate(e *gateway.MessageCreateEvent) {
 	}
 
 	// Queue the message for content analysis
+	h.handleGameURL(serverID, e.Content)
 	h.addMessageToQueue(&e.Message)
 }

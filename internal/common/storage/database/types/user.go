@@ -104,7 +104,7 @@ const (
 	UserFieldIsDeleted           // Deletion status
 	UserFieldLastThumbnailUpdate // Last thumbnail update
 
-	// Common combinations.
+	// UserFieldBasic includes all basic fields.
 	UserFieldBasic = UserFieldID |
 		UserFieldUUID |
 		UserFieldName |

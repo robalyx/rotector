@@ -24,6 +24,7 @@ type Repository struct {
 	reviewers  *models.ReviewerModel
 	sync       *models.SyncModel
 	message    *models.MessageModel
+	condo      *models.CondoModel
 }
 
 // NewRepository creates a new repository instance with all models.
@@ -56,6 +57,7 @@ func NewRepository(db *bun.DB, logger *zap.Logger) *Repository {
 		reviewers:  reviewers,
 		sync:       models.NewSync(db, logger),
 		message:    models.NewMessage(db, logger),
+		condo:      models.NewCondo(db, logger),
 	}
 }
 
@@ -137,4 +139,9 @@ func (r *Repository) Sync() *models.SyncModel {
 // Message returns the message model repository.
 func (r *Repository) Message() *models.MessageModel {
 	return r.message
+}
+
+// Condo returns the condo model repository.
+func (r *Repository) Condo() *models.CondoModel {
+	return r.condo
 }

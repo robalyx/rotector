@@ -422,12 +422,12 @@ func (w *Worker) processGroupThumbnails() {
 		zap.Int("updatedCount", len(updatedGroups)))
 }
 
-// processOldServerMembers removes Discord server member records older than 30 days.
+// processOldServerMembers removes Discord server member records older than 14 days.
 func (w *Worker) processOldServerMembers() {
 	w.bar.SetStepMessage("Processing old Discord server members", 96)
 	w.reporter.UpdateStatus("Processing old Discord server members", 96)
 
-	cutoffDate := time.Now().AddDate(0, 0, -30) // 30 days ago
+	cutoffDate := time.Now().AddDate(0, 0, -14) // 14 days ago
 	affected, err := w.db.Models().Sync().PurgeOldServerMembers(context.Background(), cutoffDate)
 	if err != nil {
 		w.logger.Error("Error purging old Discord server members", zap.Error(err))

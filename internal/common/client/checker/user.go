@@ -24,6 +24,7 @@ type UserChecker struct {
 	outfitAnalyzer *ai.OutfitAnalyzer
 	groupChecker   *GroupChecker
 	friendChecker  *FriendChecker
+	condoChecker   *CondoChecker
 	logger         *zap.Logger
 }
 
@@ -45,6 +46,7 @@ func NewUserChecker(app *setup.App, userFetcher *fetcher.UserFetcher, logger *za
 			app.Config.Worker.ThresholdLimits.MinFlaggedPercentage,
 		),
 		friendChecker: NewFriendChecker(app, logger),
+		condoChecker:  NewCondoChecker(app.DB, logger),
 		logger:        logger.Named("user_checker"),
 	}
 }
@@ -64,6 +66,9 @@ func (c *UserChecker) ProcessUsers(userInfos []*types.User) {
 
 	// Process user analysis
 	c.userAnalyzer.ProcessUsers(userInfos, reasonsMap)
+
+	// Process condo checker
+	c.condoChecker.ProcessUsers(userInfos, reasonsMap)
 
 	// Process outfit analysis (only for flagged users)
 	c.outfitAnalyzer.ProcessOutfits(userInfos, reasonsMap)
