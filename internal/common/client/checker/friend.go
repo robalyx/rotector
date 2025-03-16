@@ -138,41 +138,70 @@ func (c *FriendChecker) ProcessUsers(userInfos []*types.User, reasonsMap map[uin
 }
 
 // calculateConfidence computes a weighted confidence score based on friend relationships.
-// The score considers both ratios and absolute numbers.
 func (c *FriendChecker) calculateConfidence(confirmedCount, flaggedCount, totalFriends int) float64 {
 	var confidence float64
 
-	// Factor 1: Ratio of inappropriate friends - 50% weight
-	// This helps catch users with a high concentration of inappropriate friends
-	// even if they don't meet the absolute number thresholds
-	if totalFriends > 0 {
-		totalInappropriate := float64(confirmedCount) + (float64(flaggedCount) * 0.5)
-		ratioWeight := math.Min(totalInappropriate/float64(totalFriends), 1.0)
-		confidence += ratioWeight * 0.50
+	// Adjust weights based on total friend count
+	// For users with large friend lists, ratio becomes more important
+	ratioWeight := 0.50
+	absoluteWeight := 0.50
+	if totalFriends > 200 {
+		ratioWeight = 0.60
+		absoluteWeight = 0.40
 	}
 
-	// Factor 2: Absolute number of inappropriate friends - 50% weight
-	inappropriateWeight := c.calculateInappropriateWeight(confirmedCount, flaggedCount)
-	confidence += inappropriateWeight * 0.50
+	// Factor 1: Ratio of inappropriate friends
+	if totalFriends > 0 {
+		totalInappropriate := float64(confirmedCount) + (float64(flaggedCount) * 0.5)
+		ratioFactor := math.Min(totalInappropriate/float64(totalFriends), 1.0)
+		confidence += ratioFactor * ratioWeight
+	}
+
+	// Factor 2: Absolute number of inappropriate friends
+	inappropriateWeight := c.calculateInappropriateWeight(confirmedCount, flaggedCount, totalFriends)
+	confidence += inappropriateWeight * absoluteWeight
 
 	return confidence
 }
 
 // calculateInappropriateWeight returns a weight based on the total number of inappropriate friends.
-// Confirmed friends are weighted more heavily than flagged friends.
-func (c *FriendChecker) calculateInappropriateWeight(confirmedCount, flaggedCount int) float64 {
+func (c *FriendChecker) calculateInappropriateWeight(confirmedCount, flaggedCount, totalFriends int) float64 {
 	totalWeight := float64(confirmedCount) + (float64(flaggedCount) * 0.5)
 
+	// Calculate percentage thresholds based on friend count
+	var baseThreshold float64
 	switch {
-	case confirmedCount >= 10 || totalWeight >= 15:
+	case totalFriends >= 500: // Large networks
+		baseThreshold = 0.02 // 2% base threshold
+	case totalFriends >= 200: // Medium networks
+		baseThreshold = 0.03 // 3% base threshold
+	default: // Small networks
+		baseThreshold = 0.04 // 4% base threshol
+	}
+
+	// Calculate actual thresholds
+	minConfirmed := 3
+	minWeighted := 5
+
+	thresholdConfirmed := math.Max(float64(minConfirmed), baseThreshold*float64(totalFriends))
+	thresholdWeighted := math.Max(float64(minWeighted), (baseThreshold*1.5)*float64(totalFriends))
+
+	// Hard threshold for serious cases
+	if confirmedCount >= 15 || totalWeight >= 25 {
 		return 1.0
-	case confirmedCount >= 8 || totalWeight >= 12:
+	}
+
+	// Determine confidence based on percentage thresholds
+	switch {
+	case float64(confirmedCount) >= thresholdConfirmed*1.5 || totalWeight >= thresholdWeighted*1.5:
+		return 1.0
+	case float64(confirmedCount) >= thresholdConfirmed*1.2 || totalWeight >= thresholdWeighted*1.2:
 		return 0.8
-	case confirmedCount >= 6 || totalWeight >= 9:
+	case float64(confirmedCount) >= thresholdConfirmed || totalWeight >= thresholdWeighted:
 		return 0.6
-	case confirmedCount >= 4 || totalWeight >= 6:
+	case float64(confirmedCount) >= thresholdConfirmed*0.7 || totalWeight >= thresholdWeighted*0.7:
 		return 0.4
-	case confirmedCount >= 2 || totalWeight >= 3:
+	case float64(confirmedCount) >= thresholdConfirmed*0.4 || totalWeight >= thresholdWeighted*0.4:
 		return 0.2
 	default:
 		return 0.0
