@@ -9,12 +9,15 @@ import (
 	"github.com/diamondburned/arikawa/v3/state"
 	"github.com/diamondburned/ningen/v3"
 	"github.com/jaxron/roapi.go/pkg/api"
+	"github.com/redis/rueidis"
 	"github.com/robalyx/rotector/internal/common/client/ai"
 	"github.com/robalyx/rotector/internal/common/client/fetcher"
+	"github.com/robalyx/rotector/internal/common/discord"
 	"github.com/robalyx/rotector/internal/common/progress"
 	"github.com/robalyx/rotector/internal/common/setup"
 	"github.com/robalyx/rotector/internal/common/setup/config"
 	"github.com/robalyx/rotector/internal/common/storage/database"
+	"github.com/robalyx/rotector/internal/common/storage/redis"
 	"github.com/robalyx/rotector/internal/worker/core"
 	"github.com/robalyx/rotector/internal/worker/sync/events"
 	"go.uber.org/zap"
@@ -38,7 +41,9 @@ type Worker struct {
 	config           *config.Config
 	messageAnalyzer  *ai.MessageAnalyzer
 	eventHandler     *events.Handler
+	ratelimit        rueidis.Client
 	thumbnailFetcher *fetcher.ThumbnailFetcher
+	scanner          *discord.Scanner
 }
 
 // New creates a new sync worker.
@@ -47,6 +52,9 @@ func New(app *setup.App, bar *progress.Bar, logger *zap.Logger) *Worker {
 	s := state.NewWithIntents(app.Config.Common.Discord.SyncToken,
 		gateway.IntentGuilds|gateway.IntentGuildMembers|
 			gateway.IntentGuildMessages|gateway.IntentMessageContent)
+
+	// Disguise user agent
+	s.Session.UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:136.0) Gecko/20100101 Firefox/136.0"
 
 	// Create ningen state from discord state
 	n := ningen.FromState(s)
@@ -64,6 +72,12 @@ func New(app *setup.App, bar *progress.Bar, logger *zap.Logger) *Worker {
 	eventHandler := events.New(app, n, messageAnalyzer, logger)
 	eventHandler.Setup()
 
+	// Create rate limit client
+	ratelimit, err := app.RedisManager.GetClient(redis.RatelimitDBIndex)
+	if err != nil {
+		logger.Fatal("Failed to get Redis client for proxy rotation", zap.Error(err))
+	}
+
 	return &Worker{
 		db:               app.DB,
 		roAPI:            app.RoAPI,
@@ -74,7 +88,9 @@ func New(app *setup.App, bar *progress.Bar, logger *zap.Logger) *Worker {
 		config:           app.Config,
 		messageAnalyzer:  messageAnalyzer,
 		eventHandler:     eventHandler,
+		ratelimit:        ratelimit,
 		thumbnailFetcher: fetcher.NewThumbnailFetcher(app.RoAPI, logger),
+		scanner:          discord.NewScanner(app.DB, ratelimit, n.Session, logger),
 	}
 }
 
@@ -90,11 +106,11 @@ func (w *Worker) Start() {
 	}
 	defer w.state.Close()
 
-	// Set up event handlers for real-time member tracking
-	w.eventHandler.Setup()
-
 	// Start game scanner in a separate goroutine
-	go w.scanGames()
+	go w.runGameScanner()
+
+	// Start full user scanner in a separate goroutine
+	go w.runMutualScanner()
 
 	for {
 		w.bar.Reset()

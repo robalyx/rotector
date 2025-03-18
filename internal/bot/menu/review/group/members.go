@@ -50,7 +50,7 @@ func (m *MembersMenu) Show(event interfaces.CommonEvent, s *session.Session, r *
 	}
 
 	// Get user data from database
-	members, err := m.layout.db.Models().Users().GetUsersByIDs(
+	members, err := m.layout.db.Model().User().GetUsersByIDs(
 		context.Background(),
 		memberIDs,
 		types.UserFieldBasic|types.UserFieldReasons|types.UserFieldConfidence,

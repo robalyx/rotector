@@ -159,7 +159,7 @@ func (m *Menu) handleModal(event *events.ModalSubmitInteractionCreate, s *sessio
 	r.Show(event, s, constants.UserStatusPageName, "")
 
 	// Log the activity
-	m.layout.db.Models().Activities().Log(context.Background(), &types.ActivityLog{
+	m.layout.db.Model().Activity().Log(context.Background(), &types.ActivityLog{
 		ActivityTarget: types.ActivityTarget{
 			UserID: userID,
 		},

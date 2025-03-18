@@ -40,8 +40,11 @@ func (m *MessageModel) BatchStoreInappropriateMessages(
 		Set("confidence = EXCLUDED.confidence").
 		Set("updated_at = EXCLUDED.updated_at").
 		Exec(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to store inappropriate messages: %w", err)
+	}
 
-	return err
+	return nil
 }
 
 // BatchUpdateUserSummaries updates multiple user summaries.
@@ -60,8 +63,11 @@ func (m *MessageModel) BatchUpdateUserSummaries(
 		Set("last_detected = EXCLUDED.last_detected").
 		Set("updated_at = EXCLUDED.updated_at").
 		Exec(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to update user summary: %w", err)
+	}
 
-	return err
+	return nil
 }
 
 // GetUserInappropriateMessages retrieves inappropriate messages for a specific user in a server.
@@ -82,7 +88,7 @@ func (m *MessageModel) GetUserInappropriateMessages(
 
 	err := query.Scan(ctx)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to get user inappropriate messages: %w", err)
 	}
 
 	return messages, nil
@@ -99,7 +105,7 @@ func (m *MessageModel) GetUserInappropriateMessageSummaries(
 		Where("user_id IN (?)", bun.In(userIDs)).
 		Scan(ctx)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to get user inappropriate message summaries: %w", err)
 	}
 
 	// Convert slice to map for easier lookup
@@ -138,7 +144,7 @@ func (m *MessageModel) GetUserMessagesByCursor(
 	// Execute query
 	err := query.Scan(ctx)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("failed to get user messages by cursor: %w", err)
 	}
 
 	// Check if we have a next page
@@ -180,7 +186,7 @@ func (m *MessageModel) GetUserInappropriateMessageSummary(
 		Where("user_id = ?", userID).
 		Scan(ctx)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to get user inappropriate message summary: %w", err)
 	}
 
 	return &summary, nil
@@ -197,7 +203,7 @@ func (m *MessageModel) GetUserMessageSummaries(
 		Where("user_id IN (?)", bun.In(userIDs)).
 		Scan(ctx)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to get user message summaries: %w", err)
 	}
 
 	// Convert slice to map for easier lookup
@@ -216,7 +222,7 @@ func (m *MessageModel) GetUniqueInappropriateUserCount(ctx context.Context) (int
 		ColumnExpr("DISTINCT user_id").
 		Count(ctx)
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("failed to get unique inappropriate user count: %w", err)
 	}
 	return count, nil
 }

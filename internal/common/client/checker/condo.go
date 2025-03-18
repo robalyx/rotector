@@ -79,7 +79,7 @@ func (c *CondoChecker) ProcessUsers(userInfos []*types.User, reasonsMap map[uint
 // Returns a reason if the user should be flagged, nil otherwise.
 func (c *CondoChecker) processUser(ctx context.Context, user *types.User) (*types.Reason, error) {
 	// Check if user's thumbnail matches a condo player
-	player, err := c.db.Models().Condo().GetPlayerByThumbnail(ctx, user.ThumbnailURL)
+	player, err := c.db.Model().Condo().GetPlayerByThumbnail(ctx, user.ThumbnailURL)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrPlayerNotFound
@@ -98,24 +98,34 @@ func (c *CondoChecker) processUser(ctx context.Context, user *types.User) (*type
 	// If player already has a different user ID, blacklist them and delete the existing user
 	if player.UserID != nil && *player.UserID != user.ID {
 		// Update player to be blacklisted
-		if err := c.db.Models().Condo().BlacklistPlayer(ctx, player.ThumbnailURL); err != nil {
+		if err := c.db.Model().Condo().BlacklistPlayer(ctx, player.ThumbnailURL); err != nil {
+			c.logger.Error("Failed to blacklist player",
+				zap.Error(err),
+				zap.String("thumbnailURL", player.ThumbnailURL))
 			return nil, err
 		}
 
 		// Delete the existing user if they were only flagged for condo
-		existingUser, err := c.db.Models().Users().GetUserByID(
+		existingUser, err := c.db.Service().User().GetUserByID(
 			ctx, strconv.FormatUint(*player.UserID, 10), types.UserFieldReasons,
 		)
 		if err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
 				return nil, ErrPlayerBlacklisted
 			}
+
+			c.logger.Error("Failed to get existing user",
+				zap.Error(err),
+				zap.Uint64("userID", *player.UserID))
 			return nil, err
 		}
 
 		if existingUser.Status == enum.UserTypeFlagged && len(existingUser.Reasons) == 1 {
 			if _, ok := existingUser.Reasons[enum.UserReasonTypeCondo]; ok {
-				if _, err := c.db.Models().Users().DeleteUser(ctx, *player.UserID); err != nil {
+				if _, err := c.db.Model().User().DeleteUser(ctx, *player.UserID); err != nil {
+					c.logger.Error("Failed to delete existing user",
+						zap.Error(err),
+						zap.Uint64("userID", *player.UserID))
 					return nil, err
 				}
 			}
@@ -124,12 +134,13 @@ func (c *CondoChecker) processUser(ctx context.Context, user *types.User) (*type
 		c.logger.Info("Player blacklisted",
 			zap.String("thumbnailURL", player.ThumbnailURL),
 			zap.Uint64("userID", *player.UserID))
+
 		return nil, ErrPlayerBlacklisted
 	}
 
 	// Update player with user ID if not set
 	if player.UserID == nil {
-		if err := c.db.Models().Condo().SetPlayerUserID(ctx, player.ThumbnailURL, user.ID); err != nil {
+		if err := c.db.Model().Condo().SetPlayerUserID(ctx, player.ThumbnailURL, user.ID); err != nil {
 			c.logger.Error("Failed to update condo player user ID",
 				zap.Error(err),
 				zap.String("thumbnailURL", player.ThumbnailURL),

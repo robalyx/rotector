@@ -14,43 +14,31 @@ import (
 // ReviewerModel handles database operations for reviewer statistics.
 type ReviewerModel struct {
 	db     *bun.DB
-	views  *MaterializedViewModel
 	logger *zap.Logger
 }
 
 // NewReviewer creates a new ReviewerModel instance.
-func NewReviewer(db *bun.DB, views *MaterializedViewModel, logger *zap.Logger) *ReviewerModel {
+func NewReviewer(db *bun.DB, logger *zap.Logger) *ReviewerModel {
 	return &ReviewerModel{
 		db:     db,
-		views:  views,
 		logger: logger.Named("db_reviewer"),
 	}
 }
 
 // GetReviewerStats retrieves paginated reviewer statistics for a specific time period.
+//
+// Deprecated: Use Service().Reviewer().GetReviewerStats() instead.
 func (r *ReviewerModel) GetReviewerStats(
-	ctx context.Context,
-	period enum.ReviewerStatsPeriod,
-	cursor *types.ReviewerStatsCursor,
-	limit int,
+	ctx context.Context, period enum.ReviewerStatsPeriod, cursor *types.ReviewerStatsCursor, limit int,
 ) (map[uint64]*types.ReviewerStats, *types.ReviewerStatsCursor, error) {
 	// Initialize result map
 	results := make(map[uint64]*types.ReviewerStats)
 	var nextCursor *types.ReviewerStatsCursor
 
 	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
-		// Try to refresh the materialized view
-		err := r.views.RefreshReviewerStatsView(ctx, period)
-		if err != nil {
-			r.logger.Warn("Failed to refresh reviewer stats view",
-				zap.Error(err),
-				zap.String("period", period.String()))
-			// Continue anyway - we'll use slightly stale data
-		}
-
 		// Get bot settings to filter for valid reviewer IDs
 		var settings types.BotSetting
-		err = tx.NewSelect().
+		err := tx.NewSelect().
 			Model(&settings).
 			Where("id = 1").
 			Scan(ctx)
@@ -99,7 +87,7 @@ func (r *ReviewerModel) GetReviewerStats(
 		return nil
 	})
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to get reviewer stats: %w", err)
+		return nil, nil, err
 	}
 
 	return results, nextCursor, nil

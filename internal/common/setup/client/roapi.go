@@ -91,14 +91,14 @@ func GetRoAPIClient(
 	}
 
 	// Get Redis client for proxy rotation
-	proxyClient, err := redisManager.GetClient(redis.ProxyDBIndex)
+	ratelimitClient, err := redisManager.GetClient(redis.RatelimitDBIndex)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	// Initialize middleware instances
-	proxyMiddleware := proxy.New(proxies, proxyClient, cfg, requestTimeout)
-	roverseMiddleware := roverse.New(roverseProxies, proxyClient, cfg, requestTimeout)
+	proxyMiddleware := proxy.New(proxies, ratelimitClient, cfg, requestTimeout)
+	roverseMiddleware := roverse.New(roverseProxies, ratelimitClient, cfg, requestTimeout)
 
 	// Build middleware chain - order matters!
 	middlewares := []middleware.Middleware{

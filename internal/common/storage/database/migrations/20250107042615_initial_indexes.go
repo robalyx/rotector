@@ -269,6 +269,10 @@ func init() { //nolint:funlen
 			CREATE INDEX IF NOT EXISTS idx_condo_games_scan_time
 			ON condo_games (is_deleted, last_scanned ASC)
 			WHERE is_deleted = false;
+
+			-- Discord user full scan indexes
+			CREATE INDEX IF NOT EXISTS idx_discord_user_full_scans_last_scan
+			ON discord_user_full_scans (last_scan ASC);
 		`, enum.ActivityTypeUserViewed, enum.ActivityTypeGroupViewed).Exec(ctx)
 		if err != nil {
 			return fmt.Errorf("failed to create indexes: %w", err)
@@ -442,6 +446,9 @@ func init() { //nolint:funlen
 
 			-- Condo game indexes
 			DROP INDEX IF EXISTS idx_condo_games_scan_time;
+
+			-- Discord user full scan indexes
+			DROP INDEX IF EXISTS idx_discord_user_full_scans_last_scan;
 		`).Exec(ctx)
 		if err != nil {
 			return fmt.Errorf("failed to drop indexes: %w", err)

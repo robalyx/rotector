@@ -63,7 +63,7 @@ func (c *FriendChecker) ProcessUsers(userInfos []*types.User, reasonsMap map[uin
 	}
 
 	// Fetch all existing friends
-	existingFriends, err := c.db.Models().Users().GetUsersByIDs(
+	existingFriends, err := c.db.Model().User().GetUsersByIDs(
 		context.Background(), friendIDs, types.UserFieldBasic|types.UserFieldReasons,
 	)
 	if err != nil {
@@ -95,7 +95,7 @@ func (c *FriendChecker) ProcessUsers(userInfos []*types.User, reasonsMap map[uin
 	}
 
 	// Generate reasons for all users
-	reasons := c.friendAnalyzer.GenerateFriendReasons(context.Background(), userInfos, confirmedFriendsMap, flaggedFriendsMap)
+	reasons := c.friendAnalyzer.GenerateFriendReasons(userInfos, confirmedFriendsMap, flaggedFriendsMap)
 
 	// Process results
 	for _, userInfo := range userInfos {

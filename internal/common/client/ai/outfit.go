@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/HugoSmits86/nativewebp"
 	"github.com/bytedance/sonic"
@@ -196,8 +197,11 @@ func (a *OutfitAnalyzer) ProcessOutfits(userInfos []*types.User, reasonsMap map[
 	userOutfits, userThumbnails := a.getOutfitThumbnails(context.Background(), flaggedInfos)
 
 	// Process each user's outfits concurrently
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+
 	var (
-		p  = pool.New().WithContext(context.Background())
+		p  = pool.New().WithContext(ctx)
 		mu sync.Mutex
 	)
 

@@ -8,6 +8,8 @@ import (
 	"strings"
 	"time"
 
+	aGateway "github.com/diamondburned/arikawa/v3/gateway"
+	"github.com/diamondburned/arikawa/v3/state"
 	"github.com/disgoorg/disgo"
 	"github.com/disgoorg/disgo/bot"
 	"github.com/disgoorg/disgo/discord"
@@ -65,6 +67,13 @@ func New(app *setup.App) (*Bot, error) {
 	}
 	paginationManager := pagination.NewManager(sessionManager, logger)
 	guildEventHandler := botEvents.NewGuildEventHandler(logger)
+
+	// Initialize self-bot client
+	selfClient := state.NewWithIntents(app.Config.Common.Discord.SyncToken,
+		aGateway.IntentGuilds|aGateway.IntentGuildMembers)
+
+	// Disguise user agent
+	selfClient.Session.UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:136.0) Gecko/20100101 Firefox/136.0"
 
 	// Create bot instance
 	b := &Bot{
@@ -130,7 +139,7 @@ func New(app *setup.App) (*Bot, error) {
 	consentLayout := consent.New(app)
 	banLayout := ban.New(app, sessionManager)
 	reviewerLayout := reviewer.New(app, client)
-	guildLayout := guild.New(app)
+	guildLayout := guild.New(app, selfClient)
 
 	paginationManager.AddPages(settingLayout.Pages())
 	paginationManager.AddPages(logLayout.Pages())
@@ -399,7 +408,7 @@ func (b *Bot) checkBanStatus(event interfaces.CommonEvent, s *session.Session, p
 	userID := uint64(event.User().ID)
 
 	// Check if user is banned
-	banned, err := b.db.Models().Bans().IsBanned(context.Background(), userID)
+	banned, err := b.db.Model().Ban().IsBanned(context.Background(), userID)
 	if err != nil {
 		b.logger.Error("Failed to check ban status",
 			zap.Error(err),
@@ -431,7 +440,7 @@ func (b *Bot) checkBanStatus(event interfaces.CommonEvent, s *session.Session, p
 // checkConsentStatus checks if a user has consented and shows the consent menu if not.
 // Returns true if the user needs to consent (hasn't consented yet).
 func (b *Bot) checkConsentStatus(event interfaces.CommonEvent, s *session.Session) bool {
-	hasConsented, err := b.db.Models().Consent().HasConsented(context.Background(), uint64(event.User().ID))
+	hasConsented, err := b.db.Model().Consent().HasConsented(context.Background(), uint64(event.User().ID))
 	if err != nil {
 		b.logger.Error("Failed to check consent status", zap.Error(err))
 		return true

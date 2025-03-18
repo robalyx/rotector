@@ -52,7 +52,7 @@ func New(app *setup.App, bar *progress.Bar, logger *zap.Logger) *Worker {
 }
 
 // Start begins the statistics worker's main loop.
-func (w *Worker) Start() { //nolint:funlen
+func (w *Worker) Start() {
 	w.logger.Info("Statistics Worker started", zap.String("workerID", w.reporter.GetWorkerID()))
 	w.reporter.Start()
 	defer w.reporter.Stop()
@@ -70,7 +70,7 @@ func (w *Worker) Start() { //nolint:funlen
 		w.bar.SetStepMessage("Checking current hour stats", 0)
 		w.reporter.UpdateStatus("Checking current hour stats", 0)
 
-		exists, err := w.db.Models().Stats().HasStatsForHour(ctx, currentHour)
+		exists, err := w.db.Model().Stats().HasStatsForHour(ctx, currentHour)
 		if err != nil {
 			w.logger.Error("Failed to check current hour stats", zap.Error(err))
 			w.reporter.SetHealthy(false)
@@ -78,20 +78,10 @@ func (w *Worker) Start() { //nolint:funlen
 		}
 
 		if !exists {
-			// Step 2: Get current stats (20%)
-			w.bar.SetStepMessage("Collecting statistics", 20)
-			w.reporter.UpdateStatus("Collecting statistics", 20)
-			stats, err := w.db.Models().Stats().GetCurrentStats(ctx)
-			if err != nil {
-				w.logger.Error("Failed to get current stats", zap.Error(err))
-				w.reporter.SetHealthy(false)
-				continue
-			}
-
-			// Step 3: Save current stats (40%)
-			w.bar.SetStepMessage("Saving statistics", 40)
-			w.reporter.UpdateStatus("Saving statistics", 40)
-			if err := w.db.Models().Stats().SaveHourlyStats(ctx, stats); err != nil {
+			// Step 2: Save current stats (30%)
+			w.bar.SetStepMessage("Saving statistics", 30)
+			w.reporter.UpdateStatus("Saving statistics", 30)
+			if err := w.db.Service().Stats().SaveHourlyStats(ctx); err != nil {
 				w.logger.Error("Failed to save hourly stats", zap.Error(err))
 				w.reporter.SetHealthy(false)
 				continue
@@ -99,23 +89,23 @@ func (w *Worker) Start() { //nolint:funlen
 		}
 
 		// Get hourly stats
-		hourlyStats, err := w.db.Models().Stats().GetHourlyStats(ctx)
+		hourlyStats, err := w.db.Model().Stats().GetHourlyStats(ctx)
 		if err != nil {
 			w.logger.Error("Failed to get hourly stats", zap.Error(err))
 			w.reporter.SetHealthy(false)
 			continue
 		}
 
-		// Step 4: Generate and cache charts (50%)
-		w.bar.SetStepMessage("Generating charts", 50)
-		w.reporter.UpdateStatus("Generating charts", 50)
+		// Step 3: Generate and cache charts (40%)
+		w.bar.SetStepMessage("Generating charts", 40)
+		w.reporter.UpdateStatus("Generating charts", 40)
 		if err := w.generateAndCacheCharts(ctx, hourlyStats); err != nil {
 			w.logger.Error("Failed to generate and cache charts", zap.Error(err))
 			w.reporter.SetHealthy(false)
 			continue
 		}
 
-		// Step 5: Update welcome message (60%)
+		// Step 4: Update welcome message (60%)
 		w.bar.SetStepMessage("Updating welcome message", 60)
 		w.reporter.UpdateStatus("Updating welcome message", 60)
 		if err := w.updateWelcomeMessage(ctx, hourlyStats); err != nil {
@@ -124,17 +114,17 @@ func (w *Worker) Start() { //nolint:funlen
 			continue
 		}
 
-		// Step 6: Clean up old stats (80%)
+		// Step 5: Clean up old stats (80%)
 		w.bar.SetStepMessage("Cleaning up old stats", 80)
 		w.reporter.UpdateStatus("Cleaning up old stats", 80)
 		cutoffDate := time.Now().UTC().AddDate(0, 0, -30) // 30 days ago
-		if err := w.db.Models().Stats().PurgeOldStats(ctx, cutoffDate); err != nil {
+		if err := w.db.Model().Stats().PurgeOldStats(ctx, cutoffDate); err != nil {
 			w.logger.Error("Failed to purge old stats", zap.Error(err))
 			w.reporter.SetHealthy(false)
 			continue
 		}
 
-		// Step 7: Completed (100%)
+		// Step 6: Completed (100%)
 		w.bar.SetStepMessage("Waiting for next hour", 100)
 		w.reporter.UpdateStatus("Waiting for next hour", 100)
 		nextHour := currentHour.Add(time.Hour)
@@ -186,13 +176,13 @@ func (w *Worker) updateWelcomeMessage(ctx context.Context, hourlyStats []*types.
 	}
 
 	// Get and update bot settings
-	botSettings, err := w.db.Models().Settings().GetBotSettings(ctx)
+	botSettings, err := w.db.Model().Setting().GetBotSettings(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get bot settings: %w", err)
 	}
 	botSettings.WelcomeMessage = message
 
-	if err := w.db.Models().Settings().SaveBotSettings(ctx, botSettings); err != nil {
+	if err := w.db.Model().Setting().SaveBotSettings(ctx, botSettings); err != nil {
 		return fmt.Errorf("failed to save welcome message: %w", err)
 	}
 

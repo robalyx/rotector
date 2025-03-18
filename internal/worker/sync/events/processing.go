@@ -17,6 +17,8 @@ const (
 	similarityThreshold = 0.85
 	// maxRecentMessagesToCheck is the maximum number of recent messages to check against.
 	maxRecentMessagesToCheck = 20
+	// maxMessageLength is the maximum length of a message to process to avoid spam.
+	maxMessageLength = 500
 )
 
 // addMessageToQueue adds a message to the processing queue if it passes checks.
@@ -32,8 +34,20 @@ func (h *Handler) addMessageToQueue(message *discord.Message) {
 		return
 	}
 
+	// Skip messages that are too long (likely spam)
+	if len(content) > maxMessageLength {
+		h.logger.Debug("Skipping long message (likely spam)",
+			zap.Uint64("server_id", serverID),
+			zap.Uint64("channel_id", channelID),
+			zap.Uint64("user_id", userID),
+			zap.String("message_id", messageID),
+			zap.Int("length", len(content)),
+			zap.String("sample", content[:min(len(content), 50)]))
+		return
+	}
+
 	// Check if user's data is redacted
-	isRedacted, err := h.db.Models().Sync().IsUserDataRedacted(context.Background(), userID)
+	isRedacted, err := h.db.Model().Sync().IsUserDataRedacted(context.Background(), userID)
 	if err != nil {
 		h.logger.Error("Failed to check user redaction status",
 			zap.Uint64("user_id", userID),
@@ -126,7 +140,7 @@ func (h *Handler) addMessageToQueue(message *discord.Message) {
 // checkRecentSimilarMessages checks if a similar message was recently processed from the same user in the same server.
 func (h *Handler) checkRecentSimilarMessages(ctx context.Context, serverID, userID uint64, content string) (bool, error) {
 	// Get recent messages from this user in this server
-	messages, err := h.db.Models().Message().GetUserInappropriateMessages(ctx, serverID, userID, maxRecentMessagesToCheck)
+	messages, err := h.db.Model().Message().GetUserInappropriateMessages(ctx, serverID, userID, maxRecentMessagesToCheck)
 	if err != nil {
 		return false, err
 	}
@@ -166,16 +180,37 @@ func (h *Handler) processChannelMessages(serverID, channelID, channelKey uint64)
 		return
 	}
 
-	// Ban all users who sent messages regardless of content
+	// Create batch of server members to upsert
+	now := time.Now()
+	members := make([]*types.DiscordServerMember, 0, len(messages))
 	uniqueUsers := make(map[uint64]struct{})
+
 	for _, message := range messages {
+		if _, exists := uniqueUsers[message.UserID]; exists {
+			continue
+		}
+
+		members = append(members, &types.DiscordServerMember{
+			ServerID:  serverID,
+			UserID:    message.UserID,
+			UpdatedAt: now,
+		})
 		uniqueUsers[message.UserID] = struct{}{}
 	}
+
+	// Batch upsert server members
+	if err := h.db.Model().Sync().UpsertServerMembers(ctx, members, false); err != nil {
+		h.logger.Error("Failed to upsert server members",
+			zap.Uint64("server_id", serverID),
+			zap.Error(err))
+	}
+
+	// Create condo bans for all users
 	userIDs := make([]uint64, 0, len(uniqueUsers))
 	for userID := range uniqueUsers {
 		userIDs = append(userIDs, userID)
 	}
-	h.CreateBansForUsers(ctx, userIDs)
+	h.db.Service().Ban().CreateCondoBans(ctx, userIDs)
 
 	// Process the messages with AI
 	flaggedUsers, err := h.messageAnalyzer.ProcessMessages(ctx, serverID, channelID, serverInfo.Name, messages)
@@ -201,7 +236,7 @@ func (h *Handler) processChannelMessages(serverID, channelID, channelKey uint64)
 // getOrCreateServerInfo retrieves or creates server info for a given server ID.
 func (h *Handler) getOrCreateServerInfo(ctx context.Context, serverID uint64) (*types.DiscordServerInfo, error) {
 	// Try to get existing server info
-	serverInfos, err := h.db.Models().Sync().GetServerInfo(ctx, []uint64{serverID})
+	serverInfos, err := h.db.Model().Sync().GetServerInfo(ctx, []uint64{serverID})
 	if err != nil {
 		return nil, err
 	}
@@ -222,7 +257,7 @@ func (h *Handler) getOrCreateServerInfo(ctx context.Context, serverID uint64) (*
 		}
 
 		// Store the server info
-		if err := h.db.Models().Sync().UpsertServerInfo(ctx, serverInfo); err != nil {
+		if err := h.db.Model().Sync().UpsertServerInfo(ctx, serverInfo); err != nil {
 			return nil, err
 		}
 
@@ -239,7 +274,7 @@ func (h *Handler) getOrCreateServerInfo(ctx context.Context, serverID uint64) (*
 	}
 
 	// Store the server info
-	if err := h.db.Models().Sync().UpsertServerInfo(ctx, serverInfo); err != nil {
+	if err := h.db.Model().Sync().UpsertServerInfo(ctx, serverInfo); err != nil {
 		return nil, err
 	}
 
@@ -247,4 +282,57 @@ func (h *Handler) getOrCreateServerInfo(ctx context.Context, serverID uint64) (*
 		zap.Uint64("server_id", serverID),
 		zap.String("name", guild.Name))
 	return serverInfo, nil
+}
+
+// storeInappropriateMessages stores flagged messages in the database and updates user summaries.
+func (h *Handler) storeInappropriateMessages(
+	ctx context.Context, serverID uint64, channelID uint64, flaggedUsers map[uint64]*ai.FlaggedMessageUser,
+) error {
+	var messages []*types.InappropriateMessage
+	summaries := make([]*types.InappropriateUserSummary, 0, len(flaggedUsers))
+	now := time.Now()
+
+	// Process each flagged user
+	for userID, flaggedUser := range flaggedUsers {
+		// Create a summary for this user
+		summary := &types.InappropriateUserSummary{
+			UserID:       userID,
+			Reason:       flaggedUser.Reason,
+			MessageCount: len(flaggedUser.Messages),
+			LastDetected: now,
+			UpdatedAt:    now,
+		}
+		summaries = append(summaries, summary)
+
+		// Create a database record for each flagged message
+		for _, message := range flaggedUser.Messages {
+			messages = append(messages, &types.InappropriateMessage{
+				ServerID:   serverID,
+				ChannelID:  channelID,
+				UserID:     userID,
+				MessageID:  message.MessageID,
+				Content:    message.Content,
+				Reason:     message.Reason,
+				Confidence: message.Confidence,
+				DetectedAt: now,
+				UpdatedAt:  now,
+			})
+		}
+	}
+
+	// Store the messages in the database
+	if err := h.db.Model().Message().BatchStoreInappropriateMessages(ctx, messages); err != nil {
+		return err
+	}
+
+	// Update user summaries
+	if err := h.db.Model().Message().BatchUpdateUserSummaries(ctx, summaries); err != nil {
+		return err
+	}
+
+	h.logger.Info("Stored inappropriate messages",
+		zap.Uint64("server_id", serverID),
+		zap.Int("user_count", len(flaggedUsers)),
+		zap.Int("message_count", len(messages)))
+	return nil
 }

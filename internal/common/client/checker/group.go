@@ -103,7 +103,7 @@ func (c *GroupChecker) CheckGroupPercentages(
 	}
 
 	// Get user data for confidence calculation
-	users, err := c.db.Models().Users().GetUsersByIDs(
+	users, err := c.db.Model().User().GetUsersByIDs(
 		context.Background(), allFlaggedUserIDs, types.UserFieldBasic|types.UserFieldConfidence,
 	)
 	if err != nil {
@@ -171,7 +171,7 @@ func (c *GroupChecker) ProcessUsers(userInfos []*types.User, reasonsMap map[uint
 	}
 
 	// Fetch all existing groups
-	existingGroups, err := c.db.Models().Groups().GetGroupsByIDs(
+	existingGroups, err := c.db.Model().Group().GetGroupsByIDs(
 		context.Background(), groupIDs, types.GroupFieldBasic|types.GroupFieldReasons,
 	)
 	if err != nil {

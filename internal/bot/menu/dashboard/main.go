@@ -49,13 +49,13 @@ func (m *Menu) Show(event interfaces.CommonEvent, s *session.Session, _ *paginat
 	}
 
 	// Get all counts in a single transaction
-	userCounts, groupCounts, err := m.layout.db.Models().Stats().GetCurrentCounts(context.Background())
+	userCounts, groupCounts, err := m.layout.db.Service().Stats().GetCurrentCounts(context.Background())
 	if err != nil {
 		m.layout.logger.Error("Failed to get counts", zap.Error(err))
 	}
 
 	// Get vote statistics for the user
-	voteStats, err := m.layout.db.Models().Votes().GetUserVoteStats(
+	voteStats, err := m.layout.db.Service().Vote().GetUserVoteStats(
 		context.Background(),
 		uint64(event.User().ID),
 		enum.LeaderboardPeriodAllTime,
@@ -228,7 +228,7 @@ func (m *Menu) handleLookupRobloxUserModalSubmit(
 	}
 
 	// Get user from database
-	user, err := m.layout.db.Models().Users().GetUserByID(context.Background(), userIDStr, types.UserFieldAll)
+	user, err := m.layout.db.Service().User().GetUserByID(context.Background(), userIDStr, types.UserFieldAll)
 	if err != nil {
 		switch {
 		case errors.Is(err, types.ErrUserNotFound):
@@ -247,7 +247,7 @@ func (m *Menu) handleLookupRobloxUserModalSubmit(
 	r.Show(event, s, constants.UserReviewPageName, "")
 
 	// Log the lookup action
-	m.layout.db.Models().Activities().Log(context.Background(), &types.ActivityLog{
+	m.layout.db.Model().Activity().Log(context.Background(), &types.ActivityLog{
 		ActivityTarget: types.ActivityTarget{
 			UserID: user.ID,
 		},
@@ -276,7 +276,7 @@ func (m *Menu) handleLookupRobloxGroupModalSubmit(
 	}
 
 	// Get group from database
-	group, err := m.layout.db.Models().Groups().GetGroupByID(context.Background(), groupIDStr, types.GroupFieldAll)
+	group, err := m.layout.db.Service().Group().GetGroupByID(context.Background(), groupIDStr, types.GroupFieldAll)
 	if err != nil {
 		switch {
 		case errors.Is(err, types.ErrGroupNotFound):
@@ -295,7 +295,7 @@ func (m *Menu) handleLookupRobloxGroupModalSubmit(
 	r.Show(event, s, constants.GroupReviewPageName, "")
 
 	// Log the lookup action
-	m.layout.db.Models().Activities().Log(context.Background(), &types.ActivityLog{
+	m.layout.db.Model().Activity().Log(context.Background(), &types.ActivityLog{
 		ActivityTarget: types.ActivityTarget{
 			GroupID: group.ID,
 		},
@@ -327,7 +327,7 @@ func (m *Menu) handleLookupDiscordUserModalSubmit(
 	r.Show(event, s, constants.GuildLookupPageName, "")
 
 	// Log the lookup action
-	m.layout.db.Models().Activities().Log(context.Background(), &types.ActivityLog{
+	m.layout.db.Model().Activity().Log(context.Background(), &types.ActivityLog{
 		ActivityTarget: types.ActivityTarget{
 			UserID: discordUserID,
 		},

@@ -44,3 +44,9 @@ type GuildCursor struct {
 	JoinedAt time.Time `json:"joinedAt"` // Timestamp for cursor position
 	ServerID uint64    `json:"serverId"` // Server ID for cursor position
 }
+
+// DiscordUserFullScan represents the last time a full guild scan was performed for a Discord user.
+type DiscordUserFullScan struct {
+	UserID   uint64    `bun:",pk"      json:"userId"`   // Discord user ID
+	LastScan time.Time `bun:",notnull" json:"lastScan"` // Last full scan timestamp
+}

@@ -74,6 +74,7 @@ func (r *AppealModel) CreateAppeal(ctx context.Context, appeal *types.Appeal, re
 			zap.Uint64("userID", appeal.UserID),
 			zap.Uint64("requesterID", appeal.RequesterID),
 			zap.String("status", appeal.Status.String()))
+
 		return nil
 	})
 }
@@ -180,7 +181,6 @@ func (r *AppealModel) GetAppealByID(ctx context.Context, appealID int64) (*types
 		r.logger.Error("Failed to get appeal", zap.Error(err))
 		return nil, fmt.Errorf("failed to get appeal: %w", err)
 	}
-
 	return &fullAppeal, nil
 }
 
@@ -218,6 +218,8 @@ func (r *AppealModel) HasPendingAppealByUserID(
 
 // GetAppealsToReview gets a list of appeals based on sort criteria.
 // It supports pagination through cursors and different sorting options.
+//
+// Deprecated: Use Service().Appeal().GetAppealsToReview() instead.
 func (r *AppealModel) GetAppealsToReview(
 	ctx context.Context,
 	sortBy enum.AppealSortBy,
@@ -225,7 +227,7 @@ func (r *AppealModel) GetAppealsToReview(
 	reviewerID uint64,
 	cursor *types.AppealTimeline,
 	limit int,
-) ([]*types.FullAppeal, *types.AppealTimeline, *types.AppealTimeline, error) {
+) ([]*types.FullAppeal, error) {
 	// Build base query with timeline join
 	query := r.db.NewSelect().
 		Model((*types.Appeal)(nil)).
@@ -262,25 +264,25 @@ func (r *AppealModel) GetAppealsToReview(
 	var results []*types.FullAppeal
 	err := query.Scan(ctx, &results)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf(
+		return nil, fmt.Errorf(
 			"failed to get appeals with cursor: %w (sortBy=%s, reviewerID=%d)",
 			err, sortBy.String(), reviewerID,
 		)
 	}
 
-	// Process results to get appeals and cursors for pagination
-	firstCursor, nextCursor := processAppealResults(results, limit)
-	return results, firstCursor, nextCursor, nil
+	return results, nil
 }
 
 // GetAppealsByRequester gets all appeals submitted by a specific user.
+//
+// Deprecated: Use Service().Appeal().GetAppealsByRequester() instead.
 func (r *AppealModel) GetAppealsByRequester(
 	ctx context.Context,
 	statusFilter enum.AppealStatus,
 	requesterID uint64,
 	cursor *types.AppealTimeline,
 	limit int,
-) ([]*types.FullAppeal, *types.AppealTimeline, *types.AppealTimeline, error) {
+) ([]*types.FullAppeal, error) {
 	query := r.db.NewSelect().
 		Model((*types.Appeal)(nil)).
 		Join("JOIN appeal_timelines AS t ON t.id = appeal.id AND t.timestamp = appeal.timestamp").
@@ -302,15 +304,13 @@ func (r *AppealModel) GetAppealsByRequester(
 	var results []*types.FullAppeal
 	err := query.Scan(ctx, &results)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf(
+		return nil, fmt.Errorf(
 			"failed to get appeals by requester: %w (requesterID=%d)",
 			err, requesterID,
 		)
 	}
 
-	// Process results to get cursors for pagination
-	firstCursor, nextCursor := processAppealResults(results, limit)
-	return results, firstCursor, nextCursor, nil
+	return results, nil
 }
 
 // GetRejectedAppealsCount returns the total number of rejected appeals for a user ID.
@@ -396,37 +396,6 @@ func (r *AppealModel) AddAppealMessage(
 
 		return nil
 	})
-}
-
-// processAppealResults handles pagination and data transformation for appeal results.
-func processAppealResults(results []*types.FullAppeal, limit int) (*types.AppealTimeline, *types.AppealTimeline) {
-	var nextCursor *types.AppealTimeline
-	var firstCursor *types.AppealTimeline
-
-	if len(results) > limit {
-		// Use the extra item as the next cursor for pagination
-		last := results[limit-1]
-		nextCursor = &types.AppealTimeline{
-			ID:           last.Appeal.ID,
-			Timestamp:    last.Appeal.Timestamp,
-			LastViewed:   last.LastViewed,
-			LastActivity: last.LastActivity,
-		}
-		results = results[:limit] // Remove the extra item from results
-	}
-
-	if len(results) > 0 {
-		// Create first page cursor for navigation back to start
-		first := results[0]
-		firstCursor = &types.AppealTimeline{
-			ID:           first.Appeal.ID,
-			Timestamp:    first.Appeal.Timestamp,
-			LastViewed:   first.LastViewed,
-			LastActivity: first.LastActivity,
-		}
-	}
-
-	return firstCursor, nextCursor
 }
 
 // ClaimAppeal claims an appeal by setting the reviewer ID and timestamp.

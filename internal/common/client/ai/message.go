@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/bytedance/sonic"
 	"github.com/google/generative-ai-go/genai"
@@ -250,9 +251,14 @@ func (a *MessageAnalyzer) ProcessMessages(
 	}
 
 	// Process batches concurrently
-	var mu sync.Mutex
-	flaggedUsers := make(map[uint64]*FlaggedMessageUser)
-	p := pool.New().WithErrors().WithContext(ctx)
+	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	defer cancel()
+
+	var (
+		p            = pool.New().WithErrors().WithContext(ctx)
+		flaggedUsers = make(map[uint64]*FlaggedMessageUser)
+		mu           sync.Mutex
+	)
 
 	for _, batch := range batches {
 		batchCopy := batch

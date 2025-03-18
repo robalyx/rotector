@@ -8,13 +8,13 @@ import (
 
 var (
 	userURLPattern = regexp.MustCompile(
-		`(?i)(?:(?:https?://)?(?:www\.)?roblox\.com/users/(\d+)(?:/.*)?|(?:^|\s)(\d+)(?:$|\s))`,
+		`(?i)(?:(?:\[.*?\]\()?(?:https?://)?(?:www\.)?roblox\.com/users/(\d+)(?:/.*?)?\)?|(?:^|\s)(\d+)(?:$|\s))`,
 	)
 	groupURLPattern = regexp.MustCompile(
-		`(?i)(?:(?:https?://)?(?:www\.)?roblox\.com/(?:groups|communities)/(\d+)(?:/.*)?|(?:^|\s)(\d+)(?:$|\s))`,
+		`(?i)(?:(?:\[.*?\]\()?(?:https?://)?(?:www\.)?roblox\.com/(?:groups|communities)/(\d+)(?:/.*?)?\)?|(?:^|\s)(\d+)(?:$|\s))`,
 	)
 	gameURLPattern = regexp.MustCompile(
-		`(?i)(?:(?:https?://)?(?:www\.)?roblox\.com/games/(\d+)(?:/.*)?|(?:^|\s)(\d+)(?:$|\s))`,
+		`(?i)(?:(?:\[.*?\]\()?(?:https?://)?(?:www\.)?roblox\.com/games/(\d+)(?:/.*?)?\)?|(?:^|\s)(\d+)(?:$|\s))`,
 	)
 
 	ErrInvalidProfileURL = errors.New("invalid Roblox profile URL format")

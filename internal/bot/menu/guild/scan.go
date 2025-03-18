@@ -122,7 +122,7 @@ func (m *ScanMenu) Show(event interfaces.CommonEvent, s *session.Session, r *pag
 // handleCondoScan processes the condo server scan.
 func (m *ScanMenu) handleCondoScan(ctx context.Context, s *session.Session, memberIDs []uint64) error {
 	// Get flagged server memberships for these users
-	flaggedMembers, err := m.layout.db.Models().Sync().GetFlaggedServerMembers(ctx, memberIDs)
+	flaggedMembers, err := m.layout.db.Model().Sync().GetFlaggedServerMembers(ctx, memberIDs)
 	if err != nil {
 		return fmt.Errorf("failed to get flagged members: %w", err)
 	}
@@ -136,7 +136,7 @@ func (m *ScanMenu) handleCondoScan(ctx context.Context, s *session.Session, memb
 	}
 
 	// Get server info from database
-	serverInfo, err := m.layout.db.Models().Sync().GetServerInfo(ctx, serverIDs)
+	serverInfo, err := m.layout.db.Model().Sync().GetServerInfo(ctx, serverIDs)
 	if err != nil {
 		return fmt.Errorf("failed to get server info: %w", err)
 	}
@@ -160,7 +160,7 @@ func (m *ScanMenu) handleCondoScan(ctx context.Context, s *session.Session, memb
 // handleMessageScan processes the message-based scan.
 func (m *ScanMenu) handleMessageScan(ctx context.Context, s *session.Session, memberIDs []uint64) error {
 	// Get message summaries for all members in the guild
-	summaries, err := m.layout.db.Models().Message().GetUserMessageSummaries(ctx, memberIDs)
+	summaries, err := m.layout.db.Model().Message().GetUserMessageSummaries(ctx, memberIDs)
 	if err != nil {
 		return fmt.Errorf("failed to get message summaries: %w", err)
 	}
@@ -456,7 +456,7 @@ func (m *ScanMenu) handleBanConfirmModal(
 	totalBanned, totalFailed, bannedUserIDs := m.executeBans(event, guildID, filteredUsers, banReason)
 
 	// Log the ban operation
-	err := m.layout.db.Models().GuildBans().LogBanOperation(context.Background(), &types.GuildBanLog{
+	err := m.layout.db.Model().GuildBan().LogBanOperation(context.Background(), &types.GuildBanLog{
 		GuildID:         guildID,
 		ReviewerID:      uint64(event.User().ID),
 		BannedCount:     totalBanned,

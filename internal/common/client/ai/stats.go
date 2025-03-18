@@ -3,6 +3,7 @@ package ai
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/bytedance/sonic"
 	"github.com/google/generative-ai-go/genai"
@@ -93,6 +94,9 @@ func NewStatsAnalyzer(app *setup.App, logger *zap.Logger) *StatsAnalyzer {
 func (a *StatsAnalyzer) GenerateWelcomeMessage(
 	ctx context.Context, historicalStats []*types.HourlyStats,
 ) (string, error) {
+	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	defer cancel()
+
 	// Format stats data for AI analysis
 	data := StatsData{
 		History: historicalStats,

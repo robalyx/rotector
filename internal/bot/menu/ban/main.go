@@ -40,7 +40,7 @@ func (m *Menu) Show(event interfaces.CommonEvent, s *session.Session, r *paginat
 	userID := session.UserID.Get(s)
 
 	// Get ban information
-	ban, err := m.layout.db.Models().Bans().GetBan(context.Background(), userID)
+	ban, err := m.layout.db.Model().Ban().GetBan(context.Background(), userID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			r.Show(event, s, constants.DashboardPageName, "")
@@ -56,7 +56,7 @@ func (m *Menu) Show(event interfaces.CommonEvent, s *session.Session, r *paginat
 
 	// If ban is expired, remove it and return to dashboard
 	if ban.IsExpired() {
-		if _, err := m.layout.db.Models().Bans().UnbanUser(context.Background(), userID); err != nil {
+		if _, err := m.layout.db.Model().Ban().UnbanUser(context.Background(), userID); err != nil {
 			m.layout.logger.Error("Failed to remove expired ban",
 				zap.Error(err),
 				zap.Uint64("user_id", userID))

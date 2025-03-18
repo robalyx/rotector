@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/bytedance/sonic"
 	"github.com/google/generative-ai-go/genai"
@@ -240,8 +241,11 @@ func (a *UserAnalyzer) ProcessUsers(userInfos []*types.User, reasonsMap map[uint
 	numBatches := (len(userInfos) + a.batchSize - 1) / a.batchSize
 
 	// Process batches concurrently
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+
 	var (
-		p  = pool.New().WithContext(context.Background())
+		p  = pool.New().WithContext(ctx)
 		mu sync.Mutex
 	)
 

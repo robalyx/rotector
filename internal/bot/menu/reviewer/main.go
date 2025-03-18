@@ -43,7 +43,7 @@ func (m *Menu) Show(event interfaces.CommonEvent, s *session.Session, r *paginat
 	period := session.UserReviewerStatsPeriod.Get(s)
 
 	// Get refresh info for the selected period
-	lastRefresh, nextRefresh, err := m.layout.db.Models().Views().GetReviewerStatsRefreshInfo(
+	lastRefresh, nextRefresh, err := m.layout.db.Service().View().GetReviewerStatsRefreshInfo(
 		context.Background(),
 		period,
 	)
@@ -54,7 +54,7 @@ func (m *Menu) Show(event interfaces.CommonEvent, s *session.Session, r *paginat
 	}
 
 	// Fetch reviewer stats from database
-	stats, nextCursor, err := m.layout.db.Models().Reviewers().GetReviewerStats(
+	stats, nextCursor, err := m.layout.db.Service().Reviewer().GetReviewerStats(
 		context.Background(),
 		period,
 		cursor,

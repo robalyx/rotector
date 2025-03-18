@@ -119,7 +119,7 @@ func (w *Worker) processBannedUsers() {
 	w.reporter.UpdateStatus("Processing banned users", 12)
 
 	// Get users to check
-	users, currentlyBanned, err := w.db.Models().Users().GetUsersToCheck(context.Background(), w.userBatchSize)
+	users, currentlyBanned, err := w.db.Model().User().GetUsersToCheck(context.Background(), w.userBatchSize)
 	if err != nil {
 		w.logger.Error("Error getting users to check", zap.Error(err))
 		w.reporter.SetHealthy(false)
@@ -155,7 +155,7 @@ func (w *Worker) processBannedUsers() {
 
 	// Mark banned users
 	if len(bannedUserIDs) > 0 {
-		err = w.db.Models().Users().MarkUsersBanStatus(context.Background(), bannedUserIDs, true)
+		err = w.db.Model().User().MarkUsersBanStatus(context.Background(), bannedUserIDs, true)
 		if err != nil {
 			w.logger.Error("Error marking banned users", zap.Error(err))
 			w.reporter.SetHealthy(false)
@@ -166,7 +166,7 @@ func (w *Worker) processBannedUsers() {
 
 	// Unmark users that are no longer banned
 	if len(unbannedUserIDs) > 0 {
-		err = w.db.Models().Users().MarkUsersBanStatus(context.Background(), unbannedUserIDs, false)
+		err = w.db.Model().User().MarkUsersBanStatus(context.Background(), unbannedUserIDs, false)
 		if err != nil {
 			w.logger.Error("Error unmarking banned users", zap.Error(err))
 			w.reporter.SetHealthy(false)
@@ -182,7 +182,7 @@ func (w *Worker) processLockedGroups() {
 	w.reporter.UpdateStatus("Processing locked groups", 24)
 
 	// Get groups to check
-	groups, currentlyLocked, err := w.db.Models().Groups().GetGroupsToCheck(context.Background(), w.groupBatchSize)
+	groups, currentlyLocked, err := w.db.Model().Group().GetGroupsToCheck(context.Background(), w.groupBatchSize)
 	if err != nil {
 		w.logger.Error("Error getting groups to check", zap.Error(err))
 		w.reporter.SetHealthy(false)
@@ -218,7 +218,7 @@ func (w *Worker) processLockedGroups() {
 
 	// Mark locked groups
 	if len(lockedGroupIDs) > 0 {
-		err = w.db.Models().Groups().MarkGroupsLockStatus(context.Background(), lockedGroupIDs, true)
+		err = w.db.Model().Group().MarkGroupsLockStatus(context.Background(), lockedGroupIDs, true)
 		if err != nil {
 			w.logger.Error("Error marking locked groups", zap.Error(err))
 			w.reporter.SetHealthy(false)
@@ -229,7 +229,7 @@ func (w *Worker) processLockedGroups() {
 
 	// Unmark groups that are no longer locked
 	if len(unlockedGroupIDs) > 0 {
-		err = w.db.Models().Groups().MarkGroupsLockStatus(context.Background(), unlockedGroupIDs, false)
+		err = w.db.Model().Group().MarkGroupsLockStatus(context.Background(), unlockedGroupIDs, false)
 		if err != nil {
 			w.logger.Error("Error unmarking locked groups", zap.Error(err))
 			w.reporter.SetHealthy(false)
@@ -244,8 +244,8 @@ func (w *Worker) processClearedUsers() {
 	w.bar.SetStepMessage("Processing cleared users", 36)
 	w.reporter.UpdateStatus("Processing cleared users", 36)
 
-	cutoffDate := time.Now().AddDate(0, 0, -30) // 30 days ago
-	affected, err := w.db.Models().Users().PurgeOldClearedUsers(context.Background(), cutoffDate)
+	cutOffDate := time.Now().AddDate(0, 0, -30)
+	affected, err := w.db.Model().User().PurgeOldClearedUsers(context.Background(), cutOffDate)
 	if err != nil {
 		w.logger.Error("Error purging old cleared users", zap.Error(err))
 		w.reporter.SetHealthy(false)
@@ -255,7 +255,7 @@ func (w *Worker) processClearedUsers() {
 	if affected > 0 {
 		w.logger.Info("Purged old cleared users",
 			zap.Int("affected", affected),
-			zap.Time("cutoffDate", cutoffDate))
+			zap.Time("cutOffDate", cutOffDate))
 	}
 }
 
@@ -264,8 +264,8 @@ func (w *Worker) processClearedGroups() {
 	w.bar.SetStepMessage("Processing cleared groups", 48)
 	w.reporter.UpdateStatus("Processing cleared groups", 48)
 
-	cutoffDate := time.Now().AddDate(0, 0, -30) // 30 days ago
-	affected, err := w.db.Models().Groups().PurgeOldClearedGroups(context.Background(), cutoffDate)
+	cutOffDate := time.Now().AddDate(0, 0, -30)
+	affected, err := w.db.Model().Group().PurgeOldClearedGroups(context.Background(), cutOffDate)
 	if err != nil {
 		w.logger.Error("Error purging old cleared groups", zap.Error(err))
 		w.reporter.SetHealthy(false)
@@ -275,7 +275,7 @@ func (w *Worker) processClearedGroups() {
 	if affected > 0 {
 		w.logger.Info("Purged old cleared groups",
 			zap.Int("affected", affected),
-			zap.Time("cutoffDate", cutoffDate))
+			zap.Time("cutOffDate", cutOffDate))
 	}
 }
 
@@ -285,7 +285,7 @@ func (w *Worker) processGroupTracking() {
 	w.reporter.UpdateStatus("Processing group tracking", 60)
 
 	// Get groups to check
-	groupsWithUsers, err := w.db.Models().Tracking().GetGroupTrackingsToCheck(
+	groupsWithUsers, err := w.db.Model().Tracking().GetGroupTrackingsToCheck(
 		context.Background(),
 		w.trackBatchSize,
 		w.minGroupFlaggedUsers,
@@ -325,7 +325,7 @@ func (w *Worker) processGroupTracking() {
 	flaggedGroups = w.thumbnailFetcher.AddGroupImageURLs(context.Background(), flaggedGroups)
 
 	// Save flagged groups to database
-	if err := w.db.Models().Groups().SaveGroups(context.Background(), flaggedGroups); err != nil {
+	if err := w.db.Service().Group().SaveGroups(context.Background(), flaggedGroups); err != nil {
 		w.logger.Error("Failed to save flagged groups", zap.Error(err))
 		return
 	}
@@ -337,7 +337,7 @@ func (w *Worker) processGroupTracking() {
 	}
 
 	// Update tracking entries to mark them as flagged
-	if err := w.db.Models().Tracking().UpdateFlaggedGroups(context.Background(), flaggedGroupIDs); err != nil {
+	if err := w.db.Model().Tracking().UpdateFlaggedGroups(context.Background(), flaggedGroupIDs); err != nil {
 		w.logger.Error("Failed to update tracking entries", zap.Error(err))
 		return
 	}
@@ -353,7 +353,7 @@ func (w *Worker) processUserThumbnails() {
 	w.reporter.UpdateStatus("Processing user thumbnails", 72)
 
 	// Get users that need thumbnail updates
-	users, err := w.db.Models().Users().GetUsersForThumbnailUpdate(context.Background(), w.thumbnailUserBatchSize)
+	users, err := w.db.Model().User().GetUsersForThumbnailUpdate(context.Background(), w.thumbnailUserBatchSize)
 	if err != nil {
 		w.logger.Error("Error getting users for thumbnail update", zap.Error(err))
 		w.reporter.SetHealthy(false)
@@ -378,7 +378,7 @@ func (w *Worker) processUserThumbnails() {
 	}
 
 	// Save updated users
-	if err := w.db.Models().Users().SaveUsers(context.Background(), users); err != nil {
+	if err := w.db.Service().User().SaveUsers(context.Background(), users); err != nil {
 		w.logger.Error("Error saving updated user thumbnails", zap.Error(err))
 		w.reporter.SetHealthy(false)
 		return
@@ -395,7 +395,7 @@ func (w *Worker) processGroupThumbnails() {
 	w.reporter.UpdateStatus("Processing group thumbnails", 84)
 
 	// Get groups that need thumbnail updates
-	groups, err := w.db.Models().Groups().GetGroupsForThumbnailUpdate(context.Background(), w.thumbnailGroupBatchSize)
+	groups, err := w.db.Model().Group().GetGroupsForThumbnailUpdate(context.Background(), w.thumbnailGroupBatchSize)
 	if err != nil {
 		w.logger.Error("Error getting groups for thumbnail update", zap.Error(err))
 		w.reporter.SetHealthy(false)
@@ -411,7 +411,7 @@ func (w *Worker) processGroupThumbnails() {
 	updatedGroups := w.thumbnailFetcher.AddGroupImageURLs(context.Background(), groups)
 
 	// Save updated groups
-	if err := w.db.Models().Groups().SaveGroups(context.Background(), groups); err != nil {
+	if err := w.db.Service().Group().SaveGroups(context.Background(), groups); err != nil {
 		w.logger.Error("Error saving updated group thumbnails", zap.Error(err))
 		w.reporter.SetHealthy(false)
 		return
@@ -422,13 +422,13 @@ func (w *Worker) processGroupThumbnails() {
 		zap.Int("updatedCount", len(updatedGroups)))
 }
 
-// processOldServerMembers removes Discord server member records older than 14 days.
+// processOldServerMembers removes Discord server member records older than 7 days.
 func (w *Worker) processOldServerMembers() {
 	w.bar.SetStepMessage("Processing old Discord server members", 96)
 	w.reporter.UpdateStatus("Processing old Discord server members", 96)
 
-	cutoffDate := time.Now().AddDate(0, 0, -14) // 14 days ago
-	affected, err := w.db.Models().Sync().PurgeOldServerMembers(context.Background(), cutoffDate)
+	cutoffDate := time.Now().AddDate(0, 0, -7) // 7 days ago
+	affected, err := w.db.Model().Sync().PurgeOldServerMembers(context.Background(), cutoffDate)
 	if err != nil {
 		w.logger.Error("Error purging old Discord server members", zap.Error(err))
 		w.reporter.SetHealthy(false)

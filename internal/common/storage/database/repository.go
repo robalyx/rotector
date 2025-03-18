@@ -8,20 +8,20 @@ import (
 
 // Repository provides access to all database models.
 type Repository struct {
-	users      *models.UserModel
-	groups     *models.GroupModel
+	user       *models.UserModel
+	group      *models.GroupModel
 	stats      *models.StatsModel
-	settings   *models.SettingModel
-	activities *models.ActivityModel
-	guildBans  *models.GuildBanModel
+	setting    *models.SettingModel
+	activity   *models.ActivityModel
+	guildBan   *models.GuildBanModel
 	tracking   *models.TrackingModel
-	appeals    *models.AppealModel
-	bans       *models.BanModel
+	appeal     *models.AppealModel
+	ban        *models.BanModel
 	reputation *models.ReputationModel
-	votes      *models.VoteModel
-	views      *models.MaterializedViewModel
+	vote       *models.VoteModel
+	view       *models.MaterializedViewModel
 	consent    *models.ConsentModel
-	reviewers  *models.ReviewerModel
+	reviewer   *models.ReviewerModel
 	sync       *models.SyncModel
 	message    *models.MessageModel
 	condo      *models.CondoModel
@@ -29,46 +29,35 @@ type Repository struct {
 
 // NewRepository creates a new repository instance with all models.
 func NewRepository(db *bun.DB, logger *zap.Logger) *Repository {
-	// Initialize models in the correct order based on dependencies
-	activities := models.NewActivity(db, logger)
-	views := models.NewMaterializedView(db, logger)
-	votes := models.NewVote(db, activities, views, logger)
-	reputation := models.NewReputation(db, votes, logger)
-	tracking := models.NewTracking(db, logger)
-	users := models.NewUser(db, tracking, activities, reputation, votes, logger)
-	groups := models.NewGroup(db, activities, reputation, votes, logger)
-	consent := models.NewConsent(db, logger)
-	reviewers := models.NewReviewer(db, views, logger)
-
 	return &Repository{
-		users:      users,
-		groups:     groups,
-		stats:      models.NewStats(db, users, groups, logger),
-		settings:   models.NewSetting(db, logger),
-		activities: activities,
-		guildBans:  models.NewGuildBan(db, logger),
-		tracking:   tracking,
-		appeals:    models.NewAppeal(db, logger),
-		bans:       models.NewBan(db, logger),
-		reputation: reputation,
-		votes:      votes,
-		views:      views,
-		consent:    consent,
-		reviewers:  reviewers,
+		user:       models.NewUser(db, logger),
+		group:      models.NewGroup(db, logger),
+		stats:      models.NewStats(db, logger),
+		setting:    models.NewSetting(db, logger),
+		activity:   models.NewActivity(db, logger),
+		guildBan:   models.NewGuildBan(db, logger),
+		tracking:   models.NewTracking(db, logger),
+		appeal:     models.NewAppeal(db, logger),
+		ban:        models.NewBan(db, logger),
+		reputation: models.NewReputation(db, logger),
+		vote:       models.NewVote(db, logger),
+		view:       models.NewMaterializedView(db, logger),
+		consent:    models.NewConsent(db, logger),
+		reviewer:   models.NewReviewer(db, logger),
 		sync:       models.NewSync(db, logger),
 		message:    models.NewMessage(db, logger),
 		condo:      models.NewCondo(db, logger),
 	}
 }
 
-// Users returns the user model repository.
-func (r *Repository) Users() *models.UserModel {
-	return r.users
+// User returns the user model repository.
+func (r *Repository) User() *models.UserModel {
+	return r.user
 }
 
-// Groups returns the group model repository.
-func (r *Repository) Groups() *models.GroupModel {
-	return r.groups
+// Group returns the group model repository.
+func (r *Repository) Group() *models.GroupModel {
+	return r.group
 }
 
 // Stats returns the stats model repository.
@@ -76,19 +65,19 @@ func (r *Repository) Stats() *models.StatsModel {
 	return r.stats
 }
 
-// Settings returns the settings model repository.
-func (r *Repository) Settings() *models.SettingModel {
-	return r.settings
+// Setting returns the setting model repository.
+func (r *Repository) Setting() *models.SettingModel {
+	return r.setting
 }
 
-// Activities returns the activities model repository.
-func (r *Repository) Activities() *models.ActivityModel {
-	return r.activities
+// Activity returns the activities model repository.
+func (r *Repository) Activity() *models.ActivityModel {
+	return r.activity
 }
 
-// GuildBans returns the guild bans model repository.
-func (r *Repository) GuildBans() *models.GuildBanModel {
-	return r.guildBans
+// GuildBan returns the guild ban model repository.
+func (r *Repository) GuildBan() *models.GuildBanModel {
+	return r.guildBan
 }
 
 // Tracking returns the tracking model repository.
@@ -96,14 +85,14 @@ func (r *Repository) Tracking() *models.TrackingModel {
 	return r.tracking
 }
 
-// Appeals returns the appeals model repository.
-func (r *Repository) Appeals() *models.AppealModel {
-	return r.appeals
+// Appeal returns the appeal model repository.
+func (r *Repository) Appeal() *models.AppealModel {
+	return r.appeal
 }
 
-// Bans returns the bans model repository.
-func (r *Repository) Bans() *models.BanModel {
-	return r.bans
+// Ban returns the ban model repository.
+func (r *Repository) Ban() *models.BanModel {
+	return r.ban
 }
 
 // Reputation returns the reputation model repository.
@@ -111,14 +100,14 @@ func (r *Repository) Reputation() *models.ReputationModel {
 	return r.reputation
 }
 
-// Votes returns the votes model repository.
-func (r *Repository) Votes() *models.VoteModel {
-	return r.votes
+// Vote returns the vote model repository.
+func (r *Repository) Vote() *models.VoteModel {
+	return r.vote
 }
 
-// Views returns the materialized views model repository.
-func (r *Repository) Views() *models.MaterializedViewModel {
-	return r.views
+// View returns the materialized view model repository.
+func (r *Repository) View() *models.MaterializedViewModel {
+	return r.view
 }
 
 // Consent returns the consent model repository.
@@ -126,9 +115,9 @@ func (r *Repository) Consent() *models.ConsentModel {
 	return r.consent
 }
 
-// Reviewers returns the reviewer model repository.
-func (r *Repository) Reviewers() *models.ReviewerModel {
-	return r.reviewers
+// Reviewer returns the reviewer model repository.
+func (r *Repository) Reviewer() *models.ReviewerModel {
+	return r.reviewer
 }
 
 // Sync returns the sync model repository.

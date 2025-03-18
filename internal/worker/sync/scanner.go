@@ -11,8 +11,41 @@ import (
 	"go.uber.org/zap"
 )
 
-// scanGames periodically scans games for active players.
-func (w *Worker) scanGames() {
+// runMutualScanner continuously runs full scans for users.
+func (w *Worker) runMutualScanner() {
+	for {
+		ctx := context.Background()
+		before := time.Now().Add(-1 * time.Hour) // Scan users not checked in the last hour
+		userIDs, err := w.db.Model().Sync().GetUsersForFullScan(ctx, before, 100)
+		if err != nil {
+			w.logger.Error("Failed to get users for full scan", zap.Error(err))
+			time.Sleep(5 * time.Second)
+			continue
+		}
+
+		for _, userID := range userIDs {
+			if !w.scanner.ShouldScan(ctx, userID) {
+				continue
+			}
+
+			_, err := w.scanner.PerformFullScan(ctx, userID)
+			if err != nil {
+				w.logger.Error("Failed to perform full scan",
+					zap.Error(err),
+					zap.Uint64("user_id", userID))
+			}
+
+			// Sleep to respect rate limits
+			time.Sleep(1 * time.Second)
+		}
+
+		// Sleep before next batch
+		time.Sleep(5 * time.Second)
+	}
+}
+
+// runGameScanner periodically scans games for active players.
+func (w *Worker) runGameScanner() {
 	for {
 		if err := w.processPendingGames(); err != nil {
 			w.logger.Error("Failed to process pending games", zap.Error(err))
@@ -27,7 +60,7 @@ func (w *Worker) processPendingGames() error {
 	ctx := context.Background()
 
 	// Get oldest non-deleted games
-	pendingGames, err := w.db.Models().Condo().GetAndUpdatePendingGames(ctx, 50)
+	pendingGames, err := w.db.Model().Condo().GetAndUpdatePendingGames(ctx, 50)
 	if err != nil {
 		return fmt.Errorf("failed to get pending games: %w", err)
 	}
@@ -55,7 +88,7 @@ func (w *Worker) processPendingGames() error {
 		p.Go(func(ctx context.Context) error {
 			// Check if game is deleted
 			if !detail.IsPlayable && detail.ReasonProhibited == "AssetUnapproved" {
-				if err := w.db.Models().Condo().MarkGameDeleted(ctx, detail.PlaceID); err != nil {
+				if err := w.db.Model().Condo().MarkGameDeleted(ctx, detail.PlaceID); err != nil {
 					return fmt.Errorf("failed to mark game %d as deleted: %w", detail.PlaceID, err)
 				}
 
@@ -116,7 +149,7 @@ func (w *Worker) processPendingGames() error {
 				uniqueURLs[url] = struct{}{}
 			}
 
-			if err := w.db.Models().Condo().SaveCondoPlayers(ctx, players); err != nil {
+			if err := w.db.Model().Condo().SaveCondoPlayers(ctx, players); err != nil {
 				return fmt.Errorf("failed to save condo players for game %d: %w", detail.PlaceID, err)
 			}
 

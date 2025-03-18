@@ -49,7 +49,7 @@ func (w *Worker) syncCycle() error {
 			UpdatedAt: now,
 		}
 
-		if err := w.db.Models().Sync().UpsertServerInfo(ctx, serverInfo); err != nil {
+		if err := w.db.Model().Sync().UpsertServerInfo(ctx, serverInfo); err != nil {
 			w.logger.Error("Failed to update server info",
 				zap.String("name", guild.Name),
 				zap.Uint64("id", uint64(guild.ID)),
@@ -88,11 +88,10 @@ func (w *Worker) syncCycle() error {
 			zap.Int("member_count", len(members)))
 
 		// Batch update members for this guild
-		guildID := uint64(guild.ID)
-		if err := w.db.Models().Sync().BatchUpsertServerMembers(ctx, guildID, members); err != nil {
+		if err := w.db.Model().Sync().UpsertServerMembers(ctx, members, false); err != nil {
 			w.logger.Error("Failed to batch update members",
 				zap.String("guild_name", guild.Name),
-				zap.Uint64("guild_id", guildID),
+				zap.Uint64("guild_id", uint64(guild.ID)),
 				zap.Int("member_count", len(members)),
 				zap.Error(err))
 			failedGuilds++
@@ -104,14 +103,14 @@ func (w *Worker) syncCycle() error {
 		for _, member := range members {
 			userIDs = append(userIDs, member.UserID)
 		}
-		w.eventHandler.CreateBansForUsers(ctx, userIDs)
+		w.db.Service().Ban().CreateCondoBans(ctx, userIDs)
 
 		totalMembers += len(members)
 		successfulGuilds++
 	}
 
 	// Get total unique members in database for reporting
-	uniqueUserCount, err := w.db.Models().Sync().GetUniqueUserCount(ctx)
+	uniqueUserCount, err := w.db.Model().Sync().GetUniqueUserCount(ctx)
 	if err != nil {
 		w.logger.Warn("Failed to get unique user count", zap.Error(err))
 	} else {
@@ -436,7 +435,7 @@ func (w *Worker) processMemberList(
 	// Check which users already exist in our database
 	existingUsers := make(map[uint64]bool)
 	if len(userIDsToCheck) > 0 {
-		existingMembersMap, err := w.db.Models().Sync().GetFlaggedServerMembers(context.Background(), userIDsToCheck)
+		existingMembersMap, err := w.db.Model().Sync().GetFlaggedServerMembers(context.Background(), userIDsToCheck)
 		if err != nil {
 			w.logger.Error("Failed to check existing members",
 				zap.Error(err),
@@ -450,11 +449,11 @@ func (w *Worker) processMemberList(
 
 	// Create the final list of new members based on grace period checks
 	newMembers := make([]*types.DiscordServerMember, 0, len(potentialMembers))
-	oneHourAgo := now.Add(-1 * time.Hour)
+	twelveHoursAgo := now.Add(-12 * time.Hour)
 
 	for userID, joinedAt := range potentialMembers {
 		// If user doesn't already exist in our database, apply grace period
-		if !existingUsers[userID] && joinedAt.After(oneHourAgo) {
+		if !existingUsers[userID] && joinedAt.After(twelveHoursAgo) {
 			w.logger.Debug("Skipping recently joined member (grace period)",
 				zap.Uint64("server_id", uint64(guildID)),
 				zap.Uint64("user_id", userID),

@@ -110,7 +110,7 @@ func (s *Session) Touch(ctx context.Context) {
 
 	// Only save user settings if they've been updated
 	if s.userSettingsUpdate {
-		if err := s.db.Models().Settings().SaveUserSettings(ctx, s.userSettings); err != nil {
+		if err := s.db.Model().Setting().SaveUserSettings(ctx, s.userSettings); err != nil {
 			s.logger.Error("Failed to save user settings", zap.Error(err))
 			return
 		}
@@ -119,7 +119,7 @@ func (s *Session) Touch(ctx context.Context) {
 
 	// Only save bot settings if they've been updated
 	if s.botSettings.IsAdmin(UserID.Get(s)) && s.botSettingsUpdate {
-		if err := s.db.Models().Settings().SaveBotSettings(ctx, s.botSettings); err != nil {
+		if err := s.db.Model().Setting().SaveBotSettings(ctx, s.botSettings); err != nil {
 			s.logger.Error("Failed to save bot settings", zap.Error(err))
 			return
 		}

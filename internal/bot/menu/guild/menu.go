@@ -39,21 +39,21 @@ func (m *Menu) Show(_ interfaces.CommonEvent, s *session.Session, _ *pagination.
 	ctx := context.Background()
 
 	// Fetch unique guild count
-	uniqueGuilds, err := m.layout.db.Models().Sync().GetUniqueGuildCount(ctx)
+	uniqueGuilds, err := m.layout.db.Model().Sync().GetUniqueGuildCount(ctx)
 	if err != nil {
 		m.layout.logger.Error("Failed to get unique guild count", zap.Error(err))
 		uniqueGuilds = 0 // Default to 0 if there's an error
 	}
 
 	// Fetch unique user count
-	uniqueUsers, err := m.layout.db.Models().Sync().GetUniqueUserCount(ctx)
+	uniqueUsers, err := m.layout.db.Model().Sync().GetUniqueUserCount(ctx)
 	if err != nil {
 		m.layout.logger.Error("Failed to get unique user count", zap.Error(err))
 		uniqueUsers = 0 // Default to 0 if there's an error
 	}
 
 	// Fetch inappropriate user count
-	inappropriateUsers, err := m.layout.db.Models().Message().GetUniqueInappropriateUserCount(ctx)
+	inappropriateUsers, err := m.layout.db.Model().Message().GetUniqueInappropriateUserCount(ctx)
 	if err != nil {
 		m.layout.logger.Error("Failed to get inappropriate user count", zap.Error(err))
 		inappropriateUsers = 0 // Default to 0 if there's an error

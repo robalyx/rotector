@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 
 	"github.com/robalyx/rotector/internal/common/storage/database/types"
 	"github.com/uptrace/bun"
@@ -37,7 +38,7 @@ func (m *BanModel) BanUser(ctx context.Context, record *types.DiscordBan) error 
 		Set("updated_at = EXCLUDED.updated_at").
 		Exec(ctx)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to ban user: %w", err)
 	}
 	return nil
 }
@@ -58,8 +59,10 @@ func (m *BanModel) BulkBanUsers(ctx context.Context, records []*types.DiscordBan
 		Set("expires_at = EXCLUDED.expires_at").
 		Set("updated_at = EXCLUDED.updated_at").
 		Exec(ctx)
-
-	return err
+	if err != nil {
+		return fmt.Errorf("failed to bulk ban users: %w", err)
+	}
+	return nil
 }
 
 // UnbanUser removes a ban record for a Discord user.
@@ -88,9 +91,8 @@ func (m *BanModel) IsBanned(ctx context.Context, userID uint64) (bool, error) {
 		Where("id = ?", userID).
 		Exists(ctx)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
-		return false, err
+		return false, fmt.Errorf("failed to check if user is banned: %w", err)
 	}
-
 	return exists, nil
 }
 
@@ -118,7 +120,7 @@ func (m *BanModel) BulkCheckBanned(ctx context.Context, userIDs []uint64) (map[u
 		Where("id IN (?)", bun.In(userIDs)).
 		Scan(ctx, &bannedUsers)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to bulk check banned users: %w", err)
 	}
 
 	// Mark users as banned in the result map
@@ -137,8 +139,7 @@ func (m *BanModel) GetBan(ctx context.Context, userID uint64) (*types.DiscordBan
 		Where("id = ?", userID).
 		Scan(ctx)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to get ban: %w", err)
 	}
-
 	return &ban, nil
 }

@@ -142,19 +142,25 @@ func (b *ScanBuilder) buildWarningEmbed() *discord.EmbedBuilder {
 		// Warning for condo server scan
 		warningEmbed.SetTitle("⚠️ Warning: Unreliable Method").
 			SetDescription(
-				"**This method WILL result in lots of false positives** - one of the major criticisms of Ruben's RoCleaner bot. "+
-					"This method which RoCleaner uses bans everyone in flagged servers without checking what they actually did.\n\n"+
-					"Many innocent users could be banned, including:\n"+
-					"- Investigators and reporters\n"+
-					"- Non-participating members\n"+
-					"- Victims who joined unknowingly\n"+
-					"- Accounts that were compromised\n"+
-					"- Users who joined through misleading invites",
+				"This method may result in false positives as some legitimate users might "+
+					"be included like investigators, reporters, non-participating members, accounts "+
+					"that were compromised, and users who joined through misleading invites.\n\n"+
+					"This is one of the known flaws of Ruben's Ro-Cleaner bot but we allow you to "+
+					"reduce the number of false positives by setting certain filters.\n\n"+
+					"However, we **recommend using the 'Ban Users with Inappropriate Messages' option** "+
+					"for 100% accurate results.",
 			).
 			SetColor(0xFF0000). // Red color for warning
 			AddField(
-				"Recommendation",
-				"Use the 'Ban Users with Inappropriate Messages' option for more accurate results.",
+				"Flagging Conditions",
+				"- Sending messages in inappropriate servers (active participation)\n"+
+					"- Being present in inappropriate servers for over 12 hours (beyond grace period)",
+				false,
+			).
+			AddField(
+				"Important Notes",
+				"- Users are automatically removed if they've been clean for 7 days\n"+
+					"- The grace period helps exclude users who join and leave quickly",
 				false,
 			).
 			SetFooter("⚠️ Review the list carefully before confirming bans", "")

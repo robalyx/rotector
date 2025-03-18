@@ -51,7 +51,7 @@ func (m *LogsMenu) Show(event interfaces.CommonEvent, s *session.Session, r *pag
 	cursor := session.GuildBanLogCursor.Get(s)
 
 	// Fetch filtered logs from database
-	logs, nextCursor, err := m.layout.db.Models().GuildBans().GetGuildBanLogs(
+	logs, nextCursor, err := m.layout.db.Model().GuildBan().GetGuildBanLogs(
 		context.Background(),
 		guildID,
 		cursor,
@@ -168,7 +168,7 @@ func (m *LogsMenu) handleSelectMenu(
 	}
 
 	// Get guild memberships for banned users
-	userGuilds, err := m.layout.db.Models().Sync().GetFlaggedServerMembers(
+	userGuilds, err := m.layout.db.Model().Sync().GetFlaggedServerMembers(
 		context.Background(),
 		selectedLog.BannedUserIDs,
 	)
@@ -194,7 +194,7 @@ func (m *LogsMenu) handleSelectMenu(
 		serverIDs = append(serverIDs, serverID)
 	}
 
-	serverInfo, err := m.layout.db.Models().Sync().GetServerInfo(context.Background(), serverIDs)
+	serverInfo, err := m.layout.db.Model().Sync().GetServerInfo(context.Background(), serverIDs)
 	if err != nil {
 		m.layout.logger.Error("Failed to get server names",
 			zap.Error(err),

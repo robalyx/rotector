@@ -76,7 +76,7 @@ func (r *CondoModel) GetGameByID(ctx context.Context, gameID string, fields type
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, types.ErrGameNotFound
 		}
-		return nil, err
+		return nil, fmt.Errorf("failed to get game by ID: %w", err)
 	}
 
 	return &game, nil
@@ -146,11 +146,8 @@ func (r *CondoModel) GetAndUpdatePendingGames(ctx context.Context, limit int) ([
 
 		return nil
 	})
-	if err != nil {
-		return nil, err
-	}
 
-	return games, nil
+	return games, err
 }
 
 // MarkGameDeleted marks a game as deleted.
@@ -160,7 +157,10 @@ func (r *CondoModel) MarkGameDeleted(ctx context.Context, gameID uint64) error {
 		Set("is_deleted = ?", true).
 		Where("id = ?", gameID).
 		Exec(ctx)
-	return err
+	if err != nil {
+		return fmt.Errorf("failed to mark game as deleted: %w", err)
+	}
+	return nil
 }
 
 // SaveCondoPlayers saves or updates condo player records, skipping blacklisted players.
@@ -172,7 +172,10 @@ func (r *CondoModel) SaveCondoPlayers(ctx context.Context, players []*types.Cond
 		Set("last_updated = EXCLUDED.last_updated").
 		Where("?TableAlias.is_blacklisted = ?", false).
 		Exec(ctx)
-	return err
+	if err != nil {
+		return fmt.Errorf("failed to save condo players: %w", err)
+	}
+	return nil
 }
 
 // GetPlayerByThumbnail retrieves a condo player by their thumbnail URL.

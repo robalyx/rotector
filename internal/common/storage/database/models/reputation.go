@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/robalyx/rotector/internal/common/storage/database/types"
-	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
 	"github.com/uptrace/bun"
 	"go.uber.org/zap"
 )
@@ -16,24 +15,22 @@ import (
 // ReputationModel handles database operations for reputation records.
 type ReputationModel struct {
 	db     *bun.DB
-	votes  *VoteModel
 	logger *zap.Logger
 }
 
 // NewReputation creates a new ReputationModel instance.
-func NewReputation(db *bun.DB, votes *VoteModel, logger *zap.Logger) *ReputationModel {
+func NewReputation(db *bun.DB, logger *zap.Logger) *ReputationModel {
 	return &ReputationModel{
 		db:     db,
-		votes:  votes,
 		logger: logger.Named("db_reputation"),
 	}
 }
 
-// UpdateUserVotes updates the upvotes or downvotes count for a user in training mode.
-func (r *ReputationModel) UpdateUserVotes(
-	ctx context.Context, userID uint64, discordUserID uint64, isUpvote bool,
-) error {
-	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+// UpdateUserVotes updates the upvotes or downvotes count for a user.
+//
+// Deprecated: Use Service().Reputation().UpdateUserVotes() instead.
+func (r *ReputationModel) UpdateUserVotes(ctx context.Context, userID uint64, isUpvote bool) error {
+	return r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
 		var reputation types.UserReputation
 		err := tx.NewSelect().
 			Model(&reputation).
@@ -69,23 +66,13 @@ func (r *ReputationModel) UpdateUserVotes(
 
 		return nil
 	})
-	if err != nil {
-		return fmt.Errorf("failed to update user reputation: %w", err)
-	}
-
-	// Save the vote
-	if err := r.votes.SaveVote(ctx, userID, discordUserID, isUpvote, enum.VoteTypeUser); err != nil {
-		return fmt.Errorf("failed to save vote: %w", err)
-	}
-
-	return nil
 }
 
-// UpdateGroupVotes updates the upvotes or downvotes count for a group in training mode.
-func (r *ReputationModel) UpdateGroupVotes(
-	ctx context.Context, groupID uint64, discordUserID uint64, isUpvote bool,
-) error {
-	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+// UpdateGroupVotes updates the upvotes or downvotes count for a group.
+//
+// Deprecated: Use Service().Reputation().UpdateGroupVotes() instead.
+func (r *ReputationModel) UpdateGroupVotes(ctx context.Context, groupID uint64, isUpvote bool) error {
+	return r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
 		var reputation types.GroupReputation
 		err := tx.NewSelect().
 			Model(&reputation).
@@ -121,16 +108,6 @@ func (r *ReputationModel) UpdateGroupVotes(
 
 		return nil
 	})
-	if err != nil {
-		return fmt.Errorf("failed to update group reputation: %w", err)
-	}
-
-	// Save the vote
-	if err := r.votes.SaveVote(ctx, groupID, discordUserID, isUpvote, enum.VoteTypeGroup); err != nil {
-		return fmt.Errorf("failed to save vote: %w", err)
-	}
-
-	return nil
 }
 
 // GetUserReputation retrieves the reputation for a user.

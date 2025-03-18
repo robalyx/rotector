@@ -32,7 +32,6 @@ func (m *ConsentModel) HasConsented(ctx context.Context, discordUserID uint64) (
 	if err != nil {
 		return false, fmt.Errorf("failed to check consent: %w", err)
 	}
-
 	return exists, nil
 }
 
@@ -44,6 +43,5 @@ func (m *ConsentModel) SaveConsent(ctx context.Context, consent *types.UserConse
 	if err != nil {
 		return fmt.Errorf("failed to save consent: %w", err)
 	}
-
 	return nil
 }

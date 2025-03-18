@@ -44,7 +44,7 @@ func (m *Menu) Show(event interfaces.CommonEvent, s *session.Session, r *paginat
 	period := session.UserLeaderboardPeriod.Get(s)
 
 	// Fetch leaderboard stats from database
-	stats, nextCursor, err := m.layout.db.Models().Votes().GetLeaderboard(
+	stats, nextCursor, err := m.layout.db.Service().Vote().GetLeaderboard(
 		context.Background(),
 		period,
 		cursor,
@@ -57,7 +57,9 @@ func (m *Menu) Show(event interfaces.CommonEvent, s *session.Session, r *paginat
 	}
 
 	// Get refresh info for leaderboard view
-	lastRefresh, nextRefresh, err := m.layout.db.Models().Views().GetLeaderboardRefreshInfo(context.Background(), period)
+	lastRefresh, nextRefresh, err := m.layout.db.Service().View().GetLeaderboardRefreshInfo(
+		context.Background(), period,
+	)
 	if err != nil {
 		m.layout.logger.Error("Failed to get refresh info", zap.Error(err))
 		r.Error(event, "Failed to retrieve leaderboard data. Please try again.")

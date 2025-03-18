@@ -125,8 +125,8 @@ func (t *ThumbnailFetcher) ProcessBatchThumbnails(
 			for _, request := range batchRequests {
 				initialBatch.AddRequest(request)
 			}
-			currentBatch := initialBatch.Build()
 
+			currentBatch := initialBatch.Build()
 			_, err := utils.WithRetry(ctx, func() (map[uint64]string, error) {
 				// Fetch batch thumbnails
 				resp, err := t.roAPI.Thumbnails().GetBatchThumbnails(ctx, currentBatch)
@@ -178,10 +178,12 @@ func (t *ThumbnailFetcher) ProcessPlayerTokens(ctx context.Context, tokens []str
 	}
 
 	// Process thumbnails in batches of 100
-	var urls []string
-	var mu sync.Mutex
-	p := pool.New().WithContext(ctx)
-	batchSize := 100
+	var (
+		urls      []string
+		mu        sync.Mutex
+		p         = pool.New().WithContext(ctx)
+		batchSize = 100
+	)
 
 	for i := 0; i < len(tokens); i += batchSize {
 		p.Go(func(ctx context.Context) error {

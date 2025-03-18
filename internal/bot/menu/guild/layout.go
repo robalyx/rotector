@@ -1,28 +1,43 @@
 package guild
 
 import (
+	"github.com/diamondburned/arikawa/v3/state"
+	"github.com/redis/rueidis"
 	"github.com/robalyx/rotector/internal/bot/core/pagination"
+	"github.com/robalyx/rotector/internal/common/discord"
 	"github.com/robalyx/rotector/internal/common/setup"
 	"github.com/robalyx/rotector/internal/common/storage/database"
+	"github.com/robalyx/rotector/internal/common/storage/redis"
 	"go.uber.org/zap"
 )
 
 // Layout handles the display and interaction logic for the guild menu.
 type Layout struct {
-	db       database.Client
-	menu     *Menu
-	scan     *ScanMenu
-	logs     *LogsMenu
-	lookup   *LookupMenu
-	messages *MessagesMenu
-	logger   *zap.Logger
+	db        database.Client
+	client    *state.State
+	ratelimit rueidis.Client
+	scanner   *discord.Scanner
+	menu      *Menu
+	scan      *ScanMenu
+	logs      *LogsMenu
+	lookup    *LookupMenu
+	messages  *MessagesMenu
+	logger    *zap.Logger
 }
 
 // New creates a Layout by initializing the guild menu.
-func New(app *setup.App) *Layout {
+func New(app *setup.App, client *state.State) *Layout {
+	ratelimit, err := app.RedisManager.GetClient(redis.RatelimitDBIndex)
+	if err != nil {
+		app.Logger.Fatal("Failed to get Redis client for rate limiting", zap.Error(err))
+	}
+
 	l := &Layout{
-		db:     app.DB,
-		logger: app.Logger.Named("guild_menu"),
+		db:        app.DB,
+		client:    client,
+		ratelimit: ratelimit,
+		scanner:   discord.NewScanner(app.DB, ratelimit, client.Session, app.Logger),
+		logger:    app.Logger.Named("guild_menu"),
 	}
 
 	l.menu = NewMenu(l)

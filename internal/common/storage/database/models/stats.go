@@ -13,93 +13,20 @@ import (
 // StatsModel handles database operations for statistics.
 type StatsModel struct {
 	db     *bun.DB
-	users  *UserModel
-	groups *GroupModel
 	logger *zap.Logger
 }
 
 // NewStats creates a new StatsModel.
-func NewStats(db *bun.DB, users *UserModel, groups *GroupModel, logger *zap.Logger) *StatsModel {
+func NewStats(db *bun.DB, logger *zap.Logger) *StatsModel {
 	return &StatsModel{
 		db:     db,
-		users:  users,
-		groups: groups,
 		logger: logger.Named("db_stats"),
 	}
 }
 
-// GetCurrentStats retrieves the current statistics by counting directly from relevant tables.
-func (r *StatsModel) GetCurrentStats(ctx context.Context) (*types.HourlyStats, error) {
-	var stats types.HourlyStats
-	stats.Timestamp = time.Now().UTC().Truncate(time.Hour)
-
-	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
-		// Count confirmed users
-		confirmedUserCount, err := tx.NewSelect().Model((*types.ConfirmedUser)(nil)).Count(ctx)
-		if err != nil {
-			return err
-		}
-		stats.UsersConfirmed = int64(confirmedUserCount)
-
-		// Count flagged users
-		flaggedUserCount, err := tx.NewSelect().Model((*types.FlaggedUser)(nil)).Count(ctx)
-		if err != nil {
-			return err
-		}
-		stats.UsersFlagged = int64(flaggedUserCount)
-
-		// Count cleared users
-		clearedUserCount, err := tx.NewSelect().Model((*types.ClearedUser)(nil)).Count(ctx)
-		if err != nil {
-			return err
-		}
-		stats.UsersCleared = int64(clearedUserCount)
-
-		// Count banned users
-		bannedUserCount, err := r.users.GetBannedCount(ctx)
-		if err != nil {
-			return err
-		}
-		stats.UsersBanned = int64(bannedUserCount)
-
-		// Count confirmed groups
-		confirmedGroupsCount, err := tx.NewSelect().Model((*types.ConfirmedGroup)(nil)).Count(ctx)
-		if err != nil {
-			return err
-		}
-		stats.GroupsConfirmed = int64(confirmedGroupsCount)
-
-		// Count flagged groups
-		flaggedGroupsCount, err := tx.NewSelect().Model((*types.FlaggedGroup)(nil)).Count(ctx)
-		if err != nil {
-			return err
-		}
-		stats.GroupsFlagged = int64(flaggedGroupsCount)
-
-		// Count cleared groups
-		clearedGroupsCount, err := tx.NewSelect().Model((*types.ClearedGroup)(nil)).Count(ctx)
-		if err != nil {
-			return err
-		}
-		stats.GroupsCleared = int64(clearedGroupsCount)
-
-		// Count locked groups
-		lockedGroupsCount, err := r.groups.GetLockedCount(ctx)
-		if err != nil {
-			return err
-		}
-		stats.GroupsLocked = int64(lockedGroupsCount)
-
-		return nil
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to get current stats: %w", err)
-	}
-
-	return &stats, nil
-}
-
 // SaveHourlyStats saves the current statistics snapshot.
+//
+// Deprecated: Use Service().Stats().SaveHourlyStats() instead.
 func (r *StatsModel) SaveHourlyStats(ctx context.Context, stats *types.HourlyStats) error {
 	_, err := r.db.NewInsert().
 		Model(stats).
@@ -168,20 +95,6 @@ func (r *StatsModel) PurgeOldStats(ctx context.Context, cutoffDate time.Time) er
 	r.logger.Debug("Purged old stats",
 		zap.Int64("rowsAffected", rowsAffected),
 		zap.Time("cutoffDate", cutoffDate))
+
 	return nil
-}
-
-// GetCurrentCounts retrieves all current user and group counts.
-func (r *StatsModel) GetCurrentCounts(ctx context.Context) (*types.UserCounts, *types.GroupCounts, error) {
-	userCounts, err := r.users.GetUserCounts(ctx)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to get user counts: %w", err)
-	}
-
-	groupCounts, err := r.groups.GetGroupCounts(ctx)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to get group counts: %w", err)
-	}
-
-	return userCounts, groupCounts, nil
 }

@@ -44,8 +44,10 @@ func (sonicProvider) NewDecoder(r io.Reader) bunjson.Decoder {
 
 // Client defines the methods that a database client must implement.
 type Client interface {
-	// Models returns the repository containing all model operations.
-	Models() *Repository
+	// Model returns the repository containing all model operations.
+	Model() *Repository
+	// Services returns the service containing all service operations.
+	Service() *Service
 	// Close gracefully shuts down the database connection.
 	Close() error
 	// DB returns the underlying bun.DB instance.
@@ -54,9 +56,10 @@ type Client interface {
 
 // clientImpl represents the concrete implementation of the database client.
 type clientImpl struct {
-	db     *bun.DB
-	logger *zap.Logger
-	repo   *Repository
+	db      *bun.DB
+	logger  *zap.Logger
+	repo    *Repository
+	service *Service
 }
 
 // NewConnection establishes a new database connection and returns a Client instance.
@@ -113,13 +116,15 @@ func NewConnection(
 		}
 	}
 
-	// Create repository
+	// Create client instance
 	repo := NewRepository(db, logger)
+	service := NewService(repo, logger)
 
 	client := &clientImpl{
-		db:     db,
-		logger: logger,
-		repo:   repo,
+		db:      db,
+		logger:  logger,
+		repo:    repo,
+		service: service,
 	}
 
 	logger.Info("Database connection established")
@@ -137,9 +142,14 @@ func (c *clientImpl) Close() error {
 	return nil
 }
 
-// Models returns the repository containing all model operations.
-func (c *clientImpl) Models() *Repository {
+// Model returns the repository containing all model operations.
+func (c *clientImpl) Model() *Repository {
 	return c.repo
+}
+
+// Service returns the service containing all service operations.
+func (c *clientImpl) Service() *Service {
+	return c.service
 }
 
 // DB returns the underlying bun.DB instance.

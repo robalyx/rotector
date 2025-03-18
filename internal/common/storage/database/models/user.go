@@ -17,60 +17,30 @@ import (
 
 // UserModel handles database operations for user records.
 type UserModel struct {
-	db         *bun.DB
-	tracking   *TrackingModel
-	activity   *ActivityModel
-	reputation *ReputationModel
-	votes      *VoteModel
-	logger     *zap.Logger
+	db     *bun.DB
+	logger *zap.Logger
 }
 
-// NewUser creates a UserModel with references to the tracking system.
-func NewUser(
-	db *bun.DB,
-	tracking *TrackingModel,
-	activity *ActivityModel,
-	reputation *ReputationModel,
-	votes *VoteModel,
-	logger *zap.Logger,
-) *UserModel {
+// NewUser creates a UserModel.
+func NewUser(db *bun.DB, logger *zap.Logger) *UserModel {
 	return &UserModel{
-		db:         db,
-		tracking:   tracking,
-		activity:   activity,
-		reputation: reputation,
-		votes:      votes,
-		logger:     logger.Named("db_user"),
+		db:     db,
+		logger: logger.Named("db_user"),
 	}
 }
 
-// SaveUsers updates or inserts users into their appropriate tables based on their current status.
-func (r *UserModel) SaveUsers(ctx context.Context, users map[uint64]*types.User) error {
-	// Get list of user IDs to check
-	userIDs := make([]uint64, 0, len(users))
-	for id := range users {
-		userIDs = append(userIDs, id)
-	}
-
-	// Get existing users with all their data
-	existingUsers, err := r.GetUsersByIDs(
-		ctx, userIDs, types.UserFieldBasic|types.UserFieldTimestamps|types.UserFieldReasons,
-	)
-	if err != nil {
-		return fmt.Errorf("failed to get existing users: %w", err)
-	}
-
-	// Group users by their status
-	flaggedUsers, confirmedUsers, clearedUsers, counts := r.groupUsersByStatus(users, existingUsers)
-
-	// Update each table
-	err = r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+// SaveUsersByStatus saves users that have already been grouped by status.
+//
+// Deprecated: Use Service().User().SaveUsers() instead.
+func (r *UserModel) SaveUsersByStatus(
+	ctx context.Context,
+	flaggedUsers []*types.FlaggedUser,
+	confirmedUsers []*types.ConfirmedUser,
+	clearedUsers []*types.ClearedUser,
+) error {
+	return r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
 		// Helper function to update a table
 		updateTable := func(users any, status enum.UserType) error {
-			if counts[status] == 0 {
-				return nil
-			}
-
 			_, err := tx.NewInsert().
 				Model(users).
 				On("CONFLICT (id) DO UPDATE").
@@ -102,91 +72,33 @@ func (r *UserModel) SaveUsers(ctx context.Context, users map[uint64]*types.User)
 		}
 
 		// Update each table with its corresponding slice
-		if err := updateTable(&flaggedUsers, enum.UserTypeFlagged); err != nil {
-			return err
+		if len(flaggedUsers) > 0 {
+			if err := updateTable(&flaggedUsers, enum.UserTypeFlagged); err != nil {
+				return err
+			}
 		}
-		if err := updateTable(&confirmedUsers, enum.UserTypeConfirmed); err != nil {
-			return err
+
+		if len(confirmedUsers) > 0 {
+			if err := updateTable(&confirmedUsers, enum.UserTypeConfirmed); err != nil {
+				return err
+			}
 		}
-		if err := updateTable(&clearedUsers, enum.UserTypeCleared); err != nil {
-			return err
+
+		if len(clearedUsers) > 0 {
+			if err := updateTable(&clearedUsers, enum.UserTypeCleared); err != nil {
+				return err
+			}
 		}
 
 		return nil
 	})
-	if err != nil {
-		return fmt.Errorf("failed to save users: %w", err)
-	}
-
-	r.logger.Debug("Successfully saved users",
-		zap.Int("totalUsers", len(users)),
-		zap.Int("flaggedUsers", counts[enum.UserTypeFlagged]),
-		zap.Int("confirmedUsers", counts[enum.UserTypeConfirmed]),
-		zap.Int("clearedUsers", counts[enum.UserTypeCleared]))
-
-	return nil
-}
-
-// groupUsersByStatus groups users by their status and merges reasons.
-func (r *UserModel) groupUsersByStatus(
-	users map[uint64]*types.User, existingUsers map[uint64]*types.ReviewUser,
-) ([]*types.FlaggedUser, []*types.ConfirmedUser, []*types.ClearedUser, map[enum.UserType]int) {
-	flaggedUsers := make([]*types.FlaggedUser, 0)
-	confirmedUsers := make([]*types.ConfirmedUser, 0)
-	clearedUsers := make([]*types.ClearedUser, 0)
-	counts := make(map[enum.UserType]int)
-
-	for id, user := range users {
-		// Generate UUID for new users
-		if user.UUID == uuid.Nil {
-			user.UUID = uuid.New()
-		}
-
-		// Handle reasons merging and determine status
-		status := enum.UserTypeFlagged
-		existingUser, ok := existingUsers[id]
-		if ok {
-			status = existingUser.Status
-
-			// Create new reasons map if it doesn't exist
-			if user.Reasons == nil {
-				user.Reasons = make(types.Reasons[enum.UserReasonType])
-			}
-
-			// Copy over existing reasons, only adding new ones
-			for reasonType, reason := range existingUser.User.Reasons {
-				if _, exists := user.Reasons[reasonType]; !exists {
-					user.Reasons[reasonType] = reason
-				}
-			}
-		}
-
-		// Group users by their target tables
-		switch status {
-		case enum.UserTypeConfirmed:
-			confirmedUsers = append(confirmedUsers, &types.ConfirmedUser{
-				User:       *user,
-				VerifiedAt: existingUser.VerifiedAt,
-			})
-		case enum.UserTypeFlagged:
-			flaggedUsers = append(flaggedUsers, &types.FlaggedUser{
-				User: *user,
-			})
-		case enum.UserTypeCleared:
-			clearedUsers = append(clearedUsers, &types.ClearedUser{
-				User:      *user,
-				ClearedAt: existingUser.ClearedAt,
-			})
-		}
-		counts[status]++
-	}
-
-	return flaggedUsers, confirmedUsers, clearedUsers, counts
 }
 
 // ConfirmUser moves a user from other user tables to confirmed_users.
+//
+// Deprecated: Use Service().User().ConfirmUser() instead.
 func (r *UserModel) ConfirmUser(ctx context.Context, user *types.ReviewUser) error {
-	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+	return r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
 		confirmedUser := &types.ConfirmedUser{
 			User:       user.User,
 			VerifiedAt: time.Now(),
@@ -221,22 +133,13 @@ func (r *UserModel) ConfirmUser(ctx context.Context, user *types.ReviewUser) err
 
 		return nil
 	})
-	if err != nil {
-		return err
-	}
-
-	// Verify votes for the user
-	if err := r.votes.VerifyVotes(ctx, user.ID, true, enum.VoteTypeUser); err != nil {
-		r.logger.Error("Failed to verify votes", zap.Error(err))
-		return err
-	}
-
-	return nil
 }
 
 // ClearUser moves a user from other user tables to cleared_users.
+//
+// Deprecated: Use Service().User().ClearUser() instead.
 func (r *UserModel) ClearUser(ctx context.Context, user *types.ReviewUser) error {
-	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+	return r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
 		clearedUser := &types.ClearedUser{
 			User:      user.User,
 			ClearedAt: time.Now(),
@@ -271,17 +174,6 @@ func (r *UserModel) ClearUser(ctx context.Context, user *types.ReviewUser) error
 
 		return nil
 	})
-	if err != nil {
-		return err
-	}
-
-	// Verify votes for the user
-	if err := r.votes.VerifyVotes(ctx, user.ID, false, enum.VoteTypeUser); err != nil {
-		r.logger.Error("Failed to verify votes", zap.Error(err))
-		return err
-	}
-
-	return nil
 }
 
 // GetConfirmedUsersCount returns the total number of users in confirmed_users.
@@ -351,6 +243,8 @@ func (r *UserModel) GetRecentlyProcessedUsers(ctx context.Context, userIDs []uin
 }
 
 // GetUserByID retrieves a user by either their numeric ID or UUID.
+//
+// Deprecated: Use Service().User().GetUserByID() instead.
 func (r *UserModel) GetUserByID(ctx context.Context, userID string, fields types.UserField) (*types.ReviewUser, error) {
 	var result types.ReviewUser
 	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
@@ -396,15 +290,6 @@ func (r *UserModel) GetUserByID(ctx context.Context, userID string, fields types
 					result.Status = enum.UserTypeCleared
 				}
 
-				// Get reputation if requested
-				if fields.HasReputation() {
-					reputation, err := r.reputation.GetUserReputation(ctx, result.ID)
-					if err != nil {
-						return fmt.Errorf("failed to get user reputation: %w", err)
-					}
-					result.Reputation = reputation
-				}
-
 				// Update last_viewed if requested
 				_, err = tx.NewUpdate().
 					Model(model).
@@ -437,7 +322,6 @@ func (r *UserModel) GetUsersByIDs(
 	ctx context.Context, userIDs []uint64, fields types.UserField,
 ) (map[uint64]*types.ReviewUser, error) {
 	users := make(map[uint64]*types.ReviewUser)
-
 	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
 		// Build query with selected fields
 		columns := fields.Columns()
@@ -495,15 +379,15 @@ func (r *UserModel) GetUsersByIDs(
 			}
 		}
 
+		r.logger.Debug("Retrieved users by IDs",
+			zap.Int("requestedCount", len(userIDs)),
+			zap.Int("foundCount", len(users)))
+
 		return nil
 	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to get users by IDs: %w (userCount=%d)", err, len(userIDs))
+		return nil, err
 	}
-
-	r.logger.Debug("Retrieved users by IDs",
-		zap.Int("requestedCount", len(userIDs)),
-		zap.Int("foundCount", len(users)))
 
 	return users, nil
 }
@@ -511,7 +395,6 @@ func (r *UserModel) GetUsersByIDs(
 // GetFlaggedAndConfirmedUsers retrieves all flagged and confirmed users.
 func (r *UserModel) GetFlaggedAndConfirmedUsers(ctx context.Context) ([]*types.ReviewUser, error) {
 	var users []*types.ReviewUser
-
 	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
 		// Get flagged users
 		var flaggedUsers []types.FlaggedUser
@@ -547,16 +430,18 @@ func (r *UserModel) GetFlaggedAndConfirmedUsers(ctx context.Context) ([]*types.R
 
 		return nil
 	})
+	if err != nil {
+		return nil, err
+	}
 
-	return users, err
+	return users, nil
 }
 
 // GetUsersToCheck finds users that haven't been checked for banned status recently.
-// Returns two slices: users to check, and currently banned users among those to check.
-func (r *UserModel) GetUsersToCheck(ctx context.Context, limit int) ([]uint64, []uint64, error) {
-	var userIDs []uint64
-	var bannedIDs []uint64
-	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+func (r *UserModel) GetUsersToCheck(
+	ctx context.Context, limit int,
+) (userIDs []uint64, bannedIDs []uint64, err error) {
+	err = r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
 		// Get and update confirmed users
 		var confirmedUsers []types.ConfirmedUser
 		err := tx.NewSelect().
@@ -635,8 +520,11 @@ func (r *UserModel) GetUsersToCheck(ctx context.Context, limit int) ([]uint64, [
 
 		return nil
 	})
+	if err != nil {
+		return nil, nil, err
+	}
 
-	return userIDs, bannedIDs, err
+	return userIDs, bannedIDs, nil
 }
 
 // MarkUsersBanStatus updates the banned status of users in their respective tables.
@@ -685,16 +573,14 @@ func (r *UserModel) GetBannedCount(ctx context.Context) (int, error) {
 		).
 		Count(ctx)
 	if err != nil {
-		return 0, fmt.Errorf("failed to get banned users count: %w", err)
+		return 0, err
 	}
-
 	return count, nil
 }
 
 // GetUserCounts returns counts for all user statuses.
 func (r *UserModel) GetUserCounts(ctx context.Context) (*types.UserCounts, error) {
 	var counts types.UserCounts
-
 	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
 		confirmedCount, err := tx.NewSelect().Model((*types.ConfirmedUser)(nil)).Count(ctx)
 		if err != nil {
@@ -723,7 +609,7 @@ func (r *UserModel) GetUserCounts(ctx context.Context) (*types.UserCounts, error
 		return nil
 	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to get user counts: %w", err)
+		return nil, err
 	}
 
 	return &counts, nil
@@ -755,7 +641,6 @@ func (r *UserModel) PurgeOldClearedUsers(ctx context.Context, cutoffDate time.Ti
 // GetUsersForThumbnailUpdate retrieves users that need thumbnail updates.
 func (r *UserModel) GetUsersForThumbnailUpdate(ctx context.Context, limit int) (map[uint64]*types.User, error) {
 	users := make(map[uint64]*types.User)
-
 	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
 		// Query users from each table that need thumbnail updates
 		for _, model := range []any{
@@ -782,8 +667,11 @@ func (r *UserModel) GetUsersForThumbnailUpdate(ctx context.Context, limit int) (
 		}
 		return nil
 	})
+	if err != nil {
+		return nil, err
+	}
 
-	return users, err
+	return users, nil
 }
 
 // DeleteUser removes a user and all associated data from the database.
@@ -825,8 +713,11 @@ func (r *UserModel) DeleteUser(ctx context.Context, userID uint64) (bool, error)
 
 		return nil
 	})
+	if err != nil {
+		return false, err
+	}
 
-	return totalAffected > 0, err
+	return totalAffected > 0, nil
 }
 
 // GetUserToScan finds the next user to scan from confirmed_users, falling back to flagged_users
@@ -903,57 +794,10 @@ func (r *UserModel) GetUserToScan(ctx context.Context) (*types.User, error) {
 	return user, nil
 }
 
-// GetUserToReview finds a user to review based on the sort method and target mode.
-func (r *UserModel) GetUserToReview(
-	ctx context.Context, sortBy enum.ReviewSortBy, targetMode enum.ReviewTargetMode, reviewerID uint64,
-) (*types.ReviewUser, error) {
-	// Get recently reviewed user IDs
-	recentIDs, err := r.activity.GetRecentlyReviewedIDs(ctx, reviewerID, false, 100)
-	if err != nil {
-		r.logger.Error("Failed to get recently reviewed user IDs", zap.Error(err))
-		// Continue without filtering if there's an error
-		recentIDs = []uint64{}
-	}
-
-	// Define models in priority order based on target mode
-	var models []any
-	switch targetMode {
-	case enum.ReviewTargetModeFlagged:
-		models = []any{
-			&types.FlaggedUser{},   // Primary target
-			&types.ConfirmedUser{}, // First fallback
-			&types.ClearedUser{},   // Second fallback
-		}
-	case enum.ReviewTargetModeConfirmed:
-		models = []any{
-			&types.ConfirmedUser{}, // Primary target
-			&types.FlaggedUser{},   // First fallback
-			&types.ClearedUser{},   // Second fallback
-		}
-	case enum.ReviewTargetModeCleared:
-		models = []any{
-			&types.ClearedUser{},   // Primary target
-			&types.FlaggedUser{},   // First fallback
-			&types.ConfirmedUser{}, // Second fallback
-		}
-	}
-
-	// Try each model in order until we find a user
-	for _, model := range models {
-		result, err := r.getNextToReview(ctx, model, sortBy, recentIDs)
-		if err == nil {
-			return result, nil
-		}
-		if !errors.Is(err, sql.ErrNoRows) {
-			return nil, err
-		}
-	}
-
-	return nil, types.ErrNoUsersToReview
-}
-
-// getNextToReview handles the common logic for getting the next item to review.
-func (r *UserModel) getNextToReview(
+// GetNextToReview handles the database operations for getting the next user to review.
+//
+// Deprecated: Use Service().User().GetUserToReview() instead.
+func (r *UserModel) GetNextToReview(
 	ctx context.Context, model any, sortBy enum.ReviewSortBy, recentIDs []uint64,
 ) (*types.ReviewUser, error) {
 	var result types.ReviewUser
@@ -1011,13 +855,6 @@ func (r *UserModel) getNextToReview(
 		default:
 			return fmt.Errorf("%w: %T", types.ErrUnsupportedModel, model)
 		}
-
-		// Get reputation
-		reputation, err := r.reputation.GetUserReputation(ctx, result.ID)
-		if err != nil {
-			return fmt.Errorf("failed to get user reputation: %w", err)
-		}
-		result.Reputation = reputation
 
 		// Update last_viewed
 		_, err = tx.NewUpdate().

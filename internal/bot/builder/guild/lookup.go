@@ -120,10 +120,16 @@ func (b *LookupBuilder) buildGuildsEmbed() *discord.EmbedBuilder {
 			guildName = constants.UnknownServer
 		}
 
-		joinedTimestamp := guild.JoinedAt.Unix()
-		content := fmt.Sprintf("Server ID: `%d`\nJoined: <t:%d:R>",
+		var joinedInfo string
+		if guild.JoinedAt.IsZero() {
+			joinedInfo = "Unknown"
+		} else {
+			joinedInfo = fmt.Sprintf("<t:%d:R>", guild.JoinedAt.Unix())
+		}
+
+		content := fmt.Sprintf("Server ID: `%d`\nJoined: %s",
 			guild.ServerID,
-			joinedTimestamp,
+			joinedInfo,
 		)
 
 		embed.AddField(guildName, content, false)
@@ -164,10 +170,6 @@ func (b *LookupBuilder) buildComponents() []discord.ContainerComponent {
 			discord.NewSecondaryButton("◀️", string(session.ViewerPrevPage)).WithDisabled(!b.hasPrevPage),
 			discord.NewSecondaryButton("▶️", string(session.ViewerNextPage)).WithDisabled(!b.hasNextPage),
 			discord.NewSecondaryButton("⏭️", string(session.ViewerLastPage)).WithDisabled(true), // This is disabled on purpose
-		),
-		// Refresh button
-		discord.NewActionRow(
-			discord.NewSecondaryButton("🔄 Refresh", constants.RefreshButtonCustomID),
 		),
 	}
 

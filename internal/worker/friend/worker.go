@@ -65,7 +65,7 @@ func (w *Worker) Start() {
 		w.reporter.SetHealthy(true)
 
 		// Check flagged users count
-		flaggedCount, err := w.db.Models().Users().GetFlaggedUsersCount(context.Background())
+		flaggedCount, err := w.db.Model().User().GetFlaggedUsersCount(context.Background())
 		if err != nil {
 			w.logger.Error("Error getting flagged users count", zap.Error(err))
 			w.reporter.SetHealthy(false)
@@ -128,7 +128,7 @@ func (w *Worker) processFriendsBatch() ([]uint64, error) {
 
 	for len(friendIDs) < w.batchSize {
 		// Get the next confirmed user
-		user, err := w.db.Models().Users().GetUserToScan(context.Background())
+		user, err := w.db.Model().User().GetUserToScan(context.Background())
 		if err != nil {
 			w.logger.Error("Error getting user to scan", zap.Error(err))
 			return nil, err
@@ -147,7 +147,7 @@ func (w *Worker) processFriendsBatch() ([]uint64, error) {
 		}
 
 		// Check which users have been recently processed
-		existingUsers, err := w.db.Models().Users().GetRecentlyProcessedUsers(context.Background(), userFriendIDs)
+		existingUsers, err := w.db.Model().User().GetRecentlyProcessedUsers(context.Background(), userFriendIDs)
 		if err != nil {
 			w.logger.Error("Error checking recently processed users", zap.Error(err))
 			continue

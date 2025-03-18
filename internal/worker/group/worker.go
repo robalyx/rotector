@@ -65,7 +65,7 @@ func (w *Worker) Start() {
 		w.reporter.SetHealthy(true)
 
 		// Check flagged users count
-		flaggedCount, err := w.db.Models().Users().GetFlaggedUsersCount(context.Background())
+		flaggedCount, err := w.db.Model().User().GetFlaggedUsersCount(context.Background())
 		if err != nil {
 			w.logger.Error("Error getting flagged users count", zap.Error(err))
 			w.reporter.SetHealthy(false)
@@ -95,7 +95,7 @@ func (w *Worker) Start() {
 		w.reporter.UpdateStatus("Fetching next group to process", 10)
 
 		if w.currentGroupID == 0 {
-			group, err := w.db.Models().Groups().GetGroupToScan(context.Background())
+			group, err := w.db.Model().Group().GetGroupToScan(context.Background())
 			if err != nil {
 				w.logger.Error("Error getting group to scan", zap.Error(err))
 				w.reporter.SetHealthy(false)
@@ -157,7 +157,7 @@ func (w *Worker) processGroup() ([]uint64, error) {
 			w.currentCursor = ""
 
 			// Get next group
-			nextGroup, err := w.db.Models().Groups().GetGroupToScan(context.Background())
+			nextGroup, err := w.db.Model().Group().GetGroupToScan(context.Background())
 			if err != nil {
 				w.logger.Error("Error getting next group to scan", zap.Error(err))
 				return nil, err
@@ -173,7 +173,7 @@ func (w *Worker) processGroup() ([]uint64, error) {
 		}
 
 		// Check which users have been recently processed
-		existingUsers, err := w.db.Models().Users().GetRecentlyProcessedUsers(context.Background(), newUserIDs)
+		existingUsers, err := w.db.Model().User().GetRecentlyProcessedUsers(context.Background(), newUserIDs)
 		if err != nil {
 			w.logger.Error("Error checking recently processed users", zap.Error(err))
 			continue
@@ -208,7 +208,7 @@ func (w *Worker) processGroup() ([]uint64, error) {
 
 		// Move to next page if available
 		if groupUsers.NextPageCursor == nil {
-			nextGroup, err := w.db.Models().Groups().GetGroupToScan(context.Background())
+			nextGroup, err := w.db.Model().Group().GetGroupToScan(context.Background())
 			if err != nil {
 				w.logger.Error("Error getting next group to scan", zap.Error(err))
 				return nil, err

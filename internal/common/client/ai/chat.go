@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"time"
 
 	"github.com/google/generative-ai-go/genai"
 	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
@@ -66,6 +67,9 @@ func NewChatHandler(genAIClient *genai.Client, logger *zap.Logger) *ChatHandler 
 func (h *ChatHandler) StreamResponse(
 	ctx context.Context, history []*genai.Content, model enum.ChatModel, message string,
 ) (chan string, chan []*genai.Content) {
+	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	defer cancel()
+
 	responseChan := make(chan string)
 	historyChan := make(chan []*genai.Content, 1)
 

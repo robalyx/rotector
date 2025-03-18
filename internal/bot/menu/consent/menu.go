@@ -64,7 +64,7 @@ func (m *Menu) handleAccept(event *events.ComponentInteractionCreate, s *session
 		AgeVerified:   false,
 	}
 
-	err := m.layout.db.Models().Consent().SaveConsent(context.Background(), consent)
+	err := m.layout.db.Model().Consent().SaveConsent(context.Background(), consent)
 	if err != nil {
 		m.layout.logger.Error("Failed to save consent", zap.Error(err))
 		r.Error(event, "Failed to save consent. Please try again.")

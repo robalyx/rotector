@@ -94,7 +94,7 @@ func (h *Handler) processGame(serverID uint64, placeID uint64) {
 		}
 
 		// Store the game in the database
-		if err := h.db.Models().Condo().SaveGame(ctx, game); err != nil {
+		if err := h.db.Model().Condo().SaveGame(ctx, game); err != nil {
 			h.logger.Error("Failed to save game",
 				zap.Uint64("game_id", game.ID),
 				zap.Error(err))

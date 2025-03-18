@@ -218,3 +218,7 @@ issues:
         - gosec
         - noctx
         - wrapcheck
+    - path: "internal/common/storage/database/service"
+      text: "SA1019: .* is deprecated: Use Service\\(\\)\\..*\\(\\) instead\\."
+      linters:
+        - staticcheck

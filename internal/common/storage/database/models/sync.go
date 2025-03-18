@@ -37,13 +37,76 @@ func (m *SyncModel) UpsertServerMember(ctx context.Context, member *types.Discor
 	return nil
 }
 
+// UpsertServerMembers creates or updates multiple server member records.
+func (m *SyncModel) UpsertServerMembers(
+	ctx context.Context, members []*types.DiscordServerMember, updateScanTime bool,
+) error {
+	if len(members) == 0 {
+		return nil
+	}
+
+	now := time.Now()
+	return m.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+		// Upsert server members
+		_, err := tx.NewInsert().
+			Model(&members).
+			On("CONFLICT (server_id, user_id) DO UPDATE").
+			Set("updated_at = EXCLUDED.updated_at").
+			Exec(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to upsert server members: %w", err)
+		}
+
+		// Create full scan records for each unique user
+		uniqueUsers := make(map[uint64]struct{})
+		for _, member := range members {
+			uniqueUsers[member.UserID] = struct{}{}
+		}
+
+		// Convert unique users to full scan records
+		scans := make([]*types.DiscordUserFullScan, 0, len(uniqueUsers))
+		for userID := range uniqueUsers {
+			scans = append(scans, &types.DiscordUserFullScan{
+				UserID:   userID,
+				LastScan: now.Add(-time.Hour * 24),
+			})
+		}
+
+		// Insert full scan records, but only update timestamp if requested
+		if len(scans) > 0 {
+			query := tx.NewInsert().
+				Model(&scans)
+
+			if updateScanTime {
+				query = query.On("CONFLICT (user_id) DO UPDATE").
+					Set("last_scan = EXCLUDED.last_scan")
+			} else {
+				query = query.On("CONFLICT (user_id) DO NOTHING")
+			}
+
+			_, err = query.Exec(ctx)
+			if err != nil {
+				return fmt.Errorf("failed to insert user full scans: %w", err)
+			}
+		}
+
+		m.logger.Debug("Upserted batch of server members",
+			zap.Int("member_count", len(members)))
+
+		return nil
+	})
+}
+
 // RemoveServerMember removes a member from a server.
 func (m *SyncModel) RemoveServerMember(ctx context.Context, serverID, userID uint64) error {
 	_, err := m.db.NewDelete().
 		Model((*types.DiscordServerMember)(nil)).
 		Where("server_id = ? AND user_id = ?", serverID, userID).
 		Exec(ctx)
-	return err
+	if err != nil {
+		return fmt.Errorf("failed to remove server member: %w", err)
+	}
+	return nil
 }
 
 // GetDiscordUserGuildsByCursor returns paginated guild memberships for a specific Discord user.
@@ -129,33 +192,6 @@ func (m *SyncModel) GetServerInfo(ctx context.Context, serverIDs []uint64) ([]*t
 	return servers, nil
 }
 
-// BatchUpsertServerMembers creates or updates multiple server member records for a specific guild.
-func (m *SyncModel) BatchUpsertServerMembers(
-	ctx context.Context, serverID uint64, members []*types.DiscordServerMember,
-) error {
-	if len(members) == 0 {
-		return nil
-	}
-
-	// Direct upsert into the main table
-	_, err := m.db.NewInsert().
-		Model(&members).
-		On("CONFLICT (server_id, user_id) DO UPDATE").
-		Set("joined_at = EXCLUDED.joined_at").
-		Set("updated_at = EXCLUDED.updated_at").
-		Exec(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to upsert members for server %d: %w", serverID, err)
-	}
-
-	// Log the batch update
-	m.logger.Debug("Upserting batch of members",
-		zap.Uint64("server_id", serverID),
-		zap.Int("member_count", len(members)))
-
-	return nil
-}
-
 // GetFlaggedServerMembers returns information about flagged users and their servers.
 func (m *SyncModel) GetFlaggedServerMembers(
 	ctx context.Context, memberIDs []uint64,
@@ -188,18 +224,30 @@ func (m *SyncModel) GetFlaggedServerMembers(
 
 // DeleteUserGuildMemberships deletes all guild memberships for a specific user.
 func (m *SyncModel) DeleteUserGuildMemberships(ctx context.Context, userID uint64) error {
-	_, err := m.db.NewDelete().
-		Model((*types.DiscordServerMember)(nil)).
-		Where("user_id = ?", userID).
-		Exec(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to delete user guild memberships: %w", err)
-	}
+	return m.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+		// Delete from server members
+		_, err := tx.NewDelete().
+			Model((*types.DiscordServerMember)(nil)).
+			Where("user_id = ?", userID).
+			Exec(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to delete user guild memberships: %w", err)
+		}
 
-	m.logger.Debug("Deleted user guild memberships",
-		zap.Uint64("user_id", userID))
+		// Delete from full scan
+		_, err = tx.NewDelete().
+			Model((*types.DiscordUserFullScan)(nil)).
+			Where("user_id = ?", userID).
+			Exec(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to delete user full scan record: %w", err)
+		}
 
-	return nil
+		m.logger.Debug("Deleted user data",
+			zap.Uint64("user_id", userID))
+
+		return nil
+	})
 }
 
 // GetUniqueGuildCount returns the number of unique guilds in the database.
@@ -240,22 +288,55 @@ func (m *SyncModel) GetDiscordUserGuildCount(ctx context.Context, discordUserID 
 
 // PurgeOldServerMembers removes Discord server member records older than the specified cutoff date.
 func (m *SyncModel) PurgeOldServerMembers(ctx context.Context, cutoffDate time.Time) (int, error) {
-	result, err := m.db.NewDelete().
-		Model((*types.DiscordServerMember)(nil)).
-		Where("updated_at < ?", cutoffDate).
-		Exec(ctx)
-	if err != nil {
-		return 0, fmt.Errorf("failed to purge old server members: %w", err)
-	}
+	var affected int64
+	err := m.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+		// Get users to be purged
+		var usersToPurge []uint64
+		err := tx.NewSelect().
+			Model((*types.DiscordServerMember)(nil)).
+			Column("user_id").
+			Where("updated_at < ?", cutoffDate).
+			Group("user_id").
+			Scan(ctx, &usersToPurge)
+		if err != nil {
+			return fmt.Errorf("failed to get users to purge: %w", err)
+		}
 
-	affected, err := result.RowsAffected()
-	if err != nil {
-		return 0, fmt.Errorf("failed to get affected rows: %w", err)
-	}
+		// Delete old server members
+		result, err := tx.NewDelete().
+			Model((*types.DiscordServerMember)(nil)).
+			Where("updated_at < ?", cutoffDate).
+			Exec(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to purge old server members: %w", err)
+		}
 
-	m.logger.Debug("Purged old server members",
-		zap.Int64("rowsAffected", affected),
-		zap.Time("cutoffDate", cutoffDate))
+		// Delete corresponding full scan records
+		if len(usersToPurge) > 0 {
+			_, err = tx.NewDelete().
+				Model((*types.DiscordUserFullScan)(nil)).
+				Where("user_id IN (?)", bun.In(usersToPurge)).
+				Exec(ctx)
+			if err != nil {
+				return fmt.Errorf("failed to purge full scan records: %w", err)
+			}
+		}
+
+		affected, err = result.RowsAffected()
+		if err != nil {
+			return fmt.Errorf("failed to get affected rows: %w", err)
+		}
+
+		m.logger.Debug("Purged old server members and full scan records",
+			zap.Int64("rowsAffected", affected),
+			zap.Time("cutoffDate", cutoffDate),
+			zap.Int("usersRemoved", len(usersToPurge)))
+
+		return nil
+	})
+	if err != nil {
+		return 0, err
+	}
 
 	return int(affected), nil
 }
@@ -294,4 +375,24 @@ func (m *SyncModel) IsUserDataRedacted(ctx context.Context, userID uint64) (bool
 		return false, fmt.Errorf("failed to check if user data is redacted: %w", err)
 	}
 	return exists, nil
+}
+
+// GetUsersForFullScan returns users that haven't been scanned recently.
+func (m *SyncModel) GetUsersForFullScan(ctx context.Context, before time.Time, limit int) ([]uint64, error) {
+	var scans []types.DiscordUserFullScan
+	err := m.db.NewSelect().
+		Model(&scans).
+		Where("last_scan < ?", before).
+		Order("last_scan ASC").
+		Limit(limit).
+		Scan(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get users for full scan: %w", err)
+	}
+
+	userIDs := make([]uint64, len(scans))
+	for i, scan := range scans {
+		userIDs[i] = scan.UserID
+	}
+	return userIDs, nil
 }

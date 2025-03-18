@@ -36,6 +36,7 @@ func init() { //nolint:funlen
 			{(*types.DiscordUserRedaction)(nil), "discord_user_redactions", "user_id"},
 			{(*types.InappropriateMessage)(nil), "inappropriate_messages", "user_id"},
 			{(*types.InappropriateUserSummary)(nil), "inappropriate_user_summaries", "user_id"},
+			{(*types.DiscordUserFullScan)(nil), "discord_user_full_scans", "user_id"},
 		}
 
 		for _, table := range tables {
@@ -125,6 +126,7 @@ func init() { //nolint:funlen
 
 		// Drop partitioned tables
 		partitionedTables := []string{
+			"discord_user_full_scans",
 			"inappropriate_user_summaries",
 			"inappropriate_messages",
 			"discord_user_redactions",

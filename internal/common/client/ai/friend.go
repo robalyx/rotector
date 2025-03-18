@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/bytedance/sonic"
 	"github.com/google/generative-ai-go/genai"
@@ -160,9 +161,11 @@ func NewFriendAnalyzer(app *setup.App, logger *zap.Logger) *FriendAnalyzer {
 
 // GenerateFriendReasons generates friend network analysis reasons for multiple users using the Gemini model.
 func (a *FriendAnalyzer) GenerateFriendReasons(
-	ctx context.Context, userInfos []*types.User,
-	confirmedFriendsMap, flaggedFriendsMap map[uint64]map[uint64]*types.User,
+	userInfos []*types.User, confirmedFriendsMap, flaggedFriendsMap map[uint64]map[uint64]*types.User,
 ) map[uint64]string {
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+
 	var (
 		p       = pool.New().WithContext(ctx)
 		mu      sync.Mutex

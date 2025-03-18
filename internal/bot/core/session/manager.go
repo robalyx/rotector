@@ -62,7 +62,7 @@ func (m *Manager) GetOrCreateSession(
 	ctx context.Context, userID snowflake.ID, isGuildOwner bool,
 ) (*Session, bool, error) {
 	// Load bot settings
-	botSettings, err := m.db.Models().Settings().GetBotSettings(ctx)
+	botSettings, err := m.db.Model().Setting().GetBotSettings(ctx)
 	if err != nil {
 		return nil, false, fmt.Errorf("%w: %w", ErrFailedToLoadSettings, err)
 	}
@@ -88,7 +88,7 @@ func (m *Manager) GetOrCreateSession(
 	}
 
 	// Load user settings
-	userSettings, err := m.db.Models().Settings().GetUserSettings(ctx, userID)
+	userSettings, err := m.db.Model().Setting().GetUserSettings(ctx, userID)
 	if err != nil {
 		return nil, false, fmt.Errorf("%w: %w", ErrFailedToLoadSettings, err)
 	}

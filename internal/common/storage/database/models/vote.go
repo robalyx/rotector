@@ -16,39 +16,28 @@ import (
 
 // VoteModel handles database operations for vote records.
 type VoteModel struct {
-	db       *bun.DB
-	activity *ActivityModel
-	views    *MaterializedViewModel
-	logger   *zap.Logger
+	db     *bun.DB
+	logger *zap.Logger
 }
 
 // NewVote creates a new VoteModel instance.
-func NewVote(db *bun.DB, activity *ActivityModel, views *MaterializedViewModel, logger *zap.Logger) *VoteModel {
+func NewVote(db *bun.DB, logger *zap.Logger) *VoteModel {
 	return &VoteModel{
-		db:       db,
-		activity: activity,
-		views:    views,
-		logger:   logger.Named("db_vote"),
+		db:     db,
+		logger: logger.Named("db_vote"),
 	}
 }
 
 // GetUserVoteStats retrieves vote statistics for a Discord user.
+//
+// Deprecated: Use Service().Vote().GetUserVoteStats() instead.
 func (v *VoteModel) GetUserVoteStats(
 	ctx context.Context, discordUserID uint64, period enum.LeaderboardPeriod,
 ) (*types.VoteAccuracy, error) {
 	var stats types.VoteAccuracy
 
-	// Try to refresh the materialized view if stale
-	err := v.views.RefreshLeaderboardView(ctx, period)
-	if err != nil {
-		v.logger.Warn("Failed to refresh materialized view",
-			zap.Error(err),
-			zap.String("period", period.String()))
-		// Continue anyway - we'll use slightly stale data
-	}
-
 	// Get user's vote stats
-	err = v.db.NewSelect().
+	err := v.db.NewSelect().
 		TableExpr("vote_leaderboard_stats_"+period.String()).
 		ColumnExpr("?::bigint as discord_user_id", discordUserID).
 		ColumnExpr("correct_votes").
@@ -74,23 +63,16 @@ func (v *VoteModel) GetUserVoteStats(
 }
 
 // GetLeaderboard retrieves the top voters for a given time period.
+//
+// Deprecated: Use Service().Vote().GetLeaderboard() instead.
 func (v *VoteModel) GetLeaderboard(
 	ctx context.Context, period enum.LeaderboardPeriod, cursor *types.LeaderboardCursor, limit int,
 ) ([]*types.VoteAccuracy, *types.LeaderboardCursor, error) {
 	var stats []*types.VoteAccuracy
 	var nextCursor *types.LeaderboardCursor
 
-	// Try to refresh the materialized view if stale
-	err := v.views.RefreshLeaderboardView(ctx, period)
-	if err != nil {
-		v.logger.Warn("Failed to refresh materialized view",
-			zap.Error(err),
-			zap.String("period", period.String()))
-		// Continue anyway - we'll use slightly stale data
-	}
-
 	// Query the view
-	err = v.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+	err := v.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
 		query := tx.NewSelect().
 			TableExpr("vote_leaderboard_stats_"+period.String()).
 			ColumnExpr("discord_user_id, correct_votes, total_votes, accuracy, voted_at").
@@ -103,7 +85,7 @@ func (v *VoteModel) GetLeaderboard(
 				cursor.CorrectVotes, cursor.Accuracy, cursor.VotedAt, cursor.DiscordUserID)
 		}
 
-		err = query.Scan(ctx, &stats)
+		err := query.Scan(ctx, &stats)
 		if err != nil {
 			return fmt.Errorf("failed to get leaderboard: %w", err)
 		}
@@ -129,13 +111,17 @@ func (v *VoteModel) GetLeaderboard(
 
 		return nil
 	})
+	if err != nil {
+		return nil, nil, err
+	}
 
-	return stats, nextCursor, err
+	return stats, nextCursor, nil
 }
 
 // getUserRank gets the user's rank based on correct votes.
 func (v *VoteModel) getUserRank(ctx context.Context, discordUserID uint64, period enum.LeaderboardPeriod) (int, error) {
 	var rank int
+
 	err := v.db.NewSelect().
 		TableExpr("vote_leaderboard_stats_"+period.String()).
 		ColumnExpr(`
@@ -196,8 +182,7 @@ func (v *VoteModel) SaveVote(
 func (v *VoteModel) VerifyVotes(
 	ctx context.Context, targetID uint64, wasInappropriate bool, voteType enum.VoteType,
 ) error {
-	// First handle the vote verification in a transaction
-	err := v.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+	return v.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
 		// Use the appropriate model for the query
 		update := tx.NewUpdate()
 		switch voteType {
@@ -233,69 +218,4 @@ func (v *VoteModel) VerifyVotes(
 
 		return nil
 	})
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-// CheckVoteAccuracy checks if a user should be banned based on their voting accuracy.
-// Returns true if the user is banned, false otherwise.
-func (v *VoteModel) CheckVoteAccuracy(ctx context.Context, discordUserID uint64) (bool, error) {
-	// Get user's vote stats for all time
-	stats, err := v.GetUserVoteStats(ctx, discordUserID, enum.LeaderboardPeriodAllTime)
-	if err != nil {
-		return false, fmt.Errorf("failed to get vote stats: %w", err)
-	}
-
-	// Check if user has enough votes to be evaluated
-	const minVotesRequired = 10 // Minimum votes before checking accuracy
-	if stats.TotalVotes < minVotesRequired {
-		return false, nil
-	}
-
-	// Check if accuracy is below threshold
-	const minAccuracyRequired = 0.40 // 40% minimum accuracy required
-	shouldBan := stats.Accuracy < minAccuracyRequired
-	if !shouldBan {
-		return false, nil
-	}
-
-	// Create ban record
-	ban := &types.DiscordBan{
-		ID:       discordUserID,
-		Reason:   enum.BanReasonAbuse,
-		Source:   enum.BanSourceSystem,
-		Notes:    "Automated system detection - suspicious voting patterns",
-		BannedBy: 0, // System ban
-		BannedAt: time.Now(),
-	}
-
-	_, err = v.db.NewInsert().Model(ban).Exec(ctx)
-	if err != nil {
-		return false, fmt.Errorf("failed to create ban record: %w", err)
-	}
-
-	// Log the ban action
-	go v.activity.Log(ctx, &types.ActivityLog{
-		ActivityTarget: types.ActivityTarget{
-			DiscordID: discordUserID,
-		},
-		ReviewerID:        0,
-		ActivityType:      enum.ActivityTypeDiscordUserBanned,
-		ActivityTimestamp: time.Now(),
-		Details: map[string]any{
-			"notes":      "Automated system detection - suspicious voting patterns",
-			"accuracy":   stats.Accuracy,
-			"totalVotes": stats.TotalVotes,
-		},
-	})
-
-	v.logger.Info("User banned for low vote accuracy",
-		zap.Uint64("discordUserID", discordUserID),
-		zap.Float64("accuracy", stats.Accuracy),
-		zap.Int64("totalVotes", stats.TotalVotes))
-
-	return true, nil
 }

@@ -42,7 +42,7 @@ func (r *TrackingModel) AddUsersToGroupsTracking(ctx context.Context, groupToUse
 		})
 	}
 
-	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+	return r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
 		// Lock the groups in a consistent order to prevent deadlocks
 		groupIDs := make([]uint64, 0, len(groupToUsers))
 		for groupID := range groupToUsers {
@@ -74,16 +74,11 @@ func (r *TrackingModel) AddUsersToGroupsTracking(ctx context.Context, groupToUse
 			return fmt.Errorf("failed to add users to groups tracking: %w (groupCount=%d)", err, len(groupToUsers))
 		}
 
+		r.logger.Debug("Successfully processed group tracking updates",
+			zap.Int("groupCount", len(groupToUsers)))
+
 		return nil
 	})
-	if err != nil {
-		return err
-	}
-
-	r.logger.Debug("Successfully processed group tracking updates",
-		zap.Int("groupCount", len(groupToUsers)))
-
-	return nil
 }
 
 // PurgeOldTrackings removes tracking entries that haven't been updated recently.
@@ -156,7 +151,7 @@ func (r *TrackingModel) GetGroupTrackingsToCheck(
 		return nil
 	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to get group trackings to check: %w", err)
+		return nil, err
 	}
 
 	return result, nil
@@ -172,7 +167,6 @@ func (r *TrackingModel) GetFlaggedUsers(ctx context.Context, groupID uint64) ([]
 	if err != nil {
 		return nil, fmt.Errorf("failed to get flagged users for group: %w (groupID=%d)", err, groupID)
 	}
-
 	return tracking.FlaggedUsers, nil
 }
 

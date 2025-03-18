@@ -42,7 +42,7 @@ func (m *MessagesMenu) Show(event interfaces.CommonEvent, s *session.Session, r 
 	cursor := session.DiscordUserMessageCursor.Get(s)
 
 	// Fetch messages using cursor pagination
-	messages, nextCursor, err := m.layout.db.Models().Message().GetUserMessagesByCursor(
+	messages, nextCursor, err := m.layout.db.Model().Message().GetUserMessagesByCursor(
 		context.Background(),
 		guildID,
 		discordUserID,

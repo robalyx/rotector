@@ -1,9 +1,7 @@
 package events
 
 import (
-	"context"
 	"sync"
-	"time"
 
 	"github.com/diamondburned/arikawa/v3/gateway"
 	"github.com/diamondburned/ningen/v3"
@@ -11,7 +9,6 @@ import (
 	"github.com/robalyx/rotector/internal/common/client/ai"
 	"github.com/robalyx/rotector/internal/common/setup"
 	"github.com/robalyx/rotector/internal/common/storage/database"
-	"github.com/robalyx/rotector/internal/common/storage/database/types"
 	"github.com/robalyx/rotector/internal/worker/sync/events/ratelimit"
 	"go.uber.org/zap"
 )
@@ -69,28 +66,50 @@ func (h *Handler) handleMessageCreate(e *gateway.MessageCreateEvent) {
 		return
 	}
 
-	// Find the join date (use current time if not available)
-	var joinedAt time.Time
-	if e.Member.Joined.IsValid() {
-		joinedAt = e.Member.Joined.Time()
-	} else {
-		joinedAt = time.Now()
-	}
-
-	// Update the server member record
-	if err := h.db.Models().Sync().UpsertServerMember(context.Background(), &types.DiscordServerMember{
-		ServerID:  serverID,
-		UserID:    userID,
-		JoinedAt:  joinedAt,
-		UpdatedAt: time.Now(),
-	}); err != nil {
-		h.logger.Error("Failed to upsert server member",
-			zap.Uint64("server_id", serverID),
-			zap.Uint64("user_id", userID),
-			zap.Error(err))
-	}
-
 	// Queue the message for content analysis
-	h.handleGameURL(serverID, e.Content)
+	h.handleMessageURLs(e)
 	h.addMessageToQueue(&e.Message)
+}
+
+// handleMessageURLs processes all potential Roblox game URLs from a message create event.
+func (h *Handler) handleMessageURLs(e *gateway.MessageCreateEvent) {
+	serverID := uint64(e.GuildID)
+
+	// Check message content
+	if e.Content != "" {
+		h.handleGameURL(serverID, e.Content)
+	}
+
+	// Check embeds
+	for _, embed := range e.Embeds {
+		// Check embed description
+		if embed.Description != "" {
+			h.handleGameURL(serverID, embed.Description)
+		}
+
+		// Check embed fields
+		for _, field := range embed.Fields {
+			if field.Value != "" {
+				h.handleGameURL(serverID, field.Value)
+			}
+			if field.Name != "" {
+				h.handleGameURL(serverID, field.Name)
+			}
+		}
+
+		// Check embed title
+		if embed.Title != "" {
+			h.handleGameURL(serverID, embed.Title)
+		}
+
+		// Check embed author name if present
+		if embed.Author != nil && embed.Author.Name != "" {
+			h.handleGameURL(serverID, embed.Author.Name)
+		}
+
+		// Check embed footer text if present
+		if embed.Footer != nil && embed.Footer.Text != "" {
+			h.handleGameURL(serverID, embed.Footer.Text)
+		}
+	}
 }

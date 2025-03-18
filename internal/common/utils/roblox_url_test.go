@@ -69,6 +69,16 @@ func TestIsRobloxProfileURL(t *testing.T) {
 			input: "check out my profile: 123456789",
 			want:  false,
 		},
+		{
+			name:  "valid markdown URL with profile",
+			input: "[my profile](https://www.roblox.com/users/123456789/profile)",
+			want:  true,
+		},
+		{
+			name:  "valid markdown URL without protocol",
+			input: "[click here](roblox.com/users/123456789)",
+			want:  true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -152,6 +162,21 @@ func TestIsRobloxGroupURL(t *testing.T) {
 			input: "join my group: 123456789",
 			want:  false,
 		},
+		{
+			name:  "valid markdown URL with group name",
+			input: "[join group](https://www.roblox.com/groups/123456789/group-name)",
+			want:  true,
+		},
+		{
+			name:  "valid markdown URL without protocol",
+			input: "[our group](roblox.com/groups/123456789)",
+			want:  true,
+		},
+		{
+			name:  "valid markdown URL with communities",
+			input: "[community](roblox.com/communities/123456789/community-name)",
+			want:  true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -225,6 +250,16 @@ func TestIsRobloxGameURL(t *testing.T) {
 			input: "you guys should join my game: 123456789",
 			want:  false,
 		},
+		{
+			name:  "valid markdown URL with game name",
+			input: "[cool game](https://www.roblox.com/games/123456789/game-name)",
+			want:  true,
+		},
+		{
+			name:  "valid markdown URL without protocol",
+			input: "[join here](roblox.com/games/123456789)",
+			want:  true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -297,6 +332,18 @@ func TestExtractUserIDFromURL(t *testing.T) {
 			input:   "",
 			want:    "",
 			wantErr: utils.ErrInvalidProfileURL,
+		},
+		{
+			name:    "valid markdown URL with profile",
+			input:   "[my profile](https://www.roblox.com/users/123456789/profile)",
+			want:    "123456789",
+			wantErr: nil,
+		},
+		{
+			name:    "valid markdown URL without protocol",
+			input:   "[click here](roblox.com/users/123456789)",
+			want:    "123456789",
+			wantErr: nil,
 		},
 	}
 
@@ -384,6 +431,24 @@ func TestExtractGroupIDFromURL(t *testing.T) {
 			want:    "",
 			wantErr: utils.ErrInvalidGroupURL,
 		},
+		{
+			name:    "valid markdown URL with group name",
+			input:   "[join group](https://www.roblox.com/groups/123456789/group-name)",
+			want:    "123456789",
+			wantErr: nil,
+		},
+		{
+			name:    "valid markdown URL without protocol",
+			input:   "[our group](roblox.com/groups/123456789)",
+			want:    "123456789",
+			wantErr: nil,
+		},
+		{
+			name:    "valid markdown URL with communities",
+			input:   "[community](roblox.com/communities/123456789/community-name)",
+			want:    "123456789",
+			wantErr: nil,
+		},
 	}
 
 	for _, tt := range tests {
@@ -457,6 +522,18 @@ func TestExtractGameIDFromURL(t *testing.T) {
 			input:   "",
 			want:    "",
 			wantErr: utils.ErrInvalidGameURL,
+		},
+		{
+			name:    "valid markdown URL with game name",
+			input:   "[cool game](https://www.roblox.com/games/123456789/game-name)",
+			want:    "123456789",
+			wantErr: nil,
+		},
+		{
+			name:    "valid markdown URL without protocol",
+			input:   "[join here](roblox.com/games/123456789)",
+			want:    "123456789",
+			wantErr: nil,
 		},
 	}
 

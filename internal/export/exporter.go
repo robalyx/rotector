@@ -186,12 +186,12 @@ func (e *Exporter) hashRecords(items any, salt string, hashType HashType) []*typ
 func (e *Exporter) getFlaggedData(
 	ctx context.Context,
 ) (users []*dbTypes.ReviewUser, groups []*dbTypes.ReviewGroup, err error) {
-	users, err = e.app.DB.Models().Users().GetFlaggedAndConfirmedUsers(ctx)
+	users, err = e.app.DB.Model().User().GetFlaggedAndConfirmedUsers(ctx)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to get users: %w", err)
 	}
 
-	groups, err = e.app.DB.Models().Groups().GetFlaggedAndConfirmedGroups(ctx)
+	groups, err = e.app.DB.Model().Group().GetFlaggedAndConfirmedGroups(ctx)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to get groups: %w", err)
 	}

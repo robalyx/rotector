@@ -79,22 +79,18 @@ func (c *UserChecker) ProcessUsers(userInfos []*types.User) {
 		return
 	}
 
-	// Create final flagged users map with complete user copies
+	// Create final flagged users map
 	flaggedUsers := make(map[uint64]*types.User, len(reasonsMap))
-	for _, userInfo := range userInfos {
-		if reasons, ok := reasonsMap[userInfo.ID]; ok {
-			// Create a copy of the user
-			user := *userInfo
-			// Copy over the reasons we collected
+	for _, user := range userInfos {
+		if reasons, ok := reasonsMap[user.ID]; ok {
 			user.Reasons = reasons
-			// Calculate final confidence score
 			user.Confidence = utils.CalculateConfidence(reasons)
-			flaggedUsers[userInfo.ID] = &user
+			flaggedUsers[user.ID] = user
 		}
 	}
 
 	// Save flagged users to database
-	if err := c.db.Models().Users().SaveUsers(context.Background(), flaggedUsers); err != nil {
+	if err := c.db.Service().User().SaveUsers(context.Background(), flaggedUsers); err != nil {
 		c.logger.Error("Failed to save users", zap.Error(err))
 	}
 
@@ -122,7 +118,7 @@ func (c *UserChecker) trackFlaggedUsersGroups(flaggedUsers map[uint64]*types.Use
 
 	// Add to tracking if we have any data
 	if len(groupUsersTracking) > 0 {
-		if err := c.db.Models().Tracking().AddUsersToGroupsTracking(context.Background(), groupUsersTracking); err != nil {
+		if err := c.db.Model().Tracking().AddUsersToGroupsTracking(context.Background(), groupUsersTracking); err != nil {
 			c.logger.Error("Failed to add flagged users to groups tracking", zap.Error(err))
 		}
 	}

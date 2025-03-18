@@ -47,7 +47,7 @@ func (m *StatusMenu) Show(event interfaces.CommonEvent, s *session.Session, r *p
 	// Check if processing is complete
 	if err == nil && status == queue.StatusComplete {
 		// Check if user was flagged after recheck
-		user, err := m.layout.db.Models().Users().GetUserByID(
+		user, err := m.layout.db.Service().User().GetUserByID(
 			context.Background(), strconv.FormatUint(userID, 10), types.UserFieldAll,
 		)
 		if err != nil {
@@ -69,7 +69,7 @@ func (m *StatusMenu) Show(event interfaces.CommonEvent, s *session.Session, r *p
 		r.Show(event, s, constants.UserReviewPageName, "User has been rechecked. Showing updated information.")
 
 		// Log the view action
-		m.layout.db.Models().Activities().Log(context.Background(), &types.ActivityLog{
+		m.layout.db.Model().Activity().Log(context.Background(), &types.ActivityLog{
 			ActivityTarget: types.ActivityTarget{
 				UserID: user.ID,
 			},

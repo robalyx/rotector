@@ -227,7 +227,7 @@ func (r *SettingRegistry) createReviewTargetModeSetting() *Setting {
 				Value:       enum.ReviewTargetModeFlagged.String(),
 				Label:       "Flagged Items",
 				Description: "Review newly flagged items",
-				Emoji:       "🔍",
+				Emoji:       "⏳",
 			},
 			{
 				Value:       enum.ReviewTargetModeConfirmed.String(),
@@ -583,5 +583,5 @@ func (r *SettingRegistry) logBotSettingChange(
 		Details:           details,
 	}
 
-	db.Models().Activities().Log(ctx, activityLog)
+	db.Model().Activity().Log(ctx, activityLog)
 }

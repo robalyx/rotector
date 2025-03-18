@@ -18,6 +18,18 @@ import (
 	"go.uber.org/zap"
 )
 
+// UserProfile represents the user profile data from Discord.
+type UserProfile struct {
+	User struct {
+		ID       string `json:"id"`
+		Username string `json:"username"`
+	} `json:"user"`
+	MutualGuilds []struct {
+		ID   string `json:"id"`
+		Nick string `json:"nick"`
+	} `json:"mutual_guilds"` //nolint:tagliatelle // discord api response
+}
+
 // LookupMenu handles the display of Discord user information and their flagged servers.
 type LookupMenu struct {
 	layout *Layout
@@ -32,74 +44,32 @@ func NewLookupMenu(layout *Layout) *LookupMenu {
 		Message: func(s *session.Session) *discord.MessageUpdateBuilder {
 			return builder.NewLookupBuilder(s).Build()
 		},
-		ShowHandlerFunc:   m.Show,
-		ResetHandlerFunc:  m.Reset,
-		ButtonHandlerFunc: m.handleButton,
-		SelectHandlerFunc: m.handleSelectMenu,
+		ShowHandlerFunc:    m.Show,
+		CleanupHandlerFunc: m.Cleanup,
+		ButtonHandlerFunc:  m.handleButton,
+		SelectHandlerFunc:  m.handleSelectMenu,
 	}
 	return m
 }
 
 // Show prepares and displays the Discord user information interface.
 func (m *LookupMenu) Show(event interfaces.CommonEvent, s *session.Session, r *pagination.Respond) {
-	// Get Discord user ID from session
 	discordUserID := session.DiscordUserLookupID.Get(s)
 
-	// Check if user has requested data deletion
-	isRedacted, err := m.layout.db.Models().Sync().IsUserDataRedacted(context.Background(), discordUserID)
-	if err != nil {
-		m.layout.logger.Error("Failed to check data redaction status",
-			zap.Error(err),
-			zap.Uint64("discord_user_id", discordUserID))
-		isRedacted = false // Default to false if there's an error
-	}
-	session.DiscordUserDataRedacted.Set(s, isRedacted)
+	ctx := context.Background()
+	isRedacted := false
 
-	// Attempt to get Discord username if possible
-	var username string
-	if user, err := event.Client().Rest().GetUser(snowflake.ID(discordUserID)); err == nil {
-		username = user.Username
-		session.DiscordUserLookupName.Set(s, username)
+	// Fetch user data if it doesn't exist in session
+	if session.DiscordUserGuilds.Get(s) == nil {
+		isRedacted = m.fetchUserData(ctx, event, s, discordUserID)
 	}
-
-	// Get total guild count
-	totalGuilds, err := m.layout.db.Models().Sync().GetDiscordUserGuildCount(
-		context.Background(),
-		discordUserID,
-	)
-	if err != nil {
-		m.layout.logger.Error("Failed to get Discord user guild count",
-			zap.Error(err),
-			zap.Uint64("discord_user_id", discordUserID))
-		totalGuilds = 0 // Default to 0 if there's an error
-	}
-	session.DiscordUserTotalGuilds.Set(s, totalGuilds)
-
-	// Get guilds where the user has inappropriate messages
-	messageGuildIDs, err := m.layout.db.Models().Message().GetUserMessageGuilds(
-		context.Background(),
-		discordUserID,
-	)
-	if err != nil {
-		m.layout.logger.Error("Failed to get user message guilds",
-			zap.Error(err),
-			zap.Uint64("discord_user_id", discordUserID))
-		messageGuildIDs = []uint64{} // Default to empty if there's an error
-	}
-
-	// Convert slice to map for O(1) lookups
-	messageGuilds := make(map[uint64]struct{})
-	for _, guildID := range messageGuildIDs {
-		messageGuilds[guildID] = struct{}{}
-	}
-	session.DiscordUserMessageGuilds.Set(s, messageGuilds)
 
 	// Get cursor from session if it exists
 	cursor := session.GuildLookupCursor.Get(s)
 
 	// Fetch the user's guild memberships from database
-	userGuilds, nextCursor, err := m.layout.db.Models().Sync().GetDiscordUserGuildsByCursor(
-		context.Background(),
+	userGuilds, nextCursor, err := m.layout.db.Model().Sync().GetDiscordUserGuildsByCursor(
+		ctx,
 		discordUserID,
 		cursor,
 		constants.GuildMembershipsPerPage,
@@ -112,44 +82,8 @@ func (m *LookupMenu) Show(event interfaces.CommonEvent, s *session.Session, r *p
 		return
 	}
 
-	// If we found guilds, get guild names and message summaries
-	guildIDs := make([]uint64, len(userGuilds))
-	for i, guild := range userGuilds {
-		guildIDs[i] = guild.ServerID
-	}
-
-	guildNames := make(map[uint64]string)
-	var messageSummary *types.InappropriateUserSummary
-
-	if len(guildIDs) > 0 {
-		// Get guild names
-		guildInfos, err := m.layout.db.Models().Sync().GetServerInfo(
-			context.Background(),
-			guildIDs,
-		)
-		if err != nil {
-			m.layout.logger.Error("Failed to get guild names",
-				zap.Error(err),
-				zap.Uint64s("guild_ids", guildIDs))
-		} else {
-			for _, info := range guildInfos {
-				guildNames[info.ServerID] = info.Name
-			}
-		}
-
-		// Only get message summary if data isn't redacted
-		if !isRedacted {
-			messageSummary, err = m.layout.db.Models().Message().GetUserInappropriateMessageSummary(
-				context.Background(),
-				discordUserID,
-			)
-			if err != nil && !errors.Is(err, sql.ErrNoRows) {
-				m.layout.logger.Error("Failed to get message summary",
-					zap.Error(err),
-					zap.Uint64("discord_user_id", discordUserID))
-			}
-		}
-	}
+	// Get guild names and message summary
+	guildNames, messageSummary := m.fetchGuildDetailsAndSummary(ctx, discordUserID, userGuilds, isRedacted)
 
 	// Get previous cursors array
 	prevCursors := session.GuildLookupPrevCursors.Get(s)
@@ -164,13 +98,120 @@ func (m *LookupMenu) Show(event interfaces.CommonEvent, s *session.Session, r *p
 	session.PaginationHasPrevPage.Set(s, len(prevCursors) > 0)
 }
 
-// Reset resets the lookup menu.
-func (m *LookupMenu) Reset(s *session.Session) {
+// Cleanup handles the cleanup of the lookup menu.
+func (m *LookupMenu) Cleanup(s *session.Session) {
+	session.DiscordUserGuilds.Delete(s)
+	session.DiscordUserGuildNames.Delete(s)
+	session.DiscordUserMessageSummary.Delete(s)
+	session.DiscordUserMessageGuilds.Delete(s)
+	session.DiscordUserLookupName.Delete(s)
+	session.DiscordUserTotalGuilds.Delete(s)
+	session.DiscordUserDataRedacted.Delete(s)
+
 	session.GuildLookupCursor.Delete(s)
 	session.GuildLookupNextCursor.Delete(s)
 	session.GuildLookupPrevCursors.Delete(s)
 	session.PaginationHasNextPage.Delete(s)
 	session.PaginationHasPrevPage.Delete(s)
+}
+
+// fetchUserData retrieves and stores user-related data in the session.
+// Returns whether the user data is redacted.
+func (m *LookupMenu) fetchUserData(
+	ctx context.Context, event interfaces.CommonEvent, s *session.Session, discordUserID uint64,
+) bool {
+	// Check if user has requested data deletion
+	isRedacted, err := m.layout.db.Model().Sync().IsUserDataRedacted(ctx, discordUserID)
+	if err != nil {
+		m.layout.logger.Error("Failed to check data redaction status",
+			zap.Error(err),
+			zap.Uint64("discord_user_id", discordUserID))
+		isRedacted = false // Default to false if there's an error
+	}
+	session.DiscordUserDataRedacted.Set(s, isRedacted)
+
+	// Perform full scan and attempt to get Discord username if possible
+	username, err := m.layout.scanner.PerformFullScan(ctx, discordUserID)
+	if err != nil {
+		m.layout.logger.Error("Failed to perform full scan",
+			zap.Error(err),
+			zap.Uint64("discord_user_id", discordUserID))
+
+		if user, err := event.Client().Rest().GetUser(snowflake.ID(discordUserID)); err == nil {
+			username = user.Username
+		} else {
+			username = "Unknown"
+		}
+	}
+	session.DiscordUserLookupName.Set(s, username)
+
+	// Get total guild count
+	totalGuilds, err := m.layout.db.Model().Sync().GetDiscordUserGuildCount(ctx, discordUserID)
+	if err != nil {
+		m.layout.logger.Error("Failed to get Discord user guild count",
+			zap.Error(err),
+			zap.Uint64("discord_user_id", discordUserID))
+		totalGuilds = 0 // Default to 0 if there's an error
+	}
+	session.DiscordUserTotalGuilds.Set(s, totalGuilds)
+
+	// Get guilds where the user has inappropriate messages
+	messageGuildIDs, err := m.layout.db.Model().Message().GetUserMessageGuilds(ctx, discordUserID)
+	if err != nil {
+		m.layout.logger.Error("Failed to get user message guilds",
+			zap.Error(err),
+			zap.Uint64("discord_user_id", discordUserID))
+		messageGuildIDs = []uint64{} // Default to empty if there's an error
+	}
+
+	// Convert slice to map for O(1) lookups
+	messageGuilds := make(map[uint64]struct{})
+	for _, guildID := range messageGuildIDs {
+		messageGuilds[guildID] = struct{}{}
+	}
+	session.DiscordUserMessageGuilds.Set(s, messageGuilds)
+
+	return isRedacted
+}
+
+// fetchGuildDetailsAndSummary fetches guild names and message summary for the given guilds.
+func (m *LookupMenu) fetchGuildDetailsAndSummary(
+	ctx context.Context, discordUserID uint64, userGuilds []*types.UserGuildInfo, isRedacted bool,
+) (map[uint64]string, *types.InappropriateUserSummary) {
+	guildNames := make(map[uint64]string)
+	var messageSummary *types.InappropriateUserSummary
+
+	if len(userGuilds) > 0 {
+		// Extract guild IDs
+		guildIDs := make([]uint64, len(userGuilds))
+		for i, guild := range userGuilds {
+			guildIDs[i] = guild.ServerID
+		}
+
+		// Get guild names
+		guildInfos, err := m.layout.db.Model().Sync().GetServerInfo(ctx, guildIDs)
+		if err != nil {
+			m.layout.logger.Error("Failed to get guild names",
+				zap.Error(err),
+				zap.Uint64s("guild_ids", guildIDs))
+		} else {
+			for _, info := range guildInfos {
+				guildNames[info.ServerID] = info.Name
+			}
+		}
+
+		// Only get message summary if data isn't redacted
+		if !isRedacted {
+			messageSummary, err = m.layout.db.Model().Message().GetUserInappropriateMessageSummary(ctx, discordUserID)
+			if err != nil && !errors.Is(err, sql.ErrNoRows) {
+				m.layout.logger.Error("Failed to get message summary",
+					zap.Error(err),
+					zap.Uint64("discord_user_id", discordUserID))
+			}
+		}
+	}
+
+	return guildNames, messageSummary
 }
 
 // handleButton processes button interactions.
@@ -180,9 +221,6 @@ func (m *LookupMenu) handleButton(
 	switch customID {
 	case constants.BackButtonCustomID:
 		r.NavigateBack(event, s, "")
-	case constants.RefreshButtonCustomID:
-		m.Reset(s)
-		r.Reload(event, s, "")
 	case string(session.ViewerFirstPage),
 		string(session.ViewerPrevPage),
 		string(session.ViewerNextPage),
