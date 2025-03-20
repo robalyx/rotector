@@ -274,37 +274,39 @@ func (r *UserModel) GetUserByID(ctx context.Context, userID string, fields types
 			}
 
 			err := query.Scan(ctx)
-			if err == nil {
-				// Set result based on model type
-				switch m := model.(type) {
-				case *types.FlaggedUser:
-					result.User = m.User
-					result.Status = enum.UserTypeFlagged
-				case *types.ConfirmedUser:
-					result.User = m.User
-					result.VerifiedAt = m.VerifiedAt
-					result.Status = enum.UserTypeConfirmed
-				case *types.ClearedUser:
-					result.User = m.User
-					result.ClearedAt = m.ClearedAt
-					result.Status = enum.UserTypeCleared
+			if err != nil {
+				if errors.Is(err, sql.ErrNoRows) {
+					continue
 				}
-
-				// Update last_viewed if requested
-				_, err = tx.NewUpdate().
-					Model(model).
-					Set("last_viewed = ?", time.Now()).
-					Where("id = ?", result.ID).
-					Exec(ctx)
-				if err != nil {
-					return err
-				}
-
-				return nil
+				return fmt.Errorf("failed to get user: %w", err)
 			}
-			if !errors.Is(err, sql.ErrNoRows) {
+
+			// Set result based on model type
+			switch m := model.(type) {
+			case *types.FlaggedUser:
+				result.User = m.User
+				result.Status = enum.UserTypeFlagged
+			case *types.ConfirmedUser:
+				result.User = m.User
+				result.VerifiedAt = m.VerifiedAt
+				result.Status = enum.UserTypeConfirmed
+			case *types.ClearedUser:
+				result.User = m.User
+				result.ClearedAt = m.ClearedAt
+				result.Status = enum.UserTypeCleared
+			}
+
+			// Update last_viewed if requested
+			_, err = tx.NewUpdate().
+				Model(model).
+				Set("last_viewed = ?", time.Now()).
+				Where("id = ?", result.ID).
+				Exec(ctx)
+			if err != nil {
 				return err
 			}
+
+			return nil
 		}
 
 		return types.ErrUserNotFound

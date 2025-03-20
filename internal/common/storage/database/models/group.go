@@ -205,37 +205,39 @@ func (r *GroupModel) GetGroupByID(
 			}
 
 			err := query.Scan(ctx)
-			if err == nil {
-				// Set result based on model type
-				switch m := model.(type) {
-				case *types.FlaggedGroup:
-					result.Group = m.Group
-					result.Status = enum.GroupTypeFlagged
-				case *types.ConfirmedGroup:
-					result.Group = m.Group
-					result.VerifiedAt = m.VerifiedAt
-					result.Status = enum.GroupTypeConfirmed
-				case *types.ClearedGroup:
-					result.Group = m.Group
-					result.ClearedAt = m.ClearedAt
-					result.Status = enum.GroupTypeCleared
+			if err != nil {
+				if errors.Is(err, sql.ErrNoRows) {
+					continue
 				}
-
-				// Update last_viewed if requested
-				_, err = tx.NewUpdate().
-					Model(model).
-					Set("last_viewed = ?", time.Now()).
-					Where("id = ?", result.ID).
-					Exec(ctx)
-				if err != nil {
-					return err
-				}
-
-				return nil
+				return fmt.Errorf("failed to get group: %w", err)
 			}
-			if !errors.Is(err, sql.ErrNoRows) {
-				return err
+
+			// Set result based on model type
+			switch m := model.(type) {
+			case *types.FlaggedGroup:
+				result.Group = m.Group
+				result.Status = enum.GroupTypeFlagged
+			case *types.ConfirmedGroup:
+				result.Group = m.Group
+				result.VerifiedAt = m.VerifiedAt
+				result.Status = enum.GroupTypeConfirmed
+			case *types.ClearedGroup:
+				result.Group = m.Group
+				result.ClearedAt = m.ClearedAt
+				result.Status = enum.GroupTypeCleared
 			}
+
+			// Update last_viewed if requested
+			_, err = tx.NewUpdate().
+				Model(model).
+				Set("last_viewed = ?", time.Now()).
+				Where("id = ?", result.ID).
+				Exec(ctx)
+			if err != nil {
+				return fmt.Errorf("failed to update last_viewed: %w", err)
+			}
+
+			return nil
 		}
 
 		return types.ErrGroupNotFound

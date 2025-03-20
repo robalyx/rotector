@@ -37,19 +37,19 @@ type Group struct {
 
 // FlaggedGroup extends Group to track groups that need review.
 type FlaggedGroup struct {
-	Group
+	Group `json:"group"`
 }
 
 // ConfirmedGroup extends Group to track groups that have been reviewed and confirmed.
 type ConfirmedGroup struct {
-	Group
+	Group      `json:"group"`
 	VerifiedAt time.Time `bun:",notnull" json:"verifiedAt"`
 }
 
 // ClearedGroup extends Group to track groups that were cleared during review.
 // The ClearedAt field shows when the group was cleared by a moderator.
 type ClearedGroup struct {
-	Group
+	Group     `json:"group"`
 	ClearedAt time.Time `bun:",notnull" json:"clearedAt"`
 }
 
@@ -59,7 +59,7 @@ type ReviewGroup struct {
 	VerifiedAt time.Time      `json:"verifiedAt"`
 	ClearedAt  time.Time      `json:"clearedAt"`
 	Status     enum.GroupType `json:"status"`
-	Reputation *Reputation    `json:"reputation"`
+	Reputation Reputation     `json:"reputation"`
 }
 
 // GroupField represents available fields as bit flags.
@@ -68,15 +68,14 @@ type GroupField uint32
 const (
 	GroupFieldNone GroupField = 0
 
-	GroupFieldID           GroupField = 1 << iota // Group ID
-	GroupFieldUUID                                // Group UUID
-	GroupFieldName                                // Group name
-	GroupFieldDescription                         // Group description
-	GroupFieldOwner                               // Owner information
-	GroupFieldShout                               // Group shout
-	GroupFieldReasons                             // Reasons for flagging
-	GroupFieldThumbnail                           // ThumbnailURL
-	GroupFieldFlaggedUsers                        // FlaggedUsers list
+	GroupFieldID          GroupField = 1 << iota // Group ID
+	GroupFieldUUID                               // Group UUID
+	GroupFieldName                               // Group name
+	GroupFieldDescription                        // Group description
+	GroupFieldOwner                              // Owner information
+	GroupFieldShout                              // Group shout
+	GroupFieldReasons                            // Reasons for flagging
+	GroupFieldThumbnail                          // ThumbnailURL
 
 	GroupFieldConfidence // AI confidence score
 
@@ -109,7 +108,6 @@ const (
 		GroupFieldShout |
 		GroupFieldReasons |
 		GroupFieldThumbnail |
-		GroupFieldFlaggedUsers |
 		GroupFieldConfidence |
 		GroupFieldReputation |
 		GroupFieldTimestamps |
@@ -118,7 +116,7 @@ const (
 )
 
 // fieldToColumns maps GroupField bits to their corresponding database columns.
-var groupFieldToColumns = map[GroupField][]string{ //nolint:gochecknoglobals // -
+var groupFieldToColumns = map[GroupField][]string{
 	GroupFieldID:                  {"id"},
 	GroupFieldUUID:                {"uuid"},
 	GroupFieldName:                {"name"},
@@ -127,7 +125,6 @@ var groupFieldToColumns = map[GroupField][]string{ //nolint:gochecknoglobals // 
 	GroupFieldShout:               {"shout"},
 	GroupFieldReasons:             {"reasons"},
 	GroupFieldThumbnail:           {"thumbnail_url"},
-	GroupFieldFlaggedUsers:        {"flagged_users"},
 	GroupFieldConfidence:          {"confidence"},
 	GroupFieldLastScanned:         {"last_scanned"},
 	GroupFieldLastUpdated:         {"last_updated"},
