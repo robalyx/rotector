@@ -32,6 +32,8 @@ type ReviewBuilder struct {
 	translator     *translator.Translator
 	reviewMode     enum.ReviewMode
 	defaultSort    enum.ReviewSortBy
+	reviewHistory  []uint64
+	historyIndex   int
 	reasonsChanged bool
 	isReviewer     bool
 	trainingMode   bool
@@ -54,6 +56,8 @@ func NewReviewBuilder(s *session.Session, translator *translator.Translator, db 
 		translator:     translator,
 		reviewMode:     session.UserReviewMode.Get(s),
 		defaultSort:    session.UserUserDefaultSort.Get(s),
+		reviewHistory:  session.UserReviewHistory.Get(s),
+		historyIndex:   session.UserReviewHistoryIndex.Get(s),
 		reasonsChanged: session.ReasonsChanged.Get(s),
 		isReviewer:     s.BotSettings().IsReviewer(userID),
 		trainingMode:   trainingMode,
@@ -148,7 +152,7 @@ func (b *ReviewBuilder) buildReviewEmbed() *discord.EmbedBuilder {
 	case enum.UserTypeConfirmed:
 		status = "⚠️ Confirmed"
 	case enum.UserTypeFlagged:
-		status = "⏳ Pending Review"
+		status = "⏳ Pending"
 	case enum.UserTypeCleared:
 		status = "✅ Cleared"
 	}
@@ -158,6 +162,7 @@ func (b *ReviewBuilder) buildReviewEmbed() *discord.EmbedBuilder {
 		status += " 🔨 Banned"
 	}
 
+	userID := strconv.FormatUint(b.user.ID, 10)
 	createdAt := fmt.Sprintf("<t:%d:R>", b.user.CreatedAt.Unix())
 	lastUpdated := fmt.Sprintf("<t:%d:R>", b.user.LastUpdated.Unix())
 	confidence := fmt.Sprintf("%.2f%%", b.user.Confidence*100)
@@ -167,7 +172,7 @@ func (b *ReviewBuilder) buildReviewEmbed() *discord.EmbedBuilder {
 
 	if b.reviewMode == enum.ReviewModeTraining {
 		// Training mode - show limited information without links
-		embed.AddField("ID", utils.CensorString(strconv.FormatUint(b.user.ID, 10), true), true).
+		embed.AddField("ID", utils.CensorString(userID, true), true).
 			AddField("Name", utils.CensorString(b.user.Name, true), true).
 			AddField("Display Name", utils.CensorString(b.user.DisplayName, true), true).
 			AddField("Game Visits", b.getTotalVisits(), true).
@@ -185,7 +190,7 @@ func (b *ReviewBuilder) buildReviewEmbed() *discord.EmbedBuilder {
 		// Standard mode - show all information with links
 		embed.AddField("ID", fmt.Sprintf(
 			"[%s](https://www.roblox.com/users/%d/profile)",
-			utils.CensorString(strconv.FormatUint(b.user.ID, 10), b.privacyMode),
+			utils.CensorString(userID, b.privacyMode),
 			b.user.ID,
 		), true).
 			AddField("Name", utils.CensorString(b.user.Name, b.privacyMode), true).
@@ -212,8 +217,18 @@ func (b *ReviewBuilder) buildReviewEmbed() *discord.EmbedBuilder {
 		embed.AddField("Cleared At", fmt.Sprintf("<t:%d:R>", b.user.ClearedAt.Unix()), true)
 	}
 
-	// Add UUID and status to footer
-	embed.SetFooter(fmt.Sprintf("%s • UUID: %s", status, b.user.UUID.String()), "")
+	// Build footer with status and history position
+	var footerText string
+	if len(b.reviewHistory) > 0 {
+		footerText = fmt.Sprintf("%s • UUID: %s • History: %d/%d",
+			status,
+			b.user.UUID.String(),
+			b.historyIndex+1,
+			len(b.reviewHistory))
+	} else {
+		footerText = fmt.Sprintf("%s • UUID: %s", status, b.user.UUID.String())
+	}
+	embed.SetFooter(footerText, "")
 
 	return embed
 }
@@ -384,21 +399,35 @@ func (b *ReviewBuilder) buildComponents() []discord.ContainerComponent {
 		),
 	)
 
-	// Add navigation/action buttons
+	// Create navigation buttons
+	prevButton := discord.NewSecondaryButton("⬅️ Prev", constants.PrevReviewButtonCustomID)
+	if b.historyIndex <= 0 || len(b.reviewHistory) == 0 {
+		prevButton = prevButton.WithDisabled(true)
+	}
+
+	var nextButtonLabel string
+	if b.historyIndex >= len(b.reviewHistory)-1 {
+		nextButtonLabel = "Skip ➡️"
+	} else {
+		nextButtonLabel = "Next ➡️"
+	}
+	nextButton := discord.NewSecondaryButton(nextButtonLabel, constants.NextReviewButtonCustomID)
+
+	// Create confirm/clear buttons
 	confirmButton := discord.NewDangerButton(b.getConfirmButtonLabel(), constants.ConfirmButtonCustomID)
 	clearButton := discord.NewSuccessButton(b.getClearButtonLabel(), constants.ClearButtonCustomID)
-
-	// Disable confirm/clear buttons for condo-only cases
 	if len(b.user.Reasons) == 1 && b.user.Reasons[enum.UserReasonTypeCondo] != nil {
 		confirmButton = confirmButton.WithDisabled(true)
 		clearButton = clearButton.WithDisabled(true)
 	}
 
+	// First action row with navigation and review buttons
 	components = append(components, discord.NewActionRow(
 		discord.NewSecondaryButton("◀️", constants.BackButtonCustomID),
+		prevButton,
+		nextButton,
 		confirmButton,
 		clearButton,
-		discord.NewSecondaryButton("Skip", constants.SkipButtonCustomID),
 	))
 
 	return components

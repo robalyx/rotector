@@ -15,7 +15,6 @@ import (
 	"github.com/robalyx/rotector/internal/bot/core/session"
 	"github.com/robalyx/rotector/internal/bot/interfaces"
 	"github.com/robalyx/rotector/internal/common/storage/database/types"
-	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
 	"go.uber.org/zap"
 )
 
@@ -41,7 +40,15 @@ func NewMembersMenu(layout *Layout) *MembersMenu {
 
 // Show prepares and displays the members interface for a specific page.
 func (m *MembersMenu) Show(event interfaces.CommonEvent, s *session.Session, r *pagination.Respond) {
-	memberIDs := session.GroupMemberIDs.Get(s)
+	group := session.GroupTarget.Get(s)
+
+	// Get flagged users from tracking
+	memberIDs, err := m.layout.db.Model().Tracking().GetFlaggedUsers(context.Background(), group.ID)
+	if err != nil {
+		m.layout.logger.Error("Failed to fetch flagged users", zap.Error(err))
+		r.Error(event, "Failed to load flagged users. Please try again.")
+		return
+	}
 
 	// Return to review menu if group has no flagged members
 	if len(memberIDs) == 0 {
@@ -49,10 +56,16 @@ func (m *MembersMenu) Show(event interfaces.CommonEvent, s *session.Session, r *
 		return
 	}
 
-	// Get user data from database
+	// Calculate page boundaries
+	page := session.PaginationPage.Get(s)
+	start := page * constants.MembersPerPage
+	end := min(start+constants.MembersPerPage, len(memberIDs))
+	pageMembers := memberIDs[start:end]
+
+	// Get user data from database only for the current page
 	members, err := m.layout.db.Model().User().GetUsersByIDs(
 		context.Background(),
-		memberIDs,
+		pageMembers,
 		types.UserFieldBasic|types.UserFieldReasons|types.UserFieldConfidence,
 	)
 	if err != nil {
@@ -61,26 +74,14 @@ func (m *MembersMenu) Show(event interfaces.CommonEvent, s *session.Session, r *
 		return
 	}
 
-	// Sort members by status
-	sortedMemberIDs := m.sortMembersByStatus(memberIDs, members)
-
-	// Calculate page boundaries
-	page := session.PaginationPage.Get(s)
-
-	start := page * constants.MembersPerPage
-	end := min(start+constants.MembersPerPage, len(sortedMemberIDs))
-	pageMembers := sortedMemberIDs[start:end]
-
 	// Start fetching presences for visible members in background
 	presenceChan := m.layout.presenceFetcher.FetchPresencesConcurrently(context.Background(), pageMembers)
 
-	// Store initial data in session
-	session.GroupMemberIDs.Set(s, sortedMemberIDs)
-	session.GroupMembers.Set(s, members)
-	session.GroupPageMembers.Set(s, pageMembers)
+	// Store data in session
+	session.GroupPageFlaggedMembers.Set(s, members)
+	session.GroupPageFlaggedMemberIDs.Set(s, pageMembers)
 	session.PaginationOffset.Set(s, start)
-	session.PaginationPage.Set(s, page+1)
-	session.PaginationTotalItems.Set(s, len(sortedMemberIDs))
+	session.PaginationTotalItems.Set(s, len(memberIDs))
 
 	// Start streaming images
 	m.layout.imageStreamer.Stream(pagination.StreamRequest{
@@ -108,11 +109,11 @@ func (m *MembersMenu) handlePageNavigation(
 	action := session.ViewerAction(customID)
 	switch action {
 	case session.ViewerFirstPage, session.ViewerPrevPage, session.ViewerNextPage, session.ViewerLastPage:
-		memberIDs := session.GroupMemberIDs.Get(s)
+		memberCount := session.GroupFlaggedMembersCount.Get(s)
 
 		// Calculate max page and validate navigation action
-		maxPage := (len(memberIDs) - 1) / constants.MembersPerPage
-		page := action.ParsePageAction(s, action, maxPage)
+		maxPage := (memberCount - 1) / constants.MembersPerPage
+		page := action.ParsePageAction(s, maxPage)
 
 		session.PaginationPage.Set(s, page)
 		r.Reload(event, s, "")
@@ -127,40 +128,6 @@ func (m *MembersMenu) handlePageNavigation(
 		m.layout.logger.Warn("Invalid members viewer action", zap.String("action", string(action)))
 		r.Error(event, "Invalid interaction.")
 	}
-}
-
-// sortMembersByStatus sorts members by their status in priority order.
-func (m *MembersMenu) sortMembersByStatus(memberIDs []uint64, flaggedUsers map[uint64]*types.ReviewUser) []uint64 {
-	// Group members by status
-	groupedMembers := make(map[enum.UserType][]uint64)
-	var unflaggedMembers []uint64
-
-	// Separate flagged and unflagged members
-	for _, memberID := range memberIDs {
-		if member, exists := flaggedUsers[memberID]; exists {
-			groupedMembers[member.Status] = append(groupedMembers[member.Status], memberID)
-		} else {
-			unflaggedMembers = append(unflaggedMembers, memberID)
-		}
-	}
-
-	// Define status priority order
-	statusOrder := []enum.UserType{
-		enum.UserTypeConfirmed,
-		enum.UserTypeFlagged,
-		enum.UserTypeCleared,
-	}
-
-	// Combine members in priority order
-	sortedMembers := make([]uint64, 0, len(memberIDs))
-	for _, status := range statusOrder {
-		sortedMembers = append(sortedMembers, groupedMembers[status]...)
-	}
-
-	// Append unflagged members last
-	sortedMembers = append(sortedMembers, unflaggedMembers...)
-
-	return sortedMembers
 }
 
 // fetchMemberThumbnails fetches thumbnails for a slice of member IDs.

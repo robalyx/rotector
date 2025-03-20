@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -62,7 +63,7 @@ func (m *ReviewMenu) Show(event interfaces.CommonEvent, s *session.Session, r *p
 		user, isBanned, err = m.fetchNewTarget(event, s, r)
 		if err != nil {
 			if errors.Is(err, types.ErrNoUsersToReview) {
-				r.Cancel(event, s, "No users to review. Please check back later.")
+				r.Show(event, s, constants.DashboardPageName, "No users to review. Please check back later.")
 				return
 			}
 			if errors.Is(err, ErrBreakRequired) {
@@ -91,7 +92,7 @@ func (m *ReviewMenu) Show(event interfaces.CommonEvent, s *session.Session, r *p
 			EndDate:      time.Time{},
 		},
 		nil,
-		constants.ReviewHistoryLimit,
+		constants.ReviewLogsLimit,
 	)
 	if err != nil {
 		m.layout.logger.Error("Failed to fetch review logs", zap.Error(err))
@@ -240,7 +241,7 @@ func (m *ReviewMenu) handleActionSelection(
 	}
 }
 
-// handleButton handles the buttons for the review menu.
+// handleButton processes button clicks.
 func (m *ReviewMenu) handleButton(
 	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, customID string,
 ) {
@@ -251,12 +252,14 @@ func (m *ReviewMenu) handleButton(
 	switch customID {
 	case constants.BackButtonCustomID:
 		r.NavigateBack(event, s, "")
+	case constants.PrevReviewButtonCustomID:
+		m.handleNavigateUser(event, s, r, false)
+	case constants.NextReviewButtonCustomID:
+		m.handleNavigateUser(event, s, r, true)
 	case constants.ConfirmButtonCustomID:
 		m.handleConfirmUser(event, s, r)
 	case constants.ClearButtonCustomID:
 		m.handleClearUser(event, s, r)
-	case constants.SkipButtonCustomID:
-		m.handleSkipUser(event, s, r)
 	}
 }
 
@@ -378,6 +381,105 @@ func (m *ReviewMenu) handleViewUserLogs(
 
 	// Show the logs menu
 	r.Show(event, s, constants.LogPageName, "")
+}
+
+// handleNavigateUser handles navigation to previous or next user based on the button pressed.
+func (m *ReviewMenu) handleNavigateUser(
+	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, isNext bool,
+) {
+	// Get the review history and current index
+	history := session.UserReviewHistory.Get(s)
+	index := session.UserReviewHistoryIndex.Get(s)
+
+	// If navigating next and we're at the end of history, treat it as a skip
+	if isNext && (index >= len(history)-1 || len(history) == 0) {
+		// Clear current user and load next one
+		session.UserTarget.Delete(s)
+		r.Reload(event, s, "Skipped user.")
+		m.updateCounters(s)
+
+		// Log the skip action
+		user := session.UserTarget.Get(s)
+		if user != nil {
+			m.layout.db.Model().Activity().Log(context.Background(), &types.ActivityLog{
+				ActivityTarget: types.ActivityTarget{
+					UserID: user.ID,
+				},
+				ReviewerID:        uint64(event.User().ID),
+				ActivityType:      enum.ActivityTypeUserSkipped,
+				ActivityTimestamp: time.Now(),
+				Details:           map[string]any{},
+			})
+		}
+		return
+	}
+
+	// For previous navigation or when there's history to navigate
+	if isNext {
+		if index >= len(history)-1 {
+			r.Cancel(event, s, "No next user to navigate to.")
+			return
+		}
+		index++
+	} else {
+		if index <= 0 || len(history) == 0 {
+			r.Cancel(event, s, "No previous user to navigate to.")
+			return
+		}
+		index--
+	}
+
+	// Update index in session
+	session.UserReviewHistoryIndex.Set(s, index)
+
+	// Fetch the user data
+	targetUserID := history[index]
+	user, err := m.layout.db.Service().User().GetUserByID(
+		context.Background(),
+		strconv.FormatUint(targetUserID, 10),
+		types.UserFieldAll,
+	)
+	if err != nil {
+		if errors.Is(err, types.ErrUserNotFound) {
+			// Remove the missing user from history
+			history = slices.Delete(history, index, index+1)
+			session.UserReviewHistory.Set(s, history)
+
+			// Adjust index if needed
+			if index >= len(history) {
+				index = len(history) - 1
+			}
+			session.UserReviewHistoryIndex.Set(s, index)
+
+			// Try again with updated history
+			m.handleNavigateUser(event, s, r, isNext)
+			return
+		}
+
+		direction := map[bool]string{true: "next", false: "previous"}[isNext]
+		m.layout.logger.Error(fmt.Sprintf("Failed to fetch %s user", direction), zap.Error(err))
+		r.Error(event, fmt.Sprintf("Failed to load %s user. Please try again.", direction))
+		return
+	}
+
+	// Set as current user and reload
+	session.UserTarget.Set(s, user)
+	session.OriginalUserReasons.Set(s, user.Reasons)
+	session.ReasonsChanged.Set(s, false)
+
+	// Log the view action
+	go m.layout.db.Model().Activity().Log(context.Background(), &types.ActivityLog{
+		ActivityTarget: types.ActivityTarget{
+			UserID: user.ID,
+		},
+		ReviewerID:        uint64(event.User().ID),
+		ActivityType:      enum.ActivityTypeUserViewed,
+		ActivityTimestamp: time.Now(),
+		Details:           map[string]any{},
+	})
+
+	direction := map[bool]string{true: "next", false: "previous"}[isNext]
+	r.Reload(event, s, fmt.Sprintf("Navigated to %s user.", direction))
 }
 
 // handleConfirmUser moves a user to the confirmed state and logs the action.
@@ -586,34 +688,6 @@ func (m *ReviewMenu) handleClearUser(event interfaces.CommonEvent, s *session.Se
 	session.UserTarget.Delete(s)
 	r.Reload(event, s, fmt.Sprintf("User %s. %d users left to review.", actionMsg, flaggedCount))
 	m.updateCounters(s)
-}
-
-// handleSkipUser logs the skip action and moves to the next user.
-func (m *ReviewMenu) handleSkipUser(event interfaces.CommonEvent, s *session.Session, r *pagination.Respond) {
-	// Get the number of flagged users left to review
-	flaggedCount, err := m.layout.db.Model().User().GetFlaggedUsersCount(context.Background())
-	if err != nil {
-		m.layout.logger.Error("Failed to get flagged users count", zap.Error(err))
-	}
-
-	// Clear current user and load next one
-	session.UserTarget.Delete(s)
-	r.Reload(event, s, fmt.Sprintf("Skipped user. %d users left to review.", flaggedCount))
-	m.updateCounters(s)
-
-	// Log the skip action
-	user := session.UserTarget.Get(s)
-	if user != nil {
-		m.layout.db.Model().Activity().Log(context.Background(), &types.ActivityLog{
-			ActivityTarget: types.ActivityTarget{
-				UserID: user.ID,
-			},
-			ReviewerID:        uint64(event.User().ID),
-			ActivityType:      enum.ActivityTypeUserSkipped,
-			ActivityTimestamp: time.Now(),
-			Details:           map[string]any{},
-		})
-	}
 }
 
 // handleOpenAIChat handles the button to open the AI chat for the current user.
@@ -1004,6 +1078,18 @@ func (m *ReviewMenu) fetchNewTarget(
 	session.UserTarget.Set(s, user)
 	session.OriginalUserReasons.Set(s, user.Reasons)
 	session.ReasonsChanged.Set(s, false)
+
+	// Add current user to history and set index to point to it
+	history := session.UserReviewHistory.Get(s)
+	history = append(history, user.ID)
+
+	// Trim history if it exceeds the maximum size
+	if len(history) > constants.MaxReviewHistorySize {
+		history = history[len(history)-constants.MaxReviewHistorySize:]
+	}
+
+	session.UserReviewHistory.Set(s, history)
+	session.UserReviewHistoryIndex.Set(s, len(history)-1)
 
 	// Log the view action
 	go m.layout.db.Model().Activity().Log(context.Background(), &types.ActivityLog{

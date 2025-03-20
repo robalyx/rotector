@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -61,7 +62,7 @@ func (m *ReviewMenu) Show(event interfaces.CommonEvent, s *session.Session, r *p
 		group, isBanned, err = m.fetchNewTarget(event, s, r)
 		if err != nil {
 			if errors.Is(err, types.ErrNoGroupsToReview) {
-				r.Cancel(event, s, "No groups to review. Please check back later.")
+				r.Show(event, s, constants.DashboardPageName, "No groups to review. Please check back later.")
 				return
 			}
 			if errors.Is(err, ErrBreakRequired) {
@@ -102,7 +103,7 @@ func (m *ReviewMenu) Show(event interfaces.CommonEvent, s *session.Session, r *p
 			EndDate:      time.Time{},
 		},
 		nil,
-		constants.ReviewHistoryLimit,
+		constants.ReviewLogsLimit,
 	)
 	if err != nil {
 		m.layout.logger.Error("Failed to fetch review logs", zap.Error(err))
@@ -202,12 +203,14 @@ func (m *ReviewMenu) handleButton(
 	switch customID {
 	case constants.BackButtonCustomID:
 		r.NavigateBack(event, s, "")
+	case constants.PrevReviewButtonCustomID:
+		m.handleNavigateGroup(event, s, r, false)
+	case constants.NextReviewButtonCustomID:
+		m.handleNavigateGroup(event, s, r, true)
 	case constants.ConfirmButtonCustomID:
 		m.handleConfirmGroup(event, s, r)
 	case constants.ClearButtonCustomID:
 		m.handleClearGroup(event, s, r)
-	case constants.SkipButtonCustomID:
-		m.handleSkipGroup(event, s, r)
 	}
 }
 
@@ -227,7 +230,14 @@ func (m *ReviewMenu) handleModal(event *events.ModalSubmitInteractionCreate, s *
 func (m *ReviewMenu) handleOpenAIChat(event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond) {
 	group := session.GroupTarget.Get(s)
 	groupInfo := session.GroupInfo.Get(s)
-	memberIDs := session.GroupMemberIDs.Get(s)
+
+	// Get flagged users from tracking
+	memberIDs, err := m.layout.db.Model().Tracking().GetFlaggedUsers(context.Background(), group.ID)
+	if err != nil {
+		m.layout.logger.Error("Failed to fetch flagged users", zap.Error(err))
+		r.Error(event, "Failed to load flagged users. Please try again.")
+		return
+	}
 
 	// Get flagged members details with a limit of 20
 	limit := 20
@@ -332,6 +342,115 @@ func (m *ReviewMenu) handleViewGroupLogs(
 
 	// Show the logs menu
 	r.Show(event, s, constants.LogPageName, "")
+}
+
+// handleNavigateGroup handles navigation to previous or next group based on the button pressed.
+func (m *ReviewMenu) handleNavigateGroup(
+	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, isNext bool,
+) {
+	// Get the review history and current index
+	history := session.GroupReviewHistory.Get(s)
+	index := session.GroupReviewHistoryIndex.Get(s)
+
+	// If navigating next and we're at the end of history, treat it as a skip
+	if isNext && (index >= len(history)-1 || len(history) == 0) {
+		// Clear current group and load next one
+		session.GroupTarget.Delete(s)
+		r.Reload(event, s, "Skipped group.")
+		m.updateCounters(s)
+
+		// Log the skip action
+		group := session.GroupTarget.Get(s)
+		if group != nil {
+			m.layout.db.Model().Activity().Log(context.Background(), &types.ActivityLog{
+				ActivityTarget: types.ActivityTarget{
+					GroupID: group.ID,
+				},
+				ReviewerID:        uint64(event.User().ID),
+				ActivityType:      enum.ActivityTypeGroupSkipped,
+				ActivityTimestamp: time.Now(),
+				Details:           map[string]any{},
+			})
+		}
+		return
+	}
+
+	// For previous navigation or when there's history to navigate
+	if isNext {
+		if index >= len(history)-1 {
+			r.Cancel(event, s, "No next group to navigate to.")
+			return
+		}
+		index++
+	} else {
+		if index <= 0 || len(history) == 0 {
+			r.Cancel(event, s, "No previous group to navigate to.")
+			return
+		}
+		index--
+	}
+
+	// Update index in session
+	session.GroupReviewHistoryIndex.Set(s, index)
+
+	// Fetch the group data
+	targetGroupID := history[index]
+	m.layout.logger.Info("Fetching group", zap.Uint64("group_id", targetGroupID))
+	group, err := m.layout.db.Service().Group().GetGroupByID(
+		context.Background(),
+		strconv.FormatUint(targetGroupID, 10),
+		types.GroupFieldAll,
+	)
+	if err != nil {
+		if errors.Is(err, types.ErrGroupNotFound) {
+			// Remove the missing group from history
+			history = slices.Delete(history, index, index+1)
+			session.GroupReviewHistory.Set(s, history)
+
+			// Adjust index if needed
+			if index >= len(history) {
+				index = len(history) - 1
+			}
+			session.GroupReviewHistoryIndex.Set(s, index)
+
+			// Try again with updated history
+			m.handleNavigateGroup(event, s, r, isNext)
+			return
+		}
+
+		direction := map[bool]string{true: "next", false: "previous"}[isNext]
+		m.layout.logger.Error(fmt.Sprintf("Failed to fetch %s group", direction), zap.Error(err))
+		r.Error(event, fmt.Sprintf("Failed to load %s group. Please try again.", direction))
+		return
+	}
+
+	// Get flagged users from tracking
+	flaggedCount, err := m.layout.db.Model().Tracking().GetFlaggedUsersCount(context.Background(), group.ID)
+	if err != nil {
+		m.layout.logger.Error("Failed to fetch flagged users", zap.Error(err))
+		r.Error(event, "Failed to load flagged users. Please try again.")
+		return
+	}
+
+	// Store in session
+	session.GroupTarget.Set(s, group)
+	session.GroupFlaggedMembersCount.Set(s, flaggedCount)
+	session.OriginalGroupReasons.Set(s, group.Reasons)
+	session.ReasonsChanged.Set(s, false)
+
+	// Log the view action
+	go m.layout.db.Model().Activity().Log(context.Background(), &types.ActivityLog{
+		ActivityTarget: types.ActivityTarget{
+			GroupID: group.ID,
+		},
+		ReviewerID:        uint64(event.User().ID),
+		ActivityType:      enum.ActivityTypeGroupViewed,
+		ActivityTimestamp: time.Now(),
+		Details:           map[string]any{},
+	})
+
+	direction := map[bool]string{true: "next", false: "previous"}[isNext]
+	r.Reload(event, s, fmt.Sprintf("Navigated to %s group.", direction))
 }
 
 // handleConfirmGroup moves a group to the confirmed state and logs the action.
@@ -524,28 +643,6 @@ func (m *ReviewMenu) handleClearGroup(event interfaces.CommonEvent, s *session.S
 	session.GroupTarget.Delete(s)
 	r.Reload(event, s, fmt.Sprintf("Group %s.", actionMsg))
 	m.updateCounters(s)
-}
-
-// handleSkipGroup logs the skip action and moves to the next group.
-func (m *ReviewMenu) handleSkipGroup(event interfaces.CommonEvent, s *session.Session, r *pagination.Respond) {
-	// Clear current group and load next one
-	session.GroupTarget.Delete(s)
-	r.Reload(event, s, "Skipped group.")
-	m.updateCounters(s)
-
-	// Log the skip action
-	group := session.GroupTarget.Get(s)
-	if group != nil {
-		m.layout.db.Model().Activity().Log(context.Background(), &types.ActivityLog{
-			ActivityTarget: types.ActivityTarget{
-				GroupID: group.ID,
-			},
-			ReviewerID:        uint64(event.User().ID),
-			ActivityType:      enum.ActivityTypeGroupSkipped,
-			ActivityTimestamp: time.Now(),
-			Details:           map[string]any{},
-		})
-	}
 }
 
 // handleReasonModalSubmit processes the reason message from the modal.
@@ -827,16 +924,28 @@ func (m *ReviewMenu) fetchNewTarget(
 	}
 
 	// Get flagged users from tracking
-	flaggedUsers, err := m.layout.db.Model().Tracking().GetFlaggedUsers(context.Background(), group.ID)
+	flaggedCount, err := m.layout.db.Model().Tracking().GetFlaggedUsersCount(context.Background(), group.ID)
 	if err != nil {
 		return nil, isBanned, err
 	}
 
 	// Store the group, flagged users, and original reasons in session
 	session.GroupTarget.Set(s, group)
-	session.GroupMemberIDs.Set(s, flaggedUsers)
+	session.GroupFlaggedMembersCount.Set(s, flaggedCount)
 	session.OriginalGroupReasons.Set(s, group.Reasons)
 	session.ReasonsChanged.Set(s, false)
+
+	// Add current group to history and set index to point to it
+	history := session.GroupReviewHistory.Get(s)
+	history = append(history, group.ID)
+
+	// Trim history if it exceeds the maximum size
+	if len(history) > constants.MaxReviewHistorySize {
+		history = history[len(history)-constants.MaxReviewHistorySize:]
+	}
+
+	session.GroupReviewHistory.Set(s, history)
+	session.GroupReviewHistoryIndex.Set(s, len(history)-1)
 
 	// Log the view action
 	go m.layout.db.Model().Activity().Log(context.Background(), &types.ActivityLog{

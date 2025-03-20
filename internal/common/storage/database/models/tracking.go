@@ -170,6 +170,19 @@ func (r *TrackingModel) GetFlaggedUsers(ctx context.Context, groupID uint64) ([]
 	return tracking.FlaggedUsers, nil
 }
 
+// GetFlaggedUsersCount retrieves the count of flagged users for a specific group.
+func (r *TrackingModel) GetFlaggedUsersCount(ctx context.Context, groupID uint64) (int, error) {
+	var tracking types.GroupMemberTracking
+	err := r.db.NewSelect().Model(&tracking).
+		Column("flagged_users").
+		Where("id = ?", groupID).
+		Scan(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("failed to get flagged users count for group: %w (groupID=%d)", err, groupID)
+	}
+	return len(tracking.FlaggedUsers), nil
+}
+
 // UpdateFlaggedGroups marks the specified groups as flagged in the tracking table.
 func (r *TrackingModel) UpdateFlaggedGroups(ctx context.Context, groupIDs []uint64) error {
 	_, err := r.db.NewUpdate().Model((*types.GroupMemberTracking)(nil)).

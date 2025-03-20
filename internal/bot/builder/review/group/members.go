@@ -18,9 +18,9 @@ import (
 // MembersBuilder creates the visual layout for viewing a group's flagged members.
 type MembersBuilder struct {
 	group        *types.ReviewGroup
-	pageMembers  []uint64
-	members      map[uint64]*types.ReviewUser
 	presences    map[uint64]*apiTypes.UserPresenceResponse
+	members      map[uint64]*types.ReviewUser
+	memberIDs    []uint64
 	start        int
 	page         int
 	total        int
@@ -35,9 +35,9 @@ func NewMembersBuilder(s *session.Session) *MembersBuilder {
 	trainingMode := session.UserReviewMode.Get(s) == enum.ReviewModeTraining
 	return &MembersBuilder{
 		group:        session.GroupTarget.Get(s),
-		pageMembers:  session.GroupPageMembers.Get(s),
-		members:      session.GroupMembers.Get(s),
 		presences:    session.UserPresences.Get(s),
+		members:      session.GroupPageFlaggedMembers.Get(s),
+		memberIDs:    session.GroupPageFlaggedMemberIDs.Get(s),
 		start:        session.PaginationOffset.Get(s),
 		page:         session.PaginationPage.Get(s),
 		total:        session.PaginationTotalItems.Get(s),
@@ -68,7 +68,7 @@ func (b *MembersBuilder) Build() *discord.MessageUpdateBuilder {
 		SetColor(utils.GetMessageEmbedColor(b.privacyMode))
 
 	// Add fields for each member
-	for i, memberID := range b.pageMembers {
+	for i, memberID := range b.memberIDs {
 		fieldName := b.getMemberFieldName(i, memberID)
 		fieldValue := b.getMemberFieldValue(memberID)
 		embed.AddField(fieldName, fieldValue, true)
@@ -135,7 +135,12 @@ func (b *MembersBuilder) getMemberFieldName(index int, memberID uint64) string {
 // getMemberFieldValue creates the field value for a member entry.
 func (b *MembersBuilder) getMemberFieldValue(memberID uint64) string {
 	var info strings.Builder
-	member := b.members[memberID]
+
+	// Check if member exists
+	member, ok := b.members[memberID]
+	if !ok {
+		return "Data not found"
+	}
 
 	// Add member name (with link in standard mode)
 	name := utils.CensorString(member.Name, b.privacyMode)
@@ -153,7 +158,7 @@ func (b *MembersBuilder) getMemberFieldValue(memberID uint64) string {
 	if presence, ok := b.presences[memberID]; ok {
 		if presence.UserPresenceType != apiTypes.Offline {
 			info.WriteString("\n" + presence.LastLocation)
-		} else {
+		} else if presence.LastOnline != nil {
 			info.WriteString(fmt.Sprintf("\nLast Online: <t:%d:R>", presence.LastOnline.Unix()))
 		}
 	}

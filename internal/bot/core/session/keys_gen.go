@@ -93,9 +93,17 @@ func main() {
 		// Group related keys
 		{Name: "GroupTarget", Type: "*types.ReviewGroup", Doc: "GroupTarget stores the currently selected group", Persist: true},
 		{Name: "GroupInfo", Type: "*apiTypes.GroupResponse", Doc: "GroupInfo stores additional group information", Persist: true},
-		{Name: "GroupMemberIDs", Type: "[]uint64", Doc: "GroupMemberIDs stores member IDs for the current group", Persist: false},
-		{Name: "GroupMembers", Type: "map[uint64]*types.ReviewUser", Doc: "GroupMembers stores member details for the current group", Persist: false},
-		{Name: "GroupPageMembers", Type: "[]uint64", Doc: "GroupPageMembers stores the current page of group members", Persist: false},
+		{Name: "GroupFlaggedMembersCount", Type: "int", Doc: "GroupFlaggedMembersCount stores the total number of flagged members in the current group", Persist: true},
+		{Name: "GroupPageFlaggedMembers", Type: "map[uint64]*types.ReviewUser", Doc: "GroupPageFlaggedMembers stores flagged member details for the current page", Persist: false},
+		{Name: "GroupPageFlaggedMemberIDs", Type: "[]uint64", Doc: "GroupPageFlaggedMemberIDs stores flagged member IDs for the current page", Persist: false},
+
+		// User review history tracking
+		{Name: "UserReviewHistory", Type: "[]uint64", Doc: "UserReviewHistory stores IDs of previously reviewed users", Persist: true},
+		{Name: "UserReviewHistoryIndex", Type: "int", Doc: "UserReviewHistoryIndex stores the current position in the review history", Persist: true},
+
+		// Group review history tracking
+		{Name: "GroupReviewHistory", Type: "[]uint64", Doc: "GroupReviewHistory stores IDs of previously reviewed groups", Persist: true},
+		{Name: "GroupReviewHistoryIndex", Type: "int", Doc: "GroupReviewHistoryIndex stores the current position in the review history", Persist: true},
 
 		// Review related keys
 		{Name: "ReasonsChanged", Type: "bool", Doc: "ReasonsChanged indicates if reasons have been modified", Persist: true},

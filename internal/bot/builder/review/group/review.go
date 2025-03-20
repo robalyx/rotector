@@ -27,9 +27,11 @@ type ReviewBuilder struct {
 	groupInfo      *apiTypes.GroupResponse
 	logs           []*types.ActivityLog
 	logsHasMore    bool
-	memberIDs      []uint64
+	flaggedCount   int
 	reviewMode     enum.ReviewMode
 	defaultSort    enum.ReviewSortBy
+	reviewHistory  []uint64
+	historyIndex   int
 	reasonsChanged bool
 	isReviewer     bool
 	privacyMode    bool
@@ -46,9 +48,11 @@ func NewReviewBuilder(s *session.Session, db database.Client) *ReviewBuilder {
 		groupInfo:      session.GroupInfo.Get(s),
 		logs:           session.ReviewLogs.Get(s),
 		logsHasMore:    session.ReviewLogsHasMore.Get(s),
-		memberIDs:      session.GroupMemberIDs.Get(s),
+		flaggedCount:   session.GroupFlaggedMembersCount.Get(s),
 		reviewMode:     session.UserReviewMode.Get(s),
 		defaultSort:    session.UserGroupDefaultSort.Get(s),
+		reviewHistory:  session.GroupReviewHistory.Get(s),
+		historyIndex:   session.GroupReviewHistoryIndex.Get(s),
 		reasonsChanged: session.ReasonsChanged.Get(s),
 		isReviewer:     s.BotSettings().IsReviewer(userID),
 		privacyMode:    session.UserReviewMode.Get(s) == enum.ReviewModeTraining || session.UserStreamerMode.Get(s),
@@ -137,7 +141,7 @@ func (b *ReviewBuilder) buildReviewEmbed() *discord.EmbedBuilder {
 	case enum.GroupTypeConfirmed:
 		status = "⚠️ Confirmed"
 	case enum.GroupTypeFlagged:
-		status = "⏳ Pending Review"
+		status = "⏳ Pending"
 	case enum.GroupTypeCleared:
 		status = "✅ Cleared"
 	}
@@ -147,21 +151,23 @@ func (b *ReviewBuilder) buildReviewEmbed() *discord.EmbedBuilder {
 		status += " 🔒 Locked"
 	}
 
+	groupID := strconv.FormatUint(b.group.ID, 10)
+	ownerID := strconv.FormatUint(b.group.Owner.UserID, 10)
+	memberCount := strconv.FormatUint(b.groupInfo.MemberCount, 10)
+	flaggedCount := strconv.Itoa(b.flaggedCount)
 	lastUpdated := fmt.Sprintf("<t:%d:R>", b.group.LastUpdated.Unix())
 	confidence := fmt.Sprintf("%.2f%%", b.group.Confidence*100)
-	memberCount := strconv.FormatUint(b.groupInfo.MemberCount, 10)
-	flaggedMembers := strconv.Itoa(len(b.memberIDs))
 
 	// Censor reason if needed
 	reason := b.getReasonField()
 
 	if b.reviewMode == enum.ReviewModeTraining {
 		// Training mode - show limited information without links
-		embed.AddField("ID", utils.CensorString(strconv.FormatUint(b.group.ID, 10), true), true).
+		embed.AddField("ID", utils.CensorString(groupID, true), true).
 			AddField("Name", utils.CensorString(b.group.Name, true), true).
-			AddField("Owner", utils.CensorString(strconv.FormatUint(b.group.Owner.UserID, 10), true), true).
+			AddField("Owner", utils.CensorString(ownerID, true), true).
 			AddField("Members", memberCount, true).
-			AddField("Flagged Members", flaggedMembers, true).
+			AddField("Flagged Members", flaggedCount, true).
 			AddField("Confidence", confidence, true).
 			AddField("Last Updated", lastUpdated, true).
 			AddField("Reason", reason, false).
@@ -172,17 +178,17 @@ func (b *ReviewBuilder) buildReviewEmbed() *discord.EmbedBuilder {
 		// Standard mode - show all information with links
 		embed.AddField("ID", fmt.Sprintf(
 			"[%s](https://www.roblox.com/groups/%d)",
-			utils.CensorString(strconv.FormatUint(b.group.ID, 10), b.privacyMode),
+			utils.CensorString(groupID, b.privacyMode),
 			b.group.ID,
 		), true).
 			AddField("Name", utils.CensorString(b.group.Name, b.privacyMode), true).
 			AddField("Owner", fmt.Sprintf(
 				"[%s](https://www.roblox.com/users/%d/profile)",
-				utils.CensorString(strconv.FormatUint(b.group.Owner.UserID, 10), b.privacyMode),
+				utils.CensorString(ownerID, b.privacyMode),
 				b.group.Owner.UserID,
 			), true).
 			AddField("Members", memberCount, true).
-			AddField("Flagged Members", flaggedMembers, true).
+			AddField("Flagged Members", flaggedCount, true).
 			AddField("Confidence", confidence, true).
 			AddField("Last Updated", lastUpdated, true).
 			AddField("Reason", reason, false).
@@ -200,8 +206,18 @@ func (b *ReviewBuilder) buildReviewEmbed() *discord.EmbedBuilder {
 		embed.AddField("Cleared At", fmt.Sprintf("<t:%d:R>", b.group.ClearedAt.Unix()), true)
 	}
 
-	// Add UUID and status to footer
-	embed.SetFooter(fmt.Sprintf("%s • UUID: %s", status, b.group.UUID.String()), "")
+	// Build footer with status and history position
+	var footerText string
+	if len(b.reviewHistory) > 0 {
+		footerText = fmt.Sprintf("%s • UUID: %s • History: %d/%d",
+			status,
+			b.group.UUID.String(),
+			b.historyIndex+1,
+			len(b.reviewHistory))
+	} else {
+		footerText = fmt.Sprintf("%s • UUID: %s", status, b.group.UUID.String())
+	}
+	embed.SetFooter(footerText, "")
 
 	return embed
 }
@@ -332,12 +348,27 @@ func (b *ReviewBuilder) buildComponents() []discord.ContainerComponent {
 		),
 	)
 
-	// Add navigation/action buttons
+	// Create navigation buttons
+	prevButton := discord.NewSecondaryButton("⬅️ Prev", constants.PrevReviewButtonCustomID)
+	if b.historyIndex <= 0 || len(b.reviewHistory) == 0 {
+		prevButton = prevButton.WithDisabled(true)
+	}
+
+	var nextButtonLabel string
+	if b.historyIndex >= len(b.reviewHistory)-1 {
+		nextButtonLabel = "Skip ➡️"
+	} else {
+		nextButtonLabel = "Next ➡️"
+	}
+	nextButton := discord.NewSecondaryButton(nextButtonLabel, constants.NextReviewButtonCustomID)
+
+	// First action row with navigation and review buttons
 	components = append(components, discord.NewActionRow(
 		discord.NewSecondaryButton("◀️", constants.BackButtonCustomID),
+		prevButton,
+		nextButton,
 		discord.NewDangerButton(b.getConfirmButtonLabel(), constants.ConfirmButtonCustomID),
 		discord.NewSuccessButton(b.getClearButtonLabel(), constants.ClearButtonCustomID),
-		discord.NewSecondaryButton("Skip", constants.SkipButtonCustomID),
 	))
 
 	return components

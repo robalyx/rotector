@@ -144,11 +144,17 @@ By clicking Accept, you:
 
 // Common Review Menu.
 const (
-	VoteConsensusThreshold = 0.75 // 75% votes in one direction blocks the opposite action
-	MinimumVotesRequired   = 10   // Minimum number of votes needed before consensus is enforced
+	// VoteConsensusThreshold is the threshold for a vote to be considered a consensus.
+	VoteConsensusThreshold = 0.75
 
-	// ReviewHistoryLimit caps the number of review history entries shown.
-	ReviewHistoryLimit = 5
+	// MinimumVotesRequired is the minimum number of votes required before a consensus is enforced.
+	MinimumVotesRequired = 10
+
+	// ReviewLogsLimit caps the number of review history entries shown.
+	ReviewLogsLimit = 5
+
+	// MaxReviewHistorySize caps the number of review history entries shown.
+	MaxReviewHistorySize = 10
 
 	// ReviewFriendsLimit caps the number of friends shown in the main review embed
 	// to prevent the embed from becoming too long.
@@ -177,9 +183,10 @@ const (
 	RecheckReasonModalCustomID = "recheck_reason_modal"
 	RecheckReasonInputCustomID = "recheck_reason"
 
-	ConfirmButtonCustomID = "confirm"
-	ClearButtonCustomID   = "clear"
-	SkipButtonCustomID    = "skip"
+	PrevReviewButtonCustomID = "prev_review"
+	NextReviewButtonCustomID = "next_review"
+	ConfirmButtonCustomID    = "confirm"
+	ClearButtonCustomID      = "clear"
 )
 
 // User Review Menu.

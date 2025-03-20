@@ -68,7 +68,7 @@ type ReviewUser struct {
 	VerifiedAt time.Time     `json:"verifiedAt"`
 	ClearedAt  time.Time     `json:"clearedAt"`
 	Status     enum.UserType `json:"status"`
-	Reputation *Reputation   `json:"reputation"`
+	Reputation Reputation    `json:"reputation"`
 }
 
 // UserField represents available fields as bit flags.
@@ -145,7 +145,7 @@ const (
 )
 
 // userFieldToColumns maps UserField bits to their corresponding database columns.
-var userFieldToColumns = map[UserField][]string{ //nolint:gochecknoglobals // -
+var userFieldToColumns = map[UserField][]string{
 	UserFieldID:                  {"id"},
 	UserFieldUUID:                {"uuid"},
 	UserFieldName:                {"name"},

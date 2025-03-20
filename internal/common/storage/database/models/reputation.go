@@ -111,7 +111,7 @@ func (r *ReputationModel) UpdateGroupVotes(ctx context.Context, groupID uint64, 
 }
 
 // GetUserReputation retrieves the reputation for a user.
-func (r *ReputationModel) GetUserReputation(ctx context.Context, userID uint64) (*types.Reputation, error) {
+func (r *ReputationModel) GetUserReputation(ctx context.Context, userID uint64) (types.Reputation, error) {
 	var reputation types.UserReputation
 	err := r.db.NewSelect().
 		Model(&reputation).
@@ -119,15 +119,15 @@ func (r *ReputationModel) GetUserReputation(ctx context.Context, userID uint64) 
 		Scan(ctx)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return &types.Reputation{}, nil
+			return types.Reputation{}, nil
 		}
-		return nil, fmt.Errorf("failed to get user reputation: %w", err)
+		return types.Reputation{}, fmt.Errorf("failed to get user reputation: %w", err)
 	}
-	return &reputation.Reputation, nil
+	return reputation.Reputation, nil
 }
 
 // GetGroupReputation retrieves the reputation for a group.
-func (r *ReputationModel) GetGroupReputation(ctx context.Context, groupID uint64) (*types.Reputation, error) {
+func (r *ReputationModel) GetGroupReputation(ctx context.Context, groupID uint64) (types.Reputation, error) {
 	var reputation types.GroupReputation
 	err := r.db.NewSelect().
 		Model(&reputation).
@@ -135,9 +135,9 @@ func (r *ReputationModel) GetGroupReputation(ctx context.Context, groupID uint64
 		Scan(ctx)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return &types.Reputation{}, nil
+			return types.Reputation{}, nil
 		}
-		return nil, fmt.Errorf("failed to get group reputation: %w", err)
+		return types.Reputation{}, fmt.Errorf("failed to get group reputation: %w", err)
 	}
-	return &reputation.Reputation, nil
+	return reputation.Reputation, nil
 }

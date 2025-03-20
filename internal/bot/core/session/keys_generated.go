@@ -78,12 +78,20 @@ var (
 	GroupTarget = NewKey[*types.ReviewGroup]("GroupTarget", true)
 	// GroupInfo stores additional group information
 	GroupInfo = NewKey[*apiTypes.GroupResponse]("GroupInfo", true)
-	// GroupMemberIDs stores member IDs for the current group
-	GroupMemberIDs = NewKey[[]uint64]("GroupMemberIDs", false)
-	// GroupMembers stores member details for the current group
-	GroupMembers = NewKey[map[uint64]*types.ReviewUser]("GroupMembers", false)
-	// GroupPageMembers stores the current page of group members
-	GroupPageMembers = NewKey[[]uint64]("GroupPageMembers", false)
+	// GroupFlaggedMembersCount stores the total number of flagged members in the current group
+	GroupFlaggedMembersCount = NewKey[int]("GroupFlaggedMembersCount", true)
+	// GroupPageFlaggedMembers stores flagged member details for the current page
+	GroupPageFlaggedMembers = NewKey[map[uint64]*types.ReviewUser]("GroupPageFlaggedMembers", false)
+	// GroupPageFlaggedMemberIDs stores flagged member IDs for the current page
+	GroupPageFlaggedMemberIDs = NewKey[[]uint64]("GroupPageFlaggedMemberIDs", false)
+	// UserReviewHistory stores IDs of previously reviewed users
+	UserReviewHistory = NewKey[[]uint64]("UserReviewHistory", true)
+	// UserReviewHistoryIndex stores the current position in the review history
+	UserReviewHistoryIndex = NewKey[int]("UserReviewHistoryIndex", true)
+	// GroupReviewHistory stores IDs of previously reviewed groups
+	GroupReviewHistory = NewKey[[]uint64]("GroupReviewHistory", true)
+	// GroupReviewHistoryIndex stores the current position in the review history
+	GroupReviewHistoryIndex = NewKey[int]("GroupReviewHistoryIndex", true)
 	// ReasonsChanged indicates if reasons have been modified
 	ReasonsChanged = NewKey[bool]("ReasonsChanged", true)
 	// OriginalUserReasons stores the initial user reasons
