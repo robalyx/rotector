@@ -103,7 +103,7 @@ func (m *FriendsMenu) handlePageNavigation(
 
 		// Calculate max page and validate navigation action
 		maxPage := (len(user.Friends) - 1) / constants.FriendsPerPage
-		page := action.ParsePageAction(s, action, maxPage)
+		page := action.ParsePageAction(s, maxPage)
 
 		session.PaginationPage.Set(s, page)
 		r.Reload(event, s, "")

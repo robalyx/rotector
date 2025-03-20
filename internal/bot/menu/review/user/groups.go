@@ -128,7 +128,7 @@ func (m *GroupsMenu) handlePageNavigation(
 
 		// Calculate max page and validate navigation action
 		maxPage := (len(user.Groups) - 1) / constants.GroupsPerPage
-		page := action.ParsePageAction(s, action, maxPage)
+		page := action.ParsePageAction(s, maxPage)
 
 		session.PaginationPage.Set(s, page)
 		r.Reload(event, s, "")

@@ -183,7 +183,7 @@ func (m *TicketMenu) handleButton(
 		messages := session.AppealMessages.Get(s)
 
 		maxPage := (len(messages) - 1) / constants.AppealMessagesPerPage
-		page := action.ParsePageAction(s, action, maxPage)
+		page := action.ParsePageAction(s, maxPage)
 
 		session.PaginationPage.Set(s, page)
 		r.Cancel(event, s, "")

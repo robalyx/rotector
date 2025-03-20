@@ -21,7 +21,7 @@ import (
 )
 
 // Tips for users shown in the welcome embed footer.
-var tips = []string{ //nolint:gochecknoglobals // -
+var tips = []string{
 	"Check out the leaderboard to see our top reviewers",
 	"Track your performance through your vote statistics",
 	"Use streamer mode to hide sensitive information",

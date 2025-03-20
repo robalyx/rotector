@@ -67,7 +67,7 @@ func (m *CaesarMenu) handleButton(
 	case session.ViewerFirstPage, session.ViewerPrevPage, session.ViewerNextPage, session.ViewerLastPage:
 		// Calculate max page
 		totalPages := session.PaginationTotalPages.Get(s)
-		page := action.ParsePageAction(s, action, totalPages-1)
+		page := action.ParsePageAction(s, totalPages-1)
 
 		session.PaginationPage.Set(s, page)
 		r.Reload(event, s, "")

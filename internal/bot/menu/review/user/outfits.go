@@ -86,7 +86,7 @@ func (m *OutfitsMenu) handlePageNavigation(
 
 		// Calculate max page and validate navigation action
 		maxPage := (len(user.Outfits) - 1) / constants.OutfitsPerPage
-		page := action.ParsePageAction(s, action, maxPage)
+		page := action.ParsePageAction(s, maxPage)
 
 		session.PaginationPage.Set(s, page)
 		r.Reload(event, s, "")

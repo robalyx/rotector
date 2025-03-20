@@ -55,7 +55,7 @@ func (m *Menu) handleButton(
 		history := session.ChatHistory.Get(s)
 
 		maxPage := (len(history.Messages)/2 - 1) / constants.ChatMessagesPerPage
-		page := action.ParsePageAction(s, action, maxPage)
+		page := action.ParsePageAction(s, maxPage)
 
 		session.PaginationPage.Set(s, page)
 		r.Reload(event, s, "")

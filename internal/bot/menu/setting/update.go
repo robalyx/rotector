@@ -185,7 +185,7 @@ func (m *UpdateMenu) handlePageChange(
 	totalPages := session.PaginationTotalPages.Get(s)
 
 	// Handle navigation action
-	newPage := action.ParsePageAction(s, action, totalPages-1)
+	newPage := action.ParsePageAction(s, totalPages-1)
 
 	// Update session state
 	session.PaginationPage.Set(s, newPage)

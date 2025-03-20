@@ -18,10 +18,10 @@ const (
 // ParsePageAction updates the session's pagination page based on the requested action.
 // Returns the new page number and true if the action was valid, or 0 and false if invalid.
 // The maxPage parameter prevents navigation beyond the available pages.
-func (h *ViewerAction) ParsePageAction(s *Session, action ViewerAction, maxPage int) int {
+func (h ViewerAction) ParsePageAction(s *Session, maxPage int) int {
 	var page int
 
-	switch action {
+	switch h {
 	case ViewerFirstPage:
 		PaginationPage.Set(s, 0)
 		page = 0

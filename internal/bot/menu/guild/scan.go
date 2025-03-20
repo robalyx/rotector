@@ -252,7 +252,7 @@ func (m *ScanMenu) handleButton(
 		maxPage := max((total+constants.GuildScanUsersPerPage-1)/constants.GuildScanUsersPerPage - 1)
 
 		action := session.ViewerAction(customID)
-		action.ParsePageAction(s, action, maxPage)
+		action.ParsePageAction(s, maxPage)
 		r.Reload(event, s, "")
 		return
 	}
