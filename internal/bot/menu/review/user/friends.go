@@ -6,14 +6,12 @@ import (
 	"strconv"
 
 	"github.com/disgoorg/disgo/discord"
-	"github.com/disgoorg/disgo/events"
 	"github.com/jaxron/roapi.go/pkg/api/resources/thumbnails"
 	apiTypes "github.com/jaxron/roapi.go/pkg/api/types"
 	builder "github.com/robalyx/rotector/internal/bot/builder/review/user"
 	"github.com/robalyx/rotector/internal/bot/constants"
-	"github.com/robalyx/rotector/internal/bot/core/pagination"
+	"github.com/robalyx/rotector/internal/bot/core/interaction"
 	"github.com/robalyx/rotector/internal/bot/core/session"
-	"github.com/robalyx/rotector/internal/bot/interfaces"
 	"github.com/robalyx/rotector/internal/common/storage/database/types"
 	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
 	"go.uber.org/zap"
@@ -22,13 +20,13 @@ import (
 // FriendsMenu handles the display and interaction logic for viewing a user's friends.
 type FriendsMenu struct {
 	layout *Layout
-	page   *pagination.Page
+	page   *interaction.Page
 }
 
 // NewFriendsMenu creates a new friends menu.
 func NewFriendsMenu(layout *Layout) *FriendsMenu {
 	m := &FriendsMenu{layout: layout}
-	m.page = &pagination.Page{
+	m.page = &interaction.Page{
 		Name: constants.UserFriendsPageName,
 		Message: func(s *session.Session) *discord.MessageUpdateBuilder {
 			return builder.NewFriendsBuilder(s).Build()
@@ -40,12 +38,12 @@ func NewFriendsMenu(layout *Layout) *FriendsMenu {
 }
 
 // Show prepares and displays the friends interface.
-func (m *FriendsMenu) Show(event interfaces.CommonEvent, s *session.Session, r *pagination.Respond) {
+func (m *FriendsMenu) Show(ctx *interaction.Context, s *session.Session) {
 	user := session.UserTarget.Get(s)
 
 	// Return to review menu if user has no friends
 	if len(user.Friends) == 0 {
-		r.Cancel(event, s, "No friends found for this user.")
+		ctx.Error("No friends found for this user.")
 		return
 	}
 
@@ -65,7 +63,7 @@ func (m *FriendsMenu) Show(event interfaces.CommonEvent, s *session.Session, r *
 	for i, friend := range pageFriends {
 		friendIDs[i] = friend.ID
 	}
-	presenceChan := m.layout.presenceFetcher.FetchPresencesConcurrently(context.Background(), friendIDs)
+	presenceChan := m.layout.presenceFetcher.FetchPresencesConcurrently(ctx.Context(), friendIDs)
 
 	// Store initial data in session
 	session.UserFriends.Set(s, pageFriends)
@@ -74,11 +72,11 @@ func (m *FriendsMenu) Show(event interfaces.CommonEvent, s *session.Session, r *
 	session.PaginationTotalItems.Set(s, len(sortedFriends))
 
 	// Start streaming images
-	m.layout.imageStreamer.Stream(pagination.StreamRequest{
-		Event:    event,
+	m.layout.imageStreamer.Stream(interaction.StreamRequest{
+		Event:    ctx.Event(),
 		Session:  s,
 		Page:     m.page,
-		URLFunc:  func() []string { return m.fetchFriendThumbnails(pageFriends) },
+		URLFunc:  func() []string { return m.fetchFriendThumbnails(ctx.Context(), pageFriends) },
 		Columns:  constants.FriendsGridColumns,
 		Rows:     constants.FriendsGridRows,
 		MaxItems: constants.FriendsPerPage,
@@ -93,9 +91,7 @@ func (m *FriendsMenu) Show(event interfaces.CommonEvent, s *session.Session, r *
 }
 
 // handlePageNavigation processes navigation button clicks.
-func (m *FriendsMenu) handlePageNavigation(
-	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, customID string,
-) {
+func (m *FriendsMenu) handlePageNavigation(ctx *interaction.Context, s *session.Session, customID string) {
 	action := session.ViewerAction(customID)
 	switch action {
 	case session.ViewerFirstPage, session.ViewerPrevPage, session.ViewerNextPage, session.ViewerLastPage:
@@ -106,16 +102,16 @@ func (m *FriendsMenu) handlePageNavigation(
 		page := action.ParsePageAction(s, maxPage)
 
 		session.PaginationPage.Set(s, page)
-		r.Reload(event, s, "")
+		ctx.Reload("")
 		return
 	}
 
 	switch customID {
 	case constants.BackButtonCustomID:
-		r.NavigateBack(event, s, "")
+		ctx.NavigateBack("")
 	default:
 		m.layout.logger.Warn("Invalid friends viewer action", zap.String("action", string(action)))
-		r.Error(event, "Invalid interaction.")
+		ctx.Error("Invalid interaction.")
 	}
 }
 
@@ -156,7 +152,7 @@ func (m *FriendsMenu) sortFriendsByStatus(
 }
 
 // fetchFriendThumbnails fetches thumbnails for a slice of friends.
-func (m *FriendsMenu) fetchFriendThumbnails(friends []*apiTypes.ExtendedFriend) []string {
+func (m *FriendsMenu) fetchFriendThumbnails(ctx context.Context, friends []*apiTypes.ExtendedFriend) []string {
 	// Create batch request for friend avatars
 	requests := thumbnails.NewBatchThumbnailsBuilder()
 	for _, friend := range friends {
@@ -170,7 +166,7 @@ func (m *FriendsMenu) fetchFriendThumbnails(friends []*apiTypes.ExtendedFriend) 
 	}
 
 	// Process thumbnails
-	thumbnailMap := m.layout.thumbnailFetcher.ProcessBatchThumbnails(context.Background(), requests)
+	thumbnailMap := m.layout.thumbnailFetcher.ProcessBatchThumbnails(ctx, requests)
 
 	// Convert map to ordered slice of URLs
 	thumbnailURLs := make([]string, len(friends))

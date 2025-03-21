@@ -3,6 +3,7 @@ package ai
 import (
 	"context"
 	"fmt"
+	"slices"
 	"sync"
 	"time"
 
@@ -14,6 +15,7 @@ import (
 	"github.com/tdewolff/minify/v2"
 	"github.com/tdewolff/minify/v2/json"
 	"go.uber.org/zap"
+
 	"golang.org/x/sync/semaphore"
 )
 
@@ -415,10 +417,8 @@ func (a *MessageAnalyzer) validateMessageOwnership(
 
 		// If no valid messages remain, remove this user from the results
 		if len(user.Messages) == 0 {
-			// Remove this user by replacing with the last one and shrinking the slice
-			flaggedResults.Users[i] = flaggedResults.Users[len(flaggedResults.Users)-1]
-			flaggedResults.Users = flaggedResults.Users[:len(flaggedResults.Users)-1]
-			i-- // Adjust index to check the swapped element
+			flaggedResults.Users = slices.Delete(flaggedResults.Users, i, i+1)
+			i-- // Adjust index since we removed an element
 		}
 	}
 }

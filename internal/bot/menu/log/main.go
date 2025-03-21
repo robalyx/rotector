@@ -1,17 +1,14 @@
 package log
 
 import (
-	"context"
 	"fmt"
 	"strconv"
 
 	"github.com/disgoorg/disgo/discord"
-	"github.com/disgoorg/disgo/events"
 	builder "github.com/robalyx/rotector/internal/bot/builder/log"
 	"github.com/robalyx/rotector/internal/bot/constants"
-	"github.com/robalyx/rotector/internal/bot/core/pagination"
+	"github.com/robalyx/rotector/internal/bot/core/interaction"
 	"github.com/robalyx/rotector/internal/bot/core/session"
-	"github.com/robalyx/rotector/internal/bot/interfaces"
 	"github.com/robalyx/rotector/internal/bot/utils"
 	"github.com/robalyx/rotector/internal/common/storage/database/types"
 	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
@@ -21,13 +18,13 @@ import (
 // Menu handles the display and interaction logic for viewing activity logs.
 type Menu struct {
 	layout *Layout
-	page   *pagination.Page
+	page   *interaction.Page
 }
 
 // NewMenu creates a new log menu.
 func NewMenu(l *Layout) *Menu {
 	m := &Menu{layout: l}
-	m.page = &pagination.Page{
+	m.page = &interaction.Page{
 		Name: constants.LogPageName,
 		Message: func(s *session.Session) *discord.MessageUpdateBuilder {
 			return builder.NewBuilder(s).Build()
@@ -41,7 +38,7 @@ func NewMenu(l *Layout) *Menu {
 }
 
 // Show prepares and displays the logs interface.
-func (m *Menu) Show(event interfaces.CommonEvent, s *session.Session, r *pagination.Respond) {
+func (m *Menu) Show(ctx *interaction.Context, s *session.Session) {
 	// Get query parameters from session
 	activityFilter := types.ActivityFilter{
 		GuildID:      session.LogFilterGuildID.Get(s),
@@ -59,14 +56,14 @@ func (m *Menu) Show(event interfaces.CommonEvent, s *session.Session, r *paginat
 
 	// Fetch filtered logs from database
 	logs, nextCursor, err := m.layout.db.Model().Activity().GetLogs(
-		context.Background(),
+		ctx.Context(),
 		activityFilter,
 		cursor,
 		constants.LogsPerPage,
 	)
 	if err != nil {
 		m.layout.logger.Error("Failed to get logs", zap.Error(err))
-		r.Error(event, "Failed to retrieve log data. Please try again.")
+		ctx.Error("Failed to retrieve log data. Please try again.")
 		return
 	}
 
@@ -82,24 +79,22 @@ func (m *Menu) Show(event interfaces.CommonEvent, s *session.Session, r *paginat
 }
 
 // handleSelectMenu processes select menu interactions.
-func (m *Menu) handleSelectMenu(
-	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, customID, option string,
-) {
+func (m *Menu) handleSelectMenu(ctx *interaction.Context, s *session.Session, customID, option string) {
 	switch customID {
 	case constants.ActionSelectMenuCustomID:
 		switch option {
 		case constants.LogsQueryGuildIDOption:
-			m.showQueryModal(event, s, r, option, "Guild ID", "ID", "Enter the Guild ID to query logs")
+			m.showQueryModal(ctx, option, "Guild ID", "ID", "Enter the Guild ID to query logs")
 		case constants.LogsQueryDiscordIDOption:
-			m.showQueryModal(event, s, r, option, "Discord ID", "ID", "Enter the Discord ID to query logs")
+			m.showQueryModal(ctx, option, "Discord ID", "ID", "Enter the Discord ID to query logs")
 		case constants.LogsQueryUserIDOption:
-			m.showQueryModal(event, s, r, option, "User ID", "ID", "Enter the User ID to query logs")
+			m.showQueryModal(ctx, option, "User ID", "ID", "Enter the User ID to query logs")
 		case constants.LogsQueryGroupIDOption:
-			m.showQueryModal(event, s, r, option, "Group ID", "ID", "Enter the Group ID to query logs")
+			m.showQueryModal(ctx, option, "Group ID", "ID", "Enter the Group ID to query logs")
 		case constants.LogsQueryReviewerIDOption:
-			m.showQueryModal(event, s, r, option, "Reviewer ID", "ID", "Enter the Reviewer ID to query logs")
+			m.showQueryModal(ctx, option, "Reviewer ID", "ID", "Enter the Reviewer ID to query logs")
 		case constants.LogsQueryDateRangeOption:
-			m.showQueryModal(event, s, r, constants.LogsQueryDateRangeOption, "Date Range", "Date Range", "YYYY-MM-DD to YYYY-MM-DD")
+			m.showQueryModal(ctx, constants.LogsQueryDateRangeOption, "Date Range", "Date Range", "YYYY-MM-DD to YYYY-MM-DD")
 		}
 
 	case constants.LogsQueryActivityTypeFilterCustomID:
@@ -109,7 +104,7 @@ func (m *Menu) handleSelectMenu(
 			constants.LogsGroupActivityCategoryOption,
 			constants.LogsOtherActivityCategoryOption:
 			session.LogFilterActivityCategory.Set(s, option)
-			r.Reload(event, s, "")
+			ctx.Reload("")
 			return
 		}
 
@@ -117,57 +112,52 @@ func (m *Menu) handleSelectMenu(
 		optionInt, err := strconv.Atoi(option)
 		if err != nil {
 			m.layout.logger.Error("Failed to convert activity type option to int", zap.Error(err))
-			r.Error(event, "Invalid activity type option.")
+			ctx.Error("Invalid activity type option.")
 			return
 		}
 
 		session.LogFilterActivityType.Set(s, enum.ActivityType(optionInt))
-		r.Reload(event, s, "")
+		ctx.Reload("")
 	}
 }
 
 // handleButton processes button interactions.
-func (m *Menu) handleButton(
-	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, customID string,
-) {
+func (m *Menu) handleButton(ctx *interaction.Context, s *session.Session, customID string) {
 	switch customID {
 	case constants.BackButtonCustomID:
-		r.NavigateBack(event, s, "")
+		ctx.NavigateBack("")
 	case constants.RefreshButtonCustomID:
 		ResetLogs(s)
-		r.Reload(event, s, "")
+		ctx.Reload("")
 	case constants.ClearFiltersButtonCustomID:
 		ResetFilters(s)
-		r.Reload(event, s, "")
+		ctx.Reload("")
 	case string(session.ViewerFirstPage),
 		string(session.ViewerPrevPage),
 		string(session.ViewerNextPage),
 		string(session.ViewerLastPage):
-		m.handlePagination(event, s, r, session.ViewerAction(customID))
+		m.handlePagination(ctx, s, session.ViewerAction(customID))
 	}
 }
 
 // handleModal processes modal submissions by routing them to the appropriate
 // handler based on the modal's custom ID.
-func (m *Menu) handleModal(event *events.ModalSubmitInteractionCreate, s *session.Session, r *pagination.Respond) {
-	customID := event.Data.CustomID
+func (m *Menu) handleModal(ctx *interaction.Context, s *session.Session) {
+	customID := ctx.Event().CustomID()
 	switch customID {
 	case constants.LogsQueryGuildIDOption,
 		constants.LogsQueryDiscordIDOption,
 		constants.LogsQueryUserIDOption,
 		constants.LogsQueryGroupIDOption,
 		constants.LogsQueryReviewerIDOption:
-		m.handleIDModalSubmit(event, s, r, customID)
+		m.handleIDModalSubmit(ctx, s, customID)
 	case constants.LogsQueryDateRangeOption:
-		m.handleDateRangeModalSubmit(event, s, r)
+		m.handleDateRangeModalSubmit(ctx, s)
 	}
 }
 
 // showQueryModal creates and displays a modal for entering query parameters.
-func (m *Menu) showQueryModal(
-	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond,
-	option, title, label, placeholder string,
-) {
+func (m *Menu) showQueryModal(ctx *interaction.Context, option, title, label, placeholder string) {
 	modal := discord.NewModalCreateBuilder().
 		SetCustomID(option).
 		SetTitle(title).
@@ -177,17 +167,17 @@ func (m *Menu) showQueryModal(
 				WithRequired(true),
 		)
 
-	r.Modal(event, s, modal)
+	ctx.Modal(modal)
 }
 
 // handleIDModalSubmit processes ID-based query modal submissions.
-func (m *Menu) handleIDModalSubmit(
-	event *events.ModalSubmitInteractionCreate, s *session.Session, r *pagination.Respond, queryType string,
-) {
-	idStr := event.Data.Text(constants.LogsQueryInputCustomID)
+func (m *Menu) handleIDModalSubmit(ctx *interaction.Context, s *session.Session, queryType string) {
+	idStr := ctx.Event().ModalData().Text(constants.LogsQueryInputCustomID)
+
+	// Parse ID from string
 	id, err := strconv.ParseUint(idStr, 10, 64)
 	if err != nil {
-		r.Cancel(event, s, "Invalid ID provided. Please enter a valid numeric ID.")
+		ctx.Error("Invalid ID provided. Please enter a valid numeric ID.")
 		return
 	}
 
@@ -205,30 +195,29 @@ func (m *Menu) handleIDModalSubmit(
 		session.LogFilterReviewerID.Set(s, id)
 	}
 
-	r.Reload(event, s, "")
+	ctx.Reload("")
 }
 
 // handleDateRangeModalSubmit processes date range modal submissions.
-func (m *Menu) handleDateRangeModalSubmit(
-	event *events.ModalSubmitInteractionCreate, s *session.Session, r *pagination.Respond,
-) {
-	dateRangeStr := event.Data.Text(constants.LogsQueryInputCustomID)
+func (m *Menu) handleDateRangeModalSubmit(ctx *interaction.Context, s *session.Session) {
+	dateRangeStr := ctx.Event().ModalData().Text(constants.LogsQueryInputCustomID)
+
+	// Parse date range from string
 	startDate, endDate, err := utils.ParseDateRange(dateRangeStr)
 	if err != nil {
-		r.Cancel(event, s, fmt.Sprintf("Invalid date range: %v", err))
+		ctx.Error(fmt.Sprintf("Invalid date range: %v", err))
 		return
 	}
 
+	// Store date range in session
 	session.LogFilterDateRangeStart.Set(s, startDate)
 	session.LogFilterDateRangeEnd.Set(s, endDate)
 
-	r.Reload(event, s, "")
+	ctx.Reload("")
 }
 
 // handlePagination processes page navigation.
-func (m *Menu) handlePagination(
-	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, action session.ViewerAction,
-) {
+func (m *Menu) handlePagination(ctx *interaction.Context, s *session.Session, action session.ViewerAction) {
 	switch action {
 	case session.ViewerNextPage:
 		if session.PaginationHasNextPage.Get(s) {
@@ -238,7 +227,7 @@ func (m *Menu) handlePagination(
 
 			session.LogCursor.Set(s, nextCursor)
 			session.LogPrevCursors.Set(s, append(prevCursors, cursor))
-			r.Reload(event, s, "")
+			ctx.Reload("")
 		}
 	case session.ViewerPrevPage:
 		prevCursors := session.LogPrevCursors.Get(s)
@@ -247,12 +236,12 @@ func (m *Menu) handlePagination(
 			lastIdx := len(prevCursors) - 1
 			session.LogPrevCursors.Set(s, prevCursors[:lastIdx])
 			session.LogCursor.Set(s, prevCursors[lastIdx])
-			r.Reload(event, s, "")
+			ctx.Reload("")
 		}
 	case session.ViewerFirstPage:
 		session.LogCursor.Set(s, nil)
 		session.LogPrevCursors.Set(s, make([]*types.LogCursor, 0))
-		r.Reload(event, s, "")
+		ctx.Reload("")
 	case session.ViewerLastPage:
 		return
 	}

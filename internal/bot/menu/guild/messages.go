@@ -1,15 +1,11 @@
 package guild
 
 import (
-	"context"
-
 	"github.com/disgoorg/disgo/discord"
-	"github.com/disgoorg/disgo/events"
 	builder "github.com/robalyx/rotector/internal/bot/builder/guild"
 	"github.com/robalyx/rotector/internal/bot/constants"
-	"github.com/robalyx/rotector/internal/bot/core/pagination"
+	"github.com/robalyx/rotector/internal/bot/core/interaction"
 	"github.com/robalyx/rotector/internal/bot/core/session"
-	"github.com/robalyx/rotector/internal/bot/interfaces"
 	"github.com/robalyx/rotector/internal/common/storage/database/types"
 	"go.uber.org/zap"
 )
@@ -17,13 +13,13 @@ import (
 // MessagesMenu handles the display of a user's inappropriate messages in a guild.
 type MessagesMenu struct {
 	layout *Layout
-	page   *pagination.Page
+	page   *interaction.Page
 }
 
 // NewMessagesMenu creates a new messages menu.
 func NewMessagesMenu(layout *Layout) *MessagesMenu {
 	m := &MessagesMenu{layout: layout}
-	m.page = &pagination.Page{
+	m.page = &interaction.Page{
 		Name: constants.GuildMessagesPageName,
 		Message: func(s *session.Session) *discord.MessageUpdateBuilder {
 			return builder.NewMessagesBuilder(s).Build()
@@ -35,7 +31,7 @@ func NewMessagesMenu(layout *Layout) *MessagesMenu {
 }
 
 // Show prepares and displays the message history interface.
-func (m *MessagesMenu) Show(event interfaces.CommonEvent, s *session.Session, r *pagination.Respond) {
+func (m *MessagesMenu) Show(ctx *interaction.Context, s *session.Session) {
 	// Get required IDs and cursor from session
 	discordUserID := session.DiscordUserLookupID.Get(s)
 	guildID := session.DiscordUserMessageGuildID.Get(s)
@@ -43,7 +39,7 @@ func (m *MessagesMenu) Show(event interfaces.CommonEvent, s *session.Session, r 
 
 	// Fetch messages using cursor pagination
 	messages, nextCursor, err := m.layout.db.Model().Message().GetUserMessagesByCursor(
-		context.Background(),
+		ctx.Context(),
 		guildID,
 		discordUserID,
 		cursor,
@@ -54,7 +50,7 @@ func (m *MessagesMenu) Show(event interfaces.CommonEvent, s *session.Session, r 
 			zap.Error(err),
 			zap.Uint64("guild_id", guildID),
 			zap.Uint64("discord_user_id", discordUserID))
-		r.Error(event, "Failed to retrieve message history. Please try again.")
+		ctx.Error("Failed to retrieve message history. Please try again.")
 		return
 	}
 
@@ -70,12 +66,10 @@ func (m *MessagesMenu) Show(event interfaces.CommonEvent, s *session.Session, r 
 }
 
 // handleButton processes button interactions.
-func (m *MessagesMenu) handleButton(
-	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, customID string,
-) {
+func (m *MessagesMenu) handleButton(ctx *interaction.Context, s *session.Session, customID string) {
 	switch customID {
 	case constants.BackButtonCustomID:
-		r.NavigateBack(event, s, "")
+		ctx.NavigateBack("")
 	case constants.RefreshButtonCustomID:
 		// Reset cursors and reload
 		session.DiscordUserMessageCursor.Delete(s)
@@ -83,19 +77,17 @@ func (m *MessagesMenu) handleButton(
 		session.DiscordUserMessagePrevCursors.Delete(s)
 		session.PaginationHasNextPage.Delete(s)
 		session.PaginationHasPrevPage.Delete(s)
-		r.Reload(event, s, "")
+		ctx.Reload("")
 	case string(session.ViewerFirstPage),
 		string(session.ViewerPrevPage),
 		string(session.ViewerNextPage),
 		string(session.ViewerLastPage):
-		m.handlePagination(event, s, r, session.ViewerAction(customID))
+		m.handlePagination(ctx, s, session.ViewerAction(customID))
 	}
 }
 
 // handlePagination processes page navigation for messages.
-func (m *MessagesMenu) handlePagination(
-	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, action session.ViewerAction,
-) {
+func (m *MessagesMenu) handlePagination(ctx *interaction.Context, s *session.Session, action session.ViewerAction) {
 	switch action {
 	case session.ViewerNextPage:
 		if session.PaginationHasNextPage.Get(s) {
@@ -105,7 +97,7 @@ func (m *MessagesMenu) handlePagination(
 
 			session.DiscordUserMessageCursor.Set(s, nextCursor)
 			session.DiscordUserMessagePrevCursors.Set(s, append(prevCursors, cursor))
-			r.Reload(event, s, "")
+			ctx.Reload("")
 		}
 	case session.ViewerPrevPage:
 		prevCursors := session.DiscordUserMessagePrevCursors.Get(s)
@@ -114,12 +106,12 @@ func (m *MessagesMenu) handlePagination(
 			lastIdx := len(prevCursors) - 1
 			session.DiscordUserMessagePrevCursors.Set(s, prevCursors[:lastIdx])
 			session.DiscordUserMessageCursor.Set(s, prevCursors[lastIdx])
-			r.Reload(event, s, "")
+			ctx.Reload("")
 		}
 	case session.ViewerFirstPage:
 		session.DiscordUserMessageCursor.Set(s, nil)
 		session.DiscordUserMessagePrevCursors.Set(s, make([]*types.MessageCursor, 0))
-		r.Reload(event, s, "")
+		ctx.Reload("")
 	case session.ViewerLastPage:
 		// Not currently supported
 		return

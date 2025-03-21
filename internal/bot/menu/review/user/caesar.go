@@ -4,24 +4,22 @@ import (
 	"strings"
 
 	"github.com/disgoorg/disgo/discord"
-	"github.com/disgoorg/disgo/events"
 	builder "github.com/robalyx/rotector/internal/bot/builder/review/user"
 	"github.com/robalyx/rotector/internal/bot/constants"
-	"github.com/robalyx/rotector/internal/bot/core/pagination"
+	"github.com/robalyx/rotector/internal/bot/core/interaction"
 	"github.com/robalyx/rotector/internal/bot/core/session"
-	"github.com/robalyx/rotector/internal/bot/interfaces"
 )
 
 // CaesarMenu handles the display of Caesar cipher translations for a user's description.
 type CaesarMenu struct {
 	layout *Layout
-	page   *pagination.Page
+	page   *interaction.Page
 }
 
 // NewCaesarMenu creates a new Caesar cipher menu.
 func NewCaesarMenu(layout *Layout) *CaesarMenu {
 	m := &CaesarMenu{layout: layout}
-	m.page = &pagination.Page{
+	m.page = &interaction.Page{
 		Name: constants.UserCaesarPageName,
 		Message: func(s *session.Session) *discord.MessageUpdateBuilder {
 			return builder.NewCaesarBuilder(s, m.layout.translator).Build()
@@ -33,10 +31,10 @@ func NewCaesarMenu(layout *Layout) *CaesarMenu {
 }
 
 // Show displays the Caesar cipher analysis interface.
-func (m *CaesarMenu) Show(event interfaces.CommonEvent, s *session.Session, r *pagination.Respond) {
+func (m *CaesarMenu) Show(ctx *interaction.Context, s *session.Session) {
 	user := session.UserTarget.Get(s)
 	if strings.TrimSpace(user.Description) == "" {
-		r.Cancel(event, s, "No description available for analysis.")
+		ctx.Error("No description available for analysis.")
 		return
 	}
 
@@ -59,9 +57,7 @@ func (m *CaesarMenu) Show(event interfaces.CommonEvent, s *session.Session, r *p
 }
 
 // handleButton processes button interactions.
-func (m *CaesarMenu) handleButton(
-	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, customID string,
-) {
+func (m *CaesarMenu) handleButton(ctx *interaction.Context, s *session.Session, customID string) {
 	action := session.ViewerAction(customID)
 	switch action {
 	case session.ViewerFirstPage, session.ViewerPrevPage, session.ViewerNextPage, session.ViewerLastPage:
@@ -70,12 +66,12 @@ func (m *CaesarMenu) handleButton(
 		page := action.ParsePageAction(s, totalPages-1)
 
 		session.PaginationPage.Set(s, page)
-		r.Reload(event, s, "")
+		ctx.Reload("")
 		return
 	}
 
 	switch customID {
 	case constants.BackButtonCustomID:
-		r.NavigateBack(event, s, "")
+		ctx.NavigateBack("")
 	}
 }

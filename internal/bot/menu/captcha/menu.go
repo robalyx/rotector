@@ -4,27 +4,25 @@ import (
 	"bytes"
 
 	"github.com/disgoorg/disgo/discord"
-	"github.com/disgoorg/disgo/events"
 	builder "github.com/robalyx/rotector/internal/bot/builder/captcha"
 	"github.com/robalyx/rotector/internal/bot/constants"
 	"github.com/robalyx/rotector/internal/bot/core/captcha"
-	"github.com/robalyx/rotector/internal/bot/core/pagination"
+	"github.com/robalyx/rotector/internal/bot/core/interaction"
 	"github.com/robalyx/rotector/internal/bot/core/session"
-	"github.com/robalyx/rotector/internal/bot/interfaces"
 	"go.uber.org/zap"
 )
 
 // Menu handles the CAPTCHA verification interface.
 type Menu struct {
 	layout  *Layout
-	page    *pagination.Page
+	page    *interaction.Page
 	captcha *captcha.Manager
 }
 
 // NewMenu creates a new CAPTCHA menu.
 func NewMenu(layout *Layout) *Menu {
 	m := &Menu{layout: layout}
-	m.page = &pagination.Page{
+	m.page = &interaction.Page{
 		Name: constants.CaptchaPageName,
 		Message: func(s *session.Session) *discord.MessageUpdateBuilder {
 			return builder.NewBuilder(s).Build()
@@ -38,18 +36,20 @@ func NewMenu(layout *Layout) *Menu {
 }
 
 // Show displays the CAPTCHA verification interface.
-func (m *Menu) Show(event interfaces.CommonEvent, s *session.Session, r *pagination.Respond) {
+func (m *Menu) Show(ctx *interaction.Context, s *session.Session) {
+	// Generate CAPTCHA image
 	digits, imgBuffer, err := m.captcha.GenerateImage()
 	if err != nil {
 		m.layout.logger.Error("Failed to generate CAPTCHA image", zap.Error(err))
-		r.Error(event, "Failed to generate CAPTCHA. Please try again.")
+		ctx.Error("Failed to generate CAPTCHA. Please try again.")
 		return
 	}
 
+	// Store data in session
 	session.CaptchaAnswer.Set(s, string(digits))
 	session.ImageBuffer.Set(s, imgBuffer)
 
-	r.Show(event, s, constants.CaptchaPageName, "Generated new CAPTCHA.")
+	ctx.Show(constants.CaptchaPageName, "Generated new CAPTCHA.")
 }
 
 // Cleanup handles the cleanup of the CAPTCHA menu.
@@ -59,40 +59,34 @@ func (m *Menu) Cleanup(s *session.Session) {
 }
 
 // handleButton processes button interactions.
-func (m *Menu) handleButton(
-	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, customID string,
-) {
+func (m *Menu) handleButton(ctx *interaction.Context, _ *session.Session, customID string) {
 	switch customID {
 	case constants.BackButtonCustomID:
-		r.NavigateBack(event, s, "")
-		session.CaptchaAnswer.Delete(s)
-		session.ImageBuffer.Delete(s)
+		ctx.NavigateBack("")
 	case constants.CaptchaRefreshButtonCustomID:
-		r.Reload(event, s, "Generated new CAPTCHA.")
+		ctx.Reload("Generated new CAPTCHA.")
 	case constants.CaptchaAnswerButtonCustomID:
-		m.handleCaptchaAnswer(event, s, r)
+		m.handleCaptchaAnswer(ctx)
 	}
 }
 
 // handleModal processes modal submissions.
-func (m *Menu) handleModal(
-	event *events.ModalSubmitInteractionCreate, s *session.Session, r *pagination.Respond,
-) {
-	if event.Data.CustomID != constants.CaptchaAnswerModalCustomID {
+func (m *Menu) handleModal(ctx *interaction.Context, s *session.Session) {
+	if ctx.Event().CustomID() != constants.CaptchaAnswerModalCustomID {
 		return
 	}
 
 	// Convert user's answer to digits
-	answer := event.Data.Text(constants.CaptchaAnswerInputCustomID)
+	answer := ctx.Event().ModalData().Text(constants.CaptchaAnswerInputCustomID)
 	if len(answer) != 6 {
-		r.Cancel(event, s, "❌ Invalid answer length. Please enter exactly 6 digits.")
+		ctx.Error("❌ Invalid answer length. Please enter exactly 6 digits.")
 		return
 	}
 
 	userDigits := make([]byte, 6)
 	for i, rn := range answer {
 		if rn < '0' || rn > '9' {
-			r.Cancel(event, s, "❌ Invalid answer. Please enter only digits.")
+			ctx.Error("❌ Invalid answer. Please enter only digits.")
 			return
 		}
 		userDigits[i] = byte(rn - '0')
@@ -102,7 +96,7 @@ func (m *Menu) handleModal(
 	correctDigits := session.CaptchaAnswer.Get(s)
 
 	if !bytes.Equal(userDigits, []byte(correctDigits)) {
-		r.Cancel(event, s, "❌ Incorrect CAPTCHA answer. Please try again.")
+		ctx.Error("❌ Incorrect CAPTCHA answer. Please try again.")
 		return
 	}
 
@@ -110,13 +104,13 @@ func (m *Menu) handleModal(
 	session.UserCaptchaUsageCaptchaReviewCount.Set(s, 0)
 
 	// Return to previous page
-	r.NavigateBack(event, s, "✅ CAPTCHA verified successfully!")
+	ctx.NavigateBack("✅ CAPTCHA verified successfully!")
 	session.CaptchaAnswer.Delete(s)
 	session.ImageBuffer.Delete(s)
 }
 
 // handleCaptchaAnswer handles the modal for the CAPTCHA answer.
-func (m *Menu) handleCaptchaAnswer(event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond) {
+func (m *Menu) handleCaptchaAnswer(ctx *interaction.Context) {
 	modal := discord.NewModalCreateBuilder().
 		SetCustomID(constants.CaptchaAnswerModalCustomID).
 		SetTitle("Enter CAPTCHA Answer").
@@ -126,5 +120,5 @@ func (m *Menu) handleCaptchaAnswer(event *events.ComponentInteractionCreate, s *
 				WithPlaceholder("Enter the 6 digits you see..."),
 		)
 
-	r.Modal(event, s, modal)
+	ctx.Modal(modal)
 }

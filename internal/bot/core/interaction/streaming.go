@@ -1,4 +1,4 @@
-package pagination
+package interaction
 
 import (
 	"bytes"
@@ -14,7 +14,6 @@ import (
 	"github.com/jaxron/axonet/pkg/client"
 	"github.com/robalyx/rotector/assets"
 	"github.com/robalyx/rotector/internal/bot/core/session"
-	"github.com/robalyx/rotector/internal/bot/interfaces"
 	"github.com/robalyx/rotector/internal/common/client/fetcher"
 	"go.uber.org/zap"
 	"golang.org/x/image/webp"
@@ -22,7 +21,7 @@ import (
 
 // StreamRequest contains all the parameters needed for streaming images.
 type StreamRequest struct {
-	Event     interfaces.CommonEvent
+	Event     CommonEvent
 	Session   *session.Session
 	Page      *Page
 	URLFunc   func() []string
@@ -40,14 +39,14 @@ type DownloadResult struct {
 
 // ImageStreamer handles progressive loading and merging of images.
 type ImageStreamer struct {
-	paginationManager *Manager
-	logger            *zap.Logger
-	client            *client.Client
-	placeholderImg    image.Image
+	manager        *Manager
+	logger         *zap.Logger
+	client         *client.Client
+	placeholderImg image.Image
 }
 
 // NewImageStreamer creates a new ImageStreamer instance.
-func NewImageStreamer(paginationManager *Manager, logger *zap.Logger, client *client.Client) *ImageStreamer {
+func NewImageStreamer(manager *Manager, logger *zap.Logger, client *client.Client) *ImageStreamer {
 	// Load placeholder image for missing or failed thumbnails
 	imageFile, err := assets.Images.Open("images/content_deleted.png")
 	if err != nil {
@@ -61,10 +60,10 @@ func NewImageStreamer(paginationManager *Manager, logger *zap.Logger, client *cl
 	}
 
 	return &ImageStreamer{
-		paginationManager: paginationManager,
-		logger:            logger.Named("streaming"),
-		client:            client,
-		placeholderImg:    placeholderImg,
+		manager:        manager,
+		logger:         logger.Named("streaming"),
+		client:         client,
+		placeholderImg: placeholderImg,
 	}
 }
 
@@ -73,7 +72,7 @@ func (is *ImageStreamer) Stream(req StreamRequest) {
 	// Show initial loading message
 	session.ImageBuffer.Set(req.Session, new(bytes.Buffer))
 	session.PaginationIsStreaming.Set(req.Session, true)
-	is.paginationManager.Display(req.Event, req.Session, req.Page, "Loading images...")
+	is.manager.Display(req.Event, req.Session, req.Page, "Loading images...")
 
 	// Get URLs through URLFunc
 	urls := req.URLFunc()
@@ -195,7 +194,7 @@ func (is *ImageStreamer) createAndDisplayGrid(req StreamRequest, images [][]byte
 	}
 
 	// Update Discord message with progress or completion status
-	is.paginationManager.Display(req.Event, req.Session, req.Page, message)
+	is.manager.Display(req.Event, req.Session, req.Page, message)
 }
 
 // mergeImageBytes combines multiple images into a single grid layout.

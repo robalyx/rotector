@@ -1,18 +1,15 @@
 package guild
 
 import (
-	"context"
 	"fmt"
 	"strconv"
 	"strings"
 
 	"github.com/disgoorg/disgo/discord"
-	"github.com/disgoorg/disgo/events"
 	builder "github.com/robalyx/rotector/internal/bot/builder/guild"
 	"github.com/robalyx/rotector/internal/bot/constants"
-	"github.com/robalyx/rotector/internal/bot/core/pagination"
+	"github.com/robalyx/rotector/internal/bot/core/interaction"
 	"github.com/robalyx/rotector/internal/bot/core/session"
-	"github.com/robalyx/rotector/internal/bot/interfaces"
 	"github.com/robalyx/rotector/internal/common/storage/database/types"
 	"go.uber.org/zap"
 )
@@ -20,13 +17,13 @@ import (
 // LogsMenu handles the display of guild ban operation logs.
 type LogsMenu struct {
 	layout *Layout
-	page   *pagination.Page
+	page   *interaction.Page
 }
 
 // NewLogsMenu creates a new logs menu for viewing guild ban operations.
 func NewLogsMenu(layout *Layout) *LogsMenu {
 	m := &LogsMenu{layout: layout}
-	m.page = &pagination.Page{
+	m.page = &interaction.Page{
 		Name: constants.GuildLogsPageName,
 		Message: func(s *session.Session) *discord.MessageUpdateBuilder {
 			return builder.NewLogsBuilder(s).Build()
@@ -39,11 +36,11 @@ func NewLogsMenu(layout *Layout) *LogsMenu {
 }
 
 // Show prepares and displays the guild ban logs interface.
-func (m *LogsMenu) Show(event interfaces.CommonEvent, s *session.Session, r *pagination.Respond) {
+func (m *LogsMenu) Show(ctx *interaction.Context, s *session.Session) {
 	// Get guild ID from session
 	guildID := session.GuildStatsID.Get(s)
 	if guildID == 0 {
-		r.Error(event, "Invalid guild ID.")
+		ctx.Error("Invalid guild ID.")
 		return
 	}
 
@@ -52,14 +49,14 @@ func (m *LogsMenu) Show(event interfaces.CommonEvent, s *session.Session, r *pag
 
 	// Fetch filtered logs from database
 	logs, nextCursor, err := m.layout.db.Model().GuildBan().GetGuildBanLogs(
-		context.Background(),
+		ctx.Context(),
 		guildID,
 		cursor,
 		constants.LogsPerPage,
 	)
 	if err != nil {
 		m.layout.logger.Error("Failed to get guild ban logs", zap.Error(err))
-		r.Error(event, "Failed to retrieve ban log data. Please try again.")
+		ctx.Error("Failed to retrieve ban log data. Please try again.")
 		return
 	}
 
@@ -75,12 +72,10 @@ func (m *LogsMenu) Show(event interfaces.CommonEvent, s *session.Session, r *pag
 }
 
 // handleButton processes button interactions.
-func (m *LogsMenu) handleButton(
-	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, customID string,
-) {
+func (m *LogsMenu) handleButton(ctx *interaction.Context, s *session.Session, customID string) {
 	switch customID {
 	case constants.BackButtonCustomID:
-		r.NavigateBack(event, s, "")
+		ctx.NavigateBack("")
 	case constants.RefreshButtonCustomID:
 		// Reset logs and reload
 		session.GuildBanLogCursor.Delete(s)
@@ -88,19 +83,17 @@ func (m *LogsMenu) handleButton(
 		session.GuildBanLogPrevCursors.Delete(s)
 		session.PaginationHasNextPage.Delete(s)
 		session.PaginationHasPrevPage.Delete(s)
-		r.Reload(event, s, "")
+		ctx.Reload("")
 	case string(session.ViewerFirstPage),
 		string(session.ViewerPrevPage),
 		string(session.ViewerNextPage),
 		string(session.ViewerLastPage):
-		m.handlePagination(event, s, r, session.ViewerAction(customID))
+		m.handlePagination(ctx, s, session.ViewerAction(customID))
 	}
 }
 
 // handlePagination processes page navigation for logs.
-func (m *LogsMenu) handlePagination(
-	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, action session.ViewerAction,
-) {
+func (m *LogsMenu) handlePagination(ctx *interaction.Context, s *session.Session, action session.ViewerAction) {
 	switch action {
 	case session.ViewerNextPage:
 		if session.PaginationHasNextPage.Get(s) {
@@ -110,7 +103,7 @@ func (m *LogsMenu) handlePagination(
 
 			session.GuildBanLogCursor.Set(s, nextCursor)
 			session.GuildBanLogPrevCursors.Set(s, append(prevCursors, cursor))
-			r.Reload(event, s, "")
+			ctx.Reload("")
 		}
 	case session.ViewerPrevPage:
 		prevCursors := session.GuildBanLogPrevCursors.Get(s)
@@ -119,12 +112,12 @@ func (m *LogsMenu) handlePagination(
 			lastIdx := len(prevCursors) - 1
 			session.GuildBanLogPrevCursors.Set(s, prevCursors[:lastIdx])
 			session.GuildBanLogCursor.Set(s, prevCursors[lastIdx])
-			r.Reload(event, s, "")
+			ctx.Reload("")
 		}
 	case session.ViewerFirstPage:
 		session.GuildBanLogCursor.Set(s, nil)
 		session.GuildBanLogPrevCursors.Set(s, make([]*types.LogCursor, 0))
-		r.Reload(event, s, "")
+		ctx.Reload("")
 	case session.ViewerLastPage:
 		// Not currently supported
 		return
@@ -132,9 +125,7 @@ func (m *LogsMenu) handlePagination(
 }
 
 // handleSelectMenu processes select menu interactions.
-func (m *LogsMenu) handleSelectMenu(
-	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, customID, option string,
-) {
+func (m *LogsMenu) handleSelectMenu(ctx *interaction.Context, s *session.Session, customID, option string) {
 	if customID != constants.GuildBanLogReportSelectMenuCustomID {
 		return
 	}
@@ -142,14 +133,14 @@ func (m *LogsMenu) handleSelectMenu(
 	// Parse log ID from option
 	logID, err := strconv.ParseInt(option, 10, 64)
 	if err != nil {
-		r.Error(event, "Invalid log ID selected.")
+		ctx.Error("Invalid log ID selected.")
 		return
 	}
 
 	// Get logs from session
 	logs := session.GuildBanLogs.Get(s)
 	if logs == nil {
-		r.Error(event, "No logs available.")
+		ctx.Error("No logs available.")
 		return
 	}
 
@@ -163,20 +154,20 @@ func (m *LogsMenu) handleSelectMenu(
 	}
 
 	if selectedLog == nil {
-		r.Error(event, "Selected log not found.")
+		ctx.Error("Selected log not found.")
 		return
 	}
 
 	// Get guild memberships for banned users
 	userGuilds, err := m.layout.db.Model().Sync().GetFlaggedServerMembers(
-		context.Background(),
+		ctx.Context(),
 		selectedLog.BannedUserIDs,
 	)
 	if err != nil {
 		m.layout.logger.Error("Failed to get banned user guild memberships",
 			zap.Error(err),
 			zap.Int64("log_id", logID))
-		r.Error(event, "Failed to generate report. Please try again.")
+		ctx.Error("Failed to generate report. Please try again.")
 		return
 	}
 
@@ -194,12 +185,12 @@ func (m *LogsMenu) handleSelectMenu(
 		serverIDs = append(serverIDs, serverID)
 	}
 
-	serverInfo, err := m.layout.db.Model().Sync().GetServerInfo(context.Background(), serverIDs)
+	serverInfo, err := m.layout.db.Model().Sync().GetServerInfo(ctx.Context(), serverIDs)
 	if err != nil {
 		m.layout.logger.Error("Failed to get server names",
 			zap.Error(err),
 			zap.Int64("log_id", logID))
-		r.Error(event, "Failed to generate report. Please try again.")
+		ctx.Error("Failed to generate report. Please try again.")
 		return
 	}
 
@@ -237,5 +228,5 @@ func (m *LogsMenu) handleSelectMenu(
 
 	// Send response with CSV file
 	file := discord.NewFile(filename, "text/csv", strings.NewReader(csvContent.String()))
-	r.RespondWithFiles(event, s, fmt.Sprintf("Attached CSV report for ban operation #%d", selectedLog.ID), file)
+	ctx.RespondWithFiles(fmt.Sprintf("Attached CSV report for ban operation #%d", selectedLog.ID), file)
 }

@@ -1,16 +1,12 @@
 package reviewer
 
 import (
-	"context"
-
 	"github.com/disgoorg/disgo/discord"
-	"github.com/disgoorg/disgo/events"
 	"github.com/disgoorg/snowflake/v2"
 	builder "github.com/robalyx/rotector/internal/bot/builder/reviewer"
 	"github.com/robalyx/rotector/internal/bot/constants"
-	"github.com/robalyx/rotector/internal/bot/core/pagination"
+	"github.com/robalyx/rotector/internal/bot/core/interaction"
 	"github.com/robalyx/rotector/internal/bot/core/session"
-	"github.com/robalyx/rotector/internal/bot/interfaces"
 	"github.com/robalyx/rotector/internal/common/storage/database/types"
 	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
 	"go.uber.org/zap"
@@ -19,13 +15,13 @@ import (
 // Menu handles the display and interaction logic for viewing reviewer stats.
 type Menu struct {
 	layout *Layout
-	page   *pagination.Page
+	page   *interaction.Page
 }
 
 // NewMenu creates a new reviewer stats menu.
 func NewMenu(l *Layout) *Menu {
 	m := &Menu{layout: l}
-	m.page = &pagination.Page{
+	m.page = &interaction.Page{
 		Name: constants.ReviewerStatsPageName,
 		Message: func(s *session.Session) *discord.MessageUpdateBuilder {
 			return builder.NewBuilder(s).Build()
@@ -38,31 +34,31 @@ func NewMenu(l *Layout) *Menu {
 }
 
 // Show prepares and displays the reviewer stats interface.
-func (m *Menu) Show(event interfaces.CommonEvent, s *session.Session, r *pagination.Respond) {
+func (m *Menu) Show(ctx *interaction.Context, s *session.Session) {
 	cursor := session.ReviewerStatsCursor.Get(s)
 	period := session.UserReviewerStatsPeriod.Get(s)
 
 	// Get refresh info for the selected period
 	lastRefresh, nextRefresh, err := m.layout.db.Service().View().GetReviewerStatsRefreshInfo(
-		context.Background(),
+		ctx.Context(),
 		period,
 	)
 	if err != nil {
 		m.layout.logger.Error("Failed to get refresh info", zap.Error(err))
-		r.Error(event, "Failed to retrieve reviewer statistics. Please try again.")
+		ctx.Error("Failed to retrieve reviewer statistics. Please try again.")
 		return
 	}
 
 	// Fetch reviewer stats from database
 	stats, nextCursor, err := m.layout.db.Service().Reviewer().GetReviewerStats(
-		context.Background(),
+		ctx.Context(),
 		period,
 		cursor,
 		constants.ReviewerStatsPerPage,
 	)
 	if err != nil {
 		m.layout.logger.Error("Failed to get reviewer stats", zap.Error(err))
-		r.Error(event, "Failed to retrieve reviewer statistics. Please try again.")
+		ctx.Error("Failed to retrieve reviewer statistics. Please try again.")
 		return
 	}
 
@@ -88,9 +84,7 @@ func (m *Menu) Show(event interfaces.CommonEvent, s *session.Session, r *paginat
 }
 
 // handleSelectMenu processes select menu interactions.
-func (m *Menu) handleSelectMenu(
-	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, customID, option string,
-) {
+func (m *Menu) handleSelectMenu(ctx *interaction.Context, s *session.Session, customID, option string) {
 	if customID != constants.ReviewerStatsPeriodSelectMenuCustomID {
 		return
 	}
@@ -99,7 +93,7 @@ func (m *Menu) handleSelectMenu(
 	period, err := enum.ReviewerStatsPeriodString(option)
 	if err != nil {
 		m.layout.logger.Error("Failed to parse reviewer stats period", zap.Error(err))
-		r.Error(event, "Failed to save time period preference. Please try again.")
+		ctx.Error("Failed to save time period preference. Please try again.")
 		return
 	}
 
@@ -108,31 +102,27 @@ func (m *Menu) handleSelectMenu(
 
 	// Reset page and show updated stats
 	ResetStats(s)
-	r.Reload(event, s, "")
+	ctx.Reload("")
 }
 
 // handleButton processes button interactions.
-func (m *Menu) handleButton(
-	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, customID string,
-) {
+func (m *Menu) handleButton(ctx *interaction.Context, s *session.Session, customID string) {
 	switch customID {
 	case constants.BackButtonCustomID:
-		r.NavigateBack(event, s, "")
+		ctx.NavigateBack("")
 	case constants.RefreshButtonCustomID:
 		ResetStats(s)
-		r.Reload(event, s, "")
+		ctx.Reload("")
 	case string(session.ViewerFirstPage),
 		string(session.ViewerPrevPage),
 		string(session.ViewerNextPage),
 		string(session.ViewerLastPage):
-		m.handlePagination(event, s, r, session.ViewerAction(customID))
+		m.handlePagination(ctx, s, session.ViewerAction(customID))
 	}
 }
 
 // handlePagination processes page navigation.
-func (m *Menu) handlePagination(
-	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, action session.ViewerAction,
-) {
+func (m *Menu) handlePagination(ctx *interaction.Context, s *session.Session, action session.ViewerAction) {
 	switch action {
 	case session.ViewerNextPage:
 		cursor := session.ReviewerStatsCursor.Get(s)
@@ -142,7 +132,7 @@ func (m *Menu) handlePagination(
 		if session.PaginationHasNextPage.Get(s) {
 			session.ReviewerStatsCursor.Set(s, nextCursor)
 			session.ReviewerStatsPrevCursors.Set(s, append(prevCursors, cursor))
-			r.Reload(event, s, "")
+			ctx.Reload("")
 		}
 	case session.ViewerPrevPage:
 		prevCursors := session.ReviewerStatsPrevCursors.Get(s)
@@ -151,12 +141,12 @@ func (m *Menu) handlePagination(
 			lastIdx := len(prevCursors) - 1
 			session.ReviewerStatsPrevCursors.Set(s, prevCursors[:lastIdx])
 			session.ReviewerStatsCursor.Set(s, prevCursors[lastIdx])
-			r.Reload(event, s, "")
+			ctx.Reload("")
 		}
 	case session.ViewerFirstPage:
 		session.ReviewerStatsCursor.Set(s, nil)
 		session.ReviewerStatsPrevCursors.Set(s, []*types.ReviewerStatsCursor{})
-		r.Reload(event, s, "")
+		ctx.Reload("")
 	case session.ViewerLastPage:
 		return
 	}

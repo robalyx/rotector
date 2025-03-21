@@ -6,12 +6,10 @@ import (
 	"strings"
 
 	"github.com/disgoorg/disgo/discord"
-	"github.com/disgoorg/disgo/events"
 	"github.com/robalyx/rotector/internal/bot/builder/setting"
 	"github.com/robalyx/rotector/internal/bot/constants"
-	"github.com/robalyx/rotector/internal/bot/core/pagination"
+	"github.com/robalyx/rotector/internal/bot/core/interaction"
 	"github.com/robalyx/rotector/internal/bot/core/session"
-	"github.com/robalyx/rotector/internal/bot/interfaces"
 	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
 	"go.uber.org/zap"
 )
@@ -19,14 +17,14 @@ import (
 // UpdateMenu handles the interface for changing individual settings.
 type UpdateMenu struct {
 	layout *Layout
-	page   *pagination.Page
+	page   *interaction.Page
 }
 
 // NewMenu creates a Menu and sets up its page with message builders and
 // interaction handlers for changing settings.
 func NewUpdateMenu(l *Layout) *UpdateMenu {
 	m := &UpdateMenu{layout: l}
-	m.page = &pagination.Page{
+	m.page = &interaction.Page{
 		Name: constants.SettingUpdatePageName,
 		Message: func(s *session.Session) *discord.MessageUpdateBuilder {
 			return setting.NewUpdateBuilder(s).Build()
@@ -40,7 +38,7 @@ func NewUpdateMenu(l *Layout) *UpdateMenu {
 }
 
 // Show prepares and displays the settings change interface.
-func (m *UpdateMenu) Show(_ interfaces.CommonEvent, s *session.Session, _ *pagination.Respond) {
+func (m *UpdateMenu) Show(_ *interaction.Context, s *session.Session) {
 	// Get the setting definition
 	settingType := session.SettingType.Get(s)
 	settingKey := session.SettingCustomID.Get(s)
@@ -59,36 +57,32 @@ func (m *UpdateMenu) Show(_ interfaces.CommonEvent, s *session.Session, _ *pagin
 }
 
 // handleSettingChange processes setting value changes.
-func (m *UpdateMenu) handleSettingChange(
-	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, customID string, option string,
-) {
+func (m *UpdateMenu) handleSettingChange(ctx *interaction.Context, s *session.Session, customID, option string) {
 	settingType := session.SettingType.Get(s)
 	settingKey := session.SettingCustomID.Get(s)
 	setting := m.getSetting(settingType, settingKey)
 
 	// Validate the new value
 	if err := m.validateSettingValue(s, setting, option); err != nil {
-		r.Cancel(event, s, fmt.Sprintf("Failed to validate setting value: %v", err))
+		ctx.Error(fmt.Sprintf("Failed to validate setting value: %v", err))
 		return
 	}
 
 	// Update the setting
 	if err := setting.ValueUpdater(customID, []string{option}, s); err != nil {
-		r.Cancel(event, s, fmt.Sprintf("Failed to update setting: %v", err))
+		ctx.Error(fmt.Sprintf("Failed to update setting: %v", err))
 		return
 	}
 
-	r.Reload(event, s, "")
+	ctx.Reload("")
 }
 
 // handleSettingButton processes button interactions.
-func (m *UpdateMenu) handleSettingButton(
-	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, customID string,
-) {
+func (m *UpdateMenu) handleSettingButton(ctx *interaction.Context, s *session.Session, customID string) {
 	// Handle back button
 	split := strings.Split(customID, "_")
 	if len(split) > 1 && split[1] == constants.BackButtonCustomID {
-		r.NavigateBack(event, s, "")
+		ctx.NavigateBack("")
 		return
 	}
 
@@ -99,18 +93,18 @@ func (m *UpdateMenu) handleSettingButton(
 	action := session.ViewerAction(customID)
 	switch action {
 	case session.ViewerFirstPage, session.ViewerPrevPage, session.ViewerNextPage, session.ViewerLastPage:
-		m.handlePageChange(event, s, r, setting, action)
+		m.handlePageChange(ctx, s, setting, action)
 		return
 	}
 
 	// Handle different setting types
 	switch setting.Type {
 	case enum.SettingTypeID:
-		m.handleIDModal(event, s, r, setting)
+		m.handleIDModal(ctx, setting)
 	case enum.SettingTypeNumber:
-		m.handleNumberModal(event, s, r, setting)
+		m.handleNumberModal(ctx, s, setting)
 	case enum.SettingTypeText:
-		m.handleTextModal(event, s, r, setting)
+		m.handleTextModal(ctx, s, setting)
 	case enum.SettingTypeBool, enum.SettingTypeEnum:
 		m.layout.logger.Error("Button change not supported for this setting type",
 			zap.String("type", setting.Type.String()))
@@ -119,9 +113,7 @@ func (m *UpdateMenu) handleSettingButton(
 }
 
 // handleIDModal handles the modal for ID type settings.
-func (m *UpdateMenu) handleIDModal(
-	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, setting *session.Setting,
-) {
+func (m *UpdateMenu) handleIDModal(ctx *interaction.Context, setting *session.Setting) {
 	modal := discord.NewModalCreateBuilder().
 		SetCustomID(setting.Key).
 		SetTitle("Toggle " + setting.Name).
@@ -132,13 +124,11 @@ func (m *UpdateMenu) handleIDModal(
 				WithMaxLength(128),
 		)
 
-	r.Modal(event, s, modal)
+	ctx.Modal(modal)
 }
 
 // handleNumberModal handles the modal for number type settings.
-func (m *UpdateMenu) handleNumberModal(
-	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, setting *session.Setting,
-) {
+func (m *UpdateMenu) handleNumberModal(ctx *interaction.Context, s *session.Session, setting *session.Setting) {
 	modal := discord.NewModalCreateBuilder().
 		SetCustomID(setting.Key).
 		SetTitle("Set " + setting.Name).
@@ -150,13 +140,11 @@ func (m *UpdateMenu) handleNumberModal(
 				WithValue(session.SettingDisplay.Get(s)),
 		)
 
-	r.Modal(event, s, modal)
+	ctx.Modal(modal)
 }
 
 // handleTextModal handles the modal for text type settings.
-func (m *UpdateMenu) handleTextModal(
-	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, setting *session.Setting,
-) {
+func (m *UpdateMenu) handleTextModal(ctx *interaction.Context, s *session.Session, setting *session.Setting) {
 	modal := discord.NewModalCreateBuilder().
 		SetCustomID(setting.Key).
 		SetTitle("Set " + setting.Name).
@@ -168,13 +156,12 @@ func (m *UpdateMenu) handleTextModal(
 				WithValue(session.SettingDisplay.Get(s)),
 		)
 
-	r.Modal(event, s, modal)
+	ctx.Modal(modal)
 }
 
 // handlePageChange handles pagination for ID and text type settings.
 func (m *UpdateMenu) handlePageChange(
-	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond,
-	setting *session.Setting, action session.ViewerAction,
+	ctx *interaction.Context, s *session.Session, setting *session.Setting, action session.ViewerAction,
 ) {
 	// Calculate pagination first
 	if !m.calculatePagination(s) {
@@ -202,13 +189,11 @@ func (m *UpdateMenu) handlePageChange(
 	session.PaginationOffset.Set(s, offset)
 
 	// Refresh the display
-	r.Reload(event, s, "")
+	ctx.Reload("")
 }
 
 // handleSettingModal processes modal submissions.
-func (m *UpdateMenu) handleSettingModal(
-	event *events.ModalSubmitInteractionCreate, s *session.Session, r *pagination.Respond,
-) {
+func (m *UpdateMenu) handleSettingModal(ctx *interaction.Context, s *session.Session) {
 	settingType := session.SettingType.Get(s)
 	settingKey := session.SettingCustomID.Get(s)
 	setting := m.getSetting(settingType, settingKey)
@@ -216,7 +201,7 @@ func (m *UpdateMenu) handleSettingModal(
 	// Get all inputs from the modal
 	var inputs []string
 	for i := 0; ; i++ {
-		input := event.Data.Text(strconv.Itoa(i))
+		input := ctx.Event().ModalData().Text(strconv.Itoa(i))
 		if input == "" {
 			break
 		}
@@ -226,19 +211,19 @@ func (m *UpdateMenu) handleSettingModal(
 	// Validate each input using the setting's validators
 	for _, input := range inputs {
 		if err := m.validateSettingValue(s, setting, input); err != nil {
-			r.Cancel(event, s, fmt.Sprintf("Failed to validate setting value: %v", err))
+			ctx.Error(fmt.Sprintf("Failed to validate setting value: %v", err))
 			return
 		}
 	}
 
 	// Update the setting using ValueUpdater with the customID and inputs
-	if err := setting.ValueUpdater(event.Data.CustomID, inputs, s); err != nil {
-		r.Cancel(event, s, fmt.Sprintf("Failed to update setting: %v", err))
+	if err := setting.ValueUpdater(ctx.Event().CustomID(), inputs, s); err != nil {
+		ctx.Error(fmt.Sprintf("Failed to update setting: %v", err))
 		return
 	}
 
 	// Show updated settings
-	r.Reload(event, s, "")
+	ctx.Reload("")
 }
 
 // getSetting returns the setting definition for the given type and key.

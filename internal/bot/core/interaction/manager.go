@@ -1,10 +1,10 @@
-package pagination
+package interaction
 
 import (
+	"context"
+
 	"github.com/disgoorg/disgo/discord"
-	"github.com/disgoorg/disgo/events"
 	"github.com/robalyx/rotector/internal/bot/core/session"
-	"github.com/robalyx/rotector/internal/bot/interfaces"
 	"github.com/robalyx/rotector/internal/bot/utils"
 	"go.uber.org/zap"
 )
@@ -18,9 +18,8 @@ type Page struct {
 
 	// ShowHandlerFunc is called when the page is shown.
 	ShowHandlerFunc func(
-		event interfaces.CommonEvent,
+		ctx *Context,
 		s *session.Session,
-		r *Respond,
 	)
 
 	// ResetHandlerFunc is called when the page is opened for the first time.
@@ -34,24 +33,21 @@ type Page struct {
 
 	// SelectHandlerFunc processes select menu interactions.
 	SelectHandlerFunc func(
-		event *events.ComponentInteractionCreate,
+		ctx *Context,
 		s *session.Session,
-		r *Respond,
 		customID,
 		option string,
 	)
 	// ButtonHandlerFunc processes button clicks.
 	ButtonHandlerFunc func(
-		event *events.ComponentInteractionCreate,
+		ctx *Context,
 		s *session.Session,
-		r *Respond,
 		customID string,
 	)
 	// ModalHandlerFunc processes form submissions.
 	ModalHandlerFunc func(
-		event *events.ModalSubmitInteractionCreate,
+		ctx *Context,
 		s *session.Session,
-		r *Respond,
 	)
 }
 
@@ -87,35 +83,34 @@ func (m *Manager) GetPage(name string) *Page {
 // HandleInteraction routes Discord interactions to the appropriate handler function
 // based on the interaction type (select menu, button, or modal) and the current page.
 // If no handler is found for an interaction, an error is logged.
-func (m *Manager) HandleInteraction(event interfaces.CommonEvent, s *session.Session) {
+func (m *Manager) HandleInteraction(event CommonEvent, s *session.Session) {
 	currentPage := session.CurrentPage.Get(s)
 	page := m.GetPage(currentPage)
 
+	ctx := New(context.Background(), event, s, m)
+
 	switch e := event.(type) {
-	case *events.ComponentInteractionCreate:
+	case *ComponentEvent:
 		switch data := e.Data.(type) {
 		case discord.StringSelectMenuInteractionData:
 			if page.SelectHandlerFunc != nil {
 				m.logger.Debug("Select interaction", zap.String("customID", data.CustomID()), zap.String("option", data.Values[0]))
-				respond := NewRespond(m.sessionManager, m)
-				page.SelectHandlerFunc(e, s, respond, data.CustomID(), data.Values[0])
+				page.SelectHandlerFunc(ctx, s, data.CustomID(), data.Values[0])
 			} else {
 				m.logger.Error("No select handler found for customID", zap.String("customID", data.CustomID()))
 			}
 		case discord.ButtonInteractionData:
 			if page.ButtonHandlerFunc != nil {
 				m.logger.Debug("Button interaction", zap.String("customID", data.CustomID()))
-				respond := NewRespond(m.sessionManager, m)
-				page.ButtonHandlerFunc(e, s, respond, data.CustomID())
+				page.ButtonHandlerFunc(ctx, s, data.CustomID())
 			} else {
 				m.logger.Error("No button handler found for customID", zap.String("customID", data.CustomID()))
 			}
 		}
-	case *events.ModalSubmitInteractionCreate:
+	case *ModalSubmitEvent:
 		if page.ModalHandlerFunc != nil {
 			m.logger.Debug("Modal submit interaction", zap.String("customID", e.Data.CustomID))
-			respond := NewRespond(m.sessionManager, m)
-			page.ModalHandlerFunc(e, s, respond)
+			page.ModalHandlerFunc(ctx, s)
 		} else {
 			m.logger.Error("No modal handler found for customID", zap.String("customID", e.Data.CustomID))
 		}
@@ -123,7 +118,7 @@ func (m *Manager) HandleInteraction(event interfaces.CommonEvent, s *session.Ses
 }
 
 // Show updates the Discord message with new content and components for the target page.
-func (m *Manager) Show(event interfaces.CommonEvent, s *session.Session, pageName, content string) {
+func (m *Manager) Show(event CommonEvent, s *session.Session, pageName, content string) {
 	page := m.GetPage(pageName)
 	if page == nil {
 		m.logger.Error("Page not found", zap.String("pageName", pageName))
@@ -133,9 +128,9 @@ func (m *Manager) Show(event interfaces.CommonEvent, s *session.Session, pageNam
 	// Handle the page show event
 	responded := false
 	if page.ShowHandlerFunc != nil {
-		respond := NewRespond(m.sessionManager, m)
-		page.ShowHandlerFunc(event, s, respond)
-		responded = respond.responded
+		ctx := New(context.Background(), event, s, m)
+		page.ShowHandlerFunc(ctx, s)
+		responded = ctx.responded
 	}
 
 	// Display the page to the user if it wasn't handled by the handler
@@ -146,7 +141,7 @@ func (m *Manager) Show(event interfaces.CommonEvent, s *session.Session, pageNam
 
 // Display updates the page in the session and displays it to the user.
 func (m *Manager) Display(
-	event interfaces.CommonEvent, s *session.Session, page *Page, content string, files ...*discord.File,
+	event CommonEvent, s *session.Session, page *Page, content string, files ...*discord.File,
 ) {
 	// Update the message with the new content and components
 	messageUpdate := page.Message(s).
@@ -203,14 +198,14 @@ func (m *Manager) UpdatePage(s *session.Session, newPage *Page) {
 }
 
 // RespondWithError updates the interaction response with an error message.
-func (m *Manager) RespondWithError(event interfaces.CommonEvent, message string) {
-	respond := NewRespond(m.sessionManager, m)
-	respond.Error(event, message)
+func (m *Manager) RespondWithError(event CommonEvent, message string) {
+	ctx := New(context.Background(), event, nil, m)
+	ctx.Error(message)
 }
 
 // RespondWithClear updates the interaction response with a message.
 // This also clears message embeds, files, and container components.
-func (m *Manager) RespondWithClear(event interfaces.CommonEvent, message string) {
-	respond := NewRespond(m.sessionManager, m)
-	respond.Clear(event, message)
+func (m *Manager) RespondWithClear(event CommonEvent, message string) {
+	ctx := New(context.Background(), event, nil, m)
+	ctx.Clear(message)
 }

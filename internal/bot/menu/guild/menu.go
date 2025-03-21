@@ -1,28 +1,24 @@
 package guild
 
 import (
-	"context"
-
 	"github.com/disgoorg/disgo/discord"
-	"github.com/disgoorg/disgo/events"
 	builder "github.com/robalyx/rotector/internal/bot/builder/guild"
 	"github.com/robalyx/rotector/internal/bot/constants"
-	"github.com/robalyx/rotector/internal/bot/core/pagination"
+	"github.com/robalyx/rotector/internal/bot/core/interaction"
 	"github.com/robalyx/rotector/internal/bot/core/session"
-	"github.com/robalyx/rotector/internal/bot/interfaces"
 	"go.uber.org/zap"
 )
 
 // Menu handles the guild owner menu operations.
 type Menu struct {
 	layout *Layout
-	page   *pagination.Page
+	page   *interaction.Page
 }
 
 // NewMenu creates a new guild owner menu.
 func NewMenu(layout *Layout) *Menu {
 	m := &Menu{layout: layout}
-	m.page = &pagination.Page{
+	m.page = &interaction.Page{
 		Name: constants.GuildOwnerPageName,
 		Message: func(s *session.Session) *discord.MessageUpdateBuilder {
 			return builder.NewMenuBuilder(s).Build()
@@ -35,25 +31,23 @@ func NewMenu(layout *Layout) *Menu {
 }
 
 // Show prepares and displays the guild owner interface.
-func (m *Menu) Show(_ interfaces.CommonEvent, s *session.Session, _ *pagination.Respond) {
-	ctx := context.Background()
-
+func (m *Menu) Show(ctx *interaction.Context, s *session.Session) {
 	// Fetch unique guild count
-	uniqueGuilds, err := m.layout.db.Model().Sync().GetUniqueGuildCount(ctx)
+	uniqueGuilds, err := m.layout.db.Model().Sync().GetUniqueGuildCount(ctx.Context())
 	if err != nil {
 		m.layout.logger.Error("Failed to get unique guild count", zap.Error(err))
 		uniqueGuilds = 0 // Default to 0 if there's an error
 	}
 
 	// Fetch unique user count
-	uniqueUsers, err := m.layout.db.Model().Sync().GetUniqueUserCount(ctx)
+	uniqueUsers, err := m.layout.db.Model().Sync().GetUniqueUserCount(ctx.Context())
 	if err != nil {
 		m.layout.logger.Error("Failed to get unique user count", zap.Error(err))
 		uniqueUsers = 0 // Default to 0 if there's an error
 	}
 
 	// Fetch inappropriate user count
-	inappropriateUsers, err := m.layout.db.Model().Message().GetUniqueInappropriateUserCount(ctx)
+	inappropriateUsers, err := m.layout.db.Model().Message().GetUniqueInappropriateUserCount(ctx.Context())
 	if err != nil {
 		m.layout.logger.Error("Failed to get inappropriate user count", zap.Error(err))
 		inappropriateUsers = 0 // Default to 0 if there's an error
@@ -66,9 +60,7 @@ func (m *Menu) Show(_ interfaces.CommonEvent, s *session.Session, _ *pagination.
 }
 
 // handleSelectMenu processes select menu interactions.
-func (m *Menu) handleSelectMenu(
-	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, customID, option string,
-) {
+func (m *Menu) handleSelectMenu(ctx *interaction.Context, s *session.Session, customID, option string) {
 	if customID != constants.ActionSelectMenuCustomID {
 		return
 	}
@@ -82,7 +74,7 @@ func (m *Menu) handleSelectMenu(
 		session.PaginationPage.Set(s, 0)
 		session.PaginationTotalItems.Set(s, 0)
 
-		r.Show(event, s, constants.GuildScanPageName, "")
+		ctx.Show(constants.GuildScanPageName, "")
 
 	case constants.StartMessageScanButtonCustomID:
 		// Set scan type to message-based
@@ -92,7 +84,7 @@ func (m *Menu) handleSelectMenu(
 		session.PaginationPage.Set(s, 0)
 		session.PaginationTotalItems.Set(s, 0)
 
-		r.Show(event, s, constants.GuildScanPageName, "")
+		ctx.Show(constants.GuildScanPageName, "")
 
 	case constants.ViewGuildBanLogsButtonCustomID:
 		// Reset logs page
@@ -100,16 +92,14 @@ func (m *Menu) handleSelectMenu(
 		session.LogNextCursor.Delete(s)
 		session.LogPrevCursors.Delete(s)
 
-		r.Show(event, s, constants.GuildLogsPageName, "")
+		ctx.Show(constants.GuildLogsPageName, "")
 	}
 }
 
 // handleButton processes button interactions.
-func (m *Menu) handleButton(
-	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, customID string,
-) {
+func (m *Menu) handleButton(ctx *interaction.Context, _ *session.Session, customID string) {
 	switch customID {
 	case constants.BackButtonCustomID:
-		r.NavigateBack(event, s, "")
+		ctx.NavigateBack("")
 	}
 }

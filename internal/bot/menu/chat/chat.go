@@ -1,18 +1,15 @@
 package chat
 
 import (
-	"context"
 	"fmt"
 	"time"
 
 	"github.com/disgoorg/disgo/discord"
-	"github.com/disgoorg/disgo/events"
 	"github.com/google/generative-ai-go/genai"
 	builder "github.com/robalyx/rotector/internal/bot/builder/chat"
 	"github.com/robalyx/rotector/internal/bot/constants"
-	"github.com/robalyx/rotector/internal/bot/core/pagination"
+	"github.com/robalyx/rotector/internal/bot/core/interaction"
 	"github.com/robalyx/rotector/internal/bot/core/session"
-	"github.com/robalyx/rotector/internal/bot/interfaces"
 	"github.com/robalyx/rotector/internal/common/client/ai"
 	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
 	"go.uber.org/zap"
@@ -21,18 +18,17 @@ import (
 // Menu handles the display and interaction logic for AI chat.
 type Menu struct {
 	layout *Layout
-	page   *pagination.Page
+	page   *interaction.Page
 }
 
 // NewMenu creates a new chat menu.
 func NewMenu(layout *Layout) *Menu {
 	m := &Menu{layout: layout}
-	m.page = &pagination.Page{
+	m.page = &interaction.Page{
 		Name: constants.ChatPageName,
 		Message: func(s *session.Session) *discord.MessageUpdateBuilder {
 			return builder.NewBuilder(s).Build()
 		},
-		ShowHandlerFunc:   m.Show,
 		SelectHandlerFunc: m.handleSelectMenu,
 		ButtonHandlerFunc: m.handleButton,
 		ModalHandlerFunc:  m.handleModal,
@@ -40,15 +36,8 @@ func NewMenu(layout *Layout) *Menu {
 	return m
 }
 
-// Show prepares and displays the chat interface.
-func (m *Menu) Show(_ interfaces.CommonEvent, _ *session.Session, _ *pagination.Respond) {
-	// Nothing needs to be done here
-}
-
 // handleButton processes button interactions.
-func (m *Menu) handleButton(
-	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, customID string,
-) {
+func (m *Menu) handleButton(ctx *interaction.Context, s *session.Session, customID string) {
 	action := session.ViewerAction(customID)
 	switch action {
 	case session.ViewerFirstPage, session.ViewerPrevPage, session.ViewerNextPage, session.ViewerLastPage:
@@ -58,37 +47,35 @@ func (m *Menu) handleButton(
 		page := action.ParsePageAction(s, maxPage)
 
 		session.PaginationPage.Set(s, page)
-		r.Reload(event, s, "")
+		ctx.Reload("")
 		return
 	}
 
 	switch customID {
 	case constants.ChatSendButtonID:
-		m.handleChatSend(event, s, r)
+		m.handleChatSend(ctx)
 	case constants.BackButtonCustomID:
-		r.NavigateBack(event, s, "")
+		ctx.NavigateBack("")
 	case constants.ChatClearHistoryButtonID:
 		// Clear chat history
 		session.ChatHistory.Set(s, ai.ChatHistory{Messages: make([]*ai.ChatMessage, 0)})
 		session.PaginationPage.Set(s, 0)
-		r.Reload(event, s, "Chat history cleared.")
+		ctx.Reload("Chat history cleared.")
 	case constants.ChatClearContextButtonID:
 		session.ChatContext.Delete(s)
-		r.Reload(event, s, "Context cleared.")
+		ctx.Reload("Context cleared.")
 	}
 }
 
 // handleSelectMenu processes select menu interactions.
-func (m *Menu) handleSelectMenu(
-	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, customID, option string,
-) {
+func (m *Menu) handleSelectMenu(ctx *interaction.Context, s *session.Session, customID, option string) {
 	switch customID {
 	case constants.ChatModelSelectID:
 		// Parse option to chat model
 		chatModel, err := enum.ChatModelString(option)
 		if err != nil {
 			m.layout.logger.Error("Failed to parse chat model", zap.Error(err))
-			r.Error(event, "Failed to parse chat model. Please try again.")
+			ctx.Error("Failed to parse chat model. Please try again.")
 			return
 		}
 
@@ -96,25 +83,23 @@ func (m *Menu) handleSelectMenu(
 		session.UserChatModel.Set(s, chatModel)
 
 		// Refresh the menu
-		r.Reload(event, s, fmt.Sprintf("Switched to %s model", chatModel.String()))
+		ctx.Reload(fmt.Sprintf("Switched to %s model", chatModel.String()))
 	}
 }
 
 // handleModal processes modal submissions for chat input.
-func (m *Menu) handleModal(
-	event *events.ModalSubmitInteractionCreate, s *session.Session, r *pagination.Respond,
-) {
-	switch event.Data.CustomID {
+func (m *Menu) handleModal(ctx *interaction.Context, s *session.Session) {
+	switch ctx.Event().CustomID() {
 	case constants.ChatInputModalID:
-		message := event.Data.Text(constants.ChatInputCustomID)
+		message := ctx.Event().ModalData().Text(constants.ChatInputCustomID)
 		if message == "" {
-			r.Cancel(event, s, "Message cannot be empty")
+			ctx.Error("Message cannot be empty")
 			return
 		}
 
 		// Check message limits
 		if allowed, errMsg := m.checkMessageLimits(s); !allowed {
-			r.Cancel(event, s, errMsg)
+			ctx.Error(errMsg)
 			return
 		}
 
@@ -129,12 +114,12 @@ func (m *Menu) handleModal(
 		session.PaginationIsStreaming.Set(s, true)
 
 		// Show "AI is typing..." message
-		r.ClearComponents(event, "AI is typing...")
+		ctx.ClearComponents("AI is typing...")
 
 		// Stream AI response
 		history := session.ChatHistory.Get(s)
 		responseChan, historyChan := m.layout.chatHandler.StreamResponse(
-			context.Background(),
+			ctx.Context(),
 			history.ToGenAIHistory(),
 			session.UserChatModel.Get(s),
 			message,
@@ -148,7 +133,7 @@ func (m *Menu) handleModal(
 
 			// Update message at most once per second to avoid rate limits
 			if time.Since(lastUpdate) > 1*time.Second {
-				r.ClearComponents(event, "Receiving response...")
+				ctx.ClearComponents("Receiving response...")
 				lastUpdate = time.Now()
 			}
 		}
@@ -175,12 +160,12 @@ func (m *Menu) handleModal(
 		session.PaginationIsStreaming.Set(s, false)
 
 		// Show final message
-		r.Reload(event, s, "Response completed.")
+		ctx.Reload("Response completed.")
 	}
 }
 
 // handleChatSend handles the chat send button.
-func (m *Menu) handleChatSend(event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond) {
+func (m *Menu) handleChatSend(ctx *interaction.Context) {
 	modal := discord.NewModalCreateBuilder().
 		SetCustomID(constants.ChatInputModalID).
 		SetTitle("Chat with AI").
@@ -191,7 +176,7 @@ func (m *Menu) handleChatSend(event *events.ComponentInteractionCreate, s *sessi
 				WithPlaceholder("Type your message here..."),
 		)
 
-	r.Modal(event, s, modal)
+	ctx.Modal(modal)
 }
 
 // checkMessageLimits checks if the user has exceeded their daily message limit.

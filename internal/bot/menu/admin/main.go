@@ -5,10 +5,9 @@ import (
 	"fmt"
 
 	"github.com/disgoorg/disgo/discord"
-	"github.com/disgoorg/disgo/events"
 	builder "github.com/robalyx/rotector/internal/bot/builder/admin"
 	"github.com/robalyx/rotector/internal/bot/constants"
-	"github.com/robalyx/rotector/internal/bot/core/pagination"
+	"github.com/robalyx/rotector/internal/bot/core/interaction"
 	"github.com/robalyx/rotector/internal/bot/core/session"
 	"github.com/robalyx/rotector/internal/bot/utils"
 	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
@@ -18,14 +17,14 @@ import (
 // MainMenu handles the admin operations and their interactions.
 type MainMenu struct {
 	layout *Layout
-	page   *pagination.Page
+	page   *interaction.Page
 }
 
 // NewMainMenu creates a MainMenu and sets up its page with message builders and
 // interaction handlers.
 func NewMainMenu(layout *Layout) *MainMenu {
 	m := &MainMenu{layout: layout}
-	m.page = &pagination.Page{
+	m.page = &interaction.Page{
 		Name: constants.AdminPageName,
 		Message: func(s *session.Session) *discord.MessageUpdateBuilder {
 			return builder.NewBuilder(s).Build()
@@ -38,25 +37,23 @@ func NewMainMenu(layout *Layout) *MainMenu {
 }
 
 // handleSelectMenu processes select menu interactions.
-func (m *MainMenu) handleSelectMenu(
-	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, _ string, option string,
-) {
+func (m *MainMenu) handleSelectMenu(ctx *interaction.Context, _ *session.Session, _, option string) {
 	switch option {
 	case constants.BotSettingsButtonCustomID:
-		r.Show(event, s, constants.BotSettingsPageName, "")
+		ctx.Show(constants.BotSettingsPageName, "")
 	case constants.BanUserButtonCustomID:
-		m.handleBanUserModal(event, s, r)
+		m.handleBanUserModal(ctx)
 	case constants.UnbanUserButtonCustomID:
-		m.handleUnbanUserModal(event, s, r)
+		m.handleUnbanUserModal(ctx)
 	case constants.DeleteUserButtonCustomID:
-		m.handleDeleteUserModal(event, s, r)
+		m.handleDeleteUserModal(ctx)
 	case constants.DeleteGroupButtonCustomID:
-		m.handleDeleteGroupModal(event, s, r)
+		m.handleDeleteGroupModal(ctx)
 	}
 }
 
 // handleBanUserModal opens a modal for entering a user ID to ban.
-func (m *MainMenu) handleBanUserModal(event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond) {
+func (m *MainMenu) handleBanUserModal(ctx *interaction.Context) {
 	modal := discord.NewModalCreateBuilder().
 		SetCustomID(constants.BanUserModalCustomID).
 		SetTitle("Ban User").
@@ -84,13 +81,11 @@ func (m *MainMenu) handleBanUserModal(event *events.ComponentInteractionCreate, 
 				WithMaxLength(512),
 		)
 
-	r.Modal(event, s, modal)
+	ctx.Modal(modal)
 }
 
 // handleUnbanUserModal opens a modal for entering a user ID to unban.
-func (m *MainMenu) handleUnbanUserModal(
-	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond,
-) {
+func (m *MainMenu) handleUnbanUserModal(ctx *interaction.Context) {
 	modal := discord.NewModalCreateBuilder().
 		SetCustomID(constants.UnbanUserModalCustomID).
 		SetTitle("Unban User").
@@ -106,13 +101,11 @@ func (m *MainMenu) handleUnbanUserModal(
 				WithMaxLength(512),
 		)
 
-	r.Modal(event, s, modal)
+	ctx.Modal(modal)
 }
 
 // handleDeleteUserModal opens a modal for entering a user ID to delete.
-func (m *MainMenu) handleDeleteUserModal(
-	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond,
-) {
+func (m *MainMenu) handleDeleteUserModal(ctx *interaction.Context) {
 	modal := discord.NewModalCreateBuilder().
 		SetCustomID(constants.DeleteUserModalCustomID).
 		SetTitle("Delete User").
@@ -128,13 +121,11 @@ func (m *MainMenu) handleDeleteUserModal(
 				WithMaxLength(512),
 		)
 
-	r.Modal(event, s, modal)
+	ctx.Modal(modal)
 }
 
 // handleDeleteGroupModal opens a modal for entering a group ID to delete.
-func (m *MainMenu) handleDeleteGroupModal(
-	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond,
-) {
+func (m *MainMenu) handleDeleteGroupModal(ctx *interaction.Context) {
 	modal := discord.NewModalCreateBuilder().
 		SetCustomID(constants.DeleteGroupModalCustomID).
 		SetTitle("Delete Group").
@@ -150,43 +141,39 @@ func (m *MainMenu) handleDeleteGroupModal(
 				WithMaxLength(512),
 		)
 
-	r.Modal(event, s, modal)
+	ctx.Modal(modal)
 }
 
 // handleButton processes button interactions.
-func (m *MainMenu) handleButton(
-	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, customID string,
-) {
+func (m *MainMenu) handleButton(ctx *interaction.Context, _ *session.Session, customID string) {
 	switch customID {
 	case constants.BackButtonCustomID:
-		r.NavigateBack(event, s, "")
+		ctx.NavigateBack("")
 	}
 }
 
 // handleModal processes modal submissions.
-func (m *MainMenu) handleModal(
-	event *events.ModalSubmitInteractionCreate, s *session.Session, r *pagination.Respond,
-) {
-	switch event.Data.CustomID {
+func (m *MainMenu) handleModal(ctx *interaction.Context, s *session.Session) {
+	switch ctx.Event().CustomID() {
 	case constants.BanUserModalCustomID:
-		m.handleBanUserModalSubmit(event, s, r)
+		m.handleBanUserModalSubmit(ctx, s)
 	case constants.UnbanUserModalCustomID:
-		m.handleUnbanUserModalSubmit(event, s, r)
+		m.handleUnbanUserModalSubmit(ctx, s)
 	case constants.DeleteUserModalCustomID:
-		m.handleDeleteUserModalSubmit(event, s, r)
+		m.handleDeleteUserModalSubmit(ctx, s)
 	case constants.DeleteGroupModalCustomID:
-		m.handleDeleteGroupModalSubmit(event, s, r)
+		m.handleDeleteGroupModalSubmit(ctx, s)
 	}
 }
 
 // handleBanUserModalSubmit processes the user ID input and shows confirmation menu.
-func (m *MainMenu) handleBanUserModalSubmit(
-	event *events.ModalSubmitInteractionCreate, s *session.Session, r *pagination.Respond,
-) {
-	userID := event.Data.Text(constants.BanUserInputCustomID)
-	banType := event.Data.Text(constants.BanTypeInputCustomID)
-	notes := event.Data.Text(constants.AdminReasonInputCustomID)
-	duration := event.Data.Text(constants.BanDurationInputCustomID)
+func (m *MainMenu) handleBanUserModalSubmit(ctx *interaction.Context, s *session.Session) {
+	// Get data from modal
+	data := ctx.Event().ModalData()
+	userID := data.Text(constants.BanUserInputCustomID)
+	banType := data.Text(constants.BanTypeInputCustomID)
+	notes := data.Text(constants.AdminReasonInputCustomID)
+	duration := data.Text(constants.BanDurationInputCustomID)
 
 	// Parse ban type
 	banReason, err := enum.BanReasonString(banType)
@@ -198,7 +185,7 @@ func (m *MainMenu) handleBanUserModalSubmit(
 	expiresAt, err := utils.ParseBanDuration(duration)
 	if err != nil && !errors.Is(err, utils.ErrPermanentBan) {
 		m.layout.logger.Debug("Failed to parse ban duration", zap.Error(err))
-		r.Cancel(event, s, fmt.Sprintf("Failed to parse ban duration: %s", err))
+		ctx.Error(fmt.Sprintf("Failed to parse ban duration: %s", err))
 		return
 	}
 
@@ -207,44 +194,44 @@ func (m *MainMenu) handleBanUserModalSubmit(
 	session.AdminReason.Set(s, notes)
 	session.AdminBanReason.Set(s, banReason)
 	session.AdminBanExpiry.Set(s, expiresAt) // Will be nil for permanent bans
-	r.Reload(event, s, "")
+	ctx.Show(constants.AdminActionConfirmPageName, "")
 }
 
 // handleUnbanUserModalSubmit processes the user ID input and shows confirmation menu.
-func (m *MainMenu) handleUnbanUserModalSubmit(
-	event *events.ModalSubmitInteractionCreate, s *session.Session, r *pagination.Respond,
-) {
-	userID := event.Data.Text(constants.UnbanUserInputCustomID)
-	notes := event.Data.Text(constants.AdminReasonInputCustomID)
+func (m *MainMenu) handleUnbanUserModalSubmit(ctx *interaction.Context, s *session.Session) {
+	// Get data from modal
+	data := ctx.Event().ModalData()
+	userID := data.Text(constants.UnbanUserInputCustomID)
+	notes := data.Text(constants.AdminReasonInputCustomID)
 
 	session.AdminAction.Set(s, constants.UnbanUserAction)
 	session.AdminActionID.Set(s, userID)
 	session.AdminReason.Set(s, notes)
-	r.Show(event, s, constants.AdminActionConfirmPageName, "")
+	ctx.Show(constants.AdminActionConfirmPageName, "")
 }
 
 // handleDeleteUserModalSubmit processes the user ID input and shows confirmation menu.
-func (m *MainMenu) handleDeleteUserModalSubmit(
-	event *events.ModalSubmitInteractionCreate, s *session.Session, r *pagination.Respond,
-) {
-	userID := event.Data.Text(constants.DeleteUserInputCustomID)
-	reason := event.Data.Text(constants.AdminReasonInputCustomID)
+func (m *MainMenu) handleDeleteUserModalSubmit(ctx *interaction.Context, s *session.Session) {
+	// Get data from modal
+	data := ctx.Event().ModalData()
+	userID := data.Text(constants.DeleteUserInputCustomID)
+	reason := data.Text(constants.AdminReasonInputCustomID)
 
 	session.AdminAction.Set(s, constants.DeleteUserAction)
 	session.AdminActionID.Set(s, userID)
 	session.AdminReason.Set(s, reason)
-	r.Show(event, s, constants.AdminActionConfirmPageName, "")
+	ctx.Show(constants.AdminActionConfirmPageName, "")
 }
 
 // handleDeleteGroupModalSubmit processes the group ID input and shows confirmation menu.
-func (m *MainMenu) handleDeleteGroupModalSubmit(
-	event *events.ModalSubmitInteractionCreate, s *session.Session, r *pagination.Respond,
-) {
-	groupID := event.Data.Text(constants.DeleteGroupInputCustomID)
-	reason := event.Data.Text(constants.AdminReasonInputCustomID)
+func (m *MainMenu) handleDeleteGroupModalSubmit(ctx *interaction.Context, s *session.Session) {
+	// Get data from modal
+	data := ctx.Event().ModalData()
+	groupID := data.Text(constants.DeleteGroupInputCustomID)
+	reason := data.Text(constants.AdminReasonInputCustomID)
 
 	session.AdminAction.Set(s, constants.DeleteGroupAction)
 	session.AdminActionID.Set(s, groupID)
 	session.AdminReason.Set(s, reason)
-	r.Show(event, s, constants.AdminActionConfirmPageName, "")
+	ctx.Show(constants.AdminActionConfirmPageName, "")
 }

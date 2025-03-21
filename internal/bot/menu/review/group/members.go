@@ -6,14 +6,12 @@ import (
 	"strconv"
 
 	"github.com/disgoorg/disgo/discord"
-	"github.com/disgoorg/disgo/events"
 	"github.com/jaxron/roapi.go/pkg/api/resources/thumbnails"
 	apiTypes "github.com/jaxron/roapi.go/pkg/api/types"
 	builder "github.com/robalyx/rotector/internal/bot/builder/review/group"
 	"github.com/robalyx/rotector/internal/bot/constants"
-	"github.com/robalyx/rotector/internal/bot/core/pagination"
+	"github.com/robalyx/rotector/internal/bot/core/interaction"
 	"github.com/robalyx/rotector/internal/bot/core/session"
-	"github.com/robalyx/rotector/internal/bot/interfaces"
 	"github.com/robalyx/rotector/internal/common/storage/database/types"
 	"go.uber.org/zap"
 )
@@ -21,13 +19,13 @@ import (
 // MembersMenu handles the display and interaction logic for viewing a group's flagged members.
 type MembersMenu struct {
 	layout *Layout
-	page   *pagination.Page
+	page   *interaction.Page
 }
 
 // NewMembersMenu creates a new members menu.
 func NewMembersMenu(layout *Layout) *MembersMenu {
 	m := &MembersMenu{layout: layout}
-	m.page = &pagination.Page{
+	m.page = &interaction.Page{
 		Name: constants.GroupMembersPageName,
 		Message: func(s *session.Session) *discord.MessageUpdateBuilder {
 			return builder.NewMembersBuilder(s).Build()
@@ -39,20 +37,20 @@ func NewMembersMenu(layout *Layout) *MembersMenu {
 }
 
 // Show prepares and displays the members interface for a specific page.
-func (m *MembersMenu) Show(event interfaces.CommonEvent, s *session.Session, r *pagination.Respond) {
+func (m *MembersMenu) Show(ctx *interaction.Context, s *session.Session) {
 	group := session.GroupTarget.Get(s)
 
 	// Get flagged users from tracking
-	memberIDs, err := m.layout.db.Model().Tracking().GetFlaggedUsers(context.Background(), group.ID)
+	memberIDs, err := m.layout.db.Model().Tracking().GetFlaggedUsers(ctx.Context(), group.ID)
 	if err != nil {
 		m.layout.logger.Error("Failed to fetch flagged users", zap.Error(err))
-		r.Error(event, "Failed to load flagged users. Please try again.")
+		ctx.Error("Failed to load flagged users. Please try again.")
 		return
 	}
 
 	// Return to review menu if group has no flagged members
 	if len(memberIDs) == 0 {
-		r.Cancel(event, s, "No flagged members found for this group.")
+		ctx.Error("No flagged members found for this group.")
 		return
 	}
 
@@ -64,18 +62,18 @@ func (m *MembersMenu) Show(event interfaces.CommonEvent, s *session.Session, r *
 
 	// Get user data from database only for the current page
 	members, err := m.layout.db.Model().User().GetUsersByIDs(
-		context.Background(),
+		ctx.Context(),
 		pageMembers,
 		types.UserFieldBasic|types.UserFieldReasons|types.UserFieldConfidence,
 	)
 	if err != nil {
 		m.layout.logger.Error("Failed to get user data", zap.Error(err))
-		r.Error(event, "Failed to fetch member data. Please try again.")
+		ctx.Error("Failed to fetch member data. Please try again.")
 		return
 	}
 
 	// Start fetching presences for visible members in background
-	presenceChan := m.layout.presenceFetcher.FetchPresencesConcurrently(context.Background(), pageMembers)
+	presenceChan := m.layout.presenceFetcher.FetchPresencesConcurrently(ctx.Context(), pageMembers)
 
 	// Store data in session
 	session.GroupPageFlaggedMembers.Set(s, members)
@@ -84,11 +82,11 @@ func (m *MembersMenu) Show(event interfaces.CommonEvent, s *session.Session, r *
 	session.PaginationTotalItems.Set(s, len(memberIDs))
 
 	// Start streaming images
-	m.layout.imageStreamer.Stream(pagination.StreamRequest{
-		Event:    event,
+	m.layout.imageStreamer.Stream(interaction.StreamRequest{
+		Event:    ctx.Event(),
 		Session:  s,
 		Page:     m.page,
-		URLFunc:  func() []string { return m.fetchMemberThumbnails(pageMembers) },
+		URLFunc:  func() []string { return m.fetchMemberThumbnails(ctx.Context(), pageMembers) },
 		Columns:  constants.MembersGridColumns,
 		Rows:     constants.MembersGridRows,
 		MaxItems: constants.MembersPerPage,
@@ -103,9 +101,7 @@ func (m *MembersMenu) Show(event interfaces.CommonEvent, s *session.Session, r *
 }
 
 // handlePageNavigation processes navigation button clicks.
-func (m *MembersMenu) handlePageNavigation(
-	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, customID string,
-) {
+func (m *MembersMenu) handlePageNavigation(ctx *interaction.Context, s *session.Session, customID string) {
 	action := session.ViewerAction(customID)
 	switch action {
 	case session.ViewerFirstPage, session.ViewerPrevPage, session.ViewerNextPage, session.ViewerLastPage:
@@ -116,22 +112,22 @@ func (m *MembersMenu) handlePageNavigation(
 		page := action.ParsePageAction(s, maxPage)
 
 		session.PaginationPage.Set(s, page)
-		r.Reload(event, s, "")
+		ctx.Reload("")
 		return
 	}
 
 	switch customID {
 	case constants.BackButtonCustomID:
-		r.NavigateBack(event, s, "")
+		ctx.NavigateBack("")
 
 	default:
 		m.layout.logger.Warn("Invalid members viewer action", zap.String("action", string(action)))
-		r.Error(event, "Invalid interaction.")
+		ctx.Error("Invalid interaction.")
 	}
 }
 
 // fetchMemberThumbnails fetches thumbnails for a slice of member IDs.
-func (m *MembersMenu) fetchMemberThumbnails(members []uint64) []string {
+func (m *MembersMenu) fetchMemberThumbnails(ctx context.Context, members []uint64) []string {
 	// Create batch request for member avatars
 	requests := thumbnails.NewBatchThumbnailsBuilder()
 	for _, memberID := range members {
@@ -145,7 +141,7 @@ func (m *MembersMenu) fetchMemberThumbnails(members []uint64) []string {
 	}
 
 	// Process thumbnails
-	thumbnailMap := m.layout.thumbnailFetcher.ProcessBatchThumbnails(context.Background(), requests)
+	thumbnailMap := m.layout.thumbnailFetcher.ProcessBatchThumbnails(ctx, requests)
 
 	// Convert map to ordered slice of URLs
 	thumbnailURLs := make([]string, len(members))

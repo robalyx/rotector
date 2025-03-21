@@ -6,27 +6,25 @@ import (
 	"strconv"
 
 	"github.com/disgoorg/disgo/discord"
-	"github.com/disgoorg/disgo/events"
 	"github.com/jaxron/roapi.go/pkg/api/resources/thumbnails"
 	apiTypes "github.com/jaxron/roapi.go/pkg/api/types"
 	builder "github.com/robalyx/rotector/internal/bot/builder/review/user"
 	"github.com/robalyx/rotector/internal/bot/constants"
-	"github.com/robalyx/rotector/internal/bot/core/pagination"
+	"github.com/robalyx/rotector/internal/bot/core/interaction"
 	"github.com/robalyx/rotector/internal/bot/core/session"
-	"github.com/robalyx/rotector/internal/bot/interfaces"
 	"go.uber.org/zap"
 )
 
 // OutfitsMenu handles the display and interaction logic for viewing a user's outfits.
 type OutfitsMenu struct {
 	layout *Layout
-	page   *pagination.Page
+	page   *interaction.Page
 }
 
 // NewOutfitsMenu creates a new outfits menu.
 func NewOutfitsMenu(layout *Layout) *OutfitsMenu {
 	m := &OutfitsMenu{layout: layout}
-	m.page = &pagination.Page{
+	m.page = &interaction.Page{
 		Name: constants.UserOutfitsPageName,
 		Message: func(s *session.Session) *discord.MessageUpdateBuilder {
 			return builder.NewOutfitsBuilder(s).Build()
@@ -38,12 +36,12 @@ func NewOutfitsMenu(layout *Layout) *OutfitsMenu {
 }
 
 // Show prepares and displays the outfits interface for a specific page.
-func (m *OutfitsMenu) Show(event interfaces.CommonEvent, s *session.Session, r *pagination.Respond) {
+func (m *OutfitsMenu) Show(ctx *interaction.Context, s *session.Session) {
 	user := session.UserTarget.Get(s)
 
 	// Return to review menu if user has no outfits
 	if len(user.Outfits) == 0 {
-		r.Cancel(event, s, "No outfits found for this user.")
+		ctx.Error("No outfits found for this user.")
 		return
 	}
 
@@ -61,11 +59,11 @@ func (m *OutfitsMenu) Show(event interfaces.CommonEvent, s *session.Session, r *
 	session.PaginationTotalItems.Set(s, len(user.Outfits))
 
 	// Start streaming images
-	m.layout.imageStreamer.Stream(pagination.StreamRequest{
-		Event:    event,
+	m.layout.imageStreamer.Stream(interaction.StreamRequest{
+		Event:    ctx.Event(),
 		Session:  s,
 		Page:     m.page,
-		URLFunc:  func() []string { return m.fetchOutfitThumbnails(pageOutfits) },
+		URLFunc:  func() []string { return m.fetchOutfitThumbnails(ctx.Context(), pageOutfits) },
 		Columns:  constants.OutfitGridColumns,
 		Rows:     constants.OutfitGridRows,
 		MaxItems: constants.OutfitsPerPage,
@@ -76,9 +74,7 @@ func (m *OutfitsMenu) Show(event interfaces.CommonEvent, s *session.Session, r *
 }
 
 // handlePageNavigation processes navigation button clicks.
-func (m *OutfitsMenu) handlePageNavigation(
-	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, customID string,
-) {
+func (m *OutfitsMenu) handlePageNavigation(ctx *interaction.Context, s *session.Session, customID string) {
 	action := session.ViewerAction(customID)
 	switch action {
 	case session.ViewerFirstPage, session.ViewerPrevPage, session.ViewerNextPage, session.ViewerLastPage:
@@ -89,21 +85,21 @@ func (m *OutfitsMenu) handlePageNavigation(
 		page := action.ParsePageAction(s, maxPage)
 
 		session.PaginationPage.Set(s, page)
-		r.Reload(event, s, "")
+		ctx.Reload("")
 		return
 	}
 
 	switch customID {
 	case constants.BackButtonCustomID:
-		r.NavigateBack(event, s, "")
+		ctx.NavigateBack("")
 	default:
 		m.layout.logger.Warn("Invalid outfits viewer action", zap.String("action", string(action)))
-		r.Error(event, "Invalid interaction.")
+		ctx.Error("Invalid interaction.")
 	}
 }
 
 // fetchOutfitThumbnails gets the thumbnail URLs for a list of outfits.
-func (m *OutfitsMenu) fetchOutfitThumbnails(outfits []*apiTypes.Outfit) []string {
+func (m *OutfitsMenu) fetchOutfitThumbnails(ctx context.Context, outfits []*apiTypes.Outfit) []string {
 	// Create batch request for outfit thumbnails
 	requests := thumbnails.NewBatchThumbnailsBuilder()
 	for _, outfit := range outfits {
@@ -117,7 +113,7 @@ func (m *OutfitsMenu) fetchOutfitThumbnails(outfits []*apiTypes.Outfit) []string
 	}
 
 	// Process thumbnails
-	thumbnailMap := m.layout.thumbnailFetcher.ProcessBatchThumbnails(context.Background(), requests)
+	thumbnailMap := m.layout.thumbnailFetcher.ProcessBatchThumbnails(ctx, requests)
 
 	// Convert map to ordered slice of URLs
 	thumbnailURLs := make([]string, len(outfits))

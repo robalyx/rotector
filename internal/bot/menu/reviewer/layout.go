@@ -2,7 +2,7 @@ package reviewer
 
 import (
 	"github.com/disgoorg/disgo/bot"
-	"github.com/robalyx/rotector/internal/bot/core/pagination"
+	"github.com/robalyx/rotector/internal/bot/core/interaction"
 	"github.com/robalyx/rotector/internal/bot/core/session"
 	"github.com/robalyx/rotector/internal/common/setup"
 	"github.com/robalyx/rotector/internal/common/storage/database"
@@ -31,8 +31,8 @@ func New(app *setup.App, client bot.Client) *Layout {
 }
 
 // Pages returns all the pages in the layout.
-func (l *Layout) Pages() []*pagination.Page {
-	return []*pagination.Page{
+func (l *Layout) Pages() []*interaction.Page {
+	return []*interaction.Page{
 		l.menu.page,
 	}
 }

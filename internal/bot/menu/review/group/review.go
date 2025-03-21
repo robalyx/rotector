@@ -1,7 +1,6 @@
 package group
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"slices"
@@ -10,12 +9,10 @@ import (
 	"time"
 
 	"github.com/disgoorg/disgo/discord"
-	"github.com/disgoorg/disgo/events"
 	builder "github.com/robalyx/rotector/internal/bot/builder/review/group"
 	"github.com/robalyx/rotector/internal/bot/constants"
-	"github.com/robalyx/rotector/internal/bot/core/pagination"
+	"github.com/robalyx/rotector/internal/bot/core/interaction"
 	"github.com/robalyx/rotector/internal/bot/core/session"
-	"github.com/robalyx/rotector/internal/bot/interfaces"
 	"github.com/robalyx/rotector/internal/bot/menu/log"
 	"github.com/robalyx/rotector/internal/common/storage/database/types"
 	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
@@ -28,13 +25,13 @@ var ErrBreakRequired = errors.New("break required")
 // ReviewMenu handles the display and interaction logic for the review interface.
 type ReviewMenu struct {
 	layout *Layout
-	page   *pagination.Page
+	page   *interaction.Page
 }
 
 // NewMenu creates a new review menu.
 func NewReviewMenu(layout *Layout) *ReviewMenu {
 	m := &ReviewMenu{layout: layout}
-	m.page = &pagination.Page{
+	m.page = &interaction.Page{
 		Name: constants.GroupReviewPageName,
 		Message: func(s *session.Session) *discord.MessageUpdateBuilder {
 			return builder.NewReviewBuilder(s, layout.db).Build()
@@ -48,9 +45,9 @@ func NewReviewMenu(layout *Layout) *ReviewMenu {
 }
 
 // Show prepares and displays the review interface.
-func (m *ReviewMenu) Show(event interfaces.CommonEvent, s *session.Session, r *pagination.Respond) {
+func (m *ReviewMenu) Show(ctx *interaction.Context, s *session.Session) {
 	// Force training mode if user is not a reviewer
-	if !s.BotSettings().IsReviewer(uint64(event.User().ID)) && session.UserReviewMode.Get(s) != enum.ReviewModeTraining {
+	if !s.BotSettings().IsReviewer(uint64(ctx.Event().User().ID)) && session.UserReviewMode.Get(s) != enum.ReviewModeTraining {
 		session.UserReviewMode.Set(s, enum.ReviewModeTraining)
 	}
 
@@ -59,33 +56,33 @@ func (m *ReviewMenu) Show(event interfaces.CommonEvent, s *session.Session, r *p
 	if group == nil {
 		var isBanned bool
 		var err error
-		group, isBanned, err = m.fetchNewTarget(event, s, r)
+		group, isBanned, err = m.fetchNewTarget(ctx, s)
 		if err != nil {
 			if errors.Is(err, types.ErrNoGroupsToReview) {
-				r.Show(event, s, constants.DashboardPageName, "No groups to review. Please check back later.")
+				ctx.Show(constants.DashboardPageName, "No groups to review. Please check back later.")
 				return
 			}
 			if errors.Is(err, ErrBreakRequired) {
 				return
 			}
 			m.layout.logger.Error("Failed to fetch a new group", zap.Error(err))
-			r.Error(event, "Failed to fetch a new group. Please try again.")
+			ctx.Error("Failed to fetch a new group. Please try again.")
 			return
 		}
 
 		if isBanned {
-			r.Show(event, s, constants.BanPageName, "You have been banned for suspicious voting patterns.")
+			ctx.Show(constants.BanPageName, "You have been banned for suspicious voting patterns.")
 			return
 		}
 	}
 
 	// Fetch latest group info from API
-	groupInfo, err := m.layout.roAPI.Groups().GetGroupInfo(context.Background(), group.ID)
+	groupInfo, err := m.layout.roAPI.Groups().GetGroupInfo(ctx.Context(), group.ID)
 	if err != nil {
 		m.layout.logger.Error("Failed to fetch group info",
 			zap.Error(err),
 			zap.Uint64("groupID", group.ID))
-		r.Error(event, "Failed to fetch latest group information. Please try again.")
+		ctx.Error("Failed to fetch latest group information. Please try again.")
 		return
 	}
 
@@ -94,7 +91,7 @@ func (m *ReviewMenu) Show(event interfaces.CommonEvent, s *session.Session, r *p
 
 	// Fetch review logs for the group
 	logs, nextCursor, err := m.layout.db.Model().Activity().GetLogs(
-		context.Background(),
+		ctx.Context(),
 		types.ActivityFilter{
 			GroupID:      group.ID,
 			ReviewerID:   0,
@@ -116,46 +113,40 @@ func (m *ReviewMenu) Show(event interfaces.CommonEvent, s *session.Session, r *p
 }
 
 // handleSelectMenu processes select menu interactions.
-func (m *ReviewMenu) handleSelectMenu(
-	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, customID, option string,
-) {
-	if m.checkCaptchaRequired(event, s, r) {
+func (m *ReviewMenu) handleSelectMenu(ctx *interaction.Context, s *session.Session, customID, option string) {
+	if m.checkCaptchaRequired(ctx, s) {
 		return
 	}
 
 	switch customID {
 	case constants.SortOrderSelectMenuCustomID:
-		m.handleSortOrderSelection(event, s, r, option)
+		m.handleSortOrderSelection(ctx, s, option)
 	case constants.ActionSelectMenuCustomID:
-		m.handleActionSelection(event, s, r, option)
+		m.handleActionSelection(ctx, s, option)
 	case constants.ReasonSelectMenuCustomID:
-		m.handleReasonSelection(event, s, r, option)
+		m.handleReasonSelection(ctx, s, option)
 	}
 }
 
 // handleSortOrderSelection processes sort order menu selections.
-func (m *ReviewMenu) handleSortOrderSelection(
-	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, option string,
-) {
+func (m *ReviewMenu) handleSortOrderSelection(ctx *interaction.Context, s *session.Session, option string) {
 	// Parse option to review sort
 	sortBy, err := enum.ReviewSortByString(option)
 	if err != nil {
 		m.layout.logger.Error("Failed to parse sort order", zap.Error(err))
-		r.Error(event, "Failed to parse sort order. Please try again.")
+		ctx.Error("Failed to parse sort order. Please try again.")
 		return
 	}
 
 	// Update user's group sort preference
 	session.UserGroupDefaultSort.Set(s, sortBy)
 
-	r.Reload(event, s, "Changed sort order. Will take effect for the next group.")
+	ctx.Reload("Changed sort order. Will take effect for the next group.")
 }
 
 // handleActionSelection processes action menu selections.
-func (m *ReviewMenu) handleActionSelection(
-	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, option string,
-) {
-	userID := uint64(event.User().ID)
+func (m *ReviewMenu) handleActionSelection(ctx *interaction.Context, s *session.Session, option string) {
+	userID := uint64(ctx.Event().User().ID)
 	isReviewer := s.BotSettings().IsReviewer(userID)
 
 	// Check reviewer-only options
@@ -167,7 +158,7 @@ func (m *ReviewMenu) handleActionSelection(
 			m.layout.logger.Error("Non-reviewer attempted restricted action",
 				zap.Uint64("user_id", userID),
 				zap.String("action", option))
-			r.Error(event, "You do not have permission to perform this action.")
+			ctx.Error("You do not have permission to perform this action.")
 			return
 		}
 	}
@@ -176,66 +167,64 @@ func (m *ReviewMenu) handleActionSelection(
 	switch option {
 	case constants.GroupViewMembersButtonCustomID:
 		session.PaginationPage.Set(s, 0)
-		r.Show(event, s, constants.GroupMembersPageName, "")
+		ctx.Show(constants.GroupMembersPageName, "")
 	case constants.OpenAIChatButtonCustomID:
-		m.handleOpenAIChat(event, s, r)
+		m.handleOpenAIChat(ctx, s)
 	case constants.GroupViewLogsButtonCustomID:
-		m.handleViewGroupLogs(event, s, r)
+		m.handleViewGroupLogs(ctx, s)
 	case constants.ReviewModeOption:
 		session.SettingType.Set(s, constants.UserSettingPrefix)
 		session.SettingCustomID.Set(s, constants.ReviewModeOption)
-		r.Show(event, s, constants.SettingUpdatePageName, "")
+		ctx.Show(constants.SettingUpdatePageName, "")
 	case constants.ReviewTargetModeOption:
 		session.SettingType.Set(s, constants.UserSettingPrefix)
 		session.SettingCustomID.Set(s, constants.ReviewTargetModeOption)
-		r.Show(event, s, constants.SettingUpdatePageName, "")
+		ctx.Show(constants.SettingUpdatePageName, "")
 	}
 }
 
 // handleButton processes button clicks.
-func (m *ReviewMenu) handleButton(
-	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, customID string,
-) {
-	if m.checkCaptchaRequired(event, s, r) {
+func (m *ReviewMenu) handleButton(ctx *interaction.Context, s *session.Session, customID string) {
+	if m.checkCaptchaRequired(ctx, s) {
 		return
 	}
 
 	switch customID {
 	case constants.BackButtonCustomID:
-		r.NavigateBack(event, s, "")
+		ctx.NavigateBack("")
 	case constants.PrevReviewButtonCustomID:
-		m.handleNavigateGroup(event, s, r, false)
+		m.handleNavigateGroup(ctx, s, false)
 	case constants.NextReviewButtonCustomID:
-		m.handleNavigateGroup(event, s, r, true)
+		m.handleNavigateGroup(ctx, s, true)
 	case constants.ConfirmButtonCustomID:
-		m.handleConfirmGroup(event, s, r)
+		m.handleConfirmGroup(ctx, s)
 	case constants.ClearButtonCustomID:
-		m.handleClearGroup(event, s, r)
+		m.handleClearGroup(ctx, s)
 	}
 }
 
 // handleModal handles modal submissions for the review menu.
-func (m *ReviewMenu) handleModal(event *events.ModalSubmitInteractionCreate, s *session.Session, r *pagination.Respond) {
-	if m.checkCaptchaRequired(event, s, r) {
+func (m *ReviewMenu) handleModal(ctx *interaction.Context, s *session.Session) {
+	if m.checkCaptchaRequired(ctx, s) {
 		return
 	}
 
-	switch event.Data.CustomID {
+	switch ctx.Event().CustomID() {
 	case constants.AddReasonModalCustomID:
-		m.handleReasonModalSubmit(event, s, r)
+		m.handleReasonModalSubmit(ctx, s)
 	}
 }
 
 // handleOpenAIChat handles the button to open the AI chat for the current group.
-func (m *ReviewMenu) handleOpenAIChat(event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond) {
+func (m *ReviewMenu) handleOpenAIChat(ctx *interaction.Context, s *session.Session) {
 	group := session.GroupTarget.Get(s)
 	groupInfo := session.GroupInfo.Get(s)
 
 	// Get flagged users from tracking
-	memberIDs, err := m.layout.db.Model().Tracking().GetFlaggedUsers(context.Background(), group.ID)
+	memberIDs, err := m.layout.db.Model().Tracking().GetFlaggedUsers(ctx.Context(), group.ID)
 	if err != nil {
 		m.layout.logger.Error("Failed to fetch flagged users", zap.Error(err))
-		r.Error(event, "Failed to load flagged users. Please try again.")
+		ctx.Error("Failed to load flagged users. Please try again.")
 		return
 	}
 
@@ -246,7 +235,7 @@ func (m *ReviewMenu) handleOpenAIChat(event *events.ComponentInteractionCreate, 
 	}
 
 	flaggedMembers, err := m.layout.db.Model().User().GetUsersByIDs(
-		context.Background(),
+		ctx.Context(),
 		memberIDs,
 		types.UserFieldBasic|types.UserFieldReasons|types.UserFieldConfidence,
 	)
@@ -325,13 +314,11 @@ Flagged Members (%d total, showing first %d):
 	// Update session and navigate to chat
 	session.ChatContext.Set(s, context)
 	session.PaginationPage.Set(s, 0)
-	r.Show(event, s, constants.ChatPageName, "")
+	ctx.Show(constants.ChatPageName, "")
 }
 
 // handleViewGroupLogs handles the shortcut to view group logs.
-func (m *ReviewMenu) handleViewGroupLogs(
-	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond,
-) {
+func (m *ReviewMenu) handleViewGroupLogs(ctx *interaction.Context, s *session.Session) {
 	// Get current group
 	group := session.GroupTarget.Get(s)
 
@@ -341,13 +328,11 @@ func (m *ReviewMenu) handleViewGroupLogs(
 	session.LogFilterGroupID.Set(s, group.ID)
 
 	// Show the logs menu
-	r.Show(event, s, constants.LogPageName, "")
+	ctx.Show(constants.LogPageName, "")
 }
 
 // handleNavigateGroup handles navigation to previous or next group based on the button pressed.
-func (m *ReviewMenu) handleNavigateGroup(
-	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, isNext bool,
-) {
+func (m *ReviewMenu) handleNavigateGroup(ctx *interaction.Context, s *session.Session, isNext bool) {
 	// Get the review history and current index
 	history := session.GroupReviewHistory.Get(s)
 	index := session.GroupReviewHistoryIndex.Get(s)
@@ -356,17 +341,17 @@ func (m *ReviewMenu) handleNavigateGroup(
 	if isNext && (index >= len(history)-1 || len(history) == 0) {
 		// Clear current group and load next one
 		session.GroupTarget.Delete(s)
-		r.Reload(event, s, "Skipped group.")
+		ctx.Reload("Skipped group.")
 		m.updateCounters(s)
 
 		// Log the skip action
 		group := session.GroupTarget.Get(s)
 		if group != nil {
-			m.layout.db.Model().Activity().Log(context.Background(), &types.ActivityLog{
+			m.layout.db.Model().Activity().Log(ctx.Context(), &types.ActivityLog{
 				ActivityTarget: types.ActivityTarget{
 					GroupID: group.ID,
 				},
-				ReviewerID:        uint64(event.User().ID),
+				ReviewerID:        uint64(ctx.Event().User().ID),
 				ActivityType:      enum.ActivityTypeGroupSkipped,
 				ActivityTimestamp: time.Now(),
 				Details:           map[string]any{},
@@ -378,13 +363,13 @@ func (m *ReviewMenu) handleNavigateGroup(
 	// For previous navigation or when there's history to navigate
 	if isNext {
 		if index >= len(history)-1 {
-			r.Cancel(event, s, "No next group to navigate to.")
+			ctx.Error("No next group to navigate to.")
 			return
 		}
 		index++
 	} else {
 		if index <= 0 || len(history) == 0 {
-			r.Cancel(event, s, "No previous group to navigate to.")
+			ctx.Error("No previous group to navigate to.")
 			return
 		}
 		index--
@@ -397,7 +382,7 @@ func (m *ReviewMenu) handleNavigateGroup(
 	targetGroupID := history[index]
 	m.layout.logger.Info("Fetching group", zap.Uint64("group_id", targetGroupID))
 	group, err := m.layout.db.Service().Group().GetGroupByID(
-		context.Background(),
+		ctx.Context(),
 		strconv.FormatUint(targetGroupID, 10),
 		types.GroupFieldAll,
 	)
@@ -414,21 +399,21 @@ func (m *ReviewMenu) handleNavigateGroup(
 			session.GroupReviewHistoryIndex.Set(s, index)
 
 			// Try again with updated history
-			m.handleNavigateGroup(event, s, r, isNext)
+			m.handleNavigateGroup(ctx, s, isNext)
 			return
 		}
 
 		direction := map[bool]string{true: "next", false: "previous"}[isNext]
 		m.layout.logger.Error(fmt.Sprintf("Failed to fetch %s group", direction), zap.Error(err))
-		r.Error(event, fmt.Sprintf("Failed to load %s group. Please try again.", direction))
+		ctx.Error(fmt.Sprintf("Failed to load %s group. Please try again.", direction))
 		return
 	}
 
 	// Get flagged users from tracking
-	flaggedCount, err := m.layout.db.Model().Tracking().GetFlaggedUsersCount(context.Background(), group.ID)
+	flaggedCount, err := m.layout.db.Model().Tracking().GetFlaggedUsersCount(ctx.Context(), group.ID)
 	if err != nil {
 		m.layout.logger.Error("Failed to fetch flagged users", zap.Error(err))
-		r.Error(event, "Failed to load flagged users. Please try again.")
+		ctx.Error("Failed to load flagged users. Please try again.")
 		return
 	}
 
@@ -439,43 +424,43 @@ func (m *ReviewMenu) handleNavigateGroup(
 	session.ReasonsChanged.Set(s, false)
 
 	// Log the view action
-	go m.layout.db.Model().Activity().Log(context.Background(), &types.ActivityLog{
+	go m.layout.db.Model().Activity().Log(ctx.Context(), &types.ActivityLog{
 		ActivityTarget: types.ActivityTarget{
 			GroupID: group.ID,
 		},
-		ReviewerID:        uint64(event.User().ID),
+		ReviewerID:        uint64(ctx.Event().User().ID),
 		ActivityType:      enum.ActivityTypeGroupViewed,
 		ActivityTimestamp: time.Now(),
 		Details:           map[string]any{},
 	})
 
 	direction := map[bool]string{true: "next", false: "previous"}[isNext]
-	r.Reload(event, s, fmt.Sprintf("Navigated to %s group.", direction))
+	ctx.Reload(fmt.Sprintf("Navigated to %s group.", direction))
 }
 
 // handleConfirmGroup moves a group to the confirmed state and logs the action.
-func (m *ReviewMenu) handleConfirmGroup(event interfaces.CommonEvent, s *session.Session, r *pagination.Respond) {
+func (m *ReviewMenu) handleConfirmGroup(ctx *interaction.Context, s *session.Session) {
 	group := session.GroupTarget.Get(s)
 
 	var actionMsg string
 	if session.UserReviewMode.Get(s) == enum.ReviewModeTraining {
 		// Training mode - increment downvotes
 		if err := m.layout.db.Service().Reputation().UpdateGroupVotes(
-			context.Background(), group.ID, uint64(event.User().ID), false,
+			ctx.Context(), group.ID, uint64(ctx.Event().User().ID), false,
 		); err != nil {
 			m.layout.logger.Error("Failed to update downvotes", zap.Error(err))
-			r.Error(event, "Failed to update downvotes. Please try again.")
+			ctx.Error("Failed to update downvotes. Please try again.")
 			return
 		}
 		group.Reputation.Downvotes++
 		actionMsg = "downvoted"
 
 		// Log the training downvote action
-		go m.layout.db.Model().Activity().Log(context.Background(), &types.ActivityLog{
+		go m.layout.db.Model().Activity().Log(ctx.Context(), &types.ActivityLog{
 			ActivityTarget: types.ActivityTarget{
 				GroupID: group.ID,
 			},
-			ReviewerID:        uint64(event.User().ID),
+			ReviewerID:        uint64(ctx.Event().User().ID),
 			ActivityType:      enum.ActivityTypeGroupTrainingDownvote,
 			ActivityTimestamp: time.Now(),
 			Details: map[string]any{
@@ -485,10 +470,10 @@ func (m *ReviewMenu) handleConfirmGroup(event interfaces.CommonEvent, s *session
 		})
 	} else {
 		// Standard mode - check permissions and confirm group
-		if !s.BotSettings().IsReviewer(uint64(event.User().ID)) {
+		if !s.BotSettings().IsReviewer(uint64(ctx.Event().User().ID)) {
 			m.layout.logger.Error("Non-reviewer attempted to confirm group",
-				zap.Uint64("user_id", uint64(event.User().ID)))
-			r.Error(event, "You do not have permission to confirm groups.")
+				zap.Uint64("user_id", uint64(ctx.Event().User().ID)))
+			ctx.Error("You do not have permission to confirm groups.")
 			return
 		}
 
@@ -499,16 +484,16 @@ func (m *ReviewMenu) handleConfirmGroup(event interfaces.CommonEvent, s *session
 
 			// If there's a strong consensus for clearing, prevent confirmation
 			if upvotePercentage >= constants.VoteConsensusThreshold {
-				r.Cancel(event, s, fmt.Sprintf("Cannot confirm - %.0f%% of %d votes indicate this group is safe",
+				ctx.Error(fmt.Sprintf("Cannot confirm - %.0f%% of %d votes indicate this group is safe",
 					upvotePercentage*100, int(totalVotes)))
 				return
 			}
 		}
 
 		// Confirm the group
-		if err := m.layout.db.Service().Group().ConfirmGroup(context.Background(), group); err != nil {
+		if err := m.layout.db.Service().Group().ConfirmGroup(ctx.Context(), group); err != nil {
 			m.layout.logger.Error("Failed to confirm group", zap.Error(err))
-			r.Error(event, "Failed to confirm the group. Please try again.")
+			ctx.Error("Failed to confirm the group. Please try again.")
 			return
 		}
 		actionMsg = "confirmed"
@@ -516,11 +501,11 @@ func (m *ReviewMenu) handleConfirmGroup(event interfaces.CommonEvent, s *session
 		// Log reason changes if any were made
 		if session.ReasonsChanged.Get(s) {
 			originalReasons := session.OriginalGroupReasons.Get(s)
-			go m.layout.db.Model().Activity().Log(context.Background(), &types.ActivityLog{
+			go m.layout.db.Model().Activity().Log(ctx.Context(), &types.ActivityLog{
 				ActivityTarget: types.ActivityTarget{
 					GroupID: group.ID,
 				},
-				ReviewerID:        uint64(event.User().ID),
+				ReviewerID:        uint64(ctx.Event().User().ID),
 				ActivityType:      enum.ActivityTypeGroupReasonUpdated,
 				ActivityTimestamp: time.Now(),
 				Details: map[string]any{
@@ -531,11 +516,11 @@ func (m *ReviewMenu) handleConfirmGroup(event interfaces.CommonEvent, s *session
 		}
 
 		// Log the confirm action
-		go m.layout.db.Model().Activity().Log(context.Background(), &types.ActivityLog{
+		go m.layout.db.Model().Activity().Log(ctx.Context(), &types.ActivityLog{
 			ActivityTarget: types.ActivityTarget{
 				GroupID: group.ID,
 			},
-			ReviewerID:        uint64(event.User().ID),
+			ReviewerID:        uint64(ctx.Event().User().ID),
 			ActivityType:      enum.ActivityTypeGroupConfirmed,
 			ActivityTimestamp: time.Now(),
 			Details: map[string]any{
@@ -546,33 +531,33 @@ func (m *ReviewMenu) handleConfirmGroup(event interfaces.CommonEvent, s *session
 
 	// Clear current group and load next one
 	session.GroupTarget.Delete(s)
-	r.Reload(event, s, fmt.Sprintf("Group %s.", actionMsg))
+	ctx.Reload(fmt.Sprintf("Group %s.", actionMsg))
 	m.updateCounters(s)
 }
 
 // handleClearGroup removes a group from the flagged state and logs the action.
-func (m *ReviewMenu) handleClearGroup(event interfaces.CommonEvent, s *session.Session, r *pagination.Respond) {
+func (m *ReviewMenu) handleClearGroup(ctx *interaction.Context, s *session.Session) {
 	group := session.GroupTarget.Get(s)
 
 	var actionMsg string
 	if session.UserReviewMode.Get(s) == enum.ReviewModeTraining {
 		// Training mode - increment upvotes
 		if err := m.layout.db.Service().Reputation().UpdateGroupVotes(
-			context.Background(), group.ID, uint64(event.User().ID), true,
+			ctx.Context(), group.ID, uint64(ctx.Event().User().ID), true,
 		); err != nil {
 			m.layout.logger.Error("Failed to update upvotes", zap.Error(err))
-			r.Error(event, "Failed to update upvotes. Please try again.")
+			ctx.Error("Failed to update upvotes. Please try again.")
 			return
 		}
 		group.Reputation.Upvotes++
 		actionMsg = "upvoted"
 
 		// Log the training upvote action
-		go m.layout.db.Model().Activity().Log(context.Background(), &types.ActivityLog{
+		go m.layout.db.Model().Activity().Log(ctx.Context(), &types.ActivityLog{
 			ActivityTarget: types.ActivityTarget{
 				GroupID: group.ID,
 			},
-			ReviewerID:        uint64(event.User().ID),
+			ReviewerID:        uint64(ctx.Event().User().ID),
 			ActivityType:      enum.ActivityTypeGroupTrainingUpvote,
 			ActivityTimestamp: time.Now(),
 			Details: map[string]any{
@@ -582,10 +567,10 @@ func (m *ReviewMenu) handleClearGroup(event interfaces.CommonEvent, s *session.S
 		})
 	} else {
 		// Standard mode - check permissions and clear group
-		if !s.BotSettings().IsReviewer(uint64(event.User().ID)) {
+		if !s.BotSettings().IsReviewer(uint64(ctx.Event().User().ID)) {
 			m.layout.logger.Error("Non-reviewer attempted to clear group",
-				zap.Uint64("user_id", uint64(event.User().ID)))
-			r.Error(event, "You do not have permission to clear groups.")
+				zap.Uint64("user_id", uint64(ctx.Event().User().ID)))
+			ctx.Error("You do not have permission to clear groups.")
 			return
 		}
 
@@ -596,7 +581,7 @@ func (m *ReviewMenu) handleClearGroup(event interfaces.CommonEvent, s *session.S
 
 			// If there's a strong consensus for confirming, prevent clearing
 			if downvotePercentage >= constants.VoteConsensusThreshold {
-				r.Cancel(event, s, fmt.Sprintf("Cannot clear - %.0f%% of %d votes indicate this group is suspicious",
+				ctx.Error(fmt.Sprintf("Cannot clear - %.0f%% of %d votes indicate this group is suspicious",
 					downvotePercentage*100, int(totalVotes)))
 				return
 			}
@@ -605,11 +590,11 @@ func (m *ReviewMenu) handleClearGroup(event interfaces.CommonEvent, s *session.S
 		// Log reason changes if any were made
 		if session.ReasonsChanged.Get(s) {
 			originalReasons := session.OriginalGroupReasons.Get(s)
-			go m.layout.db.Model().Activity().Log(context.Background(), &types.ActivityLog{
+			go m.layout.db.Model().Activity().Log(ctx.Context(), &types.ActivityLog{
 				ActivityTarget: types.ActivityTarget{
 					GroupID: group.ID,
 				},
-				ReviewerID:        uint64(event.User().ID),
+				ReviewerID:        uint64(ctx.Event().User().ID),
 				ActivityType:      enum.ActivityTypeGroupReasonUpdated,
 				ActivityTimestamp: time.Now(),
 				Details: map[string]any{
@@ -620,19 +605,19 @@ func (m *ReviewMenu) handleClearGroup(event interfaces.CommonEvent, s *session.S
 		}
 
 		// Clear the group
-		if err := m.layout.db.Service().Group().ClearGroup(context.Background(), group); err != nil {
+		if err := m.layout.db.Service().Group().ClearGroup(ctx.Context(), group); err != nil {
 			m.layout.logger.Error("Failed to clear group", zap.Error(err))
-			r.Error(event, "Failed to clear the group. Please try again.")
+			ctx.Error("Failed to clear the group. Please try again.")
 			return
 		}
 		actionMsg = "cleared"
 
 		// Log the clear action
-		go m.layout.db.Model().Activity().Log(context.Background(), &types.ActivityLog{
+		go m.layout.db.Model().Activity().Log(ctx.Context(), &types.ActivityLog{
 			ActivityTarget: types.ActivityTarget{
 				GroupID: group.ID,
 			},
-			ReviewerID:        uint64(event.User().ID),
+			ReviewerID:        uint64(ctx.Event().User().ID),
 			ActivityType:      enum.ActivityTypeGroupCleared,
 			ActivityTimestamp: time.Now(),
 			Details:           map[string]any{},
@@ -641,19 +626,17 @@ func (m *ReviewMenu) handleClearGroup(event interfaces.CommonEvent, s *session.S
 
 	// Clear current group and load next one
 	session.GroupTarget.Delete(s)
-	r.Reload(event, s, fmt.Sprintf("Group %s.", actionMsg))
+	ctx.Reload(fmt.Sprintf("Group %s.", actionMsg))
 	m.updateCounters(s)
 }
 
 // handleReasonModalSubmit processes the reason message from the modal.
-func (m *ReviewMenu) handleReasonModalSubmit(
-	event *events.ModalSubmitInteractionCreate, s *session.Session, r *pagination.Respond,
-) {
+func (m *ReviewMenu) handleReasonModalSubmit(ctx *interaction.Context, s *session.Session) {
 	// Get the reason type from session
 	reasonTypeStr := session.SelectedReasonType.Get(s)
 	reasonType, err := enum.GroupReasonTypeString(reasonTypeStr)
 	if err != nil {
-		r.Error(event, "Invalid reason type: "+reasonTypeStr)
+		ctx.Error("Invalid reason type: " + reasonTypeStr)
 		return
 	}
 
@@ -666,9 +649,10 @@ func (m *ReviewMenu) handleReasonModalSubmit(
 	}
 
 	// Get the reason message from the modal
-	reasonMessage := event.Data.Text(constants.AddReasonInputCustomID)
-	confidenceStr := event.Data.Text(constants.AddReasonConfidenceInputCustomID)
-	evidenceText := event.Data.Text(constants.AddReasonEvidenceInputCustomID)
+	data := ctx.Event().ModalData()
+	reasonMessage := data.Text(constants.AddReasonInputCustomID)
+	confidenceStr := data.Text(constants.AddReasonConfidenceInputCustomID)
+	evidenceText := data.Text(constants.AddReasonEvidenceInputCustomID)
 
 	// Get existing reason if editing
 	var existingReason *types.Reason
@@ -689,20 +673,20 @@ func (m *ReviewMenu) handleReasonModalSubmit(
 			session.SelectedReasonType.Delete(s)
 			session.ReasonsChanged.Set(s, true)
 
-			r.Reload(event, s, fmt.Sprintf("Successfully removed %s reason", reasonType.String()))
+			ctx.Reload(fmt.Sprintf("Successfully removed %s reason", reasonType.String()))
 			return
 		}
 
 		// Check if confidence is empty
 		if confidenceStr == "" {
-			r.Cancel(event, s, "Confidence is required when updating a reason.")
+			ctx.Error("Confidence is required when updating a reason.")
 			return
 		}
 
 		// Parse confidence
 		confidence, err := strconv.ParseFloat(confidenceStr, 64)
 		if err != nil || confidence < 0.01 || confidence > 1.0 {
-			r.Cancel(event, s, "Invalid confidence value. Please enter a number between 0.01 and 1.00.")
+			ctx.Error("Invalid confidence value. Please enter a number between 0.01 and 1.00.")
 			return
 		}
 
@@ -722,14 +706,14 @@ func (m *ReviewMenu) handleReasonModalSubmit(
 	} else {
 		// For new reasons, message and confidence are required
 		if reasonMessage == "" || confidenceStr == "" {
-			r.Cancel(event, s, "Reason message and confidence are required for new reasons.")
+			ctx.Error("Reason message and confidence are required for new reasons.")
 			return
 		}
 
 		// Parse confidence
 		confidence, err := strconv.ParseFloat(confidenceStr, 64)
 		if err != nil || confidence < 0.01 || confidence > 1.0 {
-			r.Cancel(event, s, "Invalid confidence value. Please enter a number between 0.01 and 1.00.")
+			ctx.Error("Invalid confidence value. Please enter a number between 0.01 and 1.00.")
 			return
 		}
 
@@ -765,18 +749,16 @@ func (m *ReviewMenu) handleReasonModalSubmit(
 	if existingReason != nil {
 		action = "updated"
 	}
-	r.Reload(event, s, fmt.Sprintf("Successfully %s %s reason", action, reasonType.String()))
+	ctx.Reload(fmt.Sprintf("Successfully %s %s reason", action, reasonType.String()))
 }
 
 // handleReasonSelection processes reason management dropdown selections.
-func (m *ReviewMenu) handleReasonSelection(
-	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, option string,
-) {
+func (m *ReviewMenu) handleReasonSelection(ctx *interaction.Context, s *session.Session, option string) {
 	// Check if user is a reviewer
-	if !s.BotSettings().IsReviewer(uint64(event.User().ID)) {
+	if !s.BotSettings().IsReviewer(uint64(ctx.Event().User().ID)) {
 		m.layout.logger.Error("Non-reviewer attempted to manage reasons",
-			zap.Uint64("user_id", uint64(event.User().ID)))
-		r.Error(event, "You do not have permission to manage reasons.")
+			zap.Uint64("user_id", uint64(ctx.Event().User().ID)))
+		ctx.Error("You do not have permission to manage reasons.")
 		return
 	}
 
@@ -794,7 +776,7 @@ func (m *ReviewMenu) handleReasonSelection(
 		session.GroupTarget.Set(s, group)
 		session.ReasonsChanged.Set(s, false)
 
-		r.Reload(event, s, "Successfully restored original reasons")
+		ctx.Reload("Successfully restored original reasons")
 		return
 	}
 
@@ -802,7 +784,7 @@ func (m *ReviewMenu) handleReasonSelection(
 	option = strings.TrimSuffix(option, constants.ModalOpenSuffix)
 	reasonType, err := enum.GroupReasonTypeString(option)
 	if err != nil {
-		r.Error(event, "Invalid reason type: "+option)
+		ctx.Error("Invalid reason type: " + option)
 		return
 	}
 
@@ -821,13 +803,11 @@ func (m *ReviewMenu) handleReasonSelection(
 	}
 
 	// Show modal to user
-	r.Modal(event, s, m.buildReasonModal(reasonType, existingReason))
+	ctx.Modal(m.buildReasonModal(reasonType, existingReason))
 }
 
 // buildReasonModal creates a modal for adding or editing a reason.
-func (m *ReviewMenu) buildReasonModal(
-	reasonType enum.GroupReasonType, existingReason *types.Reason,
-) *discord.ModalCreateBuilder {
+func (m *ReviewMenu) buildReasonModal(reasonType enum.GroupReasonType, existingReason *types.Reason) *discord.ModalCreateBuilder {
 	// Create modal for reason input
 	modal := discord.NewModalCreateBuilder().
 		SetCustomID(constants.AddReasonModalCustomID).
@@ -895,36 +875,34 @@ func (m *ReviewMenu) buildReasonModal(
 }
 
 // fetchNewTarget gets a new group to review based on the current sort order.
-func (m *ReviewMenu) fetchNewTarget(
-	event interfaces.CommonEvent, s *session.Session, r *pagination.Respond,
-) (*types.ReviewGroup, bool, error) {
-	if m.checkBreakRequired(event, s, r) {
+func (m *ReviewMenu) fetchNewTarget(ctx *interaction.Context, s *session.Session) (*types.ReviewGroup, bool, error) {
+	if m.checkBreakRequired(ctx, s) {
 		return nil, false, ErrBreakRequired
 	}
 
 	// Check if user is banned for low accuracy
-	isBanned, err := m.layout.db.Service().Vote().CheckVoteAccuracy(context.Background(), uint64(event.User().ID))
+	isBanned, err := m.layout.db.Service().Vote().CheckVoteAccuracy(ctx.Context(), uint64(ctx.Event().User().ID))
 	if err != nil {
 		m.layout.logger.Error("Failed to check vote accuracy",
 			zap.Error(err),
-			zap.Uint64("user_id", uint64(event.User().ID)))
+			zap.Uint64("user_id", uint64(ctx.Event().User().ID)))
 		// Continue anyway - not a big requirement
 	}
 
 	// Get the next group to review
-	reviewerID := uint64(event.User().ID)
+	reviewerID := uint64(ctx.Event().User().ID)
 	defaultSort := session.UserGroupDefaultSort.Get(s)
 	reviewTargetMode := session.UserReviewTargetMode.Get(s)
 
 	group, err := m.layout.db.Service().Group().GetGroupToReview(
-		context.Background(), defaultSort, reviewTargetMode, reviewerID,
+		ctx.Context(), defaultSort, reviewTargetMode, reviewerID,
 	)
 	if err != nil {
 		return nil, isBanned, err
 	}
 
 	// Get flagged users from tracking
-	flaggedCount, err := m.layout.db.Model().Tracking().GetFlaggedUsersCount(context.Background(), group.ID)
+	flaggedCount, err := m.layout.db.Model().Tracking().GetFlaggedUsersCount(ctx.Context(), group.ID)
 	if err != nil {
 		return nil, isBanned, err
 	}
@@ -948,7 +926,7 @@ func (m *ReviewMenu) fetchNewTarget(
 	session.GroupReviewHistoryIndex.Set(s, len(history)-1)
 
 	// Log the view action
-	go m.layout.db.Model().Activity().Log(context.Background(), &types.ActivityLog{
+	go m.layout.db.Model().Activity().Log(ctx.Context(), &types.ActivityLog{
 		ActivityTarget: types.ActivityTarget{
 			GroupID: group.ID,
 		},
@@ -962,12 +940,12 @@ func (m *ReviewMenu) fetchNewTarget(
 }
 
 // checkBreakRequired checks if a break is needed.
-func (m *ReviewMenu) checkBreakRequired(event interfaces.CommonEvent, s *session.Session, r *pagination.Respond) bool {
+func (m *ReviewMenu) checkBreakRequired(ctx *interaction.Context, s *session.Session) bool {
 	// Check if user needs a break
 	nextReviewTime := session.UserReviewBreakNextReviewTime.Get(s)
 	if !nextReviewTime.IsZero() && time.Now().Before(nextReviewTime) {
 		// Show timeout menu if break time hasn't passed
-		r.Show(event, s, constants.TimeoutPageName, "")
+		ctx.Show(constants.TimeoutPageName, "")
 		return true
 	}
 
@@ -988,7 +966,7 @@ func (m *ReviewMenu) checkBreakRequired(event interfaces.CommonEvent, s *session
 		session.UserReviewBreakSessionStartTime.Set(s, nextTime)
 		session.UserReviewBreakNextReviewTime.Set(s, nextTime)
 		session.UserReviewBreakSessionReviews.Set(s, 0) // Reset count
-		r.Show(event, s, constants.TimeoutPageName, "")
+		ctx.Show(constants.TimeoutPageName, "")
 		return true
 	}
 
@@ -999,9 +977,9 @@ func (m *ReviewMenu) checkBreakRequired(event interfaces.CommonEvent, s *session
 }
 
 // checkCaptchaRequired checks if CAPTCHA verification is needed.
-func (m *ReviewMenu) checkCaptchaRequired(event interfaces.CommonEvent, s *session.Session, r *pagination.Respond) bool {
+func (m *ReviewMenu) checkCaptchaRequired(ctx *interaction.Context, s *session.Session) bool {
 	if m.layout.captcha.IsRequired(s) {
-		r.Cancel(event, s, "Please complete CAPTCHA verification to continue.")
+		ctx.Error("Please complete CAPTCHA verification to continue.")
 		return true
 	}
 	return false

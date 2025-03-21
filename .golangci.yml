@@ -186,7 +186,7 @@ linters-settings:
     # Max line length, lines longer will be reported.
     # '\t' is counted as 1 character by default, and can be changed with the tab-width option.
     # Default: 120.
-    line-length: 125
+    line-length: 130
     
   gosec:
     # To specify a set of rules to explicitly exclude.

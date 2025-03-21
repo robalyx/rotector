@@ -1,18 +1,15 @@
 package dashboard
 
 import (
-	"context"
 	"errors"
 	"strconv"
 	"time"
 
 	"github.com/disgoorg/disgo/discord"
-	"github.com/disgoorg/disgo/events"
 	builder "github.com/robalyx/rotector/internal/bot/builder/dashboard"
 	"github.com/robalyx/rotector/internal/bot/constants"
-	"github.com/robalyx/rotector/internal/bot/core/pagination"
+	"github.com/robalyx/rotector/internal/bot/core/interaction"
 	"github.com/robalyx/rotector/internal/bot/core/session"
-	"github.com/robalyx/rotector/internal/bot/interfaces"
 	"github.com/robalyx/rotector/internal/common/storage/database/types"
 	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
 	"github.com/robalyx/rotector/internal/common/utils"
@@ -22,13 +19,13 @@ import (
 // Menu handles dashboard operations and their interactions.
 type Menu struct {
 	layout *Layout
-	page   *pagination.Page
+	page   *interaction.Page
 }
 
 // NewMenu creates a new dashboard menu.
 func NewMenu(layout *Layout) *Menu {
 	m := &Menu{layout: layout}
-	m.page = &pagination.Page{
+	m.page = &interaction.Page{
 		Name: constants.DashboardPageName,
 		Message: func(s *session.Session) *discord.MessageUpdateBuilder {
 			return builder.NewBuilder(s, m.layout.redisClient).Build()
@@ -42,31 +39,31 @@ func NewMenu(layout *Layout) *Menu {
 }
 
 // Show prepares and displays the dashboard interface.
-func (m *Menu) Show(event interfaces.CommonEvent, s *session.Session, _ *pagination.Respond) {
+func (m *Menu) Show(ctx *interaction.Context, s *session.Session) {
 	// Skip if dashboard is already refreshed
 	if session.StatsIsRefreshed.Get(s) {
 		return
 	}
 
 	// Get all counts in a single transaction
-	userCounts, groupCounts, err := m.layout.db.Service().Stats().GetCurrentCounts(context.Background())
+	userCounts, groupCounts, err := m.layout.db.Service().Stats().GetCurrentCounts(ctx.Context())
 	if err != nil {
 		m.layout.logger.Error("Failed to get counts", zap.Error(err))
 	}
 
 	// Get vote statistics for the user
 	voteStats, err := m.layout.db.Service().Vote().GetUserVoteStats(
-		context.Background(),
-		uint64(event.User().ID),
+		ctx.Context(),
+		uint64(ctx.Event().User().ID),
 		enum.LeaderboardPeriodAllTime,
 	)
 	if err != nil {
 		m.layout.logger.Error("Failed to get vote statistics", zap.Error(err))
-		voteStats = &types.VoteAccuracy{DiscordUserID: uint64(event.User().ID)} // Use empty stats on error
+		voteStats = &types.VoteAccuracy{DiscordUserID: uint64(ctx.Event().User().ID)} // Use empty stats on error
 	}
 
 	// Get list of currently active reviewers
-	activeUsers := m.layout.sessionManager.GetActiveUsers(context.Background())
+	activeUsers := m.layout.sessionManager.GetActiveUsers(ctx.Context())
 
 	// Store data in session
 	session.StatsUserCounts.Set(s, userCounts)
@@ -77,13 +74,12 @@ func (m *Menu) Show(event interfaces.CommonEvent, s *session.Session, _ *paginat
 }
 
 // handleSelectMenu processes select menu interactions.
-func (m *Menu) handleSelectMenu(
-	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, customID, option string,
-) {
+func (m *Menu) handleSelectMenu(ctx *interaction.Context, s *session.Session, customID, option string) {
 	if customID != constants.ActionSelectMenuCustomID {
 		return
 	}
 
+	event := ctx.Event()
 	userID := uint64(event.User().ID)
 	isReviewer := s.BotSettings().IsReviewer(userID)
 	isAdmin := s.BotSettings().IsAdmin(userID)
@@ -99,7 +95,7 @@ func (m *Menu) handleSelectMenu(
 			m.layout.logger.Error("Non-reviewer attempted restricted action",
 				zap.Uint64("user_id", userID),
 				zap.String("action", option))
-			r.Error(event, "You do not have permission to perform this action.")
+			ctx.Error("You do not have permission to perform this action.")
 			return
 		}
 	case constants.AdminMenuButtonCustomID:
@@ -107,7 +103,7 @@ func (m *Menu) handleSelectMenu(
 			m.layout.logger.Error("Non-admin attempted restricted action",
 				zap.Uint64("user_id", userID),
 				zap.String("action", option))
-			r.Error(event, "You do not have permission to perform this action.")
+			ctx.Error("You do not have permission to perform this action.")
 			return
 		}
 	}
@@ -115,36 +111,36 @@ func (m *Menu) handleSelectMenu(
 	// Process selected option
 	switch option {
 	case constants.StartUserReviewButtonCustomID:
-		r.Show(event, s, constants.UserReviewPageName, "")
+		ctx.Show(constants.UserReviewPageName, "")
 	case constants.StartGroupReviewButtonCustomID:
-		r.Show(event, s, constants.GroupReviewPageName, "")
+		ctx.Show(constants.GroupReviewPageName, "")
 	case constants.LookupRobloxUserButtonCustomID:
-		m.handleLookupRobloxUser(event, s, r)
+		m.handleLookupRobloxUser(ctx)
 	case constants.LookupRobloxGroupButtonCustomID:
-		m.handleLookupRobloxGroup(event, s, r)
+		m.handleLookupRobloxGroup(ctx)
 	case constants.LookupDiscordUserButtonCustomID:
-		m.handleLookupDiscordUser(event, s, r)
+		m.handleLookupDiscordUser(ctx)
 	case constants.UserSettingsButtonCustomID:
-		r.Show(event, s, constants.UserSettingsPageName, "")
+		ctx.Show(constants.UserSettingsPageName, "")
 	case constants.ActivityBrowserButtonCustomID:
-		r.Show(event, s, constants.LogPageName, "")
+		ctx.Show(constants.LogPageName, "")
 	case constants.LeaderboardMenuButtonCustomID:
-		r.Show(event, s, constants.LeaderboardPageName, "")
+		ctx.Show(constants.LeaderboardPageName, "")
 	case constants.QueueManagerButtonCustomID:
-		r.Show(event, s, constants.QueuePageName, "")
+		ctx.Show(constants.QueuePageName, "")
 	case constants.ChatAssistantButtonCustomID:
-		r.Show(event, s, constants.ChatPageName, "")
+		ctx.Show(constants.ChatPageName, "")
 	case constants.WorkerStatusButtonCustomID:
-		r.Show(event, s, constants.StatusPageName, "")
+		ctx.Show(constants.StatusPageName, "")
 	case constants.AppealMenuButtonCustomID:
-		r.Show(event, s, constants.AppealOverviewPageName, "")
+		ctx.Show(constants.AppealOverviewPageName, "")
 	case constants.AdminMenuButtonCustomID:
-		r.Show(event, s, constants.AdminPageName, "")
+		ctx.Show(constants.AdminPageName, "")
 	case constants.ReviewerStatsButtonCustomID:
-		r.Show(event, s, constants.ReviewerStatsPageName, "")
+		ctx.Show(constants.ReviewerStatsPageName, "")
 	case constants.GuildOwnerMenuButtonCustomID:
 		if !session.IsGuildOwner.Get(s) && !isAdmin {
-			r.Error(event, "You must be a guild owner to access these tools.")
+			ctx.Error("You must be a guild owner to access these tools.")
 			return
 		}
 
@@ -156,12 +152,12 @@ func (m *Menu) handleSelectMenu(
 			session.GuildStatsName.Set(s, guild.Name)
 		}
 
-		r.Show(event, s, constants.GuildOwnerPageName, "")
+		ctx.Show(constants.GuildOwnerPageName, "")
 	}
 }
 
 // handleLookupRobloxUser opens a modal for entering a specific Roblox user ID to lookup.
-func (m *Menu) handleLookupRobloxUser(event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond) {
+func (m *Menu) handleLookupRobloxUser(ctx *interaction.Context) {
 	modal := discord.NewModalCreateBuilder().
 		SetCustomID(constants.LookupRobloxUserModalCustomID).
 		SetTitle("Lookup Roblox User").
@@ -171,11 +167,11 @@ func (m *Menu) handleLookupRobloxUser(event *events.ComponentInteractionCreate, 
 				WithPlaceholder("Enter the user ID or UUID to lookup..."),
 		)
 
-	r.Modal(event, s, modal)
+	ctx.Modal(modal)
 }
 
 // handleLookupRobloxGroup opens a modal for entering a specific Roblox group ID to lookup.
-func (m *Menu) handleLookupRobloxGroup(event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond) {
+func (m *Menu) handleLookupRobloxGroup(ctx *interaction.Context) {
 	modal := discord.NewModalCreateBuilder().
 		SetCustomID(constants.LookupRobloxGroupModalCustomID).
 		SetTitle("Lookup Roblox Group").
@@ -185,11 +181,11 @@ func (m *Menu) handleLookupRobloxGroup(event *events.ComponentInteractionCreate,
 				WithPlaceholder("Enter the group ID or UUID to lookup..."),
 		)
 
-	r.Modal(event, s, modal)
+	ctx.Modal(modal)
 }
 
 // handleLookupDiscordUser opens a modal for entering a specific Discord user ID to lookup.
-func (m *Menu) handleLookupDiscordUser(event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond) {
+func (m *Menu) handleLookupDiscordUser(ctx *interaction.Context) {
 	modal := discord.NewModalCreateBuilder().
 		SetCustomID(constants.LookupDiscordUserModalCustomID).
 		SetTitle("Lookup Discord User").
@@ -199,27 +195,25 @@ func (m *Menu) handleLookupDiscordUser(event *events.ComponentInteractionCreate,
 				WithPlaceholder("Enter the Discord user ID to lookup..."),
 		)
 
-	r.Modal(event, s, modal)
+	ctx.Modal(modal)
 }
 
 // handleModal processes modal submissions.
-func (m *Menu) handleModal(event *events.ModalSubmitInteractionCreate, s *session.Session, r *pagination.Respond) {
-	switch event.Data.CustomID {
+func (m *Menu) handleModal(ctx *interaction.Context, s *session.Session) {
+	switch ctx.Event().CustomID() {
 	case constants.LookupRobloxUserModalCustomID:
-		m.handleLookupRobloxUserModalSubmit(event, s, r)
+		m.handleLookupRobloxUserModalSubmit(ctx, s)
 	case constants.LookupRobloxGroupModalCustomID:
-		m.handleLookupRobloxGroupModalSubmit(event, s, r)
+		m.handleLookupRobloxGroupModalSubmit(ctx, s)
 	case constants.LookupDiscordUserModalCustomID:
-		m.handleLookupDiscordUserModalSubmit(event, s, r)
+		m.handleLookupDiscordUserModalSubmit(ctx, s)
 	}
 }
 
 // handleLookupRobloxUserModalSubmit processes the user ID input and opens the review menu.
-func (m *Menu) handleLookupRobloxUserModalSubmit(
-	event *events.ModalSubmitInteractionCreate, s *session.Session, r *pagination.Respond,
-) {
+func (m *Menu) handleLookupRobloxUserModalSubmit(ctx *interaction.Context, s *session.Session) {
 	// Get the user ID input
-	userIDStr := event.Data.Text(constants.LookupRobloxUserInputCustomID)
+	userIDStr := ctx.Event().ModalData().Text(constants.LookupRobloxUserInputCustomID)
 
 	// Parse profile URL if provided
 	parsedURL, err := utils.ExtractUserIDFromURL(userIDStr)
@@ -228,30 +222,30 @@ func (m *Menu) handleLookupRobloxUserModalSubmit(
 	}
 
 	// Get user from database
-	user, err := m.layout.db.Service().User().GetUserByID(context.Background(), userIDStr, types.UserFieldAll)
+	user, err := m.layout.db.Service().User().GetUserByID(ctx.Context(), userIDStr, types.UserFieldAll)
 	if err != nil {
 		switch {
 		case errors.Is(err, types.ErrUserNotFound):
-			r.Cancel(event, s, "Failed to find user. They may not be in our database.")
+			ctx.Error("Failed to find user. They may not be in our database.")
 		case errors.Is(err, types.ErrInvalidUserID):
-			r.Cancel(event, s, "Please provide a valid user ID or UUID.")
+			ctx.Error("Please provide a valid user ID or UUID.")
 		default:
 			m.layout.logger.Error("Failed to fetch user", zap.Error(err))
-			r.Error(event, "Failed to fetch user for review. Please try again.")
+			ctx.Error("Failed to fetch user for review. Please try again.")
 		}
 		return
 	}
 
 	// Store user in session and show review menu
 	session.UserTarget.Set(s, user)
-	r.Show(event, s, constants.UserReviewPageName, "")
+	ctx.Show(constants.UserReviewPageName, "")
 
 	// Log the lookup action
-	m.layout.db.Model().Activity().Log(context.Background(), &types.ActivityLog{
+	m.layout.db.Model().Activity().Log(ctx.Context(), &types.ActivityLog{
 		ActivityTarget: types.ActivityTarget{
 			UserID: user.ID,
 		},
-		ReviewerID:        uint64(event.User().ID),
+		ReviewerID:        uint64(ctx.Event().User().ID),
 		ActivityType:      enum.ActivityTypeUserLookup,
 		ActivityTimestamp: time.Now(),
 		Details:           map[string]any{},
@@ -259,47 +253,45 @@ func (m *Menu) handleLookupRobloxUserModalSubmit(
 }
 
 // handleLookupRobloxGroupModalSubmit processes the group ID input and opens the review menu.
-func (m *Menu) handleLookupRobloxGroupModalSubmit(
-	event *events.ModalSubmitInteractionCreate, s *session.Session, r *pagination.Respond,
-) {
+func (m *Menu) handleLookupRobloxGroupModalSubmit(ctx *interaction.Context, s *session.Session) {
 	// Get the group ID input
-	groupIDStr := event.Data.Text(constants.LookupRobloxGroupInputCustomID)
+	groupIDStr := ctx.Event().ModalData().Text(constants.LookupRobloxGroupInputCustomID)
 
 	// Parse group URL if provided
 	if utils.IsRobloxGroupURL(groupIDStr) {
 		var err error
 		groupIDStr, err = utils.ExtractGroupIDFromURL(groupIDStr)
 		if err != nil {
-			r.Error(event, "Invalid Roblox group URL. Please provide a valid URL or ID.")
+			ctx.Error("Invalid Roblox group URL. Please provide a valid URL or ID.")
 			return
 		}
 	}
 
 	// Get group from database
-	group, err := m.layout.db.Service().Group().GetGroupByID(context.Background(), groupIDStr, types.GroupFieldAll)
+	group, err := m.layout.db.Service().Group().GetGroupByID(ctx.Context(), groupIDStr, types.GroupFieldAll)
 	if err != nil {
 		switch {
 		case errors.Is(err, types.ErrGroupNotFound):
-			r.Cancel(event, s, "Failed to find group. It may not be in our database.")
+			ctx.Error("Failed to find group. It may not be in our database.")
 		case errors.Is(err, types.ErrInvalidGroupID):
-			r.Cancel(event, s, "Please provide a valid group ID or UUID.")
+			ctx.Error("Please provide a valid group ID or UUID.")
 		default:
 			m.layout.logger.Error("Failed to fetch group", zap.Error(err))
-			r.Error(event, "Failed to fetch group for review. Please try again.")
+			ctx.Error("Failed to fetch group for review. Please try again.")
 		}
 		return
 	}
 
 	// Store group in session and show review menu
 	session.GroupTarget.Set(s, group)
-	r.Show(event, s, constants.GroupReviewPageName, "")
+	ctx.Show(constants.GroupReviewPageName, "")
 
 	// Log the lookup action
-	m.layout.db.Model().Activity().Log(context.Background(), &types.ActivityLog{
+	m.layout.db.Model().Activity().Log(ctx.Context(), &types.ActivityLog{
 		ActivityTarget: types.ActivityTarget{
 			GroupID: group.ID,
 		},
-		ReviewerID:        uint64(event.User().ID),
+		ReviewerID:        uint64(ctx.Event().User().ID),
 		ActivityType:      enum.ActivityTypeGroupLookup,
 		ActivityTimestamp: time.Now(),
 		Details:           map[string]any{},
@@ -307,16 +299,14 @@ func (m *Menu) handleLookupRobloxGroupModalSubmit(
 }
 
 // handleLookupDiscordUserModalSubmit processes the Discord user ID input and shows the user's flagged servers.
-func (m *Menu) handleLookupDiscordUserModalSubmit(
-	event *events.ModalSubmitInteractionCreate, s *session.Session, r *pagination.Respond,
-) {
+func (m *Menu) handleLookupDiscordUserModalSubmit(ctx *interaction.Context, s *session.Session) {
 	// Get the Discord user ID input
-	discordUserIDStr := event.Data.Text(constants.LookupDiscordUserInputCustomID)
+	discordUserIDStr := ctx.Event().ModalData().Text(constants.LookupDiscordUserInputCustomID)
 
 	// Parse the Discord user ID
 	discordUserID, err := strconv.ParseUint(discordUserIDStr, 10, 64)
 	if err != nil {
-		r.Cancel(event, s, "Please provide a valid Discord user ID.")
+		ctx.Error("Please provide a valid Discord user ID.")
 		return
 	}
 
@@ -324,14 +314,14 @@ func (m *Menu) handleLookupDiscordUserModalSubmit(
 	session.DiscordUserLookupID.Set(s, discordUserID)
 
 	// Show the guild lookup page
-	r.Show(event, s, constants.GuildLookupPageName, "")
+	ctx.Show(constants.GuildLookupPageName, "")
 
 	// Log the lookup action
-	m.layout.db.Model().Activity().Log(context.Background(), &types.ActivityLog{
+	m.layout.db.Model().Activity().Log(ctx.Context(), &types.ActivityLog{
 		ActivityTarget: types.ActivityTarget{
 			UserID: discordUserID,
 		},
-		ReviewerID:        uint64(event.User().ID),
+		ReviewerID:        uint64(ctx.Event().User().ID),
 		ActivityType:      enum.ActivityTypeUserLookupDiscord,
 		ActivityTimestamp: time.Now(),
 		Details:           map[string]any{},
@@ -340,11 +330,9 @@ func (m *Menu) handleLookupDiscordUserModalSubmit(
 
 // handleButton processes button interactions, mainly handling refresh requests
 // to update the dashboard statistics.
-func (m *Menu) handleButton(
-	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, customID string,
-) {
+func (m *Menu) handleButton(ctx *interaction.Context, s *session.Session, customID string) {
 	if customID == constants.RefreshButtonCustomID {
 		session.StatsIsRefreshed.Set(s, false)
-		r.Reload(event, s, "Refreshed dashboard.")
+		ctx.Reload("Refreshed dashboard.")
 	}
 }

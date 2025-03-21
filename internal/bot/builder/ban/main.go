@@ -56,8 +56,8 @@ func (b *Builder) Build() *discord.MessageUpdateBuilder {
 
 	// Add appeal instructions
 	embed.AddField("Appeals", "Both Discord and Roblox bans can be appealed using the button below. "+
-		"However, as a precautionary measure, access to the Discord bot will remain restricted for "+
-		"users with a history of violations.\n\n"+
+		"However, as a precautionary measure, access to other parts of the Discord bot will remain "+
+		"restricted for users with a history of violations.\n\n"+
 		"If you believe this restriction was caused by a system error, please contact a staff member.", false)
 
 	embed.SetColor(constants.ErrorEmbedColor)

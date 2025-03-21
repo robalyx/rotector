@@ -7,13 +7,11 @@ import (
 	"strconv"
 
 	"github.com/disgoorg/disgo/discord"
-	"github.com/disgoorg/disgo/events"
 	"github.com/disgoorg/snowflake/v2"
 	builder "github.com/robalyx/rotector/internal/bot/builder/guild"
 	"github.com/robalyx/rotector/internal/bot/constants"
-	"github.com/robalyx/rotector/internal/bot/core/pagination"
+	"github.com/robalyx/rotector/internal/bot/core/interaction"
 	"github.com/robalyx/rotector/internal/bot/core/session"
-	"github.com/robalyx/rotector/internal/bot/interfaces"
 	"github.com/robalyx/rotector/internal/common/storage/database/types"
 	"go.uber.org/zap"
 )
@@ -33,13 +31,13 @@ type UserProfile struct {
 // LookupMenu handles the display of Discord user information and their flagged servers.
 type LookupMenu struct {
 	layout *Layout
-	page   *pagination.Page
+	page   *interaction.Page
 }
 
 // NewLookupMenu creates a new Discord user lookup menu.
 func NewLookupMenu(layout *Layout) *LookupMenu {
 	m := &LookupMenu{layout: layout}
-	m.page = &pagination.Page{
+	m.page = &interaction.Page{
 		Name: constants.GuildLookupPageName,
 		Message: func(s *session.Session) *discord.MessageUpdateBuilder {
 			return builder.NewLookupBuilder(s).Build()
@@ -53,15 +51,13 @@ func NewLookupMenu(layout *Layout) *LookupMenu {
 }
 
 // Show prepares and displays the Discord user information interface.
-func (m *LookupMenu) Show(event interfaces.CommonEvent, s *session.Session, r *pagination.Respond) {
+func (m *LookupMenu) Show(ctx *interaction.Context, s *session.Session) {
 	discordUserID := session.DiscordUserLookupID.Get(s)
 
-	ctx := context.Background()
-	isRedacted := false
-
 	// Fetch user data if it doesn't exist in session
+	isRedacted := false
 	if session.DiscordUserGuilds.Get(s) == nil {
-		isRedacted = m.fetchUserData(ctx, event, s, discordUserID)
+		isRedacted = m.fetchUserData(ctx, s, discordUserID)
 	}
 
 	// Get cursor from session if it exists
@@ -69,7 +65,7 @@ func (m *LookupMenu) Show(event interfaces.CommonEvent, s *session.Session, r *p
 
 	// Fetch the user's guild memberships from database
 	userGuilds, nextCursor, err := m.layout.db.Model().Sync().GetDiscordUserGuildsByCursor(
-		ctx,
+		ctx.Context(),
 		discordUserID,
 		cursor,
 		constants.GuildMembershipsPerPage,
@@ -78,12 +74,12 @@ func (m *LookupMenu) Show(event interfaces.CommonEvent, s *session.Session, r *p
 		m.layout.logger.Error("Failed to get Discord user guilds",
 			zap.Error(err),
 			zap.Uint64("discord_user_id", discordUserID))
-		r.Error(event, "Failed to retrieve guild membership data. Please try again.")
+		ctx.Error("Failed to retrieve guild membership data. Please try again.")
 		return
 	}
 
 	// Get guild names and message summary
-	guildNames, messageSummary := m.fetchGuildDetailsAndSummary(ctx, discordUserID, userGuilds, isRedacted)
+	guildNames, messageSummary := m.fetchGuildDetailsAndSummary(ctx.Context(), discordUserID, userGuilds, isRedacted)
 
 	// Get previous cursors array
 	prevCursors := session.GuildLookupPrevCursors.Get(s)
@@ -117,11 +113,9 @@ func (m *LookupMenu) Cleanup(s *session.Session) {
 
 // fetchUserData retrieves and stores user-related data in the session.
 // Returns whether the user data is redacted.
-func (m *LookupMenu) fetchUserData(
-	ctx context.Context, event interfaces.CommonEvent, s *session.Session, discordUserID uint64,
-) bool {
+func (m *LookupMenu) fetchUserData(ctx *interaction.Context, s *session.Session, discordUserID uint64) bool {
 	// Check privacy status
-	isRedacted, isWhitelisted, err := m.layout.db.Service().Sync().ShouldSkipUser(ctx, discordUserID)
+	isRedacted, isWhitelisted, err := m.layout.db.Service().Sync().ShouldSkipUser(ctx.Context(), discordUserID)
 	if err != nil {
 		m.layout.logger.Error("Failed to check user privacy status",
 			zap.Error(err),
@@ -134,7 +128,7 @@ func (m *LookupMenu) fetchUserData(
 
 	// Only perform full scan if user is not whitelisted
 	if !isWhitelisted {
-		username, err = m.layout.scanner.PerformFullScan(ctx, discordUserID)
+		username, err = m.layout.scanner.PerformFullScan(ctx.Context(), discordUserID)
 		if err != nil {
 			m.layout.logger.Error("Failed to perform full scan",
 				zap.Error(err),
@@ -144,7 +138,7 @@ func (m *LookupMenu) fetchUserData(
 
 	// If we don't have a username yet (either whitelisted or scan failed), try to get it from Discord
 	if username == "" {
-		if user, err := event.Client().Rest().GetUser(snowflake.ID(discordUserID)); err == nil {
+		if user, err := ctx.Event().Client().Rest().GetUser(snowflake.ID(discordUserID)); err == nil {
 			username = user.Username
 		} else {
 			username = "Unknown"
@@ -153,7 +147,7 @@ func (m *LookupMenu) fetchUserData(
 	session.DiscordUserLookupName.Set(s, username)
 
 	// Get total guild count
-	totalGuilds, err := m.layout.db.Model().Sync().GetDiscordUserGuildCount(ctx, discordUserID)
+	totalGuilds, err := m.layout.db.Model().Sync().GetDiscordUserGuildCount(ctx.Context(), discordUserID)
 	if err != nil {
 		m.layout.logger.Error("Failed to get Discord user guild count",
 			zap.Error(err),
@@ -163,7 +157,7 @@ func (m *LookupMenu) fetchUserData(
 	session.DiscordUserTotalGuilds.Set(s, totalGuilds)
 
 	// Get guilds where the user has inappropriate messages
-	messageGuildIDs, err := m.layout.db.Model().Message().GetUserMessageGuilds(ctx, discordUserID)
+	messageGuildIDs, err := m.layout.db.Model().Message().GetUserMessageGuilds(ctx.Context(), discordUserID)
 	if err != nil {
 		m.layout.logger.Error("Failed to get user message guilds",
 			zap.Error(err),
@@ -222,24 +216,20 @@ func (m *LookupMenu) fetchGuildDetailsAndSummary(
 }
 
 // handleButton processes button interactions.
-func (m *LookupMenu) handleButton(
-	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, customID string,
-) {
+func (m *LookupMenu) handleButton(ctx *interaction.Context, s *session.Session, customID string) {
 	switch customID {
 	case constants.BackButtonCustomID:
-		r.NavigateBack(event, s, "")
+		ctx.NavigateBack("")
 	case string(session.ViewerFirstPage),
 		string(session.ViewerPrevPage),
 		string(session.ViewerNextPage),
 		string(session.ViewerLastPage):
-		m.handlePagination(event, s, r, session.ViewerAction(customID))
+		m.handlePagination(ctx, s, session.ViewerAction(customID))
 	}
 }
 
 // handleSelectMenu processes select menu interactions.
-func (m *LookupMenu) handleSelectMenu(
-	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, customID, option string,
-) {
+func (m *LookupMenu) handleSelectMenu(ctx *interaction.Context, s *session.Session, customID, option string) {
 	if customID != constants.GuildMessageSelectMenuCustomID {
 		return
 	}
@@ -247,19 +237,17 @@ func (m *LookupMenu) handleSelectMenu(
 	// Parse guild ID from option value
 	guildID, err := strconv.ParseUint(option, 10, 64)
 	if err != nil {
-		r.Error(event, "Failed to parse guild ID.")
+		ctx.Error("Failed to parse guild ID.")
 		return
 	}
 
 	// Store selected guild ID
 	session.DiscordUserMessageGuildID.Set(s, guildID)
-	r.Show(event, s, constants.GuildMessagesPageName, "")
+	ctx.Show(constants.GuildMessagesPageName, "")
 }
 
 // handlePagination processes page navigation for guild memberships.
-func (m *LookupMenu) handlePagination(
-	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, action session.ViewerAction,
-) {
+func (m *LookupMenu) handlePagination(ctx *interaction.Context, s *session.Session, action session.ViewerAction) {
 	switch action {
 	case session.ViewerNextPage:
 		if session.PaginationHasNextPage.Get(s) {
@@ -269,7 +257,7 @@ func (m *LookupMenu) handlePagination(
 
 			session.GuildLookupCursor.Set(s, nextCursor)
 			session.GuildLookupPrevCursors.Set(s, append(prevCursors, cursor))
-			r.Reload(event, s, "")
+			ctx.Reload("")
 		}
 	case session.ViewerPrevPage:
 		prevCursors := session.GuildLookupPrevCursors.Get(s)
@@ -278,12 +266,12 @@ func (m *LookupMenu) handlePagination(
 			lastIdx := len(prevCursors) - 1
 			session.GuildLookupPrevCursors.Set(s, prevCursors[:lastIdx])
 			session.GuildLookupCursor.Set(s, prevCursors[lastIdx])
-			r.Reload(event, s, "")
+			ctx.Reload("")
 		}
 	case session.ViewerFirstPage:
 		session.GuildLookupCursor.Set(s, nil)
 		session.GuildLookupPrevCursors.Set(s, make([]*types.GuildCursor, 0))
-		r.Reload(event, s, "")
+		ctx.Reload("")
 	case session.ViewerLastPage:
 		// Not currently supported
 		return

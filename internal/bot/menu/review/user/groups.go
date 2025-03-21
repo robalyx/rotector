@@ -6,14 +6,12 @@ import (
 	"strconv"
 
 	"github.com/disgoorg/disgo/discord"
-	"github.com/disgoorg/disgo/events"
 	"github.com/jaxron/roapi.go/pkg/api/resources/thumbnails"
 	apiTypes "github.com/jaxron/roapi.go/pkg/api/types"
 	builder "github.com/robalyx/rotector/internal/bot/builder/review/user"
 	"github.com/robalyx/rotector/internal/bot/constants"
-	"github.com/robalyx/rotector/internal/bot/core/pagination"
+	"github.com/robalyx/rotector/internal/bot/core/interaction"
 	"github.com/robalyx/rotector/internal/bot/core/session"
-	"github.com/robalyx/rotector/internal/bot/interfaces"
 	"github.com/robalyx/rotector/internal/common/storage/database/types"
 	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
 	"go.uber.org/zap"
@@ -22,13 +20,13 @@ import (
 // GroupsMenu handles the display and interaction logic for viewing a user's groups.
 type GroupsMenu struct {
 	layout *Layout
-	page   *pagination.Page
+	page   *interaction.Page
 }
 
 // NewGroupsMenu creates a new groups menu.
 func NewGroupsMenu(layout *Layout) *GroupsMenu {
 	m := &GroupsMenu{layout: layout}
-	m.page = &pagination.Page{
+	m.page = &interaction.Page{
 		Name: constants.UserGroupsPageName,
 		Message: func(s *session.Session) *discord.MessageUpdateBuilder {
 			return builder.NewGroupsBuilder(s).Build()
@@ -40,12 +38,12 @@ func NewGroupsMenu(layout *Layout) *GroupsMenu {
 }
 
 // Show prepares and displays the groups interface for a specific page.
-func (m *GroupsMenu) Show(event interfaces.CommonEvent, s *session.Session, r *pagination.Respond) {
+func (m *GroupsMenu) Show(ctx *interaction.Context, s *session.Session) {
 	user := session.UserTarget.Get(s)
 
 	// Return to review menu if user has no groups
 	if len(user.Groups) == 0 {
-		r.Cancel(event, s, "No groups found for this user.")
+		ctx.Error("No groups found for this user.")
 		return
 	}
 
@@ -67,11 +65,11 @@ func (m *GroupsMenu) Show(event interfaces.CommonEvent, s *session.Session, r *p
 	session.PaginationTotalItems.Set(s, len(sortedGroups))
 
 	// Start streaming images
-	m.layout.imageStreamer.Stream(pagination.StreamRequest{
-		Event:    event,
+	m.layout.imageStreamer.Stream(interaction.StreamRequest{
+		Event:    ctx.Event(),
 		Session:  s,
 		Page:     m.page,
-		URLFunc:  func() []string { return m.fetchGroupThumbnails(pageGroups) },
+		URLFunc:  func() []string { return m.fetchGroupThumbnails(ctx.Context(), pageGroups) },
 		Columns:  constants.GroupsGridColumns,
 		Rows:     constants.GroupsGridRows,
 		MaxItems: constants.GroupsPerPage,
@@ -118,9 +116,7 @@ func (m *GroupsMenu) sortGroupsByStatus(
 }
 
 // handlePageNavigation processes navigation button clicks.
-func (m *GroupsMenu) handlePageNavigation(
-	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, customID string,
-) {
+func (m *GroupsMenu) handlePageNavigation(ctx *interaction.Context, s *session.Session, customID string) {
 	action := session.ViewerAction(customID)
 	switch action {
 	case session.ViewerFirstPage, session.ViewerPrevPage, session.ViewerNextPage, session.ViewerLastPage:
@@ -131,21 +127,21 @@ func (m *GroupsMenu) handlePageNavigation(
 		page := action.ParsePageAction(s, maxPage)
 
 		session.PaginationPage.Set(s, page)
-		r.Reload(event, s, "")
+		ctx.Reload("")
 		return
 	}
 
 	switch customID {
 	case constants.BackButtonCustomID:
-		r.NavigateBack(event, s, "")
+		ctx.NavigateBack("")
 	default:
 		m.layout.logger.Warn("Invalid groups viewer action", zap.String("action", string(action)))
-		r.Error(event, "Invalid interaction.")
+		ctx.Error("Invalid interaction.")
 	}
 }
 
 // fetchGroupThumbnails gets the thumbnail URLs for a list of groups.
-func (m *GroupsMenu) fetchGroupThumbnails(groups []*apiTypes.UserGroupRoles) []string {
+func (m *GroupsMenu) fetchGroupThumbnails(ctx context.Context, groups []*apiTypes.UserGroupRoles) []string {
 	// Create batch request for group icons
 	requests := thumbnails.NewBatchThumbnailsBuilder()
 	for _, group := range groups {
@@ -159,7 +155,7 @@ func (m *GroupsMenu) fetchGroupThumbnails(groups []*apiTypes.UserGroupRoles) []s
 	}
 
 	// Process thumbnails
-	thumbnailMap := m.layout.thumbnailFetcher.ProcessBatchThumbnails(context.Background(), requests)
+	thumbnailMap := m.layout.thumbnailFetcher.ProcessBatchThumbnails(ctx, requests)
 
 	// Convert map to ordered slice of URLs
 	thumbnailURLs := make([]string, len(groups))

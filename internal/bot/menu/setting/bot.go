@@ -2,23 +2,22 @@ package setting
 
 import (
 	"github.com/disgoorg/disgo/discord"
-	"github.com/disgoorg/disgo/events"
 	"github.com/robalyx/rotector/internal/bot/builder/setting"
 	"github.com/robalyx/rotector/internal/bot/constants"
-	"github.com/robalyx/rotector/internal/bot/core/pagination"
+	"github.com/robalyx/rotector/internal/bot/core/interaction"
 	"github.com/robalyx/rotector/internal/bot/core/session"
 )
 
 // BotMenu handles the display and interaction logic for bot-wide settings.
 type BotMenu struct {
 	layout *Layout
-	page   *pagination.Page
+	page   *interaction.Page
 }
 
 // NewBotMenu creates a BotMenu and sets up its page.
 func NewBotMenu(l *Layout) *BotMenu {
 	m := &BotMenu{layout: l}
-	m.page = &pagination.Page{
+	m.page = &interaction.Page{
 		Name: constants.BotSettingsPageName,
 		Message: func(s *session.Session) *discord.MessageUpdateBuilder {
 			return setting.NewBotSettingsBuilder(s, l.registry).Build()
@@ -30,20 +29,17 @@ func NewBotMenu(l *Layout) *BotMenu {
 }
 
 // handleBotSettingSelection processes select menu interactions.
-func (m *BotMenu) handleBotSettingSelection(
-	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, _ string, option string,
-) {
+func (m *BotMenu) handleBotSettingSelection(ctx *interaction.Context, s *session.Session, _, option string) {
 	// Show the change menu for the selected setting
 	session.SettingType.Set(s, constants.BotSettingPrefix)
 	session.SettingCustomID.Set(s, option)
-	r.Show(event, s, constants.SettingUpdatePageName, "")
+	ctx.Show(constants.SettingUpdatePageName, "")
 }
 
 // handleBotSettingButton processes button interactions.
-func (m *BotMenu) handleBotSettingButton(
-	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, customID string,
-) {
-	if customID == constants.BackButtonCustomID {
-		r.NavigateBack(event, s, "")
+func (m *BotMenu) handleBotSettingButton(ctx *interaction.Context, _ *session.Session, customID string) {
+	switch customID {
+	case constants.BackButtonCustomID:
+		ctx.NavigateBack("")
 	}
 }

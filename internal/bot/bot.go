@@ -13,15 +13,14 @@ import (
 	"github.com/disgoorg/disgo"
 	"github.com/disgoorg/disgo/bot"
 	"github.com/disgoorg/disgo/discord"
-	"github.com/disgoorg/disgo/events"
+	disgoEvents "github.com/disgoorg/disgo/events"
 	"github.com/disgoorg/disgo/gateway"
 	"github.com/disgoorg/disgo/sharding"
 	"github.com/disgoorg/snowflake/v2"
 	"github.com/robalyx/rotector/internal/bot/constants"
-	"github.com/robalyx/rotector/internal/bot/core/pagination"
+	"github.com/robalyx/rotector/internal/bot/core/interaction"
 	"github.com/robalyx/rotector/internal/bot/core/session"
-	botEvents "github.com/robalyx/rotector/internal/bot/events"
-	"github.com/robalyx/rotector/internal/bot/interfaces"
+	eventHandler "github.com/robalyx/rotector/internal/bot/events"
 	"github.com/robalyx/rotector/internal/bot/menu/admin"
 	"github.com/robalyx/rotector/internal/bot/menu/appeal"
 	"github.com/robalyx/rotector/internal/bot/menu/ban"
@@ -48,12 +47,12 @@ import (
 
 // Bot handles all the layouts and managers needed for Discord interaction.
 type Bot struct {
-	db                database.Client
-	client            bot.Client
-	logger            *zap.Logger
-	sessionManager    *session.Manager
-	paginationManager *pagination.Manager
-	guildEventHandler *botEvents.GuildEventHandler
+	db                 database.Client
+	client             bot.Client
+	logger             *zap.Logger
+	sessionManager     *session.Manager
+	interactionManager *interaction.Manager
+	guildEventHandler  *eventHandler.GuildEventHandler
 }
 
 // New initializes a Bot instance by creating all required managers and layouts.
@@ -65,8 +64,8 @@ func New(app *setup.App) (*Bot, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to create session manager: %w", err)
 	}
-	paginationManager := pagination.NewManager(sessionManager, logger)
-	guildEventHandler := botEvents.NewGuildEventHandler(logger)
+	interactionManager := interaction.NewManager(sessionManager, logger)
+	guildEventHandler := eventHandler.NewGuildEventHandler(logger)
 
 	// Initialize self-bot client
 	selfClient := state.NewWithIntents(app.Config.Common.Discord.SyncToken,
@@ -77,11 +76,11 @@ func New(app *setup.App) (*Bot, error) {
 
 	// Create bot instance
 	b := &Bot{
-		db:                app.DB,
-		logger:            logger,
-		sessionManager:    sessionManager,
-		paginationManager: paginationManager,
-		guildEventHandler: guildEventHandler,
+		db:                 app.DB,
+		logger:             logger,
+		sessionManager:     sessionManager,
+		interactionManager: interactionManager,
+		guildEventHandler:  guildEventHandler,
 	}
 
 	// Create Discord client
@@ -110,7 +109,7 @@ func New(app *setup.App) (*Bot, error) {
 				gateway.IntentGuildMembers,
 			),
 		),
-		bot.WithEventListeners(&events.ListenerAdapter{
+		bot.WithEventListeners(&disgoEvents.ListenerAdapter{
 			OnApplicationCommandInteraction: b.handleApplicationCommandInteraction,
 			OnComponentInteraction:          b.handleComponentInteraction,
 			OnModalSubmit:                   b.handleModalSubmit,
@@ -128,8 +127,8 @@ func New(app *setup.App) (*Bot, error) {
 	chatLayout := chat.New(app)
 	captchaLayout := captcha.New(app)
 	timeoutLayout := timeout.New(app)
-	userReviewLayout := userReview.New(app, paginationManager)
-	groupReviewLayout := groupReview.New(app, paginationManager)
+	userReviewLayout := userReview.New(app, interactionManager)
+	groupReviewLayout := groupReview.New(app, interactionManager)
 	queueLayout := queue.New(app)
 	appealLayout := appeal.New(app)
 	adminLayout := admin.New(app)
@@ -141,23 +140,23 @@ func New(app *setup.App) (*Bot, error) {
 	reviewerLayout := reviewer.New(app, client)
 	guildLayout := guild.New(app, selfClient)
 
-	paginationManager.AddPages(settingLayout.Pages())
-	paginationManager.AddPages(logLayout.Pages())
-	paginationManager.AddPages(chatLayout.Pages())
-	paginationManager.AddPages(captchaLayout.Pages())
-	paginationManager.AddPages(timeoutLayout.Pages())
-	paginationManager.AddPages(userReviewLayout.Pages())
-	paginationManager.AddPages(groupReviewLayout.Pages())
-	paginationManager.AddPages(queueLayout.Pages())
-	paginationManager.AddPages(appealLayout.Pages())
-	paginationManager.AddPages(adminLayout.Pages())
-	paginationManager.AddPages(leaderboardLayout.Pages())
-	paginationManager.AddPages(statusLayout.Pages())
-	paginationManager.AddPages(dashboardLayout.Pages())
-	paginationManager.AddPages(consentLayout.Pages())
-	paginationManager.AddPages(banLayout.Pages())
-	paginationManager.AddPages(reviewerLayout.Pages())
-	paginationManager.AddPages(guildLayout.Pages())
+	interactionManager.AddPages(settingLayout.Pages())
+	interactionManager.AddPages(logLayout.Pages())
+	interactionManager.AddPages(chatLayout.Pages())
+	interactionManager.AddPages(captchaLayout.Pages())
+	interactionManager.AddPages(timeoutLayout.Pages())
+	interactionManager.AddPages(userReviewLayout.Pages())
+	interactionManager.AddPages(groupReviewLayout.Pages())
+	interactionManager.AddPages(queueLayout.Pages())
+	interactionManager.AddPages(appealLayout.Pages())
+	interactionManager.AddPages(adminLayout.Pages())
+	interactionManager.AddPages(leaderboardLayout.Pages())
+	interactionManager.AddPages(statusLayout.Pages())
+	interactionManager.AddPages(dashboardLayout.Pages())
+	interactionManager.AddPages(consentLayout.Pages())
+	interactionManager.AddPages(banLayout.Pages())
+	interactionManager.AddPages(reviewerLayout.Pages())
+	interactionManager.AddPages(guildLayout.Pages())
 	return b, nil
 }
 
@@ -195,7 +194,7 @@ func (b *Bot) Close() {
 
 // handleApplicationCommandInteraction processes slash commands by first deferring the response,
 // then validating guild settings and user permissions before handling the command in a goroutine.
-func (b *Bot) handleApplicationCommandInteraction(event *events.ApplicationCommandInteractionCreate) {
+func (b *Bot) handleApplicationCommandInteraction(event *disgoEvents.ApplicationCommandInteractionCreate) {
 	go func() {
 		// Defer response to prevent Discord timeout while processing
 		if err := event.DeferCreateMessage(true); err != nil {
@@ -203,9 +202,11 @@ func (b *Bot) handleApplicationCommandInteraction(event *events.ApplicationComma
 			return
 		}
 
+		wrappedEvent := interaction.WrapEvent(event)
+
 		// Only handle dashboard command - respond with error for unknown commands
 		if event.SlashCommandInteractionData().CommandName() != constants.RotectorCommandName {
-			b.paginationManager.RespondWithError(event, "This command is not available.")
+			b.interactionManager.RespondWithError(wrappedEvent, "This command is not available.")
 			return
 		}
 
@@ -214,10 +215,10 @@ func (b *Bot) handleApplicationCommandInteraction(event *events.ApplicationComma
 			if r := recover(); r != nil {
 				b.logger.Error("Application command interaction failed",
 					zap.String("command", event.SlashCommandInteractionData().CommandName()),
-					zap.String("user_id", event.User().ID.String()),
+					zap.String("user_id", wrappedEvent.User().ID.String()),
 					zap.Any("panic", r),
 				)
-				b.paginationManager.RespondWithError(event, "Internal error. Please report this to an administrator.")
+				b.interactionManager.RespondWithError(wrappedEvent, "Internal error. Please report this to an administrator.")
 			}
 			duration := time.Since(start)
 			b.logger.Debug("Application command interaction handled",
@@ -226,19 +227,19 @@ func (b *Bot) handleApplicationCommandInteraction(event *events.ApplicationComma
 		}()
 
 		// Validate session but return early if session creation failed or session expired
-		s, isNewSession, ok := b.validateAndGetSession(event, event.User().ID)
+		s, isNewSession, ok := b.validateAndGetSession(wrappedEvent, wrappedEvent.User().ID)
 		if !ok {
 			return
 		}
 
 		// Run common validation checks
-		if !b.validateInteraction(event, s, isNewSession, true, "") {
+		if !b.validateInteraction(wrappedEvent, s, isNewSession, true, "") {
 			return
 		}
 
 		// Navigate to stored page
 		pageName := session.CurrentPage.Get(s)
-		b.paginationManager.Show(event, s, pageName, "")
+		b.interactionManager.Show(wrappedEvent, s, pageName, "")
 		s.Touch(context.Background())
 	}()
 }
@@ -246,18 +247,20 @@ func (b *Bot) handleApplicationCommandInteraction(event *events.ApplicationComma
 // handleComponentInteraction processes button clicks and select menu choices.
 // It first updates the message to show "Processing..." and removes interactive components
 // to prevent double-clicks, then processes the interaction in a goroutine.
-func (b *Bot) handleComponentInteraction(event *events.ComponentInteractionCreate) {
+func (b *Bot) handleComponentInteraction(event *disgoEvents.ComponentInteractionCreate) {
 	go func() {
+		wrappedEvent := interaction.WrapEvent(event)
+
 		start := time.Now()
 		defer func() {
 			if r := recover(); r != nil {
 				b.logger.Error("Component interaction failed",
 					zap.String("component_id", event.Data.CustomID()),
 					zap.String("component_type", fmt.Sprintf("%T", event.Data)),
-					zap.String("user_id", event.User().ID.String()),
+					zap.String("user_id", wrappedEvent.User().ID.String()),
 					zap.Any("panic", r),
 				)
-				b.paginationManager.RespondWithError(event, "Internal error. Please report this to an administrator.")
+				b.interactionManager.RespondWithError(wrappedEvent, "Internal error. Please report this to an administrator.")
 			}
 			duration := time.Since(start)
 			b.logger.Debug("Component interaction handled",
@@ -266,13 +269,13 @@ func (b *Bot) handleComponentInteraction(event *events.ComponentInteractionCreat
 		}()
 
 		// Validate session but return early if session creation failed or session expired
-		s, isNewSession, ok := b.validateAndGetSession(event, event.User().ID)
+		s, isNewSession, ok := b.validateAndGetSession(wrappedEvent, wrappedEvent.User().ID)
 		if !ok {
 			return
 		}
 
 		// Get current page
-		page := b.paginationManager.GetPage(session.CurrentPage.Get(s))
+		page := b.interactionManager.GetPage(session.CurrentPage.Get(s))
 
 		// WORKAROUND:
 		// Special handling for modal interactions to prevent response conflicts.
@@ -303,19 +306,19 @@ func (b *Bot) handleComponentInteraction(event *events.ComponentInteractionCreat
 		}
 
 		// Run common validation checks
-		if !b.validateInteraction(event, s, isNewSession, false, event.Data.CustomID()) {
+		if !b.validateInteraction(wrappedEvent, s, isNewSession, false, event.Data.CustomID()) {
 			return
 		}
 
 		// Handle interaction and update session
-		b.paginationManager.HandleInteraction(event, s)
+		b.interactionManager.HandleInteraction(wrappedEvent, s)
 	}()
 }
 
 // handleModalSubmit processes form submissions similarly to component interactions.
 // It updates the message to show "Processing..." and removes interactive components,
 // then processes the submission in a goroutine.
-func (b *Bot) handleModalSubmit(event *events.ModalSubmitInteractionCreate) {
+func (b *Bot) handleModalSubmit(event *disgoEvents.ModalSubmitInteractionCreate) {
 	go func() {
 		// Update message to prevent double-submissions
 		updateBuilder := discord.NewMessageUpdateBuilder().
@@ -327,6 +330,8 @@ func (b *Bot) handleModalSubmit(event *events.ModalSubmitInteractionCreate) {
 			return
 		}
 
+		wrappedEvent := interaction.WrapEvent(event)
+
 		start := time.Now()
 		defer func() {
 			if r := recover(); r != nil {
@@ -337,11 +342,11 @@ func (b *Bot) handleModalSubmit(event *events.ModalSubmitInteractionCreate) {
 
 				b.logger.Error("Modal submission failed",
 					zap.String("modal_id", event.Data.CustomID),
-					zap.String("user_id", event.User().ID.String()),
+					zap.String("user_id", wrappedEvent.User().ID.String()),
 					zap.Any("form_data", formData),
 					zap.Any("panic", r),
 				)
-				b.paginationManager.RespondWithError(event, "Internal error. Please report this to an administrator.")
+				b.interactionManager.RespondWithError(wrappedEvent, "Internal error. Please report this to an administrator.")
 			}
 			duration := time.Since(start)
 			b.logger.Debug("Modal submit interaction handled",
@@ -350,32 +355,32 @@ func (b *Bot) handleModalSubmit(event *events.ModalSubmitInteractionCreate) {
 		}()
 
 		// Validate session but return early if session creation failed or session expired
-		s, isNewSession, ok := b.validateAndGetSession(event, event.User().ID)
+		s, isNewSession, ok := b.validateAndGetSession(wrappedEvent, wrappedEvent.User().ID)
 		if !ok {
 			return
 		}
 
 		// Run common validation checks
-		if !b.validateInteraction(event, s, isNewSession, false, "") {
+		if !b.validateInteraction(wrappedEvent, s, isNewSession, false, "") {
 			return
 		}
 
 		// Handle submission and update session
-		b.paginationManager.HandleInteraction(event, s)
+		b.interactionManager.HandleInteraction(wrappedEvent, s)
 	}()
 }
 
 // validateInteraction performs common validation checks for all interaction types.
 // Returns true if the interaction should proceed, false if it should be stopped.
 func (b *Bot) validateInteraction(
-	event interfaces.CommonEvent, s *session.Session, isNewSession, isCommandEvent bool, customID string,
+	event interaction.CommonEvent, s *session.Session, isNewSession, isCommandEvent bool, customID string,
 ) bool {
 	// Check if system is in maintenance mode
 	pageName := session.CurrentPage.Get(s)
 	if session.BotAnnouncementType.Get(s) == enum.AnnouncementTypeMaintenance {
 		isAdmin := s.BotSettings().IsAdmin(uint64(event.User().ID))
 		if !isAdmin && (pageName != constants.DashboardPageName || customID != constants.RefreshButtonCustomID) {
-			b.paginationManager.Show(event, s, constants.DashboardPageName, "System is currently under maintenance.")
+			b.interactionManager.Show(event, s, constants.DashboardPageName, "System is currently under maintenance.")
 			return false
 		}
 	}
@@ -391,10 +396,10 @@ func (b *Bot) validateInteraction(
 	}
 
 	// Check if the session has a valid current page
-	page := b.paginationManager.GetPage(pageName)
+	page := b.interactionManager.GetPage(pageName)
 	if page == nil {
 		// If no valid page exists, reset to dashboard
-		b.paginationManager.Show(event, s, constants.DashboardPageName, "New session created.")
+		b.interactionManager.Show(event, s, constants.DashboardPageName, "New session created.")
 		s.Touch(context.Background())
 		return false
 	}
@@ -404,7 +409,7 @@ func (b *Bot) validateInteraction(
 
 // checkBanStatus checks if a user is banned and shows the ban menu if they are.
 // Returns true if the user is banned and should not proceed.
-func (b *Bot) checkBanStatus(event interfaces.CommonEvent, s *session.Session, pageName string, isCommandEvent bool) bool {
+func (b *Bot) checkBanStatus(event interaction.CommonEvent, s *session.Session, pageName string, isCommandEvent bool) bool {
 	userID := uint64(event.User().ID)
 
 	// Check if user is banned
@@ -413,7 +418,7 @@ func (b *Bot) checkBanStatus(event interfaces.CommonEvent, s *session.Session, p
 		b.logger.Error("Failed to check ban status",
 			zap.Error(err),
 			zap.Uint64("user_id", userID))
-		b.paginationManager.RespondWithError(event, "Failed to verify access status. Please try again later.")
+		b.interactionManager.RespondWithError(event, "Failed to verify access status. Please try again later.")
 		return true
 	}
 
@@ -427,19 +432,19 @@ func (b *Bot) checkBanStatus(event interfaces.CommonEvent, s *session.Session, p
 		pageName == constants.AppealOverviewPageName ||
 		pageName == constants.AppealTicketPageName ||
 		pageName == constants.AppealVerifyPageName) {
-		b.paginationManager.HandleInteraction(event, s)
+		b.interactionManager.HandleInteraction(event, s)
 		return true
 	}
 
 	// User is banned, show ban menu
-	b.paginationManager.Show(event, s, constants.BanPageName, "")
+	b.interactionManager.Show(event, s, constants.BanPageName, "")
 	s.Touch(context.Background())
 	return true
 }
 
 // checkConsentStatus checks if a user has consented and shows the consent menu if not.
 // Returns true if the user needs to consent (hasn't consented yet).
-func (b *Bot) checkConsentStatus(event interfaces.CommonEvent, s *session.Session) bool {
+func (b *Bot) checkConsentStatus(event interaction.CommonEvent, s *session.Session) bool {
 	hasConsented, err := b.db.Model().Consent().HasConsented(context.Background(), uint64(event.User().ID))
 	if err != nil {
 		b.logger.Error("Failed to check consent status", zap.Error(err))
@@ -448,7 +453,7 @@ func (b *Bot) checkConsentStatus(event interfaces.CommonEvent, s *session.Sessio
 
 	if !hasConsented {
 		// Show consent menu first
-		b.paginationManager.Show(event, s, constants.ConsentPageName, "")
+		b.interactionManager.Show(event, s, constants.ConsentPageName, "")
 		s.Touch(context.Background())
 		return true
 	}
@@ -457,7 +462,7 @@ func (b *Bot) checkConsentStatus(event interfaces.CommonEvent, s *session.Sessio
 }
 
 // validateAndGetSession retrieves or creates a session for the given user and validates its state.
-func (b *Bot) validateAndGetSession(event interfaces.CommonEvent, userID snowflake.ID) (*session.Session, bool, bool) {
+func (b *Bot) validateAndGetSession(event interaction.CommonEvent, userID snowflake.ID) (*session.Session, bool, bool) {
 	// Check if user is a guild owner if bot is in the guild
 	isGuildOwner := false
 	if guildID := event.GuildID(); guildID != nil {
@@ -470,10 +475,10 @@ func (b *Bot) validateAndGetSession(event interfaces.CommonEvent, userID snowfla
 	s, isNewSession, err := b.sessionManager.GetOrCreateSession(context.Background(), userID, isGuildOwner)
 	if err != nil {
 		if errors.Is(err, session.ErrSessionLimitReached) {
-			b.paginationManager.RespondWithError(event, "Session limit reached. Please try again later.")
+			b.interactionManager.RespondWithError(event, "Session limit reached. Please try again later.")
 		} else {
 			b.logger.Error("Failed to get or create session", zap.Error(err))
-			b.paginationManager.RespondWithError(event, "Failed to get or create session.")
+			b.interactionManager.RespondWithError(event, "Failed to get or create session.")
 		}
 		return nil, false, false
 	}
