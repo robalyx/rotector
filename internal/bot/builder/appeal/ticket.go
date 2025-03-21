@@ -66,22 +66,27 @@ func (b *TicketBuilder) Build() *discord.MessageUpdateBuilder {
 	switch b.appeal.Status {
 	case enum.AppealStatusPending:
 		// Create options array for the actions dropdown
-		options := []discord.StringSelectMenuOption{
-			discord.NewStringSelectMenuOption("Respond to Appeal", constants.AppealRespondButtonCustomID).
-				WithEmoji(discord.ComponentEmoji{Name: "💬"}).
-				WithDescription("Send a message in this appeal"),
+		var options []discord.StringSelectMenuOption
+
+		// Add respond option for ticket owner or reviewers
+		if b.appeal.RequesterID == b.userID || (b.isReviewer && b.appeal.ClaimedBy == b.userID) {
+			options = append(options,
+				discord.NewStringSelectMenuOption("Respond to Appeal", constants.AppealRespondButtonCustomID).
+					WithEmoji(discord.ComponentEmoji{Name: "💬"}).
+					WithDescription("Send a message in this appeal"),
+			)
 		}
 
 		if b.isReviewer {
-			// Add reviewer-specific options
+			// Add lookup option for all reviewers
 			options = append(options,
 				discord.NewStringSelectMenuOption("Lookup User", constants.AppealLookupUserButtonCustomID).
 					WithEmoji(discord.ComponentEmoji{Name: "🔍"}).
 					WithDescription("View detailed user information"),
 			)
 
-			// Add claim option if appeal is unclaimed
-			if b.appeal.ClaimedBy == 0 {
+			// Add claim option for reviewers who didn't claim it
+			if b.appeal.ClaimedBy != b.userID {
 				options = append(options,
 					discord.NewStringSelectMenuOption("Claim Appeal", constants.AppealClaimButtonCustomID).
 						WithEmoji(discord.ComponentEmoji{Name: "📌"}).
@@ -89,23 +94,25 @@ func (b *TicketBuilder) Build() *discord.MessageUpdateBuilder {
 				)
 			}
 
-			// Add review action options
-			options = append(options,
-				discord.NewStringSelectMenuOption("Accept Appeal", constants.AcceptAppealButtonCustomID).
-					WithEmoji(discord.ComponentEmoji{Name: "✅"}).
-					WithDescription("Clear the user from the system and delete user data"),
-				discord.NewStringSelectMenuOption("Reject Appeal", constants.RejectAppealButtonCustomID).
-					WithEmoji(discord.ComponentEmoji{Name: "❌"}).
-					WithDescription("Reject this appeal"),
-				discord.NewStringSelectMenuOption("Delete Data & Opt-Out", constants.DeleteUserDataButtonCustomID).
-					WithEmoji(discord.ComponentEmoji{Name: "🗑️"}).
-					WithDescription("Delete user data without clearing user"),
-				discord.NewStringSelectMenuOption("Blacklist User", constants.BlacklistUserButtonCustomID).
-					WithEmoji(discord.ComponentEmoji{Name: "⛔"}).
-					WithDescription("Reject this appeal and blacklist user from creating future appeals"),
-			)
-		} else {
-			// Add close option for regular users
+			// Add review actions only if reviewer has claimed the appeal
+			if b.appeal.ClaimedBy == b.userID {
+				options = append(options,
+					discord.NewStringSelectMenuOption("Accept Appeal", constants.AcceptAppealButtonCustomID).
+						WithEmoji(discord.ComponentEmoji{Name: "✅"}).
+						WithDescription("Clear the user from the system and delete user data"),
+					discord.NewStringSelectMenuOption("Reject Appeal", constants.RejectAppealButtonCustomID).
+						WithEmoji(discord.ComponentEmoji{Name: "❌"}).
+						WithDescription("Reject this appeal"),
+					discord.NewStringSelectMenuOption("Delete Data & Opt-Out", constants.DeleteUserDataButtonCustomID).
+						WithEmoji(discord.ComponentEmoji{Name: "🗑️"}).
+						WithDescription("Delete user data without clearing user"),
+					discord.NewStringSelectMenuOption("Blacklist User", constants.BlacklistUserButtonCustomID).
+						WithEmoji(discord.ComponentEmoji{Name: "⛔"}).
+						WithDescription("Reject this appeal and blacklist user from creating future appeals"),
+				)
+			}
+		} else if b.appeal.RequesterID == b.userID {
+			// Add close option for ticket owner
 			options = append(options,
 				discord.NewStringSelectMenuOption("Close Ticket", constants.AppealCloseButtonCustomID).
 					WithEmoji(discord.ComponentEmoji{Name: "❌"}).
@@ -113,9 +120,11 @@ func (b *TicketBuilder) Build() *discord.MessageUpdateBuilder {
 			)
 		}
 
-		components = append(components, discord.NewActionRow(
-			discord.NewStringSelectMenu(constants.AppealActionSelectID, "Appeal Actions", options...),
-		))
+		if len(options) > 0 {
+			components = append(components, discord.NewActionRow(
+				discord.NewStringSelectMenu(constants.AppealActionSelectID, "Appeal Actions", options...),
+			))
+		}
 
 	case enum.AppealStatusRejected, enum.AppealStatusAccepted:
 		if b.isReviewer {

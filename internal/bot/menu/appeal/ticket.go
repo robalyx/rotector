@@ -236,6 +236,23 @@ func (m *TicketMenu) handleSelectMenu(
 func (m *TicketMenu) handleRespond(
 	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond,
 ) {
+	appeal := session.AppealSelected.Get(s)
+	userID := uint64(event.User().ID)
+	isReviewer := s.BotSettings().IsReviewer(userID)
+
+	if userID != appeal.RequesterID {
+		// Non-reviewer is not the ticket owner
+		if !isReviewer {
+			r.Error(event, "You don't have permission to respond to this appeal")
+			return
+		}
+		// Reviewer must have claimed the appeal
+		if appeal.ClaimedBy != userID {
+			r.Error(event, "You must claim this appeal before responding")
+			return
+		}
+	}
+
 	modal := discord.NewModalCreateBuilder().
 		SetCustomID(constants.AppealRespondModalCustomID).
 		SetTitle("Respond to Appeal").
@@ -253,6 +270,12 @@ func (m *TicketMenu) handleRespond(
 func (m *TicketMenu) handleLookupUser(
 	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, appeal *types.FullAppeal,
 ) {
+	userID := uint64(event.User().ID)
+	if !s.BotSettings().IsReviewer(userID) {
+		r.Error(event, "Only reviewers can lookup users")
+		return
+	}
+
 	ctx := context.Background()
 
 	switch appeal.Type {
@@ -308,20 +331,19 @@ func (m *TicketMenu) handleLookupUser(
 func (m *TicketMenu) handleClaimAppeal(
 	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond, appeal *types.FullAppeal,
 ) {
-	// Verify the appeal is not already claimed
-	if appeal.ClaimedBy != 0 {
-		r.Cancel(event, s, "This appeal is already claimed by another reviewer.")
+	ctx := context.Background()
+	userID := uint64(event.User().ID)
+
+	if !s.BotSettings().IsReviewer(userID) {
+		r.Error(event, "Only reviewers can claim appeals")
 		return
 	}
 
-	ctx := context.Background()
-	reviewerID := uint64(event.User().ID)
-
 	// Update the appeal in the database
-	appeal.ClaimedBy = reviewerID
+	appeal.ClaimedBy = userID
 	appeal.ClaimedAt = time.Now()
 
-	if err := m.layout.db.Model().Appeal().ClaimAppeal(ctx, appeal.ID, appeal.Timestamp, reviewerID); err != nil {
+	if err := m.layout.db.Model().Appeal().ClaimAppeal(ctx, appeal.ID, appeal.Timestamp, userID); err != nil {
 		m.layout.logger.Error("Failed to claim appeal", zap.Error(err))
 		r.Error(event, "Failed to claim appeal. Please try again.")
 		return
@@ -336,7 +358,7 @@ func (m *TicketMenu) handleClaimAppeal(
 		ActivityTarget: types.ActivityTarget{
 			UserID: appeal.UserID,
 		},
-		ReviewerID:        reviewerID,
+		ReviewerID:        userID,
 		ActivityType:      enum.ActivityTypeAppealClaimed,
 		ActivityTimestamp: time.Now(),
 		Details: map[string]any{
@@ -349,6 +371,19 @@ func (m *TicketMenu) handleClaimAppeal(
 func (m *TicketMenu) handleAcceptAppeal(
 	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond,
 ) {
+	appeal := session.AppealSelected.Get(s)
+	userID := uint64(event.User().ID)
+
+	if !s.BotSettings().IsReviewer(userID) {
+		r.Error(event, "Only reviewers can accept appeals")
+		return
+	}
+
+	if appeal.ClaimedBy != userID {
+		r.Error(event, "You must claim this appeal before accepting it")
+		return
+	}
+
 	modal := discord.NewModalCreateBuilder().
 		SetCustomID(constants.AcceptAppealModalCustomID).
 		SetTitle("Accept Appeal & Delete Data").
@@ -365,6 +400,19 @@ func (m *TicketMenu) handleAcceptAppeal(
 func (m *TicketMenu) handleRejectAppeal(
 	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond,
 ) {
+	appeal := session.AppealSelected.Get(s)
+	userID := uint64(event.User().ID)
+
+	if !s.BotSettings().IsReviewer(userID) {
+		r.Error(event, "Only reviewers can reject appeals")
+		return
+	}
+
+	if appeal.ClaimedBy != userID {
+		r.Error(event, "You must claim this appeal before rejecting it")
+		return
+	}
+
 	modal := discord.NewModalCreateBuilder().
 		SetCustomID(constants.RejectAppealModalCustomID).
 		SetTitle("Reject Appeal").
@@ -470,6 +518,19 @@ func (m *TicketMenu) handleReopenAppeal(
 func (m *TicketMenu) handleDeleteUserData(
 	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond,
 ) {
+	appeal := session.AppealSelected.Get(s)
+	userID := uint64(event.User().ID)
+
+	if !s.BotSettings().IsReviewer(userID) {
+		r.Error(event, "Only reviewers can delete user data")
+		return
+	}
+
+	if appeal.ClaimedBy != userID {
+		r.Error(event, "You must claim this appeal before deleting user data")
+		return
+	}
+
 	modal := discord.NewModalCreateBuilder().
 		SetCustomID(constants.DeleteUserDataModalCustomID).
 		SetTitle("Delete User Data").
@@ -488,6 +549,19 @@ func (m *TicketMenu) handleDeleteUserData(
 func (m *TicketMenu) handleBlacklistUser(
 	event *events.ComponentInteractionCreate, s *session.Session, r *pagination.Respond,
 ) {
+	appeal := session.AppealSelected.Get(s)
+	userID := uint64(event.User().ID)
+
+	if !s.BotSettings().IsReviewer(userID) {
+		r.Error(event, "Only reviewers can blacklist users")
+		return
+	}
+
+	if appeal.ClaimedBy != userID {
+		r.Error(event, "You must claim this appeal before blacklisting the user")
+		return
+	}
+
 	modal := discord.NewModalCreateBuilder().
 		SetCustomID(constants.BlacklistUserModalCustomID).
 		SetTitle("Blacklist User").
