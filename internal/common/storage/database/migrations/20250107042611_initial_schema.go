@@ -37,6 +37,7 @@ func init() { //nolint:funlen
 			{(*types.InappropriateMessage)(nil), "inappropriate_messages", "user_id"},
 			{(*types.InappropriateUserSummary)(nil), "inappropriate_user_summaries", "user_id"},
 			{(*types.DiscordUserFullScan)(nil), "discord_user_full_scans", "user_id"},
+			{(*types.DiscordUserWhitelist)(nil), "discord_user_whitelists", "user_id"},
 		}
 
 		for _, table := range tables {

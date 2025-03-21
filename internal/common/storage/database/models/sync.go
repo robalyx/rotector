@@ -396,3 +396,36 @@ func (m *SyncModel) GetUsersForFullScan(ctx context.Context, before time.Time, l
 	}
 	return userIDs, nil
 }
+
+// WhitelistDiscordUser adds a Discord user to the whitelist.
+func (m *SyncModel) WhitelistDiscordUser(ctx context.Context, whitelist *types.DiscordUserWhitelist) error {
+	_, err := m.db.NewInsert().
+		Model(whitelist).
+		On("CONFLICT (user_id) DO UPDATE").
+		Set("whitelisted_at = EXCLUDED.whitelisted_at").
+		Set("reason = EXCLUDED.reason").
+		Set("reviewer_id = EXCLUDED.reviewer_id").
+		Set("appeal_id = EXCLUDED.appeal_id").
+		Exec(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to whitelist Discord user: %w", err)
+	}
+
+	m.logger.Debug("Added Discord user to whitelist",
+		zap.Uint64("user_id", whitelist.UserID),
+		zap.Int64("appeal_id", whitelist.AppealID))
+
+	return nil
+}
+
+// IsUserWhitelisted checks if a user is whitelisted.
+func (m *SyncModel) IsUserWhitelisted(ctx context.Context, userID uint64) (bool, error) {
+	exists, err := m.db.NewSelect().
+		Model((*types.DiscordUserWhitelist)(nil)).
+		Where("user_id = ?", userID).
+		Exists(ctx)
+	if err != nil {
+		return false, fmt.Errorf("failed to check if user is whitelisted: %w", err)
+	}
+	return exists, nil
+}

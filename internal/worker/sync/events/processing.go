@@ -46,16 +46,17 @@ func (h *Handler) addMessageToQueue(message *discord.Message) {
 		return
 	}
 
-	// Check if user's data is redacted
-	isRedacted, err := h.db.Model().Sync().IsUserDataRedacted(context.Background(), userID)
+	// Check privacy status
+	isRedacted, isWhitelisted, err := h.db.Service().Sync().ShouldSkipUser(context.Background(), userID)
 	if err != nil {
-		h.logger.Error("Failed to check user redaction status",
+		h.logger.Error("Failed to check user privacy status",
 			zap.Uint64("user_id", userID),
 			zap.Error(err))
 		return
 	}
-	if isRedacted {
-		h.logger.Debug("Skipping message from redacted user",
+
+	if isRedacted || isWhitelisted {
+		h.logger.Debug("Skipping message from redacted/whitelisted user",
 			zap.Uint64("user_id", userID))
 		return
 	}

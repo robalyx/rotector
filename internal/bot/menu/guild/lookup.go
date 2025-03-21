@@ -120,23 +120,30 @@ func (m *LookupMenu) Cleanup(s *session.Session) {
 func (m *LookupMenu) fetchUserData(
 	ctx context.Context, event interfaces.CommonEvent, s *session.Session, discordUserID uint64,
 ) bool {
-	// Check if user has requested data deletion
-	isRedacted, err := m.layout.db.Model().Sync().IsUserDataRedacted(ctx, discordUserID)
+	// Check privacy status
+	isRedacted, isWhitelisted, err := m.layout.db.Service().Sync().ShouldSkipUser(ctx, discordUserID)
 	if err != nil {
-		m.layout.logger.Error("Failed to check data redaction status",
+		m.layout.logger.Error("Failed to check user privacy status",
 			zap.Error(err),
 			zap.Uint64("discord_user_id", discordUserID))
 		isRedacted = false // Default to false if there's an error
 	}
 	session.DiscordUserDataRedacted.Set(s, isRedacted)
 
-	// Perform full scan and attempt to get Discord username if possible
-	username, err := m.layout.scanner.PerformFullScan(ctx, discordUserID)
-	if err != nil {
-		m.layout.logger.Error("Failed to perform full scan",
-			zap.Error(err),
-			zap.Uint64("discord_user_id", discordUserID))
+	var username string
 
+	// Only perform full scan if user is not whitelisted
+	if !isWhitelisted {
+		username, err = m.layout.scanner.PerformFullScan(ctx, discordUserID)
+		if err != nil {
+			m.layout.logger.Error("Failed to perform full scan",
+				zap.Error(err),
+				zap.Uint64("discord_user_id", discordUserID))
+		}
+	}
+
+	// If we don't have a username yet (either whitelisted or scan failed), try to get it from Discord
+	if username == "" {
 		if user, err := event.Client().Rest().GetUser(snowflake.ID(discordUserID)); err == nil {
 			username = user.Username
 		} else {

@@ -50,3 +50,12 @@ type DiscordUserFullScan struct {
 	UserID   uint64    `bun:",pk"      json:"userId"`   // Discord user ID
 	LastScan time.Time `bun:",notnull" json:"lastScan"` // Last full scan timestamp
 }
+
+// DiscordUserWhitelist represents a Discord user that should not be flagged.
+type DiscordUserWhitelist struct {
+	UserID        uint64    `bun:",pk"      json:"userId"`        // Discord user ID
+	WhitelistedAt time.Time `bun:",notnull" json:"whitelistedAt"` // When the user was whitelisted
+	Reason        string    `bun:",notnull" json:"reason"`        // Why the user was whitelisted
+	ReviewerID    uint64    `bun:",notnull" json:"reviewerId"`    // Who whitelisted the user
+	AppealID      int64     `bun:",notnull" json:"appealId"`      // Related appeal ID
+}
