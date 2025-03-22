@@ -101,7 +101,7 @@ func (s *UserService) GetUserToReview(
 	reviewerID uint64,
 ) (*types.ReviewUser, error) {
 	// Get recently reviewed user IDs
-	recentIDs, err := s.activity.GetRecentlyReviewedIDs(ctx, reviewerID, false, 100)
+	recentIDs, err := s.activity.GetRecentlyReviewedIDs(ctx, reviewerID, false, 50)
 	if err != nil {
 		s.logger.Error("Failed to get recently reviewed user IDs", zap.Error(err))
 		recentIDs = []uint64{} // Continue without filtering if there's an error

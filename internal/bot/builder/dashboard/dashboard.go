@@ -159,9 +159,19 @@ func (b *Builder) buildComponents() []discord.ContainerComponent {
 		discord.NewStringSelectMenuOption("Review Users", constants.StartUserReviewButtonCustomID).
 			WithEmoji(discord.ComponentEmoji{Name: "📝"}).
 			WithDescription("Start reviewing flagged users"),
-		discord.NewStringSelectMenuOption("Review Groups", constants.StartGroupReviewButtonCustomID).
-			WithEmoji(discord.ComponentEmoji{Name: "📝"}).
-			WithDescription("Start reviewing flagged groups"),
+	}
+
+	// Add group review option only for reviewers
+	if b.isReviewer {
+		options = append(options,
+			discord.NewStringSelectMenuOption("Review Groups", constants.StartGroupReviewButtonCustomID).
+				WithEmoji(discord.ComponentEmoji{Name: "📝"}).
+				WithDescription("Start reviewing flagged groups"),
+		)
+	}
+
+	// Add remaining base options
+	options = append(options,
 		discord.NewStringSelectMenuOption("Lookup Roblox User", constants.LookupRobloxUserButtonCustomID).
 			WithEmoji(discord.ComponentEmoji{Name: "🔍"}).
 			WithDescription("Look up specific Roblox user by ID or UUID"),
@@ -174,7 +184,7 @@ func (b *Builder) buildComponents() []discord.ContainerComponent {
 		discord.NewStringSelectMenuOption("View Leaderboard", constants.LeaderboardMenuButtonCustomID).
 			WithEmoji(discord.ComponentEmoji{Name: "🏆"}).
 			WithDescription("View voting leaderboard"),
-	}
+	)
 
 	// Add reviewer-only options
 	if b.isReviewer {

@@ -167,9 +167,6 @@ func (b *ReviewBuilder) buildReviewEmbed() *discord.EmbedBuilder {
 	lastUpdated := fmt.Sprintf("<t:%d:R>", b.user.LastUpdated.Unix())
 	confidence := fmt.Sprintf("%.2f%%", b.user.Confidence*100)
 
-	// Censor reason if needed
-	reason := b.getReasonField()
-
 	if b.reviewMode == enum.ReviewModeTraining {
 		// Training mode - show limited information without links
 		embed.AddField("ID", utils.CensorString(userID, true), true).
@@ -179,7 +176,7 @@ func (b *ReviewBuilder) buildReviewEmbed() *discord.EmbedBuilder {
 			AddField("Confidence", confidence, true).
 			AddField("Created At", createdAt, true).
 			AddField("Last Updated", lastUpdated, true).
-			AddField("Reason", reason, false).
+			AddField("Reason", b.getReason(), false).
 			AddField("Description", b.getDescription(), false).
 			AddField(b.getFriendsField(), b.getFriends(), false).
 			AddField(b.getGroupsField(), b.getGroups(), false).
@@ -199,7 +196,7 @@ func (b *ReviewBuilder) buildReviewEmbed() *discord.EmbedBuilder {
 			AddField("Confidence", confidence, true).
 			AddField("Created At", createdAt, true).
 			AddField("Last Updated", lastUpdated, true).
-			AddField("Reason", reason, false).
+			AddField("Reason", b.getReason(), false).
 			AddField("Description", b.getDescription(), false).
 			AddField(b.getFriendsField(), b.getFriends(), false).
 			AddField(b.getGroupsField(), b.getGroups(), false).
@@ -508,8 +505,8 @@ func (b *ReviewBuilder) getTotalVisits() string {
 	return utils.FormatNumber(totalVisits)
 }
 
-// getReasonField returns the formatted reason field for the embed.
-func (b *ReviewBuilder) getReasonField() string {
+// getReason returns the formatted reason for the embed.
+func (b *ReviewBuilder) getReason() string {
 	if len(b.user.Reasons) == 0 {
 		return constants.NotApplicable
 	}

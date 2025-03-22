@@ -101,7 +101,7 @@ func (s *GroupService) GetGroupToReview(
 	reviewerID uint64,
 ) (*types.ReviewGroup, error) {
 	// Get recently reviewed group IDs
-	recentIDs, err := s.activity.GetRecentlyReviewedIDs(ctx, reviewerID, true, 100)
+	recentIDs, err := s.activity.GetRecentlyReviewedIDs(ctx, reviewerID, true, 3)
 	if err != nil {
 		s.logger.Error("Failed to get recently reviewed group IDs", zap.Error(err))
 		recentIDs = []uint64{} // Continue without filtering if there's an error

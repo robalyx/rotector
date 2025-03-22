@@ -17,34 +17,31 @@ import (
 
 // MembersBuilder creates the visual layout for viewing a group's flagged members.
 type MembersBuilder struct {
-	group        *types.ReviewGroup
-	presences    map[uint64]*apiTypes.UserPresenceResponse
-	members      map[uint64]*types.ReviewUser
-	memberIDs    []uint64
-	start        int
-	page         int
-	total        int
-	imageBuffer  *bytes.Buffer
-	isStreaming  bool
-	trainingMode bool
-	privacyMode  bool
+	group       *types.ReviewGroup
+	presences   map[uint64]*apiTypes.UserPresenceResponse
+	members     map[uint64]*types.ReviewUser
+	memberIDs   []uint64
+	start       int
+	page        int
+	total       int
+	imageBuffer *bytes.Buffer
+	isStreaming bool
+	privacyMode bool
 }
 
 // NewMembersBuilder creates a new members builder.
 func NewMembersBuilder(s *session.Session) *MembersBuilder {
-	trainingMode := session.UserReviewMode.Get(s) == enum.ReviewModeTraining
 	return &MembersBuilder{
-		group:        session.GroupTarget.Get(s),
-		presences:    session.UserPresences.Get(s),
-		members:      session.GroupPageFlaggedMembers.Get(s),
-		memberIDs:    session.GroupPageFlaggedMemberIDs.Get(s),
-		start:        session.PaginationOffset.Get(s),
-		page:         session.PaginationPage.Get(s),
-		total:        session.PaginationTotalItems.Get(s),
-		imageBuffer:  session.ImageBuffer.Get(s),
-		isStreaming:  session.PaginationIsStreaming.Get(s),
-		trainingMode: trainingMode,
-		privacyMode:  trainingMode || session.UserStreamerMode.Get(s),
+		group:       session.GroupTarget.Get(s),
+		presences:   session.UserPresences.Get(s),
+		members:     session.GroupPageFlaggedMembers.Get(s),
+		memberIDs:   session.GroupPageFlaggedMemberIDs.Get(s),
+		start:       session.PaginationOffset.Get(s),
+		page:        session.PaginationPage.Get(s),
+		total:       session.PaginationTotalItems.Get(s),
+		imageBuffer: session.ImageBuffer.Get(s),
+		isStreaming: session.PaginationIsStreaming.Get(s),
+		privacyMode: session.UserStreamerMode.Get(s),
 	}
 }
 
@@ -142,17 +139,12 @@ func (b *MembersBuilder) getMemberFieldValue(memberID uint64) string {
 		return "Data not found"
 	}
 
-	// Add member name (with link in standard mode)
-	name := utils.CensorString(member.Name, b.privacyMode)
-	if b.trainingMode {
-		info.WriteString(name)
-	} else {
-		info.WriteString(fmt.Sprintf(
-			"[%s](https://www.roblox.com/users/%d/profile)",
-			name,
-			member.ID,
-		))
-	}
+	// Add member name
+	info.WriteString(fmt.Sprintf(
+		"[%s](https://www.roblox.com/users/%d/profile)",
+		utils.CensorString(member.Name, b.privacyMode),
+		member.ID,
+	))
 
 	// Add presence details if available
 	if presence, ok := b.presences[memberID]; ok {

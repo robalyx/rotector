@@ -34,6 +34,7 @@ type ReviewBuilder struct {
 	historyIndex   int
 	reasonsChanged bool
 	isReviewer     bool
+	isAdmin        bool
 	privacyMode    bool
 }
 
@@ -55,7 +56,8 @@ func NewReviewBuilder(s *session.Session, db database.Client) *ReviewBuilder {
 		historyIndex:   session.GroupReviewHistoryIndex.Get(s),
 		reasonsChanged: session.ReasonsChanged.Get(s),
 		isReviewer:     s.BotSettings().IsReviewer(userID),
-		privacyMode:    session.UserReviewMode.Get(s) == enum.ReviewModeTraining || session.UserStreamerMode.Get(s),
+		isAdmin:        s.BotSettings().IsAdmin(userID),
+		privacyMode:    session.UserStreamerMode.Get(s),
 	}
 }
 
@@ -106,13 +108,14 @@ func (b *ReviewBuilder) buildModeEmbed() *discord.EmbedBuilder {
 	var description string
 
 	// Format review mode
-	switch b.reviewMode {
-	case enum.ReviewModeTraining:
-		mode = "🎓 Training Mode"
-		description += "**You are not an official reviewer.**\n" +
-			"You may help moderators by downvoting to indicate inappropriate activity.\n" +
-			"Information is censored and external links are disabled."
-	case enum.ReviewModeStandard:
+	switch {
+	case b.reviewMode == enum.ReviewModeTraining || !b.isAdmin:
+		mode = "🗳️ Voting Mode"
+		description += "**You are an official reviewer.**\n" +
+			"While you can review and vote on groups, only administrators can make final decisions. " +
+			"Your votes are recorded but will not affect the group's status. Community members who are " +
+			"not official reviewers will not be able to see this group review menu."
+	case b.reviewMode == enum.ReviewModeStandard:
 		mode = "⚠️ Standard Mode"
 		description += "Your actions are recorded and affect the database. Please review carefully before taking action."
 	default:
@@ -158,45 +161,27 @@ func (b *ReviewBuilder) buildReviewEmbed() *discord.EmbedBuilder {
 	lastUpdated := fmt.Sprintf("<t:%d:R>", b.group.LastUpdated.Unix())
 	confidence := fmt.Sprintf("%.2f%%", b.group.Confidence*100)
 
-	// Censor reason if needed
-	reason := b.getReasonField()
-
-	if b.reviewMode == enum.ReviewModeTraining {
-		// Training mode - show limited information without links
-		embed.AddField("ID", utils.CensorString(groupID, true), true).
-			AddField("Name", utils.CensorString(b.group.Name, true), true).
-			AddField("Owner", utils.CensorString(ownerID, true), true).
-			AddField("Members", memberCount, true).
-			AddField("Flagged Members", flaggedCount, true).
-			AddField("Confidence", confidence, true).
-			AddField("Last Updated", lastUpdated, true).
-			AddField("Reason", reason, false).
-			AddField("Shout", b.getShout(), false).
-			AddField("Description", b.getDescription(), false)
-		b.addEvidenceFields(embed)
-	} else {
-		// Standard mode - show all information with links
-		embed.AddField("ID", fmt.Sprintf(
-			"[%s](https://www.roblox.com/groups/%d)",
-			utils.CensorString(groupID, b.privacyMode),
-			b.group.ID,
+	// Add all information fields to the embed
+	embed.AddField("ID", fmt.Sprintf(
+		"[%s](https://www.roblox.com/groups/%d)",
+		utils.CensorString(groupID, b.privacyMode),
+		b.group.ID,
+	), true).
+		AddField("Name", utils.CensorString(b.group.Name, b.privacyMode), true).
+		AddField("Owner", fmt.Sprintf(
+			"[%s](https://www.roblox.com/users/%d/profile)",
+			utils.CensorString(ownerID, b.privacyMode),
+			b.group.Owner.UserID,
 		), true).
-			AddField("Name", utils.CensorString(b.group.Name, b.privacyMode), true).
-			AddField("Owner", fmt.Sprintf(
-				"[%s](https://www.roblox.com/users/%d/profile)",
-				utils.CensorString(ownerID, b.privacyMode),
-				b.group.Owner.UserID,
-			), true).
-			AddField("Members", memberCount, true).
-			AddField("Flagged Members", flaggedCount, true).
-			AddField("Confidence", confidence, true).
-			AddField("Last Updated", lastUpdated, true).
-			AddField("Reason", reason, false).
-			AddField("Shout", b.getShout(), false).
-			AddField("Description", b.getDescription(), false)
-		b.addEvidenceFields(embed)
-		embed.AddField("Review History", b.getReviewHistory(), false)
-	}
+		AddField("Members", memberCount, true).
+		AddField("Flagged Members", flaggedCount, true).
+		AddField("Confidence", confidence, true).
+		AddField("Last Updated", lastUpdated, true).
+		AddField("Reason", b.getReason(), false).
+		AddField("Shout", b.getShout(), false).
+		AddField("Description", b.getDescription(), false)
+	b.addEvidenceFields(embed)
+	embed.AddField("Review History", b.getReviewHistory(), false)
 
 	// Add status-specific timestamps
 	if !b.group.VerifiedAt.IsZero() {
@@ -305,8 +290,8 @@ func (b *ReviewBuilder) buildActionOptions() []discord.StringSelectMenuOption {
 				WithEmoji(discord.ComponentEmoji{Name: "📋"}).
 				WithDescription("View activity logs for this group"),
 			discord.NewStringSelectMenuOption("Change Review Mode", constants.ReviewModeOption).
-				WithEmoji(discord.ComponentEmoji{Name: "🎓"}).
-				WithDescription("Switch between training and standard modes"),
+				WithEmoji(discord.ComponentEmoji{Name: "🗳️"}).
+				WithDescription("Switch between voting (training) and standard modes"),
 		}
 		options = append(options, reviewerOptions...)
 	}
@@ -333,7 +318,7 @@ func (b *ReviewBuilder) buildComponents() []discord.ContainerComponent {
 	)
 
 	// Add reason management dropdown for reviewers
-	if b.isReviewer && b.reviewMode != enum.ReviewModeTraining {
+	if b.isAdmin && b.reviewMode != enum.ReviewModeTraining {
 		components = append(components,
 			discord.NewActionRow(
 				discord.NewStringSelectMenu(constants.ReasonSelectMenuCustomID, "Manage Reasons", b.buildReasonOptions()...),
@@ -438,8 +423,8 @@ func (b *ReviewBuilder) getDescription() string {
 	return description
 }
 
-// getReasonField returns the reason field for the embed.
-func (b *ReviewBuilder) getReasonField() string {
+// getReason returns the formatted reason for the embed.
+func (b *ReviewBuilder) getReason() string {
 	if len(b.group.Reasons) == 0 {
 		return constants.NotApplicable
 	}
@@ -576,7 +561,7 @@ func (b *ReviewBuilder) getReviewHistory() string {
 
 // getConfirmButtonLabel returns the appropriate label for the confirm button based on review mode.
 func (b *ReviewBuilder) getConfirmButtonLabel() string {
-	if b.reviewMode == enum.ReviewModeTraining {
+	if b.reviewMode == enum.ReviewModeTraining || !b.isAdmin {
 		return "Report"
 	}
 	return "Confirm"
@@ -584,7 +569,7 @@ func (b *ReviewBuilder) getConfirmButtonLabel() string {
 
 // getClearButtonLabel returns the appropriate label for the clear button based on review mode.
 func (b *ReviewBuilder) getClearButtonLabel() string {
-	if b.reviewMode == enum.ReviewModeTraining {
+	if b.reviewMode == enum.ReviewModeTraining || !b.isAdmin {
 		return "Safe"
 	}
 	return "Clear"

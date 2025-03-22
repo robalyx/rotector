@@ -58,7 +58,8 @@ func (m *Menu) Show(ctx *interaction.Context, s *session.Session) {
 				zap.Error(err),
 				zap.Uint64("user_id", userID))
 		}
-		ctx.Show(constants.DashboardPageName, "Your ban has expired. You may now use the bot.")
+		ctx.Show(constants.ConsentPageName,
+			"Your ban has expired. You may use the bot again after agreeing to the new terms of service.")
 		return
 	}
 

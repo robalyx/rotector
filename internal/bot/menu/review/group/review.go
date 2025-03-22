@@ -46,11 +46,6 @@ func NewReviewMenu(layout *Layout) *ReviewMenu {
 
 // Show prepares and displays the review interface.
 func (m *ReviewMenu) Show(ctx *interaction.Context, s *session.Session) {
-	// Force training mode if user is not a reviewer
-	if !s.BotSettings().IsReviewer(uint64(ctx.Event().User().ID)) && session.UserReviewMode.Get(s) != enum.ReviewModeTraining {
-		session.UserReviewMode.Set(s, enum.ReviewModeTraining)
-	}
-
 	// If no group is set in session, fetch a new one
 	group := session.GroupTarget.Get(s)
 	if group == nil {
@@ -441,9 +436,10 @@ func (m *ReviewMenu) handleNavigateGroup(ctx *interaction.Context, s *session.Se
 // handleConfirmGroup moves a group to the confirmed state and logs the action.
 func (m *ReviewMenu) handleConfirmGroup(ctx *interaction.Context, s *session.Session) {
 	group := session.GroupTarget.Get(s)
+	isAdmin := s.BotSettings().IsAdmin(uint64(ctx.Event().User().ID))
 
 	var actionMsg string
-	if session.UserReviewMode.Get(s) == enum.ReviewModeTraining {
+	if session.UserReviewMode.Get(s) == enum.ReviewModeTraining || !isAdmin {
 		// Training mode - increment downvotes
 		if err := m.layout.db.Service().Reputation().UpdateGroupVotes(
 			ctx.Context(), group.ID, uint64(ctx.Event().User().ID), false,
@@ -538,9 +534,10 @@ func (m *ReviewMenu) handleConfirmGroup(ctx *interaction.Context, s *session.Ses
 // handleClearGroup removes a group from the flagged state and logs the action.
 func (m *ReviewMenu) handleClearGroup(ctx *interaction.Context, s *session.Session) {
 	group := session.GroupTarget.Get(s)
+	isAdmin := s.BotSettings().IsAdmin(uint64(ctx.Event().User().ID))
 
 	var actionMsg string
-	if session.UserReviewMode.Get(s) == enum.ReviewModeTraining {
+	if session.UserReviewMode.Get(s) == enum.ReviewModeTraining || !isAdmin {
 		// Training mode - increment upvotes
 		if err := m.layout.db.Service().Reputation().UpdateGroupVotes(
 			ctx.Context(), group.ID, uint64(ctx.Event().User().ID), true,
