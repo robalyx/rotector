@@ -51,15 +51,19 @@ func (m *Menu) Show(ctx *interaction.Context, s *session.Session) {
 		m.layout.logger.Error("Failed to get counts", zap.Error(err))
 	}
 
-	// Get vote statistics for the user
-	voteStats, err := m.layout.db.Service().Vote().GetUserVoteStats(
-		ctx.Context(),
-		uint64(ctx.Event().User().ID),
-		enum.LeaderboardPeriodAllTime,
-	)
-	if err != nil {
-		m.layout.logger.Error("Failed to get vote statistics", zap.Error(err))
-		voteStats = &types.VoteAccuracy{DiscordUserID: uint64(ctx.Event().User().ID)} // Use empty stats on error
+	// Only get vote statistics for non-reviewers
+	userID := uint64(ctx.Event().User().ID)
+	if !s.BotSettings().IsReviewer(userID) {
+		voteStats, err := m.layout.db.Service().Vote().GetUserVoteStats(
+			ctx.Context(),
+			userID,
+			enum.LeaderboardPeriodAllTime,
+		)
+		if err != nil {
+			m.layout.logger.Error("Failed to get vote statistics", zap.Error(err))
+			voteStats = &types.VoteAccuracy{DiscordUserID: userID} // Use empty stats on error
+		}
+		session.StatsVotes.Set(s, voteStats)
 	}
 
 	// Get list of currently active reviewers
@@ -69,7 +73,6 @@ func (m *Menu) Show(ctx *interaction.Context, s *session.Session) {
 	session.StatsUserCounts.Set(s, userCounts)
 	session.StatsGroupCounts.Set(s, groupCounts)
 	session.StatsActiveUsers.Set(s, activeUsers)
-	session.StatsVotes.Set(s, voteStats)
 	session.StatsIsRefreshed.Set(s, true)
 }
 

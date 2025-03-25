@@ -120,10 +120,18 @@ func (b *Builder) Build() *discord.MessageUpdateBuilder {
 	if !b.showMaintenance {
 		embeds = []discord.Embed{
 			b.buildWelcomeEmbed(),
-			b.buildVoteStatsEmbed(),
+		}
+
+		// Only show vote stats for non-reviewers
+		if !b.isReviewer {
+			embeds = append(embeds, b.buildVoteStatsEmbed())
+		}
+
+		// Add remaining embeds
+		embeds = append(embeds,
 			b.buildUserGraphEmbed(),
 			b.buildGroupGraphEmbed(),
-		}
+		)
 
 		// Add announcement if exists
 		if b.announcementType != enum.AnnouncementTypeNone && b.announcementMessage != "" {
