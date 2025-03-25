@@ -330,7 +330,7 @@ func (m *ScanMenu) handleModal(ctx *interaction.Context, s *session.Session) {
 		minGuildsStr := ctx.Event().ModalData().Text(constants.GuildScanMinGuildsInputCustomID)
 		minGuilds, err := strconv.Atoi(minGuildsStr)
 		if err != nil {
-			ctx.Error("Please enter a valid number greater than 0.")
+			ctx.Cancel("Please enter a valid number greater than 0.")
 			return
 		}
 
@@ -356,7 +356,7 @@ func (m *ScanMenu) handleModal(ctx *interaction.Context, s *session.Session) {
 		// Parse the duration string (e.g., "30m", "24h", "7d", "1d12h")
 		duration, err := utils.ParseCombinedDuration(durationInput)
 		if err != nil || duration <= 0 {
-			ctx.Error("Invalid duration format. Please use formats like '30m' for 30 minutes, " +
+			ctx.Cancel("Invalid duration format. Please use formats like '30m' for 30 minutes, " +
 				"'24h' for 24 hours, '7d' for 7 days, or combined formats like '1d12h'.")
 			return
 		}
@@ -379,7 +379,7 @@ func (m *ScanMenu) handleModal(ctx *interaction.Context, s *session.Session) {
 func (m *ScanMenu) handleConfirmBans(ctx *interaction.Context, s *session.Session) {
 	filteredUsers := session.GuildScanFilteredUsers.Get(s)
 	if len(filteredUsers) == 0 {
-		ctx.Error("No users to ban after applying filters.")
+		ctx.Cancel("No users to ban after applying filters.")
 		return
 	}
 
@@ -431,7 +431,7 @@ func (m *ScanMenu) handleBanConfirmModal(ctx *interaction.Context, s *session.Se
 	// Get filtered users to ban from session
 	filteredUsers := session.GuildScanFilteredUsers.Get(s)
 	if len(filteredUsers) == 0 {
-		ctx.Error("No users to ban after applying filters.")
+		ctx.Cancel("No users to ban after applying filters.")
 		return
 	}
 

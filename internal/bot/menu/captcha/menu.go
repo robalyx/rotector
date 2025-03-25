@@ -79,14 +79,14 @@ func (m *Menu) handleModal(ctx *interaction.Context, s *session.Session) {
 	// Convert user's answer to digits
 	answer := ctx.Event().ModalData().Text(constants.CaptchaAnswerInputCustomID)
 	if len(answer) != 6 {
-		ctx.Error("❌ Invalid answer length. Please enter exactly 6 digits.")
+		ctx.Cancel("❌ Invalid answer length. Please enter exactly 6 digits.")
 		return
 	}
 
 	userDigits := make([]byte, 6)
 	for i, rn := range answer {
 		if rn < '0' || rn > '9' {
-			ctx.Error("❌ Invalid answer. Please enter only digits.")
+			ctx.Cancel("❌ Invalid answer. Please enter only digits.")
 			return
 		}
 		userDigits[i] = byte(rn - '0')
@@ -96,7 +96,7 @@ func (m *Menu) handleModal(ctx *interaction.Context, s *session.Session) {
 	correctDigits := session.CaptchaAnswer.Get(s)
 
 	if !bytes.Equal(userDigits, []byte(correctDigits)) {
-		ctx.Error("❌ Incorrect CAPTCHA answer. Please try again.")
+		ctx.Cancel("❌ Incorrect CAPTCHA answer. Please try again.")
 		return
 	}
 

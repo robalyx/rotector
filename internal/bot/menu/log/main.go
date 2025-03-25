@@ -177,7 +177,7 @@ func (m *Menu) handleIDModalSubmit(ctx *interaction.Context, s *session.Session,
 	// Parse ID from string
 	id, err := strconv.ParseUint(idStr, 10, 64)
 	if err != nil {
-		ctx.Error("Invalid ID provided. Please enter a valid numeric ID.")
+		ctx.Cancel("Invalid ID provided. Please enter a valid numeric ID.")
 		return
 	}
 
@@ -205,7 +205,7 @@ func (m *Menu) handleDateRangeModalSubmit(ctx *interaction.Context, s *session.S
 	// Parse date range from string
 	startDate, endDate, err := utils.ParseDateRange(dateRangeStr)
 	if err != nil {
-		ctx.Error(fmt.Sprintf("Invalid date range: %v", err))
+		ctx.Cancel(fmt.Sprintf("Invalid date range: %v", err))
 		return
 	}
 

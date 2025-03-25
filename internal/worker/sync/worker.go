@@ -54,7 +54,7 @@ func New(app *setup.App, bar *progress.Bar, logger *zap.Logger) *Worker {
 			gateway.IntentGuildMessages|gateway.IntentMessageContent)
 
 	// Disguise user agent
-	s.Session.UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:136.0) Gecko/20100101 Firefox/136.0"
+	s.UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:136.0) Gecko/20100101 Firefox/136.0"
 
 	// Create ningen state from discord state
 	n := ningen.FromState(s)

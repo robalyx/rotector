@@ -72,7 +72,7 @@ func New(app *setup.App) (*Bot, error) {
 		aGateway.IntentGuilds|aGateway.IntentGuildMembers)
 
 	// Disguise user agent
-	selfClient.Session.UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:136.0) Gecko/20100101 Firefox/136.0"
+	selfClient.UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:136.0) Gecko/20100101 Firefox/136.0"
 
 	// Create bot instance
 	b := &Bot{

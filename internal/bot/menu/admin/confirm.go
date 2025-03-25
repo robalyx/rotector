@@ -67,7 +67,7 @@ func (m *ConfirmMenu) handleBanUser(ctx *interaction.Context, s *session.Session
 	// Parse user ID
 	id, err := strconv.ParseUint(userID, 10, 64)
 	if err != nil {
-		ctx.Error("Invalid user ID format.")
+		ctx.Cancel("Invalid user ID format.")
 		return
 	}
 
@@ -119,7 +119,7 @@ func (m *ConfirmMenu) handleUnbanUser(ctx *interaction.Context, userID string, n
 	// Parse user ID
 	id, err := strconv.ParseUint(userID, 10, 64)
 	if err != nil {
-		ctx.Error("Invalid user ID format.")
+		ctx.Cancel("Invalid user ID format.")
 		return
 	}
 
@@ -162,7 +162,7 @@ func (m *ConfirmMenu) handleDeleteUser(ctx *interaction.Context, idStr string, r
 	// Parse ID from modal
 	id, err := strconv.ParseUint(idStr, 10, 64)
 	if err != nil {
-		ctx.Error("Invalid ID format.")
+		ctx.Cancel("Invalid ID format.")
 		return
 	}
 
@@ -203,7 +203,7 @@ func (m *ConfirmMenu) handleDeleteGroup(ctx *interaction.Context, idStr string, 
 	// Parse ID from modal
 	id, err := strconv.ParseUint(idStr, 10, 64)
 	if err != nil {
-		ctx.Error("Invalid ID format.")
+		ctx.Cancel("Invalid ID format.")
 		return
 	}
 

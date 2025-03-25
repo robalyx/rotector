@@ -230,9 +230,9 @@ func (m *Menu) handleLookupRobloxUserModalSubmit(ctx *interaction.Context, s *se
 	if err != nil {
 		switch {
 		case errors.Is(err, types.ErrUserNotFound):
-			ctx.Error("Failed to find user. They may not be in our database.")
+			ctx.Cancel("Failed to find user. They may not be in our database.")
 		case errors.Is(err, types.ErrInvalidUserID):
-			ctx.Error("Please provide a valid user ID or UUID.")
+			ctx.Cancel("Please provide a valid user ID or UUID.")
 		default:
 			m.layout.logger.Error("Failed to fetch user", zap.Error(err))
 			ctx.Error("Failed to fetch user for review. Please try again.")
@@ -266,7 +266,7 @@ func (m *Menu) handleLookupRobloxGroupModalSubmit(ctx *interaction.Context, s *s
 		var err error
 		groupIDStr, err = utils.ExtractGroupIDFromURL(groupIDStr)
 		if err != nil {
-			ctx.Error("Invalid Roblox group URL. Please provide a valid URL or ID.")
+			ctx.Cancel("Invalid Roblox group URL. Please provide a valid URL or ID.")
 			return
 		}
 	}
@@ -276,9 +276,9 @@ func (m *Menu) handleLookupRobloxGroupModalSubmit(ctx *interaction.Context, s *s
 	if err != nil {
 		switch {
 		case errors.Is(err, types.ErrGroupNotFound):
-			ctx.Error("Failed to find group. It may not be in our database.")
+			ctx.Cancel("Failed to find group. It may not be in our database.")
 		case errors.Is(err, types.ErrInvalidGroupID):
-			ctx.Error("Please provide a valid group ID or UUID.")
+			ctx.Cancel("Please provide a valid group ID or UUID.")
 		default:
 			m.layout.logger.Error("Failed to fetch group", zap.Error(err))
 			ctx.Error("Failed to fetch group for review. Please try again.")
@@ -310,7 +310,7 @@ func (m *Menu) handleLookupDiscordUserModalSubmit(ctx *interaction.Context, s *s
 	// Parse the Discord user ID
 	discordUserID, err := strconv.ParseUint(discordUserIDStr, 10, 64)
 	if err != nil {
-		ctx.Error("Please provide a valid Discord user ID.")
+		ctx.Cancel("Please provide a valid Discord user ID.")
 		return
 	}
 

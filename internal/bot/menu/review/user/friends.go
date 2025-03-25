@@ -43,7 +43,7 @@ func (m *FriendsMenu) Show(ctx *interaction.Context, s *session.Session) {
 
 	// Return to review menu if user has no friends
 	if len(user.Friends) == 0 {
-		ctx.Error("No friends found for this user.")
+		ctx.Cancel("No friends found for this user.")
 		return
 	}
 

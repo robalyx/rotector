@@ -308,7 +308,7 @@ func (m *ReviewMenu) handleRecheckModalSubmit(ctx *interaction.Context, s *sessi
 	// Get and validate the recheck reason
 	reason := ctx.Event().ModalData().Text(constants.RecheckReasonInputCustomID)
 	if reason == "" {
-		ctx.Error("Recheck reason cannot be empty. Please try again.")
+		ctx.Cancel("Recheck reason cannot be empty. Please try again.")
 		return
 	}
 
@@ -411,13 +411,13 @@ func (m *ReviewMenu) handleNavigateUser(ctx *interaction.Context, s *session.Ses
 	// For previous navigation or when there's history to navigate
 	if isNext {
 		if index >= len(history)-1 {
-			ctx.Error("No next user to navigate to.")
+			ctx.Cancel("No next user to navigate to.")
 			return
 		}
 		index++
 	} else {
 		if index <= 0 || len(history) == 0 {
-			ctx.Error("No previous user to navigate to.")
+			ctx.Cancel("No previous user to navigate to.")
 			return
 		}
 		index--
@@ -522,7 +522,7 @@ func (m *ReviewMenu) handleConfirmUser(ctx *interaction.Context, s *session.Sess
 
 			// If there's a strong consensus for clearing, prevent confirmation
 			if upvotePercentage >= constants.VoteConsensusThreshold {
-				ctx.Error(fmt.Sprintf("Cannot confirm - %.0f%% of %d votes indicate this user is safe",
+				ctx.Cancel(fmt.Sprintf("Cannot confirm - %.0f%% of %d votes indicate this user is safe",
 					upvotePercentage*100, int(totalVotes)))
 				return
 			}
@@ -626,7 +626,7 @@ func (m *ReviewMenu) handleClearUser(ctx *interaction.Context, s *session.Sessio
 
 			// If there's a strong consensus for confirming, prevent clearing
 			if downvotePercentage >= constants.VoteConsensusThreshold {
-				ctx.Error(fmt.Sprintf("Cannot clear - %.0f%% of %d votes indicate this user is suspicious",
+				ctx.Cancel(fmt.Sprintf("Cannot clear - %.0f%% of %d votes indicate this user is suspicious",
 					downvotePercentage*100, int(totalVotes)))
 				return
 			}
@@ -839,14 +839,14 @@ func (m *ReviewMenu) handleReasonModalSubmit(ctx *interaction.Context, s *sessio
 
 		// Check if confidence is empty
 		if confidenceStr == "" {
-			ctx.Error("Confidence is required when updating a reason.")
+			ctx.Cancel("Confidence is required when updating a reason.")
 			return
 		}
 
 		// Parse confidence
 		confidence, err := strconv.ParseFloat(confidenceStr, 64)
 		if err != nil || confidence < 0.01 || confidence > 1.0 {
-			ctx.Error("Invalid confidence value. Please enter a number between 0.01 and 1.00.")
+			ctx.Cancel("Invalid confidence value. Please enter a number between 0.01 and 1.00.")
 			return
 		}
 
@@ -866,14 +866,14 @@ func (m *ReviewMenu) handleReasonModalSubmit(ctx *interaction.Context, s *sessio
 	} else {
 		// For new reasons, message and confidence are required
 		if reasonMessage == "" || confidenceStr == "" {
-			ctx.Error("Reason message and confidence are required for new reasons.")
+			ctx.Cancel("Reason message and confidence are required for new reasons.")
 			return
 		}
 
 		// Parse confidence
 		confidence, err := strconv.ParseFloat(confidenceStr, 64)
 		if err != nil || confidence < 0.01 || confidence > 1.0 {
-			ctx.Error("Invalid confidence value. Please enter a number between 0.01 and 1.00.")
+			ctx.Cancel("Invalid confidence value. Please enter a number between 0.01 and 1.00.")
 			return
 		}
 
@@ -1132,7 +1132,7 @@ func (m *ReviewMenu) checkBreakRequired(ctx *interaction.Context, s *session.Ses
 // checkCaptchaRequired checks if CAPTCHA verification is needed.
 func (m *ReviewMenu) checkCaptchaRequired(ctx *interaction.Context, s *session.Session) bool {
 	if m.layout.captcha.IsRequired(s) {
-		ctx.Error("Please complete CAPTCHA verification to continue.")
+		ctx.Cancel("Please complete CAPTCHA verification to continue.")
 		return true
 	}
 	return false

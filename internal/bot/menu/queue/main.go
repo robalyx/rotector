@@ -94,7 +94,7 @@ func (m *Menu) handleModal(ctx *interaction.Context, s *session.Session) {
 	// Parse the user ID
 	userID, err := strconv.ParseUint(userIDStr, 10, 64)
 	if err != nil {
-		ctx.Error("Invalid user ID format.")
+		ctx.Cancel("Invalid user ID format.")
 		return
 	}
 

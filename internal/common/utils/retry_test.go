@@ -123,7 +123,7 @@ func TestWithRetryContext(t *testing.T) {
 
 		require.Error(t, err)
 		assert.Equal(t, context.Canceled, err)
-		assert.Equal(t, "", result)
+		assert.Empty(t, result)
 		assert.Less(t, calls, 5) // Should not have completed all retries
 	})
 }

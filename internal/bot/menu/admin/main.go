@@ -185,7 +185,7 @@ func (m *MainMenu) handleBanUserModalSubmit(ctx *interaction.Context, s *session
 	expiresAt, err := utils.ParseBanDuration(duration)
 	if err != nil && !errors.Is(err, utils.ErrPermanentBan) {
 		m.layout.logger.Debug("Failed to parse ban duration", zap.Error(err))
-		ctx.Error(fmt.Sprintf("Failed to parse ban duration: %s", err))
+		ctx.Cancel(fmt.Sprintf("Ban duration is invalid: %s", err))
 		return
 	}
 

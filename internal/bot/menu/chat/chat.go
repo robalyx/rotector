@@ -93,7 +93,7 @@ func (m *Menu) handleModal(ctx *interaction.Context, s *session.Session) {
 	case constants.ChatInputModalID:
 		message := ctx.Event().ModalData().Text(constants.ChatInputCustomID)
 		if message == "" {
-			ctx.Error("Message cannot be empty")
+			ctx.Cancel("Message cannot be empty")
 			return
 		}
 

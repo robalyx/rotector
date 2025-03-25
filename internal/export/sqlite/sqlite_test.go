@@ -42,7 +42,7 @@ func verifySQLiteFile(t *testing.T, filepath, tableName string, expectedRecords 
 	require.NoError(t, err)
 
 	// Verify record count
-	assert.Equal(t, len(expectedRecords), len(records), "record count mismatch")
+	assert.Len(t, records, len(expectedRecords), "record count mismatch")
 
 	// Verify each record
 	for i, expected := range expectedRecords {

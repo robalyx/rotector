@@ -41,7 +41,7 @@ func (m *OutfitsMenu) Show(ctx *interaction.Context, s *session.Session) {
 
 	// Return to review menu if user has no outfits
 	if len(user.Outfits) == 0 {
-		ctx.Error("No outfits found for this user.")
+		ctx.Cancel("No outfits found for this user.")
 		return
 	}
 

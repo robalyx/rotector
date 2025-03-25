@@ -143,7 +143,7 @@ func (m *CommentsMenu) handleCommentModalSubmit(ctx *interaction.Context, s *ses
 	// Get message from modal
 	message := ctx.Event().ModalData().Text(constants.CommentMessageInputCustomID)
 	if message == "" {
-		ctx.Error("Note cannot be empty")
+		ctx.Cancel("Note cannot be empty")
 		return
 	}
 
@@ -160,11 +160,11 @@ func (m *CommentsMenu) handleCommentModalSubmit(ctx *interaction.Context, s *ses
 	if err := m.layout.db.Service().Comment().AddGroupComment(ctx.Context(), comment); err != nil {
 		switch {
 		case errors.Is(err, service.ErrCommentTooSimilar):
-			ctx.Error("Your note is too similar to an existing note. Please provide unique information.")
+			ctx.Cancel("Your note is too similar to an existing note. Please provide unique information.")
 		case errors.Is(err, service.ErrInvalidLinks):
-			ctx.Error("Only Roblox links are allowed in notes.")
+			ctx.Cancel("Only Roblox links are allowed in notes.")
 		case errors.Is(err, types.ErrCommentExists):
-			ctx.Error("You already have a note for this group. Delete your existing note first.")
+			ctx.Cancel("You already have a note for this group. Delete your existing note first.")
 		default:
 			m.layout.logger.Error("Failed to add comment", zap.Error(err))
 			ctx.Error("Failed to add note. Please try again.")

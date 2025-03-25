@@ -72,7 +72,7 @@ func (m *VerifyMenu) verifyDescription(ctx *interaction.Context, s *session.Sess
 
 	// Check if description contains verification code
 	if !strings.Contains(userInfo.Description, expectedCode) {
-		ctx.Error("❌ Verification code not found in description. Please make sure you copied it exactly.")
+		ctx.Cancel("❌ Verification code not found in description. Please make sure you copied it exactly.")
 		return
 	}
 

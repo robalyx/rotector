@@ -576,14 +576,14 @@ func (m *TicketMenu) handleModal(ctx *interaction.Context, s *session.Session) {
 func (m *TicketMenu) handleRespondModalSubmit(ctx *interaction.Context, s *session.Session, appeal *types.FullAppeal) {
 	// Only allow responses for pending appeals
 	if appeal.Status != enum.AppealStatusPending {
-		ctx.Error("Cannot respond to a closed appeal.")
+		ctx.Cancel("Cannot respond to a closed appeal.")
 		return
 	}
 
 	// Check if response is empty
 	content := ctx.Event().ModalData().Text(constants.AppealReasonInputCustomID)
 	if content == "" {
-		ctx.Error("Response cannot be empty.")
+		ctx.Cancel("Response cannot be empty.")
 		return
 	}
 
@@ -628,7 +628,7 @@ func (m *TicketMenu) handleAcceptModalSubmit(ctx *interaction.Context, s *sessio
 	// Verify user is a reviewer
 	reviewerID := uint64(ctx.Event().User().ID)
 	if !s.BotSettings().IsReviewer(reviewerID) {
-		ctx.Error("Only reviewers can accept appeals.")
+		ctx.Cancel("Only reviewers can accept appeals.")
 		return
 	}
 
@@ -640,7 +640,7 @@ func (m *TicketMenu) handleAcceptModalSubmit(ctx *interaction.Context, s *sessio
 
 	reason := ctx.Event().ModalData().Text(constants.AppealReasonInputCustomID)
 	if reason == "" {
-		ctx.Error("Accept reason cannot be empty.")
+		ctx.Cancel("Accept reason cannot be empty.")
 		return
 	}
 
@@ -774,13 +774,13 @@ func (m *TicketMenu) handleRejectModalSubmit(ctx *interaction.Context, s *sessio
 
 	// Prevent rejecting already processed appeals
 	if appeal.Status != enum.AppealStatusPending {
-		ctx.Error("This appeal has already been processed.")
+		ctx.Cancel("This appeal has already been processed.")
 		return
 	}
 
 	reason := ctx.Event().ModalData().Text(constants.AppealReasonInputCustomID)
 	if reason == "" {
-		ctx.Error("Reject reason cannot be empty.")
+		ctx.Cancel("Reject reason cannot be empty.")
 		return
 	}
 
@@ -822,14 +822,14 @@ func (m *TicketMenu) handleDeleteUserDataModalSubmit(ctx *interaction.Context, s
 
 	// Prevent processing already processed appeals
 	if appeal.Status != enum.AppealStatusPending {
-		ctx.Error("This appeal has already been processed.")
+		ctx.Cancel("This appeal has already been processed.")
 		return
 	}
 
 	// Get deletion reason
 	reason := ctx.Event().ModalData().Text(constants.DeleteUserDataReasonInputCustomID)
 	if reason == "" {
-		ctx.Error("Deletion reason cannot be empty.")
+		ctx.Cancel("Deletion reason cannot be empty.")
 		return
 	}
 
@@ -891,7 +891,7 @@ func (m *TicketMenu) handleBlacklistUserModalSubmit(ctx *interaction.Context, s 
 	// Get blacklist reason
 	reason := ctx.Event().ModalData().Text(constants.BlacklistUserReasonInputCustomID)
 	if reason == "" {
-		ctx.Error("Blacklist reason cannot be empty.")
+		ctx.Cancel("Blacklist reason cannot be empty.")
 		return
 	}
 

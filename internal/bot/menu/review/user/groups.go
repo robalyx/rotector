@@ -43,7 +43,7 @@ func (m *GroupsMenu) Show(ctx *interaction.Context, s *session.Session) {
 
 	// Return to review menu if user has no groups
 	if len(user.Groups) == 0 {
-		ctx.Error("No groups found for this user.")
+		ctx.Cancel("No groups found for this user.")
 		return
 	}
 

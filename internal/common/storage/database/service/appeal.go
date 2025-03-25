@@ -82,8 +82,8 @@ func (s *AppealService) processAppealResults(
 		// Use the extra item as the next cursor for pagination
 		last := results[limit-1]
 		nextCursor = &types.AppealTimeline{
-			ID:           last.Appeal.ID,
-			Timestamp:    last.Appeal.Timestamp,
+			ID:           last.ID,
+			Timestamp:    last.Timestamp,
 			LastViewed:   last.LastViewed,
 			LastActivity: last.LastActivity,
 		}
@@ -94,8 +94,8 @@ func (s *AppealService) processAppealResults(
 		// Create first page cursor for navigation back to start
 		first := results[0]
 		firstCursor = &types.AppealTimeline{
-			ID:           first.Appeal.ID,
-			Timestamp:    first.Appeal.Timestamp,
+			ID:           first.ID,
+			Timestamp:    first.Timestamp,
 			LastViewed:   first.LastViewed,
 			LastActivity: first.LastActivity,
 		}

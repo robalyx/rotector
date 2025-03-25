@@ -211,7 +211,7 @@ func (s *GroupService) groupGroupsByStatus(
 			}
 
 			// Copy over existing reasons, only adding new ones
-			for reasonType, reason := range existingGroup.Group.Reasons {
+			for reasonType, reason := range existingGroup.Reasons {
 				if _, exists := group.Reasons[reasonType]; !exists {
 					group.Reasons[reasonType] = reason
 				}

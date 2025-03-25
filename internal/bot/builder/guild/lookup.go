@@ -66,7 +66,7 @@ func (b *LookupBuilder) buildDeletionEmbed() *discord.EmbedBuilder {
 	return discord.NewEmbedBuilder().
 		SetTitle("🗑️ Data Deletion Notice").
 		SetDescription(
-			"This user has requested deletion of their data under privacy laws. While we continue to monitor " +
+			"This user has requested deletion of their data under privacy laws. While we may continue to monitor " +
 				"server memberships for safety purposes, message history and other details have been redacted.").
 		SetColor(constants.ErrorEmbedColor)
 }

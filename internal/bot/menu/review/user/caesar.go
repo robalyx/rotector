@@ -34,7 +34,7 @@ func NewCaesarMenu(layout *Layout) *CaesarMenu {
 func (m *CaesarMenu) Show(ctx *interaction.Context, s *session.Session) {
 	user := session.UserTarget.Get(s)
 	if strings.TrimSpace(user.Description) == "" {
-		ctx.Error("No description available for analysis.")
+		ctx.Cancel("No description available for analysis.")
 		return
 	}
 

@@ -64,7 +64,7 @@ func (m *UpdateMenu) handleSettingChange(ctx *interaction.Context, s *session.Se
 
 	// Validate the new value
 	if err := m.validateSettingValue(s, setting, option); err != nil {
-		ctx.Error(fmt.Sprintf("Failed to validate setting value: %v", err))
+		ctx.Cancel(fmt.Sprintf("Failed to validate setting value: %v", err))
 		return
 	}
 
@@ -211,7 +211,7 @@ func (m *UpdateMenu) handleSettingModal(ctx *interaction.Context, s *session.Ses
 	// Validate each input using the setting's validators
 	for _, input := range inputs {
 		if err := m.validateSettingValue(s, setting, input); err != nil {
-			ctx.Error(fmt.Sprintf("Failed to validate setting value: %v", err))
+			ctx.Cancel(fmt.Sprintf("Failed to validate setting value: %v", err))
 			return
 		}
 	}

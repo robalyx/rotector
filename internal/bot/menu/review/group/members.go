@@ -50,7 +50,7 @@ func (m *MembersMenu) Show(ctx *interaction.Context, s *session.Session) {
 
 	// Return to review menu if group has no flagged members
 	if len(memberIDs) == 0 {
-		ctx.Error("No flagged members found for this group.")
+		ctx.Cancel("No flagged members found for this group.")
 		return
 	}
 
