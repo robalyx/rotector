@@ -16,6 +16,7 @@ type Layout struct {
 	roAPI            *api.API
 	reviewMenu       *ReviewMenu
 	membersMenu      *MembersMenu
+	commentsMenu     *CommentsMenu
 	thumbnailFetcher *fetcher.ThumbnailFetcher
 	presenceFetcher  *fetcher.PresenceFetcher
 	imageStreamer    *interaction.ImageStreamer
@@ -39,6 +40,7 @@ func New(app *setup.App, interactionManager *interaction.Manager) *Layout {
 	// Initialize all menus with references to this layout
 	l.reviewMenu = NewReviewMenu(l)
 	l.membersMenu = NewMembersMenu(l)
+	l.commentsMenu = NewCommentsMenu(l)
 
 	return l
 }
@@ -48,5 +50,6 @@ func (l *Layout) Pages() []*interaction.Page {
 	return []*interaction.Page{
 		l.reviewMenu.page,
 		l.membersMenu.page,
+		l.commentsMenu.page,
 	}
 }

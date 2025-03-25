@@ -165,6 +165,7 @@ func (m *OverviewMenu) handleSelectMenu(ctx *interaction.Context, s *session.Ses
 		}
 
 		// Show the selected appeal
+		session.PaginationPage.Set(s, 0)
 		session.AppealSelected.Set(s, appeal)
 		ctx.Show(constants.AppealTicketPageName, "")
 	case constants.AppealCreateSelectID:
@@ -513,6 +514,7 @@ func (m *OverviewMenu) handleSearchAppealModalSubmit(ctx *interaction.Context, s
 	}
 
 	// Show the selected appeal
+	session.PaginationPage.Set(s, 0)
 	session.AppealSelected.Set(s, appeal)
 	ctx.Show(constants.AppealTicketPageName, "")
 }

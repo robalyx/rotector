@@ -53,7 +53,7 @@ func (b *CaesarBuilder) Build() *discord.MessageUpdateBuilder {
 
 	// Create embed for translations
 	embed := discord.NewEmbedBuilder().
-		SetTitle(fmt.Sprintf("%s (Page %d/%d)", constants.UserCaesarPageName, b.page+1, b.totalPages)).
+		SetTitle(fmt.Sprintf("%s (Page %d/%d)", constants.UserCaesarPageName, b.page+1, b.totalPages+1)).
 		SetDescription(fmt.Sprintf(
 			"Analyzing description for %s (%s)\n\n**Original Text:**\n%s",
 			utils.CensorString(b.user.Name, b.privacyMode),
@@ -86,8 +86,8 @@ func (b *CaesarBuilder) Build() *discord.MessageUpdateBuilder {
 		discord.NewSecondaryButton("◀️ Back", constants.BackButtonCustomID),
 		discord.NewSecondaryButton("⏮️", string(session.ViewerFirstPage)).WithDisabled(b.page == 0),
 		discord.NewSecondaryButton("◀️", string(session.ViewerPrevPage)).WithDisabled(b.page == 0),
-		discord.NewSecondaryButton("▶️", string(session.ViewerNextPage)).WithDisabled(b.page == b.totalPages-1),
-		discord.NewSecondaryButton("⏭️", string(session.ViewerLastPage)).WithDisabled(b.page == b.totalPages-1),
+		discord.NewSecondaryButton("▶️", string(session.ViewerNextPage)).WithDisabled(b.page == b.totalPages),
+		discord.NewSecondaryButton("⏭️", string(session.ViewerLastPage)).WithDisabled(b.page == b.totalPages),
 	)
 
 	return builder

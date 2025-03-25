@@ -74,6 +74,10 @@ var (
 	UserGroups = NewKey[[]*apiTypes.UserGroupRoles]("UserGroups", false)
 	// UserOutfits stores user outfits
 	UserOutfits = NewKey[[]*apiTypes.Outfit]("UserOutfits", false)
+	// UserReviewHistory stores IDs of previously reviewed users
+	UserReviewHistory = NewKey[[]uint64]("UserReviewHistory", true)
+	// UserReviewHistoryIndex stores the current position in the review history
+	UserReviewHistoryIndex = NewKey[int]("UserReviewHistoryIndex", true)
 	// GroupTarget stores the currently selected group
 	GroupTarget = NewKey[*types.ReviewGroup]("GroupTarget", true)
 	// GroupInfo stores additional group information
@@ -84,10 +88,6 @@ var (
 	GroupPageFlaggedMembers = NewKey[map[uint64]*types.ReviewUser]("GroupPageFlaggedMembers", false)
 	// GroupPageFlaggedMemberIDs stores flagged member IDs for the current page
 	GroupPageFlaggedMemberIDs = NewKey[[]uint64]("GroupPageFlaggedMemberIDs", false)
-	// UserReviewHistory stores IDs of previously reviewed users
-	UserReviewHistory = NewKey[[]uint64]("UserReviewHistory", true)
-	// UserReviewHistoryIndex stores the current position in the review history
-	UserReviewHistoryIndex = NewKey[int]("UserReviewHistoryIndex", true)
 	// GroupReviewHistory stores IDs of previously reviewed groups
 	GroupReviewHistory = NewKey[[]uint64]("GroupReviewHistory", true)
 	// GroupReviewHistoryIndex stores the current position in the review history
@@ -104,6 +104,8 @@ var (
 	ReviewLogs = NewKey[[]*types.ActivityLog]("ReviewLogs", true)
 	// ReviewLogsHasMore indicates if there are more logs available
 	ReviewLogsHasMore = NewKey[bool]("ReviewLogsHasMore", true)
+	// ReviewComments stores comments for the current user or group
+	ReviewComments = NewKey[[]*types.Comment]("ReviewComments", true)
 	// DiscordUserLookupID stores the Discord user ID being looked up
 	DiscordUserLookupID = NewKey[uint64]("DiscordUserLookupID", true)
 	// DiscordUserLookupName stores the Discord username

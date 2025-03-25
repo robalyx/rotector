@@ -22,18 +22,18 @@ import (
 type ReviewBuilder struct {
 	db             database.Client
 	botSettings    *types.BotSetting
-	userID         uint64
 	group          *types.ReviewGroup
 	groupInfo      *apiTypes.GroupResponse
 	logs           []*types.ActivityLog
-	logsHasMore    bool
+	comments       []*types.Comment
 	flaggedCount   int
 	reviewMode     enum.ReviewMode
 	defaultSort    enum.ReviewSortBy
 	reviewHistory  []uint64
+	userID         uint64
 	historyIndex   int
+	logsHasMore    bool
 	reasonsChanged bool
-	isReviewer     bool
 	isAdmin        bool
 	privacyMode    bool
 }
@@ -44,18 +44,18 @@ func NewReviewBuilder(s *session.Session, db database.Client) *ReviewBuilder {
 	return &ReviewBuilder{
 		db:             db,
 		botSettings:    s.BotSettings(),
-		userID:         userID,
 		group:          session.GroupTarget.Get(s),
 		groupInfo:      session.GroupInfo.Get(s),
 		logs:           session.ReviewLogs.Get(s),
-		logsHasMore:    session.ReviewLogsHasMore.Get(s),
+		comments:       session.ReviewComments.Get(s),
 		flaggedCount:   session.GroupFlaggedMembersCount.Get(s),
 		reviewMode:     session.UserReviewMode.Get(s),
 		defaultSort:    session.UserGroupDefaultSort.Get(s),
 		reviewHistory:  session.GroupReviewHistory.Get(s),
+		userID:         userID,
 		historyIndex:   session.GroupReviewHistoryIndex.Get(s),
+		logsHasMore:    session.ReviewLogsHasMore.Get(s),
 		reasonsChanged: session.ReasonsChanged.Get(s),
-		isReviewer:     s.BotSettings().IsReviewer(userID),
 		isAdmin:        s.BotSettings().IsAdmin(userID),
 		privacyMode:    session.UserStreamerMode.Get(s),
 	}
@@ -66,11 +66,17 @@ func NewReviewBuilder(s *session.Session, db database.Client) *ReviewBuilder {
 func (b *ReviewBuilder) Build() *discord.MessageUpdateBuilder {
 	builder := discord.NewMessageUpdateBuilder()
 
-	// Create embeds
+	// Add recent comments embed if there are any
+	if commentsEmbed := b.buildCommentsEmbed(); commentsEmbed != nil {
+		builder.AddEmbeds(commentsEmbed.Build())
+	}
+
+	// Add mode embed
 	modeEmbed := b.buildModeEmbed()
-	reviewEmbed := b.buildReviewEmbed()
+	builder.AddEmbeds(modeEmbed.Build())
 
 	// Handle thumbnail
+	reviewEmbed := b.buildReviewEmbed()
 	if b.group.ThumbnailURL != "" && b.group.ThumbnailURL != fetcher.ThumbnailPlaceholder {
 		reviewEmbed.SetThumbnail(b.group.ThumbnailURL)
 	} else {
@@ -82,6 +88,7 @@ func (b *ReviewBuilder) Build() *discord.MessageUpdateBuilder {
 			_ = placeholderImage.Close()
 		}
 	}
+	builder.AddEmbeds(reviewEmbed.Build())
 
 	// Add deletion notice if group is deleted
 	if b.group.IsDeleted {
@@ -89,6 +96,11 @@ func (b *ReviewBuilder) Build() *discord.MessageUpdateBuilder {
 		builder.AddEmbeds(modeEmbed.Build(), reviewEmbed.Build(), deletionEmbed.Build())
 	} else {
 		builder.AddEmbeds(modeEmbed.Build(), reviewEmbed.Build())
+	}
+
+	// Add recent comments embed if there are any
+	if commentsEmbed := b.buildCommentsEmbed(); commentsEmbed != nil {
+		builder.AddEmbeds(commentsEmbed.Build())
 	}
 
 	// Add warning embed if there are recent reviewers
@@ -215,6 +227,52 @@ func (b *ReviewBuilder) buildDeletionEmbed() *discord.EmbedBuilder {
 		SetColor(constants.ErrorEmbedColor)
 }
 
+// buildCommentsEmbed creates an embed showing recent comments if any exist.
+func (b *ReviewBuilder) buildCommentsEmbed() *discord.EmbedBuilder {
+	if len(b.comments) == 0 {
+		return nil
+	}
+
+	embed := discord.NewEmbedBuilder().
+		SetTitle("📝 Recent Community Notes").
+		SetColor(utils.GetMessageEmbedColor(b.privacyMode))
+
+	// Take up to 3 most recent comments
+	numComments := min(3, len(b.comments))
+	for i := range numComments {
+		comment := b.comments[i]
+		timestamp := fmt.Sprintf("<t:%d:R>", comment.CreatedAt.Unix())
+
+		// Determine user role
+		var roleTitle string
+		switch {
+		case b.botSettings.IsAdmin(comment.CommenterID):
+			roleTitle = "Administrator Note"
+		case b.botSettings.IsReviewer(comment.CommenterID):
+			roleTitle = "Reviewer Note"
+		default:
+			roleTitle = "Community Note"
+		}
+
+		// Add field for each comment
+		embed.AddField(
+			roleTitle,
+			fmt.Sprintf("From <@%d> - %s\n```%s```",
+				comment.CommenterID,
+				timestamp,
+				utils.TruncateString(comment.Message, 52),
+			),
+			false,
+		)
+	}
+
+	if len(b.comments) > 3 {
+		embed.SetFooter(fmt.Sprintf("... and %d more notes", len(b.comments)-3), "")
+	}
+
+	return embed
+}
+
 // buildReviewWarningEmbed creates a warning embed if another reviewer is reviewing the group.
 func (b *ReviewBuilder) buildReviewWarningEmbed() *discord.EmbedBuilder {
 	// Check for recent views in the logs
@@ -274,36 +332,26 @@ func (b *ReviewBuilder) buildSortingOptions() []discord.StringSelectMenuOption {
 
 // buildActionOptions creates the action menu options.
 func (b *ReviewBuilder) buildActionOptions() []discord.StringSelectMenuOption {
-	options := []discord.StringSelectMenuOption{
+	return []discord.StringSelectMenuOption{
 		discord.NewStringSelectMenuOption("View Flagged Members", constants.GroupViewMembersButtonCustomID).
 			WithDescription("View all flagged members of this group").
 			WithEmoji(discord.ComponentEmoji{Name: "👥"}),
-	}
-
-	// Add reviewer-only options
-	if b.isReviewer {
-		reviewerOptions := []discord.StringSelectMenuOption{
-			discord.NewStringSelectMenuOption("Ask AI about group", constants.OpenAIChatButtonCustomID).
-				WithEmoji(discord.ComponentEmoji{Name: "🤖"}).
-				WithDescription("Ask the AI questions about this group"),
-			discord.NewStringSelectMenuOption("View group logs", constants.GroupViewLogsButtonCustomID).
-				WithEmoji(discord.ComponentEmoji{Name: "📋"}).
-				WithDescription("View activity logs for this group"),
-			discord.NewStringSelectMenuOption("Change Review Mode", constants.ReviewModeOption).
-				WithEmoji(discord.ComponentEmoji{Name: "🗳️"}).
-				WithDescription("Switch between voting (training) and standard modes"),
-		}
-		options = append(options, reviewerOptions...)
-	}
-
-	// Add last default options
-	options = append(options,
+		discord.NewStringSelectMenuOption("View community notes", constants.ViewCommentsButtonCustomID).
+			WithEmoji(discord.ComponentEmoji{Name: "📝"}).
+			WithDescription("View and manage community notes"),
+		discord.NewStringSelectMenuOption("Ask AI about group", constants.OpenAIChatButtonCustomID).
+			WithEmoji(discord.ComponentEmoji{Name: "🤖"}).
+			WithDescription("Ask the AI questions about this group"),
+		discord.NewStringSelectMenuOption("View group logs", constants.GroupViewLogsButtonCustomID).
+			WithEmoji(discord.ComponentEmoji{Name: "📋"}).
+			WithDescription("View activity logs for this group"),
+		discord.NewStringSelectMenuOption("Change Review Mode", constants.ReviewModeOption).
+			WithEmoji(discord.ComponentEmoji{Name: "🗳️"}).
+			WithDescription("Switch between voting (training) and standard modes"),
 		discord.NewStringSelectMenuOption("Change Review Target", constants.ReviewTargetModeOption).
 			WithEmoji(discord.ComponentEmoji{Name: "🎯"}).
 			WithDescription("Change what type of groups to review"),
-	)
-
-	return options
+	}
 }
 
 // buildComponents creates all interactive components for the review menu.

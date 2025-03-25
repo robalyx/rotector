@@ -25,15 +25,17 @@ const (
 	DashboardPageName = "Dashboard"
 	ConsentPageName   = "Terms of Service"
 
-	GroupReviewPageName  = "Group Review"
-	GroupMembersPageName = "Group Members"
+	GroupReviewPageName   = "Group Review"
+	GroupMembersPageName  = "Group Members"
+	GroupCommentsPageName = "Group Comments"
 
-	UserReviewPageName  = "User Review"
-	UserFriendsPageName = "Friends Menu"
-	UserGroupsPageName  = "Groups Menu"
-	UserOutfitsPageName = "Outfits Menu"
-	UserStatusPageName  = "Status Menu"
-	UserCaesarPageName  = "Caesar Cipher Menu"
+	UserReviewPageName   = "User Review"
+	UserFriendsPageName  = "Friends Menu"
+	UserGroupsPageName   = "Groups Menu"
+	UserOutfitsPageName  = "Outfits Menu"
+	UserStatusPageName   = "Status Menu"
+	UserCaesarPageName   = "Caesar Cipher Menu"
+	UserCommentsPageName = "User Comments"
 
 	AdminPageName              = "Admin Menu"
 	AdminActionConfirmPageName = "Action Confirmation"
@@ -189,9 +191,21 @@ const (
 	ClearButtonCustomID      = "clear"
 )
 
+// Common Review Menu - Comment Menu.
+const (
+	CommentsPerPage = 5
+
+	AddCommentButtonCustomID    = "add_comment" + ModalOpenSuffix
+	DeleteCommentButtonCustomID = "delete_comment"
+
+	AddCommentModalCustomID     = "add_comment_modal"
+	CommentMessageInputCustomID = "comment_message_input"
+)
+
 // User Review Menu.
 const (
 	CaesarCipherButtonCustomID    = "caesar_cipher"
+	ViewCommentsButtonCustomID    = "view_comments"
 	OpenAIChatButtonCustomID      = "open_ai_chat"
 	RecheckButtonCustomID         = "recheck" + ModalOpenSuffix
 	ViewUserLogsButtonCustomID    = "view_user_logs"

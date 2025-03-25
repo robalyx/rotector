@@ -80,7 +80,6 @@ func (m *TicketMenu) Show(ctx *interaction.Context, s *session.Session) {
 	// Store data in session
 	session.AppealMessages.Set(s, messages)
 	session.PaginationTotalPages.Set(s, totalPages)
-	session.PaginationPage.Set(s, 0)
 }
 
 // handlePendingAppeal checks the status of a pending appeal and handles any necessary auto-actions.
@@ -174,10 +173,8 @@ func (m *TicketMenu) handleButton(ctx *interaction.Context, s *session.Session, 
 	action := session.ViewerAction(customID)
 	switch action {
 	case session.ViewerFirstPage, session.ViewerPrevPage, session.ViewerNextPage, session.ViewerLastPage:
-		messages := session.AppealMessages.Get(s)
-
-		maxPage := (len(messages) - 1) / constants.AppealMessagesPerPage
-		page := action.ParsePageAction(s, maxPage)
+		totalPages := session.PaginationTotalPages.Get(s)
+		page := action.ParsePageAction(s, totalPages)
 
 		session.PaginationPage.Set(s, page)
 		ctx.Cancel("")

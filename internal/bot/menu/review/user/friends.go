@@ -53,6 +53,7 @@ func (m *FriendsMenu) Show(ctx *interaction.Context, s *session.Session) {
 
 	// Calculate page boundaries
 	page := session.PaginationPage.Get(s)
+	totalPages := max((len(sortedFriends)-1)/constants.FriendsPerPage, 0)
 
 	start := page * constants.FriendsPerPage
 	end := min(start+constants.FriendsPerPage, len(sortedFriends))
@@ -68,8 +69,8 @@ func (m *FriendsMenu) Show(ctx *interaction.Context, s *session.Session) {
 	// Store initial data in session
 	session.UserFriends.Set(s, pageFriends)
 	session.PaginationOffset.Set(s, start)
-	session.PaginationPage.Set(s, page)
 	session.PaginationTotalItems.Set(s, len(sortedFriends))
+	session.PaginationTotalPages.Set(s, totalPages)
 
 	// Start streaming images
 	m.layout.imageStreamer.Stream(interaction.StreamRequest{
@@ -95,11 +96,8 @@ func (m *FriendsMenu) handlePageNavigation(ctx *interaction.Context, s *session.
 	action := session.ViewerAction(customID)
 	switch action {
 	case session.ViewerFirstPage, session.ViewerPrevPage, session.ViewerNextPage, session.ViewerLastPage:
-		user := session.UserTarget.Get(s)
-
-		// Calculate max page and validate navigation action
-		maxPage := (len(user.Friends) - 1) / constants.FriendsPerPage
-		page := action.ParsePageAction(s, maxPage)
+		totalPages := session.PaginationTotalPages.Get(s)
+		page := action.ParsePageAction(s, totalPages)
 
 		session.PaginationPage.Set(s, page)
 		ctx.Reload("")

@@ -23,7 +23,8 @@ type MembersBuilder struct {
 	memberIDs   []uint64
 	start       int
 	page        int
-	total       int
+	totalItems  int
+	totalPages  int
 	imageBuffer *bytes.Buffer
 	isStreaming bool
 	privacyMode bool
@@ -38,7 +39,8 @@ func NewMembersBuilder(s *session.Session) *MembersBuilder {
 		memberIDs:   session.GroupPageFlaggedMemberIDs.Get(s),
 		start:       session.PaginationOffset.Get(s),
 		page:        session.PaginationPage.Get(s),
-		total:       session.PaginationTotalItems.Get(s),
+		totalItems:  session.PaginationTotalItems.Get(s),
+		totalPages:  session.PaginationTotalPages.Get(s),
 		imageBuffer: session.ImageBuffer.Get(s),
 		isStreaming: session.PaginationIsStreaming.Get(s),
 		privacyMode: session.UserStreamerMode.Get(s),
@@ -47,15 +49,13 @@ func NewMembersBuilder(s *session.Session) *MembersBuilder {
 
 // Build creates a Discord message with a grid of member avatars and information.
 func (b *MembersBuilder) Build() *discord.MessageUpdateBuilder {
-	totalPages := (b.total + constants.MembersPerPage - 1) / constants.MembersPerPage
-
 	// Create file attachment for the member avatars grid
 	fileName := fmt.Sprintf("members_%d_%d.png", b.group.ID, b.page)
 	file := discord.NewFile(fileName, "", b.imageBuffer)
 
 	// Build base embed with group info
 	embed := discord.NewEmbedBuilder().
-		SetTitle(fmt.Sprintf("Group Members (Page %d/%d)", b.page+1, totalPages)).
+		SetTitle(fmt.Sprintf("Group Members (Page %d/%d)", b.page+1, b.totalPages+1)).
 		SetDescription(fmt.Sprintf(
 			"```%s (%s)```",
 			utils.CensorString(b.group.Name, b.privacyMode),
@@ -82,8 +82,8 @@ func (b *MembersBuilder) Build() *discord.MessageUpdateBuilder {
 				discord.NewSecondaryButton("◀️", constants.BackButtonCustomID),
 				discord.NewSecondaryButton("⏮️", string(session.ViewerFirstPage)).WithDisabled(b.page == 0),
 				discord.NewSecondaryButton("◀️", string(session.ViewerPrevPage)).WithDisabled(b.page == 0),
-				discord.NewSecondaryButton("▶️", string(session.ViewerNextPage)).WithDisabled(b.page == totalPages-1),
-				discord.NewSecondaryButton("⏭️", string(session.ViewerLastPage)).WithDisabled(b.page == totalPages-1),
+				discord.NewSecondaryButton("▶️", string(session.ViewerNextPage)).WithDisabled(b.page == b.totalPages),
+				discord.NewSecondaryButton("⏭️", string(session.ViewerLastPage)).WithDisabled(b.page == b.totalPages),
 			),
 		}...)
 	}

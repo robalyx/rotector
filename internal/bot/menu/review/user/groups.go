@@ -53,6 +53,7 @@ func (m *GroupsMenu) Show(ctx *interaction.Context, s *session.Session) {
 
 	// Calculate page boundaries
 	page := session.PaginationPage.Get(s)
+	totalPages := max((len(sortedGroups)-1)/constants.GroupsPerPage, 0)
 
 	start := page * constants.GroupsPerPage
 	end := min(start+constants.GroupsPerPage, len(sortedGroups))
@@ -61,8 +62,8 @@ func (m *GroupsMenu) Show(ctx *interaction.Context, s *session.Session) {
 	// Store data in session for the message builder
 	session.UserGroups.Set(s, pageGroups)
 	session.PaginationOffset.Set(s, start)
-	session.PaginationPage.Set(s, page)
 	session.PaginationTotalItems.Set(s, len(sortedGroups))
+	session.PaginationTotalPages.Set(s, totalPages)
 
 	// Start streaming images
 	m.layout.imageStreamer.Stream(interaction.StreamRequest{
@@ -120,11 +121,8 @@ func (m *GroupsMenu) handlePageNavigation(ctx *interaction.Context, s *session.S
 	action := session.ViewerAction(customID)
 	switch action {
 	case session.ViewerFirstPage, session.ViewerPrevPage, session.ViewerNextPage, session.ViewerLastPage:
-		user := session.UserTarget.Get(s)
-
-		// Calculate max page and validate navigation action
-		maxPage := (len(user.Groups) - 1) / constants.GroupsPerPage
-		page := action.ParsePageAction(s, maxPage)
+		totalPages := session.PaginationTotalPages.Get(s)
+		page := action.ParsePageAction(s, totalPages)
 
 		session.PaginationPage.Set(s, page)
 		ctx.Reload("")

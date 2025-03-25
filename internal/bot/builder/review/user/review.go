@@ -23,17 +23,18 @@ import (
 type ReviewBuilder struct {
 	db             database.Client
 	botSettings    *types.BotSetting
-	userID         uint64
 	user           *types.ReviewUser
 	logs           []*types.ActivityLog
-	logsHasMore    bool
+	comments       []*types.Comment
 	flaggedFriends map[uint64]*types.ReviewUser
 	flaggedGroups  map[uint64]*types.ReviewGroup
 	translator     *translator.Translator
 	reviewMode     enum.ReviewMode
 	defaultSort    enum.ReviewSortBy
 	reviewHistory  []uint64
+	userID         uint64
 	historyIndex   int
+	logsHasMore    bool
 	reasonsChanged bool
 	isReviewer     bool
 	trainingMode   bool
@@ -47,17 +48,18 @@ func NewReviewBuilder(s *session.Session, translator *translator.Translator, db 
 	return &ReviewBuilder{
 		db:             db,
 		botSettings:    s.BotSettings(),
-		userID:         userID,
 		user:           session.UserTarget.Get(s),
 		logs:           session.ReviewLogs.Get(s),
-		logsHasMore:    session.ReviewLogsHasMore.Get(s),
+		comments:       session.ReviewComments.Get(s),
 		flaggedFriends: session.UserFlaggedFriends.Get(s),
 		flaggedGroups:  session.UserFlaggedGroups.Get(s),
 		translator:     translator,
 		reviewMode:     session.UserReviewMode.Get(s),
 		defaultSort:    session.UserUserDefaultSort.Get(s),
 		reviewHistory:  session.UserReviewHistory.Get(s),
+		userID:         userID,
 		historyIndex:   session.UserReviewHistoryIndex.Get(s),
+		logsHasMore:    session.ReviewLogsHasMore.Get(s),
 		reasonsChanged: session.ReasonsChanged.Get(s),
 		isReviewer:     s.BotSettings().IsReviewer(userID),
 		trainingMode:   trainingMode,
@@ -70,11 +72,17 @@ func NewReviewBuilder(s *session.Session, translator *translator.Translator, db 
 func (b *ReviewBuilder) Build() *discord.MessageUpdateBuilder {
 	builder := discord.NewMessageUpdateBuilder()
 
-	// Create embeds
-	modeEmbed := b.buildModeEmbed()
-	reviewEmbed := b.buildReviewEmbed()
+	// Add recent comments embed if there are any
+	if commentsEmbed := b.buildCommentsEmbed(); commentsEmbed != nil {
+		builder.AddEmbeds(commentsEmbed.Build())
+	}
 
-	// Handle thumbnail
+	// Add mode embed
+	modeEmbed := b.buildModeEmbed()
+	builder.AddEmbeds(modeEmbed.Build())
+
+	// Add review embed
+	reviewEmbed := b.buildReviewEmbed()
 	if b.user.ThumbnailURL != "" && b.user.ThumbnailURL != fetcher.ThumbnailPlaceholder {
 		reviewEmbed.SetThumbnail(b.user.ThumbnailURL)
 	} else {
@@ -86,13 +94,12 @@ func (b *ReviewBuilder) Build() *discord.MessageUpdateBuilder {
 			_ = placeholderImage.Close()
 		}
 	}
+	builder.AddEmbeds(reviewEmbed.Build())
 
 	// Add deletion notice if user is deleted
 	if b.user.IsDeleted {
 		deletionEmbed := b.buildDeletionEmbed()
-		builder.AddEmbeds(modeEmbed.Build(), reviewEmbed.Build(), deletionEmbed.Build())
-	} else {
-		builder.AddEmbeds(modeEmbed.Build(), reviewEmbed.Build())
+		builder.AddEmbeds(deletionEmbed.Build())
 	}
 
 	// Add warning embed if there are recent reviewers
@@ -238,6 +245,52 @@ func (b *ReviewBuilder) buildDeletionEmbed() *discord.EmbedBuilder {
 		SetColor(constants.ErrorEmbedColor)
 }
 
+// buildCommentsEmbed creates an embed showing recent comments if any exist.
+func (b *ReviewBuilder) buildCommentsEmbed() *discord.EmbedBuilder {
+	if len(b.comments) == 0 {
+		return nil
+	}
+
+	embed := discord.NewEmbedBuilder().
+		SetTitle("📝 Recent Community Notes").
+		SetColor(utils.GetMessageEmbedColor(b.privacyMode))
+
+	// Take up to 3 most recent comments
+	numComments := min(3, len(b.comments))
+	for i := range numComments {
+		comment := b.comments[i]
+		timestamp := fmt.Sprintf("<t:%d:R>", comment.CreatedAt.Unix())
+
+		// Determine user role
+		var roleTitle string
+		switch {
+		case b.botSettings.IsAdmin(comment.CommenterID):
+			roleTitle = "Administrator Note"
+		case b.botSettings.IsReviewer(comment.CommenterID):
+			roleTitle = "Reviewer Note"
+		default:
+			roleTitle = "Community Note"
+		}
+
+		// Add field for each comment
+		embed.AddField(
+			roleTitle,
+			fmt.Sprintf("From <@%d> - %s\n```%s```",
+				comment.CommenterID,
+				timestamp,
+				utils.TruncateString(comment.Message, 52),
+			),
+			false,
+		)
+	}
+
+	if len(b.comments) > 3 {
+		embed.SetFooter(fmt.Sprintf("... and %d more notes", len(b.comments)-3), "")
+	}
+
+	return embed
+}
+
 // buildReviewWarningEmbed creates a warning embed if another reviewer is reviewing the user.
 func (b *ReviewBuilder) buildReviewWarningEmbed() *discord.EmbedBuilder {
 	// Check for recent views in the logs
@@ -337,6 +390,9 @@ func (b *ReviewBuilder) buildActionOptions() []discord.StringSelectMenuOption {
 		discord.NewStringSelectMenuOption("Translate caesar cipher", constants.CaesarCipherButtonCustomID).
 			WithEmoji(discord.ComponentEmoji{Name: "🔍"}).
 			WithDescription("View Caesar cipher analysis of description"),
+		discord.NewStringSelectMenuOption("View community notes", constants.ViewCommentsButtonCustomID).
+			WithEmoji(discord.ComponentEmoji{Name: "📝"}).
+			WithDescription("View and manage community notes"),
 	}
 
 	// Add reviewer-only options

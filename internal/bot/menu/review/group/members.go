@@ -56,8 +56,10 @@ func (m *MembersMenu) Show(ctx *interaction.Context, s *session.Session) {
 
 	// Calculate page boundaries
 	page := session.PaginationPage.Get(s)
+
 	start := page * constants.MembersPerPage
 	end := min(start+constants.MembersPerPage, len(memberIDs))
+	totalPages := max((len(memberIDs)-1)/constants.MembersPerPage, 0)
 	pageMembers := memberIDs[start:end]
 
 	// Get user data from database only for the current page
@@ -80,6 +82,7 @@ func (m *MembersMenu) Show(ctx *interaction.Context, s *session.Session) {
 	session.GroupPageFlaggedMemberIDs.Set(s, pageMembers)
 	session.PaginationOffset.Set(s, start)
 	session.PaginationTotalItems.Set(s, len(memberIDs))
+	session.PaginationTotalPages.Set(s, totalPages)
 
 	// Start streaming images
 	m.layout.imageStreamer.Stream(interaction.StreamRequest{
@@ -105,11 +108,8 @@ func (m *MembersMenu) handlePageNavigation(ctx *interaction.Context, s *session.
 	action := session.ViewerAction(customID)
 	switch action {
 	case session.ViewerFirstPage, session.ViewerPrevPage, session.ViewerNextPage, session.ViewerLastPage:
-		memberCount := session.GroupFlaggedMembersCount.Get(s)
-
-		// Calculate max page and validate navigation action
-		maxPage := (memberCount - 1) / constants.MembersPerPage
-		page := action.ParsePageAction(s, maxPage)
+		totalPages := session.PaginationTotalPages.Get(s)
+		page := action.ParsePageAction(s, totalPages)
 
 		session.PaginationPage.Set(s, page)
 		ctx.Reload("")

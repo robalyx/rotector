@@ -24,6 +24,7 @@ type Layout struct {
 	groupsMenu       *GroupsMenu
 	caesarMenu       *CaesarMenu
 	statusMenu       *StatusMenu
+	commentsMenu     *CommentsMenu
 	thumbnailFetcher *fetcher.ThumbnailFetcher
 	presenceFetcher  *fetcher.PresenceFetcher
 	imageStreamer    *interaction.ImageStreamer
@@ -53,6 +54,7 @@ func New(app *setup.App, interactionManager *interaction.Manager) *Layout {
 	l.groupsMenu = NewGroupsMenu(l)
 	l.caesarMenu = NewCaesarMenu(l)
 	l.statusMenu = NewStatusMenu(l)
+	l.commentsMenu = NewCommentsMenu(l)
 
 	return l
 }
@@ -66,5 +68,6 @@ func (l *Layout) Pages() []*interaction.Page {
 		l.groupsMenu.page,
 		l.caesarMenu.page,
 		l.statusMenu.page,
+		l.commentsMenu.page,
 	}
 }

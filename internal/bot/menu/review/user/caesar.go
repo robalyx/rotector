@@ -39,19 +39,11 @@ func (m *CaesarMenu) Show(ctx *interaction.Context, s *session.Session) {
 	}
 
 	// Calculate page boundaries
-	totalPages := (constants.CaesarTotalTranslations + constants.CaesarTranslationsPerPage - 1) /
-		constants.CaesarTranslationsPerPage
-
 	page := session.PaginationPage.Get(s)
-	if page < 0 || page >= totalPages {
-		page = 0 // Reset to first page if out of bounds
-	}
-
-	start := page * constants.CaesarTranslationsPerPage
+	totalPages := max((constants.CaesarTotalTranslations-1)/constants.CaesarTranslationsPerPage, 0)
 
 	// Store pagination data in session
-	session.PaginationPage.Set(s, page)
-	session.PaginationOffset.Set(s, start)
+	session.PaginationOffset.Set(s, page*constants.CaesarTranslationsPerPage)
 	session.PaginationTotalItems.Set(s, constants.CaesarTotalTranslations)
 	session.PaginationTotalPages.Set(s, totalPages)
 }
@@ -61,9 +53,8 @@ func (m *CaesarMenu) handleButton(ctx *interaction.Context, s *session.Session, 
 	action := session.ViewerAction(customID)
 	switch action {
 	case session.ViewerFirstPage, session.ViewerPrevPage, session.ViewerNextPage, session.ViewerLastPage:
-		// Calculate max page
 		totalPages := session.PaginationTotalPages.Get(s)
-		page := action.ParsePageAction(s, totalPages-1)
+		page := action.ParsePageAction(s, totalPages)
 
 		session.PaginationPage.Set(s, page)
 		ctx.Reload("")

@@ -17,6 +17,7 @@ type Service struct {
 	appeal     *service.AppealService
 	view       *service.ViewService
 	sync       *service.SyncService
+	comment    *service.CommentService
 }
 
 // NewService creates a new service instance with all services.
@@ -32,6 +33,7 @@ func NewService(repository *Repository, logger *zap.Logger) *Service {
 	statsModel := repository.Stats()
 	appealModel := repository.Appeal()
 	syncModel := repository.Sync()
+	commentModel := repository.Comment()
 
 	viewService := service.NewView(viewModel, logger)
 
@@ -46,6 +48,7 @@ func NewService(repository *Repository, logger *zap.Logger) *Service {
 		appeal:     service.NewAppeal(appealModel, logger),
 		view:       viewService,
 		sync:       service.NewSync(syncModel, logger),
+		comment:    service.NewComment(commentModel, logger),
 	}
 }
 
@@ -97,4 +100,9 @@ func (s *Service) View() *service.ViewService {
 // Sync returns the sync service.
 func (s *Service) Sync() *service.SyncService {
 	return s.sync
+}
+
+// Comment returns the comment service.
+func (s *Service) Comment() *service.CommentService {
+	return s.comment
 }

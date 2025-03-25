@@ -89,6 +89,8 @@ func main() {
 		{Name: "UserPresences", Type: "map[uint64]*apiTypes.UserPresenceResponse", Doc: "UserPresences stores friend presence information", Persist: false},
 		{Name: "UserGroups", Type: "[]*apiTypes.UserGroupRoles", Doc: "UserGroups stores the list of groups", Persist: false},
 		{Name: "UserOutfits", Type: "[]*apiTypes.Outfit", Doc: "UserOutfits stores user outfits", Persist: false},
+		{Name: "UserReviewHistory", Type: "[]uint64", Doc: "UserReviewHistory stores IDs of previously reviewed users", Persist: true},
+		{Name: "UserReviewHistoryIndex", Type: "int", Doc: "UserReviewHistoryIndex stores the current position in the review history", Persist: true},
 
 		// Group related keys
 		{Name: "GroupTarget", Type: "*types.ReviewGroup", Doc: "GroupTarget stores the currently selected group", Persist: true},
@@ -96,12 +98,6 @@ func main() {
 		{Name: "GroupFlaggedMembersCount", Type: "int", Doc: "GroupFlaggedMembersCount stores the total number of flagged members in the current group", Persist: true},
 		{Name: "GroupPageFlaggedMembers", Type: "map[uint64]*types.ReviewUser", Doc: "GroupPageFlaggedMembers stores flagged member details for the current page", Persist: false},
 		{Name: "GroupPageFlaggedMemberIDs", Type: "[]uint64", Doc: "GroupPageFlaggedMemberIDs stores flagged member IDs for the current page", Persist: false},
-
-		// User review history tracking
-		{Name: "UserReviewHistory", Type: "[]uint64", Doc: "UserReviewHistory stores IDs of previously reviewed users", Persist: true},
-		{Name: "UserReviewHistoryIndex", Type: "int", Doc: "UserReviewHistoryIndex stores the current position in the review history", Persist: true},
-
-		// Group review history tracking
 		{Name: "GroupReviewHistory", Type: "[]uint64", Doc: "GroupReviewHistory stores IDs of previously reviewed groups", Persist: true},
 		{Name: "GroupReviewHistoryIndex", Type: "int", Doc: "GroupReviewHistoryIndex stores the current position in the review history", Persist: true},
 
@@ -112,6 +108,7 @@ func main() {
 		{Name: "SelectedReasonType", Type: "string", Doc: "SelectedReasonType stores the currently selected reason type for modal handling", Persist: true},
 		{Name: "ReviewLogs", Type: "[]*types.ActivityLog", Doc: "ReviewLogs stores the current review logs", Persist: true},
 		{Name: "ReviewLogsHasMore", Type: "bool", Doc: "ReviewLogsHasMore indicates if there are more logs available", Persist: true},
+		{Name: "ReviewComments", Type: "[]*types.Comment", Doc: "ReviewComments stores comments for the current user or group", Persist: true},
 
 		// Discord user lookup related keys
 		{Name: "DiscordUserLookupID", Type: "uint64", Doc: "DiscordUserLookupID stores the Discord user ID being looked up", Persist: true},

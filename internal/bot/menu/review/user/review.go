@@ -147,6 +147,14 @@ func (m *ReviewMenu) Show(ctx *interaction.Context, s *session.Session) {
 	// Store data in session for the message builder
 	session.UserFlaggedFriends.Set(s, flaggedFriends)
 	session.UserFlaggedGroups.Set(s, flaggedGroups)
+
+	// Fetch comments for the user
+	comments, err := m.layout.db.Model().Comment().GetUserComments(ctx.Context(), user.ID)
+	if err != nil {
+		m.layout.logger.Error("Failed to fetch user comments", zap.Error(err))
+		comments = []*types.Comment{} // Continue without comments - not critical
+	}
+	session.ReviewComments.Set(s, comments)
 }
 
 // handleSelectMenu processes select menu interactions.
@@ -215,6 +223,9 @@ func (m *ReviewMenu) handleActionSelection(ctx *interaction.Context, s *session.
 	case constants.CaesarCipherButtonCustomID:
 		session.PaginationPage.Set(s, 0)
 		ctx.Show(constants.UserCaesarPageName, "")
+	case constants.ViewCommentsButtonCustomID:
+		session.PaginationPage.Set(s, 0)
+		ctx.Show(constants.UserCommentsPageName, "")
 	case constants.OpenAIChatButtonCustomID:
 		m.handleOpenAIChat(ctx, s)
 	case constants.ViewUserLogsButtonCustomID:

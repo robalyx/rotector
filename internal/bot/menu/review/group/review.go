@@ -105,6 +105,14 @@ func (m *ReviewMenu) Show(ctx *interaction.Context, s *session.Session) {
 	// Store logs in session
 	session.ReviewLogs.Set(s, logs)
 	session.ReviewLogsHasMore.Set(s, nextCursor != nil)
+
+	// Fetch comments for the group
+	comments, err := m.layout.db.Model().Comment().GetGroupComments(ctx.Context(), group.ID)
+	if err != nil {
+		m.layout.logger.Error("Failed to fetch group comments", zap.Error(err))
+		comments = []*types.Comment{} // Continue without comments - not critical
+	}
+	session.ReviewComments.Set(s, comments)
 }
 
 // handleSelectMenu processes select menu interactions.
@@ -163,6 +171,9 @@ func (m *ReviewMenu) handleActionSelection(ctx *interaction.Context, s *session.
 	case constants.GroupViewMembersButtonCustomID:
 		session.PaginationPage.Set(s, 0)
 		ctx.Show(constants.GroupMembersPageName, "")
+	case constants.ViewCommentsButtonCustomID:
+		session.PaginationPage.Set(s, 0)
+		ctx.Show(constants.GroupCommentsPageName, "")
 	case constants.OpenAIChatButtonCustomID:
 		m.handleOpenAIChat(ctx, s)
 	case constants.GroupViewLogsButtonCustomID:

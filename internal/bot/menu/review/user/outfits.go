@@ -47,6 +47,7 @@ func (m *OutfitsMenu) Show(ctx *interaction.Context, s *session.Session) {
 
 	// Calculate page boundaries
 	page := session.PaginationPage.Get(s)
+	totalPages := max((len(user.Outfits)-1)/constants.OutfitsPerPage, 0)
 
 	start := page * constants.OutfitsPerPage
 	end := min(start+constants.OutfitsPerPage, len(user.Outfits))
@@ -55,8 +56,8 @@ func (m *OutfitsMenu) Show(ctx *interaction.Context, s *session.Session) {
 	// Store data in session for the message builder
 	session.UserOutfits.Set(s, pageOutfits)
 	session.PaginationOffset.Set(s, start)
-	session.PaginationPage.Set(s, page)
 	session.PaginationTotalItems.Set(s, len(user.Outfits))
+	session.PaginationTotalPages.Set(s, totalPages)
 
 	// Start streaming images
 	m.layout.imageStreamer.Stream(interaction.StreamRequest{

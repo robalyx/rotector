@@ -273,6 +273,20 @@ func init() { //nolint:funlen
 			-- Discord user full scan indexes
 			CREATE INDEX IF NOT EXISTS idx_discord_user_full_scans_last_scan
 			ON discord_user_full_scans (last_scan ASC);
+
+			-- Comments indexes
+			CREATE INDEX IF NOT EXISTS idx_user_comments_target_created 
+			ON user_comments (target_id, created_at DESC);
+
+			CREATE INDEX IF NOT EXISTS idx_user_comments_target_commenter 
+			ON user_comments (target_id, commenter_id);
+
+			-- Group comments indexes
+			CREATE INDEX IF NOT EXISTS idx_group_comments_target_created 
+			ON group_comments (target_id, created_at DESC);
+
+			CREATE INDEX IF NOT EXISTS idx_group_comments_target_commenter 
+			ON group_comments (target_id, commenter_id);
 		`, enum.ActivityTypeUserViewed, enum.ActivityTypeGroupViewed).Exec(ctx)
 		if err != nil {
 			return fmt.Errorf("failed to create indexes: %w", err)
@@ -449,6 +463,14 @@ func init() { //nolint:funlen
 
 			-- Discord user full scan indexes
 			DROP INDEX IF EXISTS idx_discord_user_full_scans_last_scan;
+
+			-- Comments indexes
+			DROP INDEX IF EXISTS idx_user_comments_target_created;
+			DROP INDEX IF EXISTS idx_user_comments_target_commenter;
+
+			-- Group comments indexes
+			DROP INDEX IF EXISTS idx_group_comments_target_created;
+			DROP INDEX IF EXISTS idx_group_comments_target_commenter;
 		`).Exec(ctx)
 		if err != nil {
 			return fmt.Errorf("failed to drop indexes: %w", err)
