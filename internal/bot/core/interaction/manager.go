@@ -158,9 +158,6 @@ func (m *Manager) Display(
 	// Update the page history in the session
 	m.UpdatePage(s, page)
 
-	// Set the message ID in the session
-	session.MessageID.Set(s, uint64(message.ID))
-
 	m.logger.Debug("Updated message",
 		zap.String("page", page.Name),
 		zap.Uint64("message_id", uint64(message.ID)))

@@ -22,8 +22,9 @@ const (
 
 // Page Names.
 const (
-	DashboardPageName = "Dashboard"
-	ConsentPageName   = "Terms of Service"
+	SessionSelectorPageName = "Session Selector"
+	DashboardPageName       = "Dashboard"
+	ConsentPageName         = "Terms of Service"
 
 	GroupReviewPageName   = "Group Review"
 	GroupMembersPageName  = "Group Members"
@@ -63,6 +64,12 @@ const (
 	GuildLogsPageName     = "Guild Ban Logs"
 	GuildLookupPageName   = "Guild User Lookup"
 	GuildMessagesPageName = "Guild Messages"
+)
+
+// Selector Menu.
+const (
+	SelectorNewButtonCustomID  = "new_session"
+	SelectorSelectMenuCustomID = "select_session"
 )
 
 // Dashboard Menu.

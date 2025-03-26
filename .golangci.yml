@@ -25,6 +25,7 @@ linters:
     - varnamelen
     - wrapcheck
     - wsl
+    - interfacebloat
   settings:
     cyclop:
       max-complexity: 30

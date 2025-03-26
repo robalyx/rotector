@@ -16,7 +16,6 @@ import (
 	disgoEvents "github.com/disgoorg/disgo/events"
 	"github.com/disgoorg/disgo/gateway"
 	"github.com/disgoorg/disgo/sharding"
-	"github.com/disgoorg/snowflake/v2"
 	"github.com/robalyx/rotector/internal/bot/constants"
 	"github.com/robalyx/rotector/internal/bot/core/interaction"
 	"github.com/robalyx/rotector/internal/bot/core/session"
@@ -35,6 +34,7 @@ import (
 	groupReview "github.com/robalyx/rotector/internal/bot/menu/review/group"
 	userReview "github.com/robalyx/rotector/internal/bot/menu/review/user"
 	"github.com/robalyx/rotector/internal/bot/menu/reviewer"
+	"github.com/robalyx/rotector/internal/bot/menu/selector"
 	"github.com/robalyx/rotector/internal/bot/menu/setting"
 	"github.com/robalyx/rotector/internal/bot/menu/status"
 	"github.com/robalyx/rotector/internal/bot/menu/timeout"
@@ -122,6 +122,7 @@ func New(app *setup.App) (*Bot, error) {
 	b.client = client
 
 	// Initialize layouts
+	selectorLayout := selector.New(app, sessionManager)
 	settingLayout := setting.New(app)
 	logLayout := log.New(app)
 	chatLayout := chat.New(app)
@@ -140,6 +141,7 @@ func New(app *setup.App) (*Bot, error) {
 	reviewerLayout := reviewer.New(app, client)
 	guildLayout := guild.New(app, selfClient)
 
+	interactionManager.AddPages(selectorLayout.Pages())
 	interactionManager.AddPages(settingLayout.Pages())
 	interactionManager.AddPages(logLayout.Pages())
 	interactionManager.AddPages(chatLayout.Pages())
@@ -192,25 +194,11 @@ func (b *Bot) Close() {
 	b.client.Close(context.Background())
 }
 
-// handleApplicationCommandInteraction processes slash commands by first deferring the response,
-// then validating guild settings and user permissions before handling the command in a goroutine.
+// handleApplicationCommandInteraction processes slash commands.
 func (b *Bot) handleApplicationCommandInteraction(event *disgoEvents.ApplicationCommandInteractionCreate) {
 	go func() {
-		// Defer response to prevent Discord timeout while processing
-		if err := event.DeferCreateMessage(true); err != nil {
-			b.logger.Error("Failed to defer create message", zap.Error(err))
-			return
-		}
-
-		wrappedEvent := interaction.WrapEvent(event)
-
-		// Only handle dashboard command - respond with error for unknown commands
-		if event.SlashCommandInteractionData().CommandName() != constants.RotectorCommandName {
-			b.interactionManager.RespondWithError(wrappedEvent, "This command is not available.")
-			return
-		}
-
 		start := time.Now()
+		wrappedEvent := interaction.WrapEvent(event, nil)
 		defer func() {
 			if r := recover(); r != nil {
 				b.logger.Error("Application command interaction failed",
@@ -226,9 +214,37 @@ func (b *Bot) handleApplicationCommandInteraction(event *disgoEvents.Application
 				zap.Duration("duration", duration))
 		}()
 
-		// Validate session but return early if session creation failed or session expired
-		s, isNewSession, ok := b.validateAndGetSession(wrappedEvent, wrappedEvent.User().ID)
-		if !ok {
+		// Defer response to prevent Discord timeout while processing
+		if err := event.DeferCreateMessage(true); err != nil {
+			b.logger.Error("Failed to defer create message", zap.Error(err))
+			return
+		}
+
+		// Only handle dashboard command
+		if event.SlashCommandInteractionData().CommandName() != constants.RotectorCommandName {
+			b.interactionManager.RespondWithError(wrappedEvent, "This command is not available.")
+			return
+		}
+
+		// Get initial response message
+		message, err := event.Client().Rest().GetInteractionResponse(event.ApplicationID(), event.Token())
+		if err != nil {
+			b.logger.Error("Failed to get interaction response", zap.Error(err))
+			b.interactionManager.RespondWithError(wrappedEvent, "Failed to initialize session. Please try again.")
+			return
+		}
+		wrappedEvent.SetMessage(message)
+
+		// Initialize session
+		s, isNewSession, showSelector, err := b.initializeSession(wrappedEvent, message)
+		if err != nil {
+			return
+		}
+
+		// Check if we should show the selector menu
+		if showSelector {
+			b.interactionManager.Show(wrappedEvent, s, constants.SessionSelectorPageName, "")
+			s.Touch(context.Background())
 			return
 		}
 
@@ -245,13 +261,10 @@ func (b *Bot) handleApplicationCommandInteraction(event *disgoEvents.Application
 }
 
 // handleComponentInteraction processes button clicks and select menu choices.
-// It first updates the message to show "Processing..." and removes interactive components
-// to prevent double-clicks, then processes the interaction in a goroutine.
 func (b *Bot) handleComponentInteraction(event *disgoEvents.ComponentInteractionCreate) {
 	go func() {
-		wrappedEvent := interaction.WrapEvent(event)
-
 		start := time.Now()
+		wrappedEvent := interaction.WrapEvent(event, &event.Message)
 		defer func() {
 			if r := recover(); r != nil {
 				b.logger.Error("Component interaction failed",
@@ -268,9 +281,9 @@ func (b *Bot) handleComponentInteraction(event *disgoEvents.ComponentInteraction
 				zap.Duration("duration", duration))
 		}()
 
-		// Validate session but return early if session creation failed or session expired
-		s, isNewSession, ok := b.validateAndGetSession(wrappedEvent, wrappedEvent.User().ID)
-		if !ok {
+		// Initialize session
+		s, isNewSession, showSelector, err := b.initializeSession(wrappedEvent, &event.Message)
+		if err != nil {
 			return
 		}
 
@@ -305,6 +318,13 @@ func (b *Bot) handleComponentInteraction(event *disgoEvents.ComponentInteraction
 			}
 		}
 
+		// Check if we should show the selector menu
+		if showSelector {
+			b.interactionManager.Show(wrappedEvent, s, constants.SessionSelectorPageName, "")
+			s.Touch(context.Background())
+			return
+		}
+
 		// Run common validation checks
 		if !b.validateInteraction(wrappedEvent, s, isNewSession, false, event.Data.CustomID()) {
 			return
@@ -315,24 +335,11 @@ func (b *Bot) handleComponentInteraction(event *disgoEvents.ComponentInteraction
 	}()
 }
 
-// handleModalSubmit processes form submissions similarly to component interactions.
-// It updates the message to show "Processing..." and removes interactive components,
-// then processes the submission in a goroutine.
+// handleModalSubmit processes modal form submissions.
 func (b *Bot) handleModalSubmit(event *disgoEvents.ModalSubmitInteractionCreate) {
 	go func() {
-		// Update message to prevent double-submissions
-		updateBuilder := discord.NewMessageUpdateBuilder().
-			SetContent(utils.GetTimestampedSubtext("Processing...")).
-			ClearContainerComponents()
-
-		if err := event.UpdateMessage(updateBuilder.Build()); err != nil {
-			b.logger.Error("Failed to update message", zap.Error(err))
-			return
-		}
-
-		wrappedEvent := interaction.WrapEvent(event)
-
 		start := time.Now()
+		wrappedEvent := interaction.WrapEvent(event, nil)
 		defer func() {
 			if r := recover(); r != nil {
 				formData := make(map[string]string)
@@ -354,9 +361,35 @@ func (b *Bot) handleModalSubmit(event *disgoEvents.ModalSubmitInteractionCreate)
 				zap.Duration("duration", duration))
 		}()
 
-		// Validate session but return early if session creation failed or session expired
-		s, isNewSession, ok := b.validateAndGetSession(wrappedEvent, wrappedEvent.User().ID)
-		if !ok {
+		// Update message to prevent double-submissions
+		updateBuilder := discord.NewMessageUpdateBuilder().
+			SetContent(utils.GetTimestampedSubtext("Processing...")).
+			ClearContainerComponents()
+
+		if err := event.UpdateMessage(updateBuilder.Build()); err != nil {
+			b.logger.Error("Failed to update message", zap.Error(err))
+			return
+		}
+
+		// Get response message
+		message, err := event.Client().Rest().GetInteractionResponse(event.ApplicationID(), event.Token())
+		if err != nil {
+			b.logger.Error("Failed to get interaction response", zap.Error(err))
+			b.interactionManager.RespondWithError(wrappedEvent, "Failed to initialize session. Please try again.")
+			return
+		}
+		wrappedEvent.SetMessage(message)
+
+		// Initialize session
+		s, isNewSession, showSelector, err := b.initializeSession(wrappedEvent, message)
+		if err != nil {
+			return
+		}
+
+		// Check if we should show the selector menu
+		if showSelector {
+			b.interactionManager.Show(wrappedEvent, s, constants.SessionSelectorPageName, "")
+			s.Touch(context.Background())
 			return
 		}
 
@@ -368,6 +401,44 @@ func (b *Bot) handleModalSubmit(event *disgoEvents.ModalSubmitInteractionCreate)
 		// Handle submission and update session
 		b.interactionManager.HandleInteraction(wrappedEvent, s)
 	}()
+}
+
+// initializeSession creates or retrieves a session for the given user and message.
+func (b *Bot) initializeSession(
+	event interaction.CommonEvent, message *discord.Message,
+) (s *session.Session, isNewSession bool, showSelector bool, err error) {
+	userID := event.User().ID
+
+	// Check for existing sessions
+	existingSessions, err := b.sessionManager.GetUserSessions(context.Background(), uint64(userID), false)
+	if err != nil {
+		b.logger.Error("Failed to check existing sessions", zap.Error(err))
+		b.interactionManager.RespondWithError(event, "Failed to check existing sessions. Please try again.")
+		return nil, false, false, err
+	}
+
+	// Create new session
+	s, isNewSession, err = b.sessionManager.GetOrCreateSession(
+		context.Background(), userID, uint64(message.ID), event.Member().Permissions.Has(discord.PermissionAdministrator),
+	)
+	if err != nil {
+		if errors.Is(err, session.ErrSessionLimitReached) {
+			b.interactionManager.RespondWithError(event,
+				"You have reached the maximum number of active sessions. Please close some existing sessions first.")
+		} else {
+			b.interactionManager.RespondWithError(event,
+				"Failed to create session. Please try again.")
+		}
+		return nil, false, false, err
+	}
+
+	// If there are existing sessions and this is a new session, show selector menu
+	showSelector = len(existingSessions) > 0 && isNewSession
+	if showSelector {
+		session.ExistingSessions.Set(s, existingSessions)
+	}
+
+	return s, isNewSession, showSelector, nil
 }
 
 // validateInteraction performs common validation checks for all interaction types.
@@ -459,29 +530,4 @@ func (b *Bot) checkConsentStatus(event interaction.CommonEvent, s *session.Sessi
 	}
 
 	return false
-}
-
-// validateAndGetSession retrieves or creates a session for the given user and validates its state.
-func (b *Bot) validateAndGetSession(event interaction.CommonEvent, userID snowflake.ID) (*session.Session, bool, bool) {
-	// Check if user is a guild owner if bot is in the guild
-	isGuildOwner := false
-	if guildID := event.GuildID(); guildID != nil {
-		if _, err := event.Client().Rest().GetGuild(*guildID, false); err == nil {
-			isGuildOwner = event.Member().Permissions.Has(discord.PermissionAdministrator)
-		}
-	}
-
-	// Get or create user session
-	s, isNewSession, err := b.sessionManager.GetOrCreateSession(context.Background(), userID, isGuildOwner)
-	if err != nil {
-		if errors.Is(err, session.ErrSessionLimitReached) {
-			b.interactionManager.RespondWithError(event, "Session limit reached. Please try again later.")
-		} else {
-			b.logger.Error("Failed to get or create session", zap.Error(err))
-			b.interactionManager.RespondWithError(event, "Failed to get or create session.")
-		}
-		return nil, false, false
-	}
-
-	return s, isNewSession, true
 }

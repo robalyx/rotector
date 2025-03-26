@@ -51,6 +51,13 @@ type CommonEvent interface {
 	// ModalData returns modal data if this is a modal submit event.
 	// Returns nil for other event types.
 	ModalData() ModalData
+
+	// SetMessage sets the message that triggered this event.
+	SetMessage(message *discord.Message)
+
+	// Message returns the message that triggered this event.
+	// Returns nil for events that are not associated with a message.
+	Message() *discord.Message
 }
 
 // panicModal is a helper function that implements Modal() for events that don't support it.
@@ -61,6 +68,7 @@ func panicModal(_ *discord.ModalCreate) error {
 // ApplicationCommandEvent wraps ApplicationCommandInteractionCreate.
 type ApplicationCommandEvent struct {
 	*events.ApplicationCommandInteractionCreate
+	message *discord.Message
 }
 
 func (e *ApplicationCommandEvent) Modal(discord.ModalCreate) error {
@@ -75,9 +83,21 @@ func (e *ApplicationCommandEvent) ModalData() ModalData {
 	return nil
 }
 
+func (e *ApplicationCommandEvent) SetMessage(message *discord.Message) {
+	e.message = message
+}
+
+func (e *ApplicationCommandEvent) Message() *discord.Message {
+	if e.message != nil {
+		return e.message
+	}
+	return nil
+}
+
 // ComponentEvent wraps ComponentInteractionCreate.
 type ComponentEvent struct {
 	*events.ComponentInteractionCreate
+	message *discord.Message
 }
 
 func (e *ComponentEvent) Modal(modal discord.ModalCreate) error {
@@ -92,9 +112,21 @@ func (e *ComponentEvent) ModalData() ModalData {
 	return nil
 }
 
+func (e *ComponentEvent) SetMessage(message *discord.Message) {
+	e.message = message
+}
+
+func (e *ComponentEvent) Message() *discord.Message {
+	if e.message != nil {
+		return e.message
+	}
+	return nil
+}
+
 // ModalSubmitEvent wraps ModalSubmitInteractionCreate.
 type ModalSubmitEvent struct {
 	*events.ModalSubmitInteractionCreate
+	message *discord.Message
 }
 
 func (e *ModalSubmitEvent) Modal(discord.ModalCreate) error {
@@ -109,15 +141,26 @@ func (e *ModalSubmitEvent) ModalData() ModalData {
 	return e.Data
 }
 
+func (e *ModalSubmitEvent) SetMessage(message *discord.Message) {
+	e.message = message
+}
+
+func (e *ModalSubmitEvent) Message() *discord.Message {
+	if e.message != nil {
+		return e.message
+	}
+	return nil
+}
+
 // WrapEvent wraps Discord events in our local event types.
-func WrapEvent(event any) CommonEvent {
+func WrapEvent(event any, message *discord.Message) CommonEvent {
 	switch e := event.(type) {
 	case *events.ApplicationCommandInteractionCreate:
-		return &ApplicationCommandEvent{e}
+		return &ApplicationCommandEvent{e, message}
 	case *events.ComponentInteractionCreate:
-		return &ComponentEvent{e}
+		return &ComponentEvent{e, message}
 	case *events.ModalSubmitInteractionCreate:
-		return &ModalSubmitEvent{e}
+		return &ModalSubmitEvent{e, message}
 	default:
 		panic("unknown event type")
 	}

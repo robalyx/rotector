@@ -82,7 +82,7 @@ func (c *Context) Error(content string) {
 		Build()
 
 	_, _ = c.event.Client().Rest().UpdateInteractionResponse(c.event.ApplicationID(), c.event.Token(), messageUpdate)
-	c.manager.sessionManager.CloseSession(c.ctx, uint64(c.event.User().ID))
+	c.manager.sessionManager.CloseSession(c.ctx, c.session)
 	c.responded = true
 
 	c.manager.logger.Debug("Fatal error",

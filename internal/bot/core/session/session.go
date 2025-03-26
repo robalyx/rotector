@@ -8,6 +8,7 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
+	"maps"
 	"strconv"
 	"sync"
 	"time"
@@ -45,6 +46,7 @@ type Session struct {
 	key                string
 	userSettingsUpdate bool
 	botSettingsUpdate  bool
+	isClosed           bool
 }
 
 // NewSession creates a new session for the given user.
@@ -70,12 +72,30 @@ func NewSession(
 		data:               data,
 		dataModified:       make(map[string]bool),
 		logger:             logger.Named("session"),
+		isClosed:           false,
 	}
+}
+
+// Close marks the session as closed to prevent further updates.
+func (s *Session) Close() {
+	s.mu.Lock()
+	s.isClosed = true
+	s.mu.Unlock()
 }
 
 // Touch serializes the session data to JSON and updates the TTL in Redis to prevent expiration.
 // If serialization fails, the error is logged but the session continues.
 func (s *Session) Touch(ctx context.Context) {
+	s.mu.RLock()
+	if s.isClosed {
+		s.mu.RUnlock()
+		return
+	}
+	s.mu.RUnlock()
+
+	// Update last used time
+	LastUsed.Set(s, time.Now())
+
 	// Create a map of only persistent data
 	persistentData := make(map[string]any)
 	s.mu.RLock()
@@ -135,6 +155,35 @@ func (s *Session) UserSettings() *types.UserSetting {
 // BotSettings returns the current bot settings.
 func (s *Session) BotSettings() *types.BotSetting {
 	return s.botSettings
+}
+
+// GetData returns a copy of the session data.
+func (s *Session) GetData() map[string]any {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	dataCopy := make(map[string]any, len(s.data))
+	maps.Copy(dataCopy, s.data)
+	return dataCopy
+}
+
+// UpdateData replaces the session data with new data and updates the message ID.
+func (s *Session) UpdateData(newData map[string]any, newMessageID uint64) {
+	userID := UserID.Get(s)
+	MessageID.Set(s, newMessageID)
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// Update the session key with new message ID
+	s.key = fmt.Sprintf("%s%d:%d", SessionPrefix, userID, newMessageID)
+
+	// Clear existing data
+	s.data = make(map[string]any)
+	s.dataModified = make(map[string]bool)
+
+	// Copy new data
+	maps.Copy(s.data, newData)
 }
 
 // get retrieves a raw string value from the in-memory session cache.

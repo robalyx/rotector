@@ -49,6 +49,8 @@ func main() {
 		// Required keys
 		{Name: "UserID", Type: "uint64", Doc: "UserID stores the user ID", Persist: false},
 		{Name: "IsGuildOwner", Type: "bool", Doc: "IsGuildOwner indicates if the user is a guild owner", Persist: false},
+		{Name: "ExistingSessions", Type: "[]Info", Doc: "ExistingSessions stores information about user's existing sessions", Persist: false},
+		{Name: "LastUsed", Type: "time.Time", Doc: "LastUsed stores when the session was last accessed", Persist: true},
 
 		// Navigation related keys
 		{Name: "MessageID", Type: "uint64", Doc: "MessageID stores the ID of the current message", Persist: true},

@@ -18,6 +18,10 @@ var (
 	UserID = NewKey[uint64]("UserID", false)
 	// IsGuildOwner indicates if the user is a guild owner
 	IsGuildOwner = NewKey[bool]("IsGuildOwner", false)
+	// ExistingSessions stores information about user's existing sessions
+	ExistingSessions = NewKey[[]Info]("ExistingSessions", false)
+	// LastUsed stores when the session was last accessed
+	LastUsed = NewKey[time.Time]("LastUsed", true)
 	// MessageID stores the ID of the current message
 	MessageID = NewKey[uint64]("MessageID", true)
 	// CurrentPage stores the current page identifier
