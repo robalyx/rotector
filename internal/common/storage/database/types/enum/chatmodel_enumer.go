@@ -7,11 +7,11 @@ import (
 	"strings"
 )
 
-const _ChatModelName = "gemini-1.5-flash-8b"
+const _ChatModelName = "gemini-1.5-flash-8bgemini-1.5-flashgemini-2.0-flash-litegemini-2.0-flash"
 
-var _ChatModelIndex = [...]uint8{0, 19}
+var _ChatModelIndex = [...]uint8{0, 19, 35, 56, 72}
 
-const _ChatModelLowerName = "gemini-1.5-flash-8b"
+const _ChatModelLowerName = "gemini-1.5-flash-8bgemini-1.5-flashgemini-2.0-flash-litegemini-2.0-flash"
 
 func (i ChatModel) String() string {
 	if i < 0 || i >= ChatModel(len(_ChatModelIndex)-1) {
@@ -25,17 +25,29 @@ func (i ChatModel) String() string {
 func _ChatModelNoOp() {
 	var x [1]struct{}
 	_ = x[ChatModelGeminiFlash1_5_8B-(0)]
+	_ = x[ChatModelGemini1_5Flash-(1)]
+	_ = x[ChatModelGemini2_0FlashLite-(2)]
+	_ = x[ChatModelGemini2_0Flash-(3)]
 }
 
-var _ChatModelValues = []ChatModel{ChatModelGeminiFlash1_5_8B}
+var _ChatModelValues = []ChatModel{ChatModelGeminiFlash1_5_8B, ChatModelGemini1_5Flash, ChatModelGemini2_0FlashLite, ChatModelGemini2_0Flash}
 
 var _ChatModelNameToValueMap = map[string]ChatModel{
-	_ChatModelName[0:19]:      ChatModelGeminiFlash1_5_8B,
-	_ChatModelLowerName[0:19]: ChatModelGeminiFlash1_5_8B,
+	_ChatModelName[0:19]:       ChatModelGeminiFlash1_5_8B,
+	_ChatModelLowerName[0:19]:  ChatModelGeminiFlash1_5_8B,
+	_ChatModelName[19:35]:      ChatModelGemini1_5Flash,
+	_ChatModelLowerName[19:35]: ChatModelGemini1_5Flash,
+	_ChatModelName[35:56]:      ChatModelGemini2_0FlashLite,
+	_ChatModelLowerName[35:56]: ChatModelGemini2_0FlashLite,
+	_ChatModelName[56:72]:      ChatModelGemini2_0Flash,
+	_ChatModelLowerName[56:72]: ChatModelGemini2_0Flash,
 }
 
 var _ChatModelNames = []string{
 	_ChatModelName[0:19],
+	_ChatModelName[19:35],
+	_ChatModelName[35:56],
+	_ChatModelName[56:72],
 }
 
 // ChatModelString retrieves an enum value from the enum constants string name.

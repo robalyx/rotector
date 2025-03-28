@@ -14,6 +14,7 @@ import (
 	"github.com/robalyx/rotector/internal/bot/core/interaction"
 	"github.com/robalyx/rotector/internal/bot/core/session"
 	"github.com/robalyx/rotector/internal/bot/menu/log"
+	"github.com/robalyx/rotector/internal/common/client/ai"
 	"github.com/robalyx/rotector/internal/common/queue"
 	"github.com/robalyx/rotector/internal/common/storage/database/types"
 	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
@@ -734,9 +735,10 @@ func (m *ReviewMenu) handleOpenAIChat(ctx *interaction.Context, s *session.Sessi
 			game.Name, game.ID, game.PlaceVisits))
 	}
 
-	// Create context message about the user
-	context := fmt.Sprintf(`<context>
-User Information:
+	// Create user context
+	userContext := ai.Context{
+		Type: ai.ContextTypeUser,
+		Content: fmt.Sprintf(`User Information:
 
 Basic Info:
 - Username: %s
@@ -761,31 +763,35 @@ Outfits (%d total):
 %s
 
 Games (%d total):
-%s</context>`,
-		user.Name,
-		user.DisplayName,
-		user.Description,
-		user.CreatedAt.Format(time.RFC3339),
-		user.Reasons.Messages(),
-		user.Confidence,
-		user.Status.String(),
-		user.Reputation.Downvotes,
-		user.Reputation.Upvotes,
-		user.LastUpdated.Format(time.RFC3339),
-		len(user.Friends),
-		len(flaggedFriends),
-		strings.Join(friendsInfo, " "),
-		len(user.Groups),
-		len(flaggedGroups),
-		strings.Join(groupsInfo, " "),
-		len(user.Outfits),
-		strings.Join(outfitsInfo, " "),
-		len(user.Games),
-		strings.Join(gamesInfo, " "),
-	)
+%s`,
+			user.Name,
+			user.DisplayName,
+			user.Description,
+			user.CreatedAt.Format(time.RFC3339),
+			strings.Join(user.Reasons.Messages(), "; "),
+			user.Confidence,
+			user.Status.String(),
+			user.Reputation.Downvotes,
+			user.Reputation.Upvotes,
+			user.LastUpdated.Format(time.RFC3339),
+			len(user.Friends),
+			len(flaggedFriends),
+			strings.Join(friendsInfo, "\n"),
+			len(user.Groups),
+			len(flaggedGroups),
+			strings.Join(groupsInfo, "\n"),
+			len(user.Outfits),
+			strings.Join(outfitsInfo, "\n"),
+			len(user.Games),
+			strings.Join(gamesInfo, "\n")),
+	}
 
-	// Update session and navigate to chat
-	session.ChatContext.Set(s, context)
+	// Append to existing chat context
+	chatContext := session.AIChatContext.Get(s)
+	chatContext = append(chatContext, userContext)
+	session.AIChatContext.Set(s, chatContext)
+
+	// Navigate to chat
 	session.PaginationPage.Set(s, 0)
 	ctx.Show(constants.ChatPageName, "")
 }

@@ -263,17 +263,17 @@ func (m *Manager) GetOrCreateSession(
 
 // CloseSession removes a user's session from Redis immediately rather than
 // waiting for expiration.
-func (m *Manager) CloseSession(ctx context.Context, session *Session) {
-	userID := UserID.Get(session)
-	messageID := MessageID.Get(session)
-
+func (m *Manager) CloseSession(ctx context.Context, session *Session, userID uint64, messageID uint64) {
 	key := fmt.Sprintf("%s%d:%d", SessionPrefix, userID, messageID)
 	if err := m.redis.Do(ctx, m.redis.B().Del().Key(key).Build()).Error(); err != nil {
 		m.logger.Error("Failed to delete session",
 			zap.Error(err),
 			zap.String("key", key))
 	}
-	session.Close()
+
+	if session != nil {
+		session.Close()
+	}
 }
 
 // GetActiveUsers scans Redis for all session keys and extracts the user IDs.

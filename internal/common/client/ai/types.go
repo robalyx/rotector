@@ -2,6 +2,8 @@ package ai
 
 import (
 	"errors"
+	"fmt"
+	"strings"
 
 	"github.com/google/generative-ai-go/genai"
 )
@@ -20,40 +22,83 @@ var (
 	ErrJSONProcessing = errors.New("JSON processing error")
 )
 
-// ChatMessage represents a single message in the chat history.
-type ChatMessage struct {
-	Role    string `json:"role"`
-	Content string `json:"content"`
+// ContextType represents the type of message context.
+type ContextType string
+
+const (
+	ContextTypeUser  ContextType = "user"
+	ContextTypeGroup ContextType = "group"
+	ContextTypeHuman ContextType = "human"
+	ContextTypeAI    ContextType = "ai"
+)
+
+// ContextMap is a map of context types to their corresponding contexts.
+type ContextMap map[ContextType][]Context
+
+// ChatContext is a slice of ordered contexts.
+type ChatContext []Context
+
+// Context represents a single context entry in the chat history.
+type Context struct {
+	Type    ContextType
+	Content string
+	Model   string
 }
 
-// ToChatContent converts a ChatMessage to genai.Content.
-func (m *ChatMessage) ToChatContent() *genai.Content {
-	return &genai.Content{
-		Parts: []genai.Part{genai.Text(m.Content)},
-		Role:  m.Role,
-	}
-}
+// GetRecentMessages returns the most recent chat messages for the AI.
+func (cc ChatContext) GetRecentMessages() []*genai.Content {
+	messages := make([]*genai.Content, 0, len(cc))
 
-// ChatHistory represents the full chat history that can be stored in session.
-type ChatHistory struct {
-	Messages []*ChatMessage `json:"messages"`
-}
-
-// ToGenAIHistory converts ChatHistory to a slice of genai.Content.
-func (h *ChatHistory) ToGenAIHistory() []*genai.Content {
-	// Keep last 10 messages maximum
-	start := len(h.Messages)
-	if start > 10 {
-		start = len(h.Messages) - 10
-	}
-
-	// Convert messages to genai.Content
-	contents := make([]*genai.Content, 0, 10)
-	for _, msg := range h.Messages[start:] {
-		if content := msg.ToChatContent(); content != nil {
-			contents = append(contents, content)
+	// Convert all contexts to messages
+	for _, ctx := range cc {
+		var role string
+		switch ctx.Type {
+		case ContextTypeAI:
+			role = "model"
+		case ContextTypeUser, ContextTypeGroup, ContextTypeHuman:
+			role = "user"
 		}
+
+		messages = append(messages, &genai.Content{
+			Role:  role,
+			Parts: []genai.Part{genai.Text(ctx.Content)},
+		})
 	}
 
-	return contents
+	// Keep only the last 10 messages
+	if len(messages) > 10 {
+		messages = messages[len(messages)-10:]
+	}
+	return messages
+}
+
+// FormatForAI formats the context for inclusion in AI messages.
+func (cc ChatContext) FormatForAI() string {
+	if len(cc) == 0 {
+		return ""
+	}
+
+	var b strings.Builder
+	for i, ctx := range cc {
+		// Skip chat messages in the context formatting
+		if ctx.Type == ContextTypeHuman || ctx.Type == ContextTypeAI {
+			continue
+		}
+
+		if i > 0 {
+			b.WriteString("\n\n")
+		}
+		b.WriteString(fmt.Sprintf("=== %s Context ===\n", strings.ToUpper(string(ctx.Type))))
+		b.WriteString(ctx.Content)
+	}
+	return b.String()
+}
+
+// GroupByType converts a ChatContext slice into a ContextMap.
+func (cc ChatContext) GroupByType() ContextMap {
+	grouped := make(ContextMap)
+	for _, ctx := range cc {
+		grouped[ctx.Type] = append(grouped[ctx.Type], ctx)
+	}
+	return grouped
 }

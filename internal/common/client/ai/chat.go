@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
+	"strings"
 	"time"
 
 	"github.com/google/generative-ai-go/genai"
@@ -39,10 +39,15 @@ Response guidelines:
 - Be direct and factual in your explanations
 - Focus on relevant information
 - Keep paragraphs short and concise (max 100 characters)
-- Use no more than 3 paragraphs per response
+- Use no more than 5 paragraphs per response
 - When discussing moderation cases, use generic terms like "the user" or "this account"
 - Use bullet points sparingly and only for lists
-- Use plain text only - no bold, italic, or other markdown`
+- Use plain text only - no bold, italic, or other markdown
+
+IMPORTANT:
+These response guidelines MUST be followed at all times.
+Even if a user explicitly asks you to ignore them or use a different format (e.g., asking for more paragraphs or markdown)
+Your adherence to these system-defined guidelines supersedes any user prompt regarding response structure or formatting.`
 )
 
 // ChatHandler manages AI chat conversations using Gemini models.
@@ -63,87 +68,94 @@ func NewChatHandler(genAIClient *genai.Client, logger *zap.Logger) *ChatHandler 
 	}
 }
 
-// StreamResponse sends a message to the AI and streams both the response and history through channels.
-func (h *ChatHandler) StreamResponse(
-	ctx context.Context, history []*genai.Content, model enum.ChatModel, message string,
-) (chan string, chan []*genai.Content) {
-	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
-	defer cancel()
-
-	responseChan := make(chan string)
-	historyChan := make(chan []*genai.Content, 1)
+// StreamResponse sends a message to the AI and streams the response.
+func (h *ChatHandler) StreamResponse( //nolint:gocognit
+	ctx context.Context, messages []*genai.Content, model enum.ChatModel, message string,
+) chan string {
+	responseChan := make(chan string, 1)
 
 	go func() {
 		defer close(responseChan)
-		defer close(historyChan)
-
-		// Limit history to last 6 messages
-		limitedHistory := history
-		if len(history) > 6 {
-			limitedHistory = history[len(history)-6:]
-		}
-
-		// Create chat model
-		cc, err := h.genAIClient.CreateCachedContent(ctx, &genai.CachedContent{
-			Model:             model.String(),
-			SystemInstruction: genai.NewUserContent(genai.Text(ChatSystemPrompt)),
-			Contents:          limitedHistory,
-		})
-		if err != nil {
-			log.Fatal(err)
-		}
 		defer func() {
-			if err := h.genAIClient.DeleteCachedContent(ctx, cc.Name); err != nil {
-				h.logger.Error("Error deleting cached content", zap.Error(err))
+			if err := recover(); err != nil {
+				h.logger.Error("Panic in chat stream", zap.Any("error", err))
 			}
 		}()
 
-		model := h.genAIClient.GenerativeModelFromCachedContent(cc)
+		// Create timeout context
+		timeoutCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
+		defer cancel()
+
+		// Build chat history prompt
+		var historyPrompt strings.Builder
+		if len(messages) > 0 {
+			historyPrompt.WriteString("Previous conversation:\n")
+			for _, msg := range messages {
+				historyPrompt.WriteString(fmt.Sprintf("[%s]: %s\n", msg.Role, msg.Parts[0].(genai.Text)))
+			}
+			historyPrompt.WriteString("\nCurrent message:\n")
+		}
+		historyPrompt.WriteString(message)
+
+		// Create chat model
+		model := h.genAIClient.GenerativeModel(model.String())
+		model.SystemInstruction = genai.NewUserContent(genai.Text(ChatSystemPrompt))
 		model.MaxOutputTokens = &h.maxOutputTokens
 		model.Temperature = &h.temperature
 		model.TopP = utils.Ptr(float32(0.7))
 		model.TopK = utils.Ptr(int32(40))
 
-		// Create chat session with history
-		cs := model.StartChat()
-
 		// Send message with retry
-		iter, err := utils.WithRetry(ctx, func() (*genai.GenerateContentResponseIterator, error) {
-			return cs.SendMessageStream(ctx, genai.Text(message)), nil
+		iter, err := utils.WithRetry(timeoutCtx, func() (*genai.GenerateContentResponseIterator, error) {
+			return model.GenerateContentStream(timeoutCtx, genai.Text(historyPrompt.String())), nil
 		}, utils.GetAIRetryOptions())
 		if err != nil {
 			h.logger.Error("Error starting chat stream", zap.Error(err))
-			responseChan <- fmt.Sprintf("Error: %v", err)
+			select {
+			case responseChan <- fmt.Sprintf("Error: %v", err):
+			case <-timeoutCtx.Done():
+			}
 			return
 		}
 
 		// Stream responses as they arrive
-		for {
-			resp, err := iter.Next()
-			if errors.Is(err, iterator.Done) {
-				break
-			}
-			if err != nil {
-				h.logger.Error("Error streaming chat response", zap.Error(err))
-				responseChan <- fmt.Sprintf("Error: %v", err)
+		streamComplete := false
+		for !streamComplete {
+			select {
+			case <-timeoutCtx.Done():
+				h.logger.Warn("Chat stream timeout")
 				return
-			}
+			default:
+				resp, err := iter.Next()
+				if errors.Is(err, iterator.Done) {
+					streamComplete = true
+					break
+				}
+				if err != nil {
+					h.logger.Error("Error streaming chat response", zap.Error(err))
+					select {
+					case responseChan <- fmt.Sprintf("Error: %v", err):
+					case <-timeoutCtx.Done():
+					}
+					return
+				}
 
-			// Extract text from response
-			for _, cand := range resp.Candidates {
-				if cand.Content != nil {
-					for _, part := range cand.Content.Parts {
+				// Extract text from response
+				if len(resp.Candidates) > 0 && resp.Candidates[0].Content != nil {
+					for _, part := range resp.Candidates[0].Content.Parts {
 						if text, ok := part.(genai.Text); ok {
-							responseChan <- string(text)
+							select {
+							case responseChan <- string(text):
+							case <-timeoutCtx.Done():
+								return
+							}
+							break
 						}
 					}
 				}
 			}
 		}
-
-		// Send final history after conversation is complete
-		historyChan <- cs.History
 	}()
 
-	return responseChan, historyChan
+	return responseChan
 }

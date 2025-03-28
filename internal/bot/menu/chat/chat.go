@@ -1,11 +1,12 @@
 package chat
 
 import (
+	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/disgoorg/disgo/discord"
-	"github.com/google/generative-ai-go/genai"
 	builder "github.com/robalyx/rotector/internal/bot/builder/chat"
 	"github.com/robalyx/rotector/internal/bot/constants"
 	"github.com/robalyx/rotector/internal/bot/core/interaction"
@@ -14,6 +15,8 @@ import (
 	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
 	"go.uber.org/zap"
 )
+
+var ErrResponseTimedOut = errors.New("response timed out")
 
 // Menu handles the display and interaction logic for AI chat.
 type Menu struct {
@@ -29,6 +32,7 @@ func NewMenu(layout *Layout) *Menu {
 		Message: func(s *session.Session) *discord.MessageUpdateBuilder {
 			return builder.NewBuilder(s).Build()
 		},
+		ShowHandlerFunc:   m.Show,
 		SelectHandlerFunc: m.handleSelectMenu,
 		ButtonHandlerFunc: m.handleButton,
 		ModalHandlerFunc:  m.handleModal,
@@ -36,14 +40,28 @@ func NewMenu(layout *Layout) *Menu {
 	return m
 }
 
+// Show prepares and displays the chat interface.
+func (m *Menu) Show(_ *interaction.Context, s *session.Session) {
+	// Check if credits should be reset
+	now := time.Now()
+	firstMessageTime := session.UserChatMessageUsageFirstMessageTime.Get(s)
+	if !firstMessageTime.IsZero() && now.Sub(firstMessageTime) > constants.ChatMessageResetLimit {
+		session.UserChatMessageUsageFirstMessageTime.Set(s, time.Time{})
+		session.UserChatMessageUsageMessageCount.Set(s, 0)
+	}
+}
+
 // handleButton processes button interactions.
 func (m *Menu) handleButton(ctx *interaction.Context, s *session.Session, customID string) {
 	action := session.ViewerAction(customID)
 	switch action {
 	case session.ViewerFirstPage, session.ViewerPrevPage, session.ViewerNextPage, session.ViewerLastPage:
-		history := session.ChatHistory.Get(s)
+		chatContext := session.AIChatContext.Get(s)
+		groupedContext := chatContext.GroupByType()
 
-		maxPage := (len(history.Messages)/2 - 1) / constants.ChatMessagesPerPage
+		// Calculate total pairs from human messages since they initiate each pair
+		totalPairs := len(groupedContext[ai.ContextTypeHuman])
+		maxPage := (totalPairs - 1) / constants.ChatMessagesPerPage
 		page := action.ParsePageAction(s, maxPage)
 
 		session.PaginationPage.Set(s, page)
@@ -57,13 +75,40 @@ func (m *Menu) handleButton(ctx *interaction.Context, s *session.Session, custom
 	case constants.BackButtonCustomID:
 		ctx.NavigateBack("")
 	case constants.ChatClearHistoryButtonID:
-		// Clear chat history
-		session.ChatHistory.Set(s, ai.ChatHistory{Messages: make([]*ai.ChatMessage, 0)})
+		// Clear entire chat history
+		session.AIChatContext.Set(s, make(ai.ChatContext, 0))
 		session.PaginationPage.Set(s, 0)
 		ctx.Reload("Chat history cleared.")
 	case constants.ChatClearContextButtonID:
-		session.ChatContext.Delete(s)
-		ctx.Reload("Context cleared.")
+		// Only clear review contexts that haven't been used in messages yet
+		chatContext := session.AIChatContext.Get(s)
+		groupedContext := chatContext.GroupByType()
+
+		// Get all chat messages
+		chatMessages := make([]ai.Context, 0)
+		chatMessages = append(chatMessages, groupedContext[ai.ContextTypeHuman]...)
+		chatMessages = append(chatMessages, groupedContext[ai.ContextTypeAI]...)
+
+		// Find the last chat message's position in the full context
+		lastMessageIndex := -1
+		if len(chatMessages) > 0 {
+			lastMessage := chatMessages[len(chatMessages)-1]
+			for i, ctx := range chatContext {
+				if ctx == lastMessage {
+					lastMessageIndex = i
+					break
+				}
+			}
+		}
+
+		// Create new context keeping everything up to and including the last message
+		newContext := make(ai.ChatContext, 0)
+		if lastMessageIndex >= 0 {
+			newContext = append(newContext, chatContext[:lastMessageIndex+1]...)
+		}
+
+		session.AIChatContext.Set(s, newContext)
+		ctx.Reload("Unused review contexts cleared.")
 	}
 }
 
@@ -91,7 +136,7 @@ func (m *Menu) handleSelectMenu(ctx *interaction.Context, s *session.Session, cu
 func (m *Menu) handleModal(ctx *interaction.Context, s *session.Session) {
 	switch ctx.Event().CustomID() {
 	case constants.ChatInputModalID:
-		message := ctx.Event().ModalData().Text(constants.ChatInputCustomID)
+		message := strings.TrimSpace(ctx.Event().ModalData().Text(constants.ChatInputCustomID))
 		if message == "" {
 			ctx.Cancel("Message cannot be empty")
 			return
@@ -103,64 +148,71 @@ func (m *Menu) handleModal(ctx *interaction.Context, s *session.Session) {
 			return
 		}
 
-		// Prepend context if available
-		msgContext := session.ChatContext.Get(s)
-		if msgContext != "" {
-			message = fmt.Sprintf("%s\n\n%s", msgContext, message)
-			session.ChatContext.Delete(s)
-		}
-
-		// Set streaming state
+		// Set streaming state and show initial status
 		session.PaginationIsStreaming.Set(s, true)
-
-		// Show "AI is typing..." message
 		ctx.ClearComponents("AI is typing...")
 
 		// Stream AI response
-		history := session.ChatHistory.Get(s)
-		responseChan, historyChan := m.layout.chatHandler.StreamResponse(
-			ctx.Context(),
-			history.ToGenAIHistory(),
-			session.UserChatModel.Get(s),
-			message,
-		)
+		if err := m.streamResponse(ctx, s, message); err != nil {
+			ctx.Error(fmt.Sprintf("Failed to get response: %v", err))
+			return
+		}
 
-		// Stream AI response
-		var lastUpdate time.Time
-		var aiResponse string
-		for response := range responseChan {
-			aiResponse += response
+		// Update final state
+		session.PaginationPage.Set(s, 0)
+		session.PaginationIsStreaming.Set(s, false)
+		ctx.Reload("Response completed.")
+	}
+}
 
-			// Update message at most once per second to avoid rate limits
-			if time.Since(lastUpdate) > 1*time.Second {
+// streamResponse handles the AI response streaming with buffered updates.
+func (m *Menu) streamResponse(ctx *interaction.Context, s *session.Session, message string) error {
+	chatContext := session.AIChatContext.Get(s)
+	currentModel := session.UserChatModel.Get(s)
+
+	// Add user message to context
+	chatContext = append(chatContext, ai.Context{
+		Type:    ai.ContextTypeHuman,
+		Content: message,
+	})
+
+	// Stream response
+	responseChan := m.layout.chatHandler.StreamResponse(
+		ctx.Context(),
+		chatContext.GetRecentMessages(),
+		currentModel,
+		message,
+	)
+
+	// Buffer for collecting response chunks
+	var aiResponse strings.Builder
+	lastUpdate := time.Now()
+
+	// Stream and buffer the response
+	for {
+		select {
+		case response, ok := <-responseChan:
+			if !ok {
+				// Channel closed, streaming complete
+				chatContext = append(chatContext, ai.Context{
+					Type:    ai.ContextTypeAI,
+					Content: aiResponse.String(),
+					Model:   currentModel.String(),
+				})
+				session.AIChatContext.Set(s, chatContext)
+				return nil
+			}
+			aiResponse.WriteString(response)
+
+			// Update UI if enough time has passed
+			if time.Since(lastUpdate) > time.Second {
 				ctx.ClearComponents("Receiving response...")
 				lastUpdate = time.Now()
 			}
+
+		case <-ctx.Context().Done():
+			return ErrResponseTimedOut
 		}
-
-		// Get final history from channel
-		if genAIHistory := <-historyChan; genAIHistory != nil {
-			// Get existing history from session
-			existingHistory := session.ChatHistory.Get(s)
-
-			// Append the new messages to existing history
-			for _, msg := range genAIHistory {
-				existingHistory.Messages = append(existingHistory.Messages, &ai.ChatMessage{
-					Role:    msg.Role,
-					Content: string(msg.Parts[0].(genai.Text)),
-				})
-			}
-
-			// Update session with combined history
-			session.ChatHistory.Set(s, existingHistory)
-		}
-
-		// Calculate new page number to show latest messages
-		session.PaginationPage.Set(s, 0)
-		session.PaginationIsStreaming.Set(s, false)
-
-		// Show final message
-		ctx.Reload("Response completed.")
 	}
 }
 

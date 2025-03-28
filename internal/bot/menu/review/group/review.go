@@ -14,6 +14,7 @@ import (
 	"github.com/robalyx/rotector/internal/bot/core/interaction"
 	"github.com/robalyx/rotector/internal/bot/core/session"
 	"github.com/robalyx/rotector/internal/bot/menu/log"
+	"github.com/robalyx/rotector/internal/common/client/ai"
 	"github.com/robalyx/rotector/internal/common/storage/database/types"
 	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
 	"github.com/robalyx/rotector/internal/common/utils"
@@ -276,9 +277,10 @@ func (m *ReviewMenu) handleOpenAIChat(ctx *interaction.Context, s *session.Sessi
 			group.Shout.Created.Format(time.RFC3339))
 	}
 
-	// Create context message about the group
-	context := fmt.Sprintf(`<context>
-Group Information:
+	// Create group context
+	groupContext := ai.Context{
+		Type: ai.ContextTypeGroup,
+		Content: fmt.Sprintf(`Group Information:
 
 Basic Info:
 - Name: %s
@@ -298,27 +300,31 @@ Shout Information:
 %s
 
 Flagged Members (%d total, showing first %d):
-%s</context>`,
-		group.Name,
-		group.ID,
-		group.Description,
-		group.Owner.Username,
-		group.Owner.UserID,
-		groupInfo.MemberCount,
-		group.Reasons.Messages(),
-		group.Confidence,
-		group.Status.String(),
-		group.Reputation.Downvotes,
-		group.Reputation.Upvotes,
-		group.LastUpdated.Format(time.RFC3339),
-		strings.ReplaceAll(shoutInfo, "\n", " "),
-		totalMembers,
-		limit,
-		strings.Join(membersInfo, " "),
-	)
+%s`,
+			group.Name,
+			group.ID,
+			group.Description,
+			group.Owner.Username,
+			group.Owner.UserID,
+			groupInfo.MemberCount,
+			strings.Join(group.Reasons.Messages(), "; "),
+			group.Confidence,
+			group.Status.String(),
+			group.Reputation.Downvotes,
+			group.Reputation.Upvotes,
+			group.LastUpdated.Format(time.RFC3339),
+			shoutInfo,
+			totalMembers,
+			limit,
+			strings.Join(membersInfo, "\n")),
+	}
 
-	// Update session and navigate to chat
-	session.ChatContext.Set(s, context)
+	// Append to existing chat context
+	chatContext := session.AIChatContext.Get(s)
+	chatContext = append(chatContext, groupContext)
+	session.AIChatContext.Set(s, chatContext)
+
+	// Navigate to chat
 	session.PaginationPage.Set(s, 0)
 	ctx.Show(constants.ChatPageName, "")
 }

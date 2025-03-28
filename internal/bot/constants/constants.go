@@ -15,7 +15,7 @@ const (
 	RefreshButtonCustomID    = "refresh"
 	BackButtonCustomID       = "back"
 	ModalOpenSuffix          = "_exception"
-	DefaultEmbedColor        = 0x312D2B
+	DefaultEmbedColor        = 0x242429
 	ErrorEmbedColor          = 0xE74C3C
 	StreamerModeEmbedColor   = 0x3E3769
 )
@@ -268,7 +268,7 @@ const (
 	MaxChatMessagesPerDay = 50
 	ChatMessageResetLimit = 24 * time.Hour
 
-	ChatMessagesPerPage      = 2
+	ChatMessagesPerPage      = 1
 	ChatSendButtonID         = "chat_send" + ModalOpenSuffix
 	ChatInputModalID         = "chat_input_modal"
 	ChatInputCustomID        = "chat_input"

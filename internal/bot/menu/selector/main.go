@@ -79,7 +79,9 @@ func (m *Menu) handleSelectMenu(ctx *interaction.Context, s *session.Session, cu
 	pageName := session.CurrentPage.Get(selectedSession)
 
 	// Close the selected session
-	m.layout.sessionManager.CloseSession(ctx.Context(), selectedSession)
+	m.layout.sessionManager.CloseSession(
+		ctx.Context(), selectedSession, uint64(ctx.Event().User().ID), uint64(ctx.Event().Message().ID),
+	)
 
 	// Get the new message ID from the current interaction
 	newMessageID := uint64(ctx.Event().Message().ID)
