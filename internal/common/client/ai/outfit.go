@@ -3,20 +3,20 @@ package ai
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"image"
 	"strconv"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/HugoSmits86/nativewebp"
 	"github.com/bytedance/sonic"
-	"github.com/google/generative-ai-go/genai"
 	"github.com/jaxron/axonet/pkg/client"
 	"github.com/jaxron/roapi.go/pkg/api/resources/thumbnails"
 	apiTypes "github.com/jaxron/roapi.go/pkg/api/types"
+	"github.com/openai/openai-go"
 	"github.com/robalyx/rotector/internal/common/client/fetcher"
 	"github.com/robalyx/rotector/internal/common/setup"
 	"github.com/robalyx/rotector/internal/common/storage/database/types"
@@ -119,13 +119,14 @@ type OutfitAnalysis struct {
 	Confidence float64  `json:"confidence"`
 }
 
-// OutfitAnalyzer handles AI-based outfit analysis using Gemini models.
+// OutfitAnalyzer handles AI-based outfit analysis using OpenAI models.
 type OutfitAnalyzer struct {
 	httpClient       *client.Client
-	outfitModel      *genai.GenerativeModel
+	openAIClient     *openai.Client
 	thumbnailFetcher *fetcher.ThumbnailFetcher
 	analysisSem      *semaphore.Weighted
 	logger           *zap.Logger
+	model            string
 }
 
 // DownloadResult contains the result of a single outfit image download.
@@ -134,47 +135,18 @@ type DownloadResult struct {
 	name string
 }
 
+// OutfitAnalysisSchema is the JSON schema for the outfit analysis response.
+var OutfitAnalysisSchema = utils.GenerateSchema[OutfitAnalysis]()
+
 // NewOutfitAnalyzer creates an OutfitAnalyzer instance.
 func NewOutfitAnalyzer(app *setup.App, logger *zap.Logger) *OutfitAnalyzer {
-	// Create outfit analysis model
-	outfitModel := app.GenAIClient.GenerativeModel(app.Config.Common.GeminiAI.Model)
-	outfitModel.SystemInstruction = genai.NewUserContent(genai.Text(OutfitSystemPrompt))
-	outfitModel.ResponseMIMEType = ApplicationJSON
-	outfitModel.ResponseSchema = &genai.Schema{
-		Type: genai.TypeObject,
-		Properties: map[string]*genai.Schema{
-			"username": {
-				Type:        genai.TypeString,
-				Description: "Username of the account being analyzed",
-			},
-			"reason": {
-				Type:        genai.TypeString,
-				Description: "Clear explanation of violations found in outfits",
-			},
-			"evidence": {
-				Type: genai.TypeArray,
-				Items: &genai.Schema{
-					Type: genai.TypeString,
-				},
-				Description: "Names of outfits that have violations",
-			},
-			"confidence": {
-				Type:        genai.TypeNumber,
-				Description: "Confidence level based on severity of violations found",
-			},
-		},
-		Required: []string{"username", "reason", "evidence", "confidence"},
-	}
-	outfitModel.Temperature = utils.Ptr(float32(0.2))
-	outfitModel.TopP = utils.Ptr(float32(0.1))
-	outfitModel.TopK = utils.Ptr(int32(1))
-
 	return &OutfitAnalyzer{
 		httpClient:       app.RoAPI.GetClient(),
-		outfitModel:      outfitModel,
+		openAIClient:     app.OpenAIClient,
 		thumbnailFetcher: fetcher.NewThumbnailFetcher(app.RoAPI, logger),
 		analysisSem:      semaphore.NewWeighted(int64(app.Config.Worker.BatchSizes.OutfitAnalysis)),
 		logger:           logger.Named("ai_outfit"),
+		model:            app.Config.Common.OpenAI.Model,
 	}
 }
 
@@ -197,12 +169,10 @@ func (a *OutfitAnalyzer) ProcessOutfits(userInfos []*types.User, reasonsMap map[
 	userOutfits, userThumbnails := a.getOutfitThumbnails(context.Background(), flaggedInfos)
 
 	// Process each user's outfits concurrently
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-	defer cancel()
-
 	var (
-		p  = pool.New().WithContext(ctx)
-		mu sync.Mutex
+		ctx = context.Background()
+		p   = pool.New().WithContext(ctx)
+		mu  sync.Mutex
 	)
 
 	for _, userInfo := range flaggedInfos {
@@ -295,79 +265,90 @@ func (a *OutfitAnalyzer) analyzeUserOutfits(
 	}
 	defer a.analysisSem.Release(1)
 
-	// Analyze outfits with retry
-	analysis, err := utils.WithRetry(ctx, func() (*OutfitAnalysis, error) {
-		// Create separate image parts from outfits
-		var parts []genai.Part
-		outfitNames := make([]string, 0, len(outfits))
-
-		// Download and process each outfit image
-		downloads, err := a.downloadOutfitImages(ctx, info, outfits, thumbnailMap)
-		if err != nil {
-			if errors.Is(err, ErrNoOutfits) {
-				return nil, ErrNoViolations
-			}
-			return nil, fmt.Errorf("failed to download outfit images: %w", err)
-		}
-
-		// Process each downloaded image
-		for _, result := range downloads {
-			buf := new(bytes.Buffer)
-			if err := nativewebp.Encode(buf, result.img, nil); err != nil {
-				continue
-			}
-			parts = append(parts, genai.ImageData("webp", buf.Bytes()))
-			outfitNames = append(outfitNames, result.name)
-		}
-
-		// Prepare prompt with outfit information
-		prompt := fmt.Sprintf(
-			"%s\n\nAnalyze outfits for user %q.\nOutfit names: %s",
-			OutfitRequestPrompt,
-			info.Name,
-			strings.Join(outfitNames, ", "),
-		)
-
-		// Send request to Gemini with all image parts
-		modelParts := append([]genai.Part{genai.Text(prompt)}, parts...)
-		resp, err := a.outfitModel.GenerateContent(ctx, modelParts...)
-		if err != nil {
-			return nil, fmt.Errorf("gemini API error: %w", err)
-		}
-
-		// Check for empty response
-		if len(resp.Candidates) == 0 || resp.Candidates[0].Content == nil || len(resp.Candidates[0].Content.Parts) == 0 {
-			return nil, fmt.Errorf("%w: no response from Gemini", ErrModelResponse)
-		}
-
-		// Parse response from AI
-		responseText, ok := resp.Candidates[0].Content.Parts[0].(genai.Text)
-		if !ok {
-			return nil, fmt.Errorf("%w: unexpected response format from AI", ErrModelResponse)
-		}
-
-		// Parse the JSON response
-		var result OutfitAnalysis
-		if err := sonic.Unmarshal([]byte(responseText), &result); err != nil {
-			return nil, fmt.Errorf("JSON unmarshal error: %w", err)
-		}
-
-		return &result, nil
-	}, utils.GetAIRetryOptions())
+	// Download and process each outfit image
+	downloads, err := a.downloadOutfitImages(ctx, info, outfits, thumbnailMap)
 	if err != nil {
-		return err
+		if errors.Is(err, ErrNoOutfits) {
+			return ErrNoViolations
+		}
+		return fmt.Errorf("failed to download outfit images: %w", err)
+	}
+
+	// Process each downloaded image and add as user message parts
+	messages := []openai.ChatCompletionMessageParamUnion{
+		openai.SystemMessage(OutfitSystemPrompt),
+	}
+
+	outfitNames := make([]string, 0, len(downloads))
+	for _, result := range downloads {
+		// Convert image to base64
+		buf := new(bytes.Buffer)
+		if err := nativewebp.Encode(buf, result.img, nil); err != nil {
+			continue
+		}
+		base64Image := base64.StdEncoding.EncodeToString(buf.Bytes())
+
+		// Add image as a user message
+		imagePart := openai.ImageContentPart(openai.ChatCompletionContentPartImageImageURLParam{
+			URL: "data:image/webp;base64," + base64Image,
+		})
+		messages = append(messages, openai.UserMessage([]openai.ChatCompletionContentPartUnionParam{imagePart}))
+
+		// Store outfit name
+		outfitNames = append(outfitNames, result.name)
+	}
+
+	// Add final user message with outfit names
+	prompt := fmt.Sprintf(
+		"%s\n\nAnalyze outfits for user %q.\nOutfit names: %s",
+		OutfitRequestPrompt,
+		info.Name,
+		strings.Join(outfitNames, ", "),
+	)
+	messages = append(messages, openai.UserMessage(prompt))
+
+	// Generate outfit analysis
+	resp, err := a.openAIClient.Chat.Completions.New(ctx, openai.ChatCompletionNewParams{
+		Messages: messages,
+		ResponseFormat: openai.ChatCompletionNewParamsResponseFormatUnion{
+			OfJSONSchema: &openai.ResponseFormatJSONSchemaParam{
+				JSONSchema: openai.ResponseFormatJSONSchemaJSONSchemaParam{
+					Name:        "outfitAnalysis",
+					Description: openai.String("Analysis of user outfits"),
+					Schema:      OutfitAnalysisSchema,
+					Strict:      openai.Bool(true),
+				},
+			},
+		},
+		Model:       a.model,
+		Temperature: openai.Float(0.2),
+		TopP:        openai.Float(0.1),
+	})
+	if err != nil {
+		return fmt.Errorf("openai API error: %w", err)
+	}
+
+	// Check for empty response
+	if len(resp.Choices) == 0 || len(resp.Choices[0].Message.Content) == 0 {
+		return fmt.Errorf("%w: no response from model", ErrModelResponse)
+	}
+
+	// Parse response from AI
+	var result *OutfitAnalysis
+	if err := sonic.Unmarshal([]byte(resp.Choices[0].Message.Content), &result); err != nil {
+		return fmt.Errorf("JSON unmarshal error: %w", err)
 	}
 
 	// Skip results with no violations
-	if analysis.Confidence < 0.1 || analysis.Reason == "NO_VIOLATIONS" {
+	if result.Confidence < 0.1 || result.Reason == "NO_VIOLATIONS" {
 		return nil
 	}
 
 	// Validate confidence level
-	if analysis.Confidence > 1.0 {
+	if result.Confidence > 1.0 {
 		a.logger.Debug("AI flagged user with invalid confidence",
 			zap.String("username", info.Name),
-			zap.Float64("confidence", analysis.Confidence))
+			zap.Float64("confidence", result.Confidence))
 		return nil
 	}
 
@@ -377,17 +358,17 @@ func (a *OutfitAnalyzer) analyzeUserOutfits(
 		reasonsMap[info.ID] = make(types.Reasons[enum.UserReasonType])
 	}
 	reasonsMap[info.ID].Add(enum.UserReasonTypeOutfit, &types.Reason{
-		Message:    analysis.Reason,
-		Confidence: analysis.Confidence,
-		Evidence:   analysis.Evidence,
+		Message:    result.Reason,
+		Confidence: result.Confidence,
+		Evidence:   result.Evidence,
 	})
 	mu.Unlock()
 
 	a.logger.Info("AI flagged user with outfit violations",
 		zap.Uint64("userID", info.ID),
 		zap.String("username", info.Name),
-		zap.String("reason", analysis.Reason),
-		zap.Float64("confidence", analysis.Confidence))
+		zap.String("reason", result.Reason),
+		zap.Float64("confidence", result.Confidence))
 
 	return nil
 }

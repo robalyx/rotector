@@ -235,19 +235,26 @@ func (m *ReviewMenu) handleOpenAIChat(ctx *interaction.Context, s *session.Sessi
 		return
 	}
 
-	// Get flagged members details with a limit of 20
-	limit := 20
-	if len(memberIDs) > limit {
-		memberIDs = memberIDs[:limit]
-	}
+	// Get flagged members details with a limit of 15
+	limit := 15
 
-	flaggedMembers, err := m.layout.db.Model().User().GetUsersByIDs(
-		ctx.Context(),
-		memberIDs,
-		types.UserFieldBasic|types.UserFieldReasons|types.UserFieldConfidence,
-	)
-	if err != nil {
-		m.layout.logger.Error("Failed to get flagged members data", zap.Error(err))
+	var flaggedMembers map[uint64]*types.ReviewUser
+	if len(memberIDs) > 0 {
+		// Only fetch up to the limit
+		fetchIDs := memberIDs
+		if len(fetchIDs) > limit {
+			fetchIDs = fetchIDs[:limit]
+		}
+
+		var err error
+		flaggedMembers, err = m.layout.db.Model().User().GetUsersByIDs(
+			ctx.Context(),
+			fetchIDs,
+			types.UserFieldBasic|types.UserFieldReasons|types.UserFieldConfidence,
+		)
+		if err != nil {
+			m.layout.logger.Error("Failed to get flagged members data", zap.Error(err))
+		}
 	}
 
 	// Build flagged members information
@@ -262,19 +269,16 @@ func (m *ReviewMenu) handleOpenAIChat(ctx *interaction.Context, s *session.Sessi
 			member.Confidence))
 	}
 
-	// Add note if there are more members
-	totalMembers := len(memberIDs)
-	if totalMembers > limit {
-		membersInfo = append(membersInfo, fmt.Sprintf("\n... and %d more flagged members", totalMembers-limit))
-	}
-
-	// Format shout information
+	// Format shout information (if recent)
 	shoutInfo := "No shout available"
 	if group.Shout != nil {
-		shoutInfo = fmt.Sprintf("Posted by: %s\nContent: %s\nPosted at: %s",
-			group.Shout.Poster.Username,
-			group.Shout.Body,
-			group.Shout.Created.Format(time.RFC3339))
+		// Only include shout if it's less than 30 days old
+		if time.Since(group.Shout.Created) <= 30*24*time.Hour {
+			shoutInfo = fmt.Sprintf("Posted by: %s\nContent: %s\nPosted at: %s",
+				group.Shout.Poster.Username,
+				group.Shout.Body,
+				group.Shout.Created.Format(time.RFC3339))
+		}
 	}
 
 	// Create group context
@@ -296,10 +300,10 @@ Status Information:
 - Reputation: %d Reports, %d Safe Votes
 - Last Updated: %s
 
-Shout Information:
+Recent Shout:
 %s
 
-Flagged Members (%d total, showing first %d):
+Flagged Members (showing %d of %d total flagged):
 %s`,
 			group.Name,
 			group.ID,
@@ -314,15 +318,14 @@ Flagged Members (%d total, showing first %d):
 			group.Reputation.Upvotes,
 			group.LastUpdated.Format(time.RFC3339),
 			shoutInfo,
-			totalMembers,
-			limit,
+			len(flaggedMembers), len(memberIDs),
 			strings.Join(membersInfo, "\n")),
 	}
 
 	// Append to existing chat context
-	chatContext := session.AIChatContext.Get(s)
+	chatContext := session.ChatContext.Get(s)
 	chatContext = append(chatContext, groupContext)
-	session.AIChatContext.Set(s, chatContext)
+	session.ChatContext.Set(s, chatContext)
 
 	// Navigate to chat
 	session.PaginationPage.Set(s, 0)

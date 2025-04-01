@@ -99,11 +99,13 @@ username = ""
 # Redis password
 password = ""
 
-[common.gemini_ai]
+[common.openai]
 # API key for authentication
 api_key = ""
-# Model version to use
-model = "gemini-2.0-flash-001"
+# Base URL for OpenAI API
+base_url = "https://router.requesty.ai/v1"
+# Model to use
+model = "google/gemini-2.0-flash-001"
 
 [common.discord]
 # Self-bot token for server scanning

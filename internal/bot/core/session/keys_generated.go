@@ -142,8 +142,10 @@ var (
 	DiscordUserDataRedacted = NewKey[bool]("DiscordUserDataRedacted", true)
 	// DiscordUserMessageGuilds stores a map of guild IDs where the user has inappropriate messages
 	DiscordUserMessageGuilds = NewKey[map[uint64]struct{}]("DiscordUserMessageGuilds", true)
-	// AIChatContext stores structured context and message history
-	AIChatContext = NewKey[ai.ChatContext]("AIChatContext", true)
+	// ChatContext stores structured context and message history
+	ChatContext = NewKey[ai.ChatContext]("ChatContext", true)
+	// ChatStreamingMessage stores the current streaming message content
+	ChatStreamingMessage = NewKey[string]("ChatStreamingMessage", true)
 	// LogActivities stores activity logs
 	LogActivities = NewKey[[]*types.ActivityLog]("LogActivities", true)
 	// LogCursor stores the current log cursor

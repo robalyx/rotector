@@ -15,26 +15,28 @@ import (
 
 // Builder creates the visual layout for the chat interface.
 type Builder struct {
-	model          enum.ChatModel
-	chatContext    ai.ChatContext
-	groupedContext ai.ContextMap
-	firstMessage   time.Time
-	messageCount   int
-	page           int
-	isStreaming    bool
+	model            enum.ChatModel
+	chatContext      ai.ChatContext
+	groupedContext   ai.ContextMap
+	firstMessage     time.Time
+	streamingMessage string
+	messageCount     int
+	page             int
+	isStreaming      bool
 }
 
 // NewBuilder creates a new chat builder.
 func NewBuilder(s *session.Session) *Builder {
-	chatContext := session.AIChatContext.Get(s)
+	chatContext := session.ChatContext.Get(s)
 	return &Builder{
-		model:          session.UserChatModel.Get(s),
-		chatContext:    chatContext,
-		groupedContext: chatContext.GroupByType(),
-		firstMessage:   session.UserChatMessageUsageFirstMessageTime.Get(s),
-		messageCount:   session.UserChatMessageUsageMessageCount.Get(s),
-		page:           session.PaginationPage.Get(s),
-		isStreaming:    session.PaginationIsStreaming.Get(s),
+		model:            session.UserChatModel.Get(s),
+		chatContext:      chatContext,
+		groupedContext:   chatContext.GroupByType(),
+		firstMessage:     session.UserChatMessageUsageFirstMessageTime.Get(s),
+		streamingMessage: session.ChatStreamingMessage.Get(s),
+		messageCount:     session.UserChatMessageUsageMessageCount.Get(s),
+		page:             session.PaginationPage.Get(s),
+		isStreaming:      session.PaginationIsStreaming.Get(s),
 	}
 }
 
@@ -53,6 +55,12 @@ func (b *Builder) buildEmbeds() []discord.Embed {
 	// Add header embed
 	headerEmbed := b.buildHeaderEmbed(totalPages)
 	embeds := []discord.Embed{headerEmbed}
+
+	// If streaming, only show header and streaming status
+	if b.isStreaming {
+		embeds = append(embeds, b.buildStreamingEmbed())
+		return embeds
+	}
 
 	// Add chat message embeds
 	chatEmbeds := b.buildChatEmbeds()
@@ -93,6 +101,20 @@ func (b *Builder) buildHeaderEmbed(totalPages int) discord.Embed {
 	}
 
 	return builder.Build()
+}
+
+// buildStreamingEmbed creates an embed showing the current streaming status.
+func (b *Builder) buildStreamingEmbed() discord.Embed {
+	if b.streamingMessage == "" {
+		b.streamingMessage = "AI is typing..."
+	}
+
+	embed := discord.NewEmbedBuilder().
+		SetColor(constants.DefaultEmbedColor).
+		SetTitle("💬 Response in Progress").
+		SetDescription(b.streamingMessage)
+
+	return embed.Build()
 }
 
 // buildChatEmbeds creates embeds for chat messages.
@@ -285,24 +307,35 @@ func (b *Builder) getChatMessages() []ai.Context {
 
 // buildComponents creates all the interactive components.
 func (b *Builder) buildComponents() []discord.ContainerComponent {
+	// If streaming, return no components
+	if b.isStreaming {
+		return nil
+	}
+
 	messageCount := (len(b.getChatMessages())) / 2
 	totalPages := max((messageCount-1)/constants.ChatMessagesPerPage, 0)
 
 	components := []discord.ContainerComponent{
 		discord.NewActionRow(
 			discord.NewStringSelectMenu(constants.ChatModelSelectID, "Select Model",
-				discord.NewStringSelectMenuOption("Gemini 1.5 Flash 8B", enum.ChatModelGeminiFlash1_5_8B.String()).
-					WithDescription("Basic model - Limited capabilities but fastest responses").
-					WithDefault(b.model == enum.ChatModelGeminiFlash1_5_8B),
-				discord.NewStringSelectMenuOption("Gemini 1.5 Flash", enum.ChatModelGemini1_5Flash.String()).
-					WithDescription("Basic model - Limited capabilities and slower responses").
-					WithDefault(b.model == enum.ChatModelGemini1_5Flash),
-				discord.NewStringSelectMenuOption("Gemini 2.0 Flash Lite", enum.ChatModelGemini2_0FlashLite.String()).
-					WithDescription("Advanced model - Same abilities as 2.0 but with smaller knowledge base").
-					WithDefault(b.model == enum.ChatModelGemini2_0FlashLite),
+				discord.NewStringSelectMenuOption("QwQ-32B", enum.ChatModelQwQ32B.String()).
+					WithDescription("Most capable model - Best overall performance").
+					WithDefault(b.model == enum.ChatModelQwQ32B),
+				discord.NewStringSelectMenuOption("DeepSeek R1 Qwen 32B", enum.ChatModelDeepseekQwen32B.String()).
+					WithDescription("High performance model - Excellent reasoning and language abilities").
+					WithDefault(b.model == enum.ChatModelDeepseekQwen32B),
+				discord.NewStringSelectMenuOption("DeepSeek R1 Llama 70B", enum.ChatModelDeepseekR1.String()).
+					WithDescription("High performance model - Strong language understanding").
+					WithDefault(b.model == enum.ChatModelDeepseekR1),
 				discord.NewStringSelectMenuOption("Gemini 2.0 Flash", enum.ChatModelGemini2_0Flash.String()).
-					WithDescription("Advanced model - Full capabilities with larger knowledge base").
+					WithDescription("Fast model - Good balance of speed and capabilities").
 					WithDefault(b.model == enum.ChatModelGemini2_0Flash),
+				discord.NewStringSelectMenuOption("Llama 3.3 70B", enum.ChatModelLlama3_3_70B.String()).
+					WithDescription("Reliable model - Consistent performance").
+					WithDefault(b.model == enum.ChatModelLlama3_3_70B),
+				discord.NewStringSelectMenuOption("GPT-4o Mini", enum.ChatModelGPT4oMini.String()).
+					WithDescription("Mid-tier model - Basic capabilities").
+					WithDefault(b.model == enum.ChatModelGPT4oMini),
 			),
 		),
 		discord.NewActionRow(
@@ -336,35 +369,85 @@ func (b *Builder) buildComponents() []discord.ContainerComponent {
 // addPaddedMessage adds a message to the embed with proper padding fields.
 func (b *Builder) addPaddedMessage(embed *discord.EmbedBuilder, title string, content string, rightAlign bool) {
 	if rightAlign {
-		// User messages - no paragraph splitting
+		// User messages - with padding for right alignment
 		embed.AddField("\u200b", "\u200b", true)
 		embed.AddField("\u200b", "\u200b", true)
 		embed.AddField(title, fmt.Sprintf("```%s```", utils.NormalizeString(content)), true)
 		return
 	}
 
-	// AI messages - split into paragraphs and limit to 5
-	paragraphs := strings.Split(strings.TrimSpace(content), "\n\n")
-	if len(paragraphs) > 5 {
-		paragraphs = paragraphs[:5]
-		paragraphs[4] += " (...)"
+	// AI messages - handle thinking blocks and content
+	content = strings.TrimSpace(content)
+	content = strings.ReplaceAll(content, "<message>", "")
+	content = strings.ReplaceAll(content, "</message>", "")
+
+	// If there's a closing tag without an opening tag, treat everything before it as thinking
+	if idx := strings.Index(content, "</think>"); idx >= 0 && !strings.Contains(content[:idx], "<think>") {
+		content = "<think>" + content[:idx] + "</think>" + content[idx+8:]
 	}
 
-	for i, p := range paragraphs {
-		p = utils.NormalizeString(p)
-		if p == "" {
-			continue
+	var finalContent strings.Builder
+	var lastThinkingBlock bool
+	const limit = 1000
+
+	// Helper function to process and format content blocks
+	processContentBlock := func(text string) string {
+		text = strings.TrimSpace(text)
+		if text == "" {
+			return ""
+		}
+		text = strings.ReplaceAll(text, "`", "")
+		if len(text) > limit {
+			lastNewline := strings.LastIndex(text[:limit], "\n")
+			if lastNewline != -1 {
+				text = text[:lastNewline] + "\n..."
+			} else {
+				text = text[:limit] + " ..."
+			}
+		}
+		return fmt.Sprintf("```%s```", text)
+	}
+
+	for {
+		start := strings.Index(content, "<think>")
+		if start == -1 {
+			// Process remaining content
+			if formatted := processContentBlock(content); formatted != "" {
+				if lastThinkingBlock {
+					finalContent.WriteString("\n")
+				}
+				finalContent.WriteString(formatted)
+			}
+			break
 		}
 
-		// Format title for multi-paragraph messages
-		messageTitle := title
-		if i > 0 {
-			messageTitle = "↳" // continuation marker
+		// Add content before thinking block if any
+		if preContent := processContentBlock(content[:start]); preContent != "" {
+			if lastThinkingBlock {
+				finalContent.WriteString("\n")
+			}
+			finalContent.WriteString(preContent)
 		}
 
-		// Add message then padding for left alignment
-		embed.AddField(messageTitle, fmt.Sprintf("```%s```", p), true)
-		embed.AddField("\u200b", "\u200b", true)
-		embed.AddField("\u200b", "\u200b", true)
+		// Find end of thinking block
+		end := strings.Index(content[start:], "</think>")
+		if end == -1 {
+			break
+		}
+		end += start
+
+		// Add thinking indicator
+		if finalContent.Len() > 0 {
+			finalContent.WriteString("\n")
+		}
+		finalContent.WriteString("```💭 *thinking...*```")
+		lastThinkingBlock = true
+
+		// Continue with remaining content
+		content = content[end+8:]
+	}
+
+	if finalContent.Len() > 0 {
+		embed.AddField(title, finalContent.String(), false)
 	}
 }

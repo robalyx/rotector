@@ -20,7 +20,7 @@ type Layout struct {
 func New(app *setup.App) *Layout {
 	l := &Layout{
 		db:          app.DB,
-		chatHandler: ai.NewChatHandler(app.GenAIClient, app.Logger),
+		chatHandler: ai.NewChatHandler(app.OpenAIClient, app.Logger),
 		logger:      app.Logger.Named("chat_menu"),
 	}
 	l.menu = NewMenu(l)

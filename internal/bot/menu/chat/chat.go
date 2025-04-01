@@ -56,7 +56,7 @@ func (m *Menu) handleButton(ctx *interaction.Context, s *session.Session, custom
 	action := session.ViewerAction(customID)
 	switch action {
 	case session.ViewerFirstPage, session.ViewerPrevPage, session.ViewerNextPage, session.ViewerLastPage:
-		chatContext := session.AIChatContext.Get(s)
+		chatContext := session.ChatContext.Get(s)
 		groupedContext := chatContext.GroupByType()
 
 		// Calculate total pairs from human messages since they initiate each pair
@@ -76,12 +76,12 @@ func (m *Menu) handleButton(ctx *interaction.Context, s *session.Session, custom
 		ctx.NavigateBack("")
 	case constants.ChatClearHistoryButtonID:
 		// Clear entire chat history
-		session.AIChatContext.Set(s, make(ai.ChatContext, 0))
+		session.ChatContext.Set(s, make(ai.ChatContext, 0))
 		session.PaginationPage.Set(s, 0)
 		ctx.Reload("Chat history cleared.")
 	case constants.ChatClearContextButtonID:
 		// Only clear review contexts that haven't been used in messages yet
-		chatContext := session.AIChatContext.Get(s)
+		chatContext := session.ChatContext.Get(s)
 		groupedContext := chatContext.GroupByType()
 
 		// Get all chat messages
@@ -107,7 +107,7 @@ func (m *Menu) handleButton(ctx *interaction.Context, s *session.Session, custom
 			newContext = append(newContext, chatContext[:lastMessageIndex+1]...)
 		}
 
-		session.AIChatContext.Set(s, newContext)
+		session.ChatContext.Set(s, newContext)
 		ctx.Reload("Unused review contexts cleared.")
 	}
 }
@@ -150,7 +150,8 @@ func (m *Menu) handleModal(ctx *interaction.Context, s *session.Session) {
 
 		// Set streaming state and show initial status
 		session.PaginationIsStreaming.Set(s, true)
-		ctx.ClearComponents("AI is typing...")
+		session.ChatStreamingMessage.Set(s, "AI is typing...")
+		ctx.Reload("")
 
 		// Stream AI response
 		if err := m.streamResponse(ctx, s, message); err != nil {
@@ -167,25 +168,20 @@ func (m *Menu) handleModal(ctx *interaction.Context, s *session.Session) {
 
 // streamResponse handles the AI response streaming with buffered updates.
 func (m *Menu) streamResponse(ctx *interaction.Context, s *session.Session, message string) error {
-	chatContext := session.AIChatContext.Get(s)
+	chatContext := session.ChatContext.Get(s)
 	currentModel := session.UserChatModel.Get(s)
-
-	// Add user message to context
-	chatContext = append(chatContext, ai.Context{
-		Type:    ai.ContextTypeHuman,
-		Content: message,
-	})
 
 	// Stream response
 	responseChan := m.layout.chatHandler.StreamResponse(
 		ctx.Context(),
-		chatContext.GetRecentMessages(),
+		chatContext,
 		currentModel,
 		message,
 	)
 
 	// Buffer for collecting response chunks
 	var aiResponse strings.Builder
+	var streamBuffer strings.Builder
 	lastUpdate := time.Now()
 
 	// Stream and buffer the response
@@ -194,19 +190,47 @@ func (m *Menu) streamResponse(ctx *interaction.Context, s *session.Session, mess
 		case response, ok := <-responseChan:
 			if !ok {
 				// Channel closed, streaming complete
-				chatContext = append(chatContext, ai.Context{
-					Type:    ai.ContextTypeAI,
-					Content: aiResponse.String(),
-					Model:   currentModel.String(),
-				})
-				session.AIChatContext.Set(s, chatContext)
+				chatContext = append(chatContext,
+					ai.Context{
+						Type:    ai.ContextTypeHuman,
+						Content: message,
+					},
+					ai.Context{
+						Type:    ai.ContextTypeAI,
+						Content: aiResponse.String(),
+						Model:   currentModel.String(),
+					},
+				)
+				session.ChatContext.Set(s, chatContext)
+				session.ChatStreamingMessage.Set(s, "")
 				return nil
 			}
 			aiResponse.WriteString(response)
 
+			// Process and append new chunk to stream buffer
+			if response != "" {
+				streamBuffer.WriteString(response)
+
+				// If buffer exceeds max length, truncate from the start
+				content := streamBuffer.String()
+				if len(content) > 1024 {
+					// Find the first newline after truncation point to maintain message integrity
+					truncatePoint := len(content) - 1024
+					if newlineIdx := strings.Index(content[truncatePoint:], "\n"); newlineIdx != -1 {
+						truncatePoint += newlineIdx + 1
+					}
+					content = content[truncatePoint:]
+
+					// Set truncated content with indicator
+					session.ChatStreamingMessage.Set(s, "*Earlier content truncated for length*\n\n"+content)
+				} else {
+					session.ChatStreamingMessage.Set(s, content)
+				}
+			}
+
 			// Update UI if enough time has passed
 			if time.Since(lastUpdate) > time.Second {
-				ctx.ClearComponents("Receiving response...")
+				ctx.Reload("")
 				lastUpdate = time.Now()
 			}
 

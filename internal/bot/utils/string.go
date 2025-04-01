@@ -41,10 +41,11 @@ func FormatIDs(ids []uint64) string {
 	return strings.Join(mentions, ", ")
 }
 
-// NormalizeString sanitizes text by replacing newlines with spaces and removing backticks
-// to prevent Discord markdown formatting issues.
+// NormalizeString sanitizes text by replacing newlines with spaces, removing backticks
+// to prevent Discord markdown formatting issues, and cleaning up repeated spaces.
 func NormalizeString(s string) string {
-	return strings.ReplaceAll(strings.ReplaceAll(s, "\n", " "), "`", "")
+	s = strings.ReplaceAll(strings.ReplaceAll(s, "\n", " "), "`", "")
+	return strings.Join(strings.Fields(s), " ")
 }
 
 // GetTimestampedSubtext formats a message with a Discord timestamp and prefix.

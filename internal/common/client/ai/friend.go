@@ -4,10 +4,9 @@ import (
 	"context"
 	"fmt"
 	"sync"
-	"time"
 
 	"github.com/bytedance/sonic"
-	"github.com/google/generative-ai-go/genai"
+	"github.com/openai/openai-go"
 	"github.com/robalyx/rotector/internal/common/setup"
 	"github.com/robalyx/rotector/internal/common/storage/database/types"
 	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
@@ -94,79 +93,50 @@ type FriendSummary struct {
 
 // FriendAnalysis contains the result of analyzing a user's friend network.
 type FriendAnalysis struct {
-	Name     string `json:"name"`
-	Analysis string `json:"analysis"`
+	Name     string `json:"name"     jsonschema_description:"Username of the account being analyzed"`
+	Analysis string `json:"analysis" jsonschema_description:"Analysis of friend network patterns for this user"`
 }
 
 // BatchFriendAnalysis contains results for multiple users' friend networks.
 type BatchFriendAnalysis struct {
-	Results []FriendAnalysis `json:"results"`
+	Results []FriendAnalysis `json:"results" jsonschema_description:"Array of friend network analyses for each user"`
 }
 
-// FriendAnalyzer handles AI-based analysis of friend networks using Gemini models.
+// FriendAnalyzer handles AI-based analysis of friend networks using OpenAI models.
 type FriendAnalyzer struct {
-	genModel    *genai.GenerativeModel
-	minify      *minify.M
-	analysisSem *semaphore.Weighted
-	batchSize   int
-	logger      *zap.Logger
+	openAIClient *openai.Client
+	minify       *minify.M
+	analysisSem  *semaphore.Weighted
+	logger       *zap.Logger
+	model        string
+	batchSize    int
 }
+
+// FriendAnalysisSchema is the JSON schema for the friend analysis response.
+var FriendAnalysisSchema = utils.GenerateSchema[BatchFriendAnalysis]()
 
 // NewFriendAnalyzer creates a FriendAnalyzer.
 func NewFriendAnalyzer(app *setup.App, logger *zap.Logger) *FriendAnalyzer {
-	// Create friend analysis model
-	friendModel := app.GenAIClient.GenerativeModel(app.Config.Common.GeminiAI.Model)
-	friendModel.SystemInstruction = genai.NewUserContent(genai.Text(FriendSystemPrompt))
-	friendModel.ResponseMIMEType = ApplicationJSON
-	friendModel.ResponseSchema = &genai.Schema{
-		Type: genai.TypeObject,
-		Properties: map[string]*genai.Schema{
-			"results": {
-				Type: genai.TypeArray,
-				Items: &genai.Schema{
-					Type: genai.TypeObject,
-					Properties: map[string]*genai.Schema{
-						"name": {
-							Type:        genai.TypeString,
-							Description: "Username of the account being analyzed",
-						},
-						"analysis": {
-							Type:        genai.TypeString,
-							Description: "Analysis of friend network patterns for this user",
-						},
-					},
-					Required: []string{"name", "analysis"},
-				},
-				Description: "Array of friend network analyses for each user",
-			},
-		},
-		Required: []string{"results"},
-	}
-	friendModel.Temperature = utils.Ptr(float32(0.2))
-	friendModel.TopP = utils.Ptr(float32(0.4))
-	friendModel.TopK = utils.Ptr(int32(8))
-
 	// Create a minifier for JSON optimization
 	m := minify.New()
 	m.AddFunc(ApplicationJSON, json.Minify)
 
 	return &FriendAnalyzer{
-		genModel:    friendModel,
-		minify:      m,
-		analysisSem: semaphore.NewWeighted(int64(app.Config.Worker.BatchSizes.FriendAnalysis)),
-		batchSize:   app.Config.Worker.BatchSizes.FriendAnalysisBatch,
-		logger:      logger.Named("ai_friend"),
+		openAIClient: app.OpenAIClient,
+		minify:       m,
+		analysisSem:  semaphore.NewWeighted(int64(app.Config.Worker.BatchSizes.FriendAnalysis)),
+		logger:       logger.Named("ai_friend"),
+		model:        app.Config.Common.OpenAI.Model,
+		batchSize:    app.Config.Worker.BatchSizes.FriendAnalysisBatch,
 	}
 }
 
-// GenerateFriendReasons generates friend network analysis reasons for multiple users using the Gemini model.
+// GenerateFriendReasons generates friend network analysis reasons for multiple users using the OpenAI model.
 func (a *FriendAnalyzer) GenerateFriendReasons(
 	userInfos []*types.User, confirmedFriendsMap, flaggedFriendsMap map[uint64]map[uint64]*types.User,
 ) map[uint64]string {
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-	defer cancel()
-
 	var (
+		ctx     = context.Background()
 		p       = pool.New().WithContext(ctx)
 		mu      sync.Mutex
 		results = make(map[uint64]string)
@@ -291,40 +261,46 @@ func (a *FriendAnalyzer) processBatch(
 	// Configure prompt for friend analysis
 	prompt := fmt.Sprintf(FriendUserPrompt, string(batchDataJSON))
 
-	// Generate friend analysis using Gemini model with retry
-	batchAnalysis, err := utils.WithRetry(ctx, func() (*BatchFriendAnalysis, error) {
-		resp, err := a.genModel.GenerateContent(ctx, genai.Text(prompt))
-		if err != nil {
-			return nil, fmt.Errorf("gemini API error: %w", err)
-		}
-
-		if len(resp.Candidates) == 0 || resp.Candidates[0].Content == nil || len(resp.Candidates[0].Content.Parts) == 0 {
-			return nil, fmt.Errorf("%w: no response from Gemini", ErrModelResponse)
-		}
-
-		// Parse response from AI
-		responseText, ok := resp.Candidates[0].Content.Parts[0].(genai.Text)
-		if !ok {
-			return nil, fmt.Errorf("%w: unexpected response format from AI", ErrModelResponse)
-		}
-
-		// Parse the JSON response
-		var result BatchFriendAnalysis
-		if err := sonic.Unmarshal([]byte(responseText), &result); err != nil {
-			return nil, fmt.Errorf("JSON unmarshal error: %w", err)
-		}
-
-		return &result, nil
-	}, utils.GetAIRetryOptions())
+	// Generate friend analysis
+	resp, err := a.openAIClient.Chat.Completions.New(ctx, openai.ChatCompletionNewParams{
+		Messages: []openai.ChatCompletionMessageParamUnion{
+			openai.SystemMessage(FriendSystemPrompt),
+			openai.UserMessage(prompt),
+		},
+		ResponseFormat: openai.ChatCompletionNewParamsResponseFormatUnion{
+			OfJSONSchema: &openai.ResponseFormatJSONSchemaParam{
+				JSONSchema: openai.ResponseFormatJSONSchemaJSONSchemaParam{
+					Name:        "friendAnalysis",
+					Description: openai.String("Analysis of friend network patterns"),
+					Schema:      FriendAnalysisSchema,
+					Strict:      openai.Bool(true),
+				},
+			},
+		},
+		Model:       a.model,
+		Temperature: openai.Float(0.2),
+		TopP:        openai.Float(0.4),
+	})
 	if err != nil {
-		return nil, fmt.Errorf("%w: %w", ErrModelResponse, err)
+		return nil, fmt.Errorf("openai API error: %w", err)
+	}
+
+	// Check for empty response
+	if len(resp.Choices) == 0 || len(resp.Choices[0].Message.Content) == 0 {
+		return nil, fmt.Errorf("%w: no response from model", ErrModelResponse)
+	}
+
+	// Parse response from AI
+	var result *BatchFriendAnalysis
+	if err := sonic.Unmarshal([]byte(resp.Choices[0].Message.Content), &result); err != nil {
+		return nil, fmt.Errorf("JSON unmarshal error: %w", err)
 	}
 
 	// Verify we got results for all users in the batch
-	if len(batchAnalysis.Results) > 0 {
+	if len(result.Results) > 0 {
 		// Create map of usernames we got results for
-		resultUsers := make(map[string]struct{}, len(batchAnalysis.Results))
-		for _, result := range batchAnalysis.Results {
+		resultUsers := make(map[string]struct{}, len(result.Results))
+		for _, result := range result.Results {
 			resultUsers[result.Name] = struct{}{}
 		}
 
@@ -337,5 +313,5 @@ func (a *FriendAnalyzer) processBatch(
 		}
 	}
 
-	return batchAnalysis.Results, nil
+	return result.Results, nil
 }

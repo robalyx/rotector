@@ -4,8 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-
-	"github.com/google/generative-ai-go/genai"
 )
 
 const (
@@ -45,33 +43,6 @@ type Context struct {
 	Model   string
 }
 
-// GetRecentMessages returns the most recent chat messages for the AI.
-func (cc ChatContext) GetRecentMessages() []*genai.Content {
-	messages := make([]*genai.Content, 0, len(cc))
-
-	// Convert all contexts to messages
-	for _, ctx := range cc {
-		var role string
-		switch ctx.Type {
-		case ContextTypeAI:
-			role = "model"
-		case ContextTypeUser, ContextTypeGroup, ContextTypeHuman:
-			role = "user"
-		}
-
-		messages = append(messages, &genai.Content{
-			Role:  role,
-			Parts: []genai.Part{genai.Text(ctx.Content)},
-		})
-	}
-
-	// Keep only the last 10 messages
-	if len(messages) > 10 {
-		messages = messages[len(messages)-10:]
-	}
-	return messages
-}
-
 // FormatForAI formats the context for inclusion in AI messages.
 func (cc ChatContext) FormatForAI() string {
 	if len(cc) == 0 {
@@ -79,19 +50,20 @@ func (cc ChatContext) FormatForAI() string {
 	}
 
 	var b strings.Builder
-	for i, ctx := range cc {
-		// Skip chat messages in the context formatting
-		if ctx.Type == ContextTypeHuman || ctx.Type == ContextTypeAI {
-			continue
-		}
+	b.WriteString("Previous conversation:\n")
 
-		if i > 0 {
-			b.WriteString("\n\n")
+	for _, ctx := range cc {
+		switch ctx.Type {
+		case ContextTypeHuman:
+			b.WriteString(fmt.Sprintf("<previous user>%s</previous>\n", ctx.Content))
+		case ContextTypeAI:
+			b.WriteString(fmt.Sprintf("<previous assistant>%s</previous>\n", ctx.Content))
+		case ContextTypeUser, ContextTypeGroup:
+			b.WriteString(fmt.Sprintf("<context %s>\n%s\n</context>\n", strings.ToLower(string(ctx.Type)), ctx.Content))
 		}
-		b.WriteString(fmt.Sprintf("=== %s Context ===\n", strings.ToUpper(string(ctx.Type))))
-		b.WriteString(ctx.Content)
 	}
-	return b.String()
+
+	return strings.TrimSpace(b.String())
 }
 
 // GroupByType converts a ChatContext slice into a ContextMap.

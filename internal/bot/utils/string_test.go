@@ -154,3 +154,41 @@ func TestCensorStringsInText(t *testing.T) {
 		})
 	}
 }
+
+func TestNormalizeString(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{
+			name:  "simple string",
+			input: "hello world",
+			want:  "hello world",
+		},
+		{
+			name:  "string with backticks",
+			input: "hello `world`",
+			want:  "hello world",
+		},
+		{
+			name:  "string with multiple newlines",
+			input: "hello\n\n\nworld",
+			want:  "hello world",
+		},
+		{
+			name:  "string with mixed spaces and newlines",
+			input: "hello   world\n\n  test",
+			want:  "hello world test",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			got := utils.NormalizeString(tt.input)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}

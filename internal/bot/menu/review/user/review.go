@@ -691,51 +691,71 @@ func (m *ReviewMenu) handleOpenAIChat(ctx *interaction.Context, s *session.Sessi
 	flaggedFriends := session.UserFlaggedFriends.Get(s)
 	flaggedGroups := session.UserFlaggedGroups.Get(s)
 
-	// Build friends information
-	friendsInfo := make([]string, 0, len(user.Friends))
-	for _, friend := range user.Friends {
-		info := fmt.Sprintf("- %s (ID: %d)", friend.Name, friend.ID)
-		if flagged := flaggedFriends[friend.ID]; flagged != nil {
-			messages := flagged.Reasons.Messages()
-			info += fmt.Sprintf(" | Status: %s | Reasons: %s | Confidence: %.2f",
-				flagged.Status.String(),
-				strings.Join(messages, "; "),
-				flagged.Confidence)
+	limit := 20
+
+	// Get translated description
+	description := user.Description
+	var translatedDescription string
+	if description != "" {
+		translated, err := m.layout.translator.Translate(ctx.Context(), description, "auto", "en")
+		if err == nil && translated != description {
+			translatedDescription = translated
 		}
-		friendsInfo = append(friendsInfo, info)
 	}
 
-	// Build groups information
-	groupsInfo := make([]string, 0, len(user.Groups))
-	for _, group := range user.Groups {
-		info := fmt.Sprintf("- %s (ID: %d) | Role: %s",
-			group.Group.Name,
-			group.Group.ID,
-			group.Role.Name)
-		if flagged := flaggedGroups[group.Group.ID]; flagged != nil {
+	// Build flagged friends information
+	friendsInfo := make([]string, 0)
+	flaggedFriendsCount := len(flaggedFriends)
+	shownFriends := 0
+
+	for _, friend := range user.Friends {
+		if flagged := flaggedFriends[friend.ID]; flagged != nil {
+			if shownFriends >= limit {
+				break
+			}
 			messages := flagged.Reasons.Messages()
-			info += fmt.Sprintf(" | Status: %s | Reasons: %s | Confidence: %.2f",
-				flagged.Status.String(),
-				strings.Join(messages, "; "),
-				flagged.Confidence)
+			friendsInfo = append(friendsInfo, fmt.Sprintf("- %s (ID: %d) | Status: %s | Reasons: %s | Confidence: %.2f",
+				friend.Name, friend.ID, flagged.Status.String(), strings.Join(messages, "; "), flagged.Confidence))
+			shownFriends++
 		}
-		groupsInfo = append(groupsInfo, info)
+	}
+
+	// Build flagged groups information
+	groupsInfo := make([]string, 0)
+	flaggedGroupsCount := len(flaggedGroups)
+	shownGroups := 0
+
+	for _, group := range user.Groups {
+		if flagged := flaggedGroups[group.Group.ID]; flagged != nil {
+			if shownGroups >= limit {
+				break
+			}
+			messages := flagged.Reasons.Messages()
+			groupsInfo = append(groupsInfo, fmt.Sprintf("- %s (ID: %d) | Role: %s | Status: %s | Reasons: %s | Confidence: %.2f",
+				group.Group.Name, group.Group.ID, group.Role.Name, flagged.Status.String(), strings.Join(messages, "; "), flagged.Confidence))
+			shownGroups++
+		}
 	}
 
 	// Build outfits information
-	outfitsInfo := make([]string, 0, len(user.Outfits))
-	for _, outfit := range user.Outfits {
+	outfitsInfo := make([]string, 0)
+	for i, outfit := range user.Outfits {
+		if i >= limit {
+			break
+		}
 		outfitsInfo = append(outfitsInfo, fmt.Sprintf("- %s (ID: %d)", outfit.Name, outfit.ID))
 	}
 
 	// Build games information
-	gamesInfo := make([]string, 0, len(user.Games))
-	for _, game := range user.Games {
+	gamesInfo := make([]string, 0)
+	for i, game := range user.Games {
+		if i >= limit {
+			break
+		}
 		gamesInfo = append(gamesInfo, fmt.Sprintf("- %s (ID: %d) | Visits: %d",
 			game.Name, game.ID, game.PlaceVisits))
 	}
 
-	// Create user context
 	userContext := ai.Context{
 		Type: ai.ContextTypeUser,
 		Content: fmt.Sprintf(`User Information:
@@ -743,7 +763,7 @@ func (m *ReviewMenu) handleOpenAIChat(ctx *interaction.Context, s *session.Sessi
 Basic Info:
 - Username: %s
 - Display Name: %s
-- Description: %s
+- Description: %s%s
 - Account Created: %s
 - Reasons: %s
 - Confidence: %.2f
@@ -753,20 +773,21 @@ Status Information:
 - Reputation: %d Reports, %d Safe Votes
 - Last Updated: %s
 
-Friends (%d total, %d flagged):
+Flagged Friends (showing %d of %d flagged, %d total):
 %s
 
-Groups (%d total, %d flagged):
+Flagged Groups (showing %d of %d flagged, %d total):
 %s
 
-Outfits (%d total):
+Recent Outfits (showing %d of %d):
 %s
 
-Games (%d total):
+Recent Games (showing %d of %d):
 %s`,
 			user.Name,
 			user.DisplayName,
-			user.Description,
+			description,
+			map[bool]string{true: "\n- Translated Description: " + translatedDescription, false: ""}[translatedDescription != ""],
 			user.CreatedAt.Format(time.RFC3339),
 			strings.Join(user.Reasons.Messages(), "; "),
 			user.Confidence,
@@ -774,22 +795,20 @@ Games (%d total):
 			user.Reputation.Downvotes,
 			user.Reputation.Upvotes,
 			user.LastUpdated.Format(time.RFC3339),
-			len(user.Friends),
-			len(flaggedFriends),
+			shownFriends, flaggedFriendsCount, len(user.Friends),
 			strings.Join(friendsInfo, "\n"),
-			len(user.Groups),
-			len(flaggedGroups),
+			shownGroups, flaggedGroupsCount, len(user.Groups),
 			strings.Join(groupsInfo, "\n"),
-			len(user.Outfits),
+			len(outfitsInfo), len(user.Outfits),
 			strings.Join(outfitsInfo, "\n"),
-			len(user.Games),
+			len(gamesInfo), len(user.Games),
 			strings.Join(gamesInfo, "\n")),
 	}
 
 	// Append to existing chat context
-	chatContext := session.AIChatContext.Get(s)
+	chatContext := session.ChatContext.Get(s)
 	chatContext = append(chatContext, userContext)
-	session.AIChatContext.Set(s, chatContext)
+	session.ChatContext.Set(s, chatContext)
 
 	// Navigate to chat
 	session.PaginationPage.Set(s, 0)

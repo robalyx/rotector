@@ -43,7 +43,7 @@ type CommonConfig struct {
 	Retry          Retry          `koanf:"retry"`
 	PostgreSQL     PostgreSQL     `koanf:"postgresql"`
 	Redis          Redis          `koanf:"redis"`
-	GeminiAI       GeminiAI       `koanf:"gemini_ai"`
+	OpenAI         OpenAI         `koanf:"openai"`
 	Proxy          Proxy          `koanf:"proxy"`
 	Roverse        Roverse        `koanf:"roverse"`
 	Uptrace        Uptrace        `koanf:"uptrace"`
@@ -148,11 +148,13 @@ type Redis struct {
 	Password string `koanf:"password"`
 }
 
-// GeminiAI contains GeminiAI API configuration.
-type GeminiAI struct {
-	// API key for authentication.
+// OpenAI contains OpenAI API configuration.
+type OpenAI struct {
+	// API key for authentication
 	APIKey string `koanf:"api_key"`
-	// Model version to use.
+	// Base URL for OpenAI API
+	BaseURL string `koanf:"base_url"`
+	// Model to use
 	Model string `koanf:"model"`
 }
 

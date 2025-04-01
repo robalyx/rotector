@@ -133,7 +133,8 @@ func main() {
 		{Name: "DiscordUserMessageGuilds", Type: "map[uint64]struct{}", Doc: "DiscordUserMessageGuilds stores a map of guild IDs where the user has inappropriate messages", Persist: true},
 
 		// Chat related keys
-		{Name: "AIChatContext", Type: "ai.ChatContext", Doc: "AIChatContext stores structured context and message history", Persist: true},
+		{Name: "ChatContext", Type: "ai.ChatContext", Doc: "ChatContext stores structured context and message history", Persist: true},
+		{Name: "ChatStreamingMessage", Type: "string", Doc: "ChatStreamingMessage stores the current streaming message content", Persist: true},
 
 		// Log related keys
 		{Name: "LogActivities", Type: "[]*types.ActivityLog", Doc: "LogActivities stores activity logs", Persist: true},

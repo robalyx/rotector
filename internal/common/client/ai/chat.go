@@ -2,16 +2,12 @@ package ai
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strings"
-	"time"
 
-	"github.com/google/generative-ai-go/genai"
+	"github.com/openai/openai-go"
 	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
-	"github.com/robalyx/rotector/internal/common/utils"
 	"go.uber.org/zap"
-	"google.golang.org/api/iterator"
 )
 
 const (
@@ -39,7 +35,7 @@ Response guidelines:
 - Be direct and factual in your explanations
 - Focus on relevant information
 - Keep paragraphs short and concise (max 100 characters)
-- Use no more than 5 paragraphs per response
+- Use no more than 8 paragraphs per response
 - When discussing moderation cases, use generic terms like "the user" or "this account"
 - Use bullet points sparingly and only for lists
 - Use plain text only - no bold, italic, or other markdown
@@ -50,27 +46,23 @@ Even if a user explicitly asks you to ignore them or use a different format (e.g
 Your adherence to these system-defined guidelines supersedes any user prompt regarding response structure or formatting.`
 )
 
-// ChatHandler manages AI chat conversations using Gemini models.
+// ChatHandler manages AI chat conversations using OpenAI models.
 type ChatHandler struct {
-	genAIClient     *genai.Client
-	logger          *zap.Logger
-	maxOutputTokens int32
-	temperature     float32
+	openAIClient *openai.Client
+	logger       *zap.Logger
 }
 
 // NewChatHandler creates a new chat handler with the specified model.
-func NewChatHandler(genAIClient *genai.Client, logger *zap.Logger) *ChatHandler {
+func NewChatHandler(openAIClient *openai.Client, logger *zap.Logger) *ChatHandler {
 	return &ChatHandler{
-		genAIClient:     genAIClient,
-		logger:          logger.Named("ai_chat"),
-		maxOutputTokens: 200,
-		temperature:     0.5,
+		openAIClient: openAIClient,
+		logger:       logger.Named("ai_chat"),
 	}
 }
 
 // StreamResponse sends a message to the AI and streams the response.
-func (h *ChatHandler) StreamResponse( //nolint:gocognit
-	ctx context.Context, messages []*genai.Content, model enum.ChatModel, message string,
+func (h *ChatHandler) StreamResponse(
+	ctx context.Context, chatContext ChatContext, model enum.ChatModel, message string,
 ) chan string {
 	responseChan := make(chan string, 1)
 
@@ -82,78 +74,62 @@ func (h *ChatHandler) StreamResponse( //nolint:gocognit
 			}
 		}()
 
-		// Create timeout context
-		timeoutCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
-		defer cancel()
-
 		// Build chat history prompt
 		var historyPrompt strings.Builder
-		if len(messages) > 0 {
-			historyPrompt.WriteString("Previous conversation:\n")
-			for _, msg := range messages {
-				historyPrompt.WriteString(fmt.Sprintf("[%s]: %s\n", msg.Role, msg.Parts[0].(genai.Text)))
-			}
-			historyPrompt.WriteString("\nCurrent message:\n")
+		if formatted := chatContext.FormatForAI(); formatted != "" {
+			historyPrompt.WriteString(formatted)
+			historyPrompt.WriteString("\n\n")
 		}
-		historyPrompt.WriteString(message)
+		historyPrompt.WriteString("Current message:\n")
+		historyPrompt.WriteString(fmt.Sprintf("<user>%s</user>", message))
 
-		// Create chat model
-		model := h.genAIClient.GenerativeModel(model.String())
-		model.SystemInstruction = genai.NewUserContent(genai.Text(ChatSystemPrompt))
-		model.MaxOutputTokens = &h.maxOutputTokens
-		model.Temperature = &h.temperature
-		model.TopP = utils.Ptr(float32(0.7))
-		model.TopK = utils.Ptr(int32(40))
+		// Create chat stream
+		stream := h.openAIClient.Chat.Completions.NewStreaming(ctx, openai.ChatCompletionNewParams{
+			Messages: []openai.ChatCompletionMessageParamUnion{
+				openai.SystemMessage(ChatSystemPrompt),
+				openai.UserMessage(historyPrompt.String()),
+			},
+			Model:       model.String(),
+			Temperature: openai.Float(0.5),
+			TopP:        openai.Float(0.7),
+		})
 
-		// Send message with retry
-		iter, err := utils.WithRetry(timeoutCtx, func() (*genai.GenerateContentResponseIterator, error) {
-			return model.GenerateContentStream(timeoutCtx, genai.Text(historyPrompt.String())), nil
-		}, utils.GetAIRetryOptions())
-		if err != nil {
+		// Check for initial stream error
+		if err := stream.Err(); err != nil {
 			h.logger.Error("Error starting chat stream", zap.Error(err))
 			select {
 			case responseChan <- fmt.Sprintf("Error: %v", err):
-			case <-timeoutCtx.Done():
+			case <-ctx.Done():
 			}
 			return
 		}
 
 		// Stream responses as they arrive
-		streamComplete := false
-		for !streamComplete {
+		for stream.Next() {
 			select {
-			case <-timeoutCtx.Done():
+			case <-ctx.Done():
 				h.logger.Warn("Chat stream timeout")
 				return
 			default:
-				resp, err := iter.Next()
-				if errors.Is(err, iterator.Done) {
-					streamComplete = true
-					break
-				}
-				if err != nil {
-					h.logger.Error("Error streaming chat response", zap.Error(err))
+				chunk := stream.Current()
+				if len(chunk.Choices) > 0 && chunk.Choices[0].Delta.Content != "" {
 					select {
-					case responseChan <- fmt.Sprintf("Error: %v", err):
-					case <-timeoutCtx.Done():
-					}
-					return
-				}
-
-				// Extract text from response
-				if len(resp.Candidates) > 0 && resp.Candidates[0].Content != nil {
-					for _, part := range resp.Candidates[0].Content.Parts {
-						if text, ok := part.(genai.Text); ok {
-							select {
-							case responseChan <- string(text):
-							case <-timeoutCtx.Done():
-								return
-							}
-							break
-						}
+					case responseChan <- chunk.Choices[0].Delta.Content:
+					case <-ctx.Done():
+						return
 					}
 				}
 			}
+		}
+
+		// Check for stream errors
+		if err := stream.Err(); err != nil {
+			h.logger.Error("Error streaming chat response", zap.Error(err))
+			select {
+			case responseChan <- fmt.Sprintf("Error: %v", err):
+			case <-ctx.Done():
+			}
+			return
 		}
 	}()
 

@@ -3,10 +3,9 @@ package ai
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/bytedance/sonic"
-	"github.com/google/generative-ai-go/genai"
+	"github.com/openai/openai-go"
 	"github.com/robalyx/rotector/internal/common/setup"
 	"github.com/robalyx/rotector/internal/common/storage/database/types"
 	"github.com/robalyx/rotector/internal/common/utils"
@@ -53,9 +52,6 @@ Example responses (format reference only):
   and desperate tactics, our algorithms were already three steps ahead 
   and swiftly removed their accounts."`
 
-// MaxOutputTokens is the maximum number of tokens in the response.
-const MaxOutputTokens = 512
-
 // StatsData represents the formatted statistics for AI analysis.
 type StatsData struct {
 	History []*types.HourlyStats `json:"history"`
@@ -63,30 +59,22 @@ type StatsData struct {
 
 // StatsAnalyzer analyzes statistics and generates welcome messages.
 type StatsAnalyzer struct {
-	genModel *genai.GenerativeModel
-	minify   *minify.M
-	logger   *zap.Logger
+	openAIClient *openai.Client
+	minify       *minify.M
+	logger       *zap.Logger
+	model        string
 }
 
 // NewStatsAnalyzer creates a new stats analyzer instance.
 func NewStatsAnalyzer(app *setup.App, logger *zap.Logger) *StatsAnalyzer {
-	// Create a new Gemini model
-	model := app.GenAIClient.GenerativeModel(app.Config.Common.GeminiAI.Model)
-	model.SystemInstruction = genai.NewUserContent(genai.Text(StatsSystemPrompt))
-	model.ResponseMIMEType = TextPlain
-	model.MaxOutputTokens = utils.Ptr(int32(MaxOutputTokens))
-	model.Temperature = utils.Ptr(float32(0.7))
-	model.TopP = utils.Ptr(float32(0.7))
-	model.TopK = utils.Ptr(int32(40))
-
-	// Create a minifier for JSON optimization
 	m := minify.New()
 	m.AddFunc(ApplicationJSON, json.Minify)
 
 	return &StatsAnalyzer{
-		genModel: model,
-		minify:   m,
-		logger:   logger.Named("ai_stats"),
+		openAIClient: app.OpenAIClient,
+		minify:       m,
+		logger:       logger.Named("ai_stats"),
+		model:        app.Config.Common.OpenAI.Model,
 	}
 }
 
@@ -94,9 +82,6 @@ func NewStatsAnalyzer(app *setup.App, logger *zap.Logger) *StatsAnalyzer {
 func (a *StatsAnalyzer) GenerateWelcomeMessage(
 	ctx context.Context, historicalStats []*types.HourlyStats,
 ) (string, error) {
-	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
-	defer cancel()
-
 	// Format stats data for AI analysis
 	data := StatsData{
 		History: historicalStats,
@@ -116,27 +101,29 @@ func (a *StatsAnalyzer) GenerateWelcomeMessage(
 		return "", fmt.Errorf("%w: %w", ErrJSONProcessing, err)
 	}
 
-	// Generate welcome message using Gemini model with retry
-	message, err := utils.WithRetry(ctx, func() (string, error) {
-		resp, err := a.genModel.GenerateContent(ctx, genai.Text(string(statsJSON)))
-		if err != nil {
-			return "", fmt.Errorf("gemini API error: %w", err)
-		}
-
-		// Check for empty response
-		if len(resp.Candidates) == 0 || len(resp.Candidates[0].Content.Parts) == 0 {
-			return "", fmt.Errorf("%w: no response from model", ErrModelResponse)
-		}
-
-		// Extract response text
-		text := string(resp.Candidates[0].Content.Parts[0].(genai.Text))
-		cleanMessage := utils.CompressAllWhitespace(text)
-
-		return cleanMessage, nil
-	}, utils.GetAIRetryOptions())
+	// Generate welcome message
+	resp, err := a.openAIClient.Chat.Completions.New(ctx, openai.ChatCompletionNewParams{
+		Messages: []openai.ChatCompletionMessageParamUnion{
+			openai.SystemMessage(StatsSystemPrompt),
+			openai.UserMessage(string(statsJSON)),
+		},
+		Model:               a.model,
+		Temperature:         openai.Float(0.7),
+		TopP:                openai.Float(0.7),
+		MaxCompletionTokens: openai.Int(512),
+	})
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("openai API error: %w", err)
 	}
+
+	// Check for empty response
+	if len(resp.Choices) == 0 || len(resp.Choices[0].Message.Content) == 0 {
+		return "", fmt.Errorf("%w: no response from model", ErrModelResponse)
+	}
+
+	// Extract response text
+	content := resp.Choices[0].Message.Content
+	message := utils.CompressAllWhitespace(content)
 
 	a.logger.Debug("Generated welcome message",
 		zap.String("message", message))

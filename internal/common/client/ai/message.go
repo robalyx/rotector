@@ -5,10 +5,8 @@ import (
 	"fmt"
 	"slices"
 	"sync"
-	"time"
 
 	"github.com/bytedance/sonic"
-	"github.com/google/generative-ai-go/genai"
 	"github.com/robalyx/rotector/internal/common/setup"
 	"github.com/robalyx/rotector/internal/common/utils"
 	"github.com/sourcegraph/conc/pool"
@@ -16,6 +14,7 @@ import (
 	"github.com/tdewolff/minify/v2/json"
 	"go.uber.org/zap"
 
+	"github.com/openai/openai-go"
 	"golang.org/x/sync/semaphore"
 )
 
@@ -148,86 +147,29 @@ type FlaggedMessagesResponse struct {
 
 // MessageAnalyzer processes Discord messages to detect inappropriate content.
 type MessageAnalyzer struct {
-	messageModel *genai.GenerativeModel
+	openAIClient *openai.Client
 	minify       *minify.M
 	analysisSem  *semaphore.Weighted
 	batchSize    int
 	logger       *zap.Logger
+	model        string
 }
+
+// MessageAnalysisSchema is the JSON schema for the message analysis response.
+var MessageAnalysisSchema = utils.GenerateSchema[FlaggedMessagesResponse]()
 
 // NewMessageAnalyzer creates a new message analyzer.
 func NewMessageAnalyzer(app *setup.App, logger *zap.Logger) *MessageAnalyzer {
-	// Create message analysis model
-	messageModel := app.GenAIClient.GenerativeModel(app.Config.Common.GeminiAI.Model)
-	messageModel.SystemInstruction = genai.NewUserContent(genai.Text(MessageSystemPrompt))
-	messageModel.ResponseMIMEType = ApplicationJSON
-	messageModel.ResponseSchema = &genai.Schema{
-		Type: genai.TypeObject,
-		Properties: map[string]*genai.Schema{
-			"users": {
-				Type: genai.TypeArray,
-				Items: &genai.Schema{
-					Type: genai.TypeObject,
-					Properties: map[string]*genai.Schema{
-						"userId": {
-							Type:        genai.TypeInteger,
-							Description: "Discord user ID of the flagged user",
-						},
-						"reason": {
-							Type:        genai.TypeString,
-							Description: "Overall reason for flagging this user",
-						},
-						"messages": {
-							Type: genai.TypeArray,
-							Items: &genai.Schema{
-								Type: genai.TypeObject,
-								Properties: map[string]*genai.Schema{
-									"messageId": {
-										Type:        genai.TypeString,
-										Description: "ID of the flagged message",
-									},
-									"content": {
-										Type:        genai.TypeString,
-										Description: "Content of the flagged message",
-									},
-									"reason": {
-										Type:        genai.TypeString,
-										Description: "Specific reason this message was flagged",
-									},
-									"confidence": {
-										Type:        genai.TypeNumber,
-										Description: "Confidence score for this message between 0.0 and 1.0",
-									},
-								},
-								Required: []string{"messageId", "content", "reason", "confidence"},
-							},
-						},
-						"confidence": {
-							Type:        genai.TypeNumber,
-							Description: "Overall confidence score for this user between 0.0 and 1.0",
-						},
-					},
-					Required: []string{"userId", "reason", "messages", "confidence"},
-				},
-			},
-		},
-		Required: []string{"users"},
-	}
-	messageModel.SetTemperature(0.2)
-	messageModel.SetTopP(0.95)
-	messageModel.SetTopK(40)
-	messageModel.SetMaxOutputTokens(4096)
-
-	// Create minifier for JSON
 	m := minify.New()
 	m.AddFunc("application/json", json.Minify)
 
 	return &MessageAnalyzer{
-		messageModel: messageModel,
+		openAIClient: app.OpenAIClient,
 		minify:       m,
 		analysisSem:  semaphore.NewWeighted(int64(app.Config.Worker.BatchSizes.MessageAnalysis)),
 		batchSize:    app.Config.Worker.BatchSizes.MessageAnalysisBatch,
 		logger:       logger.Named("ai_message"),
+		model:        app.Config.Common.OpenAI.Model,
 	}
 }
 
@@ -253,9 +195,6 @@ func (a *MessageAnalyzer) ProcessMessages(
 	}
 
 	// Process batches concurrently
-	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
-	defer cancel()
-
 	var (
 		p            = pool.New().WithErrors().WithContext(ctx)
 		flaggedUsers = make(map[uint64]*FlaggedMessageUser)
@@ -351,42 +290,45 @@ func (a *MessageAnalyzer) processBatch(
 	// Format the prompt using the template
 	prompt := fmt.Sprintf(MessageAnalysisPrompt, serverName, minifiedJSON)
 
-	// Call the AI with retry mechanism
-	flaggedResults, err := utils.WithRetry(ctx, func() (*FlaggedMessagesResponse, error) {
-		response, err := a.messageModel.GenerateContent(ctx, genai.Text(prompt))
-		if err != nil {
-			return nil, fmt.Errorf("AI generation failed: %w", err)
-		}
-
-		if len(response.Candidates) == 0 || len(response.Candidates[0].Content.Parts) == 0 {
-			return nil, fmt.Errorf("%w: no response from Gemini", ErrModelResponse)
-		}
-
-		// Parse response from AI
-		responseText, ok := response.Candidates[0].Content.Parts[0].(genai.Text)
-		if !ok {
-			return nil, fmt.Errorf("%w: unexpected response format from AI", ErrModelResponse)
-		}
-
-		// Parse the JSON response
-		var results FlaggedMessagesResponse
-		if err := sonic.Unmarshal([]byte(responseText), &results); err != nil {
-			a.logger.Error("Failed to parse AI response",
-				zap.String("response", string(responseText)),
-				zap.Error(err))
-			return nil, fmt.Errorf("failed to parse AI response: %w", err)
-		}
-
-		return &results, nil
-	}, utils.GetAIRetryOptions())
+	// Generate message analysis
+	resp, err := a.openAIClient.Chat.Completions.New(ctx, openai.ChatCompletionNewParams{
+		Messages: []openai.ChatCompletionMessageParamUnion{
+			openai.SystemMessage(MessageSystemPrompt),
+			openai.UserMessage(prompt),
+		},
+		ResponseFormat: openai.ChatCompletionNewParamsResponseFormatUnion{
+			OfJSONSchema: &openai.ResponseFormatJSONSchemaParam{
+				JSONSchema: openai.ResponseFormatJSONSchemaJSONSchemaParam{
+					Name:        "messageAnalysis",
+					Description: openai.String("Analysis of Discord messages"),
+					Schema:      MessageAnalysisSchema,
+					Strict:      openai.Bool(true),
+				},
+			},
+		},
+		Model:       a.model,
+		Temperature: openai.Float(0.2),
+		TopP:        openai.Float(0.95),
+	})
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("openai API error: %w", err)
+	}
+
+	// Check for empty response
+	if len(resp.Choices) == 0 || len(resp.Choices[0].Message.Content) == 0 {
+		return nil, fmt.Errorf("%w: no response from model", ErrModelResponse)
+	}
+
+	// Parse response from AI
+	var result *FlaggedMessagesResponse
+	if err := sonic.Unmarshal([]byte(resp.Choices[0].Message.Content), &result); err != nil {
+		return nil, fmt.Errorf("JSON unmarshal error: %w", err)
 	}
 
 	// Validate message IDs against user IDs
-	a.validateMessageOwnership(messages, flaggedResults)
+	a.validateMessageOwnership(messages, result)
 
-	return flaggedResults, nil
+	return result, nil
 }
 
 // validateMessageOwnership ensures flagged messages belong to the flagged users.

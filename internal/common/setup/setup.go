@@ -6,8 +6,9 @@ import (
 	"log"
 	"time"
 
-	"github.com/google/generative-ai-go/genai"
 	"github.com/jaxron/roapi.go/pkg/api"
+	"github.com/openai/openai-go"
+	"github.com/openai/openai-go/option"
 	"github.com/redis/rueidis"
 	"github.com/robalyx/rotector/internal/common/queue"
 	"github.com/robalyx/rotector/internal/common/setup/client"
@@ -19,7 +20,6 @@ import (
 	"github.com/uptrace/bun/migrate"
 	"github.com/uptrace/uptrace-go/uptrace"
 	"go.uber.org/zap"
-	"google.golang.org/api/option"
 )
 
 // ServiceType identifies which service is being initialized.
@@ -55,7 +55,7 @@ type App struct {
 	Logger       *zap.Logger         // Main application logger
 	DBLogger     *zap.Logger         // Database-specific logger
 	DB           database.Client     // Database connection pool
-	GenAIClient  *genai.Client       // Generative AI client
+	OpenAIClient *openai.Client      // OpenAI client
 	GenAIModel   string              // Generative AI model
 	RoAPI        *api.API            // RoAPI HTTP client
 	Queue        *queue.Manager      // Background job queue
@@ -101,11 +101,12 @@ func InitializeApp(ctx context.Context, serviceType ServiceType, logDir string) 
 		return nil, err
 	}
 
-	// OpenAI client is configured with API key from config
-	genAIClient, err := genai.NewClient(ctx, option.WithAPIKey(cfg.Common.GeminiAI.APIKey))
-	if err != nil {
-		logger.Fatal("Failed to create Gemini client", zap.Error(err))
-	}
+	// Initialize OpenAI client
+	openAIClient := openai.NewClient(
+		option.WithAPIKey(cfg.Common.OpenAI.APIKey),
+		option.WithBaseURL(cfg.Common.OpenAI.BaseURL),
+		option.WithRequestTimeout(30*time.Second),
+	)
 
 	// RoAPI client is configured with middleware chain
 	requestTimeout := serviceType.GetRequestTimeout(cfg)
@@ -153,8 +154,8 @@ func InitializeApp(ctx context.Context, serviceType ServiceType, logDir string) 
 		Logger:       logger,
 		DBLogger:     dbLogger.Named("database"),
 		DB:           db,
-		GenAIClient:  genAIClient,
-		GenAIModel:   cfg.Common.GeminiAI.Model,
+		OpenAIClient: &openAIClient,
+		GenAIModel:   cfg.Common.OpenAI.Model,
 		RoAPI:        roAPI,
 		Queue:        queueManager,
 		RedisManager: redisManager,
@@ -199,9 +200,6 @@ func (s *App) Cleanup(ctx context.Context) {
 	// Cleanup proxy and roverse middlewares
 	s.middlewares.Proxy.Cleanup()
 	s.middlewares.Roverse.Cleanup()
-
-	// Close Gemini AI client
-	s.GenAIClient.Close()
 
 	// Close Redis connections last as other components might need it during cleanup
 	s.RedisManager.Close()

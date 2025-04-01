@@ -5,10 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"sync"
-	"time"
 
 	"github.com/bytedance/sonic"
-	"github.com/google/generative-ai-go/genai"
+	"github.com/openai/openai-go"
 	"github.com/robalyx/rotector/internal/common/setup"
 	"github.com/robalyx/rotector/internal/common/storage/database/types"
 	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
@@ -163,74 +162,34 @@ type FlaggedUser struct {
 	HasSocials     bool     `json:"hasSocials"`
 }
 
-// UserAnalyzer handles AI-based content analysis using Gemini models.
+// UserAnalyzer handles AI-based content analysis using OpenAI models.
 type UserAnalyzer struct {
-	userModel   *genai.GenerativeModel
-	minify      *minify.M
-	translator  *translator.Translator
-	analysisSem *semaphore.Weighted
-	batchSize   int
-	logger      *zap.Logger
+	openAIClient *openai.Client
+	minify       *minify.M
+	translator   *translator.Translator
+	analysisSem  *semaphore.Weighted
+	logger       *zap.Logger
+	model        string
+	batchSize    int
 }
+
+// UserAnalysisSchema is the JSON schema for the user analysis response.
+var UserAnalysisSchema = utils.GenerateSchema[FlaggedUsers]()
 
 // NewUserAnalyzer creates an UserAnalyzer with separate models for user and friend analysis.
 func NewUserAnalyzer(app *setup.App, translator *translator.Translator, logger *zap.Logger) *UserAnalyzer {
-	// Create user analysis model
-	userModel := app.GenAIClient.GenerativeModel(app.Config.Common.GeminiAI.Model)
-	userModel.SystemInstruction = genai.NewUserContent(genai.Text(UserSystemPrompt))
-	userModel.ResponseMIMEType = ApplicationJSON
-	userModel.ResponseSchema = &genai.Schema{
-		Type: genai.TypeObject,
-		Properties: map[string]*genai.Schema{
-			"users": {
-				Type: genai.TypeArray,
-				Items: &genai.Schema{
-					Type: genai.TypeObject,
-					Properties: map[string]*genai.Schema{
-						"name": {
-							Type:        genai.TypeString,
-							Description: "Exact username of the flagged user",
-						},
-						"reason": {
-							Type:        genai.TypeString,
-							Description: "Clear explanation of why the user was flagged, must describe violations found in their profile",
-						},
-						"flaggedContent": {
-							Type: genai.TypeArray,
-							Items: &genai.Schema{
-								Type: genai.TypeString,
-							},
-							Description: "Exact content that was flagged from the user's profile, must exist in original text",
-						},
-						"confidence": {
-							Type:        genai.TypeNumber,
-							Description: `Confidence level of moderator's assessment based on severity and number of violations found`,
-						},
-						"hasSocials": {
-							Type:        genai.TypeBoolean,
-							Description: "Indicates whether the user's description contains social media handles/links",
-						},
-					},
-					Required: []string{"name", "reason", "flaggedContent", "confidence", "hasSocials"},
-				},
-				Description: "Array of users with clear violations. Leave empty if no violations found in any profiles",
-			},
-		},
-		Required: []string{"users"},
-	}
-	userModel.Temperature = utils.Ptr(float32(0.2))
-	userModel.TopP = utils.Ptr(float32(0.5))
-	userModel.TopK = utils.Ptr(int32(10))
+	// Create a minifier for JSON optimization
 	m := minify.New()
 	m.AddFunc(ApplicationJSON, json.Minify)
 
 	return &UserAnalyzer{
-		userModel:   userModel,
-		minify:      m,
-		translator:  translator,
-		analysisSem: semaphore.NewWeighted(int64(app.Config.Worker.BatchSizes.UserAnalysis)),
-		batchSize:   app.Config.Worker.BatchSizes.UserAnalysisBatch,
-		logger:      logger.Named("ai_user"),
+		openAIClient: app.OpenAIClient,
+		minify:       m,
+		translator:   translator,
+		analysisSem:  semaphore.NewWeighted(int64(app.Config.Worker.BatchSizes.UserAnalysis)),
+		logger:       logger.Named("ai_user"),
+		model:        app.Config.Common.OpenAI.Model,
+		batchSize:    app.Config.Worker.BatchSizes.UserAnalysisBatch,
 	}
 }
 
@@ -241,12 +200,10 @@ func (a *UserAnalyzer) ProcessUsers(userInfos []*types.User, reasonsMap map[uint
 	numBatches := (len(userInfos) + a.batchSize - 1) / a.batchSize
 
 	// Process batches concurrently
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-	defer cancel()
-
 	var (
-		p  = pool.New().WithContext(ctx)
-		mu sync.Mutex
+		ctx = context.Background()
+		p   = pool.New().WithContext(ctx)
+		mu  sync.Mutex
 	)
 
 	for i := range numBatches {
@@ -334,49 +291,54 @@ func (a *UserAnalyzer) processBatch(
 	// Prepare request prompt with user info
 	requestPrompt := UserRequestPrompt + string(userInfoJSON)
 
-	// Generate content and parse response using Gemini model with retry
-	flaggedResults, err := utils.WithRetry(ctx, func() (*FlaggedUsers, error) {
-		resp, err := a.userModel.GenerateContent(ctx, genai.Text(requestPrompt))
-		if err != nil {
-			return nil, fmt.Errorf("gemini API error: %w", err)
-		}
-
-		// Check for empty response
-		if len(resp.Candidates) == 0 || resp.Candidates[0].Content == nil || len(resp.Candidates[0].Content.Parts) == 0 {
-			return nil, fmt.Errorf("%w: no response from Gemini", ErrModelResponse)
-		}
-
-		// Parse response from AI
-		responseText, ok := resp.Candidates[0].Content.Parts[0].(genai.Text)
-		if !ok {
-			return nil, fmt.Errorf("%w: unexpected response format from AI", ErrModelResponse)
-		}
-
-		// Parse the JSON response
-		var result FlaggedUsers
-		if err := sonic.Unmarshal([]byte(responseText), &result); err != nil {
-			return nil, fmt.Errorf("JSON unmarshal error: %w", err)
-		}
-
-		return &result, nil
-	}, utils.GetAIRetryOptions())
+	// Generate user analysis
+	resp, err := a.openAIClient.Chat.Completions.New(ctx, openai.ChatCompletionNewParams{
+		Messages: []openai.ChatCompletionMessageParamUnion{
+			openai.SystemMessage(UserSystemPrompt),
+			openai.UserMessage(requestPrompt),
+		},
+		ResponseFormat: openai.ChatCompletionNewParamsResponseFormatUnion{
+			OfJSONSchema: &openai.ResponseFormatJSONSchemaParam{
+				JSONSchema: openai.ResponseFormatJSONSchemaJSONSchemaParam{
+					Name:        "userAnalysis",
+					Description: openai.String("Analysis of user content"),
+					Schema:      UserAnalysisSchema,
+					Strict:      openai.Bool(true),
+				},
+			},
+		},
+		Model:       a.model,
+		Temperature: openai.Float(0.2),
+		TopP:        openai.Float(0.4),
+	})
 	if err != nil {
-		return fmt.Errorf("%w: %w", ErrModelResponse, err)
+		return fmt.Errorf("openai API error: %w", err)
+	}
+
+	// Check for empty response
+	if len(resp.Choices) == 0 || len(resp.Choices[0].Message.Content) == 0 {
+		return fmt.Errorf("%w: no response from model", ErrModelResponse)
+	}
+
+	// Parse response from AI
+	var result *FlaggedUsers
+	if err := sonic.Unmarshal([]byte(resp.Choices[0].Message.Content), &result); err != nil {
+		return fmt.Errorf("JSON unmarshal error: %w", err)
 	}
 
 	// Validate AI responses
-	a.validateAndUpdateFlaggedUsers(flaggedResults, translatedInfos, originalInfos, reasonsMap, mu)
+	a.validateAndUpdateFlaggedUsers(result, translatedInfos, originalInfos, reasonsMap, mu)
 
 	return nil
 }
 
 // validateAndUpdateFlaggedUsers validates the flagged users and updates the flaggedUsers map.
 func (a *UserAnalyzer) validateAndUpdateFlaggedUsers(
-	flaggedResults *FlaggedUsers, translatedInfos, originalInfos map[string]*types.User,
+	result *FlaggedUsers, translatedInfos, originalInfos map[string]*types.User,
 	reasonsMap map[uint64]types.Reasons[enum.UserReasonType], mu *sync.Mutex,
 ) {
 	normalizer := utils.NewTextNormalizer()
-	for _, flaggedUser := range flaggedResults.Users {
+	for _, flaggedUser := range result.Users {
 		translatedInfo, exists := translatedInfos[flaggedUser.Name]
 		originalInfo, hasOriginal := originalInfos[flaggedUser.Name]
 
