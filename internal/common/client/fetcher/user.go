@@ -3,6 +3,7 @@ package fetcher
 import (
 	"context"
 	"errors"
+	"strings"
 	"sync"
 	"time"
 
@@ -18,37 +19,6 @@ import (
 // ErrUserBanned indicates that the user is banned from Roblox.
 var ErrUserBanned = errors.New("user is banned")
 
-// UserFetchResult contains the result of fetching a user's information.
-type UserFetchResult struct {
-	ID    uint64
-	Info  *types.User
-	Error error
-}
-
-// UserGroupFetchResult contains the result of fetching a user's groups.
-type UserGroupFetchResult struct {
-	Data  []*apiTypes.UserGroupRoles
-	Error error
-}
-
-// UserFriendFetchResult contains the result of fetching a user's friends.
-type UserFriendFetchResult struct {
-	Data  []*apiTypes.ExtendedFriend
-	Error error
-}
-
-// UserGamesFetchResult contains the result of fetching a user's games.
-type UserGamesFetchResult struct {
-	Data  []*apiTypes.Game
-	Error error
-}
-
-// UserOutfitsFetchResult contains the result of fetching a user's outfits.
-type UserOutfitsFetchResult struct {
-	Data  []*apiTypes.Outfit
-	Error error
-}
-
 // UserFetcher handles concurrent retrieval of user information from the Roblox API.
 type UserFetcher struct {
 	roAPI            *api.API
@@ -58,6 +28,7 @@ type UserFetcher struct {
 	friendFetcher    *FriendFetcher
 	outfitFetcher    *OutfitFetcher
 	thumbnailFetcher *ThumbnailFetcher
+	inventoryFetcher *InventoryFetcher
 }
 
 // NewUserFetcher creates a UserFetcher with the provided API client and logger.
@@ -70,6 +41,7 @@ func NewUserFetcher(app *setup.App, logger *zap.Logger) *UserFetcher {
 		friendFetcher:    NewFriendFetcher(app.RoAPI, logger),
 		outfitFetcher:    NewOutfitFetcher(app.RoAPI, logger),
 		thumbnailFetcher: NewThumbnailFetcher(app.RoAPI, logger),
+		inventoryFetcher: NewInventoryFetcher(app.RoAPI, logger),
 	}
 }
 
@@ -100,7 +72,7 @@ func (u *UserFetcher) FetchInfos(ctx context.Context, userIDs []uint64) []*types
 			}
 
 			// Fetch groups, friends, games, and outfits concurrently
-			groups, friends, games, outfits := u.fetchUserData(ctx, id)
+			groups, friends, games, outfits, inventory := u.fetchUserData(ctx, id)
 
 			// Add user to map for thumbnail fetching
 			mu.Lock()
@@ -116,10 +88,11 @@ func (u *UserFetcher) FetchInfos(ctx context.Context, userIDs []uint64) []*types
 				DisplayName:  normalizer.Normalize(userInfo.DisplayName),
 				Description:  normalizer.Normalize(userInfo.Description),
 				CreatedAt:    userInfo.Created,
-				Groups:       groups.Data,
-				Friends:      friends.Data,
-				Games:        games.Data,
-				Outfits:      outfits.Data,
+				Groups:       groups,
+				Friends:      friends,
+				Games:        games,
+				Outfits:      outfits,
+				Inventory:    inventory,
 				LastUpdated:  now,
 				LastBanCheck: now,
 			}
@@ -161,64 +134,80 @@ func (u *UserFetcher) FetchInfos(ctx context.Context, userIDs []uint64) []*types
 }
 
 // fetchUserData retrieves a user's group memberships, friend list, and games concurrently.
-func (u *UserFetcher) fetchUserData(
-	ctx context.Context, userID uint64,
-) (*UserGroupFetchResult, *UserFriendFetchResult, *UserGamesFetchResult, *UserOutfitsFetchResult) {
-	var (
-		groupResult  *UserGroupFetchResult
-		friendResult *UserFriendFetchResult
-		gameResult   *UserGamesFetchResult
-		outfitResult *UserOutfitsFetchResult
-		p            = pool.New().WithContext(ctx)
-	)
+func (u *UserFetcher) fetchUserData(ctx context.Context, userID uint64) (
+	groups []*apiTypes.UserGroupRoles,
+	friends []*apiTypes.ExtendedFriend,
+	games []*apiTypes.Game,
+	outfits []*apiTypes.Outfit,
+	inventory []*apiTypes.InventoryAsset,
+) {
+	p := pool.New().WithContext(ctx)
 
 	// Fetch user's groups
 	p.Go(func(ctx context.Context) error {
-		groups, err := u.groupFetcher.GetUserGroups(ctx, userID)
-		groupResult = &UserGroupFetchResult{
-			Data:  groups,
-			Error: err,
+		var err error
+		groups, err = u.groupFetcher.GetUserGroups(ctx, userID)
+		if err != nil {
+			u.logger.Warn("Failed to fetch user groups",
+				zap.Error(err),
+				zap.Uint64("userID", userID))
 		}
 		return nil
 	})
 
 	// Fetch user's friends
 	p.Go(func(ctx context.Context) error {
-		friends, err := u.friendFetcher.GetFriends(ctx, userID)
-		friendResult = &UserFriendFetchResult{
-			Data:  friends,
-			Error: err,
+		var err error
+		friends, err = u.friendFetcher.GetFriends(ctx, userID)
+		if err != nil {
+			u.logger.Warn("Failed to fetch user friends",
+				zap.Error(err),
+				zap.Uint64("userID", userID))
 		}
 		return nil
 	})
 
 	// Fetch user's games
 	p.Go(func(ctx context.Context) error {
-		games, err := u.gameFetcher.FetchGamesForUser(ctx, userID)
-		gameResult = &UserGamesFetchResult{
-			Data:  games,
-			Error: err,
+		var err error
+		games, err = u.gameFetcher.FetchGamesForUser(ctx, userID)
+		if err != nil {
+			u.logger.Warn("Failed to fetch user games",
+				zap.Error(err),
+				zap.Uint64("userID", userID))
 		}
 		return nil
 	})
 
 	// Fetch user's outfits
 	p.Go(func(ctx context.Context) error {
-		outfits, err := u.outfitFetcher.GetOutfits(ctx, userID)
+		outfitsResp, err := u.outfitFetcher.GetOutfits(ctx, userID)
 		if err != nil {
-			outfitResult = &UserOutfitsFetchResult{Error: err}
-			return nil //nolint:nilerr // endpoint gets ratelimited a lot so it's okay to ignore
+			u.logger.Warn("Failed to fetch user outfits",
+				zap.Error(err),
+				zap.Uint64("userID", userID))
+			return nil
 		}
 
 		// Convert outfits to slice of pointers
-		outfitSlice := make([]*apiTypes.Outfit, 0, len(outfits.Data))
-		for _, outfit := range outfits.Data {
-			outfitSlice = append(outfitSlice, &outfit)
+		outfits = make([]*apiTypes.Outfit, 0, len(outfitsResp.Data))
+		for _, outfit := range outfitsResp.Data {
+			outfits = append(outfits, &outfit)
 		}
+		return nil
+	})
 
-		outfitResult = &UserOutfitsFetchResult{
-			Data:  outfitSlice,
-			Error: err,
+	// Fetch user's inventory
+	p.Go(func(ctx context.Context) error {
+		var err error
+		inventory, err = u.inventoryFetcher.GetInventory(ctx, userID)
+		if err != nil {
+			if strings.Contains(err.Error(), "You are not authorized to view this user's inventory.") {
+				return nil
+			}
+			u.logger.Warn("Failed to fetch user inventory",
+				zap.Error(err),
+				zap.Uint64("userID", userID))
 		}
 		return nil
 	})
@@ -226,7 +215,7 @@ func (u *UserFetcher) fetchUserData(
 	// Wait for all fetches to complete
 	_ = p.Wait()
 
-	return groupResult, friendResult, gameResult, outfitResult
+	return groups, friends, games, outfits, inventory
 }
 
 // FetchBannedUsers checks which users from a batch of IDs are currently banned.

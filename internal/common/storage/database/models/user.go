@@ -54,6 +54,7 @@ func (r *UserModel) SaveUsersByStatus(
 				Set("outfits = EXCLUDED.outfits").
 				Set("friends = EXCLUDED.friends").
 				Set("games = EXCLUDED.games").
+				Set("inventory = EXCLUDED.inventory").
 				Set("confidence = EXCLUDED.confidence").
 				Set("has_socials = EXCLUDED.has_socials").
 				Set("last_scanned = EXCLUDED.last_scanned").

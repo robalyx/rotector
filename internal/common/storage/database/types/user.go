@@ -30,6 +30,7 @@ type User struct {
 	Outfits             []*types.Outfit              `bun:"type:jsonb"             json:"outfits"`
 	Friends             []*types.ExtendedFriend      `bun:"type:jsonb"             json:"friends"`
 	Games               []*types.Game                `bun:"type:jsonb"             json:"games"`
+	Inventory           []*types.InventoryAsset      `bun:"type:jsonb"             json:"inventory"`
 	Confidence          float64                      `bun:",notnull"               json:"confidence"`
 	HasSocials          bool                         `bun:",notnull,default:false" json:"hasSocials"`
 	LastScanned         time.Time                    `bun:",notnull"               json:"lastScanned"`
