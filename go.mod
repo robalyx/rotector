@@ -35,7 +35,7 @@ require (
 	github.com/uptrace/bun/driver/pgdriver v1.2.11
 	github.com/uptrace/bun/extra/bunotel v1.2.11
 	github.com/uptrace/uptrace-go v1.35.0
-	github.com/urfave/cli/v3 v3.0.0-beta1
+	github.com/urfave/cli/v3 v3.1.1
 	github.com/wcharczuk/go-chart/v2 v2.1.2
 	go.opentelemetry.io/otel v1.35.0
 	go.opentelemetry.io/otel/trace v1.35.0
