@@ -14,6 +14,7 @@ import (
 	"github.com/robalyx/rotector/internal/bot/core/interaction"
 	"github.com/robalyx/rotector/internal/bot/core/session"
 	"github.com/robalyx/rotector/internal/bot/menu/log"
+	"github.com/robalyx/rotector/internal/bot/menu/review/shared"
 	"github.com/robalyx/rotector/internal/common/client/ai"
 	"github.com/robalyx/rotector/internal/common/storage/database/types"
 	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
@@ -25,13 +26,17 @@ var ErrBreakRequired = errors.New("break required")
 
 // ReviewMenu handles the display and interaction logic for the review interface.
 type ReviewMenu struct {
+	shared.BaseReviewMenu
 	layout *Layout
 	page   *interaction.Page
 }
 
 // NewMenu creates a new review menu.
 func NewReviewMenu(layout *Layout) *ReviewMenu {
-	m := &ReviewMenu{layout: layout}
+	m := &ReviewMenu{
+		BaseReviewMenu: *shared.NewBaseReviewMenu(layout.logger, layout.captcha),
+		layout:         layout,
+	}
 	m.page = &interaction.Page{
 		Name: constants.GroupReviewPageName,
 		Message: func(s *session.Session) *discord.MessageUpdateBuilder {
@@ -118,7 +123,7 @@ func (m *ReviewMenu) Show(ctx *interaction.Context, s *session.Session) {
 
 // handleSelectMenu processes select menu interactions.
 func (m *ReviewMenu) handleSelectMenu(ctx *interaction.Context, s *session.Session, customID, option string) {
-	if m.checkCaptchaRequired(ctx, s) {
+	if m.CheckCaptchaRequired(ctx, s) {
 		return
 	}
 
@@ -192,7 +197,7 @@ func (m *ReviewMenu) handleActionSelection(ctx *interaction.Context, s *session.
 
 // handleButton processes button clicks.
 func (m *ReviewMenu) handleButton(ctx *interaction.Context, s *session.Session, customID string) {
-	if m.checkCaptchaRequired(ctx, s) {
+	if m.CheckCaptchaRequired(ctx, s) {
 		return
 	}
 
@@ -212,7 +217,7 @@ func (m *ReviewMenu) handleButton(ctx *interaction.Context, s *session.Session, 
 
 // handleModal handles modal submissions for the review menu.
 func (m *ReviewMenu) handleModal(ctx *interaction.Context, s *session.Session) {
-	if m.checkCaptchaRequired(ctx, s) {
+	if m.CheckCaptchaRequired(ctx, s) {
 		return
 	}
 
@@ -357,7 +362,7 @@ func (m *ReviewMenu) handleNavigateGroup(ctx *interaction.Context, s *session.Se
 		// Clear current group and load next one
 		session.GroupTarget.Delete(s)
 		ctx.Reload("Skipped group.")
-		m.updateCounters(s)
+		m.UpdateCounters(s)
 
 		// Log the skip action
 		group := session.GroupTarget.Get(s)
@@ -548,7 +553,7 @@ func (m *ReviewMenu) handleConfirmGroup(ctx *interaction.Context, s *session.Ses
 	// Clear current group and load next one
 	session.GroupTarget.Delete(s)
 	ctx.Reload(fmt.Sprintf("Group %s.", actionMsg))
-	m.updateCounters(s)
+	m.UpdateCounters(s)
 }
 
 // handleClearGroup removes a group from the flagged state and logs the action.
@@ -644,7 +649,7 @@ func (m *ReviewMenu) handleClearGroup(ctx *interaction.Context, s *session.Sessi
 	// Clear current group and load next one
 	session.GroupTarget.Delete(s)
 	ctx.Reload(fmt.Sprintf("Group %s.", actionMsg))
-	m.updateCounters(s)
+	m.UpdateCounters(s)
 }
 
 // handleReasonModalSubmit processes the reason message from the modal.
@@ -893,7 +898,7 @@ func (m *ReviewMenu) buildReasonModal(reasonType enum.GroupReasonType, existingR
 
 // fetchNewTarget gets a new group to review based on the current sort order.
 func (m *ReviewMenu) fetchNewTarget(ctx *interaction.Context, s *session.Session) (*types.ReviewGroup, bool, error) {
-	if m.checkBreakRequired(ctx, s) {
+	if m.CheckBreakRequired(ctx, s) {
 		return nil, false, ErrBreakRequired
 	}
 
@@ -954,57 +959,4 @@ func (m *ReviewMenu) fetchNewTarget(ctx *interaction.Context, s *session.Session
 	})
 
 	return group, isBanned, nil
-}
-
-// checkBreakRequired checks if a break is needed.
-func (m *ReviewMenu) checkBreakRequired(ctx *interaction.Context, s *session.Session) bool {
-	// Check if user needs a break
-	nextReviewTime := session.UserReviewBreakNextReviewTime.Get(s)
-	if !nextReviewTime.IsZero() && time.Now().Before(nextReviewTime) {
-		// Show timeout menu if break time hasn't passed
-		ctx.Show(constants.TimeoutPageName, "")
-		return true
-	}
-
-	// Check review count
-	sessionReviews := session.UserReviewBreakSessionReviews.Get(s)
-	sessionStartTime := session.UserReviewBreakSessionStartTime.Get(s)
-
-	// Reset count if outside window
-	if time.Since(sessionStartTime) > constants.ReviewSessionWindow {
-		sessionReviews = 0
-		sessionStartTime = time.Now()
-		session.UserReviewBreakSessionStartTime.Set(s, sessionStartTime)
-	}
-
-	// Check if break needed
-	if sessionReviews >= constants.MaxReviewsBeforeBreak {
-		nextTime := time.Now().Add(constants.MinBreakDuration)
-		session.UserReviewBreakSessionStartTime.Set(s, nextTime)
-		session.UserReviewBreakNextReviewTime.Set(s, nextTime)
-		session.UserReviewBreakSessionReviews.Set(s, 0) // Reset count
-		ctx.Show(constants.TimeoutPageName, "")
-		return true
-	}
-
-	// Increment review count
-	session.UserReviewBreakSessionReviews.Set(s, sessionReviews+1)
-
-	return false
-}
-
-// checkCaptchaRequired checks if CAPTCHA verification is needed.
-func (m *ReviewMenu) checkCaptchaRequired(ctx *interaction.Context, s *session.Session) bool {
-	if m.layout.captcha.IsRequired(s) {
-		ctx.Cancel("Please complete CAPTCHA verification to continue.")
-		return true
-	}
-	return false
-}
-
-// updateCounters updates the review counters.
-func (m *ReviewMenu) updateCounters(s *session.Session) {
-	if err := m.layout.captcha.IncrementReviewCounter(s); err != nil {
-		m.layout.logger.Error("Failed to update review counter", zap.Error(err))
-	}
 }

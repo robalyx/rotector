@@ -13,11 +13,14 @@ type Reason struct {
 	Evidence   []string `json:"evidence"`   // Any evidence (like flagged content) specific to this reason
 }
 
-// Reasons maps reason types to their corresponding reason details.
-type Reasons[T interface {
+// ReasonType represents a type that can be used as a reason identifier.
+type ReasonType interface {
 	enum.UserReasonType | enum.GroupReasonType
 	fmt.Stringer
-}] map[T]*Reason
+}
+
+// Reasons maps reason types to their corresponding reason details.
+type Reasons[T ReasonType] map[T]*Reason
 
 // Add adds or updates a reason in the reasons map.
 // If the reason type already exists, it updates the existing entry.
