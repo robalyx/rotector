@@ -9,12 +9,12 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/robalyx/rotector/internal/common/setup"
-	dbTypes "github.com/robalyx/rotector/internal/common/storage/database/types"
+	dbTypes "github.com/robalyx/rotector/internal/database/types"
 	"github.com/robalyx/rotector/internal/export/binary"
 	"github.com/robalyx/rotector/internal/export/csv"
 	"github.com/robalyx/rotector/internal/export/sqlite"
 	"github.com/robalyx/rotector/internal/export/types"
+	"github.com/robalyx/rotector/internal/setup"
 )
 
 var ErrUnsupportedFormat = errors.New("unsupported export format")

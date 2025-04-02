@@ -5,10 +5,10 @@ import (
 	"time"
 
 	apiTypes "github.com/jaxron/roapi.go/pkg/api/types"
-	"github.com/robalyx/rotector/internal/common/client/ai"
-	"github.com/robalyx/rotector/internal/common/queue"
-	"github.com/robalyx/rotector/internal/common/storage/database/types"
-	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
+	"github.com/robalyx/rotector/internal/ai"
+	"github.com/robalyx/rotector/internal/queue"
+	"github.com/robalyx/rotector/internal/database/types"
+	"github.com/robalyx/rotector/internal/database/types/enum"
 	"github.com/robalyx/rotector/internal/worker/core"
 )
 

@@ -9,9 +9,9 @@ import (
 	"time"
 
 	"github.com/robalyx/rotector/internal/bot/constants"
-	"github.com/robalyx/rotector/internal/common/storage/database"
-	"github.com/robalyx/rotector/internal/common/storage/database/types"
-	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
+	"github.com/robalyx/rotector/internal/database"
+	"github.com/robalyx/rotector/internal/database/types"
+	"github.com/robalyx/rotector/internal/database/types/enum"
 )
 
 // Validation errors.

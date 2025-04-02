@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/jaxron/roapi.go/pkg/api/resources/games"
-	"github.com/robalyx/rotector/internal/common/storage/database/types"
+	"github.com/robalyx/rotector/internal/database/types"
 	"github.com/sourcegraph/conc/pool"
 	"go.uber.org/zap"
 )

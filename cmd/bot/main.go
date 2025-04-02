@@ -8,7 +8,7 @@ import (
 	"syscall"
 
 	"github.com/robalyx/rotector/internal/bot"
-	"github.com/robalyx/rotector/internal/common/setup"
+	"github.com/robalyx/rotector/internal/setup"
 )
 
 const (

@@ -12,8 +12,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/robalyx/rotector/internal/common/setup"
 	"github.com/robalyx/rotector/internal/export"
+	"github.com/robalyx/rotector/internal/setup"
 	"github.com/urfave/cli/v3"
 )
 

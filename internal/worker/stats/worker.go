@@ -7,12 +7,12 @@ import (
 	"time"
 
 	"github.com/redis/rueidis"
-	"github.com/robalyx/rotector/internal/common/client/ai"
-	"github.com/robalyx/rotector/internal/common/progress"
-	"github.com/robalyx/rotector/internal/common/setup"
-	"github.com/robalyx/rotector/internal/common/storage/database"
-	"github.com/robalyx/rotector/internal/common/storage/database/types"
-	"github.com/robalyx/rotector/internal/common/storage/redis"
+	"github.com/robalyx/rotector/internal/ai"
+	"github.com/robalyx/rotector/internal/database"
+	"github.com/robalyx/rotector/internal/database/types"
+	"github.com/robalyx/rotector/internal/progress"
+	"github.com/robalyx/rotector/internal/redis"
+	"github.com/robalyx/rotector/internal/setup"
 	"github.com/robalyx/rotector/internal/worker/core"
 	"go.uber.org/zap"
 )

@@ -4,7 +4,7 @@ package session
 import (
 	"time"
 
-	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
+	"github.com/robalyx/rotector/internal/database/types/enum"
 )
 
 var (

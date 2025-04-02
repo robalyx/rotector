@@ -9,8 +9,8 @@ import (
 
 	"github.com/dchest/captcha"
 	"github.com/robalyx/rotector/internal/bot/core/session"
-	"github.com/robalyx/rotector/internal/common/storage/database"
-	"github.com/robalyx/rotector/internal/common/storage/database/types/enum"
+	"github.com/robalyx/rotector/internal/database"
+	"github.com/robalyx/rotector/internal/database/types/enum"
 	"go.uber.org/zap"
 )
 

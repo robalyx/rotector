@@ -8,8 +8,8 @@ import (
 	stdSync "sync"
 	"time"
 
-	"github.com/robalyx/rotector/internal/common/progress"
-	"github.com/robalyx/rotector/internal/common/setup"
+	"github.com/robalyx/rotector/internal/progress"
+	"github.com/robalyx/rotector/internal/setup"
 	"github.com/robalyx/rotector/internal/worker/friend"
 	"github.com/robalyx/rotector/internal/worker/group"
 	"github.com/robalyx/rotector/internal/worker/maintenance"

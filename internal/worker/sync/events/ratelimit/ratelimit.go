@@ -4,7 +4,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/robalyx/rotector/internal/common/utils"
+	"github.com/robalyx/rotector/pkg/utils"
 	"go.uber.org/zap"
 )
 

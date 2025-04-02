@@ -139,7 +139,7 @@ linters:
         path: _test\.go
       - linters:
           - staticcheck
-        path: internal/common/storage/database/service
+        path: internal/database/service
         text: 'SA1019: .* is deprecated: Use Service\(\)\..*\(\) instead\.'
     paths:
       - third_party$

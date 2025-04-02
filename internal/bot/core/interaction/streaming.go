@@ -14,7 +14,7 @@ import (
 	"github.com/jaxron/axonet/pkg/client"
 	"github.com/robalyx/rotector/assets"
 	"github.com/robalyx/rotector/internal/bot/core/session"
-	"github.com/robalyx/rotector/internal/common/client/fetcher"
+	"github.com/robalyx/rotector/internal/roblox/fetcher"
 	"go.uber.org/zap"
 	"golang.org/x/image/webp"
 )

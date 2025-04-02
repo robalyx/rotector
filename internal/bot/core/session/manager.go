@@ -13,8 +13,8 @@ import (
 	"github.com/disgoorg/snowflake/v2"
 	"github.com/redis/rueidis"
 	"github.com/robalyx/rotector/internal/bot/constants"
-	"github.com/robalyx/rotector/internal/common/storage/database"
-	"github.com/robalyx/rotector/internal/common/storage/redis"
+	"github.com/robalyx/rotector/internal/database"
+	"github.com/robalyx/rotector/internal/redis"
 	"go.uber.org/zap"
 )
 

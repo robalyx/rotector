@@ -6,9 +6,9 @@ import (
 	"github.com/diamondburned/arikawa/v3/gateway"
 	"github.com/diamondburned/ningen/v3"
 	"github.com/jaxron/roapi.go/pkg/api"
-	"github.com/robalyx/rotector/internal/common/client/ai"
-	"github.com/robalyx/rotector/internal/common/setup"
-	"github.com/robalyx/rotector/internal/common/storage/database"
+	"github.com/robalyx/rotector/internal/ai"
+	"github.com/robalyx/rotector/internal/database"
+	"github.com/robalyx/rotector/internal/setup"
 	"github.com/robalyx/rotector/internal/worker/sync/events/ratelimit"
 	"go.uber.org/zap"
 )
