@@ -200,7 +200,7 @@ func (r *UserModel) GetFlaggedUsersCount(ctx context.Context) (int, error) {
 }
 
 // GetRecentlyProcessedUsers checks which users exist in any table and have been updated within the past 7 days.
-// Returns a map of user IDs to their current status.
+// For confirmed users, we consider them as processed regardless of when they were last updated.
 func (r *UserModel) GetRecentlyProcessedUsers(ctx context.Context, userIDs []uint64) (map[uint64]enum.UserType, error) {
 	var users []struct {
 		ID     uint64
@@ -211,7 +211,6 @@ func (r *UserModel) GetRecentlyProcessedUsers(ctx context.Context, userIDs []uin
 		Column("id").
 		ColumnExpr("? AS status", enum.UserTypeConfirmed).
 		Where("id IN (?)", bun.In(userIDs)).
-		Where("last_updated > NOW() - INTERVAL '7 days'").
 		Union(
 			r.db.NewSelect().Model((*types.FlaggedUser)(nil)).
 				Column("id").

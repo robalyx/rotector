@@ -18,10 +18,6 @@ const (
 	// to allow independent management of statistics data.
 	StatsDBIndex = 1
 
-	// QueueDBIndex reserves database 2 for job queues and task management
-	// to isolate queue operations from other operations.
-	QueueDBIndex = 2
-
 	// SessionDBIndex uses database 3 for user session storage
 	// to prevent session data from interfering with other operations.
 	SessionDBIndex = 3

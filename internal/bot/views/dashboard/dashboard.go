@@ -203,9 +203,6 @@ func (b *Builder) buildComponents() []discord.ContainerComponent {
 			discord.NewStringSelectMenuOption("Activity Log Browser", constants.ActivityBrowserButtonCustomID).
 				WithEmoji(discord.ComponentEmoji{Name: "📜"}).
 				WithDescription("Search and filter activity logs"),
-			discord.NewStringSelectMenuOption("User Queue Manager", constants.QueueManagerButtonCustomID).
-				WithEmoji(discord.ComponentEmoji{Name: "📋"}).
-				WithDescription("Manage user recheck queue priorities"),
 			discord.NewStringSelectMenuOption("Worker Status", constants.WorkerStatusButtonCustomID).
 				WithEmoji(discord.ComponentEmoji{Name: "🔧"}).
 				WithDescription("View worker status and health"),

@@ -6,7 +6,6 @@ import (
 
 	apiTypes "github.com/jaxron/roapi.go/pkg/api/types"
 	"github.com/robalyx/rotector/internal/ai"
-	"github.com/robalyx/rotector/internal/queue"
 	"github.com/robalyx/rotector/internal/database/types"
 	"github.com/robalyx/rotector/internal/database/types/enum"
 	"github.com/robalyx/rotector/internal/worker/core"
@@ -172,20 +171,6 @@ var (
 	LogFilterDateRangeStart = NewKey[time.Time]("LogFilterDateRangeStart", true)
 	// LogFilterDateRangeEnd stores end date filter
 	LogFilterDateRangeEnd = NewKey[time.Time]("LogFilterDateRangeEnd", true)
-	// QueueUser stores the queued user
-	QueueUser = NewKey[uint64]("QueueUser", true)
-	// QueueStatus stores the queue status
-	QueueStatus = NewKey[queue.Status]("QueueStatus", false)
-	// QueuePriority stores the queue priority
-	QueuePriority = NewKey[queue.Priority]("QueuePriority", false)
-	// QueuePosition stores the queue position
-	QueuePosition = NewKey[int]("QueuePosition", false)
-	// QueueHighCount stores high priority queue count
-	QueueHighCount = NewKey[int]("QueueHighCount", false)
-	// QueueNormalCount stores normal priority queue count
-	QueueNormalCount = NewKey[int]("QueueNormalCount", false)
-	// QueueLowCount stores low priority queue count
-	QueueLowCount = NewKey[int]("QueueLowCount", false)
 	// AppealList stores the current page of appeals
 	AppealList = NewKey[[]*types.FullAppeal]("AppealList", true)
 	// AppealSelected stores the currently selected appeal

@@ -60,3 +60,13 @@ max_group_members_track = 20000
 
 # Number of messages to accumulate before processing a channel batch
 channel_process_threshold = 25
+
+[worker.cloudflare]
+# Cloudflare account ID
+account_id = ""
+# D1 database ID
+database_id = ""
+# API token with D1 access
+api_token = ""
+# API endpoint for D1 queries
+api_endpoint = "https://api.cloudflare.com/client/v4"

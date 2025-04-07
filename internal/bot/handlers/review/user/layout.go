@@ -5,7 +5,6 @@ import (
 	"github.com/robalyx/rotector/internal/bot/core/captcha"
 	"github.com/robalyx/rotector/internal/bot/core/interaction"
 	"github.com/robalyx/rotector/internal/database"
-	"github.com/robalyx/rotector/internal/queue"
 	"github.com/robalyx/rotector/internal/roblox/fetcher"
 	"github.com/robalyx/rotector/internal/setup"
 	"github.com/robalyx/rotector/internal/translator"
@@ -16,14 +15,12 @@ import (
 type Layout struct {
 	db               database.Client
 	roAPI            *api.API
-	queueManager     *queue.Manager
 	translator       *translator.Translator
 	reviewMenu       *ReviewMenu
 	outfitsMenu      *OutfitsMenu
 	friendsMenu      *FriendsMenu
 	groupsMenu       *GroupsMenu
 	caesarMenu       *CaesarMenu
-	statusMenu       *StatusMenu
 	commentsMenu     *CommentsMenu
 	thumbnailFetcher *fetcher.ThumbnailFetcher
 	presenceFetcher  *fetcher.PresenceFetcher
@@ -38,7 +35,6 @@ func New(app *setup.App, interactionManager *interaction.Manager) *Layout {
 	l := &Layout{
 		db:               app.DB,
 		roAPI:            app.RoAPI,
-		queueManager:     app.Queue,
 		translator:       translator.New(app.RoAPI.GetClient()),
 		thumbnailFetcher: fetcher.NewThumbnailFetcher(app.RoAPI, app.Logger),
 		presenceFetcher:  fetcher.NewPresenceFetcher(app.RoAPI, app.Logger),
@@ -53,7 +49,6 @@ func New(app *setup.App, interactionManager *interaction.Manager) *Layout {
 	l.friendsMenu = NewFriendsMenu(l)
 	l.groupsMenu = NewGroupsMenu(l)
 	l.caesarMenu = NewCaesarMenu(l)
-	l.statusMenu = NewStatusMenu(l)
 	l.commentsMenu = NewCommentsMenu(l)
 
 	return l
@@ -67,7 +62,6 @@ func (l *Layout) Pages() []*interaction.Page {
 		l.friendsMenu.page,
 		l.groupsMenu.page,
 		l.caesarMenu.page,
-		l.statusMenu.page,
 		l.commentsMenu.page,
 	}
 }

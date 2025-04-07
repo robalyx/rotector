@@ -286,9 +286,6 @@ func (b *ReviewBuilder) buildActionOptions() []discord.StringSelectMenuOption {
 			discord.NewStringSelectMenuOption("View user logs", constants.ViewUserLogsButtonCustomID).
 				WithEmoji(discord.ComponentEmoji{Name: "📋"}).
 				WithDescription("View activity logs for this user"),
-			discord.NewStringSelectMenuOption("Recheck user", constants.RecheckButtonCustomID).
-				WithEmoji(discord.ComponentEmoji{Name: "🔄"}).
-				WithDescription("Add user to high priority queue for recheck"),
 			discord.NewStringSelectMenuOption("Change Review Mode", constants.ReviewModeOption).
 				WithEmoji(discord.ComponentEmoji{Name: "🎓"}).
 				WithDescription("Switch between training and standard modes"),

@@ -34,7 +34,6 @@ const (
 	UserFriendsPageName  = "Friends Menu"
 	UserGroupsPageName   = "Groups Menu"
 	UserOutfitsPageName  = "Outfits Menu"
-	UserStatusPageName   = "Status Menu"
 	UserCaesarPageName   = "Caesar Cipher Menu"
 	UserCommentsPageName = "User Comments"
 
@@ -55,7 +54,6 @@ const (
 	ChatPageName          = "AI Chat"
 	LeaderboardPageName   = "Leaderboard"
 	LogPageName           = "Activity Logs"
-	QueuePageName         = "Queue Manager"
 	StatusPageName        = "Status"
 	ReviewerStatsPageName = "Reviewer Stats"
 
@@ -79,7 +77,6 @@ const (
 	UserSettingsButtonCustomID      = "user_settings"
 	ActivityBrowserButtonCustomID   = "activity_browser"
 	LeaderboardMenuButtonCustomID   = "leaderboard_menu"
-	QueueManagerButtonCustomID      = "queue_manager"
 	AdminMenuButtonCustomID         = "admin_menu"
 	AppealMenuButtonCustomID        = "appeal_menu"
 	ChatAssistantButtonCustomID     = "chat_assistant"
@@ -189,9 +186,6 @@ const (
 	AddReasonConfidenceInputCustomID = "add_reason_confidence"
 	AddReasonEvidenceInputCustomID   = "add_reason_evidence"
 
-	RecheckReasonModalCustomID = "recheck_reason_modal"
-	RecheckReasonInputCustomID = "recheck_reason"
-
 	PrevReviewButtonCustomID = "prev_review"
 	NextReviewButtonCustomID = "next_review"
 	ConfirmButtonCustomID    = "confirm"
@@ -214,7 +208,6 @@ const (
 	CaesarCipherButtonCustomID    = "caesar_cipher"
 	ViewCommentsButtonCustomID    = "view_comments"
 	OpenAIChatButtonCustomID      = "open_ai_chat"
-	RecheckButtonCustomID         = "recheck" + ModalOpenSuffix
 	ViewUserLogsButtonCustomID    = "view_user_logs"
 	OpenOutfitsMenuButtonCustomID = "open_outfits_menu"
 	OpenFriendsMenuButtonCustomID = "open_friends_menu"
@@ -251,7 +244,6 @@ const (
 
 // Group Review Menu.
 const (
-	GroupRecheckButtonCustomID     = "group_recheck" + ModalOpenSuffix
 	GroupViewMembersButtonCustomID = "group_view_members"
 	GroupViewLogsButtonCustomID    = "group_view_logs"
 )
@@ -321,16 +313,6 @@ const (
 	LogsUserActivityCategoryOption  = "category_user"
 	LogsGroupActivityCategoryOption = "category_group"
 	LogsOtherActivityCategoryOption = "category_other"
-)
-
-// Queue Menu.
-const (
-	QueueHighPriorityCustomID   = "queue_high_priority" + ModalOpenSuffix
-	QueueNormalPriorityCustomID = "queue_normal_priority" + ModalOpenSuffix
-	QueueLowPriorityCustomID    = "queue_low_priority" + ModalOpenSuffix
-	AddToQueueModalCustomID     = "add_to_queue_modal"
-	UserIDInputCustomID         = "user_id_input"
-	ReasonInputCustomID         = "reason_input"
 )
 
 // Appeal Menu.

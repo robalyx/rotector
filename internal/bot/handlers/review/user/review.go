@@ -17,7 +17,6 @@ import (
 	view "github.com/robalyx/rotector/internal/bot/views/review/user"
 	"github.com/robalyx/rotector/internal/database/types"
 	"github.com/robalyx/rotector/internal/database/types/enum"
-	"github.com/robalyx/rotector/internal/queue"
 	"github.com/robalyx/rotector/pkg/utils"
 	"go.uber.org/zap"
 
@@ -205,7 +204,6 @@ func (m *ReviewMenu) handleActionSelection(ctx *interaction.Context, s *session.
 	switch option {
 	case constants.OpenAIChatButtonCustomID,
 		constants.ViewUserLogsButtonCustomID,
-		constants.RecheckButtonCustomID,
 		constants.ReviewModeOption:
 		if !isReviewer {
 			m.layout.logger.Error("Non-reviewer attempted restricted action",
@@ -237,8 +235,6 @@ func (m *ReviewMenu) handleActionSelection(ctx *interaction.Context, s *session.
 		m.handleOpenAIChat(ctx, s)
 	case constants.ViewUserLogsButtonCustomID:
 		m.handleViewUserLogs(ctx, s)
-	case constants.RecheckButtonCustomID:
-		m.handleRecheck(ctx, s)
 	case constants.ReviewModeOption:
 		session.SettingType.Set(s, constants.UserSettingPrefix)
 		session.SettingCustomID.Set(s, constants.ReviewModeOption)
@@ -277,99 +273,9 @@ func (m *ReviewMenu) handleModal(ctx *interaction.Context, s *session.Session) {
 	}
 
 	switch ctx.Event().CustomID() {
-	case constants.RecheckReasonModalCustomID:
-		m.handleRecheckModalSubmit(ctx, s)
 	case constants.AddReasonModalCustomID:
 		m.handleReasonModalSubmit(ctx, s)
 	}
-}
-
-// handleRecheck adds the user to the high priority queue for re-processing.
-// If the user is already in queue, it shows the status menu instead.
-func (m *ReviewMenu) handleRecheck(ctx *interaction.Context, s *session.Session) {
-	user := session.UserTarget.Get(s)
-
-	// Check if user is already in queue to prevent duplicate entries
-	status, _, _, err := m.layout.queueManager.GetQueueInfo(ctx.Context(), user.ID)
-	if err == nil && status != "" {
-		ctx.Show(constants.UserStatusPageName, "")
-		return
-	}
-
-	// Create modal for reason input
-	modal := discord.NewModalCreateBuilder().
-		SetCustomID(constants.RecheckReasonModalCustomID).
-		SetTitle("Recheck User").
-		AddActionRow(
-			discord.NewTextInput(constants.RecheckReasonInputCustomID, discord.TextInputStyleParagraph, "Recheck Reason").
-				WithRequired(true).
-				WithPlaceholder("Enter the reason for rechecking this user..."),
-		)
-
-	// Show modal to user
-	ctx.Modal(modal)
-}
-
-// handleRecheckModalSubmit processes the custom recheck reason from the modal.
-func (m *ReviewMenu) handleRecheckModalSubmit(ctx *interaction.Context, s *session.Session) {
-	// Get and validate the recheck reason
-	reason := ctx.Event().ModalData().Text(constants.RecheckReasonInputCustomID)
-	if reason == "" {
-		ctx.Cancel("Recheck reason cannot be empty. Please try again.")
-		return
-	}
-
-	// Determine priority based on review mode
-	priority := queue.PriorityHigh
-	if session.UserReviewMode.Get(s) == enum.ReviewModeTraining {
-		priority = queue.PriorityLow
-	}
-
-	user := session.UserTarget.Get(s)
-
-	// Add to queue with reviewer information
-	err := m.layout.queueManager.AddToQueue(ctx.Context(), &queue.Item{
-		UserID:   user.ID,
-		Priority: priority,
-		Reason:   reason,
-		AddedBy:  uint64(ctx.Event().User().ID),
-		AddedAt:  time.Now(),
-		Status:   queue.StatusPending,
-	})
-	if err != nil {
-		m.layout.logger.Error("Failed to add user to queue", zap.Error(err))
-		ctx.Error("Failed to add user to queue")
-		return
-	}
-
-	// Store queue position information for status display
-	err = m.layout.queueManager.SetQueueInfo(
-		ctx.Context(),
-		user.ID,
-		queue.StatusPending,
-		priority,
-		m.layout.queueManager.GetQueueLength(ctx.Context(), priority),
-	)
-	if err != nil {
-		m.layout.logger.Error("Failed to update queue info", zap.Error(err))
-		ctx.Error("Failed to update queue info")
-		return
-	}
-
-	// Show status menu to track progress
-	session.QueueUser.Set(s, user.ID)
-	ctx.Show(constants.UserStatusPageName, "")
-
-	// Log the activity
-	m.layout.db.Model().Activity().Log(ctx.Context(), &types.ActivityLog{
-		ActivityTarget: types.ActivityTarget{
-			UserID: user.ID,
-		},
-		ReviewerID:        uint64(ctx.Event().User().ID),
-		ActivityType:      enum.ActivityTypeUserRechecked,
-		ActivityTimestamp: time.Now(),
-		Details:           map[string]any{"reason": reason},
-	})
 }
 
 // handleViewUserLogs handles the shortcut to view user logs.

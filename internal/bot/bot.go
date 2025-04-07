@@ -30,7 +30,6 @@ import (
 	"github.com/robalyx/rotector/internal/bot/handlers/guild"
 	"github.com/robalyx/rotector/internal/bot/handlers/leaderboard"
 	"github.com/robalyx/rotector/internal/bot/handlers/log"
-	"github.com/robalyx/rotector/internal/bot/handlers/queue"
 	groupReview "github.com/robalyx/rotector/internal/bot/handlers/review/group"
 	userReview "github.com/robalyx/rotector/internal/bot/handlers/review/user"
 	"github.com/robalyx/rotector/internal/bot/handlers/reviewer"
@@ -130,7 +129,6 @@ func New(app *setup.App) (*Bot, error) {
 	timeoutLayout := timeout.New(app)
 	userReviewLayout := userReview.New(app, interactionManager)
 	groupReviewLayout := groupReview.New(app, interactionManager)
-	queueLayout := queue.New(app)
 	appealLayout := appeal.New(app)
 	adminLayout := admin.New(app)
 	leaderboardLayout := leaderboard.New(app, client)
@@ -149,7 +147,6 @@ func New(app *setup.App) (*Bot, error) {
 	interactionManager.AddPages(timeoutLayout.Pages())
 	interactionManager.AddPages(userReviewLayout.Pages())
 	interactionManager.AddPages(groupReviewLayout.Pages())
-	interactionManager.AddPages(queueLayout.Pages())
 	interactionManager.AddPages(appealLayout.Pages())
 	interactionManager.AddPages(adminLayout.Pages())
 	interactionManager.AddPages(leaderboardLayout.Pages())

@@ -12,7 +12,6 @@ import (
 	"github.com/redis/rueidis"
 	"github.com/robalyx/rotector/internal/database"
 	"github.com/robalyx/rotector/internal/database/migrations"
-	"github.com/robalyx/rotector/internal/queue"
 	"github.com/robalyx/rotector/internal/redis"
 	"github.com/robalyx/rotector/internal/setup/client"
 	"github.com/robalyx/rotector/internal/setup/config"
@@ -58,7 +57,6 @@ type App struct {
 	OpenAIClient *openai.Client      // OpenAI client
 	GenAIModel   string              // Generative AI model
 	RoAPI        *api.API            // RoAPI HTTP client
-	Queue        *queue.Manager      // Background job queue
 	RedisManager *redis.Manager      // Redis connection manager
 	StatusClient rueidis.Client      // Redis client for worker status reporting
 	LogManager   *telemetry.Manager  // Log management system
@@ -105,7 +103,8 @@ func InitializeApp(ctx context.Context, serviceType ServiceType, logDir string) 
 	openAIClient := openai.NewClient(
 		option.WithAPIKey(cfg.Common.OpenAI.APIKey),
 		option.WithBaseURL(cfg.Common.OpenAI.BaseURL),
-		option.WithRequestTimeout(30*time.Second),
+		option.WithRequestTimeout(60*time.Second),
+		option.WithMaxRetries(3),
 	)
 
 	// RoAPI client is configured with middleware chain
@@ -122,13 +121,6 @@ func InitializeApp(ctx context.Context, serviceType ServiceType, logDir string) 
 	if len(middlewares.Roverse.GetProxies()) > 0 {
 		logger.Info("Initialized roverse proxies", zap.Int("count", len(middlewares.Roverse.GetProxies())))
 	}
-
-	// Queue manager creates its own Redis database for job storage
-	queueClient, err := redisManager.GetClient(redis.QueueDBIndex)
-	if err != nil {
-		return nil, err
-	}
-	queueManager := queue.NewManager(queueClient, logger)
 
 	// Get Redis client for worker status reporting
 	statusClient, err := redisManager.GetClient(redis.WorkerStatusDBIndex)
@@ -157,7 +149,6 @@ func InitializeApp(ctx context.Context, serviceType ServiceType, logDir string) 
 		OpenAIClient: &openAIClient,
 		GenAIModel:   cfg.Common.OpenAI.Model,
 		RoAPI:        roAPI,
-		Queue:        queueManager,
 		RedisManager: redisManager,
 		StatusClient: statusClient,
 		LogManager:   logManager,

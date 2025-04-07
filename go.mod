@@ -6,7 +6,6 @@ tool github.com/dmarkham/enumer
 
 require (
 	github.com/HugoSmits86/nativewebp v1.1.4
-	github.com/alicebob/miniredis/v2 v2.34.0
 	github.com/bytedance/sonic v1.13.2
 	github.com/cenkalti/backoff/v4 v4.3.0
 	github.com/dchest/captcha v1.1.0
@@ -48,7 +47,6 @@ require (
 )
 
 require (
-	github.com/alicebob/gopher-json v0.0.0-20230218143504-906a9b012302 // indirect
 	github.com/bahlo/generic-list-go v0.2.0 // indirect
 	github.com/buger/jsonparser v1.1.1 // indirect
 	github.com/bytedance/sonic/loader v0.2.4 // indirect
@@ -99,7 +97,6 @@ require (
 	github.com/vmihailenco/msgpack/v5 v5.4.1 // indirect
 	github.com/vmihailenco/tagparser/v2 v2.0.0 // indirect
 	github.com/wk8/go-ordered-map/v2 v2.1.8 // indirect
-	github.com/yuin/gopher-lua v1.1.1 // indirect
 	go.opentelemetry.io/auto/sdk v1.1.0 // indirect
 	go.opentelemetry.io/contrib/instrumentation/runtime v0.60.0 // indirect
 	go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploghttp v0.11.0 // indirect

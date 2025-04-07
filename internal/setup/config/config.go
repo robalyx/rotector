@@ -78,6 +78,20 @@ type WorkerConfig struct {
 	BatchSizes BatchSizes `koanf:"batch_sizes"`
 	// Threshold limits for worker operations.
 	ThresholdLimits ThresholdLimits `koanf:"threshold_limits"`
+	// Cloudflare configuration
+	Cloudflare CloudflareConfig `koanf:"cloudflare"`
+}
+
+// CloudflareConfig contains Cloudflare D1 configuration.
+type CloudflareConfig struct {
+	// Cloudflare account ID
+	AccountID string `koanf:"account_id"`
+	// D1 database ID
+	DatabaseID string `koanf:"database_id"`
+	// API token with D1 access
+	APIToken string `koanf:"api_token"`
+	// API endpoint for D1 queries
+	APIEndpoint string `koanf:"api_endpoint"`
 }
 
 // Debug contains debug-related configuration.

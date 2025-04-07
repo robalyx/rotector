@@ -26,7 +26,6 @@ import (
     "github.com/robalyx/rotector/internal/database/types"
     "github.com/robalyx/rotector/internal/database/types/enum"
     "github.com/robalyx/rotector/internal/ai"
-	"github.com/robalyx/rotector/internal/queue"
 	"github.com/robalyx/rotector/internal/worker/core"
 	apiTypes "github.com/jaxron/roapi.go/pkg/api/types"
 )
@@ -150,15 +149,6 @@ func main() {
 		{Name: "LogFilterActivityCategory", Type: "string", Doc: "LogFilterActivityCategory stores the currently selected activity category", Persist: true},
 		{Name: "LogFilterDateRangeStart", Type: "time.Time", Doc: "LogFilterDateRangeStart stores start date filter", Persist: true},
 		{Name: "LogFilterDateRangeEnd", Type: "time.Time", Doc: "LogFilterDateRangeEnd stores end date filter", Persist: true},
-
-		// Queue related keys
-		{Name: "QueueUser", Type: "uint64", Doc: "QueueUser stores the queued user", Persist: true},
-		{Name: "QueueStatus", Type: "queue.Status", Doc: "QueueStatus stores the queue status", Persist: false},
-		{Name: "QueuePriority", Type: "queue.Priority", Doc: "QueuePriority stores the queue priority", Persist: false},
-		{Name: "QueuePosition", Type: "int", Doc: "QueuePosition stores the queue position", Persist: false},
-		{Name: "QueueHighCount", Type: "int", Doc: "QueueHighCount stores high priority queue count", Persist: false},
-		{Name: "QueueNormalCount", Type: "int", Doc: "QueueNormalCount stores normal priority queue count", Persist: false},
-		{Name: "QueueLowCount", Type: "int", Doc: "QueueLowCount stores low priority queue count", Persist: false},
 
 		// Appeal related keys
 		{Name: "AppealList", Type: "[]*types.FullAppeal", Doc: "AppealList stores the current page of appeals", Persist: true},

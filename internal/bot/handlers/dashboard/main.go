@@ -91,7 +91,6 @@ func (m *Menu) handleSelectMenu(ctx *interaction.Context, s *session.Session, cu
 	switch option {
 	case constants.StartGroupReviewButtonCustomID,
 		constants.ActivityBrowserButtonCustomID,
-		constants.QueueManagerButtonCustomID,
 		constants.ChatAssistantButtonCustomID,
 		constants.WorkerStatusButtonCustomID,
 		constants.ReviewerStatsButtonCustomID:
@@ -130,8 +129,6 @@ func (m *Menu) handleSelectMenu(ctx *interaction.Context, s *session.Session, cu
 		ctx.Show(constants.LogPageName, "")
 	case constants.LeaderboardMenuButtonCustomID:
 		ctx.Show(constants.LeaderboardPageName, "")
-	case constants.QueueManagerButtonCustomID:
-		ctx.Show(constants.QueuePageName, "")
 	case constants.ChatAssistantButtonCustomID:
 		ctx.Show(constants.ChatPageName, "")
 	case constants.WorkerStatusButtonCustomID:
