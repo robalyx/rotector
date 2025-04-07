@@ -12,6 +12,14 @@ import (
 	"github.com/robalyx/rotector/internal/database/types/enum"
 )
 
+// TargetType represents the type of target being reviewed.
+type TargetType string
+
+const (
+	TargetTypeUser  TargetType = "user"
+	TargetTypeGroup TargetType = "group"
+)
+
 // BaseReviewBuilder contains common fields used by both user and group review builders.
 type BaseReviewBuilder struct {
 	BotSettings    *types.BotSetting

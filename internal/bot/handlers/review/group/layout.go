@@ -2,8 +2,11 @@ package group
 
 import (
 	"github.com/jaxron/roapi.go/pkg/api"
+	"github.com/robalyx/rotector/internal/bot/constants"
 	"github.com/robalyx/rotector/internal/bot/core/captcha"
 	"github.com/robalyx/rotector/internal/bot/core/interaction"
+	"github.com/robalyx/rotector/internal/bot/handlers/review/shared"
+	sharedView "github.com/robalyx/rotector/internal/bot/views/review/shared"
 	"github.com/robalyx/rotector/internal/database"
 	"github.com/robalyx/rotector/internal/roblox/fetcher"
 	"github.com/robalyx/rotector/internal/setup"
@@ -16,7 +19,7 @@ type Layout struct {
 	roAPI            *api.API
 	reviewMenu       *ReviewMenu
 	membersMenu      *MembersMenu
-	commentsMenu     *CommentsMenu
+	commentsMenu     *shared.CommentsMenu
 	thumbnailFetcher *fetcher.ThumbnailFetcher
 	presenceFetcher  *fetcher.PresenceFetcher
 	imageStreamer    *interaction.ImageStreamer
@@ -40,7 +43,7 @@ func New(app *setup.App, interactionManager *interaction.Manager) *Layout {
 	// Initialize all menus with references to this layout
 	l.reviewMenu = NewReviewMenu(l)
 	l.membersMenu = NewMembersMenu(l)
-	l.commentsMenu = NewCommentsMenu(l)
+	l.commentsMenu = shared.NewCommentsMenu(l.logger, l.db, sharedView.TargetTypeGroup, constants.GroupCommentsPageName)
 
 	return l
 }
@@ -50,6 +53,6 @@ func (l *Layout) Pages() []*interaction.Page {
 	return []*interaction.Page{
 		l.reviewMenu.page,
 		l.membersMenu.page,
-		l.commentsMenu.page,
+		l.commentsMenu.Page(),
 	}
 }

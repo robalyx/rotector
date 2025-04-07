@@ -65,11 +65,6 @@ func NewReviewBuilder(s *session.Session, translator *translator.Translator, db 
 func (b *ReviewBuilder) Build() *discord.MessageUpdateBuilder {
 	builder := discord.NewMessageUpdateBuilder()
 
-	// Add recent comments embed if there are any
-	if commentsEmbed := b.BuildCommentsEmbed(); commentsEmbed != nil {
-		builder.AddEmbeds(commentsEmbed.Build())
-	}
-
 	// Add mode embed
 	modeEmbed := b.buildModeEmbed()
 	builder.AddEmbeds(modeEmbed.Build())
@@ -88,6 +83,11 @@ func (b *ReviewBuilder) Build() *discord.MessageUpdateBuilder {
 		}
 	}
 	builder.AddEmbeds(reviewEmbed.Build())
+
+	// Add recent comments embed if there are any
+	if commentsEmbed := b.BuildCommentsEmbed(); commentsEmbed != nil {
+		builder.AddEmbeds(commentsEmbed.Build())
+	}
 
 	// Add deletion notice if user is deleted
 	if b.user.IsDeleted {

@@ -1,4 +1,4 @@
-package user
+package shared
 
 import (
 	"fmt"
@@ -13,7 +13,9 @@ import (
 // CommentsBuilder creates the visual layout for the comments interface.
 type CommentsBuilder struct {
 	botSettings *types.BotSetting
-	user        *types.ReviewUser
+	targetType  TargetType
+	targetName  string
+	targetID    uint64
 	commenterID uint64
 	comments    []*types.Comment
 	page        int
@@ -24,10 +26,26 @@ type CommentsBuilder struct {
 }
 
 // NewCommentsBuilder creates a new comments builder.
-func NewCommentsBuilder(s *session.Session) *CommentsBuilder {
+func NewCommentsBuilder(s *session.Session, targetType TargetType) *CommentsBuilder {
+	var targetName string
+	var targetID uint64
+
+	// Get target info based on type
+	if targetType == TargetTypeUser {
+		user := session.UserTarget.Get(s)
+		targetName = user.Name
+		targetID = user.ID
+	} else {
+		group := session.GroupTarget.Get(s)
+		targetName = group.Name
+		targetID = group.ID
+	}
+
 	return &CommentsBuilder{
 		botSettings: s.BotSettings(),
-		user:        session.UserTarget.Get(s),
+		targetType:  targetType,
+		targetName:  targetName,
+		targetID:    targetID,
 		commenterID: session.UserID.Get(s),
 		comments:    session.ReviewComments.Get(s),
 		page:        session.PaginationPage.Get(s),
@@ -49,7 +67,7 @@ func (b *CommentsBuilder) Build() *discord.MessageUpdateBuilder {
 func (b *CommentsBuilder) buildEmbed() *discord.EmbedBuilder {
 	embed := discord.NewEmbedBuilder().
 		SetTitle("📝 Community Notes").
-		SetDescription(fmt.Sprintf("Notes for user `%s`", utils.CensorString(b.user.Name, b.privacyMode))).
+		SetDescription(fmt.Sprintf("Notes for %s `%s`", b.targetType, utils.CensorString(b.targetName, b.privacyMode))).
 		SetColor(utils.GetMessageEmbedColor(b.privacyMode))
 
 	if len(b.comments) == 0 {

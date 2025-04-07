@@ -2,8 +2,11 @@ package user
 
 import (
 	"github.com/jaxron/roapi.go/pkg/api"
+	"github.com/robalyx/rotector/internal/bot/constants"
 	"github.com/robalyx/rotector/internal/bot/core/captcha"
 	"github.com/robalyx/rotector/internal/bot/core/interaction"
+	"github.com/robalyx/rotector/internal/bot/handlers/review/shared"
+	sharedView "github.com/robalyx/rotector/internal/bot/views/review/shared"
 	"github.com/robalyx/rotector/internal/database"
 	"github.com/robalyx/rotector/internal/roblox/fetcher"
 	"github.com/robalyx/rotector/internal/setup"
@@ -21,7 +24,7 @@ type Layout struct {
 	friendsMenu      *FriendsMenu
 	groupsMenu       *GroupsMenu
 	caesarMenu       *CaesarMenu
-	commentsMenu     *CommentsMenu
+	commentsMenu     *shared.CommentsMenu
 	thumbnailFetcher *fetcher.ThumbnailFetcher
 	presenceFetcher  *fetcher.PresenceFetcher
 	imageStreamer    *interaction.ImageStreamer
@@ -49,7 +52,7 @@ func New(app *setup.App, interactionManager *interaction.Manager) *Layout {
 	l.friendsMenu = NewFriendsMenu(l)
 	l.groupsMenu = NewGroupsMenu(l)
 	l.caesarMenu = NewCaesarMenu(l)
-	l.commentsMenu = NewCommentsMenu(l)
+	l.commentsMenu = shared.NewCommentsMenu(l.logger, l.db, sharedView.TargetTypeUser, constants.UserCommentsPageName)
 
 	return l
 }
@@ -62,6 +65,6 @@ func (l *Layout) Pages() []*interaction.Page {
 		l.friendsMenu.page,
 		l.groupsMenu.page,
 		l.caesarMenu.page,
-		l.commentsMenu.page,
+		l.commentsMenu.Page(),
 	}
 }

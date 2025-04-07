@@ -1,4 +1,4 @@
-package group
+package shared
 
 import (
 	"errors"
@@ -7,25 +7,32 @@ import (
 	"github.com/robalyx/rotector/internal/bot/constants"
 	"github.com/robalyx/rotector/internal/bot/core/interaction"
 	"github.com/robalyx/rotector/internal/bot/core/session"
-	view "github.com/robalyx/rotector/internal/bot/views/review/group"
+	view "github.com/robalyx/rotector/internal/bot/views/review/shared"
+	"github.com/robalyx/rotector/internal/database"
 	"github.com/robalyx/rotector/internal/database/service"
 	"github.com/robalyx/rotector/internal/database/types"
 	"go.uber.org/zap"
 )
 
-// CommentsMenu handles the display and interaction logic for viewing group comments.
+// CommentsMenu handles the display and interaction logic for viewing comments.
 type CommentsMenu struct {
-	layout *Layout
-	page   *interaction.Page
+	logger     *zap.Logger
+	db         database.Client
+	targetType view.TargetType
+	page       *interaction.Page
 }
 
 // NewCommentsMenu creates a new comments menu.
-func NewCommentsMenu(layout *Layout) *CommentsMenu {
-	m := &CommentsMenu{layout: layout}
+func NewCommentsMenu(logger *zap.Logger, db database.Client, targetType view.TargetType, pageName string) *CommentsMenu {
+	m := &CommentsMenu{
+		logger:     logger,
+		db:         db,
+		targetType: targetType,
+	}
 	m.page = &interaction.Page{
-		Name: constants.GroupCommentsPageName,
+		Name: pageName,
 		Message: func(s *session.Session) *discord.MessageUpdateBuilder {
-			return view.NewCommentsBuilder(s).Build()
+			return view.NewCommentsBuilder(s, targetType).Build()
 		},
 		ShowHandlerFunc:   m.Show,
 		ButtonHandlerFunc: m.handleButton,
@@ -34,21 +41,40 @@ func NewCommentsMenu(layout *Layout) *CommentsMenu {
 	return m
 }
 
+// Page returns the page for the comments menu.
+func (m *CommentsMenu) Page() *interaction.Page {
+	return m.page
+}
+
 // Show prepares and displays the comments interface.
 func (m *CommentsMenu) Show(ctx *interaction.Context, s *session.Session) {
-	group := session.GroupTarget.Get(s)
+	var targetID uint64
+	if m.targetType == view.TargetTypeUser {
+		targetID = session.UserTarget.Get(s).ID
+	} else {
+		targetID = session.GroupTarget.Get(s).ID
+	}
 
-	// Fetch updated comments for the group
-	comments, err := m.layout.db.Model().Comment().GetGroupComments(ctx.Context(), group.ID)
+	// Fetch updated comments
+	var comments []*types.Comment
+	var err error
+	if m.targetType == view.TargetTypeUser {
+		comments, err = m.db.Model().Comment().GetUserComments(ctx.Context(), targetID)
+	} else {
+		comments, err = m.db.Model().Comment().GetGroupComments(ctx.Context(), targetID)
+	}
+
 	if err != nil {
-		m.layout.logger.Error("Failed to fetch user comments", zap.Error(err))
+		m.logger.Error("Failed to fetch comments", zap.Error(err))
 		comments = []*types.Comment{} // Continue without comments - not critical
 	}
 	session.ReviewComments.Set(s, comments)
 
 	// Store pagination info in session
+	page := session.PaginationPage.Get(s)
 	totalPages := max((len(comments)-1)/constants.CommentsPerPage, 0)
-	session.PaginationOffset.Set(s, session.PaginationPage.Get(s)*constants.CommentsPerPage)
+
+	session.PaginationOffset.Set(s, page*constants.CommentsPerPage)
 	session.PaginationTotalItems.Set(s, len(comments))
 	session.PaginationTotalPages.Set(s, totalPages)
 }
@@ -117,7 +143,7 @@ func (m *CommentsMenu) handleAddComment(ctx *interaction.Context, s *session.Ses
 	if existingComment != nil {
 		input = input.WithValue(existingComment.Message)
 	}
-	input = input.WithPlaceholder("Enter your note about this group...")
+	input = input.WithPlaceholder("Enter your note...")
 
 	modal.AddActionRow(input)
 	ctx.Modal(modal)
@@ -125,11 +151,24 @@ func (m *CommentsMenu) handleAddComment(ctx *interaction.Context, s *session.Ses
 
 // handleDeleteComment deletes the user's comment.
 func (m *CommentsMenu) handleDeleteComment(ctx *interaction.Context, s *session.Session) {
-	group := session.GroupTarget.Get(s)
+	var targetID uint64
+	if m.targetType == view.TargetTypeUser {
+		targetID = session.UserTarget.Get(s).ID
+	} else {
+		targetID = session.GroupTarget.Get(s).ID
+	}
+
 	commenterID := uint64(ctx.Event().User().ID)
 
-	if err := m.layout.db.Model().Comment().DeleteGroupComment(ctx.Context(), group.ID, commenterID); err != nil {
-		m.layout.logger.Error("Failed to delete comment", zap.Error(err))
+	var err error
+	if m.targetType == view.TargetTypeUser {
+		err = m.db.Model().Comment().DeleteUserComment(ctx.Context(), targetID, commenterID)
+	} else {
+		err = m.db.Model().Comment().DeleteGroupComment(ctx.Context(), targetID, commenterID)
+	}
+
+	if err != nil {
+		m.logger.Error("Failed to delete comment", zap.Error(err))
 		ctx.Error("Failed to delete note. Please try again.")
 		return
 	}
@@ -147,26 +186,37 @@ func (m *CommentsMenu) handleCommentModalSubmit(ctx *interaction.Context, s *ses
 		return
 	}
 
-	// Add comment for group
-	group := session.GroupTarget.Get(s)
-	comment := &types.GroupComment{
-		Comment: types.Comment{
-			TargetID:    group.ID,
-			CommenterID: uint64(ctx.Event().User().ID),
-			Message:     message,
-		},
+	var targetID uint64
+	if m.targetType == view.TargetTypeUser {
+		targetID = session.UserTarget.Get(s).ID
+	} else {
+		targetID = session.GroupTarget.Get(s).ID
 	}
 
-	if err := m.layout.db.Service().Comment().AddGroupComment(ctx.Context(), comment); err != nil {
+	// Create comment
+	comment := &types.Comment{
+		TargetID:    targetID,
+		CommenterID: uint64(ctx.Event().User().ID),
+		Message:     message,
+	}
+
+	var err error
+	if m.targetType == view.TargetTypeUser {
+		err = m.db.Service().Comment().AddUserComment(ctx.Context(), &types.UserComment{Comment: *comment})
+	} else {
+		err = m.db.Service().Comment().AddGroupComment(ctx.Context(), &types.GroupComment{Comment: *comment})
+	}
+
+	if err != nil {
 		switch {
 		case errors.Is(err, service.ErrCommentTooSimilar):
 			ctx.Cancel("Your note is too similar to an existing note. Please provide unique information.")
 		case errors.Is(err, service.ErrInvalidLinks):
 			ctx.Cancel("Only Roblox links are allowed in notes.")
 		case errors.Is(err, types.ErrCommentExists):
-			ctx.Cancel("You already have a note for this group. Delete your existing note first.")
+			ctx.Cancel("You already have a note for this target. Delete your existing note first.")
 		default:
-			m.layout.logger.Error("Failed to add comment", zap.Error(err))
+			m.logger.Error("Failed to add comment", zap.Error(err))
 			ctx.Error("Failed to add note. Please try again.")
 		}
 		return
