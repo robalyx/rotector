@@ -94,8 +94,8 @@ func (c *FriendChecker) ProcessUsers(userInfos []*types.User, reasonsMap map[uin
 		flaggedFriendsMap[userInfo.ID] = flaggedFriends
 	}
 
-	// Generate reasons for all users
-	reasons := c.friendAnalyzer.GenerateFriendReasons(userInfos, confirmedFriendsMap, flaggedFriendsMap)
+	// Track users that exceed confidence threshold
+	var usersToAnalyze []*types.User
 
 	// Process results
 	for _, userInfo := range userInfos {
@@ -105,8 +105,23 @@ func (c *FriendChecker) ProcessUsers(userInfos []*types.User, reasonsMap map[uin
 		// Calculate confidence score
 		confidence := c.calculateConfidence(confirmedCount, flaggedCount, len(userInfo.Friends))
 
-		// Flag user if confidence exceeds threshold
+		// Only process users that exceed threshold
 		if confidence >= 0.50 {
+			usersToAnalyze = append(usersToAnalyze, userInfo)
+		}
+	}
+
+	// Generate AI reasons if we have users to analyze
+	if len(usersToAnalyze) > 0 {
+		// Generate reasons for flagged users
+		reasons := c.friendAnalyzer.GenerateFriendReasons(usersToAnalyze, confirmedFriendsMap, flaggedFriendsMap)
+
+		// Process results and update reasonsMap
+		for _, userInfo := range usersToAnalyze {
+			confirmedCount := len(confirmedFriendsMap[userInfo.ID])
+			flaggedCount := len(flaggedFriendsMap[userInfo.ID])
+			confidence := c.calculateConfidence(confirmedCount, flaggedCount, len(userInfo.Friends))
+
 			reason := reasons[userInfo.ID]
 			if reason == "" {
 				// Fallback to default reason format if AI generation failed
@@ -134,6 +149,7 @@ func (c *FriendChecker) ProcessUsers(userInfos []*types.User, reasonsMap map[uin
 
 	c.logger.Info("Finished processing friends",
 		zap.Int("totalUsers", len(userInfos)),
+		zap.Int("analyzedUsers", len(usersToAnalyze)),
 		zap.Int("newFlags", len(reasonsMap)-existingFlags))
 }
 

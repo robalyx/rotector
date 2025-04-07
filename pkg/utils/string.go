@@ -31,3 +31,27 @@ func CompressWhitespacePreserveNewlines(s string) string {
 	// Join lines back together and trim any leading/trailing empty lines
 	return strings.TrimSpace(strings.Join(lines, "\n"))
 }
+
+// SplitLines takes a slice of strings and splits any strings containing newlines
+// into separate entries. Handles both regular and escaped newlines.
+// Empty lines after splitting are omitted from the result.
+func SplitLines(content []string) []string {
+	var result []string
+
+	for _, item := range content {
+		// Handle both escaped and unescaped newlines
+		item = strings.ReplaceAll(item, "\\n", "\n")
+
+		// Split on newlines and add each line as a separate entry
+		lines := strings.SplitSeq(item, "\n")
+		for line := range lines {
+			// Trim spaces and add non-empty lines
+			line = strings.TrimSpace(line)
+			if line != "" {
+				result = append(result, line)
+			}
+		}
+	}
+
+	return result
+}

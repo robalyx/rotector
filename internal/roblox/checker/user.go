@@ -51,8 +51,9 @@ func NewUserChecker(app *setup.App, userFetcher *fetcher.UserFetcher, logger *za
 	}
 }
 
-// ProcessUsers runs users through multiple checking stage.
-func (c *UserChecker) ProcessUsers(userInfos []*types.User) {
+// ProcessUsers runs users through multiple checking stages.
+// Returns a map of flagged user IDs.
+func (c *UserChecker) ProcessUsers(userInfos []*types.User) map[uint64]struct{} {
 	c.logger.Info("Processing users", zap.Int("userInfos", len(userInfos)))
 
 	// Initialize map to store reasons
@@ -70,22 +71,25 @@ func (c *UserChecker) ProcessUsers(userInfos []*types.User) {
 	// Process condo checker
 	c.condoChecker.ProcessUsers(userInfos, reasonsMap)
 
-	// Process outfit analysis (only for flagged users)
+	// Process outfit analysis
 	c.outfitAnalyzer.ProcessOutfits(userInfos, reasonsMap)
 
 	// Stop if no users were flagged
 	if len(reasonsMap) == 0 {
 		c.logger.Info("No flagged users found", zap.Int("userInfos", len(userInfos)))
-		return
+		return nil
 	}
 
 	// Create final flagged users map
 	flaggedUsers := make(map[uint64]*types.User, len(reasonsMap))
+	flaggedStatus := make(map[uint64]struct{}, len(reasonsMap))
+
 	for _, user := range userInfos {
 		if reasons, ok := reasonsMap[user.ID]; ok {
 			user.Reasons = reasons
 			user.Confidence = utils.CalculateConfidence(reasons)
 			flaggedUsers[user.ID] = user
+			flaggedStatus[user.ID] = struct{}{}
 		}
 	}
 
@@ -100,6 +104,8 @@ func (c *UserChecker) ProcessUsers(userInfos []*types.User) {
 	c.logger.Info("Finished processing users",
 		zap.Int("totalProcessed", len(userInfos)),
 		zap.Int("flaggedUsers", len(flaggedUsers)))
+
+	return flaggedStatus
 }
 
 // trackFlaggedUsersGroups adds flagged users' group memberships to tracking.

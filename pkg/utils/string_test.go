@@ -108,3 +108,61 @@ func TestCompressWhitespacePreserveNewlines(t *testing.T) {
 		})
 	}
 }
+
+func TestSplitLines(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name  string
+		input []string
+		want  []string
+	}{
+		{
+			name:  "empty input",
+			input: []string{},
+			want:  nil,
+		},
+		{
+			name:  "no newlines",
+			input: []string{"hello world", "test case"},
+			want:  []string{"hello world", "test case"},
+		},
+		{
+			name:  "with escaped newlines",
+			input: []string{"hello\\nworld", "test\\ncase"},
+			want:  []string{"hello", "world", "test", "case"},
+		},
+		{
+			name:  "with regular newlines",
+			input: []string{"hello\nworld", "test\ncase"},
+			want:  []string{"hello", "world", "test", "case"},
+		},
+		{
+			name:  "mixed types of newlines",
+			input: []string{"hello\\nworld\ntest"},
+			want:  []string{"hello", "world", "test"},
+		},
+		{
+			name:  "with empty lines",
+			input: []string{"hello\n\nworld", "\ntest\n\n"},
+			want:  []string{"hello", "world", "test"},
+		},
+		{
+			name:  "with whitespace",
+			input: []string{"  hello  \n  world  "},
+			want:  []string{"hello", "world"},
+		},
+		{
+			name:  "complex example",
+			input: []string{"male / bi\\nswitch (boys)\\ntop (girls)\\n\\n\\ngxy bottoms/switches or girls add me\\nrp ingame only"},
+			want:  []string{"male / bi", "switch (boys)", "top (girls)", "gxy bottoms/switches or girls add me", "rp ingame only"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			got := utils.SplitLines(tt.input)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}

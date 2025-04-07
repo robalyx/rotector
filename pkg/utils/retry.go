@@ -28,10 +28,10 @@ func GetAIRetryOptions() RetryOptions {
 // GetThumbnailRetryOptions returns retry options optimized for thumbnail fetching.
 func GetThumbnailRetryOptions() RetryOptions {
 	return RetryOptions{
-		MaxElapsedTime:  20 * time.Second,
+		MaxElapsedTime:  60 * time.Second,
 		InitialInterval: 5 * time.Second,
-		MaxInterval:     6 * time.Second,
-		MaxRetries:      3,
+		MaxInterval:     20 * time.Second,
+		MaxRetries:      5,
 	}
 }
 

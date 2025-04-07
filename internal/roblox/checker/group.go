@@ -217,11 +217,6 @@ func (c *GroupChecker) ProcessUsers(userInfos []*types.User, reasonsMap map[uint
 func (c *GroupChecker) processUserGroups(
 	userInfo *types.User, existingGroups map[uint64]*types.ReviewGroup,
 ) (*types.Reason, bool) {
-	// Skip users with very few groups to avoid false positives
-	if len(userInfo.Groups) < 2 {
-		return nil, false
-	}
-
 	// Count confirmed and flagged groups
 	confirmedCount := 0
 	flaggedCount := 0

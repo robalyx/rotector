@@ -56,9 +56,10 @@ Key rules:
 5. Skip empty descriptions
 6. Set hasSocials to true if description contains any social media handles/links
 7. If user has no violations but has socials, only include name and hasSocials fields
-8. Social media presence alone is NOT a violation - it's just informational
+8. If user is stating their social media, it is not a violation
 9. DO NOT flag users for being potential victims
 10. ONLY flag users exhibiting predatory or inappropriate behavior
+11. Flag usernames/display names even if the description is empty. The name itself can be sufficient evidence for flagging.
 
 Confidence levels (only for inappropriate content):
 0.0: No predatory elements
@@ -68,7 +69,7 @@ Confidence levels (only for inappropriate content):
 0.9-1.0: Explicit predatory intent
 
 Look for inappropriate content FROM PREDATORS:
-- Coded language for inappropriate activities
+- Coded language implying inappropriate activities
 - Leading phrases implying secrecy
 - Inappropriate game/chat/studio invitations
 - Condo/con references
@@ -99,14 +100,24 @@ Look for inappropriate content FROM PREDATORS:
 - Degradation terms
 - Caesar cipher (ROT13 and other rotations)
 
-Look for social media (not violations, just detect presence):
-- Discord tags/handles/servers
-- Telegram usernames/links
-- Instagram handles
-- TikTok usernames
-- Snapchat usernames
-- Twitter/X handles
-- Any other social media platforms
+Look for inappropriate usernames/display names suggesting PREDATORY intentions:
+- Implying ownership, control, or subservience
+- Suggesting sexual availability or soliciting inappropriate interactions 
+- Using pet names or diminutives suggestively
+- Targeting minors or specific genders inappropriately
+- Using coded language or suggestive terms related to inappropriate acts
+- Hinting at exploitation or predatory activities
+- References to adult content platforms or services
+- Deliberately misspelled inappropriate terms
+- Combinations of innocent words that create suggestive meanings
+- Animal terms used in suggestive contexts
+- Possessive terms combined with suggestive words
+
+When flagging inappropriate names:
+- Set confidence based on how explicit/obvious the inappropriate content is
+- Include the full username/display name as flagged content
+- Set reason to clearly explain why the name is inappropriate
+- Consider combinations of words that together create inappropriate meanings
 
 Ignore:
 - Simple greetings/farewells
@@ -117,6 +128,7 @@ Ignore:
 - Non-inappropriate content
 - Non-sexual roleplay
 - General social interactions
+- Social media usernames/handles/tags/servers
 - Age mentions or bypasses
 - Compliments on outfits/avatars
 - Any follow or friend making requests
@@ -373,8 +385,11 @@ func (a *UserAnalyzer) validateAndUpdateFlaggedUsers(
 			continue
 		}
 
+		// Process flagged content to handle newlines
+		processedContent := utils.SplitLines(flaggedUser.FlaggedContent)
+
 		// Validate flagged content against user texts
-		isValid := normalizer.ValidateWords(flaggedUser.FlaggedContent,
+		isValid := normalizer.ValidateWords(processedContent,
 			translatedInfo.Name,
 			translatedInfo.DisplayName,
 			translatedInfo.Description)
@@ -389,7 +404,7 @@ func (a *UserAnalyzer) validateAndUpdateFlaggedUsers(
 			reasonsMap[originalInfo.ID].Add(enum.UserReasonTypeDescription, &types.Reason{
 				Message:    flaggedUser.Reason,
 				Confidence: flaggedUser.Confidence,
-				Evidence:   flaggedUser.FlaggedContent,
+				Evidence:   processedContent,
 			})
 			mu.Unlock()
 		} else {
@@ -398,7 +413,7 @@ func (a *UserAnalyzer) validateAndUpdateFlaggedUsers(
 				zap.String("flaggedUsername", flaggedUser.Name),
 				zap.String("username", originalInfo.Name),
 				zap.String("description", originalInfo.Description),
-				zap.Strings("flaggedContent", flaggedUser.FlaggedContent))
+				zap.Strings("flaggedContent", processedContent))
 		}
 	}
 }
