@@ -22,6 +22,7 @@ type UserChecker struct {
 	userFetcher    *fetcher.UserFetcher
 	userAnalyzer   *ai.UserAnalyzer
 	outfitAnalyzer *ai.OutfitAnalyzer
+	ivanAnalyzer   *ai.IvanAnalyzer
 	groupChecker   *GroupChecker
 	friendChecker  *FriendChecker
 	condoChecker   *CondoChecker
@@ -40,6 +41,7 @@ func NewUserChecker(app *setup.App, userFetcher *fetcher.UserFetcher, logger *za
 		userFetcher:    userFetcher,
 		userAnalyzer:   userAnalyzer,
 		outfitAnalyzer: outfitAnalyzer,
+		ivanAnalyzer:   ai.NewIvanAnalyzer(app, logger),
 		groupChecker: NewGroupChecker(app.DB, logger,
 			app.Config.Worker.ThresholdLimits.MaxGroupMembersTrack,
 			app.Config.Worker.ThresholdLimits.MinFlaggedOverride,
@@ -70,6 +72,9 @@ func (c *UserChecker) ProcessUsers(userInfos []*types.User) map[uint64]struct{} 
 
 	// Process condo checker
 	c.condoChecker.ProcessUsers(userInfos, reasonsMap)
+
+	// Process ivan messages
+	c.ivanAnalyzer.ProcessUsers(userInfos, reasonsMap)
 
 	// Process outfit analysis
 	c.outfitAnalyzer.ProcessOutfits(userInfos, reasonsMap)

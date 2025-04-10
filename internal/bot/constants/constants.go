@@ -15,7 +15,7 @@ const (
 	RefreshButtonCustomID    = "refresh"
 	BackButtonCustomID       = "back"
 	ModalOpenSuffix          = "_exception"
-	DefaultEmbedColor        = 0x242429
+	DefaultEmbedColor        = 0x393A41
 	ErrorEmbedColor          = 0xE74C3C
 	StreamerModeEmbedColor   = 0x3E3769
 )

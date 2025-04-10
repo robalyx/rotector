@@ -959,6 +959,13 @@ func (m *TicketMenu) redactRobloxUserData(
 	user.ThumbnailURL = ""
 	user.LastThumbnailUpdate = time.Now()
 
+	// Redact chat evidence if it exists
+	if user.Reasons != nil {
+		if chatReason, exists := user.Reasons[enum.UserReasonTypeChat]; exists {
+			chatReason.Evidence = []string{"[chat evidence redacted]"}
+		}
+	}
+
 	// Update the user with redacted data
 	if err := m.layout.db.Service().User().SaveUsers(
 		ctx, map[uint64]*types.User{user.ID: &user.User},

@@ -273,9 +273,9 @@ func AddEvidenceFields[T types.ReasonType](
 			// Add header for this reason type
 			fieldName := fmt.Sprintf("%s Evidence", reasonType)
 
-			// Add up to 5 evidence items
+			// Add up to 3 evidence items
 			for i, evidence := range reason.Evidence {
-				if i >= 5 {
+				if i >= 3 {
 					evidenceItems = append(evidenceItems, "... and more")
 					break
 				}

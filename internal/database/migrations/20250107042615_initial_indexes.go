@@ -287,6 +287,17 @@ func init() { //nolint:funlen
 
 			CREATE INDEX IF NOT EXISTS idx_group_comments_target_commenter 
 			ON group_comments (target_id, commenter_id);
+
+			-- Ivan message indexes
+			CREATE INDEX IF NOT EXISTS idx_ivan_messages_user_time
+			ON ivan_messages (user_id, date_time ASC);
+
+			CREATE INDEX IF NOT EXISTS idx_ivan_messages_multi_user
+			ON ivan_messages (user_id ASC, date_time ASC);
+
+			CREATE INDEX IF NOT EXISTS idx_ivan_messages_unchecked
+			ON ivan_messages (user_id) 
+			WHERE was_checked = false;
 		`, enum.ActivityTypeUserViewed, enum.ActivityTypeGroupViewed).Exec(ctx)
 		if err != nil {
 			return fmt.Errorf("failed to create indexes: %w", err)
@@ -471,6 +482,11 @@ func init() { //nolint:funlen
 			-- Group comments indexes
 			DROP INDEX IF EXISTS idx_group_comments_target_created;
 			DROP INDEX IF EXISTS idx_group_comments_target_commenter;
+
+			-- Ivan message indexes
+			DROP INDEX IF EXISTS idx_ivan_messages_user_time;
+			DROP INDEX IF EXISTS idx_ivan_messages_multi_user;
+			DROP INDEX IF EXISTS idx_ivan_messages_unchecked;
 		`).Exec(ctx)
 		if err != nil {
 			return fmt.Errorf("failed to drop indexes: %w", err)

@@ -7,11 +7,11 @@ import (
 	"strings"
 )
 
-const _UserReasonTypeName = "DescriptionFriendOutfitGroupCondo"
+const _UserReasonTypeName = "DescriptionFriendOutfitGroupCondoChat"
 
-var _UserReasonTypeIndex = [...]uint8{0, 11, 17, 23, 28, 33}
+var _UserReasonTypeIndex = [...]uint8{0, 11, 17, 23, 28, 33, 37}
 
-const _UserReasonTypeLowerName = "descriptionfriendoutfitgroupcondo"
+const _UserReasonTypeLowerName = "descriptionfriendoutfitgroupcondochat"
 
 func (i UserReasonType) String() string {
 	if i < 0 || i >= UserReasonType(len(_UserReasonTypeIndex)-1) {
@@ -29,9 +29,10 @@ func _UserReasonTypeNoOp() {
 	_ = x[UserReasonTypeOutfit-(2)]
 	_ = x[UserReasonTypeGroup-(3)]
 	_ = x[UserReasonTypeCondo-(4)]
+	_ = x[UserReasonTypeChat-(5)]
 }
 
-var _UserReasonTypeValues = []UserReasonType{UserReasonTypeDescription, UserReasonTypeFriend, UserReasonTypeOutfit, UserReasonTypeGroup, UserReasonTypeCondo}
+var _UserReasonTypeValues = []UserReasonType{UserReasonTypeDescription, UserReasonTypeFriend, UserReasonTypeOutfit, UserReasonTypeGroup, UserReasonTypeCondo, UserReasonTypeChat}
 
 var _UserReasonTypeNameToValueMap = map[string]UserReasonType{
 	_UserReasonTypeName[0:11]:       UserReasonTypeDescription,
@@ -44,6 +45,8 @@ var _UserReasonTypeNameToValueMap = map[string]UserReasonType{
 	_UserReasonTypeLowerName[23:28]: UserReasonTypeGroup,
 	_UserReasonTypeName[28:33]:      UserReasonTypeCondo,
 	_UserReasonTypeLowerName[28:33]: UserReasonTypeCondo,
+	_UserReasonTypeName[33:37]:      UserReasonTypeChat,
+	_UserReasonTypeLowerName[33:37]: UserReasonTypeChat,
 }
 
 var _UserReasonTypeNames = []string{
@@ -52,6 +55,7 @@ var _UserReasonTypeNames = []string{
 	_UserReasonTypeName[17:23],
 	_UserReasonTypeName[23:28],
 	_UserReasonTypeName[28:33],
+	_UserReasonTypeName[33:37],
 }
 
 // UserReasonTypeString retrieves an enum value from the enum constants string name.

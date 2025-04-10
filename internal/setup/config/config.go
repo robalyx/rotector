@@ -218,6 +218,8 @@ type BatchSizes struct {
 	FriendAnalysis int `koanf:"friend_analysis"`
 	// Maximum concurrent AI requests for message analysis.
 	MessageAnalysis int `koanf:"message_analysis"`
+	// Maximum concurrent AI requests for ivan message analysis.
+	IvanMessageAnalysis int `koanf:"ivan_message_analysis"`
 	// Number of outfits to analyze in one AI request.
 	OutfitAnalysisBatch int `koanf:"outfit_analysis_batch"`
 	// Number of users to analyze in one AI request.
@@ -226,6 +228,8 @@ type BatchSizes struct {
 	FriendAnalysisBatch int `koanf:"friend_analysis_batch"`
 	// Number of messages to analyze in one AI request.
 	MessageAnalysisBatch int `koanf:"message_analysis_batch"`
+	// Number of ivan messages to analyze in one AI request.
+	IvanMessageAnalysisBatch int `koanf:"ivan_message_analysis_batch"`
 }
 
 // ThresholdLimits configures various thresholds for worker operations.

@@ -207,6 +207,10 @@ func (b *Builder) buildActivityTypeOptions() []discord.StringSelectMenuOption {
 	userOptions := []discord.StringSelectMenuOption{
 		discord.NewStringSelectMenuOption("User Viewed", strconv.Itoa(int(enum.ActivityTypeUserViewed))).
 			WithDefault(b.activityTypeFilter == enum.ActivityTypeUserViewed),
+		discord.NewStringSelectMenuOption("User Lookup", strconv.Itoa(int(enum.ActivityTypeUserLookup))).
+			WithDefault(b.activityTypeFilter == enum.ActivityTypeUserLookup),
+		discord.NewStringSelectMenuOption("User Reason Updated", strconv.Itoa(int(enum.ActivityTypeUserReasonUpdated))).
+			WithDefault(b.activityTypeFilter == enum.ActivityTypeUserReasonUpdated),
 		discord.NewStringSelectMenuOption("User Confirmed", strconv.Itoa(int(enum.ActivityTypeUserConfirmed))).
 			WithDefault(b.activityTypeFilter == enum.ActivityTypeUserConfirmed),
 		discord.NewStringSelectMenuOption("User Cleared", strconv.Itoa(int(enum.ActivityTypeUserCleared))).
@@ -226,6 +230,10 @@ func (b *Builder) buildActivityTypeOptions() []discord.StringSelectMenuOption {
 	groupOptions := []discord.StringSelectMenuOption{
 		discord.NewStringSelectMenuOption("Group Viewed", strconv.Itoa(int(enum.ActivityTypeGroupViewed))).
 			WithDefault(b.activityTypeFilter == enum.ActivityTypeGroupViewed),
+		discord.NewStringSelectMenuOption("Group Lookup", strconv.Itoa(int(enum.ActivityTypeGroupLookup))).
+			WithDefault(b.activityTypeFilter == enum.ActivityTypeGroupLookup),
+		discord.NewStringSelectMenuOption("Group Reason Updated", strconv.Itoa(int(enum.ActivityTypeGroupReasonUpdated))).
+			WithDefault(b.activityTypeFilter == enum.ActivityTypeGroupReasonUpdated),
 		discord.NewStringSelectMenuOption("Group Confirmed", strconv.Itoa(int(enum.ActivityTypeGroupConfirmed))).
 			WithDefault(b.activityTypeFilter == enum.ActivityTypeGroupConfirmed),
 		discord.NewStringSelectMenuOption("Group Confirmed (Custom)", strconv.Itoa(int(enum.ActivityTypeGroupConfirmedCustom))).

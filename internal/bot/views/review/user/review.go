@@ -343,6 +343,7 @@ func (b *ReviewBuilder) buildReasonOptions() []discord.StringSelectMenuOption {
 		enum.UserReasonTypeOutfit,
 		enum.UserReasonTypeGroup,
 		enum.UserReasonTypeCondo,
+		enum.UserReasonTypeChat,
 	}
 	return shared.BuildReasonOptions(b.user.Reasons, reasonTypes, getReasonEmoji, b.ReasonsChanged)
 }
@@ -377,6 +378,7 @@ func (b *ReviewBuilder) getReason() string {
 		enum.UserReasonTypeOutfit,
 		enum.UserReasonTypeGroup,
 		enum.UserReasonTypeCondo,
+		enum.UserReasonTypeChat,
 	}
 
 	for _, reasonType := range reasonTypes {
@@ -665,6 +667,8 @@ func getReasonEmoji(reasonType enum.UserReasonType) string {
 		return "🌐"
 	case enum.UserReasonTypeCondo:
 		return "🏠"
+	case enum.UserReasonTypeChat:
+		return "💬"
 	default:
 		return "❓"
 	}

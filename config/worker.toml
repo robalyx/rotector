@@ -36,6 +36,8 @@ user_analysis = 10
 friend_analysis = 10
 # Maximum concurrent AI requests for message analysis
 message_analysis = 5
+# Maximum concurrent AI requests for ivan message analysis
+ivan_message_analysis = 5
 
 # Number of outfits to analyze in one AI request
 outfit_analysis_batch = 10
@@ -45,6 +47,8 @@ user_analysis_batch = 25
 friend_analysis_batch = 25
 # Number of messages to analyze in one AI request
 message_analysis_batch = 25
+# Number of ivan messages to analyze in one AI request
+ivan_message_analysis_batch = 100
 
 [worker.threshold_limits]
 # Maximum number of flagged users before stopping worker

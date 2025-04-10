@@ -16,6 +16,8 @@ const (
 	UserReasonTypeGroup
 	// UserReasonTypeCondo indicates condo game analysis.
 	UserReasonTypeCondo
+	// UserReasonTypeChat indicates analysis of user's chat messages.
+	UserReasonTypeChat
 )
 
 // GroupReasonType represents the source of a flagging reason.
