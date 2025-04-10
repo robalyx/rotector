@@ -3,6 +3,7 @@ package interaction
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"image"
 	"image/draw"
@@ -18,6 +19,8 @@ import (
 	"go.uber.org/zap"
 	"golang.org/x/image/webp"
 )
+
+var ErrImageDownloadFailed = errors.New("failed to download image after 3 attempts")
 
 // StreamRequest contains all the parameters needed for streaming images.
 type StreamRequest struct {
@@ -81,7 +84,10 @@ func (is *ImageStreamer) Stream(req StreamRequest) {
 		return
 	}
 
-	// Track downloaded images and failed downloads
+	// Create request context with timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
 	var (
 		mu               sync.RWMutex
 		downloadedImages = make([][]byte, len(urls))
@@ -90,50 +96,36 @@ func (is *ImageStreamer) Stream(req StreamRequest) {
 		doneChan         = make(chan struct{})
 	)
 
-	// Create request context with timeout
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
 	// Start downloading images concurrently
 	for i, url := range urls {
 		go func(index int, url string) {
-			// Skip if the URL is invalid
-			if url == "" || url == fetcher.ThumbnailPlaceholder {
-				resultChan <- DownloadResult{index: index}
-				return
-			}
-
-			// Download image
-			resp, err := is.client.NewRequest().URL(url).Do(ctx)
+			// Attempt download with retries
+			data, err := is.downloadImage(ctx, url)
 			if err != nil {
-				is.logger.Warn("Failed to download image", zap.Error(err), zap.String("url", url))
-				failedDownloads.Add(1)
-				resultChan <- DownloadResult{index: index}
-				return
-			}
-			defer resp.Body.Close()
-
-			// Read image data into buffer
-			buf := new(bytes.Buffer)
-			if _, err := buf.ReadFrom(resp.Body); err != nil {
-				is.logger.Warn("Failed to read image", zap.Error(err), zap.String("url", url))
+				is.logger.Warn("Failed to download image after retries",
+					zap.Error(err),
+					zap.String("url", url))
 				failedDownloads.Add(1)
 				resultChan <- DownloadResult{index: index}
 				return
 			}
 
-			resultChan <- DownloadResult{index: index, data: buf.Bytes()}
+			resultChan <- DownloadResult{index: index, data: data}
 		}(i, url)
 	}
 
 	// Collect downloaded images as they complete
 	go func() {
 		for range urls {
-			result := <-resultChan
-			if result.data != nil {
-				mu.Lock()
-				downloadedImages[result.index] = result.data
-				mu.Unlock()
+			select {
+			case <-ctx.Done():
+				return
+			case result := <-resultChan:
+				if result.data != nil {
+					mu.Lock()
+					downloadedImages[result.index] = result.data
+					mu.Unlock()
+				}
 			}
 		}
 		close(doneChan)
@@ -147,7 +139,7 @@ func (is *ImageStreamer) Stream(req StreamRequest) {
 		select {
 		case <-ctx.Done():
 			// Clean up streaming state before returning
-			is.createAndDisplayGrid(req, downloadedImages, &mu, "Images took too long to load")
+			is.createAndDisplayGrid(req, downloadedImages, &mu, "Image loading timed out")
 			session.PaginationIsStreaming.Set(req.Session, false)
 			return
 		case <-doneChan:
@@ -170,6 +162,46 @@ func (is *ImageStreamer) Stream(req StreamRequest) {
 			is.createAndDisplayGrid(req, downloadedImages, &mu, message)
 		}
 	}
+}
+
+// downloadImage attempts to download an image with retries.
+func (is *ImageStreamer) downloadImage(ctx context.Context, url string) ([]byte, error) {
+	// Skip if URL is invalid
+	if url == "" || url == fetcher.ThumbnailPlaceholder {
+		return nil, nil
+	}
+
+	// Try up to 3 times with 2 seconds timeout each
+	for attempt := 1; attempt <= 3; attempt++ {
+		// Create timeout context for this attempt
+		downloadCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+		defer cancel()
+
+		// Attempt download
+		resp, err := is.client.NewRequest().URL(url).Do(downloadCtx)
+		if err != nil {
+			is.logger.Debug("Download attempt failed",
+				zap.Int("attempt", attempt),
+				zap.Error(err),
+				zap.String("url", url))
+			continue
+		}
+		defer resp.Body.Close()
+
+		// Read image data
+		buf := new(bytes.Buffer)
+		if _, err := buf.ReadFrom(resp.Body); err != nil {
+			is.logger.Debug("Failed to read image data",
+				zap.Int("attempt", attempt),
+				zap.Error(err),
+				zap.String("url", url))
+			continue
+		}
+
+		return buf.Bytes(), nil
+	}
+
+	return nil, ErrImageDownloadFailed
 }
 
 // createAndDisplayGrid creates and displays the image grid.
