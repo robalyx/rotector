@@ -101,32 +101,37 @@ func (a *StatsAnalyzer) GenerateWelcomeMessage(
 		return "", fmt.Errorf("%w: %w", ErrJSONProcessing, err)
 	}
 
-	// Generate welcome message
-	resp, err := a.openAIClient.Chat.Completions.New(ctx, openai.ChatCompletionNewParams{
-		Messages: []openai.ChatCompletionMessageParamUnion{
-			openai.SystemMessage(StatsSystemPrompt),
-			openai.UserMessage(string(statsJSON)),
-		},
-		Model:               a.model,
-		Temperature:         openai.Float(0.7),
-		TopP:                openai.Float(0.7),
-		MaxCompletionTokens: openai.Int(512),
-	})
+	// Generate welcome message with retry
+	response, err := utils.WithRetry(ctx, func() (string, error) {
+		resp, err := a.openAIClient.Chat.Completions.New(ctx, openai.ChatCompletionNewParams{
+			Messages: []openai.ChatCompletionMessageParamUnion{
+				openai.SystemMessage(StatsSystemPrompt),
+				openai.UserMessage(string(statsJSON)),
+			},
+			Model:               a.model,
+			Temperature:         openai.Float(0.7),
+			TopP:                openai.Float(0.7),
+			MaxCompletionTokens: openai.Int(512),
+		})
+		if err != nil {
+			return "", fmt.Errorf("openai API error: %w", err)
+		}
+
+		// Check for empty response
+		if len(resp.Choices) == 0 || len(resp.Choices[0].Message.Content) == 0 {
+			return "", fmt.Errorf("%w: no response from model", ErrModelResponse)
+		}
+
+		// Extract response text
+		content := resp.Choices[0].Message.Content
+		return utils.CompressAllWhitespace(content), nil
+	}, utils.GetAIRetryOptions())
 	if err != nil {
-		return "", fmt.Errorf("openai API error: %w", err)
+		return "", fmt.Errorf("%w: %w", ErrModelResponse, err)
 	}
-
-	// Check for empty response
-	if len(resp.Choices) == 0 || len(resp.Choices[0].Message.Content) == 0 {
-		return "", fmt.Errorf("%w: no response from model", ErrModelResponse)
-	}
-
-	// Extract response text
-	content := resp.Choices[0].Message.Content
-	message := utils.CompressAllWhitespace(content)
 
 	a.logger.Debug("Generated welcome message",
-		zap.String("message", message))
+		zap.String("message", response))
 
-	return message, nil
+	return response, nil
 }

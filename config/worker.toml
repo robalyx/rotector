@@ -37,6 +37,8 @@ friend_analysis = 10
 # Maximum concurrent AI requests for message analysis
 message_analysis = 5
 
+# Number of outfits to analyze in one AI request
+outfit_analysis_batch = 10
 # Number of users to analyze in one AI request
 user_analysis_batch = 25
 # Number of users to analyze in one friend AI request

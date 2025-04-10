@@ -104,7 +104,7 @@ func InitializeApp(ctx context.Context, serviceType ServiceType, logDir string) 
 		option.WithAPIKey(cfg.Common.OpenAI.APIKey),
 		option.WithBaseURL(cfg.Common.OpenAI.BaseURL),
 		option.WithRequestTimeout(60*time.Second),
-		option.WithMaxRetries(3),
+		option.WithMaxRetries(0),
 	)
 
 	// RoAPI client is configured with middleware chain

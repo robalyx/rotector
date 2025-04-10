@@ -261,39 +261,46 @@ func (a *FriendAnalyzer) processBatch(
 	// Configure prompt for friend analysis
 	prompt := fmt.Sprintf(FriendUserPrompt, string(batchDataJSON))
 
-	// Generate friend analysis
-	resp, err := a.openAIClient.Chat.Completions.New(ctx, openai.ChatCompletionNewParams{
-		Messages: []openai.ChatCompletionMessageParamUnion{
-			openai.SystemMessage(FriendSystemPrompt),
-			openai.UserMessage(prompt),
-		},
-		ResponseFormat: openai.ChatCompletionNewParamsResponseFormatUnion{
-			OfJSONSchema: &openai.ResponseFormatJSONSchemaParam{
-				JSONSchema: openai.ResponseFormatJSONSchemaJSONSchemaParam{
-					Name:        "friendAnalysis",
-					Description: openai.String("Analysis of friend network patterns"),
-					Schema:      FriendAnalysisSchema,
-					Strict:      openai.Bool(true),
+	// Generate friend analysis with retry
+	result, err := utils.WithRetry(ctx, func() (*BatchFriendAnalysis, error) {
+		resp, err := a.openAIClient.Chat.Completions.New(ctx, openai.ChatCompletionNewParams{
+			Messages: []openai.ChatCompletionMessageParamUnion{
+				openai.SystemMessage(FriendSystemPrompt),
+				openai.UserMessage(prompt),
+			},
+			ResponseFormat: openai.ChatCompletionNewParamsResponseFormatUnion{
+				OfJSONSchema: &openai.ResponseFormatJSONSchemaParam{
+					JSONSchema: openai.ResponseFormatJSONSchemaJSONSchemaParam{
+						Name:        "friendAnalysis",
+						Description: openai.String("Analysis of friend network patterns"),
+						Schema:      FriendAnalysisSchema,
+						Strict:      openai.Bool(true),
+					},
 				},
 			},
-		},
-		Model:       a.model,
-		Temperature: openai.Float(0.2),
-		TopP:        openai.Float(0.4),
-	})
+			Model:       a.model,
+			Temperature: openai.Float(0.2),
+			TopP:        openai.Float(0.4),
+		})
+		if err != nil {
+			return nil, fmt.Errorf("openai API error: %w", err)
+		}
+
+		// Check for empty response
+		if len(resp.Choices) == 0 || len(resp.Choices[0].Message.Content) == 0 {
+			return nil, fmt.Errorf("%w: no response from model", ErrModelResponse)
+		}
+
+		// Parse response from AI
+		var result *BatchFriendAnalysis
+		if err := sonic.Unmarshal([]byte(resp.Choices[0].Message.Content), &result); err != nil {
+			return nil, fmt.Errorf("JSON unmarshal error: %w", err)
+		}
+
+		return result, nil
+	}, utils.GetAIRetryOptions())
 	if err != nil {
-		return nil, fmt.Errorf("openai API error: %w", err)
-	}
-
-	// Check for empty response
-	if len(resp.Choices) == 0 || len(resp.Choices[0].Message.Content) == 0 {
-		return nil, fmt.Errorf("%w: no response from model", ErrModelResponse)
-	}
-
-	// Parse response from AI
-	var result *BatchFriendAnalysis
-	if err := sonic.Unmarshal([]byte(resp.Choices[0].Message.Content), &result); err != nil {
-		return nil, fmt.Errorf("JSON unmarshal error: %w", err)
+		return nil, fmt.Errorf("%w: %w", ErrModelResponse, err)
 	}
 
 	// Verify we got results for all users in the batch

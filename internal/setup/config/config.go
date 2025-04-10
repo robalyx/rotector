@@ -218,6 +218,8 @@ type BatchSizes struct {
 	FriendAnalysis int `koanf:"friend_analysis"`
 	// Maximum concurrent AI requests for message analysis.
 	MessageAnalysis int `koanf:"message_analysis"`
+	// Number of outfits to analyze in one AI request.
+	OutfitAnalysisBatch int `koanf:"outfit_analysis_batch"`
 	// Number of users to analyze in one AI request.
 	UserAnalysisBatch int `koanf:"user_analysis_batch"`
 	// Number of users to analyze in one friend AI request.

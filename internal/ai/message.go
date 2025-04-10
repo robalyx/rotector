@@ -290,39 +290,46 @@ func (a *MessageAnalyzer) processBatch(
 	// Format the prompt using the template
 	prompt := fmt.Sprintf(MessageAnalysisPrompt, serverName, minifiedJSON)
 
-	// Generate message analysis
-	resp, err := a.openAIClient.Chat.Completions.New(ctx, openai.ChatCompletionNewParams{
-		Messages: []openai.ChatCompletionMessageParamUnion{
-			openai.SystemMessage(MessageSystemPrompt),
-			openai.UserMessage(prompt),
-		},
-		ResponseFormat: openai.ChatCompletionNewParamsResponseFormatUnion{
-			OfJSONSchema: &openai.ResponseFormatJSONSchemaParam{
-				JSONSchema: openai.ResponseFormatJSONSchemaJSONSchemaParam{
-					Name:        "messageAnalysis",
-					Description: openai.String("Analysis of Discord messages"),
-					Schema:      MessageAnalysisSchema,
-					Strict:      openai.Bool(true),
+	// Generate message analysis with retry
+	result, err := utils.WithRetry(ctx, func() (*FlaggedMessagesResponse, error) {
+		resp, err := a.openAIClient.Chat.Completions.New(ctx, openai.ChatCompletionNewParams{
+			Messages: []openai.ChatCompletionMessageParamUnion{
+				openai.SystemMessage(MessageSystemPrompt),
+				openai.UserMessage(prompt),
+			},
+			ResponseFormat: openai.ChatCompletionNewParamsResponseFormatUnion{
+				OfJSONSchema: &openai.ResponseFormatJSONSchemaParam{
+					JSONSchema: openai.ResponseFormatJSONSchemaJSONSchemaParam{
+						Name:        "messageAnalysis",
+						Description: openai.String("Analysis of Discord messages"),
+						Schema:      MessageAnalysisSchema,
+						Strict:      openai.Bool(true),
+					},
 				},
 			},
-		},
-		Model:       a.model,
-		Temperature: openai.Float(0.2),
-		TopP:        openai.Float(0.95),
-	})
+			Model:       a.model,
+			Temperature: openai.Float(0.2),
+			TopP:        openai.Float(0.95),
+		})
+		if err != nil {
+			return nil, fmt.Errorf("openai API error: %w", err)
+		}
+
+		// Check for empty response
+		if len(resp.Choices) == 0 || len(resp.Choices[0].Message.Content) == 0 {
+			return nil, fmt.Errorf("%w: no response from model", ErrModelResponse)
+		}
+
+		// Parse response from AI
+		var result *FlaggedMessagesResponse
+		if err := sonic.Unmarshal([]byte(resp.Choices[0].Message.Content), &result); err != nil {
+			return nil, fmt.Errorf("JSON unmarshal error: %w", err)
+		}
+
+		return result, nil
+	}, utils.GetAIRetryOptions())
 	if err != nil {
-		return nil, fmt.Errorf("openai API error: %w", err)
-	}
-
-	// Check for empty response
-	if len(resp.Choices) == 0 || len(resp.Choices[0].Message.Content) == 0 {
-		return nil, fmt.Errorf("%w: no response from model", ErrModelResponse)
-	}
-
-	// Parse response from AI
-	var result *FlaggedMessagesResponse
-	if err := sonic.Unmarshal([]byte(resp.Choices[0].Message.Content), &result); err != nil {
-		return nil, fmt.Errorf("JSON unmarshal error: %w", err)
+		return nil, fmt.Errorf("%w: %w", ErrModelResponse, err)
 	}
 
 	// Validate message IDs against user IDs

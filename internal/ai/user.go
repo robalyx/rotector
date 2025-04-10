@@ -99,6 +99,8 @@ Look for inappropriate content FROM PREDATORS:
 - Inappropriate trading
 - Degradation terms
 - Caesar cipher (ROT13 and other rotations)
+- "Special" or "exclusive" game pass offers
+- Promises of rewards/benefits for buying passes
 
 Look for inappropriate usernames/display names suggesting PREDATORY intentions:
 - Implying ownership, control, or subservience
@@ -206,10 +208,10 @@ func NewUserAnalyzer(app *setup.App, translator *translator.Translator, logger *
 }
 
 // ProcessUsers analyzes user content for a batch of users.
-func (a *UserAnalyzer) ProcessUsers(userInfos []*types.User, reasonsMap map[uint64]types.Reasons[enum.UserReasonType]) {
+func (a *UserAnalyzer) ProcessUsers(users []*types.User, reasonsMap map[uint64]types.Reasons[enum.UserReasonType]) {
 	// Track counts before processing
 	existingFlags := len(reasonsMap)
-	numBatches := (len(userInfos) + a.batchSize - 1) / a.batchSize
+	numBatches := (len(users) + a.batchSize - 1) / a.batchSize
 
 	// Process batches concurrently
 	var (
@@ -220,9 +222,9 @@ func (a *UserAnalyzer) ProcessUsers(userInfos []*types.User, reasonsMap map[uint
 
 	for i := range numBatches {
 		start := i * a.batchSize
-		end := min(start+a.batchSize, len(userInfos))
+		end := min(start+a.batchSize, len(users))
 
-		infoBatch := userInfos[start:end]
+		infoBatch := users[start:end]
 		p.Go(func(ctx context.Context) error {
 			// Acquire semaphore before making AI request
 			if err := a.analysisSem.Acquire(ctx, 1); err != nil {
@@ -249,11 +251,11 @@ func (a *UserAnalyzer) ProcessUsers(userInfos []*types.User, reasonsMap map[uint
 	}
 
 	a.logger.Info("Received AI user analysis",
-		zap.Int("totalUsers", len(userInfos)),
+		zap.Int("totalUsers", len(users)),
 		zap.Int("newFlags", len(reasonsMap)-existingFlags))
 }
 
-// processBatch handles a single batch of users.
+// processBatch handles analysis for a batch of users.
 func (a *UserAnalyzer) processBatch(
 	ctx context.Context, userInfos []*types.User, reasonsMap map[uint64]types.Reasons[enum.UserReasonType], mu *sync.Mutex,
 ) error {
@@ -303,39 +305,46 @@ func (a *UserAnalyzer) processBatch(
 	// Prepare request prompt with user info
 	requestPrompt := UserRequestPrompt + string(userInfoJSON)
 
-	// Generate user analysis
-	resp, err := a.openAIClient.Chat.Completions.New(ctx, openai.ChatCompletionNewParams{
-		Messages: []openai.ChatCompletionMessageParamUnion{
-			openai.SystemMessage(UserSystemPrompt),
-			openai.UserMessage(requestPrompt),
-		},
-		ResponseFormat: openai.ChatCompletionNewParamsResponseFormatUnion{
-			OfJSONSchema: &openai.ResponseFormatJSONSchemaParam{
-				JSONSchema: openai.ResponseFormatJSONSchemaJSONSchemaParam{
-					Name:        "userAnalysis",
-					Description: openai.String("Analysis of user content"),
-					Schema:      UserAnalysisSchema,
-					Strict:      openai.Bool(true),
+	// Generate user analysis with retry
+	result, err := utils.WithRetry(ctx, func() (*FlaggedUsers, error) {
+		resp, err := a.openAIClient.Chat.Completions.New(ctx, openai.ChatCompletionNewParams{
+			Messages: []openai.ChatCompletionMessageParamUnion{
+				openai.SystemMessage(UserSystemPrompt),
+				openai.UserMessage(requestPrompt),
+			},
+			ResponseFormat: openai.ChatCompletionNewParamsResponseFormatUnion{
+				OfJSONSchema: &openai.ResponseFormatJSONSchemaParam{
+					JSONSchema: openai.ResponseFormatJSONSchemaJSONSchemaParam{
+						Name:        "userAnalysis",
+						Description: openai.String("Analysis of user content"),
+						Schema:      UserAnalysisSchema,
+						Strict:      openai.Bool(true),
+					},
 				},
 			},
-		},
-		Model:       a.model,
-		Temperature: openai.Float(0.2),
-		TopP:        openai.Float(0.4),
-	})
+			Model:       a.model,
+			Temperature: openai.Float(0.2),
+			TopP:        openai.Float(0.4),
+		})
+		if err != nil {
+			return nil, fmt.Errorf("openai API error: %w", err)
+		}
+
+		// Check for empty response
+		if len(resp.Choices) == 0 || len(resp.Choices[0].Message.Content) == 0 {
+			return nil, fmt.Errorf("%w: no response from model", ErrModelResponse)
+		}
+
+		// Parse response from AI
+		var result *FlaggedUsers
+		if err := sonic.Unmarshal([]byte(resp.Choices[0].Message.Content), &result); err != nil {
+			return nil, fmt.Errorf("JSON unmarshal error: %w", err)
+		}
+
+		return result, nil
+	}, utils.GetAIRetryOptions())
 	if err != nil {
-		return fmt.Errorf("openai API error: %w", err)
-	}
-
-	// Check for empty response
-	if len(resp.Choices) == 0 || len(resp.Choices[0].Message.Content) == 0 {
-		return fmt.Errorf("%w: no response from model", ErrModelResponse)
-	}
-
-	// Parse response from AI
-	var result *FlaggedUsers
-	if err := sonic.Unmarshal([]byte(resp.Choices[0].Message.Content), &result); err != nil {
-		return fmt.Errorf("JSON unmarshal error: %w", err)
+		return fmt.Errorf("%w: %w", ErrModelResponse, err)
 	}
 
 	// Validate AI responses
