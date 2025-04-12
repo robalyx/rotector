@@ -40,7 +40,10 @@ func NewGroup(
 }
 
 // ConfirmGroup moves a group from other group tables to confirmed_groups.
-func (s *GroupService) ConfirmGroup(ctx context.Context, group *types.ReviewGroup) error {
+func (s *GroupService) ConfirmGroup(ctx context.Context, group *types.ReviewGroup, reviewerID uint64) error {
+	// Set reviewer ID
+	group.ReviewerID = reviewerID
+
 	// Move group to confirmed table
 	if err := s.model.ConfirmGroup(ctx, group); err != nil {
 		return err
@@ -56,7 +59,10 @@ func (s *GroupService) ConfirmGroup(ctx context.Context, group *types.ReviewGrou
 }
 
 // ClearGroup moves a group from other group tables to cleared_groups.
-func (s *GroupService) ClearGroup(ctx context.Context, group *types.ReviewGroup) error {
+func (s *GroupService) ClearGroup(ctx context.Context, group *types.ReviewGroup, reviewerID uint64) error {
+	// Set reviewer ID
+	group.ReviewerID = reviewerID
+
 	// Move group to cleared table
 	if err := s.model.ClearGroup(ctx, group); err != nil {
 		return err

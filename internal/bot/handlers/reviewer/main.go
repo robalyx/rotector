@@ -2,7 +2,6 @@ package reviewer
 
 import (
 	"github.com/disgoorg/disgo/discord"
-	"github.com/disgoorg/snowflake/v2"
 	"github.com/robalyx/rotector/internal/bot/constants"
 	"github.com/robalyx/rotector/internal/bot/core/interaction"
 	"github.com/robalyx/rotector/internal/bot/core/session"
@@ -62,15 +61,28 @@ func (m *Menu) Show(ctx *interaction.Context, s *session.Session) {
 		return
 	}
 
-	// Fetch usernames for all reviewers
+	// Get reviewer IDs from stats
+	reviewerIDs := make([]uint64, 0, len(stats))
+	for reviewerID := range stats {
+		reviewerIDs = append(reviewerIDs, reviewerID)
+	}
+
+	// Fetch reviewer info from database
+	reviewerInfos, err := m.layout.db.Model().Reviewer().GetReviewerInfos(ctx.Context(), reviewerIDs)
+	if err != nil {
+		m.layout.logger.Error("Failed to get reviewer infos", zap.Error(err))
+		ctx.Error("Failed to retrieve reviewer information. Please try again.")
+		return
+	}
+
+	// Map reviewer IDs to usernames
 	usernames := make(map[uint64]string)
 	for reviewerID := range stats {
-		user, err := m.layout.client.Rest().GetUser(snowflake.ID(reviewerID))
-		if err != nil {
+		if info, exists := reviewerInfos[reviewerID]; exists {
+			usernames[reviewerID] = info.Username
+		} else {
 			usernames[reviewerID] = "Unknown"
-			continue
 		}
-		usernames[reviewerID] = user.Username
 	}
 
 	// Store results in session

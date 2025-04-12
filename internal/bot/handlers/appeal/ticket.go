@@ -702,7 +702,7 @@ func (m *TicketMenu) handleAcceptRobloxAppeal(
 
 	// Clear the user if not already cleared
 	if user.Status != enum.UserTypeCleared {
-		if err := m.layout.db.Service().User().ClearUser(ctx, user); err != nil {
+		if err := m.layout.db.Service().User().ClearUser(ctx, user, reviewerID); err != nil {
 			return fmt.Errorf("failed to clear user: %w", err)
 		}
 	}
@@ -955,6 +955,7 @@ func (m *TicketMenu) redactRobloxUserData(
 	user.Outfits = []*apiTypes.Outfit{}
 	user.Friends = []*apiTypes.ExtendedFriend{}
 	user.Games = []*apiTypes.Game{}
+	user.Inventory = []*apiTypes.InventoryAsset{}
 	user.IsDeleted = true
 	user.ThumbnailURL = ""
 	user.LastThumbnailUpdate = time.Now()

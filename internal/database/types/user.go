@@ -54,13 +54,15 @@ type FlaggedUser struct {
 type ConfirmedUser struct {
 	User       `json:"user"`
 	VerifiedAt time.Time `bun:",notnull" json:"verifiedAt"`
+	ReviewerID uint64    `bun:",notnull" json:"reviewerId"`
 }
 
 // ClearedUser extends User to track users that were cleared during review.
 // The ClearedAt field shows when the user was cleared by a moderator.
 type ClearedUser struct {
-	User      `json:"user"`
-	ClearedAt time.Time `bun:",notnull" json:"clearedAt"`
+	User       `json:"user"`
+	ClearedAt  time.Time `bun:",notnull" json:"clearedAt"`
+	ReviewerID uint64    `bun:",notnull" json:"reviewerId"`
 }
 
 // ReviewUser combines all possible user states into a single structure for review.
@@ -68,6 +70,7 @@ type ReviewUser struct {
 	User       `json:"user"`
 	VerifiedAt time.Time     `json:"verifiedAt"`
 	ClearedAt  time.Time     `json:"clearedAt"`
+	ReviewerID uint64        `json:"reviewerId"`
 	Status     enum.UserType `json:"status"`
 	Reputation Reputation    `json:"reputation"`
 }

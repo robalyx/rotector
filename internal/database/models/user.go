@@ -245,7 +245,9 @@ func (r *UserModel) GetRecentlyProcessedUsers(ctx context.Context, userIDs []uin
 // GetUserByID retrieves a user by either their numeric ID or UUID.
 //
 // Deprecated: Use Service().User().GetUserByID() instead.
-func (r *UserModel) GetUserByID(ctx context.Context, userID string, fields types.UserField) (*types.ReviewUser, error) {
+func (r *UserModel) GetUserByID(
+	ctx context.Context, userID string, fields types.UserField,
+) (*types.ReviewUser, error) {
 	var result types.ReviewUser
 	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
 		// Try each model in order until we find a user
@@ -289,10 +291,12 @@ func (r *UserModel) GetUserByID(ctx context.Context, userID string, fields types
 			case *types.ConfirmedUser:
 				result.User = m.User
 				result.VerifiedAt = m.VerifiedAt
+				result.ReviewerID = m.ReviewerID
 				result.Status = enum.UserTypeConfirmed
 			case *types.ClearedUser:
 				result.User = m.User
 				result.ClearedAt = m.ClearedAt
+				result.ReviewerID = m.ReviewerID
 				result.Status = enum.UserTypeCleared
 			}
 
@@ -311,11 +315,8 @@ func (r *UserModel) GetUserByID(ctx context.Context, userID string, fields types
 
 		return types.ErrUserNotFound
 	})
-	if err != nil {
-		return nil, err
-	}
 
-	return &result, nil
+	return &result, err
 }
 
 // GetUsersByIDs retrieves specified user information for a list of user IDs.
@@ -342,6 +343,7 @@ func (r *UserModel) GetUsersByIDs(
 			users[user.ID] = &types.ReviewUser{
 				User:       user.User,
 				VerifiedAt: user.VerifiedAt,
+				ReviewerID: user.ReviewerID,
 				Status:     enum.UserTypeConfirmed,
 			}
 		}
@@ -375,9 +377,10 @@ func (r *UserModel) GetUsersByIDs(
 		}
 		for _, user := range clearedUsers {
 			users[user.ID] = &types.ReviewUser{
-				User:      user.User,
-				ClearedAt: user.ClearedAt,
-				Status:    enum.UserTypeCleared,
+				User:       user.User,
+				ClearedAt:  user.ClearedAt,
+				ReviewerID: user.ReviewerID,
+				Status:     enum.UserTypeCleared,
 			}
 		}
 
@@ -387,11 +390,8 @@ func (r *UserModel) GetUsersByIDs(
 
 		return nil
 	})
-	if err != nil {
-		return nil, err
-	}
 
-	return users, nil
+	return users, err
 }
 
 // GetFlaggedAndConfirmedUsers retrieves all flagged and confirmed users.

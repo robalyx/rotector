@@ -220,10 +220,12 @@ func (r *GroupModel) GetGroupByID(
 			case *types.ConfirmedGroup:
 				result.Group = m.Group
 				result.VerifiedAt = m.VerifiedAt
+				result.ReviewerID = m.ReviewerID
 				result.Status = enum.GroupTypeConfirmed
 			case *types.ClearedGroup:
 				result.Group = m.Group
 				result.ClearedAt = m.ClearedAt
+				result.ReviewerID = m.ReviewerID
 				result.Status = enum.GroupTypeCleared
 			}
 
@@ -271,6 +273,7 @@ func (r *GroupModel) GetGroupsByIDs(
 			groups[group.ID] = &types.ReviewGroup{
 				Group:      group.Group,
 				VerifiedAt: group.VerifiedAt,
+				ReviewerID: group.ReviewerID,
 				Status:     enum.GroupTypeConfirmed,
 			}
 		}
@@ -304,9 +307,10 @@ func (r *GroupModel) GetGroupsByIDs(
 		}
 		for _, group := range clearedGroups {
 			groups[group.ID] = &types.ReviewGroup{
-				Group:     group.Group,
-				ClearedAt: group.ClearedAt,
-				Status:    enum.GroupTypeCleared,
+				Group:      group.Group,
+				ClearedAt:  group.ClearedAt,
+				ReviewerID: group.ReviewerID,
+				Status:     enum.GroupTypeCleared,
 			}
 		}
 

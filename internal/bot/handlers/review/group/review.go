@@ -461,14 +461,13 @@ func (m *ReviewMenu) handleNavigateGroup(ctx *interaction.Context, s *session.Se
 // handleConfirmGroup moves a group to the confirmed state and logs the action.
 func (m *ReviewMenu) handleConfirmGroup(ctx *interaction.Context, s *session.Session) {
 	group := session.GroupTarget.Get(s)
-	isAdmin := s.BotSettings().IsAdmin(uint64(ctx.Event().User().ID))
+	reviewerID := uint64(ctx.Event().User().ID)
+	isAdmin := s.BotSettings().IsAdmin(reviewerID)
 
 	var actionMsg string
 	if session.UserReviewMode.Get(s) == enum.ReviewModeTraining || !isAdmin {
 		// Training mode - increment downvotes
-		if err := m.layout.db.Service().Reputation().UpdateGroupVotes(
-			ctx.Context(), group.ID, uint64(ctx.Event().User().ID), false,
-		); err != nil {
+		if err := m.layout.db.Service().Reputation().UpdateGroupVotes(ctx.Context(), group.ID, reviewerID, false); err != nil {
 			m.layout.logger.Error("Failed to update downvotes", zap.Error(err))
 			ctx.Error("Failed to update downvotes. Please try again.")
 			return
@@ -481,7 +480,7 @@ func (m *ReviewMenu) handleConfirmGroup(ctx *interaction.Context, s *session.Ses
 			ActivityTarget: types.ActivityTarget{
 				GroupID: group.ID,
 			},
-			ReviewerID:        uint64(ctx.Event().User().ID),
+			ReviewerID:        reviewerID,
 			ActivityType:      enum.ActivityTypeGroupTrainingDownvote,
 			ActivityTimestamp: time.Now(),
 			Details: map[string]any{
@@ -491,9 +490,9 @@ func (m *ReviewMenu) handleConfirmGroup(ctx *interaction.Context, s *session.Ses
 		})
 	} else {
 		// Standard mode - check permissions and confirm group
-		if !s.BotSettings().IsReviewer(uint64(ctx.Event().User().ID)) {
+		if !s.BotSettings().IsReviewer(reviewerID) {
 			m.layout.logger.Error("Non-reviewer attempted to confirm group",
-				zap.Uint64("user_id", uint64(ctx.Event().User().ID)))
+				zap.Uint64("user_id", reviewerID))
 			ctx.Error("You do not have permission to confirm groups.")
 			return
 		}
@@ -512,7 +511,7 @@ func (m *ReviewMenu) handleConfirmGroup(ctx *interaction.Context, s *session.Ses
 		}
 
 		// Confirm the group
-		if err := m.layout.db.Service().Group().ConfirmGroup(ctx.Context(), group); err != nil {
+		if err := m.layout.db.Service().Group().ConfirmGroup(ctx.Context(), group, reviewerID); err != nil {
 			m.layout.logger.Error("Failed to confirm group", zap.Error(err))
 			ctx.Error("Failed to confirm the group. Please try again.")
 			return
@@ -526,7 +525,7 @@ func (m *ReviewMenu) handleConfirmGroup(ctx *interaction.Context, s *session.Ses
 				ActivityTarget: types.ActivityTarget{
 					GroupID: group.ID,
 				},
-				ReviewerID:        uint64(ctx.Event().User().ID),
+				ReviewerID:        reviewerID,
 				ActivityType:      enum.ActivityTypeGroupReasonUpdated,
 				ActivityTimestamp: time.Now(),
 				Details: map[string]any{
@@ -541,7 +540,7 @@ func (m *ReviewMenu) handleConfirmGroup(ctx *interaction.Context, s *session.Ses
 			ActivityTarget: types.ActivityTarget{
 				GroupID: group.ID,
 			},
-			ReviewerID:        uint64(ctx.Event().User().ID),
+			ReviewerID:        reviewerID,
 			ActivityType:      enum.ActivityTypeGroupConfirmed,
 			ActivityTimestamp: time.Now(),
 			Details: map[string]any{
@@ -559,14 +558,13 @@ func (m *ReviewMenu) handleConfirmGroup(ctx *interaction.Context, s *session.Ses
 // handleClearGroup removes a group from the flagged state and logs the action.
 func (m *ReviewMenu) handleClearGroup(ctx *interaction.Context, s *session.Session) {
 	group := session.GroupTarget.Get(s)
-	isAdmin := s.BotSettings().IsAdmin(uint64(ctx.Event().User().ID))
+	reviewerID := uint64(ctx.Event().User().ID)
+	isAdmin := s.BotSettings().IsAdmin(reviewerID)
 
 	var actionMsg string
 	if session.UserReviewMode.Get(s) == enum.ReviewModeTraining || !isAdmin {
 		// Training mode - increment upvotes
-		if err := m.layout.db.Service().Reputation().UpdateGroupVotes(
-			ctx.Context(), group.ID, uint64(ctx.Event().User().ID), true,
-		); err != nil {
+		if err := m.layout.db.Service().Reputation().UpdateGroupVotes(ctx.Context(), group.ID, reviewerID, true); err != nil {
 			m.layout.logger.Error("Failed to update upvotes", zap.Error(err))
 			ctx.Error("Failed to update upvotes. Please try again.")
 			return
@@ -579,7 +577,7 @@ func (m *ReviewMenu) handleClearGroup(ctx *interaction.Context, s *session.Sessi
 			ActivityTarget: types.ActivityTarget{
 				GroupID: group.ID,
 			},
-			ReviewerID:        uint64(ctx.Event().User().ID),
+			ReviewerID:        reviewerID,
 			ActivityType:      enum.ActivityTypeGroupTrainingUpvote,
 			ActivityTimestamp: time.Now(),
 			Details: map[string]any{
@@ -589,9 +587,9 @@ func (m *ReviewMenu) handleClearGroup(ctx *interaction.Context, s *session.Sessi
 		})
 	} else {
 		// Standard mode - check permissions and clear group
-		if !s.BotSettings().IsReviewer(uint64(ctx.Event().User().ID)) {
+		if !s.BotSettings().IsReviewer(reviewerID) {
 			m.layout.logger.Error("Non-reviewer attempted to clear group",
-				zap.Uint64("user_id", uint64(ctx.Event().User().ID)))
+				zap.Uint64("user_id", reviewerID))
 			ctx.Error("You do not have permission to clear groups.")
 			return
 		}
@@ -616,7 +614,7 @@ func (m *ReviewMenu) handleClearGroup(ctx *interaction.Context, s *session.Sessi
 				ActivityTarget: types.ActivityTarget{
 					GroupID: group.ID,
 				},
-				ReviewerID:        uint64(ctx.Event().User().ID),
+				ReviewerID:        reviewerID,
 				ActivityType:      enum.ActivityTypeGroupReasonUpdated,
 				ActivityTimestamp: time.Now(),
 				Details: map[string]any{
@@ -627,7 +625,7 @@ func (m *ReviewMenu) handleClearGroup(ctx *interaction.Context, s *session.Sessi
 		}
 
 		// Clear the group
-		if err := m.layout.db.Service().Group().ClearGroup(ctx.Context(), group); err != nil {
+		if err := m.layout.db.Service().Group().ClearGroup(ctx.Context(), group, reviewerID); err != nil {
 			m.layout.logger.Error("Failed to clear group", zap.Error(err))
 			ctx.Error("Failed to clear the group. Please try again.")
 			return
@@ -639,7 +637,7 @@ func (m *ReviewMenu) handleClearGroup(ctx *interaction.Context, s *session.Sessi
 			ActivityTarget: types.ActivityTarget{
 				GroupID: group.ID,
 			},
-			ReviewerID:        uint64(ctx.Event().User().ID),
+			ReviewerID:        reviewerID,
 			ActivityType:      enum.ActivityTypeGroupCleared,
 			ActivityTimestamp: time.Now(),
 			Details:           map[string]any{},

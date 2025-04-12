@@ -40,7 +40,10 @@ func NewUser(
 }
 
 // ConfirmUser moves a user from other user tables to confirmed_users.
-func (s *UserService) ConfirmUser(ctx context.Context, user *types.ReviewUser) error {
+func (s *UserService) ConfirmUser(ctx context.Context, user *types.ReviewUser, reviewerID uint64) error {
+	// Set reviewer ID
+	user.ReviewerID = reviewerID
+
 	// Move user to confirmed table
 	if err := s.model.ConfirmUser(ctx, user); err != nil {
 		return err
@@ -56,7 +59,10 @@ func (s *UserService) ConfirmUser(ctx context.Context, user *types.ReviewUser) e
 }
 
 // ClearUser moves a user from other user tables to cleared_users.
-func (s *UserService) ClearUser(ctx context.Context, user *types.ReviewUser) error {
+func (s *UserService) ClearUser(ctx context.Context, user *types.ReviewUser, reviewerID uint64) error {
+	// Set reviewer ID
+	user.ReviewerID = reviewerID
+
 	// Move user to cleared table
 	if err := s.model.ClearUser(ctx, user); err != nil {
 		return err

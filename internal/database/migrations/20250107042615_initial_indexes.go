@@ -298,6 +298,10 @@ func init() { //nolint:funlen
 			CREATE INDEX IF NOT EXISTS idx_ivan_messages_unchecked
 			ON ivan_messages (user_id) 
 			WHERE was_checked = false;
+
+			-- Reviewer info indexes
+			CREATE INDEX IF NOT EXISTS idx_reviewer_infos_updated_at
+			ON reviewer_infos (updated_at);
 		`, enum.ActivityTypeUserViewed, enum.ActivityTypeGroupViewed).Exec(ctx)
 		if err != nil {
 			return fmt.Errorf("failed to create indexes: %w", err)
@@ -487,6 +491,9 @@ func init() { //nolint:funlen
 			DROP INDEX IF EXISTS idx_ivan_messages_user_time;
 			DROP INDEX IF EXISTS idx_ivan_messages_multi_user;
 			DROP INDEX IF EXISTS idx_ivan_messages_unchecked;
+
+			-- Reviewer info indexes
+			DROP INDEX IF EXISTS idx_reviewer_infos_updated_at;
 		`).Exec(ctx)
 		if err != nil {
 			return fmt.Errorf("failed to drop indexes: %w", err)

@@ -44,13 +44,15 @@ type FlaggedGroup struct {
 type ConfirmedGroup struct {
 	Group      `json:"group"`
 	VerifiedAt time.Time `bun:",notnull" json:"verifiedAt"`
+	ReviewerID uint64    `bun:",notnull" json:"reviewerId"`
 }
 
 // ClearedGroup extends Group to track groups that were cleared during review.
 // The ClearedAt field shows when the group was cleared by a moderator.
 type ClearedGroup struct {
-	Group     `json:"group"`
-	ClearedAt time.Time `bun:",notnull" json:"clearedAt"`
+	Group      `json:"group"`
+	ClearedAt  time.Time `bun:",notnull" json:"clearedAt"`
+	ReviewerID uint64    `bun:",notnull" json:"reviewerId"`
 }
 
 // ReviewGroup combines all possible group states into a single structure for review.
@@ -58,6 +60,7 @@ type ReviewGroup struct {
 	Group      `json:"group"`
 	VerifiedAt time.Time      `json:"verifiedAt"`
 	ClearedAt  time.Time      `json:"clearedAt"`
+	ReviewerID uint64         `json:"reviewerId"`
 	Status     enum.GroupType `json:"status"`
 	Reputation Reputation     `json:"reputation"`
 }

@@ -392,13 +392,12 @@ func (m *ReviewMenu) handleNavigateUser(ctx *interaction.Context, s *session.Ses
 // handleConfirmUser moves a user to the confirmed state and logs the action.
 func (m *ReviewMenu) handleConfirmUser(ctx *interaction.Context, s *session.Session) {
 	user := session.UserTarget.Get(s)
+	reviewerID := uint64(ctx.Event().User().ID)
 
 	var actionMsg string
 	if session.UserReviewMode.Get(s) == enum.ReviewModeTraining {
 		// Training mode - increment downvotes
-		if err := m.layout.db.Service().Reputation().UpdateUserVotes(
-			ctx.Context(), user.ID, uint64(ctx.Event().User().ID), false,
-		); err != nil {
+		if err := m.layout.db.Service().Reputation().UpdateUserVotes(ctx.Context(), user.ID, reviewerID, false); err != nil {
 			m.layout.logger.Error("Failed to update downvotes", zap.Error(err))
 			ctx.Error("Failed to update downvotes. Please try again.")
 			return
@@ -411,7 +410,7 @@ func (m *ReviewMenu) handleConfirmUser(ctx *interaction.Context, s *session.Sess
 			ActivityTarget: types.ActivityTarget{
 				UserID: user.ID,
 			},
-			ReviewerID:        uint64(ctx.Event().User().ID),
+			ReviewerID:        reviewerID,
 			ActivityType:      enum.ActivityTypeUserTrainingDownvote,
 			ActivityTimestamp: time.Now(),
 			Details: map[string]any{
@@ -421,9 +420,9 @@ func (m *ReviewMenu) handleConfirmUser(ctx *interaction.Context, s *session.Sess
 		})
 	} else {
 		// Standard mode - check permissions and confirm user
-		if !s.BotSettings().IsReviewer(uint64(ctx.Event().User().ID)) {
+		if !s.BotSettings().IsReviewer(reviewerID) {
 			m.layout.logger.Error("Non-reviewer attempted to confirm user",
-				zap.Uint64("user_id", uint64(ctx.Event().User().ID)))
+				zap.Uint64("user_id", reviewerID))
 			ctx.Error("You do not have permission to confirm users.")
 			return
 		}
@@ -442,7 +441,7 @@ func (m *ReviewMenu) handleConfirmUser(ctx *interaction.Context, s *session.Sess
 		}
 
 		// Confirm the user
-		if err := m.layout.db.Service().User().ConfirmUser(ctx.Context(), user); err != nil {
+		if err := m.layout.db.Service().User().ConfirmUser(ctx.Context(), user, reviewerID); err != nil {
 			m.layout.logger.Error("Failed to confirm user", zap.Error(err))
 			ctx.Error("Failed to confirm the user. Please try again.")
 			return
@@ -456,7 +455,7 @@ func (m *ReviewMenu) handleConfirmUser(ctx *interaction.Context, s *session.Sess
 				ActivityTarget: types.ActivityTarget{
 					UserID: user.ID,
 				},
-				ReviewerID:        uint64(ctx.Event().User().ID),
+				ReviewerID:        reviewerID,
 				ActivityType:      enum.ActivityTypeUserReasonUpdated,
 				ActivityTimestamp: time.Now(),
 				Details: map[string]any{
@@ -471,7 +470,7 @@ func (m *ReviewMenu) handleConfirmUser(ctx *interaction.Context, s *session.Sess
 			ActivityTarget: types.ActivityTarget{
 				UserID: user.ID,
 			},
-			ReviewerID:        uint64(ctx.Event().User().ID),
+			ReviewerID:        reviewerID,
 			ActivityType:      enum.ActivityTypeUserConfirmed,
 			ActivityTimestamp: time.Now(),
 			Details: map[string]any{
@@ -496,13 +495,12 @@ func (m *ReviewMenu) handleConfirmUser(ctx *interaction.Context, s *session.Sess
 // handleClearUser removes a user from the flagged state and logs the action.
 func (m *ReviewMenu) handleClearUser(ctx *interaction.Context, s *session.Session) {
 	user := session.UserTarget.Get(s)
+	reviewerID := uint64(ctx.Event().User().ID)
 
 	var actionMsg string
 	if session.UserReviewMode.Get(s) == enum.ReviewModeTraining {
 		// Training mode - increment upvotes
-		if err := m.layout.db.Service().Reputation().UpdateUserVotes(
-			ctx.Context(), user.ID, uint64(ctx.Event().User().ID), true,
-		); err != nil {
+		if err := m.layout.db.Service().Reputation().UpdateUserVotes(ctx.Context(), user.ID, reviewerID, true); err != nil {
 			m.layout.logger.Error("Failed to update upvotes", zap.Error(err))
 			ctx.Error("Failed to update upvotes. Please try again.")
 			return
@@ -515,7 +513,7 @@ func (m *ReviewMenu) handleClearUser(ctx *interaction.Context, s *session.Sessio
 			ActivityTarget: types.ActivityTarget{
 				UserID: user.ID,
 			},
-			ReviewerID:        uint64(ctx.Event().User().ID),
+			ReviewerID:        reviewerID,
 			ActivityType:      enum.ActivityTypeUserTrainingUpvote,
 			ActivityTimestamp: time.Now(),
 			Details: map[string]any{
@@ -525,9 +523,9 @@ func (m *ReviewMenu) handleClearUser(ctx *interaction.Context, s *session.Sessio
 		})
 	} else {
 		// Standard mode - check permissions and clear user
-		if !s.BotSettings().IsReviewer(uint64(ctx.Event().User().ID)) {
+		if !s.BotSettings().IsReviewer(reviewerID) {
 			m.layout.logger.Error("Non-reviewer attempted to clear user",
-				zap.Uint64("user_id", uint64(ctx.Event().User().ID)))
+				zap.Uint64("user_id", reviewerID))
 			ctx.Error("You do not have permission to clear users.")
 			return
 		}
@@ -552,7 +550,7 @@ func (m *ReviewMenu) handleClearUser(ctx *interaction.Context, s *session.Sessio
 				ActivityTarget: types.ActivityTarget{
 					UserID: user.ID,
 				},
-				ReviewerID:        uint64(ctx.Event().User().ID),
+				ReviewerID:        reviewerID,
 				ActivityType:      enum.ActivityTypeUserReasonUpdated,
 				ActivityTimestamp: time.Now(),
 				Details: map[string]any{
@@ -563,7 +561,7 @@ func (m *ReviewMenu) handleClearUser(ctx *interaction.Context, s *session.Sessio
 		}
 
 		// Clear the user
-		if err := m.layout.db.Service().User().ClearUser(ctx.Context(), user); err != nil {
+		if err := m.layout.db.Service().User().ClearUser(ctx.Context(), user, reviewerID); err != nil {
 			m.layout.logger.Error("Failed to clear user", zap.Error(err))
 			ctx.Error("Failed to clear the user. Please try again.")
 			return
@@ -578,7 +576,7 @@ func (m *ReviewMenu) handleClearUser(ctx *interaction.Context, s *session.Sessio
 			ActivityTarget: types.ActivityTarget{
 				UserID: user.ID,
 			},
-			ReviewerID:        uint64(ctx.Event().User().ID),
+			ReviewerID:        reviewerID,
 			ActivityType:      enum.ActivityTypeUserCleared,
 			ActivityTimestamp: time.Now(),
 			Details:           map[string]any{},

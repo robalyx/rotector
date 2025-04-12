@@ -4,8 +4,13 @@ import (
 	"context"
 	"time"
 
+	"github.com/disgoorg/disgo"
+	"github.com/disgoorg/disgo/bot"
+	"github.com/disgoorg/disgo/gateway"
+	"github.com/disgoorg/snowflake/v2"
 	"github.com/jaxron/roapi.go/pkg/api"
 	"github.com/robalyx/rotector/internal/database"
+	"github.com/robalyx/rotector/internal/database/types"
 	"github.com/robalyx/rotector/internal/progress"
 	"github.com/robalyx/rotector/internal/roblox/checker"
 	"github.com/robalyx/rotector/internal/roblox/fetcher"
@@ -17,6 +22,7 @@ import (
 // Worker handles all maintenance operations.
 type Worker struct {
 	db                      database.Client
+	bot                     bot.Client
 	roAPI                   *api.API
 	bar                     *progress.Bar
 	userFetcher             *fetcher.UserFetcher
@@ -25,6 +31,7 @@ type Worker struct {
 	groupChecker            *checker.GroupChecker
 	reporter                *core.StatusReporter
 	logger                  *zap.Logger
+	reviewerInfoMaxAge      time.Duration
 	userBatchSize           int
 	groupBatchSize          int
 	trackBatchSize          int
@@ -47,8 +54,22 @@ func New(app *setup.App, bar *progress.Bar, logger *zap.Logger) *Worker {
 		app.Config.Worker.ThresholdLimits.MinFlaggedPercentage,
 	)
 
+	// Create Discord client
+	client, err := disgo.New(app.Config.Bot.Discord.Token,
+		bot.WithGatewayConfigOpts(
+			gateway.WithIntents(
+				gateway.IntentGuilds,
+				gateway.IntentGuildMembers,
+			),
+		),
+	)
+	if err != nil {
+		logger.Fatal("failed to create Discord client", zap.Error(err))
+	}
+
 	return &Worker{
 		db:                      app.DB,
+		bot:                     client,
 		roAPI:                   app.RoAPI,
 		bar:                     bar,
 		userFetcher:             userFetcher,
@@ -57,6 +78,7 @@ func New(app *setup.App, bar *progress.Bar, logger *zap.Logger) *Worker {
 		groupChecker:            groupChecker,
 		reporter:                reporter,
 		logger:                  logger.Named("maintenance_worker"),
+		reviewerInfoMaxAge:      24 * time.Hour,
 		userBatchSize:           app.Config.Worker.BatchSizes.PurgeUsers,
 		groupBatchSize:          app.Config.Worker.BatchSizes.PurgeGroups,
 		trackBatchSize:          app.Config.Worker.BatchSizes.TrackGroups,
@@ -80,31 +102,34 @@ func (w *Worker) Start() {
 		w.bar.Reset()
 		w.reporter.SetHealthy(true)
 
-		// Step 1: Process banned users (12%)
+		// Step 1: Process banned users (10%)
 		w.processBannedUsers()
 
-		// Step 2: Process locked groups (24%)
+		// Step 2: Process locked groups (20%)
 		w.processLockedGroups()
 
-		// Step 3: Process cleared users (36%)
+		// Step 3: Process cleared users (30%)
 		w.processClearedUsers()
 
-		// Step 4: Process cleared groups (48%)
+		// Step 4: Process cleared groups (40%)
 		w.processClearedGroups()
 
-		// Step 5: Process group tracking (60%)
+		// Step 5: Process group tracking (50%)
 		w.processGroupTracking()
 
-		// Step 6: Process user thumbnails (72%)
+		// Step 6: Process user thumbnails (60%)
 		w.processUserThumbnails()
 
-		// Step 7: Process group thumbnails (84%)
+		// Step 7: Process group thumbnails (70%)
 		w.processGroupThumbnails()
 
-		// Step 8: Process old Discord server members (96%)
+		// Step 8: Process old Discord server members (80%)
 		w.processOldServerMembers()
 
-		// Step 9: Completed (100%)
+		// Step 9: Process reviewer info (90%)
+		w.processReviewerInfo()
+
+		// Step 10: Completed (100%)
 		w.bar.SetStepMessage("Completed", 100)
 		w.reporter.UpdateStatus("Completed", 100)
 
@@ -115,8 +140,8 @@ func (w *Worker) Start() {
 
 // processBannedUsers checks for and marks banned users.
 func (w *Worker) processBannedUsers() {
-	w.bar.SetStepMessage("Processing banned users", 12)
-	w.reporter.UpdateStatus("Processing banned users", 12)
+	w.bar.SetStepMessage("Processing banned users", 10)
+	w.reporter.UpdateStatus("Processing banned users", 10)
 
 	// Get users to check
 	users, currentlyBanned, err := w.db.Model().User().GetUsersToCheck(context.Background(), w.userBatchSize)
@@ -178,8 +203,8 @@ func (w *Worker) processBannedUsers() {
 
 // processLockedGroups checks for and marks locked groups.
 func (w *Worker) processLockedGroups() {
-	w.bar.SetStepMessage("Processing locked groups", 24)
-	w.reporter.UpdateStatus("Processing locked groups", 24)
+	w.bar.SetStepMessage("Processing locked groups", 20)
+	w.reporter.UpdateStatus("Processing locked groups", 20)
 
 	// Get groups to check
 	groups, currentlyLocked, err := w.db.Model().Group().GetGroupsToCheck(context.Background(), w.groupBatchSize)
@@ -241,8 +266,8 @@ func (w *Worker) processLockedGroups() {
 
 // processClearedUsers removes old cleared users.
 func (w *Worker) processClearedUsers() {
-	w.bar.SetStepMessage("Processing cleared users", 36)
-	w.reporter.UpdateStatus("Processing cleared users", 36)
+	w.bar.SetStepMessage("Processing cleared users", 30)
+	w.reporter.UpdateStatus("Processing cleared users", 30)
 
 	cutOffDate := time.Now().AddDate(0, 0, -30)
 	affected, err := w.db.Model().User().PurgeOldClearedUsers(context.Background(), cutOffDate)
@@ -261,8 +286,8 @@ func (w *Worker) processClearedUsers() {
 
 // processClearedGroups removes old cleared groups.
 func (w *Worker) processClearedGroups() {
-	w.bar.SetStepMessage("Processing cleared groups", 48)
-	w.reporter.UpdateStatus("Processing cleared groups", 48)
+	w.bar.SetStepMessage("Processing cleared groups", 40)
+	w.reporter.UpdateStatus("Processing cleared groups", 40)
 
 	cutOffDate := time.Now().AddDate(0, 0, -30)
 	affected, err := w.db.Model().Group().PurgeOldClearedGroups(context.Background(), cutOffDate)
@@ -281,8 +306,8 @@ func (w *Worker) processClearedGroups() {
 
 // processGroupTracking manages group tracking data.
 func (w *Worker) processGroupTracking() {
-	w.bar.SetStepMessage("Processing group tracking", 60)
-	w.reporter.UpdateStatus("Processing group tracking", 60)
+	w.bar.SetStepMessage("Processing group tracking", 50)
+	w.reporter.UpdateStatus("Processing group tracking", 50)
 
 	// Get groups to check
 	groupsWithUsers, err := w.db.Model().Tracking().GetGroupTrackingsToCheck(
@@ -349,8 +374,8 @@ func (w *Worker) processGroupTracking() {
 
 // processUserThumbnails updates user thumbnails.
 func (w *Worker) processUserThumbnails() {
-	w.bar.SetStepMessage("Processing user thumbnails", 72)
-	w.reporter.UpdateStatus("Processing user thumbnails", 72)
+	w.bar.SetStepMessage("Processing user thumbnails", 60)
+	w.reporter.UpdateStatus("Processing user thumbnails", 60)
 
 	// Get users that need thumbnail updates
 	users, err := w.db.Model().User().GetUsersForThumbnailUpdate(context.Background(), w.thumbnailUserBatchSize)
@@ -391,8 +416,8 @@ func (w *Worker) processUserThumbnails() {
 
 // processGroupThumbnails updates group thumbnails.
 func (w *Worker) processGroupThumbnails() {
-	w.bar.SetStepMessage("Processing group thumbnails", 84)
-	w.reporter.UpdateStatus("Processing group thumbnails", 84)
+	w.bar.SetStepMessage("Processing group thumbnails", 70)
+	w.reporter.UpdateStatus("Processing group thumbnails", 70)
 
 	// Get groups that need thumbnail updates
 	groups, err := w.db.Model().Group().GetGroupsForThumbnailUpdate(context.Background(), w.thumbnailGroupBatchSize)
@@ -424,8 +449,8 @@ func (w *Worker) processGroupThumbnails() {
 
 // processOldServerMembers removes Discord server member records older than 7 days.
 func (w *Worker) processOldServerMembers() {
-	w.bar.SetStepMessage("Processing old Discord server members", 96)
-	w.reporter.UpdateStatus("Processing old Discord server members", 96)
+	w.bar.SetStepMessage("Processing old Discord server members", 80)
+	w.reporter.UpdateStatus("Processing old Discord server members", 80)
 
 	cutoffDate := time.Now().AddDate(0, 0, -7) // 7 days ago
 	affected, err := w.db.Model().Sync().PurgeOldServerMembers(context.Background(), cutoffDate)
@@ -439,5 +464,74 @@ func (w *Worker) processOldServerMembers() {
 		w.logger.Info("Purged old Discord server members",
 			zap.Int("affected", affected),
 			zap.Time("cutoffDate", cutoffDate))
+	}
+}
+
+// processReviewerInfo updates cached Discord user information for reviewers.
+func (w *Worker) processReviewerInfo() {
+	w.bar.SetStepMessage("Processing reviewer info", 90)
+	w.reporter.UpdateStatus("Processing reviewer info", 90)
+
+	// Get bot settings to get reviewer IDs
+	settings, err := w.db.Model().Setting().GetBotSettings(context.Background())
+	if err != nil {
+		w.logger.Error("Failed to get bot settings", zap.Error(err))
+		w.reporter.SetHealthy(false)
+		return
+	}
+
+	// Get existing reviewer info that needs updating
+	reviewerInfos, err := w.db.Model().Reviewer().GetReviewerInfosForUpdate(context.Background(), w.reviewerInfoMaxAge)
+	if err != nil {
+		w.logger.Error("Failed to get reviewer infos", zap.Error(err))
+		w.reporter.SetHealthy(false)
+		return
+	}
+
+	// Build list of reviewers to update
+	updatedReviewers := make([]*types.ReviewerInfo, 0, len(settings.ReviewerIDs))
+	now := time.Now()
+
+	for _, reviewerID := range settings.ReviewerIDs {
+		// Skip if reviewer info is fresh
+		if info, exists := reviewerInfos[reviewerID]; exists && info.UpdatedAt.Add(w.reviewerInfoMaxAge).After(now) {
+			continue
+		}
+
+		// Get user info from Discord
+		user, err := w.bot.Rest().GetUser(snowflake.ID(reviewerID))
+		if err != nil {
+			w.logger.Error("Failed to get Discord user",
+				zap.Error(err),
+				zap.Uint64("reviewer_id", reviewerID))
+			continue
+		}
+
+		// Get user's display name
+		displayName := user.GlobalName
+		if displayName == nil {
+			displayName = &user.Username
+		}
+
+		// Add to update list
+		updatedReviewers = append(updatedReviewers, &types.ReviewerInfo{
+			UserID:      reviewerID,
+			Username:    user.Username,
+			DisplayName: *displayName,
+			UpdatedAt:   now,
+		})
+	}
+
+	// Save updated reviewer info
+	if len(updatedReviewers) > 0 {
+		err = w.db.Model().Reviewer().SaveReviewerInfos(context.Background(), updatedReviewers)
+		if err != nil {
+			w.logger.Error("Failed to save reviewer infos", zap.Error(err))
+			w.reporter.SetHealthy(false)
+			return
+		}
+
+		w.logger.Info("Updated reviewer info",
+			zap.Int("count", len(updatedReviewers)))
 	}
 }
