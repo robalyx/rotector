@@ -8,6 +8,7 @@ import (
 
 	"github.com/bytedance/sonic"
 	"github.com/openai/openai-go"
+	"github.com/robalyx/rotector/internal/ai/client"
 	"github.com/robalyx/rotector/internal/database/types"
 	"github.com/robalyx/rotector/internal/database/types/enum"
 	"github.com/robalyx/rotector/internal/setup"
@@ -178,13 +179,13 @@ type FlaggedUser struct {
 
 // UserAnalyzer handles AI-based content analysis using OpenAI models.
 type UserAnalyzer struct {
-	openAIClient *openai.Client
-	minify       *minify.M
-	translator   *translator.Translator
-	analysisSem  *semaphore.Weighted
-	logger       *zap.Logger
-	model        string
-	batchSize    int
+	chat        client.ChatCompletions
+	minify      *minify.M
+	translator  *translator.Translator
+	analysisSem *semaphore.Weighted
+	logger      *zap.Logger
+	model       string
+	batchSize   int
 }
 
 // UserAnalysisSchema is the JSON schema for the user analysis response.
@@ -197,13 +198,13 @@ func NewUserAnalyzer(app *setup.App, translator *translator.Translator, logger *
 	m.AddFunc(ApplicationJSON, json.Minify)
 
 	return &UserAnalyzer{
-		openAIClient: app.OpenAIClient,
-		minify:       m,
-		translator:   translator,
-		analysisSem:  semaphore.NewWeighted(int64(app.Config.Worker.BatchSizes.UserAnalysis)),
-		logger:       logger.Named("ai_user"),
-		model:        app.Config.Common.OpenAI.Model,
-		batchSize:    app.Config.Worker.BatchSizes.UserAnalysisBatch,
+		chat:        app.AIClient.Chat(),
+		minify:      m,
+		translator:  translator,
+		analysisSem: semaphore.NewWeighted(int64(app.Config.Worker.BatchSizes.UserAnalysis)),
+		logger:      logger.Named("ai_user"),
+		model:       app.Config.Common.OpenAI.Model,
+		batchSize:   app.Config.Worker.BatchSizes.UserAnalysisBatch,
 	}
 }
 
@@ -307,7 +308,7 @@ func (a *UserAnalyzer) processBatch(
 
 	// Generate user analysis with retry
 	result, err := utils.WithRetry(ctx, func() (*FlaggedUsers, error) {
-		resp, err := a.openAIClient.Chat.Completions.New(ctx, openai.ChatCompletionNewParams{
+		resp, err := a.chat.New(ctx, openai.ChatCompletionNewParams{
 			Messages: []openai.ChatCompletionMessageParamUnion{
 				openai.SystemMessage(UserSystemPrompt),
 				openai.UserMessage(requestPrompt),

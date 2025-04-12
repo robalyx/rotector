@@ -70,7 +70,7 @@ func (i *InventoryFetcher) GetInventory(ctx context.Context, userID uint64) ([]*
 		cursor = *response.NextPageCursor
 	}
 
-	i.logger.Debug("Finished fetching inventory",
+	i.logger.Debug("Successfully fetched user inventory",
 		zap.Uint64("userID", userID),
 		zap.Int("totalAssets", len(allAssets)))
 

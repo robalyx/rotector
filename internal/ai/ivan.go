@@ -8,6 +8,7 @@ import (
 
 	"github.com/bytedance/sonic"
 	"github.com/openai/openai-go"
+	"github.com/robalyx/rotector/internal/ai/client"
 	"github.com/robalyx/rotector/internal/database"
 	"github.com/robalyx/rotector/internal/database/types"
 	"github.com/robalyx/rotector/internal/database/types/enum"
@@ -120,13 +121,13 @@ type IvanAnalysisResponse struct {
 
 // IvanAnalyzer handles AI-based analysis of user chat messages.
 type IvanAnalyzer struct {
-	db           database.Client
-	openAIClient *openai.Client
-	minify       *minify.M
-	analysisSem  *semaphore.Weighted
-	logger       *zap.Logger
-	model        string
-	batchSize    int
+	db          database.Client
+	chat        client.ChatCompletions
+	minify      *minify.M
+	analysisSem *semaphore.Weighted
+	logger      *zap.Logger
+	model       string
+	batchSize   int
 }
 
 // IvanAnalysisSchema is the JSON schema for the message analysis response.
@@ -138,13 +139,13 @@ func NewIvanAnalyzer(app *setup.App, logger *zap.Logger) *IvanAnalyzer {
 	m.AddFunc("application/json", json.Minify)
 
 	return &IvanAnalyzer{
-		db:           app.DB,
-		openAIClient: app.OpenAIClient,
-		minify:       m,
-		analysisSem:  semaphore.NewWeighted(int64(app.Config.Worker.BatchSizes.MessageAnalysis)),
-		logger:       logger.Named("ai_ivan"),
-		model:        app.Config.Common.OpenAI.Model,
-		batchSize:    app.Config.Worker.BatchSizes.MessageAnalysisBatch,
+		db:          app.DB,
+		chat:        app.AIClient.Chat(),
+		minify:      m,
+		analysisSem: semaphore.NewWeighted(int64(app.Config.Worker.BatchSizes.MessageAnalysis)),
+		logger:      logger.Named("ai_ivan"),
+		model:       app.Config.Common.OpenAI.Model,
+		batchSize:   app.Config.Worker.BatchSizes.MessageAnalysisBatch,
 	}
 }
 
@@ -279,7 +280,7 @@ func (a *IvanAnalyzer) processMessages(
 
 	// Generate analysis with retry
 	result, err := utils.WithRetry(ctx, func() (*IvanAnalysisResponse, error) {
-		resp, err := a.openAIClient.Chat.Completions.New(ctx, openai.ChatCompletionNewParams{
+		resp, err := a.chat.New(ctx, openai.ChatCompletionNewParams{
 			Messages: []openai.ChatCompletionMessageParamUnion{
 				openai.SystemMessage(IvanSystemPrompt),
 				openai.UserMessage(IvanRequestPrompt + string(minifiedJSON)),

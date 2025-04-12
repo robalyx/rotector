@@ -6,6 +6,7 @@ import (
 
 	"github.com/bytedance/sonic"
 	"github.com/openai/openai-go"
+	"github.com/robalyx/rotector/internal/ai/client"
 	"github.com/robalyx/rotector/internal/database/types"
 	"github.com/robalyx/rotector/internal/setup"
 	"github.com/robalyx/rotector/pkg/utils"
@@ -59,10 +60,10 @@ type StatsData struct {
 
 // StatsAnalyzer analyzes statistics and generates welcome messages.
 type StatsAnalyzer struct {
-	openAIClient *openai.Client
-	minify       *minify.M
-	logger       *zap.Logger
-	model        string
+	chat   client.ChatCompletions
+	minify *minify.M
+	logger *zap.Logger
+	model  string
 }
 
 // NewStatsAnalyzer creates a new stats analyzer instance.
@@ -71,10 +72,10 @@ func NewStatsAnalyzer(app *setup.App, logger *zap.Logger) *StatsAnalyzer {
 	m.AddFunc(ApplicationJSON, json.Minify)
 
 	return &StatsAnalyzer{
-		openAIClient: app.OpenAIClient,
-		minify:       m,
-		logger:       logger.Named("ai_stats"),
-		model:        app.Config.Common.OpenAI.Model,
+		chat:   app.AIClient.Chat(),
+		minify: m,
+		logger: logger.Named("ai_stats"),
+		model:  app.Config.Common.OpenAI.Model,
 	}
 }
 
@@ -103,7 +104,7 @@ func (a *StatsAnalyzer) GenerateWelcomeMessage(
 
 	// Generate welcome message with retry
 	response, err := utils.WithRetry(ctx, func() (string, error) {
-		resp, err := a.openAIClient.Chat.Completions.New(ctx, openai.ChatCompletionNewParams{
+		resp, err := a.chat.New(ctx, openai.ChatCompletionNewParams{
 			Messages: []openai.ChatCompletionMessageParamUnion{
 				openai.SystemMessage(StatsSystemPrompt),
 				openai.UserMessage(string(statsJSON)),

@@ -7,6 +7,7 @@ import (
 
 	"github.com/bytedance/sonic"
 	"github.com/openai/openai-go"
+	"github.com/robalyx/rotector/internal/ai/client"
 	"github.com/robalyx/rotector/internal/database/types"
 	"github.com/robalyx/rotector/internal/database/types/enum"
 	"github.com/robalyx/rotector/internal/setup"
@@ -104,12 +105,12 @@ type BatchFriendAnalysis struct {
 
 // FriendAnalyzer handles AI-based analysis of friend networks using OpenAI models.
 type FriendAnalyzer struct {
-	openAIClient *openai.Client
-	minify       *minify.M
-	analysisSem  *semaphore.Weighted
-	logger       *zap.Logger
-	model        string
-	batchSize    int
+	chat        client.ChatCompletions
+	minify      *minify.M
+	analysisSem *semaphore.Weighted
+	logger      *zap.Logger
+	model       string
+	batchSize   int
 }
 
 // FriendAnalysisSchema is the JSON schema for the friend analysis response.
@@ -122,12 +123,12 @@ func NewFriendAnalyzer(app *setup.App, logger *zap.Logger) *FriendAnalyzer {
 	m.AddFunc(ApplicationJSON, json.Minify)
 
 	return &FriendAnalyzer{
-		openAIClient: app.OpenAIClient,
-		minify:       m,
-		analysisSem:  semaphore.NewWeighted(int64(app.Config.Worker.BatchSizes.FriendAnalysis)),
-		logger:       logger.Named("ai_friend"),
-		model:        app.Config.Common.OpenAI.Model,
-		batchSize:    app.Config.Worker.BatchSizes.FriendAnalysisBatch,
+		chat:        app.AIClient.Chat(),
+		minify:      m,
+		analysisSem: semaphore.NewWeighted(int64(app.Config.Worker.BatchSizes.FriendAnalysis)),
+		logger:      logger.Named("ai_friend"),
+		model:       app.Config.Common.OpenAI.Model,
+		batchSize:   app.Config.Worker.BatchSizes.FriendAnalysisBatch,
 	}
 }
 
@@ -263,7 +264,7 @@ func (a *FriendAnalyzer) processBatch(
 
 	// Generate friend analysis with retry
 	result, err := utils.WithRetry(ctx, func() (*BatchFriendAnalysis, error) {
-		resp, err := a.openAIClient.Chat.Completions.New(ctx, openai.ChatCompletionNewParams{
+		resp, err := a.chat.New(ctx, openai.ChatCompletionNewParams{
 			Messages: []openai.ChatCompletionMessageParamUnion{
 				openai.SystemMessage(FriendSystemPrompt),
 				openai.UserMessage(prompt),

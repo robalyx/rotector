@@ -7,9 +7,8 @@ import (
 	"time"
 
 	"github.com/jaxron/roapi.go/pkg/api"
-	"github.com/openai/openai-go"
-	"github.com/openai/openai-go/option"
 	"github.com/redis/rueidis"
+	aiClient "github.com/robalyx/rotector/internal/ai/client"
 	"github.com/robalyx/rotector/internal/database"
 	"github.com/robalyx/rotector/internal/database/migrations"
 	"github.com/robalyx/rotector/internal/redis"
@@ -54,8 +53,7 @@ type App struct {
 	Logger       *zap.Logger         // Main application logger
 	DBLogger     *zap.Logger         // Database-specific logger
 	DB           database.Client     // Database connection pool
-	OpenAIClient *openai.Client      // OpenAI client
-	GenAIModel   string              // Generative AI model
+	AIClient     *aiClient.AIClient  // AI client providers
 	RoAPI        *api.API            // RoAPI HTTP client
 	RedisManager *redis.Manager      // Redis connection manager
 	StatusClient rueidis.Client      // Redis client for worker status reporting
@@ -99,13 +97,11 @@ func InitializeApp(ctx context.Context, serviceType ServiceType, logDir string) 
 		return nil, err
 	}
 
-	// Initialize OpenAI client
-	openAIClient := openai.NewClient(
-		option.WithAPIKey(cfg.Common.OpenAI.APIKey),
-		option.WithBaseURL(cfg.Common.OpenAI.BaseURL),
-		option.WithRequestTimeout(60*time.Second),
-		option.WithMaxRetries(0),
-	)
+	// Initialize AI client
+	aiClient, err := aiClient.NewClient(&cfg.Common.OpenAI, logger)
+	if err != nil {
+		return nil, err
+	}
 
 	// RoAPI client is configured with middleware chain
 	requestTimeout := serviceType.GetRequestTimeout(cfg)
@@ -146,8 +142,7 @@ func InitializeApp(ctx context.Context, serviceType ServiceType, logDir string) 
 		Logger:       logger,
 		DBLogger:     dbLogger.Named("database"),
 		DB:           db,
-		OpenAIClient: &openAIClient,
-		GenAIModel:   cfg.Common.OpenAI.Model,
+		AIClient:     aiClient,
 		RoAPI:        roAPI,
 		RedisManager: redisManager,
 		StatusClient: statusClient,

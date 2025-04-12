@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	"github.com/bytedance/sonic"
+	"github.com/robalyx/rotector/internal/ai/client"
 	"github.com/robalyx/rotector/internal/setup"
 	"github.com/robalyx/rotector/pkg/utils"
 	"github.com/sourcegraph/conc/pool"
@@ -147,12 +148,12 @@ type FlaggedMessagesResponse struct {
 
 // MessageAnalyzer processes Discord messages to detect inappropriate content.
 type MessageAnalyzer struct {
-	openAIClient *openai.Client
-	minify       *minify.M
-	analysisSem  *semaphore.Weighted
-	batchSize    int
-	logger       *zap.Logger
-	model        string
+	chat        client.ChatCompletions
+	minify      *minify.M
+	analysisSem *semaphore.Weighted
+	batchSize   int
+	logger      *zap.Logger
+	model       string
 }
 
 // MessageAnalysisSchema is the JSON schema for the message analysis response.
@@ -164,12 +165,12 @@ func NewMessageAnalyzer(app *setup.App, logger *zap.Logger) *MessageAnalyzer {
 	m.AddFunc("application/json", json.Minify)
 
 	return &MessageAnalyzer{
-		openAIClient: app.OpenAIClient,
-		minify:       m,
-		analysisSem:  semaphore.NewWeighted(int64(app.Config.Worker.BatchSizes.MessageAnalysis)),
-		batchSize:    app.Config.Worker.BatchSizes.MessageAnalysisBatch,
-		logger:       logger.Named("ai_message"),
-		model:        app.Config.Common.OpenAI.Model,
+		chat:        app.AIClient.Chat(),
+		minify:      m,
+		analysisSem: semaphore.NewWeighted(int64(app.Config.Worker.BatchSizes.MessageAnalysis)),
+		batchSize:   app.Config.Worker.BatchSizes.MessageAnalysisBatch,
+		logger:      logger.Named("ai_message"),
+		model:       app.Config.Common.OpenAI.Model,
 	}
 }
 
@@ -292,7 +293,7 @@ func (a *MessageAnalyzer) processBatch(
 
 	// Generate message analysis with retry
 	result, err := utils.WithRetry(ctx, func() (*FlaggedMessagesResponse, error) {
-		resp, err := a.openAIClient.Chat.Completions.New(ctx, openai.ChatCompletionNewParams{
+		resp, err := a.chat.New(ctx, openai.ChatCompletionNewParams{
 			Messages: []openai.ChatCompletionMessageParamUnion{
 				openai.SystemMessage(MessageSystemPrompt),
 				openai.UserMessage(prompt),

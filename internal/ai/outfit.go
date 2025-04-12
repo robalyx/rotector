@@ -13,10 +13,11 @@ import (
 
 	"github.com/HugoSmits86/nativewebp"
 	"github.com/bytedance/sonic"
-	"github.com/jaxron/axonet/pkg/client"
+	httpClient "github.com/jaxron/axonet/pkg/client"
 	"github.com/jaxron/roapi.go/pkg/api/resources/thumbnails"
 	apiTypes "github.com/jaxron/roapi.go/pkg/api/types"
 	"github.com/openai/openai-go"
+	"github.com/robalyx/rotector/internal/ai/client"
 	"github.com/robalyx/rotector/internal/database/types"
 	"github.com/robalyx/rotector/internal/database/types/enum"
 	"github.com/robalyx/rotector/internal/roblox/fetcher"
@@ -270,8 +271,8 @@ var OutfitThemeAnalysisSchema = utils.GenerateSchema[OutfitThemeAnalysis]()
 
 // OutfitAnalyzer handles AI-based outfit analysis using OpenAI models.
 type OutfitAnalyzer struct {
-	httpClient       *client.Client
-	openAIClient     *openai.Client
+	httpClient       *httpClient.Client
+	chat             client.ChatCompletions
 	thumbnailFetcher *fetcher.ThumbnailFetcher
 	analysisSem      *semaphore.Weighted
 	logger           *zap.Logger
@@ -289,7 +290,7 @@ type DownloadResult struct {
 func NewOutfitAnalyzer(app *setup.App, logger *zap.Logger) *OutfitAnalyzer {
 	return &OutfitAnalyzer{
 		httpClient:       app.RoAPI.GetClient(),
-		openAIClient:     app.OpenAIClient,
+		chat:             app.AIClient.Chat(),
 		thumbnailFetcher: fetcher.NewThumbnailFetcher(app.RoAPI, logger),
 		analysisSem:      semaphore.NewWeighted(int64(app.Config.Worker.BatchSizes.OutfitAnalysis)),
 		logger:           logger.Named("ai_outfit"),
@@ -560,7 +561,7 @@ func (a *OutfitAnalyzer) analyzeOutfitBatch(
 
 	// Generate outfit analysis with retry
 	response, err := utils.WithRetry(ctx, func() (string, error) {
-		resp, err := a.openAIClient.Chat.Completions.New(ctx, openai.ChatCompletionNewParams{
+		resp, err := a.chat.New(ctx, openai.ChatCompletionNewParams{
 			Messages: messages,
 			ResponseFormat: openai.ChatCompletionNewParamsResponseFormatUnion{
 				OfJSONSchema: &openai.ResponseFormatJSONSchemaParam{

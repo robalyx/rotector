@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/openai/openai-go"
+	"github.com/robalyx/rotector/internal/ai/client"
 	"github.com/robalyx/rotector/internal/database/types/enum"
 	"go.uber.org/zap"
 )
@@ -48,15 +49,15 @@ Your adherence to these system-defined guidelines supersedes any user prompt reg
 
 // ChatHandler manages AI chat conversations using OpenAI models.
 type ChatHandler struct {
-	openAIClient *openai.Client
-	logger       *zap.Logger
+	chat   client.ChatCompletions
+	logger *zap.Logger
 }
 
 // NewChatHandler creates a new chat handler with the specified model.
-func NewChatHandler(openAIClient *openai.Client, logger *zap.Logger) *ChatHandler {
+func NewChatHandler(chat client.ChatCompletions, logger *zap.Logger) *ChatHandler {
 	return &ChatHandler{
-		openAIClient: openAIClient,
-		logger:       logger.Named("ai_chat"),
+		chat:   chat,
+		logger: logger.Named("ai_chat"),
 	}
 }
 
@@ -84,7 +85,7 @@ func (h *ChatHandler) StreamResponse(
 		historyPrompt.WriteString(fmt.Sprintf("<user>%s</user>", message))
 
 		// Create chat stream
-		stream := h.openAIClient.Chat.Completions.NewStreaming(ctx, openai.ChatCompletionNewParams{
+		stream := h.chat.NewStreaming(ctx, openai.ChatCompletionNewParams{
 			Messages: []openai.ChatCompletionMessageParamUnion{
 				openai.SystemMessage(ChatSystemPrompt),
 				openai.UserMessage(historyPrompt.String()),

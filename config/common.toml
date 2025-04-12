@@ -100,12 +100,31 @@ username = ""
 password = ""
 
 [common.openai]
-# API key for authentication
+# Default model to use for AI requests
+model = "gemini-2.0-flash"
+
+[[common.openai.providers]]
+name = "google"
+base_url = "https://generativelanguage.googleapis.com/v1beta/openai/"
 api_key = ""
-# Base URL for OpenAI API
+max_concurrent = 1000
+
+[common.openai.providers.model_mappings]
+"gemini-2.0-flash" = "models/gemini-2.0-flash"
+
+[[common.openai.providers]]
+name = "requesty"
 base_url = "https://router.requesty.ai/v1"
-# Model to use
-model = "google/gemini-2.0-flash-001"
+api_key = ""
+max_concurrent = 100
+
+[common.openai.providers.model_mappings]
+"gemini-2.0-flash" = "google/gemini-2.0-flash-001"
+"gpt-4o-mini" = "openai/gpt-4o-mini-2024-07-18"
+"qwq-32B" = "deepinfra/Qwen/QwQ-32B"
+"deepseek-r1-distill-qwen-32b" = "novita/deepseek/deepseek-r1-distill-qwen-32b"
+"deepseek-r1-distill-llama-70B" = "deepinfra/deepseek-ai/DeepSeek-R1-Distill-Llama-70B"
+"llama-3.3-70B-instruct" = "nebius/meta-llama/Llama-3.3-70B-Instruct"
 
 [common.discord]
 # Self-bot token for server scanning
