@@ -18,7 +18,7 @@ type RetryOptions struct {
 // GetAIRetryOptions returns retry options optimized for AI operations.
 func GetAIRetryOptions() RetryOptions {
 	return RetryOptions{
-		MaxElapsedTime:  30 * time.Second,
+		MaxElapsedTime:  120 * time.Second,
 		InitialInterval: 100 * time.Millisecond,
 		MaxInterval:     1 * time.Second,
 		MaxRetries:      3,

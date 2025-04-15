@@ -26,6 +26,7 @@ require (
 	github.com/knadh/koanf/v2 v2.1.2
 	github.com/openai/openai-go v0.1.0-beta.3
 	github.com/redis/rueidis v1.0.56
+	github.com/sony/gobreaker v1.0.0
 	github.com/sourcegraph/conc v0.3.0
 	github.com/stretchr/testify v1.10.0
 	github.com/tdewolff/minify/v2 v2.22.4
@@ -84,7 +85,6 @@ require (
 	github.com/puzpuzpuz/xsync/v3 v3.5.1 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
 	github.com/sasha-s/go-csync v0.0.0-20240107134140-fcbab37b09ad // indirect
-	github.com/sony/gobreaker v1.0.0 // indirect
 	github.com/tdewolff/parse/v2 v2.7.21 // indirect
 	github.com/tidwall/gjson v1.18.0 // indirect
 	github.com/tidwall/match v1.1.1 // indirect

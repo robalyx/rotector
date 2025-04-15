@@ -166,3 +166,71 @@ func TestSplitLines(t *testing.T) {
 		})
 	}
 }
+
+func TestExtractThoughtProcess(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name          string
+		input         string
+		wantThought   string
+		wantCleanText string
+	}{
+		{
+			name:          "no thought process",
+			input:         `{"key": "value"}`,
+			wantThought:   "",
+			wantCleanText: `{"key": "value"}`,
+		},
+		{
+			name:          "with thought process",
+			input:         "<think>This user seems suspicious</think>\n\n{\"key\": \"value\"}",
+			wantThought:   "This user seems suspicious",
+			wantCleanText: `{"key": "value"}`,
+		},
+		{
+			name:          "with whitespace",
+			input:         `  <think>  Analyzing content  </think>  {"key": "value"}`,
+			wantThought:   "Analyzing content",
+			wantCleanText: `{"key": "value"}`,
+		},
+		{
+			name:          "with other content",
+			input:         `Some text <think>Analysis here</think> more text {"key": "value"}`,
+			wantThought:   "Analysis here",
+			wantCleanText: `Some text more text {"key": "value"}`,
+		},
+		{
+			name:          "no JSON",
+			input:         "just some text",
+			wantThought:   "",
+			wantCleanText: "just some text",
+		},
+		{
+			name:          "incomplete tags",
+			input:         `<think>incomplete{"key": "value"}`,
+			wantThought:   "",
+			wantCleanText: `<think>incomplete{"key": "value"}`,
+		},
+		{
+			name:          "non-JSON with thought",
+			input:         `<think>This is plain text</think> Hello world`,
+			wantThought:   "This is plain text",
+			wantCleanText: `Hello world`,
+		},
+		{
+			name:          "with multiple newlines",
+			input:         "<think>Multiple newlines</think>\n\n\n\nText after newlines",
+			wantThought:   "Multiple newlines",
+			wantCleanText: `Text after newlines`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			gotThought, gotCleanText := utils.ExtractThoughtProcess(tt.input)
+			assert.Equal(t, tt.wantThought, gotThought)
+			assert.Equal(t, tt.wantCleanText, gotCleanText)
+		})
+	}
+}

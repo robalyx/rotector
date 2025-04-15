@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/bytedance/sonic"
 	"github.com/openai/openai-go"
@@ -23,7 +24,8 @@ import (
 
 const (
 	// UserSystemPrompt provides detailed instructions to the AI model for analyzing user content.
-	UserSystemPrompt = `You are a Roblox content moderator specializing in detecting predatory behavior targeting minors.
+	UserSystemPrompt = `Instruction:
+You MUST act as a Roblox content moderator specializing in detecting predatory behavior targeting minors.
 
 Input format:
 {
@@ -41,7 +43,7 @@ Output format:
   "users": [
     {
       "name": "username",
-      "reason": "Clear explanation in one sentence",
+      "reason": "Clear explanation specifying why the content is inappropriate",
       "flaggedContent": ["exact quote 1", "exact quote 2"],
       "confidence": 0.0-1.0,
       "hasSocials": true/false
@@ -49,100 +51,39 @@ Output format:
   ]
 }
 
-Key rules:
-1. Return ALL users that either have violations OR contain social media links
-2. Use "the user" or "this account" instead of usernames
-3. Include exact quotes in flaggedContent
-4. Set reason to NO_VIOLATIONS if no violations found
-5. Skip empty descriptions
-6. Set hasSocials to true if description contains any social media handles/links
-7. If user has no violations but has socials, only include name and hasSocials fields
-8. If user is stating their social media, it is not a violation
-9. DO NOT flag users for being potential victims
-10. ONLY flag users exhibiting predatory or inappropriate behavior
-11. Flag usernames/display names even if the description is empty. The name itself can be sufficient evidence for flagging.
+Key instructions:
+1. You MUST return ALL users that either have violations OR contain social media links
+2. When referring to users in the 'reason' field, use "the user" or "this account" instead of usernames
+3. You MUST include exact quotes from the user's content in the 'flaggedContent' array when a violation is found
+4. If no violations are found for a user, you MUST exclude from the response or set the 'reason' field to "NO_VIOLATIONS"
+5. You MUST skip analysis for users with empty descriptions and without an inappropriate username/display name
+6. You MUST set the 'hasSocials' field to true if the user's description contains any social media handles, links, or mentions
+7. If a user has no violations but has social media links, you MUST only include the 'name' and 'hasSocials' fields for that user
+8. You MUST ONLY flag users who exhibit predatory or inappropriate behavior
+9. You MUST flag usernames and display names even if the description is empty as the name itself can be sufficient evidence
 
-Confidence levels (only for inappropriate content):
-0.0: No predatory elements
-0.1-0.3: Subtle predatory elements
+Confidence levels:
+Assign the 'confidence' score based on the explicitness of the predatory indicators found, according to the following guidelines:
+0.0: No inappropriate elements
+0.1-0.3: Subtle inappropriate elements
 0.4-0.6: Clear inappropriate content  
-0.7-0.8: Strong predatory indicators
-0.9-1.0: Explicit predatory intent
+0.7-0.8: Strong inappropriate indicators
+0.9-1.0: Explicit inappropriate content
 
-Look for inappropriate content FROM PREDATORS:
-- Coded language implying inappropriate activities
-- Leading phrases implying secrecy
-- Inappropriate game/chat/studio invitations
-- Condo/con references
-- "Exclusive" group invitations
-- Sexual content or innuendo
-- Suspicious direct messaging demands
-- Sexual solicitation
-- Erotic roleplay (ERP)
-- Age-inappropriate dating content
-- Exploitative adoption scenarios
-- Non-consensual references
-- Friend requests with inappropriate context
-- Claims of following TOS/rules to avoid detection
-- Age-restricted invitations
-- Modified app references
-- Inappropriate roleplay requests
-- Control dynamics
-- Service-oriented grooming
-- Gender-specific minor targeting
-- Ownership/dominance references
-- Boundary violations
-- Exploitation references
-- Fetish content
-- Bypassed inappropriate terms
-- Adult community references
-- Suggestive size references
-- Inappropriate trading
-- Degradation terms
-- Caesar cipher (ROT13 and other rotations)
-- "Special" or "exclusive" game pass offers
-- Promises of rewards/benefits for buying passes
-
-Look for inappropriate usernames/display names suggesting PREDATORY intentions:
-- Implying ownership, control, or subservience
-- Suggesting sexual availability or soliciting inappropriate interactions 
-- Using pet names or diminutives suggestively
-- Targeting minors or specific genders inappropriately
-- Using coded language or suggestive terms related to inappropriate acts
-- Hinting at exploitation or predatory activities
-- References to adult content platforms or services
-- Deliberately misspelled inappropriate terms
-- Combinations of innocent words that create suggestive meanings
-- Animal terms used in suggestive contexts
-- Possessive terms combined with suggestive words
-
-When flagging inappropriate names:
-- Set confidence based on how explicit/obvious the inappropriate content is
-- Include the full username/display name as flagged content
-- Set reason to clearly explain why the name is inappropriate
+Instruction: When flagging inappropriate usernames or display names:
+- Set the 'confidence' level based on how explicit or obvious the inappropriate content is
+- Include the full username or display name as a single string in the 'flaggedContent' array
+- Set the 'reason' field to clearly explain why the name is inappropriate
 - Consider combinations of words that together create inappropriate meanings
 
-Ignore:
-- Simple greetings/farewells
-- Basic responses
-- Empty descriptions
-- Emoji usage
-- Gaming preferences
-- Non-inappropriate content
-- Non-sexual roleplay
-- General social interactions
-- Social media usernames/handles/tags/servers
-- Age mentions or bypasses
-- Compliments on outfits/avatars
-- Any follow or friend making requests
-- Advertisements to join games, communities, channels, or tournaments
-- Off-platform handles without inappropriate context
-- Friend making attempts without inappropriate context
-- Gender identity expression
-- Bypass of appropriate terms
-- Self-harm or suicide-related content
-- Violence, gore, or disturbing content
-- Sharing of personal information`
+Instruction: For the 'flaggedContent' array:
+- Partially replace highly inappropriate words with 'X' characters (e.g., "f**k" becomes "fXXk")
+- Maintain the same length as the original word when censoring
+- Only censor explicitly inappropriate terms, not contextual phrases
+- Keep enough context around censored words to understand the violation
+- Do not censor usernames or social media handles
+
+` + SharedUserContentGuidelines
 
 	// UserRequestPrompt provides a reminder to follow system guidelines for user analysis.
 	UserRequestPrompt = `Analyze these user profiles for predatory content and social media links.
@@ -155,7 +96,7 @@ Remember:
 5. Always set hasSocials field accurately
 6. For users with only social media links (no violations), include only name and hasSocials fields
 
-Profiles to analyze:
+Input:
 `
 )
 
@@ -164,17 +105,17 @@ var ErrBatchProcessing = errors.New("batch processing errors")
 // FlaggedUsers holds a list of users that the AI has identified as inappropriate.
 // The JSON schema is used to ensure consistent responses from the AI.
 type FlaggedUsers struct {
-	Users []FlaggedUser `json:"users"`
+	Users []FlaggedUser `json:"users" jsonschema_description:"List of users that have been flagged for inappropriate content"`
 }
 
 // FlaggedUser contains the AI's analysis results for a single user.
 // The confidence score and flagged content help moderators make decisions.
 type FlaggedUser struct {
-	Name           string   `json:"name"`
-	Reason         string   `json:"reason"`
-	FlaggedContent []string `json:"flaggedContent"`
-	Confidence     float64  `json:"confidence"`
-	HasSocials     bool     `json:"hasSocials"`
+	Name           string   `json:"name"           jsonschema_description:"Username of the flagged account"`
+	Reason         string   `json:"reason"         jsonschema_description:"Clear explanation of why the user was flagged"`
+	FlaggedContent []string `json:"flaggedContent" jsonschema_description:"List of exact quotes from the user's content that were flagged"`
+	Confidence     float64  `json:"confidence"     jsonschema_description:"Overall confidence score for the violations (0.0-1.0)"`
+	HasSocials     bool     `json:"hasSocials"     jsonschema_description:"Whether the user's description contains social media"`
 }
 
 // UserAnalyzer handles AI-based content analysis using OpenAI models.
@@ -215,10 +156,12 @@ func (a *UserAnalyzer) ProcessUsers(users []*types.User, reasonsMap map[uint64]t
 	numBatches := (len(users) + a.batchSize - 1) / a.batchSize
 
 	// Process batches concurrently
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+	defer cancel()
+
 	var (
-		ctx = context.Background()
-		p   = pool.New().WithContext(ctx)
-		mu  sync.Mutex
+		p  = pool.New().WithContext(ctx)
+		mu sync.Mutex
 	)
 
 	for i := range numBatches {
@@ -247,7 +190,6 @@ func (a *UserAnalyzer) ProcessUsers(users []*types.User, reasonsMap map[uint64]t
 
 	// Wait for all batches to complete
 	if err := p.Wait(); err != nil {
-		a.logger.Error("Error during user analysis", zap.Error(err))
 		return
 	}
 
@@ -292,12 +234,13 @@ func (a *UserAnalyzer) processBatch(
 		userInfosWithoutID = append(userInfosWithoutID, summary)
 	}
 
-	// Minify JSON to reduce token usage
+	// Convert to JSON
 	userInfoJSON, err := sonic.Marshal(userInfosWithoutID)
 	if err != nil {
 		return fmt.Errorf("%w: %w", ErrJSONProcessing, err)
 	}
 
+	// Minify JSON to reduce token usage
 	userInfoJSON, err = a.minify.Bytes(ApplicationJSON, userInfoJSON)
 	if err != nil {
 		return fmt.Errorf("%w: %w", ErrJSONProcessing, err)
@@ -336,9 +279,17 @@ func (a *UserAnalyzer) processBatch(
 			return nil, fmt.Errorf("%w: no response from model", ErrModelResponse)
 		}
 
+		// Extract thought process and clean JSON response
+		thought, cleanJSON := utils.ExtractThoughtProcess(resp.Choices[0].Message.Content)
+		if thought != "" {
+			a.logger.Debug("AI thought process",
+				zap.String("thought", thought),
+				zap.Int("batchSize", len(userInfosWithoutID)))
+		}
+
 		// Parse response from AI
 		var result *FlaggedUsers
-		if err := sonic.Unmarshal([]byte(resp.Choices[0].Message.Content), &result); err != nil {
+		if err := sonic.Unmarshal([]byte(cleanJSON), &result); err != nil {
 			return nil, fmt.Errorf("JSON unmarshal error: %w", err)
 		}
 

@@ -166,6 +166,8 @@ type Redis struct {
 type OpenAI struct {
 	// Default model to use
 	Model string `koanf:"model"`
+	// Model to use for rechecking flagged users
+	RecheckModel string `koanf:"recheck_model"`
 	// List of providers in order of preference
 	Providers []Provider `koanf:"providers"`
 }
@@ -232,6 +234,8 @@ type BatchSizes struct {
 	MessageAnalysis int `koanf:"message_analysis"`
 	// Maximum concurrent AI requests for ivan message analysis.
 	IvanMessageAnalysis int `koanf:"ivan_message_analysis"`
+	// Maximum concurrent AI requests for recheck analysis.
+	RecheckAnalysis int `koanf:"recheck_analysis"`
 	// Number of outfits to analyze in one AI request.
 	OutfitAnalysisBatch int `koanf:"outfit_analysis_batch"`
 	// Number of users to analyze in one AI request.
@@ -242,6 +246,8 @@ type BatchSizes struct {
 	MessageAnalysisBatch int `koanf:"message_analysis_batch"`
 	// Number of ivan messages to analyze in one AI request.
 	IvanMessageAnalysisBatch int `koanf:"ivan_message_analysis_batch"`
+	// Number of users to recheck in one AI request.
+	RecheckAnalysisBatch int `koanf:"recheck_analysis_batch"`
 }
 
 // ThresholdLimits configures various thresholds for worker operations.

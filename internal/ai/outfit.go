@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/HugoSmits86/nativewebp"
 	"github.com/bytedance/sonic"
@@ -30,8 +31,8 @@ import (
 
 const (
 	// FlaggedOutfitSystemPrompt provides detailed instructions to the AI model for analyzing user outfits for violations.
-	FlaggedOutfitSystemPrompt = `You are a Roblox moderator analyzing outfits for predatory behavior targeting minors.
-
+	FlaggedOutfitSystemPrompt = `Instruction:
+You are a Roblox moderator analyzing outfits for predatory behavior.
 Each outfit image is provided as a separate image part along with this prompt.
 The first image (if present) is the user's current outfit, followed by their outfit images.
 You will receive a list of outfit names that correspond to the images in order.
@@ -61,17 +62,15 @@ Confidence levels based on severity:
 0.7-0.8: Serious violations (explicitly inappropriate or multiple clear violations)
 0.9-1.0: Severe violations (extremely inappropriate or predatory content)
 
-Key rules:
+Key instructions:
 1. Return ONLY users with violations
-2. Include exact outfit names in evidence
-3. Each evidence entry must include the outfit name, specific violation category, and confidence
+2. You MUST include exact outfit names in evidence
+3. ALL evidence entries must include the outfit name, specific violation category, and confidence
 4. NEVER flag an outfit based on its name alone - analyze only the visual content
-5. Ensure outfit names match exactly with the provided names
-6. Do not modify, combine, or alter outfit names in any way
+5. YOU MUST ensure outfit names match exactly with the provided names
+6. You MUST NOT modify, combine, or alter outfit names in any way
 
-Flag outfits containing:
-
-REVEALING OR INAPPROPRIATE CLOTHING:
+Instruction: Pay close attention to outfits that are revealing or inappropriate:
 - Extreme crop tops showing excessive skin with cleavage
 - Deep v-necks or plunging necklines emphasizing cleavage
 - Transparent or semi-transparent clothing textures
@@ -81,12 +80,13 @@ REVEALING OR INAPPROPRIATE CLOTHING:
 - Low-rise pants that imply nudity or expose hip areas
 - Lingerie, underwear sets, or "clubwear" (even if cartoonish)
 - Stripper-themed outfits or pole-dancing props
-- Nudist or "censored nudity" looks with strategic coverings (pixelation, bars, stickers)
+- Censored" nudity looks (with pixelation, censor bars, stickers)
+- Realistic body features (detailed abs, muscle definition, body hair, tattoos, etc.)
 - Bodycon dresses or clothing that excessively emphasizes body contours
 - Provocative bodysuits (especially those with cutouts or exposed areas)
 - Decorative or intentional cleavage holes (heart-shaped, keyholes, etc.)
 
-SUGGESTIVE AVATAR FEATURES:
+Instruction: Pay close attention to outfits that have suggestive avatar features:
 - Skintight bodysuits designed to mimic nudity
 - Hyper-curvy bodies with exaggerated bust/hips/buttocks
 - Oversized or emphasized chest/breast areas
@@ -102,7 +102,7 @@ SUGGESTIVE AVATAR FEATURES:
 - Succubus-themed womb tattoos or similar suggestive body markings
 - Sexualized chest scars (particularly those fetishizing trans surgeries)
 
-ADULT-THEMED OUTFITS AND ACCESSORIES:
+Instruction: Pay close attention to outfits that have adult-themed accessories:
 - Bondage, BDSM, or fetish-themed clothing and accessories
 - Latex catsuits with exaggerated body outlines
 - Collar and leash combinations, ball gags, or chains
@@ -138,12 +138,12 @@ Remember:
 4. Include only outfits whose IMAGES clearly violate the guidelines
 5. DO NOT flag outfits based on their names - analyze only the visual content
 
-Outfits to analyze (in order of corresponding images):
+Input:
 `
 
 	// OutfitThemePrompt provides instructions for analyzing outfit themes without looking for violations.
-	OutfitThemePrompt = `You are a Roblox outfit analyzer detecting specific outfit themes.
-
+	OutfitThemePrompt = `Instruction:
+You are a Roblox outfit analyzer detecting specific outfit themes.
 Each outfit image is provided as a separate image part along with this prompt.
 The first image (if present) is the user's current outfit, followed by their outfit images.
 You will receive a list of outfit names that correspond to the images in order.
@@ -165,52 +165,51 @@ Theme categories (use this format):
 - "Body/Figure: [specific detail]" (e.g., "Body/Figure: Exaggerated curvy avatar")
 - "BDSM/Kink: [specific detail]" (e.g., "BDSM/Kink: Latex catsuit with chains")
 
-Identify these specific themes and categories (only if clearly present):
-
-SEXUAL/ADULT THEMES:
-- Stripper/pole dancer outfits
-- Lingerie/underwear models
-- Sexualized maid outfits (especially with fishnets, cleavage)
-- Bunny girl outfits (lingerie versions)
-- Latex catsuits/dominatrix outfits
-- Fetishwear (bondage elements, suggestive accessories)
-- Nudist/censored nudity looks (with pixelation, censor bars, stickers)
-- Revealing swimsuit/microkini outfits (especially with exaggerated anatomy)
-- Provocative bodysuits with cutouts or revealing elements
-- Thongs/g-strings or outfits emphasizing exposed buttocks
-- Outfits with intentional cleavage cutouts or revealing holes (heart-shaped, keyholes)
-- Succubus-themed outfits (especially with womb tattoos or markings)
-
-BODY/FIGURE-FOCUSED THEMES:
-- Exaggerated curvy/thicc avatars
-- Hourglass figure avatars (especially with suggestive poses)
-- Inflated chest/butt avatars
-- Bodycon dress models
-- Ultra-slim waist avatars
-- NSFW parody bodies (like "nude" base models with strategic coverings)
-- Bodies with sexualized scars or markings (including sexualized chest scars)
-
-BDSM/KINK/FETISH PARODIES:
-- Bondage sets (chains, gags, collars)
-- Petplay (ears, collars, leashes in suggestive context)
-- Slave-themed outfits (with chains, torn clothing)
-- Leather harnesses/latex corsets
-- "Cow girl" outfits (NOT cowboy/western, but fetish-themed outfits with cow print, udders, or animal-sexualization elements)
-- Suggestive schoolgirl outfits
-- Diaper or "little" cosplays with sexualized elements
-
 Theme confidence levels based on severity:
 0.0-0.3: Subtle or ambiguous theme elements
 0.4-0.6: Clear but moderate theme elements
 0.7-0.8: Strong and obvious theme elements
 0.9-1.0: Extreme or explicit theme elements
 
-Key rules:
-1. Include the exact outfit name
-2. Only identify themes if they are clearly visible in the image
-3. Do not flag inappropriate content - focus only on theme identification
-4. Return empty themes array if no specified themes are detected
-5. Each theme detection should include the full outfit name, identified theme, and confidence level`
+Key instructions:
+1. Return ONLY users with themes
+2. Include the exact outfit name
+3. Only identify themes if they are clearly visible in the image
+4. Do not flag inappropriate content - focus only on theme identification
+5. Return empty themes array if no specified themes are detected
+6. Each theme detection should include the full outfit name, identified theme, and confidence level
+
+Instruction: Pay close attention to outfits that are sexual or adult-themed:
+- Stripper/pole dancer outfits
+- Lingerie/underwear models
+- Sexualized maid outfits (especially with fishnets, cleavage)
+- Bunny girl outfits (lingerie versions)
+- Latex catsuits/dominatrix outfits
+- Fetishwear (bondage elements, suggestive accessories)
+- Censored nudity looks (with pixelation, censor bars, stickers)
+- Nudity with realistic body features (detailed abs, muscle definition, body hair, tattoos, etc.)
+- Revealing swimsuit/microkini outfits (especially with exaggerated anatomy)
+- Provocative bodysuits with cutouts or revealing elements
+- Thongs/g-strings or outfits emphasizing exposed buttocks
+- Outfits with intentional cleavage cutouts or revealing holes (heart-shaped, keyholes)
+- Succubus-themed outfits (especially with womb tattoos or markings)
+
+Instruction: Pay close attention to outfits that are body/figure-focused:
+- Exaggerated curvy/thicc avatars
+- Hourglass figure avatars (especially with suggestive poses)
+- Inflated chest/butt avatars
+- Bodycon dress models
+- Ultra-slim waist avatars
+- Bodies with sexualized scars or markings (including sexualized chest scars)
+
+Instruction: Pay close attention to outfits that are BDSM/kink/fetish parodies:
+- Bondage sets (chains, gags, collars)
+- Petplay (ears, collars, leashes in suggestive context)
+- Slave-themed outfits (with chains, torn clothing)
+- Leather harnesses/latex corsets
+- "Cow girl" outfits (NOT cowboy/western, but fetish-themed outfits with cow print, udders, or animal-sexualization elements)
+- Suggestive schoolgirl outfits
+- Diaper or "little" cosplays with sexualized elements`
 
 	// OutfitThemeRequestPrompt provides a reminder to focus on theme identification.
 	OutfitThemeRequestPrompt = `Identify specific themes in these outfits.
@@ -222,7 +221,7 @@ Remember:
 4. Only include outfits that clearly match one of the specified themes
 5. Return the exact outfit name in your analysis
 
-Outfits to analyze (in order of corresponding images):
+Input:
 `
 )
 
@@ -234,33 +233,34 @@ var (
 	ErrNoViolations        = errors.New("no violations found in outfits")
 	ErrNoOutfits           = errors.New("no outfit images downloaded successfully")
 	ErrInvalidThumbnailURL = errors.New("invalid thumbnail URL")
+	ErrUnsupportedSchema   = errors.New("unsupported schema type")
 )
 
 // OutfitAnalysis contains the AI's analysis results for a user's outfits.
 type OutfitAnalysis struct {
-	Username   string            `json:"username"`
-	Evidence   []OutfitViolation `json:"evidence"`
-	Confidence float64           `json:"confidence"`
+	Username   string            `json:"username"   jsonschema_description:"Username of the account being analyzed"`
+	Evidence   []OutfitViolation `json:"evidence"   jsonschema_description:"List of outfit violations found"`
+	Confidence float64           `json:"confidence" jsonschema_description:"Overall confidence score for the violations (0.0-1.0)"`
 }
 
 // OutfitViolation represents a detected violation for a single outfit.
 type OutfitViolation struct {
-	OutfitName string  `json:"outfitName"`
-	Violation  string  `json:"violation"`
-	Confidence float64 `json:"confidence"`
+	OutfitName string  `json:"outfitName" jsonschema_description:"Name of the outfit with a violation"`
+	Violation  string  `json:"violation"  jsonschema_description:"Description of the specific violation found"`
+	Confidence float64 `json:"confidence" jsonschema_description:"Confidence score for this specific violation (0.0-1.0)"`
 }
 
 // OutfitThemeAnalysis contains the AI's theme detection results for a user's outfits.
 type OutfitThemeAnalysis struct {
-	Username string        `json:"username"`
-	Themes   []OutfitTheme `json:"themes"`
+	Username string        `json:"username" jsonschema_description:"Username of the account being analyzed"`
+	Themes   []OutfitTheme `json:"themes"   jsonschema_description:"List of themes detected in the outfits"`
 }
 
 // OutfitTheme represents a detected theme for a single outfit.
 type OutfitTheme struct {
-	OutfitName string  `json:"outfitName"`
-	Theme      string  `json:"theme"`
-	Confidence float64 `json:"confidence"`
+	OutfitName string  `json:"outfitName" jsonschema_description:"Name of the outfit with a detected theme"`
+	Theme      string  `json:"theme"      jsonschema_description:"Description of the specific theme detected"`
+	Confidence float64 `json:"confidence" jsonschema_description:"Confidence score for this theme detection (0.0-1.0)"`
 }
 
 // OutfitAnalysisSchema is the JSON schema for the outfit analysis response.
@@ -311,29 +311,31 @@ func (a *OutfitAnalyzer) ProcessOutfits(userInfos []*types.User, reasonsMap map[
 		}
 	}
 
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+	defer cancel()
+
 	// Process flagged users (looking for violations)
 	if len(flaggedInfos) > 0 {
-		a.processFlaggedUsersOutfits(flaggedInfos, reasonsMap)
+		a.processFlaggedUsersOutfits(ctx, flaggedInfos, reasonsMap)
 	}
 
 	// Process non-flagged users (looking for specific themes)
 	if len(unflaggedInfos) > 0 {
-		a.processUnflaggedUsersOutfits(unflaggedInfos, reasonsMap)
+		a.processUnflaggedUsersOutfits(ctx, unflaggedInfos, reasonsMap)
 	}
 }
 
 // processFlaggedUsersOutfits analyzes outfit images for flagged users.
 func (a *OutfitAnalyzer) processFlaggedUsersOutfits(
-	flaggedInfos []*types.User, reasonsMap map[uint64]types.Reasons[enum.UserReasonType],
+	ctx context.Context, flaggedInfos []*types.User, reasonsMap map[uint64]types.Reasons[enum.UserReasonType],
 ) {
 	// Get all outfit thumbnails organized by user
-	userOutfits, userThumbnails := a.getOutfitThumbnails(context.Background(), flaggedInfos)
+	userOutfits, userThumbnails := a.getOutfitThumbnails(ctx, flaggedInfos)
 
 	// Process each user's outfits concurrently
 	var (
-		ctx = context.Background()
-		p   = pool.New().WithContext(ctx)
-		mu  sync.Mutex
+		p  = pool.New().WithContext(ctx)
+		mu sync.Mutex
 	)
 
 	for _, userInfo := range flaggedInfos {
@@ -370,16 +372,15 @@ func (a *OutfitAnalyzer) processFlaggedUsersOutfits(
 
 // processUnflaggedUsersOutfits analyzes outfit images for non-flagged users.
 func (a *OutfitAnalyzer) processUnflaggedUsersOutfits(
-	unflaggedInfos []*types.User, reasonsMap map[uint64]types.Reasons[enum.UserReasonType],
+	ctx context.Context, unflaggedInfos []*types.User, reasonsMap map[uint64]types.Reasons[enum.UserReasonType],
 ) {
 	// Get all outfit thumbnails organized by user
-	userOutfits, userThumbnails := a.getOutfitThumbnails(context.Background(), unflaggedInfos)
+	userOutfits, userThumbnails := a.getOutfitThumbnails(ctx, unflaggedInfos)
 
 	// Process each user's outfits concurrently
 	var (
-		ctx = context.Background()
-		p   = pool.New().WithContext(ctx)
-		mu  sync.Mutex
+		p  = pool.New().WithContext(ctx)
+		mu sync.Mutex
 	)
 
 	for _, userInfo := range unflaggedInfos {
@@ -461,12 +462,12 @@ func (a *OutfitAnalyzer) getOutfitThumbnails(
 	return userOutfits, userThumbnails
 }
 
-// analyzeOutfits is a generic helper method that handles the common analysis steps for both flagged and unflagged users.
+// analyzeOutfits is a helper method that handles the common analysis steps for both flagged and unflagged users.
 func (a *OutfitAnalyzer) analyzeOutfits(
 	ctx context.Context, info *types.User, outfits []*apiTypes.Outfit, thumbnailMap map[uint64]string,
 	systemPrompt string, requestPrompt string, promptFormat string, schema any,
 	resultHandler func(
-		contents []string, info *types.User, mu *sync.Mutex, reasonsMap map[uint64]types.Reasons[enum.UserReasonType],
+		contents []any, info *types.User, mu *sync.Mutex, reasonsMap map[uint64]types.Reasons[enum.UserReasonType],
 	) error,
 	mu *sync.Mutex, reasonsMap map[uint64]types.Reasons[enum.UserReasonType],
 ) error {
@@ -480,7 +481,7 @@ func (a *OutfitAnalyzer) analyzeOutfits(
 	}
 
 	// Collect responses from all batches
-	var batchResponses []string
+	var batchResponses []any
 
 	// Process outfits in batches
 	for i := 0; i < len(downloads); i += a.batchSize {
@@ -490,6 +491,9 @@ func (a *OutfitAnalyzer) analyzeOutfits(
 			ctx, info, downloads[i:end], systemPrompt, requestPrompt, promptFormat, schema,
 		)
 		if err != nil {
+			if errors.Is(err, ErrNoOutfits) {
+				return ErrNoViolations
+			}
 			a.logger.Warn("Failed to analyze outfit batch",
 				zap.Error(err),
 				zap.Int("batchIndex", i),
@@ -497,7 +501,7 @@ func (a *OutfitAnalyzer) analyzeOutfits(
 				zap.Int("totalOutfits", len(downloads)))
 			continue
 		}
-		if response != "" {
+		if response != nil {
 			batchResponses = append(batchResponses, response)
 		}
 	}
@@ -514,10 +518,10 @@ func (a *OutfitAnalyzer) analyzeOutfits(
 func (a *OutfitAnalyzer) analyzeOutfitBatch(
 	ctx context.Context, info *types.User, downloads []DownloadResult,
 	systemPrompt string, requestPrompt string, promptFormat string, schema any,
-) (string, error) {
+) (any, error) {
 	// Acquire semaphore before making AI request
 	if err := a.analysisSem.Acquire(ctx, 1); err != nil {
-		return "", fmt.Errorf("failed to acquire semaphore: %w", err)
+		return nil, fmt.Errorf("failed to acquire semaphore: %w", err)
 	}
 	defer a.analysisSem.Release(1)
 
@@ -547,7 +551,7 @@ func (a *OutfitAnalyzer) analyzeOutfitBatch(
 
 	// Skip if no images were processed successfully
 	if len(outfitNames) == 0 {
-		return "", nil
+		return nil, ErrNoOutfits
 	}
 
 	// Add final user message with outfit names
@@ -560,7 +564,7 @@ func (a *OutfitAnalyzer) analyzeOutfitBatch(
 	messages = append(messages, openai.UserMessage(prompt))
 
 	// Generate outfit analysis with retry
-	response, err := utils.WithRetry(ctx, func() (string, error) {
+	response, err := utils.WithRetry(ctx, func() (any, error) {
 		resp, err := a.chat.New(ctx, openai.ChatCompletionNewParams{
 			Messages: messages,
 			ResponseFormat: openai.ChatCompletionNewParamsResponseFormatUnion{
@@ -569,7 +573,7 @@ func (a *OutfitAnalyzer) analyzeOutfitBatch(
 						Name:        "outfitAnalysis",
 						Description: openai.String("Analysis of user outfits"),
 						Schema:      schema,
-						Strict:      openai.Bool(false),
+						Strict:      openai.Bool(true),
 					},
 				},
 			},
@@ -578,15 +582,35 @@ func (a *OutfitAnalyzer) analyzeOutfitBatch(
 			TopP:        openai.Float(0.1),
 		})
 		if err != nil {
-			return "", fmt.Errorf("openai API error: %w", err)
+			// Check if content was blocked
+			if errors.Is(err, client.ErrContentBlocked) {
+				a.logger.Info("Outfit analysis blocked",
+					zap.String("model", a.model),
+					zap.Uint64("userID", info.ID),
+					zap.String("username", info.Name),
+					zap.String("reason", err.Error()))
+
+				// For blocked content, return a high-confidence violation
+				return a.handleBlockedContent(info, schema)
+			}
+			return nil, fmt.Errorf("openai API error: %w", err)
 		}
 
 		// Check for empty response
 		if len(resp.Choices) == 0 || len(resp.Choices[0].Message.Content) == 0 {
-			return "", fmt.Errorf("%w: no response from model", ErrModelResponse)
+			return nil, fmt.Errorf("%w: no response from model", ErrModelResponse)
 		}
 
-		return resp.Choices[0].Message.Content, nil
+		// Extract thought process and clean JSON response
+		thought, cleanJSON := utils.ExtractThoughtProcess(resp.Choices[0].Message.Content)
+		if thought != "" {
+			a.logger.Debug("AI outfit analysis thought process",
+				zap.String("thought", thought),
+				zap.String("model", a.model))
+		}
+
+		// Parse response based on schema type
+		return a.parseAnalysisResponse(cleanJSON, schema)
 	}, utils.GetAIRetryOptions())
 
 	return response, err
@@ -598,28 +622,28 @@ func (a *OutfitAnalyzer) analyzeFlaggedUserOutfits(
 	outfits []*apiTypes.Outfit, thumbnailMap map[uint64]string,
 ) error {
 	resultHandler := func(
-		contents []string, info *types.User, mu *sync.Mutex, reasonsMap map[uint64]types.Reasons[enum.UserReasonType],
+		results []any, info *types.User, mu *sync.Mutex, reasonsMap map[uint64]types.Reasons[enum.UserReasonType],
 	) error {
 		var allEvidence []OutfitViolation
 		var maxConfidence float64
 
 		// Process all batch responses
-		for _, content := range contents {
-			var result *OutfitAnalysis
-			if err := sonic.Unmarshal([]byte(content), &result); err != nil {
-				return fmt.Errorf("JSON unmarshal error: %w", err)
+		for _, result := range results {
+			analysis, ok := result.(*OutfitAnalysis)
+			if !ok {
+				continue
 			}
 
 			// Skip results with no violations
-			if result.Confidence < 0.1 || result.Confidence > 1.0 || result.Evidence == nil || len(result.Evidence) == 0 {
+			if analysis.Confidence < 0.1 || analysis.Confidence > 1.0 || analysis.Evidence == nil || len(analysis.Evidence) == 0 {
 				continue
 			}
 
 			// Add evidence to the list
-			allEvidence = append(allEvidence, result.Evidence...)
+			allEvidence = append(allEvidence, analysis.Evidence...)
 
 			// Process each violation to find the highest confidence one
-			for _, violation := range result.Evidence {
+			for _, violation := range analysis.Evidence {
 				if violation.Confidence > maxConfidence {
 					maxConfidence = violation.Confidence
 				}
@@ -681,25 +705,25 @@ func (a *OutfitAnalyzer) analyzeUnflaggedUserOutfits(
 	outfits []*apiTypes.Outfit, thumbnailMap map[uint64]string,
 ) error {
 	resultHandler := func(
-		contents []string, info *types.User, mu *sync.Mutex, reasonsMap map[uint64]types.Reasons[enum.UserReasonType],
+		results []any, info *types.User, mu *sync.Mutex, reasonsMap map[uint64]types.Reasons[enum.UserReasonType],
 	) error {
 		var allSuspiciousThemes []string
 		var highestConfidence float64
 
 		// Process all batch responses
-		for _, content := range contents {
-			var result *OutfitThemeAnalysis
-			if err := sonic.Unmarshal([]byte(content), &result); err != nil {
-				return fmt.Errorf("JSON unmarshal error: %w", err)
+		for _, result := range results {
+			analysis, ok := result.(*OutfitThemeAnalysis)
+			if !ok {
+				continue
 			}
 
 			// Skip results with no themes detected
-			if len(result.Themes) == 0 {
+			if len(analysis.Themes) == 0 {
 				continue
 			}
 
 			// Process themes from this batch
-			for _, theme := range result.Themes {
+			for _, theme := range analysis.Themes {
 				// Skip themes with invalid confidence
 				if theme.Confidence < 0.1 || theme.Confidence > 1.0 {
 					continue
@@ -733,7 +757,7 @@ func (a *OutfitAnalyzer) analyzeUnflaggedUserOutfits(
 			})
 			mu.Unlock()
 
-			a.logger.Info("AI flagged previously unflagged user based on outfit themes",
+			a.logger.Info("AI flagged user with outfit themes",
 				zap.Uint64("userID", info.ID),
 				zap.String("username", info.Name),
 				zap.Float64("confidence", highestConfidence),
@@ -756,6 +780,60 @@ func (a *OutfitAnalyzer) analyzeUnflaggedUserOutfits(
 		mu,
 		reasonsMap,
 	)
+}
+
+// handleBlockedContent creates an appropriate response when content is blocked.
+func (a *OutfitAnalyzer) handleBlockedContent(info *types.User, schema any) (any, error) {
+	outfitName := "Unknown Outfits"
+	blockedOutfitReason := "Content was blocked by AI safety filters."
+
+	switch schema {
+	case OutfitAnalysisSchema:
+		return &OutfitAnalysis{
+			Username: info.Name,
+			Evidence: []OutfitViolation{
+				{
+					OutfitName: outfitName,
+					Violation:  blockedOutfitReason,
+					Confidence: 1.0,
+				},
+			},
+			Confidence: 1.0,
+		}, nil
+	case OutfitThemeAnalysisSchema:
+		return &OutfitThemeAnalysis{
+			Username: info.Name,
+			Themes: []OutfitTheme{
+				{
+					OutfitName: outfitName,
+					Theme:      blockedOutfitReason,
+					Confidence: 1.0,
+				},
+			},
+		}, nil
+	default:
+		return nil, ErrUnsupportedSchema
+	}
+}
+
+// parseAnalysisResponse parses the AI response based on the schema type.
+func (a *OutfitAnalyzer) parseAnalysisResponse(cleanJSON string, schema any) (any, error) {
+	switch schema {
+	case OutfitAnalysisSchema:
+		var analysis OutfitAnalysis
+		if err := sonic.Unmarshal([]byte(cleanJSON), &analysis); err != nil {
+			return nil, fmt.Errorf("JSON unmarshal error: %w", err)
+		}
+		return &analysis, nil
+	case OutfitThemeAnalysisSchema:
+		var analysis OutfitThemeAnalysis
+		if err := sonic.Unmarshal([]byte(cleanJSON), &analysis); err != nil {
+			return nil, fmt.Errorf("JSON unmarshal error: %w", err)
+		}
+		return &analysis, nil
+	default:
+		return nil, ErrUnsupportedSchema
+	}
 }
 
 // downloadOutfitImages concurrently downloads outfit images until we have enough.

@@ -3,6 +3,7 @@ package ai
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/bytedance/sonic"
 	"github.com/openai/openai-go"
@@ -16,11 +17,11 @@ import (
 )
 
 // StatsSystemPrompt is the system prompt for the stats analyzer.
-const StatsSystemPrompt = `You are a witty assistant analyzing moderation statistics.
-
+const StatsSystemPrompt = `Instruction:
+You are a witty assistant analyzing moderation statistics.
 Generate a short, engaging welcome message (max 512 characters) for moderators based on statistical trends. 
 
-Instructions:
+Key instructions:
 - Look for patterns and spikes in activity
 - Stats show total counts, not differences
 - Stats come from our automated detection system that flags suspicious users and groups
@@ -83,6 +84,9 @@ func NewStatsAnalyzer(app *setup.App, logger *zap.Logger) *StatsAnalyzer {
 func (a *StatsAnalyzer) GenerateWelcomeMessage(
 	ctx context.Context, historicalStats []*types.HourlyStats,
 ) (string, error) {
+	ctx, cancel := context.WithTimeout(ctx, 3*time.Minute)
+	defer cancel()
+
 	// Format stats data for AI analysis
 	data := StatsData{
 		History: historicalStats,
@@ -128,7 +132,7 @@ func (a *StatsAnalyzer) GenerateWelcomeMessage(
 		return utils.CompressAllWhitespace(content), nil
 	}, utils.GetAIRetryOptions())
 	if err != nil {
-		return "", fmt.Errorf("%w: %w", ErrModelResponse, err)
+		return "", err
 	}
 
 	a.logger.Debug("Generated welcome message",

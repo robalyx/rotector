@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"slices"
 	"sync"
+	"time"
 
 	"github.com/bytedance/sonic"
 	"github.com/robalyx/rotector/internal/ai/client"
@@ -21,7 +22,10 @@ import (
 
 const (
 	// MessageSystemPrompt provides detailed instructions to the AI model for analyzing Discord conversations.
-	MessageSystemPrompt = `You are an AI moderator analyzing Discord conversations in Roblox-related servers.
+	MessageSystemPrompt = `Instruction:
+You are an AI moderator analyzing Discord conversations in Roblox-related servers.
+Your task is to identify messages that contain sexually inappropriate content.
+Your analysis should be in the context of Roblox condo servers.
 
 Input format:
 {
@@ -55,12 +59,23 @@ Output format:
   ]
 }
 
-Your task is to identify messages that contain sexually inappropriate content.
-Your analysis should be in the context of Roblox condo servers.
-You must analyze the full context of conversations to identify patterns and hidden meanings.
+Confidence levels:
+0.0: No inappropriate content
+0.1-0.3: Subtle inappropriate elements
+0.4-0.6: Clear inappropriate content
+0.7-0.8: Strong inappropriate indicators
+0.9-1.0: Explicit inappropriate content
 
-Focus on detecting:
+Key instructions:
+1. Return messages with sexual/inappropriate content violations
+2. Include exact quotes in message content
+3. Set confidence based on severity, clarity, and contextual evidence
+4. Skip empty messages or messages with only non-sexual offensive content
+5. Focus on protecting minors from inappropriate sexual content
+6. Avoid flagging messages from potential victims
+7. Ignore offensive/racist content that is not sexual in nature
 
+Instruction: Focus on detecting:
 1. Sexually explicit content or references
 2. Suggestive language, sexual innuendos, or double entendres
 3. References to condo games or similar euphemisms related to inappropriate Roblox content
@@ -78,26 +93,11 @@ Focus on detecting:
 15. References to inappropriate group activities
 16. Requesting to look in their bio
 
-Remember that Roblox is primarily used by children and young teenagers.
+IMPORTANT:
+Roblox is primarily used by children and young teenagers.
 So be especially vigilant about content that may expose minors to inappropriate material.
 
-Confidence levels:
-0.0: No inappropriate content
-0.1-0.3: Subtle inappropriate elements
-0.4-0.6: Clear inappropriate content
-0.7-0.8: Strong inappropriate indicators
-0.9-1.0: Explicit inappropriate content
-
-Key rules:
-1. Return messages with sexual/inappropriate content violations
-2. Include exact quotes in message content
-3. Set confidence based on severity, clarity, and contextual evidence
-4. Skip empty messages or messages with only non-sexual offensive content
-5. Focus on protecting minors from inappropriate sexual content
-6. Avoid flagging messages from potential victims
-7. Ignore offensive/racist content that is not sexual in nature
-
-Ignore:
+IGNORE:
 1. Users warning others, mentioning/confronting pedophiles, expressing concern, or calling out inappropriate behavior
 2. General profanity or curse words that aren't sexual in nature
 3. Non-sexual bullying or harassment
@@ -107,14 +107,12 @@ Ignore:
 	// MessageAnalysisPrompt provides a reminder to follow system guidelines for message analysis.
 	MessageAnalysisPrompt = `Analyze these messages for inappropriate content.
 
-Reminders:
-- Only flag users who post clearly inappropriate content
-- Return an empty "users" array if no inappropriate content is found
-- Follow confidence level guide strictly
+Remember:
+1. Only flag users who post clearly inappropriate content
+2. Return an empty "users" array if no inappropriate content is found
+3. Follow confidence level guide strictly
 
-SERVER: "%s"
-
-MESSAGES TO ANALYZE:
+Input:
 %s`
 )
 
@@ -176,11 +174,7 @@ func NewMessageAnalyzer(app *setup.App, logger *zap.Logger) *MessageAnalyzer {
 
 // ProcessMessages analyzes a collection of Discord messages for inappropriate content.
 func (a *MessageAnalyzer) ProcessMessages(
-	ctx context.Context,
-	serverID uint64,
-	channelID uint64,
-	serverName string,
-	messages []*MessageContent,
+	ctx context.Context, serverID uint64, channelID uint64, serverName string, messages []*MessageContent,
 ) (map[uint64]*FlaggedMessageUser, error) {
 	a.logger.Info("Starting message analysis",
 		zap.Uint64("server_id", serverID),
@@ -196,6 +190,9 @@ func (a *MessageAnalyzer) ProcessMessages(
 	}
 
 	// Process batches concurrently
+	ctx, cancel := context.WithTimeout(ctx, 3*time.Minute)
+	defer cancel()
+
 	var (
 		p            = pool.New().WithErrors().WithContext(ctx)
 		flaggedUsers = make(map[uint64]*FlaggedMessageUser)
@@ -252,10 +249,7 @@ func (a *MessageAnalyzer) ProcessMessages(
 
 // processBatch processes a batch of messages using the AI model.
 func (a *MessageAnalyzer) processBatch(
-	ctx context.Context,
-	serverID uint64,
-	serverName string,
-	messages []*MessageContent,
+	ctx context.Context, serverID uint64, serverName string, messages []*MessageContent,
 ) (*FlaggedMessagesResponse, error) {
 	// Acquire semaphore to limit concurrent AI calls
 	if err := a.analysisSem.Acquire(ctx, 1); err != nil {
@@ -289,7 +283,7 @@ func (a *MessageAnalyzer) processBatch(
 	}
 
 	// Format the prompt using the template
-	prompt := fmt.Sprintf(MessageAnalysisPrompt, serverName, minifiedJSON)
+	prompt := fmt.Sprintf(MessageAnalysisPrompt, minifiedJSON)
 
 	// Generate message analysis with retry
 	result, err := utils.WithRetry(ctx, func() (*FlaggedMessagesResponse, error) {
@@ -321,16 +315,25 @@ func (a *MessageAnalyzer) processBatch(
 			return nil, fmt.Errorf("%w: no response from model", ErrModelResponse)
 		}
 
+		// Extract thought process and clean JSON response
+		thought, cleanJSON := utils.ExtractThoughtProcess(resp.Choices[0].Message.Content)
+		if thought != "" {
+			a.logger.Debug("AI message analysis thought process",
+				zap.String("thought", thought),
+				zap.String("server_name", serverName),
+				zap.Int("batch_size", len(messages)))
+		}
+
 		// Parse response from AI
 		var result *FlaggedMessagesResponse
-		if err := sonic.Unmarshal([]byte(resp.Choices[0].Message.Content), &result); err != nil {
+		if err := sonic.Unmarshal([]byte(cleanJSON), &result); err != nil {
 			return nil, fmt.Errorf("JSON unmarshal error: %w", err)
 		}
 
 		return result, nil
 	}, utils.GetAIRetryOptions())
 	if err != nil {
-		return nil, fmt.Errorf("%w: %w", ErrModelResponse, err)
+		return nil, err
 	}
 
 	// Validate message IDs against user IDs
@@ -341,8 +344,7 @@ func (a *MessageAnalyzer) processBatch(
 
 // validateMessageOwnership ensures flagged messages belong to the flagged users.
 func (a *MessageAnalyzer) validateMessageOwnership(
-	messages []*MessageContent,
-	flaggedResults *FlaggedMessagesResponse,
+	messages []*MessageContent, flaggedResults *FlaggedMessagesResponse,
 ) {
 	// Build a map of message ID to user ID for quick lookups
 	messageToUser := make(map[string]uint64, len(messages))

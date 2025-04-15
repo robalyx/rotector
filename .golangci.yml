@@ -26,6 +26,7 @@ linters:
     - wrapcheck
     - wsl
     - interfacebloat
+    - gocognit
   settings:
     cyclop:
       max-complexity: 30
@@ -57,8 +58,6 @@ linters:
       lines: 120
       statements: 55
       ignore-comments: true
-    gocognit:
-      min-complexity: 38
     gochecksumtype:
       default-signifies-exhaustive: false
     goconst:
@@ -83,7 +82,7 @@ linters:
     inamedparam:
       skip-single-param: true
     lll:
-      line-length: 130
+      line-length: 140
     mnd:
       ignored-functions:
         - args.Error

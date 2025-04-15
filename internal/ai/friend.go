@@ -4,12 +4,12 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/bytedance/sonic"
 	"github.com/openai/openai-go"
 	"github.com/robalyx/rotector/internal/ai/client"
 	"github.com/robalyx/rotector/internal/database/types"
-	"github.com/robalyx/rotector/internal/database/types/enum"
 	"github.com/robalyx/rotector/internal/setup"
 	"github.com/robalyx/rotector/pkg/utils"
 	"github.com/sourcegraph/conc/pool"
@@ -21,7 +21,8 @@ import (
 
 const (
 	// FriendSystemPrompt provides detailed instructions to the AI model for analyzing friend networks.
-	FriendSystemPrompt = `You are a network analyst identifying predatory behavior patterns in Roblox friend networks.
+	FriendSystemPrompt = `Instruction:
+You are a network analyst identifying predatory behavior patterns in Roblox friend networks.
 
 Input format:
 {
@@ -45,7 +46,7 @@ Output format:
   ]
 }
 
-Key rules:
+Key instructions:
 1. Focus on factual connections
 2. Use "the network" instead of usernames
 3. Keep analysis to one sentence
@@ -53,18 +54,18 @@ Key rules:
 5. Return a result for each user
 6. Consider accounts with few friends as potential alt accounts
 
-Look for:
-- Common violation types
-- Confirmed vs flagged ratios
-- Connected violation patterns
-- Network size and density
-- Violation clustering
-
 Violation types:
 - user: Profile content violations
 - outfit: Inappropriate outfit designs
 - group: Group-based violations
-- friend: Network pattern violations`
+- friend: Network pattern violations
+
+Instruction: Look for:
+- Common violation types
+- Confirmed vs flagged ratios
+- Connected violation patterns
+- Network size and density
+- Violation clustering`
 
 	// FriendUserPrompt is the prompt for analyzing multiple users' friend networks.
 	FriendUserPrompt = `Analyze these friend networks for predatory behavior patterns.
@@ -87,9 +88,15 @@ const (
 
 // FriendSummary contains a summary of a friend's data.
 type FriendSummary struct {
-	Name        string        `json:"name"`
-	Type        enum.UserType `json:"type"`
-	ReasonTypes []string      `json:"reasonTypes"`
+	Name        string   `json:"name"        jsonschema_description:"Username of the friend"`
+	Type        string   `json:"type"        jsonschema_description:"Type of friend (Confirmed or Flagged)"`
+	ReasonTypes []string `json:"reasonTypes" jsonschema_description:"List of reasons why this friend was flagged"`
+}
+
+// UserFriendData represents the data for a user's friend network.
+type UserFriendData struct {
+	Username string          `json:"username" jsonschema_description:"Username of the account being analyzed"`
+	Friends  []FriendSummary `json:"friends"  jsonschema_description:"List of friends and their violation data"`
 }
 
 // FriendAnalysis contains the result of analyzing a user's friend network.
@@ -136,8 +143,10 @@ func NewFriendAnalyzer(app *setup.App, logger *zap.Logger) *FriendAnalyzer {
 func (a *FriendAnalyzer) GenerateFriendReasons(
 	userInfos []*types.User, confirmedFriendsMap, flaggedFriendsMap map[uint64]map[uint64]*types.User,
 ) map[uint64]string {
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+	defer cancel()
+
 	var (
-		ctx     = context.Background()
 		p       = pool.New().WithContext(ctx)
 		mu      sync.Mutex
 		results = make(map[uint64]string)
@@ -197,13 +206,7 @@ func (a *FriendAnalyzer) processBatch(
 	confirmedFriendsMap, flaggedFriendsMap map[uint64]map[uint64]*types.User,
 ) ([]FriendAnalysis, error) {
 	// Create summaries for all users in batch
-	type UserFriendData struct {
-		Username string          `json:"username"`
-		Friends  []FriendSummary `json:"friends"`
-	}
-
 	batchData := make([]UserFriendData, 0, len(userInfos))
-
 	for _, userInfo := range userInfos {
 		// Get confirmed and flagged friends for this user
 		confirmedFriends := confirmedFriendsMap[userInfo.ID]
@@ -219,7 +222,7 @@ func (a *FriendAnalyzer) processBatch(
 			}
 			friendSummaries = append(friendSummaries, FriendSummary{
 				Name:        friend.Name,
-				Type:        enum.UserTypeConfirmed,
+				Type:        "Confirmed",
 				ReasonTypes: friend.Reasons.Types(),
 			})
 		}
@@ -231,7 +234,7 @@ func (a *FriendAnalyzer) processBatch(
 			}
 			friendSummaries = append(friendSummaries, FriendSummary{
 				Name:        friend.Name,
-				Type:        enum.UserTypeFlagged,
+				Type:        "Flagged",
 				ReasonTypes: friend.Reasons.Types(),
 			})
 		}
@@ -292,16 +295,24 @@ func (a *FriendAnalyzer) processBatch(
 			return nil, fmt.Errorf("%w: no response from model", ErrModelResponse)
 		}
 
+		// Extract thought process and clean JSON response
+		thought, cleanJSON := utils.ExtractThoughtProcess(resp.Choices[0].Message.Content)
+		if thought != "" {
+			a.logger.Debug("AI friend analysis thought process",
+				zap.String("thought", thought),
+				zap.String("model", resp.Model))
+		}
+
 		// Parse response from AI
 		var result *BatchFriendAnalysis
-		if err := sonic.Unmarshal([]byte(resp.Choices[0].Message.Content), &result); err != nil {
+		if err := sonic.Unmarshal([]byte(cleanJSON), &result); err != nil {
 			return nil, fmt.Errorf("JSON unmarshal error: %w", err)
 		}
 
 		return result, nil
 	}, utils.GetAIRetryOptions())
 	if err != nil {
-		return nil, fmt.Errorf("%w: %w", ErrModelResponse, err)
+		return nil, err
 	}
 
 	// Verify we got results for all users in the batch

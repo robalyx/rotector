@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/openai/openai-go"
@@ -15,7 +16,46 @@ import (
 	"golang.org/x/sync/semaphore"
 )
 
-var ErrNoProvidersAvailable = errors.New("no providers available")
+var (
+	ErrNoProvidersAvailable = errors.New("no providers available")
+	ErrContentBlocked       = errors.New("content blocked by provider")
+)
+
+// BlockReason represents different types of content blocking reasons.
+type BlockReason string
+
+const (
+	BlockReasonUnspecified BlockReason = "BLOCK_REASON_UNSPECIFIED"
+	BlockReasonSafety      BlockReason = "SAFETY"
+	BlockReasonOther       BlockReason = "OTHER"
+	BlockReasonBlocklist   BlockReason = "BLOCKLIST"
+	BlockReasonProhibited  BlockReason = "PROHIBITED_CONTENT"
+	BlockReasonImageSafety BlockReason = "IMAGE_SAFETY"
+)
+
+// String returns the string representation of the block reason.
+func (br BlockReason) String() string {
+	return string(br)
+}
+
+// Details returns human-readable details about the block reason.
+func (br BlockReason) Details() string {
+	switch br {
+	case BlockReasonSafety:
+		return "Check safetyRatings for specific category"
+	case BlockReasonBlocklist:
+		return "Content matched terminology blocklist"
+	case BlockReasonImageSafety:
+		return "Unsafe image generation content"
+	case BlockReasonProhibited:
+		return "Content violates provider's content policy"
+	case BlockReasonOther:
+		return "Content blocked for unspecified reasons"
+	case BlockReasonUnspecified:
+		return "Default block reason (unused)"
+	}
+	return "Unknown block reason"
+}
 
 // CircuitBreakerSettings contains configuration for the circuit breaker.
 type CircuitBreakerSettings struct {
@@ -59,7 +99,7 @@ func NewClient(cfg *config.OpenAI, logger *zap.Logger) (*AIClient, error) {
 		client := openai.NewClient(
 			option.WithAPIKey(p.APIKey),
 			option.WithBaseURL(p.BaseURL),
-			option.WithRequestTimeout(30*time.Second),
+			option.WithRequestTimeout(90*time.Second),
 			option.WithMaxRetries(0),
 		)
 
@@ -67,7 +107,7 @@ func NewClient(cfg *config.OpenAI, logger *zap.Logger) (*AIClient, error) {
 		settings := gobreaker.Settings{
 			Name:        p.Name,
 			MaxRequests: 1,
-			Timeout:     30 * time.Second,
+			Timeout:     60 * time.Second,
 			Interval:    0,
 			ReadyToTrip: func(counts gobreaker.Counts) bool {
 				failureRatio := float64(counts.TotalFailures) / float64(counts.Requests)
@@ -107,6 +147,40 @@ type chatCompletions struct {
 	client *AIClient
 }
 
+// checkBlockReasons checks the response for various block reasons and logs them appropriately.
+func (c *chatCompletions) checkBlockReasons(resp *openai.ChatCompletion, provider *providerClient, model string) error {
+	rawJSON := resp.RawJSON()
+	blockReasons := []BlockReason{
+		BlockReasonUnspecified,
+		BlockReasonSafety,
+		BlockReasonOther,
+		BlockReasonBlocklist,
+		BlockReasonProhibited,
+		BlockReasonImageSafety,
+	}
+
+	for _, reason := range blockReasons {
+		if strings.Contains(rawJSON, fmt.Sprintf(`"native_finish_reason":"%s"`, reason)) {
+			fields := []zap.Field{
+				zap.String("provider", provider.name),
+				zap.String("model", model),
+				zap.String("blockReason", reason.String()),
+				zap.String("details", reason.Details()),
+			}
+
+			// Add raw JSON for debugging, but only for non-default cases
+			if reason != BlockReasonUnspecified {
+				fields = append(fields, zap.String("rawJSON", rawJSON))
+			}
+
+			c.client.logger.Warn("Content blocked by provider", fields...)
+			return fmt.Errorf("%w: %s", ErrContentBlocked, reason.Details())
+		}
+	}
+
+	return nil
+}
+
 // New makes a chat completion request to an available provider.
 func (c *chatCompletions) New(ctx context.Context, params openai.ChatCompletionNewParams) (*openai.ChatCompletion, error) {
 	// Get available providers that support this model
@@ -143,27 +217,37 @@ func (c *chatCompletions) New(ctx context.Context, params openai.ChatCompletionN
 				// Map model name
 				params.Model = selectedProvider.modelMappings[originalModel]
 
-				c.client.logger.Debug("Using provider for request",
+				c.client.logger.Debug("Using provider for completion",
 					zap.String("provider", selectedProvider.name),
 					zap.String("originalModel", originalModel),
 					zap.String("mappedModel", params.Model))
 
 				// Execute request
-				result, err := selectedProvider.breaker.Execute(func() (interface{}, error) {
-					return selectedProvider.client.Chat.Completions.New(ctx, params)
+				result, err := selectedProvider.breaker.Execute(func() (any, error) {
+					resp, err := selectedProvider.client.Chat.Completions.New(ctx, params)
+					if err != nil {
+						return resp, err
+					}
+					if err := c.checkBlockReasons(resp, selectedProvider, params.Model); err != nil {
+						return resp, err
+					}
+					return resp, nil
 				})
-
 				selectedProvider.semaphore.Release(1)
 
 				if err != nil {
-					if errors.Is(err, gobreaker.ErrOpenState) {
+					switch {
+					case errors.Is(err, gobreaker.ErrOpenState):
 						c.client.logger.Warn("Circuit breaker is open",
 							zap.String("provider", selectedProvider.name))
-						continue
+					case errors.Is(err, ErrContentBlocked):
+						return nil, err
+					default:
+						c.client.logger.Warn("Failed to make request",
+							zap.String("provider", selectedProvider.name),
+							zap.Error(err))
 					}
-					c.client.logger.Warn("Failed to make request",
-						zap.String("provider", selectedProvider.name),
-						zap.Error(err))
+					time.Sleep(1 * time.Second)
 					continue
 				}
 
@@ -234,11 +318,12 @@ func (c *chatCompletions) NewStreaming(
 					if errors.Is(err, gobreaker.ErrOpenState) {
 						c.client.logger.Warn("Circuit breaker is open for streaming",
 							zap.String("provider", selectedProvider.name))
-						continue
+					} else {
+						c.client.logger.Warn("Failed to create stream",
+							zap.String("provider", selectedProvider.name),
+							zap.Error(err))
 					}
-					c.client.logger.Warn("Failed to create stream",
-						zap.String("provider", selectedProvider.name),
-						zap.Error(err))
+					time.Sleep(1 * time.Second)
 					continue
 				}
 

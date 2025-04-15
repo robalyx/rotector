@@ -137,7 +137,7 @@ func (c *FriendChecker) ProcessUsers(userInfos []*types.User, reasonsMap map[uin
 				Confidence: confidence,
 			})
 
-			c.logger.Debug("User automatically flagged",
+			c.logger.Debug("User flagged for friend network",
 				zap.Uint64("userID", userInfo.ID),
 				zap.Int("confirmedFriends", confirmedCount),
 				zap.Int("flaggedFriends", flaggedCount),

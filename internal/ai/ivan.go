@@ -22,7 +22,8 @@ import (
 
 const (
 	// IvanSystemPrompt provides instructions for analyzing user chat messages.
-	IvanSystemPrompt = `You are an AI moderator analyzing chat messages from "Write A Letter".
+	IvanSystemPrompt = `Instruction:
+You are an AI moderator analyzing chat messages from "Write A Letter".
 It is a Roblox game where players write letters and notes to friends or strangers.
 This game is intended for innocent letter writing and socializing.
 However, it is frequently misused for predatory behavior and inappropriate sexual content.
@@ -47,7 +48,7 @@ Output format:
   "confidence": 0.0-1.0
 }
 
-Key rules:
+Key instructions:
 1. Focus on detecting predatory behavior and sexual content
 2. Return at most 25 of the worst messages as evidence if inappropriate
 3. Include full message content in evidence
@@ -62,7 +63,7 @@ Confidence levels:
 0.7-0.8: Strong predatory indicators
 0.9-1.0: Explicit predatory behavior
 
-Look for:
+Instruction: Look for:
 - Sexual content or innuendos
 - Grooming behavior
 - Attempts to move conversations private
@@ -77,7 +78,7 @@ Look for:
 - Attempts to establish inappropriate relationships
 - Requests for inappropriate photos or content
 
-Ignore:
+IGNORE:
 - General profanity
 - Non-sexual harassment
 - Spam messages
@@ -96,27 +97,34 @@ Ignore:
 	IvanRequestPrompt = `Analyze these chat messages for inappropriate content.
 
 Remember:
-- Only flag users showing predatory or inappropriate sexual behavior
-- Include at most 25 of the worst messages as evidence if inappropriate
-- Consider message patterns and context
-- Follow confidence level guide strictly
+1. Only flag users showing predatory or inappropriate sexual behavior
+2. Include at most 25 of the worst messages as evidence if inappropriate
+3. Consider message patterns and context
+4. Follow confidence level guide strictly
 
-Messages to analyze:
+Input:
 `
 )
 
 // MessageForAI represents a message to be analyzed by the AI.
 type MessageForAI struct {
-	DateTime time.Time `json:"dateTime"`
-	Message  string    `json:"message"`
+	DateTime time.Time `json:"dateTime" jsonschema_description:"Timestamp when the message was sent"`
+	Message  string    `json:"message"  jsonschema_description:"Content of the message"`
+}
+
+// IvanRequest represents the request data for the AI.
+type IvanRequest struct {
+	UserID   uint64         `json:"userId"   jsonschema_description:"User ID of the account being analyzed"`
+	Username string         `json:"username" jsonschema_description:"Username of the account being analyzed"`
+	Messages []MessageForAI `json:"messages" jsonschema_description:"List of messages to analyze"`
 }
 
 // IvanAnalysisResponse represents the AI's analysis of a user's messages.
 type IvanAnalysisResponse struct {
-	IsInappropriate bool     `json:"isInappropriate"`
-	Reason          string   `json:"reason"`
-	Evidence        []string `json:"evidence"`
-	Confidence      float64  `json:"confidence"`
+	IsInappropriate bool     `json:"isInappropriate" jsonschema_description:"Whether the user's messages are inappropriate"`
+	Reason          string   `json:"reason"          jsonschema_description:"Explanation of why the messages are inappropriate"`
+	Evidence        []string `json:"evidence"        jsonschema_description:"List of specific messages that were flagged"`
+	Confidence      float64  `json:"confidence"      jsonschema_description:"Confidence score for the analysis (0.0-1.0)"`
 }
 
 // IvanAnalyzer handles AI-based analysis of user chat messages.
@@ -155,6 +163,9 @@ func (a *IvanAnalyzer) ProcessUsers(users []*types.User, reasonsMap map[uint64]t
 		return
 	}
 
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+	defer cancel()
+
 	// Extract user IDs
 	userIDs := make([]uint64, len(users))
 	userMap := make(map[uint64]*types.User)
@@ -164,7 +175,7 @@ func (a *IvanAnalyzer) ProcessUsers(users []*types.User, reasonsMap map[uint64]t
 	}
 
 	// Get all user messages and mark them as checked
-	messages, err := a.db.Model().Ivan().GetAndMarkUsersMessages(context.Background(), userIDs)
+	messages, err := a.db.Model().Ivan().GetAndMarkUsersMessages(ctx, userIDs)
 	if err != nil {
 		a.logger.Error("Failed to get ivan messages",
 			zap.Error(err),
@@ -178,7 +189,7 @@ func (a *IvanAnalyzer) ProcessUsers(users []*types.User, reasonsMap map[uint64]t
 	var mu sync.Mutex
 	for userID, userMsgs := range messages {
 		user := userMap[userID]
-		if err := a.processMessages(context.Background(), user.ID, user.Name, userMsgs, reasonsMap, &mu); err != nil {
+		if err := a.processMessages(ctx, user.ID, user.Name, userMsgs, reasonsMap, &mu); err != nil {
 			a.logger.Error("Failed to process ivan messages",
 				zap.Error(err),
 				zap.Uint64("userID", user.ID))
@@ -248,13 +259,7 @@ func (a *IvanAnalyzer) processMessages(
 	}
 
 	// Prepare request data
-	type RequestData struct {
-		UserID   uint64         `json:"userId"`
-		Username string         `json:"username"`
-		Messages []MessageForAI `json:"messages"`
-	}
-
-	request := RequestData{
+	request := IvanRequest{
 		UserID:   userID,
 		Username: username,
 		Messages: uniqueMessages,
@@ -308,16 +313,24 @@ func (a *IvanAnalyzer) processMessages(
 			return nil, fmt.Errorf("%w: no response from model", ErrModelResponse)
 		}
 
+		// Extract thought process and clean JSON response
+		thought, cleanJSON := utils.ExtractThoughtProcess(resp.Choices[0].Message.Content)
+		if thought != "" {
+			a.logger.Debug("AI ivan analysis thought process",
+				zap.String("username", username),
+				zap.String("thought", thought))
+		}
+
 		// Parse response
 		var result IvanAnalysisResponse
-		if err := sonic.Unmarshal([]byte(resp.Choices[0].Message.Content), &result); err != nil {
+		if err := sonic.Unmarshal([]byte(cleanJSON), &result); err != nil {
 			return nil, fmt.Errorf("JSON unmarshal error: %w", err)
 		}
 
 		return &result, nil
 	}, utils.GetAIRetryOptions())
 	if err != nil {
-		return fmt.Errorf("%w: %w", ErrModelResponse, err)
+		return err
 	}
 
 	// Skip if not inappropriate

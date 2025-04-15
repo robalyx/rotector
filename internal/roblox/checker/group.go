@@ -237,7 +237,7 @@ func (c *GroupChecker) processUserGroups(
 
 	// Flag user if confidence exceeds threshold
 	if confidence >= 0.4 {
-		c.logger.Info("User automatically flagged",
+		c.logger.Debug("User flagged for group membership",
 			zap.Uint64("userID", userInfo.ID),
 			zap.Int("confirmedGroups", confirmedCount),
 			zap.Int("flaggedGroups", flaggedCount),
