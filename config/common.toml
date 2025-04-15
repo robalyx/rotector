@@ -53,12 +53,12 @@ secret_key = ""
 max_concurrent = 100
 
 [common.circuit_breaker]
-# Number of failures before circuit opens
-max_failures = 10
-# Request timeout in milliseconds
-failure_threshold = 500
-# Recovery delay in milliseconds
-recovery_timeout = 30000
+# Maximum number of requests allowed to pass through when the circuit is half-open
+max_requests = 1
+# The cyclic period of the closed state for the circuit breaker to clear the internal counts
+interval = 0
+# The period of the open state after which the state of the circuit breaker becomes half-open
+timeout = 30000
 
 [common.retry]
 # Maximum retry attempts

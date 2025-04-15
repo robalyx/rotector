@@ -103,9 +103,9 @@ func GetRoAPIClient(
 	// Build middleware chain - order matters!
 	middlewares := []middleware.Middleware{
 		circuitbreaker.New(
-			cfg.CircuitBreaker.MaxFailures,
-			time.Duration(cfg.CircuitBreaker.FailureThreshold)*time.Millisecond,
-			time.Duration(cfg.CircuitBreaker.RecoveryTimeout)*time.Millisecond,
+			cfg.CircuitBreaker.MaxRequests,
+			time.Duration(cfg.CircuitBreaker.Interval)*time.Millisecond,
+			time.Duration(cfg.CircuitBreaker.Timeout)*time.Millisecond,
 		),
 		retry.New(
 			cfg.Retry.MaxRetries,

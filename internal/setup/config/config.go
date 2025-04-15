@@ -109,12 +109,12 @@ type Debug struct {
 
 // CircuitBreaker contains circuit breaker configuration.
 type CircuitBreaker struct {
-	// Number of failures before circuit opens.
-	MaxFailures uint32 `koanf:"max_failures"`
-	// Request timeout in milliseconds.
-	FailureThreshold int `koanf:"failure_threshold"`
-	// Recovery delay in milliseconds.
-	RecoveryTimeout int `koanf:"recovery_timeout"`
+	// Maximum number of requests allowed to pass through when the circuit is half-open.
+	MaxRequests uint32 `koanf:"max_requests"`
+	// The cyclic period of the closed state for the circuit breaker to clear the internal counts.
+	Interval int `koanf:"interval"`
+	// The period of the open state after which the state of the circuit breaker becomes half-open.
+	Timeout int `koanf:"timeout"`
 }
 
 // Retry contains retry configuration.
