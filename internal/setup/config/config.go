@@ -24,7 +24,6 @@ const (
 	CurrentCommonVersion = 1
 	CurrentBotVersion    = 1
 	CurrentWorkerVersion = 1
-	CurrentAPIVersion    = 1
 )
 
 // Config represents the entire application configuration.
@@ -330,7 +329,7 @@ func LoadConfig() (*Config, string, error) {
 	// Load all config files
 	var usedConfigPath string
 
-	configFiles := []string{"common", "bot", "worker", "api"}
+	configFiles := []string{"common", "bot", "worker"}
 	for _, configName := range configFiles {
 		configLoaded := false
 		for _, path := range configPaths {
