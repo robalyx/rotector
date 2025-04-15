@@ -35,7 +35,7 @@ func NewManager(logDir string, cfg *config.Debug) *Manager {
 
 // GetLoggers initializes the main and database loggers.
 // Returns separate loggers for main application and database logging.
-// Both loggers write to their respective files in both the session and latest directories.
+// Both loggers write to their respective files in the session directory.
 func (lm *Manager) GetLoggers() (*zap.Logger, *zap.Logger, error) {
 	if err := lm.setupLogDirectories(); err != nil {
 		return nil, nil, err
@@ -44,7 +44,6 @@ func (lm *Manager) GetLoggers() (*zap.Logger, *zap.Logger, error) {
 	// Initialize main application logger
 	mainLogger, err := lm.initLogger([]string{
 		filepath.Join(lm.currentSessionDir, "main.log"),
-		filepath.Join(lm.logDir, "latest", "main.log"),
 	})
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to initialize main logger: %w", err)
@@ -53,7 +52,6 @@ func (lm *Manager) GetLoggers() (*zap.Logger, *zap.Logger, error) {
 	// Initialize database logger
 	dbLogger, err := lm.initLogger([]string{
 		filepath.Join(lm.currentSessionDir, "database.log"),
-		filepath.Join(lm.logDir, "latest", "database.log"),
 	})
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to initialize database logger: %w", err)
@@ -63,7 +61,7 @@ func (lm *Manager) GetLoggers() (*zap.Logger, *zap.Logger, error) {
 }
 
 // GetWorkerLogger creates a logger for background workers.
-// Each worker gets its own log file in both the session and latest directories.
+// Each worker gets its own log file in the session directory.
 // Returns a no-op logger if initialization fails.
 func (lm *Manager) GetWorkerLogger(name string) *zap.Logger {
 	zapLevel, err := zapcore.ParseLevel(lm.level)
@@ -72,13 +70,11 @@ func (lm *Manager) GetWorkerLogger(name string) *zap.Logger {
 	}
 
 	sessionDir := lm.getOrCreateSessionDir()
-	latestDir := filepath.Join(lm.logDir, "latest")
 
 	// Configure the logger
 	config := zap.NewDevelopmentConfig()
 	config.OutputPaths = []string{
 		filepath.Join(sessionDir, name+".log"),
-		filepath.Join(latestDir, name+".log"),
 	}
 	config.Level = zap.NewAtomicLevelAt(zapLevel)
 
@@ -92,7 +88,7 @@ func (lm *Manager) GetWorkerLogger(name string) *zap.Logger {
 }
 
 // setupLogDirectories creates and manages the log directory structure.
-// It ensures the base directory exists, rotates old logs, and sets up the latest directory.
+// It ensures the base directory exists, rotates old logs, and creates a new session directory.
 func (lm *Manager) setupLogDirectories() error {
 	// Ensure base log directory exists
 	if err := os.MkdirAll(lm.logDir, os.ModePerm); err != nil {
@@ -108,16 +104,6 @@ func (lm *Manager) setupLogDirectories() error {
 	lm.currentSessionDir = filepath.Join(lm.logDir, time.Now().Format("2006-01-02_15-04-05"))
 	if err := os.MkdirAll(lm.currentSessionDir, os.ModePerm); err != nil {
 		return fmt.Errorf("failed to create session directory: %w", err)
-	}
-
-	// Setup latest directory (remove old and create new)
-	latestDir := filepath.Join(lm.logDir, "latest")
-	// Ignore errors when removing old latest directory
-	// since it may be written to by another process
-	_ = os.RemoveAll(latestDir)
-
-	if err := os.MkdirAll(latestDir, os.ModePerm); err != nil {
-		return fmt.Errorf("failed to create latest directory: %w", err)
 	}
 
 	return nil
