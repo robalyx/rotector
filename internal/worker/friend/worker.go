@@ -49,6 +49,7 @@ func New(app *setup.App, bar *progress.Bar, logger *zap.Logger) *Worker {
 		logger:           logger.Named("friend_worker"),
 		batchSize:        app.Config.Worker.BatchSizes.FriendUsers,
 		flaggedThreshold: app.Config.Worker.ThresholdLimits.FlaggedUsers,
+		pendingFriendIDs: make([]uint64, 0),
 	}
 }
 
@@ -131,6 +132,7 @@ func (w *Worker) processFriendsBatch() ([]uint64, error) {
 		user, err := w.db.Model().User().GetUserToScan(context.Background())
 		if err != nil {
 			w.logger.Error("Error getting user to scan", zap.Error(err))
+			w.pendingFriendIDs = friendIDs
 			return nil, err
 		}
 

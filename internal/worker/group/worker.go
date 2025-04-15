@@ -49,6 +49,7 @@ func New(app *setup.App, bar *progress.Bar, logger *zap.Logger) *Worker {
 		logger:           logger.Named("group_worker"),
 		batchSize:        app.Config.Worker.BatchSizes.GroupUsers,
 		flaggedThreshold: app.Config.Worker.ThresholdLimits.FlaggedUsers,
+		pendingUserIDs:   make([]uint64, 0),
 	}
 }
 
@@ -147,6 +148,7 @@ func (w *Worker) processGroup() ([]uint64, error) {
 		groupUsers, err := w.roAPI.Groups().GetGroupUsers(context.Background(), builder.Build())
 		if err != nil {
 			w.logger.Error("Error fetching group members", zap.Error(err))
+			w.pendingUserIDs = userIDs
 			return nil, err
 		}
 
