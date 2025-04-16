@@ -278,8 +278,23 @@ func (m *TicketMenu) handleLookupUser(ctx *interaction.Context, s *session.Sessi
 			return
 		}
 
+		// Add current user to history and set index to point to it
+		history := session.UserReviewHistory.Get(s)
+		history = append(history, user.ID)
+
+		// Trim history if it exceeds the maximum size
+		if len(history) > constants.MaxReviewHistorySize {
+			history = history[len(history)-constants.MaxReviewHistorySize:]
+		}
+
+		session.UserReviewHistory.Set(s, history)
+		session.UserReviewHistoryIndex.Set(s, len(history)-1)
+
 		// Store user in session and show review menu
 		session.UserTarget.Set(s, user)
+		session.OriginalUserReasons.Set(s, user.Reasons)
+		session.ReasonsChanged.Set(s, false)
+		session.PaginationPage.Set(s, 0)
 		ctx.Show(constants.UserReviewPageName, "")
 
 		// Log the lookup action

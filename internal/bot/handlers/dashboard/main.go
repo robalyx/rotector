@@ -237,8 +237,22 @@ func (m *Menu) handleLookupRobloxUserModalSubmit(ctx *interaction.Context, s *se
 		return
 	}
 
+	// Add current user to history and set index to point to it
+	history := session.UserReviewHistory.Get(s)
+	history = append(history, user.ID)
+
+	// Trim history if it exceeds the maximum size
+	if len(history) > constants.MaxReviewHistorySize {
+		history = history[len(history)-constants.MaxReviewHistorySize:]
+	}
+
+	session.UserReviewHistory.Set(s, history)
+	session.UserReviewHistoryIndex.Set(s, len(history)-1)
+
 	// Store user in session and show review menu
 	session.UserTarget.Set(s, user)
+	session.OriginalUserReasons.Set(s, user.Reasons)
+	session.ReasonsChanged.Set(s, false)
 	ctx.Show(constants.UserReviewPageName, "")
 
 	// Log the lookup action
@@ -283,8 +297,22 @@ func (m *Menu) handleLookupRobloxGroupModalSubmit(ctx *interaction.Context, s *s
 		return
 	}
 
+	// Add current group to history and set index to point to it
+	history := session.GroupReviewHistory.Get(s)
+	history = append(history, group.ID)
+
+	// Trim history if it exceeds the maximum size
+	if len(history) > constants.MaxReviewHistorySize {
+		history = history[len(history)-constants.MaxReviewHistorySize:]
+	}
+
+	session.GroupReviewHistory.Set(s, history)
+	session.GroupReviewHistoryIndex.Set(s, len(history)-1)
+
 	// Store group in session and show review menu
 	session.GroupTarget.Set(s, group)
+	session.OriginalGroupReasons.Set(s, group.Reasons)
+	session.ReasonsChanged.Set(s, false)
 	ctx.Show(constants.GroupReviewPageName, "")
 
 	// Log the lookup action
