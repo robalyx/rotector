@@ -181,6 +181,29 @@ func (c *chatCompletions) checkBlockReasons(resp *openai.ChatCompletion, provide
 	return nil
 }
 
+// prepareParams prepares the chat completion parameters by mapping the model name and adding safety settings.
+func (c *chatCompletions) prepareParams(params openai.ChatCompletionNewParams, provider *providerClient) openai.ChatCompletionNewParams {
+	originalModel := params.Model
+	params.Model = provider.modelMappings[originalModel]
+
+	params.WithExtraFields(map[string]any{
+		"safety_settings": []map[string]any{
+			{"category": "HARM_CATEGORY_HARASSMENT", "threshold": "OFF"},
+			{"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "OFF"},
+			{"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "OFF"},
+			{"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "OFF"},
+			{"category": "HARM_CATEGORY_CIVIC_INTEGRITY", "threshold": "OFF"},
+		},
+	})
+
+	c.client.logger.Debug("Using provider",
+		zap.String("provider", provider.name),
+		zap.String("originalModel", originalModel),
+		zap.String("mappedModel", params.Model))
+
+	return params
+}
+
 // New makes a chat completion request to an available provider.
 func (c *chatCompletions) New(ctx context.Context, params openai.ChatCompletionNewParams) (*openai.ChatCompletion, error) {
 	// Get available providers that support this model
@@ -214,13 +237,8 @@ func (c *chatCompletions) New(ctx context.Context, params openai.ChatCompletionN
 			}
 
 			if selectedProvider != nil {
-				// Map model name
-				params.Model = selectedProvider.modelMappings[originalModel]
-
-				c.client.logger.Debug("Using provider for completion",
-					zap.String("provider", selectedProvider.name),
-					zap.String("originalModel", originalModel),
-					zap.String("mappedModel", params.Model))
+				// Prepare parameters
+				params = c.prepareParams(params, selectedProvider)
 
 				// Execute request
 				result, err := selectedProvider.breaker.Execute(func() (any, error) {
@@ -297,13 +315,8 @@ func (c *chatCompletions) NewStreaming(
 			}
 
 			if selectedProvider != nil {
-				// Map model name
-				params.Model = selectedProvider.modelMappings[originalModel]
-
-				c.client.logger.Debug("Using provider for streaming",
-					zap.String("provider", selectedProvider.name),
-					zap.String("originalModel", originalModel),
-					zap.String("mappedModel", params.Model))
+				// Prepare parameters
+				params = c.prepareParams(params, selectedProvider)
 
 				// Execute stream creation
 				result, err := selectedProvider.breaker.Execute(func() (any, error) {
