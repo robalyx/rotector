@@ -33,11 +33,20 @@ type BaseReviewBuilder struct {
 	ReasonsChanged bool
 	IsReviewer     bool
 	IsAdmin        bool
+	TrainingMode   bool
 	PrivacyMode    bool
 }
 
 // BuildCommentsEmbed creates an embed showing recent comments if any exist.
 func (b *BaseReviewBuilder) BuildCommentsEmbed() *discord.EmbedBuilder {
+	if b.IsReviewer && !b.TrainingMode {
+		return b.BuildReviewerCommentsEmbed()
+	}
+	return b.BuildNonReviewerCommentsEmbed()
+}
+
+// BuildReviewerCommentsEmbed creates an embed showing recent comments if any exist.
+func (b *BaseReviewBuilder) BuildReviewerCommentsEmbed() *discord.EmbedBuilder {
 	if len(b.Comments) == 0 {
 		return nil
 	}
@@ -78,6 +87,46 @@ func (b *BaseReviewBuilder) BuildCommentsEmbed() *discord.EmbedBuilder {
 	if len(b.Comments) > 3 {
 		embed.SetFooter(fmt.Sprintf("... and %d more notes", len(b.Comments)-3), "")
 	}
+
+	return embed
+}
+
+// BuildNonReviewerCommentsEmbed creates an embed showing only the user's own comment.
+func (b *BaseReviewBuilder) BuildNonReviewerCommentsEmbed() *discord.EmbedBuilder {
+	if len(b.Comments) == 0 {
+		return nil
+	}
+
+	embed := discord.NewEmbedBuilder().
+		SetTitle("📝 Your Community Note").
+		SetColor(utils.GetMessageEmbedColor(b.PrivacyMode))
+
+	// Find user's comment
+	var userComment *types.Comment
+	for _, comment := range b.Comments {
+		if comment.CommenterID == b.UserID {
+			userComment = comment
+			break
+		}
+	}
+
+	if userComment == nil {
+		return nil
+	}
+
+	timestamp := fmt.Sprintf("<t:%d:R>", userComment.CreatedAt.Unix())
+	if !userComment.UpdatedAt.Equal(userComment.CreatedAt) {
+		timestamp += fmt.Sprintf(" (edited <t:%d:R>)", userComment.UpdatedAt.Unix())
+	}
+
+	embed.AddField(
+		"Your Note",
+		fmt.Sprintf("%s\n```%s```",
+			timestamp,
+			userComment.Message,
+		),
+		false,
+	)
 
 	return embed
 }
@@ -180,6 +229,45 @@ func (b *BaseReviewBuilder) BuildNavigationButtons() []discord.InteractiveCompon
 		prevButton,
 		nextButton,
 	}
+}
+
+// BuildCommentOptions creates the comment options based on user permissions and state.
+func (b *BaseReviewBuilder) BuildCommentOptions() []discord.StringSelectMenuOption {
+	var options []discord.StringSelectMenuOption
+
+	// Add comment options based on reviewer status
+	if b.IsReviewer && b.ReviewMode != enum.ReviewModeTraining {
+		options = append(options,
+			discord.NewStringSelectMenuOption("View community notes", constants.ViewCommentsButtonCustomID).
+				WithEmoji(discord.ComponentEmoji{Name: "📝"}).
+				WithDescription("View and manage community notes"),
+		)
+	} else {
+		// Check if user has an existing comment
+		var hasComment bool
+		for _, comment := range b.Comments {
+			if comment.CommenterID == b.UserID {
+				hasComment = true
+				break
+			}
+		}
+
+		if hasComment {
+			options = append(options,
+				discord.NewStringSelectMenuOption("Delete your community note", constants.DeleteCommentButtonCustomID).
+					WithEmoji(discord.ComponentEmoji{Name: "📝"}).
+					WithDescription("Delete your note"),
+			)
+		} else if len(b.Comments) < constants.CommentLimit {
+			options = append(options,
+				discord.NewStringSelectMenuOption("Add community note", constants.AddCommentButtonCustomID).
+					WithEmoji(discord.ComponentEmoji{Name: "📝"}).
+					WithDescription("Add a note to help reviewers understand the user"),
+			)
+		}
+	}
+
+	return options
 }
 
 // BuildBaseComponents creates the common base components for review menus.

@@ -33,14 +33,15 @@ type ReviewBuilder struct {
 
 // NewReviewBuilder creates a new review builder.
 func NewReviewBuilder(s *session.Session, translator *translator.Translator, db database.Client) *ReviewBuilder {
-	trainingMode := session.UserReviewMode.Get(s) == enum.ReviewModeTraining
+	reviewMode := session.UserReviewMode.Get(s)
+	trainingMode := reviewMode == enum.ReviewModeTraining
 	userID := session.UserID.Get(s)
 	return &ReviewBuilder{
 		BaseReviewBuilder: shared.BaseReviewBuilder{
 			BotSettings:    s.BotSettings(),
 			Logs:           session.ReviewLogs.Get(s),
 			Comments:       session.ReviewComments.Get(s),
-			ReviewMode:     session.UserReviewMode.Get(s),
+			ReviewMode:     reviewMode,
 			ReviewHistory:  session.UserReviewHistory.Get(s),
 			UserID:         userID,
 			HistoryIndex:   session.UserReviewHistoryIndex.Get(s),
@@ -49,6 +50,7 @@ func NewReviewBuilder(s *session.Session, translator *translator.Translator, db 
 			IsReviewer:     s.BotSettings().IsReviewer(userID),
 			IsAdmin:        s.BotSettings().IsAdmin(userID),
 			PrivacyMode:    trainingMode || session.UserStreamerMode.Get(s),
+			TrainingMode:   trainingMode,
 		},
 		db:             db,
 		user:           session.UserTarget.Get(s),
@@ -272,10 +274,10 @@ func (b *ReviewBuilder) buildActionOptions() []discord.StringSelectMenuOption {
 		discord.NewStringSelectMenuOption("Translate caesar cipher", constants.CaesarCipherButtonCustomID).
 			WithEmoji(discord.ComponentEmoji{Name: "🔍"}).
 			WithDescription("View Caesar cipher analysis of description"),
-		discord.NewStringSelectMenuOption("View community notes", constants.ViewCommentsButtonCustomID).
-			WithEmoji(discord.ComponentEmoji{Name: "📝"}).
-			WithDescription("View and manage community notes"),
 	}
+
+	// Add comment options
+	options = append(options, b.BuildCommentOptions()...)
 
 	// Add reviewer-only options
 	if b.IsReviewer {

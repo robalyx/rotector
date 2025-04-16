@@ -30,20 +30,23 @@ type ReviewBuilder struct {
 
 // NewReviewBuilder creates a new review builder.
 func NewReviewBuilder(s *session.Session, db database.Client) *ReviewBuilder {
+	reviewMode := session.UserReviewMode.Get(s)
 	userID := session.UserID.Get(s)
 	return &ReviewBuilder{
 		BaseReviewBuilder: shared.BaseReviewBuilder{
 			BotSettings:    s.BotSettings(),
 			Logs:           session.ReviewLogs.Get(s),
 			Comments:       session.ReviewComments.Get(s),
-			ReviewMode:     session.UserReviewMode.Get(s),
+			ReviewMode:     reviewMode,
 			ReviewHistory:  session.GroupReviewHistory.Get(s),
 			UserID:         userID,
 			HistoryIndex:   session.GroupReviewHistoryIndex.Get(s),
 			LogsHasMore:    session.ReviewLogsHasMore.Get(s),
 			ReasonsChanged: session.ReasonsChanged.Get(s),
+			IsReviewer:     s.BotSettings().IsReviewer(userID),
 			IsAdmin:        s.BotSettings().IsAdmin(userID),
 			PrivacyMode:    session.UserStreamerMode.Get(s),
+			TrainingMode:   reviewMode == enum.ReviewModeTraining,
 		},
 		db:           db,
 		group:        session.GroupTarget.Get(s),
@@ -215,10 +218,10 @@ func (b *ReviewBuilder) buildActionOptions() []discord.StringSelectMenuOption {
 		discord.NewStringSelectMenuOption("View Flagged Members", constants.GroupViewMembersButtonCustomID).
 			WithDescription("View all flagged members of this group").
 			WithEmoji(discord.ComponentEmoji{Name: "👥"}),
-		discord.NewStringSelectMenuOption("View community notes", constants.ViewCommentsButtonCustomID).
-			WithEmoji(discord.ComponentEmoji{Name: "📝"}).
-			WithDescription("View and manage community notes"),
 	}
+
+	// Add comment options
+	options = append(options, b.BuildCommentOptions()...)
 
 	// Add reviewer-only options
 	if b.IsReviewer {

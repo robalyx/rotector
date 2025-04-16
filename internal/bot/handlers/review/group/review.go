@@ -16,6 +16,7 @@ import (
 	"github.com/robalyx/rotector/internal/bot/handlers/log"
 	"github.com/robalyx/rotector/internal/bot/handlers/review/shared"
 	view "github.com/robalyx/rotector/internal/bot/views/review/group"
+	viewShared "github.com/robalyx/rotector/internal/bot/views/review/shared"
 	"github.com/robalyx/rotector/internal/database/types"
 	"github.com/robalyx/rotector/internal/database/types/enum"
 	"github.com/robalyx/rotector/pkg/utils"
@@ -34,7 +35,7 @@ type ReviewMenu struct {
 // NewMenu creates a new review menu.
 func NewReviewMenu(layout *Layout) *ReviewMenu {
 	m := &ReviewMenu{
-		BaseReviewMenu: *shared.NewBaseReviewMenu(layout.logger, layout.captcha),
+		BaseReviewMenu: *shared.NewBaseReviewMenu(layout.logger, layout.captcha, layout.db),
 		layout:         layout,
 	}
 	m.page = &interaction.Page{
@@ -180,6 +181,10 @@ func (m *ReviewMenu) handleActionSelection(ctx *interaction.Context, s *session.
 	case constants.ViewCommentsButtonCustomID:
 		session.PaginationPage.Set(s, 0)
 		ctx.Show(constants.GroupCommentsPageName, "")
+	case constants.AddCommentButtonCustomID:
+		m.HandleAddComment(ctx, s)
+	case constants.DeleteCommentButtonCustomID:
+		m.HandleDeleteComment(ctx, s, viewShared.TargetTypeGroup)
 	case constants.OpenAIChatButtonCustomID:
 		m.handleOpenAIChat(ctx, s)
 	case constants.GroupViewLogsButtonCustomID:
@@ -224,6 +229,8 @@ func (m *ReviewMenu) handleModal(ctx *interaction.Context, s *session.Session) {
 	switch ctx.Event().CustomID() {
 	case constants.AddReasonModalCustomID:
 		m.handleReasonModalSubmit(ctx, s)
+	case constants.AddCommentModalCustomID:
+		m.HandleCommentModalSubmit(ctx, s, viewShared.TargetTypeGroup)
 	}
 }
 

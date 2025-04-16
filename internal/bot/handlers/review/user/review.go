@@ -14,6 +14,7 @@ import (
 	"github.com/robalyx/rotector/internal/bot/core/interaction"
 	"github.com/robalyx/rotector/internal/bot/core/session"
 	"github.com/robalyx/rotector/internal/bot/handlers/log"
+	viewShared "github.com/robalyx/rotector/internal/bot/views/review/shared"
 	view "github.com/robalyx/rotector/internal/bot/views/review/user"
 	"github.com/robalyx/rotector/internal/database/types"
 	"github.com/robalyx/rotector/internal/database/types/enum"
@@ -35,7 +36,7 @@ type ReviewMenu struct {
 // NewReviewMenu creates a new review menu.
 func NewReviewMenu(layout *Layout) *ReviewMenu {
 	m := &ReviewMenu{
-		BaseReviewMenu: *shared.NewBaseReviewMenu(layout.logger, layout.captcha),
+		BaseReviewMenu: *shared.NewBaseReviewMenu(layout.logger, layout.captcha, layout.db),
 		layout:         layout,
 	}
 	m.page = &interaction.Page{
@@ -204,7 +205,8 @@ func (m *ReviewMenu) handleActionSelection(ctx *interaction.Context, s *session.
 	switch option {
 	case constants.OpenAIChatButtonCustomID,
 		constants.ViewUserLogsButtonCustomID,
-		constants.ReviewModeOption:
+		constants.ReviewModeOption,
+		constants.ViewCommentsButtonCustomID:
 		if !isReviewer {
 			m.layout.logger.Error("Non-reviewer attempted restricted action",
 				zap.Uint64("user_id", userID),
@@ -231,6 +233,10 @@ func (m *ReviewMenu) handleActionSelection(ctx *interaction.Context, s *session.
 	case constants.ViewCommentsButtonCustomID:
 		session.PaginationPage.Set(s, 0)
 		ctx.Show(constants.UserCommentsPageName, "")
+	case constants.AddCommentButtonCustomID:
+		m.HandleAddComment(ctx, s)
+	case constants.DeleteCommentButtonCustomID:
+		m.HandleDeleteComment(ctx, s, viewShared.TargetTypeUser)
 	case constants.OpenAIChatButtonCustomID:
 		m.handleOpenAIChat(ctx, s)
 	case constants.ViewUserLogsButtonCustomID:
@@ -275,6 +281,8 @@ func (m *ReviewMenu) handleModal(ctx *interaction.Context, s *session.Session) {
 	switch ctx.Event().CustomID() {
 	case constants.AddReasonModalCustomID:
 		m.handleReasonModalSubmit(ctx, s)
+	case constants.AddCommentModalCustomID:
+		m.HandleCommentModalSubmit(ctx, s, viewShared.TargetTypeUser)
 	}
 }
 

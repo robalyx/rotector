@@ -195,6 +195,7 @@ const (
 // Common Review Menu - Comment Menu.
 const (
 	CommentsPerPage = 5
+	CommentLimit    = 25
 
 	AddCommentButtonCustomID    = "add_comment" + ModalOpenSuffix
 	DeleteCommentButtonCustomID = "delete_comment"
