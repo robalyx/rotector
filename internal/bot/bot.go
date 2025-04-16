@@ -233,7 +233,7 @@ func (b *Bot) handleApplicationCommandInteraction(event *disgoEvents.Application
 		wrappedEvent.SetMessage(message)
 
 		// Initialize session
-		s, isNewSession, showSelector, err := b.initializeSession(wrappedEvent, message)
+		s, isNewSession, showSelector, err := b.initializeSession(wrappedEvent, message, false)
 		if err != nil {
 			return
 		}
@@ -279,7 +279,7 @@ func (b *Bot) handleComponentInteraction(event *disgoEvents.ComponentInteraction
 		}()
 
 		// Initialize session
-		s, isNewSession, showSelector, err := b.initializeSession(wrappedEvent, &event.Message)
+		s, isNewSession, showSelector, err := b.initializeSession(wrappedEvent, &event.Message, true)
 		if err != nil {
 			return
 		}
@@ -378,7 +378,7 @@ func (b *Bot) handleModalSubmit(event *disgoEvents.ModalSubmitInteractionCreate)
 		wrappedEvent.SetMessage(message)
 
 		// Initialize session
-		s, isNewSession, showSelector, err := b.initializeSession(wrappedEvent, message)
+		s, isNewSession, showSelector, err := b.initializeSession(wrappedEvent, message, false)
 		if err != nil {
 			return
 		}
@@ -402,29 +402,47 @@ func (b *Bot) handleModalSubmit(event *disgoEvents.ModalSubmitInteractionCreate)
 
 // initializeSession creates or retrieves a session for the given user and message.
 func (b *Bot) initializeSession(
-	event interaction.CommonEvent, message *discord.Message,
+	event interaction.CommonEvent, message *discord.Message, isInteraction bool,
 ) (s *session.Session, isNewSession bool, showSelector bool, err error) {
 	userID := event.User().ID
 
+	// NOTE: Do not use the interaction manager since
+	// the interaction has not been responded to yet
+	updateMessage := func(content string) {
+		messageUpdate := discord.NewMessageUpdateBuilder().
+			SetContent(utils.GetTimestampedSubtext(content)).
+			ClearEmbeds().
+			ClearFiles().
+			ClearContainerComponents().
+			RetainAttachments().
+			Build()
+
+		if err := event.UpdateMessage(messageUpdate); err != nil {
+			b.logger.Error("Failed to update message", zap.Error(err))
+		}
+	}
+
 	// Check for existing sessions
-	existingSessions, err := b.sessionManager.GetUserSessions(context.Background(), uint64(userID), false)
+	existingSessions, err := b.sessionManager.GetUserSessions(context.Background(), uint64(userID), !isInteraction)
 	if err != nil {
 		b.logger.Error("Failed to check existing sessions", zap.Error(err))
-		b.interactionManager.RespondWithError(event, "Failed to check existing sessions. Please try again.")
+		updateMessage("Failed to check existing sessions. Please try again.")
 		return nil, false, false, err
 	}
 
 	// Create new session
 	s, isNewSession, err = b.sessionManager.GetOrCreateSession(
-		context.Background(), userID, uint64(message.ID), event.Member().Permissions.Has(discord.PermissionAdministrator),
+		context.Background(), userID, uint64(message.ID),
+		event.Member().Permissions.Has(discord.PermissionAdministrator),
+		isInteraction,
 	)
 	if err != nil {
 		if errors.Is(err, session.ErrSessionLimitReached) {
-			b.interactionManager.RespondWithError(event,
-				"You have reached the maximum number of active sessions. Please close some existing sessions first.")
+			updateMessage("The global session limit has been reached. Please wait for other users to finish their sessions.")
+		} else if errors.Is(err, session.ErrSessionNotFound) {
+			updateMessage("This session has expired. Please start a new session by using the /rotector command.")
 		} else {
-			b.interactionManager.RespondWithError(event,
-				"Failed to create session. Please try again.")
+			updateMessage("Failed to create session. Please try again.")
 		}
 		return nil, false, false, err
 	}

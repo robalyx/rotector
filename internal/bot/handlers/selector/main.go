@@ -68,6 +68,7 @@ func (m *Menu) handleSelectMenu(ctx *interaction.Context, s *session.Session, cu
 		ctx.Event().User().ID,
 		selectedMessageID,
 		session.IsGuildOwner.Get(s),
+		false,
 	)
 	if err != nil {
 		ctx.Error("Failed to load selected session.")
@@ -77,10 +78,11 @@ func (m *Menu) handleSelectMenu(ctx *interaction.Context, s *session.Session, cu
 	// Get the data from the selected session
 	selectedData := selectedSession.GetData()
 	pageName := session.CurrentPage.Get(selectedSession)
+	messageID := session.MessageID.Get(selectedSession)
 
 	// Close the selected session
 	m.layout.sessionManager.CloseSession(
-		ctx.Context(), selectedSession, uint64(ctx.Event().User().ID), uint64(ctx.Event().Message().ID),
+		ctx.Context(), selectedSession, uint64(ctx.Event().User().ID), messageID,
 	)
 
 	// Get the new message ID from the current interaction

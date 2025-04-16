@@ -4,6 +4,7 @@ import (
 	"github.com/disgoorg/disgo/bot"
 	"github.com/disgoorg/disgo/discord"
 	"github.com/disgoorg/disgo/events"
+	"github.com/disgoorg/disgo/rest"
 	"github.com/disgoorg/snowflake/v2"
 )
 
@@ -52,6 +53,9 @@ type CommonEvent interface {
 	// Returns nil for other event types.
 	ModalData() ModalData
 
+	// UpdateMessage updates the message that triggered this event.
+	UpdateMessage(messageUpdate discord.MessageUpdate, opts ...rest.RequestOpt) error
+
 	// SetMessage sets the message that triggered this event.
 	SetMessage(message *discord.Message)
 
@@ -80,6 +84,10 @@ func (e *ApplicationCommandEvent) CustomID() string {
 }
 
 func (e *ApplicationCommandEvent) ModalData() ModalData {
+	return nil
+}
+
+func (e *ApplicationCommandEvent) UpdateMessage(messageUpdate discord.MessageUpdate, opts ...rest.RequestOpt) error {
 	return nil
 }
 
@@ -112,6 +120,10 @@ func (e *ComponentEvent) ModalData() ModalData {
 	return nil
 }
 
+func (e *ComponentEvent) UpdateMessage(messageUpdate discord.MessageUpdate, opts ...rest.RequestOpt) error {
+	return e.ComponentInteractionCreate.UpdateMessage(messageUpdate, opts...)
+}
+
 func (e *ComponentEvent) SetMessage(message *discord.Message) {
 	e.message = message
 }
@@ -139,6 +151,10 @@ func (e *ModalSubmitEvent) CustomID() string {
 
 func (e *ModalSubmitEvent) ModalData() ModalData {
 	return e.Data
+}
+
+func (e *ModalSubmitEvent) UpdateMessage(messageUpdate discord.MessageUpdate, opts ...rest.RequestOpt) error {
+	return e.ModalSubmitInteractionCreate.UpdateMessage(messageUpdate, opts...)
 }
 
 func (e *ModalSubmitEvent) SetMessage(message *discord.Message) {

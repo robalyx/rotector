@@ -33,6 +33,7 @@ const (
 
 var (
 	ErrSessionLimitReached  = errors.New("session limit reached")
+	ErrSessionNotFound      = errors.New("session not found")
 	ErrFailedToGetCount     = errors.New("failed to get active session count")
 	ErrFailedToLoadSettings = errors.New("failed to load settings")
 	ErrFailedToGetSession   = errors.New("failed to get session data")
@@ -166,7 +167,7 @@ func (m *Manager) GetUserSessions(ctx context.Context, userID uint64, cleanupSel
 
 // GetOrCreateSession retrieves or creates a session for the given user and message.
 func (m *Manager) GetOrCreateSession(
-	ctx context.Context, userID snowflake.ID, messageID uint64, isGuildOwner bool,
+	ctx context.Context, userID snowflake.ID, messageID uint64, isGuildOwner, checkOutdated bool,
 ) (*Session, bool, error) {
 	// Load bot settings
 	botSettings, err := m.db.Model().Setting().GetBotSettings(ctx)
@@ -182,6 +183,11 @@ func (m *Manager) GetOrCreateSession(
 	sessionExists := result.Error() == nil
 
 	if !sessionExists {
+		// If the session doesn't exist, it means the message is outdated
+		if checkOutdated {
+			return nil, false, ErrSessionNotFound
+		}
+
 		// Get all existing sessions for this user
 		sessions, err := m.GetUserSessions(ctx, uint64(userID), true)
 		if err != nil {
