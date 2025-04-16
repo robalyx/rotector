@@ -76,13 +76,6 @@ Instruction: When flagging inappropriate usernames or display names:
 - Set the 'reason' field to clearly explain why the name is inappropriate
 - Consider combinations of words that together create inappropriate meanings
 
-Instruction: For the 'flaggedContent' array:
-- Partially replace highly inappropriate words with 'X' characters (e.g., "f**k" becomes "fXXk")
-- Maintain the same length as the original word when censoring
-- Only censor explicitly inappropriate terms, not contextual phrases
-- Keep enough context around censored words to understand the violation
-- Do not censor usernames or social media handles
-
 ` + SharedUserContentGuidelines
 
 	// UserRequestPrompt provides a reminder to follow system guidelines for user analysis.

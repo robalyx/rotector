@@ -90,23 +90,20 @@ Pay close attention to the following indicators of predatory behavior in descrip
 Instruction: Pay close attention to usernames and display names that suggest predatory intentions, such as:
 - ANY names exploiting authority or mentor roles
 - ANY names suggesting sexual availability or soliciting inappropriate interactions 
-- ANY names using pet names or diminutives suggestively
+- ANY names using pet names or diminutives suggestively (kitty, kitten, etc.)
 - ANY names targeting minors or specific genders inappropriately
 - ANY names using coded language or suggestive terms related to inappropriate acts
 - ANY names hinting at exploitation or predatory activities
 - ANY references to adult content platforms or services
 - ANY deliberately misspelled inappropriate terms
-- ANY "kitty" terms used in suggestive contexts
 - ANY mentions of bull, fart, gas, smell, etc.
 
-Important Note on Roleplay:
 Instruction: You MUST flag ANY roleplay requests and themes because:
 1. ANY roleplay can be used to groom or exploit children
 2. ANY roleplay creates opportunities for predators to build trust
 3. Even seemingly innocent roleplay can escalate to inappropriate content
 4. There is no way to ensure roleplay remains appropriate
 
-Important Note on Sexual Content:
 Instruction: You MUST consider ANY sexual content or references on Roblox as predatory behavior due to:
 1. Roblox is primarily a children's platform
 2. ANY sexual content in spaces meant for children is inherently predatory

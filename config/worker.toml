@@ -42,7 +42,7 @@ ivan_message_analysis = 5
 recheck_analysis = 5
 
 # Number of outfits to analyze in one AI request
-outfit_analysis_batch = 10
+outfit_analysis_batch = 20
 # Number of users to analyze in one AI request
 user_analysis_batch = 25
 # Number of users to analyze in one friend AI request

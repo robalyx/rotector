@@ -44,8 +44,8 @@ Output format:
       "username": "string",
       "analysis": [
         "Point 1 about why the flag might be incorrect",
-        "Point 2 with specific examples",
-        "Point 3 considering alternative interpretations"
+        "Point 2 about alternative interpretations",
+        "Point 3 about context or intent"
       ],
       "recommendation": "Clear statement about whether this deserves reconsideration"
     }
@@ -55,10 +55,13 @@ Output format:
 Key instructions:
 1. You MUST carefully analyze each user's profile content
 2. You MUST consider BOTH predatory behavior AND general content guidelines
-3. You MUST provide specific, detailed feedback about any concerns with the flagging
+3. You MUST provide feedback about any concerns with the flagging
 4. DO NOT unflag just because content isn't explicit enough
 5. If you are unsure about the flag, you MUST explain it in your feedback
 6. If ALL users were correctly flagged, return an empty JSON response: {"users": []}
+7. DO NOT repeat or quote any inappropriate content in your analysis
+8. DO NOT use sexually explicit or inappropriate language in your feedback
+9. Keep your feedback professional and clinical in tone
 
 REMEMBER: Roblox is a platform primarily used by children. Content should be kept strictly appropriate for all ages.
 

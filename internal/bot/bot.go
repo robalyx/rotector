@@ -437,11 +437,12 @@ func (b *Bot) initializeSession(
 		isInteraction,
 	)
 	if err != nil {
-		if errors.Is(err, session.ErrSessionLimitReached) {
+		switch {
+		case errors.Is(err, session.ErrSessionLimitReached):
 			updateMessage("The global session limit has been reached. Please wait for other users to finish their sessions.")
-		} else if errors.Is(err, session.ErrSessionNotFound) {
+		case errors.Is(err, session.ErrSessionNotFound):
 			updateMessage("This session has expired. Please start a new session by using the /rotector command.")
-		} else {
+		default:
 			updateMessage("Failed to create session. Please try again.")
 		}
 		return nil, false, false, err

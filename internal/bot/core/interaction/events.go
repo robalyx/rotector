@@ -87,7 +87,7 @@ func (e *ApplicationCommandEvent) ModalData() ModalData {
 	return nil
 }
 
-func (e *ApplicationCommandEvent) UpdateMessage(messageUpdate discord.MessageUpdate, opts ...rest.RequestOpt) error {
+func (e *ApplicationCommandEvent) UpdateMessage(_ discord.MessageUpdate, _ ...rest.RequestOpt) error {
 	return nil
 }
 
