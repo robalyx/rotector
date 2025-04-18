@@ -127,9 +127,15 @@ func (a *StatsAnalyzer) GenerateWelcomeMessage(
 			return "", fmt.Errorf("%w: no response from model", ErrModelResponse)
 		}
 
-		// Extract response text
-		content := resp.Choices[0].Message.Content
-		return utils.CompressAllWhitespace(content), nil
+		// Extract thought process
+		message := resp.Choices[0].Message
+		if thought := message.JSON.ExtraFields["reasoning"]; thought.IsPresent() {
+			a.logger.Debug("AI stats analysis thought process",
+				zap.String("model", resp.Model),
+				zap.String("thought", thought.Raw()))
+		}
+
+		return utils.CompressAllWhitespace(message.Content), nil
 	}, utils.GetAIRetryOptions())
 	if err != nil {
 		return "", err

@@ -315,18 +315,17 @@ func (a *MessageAnalyzer) processBatch(
 			return nil, fmt.Errorf("%w: no response from model", ErrModelResponse)
 		}
 
-		// Extract thought process and clean JSON response
-		thought, cleanJSON := utils.ExtractThoughtProcess(resp.Choices[0].Message.Content)
-		if thought != "" {
+		// Extract thought process
+		message := resp.Choices[0].Message
+		if thought := message.JSON.ExtraFields["reasoning"]; thought.IsPresent() {
 			a.logger.Debug("AI message analysis thought process",
-				zap.String("thought", thought),
-				zap.String("server_name", serverName),
-				zap.Int("batch_size", len(messages)))
+				zap.String("model", resp.Model),
+				zap.String("thought", thought.Raw()))
 		}
 
 		// Parse response from AI
 		var result *FlaggedMessagesResponse
-		if err := sonic.Unmarshal([]byte(cleanJSON), &result); err != nil {
+		if err := sonic.Unmarshal([]byte(message.Content), &result); err != nil {
 			return nil, fmt.Errorf("JSON unmarshal error: %w", err)
 		}
 

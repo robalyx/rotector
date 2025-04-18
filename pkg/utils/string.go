@@ -58,28 +58,3 @@ func SplitLines(content []string) []string {
 
 	return result
 }
-
-// ExtractThoughtProcess extracts the thought process from an AI response.
-func ExtractThoughtProcess(response string) (thought string, cleanText string) {
-	// Find the first match of the think pattern
-	matches := ThinkPatternRegex.FindStringSubmatch(response)
-	if len(matches) > 1 {
-		// Extract and trim the thought content
-		thought = strings.TrimSpace(matches[1])
-
-		// Get the full matched pattern including tags
-		fullMatch := matches[0]
-
-		// Remove the thought process from the response
-		cleanText = strings.Replace(response, fullMatch, "", 1)
-
-		// Normalize all whitespace including newlines
-		cleanText = CompressAllWhitespace(cleanText)
-	} else {
-		// No thought process found
-		thought = ""
-		cleanText = strings.TrimSpace(response)
-	}
-
-	return thought, cleanText
-}

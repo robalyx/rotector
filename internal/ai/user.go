@@ -272,17 +272,17 @@ func (a *UserAnalyzer) processBatch(
 			return nil, fmt.Errorf("%w: no response from model", ErrModelResponse)
 		}
 
-		// Extract thought process and clean JSON response
-		thought, cleanJSON := utils.ExtractThoughtProcess(resp.Choices[0].Message.Content)
-		if thought != "" {
-			a.logger.Debug("AI thought process",
-				zap.String("thought", thought),
-				zap.Int("batchSize", len(userInfosWithoutID)))
+		// Extract thought process
+		message := resp.Choices[0].Message
+		if thought := message.JSON.ExtraFields["reasoning"]; thought.IsPresent() {
+			a.logger.Debug("AI user analysis thought process",
+				zap.String("model", resp.Model),
+				zap.String("thought", thought.Raw()))
 		}
 
 		// Parse response from AI
 		var result *FlaggedUsers
-		if err := sonic.Unmarshal([]byte(cleanJSON), &result); err != nil {
+		if err := sonic.Unmarshal([]byte(message.Content), &result); err != nil {
 			return nil, fmt.Errorf("JSON unmarshal error: %w", err)
 		}
 

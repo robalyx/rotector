@@ -374,15 +374,16 @@ func (a *RecheckAnalyzer) getRecheckFeedback(ctx context.Context, inputJSON stri
 		return "", fmt.Errorf("%w: no response from recheck model", ErrModelResponse)
 	}
 
-	// Extract thought process and clean text
-	thought, cleanText := utils.ExtractThoughtProcess(resp.Choices[0].Message.Content)
+	// Extract thought process
+	message := resp.Choices[0].Message
+	thought := message.JSON.ExtraFields["reasoning"]
 
 	a.logger.Debug("Recheck feedback",
 		zap.String("model", resp.Model),
-		zap.String("thought", thought),
-		zap.String("content", cleanText))
+		zap.String("thought", thought.Raw()),
+		zap.String("content", message.Content))
 
-	return cleanText, nil
+	return message.Content, nil
 }
 
 // getVerification gets final verification using the recheck feedback.
@@ -415,17 +416,17 @@ func (a *RecheckAnalyzer) getVerification(ctx context.Context, inputJSON, feedba
 		return nil, fmt.Errorf("%w: no response from verification model", ErrModelResponse)
 	}
 
-	// Extract thought process and clean JSON response
-	thought, cleanJSON := utils.ExtractThoughtProcess(resp.Choices[0].Message.Content)
-	if thought != "" {
-		a.logger.Debug("AI verification thought process",
-			zap.String("thought", thought),
-			zap.String("model", resp.Model))
+	// Extract thought process
+	message := resp.Choices[0].Message
+	if thought := message.JSON.ExtraFields["reasoning"]; thought.IsPresent() {
+		a.logger.Debug("AI recheck verification thought process",
+			zap.String("model", resp.Model),
+			zap.String("thought", thought.Raw()))
 	}
 
 	// Parse response
 	var results VerificationResults
-	if err := sonic.Unmarshal([]byte(cleanJSON), &results); err != nil {
+	if err := sonic.Unmarshal([]byte(message.Content), &results); err != nil {
 		return nil, fmt.Errorf("JSON unmarshal error: %w", err)
 	}
 
