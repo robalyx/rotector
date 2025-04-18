@@ -399,19 +399,3 @@ func AddEvidenceFields[T types.ReasonType](
 		embed.AddField(field.name, field.value, false)
 	}
 }
-
-// GetConfirmButtonLabel returns the appropriate label for the confirm button based on review mode.
-func (b *BaseReviewBuilder) GetConfirmButtonLabel() string {
-	if b.ReviewMode == enum.ReviewModeTraining || !b.IsReviewer {
-		return "Report"
-	}
-	return "Confirm"
-}
-
-// GetClearButtonLabel returns the appropriate label for the clear button based on review mode.
-func (b *BaseReviewBuilder) GetClearButtonLabel() string {
-	if b.ReviewMode == enum.ReviewModeTraining || !b.IsReviewer {
-		return "Safe"
-	}
-	return "Clear"
-}

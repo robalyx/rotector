@@ -656,6 +656,22 @@ func (b *ReviewBuilder) getGroupsField() string {
 	return "Groups"
 }
 
+// GetConfirmButtonLabel returns the appropriate label for the confirm button based on review mode.
+func (b *ReviewBuilder) GetConfirmButtonLabel() string {
+	if b.ReviewMode == enum.ReviewModeTraining || !b.IsReviewer {
+		return "Report"
+	}
+	return "Confirm"
+}
+
+// GetClearButtonLabel returns the appropriate label for the clear button based on review mode.
+func (b *ReviewBuilder) GetClearButtonLabel() string {
+	if b.ReviewMode == enum.ReviewModeTraining || !b.IsReviewer {
+		return "Safe"
+	}
+	return "Clear"
+}
+
 // getReasonEmoji returns the appropriate emoji for a reason type.
 func getReasonEmoji(reasonType enum.UserReasonType) string {
 	switch reasonType {

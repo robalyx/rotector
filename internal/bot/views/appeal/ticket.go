@@ -92,10 +92,8 @@ func (b *TicketBuilder) Build() *discord.MessageUpdateBuilder {
 						WithEmoji(discord.ComponentEmoji{Name: "📌"}).
 						WithDescription("Claim this appeal for review"),
 				)
-			}
-
-			// Add review actions only if reviewer has claimed the appeal
-			if b.appeal.ClaimedBy == b.userID {
+			} else {
+				// Add review actions only if reviewer has claimed the appeal
 				options = append(options,
 					discord.NewStringSelectMenuOption("Accept Appeal", constants.AcceptAppealButtonCustomID).
 						WithEmoji(discord.ComponentEmoji{Name: "✅"}).
