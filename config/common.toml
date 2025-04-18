@@ -115,20 +115,9 @@ max_concurrent = 100
 "gemini-2.0-flash" = "google/gemini-2.0-flash-001"
 "gemini-2.5-pro" = "google/gemini-2.5-pro-preview-03-25"
 "qwq-32B" = "qwen/qwq-32b"
-
-[[common.openai.providers]]
-name = "requesty"
-base_url = "https://router.requesty.ai/v1"
-api_key = ""
-max_concurrent = 100
-
-[common.openai.providers.model_mappings]
-"gemini-2.0-flash" = "google/gemini-2.0-flash-001"
-"gpt-4o-mini" = "openai/gpt-4o-mini-2024-07-18"
-"qwq-32B" = "deepinfra/Qwen/QwQ-32B"
-"deepseek-r1-distill-qwen-32b" = "novita/deepseek/deepseek-r1-distill-qwen-32b"
-"deepseek-r1-distill-llama-70B" = "deepinfra/deepseek-ai/DeepSeek-R1-Distill-Llama-70B"
-"llama-3.3-70B-instruct" = "nebius/meta-llama/Llama-3.3-70B-Instruct"
+"deepseek-r1" = "deepseek/deepseek-r1"
+"deepseek-v3-0324" = "deepseek/deepseek-chat-v3-0324"
+"gpt-4o-mini" = "openai/gpt-4o-mini"
 
 [common.discord]
 # Self-bot token for server scanning

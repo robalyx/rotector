@@ -66,15 +66,18 @@ func (h *ChatHandler) StreamResponse(
 	ctx context.Context, chatContext ChatContext, model enum.ChatModel, message string,
 ) chan string {
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
-	defer cancel()
-
 	responseChan := make(chan string, 1)
 
 	go func() {
 		defer close(responseChan)
+		defer cancel()
 		defer func() {
 			if err := recover(); err != nil {
 				h.logger.Error("Panic in chat stream", zap.Any("error", err))
+				select {
+				case responseChan <- "An unexpected error occurred. Please try again later.":
+				case <-ctx.Done():
+				}
 			}
 		}()
 
@@ -133,7 +136,6 @@ func (h *ChatHandler) StreamResponse(
 			case responseChan <- fmt.Sprintf("Error: %v", err):
 			case <-ctx.Done():
 			}
-			return
 		}
 	}()
 

@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/openai/openai-go"
@@ -149,7 +148,7 @@ type chatCompletions struct {
 
 // checkBlockReasons checks the response for various block reasons and logs them appropriately.
 func (c *chatCompletions) checkBlockReasons(resp *openai.ChatCompletion, provider *providerClient, model string) error {
-	rawJSON := resp.RawJSON()
+	finishReason := resp.JSON.ExtraFields["native_finish_reason"].Raw()
 	blockReasons := []BlockReason{
 		BlockReasonUnspecified,
 		BlockReasonSafety,
@@ -160,17 +159,13 @@ func (c *chatCompletions) checkBlockReasons(resp *openai.ChatCompletion, provide
 	}
 
 	for _, reason := range blockReasons {
-		if strings.Contains(rawJSON, fmt.Sprintf(`"native_finish_reason":"%s"`, reason)) {
+		if finishReason == reason.String() {
 			fields := []zap.Field{
 				zap.String("provider", provider.name),
 				zap.String("model", model),
 				zap.String("blockReason", reason.String()),
 				zap.String("details", reason.Details()),
-			}
-
-			// Add raw JSON for debugging, but only for non-default cases
-			if reason != BlockReasonUnspecified {
-				fields = append(fields, zap.String("rawJSON", rawJSON))
+				zap.String("finishReason", finishReason),
 			}
 
 			c.client.logger.Warn("Content blocked by provider", fields...)
@@ -295,14 +290,16 @@ func (c *chatCompletions) NewStreaming(
 	if len(availableProviders) == 0 {
 		c.client.logger.Fatal("No providers available for streaming with model",
 			zap.String("model", originalModel))
-		return nil
+		return ssestream.NewStream[openai.ChatCompletionChunk](
+			nil, fmt.Errorf("%w: %s", ErrNoProvidersAvailable, originalModel),
+		)
 	}
 
 	// Try to find available provider
 	for {
 		select {
 		case <-ctx.Done():
-			return nil
+			return ssestream.NewStream[openai.ChatCompletionChunk](nil, ctx.Err())
 		default:
 			var selectedProvider *providerClient
 
@@ -342,11 +339,9 @@ func (c *chatCompletions) NewStreaming(
 
 				stream := result.(*ssestream.Stream[openai.ChatCompletionChunk])
 
-				// Set up cleanup when stream ends
+				// Set up cleanup when context is done
 				go func() {
-					for stream.Next() {
-						// Wait for stream to complete
-					}
+					<-ctx.Done()
 					selectedProvider.semaphore.Release(1)
 				}()
 

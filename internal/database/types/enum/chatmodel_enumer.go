@@ -7,11 +7,11 @@ import (
 	"strings"
 )
 
-const _ChatModelName = "gemini-2.0-flashgpt-4o-miniqwq-32Bdeepseek-r1-distill-qwen-32bdeepseek-r1-distill-llama-70Bllama-3.3-70B-instruct"
+const _ChatModelName = "gemini-2.0-flashgemini-2.5-prodeepseek-r1deepseek-v3-0324gpt-4o-mini"
 
-var _ChatModelIndex = [...]uint8{0, 16, 27, 34, 62, 91, 113}
+var _ChatModelIndex = [...]uint8{0, 16, 30, 41, 57, 68}
 
-const _ChatModelLowerName = "gemini-2.0-flashgpt-4o-miniqwq-32bdeepseek-r1-distill-qwen-32bdeepseek-r1-distill-llama-70bllama-3.3-70b-instruct"
+const _ChatModelLowerName = "gemini-2.0-flashgemini-2.5-prodeepseek-r1deepseek-v3-0324gpt-4o-mini"
 
 func (i ChatModel) String() string {
 	if i < 0 || i >= ChatModel(len(_ChatModelIndex)-1) {
@@ -25,37 +25,33 @@ func (i ChatModel) String() string {
 func _ChatModelNoOp() {
 	var x [1]struct{}
 	_ = x[ChatModelGemini2_0Flash-(0)]
-	_ = x[ChatModelGPT4oMini-(1)]
-	_ = x[ChatModelQwQ32B-(2)]
-	_ = x[ChatModelDeepseekQwen32B-(3)]
-	_ = x[ChatModelDeepseekR1-(4)]
-	_ = x[ChatModelLlama3_3_70B-(5)]
+	_ = x[ChatModelGemini2_5Pro-(1)]
+	_ = x[ChatModelDeepseekR1-(2)]
+	_ = x[ChatModelDeepseekV3_0324-(3)]
+	_ = x[ChatModelGPT4oMini-(4)]
 }
 
-var _ChatModelValues = []ChatModel{ChatModelGemini2_0Flash, ChatModelGPT4oMini, ChatModelQwQ32B, ChatModelDeepseekQwen32B, ChatModelDeepseekR1, ChatModelLlama3_3_70B}
+var _ChatModelValues = []ChatModel{ChatModelGemini2_0Flash, ChatModelGemini2_5Pro, ChatModelDeepseekR1, ChatModelDeepseekV3_0324, ChatModelGPT4oMini}
 
 var _ChatModelNameToValueMap = map[string]ChatModel{
-	_ChatModelName[0:16]:        ChatModelGemini2_0Flash,
-	_ChatModelLowerName[0:16]:   ChatModelGemini2_0Flash,
-	_ChatModelName[16:27]:       ChatModelGPT4oMini,
-	_ChatModelLowerName[16:27]:  ChatModelGPT4oMini,
-	_ChatModelName[27:34]:       ChatModelQwQ32B,
-	_ChatModelLowerName[27:34]:  ChatModelQwQ32B,
-	_ChatModelName[34:62]:       ChatModelDeepseekQwen32B,
-	_ChatModelLowerName[34:62]:  ChatModelDeepseekQwen32B,
-	_ChatModelName[62:91]:       ChatModelDeepseekR1,
-	_ChatModelLowerName[62:91]:  ChatModelDeepseekR1,
-	_ChatModelName[91:113]:      ChatModelLlama3_3_70B,
-	_ChatModelLowerName[91:113]: ChatModelLlama3_3_70B,
+	_ChatModelName[0:16]:       ChatModelGemini2_0Flash,
+	_ChatModelLowerName[0:16]:  ChatModelGemini2_0Flash,
+	_ChatModelName[16:30]:      ChatModelGemini2_5Pro,
+	_ChatModelLowerName[16:30]: ChatModelGemini2_5Pro,
+	_ChatModelName[30:41]:      ChatModelDeepseekR1,
+	_ChatModelLowerName[30:41]: ChatModelDeepseekR1,
+	_ChatModelName[41:57]:      ChatModelDeepseekV3_0324,
+	_ChatModelLowerName[41:57]: ChatModelDeepseekV3_0324,
+	_ChatModelName[57:68]:      ChatModelGPT4oMini,
+	_ChatModelLowerName[57:68]: ChatModelGPT4oMini,
 }
 
 var _ChatModelNames = []string{
 	_ChatModelName[0:16],
-	_ChatModelName[16:27],
-	_ChatModelName[27:34],
-	_ChatModelName[34:62],
-	_ChatModelName[62:91],
-	_ChatModelName[91:113],
+	_ChatModelName[16:30],
+	_ChatModelName[30:41],
+	_ChatModelName[41:57],
+	_ChatModelName[57:68],
 }
 
 // ChatModelString retrieves an enum value from the enum constants string name.

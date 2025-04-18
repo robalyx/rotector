@@ -318,21 +318,18 @@ func (b *Builder) buildComponents() []discord.ContainerComponent {
 	components := []discord.ContainerComponent{
 		discord.NewActionRow(
 			discord.NewStringSelectMenu(constants.ChatModelSelectID, "Select Model",
-				discord.NewStringSelectMenuOption("QwQ-32B", enum.ChatModelQwQ32B.String()).
+				discord.NewStringSelectMenuOption("Gemini 2.5 Pro", enum.ChatModelGemini2_5Pro.String()).
 					WithDescription("Most capable model - Best overall performance").
-					WithDefault(b.model == enum.ChatModelQwQ32B),
-				discord.NewStringSelectMenuOption("DeepSeek R1 Qwen 32B", enum.ChatModelDeepseekQwen32B.String()).
+					WithDefault(b.model == enum.ChatModelGemini2_5Pro),
+				discord.NewStringSelectMenuOption("DeepSeek R1", enum.ChatModelDeepseekR1.String()).
 					WithDescription("High performance model - Excellent reasoning and language abilities").
-					WithDefault(b.model == enum.ChatModelDeepseekQwen32B),
-				discord.NewStringSelectMenuOption("DeepSeek R1 Llama 70B", enum.ChatModelDeepseekR1.String()).
-					WithDescription("High performance model - Strong language understanding").
 					WithDefault(b.model == enum.ChatModelDeepseekR1),
+				discord.NewStringSelectMenuOption("DeepSeek V3", enum.ChatModelDeepseekV3_0324.String()).
+					WithDescription("High performance model - Strong language understanding").
+					WithDefault(b.model == enum.ChatModelDeepseekV3_0324),
 				discord.NewStringSelectMenuOption("Gemini 2.0 Flash", enum.ChatModelGemini2_0Flash.String()).
 					WithDescription("Fast model - Good balance of speed and capabilities").
 					WithDefault(b.model == enum.ChatModelGemini2_0Flash),
-				discord.NewStringSelectMenuOption("Llama 3.3 70B", enum.ChatModelLlama3_3_70B.String()).
-					WithDescription("Reliable model - Consistent performance").
-					WithDefault(b.model == enum.ChatModelLlama3_3_70B),
 				discord.NewStringSelectMenuOption("GPT-4o Mini", enum.ChatModelGPT4oMini.String()).
 					WithDescription("Mid-tier model - Basic capabilities").
 					WithDefault(b.model == enum.ChatModelGPT4oMini),
