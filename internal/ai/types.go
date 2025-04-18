@@ -151,13 +151,34 @@ func (cc ChatContext) FormatForAI() string {
 	b.WriteString("Previous conversation:\n")
 
 	for _, ctx := range cc {
+		content := ctx.Content
+
+		// For AI responses, remove thinking blocks
+		if ctx.Type == ContextTypeAI {
+			for {
+				startIdx := strings.Index(content, "<think>")
+				if startIdx == -1 {
+					break
+				}
+				endIdx := strings.Index(content[startIdx:], "</think>")
+				if endIdx == -1 {
+					break
+				}
+				endIdx += startIdx + 8 // Add length of "</think>"
+				content = content[:startIdx] + content[endIdx:]
+			}
+			content = strings.TrimSpace(content)
+		}
+
 		switch ctx.Type {
 		case ContextTypeHuman:
-			b.WriteString(fmt.Sprintf("<previous user>%s</previous>\n", ctx.Content))
+			b.WriteString(fmt.Sprintf("<previous user>%s</previous>\n", content))
 		case ContextTypeAI:
-			b.WriteString(fmt.Sprintf("<previous assistant>%s</previous>\n", ctx.Content))
+			if content != "" {
+				b.WriteString(fmt.Sprintf("<previous assistant>%s</previous>\n", content))
+			}
 		case ContextTypeUser, ContextTypeGroup:
-			b.WriteString(fmt.Sprintf("<context %s>\n%s\n</context>\n", strings.ToLower(string(ctx.Type)), ctx.Content))
+			b.WriteString(fmt.Sprintf("<context %s>\n%s\n</context>\n", strings.ToLower(string(ctx.Type)), content))
 		}
 	}
 
