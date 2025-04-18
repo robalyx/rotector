@@ -23,7 +23,7 @@ type Group struct {
 	Description         string                        `bun:",notnull"               json:"description"`
 	Owner               *types.GroupUser              `bun:"type:jsonb"             json:"owner"`
 	Shout               *types.GroupShout             `bun:"type:jsonb"             json:"shout"`
-	Reasons             Reasons[enum.GroupReasonType] `bun:"type:jsonb"             json:"reasons"`
+	Reasons             Reasons[enum.GroupReasonType] `bun:"type:jsonb,notnull"     json:"reasons"`
 	Confidence          float64                       `bun:",notnull"               json:"confidence"`
 	LastScanned         time.Time                     `bun:",notnull"               json:"lastScanned"`
 	LastUpdated         time.Time                     `bun:",notnull"               json:"lastUpdated"`

@@ -3,7 +3,6 @@ package fetcher
 import (
 	"context"
 	"errors"
-	"strings"
 	"sync"
 	"time"
 
@@ -72,7 +71,7 @@ func (u *UserFetcher) FetchInfos(ctx context.Context, userIDs []uint64) []*types
 			}
 
 			// Fetch groups, friends, games, and outfits concurrently
-			groups, friends, games, outfits, inventory := u.fetchUserData(ctx, id)
+			groups, friends, games, outfits := u.fetchUserData(ctx, id)
 
 			// Add user to map for thumbnail fetching
 			mu.Lock()
@@ -92,7 +91,9 @@ func (u *UserFetcher) FetchInfos(ctx context.Context, userIDs []uint64) []*types
 				Friends:      friends,
 				Games:        games,
 				Outfits:      outfits,
-				Inventory:    inventory,
+				Inventory:    []*apiTypes.InventoryAsset{},
+				Favorites:    []any{},
+				Badges:       []any{},
 				LastUpdated:  now,
 				LastBanCheck: now,
 			}
@@ -139,7 +140,6 @@ func (u *UserFetcher) fetchUserData(ctx context.Context, userID uint64) (
 	friends []*apiTypes.ExtendedFriend,
 	games []*apiTypes.Game,
 	outfits []*apiTypes.Outfit,
-	inventory []*apiTypes.InventoryAsset,
 ) {
 	p := pool.New().WithContext(ctx)
 
@@ -198,24 +198,24 @@ func (u *UserFetcher) fetchUserData(ctx context.Context, userID uint64) (
 	})
 
 	// Fetch user's inventory
-	p.Go(func(ctx context.Context) error {
-		var err error
-		inventory, err = u.inventoryFetcher.GetInventory(ctx, userID)
-		if err != nil {
-			if strings.Contains(err.Error(), "You are not authorized to view this user's inventory.") {
-				return nil
-			}
-			u.logger.Warn("Failed to fetch user inventory",
-				zap.Error(err),
-				zap.Uint64("userID", userID))
-		}
-		return nil
-	})
+	// p.Go(func(ctx context.Context) error {
+	// 	var err error
+	// 	inventory, err = u.inventoryFetcher.GetInventory(ctx, userID)
+	// 	if err != nil {
+	// 		if strings.Contains(err.Error(), "You are not authorized to view this user's inventory.") {
+	// 			return nil
+	// 		}
+	// 		u.logger.Warn("Failed to fetch user inventory",
+	// 			zap.Error(err),
+	// 			zap.Uint64("userID", userID))
+	// 	}
+	// 	return nil
+	// })
 
 	// Wait for all fetches to complete
 	_ = p.Wait()
 
-	return groups, friends, games, outfits, inventory
+	return groups, friends, games, outfits
 }
 
 // FetchBannedUsers checks which users from a batch of IDs are currently banned.

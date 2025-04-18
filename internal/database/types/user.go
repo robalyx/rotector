@@ -25,12 +25,14 @@ type User struct {
 	DisplayName         string                       `bun:",notnull"               json:"displayName"`
 	Description         string                       `bun:",notnull"               json:"description"`
 	CreatedAt           time.Time                    `bun:",notnull"               json:"createdAt"`
-	Reasons             Reasons[enum.UserReasonType] `bun:"type:jsonb"             json:"reasons"`
-	Groups              []*types.UserGroupRoles      `bun:"type:jsonb"             json:"groups"`
-	Outfits             []*types.Outfit              `bun:"type:jsonb"             json:"outfits"`
-	Friends             []*types.ExtendedFriend      `bun:"type:jsonb"             json:"friends"`
-	Games               []*types.Game                `bun:"type:jsonb"             json:"games"`
-	Inventory           []*types.InventoryAsset      `bun:"type:jsonb"             json:"inventory"`
+	Reasons             Reasons[enum.UserReasonType] `bun:"type:jsonb,notnull"     json:"reasons"`
+	Groups              []*types.UserGroupRoles      `bun:"type:jsonb,notnull"     json:"groups"`
+	Outfits             []*types.Outfit              `bun:"type:jsonb,notnull"     json:"outfits"`
+	Friends             []*types.ExtendedFriend      `bun:"type:jsonb,notnull"     json:"friends"`
+	Games               []*types.Game                `bun:"type:jsonb,notnull"     json:"games"`
+	Inventory           []*types.InventoryAsset      `bun:"type:jsonb,notnull"     json:"inventory"`
+	Favorites           []any                        `bun:"type:jsonb,notnull"     json:"favorites"`
+	Badges              []any                        `bun:"type:jsonb,notnull"     json:"badges"`
 	Confidence          float64                      `bun:",notnull"               json:"confidence"`
 	HasSocials          bool                         `bun:",notnull,default:false" json:"hasSocials"`
 	LastScanned         time.Time                    `bun:",notnull"               json:"lastScanned"`
