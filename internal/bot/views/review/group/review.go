@@ -293,8 +293,6 @@ func (b *ReviewBuilder) getDescription() string {
 	}
 
 	// Prepare description
-	description = utils.TruncateString(description, 400)
-	description = utils.FormatString(description)
 	description = utils.CensorStringsInText(
 		description,
 		b.PrivacyMode,
@@ -302,6 +300,8 @@ func (b *ReviewBuilder) getDescription() string {
 		b.group.Name,
 		strconv.FormatUint(b.group.Owner.UserID, 10),
 	)
+	description = utils.TruncateString(description, 400)
+	description = utils.FormatString(description)
 
 	return description
 }
@@ -326,8 +326,7 @@ func (b *ReviewBuilder) getReason() string {
 			section := fmt.Sprintf("%s **%s**\n%s",
 				getReasonEmoji(reasonType),
 				reasonType.String(),
-				reason.Message,
-			)
+				utils.TruncateString(reason.Message, 128))
 			formattedReasons = append(formattedReasons, section)
 		}
 	}

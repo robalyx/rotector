@@ -389,8 +389,7 @@ func (b *ReviewBuilder) getReason() string {
 			section := fmt.Sprintf("%s **%s**\n%s",
 				getReasonEmoji(reasonType),
 				reasonType.String(),
-				reason.Message,
-			)
+				utils.TruncateString(reason.Message, 128))
 			formattedReasons = append(formattedReasons, section)
 		}
 	}
@@ -432,8 +431,6 @@ func (b *ReviewBuilder) getDescription() string {
 	}
 
 	// Prepare description
-	description = utils.TruncateString(description, 400)
-	description = utils.FormatString(description)
 	description = utils.CensorStringsInText(
 		description,
 		b.PrivacyMode,
@@ -441,6 +438,8 @@ func (b *ReviewBuilder) getDescription() string {
 		b.user.Name,
 		b.user.DisplayName,
 	)
+	description = utils.TruncateString(description, 400)
+	description = utils.FormatString(description)
 
 	// Translate the description
 	translatedDescription, err := b.translator.Translate(context.Background(), description, "auto", "en")
