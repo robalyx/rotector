@@ -6,9 +6,10 @@ package enum
 type ChatModel int
 
 const (
-	ChatModelGemini2_0Flash  ChatModel = iota // gemini-2.0-flash
+	ChatModelGemini2_5Flash  ChatModel = iota // gemini-2.5-flash-thinking
 	ChatModelGemini2_5Pro                     // gemini-2.5-pro
-	ChatModelDeepseekR1                       // deepseek-r1
+	ChatModelQwQ32B                           // qwq-32B
 	ChatModelDeepseekV3_0324                  // deepseek-v3-0324
 	ChatModelGPT4oMini                        // gpt-4o-mini
+	ChatModelo4Mini                           // o4-mini
 )
