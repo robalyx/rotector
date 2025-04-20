@@ -230,6 +230,7 @@ func (s *GroupService) groupGroupsByStatus(
 			confirmedGroups = append(confirmedGroups, &types.ConfirmedGroup{
 				Group:      *group,
 				VerifiedAt: existingGroup.VerifiedAt,
+				ReviewerID: existingGroup.ReviewerID,
 			})
 		case enum.GroupTypeFlagged:
 			flaggedGroups = append(flaggedGroups, &types.FlaggedGroup{
@@ -237,8 +238,9 @@ func (s *GroupService) groupGroupsByStatus(
 			})
 		case enum.GroupTypeCleared:
 			clearedGroups = append(clearedGroups, &types.ClearedGroup{
-				Group:     *group,
-				ClearedAt: existingGroup.ClearedAt,
+				Group:      *group,
+				ClearedAt:  existingGroup.ClearedAt,
+				ReviewerID: existingGroup.ReviewerID,
 			})
 		}
 	}

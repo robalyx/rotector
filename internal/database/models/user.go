@@ -41,7 +41,7 @@ func (r *UserModel) SaveUsersByStatus(
 	return r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
 		// Helper function to update a table
 		updateTable := func(users any, status enum.UserType) error {
-			_, err := tx.NewInsert().
+			query := tx.NewInsert().
 				Model(users).
 				On("CONFLICT (id) DO UPDATE").
 				Set("uuid = EXCLUDED.uuid").
@@ -55,6 +55,8 @@ func (r *UserModel) SaveUsersByStatus(
 				Set("friends = EXCLUDED.friends").
 				Set("games = EXCLUDED.games").
 				Set("inventory = EXCLUDED.inventory").
+				Set("favorites = EXCLUDED.favorites").
+				Set("badges = EXCLUDED.badges").
 				Set("confidence = EXCLUDED.confidence").
 				Set("has_socials = EXCLUDED.has_socials").
 				Set("last_scanned = EXCLUDED.last_scanned").
@@ -64,8 +66,21 @@ func (r *UserModel) SaveUsersByStatus(
 				Set("is_banned = EXCLUDED.is_banned").
 				Set("is_deleted = EXCLUDED.is_deleted").
 				Set("thumbnail_url = EXCLUDED.thumbnail_url").
-				Set("last_thumbnail_update = EXCLUDED.last_thumbnail_update").
-				Exec(ctx)
+				Set("last_thumbnail_update = EXCLUDED.last_thumbnail_update")
+
+			// Add extra columns for confirmed and cleared users
+			switch status {
+			case enum.UserTypeConfirmed:
+				query = query.Set("reviewer_id = EXCLUDED.reviewer_id").
+					Set("verified_at = EXCLUDED.verified_at")
+			case enum.UserTypeCleared:
+				query = query.Set("reviewer_id = EXCLUDED.reviewer_id").
+					Set("cleared_at = EXCLUDED.cleared_at")
+			case enum.UserTypeFlagged:
+				// No extra fields for flagged users
+			}
+
+			_, err := query.Exec(ctx)
 			if err != nil {
 				return fmt.Errorf("failed to update %s users: %w", status, err)
 			}
@@ -103,6 +118,7 @@ func (r *UserModel) ConfirmUser(ctx context.Context, user *types.ReviewUser) err
 		confirmedUser := &types.ConfirmedUser{
 			User:       user.User,
 			VerifiedAt: time.Now(),
+			ReviewerID: user.ReviewerID,
 		}
 
 		// Try to move user to confirmed_users table
@@ -142,8 +158,9 @@ func (r *UserModel) ConfirmUser(ctx context.Context, user *types.ReviewUser) err
 func (r *UserModel) ClearUser(ctx context.Context, user *types.ReviewUser) error {
 	return r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
 		clearedUser := &types.ClearedUser{
-			User:      user.User,
-			ClearedAt: time.Now(),
+			User:       user.User,
+			ClearedAt:  time.Now(),
+			ReviewerID: user.ReviewerID,
 		}
 
 		// Try to move user to cleared_users table

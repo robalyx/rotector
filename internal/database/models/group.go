@@ -41,7 +41,7 @@ func (r *GroupModel) SaveGroupsByStatus(
 	return r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
 		// Helper function to update a table
 		updateTable := func(groups any, status enum.GroupType) error {
-			_, err := tx.NewInsert().
+			query := tx.NewInsert().
 				Model(groups).
 				On("CONFLICT (id) DO UPDATE").
 				Set("uuid = EXCLUDED.uuid").
@@ -58,8 +58,21 @@ func (r *GroupModel) SaveGroupsByStatus(
 				Set("is_locked = EXCLUDED.is_locked").
 				Set("is_deleted = EXCLUDED.is_deleted").
 				Set("thumbnail_url = EXCLUDED.thumbnail_url").
-				Set("last_thumbnail_update = EXCLUDED.last_thumbnail_update").
-				Exec(ctx)
+				Set("last_thumbnail_update = EXCLUDED.last_thumbnail_update")
+
+			// Add extra columns for confirmed and cleared groups
+			switch status {
+			case enum.GroupTypeConfirmed:
+				query = query.Set("reviewer_id = EXCLUDED.reviewer_id").
+					Set("verified_at = EXCLUDED.verified_at")
+			case enum.GroupTypeCleared:
+				query = query.Set("reviewer_id = EXCLUDED.reviewer_id").
+					Set("cleared_at = EXCLUDED.cleared_at")
+			case enum.GroupTypeFlagged:
+				// No extra fields for flagged groups
+			}
+
+			_, err := query.Exec(ctx)
 			if err != nil {
 				return fmt.Errorf("failed to update %s groups: %w", status, err)
 			}
@@ -97,6 +110,7 @@ func (r *GroupModel) ConfirmGroup(ctx context.Context, group *types.ReviewGroup)
 		confirmedGroup := &types.ConfirmedGroup{
 			Group:      group.Group,
 			VerifiedAt: time.Now(),
+			ReviewerID: group.ReviewerID,
 		}
 
 		// Try to move group to confirmed_groups table
@@ -136,8 +150,9 @@ func (r *GroupModel) ConfirmGroup(ctx context.Context, group *types.ReviewGroup)
 func (r *GroupModel) ClearGroup(ctx context.Context, group *types.ReviewGroup) error {
 	return r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
 		clearedGroup := &types.ClearedGroup{
-			Group:     group.Group,
-			ClearedAt: time.Now(),
+			Group:      group.Group,
+			ClearedAt:  time.Now(),
+			ReviewerID: group.ReviewerID,
 		}
 
 		// Try to move group to cleared_groups table

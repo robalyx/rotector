@@ -230,6 +230,7 @@ func (s *UserService) groupUsersByStatus(
 			confirmedUsers = append(confirmedUsers, &types.ConfirmedUser{
 				User:       *user,
 				VerifiedAt: existingUser.VerifiedAt,
+				ReviewerID: existingUser.ReviewerID,
 			})
 		case enum.UserTypeFlagged:
 			flaggedUsers = append(flaggedUsers, &types.FlaggedUser{
@@ -237,8 +238,9 @@ func (s *UserService) groupUsersByStatus(
 			})
 		case enum.UserTypeCleared:
 			clearedUsers = append(clearedUsers, &types.ClearedUser{
-				User:      *user,
-				ClearedAt: existingUser.ClearedAt,
+				User:       *user,
+				ClearedAt:  existingUser.ClearedAt,
+				ReviewerID: existingUser.ReviewerID,
 			})
 		}
 	}
