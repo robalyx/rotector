@@ -19,8 +19,8 @@ type RetryOptions struct {
 func GetAIRetryOptions() RetryOptions {
 	return RetryOptions{
 		MaxElapsedTime:  120 * time.Second,
-		InitialInterval: 100 * time.Millisecond,
-		MaxInterval:     1 * time.Second,
+		InitialInterval: 5 * time.Second,
+		MaxInterval:     10 * time.Second,
 		MaxRetries:      3,
 	}
 }

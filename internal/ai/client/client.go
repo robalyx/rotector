@@ -20,67 +20,16 @@ var (
 	ErrContentBlocked       = errors.New("content blocked by provider")
 )
 
-// BlockReason represents different types of content blocking reasons.
-type BlockReason string
-
-const (
-	BlockReasonUnspecified BlockReason = "BLOCK_REASON_UNSPECIFIED"
-	BlockReasonSafety      BlockReason = "SAFETY"
-	BlockReasonOther       BlockReason = "OTHER"
-	BlockReasonBlocklist   BlockReason = "BLOCKLIST"
-	BlockReasonProhibited  BlockReason = "PROHIBITED_CONTENT"
-	BlockReasonImageSafety BlockReason = "IMAGE_SAFETY"
-)
-
-// String returns the string representation of the block reason.
-func (br BlockReason) String() string {
-	return string(br)
-}
-
-// Details returns human-readable details about the block reason.
-func (br BlockReason) Details() string {
-	switch br {
-	case BlockReasonSafety:
-		return "Check safetyRatings for specific category"
-	case BlockReasonBlocklist:
-		return "Content matched terminology blocklist"
-	case BlockReasonImageSafety:
-		return "Unsafe image generation content"
-	case BlockReasonProhibited:
-		return "Content violates provider's content policy"
-	case BlockReasonOther:
-		return "Content blocked for unspecified reasons"
-	case BlockReasonUnspecified:
-		return "Default block reason (unused)"
-	}
-	return "Unknown block reason"
-}
-
-// CircuitBreakerSettings contains configuration for the circuit breaker.
-type CircuitBreakerSettings struct {
-	MaxFailures     uint32
-	Timeout         time.Duration
-	HalfOpenMaxReqs uint32
-}
-
-// Client provides a unified interface for making AI requests.
-type Client interface {
-	Chat() ChatCompletions
-}
-
-// ChatCompletions provides chat completion methods.
-type ChatCompletions interface {
-	New(ctx context.Context, params openai.ChatCompletionNewParams) (*openai.ChatCompletion, error)
-	NewStreaming(ctx context.Context, params openai.ChatCompletionNewParams) *ssestream.Stream[openai.ChatCompletionChunk]
-}
-
-// providerClient represents a single provider's client and configuration.
-type providerClient struct {
-	client        *openai.Client
-	breaker       *gobreaker.CircuitBreaker
-	semaphore     *semaphore.Weighted
-	modelMappings map[string]string
-	name          string
+// WithReasoning adds reasoning fields to the chat completion parameters.
+func WithReasoning(params openai.ChatCompletionNewParams, opts ReasoningOptions) openai.ChatCompletionNewParams {
+	params.WithExtraFields(map[string]any{
+		"reasoning": map[string]any{
+			"effort":     string(opts.Effort),
+			"max_tokens": opts.MaxTokens,
+			"exclude":    opts.Exclude,
+		},
+	})
+	return params
 }
 
 // AIClient implements the Client interface.
@@ -148,7 +97,11 @@ type chatCompletions struct {
 
 // checkBlockReasons checks the response for various block reasons and logs them appropriately.
 func (c *chatCompletions) checkBlockReasons(resp *openai.ChatCompletion, provider *providerClient, model string) error {
-	finishReason := resp.JSON.ExtraFields["native_finish_reason"].Raw()
+	if len(resp.Choices) == 0 {
+		return nil
+	}
+
+	finishReason := resp.Choices[0].FinishReason
 	blockReasons := []BlockReason{
 		BlockReasonUnspecified,
 		BlockReasonSafety,
@@ -172,6 +125,12 @@ func (c *chatCompletions) checkBlockReasons(resp *openai.ChatCompletion, provide
 			return fmt.Errorf("%w: %s", ErrContentBlocked, reason.Details())
 		}
 	}
+
+	c.client.logger.Debug("Content not blocked by provider",
+		zap.String("provider", provider.name),
+		zap.String("model", model),
+		zap.String("finishReason", finishReason),
+	)
 
 	return nil
 }
@@ -233,18 +192,15 @@ func (c *chatCompletions) New(ctx context.Context, params openai.ChatCompletionN
 
 			if selectedProvider != nil {
 				// Prepare parameters
-				params = c.prepareParams(params, selectedProvider)
+				newParams := c.prepareParams(params, selectedProvider)
 
 				// Execute request
 				result, err := selectedProvider.breaker.Execute(func() (any, error) {
-					resp, err := selectedProvider.client.Chat.Completions.New(ctx, params)
-					if err != nil {
-						return resp, err
+					resp, err := selectedProvider.client.Chat.Completions.New(ctx, newParams)
+					if bl := c.checkBlockReasons(resp, selectedProvider, newParams.Model); bl != nil {
+						return resp, bl
 					}
-					if err := c.checkBlockReasons(resp, selectedProvider, params.Model); err != nil {
-						return resp, err
-					}
-					return resp, nil
+					return resp, err
 				})
 				selectedProvider.semaphore.Release(1)
 
@@ -313,11 +269,11 @@ func (c *chatCompletions) NewStreaming(
 
 			if selectedProvider != nil {
 				// Prepare parameters
-				params = c.prepareParams(params, selectedProvider)
+				newParams := c.prepareParams(params, selectedProvider)
 
 				// Execute stream creation
 				result, err := selectedProvider.breaker.Execute(func() (any, error) {
-					stream := selectedProvider.client.Chat.Completions.NewStreaming(ctx, params)
+					stream := selectedProvider.client.Chat.Completions.NewStreaming(ctx, newParams)
 					if stream.Err() != nil {
 						return nil, stream.Err()
 					}

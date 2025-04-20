@@ -152,7 +152,7 @@ func NewIvanAnalyzer(app *setup.App, logger *zap.Logger) *IvanAnalyzer {
 		minify:      m,
 		analysisSem: semaphore.NewWeighted(int64(app.Config.Worker.BatchSizes.MessageAnalysis)),
 		logger:      logger.Named("ai_ivan"),
-		model:       app.Config.Common.OpenAI.Model,
+		model:       app.Config.Common.OpenAI.DefaultModel,
 		batchSize:   app.Config.Worker.BatchSizes.MessageAnalysisBatch,
 	}
 }

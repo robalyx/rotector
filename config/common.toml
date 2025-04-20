@@ -101,9 +101,9 @@ password = ""
 
 [common.openai]
 # Default model to use for AI requests
-model = "gemini-2.0-flash"
-# Model to use for rechecking flagged users
-recheck_model = "qwq-32B"
+default_model = "gemini-2.5-flash-thinking"
+# Model to use for outfit analysis
+outfit_model = "gemini-2.0-flash"
 
 [[common.openai.providers]]
 name = "openrouter"
@@ -112,8 +112,10 @@ api_key = ""
 max_concurrent = 100
 
 [common.openai.providers.model_mappings]
-"gemini-2.0-flash" = "google/gemini-2.0-flash-001"
+"gemini-2.5-flash" = "google/gemini-2.5-flash-preview"
+"gemini-2.5-flash-thinking" = "google/gemini-2.5-flash-preview:thinking"
 "gemini-2.5-pro" = "google/gemini-2.5-pro-preview-03-25"
+"gemini-2.0-flash" = "google/gemini-2.0-flash-001"
 "qwq-32B" = "qwen/qwq-32b"
 "deepseek-r1" = "deepseek/deepseek-r1"
 "deepseek-v3-0324" = "deepseek/deepseek-chat-v3-0324"

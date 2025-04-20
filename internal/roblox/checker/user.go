@@ -17,17 +17,16 @@ import (
 // UserChecker coordinates the checking process by combining results from
 // multiple checking methods (AI, groups, friends) and managing the progress bar.
 type UserChecker struct {
-	app             *setup.App
-	db              database.Client
-	userFetcher     *fetcher.UserFetcher
-	userAnalyzer    *ai.UserAnalyzer
-	outfitAnalyzer  *ai.OutfitAnalyzer
-	ivanAnalyzer    *ai.IvanAnalyzer
-	recheckAnalyzer *ai.RecheckAnalyzer
-	groupChecker    *GroupChecker
-	friendChecker   *FriendChecker
-	condoChecker    *CondoChecker
-	logger          *zap.Logger
+	app            *setup.App
+	db             database.Client
+	userFetcher    *fetcher.UserFetcher
+	userAnalyzer   *ai.UserAnalyzer
+	outfitAnalyzer *ai.OutfitAnalyzer
+	ivanAnalyzer   *ai.IvanAnalyzer
+	groupChecker   *GroupChecker
+	friendChecker  *FriendChecker
+	condoChecker   *CondoChecker
+	logger         *zap.Logger
 }
 
 // NewUserChecker creates a UserChecker with all required dependencies.
@@ -37,13 +36,12 @@ func NewUserChecker(app *setup.App, userFetcher *fetcher.UserFetcher, logger *za
 	outfitAnalyzer := ai.NewOutfitAnalyzer(app, logger)
 
 	return &UserChecker{
-		app:             app,
-		db:              app.DB,
-		userFetcher:     userFetcher,
-		userAnalyzer:    userAnalyzer,
-		outfitAnalyzer:  outfitAnalyzer,
-		ivanAnalyzer:    ai.NewIvanAnalyzer(app, logger),
-		recheckAnalyzer: ai.NewRecheckAnalyzer(app, logger),
+		app:            app,
+		db:             app.DB,
+		userFetcher:    userFetcher,
+		userAnalyzer:   userAnalyzer,
+		outfitAnalyzer: outfitAnalyzer,
+		ivanAnalyzer:   ai.NewIvanAnalyzer(app, logger),
 		groupChecker: NewGroupChecker(app.DB, logger,
 			app.Config.Worker.ThresholdLimits.MaxGroupMembersTrack,
 			app.Config.Worker.ThresholdLimits.MinFlaggedOverride,
@@ -80,9 +78,6 @@ func (c *UserChecker) ProcessUsers(userInfos []*types.User) map[uint64]struct{} 
 
 	// Process outfit analysis
 	c.outfitAnalyzer.ProcessOutfits(userInfos, reasonsMap)
-
-	// Process recheck analysis
-	c.recheckAnalyzer.ProcessUsers(userInfos, reasonsMap)
 
 	// Stop if no users were flagged
 	if len(reasonsMap) == 0 {

@@ -70,13 +70,125 @@ Assign the 'confidence' score based on the explicitness of the predatory indicat
 0.7-0.8: Strong inappropriate indicators
 0.9-1.0: Explicit inappropriate content
 
+Instruction:
+Pay close attention to the following indicators of predatory behavior in descriptions:
+
+1. Grooming Tactics:
+- ANY attempt at building trust through friendly/caring language
+- ANY attempt to establish private communication
+- ANY attempt to move communication off-platform
+- ANY use of manipulation or guilt tactics
+- ANY promises of friendship/relationship
+- ANY use of excessive compliments or flattery
+- ANY creation of secrecy or exclusivity
+- ANY attempt to isolate targets from others
+
+2. Exploitation Indicators:
+- ANY seeking of private interactions
+- ANY offering or requesting of inappropriate content
+- ANY inappropriate use of authority positions
+- ANY targeting of specific age groups/genders
+- ANY creation of power imbalances
+- ANY attempt to normalize inappropriate behavior
+- ANY use of coded language for inappropriate acts
+
+3. Suspicious Communication Patterns:
+- ANY coded language implying inappropriate activities
+- ANY leading phrases implying secrecy
+- ANY studio mentions or invites (ZERO EXCEPTIONS)
+- ANY game or chat references that could enable private interactions
+- ANY condo/con references
+- ANY "exclusive" group invitations
+- ANY private server invitations
+- ANY age-restricted invitations
+- ANY suspicious direct messaging demands
+- ANY requests to "message first" or "dm first"
+- ANY use of the spade symbol (♠) or similar symbols in suspicious contexts
+- ANY use of slang with inappropriate context ("down", "dtf", etc.)
+- ANY claims of following TOS/rules to avoid detection
+- ANY roleplay requests or themes (ZERO EXCEPTIONS)
+- ANY mentions of "trading" or variations which commonly refer to CSAM
+- ANY mentions of "cheese" or "pizza" which are known code words for CSAM
+- ANY use of "yk" or "you know" in suspicious contexts
+
+4. Inappropriate Content:
+- ANY sexual content or innuendo
+- ANY sexual solicitation
+- ANY erotic roleplay (ERP)
+- ANY age-inappropriate dating content
+- ANY non-consensual references
+- ANY ownership/dominance references
+- ANY adult community references
+- ANY suggestive size references
+- ANY inappropriate trading
+- ANY degradation terms
+- ANY breeding/heat themes
+- ANY references to bulls or cuckolding content
+- ANY raceplay or racial sexual stereotypes
+- ANY fart/gas/smell references
+- ANY fetish references
+
+5. Technical Evasion:
+- ANY bypassed inappropriate terms
+- ANY Caesar cipher (ROT13 and other rotations)
+- ANY deliberately misspelled inappropriate terms
+- ANY references to "futa" or bypasses like "fmta", "fmt", etc.
+- ANY references to "les" or similar LGBT+ terms used inappropriately
+- ANY warnings or anti-predator messages (manipulation tactics)
+
+7. Social Engineering:
+- ANY friend requests with inappropriate context
+- ANY terms of endearment used predatorily (mommy, daddy, kitten, etc.)
+- ANY "special" or "exclusive" game pass offers
+- ANY promises of rewards for buying passes
+- ANY promises or offers of "fun"
+- ANY references to "blue user" or "blue app"
+- ANY directing to other profiles/accounts
+- ANY use of innocent-sounding terms as code words
+- ANY mentions of literacy or writing ability
+
+Instruction: Pay close attention to usernames and display names that suggest predatory intentions, such as:
+- ANY names exploiting authority or mentor roles
+- ANY names suggesting sexual availability or soliciting inappropriate interactions 
+- ANY names using pet names or diminutives suggestively (kitty, kitten, etc.)
+- ANY names targeting minors or specific genders inappropriately
+- ANY names using gender identity terms that could be used to target or groom (fem, femboy, femgirl, etc.)
+- ANY names using ethnic or racial terms that could be used to target specific groups (latina, etc.)
+- ANY names using coded language or suggestive terms related to inappropriate acts
+- ANY names hinting at exploitation or predatory activities
+- ANY references to adult content platforms or services
+- ANY deliberately misspelled inappropriate terms
+- ANY mentions of bull, fart, gas, smell, etc.
+
+Instruction: You MUST flag ANY roleplay requests and themes because:
+1. ANY roleplay can be used to groom or exploit children
+2. ANY roleplay creates opportunities for predators to build trust
+3. Even seemingly innocent roleplay can escalate to inappropriate content
+4. There is no way to ensure roleplay remains appropriate
+
 Instruction: When flagging inappropriate usernames or display names:
 - Set the 'confidence' level based on how explicit or obvious the inappropriate content is
 - Include the full username or display name as a single string in the 'flaggedContent' array
-- Set the 'reason' field to clearly explain why the name is inappropriate
+- Set the 'reason' field to clearly explain why the name is inappropriate and breakdown terms
 - Consider combinations of words that together create inappropriate meanings
 
-` + SharedUserContentGuidelines
+Instruction: You MUST consider ANY sexual content or references on Roblox as predatory behavior due to:
+1. Roblox is primarily a children's platform
+2. ANY sexual content in spaces meant for children is inherently predatory
+3. ANY sexual usernames/content expose minors to inappropriate material
+4. There is no legitimate reason for sexual content on a children's platform
+
+IGNORE:
+- Empty descriptions
+- General social interactions
+- Compliments on outfits/avatars
+- Advertisements to join channels or tournaments
+- Gender identity expression
+- Bypass of appropriate terms
+- Self-harm or suicide-related content
+- Violence, gore, or disturbing content
+- Sharing of personal information
+- Random words or gibberish that are not ROT13`
 
 	// UserRequestPrompt provides a reminder to follow system guidelines for user analysis.
 	UserRequestPrompt = `Analyze these user profiles for predatory content and social media links.
@@ -84,10 +196,9 @@ Instruction: When flagging inappropriate usernames or display names:
 Remember:
 1. Return ALL users that either have violations OR contain social media links
 2. Use "the user"/"this account" instead of usernames
-3. Include exact quotes as evidence for violations
-4. Follow confidence level guide strictly
-5. Always set hasSocials field accurately
-6. For users with only social media links (no violations), include only name and hasSocials fields
+3. Follow confidence level guide strictly
+4. Always set hasSocials field accurately
+5. For users with only social media links (no violations), include only name and hasSocials fields
 
 Input:
 `
@@ -137,7 +248,7 @@ func NewUserAnalyzer(app *setup.App, translator *translator.Translator, logger *
 		translator:  translator,
 		analysisSem: semaphore.NewWeighted(int64(app.Config.Worker.BatchSizes.UserAnalysis)),
 		logger:      logger.Named("ai_user"),
-		model:       app.Config.Common.OpenAI.Model,
+		model:       app.Config.Common.OpenAI.DefaultModel,
 		batchSize:   app.Config.Worker.BatchSizes.UserAnalysisBatch,
 	}
 }
@@ -242,27 +353,36 @@ func (a *UserAnalyzer) processBatch(
 	// Prepare request prompt with user info
 	requestPrompt := UserRequestPrompt + string(userInfoJSON)
 
-	// Generate user analysis with retry
-	result, err := utils.WithRetry(ctx, func() (*FlaggedUsers, error) {
-		resp, err := a.chat.New(ctx, openai.ChatCompletionNewParams{
-			Messages: []openai.ChatCompletionMessageParamUnion{
-				openai.SystemMessage(UserSystemPrompt),
-				openai.UserMessage(requestPrompt),
-			},
-			ResponseFormat: openai.ChatCompletionNewParamsResponseFormatUnion{
-				OfJSONSchema: &openai.ResponseFormatJSONSchemaParam{
-					JSONSchema: openai.ResponseFormatJSONSchemaJSONSchemaParam{
-						Name:        "userAnalysis",
-						Description: openai.String("Analysis of user content"),
-						Schema:      UserAnalysisSchema,
-						Strict:      openai.Bool(true),
-					},
+	// Prepare request parameters
+	params := openai.ChatCompletionNewParams{
+		Messages: []openai.ChatCompletionMessageParamUnion{
+			openai.SystemMessage(UserSystemPrompt),
+			openai.UserMessage(requestPrompt),
+		},
+		ResponseFormat: openai.ChatCompletionNewParamsResponseFormatUnion{
+			OfJSONSchema: &openai.ResponseFormatJSONSchemaParam{
+				JSONSchema: openai.ResponseFormatJSONSchemaJSONSchemaParam{
+					Name:        "userAnalysis",
+					Description: openai.String("Analysis of user content"),
+					Schema:      UserAnalysisSchema,
+					Strict:      openai.Bool(true),
 				},
 			},
-			Model:       a.model,
-			Temperature: openai.Float(0.2),
-			TopP:        openai.Float(0.4),
-		})
+		},
+		Model:       a.model,
+		Temperature: openai.Float(0.1),
+		TopP:        openai.Float(0.2),
+	}
+
+	params = client.WithReasoning(params, client.ReasoningOptions{
+		Effort:    openai.ReasoningEffortHigh,
+		MaxTokens: 8192,
+		Exclude:   false,
+	})
+
+	// Make API request with retry
+	result, err := utils.WithRetry(ctx, func() (*FlaggedUsers, error) {
+		resp, err := a.chat.New(ctx, params)
 		if err != nil {
 			return nil, fmt.Errorf("openai API error: %w", err)
 		}

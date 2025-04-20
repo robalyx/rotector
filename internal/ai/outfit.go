@@ -71,31 +71,30 @@ Key instructions:
 Instruction: Pay close attention to outfits that are sexual or adult-themed:
 - Stripper/pole dancer outfits
 - Lingerie/underwear models
-- Sexualized maid outfits (especially with fishnets, cleavage)
+- Sexualized maid outfits (with fishnets, cleavage or inappropriate elements)
 - Bunny girl outfits (lingerie versions)
 - Latex catsuits/dominatrix outfits
 - Fetishwear (bondage elements, suggestive accessories)
 - Censored nudity looks (with pixelation, censor bars, stickers)
 - Nudity with realistic body features (detailed abs, muscle definition, body hair, tattoos, etc.)
-- Revealing swimsuit/microkini outfits (especially with exaggerated anatomy)
-- Provocative bodysuits with cutouts or revealing elements
+- Extremely revealing swimsuits/microkinis (especially with exaggerated anatomy)
+- Provocative bodysuits with inappropriate cutouts
 - Thongs/g-strings or outfits emphasizing exposed buttocks
 - Outfits with intentional cleavage cutouts or revealing holes (heart-shaped, keyholes)
 - Succubus-themed outfits (especially with womb tattoos or markings)
 
 Instruction: Pay close attention to outfits that are body/figure-focused:
-- Exaggerated curvy/thicc avatars
-- Hourglass figure avatars (especially with suggestive poses)
-- Inflated chest/butt avatars
-- Bodycon dress models
+- Extremely exaggerated curvy/thicc avatars
+- Unrealistic hourglass figures
+- Inflated or exaggerated anatomy
 - Ultra-slim waist avatars
-- Bodies with sexualized scars or markings (including sexualized chest scars)
+- Bodies with sexualized scars or markings
 
 Instruction: Pay close attention to outfits that are BDSM/kink/fetish parodies:
 - Bondage sets (chains, gags, collars)
 - Petplay (ears, collars, leashes in suggestive context)
 - Slave-themed outfits (with chains, torn clothing)
-- Leather harnesses/latex corsets
+- Leather harnesses/latex corsets in fetish context
 - "Cow girl" outfits (NOT cowboy/western, but fetish-themed outfits with cow print, udders, or animal-sexualization elements)
 - Suggestive schoolgirl outfits
 - Diaper or "little" cosplays with sexualized elements
@@ -110,7 +109,29 @@ DO NOT flag these legitimate themes:
 - Military or combat themes
 - Professional or occupation-based outfits (unless sexualized)
 - Cartoon or anime character costumes (unless explicitly inappropriate)
-- Horror or spooky themes`
+- Horror or spooky themes
+- Modern streetwear or fashion trends
+- Y2K or retro fashion styles
+- Aesthetic-based outfits (cottagecore, dark academia, etc.)
+- Beach or summer themed outfits of appropriate coverage
+- Dance or performance outfits (unless explicitly inappropriate)
+- Meme character outfits
+
+DO NOT flag these legitimate modern fashion elements:
+- Crop tops, midriff-showing tops
+- Off-shoulder or cold-shoulder tops
+- Ripped jeans or distressed clothing
+- High-waisted or low-rise pants
+- Bodycon dresses (unless extremely exaggerated)
+- Athleisure or workout wear
+- Shorts or skirts of reasonable length
+- Swimwear of reasonable coverage
+- Trendy cutouts in appropriate places
+- Platform or high-heeled shoes
+- Collar necklaces as fashion accessories
+- Gothic or alternative fashion styles
+- Punk or edgy fashion elements
+- Cosplay or costume elements (unless explicitly inappropriate)`
 
 	// OutfitRequestPrompt provides a reminder to focus on theme identification.
 	OutfitRequestPrompt = `Identify specific themes in these outfits.
@@ -177,14 +198,14 @@ func NewOutfitAnalyzer(app *setup.App, logger *zap.Logger) *OutfitAnalyzer {
 		thumbnailFetcher: fetcher.NewThumbnailFetcher(app.RoAPI, logger),
 		analysisSem:      semaphore.NewWeighted(int64(app.Config.Worker.BatchSizes.OutfitAnalysis)),
 		logger:           logger.Named("ai_outfit"),
-		model:            app.Config.Common.OpenAI.Model,
+		model:            app.Config.Common.OpenAI.OutfitModel,
 		batchSize:        app.Config.Worker.BatchSizes.OutfitAnalysisBatch,
 	}
 }
 
 // ProcessOutfits analyzes outfit images for a batch of users.
 func (a *OutfitAnalyzer) ProcessOutfits(userInfos []*types.User, reasonsMap map[uint64]types.Reasons[enum.UserReasonType]) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
 
 	// Get all outfit thumbnails organized by user
@@ -285,8 +306,8 @@ func (a *OutfitAnalyzer) analyzeUserOutfits(
 		return nil
 	}
 
-	// If themes are suspicious enough, flag the user
-	if highestConfidence >= 0.5 {
+	// Only flag if there are more than 1 suspicious outfits and confidence is high enough
+	if len(allSuspiciousThemes) > 1 && highestConfidence >= 0.5 {
 		mu.Lock()
 		if _, exists := reasonsMap[info.ID]; !exists {
 			reasonsMap[info.ID] = make(types.Reasons[enum.UserReasonType])
@@ -302,6 +323,7 @@ func (a *OutfitAnalyzer) analyzeUserOutfits(
 			zap.Uint64("userID", info.ID),
 			zap.String("username", info.Name),
 			zap.Float64("confidence", highestConfidence),
+			zap.Int("numOutfits", len(allSuspiciousThemes)),
 			zap.Strings("themes", allSuspiciousThemes))
 	}
 
@@ -324,6 +346,7 @@ func (a *OutfitAnalyzer) analyzeOutfitBatch(
 	}
 
 	outfitNames := make([]string, 0, len(downloads))
+	validOutfits := make(map[string]struct{})
 	for _, result := range downloads {
 		// Convert image to base64
 		buf := new(bytes.Buffer)
@@ -340,6 +363,7 @@ func (a *OutfitAnalyzer) analyzeOutfitBatch(
 
 		// Store outfit name
 		outfitNames = append(outfitNames, result.name)
+		validOutfits[result.name] = struct{}{}
 	}
 
 	// Skip if no images were processed successfully
@@ -416,6 +440,19 @@ func (a *OutfitAnalyzer) analyzeOutfitBatch(
 		if err := sonic.Unmarshal([]byte(message.Content), &analysis); err != nil {
 			return nil, fmt.Errorf("JSON unmarshal error: %w", err)
 		}
+
+		// Validate outfit names and filter out invalid ones
+		var validThemes []OutfitTheme
+		for _, theme := range analysis.Themes {
+			if _, ok := validOutfits[theme.OutfitName]; ok {
+				validThemes = append(validThemes, theme)
+				continue
+			}
+			a.logger.Warn("AI flagged non-existent outfit",
+				zap.String("username", info.Name),
+				zap.String("outfitName", theme.OutfitName))
+		}
+		analysis.Themes = validThemes
 
 		return &analysis, nil
 	}, utils.GetAIRetryOptions())

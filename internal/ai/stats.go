@@ -76,7 +76,7 @@ func NewStatsAnalyzer(app *setup.App, logger *zap.Logger) *StatsAnalyzer {
 		chat:   app.AIClient.Chat(),
 		minify: m,
 		logger: logger.Named("ai_stats"),
-		model:  app.Config.Common.OpenAI.Model,
+		model:  app.Config.Common.OpenAI.DefaultModel,
 	}
 }
 
