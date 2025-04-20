@@ -621,7 +621,7 @@ func (m *TicketMenu) handleRespondModalSubmit(ctx *interaction.Context, s *sessi
 		// Check if user is allowed to send a message
 		messages := session.AppealMessages.Get(s)
 		if allowed, errorMsg := m.isMessageAllowed(messages, userID); !allowed {
-			ctx.Error(errorMsg)
+			ctx.Cancel(errorMsg)
 			return
 		}
 	}
@@ -808,6 +808,28 @@ func (m *TicketMenu) handleRejectModalSubmit(ctx *interaction.Context, s *sessio
 		return
 	}
 
+	// Handle appeal based on type
+	if appeal.Type == enum.AppealTypeDiscord {
+		// Create a ban record for the Discord user
+		now := time.Now()
+		ban := &types.DiscordBan{
+			ID:        appeal.UserID,
+			Reason:    enum.BanReasonOther,
+			Source:    enum.BanSourceAdmin,
+			Notes:     "Banned due to rejected appeal: " + reason,
+			BannedBy:  reviewerID,
+			BannedAt:  now,
+			ExpiresAt: nil, // Permanent ban
+			UpdatedAt: now,
+		}
+
+		if err := m.layout.db.Model().Ban().BanUser(ctx.Context(), ban); err != nil {
+			m.layout.logger.Error("Failed to create ban record", zap.Error(err))
+			ctx.Error("Failed to create ban record. Please try again.")
+			return
+		}
+	}
+
 	// Reject the appeal
 	err := m.layout.db.Model().Appeal().RejectAppeal(ctx.Context(), appeal.ID, appeal.Timestamp, reason)
 	if err != nil {
@@ -937,6 +959,26 @@ func (m *TicketMenu) handleBlacklistUserModalSubmit(ctx *interaction.Context, s 
 		return
 	}
 
+	// If this is a Discord appeal, also create a ban record
+	if appeal.Type == enum.AppealTypeDiscord {
+		ban := &types.DiscordBan{
+			ID:        appeal.UserID,
+			Reason:    enum.BanReasonOther,
+			Source:    enum.BanSourceAdmin,
+			Notes:     "Banned due to appeal blacklist: " + reason,
+			BannedBy:  reviewerID,
+			BannedAt:  now,
+			ExpiresAt: nil, // Permanent ban
+			UpdatedAt: now,
+		}
+
+		if err := m.layout.db.Model().Ban().BanUser(ctx.Context(), ban); err != nil {
+			m.layout.logger.Error("Failed to create ban record", zap.Error(err))
+			ctx.Error("Failed to create ban record. Please try again.")
+			return
+		}
+	}
+
 	// Reject the appeal with the blacklist reason
 	if err := m.layout.db.Model().Appeal().RejectAppeal(
 		ctx.Context(), appeal.ID, appeal.Timestamp,
@@ -980,6 +1022,8 @@ func (m *TicketMenu) redactRobloxUserData(
 	user.Friends = []*apiTypes.ExtendedFriend{}
 	user.Games = []*apiTypes.Game{}
 	user.Inventory = []*apiTypes.InventoryAsset{}
+	user.Favorites = []any{}
+	user.Badges = []any{}
 	user.IsDeleted = true
 	user.ThumbnailURL = ""
 	user.LastThumbnailUpdate = time.Now()
