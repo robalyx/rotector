@@ -335,6 +335,15 @@ func (m *TicketMenu) handleClaimAppeal(ctx *interaction.Context, s *session.Sess
 		return
 	}
 
+	// Check if appeal is already claimed
+	if appeal.ClaimedBy != 0 {
+		// Only allow stealing claim if it's been more than 6 hours of inactivity
+		if time.Since(appeal.LastActivity) < 6*time.Hour {
+			ctx.Cancel("This appeal is already claimed by another reviewer. You can only take over the claim after 6 hours of inactivity.")
+			return
+		}
+	}
+
 	// Update the appeal in the database
 	appeal.ClaimedBy = userID
 	appeal.ClaimedAt = time.Now()
