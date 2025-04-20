@@ -183,9 +183,19 @@ func (b *Builder) buildComponents() []discord.ContainerComponent {
 		discord.NewStringSelectMenuOption("Lookup Roblox User", constants.LookupRobloxUserButtonCustomID).
 			WithEmoji(discord.ComponentEmoji{Name: "🔍"}).
 			WithDescription("Look up specific Roblox user by ID or UUID"),
-		discord.NewStringSelectMenuOption("Lookup Roblox Group", constants.LookupRobloxGroupButtonCustomID).
-			WithEmoji(discord.ComponentEmoji{Name: "🔍"}).
-			WithDescription("Look up specific Roblox group by ID or UUID"),
+	)
+
+	// Add Roblox group lookup option only for reviewers
+	if b.isReviewer {
+		options = append(options,
+			discord.NewStringSelectMenuOption("Lookup Roblox Group", constants.LookupRobloxGroupButtonCustomID).
+				WithEmoji(discord.ComponentEmoji{Name: "🔍"}).
+				WithDescription("Look up specific Roblox group by ID or UUID"),
+		)
+	}
+
+	// Continue with remaining base options
+	options = append(options,
 		discord.NewStringSelectMenuOption("Lookup Discord User", constants.LookupDiscordUserButtonCustomID).
 			WithEmoji(discord.ComponentEmoji{Name: "🔍"}).
 			WithDescription("Look up Discord user and their flagged servers"),

@@ -90,6 +90,7 @@ func (m *Menu) handleSelectMenu(ctx *interaction.Context, s *session.Session, cu
 	// Check reviewer-only options
 	switch option {
 	case constants.StartGroupReviewButtonCustomID,
+		constants.LookupRobloxGroupButtonCustomID,
 		constants.ActivityBrowserButtonCustomID,
 		constants.ChatAssistantButtonCustomID,
 		constants.WorkerStatusButtonCustomID,
