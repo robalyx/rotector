@@ -29,71 +29,68 @@ func NewGroup(db *bun.DB, logger *zap.Logger) *GroupModel {
 	}
 }
 
+// upsertGroups handles the common logic for upserting groups with status-specific fields.
+func (r *GroupModel) upsertGroups(ctx context.Context, tx bun.Tx, groups any, status enum.GroupType) error {
+	query := tx.NewInsert().
+		Model(groups).
+		On("CONFLICT (id) DO UPDATE").
+		Set("uuid = EXCLUDED.uuid").
+		Set("name = EXCLUDED.name").
+		Set("description = EXCLUDED.description").
+		Set("owner = EXCLUDED.owner").
+		Set("shout = EXCLUDED.shout").
+		Set("reasons = EXCLUDED.reasons").
+		Set("confidence = EXCLUDED.confidence").
+		Set("last_scanned = EXCLUDED.last_scanned").
+		Set("last_updated = EXCLUDED.last_updated").
+		Set("last_viewed = EXCLUDED.last_viewed").
+		Set("last_lock_check = EXCLUDED.last_lock_check").
+		Set("is_locked = EXCLUDED.is_locked").
+		Set("is_deleted = EXCLUDED.is_deleted").
+		Set("thumbnail_url = EXCLUDED.thumbnail_url").
+		Set("last_thumbnail_update = EXCLUDED.last_thumbnail_update")
+
+	// Add status-specific fields
+	switch status {
+	case enum.GroupTypeConfirmed:
+		query = query.Set("reviewer_id = EXCLUDED.reviewer_id").
+			Set("verified_at = EXCLUDED.verified_at")
+	case enum.GroupTypeCleared:
+		query = query.Set("reviewer_id = EXCLUDED.reviewer_id").
+			Set("cleared_at = EXCLUDED.cleared_at")
+	case enum.GroupTypeFlagged:
+		// No extra fields for flagged groups
+	}
+
+	_, err := query.Exec(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to upsert %s groups: %w", status, err)
+	}
+	return nil
+}
+
 // SaveGroupsByStatus saves groups that have already been grouped by status.
 //
 // Deprecated: Use Service().Group().SaveGroups() instead.
 func (r *GroupModel) SaveGroupsByStatus(
-	ctx context.Context,
-	flaggedGroups []*types.FlaggedGroup,
-	confirmedGroups []*types.ConfirmedGroup,
-	clearedGroups []*types.ClearedGroup,
+	ctx context.Context, flaggedGroups []*types.FlaggedGroup, confirmedGroups []*types.ConfirmedGroup, clearedGroups []*types.ClearedGroup,
 ) error {
 	return r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
-		// Helper function to update a table
-		updateTable := func(groups any, status enum.GroupType) error {
-			query := tx.NewInsert().
-				Model(groups).
-				On("CONFLICT (id) DO UPDATE").
-				Set("uuid = EXCLUDED.uuid").
-				Set("name = EXCLUDED.name").
-				Set("description = EXCLUDED.description").
-				Set("owner = EXCLUDED.owner").
-				Set("shout = EXCLUDED.shout").
-				Set("reasons = EXCLUDED.reasons").
-				Set("confidence = EXCLUDED.confidence").
-				Set("last_scanned = EXCLUDED.last_scanned").
-				Set("last_updated = EXCLUDED.last_updated").
-				Set("last_viewed = EXCLUDED.last_viewed").
-				Set("last_lock_check = EXCLUDED.last_lock_check").
-				Set("is_locked = EXCLUDED.is_locked").
-				Set("is_deleted = EXCLUDED.is_deleted").
-				Set("thumbnail_url = EXCLUDED.thumbnail_url").
-				Set("last_thumbnail_update = EXCLUDED.last_thumbnail_update")
-
-			// Add extra columns for confirmed and cleared groups
-			switch status {
-			case enum.GroupTypeConfirmed:
-				query = query.Set("reviewer_id = EXCLUDED.reviewer_id").
-					Set("verified_at = EXCLUDED.verified_at")
-			case enum.GroupTypeCleared:
-				query = query.Set("reviewer_id = EXCLUDED.reviewer_id").
-					Set("cleared_at = EXCLUDED.cleared_at")
-			case enum.GroupTypeFlagged:
-				// No extra fields for flagged groups
-			}
-
-			_, err := query.Exec(ctx)
-			if err != nil {
-				return fmt.Errorf("failed to update %s groups: %w", status, err)
-			}
-			return nil
-		}
-
 		// Update each table with its corresponding slice
 		if len(flaggedGroups) > 0 {
-			if err := updateTable(&flaggedGroups, enum.GroupTypeFlagged); err != nil {
+			if err := r.upsertGroups(ctx, tx, &flaggedGroups, enum.GroupTypeFlagged); err != nil {
 				return err
 			}
 		}
 
 		if len(confirmedGroups) > 0 {
-			if err := updateTable(&confirmedGroups, enum.GroupTypeConfirmed); err != nil {
+			if err := r.upsertGroups(ctx, tx, &confirmedGroups, enum.GroupTypeConfirmed); err != nil {
 				return err
 			}
 		}
 
 		if len(clearedGroups) > 0 {
-			if err := updateTable(&clearedGroups, enum.GroupTypeCleared); err != nil {
+			if err := r.upsertGroups(ctx, tx, &clearedGroups, enum.GroupTypeCleared); err != nil {
 				return err
 			}
 		}
@@ -107,30 +104,18 @@ func (r *GroupModel) SaveGroupsByStatus(
 // Deprecated: Use Service().Group().ConfirmGroup() instead.
 func (r *GroupModel) ConfirmGroup(ctx context.Context, group *types.ReviewGroup) error {
 	return r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+		// Try to move group to confirmed_groups table
 		confirmedGroup := &types.ConfirmedGroup{
 			Group:      group.Group,
 			VerifiedAt: time.Now(),
 			ReviewerID: group.ReviewerID,
 		}
-
-		// Try to move group to confirmed_groups table
-		result, err := tx.NewInsert().Model(confirmedGroup).
-			On("CONFLICT (id) DO NOTHING").
-			Exec(ctx)
-		if err != nil {
-			return fmt.Errorf("failed to insert group in confirmed_groups: %w", err)
-		}
-
-		affected, err := result.RowsAffected()
-		if err != nil {
-			return fmt.Errorf("failed to get rows affected: %w", err)
-		}
-		if affected == 0 {
-			return nil // Skip if there was a conflict
+		if err := r.upsertGroups(ctx, tx, &[]*types.ConfirmedGroup{confirmedGroup}, enum.GroupTypeConfirmed); err != nil {
+			return err
 		}
 
 		// Delete from other tables
-		_, err = tx.NewDelete().Model((*types.FlaggedGroup)(nil)).Where("id = ?", group.ID).Exec(ctx)
+		_, err := tx.NewDelete().Model((*types.FlaggedGroup)(nil)).Where("id = ?", group.ID).Exec(ctx)
 		if err != nil {
 			return fmt.Errorf("failed to delete group from flagged_groups: %w", err)
 		}
@@ -149,30 +134,18 @@ func (r *GroupModel) ConfirmGroup(ctx context.Context, group *types.ReviewGroup)
 // Deprecated: Use Service().Group().ClearGroup() instead.
 func (r *GroupModel) ClearGroup(ctx context.Context, group *types.ReviewGroup) error {
 	return r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+		// Try to move group to cleared_groups table
 		clearedGroup := &types.ClearedGroup{
 			Group:      group.Group,
 			ClearedAt:  time.Now(),
 			ReviewerID: group.ReviewerID,
 		}
-
-		// Try to move group to cleared_groups table
-		result, err := tx.NewInsert().Model(clearedGroup).
-			On("CONFLICT (id) DO NOTHING").
-			Exec(ctx)
-		if err != nil {
-			return fmt.Errorf("failed to insert group in cleared_groups: %w", err)
-		}
-
-		affected, err := result.RowsAffected()
-		if err != nil {
-			return fmt.Errorf("failed to get rows affected: %w", err)
-		}
-		if affected == 0 {
-			return nil // Skip if there was a conflict
+		if err := r.upsertGroups(ctx, tx, &[]*types.ClearedGroup{clearedGroup}, enum.GroupTypeCleared); err != nil {
+			return err
 		}
 
 		// Delete from other tables
-		_, err = tx.NewDelete().Model((*types.FlaggedGroup)(nil)).Where("id = ?", group.ID).Exec(ctx)
+		_, err := tx.NewDelete().Model((*types.FlaggedGroup)(nil)).Where("id = ?", group.ID).Exec(ctx)
 		if err != nil {
 			return fmt.Errorf("failed to delete group from flagged_groups: %w", err)
 		}

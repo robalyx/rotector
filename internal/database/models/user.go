@@ -29,79 +29,76 @@ func NewUser(db *bun.DB, logger *zap.Logger) *UserModel {
 	}
 }
 
+// upsertUsers handles the common logic for upserting users with status-specific fields.
+func (r *UserModel) upsertUsers(ctx context.Context, tx bun.Tx, users any, status enum.UserType) error {
+	query := tx.NewInsert().
+		Model(users).
+		On("CONFLICT (id) DO UPDATE").
+		Set("uuid = EXCLUDED.uuid").
+		Set("name = EXCLUDED.name").
+		Set("display_name = EXCLUDED.display_name").
+		Set("description = EXCLUDED.description").
+		Set("created_at = EXCLUDED.created_at").
+		Set("reasons = EXCLUDED.reasons").
+		Set("groups = EXCLUDED.groups").
+		Set("outfits = EXCLUDED.outfits").
+		Set("friends = EXCLUDED.friends").
+		Set("games = EXCLUDED.games").
+		Set("inventory = EXCLUDED.inventory").
+		Set("favorites = EXCLUDED.favorites").
+		Set("badges = EXCLUDED.badges").
+		Set("confidence = EXCLUDED.confidence").
+		Set("has_socials = EXCLUDED.has_socials").
+		Set("last_scanned = EXCLUDED.last_scanned").
+		Set("last_updated = EXCLUDED.last_updated").
+		Set("last_viewed = EXCLUDED.last_viewed").
+		Set("last_ban_check = EXCLUDED.last_ban_check").
+		Set("is_banned = EXCLUDED.is_banned").
+		Set("is_deleted = EXCLUDED.is_deleted").
+		Set("thumbnail_url = EXCLUDED.thumbnail_url").
+		Set("last_thumbnail_update = EXCLUDED.last_thumbnail_update")
+
+	// Add status-specific fields
+	switch status {
+	case enum.UserTypeConfirmed:
+		query = query.Set("reviewer_id = EXCLUDED.reviewer_id").
+			Set("verified_at = EXCLUDED.verified_at")
+	case enum.UserTypeCleared:
+		query = query.Set("reviewer_id = EXCLUDED.reviewer_id").
+			Set("cleared_at = EXCLUDED.cleared_at")
+	case enum.UserTypeFlagged:
+		// No extra fields for flagged users
+	}
+
+	_, err := query.Exec(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to upsert %s users: %w", status, err)
+	}
+	return nil
+}
+
 // SaveUsersByStatus saves users that have already been grouped by status.
 //
 // Deprecated: Use Service().User().SaveUsers() instead.
 func (r *UserModel) SaveUsersByStatus(
-	ctx context.Context,
-	flaggedUsers []*types.FlaggedUser,
-	confirmedUsers []*types.ConfirmedUser,
-	clearedUsers []*types.ClearedUser,
+	ctx context.Context, flaggedUsers []*types.FlaggedUser, confirmedUsers []*types.ConfirmedUser, clearedUsers []*types.ClearedUser,
 ) error {
 	return r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
-		// Helper function to update a table
-		updateTable := func(users any, status enum.UserType) error {
-			query := tx.NewInsert().
-				Model(users).
-				On("CONFLICT (id) DO UPDATE").
-				Set("uuid = EXCLUDED.uuid").
-				Set("name = EXCLUDED.name").
-				Set("display_name = EXCLUDED.display_name").
-				Set("description = EXCLUDED.description").
-				Set("created_at = EXCLUDED.created_at").
-				Set("reasons = EXCLUDED.reasons").
-				Set("groups = EXCLUDED.groups").
-				Set("outfits = EXCLUDED.outfits").
-				Set("friends = EXCLUDED.friends").
-				Set("games = EXCLUDED.games").
-				Set("inventory = EXCLUDED.inventory").
-				Set("favorites = EXCLUDED.favorites").
-				Set("badges = EXCLUDED.badges").
-				Set("confidence = EXCLUDED.confidence").
-				Set("has_socials = EXCLUDED.has_socials").
-				Set("last_scanned = EXCLUDED.last_scanned").
-				Set("last_updated = EXCLUDED.last_updated").
-				Set("last_viewed = EXCLUDED.last_viewed").
-				Set("last_ban_check = EXCLUDED.last_ban_check").
-				Set("is_banned = EXCLUDED.is_banned").
-				Set("is_deleted = EXCLUDED.is_deleted").
-				Set("thumbnail_url = EXCLUDED.thumbnail_url").
-				Set("last_thumbnail_update = EXCLUDED.last_thumbnail_update")
-
-			// Add extra columns for confirmed and cleared users
-			switch status {
-			case enum.UserTypeConfirmed:
-				query = query.Set("reviewer_id = EXCLUDED.reviewer_id").
-					Set("verified_at = EXCLUDED.verified_at")
-			case enum.UserTypeCleared:
-				query = query.Set("reviewer_id = EXCLUDED.reviewer_id").
-					Set("cleared_at = EXCLUDED.cleared_at")
-			case enum.UserTypeFlagged:
-				// No extra fields for flagged users
-			}
-
-			_, err := query.Exec(ctx)
-			if err != nil {
-				return fmt.Errorf("failed to update %s users: %w", status, err)
-			}
-			return nil
-		}
-
 		// Update each table with its corresponding slice
 		if len(flaggedUsers) > 0 {
-			if err := updateTable(&flaggedUsers, enum.UserTypeFlagged); err != nil {
+			if err := r.upsertUsers(ctx, tx, &flaggedUsers, enum.UserTypeFlagged); err != nil {
 				return err
 			}
 		}
 
 		if len(confirmedUsers) > 0 {
-			if err := updateTable(&confirmedUsers, enum.UserTypeConfirmed); err != nil {
+			if err := r.upsertUsers(ctx, tx, &confirmedUsers, enum.UserTypeConfirmed); err != nil {
 				return err
 			}
 		}
 
 		if len(clearedUsers) > 0 {
-			if err := updateTable(&clearedUsers, enum.UserTypeCleared); err != nil {
+			if err := r.upsertUsers(ctx, tx, &clearedUsers, enum.UserTypeCleared); err != nil {
 				return err
 			}
 		}
@@ -115,30 +112,18 @@ func (r *UserModel) SaveUsersByStatus(
 // Deprecated: Use Service().User().ConfirmUser() instead.
 func (r *UserModel) ConfirmUser(ctx context.Context, user *types.ReviewUser) error {
 	return r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+		// Try to move user to confirmed_users table
 		confirmedUser := &types.ConfirmedUser{
 			User:       user.User,
 			VerifiedAt: time.Now(),
 			ReviewerID: user.ReviewerID,
 		}
-
-		// Try to move user to confirmed_users table
-		result, err := tx.NewInsert().Model(confirmedUser).
-			On("CONFLICT (id) DO NOTHING").
-			Exec(ctx)
-		if err != nil {
-			return fmt.Errorf("failed to insert user in confirmed_users: %w (userID=%d)", err, user.ID)
-		}
-
-		affected, err := result.RowsAffected()
-		if err != nil {
-			return fmt.Errorf("failed to get rows affected: %w", err)
-		}
-		if affected == 0 {
-			return nil // Skip if there was a conflict
+		if err := r.upsertUsers(ctx, tx, &[]*types.ConfirmedUser{confirmedUser}, enum.UserTypeConfirmed); err != nil {
+			return err
 		}
 
 		// Delete from other tables
-		_, err = tx.NewDelete().Model((*types.FlaggedUser)(nil)).Where("id = ?", user.ID).Exec(ctx)
+		_, err := tx.NewDelete().Model((*types.FlaggedUser)(nil)).Where("id = ?", user.ID).Exec(ctx)
 		if err != nil {
 			return fmt.Errorf("failed to delete user from flagged_users: %w (userID=%d)", err, user.ID)
 		}
@@ -157,30 +142,18 @@ func (r *UserModel) ConfirmUser(ctx context.Context, user *types.ReviewUser) err
 // Deprecated: Use Service().User().ClearUser() instead.
 func (r *UserModel) ClearUser(ctx context.Context, user *types.ReviewUser) error {
 	return r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+		// Try to move user to cleared_users table
 		clearedUser := &types.ClearedUser{
 			User:       user.User,
 			ClearedAt:  time.Now(),
 			ReviewerID: user.ReviewerID,
 		}
-
-		// Try to move user to cleared_users table
-		result, err := tx.NewInsert().Model(clearedUser).
-			On("CONFLICT (id) DO NOTHING").
-			Exec(ctx)
-		if err != nil {
-			return fmt.Errorf("failed to insert user in cleared_users: %w", err)
-		}
-
-		affected, err := result.RowsAffected()
-		if err != nil {
-			return fmt.Errorf("failed to get rows affected: %w", err)
-		}
-		if affected == 0 {
-			return nil // Skip if there was a conflict
+		if err := r.upsertUsers(ctx, tx, &[]*types.ClearedUser{clearedUser}, enum.UserTypeCleared); err != nil {
+			return err
 		}
 
 		// Delete from other tables
-		_, err = tx.NewDelete().Model((*types.FlaggedUser)(nil)).Where("id = ?", user.ID).Exec(ctx)
+		_, err := tx.NewDelete().Model((*types.FlaggedUser)(nil)).Where("id = ?", user.ID).Exec(ctx)
 		if err != nil {
 			return fmt.Errorf("failed to delete user from flagged_users: %w", err)
 		}
