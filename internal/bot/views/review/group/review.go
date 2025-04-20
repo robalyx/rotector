@@ -326,7 +326,7 @@ func (b *ReviewBuilder) getReason() string {
 			section := fmt.Sprintf("%s **%s**\n%s",
 				getReasonEmoji(reasonType),
 				reasonType.String(),
-				utils.TruncateString(reason.Message, 128))
+				utils.TruncateString(reason.Message, 256))
 			formattedReasons = append(formattedReasons, section)
 		}
 	}

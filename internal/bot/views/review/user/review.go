@@ -389,7 +389,7 @@ func (b *ReviewBuilder) getReason() string {
 			section := fmt.Sprintf("%s **%s**\n%s",
 				getReasonEmoji(reasonType),
 				reasonType.String(),
-				utils.TruncateString(reason.Message, 128))
+				utils.TruncateString(reason.Message, 256))
 			formattedReasons = append(formattedReasons, section)
 		}
 	}
@@ -556,7 +556,7 @@ func (b *ReviewBuilder) getGames() string {
 			games = append(games, fmt.Sprintf("%s (%s visits)", name, visits))
 		} else {
 			games = append(games, fmt.Sprintf("[%s](https://www.roblox.com/games/%d) (%s visits)",
-				name, game.ID, visits))
+				name, game.RootPlace.ID, visits))
 		}
 	}
 
