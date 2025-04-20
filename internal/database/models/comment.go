@@ -101,7 +101,6 @@ func (r *CommentModel) UpsertGroupComment(ctx context.Context, comment *types.Gr
 		On("CONFLICT (target_id, commenter_id) DO UPDATE").
 		Set("message = EXCLUDED.message").
 		Set("updated_at = EXCLUDED.updated_at").
-		Set("is_deleted = false").
 		Exec(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to add/update comment: %w", err)
