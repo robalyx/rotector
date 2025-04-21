@@ -125,3 +125,27 @@ func CensorStringsInText(text string, streamerMode bool, targets ...string) stri
 
 	return result
 }
+
+// CalculateDynamicTruncationLength calculates the maximum length for each reason based on
+// the total number of reasons, accounting for Discord's field character limit and formatting overhead.
+// The length is bounded by a minimum of 64 characters to ensure readability.
+func CalculateDynamicTruncationLength(numReasons int) int {
+	const (
+		discordFieldLimit  = 1024 // Discord's character limit per field
+		formattingOverhead = 20   // Characters for emoji, header, newlines per reason
+		minLength          = 64   // Minimum length to ensure readability
+	)
+
+	if numReasons <= 0 {
+		return discordFieldLimit - formattingOverhead // Return maximum possible length if no reasons
+	}
+
+	// Calculate base length: (total space - total overhead) / number of reasons
+	baseLength := (discordFieldLimit - (numReasons * formattingOverhead)) / numReasons
+
+	// Ensure minimum length
+	if baseLength < minLength {
+		return minLength
+	}
+	return baseLength
+}

@@ -383,13 +383,16 @@ func (b *ReviewBuilder) getReason() string {
 		enum.UserReasonTypeChat,
 	}
 
+	// Calculate dynamic truncation length based on number of reasons
+	maxLength := utils.CalculateDynamicTruncationLength(len(b.user.Reasons))
+
 	for _, reasonType := range reasonTypes {
 		if reason, ok := b.user.Reasons[reasonType]; ok {
 			// Join all reasons of this type
 			section := fmt.Sprintf("%s **%s**\n%s",
 				getReasonEmoji(reasonType),
 				reasonType.String(),
-				utils.TruncateString(reason.Message, 256))
+				utils.TruncateString(reason.Message, maxLength))
 			formattedReasons = append(formattedReasons, section)
 		}
 	}

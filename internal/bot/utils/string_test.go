@@ -192,3 +192,61 @@ func TestNormalizeString(t *testing.T) {
 		})
 	}
 }
+
+func TestCalculateDynamicTruncationLength(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name       string
+		numReasons int
+		want       int
+	}{
+		{
+			name:       "no reasons",
+			numReasons: 0,
+			want:       1004, // discordFieldLimit(1024) - formattingOverhead(20)
+		},
+		{
+			name:       "negative reasons",
+			numReasons: -1,
+			want:       1004, // discordFieldLimit(1024) - formattingOverhead(20)
+		},
+		{
+			name:       "single reason",
+			numReasons: 1,
+			want:       1004, // (1024 - 20) / 1 = 1004
+		},
+		{
+			name:       "two reasons",
+			numReasons: 2,
+			want:       492, // (1024 - 40) / 2 = 492
+		},
+		{
+			name:       "five reasons",
+			numReasons: 5,
+			want:       184, // (1024 - 100) / 5 = 184.8 ≈ 184
+		},
+		{
+			name:       "ten reasons",
+			numReasons: 10,
+			want:       82, // (1024 - 200) / 10 = 82.4 ≈ 82
+		},
+		{
+			name:       "twenty reasons",
+			numReasons: 20,
+			want:       64, // (1024 - 400) / 20 = 31.2, floored to min 64
+		},
+		{
+			name:       "fifty reasons",
+			numReasons: 50,
+			want:       64, // Would be too small, floored to min 64
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			got := utils.CalculateDynamicTruncationLength(tt.numReasons)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
