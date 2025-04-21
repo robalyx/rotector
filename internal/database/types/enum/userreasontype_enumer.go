@@ -7,11 +7,11 @@ import (
 	"strings"
 )
 
-const _UserReasonTypeName = "DescriptionFriendOutfitGroupCondoChat"
+const _UserReasonTypeName = "DescriptionFriendOutfitGroupCondoChatFavoritesBadges"
 
-var _UserReasonTypeIndex = [...]uint8{0, 11, 17, 23, 28, 33, 37}
+var _UserReasonTypeIndex = [...]uint8{0, 11, 17, 23, 28, 33, 37, 46, 52}
 
-const _UserReasonTypeLowerName = "descriptionfriendoutfitgroupcondochat"
+const _UserReasonTypeLowerName = "descriptionfriendoutfitgroupcondochatfavoritesbadges"
 
 func (i UserReasonType) String() string {
 	if i < 0 || i >= UserReasonType(len(_UserReasonTypeIndex)-1) {
@@ -30,9 +30,11 @@ func _UserReasonTypeNoOp() {
 	_ = x[UserReasonTypeGroup-(3)]
 	_ = x[UserReasonTypeCondo-(4)]
 	_ = x[UserReasonTypeChat-(5)]
+	_ = x[UserReasonTypeFavorites-(6)]
+	_ = x[UserReasonTypeBadges-(7)]
 }
 
-var _UserReasonTypeValues = []UserReasonType{UserReasonTypeDescription, UserReasonTypeFriend, UserReasonTypeOutfit, UserReasonTypeGroup, UserReasonTypeCondo, UserReasonTypeChat}
+var _UserReasonTypeValues = []UserReasonType{UserReasonTypeDescription, UserReasonTypeFriend, UserReasonTypeOutfit, UserReasonTypeGroup, UserReasonTypeCondo, UserReasonTypeChat, UserReasonTypeFavorites, UserReasonTypeBadges}
 
 var _UserReasonTypeNameToValueMap = map[string]UserReasonType{
 	_UserReasonTypeName[0:11]:       UserReasonTypeDescription,
@@ -47,6 +49,10 @@ var _UserReasonTypeNameToValueMap = map[string]UserReasonType{
 	_UserReasonTypeLowerName[28:33]: UserReasonTypeCondo,
 	_UserReasonTypeName[33:37]:      UserReasonTypeChat,
 	_UserReasonTypeLowerName[33:37]: UserReasonTypeChat,
+	_UserReasonTypeName[37:46]:      UserReasonTypeFavorites,
+	_UserReasonTypeLowerName[37:46]: UserReasonTypeFavorites,
+	_UserReasonTypeName[46:52]:      UserReasonTypeBadges,
+	_UserReasonTypeLowerName[46:52]: UserReasonTypeBadges,
 }
 
 var _UserReasonTypeNames = []string{
@@ -56,6 +62,8 @@ var _UserReasonTypeNames = []string{
 	_UserReasonTypeName[23:28],
 	_UserReasonTypeName[28:33],
 	_UserReasonTypeName[33:37],
+	_UserReasonTypeName[37:46],
+	_UserReasonTypeName[46:52],
 }
 
 // UserReasonTypeString retrieves an enum value from the enum constants string name.

@@ -16,8 +16,12 @@ const (
 	UserReasonTypeGroup
 	// UserReasonTypeCondo indicates condo game analysis.
 	UserReasonTypeCondo
-	// UserReasonTypeChat indicates analysis of user's chat messages.
+	// UserReasonTypeChat indicates analysis of a user's chat messages.
 	UserReasonTypeChat
+	// UserReasonTypeFavorites indicates analysis of a user's favorites.
+	UserReasonTypeFavorites
+	// UserReasonTypeBadges indicates analysis of a user's badges.
+	UserReasonTypeBadges
 )
 
 // GroupReasonType represents the source of a flagging reason.

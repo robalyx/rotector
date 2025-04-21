@@ -346,6 +346,8 @@ func (b *ReviewBuilder) buildReasonOptions() []discord.StringSelectMenuOption {
 		enum.UserReasonTypeGroup,
 		enum.UserReasonTypeCondo,
 		enum.UserReasonTypeChat,
+		enum.UserReasonTypeFavorites,
+		enum.UserReasonTypeBadges,
 	}
 	return shared.BuildReasonOptions(b.user.Reasons, reasonTypes, getReasonEmoji, b.ReasonsChanged)
 }
@@ -381,6 +383,8 @@ func (b *ReviewBuilder) getReason() string {
 		enum.UserReasonTypeGroup,
 		enum.UserReasonTypeCondo,
 		enum.UserReasonTypeChat,
+		enum.UserReasonTypeFavorites,
+		enum.UserReasonTypeBadges,
 	}
 
 	// Calculate dynamic truncation length based on number of reasons
@@ -689,6 +693,10 @@ func getReasonEmoji(reasonType enum.UserReasonType) string {
 		return "🏠"
 	case enum.UserReasonTypeChat:
 		return "💬"
+	case enum.UserReasonTypeFavorites:
+		return "🌟"
+	case enum.UserReasonTypeBadges:
+		return "🏆"
 	default:
 		return "❓"
 	}
