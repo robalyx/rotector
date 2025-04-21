@@ -33,6 +33,8 @@ func (m *BotMenu) handleBotSettingSelection(ctx *interaction.Context, s *session
 	// Show the change menu for the selected setting
 	session.SettingType.Set(s, constants.BotSettingPrefix)
 	session.SettingCustomID.Set(s, option)
+	session.PaginationPage.Set(s, 0)
+	session.PaginationOffset.Set(s, 0)
 	ctx.Show(constants.SettingUpdatePageName, "")
 }
 

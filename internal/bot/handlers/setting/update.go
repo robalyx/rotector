@@ -47,8 +47,6 @@ func (m *UpdateMenu) Show(_ *interaction.Context, s *session.Session) {
 	// Store setting information in session
 	session.SettingName.Set(s, setting.Name)
 	session.SettingValue.Set(s, setting)
-	session.PaginationPage.Set(s, 0)
-	session.PaginationOffset.Set(s, 0)
 	_ = m.calculatePagination(s)
 
 	// Get current value based on setting type
@@ -168,28 +166,24 @@ func (m *UpdateMenu) handlePageChange(
 		return
 	}
 
-	// Get current state
-	totalPages := session.PaginationTotalPages.Get(s)
-
-	// Handle navigation action
-	newPage := action.ParsePageAction(s, totalPages-1)
-
-	// Update session state
-	session.PaginationPage.Set(s, newPage)
-
 	// Calculate offset for the current page
-	var itemsPerPage int
 	switch setting.Type {
 	case enum.SettingTypeID:
-		itemsPerPage = constants.SettingsIDsPerPage
+		// Get current state
+		totalPages := session.PaginationTotalPages.Get(s)
+
+		// Handle navigation action
+		newPage := action.ParsePageAction(s, totalPages)
+		offset := newPage * constants.SettingsIDsPerPage
+
+		// Update session state
+		session.PaginationOffset.Set(s, offset)
+		session.PaginationPage.Set(s, newPage)
+		ctx.Reload("")
+
 	case enum.SettingTypeBool, enum.SettingTypeEnum, enum.SettingTypeNumber, enum.SettingTypeText:
 		return
 	}
-	offset := newPage * itemsPerPage
-	session.PaginationOffset.Set(s, offset)
-
-	// Refresh the display
-	ctx.Reload("")
 }
 
 // handleSettingModal processes modal submissions.
@@ -246,31 +240,36 @@ func (m *UpdateMenu) validateSettingValue(s *session.Session, setting *session.S
 
 // calculatePagination calculates and stores pagination state in the session.
 func (m *UpdateMenu) calculatePagination(s *session.Session) bool {
-	var totalItems int
-	var itemsPerPage int
-
 	setting := session.SettingValue.Get(s)
 
 	// Get total items based on setting type
 	switch setting.Type {
 	case enum.SettingTypeID:
+		var totalItems int
+
+		// Get the correct list of IDs based on the setting key
 		switch setting.Key {
 		case constants.ReviewerIDsOption:
 			totalItems = len(session.BotReviewerIDs.Get(s))
 		case constants.AdminIDsOption:
 			totalItems = len(session.BotAdminIDs.Get(s))
+		default:
+			m.layout.logger.Error("Invalid setting type for pagination",
+				zap.String("type", setting.Type.String()))
+			return false
 		}
-		itemsPerPage = constants.SettingsIDsPerPage
+
+		// Calculate total pages for ID type settings
+		totalPages := max((totalItems+constants.SettingsIDsPerPage-1)/constants.SettingsIDsPerPage, 1)
+
+		// Store pagination state in session
+		session.PaginationTotalItems.Set(s, totalItems)
+		session.PaginationTotalPages.Set(s, totalPages)
+		return true
 
 	case enum.SettingTypeBool, enum.SettingTypeEnum, enum.SettingTypeNumber, enum.SettingTypeText:
 		return false
 	}
 
-	// Calculate total pages
-	totalPages := max((totalItems+itemsPerPage-1)/itemsPerPage, 1)
-
-	// Store pagination state in session
-	session.PaginationTotalItems.Set(s, totalItems)
-	session.PaginationTotalPages.Set(s, totalPages)
-	return true
+	return false
 }

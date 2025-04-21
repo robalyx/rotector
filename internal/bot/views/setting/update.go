@@ -18,6 +18,7 @@ type UpdateBuilder struct {
 	currentValue string
 	customID     string
 	page         int
+	offset       int
 	totalItems   int
 	totalPages   int
 }
@@ -32,6 +33,7 @@ func NewUpdateBuilder(s *session.Session) *UpdateBuilder {
 		currentValue: session.SettingDisplay.Get(s),
 		customID:     session.SettingCustomID.Get(s),
 		page:         session.PaginationPage.Get(s),
+		offset:       session.PaginationOffset.Get(s),
 		totalItems:   session.PaginationTotalItems.Get(s),
 		totalPages:   session.PaginationTotalPages.Get(s),
 	}
@@ -80,7 +82,7 @@ func (b *UpdateBuilder) addIDFields(embed *discord.EmbedBuilder) {
 	}
 
 	// Use stored pagination state
-	start := b.page * constants.SettingsIDsPerPage
+	start := b.offset
 	end := min(start+constants.SettingsIDsPerPage, len(ids))
 
 	// Add fields for this page
@@ -101,10 +103,8 @@ func (b *UpdateBuilder) buildComponents() []discord.ContainerComponent {
 	switch b.setting.Type {
 	case enum.SettingTypeBool:
 		components = append(components, b.buildBooleanComponents())
-
 	case enum.SettingTypeEnum:
 		components = append(components, b.buildEnumComponents())
-
 	case enum.SettingTypeID, enum.SettingTypeNumber, enum.SettingTypeText:
 		components = append(components, b.buildModalComponents()...)
 	}

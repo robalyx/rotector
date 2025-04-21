@@ -35,6 +35,8 @@ func (m *UserMenu) handleUserSettingSelection(ctx *interaction.Context, s *sessi
 	// Show the change menu for the selected setting
 	session.SettingType.Set(s, constants.UserSettingPrefix)
 	session.SettingCustomID.Set(s, option)
+	session.PaginationPage.Set(s, 0)
+	session.PaginationOffset.Set(s, 0)
 	ctx.Show(constants.SettingUpdatePageName, "")
 }
 
