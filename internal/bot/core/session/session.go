@@ -23,11 +23,11 @@ import (
 const (
 	// SessionTimeout defines how long a session remains valid before expiring.
 	// After this duration, Redis will automatically delete the session data.
-	SessionTimeout = 5 * time.Minute
+	SessionTimeout = 10 * time.Minute
 
 	// ReviewerSessionTimeout defines how long a reviewer's session remains valid.
 	// Reviewers get a longer timeout due to their trusted status.
-	ReviewerSessionTimeout = 30 * time.Minute
+	ReviewerSessionTimeout = 2 * time.Hour
 )
 
 // Session maintains user state through a Redis-backed key-value store where values are
