@@ -92,8 +92,8 @@ func main() {
 
 		// Review break settings
 		{Name: "ReviewBreak.NextReviewTime", Type: "time.Time", Doc: "ReviewBreakNextReviewTime tracks when user can resume reviewing"},
-		{Name: "ReviewBreak.SessionReviews", Type: "int", Doc: "ReviewBreakSessionReviews tracks reviews in current session"},
-		{Name: "ReviewBreak.SessionStartTime", Type: "time.Time", Doc: "ReviewBreakSessionStartTime tracks when review session started"},
+		{Name: "ReviewBreak.ReviewCount", Type: "int", Doc: "ReviewBreakReviewCount tracks reviews in current window"},
+		{Name: "ReviewBreak.WindowStartTime", Type: "time.Time", Doc: "ReviewBreakWindowStartTime tracks start of current review window"},
 	}
 
 	botSettings := []SettingDef{

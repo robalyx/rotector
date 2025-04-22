@@ -49,9 +49,9 @@ func (r *SettingModel) GetUserSettings(ctx context.Context, userID snowflake.ID)
 			CaptchaReviewCount: 0,
 		},
 		ReviewBreak: types.ReviewBreak{
-			NextReviewTime:   time.Unix(0, 0),
-			SessionReviews:   0,
-			SessionStartTime: time.Unix(0, 0),
+			NextReviewTime:  time.Unix(0, 0),
+			ReviewCount:     0,
+			WindowStartTime: time.Unix(0, 0),
 		},
 		LeaderboardPeriod:   enum.LeaderboardPeriodAllTime,
 		ReviewerStatsPeriod: enum.ReviewerStatsPeriodDaily,
@@ -91,8 +91,8 @@ func (r *SettingModel) SaveUserSettings(ctx context.Context, settings *types.Use
 		Set("message_count = EXCLUDED.message_count").
 		Set("captcha_review_count = EXCLUDED.captcha_review_count").
 		Set("next_review_time = EXCLUDED.next_review_time").
-		Set("session_reviews = EXCLUDED.session_reviews").
-		Set("session_start_time = EXCLUDED.session_start_time").
+		Set("review_count = EXCLUDED.review_count").
+		Set("window_start_time = EXCLUDED.window_start_time").
 		Set("leaderboard_period = EXCLUDED.leaderboard_period").
 		Set("reviewer_stats_period = EXCLUDED.reviewer_stats_period").
 		Exec(ctx)

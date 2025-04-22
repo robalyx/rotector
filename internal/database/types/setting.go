@@ -18,11 +18,11 @@ type CaptchaUsage struct {
 	CaptchaReviewCount int `bun:",notnull"`
 }
 
-// ReviewBreak stores information about the session review.
+// ReviewBreak stores information about the user's review activity.
 type ReviewBreak struct {
-	NextReviewTime   time.Time `bun:",notnull"`
-	SessionReviews   int       `bun:",notnull"`
-	SessionStartTime time.Time `bun:",notnull"`
+	NextReviewTime  time.Time `bun:",notnull"`
+	ReviewCount     int       `bun:",notnull"`
+	WindowStartTime time.Time `bun:",notnull"`
 }
 
 // UserSetting stores user-specific preferences.

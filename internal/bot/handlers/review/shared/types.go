@@ -151,33 +151,37 @@ func (m *BaseReviewMenu) CheckBreakRequired(ctx *interaction.Context, s *session
 	nextReviewTime := session.UserReviewBreakNextReviewTime.Get(s)
 	if !nextReviewTime.IsZero() && time.Now().Before(nextReviewTime) {
 		// Show timeout menu if break time hasn't passed
+		ctx.UpdatePage(constants.DashboardPageName)
 		ctx.Show(constants.TimeoutPageName, "")
 		return true
 	}
 
 	// Check review count
-	sessionReviews := session.UserReviewBreakSessionReviews.Get(s)
-	sessionStartTime := session.UserReviewBreakSessionStartTime.Get(s)
+	windowStartTime := session.UserReviewBreakWindowStartTime.Get(s)
+	reviewCount := session.UserReviewBreakReviewCount.Get(s)
 
 	// Reset count if outside window
-	if time.Since(sessionStartTime) > constants.ReviewSessionWindow {
-		sessionReviews = 0
-		sessionStartTime = time.Now()
-		session.UserReviewBreakSessionStartTime.Set(s, sessionStartTime)
+	if time.Since(windowStartTime) > constants.ReviewSessionWindow {
+		reviewCount = 0
+		windowStartTime = time.Now()
+		session.UserReviewBreakWindowStartTime.Set(s, windowStartTime)
+		session.UserReviewBreakReviewCount.Set(s, reviewCount)
 	}
 
 	// Check if break needed
-	if sessionReviews >= constants.MaxReviewsBeforeBreak {
+	if reviewCount >= constants.MaxReviewsBeforeBreak {
 		nextTime := time.Now().Add(constants.MinBreakDuration)
-		session.UserReviewBreakSessionStartTime.Set(s, nextTime)
 		session.UserReviewBreakNextReviewTime.Set(s, nextTime)
-		session.UserReviewBreakSessionReviews.Set(s, 0) // Reset count
+		session.UserReviewBreakWindowStartTime.Set(s, nextTime)
+		session.UserReviewBreakReviewCount.Set(s, 0) // Reset count
+
+		ctx.UpdatePage(constants.DashboardPageName)
 		ctx.Show(constants.TimeoutPageName, "")
 		return true
 	}
 
 	// Increment review count
-	session.UserReviewBreakSessionReviews.Set(s, sessionReviews+1)
+	session.UserReviewBreakReviewCount.Set(s, reviewCount+1)
 
 	return false
 }

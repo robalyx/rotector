@@ -121,19 +121,19 @@ var (
 		s.userSettingsUpdate = true
 	})
 
-	// ReviewBreakSessionReviews tracks reviews in current session
-	UserReviewBreakSessionReviews = NewUserSettingKey("ReviewBreak.SessionReviews", func(s *Session) int {
-		return s.userSettings.ReviewBreak.SessionReviews
+	// ReviewBreakReviewCount tracks reviews in current window
+	UserReviewBreakReviewCount = NewUserSettingKey("ReviewBreak.ReviewCount", func(s *Session) int {
+		return s.userSettings.ReviewBreak.ReviewCount
 	}, func(s *Session, value int) {
-		s.userSettings.ReviewBreak.SessionReviews = value
+		s.userSettings.ReviewBreak.ReviewCount = value
 		s.userSettingsUpdate = true
 	})
 
-	// ReviewBreakSessionStartTime tracks when review session started
-	UserReviewBreakSessionStartTime = NewUserSettingKey("ReviewBreak.SessionStartTime", func(s *Session) time.Time {
-		return s.userSettings.ReviewBreak.SessionStartTime
+	// ReviewBreakWindowStartTime tracks start of current review window
+	UserReviewBreakWindowStartTime = NewUserSettingKey("ReviewBreak.WindowStartTime", func(s *Session) time.Time {
+		return s.userSettings.ReviewBreak.WindowStartTime
 	}, func(s *Session, value time.Time) {
-		s.userSettings.ReviewBreak.SessionStartTime = value
+		s.userSettings.ReviewBreak.WindowStartTime = value
 		s.userSettingsUpdate = true
 	})
 

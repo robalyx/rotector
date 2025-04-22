@@ -30,11 +30,11 @@ func (b *Builder) Build() *discord.MessageUpdateBuilder {
 			"Great work on your reviews! To ensure that you're taking care of yourself, we've scheduled a short break.\n\n"+
 				"You can resume reviewing %s\n\n"+
 				"While you wait, here are some relaxing activities you can try:\n"+
-				"• Take a short walk outside\n"+
-				"• Practice some light stretching\n"+
-				"• Grab a glass of water\n"+
-				"• Rest your eyes from the screen\n"+
-				"• Take some deep breaths\n\n"+
+				"- Take a short walk outside\n"+
+				"- Practice some light stretching\n"+
+				"- Grab a glass of water\n"+
+				"- Rest your eyes from the screen\n"+
+				"- Take some deep breaths\n\n"+
 				"Thank you for your dedication to keeping the community safe! 💪",
 			timestampStr,
 		)).
