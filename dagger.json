@@ -1,14 +1,14 @@
 {
   "name": "rotector",
-  "engineVersion": "v0.15.4",
+  "engineVersion": "v0.18.2",
   "sdk": {
     "source": "go"
   },
   "dependencies": [
     {
       "name": "containerd",
-      "source": "github.com/levlaz/daggerverse/containerd@containerd/v0.1.2",
-      "pin": "abcd1a95cef14ad336ca21a9ab836869582617bb"
+      "source": "github.com/levlaz/daggerverse/containerd@containerd/v0.2.0",
+      "pin": "c9905b9550021591e15b5346574dd0114e412194"
     }
   ],
   "source": "dagger"

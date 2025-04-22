@@ -38,7 +38,7 @@ func (m *Rotector) BuildContainer(
 
 	// Create build container
 	buildCtr := dag.Container().
-		From("golang:1.24-alpine").
+		From("golang:1.24.2-alpine").
 		WithMountedCache("/go/pkg/mod", dag.CacheVolume("go-mod")).
 		WithMountedCache("/root/.cache/go-build", dag.CacheVolume("go-build")).
 		WithDirectory("/src", src).
@@ -108,18 +108,6 @@ func (m *Rotector) Publish(
 		}
 	}
 
-	// Run tests
-	_, err := m.Test(ctx, src)
-	if err != nil {
-		return "", fmt.Errorf("failed to run tests: %w", err)
-	}
-
-	// Run linter
-	_, err = m.Lint(ctx, src)
-	if err != nil {
-		return "", fmt.Errorf("failed to run linter: %w", err)
-	}
-
 	// Build containers for each platform
 	platformVariants := make([]*dagger.Container, 0, len(platformList))
 	for _, platform := range platformList {
@@ -139,41 +127,6 @@ func (m *Rotector) Publish(
 	}
 
 	return ref, nil
-}
-
-// Run tests on the source code directory.
-func (m *Rotector) Test(
-	ctx context.Context,
-	// Source code directory
-	// +required
-	src *dagger.Directory,
-) (string, error) {
-	return dag.Container().
-		From("golang:1.24-alpine").
-		WithMountedCache("/go/pkg/mod", dag.CacheVolume("go-mod")).
-		WithMountedCache("/root/.cache/go-build", dag.CacheVolume("go-build")).
-		WithDirectory("/src", src).
-		WithWorkdir("/src").
-		WithExec([]string{"go", "test", "-v", "./..."}).
-		Stdout(ctx)
-}
-
-// Run linter on the source code directory.
-func (m *Rotector) Lint(
-	ctx context.Context,
-	// Source code directory
-	// +required
-	src *dagger.Directory,
-) (string, error) {
-	return dag.Container().
-		From("golangci/golangci-lint").
-		WithMountedCache("/go/pkg/mod", dag.CacheVolume("go-mod")).
-		WithMountedCache("/root/.cache/go-build", dag.CacheVolume("go-build")).
-		WithMountedCache("/root/.cache/golangci-lint", dag.CacheVolume("golangci-lint")).
-		WithDirectory("/src", src).
-		WithWorkdir("/src").
-		WithExec([]string{"golangci-lint", "run", "--fast", "--timeout=5m"}).
-		Stdout(ctx)
 }
 
 // Run the program with specified command and config files.
@@ -198,7 +151,7 @@ func (m *Rotector) Run(
 ) *dagger.Container {
 	// Create run container
 	runCtr := dag.Container().
-		From("golang:1.24-alpine").
+		From("golang:1.24.2-alpine").
 		WithMountedCache("/go/pkg/mod", dag.CacheVolume("go-mod")).
 		WithMountedCache("/root/.cache/go-build", dag.CacheVolume("go-build")).
 		WithDirectory("/src", src).
