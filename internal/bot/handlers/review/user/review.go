@@ -949,6 +949,7 @@ func (m *ReviewMenu) buildReasonModal(reasonType enum.UserReasonType, existingRe
 		confidenceInput = confidenceInput.WithRequired(true).
 			WithMinLength(1).
 			WithMaxLength(4).
+			WithValue("1.00").
 			WithPlaceholder("Enter confidence value (0.01-1.00)")
 	}
 	modal.AddActionRow(confidenceInput)
@@ -966,7 +967,7 @@ func (m *ReviewMenu) buildReasonModal(reasonType enum.UserReasonType, existingRe
 
 		evidenceInput = evidenceInput.WithRequired(false).
 			WithValue(strings.Join(escapedEvidence, "\n")).
-			WithPlaceholder("Enter new evidence items, one per line.")
+			WithPlaceholder("Enter new evidence items, one per line")
 	} else {
 		evidenceInput = evidenceInput.WithRequired(false).
 			WithMaxLength(1000).

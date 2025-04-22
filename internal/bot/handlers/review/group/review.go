@@ -873,6 +873,7 @@ func (m *ReviewMenu) buildReasonModal(reasonType enum.GroupReasonType, existingR
 		confidenceInput = confidenceInput.WithRequired(true).
 			WithMinLength(1).
 			WithMaxLength(4).
+			WithValue("1.00").
 			WithPlaceholder("Enter confidence value (0.01-1.00)")
 	}
 	modal.AddActionRow(confidenceInput)
