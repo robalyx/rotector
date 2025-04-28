@@ -123,7 +123,7 @@ func getExportConfig(c *cli.Command) (*export.Config, error) {
 		Salt:          c.String("salt"),
 		Description:   c.String("description"),
 		HashType:      c.String("hash-type"),
-		Concurrency:   c.Int("concurrency"),
+		Concurrency:   c.Int64("concurrency"),
 		Iterations:    uint32(c.Uint("iterations")), //nolint:gosec // -
 		Memory:        uint32(c.Uint("memory")),     //nolint:gosec // -
 	}

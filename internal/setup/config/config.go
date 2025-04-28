@@ -165,6 +165,8 @@ type Redis struct {
 type OpenAI struct {
 	// Default model to use
 	DefaultModel string `koanf:"default_model"`
+	// Model to use for stats analysis
+	StatsModel string `koanf:"stats_model"`
 	// Model to use for outfit analysis
 	OutfitModel string `koanf:"outfit_model"`
 	// List of providers in order of preference

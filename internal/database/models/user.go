@@ -29,54 +29,6 @@ func NewUser(db *bun.DB, logger *zap.Logger) *UserModel {
 	}
 }
 
-// upsertUsers handles the common logic for upserting users with status-specific fields.
-func (r *UserModel) upsertUsers(ctx context.Context, tx bun.Tx, users any, status enum.UserType) error {
-	query := tx.NewInsert().
-		Model(users).
-		On("CONFLICT (id) DO UPDATE").
-		Set("uuid = EXCLUDED.uuid").
-		Set("name = EXCLUDED.name").
-		Set("display_name = EXCLUDED.display_name").
-		Set("description = EXCLUDED.description").
-		Set("created_at = EXCLUDED.created_at").
-		Set("reasons = EXCLUDED.reasons").
-		Set("groups = EXCLUDED.groups").
-		Set("outfits = EXCLUDED.outfits").
-		Set("friends = EXCLUDED.friends").
-		Set("games = EXCLUDED.games").
-		Set("inventory = EXCLUDED.inventory").
-		Set("favorites = EXCLUDED.favorites").
-		Set("badges = EXCLUDED.badges").
-		Set("confidence = EXCLUDED.confidence").
-		Set("has_socials = EXCLUDED.has_socials").
-		Set("last_scanned = EXCLUDED.last_scanned").
-		Set("last_updated = EXCLUDED.last_updated").
-		Set("last_viewed = EXCLUDED.last_viewed").
-		Set("last_ban_check = EXCLUDED.last_ban_check").
-		Set("is_banned = EXCLUDED.is_banned").
-		Set("is_deleted = EXCLUDED.is_deleted").
-		Set("thumbnail_url = EXCLUDED.thumbnail_url").
-		Set("last_thumbnail_update = EXCLUDED.last_thumbnail_update")
-
-	// Add status-specific fields
-	switch status {
-	case enum.UserTypeConfirmed:
-		query = query.Set("reviewer_id = EXCLUDED.reviewer_id").
-			Set("verified_at = EXCLUDED.verified_at")
-	case enum.UserTypeCleared:
-		query = query.Set("reviewer_id = EXCLUDED.reviewer_id").
-			Set("cleared_at = EXCLUDED.cleared_at")
-	case enum.UserTypeFlagged:
-		// No extra fields for flagged users
-	}
-
-	_, err := query.Exec(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to upsert %s users: %w", status, err)
-	}
-	return nil
-}
-
 // SaveUsersByStatus saves users that have already been grouped by status.
 //
 // Deprecated: Use Service().User().SaveUsers() instead.
@@ -865,4 +817,52 @@ func (r *UserModel) GetNextToReview(
 	}
 
 	return &result, nil
+}
+
+// upsertUsers handles the common logic for upserting users with status-specific fields.
+func (r *UserModel) upsertUsers(ctx context.Context, tx bun.Tx, users any, status enum.UserType) error {
+	query := tx.NewInsert().
+		Model(users).
+		On("CONFLICT (id) DO UPDATE").
+		Set("uuid = EXCLUDED.uuid").
+		Set("name = EXCLUDED.name").
+		Set("display_name = EXCLUDED.display_name").
+		Set("description = EXCLUDED.description").
+		Set("created_at = EXCLUDED.created_at").
+		Set("reasons = EXCLUDED.reasons").
+		Set("groups = EXCLUDED.groups").
+		Set("outfits = EXCLUDED.outfits").
+		Set("friends = EXCLUDED.friends").
+		Set("games = EXCLUDED.games").
+		Set("inventory = EXCLUDED.inventory").
+		Set("favorites = EXCLUDED.favorites").
+		Set("badges = EXCLUDED.badges").
+		Set("confidence = EXCLUDED.confidence").
+		Set("has_socials = EXCLUDED.has_socials").
+		Set("last_scanned = EXCLUDED.last_scanned").
+		Set("last_updated = EXCLUDED.last_updated").
+		Set("last_viewed = EXCLUDED.last_viewed").
+		Set("last_ban_check = EXCLUDED.last_ban_check").
+		Set("is_banned = EXCLUDED.is_banned").
+		Set("is_deleted = EXCLUDED.is_deleted").
+		Set("thumbnail_url = EXCLUDED.thumbnail_url").
+		Set("last_thumbnail_update = EXCLUDED.last_thumbnail_update")
+
+	// Add status-specific fields
+	switch status {
+	case enum.UserTypeConfirmed:
+		query = query.Set("reviewer_id = EXCLUDED.reviewer_id").
+			Set("verified_at = EXCLUDED.verified_at")
+	case enum.UserTypeCleared:
+		query = query.Set("reviewer_id = EXCLUDED.reviewer_id").
+			Set("cleared_at = EXCLUDED.cleared_at")
+	case enum.UserTypeFlagged:
+		// No extra fields for flagged users
+	}
+
+	_, err := query.Exec(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to upsert %s users: %w", status, err)
+	}
+	return nil
 }

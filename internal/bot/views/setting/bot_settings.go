@@ -2,6 +2,7 @@ package setting
 
 import (
 	"sort"
+	"strings"
 
 	"github.com/disgoorg/disgo/discord"
 	"github.com/robalyx/rotector/internal/bot/constants"
@@ -24,11 +25,6 @@ func NewBotSettingsBuilder(s *session.Session, r *session.SettingRegistry) *BotS
 
 // Build creates a Discord message with the current bot settings.
 func (b *BotSettingsBuilder) Build() *discord.MessageUpdateBuilder {
-	// Create embed with current settings
-	embed := discord.NewEmbedBuilder().
-		SetTitle("Bot Settings").
-		SetDescription("NOTE: It will take a minute for the settings to propagate.")
-
 	// Get all settings keys and sort them
 	keys := make([]string, 0, len(b.registry.BotSettings))
 	for key := range b.registry.BotSettings {
@@ -36,14 +32,18 @@ func (b *BotSettingsBuilder) Build() *discord.MessageUpdateBuilder {
 	}
 	sort.Strings(keys)
 
+	// Create main info container
+	var content strings.Builder
+	content.WriteString("## Bot Settings\n")
+	content.WriteString("NOTE: It will take a minute for the settings to propagate.\n")
+
 	// Add fields for each setting
 	for _, key := range keys {
 		setting := b.registry.BotSettings[key]
 		value := setting.ValueGetter(b.session)
-		embed.AddField(setting.Name, value, false)
+		content.WriteString("### " + setting.Name + "\n")
+		content.WriteString(value + "\n")
 	}
-
-	embed.SetColor(constants.DefaultEmbedColor)
 
 	// Add interactive components for changing settings
 	options := make([]discord.StringSelectMenuOption, 0, len(b.registry.BotSettings))
@@ -56,16 +56,20 @@ func (b *BotSettingsBuilder) Build() *discord.MessageUpdateBuilder {
 		options = append(options, option)
 	}
 
-	components := []discord.ContainerComponent{
+	// Create container with all components
+	container := discord.NewContainer(
+		discord.NewTextDisplay(content.String()),
+		discord.NewLargeSeparator(),
 		discord.NewActionRow(
 			discord.NewStringSelectMenu(constants.BotSettingSelectID, "Select a setting to change", options...),
 		),
-		discord.NewActionRow(
-			discord.NewSecondaryButton("Back", constants.BackButtonCustomID),
-		),
-	}
+	).WithAccentColor(constants.DefaultContainerColor)
 
 	return discord.NewMessageUpdateBuilder().
-		SetEmbeds(embed.Build()).
-		AddContainerComponents(components...)
+		AddComponents(
+			container,
+			discord.NewActionRow(
+				discord.NewSecondaryButton("Back", constants.BackButtonCustomID),
+			),
+		)
 }

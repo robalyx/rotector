@@ -48,21 +48,72 @@ func (b *ScanBuilder) Build() *discord.MessageUpdateBuilder {
 	// Calculate total pages
 	totalPages := max(1, (b.total+constants.GuildScanUsersPerPage-1)/constants.GuildScanUsersPerPage)
 
-	// Build the embeds
-	warningEmbed := b.buildWarningEmbed()
-	infoEmbed := b.buildInfoEmbed()
-	resultsEmbed := b.buildResultsEmbed(totalPages)
+	// Build the containers
+	containers := []discord.LayoutComponent{
+		b.buildWarningDisplay(),
+		b.buildInfoDisplay(),
+		b.buildResultsDisplay(totalPages),
+	}
 
-	// Build the components
-	components := b.buildComponents(totalPages)
+	// Build interactive components
+	components := b.buildInteractiveComponents(totalPages)
 
 	return discord.NewMessageUpdateBuilder().
-		SetEmbeds(warningEmbed.Build(), infoEmbed.Build(), resultsEmbed.Build()).
-		AddContainerComponents(components...)
+		AddComponents(containers...).
+		AddComponents(components...)
 }
 
-// buildInfoEmbed creates the embed showing active filters and requirements.
-func (b *ScanBuilder) buildInfoEmbed() *discord.EmbedBuilder {
+// buildWarningDisplay creates the warning container based on scan type.
+func (b *ScanBuilder) buildWarningDisplay() discord.LayoutComponent {
+	var content strings.Builder
+
+	if b.scanType == constants.GuildScanTypeCondo {
+		// Warning for condo server scan
+		content.WriteString("## ⚠️ Warning: Unreliable Method\n")
+		content.WriteString("This method may result in false positives as some legitimate users might ")
+		content.WriteString("be included like investigators, reporters, non-participating members, accounts ")
+		content.WriteString("that were compromised, and users who joined through misleading invites.\n\n")
+		content.WriteString("This is one of the known flaws of Ruben's Ro-Cleaner bot but we allow you to ")
+		content.WriteString("reduce the number of false positives by setting certain filters.\n\n")
+		content.WriteString("However, we **recommend using the 'Ban Users with Inappropriate Messages' option** ")
+		content.WriteString("for higher accuracy results.\n")
+
+		content.WriteString("### Flagging Conditions\n")
+		content.WriteString("- Sending messages in inappropriate servers (active participation)\n")
+		content.WriteString("- Being present in inappropriate servers for over 12 hours (beyond grace period)\n")
+
+		content.WriteString("### Important Notes\n")
+		content.WriteString("- Users are automatically removed if they've been clean for 7 days\n")
+		content.WriteString("- The grace period helps exclude users who join and leave quickly\n\n")
+
+		content.WriteString("Review the list carefully before confirming bans!\n")
+
+		// Add recommendation if there are many flagged guilds
+		if b.minGuilds == 1 && len(b.guildNames) > 3 {
+			content.WriteString("\n### Filter Recommendation\n")
+			content.WriteString("Consider increasing the minimum guilds filter to reduce false positives. ")
+			content.WriteString("Users in multiple flagged servers are more likely to be inappropriate.")
+		}
+
+		return discord.NewContainer(
+			discord.NewTextDisplay(content.String()),
+		).WithAccentColor(constants.ErrorContainerColor)
+	}
+
+	// Info for message scan
+	content.WriteString("## 💬 Message-Based Scan\n")
+	content.WriteString("You are using the recommended message-based scan method.\n\n")
+	content.WriteString("This scan identifies users based on their actual inappropriate messages, ")
+	content.WriteString("providing more accurate results than server membership alone.")
+
+	return discord.NewContainer(
+		discord.NewTextDisplay(content.String()),
+	).WithAccentColor(constants.DefaultContainerColor)
+}
+
+// buildInfoDisplay creates the container showing active filters and requirements.
+func (b *ScanBuilder) buildInfoDisplay() discord.LayoutComponent {
+	var content strings.Builder
 	var totalUsers int
 	var filteredUsers int
 
@@ -74,147 +125,74 @@ func (b *ScanBuilder) buildInfoEmbed() *discord.EmbedBuilder {
 		filteredUsers = len(b.filteredUsers)
 	}
 
-	description := fmt.Sprintf(
-		"Filters determine which users will be included in the ban operation.\n\n"+
-			"Total flagged users: `%d`\n"+
-			"Users meeting filter criteria: `%d`",
-		totalUsers,
-		filteredUsers,
-	)
+	content.WriteString("## Banning Users\n")
+	content.WriteString("Filters determine which users will be included in the ban operation.\n\n")
+	content.WriteString(fmt.Sprintf("Total flagged users: `%d`\n", totalUsers))
+	content.WriteString(fmt.Sprintf("Users meeting filter criteria: `%d`\n", filteredUsers))
 
-	filterEmbed := discord.NewEmbedBuilder().
-		SetTitle("Banning Users").
-		SetDescription(description).
-		SetColor(0x3498DB) // Blue color for filter embed
+	// Add filter information
+	if b.scanType == constants.GuildScanTypeCondo && b.minGuilds > 1 ||
+		b.minJoinDuration > 0 {
+		content.WriteString("### Active Filters\n")
 
-	// Build filter text
-	var filterParts []string
+		if b.scanType == constants.GuildScanTypeCondo && b.minGuilds > 1 {
+			content.WriteString(fmt.Sprintf("- Minimum Guilds: `%d` (Users must appear in at least this many flagged guilds)\n",
+				b.minGuilds))
+		}
 
-	// Add guilds filter information
-	if b.scanType == constants.GuildScanTypeCondo && b.minGuilds > 1 {
-		filterParts = append(filterParts, fmt.Sprintf(
-			"Minimum Guilds: `%d` (Users must appear in at least this many flagged guilds)",
-			b.minGuilds,
-		))
-	}
-
-	// Add join duration information
-	if b.minJoinDuration > 0 {
-		if b.scanType == constants.GuildScanTypeMessages {
-			filterParts = append(filterParts, fmt.Sprintf(
-				"Minimum Message Age: `%s` (Only show messages older than this)",
-				utils.FormatDuration(b.minJoinDuration),
-			))
-		} else {
-			filterParts = append(filterParts, fmt.Sprintf(
-				"Minimum Join Duration: `%s` (Users must be in guilds for at least this long)",
-				utils.FormatDuration(b.minJoinDuration),
-			))
+		if b.minJoinDuration > 0 {
+			if b.scanType == constants.GuildScanTypeMessages {
+				content.WriteString(fmt.Sprintf("- Minimum Message Age: `%s` (Only show messages older than this)\n",
+					utils.FormatDuration(b.minJoinDuration)))
+			} else {
+				content.WriteString(fmt.Sprintf("- Minimum Join Duration: `%s` (Users must be in guilds for at least this long)\n",
+					utils.FormatDuration(b.minJoinDuration)))
+			}
 		}
 	}
 
-	// Add filters field if we have any active filters
-	if len(filterParts) > 0 {
-		filterEmbed.AddField(
-			"Active Filters",
-			strings.Join(filterParts, "\n"),
-			false,
-		)
-	}
+	// Add requirements
+	content.WriteString("### Requirements\n")
+	content.WriteString("- You must have **Administrator** permission\n")
+	content.WriteString("- The bot must have **Ban Members** permission\n")
+	content.WriteString("- The bot's role must be higher than targeted users")
 
-	// Add permission requirements
-	filterEmbed.AddField(
-		"Requirements",
-		"- You must have **Administrator** permission\n"+
-			"- The bot must have **Ban Members** permission\n"+
-			"- The bot's role must be higher than targeted users",
-		false,
-	)
-
-	return filterEmbed
+	return discord.NewContainer(
+		discord.NewTextDisplay(content.String()),
+	).WithAccentColor(constants.DefaultContainerColor)
 }
 
-// buildWarningEmbed creates the warning embed based on scan type.
-func (b *ScanBuilder) buildWarningEmbed() *discord.EmbedBuilder {
-	warningEmbed := discord.NewEmbedBuilder()
+// buildResultsDisplay creates the container showing detailed user results for the current page.
+func (b *ScanBuilder) buildResultsDisplay(totalPages int) discord.LayoutComponent {
+	var content strings.Builder
+	content.WriteString(fmt.Sprintf("## Scan Results (Page %d/%d)\n", b.page+1, totalPages))
 
-	if b.scanType == constants.GuildScanTypeCondo {
-		// Warning for condo server scan
-		warningEmbed.SetTitle("⚠️ Warning: Unreliable Method").
-			SetDescription(
-				"This method may result in false positives as some legitimate users might "+
-					"be included like investigators, reporters, non-participating members, accounts "+
-					"that were compromised, and users who joined through misleading invites.\n\n"+
-					"This is one of the known flaws of Ruben's Ro-Cleaner bot but we allow you to "+
-					"reduce the number of false positives by setting certain filters.\n\n"+
-					"However, we **recommend using the 'Ban Users with Inappropriate Messages' option** "+
-					"for 100% accurate results.",
-			).
-			SetColor(0xFF0000). // Red color for warning
-			AddField(
-				"Flagging Conditions",
-				"- Sending messages in inappropriate servers (active participation)\n"+
-					"- Being present in inappropriate servers for over 12 hours (beyond grace period)",
-				false,
-			).
-			AddField(
-				"Important Notes",
-				"- Users are automatically removed if they've been clean for 7 days\n"+
-					"- The grace period helps exclude users who join and leave quickly",
-				false,
-			).
-			SetFooter("⚠️ Review the list carefully before confirming bans", "")
-
-		// Add recommendation if there are many flagged guilds
-		if b.minGuilds == 1 && len(b.guildNames) > 3 {
-			warningEmbed.AddField(
-				"Filter Recommendation",
-				"Consider increasing the minimum guilds filter to reduce false positives. "+
-					"Users in multiple flagged servers are more likely to be inappropriate.",
-				false,
-			)
-		}
-	} else {
-		// Info for message scan
-		warningEmbed.SetTitle("💬 Message-Based Scan").
-			SetDescription("You are using the recommended message-based scan method.\n\n" +
-				"This scan identifies users based on their actual inappropriate messages, " +
-						"providing more accurate results than server membership alone.").
-			SetColor(0x00FF00) // Green color
-	}
-
-	return warningEmbed
-}
-
-// buildResultsEmbed creates the embed showing detailed user results for the current page.
-func (b *ScanBuilder) buildResultsEmbed(totalPages int) *discord.EmbedBuilder {
-	resultsEmbed := discord.NewEmbedBuilder().
-		SetTitle(fmt.Sprintf("Scan Results (Page %d/%d)", b.page+1, totalPages)).
-		SetColor(constants.DefaultEmbedColor)
-
-	if b.scanType == constants.GuildScanTypeMessages {
+	switch b.scanType {
+	case constants.GuildScanTypeMessages:
 		// Show message scan results
 		if len(b.filteredSummaries) > 0 {
-			b.addPaginatedMessageResults(resultsEmbed)
-			return resultsEmbed
+			b.addPaginatedMessageResults(&content)
+		} else {
+			content.WriteString("### No Users Match Filter Criteria\n")
+			content.WriteString("Adjust your filters to include more users in the ban operation.")
 		}
-	} else if len(b.filteredUsers) > 0 {
+	case constants.GuildScanTypeCondo:
 		// Show condo scan results
-		b.addPaginatedUserResults(resultsEmbed)
-		return resultsEmbed
+		if len(b.filteredUsers) > 0 {
+			b.addPaginatedUserResults(&content)
+		} else {
+			content.WriteString("### No Users Match Filter Criteria\n")
+			content.WriteString("Adjust your filters to include more users in the ban operation.")
+		}
 	}
 
-	resultsEmbed.AddField(
-		"No Users Match Filter Criteria",
-		"Adjust your filters to include more users in the ban operation.",
-		false,
-	)
-
-	return resultsEmbed
+	return discord.NewContainer(
+		discord.NewTextDisplay(content.String()),
+	).WithAccentColor(constants.DefaultContainerColor)
 }
 
-// addPaginatedUserResults adds user entries to the results embed for the current page.
-func (b *ScanBuilder) addPaginatedUserResults(embed *discord.EmbedBuilder) {
+// addPaginatedUserResults adds user entries to the results content for the current page.
+func (b *ScanBuilder) addPaginatedUserResults(content *strings.Builder) {
 	// Convert map to slice for pagination
 	type userEntry struct {
 		userID uint64
@@ -233,12 +211,14 @@ func (b *ScanBuilder) addPaginatedUserResults(embed *discord.EmbedBuilder) {
 	start := b.page * constants.GuildScanUsersPerPage
 	end := min(start+constants.GuildScanUsersPerPage, len(users))
 
-	// Add fields for each user
+	// Add entries for each user
 	for i, entry := range users[start:end] {
 		userID := entry.userID
 		guilds := entry.guilds
 
-		var guildInfos []string
+		fmt.Fprintf(content, "### User %d\n", start+i+1)
+		fmt.Fprintf(content, "<@%d>\n", userID)
+		fmt.Fprintf(content, "Found in %d servers:\n```md\n", len(guilds))
 
 		// Limit to 5 guilds per user
 		maxGuildsToShow := min(5, len(guilds))
@@ -250,34 +230,22 @@ func (b *ScanBuilder) addPaginatedUserResults(embed *discord.EmbedBuilder) {
 			}
 
 			joinedAgo := utils.FormatTimeAgo(guild.JoinedAt)
-			guildInfos = append(guildInfos, fmt.Sprintf("• %s (joined %s)",
+			fmt.Fprintf(content, "• %s (joined %s)\n",
 				guildName,
-				joinedAgo,
-			))
+				joinedAgo)
 		}
 
 		// Add note about additional guilds if there are more than 5
 		if len(guilds) > 5 {
-			guildInfos = append(guildInfos, fmt.Sprintf("- ... and %d more", len(guilds)-5))
+			fmt.Fprintf(content, "- ... and %d more", len(guilds)-5)
 		}
 
-		// Create content for field
-		content := fmt.Sprintf("<@%d>\nFound in %d servers:\n```md\n%s\n```",
-			userID,
-			len(guilds),
-			strings.Join(guildInfos, "\n"),
-		)
-
-		embed.AddField(
-			fmt.Sprintf("User %d", start+i+1),
-			content,
-			false,
-		)
+		content.WriteString("\n```\n")
 	}
 }
 
-// addPaginatedMessageResults adds message summary entries to the results embed for the current page.
-func (b *ScanBuilder) addPaginatedMessageResults(embed *discord.EmbedBuilder) {
+// addPaginatedMessageResults adds message summary entries to the results content for the current page.
+func (b *ScanBuilder) addPaginatedMessageResults(content *strings.Builder) {
 	// Convert map to slice for pagination
 	type summaryEntry struct {
 		userID  uint64
@@ -301,25 +269,18 @@ func (b *ScanBuilder) addPaginatedMessageResults(embed *discord.EmbedBuilder) {
 	start := b.page * constants.GuildScanUsersPerPage
 	end := min(start+constants.GuildScanUsersPerPage, len(summaries))
 
-	// Add fields for each user
+	// Add entries for each user
 	for i, entry := range summaries[start:end] {
-		content := fmt.Sprintf("<@%d>\nInappropriate Messages: `%d`\nLast Detected: <t:%d:R>\nReason: `%s`",
-			entry.userID,
-			entry.summary.MessageCount,
-			entry.summary.LastDetected.Unix(),
-			entry.summary.Reason,
-		)
-
-		embed.AddField(
-			fmt.Sprintf("User %d", start+i+1),
-			content,
-			false,
-		)
+		fmt.Fprintf(content, "### User %d\n", start+i+1)
+		fmt.Fprintf(content, "<@%d>\n", entry.userID)
+		fmt.Fprintf(content, "Inappropriate Messages: `%d`\n", entry.summary.MessageCount)
+		fmt.Fprintf(content, "Last Detected: <t:%d:R>\n", entry.summary.LastDetected.Unix())
+		fmt.Fprintf(content, "Reason: `%s`\n\n", entry.summary.Reason)
 	}
 }
 
-// buildComponents creates the interactive components for the scan interface.
-func (b *ScanBuilder) buildComponents(totalPages int) []discord.ContainerComponent {
+// buildInteractiveComponents creates the interactive components for the scan interface.
+func (b *ScanBuilder) buildInteractiveComponents(totalPages int) []discord.LayoutComponent {
 	// Add join duration option with appropriate description
 	joinDurationDesc := "Not set"
 	if b.minJoinDuration > 0 {
@@ -345,7 +306,7 @@ func (b *ScanBuilder) buildComponents(totalPages int) []discord.ContainerCompone
 		}
 	}
 
-	return []discord.ContainerComponent{
+	return []discord.LayoutComponent{
 		// Filter dropdown
 		discord.NewActionRow(
 			discord.NewStringSelectMenu(constants.GuildScanFilterSelectMenuCustomID, "Set Filter Conditions", filterOptions...),

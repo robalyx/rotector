@@ -53,7 +53,7 @@ func (m *GuildBanModel) GetGuildBanLogs(
 
 	// Apply cursor conditions if provided
 	if cursor != nil {
-		query = query.Where("(timestamp, id) < (?, ?)", cursor.Timestamp, cursor.Sequence)
+		query = query.Where("(timestamp, id) <= (?, ?)", cursor.Timestamp, cursor.Sequence)
 	}
 
 	// Order by timestamp and ID for stable pagination

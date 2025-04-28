@@ -111,23 +111,6 @@ func (b *Bar) String() string {
 		overallDuration, b.calculateETA())
 }
 
-// calculateETA estimates completion time based on previous operation durations.
-// Returns "0s" if no duration history is available.
-func (b *Bar) calculateETA() string {
-	if len(b.overallDurations) == 0 {
-		return "0s"
-	}
-
-	// Average the stored durations
-	var totalDuration time.Duration
-	for _, duration := range b.overallDurations {
-		totalDuration += duration
-	}
-
-	eta := totalDuration / time.Duration(len(b.overallDurations))
-	return eta.Round(time.Second).String()
-}
-
 // Reset prepares the bar for a new operation by storing the previous operation's duration
 // and resetting progress counters and timers. It maintains a rolling window of past durations
 // for ETA calculation.
@@ -149,4 +132,21 @@ func (b *Bar) Reset() {
 	b.stepMessage = ""
 	b.stepStart = time.Now()
 	b.overallStart = time.Now()
+}
+
+// calculateETA estimates completion time based on previous operation durations.
+// Returns "0s" if no duration history is available.
+func (b *Bar) calculateETA() string {
+	if len(b.overallDurations) == 0 {
+		return "0s"
+	}
+
+	// Average the stored durations
+	var totalDuration time.Duration
+	for _, duration := range b.overallDurations {
+		totalDuration += duration
+	}
+
+	eta := totalDuration / time.Duration(len(b.overallDurations))
+	return eta.Round(time.Second).String()
 }

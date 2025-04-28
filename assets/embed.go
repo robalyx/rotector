@@ -1,6 +1,9 @@
 package assets
 
-import "embed"
+import _ "embed"
 
-//go:embed images
-var Images embed.FS
+//go:embed images/banner.png
+var Banner []byte
+
+//go:embed images/content_deleted.png
+var ContentDeleted []byte

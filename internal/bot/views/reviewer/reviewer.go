@@ -39,62 +39,75 @@ func NewBuilder(s *session.Session) *Builder {
 
 // Build creates a Discord message showing the reviewer statistics.
 func (b *Builder) Build() *discord.MessageUpdateBuilder {
-	embed := discord.NewEmbedBuilder().
-		SetTitle("Reviewer Statistics").
-		SetDescription(fmt.Sprintf("Activity statistics for `%s` period", b.period.String())).
-		SetColor(constants.DefaultEmbedColor)
+	builder := discord.NewMessageUpdateBuilder()
+
+	// Create main container components
+	var components []discord.ContainerSubComponent
+
+	// Add header section
+	var headerContent strings.Builder
+	headerContent.WriteString(fmt.Sprintf("## Reviewer Statistics\nActivity statistics for `%s` period", b.period.String()))
 
 	if !b.lastRefresh.IsZero() {
-		embed.SetFooter(fmt.Sprintf(
-			"Last updated %s • Next update %s",
+		headerContent.WriteString(fmt.Sprintf("\n\n-# Last updated %s • Next update %s",
 			utils.FormatTimeAgo(b.lastRefresh),
 			utils.FormatTimeUntil(b.nextRefresh),
-		), "")
+		))
 	}
 
+	components = append(components, discord.NewTextDisplay(headerContent.String()))
+
+	// Add stats section
 	if len(b.stats) > 0 {
+		components = append(components, discord.NewLargeSeparator())
+
+		var statsContent strings.Builder
+		statsContent.WriteString("## Activity Overview\n\n")
+
 		for reviewerID, username := range b.usernames {
 			if stat, ok := b.stats[reviewerID]; ok {
-				var statsBuilder strings.Builder
-				statsBuilder.WriteString("```\n")
-				statsBuilder.WriteString(fmt.Sprintf("Users Viewed: %d\n", stat.UsersViewed))
-				statsBuilder.WriteString(fmt.Sprintf("Users Confirmed: %d\n", stat.UsersConfirmed))
-				statsBuilder.WriteString(fmt.Sprintf("Users Cleared: %d\n", stat.UsersCleared))
-				statsBuilder.WriteString("```")
-
-				embed.AddField(username, statsBuilder.String(), false)
+				statsContent.WriteString(fmt.Sprintf("\n### %s\n", username))
+				statsContent.WriteString(utils.FormatString(fmt.Sprintf(
+					"Users Viewed: %d\nUsers Confirmed: %d\nUsers Cleared: %d",
+					stat.UsersViewed,
+					stat.UsersConfirmed,
+					stat.UsersCleared,
+				)))
 			}
 		}
+
+		components = append(components, discord.NewTextDisplay(statsContent.String()))
 	} else {
-		embed.AddField("No Results", "No reviewer statistics available", false)
+		components = append(components, discord.NewLargeSeparator())
+		components = append(components, discord.NewTextDisplay("## No Results\nNo reviewer statistics available"))
 	}
 
-	return discord.NewMessageUpdateBuilder().
-		SetEmbeds(embed.Build()).
-		AddContainerComponents(b.buildComponents()...)
-}
+	// Add navigation buttons
+	components = append(components, discord.NewActionRow(
+		discord.NewSecondaryButton("⏮️", string(session.ViewerFirstPage)).WithDisabled(!b.hasPrevPage),
+		discord.NewSecondaryButton("◀️", string(session.ViewerPrevPage)).WithDisabled(!b.hasPrevPage),
+		discord.NewSecondaryButton("▶️", string(session.ViewerNextPage)).WithDisabled(!b.hasNextPage),
+		discord.NewSecondaryButton("⏭️", string(session.ViewerLastPage)).WithDisabled(true),
+	))
 
-// buildComponents creates all interactive components for the reviewer stats viewer.
-func (b *Builder) buildComponents() []discord.ContainerComponent {
-	return []discord.ContainerComponent{
-		// Time period selection menu
+	// Create main container
+	mainContainer := discord.NewContainer(components...).
+		WithAccentColor(constants.DefaultContainerColor)
+
+	// Add all components
+	builder.AddComponents(
+		mainContainer,
 		discord.NewActionRow(
 			discord.NewStringSelectMenu(constants.ReviewerStatsPeriodSelectMenuCustomID, "Select Time Period",
 				b.buildPeriodOptions()...),
 		),
-		// Refresh button
 		discord.NewActionRow(
+			discord.NewSecondaryButton("◀️ Back", constants.BackButtonCustomID),
 			discord.NewSecondaryButton("🔄 Refresh", constants.RefreshButtonCustomID),
 		),
-		// Navigation buttons
-		discord.NewActionRow(
-			discord.NewSecondaryButton("◀️", constants.BackButtonCustomID),
-			discord.NewSecondaryButton("⏮️", string(session.ViewerFirstPage)).WithDisabled(!b.hasPrevPage),
-			discord.NewSecondaryButton("◀️", string(session.ViewerPrevPage)).WithDisabled(!b.hasPrevPage),
-			discord.NewSecondaryButton("▶️", string(session.ViewerNextPage)).WithDisabled(!b.hasNextPage),
-			discord.NewSecondaryButton("⏭️", string(session.ViewerLastPage)).WithDisabled(true),
-		),
-	}
+	)
+
+	return builder
 }
 
 // buildPeriodOptions creates the options for the time period selection menu.

@@ -2,6 +2,7 @@ package timeout
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/disgoorg/disgo/discord"
@@ -23,27 +24,32 @@ func NewBuilder(s *session.Session) *Builder {
 
 // Build creates a Discord message showing the timeout status.
 func (b *Builder) Build() *discord.MessageUpdateBuilder {
-	timestampStr := fmt.Sprintf("<t:%d:R>", b.nextReviewTime.Unix())
-	embed := discord.NewEmbedBuilder().
-		SetTitle("Time for a Break! 🌟").
-		SetDescription(fmt.Sprintf(
-			"Great work on your reviews! To ensure that you're taking care of yourself, we've scheduled a short break.\n\n"+
-				"You can resume reviewing %s\n\n"+
-				"While you wait, here are some relaxing activities you can try:\n"+
-				"- Take a short walk outside\n"+
-				"- Practice some light stretching\n"+
-				"- Grab a glass of water\n"+
-				"- Rest your eyes from the screen\n"+
-				"- Take some deep breaths\n\n"+
-				"Thank you for your dedication to keeping the community safe! 💪",
-			timestampStr,
-		)).
-		SetColor(constants.DefaultEmbedColor).
-		Build()
+	var content strings.Builder
+
+	// Create header and description
+	content.WriteString("## Time for a Break! 🌟\n\n")
+	content.WriteString("Great work on your reviews! To ensure that you're taking care of yourself, we've scheduled a short break.\n\n")
+	content.WriteString(fmt.Sprintf("You can resume reviewing <t:%d:R>\n", b.nextReviewTime.Unix()))
+
+	// Add relaxation suggestions
+	content.WriteString("### Suggested Activities\n")
+	content.WriteString("- Take a short walk outside\n")
+	content.WriteString("- Practice some light stretching\n")
+	content.WriteString("- Grab a glass of water\n")
+	content.WriteString("- Rest your eyes from the screen\n")
+	content.WriteString("- Take some deep breaths\n\n")
+
+	content.WriteString("Thank you for your dedication to keeping the community safe! 💪")
+
+	// Create container with text display and back button
+	container := discord.NewContainer(
+		discord.NewTextDisplay(content.String()),
+		discord.NewLargeSeparator(),
+		discord.NewActionRow(
+			discord.NewSecondaryButton("◀️ Back", constants.BackButtonCustomID),
+		),
+	).WithAccentColor(constants.DefaultContainerColor)
 
 	return discord.NewMessageUpdateBuilder().
-		SetEmbeds(embed).
-		AddActionRow(
-			discord.NewSecondaryButton("◀️ Back", constants.BackButtonCustomID),
-		)
+		AddComponents(container)
 }

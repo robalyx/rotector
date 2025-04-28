@@ -37,23 +37,22 @@ type BaseReviewBuilder struct {
 	PrivacyMode    bool
 }
 
-// BuildCommentsEmbed creates an embed showing recent comments if any exist.
-func (b *BaseReviewBuilder) BuildCommentsEmbed() *discord.EmbedBuilder {
+// BuildCommentsText creates the comments text content.
+func (b *BaseReviewBuilder) BuildCommentsText() string {
 	if b.IsReviewer && !b.TrainingMode {
-		return b.BuildReviewerCommentsEmbed()
+		return b.BuildReviewerCommentsText()
 	}
-	return b.BuildNonReviewerCommentsEmbed()
+	return b.BuildNonReviewerCommentsText()
 }
 
-// BuildReviewerCommentsEmbed creates an embed showing recent comments if any exist.
-func (b *BaseReviewBuilder) BuildReviewerCommentsEmbed() *discord.EmbedBuilder {
+// BuildReviewerCommentsText creates the comments text content for reviewers.
+func (b *BaseReviewBuilder) BuildReviewerCommentsText() string {
 	if len(b.Comments) == 0 {
-		return nil
+		return ""
 	}
 
-	embed := discord.NewEmbedBuilder().
-		SetTitle("📝 Recent Community Notes").
-		SetColor(utils.GetMessageEmbedColor(b.PrivacyMode))
+	var content strings.Builder
+	content.WriteString("## 📝 Recent Community Notes\n\n")
 
 	// Take up to 3 most recent comments
 	numComments := min(3, len(b.Comments))
@@ -72,34 +71,28 @@ func (b *BaseReviewBuilder) BuildReviewerCommentsEmbed() *discord.EmbedBuilder {
 			roleTitle = "Community Note"
 		}
 
-		// Add field for each comment
-		embed.AddField(
+		content.WriteString(fmt.Sprintf("**%s**\nFrom <@%d> - %s\n%s\n",
 			roleTitle,
-			fmt.Sprintf("From <@%d> - %s\n```%s```",
-				comment.CommenterID,
-				timestamp,
-				utils.TruncateString(comment.Message, 52),
-			),
-			false,
-		)
+			comment.CommenterID,
+			timestamp,
+			utils.FormatString(utils.TruncateString(comment.Message, 52))))
 	}
 
 	if len(b.Comments) > 3 {
-		embed.SetFooter(fmt.Sprintf("... and %d more notes", len(b.Comments)-3), "")
+		content.WriteString(fmt.Sprintf("*... and %d more notes*", len(b.Comments)-3))
 	}
 
-	return embed
+	return content.String()
 }
 
-// BuildNonReviewerCommentsEmbed creates an embed showing only the user's own comment.
-func (b *BaseReviewBuilder) BuildNonReviewerCommentsEmbed() *discord.EmbedBuilder {
+// BuildNonReviewerCommentsText creates the comments text content for non-reviewers.
+func (b *BaseReviewBuilder) BuildNonReviewerCommentsText() string {
 	if len(b.Comments) == 0 {
-		return nil
+		return ""
 	}
 
-	embed := discord.NewEmbedBuilder().
-		SetTitle("📝 Your Community Note").
-		SetColor(utils.GetMessageEmbedColor(b.PrivacyMode))
+	var content strings.Builder
+	content.WriteString("## 📝 Your Community Note\n\n")
 
 	// Find user's comment
 	var userComment *types.Comment
@@ -111,7 +104,7 @@ func (b *BaseReviewBuilder) BuildNonReviewerCommentsEmbed() *discord.EmbedBuilde
 	}
 
 	if userComment == nil {
-		return nil
+		return ""
 	}
 
 	timestamp := fmt.Sprintf("<t:%d:R>", userComment.CreatedAt.Unix())
@@ -119,73 +112,11 @@ func (b *BaseReviewBuilder) BuildNonReviewerCommentsEmbed() *discord.EmbedBuilde
 		timestamp += fmt.Sprintf(" (edited <t:%d:R>)", userComment.UpdatedAt.Unix())
 	}
 
-	embed.AddField(
-		"Your Note",
-		fmt.Sprintf("%s\n```%s```",
-			timestamp,
-			userComment.Message,
-		),
-		false,
-	)
+	content.WriteString(fmt.Sprintf("%s\n%s",
+		timestamp,
+		utils.FormatString(userComment.Message)))
 
-	return embed
-}
-
-// BuildReviewWarningEmbed creates a warning embed if another reviewer is reviewing the target.
-func (b *BaseReviewBuilder) BuildReviewWarningEmbed(activityType enum.ActivityType) *discord.EmbedBuilder {
-	// Check for recent views in the logs
-	fiveMinutesAgo := time.Now().Add(-5 * time.Minute)
-	var recentReviewers []uint64
-
-	for _, log := range b.Logs {
-		if log.ActivityType == activityType &&
-			log.ActivityTimestamp.After(fiveMinutesAgo) &&
-			log.ReviewerID != b.UserID &&
-			b.BotSettings.IsReviewer(log.ReviewerID) {
-			recentReviewers = append(recentReviewers, log.ReviewerID)
-		}
-	}
-
-	if len(recentReviewers) == 0 {
-		return nil
-	}
-
-	// Create reviewer mentions
-	mentions := make([]string, len(recentReviewers))
-	for i, reviewerID := range recentReviewers {
-		mentions[i] = fmt.Sprintf("<@%d>", reviewerID)
-	}
-
-	targetType := map[enum.ActivityType]string{
-		enum.ActivityTypeUserViewed:  "user",
-		enum.ActivityTypeGroupViewed: "group",
-	}[activityType]
-
-	return discord.NewEmbedBuilder().
-		SetTitle("⚠️ Active Review Warning").
-		SetDescription(fmt.Sprintf(
-			"This %s was recently viewed by official reviewer%s %s. They may be actively reviewing this %s. "+
-				"Please coordinate with them before taking any actions to avoid conflicts.",
-			targetType,
-			map[bool]string{true: "s", false: ""}[len(recentReviewers) > 1],
-			strings.Join(mentions, ", "),
-			targetType,
-		)).
-		SetColor(constants.ErrorEmbedColor)
-}
-
-// BuildDeletionEmbed creates an embed notifying that the target has requested data deletion.
-func (b *BaseReviewBuilder) BuildDeletionEmbed(activityType enum.ActivityType) *discord.EmbedBuilder {
-	targetType := map[enum.ActivityType]string{
-		enum.ActivityTypeUserViewed:  "user",
-		enum.ActivityTypeGroupViewed: "group",
-	}[activityType]
-
-	return discord.NewEmbedBuilder().
-		SetTitle("🗑️ Data Deletion Notice").
-		SetDescription(fmt.Sprintf("This %s has requested deletion of their data. "+
-			"Some information may be missing or incomplete.", targetType)).
-		SetColor(constants.ErrorEmbedColor)
+	return content.String()
 }
 
 // BuildSortingOptions creates the sorting options.
@@ -275,8 +206,8 @@ func (b *BaseReviewBuilder) BuildBaseComponents(
 	sortOptions []discord.StringSelectMenuOption,
 	reasonOptions []discord.StringSelectMenuOption,
 	actionOptions []discord.StringSelectMenuOption,
-) []discord.ContainerComponent {
-	components := []discord.ContainerComponent{}
+) []discord.LayoutComponent {
+	components := []discord.LayoutComponent{}
 
 	// Add sorting options
 	components = append(components,
@@ -342,60 +273,93 @@ func BuildReasonOptions[T types.ReasonType](
 	return options
 }
 
-// AddEvidenceFields adds separate evidence fields for the embed if any reasons have evidence.
-func AddEvidenceFields[T types.ReasonType](
-	embed *discord.EmbedBuilder, reasons types.Reasons[T], privacyMode bool, censorStrings ...string,
-) {
-	var hasEvidence bool
-	var fields []struct {
-		name  string
-		value string
-	}
+// BuildDeletionDisplay creates the deletion notice display.
+func (b *BaseReviewBuilder) BuildDeletionDisplay(targetType string) discord.ContainerSubComponent {
+	return discord.NewTextDisplay(fmt.Sprintf(
+		"## 🗑️ Data Deletion Notice\nThis %s has requested deletion of their data. Some information may be missing or incomplete.",
+		targetType))
+}
 
-	// Collect evidence from all reasons
-	for reasonType, reason := range reasons {
-		if len(reason.Evidence) > 0 {
-			hasEvidence = true
-			var evidenceItems []string
+// BuildReviewWarningDisplay creates the review warning display.
+func (b *BaseReviewBuilder) BuildReviewWarningDisplay(targetType string, activityType enum.ActivityType) discord.ContainerSubComponent {
+	// Check for recent views in the logs
+	fiveMinutesAgo := time.Now().Add(-5 * time.Minute)
+	var recentReviewers []uint64
 
-			// Add header for this reason type
-			fieldName := fmt.Sprintf("%s Evidence", reasonType)
-
-			// Add up to 3 evidence items
-			for i, evidence := range reason.Evidence {
-				if i >= 3 {
-					evidenceItems = append(evidenceItems, "... and more")
-					break
-				}
-
-				// Format and normalize the evidence
-				evidence = utils.TruncateString(evidence, 100)
-				evidence = utils.NormalizeString(evidence)
-
-				// Censor if needed
-				if privacyMode {
-					evidence = utils.CensorStringsInText(evidence, true, censorStrings...)
-				}
-
-				evidenceItems = append(evidenceItems, fmt.Sprintf("- `%s`", evidence))
-			}
-
-			fields = append(fields, struct {
-				name  string
-				value string
-			}{
-				name:  fieldName,
-				value: strings.Join(evidenceItems, "\n"),
-			})
+	for _, log := range b.Logs {
+		if log.ActivityType == activityType &&
+			log.ActivityTimestamp.After(fiveMinutesAgo) &&
+			log.ReviewerID != b.UserID &&
+			b.BotSettings.IsReviewer(log.ReviewerID) {
+			recentReviewers = append(recentReviewers, log.ReviewerID)
 		}
 	}
 
-	if !hasEvidence {
-		return
+	if len(recentReviewers) == 0 {
+		return nil
 	}
 
-	// Add each evidence type as a separate field
-	for _, field := range fields {
-		embed.AddField(field.name, field.value, false)
+	// Create reviewer mentions
+	mentions := make([]string, len(recentReviewers))
+	for i, reviewerID := range recentReviewers {
+		mentions[i] = fmt.Sprintf("<@%d>", reviewerID)
 	}
+
+	// Build the warning text
+	var content strings.Builder
+	content.WriteString(fmt.Sprintf(
+		"## ⚠️ Active Review Warning\nThis %s was recently viewed by official reviewer%s %s. ",
+		targetType,
+		map[bool]string{true: "s", false: ""}[len(recentReviewers) > 1],
+		strings.Join(mentions, ", ")))
+	content.WriteString(fmt.Sprintf(
+		"They may be actively reviewing this %s. Please coordinate with them before taking any actions to avoid conflicts.",
+		targetType))
+
+	return discord.NewTextDisplay(content.String())
+}
+
+// BuildFooterText builds the footer text with status and history position.
+func (b *BaseReviewBuilder) BuildFooterText(status, uuid string) string {
+	if len(b.ReviewHistory) > 0 {
+		return fmt.Sprintf("%s • UUID: %s • History: %d/%d",
+			status,
+			uuid,
+			b.HistoryIndex+1,
+			len(b.ReviewHistory))
+	}
+	return fmt.Sprintf("%s • UUID: %s", status, uuid)
+}
+
+// BuildReviewWarningText creates the review warning text for both users and groups.
+func (b *BaseReviewBuilder) BuildReviewWarningText(targetType string, activityType enum.ActivityType) string {
+	// Check for recent views in the logs
+	fiveMinutesAgo := time.Now().Add(-5 * time.Minute)
+	var recentReviewers []uint64
+
+	for _, log := range b.Logs {
+		if log.ActivityType == activityType &&
+			log.ActivityTimestamp.After(fiveMinutesAgo) &&
+			log.ReviewerID != b.UserID &&
+			b.BotSettings.IsReviewer(log.ReviewerID) {
+			recentReviewers = append(recentReviewers, log.ReviewerID)
+		}
+	}
+
+	if len(recentReviewers) == 0 {
+		return ""
+	}
+
+	// Create reviewer mentions
+	mentions := make([]string, len(recentReviewers))
+	for i, reviewerID := range recentReviewers {
+		mentions[i] = fmt.Sprintf("<@%d>", reviewerID)
+	}
+
+	return fmt.Sprintf("This %s was recently viewed by official reviewer%s %s. "+
+		"They may be actively reviewing this %s. Please coordinate with them before taking any actions to avoid conflicts.",
+		targetType,
+		map[bool]string{true: "s", false: ""}[len(recentReviewers) > 1],
+		strings.Join(mentions, ", "),
+		targetType)
 }

@@ -35,22 +35,11 @@ func NewBuilder(s *session.Session) *Builder {
 
 // Build creates a Discord message showing worker status information.
 func (b *Builder) Build() *discord.MessageUpdateBuilder {
-	embed := b.buildWorkerStatusEmbed()
+	var content strings.Builder
 
-	return discord.NewMessageUpdateBuilder().
-		SetEmbeds(embed).
-		AddActionRow(
-			discord.NewSecondaryButton("◀️", constants.BackButtonCustomID),
-			discord.NewSecondaryButton("🔄 Refresh", constants.RefreshButtonCustomID),
-		)
-}
-
-// buildWorkerStatusEmbed creates the worker status monitoring embed.
-func (b *Builder) buildWorkerStatusEmbed() discord.Embed {
-	embed := discord.NewEmbedBuilder().
-		SetTitle("Worker Statuses").
-		SetDescription(fmt.Sprintf("%s Online  %s Unhealthy  %s Offline", healthyEmoji, unhealthyEmoji, staleEmoji)).
-		SetColor(constants.DefaultEmbedColor)
+	// Create header and legend
+	content.WriteString("## Worker Statuses\n")
+	content.WriteString(fmt.Sprintf("%s Online  %s Unhealthy  %s Offline\n\n", healthyEmoji, unhealthyEmoji, staleEmoji))
 
 	// Group workers by type
 	workerGroups := make(map[string][]core.Status)
@@ -58,7 +47,7 @@ func (b *Builder) buildWorkerStatusEmbed() discord.Embed {
 		workerGroups[status.WorkerType] = append(workerGroups[status.WorkerType], status)
 	}
 
-	// Add fields for each worker type
+	// Add sections for each worker type
 	for workerType, workers := range workerGroups {
 		// Format worker statuses
 		var statusLines []string
@@ -69,16 +58,28 @@ func (b *Builder) buildWorkerStatusEmbed() discord.Embed {
 				emoji, shortID, w.CurrentTask, w.Progress))
 		}
 
-		// Add field for this worker type
-		fieldName := b.titleCaser.String(workerType)
-		fieldValue := "No workers online"
+		// Add section for this worker type
+		content.WriteString(fmt.Sprintf("### %s\n", b.titleCaser.String(workerType)))
 		if len(statusLines) > 0 {
-			fieldValue = strings.Join(statusLines, "\n")
+			content.WriteString(strings.Join(statusLines, "\n"))
+		} else {
+			content.WriteString("No workers online")
 		}
-		embed.AddField(fieldName, fieldValue, false)
+		content.WriteString("\n\n")
 	}
 
-	return embed.Build()
+	// Create container with text display and navigation buttons
+	container := discord.NewContainer(
+		discord.NewTextDisplay(content.String()),
+		discord.NewLargeSeparator(),
+		discord.NewActionRow(
+			discord.NewSecondaryButton("◀️ Back", constants.BackButtonCustomID),
+			discord.NewSecondaryButton("🔄 Refresh", constants.RefreshButtonCustomID),
+		),
+	).WithAccentColor(constants.DefaultContainerColor)
+
+	return discord.NewMessageUpdateBuilder().
+		AddComponents(container)
 }
 
 // getStatusEmoji returns the appropriate emoji for a worker's status.

@@ -30,7 +30,6 @@ func NewLogsMenu(layout *Layout) *LogsMenu {
 		},
 		ShowHandlerFunc:   m.Show,
 		ButtonHandlerFunc: m.handleButton,
-		SelectHandlerFunc: m.handleSelectMenu,
 	}
 	return m
 }
@@ -49,10 +48,7 @@ func (m *LogsMenu) Show(ctx *interaction.Context, s *session.Session) {
 
 	// Fetch filtered logs from database
 	logs, nextCursor, err := m.layout.db.Model().GuildBan().GetGuildBanLogs(
-		ctx.Context(),
-		guildID,
-		cursor,
-		constants.LogsPerPage,
+		ctx.Context(), guildID, cursor, constants.GuildBanLogsPerPage,
 	)
 	if err != nil {
 		m.layout.logger.Error("Failed to get guild ban logs", zap.Error(err))
@@ -83,60 +79,25 @@ func (m *LogsMenu) handleButton(ctx *interaction.Context, s *session.Session, cu
 		session.GuildBanLogPrevCursors.Delete(s)
 		session.PaginationHasNextPage.Delete(s)
 		session.PaginationHasPrevPage.Delete(s)
+		session.GuildBanLogCSVReport.Delete(s)
 		ctx.Reload("")
 	case string(session.ViewerFirstPage),
 		string(session.ViewerPrevPage),
 		string(session.ViewerNextPage),
 		string(session.ViewerLastPage):
 		m.handlePagination(ctx, s, session.ViewerAction(customID))
+	default:
+		// Try to parse log ID from button custom ID
+		logID, err := strconv.ParseInt(customID, 10, 64)
+		if err != nil {
+			return
+		}
+		m.handleCSVReport(ctx, s, logID)
 	}
 }
 
-// handlePagination processes page navigation for logs.
-func (m *LogsMenu) handlePagination(ctx *interaction.Context, s *session.Session, action session.ViewerAction) {
-	switch action {
-	case session.ViewerNextPage:
-		if session.PaginationHasNextPage.Get(s) {
-			cursor := session.GuildBanLogCursor.Get(s)
-			nextCursor := session.GuildBanLogNextCursor.Get(s)
-			prevCursors := session.GuildBanLogPrevCursors.Get(s)
-
-			session.GuildBanLogCursor.Set(s, nextCursor)
-			session.GuildBanLogPrevCursors.Set(s, append(prevCursors, cursor))
-			ctx.Reload("")
-		}
-	case session.ViewerPrevPage:
-		prevCursors := session.GuildBanLogPrevCursors.Get(s)
-
-		if len(prevCursors) > 0 {
-			lastIdx := len(prevCursors) - 1
-			session.GuildBanLogPrevCursors.Set(s, prevCursors[:lastIdx])
-			session.GuildBanLogCursor.Set(s, prevCursors[lastIdx])
-			ctx.Reload("")
-		}
-	case session.ViewerFirstPage:
-		session.GuildBanLogCursor.Set(s, nil)
-		session.GuildBanLogPrevCursors.Set(s, make([]*types.LogCursor, 0))
-		ctx.Reload("")
-	case session.ViewerLastPage:
-		// Not currently supported
-		return
-	}
-}
-
-// handleSelectMenu processes select menu interactions.
-func (m *LogsMenu) handleSelectMenu(ctx *interaction.Context, s *session.Session, customID, option string) {
-	if customID != constants.GuildBanLogReportSelectMenuCustomID {
-		return
-	}
-
-	// Parse log ID from option
-	logID, err := strconv.ParseInt(option, 10, 64)
-	if err != nil {
-		ctx.Error("Invalid log ID selected.")
-		return
-	}
-
+// handleCSVReport generates and sends a CSV report for the specified ban log.
+func (m *LogsMenu) handleCSVReport(ctx *interaction.Context, s *session.Session, logID int64) {
 	// Get logs from session
 	logs := session.GuildBanLogs.Get(s)
 	if logs == nil {
@@ -226,7 +187,42 @@ func (m *LogsMenu) handleSelectMenu(ctx *interaction.Context, s *session.Session
 	filename := fmt.Sprintf("ban_report_%s.csv",
 		selectedLog.Timestamp.Format("2006-01-02_15-04-05"))
 
+	// Store the log ID in session to show the file component
+	session.GuildBanLogCSVReport.Set(s, logID)
+
 	// Send response with CSV file
 	file := discord.NewFile(filename, "text/csv", strings.NewReader(csvContent.String()))
-	ctx.RespondWithFiles(fmt.Sprintf("Attached CSV report for ban operation #%d", selectedLog.ID), file)
+	ctx.RespondWithFiles("", file)
+}
+
+// handlePagination processes page navigation for logs.
+func (m *LogsMenu) handlePagination(ctx *interaction.Context, s *session.Session, action session.ViewerAction) {
+	switch action {
+	case session.ViewerNextPage:
+		if session.PaginationHasNextPage.Get(s) {
+			cursor := session.GuildBanLogCursor.Get(s)
+			nextCursor := session.GuildBanLogNextCursor.Get(s)
+			prevCursors := session.GuildBanLogPrevCursors.Get(s)
+
+			session.GuildBanLogCursor.Set(s, nextCursor)
+			session.GuildBanLogPrevCursors.Set(s, append(prevCursors, cursor))
+			ctx.Reload("")
+		}
+	case session.ViewerPrevPage:
+		prevCursors := session.GuildBanLogPrevCursors.Get(s)
+
+		if len(prevCursors) > 0 {
+			lastIdx := len(prevCursors) - 1
+			session.GuildBanLogPrevCursors.Set(s, prevCursors[:lastIdx])
+			session.GuildBanLogCursor.Set(s, prevCursors[lastIdx])
+			ctx.Reload("")
+		}
+	case session.ViewerFirstPage:
+		session.GuildBanLogCursor.Set(s, nil)
+		session.GuildBanLogPrevCursors.Set(s, make([]*types.LogCursor, 0))
+		ctx.Reload("")
+	case session.ViewerLastPage:
+		// Not currently supported
+		return
+	}
 }

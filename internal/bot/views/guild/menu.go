@@ -1,7 +1,9 @@
 package guild
 
 import (
+	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/disgoorg/disgo/discord"
 	"github.com/robalyx/rotector/internal/bot/constants"
@@ -28,11 +30,33 @@ func NewMenuBuilder(s *session.Session) *MenuBuilder {
 
 // Build creates a Discord message with the guild owner tools.
 func (b *MenuBuilder) Build() *discord.MessageUpdateBuilder {
-	// Create main and stats embeds
-	mainEmbed := b.buildMainEmbed()
-	statsEmbed := b.buildStatsEmbed()
+	// Create main info container
+	var mainContent strings.Builder
+	mainContent.WriteString("## Guild Owner Tools\n")
+	mainContent.WriteString("These tools help you maintain a safe server environment by managing ")
+	mainContent.WriteString("Discord users in your server who may be participating in ERP (erotic roleplay) ")
+	mainContent.WriteString("across multiple Discord servers.\n")
 
-	// Create action menu
+	if b.guildName != "" {
+		mainContent.WriteString("### Current Guild\n" + b.guildName)
+	}
+
+	mainContainer := discord.NewContainer(
+		discord.NewTextDisplay(mainContent.String()),
+	).WithAccentColor(constants.DefaultContainerColor)
+
+	// Create stats container
+	var statsContent strings.Builder
+	statsContent.WriteString("## Sync Statistics\n")
+	statsContent.WriteString(fmt.Sprintf("**Tracked Discord Servers:** `%s`\n", strconv.Itoa(b.uniqueGuilds)))
+	statsContent.WriteString(fmt.Sprintf("**Tracked Discord Users:** `%s`\n", strconv.Itoa(b.uniqueUsers)))
+	statsContent.WriteString(fmt.Sprintf("**Inappropriate Discord Users:** `%s`", strconv.Itoa(b.inappropriateUsers)))
+
+	statsContainer := discord.NewContainer(
+		discord.NewTextDisplay(statsContent.String()),
+	).WithAccentColor(constants.DefaultContainerColor)
+
+	// Create action menu options
 	options := []discord.StringSelectMenuOption{
 		discord.NewStringSelectMenuOption("Ban Users in Condo Servers", constants.StartGuildScanButtonCustomID).
 			WithEmoji(discord.ComponentEmoji{Name: "🔍"}).
@@ -45,45 +69,17 @@ func (b *MenuBuilder) Build() *discord.MessageUpdateBuilder {
 			WithDescription("View history of ban operations"),
 	}
 
-	return discord.NewMessageUpdateBuilder().
-		SetEmbeds(mainEmbed.Build(), statsEmbed.Build()).
-		AddContainerComponents(
-			discord.NewActionRow(
-				discord.NewStringSelectMenu(constants.ActionSelectMenuCustomID, "Select an action", options...),
-			),
-			discord.NewActionRow(
-				discord.NewSecondaryButton("◀️ Back", constants.BackButtonCustomID),
-			),
-		)
-}
-
-// buildMainEmbed creates the main embed describing guild owner tools.
-func (b *MenuBuilder) buildMainEmbed() *discord.EmbedBuilder {
-	embed := discord.NewEmbedBuilder().
-		SetTitle("Guild Owner Tools").
-		SetDescription("These tools help you maintain a safe server environment by managing " +
-			"Discord users in your server who may be participating in ERP (erotic roleplay) " +
-			"across multiple Discord servers.").
-		SetColor(constants.DefaultEmbedColor)
-
-	if b.guildName != "" {
-		embed.AddField("Current Guild", b.guildName, false)
+	// Create interactive components
+	components := []discord.LayoutComponent{
+		discord.NewActionRow(
+			discord.NewStringSelectMenu(constants.ActionSelectMenuCustomID, "Select an action", options...),
+		),
+		discord.NewActionRow(
+			discord.NewSecondaryButton("◀️ Back", constants.BackButtonCustomID),
+		),
 	}
 
-	return embed
-}
-
-// buildStatsEmbed creates a statistics embed showing sync information.
-func (b *MenuBuilder) buildStatsEmbed() *discord.EmbedBuilder {
-	guildCountText := strconv.Itoa(b.uniqueGuilds)
-	userCountText := strconv.Itoa(b.uniqueUsers)
-	inappropriateUsersText := strconv.Itoa(b.inappropriateUsers)
-
-	return discord.NewEmbedBuilder().
-		SetTitle("Sync Statistics").
-		SetDescription("Current tracking information from our database.").
-		AddField("Tracked Discord Servers", guildCountText, true).
-		AddField("Tracked Discord Users", userCountText, true).
-		AddField("Inappropriate Discord Users", inappropriateUsersText, true).
-		SetColor(constants.DefaultEmbedColor)
+	return discord.NewMessageUpdateBuilder().
+		AddComponents(mainContainer, statsContainer).
+		AddComponents(components...)
 }

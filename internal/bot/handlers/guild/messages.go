@@ -70,14 +70,6 @@ func (m *MessagesMenu) handleButton(ctx *interaction.Context, s *session.Session
 	switch customID {
 	case constants.BackButtonCustomID:
 		ctx.NavigateBack("")
-	case constants.RefreshButtonCustomID:
-		// Reset cursors and reload
-		session.DiscordUserMessageCursor.Delete(s)
-		session.DiscordUserMessageNextCursor.Delete(s)
-		session.DiscordUserMessagePrevCursors.Delete(s)
-		session.PaginationHasNextPage.Delete(s)
-		session.PaginationHasPrevPage.Delete(s)
-		ctx.Reload("")
 	case string(session.ViewerFirstPage),
 		string(session.ViewerPrevPage),
 		string(session.ViewerNextPage),

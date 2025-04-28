@@ -52,111 +52,114 @@ func NewBuilder(s *session.Session) *Builder {
 
 // Build creates a Discord message showing the log entries.
 func (b *Builder) Build() *discord.MessageUpdateBuilder {
-	// Create embed
-	embed := discord.NewEmbedBuilder().
-		SetTitle("Log Query Results").
-		SetColor(utils.GetMessageEmbedColor(b.privacyMode))
+	builder := discord.NewMessageUpdateBuilder()
+
+	// Create main info container
+	var mainContent strings.Builder
+	mainContent.WriteString("## Log Query Results\n\n")
 
 	// Add fields for each active query condition
 	if b.guildID != 0 {
-		embed.AddField("Guild ID",
-			fmt.Sprintf("`%s`", utils.CensorString(strconv.FormatUint(b.guildID, 10), b.privacyMode)),
-			true,
-		)
+		mainContent.WriteString(fmt.Sprintf("Guild ID: `%s`\n",
+			utils.CensorString(strconv.FormatUint(b.guildID, 10), b.privacyMode)))
 	}
 	if b.discordID != 0 {
-		embed.AddField("Discord ID",
-			fmt.Sprintf("`%s`", utils.CensorString(strconv.FormatUint(b.discordID, 10), b.privacyMode)),
-			true,
-		)
+		mainContent.WriteString(fmt.Sprintf("Discord ID: `%s`\n",
+			utils.CensorString(strconv.FormatUint(b.discordID, 10), b.privacyMode)))
 	}
 	if b.userID != 0 {
-		embed.AddField("User ID",
-			fmt.Sprintf("`%s`", utils.CensorString(strconv.FormatUint(b.userID, 10), b.privacyMode)),
-			true,
-		)
+		mainContent.WriteString(fmt.Sprintf("User ID: `%s`\n",
+			utils.CensorString(strconv.FormatUint(b.userID, 10), b.privacyMode)))
 	}
 	if b.groupID != 0 {
-		embed.AddField("Group ID",
-			fmt.Sprintf("`%s`", utils.CensorString(strconv.FormatUint(b.groupID, 10), b.privacyMode)),
-			true,
-		)
+		mainContent.WriteString(fmt.Sprintf("Group ID: `%s`\n",
+			utils.CensorString(strconv.FormatUint(b.groupID, 10), b.privacyMode)))
 	}
 	if b.reviewerID != 0 {
-		embed.AddField("Reviewer ID",
-			fmt.Sprintf("`%d`", b.reviewerID),
-			true,
-		)
+		mainContent.WriteString(fmt.Sprintf("Reviewer ID: `%d`\n", b.reviewerID))
 	}
 	if b.activityTypeFilter != enum.ActivityTypeAll {
-		embed.AddField("Activity Type",
-			fmt.Sprintf("`%s`", b.activityTypeFilter),
-			true,
-		)
+		mainContent.WriteString(fmt.Sprintf("Activity Type: `%s`\n", b.activityTypeFilter))
 	}
 	if !b.startDate.IsZero() && !b.endDate.IsZero() {
-		embed.AddField("Date Range",
-			fmt.Sprintf("`%s` to `%s`", b.startDate.Format("2006-01-02"), b.endDate.Format("2006-01-02")),
-			true,
-		)
+		mainContent.WriteString(fmt.Sprintf("Date Range: `%s` to `%s`\n",
+			b.startDate.Format("2006-01-02"), b.endDate.Format("2006-01-02")))
 	}
 
-	// Add log entries with details
+	mainContainer := discord.NewContainer(
+		discord.NewTextDisplay(mainContent.String()),
+	).WithAccentColor(utils.GetContainerColor(b.privacyMode))
+
+	builder.AddComponents(mainContainer)
+
+	// Create logs container with content and interactive components
+	var components []discord.ContainerSubComponent
+
+	// Add log entries if any exist
 	if len(b.logs) > 0 {
+		var logsContent strings.Builder
+		logsContent.WriteString("## Activity Logs\n\n")
+
 		for _, log := range b.logs {
-			details := ""
+			// Format timestamp as header
+			logsContent.WriteString(fmt.Sprintf("### <t:%d:F>\n", log.ActivityTimestamp.Unix()))
+
+			// Add activity type
+			logsContent.WriteString(fmt.Sprintf("Activity: `%s`\n", log.ActivityType.String()))
+
+			// Add target information
+			if log.ActivityTarget.GuildID != 0 {
+				logsContent.WriteString(fmt.Sprintf("Guild: %d\n", log.ActivityTarget.GuildID))
+			}
+			if log.ActivityTarget.DiscordID != 0 {
+				logsContent.WriteString(fmt.Sprintf("Discord: <@%d>\n", log.ActivityTarget.DiscordID))
+			}
+			if log.ActivityTarget.UserID != 0 {
+				logsContent.WriteString(fmt.Sprintf("User: [%s](https://www.roblox.com/users/%d/profile)\n",
+					utils.CensorString(strconv.FormatUint(log.ActivityTarget.UserID, 10), b.privacyMode),
+					log.ActivityTarget.UserID))
+			}
+			if log.ActivityTarget.GroupID != 0 {
+				logsContent.WriteString(fmt.Sprintf("Group: [%s](https://www.roblox.com/communities/%d)\n",
+					utils.CensorString(strconv.FormatUint(log.ActivityTarget.GroupID, 10), b.privacyMode),
+					log.ActivityTarget.GroupID))
+			}
+
+			// Add reviewer and details
+			logsContent.WriteString(fmt.Sprintf("Reviewer: <@%d>\n", log.ReviewerID))
 			for key, value := range log.Details {
 				newKey := strings.ToUpper(key[:1]) + key[1:]
 				newValue := utils.NormalizeString(fmt.Sprintf("%v", value))
-				details += fmt.Sprintf("\n%s: `%v`", newKey, newValue)
+				logsContent.WriteString(fmt.Sprintf("%s: `%v`\n", newKey, newValue))
 			}
-
-			description := fmt.Sprintf("Activity: `%s`", log.ActivityType.String())
-
-			if log.ActivityTarget.GuildID != 0 {
-				description += fmt.Sprintf("\nGuild: %d", log.ActivityTarget.GuildID)
-			}
-
-			if log.ActivityTarget.DiscordID != 0 {
-				description += fmt.Sprintf("\nDiscord: <@%d>", log.ActivityTarget.DiscordID)
-			}
-
-			if log.ActivityTarget.UserID != 0 {
-				description += fmt.Sprintf("\nUser: [%s](https://www.roblox.com/users/%d/profile)",
-					utils.CensorString(strconv.FormatUint(log.ActivityTarget.UserID, 10), b.privacyMode),
-					log.ActivityTarget.UserID)
-			}
-
-			if log.ActivityTarget.GroupID != 0 {
-				description += fmt.Sprintf("\nGroup: [%s](https://www.roblox.com/groups/%d)",
-					utils.CensorString(strconv.FormatUint(log.ActivityTarget.GroupID, 10), b.privacyMode),
-					log.ActivityTarget.GroupID)
-			}
-
-			description += fmt.Sprintf("\nReviewer: <@%d>%s", log.ReviewerID, details)
-
-			embed.AddField(
-				fmt.Sprintf("<t:%d:F>", log.ActivityTimestamp.Unix()),
-				description,
-				false,
-			)
 		}
-		embed.SetFooterText(fmt.Sprintf("Sequence %d | %d logs shown", b.logs[0].Sequence, len(b.logs)))
+
+		// Add footer text
+		logsContent.WriteString(fmt.Sprintf("\n-# Sequence %d | %d logs shown\n", b.logs[0].Sequence, len(b.logs)))
+
+		components = append(components, discord.NewTextDisplay(logsContent.String()))
 	} else {
-		embed.AddField("No Results", "No log entries found for the given query", false)
+		components = append(components, discord.NewTextDisplay("## No Results\nNo log entries found for the given query"))
 	}
 
-	// Create components
-	components := b.buildComponents()
+	// Add separator and interactive components
+	components = append(components, discord.NewLargeSeparator())
+	components = append(components, b.buildInteractiveComponents()...)
 
-	return discord.NewMessageUpdateBuilder().
-		SetEmbeds(embed.Build()).
-		AddContainerComponents(components...)
+	logsContainer := discord.NewContainer(components...).WithAccentColor(utils.GetContainerColor(b.privacyMode))
+	builder.AddComponents(logsContainer)
+
+	// Add back button outside containers
+	builder.AddComponents(discord.NewActionRow(
+		discord.NewSecondaryButton("◀️ Back", constants.BackButtonCustomID),
+	))
+
+	return builder
 }
 
-// buildComponents creates all interactive components for the log viewer.
-func (b *Builder) buildComponents() []discord.ContainerComponent {
-	return []discord.ContainerComponent{
+// buildInteractiveComponents creates the interactive components for the log view.
+func (b *Builder) buildInteractiveComponents() []discord.ContainerSubComponent {
+	return []discord.ContainerSubComponent{
 		// Query condition selection menu
 		discord.NewActionRow(
 			discord.NewStringSelectMenu(constants.ActionSelectMenuCustomID, "Set Filter Condition",
@@ -186,7 +189,6 @@ func (b *Builder) buildComponents() []discord.ContainerComponent {
 		),
 		// Navigation buttons
 		discord.NewActionRow(
-			discord.NewSecondaryButton("◀️", constants.BackButtonCustomID),
 			discord.NewSecondaryButton("⏮️", string(session.ViewerFirstPage)).WithDisabled(!b.hasPrevPage),
 			discord.NewSecondaryButton("◀️", string(session.ViewerPrevPage)).WithDisabled(!b.hasPrevPage),
 			discord.NewSecondaryButton("▶️", string(session.ViewerNextPage)).WithDisabled(!b.hasNextPage),

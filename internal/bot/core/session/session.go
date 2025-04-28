@@ -27,7 +27,7 @@ const (
 
 	// ReviewerSessionTimeout defines how long a reviewer's session remains valid.
 	// Reviewers get a longer timeout due to their trusted status.
-	ReviewerSessionTimeout = 2 * time.Hour
+	ReviewerSessionTimeout = 6 * time.Hour
 )
 
 // Session maintains user state through a Redis-backed key-value store where values are

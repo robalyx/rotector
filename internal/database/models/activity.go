@@ -86,7 +86,7 @@ func (r *ActivityModel) GetLogs(
 
 	// Apply cursor conditions if cursor exists
 	if cursor != nil {
-		query = query.Where("(activity_timestamp, sequence) < (?, ?)", cursor.Timestamp, cursor.Sequence)
+		query = query.Where("(activity_timestamp, sequence) <= (?, ?)", cursor.Timestamp, cursor.Sequence)
 	}
 
 	// Order by timestamp and sequence for stable pagination
@@ -101,10 +101,10 @@ func (r *ActivityModel) GetLogs(
 	var nextCursor *types.LogCursor
 	if len(logs) > limit {
 		// Use the extra item as the next cursor
-		last := logs[limit-1]
+		extraItem := logs[limit]
 		nextCursor = &types.LogCursor{
-			Timestamp: last.ActivityTimestamp,
-			Sequence:  last.Sequence,
+			Timestamp: extraItem.ActivityTimestamp,
+			Sequence:  extraItem.Sequence,
 		}
 		logs = logs[:limit] // Remove the extra item
 	}

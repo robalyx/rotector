@@ -16,34 +16,45 @@ type Builder struct {
 // NewBuilder creates a new CAPTCHA builder.
 func NewBuilder(s *session.Session) *Builder {
 	return &Builder{
-		imgBuffer: session.ImageBuffer.Get(s),
+		imgBuffer: session.CaptchaImageBuffer.Get(s),
 	}
 }
 
 // Build creates a Discord message with CAPTCHA information.
 func (b *Builder) Build() *discord.MessageUpdateBuilder {
-	embed := discord.NewEmbedBuilder().
-		SetTitle("🔒 CAPTCHA Verification Required").
-		SetDescription("Please solve this CAPTCHA to continue reviewing.\nThe CAPTCHA contains 6 digits.").
-		SetColor(constants.DefaultEmbedColor)
+	builder := discord.NewMessageUpdateBuilder()
+
+	// Create components for the main container
+	var components []discord.ContainerSubComponent
+
+	// Add text display
+	components = append(components, discord.NewTextDisplay(
+		"## 🔒 CAPTCHA Verification Required\nPlease solve this CAPTCHA to continue reviewing.\nThe CAPTCHA contains 6 digits."))
 
 	// Add CAPTCHA image if available
 	if b.imgBuffer != nil {
-		embed.SetImage("attachment://captcha.png")
-	}
-
-	builder := discord.NewMessageUpdateBuilder().
-		SetEmbeds(embed.Build()).
-		AddActionRow(
-			discord.NewSecondaryButton("◀️ Back", constants.BackButtonCustomID),
-			discord.NewSecondaryButton("🔄 Refresh", constants.CaptchaRefreshButtonCustomID),
-			discord.NewPrimaryButton("Enter Answer", constants.CaptchaAnswerButtonCustomID),
+		builder.AddFiles(discord.NewFile("captcha.png", "", b.imgBuffer))
+		components = append(components,
+			discord.NewMediaGallery(discord.MediaGalleryItem{
+				Media: discord.UnfurledMediaItem{
+					URL: "attachment://captcha.png",
+				},
+			}),
 		)
-
-	// Attach CAPTCHA image if available
-	if b.imgBuffer != nil {
-		builder.SetFiles(discord.NewFile("captcha.png", "", b.imgBuffer))
 	}
+
+	// Create main container with all components
+	mainContainer := discord.NewContainer(components...).
+		WithAccentColor(constants.DefaultContainerColor)
+
+	builder.AddComponents(mainContainer)
+
+	// Add interactive components
+	builder.AddComponents(discord.NewActionRow(
+		discord.NewSecondaryButton("◀️ Back", constants.BackButtonCustomID),
+		discord.NewSecondaryButton("🔄 Refresh", constants.CaptchaRefreshButtonCustomID),
+		discord.NewPrimaryButton("Enter Answer", constants.CaptchaAnswerButtonCustomID),
+	))
 
 	return builder
 }

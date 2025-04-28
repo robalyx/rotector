@@ -51,13 +51,7 @@ type ImageStreamer struct {
 // NewImageStreamer creates a new ImageStreamer instance.
 func NewImageStreamer(manager *Manager, logger *zap.Logger, client *client.Client) *ImageStreamer {
 	// Load placeholder image for missing or failed thumbnails
-	imageFile, err := assets.Images.Open("images/content_deleted.png")
-	if err != nil {
-		logger.Fatal("Failed to load placeholder image", zap.Error(err))
-	}
-	defer func() { _ = imageFile.Close() }()
-
-	placeholderImg, _, err := image.Decode(imageFile)
+	placeholderImg, _, err := image.Decode(bytes.NewReader(assets.ContentDeleted))
 	if err != nil {
 		logger.Fatal("Failed to decode placeholder image", zap.Error(err))
 	}

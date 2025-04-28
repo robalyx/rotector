@@ -107,7 +107,7 @@ func run() error {
 }
 
 // runWorkers starts multiple instances of a worker type.
-func runWorkers(ctx context.Context, workerType string, count int64) {
+func runWorkers(ctx context.Context, workerType string, count int) {
 	app, err := setup.InitializeApp(ctx, setup.ServiceWorker, WorkerLogDir)
 	if err != nil {
 		log.Fatalf("Failed to initialize application: %v", err)
@@ -134,7 +134,7 @@ func runWorkers(ctx context.Context, workerType string, count int64) {
 	var wg stdSync.WaitGroup
 	for i := range count {
 		wg.Add(1)
-		go func(workerID int64) {
+		go func(workerID int) {
 			defer wg.Done()
 
 			// Add staggered startup delay

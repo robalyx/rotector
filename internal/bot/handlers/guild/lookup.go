@@ -45,7 +45,6 @@ func NewLookupMenu(layout *Layout) *LookupMenu {
 		ShowHandlerFunc:    m.Show,
 		CleanupHandlerFunc: m.Cleanup,
 		ButtonHandlerFunc:  m.handleButton,
-		SelectHandlerFunc:  m.handleSelectMenu,
 	}
 	return m
 }
@@ -225,25 +224,13 @@ func (m *LookupMenu) handleButton(ctx *interaction.Context, s *session.Session, 
 		string(session.ViewerNextPage),
 		string(session.ViewerLastPage):
 		m.handlePagination(ctx, s, session.ViewerAction(customID))
+	default:
+		// Handle guild message view button clicks
+		if guildID, err := strconv.ParseUint(customID, 10, 64); err == nil {
+			session.DiscordUserMessageGuildID.Set(s, guildID)
+			ctx.Show(constants.GuildMessagesPageName, "")
+		}
 	}
-}
-
-// handleSelectMenu processes select menu interactions.
-func (m *LookupMenu) handleSelectMenu(ctx *interaction.Context, s *session.Session, customID, option string) {
-	if customID != constants.GuildMessageSelectMenuCustomID {
-		return
-	}
-
-	// Parse guild ID from option value
-	guildID, err := strconv.ParseUint(option, 10, 64)
-	if err != nil {
-		ctx.Error("Failed to parse guild ID.")
-		return
-	}
-
-	// Store selected guild ID
-	session.DiscordUserMessageGuildID.Set(s, guildID)
-	ctx.Show(constants.GuildMessagesPageName, "")
 }
 
 // handlePagination processes page navigation for guild memberships.

@@ -47,15 +47,13 @@ func (m *Menu) Show(ctx *interaction.Context, s *session.Session) {
 
 	// Store data in session
 	session.CaptchaAnswer.Set(s, string(digits))
-	session.ImageBuffer.Set(s, imgBuffer)
-
-	ctx.Show(constants.CaptchaPageName, "Generated new CAPTCHA.")
+	session.CaptchaImageBuffer.Set(s, imgBuffer)
 }
 
 // Cleanup handles the cleanup of the CAPTCHA menu.
 func (m *Menu) Cleanup(s *session.Session) {
 	session.CaptchaAnswer.Delete(s)
-	session.ImageBuffer.Delete(s)
+	session.CaptchaImageBuffer.Delete(s)
 }
 
 // handleButton processes button interactions.

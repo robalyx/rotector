@@ -42,85 +42,117 @@ func NewBuilder(s *session.Session) *Builder {
 
 // Build creates a Discord message showing the chat history and controls.
 func (b *Builder) Build() *discord.MessageUpdateBuilder {
-	return discord.NewMessageUpdateBuilder().
-		SetEmbeds(b.buildEmbeds()...).
-		AddContainerComponents(b.buildComponents()...)
+	builder := discord.NewMessageUpdateBuilder()
+
+	// Add containers
+	builder.AddComponents(
+		// Header container
+		b.buildHeaderContainer(),
+		// Chat container
+		b.buildChatContainer(),
+	)
+
+	// Only add back button when not streaming
+	if !b.isStreaming {
+		builder.AddComponents(
+			discord.NewActionRow(
+				discord.NewSecondaryButton("◀️ Back", constants.BackButtonCustomID),
+			),
+		)
+	}
+
+	return builder
 }
 
-// buildEmbeds creates all the embeds for the chat interface.
-func (b *Builder) buildEmbeds() []discord.Embed {
-	messageCount := len(b.getChatMessages()) / 2
-	totalPages := max((messageCount-1)/constants.ChatMessagesPerPage, 0)
+// buildHeaderContainer creates the header section with message usage info.
+func (b *Builder) buildHeaderContainer() discord.ContainerComponent {
+	var headerContent strings.Builder
+	headerContent.WriteString("## ⚠️ AI Chat - Experimental Feature\n")
+	headerContent.WriteString("This chat feature is experimental and may not work as expected. " +
+		"Chat histories are stored temporarily and will be cleared when your session expires.\n\n")
 
-	// Add header embed
-	headerEmbed := b.buildHeaderEmbed(totalPages)
-	embeds := []discord.Embed{headerEmbed}
-
-	// If streaming, only show header and streaming status
-	if b.isStreaming {
-		embeds = append(embeds, b.buildStreamingEmbed())
-		return embeds
+	// Add message count
+	resetTime := b.firstMessage.Add(constants.ChatMessageResetLimit)
+	if b.messageCount > 0 && time.Now().Before(resetTime) {
+		headerContent.WriteString(fmt.Sprintf("💬 **Messages:** %d/%d remaining",
+			constants.MaxChatMessagesPerDay-b.messageCount, constants.MaxChatMessagesPerDay))
+		headerContent.WriteString(fmt.Sprintf("\n⏰ **Credits reset:** <t:%d:R>", resetTime.Unix()))
+	} else {
+		headerContent.WriteString(fmt.Sprintf("💬 **Messages:** %d/%d remaining",
+			constants.MaxChatMessagesPerDay, constants.MaxChatMessagesPerDay))
 	}
 
-	// Add chat message embeds
-	chatEmbeds := b.buildChatEmbeds()
-	embeds = append(embeds, chatEmbeds...)
-
-	// Add context embed on first page
-	if b.page == 0 {
-		if contextEmbed := b.buildContextEmbed(); contextEmbed != nil {
-			embeds = append(embeds, *contextEmbed)
-		}
-	}
-
-	return embeds
+	return discord.NewContainer(
+		discord.NewTextDisplay(headerContent.String()),
+	).WithAccentColor(constants.DefaultContainerColor)
 }
 
-// buildHeaderEmbed creates the header embed with usage information.
-func (b *Builder) buildHeaderEmbed(totalPages int) discord.Embed {
-	messageCreditsInfo := fmt.Sprintf("This chat feature is experimental and may not work as expected. "+
-		"Chat histories are stored temporarily and will be cleared when your session expires.\n\n"+
-		"💬 **Messages:** %d/%d remaining", constants.MaxChatMessagesPerDay-b.messageCount, constants.MaxChatMessagesPerDay)
+// buildChatContainer creates the chat container with messages and controls.
+func (b *Builder) buildChatContainer() discord.ContainerComponent {
+	var chatComponents []discord.ContainerSubComponent
 
-	// Add reset time if messages have been used
-	if b.messageCount > 0 {
-		resetTime := b.firstMessage.Add(constants.ChatMessageResetLimit)
-		if time.Now().Before(resetTime) {
-			messageCreditsInfo += fmt.Sprintf("\n⏰ **Credits reset:** <t:%d:R>", resetTime.Unix())
-		}
-	}
-
-	builder := discord.NewEmbedBuilder().
-		SetTitle("⚠️ AI Chat - Experimental Feature").
-		SetDescription(messageCreditsInfo).
-		SetColor(constants.DefaultEmbedColor)
-
-	// Add page information if there are multiple pages
-	if totalPages > 0 {
-		builder.SetFooter(fmt.Sprintf("Page %d/%d", b.page+1, totalPages+1), "")
-	}
-
-	return builder.Build()
-}
-
-// buildStreamingEmbed creates an embed showing the current streaming status.
-func (b *Builder) buildStreamingEmbed() discord.Embed {
-	if b.streamingMessage == "" {
-		b.streamingMessage = "AI is typing..."
-	}
-
-	embed := discord.NewEmbedBuilder().
-		SetColor(constants.DefaultEmbedColor).
-		SetTitle("💬 Response in Progress").
-		SetDescription(b.streamingMessage)
-
-	return embed.Build()
-}
-
-// buildChatEmbeds creates embeds for chat messages.
-func (b *Builder) buildChatEmbeds() []discord.Embed {
-	var embeds []discord.Embed
+	// Add chat messages or streaming preview
 	chatMessages := b.getChatMessages()
+
+	if b.isStreaming {
+		chatComponents = append(chatComponents, b.buildStreamingPreview()...)
+	} else {
+		chatComponents = append(chatComponents, b.buildChatHistory(chatMessages)...)
+
+		// Add separator before model selection
+		chatComponents = append(chatComponents, discord.NewLargeSeparator())
+
+		// Add model selection dropdown
+		chatComponents = append(chatComponents,
+			discord.NewActionRow(
+				discord.NewStringSelectMenu(constants.ChatModelSelectID, "Select Model", b.buildModelOptions()...),
+			))
+	}
+
+	return discord.NewContainer(chatComponents...).WithAccentColor(constants.DefaultContainerColor)
+}
+
+// buildStreamingPreview adds streaming preview components to the chat container.
+func (b *Builder) buildStreamingPreview() []discord.ContainerSubComponent {
+	var components []discord.ContainerSubComponent
+	var previewContent strings.Builder
+
+	// Add active context if any
+	if contextInfo := b.getActiveContextInfo(); contextInfo != "" {
+		previewContent.WriteString("### Context\n")
+		previewContent.WriteString(utils.FormatString(contextInfo))
+		previewContent.WriteString("\n\n")
+	}
+
+	// Find the last human message from context
+	var lastHumanMessage string
+	for i := len(b.chatContext) - 1; i >= 0; i-- {
+		if b.chatContext[i].Type == ai.ContextTypeHuman {
+			lastHumanMessage = b.chatContext[i].Content
+			break
+		}
+	}
+
+	// Add user message and AI response
+	if lastHumanMessage != "" {
+		previewContent.WriteString(fmt.Sprintf("### User\n%s\n",
+			utils.FormatString(utils.NormalizeString(lastHumanMessage))))
+
+		// Add AI response
+		previewContent.WriteString(fmt.Sprintf("### %s\n%s",
+			b.model.String(),
+			b.formatAIMessage(b.streamingMessage)))
+
+		components = append(components,
+			discord.NewTextDisplay(previewContent.String()))
+	}
+
+	return components
+}
+
+// buildChatHistory adds chat history components to the chat container.
+func (b *Builder) buildChatHistory(chatMessages []ai.Context) []discord.ContainerSubComponent {
+	var components []discord.ContainerSubComponent
 
 	// Calculate page boundaries
 	totalPairs := len(chatMessages) / 2
@@ -131,79 +163,122 @@ func (b *Builder) buildChatEmbeds() []discord.Embed {
 	start := startPair * 2
 	end := endPair * 2
 
-	// Add message pairs to embeds
+	// Add message pairs
 	if len(chatMessages) >= 2 && start < len(chatMessages) {
 		for i := start; i < end && i+1 < len(chatMessages); i += 2 {
-			embed := b.buildMessagePairEmbed(chatMessages[i], chatMessages[i+1], i)
-			embeds = append(embeds, embed)
-		}
-	}
+			var content strings.Builder
 
-	return embeds
-}
+			// Add message pair
+			content.WriteString(b.buildMessagePair(chatMessages, i))
 
-// buildContextEmbed creates an embed showing active context if any exists.
-func (b *Builder) buildContextEmbed() *discord.Embed {
-	if len(b.chatContext) == 0 {
-		return nil
-	}
-
-	// Find the index of the last AI message by iterating backward
-	lastMessageIndex := -1
-	for i := len(b.chatContext) - 1; i >= 0; i-- {
-		if b.chatContext[i].Type == ai.ContextTypeAI {
-			lastMessageIndex = i
-			break
-		}
-	}
-
-	// Count contexts that were added after the last message pair
-	counts := make(map[ai.ContextType]int)
-	startIndex := lastMessageIndex + 1
-
-	// Only proceed if there are items after the last AI message (or if no AI message exists)
-	if startIndex < len(b.chatContext) {
-		for _, ctx := range b.chatContext[startIndex:] {
-			// Only count User and Group context types
-			if ctx.Type == ai.ContextTypeUser || ctx.Type == ai.ContextTypeGroup {
-				counts[ctx.Type]++
+			// Add active context after the last message pair on first page
+			if b.page == 0 && i == end-2 {
+				if contextInfo := b.getActiveContextInfo(); contextInfo != "" {
+					content.WriteString("\n### Context\n" + utils.FormatString(contextInfo))
+				}
 			}
+
+			components = append(components,
+				discord.NewTextDisplay(content.String()))
+		}
+	} else if b.page == 0 {
+		// If no messages but have active context, show it
+		if contextInfo := b.getActiveContextInfo(); contextInfo != "" {
+			components = append(components,
+				discord.NewTextDisplay("### Context\n"+utils.FormatString(contextInfo)))
 		}
 	}
 
-	// If no relevant context items were found after the last message, return nil
-	if len(counts) == 0 {
-		return nil
+	// Add separator before action buttons
+	components = append(components, discord.NewLargeSeparator())
+
+	// Add action buttons
+	actionButtons := []discord.InteractiveComponent{
+		discord.NewPrimaryButton("Send Message", constants.ChatSendButtonID),
+		discord.NewDangerButton("Clear Chat", constants.ChatClearHistoryButtonID),
 	}
 
-	// Build context indicator string
-	var sb strings.Builder
-	if count := counts[ai.ContextTypeUser]; count > 0 {
-		sb.WriteString(fmt.Sprintf("👤 User context (%d items)", count))
-	}
-	if count := counts[ai.ContextTypeGroup]; count > 0 {
-		if sb.Len() > 0 {
-			sb.WriteString("\n")
+	// Only show clear context button if the last item is a context
+	if len(b.chatContext) > 0 {
+		lastItem := b.chatContext[len(b.chatContext)-1]
+		if lastItem.Type == ai.ContextTypeUser || lastItem.Type == ai.ContextTypeGroup {
+			actionButtons = append(actionButtons,
+				discord.NewDangerButton("Clear Context", constants.ChatClearContextButtonID))
 		}
-		sb.WriteString(fmt.Sprintf("👥 Group context (%d items)", count))
 	}
 
-	// Build the context embed
-	contextEmbed := discord.NewEmbedBuilder().
-		SetColor(constants.DefaultEmbedColor)
+	components = append(components, discord.NewActionRow(actionButtons...))
 
-	b.addPaddedMessage(contextEmbed, "Context", sb.String(), true)
+	// Add pagination buttons
+	totalPages := max((totalPairs-1)/constants.ChatMessagesPerPage, 0)
+	components = append(components,
+		discord.NewActionRow(
+			discord.NewSecondaryButton("⏮️", string(session.ViewerFirstPage)).WithDisabled(b.page == 0),
+			discord.NewSecondaryButton("◀️", string(session.ViewerPrevPage)).WithDisabled(b.page == 0),
+			discord.NewSecondaryButton("▶️", string(session.ViewerNextPage)).WithDisabled(b.page == totalPages),
+			discord.NewSecondaryButton("⏭️", string(session.ViewerLastPage)).WithDisabled(b.page == totalPages),
+		))
 
-	embed := contextEmbed.Build()
-	return &embed
+	return components
 }
 
-// buildMessagePairEmbed creates an embed for a user-AI message pair.
-func (b *Builder) buildMessagePairEmbed(userMsg, aiMsg ai.Context, messageIndex int) discord.Embed {
-	embed := discord.NewEmbedBuilder().
-		SetColor(constants.DefaultEmbedColor)
+// buildMessagePair adds a single message pair to the chat components.
+func (b *Builder) buildMessagePair(chatMessages []ai.Context, i int) string {
+	var messageContent strings.Builder
 
+	// Add message number
+	messageNumber := (i / 2) + 1
+	messageContent.WriteString(fmt.Sprintf("-# Message %d\n", messageNumber))
+
+	// Add context if available
+	if contextInfo := b.getContextInfo(i); contextInfo != "" {
+		messageContent.WriteString(fmt.Sprintf("### Context\n%s\n",
+			utils.FormatString(contextInfo)))
+	}
+
+	// Add user message
+	messageContent.WriteString(fmt.Sprintf("### User\n%s\n",
+		utils.FormatString(utils.NormalizeString(chatMessages[i].Content))))
+
+	// Add AI message
+	modelName := chatMessages[i+1].Model
+	if modelName == "" {
+		modelName = "Unknown Model"
+	}
+	messageContent.WriteString(fmt.Sprintf("### %s\n%s",
+		modelName, b.formatAIMessage(chatMessages[i+1].Content)))
+
+	return messageContent.String()
+}
+
+// buildModelOptions creates the model selection options.
+func (b *Builder) buildModelOptions() []discord.StringSelectMenuOption {
+	return []discord.StringSelectMenuOption{
+		discord.NewStringSelectMenuOption("Gemini 2.5 Pro", enum.ChatModelGemini2_5Pro.String()).
+			WithDescription("Most capable model - Best overall performance").
+			WithDefault(b.model == enum.ChatModelGemini2_5Pro),
+		discord.NewStringSelectMenuOption("o4 Mini", enum.ChatModelo4Mini.String()).
+			WithDescription("Most capable model - Best overall performance").
+			WithDefault(b.model == enum.ChatModelo4Mini),
+		discord.NewStringSelectMenuOption("Gemini 2.5 Flash", enum.ChatModelGemini2_5Flash.String()).
+			WithDescription("High performance model - Good balance of speed and capabilities").
+			WithDefault(b.model == enum.ChatModelGemini2_5Flash),
+		discord.NewStringSelectMenuOption("QwQ 32B", enum.ChatModelQwQ32B.String()).
+			WithDescription("High performance model - Excellent reasoning and language abilities").
+			WithDefault(b.model == enum.ChatModelQwQ32B),
+		discord.NewStringSelectMenuOption("DeepSeek V3", enum.ChatModelDeepseekV3_0324.String()).
+			WithDescription("Mid-tier model - Good language understanding").
+			WithDefault(b.model == enum.ChatModelDeepseekV3_0324),
+		discord.NewStringSelectMenuOption("GPT-4o Mini", enum.ChatModelGPT4oMini.String()).
+			WithDescription("Mid-tier model - Basic capabilities").
+			WithDefault(b.model == enum.ChatModelGPT4oMini),
+	}
+}
+
+// getContextInfo returns context information for a specific message pair.
+func (b *Builder) getContextInfo(messageIndex int) string {
 	// Find the user message's position in the full context
+	userMsg := b.getChatMessages()[messageIndex]
 	userMsgIndex := -1
 	for i, ctx := range b.chatContext {
 		if ctx == userMsg {
@@ -213,7 +288,6 @@ func (b *Builder) buildMessagePairEmbed(userMsg, aiMsg ai.Context, messageIndex 
 	}
 
 	// Check for context immediately before this user message
-	var contextInfo string
 	if userMsgIndex > 0 {
 		counts := make(map[ai.ContextType]int)
 
@@ -240,143 +314,64 @@ func (b *Builder) buildMessagePairEmbed(userMsg, aiMsg ai.Context, messageIndex 
 				}
 				sb.WriteString(fmt.Sprintf("👥 Group context (%d items)", count))
 			}
-			contextInfo = sb.String()
+			return sb.String()
 		}
 	}
 
-	// Add context and user message (right-aligned)
-	if contextInfo != "" {
-		// Add context
-		embed.AddField("\u200b", "\u200b", true) // Padding
-		embed.AddField("\u200b", "\u200b", true) // Padding
-		embed.AddField("Context", fmt.Sprintf("```%s```", contextInfo), true)
-	}
-
-	// Add user message
-	embed.AddField("\u200b", "\u200b", true) // Padding
-	embed.AddField("\u200b", "\u200b", true) // Padding
-	embed.AddField("User", fmt.Sprintf("```%s```", utils.NormalizeString(userMsg.Content)), true)
-
-	// Add AI message (left-aligned)
-	modelName := aiMsg.Model
-	if modelName == "" {
-		modelName = "Unknown Model"
-	}
-	b.addPaddedMessage(embed, modelName, aiMsg.Content, false)
-
-	// Add message number to footer (relative to the start of the chat)
-	messageNumber := (messageIndex / 2) + 1
-	embed.SetFooter(fmt.Sprintf("Message %d", messageNumber), "")
-
-	return embed.Build()
+	return ""
 }
 
-// getChatMessages returns only the human and AI messages from the context, ensuring alternation.
-func (b *Builder) getChatMessages() []ai.Context {
-	messages := make([]ai.Context, 0, len(b.chatContext))
-	var lastType ai.ContextType
-
-	// Collect messages in order, ensuring proper human-AI alternation
-	for _, ctx := range b.chatContext {
-		// Skip non-message types
-		if ctx.Type != ai.ContextTypeHuman && ctx.Type != ai.ContextTypeAI {
-			continue
-		}
-
-		// Skip if the current message type is the same as the last one added
-		if len(messages) > 0 && lastType == ctx.Type {
-			continue
-		}
-
-		// Ensure AI messages are always preceded by a human message in the filtered list
-		if ctx.Type == ai.ContextTypeAI && lastType != ai.ContextTypeHuman {
-			continue
-		}
-
-		messages = append(messages, ctx)
-		lastType = ctx.Type
+// getActiveContextInfo returns information about active context items.
+func (b *Builder) getActiveContextInfo() string {
+	if len(b.chatContext) == 0 {
+		return ""
 	}
 
-	// Ensure the list doesn't end with a Human message without a following AI message
-	if len(messages) > 0 && messages[len(messages)-1].Type == ai.ContextTypeHuman {
-		messages = messages[:len(messages)-1]
+	// Find the index of the last AI message by iterating backward
+	lastMessageIndex := -1
+	for i := len(b.chatContext) - 1; i >= 0; i-- {
+		if b.chatContext[i].Type == ai.ContextTypeAI {
+			lastMessageIndex = i
+			break
+		}
 	}
 
-	return messages
+	// Count contexts that were added after the last message pair
+	counts := make(map[ai.ContextType]int)
+	startIndex := lastMessageIndex + 1
+
+	// Only proceed if there are items after the last AI message (or if no AI message exists)
+	if startIndex < len(b.chatContext) {
+		for _, ctx := range b.chatContext[startIndex:] {
+			// Only count User and Group context types
+			if ctx.Type == ai.ContextTypeUser || ctx.Type == ai.ContextTypeGroup {
+				counts[ctx.Type]++
+			}
+		}
+	}
+
+	// If no relevant context items were found after the last message, return empty string
+	if len(counts) == 0 {
+		return ""
+	}
+
+	// Build context indicator string
+	var sb strings.Builder
+	if count := counts[ai.ContextTypeUser]; count > 0 {
+		sb.WriteString(fmt.Sprintf("👤 User context (%d items)", count))
+	}
+	if count := counts[ai.ContextTypeGroup]; count > 0 {
+		if sb.Len() > 0 {
+			sb.WriteString("\n")
+		}
+		sb.WriteString(fmt.Sprintf("👥 Group context (%d items)", count))
+	}
+
+	return sb.String()
 }
 
-// buildComponents creates all the interactive components.
-func (b *Builder) buildComponents() []discord.ContainerComponent {
-	// If streaming, return no components
-	if b.isStreaming {
-		return nil
-	}
-
-	messageCount := (len(b.getChatMessages())) / 2
-	totalPages := max((messageCount-1)/constants.ChatMessagesPerPage, 0)
-
-	components := []discord.ContainerComponent{
-		discord.NewActionRow(
-			discord.NewStringSelectMenu(constants.ChatModelSelectID, "Select Model",
-				discord.NewStringSelectMenuOption("Gemini 2.5 Pro", enum.ChatModelGemini2_5Pro.String()).
-					WithDescription("Most capable model - Best overall performance").
-					WithDefault(b.model == enum.ChatModelGemini2_5Pro),
-				discord.NewStringSelectMenuOption("o4 Mini", enum.ChatModelo4Mini.String()).
-					WithDescription("Most capable model - Best overall performance").
-					WithDefault(b.model == enum.ChatModelo4Mini),
-				discord.NewStringSelectMenuOption("Gemini 2.5 Flash", enum.ChatModelGemini2_5Flash.String()).
-					WithDescription("High performance model - Good balance of speed and capabilities").
-					WithDefault(b.model == enum.ChatModelGemini2_5Flash),
-				discord.NewStringSelectMenuOption("QwQ 32B", enum.ChatModelQwQ32B.String()).
-					WithDescription("High performance model - Excellent reasoning and language abilities").
-					WithDefault(b.model == enum.ChatModelQwQ32B),
-				discord.NewStringSelectMenuOption("DeepSeek V3", enum.ChatModelDeepseekV3_0324.String()).
-					WithDescription("Mid-tier model - Good language understanding").
-					WithDefault(b.model == enum.ChatModelDeepseekV3_0324),
-				discord.NewStringSelectMenuOption("GPT-4o Mini", enum.ChatModelGPT4oMini.String()).
-					WithDescription("Mid-tier model - Basic capabilities").
-					WithDefault(b.model == enum.ChatModelGPT4oMini),
-			),
-		),
-		discord.NewActionRow(
-			discord.NewSecondaryButton("◀️", constants.BackButtonCustomID),
-			discord.NewSecondaryButton("⏮️", string(session.ViewerFirstPage)).WithDisabled(b.page == 0),
-			discord.NewSecondaryButton("◀️", string(session.ViewerPrevPage)).WithDisabled(b.page == 0),
-			discord.NewSecondaryButton("▶️", string(session.ViewerNextPage)).WithDisabled(b.page == totalPages),
-			discord.NewSecondaryButton("⏭️", string(session.ViewerLastPage)).WithDisabled(b.page == totalPages),
-		),
-	}
-
-	// Add action buttons row
-	actionButtons := []discord.InteractiveComponent{
-		discord.NewPrimaryButton("Send Message", constants.ChatSendButtonID),
-		discord.NewDangerButton("Clear Chat", constants.ChatClearHistoryButtonID),
-	}
-
-	// Only show clear context button if the last item is a context
-	if len(b.chatContext) > 0 {
-		lastItem := b.chatContext[len(b.chatContext)-1]
-		if lastItem.Type == ai.ContextTypeUser || lastItem.Type == ai.ContextTypeGroup {
-			actionButtons = append(actionButtons,
-				discord.NewDangerButton("Clear Context", constants.ChatClearContextButtonID))
-		}
-	}
-
-	components = append(components, discord.NewActionRow(actionButtons...))
-	return components
-}
-
-// addPaddedMessage adds a message to the embed with proper padding fields.
-func (b *Builder) addPaddedMessage(embed *discord.EmbedBuilder, title string, content string, rightAlign bool) {
-	if rightAlign {
-		// User messages - with padding for right alignment
-		embed.AddField("\u200b", "\u200b", true)
-		embed.AddField("\u200b", "\u200b", true)
-		embed.AddField(title, fmt.Sprintf("```%s```", utils.NormalizeString(content)), true)
-		return
-	}
-
-	// AI messages - handle thinking blocks and content
+// formatAIMessage formats the AI message content with proper markdown.
+func (b *Builder) formatAIMessage(content string) string {
 	content = strings.TrimSpace(content)
 	content = strings.ReplaceAll(content, "<message>", "")
 	content = strings.ReplaceAll(content, "</message>", "")
@@ -405,7 +400,7 @@ func (b *Builder) addPaddedMessage(embed *discord.EmbedBuilder, title string, co
 				text = text[:limit] + " ..."
 			}
 		}
-		return fmt.Sprintf("```%s```", text)
+		return utils.FormatString(text)
 	}
 
 	for {
@@ -447,7 +442,39 @@ func (b *Builder) addPaddedMessage(embed *discord.EmbedBuilder, title string, co
 		content = content[end+8:]
 	}
 
-	if finalContent.Len() > 0 {
-		embed.AddField(title, finalContent.String(), false)
+	return finalContent.String()
+}
+
+// getChatMessages returns only the human and AI messages from the context, ensuring alternation.
+func (b *Builder) getChatMessages() []ai.Context {
+	messages := make([]ai.Context, 0, len(b.chatContext))
+	var lastType ai.ContextType
+
+	// Collect messages in order, ensuring proper human-AI alternation
+	for _, ctx := range b.chatContext {
+		// Skip non-message types
+		if ctx.Type != ai.ContextTypeHuman && ctx.Type != ai.ContextTypeAI {
+			continue
+		}
+
+		// Skip if the current message type is the same as the last one added
+		if len(messages) > 0 && lastType == ctx.Type {
+			continue
+		}
+
+		// Ensure AI messages are always preceded by a human message in the filtered list
+		if ctx.Type == ai.ContextTypeAI && lastType != ai.ContextTypeHuman {
+			continue
+		}
+
+		messages = append(messages, ctx)
+		lastType = ctx.Type
 	}
+
+	// Ensure the list doesn't end with a Human message without a following AI message
+	if len(messages) > 0 && messages[len(messages)-1].Type == ai.ContextTypeHuman {
+		messages = messages[:len(messages)-1]
+	}
+
+	return messages
 }

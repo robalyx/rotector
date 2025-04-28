@@ -149,6 +149,16 @@ func (m *Middleware) Process(
 	return resp, nil
 }
 
+// SetLogger sets the logger for the middleware.
+func (m *Middleware) SetLogger(l logger.Logger) {
+	m.logger = l
+}
+
+// GetProxies returns the list of Roverse proxies.
+func (m *Middleware) GetProxies() []*url.URL {
+	return m.proxies
+}
+
 // routeRequest attempts to route the request through the Roverse proxy.
 func (m *Middleware) routeRequest(
 	ctx context.Context, httpClient *http.Client, req *http.Request,
@@ -296,14 +306,4 @@ func (m *Middleware) applyProxyToClient(httpClient *http.Client, proxy *url.URL)
 	proxyClient.Jar = httpClient.Jar
 
 	return proxyClient
-}
-
-// SetLogger sets the logger for the middleware.
-func (m *Middleware) SetLogger(l logger.Logger) {
-	m.logger = l
-}
-
-// GetProxies returns the list of Roverse proxies.
-func (m *Middleware) GetProxies() []*url.URL {
-	return m.proxies
 }

@@ -3,6 +3,7 @@ package selector
 import (
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/disgoorg/disgo/discord"
 	"github.com/robalyx/rotector/internal/bot/constants"
@@ -23,19 +24,20 @@ func NewBuilder(s *session.Session) *Builder {
 
 // Build creates a Discord message showing the selector menu.
 func (b *Builder) Build() *discord.MessageUpdateBuilder {
-	// Create embed
-	embed := discord.NewEmbedBuilder().
-		SetTitle("Session Manager").
-		SetDescription("You have existing sessions. Please select whether to create a new session or continue an existing one.").
-		SetColor(constants.DefaultEmbedColor)
+	var mainContent, sessionsContent strings.Builder
 
-	// Add existing sessions to embed
-	for _, s := range b.sessions {
-		embed.AddField(
-			fmt.Sprintf("Session %d", s.MessageID),
-			fmt.Sprintf("Page: %s\nLast Used: <t:%d:R>", s.PageName, s.LastUsed.Unix()),
-			false,
-		)
+	// Create header
+	mainContent.WriteString("## Session Manager\n")
+	mainContent.WriteString("You have existing sessions. Please select whether to create a new session or continue an existing one.")
+
+	// Add existing sessions
+	if len(b.sessions) > 0 {
+		sessionsContent.WriteString("### Existing Sessions\n")
+		for _, s := range b.sessions {
+			sessionsContent.WriteString(fmt.Sprintf("-# Session %d\n", s.MessageID))
+			sessionsContent.WriteString(fmt.Sprintf("-# Page: %s\n", s.PageName))
+			sessionsContent.WriteString(fmt.Sprintf("-# Last Used: <t:%d:R>\n\n", s.LastUsed.Unix()))
+		}
 	}
 
 	// Create select menu options
@@ -57,9 +59,27 @@ func (b *Builder) Build() *discord.MessageUpdateBuilder {
 		)
 	}
 
-	return discord.NewMessageUpdateBuilder().
-		SetEmbeds(embed.Build()).
-		AddActionRow(
-			discord.NewStringSelectMenu(constants.SelectorSelectMenuCustomID, "Select an action", options...),
+	// Create container
+	container := discord.NewContainer(
+		discord.NewTextDisplay(mainContent.String()),
+	).WithAccentColor(constants.DefaultContainerColor)
+
+	// Add sessions section if we have any
+	if len(b.sessions) > 0 {
+		container = container.AddComponents(
+			discord.NewLargeSeparator(),
+			discord.NewTextDisplay(sessionsContent.String()),
 		)
+	}
+
+	// Add action row separator and menu
+	container = container.AddComponents(
+		discord.NewLargeSeparator(),
+		discord.NewActionRow(
+			discord.NewStringSelectMenu(constants.SelectorSelectMenuCustomID, "Select an action", options...),
+		),
+	)
+
+	return discord.NewMessageUpdateBuilder().
+		AddComponents(container)
 }

@@ -148,6 +148,14 @@ func (m *Menu) handleModal(ctx *interaction.Context, s *session.Session) {
 			return
 		}
 
+		// Add user message to context
+		chatContext := session.ChatContext.Get(s)
+		chatContext = append(chatContext, ai.Context{
+			Type:    ai.ContextTypeHuman,
+			Content: message,
+		})
+		session.ChatContext.Set(s, chatContext)
+
 		// Set streaming state and show initial status
 		session.PaginationIsStreaming.Set(s, true)
 		session.ChatStreamingMessage.Set(s, "AI is typing...")
@@ -155,6 +163,9 @@ func (m *Menu) handleModal(ctx *interaction.Context, s *session.Session) {
 
 		// Stream AI response
 		if err := m.streamResponse(ctx, s, message); err != nil {
+			// Clean up on error
+			chatContext = chatContext[:len(chatContext)-1] // Remove the user message
+			session.ChatContext.Set(s, chatContext)
 			ctx.Error(fmt.Sprintf("Failed to get response: %v", err))
 			return
 		}
@@ -190,19 +201,14 @@ func (m *Menu) streamResponse(ctx *interaction.Context, s *session.Session, mess
 		case response, ok := <-responseChan:
 			if !ok {
 				// Channel closed, streaming complete
-				chatContext = append(chatContext,
-					ai.Context{
-						Type:    ai.ContextTypeHuman,
-						Content: message,
-					},
-					ai.Context{
-						Type:    ai.ContextTypeAI,
-						Content: aiResponse.String(),
-						Model:   currentModel.String(),
-					},
-				)
+				chatContext = append(chatContext, ai.Context{
+					Type:    ai.ContextTypeAI,
+					Content: aiResponse.String(),
+					Model:   currentModel.String(),
+				})
 				session.ChatContext.Set(s, chatContext)
 				session.ChatStreamingMessage.Set(s, "")
+				session.PaginationIsStreaming.Set(s, false)
 				return nil
 			}
 			aiResponse.WriteString(response)
@@ -235,6 +241,9 @@ func (m *Menu) streamResponse(ctx *interaction.Context, s *session.Session, mess
 			}
 
 		case <-ctx.Context().Done():
+			// Clean up streaming state on error
+			session.PaginationIsStreaming.Set(s, false)
+			session.ChatStreamingMessage.Set(s, "")
 			return ErrResponseTimedOut
 		}
 	}

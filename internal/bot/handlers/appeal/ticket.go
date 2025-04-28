@@ -82,6 +82,13 @@ func (m *TicketMenu) Show(ctx *interaction.Context, s *session.Session) {
 	session.PaginationTotalPages.Set(s, totalPages)
 }
 
+// Cleanup handles the cleanup of the appeal ticket interface.
+func (m *TicketMenu) Cleanup(s *session.Session) {
+	session.AppealMessages.Delete(s)
+	session.PaginationTotalPages.Delete(s)
+	session.PaginationPage.Delete(s)
+}
+
 // handlePendingAppeal checks the status of a pending appeal and handles any necessary auto-actions.
 // Returns false if the appeal was auto-handled and the caller should stop processing.
 func (m *TicketMenu) handlePendingAppeal(ctx *interaction.Context, s *session.Session, appeal *types.FullAppeal) bool {
@@ -159,13 +166,6 @@ func (m *TicketMenu) handlePendingAppeal(ctx *interaction.Context, s *session.Se
 	}
 
 	return true
-}
-
-// Cleanup handles the cleanup of the appeal ticket interface.
-func (m *TicketMenu) Cleanup(s *session.Session) {
-	session.AppealMessages.Delete(s)
-	session.PaginationTotalPages.Delete(s)
-	session.PaginationPage.Delete(s)
 }
 
 // handleButton processes button interactions.

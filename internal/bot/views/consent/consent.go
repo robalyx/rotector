@@ -18,19 +18,19 @@ func NewBuilder(s *session.Session) *Builder {
 	}
 }
 
-// Build creates a Discord message with terms of service in an embed.
+// Build creates a Discord message with terms of service.
 func (b *Builder) Build() *discord.MessageUpdateBuilder {
-	embed := discord.NewEmbedBuilder().
-		SetTitle("Terms of Service").
-		SetDescription(constants.TermsOfServiceText).
-		SetColor(constants.DefaultEmbedColor).
-		Build()
-
-	return discord.NewMessageUpdateBuilder().
-		SetEmbeds(embed).
-		AddActionRow(
+	// Create main container
+	mainContainer := discord.NewContainer(
+		discord.NewTextDisplay("## Terms of Service\n"+constants.TermsOfServiceText),
+		discord.NewLargeSeparator(),
+		discord.NewActionRow(
 			discord.NewSuccessButton("Accept", constants.ConsentAcceptButtonCustomID),
 			discord.NewDangerButton("Reject", constants.ConsentRejectButtonCustomID),
 			discord.NewSecondaryButton("Appeals", constants.AppealMenuButtonCustomID),
-		)
+		),
+	).WithAccentColor(constants.DefaultContainerColor)
+
+	return discord.NewMessageUpdateBuilder().
+		AddComponents(mainContainer)
 }

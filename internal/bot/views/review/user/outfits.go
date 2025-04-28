@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/disgoorg/disgo/discord"
 	apiTypes "github.com/jaxron/roapi.go/pkg/api/types"
@@ -46,39 +47,63 @@ func NewOutfitsBuilder(s *session.Session) *OutfitsBuilder {
 func (b *OutfitsBuilder) Build() *discord.MessageUpdateBuilder {
 	// Create file attachment for the outfit thumbnails grid
 	fileName := fmt.Sprintf("outfits_%d_%d.png", b.user.ID, b.page)
-	file := discord.NewFile(fileName, "", b.imageBuffer)
 
-	// Build base embed with user info
-	embed := discord.NewEmbedBuilder().
-		SetTitle(fmt.Sprintf("User Outfits (Page %d/%d)", b.page+1, b.totalPages+1)).
-		SetDescription(fmt.Sprintf(
-			"```%s (%s)```",
-			utils.CensorString(b.user.Name, b.privacyMode),
-			utils.CensorString(strconv.FormatUint(b.user.ID, 10), b.privacyMode),
-		)).
-		SetImage("attachment://" + fileName).
-		SetColor(utils.GetMessageEmbedColor(b.privacyMode))
+	// Build content
+	var content strings.Builder
+	content.WriteString("## User Outfits\n")
+	content.WriteString(fmt.Sprintf("```%s (%s)```",
+		utils.CensorString(b.user.Name, b.privacyMode),
+		utils.CensorString(strconv.FormatUint(b.user.ID, 10), b.privacyMode),
+	))
 
-	// Add fields for each outfit
+	// Add outfits list
 	for i, outfit := range b.outfits {
-		embed.AddField(fmt.Sprintf("Outfit %d", b.start+i+1), outfit.Name, true)
+		// Add row indicator at the start of each row
+		if i%constants.OutfitGridColumns == 0 {
+			content.WriteString(fmt.Sprintf("\n\n**Row %d:**", (i/constants.OutfitGridColumns)+1))
+		}
+
+		// Add outfit name
+		content.WriteString(fmt.Sprintf("\n**%d.** %s", b.start+i+1, outfit.Name))
 	}
 
-	builder := discord.NewMessageUpdateBuilder().
-		SetEmbeds(embed.Build()).
-		SetFiles(file)
+	// Add page info at the bottom
+	content.WriteString(fmt.Sprintf("\n\n-# Page %d/%d", b.page+1, b.totalPages+1))
 
-	// Only add navigation components if not streaming
+	// Build container with all components
+	container := discord.NewContainer(
+		discord.NewTextDisplay(content.String()),
+		discord.NewMediaGallery(discord.MediaGalleryItem{
+			Media: discord.UnfurledMediaItem{
+				URL: "attachment://" + fileName,
+			},
+		}),
+	).WithAccentColor(utils.GetContainerColor(b.privacyMode))
+
+	// Add pagination buttons if not streaming
 	if !b.isStreaming {
-		builder.AddContainerComponents([]discord.ContainerComponent{
+		container = container.AddComponents(
 			discord.NewActionRow(
-				discord.NewSecondaryButton("◀️", constants.BackButtonCustomID),
 				discord.NewSecondaryButton("⏮️", string(session.ViewerFirstPage)).WithDisabled(b.page == 0),
 				discord.NewSecondaryButton("◀️", string(session.ViewerPrevPage)).WithDisabled(b.page == 0),
 				discord.NewSecondaryButton("▶️", string(session.ViewerNextPage)).WithDisabled(b.page == b.totalPages),
 				discord.NewSecondaryButton("⏭️", string(session.ViewerLastPage)).WithDisabled(b.page == b.totalPages),
 			),
-		}...)
+		)
+	}
+
+	// Build message with container and back button
+	builder := discord.NewMessageUpdateBuilder().
+		SetFiles(discord.NewFile(fileName, "", b.imageBuffer)).
+		AddComponents(container)
+
+	// Add back button if not streaming
+	if !b.isStreaming {
+		builder.AddComponents(
+			discord.NewActionRow(
+				discord.NewSecondaryButton("◀️ Back", constants.BackButtonCustomID),
+			),
+		)
 	}
 
 	return builder

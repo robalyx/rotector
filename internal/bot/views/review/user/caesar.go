@@ -3,6 +3,7 @@ package user
 import (
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/disgoorg/disgo/discord"
 	"github.com/robalyx/rotector/internal/bot/constants"
@@ -51,16 +52,14 @@ func (b *CaesarBuilder) Build() *discord.MessageUpdateBuilder {
 	// Format original description
 	formattedDescription := utils.FormatString(utils.TruncateString(description, 600))
 
-	// Create embed for translations
-	embed := discord.NewEmbedBuilder().
-		SetTitle(fmt.Sprintf("%s (Page %d/%d)", constants.UserCaesarPageName, b.page+1, b.totalPages+1)).
-		SetDescription(fmt.Sprintf(
-			"Analyzing description for %s (%s)\n\n**Original Text:**\n%s",
-			utils.CensorString(b.user.Name, b.privacyMode),
-			utils.CensorString(strconv.FormatUint(b.user.ID, 10), b.privacyMode),
-			formattedDescription,
-		)).
-		SetColor(utils.GetMessageEmbedColor(b.privacyMode))
+	// Create main content
+	var content strings.Builder
+	content.WriteString(fmt.Sprintf("## %s\n", constants.UserCaesarPageName))
+	content.WriteString(fmt.Sprintf("Analyzing description for %s (%s)\n",
+		utils.CensorString(b.user.Name, b.privacyMode),
+		utils.CensorString(strconv.FormatUint(b.user.ID, 10), b.privacyMode)))
+	content.WriteString("### Original Text\n")
+	content.WriteString(formattedDescription)
 
 	// Calculate range for current page
 	startShift := b.offset + 1
@@ -70,25 +69,30 @@ func (b *CaesarBuilder) Build() *discord.MessageUpdateBuilder {
 	for shift := startShift; shift <= endShift; shift++ {
 		translated := b.translator.TranslateCaesar(description, shift)
 		formattedTranslation := utils.FormatString(utils.TruncateString(translated, 600))
-		embed.AddField(
-			fmt.Sprintf("Shift %d", shift),
-			formattedTranslation,
-			false,
-		)
+		content.WriteString(fmt.Sprintf("\n### Shift %d\n%s", shift, formattedTranslation))
 	}
 
-	// Create message with navigation
-	builder := discord.NewMessageUpdateBuilder().
-		SetEmbeds(embed.Build())
+	// Add footer with page info
+	content.WriteString(fmt.Sprintf("\n\n-# Page %d/%d", b.page+1, b.totalPages+1))
 
-	// Add navigation buttons
-	builder.AddActionRow(
+	// Create message with navigation
+	builder := discord.NewMessageUpdateBuilder()
+
+	// Add main container with content and pagination
+	builder.AddComponents(discord.NewContainer(
+		discord.NewTextDisplay(content.String()),
+		discord.NewActionRow(
+			discord.NewSecondaryButton("⏮️", string(session.ViewerFirstPage)).WithDisabled(b.page == 0),
+			discord.NewSecondaryButton("◀️", string(session.ViewerPrevPage)).WithDisabled(b.page == 0),
+			discord.NewSecondaryButton("▶️", string(session.ViewerNextPage)).WithDisabled(b.page == b.totalPages),
+			discord.NewSecondaryButton("⏭️", string(session.ViewerLastPage)).WithDisabled(b.page == b.totalPages),
+		),
+	).WithAccentColor(utils.GetContainerColor(b.privacyMode)))
+
+	// Add back button in separate action row
+	builder.AddComponents(discord.NewActionRow(
 		discord.NewSecondaryButton("◀️ Back", constants.BackButtonCustomID),
-		discord.NewSecondaryButton("⏮️", string(session.ViewerFirstPage)).WithDisabled(b.page == 0),
-		discord.NewSecondaryButton("◀️", string(session.ViewerPrevPage)).WithDisabled(b.page == 0),
-		discord.NewSecondaryButton("▶️", string(session.ViewerNextPage)).WithDisabled(b.page == b.totalPages),
-		discord.NewSecondaryButton("⏭️", string(session.ViewerLastPage)).WithDisabled(b.page == b.totalPages),
-	)
+	))
 
 	return builder
 }

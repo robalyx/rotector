@@ -29,46 +29,6 @@ func NewGroup(db *bun.DB, logger *zap.Logger) *GroupModel {
 	}
 }
 
-// upsertGroups handles the common logic for upserting groups with status-specific fields.
-func (r *GroupModel) upsertGroups(ctx context.Context, tx bun.Tx, groups any, status enum.GroupType) error {
-	query := tx.NewInsert().
-		Model(groups).
-		On("CONFLICT (id) DO UPDATE").
-		Set("uuid = EXCLUDED.uuid").
-		Set("name = EXCLUDED.name").
-		Set("description = EXCLUDED.description").
-		Set("owner = EXCLUDED.owner").
-		Set("shout = EXCLUDED.shout").
-		Set("reasons = EXCLUDED.reasons").
-		Set("confidence = EXCLUDED.confidence").
-		Set("last_scanned = EXCLUDED.last_scanned").
-		Set("last_updated = EXCLUDED.last_updated").
-		Set("last_viewed = EXCLUDED.last_viewed").
-		Set("last_lock_check = EXCLUDED.last_lock_check").
-		Set("is_locked = EXCLUDED.is_locked").
-		Set("is_deleted = EXCLUDED.is_deleted").
-		Set("thumbnail_url = EXCLUDED.thumbnail_url").
-		Set("last_thumbnail_update = EXCLUDED.last_thumbnail_update")
-
-	// Add status-specific fields
-	switch status {
-	case enum.GroupTypeConfirmed:
-		query = query.Set("reviewer_id = EXCLUDED.reviewer_id").
-			Set("verified_at = EXCLUDED.verified_at")
-	case enum.GroupTypeCleared:
-		query = query.Set("reviewer_id = EXCLUDED.reviewer_id").
-			Set("cleared_at = EXCLUDED.cleared_at")
-	case enum.GroupTypeFlagged:
-		// No extra fields for flagged groups
-	}
-
-	_, err := query.Exec(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to upsert %s groups: %w", status, err)
-	}
-	return nil
-}
-
 // SaveGroupsByStatus saves groups that have already been grouped by status.
 //
 // Deprecated: Use Service().Group().SaveGroups() instead.
@@ -798,4 +758,44 @@ func (r *GroupModel) GetNextToReview(
 	})
 
 	return &result, err
+}
+
+// upsertGroups handles the common logic for upserting groups with status-specific fields.
+func (r *GroupModel) upsertGroups(ctx context.Context, tx bun.Tx, groups any, status enum.GroupType) error {
+	query := tx.NewInsert().
+		Model(groups).
+		On("CONFLICT (id) DO UPDATE").
+		Set("uuid = EXCLUDED.uuid").
+		Set("name = EXCLUDED.name").
+		Set("description = EXCLUDED.description").
+		Set("owner = EXCLUDED.owner").
+		Set("shout = EXCLUDED.shout").
+		Set("reasons = EXCLUDED.reasons").
+		Set("confidence = EXCLUDED.confidence").
+		Set("last_scanned = EXCLUDED.last_scanned").
+		Set("last_updated = EXCLUDED.last_updated").
+		Set("last_viewed = EXCLUDED.last_viewed").
+		Set("last_lock_check = EXCLUDED.last_lock_check").
+		Set("is_locked = EXCLUDED.is_locked").
+		Set("is_deleted = EXCLUDED.is_deleted").
+		Set("thumbnail_url = EXCLUDED.thumbnail_url").
+		Set("last_thumbnail_update = EXCLUDED.last_thumbnail_update")
+
+	// Add status-specific fields
+	switch status {
+	case enum.GroupTypeConfirmed:
+		query = query.Set("reviewer_id = EXCLUDED.reviewer_id").
+			Set("verified_at = EXCLUDED.verified_at")
+	case enum.GroupTypeCleared:
+		query = query.Set("reviewer_id = EXCLUDED.reviewer_id").
+			Set("cleared_at = EXCLUDED.cleared_at")
+	case enum.GroupTypeFlagged:
+		// No extra fields for flagged groups
+	}
+
+	_, err := query.Exec(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to upsert %s groups: %w", status, err)
+	}
+	return nil
 }

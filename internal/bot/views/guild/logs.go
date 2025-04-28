@@ -3,6 +3,7 @@ package guild
 import (
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/disgoorg/disgo/discord"
 	"github.com/robalyx/rotector/internal/bot/constants"
@@ -13,105 +14,119 @@ import (
 
 // LogsBuilder creates the visual layout for the guild ban logs interface.
 type LogsBuilder struct {
-	logs        []*types.GuildBanLog
-	hasNextPage bool
-	hasPrevPage bool
-	privacyMode bool
+	logs           []*types.GuildBanLog
+	hasNextPage    bool
+	hasPrevPage    bool
+	privacyMode    bool
+	csvReportLogID int64
 }
 
 // NewLogsBuilder creates a new logs builder.
 func NewLogsBuilder(s *session.Session) *LogsBuilder {
 	return &LogsBuilder{
-		logs:        session.GuildBanLogs.Get(s),
-		hasNextPage: session.PaginationHasNextPage.Get(s),
-		hasPrevPage: session.PaginationHasPrevPage.Get(s),
-		privacyMode: session.UserStreamerMode.Get(s),
+		logs:           session.GuildBanLogs.Get(s),
+		hasNextPage:    session.PaginationHasNextPage.Get(s),
+		hasPrevPage:    session.PaginationHasPrevPage.Get(s),
+		privacyMode:    session.UserStreamerMode.Get(s),
+		csvReportLogID: session.GuildBanLogCSVReport.Get(s),
 	}
 }
 
 // Build creates a Discord message showing the guild ban logs.
 func (b *LogsBuilder) Build() *discord.MessageUpdateBuilder {
-	return discord.NewMessageUpdateBuilder().
-		SetEmbeds(b.buildEmbed().Build()).
-		AddContainerComponents(b.buildComponents()...)
-}
+	var containers []discord.LayoutComponent
 
-// buildEmbed creates the embed showing guild ban logs.
-func (b *LogsBuilder) buildEmbed() *discord.EmbedBuilder {
-	embed := discord.NewEmbedBuilder().
-		SetTitle("Guild Ban Operations").
-		SetDescription("View history of ban operations performed in this server.").
-		SetColor(utils.GetMessageEmbedColor(b.privacyMode))
+	// Create header container
+	var headerContent strings.Builder
+	headerContent.WriteString("## Guild Ban Operations\n")
+	headerContent.WriteString("View history of ban operations performed in this server.")
 
-	// Add log entries with details
+	containers = append(containers, discord.NewContainer(
+		discord.NewTextDisplay(headerContent.String()),
+	).WithAccentColor(utils.GetContainerColor(b.privacyMode)))
+
+	// Create logs container if we have logs
 	if len(b.logs) > 0 {
-		for _, log := range b.logs {
-			// Create field content
-			content := fmt.Sprintf("Timestamp: <t:%d:F>\nReason: `%s`\nBanned Users: `%d`\nFailed Users: `%d`",
-				log.Timestamp.Unix(),
-				log.Reason,
-				log.BannedCount,
-				log.FailedCount,
-			)
+		var components []discord.ContainerSubComponent
 
-			// Add reviewer info
-			content += fmt.Sprintf("\nExecuted by: <@%d>", log.ReviewerID)
+		for _, log := range b.logs {
+			// Create log entry section
+			var logContent strings.Builder
+			logContent.WriteString(fmt.Sprintf("### Ban #%d\n", log.ID))
+			logContent.WriteString(fmt.Sprintf("Timestamp: <t:%d:F>\n", log.Timestamp.Unix()))
+			logContent.WriteString(fmt.Sprintf("Reason: `%s`\n", log.Reason))
+			logContent.WriteString(fmt.Sprintf("Banned Users: `%d`\n", log.BannedCount))
+			logContent.WriteString(fmt.Sprintf("Failed Users: `%d`\n", log.FailedCount))
+			logContent.WriteString(fmt.Sprintf("Executed by: <@%d>", log.ReviewerID))
 
 			// Add minimum guilds filter info if applicable
 			if log.MinGuildsFilter > 1 {
-				content += fmt.Sprintf("\nMinimum Guilds Filter: `%d`", log.MinGuildsFilter)
+				logContent.WriteString(fmt.Sprintf("\nMinimum Guilds Filter: `%d`", log.MinGuildsFilter))
 			}
 
-			embed.AddField(
-				fmt.Sprintf("Ban #%d", log.ID),
-				content,
-				false,
+			// Add minimum join duration if applicable
+			if log.MinJoinDuration > 0 {
+				logContent.WriteString(fmt.Sprintf("\nMinimum Join Duration: `%s`", utils.FormatDuration(log.MinJoinDuration)))
+			}
+
+			// Create section with CSV report button
+			section := discord.NewSection(
+				discord.NewTextDisplay(logContent.String()),
+			).WithAccessory(
+				discord.NewSecondaryButton("Get CSV Report", strconv.FormatInt(log.ID, 10)),
 			)
+			components = append(components, section)
+
+			// Add file component if this log has a CSV report attached
+			if b.csvReportLogID == log.ID {
+				filename := fmt.Sprintf("ban_report_%s.csv", log.Timestamp.Format("2006-01-02_15-04-05"))
+				components = append(components,
+					discord.NewFileComponent("attachment://"+filename),
+				)
+			}
+
+			// Add separator between logs
+			if log.ID != b.logs[len(b.logs)-1].ID {
+				components = append(components, discord.NewSmallSeparator())
+			}
 		}
 
 		// Add footer with pagination info
-		if len(b.logs) > 0 {
-			embed.SetFooterText(fmt.Sprintf("%d logs shown", len(b.logs)))
-		}
+		components = append(components,
+			discord.NewLargeSeparator(),
+			discord.NewTextDisplay(fmt.Sprintf("*%d logs shown*", len(b.logs))),
+		)
+
+		containers = append(containers, discord.NewContainer(components...).
+			WithAccentColor(utils.GetContainerColor(b.privacyMode)))
 	} else {
-		embed.AddField("No Ban Operations Found", "No ban operations have been performed in this server yet.", false)
+		// Show no logs message
+		containers = append(containers, discord.NewContainer(
+			discord.NewTextDisplay("### No Ban Operations Found\nNo ban operations have been performed in this server yet."),
+		).WithAccentColor(utils.GetContainerColor(b.privacyMode)))
 	}
 
-	return embed
+	// Add interactive components
+	containers = append(containers, b.buildInteractiveComponents()...)
+
+	// Create message update builder
+	return discord.NewMessageUpdateBuilder().AddComponents(containers...)
 }
 
-// buildComponents creates all interactive components for the logs viewer.
-func (b *LogsBuilder) buildComponents() []discord.ContainerComponent {
-	var components []discord.ContainerComponent
-
-	// Add CSV report select menu if we have logs
-	if len(b.logs) > 0 {
-		var options []discord.StringSelectMenuOption
-		for _, log := range b.logs {
-			options = append(options, discord.NewStringSelectMenuOption(
-				fmt.Sprintf("Ban #%d", log.ID),
-				strconv.FormatInt(log.ID, 10),
-			).WithDescription(fmt.Sprintf("Get CSV report for %d banned users", log.BannedCount)))
-		}
-
-		components = append(components, discord.NewActionRow(
-			discord.NewStringSelectMenu(constants.GuildBanLogReportSelectMenuCustomID, "Get CSV Report", options...),
-		))
+// buildInteractiveComponents creates all interactive components for the logs viewer.
+func (b *LogsBuilder) buildInteractiveComponents() []discord.LayoutComponent {
+	return []discord.LayoutComponent{
+		// Add refresh button
+		discord.NewActionRow(
+			discord.NewSecondaryButton("Refresh Logs", constants.RefreshButtonCustomID),
+		),
+		// Add navigation buttons
+		discord.NewActionRow(
+			discord.NewSecondaryButton("◀️ Back", constants.BackButtonCustomID),
+			discord.NewSecondaryButton("⏮️", string(session.ViewerFirstPage)).WithDisabled(!b.hasPrevPage),
+			discord.NewSecondaryButton("◀️", string(session.ViewerPrevPage)).WithDisabled(!b.hasPrevPage),
+			discord.NewSecondaryButton("▶️", string(session.ViewerNextPage)).WithDisabled(!b.hasNextPage),
+			discord.NewSecondaryButton("⏭️", string(session.ViewerLastPage)).WithDisabled(true), // This is disabled on purpose
+		),
 	}
-
-	// Add refresh button
-	components = append(components, discord.NewActionRow(
-		discord.NewSecondaryButton("Refresh Logs", constants.RefreshButtonCustomID),
-	))
-
-	// Add navigation buttons
-	components = append(components, discord.NewActionRow(
-		discord.NewSecondaryButton("◀️ Back", constants.BackButtonCustomID),
-		discord.NewSecondaryButton("⏮️", string(session.ViewerFirstPage)).WithDisabled(!b.hasPrevPage),
-		discord.NewSecondaryButton("◀️", string(session.ViewerPrevPage)).WithDisabled(!b.hasPrevPage),
-		discord.NewSecondaryButton("▶️", string(session.ViewerNextPage)).WithDisabled(!b.hasNextPage),
-		discord.NewSecondaryButton("⏭️", string(session.ViewerLastPage)).WithDisabled(true), // This is disabled on purpose
-	))
-
-	return components
 }

@@ -35,7 +35,7 @@ func (s *AppealService) GetAppealsToReview(
 	limit int,
 ) ([]*types.FullAppeal, *types.AppealTimeline, *types.AppealTimeline, error) {
 	// Get appeals from the model layer
-	results, err := s.model.GetAppealsToReview(ctx, sortBy, statusFilter, reviewerID, cursor, limit+1)
+	results, err := s.model.GetAppealsToReview(ctx, sortBy, statusFilter, reviewerID, cursor, limit)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf(
 			"failed to get appeals with cursor: %w (sortBy=%s, reviewerID=%d)",
@@ -44,7 +44,7 @@ func (s *AppealService) GetAppealsToReview(
 	}
 
 	// Process results to get cursors for pagination
-	firstCursor, nextCursor := s.processAppealResults(results, limit)
+	results, firstCursor, nextCursor := s.processAppealResults(results, limit)
 	return results, firstCursor, nextCursor, nil
 }
 
@@ -58,7 +58,7 @@ func (s *AppealService) GetAppealsByRequester(
 	limit int,
 ) ([]*types.FullAppeal, *types.AppealTimeline, *types.AppealTimeline, error) {
 	// Get appeals from the model layer
-	results, err := s.model.GetAppealsByRequester(ctx, statusFilter, requesterID, cursor, limit+1)
+	results, err := s.model.GetAppealsByRequester(ctx, statusFilter, requesterID, cursor, limit)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf(
 			"failed to get appeals by requester: %w (requesterID=%d)",
@@ -67,25 +67,25 @@ func (s *AppealService) GetAppealsByRequester(
 	}
 
 	// Process results to get cursors for pagination
-	firstCursor, nextCursor := s.processAppealResults(results, limit)
+	results, firstCursor, nextCursor := s.processAppealResults(results, limit)
 	return results, firstCursor, nextCursor, nil
 }
 
 // processAppealResults handles pagination and data transformation for appeal results.
 func (s *AppealService) processAppealResults(
 	results []*types.FullAppeal, limit int,
-) (*types.AppealTimeline, *types.AppealTimeline) {
+) ([]*types.FullAppeal, *types.AppealTimeline, *types.AppealTimeline) {
 	var nextCursor *types.AppealTimeline
 	var firstCursor *types.AppealTimeline
 
 	if len(results) > limit {
 		// Use the extra item as the next cursor for pagination
-		last := results[limit-1]
+		extraItem := results[limit]
 		nextCursor = &types.AppealTimeline{
-			ID:           last.ID,
-			Timestamp:    last.Timestamp,
-			LastViewed:   last.LastViewed,
-			LastActivity: last.LastActivity,
+			ID:           extraItem.ID,
+			Timestamp:    extraItem.Timestamp,
+			LastViewed:   extraItem.LastViewed,
+			LastActivity: extraItem.LastActivity,
 		}
 		results = results[:limit] // Remove the extra item from results
 	}
@@ -101,5 +101,5 @@ func (s *AppealService) processAppealResults(
 		}
 	}
 
-	return firstCursor, nextCursor
+	return results, firstCursor, nextCursor
 }

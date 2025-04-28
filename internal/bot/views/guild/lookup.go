@@ -3,6 +3,7 @@ package guild
 import (
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/disgoorg/disgo/discord"
 	"github.com/robalyx/rotector/internal/bot/constants"
@@ -42,145 +43,121 @@ func NewLookupBuilder(s *session.Session) *LookupBuilder {
 
 // Build creates a Discord message showing the user's flagged guild memberships.
 func (b *LookupBuilder) Build() *discord.MessageUpdateBuilder {
-	builder := discord.NewMessageUpdateBuilder()
+	var containers []discord.LayoutComponent
 
 	// Add data deletion notice if data is redacted
 	if b.isDataRedacted {
-		builder.AddEmbeds(b.buildDeletionEmbed().Build())
+		var deletionContent strings.Builder
+		deletionContent.WriteString("## 🗑️ Data Deletion Notice\n")
+		deletionContent.WriteString("This user has requested deletion of their data under privacy laws. While we may continue to monitor ")
+		deletionContent.WriteString("server memberships for safety purposes, message history and other details have been redacted.")
+
+		containers = append(containers, discord.NewContainer(
+			discord.NewTextDisplay(deletionContent.String()),
+		).WithAccentColor(constants.ErrorContainerColor))
 	}
 
-	// Add main embeds
-	builder.AddEmbeds(
-		b.buildUserEmbed().Build(),
-		b.buildGuildsEmbed().Build(),
-	)
-
-	// Add components
-	builder.AddContainerComponents(b.buildComponents()...)
-
-	return builder
-}
-
-// buildDeletionEmbed creates an embed notifying that the user has requested data deletion.
-func (b *LookupBuilder) buildDeletionEmbed() *discord.EmbedBuilder {
-	return discord.NewEmbedBuilder().
-		SetTitle("🗑️ Data Deletion Notice").
-		SetDescription(
-			"This user has requested deletion of their data under privacy laws. While we may continue to monitor " +
-				"server memberships for safety purposes, message history and other details have been redacted.").
-		SetColor(constants.ErrorEmbedColor)
-}
-
-// buildUserEmbed creates the embed with user information.
-func (b *LookupBuilder) buildUserEmbed() *discord.EmbedBuilder {
-	userID := b.userID
-
+	// Build user info container
+	var userContent strings.Builder
 	username := b.username
 	if username == "" {
-		username = fmt.Sprintf("Unknown User (%d)", userID)
+		username = fmt.Sprintf("Unknown User (%d)", b.userID)
 	}
 
-	embed := discord.NewEmbedBuilder().
-		SetTitle("Discord User: "+username).
-		SetDescription("Displaying information about this Discord user and their memberships in flagged servers.").
-		AddField("User ID", fmt.Sprintf("`%d`", userID), true).
-		AddField("Flagged Servers", fmt.Sprintf("`%d`", b.totalGuilds), true).
-		AddField("Mention", fmt.Sprintf("<@%d>", userID), true).
-		SetColor(constants.DefaultEmbedColor)
+	userContent.WriteString(fmt.Sprintf("## Discord User: %s\n", username))
+	userContent.WriteString("Displaying information about this Discord user and their memberships in flagged servers.\n")
+	userContent.WriteString(fmt.Sprintf("### User ID\n`%d`\n", b.userID))
+	userContent.WriteString(fmt.Sprintf("### Flagged Servers\n`%d`\n", b.totalGuilds))
+	userContent.WriteString(fmt.Sprintf("### Mention\n<@%d>\n", b.userID))
 
 	// Add message summary information if available
 	if b.messageSummary != nil {
-		embed.AddField("Recent Activity", fmt.Sprintf(
-			"Total Messages: `%d`\nLast Flagged: <t:%d:R>\nReason: `%s`",
-			b.messageSummary.MessageCount,
-			b.messageSummary.LastDetected.Unix(),
-			b.messageSummary.Reason,
-		), false)
+		userContent.WriteString("### Recent Activity\n")
+		userContent.WriteString(fmt.Sprintf("Total Messages: `%d`\n", b.messageSummary.MessageCount))
+		userContent.WriteString(fmt.Sprintf("Last Flagged: <t:%d:R>\n", b.messageSummary.LastDetected.Unix()))
+		userContent.WriteString(fmt.Sprintf("Reason: `%s`", b.messageSummary.Reason))
 	}
 
-	return embed
+	containers = append(containers, discord.NewContainer(
+		discord.NewTextDisplay(userContent.String()),
+	).WithAccentColor(constants.DefaultContainerColor))
+
+	// Add guilds container
+	containers = append(containers, b.buildGuildsDisplay())
+
+	// Create message update builder with containers and back button
+	return discord.NewMessageUpdateBuilder().
+		AddComponents(containers...).
+		AddComponents(discord.NewActionRow(
+			discord.NewSecondaryButton("◀️ Back", constants.BackButtonCustomID),
+		))
 }
 
-// buildGuildsEmbed creates the embed showing detailed server membership information.
-func (b *LookupBuilder) buildGuildsEmbed() *discord.EmbedBuilder {
-	embed := discord.NewEmbedBuilder().
-		SetTitle("Server Memberships").
-		SetColor(constants.DefaultEmbedColor)
+// buildGuildsDisplay creates the container showing guild memberships.
+func (b *LookupBuilder) buildGuildsDisplay() discord.LayoutComponent {
+	var content strings.Builder
+	content.WriteString("## Server Memberships\n\n")
 
-	// Check if the user is not a member of any flagged servers
 	if len(b.userGuilds) == 0 {
-		embed.SetDescription("This user is not a member of any flagged servers in our database.")
-		return embed
+		content.WriteString("This user is not a member of any flagged servers in our database.")
+		return discord.NewContainer(
+			discord.NewTextDisplay(content.String()),
+		).WithAccentColor(constants.DefaultContainerColor)
 	}
 
-	// Create a field for each guild
+	// Create sections for each guild
+	components := make([]discord.ContainerSubComponent, 0, len(b.userGuilds))
 	for _, guild := range b.userGuilds {
 		guildName := b.guildNames[guild.ServerID]
 		if guildName == "" {
 			guildName = constants.UnknownServer
 		}
 
-		var joinedInfo string
-		if guild.JoinedAt.IsZero() {
-			joinedInfo = "Unknown"
-		} else {
+		var guildContent strings.Builder
+		guildContent.WriteString(fmt.Sprintf("### %s\n", guildName))
+		guildContent.WriteString(fmt.Sprintf("Server ID: `%d`\n", guild.ServerID))
+
+		joinedInfo := "Unknown"
+		if !guild.JoinedAt.IsZero() {
 			joinedInfo = fmt.Sprintf("<t:%d:R>", guild.JoinedAt.Unix())
 		}
+		guildContent.WriteString("Joined: " + joinedInfo)
 
-		content := fmt.Sprintf("Server ID: `%d`\nJoined: %s",
-			guild.ServerID,
-			joinedInfo,
-		)
-
-		embed.AddField(guildName, content, false)
-	}
-
-	// Add pagination info if available
-	if len(b.userGuilds) > 0 {
-		embed.SetFooterText(fmt.Sprintf("Showing %d of %d servers", len(b.userGuilds), b.totalGuilds))
-	}
-
-	return embed
-}
-
-// buildComponents creates all interactive components for the lookup menu.
-func (b *LookupBuilder) buildComponents() []discord.ContainerComponent {
-	// Create select menu options for guilds with messages
-	var options []discord.StringSelectMenuOption
-	for _, guild := range b.userGuilds {
-		// Only add option if the guild has messages
-		if _, ok := b.messageGuilds[guild.ServerID]; ok {
-			guildName := b.guildNames[guild.ServerID]
-			if guildName == "" {
-				guildName = constants.UnknownServer
-			}
-
-			options = append(options, discord.NewStringSelectMenuOption(
-				guildName,
-				strconv.FormatUint(guild.ServerID, 10),
-			).WithDescription("View message history in "+guildName))
+		// Create section for guilds with messages, text display for others
+		if _, hasMessages := b.messageGuilds[guild.ServerID]; hasMessages {
+			section := discord.NewSection(
+				discord.NewTextDisplay(guildContent.String()),
+			).WithAccessory(
+				discord.NewSecondaryButton("View Messages", strconv.FormatUint(guild.ServerID, 10)),
+			)
+			components = append(components, section)
+		} else {
+			components = append(components, discord.NewTextDisplay(guildContent.String()))
 		}
 	}
 
-	components := []discord.ContainerComponent{
-		// Navigation buttons
-		discord.NewActionRow(
-			discord.NewSecondaryButton("◀️ Back", constants.BackButtonCustomID),
-			discord.NewSecondaryButton("⏮️", string(session.ViewerFirstPage)).WithDisabled(!b.hasPrevPage),
-			discord.NewSecondaryButton("◀️", string(session.ViewerPrevPage)).WithDisabled(!b.hasPrevPage),
-			discord.NewSecondaryButton("▶️", string(session.ViewerNextPage)).WithDisabled(!b.hasNextPage),
-			discord.NewSecondaryButton("⏭️", string(session.ViewerLastPage)).WithDisabled(true), // This is disabled on purpose
-		),
+	// Add server count at the bottom
+	if len(b.userGuilds) > 0 {
+		components = append(components, discord.NewTextDisplay(fmt.Sprintf("\n-# Showing %d of %d servers", len(b.userGuilds), b.totalGuilds)))
 	}
 
-	// Add select menu if we have options
-	if len(options) > 0 {
-		components = append([]discord.ContainerComponent{
+	// Add pagination buttons
+	if b.hasNextPage || b.hasPrevPage {
+		components = append(components,
+			discord.NewLargeSeparator(),
 			discord.NewActionRow(
-				discord.NewStringSelectMenu(constants.GuildMessageSelectMenuCustomID, "View Message History", options...),
+				discord.NewSecondaryButton("⏮️", string(session.ViewerFirstPage)).WithDisabled(!b.hasPrevPage),
+				discord.NewSecondaryButton("◀️", string(session.ViewerPrevPage)).WithDisabled(!b.hasPrevPage),
+				discord.NewSecondaryButton("▶️", string(session.ViewerNextPage)).WithDisabled(!b.hasNextPage),
+				discord.NewSecondaryButton("⏭️", string(session.ViewerLastPage)).WithDisabled(true), // This is disabled on purpose
 			),
-		}, components...)
+		)
 	}
 
-	return components
+	// Create container with all components
+	container := discord.NewContainer(
+		discord.NewTextDisplay(content.String()),
+	).AddComponents(components...)
+
+	return container.WithAccentColor(constants.DefaultContainerColor)
 }

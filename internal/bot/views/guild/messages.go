@@ -2,6 +2,7 @@ package guild
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/disgoorg/disgo/discord"
 	"github.com/robalyx/rotector/internal/bot/constants"
@@ -39,53 +40,52 @@ func NewMessagesBuilder(s *session.Session) *MessagesBuilder {
 
 // Build creates a Discord message showing the user's message history.
 func (b *MessagesBuilder) Build() *discord.MessageUpdateBuilder {
-	// Create main embed
-	embed := discord.NewEmbedBuilder().
-		SetTitle("Message History - " + b.guildName).
-		SetDescription(fmt.Sprintf("Showing inappropriate messages from <@%d> in this server.", b.userID))
+	// Create main container
+	var content strings.Builder
+	content.WriteString(fmt.Sprintf("## Message History - %s\n", b.guildName))
+	content.WriteString(fmt.Sprintf("Showing inappropriate messages from <@%d> in this server.\n", b.userID))
 
 	if len(b.messages) == 0 {
-		embed.AddField("No Messages Found", "No inappropriate messages found for this user in the current page.", false)
+		content.WriteString("### No Messages Found\n")
+		content.WriteString("No inappropriate messages found for this user in the current page.")
 	} else {
 		// Add message entries
 		for i, msg := range b.messages {
-			content := utils.TruncateString(msg.Content, 100)
-			content = utils.FormatString(content)
+			msgContent := utils.TruncateString(msg.Content, 100)
+			msgContent = utils.FormatString(msgContent)
 
-			embed.AddField(
-				fmt.Sprintf("Message %d - <t:%d:F>", i+1, msg.DetectedAt.Unix()),
-				fmt.Sprintf("Reason: `%s`\nConfidence: `%.2f%%`\n%s",
-					msg.Reason,
-					msg.Confidence*100,
-					content,
-				),
-				false,
-			)
+			content.WriteString(fmt.Sprintf("### Message %d - <t:%d:F>\n", i+1, msg.DetectedAt.Unix()))
+			content.WriteString(fmt.Sprintf("Reason: `%s`\n", msg.Reason))
+			content.WriteString(fmt.Sprintf("Confidence: `%.2f%%`\n", msg.Confidence*100))
+			content.WriteString(msgContent + "\n")
 		}
 
 		// Add pagination info if available
-		embed.SetFooterText(fmt.Sprintf("Showing %d messages", len(b.messages)))
+		content.WriteString(fmt.Sprintf("\n-# Showing %d messages", len(b.messages)))
 	}
 
-	embed.SetColor(constants.DefaultEmbedColor)
+	// Create container with pagination
+	container := discord.NewContainer(
+		discord.NewTextDisplay(content.String()),
+	)
 
-	// Create components
-	components := []discord.ContainerComponent{
-		// Navigation buttons
-		discord.NewActionRow(
-			discord.NewSecondaryButton("◀️ Back", constants.BackButtonCustomID),
-			discord.NewSecondaryButton("⏮️", string(session.ViewerFirstPage)).WithDisabled(!b.hasPrevPage),
-			discord.NewSecondaryButton("◀️", string(session.ViewerPrevPage)).WithDisabled(!b.hasPrevPage),
-			discord.NewSecondaryButton("▶️", string(session.ViewerNextPage)).WithDisabled(!b.hasNextPage),
-			discord.NewSecondaryButton("⏭️", string(session.ViewerLastPage)).WithDisabled(true), // This is disabled on purpose
-		),
-		// Refresh button
-		discord.NewActionRow(
-			discord.NewSecondaryButton("🔄 Refresh", constants.RefreshButtonCustomID),
-		),
+	// Add pagination buttons if we have pages
+	if b.hasNextPage || b.hasPrevPage {
+		container.AddComponents(
+			discord.NewLargeSeparator(),
+			discord.NewActionRow(
+				discord.NewSecondaryButton("⏮️", string(session.ViewerFirstPage)).WithDisabled(!b.hasPrevPage),
+				discord.NewSecondaryButton("◀️", string(session.ViewerPrevPage)).WithDisabled(!b.hasPrevPage),
+				discord.NewSecondaryButton("▶️", string(session.ViewerNextPage)).WithDisabled(!b.hasNextPage),
+				discord.NewSecondaryButton("⏭️", string(session.ViewerLastPage)).WithDisabled(true), // This is disabled on purpose
+			),
+		)
 	}
 
+	// Create message update builder
 	return discord.NewMessageUpdateBuilder().
-		SetEmbeds(embed.Build()).
-		AddContainerComponents(components...)
+		AddComponents(container.WithAccentColor(constants.DefaultContainerColor)).
+		AddComponents(discord.NewActionRow(
+			discord.NewSecondaryButton("◀️ Back", constants.BackButtonCustomID),
+		))
 }

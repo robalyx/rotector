@@ -102,6 +102,8 @@ password = ""
 [common.openai]
 # Default model to use for AI requests
 default_model = "gemini-2.5-flash-thinking"
+# Model to use for stats analysis
+stats_model = "gemini-2.0-flash"
 # Model to use for outfit analysis
 outfit_model = "gemini-2.0-flash"
 

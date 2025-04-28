@@ -309,9 +309,9 @@ func (m *ReviewMenu) handleNavigateUser(ctx *interaction.Context, s *session.Ses
 	// If navigating next and we're at the end of history, treat it as a skip
 	if isNext && (index >= len(history)-1 || len(history) == 0) {
 		// Clear current user and load next one
+		m.UpdateCounters(s)
 		session.UserTarget.Delete(s)
 		ctx.Reload("Skipped user.")
-		m.UpdateCounters(s)
 
 		// Log the skip action
 		user := session.UserTarget.Get(s)
@@ -495,9 +495,9 @@ func (m *ReviewMenu) handleConfirmUser(ctx *interaction.Context, s *session.Sess
 	}
 
 	// Clear current user and load next one
+	m.UpdateCounters(s)
 	session.UserTarget.Delete(s)
 	ctx.Reload(fmt.Sprintf("User %s. %d users left to review.", actionMsg, flaggedCount))
-	m.UpdateCounters(s)
 }
 
 // handleClearUser removes a user from the flagged state and logs the action.
@@ -598,9 +598,9 @@ func (m *ReviewMenu) handleClearUser(ctx *interaction.Context, s *session.Sessio
 	}
 
 	// Clear current user and load next one
+	m.UpdateCounters(s)
 	session.UserTarget.Delete(s)
 	ctx.Reload(fmt.Sprintf("User %s. %d users left to review.", actionMsg, flaggedCount))
-	m.UpdateCounters(s)
 }
 
 // handleOpenAIChat handles the button to open the AI chat for the current user.

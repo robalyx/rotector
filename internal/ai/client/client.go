@@ -95,69 +95,6 @@ type chatCompletions struct {
 	client *AIClient
 }
 
-// checkBlockReasons checks the response for various block reasons and logs them appropriately.
-func (c *chatCompletions) checkBlockReasons(resp *openai.ChatCompletion, provider *providerClient, model string) error {
-	if len(resp.Choices) == 0 {
-		return nil
-	}
-
-	finishReason := resp.Choices[0].FinishReason
-	blockReasons := []BlockReason{
-		BlockReasonUnspecified,
-		BlockReasonSafety,
-		BlockReasonOther,
-		BlockReasonBlocklist,
-		BlockReasonProhibited,
-		BlockReasonImageSafety,
-	}
-
-	for _, reason := range blockReasons {
-		if finishReason == reason.String() {
-			fields := []zap.Field{
-				zap.String("provider", provider.name),
-				zap.String("model", model),
-				zap.String("blockReason", reason.String()),
-				zap.String("details", reason.Details()),
-				zap.String("finishReason", finishReason),
-			}
-
-			c.client.logger.Warn("Content blocked by provider", fields...)
-			return fmt.Errorf("%w: %s", ErrContentBlocked, reason.Details())
-		}
-	}
-
-	c.client.logger.Debug("Content not blocked by provider",
-		zap.String("provider", provider.name),
-		zap.String("model", model),
-		zap.String("finishReason", finishReason),
-	)
-
-	return nil
-}
-
-// prepareParams prepares the chat completion parameters by mapping the model name and adding safety settings.
-func (c *chatCompletions) prepareParams(params openai.ChatCompletionNewParams, provider *providerClient) openai.ChatCompletionNewParams {
-	originalModel := params.Model
-	params.Model = provider.modelMappings[originalModel]
-
-	params.WithExtraFields(map[string]any{
-		"safety_settings": []map[string]any{
-			{"category": "HARM_CATEGORY_HARASSMENT", "threshold": "OFF"},
-			{"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "OFF"},
-			{"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "OFF"},
-			{"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "OFF"},
-			{"category": "HARM_CATEGORY_CIVIC_INTEGRITY", "threshold": "OFF"},
-		},
-	})
-
-	c.client.logger.Debug("Using provider",
-		zap.String("provider", provider.name),
-		zap.String("originalModel", originalModel),
-		zap.String("mappedModel", params.Model))
-
-	return params
-}
-
 // New makes a chat completion request to an available provider.
 func (c *chatCompletions) New(ctx context.Context, params openai.ChatCompletionNewParams) (*openai.ChatCompletion, error) {
 	// Get available providers that support this model
@@ -308,4 +245,50 @@ func (c *chatCompletions) NewStreaming(
 			time.Sleep(100 * time.Millisecond)
 		}
 	}
+}
+
+// checkBlockReasons checks if the response was blocked by content filtering.
+func (c *chatCompletions) checkBlockReasons(resp *openai.ChatCompletion, provider *providerClient, model string) error {
+	if len(resp.Choices) == 0 {
+		return nil
+	}
+
+	finishReason := resp.Choices[0].FinishReason
+	if finishReason == "content_filter" {
+		c.client.logger.Warn("Content blocked by provider",
+			zap.String("provider", provider.name),
+			zap.String("model", model),
+			zap.String("finishReason", finishReason))
+		return ErrContentBlocked
+	}
+
+	c.client.logger.Debug("Content not blocked by provider",
+		zap.String("provider", provider.name),
+		zap.String("model", model),
+		zap.String("finishReason", finishReason))
+
+	return nil
+}
+
+// prepareParams prepares the chat completion parameters by mapping the model name and adding safety settings.
+func (c *chatCompletions) prepareParams(params openai.ChatCompletionNewParams, provider *providerClient) openai.ChatCompletionNewParams {
+	originalModel := params.Model
+	params.Model = provider.modelMappings[originalModel]
+
+	params.WithExtraFields(map[string]any{
+		"safety_settings": []map[string]any{
+			{"category": "HARM_CATEGORY_HARASSMENT", "threshold": "OFF"},
+			{"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "OFF"},
+			{"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "OFF"},
+			{"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "OFF"},
+			{"category": "HARM_CATEGORY_CIVIC_INTEGRITY", "threshold": "OFF"},
+		},
+	})
+
+	c.client.logger.Debug("Using provider",
+		zap.String("provider", provider.name),
+		zap.String("originalModel", originalModel),
+		zap.String("mappedModel", params.Model))
+
+	return params
 }

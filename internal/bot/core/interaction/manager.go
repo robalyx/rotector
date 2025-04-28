@@ -2,8 +2,10 @@ package interaction
 
 import (
 	"context"
+	"errors"
 
 	"github.com/disgoorg/disgo/discord"
+	"github.com/disgoorg/disgo/rest"
 	"github.com/robalyx/rotector/internal/bot/core/session"
 	"github.com/robalyx/rotector/internal/bot/utils"
 	"go.uber.org/zap"
@@ -143,16 +145,36 @@ func (m *Manager) Show(event CommonEvent, s *session.Session, pageName, content 
 func (m *Manager) Display(
 	event CommonEvent, s *session.Session, page *Page, content string, files ...*discord.File,
 ) {
-	// Update the message with the new content and components
-	messageUpdate := page.Message(s).
-		SetContent(utils.GetTimestampedSubtext(content)).
+	// Create a new message update builder
+	baseMessage := page.Message(s)
+	messageUpdate := discord.NewMessageUpdateBuilder().
 		RetainAttachments().
 		AddFiles(files...).
-		Build()
+		AddFiles(baseMessage.Files...).
+		SetIsComponentsV2(true)
 
-	message, err := event.Client().Rest().UpdateInteractionResponse(event.ApplicationID(), event.Token(), messageUpdate)
+	// Add text display at the top if content is provided
+	if content != "" {
+		messageUpdate.AddComponents(utils.CreateTimestampedTextDisplay(content))
+	}
+
+	// Add components from the base message
+	if baseMessage.Components != nil {
+		messageUpdate.AddComponents(*baseMessage.Components...)
+	}
+
+	// Update the interaction response
+	message, err := event.Client().Rest().UpdateInteractionResponse(
+		event.ApplicationID(), event.Token(), messageUpdate.Build(),
+	)
 	if err != nil {
-		m.logger.Error("Failed to update interaction response", zap.Error(err))
+		var restError rest.Error
+		errors.As(err, &restError)
+
+		m.logger.Error("Failed to update interaction response",
+			zap.String("message", restError.Message),
+			zap.String("request", string(restError.RqBody)),
+			zap.String("response", string(restError.RsBody)))
 	}
 
 	// Update the page history in the session
@@ -201,7 +223,7 @@ func (m *Manager) RespondWithError(event CommonEvent, message string) {
 }
 
 // RespondWithClear updates the interaction response with a message.
-// This also clears message embeds, files, and container components.
+// This also clears message files and container components.
 func (m *Manager) RespondWithClear(event CommonEvent, message string) {
 	ctx := New(context.Background(), event, nil, m)
 	ctx.Clear(message)

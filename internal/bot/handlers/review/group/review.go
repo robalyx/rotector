@@ -367,9 +367,9 @@ func (m *ReviewMenu) handleNavigateGroup(ctx *interaction.Context, s *session.Se
 	// If navigating next and we're at the end of history, treat it as a skip
 	if isNext && (index >= len(history)-1 || len(history) == 0) {
 		// Clear current group and load next one
+		m.UpdateCounters(s)
 		session.GroupTarget.Delete(s)
 		ctx.Reload("Skipped group.")
-		m.UpdateCounters(s)
 
 		// Log the skip action
 		group := session.GroupTarget.Get(s)
@@ -557,9 +557,9 @@ func (m *ReviewMenu) handleConfirmGroup(ctx *interaction.Context, s *session.Ses
 	}
 
 	// Clear current group and load next one
+	m.UpdateCounters(s)
 	session.GroupTarget.Delete(s)
 	ctx.Reload(fmt.Sprintf("Group %s.", actionMsg))
-	m.UpdateCounters(s)
 }
 
 // handleClearGroup removes a group from the flagged state and logs the action.
@@ -652,9 +652,9 @@ func (m *ReviewMenu) handleClearGroup(ctx *interaction.Context, s *session.Sessi
 	}
 
 	// Clear current group and load next one
+	m.UpdateCounters(s)
 	session.GroupTarget.Delete(s)
 	ctx.Reload(fmt.Sprintf("Group %s.", actionMsg))
-	m.UpdateCounters(s)
 }
 
 // handleReasonModalSubmit processes the reason message from the modal.

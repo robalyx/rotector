@@ -40,20 +40,18 @@ func NewBuilder(s *session.Session) *Builder {
 
 // Build creates a Discord message showing the leaderboard entries.
 func (b *Builder) Build() *discord.MessageUpdateBuilder {
-	embed := discord.NewEmbedBuilder().
-		SetTitle("Voting Leaderboard").
-		SetDescription(fmt.Sprintf("Top voters for `%s` period", b.period.String())).
-		SetColor(utils.GetMessageEmbedColor(b.privacyMode))
+	// Create main container
+	var mainDisplays []discord.ContainerSubComponent
 
-	if !b.lastRefresh.IsZero() {
-		embed.SetFooter(fmt.Sprintf(
-			"Last updated %s • Next update %s",
-			utils.FormatTimeAgo(b.lastRefresh),
-			utils.FormatTimeUntil(b.nextRefresh),
-		), "")
-	}
+	// Add header
+	mainDisplays = append(mainDisplays,
+		discord.NewTextDisplay(fmt.Sprintf("## Voting Leaderboard\nTop voters for `%s` period", b.period.String())),
+		discord.NewLargeSeparator(),
+	)
 
+	// Add leaderboard entries
 	if len(b.stats) > 0 {
+		var entriesContent string
 		for _, stat := range b.stats {
 			username := b.usernames[stat.DiscordUserID]
 			if username == "" {
@@ -66,31 +64,44 @@ func (b *Builder) Build() *discord.MessageUpdateBuilder {
 			// Calculate percentage
 			accuracyPercent := stat.Accuracy * 100
 
-			// Format field content with better spacing and alignment
-			embed.AddField(
-				fmt.Sprintf("%s %s", rankDisplay, username),
-				fmt.Sprintf("```\nCorrect Votes: %d\nTotal Votes: %d\nAccuracy: %.1f%%\n```",
-					stat.CorrectVotes,
-					stat.TotalVotes,
-					accuracyPercent),
-				false,
+			entriesContent += fmt.Sprintf("### %s %s\n```\nCorrect Votes: %d\nTotal Votes: %d\nAccuracy: %.1f%%\n```\n",
+				rankDisplay,
+				username,
+				stat.CorrectVotes,
+				stat.TotalVotes,
+				accuracyPercent,
 			)
 		}
+		mainDisplays = append(mainDisplays, discord.NewTextDisplay(entriesContent))
 	} else {
-		embed.AddField("No Results", "No entries found for this time period", false)
+		mainDisplays = append(mainDisplays, discord.NewTextDisplay("### No Results\nNo entries found for this time period"))
 	}
 
+	// Add footer
+	if !b.lastRefresh.IsZero() {
+		mainDisplays = append(mainDisplays,
+			discord.NewLargeSeparator(),
+			discord.NewTextDisplay(fmt.Sprintf("-# Last updated %s • Next update %s",
+				utils.FormatTimeAgo(b.lastRefresh),
+				utils.FormatTimeUntil(b.nextRefresh),
+			)),
+		)
+	}
+
+	mainContainer := discord.NewContainer(mainDisplays...).
+		WithAccentColor(utils.GetContainerColor(b.privacyMode))
+
 	// Create components
-	components := b.buildComponents()
+	components := b.buildInteractiveComponents()
 
 	return discord.NewMessageUpdateBuilder().
-		SetEmbeds(embed.Build()).
-		AddContainerComponents(components...)
+		AddComponents(mainContainer).
+		AddComponents(components...)
 }
 
-// buildComponents creates all interactive components for the leaderboard viewer.
-func (b *Builder) buildComponents() []discord.ContainerComponent {
-	return []discord.ContainerComponent{
+// buildInteractiveComponents creates all interactive components for the leaderboard viewer.
+func (b *Builder) buildInteractiveComponents() []discord.LayoutComponent {
+	return []discord.LayoutComponent{
 		// Time period selection menu
 		discord.NewActionRow(
 			discord.NewStringSelectMenu(constants.LeaderboardPeriodSelectMenuCustomID, "Select Time Period",
@@ -102,7 +113,7 @@ func (b *Builder) buildComponents() []discord.ContainerComponent {
 		),
 		// Navigation buttons
 		discord.NewActionRow(
-			discord.NewSecondaryButton("◀️", constants.BackButtonCustomID),
+			discord.NewSecondaryButton("◀️ Back", constants.BackButtonCustomID),
 			discord.NewSecondaryButton("⏮️", string(session.ViewerFirstPage)).WithDisabled(!b.hasPrevPage),
 			discord.NewSecondaryButton("◀️", string(session.ViewerPrevPage)).WithDisabled(!b.hasPrevPage),
 			discord.NewSecondaryButton("▶️", string(session.ViewerNextPage)).WithDisabled(!b.hasNextPage),

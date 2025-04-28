@@ -2,6 +2,8 @@ package shared
 
 import (
 	"fmt"
+	"strconv"
+	"strings"
 
 	"github.com/disgoorg/disgo/discord"
 	"github.com/robalyx/rotector/internal/bot/constants"
@@ -59,76 +61,87 @@ func NewCommentsBuilder(s *session.Session, targetType TargetType) *CommentsBuil
 // Build creates a Discord message showing the comments and controls.
 func (b *CommentsBuilder) Build() *discord.MessageUpdateBuilder {
 	return discord.NewMessageUpdateBuilder().
-		SetEmbeds(b.buildEmbed().Build()).
-		AddContainerComponents(b.buildComponents()...)
+		AddComponents(b.buildComponents()...)
 }
 
-// buildEmbed creates the embed for the comments interface.
-func (b *CommentsBuilder) buildEmbed() *discord.EmbedBuilder {
-	embed := discord.NewEmbedBuilder().
-		SetTitle("📝 Community Notes").
-		SetDescription(fmt.Sprintf("Notes for %s `%s`", b.targetType, utils.CensorString(b.targetName, b.privacyMode))).
-		SetColor(utils.GetMessageEmbedColor(b.privacyMode))
+// buildComponents creates all the components for the comments interface.
+func (b *CommentsBuilder) buildComponents() []discord.LayoutComponent {
+	var components []discord.ContainerSubComponent
+
+	// Add header
+	var content strings.Builder
+	content.WriteString("## Community Notes\n")
+	content.WriteString(fmt.Sprintf("```%s (%s)```",
+		utils.CensorString(b.targetName, b.privacyMode),
+		utils.CensorString(strconv.FormatUint(b.targetID, 10), b.privacyMode),
+	))
 
 	if len(b.comments) == 0 {
-		embed.AddField("No Notes", "No community notes yet. Be the first to add one!", false)
-		return embed
-	}
+		content.WriteString("\nNo community notes yet. Be the first to add one!")
+		components = append(components, discord.NewTextDisplay(content.String()))
+	} else {
+		components = append(components,
+			discord.NewTextDisplay(content.String()),
+			discord.NewLargeSeparator(),
+		)
 
-	// Calculate page boundaries
-	end := min(b.offset+constants.CommentsPerPage, b.totalItems)
+		// Calculate page boundaries
+		end := min(b.offset+constants.CommentsPerPage, b.totalItems)
 
-	// Add comments for this page
-	for _, comment := range b.comments[b.offset:end] {
-		timestamp := fmt.Sprintf("<t:%d:R>", comment.CreatedAt.Unix())
-		if !comment.UpdatedAt.Equal(comment.CreatedAt) {
-			timestamp += fmt.Sprintf(" (edited <t:%d:R>)", comment.UpdatedAt.Unix())
-		}
+		// Add comments for this page
+		var commentsContent strings.Builder
+		for _, comment := range b.comments[b.offset:end] {
+			timestamp := fmt.Sprintf("<t:%d:R>", comment.CreatedAt.Unix())
+			if !comment.UpdatedAt.Equal(comment.CreatedAt) {
+				timestamp += fmt.Sprintf(" (edited <t:%d:R>)", comment.UpdatedAt.Unix())
+			}
 
-		// Determine user role
-		var roleTitle string
-		switch {
-		case b.botSettings.IsAdmin(comment.CommenterID):
-			roleTitle = "Administrator Note"
-		case b.botSettings.IsReviewer(comment.CommenterID):
-			roleTitle = "Reviewer Note"
-		default:
-			roleTitle = "Community Note"
-		}
+			// Determine user role
+			var roleTitle string
+			switch {
+			case b.botSettings.IsAdmin(comment.CommenterID):
+				roleTitle = "Administrator Note"
+			case b.botSettings.IsReviewer(comment.CommenterID):
+				roleTitle = "Reviewer Note"
+			default:
+				roleTitle = "Community Note"
+			}
 
-		embed.AddField(
-			roleTitle,
-			fmt.Sprintf("From <@%d> - %s\n```%s```",
+			commentsContent.WriteString(fmt.Sprintf("### %s\nFrom <@%d> - %s\n%s\n",
+				roleTitle,
 				comment.CommenterID,
 				timestamp,
-				comment.Message,
-			),
-			false,
+				utils.FormatString(comment.Message)))
+		}
+
+		components = append(components,
+			discord.NewTextDisplay(commentsContent.String()),
+			discord.NewLargeSeparator(),
 		)
-	}
 
-	// Add page number and total items to footer
-	embed.SetFooter(fmt.Sprintf("Page %d/%d • Showing %d-%d of %d notes",
-		b.page+1, b.totalPages+1, b.offset+1, end, b.totalItems), "")
+		// Add pagination footer
+		footerContent := fmt.Sprintf("-# Page %d/%d • Showing %d-%d of %d notes",
+			b.page+1, b.totalPages+1, b.offset+1, end, b.totalItems)
+		components = append(components, discord.NewTextDisplay(footerContent))
 
-	return embed
-}
-
-// buildComponents creates all the interactive components.
-func (b *CommentsBuilder) buildComponents() []discord.ContainerComponent {
-	components := []discord.ContainerComponent{
-		// Navigation buttons
-		discord.NewActionRow(
-			discord.NewSecondaryButton("◀️", constants.BackButtonCustomID),
+		// Add pagination buttons
+		components = append(components, discord.NewActionRow(
 			discord.NewSecondaryButton("⏮️", string(session.ViewerFirstPage)).WithDisabled(b.page == 0),
 			discord.NewSecondaryButton("◀️", string(session.ViewerPrevPage)).WithDisabled(b.page == 0),
 			discord.NewSecondaryButton("▶️", string(session.ViewerNextPage)).WithDisabled(b.page == b.totalPages),
 			discord.NewSecondaryButton("⏭️", string(session.ViewerLastPage)).WithDisabled(b.page == b.totalPages),
-		),
+		))
 	}
 
-	// Check if user has a comment
-	var hasExistingComment bool
+	// Create main container
+	mainContainer := discord.NewContainer(components...).
+		WithAccentColor(utils.GetContainerColor(b.privacyMode))
+
+	// Create action buttons
+	actionButtons := []discord.InteractiveComponent{
+		discord.NewSecondaryButton("◀️ Back", constants.BackButtonCustomID),
+	}
+	hasExistingComment := false
 	for _, comment := range b.comments {
 		if comment.CommenterID == b.commenterID {
 			hasExistingComment = true
@@ -136,8 +149,6 @@ func (b *CommentsBuilder) buildComponents() []discord.ContainerComponent {
 		}
 	}
 
-	// Add appropriate action buttons
-	actionButtons := []discord.InteractiveComponent{}
 	if hasExistingComment {
 		actionButtons = append(actionButtons,
 			discord.NewPrimaryButton("Edit Note", constants.AddCommentButtonCustomID),
@@ -149,6 +160,9 @@ func (b *CommentsBuilder) buildComponents() []discord.ContainerComponent {
 		)
 	}
 
-	components = append(components, discord.NewActionRow(actionButtons...))
-	return components
+	// Create layout components
+	return []discord.LayoutComponent{
+		mainContainer,
+		discord.NewActionRow(actionButtons...),
+	}
 }

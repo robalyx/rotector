@@ -124,50 +124,6 @@ func (m *OverviewMenu) handleSelectMenu(ctx *interaction.Context, s *session.Ses
 		ResetAppealData(s)
 
 		ctx.Reload("Sorted appeals by " + option)
-	case constants.AppealSelectID:
-		// Check if this is a modal open request
-		if option == constants.AppealSearchCustomID {
-			modal := discord.NewModalCreateBuilder().
-				SetCustomID(constants.AppealSearchModalCustomID).
-				SetTitle("Search Appeal").
-				AddActionRow(
-					discord.NewTextInput(constants.AppealIDInputCustomID, discord.TextInputStyleShort, "Appeal ID").
-						WithRequired(true).
-						WithPlaceholder("Enter the appeal ID..."),
-				)
-			ctx.Modal(modal)
-			return
-		}
-
-		// Convert option string to int64 for appeal ID
-		appealID, err := strconv.ParseInt(option, 10, 64)
-		if err != nil {
-			m.layout.logger.Error("Failed to parse appeal ID", zap.Error(err))
-			ctx.Error("Invalid appeal ID format")
-			return
-		}
-
-		// Find the appeal in the session data
-		appeals := session.AppealList.Get(s)
-
-		var appeal *types.FullAppeal
-		for _, a := range appeals {
-			if a.ID == appealID {
-				appeal = a
-				break
-			}
-		}
-
-		// Show error if appeal not found
-		if appeal == nil {
-			ctx.Error("Appeal not found in current view")
-			return
-		}
-
-		// Show the selected appeal
-		session.PaginationPage.Set(s, 0)
-		session.AppealSelected.Set(s, appeal)
-		ctx.Show(constants.AppealTicketPageName, "")
 	case constants.AppealCreateSelectID:
 		switch option {
 		case constants.AppealCreateRobloxButtonCustomID:
@@ -188,11 +144,48 @@ func (m *OverviewMenu) handleButton(ctx *interaction.Context, s *session.Session
 	case constants.RefreshButtonCustomID:
 		ResetAppealData(s)
 		ctx.Reload("Appeals refreshed.")
+	case constants.AppealSearchCustomID:
+		modal := discord.NewModalCreateBuilder().
+			SetCustomID(constants.AppealSearchModalCustomID).
+			SetTitle("Search Appeal").
+			AddActionRow(
+				discord.NewTextInput(constants.AppealIDInputCustomID, discord.TextInputStyleShort, "Appeal ID").
+					WithRequired(true).
+					WithPlaceholder("Enter the appeal ID..."),
+			)
+		ctx.Modal(modal)
 	case string(session.ViewerFirstPage),
 		string(session.ViewerPrevPage),
 		string(session.ViewerNextPage),
 		string(session.ViewerLastPage):
 		m.handlePagination(ctx, s, session.ViewerAction(customID))
+	default:
+		// Handle view appeal buttons
+		appealID, err := strconv.ParseInt(customID, 10, 64)
+		if err != nil {
+			return
+		}
+
+		// Find the appeal in the session data
+		appeals := session.AppealList.Get(s)
+		var appeal *types.FullAppeal
+		for _, a := range appeals {
+			if a.ID == appealID {
+				appeal = a
+				break
+			}
+		}
+
+		// Show error if appeal not found
+		if appeal == nil {
+			ctx.Error("Appeal not found in current view")
+			return
+		}
+
+		// Show the selected appeal
+		session.PaginationPage.Set(s, 0)
+		session.AppealSelected.Set(s, appeal)
+		ctx.Show(constants.AppealTicketPageName, "")
 	}
 }
 
@@ -207,6 +200,7 @@ func (m *OverviewMenu) handlePagination(ctx *interaction.Context, s *session.Ses
 
 			session.AppealCursor.Set(s, nextCursor)
 			session.AppealPrevCursors.Set(s, append(prevCursors, cursor))
+			session.AppealList.Delete(s)
 			ctx.Reload("")
 		}
 	case session.ViewerPrevPage:
@@ -216,11 +210,13 @@ func (m *OverviewMenu) handlePagination(ctx *interaction.Context, s *session.Ses
 			lastIdx := len(prevCursors) - 1
 			session.AppealCursor.Set(s, prevCursors[lastIdx])
 			session.AppealPrevCursors.Set(s, prevCursors[:lastIdx])
+			session.AppealList.Delete(s)
 			ctx.Reload("")
 		}
 	case session.ViewerFirstPage:
 		session.AppealCursor.Delete(s)
 		session.AppealPrevCursors.Set(s, make([]*types.AppealTimeline, 0))
+		session.AppealList.Delete(s)
 		ctx.Reload("")
 	case session.ViewerLastPage:
 		return

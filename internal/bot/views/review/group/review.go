@@ -1,6 +1,7 @@
 package group
 
 import (
+	"bytes"
 	"fmt"
 	"strconv"
 	"strings"
@@ -56,168 +57,287 @@ func NewReviewBuilder(s *session.Session, db database.Client) *ReviewBuilder {
 	}
 }
 
-// Build creates a Discord message with group information in an embed and adds
-// interactive components for reviewing the group.
+// Build creates a Discord message with group information.
 func (b *ReviewBuilder) Build() *discord.MessageUpdateBuilder {
 	builder := discord.NewMessageUpdateBuilder()
 
-	// Add mode embed
-	modeEmbed := b.buildModeEmbed()
-	builder.AddEmbeds(modeEmbed.Build())
+	// Create main info container
+	mainInfoDisplays := []discord.ContainerSubComponent{
+		b.buildGroupInfoSection(),
+		discord.NewLargeSeparator(),
+		discord.NewSection(
+			discord.NewTextDisplay(fmt.Sprintf("⚠️ Reports: %d • 🛡️ Safe Votes: %d\n-# UUID: %s\n-# Created: %s • Updated: %s",
+				b.group.Reputation.Downvotes,
+				b.group.Reputation.Upvotes,
+				b.group.UUID.String(),
+				fmt.Sprintf("<t:%d:R>", b.group.LastUpdated.Unix()),
+				fmt.Sprintf("<t:%d:R>", b.group.LastUpdated.Unix()),
+			)),
+		).WithAccessory(
+			discord.NewLinkButton("View Group", fmt.Sprintf("https://www.roblox.com/communities/%d", b.group.ID)).
+				WithEmoji(discord.ComponentEmoji{Name: "🔗"}),
+		),
+	}
 
-	// Handle thumbnail
-	reviewEmbed := b.buildReviewEmbed()
-	if b.group.ThumbnailURL != "" && b.group.ThumbnailURL != fetcher.ThumbnailPlaceholder {
-		reviewEmbed.SetThumbnail(b.group.ThumbnailURL)
-	} else {
-		// Load and attach placeholder image
-		placeholderImage, err := assets.Images.Open("images/content_deleted.png")
-		if err == nil {
-			builder.SetFiles(discord.NewFile("content_deleted.png", "", placeholderImage))
-			reviewEmbed.SetThumbnail("attachment://content_deleted.png")
-			_ = placeholderImage.Close()
+	// Add status-specific timestamps if they exist
+	if !b.group.VerifiedAt.IsZero() || !b.group.ClearedAt.IsZero() {
+		var timestamps []string
+		if !b.group.VerifiedAt.IsZero() {
+			timestamps = append(timestamps, "Verified: "+fmt.Sprintf("<t:%d:R>", b.group.VerifiedAt.Unix()))
+		}
+		if !b.group.ClearedAt.IsZero() {
+			timestamps = append(timestamps, "Cleared: "+fmt.Sprintf("<t:%d:R>", b.group.ClearedAt.Unix()))
+		}
+		mainInfoDisplays = append(mainInfoDisplays,
+			discord.NewTextDisplay("-# "+strings.Join(timestamps, " • ")),
+		)
+	}
+
+	mainContainer := discord.NewContainer(mainInfoDisplays...).
+		WithAccentColor(utils.GetContainerColor(b.PrivacyMode))
+
+	// Create review info container
+	var reviewInfoDisplays []discord.ContainerSubComponent
+
+	// Add reason section with evidence
+	if reasonDisplay := b.buildReasonDisplay(); reasonDisplay != nil {
+		reviewInfoDisplays = append(reviewInfoDisplays, reasonDisplay)
+
+		// Add reason management dropdown for reviewers
+		if b.IsReviewer && b.ReviewMode != enum.ReviewModeTraining {
+			reviewInfoDisplays = append(reviewInfoDisplays,
+				discord.NewActionRow(
+					discord.NewStringSelectMenu(constants.ReasonSelectMenuCustomID, "Manage Reasons", b.buildReasonOptions()...),
+				),
+			)
 		}
 	}
-	builder.AddEmbeds(reviewEmbed.Build())
 
-	// Add recent comments embed if there are any
-	if commentsEmbed := b.BuildCommentsEmbed(); commentsEmbed != nil {
-		builder.AddEmbeds(commentsEmbed.Build())
+	// Create review container if we have any review info
+	var reviewContainer discord.ContainerComponent
+	if len(reviewInfoDisplays) > 0 {
+		reviewContainer = discord.NewContainer(reviewInfoDisplays...).
+			WithAccentColor(utils.GetContainerColor(b.PrivacyMode))
 	}
+
+	// Add mode display with warnings and action rows
+	modeDisplays := b.buildStatusDisplay()
+	modeDisplays = append(modeDisplays,
+		discord.NewLargeSeparator(),
+		discord.NewActionRow(
+			discord.NewStringSelectMenu(constants.SortOrderSelectMenuCustomID, "Sorting", b.BuildSortingOptions(b.defaultSort)...),
+		),
+		discord.NewActionRow(
+			discord.NewStringSelectMenu(constants.ActionSelectMenuCustomID, "Other Actions", b.buildActionOptions()...),
+		),
+	)
+
+	// Add navigation and action buttons
+	modeDisplays = append(modeDisplays, b.buildInteractiveComponents()...)
+
+	modeContainer := discord.NewContainer(modeDisplays...).
+		WithAccentColor(utils.GetContainerColor(b.PrivacyMode))
+
+	// Add containers to builder
+	builder.AddComponents(mainContainer)
+	if len(reviewInfoDisplays) > 0 {
+		builder.AddComponents(reviewContainer)
+	}
+	builder.AddComponents(modeContainer)
+
+	// Handle thumbnail
+	if b.group.ThumbnailURL == "" || b.group.ThumbnailURL == fetcher.ThumbnailPlaceholder {
+		builder.AddFiles(discord.NewFile("content_deleted.png", "", bytes.NewReader(assets.ContentDeleted)))
+	}
+
+	return builder
+}
+
+// buildStatusDisplay creates the review mode info display with warnings and notices.
+func (b *ReviewBuilder) buildStatusDisplay() []discord.ContainerSubComponent {
+	displays := []discord.ContainerSubComponent{
+		discord.NewTextDisplay(b.buildReviewModeText()),
+	}
+
+	var content strings.Builder
 
 	// Add deletion notice if group is deleted
 	if b.group.IsDeleted {
-		deletionEmbed := b.BuildDeletionEmbed(enum.ActivityTypeGroupViewed)
-		builder.AddEmbeds(deletionEmbed.Build())
+		content.WriteString(
+			"\n\n## 🗑️ Data Deletion Notice\nThis group has requested deletion of their data. Some information may be missing or incomplete.")
 	}
 
-	// Add warning embed if there are recent reviewers
-	if warningEmbed := b.BuildReviewWarningEmbed(enum.ActivityTypeGroupViewed); warningEmbed != nil {
-		builder.AddEmbeds(warningEmbed.Build())
+	// Add warning if there are recent reviewers
+	if warningDisplay := b.BuildReviewWarningText("group", enum.ActivityTypeGroupViewed); warningDisplay != "" {
+		content.WriteString("\n\n## ⚠️ Active Review Warning\n" + warningDisplay)
 	}
 
-	// Create components
-	components := b.buildComponents()
+	// Add comments if any exist
+	if len(b.Comments) > 0 {
+		content.WriteString("\n\n" + b.BuildCommentsText())
+	}
 
-	return builder.AddContainerComponents(components...)
+	if content.Len() > 0 {
+		displays = append(displays,
+			discord.NewLargeSeparator(),
+			discord.NewTextDisplay(content.String()))
+	}
+
+	return displays
 }
 
-// buildModeEmbed creates the review mode info embed.
-func (b *ReviewBuilder) buildModeEmbed() *discord.EmbedBuilder {
+// buildReviewModeText formats the review mode section with description.
+func (b *ReviewBuilder) buildReviewModeText() string {
+	// Format review mode
 	var mode string
 	var description string
 
-	// Format review mode
 	switch {
 	case b.ReviewMode == enum.ReviewModeTraining || !b.IsAdmin:
 		mode = "🗳️ Voting Mode"
-		description += "**You are an official reviewer.**\n" +
+		description = "**You are an official reviewer.**\n" +
 			"While you can review and vote on groups, only administrators can make final decisions. " +
 			"Your votes are recorded but will not affect the group's status. Community members who are " +
 			"not official reviewers will not be able to see this group review menu."
 	case b.ReviewMode == enum.ReviewModeStandard:
 		mode = "⚠️ Standard Mode"
-		description += "Your actions are recorded and affect the database. Please review carefully before taking action."
+		description = "Your actions are recorded and affect the database. Please review carefully before taking action."
 	default:
 		mode = "❌ Unknown Mode"
 		description = "Error encountered. Please check your settings."
 	}
 
-	return discord.NewEmbedBuilder().
-		SetTitle(mode).
-		SetDescription(description).
-		SetColor(utils.GetMessageEmbedColor(b.PrivacyMode))
+	return fmt.Sprintf("## %s\n%s", mode, description)
 }
 
-// buildReviewEmbed creates the main review information embed.
-func (b *ReviewBuilder) buildReviewEmbed() *discord.EmbedBuilder {
-	embed := discord.NewEmbedBuilder().
-		SetColor(utils.GetMessageEmbedColor(b.PrivacyMode)).
-		SetTitle(fmt.Sprintf("⚠️ %d Reports • 🛡️ %d Safe ",
-			b.group.Reputation.Downvotes,
-			b.group.Reputation.Upvotes,
-		))
-
-	// Add status indicator based on group status
-	var status string
+// buildGroupInfoSection creates the main group information section with thumbnail.
+func (b *ReviewBuilder) buildGroupInfoSection() discord.ContainerSubComponent {
+	// Build status icon
+	var statusIcon string
 	switch b.group.Status {
 	case enum.GroupTypeConfirmed:
-		status = "⚠️ Confirmed"
+		statusIcon = "⚠️"
 	case enum.GroupTypeFlagged:
-		status = "⏳ Pending"
+		statusIcon = "⏳"
 	case enum.GroupTypeCleared:
-		status = "✅ Cleared"
+		statusIcon = "✅"
 	}
-
-	// Add locked status if applicable
 	if b.group.IsLocked {
-		status += " 🔒 Locked"
+		statusIcon += "🔒"
 	}
 
-	groupID := strconv.FormatUint(b.group.ID, 10)
+	// Add basic info with status
+	var content strings.Builder
+
+	// Add name header with status icon
+	content.WriteString(fmt.Sprintf("## %s %s\n",
+		statusIcon,
+		utils.CensorString(b.group.Name, b.PrivacyMode)))
+
+	// Add owner info
 	ownerID := strconv.FormatUint(b.group.Owner.UserID, 10)
-	memberCount := strconv.FormatUint(b.groupInfo.MemberCount, 10)
-	flaggedCount := strconv.Itoa(b.flaggedCount)
-	lastUpdated := fmt.Sprintf("<t:%d:R>", b.group.LastUpdated.Unix())
-	confidence := fmt.Sprintf("%.2f%%", b.group.Confidence*100)
+	content.WriteString(fmt.Sprintf("-# Owner: [%s](https://www.roblox.com/users/%d/profile)\n",
+		utils.CensorString(ownerID, b.PrivacyMode), b.group.Owner.UserID))
+	content.WriteString(fmt.Sprintf("-# Members: %s\n", strconv.FormatUint(b.groupInfo.MemberCount, 10)))
+	content.WriteString("-# Flagged Members: " + strconv.Itoa(b.flaggedCount))
 
-	// Add all information fields to the embed
-	embed.AddField("ID", fmt.Sprintf(
-		"[%s](https://www.roblox.com/groups/%d)",
-		utils.CensorString(groupID, b.PrivacyMode),
-		b.group.ID,
-	), true).
-		AddField("Name", utils.CensorString(b.group.Name, b.PrivacyMode), true).
-		AddField("Owner", fmt.Sprintf(
-			"[%s](https://www.roblox.com/users/%d/profile)",
-			utils.CensorString(ownerID, b.PrivacyMode),
-			b.group.Owner.UserID,
-		), true).
-		AddField("Members", memberCount, true).
-		AddField("Flagged Members", flaggedCount, true).
-		AddField("Confidence", confidence, true).
-		AddField("Last Updated", lastUpdated, true).
-		AddField("Reason", b.getReason(), false).
-		AddField("Shout", b.getShout(), false).
-		AddField("Description", b.getDescription(), false)
-	shared.AddEvidenceFields(
-		embed, b.group.Reasons, b.PrivacyMode,
-		strconv.FormatUint(b.group.ID, 10),
-		b.group.Name,
-		strconv.FormatUint(b.group.Owner.UserID, 10),
-	)
-	embed.AddField("Review History", b.getReviewHistory(), false)
+	// Add description
+	content.WriteString("\n### 📝 Description\n")
+	content.WriteString(b.getDescription())
 
-	// Add status-specific timestamps
-	if !b.group.VerifiedAt.IsZero() {
-		embed.AddField("Verified At", fmt.Sprintf("<t:%d:R>", b.group.VerifiedAt.Unix()), true)
-	}
-	if !b.group.ClearedAt.IsZero() {
-		embed.AddField("Cleared At", fmt.Sprintf("<t:%d:R>", b.group.ClearedAt.Unix()), true)
-	}
+	// Add shout
+	content.WriteString("\n### 📢 Group Shout\n")
+	content.WriteString(b.getShout())
 
-	// Build footer with status and history position
-	var footerText string
-	if len(b.ReviewHistory) > 0 {
-		footerText = fmt.Sprintf("%s • UUID: %s • History: %d/%d",
-			status,
-			b.group.UUID.String(),
-			b.HistoryIndex+1,
-			len(b.ReviewHistory))
+	// Create main section with thumbnail
+	section := discord.NewSection(discord.NewTextDisplay(content.String()))
+	if b.group.ThumbnailURL != "" && b.group.ThumbnailURL != fetcher.ThumbnailPlaceholder {
+		section = section.WithAccessory(discord.NewThumbnail(b.group.ThumbnailURL))
 	} else {
-		footerText = fmt.Sprintf("%s • UUID: %s", status, b.group.UUID.String())
+		section = section.WithAccessory(discord.NewThumbnail("attachment://content_deleted.png"))
 	}
-	embed.SetFooter(footerText, "")
 
-	return embed
+	return section
+}
+
+// buildReasonDisplay creates the reason section with evidence.
+func (b *ReviewBuilder) buildReasonDisplay() discord.ContainerSubComponent {
+	if len(b.group.Reasons) == 0 {
+		return nil
+	}
+
+	var content strings.Builder
+	content.WriteString("## Reasons and Evidence\n")
+	content.WriteString(fmt.Sprintf("-# Total Confidence: %.2f%%\n\n", b.group.Confidence*100))
+
+	// Calculate dynamic truncation length based on number of reasons
+	maxLength := utils.CalculateDynamicTruncationLength(len(b.group.Reasons))
+
+	for _, reasonType := range []enum.GroupReasonType{
+		enum.GroupReasonTypeMember,
+	} {
+		if reason, ok := b.group.Reasons[reasonType]; ok {
+			// Add reason header and message
+			message := utils.CensorStringsInText(reason.Message, b.PrivacyMode,
+				strconv.FormatUint(b.group.ID, 10),
+				b.group.Name)
+			message = utils.TruncateString(message, maxLength)
+			message = utils.FormatString(message)
+
+			content.WriteString(fmt.Sprintf("%s **%s** [%.0f%%]\n%s",
+				getReasonEmoji(reasonType),
+				reasonType.String(),
+				reason.Confidence*100,
+				message))
+
+			// Add evidence if any
+			if len(reason.Evidence) > 0 {
+				content.WriteString("\n")
+				for i, evidence := range reason.Evidence {
+					if i >= 3 {
+						content.WriteString("... and more\n")
+						break
+					}
+					evidence = utils.TruncateString(evidence, 100)
+					evidence = utils.NormalizeString(evidence)
+					if b.PrivacyMode {
+						evidence = utils.CensorStringsInText(evidence, true,
+							strconv.FormatUint(b.group.ID, 10),
+							b.group.Name)
+					}
+					content.WriteString(fmt.Sprintf("- `%s`\n", evidence))
+				}
+			}
+			content.WriteString("\n")
+		}
+	}
+
+	return discord.NewTextDisplay(content.String())
+}
+
+// buildInteractiveComponents creates the navigation and action buttons.
+func (b *ReviewBuilder) buildInteractiveComponents() []discord.ContainerSubComponent {
+	// Add navigation buttons
+	navButtons := b.BuildNavigationButtons()
+	confirmButton := discord.NewDangerButton(b.getConfirmButtonLabel(), constants.ConfirmButtonCustomID)
+	clearButton := discord.NewSuccessButton(b.getClearButtonLabel(), constants.ClearButtonCustomID)
+
+	// Add all buttons to a single row
+	allButtons := make([]discord.InteractiveComponent, 0, len(navButtons)+2)
+	allButtons = append(allButtons, navButtons...)
+	allButtons = append(allButtons, confirmButton, clearButton)
+
+	return []discord.ContainerSubComponent{
+		discord.NewActionRow(allButtons...),
+	}
 }
 
 // buildActionOptions creates the action menu options.
 func (b *ReviewBuilder) buildActionOptions() []discord.StringSelectMenuOption {
 	options := []discord.StringSelectMenuOption{
-		discord.NewStringSelectMenuOption("View Flagged Members", constants.GroupViewMembersButtonCustomID).
-			WithDescription("View all flagged members of this group").
-			WithEmoji(discord.ComponentEmoji{Name: "👥"}),
+		discord.NewStringSelectMenuOption("View Members", constants.GroupViewMembersButtonCustomID).
+			WithEmoji(discord.ComponentEmoji{Name: "👥"}).
+			WithDescription("View group members"),
 	}
 
 	// Add comment options
@@ -249,32 +369,6 @@ func (b *ReviewBuilder) buildActionOptions() []discord.StringSelectMenuOption {
 	return options
 }
 
-// buildComponents creates all interactive components for the review menu.
-func (b *ReviewBuilder) buildComponents() []discord.ContainerComponent {
-	// Get base components
-	components := b.BuildBaseComponents(
-		b.BuildSortingOptions(b.defaultSort),
-		b.buildReasonOptions(),
-		b.buildActionOptions(),
-	)
-
-	// Create all buttons
-	navButtons := b.BuildNavigationButtons()
-	confirmButton := discord.NewDangerButton(b.GetConfirmButtonLabel(), constants.ConfirmButtonCustomID)
-	clearButton := discord.NewSuccessButton(b.GetClearButtonLabel(), constants.ClearButtonCustomID)
-
-	// Combine all buttons into a single slice
-	allButtons := make([]discord.InteractiveComponent, 0, len(navButtons)+2)
-	allButtons = append(allButtons, navButtons...)
-	allButtons = append(allButtons, confirmButton, clearButton)
-
-	// Create action row with all buttons
-	actionRow := discord.NewActionRow(allButtons...)
-	components = append(components, actionRow)
-
-	return components
-}
-
 // buildReasonOptions creates the reason management options.
 func (b *ReviewBuilder) buildReasonOptions() []discord.StringSelectMenuOption {
 	reasonTypes := []enum.GroupReasonType{
@@ -283,7 +377,7 @@ func (b *ReviewBuilder) buildReasonOptions() []discord.StringSelectMenuOption {
 	return shared.BuildReasonOptions(b.group.Reasons, reasonTypes, getReasonEmoji, b.ReasonsChanged)
 }
 
-// getDescription returns the description field for the embed.
+// getDescription returns the description field.
 func (b *ReviewBuilder) getDescription() string {
 	description := b.group.Description
 
@@ -306,51 +400,7 @@ func (b *ReviewBuilder) getDescription() string {
 	return description
 }
 
-// getReason returns the formatted reason for the embed.
-func (b *ReviewBuilder) getReason() string {
-	if len(b.group.Reasons) == 0 {
-		return constants.NotApplicable
-	}
-
-	// Build formatted output
-	var formattedReasons []string
-
-	// Order of reason types to display
-	reasonTypes := []enum.GroupReasonType{
-		enum.GroupReasonTypeMember,
-	}
-
-	// Calculate dynamic truncation length based on number of reasons
-	maxLength := utils.CalculateDynamicTruncationLength(len(b.group.Reasons))
-
-	for _, reasonType := range reasonTypes {
-		if reason, ok := b.group.Reasons[reasonType]; ok {
-			// Join all reasons of this type
-			section := fmt.Sprintf("%s **%s**\n%s",
-				getReasonEmoji(reasonType),
-				reasonType.String(),
-				utils.TruncateString(reason.Message, maxLength))
-			formattedReasons = append(formattedReasons, section)
-		}
-	}
-
-	// Join all sections with double newlines for spacing
-	reasonText := strings.Join(formattedReasons, "\n\n")
-
-	// Censor if needed
-	if b.PrivacyMode {
-		reasonText = utils.CensorStringsInText(
-			reasonText,
-			true,
-			strconv.FormatUint(b.group.ID, 10),
-			b.group.Name,
-		)
-	}
-
-	return reasonText
-}
-
-// getShout returns the shout field for the embed.
+// getShout returns the shout field.
 func (b *ReviewBuilder) getShout() string {
 	// Skip if shout is not available
 	if b.group.Shout == nil || b.group.Shout.Body == "" {
@@ -364,35 +414,16 @@ func (b *ReviewBuilder) getShout() string {
 	return shout
 }
 
-// getReviewHistory returns the review history field for the embed.
-func (b *ReviewBuilder) getReviewHistory() string {
-	if len(b.Logs) == 0 {
-		return constants.NotApplicable
-	}
-
-	history := make([]string, 0, len(b.Logs))
-	for _, log := range b.Logs {
-		history = append(history, fmt.Sprintf("- <@%d> (%s) - <t:%d:R>",
-			log.ReviewerID, log.ActivityType.String(), log.ActivityTimestamp.Unix()))
-	}
-
-	if b.LogsHasMore {
-		history = append(history, "... and more")
-	}
-
-	return strings.Join(history, "\n")
-}
-
-// GetConfirmButtonLabel returns the appropriate label for the confirm button based on review mode.
-func (b *ReviewBuilder) GetConfirmButtonLabel() string {
+// getConfirmButtonLabel returns the appropriate label for the confirm button based on review mode.
+func (b *ReviewBuilder) getConfirmButtonLabel() string {
 	if b.ReviewMode == enum.ReviewModeTraining || !b.IsAdmin {
 		return "Report"
 	}
 	return "Confirm"
 }
 
-// GetClearButtonLabel returns the appropriate label for the clear button based on review mode.
-func (b *ReviewBuilder) GetClearButtonLabel() string {
+// getClearButtonLabel returns the appropriate label for the clear button based on review mode.
+func (b *ReviewBuilder) getClearButtonLabel() string {
 	if b.ReviewMode == enum.ReviewModeTraining || !b.IsAdmin {
 		return "Safe"
 	}

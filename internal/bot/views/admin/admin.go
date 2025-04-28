@@ -35,18 +35,20 @@ func (b *Builder) Build() *discord.MessageUpdateBuilder {
 			WithDescription("Delete a Roblox group from the database"),
 	}
 
-	// Create embed
-	embed := discord.NewEmbedBuilder().
-		SetTitle("Admin Menu").
-		SetDescription("⚠️ **Warning**: These actions are permanent and cannot be undone.").
-		SetColor(constants.DefaultEmbedColor)
+	// Create main container with title and warning
+	mainContainer := discord.NewContainer(
+		discord.NewTextDisplay("## Admin Menu\n⚠️ **Warning**: These actions are permanent and cannot be undone."),
+		discord.NewLargeSeparator(),
+		discord.NewActionRow(
+			discord.NewStringSelectMenu(constants.ActionSelectMenuCustomID, "Select Action", options...),
+		),
+	).WithAccentColor(constants.DefaultContainerColor)
 
 	return discord.NewMessageUpdateBuilder().
-		SetEmbeds(embed.Build()).
-		AddActionRow(
-			discord.NewStringSelectMenu(constants.ActionSelectMenuCustomID, "Select Action", options...),
-		).
-		AddActionRow(
-			discord.NewSecondaryButton("◀️", constants.BackButtonCustomID),
+		AddComponents(
+			mainContainer,
+			discord.NewActionRow(
+				discord.NewSecondaryButton("◀️ Back", constants.BackButtonCustomID),
+			),
 		)
 }

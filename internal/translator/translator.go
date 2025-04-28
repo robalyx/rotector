@@ -137,7 +137,7 @@ func shouldSkipTranslation(text string) bool {
 	}
 
 	// Skip deleted content
-	if text == "[ Content Deleted ]" {
+	if strings.EqualFold(text, "[ Content Deleted ]") {
 		return true
 	}
 

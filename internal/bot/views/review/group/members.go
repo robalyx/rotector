@@ -51,115 +51,142 @@ func NewMembersBuilder(s *session.Session) *MembersBuilder {
 func (b *MembersBuilder) Build() *discord.MessageUpdateBuilder {
 	// Create file attachment for the member avatars grid
 	fileName := fmt.Sprintf("members_%d_%d.png", b.group.ID, b.page)
-	file := discord.NewFile(fileName, "", b.imageBuffer)
 
-	// Build base embed with group info
-	embed := discord.NewEmbedBuilder().
-		SetTitle(fmt.Sprintf("Group Members (Page %d/%d)", b.page+1, b.totalPages+1)).
-		SetDescription(fmt.Sprintf(
-			"```%s (%s)```",
-			utils.CensorString(b.group.Name, b.privacyMode),
-			utils.CensorString(strconv.FormatUint(b.group.ID, 10), b.privacyMode),
-		)).
-		SetImage("attachment://" + fileName).
-		SetColor(utils.GetMessageEmbedColor(b.privacyMode))
+	// Build content
+	var content strings.Builder
+	content.WriteString("## Group Members\n")
+	content.WriteString(fmt.Sprintf("```%s (%s)```\n",
+		utils.CensorString(b.group.Name, b.privacyMode),
+		utils.CensorString(strconv.FormatUint(b.group.ID, 10), b.privacyMode),
+	))
 
-	// Add fields for each member
+	// Add members list
 	for i, memberID := range b.memberIDs {
-		fieldName := b.getMemberFieldName(i, memberID)
-		fieldValue := b.getMemberFieldValue(memberID)
-		embed.AddField(fieldName, fieldValue, true)
+		// Add member name with status indicators
+		content.WriteString(fmt.Sprintf("\n**%d.** %s", b.start+i+1, b.getMemberFieldName(memberID)))
+
+		// Add member details
+		details := b.getMemberFieldValue(memberID)
+		if details != "" {
+			content.WriteString("\n" + details)
+		}
 	}
 
-	builder := discord.NewMessageUpdateBuilder().
-		SetEmbeds(embed.Build()).
-		SetFiles(file)
+	// Add page info at the bottom
+	content.WriteString(fmt.Sprintf("\n\n-# Page %d/%d", b.page+1, b.totalPages+1))
 
-	// Only add navigation components if not streaming
+	// Build container with all components
+	container := discord.NewContainer(
+		discord.NewTextDisplay(content.String()),
+		discord.NewMediaGallery(discord.MediaGalleryItem{
+			Media: discord.UnfurledMediaItem{
+				URL: "attachment://" + fileName,
+			},
+		}),
+	).WithAccentColor(utils.GetContainerColor(b.privacyMode))
+
+	// Add pagination buttons if not streaming
 	if !b.isStreaming {
-		builder.AddContainerComponents([]discord.ContainerComponent{
+		container = container.AddComponents(
 			discord.NewActionRow(
-				discord.NewSecondaryButton("◀️", constants.BackButtonCustomID),
 				discord.NewSecondaryButton("⏮️", string(session.ViewerFirstPage)).WithDisabled(b.page == 0),
 				discord.NewSecondaryButton("◀️", string(session.ViewerPrevPage)).WithDisabled(b.page == 0),
 				discord.NewSecondaryButton("▶️", string(session.ViewerNextPage)).WithDisabled(b.page == b.totalPages),
 				discord.NewSecondaryButton("⏭️", string(session.ViewerLastPage)).WithDisabled(b.page == b.totalPages),
 			),
-		}...)
+		)
+	}
+
+	// Build message with container and back button
+	builder := discord.NewMessageUpdateBuilder().
+		SetFiles(discord.NewFile(fileName, "", b.imageBuffer)).
+		AddComponents(container)
+
+	// Add back button if not streaming
+	if !b.isStreaming {
+		builder.AddComponents(
+			discord.NewActionRow(
+				discord.NewSecondaryButton("◀️ Back", constants.BackButtonCustomID),
+			),
+		)
 	}
 
 	return builder
 }
 
 // getMemberFieldName creates the field name for a member entry.
-func (b *MembersBuilder) getMemberFieldName(index int, memberID uint64) string {
-	fieldName := fmt.Sprintf("Member %d", b.start+index+1)
+func (b *MembersBuilder) getMemberFieldName(memberID uint64) string {
+	var indicators []string
 
 	// Add presence indicator
 	if presence, ok := b.presences[memberID]; ok {
 		switch presence.UserPresenceType {
 		case apiTypes.Website:
-			fieldName += " 🌐"
+			indicators = append(indicators, "🌐")
 		case apiTypes.InGame:
-			fieldName += " 🎮"
+			indicators = append(indicators, "🎮")
 		case apiTypes.InStudio:
-			fieldName += " 🔨"
+			indicators = append(indicators, "🔨")
 		case apiTypes.Offline:
-			fieldName += " 💤"
+			indicators = append(indicators, "💤")
 		}
+	}
+
+	// Get member info
+	member, ok := b.members[memberID]
+	if !ok {
+		return fmt.Sprintf("%d ❌", memberID)
 	}
 
 	// Add status indicator based on member status
-	if member, ok := b.members[memberID]; ok {
-		switch member.Status {
-		case enum.UserTypeConfirmed:
-			fieldName += " ⚠️"
-		case enum.UserTypeFlagged:
-			fieldName += " ⏳"
-		case enum.UserTypeCleared:
-			fieldName += " ✅"
-		}
-
-		// Add banned status if applicable
-		if member.IsBanned {
-			fieldName += " 🔨"
-		}
+	switch member.Status {
+	case enum.UserTypeConfirmed:
+		indicators = append(indicators, "⚠️")
+	case enum.UserTypeFlagged:
+		indicators = append(indicators, "⏳")
+	case enum.UserTypeCleared:
+		indicators = append(indicators, "✅")
 	}
 
-	return fieldName
+	// Add banned status if applicable
+	if member.IsBanned {
+		indicators = append(indicators, "🔨")
+	}
+
+	// Add member name (with link in standard mode)
+	name := utils.CensorString(member.Name, b.privacyMode)
+	if !b.privacyMode {
+		name = fmt.Sprintf("[%s](https://www.roblox.com/users/%d/profile)", name, member.ID)
+	}
+
+	if len(indicators) > 0 {
+		return fmt.Sprintf("%s %s", name, strings.Join(indicators, " "))
+	}
+	return name
 }
 
 // getMemberFieldValue creates the field value for a member entry.
 func (b *MembersBuilder) getMemberFieldValue(memberID uint64) string {
-	var info strings.Builder
-
-	// Check if member exists
-	member, ok := b.members[memberID]
-	if !ok {
-		return "Data not found"
-	}
-
-	// Add member name
-	info.WriteString(fmt.Sprintf(
-		"[%s](https://www.roblox.com/users/%d/profile)",
-		utils.CensorString(member.Name, b.privacyMode),
-		member.ID,
-	))
+	var info []string
 
 	// Add presence details if available
 	if presence, ok := b.presences[memberID]; ok {
 		if presence.UserPresenceType != apiTypes.Offline {
-			info.WriteString("\n" + presence.LastLocation)
+			info = append(info, presence.LastLocation)
 		} else if presence.LastOnline != nil {
-			info.WriteString(fmt.Sprintf("\nLast Online: <t:%d:R>", presence.LastOnline.Unix()))
+			info = append(info, fmt.Sprintf("Last Online: <t:%d:R>", presence.LastOnline.Unix()))
 		}
 	}
 
-	// Add reason and confidence if available
-	if len(member.Reasons) > 0 {
+	// Add confidence and reason if available
+	if member, ok := b.members[memberID]; ok && len(member.Reasons) > 0 {
 		reasonTypes := member.Reasons.Types()
-		info.WriteString(fmt.Sprintf("\n(%.2f) [%s]", member.Confidence, strings.Join(reasonTypes, ", ")))
+		info = append(info, fmt.Sprintf("(%.2f) [%s]", member.Confidence, strings.Join(reasonTypes, ", ")))
 	}
 
-	return info.String()
+	if len(info) == 0 {
+		return "No data available"
+	}
+
+	return strings.Join(info, " • ")
 }

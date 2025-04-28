@@ -5,11 +5,10 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
-	"math/rand"
-	"strconv"
 
 	"github.com/disgoorg/disgo/discord"
 	"github.com/redis/rueidis"
+	"github.com/robalyx/rotector/assets"
 	"github.com/robalyx/rotector/internal/bot/constants"
 	"github.com/robalyx/rotector/internal/bot/core/session"
 	"github.com/robalyx/rotector/internal/bot/utils"
@@ -19,21 +18,6 @@ import (
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
 )
-
-// Tips for users shown in the welcome embed footer.
-var tips = []string{
-	"Check out the leaderboard to see our top reviewers",
-	"Track your performance through your vote statistics",
-	"Use streamer mode to hide sensitive information",
-	"You can continue from where you left off across all servers",
-	"All foreign text is automatically translated for you",
-	"Take your time to make accurate decisions",
-}
-
-// getRandomTip returns a random tip from the tips slice.
-func getRandomTip() string {
-	return "💡 " + tips[rand.Intn(len(tips))]
-}
 
 // Builder creates the visual layout for the main dashboard.
 type Builder struct {
@@ -113,77 +97,142 @@ func getChartBuffers(client rueidis.Client) (*bytes.Buffer, *bytes.Buffer) {
 
 // Build creates a Discord message showing statistics and worker status.
 func (b *Builder) Build() *discord.MessageUpdateBuilder {
-	// Create embeds
-	var embeds []discord.Embed
+	// Create components
+	var components []discord.LayoutComponent
 
-	// Show all embeds if not in maintenance mode or if user is admin
+	// Show all components if not in maintenance mode or if user is admin
 	if !b.showMaintenance {
-		embeds = []discord.Embed{
-			b.buildWelcomeEmbed(),
-		}
-
 		// Only show vote stats for non-reviewers
 		if !b.isReviewer {
-			embeds = append(embeds, b.buildVoteStatsEmbed())
+			components = append(components,
+				b.buildVoteStatsContainer(),
+			)
 		}
 
-		// Add remaining embeds
-		embeds = append(embeds,
-			b.buildUserGraphEmbed(),
-			b.buildGroupGraphEmbed(),
+		// Add stats components
+		components = append(components,
+			b.buildUserGraphContainer(),
+			b.buildGroupGraphContainer(),
 		)
 
 		// Add announcement if exists
 		if b.announcementType != enum.AnnouncementTypeNone && b.announcementMessage != "" {
-			embeds = append(embeds, b.buildAnnouncementEmbed())
+			components = append(components,
+				b.buildAnnouncementContainer(),
+			)
 		}
+
+		// Add welcome container with action menu at the bottom
+		components = append(components, b.buildWelcomeContainer())
 	} else {
-		// Only show maintenance announcement for non-admins during maintenance
-		embeds = []discord.Embed{b.buildAnnouncementEmbed()}
+		// Only show maintenance announcement and refresh button for non-admins during maintenance
+		components = append(components,
+			b.buildAnnouncementContainer(),
+			discord.NewActionRow(
+				discord.NewSecondaryButton("🔄 Refresh", constants.RefreshButtonCustomID),
+			),
+		)
 	}
 
 	// Create message builder
 	builder := discord.NewMessageUpdateBuilder().
-		SetEmbeds(embeds...).
-		AddContainerComponents(b.buildComponents()...)
+		AddComponents(components...).
+		AddFile("banner.png", "", bytes.NewReader(assets.Banner))
 
 	// Attach both chart files if available
 	if b.userStatsBuffer != nil && !b.showMaintenance {
-		builder.AddFile("user_stats_chart.png", "image/png", b.userStatsBuffer)
+		builder.AddFile("user_stats_chart.png", "", b.userStatsBuffer)
 	}
 	if b.groupStatsBuffer != nil && !b.showMaintenance {
-		builder.AddFile("group_stats_chart.png", "image/png", b.groupStatsBuffer)
+		builder.AddFile("group_stats_chart.png", "", b.groupStatsBuffer)
 	}
 
 	return builder
 }
 
-// buildComponents creates all interactive components for the dashboard.
-func (b *Builder) buildComponents() []discord.ContainerComponent {
-	components := []discord.ContainerComponent{}
+// buildWelcomeContainer creates the main welcome container.
+func (b *Builder) buildWelcomeContainer() discord.LayoutComponent {
+	var displays []discord.ContainerSubComponent
+	displays = append(displays,
+		discord.NewTextDisplay("# Welcome to Rotector 👋"),
+		discord.NewMediaGallery(
+			discord.MediaGalleryItem{
+				Media: discord.UnfurledMediaItem{
+					URL: "attachment://banner.png",
+				},
+			},
+		),
+		discord.NewLargeSeparator(),
+	)
 
-	// Create base options
-	options := []discord.StringSelectMenuOption{
-		discord.NewStringSelectMenuOption("Review Users", constants.StartUserReviewButtonCustomID).
-			WithEmoji(discord.ComponentEmoji{Name: "📝"}).
-			WithDescription("Start reviewing flagged users"),
+	// Add welcome message if set
+	if b.welcomeMessage != "" {
+		displays = append(displays, discord.NewTextDisplay(b.welcomeMessage))
 	}
 
-	// Add group review option only for reviewers
+	// Add active reviewers if any are online
+	if len(b.activeUsers) > 0 {
+		// Collect reviewer IDs
+		displayIDs := make([]uint64, 0, 10)
+		for _, userID := range b.activeUsers {
+			if b.isReviewer {
+				displayIDs = append(displayIDs, userID)
+			}
+		}
+
+		// Format IDs and add count of additional users if any
+		fieldValue := utils.FormatIDs(displayIDs)
+		if len(displayIDs) > 10 {
+			fieldValue += fmt.Sprintf("\n...and %d more", len(displayIDs)-10)
+		}
+
+		displays = append(displays, discord.NewTextDisplay("**Active Reviewers**\n"+fieldValue))
+	}
+
+	// Add review sections
+	displays = append(displays,
+		discord.NewLargeSeparator(),
+		discord.NewSection(
+			discord.NewTextDisplay("📝 **Review Users**\nStart reviewing flagged users"),
+		).WithAccessory(
+			discord.NewPrimaryButton("Start Review", constants.StartUserReviewButtonCustomID),
+		),
+	)
+
+	// Add group review section only for reviewers
 	if b.isReviewer {
-		options = append(options,
-			discord.NewStringSelectMenuOption("Review Groups", constants.StartGroupReviewButtonCustomID).
-				WithEmoji(discord.ComponentEmoji{Name: "📝"}).
-				WithDescription("Start reviewing flagged groups"),
+		displays = append(displays,
+			discord.NewSection(
+				discord.NewTextDisplay("📝 **Review Groups**\nStart reviewing flagged groups"),
+			).WithAccessory(
+				discord.NewPrimaryButton("Start Review", constants.StartGroupReviewButtonCustomID),
+			),
 		)
 	}
 
-	// Add remaining base options
-	options = append(options,
+	// Add action menu components
+	options := b.buildActionMenuOptions()
+	displays = append(displays,
+		discord.NewLargeSeparator(),
+		discord.NewActionRow(
+			discord.NewStringSelectMenu(constants.ActionSelectMenuCustomID, "Select other actions", options...),
+		),
+		discord.NewActionRow(
+			discord.NewSecondaryButton("🔄 Refresh", constants.RefreshButtonCustomID),
+		),
+	)
+
+	return discord.NewContainer(displays...).WithAccentColor(constants.DefaultContainerColor)
+}
+
+// buildActionMenuOptions creates the options for the action menu.
+func (b *Builder) buildActionMenuOptions() []discord.StringSelectMenuOption {
+	// Create base options
+	options := []discord.StringSelectMenuOption{
 		discord.NewStringSelectMenuOption("Lookup Roblox User", constants.LookupRobloxUserButtonCustomID).
 			WithEmoji(discord.ComponentEmoji{Name: "🔍"}).
 			WithDescription("Look up specific Roblox user by ID or UUID"),
-	)
+	}
 
 	// Add Roblox group lookup option only for reviewers
 	if b.isReviewer {
@@ -250,103 +299,61 @@ func (b *Builder) buildComponents() []discord.ContainerComponent {
 		)
 	}
 
-	// Add components based on maintenance mode and admin status
-	if !b.showMaintenance {
-		// Show all components for admins or when not in maintenance
-		components = append(components,
-			discord.NewActionRow(
-				discord.NewStringSelectMenu(constants.ActionSelectMenuCustomID, "Select an action", options...),
-			),
-			discord.NewActionRow(
-				discord.NewSecondaryButton("🔄 Refresh", constants.RefreshButtonCustomID),
-			),
-		)
-	} else {
-		// Only show refresh button during maintenance for non-admins
-		components = append(components,
-			discord.NewActionRow(
-				discord.NewSecondaryButton("🔄 Refresh", constants.RefreshButtonCustomID),
-			),
-		)
-	}
-
-	return components
+	return options
 }
 
-// buildWelcomeEmbed creates the main welcome embed.
-func (b *Builder) buildWelcomeEmbed() discord.Embed {
-	embed := discord.NewEmbedBuilder().
-		SetTitle("Welcome to Rotector 👋").
-		SetColor(constants.DefaultEmbedColor)
-
-	// Add welcome message if set
-	if b.welcomeMessage != "" {
-		embed.SetDescription(b.welcomeMessage)
+// buildUserGraphContainer creates the container containing user statistics graph and current counts.
+func (b *Builder) buildUserGraphContainer() discord.LayoutComponent {
+	displays := []discord.ContainerSubComponent{
+		discord.NewTextDisplay("# User Statistics"),
+		discord.NewTextDisplayf("**Confirmed Users:** `%d`\n**Flagged Users:** `%d`\n**Cleared Users:** `%d`\n**Banned Users:** `%d`",
+			b.userCounts.Confirmed,
+			b.userCounts.Flagged,
+			b.userCounts.Cleared,
+			b.userCounts.Banned,
+		),
 	}
 
-	// Add active reviewers field if any are online
-	if len(b.activeUsers) > 0 {
-		// Collect reviewer IDs
-		displayIDs := make([]uint64, 0, 10)
-		for _, userID := range b.activeUsers {
-			if b.isReviewer {
-				displayIDs = append(displayIDs, userID)
-			}
-		}
-
-		// Format IDs and add count of additional users if any
-		fieldValue := utils.FormatIDs(displayIDs)
-		if len(displayIDs) > 10 {
-			fieldValue += fmt.Sprintf("\n...and %d more", len(displayIDs)-10)
-		}
-
-		embed.AddField("Active Reviewers", fieldValue, false)
-	}
-
-	// Add random tip to footer
-	embed.SetFooter(getRandomTip(), "")
-
-	return embed.Build()
-}
-
-// buildUserGraphEmbed creates the embed containing user statistics graph and current counts.
-func (b *Builder) buildUserGraphEmbed() discord.Embed {
-	embed := discord.NewEmbedBuilder().
-		SetTitle("User Statistics").
-		AddField("Confirmed Users", strconv.Itoa(b.userCounts.Confirmed), true).
-		AddField("Flagged Users", strconv.Itoa(b.userCounts.Flagged), true).
-		AddField("Cleared Users", strconv.Itoa(b.userCounts.Cleared), true).
-		AddField("Banned Users", strconv.Itoa(b.userCounts.Banned), true).
-		SetColor(constants.DefaultEmbedColor)
-
-	// Attach user statistics chart if available
 	if b.userStatsBuffer != nil {
-		embed.SetImage("attachment://user_stats_chart.png")
+		displays = append(displays, discord.NewMediaGallery(
+			discord.MediaGalleryItem{
+				Media: discord.UnfurledMediaItem{
+					URL: "attachment://user_stats_chart.png",
+				},
+			},
+		))
 	}
 
-	return embed.Build()
+	return discord.NewContainer(displays...).WithAccentColor(constants.DefaultContainerColor)
 }
 
-// buildGroupGraphEmbed creates the embed containing group statistics graph and current counts.
-func (b *Builder) buildGroupGraphEmbed() discord.Embed {
-	embed := discord.NewEmbedBuilder().
-		SetTitle("Group Statistics").
-		AddField("Confirmed Groups", strconv.Itoa(b.groupCounts.Confirmed), true).
-		AddField("Flagged Groups", strconv.Itoa(b.groupCounts.Flagged), true).
-		AddField("Cleared Groups", strconv.Itoa(b.groupCounts.Cleared), true).
-		AddField("Locked Groups", strconv.Itoa(b.groupCounts.Locked), true).
-		SetColor(constants.DefaultEmbedColor)
+// buildGroupGraphContainer creates the container containing group statistics graph and current counts.
+func (b *Builder) buildGroupGraphContainer() discord.LayoutComponent {
+	displays := []discord.ContainerSubComponent{
+		discord.NewTextDisplay("# Group Statistics"),
+		discord.NewTextDisplayf("**Confirmed Groups:** `%d`\n**Flagged Groups:** `%d`\n**Cleared Groups:** `%d`\n**Locked Groups:** `%d`",
+			b.groupCounts.Confirmed,
+			b.groupCounts.Flagged,
+			b.groupCounts.Cleared,
+			b.groupCounts.Locked,
+		),
+	}
 
-	// Attach group statistics chart if available
 	if b.groupStatsBuffer != nil {
-		embed.SetImage("attachment://group_stats_chart.png")
+		displays = append(displays, discord.NewMediaGallery(
+			discord.MediaGalleryItem{
+				Media: discord.UnfurledMediaItem{
+					URL: "attachment://group_stats_chart.png",
+				},
+			},
+		))
 	}
 
-	return embed.Build()
+	return discord.NewContainer(displays...).WithAccentColor(constants.DefaultContainerColor)
 }
 
-// buildAnnouncementEmbed creates the announcement embed.
-func (b *Builder) buildAnnouncementEmbed() discord.Embed {
+// buildAnnouncementContainer creates the announcement container.
+func (b *Builder) buildAnnouncementContainer() discord.LayoutComponent {
 	var color int
 	var title string
 
@@ -369,34 +376,33 @@ func (b *Builder) buildAnnouncementEmbed() discord.Embed {
 	case enum.AnnouncementTypeNone:
 	}
 
-	return discord.NewEmbedBuilder().
-		SetTitle(title).
-		SetDescription(b.announcementMessage).
-		SetColor(color).
-		Build()
+	return discord.NewContainer(
+		discord.NewTextDisplay("# "+title),
+		discord.NewTextDisplay(b.announcementMessage),
+	).WithAccentColor(color)
 }
 
-// buildVoteStatsEmbed creates the vote statistics embed.
-func (b *Builder) buildVoteStatsEmbed() discord.Embed {
-	embed := discord.NewEmbedBuilder().
-		SetTitle("Your Vote Statistics").
-		AddField("Correct Votes", strconv.FormatInt(b.voteStats.CorrectVotes, 10), true).
-		AddField("Total Votes", strconv.FormatInt(b.voteStats.TotalVotes, 10), true).
-		SetColor(constants.DefaultEmbedColor)
-
-	// Calculate and add accuracy field
+// buildVoteStatsContainer creates the vote statistics container.
+func (b *Builder) buildVoteStatsContainer() discord.LayoutComponent {
+	// Calculate accuracy
 	accuracyStr := "0%"
 	if b.voteStats.TotalVotes > 0 {
 		accuracyStr = fmt.Sprintf("%.1f%%", b.voteStats.Accuracy*100)
 	}
-	embed.AddField("Accuracy", accuracyStr, true)
 
-	// Add rank field if available
+	// Format rank
+	rankStr := "Unranked"
 	if b.voteStats.Rank > 0 {
-		embed.AddField("Leaderboard Rank", fmt.Sprintf("#%d", b.voteStats.Rank), true)
-	} else {
-		embed.AddField("Leaderboard Rank", "Unranked", true)
+		rankStr = fmt.Sprintf("#%d", b.voteStats.Rank)
 	}
 
-	return embed.Build()
+	return discord.NewContainer(
+		discord.NewTextDisplay("# Your Vote Statistics"),
+		discord.NewTextDisplayf("**Correct Votes:** `%d`\n**Total Votes:** `%d`\n**Accuracy:** `%s`\n**Leaderboard Rank:** `%s`",
+			b.voteStats.CorrectVotes,
+			b.voteStats.TotalVotes,
+			accuracyStr,
+			rankStr,
+		),
+	).WithAccentColor(constants.DefaultContainerColor)
 }

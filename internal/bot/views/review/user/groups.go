@@ -52,103 +52,127 @@ func NewGroupsBuilder(s *session.Session) *GroupsBuilder {
 func (b *GroupsBuilder) Build() *discord.MessageUpdateBuilder {
 	// Create file attachment for the group thumbnails grid
 	fileName := fmt.Sprintf("groups_%d_%d.png", b.user.ID, b.page)
-	file := discord.NewFile(fileName, "", b.imageBuffer)
 
-	// Build base embed with user info
-	embed := discord.NewEmbedBuilder().
-		SetTitle(fmt.Sprintf("User Groups (Page %d/%d)", b.page+1, b.totalPages+1)).
-		SetDescription(fmt.Sprintf(
-			"```%s (%s)```",
-			utils.CensorString(b.user.Name, b.privacyMode),
-			utils.CensorString(strconv.FormatUint(b.user.ID, 10), b.privacyMode),
-		)).
-		SetImage("attachment://" + fileName).
-		SetColor(utils.GetMessageEmbedColor(b.privacyMode))
+	// Build content
+	var content strings.Builder
+	content.WriteString("## User Groups\n")
+	content.WriteString(fmt.Sprintf("```%s (%s)```",
+		utils.CensorString(b.user.Name, b.privacyMode),
+		utils.CensorString(strconv.FormatUint(b.user.ID, 10), b.privacyMode),
+	))
 
-	// Add fields for each group
+	// Add groups list
 	for i, group := range b.groups {
-		fieldName := b.getGroupFieldName(i, group)
-		fieldValue := b.getGroupFieldValue(group)
-		embed.AddField(fieldName, fieldValue, false)
+		// Add row indicator at the start of each row
+		if i%constants.GroupsGridColumns == 0 {
+			content.WriteString("\n\n**Row " + strconv.Itoa((i/constants.GroupsGridColumns)+1) + "**")
+		}
+
+		// Add group name with status indicators
+		content.WriteString("\n" + b.getGroupFieldName(group))
+
+		// Add group details
+		details := b.getGroupFieldValue(group)
+		if details != "" {
+			content.WriteString("\n" + details)
+		}
 	}
 
-	builder := discord.NewMessageUpdateBuilder().
-		SetEmbeds(embed.Build()).
-		SetFiles(file)
+	// Add page info at the bottom
+	content.WriteString(fmt.Sprintf("\n\n-# Page %d/%d", b.page+1, b.totalPages+1))
 
-	// Only add navigation components if not streaming
+	// Build container with all components
+	container := discord.NewContainer(
+		discord.NewTextDisplay(content.String()),
+		discord.NewMediaGallery(discord.MediaGalleryItem{
+			Media: discord.UnfurledMediaItem{
+				URL: "attachment://" + fileName,
+			},
+		}),
+	).WithAccentColor(utils.GetContainerColor(b.privacyMode))
+
+	// Add pagination buttons if not streaming
 	if !b.isStreaming {
-		builder.AddContainerComponents([]discord.ContainerComponent{
+		container = container.AddComponents(
 			discord.NewActionRow(
-				discord.NewSecondaryButton("◀️", constants.BackButtonCustomID),
 				discord.NewSecondaryButton("⏮️", string(session.ViewerFirstPage)).WithDisabled(b.page == 0),
 				discord.NewSecondaryButton("◀️", string(session.ViewerPrevPage)).WithDisabled(b.page == 0),
 				discord.NewSecondaryButton("▶️", string(session.ViewerNextPage)).WithDisabled(b.page == b.totalPages),
 				discord.NewSecondaryButton("⏭️", string(session.ViewerLastPage)).WithDisabled(b.page == b.totalPages),
 			),
-		}...)
+		)
+	}
+
+	// Build message with container and back button
+	builder := discord.NewMessageUpdateBuilder().
+		SetFiles(discord.NewFile(fileName, "", b.imageBuffer)).
+		AddComponents(container)
+
+	// Add back button if not streaming
+	if !b.isStreaming {
+		builder.AddComponents(
+			discord.NewActionRow(
+				discord.NewSecondaryButton("◀️ Back", constants.BackButtonCustomID),
+			),
+		)
 	}
 
 	return builder
 }
 
 // getGroupFieldName creates the field name for a group entry.
-func (b *GroupsBuilder) getGroupFieldName(index int, group *apiTypes.UserGroupRoles) string {
-	fieldName := fmt.Sprintf("Group %d", b.start+index+1)
+func (b *GroupsBuilder) getGroupFieldName(group *apiTypes.UserGroupRoles) string {
+	var indicators []string
 
 	// Add status indicator based on group status
 	if reviewGroup, ok := b.flaggedGroups[group.Group.ID]; ok {
 		switch reviewGroup.Status {
 		case enum.GroupTypeConfirmed:
-			fieldName += " ⚠️"
+			indicators = append(indicators, "⚠️")
 		case enum.GroupTypeFlagged:
-			fieldName += " ⏳"
+			indicators = append(indicators, "⏳")
 		case enum.GroupTypeCleared:
-			fieldName += " ✅"
+			indicators = append(indicators, "✅")
 		}
 
 		// Add locked status if applicable
 		if reviewGroup.IsLocked {
-			fieldName += " 🔒"
+			indicators = append(indicators, "🔒")
 		}
 	}
 
 	// Add verification badge if group is verified
 	if group.Group.HasVerifiedBadge {
-		fieldName += " ✓"
+		indicators = append(indicators, "✓")
 	}
 
-	return fieldName
+	// Add group name (with link in standard mode)
+	name := utils.CensorString(group.Group.Name, b.privacyMode)
+	if !b.privacyMode {
+		name = fmt.Sprintf("[%s](https://www.roblox.com/communities/%d)", name, group.Group.ID)
+	}
+
+	if len(indicators) > 0 {
+		return fmt.Sprintf("### %s %s", name, strings.Join(indicators, " "))
+	}
+	return "### " + name
 }
 
 // getGroupFieldValue creates the field value for a group entry.
 func (b *GroupsBuilder) getGroupFieldValue(group *apiTypes.UserGroupRoles) string {
-	var info strings.Builder
+	var info []string
 
-	// Add group name (with link in standard mode)
-	name := utils.CensorString(group.Group.Name, b.privacyMode)
-	if b.trainingMode {
-		info.WriteString(name + "\n")
-	} else {
-		info.WriteString(fmt.Sprintf(
-			"[%s](https://www.roblox.com/groups/%d)\n",
-			name,
-			group.Group.ID,
-		))
-	}
-
-	// Add member count and user's role
-	info.WriteString(fmt.Sprintf("👥 `%s` • 👤 `%s`\n",
-		utils.FormatNumber(group.Group.MemberCount),
-		group.Role.Name,
-	))
-
-	// Add owner info (with link in standard mode)
+	// Add member count, user's role, and owner info
 	username := utils.CensorString(group.Group.Owner.Username, b.privacyMode)
 	if b.privacyMode {
-		info.WriteString(fmt.Sprintf("👑 Owner: %s\n", username))
+		info = append(info, fmt.Sprintf("👥 `%s` • 👤 `%s` • 👑 %s",
+			utils.FormatNumber(group.Group.MemberCount),
+			group.Role.Name,
+			username))
 	} else {
-		info.WriteString(fmt.Sprintf("👑 Owner: [%s](https://www.roblox.com/users/%d/profile)\n",
+		info = append(info, fmt.Sprintf("👥 `%s` • 👤 `%s` • 👑 [%s](https://www.roblox.com/users/%d/profile)",
+			utils.FormatNumber(group.Group.MemberCount),
+			group.Role.Name,
 			username,
 			group.Group.Owner.UserID))
 	}
@@ -162,17 +186,17 @@ func (b *GroupsBuilder) getGroupFieldValue(group *apiTypes.UserGroupRoles) strin
 		status = append(status, "🚫 Private")
 	}
 	if len(status) > 0 {
-		info.WriteString(strings.Join(status, " • ") + "\n")
+		info = append(info, strings.Join(status, " • "))
 	}
 
 	// Add flagged info and confidence if available
 	if flaggedGroup, ok := b.flaggedGroups[group.Group.ID]; ok {
 		if flaggedGroup.Confidence > 0 {
-			info.WriteString(fmt.Sprintf("🔮 Confidence: `%.2f`\n", flaggedGroup.Confidence))
+			info = append(info, fmt.Sprintf("🔮 `%.2f`", flaggedGroup.Confidence))
 		}
 		if len(flaggedGroup.Reasons) > 0 {
 			for reasonType, reason := range flaggedGroup.Reasons {
-				info.WriteString(fmt.Sprintf("```[%s] %s```\n", reasonType, reason.Message))
+				info = append(info, fmt.Sprintf("`[%s] %s`", reasonType, reason.Message))
 			}
 		}
 	}
@@ -180,11 +204,10 @@ func (b *GroupsBuilder) getGroupFieldValue(group *apiTypes.UserGroupRoles) strin
 	// Add truncated description if available
 	if group.Group.Description != "" {
 		desc := utils.NormalizeString(group.Group.Description)
-		if len(desc) > 500 {
-			desc = desc[:497] + "..."
-		}
-		info.WriteString(fmt.Sprintf("```%s```", desc))
+		desc = utils.TruncateString(desc, 200)
+		desc = utils.FormatString(desc)
+		info = append(info, desc)
 	}
 
-	return info.String()
+	return strings.Join(info, "\n")
 }

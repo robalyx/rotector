@@ -269,7 +269,11 @@ var (
 	GuildBanLogNextCursor = NewKey[*types.LogCursor]("GuildBanLogNextCursor", true)
 	// GuildBanLogPrevCursors stores previous guild ban log cursors
 	GuildBanLogPrevCursors = NewKey[[]*types.LogCursor]("GuildBanLogPrevCursors", true)
+	// GuildBanLogCSVReport stores the ID of the ban log that has a CSV report attached
+	GuildBanLogCSVReport = NewKey[int64]("GuildBanLogCSVReport", true)
 
+	// CaptchaImageBuffer stores binary image data for CAPTCHA verification
+	CaptchaImageBuffer = NewBufferKey("CaptchaImageBuffer", true)
 	// ImageBuffer stores binary image data
 	ImageBuffer = NewBufferKey("ImageBuffer", false)
 )

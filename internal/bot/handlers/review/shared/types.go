@@ -189,7 +189,7 @@ func (m *BaseReviewMenu) CheckBreakRequired(ctx *interaction.Context, s *session
 // CheckCaptchaRequired checks if CAPTCHA verification is needed.
 func (m *BaseReviewMenu) CheckCaptchaRequired(ctx *interaction.Context, s *session.Session) bool {
 	if m.captcha.IsRequired(s) {
-		ctx.Cancel("Please complete CAPTCHA verification to continue.")
+		ctx.Show(constants.CaptchaPageName, "Please complete CAPTCHA verification to continue.")
 		return true
 	}
 	return false

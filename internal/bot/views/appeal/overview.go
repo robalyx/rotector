@@ -3,6 +3,7 @@ package appeal
 import (
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/disgoorg/disgo/discord"
 	"github.com/robalyx/rotector/internal/bot/constants"
@@ -38,218 +39,205 @@ func NewOverviewBuilder(s *session.Session) *OverviewBuilder {
 
 // Build creates a Discord message showing the appeals list and controls.
 func (b *OverviewBuilder) Build() *discord.MessageUpdateBuilder {
-	return discord.NewMessageUpdateBuilder().
-		SetEmbeds(
-			b.buildInfoEmbed().Build(),
-			b.buildListEmbed().Build(),
-		).
-		AddContainerComponents(b.buildComponents()...)
-}
+	builder := discord.NewMessageUpdateBuilder()
 
-// buildInfoEmbed creates the informational embed on the appeal system.
-func (b *OverviewBuilder) buildInfoEmbed() *discord.EmbedBuilder {
-	return discord.NewEmbedBuilder().
-		SetTitle("Appeal System").
-		SetDescription(
-			"Welcome to the appeal system. Here you can:\n\n" +
-				"- Submit appeals for flagged or confirmed users\n" +
-				"- Track the status of your appeals\n" +
-				"- Request data deletion under privacy laws\n" +
-				"- Communicate with moderators about your case").
-		SetColor(utils.GetMessageEmbedColor(b.streamerMode))
-}
+	// Create info container
+	var infoContent strings.Builder
+	infoContent.WriteString("## Appeal System\n\n")
+	infoContent.WriteString("Welcome to the appeal system. Here you can:\n\n")
+	infoContent.WriteString("- Submit appeals for flagged or confirmed users\n")
+	infoContent.WriteString("- Track the status of your appeals\n")
+	infoContent.WriteString("- Request data deletion under privacy laws\n")
+	infoContent.WriteString("- Communicate with moderators about your case")
 
-// buildListEmbed creates the embed showing the list of appeals.
-func (b *OverviewBuilder) buildListEmbed() *discord.EmbedBuilder {
-	embed := discord.NewEmbedBuilder().
-		SetTitle("Active Appeals").
-		SetColor(utils.GetMessageEmbedColor(b.streamerMode))
+	infoContainer := discord.NewContainer(
+		discord.NewTextDisplay(infoContent.String()),
+	).WithAccentColor(utils.GetContainerColor(b.streamerMode))
+
+	// Create list content
+	var listContent strings.Builder
+	listContent.WriteString("## Active Appeals\n\n")
 
 	if len(b.appeals) == 0 {
-		embed.SetDescription("No appeals found.")
-		return embed
+		listContent.WriteString("No appeals found.")
 	}
 
-	// Add appeal entries
-	for _, appeal := range b.appeals {
-		fieldName, fieldValue := b.formatAppealField(appeal)
-		embed.AddField(fieldName, fieldValue, false)
+	// Create list container components
+	listComponents := []discord.ContainerSubComponent{
+		discord.NewTextDisplay(listContent.String()),
+		discord.NewLargeSeparator(),
 	}
 
-	// Add sequence count to footer
+	// Add appeal sections if there are appeals
 	if len(b.appeals) > 0 {
-		firstAppeal := b.appeals[0]
-		lastAppeal := b.appeals[len(b.appeals)-1]
-		embed.SetFooter(fmt.Sprintf("Sequence %d-%d | %d appeals shown",
-			firstAppeal.ID,
-			lastAppeal.ID,
-			len(b.appeals)),
-			"")
-	}
-
-	return embed
-}
-
-// formatAppealField formats a single appeal entry for the embed.
-func (b *OverviewBuilder) formatAppealField(appeal *types.FullAppeal) (string, string) {
-	// Get status and type emojis
-	statusEmoji := appeal.Status.Emoji()
-	typeEmoji := appeal.Type.Emoji()
-
-	// Format claimed status
-	claimedInfo := ""
-	if appeal.ClaimedBy != 0 {
-		claimedInfo = fmt.Sprintf("\nClaimed by: <@%d>", appeal.ClaimedBy)
-	}
-
-	// Format timestamps
-	submitted := "N/A"
-	if !appeal.Timestamp.IsZero() {
-		submitted = fmt.Sprintf("<t:%d:R>", appeal.Timestamp.Unix())
-	}
-
-	lastViewed := "N/A"
-	if !appeal.LastViewed.IsZero() {
-		lastViewed = fmt.Sprintf("<t:%d:R>", appeal.LastViewed.Unix())
-	}
-
-	lastActivity := "N/A"
-	if !appeal.LastActivity.IsZero() {
-		lastActivity = fmt.Sprintf("<t:%d:R>", appeal.LastActivity.Unix())
-	}
-
-	// Format user ID based on appeal type
-	var userInfo string
-	if appeal.Type == enum.AppealTypeRoblox {
-		userInfo = fmt.Sprintf("[%s](https://www.roblox.com/users/%d/profile)",
-			utils.CensorString(strconv.FormatUint(appeal.UserID, 10), b.streamerMode),
-			appeal.UserID)
-	} else {
-		userInfo = fmt.Sprintf("<@%d>", appeal.UserID)
-	}
-
-	fieldName := fmt.Sprintf("%s %s Appeal `#%d`", statusEmoji, typeEmoji, appeal.ID)
-	fieldValue := fmt.Sprintf(
-		"User: %s\n"+
-			"Requester: <@%d>%s\n"+
-			"Submitted: %s\n"+
-			"Last Viewed: %s\n"+
-			"Last Activity: %s",
-		userInfo,
-		appeal.RequesterID,
-		claimedInfo,
-		submitted,
-		lastViewed,
-		lastActivity,
-	)
-
-	return fieldName, fieldValue
-}
-
-// buildComponents creates all the interactive components.
-func (b *OverviewBuilder) buildComponents() []discord.ContainerComponent {
-	var components []discord.ContainerComponent
-	options := make([]discord.StringSelectMenuOption, 0, len(b.appeals)+1)
-
-	// Add search option for reviewers only
-	if b.isReviewer {
-		options = append(options, discord.NewStringSelectMenuOption(
-			"🔍 Search by ID", constants.AppealSearchCustomID,
-		).WithDescription("Look up a specific appeal by ID"))
-	}
-
-	// Add appeal selector
-	if len(b.appeals) > 0 {
-		for _, appeal := range b.appeals {
+		for i, appeal := range b.appeals {
 			// Get status and type emojis
 			statusEmoji := appeal.Status.Emoji()
 			typeEmoji := appeal.Type.Emoji()
 
-			// Create option for each appeal
-			option := discord.NewStringSelectMenuOption(
-				fmt.Sprintf("%s %s Appeal #%d", statusEmoji, typeEmoji, appeal.ID),
-				strconv.FormatInt(appeal.ID, 10),
-			).WithDescription(
-				"View appeal for User ID: " +
+			// Format claimed status
+			claimedInfo := ""
+			if appeal.ClaimedBy != 0 {
+				claimedInfo = fmt.Sprintf("\nClaimed by: <@%d>", appeal.ClaimedBy)
+			}
+
+			// Format timestamps
+			submitted := "N/A"
+			if !appeal.Timestamp.IsZero() {
+				submitted = fmt.Sprintf("<t:%d:R>", appeal.Timestamp.Unix())
+			}
+
+			lastViewed := "N/A"
+			if !appeal.LastViewed.IsZero() {
+				lastViewed = fmt.Sprintf("<t:%d:R>", appeal.LastViewed.Unix())
+			}
+
+			lastActivity := "N/A"
+			if !appeal.LastActivity.IsZero() {
+				lastActivity = fmt.Sprintf("<t:%d:R>", appeal.LastActivity.Unix())
+			}
+
+			// Format user ID based on appeal type
+			var userInfo string
+			if appeal.Type == enum.AppealTypeRoblox {
+				userInfo = fmt.Sprintf("[%s](https://www.roblox.com/users/%d/profile)",
 					utils.CensorString(strconv.FormatUint(appeal.UserID, 10), b.streamerMode),
+					appeal.UserID)
+			} else {
+				userInfo = fmt.Sprintf("<@%d>", appeal.UserID)
+			}
+
+			// Create section content
+			var sectionContent strings.Builder
+			sectionContent.WriteString(fmt.Sprintf("### %s %s Appeal `#%d`\n", statusEmoji, typeEmoji, appeal.ID))
+			sectionContent.WriteString(fmt.Sprintf("User: %s\n", userInfo))
+			sectionContent.WriteString(fmt.Sprintf("Requester: <@%d>%s\n", appeal.RequesterID, claimedInfo))
+			sectionContent.WriteString(fmt.Sprintf("Submitted: %s\n", submitted))
+			sectionContent.WriteString(fmt.Sprintf("Last Viewed: %s\n", lastViewed))
+			sectionContent.WriteString("Last Activity: " + lastActivity)
+
+			// If this is the last appeal, add sequence count
+			if i == len(b.appeals)-1 {
+				firstAppeal := b.appeals[0]
+				lastAppeal := b.appeals[len(b.appeals)-1]
+				sectionContent.WriteString(fmt.Sprintf("\n\n-# Sequence %d-%d | %d appeals shown",
+					firstAppeal.ID,
+					lastAppeal.ID,
+					len(b.appeals)))
+			}
+
+			// Create section with view button
+			section := discord.NewSection(
+				discord.NewTextDisplay(sectionContent.String()),
+			).WithAccessory(
+				discord.NewPrimaryButton("View Appeal", strconv.FormatInt(appeal.ID, 10)),
 			)
 
-			options = append(options, option)
+			listComponents = append(listComponents, section)
 		}
 	}
 
-	if len(options) > 0 {
-		components = append(components, discord.NewActionRow(
-			discord.NewStringSelectMenu(constants.AppealSelectID, "Select Appeal", options...),
-		))
-	}
+	// Add interactive components
+	listComponents = append(listComponents, b.buildInteractiveComponents()...)
+
+	listContainer := discord.NewContainer(listComponents...).WithAccentColor(utils.GetContainerColor(b.streamerMode))
+
+	// Add containers and back button
+	builder.AddComponents(
+		infoContainer,
+		listContainer,
+		discord.NewActionRow(
+			discord.NewSecondaryButton("◀️ Back", constants.BackButtonCustomID),
+		),
+	)
+
+	return builder
+}
+
+// buildInteractiveComponents creates the interactive components for the appeal overview.
+func (b *OverviewBuilder) buildInteractiveComponents() []discord.ContainerSubComponent {
+	var components []discord.ContainerSubComponent
 
 	// Add status filter dropdown
-	components = append(components, discord.NewActionRow(
-		discord.NewStringSelectMenu(constants.AppealStatusSelectID, "Filter by Status",
-			discord.NewStringSelectMenuOption("Pending Appeals", enum.AppealStatusPending.String()).
-				WithDescription("Show only pending appeals").
-				WithDefault(b.statusFilter == enum.AppealStatusPending),
-			discord.NewStringSelectMenuOption("Accepted Appeals", enum.AppealStatusAccepted.String()).
-				WithDescription("Show only accepted appeals").
-				WithDefault(b.statusFilter == enum.AppealStatusAccepted),
-			discord.NewStringSelectMenuOption("Rejected Appeals", enum.AppealStatusRejected.String()).
-				WithDescription("Show only rejected appeals").
-				WithDefault(b.statusFilter == enum.AppealStatusRejected)),
-	))
+	components = append(components,
+		discord.NewActionRow(
+			discord.NewStringSelectMenu(constants.AppealStatusSelectID, "Filter by Status",
+				discord.NewStringSelectMenuOption("Pending Appeals", enum.AppealStatusPending.String()).
+					WithDescription("Show only pending appeals").
+					WithDefault(b.statusFilter == enum.AppealStatusPending),
+				discord.NewStringSelectMenuOption("Accepted Appeals", enum.AppealStatusAccepted.String()).
+					WithDescription("Show only accepted appeals").
+					WithDefault(b.statusFilter == enum.AppealStatusAccepted),
+				discord.NewStringSelectMenuOption("Rejected Appeals", enum.AppealStatusRejected.String()).
+					WithDescription("Show only rejected appeals").
+					WithDefault(b.statusFilter == enum.AppealStatusRejected)),
+		),
+	)
 
+	// Add sorting options for reviewers
 	if b.isReviewer {
-		// Add sorting options for reviewers
-		components = append(components, discord.NewActionRow(
-			discord.NewStringSelectMenu(constants.AppealSortSelectID, "Sort by",
-				discord.NewStringSelectMenuOption("Oldest First", enum.AppealSortByOldest.String()).
-					WithDescription("Show oldest appeals first").
-					WithDefault(b.sortBy == enum.AppealSortByOldest),
-				discord.NewStringSelectMenuOption("My Claims", enum.AppealSortByClaimed.String()).
-					WithDescription("Show appeals claimed by you").
-					WithDefault(b.sortBy == enum.AppealSortByClaimed),
-				discord.NewStringSelectMenuOption("Newest First", enum.AppealSortByNewest.String()).
-					WithDescription("Show newest appeals first").
-					WithDefault(b.sortBy == enum.AppealSortByNewest),
+		components = append(components,
+			discord.NewActionRow(
+				discord.NewStringSelectMenu(constants.AppealSortSelectID, "Sort by",
+					discord.NewStringSelectMenuOption("Oldest First", enum.AppealSortByOldest.String()).
+						WithDescription("Show oldest appeals first").
+						WithDefault(b.sortBy == enum.AppealSortByOldest),
+					discord.NewStringSelectMenuOption("My Claims", enum.AppealSortByClaimed.String()).
+						WithDescription("Show appeals claimed by you").
+						WithDefault(b.sortBy == enum.AppealSortByClaimed),
+					discord.NewStringSelectMenuOption("Newest First", enum.AppealSortByNewest.String()).
+						WithDescription("Show newest appeals first").
+						WithDefault(b.sortBy == enum.AppealSortByNewest),
+				),
 			),
-		))
+		)
 	}
 
-	// Add action buttons row
-	var actionButtons []discord.InteractiveComponent
-
-	// Add refresh button for everyone
-	actionButtons = append(actionButtons,
-		discord.NewSecondaryButton("🔄 Refresh", constants.RefreshButtonCustomID))
-
-	// Add new appeal dropdown only for non-reviewers
+	// Add new appeal dropdown for non-reviewers
 	if !b.isReviewer {
-		components = append(components, discord.NewActionRow(
-			discord.NewStringSelectMenu(constants.AppealCreateSelectID, "Create New Appeal",
-				discord.NewStringSelectMenuOption("Appeal Roblox User", constants.AppealCreateRobloxButtonCustomID).
-					WithDescription("Submit an appeal for a Roblox user").
-					WithEmoji(discord.ComponentEmoji{Name: "🎮"}),
-				discord.NewStringSelectMenuOption("Appeal Discord User", constants.AppealCreateDiscordButtonCustomID).
-					WithDescription("Submit an appeal for a Discord user").
-					WithEmoji(discord.ComponentEmoji{Name: "💬"}),
+		components = append(components,
+			discord.NewActionRow(
+				discord.NewStringSelectMenu(constants.AppealCreateSelectID, "Create New Appeal",
+					discord.NewStringSelectMenuOption("Appeal Roblox User", constants.AppealCreateRobloxButtonCustomID).
+						WithDescription("Submit an appeal for a Roblox user").
+						WithEmoji(discord.ComponentEmoji{Name: "🎮"}),
+					discord.NewStringSelectMenuOption("Appeal Discord User", constants.AppealCreateDiscordButtonCustomID).
+						WithDescription("Submit an appeal for a Discord user").
+						WithEmoji(discord.ComponentEmoji{Name: "💬"}),
+				),
 			),
-		))
+		)
 	}
 
-	components = append(components, discord.NewActionRow(actionButtons...))
+	// Add refresh and search buttons
+	actionButtons := []discord.InteractiveComponent{
+		discord.NewSecondaryButton("🔄 Refresh", constants.RefreshButtonCustomID),
+	}
 
-	// Add navigation buttons
-	components = append(components, discord.NewActionRow(
-		discord.NewSecondaryButton("◀️", constants.BackButtonCustomID),
-		discord.NewSecondaryButton("⏮️", string(session.ViewerFirstPage)).
-			WithDisabled(!b.hasPrevPage),
-		discord.NewSecondaryButton("◀️", string(session.ViewerPrevPage)).
-			WithDisabled(!b.hasPrevPage),
-		discord.NewSecondaryButton("▶️", string(session.ViewerNextPage)).
-			WithDisabled(!b.hasNextPage),
-		discord.NewSecondaryButton("⏭️", string(session.ViewerLastPage)).
-			WithDisabled(true),
-	))
+	// Add search button for reviewers
+	if b.isReviewer {
+		actionButtons = append(actionButtons,
+			discord.NewSecondaryButton("🔍 Search by ID", constants.AppealSearchCustomID),
+		)
+	}
+
+	components = append(components,
+		discord.NewActionRow(actionButtons...),
+	)
+
+	// Add pagination buttons
+	components = append(components,
+		discord.NewActionRow(
+			discord.NewSecondaryButton("⏮️", string(session.ViewerFirstPage)).
+				WithDisabled(!b.hasPrevPage),
+			discord.NewSecondaryButton("◀️", string(session.ViewerPrevPage)).
+				WithDisabled(!b.hasPrevPage),
+			discord.NewSecondaryButton("▶️", string(session.ViewerNextPage)).
+				WithDisabled(!b.hasNextPage),
+			discord.NewSecondaryButton("⏭️", string(session.ViewerLastPage)).
+				WithDisabled(true),
+		),
+	)
 
 	return components
 }

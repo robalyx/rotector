@@ -306,8 +306,8 @@ func (b *Bot) handleComponentInteraction(event *disgoEvents.ComponentInteraction
 		// Update message to prevent double-clicks (skip for modals)
 		if !isModal || page == nil {
 			updateBuilder := discord.NewMessageUpdateBuilder().
-				SetContent(utils.GetTimestampedSubtext("Processing...")).
-				ClearContainerComponents()
+				AddComponents(utils.CreateTimestampedTextDisplay("Processing...")).
+				AddFlags(discord.MessageFlagIsComponentsV2)
 
 			if err := event.UpdateMessage(updateBuilder.Build()); err != nil {
 				b.logger.Error("Failed to update message", zap.Error(err))
@@ -339,9 +339,9 @@ func (b *Bot) handleModalSubmit(event *disgoEvents.ModalSubmitInteractionCreate)
 		wrappedEvent := interaction.WrapEvent(event, nil)
 		defer func() {
 			if r := recover(); r != nil {
-				formData := make(map[string]string)
-				for id, comp := range event.Data.Components {
-					formData[id] = fmt.Sprintf("Component type: %T", comp)
+				formData := make(map[int]string)
+				for comp := range event.Data.AllComponents() {
+					formData[comp.GetID()] = fmt.Sprintf("Component type: %T", comp)
 				}
 
 				b.logger.Error("Modal submission failed",
@@ -360,8 +360,8 @@ func (b *Bot) handleModalSubmit(event *disgoEvents.ModalSubmitInteractionCreate)
 
 		// Update message to prevent double-submissions
 		updateBuilder := discord.NewMessageUpdateBuilder().
-			SetContent(utils.GetTimestampedSubtext("Processing...")).
-			ClearContainerComponents()
+			AddComponents(utils.CreateTimestampedTextDisplay("Processing...")).
+			AddFlags(discord.MessageFlagIsComponentsV2)
 
 		if err := event.UpdateMessage(updateBuilder.Build()); err != nil {
 			b.logger.Error("Failed to update message", zap.Error(err))
@@ -410,11 +410,11 @@ func (b *Bot) initializeSession(
 	// the interaction has not been responded to yet
 	updateMessage := func(content string) {
 		messageUpdate := discord.NewMessageUpdateBuilder().
-			SetContent(utils.GetTimestampedSubtext(content)).
-			ClearEmbeds().
 			ClearFiles().
-			ClearContainerComponents().
+			ClearComponents().
 			RetainAttachments().
+			AddComponents(utils.CreateTimestampedTextDisplay(content)).
+			AddFlags(discord.MessageFlagIsComponentsV2).
 			Build()
 
 		if err := event.UpdateMessage(messageUpdate); err != nil {

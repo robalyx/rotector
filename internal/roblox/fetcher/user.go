@@ -134,6 +134,48 @@ func (u *UserFetcher) FetchInfos(ctx context.Context, userIDs []uint64) []*types
 	return validUsers
 }
 
+// FetchBannedUsers checks which users from a batch of IDs are currently banned.
+// Returns a slice of banned user IDs.
+func (u *UserFetcher) FetchBannedUsers(ctx context.Context, userIDs []uint64) ([]uint64, error) {
+	var (
+		results = make([]uint64, 0, len(userIDs))
+		p       = pool.New().WithContext(ctx)
+		mu      sync.Mutex
+	)
+
+	// Process each user concurrently
+	for _, id := range userIDs {
+		p.Go(func(ctx context.Context) error {
+			userInfo, err := u.roAPI.Users().GetUserByID(ctx, id)
+			if err != nil {
+				u.logger.Error("Error fetching user info",
+					zap.Uint64("userID", id),
+					zap.Error(err))
+				return nil // Don't fail the whole batch for one error
+			}
+
+			if userInfo.IsBanned {
+				mu.Lock()
+				results = append(results, userInfo.ID)
+				mu.Unlock()
+			}
+			return nil
+		})
+	}
+
+	// Wait for all goroutines to complete
+	if err := p.Wait(); err != nil {
+		u.logger.Error("Error during banned users fetch", zap.Error(err))
+		return nil, err
+	}
+
+	u.logger.Debug("Finished checking banned users",
+		zap.Int("totalChecked", len(userIDs)),
+		zap.Int("bannedUsers", len(results)))
+
+	return results, nil
+}
+
 // fetchUserData retrieves a user's group memberships, friend list, and games concurrently.
 func (u *UserFetcher) fetchUserData(ctx context.Context, userID uint64) (
 	groups []*apiTypes.UserGroupRoles,
@@ -216,46 +258,4 @@ func (u *UserFetcher) fetchUserData(ctx context.Context, userID uint64) (
 	_ = p.Wait()
 
 	return groups, friends, games, outfits
-}
-
-// FetchBannedUsers checks which users from a batch of IDs are currently banned.
-// Returns a slice of banned user IDs.
-func (u *UserFetcher) FetchBannedUsers(ctx context.Context, userIDs []uint64) ([]uint64, error) {
-	var (
-		results = make([]uint64, 0, len(userIDs))
-		p       = pool.New().WithContext(ctx)
-		mu      sync.Mutex
-	)
-
-	// Process each user concurrently
-	for _, id := range userIDs {
-		p.Go(func(ctx context.Context) error {
-			userInfo, err := u.roAPI.Users().GetUserByID(ctx, id)
-			if err != nil {
-				u.logger.Error("Error fetching user info",
-					zap.Uint64("userID", id),
-					zap.Error(err))
-				return nil // Don't fail the whole batch for one error
-			}
-
-			if userInfo.IsBanned {
-				mu.Lock()
-				results = append(results, userInfo.ID)
-				mu.Unlock()
-			}
-			return nil
-		})
-	}
-
-	// Wait for all goroutines to complete
-	if err := p.Wait(); err != nil {
-		u.logger.Error("Error during banned users fetch", zap.Error(err))
-		return nil, err
-	}
-
-	u.logger.Debug("Finished checking banned users",
-		zap.Int("totalChecked", len(userIDs)),
-		zap.Int("bannedUsers", len(results)))
-
-	return results, nil
 }

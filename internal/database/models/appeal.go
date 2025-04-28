@@ -233,33 +233,31 @@ func (r *AppealModel) GetAppealsToReview(
 		Model((*types.Appeal)(nil)).
 		Join("JOIN appeal_timelines AS t ON t.id = appeal.id AND t.timestamp = appeal.timestamp").
 		ColumnExpr("appeal.*").
-		ColumnExpr("t.last_viewed, t.last_activity")
-
-	// Apply status filter if not showing all
-	query.Where("status = ?", statusFilter)
+		ColumnExpr("t.last_viewed, t.last_activity").
+		Where("status = ?", statusFilter)
 
 	// Apply sort order and cursor conditions based on sort type
 	switch sortBy {
 	case enum.AppealSortByOldest:
 		if cursor != nil {
-			query.Where("(appeal.timestamp, appeal.id) > (?, ?)", cursor.Timestamp, cursor.ID)
+			query = query.Where("(appeal.timestamp, appeal.id) >= (?, ?)", cursor.Timestamp, cursor.ID)
 		}
-		query.Order("appeal.timestamp ASC", "appeal.id ASC")
+		query = query.Order("appeal.timestamp ASC", "appeal.id ASC")
 	case enum.AppealSortByClaimed:
-		query.Where("claimed_by = ?", reviewerID)
+		query = query.Where("claimed_by = ?", reviewerID)
 		if cursor != nil {
-			query.Where("(t.last_activity, appeal.id) < (?, ?)", cursor.LastActivity, cursor.ID)
+			query = query.Where("(t.last_activity, appeal.id) <= (?, ?)", cursor.LastActivity, cursor.ID)
 		}
-		query.Order("t.last_activity DESC", "appeal.id DESC")
+		query = query.Order("t.last_activity DESC", "appeal.id DESC")
 	case enum.AppealSortByNewest:
 		if cursor != nil {
-			query.Where("(appeal.timestamp, appeal.id) < (?, ?)", cursor.Timestamp, cursor.ID)
+			query = query.Where("(appeal.timestamp, appeal.id) <= (?, ?)", cursor.Timestamp, cursor.ID)
 		}
-		query.Order("appeal.timestamp DESC", "appeal.id DESC")
+		query = query.Order("appeal.timestamp DESC", "appeal.id DESC")
 	}
 
 	// Get one extra to determine if there are more results
-	query.Limit(limit + 1)
+	query = query.Limit(limit + 1)
 
 	var results []*types.FullAppeal
 	err := query.Scan(ctx, &results)
@@ -288,14 +286,12 @@ func (r *AppealModel) GetAppealsByRequester(
 		Join("JOIN appeal_timelines AS t ON t.id = appeal.id AND t.timestamp = appeal.timestamp").
 		ColumnExpr("appeal.*").
 		ColumnExpr("t.last_viewed, t.last_activity").
-		Where("requester_id = ?", requesterID)
-
-	// Apply status filter if not showing all
-	query.Where("status = ?", statusFilter)
+		Where("requester_id = ?", requesterID).
+		Where("status = ?", statusFilter)
 
 	// Apply cursor conditions if cursor exists
 	if cursor != nil {
-		query = query.Where("(appeal.timestamp, appeal.id) < (?, ?)", cursor.Timestamp, cursor.ID)
+		query = query.Where("(appeal.timestamp, appeal.id) <= (?, ?)", cursor.Timestamp, cursor.ID)
 	}
 
 	query.Order("appeal.timestamp DESC", "appeal.id DESC").

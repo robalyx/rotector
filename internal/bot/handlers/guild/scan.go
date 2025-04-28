@@ -450,6 +450,7 @@ func (m *ScanMenu) handleBanConfirmModal(ctx *interaction.Context, s *session.Se
 		BannedUserIDs:   bannedUserIDs,
 		Reason:          banReason,
 		MinGuildsFilter: session.GuildScanMinGuilds.Get(s),
+		MinJoinDuration: session.GuildScanMinJoinDuration.Get(s),
 		Timestamp:       time.Now(),
 	})
 	if err != nil {
@@ -542,26 +543,35 @@ func (m *ScanMenu) executeBans(
 				continue
 			}
 
-			// Send ban notification with detailed information
-			embed := discord.NewEmbedBuilder().
-				SetTitle("🚫 Server Ban Notice").
-				SetDescription(fmt.Sprintf("You have been banned from **%s**", guild.Name)).
-				AddField("Reason", utils.FormatString(banReason), false).
-				AddField("Server ID", fmt.Sprintf("`%d`", guildID), true).
-				AddField("Ban Date", fmt.Sprintf("<t:%d:F>", time.Now().Unix()), true).
-				SetColor(constants.ErrorEmbedColor).
-				SetFooter("This is an automated message. If you believe this ban was in error, "+
-					"please use this bot to appeal.", "")
+			// Build notification content
+			var content strings.Builder
+			content.WriteString("## 🚫 Server Ban Notice\n")
+			content.WriteString(fmt.Sprintf("You have been banned from **%s**\n\n", guild.Name))
+			content.WriteString("### Reason\n")
+			content.WriteString(utils.FormatString(banReason))
+			content.WriteString("\n\n### Details\n")
+			content.WriteString(fmt.Sprintf("- Server ID: `%d`\n", guildID))
+			content.WriteString(fmt.Sprintf("- Ban Date: <t:%d:F>\n\n", time.Now().Unix()))
+			content.WriteString("*This is an automated message. If you believe this ban was in error, please use this bot to appeal.*")
 
-			// Add server icon if available
+			// Create notification message with container
+			messageBuilder := discord.NewMessageCreateBuilder()
+
+			// Create container with content, using section if we have an icon
 			if guild.Icon != nil {
-				embed.SetThumbnail(*guild.Icon)
+				messageBuilder.AddComponents(discord.NewContainer(
+					discord.NewSection(
+						discord.NewTextDisplay(content.String()),
+					).WithAccessory(discord.NewThumbnail(*guild.Icon)),
+				).WithAccentColor(constants.ErrorContainerColor))
+			} else {
+				messageBuilder.AddComponents(discord.NewContainer(
+					discord.NewTextDisplay(content.String()),
+				).WithAccentColor(constants.ErrorContainerColor))
 			}
 
-			// Send the embed to the DM channel
-			_, err = ctx.Event().Client().Rest().CreateMessage(channel.ID(), discord.NewMessageCreateBuilder().
-				SetEmbeds(embed.Build()).
-				Build())
+			// Send the notification
+			_, err = ctx.Event().Client().Rest().CreateMessage(channel.ID(), messageBuilder.Build())
 			if err != nil {
 				m.layout.logger.Error("Failed to send ban notification",
 					zap.Error(err),

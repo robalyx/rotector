@@ -2,6 +2,7 @@ package admin
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/disgoorg/disgo/discord"
@@ -33,50 +34,65 @@ func NewConfirmBuilder(s *session.Session) *ConfirmBuilder {
 // Build creates a Discord message with confirmation options.
 func (b *ConfirmBuilder) Build() *discord.MessageUpdateBuilder {
 	var title, description string
-	embed := discord.NewEmbedBuilder()
 
+	// Build title and description based on action
 	switch b.action {
 	case constants.DeleteUserAction:
 		title = "Confirm Roblox User Deletion"
-		description = "Are you sure you want to delete roblox user `" + b.id + "` from the database?"
-		embed.AddField("Reason", b.reason, false)
+		description = fmt.Sprintf("Are you sure you want to delete roblox user `%s` from the database?", b.id)
 
 	case constants.DeleteGroupAction:
 		title = "Confirm Roblox Group Deletion"
-		description = "Are you sure you want to delete roblox group `" + b.id + "` from the database?"
-		embed.AddField("Reason", b.reason, false)
+		description = fmt.Sprintf("Are you sure you want to delete roblox group `%s` from the database?", b.id)
 
 	case constants.BanUserAction:
 		title = "Confirm Discord User Ban"
-		description = "Are you sure you want to ban Discord user `" + b.id + "`?"
-
-		// Add ban type field
-		embed.AddField("Ban Reason", b.banReason.String(), true)
-
-		// Add duration/expiry field
-		if b.expiresAt != nil {
-			embed.AddField("Expires", fmt.Sprintf("<t:%d:f>", b.expiresAt.Unix()), true)
-		} else {
-			embed.AddField("Duration", "Permanent", true)
-		}
-
-		// Add notes field
-		embed.AddField("Notes", b.reason, false)
+		description = fmt.Sprintf("Are you sure you want to ban Discord user `%s`?", b.id)
 
 	case constants.UnbanUserAction:
 		title = "Confirm Discord User Unban"
-		description = "Are you sure you want to unban Discord user `" + b.id + "`?"
-		embed.AddField("Notes", b.reason, false)
+		description = fmt.Sprintf("Are you sure you want to unban Discord user `%s`?", b.id)
 	}
 
-	embed.SetTitle(title).
-		SetDescription("⚠️ **Warning**: " + description).
-		SetColor(constants.DefaultEmbedColor)
+	// Build content based on action type
+	var content strings.Builder
+	content.WriteString(fmt.Sprintf("## %s\n⚠️ **Warning**: %s\n", title, description))
+
+	// Add fields based on action type
+	switch b.action {
+	case constants.DeleteUserAction, constants.DeleteGroupAction:
+		content.WriteString("\n### Reason\n" + b.reason)
+
+	case constants.BanUserAction:
+		content.WriteString("\n### Ban Details\n")
+		content.WriteString(fmt.Sprintf("-# Ban Reason: %s\n", b.banReason.String()))
+
+		if b.expiresAt != nil {
+			content.WriteString(fmt.Sprintf("-# Expires: <t:%d:f>\n", b.expiresAt.Unix()))
+		} else {
+			content.WriteString("-# Duration: Permanent\n")
+		}
+
+		content.WriteString("\n### Notes\n" + b.reason)
+
+	case constants.UnbanUserAction:
+		content.WriteString("\n### Notes\n" + b.reason)
+	}
+
+	// Create main container
+	mainContainer := discord.NewContainer(
+		discord.NewTextDisplay(content.String()),
+		discord.NewLargeSeparator(),
+		discord.NewActionRow(
+			discord.NewDangerButton("Confirm", constants.ActionButtonCustomID),
+		),
+	).WithAccentColor(constants.DefaultContainerColor)
 
 	return discord.NewMessageUpdateBuilder().
-		SetEmbeds(embed.Build()).
-		AddActionRow(
-			discord.NewSecondaryButton("◀️", constants.BackButtonCustomID),
-			discord.NewDangerButton("Confirm", constants.ActionButtonCustomID),
+		AddComponents(
+			mainContainer,
+			discord.NewActionRow(
+				discord.NewSecondaryButton("◀️ Back", constants.BackButtonCustomID),
+			),
 		)
 }

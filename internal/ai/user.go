@@ -143,7 +143,7 @@ Pay close attention to the following indicators of predatory behavior in descrip
 - ANY promises of rewards for buying passes
 - ANY promises or offers of "fun"
 - ANY references to "blue user" or "blue app"
-- ANY directing to other profiles/accounts
+- ANY directing to other profiles/accounts with a user identifier
 - ANY use of innocent-sounding terms as code words
 - ANY mentions of literacy or writing ability
 

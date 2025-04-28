@@ -15,9 +15,10 @@ const (
 	RefreshButtonCustomID    = "refresh"
 	BackButtonCustomID       = "back"
 	ModalOpenSuffix          = "_exception"
-	DefaultEmbedColor        = 0x393A41
-	ErrorEmbedColor          = 0xE74C3C
-	StreamerModeEmbedColor   = 0x3E3769
+
+	DefaultContainerColor      = 0x393A41
+	ErrorContainerColor        = 0xE74C3C
+	StreamerModeContainerColor = 0x3E3769
 )
 
 // Page Names.
@@ -162,21 +163,17 @@ const (
 	// MaxReviewHistorySize caps the number of review history entries shown.
 	MaxReviewHistorySize = 10
 
-	// ReviewFriendsLimit caps the number of friends shown in the main review embed
-	// to prevent the embed from becoming too long.
-	ReviewFriendsLimit = 10
+	// ReviewFriendsLimit caps the number of friends shown in the main review container.
+	ReviewFriendsLimit = 15
 
-	// ReviewGroupsLimit caps the number of groups shown in the main review embed
-	// to prevent the embed from becoming too long.
-	ReviewGroupsLimit = 10
+	// ReviewGroupsLimit caps the number of groups shown in the main review container.
+	ReviewGroupsLimit = 15
 
-	// ReviewGamesLimit caps the number of games shown in the main review embed
-	// to prevent the embed from becoming too long.
-	ReviewGamesLimit = 10
+	// ReviewGamesLimit caps the number of games shown in the main review container.
+	ReviewGamesLimit = 15
 
-	// ReviewOutfitsLimit caps the number of outfits shown in the main review embed
-	// to prevent the embed from becoming too long.
-	ReviewOutfitsLimit = 10
+	// ReviewOutfitsLimit caps the number of outfits shown in the main review container.
+	ReviewOutfitsLimit = 15
 
 	SortOrderSelectMenuCustomID = "sort_order"
 	ReasonSelectMenuCustomID    = "reason_select"
@@ -218,23 +215,23 @@ const (
 
 // User Review Menu - Friends Viewer.
 const (
-	FriendsPerPage     = 12
-	FriendsGridColumns = 3
-	FriendsGridRows    = 4
+	FriendsPerPage     = 28
+	FriendsGridColumns = 4
+	FriendsGridRows    = 7
 )
 
 // User Review Menu - Outfits Viewer.
 const (
-	OutfitsPerPage    = 15
-	OutfitGridColumns = 3
-	OutfitGridRows    = 5
+	OutfitsPerPage    = 28
+	OutfitGridColumns = 4
+	OutfitGridRows    = 7
 )
 
 // User Review Menu - Groups Viewer.
 const (
-	GroupsPerPage     = 9
-	GroupsGridColumns = 3
-	GroupsGridRows    = 3
+	GroupsPerPage     = 8
+	GroupsGridColumns = 4
+	GroupsGridRows    = 2
 )
 
 // User Review Menu - Caesar Cipher Menu.
@@ -348,7 +345,7 @@ const (
 	BlacklistUserModalCustomID       = "blacklist_user_modal"
 	BlacklistUserReasonInputCustomID = "blacklist_user_reason_input"
 
-	AppealsPerPage              = 5
+	AppealsPerPage              = 3
 	AppealMessagesPerPage       = 5
 	AppealSelectID              = "appeal_select"
 	AppealStatusSelectID        = "appeal_status"
@@ -420,9 +417,10 @@ const (
 
 // Guild Owner Menu.
 const (
-	GuildMembershipsPerPage = 10
+	GuildMembershipsPerPage = 5
 	GuildScanUsersPerPage   = 6
 	GuildMessagesPerPage    = 10
+	GuildBanLogsPerPage     = 3
 
 	GuildScanTypeCondo    = "condo"
 	GuildScanTypeMessages = "messages"

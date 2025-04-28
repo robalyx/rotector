@@ -118,29 +118,6 @@ func (v *VoteModel) GetLeaderboard(
 	return stats, nextCursor, nil
 }
 
-// getUserRank gets the user's rank based on correct votes.
-func (v *VoteModel) getUserRank(ctx context.Context, discordUserID uint64, period enum.LeaderboardPeriod) (int, error) {
-	var rank int
-
-	err := v.db.NewSelect().
-		TableExpr("vote_leaderboard_stats_"+period.String()).
-		ColumnExpr(`
-			RANK() OVER (
-				ORDER BY correct_votes DESC, accuracy DESC
-			)::int as rank
-		`).
-		Where("discord_user_id = ?", discordUserID).
-		Scan(ctx, &rank)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return 0, nil
-		}
-		return 0, fmt.Errorf("failed to get user rank: %w", err)
-	}
-
-	return rank, nil
-}
-
 // SaveVote records a new vote from a Discord user.
 func (v *VoteModel) SaveVote(
 	ctx context.Context, targetID uint64, discordUserID uint64, isUpvote bool, voteType enum.VoteType,
@@ -218,4 +195,27 @@ func (v *VoteModel) VerifyVotes(
 
 		return nil
 	})
+}
+
+// getUserRank gets the user's rank based on correct votes.
+func (v *VoteModel) getUserRank(ctx context.Context, discordUserID uint64, period enum.LeaderboardPeriod) (int, error) {
+	var rank int
+
+	err := v.db.NewSelect().
+		TableExpr("vote_leaderboard_stats_"+period.String()).
+		ColumnExpr(`
+			RANK() OVER (
+				ORDER BY correct_votes DESC, accuracy DESC
+			)::int as rank
+		`).
+		Where("discord_user_id = ?", discordUserID).
+		Scan(ctx, &rank)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return 0, nil
+		}
+		return 0, fmt.Errorf("failed to get user rank: %w", err)
+	}
+
+	return rank, nil
 }

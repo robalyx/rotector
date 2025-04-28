@@ -74,11 +74,11 @@ func (c *Context) WithValue(key, val any) *Context {
 // Error updates the interaction response with an error message.
 func (c *Context) Error(content string) {
 	messageUpdate := discord.NewMessageUpdateBuilder().
-		SetContent(utils.GetTimestampedSubtext("Fatal error: " + content)).
-		ClearEmbeds().
 		ClearFiles().
-		ClearContainerComponents().
+		ClearComponents().
 		RetainAttachments().
+		AddComponents(utils.CreateTimestampedTextDisplay("Fatal error: " + content)).
+		AddFlags(discord.MessageFlagIsComponentsV2).
 		Build()
 
 	_, _ = c.event.Client().Rest().UpdateInteractionResponse(c.event.ApplicationID(), c.event.Token(), messageUpdate)
@@ -91,14 +91,14 @@ func (c *Context) Error(content string) {
 	)
 }
 
-// Clear updates the interaction response with a message and clears the embeds, files, and components.
+// Clear updates the interaction response with a message and clears the files and components.
 func (c *Context) Clear(content string) {
 	messageUpdate := discord.NewMessageUpdateBuilder().
-		SetContent(utils.GetTimestampedSubtext(content)).
-		ClearEmbeds().
 		ClearFiles().
-		ClearContainerComponents().
+		ClearComponents().
 		RetainAttachments().
+		AddComponents(utils.CreateTimestampedTextDisplay(content)).
+		AddFlags(discord.MessageFlagIsComponentsV2).
 		Build()
 
 	_, _ = c.event.Client().Rest().UpdateInteractionResponse(
@@ -112,8 +112,9 @@ func (c *Context) Clear(content string) {
 // ClearComponents updates the interaction response with a message and clears the components.
 func (c *Context) ClearComponents(content string) {
 	messageUpdate := discord.NewMessageUpdateBuilder().
-		SetContent(utils.GetTimestampedSubtext(content)).
-		ClearContainerComponents().
+		ClearComponents().
+		AddComponents(utils.CreateTimestampedTextDisplay(content)).
+		AddFlags(discord.MessageFlagIsComponentsV2).
 		Build()
 
 	_, _ = c.event.Client().Rest().UpdateInteractionResponse(
@@ -193,7 +194,6 @@ func (c *Context) Modal(modal *discord.ModalCreateBuilder) {
 			zap.String("custom_id", modal.CustomID),
 			zap.String("title", modal.Title),
 		)
-		c.Error("Failed to open the modal. Please try again.")
 		return
 	}
 	c.session.Touch(context.Background())

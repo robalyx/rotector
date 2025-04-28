@@ -160,6 +160,16 @@ func (m *Middleware) Process(
 	return resp, nil
 }
 
+// SetLogger sets the logger for the middleware.
+func (m *Middleware) SetLogger(l logger.Logger) {
+	m.logger = l
+}
+
+// GetProxies returns the list of proxies.
+func (m *Middleware) GetProxies() []*url.URL {
+	return m.proxies
+}
+
 // tryProxy attempts to use a proxy for the given endpoint.
 func (m *Middleware) tryProxy(ctx context.Context, httpClient *http.Client, req *http.Request) (*http.Response, error) {
 	// Get normalized endpoint path
@@ -300,16 +310,6 @@ func (m *Middleware) applyProxyToClient(httpClient *http.Client, proxy *url.URL)
 	proxyClient.Jar = httpClient.Jar
 
 	return proxyClient
-}
-
-// SetLogger sets the logger for the middleware.
-func (m *Middleware) SetLogger(l logger.Logger) {
-	m.logger = l
-}
-
-// GetProxies returns the list of proxies.
-func (m *Middleware) GetProxies() []*url.URL {
-	return m.proxies
 }
 
 // GetNormalizedPath returns a normalized path where numeric IDs and CDN hashes are replaced with placeholders.

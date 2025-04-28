@@ -54,61 +54,89 @@ func NewFriendsBuilder(s *session.Session) *FriendsBuilder {
 func (b *FriendsBuilder) Build() *discord.MessageUpdateBuilder {
 	// Create file attachment for the friend avatars grid
 	fileName := fmt.Sprintf("friends_%d_%d.png", b.user.ID, b.page)
-	file := discord.NewFile(fileName, "", b.imageBuffer)
 
-	// Build base embed with user info
-	embed := discord.NewEmbedBuilder().
-		SetTitle(fmt.Sprintf("User Friends (Page %d/%d)", b.page+1, b.totalPages+1)).
-		SetDescription(fmt.Sprintf(
-			"```%s (%s)```",
-			utils.CensorString(b.user.Name, b.privacyMode),
-			utils.CensorString(strconv.FormatUint(b.user.ID, 10), b.privacyMode),
-		)).
-		SetImage("attachment://" + fileName).
-		SetColor(utils.GetMessageEmbedColor(b.privacyMode))
+	// Build content
+	var content strings.Builder
+	content.WriteString("## User Friends\n")
+	content.WriteString(fmt.Sprintf("```%s (%s)```",
+		utils.CensorString(b.user.Name, b.privacyMode),
+		utils.CensorString(strconv.FormatUint(b.user.ID, 10), b.privacyMode),
+	))
 
-	// Add fields for each friend
+	// Add friends list
 	for i, friend := range b.friends {
-		fieldName := b.getFriendFieldName(i, friend)
-		fieldValue := b.getFriendFieldValue(friend)
-		embed.AddField(fieldName, fieldValue, true)
+		// Add row indicator at the start of each row
+		if i%constants.FriendsGridColumns == 0 {
+			content.WriteString(fmt.Sprintf("\n\n**Row %d:**", (i/constants.FriendsGridColumns)+1))
+		}
+
+		// Add friend name with status indicators
+		content.WriteString(fmt.Sprintf("\n**%d.** %s", b.start+i+1, b.getFriendFieldName(friend)))
+
+		// Add friend details
+		details := b.getFriendFieldValue(friend)
+		if details != "" {
+			content.WriteString(" • " + details)
+		}
 	}
 
-	builder := discord.NewMessageUpdateBuilder().
-		SetEmbeds(embed.Build()).
-		SetFiles(file)
+	// Add page info at the bottom
+	content.WriteString(fmt.Sprintf("\n\n-# Page %d/%d", b.page+1, b.totalPages+1))
 
-	// Only add navigation components if not streaming
+	// Build container with all components
+	container := discord.NewContainer(
+		discord.NewTextDisplay(content.String()),
+		discord.NewMediaGallery(discord.MediaGalleryItem{
+			Media: discord.UnfurledMediaItem{
+				URL: "attachment://" + fileName,
+			},
+		}),
+	).WithAccentColor(utils.GetContainerColor(b.privacyMode))
+
+	// Add pagination buttons if not streaming
 	if !b.isStreaming {
-		builder.AddContainerComponents([]discord.ContainerComponent{
+		container = container.AddComponents(
 			discord.NewActionRow(
-				discord.NewSecondaryButton("◀️", constants.BackButtonCustomID),
 				discord.NewSecondaryButton("⏮️", string(session.ViewerFirstPage)).WithDisabled(b.page == 0),
 				discord.NewSecondaryButton("◀️", string(session.ViewerPrevPage)).WithDisabled(b.page == 0),
 				discord.NewSecondaryButton("▶️", string(session.ViewerNextPage)).WithDisabled(b.page == b.totalPages),
 				discord.NewSecondaryButton("⏭️", string(session.ViewerLastPage)).WithDisabled(b.page == b.totalPages),
 			),
-		}...)
+		)
+	}
+
+	// Build message with container and back button
+	builder := discord.NewMessageUpdateBuilder().
+		SetFiles(discord.NewFile(fileName, "", b.imageBuffer)).
+		AddComponents(container)
+
+	// Add back button if not streaming
+	if !b.isStreaming {
+		builder.AddComponents(
+			discord.NewActionRow(
+				discord.NewSecondaryButton("◀️ Back", constants.BackButtonCustomID),
+			),
+		)
 	}
 
 	return builder
 }
 
 // getFriendFieldName creates the field name for a friend entry.
-func (b *FriendsBuilder) getFriendFieldName(index int, friend *apiTypes.ExtendedFriend) string {
-	fieldName := fmt.Sprintf("Friend %d", b.start+index+1)
+func (b *FriendsBuilder) getFriendFieldName(friend *apiTypes.ExtendedFriend) string {
+	var indicators []string
 
 	// Add presence indicator
 	if presence, ok := b.presences[friend.ID]; ok {
 		switch presence.UserPresenceType {
 		case apiTypes.Website:
-			fieldName += " 🌐"
+			indicators = append(indicators, "🌐")
 		case apiTypes.InGame:
-			fieldName += " 🎮"
+			indicators = append(indicators, "🎮")
 		case apiTypes.InStudio:
-			fieldName += " 🔨"
+			indicators = append(indicators, "🔨")
 		case apiTypes.Offline:
-			fieldName += " 💤"
+			indicators = append(indicators, "💤")
 		}
 	}
 
@@ -116,52 +144,49 @@ func (b *FriendsBuilder) getFriendFieldName(index int, friend *apiTypes.Extended
 	if reviewUser, ok := b.flaggedFriends[friend.ID]; ok {
 		switch reviewUser.Status {
 		case enum.UserTypeConfirmed:
-			fieldName += " ⚠️"
+			indicators = append(indicators, "⚠️")
 		case enum.UserTypeFlagged:
-			fieldName += " ⏳"
+			indicators = append(indicators, "⏳")
 		case enum.UserTypeCleared:
-			fieldName += " ✅"
+			indicators = append(indicators, "✅")
 		}
 
 		// Add banned status if applicable
 		if reviewUser.IsBanned {
-			fieldName += " 🔨"
+			indicators = append(indicators, "🔨")
 		}
 	}
 
-	return fieldName
+	// Add friend name (with link in standard mode)
+	name := utils.CensorString(friend.Name, b.privacyMode)
+	if !b.trainingMode {
+		name = fmt.Sprintf("[%s](https://www.roblox.com/users/%d/profile)", name, friend.ID)
+	}
+
+	if len(indicators) > 0 {
+		return fmt.Sprintf("%s %s", name, strings.Join(indicators, " "))
+	}
+	return name
 }
 
 // getFriendFieldValue creates the field value for a friend entry.
 func (b *FriendsBuilder) getFriendFieldValue(friend *apiTypes.ExtendedFriend) string {
-	var info strings.Builder
-
-	// Add friend name (with link in standard mode)
-	name := utils.CensorString(friend.Name, b.privacyMode)
-	if b.trainingMode {
-		info.WriteString(name)
-	} else {
-		info.WriteString(fmt.Sprintf(
-			"[%s](https://www.roblox.com/users/%d/profile)",
-			name,
-			friend.ID,
-		))
-	}
+	var info []string
 
 	// Add presence details if available
 	if presence, ok := b.presences[friend.ID]; ok {
 		if presence.UserPresenceType != apiTypes.Offline {
-			info.WriteString("\n" + presence.LastLocation)
+			info = append(info, presence.LastLocation)
 		} else if presence.LastOnline != nil {
-			info.WriteString(fmt.Sprintf("\nLast Online: <t:%d:R>", presence.LastOnline.Unix()))
+			info = append(info, fmt.Sprintf("Last Online: <t:%d:R>", presence.LastOnline.Unix()))
 		}
 	}
 
 	// Add confidence and reason if available
 	if flaggedFriend, ok := b.flaggedFriends[friend.ID]; ok && len(flaggedFriend.Reasons) > 0 {
 		reasonTypes := flaggedFriend.Reasons.Types()
-		info.WriteString(fmt.Sprintf("\n(%.2f) [%s]", flaggedFriend.Confidence, strings.Join(reasonTypes, ", ")))
+		info = append(info, fmt.Sprintf("(%.2f) [%s]", flaggedFriend.Confidence, strings.Join(reasonTypes, ", ")))
 	}
 
-	return info.String()
+	return strings.Join(info, " • ")
 }

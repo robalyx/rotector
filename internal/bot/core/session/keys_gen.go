@@ -214,9 +214,11 @@ func main() {
 		{Name: "GuildBanLogCursor", Type: "*types.LogCursor", Doc: "GuildBanLogCursor stores the current guild ban log cursor", Persist: true},
 		{Name: "GuildBanLogNextCursor", Type: "*types.LogCursor", Doc: "GuildBanLogNextCursor stores the next guild ban log cursor", Persist: true},
 		{Name: "GuildBanLogPrevCursors", Type: "[]*types.LogCursor", Doc: "GuildBanLogPrevCursors stores previous guild ban log cursors", Persist: true},
+		{Name: "GuildBanLogCSVReport", Type: "int64", Doc: "GuildBanLogCSVReport stores the ID of the ban log that has a CSV report attached", Persist: true},
 	}
 
 	bufferKeys := []KeyDef{
+		{Name: "CaptchaImageBuffer", Doc: "CaptchaImageBuffer stores binary image data for CAPTCHA verification", Persist: true},
 		{Name: "ImageBuffer", Doc: "ImageBuffer stores binary image data", Persist: false},
 	}
 

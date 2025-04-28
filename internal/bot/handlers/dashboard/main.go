@@ -82,15 +82,13 @@ func (m *Menu) handleSelectMenu(ctx *interaction.Context, s *session.Session, cu
 		return
 	}
 
-	event := ctx.Event()
-	userID := uint64(event.User().ID)
+	userID := uint64(ctx.Event().User().ID)
 	isReviewer := s.BotSettings().IsReviewer(userID)
 	isAdmin := s.BotSettings().IsAdmin(userID)
 
 	// Check reviewer-only options
 	switch option {
-	case constants.StartGroupReviewButtonCustomID,
-		constants.LookupRobloxGroupButtonCustomID,
+	case constants.LookupRobloxGroupButtonCustomID,
 		constants.ActivityBrowserButtonCustomID,
 		constants.ChatAssistantButtonCustomID,
 		constants.WorkerStatusButtonCustomID,
@@ -114,10 +112,6 @@ func (m *Menu) handleSelectMenu(ctx *interaction.Context, s *session.Session, cu
 
 	// Process selected option
 	switch option {
-	case constants.StartUserReviewButtonCustomID:
-		ctx.Show(constants.UserReviewPageName, "")
-	case constants.StartGroupReviewButtonCustomID:
-		ctx.Show(constants.GroupReviewPageName, "")
 	case constants.LookupRobloxUserButtonCustomID:
 		m.handleLookupRobloxUser(ctx)
 	case constants.LookupRobloxGroupButtonCustomID:
@@ -147,10 +141,10 @@ func (m *Menu) handleSelectMenu(ctx *interaction.Context, s *session.Session, cu
 		}
 
 		// Set guild ID and name in session
-		guildID := uint64(*event.GuildID())
-		session.GuildStatsID.Set(s, guildID)
+		guildID := *ctx.Event().GuildID()
+		session.GuildStatsID.Set(s, uint64(guildID))
 
-		if guild, err := event.Client().Rest().GetGuild(*event.GuildID(), false); err == nil {
+		if guild, err := ctx.Event().Client().Rest().GetGuild(guildID, false); err == nil {
 			session.GuildStatsName.Set(s, guild.Name)
 		}
 
@@ -361,8 +355,23 @@ func (m *Menu) handleLookupDiscordUserModalSubmit(ctx *interaction.Context, s *s
 // handleButton processes button interactions, mainly handling refresh requests
 // to update the dashboard statistics.
 func (m *Menu) handleButton(ctx *interaction.Context, s *session.Session, customID string) {
-	if customID == constants.RefreshButtonCustomID {
+	userID := uint64(ctx.Event().User().ID)
+	isReviewer := s.BotSettings().IsReviewer(userID)
+
+	switch customID {
+	case constants.RefreshButtonCustomID:
 		session.StatsIsRefreshed.Set(s, false)
 		ctx.Reload("Refreshed dashboard.")
+	case constants.StartUserReviewButtonCustomID:
+		ctx.Show(constants.UserReviewPageName, "")
+	case constants.StartGroupReviewButtonCustomID:
+		if !isReviewer {
+			m.layout.logger.Error("Non-reviewer attempted restricted action",
+				zap.Uint64("user_id", userID),
+				zap.String("action", customID))
+			ctx.Error("You do not have permission to perform this action.")
+			return
+		}
+		ctx.Show(constants.GroupReviewPageName, "")
 	}
 }
