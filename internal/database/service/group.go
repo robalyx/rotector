@@ -39,12 +39,13 @@ func NewGroup(
 	}
 }
 
-// ConfirmGroup moves a group from other group tables to confirmed_groups.
+// ConfirmGroup moves a group to confirmed status and creates a verification record.
 func (s *GroupService) ConfirmGroup(ctx context.Context, group *types.ReviewGroup, reviewerID uint64) error {
 	// Set reviewer ID
 	group.ReviewerID = reviewerID
+	group.Status = enum.GroupTypeConfirmed
 
-	// Move group to confirmed table
+	// Update group status and create verification record
 	if err := s.model.ConfirmGroup(ctx, group); err != nil {
 		return err
 	}
@@ -58,12 +59,13 @@ func (s *GroupService) ConfirmGroup(ctx context.Context, group *types.ReviewGrou
 	return nil
 }
 
-// ClearGroup moves a group from other group tables to cleared_groups.
+// ClearGroup moves a group to cleared status and creates a clearance record.
 func (s *GroupService) ClearGroup(ctx context.Context, group *types.ReviewGroup, reviewerID uint64) error {
 	// Set reviewer ID
 	group.ReviewerID = reviewerID
+	group.Status = enum.GroupTypeCleared
 
-	// Move group to cleared table
+	// Update group status and create clearance record
 	if err := s.model.ClearGroup(ctx, group); err != nil {
 		return err
 	}
@@ -107,53 +109,64 @@ func (s *GroupService) GetGroupToReview(
 	reviewerID uint64,
 ) (*types.ReviewGroup, error) {
 	// Get recently reviewed group IDs
-	recentIDs, err := s.activity.GetRecentlyReviewedIDs(ctx, reviewerID, true, 3)
+	recentIDs, err := s.activity.GetRecentlyReviewedIDs(ctx, reviewerID, true, 50)
 	if err != nil {
 		s.logger.Error("Failed to get recently reviewed group IDs", zap.Error(err))
 		recentIDs = []uint64{} // Continue without filtering if there's an error
 	}
 
-	// Define models in priority order based on target mode
-	var models []any
+	// Determine target status based on mode
+	var targetStatus enum.GroupType
 	switch targetMode {
 	case enum.ReviewTargetModeFlagged:
-		models = []any{
-			&types.FlaggedGroup{},
-			&types.ConfirmedGroup{},
-			&types.ClearedGroup{},
-		}
+		targetStatus = enum.GroupTypeFlagged
 	case enum.ReviewTargetModeConfirmed:
-		models = []any{
-			&types.ConfirmedGroup{},
-			&types.FlaggedGroup{},
-			&types.ClearedGroup{},
-		}
+		targetStatus = enum.GroupTypeConfirmed
 	case enum.ReviewTargetModeCleared:
-		models = []any{
-			&types.ClearedGroup{},
-			&types.FlaggedGroup{},
-			&types.ConfirmedGroup{},
-		}
+		targetStatus = enum.GroupTypeCleared
 	}
 
-	// Try each model in order until we find a group
-	for _, model := range models {
-		result, err := s.model.GetNextToReview(ctx, model, sortBy, recentIDs)
-		if err == nil {
-			// Get reputation
-			reputation, err := s.reputation.GetGroupReputation(ctx, result.ID)
-			if err != nil {
-				return nil, fmt.Errorf("failed to get group reputation: %w", err)
+	// Get next group to review
+	result, err := s.model.GetNextToReview(ctx, targetStatus, sortBy, recentIDs)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			// If no groups found with primary status, try other statuses in order
+			var fallbackStatuses []enum.GroupType
+			switch targetMode {
+			case enum.ReviewTargetModeFlagged:
+				fallbackStatuses = []enum.GroupType{enum.GroupTypeConfirmed, enum.GroupTypeCleared}
+			case enum.ReviewTargetModeConfirmed:
+				fallbackStatuses = []enum.GroupType{enum.GroupTypeFlagged, enum.GroupTypeCleared}
+			case enum.ReviewTargetModeCleared:
+				fallbackStatuses = []enum.GroupType{enum.GroupTypeFlagged, enum.GroupTypeConfirmed}
 			}
-			result.Reputation = reputation
-			return result, nil
-		}
-		if !errors.Is(err, sql.ErrNoRows) {
+
+			for _, status := range fallbackStatuses {
+				result, err = s.model.GetNextToReview(ctx, status, sortBy, recentIDs)
+				if err == nil {
+					break
+				}
+				if !errors.Is(err, sql.ErrNoRows) {
+					return nil, err
+				}
+			}
+
+			if err != nil {
+				return nil, types.ErrNoGroupsToReview
+			}
+		} else {
 			return nil, err
 		}
 	}
 
-	return nil, types.ErrNoGroupsToReview
+	// Get reputation
+	reputation, err := s.reputation.GetGroupReputation(ctx, result.ID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get group reputation: %w", err)
+	}
+	result.Reputation = reputation
+
+	return result, nil
 }
 
 // SaveGroups handles the business logic for saving groups.
@@ -174,31 +187,8 @@ func (s *GroupService) SaveGroups(ctx context.Context, groups map[uint64]*types.
 		return fmt.Errorf("failed to get existing groups: %w", err)
 	}
 
-	// Group groups by their status and merge reasons
-	flaggedGroups, confirmedGroups, clearedGroups := s.groupGroupsByStatus(groups, existingGroups)
-
-	// Save the grouped groups
-	if err := s.model.SaveGroupsByStatus(ctx, flaggedGroups, confirmedGroups, clearedGroups); err != nil {
-		return err
-	}
-
-	s.logger.Debug("Successfully saved groups",
-		zap.Int("totalGroups", len(groups)),
-		zap.Int("flaggedGroups", len(flaggedGroups)),
-		zap.Int("confirmedGroups", len(confirmedGroups)),
-		zap.Int("clearedGroups", len(clearedGroups)))
-
-	return nil
-}
-
-// groupGroupsByStatus groups by their status and merges reasons.
-func (s *GroupService) groupGroupsByStatus(
-	groups map[uint64]*types.Group, existingGroups map[uint64]*types.ReviewGroup,
-) ([]*types.FlaggedGroup, []*types.ConfirmedGroup, []*types.ClearedGroup) {
-	var flaggedGroups []*types.FlaggedGroup
-	var confirmedGroups []*types.ConfirmedGroup
-	var clearedGroups []*types.ClearedGroup
-
+	// Prepare groups for saving
+	groupsToSave := make([]*types.Group, 0, len(groups))
 	for id, group := range groups {
 		// Generate UUID for new groups
 		if group.UUID == uuid.Nil {
@@ -206,10 +196,9 @@ func (s *GroupService) groupGroupsByStatus(
 		}
 
 		// Handle reasons merging and determine status
-		status := enum.GroupTypeFlagged
 		existingGroup, ok := existingGroups[id]
 		if ok {
-			status = existingGroup.Status
+			group.Status = existingGroup.Status
 
 			// Create new reasons map if it doesn't exist
 			if group.Reasons == nil {
@@ -222,28 +211,20 @@ func (s *GroupService) groupGroupsByStatus(
 					group.Reasons[reasonType] = reason
 				}
 			}
+		} else {
+			group.Status = enum.GroupTypeFlagged
 		}
 
-		// Group groups by their target tables
-		switch status {
-		case enum.GroupTypeConfirmed:
-			confirmedGroups = append(confirmedGroups, &types.ConfirmedGroup{
-				Group:      *group,
-				VerifiedAt: existingGroup.VerifiedAt,
-				ReviewerID: existingGroup.ReviewerID,
-			})
-		case enum.GroupTypeFlagged:
-			flaggedGroups = append(flaggedGroups, &types.FlaggedGroup{
-				Group: *group,
-			})
-		case enum.GroupTypeCleared:
-			clearedGroups = append(clearedGroups, &types.ClearedGroup{
-				Group:      *group,
-				ClearedAt:  existingGroup.ClearedAt,
-				ReviewerID: existingGroup.ReviewerID,
-			})
-		}
+		groupsToSave = append(groupsToSave, group)
 	}
 
-	return flaggedGroups, confirmedGroups, clearedGroups
+	// Save the groups
+	if err := s.model.SaveGroups(ctx, groupsToSave); err != nil {
+		return err
+	}
+
+	s.logger.Debug("Successfully saved groups",
+		zap.Int("totalGroups", len(groups)))
+
+	return nil
 }

@@ -29,90 +29,106 @@ func NewGroup(db *bun.DB, logger *zap.Logger) *GroupModel {
 	}
 }
 
-// SaveGroupsByStatus saves groups that have already been grouped by status.
+// SaveGroups saves groups to the database.
 //
 // Deprecated: Use Service().Group().SaveGroups() instead.
-func (r *GroupModel) SaveGroupsByStatus(
-	ctx context.Context, flaggedGroups []*types.FlaggedGroup, confirmedGroups []*types.ConfirmedGroup, clearedGroups []*types.ClearedGroup,
-) error {
-	return r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
-		// Update each table with its corresponding slice
-		if len(flaggedGroups) > 0 {
-			if err := r.upsertGroups(ctx, tx, &flaggedGroups, enum.GroupTypeFlagged); err != nil {
-				return err
-			}
-		}
-
-		if len(confirmedGroups) > 0 {
-			if err := r.upsertGroups(ctx, tx, &confirmedGroups, enum.GroupTypeConfirmed); err != nil {
-				return err
-			}
-		}
-
-		if len(clearedGroups) > 0 {
-			if err := r.upsertGroups(ctx, tx, &clearedGroups, enum.GroupTypeCleared); err != nil {
-				return err
-			}
-		}
-
+func (r *GroupModel) SaveGroups(ctx context.Context, groups []*types.Group) error {
+	if len(groups) == 0 {
 		return nil
-	})
+	}
+
+	// Update groups table
+	_, err := r.db.NewInsert().
+		Model(&groups).
+		On("CONFLICT (id) DO UPDATE").
+		Set("uuid = EXCLUDED.uuid").
+		Set("name = EXCLUDED.name").
+		Set("description = EXCLUDED.description").
+		Set("owner = EXCLUDED.owner").
+		Set("shout = EXCLUDED.shout").
+		Set("reasons = EXCLUDED.reasons").
+		Set("confidence = EXCLUDED.confidence").
+		Set("status = EXCLUDED.status").
+		Set("last_scanned = EXCLUDED.last_scanned").
+		Set("last_updated = EXCLUDED.last_updated").
+		Set("last_viewed = EXCLUDED.last_viewed").
+		Set("last_lock_check = EXCLUDED.last_lock_check").
+		Set("is_locked = EXCLUDED.is_locked").
+		Set("is_deleted = EXCLUDED.is_deleted").
+		Set("thumbnail_url = EXCLUDED.thumbnail_url").
+		Set("last_thumbnail_update = EXCLUDED.last_thumbnail_update").
+		Exec(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to upsert groups: %w", err)
+	}
+
+	return nil
 }
 
-// ConfirmGroup moves a group from other group tables to confirmed_groups.
+// ConfirmGroup moves a group to confirmed status and creates a verification record.
 //
 // Deprecated: Use Service().Group().ConfirmGroup() instead.
 func (r *GroupModel) ConfirmGroup(ctx context.Context, group *types.ReviewGroup) error {
 	return r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
-		// Try to move group to confirmed_groups table
-		confirmedGroup := &types.ConfirmedGroup{
-			Group:      group.Group,
-			VerifiedAt: time.Now(),
+		// Update group status
+		_, err := tx.NewUpdate().
+			Model((*types.Group)(nil)).
+			Set("status = ?", enum.GroupTypeConfirmed).
+			Where("id = ?", group.ID).
+			Exec(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to update group status: %w", err)
+		}
+
+		// Create verification record
+		verification := &types.GroupVerification{
+			GroupID:    group.ID,
 			ReviewerID: group.ReviewerID,
+			VerifiedAt: time.Now(),
 		}
-		if err := r.upsertGroups(ctx, tx, &[]*types.ConfirmedGroup{confirmedGroup}, enum.GroupTypeConfirmed); err != nil {
-			return err
-		}
-
-		// Delete from other tables
-		_, err := tx.NewDelete().Model((*types.FlaggedGroup)(nil)).Where("id = ?", group.ID).Exec(ctx)
+		_, err = tx.NewInsert().
+			Model(verification).
+			On("CONFLICT (group_id) DO UPDATE").
+			Set("reviewer_id = EXCLUDED.reviewer_id").
+			Set("verified_at = EXCLUDED.verified_at").
+			Exec(ctx)
 		if err != nil {
-			return fmt.Errorf("failed to delete group from flagged_groups: %w", err)
-		}
-
-		_, err = tx.NewDelete().Model((*types.ClearedGroup)(nil)).Where("id = ?", group.ID).Exec(ctx)
-		if err != nil {
-			return fmt.Errorf("failed to delete group from cleared_groups: %w", err)
+			return fmt.Errorf("failed to create verification record: %w", err)
 		}
 
 		return nil
 	})
 }
 
-// ClearGroup moves a group from other group tables to cleared_groups.
+// ClearGroup moves a group to cleared status and creates a clearance record.
 //
 // Deprecated: Use Service().Group().ClearGroup() instead.
 func (r *GroupModel) ClearGroup(ctx context.Context, group *types.ReviewGroup) error {
 	return r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
-		// Try to move group to cleared_groups table
-		clearedGroup := &types.ClearedGroup{
-			Group:      group.Group,
-			ClearedAt:  time.Now(),
+		// Update group status
+		_, err := tx.NewUpdate().
+			Model((*types.Group)(nil)).
+			Set("status = ?", enum.GroupTypeCleared).
+			Where("id = ?", group.ID).
+			Exec(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to update group status: %w", err)
+		}
+
+		// Create clearance record
+		clearance := &types.GroupClearance{
+			GroupID:    group.ID,
 			ReviewerID: group.ReviewerID,
+			ClearedAt:  time.Now(),
 		}
-		if err := r.upsertGroups(ctx, tx, &[]*types.ClearedGroup{clearedGroup}, enum.GroupTypeCleared); err != nil {
-			return err
-		}
-
-		// Delete from other tables
-		_, err := tx.NewDelete().Model((*types.FlaggedGroup)(nil)).Where("id = ?", group.ID).Exec(ctx)
+		_, err = tx.NewInsert().
+			Model(clearance).
+			On("CONFLICT (group_id) DO UPDATE").
+			Set("reviewer_id = EXCLUDED.reviewer_id").
+			Set("cleared_at = EXCLUDED.cleared_at").
+			Exec(ctx)
 		if err != nil {
-			return fmt.Errorf("failed to delete group from flagged_groups: %w", err)
-		}
-
-		_, err = tx.NewDelete().Model((*types.ConfirmedGroup)(nil)).Where("id = ?", group.ID).Exec(ctx)
-		if err != nil {
-			return fmt.Errorf("failed to delete group from confirmed_groups: %w", err)
+			return fmt.Errorf("failed to create clearance record: %w", err)
 		}
 
 		return nil
@@ -125,72 +141,84 @@ func (r *GroupModel) ClearGroup(ctx context.Context, group *types.ReviewGroup) e
 func (r *GroupModel) GetGroupByID(
 	ctx context.Context, groupID string, fields types.GroupField,
 ) (*types.ReviewGroup, error) {
+	var group types.Group
 	var result types.ReviewGroup
+
 	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
-		// Try each model in order until we find a group
-		models := []any{
-			&types.FlaggedGroup{},
-			&types.ConfirmedGroup{},
-			&types.ClearedGroup{},
+		// Build query
+		query := tx.NewSelect().
+			Model(&group).
+			Column(fields.Columns()...).
+			For("UPDATE")
+
+		// Check if input is numeric (ID) or string (UUID)
+		if id, err := strconv.ParseUint(groupID, 10, 64); err == nil {
+			query.Where("id = ?", id)
+		} else {
+			// Parse UUID string
+			uid, err := uuid.Parse(groupID)
+			if err != nil {
+				return types.ErrInvalidGroupID
+			}
+			query.Where("uuid = ?", uid)
 		}
 
-		for _, model := range models {
-			query := tx.NewSelect().
-				Model(model).
-				Column(fields.Columns()...).
-				For("UPDATE")
-
-			// Check if input is numeric (ID) or string (UUID)
-			if id, err := strconv.ParseUint(groupID, 10, 64); err == nil {
-				query.Where("id = ?", id)
-			} else {
-				// Parse UUID string
-				uid, err := uuid.Parse(groupID)
-				if err != nil {
-					return types.ErrInvalidGroupID
-				}
-				query.Where("uuid = ?", uid)
+		// Get group
+		err := query.Scan(ctx)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return types.ErrGroupNotFound
 			}
-
-			err := query.Scan(ctx)
-			if err != nil {
-				if errors.Is(err, sql.ErrNoRows) {
-					continue
-				}
-				return fmt.Errorf("failed to get group: %w", err)
-			}
-
-			// Set result based on model type
-			switch m := model.(type) {
-			case *types.FlaggedGroup:
-				result.Group = m.Group
-				result.Status = enum.GroupTypeFlagged
-			case *types.ConfirmedGroup:
-				result.Group = m.Group
-				result.VerifiedAt = m.VerifiedAt
-				result.ReviewerID = m.ReviewerID
-				result.Status = enum.GroupTypeConfirmed
-			case *types.ClearedGroup:
-				result.Group = m.Group
-				result.ClearedAt = m.ClearedAt
-				result.ReviewerID = m.ReviewerID
-				result.Status = enum.GroupTypeCleared
-			}
-
-			// Update last_viewed if requested
-			_, err = tx.NewUpdate().
-				Model(model).
-				Set("last_viewed = ?", time.Now()).
-				Where("id = ?", result.ID).
-				Exec(ctx)
-			if err != nil {
-				return fmt.Errorf("failed to update last_viewed: %w", err)
-			}
-
-			return nil
+			return fmt.Errorf("failed to get group: %w", err)
 		}
 
-		return types.ErrGroupNotFound
+		// Set base group data
+		result.Group = &group
+		result.Status = group.Status
+
+		// Get verification data if confirmed
+		switch group.Status {
+		case enum.GroupTypeConfirmed:
+			var verification types.GroupVerification
+			err = tx.NewSelect().
+				Model(&verification).
+				Where("group_id = ?", group.ID).
+				Scan(ctx)
+			if err != nil && !errors.Is(err, sql.ErrNoRows) {
+				return fmt.Errorf("failed to get verification data: %w", err)
+			}
+			if err == nil {
+				result.ReviewerID = verification.ReviewerID
+				result.VerifiedAt = verification.VerifiedAt
+			}
+		case enum.GroupTypeCleared:
+			var clearance types.GroupClearance
+			err = tx.NewSelect().
+				Model(&clearance).
+				Where("group_id = ?", group.ID).
+				Scan(ctx)
+			if err != nil && !errors.Is(err, sql.ErrNoRows) {
+				return fmt.Errorf("failed to get clearance data: %w", err)
+			}
+			if err == nil {
+				result.ReviewerID = clearance.ReviewerID
+				result.ClearedAt = clearance.ClearedAt
+			}
+		case enum.GroupTypeFlagged:
+			// Nothing to do here
+		}
+
+		// Update last_viewed
+		_, err = tx.NewUpdate().
+			Model(group).
+			Set("last_viewed = ?", time.Now()).
+			Where("id = ?", group.ID).
+			Exec(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to update last_viewed: %w", err)
+		}
+
+		return nil
 	})
 
 	return &result, err
@@ -204,67 +232,66 @@ func (r *GroupModel) GetGroupsByIDs(
 	groups := make(map[uint64]*types.ReviewGroup)
 
 	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
-		// Build query with selected fields
-		columns := fields.Columns()
-
-		// Query confirmed groups
-		var confirmedGroups []types.ConfirmedGroup
+		// Query all users
+		var baseGroups []types.Group
 		err := tx.NewSelect().
-			Model(&confirmedGroups).
-			Column(columns...).
+			Model(&baseGroups).
+			Column(fields.Columns()...).
 			Where("id IN (?)", bun.In(groupIDs)).
 			Scan(ctx)
 		if err != nil {
-			return fmt.Errorf("failed to get confirmed groups: %w", err)
-		}
-		for _, group := range confirmedGroups {
-			groups[group.ID] = &types.ReviewGroup{
-				Group:      group.Group,
-				VerifiedAt: group.VerifiedAt,
-				ReviewerID: group.ReviewerID,
-				Status:     enum.GroupTypeConfirmed,
-			}
+			return fmt.Errorf("failed to get groups: %w", err)
 		}
 
-		// Query flagged groups
-		var flaggedGroups []types.FlaggedGroup
+		// Get verifications and clearances
+		var verifications []types.GroupVerification
 		err = tx.NewSelect().
-			Model(&flaggedGroups).
-			Column(columns...).
-			Where("id IN (?)", bun.In(groupIDs)).
+			Model(&verifications).
+			Where("group_id IN (?)", bun.In(groupIDs)).
 			Scan(ctx)
-		if err != nil {
-			return fmt.Errorf("failed to get flagged groups: %w", err)
-		}
-		for _, group := range flaggedGroups {
-			groups[group.ID] = &types.ReviewGroup{
-				Group:  group.Group,
-				Status: enum.GroupTypeFlagged,
-			}
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return fmt.Errorf("failed to get verifications: %w", err)
 		}
 
-		// Query cleared groups
-		var clearedGroups []types.ClearedGroup
+		var clearances []types.GroupClearance
 		err = tx.NewSelect().
-			Model(&clearedGroups).
-			Column(columns...).
-			Where("id IN (?)", bun.In(groupIDs)).
+			Model(&clearances).
+			Where("group_id IN (?)", bun.In(groupIDs)).
 			Scan(ctx)
-		if err != nil {
-			return fmt.Errorf("failed to get cleared groups: %w", err)
-		}
-		for _, group := range clearedGroups {
-			groups[group.ID] = &types.ReviewGroup{
-				Group:      group.Group,
-				ClearedAt:  group.ClearedAt,
-				ReviewerID: group.ReviewerID,
-				Status:     enum.GroupTypeCleared,
-			}
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return fmt.Errorf("failed to get clearances: %w", err)
 		}
 
-		r.logger.Debug("Retrieved groups by IDs",
-			zap.Int("requestedCount", len(groupIDs)),
-			zap.Int("foundCount", len(groups)))
+		// Map verifications and clearances by group ID
+		verificationMap := make(map[uint64]types.GroupVerification)
+		for _, v := range verifications {
+			verificationMap[v.GroupID] = v
+		}
+
+		clearanceMap := make(map[uint64]types.GroupClearance)
+		for _, c := range clearances {
+			clearanceMap[c.GroupID] = c
+		}
+
+		// Build review groups
+		for _, group := range baseGroups {
+			reviewGroup := &types.ReviewGroup{
+				Group:  &group,
+				Status: group.Status,
+			}
+
+			if v, ok := verificationMap[group.ID]; ok {
+				reviewGroup.ReviewerID = v.ReviewerID
+				reviewGroup.VerifiedAt = v.VerifiedAt
+			}
+
+			if c, ok := clearanceMap[group.ID]; ok {
+				reviewGroup.ReviewerID = c.ReviewerID
+				reviewGroup.ClearedAt = c.ClearedAt
+			}
+
+			groups[group.ID] = reviewGroup
+		}
 
 		return nil
 	})
@@ -274,71 +301,59 @@ func (r *GroupModel) GetGroupsByIDs(
 
 // GetFlaggedAndConfirmedGroups retrieves all flagged and confirmed groups.
 func (r *GroupModel) GetFlaggedAndConfirmedGroups(ctx context.Context) ([]*types.ReviewGroup, error) {
-	var groups []*types.ReviewGroup
-
+	// Get groups
+	var groups []types.Group
 	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
-		// Get flagged groups
-		var flaggedGroups []types.FlaggedGroup
 		err := tx.NewSelect().
-			Model(&flaggedGroups).
+			Model(&groups).
 			Column("id", "reasons", "confidence").
+			Where("status IN (?)", bun.In([]enum.GroupType{enum.GroupTypeFlagged, enum.GroupTypeConfirmed})).
 			Scan(ctx)
 		if err != nil {
-			return fmt.Errorf("failed to get flagged groups: %w", err)
-		}
-		for _, group := range flaggedGroups {
-			groups = append(groups, &types.ReviewGroup{
-				Group:  group.Group,
-				Status: enum.GroupTypeFlagged,
-			})
-		}
-
-		// Get confirmed groups
-		var confirmedGroups []types.ConfirmedGroup
-		err = tx.NewSelect().
-			Model(&confirmedGroups).
-			Column("id", "reasons", "confidence").
-			Scan(ctx)
-		if err != nil {
-			return fmt.Errorf("failed to get confirmed groups: %w", err)
-		}
-		for _, group := range confirmedGroups {
-			groups = append(groups, &types.ReviewGroup{
-				Group:  group.Group,
-				Status: enum.GroupTypeConfirmed,
-			})
+			return fmt.Errorf("failed to get groups: %w", err)
 		}
 
 		return nil
 	})
+	if err != nil {
+		return nil, err
+	}
 
-	return groups, err
+	// Convert to review groups
+	result := make([]*types.ReviewGroup, len(groups))
+	for i, group := range groups {
+		result[i] = &types.ReviewGroup{
+			Group:  &group,
+			Status: group.Status,
+		}
+	}
+
+	return result, nil
 }
 
 // GetGroupsToCheck finds groups that haven't been checked for locked status recently.
-// Returns two slices: groups to check, and currently locked groups among those to check.
-func (r *GroupModel) GetGroupsToCheck(ctx context.Context, limit int) ([]uint64, []uint64, error) {
-	var groupIDs []uint64
-	var lockedIDs []uint64
-
-	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
-		// Get and update confirmed groups
-		var confirmedGroups []types.ConfirmedGroup
+func (r *GroupModel) GetGroupsToCheck(
+	ctx context.Context, limit int,
+) (groupIDs []uint64, lockedIDs []uint64, err error) {
+	var groups []types.Group
+	err = r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+		// Get groups that need checking
 		err := tx.NewSelect().
-			Model(&confirmedGroups).
+			Model(&groups).
 			Column("id", "is_locked").
 			Where("last_lock_check < NOW() - INTERVAL '1 day'").
+			Where("status IN (?)", bun.In([]enum.GroupType{enum.GroupTypeFlagged, enum.GroupTypeConfirmed})).
 			OrderExpr("last_lock_check ASC").
-			Limit(limit / 2).
+			Limit(limit).
 			For("UPDATE SKIP LOCKED").
 			Scan(ctx)
 		if err != nil {
-			return fmt.Errorf("failed to get confirmed groups: %w", err)
+			return fmt.Errorf("failed to get groups: %w", err)
 		}
 
-		if len(confirmedGroups) > 0 {
-			groupIDs = make([]uint64, 0, len(confirmedGroups))
-			for _, group := range confirmedGroups {
+		if len(groups) > 0 {
+			groupIDs = make([]uint64, 0, len(groups))
+			for _, group := range groups {
 				groupIDs = append(groupIDs, group.ID)
 				if group.IsLocked {
 					lockedIDs = append(lockedIDs, group.ID)
@@ -347,55 +362,13 @@ func (r *GroupModel) GetGroupsToCheck(ctx context.Context, limit int) ([]uint64,
 
 			// Update last_lock_check
 			_, err = tx.NewUpdate().
-				Model(&confirmedGroups).
+				Model(&groups).
 				Set("last_lock_check = NOW()").
 				Where("id IN (?)", bun.In(groupIDs)).
 				Exec(ctx)
 			if err != nil {
-				return fmt.Errorf("failed to update confirmed groups: %w", err)
+				return fmt.Errorf("failed to update groups: %w", err)
 			}
-		}
-
-		// Calculate remaining limit for flagged groups
-		remainingLimit := limit - len(confirmedGroups)
-		if remainingLimit <= 0 {
-			return nil
-		}
-
-		// Get and update flagged groups
-		var flaggedGroups []types.FlaggedGroup
-		err = tx.NewSelect().
-			Model(&flaggedGroups).
-			Column("id", "is_locked").
-			Where("last_lock_check < NOW() - INTERVAL '1 day'").
-			OrderExpr("last_lock_check ASC").
-			Limit(remainingLimit).
-			For("UPDATE SKIP LOCKED").
-			Scan(ctx)
-		if err != nil {
-			return fmt.Errorf("failed to get flagged groups: %w", err)
-		}
-
-		if len(flaggedGroups) > 0 {
-			flaggedIDs := make([]uint64, 0, len(flaggedGroups))
-			for _, group := range flaggedGroups {
-				flaggedIDs = append(flaggedIDs, group.ID)
-				if group.IsLocked {
-					lockedIDs = append(lockedIDs, group.ID)
-				}
-			}
-
-			// Update last_lock_check
-			_, err = tx.NewUpdate().
-				Model(&flaggedGroups).
-				Set("last_lock_check = NOW()").
-				Where("id IN (?)", bun.In(flaggedIDs)).
-				Exec(ctx)
-			if err != nil {
-				return fmt.Errorf("failed to update flagged groups: %w", err)
-			}
-
-			groupIDs = append(groupIDs, flaggedIDs...)
 		}
 
 		return nil
@@ -404,51 +377,29 @@ func (r *GroupModel) GetGroupsToCheck(ctx context.Context, limit int) ([]uint64,
 	return groupIDs, lockedIDs, err
 }
 
-// MarkGroupsLockStatus updates the locked status of groups in their respective tables.
+// MarkGroupsLockStatus updates the locked status of groups.
 func (r *GroupModel) MarkGroupsLockStatus(ctx context.Context, groupIDs []uint64, isLocked bool) error {
-	return r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
-		// Update confirmed groups
-		_, err := tx.NewUpdate().
-			Model((*types.ConfirmedGroup)(nil)).
-			Set("is_locked = ?", isLocked).
-			Where("id IN (?)", bun.In(groupIDs)).
-			Exec(ctx)
-		if err != nil {
-			return fmt.Errorf("failed to mark confirmed groups lock status: %w", err)
-		}
+	_, err := r.db.NewUpdate().
+		Model((*types.Group)(nil)).
+		Set("is_locked = ?", isLocked).
+		Where("id IN (?)", bun.In(groupIDs)).
+		Exec(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to mark groups lock status: %w", err)
+	}
 
-		// Update flagged groups
-		_, err = tx.NewUpdate().
-			Model((*types.FlaggedGroup)(nil)).
-			Set("is_locked = ?", isLocked).
-			Where("id IN (?)", bun.In(groupIDs)).
-			Exec(ctx)
-		if err != nil {
-			return fmt.Errorf("failed to mark flagged groups lock status: %w", err)
-		}
-
-		r.logger.Debug("Marked groups lock status",
-			zap.Int("count", len(groupIDs)),
-			zap.Bool("isLocked", isLocked))
-
-		return nil
-	})
+	r.logger.Debug("Marked groups lock status",
+		zap.Int("count", len(groupIDs)),
+		zap.Bool("isLocked", isLocked))
+	return nil
 }
 
-// GetLockedCount returns the total number of locked groups across all tables.
+// GetLockedCount returns the total number of locked groups.
 func (r *GroupModel) GetLockedCount(ctx context.Context) (int, error) {
 	count, err := r.db.NewSelect().
-		TableExpr("(?) AS locked_groups", r.db.NewSelect().
-			Model((*types.ConfirmedGroup)(nil)).
-			Column("id").
-			Where("is_locked = true").
-			UnionAll(
-				r.db.NewSelect().
-					Model((*types.FlaggedGroup)(nil)).
-					Column("id").
-					Where("is_locked = true"),
-			),
-		).
+		Model((*types.Group)(nil)).
+		Where("is_locked = true").
+		Where("status IN (?, ?)", enum.GroupTypeFlagged, enum.GroupTypeConfirmed).
 		Count(ctx)
 	if err != nil {
 		return 0, fmt.Errorf("failed to get locked groups count: %w", err)
@@ -460,24 +411,34 @@ func (r *GroupModel) GetLockedCount(ctx context.Context) (int, error) {
 func (r *GroupModel) GetGroupCounts(ctx context.Context) (*types.GroupCounts, error) {
 	var counts types.GroupCounts
 	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
-		confirmedCount, err := tx.NewSelect().Model((*types.ConfirmedGroup)(nil)).Count(ctx)
-		if err != nil {
-			return fmt.Errorf("failed to get confirmed groups count: %w", err)
+		// Get counts by status
+		var statusCounts []struct {
+			Status enum.GroupType `bun:"status"`
+			Count  int            `bun:"count"`
 		}
-		counts.Confirmed = confirmedCount
-
-		flaggedCount, err := tx.NewSelect().Model((*types.FlaggedGroup)(nil)).Count(ctx)
+		err := tx.NewSelect().
+			Model((*types.Group)(nil)).
+			Column("status").
+			ColumnExpr("COUNT(*) AS count").
+			GroupExpr("status").
+			Scan(ctx, &statusCounts)
 		if err != nil {
-			return fmt.Errorf("failed to get flagged groups count: %w", err)
+			return fmt.Errorf("failed to get group counts: %w", err)
 		}
-		counts.Flagged = flaggedCount
 
-		clearedCount, err := tx.NewSelect().Model((*types.ClearedGroup)(nil)).Count(ctx)
-		if err != nil {
-			return fmt.Errorf("failed to get cleared groups count: %w", err)
+		// Map counts to their respective fields
+		for _, sc := range statusCounts {
+			switch sc.Status {
+			case enum.GroupTypeConfirmed:
+				counts.Confirmed = sc.Count
+			case enum.GroupTypeFlagged:
+				counts.Flagged = sc.Count
+			case enum.GroupTypeCleared:
+				counts.Cleared = sc.Count
+			}
 		}
-		counts.Cleared = clearedCount
 
+		// Get locked count
 		lockedCount, err := r.GetLockedCount(ctx)
 		if err != nil {
 			return err
@@ -494,59 +455,78 @@ func (r *GroupModel) GetGroupCounts(ctx context.Context) (*types.GroupCounts, er
 }
 
 // PurgeOldClearedGroups removes cleared groups older than the cutoff date.
-// This helps maintain database size by removing groups that were cleared long ago.
 func (r *GroupModel) PurgeOldClearedGroups(ctx context.Context, cutoffDate time.Time) (int, error) {
-	result, err := r.db.NewDelete().
-		Model((*types.ClearedGroup)(nil)).
-		Where("cleared_at < ?", cutoffDate).
-		Exec(ctx)
-	if err != nil {
-		return 0, fmt.Errorf(
-			"failed to purge old cleared groups: %w (cutoffDate=%s)",
-			err, cutoffDate.Format(time.RFC3339),
-		)
-	}
+	var clearances []types.GroupClearance
+	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+		// Get groups to delete
+		err := tx.NewSelect().
+			Model(&clearances).
+			Column("group_id").
+			Where("cleared_at < ?", cutoffDate).
+			Scan(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to get groups to delete: %w", err)
+		}
 
-	affected, err := result.RowsAffected()
+		if len(clearances) > 0 {
+			groupIDs := make([]uint64, len(clearances))
+			for i, c := range clearances {
+				groupIDs[i] = c.GroupID
+			}
+
+			// Delete groups
+			_, err = tx.NewDelete().
+				Model((*types.Group)(nil)).
+				Where("id IN (?)", bun.In(groupIDs)).
+				Where("status = ?", enum.GroupTypeCleared).
+				Exec(ctx)
+			if err != nil {
+				return fmt.Errorf("failed to delete groups: %w", err)
+			}
+
+			// Delete clearance records
+			_, err := tx.NewDelete().
+				Model(&clearances).
+				Where("group_id IN (?)", bun.In(groupIDs)).
+				Exec(ctx)
+			if err != nil {
+				return fmt.Errorf("failed to delete clearance records: %w", err)
+			}
+		}
+
+		return nil
+	})
 	if err != nil {
-		return 0, fmt.Errorf("failed to get rows affected: %w", err)
+		return 0, err
 	}
 
 	r.logger.Debug("Purged old cleared groups",
-		zap.Int64("rowsAffected", affected),
+		zap.Int("count", len(clearances)),
 		zap.Time("cutoffDate", cutoffDate))
 
-	return int(affected), nil
+	return len(clearances), nil
 }
 
 // GetGroupsForThumbnailUpdate retrieves groups that need thumbnail updates.
 func (r *GroupModel) GetGroupsForThumbnailUpdate(ctx context.Context, limit int) (map[uint64]*types.Group, error) {
 	groups := make(map[uint64]*types.Group)
-
 	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
-		// Query groups from each table that need thumbnail updates
-		for _, model := range []any{
-			(*types.FlaggedGroup)(nil),
-			(*types.ConfirmedGroup)(nil),
-			(*types.ClearedGroup)(nil),
-		} {
-			var reviewGroups []types.ReviewGroup
-			err := tx.NewSelect().
-				Model(model).
-				Where("last_thumbnail_update < NOW() - INTERVAL '7 days'").
-				Where("is_deleted = false").
-				OrderExpr("last_thumbnail_update ASC").
-				Limit(limit).
-				Scan(ctx, &reviewGroups)
-
-			if err != nil && !errors.Is(err, sql.ErrNoRows) {
-				return fmt.Errorf("failed to query groups for thumbnail update: %w", err)
-			}
-
-			for _, group := range reviewGroups {
-				groups[group.ID] = &group.Group
-			}
+		var baseGroups []types.Group
+		err := tx.NewSelect().
+			Model(&baseGroups).
+			Where("last_thumbnail_update < NOW() - INTERVAL '7 days'").
+			Where("is_deleted = false").
+			OrderExpr("last_thumbnail_update ASC").
+			Limit(limit).
+			Scan(ctx)
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return fmt.Errorf("failed to query groups for thumbnail update: %w", err)
 		}
+
+		for _, group := range baseGroups {
+			groups[group.ID] = &group
+		}
+
 		return nil
 	})
 	if err != nil {
@@ -560,35 +540,35 @@ func (r *GroupModel) GetGroupsForThumbnailUpdate(ctx context.Context, limit int)
 func (r *GroupModel) DeleteGroup(ctx context.Context, groupID uint64) (bool, error) {
 	var totalAffected int64
 	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
-		// Delete from flagged_groups
+		// Delete group
 		result, err := tx.NewDelete().
-			Model((*types.FlaggedGroup)(nil)).
+			Model((*types.Group)(nil)).
 			Where("id = ?", groupID).
 			Exec(ctx)
 		if err != nil {
-			return fmt.Errorf("failed to delete from flagged_groups: %w", err)
+			return fmt.Errorf("failed to delete group: %w", err)
 		}
 		affected, _ := result.RowsAffected()
 		totalAffected += affected
 
-		// Delete from confirmed_groups
+		// Delete verification if exists
 		result, err = tx.NewDelete().
-			Model((*types.ConfirmedGroup)(nil)).
-			Where("id = ?", groupID).
+			Model((*types.GroupVerification)(nil)).
+			Where("group_id = ?", groupID).
 			Exec(ctx)
 		if err != nil {
-			return fmt.Errorf("failed to delete from confirmed_groups: %w", err)
+			return fmt.Errorf("failed to delete verification record: %w", err)
 		}
 		affected, _ = result.RowsAffected()
 		totalAffected += affected
 
-		// Delete from cleared_groups
-		result, err = tx.NewDelete().
-			Model((*types.ClearedGroup)(nil)).
-			Where("id = ?", groupID).
+		// Delete clearance if exists
+		_, err = tx.NewDelete().
+			Model((*types.GroupClearance)(nil)).
+			Where("group_id = ?", groupID).
 			Exec(ctx)
 		if err != nil {
-			return fmt.Errorf("failed to delete from cleared_groups: %w", err)
+			return fmt.Errorf("failed to delete clearance record: %w", err)
 		}
 		affected, _ = result.RowsAffected()
 		totalAffected += affected
@@ -599,39 +579,15 @@ func (r *GroupModel) DeleteGroup(ctx context.Context, groupID uint64) (bool, err
 	return totalAffected > 0, err
 }
 
-// GetGroupToScan finds the next group to scan from confirmed_groups, falling back to flagged_groups
-// if no confirmed groups are available.
+// GetGroupToScan finds the next group to scan.
 func (r *GroupModel) GetGroupToScan(ctx context.Context) (*types.Group, error) {
-	var group *types.Group
+	var group types.Group
 	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
-		// First try confirmed groups
-		var confirmedGroup types.ConfirmedGroup
-		err := tx.NewSelect().Model(&confirmedGroup).
+		// Try confirmed and flagged groups
+		err := tx.NewSelect().
+			Model(&group).
 			Where("last_scanned < NOW() - INTERVAL '1 day'").
-			OrderExpr("last_scanned ASC, confidence DESC").
-			Limit(1).
-			For("UPDATE SKIP LOCKED").
-			Scan(ctx)
-		if err == nil {
-			// Update last_scanned
-			_, err = tx.NewUpdate().Model(&confirmedGroup).
-				Set("last_scanned = ?", time.Now()).
-				Where("id = ?", confirmedGroup.ID).
-				Exec(ctx)
-			if err != nil {
-				return fmt.Errorf(
-					"failed to update last_scanned for confirmed group: %w (groupID=%d)",
-					err, confirmedGroup.ID,
-				)
-			}
-			group = &confirmedGroup.Group
-			return nil
-		}
-
-		// If no confirmed groups, try flagged groups
-		var flaggedGroup types.FlaggedGroup
-		err = tx.NewSelect().Model(&flaggedGroup).
-			Where("last_scanned < NOW() - INTERVAL '1 day'").
+			Where("status IN (?)", bun.In([]enum.GroupType{enum.GroupTypeFlagged, enum.GroupTypeConfirmed})).
 			OrderExpr("last_scanned ASC, confidence DESC").
 			Limit(1).
 			For("UPDATE SKIP LOCKED").
@@ -641,114 +597,104 @@ func (r *GroupModel) GetGroupToScan(ctx context.Context) (*types.Group, error) {
 		}
 
 		// Update last_scanned
-		_, err = tx.NewUpdate().Model(&flaggedGroup).
+		_, err = tx.NewUpdate().
+			Model(&group).
 			Set("last_scanned = ?", time.Now()).
-			Where("id = ?", flaggedGroup.ID).
+			Where("id = ?", group.ID).
 			Exec(ctx)
 		if err != nil {
-			return fmt.Errorf(
-				"failed to update last_scanned for flagged group: %w (groupID=%d)",
-				err, flaggedGroup.ID,
-			)
+			return fmt.Errorf("failed to update last_scanned: %w", err)
 		}
-		group = &flaggedGroup.Group
+
 		return nil
 	})
 	if err != nil {
 		return nil, err
 	}
 
-	return group, nil
-}
-
-// CheckConfirmedGroups checks which groups from a list of IDs exist in any group table.
-// Returns a map of group IDs to their status (confirmed, flagged, cleared, locked).
-func (r *GroupModel) CheckConfirmedGroups(ctx context.Context, groupIDs []uint64) ([]uint64, error) {
-	var confirmedGroupIDs []uint64
-	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
-		// Query confirmed groups
-		err := tx.NewSelect().
-			Model((*types.ConfirmedGroup)(nil)).
-			Column("id").
-			Where("id IN (?)", bun.In(groupIDs)).
-			Scan(ctx, &confirmedGroupIDs)
-		if err != nil {
-			return fmt.Errorf("failed to query confirmed groups: %w", err)
-		}
-
-		return nil
-	})
-
-	return confirmedGroupIDs, err
+	return &group, nil
 }
 
 // GetNextToReview handles the common logic for getting the next item to review.
 //
 // Deprecated: Use Service().Group().GetGroupToReview() instead.
 func (r *GroupModel) GetNextToReview(
-	ctx context.Context, model any, sortBy enum.ReviewSortBy, recentIDs []uint64,
+	ctx context.Context, targetStatus enum.GroupType, sortBy enum.ReviewSortBy, recentIDs []uint64,
 ) (*types.ReviewGroup, error) {
+	var group types.Group
 	var result types.ReviewGroup
+
 	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
-		// Build subquery to get ID
-		subq := tx.NewSelect().
-			Model(model).
-			Column("id")
+		// Build query
+		query := tx.NewSelect().
+			Model(&group).
+			Where("status = ?", targetStatus)
 
 		// Exclude recently reviewed IDs if any exist
 		if len(recentIDs) > 0 {
-			subq.Where("?TableAlias.id NOT IN (?)", bun.In(recentIDs))
+			query.Where("id NOT IN (?)", bun.In(recentIDs))
 		}
 
-		// Apply sort order to subquery
+		// Apply sort order
 		switch sortBy {
 		case enum.ReviewSortByConfidence:
-			subq.OrderExpr("confidence DESC, last_viewed ASC")
+			query.OrderExpr("confidence DESC, last_viewed ASC")
 		case enum.ReviewSortByLastUpdated:
-			subq.OrderExpr("last_updated ASC, last_viewed ASC")
+			query.OrderExpr("last_updated ASC, last_viewed ASC")
 		case enum.ReviewSortByReputation:
-			subq.Join("LEFT JOIN group_reputations ON group_reputations.id = ?TableAlias.id").
+			query.Join("LEFT JOIN group_reputations ON group_reputations.id = groups.id").
 				OrderExpr("COALESCE(group_reputations.score, 0) ASC, last_viewed ASC")
 		case enum.ReviewSortByLastViewed:
-			subq.Order("last_viewed ASC")
+			query.Order("last_viewed ASC")
 		case enum.ReviewSortByRandom:
-			subq.OrderExpr("RANDOM()")
+			query.OrderExpr("RANDOM()")
 		}
 
-		subq.Limit(1)
+		query.Limit(1).For("UPDATE")
 
-		// Main query to get the full record with FOR UPDATE
-		err := tx.NewSelect().
-			Model(model).
-			Where("id = (?)", subq).
-			For("UPDATE").
-			Scan(ctx)
+		// Get group
+		err := query.Scan(ctx)
 		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return types.ErrNoGroupsToReview
+			}
 			return err
 		}
 
-		// Set result based on model type
-		switch m := model.(type) {
-		case *types.FlaggedGroup:
-			result.Group = m.Group
-			result.Status = enum.GroupTypeFlagged
-		case *types.ConfirmedGroup:
-			result.Group = m.Group
-			result.VerifiedAt = m.VerifiedAt
-			result.Status = enum.GroupTypeConfirmed
-		case *types.ClearedGroup:
-			result.Group = m.Group
-			result.ClearedAt = m.ClearedAt
-			result.Status = enum.GroupTypeCleared
-		default:
-			return fmt.Errorf("%w: %T", types.ErrUnsupportedModel, model)
+		result.Group = &group
+		result.Status = group.Status
+
+		// Get verification/clearance info based on status
+		switch group.Status {
+		case enum.GroupTypeConfirmed:
+			var verification types.GroupVerification
+			err = tx.NewSelect().
+				Model(&verification).
+				Where("group_id = ?", group.ID).
+				Scan(ctx)
+			if err == nil {
+				result.ReviewerID = verification.ReviewerID
+				result.VerifiedAt = verification.VerifiedAt
+			}
+		case enum.GroupTypeCleared:
+			var clearance types.GroupClearance
+			err = tx.NewSelect().
+				Model(&clearance).
+				Where("group_id = ?", group.ID).
+				Scan(ctx)
+			if err == nil {
+				result.ReviewerID = clearance.ReviewerID
+				result.ClearedAt = clearance.ClearedAt
+			}
+		case enum.GroupTypeFlagged:
+			// Nothing to do here
 		}
 
 		// Update last_viewed
 		_, err = tx.NewUpdate().
-			Model(model).
+			Model(&group).
 			Set("last_viewed = ?", time.Now()).
-			Where("id = ?", result.ID).
+			Where("id = ?", group.ID).
 			Exec(ctx)
 		if err != nil {
 			return err
@@ -758,44 +704,4 @@ func (r *GroupModel) GetNextToReview(
 	})
 
 	return &result, err
-}
-
-// upsertGroups handles the common logic for upserting groups with status-specific fields.
-func (r *GroupModel) upsertGroups(ctx context.Context, tx bun.Tx, groups any, status enum.GroupType) error {
-	query := tx.NewInsert().
-		Model(groups).
-		On("CONFLICT (id) DO UPDATE").
-		Set("uuid = EXCLUDED.uuid").
-		Set("name = EXCLUDED.name").
-		Set("description = EXCLUDED.description").
-		Set("owner = EXCLUDED.owner").
-		Set("shout = EXCLUDED.shout").
-		Set("reasons = EXCLUDED.reasons").
-		Set("confidence = EXCLUDED.confidence").
-		Set("last_scanned = EXCLUDED.last_scanned").
-		Set("last_updated = EXCLUDED.last_updated").
-		Set("last_viewed = EXCLUDED.last_viewed").
-		Set("last_lock_check = EXCLUDED.last_lock_check").
-		Set("is_locked = EXCLUDED.is_locked").
-		Set("is_deleted = EXCLUDED.is_deleted").
-		Set("thumbnail_url = EXCLUDED.thumbnail_url").
-		Set("last_thumbnail_update = EXCLUDED.last_thumbnail_update")
-
-	// Add status-specific fields
-	switch status {
-	case enum.GroupTypeConfirmed:
-		query = query.Set("reviewer_id = EXCLUDED.reviewer_id").
-			Set("verified_at = EXCLUDED.verified_at")
-	case enum.GroupTypeCleared:
-		query = query.Set("reviewer_id = EXCLUDED.reviewer_id").
-			Set("cleared_at = EXCLUDED.cleared_at")
-	case enum.GroupTypeFlagged:
-		// No extra fields for flagged groups
-	}
-
-	_, err := query.Exec(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to upsert %s groups: %w", status, err)
-	}
-	return nil
 }

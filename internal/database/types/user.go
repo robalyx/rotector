@@ -16,8 +16,7 @@ var (
 	ErrUnsupportedModel = errors.New("unsupported model type")
 )
 
-// User combines all the information needed to review a user.
-// This base structure is embedded in other user types (Flagged, Confirmed).
+// User represents a user in any state (flagged, confirmed, or cleared).
 type User struct {
 	ID                  uint64                       `bun:",pk"                    json:"id"`
 	UUID                uuid.UUID                    `bun:",notnull"               json:"uuid"`
@@ -25,6 +24,7 @@ type User struct {
 	DisplayName         string                       `bun:",notnull"               json:"displayName"`
 	Description         string                       `bun:",notnull"               json:"description"`
 	CreatedAt           time.Time                    `bun:",notnull"               json:"createdAt"`
+	Status              enum.UserType                `bun:",notnull"               json:"status"`
 	Reasons             Reasons[enum.UserReasonType] `bun:"type:jsonb,notnull"     json:"reasons"`
 	Groups              []*types.UserGroupRoles      `bun:"type:jsonb,notnull"     json:"groups"`
 	Outfits             []*types.Outfit              `bun:"type:jsonb,notnull"     json:"outfits"`
@@ -45,35 +45,27 @@ type User struct {
 	LastThumbnailUpdate time.Time                    `bun:",notnull"               json:"lastThumbnailUpdate"`
 }
 
-// FlaggedUser extends User to track users that need review.
-// The base User structure contains all the fields needed for review.
-type FlaggedUser struct {
-	User `json:"user"`
-}
-
-// ConfirmedUser extends User to track users that have been reviewed and confirmed.
-// The VerifiedAt field shows when the user was confirmed by a moderator.
-type ConfirmedUser struct {
-	User       `json:"user"`
+// UserVerification stores verification data for confirmed users.
+type UserVerification struct {
+	UserID     uint64    `bun:",pk"      json:"userId"`
+	ReviewerID uint64    `bun:",notnull" json:"reviewerId"`
 	VerifiedAt time.Time `bun:",notnull" json:"verifiedAt"`
-	ReviewerID uint64    `bun:",notnull" json:"reviewerId"`
 }
 
-// ClearedUser extends User to track users that were cleared during review.
-// The ClearedAt field shows when the user was cleared by a moderator.
-type ClearedUser struct {
-	User       `json:"user"`
+// UserClearance stores clearance data for cleared users.
+type UserClearance struct {
+	UserID     uint64    `bun:",pk"      json:"userId"`
+	ReviewerID uint64    `bun:",notnull" json:"reviewerId"`
 	ClearedAt  time.Time `bun:",notnull" json:"clearedAt"`
-	ReviewerID uint64    `bun:",notnull" json:"reviewerId"`
 }
 
-// ReviewUser combines all possible user states into a single structure for review.
+// ReviewUser combines user data with verification/clearance info for review.
 type ReviewUser struct {
-	User       `json:"user"`
+	*User
+	Status     enum.UserType `json:"status"`
+	ReviewerID uint64        `json:"reviewerId,omitempty"`
 	VerifiedAt time.Time     `json:"verifiedAt"`
 	ClearedAt  time.Time     `json:"clearedAt"`
-	ReviewerID uint64        `json:"reviewerId"`
-	Status     enum.UserType `json:"status"`
 	Reputation Reputation    `json:"reputation"`
 }
 

@@ -576,9 +576,6 @@ func (m *ReviewMenu) handleClearUser(ctx *interaction.Context, s *session.Sessio
 		}
 		actionMsg = "cleared"
 
-		// Remove user from group tracking
-		go m.layout.db.Model().Tracking().RemoveUserFromGroups(ctx.Context(), user.ID, user.Groups)
-
 		// Log the clear action
 		go m.layout.db.Model().Activity().Log(ctx.Context(), &types.ActivityLog{
 			ActivityTarget: types.ActivityTarget{

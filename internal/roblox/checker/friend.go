@@ -83,9 +83,9 @@ func (c *FriendChecker) ProcessUsers(userInfos []*types.User, reasonsMap map[uin
 			if reviewUser, exists := existingFriends[friend.ID]; exists {
 				switch reviewUser.Status {
 				case enum.UserTypeConfirmed:
-					confirmedFriends[friend.ID] = &reviewUser.User
+					confirmedFriends[friend.ID] = reviewUser.User
 				case enum.UserTypeFlagged:
-					flaggedFriends[friend.ID] = &reviewUser.User
+					flaggedFriends[friend.ID] = reviewUser.User
 				} //exhaustive:ignore
 			}
 		}

@@ -6,7 +6,6 @@ import (
 	"slices"
 	"time"
 
-	apiTypes "github.com/jaxron/roapi.go/pkg/api/types"
 	"github.com/robalyx/rotector/internal/database/types"
 	"github.com/uptrace/bun"
 	"go.uber.org/zap"
@@ -31,15 +30,22 @@ func NewTracking(db *bun.DB, logger *zap.Logger) *TrackingModel {
 func (r *TrackingModel) AddUsersToGroupsTracking(ctx context.Context, groupToUsers map[uint64][]uint64) error {
 	// Create tracking entries for bulk insert
 	trackings := make([]types.GroupMemberTracking, 0, len(groupToUsers))
+	trackingUsers := make([]types.GroupMemberTrackingUser, 0)
 	now := time.Now()
 
 	for groupID, userIDs := range groupToUsers {
 		trackings = append(trackings, types.GroupMemberTracking{
 			ID:           groupID,
-			FlaggedUsers: userIDs,
 			LastAppended: now,
 			IsFlagged:    false,
 		})
+
+		for _, userID := range userIDs {
+			trackingUsers = append(trackingUsers, types.GroupMemberTrackingUser{
+				GroupID: groupID,
+				UserID:  userID,
+			})
+		}
 	}
 
 	return r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
@@ -66,12 +72,19 @@ func (r *TrackingModel) AddUsersToGroupsTracking(ctx context.Context, groupToUse
 		_, err = tx.NewInsert().
 			Model(&trackings).
 			On("CONFLICT (id) DO UPDATE").
-			Set("flagged_users = ARRAY(SELECT DISTINCT unnest(EXCLUDED.flagged_users || group_member_tracking.flagged_users))").
 			Set("last_appended = EXCLUDED.last_appended").
 			Set("is_flagged = group_member_tracking.is_flagged").
 			Exec(ctx)
 		if err != nil {
-			return fmt.Errorf("failed to add users to groups tracking: %w (groupCount=%d)", err, len(groupToUsers))
+			return fmt.Errorf("failed to add tracking entries: %w", err)
+		}
+
+		_, err = tx.NewInsert().
+			Model(&trackingUsers).
+			On("CONFLICT DO NOTHING").
+			Exec(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to add tracking user entries: %w", err)
 		}
 
 		r.logger.Debug("Successfully processed group tracking updates",
@@ -79,29 +92,6 @@ func (r *TrackingModel) AddUsersToGroupsTracking(ctx context.Context, groupToUse
 
 		return nil
 	})
-}
-
-// PurgeOldTrackings removes tracking entries that haven't been updated recently.
-func (r *TrackingModel) PurgeOldTrackings(ctx context.Context, cutoffDate time.Time) (int, error) {
-	result, err := r.db.NewDelete().Model((*types.GroupMemberTracking)(nil)).
-		Where("last_appended < ?", cutoffDate).
-		Exec(ctx)
-	if err != nil {
-		return 0, fmt.Errorf(
-			"failed to purge old group trackings: %w (cutoffDate=%s)",
-			err, cutoffDate.Format(time.RFC3339),
-		)
-	}
-
-	rowsAffected, err := result.RowsAffected()
-	if err != nil {
-		return 0, fmt.Errorf(
-			"failed to get rows affected: %w (cutoffDate=%s)",
-			err, cutoffDate.Format(time.RFC3339),
-		)
-	}
-
-	return int(rowsAffected), nil
 }
 
 // GetGroupTrackingsToCheck finds groups that haven't been checked recently
@@ -122,13 +112,19 @@ func (r *TrackingModel) GetGroupTrackingsToCheck(
 		subq := tx.NewSelect().
 			Model((*types.GroupMemberTracking)(nil)).
 			Column("id").
+			With("user_counts", tx.NewSelect().
+				Model((*types.GroupMemberTrackingUser)(nil)).
+				Column("group_id").
+				ColumnExpr("COUNT(*) as user_count").
+				Group("group_id")).
+			Join("JOIN user_counts ON group_member_tracking.id = user_counts.group_id").
 			Where("is_flagged = FALSE").
-			Where("cardinality(flagged_users) >= ?", minFlaggedUsers).
-			Where("(last_checked < ? AND cardinality(flagged_users) >= ?) OR "+
-				"(last_checked < ? AND cardinality(flagged_users) >= ? / 2)",
+			Where("user_count >= ?", minFlaggedUsers).
+			Where("(last_checked < ? AND user_count >= ?) OR "+
+				"(last_checked < ? AND user_count >= ? / 2)",
 				tenMinutesAgo, minFlaggedOverride,
 				oneMinuteAgo, minFlaggedOverride).
-			OrderExpr("cardinality(flagged_users) DESC").
+			OrderExpr("user_count DESC").
 			Order("last_checked ASC").
 			Limit(batchSize)
 
@@ -137,15 +133,32 @@ func (r *TrackingModel) GetGroupTrackingsToCheck(
 			Model(&trackings).
 			Set("last_checked = ?", now).
 			Where("id IN (?)", subq).
-			Returning("id, flagged_users").
+			Returning("id").
 			Scan(ctx)
 		if err != nil {
 			return fmt.Errorf("failed to get and update group trackings: %w", err)
 		}
 
-		// Map group IDs to their flagged user lists
-		for _, tracking := range trackings {
-			result[tracking.ID] = tracking.FlaggedUsers
+		// Get flagged users for each group
+		if len(trackings) > 0 {
+			groupIDs := make([]uint64, len(trackings))
+			for i, tracking := range trackings {
+				groupIDs[i] = tracking.ID
+			}
+
+			var trackingUsers []types.GroupMemberTrackingUser
+			err = tx.NewSelect().
+				Model(&trackingUsers).
+				Where("group_id IN (?)", bun.In(groupIDs)).
+				Scan(ctx)
+			if err != nil {
+				return fmt.Errorf("failed to get tracking users: %w", err)
+			}
+
+			// Map users to their groups
+			for _, tu := range trackingUsers {
+				result[tu.GroupID] = append(result[tu.GroupID], tu.UserID)
+			}
 		}
 
 		return nil
@@ -159,28 +172,33 @@ func (r *TrackingModel) GetGroupTrackingsToCheck(
 
 // GetFlaggedUsers retrieves the list of flagged users for a specific group.
 func (r *TrackingModel) GetFlaggedUsers(ctx context.Context, groupID uint64) ([]uint64, error) {
-	var tracking types.GroupMemberTracking
-	err := r.db.NewSelect().Model(&tracking).
-		Column("flagged_users").
-		Where("id = ?", groupID).
+	var trackingUsers []types.GroupMemberTrackingUser
+	err := r.db.NewSelect().
+		Model(&trackingUsers).
+		Column("user_id").
+		Where("group_id = ?", groupID).
 		Scan(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get flagged users for group: %w (groupID=%d)", err, groupID)
 	}
-	return tracking.FlaggedUsers, nil
+
+	userIDs := make([]uint64, len(trackingUsers))
+	for i, tu := range trackingUsers {
+		userIDs[i] = tu.UserID
+	}
+	return userIDs, nil
 }
 
 // GetFlaggedUsersCount retrieves the count of flagged users for a specific group.
 func (r *TrackingModel) GetFlaggedUsersCount(ctx context.Context, groupID uint64) (int, error) {
-	var tracking types.GroupMemberTracking
-	err := r.db.NewSelect().Model(&tracking).
-		Column("flagged_users").
-		Where("id = ?", groupID).
-		Scan(ctx)
+	count, err := r.db.NewSelect().
+		Model((*types.GroupMemberTrackingUser)(nil)).
+		Where("group_id = ?", groupID).
+		Count(ctx)
 	if err != nil {
 		return 0, fmt.Errorf("failed to get flagged users count for group: %w (groupID=%d)", err, groupID)
 	}
-	return len(tracking.FlaggedUsers), nil
+	return count, nil
 }
 
 // UpdateFlaggedGroups marks the specified groups as flagged in the tracking table.
@@ -195,32 +213,17 @@ func (r *TrackingModel) UpdateFlaggedGroups(ctx context.Context, groupIDs []uint
 	return nil
 }
 
-// RemoveUserFromGroups removes a user from the tracking lists of specified groups.
-func (r *TrackingModel) RemoveUserFromGroups(ctx context.Context, userID uint64, groups []*apiTypes.UserGroupRoles) {
-	if len(groups) == 0 {
-		return
-	}
-
-	// Get all group IDs the user is in
-	groupIDs := make([]uint64, 0, len(groups))
-	for _, group := range groups {
-		groupIDs = append(groupIDs, group.Group.ID)
-	}
-
-	// Remove user from group tracking
-	_, err := r.db.NewUpdate().
-		Model((*types.GroupMemberTracking)(nil)).
-		Set("flagged_users = array_remove(flagged_users, ?)", userID).
-		Where("id IN (?)", bun.In(groupIDs)).
+// RemoveUserFromAllGroups removes a user from all group tracking records.
+func (r *TrackingModel) RemoveUserFromAllGroups(ctx context.Context, userID uint64) error {
+	_, err := r.db.NewDelete().
+		Model((*types.GroupMemberTrackingUser)(nil)).
+		Where("user_id = ?", userID).
 		Exec(ctx)
 	if err != nil {
-		r.logger.Error("Failed to remove user from group tracking",
-			zap.Error(err),
-			zap.Uint64("userID", userID),
-			zap.Uint64s("groupIDs", groupIDs))
+		return fmt.Errorf("failed to remove user from all group tracking: %w (userID=%d)", err, userID)
 	}
 
-	r.logger.Debug("Removed user from group tracking",
-		zap.Uint64("userID", userID),
-		zap.Int("groupCount", len(groupIDs)))
+	r.logger.Debug("Removed user from all group tracking",
+		zap.Uint64("userID", userID))
+	return nil
 }

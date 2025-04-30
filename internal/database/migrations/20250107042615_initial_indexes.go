@@ -81,131 +81,101 @@ func init() { //nolint:funlen
 			-- Appeal messages index
 			CREATE INDEX IF NOT EXISTS idx_appeal_messages_appeal_created
 			ON appeal_messages (appeal_id, created_at ASC);
-
-			-- Scanning indexes for users and groups
-			CREATE INDEX IF NOT EXISTS idx_confirmed_users_scan_time 
-			ON confirmed_users (last_scanned ASC, confidence DESC);
-			CREATE INDEX IF NOT EXISTS idx_flagged_users_scan_time 
-			ON flagged_users (confidence DESC, last_scanned ASC)
-			WHERE confidence >= 0.8;
-			CREATE INDEX IF NOT EXISTS idx_confirmed_groups_scan_time 
-			ON confirmed_groups (last_scanned ASC, confidence DESC);
-			CREATE INDEX IF NOT EXISTS idx_flagged_groups_scan_time 
-			ON flagged_groups (last_scanned ASC, confidence DESC);
 			
 			-- Group tracking indexes
 			CREATE INDEX IF NOT EXISTS idx_group_member_trackings_check 
-			ON group_member_trackings (cardinality(flagged_users) DESC, last_checked ASC)
+			ON group_member_trackings (last_checked ASC)
 			WHERE is_flagged = false;
 			
 			CREATE INDEX IF NOT EXISTS idx_group_member_trackings_id
 			ON group_member_trackings (id);
-			
-			CREATE INDEX IF NOT EXISTS idx_group_member_trackings_cleanup
-			ON group_member_trackings (last_appended)
-			WHERE is_flagged = false;
-			
+
+			-- Group member tracking users indexes
+			CREATE INDEX IF NOT EXISTS idx_group_member_tracking_users_group
+			ON group_member_tracking_users (group_id);
+
+			CREATE INDEX IF NOT EXISTS idx_group_member_tracking_users_user
+			ON group_member_tracking_users (user_id);
+
 			-- Group review sorting indexes
-			CREATE INDEX IF NOT EXISTS idx_flagged_groups_confidence
-			ON flagged_groups (confidence DESC, last_viewed ASC);
-			CREATE INDEX IF NOT EXISTS idx_confirmed_groups_confidence
-			ON confirmed_groups (confidence DESC, last_viewed ASC);
-			CREATE INDEX IF NOT EXISTS idx_cleared_groups_confidence
-			ON cleared_groups (confidence DESC, last_viewed ASC);
+			CREATE INDEX IF NOT EXISTS idx_groups_confidence
+			ON groups (status, confidence DESC, last_viewed ASC);
 
-			CREATE INDEX IF NOT EXISTS idx_flagged_groups_updated
-			ON flagged_groups (last_updated ASC, last_viewed ASC);
-			CREATE INDEX IF NOT EXISTS idx_confirmed_groups_updated
-			ON confirmed_groups (last_updated ASC, last_viewed ASC);
-			CREATE INDEX IF NOT EXISTS idx_cleared_groups_updated
-			ON cleared_groups (last_updated ASC, last_viewed ASC);
+			CREATE INDEX IF NOT EXISTS idx_groups_updated
+			ON groups (status, last_updated ASC, last_viewed ASC);
 
-			-- User review sorting indexes
-			CREATE INDEX IF NOT EXISTS idx_flagged_users_confidence
-			ON flagged_users (confidence DESC, last_viewed ASC);
-			CREATE INDEX IF NOT EXISTS idx_confirmed_users_confidence
-			ON confirmed_users (confidence DESC, last_viewed ASC);
-			CREATE INDEX IF NOT EXISTS idx_cleared_users_confidence
-			ON cleared_users (confidence DESC, last_viewed ASC);
+			CREATE INDEX IF NOT EXISTS idx_groups_viewed
+			ON groups (status, last_viewed ASC);
 
-			CREATE INDEX IF NOT EXISTS idx_flagged_users_updated
-			ON flagged_users (last_updated ASC, last_viewed ASC);
-			CREATE INDEX IF NOT EXISTS idx_confirmed_users_updated
-			ON confirmed_users (last_updated ASC, last_viewed ASC);
-			CREATE INDEX IF NOT EXISTS idx_cleared_users_updated
-			ON cleared_users (last_updated ASC, last_viewed ASC);
+			CREATE INDEX IF NOT EXISTS idx_groups_scan_time 
+			ON groups (status, last_scanned ASC, confidence DESC);
 
-			-- User reputation sorting indexes
-			CREATE INDEX IF NOT EXISTS idx_user_reputations_score_viewed
-			ON user_reputations (score ASC)
-			INCLUDE (id);
+			CREATE INDEX IF NOT EXISTS idx_groups_lock_check 
+			ON groups (status, last_lock_check ASC);
 
-			CREATE INDEX IF NOT EXISTS idx_flagged_users_last_viewed
-			ON flagged_users (last_viewed ASC)
-			INCLUDE (id);
-			CREATE INDEX IF NOT EXISTS idx_confirmed_users_last_viewed
-			ON confirmed_users (last_viewed ASC)
-			INCLUDE (id);
-			CREATE INDEX IF NOT EXISTS idx_cleared_users_last_viewed
-			ON cleared_users (last_viewed ASC)
-			INCLUDE (id);
+			CREATE INDEX IF NOT EXISTS idx_groups_thumbnail_update 
+			ON groups (status, is_deleted, last_thumbnail_update ASC)
+			WHERE is_deleted = false;
+
+			CREATE INDEX IF NOT EXISTS idx_groups_locked_status
+			ON groups (is_locked, status)
+			WHERE is_locked = true;
+
+			CREATE INDEX IF NOT EXISTS idx_groups_uuid
+			ON groups (uuid);
+
+			CREATE INDEX IF NOT EXISTS idx_groups_status_count
+			ON groups (status);
 
 			-- Group reputation sorting indexes
-			CREATE INDEX IF NOT EXISTS idx_group_reputations_score_viewed
-			ON group_reputations (score ASC)
-			INCLUDE (id);
+			CREATE INDEX IF NOT EXISTS idx_group_reputations_score
+			ON group_reputations (score ASC);
 
-			CREATE INDEX IF NOT EXISTS idx_flagged_groups_last_viewed
-			ON flagged_groups (last_viewed ASC)
-			INCLUDE (id);
-			CREATE INDEX IF NOT EXISTS idx_confirmed_groups_last_viewed
-			ON confirmed_groups (last_viewed ASC)
-			INCLUDE (id);
-			CREATE INDEX IF NOT EXISTS idx_cleared_groups_last_viewed
-			ON cleared_groups (last_viewed ASC)
-			INCLUDE (id);
+			-- Group clearance index
+			CREATE INDEX IF NOT EXISTS idx_group_clearances_cleared_at
+			ON group_clearances (cleared_at);
 
-			-- User thumbnail update indexes
-			CREATE INDEX IF NOT EXISTS idx_flagged_users_thumbnail_update 
-			ON flagged_users (is_deleted, last_thumbnail_update ASC)
-			WHERE is_deleted = false;
-			CREATE INDEX IF NOT EXISTS idx_confirmed_users_thumbnail_update 
-			ON confirmed_users (is_deleted, last_thumbnail_update ASC)
-			WHERE is_deleted = false;
-			CREATE INDEX IF NOT EXISTS idx_cleared_users_thumbnail_update 
-			ON cleared_users (is_deleted, last_thumbnail_update ASC)
-			WHERE is_deleted = false;
+			-- Group verification index
+			CREATE INDEX IF NOT EXISTS idx_group_verifications_verified_at
+			ON group_verifications (verified_at);
 
-			-- Group thumbnail update indexes
-			CREATE INDEX IF NOT EXISTS idx_flagged_groups_thumbnail_update 
-			ON flagged_groups (is_deleted, last_thumbnail_update ASC)
-			WHERE is_deleted = false;
-			CREATE INDEX IF NOT EXISTS idx_confirmed_groups_thumbnail_update 
-			ON confirmed_groups (is_deleted, last_thumbnail_update ASC)
-			WHERE is_deleted = false;
-			CREATE INDEX IF NOT EXISTS idx_cleared_groups_thumbnail_update 
-			ON cleared_groups (is_deleted, last_thumbnail_update ASC)
+			-- User review sorting indexes
+			CREATE INDEX IF NOT EXISTS idx_users_confidence
+			ON users (status, confidence DESC, last_viewed ASC);
+
+			CREATE INDEX IF NOT EXISTS idx_users_updated
+			ON users (status, last_updated ASC, last_viewed ASC);
+
+			CREATE INDEX IF NOT EXISTS idx_users_viewed
+			ON users (status, last_viewed ASC);
+
+			CREATE INDEX IF NOT EXISTS idx_users_scan_time 
+			ON users (status, last_scanned ASC, confidence DESC);
+
+			CREATE INDEX IF NOT EXISTS idx_users_ban_check 
+			ON users (status, last_ban_check ASC);
+
+			CREATE INDEX IF NOT EXISTS idx_users_thumbnail_update 
+			ON users (status, is_deleted, last_thumbnail_update ASC)
 			WHERE is_deleted = false;
 
-			-- User status indexes
-			CREATE INDEX IF NOT EXISTS idx_cleared_users_purged_at
-			ON cleared_users (cleared_at);
-			CREATE INDEX IF NOT EXISTS idx_flagged_users_ban_check 
-			ON flagged_users (last_ban_check ASC);
-			CREATE INDEX IF NOT EXISTS idx_confirmed_users_ban_check 
-			ON confirmed_users (last_ban_check ASC);
-			
-			-- Group status indexes
-			CREATE INDEX IF NOT EXISTS idx_cleared_groups_purged_at
-			ON cleared_groups (cleared_at);
-			CREATE INDEX IF NOT EXISTS idx_flagged_groups_lock_check 
-			ON flagged_groups (last_lock_check ASC);
-			CREATE INDEX IF NOT EXISTS idx_confirmed_groups_lock_check 
-			ON confirmed_groups (last_lock_check ASC);
+			CREATE INDEX IF NOT EXISTS idx_users_banned_status
+			ON users (is_banned, status)
+			WHERE is_banned = true;
+
+			CREATE INDEX IF NOT EXISTS idx_users_uuid
+			ON users (uuid);
+
+			CREATE INDEX IF NOT EXISTS idx_users_status_count
+			ON users (status);
+
+			-- User reputation sorting indexes
+			CREATE INDEX IF NOT EXISTS idx_user_reputations_score
+			ON user_reputations (score ASC);
 
 			-- Statistics indexes
-			CREATE INDEX IF NOT EXISTS idx_hourly_stats_timestamp
-			ON hourly_stats (timestamp DESC);
+            CREATE INDEX IF NOT EXISTS idx_hourly_stats_timestamp
+            ON hourly_stats (timestamp DESC);
 
 			-- Vote indexes
 			CREATE INDEX IF NOT EXISTS idx_user_votes_id_discord 
@@ -375,73 +345,55 @@ func init() { //nolint:funlen
 			-- Appeal messages index
 			DROP INDEX IF EXISTS idx_appeal_messages_appeal_created;
 
-			-- Scanning indexes
-			DROP INDEX IF EXISTS idx_confirmed_users_scan_time;
-			DROP INDEX IF EXISTS idx_flagged_users_scan_time;
-			DROP INDEX IF EXISTS idx_confirmed_groups_scan_time;
-			DROP INDEX IF EXISTS idx_flagged_groups_scan_time;
-
 			-- Group tracking indexes
 			DROP INDEX IF EXISTS idx_group_member_trackings_check;
 			DROP INDEX IF EXISTS idx_group_member_trackings_id;
-			DROP INDEX IF EXISTS idx_group_member_trackings_cleanup;
+
+			-- Group member tracking users indexes
+			DROP INDEX IF EXISTS idx_group_member_tracking_users_group;
+			DROP INDEX IF EXISTS idx_group_member_tracking_users_user;
 
 			-- Group review sorting indexes
-			DROP INDEX IF EXISTS idx_flagged_groups_confidence;
-			DROP INDEX IF EXISTS idx_confirmed_groups_confidence;
-			DROP INDEX IF EXISTS idx_cleared_groups_confidence;
-
-			DROP INDEX IF EXISTS idx_flagged_groups_updated;
-			DROP INDEX IF EXISTS idx_confirmed_groups_updated;
-			DROP INDEX IF EXISTS idx_cleared_groups_updated;
-
-			DROP INDEX IF EXISTS idx_group_reputations_id_score;
+			DROP INDEX IF EXISTS idx_groups_confidence;
+			DROP INDEX IF EXISTS idx_groups_updated;
+			DROP INDEX IF EXISTS idx_groups_viewed;
+			DROP INDEX IF EXISTS idx_groups_scan_time;
+			DROP INDEX IF EXISTS idx_groups_lock_check;
+			DROP INDEX IF EXISTS idx_groups_thumbnail_update;
+			DROP INDEX IF EXISTS idx_groups_locked_status;
+			DROP INDEX IF EXISTS idx_group_clearances_cleared_at;
+			DROP INDEX IF EXISTS idx_group_verifications_verified_at;
 
 			-- User review sorting indexes
-			DROP INDEX IF EXISTS idx_flagged_users_confidence;
-			DROP INDEX IF EXISTS idx_confirmed_users_confidence;
-			DROP INDEX IF EXISTS idx_cleared_users_confidence;
-
-			DROP INDEX IF EXISTS idx_flagged_users_updated;
-			DROP INDEX IF EXISTS idx_confirmed_users_updated;
-			DROP INDEX IF EXISTS idx_cleared_users_updated;
-
-			DROP INDEX IF EXISTS idx_user_reputations_id_score;
+			DROP INDEX IF EXISTS idx_users_confidence;
+			DROP INDEX IF EXISTS idx_users_updated;
+			DROP INDEX IF EXISTS idx_users_viewed;
+			DROP INDEX IF EXISTS idx_users_scan_time;
+			DROP INDEX IF EXISTS idx_users_ban_check;
+			DROP INDEX IF EXISTS idx_users_thumbnail_update;
+			DROP INDEX IF EXISTS idx_users_banned_status;
+			DROP INDEX IF EXISTS idx_users_uuid;
+			DROP INDEX IF EXISTS idx_users_status_count;
 
 			-- User reputation sorting indexes
-			DROP INDEX IF EXISTS idx_user_reputations_score_viewed;
-			DROP INDEX IF EXISTS idx_flagged_users_last_viewed;
-			DROP INDEX IF EXISTS idx_confirmed_users_last_viewed;
-			DROP INDEX IF EXISTS idx_cleared_users_last_viewed;
+			DROP INDEX IF EXISTS idx_user_reputations_score;
+
+			-- Group review sorting indexes
+			DROP INDEX IF EXISTS idx_groups_confidence;
+			DROP INDEX IF EXISTS idx_groups_updated;
+			DROP INDEX IF EXISTS idx_groups_viewed;
+			DROP INDEX IF EXISTS idx_groups_scan_time;
+			DROP INDEX IF EXISTS idx_groups_lock_check;
+			DROP INDEX IF EXISTS idx_groups_thumbnail_update;
+			DROP INDEX IF EXISTS idx_groups_locked_status;
+			DROP INDEX IF EXISTS idx_groups_uuid;
+			DROP INDEX IF EXISTS idx_groups_status_count;
 
 			-- Group reputation sorting indexes
-			DROP INDEX IF EXISTS idx_group_reputations_score_viewed;
-			DROP INDEX IF EXISTS idx_flagged_groups_last_viewed;
-			DROP INDEX IF EXISTS idx_confirmed_groups_last_viewed;
-			DROP INDEX IF EXISTS idx_cleared_groups_last_viewed;
-
-			-- User status indexes
-			DROP INDEX IF EXISTS idx_cleared_users_purged_at;
-			DROP INDEX IF EXISTS idx_flagged_users_ban_check;
-			DROP INDEX IF EXISTS idx_confirmed_users_ban_check;
-
-			-- Group status indexes
-			DROP INDEX IF EXISTS idx_cleared_groups_purged_at;
-			DROP INDEX IF EXISTS idx_flagged_groups_lock_check;
-			DROP INDEX IF EXISTS idx_confirmed_groups_lock_check;
-
-			-- User thumbnail update indexes
-			DROP INDEX IF EXISTS idx_flagged_users_thumbnail_update;
-			DROP INDEX IF EXISTS idx_confirmed_users_thumbnail_update;
-			DROP INDEX IF EXISTS idx_cleared_users_thumbnail_update;
-
-			-- Group thumbnail update indexes
-			DROP INDEX IF EXISTS idx_flagged_groups_thumbnail_update;
-			DROP INDEX IF EXISTS idx_confirmed_groups_thumbnail_update;
-			DROP INDEX IF EXISTS idx_cleared_groups_thumbnail_update;
+			DROP INDEX IF EXISTS idx_group_reputations_score;
 
 			-- Statistics indexes
-			DROP INDEX IF EXISTS idx_hourly_stats_timestamp;
+            DROP INDEX IF EXISTS idx_hourly_stats_timestamp;
 
 			-- Vote indexes
 			DROP INDEX IF EXISTS idx_user_votes_id_discord;

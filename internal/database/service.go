@@ -34,12 +34,13 @@ func NewService(repository *Repository, logger *zap.Logger) *Service {
 	appealModel := repository.Appeal()
 	syncModel := repository.Sync()
 	commentModel := repository.Comment()
+	trackingModel := repository.Tracking()
 
 	viewService := service.NewView(viewModel, logger)
 
 	return &Service{
 		ban:        service.NewBan(banModel, logger),
-		user:       service.NewUser(userModel, activityModel, reputationModel, voteModel, logger),
+		user:       service.NewUser(userModel, activityModel, reputationModel, voteModel, trackingModel, logger),
 		group:      service.NewGroup(groupModel, activityModel, reputationModel, voteModel, logger),
 		vote:       service.NewVote(voteModel, activityModel, viewService, banModel, logger),
 		reputation: service.NewReputation(reputationModel, voteModel, logger),

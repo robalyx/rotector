@@ -19,6 +19,7 @@ type UserService struct {
 	activity   *models.ActivityModel
 	reputation *models.ReputationModel
 	votes      *models.VoteModel
+	tracking   *models.TrackingModel
 	logger     *zap.Logger
 }
 
@@ -28,6 +29,7 @@ func NewUser(
 	activity *models.ActivityModel,
 	reputation *models.ReputationModel,
 	votes *models.VoteModel,
+	tracking *models.TrackingModel,
 	logger *zap.Logger,
 ) *UserService {
 	return &UserService{
@@ -35,16 +37,18 @@ func NewUser(
 		activity:   activity,
 		reputation: reputation,
 		votes:      votes,
+		tracking:   tracking,
 		logger:     logger.Named("user_service"),
 	}
 }
 
-// ConfirmUser moves a user from other user tables to confirmed_users.
+// ConfirmUser moves a user to confirmed status and creates a verification record.
 func (s *UserService) ConfirmUser(ctx context.Context, user *types.ReviewUser, reviewerID uint64) error {
 	// Set reviewer ID
 	user.ReviewerID = reviewerID
+	user.Status = enum.UserTypeConfirmed
 
-	// Move user to confirmed table
+	// Update user status and create verification record
 	if err := s.model.ConfirmUser(ctx, user); err != nil {
 		return err
 	}
@@ -58,13 +62,20 @@ func (s *UserService) ConfirmUser(ctx context.Context, user *types.ReviewUser, r
 	return nil
 }
 
-// ClearUser moves a user from other user tables to cleared_users.
+// ClearUser moves a user to cleared status and creates a clearance record.
 func (s *UserService) ClearUser(ctx context.Context, user *types.ReviewUser, reviewerID uint64) error {
 	// Set reviewer ID
 	user.ReviewerID = reviewerID
+	user.Status = enum.UserTypeCleared
 
-	// Move user to cleared table
+	// Update user status and create clearance record
 	if err := s.model.ClearUser(ctx, user); err != nil {
+		return err
+	}
+
+	// Remove user from all group tracking
+	if err := s.tracking.RemoveUserFromAllGroups(ctx, user.ID); err != nil {
+		s.logger.Error("Failed to remove user from group tracking", zap.Error(err))
 		return err
 	}
 
@@ -113,47 +124,58 @@ func (s *UserService) GetUserToReview(
 		recentIDs = []uint64{} // Continue without filtering if there's an error
 	}
 
-	// Define models in priority order based on target mode
-	var models []any
+	// Determine target status based on mode
+	var targetStatus enum.UserType
 	switch targetMode {
 	case enum.ReviewTargetModeFlagged:
-		models = []any{
-			&types.FlaggedUser{},
-			&types.ConfirmedUser{},
-			&types.ClearedUser{},
-		}
+		targetStatus = enum.UserTypeFlagged
 	case enum.ReviewTargetModeConfirmed:
-		models = []any{
-			&types.ConfirmedUser{},
-			&types.FlaggedUser{},
-			&types.ClearedUser{},
-		}
+		targetStatus = enum.UserTypeConfirmed
 	case enum.ReviewTargetModeCleared:
-		models = []any{
-			&types.ClearedUser{},
-			&types.FlaggedUser{},
-			&types.ConfirmedUser{},
-		}
+		targetStatus = enum.UserTypeCleared
 	}
 
-	// Try each model in order until we find a user
-	for _, model := range models {
-		result, err := s.model.GetNextToReview(ctx, model, sortBy, recentIDs)
-		if err == nil {
-			// Get reputation
-			reputation, err := s.reputation.GetUserReputation(ctx, result.ID)
-			if err != nil {
-				return nil, fmt.Errorf("failed to get user reputation: %w", err)
+	// Get next user to review
+	result, err := s.model.GetNextToReview(ctx, targetStatus, sortBy, recentIDs)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			// If no users found with primary status, try other statuses in order
+			var fallbackStatuses []enum.UserType
+			switch targetMode {
+			case enum.ReviewTargetModeFlagged:
+				fallbackStatuses = []enum.UserType{enum.UserTypeConfirmed, enum.UserTypeCleared}
+			case enum.ReviewTargetModeConfirmed:
+				fallbackStatuses = []enum.UserType{enum.UserTypeFlagged, enum.UserTypeCleared}
+			case enum.ReviewTargetModeCleared:
+				fallbackStatuses = []enum.UserType{enum.UserTypeFlagged, enum.UserTypeConfirmed}
 			}
-			result.Reputation = reputation
-			return result, nil
-		}
-		if !errors.Is(err, sql.ErrNoRows) {
+
+			for _, status := range fallbackStatuses {
+				result, err = s.model.GetNextToReview(ctx, status, sortBy, recentIDs)
+				if err == nil {
+					break
+				}
+				if !errors.Is(err, sql.ErrNoRows) {
+					return nil, err
+				}
+			}
+
+			if err != nil {
+				return nil, types.ErrNoUsersToReview
+			}
+		} else {
 			return nil, err
 		}
 	}
 
-	return nil, types.ErrNoUsersToReview
+	// Get reputation
+	reputation, err := s.reputation.GetUserReputation(ctx, result.ID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get user reputation: %w", err)
+	}
+	result.Reputation = reputation
+
+	return result, nil
 }
 
 // SaveUsers handles the business logic for saving users.
@@ -174,31 +196,8 @@ func (s *UserService) SaveUsers(ctx context.Context, users map[uint64]*types.Use
 		return fmt.Errorf("failed to get existing users: %w", err)
 	}
 
-	// Group users by their status and merge reasons
-	flaggedUsers, confirmedUsers, clearedUsers := s.groupUsersByStatus(users, existingUsers)
-
-	// Save the grouped users
-	if err := s.model.SaveUsersByStatus(ctx, flaggedUsers, confirmedUsers, clearedUsers); err != nil {
-		return err
-	}
-
-	s.logger.Debug("Successfully saved users",
-		zap.Int("totalUsers", len(users)),
-		zap.Int("flaggedUsers", len(flaggedUsers)),
-		zap.Int("confirmedUsers", len(confirmedUsers)),
-		zap.Int("clearedUsers", len(clearedUsers)))
-
-	return nil
-}
-
-// groupUsersByStatus groups users by their status and merges reasons.
-func (s *UserService) groupUsersByStatus(
-	users map[uint64]*types.User, existingUsers map[uint64]*types.ReviewUser,
-) ([]*types.FlaggedUser, []*types.ConfirmedUser, []*types.ClearedUser) {
-	var flaggedUsers []*types.FlaggedUser
-	var confirmedUsers []*types.ConfirmedUser
-	var clearedUsers []*types.ClearedUser
-
+	// Prepare users for saving
+	usersToSave := make([]*types.User, 0, len(users))
 	for id, user := range users {
 		// Generate UUID for new users
 		if user.UUID == uuid.Nil {
@@ -206,10 +205,9 @@ func (s *UserService) groupUsersByStatus(
 		}
 
 		// Handle reasons merging and determine status
-		status := enum.UserTypeFlagged
 		existingUser, ok := existingUsers[id]
 		if ok {
-			status = existingUser.Status
+			user.Status = existingUser.Status
 
 			// Create new reasons map if it doesn't exist
 			if user.Reasons == nil {
@@ -222,28 +220,20 @@ func (s *UserService) groupUsersByStatus(
 					user.Reasons[reasonType] = reason
 				}
 			}
+		} else {
+			user.Status = enum.UserTypeFlagged
 		}
 
-		// Group users by their target tables
-		switch status {
-		case enum.UserTypeConfirmed:
-			confirmedUsers = append(confirmedUsers, &types.ConfirmedUser{
-				User:       *user,
-				VerifiedAt: existingUser.VerifiedAt,
-				ReviewerID: existingUser.ReviewerID,
-			})
-		case enum.UserTypeFlagged:
-			flaggedUsers = append(flaggedUsers, &types.FlaggedUser{
-				User: *user,
-			})
-		case enum.UserTypeCleared:
-			clearedUsers = append(clearedUsers, &types.ClearedUser{
-				User:       *user,
-				ClearedAt:  existingUser.ClearedAt,
-				ReviewerID: existingUser.ReviewerID,
-			})
-		}
+		usersToSave = append(usersToSave, user)
 	}
 
-	return flaggedUsers, confirmedUsers, clearedUsers
+	// Save the users
+	if err := s.model.SaveUsers(ctx, usersToSave); err != nil {
+		return err
+	}
+
+	s.logger.Debug("Successfully saved users",
+		zap.Int("totalUsers", len(users)))
+
+	return nil
 }

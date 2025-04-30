@@ -15,7 +15,7 @@ var (
 	ErrNoGroupsToReview = errors.New("no groups available to review")
 )
 
-// Group combines all the information needed to review a group.
+// Group represents a group in any state (flagged, confirmed, or cleared).
 type Group struct {
 	ID                  uint64                        `bun:",pk"                    json:"id"`
 	UUID                uuid.UUID                     `bun:",notnull"               json:"uuid"`
@@ -25,6 +25,7 @@ type Group struct {
 	Shout               *types.GroupShout             `bun:"type:jsonb"             json:"shout"`
 	Reasons             Reasons[enum.GroupReasonType] `bun:"type:jsonb,notnull"     json:"reasons"`
 	Confidence          float64                       `bun:",notnull"               json:"confidence"`
+	Status              enum.GroupType                `bun:",notnull"               json:"status"`
 	LastScanned         time.Time                     `bun:",notnull"               json:"lastScanned"`
 	LastUpdated         time.Time                     `bun:",notnull"               json:"lastUpdated"`
 	LastViewed          time.Time                     `bun:",notnull"               json:"lastViewed"`
@@ -35,33 +36,27 @@ type Group struct {
 	LastThumbnailUpdate time.Time                     `bun:",notnull"               json:"lastThumbnailUpdate"`
 }
 
-// FlaggedGroup extends Group to track groups that need review.
-type FlaggedGroup struct {
-	Group `json:"group"`
-}
-
-// ConfirmedGroup extends Group to track groups that have been reviewed and confirmed.
-type ConfirmedGroup struct {
-	Group      `json:"group"`
+// GroupVerification stores verification data for confirmed groups.
+type GroupVerification struct {
+	GroupID    uint64    `bun:",pk"      json:"groupId"`
+	ReviewerID uint64    `bun:",notnull" json:"reviewerId"`
 	VerifiedAt time.Time `bun:",notnull" json:"verifiedAt"`
-	ReviewerID uint64    `bun:",notnull" json:"reviewerId"`
 }
 
-// ClearedGroup extends Group to track groups that were cleared during review.
-// The ClearedAt field shows when the group was cleared by a moderator.
-type ClearedGroup struct {
-	Group      `json:"group"`
+// GroupClearance stores clearance data for cleared groups.
+type GroupClearance struct {
+	GroupID    uint64    `bun:",pk"      json:"groupId"`
+	ReviewerID uint64    `bun:",notnull" json:"reviewerId"`
 	ClearedAt  time.Time `bun:",notnull" json:"clearedAt"`
-	ReviewerID uint64    `bun:",notnull" json:"reviewerId"`
 }
 
-// ReviewGroup combines all possible group states into a single structure for review.
+// ReviewGroup combines group data with verification/clearance info for review.
 type ReviewGroup struct {
-	Group      `json:"group"`
+	*Group
+	Status     enum.GroupType `json:"status"`
+	ReviewerID uint64         `json:"reviewerId,omitempty"`
 	VerifiedAt time.Time      `json:"verifiedAt"`
 	ClearedAt  time.Time      `json:"clearedAt"`
-	ReviewerID uint64         `json:"reviewerId"`
-	Status     enum.GroupType `json:"status"`
 	Reputation Reputation     `json:"reputation"`
 }
 

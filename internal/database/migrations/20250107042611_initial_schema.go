@@ -17,14 +17,15 @@ func init() { //nolint:funlen
 			name         string
 			partitionKey string
 		}{
-			{(*types.FlaggedUser)(nil), "flagged_users", "id"},
-			{(*types.ConfirmedUser)(nil), "confirmed_users", "id"},
-			{(*types.ClearedUser)(nil), "cleared_users", "id"},
-			{(*types.FlaggedGroup)(nil), "flagged_groups", "id"},
-			{(*types.ConfirmedGroup)(nil), "confirmed_groups", "id"},
-			{(*types.ClearedGroup)(nil), "cleared_groups", "id"},
+			{(*types.User)(nil), "users", "id"},
+			{(*types.UserVerification)(nil), "user_verifications", "user_id"},
+			{(*types.UserClearance)(nil), "user_clearances", "user_id"},
+			{(*types.Group)(nil), "groups", "id"},
+			{(*types.GroupVerification)(nil), "group_verifications", "group_id"},
+			{(*types.GroupClearance)(nil), "group_clearances", "group_id"},
 			{(*types.CondoGame)(nil), "condo_games", "id"},
 			{(*types.GroupMemberTracking)(nil), "group_member_trackings", "id"},
+			{(*types.GroupMemberTrackingUser)(nil), "group_member_tracking_users", "group_id"},
 			{(*types.UserReputation)(nil), "user_reputations", "id"},
 			{(*types.GroupReputation)(nil), "group_reputations", "id"},
 			{(*types.UserVote)(nil), "user_votes", "id"},
@@ -147,14 +148,15 @@ func init() { //nolint:funlen
 			"user_votes",
 			"group_reputations",
 			"user_reputations",
+			"group_member_tracking_users",
 			"group_member_trackings",
 			"condo_games",
-			"cleared_groups",
-			"confirmed_groups",
-			"flagged_groups",
-			"cleared_users",
-			"confirmed_users",
-			"flagged_users",
+			"group_clearances",
+			"group_verifications",
+			"groups",
+			"user_clearances",
+			"user_verifications",
+			"users",
 		}
 
 		var dropStmt strings.Builder
