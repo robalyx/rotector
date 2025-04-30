@@ -206,6 +206,13 @@ Input:
 
 var ErrBatchProcessing = errors.New("batch processing errors")
 
+// UserSummary is a struct for user summaries for AI analysis.
+type UserSummary struct {
+	Name        string `json:"name"`
+	DisplayName string `json:"displayName,omitempty"`
+	Description string `json:"description"`
+}
+
 // FlaggedUsers holds a list of users that the AI has identified as inappropriate.
 // The JSON schema is used to ensure consistent responses from the AI.
 type FlaggedUsers struct {
@@ -274,7 +281,7 @@ func (a *UserAnalyzer) ProcessUsers(users []*types.User, reasonsMap map[uint64]t
 
 		infoBatch := users[start:end]
 		p.Go(func(ctx context.Context) error {
-			// Acquire semaphore before making AI request
+			// Acquire semaphore
 			if err := a.analysisSem.Acquire(ctx, 1); err != nil {
 				return fmt.Errorf("failed to acquire semaphore: %w", err)
 			}
@@ -302,52 +309,18 @@ func (a *UserAnalyzer) ProcessUsers(users []*types.User, reasonsMap map[uint64]t
 		zap.Int("newFlags", len(reasonsMap)-existingFlags))
 }
 
-// processBatch handles analysis for a batch of users.
-func (a *UserAnalyzer) processBatch(
-	ctx context.Context, userInfos []*types.User, reasonsMap map[uint64]types.Reasons[enum.UserReasonType], mu *sync.Mutex,
-) error {
-	// Translate all descriptions concurrently
-	translatedInfos, originalInfos := a.prepareUserInfos(ctx, userInfos)
-
-	// Create a struct for user summaries for AI analysis
-	type UserSummary struct {
-		Name        string `json:"name"`
-		DisplayName string `json:"displayName,omitempty"`
-		Description string `json:"description"`
-	}
-
-	// Convert map to slice for AI request
-	userInfosWithoutID := make([]UserSummary, 0, len(translatedInfos))
-	for _, userInfo := range translatedInfos {
-		summary := UserSummary{
-			Name: userInfo.Name,
-		}
-
-		// Only include display name if it's different from the username
-		if userInfo.DisplayName != userInfo.Name {
-			summary.DisplayName = userInfo.DisplayName
-		}
-
-		// Replace empty descriptions with placeholder
-		description := userInfo.Description
-		if description == "" {
-			description = "[Empty profile]"
-		}
-		summary.Description = description
-
-		userInfosWithoutID = append(userInfosWithoutID, summary)
-	}
-
+// processUserBatch handles the AI analysis for a batch of user summaries.
+func (a *UserAnalyzer) processUserBatch(ctx context.Context, batch []UserSummary) (*FlaggedUsers, error) {
 	// Convert to JSON
-	userInfoJSON, err := sonic.Marshal(userInfosWithoutID)
+	userInfoJSON, err := sonic.Marshal(batch)
 	if err != nil {
-		return fmt.Errorf("%w: %w", ErrJSONProcessing, err)
+		return nil, fmt.Errorf("%w: %w", ErrJSONProcessing, err)
 	}
 
 	// Minify JSON to reduce token usage
 	userInfoJSON, err = a.minify.Bytes(ApplicationJSON, userInfoJSON)
 	if err != nil {
-		return fmt.Errorf("%w: %w", ErrJSONProcessing, err)
+		return nil, fmt.Errorf("%w: %w", ErrJSONProcessing, err)
 	}
 
 	// Prepare request prompt with user info
@@ -381,7 +354,7 @@ func (a *UserAnalyzer) processBatch(
 	})
 
 	// Make API request with retry
-	result, err := utils.WithRetry(ctx, func() (*FlaggedUsers, error) {
+	return utils.WithRetry(ctx, func() (*FlaggedUsers, error) {
 		resp, err := a.chat.New(ctx, params)
 		if err != nil {
 			return nil, fmt.Errorf("openai API error: %w", err)
@@ -408,6 +381,46 @@ func (a *UserAnalyzer) processBatch(
 
 		return result, nil
 	}, utils.GetAIRetryOptions())
+}
+
+// processBatch handles analysis for a batch of users.
+func (a *UserAnalyzer) processBatch(
+	ctx context.Context, userInfos []*types.User, reasonsMap map[uint64]types.Reasons[enum.UserReasonType], mu *sync.Mutex,
+) error {
+	// Translate all descriptions concurrently
+	translatedInfos, originalInfos := a.prepareUserInfos(ctx, userInfos)
+
+	// Convert map to slice for AI request
+	userInfosWithoutID := make([]UserSummary, 0, len(translatedInfos))
+	for _, userInfo := range translatedInfos {
+		summary := UserSummary{
+			Name: userInfo.Name,
+		}
+
+		// Only include display name if it's different from the username
+		if userInfo.DisplayName != userInfo.Name {
+			summary.DisplayName = userInfo.DisplayName
+		}
+
+		// Replace empty descriptions with placeholder
+		description := userInfo.Description
+		if description == "" {
+			description = "[Empty profile]"
+		}
+		summary.Description = description
+
+		userInfosWithoutID = append(userInfosWithoutID, summary)
+	}
+
+	// Create operation function for batch processing
+	minBatchSize := max(len(userInfosWithoutID)/4, 1)
+	result, err := utils.WithRetrySplitBatch(
+		ctx, userInfosWithoutID, len(userInfosWithoutID), minBatchSize,
+		func(batch []UserSummary) (*FlaggedUsers, error) {
+			return a.processUserBatch(ctx, batch)
+		},
+		utils.GetAIRetryOptions(), a.logger,
+	)
 	if err != nil {
 		return fmt.Errorf("%w: %w", ErrModelResponse, err)
 	}

@@ -242,49 +242,22 @@ func (a *IvanAnalyzer) processUserMessages(messages []*types.IvanMessage) []Mess
 	return uniqueMessages
 }
 
-// processMessages analyzes a user's chat messages for inappropriate content.
-func (a *IvanAnalyzer) processMessages(
-	ctx context.Context, userID uint64, username string, messages []*types.IvanMessage,
-	reasonsMap map[uint64]types.Reasons[enum.UserReasonType], mu *sync.Mutex,
-) error {
-	// Skip if no messages
-	if len(messages) == 0 {
-		return nil
-	}
-
-	// Process and deduplicate messages
-	uniqueMessages := a.processUserMessages(messages)
-	if len(uniqueMessages) == 0 {
-		return nil
-	}
-
-	// Prepare request data
-	request := IvanRequest{
-		UserID:   userID,
-		Username: username,
-		Messages: uniqueMessages,
-	}
-
+// processIvanBatch handles the AI analysis for a batch of messages.
+func (a *IvanAnalyzer) processIvanBatch(ctx context.Context, batchRequest IvanRequest) (*IvanAnalysisResponse, error) {
 	// Convert to JSON
-	requestJSON, err := sonic.Marshal(request)
+	requestJSON, err := sonic.Marshal(batchRequest)
 	if err != nil {
-		return fmt.Errorf("failed to marshal request: %w", err)
+		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
 
 	// Minify JSON
 	minifiedJSON, err := a.minify.Bytes("application/json", requestJSON)
 	if err != nil {
-		return fmt.Errorf("failed to minify JSON: %w", err)
+		return nil, fmt.Errorf("failed to minify JSON: %w", err)
 	}
 
-	// Acquire semaphore
-	if err := a.analysisSem.Acquire(ctx, 1); err != nil {
-		return fmt.Errorf("failed to acquire semaphore: %w", err)
-	}
-	defer a.analysisSem.Release(1)
-
-	// Generate analysis with retry
-	result, err := utils.WithRetry(ctx, func() (*IvanAnalysisResponse, error) {
+	// Make API request with retry
+	return utils.WithRetry(ctx, func() (*IvanAnalysisResponse, error) {
 		resp, err := a.chat.New(ctx, openai.ChatCompletionNewParams{
 			Messages: []openai.ChatCompletionMessageParamUnion{
 				openai.SystemMessage(IvanSystemPrompt),
@@ -329,6 +302,43 @@ func (a *IvanAnalyzer) processMessages(
 
 		return &result, nil
 	}, utils.GetAIRetryOptions())
+}
+
+// processMessages analyzes a user's chat messages for inappropriate content.
+func (a *IvanAnalyzer) processMessages(
+	ctx context.Context, userID uint64, username string, messages []*types.IvanMessage,
+	reasonsMap map[uint64]types.Reasons[enum.UserReasonType], mu *sync.Mutex,
+) error {
+	// Skip if no messages
+	if len(messages) == 0 {
+		return nil
+	}
+
+	// Process and deduplicate messages
+	uniqueMessages := a.processUserMessages(messages)
+	if len(uniqueMessages) == 0 {
+		return nil
+	}
+
+	// Acquire semaphore
+	if err := a.analysisSem.Acquire(ctx, 1); err != nil {
+		return fmt.Errorf("failed to acquire semaphore: %w", err)
+	}
+	defer a.analysisSem.Release(1)
+
+	// Handle content blocking
+	minBatchSize := max(len(uniqueMessages)/4, 1)
+	result, err := utils.WithRetrySplitBatch(
+		ctx, uniqueMessages, len(uniqueMessages), minBatchSize,
+		func(batch []MessageForAI) (*IvanAnalysisResponse, error) {
+			return a.processIvanBatch(ctx, IvanRequest{
+				UserID:   userID,
+				Username: username,
+				Messages: batch,
+			})
+		},
+		utils.GetAIRetryOptions(), a.logger,
+	)
 	if err != nil {
 		return err
 	}

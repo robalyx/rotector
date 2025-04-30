@@ -247,16 +247,10 @@ func (a *MessageAnalyzer) ProcessMessages(
 	return flaggedUsers, nil
 }
 
-// processBatch processes a batch of messages using the AI model.
-func (a *MessageAnalyzer) processBatch(
-	ctx context.Context, serverID uint64, serverName string, messages []*MessageContent,
+// processMessageBatch handles the AI analysis for a batch of messages.
+func (a *MessageAnalyzer) processMessageBatch(
+	ctx context.Context, serverID uint64, serverName string, batch []*MessageContent,
 ) (*FlaggedMessagesResponse, error) {
-	// Acquire semaphore to limit concurrent AI calls
-	if err := a.analysisSem.Acquire(ctx, 1); err != nil {
-		return nil, fmt.Errorf("failed to acquire analysis semaphore: %w", err)
-	}
-	defer a.analysisSem.Release(1)
-
 	// Prepare message data for AI
 	type ConversationAnalysisRequest struct {
 		ServerName string            `json:"serverName"`
@@ -267,7 +261,7 @@ func (a *MessageAnalyzer) processBatch(
 	request := ConversationAnalysisRequest{
 		ServerName: serverName,
 		ServerID:   serverID,
-		Messages:   messages,
+		Messages:   batch,
 	}
 
 	// Convert to JSON
@@ -285,8 +279,8 @@ func (a *MessageAnalyzer) processBatch(
 	// Format the prompt using the template
 	prompt := fmt.Sprintf(MessageAnalysisPrompt, minifiedJSON)
 
-	// Generate message analysis with retry
-	result, err := utils.WithRetry(ctx, func() (*FlaggedMessagesResponse, error) {
+	// Make API request with retry
+	return utils.WithRetry(ctx, func() (*FlaggedMessagesResponse, error) {
 		resp, err := a.chat.New(ctx, openai.ChatCompletionNewParams{
 			Messages: []openai.ChatCompletionMessageParamUnion{
 				openai.SystemMessage(MessageSystemPrompt),
@@ -331,6 +325,27 @@ func (a *MessageAnalyzer) processBatch(
 
 		return result, nil
 	}, utils.GetAIRetryOptions())
+}
+
+// processBatch processes a batch of messages using the AI model.
+func (a *MessageAnalyzer) processBatch(
+	ctx context.Context, serverID uint64, serverName string, messages []*MessageContent,
+) (*FlaggedMessagesResponse, error) {
+	// Acquire semaphore
+	if err := a.analysisSem.Acquire(ctx, 1); err != nil {
+		return nil, fmt.Errorf("failed to acquire analysis semaphore: %w", err)
+	}
+	defer a.analysisSem.Release(1)
+
+	// Handle content blocking
+	minBatchSize := max(len(messages)/4, 1)
+	result, err := utils.WithRetrySplitBatch(
+		ctx, messages, len(messages), minBatchSize,
+		func(batch []*MessageContent) (*FlaggedMessagesResponse, error) {
+			return a.processMessageBatch(ctx, serverID, serverName, batch)
+		},
+		utils.GetAIRetryOptions(), a.logger,
+	)
 	if err != nil {
 		return nil, err
 	}

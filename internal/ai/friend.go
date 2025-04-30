@@ -200,6 +200,71 @@ func (a *FriendAnalyzer) GenerateFriendReasons(
 	return results
 }
 
+// processFriendBatch handles the AI analysis for a batch of friend data.
+func (a *FriendAnalyzer) processFriendBatch(ctx context.Context, batch []UserFriendData) (*BatchFriendAnalysis, error) {
+	// Convert to JSON for the AI request
+	batchDataJSON, err := sonic.Marshal(batch)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", ErrJSONProcessing, err)
+	}
+
+	// Minify JSON to reduce token usage
+	batchDataJSON, err = a.minify.Bytes(ApplicationJSON, batchDataJSON)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", ErrJSONProcessing, err)
+	}
+
+	// Configure prompt for friend analysis
+	prompt := fmt.Sprintf(FriendUserPrompt, string(batchDataJSON))
+
+	// Make API request with retry
+	return utils.WithRetry(ctx, func() (*BatchFriendAnalysis, error) {
+		resp, err := a.chat.New(ctx, openai.ChatCompletionNewParams{
+			Messages: []openai.ChatCompletionMessageParamUnion{
+				openai.SystemMessage(FriendSystemPrompt),
+				openai.UserMessage(prompt),
+			},
+			ResponseFormat: openai.ChatCompletionNewParamsResponseFormatUnion{
+				OfJSONSchema: &openai.ResponseFormatJSONSchemaParam{
+					JSONSchema: openai.ResponseFormatJSONSchemaJSONSchemaParam{
+						Name:        "friendAnalysis",
+						Description: openai.String("Analysis of friend network patterns"),
+						Schema:      FriendAnalysisSchema,
+						Strict:      openai.Bool(true),
+					},
+				},
+			},
+			Model:       a.model,
+			Temperature: openai.Float(0.2),
+			TopP:        openai.Float(0.4),
+		})
+		if err != nil {
+			return nil, fmt.Errorf("openai API error: %w", err)
+		}
+
+		// Check for empty response
+		if len(resp.Choices) == 0 || len(resp.Choices[0].Message.Content) == 0 {
+			return nil, fmt.Errorf("%w: no response from model", ErrModelResponse)
+		}
+
+		// Extract thought process
+		message := resp.Choices[0].Message
+		if thought := message.JSON.ExtraFields["reasoning"]; thought.IsPresent() {
+			a.logger.Debug("AI friend analysis thought process",
+				zap.String("model", resp.Model),
+				zap.String("thought", thought.Raw()))
+		}
+
+		// Parse response from AI
+		var result *BatchFriendAnalysis
+		if err := sonic.Unmarshal([]byte(message.Content), &result); err != nil {
+			return nil, fmt.Errorf("JSON unmarshal error: %w", err)
+		}
+
+		return result, nil
+	}, utils.GetAIRetryOptions())
+}
+
 // processBatch handles analysis for a batch of users.
 func (a *FriendAnalyzer) processBatch(
 	ctx context.Context, userInfos []*types.User,
@@ -250,67 +315,21 @@ func (a *FriendAnalyzer) processBatch(
 		return nil, nil
 	}
 
-	// Convert to JSON for the AI request
-	batchDataJSON, err := sonic.Marshal(batchData)
-	if err != nil {
-		return nil, fmt.Errorf("%w: %w", ErrJSONProcessing, err)
+	// Acquire semaphore
+	if err := a.analysisSem.Acquire(ctx, 1); err != nil {
+		return nil, fmt.Errorf("failed to acquire semaphore: %w", err)
 	}
+	defer a.analysisSem.Release(1)
 
-	// Minify JSON to reduce token usage
-	batchDataJSON, err = a.minify.Bytes(ApplicationJSON, batchDataJSON)
-	if err != nil {
-		return nil, fmt.Errorf("%w: %w", ErrJSONProcessing, err)
-	}
-
-	// Configure prompt for friend analysis
-	prompt := fmt.Sprintf(FriendUserPrompt, string(batchDataJSON))
-
-	// Generate friend analysis with retry
-	result, err := utils.WithRetry(ctx, func() (*BatchFriendAnalysis, error) {
-		resp, err := a.chat.New(ctx, openai.ChatCompletionNewParams{
-			Messages: []openai.ChatCompletionMessageParamUnion{
-				openai.SystemMessage(FriendSystemPrompt),
-				openai.UserMessage(prompt),
-			},
-			ResponseFormat: openai.ChatCompletionNewParamsResponseFormatUnion{
-				OfJSONSchema: &openai.ResponseFormatJSONSchemaParam{
-					JSONSchema: openai.ResponseFormatJSONSchemaJSONSchemaParam{
-						Name:        "friendAnalysis",
-						Description: openai.String("Analysis of friend network patterns"),
-						Schema:      FriendAnalysisSchema,
-						Strict:      openai.Bool(true),
-					},
-				},
-			},
-			Model:       a.model,
-			Temperature: openai.Float(0.2),
-			TopP:        openai.Float(0.4),
-		})
-		if err != nil {
-			return nil, fmt.Errorf("openai API error: %w", err)
-		}
-
-		// Check for empty response
-		if len(resp.Choices) == 0 || len(resp.Choices[0].Message.Content) == 0 {
-			return nil, fmt.Errorf("%w: no response from model", ErrModelResponse)
-		}
-
-		// Extract thought process
-		message := resp.Choices[0].Message
-		if thought := message.JSON.ExtraFields["reasoning"]; thought.IsPresent() {
-			a.logger.Debug("AI friend analysis thought process",
-				zap.String("model", resp.Model),
-				zap.String("thought", thought.Raw()))
-		}
-
-		// Parse response from AI
-		var result *BatchFriendAnalysis
-		if err := sonic.Unmarshal([]byte(message.Content), &result); err != nil {
-			return nil, fmt.Errorf("JSON unmarshal error: %w", err)
-		}
-
-		return result, nil
-	}, utils.GetAIRetryOptions())
+	// Handle content blocking
+	minBatchSize := max(len(batchData)/4, 1)
+	result, err := utils.WithRetrySplitBatch(
+		ctx, batchData, len(batchData), minBatchSize,
+		func(batch []UserFriendData) (*BatchFriendAnalysis, error) {
+			return a.processFriendBatch(ctx, batch)
+		},
+		utils.GetAIRetryOptions(), a.logger,
+	)
 	if err != nil {
 		return nil, err
 	}

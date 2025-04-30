@@ -292,7 +292,7 @@ func (a *OutfitAnalyzer) analyzeUserOutfits(
 			}
 
 			allSuspiciousThemes = append(allSuspiciousThemes,
-				fmt.Sprintf("%s: %s (%.2f)", theme.OutfitName, theme.Theme, theme.Confidence))
+				fmt.Sprintf("outfit|%s|theme|%s|confidence|%.2f", theme.OutfitName, theme.Theme, theme.Confidence))
 
 			// Track highest confidence
 			if theme.Confidence > highestConfidence {
@@ -330,24 +330,18 @@ func (a *OutfitAnalyzer) analyzeUserOutfits(
 	return nil
 }
 
-// analyzeOutfitBatch processes a single batch of outfit images.
-func (a *OutfitAnalyzer) analyzeOutfitBatch(
-	ctx context.Context, info *types.User, downloads []DownloadResult,
+// processOutfitBatch handles the AI analysis for a batch of outfit images.
+func (a *OutfitAnalyzer) processOutfitBatch(
+	ctx context.Context, info *types.User, batch []DownloadResult,
 ) (*OutfitThemeAnalysis, error) {
-	// Acquire semaphore before making AI request
-	if err := a.analysisSem.Acquire(ctx, 1); err != nil {
-		return nil, fmt.Errorf("failed to acquire semaphore: %w", err)
-	}
-	defer a.analysisSem.Release(1)
-
 	// Process each downloaded image and add as user message parts
 	messages := []openai.ChatCompletionMessageParamUnion{
 		openai.SystemMessage(OutfitSystemPrompt),
 	}
 
-	outfitNames := make([]string, 0, len(downloads))
+	outfitNames := make([]string, 0, len(batch))
 	validOutfits := make(map[string]struct{})
-	for _, result := range downloads {
+	for _, result := range batch {
 		// Convert image to base64
 		buf := new(bytes.Buffer)
 		if err := nativewebp.Encode(buf, result.img, nil); err != nil {
@@ -380,8 +374,8 @@ func (a *OutfitAnalyzer) analyzeOutfitBatch(
 	)
 	messages = append(messages, openai.UserMessage(prompt))
 
-	// Generate outfit analysis with retry
-	response, err := utils.WithRetry(ctx, func() (*OutfitThemeAnalysis, error) {
+	// Make API request with retry
+	return utils.WithRetry(ctx, func() (*OutfitThemeAnalysis, error) {
 		resp, err := a.chat.New(ctx, openai.ChatCompletionNewParams{
 			Messages: messages,
 			ResponseFormat: openai.ChatCompletionNewParamsResponseFormatUnion{
@@ -399,26 +393,6 @@ func (a *OutfitAnalyzer) analyzeOutfitBatch(
 			TopP:        openai.Float(0.1),
 		})
 		if err != nil {
-			// Check if content was blocked
-			if errors.Is(err, client.ErrContentBlocked) {
-				a.logger.Info("Outfit analysis blocked",
-					zap.String("model", a.model),
-					zap.Uint64("userID", info.ID),
-					zap.String("username", info.Name),
-					zap.String("reason", err.Error()))
-
-				// For blocked content, return a high-confidence theme
-				return &OutfitThemeAnalysis{
-					Username: info.Name,
-					Themes: []OutfitTheme{
-						{
-							OutfitName: "Unknown Outfits",
-							Theme:      "Content was blocked by AI safety filters.",
-							Confidence: 1.0,
-						},
-					},
-				}, nil
-			}
 			return nil, fmt.Errorf("openai API error: %w", err)
 		}
 
@@ -456,8 +430,27 @@ func (a *OutfitAnalyzer) analyzeOutfitBatch(
 
 		return &analysis, nil
 	}, utils.GetAIRetryOptions())
+}
 
-	return response, err
+// analyzeOutfitBatch processes a single batch of outfit images.
+func (a *OutfitAnalyzer) analyzeOutfitBatch(
+	ctx context.Context, info *types.User, downloads []DownloadResult,
+) (*OutfitThemeAnalysis, error) {
+	// Acquire semaphore
+	if err := a.analysisSem.Acquire(ctx, 1); err != nil {
+		return nil, fmt.Errorf("failed to acquire semaphore: %w", err)
+	}
+	defer a.analysisSem.Release(1)
+
+	// Handle content blocking
+	minBatchSize := max(len(downloads)/4, 1)
+	return utils.WithRetrySplitBatch(
+		ctx, downloads, len(downloads), minBatchSize,
+		func(batch []DownloadResult) (*OutfitThemeAnalysis, error) {
+			return a.processOutfitBatch(ctx, info, batch)
+		},
+		utils.GetAIRetryOptions(), a.logger,
+	)
 }
 
 // getOutfitThumbnails fetches thumbnail URLs for outfits and organizes them by user.
