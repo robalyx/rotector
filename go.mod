@@ -25,17 +25,17 @@ require (
 	github.com/knadh/koanf/providers/file v1.2.0
 	github.com/knadh/koanf/v2 v2.2.0
 	github.com/openai/openai-go v0.1.0-beta.10
-	github.com/redis/rueidis v1.0.57
+	github.com/redis/rueidis v1.0.59
 	github.com/sony/gobreaker v1.0.0
 	github.com/sourcegraph/conc v0.3.0
 	github.com/stretchr/testify v1.10.0
-	github.com/tdewolff/minify/v2 v2.23.1
+	github.com/tdewolff/minify/v2 v2.23.3
 	github.com/uptrace/bun v1.2.11
 	github.com/uptrace/bun/dialect/pgdialect v1.2.11
 	github.com/uptrace/bun/driver/pgdriver v1.2.11
 	github.com/uptrace/bun/extra/bunotel v1.2.11
 	github.com/uptrace/uptrace-go v1.35.1
-	github.com/urfave/cli/v3 v3.3.1
+	github.com/urfave/cli/v3 v3.3.2
 	github.com/wcharczuk/go-chart/v2 v2.1.2
 	go.opentelemetry.io/otel v1.35.0
 	go.opentelemetry.io/otel/trace v1.35.0
