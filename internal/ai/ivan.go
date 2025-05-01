@@ -257,7 +257,8 @@ func (a *IvanAnalyzer) processIvanBatch(ctx context.Context, batchRequest IvanRe
 	}
 
 	// Make API request with retry
-	return utils.WithRetry(ctx, func() (*IvanAnalysisResponse, error) {
+	var result *IvanAnalysisResponse
+	err = utils.WithRetry(ctx, func() error {
 		resp, err := a.chat.New(ctx, openai.ChatCompletionNewParams{
 			Messages: []openai.ChatCompletionMessageParamUnion{
 				openai.SystemMessage(IvanSystemPrompt),
@@ -278,12 +279,12 @@ func (a *IvanAnalyzer) processIvanBatch(ctx context.Context, batchRequest IvanRe
 			TopP:        openai.Float(0.4),
 		})
 		if err != nil {
-			return nil, fmt.Errorf("openai API error: %w", err)
+			return fmt.Errorf("openai API error: %w", err)
 		}
 
 		// Check for empty response
 		if len(resp.Choices) == 0 || len(resp.Choices[0].Message.Content) == 0 {
-			return nil, fmt.Errorf("%w: no response from model", ErrModelResponse)
+			return fmt.Errorf("%w: no response from model", ErrModelResponse)
 		}
 
 		// Extract thought process
@@ -295,13 +296,14 @@ func (a *IvanAnalyzer) processIvanBatch(ctx context.Context, batchRequest IvanRe
 		}
 
 		// Parse response
-		var result IvanAnalysisResponse
 		if err := sonic.Unmarshal([]byte(message.Content), &result); err != nil {
-			return nil, fmt.Errorf("JSON unmarshal error: %w", err)
+			return fmt.Errorf("JSON unmarshal error: %w", err)
 		}
 
-		return &result, nil
+		return nil
 	}, utils.GetAIRetryOptions())
+
+	return result, err
 }
 
 // processMessages analyzes a user's chat messages for inappropriate content.
@@ -328,14 +330,18 @@ func (a *IvanAnalyzer) processMessages(
 
 	// Handle content blocking
 	minBatchSize := max(len(uniqueMessages)/4, 1)
-	result, err := utils.WithRetrySplitBatch(
+
+	var result *IvanAnalysisResponse
+	err := utils.WithRetrySplitBatch(
 		ctx, uniqueMessages, len(uniqueMessages), minBatchSize,
-		func(batch []MessageForAI) (*IvanAnalysisResponse, error) {
-			return a.processIvanBatch(ctx, IvanRequest{
+		func(batch []MessageForAI) error {
+			var err error
+			result, err = a.processIvanBatch(ctx, IvanRequest{
 				UserID:   userID,
 				Username: username,
 				Messages: batch,
 			})
+			return err
 		},
 		utils.GetAIRetryOptions(), a.logger,
 	)

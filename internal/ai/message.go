@@ -280,7 +280,8 @@ func (a *MessageAnalyzer) processMessageBatch(
 	prompt := fmt.Sprintf(MessageAnalysisPrompt, minifiedJSON)
 
 	// Make API request with retry
-	return utils.WithRetry(ctx, func() (*FlaggedMessagesResponse, error) {
+	var result *FlaggedMessagesResponse
+	err = utils.WithRetry(ctx, func() error {
 		resp, err := a.chat.New(ctx, openai.ChatCompletionNewParams{
 			Messages: []openai.ChatCompletionMessageParamUnion{
 				openai.SystemMessage(MessageSystemPrompt),
@@ -301,12 +302,12 @@ func (a *MessageAnalyzer) processMessageBatch(
 			TopP:        openai.Float(0.95),
 		})
 		if err != nil {
-			return nil, fmt.Errorf("openai API error: %w", err)
+			return fmt.Errorf("openai API error: %w", err)
 		}
 
 		// Check for empty response
 		if len(resp.Choices) == 0 || len(resp.Choices[0].Message.Content) == 0 {
-			return nil, fmt.Errorf("%w: no response from model", ErrModelResponse)
+			return fmt.Errorf("%w: no response from model", ErrModelResponse)
 		}
 
 		// Extract thought process
@@ -318,13 +319,13 @@ func (a *MessageAnalyzer) processMessageBatch(
 		}
 
 		// Parse response from AI
-		var result *FlaggedMessagesResponse
 		if err := sonic.Unmarshal([]byte(message.Content), &result); err != nil {
-			return nil, fmt.Errorf("JSON unmarshal error: %w", err)
+			return fmt.Errorf("JSON unmarshal error: %w", err)
 		}
 
-		return result, nil
+		return nil
 	}, utils.GetAIRetryOptions())
+	return result, err
 }
 
 // processBatch processes a batch of messages using the AI model.
@@ -339,10 +340,14 @@ func (a *MessageAnalyzer) processBatch(
 
 	// Handle content blocking
 	minBatchSize := max(len(messages)/4, 1)
-	result, err := utils.WithRetrySplitBatch(
+
+	var result *FlaggedMessagesResponse
+	err := utils.WithRetrySplitBatch(
 		ctx, messages, len(messages), minBatchSize,
-		func(batch []*MessageContent) (*FlaggedMessagesResponse, error) {
-			return a.processMessageBatch(ctx, serverID, serverName, batch)
+		func(batch []*MessageContent) error {
+			var err error
+			result, err = a.processMessageBatch(ctx, serverID, serverName, batch)
+			return err
 		},
 		utils.GetAIRetryOptions(), a.logger,
 	)

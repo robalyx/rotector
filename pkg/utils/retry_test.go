@@ -23,44 +23,40 @@ func TestWithRetry(t *testing.T) {
 
 	tests := []struct {
 		name          string
-		operation     func() (string, error)
+		operation     func() error
 		expectedCalls int
 		expectedErr   error
-		expectedRes   string
 	}{
 		{
 			name: "succeeds first try",
-			operation: func() (string, error) {
-				return "success", nil
+			operation: func() error {
+				return nil
 			},
 			expectedCalls: 1,
 			expectedErr:   nil,
-			expectedRes:   "success",
 		},
 		{
 			name: "succeeds after retries",
-			operation: func() func() (string, error) {
+			operation: func() func() error {
 				count := 0
-				return func() (string, error) {
+				return func() error {
 					count++
 					if count < 3 {
-						return "", errTemporary
+						return errTemporary
 					}
-					return "success after retry", nil
+					return nil
 				}
 			}(),
 			expectedCalls: 3,
 			expectedErr:   nil,
-			expectedRes:   "success after retry",
 		},
 		{
 			name: "fails all retries",
-			operation: func() (string, error) {
-				return "", errTemporary
+			operation: func() error {
+				return errTemporary
 			},
 			expectedCalls: 4, // Initial + 3 retries
 			expectedErr:   errTemporary,
-			expectedRes:   "",
 		},
 	}
 
@@ -70,7 +66,7 @@ func TestWithRetry(t *testing.T) {
 
 			ctx := t.Context()
 			calls := 0
-			wrappedOp := func() (string, error) {
+			wrappedOp := func() error {
 				calls++
 				return tt.operation()
 			}
@@ -82,7 +78,7 @@ func TestWithRetry(t *testing.T) {
 				MaxRetries:      3,
 			}
 
-			result, err := utils.WithRetry(ctx, wrappedOp, opts)
+			err := utils.WithRetry(ctx, wrappedOp, opts)
 
 			if tt.expectedErr != nil {
 				require.Error(t, err)
@@ -91,7 +87,6 @@ func TestWithRetry(t *testing.T) {
 				require.NoError(t, err)
 			}
 
-			assert.Equal(t, tt.expectedRes, result)
 			assert.Equal(t, tt.expectedCalls, calls)
 		})
 	}
@@ -106,9 +101,9 @@ func TestWithRetryContext(t *testing.T) {
 		ctx, cancel := context.WithCancel(t.Context())
 		calls := 0
 
-		operation := func() (string, error) {
+		operation := func() error {
 			calls++
-			return "", errTemporary
+			return errTemporary
 		}
 
 		opts := utils.RetryOptions{
@@ -124,11 +119,10 @@ func TestWithRetryContext(t *testing.T) {
 			cancel()
 		}()
 
-		result, err := utils.WithRetry(ctx, operation, opts)
+		err := utils.WithRetry(ctx, operation, opts)
 
 		require.Error(t, err)
 		require.ErrorIs(t, err, context.Canceled)
-		assert.Empty(t, result)
 		assert.Less(t, calls, 5) // Should not have completed all retries
 	})
 }
@@ -143,90 +137,85 @@ func TestWithRetrySplitBatch(t *testing.T) {
 		items         []int
 		batchSize     int
 		minBatchSize  int
-		operation     func([]int) (string, error)
+		operation     func([]int) error
 		expectedCalls int
 		expectedErr   error
-		expectedRes   string
 	}{
 		{
 			name:         "succeeds first try",
 			items:        []int{1, 2, 3, 4},
 			batchSize:    4,
 			minBatchSize: 1,
-			operation: func(_ []int) (string, error) {
-				return "success", nil
+			operation: func(_ []int) error {
+				return nil
 			},
 			expectedCalls: 1,
 			expectedErr:   nil,
-			expectedRes:   "success",
 		},
 		{
 			name:         "splits on content block",
 			items:        []int{1, 2, 3, 4},
 			batchSize:    4,
 			minBatchSize: 1,
-			operation: func() func([]int) (string, error) {
+			operation: func() func([]int) error {
 				calls := 0
-				return func(batch []int) (string, error) {
+				return func(batch []int) error {
 					calls++
 					switch {
 					case len(batch) == 4:
 						// Full batch fails with content block
-						return "", utils.ErrContentBlocked
+						return utils.ErrContentBlocked
 					case len(batch) == 2 && batch[0] == 1:
 						// First half fails with content block
-						return "", utils.ErrContentBlocked
+						return utils.ErrContentBlocked
 					case len(batch) == 1 && batch[0] == 1:
 						// First item fails with content block
-						return "", utils.ErrContentBlocked
+						return utils.ErrContentBlocked
 					case len(batch) == 1 && batch[0] == 2:
 						// Second item succeeds
-						return "success with item 2", nil
+						return nil
 					default:
-						return "", errOther
+						return errOther
 					}
 				}
 			}(),
-			expectedCalls: 4, // Full batch + first half + item 1 + item 2
+			expectedCalls: 5, // Full batch + first half + first quarter + items 1 and 2
 			expectedErr:   nil,
-			expectedRes:   "success with item 2",
 		},
 		{
 			name:         "stops at min batch size",
 			items:        []int{1, 2, 3, 4},
 			batchSize:    4,
 			minBatchSize: 2,
-			operation: func() func([]int) (string, error) {
+			operation: func() func([]int) error {
 				calls := 0
-				return func(batch []int) (string, error) {
+				return func(batch []int) error {
 					calls++
 					switch {
 					case len(batch) == 4:
 						// Full batch fails with content block
-						return "", utils.ErrContentBlocked
+						return utils.ErrContentBlocked
 					case len(batch) == 2:
 						// At min batch size, return non-content error
-						return "", errMinBatchSize
+						return errMinBatchSize
 					default:
-						return "should not reach here", nil
+						return nil
 					}
 				}
 			}(),
-			expectedCalls: 2, // Full batch + first half
+			expectedCalls: 3, // Full batch + both halves at min batch size
 			expectedErr:   errMinBatchSize,
-			expectedRes:   "",
 		},
 		{
 			name:         "both halves content blocked",
 			items:        []int{1, 2, 3, 4},
 			batchSize:    4,
 			minBatchSize: 2,
-			operation: func(_ []int) (string, error) {
-				return "", utils.ErrContentBlocked
+			operation: func(_ []int) error {
+				return utils.ErrContentBlocked
 			},
 			expectedCalls: 3, // Full batch + both halves
 			expectedErr:   utils.ErrContentBlocked,
-			expectedRes:   "",
 		},
 	}
 
@@ -236,7 +225,7 @@ func TestWithRetrySplitBatch(t *testing.T) {
 
 			ctx := t.Context()
 			calls := 0
-			wrappedOp := func(batch []int) (string, error) {
+			wrappedOp := func(batch []int) error {
 				calls++
 				return tt.operation(batch)
 			}
@@ -248,7 +237,7 @@ func TestWithRetrySplitBatch(t *testing.T) {
 				MaxRetries:      3,
 			}
 
-			result, err := utils.WithRetrySplitBatch(ctx, tt.items, tt.batchSize, tt.minBatchSize, wrappedOp, opts, logger)
+			err := utils.WithRetrySplitBatch(ctx, tt.items, tt.batchSize, tt.minBatchSize, wrappedOp, opts, logger)
 
 			if tt.expectedErr != nil {
 				require.Error(t, err)
@@ -257,7 +246,6 @@ func TestWithRetrySplitBatch(t *testing.T) {
 				require.NoError(t, err)
 			}
 
-			assert.Equal(t, tt.expectedRes, result)
 			assert.Equal(t, tt.expectedCalls, calls)
 		})
 	}

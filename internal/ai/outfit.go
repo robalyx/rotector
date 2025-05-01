@@ -76,7 +76,7 @@ Instruction: Pay close attention to outfits that are sexual or adult-themed:
 - Latex catsuits/dominatrix outfits
 - Fetishwear (bondage elements, suggestive accessories)
 - Censored nudity looks (with pixelation, censor bars, stickers)
-- Nudity with realistic body features (detailed abs, muscle definition, body hair, tattoos, etc.)
+- Full nudity with realistic body features (detailed abs, body hair, tattoos, etc.)
 - Extremely revealing swimsuits/microkinis (especially with exaggerated anatomy)
 - Provocative bodysuits with inappropriate cutouts
 - Thongs/g-strings or outfits emphasizing exposed buttocks
@@ -292,7 +292,7 @@ func (a *OutfitAnalyzer) analyzeUserOutfits(
 			}
 
 			allSuspiciousThemes = append(allSuspiciousThemes,
-				fmt.Sprintf("outfit|%s|theme|%s|confidence|%.2f", theme.OutfitName, theme.Theme, theme.Confidence))
+				fmt.Sprintf("%s|%s|%.2f", theme.OutfitName, theme.Theme, theme.Confidence))
 
 			// Track highest confidence
 			if theme.Confidence > highestConfidence {
@@ -375,7 +375,8 @@ func (a *OutfitAnalyzer) processOutfitBatch(
 	messages = append(messages, openai.UserMessage(prompt))
 
 	// Make API request with retry
-	return utils.WithRetry(ctx, func() (*OutfitThemeAnalysis, error) {
+	var analysis *OutfitThemeAnalysis
+	err := utils.WithRetry(ctx, func() error {
 		resp, err := a.chat.New(ctx, openai.ChatCompletionNewParams{
 			Messages: messages,
 			ResponseFormat: openai.ChatCompletionNewParamsResponseFormatUnion{
@@ -393,12 +394,12 @@ func (a *OutfitAnalyzer) processOutfitBatch(
 			TopP:        openai.Float(0.1),
 		})
 		if err != nil {
-			return nil, fmt.Errorf("openai API error: %w", err)
+			return fmt.Errorf("openai API error: %w", err)
 		}
 
 		// Check for empty response
 		if len(resp.Choices) == 0 || len(resp.Choices[0].Message.Content) == 0 {
-			return nil, fmt.Errorf("%w: no response from model", ErrModelResponse)
+			return fmt.Errorf("%w: no response from model", ErrModelResponse)
 		}
 
 		// Extract thought process
@@ -410,9 +411,8 @@ func (a *OutfitAnalyzer) processOutfitBatch(
 		}
 
 		// Parse response
-		var analysis OutfitThemeAnalysis
 		if err := sonic.Unmarshal([]byte(message.Content), &analysis); err != nil {
-			return nil, fmt.Errorf("JSON unmarshal error: %w", err)
+			return fmt.Errorf("JSON unmarshal error: %w", err)
 		}
 
 		// Validate outfit names and filter out invalid ones
@@ -428,8 +428,10 @@ func (a *OutfitAnalyzer) processOutfitBatch(
 		}
 		analysis.Themes = validThemes
 
-		return &analysis, nil
+		return nil
 	}, utils.GetAIRetryOptions())
+
+	return analysis, err
 }
 
 // analyzeOutfitBatch processes a single batch of outfit images.
@@ -444,13 +446,19 @@ func (a *OutfitAnalyzer) analyzeOutfitBatch(
 
 	// Handle content blocking
 	minBatchSize := max(len(downloads)/4, 1)
-	return utils.WithRetrySplitBatch(
+
+	var result *OutfitThemeAnalysis
+	err := utils.WithRetrySplitBatch(
 		ctx, downloads, len(downloads), minBatchSize,
-		func(batch []DownloadResult) (*OutfitThemeAnalysis, error) {
-			return a.processOutfitBatch(ctx, info, batch)
+		func(batch []DownloadResult) error {
+			var err error
+			result, err = a.processOutfitBatch(ctx, info, batch)
+			return err
 		},
 		utils.GetAIRetryOptions(), a.logger,
 	)
+
+	return result, err
 }
 
 // getOutfitThumbnails fetches thumbnail URLs for outfits and organizes them by user.

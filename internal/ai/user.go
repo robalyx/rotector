@@ -354,15 +354,16 @@ func (a *UserAnalyzer) processUserBatch(ctx context.Context, batch []UserSummary
 	})
 
 	// Make API request with retry
-	return utils.WithRetry(ctx, func() (*FlaggedUsers, error) {
+	var result *FlaggedUsers
+	err = utils.WithRetry(ctx, func() error {
 		resp, err := a.chat.New(ctx, params)
 		if err != nil {
-			return nil, fmt.Errorf("openai API error: %w", err)
+			return fmt.Errorf("openai API error: %w", err)
 		}
 
 		// Check for empty response
 		if len(resp.Choices) == 0 || len(resp.Choices[0].Message.Content) == 0 {
-			return nil, fmt.Errorf("%w: no response from model", ErrModelResponse)
+			return fmt.Errorf("%w: no response from model", ErrModelResponse)
 		}
 
 		// Extract thought process
@@ -374,13 +375,14 @@ func (a *UserAnalyzer) processUserBatch(ctx context.Context, batch []UserSummary
 		}
 
 		// Parse response from AI
-		var result *FlaggedUsers
 		if err := sonic.Unmarshal([]byte(message.Content), &result); err != nil {
-			return nil, fmt.Errorf("JSON unmarshal error: %w", err)
+			return fmt.Errorf("JSON unmarshal error: %w", err)
 		}
 
-		return result, nil
+		return nil
 	}, utils.GetAIRetryOptions())
+
+	return result, err
 }
 
 // processBatch handles analysis for a batch of users.
@@ -414,10 +416,14 @@ func (a *UserAnalyzer) processBatch(
 
 	// Create operation function for batch processing
 	minBatchSize := max(len(userInfosWithoutID)/4, 1)
-	result, err := utils.WithRetrySplitBatch(
+
+	var result *FlaggedUsers
+	err := utils.WithRetrySplitBatch(
 		ctx, userInfosWithoutID, len(userInfosWithoutID), minBatchSize,
-		func(batch []UserSummary) (*FlaggedUsers, error) {
-			return a.processUserBatch(ctx, batch)
+		func(batch []UserSummary) error {
+			var err error
+			result, err = a.processUserBatch(ctx, batch)
+			return err
 		},
 		utils.GetAIRetryOptions(), a.logger,
 	)
@@ -531,13 +537,16 @@ func (a *UserAnalyzer) prepareUserInfos(
 			}
 
 			// Translate the description with retry
-			translated, err := utils.WithRetry(ctx, func() (string, error) {
-				return a.translator.Translate(
+			var translated string
+			err := utils.WithRetry(ctx, func() error {
+				var err error
+				translated, err = a.translator.Translate(
 					ctx,
 					info.Description,
 					"auto", // Auto-detect source language
 					"en",   // Translate to English
 				)
+				return err
 			}, utils.GetAIRetryOptions())
 			if err != nil {
 				// Use original userInfo if translation fails

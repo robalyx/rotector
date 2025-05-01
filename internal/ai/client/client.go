@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/cenkalti/backoff/v4"
 	"github.com/openai/openai-go"
 	"github.com/openai/openai-go/option"
 	"github.com/openai/openai-go/packages/ssestream"
@@ -15,8 +16,6 @@ import (
 	"go.uber.org/zap"
 	"golang.org/x/sync/semaphore"
 )
-
-var ErrNoProvidersAvailable = errors.New("no providers available")
 
 // WithReasoning adds reasoning fields to the chat completion parameters.
 func WithReasoning(params openai.ChatCompletionNewParams, opts ReasoningOptions) openai.ChatCompletionNewParams {
@@ -247,32 +246,53 @@ func (c *chatCompletions) NewStreaming(
 
 // checkBlockReasons checks if the response was blocked by content filtering.
 func (c *chatCompletions) checkBlockReasons(resp *openai.ChatCompletion, provider *providerClient, model string) error {
-	if len(resp.Choices) == 0 {
-		return nil
-	}
-
-	finishReason := resp.Choices[0].FinishReason
-	switch finishReason {
-	case "content_filter":
-		c.client.logger.Warn("Content blocked by provider",
-			zap.String("provider", provider.name),
-			zap.String("model", model),
-			zap.String("finishReason", finishReason))
-		return utils.ErrContentBlocked
-	case "stop":
-		return nil
-	case "":
-		c.client.logger.Warn("No finish reason",
+	if resp == nil {
+		c.client.logger.Warn("Received nil response from provider",
 			zap.String("provider", provider.name),
 			zap.String("model", model))
 		return nil
-	default:
+	}
+
+	if len(resp.Choices) == 0 {
+		c.client.logger.Warn("Received empty choices from provider",
+			zap.String("provider", provider.name),
+			zap.String("model", model))
+		return nil
+	}
+
+	// Check if finish reason is provided
+	finishReason := resp.Choices[0].FinishReason
+	if finishReason == "" {
+		c.client.logger.Warn("No finish reason provided",
+			zap.String("provider", provider.name),
+			zap.String("model", model))
+		return nil
+	}
+
+	// Map of finish reasons to their error handling
+	finishReasonHandlers := map[string]error{
+		"content_filter": utils.ErrContentBlocked,
+		"stop":           nil,
+	}
+
+	err, known := finishReasonHandlers[finishReason]
+	if !known {
 		c.client.logger.Warn("Unknown finish reason",
 			zap.String("provider", provider.name),
 			zap.String("model", model),
 			zap.String("finishReason", finishReason))
-		return utils.ErrContentBlocked
+		err = utils.ErrContentBlocked
 	}
+
+	if err != nil {
+		c.client.logger.Warn("Content blocked by provider",
+			zap.String("provider", provider.name),
+			zap.String("model", model),
+			zap.String("finishReason", finishReason))
+		return backoff.Permanent(err)
+	}
+
+	return nil
 }
 
 // prepareParams prepares the chat completion parameters by mapping the model name and adding safety settings.

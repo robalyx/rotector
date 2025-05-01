@@ -127,11 +127,11 @@ func (t *ThumbnailFetcher) ProcessBatchThumbnails(
 			}
 
 			currentBatch := initialBatch.Build()
-			_, err := utils.WithRetry(ctx, func() (map[uint64]string, error) {
+			err := utils.WithRetry(ctx, func() error {
 				// Fetch batch thumbnails
 				resp, err := t.roAPI.Thumbnails().GetBatchThumbnails(ctx, currentBatch)
 				if err != nil {
-					return nil, err
+					return err
 				}
 
 				// Process batch response
@@ -141,12 +141,13 @@ func (t *ThumbnailFetcher) ProcessBatchThumbnails(
 				mu.Unlock()
 
 				// If there are still pending requests, return error to trigger retry
+				// Note: we don't want to wait for 1 pending thumbnail to be fetched
 				currentBatch = pendingRequests.Build()
-				if len(currentBatch.Requests) > 0 {
-					return nil, ErrPendingThumbnails
+				if len(currentBatch.Requests) > 1 {
+					return ErrPendingThumbnails
 				}
 
-				return results, nil
+				return nil
 			}, utils.GetThumbnailRetryOptions())
 			if err != nil {
 				t.logger.Warn("Failed to fetch thumbnails after retries",
@@ -204,11 +205,11 @@ func (t *ThumbnailFetcher) ProcessPlayerTokens(ctx context.Context, tokens []str
 			}
 			currentBatch := batchRequests.Build()
 
-			_, err := utils.WithRetry(ctx, func() (map[string]string, error) {
+			err := utils.WithRetry(ctx, func() error {
 				// Fetch batch thumbnails
 				resp, err := t.roAPI.Thumbnails().GetBatchThumbnails(ctx, currentBatch)
 				if err != nil {
-					return nil, err
+					return err
 				}
 
 				// Process batch response
@@ -229,10 +230,10 @@ func (t *ThumbnailFetcher) ProcessPlayerTokens(ctx context.Context, tokens []str
 				// If there are still pending requests, return error to trigger retry
 				currentBatch = pendingRequests.Build()
 				if len(currentBatch.Requests) > 0 {
-					return nil, ErrPendingThumbnails
+					return ErrPendingThumbnails
 				}
 
-				return results, nil
+				return nil
 			}, utils.GetThumbnailRetryOptions())
 			if err != nil {
 				t.logger.Warn("Failed to fetch player token thumbnails after retries",

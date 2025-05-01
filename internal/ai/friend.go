@@ -218,7 +218,8 @@ func (a *FriendAnalyzer) processFriendBatch(ctx context.Context, batch []UserFri
 	prompt := fmt.Sprintf(FriendUserPrompt, string(batchDataJSON))
 
 	// Make API request with retry
-	return utils.WithRetry(ctx, func() (*BatchFriendAnalysis, error) {
+	var result *BatchFriendAnalysis
+	err = utils.WithRetry(ctx, func() error {
 		resp, err := a.chat.New(ctx, openai.ChatCompletionNewParams{
 			Messages: []openai.ChatCompletionMessageParamUnion{
 				openai.SystemMessage(FriendSystemPrompt),
@@ -239,12 +240,12 @@ func (a *FriendAnalyzer) processFriendBatch(ctx context.Context, batch []UserFri
 			TopP:        openai.Float(0.4),
 		})
 		if err != nil {
-			return nil, fmt.Errorf("openai API error: %w", err)
+			return fmt.Errorf("openai API error: %w", err)
 		}
 
 		// Check for empty response
 		if len(resp.Choices) == 0 || len(resp.Choices[0].Message.Content) == 0 {
-			return nil, fmt.Errorf("%w: no response from model", ErrModelResponse)
+			return fmt.Errorf("%w: no response from model", ErrModelResponse)
 		}
 
 		// Extract thought process
@@ -256,13 +257,14 @@ func (a *FriendAnalyzer) processFriendBatch(ctx context.Context, batch []UserFri
 		}
 
 		// Parse response from AI
-		var result *BatchFriendAnalysis
 		if err := sonic.Unmarshal([]byte(message.Content), &result); err != nil {
-			return nil, fmt.Errorf("JSON unmarshal error: %w", err)
+			return fmt.Errorf("JSON unmarshal error: %w", err)
 		}
 
-		return result, nil
+		return nil
 	}, utils.GetAIRetryOptions())
+
+	return result, err
 }
 
 // processBatch handles analysis for a batch of users.
@@ -323,10 +325,14 @@ func (a *FriendAnalyzer) processBatch(
 
 	// Handle content blocking
 	minBatchSize := max(len(batchData)/4, 1)
-	result, err := utils.WithRetrySplitBatch(
+
+	var result *BatchFriendAnalysis
+	err := utils.WithRetrySplitBatch(
 		ctx, batchData, len(batchData), minBatchSize,
-		func(batch []UserFriendData) (*BatchFriendAnalysis, error) {
-			return a.processFriendBatch(ctx, batch)
+		func(batch []UserFriendData) error {
+			var err error
+			result, err = a.processFriendBatch(ctx, batch)
+			return err
 		},
 		utils.GetAIRetryOptions(), a.logger,
 	)

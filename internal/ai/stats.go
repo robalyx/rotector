@@ -104,7 +104,8 @@ func (a *StatsAnalyzer) GenerateWelcomeMessage(
 	}
 
 	// Generate welcome message with retry
-	response, err := utils.WithRetry(ctx, func() (string, error) {
+	var response string
+	err = utils.WithRetry(ctx, func() error {
 		resp, err := a.chat.New(ctx, openai.ChatCompletionNewParams{
 			Messages: []openai.ChatCompletionMessageParamUnion{
 				openai.SystemMessage(StatsSystemPrompt),
@@ -116,12 +117,12 @@ func (a *StatsAnalyzer) GenerateWelcomeMessage(
 			MaxCompletionTokens: openai.Int(512),
 		})
 		if err != nil {
-			return "", fmt.Errorf("openai API error: %w", err)
+			return fmt.Errorf("openai API error: %w", err)
 		}
 
 		// Check for empty response
 		if len(resp.Choices) == 0 || len(resp.Choices[0].Message.Content) == 0 {
-			return "", fmt.Errorf("%w: no response from model", ErrModelResponse)
+			return fmt.Errorf("%w: no response from model", ErrModelResponse)
 		}
 
 		// Extract thought process
@@ -132,7 +133,8 @@ func (a *StatsAnalyzer) GenerateWelcomeMessage(
 				zap.String("thought", thought.Raw()))
 		}
 
-		return utils.CompressAllWhitespace(message.Content), nil
+		response = utils.CompressAllWhitespace(message.Content)
+		return nil
 	}, utils.GetAIRetryOptions())
 	if err != nil {
 		return "", err

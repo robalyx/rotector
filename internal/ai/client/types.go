@@ -2,6 +2,7 @@ package client
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/openai/openai-go"
@@ -9,6 +10,8 @@ import (
 	"github.com/sony/gobreaker"
 	"golang.org/x/sync/semaphore"
 )
+
+var ErrNoProvidersAvailable = errors.New("no providers available")
 
 // ReasoningOptions contains options for configuring reasoning fields.
 type ReasoningOptions struct {
@@ -19,18 +22,6 @@ type ReasoningOptions struct {
 	// Exclude determines whether to exclude reasoning from the response.
 	Exclude bool
 }
-
-// BlockReason represents different types of content blocking reasons.
-type BlockReason string
-
-const (
-	BlockReasonUnspecified BlockReason = "BLOCK_REASON_UNSPECIFIED"
-	BlockReasonSafety      BlockReason = "SAFETY"
-	BlockReasonOther       BlockReason = "OTHER"
-	BlockReasonBlocklist   BlockReason = "BLOCKLIST"
-	BlockReasonProhibited  BlockReason = "PROHIBITED_CONTENT"
-	BlockReasonImageSafety BlockReason = "IMAGE_SAFETY"
-)
 
 // CircuitBreakerSettings contains configuration for the circuit breaker.
 type CircuitBreakerSettings struct {
@@ -57,28 +48,4 @@ type providerClient struct {
 	semaphore     *semaphore.Weighted
 	modelMappings map[string]string
 	name          string
-}
-
-// String returns the string representation of the block reason.
-func (br BlockReason) String() string {
-	return string(br)
-}
-
-// Details returns human-readable details about the block reason.
-func (br BlockReason) Details() string {
-	switch br {
-	case BlockReasonSafety:
-		return "Check safetyRatings for specific category"
-	case BlockReasonBlocklist:
-		return "Content matched terminology blocklist"
-	case BlockReasonImageSafety:
-		return "Unsafe image generation content"
-	case BlockReasonProhibited:
-		return "Content violates provider's content policy"
-	case BlockReasonOther:
-		return "Content blocked for unspecified reasons"
-	case BlockReasonUnspecified:
-		return "Default block reason (unused)"
-	}
-	return "Unknown block reason"
 }
