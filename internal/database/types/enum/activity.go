@@ -21,8 +21,8 @@ const (
 	ActivityTypeUserCleared
 	// ActivityTypeUserSkipped tracks when a moderator skips reviewing a user.
 	ActivityTypeUserSkipped
-	// ActivityTypeUserRechecked tracks when a moderator requests an AI recheck.
-	ActivityTypeUserRechecked
+	// ActivityTypeUserQueued tracks when a moderator queues a user for review.
+	ActivityTypeUserQueued
 	// ActivityTypeUserTrainingUpvote tracks when a moderator upvotes a user in training mode.
 	ActivityTypeUserTrainingUpvote
 	// ActivityTypeUserTrainingDownvote tracks when a moderator downvotes a user in training mode.

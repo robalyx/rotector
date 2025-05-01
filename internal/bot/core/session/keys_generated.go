@@ -8,6 +8,7 @@ import (
 	"github.com/robalyx/rotector/internal/ai"
 	"github.com/robalyx/rotector/internal/database/types"
 	"github.com/robalyx/rotector/internal/database/types/enum"
+	"github.com/robalyx/rotector/internal/queue"
 	"github.com/robalyx/rotector/internal/worker/core"
 )
 
@@ -109,6 +110,18 @@ var (
 	ReviewLogsHasMore = NewKey[bool]("ReviewLogsHasMore", true)
 	// ReviewComments stores comments for the current user or group
 	ReviewComments = NewKey[[]*types.Comment]("ReviewComments", true)
+	// QueueStats stores queue statistics
+	QueueStats = NewKey[*queue.Stats]("QueueStats", true)
+	// QueuedUserID stores the ID of the currently queued user
+	QueuedUserID = NewKey[uint64]("QueuedUserID", true)
+	// QueuedUserTimestamp stores when the user was queued
+	QueuedUserTimestamp = NewKey[time.Time]("QueuedUserTimestamp", true)
+	// QueuedUserProcessing indicates if the user is being processed
+	QueuedUserProcessing = NewKey[bool]("QueuedUserProcessing", true)
+	// QueuedUserProcessed indicates if the user has been processed
+	QueuedUserProcessed = NewKey[bool]("QueuedUserProcessed", true)
+	// QueuedUserFlagged indicates if the processed user was flagged
+	QueuedUserFlagged = NewKey[bool]("QueuedUserFlagged", true)
 	// DiscordUserLookupID stores the Discord user ID being looked up
 	DiscordUserLookupID = NewKey[uint64]("DiscordUserLookupID", true)
 	// DiscordUserLookupName stores the Discord username

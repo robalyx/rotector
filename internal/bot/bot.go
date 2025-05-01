@@ -30,6 +30,7 @@ import (
 	"github.com/robalyx/rotector/internal/bot/handlers/guild"
 	"github.com/robalyx/rotector/internal/bot/handlers/leaderboard"
 	"github.com/robalyx/rotector/internal/bot/handlers/log"
+	"github.com/robalyx/rotector/internal/bot/handlers/queue"
 	groupReview "github.com/robalyx/rotector/internal/bot/handlers/review/group"
 	userReview "github.com/robalyx/rotector/internal/bot/handlers/review/user"
 	"github.com/robalyx/rotector/internal/bot/handlers/reviewer"
@@ -138,6 +139,7 @@ func New(app *setup.App) (*Bot, error) {
 	banLayout := ban.New(app, sessionManager)
 	reviewerLayout := reviewer.New(app, client)
 	guildLayout := guild.New(app, selfClient)
+	queueLayout := queue.New(app)
 
 	interactionManager.AddPages(selectorLayout.Pages())
 	interactionManager.AddPages(settingLayout.Pages())
@@ -156,6 +158,8 @@ func New(app *setup.App) (*Bot, error) {
 	interactionManager.AddPages(banLayout.Pages())
 	interactionManager.AddPages(reviewerLayout.Pages())
 	interactionManager.AddPages(guildLayout.Pages())
+	interactionManager.AddPages(queueLayout.Pages())
+
 	return b, nil
 }
 

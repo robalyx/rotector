@@ -382,6 +382,9 @@ func (m *ReviewMenu) handleNavigateUser(ctx *interaction.Context, s *session.Ses
 	session.OriginalUserReasons.Set(s, user.Reasons)
 	session.ReasonsChanged.Set(s, false)
 
+	direction := map[bool]string{true: "next", false: "previous"}[isNext]
+	ctx.Reload(fmt.Sprintf("Navigated to %s user.", direction))
+
 	// Log the view action
 	go m.layout.db.Model().Activity().Log(ctx.Context(), &types.ActivityLog{
 		ActivityTarget: types.ActivityTarget{
@@ -392,9 +395,6 @@ func (m *ReviewMenu) handleNavigateUser(ctx *interaction.Context, s *session.Ses
 		ActivityTimestamp: time.Now(),
 		Details:           map[string]any{},
 	})
-
-	direction := map[bool]string{true: "next", false: "previous"}[isNext]
-	ctx.Reload(fmt.Sprintf("Navigated to %s user.", direction))
 }
 
 // handleConfirmUser moves a user to the confirmed state and logs the action.
@@ -1002,22 +1002,13 @@ func (m *ReviewMenu) fetchNewTarget(ctx *interaction.Context, s *session.Session
 		return nil, isBanned, err
 	}
 
-	// Store the user and their original reasons in session
+	// Add current user to history and set index to point to it
+	session.AddToReviewHistory(s, session.UserReviewHistoryType, user.ID)
+
+	// Store user in session and show review menu
 	session.UserTarget.Set(s, user)
 	session.OriginalUserReasons.Set(s, user.Reasons)
 	session.ReasonsChanged.Set(s, false)
-
-	// Add current user to history and set index to point to it
-	history := session.UserReviewHistory.Get(s)
-	history = append(history, user.ID)
-
-	// Trim history if it exceeds the maximum size
-	if len(history) > constants.MaxReviewHistorySize {
-		history = history[len(history)-constants.MaxReviewHistorySize:]
-	}
-
-	session.UserReviewHistory.Set(s, history)
-	session.UserReviewHistoryIndex.Set(s, len(history)-1)
 
 	// Log the view action
 	go m.layout.db.Model().Activity().Log(ctx.Context(), &types.ActivityLog{

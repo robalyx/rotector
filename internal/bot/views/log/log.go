@@ -219,8 +219,8 @@ func (b *Builder) buildActivityTypeOptions() []discord.StringSelectMenuOption {
 			WithDefault(b.activityTypeFilter == enum.ActivityTypeUserCleared),
 		discord.NewStringSelectMenuOption("User Skipped", strconv.Itoa(int(enum.ActivityTypeUserSkipped))).
 			WithDefault(b.activityTypeFilter == enum.ActivityTypeUserSkipped),
-		discord.NewStringSelectMenuOption("User Rechecked", strconv.Itoa(int(enum.ActivityTypeUserRechecked))).
-			WithDefault(b.activityTypeFilter == enum.ActivityTypeUserRechecked),
+		discord.NewStringSelectMenuOption("User Queued", strconv.Itoa(int(enum.ActivityTypeUserQueued))).
+			WithDefault(b.activityTypeFilter == enum.ActivityTypeUserQueued),
 		discord.NewStringSelectMenuOption("User Training Upvote", strconv.Itoa(int(enum.ActivityTypeUserTrainingUpvote))).
 			WithDefault(b.activityTypeFilter == enum.ActivityTypeUserTrainingUpvote),
 		discord.NewStringSelectMenuOption("User Training Downvote", strconv.Itoa(int(enum.ActivityTypeUserTrainingDownvote))).

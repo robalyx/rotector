@@ -92,7 +92,8 @@ func (m *Menu) handleSelectMenu(ctx *interaction.Context, s *session.Session, cu
 		constants.ActivityBrowserButtonCustomID,
 		constants.ChatAssistantButtonCustomID,
 		constants.WorkerStatusButtonCustomID,
-		constants.ReviewerStatsButtonCustomID:
+		constants.ReviewerStatsButtonCustomID,
+		constants.QueueManagementButtonCustomID:
 		if !isReviewer {
 			m.layout.logger.Error("Non-reviewer attempted restricted action",
 				zap.Uint64("user_id", userID),
@@ -100,7 +101,8 @@ func (m *Menu) handleSelectMenu(ctx *interaction.Context, s *session.Session, cu
 			ctx.Error("You do not have permission to perform this action.")
 			return
 		}
-	case constants.AdminMenuButtonCustomID:
+	case constants.AdminMenuButtonCustomID,
+		constants.GuildOwnerMenuButtonCustomID:
 		if !isAdmin {
 			m.layout.logger.Error("Non-admin attempted restricted action",
 				zap.Uint64("user_id", userID),
@@ -135,7 +137,7 @@ func (m *Menu) handleSelectMenu(ctx *interaction.Context, s *session.Session, cu
 	case constants.ReviewerStatsButtonCustomID:
 		ctx.Show(constants.ReviewerStatsPageName, "")
 	case constants.GuildOwnerMenuButtonCustomID:
-		if !session.IsGuildOwner.Get(s) && !isAdmin {
+		if !session.IsGuildOwner.Get(s) {
 			ctx.Error("You must be a guild owner to access these tools.")
 			return
 		}
@@ -149,6 +151,8 @@ func (m *Menu) handleSelectMenu(ctx *interaction.Context, s *session.Session, cu
 		}
 
 		ctx.Show(constants.GuildOwnerPageName, "")
+	case constants.QueueManagementButtonCustomID:
+		ctx.Show(constants.QueuePageName, "")
 	}
 }
 
@@ -233,16 +237,7 @@ func (m *Menu) handleLookupRobloxUserModalSubmit(ctx *interaction.Context, s *se
 	}
 
 	// Add current user to history and set index to point to it
-	history := session.UserReviewHistory.Get(s)
-	history = append(history, user.ID)
-
-	// Trim history if it exceeds the maximum size
-	if len(history) > constants.MaxReviewHistorySize {
-		history = history[len(history)-constants.MaxReviewHistorySize:]
-	}
-
-	session.UserReviewHistory.Set(s, history)
-	session.UserReviewHistoryIndex.Set(s, len(history)-1)
+	session.AddToReviewHistory(s, session.UserReviewHistoryType, user.ID)
 
 	// Store user in session and show review menu
 	session.UserTarget.Set(s, user)
@@ -293,16 +288,7 @@ func (m *Menu) handleLookupRobloxGroupModalSubmit(ctx *interaction.Context, s *s
 	}
 
 	// Add current group to history and set index to point to it
-	history := session.GroupReviewHistory.Get(s)
-	history = append(history, group.ID)
-
-	// Trim history if it exceeds the maximum size
-	if len(history) > constants.MaxReviewHistorySize {
-		history = history[len(history)-constants.MaxReviewHistorySize:]
-	}
-
-	session.GroupReviewHistory.Set(s, history)
-	session.GroupReviewHistoryIndex.Set(s, len(history)-1)
+	session.AddToReviewHistory(s, session.GroupReviewHistoryType, group.ID)
 
 	// Store group in session and show review menu
 	session.GroupTarget.Set(s, group)

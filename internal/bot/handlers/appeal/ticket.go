@@ -279,16 +279,7 @@ func (m *TicketMenu) handleLookupUser(ctx *interaction.Context, s *session.Sessi
 		}
 
 		// Add current user to history and set index to point to it
-		history := session.UserReviewHistory.Get(s)
-		history = append(history, user.ID)
-
-		// Trim history if it exceeds the maximum size
-		if len(history) > constants.MaxReviewHistorySize {
-			history = history[len(history)-constants.MaxReviewHistorySize:]
-		}
-
-		session.UserReviewHistory.Set(s, history)
-		session.UserReviewHistoryIndex.Set(s, len(history)-1)
+		session.AddToReviewHistory(s, session.UserReviewHistoryType, user.ID)
 
 		// Store user in session and show review menu
 		session.UserTarget.Set(s, user)

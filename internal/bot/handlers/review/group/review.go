@@ -444,14 +444,17 @@ func (m *ReviewMenu) handleNavigateGroup(ctx *interaction.Context, s *session.Se
 		return
 	}
 
-	// Store in session
+	// Store as current group and reload
 	session.GroupTarget.Set(s, group)
 	session.GroupFlaggedMembersCount.Set(s, flaggedCount)
 	session.OriginalGroupReasons.Set(s, group.Reasons)
 	session.ReasonsChanged.Set(s, false)
 
+	direction := map[bool]string{true: "next", false: "previous"}[isNext]
+	ctx.Reload(fmt.Sprintf("Navigated to %s group.", direction))
+
 	// Log the view action
-	go m.layout.db.Model().Activity().Log(ctx.Context(), &types.ActivityLog{
+	m.layout.db.Model().Activity().Log(ctx.Context(), &types.ActivityLog{
 		ActivityTarget: types.ActivityTarget{
 			GroupID: group.ID,
 		},
@@ -460,9 +463,6 @@ func (m *ReviewMenu) handleNavigateGroup(ctx *interaction.Context, s *session.Se
 		ActivityTimestamp: time.Now(),
 		Details:           map[string]any{},
 	})
-
-	direction := map[bool]string{true: "next", false: "previous"}[isNext]
-	ctx.Reload(fmt.Sprintf("Navigated to %s group.", direction))
 }
 
 // handleConfirmGroup moves a group to the confirmed state and logs the action.
@@ -935,23 +935,14 @@ func (m *ReviewMenu) fetchNewTarget(ctx *interaction.Context, s *session.Session
 		return nil, isBanned, err
 	}
 
-	// Store the group, flagged users, and original reasons in session
+	// Store info in session
 	session.GroupTarget.Set(s, group)
 	session.GroupFlaggedMembersCount.Set(s, flaggedCount)
 	session.OriginalGroupReasons.Set(s, group.Reasons)
 	session.ReasonsChanged.Set(s, false)
 
 	// Add current group to history and set index to point to it
-	history := session.GroupReviewHistory.Get(s)
-	history = append(history, group.ID)
-
-	// Trim history if it exceeds the maximum size
-	if len(history) > constants.MaxReviewHistorySize {
-		history = history[len(history)-constants.MaxReviewHistorySize:]
-	}
-
-	session.GroupReviewHistory.Set(s, history)
-	session.GroupReviewHistoryIndex.Set(s, len(history)-1)
+	session.AddToReviewHistory(s, session.GroupReviewHistoryType, group.ID)
 
 	// Log the view action
 	go m.layout.db.Model().Activity().Log(ctx.Context(), &types.ActivityLog{

@@ -38,6 +38,8 @@ const (
 	UserCaesarPageName   = "Caesar Cipher Menu"
 	UserCommentsPageName = "User Comments"
 
+	QueuePageName = "Queue Management"
+
 	AdminPageName              = "Admin Menu"
 	AdminActionConfirmPageName = "Action Confirmation"
 
@@ -80,6 +82,7 @@ const (
 	LeaderboardMenuButtonCustomID   = "leaderboard_menu"
 	AdminMenuButtonCustomID         = "admin_menu"
 	AppealMenuButtonCustomID        = "appeal_menu"
+	QueueManagementButtonCustomID   = "queue_management"
 	ChatAssistantButtonCustomID     = "chat_assistant"
 	WorkerStatusButtonCustomID      = "worker_status"
 	LookupRobloxUserButtonCustomID  = "lookup_roblox_user" + ModalOpenSuffix
@@ -251,6 +254,19 @@ const (
 	MembersPerPage     = 12
 	MembersGridColumns = 3
 	MembersGridRows    = 4
+)
+
+// Queue Menu.
+const (
+	QueueUserButtonCustomID = "queue_user" + ModalOpenSuffix
+	QueueUserModalCustomID  = "queue_user_modal"
+	QueueUserInputCustomID  = "queue_user_input"
+
+	ManualReviewButtonCustomID = "manual_review" + ModalOpenSuffix
+	ManualReviewModalCustomID  = "manual_review_modal"
+	ManualReviewInputCustomID  = "manual_review_input"
+
+	ReviewQueuedUserButtonCustomID = "review_queued_user"
 )
 
 // Chat Menu.

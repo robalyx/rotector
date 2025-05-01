@@ -1,0 +1,345 @@
+package queue
+
+import (
+	"errors"
+	"fmt"
+	"strconv"
+	"time"
+
+	"github.com/disgoorg/disgo/discord"
+	"github.com/google/uuid"
+	"github.com/robalyx/rotector/internal/bot/constants"
+	"github.com/robalyx/rotector/internal/bot/core/interaction"
+	"github.com/robalyx/rotector/internal/bot/core/session"
+	view "github.com/robalyx/rotector/internal/bot/views/queue"
+	"github.com/robalyx/rotector/internal/database/types"
+	"github.com/robalyx/rotector/internal/database/types/enum"
+	"github.com/robalyx/rotector/internal/queue"
+	"github.com/robalyx/rotector/pkg/utils"
+	"go.uber.org/zap"
+)
+
+// Menu handles queue operations and their interactions.
+type Menu struct {
+	layout *Layout
+	page   *interaction.Page
+}
+
+// NewMenu creates a new queue menu.
+func NewMenu(layout *Layout) *Menu {
+	m := &Menu{layout: layout}
+	m.page = &interaction.Page{
+		Name: constants.QueuePageName,
+		Message: func(s *session.Session) *discord.MessageUpdateBuilder {
+			return view.NewBuilder(s).Build()
+		},
+		ShowHandlerFunc:   m.Show,
+		ButtonHandlerFunc: m.handleButton,
+		ModalHandlerFunc:  m.handleModal,
+	}
+	return m
+}
+
+// Show prepares and displays the queue interface.
+func (m *Menu) Show(ctx *interaction.Context, s *session.Session) {
+	// Get queue stats
+	stats, err := m.layout.d1Client.GetQueueStats(ctx.Context())
+	if err != nil {
+		m.layout.logger.Error("Failed to get queue stats", zap.Error(err))
+		ctx.Error("Failed to get queue statistics. Please try again.")
+		return
+	}
+
+	// Store stats in session
+	session.QueueStats.Set(s, stats)
+
+	// Get queued user status if one exists
+	if userID := session.QueuedUserID.Get(s); userID > 0 {
+		status, err := m.layout.d1Client.GetQueueStatus(ctx.Context(), userID)
+		if err != nil {
+			m.layout.logger.Error("Failed to get queue status", zap.Error(err))
+			ctx.Error("Failed to get queue status. Please try again.")
+			return
+		}
+
+		// Store status in session
+		session.QueuedUserProcessing.Set(s, status.Processing)
+		session.QueuedUserProcessed.Set(s, status.Processed)
+		session.QueuedUserFlagged.Set(s, status.Flagged)
+	}
+}
+
+// handleQueueUser opens a modal for entering a Roblox user ID to queue.
+func (m *Menu) handleQueueUser(ctx *interaction.Context) {
+	modal := discord.NewModalCreateBuilder().
+		SetCustomID(constants.QueueUserModalCustomID).
+		SetTitle("Queue Roblox User").
+		AddActionRow(
+			discord.NewTextInput(constants.QueueUserInputCustomID, discord.TextInputStyleShort, "User ID").
+				WithRequired(true).
+				WithPlaceholder("Enter the Roblox user ID to queue..."),
+		)
+
+	ctx.Modal(modal)
+}
+
+// handleManualReview opens a modal for entering a Roblox user ID to manually review.
+func (m *Menu) handleManualReview(ctx *interaction.Context) {
+	modal := discord.NewModalCreateBuilder().
+		SetCustomID(constants.ManualReviewModalCustomID).
+		SetTitle("Manual User Review").
+		AddActionRow(
+			discord.NewTextInput(constants.ManualReviewInputCustomID, discord.TextInputStyleShort, "User ID").
+				WithRequired(true).
+				WithPlaceholder("Enter the Roblox user ID to review..."),
+		)
+
+	ctx.Modal(modal)
+}
+
+// handleModal processes modal submissions.
+func (m *Menu) handleModal(ctx *interaction.Context, s *session.Session) {
+	switch ctx.Event().CustomID() {
+	case constants.QueueUserModalCustomID:
+		m.handleQueueUserModalSubmit(ctx, s)
+	case constants.ManualReviewModalCustomID:
+		m.handleManualReviewModalSubmit(ctx, s)
+	}
+}
+
+// handleQueueUserModalSubmit processes the user ID input and queues the user.
+func (m *Menu) handleQueueUserModalSubmit(ctx *interaction.Context, s *session.Session) {
+	// Get the user ID input
+	userIDStr := ctx.Event().ModalData().Text(constants.QueueUserInputCustomID)
+
+	// Parse profile URL if provided
+	parsedURL, err := utils.ExtractUserIDFromURL(userIDStr)
+	if err == nil {
+		userIDStr = parsedURL
+	}
+
+	// Parse user ID
+	userID, err := strconv.ParseUint(userIDStr, 10, 64)
+	if err != nil {
+		ctx.Cancel("Please provide a valid user ID.")
+		return
+	}
+
+	// Check if user exists in database first
+	user, err := m.layout.db.Service().User().GetUserByID(ctx.Context(), userIDStr, types.UserFieldAll)
+	if err == nil {
+		// Store user in session and show review menu
+		session.AddToReviewHistory(s, session.UserReviewHistoryType, user.ID)
+
+		session.UserTarget.Set(s, user)
+		session.OriginalUserReasons.Set(s, user.Reasons)
+		session.ReasonsChanged.Set(s, false)
+		ctx.Show(constants.UserReviewPageName, "")
+		return
+	}
+
+	// Queue the user
+	if err := m.layout.d1Client.QueueUser(ctx.Context(), userID); err != nil {
+		if errors.Is(err, queue.ErrUserRecentlyQueued) {
+			ctx.Cancel("This user was recently queued. Please wait before queuing again.")
+			return
+		}
+		m.layout.logger.Error("Failed to queue user", zap.Error(err))
+		ctx.Error("Failed to queue user. Please try again.")
+		return
+	}
+
+	// Store queued user ID in session
+	session.QueuedUserID.Set(s, userID)
+	session.QueuedUserTimestamp.Set(s, time.Now())
+
+	// Get updated queue stats
+	stats, err := m.layout.d1Client.GetQueueStats(ctx.Context())
+	if err != nil {
+		m.layout.logger.Error("Failed to get queue stats", zap.Error(err))
+	} else {
+		session.QueueStats.Set(s, stats)
+	}
+
+	ctx.Reload(fmt.Sprintf("Successfully queued user %d for processing.", userID))
+
+	// Log the queue action
+	m.layout.db.Model().Activity().Log(ctx.Context(), &types.ActivityLog{
+		ActivityTarget: types.ActivityTarget{
+			UserID: userID,
+		},
+		ReviewerID:        uint64(ctx.Event().User().ID),
+		ActivityType:      enum.ActivityTypeUserQueued,
+		ActivityTimestamp: time.Now(),
+		Details:           map[string]any{},
+	})
+}
+
+// handleManualReviewModalSubmit processes the user ID input and adds the user to the review system.
+func (m *Menu) handleManualReviewModalSubmit(ctx *interaction.Context, s *session.Session) {
+	// Get the user ID input
+	userIDStr := ctx.Event().ModalData().Text(constants.ManualReviewInputCustomID)
+
+	// Parse profile URL if provided
+	parsedURL, err := utils.ExtractUserIDFromURL(userIDStr)
+	if err == nil {
+		userIDStr = parsedURL
+	}
+
+	// Parse user ID
+	userID, err := strconv.ParseUint(userIDStr, 10, 64)
+	if err != nil {
+		ctx.Cancel("Please provide a valid user ID.")
+		return
+	}
+
+	// Check if user exists in database first
+	user, err := m.layout.db.Service().User().GetUserByID(ctx.Context(), userIDStr, types.UserFieldAll)
+	if err == nil {
+		// Store user in session and show review menu
+		session.AddToReviewHistory(s, session.UserReviewHistoryType, user.ID)
+
+		session.UserTarget.Set(s, user)
+		session.OriginalUserReasons.Set(s, user.Reasons)
+		session.ReasonsChanged.Set(s, false)
+		ctx.Show(constants.UserReviewPageName, "")
+		return
+	}
+
+	// Fetch user info from Roblox API
+	users := m.layout.userFetcher.FetchInfos(ctx.Context(), []uint64{userID})
+	if len(users) == 0 {
+		ctx.Cancel("Failed to fetch user information. The user may be banned or not exist.")
+		return
+	}
+
+	// Create new user with empty reasons
+	user = &types.ReviewUser{
+		User: users[0],
+	}
+	user.Status = enum.UserTypeFlagged
+	user.UUID = uuid.New()
+	user.Reasons = types.Reasons[enum.UserReasonType]{}
+
+	// Store user in session and show review menu
+	session.AddToReviewHistory(s, session.UserReviewHistoryType, user.ID)
+
+	session.UserTarget.Set(s, user)
+	session.OriginalUserReasons.Set(s, user.Reasons)
+	session.ReasonsChanged.Set(s, false)
+	ctx.Show(constants.UserReviewPageName, "")
+
+	// Log the manual review queue action
+	m.layout.db.Model().Activity().Log(ctx.Context(), &types.ActivityLog{
+		ActivityTarget: types.ActivityTarget{
+			UserID: userID,
+		},
+		ReviewerID:        uint64(ctx.Event().User().ID),
+		ActivityType:      enum.ActivityTypeUserQueued,
+		ActivityTimestamp: time.Now(),
+		Details:           map[string]any{},
+	})
+}
+
+// handleButton processes button interactions.
+func (m *Menu) handleButton(ctx *interaction.Context, s *session.Session, customID string) {
+	switch customID {
+	case constants.RefreshButtonCustomID:
+		m.handleRefresh(ctx, s)
+	case constants.AbortButtonCustomID:
+		m.handleAbort(ctx, s)
+	case constants.QueueUserButtonCustomID:
+		m.handleQueueUser(ctx)
+	case constants.ManualReviewButtonCustomID:
+		m.handleManualReview(ctx)
+	case constants.ReviewQueuedUserButtonCustomID:
+		m.handleReviewQueuedUser(ctx, s)
+	case constants.BackButtonCustomID:
+		ctx.NavigateBack("")
+	}
+}
+
+// handleRefresh updates the queue statistics.
+func (m *Menu) handleRefresh(ctx *interaction.Context, s *session.Session) {
+	// Get updated queue stats
+	stats, err := m.layout.d1Client.GetQueueStats(ctx.Context())
+	if err != nil {
+		m.layout.logger.Error("Failed to get queue stats", zap.Error(err))
+		ctx.Error("Failed to get queue statistics. Please try again.")
+		return
+	}
+	session.QueueStats.Set(s, stats)
+	ctx.Reload("Refreshed queue statistics.")
+}
+
+// handleAbort removes a user from the processing queue.
+func (m *Menu) handleAbort(ctx *interaction.Context, s *session.Session) {
+	// Get queued user ID from session
+	userID := session.QueuedUserID.Get(s)
+	if userID == 0 {
+		ctx.Cancel("No user is currently queued.")
+		return
+	}
+
+	// Remove user from queue
+	if err := m.layout.d1Client.RemoveFromQueue(ctx.Context(), userID); err != nil {
+		switch {
+		case errors.Is(err, queue.ErrUserNotFound):
+			// Clear session data since user is no longer in queue
+			session.QueuedUserID.Delete(s)
+			session.QueuedUserTimestamp.Delete(s)
+			ctx.Cancel("User is no longer in queue.")
+			return
+		case errors.Is(err, queue.ErrUserProcessing):
+			// Clear session data since we can't abort anymore
+			session.QueuedUserID.Delete(s)
+			session.QueuedUserTimestamp.Delete(s)
+			ctx.Cancel("Cannot abort - user is already being processed or has been processed.")
+			return
+		default:
+			m.layout.logger.Error("Failed to remove user from queue", zap.Error(err))
+			ctx.Error("Failed to remove user from queue. Please try again.")
+			return
+		}
+	}
+
+	// Clear queued user from session
+	session.QueuedUserID.Delete(s)
+	session.QueuedUserTimestamp.Delete(s)
+
+	// Get updated queue stats
+	stats, err := m.layout.d1Client.GetQueueStats(ctx.Context())
+	if err != nil {
+		m.layout.logger.Error("Failed to get queue stats", zap.Error(err))
+	} else {
+		session.QueueStats.Set(s, stats)
+	}
+
+	ctx.Reload(fmt.Sprintf("Successfully removed user %d from queue.", userID))
+}
+
+// handleReviewQueuedUser handles reviewing a queued user that has been processed.
+func (m *Menu) handleReviewQueuedUser(ctx *interaction.Context, s *session.Session) {
+	// Get queued user ID from session
+	userID := session.QueuedUserID.Get(s)
+	if userID == 0 {
+		ctx.Cancel("No user is currently queued.")
+		return
+	}
+
+	// Check if user exists in database
+	user, err := m.layout.db.Service().User().GetUserByID(ctx.Context(), strconv.FormatUint(userID, 10), types.UserFieldAll)
+	if err != nil {
+		m.layout.logger.Error("Failed to get user", zap.Error(err))
+		ctx.Error("Failed to get user information. Please try again.")
+		return
+	}
+
+	// Store user in session and show review menu
+	session.AddToReviewHistory(s, session.UserReviewHistoryType, user.ID)
+
+	session.UserTarget.Set(s, user)
+	session.OriginalUserReasons.Set(s, user.Reasons)
+	session.ReasonsChanged.Set(s, false)
+	ctx.Show(constants.UserReviewPageName, "")
+}

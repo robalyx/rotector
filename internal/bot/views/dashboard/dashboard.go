@@ -256,6 +256,9 @@ func (b *Builder) buildActionMenuOptions() []discord.StringSelectMenuOption {
 	// Add reviewer-only options
 	if b.isReviewer {
 		options = append(options,
+			discord.NewStringSelectMenuOption("Queue Management", constants.QueueManagementButtonCustomID).
+				WithEmoji(discord.ComponentEmoji{Name: "📥"}).
+				WithDescription("Add users to the processing queue"),
 			discord.NewStringSelectMenuOption("AI Chat Assistant", constants.ChatAssistantButtonCustomID).
 				WithEmoji(discord.ComponentEmoji{Name: "🤖"}).
 				WithDescription("Chat with AI about moderation topics"),

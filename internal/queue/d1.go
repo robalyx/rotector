@@ -9,6 +9,20 @@ import (
 	"go.uber.org/zap"
 )
 
+// Stats represents queue statistics.
+type Stats struct {
+	TotalItems  int
+	Processing  int
+	Unprocessed int
+}
+
+// Status represents the current status of a queued user.
+type Status struct {
+	Processing bool
+	Processed  bool
+	Flagged    bool
+}
+
 // D1Client handles Cloudflare D1 API requests.
 type D1Client struct {
 	api    *CloudflareAPI
@@ -148,4 +162,151 @@ func (c *D1Client) CleanupQueue(ctx context.Context, stuckTimeout, retentionPeri
 	}
 
 	return nil
+}
+
+// GetQueueStats retrieves current queue statistics.
+func (c *D1Client) GetQueueStats(ctx context.Context) (*Stats, error) {
+	// Get total items and processing count
+	query := `
+		SELECT 
+			COUNT(*) as total,
+			SUM(CASE WHEN processing = 1 THEN 1 ELSE 0 END) as processing,
+			SUM(CASE WHEN processed = 0 AND processing = 0 THEN 1 ELSE 0 END) as unprocessed
+		FROM queued_users
+		WHERE processed = 0
+	`
+
+	result, err := c.api.ExecuteSQL(ctx, query, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get queue stats: %w", err)
+	}
+
+	if len(result) == 0 {
+		return &Stats{}, nil
+	}
+
+	stats := &Stats{}
+	if total, ok := result[0]["total"].(float64); ok {
+		stats.TotalItems = int(total)
+	}
+	if processing, ok := result[0]["processing"].(float64); ok {
+		stats.Processing = int(processing)
+	}
+	if unprocessed, ok := result[0]["unprocessed"].(float64); ok {
+		stats.Unprocessed = int(unprocessed)
+	}
+
+	return stats, nil
+}
+
+// QueueUser adds a user to the processing queue.
+func (c *D1Client) QueueUser(ctx context.Context, userID uint64) error {
+	// Check if user exists and is not processed
+	query := `
+		SELECT queued_at, processed 
+		FROM queued_users 
+		WHERE user_id = ?
+	`
+
+	result, err := c.api.ExecuteSQL(ctx, query, []any{userID})
+	if err != nil {
+		return fmt.Errorf("failed to check queue status: %w", err)
+	}
+
+	// If user exists in queue
+	if len(result) > 0 {
+		// Check if user was queued in the past 7 days
+		if queuedAt, ok := result[0]["queued_at"].(float64); ok {
+			cutoffTime := time.Now().AddDate(0, 0, -7).Unix()
+			if int64(queuedAt) > cutoffTime {
+				return ErrUserRecentlyQueued
+			}
+		}
+
+		// Update existing record
+		updateQuery := `
+			UPDATE queued_users 
+			SET queued_at = ?, processed = 0, processing = 0 
+			WHERE user_id = ?
+		`
+		if _, err := c.api.ExecuteSQL(ctx, updateQuery, []any{time.Now().Unix(), userID}); err != nil {
+			return fmt.Errorf("failed to update queue entry: %w", err)
+		}
+		return nil
+	}
+
+	// Add new queue entry
+	insertQuery := `
+		INSERT INTO queued_users (user_id, queued_at, processed, processing) 
+		VALUES (?, ?, 0, 0)
+	`
+	if _, err := c.api.ExecuteSQL(ctx, insertQuery, []any{userID, time.Now().Unix()}); err != nil {
+		return fmt.Errorf("failed to add queue entry: %w", err)
+	}
+
+	return nil
+}
+
+// RemoveFromQueue removes an unprocessed user from the processing queue.
+func (c *D1Client) RemoveFromQueue(ctx context.Context, userID uint64) error {
+	// First check if the user is in an unprocessed state
+	query := `
+		SELECT processed, processing 
+		FROM queued_users 
+		WHERE user_id = ?
+	`
+	result, err := c.api.ExecuteSQL(ctx, query, []any{userID})
+	if err != nil {
+		return fmt.Errorf("failed to check queue status: %w", err)
+	}
+
+	if len(result) == 0 {
+		return ErrUserNotFound
+	}
+
+	processed, _ := result[0]["processed"].(float64)
+	processing, _ := result[0]["processing"].(float64)
+
+	if processed == 1 || processing == 1 {
+		return ErrUserProcessing
+	}
+
+	// Remove the unprocessed entry
+	deleteQuery := "DELETE FROM queued_users WHERE user_id = ? AND processed = 0 AND processing = 0"
+	if _, err := c.api.ExecuteSQL(ctx, deleteQuery, []any{userID}); err != nil {
+		return fmt.Errorf("failed to remove queue entry: %w", err)
+	}
+
+	return nil
+}
+
+// GetQueueStatus retrieves the current status of a queued user.
+func (c *D1Client) GetQueueStatus(ctx context.Context, userID uint64) (*Status, error) {
+	query := `
+		SELECT processing, processed, flagged 
+		FROM queued_users 
+		WHERE user_id = ?
+	`
+
+	result, err := c.api.ExecuteSQL(ctx, query, []any{userID})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get queue status: %w", err)
+	}
+
+	if len(result) == 0 {
+		return nil, ErrUserNotFound
+	}
+
+	var status Status
+	if processing, ok := result[0]["processing"].(float64); ok {
+		status.Processing = processing == 1
+	}
+	if processed, ok := result[0]["processed"].(float64); ok {
+		status.Processed = processed == 1
+	}
+	if flagged, ok := result[0]["flagged"].(float64); ok {
+		status.Flagged = flagged == 1
+	}
+
+	return &status, nil
 }

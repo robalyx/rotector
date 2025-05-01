@@ -27,6 +27,7 @@ import (
     "github.com/robalyx/rotector/internal/database/types/enum"
     "github.com/robalyx/rotector/internal/ai"
 	"github.com/robalyx/rotector/internal/worker/core"
+	"github.com/robalyx/rotector/internal/queue"
 	apiTypes "github.com/jaxron/roapi.go/pkg/api/types"
 )
 
@@ -110,6 +111,14 @@ func main() {
 		{Name: "ReviewLogs", Type: "[]*types.ActivityLog", Doc: "ReviewLogs stores the current review logs", Persist: true},
 		{Name: "ReviewLogsHasMore", Type: "bool", Doc: "ReviewLogsHasMore indicates if there are more logs available", Persist: true},
 		{Name: "ReviewComments", Type: "[]*types.Comment", Doc: "ReviewComments stores comments for the current user or group", Persist: true},
+
+		// Queue related keys
+		{Name: "QueueStats", Type: "*queue.Stats", Doc: "QueueStats stores queue statistics", Persist: true},
+		{Name: "QueuedUserID", Type: "uint64", Doc: "QueuedUserID stores the ID of the currently queued user", Persist: true},
+		{Name: "QueuedUserTimestamp", Type: "time.Time", Doc: "QueuedUserTimestamp stores when the user was queued", Persist: true},
+		{Name: "QueuedUserProcessing", Type: "bool", Doc: "QueuedUserProcessing indicates if the user is being processed", Persist: true},
+		{Name: "QueuedUserProcessed", Type: "bool", Doc: "QueuedUserProcessed indicates if the user has been processed", Persist: true},
+		{Name: "QueuedUserFlagged", Type: "bool", Doc: "QueuedUserFlagged indicates if the processed user was flagged", Persist: true},
 
 		// Discord user lookup related keys
 		{Name: "DiscordUserLookupID", Type: "uint64", Doc: "DiscordUserLookupID stores the Discord user ID being looked up", Persist: true},
