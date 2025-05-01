@@ -106,17 +106,15 @@ func (b *ReviewBuilder) Build() *discord.MessageUpdateBuilder {
 	var reviewInfoDisplays []discord.ContainerSubComponent
 
 	// Add reason section with evidence
-	if reasonDisplay := b.buildReasonDisplay(); reasonDisplay != nil {
-		reviewInfoDisplays = append(reviewInfoDisplays, reasonDisplay)
+	reviewInfoDisplays = append(reviewInfoDisplays, b.buildReasonDisplay())
 
-		// Add reason management dropdown for reviewers
-		if b.IsReviewer && b.ReviewMode != enum.ReviewModeTraining {
-			reviewInfoDisplays = append(reviewInfoDisplays,
-				discord.NewActionRow(
-					discord.NewStringSelectMenu(constants.ReasonSelectMenuCustomID, "Manage Reasons", b.buildReasonOptions()...),
-				),
-			)
-		}
+	// Add reason management dropdown for reviewers
+	if b.IsReviewer && b.ReviewMode != enum.ReviewModeTraining {
+		reviewInfoDisplays = append(reviewInfoDisplays,
+			discord.NewActionRow(
+				discord.NewStringSelectMenu(constants.ReasonSelectMenuCustomID, "Manage Reasons", b.buildReasonOptions()...),
+			),
+		)
 	}
 
 	// Create review container if we have any review info
@@ -303,12 +301,14 @@ func (b *ReviewBuilder) buildInteractiveComponents() []discord.ContainerSubCompo
 
 // buildReasonDisplay creates the reason section with evidence.
 func (b *ReviewBuilder) buildReasonDisplay() discord.ContainerSubComponent {
-	if len(b.user.Reasons) == 0 {
-		return nil
-	}
-
 	var content strings.Builder
 	content.WriteString("## Reasons and Evidence\n")
+
+	if len(b.user.Reasons) == 0 {
+		content.WriteString("No reasons have been added yet.")
+		return discord.NewTextDisplay(content.String())
+	}
+
 	content.WriteString(fmt.Sprintf("-# Total Confidence: %.2f%%\n\n", b.user.Confidence*100))
 
 	// Calculate dynamic truncation length based on number of reasons
