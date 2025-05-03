@@ -86,7 +86,9 @@ func (c *FriendChecker) ProcessUsers(userInfos []*types.ReviewUser, reasonsMap m
 					confirmedFriends[friend.ID] = reviewUser.User
 				case enum.UserTypeFlagged:
 					flaggedFriends[friend.ID] = reviewUser.User
-				} //exhaustive:ignore
+				default:
+					continue
+				}
 			}
 		}
 

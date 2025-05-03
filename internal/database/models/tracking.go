@@ -37,6 +37,7 @@ func (r *TrackingModel) AddUsersToGroupsTracking(ctx context.Context, groupToUse
 		trackings = append(trackings, types.GroupMemberTracking{
 			ID:           groupID,
 			LastAppended: now,
+			LastChecked:  now,
 			IsFlagged:    false,
 		})
 
@@ -225,5 +226,192 @@ func (r *TrackingModel) RemoveUserFromAllGroups(ctx context.Context, userID uint
 
 	r.logger.Debug("Removed user from all group tracking",
 		zap.Uint64("userID", userID))
+	return nil
+}
+
+// AddOutfitAssetsToTracking adds multiple outfits to multiple assets' tracking lists.
+// The map values can contain either outfit IDs or user IDs (for current outfit).
+func (r *TrackingModel) AddOutfitAssetsToTracking(ctx context.Context, assetToOutfits map[uint64][]types.TrackedID) error {
+	// Create tracking entries for bulk insert
+	trackings := make([]types.OutfitAssetTracking, 0, len(assetToOutfits))
+	trackingOutfits := make([]types.OutfitAssetTrackingOutfit, 0)
+	now := time.Now()
+
+	for assetID, trackedIDs := range assetToOutfits {
+		trackings = append(trackings, types.OutfitAssetTracking{
+			ID:           assetID,
+			LastAppended: now,
+			LastChecked:  now,
+			IsFlagged:    false,
+		})
+
+		for _, tracked := range trackedIDs {
+			trackingOutfits = append(trackingOutfits, types.OutfitAssetTrackingOutfit{
+				AssetID:   assetID,
+				TrackedID: tracked.ID,
+				IsUserID:  tracked.IsUserID,
+			})
+		}
+	}
+
+	return r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+		// Lock the assets in a consistent order to prevent deadlocks
+		assetIDs := make([]uint64, 0, len(assetToOutfits))
+		for assetID := range assetToOutfits {
+			assetIDs = append(assetIDs, assetID)
+		}
+		slices.Sort(assetIDs)
+
+		// Lock the rows we're going to update
+		var existing []types.OutfitAssetTracking
+		err := tx.NewSelect().
+			Model(&existing).
+			Where("id IN (?)", bun.In(assetIDs)).
+			For("UPDATE").
+			Order("id").
+			Scan(ctx)
+		if err != nil {
+			return err
+		}
+
+		// Perform bulk insert with upsert
+		_, err = tx.NewInsert().
+			Model(&trackings).
+			On("CONFLICT (id) DO UPDATE").
+			Set("last_appended = EXCLUDED.last_appended").
+			Set("is_flagged = outfit_asset_tracking.is_flagged").
+			Exec(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to add tracking entries: %w", err)
+		}
+
+		_, err = tx.NewInsert().
+			Model(&trackingOutfits).
+			On("CONFLICT (asset_id, tracked_id) DO UPDATE").
+			Set("is_user_id = EXCLUDED.is_user_id").
+			Exec(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to add tracking outfit entries: %w", err)
+		}
+
+		r.logger.Debug("Successfully processed outfit asset tracking updates",
+			zap.Int("assetCount", len(assetToOutfits)))
+
+		return nil
+	})
+}
+
+// GetOutfitAssetTrackingsToCheck finds assets that haven't been checked recently
+// with priority for assets appearing in more outfits or current outfits.
+func (r *TrackingModel) GetOutfitAssetTrackingsToCheck(
+	ctx context.Context, batchSize int, minOutfits int, minOutfitsOverride int,
+) (map[uint64][]types.TrackedID, error) {
+	result := make(map[uint64][]types.TrackedID)
+
+	now := time.Now()
+	tenMinutesAgo := now.Add(-10 * time.Minute)
+	oneMinuteAgo := now.Add(-1 * time.Minute)
+
+	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+		var trackings []types.OutfitAssetTracking
+
+		// Build subquery to find the asset IDs to update
+		subq := tx.NewSelect().
+			Model((*types.OutfitAssetTracking)(nil)).
+			Column("id").
+			With("outfit_counts", tx.NewSelect().
+				Model((*types.OutfitAssetTrackingOutfit)(nil)).
+				Column("asset_id").
+				ColumnExpr("COUNT(*) as outfit_count").
+				Group("asset_id")).
+			Join("JOIN outfit_counts ON outfit_asset_trackings.id = outfit_counts.asset_id").
+			Where("is_flagged = FALSE").
+			Where("outfit_count >= ?", minOutfits).
+			Where("(last_checked < ? AND outfit_count >= ?) OR "+
+				"(last_checked < ? AND outfit_count >= ? / 2)",
+				tenMinutesAgo, minOutfitsOverride,
+				oneMinuteAgo, minOutfitsOverride).
+			OrderExpr("outfit_count DESC").
+			Order("last_checked ASC").
+			Limit(batchSize)
+
+		// Update the selected assets and return their data
+		err := tx.NewUpdate().
+			Model(&trackings).
+			Set("last_checked = ?", now).
+			Where("id IN (?)", subq).
+			Returning("id").
+			Scan(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to get and update asset trackings: %w", err)
+		}
+
+		// Get outfits for each asset
+		if len(trackings) > 0 {
+			assetIDs := make([]uint64, len(trackings))
+			for i, tracking := range trackings {
+				assetIDs[i] = tracking.ID
+			}
+
+			var trackingOutfits []types.OutfitAssetTrackingOutfit
+			err = tx.NewSelect().
+				Model(&trackingOutfits).
+				Where("asset_id IN (?)", bun.In(assetIDs)).
+				Scan(ctx)
+			if err != nil {
+				return fmt.Errorf("failed to get tracking outfits: %w", err)
+			}
+
+			// Map outfits/users to their assets
+			for _, to := range trackingOutfits {
+				if to.IsUserID {
+					result[to.AssetID] = append(result[to.AssetID], types.NewUserID(to.TrackedID))
+				} else {
+					result[to.AssetID] = append(result[to.AssetID], types.NewOutfitID(to.TrackedID))
+				}
+			}
+		}
+
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return result, nil
+}
+
+// RemoveUserAndOutfitsFromAssetTracking removes both user ID and outfit IDs from asset tracking.
+func (r *TrackingModel) RemoveUserAndOutfitsFromAssetTracking(ctx context.Context, userID uint64, outfitIDs []uint64) error {
+	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+		// Remove user ID from current outfit tracking
+		_, err := tx.NewDelete().
+			Model((*types.OutfitAssetTrackingOutfit)(nil)).
+			Where("tracked_id = ? AND is_user_id = TRUE", userID).
+			Exec(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to remove user from asset tracking: %w (userID=%d)", err, userID)
+		}
+
+		// Remove outfit IDs if any exist
+		if len(outfitIDs) > 0 {
+			_, err = tx.NewDelete().
+				Model((*types.OutfitAssetTrackingOutfit)(nil)).
+				Where("tracked_id IN (?) AND is_user_id = FALSE", bun.In(outfitIDs)).
+				Exec(ctx)
+			if err != nil {
+				return fmt.Errorf("failed to remove outfits from asset tracking: %w (outfitCount=%d)", err, len(outfitIDs))
+			}
+		}
+
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+
+	r.logger.Debug("Removed user and outfits from asset tracking",
+		zap.Uint64("userID", userID),
+		zap.Int("outfitCount", len(outfitIDs)))
 	return nil
 }

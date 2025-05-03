@@ -157,7 +157,9 @@ func (b *UpdateBuilder) buildModalComponents() []discord.ContainerSubComponent {
 		buttonText = "Set Value"
 	case enum.SettingTypeText:
 		buttonText = "Set Description"
-	} //exhaustive:ignore
+	default:
+		buttonText = "Set Value"
+	}
 
 	components = append(components, discord.NewActionRow(
 		discord.NewPrimaryButton(buttonText, b.customID+constants.ModalOpenSuffix),

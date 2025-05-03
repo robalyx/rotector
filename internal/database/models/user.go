@@ -978,7 +978,9 @@ func (r *UserModel) GetUserGroups(ctx context.Context, userID uint64) ([]*apiTyp
 }
 
 // GetUserOutfits fetches outfits for a user.
-func (r *UserModel) GetUserOutfits(ctx context.Context, userID uint64) ([]*apiTypes.Outfit, error) {
+func (r *UserModel) GetUserOutfits(
+	ctx context.Context, userID uint64,
+) ([]*apiTypes.Outfit, map[uint64][]*apiTypes.AssetV2, error) {
 	var results []types.UserOutfitQueryResult
 
 	err := r.db.NewSelect().
@@ -989,7 +991,58 @@ func (r *UserModel) GetUserOutfits(ctx context.Context, userID uint64) ([]*apiTy
 		Scan(ctx, &results)
 
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
-		return nil, fmt.Errorf("failed to get user outfits: %w", err)
+		return nil, nil, fmt.Errorf("failed to get user outfits: %w", err)
+	}
+
+	// Get outfit assets
+	var outfitAssets []types.OutfitAsset
+	err = r.db.NewSelect().
+		Model(&outfitAssets).
+		Join("JOIN outfit_assets oa ON oa.outfit_id = outfit_assets.outfit_id").
+		Where("outfit_id IN (SELECT outfit_id FROM user_outfits WHERE user_id = ?)", userID).
+		Scan(ctx)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return nil, nil, fmt.Errorf("failed to get outfit assets: %w", err)
+	}
+
+	// Get asset info
+	var assetInfos []types.AssetInfo
+	if len(outfitAssets) > 0 {
+		assetIDs := make([]uint64, len(outfitAssets))
+		for i, asset := range outfitAssets {
+			assetIDs[i] = asset.AssetID
+		}
+
+		err = r.db.NewSelect().
+			Model(&assetInfos).
+			Where("id IN (?)", bun.In(assetIDs)).
+			Scan(ctx)
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return nil, nil, fmt.Errorf("failed to get asset info: %w", err)
+		}
+	}
+
+	// Build map of outfit ID to assets
+	outfitToAssets := make(map[uint64][]*apiTypes.AssetV2)
+	assetInfoMap := make(map[uint64]types.AssetInfo)
+	for _, info := range assetInfos {
+		assetInfoMap[info.ID] = info
+	}
+
+	for _, asset := range outfitAssets {
+		info, ok := assetInfoMap[asset.AssetID]
+		if !ok {
+			continue
+		}
+
+		outfitToAssets[asset.OutfitID] = append(outfitToAssets[asset.OutfitID], &apiTypes.AssetV2{
+			ID:   info.ID,
+			Name: info.Name,
+			AssetType: apiTypes.AssetType{
+				ID: info.AssetType,
+			},
+			CurrentVersionID: asset.CurrentVersionID,
+		})
 	}
 
 	// Convert to API types
@@ -998,7 +1051,31 @@ func (r *UserModel) GetUserOutfits(ctx context.Context, userID uint64) ([]*apiTy
 		apiOutfits[i] = result.ToAPIType()
 	}
 
-	return apiOutfits, nil
+	return apiOutfits, outfitToAssets, nil
+}
+
+// GetUserAssets fetches the current assets for a user.
+func (r *UserModel) GetUserAssets(ctx context.Context, userID uint64) ([]*apiTypes.AssetV2, error) {
+	var results []types.UserAssetQueryResult
+
+	err := r.db.NewSelect().
+		TableExpr("user_assets ua").
+		Join("JOIN asset_infos ai ON ai.id = ua.asset_id").
+		ColumnExpr("ua.user_id, ua.asset_id, ua.current_version_id, "+
+			"ai.name, ai.asset_type").
+		Where("ua.user_id = ?", userID).
+		Scan(ctx, &results)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get user assets: %w", err)
+	}
+
+	// Convert to API types
+	assets := make([]*apiTypes.AssetV2, len(results))
+	for i, result := range results {
+		assets[i] = result.ToAPIType()
+	}
+
+	return assets, nil
 }
 
 // GetUserFriends fetches friends for a user.
@@ -1155,8 +1232,10 @@ func (r *UserModel) SaveUserGroups(ctx context.Context, tx bun.Tx, userID uint64
 	return nil
 }
 
-// SaveUserOutfits saves outfits for a user.
-func (r *UserModel) SaveUserOutfits(ctx context.Context, tx bun.Tx, userID uint64, outfits []*apiTypes.Outfit) error {
+// SaveUserOutfits saves outfits and their assets for a user.
+func (r *UserModel) SaveUserOutfits(
+	ctx context.Context, tx bun.Tx, userID uint64, outfits []*apiTypes.Outfit, outfitAssets map[uint64][]*apiTypes.AssetV2,
+) error {
 	if len(outfits) == 0 {
 		return nil
 	}
@@ -1191,6 +1270,98 @@ func (r *UserModel) SaveUserOutfits(ctx context.Context, tx bun.Tx, userID uint6
 		Exec(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to upsert user outfits: %w", err)
+	}
+
+	// Save outfit assets if provided
+	if len(outfitAssets) > 0 {
+		var (
+			assets   []types.OutfitAsset
+			assetMap = make(map[uint64]types.AssetInfo)
+		)
+
+		// Prepare asset data
+		for outfitID, assetList := range outfitAssets {
+			for _, asset := range assetList {
+				assets = append(assets, types.OutfitAsset{
+					OutfitID:         outfitID,
+					AssetID:          asset.ID,
+					CurrentVersionID: asset.CurrentVersionID,
+				})
+
+				assetMap[asset.ID] = types.AssetInfo{
+					ID:        asset.ID,
+					Name:      asset.Name,
+					AssetType: asset.AssetType.ID,
+				}
+			}
+		}
+
+		// Convert map to slice for insertion
+		assetInfo := make([]types.AssetInfo, 0, len(assetMap))
+		for _, info := range assetMap {
+			assetInfo = append(assetInfo, info)
+		}
+
+		// Save asset info
+		_, err = tx.NewInsert().
+			Model(&assetInfo).
+			On("CONFLICT (id) DO UPDATE").
+			Set("name = EXCLUDED.name").
+			Set("asset_type = EXCLUDED.asset_type").
+			Exec(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to upsert asset info: %w", err)
+		}
+
+		// Save outfit assets
+		_, err = tx.NewInsert().
+			Model(&assets).
+			On("CONFLICT (outfit_id, asset_id) DO UPDATE").
+			Set("current_version_id = EXCLUDED.current_version_id").
+			Exec(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to upsert outfit assets: %w", err)
+		}
+	}
+
+	return nil
+}
+
+// SaveUserAssets saves the current assets for a user.
+func (r *UserModel) SaveUserAssets(ctx context.Context, tx bun.Tx, userID uint64, assets []*apiTypes.AssetV2) error {
+	if len(assets) == 0 {
+		return nil
+	}
+
+	// Prepare user assets and asset info
+	userAssets := make([]types.UserAsset, 0, len(assets))
+	assetInfos := make([]types.AssetInfo, 0, len(assets))
+
+	for _, asset := range assets {
+		userAsset, assetInfo := types.FromAPIAsset(userID, asset)
+		userAssets = append(userAssets, *userAsset)
+		assetInfos = append(assetInfos, *assetInfo)
+	}
+
+	// Save asset info
+	_, err := tx.NewInsert().
+		Model(&assetInfos).
+		On("CONFLICT (id) DO UPDATE").
+		Set("name = EXCLUDED.name").
+		Set("asset_type = EXCLUDED.asset_type").
+		Exec(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to upsert asset info: %w", err)
+	}
+
+	// Save user assets
+	_, err = tx.NewInsert().
+		Model(&userAssets).
+		On("CONFLICT (user_id, asset_id) DO UPDATE").
+		Set("current_version_id = EXCLUDED.current_version_id").
+		Exec(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to upsert user assets: %w", err)
 	}
 
 	return nil

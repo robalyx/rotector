@@ -86,16 +86,28 @@ func init() { //nolint:funlen
 			CREATE INDEX IF NOT EXISTS idx_group_member_trackings_check 
 			ON group_member_trackings (last_checked ASC)
 			WHERE is_flagged = false;
-			
-			CREATE INDEX IF NOT EXISTS idx_group_member_trackings_id
-			ON group_member_trackings (id);
 
-			-- Group member tracking users indexes
 			CREATE INDEX IF NOT EXISTS idx_group_member_tracking_users_group
 			ON group_member_tracking_users (group_id);
 
 			CREATE INDEX IF NOT EXISTS idx_group_member_tracking_users_user
 			ON group_member_tracking_users (user_id);
+
+			-- Outfit asset tracking indexes
+			CREATE INDEX IF NOT EXISTS idx_outfit_asset_trackings_check 
+			ON outfit_asset_trackings (last_checked ASC)
+			WHERE is_flagged = false;
+
+			CREATE INDEX IF NOT EXISTS idx_outfit_asset_tracking_outfits_asset
+			ON outfit_asset_tracking_outfits (asset_id);
+
+			CREATE INDEX IF NOT EXISTS idx_outfit_asset_tracking_outfits_user
+			ON outfit_asset_tracking_outfits (tracked_id)
+			WHERE is_user_id = TRUE;
+
+			CREATE INDEX IF NOT EXISTS idx_outfit_asset_tracking_outfits_outfit_only
+			ON outfit_asset_tracking_outfits (tracked_id)
+			WHERE is_user_id = FALSE;
 
 			-- Group review sorting indexes
 			CREATE INDEX IF NOT EXISTS idx_groups_confidence
@@ -280,6 +292,18 @@ func init() { //nolint:funlen
 			CREATE INDEX IF NOT EXISTS idx_user_outfits_user_id
 			ON user_outfits (user_id);
 
+			CREATE INDEX IF NOT EXISTS idx_outfit_assets_outfit_id
+			ON outfit_assets (outfit_id);
+
+			CREATE INDEX IF NOT EXISTS idx_outfit_assets_asset_id
+			ON outfit_assets (asset_id);
+			
+			CREATE INDEX IF NOT EXISTS idx_user_assets_user_id
+			ON user_assets (user_id);
+
+			CREATE INDEX IF NOT EXISTS idx_user_assets_asset_id
+			ON user_assets (asset_id);
+
 			CREATE INDEX IF NOT EXISTS idx_user_friends_user_id
 			ON user_friends (user_id);
 
@@ -389,11 +413,15 @@ func init() { //nolint:funlen
 
 			-- Group tracking indexes
 			DROP INDEX IF EXISTS idx_group_member_trackings_check;
-			DROP INDEX IF EXISTS idx_group_member_trackings_id;
 
-			-- Group member tracking users indexes
 			DROP INDEX IF EXISTS idx_group_member_tracking_users_group;
 			DROP INDEX IF EXISTS idx_group_member_tracking_users_user;
+
+			-- Outfit asset tracking indexes
+			DROP INDEX IF EXISTS idx_outfit_asset_trackings_check;
+			DROP INDEX IF EXISTS idx_outfit_asset_tracking_outfits_asset;
+			DROP INDEX IF EXISTS idx_outfit_asset_tracking_outfits_user;
+			DROP INDEX IF EXISTS idx_outfit_asset_tracking_outfits_outfit_only;
 
 			-- Group review sorting indexes
 			DROP INDEX IF EXISTS idx_groups_confidence;
@@ -492,6 +520,10 @@ func init() { //nolint:funlen
 			-- User relationship indexes
 			DROP INDEX IF EXISTS idx_user_groups_user_id_rank;
 			DROP INDEX IF EXISTS idx_user_outfits_user_id;
+			DROP INDEX IF EXISTS idx_outfit_assets_outfit_id;
+			DROP INDEX IF EXISTS idx_outfit_assets_asset_id;
+			DROP INDEX IF EXISTS idx_user_assets_user_id;
+			DROP INDEX IF EXISTS idx_user_assets_asset_id;
 			DROP INDEX IF EXISTS idx_user_friends_user_id;
 			DROP INDEX IF EXISTS idx_user_games_user_id;
 			DROP INDEX IF EXISTS idx_user_inventory_user_id;

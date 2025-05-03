@@ -3,6 +3,7 @@ package checker
 import (
 	"context"
 
+	apiTypes "github.com/jaxron/roapi.go/pkg/api/types"
 	"github.com/robalyx/rotector/internal/ai"
 	"github.com/robalyx/rotector/internal/database"
 	"github.com/robalyx/rotector/internal/database/types"
@@ -77,7 +78,7 @@ func (c *UserChecker) ProcessUsers(userInfos []*types.ReviewUser) map[uint64]str
 	c.ivanAnalyzer.ProcessUsers(userInfos, reasonsMap)
 
 	// Process outfit analysis
-	c.outfitAnalyzer.ProcessOutfits(userInfos, reasonsMap)
+	flaggedOutfits := c.outfitAnalyzer.ProcessOutfits(userInfos, reasonsMap)
 
 	// Stop if no users were flagged
 	if len(reasonsMap) == 0 {
@@ -106,6 +107,9 @@ func (c *UserChecker) ProcessUsers(userInfos []*types.ReviewUser) map[uint64]str
 	// Track flagged users' group memberships
 	go c.trackFlaggedUsersGroups(flaggedUsers)
 
+	// Track flagged users' outfit assets
+	go c.trackOutfitAssets(flaggedUsers, flaggedOutfits)
+
 	c.logger.Info("Finished processing users",
 		zap.Int("totalProcessed", len(userInfos)),
 		zap.Int("flaggedUsers", len(flaggedUsers)))
@@ -132,5 +136,97 @@ func (c *UserChecker) trackFlaggedUsersGroups(flaggedUsers map[uint64]*types.Rev
 		if err := c.db.Model().Tracking().AddUsersToGroupsTracking(context.Background(), groupUsersTracking); err != nil {
 			c.logger.Error("Failed to add flagged users to groups tracking", zap.Error(err))
 		}
+	}
+}
+
+// trackOutfitAssets adds outfit assets to tracking.
+func (c *UserChecker) trackOutfitAssets(flaggedUsers map[uint64]*types.ReviewUser, flaggedOutfits map[uint64]map[string]struct{}) {
+	assetOutfitsTracking := make(map[uint64][]types.TrackedID)
+
+	// Collect outfit assets only for flagged outfits
+	for userID, user := range flaggedUsers {
+		// Skip if user wasn't flagged for outfit reasons
+		if user.Reasons == nil || user.Reasons[enum.UserReasonTypeOutfit] == nil {
+			continue
+		}
+
+		// Get the map of flagged outfits
+		userFlaggedOutfits, hasFlaggedOutfits := flaggedOutfits[userID]
+		if !hasFlaggedOutfits {
+			continue
+		}
+
+		// Track current outfit assets if it was flagged
+		if _, currentOutfitFlagged := userFlaggedOutfits["Current Outfit"]; currentOutfitFlagged && user.CurrentAssets != nil {
+			for _, asset := range user.CurrentAssets {
+				if isTrackableAssetType(asset.AssetType.ID) {
+					assetOutfitsTracking[asset.ID] = append(assetOutfitsTracking[asset.ID], types.NewUserID(user.ID))
+				}
+			}
+		}
+
+		// Create map of outfit IDs to names for O(1) lookup
+		outfitNames := make(map[uint64]string, len(user.Outfits))
+		for _, outfit := range user.Outfits {
+			outfitNames[outfit.ID] = outfit.Name
+		}
+
+		// Track assets from flagged outfits
+		for outfitID, assets := range user.OutfitAssets {
+			// Get outfit name from our map
+			outfitName, exists := outfitNames[outfitID]
+			if !exists || outfitName == "Current Outfit" {
+				continue
+			}
+
+			// Skip if this outfit wasn't flagged
+			if _, wasFlagged := userFlaggedOutfits[outfitName]; !wasFlagged {
+				continue
+			}
+
+			// Track assets for this flagged outfit
+			for _, asset := range assets {
+				if isTrackableAssetType(asset.AssetType.ID) {
+					assetOutfitsTracking[asset.ID] = append(assetOutfitsTracking[asset.ID], types.NewOutfitID(outfitID))
+				}
+			}
+		}
+	}
+
+	// Add to tracking if we have any data
+	if len(assetOutfitsTracking) > 0 {
+		if err := c.db.Model().Tracking().AddOutfitAssetsToTracking(context.Background(), assetOutfitsTracking); err != nil {
+			c.logger.Error("Failed to add outfit assets to tracking", zap.Error(err))
+		}
+	}
+}
+
+// isTrackableAssetType checks if an asset type is one we want to track.
+func isTrackableAssetType(assetType apiTypes.ItemAssetType) bool {
+	switch assetType {
+	case apiTypes.ItemAssetTypeTShirt,
+		apiTypes.ItemAssetTypeShirt,
+		apiTypes.ItemAssetTypePants,
+		apiTypes.ItemAssetTypeNeckAccessory,
+		apiTypes.ItemAssetTypeShoulderAccessory,
+		apiTypes.ItemAssetTypeFrontAccessory,
+		apiTypes.ItemAssetTypeBackAccessory,
+		apiTypes.ItemAssetTypeWaistAccessory,
+		apiTypes.ItemAssetTypeEarAccessory,
+		apiTypes.ItemAssetTypeEyeAccessory,
+		apiTypes.ItemAssetTypeTShirtAccessory,
+		apiTypes.ItemAssetTypeShirtAccessory,
+		apiTypes.ItemAssetTypePantsAccessory,
+		apiTypes.ItemAssetTypeJacketAccessory,
+		apiTypes.ItemAssetTypeSweaterAccessory,
+		apiTypes.ItemAssetTypeShortsAccessory,
+		apiTypes.ItemAssetTypeLeftShoeAccessory,
+		apiTypes.ItemAssetTypeRightShoeAccessory,
+		apiTypes.ItemAssetTypeDressSkirtAccessory,
+		apiTypes.ItemAssetTypeEyebrowAccessory,
+		apiTypes.ItemAssetTypeEyelashAccessory:
+		return true
+	default:
+		return false
 	}
 }

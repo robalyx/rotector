@@ -40,7 +40,9 @@ user_info = { pattern = "users.roblox.com/v1/users/{id}", cooldown = 5000 }
 user_info_batch = { pattern = "users.roblox.com/v1/users", cooldown = 5000 }
 user_games = { pattern = "games.roblox.com/v2/users/{id}/games", cooldown = 5000 }
 user_outfits = { pattern = "avatar.roblox.com/v2/avatar/users/{id}/outfits", cooldown = 6000 }
+user_outfits_details = { pattern = "avatar.roblox.com/v3/outfits/{id}/details", cooldown = 6000 }
 user_groups = { pattern = "groups.roblox.com/v1/users/{id}/groups/roles", cooldown = 5000 }
+user_inventory = { pattern = "inventory.roblox.com/v2/users/{id}/inventory", cooldown = 5000 }
 thumbnail_batch = { pattern = "thumbnails.roblox.com/v1/batch", cooldown = 1000 }
 cdn_thumbnails = { pattern = "tr.rbxcdn.com/30DAY-Avatar-{hash}-Png/{id}/{id}/Avatar/Webp/noFilter", cooldown = 1000 }
 

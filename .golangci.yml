@@ -54,9 +54,11 @@ linters:
         - ^golang.org/x/tools/go/analysis.Analyzer$
         - ^google.golang.org/protobuf/.+Options$
         - ^gopkg.in/yaml.v3.Node$
+    exhaustive:
+      default-signifies-exhaustive: true
     funlen:
       lines: 120
-      statements: 55
+      statements: 60
       ignore-comments: true
     gochecksumtype:
       default-signifies-exhaustive: false

@@ -228,7 +228,9 @@ func (c *GroupChecker) processUserGroups(
 				confirmedCount++
 			case enum.GroupTypeFlagged:
 				flaggedCount++
-			} //exhaustive:ignore
+			default:
+				continue
+			}
 		}
 	}
 

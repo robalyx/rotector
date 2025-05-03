@@ -75,6 +75,20 @@ type OutfitInfo struct {
 	OutfitType string `bun:",notnull" json:"outfitType"`
 }
 
+// OutfitAsset represents an outfit's asset.
+type OutfitAsset struct {
+	OutfitID         uint64 `bun:",pk"      json:"outfitId"`
+	AssetID          uint64 `bun:",pk"      json:"assetId"`
+	CurrentVersionID uint64 `bun:",notnull" json:"currentVersionId"`
+}
+
+// AssetInfo stores the shared asset information.
+type AssetInfo struct {
+	ID        uint64                 `bun:",pk"      json:"id"`
+	Name      string                 `bun:",notnull" json:"name"`
+	AssetType apiTypes.ItemAssetType `bun:",notnull" json:"assetType"`
+}
+
 // UserFriend represents a user's friend.
 type UserFriend struct {
 	UserID   uint64 `bun:",pk" json:"userId"`
@@ -146,20 +160,29 @@ type UserClearance struct {
 	ClearedAt  time.Time `bun:",notnull" json:"clearedAt"`
 }
 
+// UserAsset represents a user's currently equipped asset.
+type UserAsset struct {
+	UserID           uint64 `bun:",pk"      json:"userId"`
+	AssetID          uint64 `bun:",pk"      json:"assetId"`
+	CurrentVersionID uint64 `bun:",notnull" json:"currentVersionId"`
+}
+
 // ReviewUser combines user data with verification/clearance info for review.
 type ReviewUser struct {
 	*User
-	ReviewerID uint64                     `json:"reviewerId,omitempty"`
-	VerifiedAt time.Time                  `json:"verifiedAt"`
-	ClearedAt  time.Time                  `json:"clearedAt"`
-	Reputation Reputation                 `json:"reputation"`
-	Groups     []*apiTypes.UserGroupRoles `json:"groups,omitempty"`
-	Outfits    []*apiTypes.Outfit         `json:"outfits,omitempty"`
-	Friends    []*apiTypes.ExtendedFriend `json:"friends,omitempty"`
-	Games      []*apiTypes.Game           `json:"games,omitempty"`
-	Inventory  []*apiTypes.InventoryAsset `json:"inventory,omitempty"`
-	Favorites  []any                      `json:"favorites,omitempty"`
-	Badges     []any                      `json:"badges,omitempty"`
+	ReviewerID    uint64                         `json:"reviewerId,omitempty"`
+	VerifiedAt    time.Time                      `json:"verifiedAt"`
+	ClearedAt     time.Time                      `json:"clearedAt"`
+	Reputation    Reputation                     `json:"reputation"`
+	Groups        []*apiTypes.UserGroupRoles     `json:"groups,omitempty"`
+	Outfits       []*apiTypes.Outfit             `json:"outfits,omitempty"`
+	OutfitAssets  map[uint64][]*apiTypes.AssetV2 `json:"outfitAssets,omitempty"`
+	CurrentAssets []*apiTypes.AssetV2            `json:"currentAssets,omitempty"`
+	Friends       []*apiTypes.ExtendedFriend     `json:"friends,omitempty"`
+	Games         []*apiTypes.Game               `json:"games,omitempty"`
+	Inventory     []*apiTypes.InventoryAsset     `json:"inventory,omitempty"`
+	Favorites     []any                          `json:"favorites,omitempty"`
+	Badges        []any                          `json:"badges,omitempty"`
 }
 
 // UserField represents available fields as bit flags.
@@ -398,6 +421,25 @@ func (r *UserInventoryQueryResult) ToAPIType() *apiTypes.InventoryAsset {
 	}
 }
 
+// UserAssetQueryResult combines user asset and asset info for database queries.
+type UserAssetQueryResult struct {
+	UserAsset
+	Name      string                 `bun:"name"       json:"name"`
+	AssetType apiTypes.ItemAssetType `bun:"asset_type" json:"assetType"`
+}
+
+// ToAPIType converts a UserAssetQueryResult to an API AssetV2 type.
+func (r *UserAssetQueryResult) ToAPIType() *apiTypes.AssetV2 {
+	return &apiTypes.AssetV2{
+		ID:   r.AssetID,
+		Name: r.Name,
+		AssetType: apiTypes.AssetType{
+			ID: r.AssetType,
+		},
+		CurrentVersionID: r.CurrentVersionID,
+	}
+}
+
 // FromAPIGroupRoles creates database types from an API UserGroupRoles type.
 func FromAPIGroupRoles(userID uint64, group *apiTypes.UserGroupRoles) (*UserGroup, *GroupInfo) {
 	return &UserGroup{
@@ -470,5 +512,18 @@ func FromAPIInventoryAsset(userID uint64, asset *apiTypes.InventoryAsset) (*User
 			Name:      asset.Name,
 			AssetType: asset.AssetType,
 			Created:   asset.Created,
+		}
+}
+
+// FromAPIAsset creates database types from an API AssetV2 type.
+func FromAPIAsset(userID uint64, asset *apiTypes.AssetV2) (*UserAsset, *AssetInfo) {
+	return &UserAsset{
+			UserID:           userID,
+			AssetID:          asset.ID,
+			CurrentVersionID: asset.CurrentVersionID,
+		}, &AssetInfo{
+			ID:        asset.ID,
+			Name:      asset.Name,
+			AssetType: asset.AssetType.ID,
 		}
 }

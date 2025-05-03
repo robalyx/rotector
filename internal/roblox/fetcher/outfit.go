@@ -2,12 +2,14 @@ package fetcher
 
 import (
 	"context"
+	"sync"
 
 	"github.com/jaxron/roapi.go/pkg/api"
 	"github.com/jaxron/roapi.go/pkg/api/middleware/auth"
 	"github.com/jaxron/roapi.go/pkg/api/resources/avatar"
 	apiTypes "github.com/jaxron/roapi.go/pkg/api/types"
 	"github.com/robalyx/rotector/pkg/utils"
+	"github.com/sourcegraph/conc/pool"
 	"go.uber.org/zap"
 )
 
@@ -25,17 +27,29 @@ func NewOutfitFetcher(roAPI *api.API, logger *zap.Logger) *OutfitFetcher {
 	}
 }
 
-// GetOutfits fetches outfits for a single user.
-func (o *OutfitFetcher) GetOutfits(ctx context.Context, userID uint64) (*apiTypes.OutfitResponse, error) {
+// GetOutfits fetches outfits and their assets for a single user.
+func (o *OutfitFetcher) GetOutfits(
+	ctx context.Context, userID uint64,
+) ([]*apiTypes.Outfit, map[uint64][]*apiTypes.AssetV2, []*apiTypes.AssetV2, error) {
 	ctx = context.WithValue(ctx, auth.KeyAddCookie, true)
-	builder := avatar.NewUserOutfitsBuilder(userID).WithItemsPerPage(100).WithIsEditable(true)
 
+	// Get the user's current avatar details
+	avatarDetails, err := o.roAPI.Avatar().GetUserAvatar(ctx, userID)
+	if err != nil {
+		o.logger.Error("Failed to fetch user avatar",
+			zap.Error(err),
+			zap.Uint64("userID", userID))
+		return nil, nil, nil, err
+	}
+
+	// Get user's outfits
+	builder := avatar.NewUserOutfitsBuilder(userID).WithItemsPerPage(100).WithIsEditable(true)
 	outfits, err := o.roAPI.Avatar().GetUserOutfits(ctx, builder.Build())
 	if err != nil {
 		o.logger.Error("Failed to fetch user outfits",
 			zap.Error(err),
 			zap.Uint64("userID", userID))
-		return nil, err
+		return nil, nil, nil, err
 	}
 
 	// Normalize outfit names
@@ -44,9 +58,38 @@ func (o *OutfitFetcher) GetOutfits(ctx context.Context, userID uint64) (*apiType
 		outfits.Data[i].Name = normalizer.Normalize(outfits.Data[i].Name)
 	}
 
-	o.logger.Debug("Successfully fetched user outfits",
-		zap.Uint64("userID", userID),
-		zap.Int("outfitCount", len(outfits.Data)))
+	// Fetch outfit details concurrently
+	var (
+		outfitAssets = make(map[uint64][]*apiTypes.AssetV2)
+		p            = pool.New().WithContext(ctx)
+		mu           sync.Mutex
+	)
 
-	return outfits, nil
+	for _, outfit := range outfits.Data {
+		outfitID := outfit.ID
+		p.Go(func(ctx context.Context) error {
+			details, err := o.roAPI.Avatar().GetOutfitDetails(ctx, outfitID)
+			if err != nil {
+				o.logger.Warn("Failed to fetch outfit details",
+					zap.Error(err),
+					zap.Uint64("outfitID", outfitID))
+				return nil
+			}
+
+			mu.Lock()
+			outfitAssets[outfitID] = details.Assets
+			mu.Unlock()
+			return nil
+		})
+	}
+
+	// Wait for all outfit detail fetches to complete
+	_ = p.Wait()
+
+	o.logger.Debug("Successfully fetched user outfits and assets",
+		zap.Uint64("userID", userID),
+		zap.Int("outfitCount", len(outfits.Data)),
+		zap.Int("outfitsWithAssets", len(outfitAssets)))
+
+	return outfits.Data, outfitAssets, avatarDetails.Assets, nil
 }

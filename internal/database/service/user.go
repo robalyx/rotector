@@ -85,6 +85,18 @@ func (s *UserService) ClearUser(ctx context.Context, user *types.ReviewUser, rev
 		return err
 	}
 
+	// Collect outfit IDs from the user's outfits
+	outfitIDs := make([]uint64, 0, len(user.Outfits))
+	for _, outfit := range user.Outfits {
+		outfitIDs = append(outfitIDs, outfit.ID)
+	}
+
+	// Remove user and their outfits from asset tracking
+	if err := s.tracking.RemoveUserAndOutfitsFromAssetTracking(ctx, user.ID, outfitIDs); err != nil {
+		s.logger.Error("Failed to remove user from outfit asset tracking", zap.Error(err))
+		return err
+	}
+
 	// Verify votes for the user
 	if err := s.votes.VerifyVotes(ctx, user.ID, false, enum.VoteTypeUser); err != nil {
 		s.logger.Error("Failed to verify votes", zap.Error(err))
@@ -232,12 +244,13 @@ func (s *UserService) GetUserRelationships(ctx context.Context, userID uint64) (
 
 	// Fetch outfits in parallel
 	p.Go(func(ctx context.Context) error {
-		outfits, err := s.model.GetUserOutfits(ctx, userID)
+		outfits, outfitAssets, err := s.model.GetUserOutfits(ctx, userID)
 		if err != nil {
 			return fmt.Errorf("failed to get user outfits: %w", err)
 		}
 		mu.Lock()
 		result.Outfits = outfits
+		result.OutfitAssets = outfitAssets
 		mu.Unlock()
 		return nil
 	})
@@ -350,7 +363,12 @@ func (s *UserService) SaveUsers(ctx context.Context, users map[uint64]*types.Rev
 			}
 
 			// Save outfits
-			if err := s.model.SaveUserOutfits(ctx, tx, user.ID, user.Outfits); err != nil {
+			if err := s.model.SaveUserOutfits(ctx, tx, user.ID, user.Outfits, user.OutfitAssets); err != nil {
+				return err
+			}
+
+			// Save current assets
+			if err := s.model.SaveUserAssets(ctx, tx, user.ID, user.CurrentAssets); err != nil {
 				return err
 			}
 

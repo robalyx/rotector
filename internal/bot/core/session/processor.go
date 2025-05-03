@@ -95,7 +95,7 @@ func (p *ValueProcessor) ProcessValue(value any) any {
 				result[TypeMetadataPrefix+keyStr] = NumericTypeMeta
 			default:
 				keyStr = fmt.Sprintf("%v", key.Interface())
-			} //exhaustive:ignore
+			}
 
 			// Process map values
 			result[keyStr] = p.ProcessValue(refValue.MapIndex(key).Interface())
@@ -137,9 +137,10 @@ func (p *ValueProcessor) ProcessValue(value any) any {
 			return p.ProcessValue(refValue.Elem().Interface())
 		}
 		return nil
-	} //exhaustive:ignore
 
-	return value
+	default:
+		return value
+	}
 }
 
 // handleEmbeddedField processes an anonymous (embedded) struct field.

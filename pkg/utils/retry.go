@@ -60,7 +60,14 @@ func WithRetrySplitBatch[T any](
 	// Base case: batch size too small, skip splitting
 	if len(items) <= minBatchSize {
 		// At min batch size, just run the operation directly without retry
-		return operation(items)
+		err := operation(items)
+		if errors.Is(err, ErrContentBlocked) && logger != nil {
+			logger.Warn("Content blocked at minimum batch size",
+				zap.Any("items", items),
+				zap.Int("batchSize", len(items)),
+				zap.Int("minBatchSize", minBatchSize))
+		}
+		return err
 	}
 
 	// Try processing the full batch once to see if it's blocked

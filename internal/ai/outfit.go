@@ -204,7 +204,10 @@ func NewOutfitAnalyzer(app *setup.App, logger *zap.Logger) *OutfitAnalyzer {
 }
 
 // ProcessOutfits analyzes outfit images for a batch of users.
-func (a *OutfitAnalyzer) ProcessOutfits(userInfos []*types.ReviewUser, reasonsMap map[uint64]types.Reasons[enum.UserReasonType]) {
+// Returns a map of user IDs to their flagged outfit names.
+func (a *OutfitAnalyzer) ProcessOutfits(
+	userInfos []*types.ReviewUser, reasonsMap map[uint64]types.Reasons[enum.UserReasonType],
+) map[uint64]map[string]struct{} {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
 
@@ -213,8 +216,9 @@ func (a *OutfitAnalyzer) ProcessOutfits(userInfos []*types.ReviewUser, reasonsMa
 
 	// Process each user's outfits concurrently
 	var (
-		p  = pool.New().WithContext(ctx)
-		mu sync.Mutex
+		p              = pool.New().WithContext(ctx)
+		mu             sync.Mutex
+		flaggedOutfits = make(map[uint64]map[string]struct{})
 	)
 
 	for _, userInfo := range userInfos {
@@ -228,12 +232,18 @@ func (a *OutfitAnalyzer) ProcessOutfits(userInfos []*types.ReviewUser, reasonsMa
 
 		p.Go(func(ctx context.Context) error {
 			// Analyze user's outfits for themes
-			err := a.analyzeUserOutfits(ctx, userInfo, &mu, reasonsMap, outfits, thumbnails)
+			outfitNames, err := a.analyzeUserOutfits(ctx, userInfo, &mu, reasonsMap, outfits, thumbnails)
 			if err != nil && !errors.Is(err, ErrNoViolations) {
 				a.logger.Error("Failed to analyze outfit themes",
 					zap.Error(err),
 					zap.Uint64("userID", userInfo.ID))
 				return err
+			}
+
+			if len(outfitNames) > 0 {
+				mu.Lock()
+				flaggedOutfits[userInfo.ID] = outfitNames
+				mu.Unlock()
 			}
 			return nil
 		})
@@ -242,30 +252,34 @@ func (a *OutfitAnalyzer) ProcessOutfits(userInfos []*types.ReviewUser, reasonsMa
 	// Wait for all goroutines to complete
 	if err := p.Wait(); err != nil {
 		a.logger.Error("Error during outfit theme analysis", zap.Error(err))
-		return
+		return flaggedOutfits
 	}
 
 	a.logger.Info("Received AI outfit theme analysis",
-		zap.Int("totalUsers", len(userInfos)))
+		zap.Int("totalUsers", len(userInfos)),
+		zap.Int("flaggedUsers", len(flaggedOutfits)))
+
+	return flaggedOutfits
 }
 
 // analyzeUserOutfits handles the theme analysis of a single user's outfits.
 func (a *OutfitAnalyzer) analyzeUserOutfits(
 	ctx context.Context, info *types.ReviewUser, mu *sync.Mutex, reasonsMap map[uint64]types.Reasons[enum.UserReasonType],
 	outfits []*apiTypes.Outfit, thumbnailMap map[uint64]string,
-) error {
+) (map[string]struct{}, error) {
 	// Download all outfit images
 	downloads, err := a.downloadOutfitImages(ctx, info, outfits, thumbnailMap)
 	if err != nil {
 		if errors.Is(err, ErrNoOutfits) {
-			return ErrNoViolations
+			return nil, ErrNoViolations
 		}
-		return fmt.Errorf("failed to download outfit images: %w", err)
+		return nil, fmt.Errorf("failed to download outfit images: %w", err)
 	}
 
 	// Process outfits in batches
 	var allSuspiciousThemes []string
 	var highestConfidence float64
+	flaggedOutfits := make(map[string]struct{})
 
 	for i := 0; i < len(downloads); i += a.batchSize {
 		end := min(i+a.batchSize, len(downloads))
@@ -284,6 +298,11 @@ func (a *OutfitAnalyzer) analyzeUserOutfits(
 			continue
 		}
 
+		// Skip if no analysis or themes
+		if analysis == nil || len(analysis.Themes) == 0 {
+			continue
+		}
+
 		// Process themes from this batch
 		for _, theme := range analysis.Themes {
 			// Skip themes with invalid confidence
@@ -294,16 +313,13 @@ func (a *OutfitAnalyzer) analyzeUserOutfits(
 			allSuspiciousThemes = append(allSuspiciousThemes,
 				fmt.Sprintf("%s|%s|%.2f", theme.OutfitName, theme.Theme, theme.Confidence))
 
+			flaggedOutfits[theme.OutfitName] = struct{}{}
+
 			// Track highest confidence
 			if theme.Confidence > highestConfidence {
 				highestConfidence = theme.Confidence
 			}
 		}
-	}
-
-	// If no suspicious themes found, return
-	if len(allSuspiciousThemes) == 0 {
-		return nil
 	}
 
 	// Only flag if there are more than 1 suspicious outfits and confidence is high enough
@@ -327,7 +343,7 @@ func (a *OutfitAnalyzer) analyzeUserOutfits(
 			zap.Strings("themes", allSuspiciousThemes))
 	}
 
-	return nil
+	return flaggedOutfits, nil
 }
 
 // processOutfitBatch handles the AI analysis for a batch of outfit images.
