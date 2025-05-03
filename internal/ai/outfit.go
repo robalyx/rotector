@@ -204,7 +204,7 @@ func NewOutfitAnalyzer(app *setup.App, logger *zap.Logger) *OutfitAnalyzer {
 }
 
 // ProcessOutfits analyzes outfit images for a batch of users.
-func (a *OutfitAnalyzer) ProcessOutfits(userInfos []*types.User, reasonsMap map[uint64]types.Reasons[enum.UserReasonType]) {
+func (a *OutfitAnalyzer) ProcessOutfits(userInfos []*types.ReviewUser, reasonsMap map[uint64]types.Reasons[enum.UserReasonType]) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
 
@@ -251,7 +251,7 @@ func (a *OutfitAnalyzer) ProcessOutfits(userInfos []*types.User, reasonsMap map[
 
 // analyzeUserOutfits handles the theme analysis of a single user's outfits.
 func (a *OutfitAnalyzer) analyzeUserOutfits(
-	ctx context.Context, info *types.User, mu *sync.Mutex, reasonsMap map[uint64]types.Reasons[enum.UserReasonType],
+	ctx context.Context, info *types.ReviewUser, mu *sync.Mutex, reasonsMap map[uint64]types.Reasons[enum.UserReasonType],
 	outfits []*apiTypes.Outfit, thumbnailMap map[uint64]string,
 ) error {
 	// Download all outfit images
@@ -332,7 +332,7 @@ func (a *OutfitAnalyzer) analyzeUserOutfits(
 
 // processOutfitBatch handles the AI analysis for a batch of outfit images.
 func (a *OutfitAnalyzer) processOutfitBatch(
-	ctx context.Context, info *types.User, batch []DownloadResult,
+	ctx context.Context, info *types.ReviewUser, batch []DownloadResult,
 ) (*OutfitThemeAnalysis, error) {
 	// Process each downloaded image and add as user message parts
 	messages := []openai.ChatCompletionMessageParamUnion{
@@ -436,7 +436,7 @@ func (a *OutfitAnalyzer) processOutfitBatch(
 
 // analyzeOutfitBatch processes a single batch of outfit images.
 func (a *OutfitAnalyzer) analyzeOutfitBatch(
-	ctx context.Context, info *types.User, downloads []DownloadResult,
+	ctx context.Context, info *types.ReviewUser, downloads []DownloadResult,
 ) (*OutfitThemeAnalysis, error) {
 	// Acquire semaphore
 	if err := a.analysisSem.Acquire(ctx, 1); err != nil {
@@ -463,7 +463,7 @@ func (a *OutfitAnalyzer) analyzeOutfitBatch(
 
 // getOutfitThumbnails fetches thumbnail URLs for outfits and organizes them by user.
 func (a *OutfitAnalyzer) getOutfitThumbnails(
-	ctx context.Context, userInfos []*types.User,
+	ctx context.Context, userInfos []*types.ReviewUser,
 ) (map[uint64][]*apiTypes.Outfit, map[uint64]map[uint64]string) {
 	userOutfits := make(map[uint64][]*apiTypes.Outfit)
 	requests := thumbnails.NewBatchThumbnailsBuilder()
@@ -510,7 +510,7 @@ func (a *OutfitAnalyzer) getOutfitThumbnails(
 
 // downloadOutfitImages concurrently downloads outfit images until we have enough.
 func (a *OutfitAnalyzer) downloadOutfitImages(
-	ctx context.Context, userInfo *types.User, outfits []*apiTypes.Outfit, thumbnailMap map[uint64]string,
+	ctx context.Context, userInfo *types.ReviewUser, outfits []*apiTypes.Outfit, thumbnailMap map[uint64]string,
 ) ([]DownloadResult, error) {
 	var (
 		p         = pool.New().WithContext(ctx)

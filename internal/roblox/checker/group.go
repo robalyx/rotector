@@ -120,7 +120,7 @@ func (c *GroupChecker) CheckGroupPercentages(
 }
 
 // ProcessUsers checks multiple users' groups concurrently and updates flaggedUsers map.
-func (c *GroupChecker) ProcessUsers(userInfos []*types.User, reasonsMap map[uint64]types.Reasons[enum.UserReasonType]) {
+func (c *GroupChecker) ProcessUsers(userInfos []*types.ReviewUser, reasonsMap map[uint64]types.Reasons[enum.UserReasonType]) {
 	// Track counts before processing
 	existingFlags := len(reasonsMap)
 
@@ -215,7 +215,7 @@ func (c *GroupChecker) calculateGroupConfidence(flaggedUsers []uint64, users map
 
 // processUserGroups checks if a user should be flagged based on their groups.
 func (c *GroupChecker) processUserGroups(
-	userInfo *types.User, existingGroups map[uint64]*types.ReviewGroup,
+	userInfo *types.ReviewUser, existingGroups map[uint64]*types.ReviewGroup,
 ) (*types.Reason, bool) {
 	// Count confirmed and flagged groups
 	confirmedCount := 0

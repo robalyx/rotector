@@ -1028,7 +1028,7 @@ func (m *TicketMenu) redactRobloxUserData(
 
 	// Update the user with redacted data
 	if err := m.layout.db.Service().User().SaveUsers(
-		ctx, map[uint64]*types.User{user.ID: user.User},
+		ctx, map[uint64]*types.ReviewUser{user.ID: user},
 	); err != nil {
 		return fmt.Errorf("failed to save redacted user data: %w", err)
 	}

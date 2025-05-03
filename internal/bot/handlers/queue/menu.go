@@ -214,9 +214,6 @@ func (m *Menu) handleManualReviewModalSubmit(ctx *interaction.Context, s *sessio
 	}
 
 	// Create new user with empty reasons
-	user = &types.ReviewUser{
-		User: users[0],
-	}
 	user.Status = enum.UserTypeFlagged
 	user.UUID = uuid.New()
 	user.Reasons = types.Reasons[enum.UserReasonType]{}

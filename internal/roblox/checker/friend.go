@@ -44,7 +44,7 @@ func NewFriendChecker(app *setup.App, logger *zap.Logger) *FriendChecker {
 }
 
 // ProcessUsers checks multiple users' friends concurrently and updates reasonsMap.
-func (c *FriendChecker) ProcessUsers(userInfos []*types.User, reasonsMap map[uint64]types.Reasons[enum.UserReasonType]) {
+func (c *FriendChecker) ProcessUsers(userInfos []*types.ReviewUser, reasonsMap map[uint64]types.Reasons[enum.UserReasonType]) {
 	// Track counts before processing
 	existingFlags := len(reasonsMap)
 
@@ -95,7 +95,7 @@ func (c *FriendChecker) ProcessUsers(userInfos []*types.User, reasonsMap map[uin
 	}
 
 	// Track users that exceed confidence threshold
-	var usersToAnalyze []*types.User
+	var usersToAnalyze []*types.ReviewUser
 
 	// Process results
 	for _, userInfo := range userInfos {

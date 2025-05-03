@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
 
@@ -129,7 +128,7 @@ func (s *GroupService) GetGroupToReview(
 	// Get next group to review
 	result, err := s.model.GetNextToReview(ctx, targetStatus, sortBy, recentIDs)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
+		if errors.Is(err, types.ErrNoGroupsToReview) {
 			// If no groups found with primary status, try other statuses in order
 			var fallbackStatuses []enum.GroupType
 			switch targetMode {
@@ -146,7 +145,7 @@ func (s *GroupService) GetGroupToReview(
 				if err == nil {
 					break
 				}
-				if !errors.Is(err, sql.ErrNoRows) {
+				if !errors.Is(err, types.ErrNoGroupsToReview) {
 					return nil, err
 				}
 			}

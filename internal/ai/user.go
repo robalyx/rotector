@@ -261,7 +261,7 @@ func NewUserAnalyzer(app *setup.App, translator *translator.Translator, logger *
 }
 
 // ProcessUsers analyzes user content for a batch of users.
-func (a *UserAnalyzer) ProcessUsers(users []*types.User, reasonsMap map[uint64]types.Reasons[enum.UserReasonType]) {
+func (a *UserAnalyzer) ProcessUsers(users []*types.ReviewUser, reasonsMap map[uint64]types.Reasons[enum.UserReasonType]) {
 	// Track counts before processing
 	existingFlags := len(reasonsMap)
 	numBatches := (len(users) + a.batchSize - 1) / a.batchSize
@@ -387,7 +387,7 @@ func (a *UserAnalyzer) processUserBatch(ctx context.Context, batch []UserSummary
 
 // processBatch handles analysis for a batch of users.
 func (a *UserAnalyzer) processBatch(
-	ctx context.Context, userInfos []*types.User, reasonsMap map[uint64]types.Reasons[enum.UserReasonType], mu *sync.Mutex,
+	ctx context.Context, userInfos []*types.ReviewUser, reasonsMap map[uint64]types.Reasons[enum.UserReasonType], mu *sync.Mutex,
 ) error {
 	// Translate all descriptions concurrently
 	translatedInfos, originalInfos := a.prepareUserInfos(ctx, userInfos)
@@ -439,7 +439,7 @@ func (a *UserAnalyzer) processBatch(
 
 // validateAndUpdateFlaggedUsers validates the flagged users and updates the flaggedUsers map.
 func (a *UserAnalyzer) validateAndUpdateFlaggedUsers(
-	result *FlaggedUsers, translatedInfos, originalInfos map[string]*types.User,
+	result *FlaggedUsers, translatedInfos, originalInfos map[string]*types.ReviewUser,
 	reasonsMap map[uint64]types.Reasons[enum.UserReasonType], mu *sync.Mutex,
 ) {
 	normalizer := utils.NewTextNormalizer()
@@ -514,11 +514,11 @@ func (a *UserAnalyzer) validateAndUpdateFlaggedUsers(
 // prepareUserInfos translates user descriptions for different languages and encodings.
 // Returns maps of both translated and original user infos for validation.
 func (a *UserAnalyzer) prepareUserInfos(
-	ctx context.Context, userInfos []*types.User,
-) (map[string]*types.User, map[string]*types.User) {
+	ctx context.Context, userInfos []*types.ReviewUser,
+) (map[string]*types.ReviewUser, map[string]*types.ReviewUser) {
 	var (
-		originalInfos   = make(map[string]*types.User)
-		translatedInfos = make(map[string]*types.User)
+		originalInfos   = make(map[string]*types.ReviewUser)
+		translatedInfos = make(map[string]*types.ReviewUser)
 		p               = pool.New().WithContext(ctx)
 		mu              sync.Mutex
 	)

@@ -20,6 +20,18 @@ func init() { //nolint:funlen
 			{(*types.User)(nil), "users", "id"},
 			{(*types.UserVerification)(nil), "user_verifications", "user_id"},
 			{(*types.UserClearance)(nil), "user_clearances", "user_id"},
+			{(*types.UserGroup)(nil), "user_groups", "user_id"},
+			{(*types.GroupInfo)(nil), "group_infos", "id"},
+			{(*types.UserOutfit)(nil), "user_outfits", "user_id"},
+			{(*types.OutfitInfo)(nil), "outfit_infos", "id"},
+			{(*types.UserFriend)(nil), "user_friends", "user_id"},
+			{(*types.FriendInfo)(nil), "friend_infos", "id"},
+			{(*types.UserGame)(nil), "user_games", "user_id"},
+			{(*types.GameInfo)(nil), "game_infos", "id"},
+			{(*types.UserInventory)(nil), "user_inventories", "user_id"},
+			{(*types.InventoryInfo)(nil), "inventory_infos", "id"},
+			// {(*types.UserFavorite)(nil), "user_favorites", "user_id"},
+			// {(*types.UserBadge)(nil), "user_badges", "user_id"},
 			{(*types.Group)(nil), "groups", "id"},
 			{(*types.GroupVerification)(nil), "group_verifications", "group_id"},
 			{(*types.GroupClearance)(nil), "group_clearances", "group_id"},
@@ -48,18 +60,17 @@ func init() { //nolint:funlen
 				Model(table.model).
 				ModelTableExpr(table.name).
 				IfNotExists().
-				PartitionBy(fmt.Sprintf(`HASH (%s)`, table.partitionKey)).
+				PartitionBy(fmt.Sprintf("HASH (%s)", table.partitionKey)).
 				Exec(ctx)
 			if err != nil {
 				return fmt.Errorf("failed to create parent table %s: %w", table.name, err)
 			}
 
 			for i := range 8 {
-				_, err = db.NewRaw(fmt.Sprintf(`
-					CREATE TABLE IF NOT EXISTS %s_%d 
-					PARTITION OF %s 
-					FOR VALUES WITH (modulus 8, remainder %d)
-				`, table.name, i, table.name, i)).Exec(ctx)
+				_, err = db.NewRaw(fmt.Sprintf(
+					"CREATE TABLE IF NOT EXISTS %s_%d PARTITION OF %s FOR VALUES WITH (modulus 8, remainder %d)",
+					table.name, i, table.name, i)).
+					Exec(ctx)
 				if err != nil {
 					return fmt.Errorf("failed to create partition %s_%d: %w", table.name, i, err)
 				}
@@ -154,6 +165,18 @@ func init() { //nolint:funlen
 			"group_clearances",
 			"group_verifications",
 			"groups",
+			// "user_badges",
+			// "user_favorites",
+			"inventory_infos",
+			"user_inventories",
+			"game_infos",
+			"user_games",
+			"friend_infos",
+			"user_friends",
+			"outfit_infos",
+			"user_outfits",
+			"group_infos",
+			"user_groups",
 			"user_clearances",
 			"user_verifications",
 			"users",

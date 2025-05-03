@@ -174,7 +174,6 @@ func (r *GroupModel) GetGroupByID(
 
 		// Set base group data
 		result.Group = &group
-		result.Status = group.Status
 
 		// Get verification data if confirmed
 		switch group.Status {
@@ -276,8 +275,7 @@ func (r *GroupModel) GetGroupsByIDs(
 		// Build review groups
 		for _, group := range baseGroups {
 			reviewGroup := &types.ReviewGroup{
-				Group:  &group,
-				Status: group.Status,
+				Group: &group,
 			}
 
 			if v, ok := verificationMap[group.ID]; ok {
@@ -323,8 +321,7 @@ func (r *GroupModel) GetFlaggedAndConfirmedGroups(ctx context.Context) ([]*types
 	result := make([]*types.ReviewGroup, len(groups))
 	for i, group := range groups {
 		result[i] = &types.ReviewGroup{
-			Group:  &group,
-			Status: group.Status,
+			Group: &group,
 		}
 	}
 
@@ -662,7 +659,6 @@ func (r *GroupModel) GetNextToReview(
 		}
 
 		result.Group = &group
-		result.Status = group.Status
 
 		// Get verification/clearance info based on status
 		switch group.Status {

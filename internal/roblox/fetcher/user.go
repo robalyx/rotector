@@ -37,7 +37,7 @@ func NewUserFetcher(app *setup.App, logger *zap.Logger) *UserFetcher {
 		logger:           logger.Named("user_fetcher"),
 		groupFetcher:     NewGroupFetcher(app.RoAPI, logger),
 		gameFetcher:      NewGameFetcher(app.RoAPI, logger),
-		friendFetcher:    NewFriendFetcher(app.RoAPI, logger),
+		friendFetcher:    NewFriendFetcher(app, logger),
 		outfitFetcher:    NewOutfitFetcher(app.RoAPI, logger),
 		thumbnailFetcher: NewThumbnailFetcher(app.RoAPI, logger),
 		inventoryFetcher: NewInventoryFetcher(app.RoAPI, logger),
@@ -45,9 +45,9 @@ func NewUserFetcher(app *setup.App, logger *zap.Logger) *UserFetcher {
 }
 
 // FetchInfos retrieves complete user information for a batch of user IDs.
-func (u *UserFetcher) FetchInfos(ctx context.Context, userIDs []uint64) []*types.User {
+func (u *UserFetcher) FetchInfos(ctx context.Context, userIDs []uint64) []*types.ReviewUser {
 	var (
-		validUsers = make([]*types.User, 0, len(userIDs))
+		validUsers = make([]*types.ReviewUser, 0, len(userIDs))
 		userMap    = make(map[uint64]*types.User)
 		p          = pool.New().WithContext(ctx)
 		mu         sync.Mutex
@@ -81,21 +81,23 @@ func (u *UserFetcher) FetchInfos(ctx context.Context, userIDs []uint64) []*types
 			// Add the user info to valid users
 			normalizer := utils.NewTextNormalizer()
 			now := time.Now()
-			user := &types.User{
-				ID:           userInfo.ID,
-				Name:         normalizer.Normalize(userInfo.Name),
-				DisplayName:  normalizer.Normalize(userInfo.DisplayName),
-				Description:  normalizer.Normalize(userInfo.Description),
-				CreatedAt:    userInfo.Created,
-				Groups:       groups,
-				Friends:      friends,
-				Games:        games,
-				Outfits:      outfits,
-				Inventory:    []*apiTypes.InventoryAsset{},
-				Favorites:    []any{},
-				Badges:       []any{},
-				LastUpdated:  now,
-				LastBanCheck: now,
+			user := &types.ReviewUser{
+				User: &types.User{
+					ID:           userInfo.ID,
+					Name:         normalizer.Normalize(userInfo.Name),
+					DisplayName:  normalizer.Normalize(userInfo.DisplayName),
+					Description:  normalizer.Normalize(userInfo.Description),
+					CreatedAt:    userInfo.Created,
+					LastUpdated:  now,
+					LastBanCheck: now,
+				},
+				Groups:    groups,
+				Friends:   friends,
+				Games:     games,
+				Outfits:   outfits,
+				Inventory: []*apiTypes.InventoryAsset{},
+				Favorites: []any{},
+				Badges:    []any{},
 			}
 
 			mu.Lock()

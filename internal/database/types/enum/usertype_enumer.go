@@ -7,11 +7,11 @@ import (
 	"strings"
 )
 
-const _UserTypeName = "ConfirmedFlaggedCleared"
+const _UserTypeName = "ClearedFlaggedConfirmed"
 
-var _UserTypeIndex = [...]uint8{0, 9, 16, 23}
+var _UserTypeIndex = [...]uint8{0, 7, 14, 23}
 
-const _UserTypeLowerName = "confirmedflaggedcleared"
+const _UserTypeLowerName = "clearedflaggedconfirmed"
 
 func (i UserType) String() string {
 	if i < 0 || i >= UserType(len(_UserTypeIndex)-1) {
@@ -24,26 +24,26 @@ func (i UserType) String() string {
 // Re-run the stringer command to generate them again.
 func _UserTypeNoOp() {
 	var x [1]struct{}
-	_ = x[UserTypeConfirmed-(0)]
+	_ = x[UserTypeCleared-(0)]
 	_ = x[UserTypeFlagged-(1)]
-	_ = x[UserTypeCleared-(2)]
+	_ = x[UserTypeConfirmed-(2)]
 }
 
-var _UserTypeValues = []UserType{UserTypeConfirmed, UserTypeFlagged, UserTypeCleared}
+var _UserTypeValues = []UserType{UserTypeCleared, UserTypeFlagged, UserTypeConfirmed}
 
 var _UserTypeNameToValueMap = map[string]UserType{
-	_UserTypeName[0:9]:        UserTypeConfirmed,
-	_UserTypeLowerName[0:9]:   UserTypeConfirmed,
-	_UserTypeName[9:16]:       UserTypeFlagged,
-	_UserTypeLowerName[9:16]:  UserTypeFlagged,
-	_UserTypeName[16:23]:      UserTypeCleared,
-	_UserTypeLowerName[16:23]: UserTypeCleared,
+	_UserTypeName[0:7]:        UserTypeCleared,
+	_UserTypeLowerName[0:7]:   UserTypeCleared,
+	_UserTypeName[7:14]:       UserTypeFlagged,
+	_UserTypeLowerName[7:14]:  UserTypeFlagged,
+	_UserTypeName[14:23]:      UserTypeConfirmed,
+	_UserTypeLowerName[14:23]: UserTypeConfirmed,
 }
 
 var _UserTypeNames = []string{
-	_UserTypeName[0:9],
-	_UserTypeName[9:16],
-	_UserTypeName[16:23],
+	_UserTypeName[0:7],
+	_UserTypeName[7:14],
+	_UserTypeName[14:23],
 }
 
 // UserTypeString retrieves an enum value from the enum constants string name.

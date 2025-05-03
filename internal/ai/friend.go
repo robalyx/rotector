@@ -141,7 +141,7 @@ func NewFriendAnalyzer(app *setup.App, logger *zap.Logger) *FriendAnalyzer {
 
 // GenerateFriendReasons generates friend network analysis reasons for multiple users using the OpenAI model.
 func (a *FriendAnalyzer) GenerateFriendReasons(
-	userInfos []*types.User, confirmedFriendsMap, flaggedFriendsMap map[uint64]map[uint64]*types.User,
+	userInfos []*types.ReviewUser, confirmedFriendsMap, flaggedFriendsMap map[uint64]map[uint64]*types.User,
 ) map[uint64]string {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
@@ -269,7 +269,7 @@ func (a *FriendAnalyzer) processFriendBatch(ctx context.Context, batch []UserFri
 
 // processBatch handles analysis for a batch of users.
 func (a *FriendAnalyzer) processBatch(
-	ctx context.Context, userInfos []*types.User,
+	ctx context.Context, userInfos []*types.ReviewUser,
 	confirmedFriendsMap, flaggedFriendsMap map[uint64]map[uint64]*types.User,
 ) ([]FriendAnalysis, error) {
 	// Create summaries for all users in batch

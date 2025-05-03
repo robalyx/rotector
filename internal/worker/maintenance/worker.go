@@ -270,7 +270,7 @@ func (w *Worker) processClearedUsers() {
 	w.reporter.UpdateStatus("Processing cleared users", 30)
 
 	cutOffDate := time.Now().AddDate(0, 0, -30)
-	affected, err := w.db.Model().User().PurgeOldClearedUsers(context.Background(), cutOffDate)
+	affected, err := w.db.Service().User().PurgeOldClearedUsers(context.Background(), cutOffDate)
 	if err != nil {
 		w.logger.Error("Error purging old cleared users", zap.Error(err))
 		w.reporter.SetHealthy(false)
@@ -393,17 +393,21 @@ func (w *Worker) processUserThumbnails() {
 	// Update thumbnails
 	thumbnailMap := w.thumbnailFetcher.GetImageURLs(context.Background(), users)
 
-	// Update last thumbnail update time
+	// Convert users to review users
 	now := time.Now()
-	for id, thumbnail := range thumbnailMap {
-		if user, ok := users[id]; ok {
+	reviewUsers := make(map[uint64]*types.ReviewUser, len(users))
+	for id, user := range users {
+		if thumbnail, ok := thumbnailMap[id]; ok {
 			user.ThumbnailURL = thumbnail
 			user.LastThumbnailUpdate = now
+		}
+		reviewUsers[id] = &types.ReviewUser{
+			User: user,
 		}
 	}
 
 	// Save updated users
-	if err := w.db.Service().User().SaveUsers(context.Background(), users); err != nil {
+	if err := w.db.Service().User().SaveUsers(context.Background(), reviewUsers); err != nil {
 		w.logger.Error("Error saving updated user thumbnails", zap.Error(err))
 		w.reporter.SetHealthy(false)
 		return

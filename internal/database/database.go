@@ -118,7 +118,7 @@ func NewConnection(
 
 	// Create client instance
 	repo := NewRepository(db, logger)
-	service := NewService(repo, logger)
+	service := NewService(db, repo, logger)
 
 	client := &clientImpl{
 		db:      db,

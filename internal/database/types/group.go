@@ -53,11 +53,10 @@ type GroupClearance struct {
 // ReviewGroup combines group data with verification/clearance info for review.
 type ReviewGroup struct {
 	*Group
-	Status     enum.GroupType `json:"status"`
-	ReviewerID uint64         `json:"reviewerId,omitempty"`
-	VerifiedAt time.Time      `json:"verifiedAt"`
-	ClearedAt  time.Time      `json:"clearedAt"`
-	Reputation Reputation     `json:"reputation"`
+	ReviewerID uint64     `json:"reviewerId,omitempty"`
+	VerifiedAt time.Time  `json:"verifiedAt"`
+	ClearedAt  time.Time  `json:"clearedAt"`
+	Reputation Reputation `json:"reputation"`
 }
 
 // GroupField represents available fields as bit flags.
@@ -72,6 +71,7 @@ const (
 	GroupFieldDescription                        // Group description
 	GroupFieldOwner                              // Owner information
 	GroupFieldShout                              // Group shout
+	GroupFieldStatus                             // Group status
 	GroupFieldReasons                            // Reasons for flagging
 	GroupFieldThumbnail                          // ThumbnailURL
 
@@ -91,7 +91,8 @@ const (
 	GroupFieldBasic = GroupFieldID |
 		GroupFieldUUID |
 		GroupFieldName |
-		GroupFieldDescription
+		GroupFieldDescription |
+		GroupFieldStatus
 
 	// GroupFieldTimestamps includes all timestamp-related fields.
 	GroupFieldTimestamps = GroupFieldLastScanned |
@@ -121,6 +122,7 @@ var groupFieldToColumns = map[GroupField][]string{
 	GroupFieldDescription:         {"description"},
 	GroupFieldOwner:               {"owner"},
 	GroupFieldShout:               {"shout"},
+	GroupFieldStatus:              {"status"},
 	GroupFieldReasons:             {"reasons"},
 	GroupFieldThumbnail:           {"thumbnail_url"},
 	GroupFieldConfidence:          {"confidence"},

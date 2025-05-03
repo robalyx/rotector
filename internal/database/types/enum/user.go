@@ -6,10 +6,10 @@ package enum
 type UserType int
 
 const (
-	// UserTypeConfirmed indicates a user has been reviewed and confirmed as inappropriate.
-	UserTypeConfirmed UserType = iota
+	// UserTypeCleared indicates a user was reviewed and found to be appropriate.
+	UserTypeCleared UserType = iota
 	// UserTypeFlagged indicates a user needs review for potential violations.
 	UserTypeFlagged
-	// UserTypeCleared indicates a user was reviewed and found to be appropriate.
-	UserTypeCleared
+	// UserTypeConfirmed indicates a user has been reviewed and confirmed as inappropriate.
+	UserTypeConfirmed
 )

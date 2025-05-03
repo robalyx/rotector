@@ -34,7 +34,7 @@ func NewCondoChecker(db database.Client, logger *zap.Logger) *CondoChecker {
 }
 
 // ProcessUsers checks multiple users' thumbnails concurrently and updates reasonsMap.
-func (c *CondoChecker) ProcessUsers(userInfos []*types.User, reasonsMap map[uint64]types.Reasons[enum.UserReasonType]) {
+func (c *CondoChecker) ProcessUsers(userInfos []*types.ReviewUser, reasonsMap map[uint64]types.Reasons[enum.UserReasonType]) {
 	existingFlags := len(reasonsMap)
 
 	var (
@@ -77,7 +77,7 @@ func (c *CondoChecker) ProcessUsers(userInfos []*types.User, reasonsMap map[uint
 
 // processUser handles the logic for checking a single user against condo players.
 // Returns a reason if the user should be flagged, nil otherwise.
-func (c *CondoChecker) processUser(ctx context.Context, user *types.User) (*types.Reason, error) {
+func (c *CondoChecker) processUser(ctx context.Context, user *types.ReviewUser) (*types.Reason, error) {
 	// Check if user's thumbnail matches a condo player
 	player, err := c.db.Model().Condo().GetPlayerByThumbnail(ctx, user.ThumbnailURL)
 	if err != nil {
@@ -122,7 +122,7 @@ func (c *CondoChecker) processUser(ctx context.Context, user *types.User) (*type
 
 		if existingUser.Status == enum.UserTypeFlagged && len(existingUser.Reasons) == 1 {
 			if _, ok := existingUser.Reasons[enum.UserReasonTypeCondo]; ok {
-				if _, err := c.db.Model().User().DeleteUser(ctx, *player.UserID); err != nil {
+				if _, err := c.db.Service().User().DeleteUser(ctx, *player.UserID); err != nil {
 					c.logger.Error("Failed to delete existing user",
 						zap.Error(err),
 						zap.Uint64("userID", *player.UserID))

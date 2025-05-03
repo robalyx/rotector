@@ -361,7 +361,7 @@ const (
 	BlacklistUserModalCustomID       = "blacklist_user_modal"
 	BlacklistUserReasonInputCustomID = "blacklist_user_reason_input"
 
-	AppealsPerPage              = 3
+	AppealsPerPage              = 5
 	AppealMessagesPerPage       = 5
 	AppealSelectID              = "appeal_select"
 	AppealStatusSelectID        = "appeal_status"

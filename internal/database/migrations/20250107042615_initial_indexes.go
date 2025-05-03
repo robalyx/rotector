@@ -272,6 +272,48 @@ func init() { //nolint:funlen
 			-- Reviewer info indexes
 			CREATE INDEX IF NOT EXISTS idx_reviewer_infos_updated_at
 			ON reviewer_infos (updated_at);
+
+			-- User relationship indexes
+			CREATE INDEX IF NOT EXISTS idx_user_groups_user_id_rank
+			ON user_groups (user_id, role_rank DESC);
+
+			CREATE INDEX IF NOT EXISTS idx_user_outfits_user_id
+			ON user_outfits (user_id);
+
+			CREATE INDEX IF NOT EXISTS idx_user_friends_user_id
+			ON user_friends (user_id);
+
+			CREATE INDEX IF NOT EXISTS idx_user_games_user_id
+			ON user_games (user_id);
+
+			CREATE INDEX IF NOT EXISTS idx_user_inventory_user_id
+			ON user_inventories (user_id);
+
+			-- NOTE: We will make use of these in the future
+			-- CREATE INDEX IF NOT EXISTS idx_user_favorites_user_id
+			-- ON user_favorites (user_id);
+			-- CREATE INDEX IF NOT EXISTS idx_user_badges_user_id
+			-- ON user_badges (user_id);
+
+			-- User relationship info indexes
+			CREATE INDEX IF NOT EXISTS idx_game_infos_place_visits
+			ON game_infos (place_visits DESC);
+
+			-- User relationship deletion indexes
+			CREATE INDEX IF NOT EXISTS idx_user_groups_group_id
+			ON user_groups (group_id);
+
+			CREATE INDEX IF NOT EXISTS idx_user_outfits_outfit_id
+			ON user_outfits (outfit_id);
+
+			CREATE INDEX IF NOT EXISTS idx_user_friends_friend_id
+			ON user_friends (friend_id);
+
+			CREATE INDEX IF NOT EXISTS idx_user_games_game_id
+			ON user_games (game_id);
+
+			CREATE INDEX IF NOT EXISTS idx_user_inventory_inventory_id
+			ON user_inventories (inventory_id);
 		`, enum.ActivityTypeUserViewed, enum.ActivityTypeGroupViewed).Exec(ctx)
 		if err != nil {
 			return fmt.Errorf("failed to create indexes: %w", err)
@@ -446,6 +488,26 @@ func init() { //nolint:funlen
 
 			-- Reviewer info indexes
 			DROP INDEX IF EXISTS idx_reviewer_infos_updated_at;
+
+			-- User relationship indexes
+			DROP INDEX IF EXISTS idx_user_groups_user_id_rank;
+			DROP INDEX IF EXISTS idx_user_outfits_user_id;
+			DROP INDEX IF EXISTS idx_user_friends_user_id;
+			DROP INDEX IF EXISTS idx_user_games_user_id;
+			DROP INDEX IF EXISTS idx_user_inventory_user_id;
+			-- NOTE: We will make use of these in the future
+			-- DROP INDEX IF EXISTS idx_user_favorites_user_id;
+			-- DROP INDEX IF EXISTS idx_user_badges_user_id;
+
+			-- User relationship info indexes
+			DROP INDEX IF EXISTS idx_game_infos_place_visits;
+
+			-- User relationship deletion indexes
+			DROP INDEX IF EXISTS idx_user_groups_group_id;
+			DROP INDEX IF EXISTS idx_user_outfits_outfit_id;
+			DROP INDEX IF EXISTS idx_user_friends_friend_id;
+			DROP INDEX IF EXISTS idx_user_games_game_id;
+			DROP INDEX IF EXISTS idx_user_inventory_inventory_id;
 		`).Exec(ctx)
 		if err != nil {
 			return fmt.Errorf("failed to drop indexes: %w", err)

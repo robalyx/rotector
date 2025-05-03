@@ -167,7 +167,7 @@ func (m *ConfirmMenu) handleDeleteUser(ctx *interaction.Context, idStr string, r
 	}
 
 	// Delete user
-	found, err := m.layout.db.Model().User().DeleteUser(ctx.Context(), id)
+	found, err := m.layout.db.Service().User().DeleteUser(ctx.Context(), id)
 	if err != nil {
 		m.layout.logger.Error("Failed to delete user",
 			zap.Error(err),

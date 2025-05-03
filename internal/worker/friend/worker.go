@@ -35,7 +35,7 @@ type Worker struct {
 func New(app *setup.App, bar *progress.Bar, logger *zap.Logger) *Worker {
 	userFetcher := fetcher.NewUserFetcher(app, logger)
 	userChecker := checker.NewUserChecker(app, userFetcher, logger)
-	friendFetcher := fetcher.NewFriendFetcher(app.RoAPI, logger)
+	friendFetcher := fetcher.NewFriendFetcher(app, logger)
 	reporter := core.NewStatusReporter(app.StatusClient, "friend", logger)
 
 	return &Worker{

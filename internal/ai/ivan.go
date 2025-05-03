@@ -158,7 +158,7 @@ func NewIvanAnalyzer(app *setup.App, logger *zap.Logger) *IvanAnalyzer {
 }
 
 // ProcessUsers analyzes multiple users' chat messages for inappropriate content.
-func (a *IvanAnalyzer) ProcessUsers(users []*types.User, reasonsMap map[uint64]types.Reasons[enum.UserReasonType]) {
+func (a *IvanAnalyzer) ProcessUsers(users []*types.ReviewUser, reasonsMap map[uint64]types.Reasons[enum.UserReasonType]) {
 	if len(users) == 0 {
 		return
 	}
@@ -168,7 +168,7 @@ func (a *IvanAnalyzer) ProcessUsers(users []*types.User, reasonsMap map[uint64]t
 
 	// Extract user IDs
 	userIDs := make([]uint64, len(users))
-	userMap := make(map[uint64]*types.User)
+	userMap := make(map[uint64]*types.ReviewUser)
 	for i, user := range users {
 		userIDs[i] = user.ID
 		userMap[user.ID] = user

@@ -55,7 +55,7 @@ func NewUserChecker(app *setup.App, userFetcher *fetcher.UserFetcher, logger *za
 
 // ProcessUsers runs users through multiple checking stages.
 // Returns a map of flagged user IDs.
-func (c *UserChecker) ProcessUsers(userInfos []*types.User) map[uint64]struct{} {
+func (c *UserChecker) ProcessUsers(userInfos []*types.ReviewUser) map[uint64]struct{} {
 	c.logger.Info("Processing users", zap.Int("userInfos", len(userInfos)))
 
 	// Initialize map to store reasons
@@ -86,7 +86,7 @@ func (c *UserChecker) ProcessUsers(userInfos []*types.User) map[uint64]struct{} 
 	}
 
 	// Create final flagged users map
-	flaggedUsers := make(map[uint64]*types.User, len(reasonsMap))
+	flaggedUsers := make(map[uint64]*types.ReviewUser, len(reasonsMap))
 	flaggedStatus := make(map[uint64]struct{}, len(reasonsMap))
 
 	for _, user := range userInfos {
@@ -114,7 +114,7 @@ func (c *UserChecker) ProcessUsers(userInfos []*types.User) map[uint64]struct{} 
 }
 
 // trackFlaggedUsersGroups adds flagged users' group memberships to tracking.
-func (c *UserChecker) trackFlaggedUsersGroups(flaggedUsers map[uint64]*types.User) {
+func (c *UserChecker) trackFlaggedUsersGroups(flaggedUsers map[uint64]*types.ReviewUser) {
 	groupUsersTracking := make(map[uint64][]uint64)
 
 	// Collect group memberships for flagged users

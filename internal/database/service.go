@@ -2,6 +2,7 @@ package database
 
 import (
 	"github.com/robalyx/rotector/internal/database/service"
+	"github.com/uptrace/bun"
 	"go.uber.org/zap"
 )
 
@@ -21,7 +22,7 @@ type Service struct {
 }
 
 // NewService creates a new service instance with all services.
-func NewService(repository *Repository, logger *zap.Logger) *Service {
+func NewService(db *bun.DB, repository *Repository, logger *zap.Logger) *Service {
 	banModel := repository.Ban()
 	userModel := repository.User()
 	groupModel := repository.Group()
@@ -40,7 +41,7 @@ func NewService(repository *Repository, logger *zap.Logger) *Service {
 
 	return &Service{
 		ban:        service.NewBan(banModel, logger),
-		user:       service.NewUser(userModel, activityModel, reputationModel, voteModel, trackingModel, logger),
+		user:       service.NewUser(db, userModel, activityModel, reputationModel, voteModel, trackingModel, logger),
 		group:      service.NewGroup(groupModel, activityModel, reputationModel, voteModel, logger),
 		vote:       service.NewVote(voteModel, activityModel, viewService, banModel, logger),
 		reputation: service.NewReputation(reputationModel, voteModel, logger),
