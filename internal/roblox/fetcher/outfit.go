@@ -61,7 +61,7 @@ func (o *OutfitFetcher) GetOutfits(
 	// Fetch outfit details concurrently
 	var (
 		outfitAssets = make(map[uint64][]*apiTypes.AssetV2)
-		p            = pool.New().WithContext(ctx)
+		p            = pool.New().WithContext(ctx).WithMaxGoroutines(5)
 		mu           sync.Mutex
 	)
 
