@@ -162,20 +162,26 @@ func (b *GroupsBuilder) getGroupFieldName(group *apiTypes.UserGroupRoles) string
 func (b *GroupsBuilder) getGroupFieldValue(group *apiTypes.UserGroupRoles) string {
 	var info []string
 
-	// Add member count, user's role, and owner info
-	username := utils.CensorString(group.Group.Owner.Username, b.privacyMode)
-	if b.privacyMode {
-		info = append(info, fmt.Sprintf("👥 `%s` • 👤 `%s` • 👑 %s",
-			utils.FormatNumber(group.Group.MemberCount),
-			group.Role.Name,
-			username))
-	} else {
-		info = append(info, fmt.Sprintf("👥 `%s` • 👤 `%s` • 👑 [%s](https://www.roblox.com/users/%d/profile)",
-			utils.FormatNumber(group.Group.MemberCount),
-			group.Role.Name,
-			username,
-			group.Group.Owner.UserID))
+	// Add member count and user's role
+	var builder strings.Builder
+	builder.WriteString(fmt.Sprintf("👥 `%s` • 👤 `%s`",
+		utils.FormatNumber(group.Group.MemberCount),
+		group.Role.Name))
+
+	// Add owner info if available
+	if group.Group.Owner != nil {
+		username := utils.CensorString(group.Group.Owner.Username, b.privacyMode)
+		builder.WriteString(" • 👑 ")
+		if b.privacyMode {
+			builder.WriteString(username)
+		} else {
+			builder.WriteString(fmt.Sprintf("[%s](https://www.roblox.com/users/%d/profile)",
+				username,
+				group.Group.Owner.UserID))
+		}
 	}
+
+	info = append(info, builder.String())
 
 	// Add status indicators (locked, private)
 	var status []string
