@@ -59,15 +59,11 @@ func TestCreateTimestampedTextDisplay(t *testing.T) {
 			component := utils.CreateTimestampedTextDisplay(tt.content)
 
 			// Assert component type
-			assert.Equal(t, discord.ComponentTypeContainer, component.Type())
+			assert.Equal(t, discord.ComponentTypeTextDisplay, component.Type())
 
-			// Assert container has text display with timestamped content
-			container, ok := component.(discord.ContainerComponent)
-			assert.True(t, ok, "component should be a container")
-			assert.Len(t, container.Components, 1, "container should have one component")
-
-			textDisplay, ok := container.Components[0].(discord.TextDisplayComponent)
-			assert.True(t, ok, "first component should be a text display")
+			// Assert component is a text display
+			textDisplay, ok := component.(discord.TextDisplayComponent)
+			assert.True(t, ok, "component should be a text display")
 
 			// Check that content is timestamped
 			expectedContent := utils.GetTimestampedSubtext(tt.content)
