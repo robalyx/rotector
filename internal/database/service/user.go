@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	apiTypes "github.com/jaxron/roapi.go/pkg/api/types"
 	"github.com/robalyx/rotector/internal/database/models"
 	"github.com/robalyx/rotector/internal/database/types"
 	"github.com/robalyx/rotector/internal/database/types/enum"
@@ -349,37 +350,63 @@ func (s *UserService) SaveUsers(ctx context.Context, users map[uint64]*types.Rev
 			return err
 		}
 
-		// Then save relationships for each user
+		// Prepare batch data structures
+		userGroups := make(map[uint64][]*apiTypes.UserGroupRoles)
+		userOutfits := make(map[uint64][]*apiTypes.Outfit)
+		userOutfitAssets := make(map[uint64]map[uint64][]*apiTypes.AssetV2)
+		userAssets := make(map[uint64][]*apiTypes.AssetV2)
+		userFriends := make(map[uint64][]*apiTypes.ExtendedFriend)
+		userGames := make(map[uint64][]*apiTypes.Game)
+		userInventory := make(map[uint64][]*apiTypes.InventoryAsset)
+
+		// Collect all relationships
 		for _, user := range usersToSave {
-			// Save groups
-			if err := s.model.SaveUserGroups(ctx, tx, user.ID, user.Groups); err != nil {
-				return err
+			if len(user.Groups) > 0 {
+				userGroups[user.ID] = user.Groups
 			}
+			if len(user.Outfits) > 0 {
+				userOutfits[user.ID] = user.Outfits
+				if len(user.OutfitAssets) > 0 {
+					userOutfitAssets[user.ID] = user.OutfitAssets
+				}
+			}
+			if len(user.CurrentAssets) > 0 {
+				userAssets[user.ID] = user.CurrentAssets
+			}
+			if len(user.Friends) > 0 {
+				userFriends[user.ID] = user.Friends
+			}
+			if len(user.Games) > 0 {
+				userGames[user.ID] = user.Games
+			}
+			if len(user.Inventory) > 0 {
+				userInventory[user.ID] = user.Inventory
+			}
+		}
 
-			// Save outfits
-			if err := s.model.SaveUserOutfits(ctx, tx, user.ID, user.Outfits, user.OutfitAssets); err != nil {
-				return err
-			}
+		// Save all relationships
+		if err := s.model.SaveUserGroups(ctx, tx, userGroups); err != nil {
+			return err
+		}
 
-			// Save current assets
-			if err := s.model.SaveUserAssets(ctx, tx, user.ID, user.CurrentAssets); err != nil {
-				return err
-			}
+		if err := s.model.SaveUserOutfits(ctx, tx, userOutfits, userOutfitAssets); err != nil {
+			return err
+		}
 
-			// Save friends
-			if err := s.model.SaveUserFriends(ctx, tx, user.ID, user.Friends); err != nil {
-				return err
-			}
+		if err := s.model.SaveUserAssets(ctx, tx, userAssets); err != nil {
+			return err
+		}
 
-			// Save games
-			if err := s.model.SaveUserGames(ctx, tx, user.ID, user.Games); err != nil {
-				return err
-			}
+		if err := s.model.SaveUserFriends(ctx, tx, userFriends); err != nil {
+			return err
+		}
 
-			// Save inventory
-			if err := s.model.SaveUserInventory(ctx, tx, user.ID, user.Inventory); err != nil {
-				return err
-			}
+		if err := s.model.SaveUserGames(ctx, tx, userGames); err != nil {
+			return err
+		}
+
+		if err := s.model.SaveUserInventory(ctx, tx, userInventory); err != nil {
+			return err
 		}
 
 		return nil

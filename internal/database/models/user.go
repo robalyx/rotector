@@ -1184,19 +1184,35 @@ func (r *UserModel) GetUserInventory(ctx context.Context, userID uint64) ([]*api
 	return apiInventory, nil
 }
 
-// SaveUserGroups saves groups for a user.
-func (r *UserModel) SaveUserGroups(ctx context.Context, tx bun.Tx, userID uint64, groups []*apiTypes.UserGroupRoles) error {
-	if len(groups) == 0 {
+// SaveUserGroups saves groups for multiple users.
+func (r *UserModel) SaveUserGroups(ctx context.Context, tx bun.Tx, userGroups map[uint64][]*apiTypes.UserGroupRoles) error {
+	if len(userGroups) == 0 {
 		return nil
 	}
 
-	userGroups := make([]types.UserGroup, 0, len(groups))
-	groupInfos := make([]types.GroupInfo, 0, len(groups))
+	// Calculate total size for slices
+	totalGroups := 0
+	for _, groups := range userGroups {
+		totalGroups += len(groups)
+	}
 
-	for _, group := range groups {
-		userGroup, groupInfo := types.FromAPIGroupRoles(userID, group)
-		userGroups = append(userGroups, *userGroup)
-		groupInfos = append(groupInfos, *groupInfo)
+	// Pre-allocate slices
+	allUserGroups := make([]types.UserGroup, 0, totalGroups)
+	groupInfoMap := make(map[uint64]*types.GroupInfo)
+
+	// Build user groups and group info
+	for userID, groups := range userGroups {
+		for _, group := range groups {
+			userGroup, groupInfo := types.FromAPIGroupRoles(userID, group)
+			allUserGroups = append(allUserGroups, *userGroup)
+			groupInfoMap[group.Group.ID] = groupInfo
+		}
+	}
+
+	// Convert group info map to slice
+	groupInfos := make([]types.GroupInfo, 0, len(groupInfoMap))
+	for _, info := range groupInfoMap {
+		groupInfos = append(groupInfos, *info)
 	}
 
 	// Save group info
@@ -1219,7 +1235,7 @@ func (r *UserModel) SaveUserGroups(ctx context.Context, tx bun.Tx, userID uint64
 
 	// Save user groups
 	_, err = tx.NewInsert().
-		Model(&userGroups).
+		Model(&allUserGroups).
 		On("CONFLICT (user_id, group_id) DO UPDATE").
 		Set("role_id = EXCLUDED.role_id").
 		Set("role_name = EXCLUDED.role_name").
@@ -1232,21 +1248,38 @@ func (r *UserModel) SaveUserGroups(ctx context.Context, tx bun.Tx, userID uint64
 	return nil
 }
 
-// SaveUserOutfits saves outfits and their assets for a user.
+// SaveUserOutfits saves outfits and their assets for multiple users.
 func (r *UserModel) SaveUserOutfits(
-	ctx context.Context, tx bun.Tx, userID uint64, outfits []*apiTypes.Outfit, outfitAssets map[uint64][]*apiTypes.AssetV2,
+	ctx context.Context, tx bun.Tx, userOutfits map[uint64][]*apiTypes.Outfit,
+	userOutfitAssets map[uint64]map[uint64][]*apiTypes.AssetV2,
 ) error {
-	if len(outfits) == 0 {
+	if len(userOutfits) == 0 {
 		return nil
 	}
 
-	userOutfits := make([]types.UserOutfit, 0, len(outfits))
-	outfitInfos := make([]types.OutfitInfo, 0, len(outfits))
+	// Calculate total size for slices
+	totalOutfits := 0
+	for _, outfits := range userOutfits {
+		totalOutfits += len(outfits)
+	}
 
-	for _, outfit := range outfits {
-		userOutfit, outfitInfo := types.FromAPIOutfit(userID, outfit)
-		userOutfits = append(userOutfits, *userOutfit)
-		outfitInfos = append(outfitInfos, *outfitInfo)
+	// Pre-allocate slices
+	allUserOutfits := make([]types.UserOutfit, 0, totalOutfits)
+	outfitInfoMap := make(map[uint64]*types.OutfitInfo)
+
+	// Build user outfits and outfit info
+	for userID, outfits := range userOutfits {
+		for _, outfit := range outfits {
+			userOutfit, outfitInfo := types.FromAPIOutfit(userID, outfit)
+			allUserOutfits = append(allUserOutfits, *userOutfit)
+			outfitInfoMap[outfit.ID] = outfitInfo
+		}
+	}
+
+	// Convert outfit info map to slice
+	outfitInfos := make([]types.OutfitInfo, 0, len(outfitInfoMap))
+	for _, info := range outfitInfoMap {
+		outfitInfos = append(outfitInfos, *info)
 	}
 
 	// Save outfit info
@@ -1263,7 +1296,7 @@ func (r *UserModel) SaveUserOutfits(
 
 	// Save user outfits
 	_, err = tx.NewInsert().
-		Model(&userOutfits).
+		Model(&allUserOutfits).
 		On("CONFLICT (user_id, outfit_id) DO UPDATE").
 		Set("user_id = EXCLUDED.user_id").
 		Set("outfit_id = EXCLUDED.outfit_id").
@@ -1273,25 +1306,27 @@ func (r *UserModel) SaveUserOutfits(
 	}
 
 	// Save outfit assets if provided
-	if len(outfitAssets) > 0 {
+	if len(userOutfitAssets) > 0 {
 		var (
 			assets   []types.OutfitAsset
 			assetMap = make(map[uint64]types.AssetInfo)
 		)
 
 		// Prepare asset data
-		for outfitID, assetList := range outfitAssets {
-			for _, asset := range assetList {
-				assets = append(assets, types.OutfitAsset{
-					OutfitID:         outfitID,
-					AssetID:          asset.ID,
-					CurrentVersionID: asset.CurrentVersionID,
-				})
+		for _, outfitAssets := range userOutfitAssets {
+			for outfitID, assetList := range outfitAssets {
+				for _, asset := range assetList {
+					assets = append(assets, types.OutfitAsset{
+						OutfitID:         outfitID,
+						AssetID:          asset.ID,
+						CurrentVersionID: asset.CurrentVersionID,
+					})
 
-				assetMap[asset.ID] = types.AssetInfo{
-					ID:        asset.ID,
-					Name:      asset.Name,
-					AssetType: asset.AssetType.ID,
+					assetMap[asset.ID] = types.AssetInfo{
+						ID:        asset.ID,
+						Name:      asset.Name,
+						AssetType: asset.AssetType.ID,
+					}
 				}
 			}
 		}
@@ -1327,20 +1362,35 @@ func (r *UserModel) SaveUserOutfits(
 	return nil
 }
 
-// SaveUserAssets saves the current assets for a user.
-func (r *UserModel) SaveUserAssets(ctx context.Context, tx bun.Tx, userID uint64, assets []*apiTypes.AssetV2) error {
-	if len(assets) == 0 {
+// SaveUserAssets saves the current assets for multiple users.
+func (r *UserModel) SaveUserAssets(ctx context.Context, tx bun.Tx, userAssets map[uint64][]*apiTypes.AssetV2) error {
+	if len(userAssets) == 0 {
 		return nil
 	}
 
-	// Prepare user assets and asset info
-	userAssets := make([]types.UserAsset, 0, len(assets))
-	assetInfos := make([]types.AssetInfo, 0, len(assets))
+	// Calculate total size for slices
+	totalAssets := 0
+	for _, assets := range userAssets {
+		totalAssets += len(assets)
+	}
 
-	for _, asset := range assets {
-		userAsset, assetInfo := types.FromAPIAsset(userID, asset)
-		userAssets = append(userAssets, *userAsset)
-		assetInfos = append(assetInfos, *assetInfo)
+	// Pre-allocate slices
+	allUserAssets := make([]types.UserAsset, 0, totalAssets)
+	assetInfoMap := make(map[uint64]*types.AssetInfo)
+
+	// Build user assets and asset info
+	for userID, assets := range userAssets {
+		for _, asset := range assets {
+			userAsset, assetInfo := types.FromAPIAsset(userID, asset)
+			allUserAssets = append(allUserAssets, *userAsset)
+			assetInfoMap[asset.ID] = assetInfo
+		}
+	}
+
+	// Convert asset info map to slice
+	assetInfos := make([]types.AssetInfo, 0, len(assetInfoMap))
+	for _, info := range assetInfoMap {
+		assetInfos = append(assetInfos, *info)
 	}
 
 	// Save asset info
@@ -1356,7 +1406,7 @@ func (r *UserModel) SaveUserAssets(ctx context.Context, tx bun.Tx, userID uint64
 
 	// Save user assets
 	_, err = tx.NewInsert().
-		Model(&userAssets).
+		Model(&allUserAssets).
 		On("CONFLICT (user_id, asset_id) DO UPDATE").
 		Set("current_version_id = EXCLUDED.current_version_id").
 		Exec(ctx)
@@ -1367,19 +1417,35 @@ func (r *UserModel) SaveUserAssets(ctx context.Context, tx bun.Tx, userID uint64
 	return nil
 }
 
-// SaveUserFriends saves friends for a user.
-func (r *UserModel) SaveUserFriends(ctx context.Context, tx bun.Tx, userID uint64, friends []*apiTypes.ExtendedFriend) error {
-	if len(friends) == 0 {
+// SaveUserFriends saves friends for multiple users.
+func (r *UserModel) SaveUserFriends(ctx context.Context, tx bun.Tx, userFriends map[uint64][]*apiTypes.ExtendedFriend) error {
+	if len(userFriends) == 0 {
 		return nil
 	}
 
-	userFriends := make([]types.UserFriend, 0, len(friends))
-	friendInfos := make([]types.FriendInfo, 0, len(friends))
+	// Calculate total size for slices
+	totalFriends := 0
+	for _, friends := range userFriends {
+		totalFriends += len(friends)
+	}
 
-	for _, friend := range friends {
-		userFriend, friendInfo := types.FromAPIFriend(userID, friend)
-		userFriends = append(userFriends, *userFriend)
-		friendInfos = append(friendInfos, *friendInfo)
+	// Pre-allocate slices
+	allUserFriends := make([]types.UserFriend, 0, totalFriends)
+	friendInfoMap := make(map[uint64]*types.FriendInfo)
+
+	// Build user friends and friend info
+	for userID, friends := range userFriends {
+		for _, friend := range friends {
+			userFriend, friendInfo := types.FromAPIFriend(userID, friend)
+			allUserFriends = append(allUserFriends, *userFriend)
+			friendInfoMap[friend.ID] = friendInfo
+		}
+	}
+
+	// Convert friend info map to slice
+	friendInfos := make([]types.FriendInfo, 0, len(friendInfoMap))
+	for _, info := range friendInfoMap {
+		friendInfos = append(friendInfos, *info)
 	}
 
 	// Save friend info
@@ -1395,7 +1461,7 @@ func (r *UserModel) SaveUserFriends(ctx context.Context, tx bun.Tx, userID uint6
 
 	// Save user friends
 	_, err = tx.NewInsert().
-		Model(&userFriends).
+		Model(&allUserFriends).
 		On("CONFLICT (user_id, friend_id) DO NOTHING").
 		Exec(ctx)
 	if err != nil {
@@ -1405,19 +1471,35 @@ func (r *UserModel) SaveUserFriends(ctx context.Context, tx bun.Tx, userID uint6
 	return nil
 }
 
-// SaveUserGames saves games for a user.
-func (r *UserModel) SaveUserGames(ctx context.Context, tx bun.Tx, userID uint64, games []*apiTypes.Game) error {
-	if len(games) == 0 {
+// SaveUserGames saves games for multiple users.
+func (r *UserModel) SaveUserGames(ctx context.Context, tx bun.Tx, userGames map[uint64][]*apiTypes.Game) error {
+	if len(userGames) == 0 {
 		return nil
 	}
 
-	userGames := make([]types.UserGame, 0, len(games))
-	gameInfos := make([]types.GameInfo, 0, len(games))
+	// Calculate total size for slices
+	totalGames := 0
+	for _, games := range userGames {
+		totalGames += len(games)
+	}
 
-	for _, game := range games {
-		userGame, gameInfo := types.FromAPIGame(userID, game)
-		userGames = append(userGames, *userGame)
-		gameInfos = append(gameInfos, *gameInfo)
+	// Pre-allocate slices
+	allUserGames := make([]types.UserGame, 0, totalGames)
+	gameInfoMap := make(map[uint64]*types.GameInfo)
+
+	// Build user games and game info
+	for userID, games := range userGames {
+		for _, game := range games {
+			userGame, gameInfo := types.FromAPIGame(userID, game)
+			allUserGames = append(allUserGames, *userGame)
+			gameInfoMap[game.ID] = gameInfo
+		}
+	}
+
+	// Convert game info map to slice
+	gameInfos := make([]types.GameInfo, 0, len(gameInfoMap))
+	for _, info := range gameInfoMap {
+		gameInfos = append(gameInfos, *info)
 	}
 
 	// Save game info
@@ -1436,7 +1518,7 @@ func (r *UserModel) SaveUserGames(ctx context.Context, tx bun.Tx, userID uint64,
 
 	// Save user games
 	_, err = tx.NewInsert().
-		Model(&userGames).
+		Model(&allUserGames).
 		On("CONFLICT (user_id, game_id) DO NOTHING").
 		Exec(ctx)
 	if err != nil {
@@ -1446,19 +1528,35 @@ func (r *UserModel) SaveUserGames(ctx context.Context, tx bun.Tx, userID uint64,
 	return nil
 }
 
-// SaveUserInventory saves inventory for a user.
-func (r *UserModel) SaveUserInventory(ctx context.Context, tx bun.Tx, userID uint64, inventory []*apiTypes.InventoryAsset) error {
-	if len(inventory) == 0 {
+// SaveUserInventory saves inventory for multiple users.
+func (r *UserModel) SaveUserInventory(ctx context.Context, tx bun.Tx, userInventory map[uint64][]*apiTypes.InventoryAsset) error {
+	if len(userInventory) == 0 {
 		return nil
 	}
 
-	userInventory := make([]types.UserInventory, 0, len(inventory))
-	inventoryInfos := make([]types.InventoryInfo, 0, len(inventory))
+	// Calculate total size for slices
+	totalInventory := 0
+	for _, inventory := range userInventory {
+		totalInventory += len(inventory)
+	}
 
-	for _, asset := range inventory {
-		userInv, invInfo := types.FromAPIInventoryAsset(userID, asset)
-		userInventory = append(userInventory, *userInv)
-		inventoryInfos = append(inventoryInfos, *invInfo)
+	// Pre-allocate slices
+	allUserInventory := make([]types.UserInventory, 0, totalInventory)
+	inventoryInfoMap := make(map[uint64]*types.InventoryInfo)
+
+	// Build user inventory and inventory info
+	for userID, inventory := range userInventory {
+		for _, asset := range inventory {
+			userInv, invInfo := types.FromAPIInventoryAsset(userID, asset)
+			allUserInventory = append(allUserInventory, *userInv)
+			inventoryInfoMap[asset.AssetID] = invInfo
+		}
+	}
+
+	// Convert inventory info map to slice
+	inventoryInfos := make([]types.InventoryInfo, 0, len(inventoryInfoMap))
+	for _, info := range inventoryInfoMap {
+		inventoryInfos = append(inventoryInfos, *info)
 	}
 
 	// Save inventory info
@@ -1475,7 +1573,7 @@ func (r *UserModel) SaveUserInventory(ctx context.Context, tx bun.Tx, userID uin
 
 	// Save user inventory
 	_, err = tx.NewInsert().
-		Model(&userInventory).
+		Model(&allUserInventory).
 		On("CONFLICT (user_id, inventory_id) DO NOTHING").
 		Exec(ctx)
 	if err != nil {
