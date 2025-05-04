@@ -1,8 +1,11 @@
 package ai
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -134,6 +137,8 @@ type IvanAnalyzer struct {
 	minify      *minify.M
 	analysisSem *semaphore.Weighted
 	logger      *zap.Logger
+	textLogger  *zap.Logger
+	textDir     string
 	model       string
 	batchSize   int
 }
@@ -146,12 +151,21 @@ func NewIvanAnalyzer(app *setup.App, logger *zap.Logger) *IvanAnalyzer {
 	m := minify.New()
 	m.AddFunc("application/json", json.Minify)
 
+	// Get text logger
+	textLogger, textDir, err := app.LogManager.GetTextLogger("ivan_analyzer")
+	if err != nil {
+		logger.Error("Failed to create text logger", zap.Error(err))
+		textLogger = logger
+	}
+
 	return &IvanAnalyzer{
 		db:          app.DB,
 		chat:        app.AIClient.Chat(),
 		minify:      m,
 		analysisSem: semaphore.NewWeighted(int64(app.Config.Worker.BatchSizes.MessageAnalysis)),
 		logger:      logger.Named("ai_ivan"),
+		textLogger:  textLogger,
+		textDir:     textDir,
 		model:       app.Config.Common.OpenAI.IvanModel,
 		batchSize:   app.Config.Worker.BatchSizes.MessageAnalysisBatch,
 	}
@@ -333,7 +347,7 @@ func (a *IvanAnalyzer) processMessages(
 
 	var result *IvanAnalysisResponse
 	err := utils.WithRetrySplitBatch(
-		ctx, uniqueMessages, len(uniqueMessages), minBatchSize,
+		ctx, uniqueMessages, len(uniqueMessages), minBatchSize, utils.GetAIRetryOptions(),
 		func(batch []MessageForAI) error {
 			var err error
 			result, err = a.processIvanBatch(ctx, IvanRequest{
@@ -343,7 +357,34 @@ func (a *IvanAnalyzer) processMessages(
 			})
 			return err
 		},
-		utils.GetAIRetryOptions(), a.logger,
+		func(batch []MessageForAI) {
+			// Log detailed content to text logger
+			a.textLogger.Warn("Content blocked in ivan analysis batch",
+				zap.Uint64("user_id", userID),
+				zap.String("username", username),
+				zap.Int("batch_size", len(batch)),
+				zap.Any("messages", batch))
+
+			// Save blocked messages to file
+			filename := fmt.Sprintf("%d_%s_%s.txt", userID, username, time.Now().Format("20060102_150405"))
+			filepath := filepath.Join(a.textDir, filename)
+
+			var buf bytes.Buffer
+			for _, msg := range batch {
+				buf.WriteString(fmt.Sprintf("Time: %s\nMessage: %s\n\n",
+					msg.DateTime.Format(time.RFC3339), msg.Message))
+			}
+
+			if err := os.WriteFile(filepath, buf.Bytes(), 0o600); err != nil {
+				a.textLogger.Error("Failed to save blocked messages",
+					zap.Error(err),
+					zap.String("path", filepath))
+				return
+			}
+
+			a.textLogger.Info("Saved blocked messages",
+				zap.String("path", filepath))
+		},
 	)
 	if err != nil {
 		return err

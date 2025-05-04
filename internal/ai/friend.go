@@ -1,8 +1,11 @@
 package ai
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -116,6 +119,8 @@ type FriendAnalyzer struct {
 	minify      *minify.M
 	analysisSem *semaphore.Weighted
 	logger      *zap.Logger
+	textLogger  *zap.Logger
+	textDir     string
 	model       string
 	batchSize   int
 }
@@ -129,11 +134,20 @@ func NewFriendAnalyzer(app *setup.App, logger *zap.Logger) *FriendAnalyzer {
 	m := minify.New()
 	m.AddFunc(ApplicationJSON, json.Minify)
 
+	// Get text logger
+	textLogger, textDir, err := app.LogManager.GetTextLogger("friend_analyzer")
+	if err != nil {
+		logger.Error("Failed to create text logger", zap.Error(err))
+		textLogger = logger
+	}
+
 	return &FriendAnalyzer{
 		chat:        app.AIClient.Chat(),
 		minify:      m,
 		analysisSem: semaphore.NewWeighted(int64(app.Config.Worker.BatchSizes.FriendAnalysis)),
 		logger:      logger.Named("ai_friend"),
+		textLogger:  textLogger,
+		textDir:     textDir,
 		model:       app.Config.Common.OpenAI.FriendModel,
 		batchSize:   app.Config.Worker.BatchSizes.FriendAnalysisBatch,
 	}
@@ -328,13 +342,48 @@ func (a *FriendAnalyzer) processBatch(
 
 	var result *BatchFriendAnalysis
 	err := utils.WithRetrySplitBatch(
-		ctx, batchData, len(batchData), minBatchSize,
+		ctx, batchData, len(batchData), minBatchSize, utils.GetAIRetryOptions(),
 		func(batch []UserFriendData) error {
 			var err error
 			result, err = a.processFriendBatch(ctx, batch)
 			return err
 		},
-		utils.GetAIRetryOptions(), a.logger,
+		func(batch []UserFriendData) {
+			usernames := make([]string, len(batch))
+			for i, data := range batch {
+				usernames[i] = data.Username
+			}
+
+			// Log detailed content to text logger
+			a.textLogger.Warn("Content blocked in friend analysis batch",
+				zap.Strings("usernames", usernames),
+				zap.Int("batch_size", len(batch)),
+				zap.Any("friend_data", batch))
+
+			// Save blocked friend data to file
+			filename := fmt.Sprintf("friends_%s.txt", time.Now().Format("20060102_150405"))
+			filepath := filepath.Join(a.textDir, filename)
+
+			var buf bytes.Buffer
+			for _, data := range batch {
+				buf.WriteString(fmt.Sprintf("Username: %s\nFriends:\n", data.Username))
+				for _, friend := range data.Friends {
+					buf.WriteString(fmt.Sprintf("  - Name: %s\n    Type: %s\n    Reasons: %v\n",
+						friend.Name, friend.Type, friend.ReasonTypes))
+				}
+				buf.WriteString("\n")
+			}
+
+			if err := os.WriteFile(filepath, buf.Bytes(), 0o600); err != nil {
+				a.textLogger.Error("Failed to save blocked friend data",
+					zap.Error(err),
+					zap.String("path", filepath))
+				return
+			}
+
+			a.textLogger.Info("Saved blocked friend data",
+				zap.String("path", filepath))
+		},
 	)
 	if err != nil {
 		return nil, err

@@ -1,9 +1,12 @@
 package ai
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -236,6 +239,8 @@ type UserAnalyzer struct {
 	translator  *translator.Translator
 	analysisSem *semaphore.Weighted
 	logger      *zap.Logger
+	textLogger  *zap.Logger
+	textDir     string
 	model       string
 	batchSize   int
 }
@@ -249,12 +254,21 @@ func NewUserAnalyzer(app *setup.App, translator *translator.Translator, logger *
 	m := minify.New()
 	m.AddFunc(ApplicationJSON, json.Minify)
 
+	// Get text logger
+	textLogger, textDir, err := app.LogManager.GetTextLogger("user_analyzer")
+	if err != nil {
+		logger.Error("Failed to create text logger", zap.Error(err))
+		textLogger = logger
+	}
+
 	return &UserAnalyzer{
 		chat:        app.AIClient.Chat(),
 		minify:      m,
 		translator:  translator,
 		analysisSem: semaphore.NewWeighted(int64(app.Config.Worker.BatchSizes.UserAnalysis)),
 		logger:      logger.Named("ai_user"),
+		textLogger:  textLogger,
+		textDir:     textDir,
 		model:       app.Config.Common.OpenAI.UserModel,
 		batchSize:   app.Config.Worker.BatchSizes.UserAnalysisBatch,
 	}
@@ -407,7 +421,7 @@ func (a *UserAnalyzer) processBatch(
 		// Replace empty descriptions with placeholder
 		description := userInfo.Description
 		if description == "" {
-			description = "[Empty profile]"
+			description = "No description"
 		}
 		summary.Description = description
 
@@ -419,13 +433,47 @@ func (a *UserAnalyzer) processBatch(
 
 	var result *FlaggedUsers
 	err := utils.WithRetrySplitBatch(
-		ctx, userInfosWithoutID, len(userInfosWithoutID), minBatchSize,
+		ctx, userInfosWithoutID, len(userInfosWithoutID), minBatchSize, utils.GetAIRetryOptions(),
 		func(batch []UserSummary) error {
 			var err error
 			result, err = a.processUserBatch(ctx, batch)
 			return err
 		},
-		utils.GetAIRetryOptions(), a.logger,
+		func(batch []UserSummary) {
+			usernames := make([]string, len(batch))
+			for i, user := range batch {
+				usernames[i] = user.Name
+			}
+
+			// Log detailed content to text logger
+			a.textLogger.Warn("Content blocked in user analysis batch",
+				zap.Strings("usernames", usernames),
+				zap.Int("batch_size", len(batch)),
+				zap.Any("users", batch))
+
+			// Save blocked user data to file
+			filename := fmt.Sprintf("users_%s.txt", time.Now().Format("20060102_150405"))
+			filepath := filepath.Join(a.textDir, filename)
+
+			var buf bytes.Buffer
+			for _, user := range batch {
+				buf.WriteString(fmt.Sprintf("Username: %s\n", user.Name))
+				if user.DisplayName != "" && user.DisplayName != user.Name {
+					buf.WriteString(fmt.Sprintf("Display Name: %s\n", user.DisplayName))
+				}
+				buf.WriteString(fmt.Sprintf("Description: %s\n\n", user.Description))
+			}
+
+			if err := os.WriteFile(filepath, buf.Bytes(), 0o600); err != nil {
+				a.textLogger.Error("Failed to save blocked user data",
+					zap.Error(err),
+					zap.String("path", filepath))
+				return
+			}
+
+			a.textLogger.Info("Saved blocked user data",
+				zap.String("path", filepath))
+		},
 	)
 	if err != nil {
 		return fmt.Errorf("%w: %w", ErrModelResponse, err)
@@ -449,7 +497,7 @@ func (a *UserAnalyzer) validateAndUpdateFlaggedUsers(
 
 		// Check if the flagged user exists in both maps
 		if !exists && !hasOriginal {
-			a.logger.Warn("AI flagged non-existent user", zap.String("username", flaggedUser.Name))
+			a.logger.Info("AI flagged non-existent user", zap.String("username", flaggedUser.Name))
 			continue
 		}
 

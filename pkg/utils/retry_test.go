@@ -9,7 +9,6 @@ import (
 	"github.com/robalyx/rotector/pkg/utils"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.uber.org/zap/zaptest"
 )
 
 var (
@@ -130,16 +129,16 @@ func TestWithRetryContext(t *testing.T) {
 func TestWithRetrySplitBatch(t *testing.T) {
 	t.Parallel()
 
-	logger := zaptest.NewLogger(t)
-
 	tests := []struct {
-		name          string
-		items         []int
-		batchSize     int
-		minBatchSize  int
-		operation     func([]int) error
-		expectedCalls int
-		expectedErr   error
+		name              string
+		items             []int
+		batchSize         int
+		minBatchSize      int
+		operation         func([]int) error
+		expectedCalls     int
+		expectedErr       error
+		expectedBlocked   [][]int
+		expectedOnBlocked int
 	}{
 		{
 			name:         "succeeds first try",
@@ -149,8 +148,10 @@ func TestWithRetrySplitBatch(t *testing.T) {
 			operation: func(_ []int) error {
 				return nil
 			},
-			expectedCalls: 1,
-			expectedErr:   nil,
+			expectedCalls:     1,
+			expectedErr:       nil,
+			expectedBlocked:   nil,
+			expectedOnBlocked: 0,
 		},
 		{
 			name:         "splits on content block",
@@ -179,8 +180,10 @@ func TestWithRetrySplitBatch(t *testing.T) {
 					}
 				}
 			}(),
-			expectedCalls: 5, // Full batch + first half + first quarter + items 1 and 2
-			expectedErr:   nil,
+			expectedCalls:     5, // Full batch + first half + first quarter + items 1 and 2
+			expectedErr:       nil,
+			expectedBlocked:   [][]int{{1}},
+			expectedOnBlocked: 1,
 		},
 		{
 			name:         "stops at min batch size",
@@ -203,8 +206,10 @@ func TestWithRetrySplitBatch(t *testing.T) {
 					}
 				}
 			}(),
-			expectedCalls: 3, // Full batch + both halves at min batch size
-			expectedErr:   errMinBatchSize,
+			expectedCalls:     3, // Full batch + both halves at min batch size
+			expectedErr:       errMinBatchSize,
+			expectedBlocked:   nil,
+			expectedOnBlocked: 0,
 		},
 		{
 			name:         "both halves content blocked",
@@ -214,8 +219,10 @@ func TestWithRetrySplitBatch(t *testing.T) {
 			operation: func(_ []int) error {
 				return utils.ErrContentBlocked
 			},
-			expectedCalls: 3, // Full batch + both halves
-			expectedErr:   utils.ErrContentBlocked,
+			expectedCalls:     3, // Full batch + both halves
+			expectedErr:       utils.ErrContentBlocked,
+			expectedBlocked:   [][]int{{1, 2}, {3, 4}},
+			expectedOnBlocked: 2,
 		},
 	}
 
@@ -225,9 +232,17 @@ func TestWithRetrySplitBatch(t *testing.T) {
 
 			ctx := t.Context()
 			calls := 0
+			blockedCalls := 0
+			var blockedBatches [][]int
+
 			wrappedOp := func(batch []int) error {
 				calls++
 				return tt.operation(batch)
+			}
+
+			onBlocked := func(batch []int) {
+				blockedCalls++
+				blockedBatches = append(blockedBatches, batch)
 			}
 
 			opts := utils.RetryOptions{
@@ -237,7 +252,7 @@ func TestWithRetrySplitBatch(t *testing.T) {
 				MaxRetries:      3,
 			}
 
-			err := utils.WithRetrySplitBatch(ctx, tt.items, tt.batchSize, tt.minBatchSize, wrappedOp, opts, logger)
+			err := utils.WithRetrySplitBatch(ctx, tt.items, tt.batchSize, tt.minBatchSize, opts, wrappedOp, onBlocked)
 
 			if tt.expectedErr != nil {
 				require.Error(t, err)
@@ -247,6 +262,11 @@ func TestWithRetrySplitBatch(t *testing.T) {
 			}
 
 			assert.Equal(t, tt.expectedCalls, calls)
+			assert.Equal(t, tt.expectedOnBlocked, blockedCalls)
+
+			if tt.expectedBlocked != nil {
+				assert.Equal(t, tt.expectedBlocked, blockedBatches)
+			}
 		})
 	}
 }

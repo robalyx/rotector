@@ -87,6 +87,68 @@ func (lm *Manager) GetWorkerLogger(name string) *zap.Logger {
 	return logger
 }
 
+// GetImageLogger creates a logger specifically for handling image logging.
+// It creates a dedicated image directory within the current session directory.
+func (lm *Manager) GetImageLogger(name string) (*zap.Logger, string, error) {
+	sessionDir := lm.getOrCreateSessionDir()
+	imageDir := filepath.Join(sessionDir, "images", name)
+
+	// Create image directory
+	if err := os.MkdirAll(imageDir, os.ModePerm); err != nil {
+		return nil, "", fmt.Errorf("failed to create image directory: %w", err)
+	}
+
+	// Create logger for image operations
+	zapLevel, err := zapcore.ParseLevel(lm.level)
+	if err != nil {
+		return nil, "", err
+	}
+
+	config := zap.NewDevelopmentConfig()
+	config.OutputPaths = []string{
+		filepath.Join(imageDir, name+".log"),
+	}
+	config.Level = zap.NewAtomicLevelAt(zapLevel)
+
+	logger, err := config.Build()
+	if err != nil {
+		return nil, "", err
+	}
+
+	return logger, imageDir, nil
+}
+
+// GetTextLogger creates a logger specifically for handling blocked text content.
+// It creates a dedicated text directory within the current session directory.
+func (lm *Manager) GetTextLogger(name string) (*zap.Logger, string, error) {
+	sessionDir := lm.getOrCreateSessionDir()
+	textDir := filepath.Join(sessionDir, "blocked_text", name)
+
+	// Create text directory
+	if err := os.MkdirAll(textDir, os.ModePerm); err != nil {
+		return nil, "", fmt.Errorf("failed to create text directory: %w", err)
+	}
+
+	// Create logger for text operations
+	zapLevel, err := zapcore.ParseLevel(lm.level)
+	if err != nil {
+		return nil, "", err
+	}
+
+	config := zap.NewDevelopmentConfig()
+	config.OutputPaths = []string{
+		filepath.Join(textDir, name+".log"),
+	}
+	config.Level = zap.NewAtomicLevelAt(zapLevel)
+
+	logger, err := config.Build()
+	if err != nil {
+		return nil, "", err
+	}
+
+	return logger, textDir, nil
+}
+
 // setupLogDirectories creates and manages the log directory structure.
 // It ensures the base directory exists, rotates old logs, and creates a new session directory.
 func (lm *Manager) setupLogDirectories() error {

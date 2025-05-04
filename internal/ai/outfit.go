@@ -7,6 +7,8 @@ import (
 	"errors"
 	"fmt"
 	"image"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -180,6 +182,8 @@ type OutfitAnalyzer struct {
 	thumbnailFetcher *fetcher.ThumbnailFetcher
 	analysisSem      *semaphore.Weighted
 	logger           *zap.Logger
+	imageLogger      *zap.Logger
+	imageDir         string
 	model            string
 	batchSize        int
 }
@@ -192,12 +196,21 @@ type DownloadResult struct {
 
 // NewOutfitAnalyzer creates an OutfitAnalyzer instance.
 func NewOutfitAnalyzer(app *setup.App, logger *zap.Logger) *OutfitAnalyzer {
+	// Get image logger
+	imageLogger, imageDir, err := app.LogManager.GetImageLogger("outfit_analyzer")
+	if err != nil {
+		logger.Error("Failed to create image logger", zap.Error(err))
+		imageLogger = logger
+	}
+
 	return &OutfitAnalyzer{
 		httpClient:       app.RoAPI.GetClient(),
 		chat:             app.AIClient.Chat(),
 		thumbnailFetcher: fetcher.NewThumbnailFetcher(app.RoAPI, logger),
 		analysisSem:      semaphore.NewWeighted(int64(app.Config.Worker.BatchSizes.OutfitAnalysis)),
 		logger:           logger.Named("ai_outfit"),
+		imageLogger:      imageLogger,
+		imageDir:         imageDir,
 		model:            app.Config.Common.OpenAI.OutfitModel,
 		batchSize:        app.Config.Worker.BatchSizes.OutfitAnalysisBatch,
 	}
@@ -438,7 +451,7 @@ func (a *OutfitAnalyzer) processOutfitBatch(
 				validThemes = append(validThemes, theme)
 				continue
 			}
-			a.logger.Warn("AI flagged non-existent outfit",
+			a.logger.Info("AI flagged non-existent outfit",
 				zap.String("username", info.Name),
 				zap.String("outfitName", theme.OutfitName))
 		}
@@ -465,13 +478,40 @@ func (a *OutfitAnalyzer) analyzeOutfitBatch(
 
 	var result *OutfitThemeAnalysis
 	err := utils.WithRetrySplitBatch(
-		ctx, downloads, len(downloads), minBatchSize,
+		ctx, downloads, len(downloads), minBatchSize, utils.GetAIRetryOptions(),
 		func(batch []DownloadResult) error {
 			var err error
 			result, err = a.processOutfitBatch(ctx, info, batch)
 			return err
 		},
-		utils.GetAIRetryOptions(), a.logger,
+		func(items []DownloadResult) {
+			for i, item := range items {
+				// Generate unique filename using outfit name
+				filename := fmt.Sprintf("%d_%s.webp", i+1, strings.ReplaceAll(item.name, " ", "_"))
+				filepath := filepath.Join(a.imageDir, filename)
+
+				// Save image
+				buf := new(bytes.Buffer)
+				if err := nativewebp.Encode(buf, item.img, nil); err != nil {
+					a.imageLogger.Error("Failed to encode blocked image",
+						zap.Error(err),
+						zap.String("outfitName", item.name))
+					continue
+				}
+
+				if err := os.WriteFile(filepath, buf.Bytes(), 0o600); err != nil {
+					a.imageLogger.Error("Failed to save blocked image",
+						zap.Error(err),
+						zap.String("outfitName", item.name),
+						zap.String("path", filepath))
+					continue
+				}
+
+				a.imageLogger.Info("Saved blocked image",
+					zap.String("outfitName", item.name),
+					zap.String("path", filepath))
+			}
+		},
 	)
 
 	return result, err
