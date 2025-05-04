@@ -102,12 +102,20 @@ username = ""
 password = ""
 
 [common.openai]
-# Default model to use for AI requests
-default_model = "gemini-2.5-flash-thinking"
+# Model to use for user analysis
+user_model = "gemini-2.5-flash-thinking"
+# Model to use for friend network analysis
+friend_model = "gemini-2.5-flash"
 # Model to use for stats analysis
 stats_model = "gemini-2.5-flash"
 # Model to use for outfit analysis
-outfit_model = "gemini-2.0-flash"
+outfit_model = "gemini-2.5-flash"
+# Model to use for message analysis
+message_model = "gemini-2.5-flash"
+# Model to use for ivan message analysis
+ivan_model = "gemini-2.5-flash"
+# Model to use for general chat completions
+chat_model = "gemini-2.5-flash"
 
 [[common.openai.providers]]
 name = "openrouter"

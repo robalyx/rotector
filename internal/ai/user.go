@@ -255,7 +255,7 @@ func NewUserAnalyzer(app *setup.App, translator *translator.Translator, logger *
 		translator:  translator,
 		analysisSem: semaphore.NewWeighted(int64(app.Config.Worker.BatchSizes.UserAnalysis)),
 		logger:      logger.Named("ai_user"),
-		model:       app.Config.Common.OpenAI.DefaultModel,
+		model:       app.Config.Common.OpenAI.UserModel,
 		batchSize:   app.Config.Worker.BatchSizes.UserAnalysisBatch,
 	}
 }

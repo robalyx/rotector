@@ -163,12 +163,20 @@ type Redis struct {
 
 // OpenAI contains OpenAI API configuration.
 type OpenAI struct {
-	// Default model to use
-	DefaultModel string `koanf:"default_model"`
+	// Model to use for user analysis
+	UserModel string `koanf:"user_model"`
+	// Model to use for friend network analysis
+	FriendModel string `koanf:"friend_model"`
 	// Model to use for stats analysis
 	StatsModel string `koanf:"stats_model"`
 	// Model to use for outfit analysis
 	OutfitModel string `koanf:"outfit_model"`
+	// Model to use for message analysis
+	MessageModel string `koanf:"message_model"`
+	// Model to use for ivan message analysis
+	IvanModel string `koanf:"ivan_model"`
+	// Model to use for general chat completions
+	ChatModel string `koanf:"chat_model"`
 	// List of providers in order of preference
 	Providers []Provider `koanf:"providers"`
 }
