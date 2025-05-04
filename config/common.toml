@@ -102,6 +102,11 @@ username = ""
 password = ""
 
 [common.openai]
+# OpenAI API configuration
+base_url = "https://openrouter.ai/api/v1"
+api_key = ""
+max_concurrent = 100
+
 # Model to use for user analysis
 user_model = "gemini-2.5-flash-thinking"
 # Model to use for friend network analysis
@@ -117,13 +122,8 @@ ivan_model = "gemini-2.5-flash"
 # Model to use for general chat completions
 chat_model = "gemini-2.5-flash"
 
-[[common.openai.providers]]
-name = "openrouter"
-base_url = "https://openrouter.ai/api/v1"
-api_key = ""
-max_concurrent = 100
-
-[common.openai.providers.model_mappings]
+# Model mappings for the provider
+[common.openai.model_mappings]
 "gemini-2.5-flash" = "google/gemini-2.5-flash-preview"
 "gemini-2.5-flash-thinking" = "google/gemini-2.5-flash-preview:thinking"
 "gemini-2.5-pro" = "google/gemini-2.5-pro-preview-03-25"

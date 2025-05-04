@@ -163,6 +163,14 @@ type Redis struct {
 
 // OpenAI contains OpenAI API configuration.
 type OpenAI struct {
+	// Base URL for the API
+	BaseURL string `koanf:"base_url"`
+	// API key for authentication
+	APIKey string `koanf:"api_key"`
+	// Maximum concurrent requests
+	MaxConcurrent int64 `koanf:"max_concurrent"`
+	// Model name mappings
+	ModelMappings map[string]string `koanf:"model_mappings"`
 	// Model to use for user analysis
 	UserModel string `koanf:"user_model"`
 	// Model to use for friend network analysis
@@ -177,22 +185,6 @@ type OpenAI struct {
 	IvanModel string `koanf:"ivan_model"`
 	// Model to use for general chat completions
 	ChatModel string `koanf:"chat_model"`
-	// List of providers in order of preference
-	Providers []Provider `koanf:"providers"`
-}
-
-// Provider defines an OpenAI-compatible API provider.
-type Provider struct {
-	// Provider name (e.g. "google", "requesty", "openrouter")
-	Name string `koanf:"name"`
-	// Base URL for the API
-	BaseURL string `koanf:"base_url"`
-	// API key for authentication
-	APIKey string `koanf:"api_key"`
-	// Maximum concurrent requests
-	MaxConcurrent int64 `koanf:"max_concurrent"`
-	// Model name mappings for this provider
-	ModelMappings map[string]string `koanf:"model_mappings"`
 }
 
 // Discord contains Discord bot configuration.

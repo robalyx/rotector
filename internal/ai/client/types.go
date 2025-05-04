@@ -7,8 +7,6 @@ import (
 
 	"github.com/openai/openai-go"
 	"github.com/openai/openai-go/packages/ssestream"
-	"github.com/sony/gobreaker"
-	"golang.org/x/sync/semaphore"
 )
 
 var ErrNoProvidersAvailable = errors.New("no providers available")
@@ -39,13 +37,4 @@ type Client interface {
 type ChatCompletions interface {
 	New(ctx context.Context, params openai.ChatCompletionNewParams) (*openai.ChatCompletion, error)
 	NewStreaming(ctx context.Context, params openai.ChatCompletionNewParams) *ssestream.Stream[openai.ChatCompletionChunk]
-}
-
-// providerClient represents a single provider's client and configuration.
-type providerClient struct {
-	client        *openai.Client
-	breaker       *gobreaker.CircuitBreaker
-	semaphore     *semaphore.Weighted
-	modelMappings map[string]string
-	name          string
 }
