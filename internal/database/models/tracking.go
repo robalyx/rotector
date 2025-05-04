@@ -214,18 +214,22 @@ func (r *TrackingModel) UpdateFlaggedGroups(ctx context.Context, groupIDs []uint
 	return nil
 }
 
-// RemoveUserFromAllGroups removes a user from all group tracking records.
-func (r *TrackingModel) RemoveUserFromAllGroups(ctx context.Context, userID uint64) error {
-	_, err := r.db.NewDelete().
-		Model((*types.GroupMemberTrackingUser)(nil)).
-		Where("user_id = ?", userID).
-		Exec(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to remove user from all group tracking: %w (userID=%d)", err, userID)
+// RemoveUsersFromAllGroups removes multiple users from all group tracking records.
+func (r *TrackingModel) RemoveUsersFromAllGroups(ctx context.Context, userIDs []uint64) error {
+	if len(userIDs) == 0 {
+		return nil
 	}
 
-	r.logger.Debug("Removed user from all group tracking",
-		zap.Uint64("userID", userID))
+	_, err := r.db.NewDelete().
+		Model((*types.GroupMemberTrackingUser)(nil)).
+		Where("user_id IN (?)", bun.In(userIDs)).
+		Exec(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to remove users from group tracking: %w (userCount=%d)", err, len(userIDs))
+	}
+
+	r.logger.Debug("Removed users from all group tracking",
+		zap.Int("userCount", len(userIDs)))
 	return nil
 }
 
@@ -381,16 +385,31 @@ func (r *TrackingModel) GetOutfitAssetTrackingsToCheck(
 	return result, nil
 }
 
-// RemoveUserAndOutfitsFromAssetTracking removes both user ID and outfit IDs from asset tracking.
-func (r *TrackingModel) RemoveUserAndOutfitsFromAssetTracking(ctx context.Context, userID uint64, outfitIDs []uint64) error {
+// RemoveUsersFromAssetTracking removes multiple users and their outfits from asset tracking.
+func (r *TrackingModel) RemoveUsersFromAssetTracking(ctx context.Context, userIDs []uint64) error {
+	if len(userIDs) == 0 {
+		return nil
+	}
+
 	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
-		// Remove user ID from current outfit tracking
+		// Remove user IDs from current outfit tracking
 		_, err := tx.NewDelete().
 			Model((*types.OutfitAssetTrackingOutfit)(nil)).
-			Where("tracked_id = ? AND is_user_id = TRUE", userID).
+			Where("tracked_id IN (?) AND is_user_id = TRUE", bun.In(userIDs)).
 			Exec(ctx)
 		if err != nil {
-			return fmt.Errorf("failed to remove user from asset tracking: %w (userID=%d)", err, userID)
+			return fmt.Errorf("failed to remove users from asset tracking: %w (userCount=%d)", err, len(userIDs))
+		}
+
+		// Get outfit IDs for these users
+		var outfitIDs []uint64
+		err = tx.NewSelect().
+			Model((*types.UserOutfit)(nil)).
+			Column("outfit_id").
+			Where("user_id IN (?)", bun.In(userIDs)).
+			Scan(ctx, &outfitIDs)
+		if err != nil {
+			return fmt.Errorf("failed to get user outfit IDs: %w", err)
 		}
 
 		// Remove outfit IDs if any exist
@@ -410,8 +429,7 @@ func (r *TrackingModel) RemoveUserAndOutfitsFromAssetTracking(ctx context.Contex
 		return err
 	}
 
-	r.logger.Debug("Removed user and outfits from asset tracking",
-		zap.Uint64("userID", userID),
-		zap.Int("outfitCount", len(outfitIDs)))
+	r.logger.Debug("Removed users and their outfits from asset tracking",
+		zap.Int("userCount", len(userIDs)))
 	return nil
 }

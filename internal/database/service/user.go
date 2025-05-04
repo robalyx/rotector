@@ -80,19 +80,13 @@ func (s *UserService) ClearUser(ctx context.Context, user *types.ReviewUser, rev
 	}
 
 	// Remove user from all group tracking
-	if err := s.tracking.RemoveUserFromAllGroups(ctx, user.ID); err != nil {
+	if err := s.tracking.RemoveUsersFromAllGroups(ctx, []uint64{user.ID}); err != nil {
 		s.logger.Error("Failed to remove user from group tracking", zap.Error(err))
 		return err
 	}
 
-	// Collect outfit IDs from the user's outfits
-	outfitIDs := make([]uint64, 0, len(user.Outfits))
-	for _, outfit := range user.Outfits {
-		outfitIDs = append(outfitIDs, outfit.ID)
-	}
-
 	// Remove user and their outfits from asset tracking
-	if err := s.tracking.RemoveUserAndOutfitsFromAssetTracking(ctx, user.ID, outfitIDs); err != nil {
+	if err := s.tracking.RemoveUsersFromAssetTracking(ctx, []uint64{user.ID}); err != nil {
 		s.logger.Error("Failed to remove user from outfit asset tracking", zap.Error(err))
 		return err
 	}
@@ -408,7 +402,18 @@ func (s *UserService) DeleteUsers(ctx context.Context, userIDs []uint64) (int64,
 
 	var totalAffected int64
 	err := s.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
-		// Delete core user data first
+		// Remove users from tracking
+		if err := s.tracking.RemoveUsersFromAllGroups(ctx, userIDs); err != nil {
+			s.logger.Error("Failed to remove users from group tracking", zap.Error(err))
+			return err
+		}
+
+		if err := s.tracking.RemoveUsersFromAssetTracking(ctx, userIDs); err != nil {
+			s.logger.Error("Failed to remove users from asset tracking", zap.Error(err))
+			return err
+		}
+
+		// Delete core user data
 		affected, err := s.model.DeleteUsers(ctx, userIDs)
 		if err != nil {
 			return fmt.Errorf("failed to delete users core data: %w", err)
