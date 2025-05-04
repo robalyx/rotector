@@ -30,6 +30,8 @@ github.com/diamondburned/ningen/v3 v3.0.1-0.20240808103805-f1a24c0da3d8 h1:wgvgS
 github.com/diamondburned/ningen/v3 v3.0.1-0.20240808103805-f1a24c0da3d8/go.mod h1:UU1lud9g/GBl2+CZ8nPCe3Qk1U6fABEP1fk1sUzo7w0=
 github.com/disgoorg/disgo v0.18.16-0.20250424212101-7a9f159e27c9 h1:G6QvwN98PoX4yImPc7JcvjgbOIGDiAA648jZJQaF1eY=
 github.com/disgoorg/disgo v0.18.16-0.20250424212101-7a9f159e27c9/go.mod h1:3jeXsdHzg0aLx/vg7fB0ifOvSmC9bLYxjJBo0EbT+qk=
+github.com/disgoorg/disgo v0.18.16-0.20250502233236-8c914a0f3369 h1:4I6HMNCbqmRLR72pM4fdTFHv5KHYagph2aPuBjb75ZI=
+github.com/disgoorg/disgo v0.18.16-0.20250502233236-8c914a0f3369/go.mod h1:3jeXsdHzg0aLx/vg7fB0ifOvSmC9bLYxjJBo0EbT+qk=
 github.com/disgoorg/json/v2 v2.0.0 h1:U16yy/ARK7/aEpzjjqK1b/KaqqGHozUdeVw/DViEzQI=
 github.com/disgoorg/json/v2 v2.0.0/go.mod h1:jZTBC0nIE1WeetSEI3/Dka8g+qglb4FPVmp5I5HpEfI=
 github.com/disgoorg/omit v1.0.0 h1:y0LkVUOyUHT8ZlnhIAeOZEA22UYykeysK8bLJ0SfT78=

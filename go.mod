@@ -11,7 +11,7 @@ require (
 	github.com/dchest/captcha v1.1.0
 	github.com/diamondburned/arikawa/v3 v3.4.0
 	github.com/diamondburned/ningen/v3 v3.0.1-0.20240808103805-f1a24c0da3d8
-	github.com/disgoorg/disgo v0.18.16-0.20250424212101-7a9f159e27c9
+	github.com/disgoorg/disgo v0.18.16-0.20250502233236-8c914a0f3369
 	github.com/disgoorg/snowflake/v2 v2.0.3
 	github.com/google/uuid v1.6.0
 	github.com/invopop/jsonschema v0.13.0

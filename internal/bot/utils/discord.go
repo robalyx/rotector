@@ -17,7 +17,5 @@ func GetContainerColor(streamerMode bool) int {
 // CreateTimestampedTextDisplay creates a container component with a timestamped text display at the top.
 // This is used to display timestamped messages in Discord's Components V2 format.
 func CreateTimestampedTextDisplay(content string) discord.LayoutComponent {
-	return discord.NewContainer(
-		discord.NewTextDisplay(GetTimestampedSubtext(content)),
-	)
+	return discord.NewTextDisplay(GetTimestampedSubtext(content))
 }
