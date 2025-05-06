@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"strconv"
+	"strings"
 
 	"github.com/disgoorg/disgo/discord"
 	"github.com/jaxron/roapi.go/pkg/api/resources/thumbnails"
@@ -12,6 +13,7 @@ import (
 	"github.com/robalyx/rotector/internal/bot/core/interaction"
 	"github.com/robalyx/rotector/internal/bot/core/session"
 	view "github.com/robalyx/rotector/internal/bot/views/review/user"
+	"github.com/robalyx/rotector/internal/database/types/enum"
 	"go.uber.org/zap"
 )
 
@@ -44,6 +46,21 @@ func (m *OutfitsMenu) Show(ctx *interaction.Context, s *session.Session) {
 		ctx.Cancel("No outfits found for this user.")
 		return
 	}
+
+	// Create map of outfit names from evidence
+	flaggedOutfits := make(map[string]struct{})
+	if outfitReason, ok := user.Reasons[enum.UserReasonTypeOutfit]; ok {
+		// For each outfit, check if its name appears in any evidence
+		for _, outfit := range user.Outfits {
+			for _, evidence := range outfitReason.Evidence {
+				if strings.Contains(evidence, outfit.Name) {
+					flaggedOutfits[outfit.Name] = struct{}{}
+					break // Found a match, no need to check other evidence
+				}
+			}
+		}
+	}
+	session.UserFlaggedOutfits.Set(s, flaggedOutfits)
 
 	// Calculate page boundaries
 	page := session.PaginationPage.Get(s)

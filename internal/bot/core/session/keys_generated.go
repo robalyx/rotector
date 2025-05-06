@@ -78,6 +78,8 @@ var (
 	UserGroups = NewKey[[]*apiTypes.UserGroupRoles]("UserGroups", false)
 	// UserOutfits stores user outfits
 	UserOutfits = NewKey[[]*apiTypes.Outfit]("UserOutfits", false)
+	// UserFlaggedOutfits stores outfit names that appear in reason evidence
+	UserFlaggedOutfits = NewKey[map[string]struct{}]("UserFlaggedOutfits", false)
 	// UserReviewHistory stores IDs of previously reviewed users
 	UserReviewHistory = NewKey[[]uint64]("UserReviewHistory", true)
 	// UserReviewHistoryIndex stores the current position in the review history

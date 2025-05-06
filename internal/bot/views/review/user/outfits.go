@@ -17,29 +17,31 @@ import (
 
 // OutfitsBuilder creates the visual layout for viewing a user's outfits.
 type OutfitsBuilder struct {
-	user        *types.ReviewUser
-	outfits     []*apiTypes.Outfit
-	start       int
-	page        int
-	totalItems  int
-	totalPages  int
-	imageBuffer *bytes.Buffer
-	isStreaming bool
-	privacyMode bool
+	user           *types.ReviewUser
+	outfits        []*apiTypes.Outfit
+	flaggedOutfits map[string]struct{}
+	start          int
+	page           int
+	totalItems     int
+	totalPages     int
+	imageBuffer    *bytes.Buffer
+	isStreaming    bool
+	privacyMode    bool
 }
 
 // NewOutfitsBuilder creates a new outfits builder.
 func NewOutfitsBuilder(s *session.Session) *OutfitsBuilder {
 	return &OutfitsBuilder{
-		user:        session.UserTarget.Get(s),
-		outfits:     session.UserOutfits.Get(s),
-		start:       session.PaginationOffset.Get(s),
-		page:        session.PaginationPage.Get(s),
-		totalItems:  session.PaginationTotalItems.Get(s),
-		totalPages:  session.PaginationTotalPages.Get(s),
-		imageBuffer: session.ImageBuffer.Get(s),
-		isStreaming: session.PaginationIsStreaming.Get(s),
-		privacyMode: session.UserReviewMode.Get(s) == enum.ReviewModeTraining || session.UserStreamerMode.Get(s),
+		user:           session.UserTarget.Get(s),
+		outfits:        session.UserOutfits.Get(s),
+		flaggedOutfits: session.UserFlaggedOutfits.Get(s),
+		start:          session.PaginationOffset.Get(s),
+		page:           session.PaginationPage.Get(s),
+		totalItems:     session.PaginationTotalItems.Get(s),
+		totalPages:     session.PaginationTotalPages.Get(s),
+		imageBuffer:    session.ImageBuffer.Get(s),
+		isStreaming:    session.PaginationIsStreaming.Get(s),
+		privacyMode:    session.UserReviewMode.Get(s) == enum.ReviewModeTraining || session.UserStreamerMode.Get(s),
 	}
 }
 
@@ -63,8 +65,14 @@ func (b *OutfitsBuilder) Build() *discord.MessageUpdateBuilder {
 			content.WriteString(fmt.Sprintf("\n\n**Row %d:**", (i/constants.OutfitGridColumns)+1))
 		}
 
+		// Check if outfit is flagged and add indicator
+		indicator := ""
+		if _, ok := b.flaggedOutfits[outfit.Name]; ok {
+			indicator = " ⚠️"
+		}
+
 		// Add outfit name
-		content.WriteString(fmt.Sprintf("\n**%d.** %s", b.start+i+1, outfit.Name))
+		content.WriteString(fmt.Sprintf("\n**%d.** %s%s", b.start+i+1, outfit.Name, indicator))
 	}
 
 	// Add page info at the bottom

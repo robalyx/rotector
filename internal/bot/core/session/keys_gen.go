@@ -91,6 +91,7 @@ func main() {
 		{Name: "UserPresences", Type: "map[uint64]*apiTypes.UserPresenceResponse", Doc: "UserPresences stores friend presence information", Persist: false},
 		{Name: "UserGroups", Type: "[]*apiTypes.UserGroupRoles", Doc: "UserGroups stores the list of groups", Persist: false},
 		{Name: "UserOutfits", Type: "[]*apiTypes.Outfit", Doc: "UserOutfits stores user outfits", Persist: false},
+		{Name: "UserFlaggedOutfits", Type: "map[string]struct{}", Doc: "UserFlaggedOutfits stores outfit names that appear in reason evidence", Persist: false},
 		{Name: "UserReviewHistory", Type: "[]uint64", Doc: "UserReviewHistory stores IDs of previously reviewed users", Persist: true},
 		{Name: "UserReviewHistoryIndex", Type: "int", Doc: "UserReviewHistoryIndex stores the current position in the review history", Persist: true},
 
