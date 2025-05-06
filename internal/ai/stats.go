@@ -93,36 +93,39 @@ func (a *StatsAnalyzer) GenerateWelcomeMessage(
 	statsJSON, err := sonic.Marshal(data)
 	if err != nil {
 		a.logger.Error("failed to marshal stats data", zap.Error(err))
-		return "", fmt.Errorf("%w: %w", ErrJSONProcessing, err)
+		return "", fmt.Errorf("%w: %w", utils.ErrJSONProcessing, err)
 	}
 
 	// Minify JSON to reduce token usage
 	statsJSON, err = a.minify.Bytes(ApplicationJSON, statsJSON)
 	if err != nil {
 		a.logger.Error("failed to minify stats data", zap.Error(err))
-		return "", fmt.Errorf("%w: %w", ErrJSONProcessing, err)
+		return "", fmt.Errorf("%w: %w", utils.ErrJSONProcessing, err)
 	}
 
-	// Generate welcome message with retry
+	// Prepare chat completion parameters
+	params := openai.ChatCompletionNewParams{
+		Messages: []openai.ChatCompletionMessageParamUnion{
+			openai.SystemMessage(StatsSystemPrompt),
+			openai.UserMessage(string(statsJSON)),
+		},
+		Model:               a.model,
+		Temperature:         openai.Float(0.7),
+		TopP:                openai.Float(0.7),
+		MaxCompletionTokens: openai.Int(512),
+	}
+
+	// Generate welcome message
 	var response string
-	err = utils.WithRetry(ctx, func() error {
-		resp, err := a.chat.New(ctx, openai.ChatCompletionNewParams{
-			Messages: []openai.ChatCompletionMessageParamUnion{
-				openai.SystemMessage(StatsSystemPrompt),
-				openai.UserMessage(string(statsJSON)),
-			},
-			Model:               a.model,
-			Temperature:         openai.Float(0.7),
-			TopP:                openai.Float(0.7),
-			MaxCompletionTokens: openai.Int(512),
-		})
+	err = a.chat.NewWithRetry(ctx, params, func(resp *openai.ChatCompletion, err error) error {
+		// Handle API error
 		if err != nil {
 			return fmt.Errorf("openai API error: %w", err)
 		}
 
 		// Check for empty response
 		if len(resp.Choices) == 0 || len(resp.Choices[0].Message.Content) == 0 {
-			return fmt.Errorf("%w: no response from model", ErrModelResponse)
+			return fmt.Errorf("%w: no response from model", utils.ErrModelResponse)
 		}
 
 		// Extract thought process
@@ -135,7 +138,7 @@ func (a *StatsAnalyzer) GenerateWelcomeMessage(
 
 		response = utils.CompressAllWhitespace(message.Content)
 		return nil
-	}, utils.GetAIRetryOptions())
+	})
 	if err != nil {
 		return "", err
 	}

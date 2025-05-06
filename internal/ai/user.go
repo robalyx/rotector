@@ -3,7 +3,6 @@ package ai
 import (
 	"bytes"
 	"context"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -207,8 +206,6 @@ Input:
 `
 )
 
-var ErrBatchProcessing = errors.New("batch processing errors")
-
 // UserSummary is a struct for user summaries for AI analysis.
 type UserSummary struct {
 	Name        string `json:"name"`
@@ -328,19 +325,19 @@ func (a *UserAnalyzer) processUserBatch(ctx context.Context, batch []UserSummary
 	// Convert to JSON
 	userInfoJSON, err := sonic.Marshal(batch)
 	if err != nil {
-		return nil, fmt.Errorf("%w: %w", ErrJSONProcessing, err)
+		return nil, fmt.Errorf("%w: %w", utils.ErrJSONProcessing, err)
 	}
 
 	// Minify JSON to reduce token usage
 	userInfoJSON, err = a.minify.Bytes(ApplicationJSON, userInfoJSON)
 	if err != nil {
-		return nil, fmt.Errorf("%w: %w", ErrJSONProcessing, err)
+		return nil, fmt.Errorf("%w: %w", utils.ErrJSONProcessing, err)
 	}
 
 	// Prepare request prompt with user info
 	requestPrompt := UserRequestPrompt + string(userInfoJSON)
 
-	// Prepare request parameters
+	// Prepare chat completion parameters
 	params := openai.ChatCompletionNewParams{
 		Messages: []openai.ChatCompletionMessageParamUnion{
 			openai.SystemMessage(UserSystemPrompt),
@@ -367,17 +364,17 @@ func (a *UserAnalyzer) processUserBatch(ctx context.Context, batch []UserSummary
 		Exclude:   false,
 	})
 
-	// Make API request with retry
+	// Make API request
 	var result *FlaggedUsers
-	err = utils.WithRetry(ctx, func() error {
-		resp, err := a.chat.New(ctx, params)
+	err = a.chat.NewWithRetry(ctx, params, func(resp *openai.ChatCompletion, err error) error {
+		// Handle API error
 		if err != nil {
 			return fmt.Errorf("openai API error: %w", err)
 		}
 
 		// Check for empty response
 		if len(resp.Choices) == 0 || len(resp.Choices[0].Message.Content) == 0 {
-			return fmt.Errorf("%w: no response from model", ErrModelResponse)
+			return fmt.Errorf("%w: no response from model", utils.ErrModelResponse)
 		}
 
 		// Extract thought process
@@ -394,7 +391,7 @@ func (a *UserAnalyzer) processUserBatch(ctx context.Context, batch []UserSummary
 		}
 
 		return nil
-	}, utils.GetAIRetryOptions())
+	})
 
 	return result, err
 }
@@ -476,7 +473,7 @@ func (a *UserAnalyzer) processBatch(
 		},
 	)
 	if err != nil {
-		return fmt.Errorf("%w: %w", ErrModelResponse, err)
+		return fmt.Errorf("%w: %w", utils.ErrModelResponse, err)
 	}
 
 	// Validate AI responses

@@ -8,8 +8,14 @@ import (
 	"github.com/cenkalti/backoff/v4"
 )
 
-// ErrContentBlocked is returned when content is blocked by AI safety filters.
-var ErrContentBlocked = errors.New("content blocked by AI safety filters")
+var (
+	// ErrContentBlocked is returned when content is blocked by AI safety filters.
+	ErrContentBlocked = errors.New("content blocked by AI safety filters")
+	// ErrModelResponse indicates the model returned no usable response.
+	ErrModelResponse = errors.New("model response error")
+	// ErrJSONProcessing indicates a JSON processing error.
+	ErrJSONProcessing = errors.New("JSON processing error")
+)
 
 // RetryOptions contains configuration for retry behavior.
 type RetryOptions struct {
@@ -22,7 +28,7 @@ type RetryOptions struct {
 // GetAIRetryOptions returns retry options optimized for AI operations.
 func GetAIRetryOptions() RetryOptions {
 	return RetryOptions{
-		MaxElapsedTime:  30 * time.Second,
+		MaxElapsedTime:  40 * time.Second,
 		InitialInterval: 5 * time.Second,
 		MaxInterval:     10 * time.Second,
 		MaxRetries:      3,

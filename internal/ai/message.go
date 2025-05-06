@@ -293,35 +293,38 @@ func (a *MessageAnalyzer) processMessageBatch(
 	// Format the prompt using the template
 	prompt := fmt.Sprintf(MessageAnalysisPrompt, minifiedJSON)
 
-	// Make API request with retry
-	var result *FlaggedMessagesResponse
-	err = utils.WithRetry(ctx, func() error {
-		resp, err := a.chat.New(ctx, openai.ChatCompletionNewParams{
-			Messages: []openai.ChatCompletionMessageParamUnion{
-				openai.SystemMessage(MessageSystemPrompt),
-				openai.UserMessage(prompt),
-			},
-			ResponseFormat: openai.ChatCompletionNewParamsResponseFormatUnion{
-				OfJSONSchema: &openai.ResponseFormatJSONSchemaParam{
-					JSONSchema: openai.ResponseFormatJSONSchemaJSONSchemaParam{
-						Name:        "messageAnalysis",
-						Description: openai.String("Analysis of Discord messages"),
-						Schema:      MessageAnalysisSchema,
-						Strict:      openai.Bool(true),
-					},
+	// Prepare chat completion parameters
+	params := openai.ChatCompletionNewParams{
+		Messages: []openai.ChatCompletionMessageParamUnion{
+			openai.SystemMessage(MessageSystemPrompt),
+			openai.UserMessage(prompt),
+		},
+		ResponseFormat: openai.ChatCompletionNewParamsResponseFormatUnion{
+			OfJSONSchema: &openai.ResponseFormatJSONSchemaParam{
+				JSONSchema: openai.ResponseFormatJSONSchemaJSONSchemaParam{
+					Name:        "messageAnalysis",
+					Description: openai.String("Analysis of Discord messages"),
+					Schema:      MessageAnalysisSchema,
+					Strict:      openai.Bool(true),
 				},
 			},
-			Model:       a.model,
-			Temperature: openai.Float(0.2),
-			TopP:        openai.Float(0.95),
-		})
+		},
+		Model:       a.model,
+		Temperature: openai.Float(0.2),
+		TopP:        openai.Float(0.95),
+	}
+
+	// Make API request
+	var result *FlaggedMessagesResponse
+	err = a.chat.NewWithRetry(ctx, params, func(resp *openai.ChatCompletion, err error) error {
+		// Handle API error
 		if err != nil {
 			return fmt.Errorf("openai API error: %w", err)
 		}
 
 		// Check for empty response
 		if len(resp.Choices) == 0 || len(resp.Choices[0].Message.Content) == 0 {
-			return fmt.Errorf("%w: no response from model", ErrModelResponse)
+			return fmt.Errorf("%w: no response from model", utils.ErrModelResponse)
 		}
 
 		// Extract thought process
@@ -338,7 +341,8 @@ func (a *MessageAnalyzer) processMessageBatch(
 		}
 
 		return nil
-	}, utils.GetAIRetryOptions())
+	})
+
 	return result, err
 }
 

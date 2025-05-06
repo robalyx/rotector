@@ -1,7 +1,6 @@
 package ai
 
 import (
-	"errors"
 	"fmt"
 	"strings"
 )
@@ -11,13 +10,6 @@ const (
 	ApplicationJSON = "application/json"
 	// TextPlain is the MIME type for plain text content.
 	TextPlain = "text/plain"
-)
-
-var (
-	// ErrModelResponse indicates the model returned no usable response.
-	ErrModelResponse = errors.New("model response error")
-	// ErrJSONProcessing indicates a JSON processing error.
-	ErrJSONProcessing = errors.New("JSON processing error")
 )
 
 // ContextType represents the type of message context.

@@ -403,32 +403,35 @@ func (a *OutfitAnalyzer) processOutfitBatch(
 	)
 	messages = append(messages, openai.UserMessage(prompt))
 
-	// Make API request with retry
-	var analysis *OutfitThemeAnalysis
-	err := utils.WithRetry(ctx, func() error {
-		resp, err := a.chat.New(ctx, openai.ChatCompletionNewParams{
-			Messages: messages,
-			ResponseFormat: openai.ChatCompletionNewParamsResponseFormatUnion{
-				OfJSONSchema: &openai.ResponseFormatJSONSchemaParam{
-					JSONSchema: openai.ResponseFormatJSONSchemaJSONSchemaParam{
-						Name:        "outfitAnalysis",
-						Description: openai.String("Analysis of user outfits"),
-						Schema:      OutfitAnalysisSchema,
-						Strict:      openai.Bool(true),
-					},
+	// Prepare chat completion parameters
+	params := openai.ChatCompletionNewParams{
+		Messages: messages,
+		ResponseFormat: openai.ChatCompletionNewParamsResponseFormatUnion{
+			OfJSONSchema: &openai.ResponseFormatJSONSchemaParam{
+				JSONSchema: openai.ResponseFormatJSONSchemaJSONSchemaParam{
+					Name:        "outfitAnalysis",
+					Description: openai.String("Analysis of user outfits"),
+					Schema:      OutfitAnalysisSchema,
+					Strict:      openai.Bool(true),
 				},
 			},
-			Model:       a.model,
-			Temperature: openai.Float(0.2),
-			TopP:        openai.Float(0.1),
-		})
+		},
+		Model:       a.model,
+		Temperature: openai.Float(0.2),
+		TopP:        openai.Float(0.1),
+	}
+
+	// Make API request
+	var analysis *OutfitThemeAnalysis
+	err := a.chat.NewWithRetry(ctx, params, func(resp *openai.ChatCompletion, err error) error {
+		// Handle API error
 		if err != nil {
 			return fmt.Errorf("openai API error: %w", err)
 		}
 
 		// Check for empty response
 		if len(resp.Choices) == 0 || len(resp.Choices[0].Message.Content) == 0 {
-			return fmt.Errorf("%w: no response from model", ErrModelResponse)
+			return fmt.Errorf("%w: no response from model", utils.ErrModelResponse)
 		}
 
 		// Extract thought process
@@ -458,7 +461,7 @@ func (a *OutfitAnalyzer) processOutfitBatch(
 		analysis.Themes = validThemes
 
 		return nil
-	}, utils.GetAIRetryOptions())
+	})
 
 	return analysis, err
 }

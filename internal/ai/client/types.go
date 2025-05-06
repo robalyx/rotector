@@ -11,6 +11,9 @@ import (
 
 var ErrNoProvidersAvailable = errors.New("no providers available")
 
+// RetryCallback is a function that will be called on each attempt.
+type RetryCallback func(resp *openai.ChatCompletion, err error) error
+
 // ReasoningOptions contains options for configuring reasoning fields.
 type ReasoningOptions struct {
 	// Effort specifies the level of reasoning effort (low, medium, high).
@@ -36,5 +39,6 @@ type Client interface {
 // ChatCompletions provides chat completion methods.
 type ChatCompletions interface {
 	New(ctx context.Context, params openai.ChatCompletionNewParams) (*openai.ChatCompletion, error)
+	NewWithRetry(ctx context.Context, params openai.ChatCompletionNewParams, callback RetryCallback) error
 	NewStreaming(ctx context.Context, params openai.ChatCompletionNewParams) *ssestream.Stream[openai.ChatCompletionChunk]
 }
