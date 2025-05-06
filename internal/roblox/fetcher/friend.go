@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/jaxron/roapi.go/pkg/api"
 	"github.com/jaxron/roapi.go/pkg/api/resources/friends"
@@ -110,7 +111,7 @@ func (f *FriendFetcher) GetFriends(ctx context.Context, userID uint64) ([]*apiTy
 	}
 
 	// Get existing friend info from database
-	existingFriends, err := f.db.Model().User().GetFriendInfos(ctx, friendIDs)
+	existingFriends, err := f.db.Model().User().GetRecentFriendInfos(ctx, friendIDs, time.Now().Add(-7*24*time.Hour))
 	if err != nil {
 		f.logger.Error("Failed to get existing friend info from database",
 			zap.Error(err),

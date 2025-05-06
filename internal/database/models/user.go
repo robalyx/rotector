@@ -998,7 +998,6 @@ func (r *UserModel) GetUserOutfits(
 	var outfitAssets []types.OutfitAsset
 	err = r.db.NewSelect().
 		Model(&outfitAssets).
-		Join("JOIN outfit_assets oa ON oa.outfit_id = outfit_assets.outfit_id").
 		Where("outfit_id IN (SELECT outfit_id FROM user_outfits WHERE user_id = ?)", userID).
 		Scan(ctx)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
@@ -1134,6 +1133,41 @@ func (r *UserModel) GetFriendInfos(ctx context.Context, friendIDs []uint64) (map
 	return friendMap, nil
 }
 
+// GetRecentFriendInfos retrieves friend information for a list of friend IDs,
+// but only if they were updated within the cutoff time.
+func (r *UserModel) GetRecentFriendInfos(
+	ctx context.Context, friendIDs []uint64, cutoffTime time.Time,
+) (map[uint64]*apiTypes.ExtendedFriend, error) {
+	if len(friendIDs) == 0 {
+		return make(map[uint64]*apiTypes.ExtendedFriend), nil
+	}
+
+	var results []types.FriendInfo
+	err := r.db.NewSelect().
+		Model((*types.FriendInfo)(nil)).
+		Column("id", "name", "display_name").
+		Where("id IN (?)", bun.In(friendIDs)).
+		Where("last_updated > ?", cutoffTime).
+		Scan(ctx, &results)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get friend info: %w", err)
+	}
+
+	// Convert to map of extended friends
+	friendMap := make(map[uint64]*apiTypes.ExtendedFriend, len(results))
+	for _, friend := range results {
+		friendMap[friend.ID] = &apiTypes.ExtendedFriend{
+			Friend: apiTypes.Friend{
+				ID: friend.ID,
+			},
+			Name:        friend.Name,
+			DisplayName: friend.DisplayName,
+		}
+	}
+
+	return friendMap, nil
+}
+
 // GetUserGames fetches games for a user.
 func (r *UserModel) GetUserGames(ctx context.Context, userID uint64) ([]*apiTypes.Game, error) {
 	var results []types.UserGameQueryResult
@@ -1228,6 +1262,7 @@ func (r *UserModel) SaveUserGroups(ctx context.Context, tx bun.Tx, userGroups ma
 		Set("public_entry_allowed = EXCLUDED.public_entry_allowed").
 		Set("is_locked = EXCLUDED.is_locked").
 		Set("has_verified_badge = EXCLUDED.has_verified_badge").
+		Set("last_updated = EXCLUDED.last_updated").
 		Exec(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to upsert group info: %w", err)
@@ -1289,6 +1324,7 @@ func (r *UserModel) SaveUserOutfits(
 		Set("name = EXCLUDED.name").
 		Set("is_editable = EXCLUDED.is_editable").
 		Set("outfit_type = EXCLUDED.outfit_type").
+		Set("last_updated = EXCLUDED.last_updated").
 		Exec(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to upsert outfit info: %w", err)
@@ -1343,6 +1379,7 @@ func (r *UserModel) SaveUserOutfits(
 			On("CONFLICT (id) DO UPDATE").
 			Set("name = EXCLUDED.name").
 			Set("asset_type = EXCLUDED.asset_type").
+			Set("last_updated = EXCLUDED.last_updated").
 			Exec(ctx)
 		if err != nil {
 			return fmt.Errorf("failed to upsert asset info: %w", err)
@@ -1399,6 +1436,7 @@ func (r *UserModel) SaveUserAssets(ctx context.Context, tx bun.Tx, userAssets ma
 		On("CONFLICT (id) DO UPDATE").
 		Set("name = EXCLUDED.name").
 		Set("asset_type = EXCLUDED.asset_type").
+		Set("last_updated = EXCLUDED.last_updated").
 		Exec(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to upsert asset info: %w", err)
@@ -1454,6 +1492,7 @@ func (r *UserModel) SaveUserFriends(ctx context.Context, tx bun.Tx, userFriends 
 		On("CONFLICT (id) DO UPDATE").
 		Set("name = EXCLUDED.name").
 		Set("display_name = EXCLUDED.display_name").
+		Set("last_updated = EXCLUDED.last_updated").
 		Exec(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to upsert friend info: %w", err)
@@ -1511,6 +1550,7 @@ func (r *UserModel) SaveUserGames(ctx context.Context, tx bun.Tx, userGames map[
 		Set("place_visits = EXCLUDED.place_visits").
 		Set("created = EXCLUDED.created").
 		Set("updated = EXCLUDED.updated").
+		Set("last_updated = EXCLUDED.last_updated").
 		Exec(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to upsert game info: %w", err)
@@ -1566,6 +1606,7 @@ func (r *UserModel) SaveUserInventory(ctx context.Context, tx bun.Tx, userInvent
 		Set("name = EXCLUDED.name").
 		Set("asset_type = EXCLUDED.asset_type").
 		Set("created = EXCLUDED.created").
+		Set("last_updated = EXCLUDED.last_updated").
 		Exec(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to upsert inventory info: %w", err)

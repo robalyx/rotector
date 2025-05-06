@@ -323,6 +323,9 @@ func init() { //nolint:funlen
 			CREATE INDEX IF NOT EXISTS idx_game_infos_place_visits
 			ON game_infos (place_visits DESC);
 
+			CREATE INDEX IF NOT EXISTS idx_friend_infos_id_updated
+			ON friend_infos (id, last_updated DESC);
+
 			-- User relationship deletion indexes
 			CREATE INDEX IF NOT EXISTS idx_user_groups_group_id
 			ON user_groups (group_id);
@@ -533,6 +536,7 @@ func init() { //nolint:funlen
 
 			-- User relationship info indexes
 			DROP INDEX IF EXISTS idx_game_infos_place_visits;
+			DROP INDEX IF EXISTS idx_friend_infos_id_updated;
 
 			-- User relationship deletion indexes
 			DROP INDEX IF EXISTS idx_user_groups_group_id;

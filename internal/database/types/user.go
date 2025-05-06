@@ -59,6 +59,7 @@ type GroupInfo struct {
 	IsBuildersClubOnly bool                 `bun:",notnull"  json:"isBuildersClubOnly"`
 	PublicEntryAllowed bool                 `bun:",notnull"  json:"publicEntryAllowed"`
 	IsLocked           bool                 `bun:",notnull"  json:"isLocked"`
+	LastUpdated        time.Time            `bun:",notnull"  json:"lastUpdated"`
 }
 
 // UserOutfit represents a user's outfit.
@@ -69,10 +70,11 @@ type UserOutfit struct {
 
 // OutfitInfo stores the shared outfit information.
 type OutfitInfo struct {
-	ID         uint64 `bun:",pk"      json:"id"`
-	Name       string `bun:",notnull" json:"name"`
-	IsEditable bool   `bun:",notnull" json:"isEditable"`
-	OutfitType string `bun:",notnull" json:"outfitType"`
+	ID          uint64    `bun:",pk"      json:"id"`
+	Name        string    `bun:",notnull" json:"name"`
+	IsEditable  bool      `bun:",notnull" json:"isEditable"`
+	OutfitType  string    `bun:",notnull" json:"outfitType"`
+	LastUpdated time.Time `bun:",notnull" json:"lastUpdated"`
 }
 
 // OutfitAsset represents an outfit's asset.
@@ -84,9 +86,10 @@ type OutfitAsset struct {
 
 // AssetInfo stores the shared asset information.
 type AssetInfo struct {
-	ID        uint64                 `bun:",pk"      json:"id"`
-	Name      string                 `bun:",notnull" json:"name"`
-	AssetType apiTypes.ItemAssetType `bun:",notnull" json:"assetType"`
+	ID          uint64                 `bun:",pk"      json:"id"`
+	Name        string                 `bun:",notnull" json:"name"`
+	AssetType   apiTypes.ItemAssetType `bun:",notnull" json:"assetType"`
+	LastUpdated time.Time              `bun:",notnull" json:"lastUpdated"`
 }
 
 // UserFriend represents a user's friend.
@@ -97,9 +100,10 @@ type UserFriend struct {
 
 // FriendInfo stores the shared friend information.
 type FriendInfo struct {
-	ID          uint64 `bun:",pk"      json:"id"`
-	Name        string `bun:",notnull" json:"name"`
-	DisplayName string `bun:",notnull" json:"displayName"`
+	ID          uint64    `bun:",pk"      json:"id"`
+	Name        string    `bun:",notnull" json:"name"`
+	DisplayName string    `bun:",notnull" json:"displayName"`
+	LastUpdated time.Time `bun:",notnull" json:"lastUpdated"`
 }
 
 // UserGame represents a user's game.
@@ -116,6 +120,7 @@ type GameInfo struct {
 	PlaceVisits uint64    `bun:",notnull" json:"placeVisits"`
 	Created     time.Time `bun:",notnull" json:"created"`
 	Updated     time.Time `bun:",notnull" json:"updated"`
+	LastUpdated time.Time `bun:",notnull" json:"lastUpdated"`
 }
 
 // UserInventory represents a user's inventory item.
@@ -126,10 +131,11 @@ type UserInventory struct {
 
 // InventoryInfo stores the shared inventory item information.
 type InventoryInfo struct {
-	ID        uint64    `bun:",pk"      json:"id"`
-	Name      string    `bun:",notnull" json:"name"`
-	AssetType string    `bun:",notnull" json:"assetType"`
-	Created   time.Time `bun:",notnull" json:"created"`
+	ID          uint64    `bun:",pk"      json:"id"`
+	Name        string    `bun:",notnull" json:"name"`
+	AssetType   string    `bun:",notnull" json:"assetType"`
+	Created     time.Time `bun:",notnull" json:"created"`
+	LastUpdated time.Time `bun:",notnull" json:"lastUpdated"`
 }
 
 // UserFavorite represents a user's favorite item.
@@ -459,6 +465,7 @@ func FromAPIGroupRoles(userID uint64, group *apiTypes.UserGroupRoles) (*UserGrou
 			IsBuildersClubOnly: group.Group.IsBuildersClubOnly,
 			PublicEntryAllowed: group.Group.PublicEntryAllowed,
 			IsLocked:           group.Group.IsLocked != nil && *group.Group.IsLocked,
+			LastUpdated:        time.Now(),
 		}
 }
 
@@ -468,10 +475,11 @@ func FromAPIOutfit(userID uint64, outfit *apiTypes.Outfit) (*UserOutfit, *Outfit
 			UserID:   userID,
 			OutfitID: outfit.ID,
 		}, &OutfitInfo{
-			ID:         outfit.ID,
-			Name:       outfit.Name,
-			IsEditable: outfit.IsEditable,
-			OutfitType: outfit.OutfitType,
+			ID:          outfit.ID,
+			Name:        outfit.Name,
+			IsEditable:  outfit.IsEditable,
+			OutfitType:  outfit.OutfitType,
+			LastUpdated: time.Now(),
 		}
 }
 
@@ -484,6 +492,7 @@ func FromAPIFriend(userID uint64, friend *apiTypes.ExtendedFriend) (*UserFriend,
 			ID:          friend.ID,
 			Name:        friend.Name,
 			DisplayName: friend.DisplayName,
+			LastUpdated: time.Now(),
 		}
 }
 
@@ -499,6 +508,7 @@ func FromAPIGame(userID uint64, game *apiTypes.Game) (*UserGame, *GameInfo) {
 			PlaceVisits: game.PlaceVisits,
 			Created:     game.Created,
 			Updated:     game.Updated,
+			LastUpdated: time.Now(),
 		}
 }
 
@@ -508,10 +518,11 @@ func FromAPIInventoryAsset(userID uint64, asset *apiTypes.InventoryAsset) (*User
 			UserID:      userID,
 			InventoryID: asset.AssetID,
 		}, &InventoryInfo{
-			ID:        asset.AssetID,
-			Name:      asset.Name,
-			AssetType: asset.AssetType,
-			Created:   asset.Created,
+			ID:          asset.AssetID,
+			Name:        asset.Name,
+			AssetType:   asset.AssetType,
+			Created:     asset.Created,
+			LastUpdated: time.Now(),
 		}
 }
 
@@ -522,8 +533,9 @@ func FromAPIAsset(userID uint64, asset *apiTypes.AssetV2) (*UserAsset, *AssetInf
 			AssetID:          asset.ID,
 			CurrentVersionID: asset.CurrentVersionID,
 		}, &AssetInfo{
-			ID:        asset.ID,
-			Name:      asset.Name,
-			AssetType: asset.AssetType.ID,
+			ID:          asset.ID,
+			Name:        asset.Name,
+			AssetType:   asset.AssetType.ID,
+			LastUpdated: time.Now(),
 		}
 }
