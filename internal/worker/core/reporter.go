@@ -2,6 +2,7 @@ package core
 
 import (
 	"context"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -14,6 +15,8 @@ type StatusReporter struct {
 	monitor  *Monitor
 	status   Status
 	stopChan chan struct{}
+	stopped  bool
+	mu       sync.Mutex
 	logger   *zap.Logger
 }
 
@@ -30,12 +33,20 @@ func NewStatusReporter(client rueidis.Client, workerType string, logger *zap.Log
 			IsHealthy:  true,
 		},
 		stopChan: make(chan struct{}),
+		stopped:  false,
 		logger:   logger.Named("status_reporter"),
 	}
 }
 
 // Start begins periodic status reporting.
 func (r *StatusReporter) Start() {
+	r.mu.Lock()
+	if r.stopped {
+		r.mu.Unlock()
+		return
+	}
+	r.mu.Unlock()
+
 	go func() {
 		ticker := time.NewTicker(HeartbeatInterval)
 		defer ticker.Stop()
@@ -60,17 +71,29 @@ func (r *StatusReporter) Start() {
 
 // Stop ends status reporting.
 func (r *StatusReporter) Stop() {
-	close(r.stopChan)
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if !r.stopped {
+		close(r.stopChan)
+		r.stopped = true
+	}
 }
 
 // UpdateStatus updates the current status.
 func (r *StatusReporter) UpdateStatus(task string, progress int) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
 	r.status.CurrentTask = task
 	r.status.Progress = progress
 }
 
 // SetHealthy updates the health status.
 func (r *StatusReporter) SetHealthy(healthy bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
 	r.status.IsHealthy = healthy
 }
 
