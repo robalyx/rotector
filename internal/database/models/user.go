@@ -38,15 +38,15 @@ func (r *UserModel) SaveUsers(ctx context.Context, tx bun.Tx, users []*types.Rev
 		return nil
 	}
 
-	// Convert review user to database user
-	dbUsers := make([]*types.User, len(users))
+	// Extract base users
+	baseUsers := make([]*types.User, len(users))
 	for i, user := range users {
-		dbUsers[i] = user.User
+		baseUsers[i] = user.User
 	}
 
 	// Update users table with core data
 	_, err := tx.NewInsert().
-		Model(&dbUsers).
+		Model(&baseUsers).
 		On("CONFLICT (id) DO UPDATE").
 		Set("uuid = EXCLUDED.uuid").
 		Set("name = EXCLUDED.name").
@@ -54,7 +54,6 @@ func (r *UserModel) SaveUsers(ctx context.Context, tx bun.Tx, users []*types.Rev
 		Set("description = EXCLUDED.description").
 		Set("created_at = EXCLUDED.created_at").
 		Set("status = EXCLUDED.status").
-		Set("reasons = EXCLUDED.reasons").
 		Set("confidence = EXCLUDED.confidence").
 		Set("has_socials = EXCLUDED.has_socials").
 		Set("last_scanned = EXCLUDED.last_scanned").
@@ -68,6 +67,36 @@ func (r *UserModel) SaveUsers(ctx context.Context, tx bun.Tx, users []*types.Rev
 		Exec(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to upsert users: %w", err)
+	}
+
+	// Save user reasons
+	var reasons []*types.UserReason
+	for _, user := range users {
+		if user.Reasons != nil {
+			for reasonType, reason := range user.Reasons {
+				reasons = append(reasons, &types.UserReason{
+					UserID:     user.ID,
+					ReasonType: reasonType,
+					Message:    reason.Message,
+					Confidence: reason.Confidence,
+					Evidence:   reason.Evidence,
+					CreatedAt:  time.Now(),
+				})
+			}
+		}
+	}
+
+	if len(reasons) > 0 {
+		_, err = tx.NewInsert().
+			Model(&reasons).
+			On("CONFLICT (user_id, reason_type) DO UPDATE").
+			Set("message = EXCLUDED.message").
+			Set("confidence = EXCLUDED.confidence").
+			Set("evidence = EXCLUDED.evidence").
+			Exec(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to upsert user reasons: %w", err)
+		}
 	}
 
 	return nil
@@ -101,6 +130,34 @@ func (r *UserModel) ConfirmUser(ctx context.Context, user *types.ReviewUser) err
 			return fmt.Errorf("failed to create verification record: %w", err)
 		}
 
+		// Update user reasons if any exist
+		if user.Reasons != nil {
+			var reasons []*types.UserReason
+			for reasonType, reason := range user.Reasons {
+				reasons = append(reasons, &types.UserReason{
+					UserID:     user.ID,
+					ReasonType: reasonType,
+					Message:    reason.Message,
+					Confidence: reason.Confidence,
+					Evidence:   reason.Evidence,
+					CreatedAt:  time.Now(),
+				})
+			}
+
+			if len(reasons) > 0 {
+				_, err = tx.NewInsert().
+					Model(&reasons).
+					On("CONFLICT (user_id, reason_type) DO UPDATE").
+					Set("message = EXCLUDED.message").
+					Set("confidence = EXCLUDED.confidence").
+					Set("evidence = EXCLUDED.evidence").
+					Exec(ctx)
+				if err != nil {
+					return fmt.Errorf("failed to update user reasons: %w", err)
+				}
+			}
+		}
+
 		return nil
 	})
 }
@@ -131,6 +188,34 @@ func (r *UserModel) ClearUser(ctx context.Context, user *types.ReviewUser) error
 			Exec(ctx)
 		if err != nil {
 			return fmt.Errorf("failed to create clearance record: %w", err)
+		}
+
+		// Update user reasons if any exist
+		if user.Reasons != nil {
+			var reasons []*types.UserReason
+			for reasonType, reason := range user.Reasons {
+				reasons = append(reasons, &types.UserReason{
+					UserID:     user.ID,
+					ReasonType: reasonType,
+					Message:    reason.Message,
+					Confidence: reason.Confidence,
+					Evidence:   reason.Evidence,
+					CreatedAt:  time.Now(),
+				})
+			}
+
+			if len(reasons) > 0 {
+				_, err = tx.NewInsert().
+					Model(&reasons).
+					On("CONFLICT (user_id, reason_type) DO UPDATE").
+					Set("message = EXCLUDED.message").
+					Set("confidence = EXCLUDED.confidence").
+					Set("evidence = EXCLUDED.evidence").
+					Exec(ctx)
+				if err != nil {
+					return fmt.Errorf("failed to update user reasons: %w", err)
+				}
+			}
 		}
 
 		return nil
@@ -232,6 +317,26 @@ func (r *UserModel) GetUserByID(
 			return fmt.Errorf("failed to get user: %w", err)
 		}
 
+		// Get user reasons
+		var reasons []*types.UserReason
+		err = tx.NewSelect().
+			Model(&reasons).
+			Where("user_id = ?", user.ID).
+			Scan(ctx)
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return fmt.Errorf("failed to get user reasons: %w", err)
+		}
+
+		// Convert reasons to map
+		result.Reasons = make(types.Reasons[enum.UserReasonType])
+		for _, reason := range reasons {
+			result.Reasons[reason.ReasonType] = &types.Reason{
+				Message:    reason.Message,
+				Confidence: reason.Confidence,
+				Evidence:   reason.Evidence,
+			}
+		}
+
 		// Get verification/clearance info based on status
 		result.User = &user
 
@@ -319,6 +424,18 @@ func (r *UserModel) GetUsersByIDs(
 			return fmt.Errorf("failed to get clearances: %w", err)
 		}
 
+		// Get user reasons
+		var reasons []*types.UserReason
+		if fields.Has(types.UserFieldReasons) {
+			err = tx.NewSelect().
+				Model(&reasons).
+				Where("user_id IN (?)", bun.In(userIDs)).
+				Scan(ctx)
+			if err != nil && !errors.Is(err, sql.ErrNoRows) {
+				return fmt.Errorf("failed to get user reasons: %w", err)
+			}
+		}
+
 		// Map verifications and clearances by user ID
 		verificationMap := make(map[uint64]types.UserVerification)
 		for _, v := range verifications {
@@ -330,10 +447,24 @@ func (r *UserModel) GetUsersByIDs(
 			clearanceMap[c.UserID] = c
 		}
 
+		// Map reasons by user ID
+		reasonMap := make(map[uint64]types.Reasons[enum.UserReasonType])
+		for _, reason := range reasons {
+			if _, ok := reasonMap[reason.UserID]; !ok {
+				reasonMap[reason.UserID] = make(types.Reasons[enum.UserReasonType])
+			}
+			reasonMap[reason.UserID][reason.ReasonType] = &types.Reason{
+				Message:    reason.Message,
+				Confidence: reason.Confidence,
+				Evidence:   reason.Evidence,
+			}
+		}
+
 		// Build review users
 		for _, user := range baseUsers {
 			reviewUser := &types.ReviewUser{
-				User: &user,
+				User:    &user,
+				Reasons: reasonMap[user.ID],
 			}
 
 			if v, ok := verificationMap[user.ID]; ok {
@@ -574,15 +705,26 @@ func (r *UserModel) DeleteUsers(ctx context.Context, userIDs []uint64) (int64, e
 
 	var totalAffected int64
 	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
-		// Delete users
+		// Delete user reasons
 		result, err := tx.NewDelete().
+			Model((*types.UserReason)(nil)).
+			Where("user_id IN (?)", bun.In(userIDs)).
+			Exec(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to delete user reasons: %w", err)
+		}
+		affected, _ := result.RowsAffected()
+		totalAffected += affected
+
+		// Delete users
+		result, err = tx.NewDelete().
 			Model((*types.User)(nil)).
 			Where("id IN (?)", bun.In(userIDs)).
 			Exec(ctx)
 		if err != nil {
 			return fmt.Errorf("failed to delete users: %w", err)
 		}
-		affected, _ := result.RowsAffected()
+		affected, _ = result.RowsAffected()
 		totalAffected += affected
 
 		// Delete verifications
@@ -907,6 +1049,26 @@ func (r *UserModel) GetNextToReview(
 		}
 
 		result.User = &user
+
+		// Get user reasons
+		var reasons []*types.UserReason
+		err = tx.NewSelect().
+			Model(&reasons).
+			Where("user_id = ?", user.ID).
+			Scan(ctx)
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return fmt.Errorf("failed to get user reasons: %w", err)
+		}
+
+		// Convert reasons to map
+		result.Reasons = make(types.Reasons[enum.UserReasonType])
+		for _, reason := range reasons {
+			result.Reasons[reason.ReasonType] = &types.Reason{
+				Message:    reason.Message,
+				Confidence: reason.Confidence,
+				Evidence:   reason.Evidence,
+			}
+		}
 
 		// Get verification/clearance info based on status
 		switch user.Status {

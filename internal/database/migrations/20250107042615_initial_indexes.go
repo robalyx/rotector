@@ -285,6 +285,14 @@ func init() { //nolint:funlen
 			CREATE INDEX IF NOT EXISTS idx_reviewer_infos_updated_at
 			ON reviewer_infos (updated_at);
 
+			-- User reasons indexes
+			CREATE INDEX IF NOT EXISTS idx_user_reasons_user_id
+			ON user_reasons (user_id);
+
+			-- Group reasons indexes
+			CREATE INDEX IF NOT EXISTS idx_group_reasons_group_id
+			ON group_reasons (group_id);
+
 			-- User relationship indexes
 			CREATE INDEX IF NOT EXISTS idx_user_groups_user_id_rank
 			ON user_groups (user_id, role_rank DESC);
@@ -519,6 +527,12 @@ func init() { //nolint:funlen
 
 			-- Reviewer info indexes
 			DROP INDEX IF EXISTS idx_reviewer_infos_updated_at;
+
+			-- User reasons indexes
+			DROP INDEX IF EXISTS idx_user_reasons_user_id;
+
+			-- Group reasons indexes
+			DROP INDEX IF EXISTS idx_group_reasons_group_id;
 
 			-- User relationship indexes
 			DROP INDEX IF EXISTS idx_user_groups_user_id_rank;

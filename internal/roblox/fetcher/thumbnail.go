@@ -64,8 +64,8 @@ func (t *ThumbnailFetcher) GetImageURLs(ctx context.Context, users map[uint64]*t
 
 // AddGroupImageURLs fetches thumbnails for groups and adds them to the group records.
 func (t *ThumbnailFetcher) AddGroupImageURLs(
-	ctx context.Context, groups map[uint64]*types.Group,
-) map[uint64]*types.Group {
+	ctx context.Context, groups map[uint64]*types.ReviewGroup,
+) map[uint64]*types.ReviewGroup {
 	// Create batch request for group icons
 	requests := thumbnails.NewBatchThumbnailsBuilder()
 	for _, group := range groups {
@@ -83,7 +83,7 @@ func (t *ThumbnailFetcher) AddGroupImageURLs(
 
 	// Add thumbnail URLs to groups
 	now := time.Now()
-	updatedGroups := make(map[uint64]*types.Group, len(groups))
+	updatedGroups := make(map[uint64]*types.ReviewGroup, len(groups))
 	for _, group := range groups {
 		if thumbnailURL, ok := results[group.ID]; ok {
 			group.ThumbnailURL = thumbnailURL

@@ -18,6 +18,7 @@ func init() { //nolint:funlen
 			partitionKey string
 		}{
 			{(*types.User)(nil), "users", "id"},
+			{(*types.UserReason)(nil), "user_reasons", "user_id"},
 			{(*types.UserVerification)(nil), "user_verifications", "user_id"},
 			{(*types.UserClearance)(nil), "user_clearances", "user_id"},
 			{(*types.UserGroup)(nil), "user_groups", "user_id"},
@@ -36,6 +37,7 @@ func init() { //nolint:funlen
 			// {(*types.UserFavorite)(nil), "user_favorites", "user_id"},
 			// {(*types.UserBadge)(nil), "user_badges", "user_id"},
 			{(*types.Group)(nil), "groups", "id"},
+			{(*types.GroupReason)(nil), "group_reasons", "group_id"},
 			{(*types.GroupVerification)(nil), "group_verifications", "group_id"},
 			{(*types.GroupClearance)(nil), "group_clearances", "group_id"},
 			{(*types.CondoGame)(nil), "condo_games", "id"},
@@ -171,6 +173,7 @@ func init() { //nolint:funlen
 			"condo_games",
 			"group_clearances",
 			"group_verifications",
+			"group_reasons",
 			"groups",
 			// "user_badges",
 			// "user_favorites",
@@ -188,6 +191,7 @@ func init() { //nolint:funlen
 			"user_groups",
 			"user_clearances",
 			"user_verifications",
+			"user_reasons",
 			"users",
 		}
 

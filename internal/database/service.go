@@ -42,7 +42,7 @@ func NewService(db *bun.DB, repository *Repository, logger *zap.Logger) *Service
 	return &Service{
 		ban:        service.NewBan(banModel, logger),
 		user:       service.NewUser(db, userModel, activityModel, reputationModel, voteModel, trackingModel, logger),
-		group:      service.NewGroup(groupModel, activityModel, reputationModel, voteModel, logger),
+		group:      service.NewGroup(db, groupModel, activityModel, reputationModel, voteModel, logger),
 		vote:       service.NewVote(voteModel, activityModel, viewService, banModel, logger),
 		reputation: service.NewReputation(reputationModel, voteModel, logger),
 		reviewer:   service.NewReviewer(reviewerModel, viewService, logger),

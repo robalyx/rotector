@@ -9,11 +9,13 @@ import (
 	"github.com/robalyx/rotector/internal/database/models"
 	"github.com/robalyx/rotector/internal/database/types"
 	"github.com/robalyx/rotector/internal/database/types/enum"
+	"github.com/uptrace/bun"
 	"go.uber.org/zap"
 )
 
 // GroupService handles group-related business logic.
 type GroupService struct {
+	db         *bun.DB
 	model      *models.GroupModel
 	activity   *models.ActivityModel
 	reputation *models.ReputationModel
@@ -23,6 +25,7 @@ type GroupService struct {
 
 // NewGroup creates a new group service.
 func NewGroup(
+	db *bun.DB,
 	model *models.GroupModel,
 	activity *models.ActivityModel,
 	reputation *models.ReputationModel,
@@ -30,6 +33,7 @@ func NewGroup(
 	logger *zap.Logger,
 ) *GroupService {
 	return &GroupService{
+		db:         db,
 		model:      model,
 		activity:   activity,
 		reputation: reputation,
@@ -169,7 +173,7 @@ func (s *GroupService) GetGroupToReview(
 }
 
 // SaveGroups handles the business logic for saving groups.
-func (s *GroupService) SaveGroups(ctx context.Context, groups map[uint64]*types.Group) error {
+func (s *GroupService) SaveGroups(ctx context.Context, groups map[uint64]*types.ReviewGroup) error {
 	// Get list of group IDs to check
 	groupIDs := make([]uint64, 0, len(groups))
 	for id := range groups {
@@ -187,7 +191,7 @@ func (s *GroupService) SaveGroups(ctx context.Context, groups map[uint64]*types.
 	}
 
 	// Prepare groups for saving
-	groupsToSave := make([]*types.Group, 0, len(groups))
+	groupsToSave := make([]*types.ReviewGroup, 0, len(groups))
 	for id, group := range groups {
 		// Generate UUID for new groups
 		if group.UUID == uuid.Nil {
@@ -218,7 +222,17 @@ func (s *GroupService) SaveGroups(ctx context.Context, groups map[uint64]*types.
 	}
 
 	// Save the groups
-	if err := s.model.SaveGroups(ctx, groupsToSave); err != nil {
+	err = s.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+		// Save groups with their reasons
+		if err := s.model.SaveGroups(ctx, tx, groupsToSave); err != nil {
+			return err
+		}
+
+		// NOTE: any additional logic can be added here
+
+		return nil
+	})
+	if err != nil {
 		return err
 	}
 

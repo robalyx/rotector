@@ -72,20 +72,20 @@ func (c *FriendChecker) ProcessUsers(userInfos []*types.ReviewUser, reasonsMap m
 	}
 
 	// Prepare maps for confirmed and flagged friends per user
-	confirmedFriendsMap := make(map[uint64]map[uint64]*types.User)
-	flaggedFriendsMap := make(map[uint64]map[uint64]*types.User)
+	confirmedFriendsMap := make(map[uint64]map[uint64]*types.ReviewUser)
+	flaggedFriendsMap := make(map[uint64]map[uint64]*types.ReviewUser)
 
 	for _, userInfo := range userInfos {
-		confirmedFriends := make(map[uint64]*types.User)
-		flaggedFriends := make(map[uint64]*types.User)
+		confirmedFriends := make(map[uint64]*types.ReviewUser)
+		flaggedFriends := make(map[uint64]*types.ReviewUser)
 
 		for _, friend := range userInfo.Friends {
 			if reviewUser, exists := existingFriends[friend.ID]; exists {
 				switch reviewUser.Status {
 				case enum.UserTypeConfirmed:
-					confirmedFriends[friend.ID] = reviewUser.User
+					confirmedFriends[friend.ID] = reviewUser
 				case enum.UserTypeFlagged:
-					flaggedFriends[friend.ID] = reviewUser.User
+					flaggedFriends[friend.ID] = reviewUser
 				default:
 					continue
 				}

@@ -17,23 +17,32 @@ var (
 
 // Group represents a group in any state (flagged, confirmed, or cleared).
 type Group struct {
-	ID                  uint64                        `bun:",pk"                    json:"id"`
-	UUID                uuid.UUID                     `bun:",notnull"               json:"uuid"`
-	Name                string                        `bun:",notnull"               json:"name"`
-	Description         string                        `bun:",notnull"               json:"description"`
-	Owner               *types.GroupUser              `bun:"type:jsonb"             json:"owner"`
-	Shout               *types.GroupShout             `bun:"type:jsonb"             json:"shout"`
-	Reasons             Reasons[enum.GroupReasonType] `bun:"type:jsonb,notnull"     json:"reasons"`
-	Confidence          float64                       `bun:",notnull"               json:"confidence"`
-	Status              enum.GroupType                `bun:",notnull"               json:"status"`
-	LastScanned         time.Time                     `bun:",notnull"               json:"lastScanned"`
-	LastUpdated         time.Time                     `bun:",notnull"               json:"lastUpdated"`
-	LastViewed          time.Time                     `bun:",notnull"               json:"lastViewed"`
-	LastLockCheck       time.Time                     `bun:",notnull"               json:"lastLockCheck"`
-	IsLocked            bool                          `bun:",notnull,default:false" json:"isLocked"`
-	IsDeleted           bool                          `bun:",notnull,default:false" json:"isDeleted"`
-	ThumbnailURL        string                        `bun:",notnull"               json:"thumbnailUrl"`
-	LastThumbnailUpdate time.Time                     `bun:",notnull"               json:"lastThumbnailUpdate"`
+	ID                  uint64            `bun:",pk"                    json:"id"`
+	UUID                uuid.UUID         `bun:",notnull"               json:"uuid"`
+	Name                string            `bun:",notnull"               json:"name"`
+	Description         string            `bun:",notnull"               json:"description"`
+	Owner               *types.GroupUser  `bun:"type:jsonb"             json:"owner"`
+	Shout               *types.GroupShout `bun:"type:jsonb"             json:"shout"`
+	Confidence          float64           `bun:",notnull"               json:"confidence"`
+	Status              enum.GroupType    `bun:",notnull"               json:"status"`
+	LastScanned         time.Time         `bun:",notnull"               json:"lastScanned"`
+	LastUpdated         time.Time         `bun:",notnull"               json:"lastUpdated"`
+	LastViewed          time.Time         `bun:",notnull"               json:"lastViewed"`
+	LastLockCheck       time.Time         `bun:",notnull"               json:"lastLockCheck"`
+	IsLocked            bool              `bun:",notnull,default:false" json:"isLocked"`
+	IsDeleted           bool              `bun:",notnull,default:false" json:"isDeleted"`
+	ThumbnailURL        string            `bun:",notnull"               json:"thumbnailUrl"`
+	LastThumbnailUpdate time.Time         `bun:",notnull"               json:"lastThumbnailUpdate"`
+}
+
+// GroupReason represents a reason for flagging a group.
+type GroupReason struct {
+	GroupID    uint64               `bun:",pk"      json:"groupId"`
+	ReasonType enum.GroupReasonType `bun:",pk"      json:"reasonType"`
+	Message    string               `bun:",notnull" json:"message"`
+	Confidence float64              `bun:",notnull" json:"confidence"`
+	Evidence   []string             `bun:",notnull" json:"evidence"`
+	CreatedAt  time.Time            `bun:",notnull" json:"createdAt"`
 }
 
 // GroupVerification stores verification data for confirmed groups.
@@ -53,10 +62,11 @@ type GroupClearance struct {
 // ReviewGroup combines group data with verification/clearance info for review.
 type ReviewGroup struct {
 	*Group
-	ReviewerID uint64     `json:"reviewerId,omitempty"`
-	VerifiedAt time.Time  `json:"verifiedAt"`
-	ClearedAt  time.Time  `json:"clearedAt"`
-	Reputation Reputation `json:"reputation"`
+	Reasons    Reasons[enum.GroupReasonType] `json:"reasons"`
+	ReviewerID uint64                        `json:"reviewerId,omitempty"`
+	VerifiedAt time.Time                     `json:"verifiedAt"`
+	ClearedAt  time.Time                     `json:"clearedAt"`
+	Reputation Reputation                    `json:"reputation"`
 }
 
 // GroupField represents available fields as bit flags.
@@ -123,7 +133,6 @@ var groupFieldToColumns = map[GroupField][]string{
 	GroupFieldOwner:               {"owner"},
 	GroupFieldShout:               {"shout"},
 	GroupFieldStatus:              {"status"},
-	GroupFieldReasons:             {"reasons"},
 	GroupFieldThumbnail:           {"thumbnail_url"},
 	GroupFieldConfidence:          {"confidence"},
 	GroupFieldLastScanned:         {"last_scanned"},

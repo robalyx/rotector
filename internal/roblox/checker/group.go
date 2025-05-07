@@ -49,8 +49,8 @@ func NewGroupChecker(
 // CheckGroupPercentages analyzes groups to find those exceeding the flagged user threshold.
 func (c *GroupChecker) CheckGroupPercentages(
 	groupInfos []*apiTypes.GroupResponse, groupToFlaggedUsers map[uint64][]uint64,
-) map[uint64]*types.Group {
-	flaggedGroups := make(map[uint64]*types.Group)
+) map[uint64]*types.ReviewGroup {
+	flaggedGroups := make(map[uint64]*types.ReviewGroup)
 
 	// Identify groups that exceed thresholds
 	for _, groupInfo := range groupInfos {
@@ -72,20 +72,22 @@ func (c *GroupChecker) CheckGroupPercentages(
 		}
 
 		now := time.Now()
-		flaggedGroups[groupInfo.ID] = &types.Group{
-			ID:          groupInfo.ID,
-			Name:        groupInfo.Name,
-			Description: groupInfo.Description,
-			Owner:       groupInfo.Owner,
-			Shout:       groupInfo.Shout,
+		flaggedGroups[groupInfo.ID] = &types.ReviewGroup{
+			Group: &types.Group{
+				ID:            groupInfo.ID,
+				Name:          groupInfo.Name,
+				Description:   groupInfo.Description,
+				Owner:         groupInfo.Owner,
+				Shout:         groupInfo.Shout,
+				LastUpdated:   now,
+				LastLockCheck: now,
+			},
 			Reasons: types.Reasons[enum.GroupReasonType]{
 				enum.GroupReasonTypeMember: &types.Reason{
 					Message:    reason,
 					Confidence: 0, // NOTE: Confidence will be updated later
 				},
 			},
-			LastUpdated:   now,
-			LastLockCheck: now,
 		}
 	}
 

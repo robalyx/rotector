@@ -18,24 +18,33 @@ var (
 
 // User represents a user in any state (flagged, confirmed, or cleared).
 type User struct {
-	ID                  uint64                       `bun:",pk"                    json:"id"`
-	UUID                uuid.UUID                    `bun:",notnull"               json:"uuid"`
-	Name                string                       `bun:",notnull"               json:"name"`
-	DisplayName         string                       `bun:",notnull"               json:"displayName"`
-	Description         string                       `bun:",notnull"               json:"description"`
-	CreatedAt           time.Time                    `bun:",notnull"               json:"createdAt"`
-	Status              enum.UserType                `bun:",notnull"               json:"status"`
-	Reasons             Reasons[enum.UserReasonType] `bun:"type:jsonb,notnull"     json:"reasons"`
-	Confidence          float64                      `bun:",notnull"               json:"confidence"`
-	HasSocials          bool                         `bun:",notnull,default:false" json:"hasSocials"`
-	LastScanned         time.Time                    `bun:",notnull"               json:"lastScanned"`
-	LastUpdated         time.Time                    `bun:",notnull"               json:"lastUpdated"`
-	LastViewed          time.Time                    `bun:",notnull"               json:"lastViewed"`
-	LastBanCheck        time.Time                    `bun:",notnull"               json:"lastBanCheck"`
-	IsBanned            bool                         `bun:",notnull,default:false" json:"isBanned"`
-	IsDeleted           bool                         `bun:",notnull,default:false" json:"isDeleted"`
-	ThumbnailURL        string                       `bun:",notnull"               json:"thumbnailUrl"`
-	LastThumbnailUpdate time.Time                    `bun:",notnull"               json:"lastThumbnailUpdate"`
+	ID                  uint64        `bun:",pk"                    json:"id"`
+	UUID                uuid.UUID     `bun:",notnull"               json:"uuid"`
+	Name                string        `bun:",notnull"               json:"name"`
+	DisplayName         string        `bun:",notnull"               json:"displayName"`
+	Description         string        `bun:",notnull"               json:"description"`
+	CreatedAt           time.Time     `bun:",notnull"               json:"createdAt"`
+	Status              enum.UserType `bun:",notnull"               json:"status"`
+	Confidence          float64       `bun:",notnull"               json:"confidence"`
+	HasSocials          bool          `bun:",notnull,default:false" json:"hasSocials"`
+	LastScanned         time.Time     `bun:",notnull"               json:"lastScanned"`
+	LastUpdated         time.Time     `bun:",notnull"               json:"lastUpdated"`
+	LastViewed          time.Time     `bun:",notnull"               json:"lastViewed"`
+	LastBanCheck        time.Time     `bun:",notnull"               json:"lastBanCheck"`
+	IsBanned            bool          `bun:",notnull,default:false" json:"isBanned"`
+	IsDeleted           bool          `bun:",notnull,default:false" json:"isDeleted"`
+	ThumbnailURL        string        `bun:",notnull"               json:"thumbnailUrl"`
+	LastThumbnailUpdate time.Time     `bun:",notnull"               json:"lastThumbnailUpdate"`
+}
+
+// UserReason represents a reason for flagging a user.
+type UserReason struct {
+	UserID     uint64              `bun:",pk"      json:"userId"`
+	ReasonType enum.UserReasonType `bun:",pk"      json:"reasonType"`
+	Message    string              `bun:",notnull" json:"message"`
+	Confidence float64             `bun:",notnull" json:"confidence"`
+	Evidence   []string            `bun:",notnull" json:"evidence"`
+	CreatedAt  time.Time           `bun:",notnull" json:"createdAt"`
 }
 
 // UserGroup represents a user's group membership.
@@ -176,6 +185,7 @@ type UserAsset struct {
 // ReviewUser combines user data with verification/clearance info for review.
 type ReviewUser struct {
 	*User
+	Reasons       Reasons[enum.UserReasonType]   `json:"reasons"`
 	ReviewerID    uint64                         `json:"reviewerId,omitempty"`
 	VerifiedAt    time.Time                      `json:"verifiedAt"`
 	ClearedAt     time.Time                      `json:"clearedAt"`
@@ -266,7 +276,6 @@ var userFieldToColumns = map[UserField][]string{
 	UserFieldDescription:         {"description"},
 	UserFieldCreatedAt:           {"created_at"},
 	UserFieldStatus:              {"status"},
-	UserFieldReasons:             {"reasons"},
 	UserFieldThumbnail:           {"thumbnail_url"},
 	UserFieldRelationships:       {"groups", "outfits", "friends", "games", "inventory", "favorites", "badges"},
 	UserFieldConfidence:          {"confidence"},
