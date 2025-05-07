@@ -11,8 +11,10 @@ import (
 	"github.com/robalyx/rotector/internal/bot/constants"
 	"github.com/robalyx/rotector/internal/bot/core/interaction"
 	"github.com/robalyx/rotector/internal/bot/core/session"
+	"github.com/robalyx/rotector/internal/bot/handlers/review/shared"
 	view "github.com/robalyx/rotector/internal/bot/views/review/group"
 	"github.com/robalyx/rotector/internal/database/types"
+	"github.com/robalyx/rotector/internal/database/types/enum"
 	"go.uber.org/zap"
 )
 
@@ -31,13 +33,22 @@ func NewMembersMenu(layout *Layout) *MembersMenu {
 			return view.NewMembersBuilder(s).Build()
 		},
 		ShowHandlerFunc:   m.Show,
-		ButtonHandlerFunc: m.handlePageNavigation,
+		ButtonHandlerFunc: m.handleButton,
+		ModalHandlerFunc:  m.handleModal,
+		CleanupHandlerFunc: func(s *session.Session) {
+			session.ImageBuffer.Delete(s)
+		},
 	}
 	return m
 }
 
 // Show prepares and displays the members interface for a specific page.
 func (m *MembersMenu) Show(ctx *interaction.Context, s *session.Session) {
+	// If ImageBuffer exists, we can skip fetching data
+	if session.ImageBuffer.Get(s) != nil {
+		return
+	}
+
 	group := session.GroupTarget.Get(s)
 
 	// Get flagged users from tracking
@@ -103,26 +114,54 @@ func (m *MembersMenu) Show(ctx *interaction.Context, s *session.Session) {
 	session.UserPresences.Set(s, presenceMap)
 }
 
-// handlePageNavigation processes navigation button clicks.
-func (m *MembersMenu) handlePageNavigation(ctx *interaction.Context, s *session.Session, customID string) {
+// handleButton processes button clicks.
+func (m *MembersMenu) handleButton(ctx *interaction.Context, s *session.Session, customID string) {
 	action := session.ViewerAction(customID)
 	switch action {
 	case session.ViewerFirstPage, session.ViewerPrevPage, session.ViewerNextPage, session.ViewerLastPage:
 		totalPages := session.PaginationTotalPages.Get(s)
 		page := action.ParsePageAction(s, totalPages)
 
+		session.ImageBuffer.Delete(s)
 		session.PaginationPage.Set(s, page)
 		ctx.Reload("")
 		return
 	}
 
 	switch customID {
+	case constants.EditReasonButtonCustomID:
+		group := session.GroupTarget.Get(s)
+		shared.HandleEditReason(
+			ctx, s, m.layout.logger, enum.GroupReasonTypeMember, group.Reasons,
+			func(r types.Reasons[enum.GroupReasonType]) {
+				group.Reasons = r
+				session.GroupTarget.Set(s, group)
+			},
+		)
 	case constants.BackButtonCustomID:
 		ctx.NavigateBack("")
-
 	default:
 		m.layout.logger.Warn("Invalid members viewer action", zap.String("action", string(action)))
 		ctx.Error("Invalid interaction.")
+	}
+}
+
+// handleModal handles modal submissions for the members menu.
+func (m *MembersMenu) handleModal(ctx *interaction.Context, s *session.Session) {
+	switch ctx.Event().CustomID() {
+	case constants.AddReasonModalCustomID:
+		group := session.GroupTarget.Get(s)
+		shared.HandleReasonModalSubmit(
+			ctx, s, group.Reasons, enum.GroupReasonTypeString,
+			func(r types.Reasons[enum.GroupReasonType]) {
+				group.Reasons = r
+				session.GroupTarget.Set(s, group)
+			},
+			func(c float64) {
+				group.Confidence = c
+				session.GroupTarget.Set(s, group)
+			},
+		)
 	}
 }
 

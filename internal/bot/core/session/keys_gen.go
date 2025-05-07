@@ -87,11 +87,11 @@ func main() {
 		{Name: "UserTarget", Type: "*types.ReviewUser", Doc: "UserTarget stores the currently selected user", Persist: true},
 		{Name: "UserFlaggedFriends", Type: "map[uint64]*types.ReviewUser", Doc: "UserFlaggedFriends stores flagged friends", Persist: true},
 		{Name: "UserFlaggedGroups", Type: "map[uint64]*types.ReviewGroup", Doc: "UserFlaggedGroups stores flagged groups", Persist: true},
-		{Name: "UserFriends", Type: "[]*apiTypes.ExtendedFriend", Doc: "UserFriends stores the user's friend list", Persist: false},
-		{Name: "UserPresences", Type: "map[uint64]*apiTypes.UserPresenceResponse", Doc: "UserPresences stores friend presence information", Persist: false},
-		{Name: "UserGroups", Type: "[]*apiTypes.UserGroupRoles", Doc: "UserGroups stores the list of groups", Persist: false},
-		{Name: "UserOutfits", Type: "[]*apiTypes.Outfit", Doc: "UserOutfits stores user outfits", Persist: false},
-		{Name: "UserFlaggedOutfits", Type: "map[string]struct{}", Doc: "UserFlaggedOutfits stores outfit names that appear in reason evidence", Persist: false},
+		{Name: "UserFriends", Type: "[]*apiTypes.ExtendedFriend", Doc: "UserFriends stores the user's friend list", Persist: true},
+		{Name: "UserPresences", Type: "map[uint64]*apiTypes.UserPresenceResponse", Doc: "UserPresences stores friend presence information", Persist: true},
+		{Name: "UserGroups", Type: "[]*apiTypes.UserGroupRoles", Doc: "UserGroups stores the list of groups", Persist: true},
+		{Name: "UserOutfits", Type: "[]*apiTypes.Outfit", Doc: "UserOutfits stores user outfits", Persist: true},
+		{Name: "UserFlaggedOutfits", Type: "map[string]struct{}", Doc: "UserFlaggedOutfits stores outfit names that appear in reason evidence", Persist: true},
 		{Name: "UserReviewHistory", Type: "[]uint64", Doc: "UserReviewHistory stores IDs of previously reviewed users", Persist: true},
 		{Name: "UserReviewHistoryIndex", Type: "int", Doc: "UserReviewHistoryIndex stores the current position in the review history", Persist: true},
 
@@ -99,8 +99,8 @@ func main() {
 		{Name: "GroupTarget", Type: "*types.ReviewGroup", Doc: "GroupTarget stores the currently selected group", Persist: true},
 		{Name: "GroupInfo", Type: "*apiTypes.GroupResponse", Doc: "GroupInfo stores additional group information", Persist: true},
 		{Name: "GroupFlaggedMembersCount", Type: "int", Doc: "GroupFlaggedMembersCount stores the total number of flagged members in the current group", Persist: true},
-		{Name: "GroupPageFlaggedMembers", Type: "map[uint64]*types.ReviewUser", Doc: "GroupPageFlaggedMembers stores flagged member details for the current page", Persist: false},
-		{Name: "GroupPageFlaggedMemberIDs", Type: "[]uint64", Doc: "GroupPageFlaggedMemberIDs stores flagged member IDs for the current page", Persist: false},
+		{Name: "GroupPageFlaggedMembers", Type: "map[uint64]*types.ReviewUser", Doc: "GroupPageFlaggedMembers stores flagged member details for the current page", Persist: true},
+		{Name: "GroupPageFlaggedMemberIDs", Type: "[]uint64", Doc: "GroupPageFlaggedMemberIDs stores flagged member IDs for the current page", Persist: true},
 		{Name: "GroupReviewHistory", Type: "[]uint64", Doc: "GroupReviewHistory stores IDs of previously reviewed groups", Persist: true},
 		{Name: "GroupReviewHistoryIndex", Type: "int", Doc: "GroupReviewHistoryIndex stores the current position in the review history", Persist: true},
 
@@ -229,7 +229,7 @@ func main() {
 
 	bufferKeys := []KeyDef{
 		{Name: "CaptchaImageBuffer", Doc: "CaptchaImageBuffer stores binary image data for CAPTCHA verification", Persist: true},
-		{Name: "ImageBuffer", Doc: "ImageBuffer stores binary image data", Persist: false},
+		{Name: "ImageBuffer", Doc: "ImageBuffer stores binary image data", Persist: true},
 	}
 
 	data := struct {

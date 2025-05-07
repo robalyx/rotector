@@ -71,13 +71,13 @@ var (
 	// UserFlaggedGroups stores flagged groups
 	UserFlaggedGroups = NewKey[map[uint64]*types.ReviewGroup]("UserFlaggedGroups", true)
 	// UserFriends stores the user's friend list
-	UserFriends = NewKey[[]*apiTypes.ExtendedFriend]("UserFriends", false)
+	UserFriends = NewKey[[]*apiTypes.ExtendedFriend]("UserFriends", true)
 	// UserPresences stores friend presence information
-	UserPresences = NewKey[map[uint64]*apiTypes.UserPresenceResponse]("UserPresences", false)
+	UserPresences = NewKey[map[uint64]*apiTypes.UserPresenceResponse]("UserPresences", true)
 	// UserGroups stores the list of groups
-	UserGroups = NewKey[[]*apiTypes.UserGroupRoles]("UserGroups", false)
+	UserGroups = NewKey[[]*apiTypes.UserGroupRoles]("UserGroups", true)
 	// UserOutfits stores user outfits
-	UserOutfits = NewKey[[]*apiTypes.Outfit]("UserOutfits", false)
+	UserOutfits = NewKey[[]*apiTypes.Outfit]("UserOutfits", true)
 	// UserFlaggedOutfits stores outfit names that appear in reason evidence
 	UserFlaggedOutfits = NewKey[map[string]struct{}]("UserFlaggedOutfits", false)
 	// UserReviewHistory stores IDs of previously reviewed users
@@ -91,9 +91,9 @@ var (
 	// GroupFlaggedMembersCount stores the total number of flagged members in the current group
 	GroupFlaggedMembersCount = NewKey[int]("GroupFlaggedMembersCount", true)
 	// GroupPageFlaggedMembers stores flagged member details for the current page
-	GroupPageFlaggedMembers = NewKey[map[uint64]*types.ReviewUser]("GroupPageFlaggedMembers", false)
+	GroupPageFlaggedMembers = NewKey[map[uint64]*types.ReviewUser]("GroupPageFlaggedMembers", true)
 	// GroupPageFlaggedMemberIDs stores flagged member IDs for the current page
-	GroupPageFlaggedMemberIDs = NewKey[[]uint64]("GroupPageFlaggedMemberIDs", false)
+	GroupPageFlaggedMemberIDs = NewKey[[]uint64]("GroupPageFlaggedMemberIDs", true)
 	// GroupReviewHistory stores IDs of previously reviewed groups
 	GroupReviewHistory = NewKey[[]uint64]("GroupReviewHistory", true)
 	// GroupReviewHistoryIndex stores the current position in the review history
@@ -290,5 +290,5 @@ var (
 	// CaptchaImageBuffer stores binary image data for CAPTCHA verification
 	CaptchaImageBuffer = NewBufferKey("CaptchaImageBuffer", true)
 	// ImageBuffer stores binary image data
-	ImageBuffer = NewBufferKey("ImageBuffer", false)
+	ImageBuffer = NewBufferKey("ImageBuffer", true)
 )

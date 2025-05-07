@@ -280,7 +280,18 @@ func (m *ReviewMenu) handleModal(ctx *interaction.Context, s *session.Session) {
 
 	switch ctx.Event().CustomID() {
 	case constants.AddReasonModalCustomID:
-		m.handleReasonModalSubmit(ctx, s)
+		user := session.UserTarget.Get(s)
+		shared.HandleReasonModalSubmit(
+			ctx, s, user.Reasons, enum.UserReasonTypeString,
+			func(r types.Reasons[enum.UserReasonType]) {
+				user.Reasons = r
+				session.UserTarget.Set(s, user)
+			},
+			func(c float64) {
+				user.Confidence = c
+				session.UserTarget.Set(s, user)
+			},
+		)
 	case constants.AddCommentModalCustomID:
 		m.HandleCommentModalSubmit(ctx, s, viewShared.TargetTypeUser)
 	}
@@ -456,23 +467,6 @@ func (m *ReviewMenu) handleConfirmUser(ctx *interaction.Context, s *session.Sess
 		}
 		actionMsg = "confirmed"
 
-		// Log reason changes if any were made
-		if session.ReasonsChanged.Get(s) {
-			originalReasons := session.OriginalUserReasons.Get(s)
-			go m.layout.db.Model().Activity().Log(ctx.Context(), &types.ActivityLog{
-				ActivityTarget: types.ActivityTarget{
-					UserID: user.ID,
-				},
-				ReviewerID:        reviewerID,
-				ActivityType:      enum.ActivityTypeUserReasonUpdated,
-				ActivityTimestamp: time.Now(),
-				Details: map[string]any{
-					"originalReasons": originalReasons.Messages(),
-					"updatedReasons":  user.Reasons.Messages(),
-				},
-			})
-		}
-
 		// Log the confirm action
 		go m.layout.db.Model().Activity().Log(ctx.Context(), &types.ActivityLog{
 			ActivityTarget: types.ActivityTarget{
@@ -549,23 +543,6 @@ func (m *ReviewMenu) handleClearUser(ctx *interaction.Context, s *session.Sessio
 					downvotePercentage*100, int(totalVotes)))
 				return
 			}
-		}
-
-		// Log reason changes if any were made
-		if session.ReasonsChanged.Get(s) {
-			originalReasons := session.OriginalUserReasons.Get(s)
-			go m.layout.db.Model().Activity().Log(ctx.Context(), &types.ActivityLog{
-				ActivityTarget: types.ActivityTarget{
-					UserID: user.ID,
-				},
-				ReviewerID:        reviewerID,
-				ActivityType:      enum.ActivityTypeUserReasonUpdated,
-				ActivityTimestamp: time.Now(),
-				Details: map[string]any{
-					"originalReasons": originalReasons.Messages(),
-					"updatedReasons":  user.Reasons.Messages(),
-				},
-			})
 		}
 
 		// Clear the user
@@ -730,128 +707,6 @@ Recent Games (showing %d of %d):
 	ctx.Show(constants.ChatPageName, "")
 }
 
-// handleReasonModalSubmit processes the reason message from the modal.
-func (m *ReviewMenu) handleReasonModalSubmit(ctx *interaction.Context, s *session.Session) {
-	// Get the reason type from session
-	reasonTypeStr := session.SelectedReasonType.Get(s)
-	reasonType, err := enum.UserReasonTypeString(reasonTypeStr)
-	if err != nil {
-		ctx.Error("Invalid reason type: " + reasonTypeStr)
-		return
-	}
-
-	// Get current user
-	user := session.UserTarget.Get(s)
-
-	// Initialize reasons map if nil
-	if user.Reasons == nil {
-		user.Reasons = make(types.Reasons[enum.UserReasonType])
-	}
-
-	// Get the reason message from the modal
-	data := ctx.Event().ModalData()
-	reasonMessage := data.Text(constants.AddReasonInputCustomID)
-	confidenceStr := data.Text(constants.AddReasonConfidenceInputCustomID)
-	evidenceText := data.Text(constants.AddReasonEvidenceInputCustomID)
-
-	// Get existing reason if editing
-	var existingReason *types.Reason
-	if existing, exists := user.Reasons[reasonType]; exists {
-		existingReason = existing
-	}
-
-	// Create or update reason
-	var reason types.Reason
-	if existingReason != nil {
-		// Check if reasons field is empty
-		if reasonMessage == "" {
-			delete(user.Reasons, reasonType)
-			user.Confidence = utils.CalculateConfidence(user.Reasons)
-
-			// Update session
-			session.UserTarget.Set(s, user)
-			session.SelectedReasonType.Delete(s)
-			session.ReasonsChanged.Set(s, true)
-
-			ctx.Reload(fmt.Sprintf("Successfully removed %s reason", reasonType.String()))
-			return
-		}
-
-		// Check if confidence is empty
-		if confidenceStr == "" {
-			ctx.Cancel("Confidence is required when updating a reason.")
-			return
-		}
-
-		// Parse confidence
-		confidence, err := strconv.ParseFloat(confidenceStr, 64)
-		if err != nil || confidence < 0.01 || confidence > 1.0 {
-			ctx.Cancel("Invalid confidence value. Please enter a number between 0.01 and 1.00.")
-			return
-		}
-
-		// Parse evidence items
-		var evidence []string
-		for line := range strings.SplitSeq(evidenceText, "\n") {
-			if trimmed := strings.TrimSpace(line); trimmed != "" {
-				evidence = append(evidence, trimmed)
-			}
-		}
-
-		reason = types.Reason{
-			Message:    reasonMessage,
-			Confidence: confidence,
-			Evidence:   evidence,
-		}
-	} else {
-		// For new reasons, message and confidence are required
-		if reasonMessage == "" || confidenceStr == "" {
-			ctx.Cancel("Reason message and confidence are required for new reasons.")
-			return
-		}
-
-		// Parse confidence
-		confidence, err := strconv.ParseFloat(confidenceStr, 64)
-		if err != nil || confidence < 0.01 || confidence > 1.0 {
-			ctx.Cancel("Invalid confidence value. Please enter a number between 0.01 and 1.00.")
-			return
-		}
-
-		// Parse evidence items
-		var evidence []string
-		if evidenceText != "" {
-			for line := range strings.SplitSeq(evidenceText, "\n") {
-				if trimmed := strings.TrimSpace(line); trimmed != "" {
-					evidence = append(evidence, trimmed)
-				}
-			}
-		}
-
-		reason = types.Reason{
-			Message:    reasonMessage,
-			Confidence: confidence,
-			Evidence:   evidence,
-		}
-	}
-
-	// Update the reason
-	user.Reasons[reasonType] = &reason
-
-	// Recalculate overall confidence
-	user.Confidence = utils.CalculateConfidence(user.Reasons)
-
-	// Update session
-	session.UserTarget.Set(s, user)
-	session.SelectedReasonType.Delete(s)
-	session.ReasonsChanged.Set(s, true)
-
-	action := "added"
-	if existingReason != nil {
-		action = "updated"
-	}
-	ctx.Reload(fmt.Sprintf("Successfully %s %s reason", action, reasonType.String()))
-}
-
 // handleReasonSelection processes reason management dropdown selections.
 func (m *ReviewMenu) handleReasonSelection(ctx *interaction.Context, s *session.Session, option string) {
 	// Check if user is a reviewer
@@ -888,91 +743,17 @@ func (m *ReviewMenu) handleReasonSelection(ctx *interaction.Context, s *session.
 		return
 	}
 
-	// Initialize reasons map if nil
-	if user.Reasons == nil {
-		user.Reasons = make(types.Reasons[enum.UserReasonType])
-	}
-
-	// Store the selected reason type in session
-	session.SelectedReasonType.Set(s, option)
-
-	// Check if we're editing an existing reason
-	var existingReason *types.Reason
-	if existing, exists := user.Reasons[reasonType]; exists {
-		existingReason = existing
-	}
-
-	// Show modal to user
-	ctx.Modal(m.buildReasonModal(reasonType, existingReason))
-}
-
-// buildReasonModal creates a modal for adding or editing a reason.
-func (m *ReviewMenu) buildReasonModal(reasonType enum.UserReasonType, existingReason *types.Reason) *discord.ModalCreateBuilder {
-	// Create modal for reason input
-	modal := discord.NewModalCreateBuilder().
-		SetCustomID(constants.AddReasonModalCustomID).
-		SetTitle(
-			fmt.Sprintf("%s %s Reason",
-				map[bool]string{true: "Edit", false: "Add"}[existingReason != nil],
-				reasonType.String(),
-			),
-		)
-
-	// Add reason input field
-	reasonInput := discord.NewTextInput(
-		constants.AddReasonInputCustomID, discord.TextInputStyleParagraph, "Reason (leave empty to remove)",
+	shared.HandleEditReason(
+		ctx,
+		s,
+		m.layout.logger,
+		reasonType,
+		user.Reasons,
+		func(r types.Reasons[enum.UserReasonType]) {
+			user.Reasons = r
+			session.UserTarget.Set(s, user)
+		},
 	)
-	if existingReason != nil {
-		reasonInput = reasonInput.WithRequired(false).
-			WithValue(existingReason.Message).
-			WithPlaceholder("Enter new reason message, or leave empty to remove")
-	} else {
-		reasonInput = reasonInput.WithRequired(true).
-			WithMinLength(32).
-			WithMaxLength(256).
-			WithPlaceholder("Enter the reason for flagging this user")
-	}
-	modal.AddActionRow(reasonInput)
-
-	// Add confidence input field
-	confidenceInput := discord.NewTextInput(
-		constants.AddReasonConfidenceInputCustomID, discord.TextInputStyleShort, "Confidence",
-	)
-	if existingReason != nil {
-		confidenceInput = confidenceInput.WithRequired(false).
-			WithValue(fmt.Sprintf("%.2f", existingReason.Confidence)).
-			WithPlaceholder("Enter new confidence value (0.01-1.00)")
-	} else {
-		confidenceInput = confidenceInput.WithRequired(true).
-			WithMinLength(1).
-			WithMaxLength(4).
-			WithValue("1.00").
-			WithPlaceholder("Enter confidence value (0.01-1.00)")
-	}
-	modal.AddActionRow(confidenceInput)
-
-	// Add evidence input field
-	evidenceInput := discord.NewTextInput(
-		constants.AddReasonEvidenceInputCustomID, discord.TextInputStyleParagraph, "Evidence",
-	)
-	if existingReason != nil {
-		// Replace newlines within each evidence item before joining
-		escapedEvidence := make([]string, len(existingReason.Evidence))
-		for i, evidence := range existingReason.Evidence {
-			escapedEvidence[i] = strings.ReplaceAll(evidence, "\n", "\\n")
-		}
-
-		evidenceInput = evidenceInput.WithRequired(false).
-			WithValue(strings.Join(escapedEvidence, "\n")).
-			WithPlaceholder("Enter new evidence items, one per line")
-	} else {
-		evidenceInput = evidenceInput.WithRequired(false).
-			WithMaxLength(1000).
-			WithPlaceholder("Enter evidence items, one per line")
-	}
-	modal.AddActionRow(evidenceInput)
-
-	return modal
 }
 
 // fetchNewTarget gets a new user to review based on the current sort order.

@@ -235,44 +235,6 @@ func (b *BaseReviewBuilder) BuildBaseComponents(
 	return components
 }
 
-// BuildReasonOptions creates the common reason management options.
-func BuildReasonOptions[T types.ReasonType](
-	reasons types.Reasons[T], reasonTypes []T, getEmoji func(T) string, reasonsChanged bool,
-) []discord.StringSelectMenuOption {
-	options := make([]discord.StringSelectMenuOption, 0)
-
-	// Add refresh option if reasons have been changed
-	if reasonsChanged {
-		options = append(options, discord.NewStringSelectMenuOption(
-			"Restore original reasons",
-			constants.RefreshButtonCustomID,
-		).WithEmoji(discord.ComponentEmoji{Name: "🔄"}).
-			WithDescription("Reset all reasons back to their original state"))
-	}
-
-	for _, reasonType := range reasonTypes {
-		// Check if this reason type exists
-		_, exists := reasons[reasonType]
-
-		var action string
-		optionValue := reasonType.String()
-		if exists {
-			action = "Edit"
-			optionValue += constants.ModalOpenSuffix
-		} else {
-			action = "Add"
-			optionValue += constants.ModalOpenSuffix
-		}
-
-		options = append(options, discord.NewStringSelectMenuOption(
-			fmt.Sprintf("%s %s reason", action, reasonType.String()),
-			optionValue,
-		).WithEmoji(discord.ComponentEmoji{Name: getEmoji(reasonType)}))
-	}
-
-	return options
-}
-
 // BuildDeletionDisplay creates the deletion notice display.
 func (b *BaseReviewBuilder) BuildDeletionDisplay(targetType string) discord.ContainerSubComponent {
 	return discord.NewTextDisplay(fmt.Sprintf(
@@ -362,4 +324,77 @@ func (b *BaseReviewBuilder) BuildReviewWarningText(targetType string, activityTy
 		map[bool]string{true: "s", false: ""}[len(recentReviewers) > 1],
 		strings.Join(mentions, ", "),
 		targetType)
+}
+
+// BuildSingleReasonDisplay creates a display for a single reason with evidence.
+func BuildSingleReasonDisplay[T types.ReasonType](
+	privacyMode bool, reasonType T, reason *types.Reason, maxLength int, sensitiveInfo ...string,
+) string {
+	var content strings.Builder
+
+	// Format the message
+	message := utils.CensorStringsInText(reason.Message, privacyMode, sensitiveInfo...)
+	message = utils.TruncateString(message, maxLength)
+	message = utils.FormatString(message)
+
+	// Build the header with emoji and confidence
+	content.WriteString(fmt.Sprintf("### %s Reason [%.0f%%]\n", reasonType.String(), reason.Confidence*100))
+	content.WriteString(message)
+
+	// Add evidence if any exists
+	if len(reason.Evidence) > 0 {
+		content.WriteString("\n**Evidence:**")
+		for i, evidence := range reason.Evidence {
+			if i >= 5 {
+				content.WriteString("\n... and more evidence")
+				break
+			}
+			evidence = utils.TruncateString(evidence, 100)
+			evidence = utils.NormalizeString(evidence)
+			if privacyMode {
+				evidence = utils.CensorStringsInText(evidence, true, sensitiveInfo...)
+			}
+			content.WriteString(fmt.Sprintf("\n- `%s`", evidence))
+		}
+	}
+
+	return content.String()
+}
+
+// BuildReasonOptions creates the common reason management options.
+func BuildReasonOptions[T types.ReasonType](
+	reasons types.Reasons[T], reasonTypes []T, getEmoji func(T) string, reasonsChanged bool,
+) []discord.StringSelectMenuOption {
+	options := make([]discord.StringSelectMenuOption, 0)
+
+	// Add refresh option if reasons have been changed
+	if reasonsChanged {
+		options = append(options, discord.NewStringSelectMenuOption(
+			"Restore original reasons",
+			constants.RefreshButtonCustomID,
+		).WithEmoji(discord.ComponentEmoji{Name: "🔄"}).
+			WithDescription("Reset all reasons back to their original state"))
+	}
+
+	for _, reasonType := range reasonTypes {
+		// Check if this reason type exists
+		_, exists := reasons[reasonType]
+
+		var action string
+		optionValue := reasonType.String()
+		if exists {
+			action = "Edit"
+			optionValue += constants.ModalOpenSuffix
+		} else {
+			action = "Add"
+			optionValue += constants.ModalOpenSuffix
+		}
+
+		options = append(options, discord.NewStringSelectMenuOption(
+			fmt.Sprintf("%s %s reason", action, reasonType.String()),
+			optionValue,
+		).WithEmoji(discord.ComponentEmoji{Name: getEmoji(reasonType)}))
+	}
+
+	return options
 }

@@ -11,10 +11,10 @@ import (
 	"github.com/robalyx/rotector/internal/bot/constants"
 	"github.com/robalyx/rotector/internal/bot/core/interaction"
 	"github.com/robalyx/rotector/internal/bot/core/session"
+	"github.com/robalyx/rotector/internal/bot/handlers/review/shared"
 	view "github.com/robalyx/rotector/internal/bot/views/review/user"
 	"github.com/robalyx/rotector/internal/database/types"
 	"github.com/robalyx/rotector/internal/database/types/enum"
-	"go.uber.org/zap"
 )
 
 // FriendsMenu handles the display and interaction logic for viewing a user's friends.
@@ -31,14 +31,24 @@ func NewFriendsMenu(layout *Layout) *FriendsMenu {
 		Message: func(s *session.Session) *discord.MessageUpdateBuilder {
 			return view.NewFriendsBuilder(s).Build()
 		},
-		ShowHandlerFunc:   m.Show,
-		ButtonHandlerFunc: m.handlePageNavigation,
+		DisableSelectMenuReset: true,
+		ShowHandlerFunc:        m.Show,
+		ButtonHandlerFunc:      m.handleButton,
+		ModalHandlerFunc:       m.handleModal,
+		CleanupHandlerFunc: func(s *session.Session) {
+			session.ImageBuffer.Delete(s)
+		},
 	}
 	return m
 }
 
 // Show prepares and displays the friends interface.
 func (m *FriendsMenu) Show(ctx *interaction.Context, s *session.Session) {
+	// If ImageBuffer exists, we can skip fetching data
+	if session.ImageBuffer.Get(s) != nil {
+		return
+	}
+
 	user := session.UserTarget.Get(s)
 
 	// Return to review menu if user has no friends
@@ -91,25 +101,51 @@ func (m *FriendsMenu) Show(ctx *interaction.Context, s *session.Session) {
 	session.UserPresences.Set(s, presenceMap)
 }
 
-// handlePageNavigation processes navigation button clicks.
-func (m *FriendsMenu) handlePageNavigation(ctx *interaction.Context, s *session.Session, customID string) {
+// handleButton processes button clicks.
+func (m *FriendsMenu) handleButton(ctx *interaction.Context, s *session.Session, customID string) {
 	action := session.ViewerAction(customID)
 	switch action {
 	case session.ViewerFirstPage, session.ViewerPrevPage, session.ViewerNextPage, session.ViewerLastPage:
 		totalPages := session.PaginationTotalPages.Get(s)
 		page := action.ParsePageAction(s, totalPages)
 
+		session.ImageBuffer.Delete(s)
 		session.PaginationPage.Set(s, page)
 		ctx.Reload("")
 		return
 	}
 
 	switch customID {
+	case constants.EditReasonButtonCustomID:
+		user := session.UserTarget.Get(s)
+		shared.HandleEditReason(
+			ctx, s, m.layout.logger, enum.UserReasonTypeFriend, user.Reasons,
+			func(r types.Reasons[enum.UserReasonType]) {
+				user.Reasons = r
+				session.UserTarget.Set(s, user)
+			},
+		)
 	case constants.BackButtonCustomID:
 		ctx.NavigateBack("")
-	default:
-		m.layout.logger.Warn("Invalid friends viewer action", zap.String("action", string(action)))
-		ctx.Error("Invalid interaction.")
+	}
+}
+
+// handleModal handles modal submissions for the friends menu.
+func (m *FriendsMenu) handleModal(ctx *interaction.Context, s *session.Session) {
+	switch ctx.Event().CustomID() {
+	case constants.AddReasonModalCustomID:
+		user := session.UserTarget.Get(s)
+		shared.HandleReasonModalSubmit(
+			ctx, s, user.Reasons, enum.UserReasonTypeString,
+			func(r types.Reasons[enum.UserReasonType]) {
+				user.Reasons = r
+				session.UserTarget.Set(s, user)
+			},
+			func(c float64) {
+				user.Confidence = c
+				session.UserTarget.Set(s, user)
+			},
+		)
 	}
 }
 

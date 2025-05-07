@@ -13,8 +13,6 @@ const (
 	ActivityTypeUserViewed
 	// ActivityTypeUserLookup tracks when a moderator looks up a user's profile.
 	ActivityTypeUserLookup
-	// ActivityTypeUserReasonUpdated tracks when a moderator updates a user's reason.
-	ActivityTypeUserReasonUpdated
 	// ActivityTypeUserConfirmed tracks when a moderator confirms a user as inappropriate.
 	ActivityTypeUserConfirmed
 	// ActivityTypeUserCleared tracks when a moderator marks a user as appropriate.
@@ -34,8 +32,6 @@ const (
 	ActivityTypeGroupViewed
 	// ActivityTypeGroupLookup tracks when a moderator looks up a group's profile.
 	ActivityTypeGroupLookup
-	// ActivityTypeGroupReasonUpdated tracks when a moderator updates a group's reason.
-	ActivityTypeGroupReasonUpdated
 	// ActivityTypeGroupConfirmed tracks when a moderator confirms a group as inappropriate.
 	ActivityTypeGroupConfirmed
 	// ActivityTypeGroupConfirmedCustom tracks bans with custom moderator-provided reasons.

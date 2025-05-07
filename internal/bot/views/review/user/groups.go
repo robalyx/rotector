@@ -11,6 +11,7 @@ import (
 	"github.com/robalyx/rotector/internal/bot/constants"
 	"github.com/robalyx/rotector/internal/bot/core/session"
 	"github.com/robalyx/rotector/internal/bot/utils"
+	"github.com/robalyx/rotector/internal/bot/views/review/shared"
 	"github.com/robalyx/rotector/internal/database/types"
 	"github.com/robalyx/rotector/internal/database/types/enum"
 )
@@ -26,6 +27,7 @@ type GroupsBuilder struct {
 	totalPages    int
 	imageBuffer   *bytes.Buffer
 	isStreaming   bool
+	isReviewer    bool
 	trainingMode  bool
 	privacyMode   bool
 }
@@ -43,6 +45,7 @@ func NewGroupsBuilder(s *session.Session) *GroupsBuilder {
 		totalPages:    session.PaginationTotalPages.Get(s),
 		imageBuffer:   session.ImageBuffer.Get(s),
 		isStreaming:   session.PaginationIsStreaming.Get(s),
+		isReviewer:    s.BotSettings().IsReviewer(session.UserID.Get(s)),
 		trainingMode:  trainingMode,
 		privacyMode:   trainingMode || session.UserStreamerMode.Get(s),
 	}
@@ -90,6 +93,34 @@ func (b *GroupsBuilder) Build() *discord.MessageUpdateBuilder {
 			},
 		}),
 	).WithAccentColor(utils.GetContainerColor(b.privacyMode))
+
+	// Add group reason section if exists
+	if reason, ok := b.user.Reasons[enum.UserReasonTypeGroup]; ok {
+		var reasonContent strings.Builder
+		reasonContent.WriteString(shared.BuildSingleReasonDisplay(
+			b.privacyMode,
+			enum.UserReasonTypeGroup,
+			reason,
+			200,
+			strconv.FormatUint(b.user.ID, 10),
+			b.user.Name,
+			b.user.DisplayName))
+
+		container = container.AddComponents(
+			discord.NewLargeSeparator(),
+			discord.NewTextDisplay(reasonContent.String()),
+			discord.NewLargeSeparator(),
+		)
+	}
+
+	// Add edit button if reviewer and not in training mode
+	if b.isReviewer && !b.trainingMode {
+		container = container.AddComponents(
+			discord.NewActionRow(
+				discord.NewSecondaryButton("Edit Reason", constants.EditReasonButtonCustomID),
+			),
+		)
+	}
 
 	// Add pagination buttons if not streaming
 	if !b.isStreaming {

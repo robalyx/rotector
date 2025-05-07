@@ -206,12 +206,14 @@ func (c *Context) Modal(modal *discord.ModalCreateBuilder) {
 	// automatically reset the selection. By updating the message after opening a modal,
 	// we force the select menu to reset to its default state.
 	page := c.manager.GetPage(session.CurrentPage.Get(c.session))
-	_, err := c.event.Client().Rest().UpdateInteractionResponse(
-		c.event.ApplicationID(),
-		c.event.Token(),
-		page.Message(c.session).Build(),
-	)
-	if err != nil {
-		c.Error("Failed to implement workaround for Discord's select menu behavior. Please report this issue.")
+	if !page.DisableSelectMenuReset {
+		_, err := c.event.Client().Rest().UpdateInteractionResponse(
+			c.event.ApplicationID(),
+			c.event.Token(),
+			page.Message(c.session).Build(),
+		)
+		if err != nil {
+			c.Error("Failed to implement workaround for Discord's select menu behavior. Please report this issue.")
+		}
 	}
 }

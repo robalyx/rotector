@@ -15,8 +15,9 @@ import (
 // types of Discord interactions (select menus, buttons, modals) and a message builder function.
 // The handlers are optional - a page may only use some interaction types.
 type Page struct {
-	Name    string
-	Message func(s *session.Session) *discord.MessageUpdateBuilder
+	Name                   string
+	Message                func(s *session.Session) *discord.MessageUpdateBuilder
+	DisableSelectMenuReset bool
 
 	// ShowHandlerFunc is called when the page is shown.
 	ShowHandlerFunc func(

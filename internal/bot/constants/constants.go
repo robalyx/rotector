@@ -213,21 +213,22 @@ const (
 	OpenOutfitsMenuButtonCustomID = "open_outfits_menu"
 	OpenFriendsMenuButtonCustomID = "open_friends_menu"
 	OpenGroupsMenuButtonCustomID  = "open_groups_menu"
+	EditReasonButtonCustomID      = "edit_reason" + ModalOpenSuffix
 	AbortButtonCustomID           = "abort"
 )
 
 // User Review Menu - Friends Viewer.
 const (
-	FriendsPerPage     = 28
+	FriendsPerPage     = 20
 	FriendsGridColumns = 4
-	FriendsGridRows    = 7
+	FriendsGridRows    = 5
 )
 
 // User Review Menu - Outfits Viewer.
 const (
-	OutfitsPerPage    = 28
+	OutfitsPerPage    = 20
 	OutfitGridColumns = 4
-	OutfitGridRows    = 7
+	OutfitGridRows    = 5
 )
 
 // User Review Menu - Groups Viewer.

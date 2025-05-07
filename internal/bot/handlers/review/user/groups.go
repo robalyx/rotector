@@ -11,6 +11,7 @@ import (
 	"github.com/robalyx/rotector/internal/bot/constants"
 	"github.com/robalyx/rotector/internal/bot/core/interaction"
 	"github.com/robalyx/rotector/internal/bot/core/session"
+	"github.com/robalyx/rotector/internal/bot/handlers/review/shared"
 	view "github.com/robalyx/rotector/internal/bot/views/review/user"
 	"github.com/robalyx/rotector/internal/database/types"
 	"github.com/robalyx/rotector/internal/database/types/enum"
@@ -31,14 +32,24 @@ func NewGroupsMenu(layout *Layout) *GroupsMenu {
 		Message: func(s *session.Session) *discord.MessageUpdateBuilder {
 			return view.NewGroupsBuilder(s).Build()
 		},
-		ShowHandlerFunc:   m.Show,
-		ButtonHandlerFunc: m.handlePageNavigation,
+		DisableSelectMenuReset: true,
+		ShowHandlerFunc:        m.Show,
+		ButtonHandlerFunc:      m.handleButton,
+		ModalHandlerFunc:       m.handleModal,
+		CleanupHandlerFunc: func(s *session.Session) {
+			session.ImageBuffer.Delete(s)
+		},
 	}
 	return m
 }
 
 // Show prepares and displays the groups interface for a specific page.
 func (m *GroupsMenu) Show(ctx *interaction.Context, s *session.Session) {
+	// If ImageBuffer exists, we can skip fetching data
+	if session.ImageBuffer.Get(s) != nil {
+		return
+	}
+
 	user := session.UserTarget.Get(s)
 
 	// Return to review menu if user has no groups
@@ -116,25 +127,54 @@ func (m *GroupsMenu) sortGroupsByStatus(
 	return sortedGroups
 }
 
-// handlePageNavigation processes navigation button clicks.
-func (m *GroupsMenu) handlePageNavigation(ctx *interaction.Context, s *session.Session, customID string) {
+// handleButton processes button clicks.
+func (m *GroupsMenu) handleButton(ctx *interaction.Context, s *session.Session, customID string) {
 	action := session.ViewerAction(customID)
 	switch action {
 	case session.ViewerFirstPage, session.ViewerPrevPage, session.ViewerNextPage, session.ViewerLastPage:
 		totalPages := session.PaginationTotalPages.Get(s)
 		page := action.ParsePageAction(s, totalPages)
 
+		session.ImageBuffer.Delete(s)
 		session.PaginationPage.Set(s, page)
 		ctx.Reload("")
 		return
 	}
 
 	switch customID {
+	case constants.EditReasonButtonCustomID:
+		user := session.UserTarget.Get(s)
+		shared.HandleEditReason(
+			ctx, s, m.layout.logger, enum.UserReasonTypeGroup, user.Reasons,
+			func(r types.Reasons[enum.UserReasonType]) {
+				user.Reasons = r
+				session.UserTarget.Set(s, user)
+			},
+		)
 	case constants.BackButtonCustomID:
 		ctx.NavigateBack("")
 	default:
 		m.layout.logger.Warn("Invalid groups viewer action", zap.String("action", string(action)))
 		ctx.Error("Invalid interaction.")
+	}
+}
+
+// handleModal processes modal submissions.
+func (m *GroupsMenu) handleModal(ctx *interaction.Context, s *session.Session) {
+	switch ctx.Event().CustomID() {
+	case constants.AddReasonModalCustomID:
+		user := session.UserTarget.Get(s)
+		shared.HandleReasonModalSubmit(
+			ctx, s, user.Reasons, enum.UserReasonTypeString,
+			func(r types.Reasons[enum.UserReasonType]) {
+				user.Reasons = r
+				session.UserTarget.Set(s, user)
+			},
+			func(c float64) {
+				user.Confidence = c
+				session.UserTarget.Set(s, user)
+			},
+		)
 	}
 }
 

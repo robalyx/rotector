@@ -228,7 +228,18 @@ func (m *ReviewMenu) handleModal(ctx *interaction.Context, s *session.Session) {
 
 	switch ctx.Event().CustomID() {
 	case constants.AddReasonModalCustomID:
-		m.handleReasonModalSubmit(ctx, s)
+		group := session.GroupTarget.Get(s)
+		shared.HandleReasonModalSubmit(
+			ctx, s, group.Reasons, enum.GroupReasonTypeString,
+			func(r types.Reasons[enum.GroupReasonType]) {
+				group.Reasons = r
+				session.GroupTarget.Set(s, group)
+			},
+			func(c float64) {
+				group.Confidence = c
+				session.GroupTarget.Set(s, group)
+			},
+		)
 	case constants.AddCommentModalCustomID:
 		m.HandleCommentModalSubmit(ctx, s, viewShared.TargetTypeGroup)
 	}
@@ -525,23 +536,6 @@ func (m *ReviewMenu) handleConfirmGroup(ctx *interaction.Context, s *session.Ses
 		}
 		actionMsg = "confirmed"
 
-		// Log reason changes if any were made
-		if session.ReasonsChanged.Get(s) {
-			originalReasons := session.OriginalGroupReasons.Get(s)
-			go m.layout.db.Model().Activity().Log(ctx.Context(), &types.ActivityLog{
-				ActivityTarget: types.ActivityTarget{
-					GroupID: group.ID,
-				},
-				ReviewerID:        reviewerID,
-				ActivityType:      enum.ActivityTypeGroupReasonUpdated,
-				ActivityTimestamp: time.Now(),
-				Details: map[string]any{
-					"originalReasons": originalReasons.Messages(),
-					"updatedReasons":  group.Reasons.Messages(),
-				},
-			})
-		}
-
 		// Log the confirm action
 		go m.layout.db.Model().Activity().Log(ctx.Context(), &types.ActivityLog{
 			ActivityTarget: types.ActivityTarget{
@@ -614,23 +608,6 @@ func (m *ReviewMenu) handleClearGroup(ctx *interaction.Context, s *session.Sessi
 			}
 		}
 
-		// Log reason changes if any were made
-		if session.ReasonsChanged.Get(s) {
-			originalReasons := session.OriginalGroupReasons.Get(s)
-			go m.layout.db.Model().Activity().Log(ctx.Context(), &types.ActivityLog{
-				ActivityTarget: types.ActivityTarget{
-					GroupID: group.ID,
-				},
-				ReviewerID:        reviewerID,
-				ActivityType:      enum.ActivityTypeGroupReasonUpdated,
-				ActivityTimestamp: time.Now(),
-				Details: map[string]any{
-					"originalReasons": originalReasons.Messages(),
-					"updatedReasons":  group.Reasons.Messages(),
-				},
-			})
-		}
-
 		// Clear the group
 		if err := m.layout.db.Service().Group().ClearGroup(ctx.Context(), group, reviewerID); err != nil {
 			m.layout.logger.Error("Failed to clear group", zap.Error(err))
@@ -655,128 +632,6 @@ func (m *ReviewMenu) handleClearGroup(ctx *interaction.Context, s *session.Sessi
 	m.UpdateCounters(s)
 	session.GroupTarget.Delete(s)
 	ctx.Reload(fmt.Sprintf("Group %s.", actionMsg))
-}
-
-// handleReasonModalSubmit processes the reason message from the modal.
-func (m *ReviewMenu) handleReasonModalSubmit(ctx *interaction.Context, s *session.Session) {
-	// Get the reason type from session
-	reasonTypeStr := session.SelectedReasonType.Get(s)
-	reasonType, err := enum.GroupReasonTypeString(reasonTypeStr)
-	if err != nil {
-		ctx.Error("Invalid reason type: " + reasonTypeStr)
-		return
-	}
-
-	// Get current group
-	group := session.GroupTarget.Get(s)
-
-	// Initialize reasons map if nil
-	if group.Reasons == nil {
-		group.Reasons = make(types.Reasons[enum.GroupReasonType])
-	}
-
-	// Get the reason message from the modal
-	data := ctx.Event().ModalData()
-	reasonMessage := data.Text(constants.AddReasonInputCustomID)
-	confidenceStr := data.Text(constants.AddReasonConfidenceInputCustomID)
-	evidenceText := data.Text(constants.AddReasonEvidenceInputCustomID)
-
-	// Get existing reason if editing
-	var existingReason *types.Reason
-	if existing, exists := group.Reasons[reasonType]; exists {
-		existingReason = existing
-	}
-
-	// Create or update reason
-	var reason types.Reason
-	if existingReason != nil {
-		// Check if reasons field is empty
-		if reasonMessage == "" {
-			delete(group.Reasons, reasonType)
-			group.Confidence = utils.CalculateConfidence(group.Reasons)
-
-			// Update session
-			session.GroupTarget.Set(s, group)
-			session.SelectedReasonType.Delete(s)
-			session.ReasonsChanged.Set(s, true)
-
-			ctx.Reload(fmt.Sprintf("Successfully removed %s reason", reasonType.String()))
-			return
-		}
-
-		// Check if confidence is empty
-		if confidenceStr == "" {
-			ctx.Cancel("Confidence is required when updating a reason.")
-			return
-		}
-
-		// Parse confidence
-		confidence, err := strconv.ParseFloat(confidenceStr, 64)
-		if err != nil || confidence < 0.01 || confidence > 1.0 {
-			ctx.Cancel("Invalid confidence value. Please enter a number between 0.01 and 1.00.")
-			return
-		}
-
-		// Parse evidence items
-		var evidence []string
-		for line := range strings.SplitSeq(evidenceText, "\n") {
-			if trimmed := strings.TrimSpace(line); trimmed != "" {
-				evidence = append(evidence, trimmed)
-			}
-		}
-
-		reason = types.Reason{
-			Message:    reasonMessage,
-			Confidence: confidence,
-			Evidence:   evidence,
-		}
-	} else {
-		// For new reasons, message and confidence are required
-		if reasonMessage == "" || confidenceStr == "" {
-			ctx.Cancel("Reason message and confidence are required for new reasons.")
-			return
-		}
-
-		// Parse confidence
-		confidence, err := strconv.ParseFloat(confidenceStr, 64)
-		if err != nil || confidence < 0.01 || confidence > 1.0 {
-			ctx.Cancel("Invalid confidence value. Please enter a number between 0.01 and 1.00.")
-			return
-		}
-
-		// Parse evidence items
-		var evidence []string
-		if evidenceText != "" {
-			for line := range strings.SplitSeq(evidenceText, "\n") {
-				if trimmed := strings.TrimSpace(line); trimmed != "" {
-					evidence = append(evidence, trimmed)
-				}
-			}
-		}
-
-		reason = types.Reason{
-			Message:    reasonMessage,
-			Confidence: confidence,
-			Evidence:   evidence,
-		}
-	}
-
-	// Update the reason
-	group.Reasons[reasonType] = &reason
-
-	// Recalculate overall confidence
-	group.Confidence = utils.CalculateConfidence(group.Reasons)
-
-	// Update session
-	session.GroupTarget.Set(s, group)
-	session.SelectedReasonType.Delete(s)
-	session.ReasonsChanged.Set(s, true)
-
-	action := "added"
-	if existingReason != nil {
-		action = "updated"
-	}
-	ctx.Reload(fmt.Sprintf("Successfully %s %s reason", action, reasonType.String()))
 }
 
 // handleReasonSelection processes reason management dropdown selections.
@@ -815,91 +670,17 @@ func (m *ReviewMenu) handleReasonSelection(ctx *interaction.Context, s *session.
 		return
 	}
 
-	// Initialize reasons map if nil
-	if group.Reasons == nil {
-		group.Reasons = make(types.Reasons[enum.GroupReasonType])
-	}
-
-	// Store the selected reason type in session
-	session.SelectedReasonType.Set(s, option)
-
-	// Check if we're editing an existing reason
-	var existingReason *types.Reason
-	if existing, exists := group.Reasons[reasonType]; exists {
-		existingReason = existing
-	}
-
-	// Show modal to user
-	ctx.Modal(m.buildReasonModal(reasonType, existingReason))
-}
-
-// buildReasonModal creates a modal for adding or editing a reason.
-func (m *ReviewMenu) buildReasonModal(reasonType enum.GroupReasonType, existingReason *types.Reason) *discord.ModalCreateBuilder {
-	// Create modal for reason input
-	modal := discord.NewModalCreateBuilder().
-		SetCustomID(constants.AddReasonModalCustomID).
-		SetTitle(
-			fmt.Sprintf("%s %s Reason",
-				map[bool]string{true: "Edit", false: "Add"}[existingReason != nil],
-				reasonType.String(),
-			),
-		)
-
-	// Add reason input field
-	reasonInput := discord.NewTextInput(
-		constants.AddReasonInputCustomID, discord.TextInputStyleParagraph, "Reason (leave empty to remove)",
+	shared.HandleEditReason(
+		ctx,
+		s,
+		m.layout.logger,
+		reasonType,
+		group.Reasons,
+		func(r types.Reasons[enum.GroupReasonType]) {
+			group.Reasons = r
+			session.GroupTarget.Set(s, group)
+		},
 	)
-	if existingReason != nil {
-		reasonInput = reasonInput.WithRequired(false).
-			WithValue(existingReason.Message).
-			WithPlaceholder("Enter new reason message, or leave empty to remove")
-	} else {
-		reasonInput = reasonInput.WithRequired(true).
-			WithMinLength(32).
-			WithMaxLength(256).
-			WithPlaceholder("Enter the reason for flagging this group")
-	}
-	modal.AddActionRow(reasonInput)
-
-	// Add confidence input field
-	confidenceInput := discord.NewTextInput(
-		constants.AddReasonConfidenceInputCustomID, discord.TextInputStyleShort, "Confidence",
-	)
-	if existingReason != nil {
-		confidenceInput = confidenceInput.WithRequired(false).
-			WithValue(fmt.Sprintf("%.2f", existingReason.Confidence)).
-			WithPlaceholder("Enter new confidence value (0.01-1.00)")
-	} else {
-		confidenceInput = confidenceInput.WithRequired(true).
-			WithMinLength(1).
-			WithMaxLength(4).
-			WithValue("1.00").
-			WithPlaceholder("Enter confidence value (0.01-1.00)")
-	}
-	modal.AddActionRow(confidenceInput)
-
-	// Add evidence input field
-	evidenceInput := discord.NewTextInput(
-		constants.AddReasonEvidenceInputCustomID, discord.TextInputStyleParagraph, "Evidence",
-	)
-	if existingReason != nil {
-		// Replace newlines within each evidence item before joining
-		escapedEvidence := make([]string, len(existingReason.Evidence))
-		for i, evidence := range existingReason.Evidence {
-			escapedEvidence[i] = strings.ReplaceAll(evidence, "\n", "\\n")
-		}
-
-		evidenceInput = evidenceInput.WithRequired(false).
-			WithValue(strings.Join(escapedEvidence, "\n")).
-			WithPlaceholder("Enter new evidence items, one per line")
-	} else {
-		evidenceInput = evidenceInput.WithRequired(false).
-			WithMaxLength(1000).
-			WithPlaceholder("Enter evidence items, one per line")
-	}
-	modal.AddActionRow(evidenceInput)
-
-	return modal
 }
 
 // fetchNewTarget gets a new group to review based on the current sort order.
