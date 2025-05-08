@@ -114,7 +114,7 @@ func (b *GroupsBuilder) Build() *discord.MessageUpdateBuilder {
 	}
 
 	// Add edit button if reviewer and not in training mode
-	if b.isReviewer && !b.trainingMode {
+	if b.isReviewer && !b.trainingMode && !b.isStreaming {
 		container = container.AddComponents(
 			discord.NewActionRow(
 				discord.NewSecondaryButton("Edit Reason", constants.EditReasonButtonCustomID),
