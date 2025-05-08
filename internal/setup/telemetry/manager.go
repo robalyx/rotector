@@ -7,6 +7,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/getsentry/sentry-go"
 	"github.com/robalyx/rotector/internal/setup/config"
 	"github.com/robalyx/rotector/internal/setup/telemetry/logger"
 	"go.uber.org/zap"
@@ -82,6 +83,16 @@ func (lm *Manager) GetWorkerLogger(name string) *zap.Logger {
 	logger, err := config.Build()
 	if err != nil {
 		return zap.NewNop()
+	}
+
+	// Add Sentry core if Sentry client is initialized
+	if sentry.CurrentHub().Client() != nil {
+		sentryLevel := zap.LevelEnablerFunc(func(lvl zapcore.Level) bool {
+			return lvl >= zapcore.ErrorLevel
+		})
+		logger = logger.WithOptions(zap.WrapCore(func(core zapcore.Core) zapcore.Core {
+			return zapcore.NewTee(core, NewSentryCore(sentryLevel))
+		}))
 	}
 
 	return logger
@@ -194,12 +205,9 @@ func (lm *Manager) initLogger(logPaths []string) (*zap.Logger, error) {
 	}
 
 	// Create custom writer for each output path
-	cores := make([]zapcore.Core, 0, len(logPaths)+1)
+	cores := make([]zapcore.Core, 0, len(logPaths))
 	encoderConfig := zap.NewDevelopmentEncoderConfig()
 	encoderConfig.EncodeCaller = zapcore.ShortCallerEncoder
-
-	// Add telemetry core for error forwarding
-	cores = append(cores, NewCore(zapLevel))
 
 	for _, path := range logPaths {
 		file, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
@@ -217,6 +225,14 @@ func (lm *Manager) initLogger(logPaths []string) (*zap.Logger, error) {
 			zapLevel,
 		)
 		cores = append(cores, core)
+	}
+
+	// Add Sentry core if Sentry client is initialized
+	if sentry.CurrentHub().Client() != nil {
+		sentryLevel := zap.LevelEnablerFunc(func(lvl zapcore.Level) bool {
+			return lvl >= zapcore.ErrorLevel
+		})
+		cores = append(cores, NewSentryCore(sentryLevel))
 	}
 
 	// Create logger with all cores and development options

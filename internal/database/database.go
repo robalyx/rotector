@@ -14,9 +14,7 @@ import (
 	"github.com/uptrace/bun/dialect/pgdialect"
 	"github.com/uptrace/bun/driver/pgdriver"
 	"github.com/uptrace/bun/extra/bunjson"
-	"github.com/uptrace/bun/extra/bunotel"
 	"github.com/uptrace/bun/migrate"
-	"go.opentelemetry.io/otel/attribute"
 	"go.uber.org/zap"
 )
 
@@ -88,17 +86,8 @@ func NewConnection(
 	// Create Bun db instance
 	db := bun.NewDB(sqldb, pgdialect.New())
 
-	// Add OpenTelemetry instrumentation
-	db.AddQueryHook(bunotel.NewQueryHook(
-		bunotel.WithDBName(config.DBName),
-		bunotel.WithAttributes(
-			attribute.String("db.system", "postgresql"),
-			attribute.String("db.user", config.User),
-			attribute.String("net.peer.name", config.Host),
-			attribute.Int("net.peer.port", config.Port),
-		),
-		bunotel.WithFormattedQueries(true),
-	))
+	// Add query hook for monitoring
+	db.AddQueryHook(NewHook(logger))
 
 	// Run migrations if requested
 	if autoMigrate {

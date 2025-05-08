@@ -45,7 +45,7 @@ type CommonConfig struct {
 	OpenAI         OpenAI         `koanf:"openai"`
 	Proxy          Proxy          `koanf:"proxy"`
 	Roverse        Roverse        `koanf:"roverse"`
-	Uptrace        Uptrace        `koanf:"uptrace"`
+	Sentry         Sentry         `koanf:"sentry"`
 	Discord        DiscordConfig  `koanf:"discord"`
 }
 
@@ -293,16 +293,10 @@ type Roverse struct {
 	MaxConcurrent int64 `koanf:"max_concurrent"`
 }
 
-// Uptrace contains Uptrace telemetry configuration.
-type Uptrace struct {
-	// Uptrace DSN for telemetry.
+// Sentry contains Sentry error tracking configuration.
+type Sentry struct {
+	// Sentry DSN for error reporting (leave empty to disable)
 	DSN string `koanf:"dsn"`
-	// Service name for telemetry.
-	ServiceName string `koanf:"service_name"`
-	// Service version for telemetry.
-	ServiceVersion string `koanf:"service_version"`
-	// Deployment environment.
-	DeployEnvironment string `koanf:"deploy_environment"`
 }
 
 // LoadConfig loads the configuration from the specified file.
