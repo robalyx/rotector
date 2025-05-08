@@ -1,6 +1,8 @@
 <h1 align="center">
   <picture>
-    <img width="800" alt="Rotector" src="./assets/gif/banner.gif">
+    <source media="(prefers-color-scheme: dark)" srcset="./assets/png/banner-dark.png">
+    <source media="(prefers-color-scheme: light)" srcset="./assets/png/banner-light.png">
+    <img width="500" alt="Rotector" src="./assets/png/banner-light.png">
   </picture>
   <br>
   <a href="https://github.com/robalyx/rotector/blob/main/LICENSE">
@@ -33,18 +35,6 @@
 > This project is currently in an **ALPHA** state with frequent breaking changes - **do not use this in production yet**. This is a **community-driven initiative** and is not affiliated with, endorsed by, or sponsored by Roblox Corporation.
 
 ---
-
-## 📚 Table of Contents
-
-- [🛠️ Community Tools](#%EF%B8%8F-community-tools)
-- [❓ FAQ](#-faq)
-- [📄 License](#-license)
-
-## 🛠️ Community Tools
-
-|                                                                                                                                                                                                        [Rotten - Official Export Checker](https://github.com/robalyx/rotten)                                                                                                                                                                                                        |                                                                                                                                                                                                    [Roscoe - Official REST API](https://github.com/robalyx/roscoe)                                                                                                                                                                                                    |
-|:-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------:|:---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------:|
-| <p align="center"><a href="https://github.com/robalyx/rotten"><img src="assets/gif/rotten.gif" height="500"></a></p><p align="center">A simple command-line tool that lets you check Roblox accounts against Rotector exports. Easily verify individual users, groups, or scan entire friend lists for flagged accounts.</p><p align="center">[![GitHub](https://img.shields.io/badge/View_Repository-4a92e1?style=flat-square&logo=github)](https://github.com/robalyx/rotten)</p> | <p align="center"><a href="https://github.com/robalyx/roscoe"><img src="assets/gif/roscoe.gif" height="500"></a></p><p align="center">A globally-distributed REST API powered by Cloudflare Workers and D1. Efficiently stores and serves flagged users from edge locations worldwide for minimal latency.</p><p align="center">[![GitHub](https://img.shields.io/badge/View_Repository-4a92e1?style=flat-square&logo=github)](https://github.com/robalyx/roscoe)</p> |
 
 ## ❓ FAQ
 
@@ -102,6 +92,15 @@ When a data deletion request is received through the appeal system, we carefully
 <summary>What AI models does Rotector use?</summary>
 
 Rotector uses the [official OpenAI library](https://github.com/openai/openai-go) for its AI capabilities, which means it can work with any OpenAI-compatible API service like [OpenRouter](https://openrouter.ai/) or [Requesty](https://www.requesty.ai/). While we use Gemini 2.0 Flash by default due to its excellent price-to-performance ratio, you have the flexibility to use any compatible model available through these services.
+
+</details>
+
+<details>
+<summary>Does Rotector target the furry community?</summary>
+
+No. Unlike some other initiatives that incorrectly associate the entire furry community with inappropriate behavior, Rotector strictly focuses on actual inappropriate content and behavior patterns. This kind of prejudiced targeting not only discriminates against innocent users but also undermines the real purpose of protecting users from real threats.
+
+We believe that blanket targeting of any community is both harmful and ineffective. Our system evaluates specific behaviors and content that violate platform policies, not personal interests or community affiliation. This approach allows us to be more accurate in identifying actual inappropriate accounts while avoiding false positives based on  assumptions.
 
 </details>
 
