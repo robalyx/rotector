@@ -277,7 +277,6 @@ var userFieldToColumns = map[UserField][]string{
 	UserFieldCreatedAt:           {"created_at"},
 	UserFieldStatus:              {"status"},
 	UserFieldThumbnail:           {"thumbnail_url"},
-	UserFieldRelationships:       {"groups", "outfits", "friends", "games", "inventory", "favorites", "badges"},
 	UserFieldConfidence:          {"confidence"},
 	UserFieldLastScanned:         {"last_scanned"},
 	UserFieldLastUpdated:         {"last_updated"},
