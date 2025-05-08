@@ -46,7 +46,7 @@ func (m *Menu) Show(_ *interaction.Context, s *session.Session) {
 	now := time.Now()
 	firstMessageTime := session.UserChatMessageUsageFirstMessageTime.Get(s)
 	if !firstMessageTime.IsZero() && now.Sub(firstMessageTime) > constants.ChatMessageResetLimit {
-		session.UserChatMessageUsageFirstMessageTime.Set(s, time.Time{})
+		session.UserChatMessageUsageFirstMessageTime.Set(s, time.Unix(0, 0))
 		session.UserChatMessageUsageMessageCount.Set(s, 0)
 	}
 }
