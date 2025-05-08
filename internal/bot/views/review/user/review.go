@@ -161,6 +161,8 @@ func (b *ReviewBuilder) Build() *discord.MessageUpdateBuilder {
 func (b *ReviewBuilder) buildStatusDisplay() []discord.ContainerSubComponent {
 	displays := []discord.ContainerSubComponent{
 		discord.NewTextDisplay(b.buildReviewModeText()),
+		discord.NewLargeSeparator(),
+		discord.NewTextDisplay(b.buildStatusText()),
 	}
 
 	var content strings.Builder
@@ -195,6 +197,35 @@ func (b *ReviewBuilder) buildStatusDisplay() []discord.ContainerSubComponent {
 	return displays
 }
 
+// buildStatusText formats the status section with description.
+func (b *ReviewBuilder) buildStatusText() string {
+	var statusIcon string
+	var statusName string
+	var statusDesc string
+
+	switch b.user.Status {
+	case enum.UserTypeConfirmed:
+		statusIcon = "⚠️"
+		statusName = "Confirmed"
+		statusDesc = "This user has been confirmed to have inappropriate content or behavior"
+	case enum.UserTypeFlagged:
+		statusIcon = "⏳"
+		statusName = "Flagged"
+		statusDesc = "This user has been flagged for review but no final decision has been made"
+	case enum.UserTypeCleared:
+		statusIcon = "✅"
+		statusName = "Cleared"
+		statusDesc = "This user has been reviewed and cleared of any violations"
+	}
+
+	if b.user.IsBanned {
+		statusIcon += "🔨"
+		statusDesc += " and is currently banned from Roblox"
+	}
+
+	return fmt.Sprintf("## %s %s\n%s", statusIcon, statusName, statusDesc)
+}
+
 // buildReviewModeText formats the review mode section with description.
 func (b *ReviewBuilder) buildReviewModeText() string {
 	// Format review mode
@@ -222,23 +253,8 @@ func (b *ReviewBuilder) buildReviewModeText() string {
 func (b *ReviewBuilder) buildUserInfoSection() discord.ContainerSubComponent {
 	var content strings.Builder
 
-	// Build status icon
-	var statusIcon string
-	switch b.user.Status {
-	case enum.UserTypeConfirmed:
-		statusIcon = "⚠️"
-	case enum.UserTypeFlagged:
-		statusIcon = "⏳"
-	case enum.UserTypeCleared:
-		statusIcon = "✅"
-	}
-	if b.user.IsBanned {
-		statusIcon += "🔨"
-	}
-
-	// Add name header with status icon
-	content.WriteString(fmt.Sprintf("## %s %s (%s)\n",
-		statusIcon,
+	// Add name header
+	content.WriteString(fmt.Sprintf("## %s (%s)\n",
 		utils.CensorString(b.user.Name, b.PrivacyMode),
 		utils.CensorString(b.user.DisplayName, b.PrivacyMode)))
 

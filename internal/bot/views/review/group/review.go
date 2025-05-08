@@ -155,6 +155,8 @@ func (b *ReviewBuilder) Build() *discord.MessageUpdateBuilder {
 func (b *ReviewBuilder) buildStatusDisplay() []discord.ContainerSubComponent {
 	displays := []discord.ContainerSubComponent{
 		discord.NewTextDisplay(b.buildReviewModeText()),
+		discord.NewLargeSeparator(),
+		discord.NewTextDisplay(b.buildStatusText()),
 	}
 
 	var content strings.Builder
@@ -184,6 +186,35 @@ func (b *ReviewBuilder) buildStatusDisplay() []discord.ContainerSubComponent {
 	return displays
 }
 
+// buildStatusText formats the status section with description.
+func (b *ReviewBuilder) buildStatusText() string {
+	var statusIcon string
+	var statusName string
+	var statusDesc string
+
+	switch b.group.Status {
+	case enum.GroupTypeConfirmed:
+		statusIcon = "⚠️"
+		statusName = "Confirmed"
+		statusDesc = "This group has been confirmed to have inappropriate content or behavior"
+	case enum.GroupTypeFlagged:
+		statusIcon = "⏳"
+		statusName = "Flagged"
+		statusDesc = "This group has been flagged for review but no final decision has been made"
+	case enum.GroupTypeCleared:
+		statusIcon = "✅"
+		statusName = "Cleared"
+		statusDesc = "This group has been reviewed and cleared of any violations"
+	}
+
+	if b.group.IsLocked {
+		statusIcon += "🔒"
+		statusDesc += " and is currently locked from accepting new members"
+	}
+
+	return fmt.Sprintf("## %s %s\n%s", statusIcon, statusName, statusDesc)
+}
+
 // buildReviewModeText formats the review mode section with description.
 func (b *ReviewBuilder) buildReviewModeText() string {
 	// Format review mode
@@ -210,26 +241,11 @@ func (b *ReviewBuilder) buildReviewModeText() string {
 
 // buildGroupInfoSection creates the main group information section with thumbnail.
 func (b *ReviewBuilder) buildGroupInfoSection() discord.ContainerSubComponent {
-	// Build status icon
-	var statusIcon string
-	switch b.group.Status {
-	case enum.GroupTypeConfirmed:
-		statusIcon = "⚠️"
-	case enum.GroupTypeFlagged:
-		statusIcon = "⏳"
-	case enum.GroupTypeCleared:
-		statusIcon = "✅"
-	}
-	if b.group.IsLocked {
-		statusIcon += "🔒"
-	}
-
 	// Add basic info with status
 	var content strings.Builder
 
-	// Add name header with status icon
-	content.WriteString(fmt.Sprintf("## %s %s\n",
-		statusIcon,
+	// Add name header
+	content.WriteString(fmt.Sprintf("## %s\n",
 		utils.CensorString(b.group.Name, b.PrivacyMode)))
 
 	// Add owner info
