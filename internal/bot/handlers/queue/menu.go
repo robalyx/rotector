@@ -213,10 +213,11 @@ func (m *Menu) handleManualReviewModalSubmit(ctx *interaction.Context, s *sessio
 		return
 	}
 
-	// Create new user with empty reasons
+	// Use the fetched user information
+	user = users[0]
 	user.Status = enum.UserTypeFlagged
 	user.UUID = uuid.New()
-	user.Reasons = types.Reasons[enum.UserReasonType]{}
+	user.Reasons = make(types.Reasons[enum.UserReasonType])
 
 	// Store user in session and show review menu
 	session.AddToReviewHistory(s, session.UserReviewHistoryType, user.ID)
