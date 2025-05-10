@@ -21,6 +21,7 @@ type Builder struct {
 	isProcessed     bool
 	isFlagged       bool
 	privacyMode     bool
+	isAdmin         bool
 }
 
 // NewBuilder creates a new queue builder.
@@ -33,6 +34,7 @@ func NewBuilder(s *session.Session) *Builder {
 		isProcessed:     session.QueuedUserProcessed.Get(s),
 		isFlagged:       session.QueuedUserFlagged.Get(s),
 		privacyMode:     session.UserStreamerMode.Get(s),
+		isAdmin:         s.BotSettings().IsAdmin(session.UserID.Get(s)),
 	}
 }
 
@@ -55,7 +57,7 @@ func (b *Builder) Build() *discord.MessageUpdateBuilder {
 		)
 	}
 
-	// Add action sections
+	// Add queue user section
 	mainInfoDisplays = append(mainInfoDisplays,
 		discord.NewLargeSeparator(),
 		discord.NewSection(
@@ -64,11 +66,22 @@ func (b *Builder) Build() *discord.MessageUpdateBuilder {
 			discord.NewPrimaryButton("Queue User", constants.QueueUserButtonCustomID),
 		),
 		discord.NewSection(
-			discord.NewTextDisplay("### 🔍 Direct Review\nImmediately fetch and review a user's profile without queue processing"),
+			discord.NewTextDisplay("### 🔍 Direct User Review\nImmediately fetch and review a user's profile without queue processing"),
 		).WithAccessory(
-			discord.NewPrimaryButton("Review User", constants.ManualReviewButtonCustomID),
+			discord.NewPrimaryButton("Review User", constants.ManualUserReviewButtonCustomID),
 		),
 	)
+
+	// Add group review section only for admins
+	if b.isAdmin {
+		mainInfoDisplays = append(mainInfoDisplays,
+			discord.NewSection(
+				discord.NewTextDisplay("### 🔍 Direct Group Review\nImmediately fetch and review a group's profile"),
+			).WithAccessory(
+				discord.NewPrimaryButton("Review Group", constants.ManualGroupReviewButtonCustomID),
+			),
+		)
+	}
 
 	// Add control buttons
 	buttons := []discord.InteractiveComponent{

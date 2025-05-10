@@ -83,15 +83,29 @@ func (m *Menu) handleQueueUser(ctx *interaction.Context) {
 	ctx.Modal(modal)
 }
 
-// handleManualReview opens a modal for entering a Roblox user ID to manually review.
-func (m *Menu) handleManualReview(ctx *interaction.Context) {
+// handleManualUserReview opens a modal for entering a Roblox user ID to manually review.
+func (m *Menu) handleManualUserReview(ctx *interaction.Context) {
 	modal := discord.NewModalCreateBuilder().
-		SetCustomID(constants.ManualReviewModalCustomID).
+		SetCustomID(constants.ManualUserReviewModalCustomID).
 		SetTitle("Manual User Review").
 		AddActionRow(
-			discord.NewTextInput(constants.ManualReviewInputCustomID, discord.TextInputStyleShort, "User ID").
+			discord.NewTextInput(constants.ManualUserReviewInputCustomID, discord.TextInputStyleShort, "User ID").
 				WithRequired(true).
 				WithPlaceholder("Enter the Roblox user ID to review..."),
+		)
+
+	ctx.Modal(modal)
+}
+
+// handleManualGroupReview opens a modal for entering a Roblox group ID to manually review.
+func (m *Menu) handleManualGroupReview(ctx *interaction.Context) {
+	modal := discord.NewModalCreateBuilder().
+		SetCustomID(constants.ManualGroupReviewModalCustomID).
+		SetTitle("Manual Group Review").
+		AddActionRow(
+			discord.NewTextInput(constants.ManualGroupReviewInputCustomID, discord.TextInputStyleShort, "Group ID").
+				WithRequired(true).
+				WithPlaceholder("Enter the Roblox group ID to review..."),
 		)
 
 	ctx.Modal(modal)
@@ -102,8 +116,10 @@ func (m *Menu) handleModal(ctx *interaction.Context, s *session.Session) {
 	switch ctx.Event().CustomID() {
 	case constants.QueueUserModalCustomID:
 		m.handleQueueUserModalSubmit(ctx, s)
-	case constants.ManualReviewModalCustomID:
-		m.handleManualReviewModalSubmit(ctx, s)
+	case constants.ManualUserReviewModalCustomID:
+		m.handleManualUserReviewModalSubmit(ctx, s)
+	case constants.ManualGroupReviewModalCustomID:
+		m.handleManualGroupReviewModalSubmit(ctx, s)
 	}
 }
 
@@ -175,10 +191,10 @@ func (m *Menu) handleQueueUserModalSubmit(ctx *interaction.Context, s *session.S
 	})
 }
 
-// handleManualReviewModalSubmit processes the user ID input and adds the user to the review system.
-func (m *Menu) handleManualReviewModalSubmit(ctx *interaction.Context, s *session.Session) {
+// handleManualUserReviewModalSubmit processes the user ID input and adds the user to the review system.
+func (m *Menu) handleManualUserReviewModalSubmit(ctx *interaction.Context, s *session.Session) {
 	// Get the user ID input
-	userIDStr := ctx.Event().ModalData().Text(constants.ManualReviewInputCustomID)
+	userIDStr := ctx.Event().ModalData().Text(constants.ManualUserReviewInputCustomID)
 
 	// Parse profile URL if provided
 	parsedURL, err := utils.ExtractUserIDFromURL(userIDStr)
@@ -239,6 +255,94 @@ func (m *Menu) handleManualReviewModalSubmit(ctx *interaction.Context, s *sessio
 	})
 }
 
+// handleManualGroupReviewModalSubmit processes the group ID input and adds the group to the review system.
+func (m *Menu) handleManualGroupReviewModalSubmit(ctx *interaction.Context, s *session.Session) {
+	// Get the group ID input
+	groupIDStr := ctx.Event().ModalData().Text(constants.ManualGroupReviewInputCustomID)
+
+	// Parse profile URL if provided
+	parsedURL, err := utils.ExtractGroupIDFromURL(groupIDStr)
+	if err == nil {
+		groupIDStr = parsedURL
+	}
+
+	// Parse group ID
+	groupID, err := strconv.ParseUint(groupIDStr, 10, 64)
+	if err != nil {
+		ctx.Cancel("Please provide a valid group ID.")
+		return
+	}
+
+	// Check if group exists in database first
+	group, err := m.layout.db.Service().Group().GetGroupByID(ctx.Context(), groupIDStr, types.GroupFieldAll)
+	if err == nil {
+		// Store group in session and show review menu
+		session.AddToReviewHistory(s, session.GroupReviewHistoryType, group.ID)
+
+		session.GroupTarget.Set(s, group)
+		session.OriginalGroupReasons.Set(s, group.Reasons)
+		session.ReasonsChanged.Set(s, false)
+		ctx.Show(constants.GroupReviewPageName, "")
+		return
+	}
+
+	// Fetch group info from Roblox API
+	groups := m.layout.groupFetcher.FetchGroupInfos(ctx.Context(), []uint64{groupID})
+	if len(groups) == 0 {
+		ctx.Cancel("Failed to fetch group information. The group may be locked or not exist.")
+		return
+	}
+
+	// Use the fetched group information
+	now := time.Now()
+	groupInfo := groups[0]
+
+	group = &types.ReviewGroup{
+		Group: &types.Group{
+			ID:          groupID,
+			UUID:        uuid.New(),
+			Name:        groupInfo.Name,
+			Description: groupInfo.Description,
+			Owner:       groupInfo.Owner,
+			Shout:       groupInfo.Shout,
+			Status:      enum.GroupTypeFlagged,
+			LastScanned: now,
+			LastUpdated: now,
+			LastViewed:  now,
+		},
+		Reasons: make(types.Reasons[enum.GroupReasonType]),
+	}
+
+	// Get flagged users count from tracking
+	flaggedCount, err := m.layout.db.Model().Tracking().GetFlaggedUsersCount(ctx.Context(), groupID)
+	if err != nil {
+		m.layout.logger.Error("Failed to fetch flagged users count", zap.Error(err))
+		ctx.Error("Failed to load flagged users count. Please try again.")
+		return
+	}
+
+	// Store group and related info in session
+	session.AddToReviewHistory(s, session.GroupReviewHistoryType, group.ID)
+
+	session.GroupTarget.Set(s, group)
+	session.GroupFlaggedMembersCount.Set(s, flaggedCount)
+	session.OriginalGroupReasons.Set(s, group.Reasons)
+	session.ReasonsChanged.Set(s, false)
+
+	ctx.Show(constants.GroupReviewPageName, "")
+
+	// Log the manual review action
+	m.layout.db.Model().Activity().Log(ctx.Context(), &types.ActivityLog{
+		ActivityTarget: types.ActivityTarget{
+			GroupID: groupID,
+		},
+		ReviewerID:        uint64(ctx.Event().User().ID),
+		ActivityType:      enum.ActivityTypeGroupQueued,
+		ActivityTimestamp: time.Now(),
+		Details:           map[string]any{},
+	})
+}
+
 // handleButton processes button interactions.
 func (m *Menu) handleButton(ctx *interaction.Context, s *session.Session, customID string) {
 	switch customID {
@@ -248,8 +352,17 @@ func (m *Menu) handleButton(ctx *interaction.Context, s *session.Session, custom
 		m.handleAbort(ctx, s)
 	case constants.QueueUserButtonCustomID:
 		m.handleQueueUser(ctx)
-	case constants.ManualReviewButtonCustomID:
-		m.handleManualReview(ctx)
+	case constants.ManualUserReviewButtonCustomID:
+		m.handleManualUserReview(ctx)
+	case constants.ManualGroupReviewButtonCustomID:
+		if !s.BotSettings().IsAdmin(uint64(ctx.Event().User().ID)) {
+			m.layout.logger.Error("Non-admin attempted restricted action",
+				zap.Uint64("user_id", uint64(ctx.Event().User().ID)),
+				zap.String("action", customID))
+			ctx.Error("You do not have permission to perform this action.")
+			return
+		}
+		m.handleManualGroupReview(ctx)
 	case constants.ReviewQueuedUserButtonCustomID:
 		m.handleReviewQueuedUser(ctx, s)
 	case constants.BackButtonCustomID:

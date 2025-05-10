@@ -263,9 +263,13 @@ const (
 	QueueUserModalCustomID  = "queue_user_modal"
 	QueueUserInputCustomID  = "queue_user_input"
 
-	ManualReviewButtonCustomID = "manual_review" + ModalOpenSuffix
-	ManualReviewModalCustomID  = "manual_review_modal"
-	ManualReviewInputCustomID  = "manual_review_input"
+	ManualUserReviewButtonCustomID = "manual_user_review" + ModalOpenSuffix
+	ManualUserReviewModalCustomID  = "manual_user_review_modal"
+	ManualUserReviewInputCustomID  = "manual_user_review_input"
+
+	ManualGroupReviewButtonCustomID = "manual_group_review" + ModalOpenSuffix
+	ManualGroupReviewModalCustomID  = "manual_group_review_modal"
+	ManualGroupReviewInputCustomID  = "manual_group_review_input"
 
 	ReviewQueuedUserButtonCustomID = "review_queued_user"
 )
