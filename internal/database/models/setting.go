@@ -154,7 +154,6 @@ func (r *SettingModel) SaveBotSettings(ctx context.Context, settings *types.BotS
 		Set("welcome_message = EXCLUDED.welcome_message").
 		Set("announcement_type = EXCLUDED.announcement_type").
 		Set("announcement_message = EXCLUDED.announcement_message").
-		Set("api_keys = EXCLUDED.api_keys").
 		Exec(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to save bot settings: %w", err)
