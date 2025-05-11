@@ -60,10 +60,19 @@ deps:
 generate:
     go generate ./...
 
-# Build container image using Dagger
+# Build container image
 build-container *args:
     dagger call build {{args}}
 
-# Publish container image using Dagger
-publish-container name platform="linux/amd64":
-    dagger call publish --src . --image-name {{name}} --platforms {{platform}}
+# Publish container image
+# Usage: just publish-container [image-name] [platform] [upx]
+publish-container image-name platform="linux/amd64" upx="true":
+    dagger call publish \
+        --src . \
+        --image-name "{{image-name}}" \
+        --platforms "{{platform}}" \
+        --enable-upx "{{upx}}"
+
+# Build container image without UPX compression
+build-container-no-upx *args:
+    dagger call build --enable-upx "false" {{args}}

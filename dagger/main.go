@@ -23,12 +23,19 @@ func (m *Rotector) BuildContainer(
 	// +optional
 	// +default="linux/amd64"
 	platform *dagger.Platform,
+	// Enable UPX compression
+	// +optional
+	// +default="true"
+	enableUpx string,
 ) (*dagger.Container, error) {
 	// Use default platform if none specified
 	buildPlatform := dagger.Platform("linux/amd64")
 	if platform != nil {
 		buildPlatform = *platform
 	}
+
+	// Set default UPX value if not specified
+	useUpx := enableUpx == "" || enableUpx == "true"
 
 	// Get architecture using containerd utility
 	platformArch, err := dag.Containerd().ArchitectureOf(ctx, buildPlatform)
@@ -45,12 +52,14 @@ func (m *Rotector) BuildContainer(
 		WithWorkdir("/src").
 		WithEnvVariable("CGO_ENABLED", "0").
 		WithEnvVariable("GOOS", "linux").
-		WithEnvVariable("GOARCH", platformArch)
+		WithEnvVariable("GOARCH", platformArch).
+		WithExec([]string{"apk", "add", "--no-cache", "ca-certificates"})
 
-	// Install build dependencies
-	buildCtr = buildCtr.WithExec([]string{"apk", "add", "--no-cache", "upx", "ca-certificates"})
+	// Add UPX only if enabled
+	if useUpx {
+		buildCtr = buildCtr.WithExec([]string{"apk", "add", "--no-cache", "upx"})
+	}
 
-	// Create necessary directories
 	buildCtr = buildCtr.
 		WithExec([]string{"mkdir", "-p", "/src/bin"}).
 		WithExec([]string{"mkdir", "-p", "/src/logs"})
@@ -66,9 +75,11 @@ func (m *Rotector) BuildContainer(
 		})
 	}
 
-	// Compress binaries
-	for _, binary := range binaries {
-		buildCtr = buildCtr.WithExec([]string{"upx", "--best", "--lzma", "/src/bin/" + binary})
+	// Compress binaries if UPX is enabled
+	if useUpx {
+		for _, binary := range binaries {
+			buildCtr = buildCtr.WithExec([]string{"upx", "--best", "--lzma", "/src/bin/" + binary})
+		}
 	}
 
 	// Create final container
@@ -97,6 +108,10 @@ func (m *Rotector) Publish(
 	// +optional
 	// +default="linux/amd64"
 	platforms string,
+	// Enable UPX compression
+	// +optional
+	// +default="true"
+	enableUpx string,
 ) (string, error) {
 	// Parse platforms string
 	var platformList []dagger.Platform
@@ -111,7 +126,7 @@ func (m *Rotector) Publish(
 	// Build containers for each platform
 	platformVariants := make([]*dagger.Container, 0, len(platformList))
 	for _, platform := range platformList {
-		container, err := m.BuildContainer(ctx, src, &platform)
+		container, err := m.BuildContainer(ctx, src, &platform, enableUpx)
 		if err != nil {
 			return "", fmt.Errorf("failed to build container for %s: %w", platform, err)
 		}
