@@ -52,34 +52,32 @@ func (b *BaseReviewBuilder) BuildReviewerCommentsText() string {
 	}
 
 	var content strings.Builder
-	content.WriteString("## 📝 Recent Community Notes\n\n")
+	content.WriteString("## 📝 Recent Community Note\n\n")
 
-	// Take up to 3 most recent comments
-	numComments := min(3, len(b.Comments))
-	for i := range numComments {
-		comment := b.Comments[i]
-		timestamp := fmt.Sprintf("<t:%d:R>", comment.CreatedAt.Unix())
+	// Take the most recent comment
+	comment := b.Comments[0]
+	timestamp := fmt.Sprintf("<t:%d:R>", comment.CreatedAt.Unix())
 
-		// Determine user role
-		var roleTitle string
-		switch {
-		case b.BotSettings.IsAdmin(comment.CommenterID):
-			roleTitle = "Administrator Note"
-		case b.BotSettings.IsReviewer(comment.CommenterID):
-			roleTitle = "Reviewer Note"
-		default:
-			roleTitle = "Community Note"
-		}
-
-		content.WriteString(fmt.Sprintf("**%s**\nFrom <@%d> - %s\n%s\n",
-			roleTitle,
-			comment.CommenterID,
-			timestamp,
-			utils.FormatString(utils.TruncateString(comment.Message, 52))))
+	// Determine user role
+	var roleTitle string
+	switch {
+	case b.BotSettings.IsAdmin(comment.CommenterID):
+		roleTitle = "Administrator Note"
+	case b.BotSettings.IsReviewer(comment.CommenterID):
+		roleTitle = "Reviewer Note"
+	default:
+		roleTitle = "Community Note"
 	}
 
-	if len(b.Comments) > 3 {
-		content.WriteString(fmt.Sprintf("*... and %d more notes*", len(b.Comments)-3))
+	content.WriteString(fmt.Sprintf("**%s**\nFrom <@%d> - %s\n%s",
+		roleTitle,
+		comment.CommenterID,
+		timestamp,
+		utils.FormatString(utils.TruncateString(comment.Message, 256))))
+
+	// Add remaining notes count if there are more
+	if len(b.Comments) > 1 {
+		content.WriteString(fmt.Sprintf("\n-# and %d more community notes", len(b.Comments)-1))
 	}
 
 	return content.String()

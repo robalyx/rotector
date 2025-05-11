@@ -1,11 +1,8 @@
 package types
 
 import (
-	"errors"
 	"time"
 )
-
-var ErrCommentExists = errors.New("user already has a comment for this target")
 
 // UserComment represents a community note/comment on a user.
 type UserComment struct {
