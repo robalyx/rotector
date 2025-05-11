@@ -107,8 +107,17 @@ func (r *UserModel) SaveUsers(ctx context.Context, tx bun.Tx, users []*types.Rev
 // Deprecated: Use Service().User().ConfirmUser() instead.
 func (r *UserModel) ConfirmUser(ctx context.Context, user *types.ReviewUser) error {
 	return r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+		// Delete any existing clearance record
+		_, err := tx.NewDelete().
+			Model((*types.UserClearance)(nil)).
+			Where("user_id = ?", user.ID).
+			Exec(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to delete existing clearance record: %w", err)
+		}
+
 		// Update user status
-		_, err := tx.NewUpdate().
+		_, err = tx.NewUpdate().
 			Model(user.User).
 			Set("status = ?", enum.UserTypeConfirmed).
 			Where("id = ?", user.ID).
@@ -125,6 +134,9 @@ func (r *UserModel) ConfirmUser(ctx context.Context, user *types.ReviewUser) err
 		}
 		_, err = tx.NewInsert().
 			Model(verification).
+			On("CONFLICT (user_id) DO UPDATE").
+			Set("reviewer_id = EXCLUDED.reviewer_id").
+			Set("verified_at = EXCLUDED.verified_at").
 			Exec(ctx)
 		if err != nil {
 			return fmt.Errorf("failed to create verification record: %w", err)
@@ -167,8 +179,17 @@ func (r *UserModel) ConfirmUser(ctx context.Context, user *types.ReviewUser) err
 // Deprecated: Use Service().User().ClearUser() instead.
 func (r *UserModel) ClearUser(ctx context.Context, user *types.ReviewUser) error {
 	return r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+		// Delete any existing verification record
+		_, err := tx.NewDelete().
+			Model((*types.UserVerification)(nil)).
+			Where("user_id = ?", user.ID).
+			Exec(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to delete existing verification record: %w", err)
+		}
+
 		// Update user status
-		_, err := tx.NewUpdate().
+		_, err = tx.NewUpdate().
 			Model(user.User).
 			Set("status = ?", enum.UserTypeCleared).
 			Where("id = ?", user.ID).
@@ -185,6 +206,9 @@ func (r *UserModel) ClearUser(ctx context.Context, user *types.ReviewUser) error
 		}
 		_, err = tx.NewInsert().
 			Model(clearance).
+			On("CONFLICT (user_id) DO UPDATE").
+			Set("reviewer_id = EXCLUDED.reviewer_id").
+			Set("cleared_at = EXCLUDED.cleared_at").
 			Exec(ctx)
 		if err != nil {
 			return fmt.Errorf("failed to create clearance record: %w", err)

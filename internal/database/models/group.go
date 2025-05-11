@@ -105,8 +105,17 @@ func (r *GroupModel) SaveGroups(ctx context.Context, tx bun.Tx, groups []*types.
 // Deprecated: Use Service().Group().ConfirmGroup() instead.
 func (r *GroupModel) ConfirmGroup(ctx context.Context, group *types.ReviewGroup) error {
 	return r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+		// Delete any existing clearance record
+		_, err := tx.NewDelete().
+			Model((*types.GroupClearance)(nil)).
+			Where("group_id = ?", group.ID).
+			Exec(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to delete existing clearance record: %w", err)
+		}
+
 		// Update group status
-		_, err := tx.NewUpdate().
+		_, err = tx.NewUpdate().
 			Model(group.Group).
 			Set("status = ?", enum.GroupTypeConfirmed).
 			Where("id = ?", group.ID).
@@ -168,8 +177,17 @@ func (r *GroupModel) ConfirmGroup(ctx context.Context, group *types.ReviewGroup)
 // Deprecated: Use Service().Group().ClearGroup() instead.
 func (r *GroupModel) ClearGroup(ctx context.Context, group *types.ReviewGroup) error {
 	return r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+		// Delete any existing verification record
+		_, err := tx.NewDelete().
+			Model((*types.GroupVerification)(nil)).
+			Where("group_id = ?", group.ID).
+			Exec(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to delete existing verification record: %w", err)
+		}
+
 		// Update group status
-		_, err := tx.NewUpdate().
+		_, err = tx.NewUpdate().
 			Model(group.Group).
 			Set("status = ?", enum.GroupTypeCleared).
 			Where("id = ?", group.ID).
@@ -320,7 +338,7 @@ func (r *GroupModel) GetGroupByID(
 
 		// Update last_viewed
 		_, err = tx.NewUpdate().
-			Model(group).
+			Model(&group).
 			Set("last_viewed = ?", time.Now()).
 			Where("id = ?", group.ID).
 			Exec(ctx)
