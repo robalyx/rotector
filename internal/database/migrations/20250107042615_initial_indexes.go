@@ -289,6 +289,9 @@ func init() { //nolint:funlen
 			CREATE INDEX IF NOT EXISTS idx_user_reasons_user_id
 			ON user_reasons (user_id);
 
+			CREATE INDEX IF NOT EXISTS idx_user_reasons_type_user
+			ON user_reasons (reason_type, user_id);
+
 			-- Group reasons indexes
 			CREATE INDEX IF NOT EXISTS idx_group_reasons_group_id
 			ON group_reasons (group_id);
@@ -530,6 +533,7 @@ func init() { //nolint:funlen
 
 			-- User reasons indexes
 			DROP INDEX IF EXISTS idx_user_reasons_user_id;
+			DROP INDEX IF EXISTS idx_user_reasons_type_user;
 
 			-- Group reasons indexes
 			DROP INDEX IF EXISTS idx_group_reasons_group_id;

@@ -964,6 +964,9 @@ func (r *UserModel) GetUserToScan(ctx context.Context) (*types.User, error) {
 		err := tx.NewSelect().Model(&user).
 			Where("status = ?", enum.UserTypeConfirmed).
 			Where("last_scanned < NOW() - INTERVAL '1 day'").
+			Where("NOT EXISTS (SELECT 1 FROM user_reasons ur WHERE ur.user_id = \"user\".id AND reason_type = ?) OR "+
+				"EXISTS (SELECT 1 FROM user_reasons ur2 WHERE ur2.user_id = \"user\".id AND reason_type != ?)",
+				enum.UserReasonTypeOutfit, enum.UserReasonTypeOutfit).
 			OrderExpr("last_scanned ASC, confidence DESC").
 			Limit(1).
 			For("UPDATE SKIP LOCKED").
@@ -992,7 +995,10 @@ func (r *UserModel) GetUserToScan(ctx context.Context) (*types.User, error) {
 		err = tx.NewSelect().Model(&user).
 			Where("status = ?", enum.UserTypeFlagged).
 			Where("last_scanned < NOW() - INTERVAL '1 day'").
-			Where("confidence >= 0.8").
+			Where("confidence >= 0.9").
+			Where("NOT EXISTS (SELECT 1 FROM user_reasons ur WHERE ur.user_id = \"user\".id AND reason_type = ?) OR "+
+				"EXISTS (SELECT 1 FROM user_reasons ur2 WHERE ur2.user_id = \"user\".id AND reason_type != ?)",
+				enum.UserReasonTypeOutfit, enum.UserReasonTypeOutfit).
 			OrderExpr("last_scanned ASC, confidence DESC").
 			Limit(1).
 			For("UPDATE SKIP LOCKED").
