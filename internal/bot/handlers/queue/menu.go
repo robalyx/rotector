@@ -235,6 +235,15 @@ func (m *Menu) handleManualUserReviewModalSubmit(ctx *interaction.Context, s *se
 	user.UUID = uuid.New()
 	user.Reasons = make(types.Reasons[enum.UserReasonType])
 
+	// Save the new user to the database
+	if err := m.layout.db.Service().User().SaveUsers(ctx.Context(), map[uint64]*types.ReviewUser{
+		user.ID: user,
+	}); err != nil {
+		m.layout.logger.Error("Failed to save new user", zap.Error(err))
+		ctx.Error("Failed to save user information. Please try again.")
+		return
+	}
+
 	// Store user in session and show review menu
 	session.AddToReviewHistory(s, session.UserReviewHistoryType, user.ID)
 
@@ -311,6 +320,15 @@ func (m *Menu) handleManualGroupReviewModalSubmit(ctx *interaction.Context, s *s
 			LastViewed:  now,
 		},
 		Reasons: make(types.Reasons[enum.GroupReasonType]),
+	}
+
+	// Save the new group to the database
+	if err := m.layout.db.Service().Group().SaveGroups(ctx.Context(), map[uint64]*types.ReviewGroup{
+		group.ID: group,
+	}); err != nil {
+		m.layout.logger.Error("Failed to save new group", zap.Error(err))
+		ctx.Error("Failed to save group information. Please try again.")
+		return
 	}
 
 	// Get flagged users count from tracking
