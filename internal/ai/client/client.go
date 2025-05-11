@@ -17,6 +17,9 @@ import (
 	"golang.org/x/sync/semaphore"
 )
 
+// ErrCircuitBreakerTimeout indicates the circuit breaker did not close within the timeout.
+var ErrCircuitBreakerTimeout = errors.New("circuit breaker timeout")
+
 // defaultSafetySettings defines the default safety thresholds for content filtering.
 var defaultSafetySettings = map[string]any{
 	"safety_settings": []map[string]any{
@@ -96,6 +99,29 @@ type chatCompletions struct {
 	client *AIClient
 }
 
+// waitForCircuitClosed waits for the circuit breaker to transition from Open state.
+// It returns an error if the context is cancelled or if maxWait is exceeded.
+func (c *AIClient) waitForCircuitClosed(ctx context.Context, maxWait time.Duration) error {
+	ticker := time.NewTicker(500 * time.Millisecond)
+	defer ticker.Stop()
+
+	deadline := time.Now().Add(maxWait)
+
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-ticker.C:
+			if c.breaker.State() != gobreaker.StateOpen {
+				return nil
+			}
+			if time.Now().After(deadline) {
+				return fmt.Errorf("%w after %v", ErrCircuitBreakerTimeout, maxWait)
+			}
+		}
+	}
+}
+
 // New makes a chat completion request.
 func (c *chatCompletions) New(ctx context.Context, params openai.ChatCompletionNewParams) (*openai.ChatCompletion, error) {
 	// Map model name
@@ -126,13 +152,30 @@ func (c *chatCompletions) New(ctx context.Context, params openai.ChatCompletionN
 	if err != nil {
 		switch {
 		case errors.Is(err, gobreaker.ErrOpenState):
-			c.client.logger.Warn("Circuit breaker is open")
+			c.client.logger.Warn("Circuit breaker is open, waiting for it to close...")
+			if waitErr := c.client.waitForCircuitClosed(ctx, 90*time.Second); waitErr != nil {
+				c.client.logger.Warn("Failed to wait for circuit breaker to close", zap.Error(waitErr))
+				return nil, waitErr
+			}
+			// Retry the request once the circuit is closed
+			retryResult, retryErr := c.client.breaker.Execute(func() (any, error) {
+				resp, err := c.client.client.Chat.Completions.New(ctx, params)
+				if bl := c.checkBlockReasons(resp, params.Model); bl != nil {
+					return resp, bl
+				}
+				return resp, err
+			})
+			if retryErr != nil {
+				c.client.logger.Warn("Failed to make request after circuit breaker closed", zap.Error(retryErr))
+				return nil, retryErr
+			}
+			result = retryResult
 		case errors.Is(err, utils.ErrContentBlocked):
 			return nil, err
 		default:
 			c.client.logger.Warn("Failed to make request", zap.Error(err))
+			return nil, err
 		}
-		return nil, err
 	}
 
 	return result.(*openai.ChatCompletion), nil
@@ -289,11 +332,28 @@ func (c *chatCompletions) NewStreaming(
 	if err != nil {
 		c.client.semaphore.Release(1)
 		if errors.Is(err, gobreaker.ErrOpenState) {
-			c.client.logger.Warn("Circuit breaker is open for streaming")
+			c.client.logger.Warn("Circuit breaker is open for streaming, waiting for it to close...")
+			if waitErr := c.client.waitForCircuitClosed(ctx, 90*time.Second); waitErr != nil {
+				c.client.logger.Warn("Failed to wait for circuit breaker to close", zap.Error(waitErr))
+				return ssestream.NewStream[openai.ChatCompletionChunk](nil, waitErr)
+			}
+			// Retry the stream creation once the circuit is closed
+			retryResult, retryErr := c.client.breaker.Execute(func() (any, error) {
+				stream := c.client.client.Chat.Completions.NewStreaming(ctx, params)
+				if stream.Err() != nil {
+					return nil, stream.Err()
+				}
+				return stream, nil
+			})
+			if retryErr != nil {
+				c.client.logger.Warn("Failed to create stream after circuit breaker closed", zap.Error(retryErr))
+				return ssestream.NewStream[openai.ChatCompletionChunk](nil, retryErr)
+			}
+			result = retryResult
 		} else {
 			c.client.logger.Warn("Failed to create stream", zap.Error(err))
+			return ssestream.NewStream[openai.ChatCompletionChunk](nil, err)
 		}
-		return ssestream.NewStream[openai.ChatCompletionChunk](nil, err)
 	}
 
 	stream := result.(*ssestream.Stream[openai.ChatCompletionChunk])
@@ -309,21 +369,23 @@ func (c *chatCompletions) NewStreaming(
 
 // checkBlockReasons checks if the response was blocked by content filtering.
 func (c *chatCompletions) checkBlockReasons(resp *openai.ChatCompletion, model string) error {
+	// Check if response is provided
 	if resp == nil {
 		c.client.logger.Warn("Received nil response", zap.String("model", model))
-		return nil
+		return fmt.Errorf("%w: received nil response", utils.ErrModelResponse)
 	}
 
+	// Check if choices are provided
 	if len(resp.Choices) == 0 {
 		c.client.logger.Warn("Received empty choices", zap.String("model", model))
-		return nil
+		return fmt.Errorf("%w: received empty choices", utils.ErrModelResponse)
 	}
 
 	// Check if finish reason is provided
 	finishReason := resp.Choices[0].FinishReason
 	if finishReason == "" {
 		c.client.logger.Warn("No finish reason provided", zap.String("model", model))
-		return nil
+		return fmt.Errorf("%w: no finish reason provided", utils.ErrModelResponse)
 	}
 
 	// Map of finish reasons to their error handling
