@@ -34,7 +34,7 @@ user_info = { pattern = "users.roblox.com/v1/users/{id}", cooldown = 5000 }
 user_info_batch = { pattern = "users.roblox.com/v1/users", cooldown = 5000 }
 user_games = { pattern = "games.roblox.com/v2/users/{id}/games", cooldown = 5000 }
 user_outfits = { pattern = "avatar.roblox.com/v2/avatar/users/{id}/outfits", cooldown = 6000 }
-user_outfits_details = { pattern = "avatar.roblox.com/v3/outfits/{id}/details", cooldown = 6000 }
+user_outfits_details = { pattern = "avatar.roblox.com/v3/outfits/{id}/details", cooldown = 8000 }
 user_groups = { pattern = "groups.roblox.com/v1/users/{id}/groups/roles", cooldown = 5000 }
 user_inventory = { pattern = "inventory.roblox.com/v2/users/{id}/inventory", cooldown = 5000 }
 thumbnail_batch = { pattern = "thumbnails.roblox.com/v1/batch", cooldown = 1000 }
@@ -120,12 +120,11 @@ chat_model = "gemini-2.5-flash"
 [common.openai.model_mappings]
 "gemini-2.5-flash" = "google/gemini-2.5-flash-preview"
 "gemini-2.5-flash-thinking" = "google/gemini-2.5-flash-preview:thinking"
-"gemini-2.5-pro" = "google/gemini-2.5-pro-preview-03-25"
-"gemini-2.0-flash" = "google/gemini-2.0-flash-001"
-"qwq-32B" = "qwen/qwq-32b:nitro"
+"qwen-3-235b-a22b" = "qwen/qwen3-235b-a22b"
 "deepseek-v3-0324" = "deepseek/deepseek-chat-v3-0324"
-"gpt-4o-mini" = "openai/gpt-4o-mini"
+"gpt-4.1-mini" = "openai/gpt-4.1-mini"
 "o4-mini" = "openai/o4-mini"
+"o4-mini-high" = "openai/o4-mini-high"
 
 # Fallback model mappings for when primary models fail
 [common.openai.fallback_mappings]

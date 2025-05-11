@@ -254,24 +254,24 @@ func (b *Builder) buildMessagePair(chatMessages []ai.Context, i int) string {
 // buildModelOptions creates the model selection options.
 func (b *Builder) buildModelOptions() []discord.StringSelectMenuOption {
 	return []discord.StringSelectMenuOption{
-		discord.NewStringSelectMenuOption("Gemini 2.5 Pro", enum.ChatModelGemini2_5Pro.String()).
-			WithDescription("Most capable model - Best overall performance").
-			WithDefault(b.model == enum.ChatModelGemini2_5Pro),
+		discord.NewStringSelectMenuOption("o4 Mini High", enum.ChatModelo4MiniHigh.String()).
+			WithDescription("Most capable model - Best overall performance with more thinking tokens").
+			WithDefault(b.model == enum.ChatModelo4MiniHigh),
 		discord.NewStringSelectMenuOption("o4 Mini", enum.ChatModelo4Mini.String()).
 			WithDescription("Most capable model - Best overall performance").
 			WithDefault(b.model == enum.ChatModelo4Mini),
+		discord.NewStringSelectMenuOption("Qwen 3 235B A22B", enum.ChatModelQwen3_235bA22b.String()).
+			WithDescription("High performance model - Excellent reasoning and language abilities").
+			WithDefault(b.model == enum.ChatModelQwen3_235bA22b),
 		discord.NewStringSelectMenuOption("Gemini 2.5 Flash", enum.ChatModelGemini2_5Flash.String()).
 			WithDescription("High performance model - Good balance of speed and capabilities").
 			WithDefault(b.model == enum.ChatModelGemini2_5Flash),
-		discord.NewStringSelectMenuOption("QwQ 32B", enum.ChatModelQwQ32B.String()).
-			WithDescription("High performance model - Excellent reasoning and language abilities").
-			WithDefault(b.model == enum.ChatModelQwQ32B),
 		discord.NewStringSelectMenuOption("DeepSeek V3", enum.ChatModelDeepseekV3_0324.String()).
 			WithDescription("Mid-tier model - Good language understanding").
 			WithDefault(b.model == enum.ChatModelDeepseekV3_0324),
-		discord.NewStringSelectMenuOption("GPT-4o Mini", enum.ChatModelGPT4oMini.String()).
+		discord.NewStringSelectMenuOption("GPT-4.1 Mini", enum.ChatModelGPT4_1Mini.String()).
 			WithDescription("Mid-tier model - Basic capabilities").
-			WithDefault(b.model == enum.ChatModelGPT4oMini),
+			WithDefault(b.model == enum.ChatModelGPT4_1Mini),
 	}
 }
 
