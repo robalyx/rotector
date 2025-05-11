@@ -61,9 +61,9 @@ func (b *Builder) Build() *discord.MessageUpdateBuilder {
 	mainInfoDisplays = append(mainInfoDisplays,
 		discord.NewLargeSeparator(),
 		discord.NewSection(
-			discord.NewTextDisplay("### 📥 Queue User\nAdd a user to the processing queue for automated scanning and review"),
+			discord.NewTextDisplay("### 📥 Queue Users\nAdd users to the processing queue for automated scanning and review"),
 		).WithAccessory(
-			discord.NewPrimaryButton("Queue User", constants.QueueUserButtonCustomID),
+			discord.NewPrimaryButton("Queue Users", constants.QueueUserButtonCustomID),
 		),
 		discord.NewSection(
 			discord.NewTextDisplay("### 🔍 Direct User Review\nImmediately fetch and review a user's profile without queue processing"),

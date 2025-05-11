@@ -25,7 +25,7 @@ const (
 
 	// ScanBatchSize controls how many Redis keys are retrieved in each SCAN operation
 	// when listing active sessions. This helps balance memory usage and performance.
-	ScanBatchSize = 1000
+	ScanBatchSize = 100
 
 	// MaxSessionsPerUser is the maximum number of sessions allowed per user.
 	MaxSessionsPerUser = 3

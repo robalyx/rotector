@@ -9,4 +9,8 @@ var (
 	ErrUserRecentlyQueued = errors.New("user was recently queued")
 	// ErrUserProcessing indicates the user is currently being processed.
 	ErrUserProcessing = errors.New("cannot remove user that is already processed or being processed")
+	// ErrBatchSizeExceeded indicates the batch size exceeds the maximum allowed.
+	ErrBatchSizeExceeded = errors.New("batch size exceeds maximum capacity")
+	// ErrEmptyBatch indicates an empty batch was provided.
+	ErrEmptyBatch = errors.New("empty batch provided")
 )

@@ -9,6 +9,11 @@ import (
 	"go.uber.org/zap"
 )
 
+const (
+	// MaxQueueBatchSize is the maximum number of users that can be queued in a single batch.
+	MaxQueueBatchSize = 100
+)
+
 // Stats represents queue statistics.
 type Stats struct {
 	TotalItems  int
@@ -199,52 +204,105 @@ func (c *D1Client) GetQueueStats(ctx context.Context) (*Stats, error) {
 	return stats, nil
 }
 
-// QueueUser adds a user to the processing queue.
-func (c *D1Client) QueueUser(ctx context.Context, userID uint64) error {
-	// Check if user exists and is not processed
-	query := `
-		SELECT queued_at, processed 
-		FROM queued_users 
-		WHERE user_id = ?
-	`
-
-	result, err := c.api.ExecuteSQL(ctx, query, []any{userID})
-	if err != nil {
-		return fmt.Errorf("failed to check queue status: %w", err)
+// QueueUsers adds multiple users to the processing queue.
+func (c *D1Client) QueueUsers(ctx context.Context, userIDs []uint64) (map[uint64]error, error) {
+	if len(userIDs) == 0 {
+		return nil, ErrEmptyBatch
 	}
 
-	// If user exists in queue
-	if len(result) > 0 {
-		// Check if user was queued in the past 7 days
-		if queuedAt, ok := result[0]["queued_at"].(float64); ok {
-			cutoffTime := time.Now().AddDate(0, 0, -7).Unix()
-			if int64(queuedAt) > cutoffTime {
-				return ErrUserRecentlyQueued
+	if len(userIDs) > MaxQueueBatchSize {
+		return nil, ErrBatchSizeExceeded
+	}
+
+	// Check existing users and their queue status
+	checkQuery := `
+		SELECT user_id, queued_at, processed 
+		FROM queued_users 
+		WHERE user_id IN (`
+
+	params := make([]any, len(userIDs))
+	for i, id := range userIDs {
+		if i > 0 {
+			checkQuery += ","
+		}
+		checkQuery += "?"
+		params[i] = id
+	}
+	checkQuery += ")"
+
+	result, err := c.api.ExecuteSQL(ctx, checkQuery, params)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check queue status: %w", err)
+	}
+
+	// Track which users need to be inserted vs updated
+	existingUsers := make(map[uint64]float64) // user_id -> queued_at
+	for _, row := range result {
+		if userID, ok := row["user_id"].(float64); ok {
+			if queuedAt, ok := row["queued_at"].(float64); ok {
+				existingUsers[uint64(userID)] = queuedAt
 			}
 		}
-
-		// Update existing record
-		updateQuery := `
-			UPDATE queued_users 
-			SET queued_at = ?, processed = 0, processing = 0 
-			WHERE user_id = ?
-		`
-		if _, err := c.api.ExecuteSQL(ctx, updateQuery, []any{time.Now().Unix(), userID}); err != nil {
-			return fmt.Errorf("failed to update queue entry: %w", err)
-		}
-		return nil
 	}
 
-	// Add new queue entry
+	// Prepare batch insert for new users
+	now := time.Now().Unix()
 	insertQuery := `
 		INSERT INTO queued_users (user_id, queued_at, processed, processing) 
-		VALUES (?, ?, 0, 0)
-	`
-	if _, err := c.api.ExecuteSQL(ctx, insertQuery, []any{userID, time.Now().Unix()}); err != nil {
-		return fmt.Errorf("failed to add queue entry: %w", err)
+		VALUES `
+
+	updateQuery := `
+		UPDATE queued_users 
+		SET queued_at = ?, processed = 0, processing = 0 
+		WHERE user_id IN (`
+
+	var insertParams []any
+	var updateParams []any
+	updateParams = append(updateParams, now) // First param is the new queued_at time
+
+	cutoffTime := time.Now().AddDate(0, 0, -7).Unix()
+	errors := make(map[uint64]error)
+
+	for _, userID := range userIDs {
+		if queuedAt, exists := existingUsers[userID]; exists {
+			// Check if user was queued in the past 7 days
+			if int64(queuedAt) > cutoffTime {
+				errors[userID] = ErrUserRecentlyQueued
+				continue
+			}
+			updateParams = append(updateParams, userID)
+		} else {
+			if len(insertParams) > 0 {
+				insertQuery += ","
+			}
+			insertQuery += "(?, ?, 0, 0)"
+			insertParams = append(insertParams, userID, now)
+		}
 	}
 
-	return nil
+	// Execute insert for new users if any
+	if len(insertParams) > 0 {
+		if _, err := c.api.ExecuteSQL(ctx, insertQuery, insertParams); err != nil {
+			return errors, fmt.Errorf("failed to insert queue entries: %w", err)
+		}
+	}
+
+	// Execute update for existing users if any
+	if len(updateParams) > 1 { // More than just the timestamp
+		for i := range len(updateParams) - 1 {
+			if i > 0 {
+				updateQuery += ","
+			}
+			updateQuery += "?"
+		}
+		updateQuery += ")"
+
+		if _, err := c.api.ExecuteSQL(ctx, updateQuery, updateParams); err != nil {
+			return errors, fmt.Errorf("failed to update queue entries: %w", err)
+		}
+	}
+
+	return errors, nil
 }
 
 // RemoveFromQueue removes an unprocessed user from the processing queue.

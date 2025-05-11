@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/disgoorg/disgo/discord"
@@ -17,6 +18,13 @@ import (
 	"github.com/robalyx/rotector/internal/queue"
 	"github.com/robalyx/rotector/pkg/utils"
 	"go.uber.org/zap"
+)
+
+var (
+	// ErrEmptyLine indicates an empty line was provided.
+	ErrEmptyLine = errors.New("empty line")
+	// ErrInvalidUserID indicates an invalid user ID was provided.
+	ErrInvalidUserID = errors.New("invalid user ID")
 )
 
 // Menu handles queue operations and their interactions.
@@ -73,11 +81,12 @@ func (m *Menu) Show(ctx *interaction.Context, s *session.Session) {
 func (m *Menu) handleQueueUser(ctx *interaction.Context) {
 	modal := discord.NewModalCreateBuilder().
 		SetCustomID(constants.QueueUserModalCustomID).
-		SetTitle("Queue Roblox User").
+		SetTitle("Queue Roblox Users").
 		AddActionRow(
-			discord.NewTextInput(constants.QueueUserInputCustomID, discord.TextInputStyleShort, "User ID").
+			discord.NewTextInput(constants.QueueUserInputCustomID, discord.TextInputStyleParagraph, "User IDs").
 				WithRequired(true).
-				WithPlaceholder("Enter the Roblox user ID to queue..."),
+				WithPlaceholder("Enter Roblox user IDs to queue (one per line)").
+				WithMaxLength(512),
 		)
 
 	ctx.Modal(modal)
@@ -123,51 +132,78 @@ func (m *Menu) handleModal(ctx *interaction.Context, s *session.Session) {
 	}
 }
 
-// handleQueueUserModalSubmit processes the user ID input and queues the user.
+// handleQueueUserModalSubmit processes the user IDs input and queues the users.
 func (m *Menu) handleQueueUserModalSubmit(ctx *interaction.Context, s *session.Session) {
-	// Get the user ID input
-	userIDStr := ctx.Event().ModalData().Text(constants.QueueUserInputCustomID)
+	// Get the user IDs input
+	input := ctx.Event().ModalData().Text(constants.QueueUserInputCustomID)
+	lines := strings.Split(strings.TrimSpace(input), "\n")
 
-	// Parse profile URL if provided
-	parsedURL, err := utils.ExtractUserIDFromURL(userIDStr)
-	if err == nil {
-		userIDStr = parsedURL
-	}
-
-	// Parse user ID
-	userID, err := strconv.ParseUint(userIDStr, 10, 64)
-	if err != nil {
-		ctx.Cancel("Please provide a valid user ID.")
+	if len(lines) == 0 {
+		ctx.Cancel("Please provide at least one user ID.")
 		return
 	}
 
-	// Check if user exists in database first
-	user, err := m.layout.db.Service().User().GetUserByID(ctx.Context(), userIDStr, types.UserFieldAll)
-	if err == nil {
-		// Store user in session and show review menu
-		session.AddToReviewHistory(s, session.UserReviewHistoryType, user.ID)
+	// Process and validate all lines first
+	userIDs := make([]uint64, 0, len(lines))
+	invalidInputs := make([]string, 0)
+	processedLines := make(map[string]struct{})
 
-		session.UserTarget.Set(s, user)
-		session.OriginalUserReasons.Set(s, user.Reasons)
-		session.ReasonsChanged.Set(s, false)
-		ctx.Show(constants.UserReviewPageName, "")
-		return
-	}
-
-	// Queue the user
-	if err := m.layout.d1Client.QueueUser(ctx.Context(), userID); err != nil {
-		if errors.Is(err, queue.ErrUserRecentlyQueued) {
-			ctx.Cancel("This user was recently queued. Please wait before queuing again.")
-			return
+	for _, line := range lines {
+		// Skip duplicate lines
+		if _, exists := processedLines[line]; exists {
+			continue
 		}
-		m.layout.logger.Error("Failed to queue user", zap.Error(err))
-		ctx.Error("Failed to queue user. Please try again.")
+		processedLines[line] = struct{}{}
+
+		userID, err := m.processUserIDInput(line)
+		if err != nil {
+			invalidInputs = append(invalidInputs, line)
+			continue
+		}
+
+		userIDs = append(userIDs, userID)
+	}
+
+	if len(userIDs) == 0 {
+		if len(invalidInputs) > 0 {
+			ctx.Cancel("Invalid user IDs or URLs: " + strings.Join(invalidInputs, ", "))
+		} else {
+			ctx.Cancel("No valid user IDs provided.")
+		}
 		return
 	}
 
-	// Store queued user ID in session
-	session.QueuedUserID.Set(s, userID)
-	session.QueuedUserTimestamp.Set(s, time.Now())
+	// Queue users in batches if needed
+	var totalQueuedCount int
+	var lastUserID uint64
+	var allFailedIDs []string
+
+	for i := 0; i < len(userIDs); i += queue.MaxQueueBatchSize {
+		end := min(i+queue.MaxQueueBatchSize, len(userIDs))
+		batch := userIDs[i:end]
+
+		queuedCount, batchLastUserID, failedIDs, activityLogs := m.queueUserBatch(ctx, batch)
+		totalQueuedCount += queuedCount
+		if queuedCount > 0 {
+			lastUserID = batchLastUserID
+		}
+		allFailedIDs = append(allFailedIDs, failedIDs...)
+
+		// Log activities in batch
+		if len(activityLogs) > 0 {
+			m.layout.db.Model().Activity().LogBatch(ctx.Context(), activityLogs)
+		}
+	}
+
+	// Store queued user ID in session only if exactly one user was queued
+	if totalQueuedCount == 1 {
+		session.QueuedUserID.Set(s, lastUserID)
+		session.QueuedUserTimestamp.Set(s, time.Now())
+	} else {
+		// Clear any existing queued user tracking
+		session.QueuedUserID.Delete(s)
+		session.QueuedUserTimestamp.Delete(s)
+	}
 
 	// Get updated queue stats
 	stats, err := m.layout.d1Client.GetQueueStats(ctx.Context())
@@ -177,18 +213,19 @@ func (m *Menu) handleQueueUserModalSubmit(ctx *interaction.Context, s *session.S
 		session.QueueStats.Set(s, stats)
 	}
 
-	ctx.Reload(fmt.Sprintf("Successfully queued user %d for processing.", userID))
+	// Build response message
+	var msg strings.Builder
+	if totalQueuedCount > 0 {
+		msg.WriteString(fmt.Sprintf("Successfully queued %d user(s) for processing. ", totalQueuedCount))
+	}
+	if len(invalidInputs) > 0 {
+		msg.WriteString(fmt.Sprintf("Invalid entries: %s ", strings.Join(invalidInputs, ", ")))
+	}
+	if len(allFailedIDs) > 0 {
+		msg.WriteString(fmt.Sprintf("Failed to queue: %s ", strings.Join(allFailedIDs, ", ")))
+	}
 
-	// Log the queue action
-	m.layout.db.Model().Activity().Log(ctx.Context(), &types.ActivityLog{
-		ActivityTarget: types.ActivityTarget{
-			UserID: userID,
-		},
-		ReviewerID:        uint64(ctx.Event().User().ID),
-		ActivityType:      enum.ActivityTypeUserQueued,
-		ActivityTimestamp: time.Now(),
-		Details:           map[string]any{},
-	})
+	ctx.Reload(msg.String())
 }
 
 // handleManualUserReviewModalSubmit processes the user ID input and adds the user to the review system.
@@ -479,4 +516,75 @@ func (m *Menu) handleReviewQueuedUser(ctx *interaction.Context, s *session.Sessi
 	session.OriginalUserReasons.Set(s, user.Reasons)
 	session.ReasonsChanged.Set(s, false)
 	ctx.Show(constants.UserReviewPageName, "")
+}
+
+// processUserIDInput processes a single line of input and returns the parsed user ID if valid.
+func (m *Menu) processUserIDInput(line string) (uint64, error) {
+	line = strings.TrimSpace(line)
+	if line == "" {
+		return 0, ErrEmptyLine
+	}
+
+	// Parse profile URL if provided
+	userIDStr := line
+	parsedURL, err := utils.ExtractUserIDFromURL(line)
+	if err == nil {
+		userIDStr = parsedURL
+	}
+
+	// Parse user ID
+	userID, err := strconv.ParseUint(userIDStr, 10, 64)
+	if err != nil {
+		return 0, fmt.Errorf("%w: %s", ErrInvalidUserID, line)
+	}
+
+	return userID, nil
+}
+
+// queueUserBatch queues a batch of users and returns the results.
+func (m *Menu) queueUserBatch(ctx *interaction.Context, batch []uint64) (int, uint64, []string, []*types.ActivityLog) {
+	queueErrors, err := m.layout.d1Client.QueueUsers(ctx.Context(), batch)
+	if err != nil {
+		m.layout.logger.Error("Failed to queue batch", zap.Error(err))
+		failedIDs := make([]string, len(batch))
+		for i, userID := range batch {
+			failedIDs[i] = fmt.Sprintf("%d (error)", userID)
+		}
+		return 0, 0, failedIDs, nil
+	}
+
+	// Process results and create activity logs
+	var queuedCount int
+	var lastUserID uint64
+	var failedIDs []string
+	activityLogs := make([]*types.ActivityLog, 0, len(batch))
+	now := time.Now()
+
+	for _, userID := range batch {
+		if queueErr, failed := queueErrors[userID]; failed {
+			if errors.Is(queueErr, queue.ErrUserRecentlyQueued) {
+				failedIDs = append(failedIDs, fmt.Sprintf("%d (recently queued)", userID))
+			} else {
+				failedIDs = append(failedIDs, fmt.Sprintf("%d (error)", userID))
+			}
+			continue
+		}
+		lastUserID = userID
+		queuedCount++
+
+		// Create activity log for this user
+		activityLogs = append(activityLogs, &types.ActivityLog{
+			ActivityTarget: types.ActivityTarget{
+				UserID: userID,
+			},
+			ReviewerID:        uint64(ctx.Event().User().ID),
+			ActivityType:      enum.ActivityTypeUserQueued,
+			ActivityTimestamp: now,
+			Details: map[string]any{
+				"batch_size": len(batch),
+			},
+		})
+	}
+
+	return queuedCount, lastUserID, failedIDs, activityLogs
 }

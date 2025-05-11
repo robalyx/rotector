@@ -53,6 +53,24 @@ func (r *ActivityModel) Log(ctx context.Context, log *types.ActivityLog) {
 		zap.String("activityType", log.ActivityType.String()))
 }
 
+// LogBatch stores multiple moderator actions in the database.
+func (r *ActivityModel) LogBatch(ctx context.Context, logs []*types.ActivityLog) {
+	if len(logs) == 0 {
+		return
+	}
+
+	_, err := r.db.NewInsert().Model(&logs).Exec(ctx)
+	if err != nil {
+		r.logger.Error("Failed to log batch activities",
+			zap.Error(err),
+			zap.Int("count", len(logs)))
+		return
+	}
+
+	r.logger.Debug("Logged batch activities",
+		zap.Int("count", len(logs)))
+}
+
 // GetLogs retrieves activity logs based on filter criteria.
 func (r *ActivityModel) GetLogs(
 	ctx context.Context, filter types.ActivityFilter, cursor *types.LogCursor, limit int,

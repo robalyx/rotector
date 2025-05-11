@@ -77,4 +77,9 @@ const (
 
 	// ActivityTypeGuildBans tracks when a guild bans a set of users.
 	ActivityTypeGuildBans
+
+	// LOGS ADDED AFTER RELEASE BELOW.
+
+	// ActivityTypeGroupQueued tracks when a group is queued for review.
+	ActivityTypeGroupQueued
 )
