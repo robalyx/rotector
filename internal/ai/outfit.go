@@ -52,7 +52,7 @@ Output format:
 }
 
 Theme categories (use this format):
-- "Sexual/Adult: [specific detail]" (e.g., "Sexual/Adult: Revealing swimsuit with exaggerated anatomy")
+- "Sexual/Adult: [specific detail]" (e.g., "Sexual/Adult: Succubus-themed outfits")
 - "Body/Figure: [specific detail]" (e.g., "Body/Figure: Exaggerated curvy avatar")
 - "BDSM/Kink: [specific detail]" (e.g., "BDSM/Kink: Latex catsuit with chains")
 
@@ -72,14 +72,13 @@ Key instructions:
 
 Instruction: Pay close attention to outfits that are sexual or adult-themed:
 - Stripper/pole dancer outfits
-- Lingerie/underwear models
+- Lingerie outfits
 - Sexualized maid outfits (with fishnets, cleavage or inappropriate elements)
 - Bunny girl outfits (lingerie versions)
 - Latex catsuits/dominatrix outfits
 - Fetishwear (bondage elements, suggestive accessories)
 - Censored nudity looks (with pixelation, censor bars, stickers)
-- Full nudity with realistic body features (detailed abs, body hair, tattoos, etc.)
-- Extremely revealing swimsuits/microkinis (especially with exaggerated anatomy)
+- FULL NUDITY with realistic body features (detailed abs, body hair, tattoos, etc.)
 - Provocative bodysuits with inappropriate cutouts
 - Thongs/g-strings or outfits emphasizing exposed buttocks
 - Outfits with intentional cleavage cutouts or revealing holes (heart-shaped, keyholes)
@@ -91,6 +90,7 @@ Instruction: Pay close attention to outfits that are body/figure-focused:
 - Inflated or exaggerated anatomy
 - Ultra-slim waist avatars
 - Bodies with sexualized scars or markings
+- Outfits using belly shaders
 
 Instruction: Pay close attention to outfits that are BDSM/kink/fetish parodies:
 - Bondage sets (chains, gags, collars)
@@ -422,7 +422,7 @@ func (a *OutfitAnalyzer) processOutfitBatch(
 	}
 
 	// Make API request
-	var analysis *OutfitThemeAnalysis
+	var analysis OutfitThemeAnalysis
 	err := a.chat.NewWithRetry(ctx, params, func(resp *openai.ChatCompletion, err error) error {
 		// Handle API error
 		if err != nil {
@@ -463,7 +463,7 @@ func (a *OutfitAnalyzer) processOutfitBatch(
 		return nil
 	})
 
-	return analysis, err
+	return &analysis, err
 }
 
 // analyzeOutfitBatch processes a single batch of outfit images.

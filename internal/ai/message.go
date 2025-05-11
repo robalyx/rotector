@@ -315,7 +315,7 @@ func (a *MessageAnalyzer) processMessageBatch(
 	}
 
 	// Make API request
-	var result *FlaggedMessagesResponse
+	var result FlaggedMessagesResponse
 	err = a.chat.NewWithRetry(ctx, params, func(resp *openai.ChatCompletion, err error) error {
 		// Handle API error
 		if err != nil {
@@ -343,7 +343,7 @@ func (a *MessageAnalyzer) processMessageBatch(
 		return nil
 	})
 
-	return result, err
+	return &result, err
 }
 
 // processBatch processes a batch of messages using the AI model.

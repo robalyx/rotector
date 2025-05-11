@@ -253,7 +253,7 @@ func (a *FriendAnalyzer) processFriendBatch(ctx context.Context, batch []UserFri
 	}
 
 	// Make API request
-	var result *BatchFriendAnalysis
+	var result BatchFriendAnalysis
 	err = a.chat.NewWithRetry(ctx, params, func(resp *openai.ChatCompletion, err error) error {
 		// Handle API error
 		if err != nil {
@@ -281,7 +281,7 @@ func (a *FriendAnalyzer) processFriendBatch(ctx context.Context, batch []UserFri
 		return nil
 	})
 
-	return result, err
+	return &result, err
 }
 
 // processBatch handles analysis for a batch of users.
@@ -403,7 +403,7 @@ func (a *FriendAnalyzer) processBatch(
 		// Check if we got results for all users we sent
 		for _, data := range batchData {
 			if _, ok := resultUsers[data.Username]; !ok {
-				a.logger.Error("Missing friend analysis result",
+				a.logger.Warn("Missing friend analysis result",
 					zap.String("username", data.Username))
 			}
 		}

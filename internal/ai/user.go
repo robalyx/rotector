@@ -60,9 +60,10 @@ Key instructions:
 4. If no violations are found for a user, you MUST exclude from the response or set the 'reason' field to "NO_VIOLATIONS"
 5. You MUST skip analysis for users with empty descriptions and without an inappropriate username/display name
 6. You MUST set the 'hasSocials' field to true if the user's description contains any social media handles, links, or mentions
-7. If a user has no violations but has social media links, you MUST only include the 'name' and 'hasSocials' fields for that user
-8. You MUST ONLY flag users who exhibit predatory or inappropriate behavior
-9. You MUST flag usernames and display names even if the description is empty as the name itself can be sufficient evidence
+7. Sharing of social media links is not a violation of Roblox's rules but we should set 'hasSocials' to true
+8. If a user has no violations but has social media links, you MUST only include the 'name' and 'hasSocials' fields for that user
+9. You MUST ONLY flag users who exhibit predatory or inappropriate behavior
+10. You MUST flag usernames and display names even if the description is empty as the name itself can be sufficient evidence
 
 Confidence levels:
 Assign the 'confidence' score based on the explicitness of the predatory indicators found, according to the following guidelines:
@@ -365,7 +366,7 @@ func (a *UserAnalyzer) processUserBatch(ctx context.Context, batch []UserSummary
 	})
 
 	// Make API request
-	var result *FlaggedUsers
+	var result FlaggedUsers
 	err = a.chat.NewWithRetry(ctx, params, func(resp *openai.ChatCompletion, err error) error {
 		// Handle API error
 		if err != nil {
@@ -393,7 +394,7 @@ func (a *UserAnalyzer) processUserBatch(ctx context.Context, batch []UserSummary
 		return nil
 	})
 
-	return result, err
+	return &result, err
 }
 
 // processBatch handles analysis for a batch of users.
@@ -473,7 +474,7 @@ func (a *UserAnalyzer) processBatch(
 		},
 	)
 	if err != nil {
-		return fmt.Errorf("%w: %w", utils.ErrModelResponse, err)
+		return err
 	}
 
 	// Validate AI responses
