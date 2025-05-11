@@ -167,16 +167,16 @@ const (
 	MaxReviewHistorySize = 10
 
 	// ReviewFriendsLimit caps the number of friends shown in the main review container.
-	ReviewFriendsLimit = 15
+	ReviewFriendsLimit = 8
 
 	// ReviewGroupsLimit caps the number of groups shown in the main review container.
-	ReviewGroupsLimit = 15
+	ReviewGroupsLimit = 8
 
 	// ReviewGamesLimit caps the number of games shown in the main review container.
-	ReviewGamesLimit = 15
+	ReviewGamesLimit = 6
 
 	// ReviewOutfitsLimit caps the number of outfits shown in the main review container.
-	ReviewOutfitsLimit = 15
+	ReviewOutfitsLimit = 6
 
 	SortOrderSelectMenuCustomID = "sort_order"
 	ReasonSelectMenuCustomID    = "reason_select"
