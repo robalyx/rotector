@@ -7,11 +7,11 @@ import (
 	"strings"
 )
 
-const _GroupReasonTypeName = "Member"
+const _GroupReasonTypeName = "MemberPurposeDescriptionShout"
 
-var _GroupReasonTypeIndex = [...]uint8{0, 6}
+var _GroupReasonTypeIndex = [...]uint8{0, 6, 13, 24, 29}
 
-const _GroupReasonTypeLowerName = "member"
+const _GroupReasonTypeLowerName = "memberpurposedescriptionshout"
 
 func (i GroupReasonType) String() string {
 	if i < 0 || i >= GroupReasonType(len(_GroupReasonTypeIndex)-1) {
@@ -25,17 +25,29 @@ func (i GroupReasonType) String() string {
 func _GroupReasonTypeNoOp() {
 	var x [1]struct{}
 	_ = x[GroupReasonTypeMember-(0)]
+	_ = x[GroupReasonTypePurpose-(1)]
+	_ = x[GroupReasonTypeDescription-(2)]
+	_ = x[GroupReasonTypeShout-(3)]
 }
 
-var _GroupReasonTypeValues = []GroupReasonType{GroupReasonTypeMember}
+var _GroupReasonTypeValues = []GroupReasonType{GroupReasonTypeMember, GroupReasonTypePurpose, GroupReasonTypeDescription, GroupReasonTypeShout}
 
 var _GroupReasonTypeNameToValueMap = map[string]GroupReasonType{
-	_GroupReasonTypeName[0:6]:      GroupReasonTypeMember,
-	_GroupReasonTypeLowerName[0:6]: GroupReasonTypeMember,
+	_GroupReasonTypeName[0:6]:        GroupReasonTypeMember,
+	_GroupReasonTypeLowerName[0:6]:   GroupReasonTypeMember,
+	_GroupReasonTypeName[6:13]:       GroupReasonTypePurpose,
+	_GroupReasonTypeLowerName[6:13]:  GroupReasonTypePurpose,
+	_GroupReasonTypeName[13:24]:      GroupReasonTypeDescription,
+	_GroupReasonTypeLowerName[13:24]: GroupReasonTypeDescription,
+	_GroupReasonTypeName[24:29]:      GroupReasonTypeShout,
+	_GroupReasonTypeLowerName[24:29]: GroupReasonTypeShout,
 }
 
 var _GroupReasonTypeNames = []string{
 	_GroupReasonTypeName[0:6],
+	_GroupReasonTypeName[6:13],
+	_GroupReasonTypeName[13:24],
+	_GroupReasonTypeName[24:29],
 }
 
 // GroupReasonTypeString retrieves an enum value from the enum constants string name.

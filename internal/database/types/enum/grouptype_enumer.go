@@ -7,11 +7,11 @@ import (
 	"strings"
 )
 
-const _GroupTypeName = "ConfirmedFlaggedCleared"
+const _GroupTypeName = "ClearedFlaggedConfirmed"
 
-var _GroupTypeIndex = [...]uint8{0, 9, 16, 23}
+var _GroupTypeIndex = [...]uint8{0, 7, 14, 23}
 
-const _GroupTypeLowerName = "confirmedflaggedcleared"
+const _GroupTypeLowerName = "clearedflaggedconfirmed"
 
 func (i GroupType) String() string {
 	if i < 0 || i >= GroupType(len(_GroupTypeIndex)-1) {
@@ -24,26 +24,26 @@ func (i GroupType) String() string {
 // Re-run the stringer command to generate them again.
 func _GroupTypeNoOp() {
 	var x [1]struct{}
-	_ = x[GroupTypeConfirmed-(0)]
+	_ = x[GroupTypeCleared-(0)]
 	_ = x[GroupTypeFlagged-(1)]
-	_ = x[GroupTypeCleared-(2)]
+	_ = x[GroupTypeConfirmed-(2)]
 }
 
-var _GroupTypeValues = []GroupType{GroupTypeConfirmed, GroupTypeFlagged, GroupTypeCleared}
+var _GroupTypeValues = []GroupType{GroupTypeCleared, GroupTypeFlagged, GroupTypeConfirmed}
 
 var _GroupTypeNameToValueMap = map[string]GroupType{
-	_GroupTypeName[0:9]:        GroupTypeConfirmed,
-	_GroupTypeLowerName[0:9]:   GroupTypeConfirmed,
-	_GroupTypeName[9:16]:       GroupTypeFlagged,
-	_GroupTypeLowerName[9:16]:  GroupTypeFlagged,
-	_GroupTypeName[16:23]:      GroupTypeCleared,
-	_GroupTypeLowerName[16:23]: GroupTypeCleared,
+	_GroupTypeName[0:7]:        GroupTypeCleared,
+	_GroupTypeLowerName[0:7]:   GroupTypeCleared,
+	_GroupTypeName[7:14]:       GroupTypeFlagged,
+	_GroupTypeLowerName[7:14]:  GroupTypeFlagged,
+	_GroupTypeName[14:23]:      GroupTypeConfirmed,
+	_GroupTypeLowerName[14:23]: GroupTypeConfirmed,
 }
 
 var _GroupTypeNames = []string{
-	_GroupTypeName[0:9],
-	_GroupTypeName[9:16],
-	_GroupTypeName[16:23],
+	_GroupTypeName[0:7],
+	_GroupTypeName[7:14],
+	_GroupTypeName[14:23],
 }
 
 // GroupTypeString retrieves an enum value from the enum constants string name.

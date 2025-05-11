@@ -32,4 +32,10 @@ type GroupReasonType int
 const (
 	// GroupReasonTypeMember indicates member analysis.
 	GroupReasonTypeMember GroupReasonType = iota
+	// GroupReasonTypePurpose indicates a group's purpose.
+	GroupReasonTypePurpose
+	// GroupReasonTypeDescription indicates a group's description.
+	GroupReasonTypeDescription
+	// GroupReasonTypeShout indicates a group's shout.
+	GroupReasonTypeShout
 )

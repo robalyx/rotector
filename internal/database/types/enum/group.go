@@ -6,10 +6,10 @@ package enum
 type GroupType int
 
 const (
-	// GroupTypeConfirmed indicates a group has been reviewed and confirmed as inappropriate.
-	GroupTypeConfirmed GroupType = iota
+	// GroupTypeCleared indicates a group was reviewed and found to be appropriate.
+	GroupTypeCleared GroupType = iota
 	// GroupTypeFlagged indicates a group needs review for potential violations.
 	GroupTypeFlagged
-	// GroupTypeCleared indicates a group was reviewed and found to be appropriate.
-	GroupTypeCleared
+	// GroupTypeConfirmed indicates a group has been reviewed and confirmed as inappropriate.
+	GroupTypeConfirmed
 )

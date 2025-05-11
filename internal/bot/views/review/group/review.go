@@ -291,6 +291,9 @@ func (b *ReviewBuilder) buildReasonDisplay() discord.ContainerSubComponent {
 
 	for _, reasonType := range []enum.GroupReasonType{
 		enum.GroupReasonTypeMember,
+		enum.GroupReasonTypePurpose,
+		enum.GroupReasonTypeDescription,
+		enum.GroupReasonTypeShout,
 	} {
 		if reason, ok := b.group.Reasons[reasonType]; ok {
 			// Add reason header and message
@@ -389,6 +392,9 @@ func (b *ReviewBuilder) buildActionOptions() []discord.StringSelectMenuOption {
 func (b *ReviewBuilder) buildReasonOptions() []discord.StringSelectMenuOption {
 	reasonTypes := []enum.GroupReasonType{
 		enum.GroupReasonTypeMember,
+		enum.GroupReasonTypePurpose,
+		enum.GroupReasonTypeDescription,
+		enum.GroupReasonTypeShout,
 	}
 	return shared.BuildReasonOptions(b.group.Reasons, reasonTypes, getReasonEmoji, b.ReasonsChanged)
 }
@@ -451,6 +457,12 @@ func getReasonEmoji(reasonType enum.GroupReasonType) string {
 	switch reasonType {
 	case enum.GroupReasonTypeMember:
 		return "👥"
+	case enum.GroupReasonTypePurpose:
+		return "🎯"
+	case enum.GroupReasonTypeDescription:
+		return "📝"
+	case enum.GroupReasonTypeShout:
+		return "📢"
 	default:
 		return "❓"
 	}
