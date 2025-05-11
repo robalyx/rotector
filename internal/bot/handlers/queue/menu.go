@@ -322,6 +322,14 @@ func (m *Menu) handleManualGroupReviewModalSubmit(ctx *interaction.Context, s *s
 		Reasons: make(types.Reasons[enum.GroupReasonType]),
 	}
 
+	// Add thumbnail URL to the group
+	groupWithThumbnail := m.layout.thumbnailFetcher.AddGroupImageURLs(ctx.Context(), map[uint64]*types.ReviewGroup{
+		group.ID: group,
+	})
+	if len(groupWithThumbnail) > 0 {
+		group = groupWithThumbnail[group.ID]
+	}
+
 	// Save the new group to the database
 	if err := m.layout.db.Service().Group().SaveGroups(ctx.Context(), map[uint64]*types.ReviewGroup{
 		group.ID: group,

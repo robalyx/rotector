@@ -11,22 +11,24 @@ import (
 
 // Layout handles the display and interaction logic for the queue menu.
 type Layout struct {
-	db           database.Client
-	d1Client     *queue.D1Client
-	userFetcher  *fetcher.UserFetcher
-	groupFetcher *fetcher.GroupFetcher
-	menu         *Menu
-	logger       *zap.Logger
+	db               database.Client
+	d1Client         *queue.D1Client
+	userFetcher      *fetcher.UserFetcher
+	groupFetcher     *fetcher.GroupFetcher
+	thumbnailFetcher *fetcher.ThumbnailFetcher
+	menu             *Menu
+	logger           *zap.Logger
 }
 
 // New creates a Layout by initializing the queue menu.
 func New(app *setup.App) *Layout {
 	l := &Layout{
-		db:           app.DB,
-		d1Client:     queue.NewD1Client(app, app.Logger),
-		userFetcher:  fetcher.NewUserFetcher(app, app.Logger),
-		groupFetcher: fetcher.NewGroupFetcher(app.RoAPI, app.Logger),
-		logger:       app.Logger.Named("queue_menu"),
+		db:               app.DB,
+		d1Client:         queue.NewD1Client(app, app.Logger),
+		userFetcher:      fetcher.NewUserFetcher(app, app.Logger),
+		groupFetcher:     fetcher.NewGroupFetcher(app.RoAPI, app.Logger),
+		thumbnailFetcher: fetcher.NewThumbnailFetcher(app.RoAPI, app.Logger),
+		logger:           app.Logger.Named("queue_menu"),
 	}
 	l.menu = NewMenu(l)
 
