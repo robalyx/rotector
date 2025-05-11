@@ -288,12 +288,13 @@ func (m *Middleware) markProxyUnhealthy(ctx context.Context, proxyIndex int64) {
 		m.logger.WithFields(
 			logger.String("error", err.Error()),
 		).Error("Failed to mark proxy as unhealthy")
-	} else {
-		m.logger.WithFields(
-			logger.Int64("proxy_index", proxyIndex),
-			logger.Duration("unhealthy_duration", m.unhealthyDuration),
-		).Debug("Marked proxy as unhealthy")
+		return
 	}
+
+	m.logger.WithFields(
+		logger.Int64("proxy_index", proxyIndex),
+		logger.Duration("unhealthy_duration", m.unhealthyDuration),
+	).Debug("Marked proxy as unhealthy")
 }
 
 // applyProxyToClient applies the proxy to the given http.Client.

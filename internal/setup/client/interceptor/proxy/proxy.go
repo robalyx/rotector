@@ -187,6 +187,10 @@ func (m *Middleware) tryProxy(ctx context.Context, httpClient *http.Client, req 
 	// Make the request
 	resp, err := proxyClient.Do(req)
 	if err != nil {
+		// Check if error is due to context cancellation/timeout
+		if ctx.Err() != nil {
+			return nil, err
+		}
 		// Try selecting another proxy on timeout errors
 		if interceptorutil.IsTimeoutError(err) {
 			m.markProxyUnhealthy(ctx, proxyIndex)
@@ -292,12 +296,13 @@ func (m *Middleware) markProxyUnhealthy(ctx context.Context, proxyIndex int64) {
 		m.logger.WithFields(
 			logger.String("error", err.Error()),
 		).Error("Failed to mark proxy as unhealthy")
-	} else {
-		m.logger.WithFields(
-			logger.Int64("proxy_index", proxyIndex),
-			logger.Duration("unhealthy_duration", m.unhealthyDuration),
-		).Debug("Marked proxy as unhealthy")
+		return
 	}
+
+	m.logger.WithFields(
+		logger.Int64("proxy_index", proxyIndex),
+		logger.Duration("unhealthy_duration", m.unhealthyDuration),
+	).Debug("Marked proxy as unhealthy")
 }
 
 // applyProxyToClient applies the proxy to the given http.Client.
