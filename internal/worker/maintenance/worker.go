@@ -334,42 +334,83 @@ func (w *Worker) processGroupTracking() {
 		groupIDs = append(groupIDs, groupID)
 	}
 
-	// Load group information from API
-	groupInfos := w.groupFetcher.FetchGroupInfos(context.Background(), groupIDs)
-	if len(groupInfos) == 0 {
+	// Get existing groups from database
+	existingGroups, err := w.db.Model().Group().GetGroupsByIDs(
+		context.Background(),
+		groupIDs,
+		types.GroupFieldID,
+	)
+	if err != nil {
+		w.logger.Error("Failed to check existing groups", zap.Error(err))
+		w.reporter.SetHealthy(false)
 		return
 	}
 
-	// Check which groups exceed the percentage threshold
-	flaggedGroups := w.groupChecker.CheckGroupPercentages(groupInfos, groupsWithUsers)
-	if len(flaggedGroups) == 0 {
-		return
+	// Separate new and existing groups
+	newGroupIDs := make([]uint64, 0)
+	existingGroupIDs := make([]uint64, 0)
+	for _, groupID := range groupIDs {
+		if _, exists := existingGroups[groupID]; exists {
+			existingGroupIDs = append(existingGroupIDs, groupID)
+		} else {
+			newGroupIDs = append(newGroupIDs, groupID)
+		}
 	}
 
-	// Add thumbnails to flagged groups
-	flaggedGroups = w.thumbnailFetcher.AddGroupImageURLs(context.Background(), flaggedGroups)
-
-	// Save flagged groups to database
-	if err := w.db.Service().Group().SaveGroups(context.Background(), flaggedGroups); err != nil {
-		w.logger.Error("Failed to save flagged groups", zap.Error(err))
-		return
+	// Process new groups
+	newlyFlaggedIDs := w.processNewGroups(context.Background(), newGroupIDs, groupsWithUsers)
+	if len(newlyFlaggedIDs) > 0 {
+		existingGroupIDs = append(existingGroupIDs, newlyFlaggedIDs...)
 	}
 
-	// Extract group IDs that were flagged
-	flaggedGroupIDs := make([]uint64, 0, len(flaggedGroups))
-	for _, group := range flaggedGroups {
-		flaggedGroupIDs = append(flaggedGroupIDs, group.ID)
-	}
-
-	// Update tracking entries to mark them as flagged
-	if err := w.db.Model().Tracking().UpdateFlaggedGroups(context.Background(), flaggedGroupIDs); err != nil {
-		w.logger.Error("Failed to update tracking entries", zap.Error(err))
-		return
+	// Update tracking entries to mark them as flagged for all groups
+	if len(existingGroupIDs) > 0 {
+		if err := w.db.Model().Tracking().UpdateFlaggedGroups(context.Background(), existingGroupIDs); err != nil {
+			w.logger.Error("Failed to update tracking entries", zap.Error(err))
+			return
+		}
 	}
 
 	w.logger.Info("Processed group trackings",
-		zap.Int("checkedGroups", len(groupInfos)),
-		zap.Int("flaggedGroups", len(flaggedGroups)))
+		zap.Int("totalGroups", len(groupIDs)),
+		zap.Int("existingGroups", len(existingGroupIDs)-len(newlyFlaggedIDs)),
+		zap.Int("newGroups", len(newlyFlaggedIDs)))
+}
+
+// processNewGroups handles fetching and processing of new groups.
+// Returns the IDs of newly flagged groups.
+func (w *Worker) processNewGroups(ctx context.Context, newGroupIDs []uint64, groupsWithUsers map[uint64][]uint64) []uint64 {
+	if len(newGroupIDs) == 0 {
+		return nil
+	}
+
+	// Load group information from API
+	groupInfos := w.groupFetcher.FetchGroupInfos(ctx, newGroupIDs)
+	if len(groupInfos) == 0 {
+		return nil
+	}
+
+	// Check which groups exceed the percentage threshold
+	flaggedGroups := w.groupChecker.CheckGroupPercentages(ctx, groupInfos, groupsWithUsers)
+	if len(flaggedGroups) == 0 {
+		return nil
+	}
+
+	// Add thumbnails to flagged groups
+	flaggedGroups = w.thumbnailFetcher.AddGroupImageURLs(ctx, flaggedGroups)
+
+	// Save flagged groups to database
+	if err := w.db.Service().Group().SaveGroups(ctx, flaggedGroups); err != nil {
+		w.logger.Error("Failed to save flagged groups", zap.Error(err))
+		return nil
+	}
+
+	// Extract and return the IDs of newly flagged groups
+	newlyFlaggedIDs := make([]uint64, 0, len(flaggedGroups))
+	for groupID := range flaggedGroups {
+		newlyFlaggedIDs = append(newlyFlaggedIDs, groupID)
+	}
+	return newlyFlaggedIDs
 }
 
 // processUserThumbnails updates user thumbnails.
