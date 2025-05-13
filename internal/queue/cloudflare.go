@@ -8,6 +8,10 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"time"
+
+	"github.com/cenkalti/backoff/v4"
+	"github.com/robalyx/rotector/pkg/utils"
 )
 
 var (
@@ -43,8 +47,39 @@ func NewCloudflareAPI(accountID, dbID, token, endpoint string) *CloudflareAPI {
 	}
 }
 
-// ExecuteSQL executes a SQL statement on D1 and returns the results.
+// ExecuteSQL executes a SQL statement on D1 and returns the results with retries.
 func (c *CloudflareAPI) ExecuteSQL(ctx context.Context, sql string, params []any) ([]map[string]any, error) {
+	var result []map[string]any
+
+	// Define retry options
+	opts := utils.RetryOptions{
+		MaxElapsedTime:  30 * time.Second,
+		InitialInterval: 1 * time.Second,
+		MaxInterval:     5 * time.Second,
+		MaxRetries:      3,
+	}
+
+	// Execute the request with retries
+	err := utils.WithRetry(ctx, func() error {
+		var execErr error
+		result, execErr = c.executeRequest(ctx, sql, params)
+
+		// Don't retry on validation errors or permanent failures
+		if errors.Is(execErr, ErrD1APIUnsuccessful) {
+			return backoff.Permanent(execErr)
+		}
+
+		return execErr
+	}, opts)
+	if err != nil {
+		return nil, err
+	}
+
+	return result, nil
+}
+
+// executeRequest executes a single SQL request.
+func (c *CloudflareAPI) executeRequest(ctx context.Context, sql string, params []any) ([]map[string]any, error) {
 	url := fmt.Sprintf("%s/accounts/%s/d1/database/%s/query", c.endpoint, c.accountID, c.dbID)
 
 	// Prepare request body
