@@ -340,9 +340,7 @@ func (m *Menu) handleManualGroupReviewModalSubmit(ctx *interaction.Context, s *s
 	}
 
 	// Use the fetched group information
-	now := time.Now()
 	groupInfo := groups[0]
-
 	group = &types.ReviewGroup{
 		Group: &types.Group{
 			ID:          groupID,
@@ -352,9 +350,9 @@ func (m *Menu) handleManualGroupReviewModalSubmit(ctx *interaction.Context, s *s
 			Owner:       groupInfo.Owner,
 			Shout:       groupInfo.Shout,
 			Status:      enum.GroupTypeFlagged,
-			LastScanned: now,
-			LastUpdated: now,
-			LastViewed:  now,
+			LastScanned: time.Unix(0, 0),
+			LastUpdated: time.Now(),
+			LastViewed:  time.Unix(0, 0),
 		},
 		Reasons: make(types.Reasons[enum.GroupReasonType]),
 	}
