@@ -74,6 +74,7 @@ func (w *Worker) Start() {
 		if err != nil {
 			w.logger.Error("Failed to check current hour stats", zap.Error(err))
 			w.reporter.SetHealthy(false)
+			time.Sleep(30 * time.Second)
 			continue
 		}
 
@@ -84,6 +85,7 @@ func (w *Worker) Start() {
 			if err := w.db.Service().Stats().SaveHourlyStats(ctx); err != nil {
 				w.logger.Error("Failed to save hourly stats", zap.Error(err))
 				w.reporter.SetHealthy(false)
+				time.Sleep(30 * time.Second)
 				continue
 			}
 		}
@@ -93,6 +95,7 @@ func (w *Worker) Start() {
 		if err != nil {
 			w.logger.Error("Failed to get hourly stats", zap.Error(err))
 			w.reporter.SetHealthy(false)
+			time.Sleep(30 * time.Second)
 			continue
 		}
 
@@ -102,6 +105,7 @@ func (w *Worker) Start() {
 		if err := w.generateAndCacheCharts(ctx, hourlyStats); err != nil {
 			w.logger.Error("Failed to generate and cache charts", zap.Error(err))
 			w.reporter.SetHealthy(false)
+			time.Sleep(30 * time.Second)
 			continue
 		}
 
@@ -111,6 +115,7 @@ func (w *Worker) Start() {
 		if err := w.updateWelcomeMessage(ctx, hourlyStats); err != nil {
 			w.logger.Error("Failed to update welcome message", zap.Error(err))
 			w.reporter.SetHealthy(false)
+			time.Sleep(30 * time.Second)
 			continue
 		}
 
@@ -121,6 +126,7 @@ func (w *Worker) Start() {
 		if err := w.db.Model().Stats().PurgeOldStats(ctx, cutoffDate); err != nil {
 			w.logger.Error("Failed to purge old stats", zap.Error(err))
 			w.reporter.SetHealthy(false)
+			time.Sleep(30 * time.Second)
 			continue
 		}
 
