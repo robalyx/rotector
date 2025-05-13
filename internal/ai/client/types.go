@@ -2,14 +2,11 @@ package client
 
 import (
 	"context"
-	"errors"
 	"time"
 
 	"github.com/openai/openai-go"
 	"github.com/openai/openai-go/packages/ssestream"
 )
-
-var ErrNoProvidersAvailable = errors.New("no providers available")
 
 // RetryCallback is a function that will be called on each attempt.
 type RetryCallback func(resp *openai.ChatCompletion, err error) error

@@ -32,6 +32,7 @@ get_friends = { pattern = "friends.roblox.com/v1/users/{id}/friends", cooldown =
 find_friends = { pattern = "friends.roblox.com/v1/users/{id}/friends/find", cooldown = 5000 }
 user_info = { pattern = "users.roblox.com/v1/users/{id}", cooldown = 5000 }
 user_info_batch = { pattern = "users.roblox.com/v1/users", cooldown = 5000 }
+user_favorite_games = { pattern = "games.roblox.com/v2/users/{id}/favorite/games", cooldown = 5000 }
 user_games = { pattern = "games.roblox.com/v2/users/{id}/games", cooldown = 5000 }
 user_outfits = { pattern = "avatar.roblox.com/v2/avatar/users/{id}/outfits", cooldown = 6000 }
 user_outfits_details = { pattern = "avatar.roblox.com/v3/outfits/{id}/details", cooldown = 8000 }
@@ -52,7 +53,7 @@ max_concurrent = 100
 # Maximum number of requests allowed to pass through when the circuit is half-open
 max_requests = 1
 # The cyclic period of the closed state for the circuit breaker to clear the internal counts
-interval = 0
+interval = 60
 # The period of the open state after which the state of the circuit breaker becomes half-open
 timeout = 30000
 

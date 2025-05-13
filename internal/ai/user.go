@@ -191,7 +191,8 @@ IGNORE:
 - Self-harm or suicide-related content
 - Violence, gore, or disturbing content
 - Sharing of personal information
-- Random words or gibberish that are not ROT13`
+- Random words or gibberish that are not ROT13
+- Normal age mentions`
 
 	// UserRequestPrompt provides a reminder to follow system guidelines for user analysis.
 	UserRequestPrompt = `Analyze these user profiles for predatory content and social media links.
