@@ -127,7 +127,7 @@ func (c *FriendChecker) ProcessUsers(userInfos []*types.ReviewUser, reasonsMap m
 			reason := reasons[userInfo.ID]
 			if reason == "" {
 				// Fallback to default reason format if AI generation failed
-				reason = "User has flagged friends."
+				reason = "User has flagged friends in their friend network."
 			}
 
 			// Add new reason to reasons map

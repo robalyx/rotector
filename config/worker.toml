@@ -21,7 +21,7 @@ purge_groups = 100
 track_groups = 100
 
 # Number of queue items to process in one batch
-queue_items = 50
+queue_items = 10
 
 # Number of users to update thumbnails in one batch
 thumbnail_users = 100
@@ -55,7 +55,7 @@ ivan_message_analysis_batch = 100
 flagged_users = 1000000
 
 # Minimum number of flagged users needed to consider flagging a group
-min_group_flagged_users = 5
+min_group_flagged_users = 10
 # Minimum percentage of flagged users needed to flag a group
 min_flagged_percentage = 70.0
 # Flag group if flagged users count exceeds this value, regardless of percentage
@@ -63,6 +63,9 @@ min_flagged_override = 1000
 
 # Maximum group members before skipping tracking
 max_group_members_track = 20000
+
+# Maximum game visits before skipping tracking
+max_game_visits_track = 1000000
 
 # Number of messages to accumulate before processing a channel batch
 channel_process_threshold = 25

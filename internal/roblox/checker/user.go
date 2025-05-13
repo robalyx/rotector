@@ -21,6 +21,8 @@ type UserChecker struct {
 	app            *setup.App
 	db             database.Client
 	userFetcher    *fetcher.UserFetcher
+	gameFetcher    *fetcher.GameFetcher
+	outfitFetcher  *fetcher.OutfitFetcher
 	userAnalyzer   *ai.UserAnalyzer
 	outfitAnalyzer *ai.OutfitAnalyzer
 	ivanAnalyzer   *ai.IvanAnalyzer
@@ -40,6 +42,8 @@ func NewUserChecker(app *setup.App, userFetcher *fetcher.UserFetcher, logger *za
 		app:            app,
 		db:             app.DB,
 		userFetcher:    userFetcher,
+		gameFetcher:    fetcher.NewGameFetcher(app.RoAPI, logger),
+		outfitFetcher:  fetcher.NewOutfitFetcher(app.RoAPI, logger),
 		userAnalyzer:   userAnalyzer,
 		outfitAnalyzer: outfitAnalyzer,
 		ivanAnalyzer:   ai.NewIvanAnalyzer(app, logger),
@@ -110,6 +114,9 @@ func (c *UserChecker) ProcessUsers(userInfos []*types.ReviewUser) map[uint64]str
 	// Track flagged users' outfit assets
 	go c.trackOutfitAssets(flaggedUsers, flaggedOutfits)
 
+	// Track flagged users' favorite games
+	go c.trackFavoriteGames(flaggedUsers)
+
 	c.logger.Info("Finished processing users",
 		zap.Int("totalProcessed", len(userInfos)),
 		zap.Int("flaggedUsers", len(flaggedUsers)))
@@ -142,6 +149,7 @@ func (c *UserChecker) trackFlaggedUsersGroups(flaggedUsers map[uint64]*types.Rev
 // trackOutfitAssets adds outfit assets to tracking.
 func (c *UserChecker) trackOutfitAssets(flaggedUsers map[uint64]*types.ReviewUser, flaggedOutfits map[uint64]map[string]struct{}) {
 	assetOutfitsTracking := make(map[uint64][]types.TrackedID)
+	ctx := context.Background()
 
 	// Collect outfit assets only for flagged outfits
 	for userID, user := range flaggedUsers {
@@ -171,23 +179,34 @@ func (c *UserChecker) trackOutfitAssets(flaggedUsers map[uint64]*types.ReviewUse
 			outfitNames[outfit.ID] = outfit.Name
 		}
 
-		// Track assets from flagged outfits
-		for outfitID, assets := range user.OutfitAssets {
-			// Get outfit name from our map
-			outfitName, exists := outfitNames[outfitID]
-			if !exists || outfitName == "Current Outfit" {
+		// Get outfit details for flagged outfits
+		if len(user.Outfits) > 0 {
+			outfitAssets, err := c.outfitFetcher.GetOutfitDetails(ctx, user.Outfits)
+			if err != nil {
+				c.logger.Error("Failed to fetch outfit details",
+					zap.Error(err),
+					zap.Uint64("userID", user.ID))
 				continue
 			}
 
-			// Skip if this outfit wasn't flagged
-			if _, wasFlagged := userFlaggedOutfits[outfitName]; !wasFlagged {
-				continue
-			}
+			// Track assets from flagged outfits
+			for outfitID, assets := range outfitAssets {
+				// Get outfit name from our map
+				outfitName, exists := outfitNames[outfitID]
+				if !exists || outfitName == "Current Outfit" {
+					continue
+				}
 
-			// Track assets for this flagged outfit
-			for _, asset := range assets {
-				if isTrackableAssetType(asset.AssetType.ID) {
-					assetOutfitsTracking[asset.ID] = append(assetOutfitsTracking[asset.ID], types.NewOutfitID(outfitID))
+				// Skip if this outfit wasn't flagged
+				if _, wasFlagged := userFlaggedOutfits[outfitName]; !wasFlagged {
+					continue
+				}
+
+				// Track assets for this flagged outfit
+				for _, asset := range assets {
+					if isTrackableAssetType(asset.AssetType.ID) {
+						assetOutfitsTracking[asset.ID] = append(assetOutfitsTracking[asset.ID], types.NewOutfitID(outfitID))
+					}
 				}
 			}
 		}
@@ -197,6 +216,36 @@ func (c *UserChecker) trackOutfitAssets(flaggedUsers map[uint64]*types.ReviewUse
 	if len(assetOutfitsTracking) > 0 {
 		if err := c.db.Model().Tracking().AddOutfitAssetsToTracking(context.Background(), assetOutfitsTracking); err != nil {
 			c.logger.Error("Failed to add outfit assets to tracking", zap.Error(err))
+		}
+	}
+}
+
+// trackFavoriteGames adds flagged users' favorite games to tracking.
+func (c *UserChecker) trackFavoriteGames(flaggedUsers map[uint64]*types.ReviewUser) {
+	gameUsersTracking := make(map[uint64][]uint64)
+
+	// Fetch favorite games for each flagged user
+	for userID := range flaggedUsers {
+		favorites, err := c.gameFetcher.FetchFavoriteGames(context.Background(), userID)
+		if err != nil {
+			c.logger.Error("Failed to fetch favorite games for user",
+				zap.Uint64("userID", userID),
+				zap.Error(err))
+			continue
+		}
+
+		// Track games that meet the visit threshold
+		for _, game := range favorites {
+			if game.PlaceVisits <= c.app.Config.Worker.ThresholdLimits.MaxGameVisitsTrack {
+				gameUsersTracking[game.ID] = append(gameUsersTracking[game.ID], userID)
+			}
+		}
+	}
+
+	// Add to tracking if we have any data
+	if len(gameUsersTracking) > 0 {
+		if err := c.db.Model().Tracking().AddGamesToTracking(context.Background(), gameUsersTracking); err != nil {
+			c.logger.Error("Failed to add flagged users to games tracking", zap.Error(err))
 		}
 	}
 }

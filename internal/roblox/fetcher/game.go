@@ -79,3 +79,52 @@ func (g *GameFetcher) FetchGamesForUser(ctx context.Context, userID uint64) ([]*
 
 	return allGames, nil
 }
+
+// FetchFavoriteGames retrieves all favorite games for a single user.
+func (g *GameFetcher) FetchFavoriteGames(ctx context.Context, userID uint64) ([]*types.Game, error) {
+	ctx = context.WithValue(ctx, auth.KeyAddCookie, true)
+
+	var (
+		allGames   = make([]*types.Game, 0, 50)
+		cursor     string
+		normalizer = utils.NewTextNormalizer()
+	)
+
+	for {
+		// Create request builder
+		builder := games.NewUserFavoriteGamesBuilder(userID).
+			WithLimit(50)
+
+		// Add cursor if we're not on the first page
+		if cursor != "" {
+			builder.WithCursor(cursor)
+		}
+
+		// Fetch page of favorite games
+		response, err := g.roAPI.Games().GetUserFavoriteGames(ctx, builder.Build())
+		if err != nil {
+			return nil, err
+		}
+
+		// Append games from this page
+		for _, game := range response.Data {
+			normalizedGame := game
+			normalizedGame.Name = normalizer.Normalize(game.Name)
+			normalizedGame.Description = normalizer.Normalize(game.Description)
+			allGames = append(allGames, &normalizedGame)
+		}
+
+		// Check if there are more pages
+		if response.NextPageCursor == nil || *response.NextPageCursor == "" {
+			break
+		}
+
+		cursor = *response.NextPageCursor
+	}
+
+	g.logger.Debug("Finished fetching favorite games",
+		zap.Uint64("userID", userID),
+		zap.Int("totalFavorites", len(allGames)))
+
+	return allGames, nil
+}

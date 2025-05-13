@@ -3,7 +3,6 @@ package types
 import "time"
 
 // GroupMemberTracking monitors confirmed users within groups.
-// The LastAppended field helps determine when to purge old tracking data.
 type GroupMemberTracking struct {
 	ID           uint64    `bun:",pk"`
 	LastAppended time.Time `bun:",notnull"`
@@ -18,7 +17,6 @@ type GroupMemberTrackingUser struct {
 }
 
 // OutfitAssetTracking monitors assets that appear in multiple outfits.
-// The LastAppended field helps determine when to purge old tracking data.
 type OutfitAssetTracking struct {
 	ID           uint64    `bun:",pk"`
 	LastAppended time.Time `bun:",notnull"`
@@ -31,6 +29,20 @@ type OutfitAssetTrackingOutfit struct {
 	AssetID   uint64 `bun:",pk"`
 	TrackedID uint64 `bun:",pk"`      // Can be either an outfit ID or user ID
 	IsUserID  bool   `bun:",notnull"` // True if TrackedID is actually a user ID
+}
+
+// GameTracking monitors games that appear in multiple users' favorites.
+type GameTracking struct {
+	ID           uint64    `bun:",pk"`
+	LastAppended time.Time `bun:",notnull"`
+	LastChecked  time.Time `bun:",notnull"`
+	IsFlagged    bool      `bun:",notnull"`
+}
+
+// GameTrackingUser represents a user who has favorited a tracked game.
+type GameTrackingUser struct {
+	GameID uint64 `bun:",pk"`
+	UserID uint64 `bun:",pk"`
 }
 
 // TrackedID represents an ID that can be either an outfit ID or user ID.

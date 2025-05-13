@@ -86,6 +86,8 @@ github.com/jaxron/axonet/middleware/singleflight v0.0.0-20250316044721-2d660b2bc
 github.com/jaxron/axonet/middleware/singleflight v0.0.0-20250316044721-2d660b2bcf59/go.mod h1:ayL5YEn44i8T7HnugdmqF5gv5b7oGI+w5HNSU7Mcq3s=
 github.com/jaxron/roapi.go v0.0.0-20250503131421-6aaa398d0eec h1:QdCzhwfm0OrJR/AM/3sNNg3L7vsdX982OtQmcSF/WNs=
 github.com/jaxron/roapi.go v0.0.0-20250503131421-6aaa398d0eec/go.mod h1:V8G42xkZKR8KA2XmlZQqTLbJaZlA6gO9XaAXlb8O3gM=
+github.com/jaxron/roapi.go v0.0.0-20250511065027-1d861e01b0c6 h1:YvNR+YG6wLZBI0sHpl7e4o7qiflNEA7anHHXfZmpB8E=
+github.com/jaxron/roapi.go v0.0.0-20250511065027-1d861e01b0c6/go.mod h1:V8G42xkZKR8KA2XmlZQqTLbJaZlA6gO9XaAXlb8O3gM=
 github.com/jinzhu/inflection v1.0.0 h1:K317FqzuhWc8YvSVlFMCCUb36O/S9MCKRDI7QkRKD/E=
 github.com/jinzhu/inflection v1.0.0/go.mod h1:h+uFLlag+Qp1Va5pdKtLDYj+kHp5pxUVkryuEj+Srlc=
 github.com/klauspost/cpuid/v2 v2.0.9/go.mod h1:FInQzS24/EEf25PyTYn52gqo7WaD8xa0213Md/qVLRg=

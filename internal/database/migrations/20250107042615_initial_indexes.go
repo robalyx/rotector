@@ -103,11 +103,22 @@ func init() { //nolint:funlen
 
 			CREATE INDEX IF NOT EXISTS idx_outfit_asset_tracking_outfits_user
 			ON outfit_asset_tracking_outfits (tracked_id)
-			WHERE is_user_id = TRUE;
+			WHERE is_user_id = true;
 
 			CREATE INDEX IF NOT EXISTS idx_outfit_asset_tracking_outfits_outfit_only
 			ON outfit_asset_tracking_outfits (tracked_id)
-			WHERE is_user_id = FALSE;
+			WHERE is_user_id = false;
+
+			-- Game tracking indexes
+			CREATE INDEX IF NOT EXISTS idx_game_trackings_check 
+			ON game_trackings (last_checked ASC)
+			WHERE is_flagged = false;
+
+			CREATE INDEX IF NOT EXISTS idx_game_tracking_users_game
+			ON game_tracking_users (game_id);
+
+			CREATE INDEX IF NOT EXISTS idx_game_tracking_users_user
+			ON game_tracking_users (user_id);
 
 			-- Group review sorting indexes
 			CREATE INDEX IF NOT EXISTS idx_groups_confidence
@@ -324,11 +335,8 @@ func init() { //nolint:funlen
 			CREATE INDEX IF NOT EXISTS idx_user_inventory_user_id
 			ON user_inventories (user_id);
 
-			-- NOTE: We will make use of these in the future
-			-- CREATE INDEX IF NOT EXISTS idx_user_favorites_user_id
-			-- ON user_favorites (user_id);
-			-- CREATE INDEX IF NOT EXISTS idx_user_badges_user_id
-			-- ON user_badges (user_id);
+			CREATE INDEX IF NOT EXISTS idx_user_favorites_user_id
+			ON user_favorites (user_id);
 
 			-- User relationship info indexes
 			CREATE INDEX IF NOT EXISTS idx_game_infos_place_visits
@@ -436,6 +444,12 @@ func init() { //nolint:funlen
 			DROP INDEX IF EXISTS idx_outfit_asset_tracking_outfits_asset;
 			DROP INDEX IF EXISTS idx_outfit_asset_tracking_outfits_user;
 			DROP INDEX IF EXISTS idx_outfit_asset_tracking_outfits_outfit_only;
+
+			-- Game tracking indexes
+			DROP INDEX IF EXISTS idx_game_trackings_check;
+
+			DROP INDEX IF EXISTS idx_game_tracking_users_game;
+			DROP INDEX IF EXISTS idx_game_tracking_users_user;
 
 			-- Group review sorting indexes
 			DROP INDEX IF EXISTS idx_groups_confidence;
@@ -548,9 +562,7 @@ func init() { //nolint:funlen
 			DROP INDEX IF EXISTS idx_user_friends_user_id;
 			DROP INDEX IF EXISTS idx_user_games_user_id;
 			DROP INDEX IF EXISTS idx_user_inventory_user_id;
-			-- NOTE: We will make use of these in the future
-			-- DROP INDEX IF EXISTS idx_user_favorites_user_id;
-			-- DROP INDEX IF EXISTS idx_user_badges_user_id;
+			DROP INDEX IF EXISTS idx_user_favorites_user_id;
 
 			-- User relationship info indexes
 			DROP INDEX IF EXISTS idx_game_infos_place_visits;

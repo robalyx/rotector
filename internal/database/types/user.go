@@ -149,9 +149,8 @@ type InventoryInfo struct {
 
 // UserFavorite represents a user's favorite item.
 type UserFavorite struct {
-	UserID     uint64 `bun:",pk"      json:"userId"`
-	FavoriteID uint64 `bun:",notnull" json:"favoriteId"`
-	Item       any    `bun:",notnull" json:"item"`
+	UserID uint64 `bun:",pk" json:"userId"`
+	GameID uint64 `bun:",pk" json:"gameId"`
 }
 
 // UserBadge represents a user's badge.
@@ -197,7 +196,7 @@ type ReviewUser struct {
 	Friends       []*apiTypes.ExtendedFriend     `json:"friends,omitempty"`
 	Games         []*apiTypes.Game               `json:"games,omitempty"`
 	Inventory     []*apiTypes.InventoryAsset     `json:"inventory,omitempty"`
-	Favorites     []any                          `json:"favorites,omitempty"`
+	Favorites     []*apiTypes.Game               `json:"favorites,omitempty"`
 	Badges        []any                          `json:"badges,omitempty"`
 }
 
@@ -451,6 +450,28 @@ func (r *UserAssetQueryResult) ToAPIType() *apiTypes.AssetV2 {
 			ID: r.AssetType,
 		},
 		CurrentVersionID: r.CurrentVersionID,
+	}
+}
+
+// UserFavoriteQueryResult combines user favorite and game info for database queries.
+type UserFavoriteQueryResult struct {
+	UserFavorite
+	Name        string    `bun:"name"         json:"name"`
+	Description string    `bun:"description"  json:"description"`
+	PlaceVisits uint64    `bun:"place_visits" json:"placeVisits"`
+	Created     time.Time `bun:"created"      json:"created"`
+	Updated     time.Time `bun:"updated"      json:"updated"`
+}
+
+// ToAPIType converts a UserFavoriteQueryResult to an API Game type.
+func (r *UserFavoriteQueryResult) ToAPIType() *apiTypes.Game {
+	return &apiTypes.Game{
+		ID:          r.GameID,
+		Name:        r.Name,
+		Description: r.Description,
+		PlaceVisits: r.PlaceVisits,
+		Created:     r.Created,
+		Updated:     r.Updated,
 	}
 }
 

@@ -27,10 +27,10 @@ func NewOutfitFetcher(roAPI *api.API, logger *zap.Logger) *OutfitFetcher {
 	}
 }
 
-// GetOutfits fetches outfits and their assets for a single user.
+// GetOutfits fetches basic outfit information and current avatar assets for a user.
 func (o *OutfitFetcher) GetOutfits(
 	ctx context.Context, userID uint64,
-) ([]*apiTypes.Outfit, map[uint64][]*apiTypes.AssetV2, []*apiTypes.AssetV2, error) {
+) ([]*apiTypes.Outfit, []*apiTypes.AssetV2, error) {
 	ctx = context.WithValue(ctx, auth.KeyAddCookie, true)
 
 	// Get the user's current avatar details
@@ -39,7 +39,7 @@ func (o *OutfitFetcher) GetOutfits(
 		o.logger.Error("Failed to fetch user avatar",
 			zap.Error(err),
 			zap.Uint64("userID", userID))
-		return nil, nil, nil, err
+		return nil, nil, err
 	}
 
 	// Get user's outfits
@@ -49,7 +49,7 @@ func (o *OutfitFetcher) GetOutfits(
 		o.logger.Error("Failed to fetch user outfits",
 			zap.Error(err),
 			zap.Uint64("userID", userID))
-		return nil, nil, nil, err
+		return nil, nil, err
 	}
 
 	// Normalize outfit names
@@ -58,14 +58,26 @@ func (o *OutfitFetcher) GetOutfits(
 		outfits.Data[i].Name = normalizer.Normalize(outfits.Data[i].Name)
 	}
 
-	// Fetch outfit details concurrently
+	o.logger.Debug("Successfully fetched user outfits",
+		zap.Uint64("userID", userID),
+		zap.Int("outfitCount", len(outfits.Data)))
+
+	return outfits.Data, avatarDetails.Assets, nil
+}
+
+// GetOutfitDetails fetches detailed asset information for specific outfits.
+func (o *OutfitFetcher) GetOutfitDetails(
+	ctx context.Context, outfits []*apiTypes.Outfit,
+) (map[uint64][]*apiTypes.AssetV2, error) {
+	ctx = context.WithValue(ctx, auth.KeyAddCookie, true)
+
 	var (
 		outfitAssets = make(map[uint64][]*apiTypes.AssetV2)
 		p            = pool.New().WithContext(ctx).WithMaxGoroutines(5)
 		mu           sync.Mutex
 	)
 
-	for _, outfit := range outfits.Data {
+	for _, outfit := range outfits {
 		outfitID := outfit.ID
 		p.Go(func(ctx context.Context) error {
 			details, err := o.roAPI.Avatar().GetOutfitDetails(ctx, outfitID)
@@ -86,10 +98,9 @@ func (o *OutfitFetcher) GetOutfits(
 	// Wait for all outfit detail fetches to complete
 	_ = p.Wait()
 
-	o.logger.Debug("Successfully fetched user outfits and assets",
-		zap.Uint64("userID", userID),
-		zap.Int("outfitCount", len(outfits.Data)),
+	o.logger.Debug("Successfully fetched outfit details",
+		zap.Int("outfitCount", len(outfits)),
 		zap.Int("outfitsWithAssets", len(outfitAssets)))
 
-	return outfits.Data, outfitAssets, avatarDetails.Assets, nil
+	return outfitAssets, nil
 }

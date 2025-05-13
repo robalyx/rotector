@@ -233,6 +233,35 @@ func (r *TrackingModel) RemoveUsersFromAllGroups(ctx context.Context, userIDs []
 	return nil
 }
 
+// RemoveGroupsFromTracking removes multiple groups and their users from tracking.
+func (r *TrackingModel) RemoveGroupsFromTracking(ctx context.Context, groupIDs []uint64) error {
+	if len(groupIDs) == 0 {
+		return nil
+	}
+
+	return r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+		// Remove users from tracking
+		_, err := tx.NewDelete().
+			Model((*types.GroupMemberTrackingUser)(nil)).
+			Where("group_id IN (?)", bun.In(groupIDs)).
+			Exec(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to remove users from group tracking: %w", err)
+		}
+
+		// Remove groups from tracking
+		_, err = tx.NewDelete().
+			Model((*types.GroupMemberTracking)(nil)).
+			Where("id IN (?)", bun.In(groupIDs)).
+			Exec(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to remove groups from tracking: %w", err)
+		}
+
+		return nil
+	})
+}
+
 // AddOutfitAssetsToTracking adds multiple outfits to multiple assets' tracking lists.
 // The map values can contain either outfit IDs or user IDs (for current outfit).
 func (r *TrackingModel) AddOutfitAssetsToTracking(ctx context.Context, assetToOutfits map[uint64][]types.TrackedID) error {
@@ -432,4 +461,197 @@ func (r *TrackingModel) RemoveUsersFromAssetTracking(ctx context.Context, userID
 	r.logger.Debug("Removed users and their outfits from asset tracking",
 		zap.Int("userCount", len(userIDs)))
 	return nil
+}
+
+// AddGamesToTracking adds multiple users to multiple games' tracking lists.
+func (r *TrackingModel) AddGamesToTracking(ctx context.Context, gameToUsers map[uint64][]uint64) error {
+	// Create tracking entries for bulk insert
+	trackings := make([]types.GameTracking, 0, len(gameToUsers))
+	trackingUsers := make([]types.GameTrackingUser, 0)
+	now := time.Now()
+
+	for gameID, userIDs := range gameToUsers {
+		trackings = append(trackings, types.GameTracking{
+			ID:           gameID,
+			LastAppended: now,
+			LastChecked:  now,
+			IsFlagged:    false,
+		})
+
+		for _, userID := range userIDs {
+			trackingUsers = append(trackingUsers, types.GameTrackingUser{
+				GameID: gameID,
+				UserID: userID,
+			})
+		}
+	}
+
+	return r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+		// Lock the games in a consistent order to prevent deadlocks
+		gameIDs := make([]uint64, 0, len(gameToUsers))
+		for gameID := range gameToUsers {
+			gameIDs = append(gameIDs, gameID)
+		}
+		slices.Sort(gameIDs)
+
+		// Lock the rows we're going to update
+		var existing []types.GameTracking
+		err := tx.NewSelect().
+			Model(&existing).
+			Where("id IN (?)", bun.In(gameIDs)).
+			For("UPDATE").
+			Order("id").
+			Scan(ctx)
+		if err != nil {
+			return err
+		}
+
+		// Perform bulk insert with upsert
+		_, err = tx.NewInsert().
+			Model(&trackings).
+			On("CONFLICT (id) DO UPDATE").
+			Set("last_appended = EXCLUDED.last_appended").
+			Set("is_flagged = game_tracking.is_flagged").
+			Exec(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to add tracking entries: %w", err)
+		}
+
+		_, err = tx.NewInsert().
+			Model(&trackingUsers).
+			On("CONFLICT DO NOTHING").
+			Exec(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to add tracking user entries: %w", err)
+		}
+
+		r.logger.Debug("Successfully processed game tracking updates",
+			zap.Int("gameCount", len(gameToUsers)))
+
+		return nil
+	})
+}
+
+// GetGameTrackingsToCheck finds games that haven't been checked recently
+// with priority for games with more flagged users.
+func (r *TrackingModel) GetGameTrackingsToCheck(
+	ctx context.Context, batchSize int, minFlaggedUsers int, minFlaggedOverride int,
+) (map[uint64][]uint64, error) {
+	result := make(map[uint64][]uint64)
+
+	now := time.Now()
+	tenMinutesAgo := now.Add(-10 * time.Minute)
+	oneMinuteAgo := now.Add(-1 * time.Minute)
+
+	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+		var trackings []types.GameTracking
+
+		// Build subquery to find the game IDs to update
+		subq := tx.NewSelect().
+			Model((*types.GameTracking)(nil)).
+			Column("id").
+			With("user_counts", tx.NewSelect().
+				Model((*types.GameTrackingUser)(nil)).
+				Column("game_id").
+				ColumnExpr("COUNT(*) as user_count").
+				Group("game_id")).
+			Join("JOIN user_counts ON game_tracking.id = user_counts.game_id").
+			Where("is_flagged = FALSE").
+			Where("user_count >= ?", minFlaggedUsers).
+			Where("(last_checked < ? AND user_count >= ?) OR "+
+				"(last_checked < ? AND user_count >= ? / 2)",
+				tenMinutesAgo, minFlaggedOverride,
+				oneMinuteAgo, minFlaggedOverride).
+			OrderExpr("user_count DESC").
+			Order("last_checked ASC").
+			Limit(batchSize)
+
+		// Update the selected games and return their data
+		err := tx.NewUpdate().
+			Model(&trackings).
+			Set("last_checked = ?", now).
+			Where("id IN (?)", subq).
+			Returning("id").
+			Scan(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to get and update game trackings: %w", err)
+		}
+
+		// Get flagged users for each game
+		if len(trackings) > 0 {
+			gameIDs := make([]uint64, len(trackings))
+			for i, tracking := range trackings {
+				gameIDs[i] = tracking.ID
+			}
+
+			var trackingUsers []types.GameTrackingUser
+			err = tx.NewSelect().
+				Model(&trackingUsers).
+				Where("game_id IN (?)", bun.In(gameIDs)).
+				Scan(ctx)
+			if err != nil {
+				return fmt.Errorf("failed to get tracking users: %w", err)
+			}
+
+			// Map users to their games
+			for _, tu := range trackingUsers {
+				result[tu.GameID] = append(result[tu.GameID], tu.UserID)
+			}
+		}
+
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return result, nil
+}
+
+// RemoveUsersFromGameTracking removes multiple users from game tracking.
+func (r *TrackingModel) RemoveUsersFromGameTracking(ctx context.Context, userIDs []uint64) error {
+	if len(userIDs) == 0 {
+		return nil
+	}
+
+	_, err := r.db.NewDelete().
+		Model((*types.GameTrackingUser)(nil)).
+		Where("user_id IN (?)", bun.In(userIDs)).
+		Exec(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to remove users from game tracking: %w (userCount=%d)", err, len(userIDs))
+	}
+
+	r.logger.Debug("Removed users from game tracking",
+		zap.Int("userCount", len(userIDs)))
+	return nil
+}
+
+// RemoveGamesFromTracking removes multiple games and their users from tracking.
+func (r *TrackingModel) RemoveGamesFromTracking(ctx context.Context, gameIDs []uint64) error {
+	if len(gameIDs) == 0 {
+		return nil
+	}
+
+	return r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+		// Remove users from tracking
+		_, err := tx.NewDelete().
+			Model((*types.GameTrackingUser)(nil)).
+			Where("game_id IN (?)", bun.In(gameIDs)).
+			Exec(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to remove users from game tracking: %w", err)
+		}
+
+		// Remove games from tracking
+		_, err = tx.NewDelete().
+			Model((*types.GameTracking)(nil)).
+			Where("id IN (?)", bun.In(gameIDs)).
+			Exec(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to remove games from tracking: %w", err)
+		}
+
+		return nil
+	})
 }

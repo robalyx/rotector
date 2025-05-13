@@ -261,6 +261,8 @@ type ThresholdLimits struct {
 	MinFlaggedOverride int `koanf:"min_flagged_override"`
 	// Maximum group members before skipping tracking.
 	MaxGroupMembersTrack uint64 `koanf:"max_group_members_track"`
+	// Maximum game visits before skipping tracking.
+	MaxGameVisitsTrack uint64 `koanf:"max_game_visits_track"`
 	// Number of messages to accumulate before processing a channel.
 	ChannelProcessThreshold int `koanf:"channel_process_threshold"`
 }

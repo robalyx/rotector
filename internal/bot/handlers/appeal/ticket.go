@@ -1013,7 +1013,7 @@ func (m *TicketMenu) redactRobloxUserData(
 	user.Friends = []*apiTypes.ExtendedFriend{}
 	user.Games = []*apiTypes.Game{}
 	user.Inventory = []*apiTypes.InventoryAsset{}
-	user.Favorites = []any{}
+	user.Favorites = []*apiTypes.Game{}
 	user.Badges = []any{}
 	user.IsDeleted = true
 	user.ThumbnailURL = ""

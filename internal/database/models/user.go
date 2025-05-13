@@ -888,6 +888,53 @@ func (r *UserModel) DeleteUserFriends(ctx context.Context, tx bun.Tx, userIDs []
 	return totalAffected, nil
 }
 
+// DeleteUserFavorites removes favorite games for the specified users and their associated info.
+func (r *UserModel) DeleteUserFavorites(ctx context.Context, tx bun.Tx, userIDs []uint64) (int64, error) {
+	if len(userIDs) == 0 {
+		return 0, nil
+	}
+
+	// Get game IDs to delete
+	var gameIDs []uint64
+	err := tx.NewSelect().
+		ColumnExpr("DISTINCT game_id").
+		TableExpr("user_favorites").
+		Where("user_id IN (?)", bun.In(userIDs)).
+		Scan(ctx, &gameIDs)
+	if err != nil {
+		return 0, fmt.Errorf("failed to get game IDs: %w", err)
+	}
+
+	if len(gameIDs) == 0 {
+		return 0, nil
+	}
+
+	// Delete favorite games
+	result, err := tx.NewDelete().
+		TableExpr("user_favorites").
+		Where("user_id IN (?)", bun.In(userIDs)).
+		Exec(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("failed to delete user favorites: %w", err)
+	}
+
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return 0, fmt.Errorf("failed to get affected rows: %w", err)
+	}
+
+	// Delete orphaned game info
+	_, err = tx.NewDelete().
+		TableExpr("game_infos").
+		Where("id IN (?) AND id NOT IN (SELECT game_id FROM user_games UNION SELECT game_id FROM user_favorites)", bun.In(gameIDs)).
+		Exec(ctx)
+	if err != nil {
+		return affected, fmt.Errorf("failed to delete orphaned game info: %w", err)
+	}
+
+	return affected, nil
+}
+
 // DeleteUserGames removes user game relationships and unreferenced game info.
 func (r *UserModel) DeleteUserGames(ctx context.Context, tx bun.Tx, userIDs []uint64) (int64, error) {
 	if len(userIDs) == 0 {
@@ -901,6 +948,7 @@ func (r *UserModel) DeleteUserGames(ctx context.Context, tx bun.Tx, userIDs []ui
 		Model((*types.GameInfo)(nil)).
 		Where("id IN (SELECT game_id FROM user_games WHERE user_id IN (?))", bun.In(userIDs)).
 		Where("id NOT IN (SELECT game_id FROM user_games WHERE user_id NOT IN (?))", bun.In(userIDs)).
+		Where("id NOT IN (SELECT game_id FROM user_favorites)").
 		Exec(ctx)
 	if err != nil {
 		return 0, fmt.Errorf("failed to delete unreferenced game info: %w", err)
@@ -915,6 +963,17 @@ func (r *UserModel) DeleteUserGames(ctx context.Context, tx bun.Tx, userIDs []ui
 		Exec(ctx)
 	if err != nil {
 		return 0, fmt.Errorf("failed to delete user games: %w", err)
+	}
+	affected, _ = result.RowsAffected()
+	totalAffected += affected
+
+	// Delete user favorites
+	result, err = tx.NewDelete().
+		Model((*types.UserFavorite)(nil)).
+		Where("user_id IN (?)", bun.In(userIDs)).
+		Exec(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("failed to delete user favorites: %w", err)
 	}
 	affected, _ = result.RowsAffected()
 	totalAffected += affected
@@ -1360,6 +1419,33 @@ func (r *UserModel) GetRecentFriendInfos(
 	return friendMap, nil
 }
 
+// GetUserFavorites fetches favorite games for a user.
+func (r *UserModel) GetUserFavorites(ctx context.Context, userID uint64) ([]*apiTypes.Game, error) {
+	var results []types.UserFavoriteQueryResult
+
+	err := r.db.NewSelect().
+		TableExpr("user_favorites uf").
+		Join("JOIN game_infos gi ON gi.id = uf.game_id").
+		ColumnExpr("uf.user_id, uf.game_id, "+
+			"gi.name, gi.description, gi.place_visits, "+
+			"gi.created, gi.updated").
+		Where("uf.user_id = ?", userID).
+		Order("gi.place_visits DESC").
+		Scan(ctx, &results)
+
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return nil, fmt.Errorf("failed to get user favorites: %w", err)
+	}
+
+	// Convert to API types
+	apiFavorites := make([]*apiTypes.Game, len(results))
+	for i, result := range results {
+		apiFavorites[i] = result.ToAPIType()
+	}
+
+	return apiFavorites, nil
+}
+
 // GetUserGames fetches games for a user.
 func (r *UserModel) GetUserGames(ctx context.Context, userID uint64) ([]*apiTypes.Game, error) {
 	var results []types.UserGameQueryResult
@@ -1697,6 +1783,68 @@ func (r *UserModel) SaveUserFriends(ctx context.Context, tx bun.Tx, userFriends 
 		Exec(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to upsert user friends: %w", err)
+	}
+
+	return nil
+}
+
+// SaveUserFavorites saves favorite games for multiple users.
+func (r *UserModel) SaveUserFavorites(ctx context.Context, tx bun.Tx, userFavorites map[uint64][]*apiTypes.Game) error {
+	if len(userFavorites) == 0 {
+		return nil
+	}
+
+	// Calculate total size for slices
+	totalFavorites := 0
+	for _, favorites := range userFavorites {
+		totalFavorites += len(favorites)
+	}
+
+	// Pre-allocate slices
+	allUserFavorites := make([]types.UserFavorite, 0, totalFavorites)
+	gameInfoMap := make(map[uint64]*types.GameInfo)
+
+	// Build user favorites and game info
+	for userID, favorites := range userFavorites {
+		for _, game := range favorites {
+			userFavorite := &types.UserFavorite{
+				UserID: userID,
+				GameID: game.ID,
+			}
+			_, gameInfo := types.FromAPIGame(userID, game)
+			allUserFavorites = append(allUserFavorites, *userFavorite)
+			gameInfoMap[game.ID] = gameInfo
+		}
+	}
+
+	// Convert game info map to slice
+	gameInfos := make([]types.GameInfo, 0, len(gameInfoMap))
+	for _, info := range gameInfoMap {
+		gameInfos = append(gameInfos, *info)
+	}
+
+	// Save game info
+	_, err := tx.NewInsert().
+		Model(&gameInfos).
+		On("CONFLICT (id) DO UPDATE").
+		Set("name = EXCLUDED.name").
+		Set("description = EXCLUDED.description").
+		Set("place_visits = EXCLUDED.place_visits").
+		Set("created = EXCLUDED.created").
+		Set("updated = EXCLUDED.updated").
+		Set("last_updated = EXCLUDED.last_updated").
+		Exec(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to upsert game info: %w", err)
+	}
+
+	// Save user favorites
+	_, err = tx.NewInsert().
+		Model(&allUserFavorites).
+		On("CONFLICT (user_id, game_id) DO NOTHING").
+		Exec(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to upsert user favorites: %w", err)
 	}
 
 	return nil

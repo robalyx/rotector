@@ -48,12 +48,19 @@ func NewGroupChecker(
 
 // CheckGroupPercentages analyzes groups to find those exceeding the flagged user threshold.
 func (c *GroupChecker) CheckGroupPercentages(
-	groupInfos []*apiTypes.GroupResponse, groupToFlaggedUsers map[uint64][]uint64,
+	ctx context.Context, groupInfos []*apiTypes.GroupResponse, groupToFlaggedUsers map[uint64][]uint64,
 ) map[uint64]*types.ReviewGroup {
 	flaggedGroups := make(map[uint64]*types.ReviewGroup)
+	largeGroupIDs := make([]uint64, 0)
 
 	// Identify groups that exceed thresholds
 	for _, groupInfo := range groupInfos {
+		// Skip groups that are too large to track
+		if groupInfo.MemberCount > c.maxGroupMembersTrack {
+			largeGroupIDs = append(largeGroupIDs, groupInfo.ID)
+			continue
+		}
+
 		flaggedUsers := groupToFlaggedUsers[groupInfo.ID]
 
 		var reason string
@@ -91,6 +98,18 @@ func (c *GroupChecker) CheckGroupPercentages(
 		}
 	}
 
+	// Remove large groups from tracking
+	if len(largeGroupIDs) > 0 {
+		if err := c.db.Model().Tracking().RemoveGroupsFromTracking(ctx, largeGroupIDs); err != nil {
+			c.logger.Error("Failed to remove large groups from tracking",
+				zap.Error(err),
+				zap.Uint64s("groupIDs", largeGroupIDs))
+		} else {
+			c.logger.Info("Removed large groups from tracking",
+				zap.Int("count", len(largeGroupIDs)))
+		}
+	}
+
 	// If no groups were flagged, return empty map
 	if len(flaggedGroups) == 0 {
 		return flaggedGroups
@@ -106,7 +125,7 @@ func (c *GroupChecker) CheckGroupPercentages(
 
 	// Get user data for confidence calculation
 	users, err := c.db.Model().User().GetUsersByIDs(
-		context.Background(), allFlaggedUserIDs, types.UserFieldBasic|types.UserFieldConfidence,
+		ctx, allFlaggedUserIDs, types.UserFieldBasic|types.UserFieldConfidence,
 	)
 	if err != nil {
 		c.logger.Error("Failed to get user confidence data", zap.Error(err))

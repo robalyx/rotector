@@ -92,6 +92,12 @@ func (s *UserService) ClearUser(ctx context.Context, user *types.ReviewUser, rev
 		return err
 	}
 
+	// Remove user from game tracking
+	if err := s.tracking.RemoveUsersFromGameTracking(ctx, []uint64{user.ID}); err != nil {
+		s.logger.Error("Failed to remove user from game tracking", zap.Error(err))
+		return err
+	}
+
 	// Verify votes for the user
 	if err := s.votes.VerifyVotes(ctx, user.ID, false, enum.VoteTypeUser); err != nil {
 		s.logger.Error("Failed to verify votes", zap.Error(err))
@@ -130,9 +136,9 @@ func (s *UserService) GetUserByID(
 		user.Groups = relationships.Groups
 		user.Outfits = relationships.Outfits
 		user.Friends = relationships.Friends
+		user.Favorites = relationships.Favorites
 		user.Games = relationships.Games
 		user.Inventory = relationships.Inventory
-		user.Favorites = relationships.Favorites
 		user.Badges = relationships.Badges
 	}
 
@@ -211,9 +217,9 @@ func (s *UserService) GetUserToReview(
 	result.Groups = relationships.Groups
 	result.Outfits = relationships.Outfits
 	result.Friends = relationships.Friends
+	result.Favorites = relationships.Favorites
 	result.Games = relationships.Games
 	result.Inventory = relationships.Inventory
-	result.Favorites = relationships.Favorites
 	result.Badges = relationships.Badges
 
 	return result, nil
@@ -258,6 +264,18 @@ func (s *UserService) GetUserRelationships(ctx context.Context, userID uint64) (
 		}
 		mu.Lock()
 		result.Friends = friends
+		mu.Unlock()
+		return nil
+	})
+
+	// Fetch favorites in parallel
+	p.Go(func(ctx context.Context) error {
+		favorites, err := s.model.GetUserFavorites(ctx, userID)
+		if err != nil {
+			return fmt.Errorf("failed to get user favorites: %w", err)
+		}
+		mu.Lock()
+		result.Favorites = favorites
 		mu.Unlock()
 		return nil
 	})
@@ -356,6 +374,7 @@ func (s *UserService) SaveUsers(ctx context.Context, users map[uint64]*types.Rev
 		userOutfitAssets := make(map[uint64]map[uint64][]*apiTypes.AssetV2)
 		userAssets := make(map[uint64][]*apiTypes.AssetV2)
 		userFriends := make(map[uint64][]*apiTypes.ExtendedFriend)
+		userFavorites := make(map[uint64][]*apiTypes.Game)
 		userGames := make(map[uint64][]*apiTypes.Game)
 		userInventory := make(map[uint64][]*apiTypes.InventoryAsset)
 
@@ -375,6 +394,9 @@ func (s *UserService) SaveUsers(ctx context.Context, users map[uint64]*types.Rev
 			}
 			if len(user.Friends) > 0 {
 				userFriends[user.ID] = user.Friends
+			}
+			if len(user.Favorites) > 0 {
+				userFavorites[user.ID] = user.Favorites
 			}
 			if len(user.Games) > 0 {
 				userGames[user.ID] = user.Games
@@ -398,6 +420,10 @@ func (s *UserService) SaveUsers(ctx context.Context, users map[uint64]*types.Rev
 		}
 
 		if err := s.model.SaveUserFriends(ctx, tx, userFriends); err != nil {
+			return err
+		}
+
+		if err := s.model.SaveUserFavorites(ctx, tx, userFavorites); err != nil {
 			return err
 		}
 
@@ -440,6 +466,11 @@ func (s *UserService) DeleteUsers(ctx context.Context, userIDs []uint64) (int64,
 			return err
 		}
 
+		if err := s.tracking.RemoveUsersFromGameTracking(ctx, userIDs); err != nil {
+			s.logger.Error("Failed to remove users from game tracking", zap.Error(err))
+			return err
+		}
+
 		// Delete core user data
 		affected, err := s.model.DeleteUsers(ctx, userIDs)
 		if err != nil {
@@ -463,6 +494,12 @@ func (s *UserService) DeleteUsers(ctx context.Context, userIDs []uint64) (int64,
 		affected, err = s.model.DeleteUserFriends(ctx, tx, userIDs)
 		if err != nil {
 			return fmt.Errorf("failed to delete user friends: %w", err)
+		}
+		totalAffected += affected
+
+		affected, err = s.model.DeleteUserFavorites(ctx, tx, userIDs)
+		if err != nil {
+			return fmt.Errorf("failed to delete user favorites: %w", err)
 		}
 		totalAffected += affected
 
