@@ -2,6 +2,8 @@ package friend
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"fmt"
 	"time"
 
@@ -131,7 +133,11 @@ func (w *Worker) processFriendsBatch() ([]uint64, error) {
 		// Get the next confirmed user
 		user, err := w.db.Model().User().GetUserToScan(context.Background())
 		if err != nil {
-			w.logger.Error("Error getting user to scan", zap.Error(err))
+			if !errors.Is(err, sql.ErrNoRows) {
+				w.logger.Error("Error getting user to scan", zap.Error(err))
+			} else {
+				w.logger.Warn("No more users to scan", zap.Error(err))
+			}
 			w.pendingFriendIDs = friendIDs
 			return nil, err
 		}

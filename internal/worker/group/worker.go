@@ -2,6 +2,8 @@ package group
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"fmt"
 	"time"
 
@@ -98,8 +100,12 @@ func (w *Worker) Start() {
 		if w.currentGroupID == 0 {
 			group, err := w.db.Model().Group().GetGroupToScan(context.Background())
 			if err != nil {
-				w.logger.Error("Error getting group to scan", zap.Error(err))
-				w.reporter.SetHealthy(false)
+				if !errors.Is(err, sql.ErrNoRows) {
+					w.logger.Error("Error getting group to scan", zap.Error(err))
+					w.reporter.SetHealthy(false)
+				} else {
+					w.logger.Warn("No more groups to scan", zap.Error(err))
+				}
 				time.Sleep(5 * time.Minute)
 				continue
 			}
@@ -161,7 +167,11 @@ func (w *Worker) processGroup() ([]uint64, error) {
 			// Get next group
 			nextGroup, err := w.db.Model().Group().GetGroupToScan(context.Background())
 			if err != nil {
-				w.logger.Error("Error getting next group to scan", zap.Error(err))
+				if !errors.Is(err, sql.ErrNoRows) {
+					w.logger.Error("Error getting next group to scan", zap.Error(err))
+				} else {
+					w.logger.Warn("No more groups to scan", zap.Error(err))
+				}
 				return nil, err
 			}
 			w.currentGroupID = nextGroup.ID
@@ -212,7 +222,11 @@ func (w *Worker) processGroup() ([]uint64, error) {
 		if groupUsers.NextPageCursor == nil {
 			nextGroup, err := w.db.Model().Group().GetGroupToScan(context.Background())
 			if err != nil {
-				w.logger.Error("Error getting next group to scan", zap.Error(err))
+				if !errors.Is(err, sql.ErrNoRows) {
+					w.logger.Error("Error getting next group to scan", zap.Error(err))
+				} else {
+					w.logger.Warn("No more groups to scan", zap.Error(err))
+				}
 				return nil, err
 			}
 			w.currentGroupID = nextGroup.ID
