@@ -54,19 +54,15 @@ func (m *Menu) Show(ctx *interaction.Context, s *session.Session) {
 	stats, err := m.layout.d1Client.GetQueueStats(ctx.Context())
 	if err != nil {
 		m.layout.logger.Error("Failed to get queue stats", zap.Error(err))
-		ctx.Error("Failed to get queue statistics. Please try again.")
-		return
+	} else {
+		session.QueueStats.Set(s, stats)
 	}
-
-	// Store stats in session
-	session.QueueStats.Set(s, stats)
 
 	// Get queued user status if one exists
 	if userID := session.QueuedUserID.Get(s); userID > 0 {
 		status, err := m.layout.d1Client.GetQueueStatus(ctx.Context(), userID)
 		if err != nil {
 			m.layout.logger.Error("Failed to get queue status", zap.Error(err))
-			ctx.Error("Failed to get queue status. Please try again.")
 			return
 		}
 

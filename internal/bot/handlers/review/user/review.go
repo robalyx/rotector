@@ -783,6 +783,37 @@ func (m *ReviewMenu) fetchNewTarget(ctx *interaction.Context, s *session.Session
 		return nil, isBanned, err
 	}
 
+	// Process friends and groups to update reasons
+	reasonsMap := make(map[uint64]types.Reasons[enum.UserReasonType])
+	if len(user.Reasons) > 0 {
+		reasonsMap[user.ID] = user.Reasons
+	}
+
+	// Create a slice with just this user for processing
+	userSlice := []*types.ReviewUser{user}
+
+	// Process friends if friend reason doesn't exist
+	if _, hasFriendReason := user.Reasons[enum.UserReasonTypeFriend]; !hasFriendReason {
+		m.layout.friendChecker.ProcessUsers(userSlice, reasonsMap)
+	}
+
+	// Process groups if group reason doesn't exist
+	if _, hasGroupReason := user.Reasons[enum.UserReasonTypeGroup]; !hasGroupReason {
+		m.layout.groupChecker.ProcessUsers(userSlice, reasonsMap)
+	}
+
+	// Update user with any new reasons from friend/group checking
+	if reasons, ok := reasonsMap[user.ID]; ok {
+		user.Reasons = reasons
+		user.Confidence = utils.CalculateConfidence(reasons)
+
+		// Save updated user to database
+		flaggedUsers := map[uint64]*types.ReviewUser{user.ID: user}
+		if err := m.layout.db.Service().User().SaveUsers(ctx.Context(), flaggedUsers); err != nil {
+			m.layout.logger.Error("Failed to save updated user reasons", zap.Error(err))
+		}
+	}
+
 	// Add current user to history and set index to point to it
 	session.AddToReviewHistory(s, session.UserReviewHistoryType, user.ID)
 

@@ -8,6 +8,7 @@ import (
 	"github.com/robalyx/rotector/internal/bot/handlers/review/shared"
 	sharedView "github.com/robalyx/rotector/internal/bot/views/review/shared"
 	"github.com/robalyx/rotector/internal/database"
+	"github.com/robalyx/rotector/internal/roblox/checker"
 	"github.com/robalyx/rotector/internal/roblox/fetcher"
 	"github.com/robalyx/rotector/internal/setup"
 	"github.com/robalyx/rotector/internal/translator"
@@ -27,6 +28,8 @@ type Layout struct {
 	commentsMenu     *shared.CommentsMenu
 	thumbnailFetcher *fetcher.ThumbnailFetcher
 	presenceFetcher  *fetcher.PresenceFetcher
+	friendChecker    *checker.FriendChecker
+	groupChecker     *checker.GroupChecker
 	imageStreamer    *interaction.ImageStreamer
 	captcha          *captcha.Manager
 	logger           *zap.Logger
@@ -41,6 +44,8 @@ func New(app *setup.App, interactionManager *interaction.Manager) *Layout {
 		translator:       translator.New(app.RoAPI.GetClient()),
 		thumbnailFetcher: fetcher.NewThumbnailFetcher(app.RoAPI, app.Logger),
 		presenceFetcher:  fetcher.NewPresenceFetcher(app.RoAPI, app.Logger),
+		friendChecker:    checker.NewFriendChecker(app, app.Logger),
+		groupChecker:     checker.NewGroupChecker(app, app.Logger),
 		imageStreamer:    interaction.NewImageStreamer(interactionManager, app.Logger, app.RoAPI.GetClient()),
 		captcha:          captcha.NewManager(app.DB, app.Logger),
 		logger:           app.Logger.Named("user_menu"),
