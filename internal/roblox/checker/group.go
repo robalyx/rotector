@@ -10,6 +10,7 @@ import (
 	"github.com/robalyx/rotector/internal/database"
 	"github.com/robalyx/rotector/internal/database/types"
 	"github.com/robalyx/rotector/internal/database/types/enum"
+	"github.com/robalyx/rotector/internal/setup"
 	"github.com/sourcegraph/conc/pool"
 	"go.uber.org/zap"
 )
@@ -33,16 +34,13 @@ type GroupChecker struct {
 
 // NewGroupChecker creates a GroupChecker with database access for looking up
 // flagged group information.
-func NewGroupChecker(
-	db database.Client, logger *zap.Logger, maxGroupMembersTrack uint64,
-	minFlaggedOverride int, minFlaggedPercentage float64,
-) *GroupChecker {
+func NewGroupChecker(app *setup.App, logger *zap.Logger) *GroupChecker {
 	return &GroupChecker{
-		db:                   db,
+		db:                   app.DB,
 		logger:               logger.Named("group_checker"),
-		maxGroupMembersTrack: maxGroupMembersTrack,
-		minFlaggedOverride:   minFlaggedOverride,
-		minFlaggedPercentage: minFlaggedPercentage,
+		maxGroupMembersTrack: app.Config.Worker.ThresholdLimits.MaxGroupMembersTrack,
+		minFlaggedOverride:   app.Config.Worker.ThresholdLimits.MinFlaggedOverride,
+		minFlaggedPercentage: app.Config.Worker.ThresholdLimits.MinFlaggedPercentage,
 	}
 }
 
@@ -135,6 +133,9 @@ func (c *GroupChecker) CheckGroupPercentages(
 	// Calculate average confidence for each flagged group
 	for groupID, group := range flaggedGroups {
 		group.Confidence = c.calculateGroupConfidence(groupToFlaggedUsers[groupID], users)
+		if memberReason, ok := group.Reasons[enum.GroupReasonTypeMember]; ok {
+			memberReason.Confidence = group.Confidence
+		}
 	}
 
 	return flaggedGroups
@@ -259,7 +260,7 @@ func (c *GroupChecker) processUserGroups(
 	confidence := c.calculateConfidence(confirmedCount, flaggedCount, len(userInfo.Groups))
 
 	// Flag user if confidence exceeds threshold
-	if confidence >= 0.4 {
+	if confidence >= 0.5 {
 		c.logger.Debug("User flagged for group membership",
 			zap.Uint64("userID", userInfo.ID),
 			zap.Int("confirmedGroups", confirmedCount),
@@ -279,15 +280,15 @@ func (c *GroupChecker) processUserGroups(
 func (c *GroupChecker) calculateConfidence(confirmedCount, flaggedCount, totalGroups int) float64 {
 	var confidence float64
 
-	// Factor 1: Absolute number of inappropriate groups - 60% weight
+	// Factor 1: Absolute number of inappropriate groups - 70% weight
 	inappropriateWeight := c.calculateInappropriateWeight(confirmedCount, flaggedCount)
-	confidence += inappropriateWeight * 0.60
+	confidence += inappropriateWeight * 0.70
 
-	// Factor 2: Ratio of inappropriate groups - 40% weight
+	// Factor 2: Ratio of inappropriate groups - 30% weight
 	if totalGroups > 0 {
 		totalInappropriate := float64(confirmedCount) + (float64(flaggedCount) * 0.5)
 		ratioWeight := math.Min(totalInappropriate/float64(totalGroups), 1.0)
-		confidence += ratioWeight * 0.40
+		confidence += ratioWeight * 0.30
 	}
 
 	return confidence
@@ -304,8 +305,10 @@ func (c *GroupChecker) calculateInappropriateWeight(confirmedCount, flaggedCount
 		return 0.8
 	case confirmedCount >= 2 || totalWeight >= 3:
 		return 0.6
-	case confirmedCount >= 1 || totalWeight >= 1:
+	case confirmedCount >= 1 || totalWeight >= 2:
 		return 0.4
+	case totalWeight >= 1:
+		return 0.2
 	default:
 		return 0.0
 	}

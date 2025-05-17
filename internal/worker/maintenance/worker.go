@@ -48,11 +48,7 @@ func New(app *setup.App, bar *progress.Bar, logger *zap.Logger) *Worker {
 	groupFetcher := fetcher.NewGroupFetcher(app.RoAPI, logger)
 	thumbnailFetcher := fetcher.NewThumbnailFetcher(app.RoAPI, logger)
 	reporter := core.NewStatusReporter(app.StatusClient, "maintenance", logger)
-	groupChecker := checker.NewGroupChecker(app.DB, logger,
-		app.Config.Worker.ThresholdLimits.MaxGroupMembersTrack,
-		app.Config.Worker.ThresholdLimits.MinFlaggedOverride,
-		app.Config.Worker.ThresholdLimits.MinFlaggedPercentage,
-	)
+	groupChecker := checker.NewGroupChecker(app, logger)
 
 	// Create Discord client
 	client, err := disgo.New(app.Config.Bot.Discord.Token,

@@ -47,14 +47,10 @@ func NewUserChecker(app *setup.App, userFetcher *fetcher.UserFetcher, logger *za
 		userAnalyzer:   userAnalyzer,
 		outfitAnalyzer: outfitAnalyzer,
 		ivanAnalyzer:   ai.NewIvanAnalyzer(app, logger),
-		groupChecker: NewGroupChecker(app.DB, logger,
-			app.Config.Worker.ThresholdLimits.MaxGroupMembersTrack,
-			app.Config.Worker.ThresholdLimits.MinFlaggedOverride,
-			app.Config.Worker.ThresholdLimits.MinFlaggedPercentage,
-		),
-		friendChecker: NewFriendChecker(app, logger),
-		condoChecker:  NewCondoChecker(app.DB, logger),
-		logger:        logger.Named("user_checker"),
+		groupChecker:   NewGroupChecker(app, logger),
+		friendChecker:  NewFriendChecker(app, logger),
+		condoChecker:   NewCondoChecker(app.DB, logger),
+		logger:         logger.Named("user_checker"),
 	}
 }
 
@@ -237,6 +233,8 @@ func (c *UserChecker) trackFavoriteGames(flaggedUsers map[uint64]*types.ReviewUs
 		// Track games that meet the visit threshold
 		for _, game := range favorites {
 			if game.PlaceVisits <= c.app.Config.Worker.ThresholdLimits.MaxGameVisitsTrack {
+				// NOTE: just realized we're using the universe ID and not the root place ID
+				// RIP!!!!!! wtf roblox
 				gameUsersTracking[game.ID] = append(gameUsersTracking[game.ID], userID)
 			}
 		}
