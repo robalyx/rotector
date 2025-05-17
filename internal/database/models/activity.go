@@ -131,6 +131,7 @@ func (r *ActivityModel) GetLogs(
 }
 
 // GetRecentlyReviewedIDs returns the IDs of users or groups that were recently reviewed by a specific reviewer.
+// Only returns IDs if there are enough items to review (more than 2x the limit).
 func (r *ActivityModel) GetRecentlyReviewedIDs(
 	ctx context.Context, reviewerID uint64, isGroup bool, limit int,
 ) ([]uint64, error) {
@@ -147,17 +148,43 @@ func (r *ActivityModel) GetRecentlyReviewedIDs(
 		activityType = enum.ActivityTypeUserViewed
 	}
 
-	query := r.db.NewSelect().
+	// Check if we have enough items to apply the filter
+	var totalCount int
+	var err error
+
+	if isGroup {
+		totalCount, err = r.db.NewSelect().
+			Model((*types.Group)(nil)).
+			Where("status = ?", enum.GroupTypeFlagged).
+			Count(ctx)
+	} else {
+		totalCount, err = r.db.NewSelect().
+			Model((*types.User)(nil)).
+			Where("status = ?", enum.UserTypeFlagged).
+			Count(ctx)
+	}
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to get total count: %w", err)
+	}
+
+	// If we don't have enough items (2x the limit + buffer), return empty slice
+	// This ensures we always have enough items to review even after filtering
+	if totalCount < limit*2+10 {
+		return []uint64{}, nil
+	}
+
+	// Get recently reviewed IDs since we have enough items
+	var ids []uint64
+	err = r.db.NewSelect().
 		Model(&logs).
 		Column(itemType).
 		Where(itemType+" > 0").
 		Where("reviewer_id = ?", reviewerID).
 		Where("activity_type = ?", activityType).
 		Order("activity_timestamp DESC").
-		Limit(limit)
-
-	var ids []uint64
-	err := query.Scan(ctx, &ids)
+		Limit(limit).
+		Scan(ctx, &ids)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get recently reviewed IDs: %w", err)
 	}
