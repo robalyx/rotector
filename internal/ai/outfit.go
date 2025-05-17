@@ -53,7 +53,7 @@ Output format:
 
 Theme categories (use this format):
 - "Sexual/Adult: [specific detail]" (e.g., "Sexual/Adult: Succubus-themed outfits")
-- "Body/Figure: [specific detail]" (e.g., "Body/Figure: Exaggerated curvy avatar")
+- "Body/Figure: [specific detail]" (e.g., "Body/Figure: Exaggerated anatomy")
 - "BDSM/Kink: [specific detail]" (e.g., "BDSM/Kink: Latex catsuit with chains")
 
 Theme confidence levels based on severity:
@@ -85,10 +85,8 @@ Instruction: Pay close attention to outfits that are sexual or adult-themed:
 - Succubus-themed outfits (especially with womb tattoos or markings)
 
 Instruction: Pay close attention to outfits that are body/figure-focused:
-- Extremely exaggerated curvy/thicc avatars
 - Unrealistic hourglass figures
 - Inflated or exaggerated anatomy
-- Ultra-slim waist avatars
 - Bodies with sexualized scars or markings
 - Outfits using belly shaders
 

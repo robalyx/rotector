@@ -25,7 +25,7 @@ func TestCalculateConfidence(t *testing.T) {
 		{
 			name: "single reason",
 			reasons: types.Reasons[enum.UserReasonType]{
-				enum.UserReasonTypeDescription: {
+				enum.UserReasonTypeProfile: {
 					Message:    "test",
 					Confidence: 0.8,
 				},
@@ -35,7 +35,7 @@ func TestCalculateConfidence(t *testing.T) {
 		{
 			name: "multiple reasons same confidence",
 			reasons: types.Reasons[enum.UserReasonType]{
-				enum.UserReasonTypeDescription: {
+				enum.UserReasonTypeProfile: {
 					Message:    "test1",
 					Confidence: 0.8,
 				},
@@ -49,7 +49,7 @@ func TestCalculateConfidence(t *testing.T) {
 		{
 			name: "multiple reasons different confidence",
 			reasons: types.Reasons[enum.UserReasonType]{
-				enum.UserReasonTypeDescription: {
+				enum.UserReasonTypeProfile: {
 					Message:    "test1",
 					Confidence: 0.9,
 				},
@@ -63,7 +63,7 @@ func TestCalculateConfidence(t *testing.T) {
 		{
 			name: "three reasons different confidence",
 			reasons: types.Reasons[enum.UserReasonType]{
-				enum.UserReasonTypeDescription: {
+				enum.UserReasonTypeProfile: {
 					Message:    "test1",
 					Confidence: 0.9,
 				},
@@ -81,7 +81,7 @@ func TestCalculateConfidence(t *testing.T) {
 		{
 			name: "confidence above 1.0",
 			reasons: types.Reasons[enum.UserReasonType]{
-				enum.UserReasonTypeDescription: {
+				enum.UserReasonTypeProfile: {
 					Message:    "test1",
 					Confidence: 1.2,
 				},
@@ -91,7 +91,7 @@ func TestCalculateConfidence(t *testing.T) {
 		{
 			name: "confidence below 0",
 			reasons: types.Reasons[enum.UserReasonType]{
-				enum.UserReasonTypeDescription: {
+				enum.UserReasonTypeProfile: {
 					Message:    "test1",
 					Confidence: -0.2,
 				},
@@ -101,7 +101,7 @@ func TestCalculateConfidence(t *testing.T) {
 		{
 			name: "mixed positive and negative confidence",
 			reasons: types.Reasons[enum.UserReasonType]{
-				enum.UserReasonTypeDescription: {
+				enum.UserReasonTypeProfile: {
 					Message:    "test1",
 					Confidence: 0.8,
 				},
@@ -147,7 +147,7 @@ func TestCalculateConfidenceRounding(t *testing.T) {
 	t.Parallel()
 
 	reasons := types.Reasons[enum.UserReasonType]{
-		enum.UserReasonTypeDescription: {
+		enum.UserReasonTypeProfile: {
 			Message:    "test1",
 			Confidence: 0.823,
 		},

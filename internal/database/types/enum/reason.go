@@ -6,8 +6,8 @@ package enum
 type UserReasonType int
 
 const (
-	// UserReasonTypeDescription indicates content analysis of user profile.
-	UserReasonTypeDescription UserReasonType = iota
+	// UserReasonTypeProfile indicates content analysis of user profile.
+	UserReasonTypeProfile UserReasonType = iota
 	// UserReasonTypeFriend indicates friend network analysis.
 	UserReasonTypeFriend
 	// UserReasonTypeOutfit indicates outfit analysis.

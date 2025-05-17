@@ -7,11 +7,11 @@ import (
 	"strings"
 )
 
-const _UserReasonTypeName = "DescriptionFriendOutfitGroupCondoChatFavoritesBadges"
+const _UserReasonTypeName = "ProfileFriendOutfitGroupCondoChatFavoritesBadges"
 
-var _UserReasonTypeIndex = [...]uint8{0, 11, 17, 23, 28, 33, 37, 46, 52}
+var _UserReasonTypeIndex = [...]uint8{0, 7, 13, 19, 24, 29, 33, 42, 48}
 
-const _UserReasonTypeLowerName = "descriptionfriendoutfitgroupcondochatfavoritesbadges"
+const _UserReasonTypeLowerName = "profilefriendoutfitgroupcondochatfavoritesbadges"
 
 func (i UserReasonType) String() string {
 	if i < 0 || i >= UserReasonType(len(_UserReasonTypeIndex)-1) {
@@ -24,7 +24,7 @@ func (i UserReasonType) String() string {
 // Re-run the stringer command to generate them again.
 func _UserReasonTypeNoOp() {
 	var x [1]struct{}
-	_ = x[UserReasonTypeDescription-(0)]
+	_ = x[UserReasonTypeProfile-(0)]
 	_ = x[UserReasonTypeFriend-(1)]
 	_ = x[UserReasonTypeOutfit-(2)]
 	_ = x[UserReasonTypeGroup-(3)]
@@ -34,36 +34,36 @@ func _UserReasonTypeNoOp() {
 	_ = x[UserReasonTypeBadges-(7)]
 }
 
-var _UserReasonTypeValues = []UserReasonType{UserReasonTypeDescription, UserReasonTypeFriend, UserReasonTypeOutfit, UserReasonTypeGroup, UserReasonTypeCondo, UserReasonTypeChat, UserReasonTypeFavorites, UserReasonTypeBadges}
+var _UserReasonTypeValues = []UserReasonType{UserReasonTypeProfile, UserReasonTypeFriend, UserReasonTypeOutfit, UserReasonTypeGroup, UserReasonTypeCondo, UserReasonTypeChat, UserReasonTypeFavorites, UserReasonTypeBadges}
 
 var _UserReasonTypeNameToValueMap = map[string]UserReasonType{
-	_UserReasonTypeName[0:11]:       UserReasonTypeDescription,
-	_UserReasonTypeLowerName[0:11]:  UserReasonTypeDescription,
-	_UserReasonTypeName[11:17]:      UserReasonTypeFriend,
-	_UserReasonTypeLowerName[11:17]: UserReasonTypeFriend,
-	_UserReasonTypeName[17:23]:      UserReasonTypeOutfit,
-	_UserReasonTypeLowerName[17:23]: UserReasonTypeOutfit,
-	_UserReasonTypeName[23:28]:      UserReasonTypeGroup,
-	_UserReasonTypeLowerName[23:28]: UserReasonTypeGroup,
-	_UserReasonTypeName[28:33]:      UserReasonTypeCondo,
-	_UserReasonTypeLowerName[28:33]: UserReasonTypeCondo,
-	_UserReasonTypeName[33:37]:      UserReasonTypeChat,
-	_UserReasonTypeLowerName[33:37]: UserReasonTypeChat,
-	_UserReasonTypeName[37:46]:      UserReasonTypeFavorites,
-	_UserReasonTypeLowerName[37:46]: UserReasonTypeFavorites,
-	_UserReasonTypeName[46:52]:      UserReasonTypeBadges,
-	_UserReasonTypeLowerName[46:52]: UserReasonTypeBadges,
+	_UserReasonTypeName[0:7]:        UserReasonTypeProfile,
+	_UserReasonTypeLowerName[0:7]:   UserReasonTypeProfile,
+	_UserReasonTypeName[7:13]:       UserReasonTypeFriend,
+	_UserReasonTypeLowerName[7:13]:  UserReasonTypeFriend,
+	_UserReasonTypeName[13:19]:      UserReasonTypeOutfit,
+	_UserReasonTypeLowerName[13:19]: UserReasonTypeOutfit,
+	_UserReasonTypeName[19:24]:      UserReasonTypeGroup,
+	_UserReasonTypeLowerName[19:24]: UserReasonTypeGroup,
+	_UserReasonTypeName[24:29]:      UserReasonTypeCondo,
+	_UserReasonTypeLowerName[24:29]: UserReasonTypeCondo,
+	_UserReasonTypeName[29:33]:      UserReasonTypeChat,
+	_UserReasonTypeLowerName[29:33]: UserReasonTypeChat,
+	_UserReasonTypeName[33:42]:      UserReasonTypeFavorites,
+	_UserReasonTypeLowerName[33:42]: UserReasonTypeFavorites,
+	_UserReasonTypeName[42:48]:      UserReasonTypeBadges,
+	_UserReasonTypeLowerName[42:48]: UserReasonTypeBadges,
 }
 
 var _UserReasonTypeNames = []string{
-	_UserReasonTypeName[0:11],
-	_UserReasonTypeName[11:17],
-	_UserReasonTypeName[17:23],
-	_UserReasonTypeName[23:28],
-	_UserReasonTypeName[28:33],
-	_UserReasonTypeName[33:37],
-	_UserReasonTypeName[37:46],
-	_UserReasonTypeName[46:52],
+	_UserReasonTypeName[0:7],
+	_UserReasonTypeName[7:13],
+	_UserReasonTypeName[13:19],
+	_UserReasonTypeName[19:24],
+	_UserReasonTypeName[24:29],
+	_UserReasonTypeName[29:33],
+	_UserReasonTypeName[33:42],
+	_UserReasonTypeName[42:48],
 }
 
 // UserReasonTypeString retrieves an enum value from the enum constants string name.

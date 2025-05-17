@@ -331,7 +331,7 @@ func (b *ReviewBuilder) buildReasonDisplay() discord.ContainerSubComponent {
 	maxLength := utils.CalculateDynamicTruncationLength(len(b.user.Reasons))
 
 	for _, reasonType := range []enum.UserReasonType{
-		enum.UserReasonTypeDescription,
+		enum.UserReasonTypeProfile,
 		enum.UserReasonTypeFriend,
 		enum.UserReasonTypeOutfit,
 		enum.UserReasonTypeGroup,
@@ -456,7 +456,7 @@ func (b *ReviewBuilder) buildActionOptions() []discord.StringSelectMenuOption {
 // buildReasonOptions creates the reason management options.
 func (b *ReviewBuilder) buildReasonOptions() []discord.StringSelectMenuOption {
 	reasonTypes := []enum.UserReasonType{
-		enum.UserReasonTypeDescription,
+		enum.UserReasonTypeProfile,
 		enum.UserReasonTypeFriend,
 		enum.UserReasonTypeOutfit,
 		enum.UserReasonTypeGroup,
@@ -715,7 +715,7 @@ func (b *ReviewBuilder) getClearButtonLabel() string {
 // getReasonEmoji returns the appropriate emoji for a reason type.
 func getReasonEmoji(reasonType enum.UserReasonType) string {
 	switch reasonType {
-	case enum.UserReasonTypeDescription:
+	case enum.UserReasonTypeProfile:
 		return "📝"
 	case enum.UserReasonTypeFriend:
 		return "👥"

@@ -280,7 +280,7 @@ func (a *UserAnalyzer) ProcessUsers(users []*types.ReviewUser, reasonsMap map[ui
 	numBatches := (len(users) + a.batchSize - 1) / a.batchSize
 
 	// Process batches concurrently
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 
 	var (
@@ -541,7 +541,7 @@ func (a *UserAnalyzer) validateAndUpdateFlaggedUsers(
 				reasonsMap[originalInfo.ID] = make(types.Reasons[enum.UserReasonType])
 			}
 
-			reasonsMap[originalInfo.ID].Add(enum.UserReasonTypeDescription, &types.Reason{
+			reasonsMap[originalInfo.ID].Add(enum.UserReasonTypeProfile, &types.Reason{
 				Message:    flaggedUser.Reason,
 				Confidence: flaggedUser.Confidence,
 				Evidence:   processedContent,
