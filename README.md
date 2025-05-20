@@ -36,6 +36,19 @@
 
 ---
 
+## 🔍 Showcase
+
+<p align="center">
+  <em>Watch a sample of the types of users flagged by our AI system</em><br>
+  <video src="./assets/showcase.mp4" controls="controls" style="max-width: 300px;"></video>
+</p>
+
+Our detection system works through multiple layers of sophisticated analysis. Specialized workers continuously scan friend lists, groups, avatar outfits, user descriptions, and more to identify potentially inappropriate users. When the AI flags an account, it appears in our Discord bot interface where trained moderators conduct thorough reviews before confirming or clearing the flag.
+
+This approach ensures high accuracy while minimizing false positives, and the system provides specialized tools for moderators to perform detailed checks, creating a powerful moderation workflow.
+
+We're also developing an unreleased browser extension that will allow regular Roblox players to see if users they encounter have been flagged in our reviewed database. This extension will help the broader community identify potentially inappropriate accounts while browsing Roblox.
+
 ## ❓ FAQ
 
 <details>
@@ -52,13 +65,24 @@ To address this, we have a feature-rich review system where our moderators caref
 </details>
 
 <details>
+<summary>What are your plans for the database of reviewed users?</summary>
+
+Our primary goal is to create transparency about the scale of inappropriate accounts on Roblox, especially given that it's marketed as a platform for children. We're developing a browser extension that will allow regular Roblox players to see if users they encounter have been flagged in our reviewed database, helping parents and players make informed decisions about interactions.
+
+Unfortunately, Roblox Corporation has consistently downplayed the scale of this issue, which we believe puts children at risk. By making our findings accessible and transparent, we aim to demonstrate the true extent of the problem and encourage Roblox to take more decisive action to protect its young user base. Our project serves as both a protective tool and a call for accountability.
+
+If Roblox administrators or relevant authorities need access to our complete database for legitimate safety purposes, we are more than willing to cooperate and provide the full, uncensored information directly.
+
+</details>
+
+<details>
 <summary>How does the Roblox user detection system work?</summary>
 
 The system operates through multiple sophisticated layers of detection and verification. At its core, specialized workers continuously scan friend lists and groups to identify potentially inappropriate users. These workers analyze various things including membership in inappropriate groups, connections to known inappropriate accounts, avatar outfits, condo game activities, and inappropriate user descriptions. We make use of AI and algorithms to flag accounts and generate reasons.
 
 When users get flagged through these detection methods, they appear in the Discord bot interface where moderators can conduct thorough reviews. The bot provides specialized tools that allow moderators to perform checks before deciding whether to confirm or clear the flag.
 
-The system also includes an API service called [roscoe](https://github.com/robalyx/roscoe) that developers can integrate with their own applications to check user flags. Additionally, we provide a tool called [rotten](https://github.com/robalyx/rotten) that allows anyone to verify user IDs against a hashed list, which even with dedicated effort, would take approximately a year to crack the complete list with standard hardware.
+The system also includes an API service called [roscoe](https://github.com/robalyx/roscoe) that developers can integrate with their own applications to check user flags. Additionally, we're developing a browser extension that will allow regular Roblox players to see if users they encounter have been flagged in our reviewed database, helping the broader community identify potentially inappropriate accounts while browsing Roblox.
 
 Rotector focuses on identifying and tracking inappropriate accounts, while leaving the actual account moderation and termination decisions to Roblox. Roblox administrators would need to contact us directly to access the uncensored list.
 
