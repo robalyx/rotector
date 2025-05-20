@@ -39,8 +39,8 @@
 ## 🔍 Showcase
 
 <p align="center">
-  <em>Watch a sample of the types of users flagged by our AI system</em><br>
-  <video src="./assets/showcase.mp4" controls="controls" style="max-width: 300px;"></video>
+  <em>See a sample of the types of users flagged by our AI system</em><br>
+  <img src="./assets/gif/showcase.gif" alt="Rotector Showcase" style="max-width: 350px;">
 </p>
 
 Our detection system works through multiple layers of sophisticated analysis. Specialized workers continuously scan friend lists, groups, avatar outfits, user descriptions, and more to identify potentially inappropriate users. When the AI flags an account, it appears in our Discord bot interface where trained moderators conduct thorough reviews before confirming or clearing the flag.
