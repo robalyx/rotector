@@ -6,6 +6,7 @@ import (
 	"slices"
 	"time"
 
+	"github.com/robalyx/rotector/internal/database/dbretry"
 	"github.com/robalyx/rotector/internal/database/types"
 	"github.com/uptrace/bun"
 	"go.uber.org/zap"
@@ -49,7 +50,7 @@ func (r *TrackingModel) AddUsersToGroupsTracking(ctx context.Context, groupToUse
 		}
 	}
 
-	return r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+	return dbretry.Transaction(ctx, r.db, func(ctx context.Context, tx bun.Tx) error {
 		// Lock the groups in a consistent order to prevent deadlocks
 		groupIDs := make([]uint64, 0, len(groupToUsers))
 		for groupID := range groupToUsers {
@@ -106,7 +107,7 @@ func (r *TrackingModel) GetGroupTrackingsToCheck(
 	tenMinutesAgo := now.Add(-10 * time.Minute)
 	oneMinuteAgo := now.Add(-1 * time.Minute)
 
-	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+	err := dbretry.Transaction(ctx, r.db, func(ctx context.Context, tx bun.Tx) error {
 		var trackings []types.GroupMemberTracking
 
 		// Build subquery to find the group IDs to update
@@ -173,45 +174,51 @@ func (r *TrackingModel) GetGroupTrackingsToCheck(
 
 // GetFlaggedUsers retrieves the list of flagged users for a specific group.
 func (r *TrackingModel) GetFlaggedUsers(ctx context.Context, groupID uint64) ([]uint64, error) {
-	var trackingUsers []types.GroupMemberTrackingUser
-	err := r.db.NewSelect().
-		Model(&trackingUsers).
-		Column("user_id").
-		Where("group_id = ?", groupID).
-		Scan(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get flagged users for group: %w (groupID=%d)", err, groupID)
-	}
+	return dbretry.Operation(ctx, func(ctx context.Context) ([]uint64, error) {
+		var trackingUsers []types.GroupMemberTrackingUser
+		err := r.db.NewSelect().
+			Model(&trackingUsers).
+			Column("user_id").
+			Where("group_id = ?", groupID).
+			Scan(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get flagged users for group: %w (groupID=%d)", err, groupID)
+		}
 
-	userIDs := make([]uint64, len(trackingUsers))
-	for i, tu := range trackingUsers {
-		userIDs[i] = tu.UserID
-	}
-	return userIDs, nil
+		userIDs := make([]uint64, len(trackingUsers))
+		for i, tu := range trackingUsers {
+			userIDs[i] = tu.UserID
+		}
+		return userIDs, nil
+	})
 }
 
 // GetFlaggedUsersCount retrieves the count of flagged users for a specific group.
 func (r *TrackingModel) GetFlaggedUsersCount(ctx context.Context, groupID uint64) (int, error) {
-	count, err := r.db.NewSelect().
-		Model((*types.GroupMemberTrackingUser)(nil)).
-		Where("group_id = ?", groupID).
-		Count(ctx)
-	if err != nil {
-		return 0, fmt.Errorf("failed to get flagged users count for group: %w (groupID=%d)", err, groupID)
-	}
-	return count, nil
+	return dbretry.Operation(ctx, func(ctx context.Context) (int, error) {
+		count, err := r.db.NewSelect().
+			Model((*types.GroupMemberTrackingUser)(nil)).
+			Where("group_id = ?", groupID).
+			Count(ctx)
+		if err != nil {
+			return 0, fmt.Errorf("failed to get flagged users count for group: %w (groupID=%d)", err, groupID)
+		}
+		return count, nil
+	})
 }
 
 // UpdateFlaggedGroups marks the specified groups as flagged in the tracking table.
 func (r *TrackingModel) UpdateFlaggedGroups(ctx context.Context, groupIDs []uint64) error {
-	_, err := r.db.NewUpdate().Model((*types.GroupMemberTracking)(nil)).
-		Set("is_flagged = true").
-		Where("id IN (?)", bun.In(groupIDs)).
-		Exec(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to update flagged groups: %w (groupCount=%d)", err, len(groupIDs))
-	}
-	return nil
+	return dbretry.NoResult(ctx, func(ctx context.Context) error {
+		_, err := r.db.NewUpdate().Model((*types.GroupMemberTracking)(nil)).
+			Set("is_flagged = true").
+			Where("id IN (?)", bun.In(groupIDs)).
+			Exec(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to update flagged groups: %w (groupCount=%d)", err, len(groupIDs))
+		}
+		return nil
+	})
 }
 
 // RemoveUsersFromAllGroups removes multiple users from all group tracking records.
@@ -220,7 +227,18 @@ func (r *TrackingModel) RemoveUsersFromAllGroups(ctx context.Context, userIDs []
 		return nil
 	}
 
-	_, err := r.db.NewDelete().
+	return dbretry.NoResult(ctx, func(ctx context.Context) error {
+		return r.RemoveUsersFromAllGroupsWithTx(ctx, r.db, userIDs)
+	})
+}
+
+// RemoveUsersFromAllGroupsWithTx removes multiple users from all group tracking records using the provided transaction.
+func (r *TrackingModel) RemoveUsersFromAllGroupsWithTx(ctx context.Context, tx bun.IDB, userIDs []uint64) error {
+	if len(userIDs) == 0 {
+		return nil
+	}
+
+	_, err := tx.NewDelete().
 		Model((*types.GroupMemberTrackingUser)(nil)).
 		Where("user_id IN (?)", bun.In(userIDs)).
 		Exec(ctx)
@@ -239,7 +257,7 @@ func (r *TrackingModel) RemoveGroupsFromTracking(ctx context.Context, groupIDs [
 		return nil
 	}
 
-	return r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+	return dbretry.Transaction(ctx, r.db, func(ctx context.Context, tx bun.Tx) error {
 		// Remove users from tracking
 		_, err := tx.NewDelete().
 			Model((*types.GroupMemberTrackingUser)(nil)).
@@ -287,7 +305,7 @@ func (r *TrackingModel) AddOutfitAssetsToTracking(ctx context.Context, assetToOu
 		}
 	}
 
-	return r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+	return dbretry.Transaction(ctx, r.db, func(ctx context.Context, tx bun.Tx) error {
 		// Lock the assets in a consistent order to prevent deadlocks
 		assetIDs := make([]uint64, 0, len(assetToOutfits))
 		for assetID := range assetToOutfits {
@@ -345,7 +363,7 @@ func (r *TrackingModel) GetOutfitAssetTrackingsToCheck(
 	tenMinutesAgo := now.Add(-10 * time.Minute)
 	oneMinuteAgo := now.Add(-1 * time.Minute)
 
-	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+	err := dbretry.Transaction(ctx, r.db, func(ctx context.Context, tx bun.Tx) error {
 		var trackings []types.OutfitAssetTracking
 
 		// Build subquery to find the asset IDs to update
@@ -420,42 +438,46 @@ func (r *TrackingModel) RemoveUsersFromAssetTracking(ctx context.Context, userID
 		return nil
 	}
 
-	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
-		// Remove user IDs from current outfit tracking
-		_, err := tx.NewDelete().
+	return dbretry.Transaction(ctx, r.db, func(ctx context.Context, tx bun.Tx) error {
+		return r.RemoveUsersFromAssetTrackingWithTx(ctx, tx, userIDs)
+	})
+}
+
+// RemoveUsersFromAssetTrackingWithTx removes multiple users and their outfits from asset tracking using the provided transaction.
+func (r *TrackingModel) RemoveUsersFromAssetTrackingWithTx(ctx context.Context, tx bun.Tx, userIDs []uint64) error {
+	if len(userIDs) == 0 {
+		return nil
+	}
+
+	// Remove user IDs from current outfit tracking
+	_, err := tx.NewDelete().
+		Model((*types.OutfitAssetTrackingOutfit)(nil)).
+		Where("tracked_id IN (?) AND is_user_id = TRUE", bun.In(userIDs)).
+		Exec(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to remove users from asset tracking: %w (userCount=%d)", err, len(userIDs))
+	}
+
+	// Get outfit IDs for these users
+	var outfitIDs []uint64
+	err = tx.NewSelect().
+		Model((*types.UserOutfit)(nil)).
+		Column("outfit_id").
+		Where("user_id IN (?)", bun.In(userIDs)).
+		Scan(ctx, &outfitIDs)
+	if err != nil {
+		return fmt.Errorf("failed to get user outfit IDs: %w", err)
+	}
+
+	// Remove outfit IDs if any exist
+	if len(outfitIDs) > 0 {
+		_, err = tx.NewDelete().
 			Model((*types.OutfitAssetTrackingOutfit)(nil)).
-			Where("tracked_id IN (?) AND is_user_id = TRUE", bun.In(userIDs)).
+			Where("tracked_id IN (?) AND is_user_id = FALSE", bun.In(outfitIDs)).
 			Exec(ctx)
 		if err != nil {
-			return fmt.Errorf("failed to remove users from asset tracking: %w (userCount=%d)", err, len(userIDs))
+			return fmt.Errorf("failed to remove outfits from asset tracking: %w (outfitCount=%d)", err, len(outfitIDs))
 		}
-
-		// Get outfit IDs for these users
-		var outfitIDs []uint64
-		err = tx.NewSelect().
-			Model((*types.UserOutfit)(nil)).
-			Column("outfit_id").
-			Where("user_id IN (?)", bun.In(userIDs)).
-			Scan(ctx, &outfitIDs)
-		if err != nil {
-			return fmt.Errorf("failed to get user outfit IDs: %w", err)
-		}
-
-		// Remove outfit IDs if any exist
-		if len(outfitIDs) > 0 {
-			_, err = tx.NewDelete().
-				Model((*types.OutfitAssetTrackingOutfit)(nil)).
-				Where("tracked_id IN (?) AND is_user_id = FALSE", bun.In(outfitIDs)).
-				Exec(ctx)
-			if err != nil {
-				return fmt.Errorf("failed to remove outfits from asset tracking: %w (outfitCount=%d)", err, len(outfitIDs))
-			}
-		}
-
-		return nil
-	})
-	if err != nil {
-		return err
 	}
 
 	r.logger.Debug("Removed users and their outfits from asset tracking",
@@ -486,7 +508,7 @@ func (r *TrackingModel) AddGamesToTracking(ctx context.Context, gameToUsers map[
 		}
 	}
 
-	return r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+	return dbretry.Transaction(ctx, r.db, func(ctx context.Context, tx bun.Tx) error {
 		// Lock the games in a consistent order to prevent deadlocks
 		gameIDs := make([]uint64, 0, len(gameToUsers))
 		for gameID := range gameToUsers {
@@ -543,7 +565,7 @@ func (r *TrackingModel) GetGameTrackingsToCheck(
 	tenMinutesAgo := now.Add(-10 * time.Minute)
 	oneMinuteAgo := now.Add(-1 * time.Minute)
 
-	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+	err := dbretry.Transaction(ctx, r.db, func(ctx context.Context, tx bun.Tx) error {
 		var trackings []types.GameTracking
 
 		// Build subquery to find the game IDs to update
@@ -614,7 +636,18 @@ func (r *TrackingModel) RemoveUsersFromGameTracking(ctx context.Context, userIDs
 		return nil
 	}
 
-	_, err := r.db.NewDelete().
+	return dbretry.NoResult(ctx, func(ctx context.Context) error {
+		return r.RemoveUsersFromGameTrackingWithTx(ctx, r.db, userIDs)
+	})
+}
+
+// RemoveUsersFromGameTrackingWithTx removes multiple users from game tracking using the provided transaction.
+func (r *TrackingModel) RemoveUsersFromGameTrackingWithTx(ctx context.Context, tx bun.IDB, userIDs []uint64) error {
+	if len(userIDs) == 0 {
+		return nil
+	}
+
+	_, err := tx.NewDelete().
 		Model((*types.GameTrackingUser)(nil)).
 		Where("user_id IN (?)", bun.In(userIDs)).
 		Exec(ctx)
@@ -633,7 +666,7 @@ func (r *TrackingModel) RemoveGamesFromTracking(ctx context.Context, gameIDs []u
 		return nil
 	}
 
-	return r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+	return dbretry.Transaction(ctx, r.db, func(ctx context.Context, tx bun.Tx) error {
 		// Remove users from tracking
 		_, err := tx.NewDelete().
 			Model((*types.GameTrackingUser)(nil)).

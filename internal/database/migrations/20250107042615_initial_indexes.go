@@ -311,8 +311,14 @@ func init() { //nolint:funlen
 			CREATE INDEX IF NOT EXISTS idx_user_groups_user_id_rank
 			ON user_groups (user_id, role_rank DESC);
 
+			CREATE INDEX IF NOT EXISTS idx_user_groups_group_id
+			ON user_groups (group_id);
+
 			CREATE INDEX IF NOT EXISTS idx_user_outfits_user_id
 			ON user_outfits (user_id);
+
+			CREATE INDEX IF NOT EXISTS idx_user_outfits_outfit_id
+			ON user_outfits (outfit_id);
 
 			CREATE INDEX IF NOT EXISTS idx_outfit_assets_outfit_id
 			ON outfit_assets (outfit_id);
@@ -329,37 +335,32 @@ func init() { //nolint:funlen
 			CREATE INDEX IF NOT EXISTS idx_user_friends_user_id
 			ON user_friends (user_id);
 
+			CREATE INDEX IF NOT EXISTS idx_user_friends_friend_id
+			ON user_friends (friend_id);
+
 			CREATE INDEX IF NOT EXISTS idx_user_games_user_id
 			ON user_games (user_id);
 
-			CREATE INDEX IF NOT EXISTS idx_user_inventory_user_id
+			CREATE INDEX IF NOT EXISTS idx_user_games_game_id
+			ON user_games (game_id);
+
+			CREATE INDEX IF NOT EXISTS idx_user_inventories_user_id
 			ON user_inventories (user_id);
+
+			CREATE INDEX IF NOT EXISTS idx_user_inventories_inventory_id
+			ON user_inventories (inventory_id);
 
 			CREATE INDEX IF NOT EXISTS idx_user_favorites_user_id
 			ON user_favorites (user_id);
 
-			-- User relationship info indexes
+			CREATE INDEX IF NOT EXISTS idx_user_favorites_game_id
+			ON user_favorites (game_id);
+
 			CREATE INDEX IF NOT EXISTS idx_game_infos_place_visits
 			ON game_infos (place_visits DESC);
 
 			CREATE INDEX IF NOT EXISTS idx_friend_infos_id_updated
 			ON friend_infos (id, last_updated DESC);
-
-			-- User relationship deletion indexes
-			CREATE INDEX IF NOT EXISTS idx_user_groups_group_id
-			ON user_groups (group_id);
-
-			CREATE INDEX IF NOT EXISTS idx_user_outfits_outfit_id
-			ON user_outfits (outfit_id);
-
-			CREATE INDEX IF NOT EXISTS idx_user_friends_friend_id
-			ON user_friends (friend_id);
-
-			CREATE INDEX IF NOT EXISTS idx_user_games_game_id
-			ON user_games (game_id);
-
-			CREATE INDEX IF NOT EXISTS idx_user_inventory_inventory_id
-			ON user_inventories (inventory_id);
 		`, enum.ActivityTypeUserViewed, enum.ActivityTypeGroupViewed).Exec(ctx)
 		if err != nil {
 			return fmt.Errorf("failed to create indexes: %w", err)
@@ -561,8 +562,9 @@ func init() { //nolint:funlen
 			DROP INDEX IF EXISTS idx_user_assets_asset_id;
 			DROP INDEX IF EXISTS idx_user_friends_user_id;
 			DROP INDEX IF EXISTS idx_user_games_user_id;
-			DROP INDEX IF EXISTS idx_user_inventory_user_id;
+			DROP INDEX IF EXISTS idx_user_inventories_user_id;
 			DROP INDEX IF EXISTS idx_user_favorites_user_id;
+			DROP INDEX IF EXISTS idx_user_favorites_game_id;
 
 			-- User relationship info indexes
 			DROP INDEX IF EXISTS idx_game_infos_place_visits;
@@ -573,7 +575,7 @@ func init() { //nolint:funlen
 			DROP INDEX IF EXISTS idx_user_outfits_outfit_id;
 			DROP INDEX IF EXISTS idx_user_friends_friend_id;
 			DROP INDEX IF EXISTS idx_user_games_game_id;
-			DROP INDEX IF EXISTS idx_user_inventory_inventory_id;
+			DROP INDEX IF EXISTS idx_user_inventories_inventory_id;
 		`).Exec(ctx)
 		if err != nil {
 			return fmt.Errorf("failed to drop indexes: %w", err)

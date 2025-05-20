@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/robalyx/rotector/internal/database/dbretry"
 	"github.com/robalyx/rotector/internal/database/types"
 	"github.com/robalyx/rotector/internal/database/types/enum"
 	"github.com/uptrace/bun"
@@ -34,32 +35,34 @@ func NewVote(db *bun.DB, logger *zap.Logger) *VoteModel {
 func (v *VoteModel) GetUserVoteStats(
 	ctx context.Context, discordUserID uint64, period enum.LeaderboardPeriod,
 ) (*types.VoteAccuracy, error) {
-	var stats types.VoteAccuracy
+	return dbretry.Operation(ctx, func(ctx context.Context) (*types.VoteAccuracy, error) {
+		var stats types.VoteAccuracy
 
-	// Get user's vote stats
-	err := v.db.NewSelect().
-		TableExpr("vote_leaderboard_stats_"+period.String()).
-		ColumnExpr("?::bigint as discord_user_id", discordUserID).
-		ColumnExpr("correct_votes").
-		ColumnExpr("total_votes").
-		ColumnExpr("accuracy").
-		Where("discord_user_id = ?", discordUserID).
-		Scan(ctx, &stats)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return &types.VoteAccuracy{DiscordUserID: discordUserID}, nil
+		// Get user's vote stats
+		err := v.db.NewSelect().
+			TableExpr("vote_leaderboard_stats_"+period.String()).
+			ColumnExpr("?::bigint as discord_user_id", discordUserID).
+			ColumnExpr("correct_votes").
+			ColumnExpr("total_votes").
+			ColumnExpr("accuracy").
+			Where("discord_user_id = ?", discordUserID).
+			Scan(ctx, &stats)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return &types.VoteAccuracy{DiscordUserID: discordUserID}, nil
+			}
+			return nil, fmt.Errorf("failed to get user vote stats: %w", err)
 		}
-		return nil, fmt.Errorf("failed to get user vote stats: %w", err)
-	}
 
-	// Get user's rank
-	rank, err := v.getUserRank(ctx, discordUserID, period)
-	if err != nil {
-		return nil, err
-	}
-	stats.Rank = rank
+		// Get user's rank
+		rank, err := v.getUserRank(ctx, discordUserID, period)
+		if err != nil {
+			return nil, err
+		}
+		stats.Rank = rank
 
-	return &stats, nil
+		return &stats, nil
+	})
 }
 
 // GetLeaderboard retrieves the top voters for a given time period.
@@ -72,7 +75,7 @@ func (v *VoteModel) GetLeaderboard(
 	var nextCursor *types.LeaderboardCursor
 
 	// Query the view
-	err := v.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+	err := dbretry.Transaction(ctx, v.db, func(ctx context.Context, tx bun.Tx) error {
 		query := tx.NewSelect().
 			TableExpr("vote_leaderboard_stats_"+period.String()).
 			ColumnExpr("discord_user_id, correct_votes, total_votes, accuracy, voted_at").
@@ -122,100 +125,111 @@ func (v *VoteModel) GetLeaderboard(
 func (v *VoteModel) SaveVote(
 	ctx context.Context, targetID uint64, discordUserID uint64, isUpvote bool, voteType enum.VoteType,
 ) error {
-	vote := types.Vote{
-		ID:            targetID,
-		DiscordUserID: discordUserID,
-		IsUpvote:      isUpvote,
-		IsCorrect:     false, // Will be set during verification
-		IsVerified:    false,
-		VotedAt:       time.Now(),
-	}
+	return dbretry.NoResult(ctx, func(ctx context.Context) error {
+		vote := types.Vote{
+			ID:            targetID,
+			DiscordUserID: discordUserID,
+			IsUpvote:      isUpvote,
+			IsCorrect:     false, // Will be set during verification
+			IsVerified:    false,
+			VotedAt:       time.Now(),
+		}
 
-	insert := v.db.NewInsert()
-	switch voteType {
-	case enum.VoteTypeUser:
-		userVote := &types.UserVote{Vote: vote}
-		insert = insert.Model(userVote)
-	case enum.VoteTypeGroup:
-		groupVote := &types.GroupVote{Vote: vote}
-		insert = insert.Model(groupVote)
-	default:
-		return fmt.Errorf("%w: %s", types.ErrInvalidVoteType, voteType)
-	}
-
-	_, err := insert.
-		On("CONFLICT (id, discord_user_id) DO UPDATE").
-		Set("is_upvote = EXCLUDED.is_upvote").
-		Set("voted_at = EXCLUDED.voted_at").
-		Exec(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to save vote: %w", err)
-	}
-
-	return nil
-}
-
-// VerifyVotes verifies all unverified votes for a target and updates vote statistics.
-func (v *VoteModel) VerifyVotes(
-	ctx context.Context, targetID uint64, wasInappropriate bool, voteType enum.VoteType,
-) error {
-	return v.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
-		// Use the appropriate model for the query
-		update := tx.NewUpdate()
+		insert := v.db.NewInsert()
 		switch voteType {
 		case enum.VoteTypeUser:
-			update = update.Model((*types.UserVote)(nil))
+			userVote := &types.UserVote{Vote: vote}
+			insert = insert.Model(userVote)
 		case enum.VoteTypeGroup:
-			update = update.Model((*types.GroupVote)(nil))
+			groupVote := &types.GroupVote{Vote: vote}
+			insert = insert.Model(groupVote)
 		default:
 			return fmt.Errorf("%w: %s", types.ErrInvalidVoteType, voteType)
 		}
 
-		// Update all unverified votes for this target
-		var stats []*types.VoteStats
-		err := update.
-			Set("is_correct = (is_upvote != ?)", wasInappropriate).
-			Set("is_verified = true").
-			Where("id = ? AND is_verified = false", targetID).
-			Returning("discord_user_id, is_correct, voted_at").
-			Scan(ctx, &stats)
+		_, err := insert.
+			On("CONFLICT (id, discord_user_id) DO UPDATE").
+			Set("is_upvote = EXCLUDED.is_upvote").
+			Set("voted_at = EXCLUDED.voted_at").
+			Exec(ctx)
 		if err != nil {
-			return fmt.Errorf("failed to update votes: %w", err)
-		}
-
-		// Insert vote statistics
-		if len(stats) > 0 {
-			_, err = tx.NewInsert().
-				Model(&stats).
-				Exec(ctx)
-			if err != nil {
-				return fmt.Errorf("failed to update vote stats: %w", err)
-			}
+			return fmt.Errorf("failed to save vote: %w", err)
 		}
 
 		return nil
 	})
 }
 
-// getUserRank gets the user's rank based on correct votes.
-func (v *VoteModel) getUserRank(ctx context.Context, discordUserID uint64, period enum.LeaderboardPeriod) (int, error) {
-	var rank int
+// VerifyVotes verifies all unverified votes for a target and updates vote statistics.
+func (v *VoteModel) VerifyVotes(
+	ctx context.Context, targetID uint64, wasInappropriate bool, voteType enum.VoteType,
+) error {
+	return dbretry.Transaction(ctx, v.db, func(ctx context.Context, tx bun.Tx) error {
+		return v.VerifyVotesWithTx(ctx, tx, targetID, wasInappropriate, voteType)
+	})
+}
 
-	err := v.db.NewSelect().
-		TableExpr("vote_leaderboard_stats_"+period.String()).
-		ColumnExpr(`
-			RANK() OVER (
-				ORDER BY correct_votes DESC, accuracy DESC
-			)::int as rank
-		`).
-		Where("discord_user_id = ?", discordUserID).
-		Scan(ctx, &rank)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return 0, nil
-		}
-		return 0, fmt.Errorf("failed to get user rank: %w", err)
+// VerifyVotesWithTx verifies all unverified votes for a target and updates vote statistics using the provided transaction.
+func (v *VoteModel) VerifyVotesWithTx(
+	ctx context.Context, tx bun.Tx, targetID uint64, wasInappropriate bool, voteType enum.VoteType,
+) error {
+	// Use the appropriate model for the query
+	update := tx.NewUpdate()
+	switch voteType {
+	case enum.VoteTypeUser:
+		update = update.Model((*types.UserVote)(nil))
+	case enum.VoteTypeGroup:
+		update = update.Model((*types.GroupVote)(nil))
+	default:
+		return fmt.Errorf("%w: %s", types.ErrInvalidVoteType, voteType)
 	}
 
-	return rank, nil
+	// Update all unverified votes for this target
+	var stats []*types.VoteStats
+	err := update.
+		Set("is_correct = (is_upvote != ?)", wasInappropriate).
+		Set("is_verified = true").
+		Where("id = ? AND is_verified = false", targetID).
+		Returning("discord_user_id, is_correct, voted_at").
+		Scan(ctx, &stats)
+	if err != nil {
+		return fmt.Errorf("failed to update votes: %w", err)
+	}
+
+	// Insert vote statistics
+	if len(stats) > 0 {
+		_, err = tx.NewInsert().
+			Model(&stats).
+			Exec(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to update vote stats: %w", err)
+		}
+	}
+
+	return nil
+}
+
+// getUserRank gets the user's rank based on correct votes.
+func (v *VoteModel) getUserRank(ctx context.Context, discordUserID uint64, period enum.LeaderboardPeriod) (int, error) {
+	return dbretry.Operation(ctx, func(ctx context.Context) (int, error) {
+		var rank int
+
+		err := v.db.NewSelect().
+			TableExpr("vote_leaderboard_stats_"+period.String()).
+			ColumnExpr(`
+				RANK() OVER (
+					ORDER BY correct_votes DESC, accuracy DESC
+				)::int as rank
+			`).
+			Where("discord_user_id = ?", discordUserID).
+			Scan(ctx, &rank)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return 0, nil
+			}
+			return 0, fmt.Errorf("failed to get user rank: %w", err)
+		}
+
+		return rank, nil
+	})
 }

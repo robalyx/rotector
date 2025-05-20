@@ -54,6 +54,8 @@ type UserGroup struct {
 	RoleID   uint64 `bun:",notnull" json:"roleId"`
 	RoleName string `bun:",notnull" json:"roleName"`
 	RoleRank uint64 `bun:",notnull" json:"roleRank"`
+
+	Group *GroupInfo `bun:"rel:belongs-to,join:group_id=id" json:"-"`
 }
 
 // GroupInfo stores the shared group information.
@@ -75,6 +77,8 @@ type GroupInfo struct {
 type UserOutfit struct {
 	UserID   uint64 `bun:",pk" json:"userId"`
 	OutfitID uint64 `bun:",pk" json:"outfitId"`
+
+	Outfit *OutfitInfo `bun:"rel:belongs-to,join:outfit_id=id" json:"-"`
 }
 
 // OutfitInfo stores the shared outfit information.
@@ -84,6 +88,8 @@ type OutfitInfo struct {
 	IsEditable  bool      `bun:",notnull" json:"isEditable"`
 	OutfitType  string    `bun:",notnull" json:"outfitType"`
 	LastUpdated time.Time `bun:",notnull" json:"lastUpdated"`
+
+	OutfitAssets []*OutfitAsset `bun:"rel:has-many,join:id=outfit_id" json:"-"`
 }
 
 // OutfitAsset represents an outfit's asset.
@@ -91,6 +97,8 @@ type OutfitAsset struct {
 	OutfitID         uint64 `bun:",pk"      json:"outfitId"`
 	AssetID          uint64 `bun:",pk"      json:"assetId"`
 	CurrentVersionID uint64 `bun:",notnull" json:"currentVersionId"`
+
+	Asset *AssetInfo `bun:"rel:belongs-to,join:asset_id=id" json:"-"`
 }
 
 // AssetInfo stores the shared asset information.
@@ -105,6 +113,8 @@ type AssetInfo struct {
 type UserFriend struct {
 	UserID   uint64 `bun:",pk" json:"userId"`
 	FriendID uint64 `bun:",pk" json:"friendId"`
+
+	Friend *FriendInfo `bun:"rel:belongs-to,join:friend_id=id" json:"-"`
 }
 
 // FriendInfo stores the shared friend information.
@@ -119,6 +129,8 @@ type FriendInfo struct {
 type UserGame struct {
 	UserID uint64 `bun:",pk" json:"userId"`
 	GameID uint64 `bun:",pk" json:"gameId"`
+
+	Game *GameInfo `bun:"rel:belongs-to,join:game_id=id" json:"-"`
 }
 
 // GameInfo stores the shared game information.
@@ -136,6 +148,8 @@ type GameInfo struct {
 type UserInventory struct {
 	UserID      uint64 `bun:",pk" json:"userId"`
 	InventoryID uint64 `bun:",pk" json:"inventoryId"`
+
+	Inventory *InventoryInfo `bun:"rel:belongs-to,join:inventory_id=id" json:"-"`
 }
 
 // InventoryInfo stores the shared inventory item information.
@@ -151,6 +165,8 @@ type InventoryInfo struct {
 type UserFavorite struct {
 	UserID uint64 `bun:",pk" json:"userId"`
 	GameID uint64 `bun:",pk" json:"gameId"`
+
+	Game *GameInfo `bun:"rel:belongs-to,join:game_id=id" json:"-"`
 }
 
 // UserBadge represents a user's badge.
@@ -179,6 +195,8 @@ type UserAsset struct {
 	UserID           uint64 `bun:",pk"      json:"userId"`
 	AssetID          uint64 `bun:",pk"      json:"assetId"`
 	CurrentVersionID uint64 `bun:",notnull" json:"currentVersionId"`
+
+	Asset *AssetInfo `bun:"rel:belongs-to,join:asset_id=id" json:"-"`
 }
 
 // ReviewUser combines user data with verification/clearance info for review.

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/robalyx/rotector/internal/database/dbretry"
 	"github.com/robalyx/rotector/internal/database/types"
 	"github.com/uptrace/bun"
 	"go.uber.org/zap"
@@ -30,7 +31,7 @@ func NewReputation(db *bun.DB, logger *zap.Logger) *ReputationModel {
 //
 // Deprecated: Use Service().Reputation().UpdateUserVotes() instead.
 func (r *ReputationModel) UpdateUserVotes(ctx context.Context, userID uint64, isUpvote bool) error {
-	return r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+	return dbretry.Transaction(ctx, r.db, func(ctx context.Context, tx bun.Tx) error {
 		var reputation types.UserReputation
 		err := tx.NewSelect().
 			Model(&reputation).
@@ -72,7 +73,7 @@ func (r *ReputationModel) UpdateUserVotes(ctx context.Context, userID uint64, is
 //
 // Deprecated: Use Service().Reputation().UpdateGroupVotes() instead.
 func (r *ReputationModel) UpdateGroupVotes(ctx context.Context, groupID uint64, isUpvote bool) error {
-	return r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+	return dbretry.Transaction(ctx, r.db, func(ctx context.Context, tx bun.Tx) error {
 		var reputation types.GroupReputation
 		err := tx.NewSelect().
 			Model(&reputation).
@@ -112,32 +113,36 @@ func (r *ReputationModel) UpdateGroupVotes(ctx context.Context, groupID uint64, 
 
 // GetUserReputation retrieves the reputation for a user.
 func (r *ReputationModel) GetUserReputation(ctx context.Context, userID uint64) (types.Reputation, error) {
-	var reputation types.UserReputation
-	err := r.db.NewSelect().
-		Model(&reputation).
-		Where("id = ?", userID).
-		Scan(ctx)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return types.Reputation{}, nil
+	return dbretry.Operation(ctx, func(ctx context.Context) (types.Reputation, error) {
+		var reputation types.UserReputation
+		err := r.db.NewSelect().
+			Model(&reputation).
+			Where("id = ?", userID).
+			Scan(ctx)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return types.Reputation{}, nil
+			}
+			return types.Reputation{}, fmt.Errorf("failed to get user reputation: %w", err)
 		}
-		return types.Reputation{}, fmt.Errorf("failed to get user reputation: %w", err)
-	}
-	return reputation.Reputation, nil
+		return reputation.Reputation, nil
+	})
 }
 
 // GetGroupReputation retrieves the reputation for a group.
 func (r *ReputationModel) GetGroupReputation(ctx context.Context, groupID uint64) (types.Reputation, error) {
-	var reputation types.GroupReputation
-	err := r.db.NewSelect().
-		Model(&reputation).
-		Where("id = ?", groupID).
-		Scan(ctx)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return types.Reputation{}, nil
+	return dbretry.Operation(ctx, func(ctx context.Context) (types.Reputation, error) {
+		var reputation types.GroupReputation
+		err := r.db.NewSelect().
+			Model(&reputation).
+			Where("id = ?", groupID).
+			Scan(ctx)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return types.Reputation{}, nil
+			}
+			return types.Reputation{}, fmt.Errorf("failed to get group reputation: %w", err)
 		}
-		return types.Reputation{}, fmt.Errorf("failed to get group reputation: %w", err)
-	}
-	return reputation.Reputation, nil
+		return reputation.Reputation, nil
+	})
 }

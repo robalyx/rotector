@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/robalyx/rotector/internal/database/dbretry"
 	"github.com/robalyx/rotector/internal/database/types"
 	"github.com/robalyx/rotector/internal/database/types/enum"
 	"github.com/uptrace/bun"
@@ -36,7 +37,7 @@ func (r *ReviewerModel) GetReviewerStats(
 	results := make(map[uint64]*types.ReviewerStats)
 	var nextCursor *types.ReviewerStatsCursor
 
-	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+	err := dbretry.Transaction(ctx, r.db, func(ctx context.Context, tx bun.Tx) error {
 		// Get bot settings to filter for valid reviewer IDs
 		var settings types.BotSetting
 		err := tx.NewSelect().
@@ -96,61 +97,67 @@ func (r *ReviewerModel) GetReviewerStats(
 
 // GetReviewerInfos gets reviewer info records for the specified reviewer IDs.
 func (r *ReviewerModel) GetReviewerInfos(ctx context.Context, reviewerIDs []uint64) (map[uint64]*types.ReviewerInfo, error) {
-	var reviewers []*types.ReviewerInfo
+	return dbretry.Operation(ctx, func(ctx context.Context) (map[uint64]*types.ReviewerInfo, error) {
+		var reviewers []*types.ReviewerInfo
 
-	err := r.db.NewSelect().
-		Model(&reviewers).
-		Where("user_id IN (?)", bun.In(reviewerIDs)).
-		Scan(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get reviewer infos: %w", err)
-	}
+		err := r.db.NewSelect().
+			Model(&reviewers).
+			Where("user_id IN (?)", bun.In(reviewerIDs)).
+			Scan(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get reviewer infos: %w", err)
+		}
 
-	// Convert to map for easier lookup
-	result := make(map[uint64]*types.ReviewerInfo, len(reviewers))
-	for _, reviewer := range reviewers {
-		result[reviewer.UserID] = reviewer
-	}
+		// Convert to map for easier lookup
+		result := make(map[uint64]*types.ReviewerInfo, len(reviewers))
+		for _, reviewer := range reviewers {
+			result[reviewer.UserID] = reviewer
+		}
 
-	return result, nil
+		return result, nil
+	})
 }
 
 // GetReviewerInfosForUpdate gets all reviewer info records that need updating.
 func (r *ReviewerModel) GetReviewerInfosForUpdate(
 	ctx context.Context, maxAge time.Duration,
 ) (map[uint64]*types.ReviewerInfo, error) {
-	var reviewers []*types.ReviewerInfo
-	cutoff := time.Now().Add(-maxAge)
+	return dbretry.Operation(ctx, func(ctx context.Context) (map[uint64]*types.ReviewerInfo, error) {
+		var reviewers []*types.ReviewerInfo
+		cutoff := time.Now().Add(-maxAge)
 
-	err := r.db.NewSelect().
-		Model(&reviewers).
-		Where("updated_at < ?", cutoff).
-		Scan(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get reviewer infos: %w", err)
-	}
+		err := r.db.NewSelect().
+			Model(&reviewers).
+			Where("updated_at < ?", cutoff).
+			Scan(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get reviewer infos: %w", err)
+		}
 
-	// Convert to map for easier lookup
-	result := make(map[uint64]*types.ReviewerInfo, len(reviewers))
-	for _, reviewer := range reviewers {
-		result[reviewer.UserID] = reviewer
-	}
+		// Convert to map for easier lookup
+		result := make(map[uint64]*types.ReviewerInfo, len(reviewers))
+		for _, reviewer := range reviewers {
+			result[reviewer.UserID] = reviewer
+		}
 
-	return result, nil
+		return result, nil
+	})
 }
 
 // SaveReviewerInfos saves or updates reviewer info records.
 func (r *ReviewerModel) SaveReviewerInfos(ctx context.Context, reviewers []*types.ReviewerInfo) error {
-	_, err := r.db.NewInsert().
-		Model(&reviewers).
-		On("CONFLICT (user_id) DO UPDATE").
-		Set("username = EXCLUDED.username").
-		Set("display_name = EXCLUDED.display_name").
-		Set("updated_at = EXCLUDED.updated_at").
-		Exec(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to save reviewer infos: %w", err)
-	}
+	return dbretry.NoResult(ctx, func(ctx context.Context) error {
+		_, err := r.db.NewInsert().
+			Model(&reviewers).
+			On("CONFLICT (user_id) DO UPDATE").
+			Set("username = EXCLUDED.username").
+			Set("display_name = EXCLUDED.display_name").
+			Set("updated_at = EXCLUDED.updated_at").
+			Exec(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to save reviewer infos: %w", err)
+		}
 
-	return nil
+		return nil
+	})
 }

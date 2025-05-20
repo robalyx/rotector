@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/robalyx/rotector/internal/database/dbretry"
 	"github.com/robalyx/rotector/internal/database/types"
 	"github.com/uptrace/bun"
 	"go.uber.org/zap"
@@ -30,7 +31,7 @@ func NewMaterializedView(db *bun.DB, logger *zap.Logger) *MaterializedViewModel 
 func (m *MaterializedViewModel) RefreshIfStale(
 	ctx context.Context, viewName string, staleDuration time.Duration,
 ) error {
-	return m.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+	return dbretry.Transaction(ctx, m.db, func(ctx context.Context, tx bun.Tx) error {
 		// Get last refresh time
 		var refresh types.MaterializedViewRefresh
 		err := tx.NewSelect().
@@ -70,17 +71,19 @@ func (m *MaterializedViewModel) RefreshIfStale(
 func (m *MaterializedViewModel) GetRefreshInfo(
 	ctx context.Context, viewName string,
 ) (lastRefresh time.Time, err error) {
-	var refresh types.MaterializedViewRefresh
-	err = m.db.NewSelect().
-		Model(&refresh).
-		Where("view_name = ?", viewName).
-		Scan(ctx)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return time.Time{}, nil
+	return dbretry.Operation(ctx, func(ctx context.Context) (time.Time, error) {
+		var refresh types.MaterializedViewRefresh
+		err = m.db.NewSelect().
+			Model(&refresh).
+			Where("view_name = ?", viewName).
+			Scan(ctx)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return time.Time{}, nil
+			}
+			return time.Time{}, fmt.Errorf("failed to get refresh info: %w", err)
 		}
-		return time.Time{}, fmt.Errorf("failed to get refresh info: %w", err)
-	}
 
-	return refresh.LastRefresh, nil
+		return refresh.LastRefresh, nil
+	})
 }

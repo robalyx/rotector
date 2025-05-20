@@ -146,6 +146,7 @@ linters:
       - third_party$
       - builtin$
       - examples$
+      - internal/database/migrations/
 issues:
   max-same-issues: 50
 formatters:

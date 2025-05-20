@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/google/uuid"
+	"github.com/robalyx/rotector/internal/database/dbretry"
 	"github.com/robalyx/rotector/internal/database/models"
 	"github.com/robalyx/rotector/internal/database/types"
 	"github.com/robalyx/rotector/internal/database/types/enum"
@@ -44,17 +45,24 @@ func NewGroup(
 
 // ConfirmGroup moves a group to confirmed status and creates a verification record.
 func (s *GroupService) ConfirmGroup(ctx context.Context, group *types.ReviewGroup, reviewerID uint64) error {
+	return dbretry.Transaction(ctx, s.db, func(ctx context.Context, tx bun.Tx) error {
+		return s.ConfirmGroupWithTx(ctx, tx, group, reviewerID)
+	})
+}
+
+// ConfirmGroupWithTx moves a group to confirmed status and creates a verification record using the provided transaction.
+func (s *GroupService) ConfirmGroupWithTx(ctx context.Context, tx bun.Tx, group *types.ReviewGroup, reviewerID uint64) error {
 	// Set reviewer ID
 	group.ReviewerID = reviewerID
 	group.Status = enum.GroupTypeConfirmed
 
 	// Update group status and create verification record
-	if err := s.model.ConfirmGroup(ctx, group); err != nil {
+	if err := s.model.ConfirmGroupWithTx(ctx, tx, group); err != nil {
 		return err
 	}
 
 	// Verify votes for the group
-	if err := s.votes.VerifyVotes(ctx, group.ID, true, enum.VoteTypeGroup); err != nil {
+	if err := s.votes.VerifyVotesWithTx(ctx, tx, group.ID, true, enum.VoteTypeGroup); err != nil {
 		s.logger.Error("Failed to verify votes", zap.Error(err))
 		return err
 	}
@@ -64,17 +72,24 @@ func (s *GroupService) ConfirmGroup(ctx context.Context, group *types.ReviewGrou
 
 // ClearGroup moves a group to cleared status and creates a clearance record.
 func (s *GroupService) ClearGroup(ctx context.Context, group *types.ReviewGroup, reviewerID uint64) error {
+	return dbretry.Transaction(ctx, s.db, func(ctx context.Context, tx bun.Tx) error {
+		return s.ClearGroupWithTx(ctx, tx, group, reviewerID)
+	})
+}
+
+// ClearGroupWithTx moves a group to cleared status and creates a clearance record using the provided transaction.
+func (s *GroupService) ClearGroupWithTx(ctx context.Context, tx bun.Tx, group *types.ReviewGroup, reviewerID uint64) error {
 	// Set reviewer ID
 	group.ReviewerID = reviewerID
 	group.Status = enum.GroupTypeCleared
 
 	// Update group status and create clearance record
-	if err := s.model.ClearGroup(ctx, group); err != nil {
+	if err := s.model.ClearGroupWithTx(ctx, tx, group); err != nil {
 		return err
 	}
 
 	// Verify votes for the group
-	if err := s.votes.VerifyVotes(ctx, group.ID, false, enum.VoteTypeGroup); err != nil {
+	if err := s.votes.VerifyVotesWithTx(ctx, tx, group.ID, false, enum.VoteTypeGroup); err != nil {
 		s.logger.Error("Failed to verify votes", zap.Error(err))
 		return err
 	}
@@ -222,7 +237,7 @@ func (s *GroupService) SaveGroups(ctx context.Context, groups map[uint64]*types.
 	}
 
 	// Save the groups
-	err = s.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+	err = dbretry.Transaction(ctx, s.db, func(ctx context.Context, tx bun.Tx) error {
 		// Save groups with their reasons
 		if err := s.model.SaveGroups(ctx, tx, groupsToSave); err != nil {
 			return err

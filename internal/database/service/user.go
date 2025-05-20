@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/uuid"
 	apiTypes "github.com/jaxron/roapi.go/pkg/api/types"
+	"github.com/robalyx/rotector/internal/database/dbretry"
 	"github.com/robalyx/rotector/internal/database/models"
 	"github.com/robalyx/rotector/internal/database/types"
 	"github.com/robalyx/rotector/internal/database/types/enum"
@@ -51,17 +52,24 @@ func NewUser(
 
 // ConfirmUser moves a user to confirmed status and creates a verification record.
 func (s *UserService) ConfirmUser(ctx context.Context, user *types.ReviewUser, reviewerID uint64) error {
+	return dbretry.Transaction(ctx, s.db, func(ctx context.Context, tx bun.Tx) error {
+		return s.ConfirmUserWithTx(ctx, tx, user, reviewerID)
+	})
+}
+
+// ConfirmUserWithTx moves a user to confirmed status and creates a verification record using the provided transaction.
+func (s *UserService) ConfirmUserWithTx(ctx context.Context, tx bun.Tx, user *types.ReviewUser, reviewerID uint64) error {
 	// Set reviewer ID
 	user.ReviewerID = reviewerID
 	user.Status = enum.UserTypeConfirmed
 
 	// Update user status and create verification record
-	if err := s.model.ConfirmUser(ctx, user); err != nil {
+	if err := s.model.ConfirmUserWithTx(ctx, tx, user); err != nil {
 		return err
 	}
 
 	// Verify votes for the user
-	if err := s.votes.VerifyVotes(ctx, user.ID, true, enum.VoteTypeUser); err != nil {
+	if err := s.votes.VerifyVotesWithTx(ctx, tx, user.ID, true, enum.VoteTypeUser); err != nil {
 		s.logger.Error("Failed to verify votes", zap.Error(err))
 		return err
 	}
@@ -71,35 +79,42 @@ func (s *UserService) ConfirmUser(ctx context.Context, user *types.ReviewUser, r
 
 // ClearUser moves a user to cleared status and creates a clearance record.
 func (s *UserService) ClearUser(ctx context.Context, user *types.ReviewUser, reviewerID uint64) error {
+	return dbretry.Transaction(ctx, s.db, func(ctx context.Context, tx bun.Tx) error {
+		return s.ClearUserWithTx(ctx, tx, user, reviewerID)
+	})
+}
+
+// ClearUserWithTx moves a user to cleared status and creates a clearance record using the provided transaction.
+func (s *UserService) ClearUserWithTx(ctx context.Context, tx bun.Tx, user *types.ReviewUser, reviewerID uint64) error {
 	// Set reviewer ID
 	user.ReviewerID = reviewerID
 	user.Status = enum.UserTypeCleared
 
 	// Update user status and create clearance record
-	if err := s.model.ClearUser(ctx, user); err != nil {
+	if err := s.model.ClearUserWithTx(ctx, tx, user); err != nil {
 		return err
 	}
 
 	// Remove user from all group tracking
-	if err := s.tracking.RemoveUsersFromAllGroups(ctx, []uint64{user.ID}); err != nil {
+	if err := s.tracking.RemoveUsersFromAllGroupsWithTx(ctx, tx, []uint64{user.ID}); err != nil {
 		s.logger.Error("Failed to remove user from group tracking", zap.Error(err))
 		return err
 	}
 
 	// Remove user and their outfits from asset tracking
-	if err := s.tracking.RemoveUsersFromAssetTracking(ctx, []uint64{user.ID}); err != nil {
+	if err := s.tracking.RemoveUsersFromAssetTrackingWithTx(ctx, tx, []uint64{user.ID}); err != nil {
 		s.logger.Error("Failed to remove user from outfit asset tracking", zap.Error(err))
 		return err
 	}
 
 	// Remove user from game tracking
-	if err := s.tracking.RemoveUsersFromGameTracking(ctx, []uint64{user.ID}); err != nil {
+	if err := s.tracking.RemoveUsersFromGameTrackingWithTx(ctx, tx, []uint64{user.ID}); err != nil {
 		s.logger.Error("Failed to remove user from game tracking", zap.Error(err))
 		return err
 	}
 
 	// Verify votes for the user
-	if err := s.votes.VerifyVotes(ctx, user.ID, false, enum.VoteTypeUser); err != nil {
+	if err := s.votes.VerifyVotesWithTx(ctx, tx, user.ID, false, enum.VoteTypeUser); err != nil {
 		s.logger.Error("Failed to verify votes", zap.Error(err))
 		return err
 	}
@@ -362,7 +377,7 @@ func (s *UserService) SaveUsers(ctx context.Context, users map[uint64]*types.Rev
 	}
 
 	// Save the users
-	err = s.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+	err = dbretry.Transaction(ctx, s.db, func(ctx context.Context, tx bun.Tx) error {
 		// First save core user data
 		if err := s.model.SaveUsers(ctx, tx, usersToSave); err != nil {
 			return err
@@ -406,20 +421,7 @@ func (s *UserService) SaveUsers(ctx context.Context, users map[uint64]*types.Rev
 			}
 		}
 
-		// Save all relationships
-		if err := s.model.SaveUserGroups(ctx, tx, userGroups); err != nil {
-			return err
-		}
-
-		if err := s.model.SaveUserOutfits(ctx, tx, userOutfits, userOutfitAssets); err != nil {
-			return err
-		}
-
-		if err := s.model.SaveUserAssets(ctx, tx, userAssets); err != nil {
-			return err
-		}
-
-		if err := s.model.SaveUserFriends(ctx, tx, userFriends); err != nil {
+		if err := s.model.SaveUserGames(ctx, tx, userGames); err != nil {
 			return err
 		}
 
@@ -427,7 +429,19 @@ func (s *UserService) SaveUsers(ctx context.Context, users map[uint64]*types.Rev
 			return err
 		}
 
-		if err := s.model.SaveUserGames(ctx, tx, userGames); err != nil {
+		if err := s.model.SaveUserAssets(ctx, tx, userAssets); err != nil {
+			return err
+		}
+
+		if err := s.model.SaveUserOutfits(ctx, tx, userOutfits, userOutfitAssets); err != nil {
+			return err
+		}
+
+		if err := s.model.SaveUserGroups(ctx, tx, userGroups); err != nil {
+			return err
+		}
+
+		if err := s.model.SaveUserFriends(ctx, tx, userFriends); err != nil {
 			return err
 		}
 
@@ -454,72 +468,85 @@ func (s *UserService) DeleteUsers(ctx context.Context, userIDs []uint64) (int64,
 	}
 
 	var totalAffected int64
-	err := s.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
-		// Remove users from tracking
-		if err := s.tracking.RemoveUsersFromAllGroups(ctx, userIDs); err != nil {
-			s.logger.Error("Failed to remove users from group tracking", zap.Error(err))
-			return err
-		}
-
-		if err := s.tracking.RemoveUsersFromAssetTracking(ctx, userIDs); err != nil {
-			s.logger.Error("Failed to remove users from asset tracking", zap.Error(err))
-			return err
-		}
-
-		if err := s.tracking.RemoveUsersFromGameTracking(ctx, userIDs); err != nil {
-			s.logger.Error("Failed to remove users from game tracking", zap.Error(err))
-			return err
-		}
-
-		// Delete core user data
-		affected, err := s.model.DeleteUsers(ctx, userIDs)
-		if err != nil {
-			return fmt.Errorf("failed to delete users core data: %w", err)
-		}
-		totalAffected += affected
-
-		// Delete all relationships and their unreferenced info
-		affected, err = s.model.DeleteUserGroups(ctx, tx, userIDs)
-		if err != nil {
-			return fmt.Errorf("failed to delete user groups: %w", err)
-		}
-		totalAffected += affected
-
-		affected, err = s.model.DeleteUserOutfits(ctx, tx, userIDs)
-		if err != nil {
-			return fmt.Errorf("failed to delete user outfits: %w", err)
-		}
-		totalAffected += affected
-
-		affected, err = s.model.DeleteUserFriends(ctx, tx, userIDs)
-		if err != nil {
-			return fmt.Errorf("failed to delete user friends: %w", err)
-		}
-		totalAffected += affected
-
-		affected, err = s.model.DeleteUserFavorites(ctx, tx, userIDs)
-		if err != nil {
-			return fmt.Errorf("failed to delete user favorites: %w", err)
-		}
-		totalAffected += affected
-
-		affected, err = s.model.DeleteUserGames(ctx, tx, userIDs)
-		if err != nil {
-			return fmt.Errorf("failed to delete user games: %w", err)
-		}
-		totalAffected += affected
-
-		affected, err = s.model.DeleteUserInventory(ctx, tx, userIDs)
-		if err != nil {
-			return fmt.Errorf("failed to delete user inventory: %w", err)
-		}
-		totalAffected += affected
-
-		return nil
+	err := dbretry.Transaction(ctx, s.db, func(ctx context.Context, tx bun.Tx) error {
+		var err error
+		totalAffected, err = s.DeleteUsersWithTx(ctx, tx, userIDs)
+		return err
 	})
 	if err != nil {
 		return 0, err
 	}
+
+	return totalAffected, nil
+}
+
+// DeleteUsersWithTx removes multiple users and all their associated data from the database using the provided transaction.
+func (s *UserService) DeleteUsersWithTx(ctx context.Context, tx bun.Tx, userIDs []uint64) (int64, error) {
+	if len(userIDs) == 0 {
+		return 0, nil
+	}
+
+	var totalAffected int64
+
+	// Remove users from tracking
+	if err := s.tracking.RemoveUsersFromAllGroupsWithTx(ctx, tx, userIDs); err != nil {
+		s.logger.Error("Failed to remove users from group tracking", zap.Error(err))
+		return 0, err
+	}
+
+	if err := s.tracking.RemoveUsersFromAssetTrackingWithTx(ctx, tx, userIDs); err != nil {
+		s.logger.Error("Failed to remove users from asset tracking", zap.Error(err))
+		return 0, err
+	}
+
+	if err := s.tracking.RemoveUsersFromGameTrackingWithTx(ctx, tx, userIDs); err != nil {
+		s.logger.Error("Failed to remove users from game tracking", zap.Error(err))
+		return 0, err
+	}
+
+	// Delete core user data
+	affected, err := s.model.DeleteUsersWithTx(ctx, tx, userIDs)
+	if err != nil {
+		return 0, fmt.Errorf("failed to delete users core data: %w", err)
+	}
+	totalAffected += affected
+
+	// Delete all relationships and their unreferenced info
+	affected, err = s.model.DeleteUserGroups(ctx, tx, userIDs)
+	if err != nil {
+		return 0, fmt.Errorf("failed to delete user groups: %w", err)
+	}
+	totalAffected += affected
+
+	affected, err = s.model.DeleteUserOutfits(ctx, tx, userIDs)
+	if err != nil {
+		return 0, fmt.Errorf("failed to delete user outfits: %w", err)
+	}
+	totalAffected += affected
+
+	affected, err = s.model.DeleteUserFriends(ctx, tx, userIDs)
+	if err != nil {
+		return 0, fmt.Errorf("failed to delete user friends: %w", err)
+	}
+	totalAffected += affected
+
+	affected, err = s.model.DeleteUserFavorites(ctx, tx, userIDs)
+	if err != nil {
+		return 0, fmt.Errorf("failed to delete user favorites: %w", err)
+	}
+	totalAffected += affected
+
+	affected, err = s.model.DeleteUserGames(ctx, tx, userIDs)
+	if err != nil {
+		return 0, fmt.Errorf("failed to delete user games: %w", err)
+	}
+	totalAffected += affected
+
+	affected, err = s.model.DeleteUserInventory(ctx, tx, userIDs)
+	if err != nil {
+		return 0, fmt.Errorf("failed to delete user inventory: %w", err)
+	}
+	totalAffected += affected
 
 	s.logger.Debug("Deleted users and all associated data",
 		zap.Int("userCount", len(userIDs)),

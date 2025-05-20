@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/robalyx/rotector/internal/database/dbretry"
 	"github.com/robalyx/rotector/internal/database/types"
 	"github.com/robalyx/rotector/internal/database/types/enum"
 	"github.com/uptrace/bun"
@@ -104,144 +105,158 @@ func (r *GroupModel) SaveGroups(ctx context.Context, tx bun.Tx, groups []*types.
 //
 // Deprecated: Use Service().Group().ConfirmGroup() instead.
 func (r *GroupModel) ConfirmGroup(ctx context.Context, group *types.ReviewGroup) error {
-	return r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
-		// Delete any existing clearance record
-		_, err := tx.NewDelete().
-			Model((*types.GroupClearance)(nil)).
-			Where("group_id = ?", group.ID).
-			Exec(ctx)
-		if err != nil {
-			return fmt.Errorf("failed to delete existing clearance record: %w", err)
-		}
-
-		// Update group status
-		_, err = tx.NewUpdate().
-			Model(group.Group).
-			Set("status = ?", enum.GroupTypeConfirmed).
-			Where("id = ?", group.ID).
-			Exec(ctx)
-		if err != nil {
-			return fmt.Errorf("failed to update group status: %w", err)
-		}
-
-		// Create verification record
-		verification := &types.GroupVerification{
-			GroupID:    group.ID,
-			ReviewerID: group.ReviewerID,
-			VerifiedAt: time.Now(),
-		}
-		_, err = tx.NewInsert().
-			Model(verification).
-			On("CONFLICT (group_id) DO UPDATE").
-			Set("reviewer_id = EXCLUDED.reviewer_id").
-			Set("verified_at = EXCLUDED.verified_at").
-			Exec(ctx)
-		if err != nil {
-			return fmt.Errorf("failed to create verification record: %w", err)
-		}
-
-		// Save reasons if any exist
-		if group.Reasons != nil {
-			var reasons []*types.GroupReason
-			for reasonType, reason := range group.Reasons {
-				reasons = append(reasons, &types.GroupReason{
-					GroupID:    group.ID,
-					ReasonType: reasonType,
-					Message:    reason.Message,
-					Confidence: reason.Confidence,
-					Evidence:   reason.Evidence,
-					CreatedAt:  time.Now(),
-				})
-			}
-
-			if len(reasons) > 0 {
-				_, err = tx.NewInsert().
-					Model(&reasons).
-					On("CONFLICT (group_id, reason_type) DO UPDATE").
-					Set("message = EXCLUDED.message").
-					Set("confidence = EXCLUDED.confidence").
-					Set("evidence = EXCLUDED.evidence").
-					Exec(ctx)
-				if err != nil {
-					return fmt.Errorf("failed to update group reasons: %w", err)
-				}
-			}
-		}
-
-		return nil
+	return dbretry.Transaction(ctx, r.db, func(ctx context.Context, tx bun.Tx) error {
+		return r.ConfirmGroupWithTx(ctx, tx, group)
 	})
+}
+
+// ConfirmGroupWithTx moves a group to confirmed status and creates a verification record using the provided transaction.
+//
+// Deprecated: Use Service().Group().ConfirmGroupWithTx() instead.
+func (r *GroupModel) ConfirmGroupWithTx(ctx context.Context, tx bun.Tx, group *types.ReviewGroup) error {
+	// Delete any existing clearance record
+	_, err := tx.NewDelete().
+		Model((*types.GroupClearance)(nil)).
+		Where("group_id = ?", group.ID).
+		Exec(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to delete existing clearance record: %w", err)
+	}
+
+	// Update group status
+	_, err = tx.NewUpdate().
+		Model(group.Group).
+		Set("status = ?", enum.GroupTypeConfirmed).
+		Where("id = ?", group.ID).
+		Exec(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to update group status: %w", err)
+	}
+
+	// Create verification record
+	verification := &types.GroupVerification{
+		GroupID:    group.ID,
+		ReviewerID: group.ReviewerID,
+		VerifiedAt: time.Now(),
+	}
+	_, err = tx.NewInsert().
+		Model(verification).
+		On("CONFLICT (group_id) DO UPDATE").
+		Set("reviewer_id = EXCLUDED.reviewer_id").
+		Set("verified_at = EXCLUDED.verified_at").
+		Exec(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to create verification record: %w", err)
+	}
+
+	// Save reasons if any exist
+	if group.Reasons != nil {
+		var reasons []*types.GroupReason
+		for reasonType, reason := range group.Reasons {
+			reasons = append(reasons, &types.GroupReason{
+				GroupID:    group.ID,
+				ReasonType: reasonType,
+				Message:    reason.Message,
+				Confidence: reason.Confidence,
+				Evidence:   reason.Evidence,
+				CreatedAt:  time.Now(),
+			})
+		}
+
+		if len(reasons) > 0 {
+			_, err = tx.NewInsert().
+				Model(&reasons).
+				On("CONFLICT (group_id, reason_type) DO UPDATE").
+				Set("message = EXCLUDED.message").
+				Set("confidence = EXCLUDED.confidence").
+				Set("evidence = EXCLUDED.evidence").
+				Exec(ctx)
+			if err != nil {
+				return fmt.Errorf("failed to update group reasons: %w", err)
+			}
+		}
+	}
+
+	return nil
 }
 
 // ClearGroup moves a group to cleared status and creates a clearance record.
 //
 // Deprecated: Use Service().Group().ClearGroup() instead.
 func (r *GroupModel) ClearGroup(ctx context.Context, group *types.ReviewGroup) error {
-	return r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
-		// Delete any existing verification record
-		_, err := tx.NewDelete().
-			Model((*types.GroupVerification)(nil)).
-			Where("group_id = ?", group.ID).
-			Exec(ctx)
-		if err != nil {
-			return fmt.Errorf("failed to delete existing verification record: %w", err)
-		}
-
-		// Update group status
-		_, err = tx.NewUpdate().
-			Model(group.Group).
-			Set("status = ?", enum.GroupTypeCleared).
-			Where("id = ?", group.ID).
-			Exec(ctx)
-		if err != nil {
-			return fmt.Errorf("failed to update group status: %w", err)
-		}
-
-		// Create clearance record
-		clearance := &types.GroupClearance{
-			GroupID:    group.ID,
-			ReviewerID: group.ReviewerID,
-			ClearedAt:  time.Now(),
-		}
-		_, err = tx.NewInsert().
-			Model(clearance).
-			On("CONFLICT (group_id) DO UPDATE").
-			Set("reviewer_id = EXCLUDED.reviewer_id").
-			Set("cleared_at = EXCLUDED.cleared_at").
-			Exec(ctx)
-		if err != nil {
-			return fmt.Errorf("failed to create clearance record: %w", err)
-		}
-
-		// Save reasons if any exist
-		if group.Reasons != nil {
-			var reasons []*types.GroupReason
-			for reasonType, reason := range group.Reasons {
-				reasons = append(reasons, &types.GroupReason{
-					GroupID:    group.ID,
-					ReasonType: reasonType,
-					Message:    reason.Message,
-					Confidence: reason.Confidence,
-					Evidence:   reason.Evidence,
-					CreatedAt:  time.Now(),
-				})
-			}
-
-			if len(reasons) > 0 {
-				_, err = tx.NewInsert().
-					Model(&reasons).
-					On("CONFLICT (group_id, reason_type) DO UPDATE").
-					Set("message = EXCLUDED.message").
-					Set("confidence = EXCLUDED.confidence").
-					Set("evidence = EXCLUDED.evidence").
-					Exec(ctx)
-				if err != nil {
-					return fmt.Errorf("failed to update group reasons: %w", err)
-				}
-			}
-		}
-
-		return nil
+	return dbretry.Transaction(ctx, r.db, func(ctx context.Context, tx bun.Tx) error {
+		return r.ClearGroupWithTx(ctx, tx, group)
 	})
+}
+
+// ClearGroupWithTx moves a group to cleared status and creates a clearance record using the provided transaction.
+//
+// Deprecated: Use Service().Group().ClearGroupWithTx() instead.
+func (r *GroupModel) ClearGroupWithTx(ctx context.Context, tx bun.Tx, group *types.ReviewGroup) error {
+	// Delete any existing verification record
+	_, err := tx.NewDelete().
+		Model((*types.GroupVerification)(nil)).
+		Where("group_id = ?", group.ID).
+		Exec(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to delete existing verification record: %w", err)
+	}
+
+	// Update group status
+	_, err = tx.NewUpdate().
+		Model(group.Group).
+		Set("status = ?", enum.GroupTypeCleared).
+		Where("id = ?", group.ID).
+		Exec(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to update group status: %w", err)
+	}
+
+	// Create clearance record
+	clearance := &types.GroupClearance{
+		GroupID:    group.ID,
+		ReviewerID: group.ReviewerID,
+		ClearedAt:  time.Now(),
+	}
+	_, err = tx.NewInsert().
+		Model(clearance).
+		On("CONFLICT (group_id) DO UPDATE").
+		Set("reviewer_id = EXCLUDED.reviewer_id").
+		Set("cleared_at = EXCLUDED.cleared_at").
+		Exec(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to create clearance record: %w", err)
+	}
+
+	// Save reasons if any exist
+	if group.Reasons != nil {
+		var reasons []*types.GroupReason
+		for reasonType, reason := range group.Reasons {
+			reasons = append(reasons, &types.GroupReason{
+				GroupID:    group.ID,
+				ReasonType: reasonType,
+				Message:    reason.Message,
+				Confidence: reason.Confidence,
+				Evidence:   reason.Evidence,
+				CreatedAt:  time.Now(),
+			})
+		}
+
+		if len(reasons) > 0 {
+			_, err = tx.NewInsert().
+				Model(&reasons).
+				On("CONFLICT (group_id, reason_type) DO UPDATE").
+				Set("message = EXCLUDED.message").
+				Set("confidence = EXCLUDED.confidence").
+				Set("evidence = EXCLUDED.evidence").
+				Exec(ctx)
+			if err != nil {
+				return fmt.Errorf("failed to update group reasons: %w", err)
+			}
+		}
+	}
+
+	return nil
 }
 
 // GetGroupByID retrieves a group by either their numeric ID or UUID.
@@ -253,7 +268,7 @@ func (r *GroupModel) GetGroupByID(
 	var group types.Group
 	var result types.ReviewGroup
 
-	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+	err := dbretry.Transaction(ctx, r.db, func(ctx context.Context, tx bun.Tx) error {
 		// Build query
 		query := tx.NewSelect().
 			Model(&group).
@@ -359,7 +374,7 @@ func (r *GroupModel) GetGroupsByIDs(
 ) (map[uint64]*types.ReviewGroup, error) {
 	groups := make(map[uint64]*types.ReviewGroup)
 
-	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+	err := dbretry.Transaction(ctx, r.db, func(ctx context.Context, tx bun.Tx) error {
 		// Query all groups
 		var baseGroups []types.Group
 		err := tx.NewSelect().
@@ -454,7 +469,7 @@ func (r *GroupModel) GetGroupsByIDs(
 func (r *GroupModel) GetFlaggedAndConfirmedGroups(ctx context.Context) ([]*types.ReviewGroup, error) {
 	// Get groups
 	var groups []types.Group
-	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+	err := dbretry.Transaction(ctx, r.db, func(ctx context.Context, tx bun.Tx) error {
 		err := tx.NewSelect().
 			Model(&groups).
 			Column("id", "reasons", "confidence").
@@ -486,7 +501,7 @@ func (r *GroupModel) GetGroupsToCheck(
 	ctx context.Context, limit int,
 ) (groupIDs []uint64, lockedIDs []uint64, err error) {
 	var groups []types.Group
-	err = r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+	err = dbretry.Transaction(ctx, r.db, func(ctx context.Context, tx bun.Tx) error {
 		// Get groups that need checking
 		err := tx.NewSelect().
 			Model(&groups).
@@ -529,28 +544,33 @@ func (r *GroupModel) GetGroupsToCheck(
 
 // MarkGroupsLockStatus updates the locked status of groups.
 func (r *GroupModel) MarkGroupsLockStatus(ctx context.Context, groupIDs []uint64, isLocked bool) error {
-	_, err := r.db.NewUpdate().
-		Model((*types.Group)(nil)).
-		Set("is_locked = ?", isLocked).
-		Where("id IN (?)", bun.In(groupIDs)).
-		Exec(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to mark groups lock status: %w", err)
-	}
+	return dbretry.NoResult(ctx, func(ctx context.Context) error {
+		_, err := r.db.NewUpdate().
+			Model((*types.Group)(nil)).
+			Set("is_locked = ?", isLocked).
+			Where("id IN (?)", bun.In(groupIDs)).
+			Exec(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to mark groups lock status: %w", err)
+		}
 
-	r.logger.Debug("Marked groups lock status",
-		zap.Int("count", len(groupIDs)),
-		zap.Bool("isLocked", isLocked))
-	return nil
+		r.logger.Debug("Marked groups lock status",
+			zap.Int("count", len(groupIDs)),
+			zap.Bool("isLocked", isLocked))
+
+		return err
+	})
 }
 
 // GetLockedCount returns the total number of locked groups.
 func (r *GroupModel) GetLockedCount(ctx context.Context) (int, error) {
-	count, err := r.db.NewSelect().
-		Model((*types.Group)(nil)).
-		Where("is_locked = true").
-		Where("status IN (?, ?)", enum.GroupTypeFlagged, enum.GroupTypeConfirmed).
-		Count(ctx)
+	count, err := dbretry.Operation(ctx, func(ctx context.Context) (int, error) {
+		return r.db.NewSelect().
+			Model((*types.Group)(nil)).
+			Where("is_locked = true").
+			Where("status IN (?, ?)", enum.GroupTypeFlagged, enum.GroupTypeConfirmed).
+			Count(ctx)
+	})
 	if err != nil {
 		return 0, fmt.Errorf("failed to get locked groups count: %w", err)
 	}
@@ -560,7 +580,7 @@ func (r *GroupModel) GetLockedCount(ctx context.Context) (int, error) {
 // GetGroupCounts returns counts for all group statuses.
 func (r *GroupModel) GetGroupCounts(ctx context.Context) (*types.GroupCounts, error) {
 	var counts types.GroupCounts
-	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+	err := dbretry.Transaction(ctx, r.db, func(ctx context.Context, tx bun.Tx) error {
 		// Get counts by status
 		var statusCounts []struct {
 			Status enum.GroupType `bun:"status"`
@@ -607,7 +627,7 @@ func (r *GroupModel) GetGroupCounts(ctx context.Context) (*types.GroupCounts, er
 // PurgeOldClearedGroups removes cleared groups older than the cutoff date.
 func (r *GroupModel) PurgeOldClearedGroups(ctx context.Context, cutoffDate time.Time) (int, error) {
 	var clearances []types.GroupClearance
-	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+	err := dbretry.Transaction(ctx, r.db, func(ctx context.Context, tx bun.Tx) error {
 		// Get groups to delete
 		err := tx.NewSelect().
 			Model(&clearances).
@@ -660,7 +680,7 @@ func (r *GroupModel) PurgeOldClearedGroups(ctx context.Context, cutoffDate time.
 // GetGroupsForThumbnailUpdate retrieves groups that need thumbnail updates.
 func (r *GroupModel) GetGroupsForThumbnailUpdate(ctx context.Context, limit int) (map[uint64]*types.ReviewGroup, error) {
 	groups := make(map[uint64]*types.ReviewGroup)
-	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+	err := dbretry.Transaction(ctx, r.db, func(ctx context.Context, tx bun.Tx) error {
 		var baseGroups []types.Group
 		err := tx.NewSelect().
 			Model(&baseGroups).
@@ -691,7 +711,7 @@ func (r *GroupModel) GetGroupsForThumbnailUpdate(ctx context.Context, limit int)
 // DeleteGroup removes a group and all associated data from the database.
 func (r *GroupModel) DeleteGroup(ctx context.Context, groupID uint64) (bool, error) {
 	var totalAffected int64
-	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+	err := dbretry.Transaction(ctx, r.db, func(ctx context.Context, tx bun.Tx) error {
 		// Delete group reasons
 		result, err := tx.NewDelete().
 			Model((*types.GroupReason)(nil)).
@@ -745,7 +765,7 @@ func (r *GroupModel) DeleteGroup(ctx context.Context, groupID uint64) (bool, err
 // GetGroupToScan finds the next group to scan.
 func (r *GroupModel) GetGroupToScan(ctx context.Context) (*types.Group, error) {
 	var group types.Group
-	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+	err := dbretry.Transaction(ctx, r.db, func(ctx context.Context, tx bun.Tx) error {
 		// Try confirmed and flagged groups
 		err := tx.NewSelect().
 			Model(&group).
@@ -787,7 +807,7 @@ func (r *GroupModel) GetNextToReview(
 	var group types.Group
 	var result types.ReviewGroup
 
-	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+	err := dbretry.Transaction(ctx, r.db, func(ctx context.Context, tx bun.Tx) error {
 		// Build query
 		query := tx.NewSelect().
 			Model(&group).

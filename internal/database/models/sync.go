@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/robalyx/rotector/internal/database/dbretry"
 	"github.com/robalyx/rotector/internal/database/types"
 	"github.com/uptrace/bun"
 	"go.uber.org/zap"
@@ -26,15 +27,17 @@ func NewSync(db *bun.DB, logger *zap.Logger) *SyncModel {
 
 // UpsertServerMember creates or updates a single server member record.
 func (m *SyncModel) UpsertServerMember(ctx context.Context, member *types.DiscordServerMember) error {
-	_, err := m.db.NewInsert().
-		Model(member).
-		On("CONFLICT (server_id, user_id) DO UPDATE").
-		Set("updated_at = EXCLUDED.updated_at").
-		Exec(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to upsert member: %w", err)
-	}
-	return nil
+	return dbretry.NoResult(ctx, func(ctx context.Context) error {
+		_, err := m.db.NewInsert().
+			Model(member).
+			On("CONFLICT (server_id, user_id) DO UPDATE").
+			Set("updated_at = EXCLUDED.updated_at").
+			Exec(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to upsert member: %w", err)
+		}
+		return nil
+	})
 }
 
 // UpsertServerMembers creates or updates multiple server member records.
@@ -46,7 +49,7 @@ func (m *SyncModel) UpsertServerMembers(
 	}
 
 	now := time.Now()
-	return m.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+	return dbretry.Transaction(ctx, m.db, func(ctx context.Context, tx bun.Tx) error {
 		// Upsert server members
 		_, err := tx.NewInsert().
 			Model(&members).
@@ -99,67 +102,73 @@ func (m *SyncModel) UpsertServerMembers(
 
 // RemoveServerMember removes a member from a server.
 func (m *SyncModel) RemoveServerMember(ctx context.Context, serverID, userID uint64) error {
-	_, err := m.db.NewDelete().
-		Model((*types.DiscordServerMember)(nil)).
-		Where("server_id = ? AND user_id = ?", serverID, userID).
-		Exec(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to remove server member: %w", err)
-	}
-	return nil
+	return dbretry.NoResult(ctx, func(ctx context.Context) error {
+		_, err := m.db.NewDelete().
+			Model((*types.DiscordServerMember)(nil)).
+			Where("server_id = ? AND user_id = ?", serverID, userID).
+			Exec(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to remove server member: %w", err)
+		}
+		return nil
+	})
 }
 
 // GetDiscordUserGuildsByCursor returns paginated guild memberships for a specific Discord user.
 func (m *SyncModel) GetDiscordUserGuildsByCursor(
-	ctx context.Context,
-	discordUserID uint64,
-	cursor *types.GuildCursor,
-	limit int,
+	ctx context.Context, discordUserID uint64, cursor *types.GuildCursor, limit int,
 ) ([]*types.UserGuildInfo, *types.GuildCursor, error) {
 	var members []*types.DiscordServerMember
-
-	// Build base query
-	query := m.db.NewSelect().
-		Model(&members).
-		Where("user_id = ?", discordUserID).
-		Limit(limit + 1) // Get one extra to determine if there's a next page
-
-	// Apply cursor conditions if provided
-	if cursor != nil {
-		query = query.Where("(joined_at, server_id) < (?, ?)",
-			cursor.JoinedAt,
-			cursor.ServerID,
-		)
-	}
-
-	// Order by join time and server ID for stable pagination
-	query = query.Order("joined_at DESC", "server_id DESC")
-
-	// Execute query
-	err := query.Scan(ctx)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to get Discord user guild memberships: %w", err)
-	}
-
-	// Convert to UserGuildInfo slice
-	guilds := make([]*types.UserGuildInfo, len(members))
-	for i, member := range members {
-		guilds[i] = &types.UserGuildInfo{
-			ServerID:  member.ServerID,
-			JoinedAt:  member.JoinedAt,
-			UpdatedAt: member.UpdatedAt,
-		}
-	}
-
-	// Check if we have a next page
 	var nextCursor *types.GuildCursor
-	if len(guilds) > limit {
-		lastGuild := guilds[limit] // Get the extra guild we fetched
-		nextCursor = &types.GuildCursor{
-			JoinedAt: lastGuild.JoinedAt,
-			ServerID: lastGuild.ServerID,
+	guilds := make([]*types.UserGuildInfo, len(members))
+
+	err := dbretry.NoResult(ctx, func(ctx context.Context) error {
+		// Build base query
+		query := m.db.NewSelect().
+			Model(&members).
+			Where("user_id = ?", discordUserID).
+			Limit(limit + 1) // Get one extra to determine if there's a next page
+
+		// Apply cursor conditions if provided
+		if cursor != nil {
+			query = query.Where("(joined_at, server_id) < (?, ?)",
+				cursor.JoinedAt,
+				cursor.ServerID,
+			)
 		}
-		guilds = guilds[:limit] // Remove the extra guild from results
+
+		// Order by join time and server ID for stable pagination
+		query = query.Order("joined_at DESC", "server_id DESC")
+
+		// Execute query
+		err := query.Scan(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to get Discord user guild memberships: %w", err)
+		}
+
+		// Convert to UserGuildInfo slice
+		for i, member := range members {
+			guilds[i] = &types.UserGuildInfo{
+				ServerID:  member.ServerID,
+				JoinedAt:  member.JoinedAt,
+				UpdatedAt: member.UpdatedAt,
+			}
+		}
+
+		// Check if we have a next page
+		if len(guilds) > limit {
+			lastGuild := guilds[limit] // Get the extra guild we fetched
+			nextCursor = &types.GuildCursor{
+				JoinedAt: lastGuild.JoinedAt,
+				ServerID: lastGuild.ServerID,
+			}
+			guilds = guilds[:limit] // Remove the extra guild from results
+		}
+
+		return nil
+	})
+	if err != nil {
+		return nil, nil, err
 	}
 
 	return guilds, nextCursor, nil
@@ -167,29 +176,33 @@ func (m *SyncModel) GetDiscordUserGuildsByCursor(
 
 // UpsertServerInfo creates or updates a single server information record.
 func (m *SyncModel) UpsertServerInfo(ctx context.Context, server *types.DiscordServerInfo) error {
-	_, err := m.db.NewInsert().
-		Model(server).
-		On("CONFLICT (server_id) DO UPDATE").
-		Set("name = EXCLUDED.name").
-		Set("updated_at = EXCLUDED.updated_at").
-		Exec(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to upsert server info: %w", err)
-	}
-	return nil
+	return dbretry.NoResult(ctx, func(ctx context.Context) error {
+		_, err := m.db.NewInsert().
+			Model(server).
+			On("CONFLICT (server_id) DO UPDATE").
+			Set("name = EXCLUDED.name").
+			Set("updated_at = EXCLUDED.updated_at").
+			Exec(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to upsert server info: %w", err)
+		}
+		return nil
+	})
 }
 
 // GetServerInfo returns server information for the given server IDs.
 func (m *SyncModel) GetServerInfo(ctx context.Context, serverIDs []uint64) ([]*types.DiscordServerInfo, error) {
-	var servers []*types.DiscordServerInfo
-	err := m.db.NewSelect().
-		Model(&servers).
-		Where("server_id IN (?)", bun.In(serverIDs)).
-		Scan(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get server info: %w", err)
-	}
-	return servers, nil
+	return dbretry.Operation(ctx, func(ctx context.Context) ([]*types.DiscordServerInfo, error) {
+		var servers []*types.DiscordServerInfo
+		err := m.db.NewSelect().
+			Model(&servers).
+			Where("server_id IN (?)", bun.In(serverIDs)).
+			Scan(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get server info: %w", err)
+		}
+		return servers, nil
+	})
 }
 
 // GetFlaggedServerMembers returns information about flagged users and their servers.
@@ -199,13 +212,19 @@ func (m *SyncModel) GetFlaggedServerMembers(
 	// Query to find which members exist and their server information
 	var flaggedMembers []*types.DiscordServerMember
 
-	err := m.db.NewSelect().
-		Model((*types.DiscordServerMember)(nil)).
-		Column("user_id", "server_id", "joined_at", "updated_at").
-		Where("user_id IN (?)", bun.In(memberIDs)).
-		Scan(ctx, &flaggedMembers)
+	err := dbretry.NoResult(ctx, func(ctx context.Context) error {
+		err := m.db.NewSelect().
+			Model((*types.DiscordServerMember)(nil)).
+			Column("user_id", "server_id", "joined_at", "updated_at").
+			Where("user_id IN (?)", bun.In(memberIDs)).
+			Scan(ctx, &flaggedMembers)
+		if err != nil {
+			return fmt.Errorf("failed to get flagged members: %w", err)
+		}
+		return nil
+	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to get flagged members: %w", err)
+		return nil, err
 	}
 
 	// Convert to map of user ID to their guild info
@@ -224,7 +243,7 @@ func (m *SyncModel) GetFlaggedServerMembers(
 
 // DeleteUserGuildMemberships deletes all guild memberships for a specific user.
 func (m *SyncModel) DeleteUserGuildMemberships(ctx context.Context, userID uint64) error {
-	return m.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+	return dbretry.Transaction(ctx, m.db, func(ctx context.Context, tx bun.Tx) error {
 		// Delete from server members
 		_, err := tx.NewDelete().
 			Model((*types.DiscordServerMember)(nil)).
@@ -252,44 +271,50 @@ func (m *SyncModel) DeleteUserGuildMemberships(ctx context.Context, userID uint6
 
 // GetUniqueGuildCount returns the number of unique guilds in the database.
 func (m *SyncModel) GetUniqueGuildCount(ctx context.Context) (int, error) {
-	count, err := m.db.NewSelect().
-		Model((*types.DiscordServerInfo)(nil)).
-		Count(ctx)
-	if err != nil {
-		return 0, fmt.Errorf("failed to get unique guild count: %w", err)
-	}
-	return count, nil
+	return dbretry.Operation(ctx, func(ctx context.Context) (int, error) {
+		count, err := m.db.NewSelect().
+			Model((*types.DiscordServerInfo)(nil)).
+			Count(ctx)
+		if err != nil {
+			return 0, fmt.Errorf("failed to get unique guild count: %w", err)
+		}
+		return count, nil
+	})
 }
 
 // GetUniqueUserCount returns the number of unique user IDs in the server members table.
 func (m *SyncModel) GetUniqueUserCount(ctx context.Context) (int, error) {
-	var count int
-	_, err := m.db.NewRaw(`
-		SELECT COUNT(DISTINCT user_id) 
-		FROM discord_server_members
-	`).Exec(ctx, &count)
-	if err != nil {
-		return 0, fmt.Errorf("failed to get unique user count: %w", err)
-	}
-	return count, nil
+	return dbretry.Operation(ctx, func(ctx context.Context) (int, error) {
+		var count int
+		_, err := m.db.NewRaw(`
+			SELECT COUNT(DISTINCT user_id) 
+			FROM discord_server_members
+		`).Exec(ctx, &count)
+		if err != nil {
+			return 0, fmt.Errorf("failed to get unique user count: %w", err)
+		}
+		return count, nil
+	})
 }
 
 // GetDiscordUserGuildCount returns the total number of flagged guilds for a specific Discord user.
 func (m *SyncModel) GetDiscordUserGuildCount(ctx context.Context, discordUserID uint64) (int, error) {
-	count, err := m.db.NewSelect().
-		Model((*types.DiscordServerMember)(nil)).
-		Where("user_id = ?", discordUserID).
-		Count(ctx)
-	if err != nil {
-		return 0, fmt.Errorf("failed to get Discord user guild count: %w", err)
-	}
-	return count, nil
+	return dbretry.Operation(ctx, func(ctx context.Context) (int, error) {
+		count, err := m.db.NewSelect().
+			Model((*types.DiscordServerMember)(nil)).
+			Where("user_id = ?", discordUserID).
+			Count(ctx)
+		if err != nil {
+			return 0, fmt.Errorf("failed to get Discord user guild count: %w", err)
+		}
+		return count, nil
+	})
 }
 
 // PurgeOldServerMembers removes Discord server member records older than the specified cutoff date.
 func (m *SyncModel) PurgeOldServerMembers(ctx context.Context, cutoffDate time.Time) (int, error) {
 	var affected int64
-	err := m.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+	err := dbretry.Transaction(ctx, m.db, func(ctx context.Context, tx bun.Tx) error {
 		// Get users to be purged
 		var usersToPurge []uint64
 		err := tx.NewSelect().
@@ -350,82 +375,92 @@ func (m *SyncModel) MarkUserDataRedacted(ctx context.Context, userID uint64) err
 		UpdatedAt:  now,
 	}
 
-	_, err := m.db.NewInsert().
-		Model(redaction).
-		On("CONFLICT (user_id) DO UPDATE").
-		Set("updated_at = EXCLUDED.updated_at").
-		Exec(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to mark user data as redacted: %w", err)
-	}
+	return dbretry.NoResult(ctx, func(ctx context.Context) error {
+		_, err := m.db.NewInsert().
+			Model(redaction).
+			On("CONFLICT (user_id) DO UPDATE").
+			Set("updated_at = EXCLUDED.updated_at").
+			Exec(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to mark user data as redacted: %w", err)
+		}
 
-	m.logger.Debug("Marked user data as redacted",
-		zap.Uint64("user_id", userID))
+		m.logger.Debug("Marked user data as redacted",
+			zap.Uint64("user_id", userID))
 
-	return nil
+		return nil
+	})
 }
 
 // IsUserDataRedacted checks if a user's data has been redacted.
 func (m *SyncModel) IsUserDataRedacted(ctx context.Context, userID uint64) (bool, error) {
-	exists, err := m.db.NewSelect().
-		Model((*types.DiscordUserRedaction)(nil)).
-		Where("user_id = ?", userID).
-		Exists(ctx)
-	if err != nil {
-		return false, fmt.Errorf("failed to check if user data is redacted: %w", err)
-	}
-	return exists, nil
+	return dbretry.Operation(ctx, func(ctx context.Context) (bool, error) {
+		exists, err := m.db.NewSelect().
+			Model((*types.DiscordUserRedaction)(nil)).
+			Where("user_id = ?", userID).
+			Exists(ctx)
+		if err != nil {
+			return false, fmt.Errorf("failed to check if user data is redacted: %w", err)
+		}
+		return exists, nil
+	})
 }
 
 // GetUsersForFullScan returns users that haven't been scanned recently.
 func (m *SyncModel) GetUsersForFullScan(ctx context.Context, before time.Time, limit int) ([]uint64, error) {
-	var scans []types.DiscordUserFullScan
-	err := m.db.NewSelect().
-		Model(&scans).
-		Where("last_scan < ?", before).
-		Order("last_scan ASC").
-		Limit(limit).
-		Scan(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get users for full scan: %w", err)
-	}
+	return dbretry.Operation(ctx, func(ctx context.Context) ([]uint64, error) {
+		var scans []types.DiscordUserFullScan
+		err := m.db.NewSelect().
+			Model(&scans).
+			Where("last_scan < ?", before).
+			Order("last_scan ASC").
+			Limit(limit).
+			Scan(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get users for full scan: %w", err)
+		}
 
-	userIDs := make([]uint64, len(scans))
-	for i, scan := range scans {
-		userIDs[i] = scan.UserID
-	}
-	return userIDs, nil
+		userIDs := make([]uint64, len(scans))
+		for i, scan := range scans {
+			userIDs[i] = scan.UserID
+		}
+		return userIDs, nil
+	})
 }
 
 // WhitelistDiscordUser adds a Discord user to the whitelist.
 func (m *SyncModel) WhitelistDiscordUser(ctx context.Context, whitelist *types.DiscordUserWhitelist) error {
-	_, err := m.db.NewInsert().
-		Model(whitelist).
-		On("CONFLICT (user_id) DO UPDATE").
-		Set("whitelisted_at = EXCLUDED.whitelisted_at").
-		Set("reason = EXCLUDED.reason").
-		Set("reviewer_id = EXCLUDED.reviewer_id").
-		Set("appeal_id = EXCLUDED.appeal_id").
-		Exec(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to whitelist Discord user: %w", err)
-	}
+	return dbretry.NoResult(ctx, func(ctx context.Context) error {
+		_, err := m.db.NewInsert().
+			Model(whitelist).
+			On("CONFLICT (user_id) DO UPDATE").
+			Set("whitelisted_at = EXCLUDED.whitelisted_at").
+			Set("reason = EXCLUDED.reason").
+			Set("reviewer_id = EXCLUDED.reviewer_id").
+			Set("appeal_id = EXCLUDED.appeal_id").
+			Exec(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to whitelist Discord user: %w", err)
+		}
 
-	m.logger.Debug("Added Discord user to whitelist",
-		zap.Uint64("user_id", whitelist.UserID),
-		zap.Int64("appeal_id", whitelist.AppealID))
+		m.logger.Debug("Added Discord user to whitelist",
+			zap.Uint64("user_id", whitelist.UserID),
+			zap.Int64("appeal_id", whitelist.AppealID))
 
-	return nil
+		return nil
+	})
 }
 
 // IsUserWhitelisted checks if a user is whitelisted.
 func (m *SyncModel) IsUserWhitelisted(ctx context.Context, userID uint64) (bool, error) {
-	exists, err := m.db.NewSelect().
-		Model((*types.DiscordUserWhitelist)(nil)).
-		Where("user_id = ?", userID).
-		Exists(ctx)
-	if err != nil {
-		return false, fmt.Errorf("failed to check if user is whitelisted: %w", err)
-	}
-	return exists, nil
+	return dbretry.Operation(ctx, func(ctx context.Context) (bool, error) {
+		exists, err := m.db.NewSelect().
+			Model((*types.DiscordUserWhitelist)(nil)).
+			Where("user_id = ?", userID).
+			Exists(ctx)
+		if err != nil {
+			return false, fmt.Errorf("failed to check if user is whitelisted: %w", err)
+		}
+		return exists, nil
+	})
 }
