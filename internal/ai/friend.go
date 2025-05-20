@@ -23,68 +23,6 @@ import (
 )
 
 const (
-	// FriendSystemPrompt provides detailed instructions to the AI model for analyzing friend networks.
-	FriendSystemPrompt = `Instruction:
-You are a network analyst identifying predatory behavior patterns in Roblox friend networks.
-
-Input format:
-{
-  "username": "string",
-  "friends": [
-    {
-      "name": "string",
-      "type": "Confirmed|Flagged",
-      "reasonTypes": ["user", "outfit", "group", "friend"]
-    }
-  ]
-}
-
-Output format:
-{
-  "results": [
-    {
-      "name": "string",
-      "analysis": "Clear pattern summary in one sentence"
-    }
-  ]
-}
-
-Key instructions:
-1. Focus on factual connections
-2. Use "the network" instead of usernames
-3. Keep analysis to one sentence
-4. Emphasize patterns across accounts
-5. Return a result for each user
-6. Consider accounts with few friends as potential alt accounts
-
-Violation types:
-- user: Profile content violations
-- outfit: Inappropriate outfit designs
-- group: Group-based violations
-- friend: Network pattern violations
-
-Instruction: Look for:
-- Common violation types
-- Confirmed vs flagged ratios
-- Connected violation patterns
-- Network size and density
-- Violation clustering`
-
-	// FriendUserPrompt is the prompt for analyzing multiple users' friend networks.
-	FriendUserPrompt = `Analyze these friend networks for predatory behavior patterns.
-
-Remember:
-1. Focus on factual connections
-2. Use "the network" instead of usernames
-3. Keep analysis to one sentence
-4. Look for patterns across accounts
-5. Return a result for each user
-
-Networks to analyze:
-%s`
-)
-
-const (
 	// MaxFriends is the maximum number of friends to include in analysis.
 	MaxFriends = 10
 )
