@@ -6,16 +6,29 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strings"
+	"time"
 
 	"github.com/robalyx/rotector/internal/database"
 	"github.com/robalyx/rotector/internal/database/migrations"
+	"github.com/robalyx/rotector/internal/database/types/enum"
 	"github.com/robalyx/rotector/internal/setup/config"
 	"github.com/uptrace/bun/migrate"
 	"github.com/urfave/cli/v3"
 	"go.uber.org/zap"
 )
 
-var ErrNameRequired = errors.New("NAME argument required")
+var (
+	ErrNameRequired   = errors.New("NAME argument required")
+	ErrReasonRequired = errors.New("REASON argument required")
+)
+
+// cliDependencies holds the common dependencies needed by CLI commands.
+type cliDependencies struct {
+	db       database.Client
+	migrator *migrate.Migrator
+	logger   *zap.Logger
+}
 
 func main() {
 	if err := run(); err != nil {
@@ -26,110 +39,55 @@ func main() {
 
 func run() error {
 	// Setup dependencies
-	db, migrator, logger, err := setupMigrator()
+	deps, err := setupDependencies()
 	if err != nil {
-		return fmt.Errorf("failed to setup migrator: %w", err)
+		return fmt.Errorf("failed to setup dependencies: %w", err)
 	}
-	defer db.Close()
+	defer deps.db.Close()
 
 	app := &cli.Command{
 		Name:  "db",
 		Usage: "Database management tool",
 		Commands: []*cli.Command{
 			{
-				Name:  "init",
-				Usage: "Initialize migration tables",
-				Action: func(ctx context.Context, _ *cli.Command) error {
-					return migrator.Init(ctx)
-				},
+				Name:   "init",
+				Usage:  "Initialize migration tables",
+				Action: handleInit(deps),
 			},
 			{
-				Name:  "migrate",
-				Usage: "Run pending migrations",
-				Action: func(ctx context.Context, _ *cli.Command) error {
-					if err := migrator.Lock(ctx); err != nil {
-						return err
-					}
-					defer migrator.Unlock(ctx) //nolint:errcheck // -
-
-					group, err := migrator.Migrate(ctx)
-					if err != nil {
-						return err
-					}
-
-					if group.IsZero() {
-						logger.Info("No new migrations to run (database is up to date)")
-						return nil
-					}
-
-					logger.Info("Successfully migrated",
-						zap.String("group", group.String()),
-					)
-					return nil
-				},
+				Name:   "migrate",
+				Usage:  "Run pending migrations",
+				Action: handleMigrate(deps),
 			},
 			{
-				Name:  "rollback",
-				Usage: "Rollback the last migration group",
-				Action: func(ctx context.Context, _ *cli.Command) error {
-					if err := migrator.Lock(ctx); err != nil {
-						return err
-					}
-					defer migrator.Unlock(ctx) //nolint:errcheck // -
-
-					group, err := migrator.Rollback(ctx)
-					if err != nil {
-						return err
-					}
-
-					if group.IsZero() {
-						logger.Info("No groups to roll back")
-						return nil
-					}
-
-					logger.Info("Successfully rolled back",
-						zap.String("group", group.String()),
-					)
-					return nil
-				},
+				Name:   "rollback",
+				Usage:  "Rollback the last migration group",
+				Action: handleRollback(deps),
 			},
 			{
-				Name:  "status",
-				Usage: "Show migration status",
-				Action: func(ctx context.Context, _ *cli.Command) error {
-					ms, err := migrator.MigrationsWithStatus(ctx)
-					if err != nil {
-						return err
-					}
-
-					logger.Info("Migration status",
-						zap.String("migrations", ms.String()),
-						zap.String("unapplied", ms.Unapplied().String()),
-						zap.String("last_group", ms.LastGroup().String()),
-					)
-					return nil
-				},
+				Name:   "status",
+				Usage:  "Show migration status",
+				Action: handleStatus(deps),
 			},
 			{
 				Name:      "create",
 				Usage:     "Create a new Go migration file",
 				ArgsUsage: "NAME",
-				Action: func(ctx context.Context, c *cli.Command) error {
-					if c.Args().Len() != 1 {
-						return ErrNameRequired
-					}
-
-					mf, err := migrator.CreateGoMigration(ctx, c.Args().First())
-					if err != nil {
-						return err
-					}
-
-					logger.Info("Created Go migration",
-						zap.String("name", mf.Name),
-						zap.String("path", mf.Path),
-					)
-					return nil
+				Action:    handleCreate(deps),
+			},
+			{
+				Name:      "clear-reason",
+				Usage:     "Clear flagged users with only a specific reason type",
+				ArgsUsage: "REASON",
+				Flags: []cli.Flag{
+					&cli.IntFlag{
+						Name:    "batch-size",
+						Usage:   "Number of users to process in each batch",
+						Value:   5000,
+						Aliases: []string{"b"},
+					},
 				},
+				Action: handleClearReason(deps),
 			},
 		},
 	}
@@ -137,28 +95,219 @@ func run() error {
 	return app.Run(context.Background(), os.Args)
 }
 
-// setupMigrator initializes the database connection and migrator.
-func setupMigrator() (database.Client, *migrate.Migrator, *zap.Logger, error) {
+// setupDependencies initializes all dependencies needed by the CLI.
+func setupDependencies() (*cliDependencies, error) {
 	// Load full configuration
 	cfg, _, err := config.LoadConfig()
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("failed to load config: %w", err)
+		return nil, fmt.Errorf("failed to load config: %w", err)
 	}
 
 	// Create development logger
 	logger, err := zap.NewDevelopment()
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("failed to create logger: %w", err)
+		return nil, fmt.Errorf("failed to create logger: %w", err)
 	}
 
 	// Connect to database
 	db, err := database.NewConnection(context.Background(), &cfg.Common.PostgreSQL, logger, false)
 	if err != nil {
-		return nil, nil, logger, fmt.Errorf("failed to connect to database: %w", err)
+		return nil, fmt.Errorf("failed to connect to database: %w", err)
 	}
 
 	// Create migrator using database connection and migrations
 	migrator := migrate.NewMigrator(db.DB(), migrations.Migrations)
 
-	return db, migrator, logger, nil
+	return &cliDependencies{
+		db:       db,
+		migrator: migrator,
+		logger:   logger,
+	}, nil
+}
+
+// handleInit handles the 'init' command.
+func handleInit(deps *cliDependencies) cli.ActionFunc {
+	return func(ctx context.Context, _ *cli.Command) error {
+		return deps.migrator.Init(ctx)
+	}
+}
+
+// handleMigrate handles the 'migrate' command.
+func handleMigrate(deps *cliDependencies) cli.ActionFunc {
+	return func(ctx context.Context, _ *cli.Command) error {
+		if err := deps.migrator.Lock(ctx); err != nil {
+			return err
+		}
+		defer deps.migrator.Unlock(ctx) //nolint:errcheck // -
+
+		group, err := deps.migrator.Migrate(ctx)
+		if err != nil {
+			return err
+		}
+
+		if group.IsZero() {
+			deps.logger.Info("No new migrations to run (database is up to date)")
+			return nil
+		}
+
+		deps.logger.Info("Successfully migrated",
+			zap.String("group", group.String()),
+		)
+		return nil
+	}
+}
+
+// handleRollback handles the 'rollback' command.
+func handleRollback(deps *cliDependencies) cli.ActionFunc {
+	return func(ctx context.Context, _ *cli.Command) error {
+		if err := deps.migrator.Lock(ctx); err != nil {
+			return err
+		}
+		defer deps.migrator.Unlock(ctx) //nolint:errcheck // -
+
+		group, err := deps.migrator.Rollback(ctx)
+		if err != nil {
+			return err
+		}
+
+		if group.IsZero() {
+			deps.logger.Info("No groups to roll back")
+			return nil
+		}
+
+		deps.logger.Info("Successfully rolled back",
+			zap.String("group", group.String()),
+		)
+		return nil
+	}
+}
+
+// handleStatus handles the 'status' command.
+func handleStatus(deps *cliDependencies) cli.ActionFunc {
+	return func(ctx context.Context, _ *cli.Command) error {
+		ms, err := deps.migrator.MigrationsWithStatus(ctx)
+		if err != nil {
+			return err
+		}
+
+		deps.logger.Info("Migration status",
+			zap.String("migrations", ms.String()),
+			zap.String("unapplied", ms.Unapplied().String()),
+			zap.String("last_group", ms.LastGroup().String()),
+		)
+		return nil
+	}
+}
+
+// handleCreate handles the 'create' command.
+func handleCreate(deps *cliDependencies) cli.ActionFunc {
+	return func(ctx context.Context, c *cli.Command) error {
+		if c.Args().Len() != 1 {
+			return ErrNameRequired
+		}
+
+		mf, err := deps.migrator.CreateGoMigration(ctx, c.Args().First())
+		if err != nil {
+			return err
+		}
+
+		deps.logger.Info("Created Go migration",
+			zap.String("name", mf.Name),
+			zap.String("path", mf.Path),
+		)
+		return nil
+	}
+}
+
+// handleClearReason handles the 'clear-reason' command.
+func handleClearReason(deps *cliDependencies) cli.ActionFunc {
+	return func(ctx context.Context, c *cli.Command) error {
+		if c.Args().Len() != 1 {
+			return ErrReasonRequired
+		}
+
+		// Get batch size from flag
+		batchSize := max(c.Int("batch-size"), 5000)
+
+		// Get reason type from argument
+		reasonStr := strings.ToUpper(c.Args().First())
+		reasonType, err := enum.UserReasonTypeString(reasonStr)
+		if err != nil {
+			return fmt.Errorf("invalid reason type %q: %w", reasonStr, err)
+		}
+
+		// Get users with only this reason
+		users, err := deps.db.Model().User().GetFlaggedUsersWithOnlyReason(ctx, reasonType)
+		if err != nil {
+			return fmt.Errorf("failed to get users: %w", err)
+		}
+
+		if len(users) == 0 {
+			deps.logger.Info("No users found with only the specified reason",
+				zap.String("reason", reasonType.String()))
+			return nil
+		}
+
+		// Ask for confirmation
+		deps.logger.Info("Found users to clear",
+			zap.Int("count", len(users)),
+			zap.String("reason", reasonType.String()))
+
+		log.Printf("Are you sure you want to delete these %d users in batches of %d? (y/N)",
+			len(users), batchSize)
+		var response string
+		_, _ = fmt.Scanln(&response)
+
+		if response != "y" && response != "Y" {
+			deps.logger.Info("Operation cancelled")
+			return nil
+		}
+
+		// Create user ID slices
+		userIDs := make([]uint64, len(users))
+		for i, user := range users {
+			userIDs[i] = user.ID
+		}
+
+		// Process in batches
+		var totalAffected int64
+		var totalProcessed int
+
+		for i := 0; i < len(userIDs); i += batchSize {
+			end := min(i+batchSize, len(userIDs))
+
+			batchIDs := userIDs[i:end]
+			batchCount := len(batchIDs)
+
+			deps.logger.Info("Processing batch",
+				zap.Int("batch", i/batchSize+1),
+				zap.Int("size", batchCount),
+				zap.Int("processed", totalProcessed),
+				zap.Int("remaining", len(userIDs)-totalProcessed))
+
+			affected, err := deps.db.Service().User().DeleteUsers(ctx, batchIDs)
+			if err != nil {
+				return fmt.Errorf("failed to delete users in batch %d: %w", i/batchSize+1, err)
+			}
+
+			totalAffected += affected
+			totalProcessed += batchCount
+
+			deps.logger.Info("Batch processed successfully",
+				zap.Int("batch", i/batchSize+1),
+				zap.Int("processed", batchCount),
+				zap.Int64("affected_rows", affected))
+
+			// Add a small delay between batches to reduce database load
+			if end < len(userIDs) {
+				time.Sleep(100 * time.Millisecond)
+			}
+		}
+
+		deps.logger.Info("Successfully cleared all users",
+			zap.Int("total_count", len(users)),
+			zap.Int64("total_affected_rows", totalAffected))
+
+		return nil
+	}
 }
