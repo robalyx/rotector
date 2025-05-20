@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/robalyx/rotector/internal/database/types"
 	"github.com/robalyx/rotector/internal/progress"
 	"github.com/robalyx/rotector/internal/queue"
 	"github.com/robalyx/rotector/internal/roblox/checker"
@@ -71,33 +72,53 @@ func (w *Worker) Start() {
 			continue
 		}
 
-		// Check which users have been recently processed or are confirmed
-		existingUsers, err := w.app.DB.Model().User().GetRecentlyProcessedUsers(context.Background(), userIDs)
+		// Get existing users from database
+		existingUsers, err := w.app.DB.Model().User().GetUsersByIDs(
+			context.Background(), userIDs, types.UserFieldBasic,
+		)
 		if err != nil {
-			w.logger.Error("Failed to check recently processed users", zap.Error(err))
+			w.logger.Error("Failed to check existing users", zap.Error(err))
 			time.Sleep(5 * time.Second)
 			continue
 		}
 
-		// Filter out confirmed and recently processed users
-		unprocessedIDs := make([]uint64, 0, len(userIDs))
+		// Separate users into different processing groups
+		processIDs := make([]uint64, 0)
+		skipAndFlagIDs := make([]uint64, 0)
+
 		for _, id := range userIDs {
-			if _, exists := existingUsers[id]; !exists {
-				unprocessedIDs = append(unprocessedIDs, id)
+			// If user exists in database, mark as processed and flagged
+			if _, exists := existingUsers[id]; exists {
+				skipAndFlagIDs = append(skipAndFlagIDs, id)
+				w.logger.Debug("Skipping user - already in database (will flag)",
+					zap.Uint64("userID", id))
+				continue
+			}
+
+			// Otherwise, this user needs processing
+			processIDs = append(processIDs, id)
+		}
+
+		// Mark users that should be processed and flagged
+		if len(skipAndFlagIDs) > 0 {
+			flaggedMap := make(map[uint64]struct{})
+			for _, id := range skipAndFlagIDs {
+				flaggedMap[id] = struct{}{}
+			}
+
+			if err := w.d1Client.MarkAsProcessed(context.Background(), skipAndFlagIDs, flaggedMap); err != nil {
+				w.logger.Error("Failed to mark users as processed and flagged", zap.Error(err))
 			}
 		}
 
-		if len(unprocessedIDs) == 0 {
-			// Mark all as processed since they're either confirmed or recently processed
-			if err := w.d1Client.MarkAsProcessed(context.Background(), userIDs, nil); err != nil {
-				w.logger.Error("Failed to mark users as processed", zap.Error(err))
-			}
+		// If no users to process, skip to next batch
+		if len(processIDs) == 0 {
 			continue
 		}
 
 		// Step 2: Fetch user info (50%)
 		w.bar.SetStepMessage("Fetching user info", 50)
-		userInfos := w.userFetcher.FetchInfos(context.Background(), unprocessedIDs)
+		userInfos := w.userFetcher.FetchInfos(context.Background(), processIDs)
 
 		// Step 3: Process users with checker (75%)
 		w.bar.SetStepMessage("Processing users", 75)
@@ -105,13 +126,13 @@ func (w *Worker) Start() {
 
 		// Step 4: Mark users as processed (100%)
 		w.bar.SetStepMessage("Marking as processed", 100)
-		if err := w.d1Client.MarkAsProcessed(context.Background(), userIDs, flaggedStatus); err != nil {
+		if err := w.d1Client.MarkAsProcessed(context.Background(), processIDs, flaggedStatus); err != nil {
 			w.logger.Error("Failed to mark users as processed", zap.Error(err))
 		}
 
 		w.logger.Info("Processed batch",
 			zap.Int("total", len(userIDs)),
-			zap.Int("processed", len(unprocessedIDs)),
-			zap.Int("skipped", len(userIDs)-len(unprocessedIDs)))
+			zap.Int("processed", len(processIDs)),
+			zap.Int("skippedAndFlagged", len(skipAndFlagIDs)))
 	}
 }
