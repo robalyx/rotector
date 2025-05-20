@@ -59,15 +59,23 @@ func (m *OutfitsMenu) Show(ctx *interaction.Context, s *session.Session) {
 		return
 	}
 
-	// Create map of outfit names from evidence
+	// Create map of flagged outfit names from evidence
 	flaggedOutfits := make(map[string]struct{})
 	if outfitReason, ok := user.Reasons[enum.UserReasonTypeOutfit]; ok {
-		// For each outfit, check if its name appears in any evidence
+		// Create a map of outfit name to outfit for quick lookup
+		outfitMap := make(map[string]*apiTypes.Outfit)
 		for _, outfit := range user.Outfits {
-			for _, evidence := range outfitReason.Evidence {
-				if strings.Contains(evidence, outfit.Name) {
-					flaggedOutfits[outfit.Name] = struct{}{}
-					break // Found a match, no need to check other evidence
+			outfitMap[outfit.Name] = outfit
+		}
+
+		// Parse evidence using pipe delimiter pattern
+		for _, evidence := range outfitReason.Evidence {
+			parts := strings.Split(evidence, "|")
+			if len(parts) >= 2 {
+				// Check if this outfit name exists in the user's outfits
+				outfitName := strings.TrimSpace(parts[0])
+				if _, exists := outfitMap[outfitName]; exists {
+					flaggedOutfits[outfitName] = struct{}{}
 				}
 			}
 		}
