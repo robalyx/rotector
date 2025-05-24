@@ -390,8 +390,8 @@ const (
 
 // Timeout Menu.
 const (
-	MaxReviewsBeforeBreak = 25               // Maximum reviews before requiring a break
-	MinBreakDuration      = 15 * time.Minute // Minimum break duration
+	MaxReviewsBeforeBreak = 40               // Maximum reviews before requiring a break
+	MinBreakDuration      = 10 * time.Minute // Minimum break duration
 	ReviewSessionWindow   = 1 * time.Hour    // Window to track review count
 )
 

@@ -7,11 +7,11 @@ import (
 	"strings"
 )
 
-const _ReviewSortByName = "RandomConfidenceLastUpdatedReputationLastViewed"
+const _ReviewSortByName = "RandomConfidenceLastUpdatedRecentlyUpdatedReputationLastViewed"
 
-var _ReviewSortByIndex = [...]uint8{0, 6, 16, 27, 37, 47}
+var _ReviewSortByIndex = [...]uint8{0, 6, 16, 27, 42, 52, 62}
 
-const _ReviewSortByLowerName = "randomconfidencelastupdatedreputationlastviewed"
+const _ReviewSortByLowerName = "randomconfidencelastupdatedrecentlyupdatedreputationlastviewed"
 
 func (i ReviewSortBy) String() string {
 	if i < 0 || i >= ReviewSortBy(len(_ReviewSortByIndex)-1) {
@@ -27,11 +27,12 @@ func _ReviewSortByNoOp() {
 	_ = x[ReviewSortByRandom-(0)]
 	_ = x[ReviewSortByConfidence-(1)]
 	_ = x[ReviewSortByLastUpdated-(2)]
-	_ = x[ReviewSortByReputation-(3)]
-	_ = x[ReviewSortByLastViewed-(4)]
+	_ = x[ReviewSortByRecentlyUpdated-(3)]
+	_ = x[ReviewSortByReputation-(4)]
+	_ = x[ReviewSortByLastViewed-(5)]
 }
 
-var _ReviewSortByValues = []ReviewSortBy{ReviewSortByRandom, ReviewSortByConfidence, ReviewSortByLastUpdated, ReviewSortByReputation, ReviewSortByLastViewed}
+var _ReviewSortByValues = []ReviewSortBy{ReviewSortByRandom, ReviewSortByConfidence, ReviewSortByLastUpdated, ReviewSortByRecentlyUpdated, ReviewSortByReputation, ReviewSortByLastViewed}
 
 var _ReviewSortByNameToValueMap = map[string]ReviewSortBy{
 	_ReviewSortByName[0:6]:        ReviewSortByRandom,
@@ -40,18 +41,21 @@ var _ReviewSortByNameToValueMap = map[string]ReviewSortBy{
 	_ReviewSortByLowerName[6:16]:  ReviewSortByConfidence,
 	_ReviewSortByName[16:27]:      ReviewSortByLastUpdated,
 	_ReviewSortByLowerName[16:27]: ReviewSortByLastUpdated,
-	_ReviewSortByName[27:37]:      ReviewSortByReputation,
-	_ReviewSortByLowerName[27:37]: ReviewSortByReputation,
-	_ReviewSortByName[37:47]:      ReviewSortByLastViewed,
-	_ReviewSortByLowerName[37:47]: ReviewSortByLastViewed,
+	_ReviewSortByName[27:42]:      ReviewSortByRecentlyUpdated,
+	_ReviewSortByLowerName[27:42]: ReviewSortByRecentlyUpdated,
+	_ReviewSortByName[42:52]:      ReviewSortByReputation,
+	_ReviewSortByLowerName[42:52]: ReviewSortByReputation,
+	_ReviewSortByName[52:62]:      ReviewSortByLastViewed,
+	_ReviewSortByLowerName[52:62]: ReviewSortByLastViewed,
 }
 
 var _ReviewSortByNames = []string{
 	_ReviewSortByName[0:6],
 	_ReviewSortByName[6:16],
 	_ReviewSortByName[16:27],
-	_ReviewSortByName[27:37],
-	_ReviewSortByName[37:47],
+	_ReviewSortByName[27:42],
+	_ReviewSortByName[42:52],
+	_ReviewSortByName[52:62],
 }
 
 // ReviewSortByString retrieves an enum value from the enum constants string name.

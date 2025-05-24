@@ -192,9 +192,11 @@ func (w *Worker) processGroup() ([]uint64, error) {
 			continue
 		}
 
-		// Add only users that exist in our system
-		for userID := range existingUsers {
-			userIDs = append(userIDs, userID)
+		// Add users that do not exist in our system
+		for _, userID := range newUserIDs {
+			if _, exists := existingUsers[userID]; !exists {
+				userIDs = append(userIDs, userID)
+			}
 		}
 
 		w.logger.Info("Fetched group users",

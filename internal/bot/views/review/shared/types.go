@@ -126,9 +126,12 @@ func (b *BaseReviewBuilder) BuildSortingOptions(defaultSort enum.ReviewSortBy) [
 		discord.NewStringSelectMenuOption("Selected by confidence", enum.ReviewSortByConfidence.String()).
 			WithDefault(defaultSort == enum.ReviewSortByConfidence).
 			WithEmoji(discord.ComponentEmoji{Name: "🔮"}),
-		discord.NewStringSelectMenuOption("Selected by last updated time", enum.ReviewSortByLastUpdated.String()).
+		discord.NewStringSelectMenuOption("Selected by least recently updated", enum.ReviewSortByLastUpdated.String()).
 			WithDefault(defaultSort == enum.ReviewSortByLastUpdated).
 			WithEmoji(discord.ComponentEmoji{Name: "📅"}),
+		discord.NewStringSelectMenuOption("Selected by most recently updated", enum.ReviewSortByRecentlyUpdated.String()).
+			WithDefault(defaultSort == enum.ReviewSortByRecentlyUpdated).
+			WithEmoji(discord.ComponentEmoji{Name: "🔄"}),
 		discord.NewStringSelectMenuOption("Selected by bad reputation", enum.ReviewSortByReputation.String()).
 			WithDefault(defaultSort == enum.ReviewSortByReputation).
 			WithEmoji(discord.ComponentEmoji{Name: "👎"}),

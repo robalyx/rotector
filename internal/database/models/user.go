@@ -1225,6 +1225,8 @@ func (r *UserModel) GetNextToReview(
 			query.OrderExpr("confidence DESC, last_viewed ASC")
 		case enum.ReviewSortByLastUpdated:
 			query.OrderExpr("last_updated ASC, last_viewed ASC")
+		case enum.ReviewSortByRecentlyUpdated:
+			query.OrderExpr("last_updated DESC, last_viewed ASC")
 		case enum.ReviewSortByReputation:
 			query.Join("LEFT JOIN user_reputations ON user_reputations.id = users.id").
 				OrderExpr("COALESCE(user_reputations.score, 0) ASC, last_viewed ASC")

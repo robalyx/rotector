@@ -126,6 +126,9 @@ func init() { //nolint:funlen
 
 			CREATE INDEX IF NOT EXISTS idx_groups_updated
 			ON groups (status, last_updated ASC, last_viewed ASC);
+			
+			CREATE INDEX IF NOT EXISTS idx_groups_recently_updated
+			ON groups (status, last_updated DESC, last_viewed ASC);
 
 			CREATE INDEX IF NOT EXISTS idx_groups_viewed
 			ON groups (status, last_viewed ASC);
@@ -139,7 +142,7 @@ func init() { //nolint:funlen
 			CREATE INDEX IF NOT EXISTS idx_groups_thumbnail_update 
 			ON groups (status, is_deleted, last_thumbnail_update ASC)
 			WHERE is_deleted = false;
-
+					
 			CREATE INDEX IF NOT EXISTS idx_groups_locked_status
 			ON groups (is_locked, status)
 			WHERE is_locked = true;
@@ -168,6 +171,9 @@ func init() { //nolint:funlen
 
 			CREATE INDEX IF NOT EXISTS idx_users_updated
 			ON users (status, last_updated ASC, last_viewed ASC);
+			
+			CREATE INDEX IF NOT EXISTS idx_users_recently_updated
+			ON users (status, last_updated DESC, last_viewed ASC);
 
 			CREATE INDEX IF NOT EXISTS idx_users_viewed
 			ON users (status, last_viewed ASC);
@@ -455,17 +461,21 @@ func init() { //nolint:funlen
 			-- Group review sorting indexes
 			DROP INDEX IF EXISTS idx_groups_confidence;
 			DROP INDEX IF EXISTS idx_groups_updated;
+			DROP INDEX IF EXISTS idx_groups_recently_updated;
 			DROP INDEX IF EXISTS idx_groups_viewed;
 			DROP INDEX IF EXISTS idx_groups_scan_time;
 			DROP INDEX IF EXISTS idx_groups_lock_check;
 			DROP INDEX IF EXISTS idx_groups_thumbnail_update;
 			DROP INDEX IF EXISTS idx_groups_locked_status;
+			DROP INDEX IF EXISTS idx_groups_uuid;
+			DROP INDEX IF EXISTS idx_groups_status_count;
 			DROP INDEX IF EXISTS idx_group_clearances_cleared_at;
 			DROP INDEX IF EXISTS idx_group_verifications_verified_at;
 
 			-- User review sorting indexes
 			DROP INDEX IF EXISTS idx_users_confidence;
 			DROP INDEX IF EXISTS idx_users_updated;
+			DROP INDEX IF EXISTS idx_users_recently_updated;
 			DROP INDEX IF EXISTS idx_users_viewed;
 			DROP INDEX IF EXISTS idx_users_scan_time;
 			DROP INDEX IF EXISTS idx_users_ban_check;
@@ -476,17 +486,6 @@ func init() { //nolint:funlen
 
 			-- User reputation sorting indexes
 			DROP INDEX IF EXISTS idx_user_reputations_score;
-
-			-- Group review sorting indexes
-			DROP INDEX IF EXISTS idx_groups_confidence;
-			DROP INDEX IF EXISTS idx_groups_updated;
-			DROP INDEX IF EXISTS idx_groups_viewed;
-			DROP INDEX IF EXISTS idx_groups_scan_time;
-			DROP INDEX IF EXISTS idx_groups_lock_check;
-			DROP INDEX IF EXISTS idx_groups_thumbnail_update;
-			DROP INDEX IF EXISTS idx_groups_locked_status;
-			DROP INDEX IF EXISTS idx_groups_uuid;
-			DROP INDEX IF EXISTS idx_groups_status_count;
 
 			-- Group reputation sorting indexes
 			DROP INDEX IF EXISTS idx_group_reputations_score;

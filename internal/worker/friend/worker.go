@@ -196,9 +196,11 @@ func (w *Worker) processFriendsBatch() ([]uint64, error) {
 				zap.Uint64("userID", user.ID))
 		}
 
-		// Add only users that exist in our system
-		for friendID := range existingUsers {
-			friendIDs = append(friendIDs, friendID)
+		// Add users that do not exist in our system
+		for _, userID := range userFriendIDs {
+			if _, exists := existingUsers[userID]; !exists {
+				friendIDs = append(friendIDs, userID)
+			}
 		}
 
 		w.logger.Debug("Added friends for processing",
