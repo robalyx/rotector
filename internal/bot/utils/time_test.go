@@ -218,3 +218,74 @@ func TestFormatTimeAgo(t *testing.T) {
 		})
 	}
 }
+
+func TestParseTimeWithTimezone(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name      string
+		input     string
+		wantTime  string // Expected time in UTC format
+		wantError bool
+	}{
+		{
+			name:     "RFC3339 with timezone",
+			input:    "2024-01-01T12:00:00Z",
+			wantTime: "2024-01-01 12:00:00 +0000 UTC",
+		},
+		{
+			name:     "RFC3339 with offset",
+			input:    "2024-01-01T12:00:00-05:00",
+			wantTime: "2024-01-01 17:00:00 +0000 UTC", // 12:00 EST = 17:00 UTC
+		},
+		{
+			name:     "Date only",
+			input:    "2024-01-01",
+			wantTime: "2024-01-01 00:00:00 +0000 UTC",
+		},
+		{
+			name:     "Datetime without timezone (assumes UTC)",
+			input:    "2024-01-01 12:00:00",
+			wantTime: "2024-01-01 12:00:00 +0000 UTC",
+		},
+		{
+			name:     "Datetime with UTC timezone",
+			input:    "2024-01-01 12:00:00 UTC",
+			wantTime: "2024-01-01 12:00:00 +0000 UTC",
+		},
+		{
+			name:     "Datetime with timezone name",
+			input:    "2024-01-01 12:00:00 America/New_York",
+			wantTime: "2024-01-01 17:00:00 +0000 UTC", // 12:00 EST = 17:00 UTC (assuming standard time)
+		},
+		{
+			name:      "Empty string",
+			input:     "",
+			wantError: true,
+		},
+		{
+			name:      "Invalid format",
+			input:     "not-a-date",
+			wantError: true,
+		},
+		{
+			name:      "Invalid timezone",
+			input:     "2024-01-01 12:00:00 Invalid/Timezone",
+			wantError: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			result, err := utils.ParseTimeWithTimezone(tt.input)
+
+			if tt.wantError {
+				assert.Error(t, err)
+				return
+			}
+
+			require.NoError(t, err)
+			assert.Equal(t, tt.wantTime, result.UTC().String())
+		})
+	}
+}

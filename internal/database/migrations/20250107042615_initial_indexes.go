@@ -198,6 +198,10 @@ func init() { //nolint:funlen
 			CREATE INDEX IF NOT EXISTS idx_users_status_count
 			ON users (status);
 
+			-- User last_updated index for delete-after-time command
+			CREATE INDEX IF NOT EXISTS idx_users_last_updated
+			ON users (last_updated ASC);
+
 			-- User reputation sorting indexes
 			CREATE INDEX IF NOT EXISTS idx_user_reputations_score
 			ON user_reputations (score ASC);
@@ -483,6 +487,9 @@ func init() { //nolint:funlen
 			DROP INDEX IF EXISTS idx_users_banned_status;
 			DROP INDEX IF EXISTS idx_users_uuid;
 			DROP INDEX IF EXISTS idx_users_status_count;
+
+			-- User last_updated index for delete-after-time command
+			DROP INDEX IF EXISTS idx_users_last_updated;
 
 			-- User reputation sorting indexes
 			DROP INDEX IF EXISTS idx_user_reputations_score;

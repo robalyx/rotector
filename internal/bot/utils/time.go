@@ -22,6 +22,10 @@ var (
 	ErrInvalidDurationFormat = errors.New("invalid duration format")
 	// ErrInvalidNumberFormat indicates that the number string is not in the correct format.
 	ErrInvalidNumberFormat = errors.New("invalid number format")
+	// ErrInvalidTimeFormat indicates that the time string is not in the correct format.
+	ErrInvalidTimeFormat = errors.New("invalid time format")
+	// ErrInvalidTimezone indicates that the timezone string is not valid.
+	ErrInvalidTimezone = errors.New("invalid timezone")
 )
 
 // ParseDateRange converts a date range string into start and end time.Time values.
@@ -273,4 +277,73 @@ func FormatDuration(d time.Duration) string {
 		return "1 day"
 	}
 	return fmt.Sprintf("%d days", days)
+}
+
+// ParseTimeWithTimezone parses a time string with optional timezone support.
+// Supported formats:
+// - "2006-01-02 15:04:05" (assumes UTC if no timezone specified)
+// - "2006-01-02 15:04:05 UTC"
+// - "2006-01-02 15:04:05 America/New_York"
+// - "2006-01-02T15:04:05Z" (RFC3339)
+// - "2006-01-02T15:04:05-07:00" (RFC3339 with timezone)
+// - "2006-01-02" (date only, assumes 00:00:00 UTC).
+func ParseTimeWithTimezone(timeStr string) (time.Time, error) {
+	timeStr = strings.TrimSpace(timeStr)
+	if timeStr == "" {
+		return time.Time{}, ErrInvalidTimeFormat
+	}
+
+	// Try RFC3339 format first (includes timezone)
+	if t, err := time.Parse(time.RFC3339, timeStr); err == nil {
+		return t, nil
+	}
+
+	// Try RFC3339 without nanoseconds
+	if t, err := time.Parse("2006-01-02T15:04:05Z", timeStr); err == nil {
+		return t, nil
+	}
+
+	// Try date only format (assume UTC)
+	if t, err := time.Parse("2006-01-02", timeStr); err == nil {
+		return t.UTC(), nil
+	}
+
+	// Try datetime with timezone name
+	parts := strings.Fields(timeStr)
+	if len(parts) >= 3 {
+		// Format: "2006-01-02 15:04:05 America/New_York" or "2006-01-02 15:04:05 UTC"
+		dateTimePart := strings.Join(parts[:2], " ")
+		timezonePart := parts[2]
+
+		// Parse the datetime part
+		t, err := time.Parse("2006-01-02 15:04:05", dateTimePart)
+		if err != nil {
+			return time.Time{}, fmt.Errorf("%w: failed to parse datetime part: %w", ErrInvalidTimeFormat, err)
+		}
+
+		// Handle timezone
+		if timezonePart == "UTC" || timezonePart == "utc" {
+			return t.UTC(), nil
+		}
+
+		// Try to load the timezone
+		loc, err := time.LoadLocation(timezonePart)
+		if err != nil {
+			return time.Time{}, fmt.Errorf("%w: %s: %w", ErrInvalidTimezone, timezonePart, err)
+		}
+
+		// Convert to the specified timezone and then to UTC
+		return time.Date(t.Year(), t.Month(), t.Day(), t.Hour(), t.Minute(), t.Second(), t.Nanosecond(), loc), nil
+	}
+
+	// Try datetime without timezone (assume UTC)
+	if len(parts) == 2 {
+		t, err := time.Parse("2006-01-02 15:04:05", timeStr)
+		if err != nil {
+			return time.Time{}, fmt.Errorf("%w: %w", ErrInvalidTimeFormat, err)
+		}
+		return t.UTC(), nil
+	}
+
+	return time.Time{}, fmt.Errorf("%w: unsupported format: %s", ErrInvalidTimeFormat, timeStr)
 }

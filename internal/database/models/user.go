@@ -2141,3 +2141,25 @@ func (r *UserModel) SaveUserInventory(ctx context.Context, tx bun.Tx, userInvent
 
 	return nil
 }
+
+// GetUsersUpdatedAfter returns users that have been updated after the specified time.
+func (r *UserModel) GetUsersUpdatedAfter(ctx context.Context, cutoffTime time.Time) ([]*types.User, error) {
+	var users []*types.User
+
+	err := dbretry.NoResult(ctx, func(ctx context.Context) error {
+		return r.db.NewSelect().
+			Model(&users).
+			Where("last_updated > ?", cutoffTime).
+			Order("last_updated ASC").
+			Scan(ctx)
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get users updated after %s: %w", cutoffTime.Format(time.RFC3339), err)
+	}
+
+	r.logger.Debug("Found users updated after cutoff time",
+		zap.Time("cutoffTime", cutoffTime),
+		zap.Int("count", len(users)))
+
+	return users, nil
+}
