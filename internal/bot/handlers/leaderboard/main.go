@@ -65,7 +65,7 @@ func (m *Menu) Show(ctx *interaction.Context, s *session.Session) {
 	// Fetch usernames for all users in stats
 	usernames := make(map[uint64]string)
 	for _, stat := range stats {
-		user, err := m.layout.client.Rest().GetUser(snowflake.ID(stat.DiscordUserID))
+		user, err := m.layout.client.Rest.GetUser(snowflake.ID(stat.DiscordUserID))
 		if err != nil {
 			usernames[stat.DiscordUserID] = "Unknown"
 			continue

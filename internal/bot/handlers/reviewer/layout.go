@@ -13,13 +13,13 @@ import (
 // Layout handles reviewer stats operations and their interactions.
 type Layout struct {
 	db     database.Client
-	client bot.Client
+	client *bot.Client
 	menu   *Menu
 	logger *zap.Logger
 }
 
 // New creates a Layout by initializing the reviewer stats menu.
-func New(app *setup.App, client bot.Client) *Layout {
+func New(app *setup.App, client *bot.Client) *Layout {
 	l := &Layout{
 		db:     app.DB,
 		client: client,

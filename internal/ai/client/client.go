@@ -32,7 +32,7 @@ var defaultSafetySettings = map[string]any{
 
 // WithReasoning adds reasoning fields to the chat completion parameters.
 func WithReasoning(params openai.ChatCompletionNewParams, opts ReasoningOptions) openai.ChatCompletionNewParams {
-	params.WithExtraFields(map[string]any{
+	params.SetExtraFields(map[string]any{
 		"reasoning": map[string]any{
 			"effort":     string(opts.Effort),
 			"max_tokens": opts.MaxTokens,
@@ -119,7 +119,7 @@ func (c *chatCompletions) New(ctx context.Context, params openai.ChatCompletionN
 	}
 
 	// Add safety settings
-	params.WithExtraFields(defaultSafetySettings)
+	params.SetExtraFields(defaultSafetySettings)
 
 	// Try to acquire semaphore
 	if err := c.client.semaphore.Acquire(ctx, 1); err != nil {
@@ -164,7 +164,7 @@ func (c *chatCompletions) NewWithRetry(
 	}
 
 	// Add safety settings
-	params.WithExtraFields(defaultSafetySettings)
+	params.SetExtraFields(defaultSafetySettings)
 
 	// Try to acquire semaphore
 	if err := c.client.semaphore.Acquire(ctx, 1); err != nil {
@@ -282,7 +282,7 @@ func (c *chatCompletions) NewStreaming(
 	}
 
 	// Add safety settings
-	params.WithExtraFields(defaultSafetySettings)
+	params.SetExtraFields(defaultSafetySettings)
 
 	// Try to acquire semaphore
 	if err := c.client.semaphore.Acquire(ctx, 1); err != nil {

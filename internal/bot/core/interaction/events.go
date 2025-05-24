@@ -20,7 +20,7 @@ type ModalData interface {
 // This allows pagination to work with any interaction event without type checking.
 type CommonEvent interface {
 	// Client returns the Discord client instance handling this event.
-	Client() bot.Client
+	Client() *bot.Client
 
 	// ApplicationID returns the bot's application ID for API requests.
 	ApplicationID() snowflake.ID

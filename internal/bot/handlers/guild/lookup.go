@@ -137,7 +137,7 @@ func (m *LookupMenu) fetchUserData(ctx *interaction.Context, s *session.Session,
 
 	// If we don't have a username yet (either whitelisted or scan failed), try to get it from Discord
 	if username == "" {
-		if user, err := ctx.Event().Client().Rest().GetUser(snowflake.ID(discordUserID)); err == nil {
+		if user, err := ctx.Event().Client().Rest.GetUser(snowflake.ID(discordUserID)); err == nil {
 			username = user.Username
 		} else {
 			username = "Unknown"

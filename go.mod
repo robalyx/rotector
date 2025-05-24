@@ -10,11 +10,11 @@ require (
 	github.com/cenkalti/backoff/v4 v4.3.0
 	github.com/corona10/goimagehash v1.1.0
 	github.com/dchest/captcha v1.1.0
-	github.com/diamondburned/arikawa/v3 v3.4.0
+	github.com/diamondburned/arikawa/v3 v3.5.0
 	github.com/diamondburned/ningen/v3 v3.0.1-0.20240808103805-f1a24c0da3d8
-	github.com/disgoorg/disgo v0.18.16-0.20250502233236-8c914a0f3369
+	github.com/disgoorg/disgo v0.18.17-0.20250523015103-a87bbab7765b
 	github.com/disgoorg/snowflake/v2 v2.0.3
-	github.com/getsentry/sentry-go v0.32.0
+	github.com/getsentry/sentry-go v0.33.0
 	github.com/google/uuid v1.6.0
 	github.com/invopop/jsonschema v0.13.0
 	github.com/jaxron/axonet v0.0.0-20250316044721-2d660b2bcf59
@@ -26,23 +26,23 @@ require (
 	github.com/knadh/koanf/parsers/toml/v2 v2.2.0
 	github.com/knadh/koanf/providers/file v1.2.0
 	github.com/knadh/koanf/v2 v2.2.0
-	github.com/openai/openai-go v0.1.0-beta.10
-	github.com/redis/rueidis v1.0.57
+	github.com/openai/openai-go v1.1.0
+	github.com/redis/rueidis v1.0.60
 	github.com/sony/gobreaker v1.0.0
 	github.com/sourcegraph/conc v0.3.0
 	github.com/stretchr/testify v1.10.0
-	github.com/tdewolff/minify/v2 v2.23.1
+	github.com/tdewolff/minify/v2 v2.23.8
 	github.com/uptrace/bun v1.2.11
 	github.com/uptrace/bun/dialect/pgdialect v1.2.11
 	github.com/uptrace/bun/driver/pgdriver v1.2.11
-	github.com/urfave/cli/v3 v3.3.1
+	github.com/urfave/cli/v3 v3.3.3
 	github.com/wcharczuk/go-chart/v2 v2.1.2
 	go.uber.org/zap v1.27.0
-	golang.org/x/crypto v0.37.0
-	golang.org/x/image v0.26.0
-	golang.org/x/sync v0.13.0
-	golang.org/x/text v0.24.0
-	zombiezen.com/go/sqlite v1.4.0
+	golang.org/x/crypto v0.38.0
+	golang.org/x/image v0.27.0
+	golang.org/x/sync v0.14.0
+	golang.org/x/text v0.25.0
+	zombiezen.com/go/sqlite v1.4.2
 )
 
 require (
@@ -84,7 +84,7 @@ require (
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
 	github.com/rogpeppe/go-internal v1.13.1 // indirect
 	github.com/sasha-s/go-csync v0.0.0-20240107134140-fcbab37b09ad // indirect
-	github.com/tdewolff/parse/v2 v2.7.23 // indirect
+	github.com/tdewolff/parse/v2 v2.8.1 // indirect
 	github.com/tidwall/gjson v1.18.0 // indirect
 	github.com/tidwall/match v1.1.1 // indirect
 	github.com/tidwall/pretty v1.2.1 // indirect
@@ -101,14 +101,14 @@ require (
 	golang.org/x/arch v0.16.0 // indirect
 	golang.org/x/exp v0.0.0-20250408133849-7e4ce0ab07d0 // indirect
 	golang.org/x/mod v0.24.0 // indirect
-	golang.org/x/net v0.39.0 // indirect
-	golang.org/x/sys v0.32.0 // indirect
+	golang.org/x/net v0.40.0 // indirect
+	golang.org/x/sys v0.33.0 // indirect
 	golang.org/x/time v0.11.0 // indirect
-	golang.org/x/tools v0.32.0 // indirect
+	golang.org/x/tools v0.33.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	mellium.im/sasl v0.3.2 // indirect
-	modernc.org/libc v1.64.0 // indirect
+	modernc.org/libc v1.65.7 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
-	modernc.org/memory v1.10.0 // indirect
-	modernc.org/sqlite v1.37.0 // indirect
+	modernc.org/memory v1.11.0 // indirect
+	modernc.org/sqlite v1.37.1 // indirect
 )
