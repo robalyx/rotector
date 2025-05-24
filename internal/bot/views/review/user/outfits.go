@@ -18,36 +18,38 @@ import (
 
 // OutfitsBuilder creates the visual layout for viewing a user's outfits.
 type OutfitsBuilder struct {
-	user           *types.ReviewUser
-	outfits        []*apiTypes.Outfit
-	flaggedOutfits map[string]struct{}
-	start          int
-	page           int
-	totalItems     int
-	totalPages     int
-	imageBuffer    *bytes.Buffer
-	isStreaming    bool
-	isReviewer     bool
-	trainingMode   bool
-	privacyMode    bool
+	user                 *types.ReviewUser
+	outfits              []*apiTypes.Outfit
+	flaggedOutfits       map[string]struct{}
+	duplicateOutfitNames map[string]struct{}
+	start                int
+	page                 int
+	totalItems           int
+	totalPages           int
+	imageBuffer          *bytes.Buffer
+	isStreaming          bool
+	isReviewer           bool
+	trainingMode         bool
+	privacyMode          bool
 }
 
 // NewOutfitsBuilder creates a new outfits builder.
 func NewOutfitsBuilder(s *session.Session) *OutfitsBuilder {
 	trainingMode := session.UserReviewMode.Get(s) == enum.ReviewModeTraining
 	return &OutfitsBuilder{
-		user:           session.UserTarget.Get(s),
-		outfits:        session.UserOutfits.Get(s),
-		flaggedOutfits: session.UserFlaggedOutfits.Get(s),
-		start:          session.PaginationOffset.Get(s),
-		page:           session.PaginationPage.Get(s),
-		totalItems:     session.PaginationTotalItems.Get(s),
-		totalPages:     session.PaginationTotalPages.Get(s),
-		imageBuffer:    session.ImageBuffer.Get(s),
-		isStreaming:    session.PaginationIsStreaming.Get(s),
-		isReviewer:     s.BotSettings().IsReviewer(session.UserID.Get(s)),
-		trainingMode:   trainingMode,
-		privacyMode:    trainingMode || session.UserStreamerMode.Get(s),
+		user:                 session.UserTarget.Get(s),
+		outfits:              session.UserOutfits.Get(s),
+		flaggedOutfits:       session.UserFlaggedOutfits.Get(s),
+		duplicateOutfitNames: session.UserDuplicateOutfitNames.Get(s),
+		start:                session.PaginationOffset.Get(s),
+		page:                 session.PaginationPage.Get(s),
+		totalItems:           session.PaginationTotalItems.Get(s),
+		totalPages:           session.PaginationTotalPages.Get(s),
+		imageBuffer:          session.ImageBuffer.Get(s),
+		isStreaming:          session.PaginationIsStreaming.Get(s),
+		isReviewer:           s.BotSettings().IsReviewer(session.UserID.Get(s)),
+		trainingMode:         trainingMode,
+		privacyMode:          trainingMode || session.UserStreamerMode.Get(s),
 	}
 }
 
@@ -71,10 +73,14 @@ func (b *OutfitsBuilder) Build() *discord.MessageUpdateBuilder {
 			content.WriteString(fmt.Sprintf("\n\n**Row %d:**", (i/constants.OutfitGridColumns)+1))
 		}
 
-		// Check if outfit is flagged and add indicator
+		// Check if outfit is flagged and add appropriate indicator
 		indicator := ""
 		if _, ok := b.flaggedOutfits[outfit.Name]; ok {
-			indicator = " ⚠️"
+			if _, isDuplicate := b.duplicateOutfitNames[outfit.Name]; isDuplicate {
+				indicator = " ❓" // Question mark for flagged outfits with duplicate names
+			} else {
+				indicator = " ⚠️" // Warning for flagged outfits with unique names
+			}
 		}
 
 		// Add outfit name

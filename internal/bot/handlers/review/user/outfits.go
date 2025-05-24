@@ -82,6 +82,21 @@ func (m *OutfitsMenu) Show(ctx *interaction.Context, s *session.Session) {
 	}
 	session.UserFlaggedOutfits.Set(s, flaggedOutfits)
 
+	// Detect duplicate outfit names
+	duplicateFlaggedOutfitNames := make(map[string]struct{})
+	if len(flaggedOutfits) > 0 {
+		outfitNameCounts := make(map[string]int)
+		for _, outfit := range user.Outfits {
+			outfitNameCounts[outfit.Name]++
+		}
+		for flaggedName := range flaggedOutfits {
+			if outfitNameCounts[flaggedName] > 1 {
+				duplicateFlaggedOutfitNames[flaggedName] = struct{}{}
+			}
+		}
+	}
+	session.UserDuplicateOutfitNames.Set(s, duplicateFlaggedOutfitNames)
+
 	// Calculate page boundaries
 	page := session.PaginationPage.Get(s)
 	totalPages := max((len(user.Outfits)-1)/constants.OutfitsPerPage, 0)

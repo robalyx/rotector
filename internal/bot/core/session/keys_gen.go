@@ -92,6 +92,7 @@ func main() {
 		{Name: "UserGroups", Type: "[]*apiTypes.UserGroupRoles", Doc: "UserGroups stores the list of groups", Persist: true},
 		{Name: "UserOutfits", Type: "[]*apiTypes.Outfit", Doc: "UserOutfits stores user outfits", Persist: true},
 		{Name: "UserFlaggedOutfits", Type: "map[string]struct{}", Doc: "UserFlaggedOutfits stores outfit names that appear in reason evidence", Persist: true},
+		{Name: "UserDuplicateOutfitNames", Type: "map[string]struct{}", Doc: "UserDuplicateOutfitNames stores outfit names that have multiple instances", Persist: true},
 		{Name: "UserReviewHistory", Type: "[]uint64", Doc: "UserReviewHistory stores IDs of previously reviewed users", Persist: true},
 		{Name: "UserReviewHistoryIndex", Type: "int", Doc: "UserReviewHistoryIndex stores the current position in the review history", Persist: true},
 
