@@ -161,25 +161,17 @@ func (c *FriendChecker) ProcessUsers(
 func (c *FriendChecker) calculateConfidence(confirmedCount, flaggedCount, totalFriends int) float64 {
 	var confidence float64
 
-	// Adjust weights based on total friend count
-	// For users with large friend lists, ratio becomes more important
-	ratioWeight := 0.50
-	absoluteWeight := 0.50
-	if totalFriends > 200 {
-		ratioWeight = 0.60
-		absoluteWeight = 0.40
-	}
-
 	// Factor 1: Ratio of inappropriate friends
 	if totalFriends > 0 {
 		totalInappropriate := float64(confirmedCount) + (float64(flaggedCount) * 0.5)
-		ratioFactor := math.Min(totalInappropriate/float64(totalFriends), 1.0)
-		confidence += ratioFactor * ratioWeight
+		effectiveTotalFriends := math.Min(float64(totalFriends), float64(200))
+		ratioFactor := math.Min(totalInappropriate/effectiveTotalFriends, 1.0)
+		confidence += ratioFactor * 0.50
 	}
 
 	// Factor 2: Absolute number of inappropriate friends
 	inappropriateWeight := c.calculateInappropriateWeight(confirmedCount, flaggedCount, totalFriends)
-	confidence += inappropriateWeight * absoluteWeight
+	confidence += inappropriateWeight * 0.50
 
 	return confidence
 }
