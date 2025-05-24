@@ -22,7 +22,7 @@ import (
 // Worker handles all maintenance operations.
 type Worker struct {
 	db                      database.Client
-	bot                     bot.Client
+	bot                     *bot.Client
 	roAPI                   *api.API
 	bar                     *progress.Bar
 	userFetcher             *fetcher.UserFetcher
@@ -540,7 +540,7 @@ func (w *Worker) processReviewerInfo() {
 		}
 
 		// Get user info from Discord
-		user, err := w.bot.Rest().GetUser(snowflake.ID(reviewerID))
+		user, err := w.bot.Rest.GetUser(snowflake.ID(reviewerID))
 		if err != nil {
 			w.logger.Error("Failed to get Discord user",
 				zap.Error(err),

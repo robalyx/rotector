@@ -165,7 +165,7 @@ func (m *Manager) Display(
 	}
 
 	// Update the interaction response
-	message, err := event.Client().Rest().UpdateInteractionResponse(
+	message, err := event.Client().Rest.UpdateInteractionResponse(
 		event.ApplicationID(), event.Token(), messageUpdate.Build(),
 	)
 	if err != nil {

@@ -311,7 +311,7 @@ func (a *FriendAnalyzer) processFriendBatch(ctx context.Context, batch []UserFri
 
 		// Extract thought process
 		message := resp.Choices[0].Message
-		if thought := message.JSON.ExtraFields["reasoning"]; thought.IsPresent() {
+		if thought := message.JSON.ExtraFields["reasoning"]; thought.Valid() {
 			a.logger.Debug("AI friend analysis thought process",
 				zap.String("model", resp.Model),
 				zap.String("thought", thought.Raw()))

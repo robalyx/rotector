@@ -48,7 +48,7 @@ import (
 // Bot handles all the layouts and managers needed for Discord interaction.
 type Bot struct {
 	db                 database.Client
-	client             bot.Client
+	client             *bot.Client
 	logger             *zap.Logger
 	sessionManager     *session.Manager
 	interactionManager *interaction.Manager
@@ -83,24 +83,30 @@ func New(app *setup.App) (*Bot, error) {
 		guildEventHandler:  guildEventHandler,
 	}
 
+	// Create shard manager options
+	shardManagerOpts := []sharding.ConfigOpt{
+		sharding.WithShardCount(app.Config.Bot.Discord.Sharding.Count),
+		sharding.WithAutoScaling(app.Config.Bot.Discord.Sharding.AutoScale),
+		sharding.WithShardSplitCount(app.Config.Bot.Discord.Sharding.SplitCount),
+	}
+
+	// Parse shard IDs if specified
+	if app.Config.Bot.Discord.Sharding.ShardIDs != "" {
+		shardIDStrs := strings.SplitSeq(app.Config.Bot.Discord.Sharding.ShardIDs, ",")
+		var shardIDs []int
+		for idStr := range shardIDStrs {
+			if id, err := strconv.Atoi(strings.TrimSpace(idStr)); err == nil {
+				shardIDs = append(shardIDs, id)
+			}
+		}
+		if len(shardIDs) > 0 {
+			shardManagerOpts = append(shardManagerOpts, sharding.WithShardIDs(shardIDs...))
+		}
+	}
+
 	// Create Discord client
 	client, err := disgo.New(app.Config.Bot.Discord.Token,
-		bot.WithShardManagerConfigOpts(
-			sharding.WithShardCount(app.Config.Bot.Discord.Sharding.Count),
-			sharding.WithAutoScaling(app.Config.Bot.Discord.Sharding.AutoScale),
-			sharding.WithShardSplitCount(app.Config.Bot.Discord.Sharding.SplitCount),
-			func(config *sharding.Config) {
-				// Parse shard IDs if specified
-				if app.Config.Bot.Discord.Sharding.ShardIDs != "" {
-					shardIDStrs := strings.SplitSeq(app.Config.Bot.Discord.Sharding.ShardIDs, ",")
-					for idStr := range shardIDStrs {
-						if id, err := strconv.Atoi(strings.TrimSpace(idStr)); err == nil {
-							sharding.WithShardIDs(id)(config)
-						}
-					}
-				}
-			},
-		),
+		bot.WithShardManagerConfigOpts(shardManagerOpts...),
 		bot.WithGatewayConfigOpts(
 			gateway.WithIntents(
 				gateway.IntentGuilds,
@@ -168,7 +174,7 @@ func (b *Bot) Start() error {
 	b.logger.Info("Registering commands")
 
 	// Register the dashboard command globally
-	_, err := b.client.Rest().SetGlobalCommands(b.client.ApplicationID(), []discord.ApplicationCommandCreate{
+	_, err := b.client.Rest.SetGlobalCommands(b.client.ApplicationID, []discord.ApplicationCommandCreate{
 		discord.SlashCommandCreate{
 			Name:        constants.RotectorCommandName,
 			Description: "Open the moderation interface",
@@ -228,7 +234,7 @@ func (b *Bot) handleApplicationCommandInteraction(event *disgoEvents.Application
 		}
 
 		// Get initial response message
-		message, err := event.Client().Rest().GetInteractionResponse(event.ApplicationID(), event.Token())
+		message, err := event.Client().Rest.GetInteractionResponse(event.ApplicationID(), event.Token())
 		if err != nil {
 			b.logger.Error("Failed to get interaction response", zap.Error(err))
 			b.interactionManager.RespondWithError(wrappedEvent, "Failed to initialize session. Please try again.")
@@ -373,7 +379,7 @@ func (b *Bot) handleModalSubmit(event *disgoEvents.ModalSubmitInteractionCreate)
 		}
 
 		// Get response message
-		message, err := event.Client().Rest().GetInteractionResponse(event.ApplicationID(), event.Token())
+		message, err := event.Client().Rest.GetInteractionResponse(event.ApplicationID(), event.Token())
 		if err != nil {
 			b.logger.Error("Failed to get interaction response", zap.Error(err))
 			b.interactionManager.RespondWithError(wrappedEvent, "Failed to initialize session. Please try again.")

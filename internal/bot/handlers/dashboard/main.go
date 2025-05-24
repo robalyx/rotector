@@ -146,7 +146,7 @@ func (m *Menu) handleSelectMenu(ctx *interaction.Context, s *session.Session, cu
 		guildID := *ctx.Event().GuildID()
 		session.GuildStatsID.Set(s, uint64(guildID))
 
-		if guild, err := ctx.Event().Client().Rest().GetGuild(guildID, false); err == nil {
+		if guild, err := ctx.Event().Client().Rest.GetGuild(guildID, false); err == nil {
 			session.GuildStatsName.Set(s, guild.Name)
 		}
 

@@ -36,7 +36,7 @@ type Manager struct {
 	clients map[int]rueidis.Client
 	config  *config.Redis
 	logger  *zap.Logger
-	mu      sync.RWMutex // Protects concurrent access to the clients map
+	mu      sync.RWMutex
 }
 
 // NewManager initializes the Redis connection manager with an empty client pool.

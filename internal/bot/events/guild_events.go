@@ -38,7 +38,7 @@ func (h *GuildEventHandler) OnGuildJoin(event *events.GuildJoin) {
 
 // registerGuildCommands registers the bot's commands for a specific guild.
 func (h *GuildEventHandler) registerGuildCommands(event *events.GuildJoin) error {
-	_, err := event.Client().Rest().SetGuildCommands(event.Client().ApplicationID(), event.Guild.ID,
+	_, err := event.Client().Rest.SetGuildCommands(event.Client().ApplicationID, event.Guild.ID,
 		[]discord.ApplicationCommandCreate{
 			discord.SlashCommandCreate{
 				Name:        constants.RotectorCommandName,

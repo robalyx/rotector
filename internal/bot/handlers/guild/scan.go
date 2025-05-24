@@ -65,7 +65,7 @@ func (m *ScanMenu) Show(ctx *interaction.Context, s *session.Session) {
 	var after snowflake.ID
 
 	for {
-		chunk, err := ctx.Event().Client().Rest().GetMembers(snowflake.ID(guildID), 1000, after)
+		chunk, err := ctx.Event().Client().Rest.GetMembers(snowflake.ID(guildID), 1000, after)
 		if err != nil {
 			m.layout.logger.Error("Failed to get guild members",
 				zap.Error(err),
@@ -505,7 +505,7 @@ func (m *ScanMenu) executeBans(
 		}
 
 		// Execute batch ban
-		result, err := ctx.Event().Client().Rest().BulkBan(snowflake.ID(guildID), bulkBan, rest.WithReason(banReason))
+		result, err := ctx.Event().Client().Rest.BulkBan(snowflake.ID(guildID), bulkBan, rest.WithReason(banReason))
 		if err != nil {
 			m.layout.logger.Error("Failed to execute bulk ban batch",
 				zap.Error(err),
@@ -526,7 +526,7 @@ func (m *ScanMenu) executeBans(
 		// Send DM notifications to successfully banned users
 		for _, userID := range result.BannedUsers {
 			// Create DM channel
-			channel, err := ctx.Event().Client().Rest().CreateDMChannel(userID)
+			channel, err := ctx.Event().Client().Rest.CreateDMChannel(userID)
 			if err != nil {
 				m.layout.logger.Error("Failed to create DM channel",
 					zap.Error(err),
@@ -535,7 +535,7 @@ func (m *ScanMenu) executeBans(
 			}
 
 			// Get guild information
-			guild, err := ctx.Event().Client().Rest().GetGuild(snowflake.ID(guildID), false)
+			guild, err := ctx.Event().Client().Rest.GetGuild(snowflake.ID(guildID), false)
 			if err != nil {
 				m.layout.logger.Error("Failed to get guild information",
 					zap.Error(err),
@@ -571,7 +571,7 @@ func (m *ScanMenu) executeBans(
 			}
 
 			// Send the notification
-			_, err = ctx.Event().Client().Rest().CreateMessage(channel.ID(), messageBuilder.Build())
+			_, err = ctx.Event().Client().Rest.CreateMessage(channel.ID(), messageBuilder.Build())
 			if err != nil {
 				m.layout.logger.Error("Failed to send ban notification",
 					zap.Error(err),

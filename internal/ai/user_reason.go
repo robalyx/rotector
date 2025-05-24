@@ -249,7 +249,7 @@ func (a *UserReasonAnalyzer) processReasonBatch(ctx context.Context, batch []Use
 
 		// Extract thought process
 		message := resp.Choices[0].Message
-		if thought := message.JSON.ExtraFields["reasoning"]; thought.IsPresent() {
+		if thought := message.JSON.ExtraFields["reasoning"]; thought.Valid() {
 			a.logger.Debug("AI user reason analysis thought process",
 				zap.String("model", resp.Model),
 				zap.String("thought", thought.Raw()))

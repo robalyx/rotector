@@ -31,10 +31,12 @@ github.com/diamondburned/arikawa/v3 v3.5.0 h1:Ct93e1kZBLqlwTB88oOSZ/B0zzqrn5MpRw
 github.com/diamondburned/arikawa/v3 v3.5.0/go.mod h1:thocAM2X8lRDHuEZR5vWYaT4w+tb/vOKa1qm+r0gs5A=
 github.com/diamondburned/ningen/v3 v3.0.1-0.20240808103805-f1a24c0da3d8 h1:wgvgSzI4N+BHhCWhGhHKfW4gm0UtBVptiDaBGPdHmcs=
 github.com/diamondburned/ningen/v3 v3.0.1-0.20240808103805-f1a24c0da3d8/go.mod h1:UU1lud9g/GBl2+CZ8nPCe3Qk1U6fABEP1fk1sUzo7w0=
-github.com/disgoorg/disgo v0.18.16 h1:Yk6pA9TaGbuM4hWfWafH0jAfmkWvZBFY7rh49DgljGE=
-github.com/disgoorg/disgo v0.18.16/go.mod h1:dXYVH059d6aK7mI+Nh/3svSRWedNd09P7C2VX3RqbJY=
-github.com/disgoorg/json v1.2.0 h1:6e/j4BCfSHIvucG1cd7tJPAOp1RgnnMFSqkvZUtEd1Y=
-github.com/disgoorg/json v1.2.0/go.mod h1:BHDwdde0rpQFDVsRLKhma6Y7fTbQKub/zdGO5O9NqqA=
+github.com/disgoorg/disgo v0.18.17-0.20250523015103-a87bbab7765b h1:HMZXOp959y8Fmqdl80VEVe9BWw6IZSbT92u+4f2VwtY=
+github.com/disgoorg/disgo v0.18.17-0.20250523015103-a87bbab7765b/go.mod h1:3jeXsdHzg0aLx/vg7fB0ifOvSmC9bLYxjJBo0EbT+qk=
+github.com/disgoorg/json/v2 v2.0.0 h1:U16yy/ARK7/aEpzjjqK1b/KaqqGHozUdeVw/DViEzQI=
+github.com/disgoorg/json/v2 v2.0.0/go.mod h1:jZTBC0nIE1WeetSEI3/Dka8g+qglb4FPVmp5I5HpEfI=
+github.com/disgoorg/omit v1.0.0 h1:y0LkVUOyUHT8ZlnhIAeOZEA22UYykeysK8bLJ0SfT78=
+github.com/disgoorg/omit v1.0.0/go.mod h1:RTmSARkf6PWT/UckwI0bV8XgWkWQoPppaT01rYKLcFQ=
 github.com/disgoorg/snowflake/v2 v2.0.3 h1:3B+PpFjr7j4ad7oeJu4RlQ+nYOTadsKapJIzgvSI2Ro=
 github.com/disgoorg/snowflake/v2 v2.0.3/go.mod h1:W6r7NUA7DwfZLwr00km6G4UnZ0zcoLBRufhkFWgAc4c=
 github.com/dmarkham/enumer v1.5.11 h1:quorLCaEfzjJ23Pf7PB9lyyaHseh91YfTM/sAD/4Mbo=

@@ -81,7 +81,7 @@ func (c *Context) Error(content string) {
 		AddFlags(discord.MessageFlagIsComponentsV2).
 		Build()
 
-	_, _ = c.event.Client().Rest().UpdateInteractionResponse(c.event.ApplicationID(), c.event.Token(), messageUpdate)
+	_, _ = c.event.Client().Rest.UpdateInteractionResponse(c.event.ApplicationID(), c.event.Token(), messageUpdate)
 	c.manager.sessionManager.CloseSession(c.ctx, c.session, uint64(c.event.User().ID), uint64(c.event.Message().ID))
 	c.responded = true
 
@@ -101,7 +101,7 @@ func (c *Context) Clear(content string) {
 		AddFlags(discord.MessageFlagIsComponentsV2).
 		Build()
 
-	_, _ = c.event.Client().Rest().UpdateInteractionResponse(
+	_, _ = c.event.Client().Rest.UpdateInteractionResponse(
 		c.event.ApplicationID(),
 		c.event.Token(),
 		messageUpdate,
@@ -117,7 +117,7 @@ func (c *Context) ClearComponents(content string) {
 		AddFlags(discord.MessageFlagIsComponentsV2).
 		Build()
 
-	_, _ = c.event.Client().Rest().UpdateInteractionResponse(
+	_, _ = c.event.Client().Rest.UpdateInteractionResponse(
 		c.event.ApplicationID(),
 		c.event.Token(),
 		messageUpdate,
@@ -207,7 +207,7 @@ func (c *Context) Modal(modal *discord.ModalCreateBuilder) {
 	// we force the select menu to reset to its default state.
 	page := c.manager.GetPage(session.CurrentPage.Get(c.session))
 	if !page.DisableSelectMenuReset {
-		_, err := c.event.Client().Rest().UpdateInteractionResponse(
+		_, err := c.event.Client().Rest.UpdateInteractionResponse(
 			c.event.ApplicationID(),
 			c.event.Token(),
 			page.Message(c.session).Build(),

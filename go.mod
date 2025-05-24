@@ -12,7 +12,7 @@ require (
 	github.com/dchest/captcha v1.1.0
 	github.com/diamondburned/arikawa/v3 v3.5.0
 	github.com/diamondburned/ningen/v3 v3.0.1-0.20240808103805-f1a24c0da3d8
-	github.com/disgoorg/disgo v0.18.16
+	github.com/disgoorg/disgo v0.18.17-0.20250523015103-a87bbab7765b
 	github.com/disgoorg/snowflake/v2 v2.0.3
 	github.com/getsentry/sentry-go v0.33.0
 	github.com/google/uuid v1.6.0
@@ -52,7 +52,8 @@ require (
 	github.com/cespare/xxhash v1.1.0 // indirect
 	github.com/cloudwego/base64x v0.1.5 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
-	github.com/disgoorg/json v1.2.0 // indirect
+	github.com/disgoorg/json/v2 v2.0.0 // indirect
+	github.com/disgoorg/omit v1.0.0 // indirect
 	github.com/dmarkham/enumer v1.5.11 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/fsnotify/fsnotify v1.9.0 // indirect
