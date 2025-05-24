@@ -34,17 +34,19 @@ func NewCondoChecker(db database.Client, logger *zap.Logger) *CondoChecker {
 }
 
 // ProcessUsers checks multiple users' thumbnails concurrently and updates reasonsMap.
-func (c *CondoChecker) ProcessUsers(userInfos []*types.ReviewUser, reasonsMap map[uint64]types.Reasons[enum.UserReasonType]) {
+func (c *CondoChecker) ProcessUsers(
+	ctx context.Context, userInfos []*types.ReviewUser, reasonsMap map[uint64]types.Reasons[enum.UserReasonType],
+) {
 	existingFlags := len(reasonsMap)
 
 	var (
-		p  = pool.New().WithContext(context.Background())
+		p  = pool.New().WithContext(ctx)
 		mu sync.Mutex
 	)
 
 	// Process each user concurrently
 	for _, userInfo := range userInfos {
-		p.Go(func(ctx context.Context) error {
+		p.Go(func(_ context.Context) error {
 			// Process user
 			reason, err := c.processUser(ctx, userInfo)
 			if err != nil {

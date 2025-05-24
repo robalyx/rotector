@@ -13,7 +13,6 @@ import (
 	"github.com/openai/openai-go"
 	"github.com/robalyx/rotector/internal/ai/client"
 	"github.com/robalyx/rotector/internal/database/types"
-	"github.com/robalyx/rotector/internal/database/types/enum"
 	"github.com/robalyx/rotector/internal/setup"
 	"github.com/robalyx/rotector/internal/translator"
 	"github.com/robalyx/rotector/pkg/utils"
@@ -32,19 +31,19 @@ type UserSummary struct {
 }
 
 // FlaggedUsers holds a list of users that the AI has identified as inappropriate.
-// The JSON schema is used to ensure consistent responses from the AI.
 type FlaggedUsers struct {
 	Users []FlaggedUser `json:"users" jsonschema_description:"List of users that have been flagged for inappropriate content"`
 }
 
 // FlaggedUser contains the AI's analysis results for a single user.
-// The confidence score and flagged content help moderators make decisions.
 type FlaggedUser struct {
-	Name           string   `json:"name"           jsonschema_description:"Username of the flagged account"`
-	Reason         string   `json:"reason"         jsonschema_description:"Clear explanation of why the user was flagged"`
-	FlaggedContent []string `json:"flaggedContent" jsonschema_description:"List of exact quotes from the user's content that were flagged"`
-	Confidence     float64  `json:"confidence"     jsonschema_description:"Overall confidence score for the violations (0.0-1.0)"`
-	HasSocials     bool     `json:"hasSocials"     jsonschema_description:"Whether the user's description contains social media"`
+	Name              string   `json:"name"                        jsonschema_description:"Username of the flagged account"`
+	Hint              string   `json:"hint"                        jsonschema_description:"Brief clinical description using safe terminology"`
+	Confidence        float64  `json:"confidence"                  jsonschema_description:"Overall confidence score for the violations"`
+	HasSocials        bool     `json:"hasSocials"                  jsonschema_description:"Whether the user's description has social media"`
+	ViolationLocation []string `json:"violationLocation,omitempty" jsonschema_description:"Locations of violations"`
+	PatternType       []string `json:"patternType,omitempty"       jsonschema_description:"Types of evasion patterns detected"`
+	LanguagePattern   []string `json:"languagePattern,omitempty"   jsonschema_description:"Linguistic patterns detected"`
 }
 
 // UserAnalyzer handles AI-based content analysis using OpenAI models.
@@ -63,7 +62,7 @@ type UserAnalyzer struct {
 // UserAnalysisSchema is the JSON schema for the user analysis response.
 var UserAnalysisSchema = utils.GenerateSchema[FlaggedUsers]()
 
-// NewUserAnalyzer creates an UserAnalyzer with separate models for user and friend analysis.
+// NewUserAnalyzer creates an UserAnalyzer.
 func NewUserAnalyzer(app *setup.App, translator *translator.Translator, logger *zap.Logger) *UserAnalyzer {
 	// Create a minifier for JSON optimization
 	m := minify.New()
@@ -90,15 +89,14 @@ func NewUserAnalyzer(app *setup.App, translator *translator.Translator, logger *
 }
 
 // ProcessUsers analyzes user content for a batch of users.
-func (a *UserAnalyzer) ProcessUsers(users []*types.ReviewUser, reasonsMap map[uint64]types.Reasons[enum.UserReasonType]) {
-	// Track counts before processing
-	existingFlags := len(reasonsMap)
+func (a *UserAnalyzer) ProcessUsers(
+	ctx context.Context, users []*types.ReviewUser,
+	translatedInfos map[string]*types.ReviewUser, originalInfos map[string]*types.ReviewUser,
+) map[uint64]UserReasonRequest {
+	userReasonRequests := make(map[uint64]UserReasonRequest)
 	numBatches := (len(users) + a.batchSize - 1) / a.batchSize
 
 	// Process batches concurrently
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
-	defer cancel()
-
 	var (
 		p  = pool.New().WithContext(ctx)
 		mu sync.Mutex
@@ -117,7 +115,7 @@ func (a *UserAnalyzer) ProcessUsers(users []*types.ReviewUser, reasonsMap map[ui
 			defer a.analysisSem.Release(1)
 
 			// Process batch
-			if err := a.processBatch(ctx, infoBatch, reasonsMap, &mu); err != nil {
+			if err := a.processBatch(ctx, infoBatch, translatedInfos, originalInfos, userReasonRequests, &mu); err != nil {
 				a.logger.Error("Failed to process batch",
 					zap.Error(err),
 					zap.Int("batchStart", start),
@@ -130,12 +128,14 @@ func (a *UserAnalyzer) ProcessUsers(users []*types.ReviewUser, reasonsMap map[ui
 
 	// Wait for all batches to complete
 	if err := p.Wait(); err != nil {
-		return
+		return userReasonRequests
 	}
 
-	a.logger.Info("Received AI user analysis",
+	a.logger.Info("Completed initial user analysis",
 		zap.Int("totalUsers", len(users)),
-		zap.Int("newFlags", len(reasonsMap)-existingFlags))
+		zap.Int("flaggedUsers", len(userReasonRequests)))
+
+	return userReasonRequests
 }
 
 // processUserBatch handles the AI analysis for a batch of user summaries.
@@ -214,27 +214,33 @@ func (a *UserAnalyzer) processUserBatch(ctx context.Context, batch []UserSummary
 	return &result, err
 }
 
-// processBatch handles analysis for a batch of users.
+// processBatch handles the AI analysis for a batch of user summaries.
 func (a *UserAnalyzer) processBatch(
-	ctx context.Context, userInfos []*types.ReviewUser, reasonsMap map[uint64]types.Reasons[enum.UserReasonType], mu *sync.Mutex,
+	ctx context.Context, userInfos []*types.ReviewUser, translatedInfos map[string]*types.ReviewUser,
+	originalInfos map[string]*types.ReviewUser, userReasonRequests map[uint64]UserReasonRequest, mu *sync.Mutex,
 ) error {
-	// Translate all descriptions concurrently
-	translatedInfos, originalInfos := a.prepareUserInfos(ctx, userInfos)
-
 	// Convert map to slice for AI request
-	userInfosWithoutID := make([]UserSummary, 0, len(translatedInfos))
-	for _, userInfo := range translatedInfos {
+	userInfosWithoutID := make([]UserSummary, 0, len(userInfos))
+	for _, userInfo := range userInfos {
+		// Get the translated info
+		translatedInfo, exists := translatedInfos[userInfo.Name]
+		if !exists {
+			a.logger.Warn("Translated info not found for user",
+				zap.String("username", userInfo.Name))
+			translatedInfo = userInfo
+		}
+
 		summary := UserSummary{
-			Name: userInfo.Name,
+			Name: translatedInfo.Name,
 		}
 
 		// Only include display name if it's different from the username
-		if userInfo.DisplayName != userInfo.Name {
-			summary.DisplayName = userInfo.DisplayName
+		if translatedInfo.DisplayName != translatedInfo.Name {
+			summary.DisplayName = translatedInfo.DisplayName
 		}
 
 		// Replace empty descriptions with placeholder
-		description := userInfo.Description
+		description := translatedInfo.Description
 		if description == "" {
 			description = "No description"
 		}
@@ -294,35 +300,40 @@ func (a *UserAnalyzer) processBatch(
 		return err
 	}
 
-	// Validate AI responses
-	a.validateAndUpdateFlaggedUsers(result, translatedInfos, originalInfos, reasonsMap, mu)
+	// Process AI responses and create reason requests
+	a.processAndCreateRequests(result, originalInfos, translatedInfos, userReasonRequests, mu)
 
 	return nil
 }
 
-// validateAndUpdateFlaggedUsers validates the flagged users and updates the flaggedUsers map.
-func (a *UserAnalyzer) validateAndUpdateFlaggedUsers(
-	result *FlaggedUsers, translatedInfos, originalInfos map[string]*types.ReviewUser,
-	reasonsMap map[uint64]types.Reasons[enum.UserReasonType], mu *sync.Mutex,
+// processAndCreateRequests processes the AI responses and creates reason requests.
+func (a *UserAnalyzer) processAndCreateRequests(
+	result *FlaggedUsers, originalInfos map[string]*types.ReviewUser,
+	translatedInfos map[string]*types.ReviewUser,
+	userReasonRequests map[uint64]UserReasonRequest, mu *sync.Mutex,
 ) {
-	normalizer := utils.NewTextNormalizer()
 	for _, flaggedUser := range result.Users {
-		translatedInfo, exists := translatedInfos[flaggedUser.Name]
 		originalInfo, hasOriginal := originalInfos[flaggedUser.Name]
-
-		// Check if the flagged user exists in both maps
-		if !exists && !hasOriginal {
+		if !hasOriginal {
 			a.logger.Info("AI flagged non-existent user", zap.String("username", flaggedUser.Name))
 			continue
 		}
 
-		// Check if the user has social media links
+		// Get the translated info
+		translatedInfo, hasTranslated := translatedInfos[flaggedUser.Name]
+		if !hasTranslated {
+			a.logger.Warn("Translated info not found for flagged user, using original",
+				zap.String("username", flaggedUser.Name))
+			translatedInfo = originalInfo
+		}
+
+		// Set the HasSocials field
 		mu.Lock()
 		originalInfo.HasSocials = flaggedUser.HasSocials
 		mu.Unlock()
 
 		// Skip results with no violations
-		if flaggedUser.Reason == "" || flaggedUser.Reason == "NO_VIOLATIONS" {
+		if flaggedUser.Hint == "" || flaggedUser.Hint == "NO_VIOLATIONS" {
 			continue
 		}
 
@@ -334,111 +345,42 @@ func (a *UserAnalyzer) validateAndUpdateFlaggedUsers(
 			continue
 		}
 
-		// Validate that flagged content exists
-		if len(flaggedUser.FlaggedContent) == 0 {
-			a.logger.Debug("AI flagged user without specific content",
-				zap.String("username", flaggedUser.Name))
-			continue
+		// Create a user summary for the reason request
+		summary := &UserSummary{
+			Name: translatedInfo.Name,
 		}
 
-		// Process flagged content to handle newlines
-		processedContent := utils.SplitLines(flaggedUser.FlaggedContent)
-
-		// Validate flagged content against user texts
-		isValid := normalizer.ValidateWords(processedContent,
-			translatedInfo.Name,
-			translatedInfo.DisplayName,
-			translatedInfo.Description)
-
-		// If the flagged user is valid, update the reasons map
-		if isValid {
-			mu.Lock()
-			if _, exists := reasonsMap[originalInfo.ID]; !exists {
-				reasonsMap[originalInfo.ID] = make(types.Reasons[enum.UserReasonType])
-			}
-
-			reasonsMap[originalInfo.ID].Add(enum.UserReasonTypeProfile, &types.Reason{
-				Message:    flaggedUser.Reason,
-				Confidence: flaggedUser.Confidence,
-				Evidence:   processedContent,
-			})
-			mu.Unlock()
-		} else {
-			a.logger.Warn("AI flagged content did not pass validation",
-				zap.Uint64("userID", originalInfo.ID),
-				zap.String("flaggedUsername", flaggedUser.Name),
-				zap.String("username", originalInfo.Name),
-				zap.String("description", originalInfo.Description),
-				zap.Strings("flaggedContent", processedContent))
+		// Only include display name if it's different from the username
+		if translatedInfo.DisplayName != translatedInfo.Name {
+			summary.DisplayName = translatedInfo.DisplayName
 		}
+
+		// Replace empty descriptions with placeholder
+		description := translatedInfo.Description
+		if description == "" {
+			description = "No description"
+		}
+		summary.Description = description
+
+		// Create and store the reason request
+		mu.Lock()
+		userReasonRequests[originalInfo.ID] = UserReasonRequest{
+			User:              summary,
+			Confidence:        flaggedUser.Confidence,
+			Hint:              flaggedUser.Hint,
+			ViolationLocation: flaggedUser.ViolationLocation,
+			PatternType:       flaggedUser.PatternType,
+			LanguagePattern:   flaggedUser.LanguagePattern,
+			UserID:            originalInfo.ID,
+		}
+		mu.Unlock()
+
+		a.logger.Debug("Created reason request for user",
+			zap.String("username", flaggedUser.Name),
+			zap.Float64("confidence", flaggedUser.Confidence),
+			zap.String("hint", flaggedUser.Hint),
+			zap.Strings("violationLocation", flaggedUser.ViolationLocation),
+			zap.Strings("patternType", flaggedUser.PatternType),
+			zap.Strings("languagePattern", flaggedUser.LanguagePattern))
 	}
-}
-
-// prepareUserInfos translates user descriptions for different languages and encodings.
-// Returns maps of both translated and original user infos for validation.
-func (a *UserAnalyzer) prepareUserInfos(
-	ctx context.Context, userInfos []*types.ReviewUser,
-) (map[string]*types.ReviewUser, map[string]*types.ReviewUser) {
-	var (
-		originalInfos   = make(map[string]*types.ReviewUser)
-		translatedInfos = make(map[string]*types.ReviewUser)
-		p               = pool.New().WithContext(ctx)
-		mu              sync.Mutex
-	)
-
-	// Initialize maps and spawn translation goroutines
-	for _, info := range userInfos {
-		originalInfos[info.Name] = info
-
-		p.Go(func(ctx context.Context) error {
-			// Skip empty descriptions
-			if info.Description == "" {
-				mu.Lock()
-				translatedInfos[info.Name] = info
-				mu.Unlock()
-				return nil
-			}
-
-			// Translate the description with retry
-			var translated string
-			err := utils.WithRetry(ctx, func() error {
-				var err error
-				translated, err = a.translator.Translate(
-					ctx,
-					info.Description,
-					"auto", // Auto-detect source language
-					"en",   // Translate to English
-				)
-				return err
-			}, utils.GetAIRetryOptions())
-			if err != nil {
-				// Use original userInfo if translation fails
-				mu.Lock()
-				translatedInfos[info.Name] = info
-				mu.Unlock()
-				a.logger.Error("Translation failed, using original description",
-					zap.String("username", info.Name),
-					zap.Error(err))
-				return nil
-			}
-
-			// Create new Info with translated description
-			translatedInfo := *info
-			if translatedInfo.Description != translated {
-				translatedInfo.Description = translated
-				a.logger.Debug("Translated description", zap.String("username", info.Name))
-			}
-			mu.Lock()
-			translatedInfos[info.Name] = &translatedInfo
-			mu.Unlock()
-			return nil
-		})
-	}
-
-	// Wait for all translations to complete
-	if err := p.Wait(); err != nil {
-		a.logger.Error("Error during translations", zap.Error(err))
-	}
-
-	return translatedInfos, originalInfos
 }

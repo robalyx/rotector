@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"sync"
@@ -15,7 +16,6 @@ import (
 	"github.com/robalyx/rotector/internal/database/types"
 	"github.com/robalyx/rotector/internal/setup"
 	"github.com/robalyx/rotector/pkg/utils"
-	"github.com/sourcegraph/conc/pool"
 	"github.com/tdewolff/minify/v2"
 	"github.com/tdewolff/minify/v2/json"
 	"go.uber.org/zap"
@@ -38,6 +38,12 @@ type FriendSummary struct {
 type UserFriendData struct {
 	Username string          `json:"username" jsonschema_description:"Username of the account being analyzed"`
 	Friends  []FriendSummary `json:"friends"  jsonschema_description:"List of friends and their violation data"`
+}
+
+// UserFriendRequest contains the user data and friend network for analysis.
+type UserFriendRequest struct {
+	UserInfo *types.ReviewUser `json:"-"`        // User info stored for internal reference, not sent to AI
+	UserData UserFriendData    `json:"userData"` // Friend network data to be analyzed
 }
 
 // FriendAnalysis contains the result of analyzing a user's friend network.
@@ -93,69 +99,169 @@ func NewFriendAnalyzer(app *setup.App, logger *zap.Logger) *FriendAnalyzer {
 
 // GenerateFriendReasons generates friend network analysis reasons for multiple users using the OpenAI model.
 func (a *FriendAnalyzer) GenerateFriendReasons(
-	userInfos []*types.ReviewUser, confirmedFriendsMap, flaggedFriendsMap map[uint64]map[uint64]*types.ReviewUser,
+	ctx context.Context, userInfos []*types.ReviewUser, confirmedFriendsMap, flaggedFriendsMap map[uint64]map[uint64]*types.ReviewUser,
 ) map[uint64]string {
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
-	defer cancel()
+	// Create friend requests map
+	friendRequests := make(map[uint64]UserFriendRequest)
+	for _, userInfo := range userInfos {
+		// Get confirmed and flagged friends for this user
+		confirmedFriends := confirmedFriendsMap[userInfo.ID]
+		flaggedFriends := flaggedFriendsMap[userInfo.ID]
 
-	var (
-		p       = pool.New().WithContext(ctx)
-		mu      sync.Mutex
-		results = make(map[uint64]string)
-	)
+		// Collect friend summaries
+		friendSummaries := make([]FriendSummary, 0, MaxFriends)
 
-	// Calculate number of batches
-	numBatches := (len(userInfos) + a.batchSize - 1) / a.batchSize
-
-	for i := range numBatches {
-		start := i * a.batchSize
-		end := min(start+a.batchSize, len(userInfos))
-
-		infoBatch := userInfos[start:end]
-		p.Go(func(ctx context.Context) error {
-			// Acquire semaphore before making AI request
-			if err := a.analysisSem.Acquire(ctx, 1); err != nil {
-				return fmt.Errorf("failed to acquire semaphore: %w", err)
+		// Add confirmed friends first
+		for _, friend := range confirmedFriends {
+			if len(friendSummaries) >= MaxFriends {
+				break
 			}
-			defer a.analysisSem.Release(1)
+			friendSummaries = append(friendSummaries, FriendSummary{
+				Name:        friend.Name,
+				Type:        "Confirmed",
+				ReasonTypes: friend.Reasons.Types(),
+			})
+		}
 
-			// Process batch
-			batchResults, err := a.processBatch(ctx, infoBatch, confirmedFriendsMap, flaggedFriendsMap)
-			if err != nil {
-				a.logger.Error("Failed to process batch",
-					zap.Error(err),
-					zap.Int("batchStart", start),
-					zap.Int("batchEnd", end))
-				return err
+		// Add flagged friends with remaining space
+		for _, friend := range flaggedFriends {
+			if len(friendSummaries) >= MaxFriends {
+				break
 			}
+			friendSummaries = append(friendSummaries, FriendSummary{
+				Name:        friend.Name,
+				Type:        "Flagged",
+				ReasonTypes: friend.Reasons.Types(),
+			})
+		}
 
-			// Store results
-			mu.Lock()
-			for _, result := range batchResults {
-				for _, info := range infoBatch {
-					if info.Name == result.Name {
-						results[info.ID] = result.Analysis
-						break
-					}
-				}
-			}
-			mu.Unlock()
-
-			return nil
-		})
+		friendRequests[userInfo.ID] = UserFriendRequest{
+			UserInfo: userInfo,
+			UserData: UserFriendData{
+				Username: userInfo.Name,
+				Friends:  friendSummaries,
+			},
+		}
 	}
 
-	if err := p.Wait(); err != nil {
-		a.logger.Error("Error during friend reason generation", zap.Error(err))
-	}
+	// Process friend requests
+	results := make(map[uint64]string)
+	a.ProcessFriendRequests(ctx, friendRequests, results)
 
 	return results
 }
 
+// ProcessFriendRequests processes friend analysis requests with retry logic for invalid users.
+func (a *FriendAnalyzer) ProcessFriendRequests(
+	ctx context.Context, friendRequests map[uint64]UserFriendRequest, results map[uint64]string,
+) {
+	if len(friendRequests) == 0 {
+		return
+	}
+
+	// Convert map to slice for batch processing
+	requestSlice := make([]UserFriendRequest, 0, len(friendRequests))
+	for _, req := range friendRequests {
+		requestSlice = append(requestSlice, req)
+	}
+
+	// Process batches with retry and splitting
+	var (
+		mu              sync.Mutex
+		invalidMu       sync.Mutex
+		invalidRequests = make(map[uint64]UserFriendRequest)
+	)
+	minBatchSize := max(len(requestSlice)/4, 1)
+
+	err := utils.WithRetrySplitBatch(
+		ctx, requestSlice, a.batchSize, minBatchSize, utils.GetAIRetryOptions(),
+		func(batch []UserFriendRequest) error {
+			// Process the batch
+			batchResults, err := a.processFriendBatch(ctx, batch)
+			if err != nil {
+				return err
+			}
+
+			// Process and store valid results
+			invalid, err := a.processResults(batchResults, batch, results, &mu)
+			if err != nil {
+				return err
+			}
+
+			// Add invalid results to retry map
+			if len(invalid) > 0 {
+				invalidMu.Lock()
+				maps.Copy(invalidRequests, invalid)
+				invalidMu.Unlock()
+			}
+
+			return nil
+		},
+		func(batch []UserFriendRequest) {
+			// Log blocked content
+			usernames := make([]string, len(batch))
+			for i, req := range batch {
+				usernames[i] = req.UserData.Username
+			}
+
+			// Log details of the blocked content
+			a.textLogger.Warn("Content blocked in friend analysis batch",
+				zap.Strings("usernames", usernames),
+				zap.Int("batch_size", len(batch)),
+				zap.Any("requests", batch))
+
+			// Save blocked friend data to file
+			filename := fmt.Sprintf("friends_%s.txt", time.Now().Format("20060102_150405"))
+			filepath := filepath.Join(a.textDir, filename)
+
+			var buf bytes.Buffer
+			for _, req := range batch {
+				buf.WriteString(fmt.Sprintf("Username: %s\nFriends:\n", req.UserData.Username))
+				for _, friend := range req.UserData.Friends {
+					buf.WriteString(fmt.Sprintf("  - Name: %s\n    Type: %s\n    Reasons: %v\n",
+						friend.Name, friend.Type, friend.ReasonTypes))
+				}
+				buf.WriteString("\n")
+			}
+
+			if err := os.WriteFile(filepath, buf.Bytes(), 0o600); err != nil {
+				a.textLogger.Error("Failed to save blocked friend data",
+					zap.Error(err),
+					zap.String("path", filepath))
+				return
+			}
+
+			a.textLogger.Info("Saved blocked friend data",
+				zap.String("path", filepath))
+		},
+	)
+	if err != nil {
+		a.logger.Error("Error processing friend requests", zap.Error(err))
+	}
+
+	// Process invalid requests if any
+	if len(invalidRequests) > 0 {
+		a.logger.Info("Retrying analysis for invalid results",
+			zap.Int("invalidUsers", len(invalidRequests)))
+
+		a.ProcessFriendRequests(ctx, invalidRequests, results)
+	}
+
+	a.logger.Info("Finished processing friend requests",
+		zap.Int("totalRequests", len(friendRequests)),
+		zap.Int("retriedUsers", len(invalidRequests)))
+}
+
 // processFriendBatch handles the AI analysis for a batch of friend data.
-func (a *FriendAnalyzer) processFriendBatch(ctx context.Context, batch []UserFriendData) (*BatchFriendAnalysis, error) {
+func (a *FriendAnalyzer) processFriendBatch(ctx context.Context, batch []UserFriendRequest) (*BatchFriendAnalysis, error) {
+	// Extract UserFriendData for AI request
+	batchData := make([]UserFriendData, len(batch))
+	for i, req := range batch {
+		batchData[i] = req.UserData
+	}
+
 	// Convert to JSON for the AI request
-	batchDataJSON, err := sonic.Marshal(batch)
+	batchDataJSON, err := sonic.Marshal(batchData)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", utils.ErrJSONProcessing, err)
 	}
@@ -216,136 +322,109 @@ func (a *FriendAnalyzer) processFriendBatch(ctx context.Context, batch []UserFri
 			return fmt.Errorf("JSON unmarshal error: %w", err)
 		}
 
+		// Create a map of usernames to user IDs for efficient lookup
+		userIDMap := make(map[string]uint64, len(batch))
+		for _, req := range batch {
+			userIDMap[req.UserData.Username] = req.UserInfo.ID
+		}
+
+		// Create a new slice to store the processed results
+		processedResults := make([]FriendAnalysis, 0, len(result.Results))
+
+		// Process each result and validate
+		for _, response := range result.Results {
+			// Skip responses with missing or empty usernames
+			if response.Name == "" {
+				a.logger.Warn("Received response with empty username")
+				continue
+			}
+
+			// Skip responses with no analysis content
+			if response.Analysis == "" {
+				a.logger.Debug("Skipping response with empty analysis",
+					zap.String("username", response.Name))
+				continue
+			}
+
+			processedResults = append(processedResults, response)
+		}
+
+		result.Results = processedResults
 		return nil
 	})
 
 	return &result, err
 }
 
-// processBatch handles analysis for a batch of users.
-func (a *FriendAnalyzer) processBatch(
-	ctx context.Context, userInfos []*types.ReviewUser,
-	confirmedFriendsMap, flaggedFriendsMap map[uint64]map[uint64]*types.ReviewUser,
-) ([]FriendAnalysis, error) {
-	// Create summaries for all users in batch
-	batchData := make([]UserFriendData, 0, len(userInfos))
-	for _, userInfo := range userInfos {
-		// Get confirmed and flagged friends for this user
-		confirmedFriends := confirmedFriendsMap[userInfo.ID]
-		flaggedFriends := flaggedFriendsMap[userInfo.ID]
+// processResults validates and stores the analysis results.
+// Returns a map of user IDs that had invalid results and need retry.
+func (a *FriendAnalyzer) processResults(
+	results *BatchFriendAnalysis, batch []UserFriendRequest, finalResults map[uint64]string, mu *sync.Mutex,
+) (map[uint64]UserFriendRequest, error) {
+	// Create map for retry requests
+	invalidRequests := make(map[uint64]UserFriendRequest)
 
-		// Collect friend summaries
-		friendSummaries := make([]FriendSummary, 0, MaxFriends)
-
-		// Add confirmed friends first
-		for _, friend := range confirmedFriends {
-			if len(friendSummaries) >= MaxFriends {
-				break
-			}
-			friendSummaries = append(friendSummaries, FriendSummary{
-				Name:        friend.Name,
-				Type:        "Confirmed",
-				ReasonTypes: friend.Reasons.Types(),
-			})
+	// If no results returned, mark all users for retry
+	if results == nil || len(results.Results) == 0 {
+		a.logger.Warn("No results returned from friend analysis, retrying all users")
+		for _, req := range batch {
+			invalidRequests[req.UserInfo.ID] = req
 		}
-
-		// Add flagged friends with remaining space
-		for _, friend := range flaggedFriends {
-			if len(friendSummaries) >= MaxFriends {
-				break
-			}
-			friendSummaries = append(friendSummaries, FriendSummary{
-				Name:        friend.Name,
-				Type:        "Flagged",
-				ReasonTypes: friend.Reasons.Types(),
-			})
-		}
-
-		batchData = append(batchData, UserFriendData{
-			Username: userInfo.Name,
-			Friends:  friendSummaries,
-		})
+		return invalidRequests, nil
 	}
 
-	// Skip if no users in batch
-	if len(batchData) == 0 {
-		return nil, nil
+	// Create map of processed users for O(1) lookup
+	processedUsers := make(map[string]struct{}, len(results.Results))
+	for _, result := range results.Results {
+		processedUsers[result.Name] = struct{}{}
 	}
 
-	// Acquire semaphore
-	if err := a.analysisSem.Acquire(ctx, 1); err != nil {
-		return nil, fmt.Errorf("failed to acquire semaphore: %w", err)
-	}
-	defer a.analysisSem.Release(1)
-
-	// Handle content blocking
-	minBatchSize := max(len(batchData)/4, 1)
-
-	var result *BatchFriendAnalysis
-	err := utils.WithRetrySplitBatch(
-		ctx, batchData, len(batchData), minBatchSize, utils.GetAIRetryOptions(),
-		func(batch []UserFriendData) error {
-			var err error
-			result, err = a.processFriendBatch(ctx, batch)
-			return err
-		},
-		func(batch []UserFriendData) {
-			usernames := make([]string, len(batch))
-			for i, data := range batch {
-				usernames[i] = data.Username
-			}
-
-			// Log detailed content to text logger
-			a.textLogger.Warn("Content blocked in friend analysis batch",
-				zap.Strings("usernames", usernames),
-				zap.Int("batch_size", len(batch)),
-				zap.Any("friend_data", batch))
-
-			// Save blocked friend data to file
-			filename := fmt.Sprintf("friends_%s.txt", time.Now().Format("20060102_150405"))
-			filepath := filepath.Join(a.textDir, filename)
-
-			var buf bytes.Buffer
-			for _, data := range batch {
-				buf.WriteString(fmt.Sprintf("Username: %s\nFriends:\n", data.Username))
-				for _, friend := range data.Friends {
-					buf.WriteString(fmt.Sprintf("  - Name: %s\n    Type: %s\n    Reasons: %v\n",
-						friend.Name, friend.Type, friend.ReasonTypes))
-				}
-				buf.WriteString("\n")
-			}
-
-			if err := os.WriteFile(filepath, buf.Bytes(), 0o600); err != nil {
-				a.textLogger.Error("Failed to save blocked friend data",
-					zap.Error(err),
-					zap.String("path", filepath))
-				return
-			}
-
-			a.textLogger.Info("Saved blocked friend data",
-				zap.String("path", filepath))
-		},
-	)
-	if err != nil {
-		return nil, err
+	// Create map of requests by username for O(1) lookup
+	requestsByName := make(map[string]UserFriendRequest, len(batch))
+	for _, req := range batch {
+		requestsByName[req.UserData.Username] = req
 	}
 
-	// Verify we got results for all users in the batch
-	if len(result.Results) > 0 {
-		// Create map of usernames we got results for
-		resultUsers := make(map[string]struct{}, len(result.Results))
-		for _, result := range result.Results {
-			resultUsers[result.Name] = struct{}{}
-		}
-
-		// Check if we got results for all users we sent
-		for _, data := range batchData {
-			if _, ok := resultUsers[data.Username]; !ok {
-				a.logger.Warn("Missing friend analysis result",
-					zap.String("username", data.Username))
-			}
+	// Handle missing users
+	for _, req := range batch {
+		if _, wasProcessed := processedUsers[req.UserData.Username]; !wasProcessed {
+			a.logger.Warn("User missing from friend analysis results",
+				zap.String("username", req.UserData.Username))
+			invalidRequests[req.UserInfo.ID] = req
 		}
 	}
 
-	return result.Results, nil
+	// Process valid results
+	for _, result := range results.Results {
+		// Get the original request
+		req, exists := requestsByName[result.Name]
+		if !exists {
+			a.logger.Error("Got result for user not in batch",
+				zap.String("username", result.Name))
+			continue
+		}
+
+		// Skip results with no analysis content
+		if result.Analysis == "" {
+			a.logger.Debug("Friend analysis returned empty results",
+				zap.String("username", result.Name))
+			invalidRequests[req.UserInfo.ID] = req
+			continue
+		}
+
+		// Store valid result
+		mu.Lock()
+		finalResults[req.UserInfo.ID] = result.Analysis
+		mu.Unlock()
+
+		a.logger.Debug("Added friend analysis result",
+			zap.String("username", result.Name))
+	}
+
+	// If all users were missing or invalid, return an error to trigger batch retry
+	if len(invalidRequests) == len(batch) {
+		return nil, fmt.Errorf("%w: all users in batch need retry", utils.ErrModelResponse)
+	}
+
+	return invalidRequests, nil
 }

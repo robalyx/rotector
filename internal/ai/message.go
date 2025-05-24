@@ -108,9 +108,6 @@ func (a *MessageAnalyzer) ProcessMessages(
 	}
 
 	// Process batches concurrently
-	ctx, cancel := context.WithTimeout(ctx, 3*time.Minute)
-	defer cancel()
-
 	var (
 		p            = pool.New().WithErrors().WithContext(ctx)
 		flaggedUsers = make(map[uint64]*FlaggedMessageUser)

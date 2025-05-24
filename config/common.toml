@@ -104,8 +104,10 @@ max_concurrent = 100
 
 # Model to use for user analysis
 user_model = "gemini-2.5-flash-thinking"
+# Model to use for user reason analysis
+user_reason_model = "gpt-4o-mini"
 # Model to use for friend network analysis
-friend_model = "gemini-2.5-flash"
+friend_model = "gemini-1.5-flash-8b"
 # Model to use for stats analysis
 stats_model = "gemini-2.5-flash"
 # Model to use for outfit analysis
@@ -119,11 +121,13 @@ chat_model = "gemini-2.5-flash"
 
 # Model mappings for the provider
 [common.openai.model_mappings]
-"gemini-2.5-flash" = "google/gemini-2.5-flash-preview"
-"gemini-2.5-flash-thinking" = "google/gemini-2.5-flash-preview:thinking"
+"gemini-2.5-flash" = "google/gemini-2.5-flash-preview-05-20"
+"gemini-2.5-flash-thinking" = "google/gemini-2.5-flash-preview-05-20:thinking"
+"gemini-1.5-flash-8b" = "google/gemini-flash-1.5-8b"
 "qwen-3-235b-a22b" = "qwen/qwen3-235b-a22b"
 "deepseek-v3-0324" = "deepseek/deepseek-chat-v3-0324"
 "gpt-4.1-mini" = "openai/gpt-4.1-mini"
+"gpt-4o-mini" = "openai/gpt-4o-mini"
 "o4-mini" = "openai/o4-mini"
 "o4-mini-high" = "openai/o4-mini-high"
 

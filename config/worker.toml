@@ -32,6 +32,8 @@ thumbnail_groups = 100
 outfit_analysis = 10
 # Maximum concurrent AI requests for user analysis
 user_analysis = 10
+# Maximum concurrent AI requests for user reason analysis
+user_reason_analysis = 10
 # Maximum concurrent AI requests for friend analysis
 friend_analysis = 10
 # Maximum concurrent AI requests for message analysis
@@ -43,8 +45,10 @@ ivan_message_analysis = 5
 outfit_analysis_batch = 16
 # Number of users to analyze in one AI request
 user_analysis_batch = 25
+# Number of users to analyze in one user reason AI request
+user_reason_analysis_batch = 10
 # Number of users to analyze in one friend AI request
-friend_analysis_batch = 25
+friend_analysis_batch = 20
 # Number of messages to analyze in one AI request
 message_analysis_batch = 25
 # Number of ivan messages to analyze in one AI request

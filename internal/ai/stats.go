@@ -3,7 +3,6 @@ package ai
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/bytedance/sonic"
 	"github.com/openai/openai-go"
@@ -43,12 +42,7 @@ func NewStatsAnalyzer(app *setup.App, logger *zap.Logger) *StatsAnalyzer {
 }
 
 // GenerateWelcomeMessage analyzes current and historical stats to generate a contextual welcome message.
-func (a *StatsAnalyzer) GenerateWelcomeMessage(
-	ctx context.Context, historicalStats []*types.HourlyStats,
-) (string, error) {
-	ctx, cancel := context.WithTimeout(ctx, 3*time.Minute)
-	defer cancel()
-
+func (a *StatsAnalyzer) GenerateWelcomeMessage(ctx context.Context, historicalStats []*types.HourlyStats) (string, error) {
 	// Format stats data for AI analysis
 	data := StatsData{
 		History: historicalStats,

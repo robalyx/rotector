@@ -175,6 +175,8 @@ type OpenAI struct {
 	FallbackMappings map[string]string `koanf:"fallback_mappings"`
 	// Model to use for user analysis
 	UserModel string `koanf:"user_model"`
+	// Model to use for user reason analysis
+	UserReasonModel string `koanf:"user_reason_model"`
 	// Model to use for friend network analysis
 	FriendModel string `koanf:"friend_model"`
 	// Model to use for stats analysis
@@ -231,6 +233,8 @@ type BatchSizes struct {
 	OutfitAnalysis int `koanf:"outfit_analysis"`
 	// Maximum concurrent AI requests for user analysis.
 	UserAnalysis int `koanf:"user_analysis"`
+	// Maximum concurrent AI requests for user reason analysis.
+	UserReasonAnalysis int `koanf:"user_reason_analysis"`
 	// Maximum concurrent AI requests for friend analysis.
 	FriendAnalysis int `koanf:"friend_analysis"`
 	// Maximum concurrent AI requests for message analysis.
@@ -241,6 +245,8 @@ type BatchSizes struct {
 	OutfitAnalysisBatch int `koanf:"outfit_analysis_batch"`
 	// Number of users to analyze in one AI request.
 	UserAnalysisBatch int `koanf:"user_analysis_batch"`
+	// Number of users to analyze in one user reason AI request.
+	UserReasonAnalysisBatch int `koanf:"user_reason_analysis_batch"`
 	// Number of users to analyze in one friend AI request.
 	FriendAnalysisBatch int `koanf:"friend_analysis_batch"`
 	// Number of messages to analyze in one AI request.

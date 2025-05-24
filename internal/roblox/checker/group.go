@@ -142,7 +142,9 @@ func (c *GroupChecker) CheckGroupPercentages(
 }
 
 // ProcessUsers checks multiple users' groups concurrently and updates flaggedUsers map.
-func (c *GroupChecker) ProcessUsers(userInfos []*types.ReviewUser, reasonsMap map[uint64]types.Reasons[enum.UserReasonType]) {
+func (c *GroupChecker) ProcessUsers(
+	ctx context.Context, userInfos []*types.ReviewUser, reasonsMap map[uint64]types.Reasons[enum.UserReasonType],
+) {
 	// Track counts before processing
 	existingFlags := len(reasonsMap)
 
@@ -162,7 +164,7 @@ func (c *GroupChecker) ProcessUsers(userInfos []*types.ReviewUser, reasonsMap ma
 
 	// Fetch all existing groups
 	existingGroups, err := c.db.Model().Group().GetGroupsByIDs(
-		context.Background(), groupIDs, types.GroupFieldBasic|types.GroupFieldReasons,
+		ctx, groupIDs, types.GroupFieldBasic|types.GroupFieldReasons,
 	)
 	if err != nil {
 		c.logger.Error("Failed to fetch existing groups", zap.Error(err))
@@ -170,7 +172,7 @@ func (c *GroupChecker) ProcessUsers(userInfos []*types.ReviewUser, reasonsMap ma
 	}
 
 	var (
-		p  = pool.New().WithContext(context.Background())
+		p  = pool.New().WithContext(ctx)
 		mu sync.Mutex
 	)
 

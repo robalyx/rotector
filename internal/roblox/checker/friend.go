@@ -44,7 +44,9 @@ func NewFriendChecker(app *setup.App, logger *zap.Logger) *FriendChecker {
 }
 
 // ProcessUsers checks multiple users' friends concurrently and updates reasonsMap.
-func (c *FriendChecker) ProcessUsers(userInfos []*types.ReviewUser, reasonsMap map[uint64]types.Reasons[enum.UserReasonType]) {
+func (c *FriendChecker) ProcessUsers(
+	ctx context.Context, userInfos []*types.ReviewUser, reasonsMap map[uint64]types.Reasons[enum.UserReasonType],
+) {
 	// Track counts before processing
 	existingFlags := len(reasonsMap)
 
@@ -64,7 +66,7 @@ func (c *FriendChecker) ProcessUsers(userInfos []*types.ReviewUser, reasonsMap m
 
 	// Fetch all existing friends
 	existingFriends, err := c.db.Model().User().GetUsersByIDs(
-		context.Background(), friendIDs, types.UserFieldBasic|types.UserFieldReasons,
+		ctx, friendIDs, types.UserFieldBasic|types.UserFieldReasons,
 	)
 	if err != nil {
 		c.logger.Error("Failed to fetch existing friends", zap.Error(err))
@@ -116,7 +118,7 @@ func (c *FriendChecker) ProcessUsers(userInfos []*types.ReviewUser, reasonsMap m
 	// Generate AI reasons if we have users to analyze
 	if len(usersToAnalyze) > 0 {
 		// Generate reasons for flagged users
-		reasons := c.friendAnalyzer.GenerateFriendReasons(usersToAnalyze, confirmedFriendsMap, flaggedFriendsMap)
+		reasons := c.friendAnalyzer.GenerateFriendReasons(ctx, usersToAnalyze, confirmedFriendsMap, flaggedFriendsMap)
 
 		// Process results and update reasonsMap
 		for _, userInfo := range usersToAnalyze {

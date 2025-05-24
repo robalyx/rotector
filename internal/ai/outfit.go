@@ -12,7 +12,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/HugoSmits86/nativewebp"
 	"github.com/bytedance/sonic"
@@ -102,11 +101,8 @@ func NewOutfitAnalyzer(app *setup.App, logger *zap.Logger) *OutfitAnalyzer {
 // ProcessOutfits analyzes outfit images for a batch of users.
 // Returns a map of user IDs to their flagged outfit names.
 func (a *OutfitAnalyzer) ProcessOutfits(
-	userInfos []*types.ReviewUser, reasonsMap map[uint64]types.Reasons[enum.UserReasonType],
+	ctx context.Context, userInfos []*types.ReviewUser, reasonsMap map[uint64]types.Reasons[enum.UserReasonType],
 ) map[uint64]map[string]struct{} {
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
-	defer cancel()
-
 	// Get all outfit thumbnails organized by user
 	userOutfits, userThumbnails := a.getOutfitThumbnails(ctx, userInfos)
 

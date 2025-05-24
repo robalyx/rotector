@@ -2,6 +2,8 @@ package checker
 
 import (
 	"context"
+	"sync"
+	"time"
 
 	apiTypes "github.com/jaxron/roapi.go/pkg/api/types"
 	"github.com/robalyx/rotector/internal/ai"
@@ -12,45 +14,51 @@ import (
 	"github.com/robalyx/rotector/internal/setup"
 	"github.com/robalyx/rotector/internal/translator"
 	"github.com/robalyx/rotector/pkg/utils"
+	"github.com/sourcegraph/conc/pool"
 	"go.uber.org/zap"
 )
 
 // UserChecker coordinates the checking process by combining results from
 // multiple checking methods (AI, groups, friends) and managing the progress bar.
 type UserChecker struct {
-	app            *setup.App
-	db             database.Client
-	userFetcher    *fetcher.UserFetcher
-	gameFetcher    *fetcher.GameFetcher
-	outfitFetcher  *fetcher.OutfitFetcher
-	userAnalyzer   *ai.UserAnalyzer
-	outfitAnalyzer *ai.OutfitAnalyzer
-	ivanAnalyzer   *ai.IvanAnalyzer
-	groupChecker   *GroupChecker
-	friendChecker  *FriendChecker
-	condoChecker   *CondoChecker
-	logger         *zap.Logger
+	app                *setup.App
+	db                 database.Client
+	userFetcher        *fetcher.UserFetcher
+	gameFetcher        *fetcher.GameFetcher
+	outfitFetcher      *fetcher.OutfitFetcher
+	translator         *translator.Translator
+	userAnalyzer       *ai.UserAnalyzer
+	userReasonAnalyzer *ai.UserReasonAnalyzer
+	outfitAnalyzer     *ai.OutfitAnalyzer
+	ivanAnalyzer       *ai.IvanAnalyzer
+	groupChecker       *GroupChecker
+	friendChecker      *FriendChecker
+	condoChecker       *CondoChecker
+	logger             *zap.Logger
 }
 
 // NewUserChecker creates a UserChecker with all required dependencies.
 func NewUserChecker(app *setup.App, userFetcher *fetcher.UserFetcher, logger *zap.Logger) *UserChecker {
 	translator := translator.New(app.RoAPI.GetClient())
 	userAnalyzer := ai.NewUserAnalyzer(app, translator, logger)
+	userReasonAnalyzer := ai.NewUserReasonAnalyzer(app, logger)
 	outfitAnalyzer := ai.NewOutfitAnalyzer(app, logger)
 
 	return &UserChecker{
-		app:            app,
-		db:             app.DB,
-		userFetcher:    userFetcher,
-		gameFetcher:    fetcher.NewGameFetcher(app.RoAPI, logger),
-		outfitFetcher:  fetcher.NewOutfitFetcher(app.RoAPI, logger),
-		userAnalyzer:   userAnalyzer,
-		outfitAnalyzer: outfitAnalyzer,
-		ivanAnalyzer:   ai.NewIvanAnalyzer(app, logger),
-		groupChecker:   NewGroupChecker(app, logger),
-		friendChecker:  NewFriendChecker(app, logger),
-		condoChecker:   NewCondoChecker(app.DB, logger),
-		logger:         logger.Named("user_checker"),
+		app:                app,
+		db:                 app.DB,
+		userFetcher:        userFetcher,
+		gameFetcher:        fetcher.NewGameFetcher(app.RoAPI, logger),
+		outfitFetcher:      fetcher.NewOutfitFetcher(app.RoAPI, logger),
+		translator:         translator,
+		userAnalyzer:       userAnalyzer,
+		userReasonAnalyzer: userReasonAnalyzer,
+		outfitAnalyzer:     outfitAnalyzer,
+		ivanAnalyzer:       ai.NewIvanAnalyzer(app, logger),
+		groupChecker:       NewGroupChecker(app, logger),
+		friendChecker:      NewFriendChecker(app, logger),
+		condoChecker:       NewCondoChecker(app.DB, logger),
+		logger:             logger.Named("user_checker"),
 	}
 }
 
@@ -62,23 +70,34 @@ func (c *UserChecker) ProcessUsers(userInfos []*types.ReviewUser) map[uint64]str
 	// Initialize map to store reasons
 	reasonsMap := make(map[uint64]types.Reasons[enum.UserReasonType])
 
+	// Create context with timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	defer cancel()
+
+	// Prepare user info maps with translations
+	translatedInfos, originalInfos := c.prepareUserInfoMaps(ctx, userInfos)
+
 	// Process group checker
-	c.groupChecker.ProcessUsers(userInfos, reasonsMap)
+	c.groupChecker.ProcessUsers(ctx, userInfos, reasonsMap)
 
 	// Process friend checker
-	c.friendChecker.ProcessUsers(userInfos, reasonsMap)
+	c.friendChecker.ProcessUsers(ctx, userInfos, reasonsMap)
 
 	// Process user analysis
-	c.userAnalyzer.ProcessUsers(userInfos, reasonsMap)
+	reasonRequests := c.userAnalyzer.ProcessUsers(ctx, userInfos, translatedInfos, originalInfos)
+	if len(reasonRequests) > 0 {
+		c.userReasonAnalyzer.ProcessFlaggedUsers(ctx, reasonRequests, translatedInfos, originalInfos, reasonsMap)
+		c.logger.Info("Completed user reason analysis", zap.Int("flaggedUsers", len(reasonRequests)))
+	}
 
 	// Process condo checker
-	c.condoChecker.ProcessUsers(userInfos, reasonsMap)
+	c.condoChecker.ProcessUsers(ctx, userInfos, reasonsMap)
 
 	// Process ivan messages
-	c.ivanAnalyzer.ProcessUsers(userInfos, reasonsMap)
+	c.ivanAnalyzer.ProcessUsers(ctx, userInfos, reasonsMap)
 
 	// Process outfit analysis
-	flaggedOutfits := c.outfitAnalyzer.ProcessOutfits(userInfos, reasonsMap)
+	flaggedOutfits := c.outfitAnalyzer.ProcessOutfits(ctx, userInfos, reasonsMap)
 
 	// Stop if no users were flagged
 	if len(reasonsMap) == 0 {
@@ -118,6 +137,74 @@ func (c *UserChecker) ProcessUsers(userInfos []*types.ReviewUser) map[uint64]str
 		zap.Int("flaggedUsers", len(flaggedUsers)))
 
 	return flaggedStatus
+}
+
+// prepareUserInfoMaps creates maps of user information for both translated and original content.
+func (c *UserChecker) prepareUserInfoMaps(
+	ctx context.Context, userInfos []*types.ReviewUser,
+) (map[string]*types.ReviewUser, map[string]*types.ReviewUser) {
+	var (
+		originalInfos   = make(map[string]*types.ReviewUser)
+		translatedInfos = make(map[string]*types.ReviewUser)
+		p               = pool.New().WithContext(ctx).WithMaxGoroutines(50)
+		mu              sync.Mutex
+	)
+
+	// Initialize maps and spawn translation goroutines
+	for _, info := range userInfos {
+		originalInfos[info.Name] = info
+
+		p.Go(func(ctx context.Context) error {
+			// Skip empty descriptions
+			if info.Description == "" {
+				mu.Lock()
+				translatedInfos[info.Name] = info
+				mu.Unlock()
+				return nil
+			}
+
+			// Translate the description with retry
+			var translated string
+			err := utils.WithRetry(ctx, func() error {
+				var err error
+				translated, err = c.translator.Translate(
+					ctx,
+					info.Description,
+					"auto", // Auto-detect source language
+					"en",   // Translate to English
+				)
+				return err
+			}, utils.GetAIRetryOptions())
+			if err != nil {
+				// Use original userInfo if translation fails
+				mu.Lock()
+				translatedInfos[info.Name] = info
+				mu.Unlock()
+				c.logger.Error("Translation failed, using original description",
+					zap.String("username", info.Name),
+					zap.Error(err))
+				return nil
+			}
+
+			// Create new Info with translated description
+			translatedInfo := *info
+			if translatedInfo.Description != translated {
+				translatedInfo.Description = translated
+				c.logger.Debug("Translated description", zap.String("username", info.Name))
+			}
+			mu.Lock()
+			translatedInfos[info.Name] = &translatedInfo
+			mu.Unlock()
+			return nil
+		})
+	}
+
+	// Wait for all translations to complete
+	if err := p.Wait(); err != nil {
+		c.logger.Error("Error during translations", zap.Error(err))
+	}
+
+	return translatedInfos, originalInfos
 }
 
 // trackFlaggedUsersGroups adds flagged users' group memberships to tracking.

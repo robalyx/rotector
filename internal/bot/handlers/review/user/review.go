@@ -794,12 +794,12 @@ func (m *ReviewMenu) fetchNewTarget(ctx *interaction.Context, s *session.Session
 
 	// Process friends if friend reason doesn't exist
 	if _, hasFriendReason := user.Reasons[enum.UserReasonTypeFriend]; !hasFriendReason {
-		m.layout.friendChecker.ProcessUsers(userSlice, reasonsMap)
+		m.layout.friendChecker.ProcessUsers(ctx.Context(), userSlice, reasonsMap)
 	}
 
 	// Process groups if group reason doesn't exist
 	if _, hasGroupReason := user.Reasons[enum.UserReasonTypeGroup]; !hasGroupReason {
-		m.layout.groupChecker.ProcessUsers(userSlice, reasonsMap)
+		m.layout.groupChecker.ProcessUsers(ctx.Context(), userSlice, reasonsMap)
 	}
 
 	// Update user with any new reasons from friend/group checking
