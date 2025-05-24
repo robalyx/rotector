@@ -289,42 +289,6 @@ func (r *UserModel) GetFlaggedUsersCount(ctx context.Context) (int, error) {
 	return count, nil
 }
 
-// GetRecentlyProcessedUsers checks which users exist in any table and have been updated within the past 7 days.
-// For confirmed users, we consider them as processed regardless of when they were last updated.
-func (r *UserModel) GetRecentlyProcessedUsers(ctx context.Context, userIDs []uint64) (map[uint64]enum.UserType, error) {
-	var users []struct {
-		ID     uint64
-		Status enum.UserType
-	}
-
-	err := dbretry.NoResult(ctx, func(ctx context.Context) error {
-		return r.db.NewSelect().
-			Model((*types.User)(nil)).
-			Column("id", "status").
-			Where("id IN (?)", bun.In(userIDs)).
-			Where("status = ? OR (status IN (?, ?) AND last_updated > NOW() - INTERVAL '7 days')",
-				enum.UserTypeConfirmed,
-				enum.UserTypeFlagged,
-				enum.UserTypeCleared,
-			).
-			Scan(ctx, &users)
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to check recently processed users: %w", err)
-	}
-
-	result := make(map[uint64]enum.UserType, len(users))
-	for _, user := range users {
-		result[user.ID] = user.Status
-	}
-
-	r.logger.Debug("Checked recently processed users",
-		zap.Int("total", len(userIDs)),
-		zap.Int("existing", len(result)))
-
-	return result, nil
-}
-
 // GetUserByID retrieves a user by either their numeric ID or UUID.
 //
 // Deprecated: Use Service().User().GetUserByID() instead.

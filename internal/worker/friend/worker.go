@@ -9,12 +9,21 @@ import (
 
 	"github.com/jaxron/roapi.go/pkg/api"
 	"github.com/robalyx/rotector/internal/database"
+	"github.com/robalyx/rotector/internal/database/types"
+	"github.com/robalyx/rotector/internal/database/types/enum"
 	"github.com/robalyx/rotector/internal/progress"
 	"github.com/robalyx/rotector/internal/roblox/checker"
 	"github.com/robalyx/rotector/internal/roblox/fetcher"
 	"github.com/robalyx/rotector/internal/setup"
 	"github.com/robalyx/rotector/internal/worker/core"
 	"go.uber.org/zap"
+)
+
+const (
+	// MinFriendPercentage is the minimum percentage of friends that must be in the system for flagged users.
+	MinFriendPercentage = 30.0
+	// MinFriendsInSystem is the minimum number of friends that must be in the system for flagged users.
+	MinFriendsInSystem = 10
 )
 
 // Worker processes user friend networks by checking each friend's
@@ -154,24 +163,49 @@ func (w *Worker) processFriendsBatch() ([]uint64, error) {
 			continue
 		}
 
-		// Check which users have been recently processed
-		existingUsers, err := w.db.Model().User().GetRecentlyProcessedUsers(context.Background(), userFriendIDs)
+		// Get all users that exist in our system
+		existingUsers, err := w.db.Model().User().GetUsersByIDs(context.Background(), userFriendIDs, types.UserFieldID)
 		if err != nil {
-			w.logger.Error("Error checking recently processed users", zap.Error(err))
+			w.logger.Error("Error checking existing users", zap.Error(err))
 			continue
 		}
 
-		// Add only new users to the friendIDs slice
-		for _, friendID := range userFriendIDs {
-			if _, exists := existingUsers[friendID]; !exists {
-				friendIDs = append(friendIDs, friendID)
+		// For flagged users, check if they meet the friend criteria
+		if user.Status == enum.UserTypeFlagged {
+			existingCount := len(existingUsers)
+			friendPercentage := (float64(existingCount) / float64(len(userFriendIDs))) * 100
+
+			if existingCount < MinFriendsInSystem || friendPercentage < MinFriendPercentage {
+				w.logger.Debug("Flagged user does not meet friend criteria",
+					zap.Uint64("userID", user.ID),
+					zap.Int("totalFriends", len(userFriendIDs)),
+					zap.Int("existingFriends", existingCount),
+					zap.Float64("friendPercentage", friendPercentage))
+				continue
 			}
+
+			w.logger.Info("Processing flagged user",
+				zap.Int("userFriends", len(userFriendIDs)),
+				zap.Int("existingFriends", existingCount),
+				zap.Float64("friendPercentage", friendPercentage),
+				zap.Uint64("userID", user.ID))
+		} else {
+			w.logger.Info("Processing confirmed user",
+				zap.Int("userFriends", len(userFriendIDs)),
+				zap.Int("existingFriends", len(existingUsers)),
+				zap.Uint64("userID", user.ID))
 		}
 
-		w.logger.Info("Fetched friends",
-			zap.Int("userFriends", len(userFriendIDs)),
-			zap.Int("totalFriends", len(friendIDs)),
-			zap.Uint64("userID", user.ID))
+		// Add only users that exist in our system
+		for friendID := range existingUsers {
+			friendIDs = append(friendIDs, friendID)
+		}
+
+		w.logger.Debug("Added friends for processing",
+			zap.Uint64("userID", user.ID),
+			zap.Int("totalFriends", len(userFriendIDs)),
+			zap.Int("existingFriends", len(existingUsers)),
+			zap.Int("addedForProcessing", len(friendIDs)))
 	}
 
 	return friendIDs, nil

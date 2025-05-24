@@ -10,6 +10,7 @@ import (
 	"github.com/jaxron/roapi.go/pkg/api"
 	"github.com/jaxron/roapi.go/pkg/api/resources/groups"
 	"github.com/robalyx/rotector/internal/database"
+	"github.com/robalyx/rotector/internal/database/types"
 	"github.com/robalyx/rotector/internal/progress"
 	"github.com/robalyx/rotector/internal/roblox/checker"
 	"github.com/robalyx/rotector/internal/roblox/fetcher"
@@ -184,25 +185,23 @@ func (w *Worker) processGroup() ([]uint64, error) {
 			newUserIDs[i] = groupUser.User.UserID
 		}
 
-		// Check which users have been recently processed
-		existingUsers, err := w.db.Model().User().GetRecentlyProcessedUsers(context.Background(), newUserIDs)
+		// Check which users exist in our system
+		existingUsers, err := w.db.Model().User().GetUsersByIDs(context.Background(), newUserIDs, types.UserFieldID)
 		if err != nil {
-			w.logger.Error("Error checking recently processed users", zap.Error(err))
+			w.logger.Error("Error checking existing users", zap.Error(err))
 			continue
 		}
 
-		// Add only new users to the userIDs slice
-		for _, userID := range newUserIDs {
-			if _, exists := existingUsers[userID]; !exists {
-				userIDs = append(userIDs, userID)
-			}
+		// Add only users that exist in our system
+		for userID := range existingUsers {
+			userIDs = append(userIDs, userID)
 		}
 
 		w.logger.Info("Fetched group users",
 			zap.Uint64("groupID", w.currentGroupID),
 			zap.String("cursor", w.currentCursor),
 			zap.Int("totalUsers", len(groupUsers.Data)),
-			zap.Int("newUsers", len(newUserIDs)-len(existingUsers)),
+			zap.Int("existingUsers", len(existingUsers)),
 			zap.Int("userIDs", len(userIDs)))
 
 		// Check if we've reached batch size
