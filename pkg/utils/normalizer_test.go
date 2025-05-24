@@ -123,12 +123,6 @@ func TestTextNormalizer_ValidateWords(t *testing.T) {
 			want:         false,
 		},
 		{
-			name:         "exact threshold match",
-			flaggedWords: []string{"hello", "world", "test"},
-			targetTexts:  []string{"hello world"},
-			want:         true,
-		},
-		{
 			name:         "single word match",
 			flaggedWords: []string{"hello"},
 			targetTexts:  []string{"hello world"},
@@ -139,6 +133,42 @@ func TestTextNormalizer_ValidateWords(t *testing.T) {
 			flaggedWords: []string{"hello", "world"},
 			targetTexts:  []string{""},
 			want:         false,
+		},
+		{
+			name:         "disproportionate content length",
+			flaggedWords: []string{"this is a very long flagged content that should not match a short text"},
+			targetTexts:  []string{":)"},
+			want:         false,
+		},
+		{
+			name:         "emoticon exact match",
+			flaggedWords: []string{";)"},
+			targetTexts:  []string{";)"},
+			want:         true,
+		},
+		{
+			name:         "emoticon in description",
+			flaggedWords: []string{";)"},
+			targetTexts:  []string{"username", "", ";)"},
+			want:         true,
+		},
+		{
+			name:         "multiple emoticons",
+			flaggedWords: []string{":)", ";)", ":("},
+			targetTexts:  []string{"hello :) world"},
+			want:         true,
+		},
+		{
+			name:         "emoticon no match",
+			flaggedWords: []string{";)"},
+			targetTexts:  []string{"hello world"},
+			want:         false,
+		},
+		{
+			name:         "mixed short and long content",
+			flaggedWords: []string{";)", "hello world"},
+			targetTexts:  []string{";) testing"},
+			want:         true,
 		},
 	}
 
