@@ -8,6 +8,7 @@ require (
 	github.com/HugoSmits86/nativewebp v1.2.0
 	github.com/bytedance/sonic v1.13.2
 	github.com/cenkalti/backoff/v4 v4.3.0
+	github.com/corona10/goimagehash v1.1.0
 	github.com/dchest/captcha v1.1.0
 	github.com/diamondburned/arikawa/v3 v3.4.0
 	github.com/diamondburned/ningen/v3 v3.0.1-0.20240808103805-f1a24c0da3d8
@@ -74,6 +75,7 @@ require (
 	github.com/mitchellh/copystructure v1.2.0 // indirect
 	github.com/mitchellh/reflectwalk v1.0.2 // indirect
 	github.com/ncruces/go-strftime v0.1.9 // indirect
+	github.com/nfnt/resize v0.0.0-20180221191011-83c6a9932646 // indirect
 	github.com/pascaldekloe/name v1.0.0 // indirect
 	github.com/pelletier/go-toml/v2 v2.2.4 // indirect
 	github.com/pkg/errors v0.9.1 // indirect

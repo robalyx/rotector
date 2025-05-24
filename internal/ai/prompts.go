@@ -153,7 +153,7 @@ Input:
 - ANY breeding/heat themes
 - ANY references to bulls or cuckolding content
 - ANY raceplay stereotypes
-- ANY fart/gas/smell references
+- ANY fart/gas/smell/poop references
 - ANY fetish references
 
 4. Technical Evasion:

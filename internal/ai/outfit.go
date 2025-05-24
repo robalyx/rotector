@@ -15,6 +15,7 @@ import (
 
 	"github.com/HugoSmits86/nativewebp"
 	"github.com/bytedance/sonic"
+	"github.com/corona10/goimagehash"
 	httpClient "github.com/jaxron/axonet/pkg/client"
 	"github.com/jaxron/roapi.go/pkg/api/resources/thumbnails"
 	apiTypes "github.com/jaxron/roapi.go/pkg/api/types"
@@ -59,20 +60,22 @@ var OutfitAnalysisSchema = utils.GenerateSchema[OutfitThemeAnalysis]()
 
 // OutfitAnalyzer handles AI-based outfit analysis using OpenAI models.
 type OutfitAnalyzer struct {
-	httpClient       *httpClient.Client
-	chat             client.ChatCompletions
-	thumbnailFetcher *fetcher.ThumbnailFetcher
-	analysisSem      *semaphore.Weighted
-	logger           *zap.Logger
-	imageLogger      *zap.Logger
-	imageDir         string
-	model            string
-	batchSize        int
+	httpClient          *httpClient.Client
+	chat                client.ChatCompletions
+	thumbnailFetcher    *fetcher.ThumbnailFetcher
+	analysisSem         *semaphore.Weighted
+	logger              *zap.Logger
+	imageLogger         *zap.Logger
+	imageDir            string
+	model               string
+	batchSize           int
+	similarityThreshold int
 }
 
 // DownloadResult contains the result of a single outfit image download.
 type DownloadResult struct {
 	img  image.Image
+	hash *goimagehash.ImageHash
 	name string
 }
 
@@ -86,15 +89,16 @@ func NewOutfitAnalyzer(app *setup.App, logger *zap.Logger) *OutfitAnalyzer {
 	}
 
 	return &OutfitAnalyzer{
-		httpClient:       app.RoAPI.GetClient(),
-		chat:             app.AIClient.Chat(),
-		thumbnailFetcher: fetcher.NewThumbnailFetcher(app.RoAPI, logger),
-		analysisSem:      semaphore.NewWeighted(int64(app.Config.Worker.BatchSizes.OutfitAnalysis)),
-		logger:           logger.Named("ai_outfit"),
-		imageLogger:      imageLogger,
-		imageDir:         imageDir,
-		model:            app.Config.Common.OpenAI.OutfitModel,
-		batchSize:        app.Config.Worker.BatchSizes.OutfitAnalysisBatch,
+		httpClient:          app.RoAPI.GetClient(),
+		chat:                app.AIClient.Chat(),
+		thumbnailFetcher:    fetcher.NewThumbnailFetcher(app.RoAPI, logger),
+		analysisSem:         semaphore.NewWeighted(int64(app.Config.Worker.BatchSizes.OutfitAnalysis)),
+		logger:              logger.Named("ai_outfit"),
+		imageLogger:         imageLogger,
+		imageDir:            imageDir,
+		model:               app.Config.Common.OpenAI.OutfitModel,
+		batchSize:           app.Config.Worker.BatchSizes.OutfitAnalysisBatch,
+		similarityThreshold: app.Config.Worker.ThresholdLimits.ImageSimilarityThreshold,
 	}
 }
 
@@ -460,12 +464,13 @@ func (a *OutfitAnalyzer) downloadOutfitImages(
 	thumbnailURL := userInfo.ThumbnailURL
 	if thumbnailURL != "" && thumbnailURL != fetcher.ThumbnailPlaceholder {
 		p.Go(func(ctx context.Context) error {
-			img, ok := a.downloadImage(ctx, thumbnailURL)
+			img, hash, ok := a.downloadImage(ctx, thumbnailURL)
 			if ok {
 				mu.Lock()
 				// Add current outfit at the beginning of the array
 				downloads = append(downloads, DownloadResult{
 					img:  img,
+					hash: hash,
 					name: "Current Outfit",
 				})
 				mu.Unlock()
@@ -483,7 +488,7 @@ func (a *OutfitAnalyzer) downloadOutfitImages(
 		}
 
 		p.Go(func(ctx context.Context) error {
-			img, ok := a.downloadImage(ctx, thumbnailURL)
+			img, hash, ok := a.downloadImage(ctx, thumbnailURL)
 			if !ok {
 				return nil
 			}
@@ -491,6 +496,7 @@ func (a *OutfitAnalyzer) downloadOutfitImages(
 			mu.Lock()
 			downloads = append(downloads, DownloadResult{
 				img:  img,
+				hash: hash,
 				name: outfit.Name,
 			})
 			mu.Unlock()
@@ -509,26 +515,89 @@ func (a *OutfitAnalyzer) downloadOutfitImages(
 		return nil, ErrNoOutfits
 	}
 
-	return downloads, nil
+	// Deduplicate similar images
+	deduplicatedDownloads := a.deduplicateImages(downloads)
+	if len(deduplicatedDownloads) == 0 {
+		return nil, ErrNoOutfits
+	}
+
+	return deduplicatedDownloads, nil
 }
 
-// downloadImage downloads an image from a URL.
-func (a *OutfitAnalyzer) downloadImage(ctx context.Context, url string) (image.Image, bool) {
+// downloadImage downloads an image from a URL and computes its perceptual hash.
+func (a *OutfitAnalyzer) downloadImage(ctx context.Context, url string) (image.Image, *goimagehash.ImageHash, bool) {
 	// Download image
 	resp, err := a.httpClient.NewRequest().URL(url).Do(ctx)
 	if err != nil {
 		a.logger.Warn("Failed to download outfit image",
 			zap.Error(err),
 			zap.String("url", url))
-		return nil, false
+		return nil, nil, false
 	}
 	defer resp.Body.Close()
 
 	// Decode image
 	img, err := nativewebp.Decode(resp.Body)
 	if err != nil {
-		return nil, false
+		return nil, nil, false
 	}
 
-	return img, true
+	// Compute perceptual hash for deduplication
+	hash, err := goimagehash.PerceptionHash(img)
+	if err != nil {
+		a.logger.Warn("Failed to compute perceptual hash",
+			zap.Error(err),
+			zap.String("url", url))
+		// Still return the image even if hash computation fails
+		return img, nil, true
+	}
+
+	return img, hash, true
+}
+
+// deduplicateImages removes similar images based on perceptual hashing.
+// Returns a deduplicated slice of DownloadResult with unique images.
+func (a *OutfitAnalyzer) deduplicateImages(downloads []DownloadResult) []DownloadResult {
+	if len(downloads) <= 1 {
+		return downloads
+	}
+
+	var deduplicated []DownloadResult
+	var processedHashes []*goimagehash.ImageHash
+
+	for _, download := range downloads {
+		// Skip if hash computation failed
+		if download.hash == nil {
+			continue
+		}
+
+		// Check if this image is similar to any previously processed image
+		isSimilar := false
+		for _, existingHash := range processedHashes {
+			distance, err := download.hash.Distance(existingHash)
+			if err != nil {
+				a.logger.Warn("Failed to compute hash distance",
+					zap.Error(err),
+					zap.String("outfitName", download.name))
+				continue
+			}
+
+			// If images are similar, skip this one
+			if distance <= a.similarityThreshold {
+				isSimilar = true
+				a.logger.Debug("Skipping similar outfit image",
+					zap.String("outfitName", download.name),
+					zap.Int("distance", distance))
+				break
+			}
+		}
+
+		// If not similar to any existing image, add it to the deduplicated list
+		if !isSimilar {
+			deduplicated = append(deduplicated, download)
+			processedHashes = append(processedHashes, download.hash)
+		}
+	}
+
+	return deduplicated
 }

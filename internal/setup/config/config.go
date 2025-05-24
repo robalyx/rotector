@@ -269,6 +269,8 @@ type ThresholdLimits struct {
 	MaxGroupMembersTrack uint64 `koanf:"max_group_members_track"`
 	// Maximum game visits before skipping tracking.
 	MaxGameVisitsTrack uint64 `koanf:"max_game_visits_track"`
+	// Hamming distance threshold for considering outfit images as similar.
+	ImageSimilarityThreshold int `koanf:"image_similarity_threshold"`
 	// Number of messages to accumulate before processing a channel.
 	ChannelProcessThreshold int `koanf:"channel_process_threshold"`
 }

@@ -71,6 +71,9 @@ max_group_members_track = 20000
 # Maximum game visits before skipping tracking
 max_game_visits_track = 1000000
 
+# Hamming distance threshold for considering outfit images as similar (lower = more strict)
+image_similarity_threshold = 6
+
 # Number of messages to accumulate before processing a channel batch
 channel_process_threshold = 25
 
