@@ -26,7 +26,7 @@ require (
 	github.com/knadh/koanf/parsers/toml/v2 v2.2.0
 	github.com/knadh/koanf/providers/file v1.2.0
 	github.com/knadh/koanf/v2 v2.2.0
-	github.com/openai/openai-go v1.1.0
+	github.com/openai/openai-go v1.2.0
 	github.com/redis/rueidis v1.0.60
 	github.com/sony/gobreaker v1.0.0
 	github.com/sourcegraph/conc v0.3.0
