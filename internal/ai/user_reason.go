@@ -29,8 +29,8 @@ type UserReasonRequest struct {
 	Confidence        float64      `json:"confidence"`                  // Original confidence from first-pass analysis
 	Hint              string       `json:"hint"`                        // Clean hint about the violation type
 	ViolationLocation []string     `json:"violationLocation,omitempty"` // Locations of violations
-	PatternType       []string     `json:"patternType,omitempty"`       // Types of evasion patterns
 	LanguagePattern   []string     `json:"languagePattern,omitempty"`   // Linguistic patterns detected
+	LanguageUsed      []string     `json:"languageUsed,omitempty"`      // Languages or encodings detected in content
 	UserID            uint64       `json:"-"`                           // User ID stored for internal reference, not sent to AI
 }
 
@@ -119,10 +119,7 @@ func (a *UserReasonAnalyzer) ProcessFlaggedUsers(
 			}
 
 			// Process and store valid results
-			invalid, err := a.processResults(results, batch, translatedInfos, originalInfos, reasonsMap, &mu)
-			if err != nil {
-				return err
-			}
+			invalid := a.processResults(results, batch, translatedInfos, originalInfos, reasonsMap, &mu)
 
 			// Add invalid results to retry map
 			if len(invalid) > 0 {
@@ -296,7 +293,7 @@ func (a *UserReasonAnalyzer) processResults(
 	results *ReasonAnalysisResult, batch []UserReasonRequest, translatedInfos map[string]*types.ReviewUser,
 	originalInfos map[string]*types.ReviewUser, reasonsMap map[uint64]types.Reasons[enum.UserReasonType],
 	mu *sync.Mutex,
-) (map[uint64]UserReasonRequest, error) {
+) map[uint64]UserReasonRequest {
 	// Create map for retry requests
 	invalidRequests := make(map[uint64]UserReasonRequest)
 
@@ -306,7 +303,7 @@ func (a *UserReasonAnalyzer) processResults(
 		for _, req := range batch {
 			invalidRequests[req.UserID] = req
 		}
-		return invalidRequests, nil
+		return invalidRequests
 	}
 
 	// Create map of processed users for O(1) lookup
@@ -403,10 +400,5 @@ func (a *UserReasonAnalyzer) processResults(
 		}
 	}
 
-	// If all users were missing or invalid, return an error to trigger batch retry
-	if len(invalidRequests) == len(batch) {
-		return nil, fmt.Errorf("%w: all users in batch need retry", utils.ErrModelResponse)
-	}
-
-	return invalidRequests, nil
+	return invalidRequests
 }

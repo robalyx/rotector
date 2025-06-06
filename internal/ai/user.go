@@ -42,8 +42,8 @@ type FlaggedUser struct {
 	Confidence        float64  `json:"confidence"                  jsonschema_description:"Overall confidence score for the violations"`
 	HasSocials        bool     `json:"hasSocials"                  jsonschema_description:"Whether the user's description has social media"`
 	ViolationLocation []string `json:"violationLocation,omitempty" jsonschema_description:"Locations of violations"`
-	PatternType       []string `json:"patternType,omitempty"       jsonschema_description:"Types of evasion patterns detected"`
 	LanguagePattern   []string `json:"languagePattern,omitempty"   jsonschema_description:"Linguistic patterns detected"`
+	LanguageUsed      []string `json:"languageUsed,omitempty"      jsonschema_description:"Languages or encodings detected in content"`
 }
 
 // UserAnalyzer handles AI-based content analysis using OpenAI models.
@@ -369,8 +369,8 @@ func (a *UserAnalyzer) processAndCreateRequests(
 			Confidence:        flaggedUser.Confidence,
 			Hint:              flaggedUser.Hint,
 			ViolationLocation: flaggedUser.ViolationLocation,
-			PatternType:       flaggedUser.PatternType,
 			LanguagePattern:   flaggedUser.LanguagePattern,
+			LanguageUsed:      flaggedUser.LanguageUsed,
 			UserID:            originalInfo.ID,
 		}
 		mu.Unlock()
@@ -380,7 +380,7 @@ func (a *UserAnalyzer) processAndCreateRequests(
 			zap.Float64("confidence", flaggedUser.Confidence),
 			zap.String("hint", flaggedUser.Hint),
 			zap.Strings("violationLocation", flaggedUser.ViolationLocation),
-			zap.Strings("patternType", flaggedUser.PatternType),
-			zap.Strings("languagePattern", flaggedUser.LanguagePattern))
+			zap.Strings("languagePattern", flaggedUser.LanguagePattern),
+			zap.Strings("languageUsed", flaggedUser.LanguageUsed))
 	}
 }
