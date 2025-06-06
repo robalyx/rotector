@@ -74,9 +74,11 @@ type OutfitAnalyzer struct {
 
 // DownloadResult contains the result of a single outfit image download.
 type DownloadResult struct {
-	img  image.Image
-	hash *goimagehash.ImageHash
-	name string
+	img             image.Image
+	hash            *goimagehash.ImageHash
+	name            string
+	isCurrentOutfit bool
+	similarOutfits  []string
 }
 
 // NewOutfitAnalyzer creates an OutfitAnalyzer instance.
@@ -211,6 +213,26 @@ func (a *OutfitAnalyzer) analyzeUserOutfits(
 
 			flaggedOutfits[theme.OutfitName] = struct{}{}
 
+			// Also flag similar outfits that were deduplicated
+			for _, download := range batch {
+				if download.name == theme.OutfitName && len(download.similarOutfits) > 0 {
+					for _, similarOutfit := range download.similarOutfits {
+						flaggedOutfits[similarOutfit] = struct{}{}
+						similarConfidence := theme.Confidence * 0.9 // Reduce confidence by 10% for similar outfits
+						allSuspiciousThemes = append(allSuspiciousThemes,
+							fmt.Sprintf("%s|%s (similar to %s)|%.2f", similarOutfit, theme.Theme, theme.OutfitName, similarConfidence))
+
+						a.logger.Debug("Flagged similar outfit",
+							zap.String("originalOutfit", theme.OutfitName),
+							zap.String("similarOutfit", similarOutfit),
+							zap.String("theme", theme.Theme),
+							zap.Float64("originalConfidence", theme.Confidence),
+							zap.Float64("similarConfidence", similarConfidence))
+					}
+					break
+				}
+			}
+
 			// Track highest confidence
 			if theme.Confidence > highestConfidence {
 				highestConfidence = theme.Confidence
@@ -236,6 +258,7 @@ func (a *OutfitAnalyzer) analyzeUserOutfits(
 			zap.String("username", info.Name),
 			zap.Float64("confidence", highestConfidence),
 			zap.Int("numOutfits", len(allSuspiciousThemes)),
+			zap.Int("totalFlaggedOutfits", len(flaggedOutfits)),
 			zap.Strings("themes", allSuspiciousThemes))
 	}
 
@@ -277,12 +300,17 @@ func (a *OutfitAnalyzer) processOutfitBatch(
 		return nil, ErrNoOutfits
 	}
 
-	// Add final user message with outfit names
+	// Add final user message with numbered outfit names
+	outfitList := make([]string, 0, len(outfitNames))
+	for i, name := range outfitNames {
+		outfitList = append(outfitList, fmt.Sprintf("Image %d: %s", i+1, name))
+	}
+
 	prompt := fmt.Sprintf(
-		"%s\n\nIdentify themes for user %q.\nOutfit names: %s",
+		"%s\n\nIdentify themes for user %q.\n\nOutfit mapping:\n%s\n\nAnalyze each image in order and use the EXACT outfit names listed above.",
 		OutfitRequestPrompt,
 		info.Name,
-		strings.Join(outfitNames, ", "),
+		strings.Join(outfitList, "\n"),
 	)
 	messages = append(messages, openai.UserMessage(prompt))
 
@@ -469,9 +497,10 @@ func (a *OutfitAnalyzer) downloadOutfitImages(
 				mu.Lock()
 				// Add current outfit at the beginning of the array
 				downloads = append(downloads, DownloadResult{
-					img:  img,
-					hash: hash,
-					name: "Current Outfit",
+					img:             img,
+					hash:            hash,
+					name:            "Current Outfit",
+					isCurrentOutfit: true,
 				})
 				mu.Unlock()
 			}
@@ -495,9 +524,10 @@ func (a *OutfitAnalyzer) downloadOutfitImages(
 
 			mu.Lock()
 			downloads = append(downloads, DownloadResult{
-				img:  img,
-				hash: hash,
-				name: outfit.Name,
+				img:             img,
+				hash:            hash,
+				name:            outfit.Name,
+				isCurrentOutfit: false,
 			})
 			mu.Unlock()
 
@@ -563,18 +593,28 @@ func (a *OutfitAnalyzer) deduplicateImages(downloads []DownloadResult) []Downloa
 	}
 
 	var deduplicated []DownloadResult
-	var processedHashes []*goimagehash.ImageHash
 
 	for _, download := range downloads {
+		// Always preserve the current outfit regardless of similarity
+		if download.isCurrentOutfit {
+			deduplicated = append(deduplicated, download)
+			continue
+		}
+
 		// Skip if hash computation failed
 		if download.hash == nil {
 			continue
 		}
 
 		// Check if this image is similar to any previously processed image
-		isSimilar := false
-		for _, existingHash := range processedHashes {
-			distance, err := download.hash.Distance(existingHash)
+		matchedIndex := -1
+		for i, existing := range deduplicated {
+			// Skip current outfit when checking similarity
+			if existing.isCurrentOutfit || existing.hash == nil {
+				continue
+			}
+
+			distance, err := download.hash.Distance(existing.hash)
 			if err != nil {
 				a.logger.Warn("Failed to compute hash distance",
 					zap.Error(err),
@@ -582,20 +622,26 @@ func (a *OutfitAnalyzer) deduplicateImages(downloads []DownloadResult) []Downloa
 				continue
 			}
 
-			// If images are similar, skip this one
+			// If images are similar, track this outfit as similar to the existing one
 			if distance <= a.similarityThreshold {
-				isSimilar = true
-				a.logger.Debug("Skipping similar outfit image",
+				matchedIndex = i
+				a.logger.Debug("Found similar outfit image",
 					zap.String("outfitName", download.name),
+					zap.String("similarTo", existing.name),
 					zap.Int("distance", distance))
 				break
 			}
 		}
 
-		// If not similar to any existing image, add it to the deduplicated list
-		if !isSimilar {
+		// If similar to an existing image, add to its similar outfits list
+		if matchedIndex >= 0 {
+			if deduplicated[matchedIndex].similarOutfits == nil {
+				deduplicated[matchedIndex].similarOutfits = make([]string, 0)
+			}
+			deduplicated[matchedIndex].similarOutfits = append(deduplicated[matchedIndex].similarOutfits, download.name)
+		} else {
+			// If not similar to any existing image, add it to the deduplicated list
 			deduplicated = append(deduplicated, download)
-			processedHashes = append(processedHashes, download.hash)
 		}
 	}
 
