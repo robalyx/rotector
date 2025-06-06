@@ -282,15 +282,15 @@ func (c *GroupChecker) processUserGroups(
 func (c *GroupChecker) calculateConfidence(confirmedCount, flaggedCount, totalGroups int) float64 {
 	var confidence float64
 
-	// Factor 1: Absolute number of inappropriate groups - 70% weight
+	// Factor 1: Absolute number of inappropriate groups - 50% weight
 	inappropriateWeight := c.calculateInappropriateWeight(confirmedCount, flaggedCount)
-	confidence += inappropriateWeight * 0.70
+	confidence += inappropriateWeight * 0.50
 
-	// Factor 2: Ratio of inappropriate groups - 30% weight
+	// Factor 2: Ratio of inappropriate groups - 50% weight
 	if totalGroups > 0 {
 		totalInappropriate := float64(confirmedCount) + (float64(flaggedCount) * 0.5)
 		ratioWeight := math.Min(totalInappropriate/float64(totalGroups), 1.0)
-		confidence += ratioWeight * 0.30
+		confidence += ratioWeight * 0.50
 	}
 
 	return confidence
@@ -301,13 +301,13 @@ func (c *GroupChecker) calculateInappropriateWeight(confirmedCount, flaggedCount
 	totalWeight := float64(confirmedCount) + (float64(flaggedCount) * 0.5)
 
 	switch {
-	case confirmedCount >= 4 || totalWeight >= 6:
+	case confirmedCount >= 5 || totalWeight >= 7:
 		return 1.0
-	case confirmedCount >= 3 || totalWeight >= 4:
+	case confirmedCount >= 4 || totalWeight >= 5:
 		return 0.8
-	case confirmedCount >= 2 || totalWeight >= 3:
+	case confirmedCount >= 3 || totalWeight >= 4:
 		return 0.6
-	case confirmedCount >= 1 || totalWeight >= 2:
+	case confirmedCount >= 2 || totalWeight >= 3:
 		return 0.4
 	case totalWeight >= 1:
 		return 0.2
