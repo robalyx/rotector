@@ -93,9 +93,9 @@ func run() error {
 			},
 			{
 				Name:      "delete-after-time",
-				Usage:     "Delete users that have been updated after a specific time",
+				Usage:     "Delete flagged users that have been updated after a specific time",
 				ArgsUsage: "TIME",
-				Description: `Delete users that have been updated after the specified time.
+				Description: `Delete flagged users that have been updated after the specified time.
 				
 TIME can be in various formats:
   - "2006-01-02" (date only, assumes 00:00:00 UTC)
@@ -378,18 +378,18 @@ func handleDeleteAfterTime(deps *cliDependencies) cli.ActionFunc {
 		}
 
 		if len(users) == 0 {
-			deps.logger.Info("No users found updated after the specified time",
+			deps.logger.Info("No flagged users found updated after the specified time",
 				zap.Time("cutoffTime", cutoffTime))
 			return nil
 		}
 
 		// Ask for confirmation
-		deps.logger.Info("Found users to delete",
+		deps.logger.Info("Found flagged users to delete",
 			zap.Int("count", len(users)),
 			zap.Time("cutoffTime", cutoffTime),
 			zap.String("timezone", cutoffTime.Location().String()))
 
-		log.Printf("Are you sure you want to delete these %d users updated after %s in batches of %d? (y/N)",
+		log.Printf("Are you sure you want to delete these %d flagged users updated after %s in batches of %d? (y/N)",
 			len(users), cutoffTime.Format("2006-01-02 15:04:05 MST"), batchSize)
 		var response string
 		_, _ = fmt.Scanln(&response)
@@ -440,7 +440,7 @@ func handleDeleteAfterTime(deps *cliDependencies) cli.ActionFunc {
 			}
 		}
 
-		deps.logger.Info("Successfully deleted all users",
+		deps.logger.Info("Successfully deleted all flagged users",
 			zap.Int("total_count", len(users)),
 			zap.Int64("total_affected_rows", totalAffected),
 			zap.Time("cutoffTime", cutoffTime))
