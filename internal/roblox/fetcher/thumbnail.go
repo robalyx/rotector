@@ -141,9 +141,9 @@ func (t *ThumbnailFetcher) ProcessBatchThumbnails(
 				mu.Unlock()
 
 				// If there are still pending requests, return error to trigger retry
-				// Note: we don't want to wait for 1 pending thumbnail to be fetched
+				// Note: we don't want to wait for 2 pending thumbnails to be fetched
 				currentBatch = pendingRequests.Build()
-				if len(currentBatch.Requests) > 1 {
+				if len(currentBatch.Requests) > 2 {
 					return ErrPendingThumbnails
 				}
 
