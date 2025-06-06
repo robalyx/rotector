@@ -105,7 +105,7 @@ max_concurrent = 100
 # Model to use for user analysis
 user_model = "gemini-2.5-flash-thinking"
 # Model to use for user reason analysis
-user_reason_model = "gpt-4o-mini"
+user_reason_model = "grok-3-mini"
 # Model to use for friend network analysis
 friend_model = "gemini-1.5-flash-8b"
 # Model to use for stats analysis
@@ -127,9 +127,9 @@ chat_model = "gemini-2.5-flash"
 "qwen-3-235b-a22b" = "qwen/qwen3-235b-a22b"
 "deepseek-v3-0324" = "deepseek/deepseek-chat-v3-0324"
 "gpt-4.1-mini" = "openai/gpt-4.1-mini"
-"gpt-4o-mini" = "openai/gpt-4o-mini"
 "o4-mini" = "openai/o4-mini"
 "o4-mini-high" = "openai/o4-mini-high"
+"grok-3-mini" = "x-ai/grok-3-mini-beta"
 
 # Fallback model mappings for when primary models fail
 [common.openai.fallback_mappings]
