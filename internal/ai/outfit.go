@@ -109,8 +109,22 @@ func NewOutfitAnalyzer(app *setup.App, logger *zap.Logger) *OutfitAnalyzer {
 func (a *OutfitAnalyzer) ProcessOutfits(
 	ctx context.Context, userInfos []*types.ReviewUser, reasonsMap map[uint64]types.Reasons[enum.UserReasonType],
 ) map[uint64]map[string]struct{} {
+	// Filter users to only those who already have reasons
+	var usersToProcess []*types.ReviewUser
+	for _, userInfo := range userInfos {
+		if reasons, hasFlaggedReasons := reasonsMap[userInfo.ID]; hasFlaggedReasons && len(reasons) > 0 {
+			usersToProcess = append(usersToProcess, userInfo)
+		}
+	}
+
+	// Skip if no users need outfit processing
+	if len(usersToProcess) == 0 {
+		a.logger.Info("No users with existing reasons to process outfits for")
+		return nil
+	}
+
 	// Get all outfit thumbnails organized by user
-	userOutfits, userThumbnails := a.getOutfitThumbnails(ctx, userInfos)
+	userOutfits, userThumbnails := a.getOutfitThumbnails(ctx, usersToProcess)
 
 	// Process each user's outfits concurrently
 	var (
@@ -119,7 +133,7 @@ func (a *OutfitAnalyzer) ProcessOutfits(
 		flaggedOutfits = make(map[uint64]map[string]struct{})
 	)
 
-	for _, userInfo := range userInfos {
+	for _, userInfo := range usersToProcess {
 		// Skip if user has no outfits
 		outfits, hasOutfits := userOutfits[userInfo.ID]
 		if !hasOutfits || len(outfits) == 0 {
@@ -154,7 +168,7 @@ func (a *OutfitAnalyzer) ProcessOutfits(
 	}
 
 	a.logger.Info("Received AI outfit theme analysis",
-		zap.Int("totalUsers", len(userInfos)),
+		zap.Int("processedUsers", len(usersToProcess)),
 		zap.Int("flaggedUsers", len(flaggedOutfits)))
 
 	return flaggedOutfits
