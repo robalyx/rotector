@@ -183,10 +183,7 @@ func (a *FriendAnalyzer) ProcessFriendRequests(
 			}
 
 			// Process and store valid results
-			invalid, err := a.processResults(batchResults, batch, results, &mu)
-			if err != nil {
-				return err
-			}
+			invalid := a.processResults(batchResults, batch, results, &mu)
 
 			// Add invalid results to retry map
 			if len(invalid) > 0 {
@@ -360,7 +357,7 @@ func (a *FriendAnalyzer) processFriendBatch(ctx context.Context, batch []UserFri
 // Returns a map of user IDs that had invalid results and need retry.
 func (a *FriendAnalyzer) processResults(
 	results *BatchFriendAnalysis, batch []UserFriendRequest, finalResults map[uint64]string, mu *sync.Mutex,
-) (map[uint64]UserFriendRequest, error) {
+) map[uint64]UserFriendRequest {
 	// Create map for retry requests
 	invalidRequests := make(map[uint64]UserFriendRequest)
 
@@ -370,7 +367,7 @@ func (a *FriendAnalyzer) processResults(
 		for _, req := range batch {
 			invalidRequests[req.UserInfo.ID] = req
 		}
-		return invalidRequests, nil
+		return invalidRequests
 	}
 
 	// Create map of processed users for O(1) lookup
@@ -421,10 +418,5 @@ func (a *FriendAnalyzer) processResults(
 			zap.String("username", result.Name))
 	}
 
-	// If all users were missing or invalid, return an error to trigger batch retry
-	if len(invalidRequests) == len(batch) {
-		return nil, fmt.Errorf("%w: all users in batch need retry", utils.ErrModelResponse)
-	}
-
-	return invalidRequests, nil
+	return invalidRequests
 }
