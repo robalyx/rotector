@@ -160,6 +160,54 @@ func (s *UserService) GetUserByID(
 	return user, nil
 }
 
+// GetUsersByIDs retrieves multiple users by their IDs with specified fields.
+func (s *UserService) GetUsersByIDs(
+	ctx context.Context, userIDs []uint64, fields types.UserField,
+) (map[uint64]*types.ReviewUser, error) {
+	if len(userIDs) == 0 {
+		return make(map[uint64]*types.ReviewUser), nil
+	}
+
+	// Get users from the model layer
+	users, err := s.model.GetUsersByIDs(ctx, userIDs, fields)
+	if err != nil {
+		return nil, err
+	}
+
+	// Get reputation if requested
+	if fields.HasReputation() {
+		reputations, err := s.reputation.GetUsersReputations(ctx, userIDs)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get users reputations: %w", err)
+		}
+		for userID, user := range users {
+			if reputation, exists := reputations[userID]; exists {
+				user.Reputation = reputation
+			}
+		}
+	}
+
+	// Get relationships if requested
+	if fields.Has(types.UserFieldRelationships) {
+		relationships := s.GetUsersRelationships(ctx, userIDs)
+		for userID, user := range users {
+			if rel, exists := relationships[userID]; exists {
+				user.Groups = rel.Groups
+				user.Outfits = rel.Outfits
+				user.OutfitAssets = rel.OutfitAssets
+				user.CurrentAssets = rel.CurrentAssets
+				user.Friends = rel.Friends
+				user.Favorites = rel.Favorites
+				user.Games = rel.Games
+				user.Inventory = rel.Inventory
+				user.Badges = rel.Badges
+			}
+		}
+	}
+
+	return users, nil
+}
+
 // GetUserToReview finds a user to review based on the sort method and target mode.
 func (s *UserService) GetUserToReview(
 	ctx context.Context, sortBy enum.ReviewSortBy, targetMode enum.ReviewTargetMode, reviewerID uint64,
@@ -242,89 +290,119 @@ func (s *UserService) GetUserToReview(
 
 // GetUserRelationships fetches all relationships for a user.
 func (s *UserService) GetUserRelationships(ctx context.Context, userID uint64) (*types.ReviewUser, error) {
-	var result types.ReviewUser
+	results := s.GetUsersRelationships(ctx, []uint64{userID})
+	if result, exists := results[userID]; exists {
+		return result, nil
+	}
+	return &types.ReviewUser{}, nil
+}
+
+// GetUsersRelationships fetches all relationships for multiple users efficiently.
+func (s *UserService) GetUsersRelationships(ctx context.Context, userIDs []uint64) map[uint64]*types.ReviewUser {
+	if len(userIDs) == 0 {
+		return make(map[uint64]*types.ReviewUser)
+	}
+
+	result := make(map[uint64]*types.ReviewUser)
+	for _, userID := range userIDs {
+		result[userID] = &types.ReviewUser{}
+	}
+
 	var mu sync.Mutex
 	p := pool.New().WithContext(ctx).WithCancelOnError()
 
 	// Fetch groups in parallel
 	p.Go(func(ctx context.Context) error {
-		groups, err := s.model.GetUserGroups(ctx, userID)
+		groups, err := s.model.GetUsersGroups(ctx, userIDs)
 		if err != nil {
-			return fmt.Errorf("failed to get user groups: %w", err)
+			return fmt.Errorf("failed to get users groups: %w", err)
 		}
 		mu.Lock()
-		result.Groups = groups
+		for userID, userGroups := range groups {
+			result[userID].Groups = userGroups
+		}
 		mu.Unlock()
 		return nil
 	})
 
 	// Fetch outfits in parallel
 	p.Go(func(ctx context.Context) error {
-		outfits, outfitAssets, err := s.model.GetUserOutfits(ctx, userID)
+		outfits, err := s.model.GetUsersOutfits(ctx, userIDs)
 		if err != nil {
-			return fmt.Errorf("failed to get user outfits: %w", err)
+			return fmt.Errorf("failed to get users outfits: %w", err)
 		}
 		mu.Lock()
-		result.Outfits = outfits
-		result.OutfitAssets = outfitAssets
+		for userID, userOutfits := range outfits {
+			result[userID].Outfits = userOutfits.Outfits
+			result[userID].OutfitAssets = userOutfits.OutfitAssets
+		}
 		mu.Unlock()
 		return nil
 	})
 
 	// Fetch friends in parallel
 	p.Go(func(ctx context.Context) error {
-		friends, err := s.model.GetUserFriends(ctx, userID)
+		friends, err := s.model.GetUsersFriends(ctx, userIDs)
 		if err != nil {
-			return fmt.Errorf("failed to get user friends: %w", err)
+			return fmt.Errorf("failed to get users friends: %w", err)
 		}
 		mu.Lock()
-		result.Friends = friends
+		for userID, userFriends := range friends {
+			result[userID].Friends = userFriends
+		}
 		mu.Unlock()
 		return nil
 	})
 
 	// Fetch favorites in parallel
 	p.Go(func(ctx context.Context) error {
-		favorites, err := s.model.GetUserFavorites(ctx, userID)
+		favorites, err := s.model.GetUsersFavorites(ctx, userIDs)
 		if err != nil {
-			return fmt.Errorf("failed to get user favorites: %w", err)
+			return fmt.Errorf("failed to get users favorites: %w", err)
 		}
 		mu.Lock()
-		result.Favorites = favorites
+		for userID, userFavorites := range favorites {
+			result[userID].Favorites = userFavorites
+		}
 		mu.Unlock()
 		return nil
 	})
 
 	// Fetch games in parallel
 	p.Go(func(ctx context.Context) error {
-		games, err := s.model.GetUserGames(ctx, userID)
+		games, err := s.model.GetUsersGames(ctx, userIDs)
 		if err != nil {
-			return fmt.Errorf("failed to get user games: %w", err)
+			return fmt.Errorf("failed to get users games: %w", err)
 		}
 		mu.Lock()
-		result.Games = games
+		for userID, userGames := range games {
+			result[userID].Games = userGames
+		}
 		mu.Unlock()
 		return nil
 	})
 
 	// Fetch inventory in parallel
 	p.Go(func(ctx context.Context) error {
-		inventory, err := s.model.GetUserInventory(ctx, userID)
+		inventory, err := s.model.GetUsersInventory(ctx, userIDs)
 		if err != nil {
-			return fmt.Errorf("failed to get user inventory: %w", err)
+			return fmt.Errorf("failed to get users inventory: %w", err)
 		}
 		mu.Lock()
-		result.Inventory = inventory
+		for userID, userInventory := range inventory {
+			result[userID].Inventory = userInventory
+		}
 		mu.Unlock()
 		return nil
 	})
 
 	// Wait for all goroutines
 	if err := p.Wait(); err != nil {
-		return nil, fmt.Errorf("failed to get user relationships: %w", err)
+		s.logger.Error("Failed to get users relationships", zap.Error(err))
+		return make(map[uint64]*types.ReviewUser)
 	}
 
-	return &result, nil
+	return result
 }
 
 // SaveUsers handles the business logic for saving users.

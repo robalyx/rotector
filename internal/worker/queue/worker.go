@@ -68,7 +68,7 @@ func (w *Worker) Start() {
 
 		if len(userIDs) == 0 {
 			w.bar.SetStepMessage("No items to process", 0)
-			time.Sleep(10 * time.Second)
+			time.Sleep(60 * time.Second)
 			continue
 		}
 

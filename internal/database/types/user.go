@@ -586,3 +586,9 @@ func FromAPIAsset(userID uint64, asset *apiTypes.AssetV2) (*UserAsset, *AssetInf
 			LastUpdated: time.Now(),
 		}
 }
+
+// UserOutfitsResult represents outfits and their assets for a single user.
+type UserOutfitsResult struct {
+	Outfits      []*apiTypes.Outfit             `json:"outfits"`
+	OutfitAssets map[uint64][]*apiTypes.AssetV2 `json:"outfitAssets"`
+}

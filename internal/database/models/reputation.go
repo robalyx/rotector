@@ -129,6 +129,31 @@ func (r *ReputationModel) GetUserReputation(ctx context.Context, userID uint64) 
 	})
 }
 
+// GetUsersReputations retrieves reputations for multiple users efficiently.
+func (r *ReputationModel) GetUsersReputations(ctx context.Context, userIDs []uint64) (map[uint64]types.Reputation, error) {
+	if len(userIDs) == 0 {
+		return make(map[uint64]types.Reputation), nil
+	}
+
+	return dbretry.Operation(ctx, func(ctx context.Context) (map[uint64]types.Reputation, error) {
+		var reputations []types.UserReputation
+		err := r.db.NewSelect().
+			Model(&reputations).
+			Where("id IN (?)", bun.In(userIDs)).
+			Scan(ctx)
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return nil, fmt.Errorf("failed to get users reputations: %w", err)
+		}
+
+		result := make(map[uint64]types.Reputation)
+		for _, rep := range reputations {
+			result[rep.ID] = rep.Reputation
+		}
+
+		return result, nil
+	})
+}
+
 // GetGroupReputation retrieves the reputation for a group.
 func (r *ReputationModel) GetGroupReputation(ctx context.Context, groupID uint64) (types.Reputation, error) {
 	return dbretry.Operation(ctx, func(ctx context.Context) (types.Reputation, error) {

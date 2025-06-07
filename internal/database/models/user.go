@@ -1311,25 +1311,29 @@ func (r *UserModel) GetNextToReview(
 	return &result, err
 }
 
-// GetUserGroups fetches groups for a user.
-func (r *UserModel) GetUserGroups(ctx context.Context, userID uint64) ([]*apiTypes.UserGroupRoles, error) {
+// GetUsersGroups fetches groups for multiple users.
+func (r *UserModel) GetUsersGroups(ctx context.Context, userIDs []uint64) (map[uint64][]*apiTypes.UserGroupRoles, error) {
+	if len(userIDs) == 0 {
+		return make(map[uint64][]*apiTypes.UserGroupRoles), nil
+	}
+
 	var userGroups []*types.UserGroup
 
 	err := dbretry.NoResult(ctx, func(ctx context.Context) error {
 		return r.db.NewSelect().
 			Model(&userGroups).
 			Relation("Group").
-			Where("user_group.user_id = ?", userID).
-			Order("user_group.role_rank DESC").
+			Where("user_group.user_id IN (?)", bun.In(userIDs)).
+			Order("user_group.user_id", "user_group.role_rank DESC").
 			Scan(ctx)
 	})
 
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
-		return nil, fmt.Errorf("failed to get user groups: %w", err)
+		return nil, fmt.Errorf("failed to get users groups: %w", err)
 	}
 
-	// Convert to API types
-	apiGroups := make([]*apiTypes.UserGroupRoles, 0, len(userGroups))
+	// Group by user ID
+	result := make(map[uint64][]*apiTypes.UserGroupRoles)
 	for _, userGroup := range userGroups {
 		if userGroup.Group == nil {
 			continue
@@ -1338,7 +1342,7 @@ func (r *UserModel) GetUserGroups(ctx context.Context, userID uint64) ([]*apiTyp
 		group := userGroup.Group
 		isLocked := group.IsLocked
 
-		apiGroups = append(apiGroups, &apiTypes.UserGroupRoles{
+		apiGroup := &apiTypes.UserGroupRoles{
 			Group: apiTypes.GroupResponse{
 				ID:                 userGroup.GroupID,
 				Name:               group.Name,
@@ -1356,16 +1360,20 @@ func (r *UserModel) GetUserGroups(ctx context.Context, userID uint64) ([]*apiTyp
 				Name: userGroup.RoleName,
 				Rank: userGroup.RoleRank,
 			},
-		})
+		}
+
+		result[userGroup.UserID] = append(result[userGroup.UserID], apiGroup)
 	}
 
-	return apiGroups, nil
+	return result, nil
 }
 
-// GetUserOutfits fetches outfits for a user.
-func (r *UserModel) GetUserOutfits(
-	ctx context.Context, userID uint64,
-) ([]*apiTypes.Outfit, map[uint64][]*apiTypes.AssetV2, error) {
+// GetUsersOutfits fetches outfits for multiple users.
+func (r *UserModel) GetUsersOutfits(ctx context.Context, userIDs []uint64) (map[uint64]*types.UserOutfitsResult, error) {
+	if len(userIDs) == 0 {
+		return make(map[uint64]*types.UserOutfitsResult), nil
+	}
+
 	var userOutfits []*types.UserOutfit
 
 	err := dbretry.NoResult(ctx, func(ctx context.Context) error {
@@ -1374,30 +1382,39 @@ func (r *UserModel) GetUserOutfits(
 			Relation("Outfit").
 			Relation("Outfit.OutfitAssets").
 			Relation("Outfit.OutfitAssets.Asset").
-			Where("user_outfit.user_id = ?", userID).
+			Where("user_outfit.user_id IN (?)", bun.In(userIDs)).
 			Scan(ctx)
 	})
 
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
-		return nil, nil, fmt.Errorf("failed to get user outfits: %w", err)
+		return nil, fmt.Errorf("failed to get users outfits: %w", err)
 	}
 
-	// Convert to API types
-	apiOutfits := make([]*apiTypes.Outfit, len(userOutfits))
-	outfitToAssets := make(map[uint64][]*apiTypes.AssetV2)
-
-	for i, userOutfit := range userOutfits {
+	// Group by user ID
+	result := make(map[uint64]*types.UserOutfitsResult)
+	for _, userOutfit := range userOutfits {
 		if userOutfit.Outfit == nil {
 			continue
 		}
 
+		// Initialize user result if not exists
+		if _, exists := result[userOutfit.UserID]; !exists {
+			result[userOutfit.UserID] = &types.UserOutfitsResult{
+				Outfits:      make([]*apiTypes.Outfit, 0),
+				OutfitAssets: make(map[uint64][]*apiTypes.AssetV2),
+			}
+		}
+
+		userResult := result[userOutfit.UserID]
+
 		// Convert outfit to API type
-		apiOutfits[i] = &apiTypes.Outfit{
+		apiOutfit := &apiTypes.Outfit{
 			ID:         userOutfit.OutfitID,
 			Name:       userOutfit.Outfit.Name,
 			IsEditable: userOutfit.Outfit.IsEditable,
 			OutfitType: userOutfit.Outfit.OutfitType,
 		}
+		userResult.Outfits = append(userResult.Outfits, apiOutfit)
 
 		// Process outfit assets if any
 		var outfitAssets []*apiTypes.AssetV2
@@ -1417,81 +1434,222 @@ func (r *UserModel) GetUserOutfits(
 		}
 
 		if len(outfitAssets) > 0 {
-			outfitToAssets[userOutfit.OutfitID] = outfitAssets
+			userResult.OutfitAssets[userOutfit.OutfitID] = outfitAssets
 		}
 	}
 
-	return apiOutfits, outfitToAssets, nil
+	return result, nil
 }
 
-// GetUserAssets fetches the current assets for a user.
-func (r *UserModel) GetUserAssets(ctx context.Context, userID uint64) ([]*apiTypes.AssetV2, error) {
+// GetUsersAssets fetches the current assets for multiple users.
+func (r *UserModel) GetUsersAssets(ctx context.Context, userIDs []uint64) (map[uint64][]*apiTypes.AssetV2, error) {
+	if len(userIDs) == 0 {
+		return make(map[uint64][]*apiTypes.AssetV2), nil
+	}
+
 	var userAssets []*types.UserAsset
 
 	err := dbretry.NoResult(ctx, func(ctx context.Context) error {
 		return r.db.NewSelect().
 			Model(&userAssets).
 			Relation("Asset").
-			Where("user_asset.user_id = ?", userID).
+			Where("user_asset.user_id IN (?)", bun.In(userIDs)).
 			Scan(ctx)
 	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to get user assets: %w", err)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return nil, fmt.Errorf("failed to get users assets: %w", err)
 	}
 
-	// Convert to API types
-	assets := make([]*apiTypes.AssetV2, 0, len(userAssets))
+	// Group by user ID
+	result := make(map[uint64][]*apiTypes.AssetV2)
 	for _, userAsset := range userAssets {
 		if userAsset.Asset == nil {
 			continue
 		}
 
-		assets = append(assets, &apiTypes.AssetV2{
+		apiAsset := &apiTypes.AssetV2{
 			ID:   userAsset.AssetID,
 			Name: userAsset.Asset.Name,
 			AssetType: apiTypes.AssetType{
 				ID: userAsset.Asset.AssetType,
 			},
 			CurrentVersionID: userAsset.CurrentVersionID,
-		})
+		}
+
+		result[userAsset.UserID] = append(result[userAsset.UserID], apiAsset)
 	}
 
-	return assets, nil
+	return result, nil
 }
 
-// GetUserFriends fetches friends for a user.
-func (r *UserModel) GetUserFriends(ctx context.Context, userID uint64) ([]*apiTypes.ExtendedFriend, error) {
+// GetUsersFriends fetches friends for multiple users.
+func (r *UserModel) GetUsersFriends(ctx context.Context, userIDs []uint64) (map[uint64][]*apiTypes.ExtendedFriend, error) {
+	if len(userIDs) == 0 {
+		return make(map[uint64][]*apiTypes.ExtendedFriend), nil
+	}
+
 	var userFriends []*types.UserFriend
 
 	err := dbretry.NoResult(ctx, func(ctx context.Context) error {
 		return r.db.NewSelect().
 			Model(&userFriends).
 			Relation("Friend").
-			Where("user_friend.user_id = ?", userID).
+			Where("user_friend.user_id IN (?)", bun.In(userIDs)).
 			Scan(ctx)
 	})
 
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
-		return nil, fmt.Errorf("failed to get user friends: %w", err)
+		return nil, fmt.Errorf("failed to get users friends: %w", err)
 	}
 
-	// Convert to API types
-	apiFriends := make([]*apiTypes.ExtendedFriend, 0, len(userFriends))
+	// Group by user ID
+	result := make(map[uint64][]*apiTypes.ExtendedFriend)
 	for _, userFriend := range userFriends {
 		if userFriend.Friend == nil {
 			continue
 		}
 
-		apiFriends = append(apiFriends, &apiTypes.ExtendedFriend{
+		apiFriend := &apiTypes.ExtendedFriend{
 			Friend: apiTypes.Friend{
 				ID: userFriend.FriendID,
 			},
 			Name:        userFriend.Friend.Name,
 			DisplayName: userFriend.Friend.DisplayName,
-		})
+		}
+
+		result[userFriend.UserID] = append(result[userFriend.UserID], apiFriend)
 	}
 
-	return apiFriends, nil
+	return result, nil
+}
+
+// GetUsersFavorites fetches favorite games for multiple users.
+func (r *UserModel) GetUsersFavorites(ctx context.Context, userIDs []uint64) (map[uint64][]*apiTypes.Game, error) {
+	if len(userIDs) == 0 {
+		return make(map[uint64][]*apiTypes.Game), nil
+	}
+
+	var userFavorites []*types.UserFavorite
+
+	err := dbretry.NoResult(ctx, func(ctx context.Context) error {
+		return r.db.NewSelect().
+			Model(&userFavorites).
+			Relation("Game").
+			Where("user_favorite.user_id IN (?)", bun.In(userIDs)).
+			Order("user_favorite.user_id", "game.place_visits DESC").
+			Scan(ctx)
+	})
+
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return nil, fmt.Errorf("failed to get users favorites: %w", err)
+	}
+
+	// Group by user ID
+	result := make(map[uint64][]*apiTypes.Game)
+	for _, userFavorite := range userFavorites {
+		if userFavorite.Game == nil {
+			continue
+		}
+
+		game := userFavorite.Game
+		apiGame := &apiTypes.Game{
+			ID:          userFavorite.GameID,
+			Name:        game.Name,
+			Description: game.Description,
+			PlaceVisits: game.PlaceVisits,
+			Created:     game.Created,
+			Updated:     game.Updated,
+		}
+
+		result[userFavorite.UserID] = append(result[userFavorite.UserID], apiGame)
+	}
+
+	return result, nil
+}
+
+// GetUsersGames fetches games for multiple users.
+func (r *UserModel) GetUsersGames(ctx context.Context, userIDs []uint64) (map[uint64][]*apiTypes.Game, error) {
+	if len(userIDs) == 0 {
+		return make(map[uint64][]*apiTypes.Game), nil
+	}
+
+	var userGames []*types.UserGame
+
+	err := dbretry.NoResult(ctx, func(ctx context.Context) error {
+		return r.db.NewSelect().
+			Model(&userGames).
+			Relation("Game").
+			Where("user_game.user_id IN (?)", bun.In(userIDs)).
+			Order("user_game.user_id", "game.place_visits DESC").
+			Scan(ctx)
+	})
+
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return nil, fmt.Errorf("failed to get users games: %w", err)
+	}
+
+	// Group by user ID
+	result := make(map[uint64][]*apiTypes.Game)
+	for _, userGame := range userGames {
+		if userGame.Game == nil {
+			continue
+		}
+
+		game := userGame.Game
+		apiGame := &apiTypes.Game{
+			ID:          userGame.GameID,
+			Name:        game.Name,
+			Description: game.Description,
+			PlaceVisits: game.PlaceVisits,
+			Created:     game.Created,
+			Updated:     game.Updated,
+		}
+
+		result[userGame.UserID] = append(result[userGame.UserID], apiGame)
+	}
+
+	return result, nil
+}
+
+// GetUsersInventory fetches inventory for multiple users.
+func (r *UserModel) GetUsersInventory(ctx context.Context, userIDs []uint64) (map[uint64][]*apiTypes.InventoryAsset, error) {
+	if len(userIDs) == 0 {
+		return make(map[uint64][]*apiTypes.InventoryAsset), nil
+	}
+
+	var userInventories []*types.UserInventory
+
+	err := dbretry.NoResult(ctx, func(ctx context.Context) error {
+		return r.db.NewSelect().
+			Model(&userInventories).
+			Relation("Inventory").
+			Where("user_inventory.user_id IN (?)", bun.In(userIDs)).
+			Scan(ctx)
+	})
+
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return nil, fmt.Errorf("failed to get users inventory: %w", err)
+	}
+
+	// Group by user ID
+	result := make(map[uint64][]*apiTypes.InventoryAsset)
+	for _, userInventory := range userInventories {
+		if userInventory.Inventory == nil {
+			continue
+		}
+
+		inventory := userInventory.Inventory
+		apiInventory := &apiTypes.InventoryAsset{
+			AssetID:   userInventory.InventoryID,
+			Name:      inventory.Name,
+			AssetType: inventory.AssetType,
+			Created:   inventory.Created,
+		}
+
+		result[userInventory.UserID] = append(result[userInventory.UserID], apiInventory)
+	}
+
+	return result, nil
 }
 
 // GetFriendInfos retrieves friend information for a list of friend IDs.
@@ -1561,117 +1719,6 @@ func (r *UserModel) GetRecentFriendInfos(
 	}
 
 	return friendMap, nil
-}
-
-// GetUserFavorites fetches favorite games for a user.
-func (r *UserModel) GetUserFavorites(ctx context.Context, userID uint64) ([]*apiTypes.Game, error) {
-	var userFavorites []*types.UserFavorite
-
-	err := dbretry.NoResult(ctx, func(ctx context.Context) error {
-		return r.db.NewSelect().
-			Model(&userFavorites).
-			Relation("Game").
-			Where("user_favorite.user_id = ?", userID).
-			Order("game.place_visits DESC").
-			Scan(ctx)
-	})
-
-	if err != nil && !errors.Is(err, sql.ErrNoRows) {
-		return nil, fmt.Errorf("failed to get user favorites: %w", err)
-	}
-
-	// Convert to API types
-	apiFavorites := make([]*apiTypes.Game, 0, len(userFavorites))
-	for _, userFavorite := range userFavorites {
-		if userFavorite.Game == nil {
-			continue
-		}
-
-		game := userFavorite.Game
-		apiFavorites = append(apiFavorites, &apiTypes.Game{
-			ID:          userFavorite.GameID,
-			Name:        game.Name,
-			Description: game.Description,
-			PlaceVisits: game.PlaceVisits,
-			Created:     game.Created,
-			Updated:     game.Updated,
-		})
-	}
-
-	return apiFavorites, nil
-}
-
-// GetUserGames fetches games for a user.
-func (r *UserModel) GetUserGames(ctx context.Context, userID uint64) ([]*apiTypes.Game, error) {
-	var userGames []*types.UserGame
-
-	err := dbretry.NoResult(ctx, func(ctx context.Context) error {
-		return r.db.NewSelect().
-			Model(&userGames).
-			Relation("Game").
-			Where("user_game.user_id = ?", userID).
-			Order("game.place_visits DESC").
-			Scan(ctx)
-	})
-
-	if err != nil && !errors.Is(err, sql.ErrNoRows) {
-		return nil, fmt.Errorf("failed to get user games: %w", err)
-	}
-
-	// Convert to API types
-	apiGames := make([]*apiTypes.Game, 0, len(userGames))
-	for _, userGame := range userGames {
-		if userGame.Game == nil {
-			continue
-		}
-
-		game := userGame.Game
-		apiGames = append(apiGames, &apiTypes.Game{
-			ID:          userGame.GameID,
-			Name:        game.Name,
-			Description: game.Description,
-			PlaceVisits: game.PlaceVisits,
-			Created:     game.Created,
-			Updated:     game.Updated,
-		})
-	}
-
-	return apiGames, nil
-}
-
-// GetUserInventory fetches inventory for a user.
-func (r *UserModel) GetUserInventory(ctx context.Context, userID uint64) ([]*apiTypes.InventoryAsset, error) {
-	var userInventories []*types.UserInventory
-
-	err := dbretry.NoResult(ctx, func(ctx context.Context) error {
-		return r.db.NewSelect().
-			Model(&userInventories).
-			Relation("Inventory").
-			Where("user_inventory.user_id = ?", userID).
-			Scan(ctx)
-	})
-
-	if err != nil && !errors.Is(err, sql.ErrNoRows) {
-		return nil, fmt.Errorf("failed to get user inventory: %w", err)
-	}
-
-	// Convert to API types
-	apiInventory := make([]*apiTypes.InventoryAsset, 0, len(userInventories))
-	for _, userInventory := range userInventories {
-		if userInventory.Inventory == nil {
-			continue
-		}
-
-		inventory := userInventory.Inventory
-		apiInventory = append(apiInventory, &apiTypes.InventoryAsset{
-			AssetID:   userInventory.InventoryID,
-			Name:      inventory.Name,
-			AssetType: inventory.AssetType,
-			Created:   inventory.Created,
-		})
-	}
-
-	return apiInventory, nil
 }
 
 // SaveUserGroups saves groups for multiple users.
@@ -2163,4 +2210,60 @@ func (r *UserModel) GetUsersUpdatedAfter(ctx context.Context, cutoffTime time.Ti
 		zap.Int("count", len(users)))
 
 	return users, nil
+}
+
+// GetUsersWithReasonMessage gets users with a specific reason message.
+func (r *UserModel) GetUsersWithReasonMessage(
+	ctx context.Context, reasonType enum.UserReasonType, message string,
+) ([]*types.ReviewUser, error) {
+	var users []types.User
+
+	err := dbretry.NoResult(ctx, func(ctx context.Context) error {
+		return r.db.NewSelect().
+			Model(&users).
+			Column("id", "status").
+			Where("status IN (?, ?)", enum.UserTypeFlagged, enum.UserTypeConfirmed).
+			Where("id IN (SELECT user_id FROM user_reasons WHERE reason_type = ? AND message = ?)", reasonType, message).
+			Scan(ctx)
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get users with reason message: %w", err)
+	}
+
+	// Convert to review users with minimal data
+	result := make([]*types.ReviewUser, len(users))
+	for i, user := range users {
+		result[i] = &types.ReviewUser{
+			User: &user,
+		}
+	}
+
+	r.logger.Debug("Found users with reason message",
+		zap.String("reasonType", reasonType.String()),
+		zap.String("message", message),
+		zap.Int("count", len(result)))
+
+	return result, nil
+}
+
+// UpdateUserReason updates a specific reason for a user.
+func (r *UserModel) UpdateUserReason(ctx context.Context, userID uint64, reasonType enum.UserReasonType, newMessage string) error {
+	err := dbretry.NoResult(ctx, func(ctx context.Context) error {
+		_, err := r.db.NewUpdate().
+			Model((*types.UserReason)(nil)).
+			Set("message = ?", newMessage).
+			Where("user_id = ? AND reason_type = ?", userID, reasonType).
+			Exec(ctx)
+		return err
+	})
+	if err != nil {
+		return fmt.Errorf("failed to update user reason: %w", err)
+	}
+
+	r.logger.Debug("Updated user reason",
+		zap.Uint64("userID", userID),
+		zap.String("reasonType", reasonType.String()),
+		zap.String("newMessage", newMessage))
+
+	return nil
 }

@@ -14,6 +14,7 @@ import (
 	"github.com/robalyx/rotector/internal/worker/group"
 	"github.com/robalyx/rotector/internal/worker/maintenance"
 	"github.com/robalyx/rotector/internal/worker/queue"
+	"github.com/robalyx/rotector/internal/worker/reason"
 	"github.com/robalyx/rotector/internal/worker/stats"
 	"github.com/robalyx/rotector/internal/worker/sync"
 	"github.com/urfave/cli/v3"
@@ -30,6 +31,7 @@ const (
 	StatsWorker       = "stats"
 	QueueWorker       = "queue"
 	SyncWorker        = "sync"
+	ReasonWorker      = "reason"
 )
 
 func main() {
@@ -100,6 +102,14 @@ func run() error {
 					return nil
 				},
 			},
+			{
+				Name:  ReasonWorker,
+				Usage: "Start reason update worker",
+				Action: func(ctx context.Context, _ *cli.Command) error {
+					runWorkers(ctx, ReasonWorker, 1)
+					return nil
+				},
+			},
 		},
 	}
 
@@ -167,6 +177,8 @@ func runWorkers(ctx context.Context, workerType string, count int) {
 				w = queue.New(app, bar, workerLogger)
 			case SyncWorker:
 				w = sync.New(app, bar, workerLogger)
+			case ReasonWorker:
+				w = reason.New(app, bar, workerLogger)
 			default:
 				log.Fatalf("Invalid worker type: %s", workerType)
 			}

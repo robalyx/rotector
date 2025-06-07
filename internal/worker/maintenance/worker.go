@@ -265,7 +265,7 @@ func (w *Worker) processClearedUsers() {
 	w.bar.SetStepMessage("Processing cleared users", 30)
 	w.reporter.UpdateStatus("Processing cleared users", 30)
 
-	cutOffDate := time.Now().AddDate(0, 0, -30)
+	cutOffDate := time.Now().AddDate(-1, 0, 0)
 	affected, err := w.db.Service().User().PurgeOldClearedUsers(context.Background(), cutOffDate)
 	if err != nil {
 		w.logger.Error("Error purging old cleared users", zap.Error(err))
