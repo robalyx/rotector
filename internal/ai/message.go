@@ -211,7 +211,7 @@ func (a *MessageAnalyzer) processMessageBatch(
 			},
 		},
 		Model:       a.model,
-		Temperature: openai.Float(0.2),
+		Temperature: openai.Float(0.0),
 		TopP:        openai.Float(0.95),
 	}
 

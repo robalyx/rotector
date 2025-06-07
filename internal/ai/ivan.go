@@ -200,7 +200,7 @@ func (a *IvanAnalyzer) processIvanBatch(ctx context.Context, batchRequest IvanRe
 			},
 		},
 		Model:       a.model,
-		Temperature: openai.Float(0.2),
+		Temperature: openai.Float(0.0),
 		TopP:        openai.Float(0.4),
 	}
 

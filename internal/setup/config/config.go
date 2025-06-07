@@ -177,8 +177,12 @@ type OpenAI struct {
 	UserModel string `koanf:"user_model"`
 	// Model to use for user reason analysis
 	UserReasonModel string `koanf:"user_reason_model"`
-	// Model to use for friend network analysis
-	FriendModel string `koanf:"friend_model"`
+	// Model to use for friend reason analysis
+	FriendReasonModel string `koanf:"friend_reason_model"`
+	// Model to use for group reason analysis
+	GroupReasonModel string `koanf:"group_reason_model"`
+	// Model to use for outfit reason analysis
+	OutfitReasonModel string `koanf:"outfit_reason_model"`
 	// Model to use for stats analysis
 	StatsModel string `koanf:"stats_model"`
 	// Model to use for outfit analysis
@@ -235,8 +239,12 @@ type BatchSizes struct {
 	UserAnalysis int `koanf:"user_analysis"`
 	// Maximum concurrent AI requests for user reason analysis.
 	UserReasonAnalysis int `koanf:"user_reason_analysis"`
-	// Maximum concurrent AI requests for friend analysis.
-	FriendAnalysis int `koanf:"friend_analysis"`
+	// Maximum concurrent AI requests for friend reason analysis.
+	FriendReasonAnalysis int `koanf:"friend_reason_analysis"`
+	// Maximum concurrent AI requests for group reason analysis.
+	GroupReasonAnalysis int `koanf:"group_reason_analysis"`
+	// Maximum concurrent AI requests for outfit reason analysis.
+	OutfitReasonAnalysis int `koanf:"outfit_reason_analysis"`
 	// Maximum concurrent AI requests for message analysis.
 	MessageAnalysis int `koanf:"message_analysis"`
 	// Maximum concurrent AI requests for ivan message analysis.
@@ -247,8 +255,12 @@ type BatchSizes struct {
 	UserAnalysisBatch int `koanf:"user_analysis_batch"`
 	// Number of users to analyze in one user reason AI request.
 	UserReasonAnalysisBatch int `koanf:"user_reason_analysis_batch"`
-	// Number of users to analyze in one friend AI request.
-	FriendAnalysisBatch int `koanf:"friend_analysis_batch"`
+	// Number of users to analyze in one friend reason AI request.
+	FriendReasonAnalysisBatch int `koanf:"friend_reason_analysis_batch"`
+	// Number of users to analyze in one group reason AI request.
+	GroupReasonAnalysisBatch int `koanf:"group_reason_analysis_batch"`
+	// Number of users to analyze in one outfit reason AI request.
+	OutfitReasonAnalysisBatch int `koanf:"outfit_reason_analysis_batch"`
 	// Number of messages to analyze in one AI request.
 	MessageAnalysisBatch int `koanf:"message_analysis_batch"`
 	// Number of ivan messages to analyze in one AI request.

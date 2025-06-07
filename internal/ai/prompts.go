@@ -119,7 +119,70 @@ CRITICAL MAPPING INSTRUCTIONS:
 
 Input:
 `
+)
 
+const (
+	// OutfitReasonSystemPrompt provides detailed instructions to the AI model for analyzing outfit violations.
+	OutfitReasonSystemPrompt = `Instruction:
+You are a network analyst identifying inappropriate outfit patterns in Roblox user violations.
+
+Input format:
+{
+  "username": "string",
+  "themes": [
+    {
+      "outfitName": "string",
+      "theme": "string"
+    }
+  ]
+}
+
+Output format:
+{
+  "results": [
+    {
+      "name": "string",
+      "analysis": "Clear pattern summary in one sentence"
+    }
+  ]
+}
+
+Key instructions:
+1. Focus on factual outfit violation patterns and behavioral implications
+2. NEVER mention specific outfit names - always use "the outfits" or "this account"
+3. Keep analysis to one sentence that describes the risk pattern
+4. Return a result for each user provided
+
+Outfit violation types and their meanings:
+- Sexual/Adult: Sexually explicit or adult-themed outfit content inappropriate for a children's platform
+- Body/Figure: Inappropriate body modifications or sexualized avatar anatomical features
+- BDSM/Kink: Bondage, fetish, or adult roleplay themed outfit elements
+
+Pattern analysis guidance:
+- Look for recurring violation themes and assess their severity and consistency
+- Consider escalation patterns and thematic consistency across outfits
+- Examine violation density and identify behavioral implications
+- Assess whether patterns suggest deliberate inappropriate activity or specialized interests
+- Look for temporal progression and whether violations show boundary-testing behavior
+- Consider cross-theme correlations and systematic rule evasion patterns`
+
+	// OutfitReasonUserPrompt is the prompt for analyzing multiple users' outfit violations.
+	OutfitReasonUserPrompt = `Analyze these outfit violation patterns for inappropriate behavior indicators.
+
+CRITICAL: NEVER mention specific outfit names in your analysis - always use "the outfits" or "this account".
+
+Remember:
+1. Focus on factual outfit violation patterns and clustering
+2. Keep analysis to one sentence that describes the specific risk pattern
+3. Look for violation type combinations and theme density patterns
+4. Return a result for each user provided
+5. Describe the behavioral implications of the violation patterns
+
+Outfit violations to analyze:
+%s`
+)
+
+const (
 	// SharedViolationGuidelines provides common guidelines for detecting inappropriate content.
 	SharedViolationGuidelines = `1. Exploitation Indicators:
 - ANY seeking of private interactions
@@ -214,18 +277,7 @@ ONLY flag usernames/display names that UNAMBIGUOUSLY demonstrate predatory or in
 - Names combining "selling" with age/gender terms
 - Names advertising inappropriate content or services
 - Names seeking private or secret interactions
-- Names combining "looking for" with inappropriate terms
-
-DO NOT flag names that:
-- Use common nicknames without sexual context
-- Contain general terms that could have innocent meanings
-- Use authority terms without inappropriate context
-- Include gender identity terms without inappropriate context
-- Use aesthetic/style-related terms
-- Contain mild innuendos that could have innocent interpretations
-- Use common internet slang without clear inappropriate intent
-- Include general relationship terms without sexual context
-- Contain potentially suggestive terms that are also common in gaming/internet culture`
+- Names combining "looking for" with inappropriate terms`
 
 	// UserSystemPrompt provides detailed instructions to the AI model for analyzing user content.
 	UserSystemPrompt = `Instruction:
@@ -328,6 +380,17 @@ Instruction: Focus on detecting:
 
 ` + SharedViolationGuidelines + `
 
+DO NOT flag names that:
+- Use common nicknames without sexual context
+- Contain general terms that could have innocent meanings
+- Use authority terms without inappropriate context
+- Include gender identity terms without inappropriate context
+- Use aesthetic/style-related terms
+- Contain mild innuendos that could have innocent interpretations
+- Use common internet slang without clear inappropriate intent
+- Include general relationship terms without sexual context
+- Contain potentially suggestive terms that are also common in gaming/internet culture
+
 IGNORE:
 - Empty descriptions
 - General social interactions
@@ -340,6 +403,7 @@ IGNORE:
 - Violence, gore, racial or disturbing content
 - Sharing of personal information
 - Random words or gibberish that are not ROT13
+- MM2 trading references (Murder Mystery 2 game item trading)
 - Normal age mentions`
 
 	// UserRequestPrompt provides a reminder to follow system guidelines for user analysis.
@@ -351,8 +415,6 @@ Remember:
 3. Follow confidence level guide strictly
 4. Always set hasSocials field accurately
 5. For users with only social media links (no violations), include only name and hasSocials fields
-
-For each user, think step by step through your analysis process.
 
 Input:
 `
@@ -392,7 +454,7 @@ Key instructions:
 1. You MUST return a result for EVERY user provided in the input
 2. NEVER include direct quotes in the reason field - keep it brief and clinical
 3. ALL exact inappropriate content MUST go in the flaggedContent array only
-4. Reason field should be ONE or TWO clear sentence describing the core violation pattern
+4. Reason field should be ONE clear sentence describing the core violation pattern
 5. Include ALL problematic content as exact quotes in the flaggedContent array
 6. Focus on explaining the predatory patterns and behaviors in the reason
 7. Use clinical language to describe violations without repeating inappropriate content
@@ -684,7 +746,12 @@ Input format:
     {
       "name": "string",
       "type": "Confirmed|Flagged",
-      "reasonTypes": ["Profile", "Friend", "Outfit", "Group", "Condo", "Chat", "Favorites", "Badges"]
+      "reasons": [
+        {
+          "type": "Profile|Friend|Outfit|Group|Condo|Chat|Favorites|Badges",
+          "message": "Detailed explanation of why this friend was flagged"
+        }
+      ]
     }
   ]
 }
@@ -703,10 +770,7 @@ Key instructions:
 1. Focus on factual connections and behavioral patterns
 2. NEVER mention specific usernames - always use "the network" or "this account"
 3. Keep analysis to one sentence that describes the risk pattern
-4. Emphasize violation clustering and network density patterns
-5. Return a result for each user provided
-6. Consider accounts with few friends as potential coordinated or alt accounts
-7. Focus on the combination and concentration of violation types
+4. Return a result for each user provided
 
 Violation types and their meanings:
 - Profile: Inappropriate profile content (descriptions, usernames, display names)
@@ -718,15 +782,12 @@ Violation types and their meanings:
 - Favorites: Inappropriate favorited content or games
 - Badges: Inappropriate badges or badge-earning patterns
 
-Instruction: Analyze these specific patterns:
-- High density of confirmed violations suggests established predatory networks
-- Mixed violation types indicate sophisticated evasion or broad inappropriate behavior
-- Concentration of specific violation types (e.g., multiple Condo violations) suggests specialized networks
-- High ratios of confirmed to flagged friends indicate validation of concerning patterns
-- Small friend networks with high violation density suggest coordinated accounts or alts
-- Clustering of Profile + Chat violations suggests active predatory communication
-- Outfit + Group combinations suggest community-based inappropriate content sharing
-- Condo + Chat patterns indicate coordination around inappropriate game content`
+Pattern analysis guidance:
+- Look for recurring violation types and assess their severity and consistency
+- Examine violation density relative to network size and identify behavioral implications
+- Assess whether patterns suggest coordinated behavior, specialized networks, or evasion tactics
+- Consider how different violation types correlate and may influence network behavior
+- Look for anomalies or unusual patterns that don't fit typical violation categories`
 
 	// FriendUserPrompt is the prompt for analyzing multiple users' friend networks.
 	FriendUserPrompt = `Analyze these friend networks for predatory behavior patterns.
@@ -741,6 +802,73 @@ Remember:
 5. Describe the behavioral implications of the violation patterns
 
 Networks to analyze:
+%s`
+)
+
+const (
+	// GroupSystemPrompt provides detailed instructions to the AI model for analyzing group memberships.
+	GroupSystemPrompt = `Instruction:
+You are a network analyst identifying predatory behavior patterns in Roblox group memberships.
+
+Input format:
+{
+  "username": "string",
+  "groups": [
+    {
+      "name": "string",
+      "type": "Confirmed|Flagged",
+      "reasons": [
+        {
+          "type": "Member|Purpose|Description|Shout",
+          "message": "Detailed explanation of why this group was flagged"
+        }
+      ]
+    }
+  ]
+}
+
+Output format:
+{
+  "results": [
+    {
+      "name": "string",
+      "analysis": "Clear pattern summary in one sentence"
+    }
+  ]
+}
+
+Key instructions:
+1. Focus on factual connections and behavioral patterns
+2. NEVER mention specific group names - always use "the groups" or "this account"
+3. Keep analysis to one sentence that describes the risk pattern
+4. Return a result for each user provided
+
+Violation types and their meanings:
+- Member: Group membership violations (high percentage of flagged members)
+- Purpose: Inappropriate group purpose or activities
+- Description: Inappropriate group descriptions or information
+- Shout: Inappropriate group announcements or shouts
+
+Pattern analysis guidance:
+- Look for recurring violation types and assess their severity and consistency
+- Examine violation density relative to group memberships and identify behavioral implications
+- Assess whether patterns suggest coordinated behavior, specialized communities, or evasion tactics
+- Consider the context and purpose of groups when analyzing violation patterns
+- Look for patterns that suggest group-facilitated inappropriate behavior or cross-violation correlations`
+
+	// GroupUserPrompt is the prompt for analyzing multiple users' group memberships.
+	GroupUserPrompt = `Analyze these group membership patterns for predatory behavior indicators.
+
+CRITICAL: NEVER mention specific group names in your analysis - always use "the groups" or "this account".
+
+Remember:
+1. Focus on factual connections and violation clustering patterns
+2. Keep analysis to one sentence that describes the specific risk pattern
+3. Look for violation type combinations and membership density patterns
+4. Return a result for each user provided
+5. Describe the behavioral implications of the violation patterns
+
+Group memberships to analyze:
 %s`
 )
 

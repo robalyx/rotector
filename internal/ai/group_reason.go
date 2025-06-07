@@ -23,42 +23,42 @@ import (
 )
 
 const (
-	// MaxFriends is the maximum number of friends to include in analysis.
-	MaxFriends = 10
+	// MaxGroups is the maximum number of groups to include in analysis.
+	MaxGroups = 6
 )
 
-// FriendSummary contains a summary of a friend's data.
-type FriendSummary struct {
-	Name        string   `json:"name"        jsonschema_description:"Username of the friend"`
-	Type        string   `json:"type"        jsonschema_description:"Type of friend (Confirmed or Flagged)"`
-	ReasonTypes []string `json:"reasonTypes" jsonschema_description:"List of reasons why this friend was flagged"`
+// GroupSummary contains a summary of a group's data.
+type GroupSummary struct {
+	Name    string             `json:"name"    jsonschema_description:"Name of the group"`
+	Type    string             `json:"type"    jsonschema_description:"Type of group (Confirmed or Flagged)"`
+	Reasons []types.ReasonInfo `json:"reasons" jsonschema_description:"List of reasons with types and messages why this group was flagged"`
 }
 
-// UserFriendData represents the data for a user's friend network.
-type UserFriendData struct {
-	Username string          `json:"username" jsonschema_description:"Username of the account being analyzed"`
-	Friends  []FriendSummary `json:"friends"  jsonschema_description:"List of friends and their violation data"`
+// UserGroupData represents the data for a user's group memberships.
+type UserGroupData struct {
+	Username string         `json:"username" jsonschema_description:"Username of the account being analyzed"`
+	Groups   []GroupSummary `json:"groups"   jsonschema_description:"List of groups and their violation data"`
 }
 
-// UserFriendRequest contains the user data and friend network for analysis.
-type UserFriendRequest struct {
+// UserGroupRequest contains the user data and group memberships for analysis.
+type UserGroupRequest struct {
 	UserInfo *types.ReviewUser `json:"-"`        // User info stored for internal reference, not sent to AI
-	UserData UserFriendData    `json:"userData"` // Friend network data to be analyzed
+	UserData UserGroupData     `json:"userData"` // Group membership data to be analyzed
 }
 
-// FriendAnalysis contains the result of analyzing a user's friend network.
-type FriendAnalysis struct {
+// GroupAnalysis contains the result of analyzing a user's group memberships.
+type GroupAnalysis struct {
 	Name     string `json:"name"     jsonschema_description:"Username of the account being analyzed"`
-	Analysis string `json:"analysis" jsonschema_description:"Analysis of friend network patterns for this user"`
+	Analysis string `json:"analysis" jsonschema_description:"Analysis of group membership patterns for this user"`
 }
 
-// BatchFriendAnalysis contains results for multiple users' friend networks.
-type BatchFriendAnalysis struct {
-	Results []FriendAnalysis `json:"results" jsonschema_description:"Array of friend network analyses for each user"`
+// BatchGroupAnalysis contains results for multiple users' group memberships.
+type BatchGroupAnalysis struct {
+	Results []GroupAnalysis `json:"results" jsonschema_description:"Array of group membership analyses for each user"`
 }
 
-// FriendAnalyzer handles AI-based analysis of friend networks using OpenAI models.
-type FriendAnalyzer struct {
+// GroupReasonAnalyzer handles AI-based analysis of group memberships using OpenAI models.
+type GroupReasonAnalyzer struct {
 	chat        client.ChatCompletions
 	minify      *minify.M
 	analysisSem *semaphore.Weighted
@@ -69,99 +69,99 @@ type FriendAnalyzer struct {
 	batchSize   int
 }
 
-// FriendAnalysisSchema is the JSON schema for the friend analysis response.
-var FriendAnalysisSchema = utils.GenerateSchema[BatchFriendAnalysis]()
+// GroupAnalysisSchema is the JSON schema for the group analysis response.
+var GroupAnalysisSchema = utils.GenerateSchema[BatchGroupAnalysis]()
 
-// NewFriendAnalyzer creates a FriendAnalyzer.
-func NewFriendAnalyzer(app *setup.App, logger *zap.Logger) *FriendAnalyzer {
+// NewGroupReasonAnalyzer creates a GroupReasonAnalyzer.
+func NewGroupReasonAnalyzer(app *setup.App, logger *zap.Logger) *GroupReasonAnalyzer {
 	// Create a minifier for JSON optimization
 	m := minify.New()
 	m.AddFunc(ApplicationJSON, json.Minify)
 
 	// Get text logger
-	textLogger, textDir, err := app.LogManager.GetTextLogger("friend_analyzer")
+	textLogger, textDir, err := app.LogManager.GetTextLogger("group_reason_analyzer")
 	if err != nil {
 		logger.Error("Failed to create text logger", zap.Error(err))
 		textLogger = logger
 	}
 
-	return &FriendAnalyzer{
+	return &GroupReasonAnalyzer{
 		chat:        app.AIClient.Chat(),
 		minify:      m,
-		analysisSem: semaphore.NewWeighted(int64(app.Config.Worker.BatchSizes.FriendAnalysis)),
-		logger:      logger.Named("ai_friend"),
+		analysisSem: semaphore.NewWeighted(int64(app.Config.Worker.BatchSizes.GroupReasonAnalysis)),
+		logger:      logger.Named("ai_group_reason"),
 		textLogger:  textLogger,
 		textDir:     textDir,
-		model:       app.Config.Common.OpenAI.FriendModel,
-		batchSize:   app.Config.Worker.BatchSizes.FriendAnalysisBatch,
+		model:       app.Config.Common.OpenAI.GroupReasonModel,
+		batchSize:   app.Config.Worker.BatchSizes.GroupReasonAnalysisBatch,
 	}
 }
 
-// GenerateFriendReasons generates friend network analysis reasons for multiple users using the OpenAI model.
-func (a *FriendAnalyzer) GenerateFriendReasons(
-	ctx context.Context, userInfos []*types.ReviewUser, confirmedFriendsMap, flaggedFriendsMap map[uint64]map[uint64]*types.ReviewUser,
+// GenerateGroupReasons generates group membership analysis reasons for multiple users using the OpenAI model.
+func (a *GroupReasonAnalyzer) GenerateGroupReasons(
+	ctx context.Context, userInfos []*types.ReviewUser, confirmedGroupsMap, flaggedGroupsMap map[uint64]map[uint64]*types.ReviewGroup,
 ) map[uint64]string {
-	// Create friend requests map
-	friendRequests := make(map[uint64]UserFriendRequest)
+	// Create group requests map
+	groupRequests := make(map[uint64]UserGroupRequest)
 	for _, userInfo := range userInfos {
-		// Get confirmed and flagged friends for this user
-		confirmedFriends := confirmedFriendsMap[userInfo.ID]
-		flaggedFriends := flaggedFriendsMap[userInfo.ID]
+		// Get confirmed and flagged groups for this user
+		confirmedGroups := confirmedGroupsMap[userInfo.ID]
+		flaggedGroups := flaggedGroupsMap[userInfo.ID]
 
-		// Collect friend summaries
-		friendSummaries := make([]FriendSummary, 0, MaxFriends)
+		// Collect group summaries
+		groupSummaries := make([]GroupSummary, 0, MaxGroups)
 
-		// Add confirmed friends first
-		for _, friend := range confirmedFriends {
-			if len(friendSummaries) >= MaxFriends {
+		// Add confirmed groups first
+		for _, group := range confirmedGroups {
+			if len(groupSummaries) >= MaxGroups {
 				break
 			}
-			friendSummaries = append(friendSummaries, FriendSummary{
-				Name:        friend.Name,
-				Type:        "Confirmed",
-				ReasonTypes: friend.Reasons.Types(),
+			groupSummaries = append(groupSummaries, GroupSummary{
+				Name:    group.Name,
+				Type:    "Confirmed",
+				Reasons: group.Reasons.ReasonInfos(),
 			})
 		}
 
-		// Add flagged friends with remaining space
-		for _, friend := range flaggedFriends {
-			if len(friendSummaries) >= MaxFriends {
+		// Add flagged groups with remaining space
+		for _, group := range flaggedGroups {
+			if len(groupSummaries) >= MaxGroups {
 				break
 			}
-			friendSummaries = append(friendSummaries, FriendSummary{
-				Name:        friend.Name,
-				Type:        "Flagged",
-				ReasonTypes: friend.Reasons.Types(),
+			groupSummaries = append(groupSummaries, GroupSummary{
+				Name:    group.Name,
+				Type:    "Flagged",
+				Reasons: group.Reasons.ReasonInfos(),
 			})
 		}
 
-		friendRequests[userInfo.ID] = UserFriendRequest{
+		groupRequests[userInfo.ID] = UserGroupRequest{
 			UserInfo: userInfo,
-			UserData: UserFriendData{
+			UserData: UserGroupData{
 				Username: userInfo.Name,
-				Friends:  friendSummaries,
+				Groups:   groupSummaries,
 			},
 		}
 	}
 
-	// Process friend requests
+	// Process group requests
 	results := make(map[uint64]string)
-	a.ProcessFriendRequests(ctx, friendRequests, results)
+	a.ProcessGroupRequests(ctx, groupRequests, results)
 
 	return results
 }
 
-// ProcessFriendRequests processes friend analysis requests with retry logic for invalid users.
-func (a *FriendAnalyzer) ProcessFriendRequests(
-	ctx context.Context, friendRequests map[uint64]UserFriendRequest, results map[uint64]string,
+// ProcessGroupRequests processes group analysis requests with retry logic for invalid users.
+func (a *GroupReasonAnalyzer) ProcessGroupRequests(
+	ctx context.Context, groupRequests map[uint64]UserGroupRequest, results map[uint64]string,
 ) {
-	if len(friendRequests) == 0 {
+	if len(groupRequests) == 0 {
 		return
 	}
 
 	// Convert map to slice for batch processing
-	requestSlice := make([]UserFriendRequest, 0, len(friendRequests))
-	for _, req := range friendRequests {
+	requestSlice := make([]UserGroupRequest, 0, len(groupRequests))
+	for _, req := range groupRequests {
 		requestSlice = append(requestSlice, req)
 	}
 
@@ -169,15 +169,15 @@ func (a *FriendAnalyzer) ProcessFriendRequests(
 	var (
 		mu              sync.Mutex
 		invalidMu       sync.Mutex
-		invalidRequests = make(map[uint64]UserFriendRequest)
+		invalidRequests = make(map[uint64]UserGroupRequest)
 	)
 	minBatchSize := max(len(requestSlice)/4, 1)
 
 	err := utils.WithRetrySplitBatch(
 		ctx, requestSlice, a.batchSize, minBatchSize, utils.GetAIRetryOptions(),
-		func(batch []UserFriendRequest) error {
+		func(batch []UserGroupRequest) error {
 			// Process the batch
-			batchResults, err := a.processFriendBatch(ctx, batch)
+			batchResults, err := a.processGroupBatch(ctx, batch)
 			if err != nil {
 				return err
 			}
@@ -194,7 +194,7 @@ func (a *FriendAnalyzer) ProcessFriendRequests(
 
 			return nil
 		},
-		func(batch []UserFriendRequest) {
+		func(batch []UserGroupRequest) {
 			// Log blocked content
 			usernames := make([]string, len(batch))
 			for i, req := range batch {
@@ -202,38 +202,38 @@ func (a *FriendAnalyzer) ProcessFriendRequests(
 			}
 
 			// Log details of the blocked content
-			a.textLogger.Warn("Content blocked in friend analysis batch",
+			a.textLogger.Warn("Content blocked in group analysis batch",
 				zap.Strings("usernames", usernames),
 				zap.Int("batch_size", len(batch)),
 				zap.Any("requests", batch))
 
-			// Save blocked friend data to file
-			filename := fmt.Sprintf("friends_%s.txt", time.Now().Format("20060102_150405"))
+			// Save blocked group data to file
+			filename := fmt.Sprintf("groups_%s.txt", time.Now().Format("20060102_150405"))
 			filepath := filepath.Join(a.textDir, filename)
 
 			var buf bytes.Buffer
 			for _, req := range batch {
-				buf.WriteString(fmt.Sprintf("Username: %s\nFriends:\n", req.UserData.Username))
-				for _, friend := range req.UserData.Friends {
+				buf.WriteString(fmt.Sprintf("Username: %s\nGroups:\n", req.UserData.Username))
+				for _, group := range req.UserData.Groups {
 					buf.WriteString(fmt.Sprintf("  - Name: %s\n    Type: %s\n    Reasons: %v\n",
-						friend.Name, friend.Type, friend.ReasonTypes))
+						group.Name, group.Type, group.Reasons))
 				}
 				buf.WriteString("\n")
 			}
 
 			if err := os.WriteFile(filepath, buf.Bytes(), 0o600); err != nil {
-				a.textLogger.Error("Failed to save blocked friend data",
+				a.textLogger.Error("Failed to save blocked group data",
 					zap.Error(err),
 					zap.String("path", filepath))
 				return
 			}
 
-			a.textLogger.Info("Saved blocked friend data",
+			a.textLogger.Info("Saved blocked group data",
 				zap.String("path", filepath))
 		},
 	)
 	if err != nil {
-		a.logger.Error("Error processing friend requests", zap.Error(err))
+		a.logger.Error("Error processing group requests", zap.Error(err))
 	}
 
 	// Process invalid requests if any
@@ -241,18 +241,18 @@ func (a *FriendAnalyzer) ProcessFriendRequests(
 		a.logger.Info("Retrying analysis for invalid results",
 			zap.Int("invalidUsers", len(invalidRequests)))
 
-		a.ProcessFriendRequests(ctx, invalidRequests, results)
+		a.ProcessGroupRequests(ctx, invalidRequests, results)
 	}
 
-	a.logger.Info("Finished processing friend requests",
-		zap.Int("totalRequests", len(friendRequests)),
+	a.logger.Info("Finished processing group requests",
+		zap.Int("totalRequests", len(groupRequests)),
 		zap.Int("retriedUsers", len(invalidRequests)))
 }
 
-// processFriendBatch handles the AI analysis for a batch of friend data.
-func (a *FriendAnalyzer) processFriendBatch(ctx context.Context, batch []UserFriendRequest) (*BatchFriendAnalysis, error) {
-	// Extract UserFriendData for AI request
-	batchData := make([]UserFriendData, len(batch))
+// processGroupBatch handles the AI analysis for a batch of group data.
+func (a *GroupReasonAnalyzer) processGroupBatch(ctx context.Context, batch []UserGroupRequest) (*BatchGroupAnalysis, error) {
+	// Extract UserGroupData for AI request
+	batchData := make([]UserGroupData, len(batch))
 	for i, req := range batch {
 		batchData[i] = req.UserData
 	}
@@ -269,32 +269,32 @@ func (a *FriendAnalyzer) processFriendBatch(ctx context.Context, batch []UserFri
 		return nil, fmt.Errorf("%w: %w", utils.ErrJSONProcessing, err)
 	}
 
-	// Configure prompt for friend analysis
-	prompt := fmt.Sprintf(FriendUserPrompt, string(batchDataJSON))
+	// Configure prompt for group analysis
+	prompt := fmt.Sprintf(GroupUserPrompt, string(batchDataJSON))
 
 	// Prepare chat completion parameters
 	params := openai.ChatCompletionNewParams{
 		Messages: []openai.ChatCompletionMessageParamUnion{
-			openai.SystemMessage(FriendSystemPrompt),
+			openai.SystemMessage(GroupSystemPrompt),
 			openai.UserMessage(prompt),
 		},
 		ResponseFormat: openai.ChatCompletionNewParamsResponseFormatUnion{
 			OfJSONSchema: &openai.ResponseFormatJSONSchemaParam{
 				JSONSchema: openai.ResponseFormatJSONSchemaJSONSchemaParam{
-					Name:        "friendAnalysis",
-					Description: openai.String("Analysis of friend network patterns"),
-					Schema:      FriendAnalysisSchema,
+					Name:        "groupAnalysis",
+					Description: openai.String("Analysis of group membership patterns"),
+					Schema:      GroupAnalysisSchema,
 					Strict:      openai.Bool(true),
 				},
 			},
 		},
 		Model:       a.model,
-		Temperature: openai.Float(0.2),
+		Temperature: openai.Float(0.0),
 		TopP:        openai.Float(0.4),
 	}
 
 	// Make API request
-	var result BatchFriendAnalysis
+	var result BatchGroupAnalysis
 	err = a.chat.NewWithRetry(ctx, params, func(resp *openai.ChatCompletion, err error) error {
 		// Handle API error
 		if err != nil {
@@ -309,7 +309,7 @@ func (a *FriendAnalyzer) processFriendBatch(ctx context.Context, batch []UserFri
 		// Extract thought process
 		message := resp.Choices[0].Message
 		if thought := message.JSON.ExtraFields["reasoning"]; thought.Valid() {
-			a.logger.Debug("AI friend analysis thought process",
+			a.logger.Debug("AI group analysis thought process",
 				zap.String("model", resp.Model),
 				zap.String("thought", thought.Raw()))
 		}
@@ -326,7 +326,7 @@ func (a *FriendAnalyzer) processFriendBatch(ctx context.Context, batch []UserFri
 		}
 
 		// Create a new slice to store the processed results
-		processedResults := make([]FriendAnalysis, 0, len(result.Results))
+		processedResults := make([]GroupAnalysis, 0, len(result.Results))
 
 		// Process each result and validate
 		for _, response := range result.Results {
@@ -355,15 +355,15 @@ func (a *FriendAnalyzer) processFriendBatch(ctx context.Context, batch []UserFri
 
 // processResults validates and stores the analysis results.
 // Returns a map of user IDs that had invalid results and need retry.
-func (a *FriendAnalyzer) processResults(
-	results *BatchFriendAnalysis, batch []UserFriendRequest, finalResults map[uint64]string, mu *sync.Mutex,
-) map[uint64]UserFriendRequest {
+func (a *GroupReasonAnalyzer) processResults(
+	results *BatchGroupAnalysis, batch []UserGroupRequest, finalResults map[uint64]string, mu *sync.Mutex,
+) map[uint64]UserGroupRequest {
 	// Create map for retry requests
-	invalidRequests := make(map[uint64]UserFriendRequest)
+	invalidRequests := make(map[uint64]UserGroupRequest)
 
 	// If no results returned, mark all users for retry
 	if results == nil || len(results.Results) == 0 {
-		a.logger.Warn("No results returned from friend analysis, retrying all users")
+		a.logger.Warn("No results returned from group analysis, retrying all users")
 		for _, req := range batch {
 			invalidRequests[req.UserInfo.ID] = req
 		}
@@ -377,7 +377,7 @@ func (a *FriendAnalyzer) processResults(
 	}
 
 	// Create map of requests by username for O(1) lookup
-	requestsByName := make(map[string]UserFriendRequest, len(batch))
+	requestsByName := make(map[string]UserGroupRequest, len(batch))
 	for _, req := range batch {
 		requestsByName[req.UserData.Username] = req
 	}
@@ -385,7 +385,7 @@ func (a *FriendAnalyzer) processResults(
 	// Handle missing users
 	for _, req := range batch {
 		if _, wasProcessed := processedUsers[req.UserData.Username]; !wasProcessed {
-			a.logger.Warn("User missing from friend analysis results",
+			a.logger.Warn("User missing from group analysis results",
 				zap.String("username", req.UserData.Username))
 			invalidRequests[req.UserInfo.ID] = req
 		}
@@ -403,7 +403,7 @@ func (a *FriendAnalyzer) processResults(
 
 		// Skip results with no analysis content
 		if result.Analysis == "" {
-			a.logger.Debug("Friend analysis returned empty results",
+			a.logger.Debug("Group analysis returned empty results",
 				zap.String("username", result.Name))
 			invalidRequests[req.UserInfo.ID] = req
 			continue
@@ -414,7 +414,7 @@ func (a *FriendAnalyzer) processResults(
 		finalResults[req.UserInfo.ID] = result.Analysis
 		mu.Unlock()
 
-		a.logger.Debug("Added friend analysis result",
+		a.logger.Debug("Added group analysis result",
 			zap.String("username", result.Name))
 	}
 

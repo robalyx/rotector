@@ -69,7 +69,7 @@ func (a *StatsAnalyzer) GenerateWelcomeMessage(ctx context.Context, historicalSt
 			openai.UserMessage(string(statsJSON)),
 		},
 		Model:               a.model,
-		Temperature:         openai.Float(0.7),
+		Temperature:         openai.Float(0.5),
 		TopP:                openai.Float(0.7),
 		MaxCompletionTokens: openai.Int(512),
 	}

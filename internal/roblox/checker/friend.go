@@ -30,7 +30,7 @@ type FriendCheckResult struct {
 // users connected to multiple flagged accounts.
 type FriendChecker struct {
 	db             database.Client
-	friendAnalyzer *ai.FriendAnalyzer
+	friendAnalyzer *ai.FriendReasonAnalyzer
 	logger         *zap.Logger
 }
 
@@ -38,7 +38,7 @@ type FriendChecker struct {
 func NewFriendChecker(app *setup.App, logger *zap.Logger) *FriendChecker {
 	return &FriendChecker{
 		db:             app.DB,
-		friendAnalyzer: ai.NewFriendAnalyzer(app, logger),
+		friendAnalyzer: ai.NewFriendReasonAnalyzer(app, logger),
 		logger:         logger.Named("friend_checker"),
 	}
 }

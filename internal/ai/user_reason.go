@@ -221,7 +221,7 @@ func (a *UserReasonAnalyzer) processReasonBatch(ctx context.Context, batch []Use
 			},
 		},
 		Model:       a.model,
-		Temperature: openai.Float(0.1),
+		Temperature: openai.Float(0.0),
 		TopP:        openai.Float(0.2),
 	}
 

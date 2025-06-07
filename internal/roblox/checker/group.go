@@ -3,15 +3,14 @@ package checker
 import (
 	"context"
 	"math"
-	"sync"
 	"time"
 
 	apiTypes "github.com/jaxron/roapi.go/pkg/api/types"
+	"github.com/robalyx/rotector/internal/ai"
 	"github.com/robalyx/rotector/internal/database"
 	"github.com/robalyx/rotector/internal/database/types"
 	"github.com/robalyx/rotector/internal/database/types/enum"
 	"github.com/robalyx/rotector/internal/setup"
-	"github.com/sourcegraph/conc/pool"
 	"go.uber.org/zap"
 )
 
@@ -26,6 +25,7 @@ type GroupCheckResult struct {
 // a database of known inappropriate groups.
 type GroupChecker struct {
 	db                   database.Client
+	groupReasonAnalyzer  *ai.GroupReasonAnalyzer
 	logger               *zap.Logger
 	maxGroupMembersTrack uint64
 	minFlaggedOverride   int
@@ -37,6 +37,7 @@ type GroupChecker struct {
 func NewGroupChecker(app *setup.App, logger *zap.Logger) *GroupChecker {
 	return &GroupChecker{
 		db:                   app.DB,
+		groupReasonAnalyzer:  ai.NewGroupReasonAnalyzer(app, logger),
 		logger:               logger.Named("group_checker"),
 		maxGroupMembersTrack: app.Config.Worker.ThresholdLimits.MaxGroupMembersTrack,
 		minFlaggedOverride:   app.Config.Worker.ThresholdLimits.MinFlaggedOverride,
@@ -141,7 +142,7 @@ func (c *GroupChecker) CheckGroupPercentages(
 	return flaggedGroups
 }
 
-// ProcessUsers checks multiple users' groups concurrently and updates flaggedUsers map.
+// ProcessUsers checks multiple users' groups concurrently and updates reasonsMap.
 func (c *GroupChecker) ProcessUsers(
 	ctx context.Context, userInfos []*types.ReviewUser, reasonsMap map[uint64]types.Reasons[enum.UserReasonType],
 ) {
@@ -171,37 +172,86 @@ func (c *GroupChecker) ProcessUsers(
 		return
 	}
 
-	var (
-		p  = pool.New().WithContext(ctx)
-		mu sync.Mutex
-	)
+	// Prepare maps for confirmed and flagged groups per user
+	confirmedGroupsMap := make(map[uint64]map[uint64]*types.ReviewGroup)
+	flaggedGroupsMap := make(map[uint64]map[uint64]*types.ReviewGroup)
 
-	// Process each user concurrently
 	for _, userInfo := range userInfos {
-		p.Go(func(_ context.Context) error {
-			// Process user groups
-			reason, autoFlagged := c.processUserGroups(userInfo, existingGroups)
+		confirmedGroups := make(map[uint64]*types.ReviewGroup)
+		flaggedGroups := make(map[uint64]*types.ReviewGroup)
 
-			if autoFlagged {
-				mu.Lock()
-				if _, exists := reasonsMap[userInfo.ID]; !exists {
-					reasonsMap[userInfo.ID] = make(types.Reasons[enum.UserReasonType])
+		for _, group := range userInfo.Groups {
+			if reviewGroup, exists := existingGroups[group.Group.ID]; exists {
+				switch reviewGroup.Status {
+				case enum.GroupTypeConfirmed:
+					confirmedGroups[group.Group.ID] = reviewGroup
+				case enum.GroupTypeFlagged:
+					flaggedGroups[group.Group.ID] = reviewGroup
+				default:
+					continue
 				}
-				reasonsMap[userInfo.ID].Add(enum.UserReasonTypeGroup, reason)
-				mu.Unlock()
 			}
+		}
 
-			return nil
-		})
+		confirmedGroupsMap[userInfo.ID] = confirmedGroups
+		flaggedGroupsMap[userInfo.ID] = flaggedGroups
 	}
 
-	// Wait for all goroutines to complete
-	if err := p.Wait(); err != nil {
-		c.logger.Error("Error during group processing", zap.Error(err))
+	// Track users that exceed confidence threshold
+	var usersToAnalyze []*types.ReviewUser
+
+	// Process results
+	for _, userInfo := range userInfos {
+		confirmedCount := len(confirmedGroupsMap[userInfo.ID])
+		flaggedCount := len(flaggedGroupsMap[userInfo.ID])
+
+		// Calculate confidence score
+		confidence := c.calculateConfidence(confirmedCount, flaggedCount, len(userInfo.Groups))
+
+		// Only process users that exceed threshold
+		if confidence >= 0.5 {
+			usersToAnalyze = append(usersToAnalyze, userInfo)
+		}
+	}
+
+	// Generate AI reasons if we have users to analyze
+	if len(usersToAnalyze) > 0 {
+		// Generate reasons for flagged users
+		reasons := c.groupReasonAnalyzer.GenerateGroupReasons(ctx, usersToAnalyze, confirmedGroupsMap, flaggedGroupsMap)
+
+		// Process results and update reasonsMap
+		for _, userInfo := range usersToAnalyze {
+			confirmedCount := len(confirmedGroupsMap[userInfo.ID])
+			flaggedCount := len(flaggedGroupsMap[userInfo.ID])
+			confidence := c.calculateConfidence(confirmedCount, flaggedCount, len(userInfo.Groups))
+
+			reason := reasons[userInfo.ID]
+			if reason == "" {
+				// Fallback to default reason format if AI generation failed
+				reason = "Member of multiple inappropriate groups."
+			}
+
+			// Add new reason to reasons map
+			if _, exists := reasonsMap[userInfo.ID]; !exists {
+				reasonsMap[userInfo.ID] = make(types.Reasons[enum.UserReasonType])
+			}
+			reasonsMap[userInfo.ID].Add(enum.UserReasonTypeGroup, &types.Reason{
+				Message:    reason,
+				Confidence: confidence,
+			})
+
+			c.logger.Debug("User flagged for group membership",
+				zap.Uint64("userID", userInfo.ID),
+				zap.Int("confirmedGroups", confirmedCount),
+				zap.Int("flaggedGroups", flaggedCount),
+				zap.Float64("confidence", confidence),
+				zap.String("reason", reason))
+		}
 	}
 
 	c.logger.Info("Finished processing groups",
 		zap.Int("totalUsers", len(userInfos)),
+		zap.Int("analyzedUsers", len(usersToAnalyze)),
 		zap.Int("newFlags", len(reasonsMap)-existingFlags))
 }
 
@@ -235,47 +285,6 @@ func (c *GroupChecker) calculateGroupConfidence(flaggedUsers []uint64, users map
 
 	// Round confidence to 2 decimal places
 	return math.Round(avgConfidence*100) / 100
-}
-
-// processUserGroups checks if a user should be flagged based on their groups.
-func (c *GroupChecker) processUserGroups(
-	userInfo *types.ReviewUser, existingGroups map[uint64]*types.ReviewGroup,
-) (*types.Reason, bool) {
-	// Count confirmed and flagged groups
-	confirmedCount := 0
-	flaggedCount := 0
-
-	for _, group := range userInfo.Groups {
-		if reviewGroup, exists := existingGroups[group.Group.ID]; exists {
-			switch reviewGroup.Status {
-			case enum.GroupTypeConfirmed:
-				confirmedCount++
-			case enum.GroupTypeFlagged:
-				flaggedCount++
-			default:
-				continue
-			}
-		}
-	}
-
-	// Calculate confidence score
-	confidence := c.calculateConfidence(confirmedCount, flaggedCount, len(userInfo.Groups))
-
-	// Flag user if confidence exceeds threshold
-	if confidence >= 0.5 {
-		c.logger.Debug("User flagged for group membership",
-			zap.Uint64("userID", userInfo.ID),
-			zap.Int("confirmedGroups", confirmedCount),
-			zap.Int("flaggedGroups", flaggedCount),
-			zap.Float64("confidence", confidence))
-
-		return &types.Reason{
-			Message:    "Member of multiple inappropriate groups.",
-			Confidence: confidence,
-		}, true
-	}
-
-	return nil, false
 }
 
 // calculateConfidence computes a weighted confidence score based on group memberships.

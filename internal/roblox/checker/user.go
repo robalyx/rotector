@@ -21,44 +21,41 @@ import (
 // UserChecker coordinates the checking process by combining results from
 // multiple checking methods (AI, groups, friends) and managing the progress bar.
 type UserChecker struct {
-	app                *setup.App
-	db                 database.Client
-	userFetcher        *fetcher.UserFetcher
-	gameFetcher        *fetcher.GameFetcher
-	outfitFetcher      *fetcher.OutfitFetcher
-	translator         *translator.Translator
-	userAnalyzer       *ai.UserAnalyzer
-	userReasonAnalyzer *ai.UserReasonAnalyzer
-	outfitAnalyzer     *ai.OutfitAnalyzer
-	ivanAnalyzer       *ai.IvanAnalyzer
-	groupChecker       *GroupChecker
-	friendChecker      *FriendChecker
-	condoChecker       *CondoChecker
-	logger             *zap.Logger
+	app            *setup.App
+	db             database.Client
+	userFetcher    *fetcher.UserFetcher
+	gameFetcher    *fetcher.GameFetcher
+	outfitFetcher  *fetcher.OutfitFetcher
+	translator     *translator.Translator
+	userAnalyzer   *ai.UserAnalyzer
+	outfitAnalyzer *ai.OutfitAnalyzer
+	ivanAnalyzer   *ai.IvanAnalyzer
+	groupChecker   *GroupChecker
+	friendChecker  *FriendChecker
+	condoChecker   *CondoChecker
+	logger         *zap.Logger
 }
 
 // NewUserChecker creates a UserChecker with all required dependencies.
 func NewUserChecker(app *setup.App, userFetcher *fetcher.UserFetcher, logger *zap.Logger) *UserChecker {
 	translator := translator.New(app.RoAPI.GetClient())
 	userAnalyzer := ai.NewUserAnalyzer(app, translator, logger)
-	userReasonAnalyzer := ai.NewUserReasonAnalyzer(app, logger)
 	outfitAnalyzer := ai.NewOutfitAnalyzer(app, logger)
 
 	return &UserChecker{
-		app:                app,
-		db:                 app.DB,
-		userFetcher:        userFetcher,
-		gameFetcher:        fetcher.NewGameFetcher(app.RoAPI, logger),
-		outfitFetcher:      fetcher.NewOutfitFetcher(app.RoAPI, logger),
-		translator:         translator,
-		userAnalyzer:       userAnalyzer,
-		userReasonAnalyzer: userReasonAnalyzer,
-		outfitAnalyzer:     outfitAnalyzer,
-		ivanAnalyzer:       ai.NewIvanAnalyzer(app, logger),
-		groupChecker:       NewGroupChecker(app, logger),
-		friendChecker:      NewFriendChecker(app, logger),
-		condoChecker:       NewCondoChecker(app.DB, logger),
-		logger:             logger.Named("user_checker"),
+		app:            app,
+		db:             app.DB,
+		userFetcher:    userFetcher,
+		gameFetcher:    fetcher.NewGameFetcher(app.RoAPI, logger),
+		outfitFetcher:  fetcher.NewOutfitFetcher(app.RoAPI, logger),
+		translator:     translator,
+		userAnalyzer:   userAnalyzer,
+		outfitAnalyzer: outfitAnalyzer,
+		ivanAnalyzer:   ai.NewIvanAnalyzer(app, logger),
+		groupChecker:   NewGroupChecker(app, logger),
+		friendChecker:  NewFriendChecker(app, logger),
+		condoChecker:   NewCondoChecker(app.DB, logger),
+		logger:         logger.Named("user_checker"),
 	}
 }
 
@@ -84,11 +81,7 @@ func (c *UserChecker) ProcessUsers(userInfos []*types.ReviewUser) map[uint64]str
 	c.friendChecker.ProcessUsers(ctx, userInfos, reasonsMap)
 
 	// Process user analysis
-	reasonRequests := c.userAnalyzer.ProcessUsers(ctx, userInfos, translatedInfos, originalInfos)
-	if len(reasonRequests) > 0 {
-		c.userReasonAnalyzer.ProcessFlaggedUsers(ctx, reasonRequests, translatedInfos, originalInfos, reasonsMap)
-		c.logger.Info("Completed user reason analysis", zap.Int("flaggedUsers", len(reasonRequests)))
-	}
+	c.userAnalyzer.ProcessUsers(ctx, userInfos, translatedInfos, originalInfos, reasonsMap)
 
 	// Process condo checker
 	c.condoChecker.ProcessUsers(ctx, userInfos, reasonsMap)

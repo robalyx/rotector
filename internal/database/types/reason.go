@@ -45,3 +45,22 @@ func (r Reasons[T]) Types() []string {
 	}
 	return types
 }
+
+// ReasonInfos returns an array of ReasonInfo structs containing both type and message.
+// This is used for AI analysis where both the type and detailed message are needed.
+func (r Reasons[T]) ReasonInfos() []ReasonInfo {
+	infos := make([]ReasonInfo, 0, len(r))
+	for reasonType, reason := range r {
+		infos = append(infos, ReasonInfo{
+			Type:    reasonType.String(),
+			Message: reason.Message,
+		})
+	}
+	return infos
+}
+
+// ReasonInfo represents a reason with both type and message for AI analysis.
+type ReasonInfo struct {
+	Type    string `json:"type"`    // The type of reason (e.g., Profile, Friend, Group, etc.)
+	Message string `json:"message"` // The detailed reason message explaining why this was flagged
+}

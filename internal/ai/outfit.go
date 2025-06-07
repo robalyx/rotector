@@ -60,16 +60,17 @@ var OutfitAnalysisSchema = utils.GenerateSchema[OutfitThemeAnalysis]()
 
 // OutfitAnalyzer handles AI-based outfit analysis using OpenAI models.
 type OutfitAnalyzer struct {
-	httpClient          *httpClient.Client
-	chat                client.ChatCompletions
-	thumbnailFetcher    *fetcher.ThumbnailFetcher
-	analysisSem         *semaphore.Weighted
-	logger              *zap.Logger
-	imageLogger         *zap.Logger
-	imageDir            string
-	model               string
-	batchSize           int
-	similarityThreshold int
+	httpClient           *httpClient.Client
+	chat                 client.ChatCompletions
+	thumbnailFetcher     *fetcher.ThumbnailFetcher
+	outfitReasonAnalyzer *OutfitReasonAnalyzer
+	analysisSem          *semaphore.Weighted
+	logger               *zap.Logger
+	imageLogger          *zap.Logger
+	imageDir             string
+	model                string
+	batchSize            int
+	similarityThreshold  int
 }
 
 // DownloadResult contains the result of a single outfit image download.
@@ -91,16 +92,17 @@ func NewOutfitAnalyzer(app *setup.App, logger *zap.Logger) *OutfitAnalyzer {
 	}
 
 	return &OutfitAnalyzer{
-		httpClient:          app.RoAPI.GetClient(),
-		chat:                app.AIClient.Chat(),
-		thumbnailFetcher:    fetcher.NewThumbnailFetcher(app.RoAPI, logger),
-		analysisSem:         semaphore.NewWeighted(int64(app.Config.Worker.BatchSizes.OutfitAnalysis)),
-		logger:              logger.Named("ai_outfit"),
-		imageLogger:         imageLogger,
-		imageDir:            imageDir,
-		model:               app.Config.Common.OpenAI.OutfitModel,
-		batchSize:           app.Config.Worker.BatchSizes.OutfitAnalysisBatch,
-		similarityThreshold: app.Config.Worker.ThresholdLimits.ImageSimilarityThreshold,
+		httpClient:           app.RoAPI.GetClient(),
+		chat:                 app.AIClient.Chat(),
+		thumbnailFetcher:     fetcher.NewThumbnailFetcher(app.RoAPI, logger),
+		outfitReasonAnalyzer: NewOutfitReasonAnalyzer(app, logger),
+		analysisSem:          semaphore.NewWeighted(int64(app.Config.Worker.BatchSizes.OutfitAnalysis)),
+		logger:               logger.Named("ai_outfit"),
+		imageLogger:          imageLogger,
+		imageDir:             imageDir,
+		model:                app.Config.Common.OpenAI.OutfitModel,
+		batchSize:            app.Config.Worker.BatchSizes.OutfitAnalysisBatch,
+		similarityThreshold:  app.Config.Worker.ThresholdLimits.ImageSimilarityThreshold,
 	}
 }
 
@@ -170,6 +172,11 @@ func (a *OutfitAnalyzer) ProcessOutfits(
 	a.logger.Info("Received AI outfit theme analysis",
 		zap.Int("processedUsers", len(usersToProcess)),
 		zap.Int("flaggedUsers", len(flaggedOutfits)))
+
+	// Generate detailed outfit reasons for flagged users
+	if len(flaggedOutfits) > 0 {
+		a.outfitReasonAnalyzer.ProcessFlaggedUsers(ctx, userInfos, reasonsMap)
+	}
 
 	return flaggedOutfits
 }
@@ -342,7 +349,7 @@ func (a *OutfitAnalyzer) processOutfitBatch(
 			},
 		},
 		Model:       a.model,
-		Temperature: openai.Float(0.2),
+		Temperature: openai.Float(0.0),
 		TopP:        openai.Float(0.1),
 	}
 

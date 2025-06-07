@@ -13,6 +13,7 @@ import (
 	"github.com/openai/openai-go"
 	"github.com/robalyx/rotector/internal/ai/client"
 	"github.com/robalyx/rotector/internal/database/types"
+	"github.com/robalyx/rotector/internal/database/types/enum"
 	"github.com/robalyx/rotector/internal/setup"
 	"github.com/robalyx/rotector/internal/translator"
 	"github.com/robalyx/rotector/pkg/utils"
@@ -48,15 +49,16 @@ type FlaggedUser struct {
 
 // UserAnalyzer handles AI-based content analysis using OpenAI models.
 type UserAnalyzer struct {
-	chat        client.ChatCompletions
-	minify      *minify.M
-	translator  *translator.Translator
-	analysisSem *semaphore.Weighted
-	logger      *zap.Logger
-	textLogger  *zap.Logger
-	textDir     string
-	model       string
-	batchSize   int
+	chat               client.ChatCompletions
+	minify             *minify.M
+	translator         *translator.Translator
+	userReasonAnalyzer *UserReasonAnalyzer
+	analysisSem        *semaphore.Weighted
+	logger             *zap.Logger
+	textLogger         *zap.Logger
+	textDir            string
+	model              string
+	batchSize          int
 }
 
 // UserAnalysisSchema is the JSON schema for the user analysis response.
@@ -76,15 +78,16 @@ func NewUserAnalyzer(app *setup.App, translator *translator.Translator, logger *
 	}
 
 	return &UserAnalyzer{
-		chat:        app.AIClient.Chat(),
-		minify:      m,
-		translator:  translator,
-		analysisSem: semaphore.NewWeighted(int64(app.Config.Worker.BatchSizes.UserAnalysis)),
-		logger:      logger.Named("ai_user"),
-		textLogger:  textLogger,
-		textDir:     textDir,
-		model:       app.Config.Common.OpenAI.UserModel,
-		batchSize:   app.Config.Worker.BatchSizes.UserAnalysisBatch,
+		chat:               app.AIClient.Chat(),
+		minify:             m,
+		translator:         translator,
+		userReasonAnalyzer: NewUserReasonAnalyzer(app, logger),
+		analysisSem:        semaphore.NewWeighted(int64(app.Config.Worker.BatchSizes.UserAnalysis)),
+		logger:             logger.Named("ai_user"),
+		textLogger:         textLogger,
+		textDir:            textDir,
+		model:              app.Config.Common.OpenAI.UserModel,
+		batchSize:          app.Config.Worker.BatchSizes.UserAnalysisBatch,
 	}
 }
 
@@ -92,7 +95,8 @@ func NewUserAnalyzer(app *setup.App, translator *translator.Translator, logger *
 func (a *UserAnalyzer) ProcessUsers(
 	ctx context.Context, users []*types.ReviewUser,
 	translatedInfos map[string]*types.ReviewUser, originalInfos map[string]*types.ReviewUser,
-) map[uint64]UserReasonRequest {
+	reasonsMap map[uint64]types.Reasons[enum.UserReasonType],
+) {
 	userReasonRequests := make(map[uint64]UserReasonRequest)
 	numBatches := (len(users) + a.batchSize - 1) / a.batchSize
 
@@ -128,14 +132,17 @@ func (a *UserAnalyzer) ProcessUsers(
 
 	// Wait for all batches to complete
 	if err := p.Wait(); err != nil {
-		return userReasonRequests
+		return
 	}
 
 	a.logger.Info("Completed initial user analysis",
 		zap.Int("totalUsers", len(users)),
 		zap.Int("flaggedUsers", len(userReasonRequests)))
 
-	return userReasonRequests
+	// Generate detailed reasons for flagged users
+	if len(userReasonRequests) > 0 {
+		a.userReasonAnalyzer.ProcessFlaggedUsers(ctx, userReasonRequests, translatedInfos, originalInfos, reasonsMap)
+	}
 }
 
 // processUserBatch handles the AI analysis for a batch of user summaries.
@@ -172,15 +179,9 @@ func (a *UserAnalyzer) processUserBatch(ctx context.Context, batch []UserSummary
 			},
 		},
 		Model:       a.model,
-		Temperature: openai.Float(0.1),
+		Temperature: openai.Float(0.0),
 		TopP:        openai.Float(0.2),
 	}
-
-	params = client.WithReasoning(params, client.ReasoningOptions{
-		Effort:    openai.ReasoningEffortHigh,
-		MaxTokens: 8192,
-		Exclude:   false,
-	})
 
 	// Make API request
 	var result FlaggedUsers
