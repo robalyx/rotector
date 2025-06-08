@@ -32,22 +32,27 @@
 > This project is open-sourced for version control and transparency only. **DO NOT** attempt to set up your own instance as the system requires significant technical expertise, infrastructure resources, and specific configurations to operate effectively. No support or guides are provided.
 
 > [!IMPORTANT]
-> This project is currently in an **ALPHA** state with frequent breaking changes - **do not use this in production yet**. This is a **community-driven initiative** and is not affiliated with, endorsed by, or sponsored by Roblox Corporation.
+> This is a **community-driven initiative** and is not affiliated with, endorsed by, or sponsored by Roblox Corporation.
 
 ---
 
-## 🔍 Showcase
+## 🌐 Experience Rotector
 
 <p align="center">
-  <em>See a sample of the types of users flagged by our AI system</em><br>
-  <img src="./assets/gif/showcase.gif" alt="Rotector Showcase" style="max-width: 350px;">
+  <em>Explore our interactive website to understand how Rotector works</em><br>
+  <a href="https://rotector.com">
+    <img src="./assets/gif/website.gif" alt="Rotector Website Demo" style="max-width: 800px;">
+  </a>
 </p>
 
-Our detection system works through multiple layers of sophisticated analysis. Specialized workers continuously scan friend lists, groups, avatar outfits, user descriptions, and more to identify potentially inappropriate users. When the AI flags an account, it appears in our Discord bot interface where trained moderators conduct thorough reviews before confirming or clearing the flag.
-
-This approach ensures high accuracy while minimizing false positives, and the system provides specialized tools for moderators to perform detailed checks, creating a powerful moderation workflow.
-
-We're also developing an unreleased browser extension that will allow regular Roblox players to see if users they encounter have been flagged in our reviewed database. This extension will help the broader community identify potentially inappropriate accounts while browsing Roblox.
+<p align="center">
+  <a href="https://chrome.google.com/webstore/detail/rotector">
+    <img src="https://img.shields.io/chrome-web-store/v/rotector?style=flat-square&color=4a92e1&label=chrome%20extension" alt="Chrome Web Store">
+  </a>
+  <a href="https://addons.mozilla.org/en-US/firefox/addon/rotector/">
+    <img src="https://img.shields.io/amo/v/rotector?style=flat-square&color=4a92e1&label=firefox%20extension" alt="Firefox Add-ons">
+  </a>
+</p>
 
 ## ❓ FAQ
 
@@ -67,7 +72,7 @@ To address this, we have a feature-rich review system where our moderators caref
 <details>
 <summary>What are your plans for the database of reviewed users?</summary>
 
-Our primary goal is to create transparency about the scale of inappropriate accounts on Roblox, especially given that it's marketed as a platform for children. We're developing a browser extension that will allow regular Roblox players to see if users they encounter have been flagged in our reviewed database, helping parents and players make informed decisions about interactions.
+Our primary goal is to create transparency about the scale of inappropriate accounts on Roblox, especially given that it's marketed as a platform for children. We've released a browser extension that allows regular Roblox players to see if users they encounter have been flagged in our reviewed database, helping parents and players make informed decisions about interactions.
 
 Unfortunately, Roblox Corporation has consistently downplayed the scale of this issue, which we believe puts children at risk. By making our findings accessible and transparent, we aim to demonstrate the true extent of the problem and encourage Roblox to take more decisive action to protect its young user base. Our project serves as both a protective tool and a call for accountability.
 
@@ -82,7 +87,7 @@ The system operates through multiple sophisticated layers of detection and verif
 
 When users get flagged through these detection methods, they appear in the Discord bot interface where moderators can conduct thorough reviews. The bot provides specialized tools that allow moderators to perform checks before deciding whether to confirm or clear the flag.
 
-The system also includes an API service called [roscoe](https://github.com/robalyx/roscoe) that developers can integrate with their own applications to check user flags. Additionally, we're developing a browser extension that will allow regular Roblox players to see if users they encounter have been flagged in our reviewed database, helping the broader community identify potentially inappropriate accounts while browsing Roblox.
+We've released a browser extension that allows regular Roblox players to see if users they encounter have been flagged in our reviewed database, helping the broader community identify potentially inappropriate accounts while browsing Roblox.
 
 Rotector focuses on identifying and tracking inappropriate accounts, while leaving the actual account moderation and termination decisions to Roblox. Roblox administrators would need to contact us directly to access the uncensored list.
 
