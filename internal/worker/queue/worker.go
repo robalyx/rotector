@@ -54,6 +54,14 @@ func (w *Worker) Start() {
 		w.logger.Error("Failed to cleanup queue", zap.Error(err))
 	}
 
+	// Cleanup IP tracking records on startup
+	if err := w.d1Client.CleanupIPTracking(
+		context.Background(),
+		30*24*time.Hour, // Remove IP tracking records older than 30 days
+	); err != nil {
+		w.logger.Error("Failed to cleanup IP tracking", zap.Error(err))
+	}
+
 	for {
 		w.bar.Reset()
 
@@ -130,9 +138,43 @@ func (w *Worker) Start() {
 			w.logger.Error("Failed to mark users as processed", zap.Error(err))
 		}
 
+		// Update IP tracking with user flagged status
+		if err := w.updateIPTrackingFlaggedStatus(context.Background(), processIDs, flaggedStatus, skipAndFlagIDs); err != nil {
+			w.logger.Error("Failed to update IP tracking flagged status", zap.Error(err))
+		} else {
+			w.logger.Debug("Updated IP tracking flagged status",
+				zap.Int("total_users", len(processIDs)+len(skipAndFlagIDs)))
+		}
+
 		w.logger.Info("Processed batch",
 			zap.Int("total", len(userIDs)),
 			zap.Int("processed", len(processIDs)),
 			zap.Int("skippedAndFlagged", len(skipAndFlagIDs)))
 	}
+}
+
+// updateIPTrackingFlaggedStatus updates the  queue_ip_tracking table for processed and skipped users.
+func (w *Worker) updateIPTrackingFlaggedStatus(
+	ctx context.Context, processIDs []uint64, flaggedStatus map[uint64]struct{}, skipAndFlagIDs []uint64,
+) error {
+	// Combine all user IDs and their flagged status
+	allUserFlaggedStatus := make(map[uint64]bool)
+
+	// Add processed users with their actual flagged status
+	for _, userID := range processIDs {
+		_, flagged := flaggedStatus[userID]
+		allUserFlaggedStatus[userID] = flagged
+	}
+
+	// Add skipped users (they are always flagged since they exist in database)
+	for _, userID := range skipAndFlagIDs {
+		allUserFlaggedStatus[userID] = true
+	}
+
+	// Update IP tracking table if we have any users to update
+	if len(allUserFlaggedStatus) > 0 {
+		return w.d1Client.UpdateIPTrackingUserFlagged(ctx, allUserFlaggedStatus)
+	}
+
+	return nil
 }
