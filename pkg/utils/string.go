@@ -11,6 +11,9 @@ var MultipleSpaces = regexp.MustCompile(`\s+`)
 // ThinkPatternRegex matches thought process content enclosed in <think> tags.
 var ThinkPatternRegex = regexp.MustCompile(`<think>(.*?)</think>`)
 
+// ValidCommentCharsRegex matches only allowed characters in community notes.
+var ValidCommentCharsRegex = regexp.MustCompile(`^[a-zA-Z0-9\s.,''\-\n]+$`)
+
 // CompressAllWhitespace replaces all whitespace sequences (including newlines) with a single space.
 // This is useful for cases where you want to completely normalize whitespace.
 func CompressAllWhitespace(s string) string {
@@ -57,4 +60,20 @@ func SplitLines(content []string) []string {
 	}
 
 	return result
+}
+
+// ValidateCommentText checks if the text contains only allowed characters for community notes.
+// Returns true if the text is valid, false otherwise.
+func ValidateCommentText(text string) bool {
+	if text == "" {
+		return false
+	}
+
+	// Check if the text contains only whitespace
+	if strings.TrimSpace(text) == "" {
+		return false
+	}
+
+	// Check if all characters in the text are allowed
+	return ValidCommentCharsRegex.MatchString(text)
 }

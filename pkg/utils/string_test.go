@@ -166,3 +166,108 @@ func TestSplitLines(t *testing.T) {
 		})
 	}
 }
+
+func TestValidateCommentText(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name     string
+		input    string
+		expected bool
+	}{
+		{
+			name:     "valid basic text",
+			input:    "This is a valid comment.",
+			expected: true,
+		},
+		{
+			name:     "valid with numbers",
+			input:    "User123 has inappropriate content in outfit 456.",
+			expected: true,
+		},
+		{
+			name:     "valid with all allowed punctuation",
+			input:    "User's profile contains inappropriate text, see description.",
+			expected: true,
+		},
+		{
+			name:     "valid with hyphens",
+			input:    "Check the user's bio - it contains bad content.",
+			expected: true,
+		},
+		{
+			name:     "valid with newlines",
+			input:    "First line.\nSecond line with valid content.",
+			expected: true,
+		},
+		{
+			name:     "empty string",
+			input:    "",
+			expected: false,
+		},
+		{
+			name:     "invalid characters - special symbols",
+			input:    "User has @#$% in their profile!",
+			expected: false,
+		},
+		{
+			name:     "invalid characters - unicode",
+			input:    "User has émojis in their profile",
+			expected: false,
+		},
+		{
+			name:     "invalid characters - brackets",
+			input:    "Check [this] user's profile",
+			expected: false,
+		},
+		{
+			name:     "invalid characters - question mark",
+			input:    "Is this user appropriate?",
+			expected: false,
+		},
+		{
+			name:     "invalid characters - exclamation",
+			input:    "This user is inappropriate!",
+			expected: false,
+		},
+		{
+			name:     "invalid characters - semicolon",
+			input:    "User has bad content; check profile",
+			expected: false,
+		},
+		{
+			name:     "invalid characters - colon",
+			input:    "Note: user has inappropriate content",
+			expected: false,
+		},
+		{
+			name:     "invalid characters - parentheses",
+			input:    "User (ID: 123) has bad content",
+			expected: false,
+		},
+		{
+			name:     "mixed valid and invalid",
+			input:    "Valid text with & invalid symbols",
+			expected: false,
+		},
+		{
+			name:     "only spaces",
+			input:    "   ",
+			expected: false,
+		},
+		{
+			name:     "only punctuation",
+			input:    "...,,,---'''",
+			expected: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			result := utils.ValidateCommentText(tt.input)
+			if result != tt.expected {
+				t.Errorf("ValidateCommentText(%q) = %v, want %v", tt.input, result, tt.expected)
+			}
+		})
+	}
+}

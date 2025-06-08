@@ -59,6 +59,11 @@ func (s *CommentService) addComment(ctx context.Context, targetID, commenterID u
 		return fmt.Errorf("failed to get existing comments: %w", err)
 	}
 
+	// Validate comment text contains only allowed characters
+	if !utils.ValidateCommentText(message) {
+		return ErrInvalidComment
+	}
+
 	// Normalize the new comment message
 	normalizedNew := s.normalizer.Normalize(message)
 	if normalizedNew == "" {
@@ -84,11 +89,6 @@ func (s *CommentService) addComment(ctx context.Context, targetID, commenterID u
 		}
 	}
 
-	// Validate links in comment
-	if err := validateLinks(message); err != nil {
-		return err
-	}
-
 	// Save the comment
 	comment := types.Comment{
 		TargetID:    targetID,
@@ -105,21 +105,5 @@ func (s *CommentService) addComment(ctx context.Context, targetID, commenterID u
 		return fmt.Errorf("failed to save comment: %w", err)
 	}
 
-	return nil
-}
-
-// validateLinks checks that any URLs in the comment are valid Roblox links.
-func validateLinks(message string) error {
-	words := strings.Fields(message)
-	for _, word := range words {
-		if strings.Contains(word, "http") {
-			// Check if it's a Roblox URL
-			if !utils.IsRobloxProfileURL(word) &&
-				!utils.IsRobloxGroupURL(word) &&
-				!utils.IsRobloxGameURL(word) {
-				return ErrInvalidLinks
-			}
-		}
-	}
 	return nil
 }
