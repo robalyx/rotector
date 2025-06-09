@@ -13,15 +13,22 @@ import (
 	"go.uber.org/zap"
 )
 
+const (
+	MaxWaitTime       = 8 * time.Minute  // Maximum time to wait before processing
+	CheckInterval     = 10 * time.Second // How often to check conditions when waiting
+	MinBatchThreshold = 0.5              // Process when queue has at least 50% of batch size
+)
+
 // Worker processes queued users from Cloudflare D1.
 type Worker struct {
-	app         *setup.App
-	bar         *progress.Bar
-	userFetcher *fetcher.UserFetcher
-	userChecker *checker.UserChecker
-	d1Client    *queue.D1Client
-	logger      *zap.Logger
-	batchSize   int
+	app             *setup.App
+	bar             *progress.Bar
+	userFetcher     *fetcher.UserFetcher
+	userChecker     *checker.UserChecker
+	d1Client        *queue.D1Client
+	logger          *zap.Logger
+	batchSize       int
+	lastProcessTime time.Time
 }
 
 // New creates a new queue worker.
@@ -44,6 +51,9 @@ func New(app *setup.App, bar *progress.Bar, logger *zap.Logger) *Worker {
 func (w *Worker) Start() {
 	w.logger.Info("Queue Worker started")
 	w.bar.SetTotal(100)
+
+	// Initialize last process time
+	w.lastProcessTime = time.Now()
 
 	// Cleanup queue on startup
 	if err := w.d1Client.CleanupQueue(
@@ -79,6 +89,9 @@ func (w *Worker) Start() {
 			time.Sleep(60 * time.Second)
 			continue
 		}
+
+		// Update last process time since we're about to process
+		w.lastProcessTime = time.Now()
 
 		// Get existing users from database
 		existingUsers, err := w.app.DB.Model().User().GetUsersByIDs(
@@ -151,6 +164,45 @@ func (w *Worker) Start() {
 			zap.Int("processed", len(processIDs)),
 			zap.Int("skippedAndFlagged", len(skipAndFlagIDs)))
 	}
+}
+
+// shouldProcessBatch determines if we should process a batch based on queue size and timing conditions.
+func (w *Worker) shouldProcessBatch() (bool, time.Duration) {
+	// Check how much time has passed since last processing
+	timeSinceLastProcess := time.Since(w.lastProcessTime)
+	if timeSinceLastProcess >= MaxWaitTime {
+		w.logger.Debug("Processing due to time threshold",
+			zap.Duration("time_since_last_process", timeSinceLastProcess))
+		return true, 0
+	}
+
+	// Check queue stats to see how many items are available
+	stats, err := w.d1Client.GetQueueStats(context.Background())
+	if err != nil {
+		w.logger.Error("Failed to get queue stats, proceeding with processing", zap.Error(err))
+		return true, 0
+	}
+
+	minBatchSize := int(float64(w.batchSize) * MinBatchThreshold)
+	if stats.Unprocessed >= minBatchSize {
+		w.logger.Debug("Processing due to queue size threshold",
+			zap.Int("unprocessed", stats.Unprocessed),
+			zap.Int("min_batch_size", minBatchSize))
+		return true, 0
+	}
+
+	// Calculate remaining wait time
+	remainingWaitTime := MaxWaitTime - timeSinceLastProcess
+	nextCheckTime := min(CheckInterval, remainingWaitTime)
+
+	w.logger.Debug("Batch conditions not met, waiting",
+		zap.Int("unprocessed", stats.Unprocessed),
+		zap.Int("min_batch_size", minBatchSize),
+		zap.Duration("time_since_last_process", timeSinceLastProcess),
+		zap.Duration("remaining_wait_time", remainingWaitTime),
+		zap.Duration("next_check_in", nextCheckTime))
+
+	return false, nextCheckTime
 }
 
 // updateIPTrackingFlaggedStatus updates the  queue_ip_tracking table for processed and skipped users.
