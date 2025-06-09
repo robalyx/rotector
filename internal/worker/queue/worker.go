@@ -2,6 +2,8 @@ package queue
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"time"
 
 	"github.com/robalyx/rotector/internal/database/types"
@@ -14,10 +16,20 @@ import (
 )
 
 const (
-	MaxWaitTime       = 8 * time.Minute  // Maximum time to wait before processing
+	MaxWaitTime       = 5 * time.Minute  // Maximum time to wait before processing
 	CheckInterval     = 10 * time.Second // How often to check conditions when waiting
 	MinBatchThreshold = 0.5              // Process when queue has at least 50% of batch size
 )
+
+// ErrNoUsersToProcess indicates that no users are available for processing.
+var ErrNoUsersToProcess = errors.New("no users available for processing")
+
+// BatchData represents the data needed for processing a batch of users.
+type BatchData struct {
+	ProcessIDs     []uint64
+	SkipAndFlagIDs []uint64
+	OutfitFlags    map[uint64]bool
+}
 
 // Worker processes queued users from Cloudflare D1.
 type Worker struct {
@@ -87,94 +99,60 @@ func (w *Worker) Start() {
 
 		// Step 1: Get next batch of unprocessed users (25%)
 		w.bar.SetStepMessage("Getting next batch", 25)
-		userBatch, err := w.d1Client.GetNextBatch(context.Background(), w.batchSize)
+		batchData, err := w.getBatchForProcessing(context.Background())
 		if err != nil {
-			w.logger.Error("Failed to get next batch", zap.Error(err))
+			if errors.Is(err, ErrNoUsersToProcess) {
+				w.bar.SetStepMessage("No items to process", 0)
+				time.Sleep(10 * time.Second)
+				continue
+			}
+			w.logger.Error("Failed to get batch for processing", zap.Error(err))
 			time.Sleep(5 * time.Second)
 			continue
 		}
 
-		if len(userBatch.UserIDs) == 0 {
-			w.bar.SetStepMessage("No items to process", 0)
-			time.Sleep(10 * time.Second)
+		// If no users to process, skip to next batch
+		if len(batchData.ProcessIDs) == 0 {
 			continue
 		}
 
 		// Update last process time since we're about to process
 		w.lastProcessTime = time.Now()
 
-		// Get existing users from database
-		existingUsers, err := w.app.DB.Model().User().GetUsersByIDs(
-			context.Background(), userBatch.UserIDs, types.UserFieldBasic,
-		)
-		if err != nil {
-			w.logger.Error("Failed to check existing users", zap.Error(err))
-			time.Sleep(5 * time.Second)
-			continue
-		}
+		// Step 2: Fetch user info (40%)
+		w.bar.SetStepMessage("Fetching user info", 40)
+		userInfos := w.userFetcher.FetchInfos(context.Background(), batchData.ProcessIDs)
 
-		// Separate users into different processing groups
-		processIDs := make([]uint64, 0)
-		skipAndFlagIDs := make([]uint64, 0)
-		processInappropriateOutfitFlags := make(map[uint64]bool)
+		// Step 3: Process users with checker (60%)
+		w.bar.SetStepMessage("Processing users", 60)
+		processResult := w.userChecker.ProcessUsers(userInfos, batchData.OutfitFlags)
 
-		for _, id := range userBatch.UserIDs {
-			// If user exists in database, mark as processed and flagged
-			if _, exists := existingUsers[id]; exists {
-				skipAndFlagIDs = append(skipAndFlagIDs, id)
-				w.logger.Debug("Skipping user - already in database (will flag)",
-					zap.Uint64("userID", id))
-				continue
-			}
-
-			// Otherwise, this user needs processing
-			processIDs = append(processIDs, id)
-			processInappropriateOutfitFlags[id] = userBatch.InappropriateOutfitFlags[id]
-		}
-
-		// Mark users that should be processed and flagged
-		if len(skipAndFlagIDs) > 0 {
-			flaggedMap := make(map[uint64]struct{})
-			for _, id := range skipAndFlagIDs {
-				flaggedMap[id] = struct{}{}
-			}
-
-			if err := w.d1Client.MarkAsProcessed(context.Background(), skipAndFlagIDs, flaggedMap); err != nil {
-				w.logger.Error("Failed to mark users as processed and flagged", zap.Error(err))
-			}
-		}
-
-		// If no users to process, skip to next batch
-		if len(processIDs) == 0 {
-			continue
-		}
-
-		// Step 2: Fetch user info (50%)
-		w.bar.SetStepMessage("Fetching user info", 50)
-		userInfos := w.userFetcher.FetchInfos(context.Background(), processIDs)
-
-		// Step 3: Process users with checker (75%)
-		w.bar.SetStepMessage("Processing users", 75)
-		flaggedStatus := w.userChecker.ProcessUsers(userInfos, processInappropriateOutfitFlags)
-
-		// Step 4: Mark users as processed (100%)
-		w.bar.SetStepMessage("Marking as processed", 100)
-		if err := w.d1Client.MarkAsProcessed(context.Background(), processIDs, flaggedStatus); err != nil {
+		// Step 4: Mark users as processed (75%)
+		w.bar.SetStepMessage("Marking as processed", 75)
+		if err := w.d1Client.MarkAsProcessed(context.Background(), batchData.ProcessIDs, processResult.FlaggedStatus); err != nil {
 			w.logger.Error("Failed to mark users as processed", zap.Error(err))
 		}
 
-		// Update IP tracking with user flagged status
-		if err := w.updateIPTrackingFlaggedStatus(context.Background(), processIDs, flaggedStatus, skipAndFlagIDs); err != nil {
+		// Step 5: Add flagged users to D1 database (85%)
+		w.bar.SetStepMessage("Adding flagged users to D1", 85)
+		if len(processResult.FlaggedUsers) > 0 {
+			if err := w.d1Client.AddFlaggedUsers(context.Background(), processResult.FlaggedUsers); err != nil {
+				w.logger.Error("Failed to add flagged users to D1", zap.Error(err))
+			}
+		}
+
+		// Step 6: Update IP tracking (100%)
+		w.bar.SetStepMessage("Updating IP tracking", 100)
+		if err := w.updateIPTrackingFlaggedStatus(
+			context.Background(), batchData.ProcessIDs, processResult.FlaggedStatus, batchData.SkipAndFlagIDs,
+		); err != nil {
 			w.logger.Error("Failed to update IP tracking flagged status", zap.Error(err))
-		} else {
-			w.logger.Debug("Updated IP tracking flagged status",
-				zap.Int("total_users", len(processIDs)+len(skipAndFlagIDs)))
 		}
 
 		w.logger.Info("Processed batch",
-			zap.Int("total", len(userBatch.UserIDs)),
-			zap.Int("processed", len(processIDs)),
-			zap.Int("skippedAndFlagged", len(skipAndFlagIDs)))
+			zap.Int("total", len(batchData.ProcessIDs)+len(batchData.SkipAndFlagIDs)),
+			zap.Int("processed", len(batchData.ProcessIDs)),
+			zap.Int("skippedAndFlagged", len(batchData.SkipAndFlagIDs)))
 	}
 }
 
@@ -241,4 +219,60 @@ func (w *Worker) updateIPTrackingFlaggedStatus(
 	}
 
 	return nil
+}
+
+// getBatchForProcessing handles getting and preparing a batch of users for processing.
+func (w *Worker) getBatchForProcessing(ctx context.Context) (*BatchData, error) {
+	// Get next batch of unprocessed users
+	userBatch, err := w.d1Client.GetNextBatch(ctx, w.batchSize)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get next batch: %w", err)
+	}
+
+	if len(userBatch.UserIDs) == 0 {
+		return nil, ErrNoUsersToProcess
+	}
+
+	// Get existing users from database
+	existingUsers, err := w.app.DB.Model().User().GetUsersByIDs(
+		ctx, userBatch.UserIDs, types.UserFieldBasic,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check existing users: %w", err)
+	}
+
+	// Separate users into different processing groups
+	batchData := &BatchData{
+		ProcessIDs:     make([]uint64, 0),
+		SkipAndFlagIDs: make([]uint64, 0),
+		OutfitFlags:    make(map[uint64]bool),
+	}
+
+	for _, id := range userBatch.UserIDs {
+		// If user exists in database, mark as processed and flagged
+		if _, exists := existingUsers[id]; exists {
+			batchData.SkipAndFlagIDs = append(batchData.SkipAndFlagIDs, id)
+			w.logger.Debug("Skipping user - already in database (will flag)",
+				zap.Uint64("userID", id))
+			continue
+		}
+
+		// Otherwise, this user needs processing
+		batchData.ProcessIDs = append(batchData.ProcessIDs, id)
+		batchData.OutfitFlags[id] = userBatch.InappropriateOutfitFlags[id]
+	}
+
+	// Mark users that should be processed and flagged
+	if len(batchData.SkipAndFlagIDs) > 0 {
+		flaggedMap := make(map[uint64]struct{})
+		for _, id := range batchData.SkipAndFlagIDs {
+			flaggedMap[id] = struct{}{}
+		}
+
+		if err := w.d1Client.MarkAsProcessed(ctx, batchData.SkipAndFlagIDs, flaggedMap); err != nil {
+			w.logger.Error("Failed to mark users as processed and flagged", zap.Error(err))
+		}
+	}
+
+	return batchData, nil
 }

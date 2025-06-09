@@ -59,9 +59,15 @@ func NewUserChecker(app *setup.App, userFetcher *fetcher.UserFetcher, logger *za
 	}
 }
 
+// ProcessResult contains the results of processing users.
+type ProcessResult struct {
+	FlaggedStatus map[uint64]struct{}          // User IDs that were flagged
+	FlaggedUsers  map[uint64]*types.ReviewUser // Full user data for flagged users
+}
+
 // ProcessUsers runs users through multiple checking stages.
-// Returns a map of flagged user IDs.
-func (c *UserChecker) ProcessUsers(userInfos []*types.ReviewUser, inappropriateOutfitFlags map[uint64]bool) map[uint64]struct{} {
+// Returns processing results containing flagged user IDs and their full data.
+func (c *UserChecker) ProcessUsers(userInfos []*types.ReviewUser, inappropriateOutfitFlags map[uint64]bool) *ProcessResult {
 	c.logger.Info("Processing users", zap.Int("userInfos", len(userInfos)))
 
 	// Initialize map to store reasons
@@ -95,7 +101,10 @@ func (c *UserChecker) ProcessUsers(userInfos []*types.ReviewUser, inappropriateO
 	// Stop if no users were flagged
 	if len(reasonsMap) == 0 {
 		c.logger.Info("No flagged users found", zap.Int("userInfos", len(userInfos)))
-		return nil
+		return &ProcessResult{
+			FlaggedStatus: make(map[uint64]struct{}),
+			FlaggedUsers:  make(map[uint64]*types.ReviewUser),
+		}
 	}
 
 	// Create final flagged users map
@@ -129,7 +138,10 @@ func (c *UserChecker) ProcessUsers(userInfos []*types.ReviewUser, inappropriateO
 		zap.Int("totalProcessed", len(userInfos)),
 		zap.Int("flaggedUsers", len(flaggedUsers)))
 
-	return flaggedStatus
+	return &ProcessResult{
+		FlaggedStatus: flaggedStatus,
+		FlaggedUsers:  flaggedUsers,
+	}
 }
 
 // prepareUserInfoMaps creates maps of user information for both translated and original content.

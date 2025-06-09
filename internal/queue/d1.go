@@ -2,9 +2,12 @@ package queue
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
+	"github.com/robalyx/rotector/internal/database/types"
+	"github.com/robalyx/rotector/internal/database/types/enum"
 	"github.com/robalyx/rotector/internal/setup"
 	"go.uber.org/zap"
 )
@@ -449,6 +452,74 @@ func (c *D1Client) CleanupIPTracking(ctx context.Context, retentionPeriod time.D
 	c.logger.Debug("Cleaned up old IP tracking records",
 		zap.Int64("retention_cutoff", retentionCutoff),
 		zap.Int("records_removed", len(result)))
+
+	return nil
+}
+
+// AddFlaggedUsers inserts flagged users into the user_flags table.
+func (c *D1Client) AddFlaggedUsers(ctx context.Context, flaggedUsers map[uint64]*types.ReviewUser) error {
+	if len(flaggedUsers) == 0 {
+		return nil
+	}
+
+	// Build batch insert query
+	sqlStmt := `
+		INSERT OR REPLACE INTO user_flags (
+			user_id, 
+			flag_type, 
+			confidence, 
+			reasons
+		) VALUES
+	`
+
+	params := make([]any, 0, len(flaggedUsers)*4)
+	userIDs := make([]uint64, 0, len(flaggedUsers))
+
+	for userID := range flaggedUsers {
+		userIDs = append(userIDs, userID)
+	}
+
+	for i, userID := range userIDs {
+		user := flaggedUsers[userID]
+
+		if i > 0 {
+			sqlStmt += ","
+		}
+		sqlStmt += "(?, ?, ?, ?)"
+
+		// Convert reasons to JSON string
+		reasonsJSON := "{}"
+		if len(user.Reasons) > 0 {
+			// Convert reasons map to the proper format
+			reasonsData := make(map[string]map[string]any)
+			for reasonType, reason := range user.Reasons {
+				reasonsData[reasonType.String()] = map[string]any{
+					"message":    reason.Message,
+					"confidence": reason.Confidence,
+					"evidence":   reason.Evidence,
+				}
+			}
+
+			if jsonBytes, err := json.Marshal(reasonsData); err == nil {
+				reasonsJSON = string(jsonBytes)
+			}
+		}
+
+		params = append(params,
+			userID,
+			enum.UserTypeFlagged,
+			user.Confidence,
+			reasonsJSON,
+		)
+	}
+
+	_, err := c.api.ExecuteSQL(ctx, sqlStmt, params)
+	if err != nil {
+		return fmt.Errorf("failed to insert flagged users: %w", err)
+	}
+
+	c.logger.Debug("Inserted flagged users into user_flags table",
+		zap.Int("count", len(flaggedUsers)))
 
 	return nil
 }
