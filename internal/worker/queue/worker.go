@@ -75,18 +75,28 @@ func (w *Worker) Start() {
 	for {
 		w.bar.Reset()
 
+		// Check if we should process based on batching conditions
+		shouldProcess, sleepDuration := w.shouldProcessBatch()
+		if !shouldProcess {
+			w.bar.SetStepMessage("Waiting for batch conditions", 0)
+			w.logger.Debug("Waiting for batch conditions",
+				zap.Duration("sleep_duration", sleepDuration))
+			time.Sleep(sleepDuration)
+			continue
+		}
+
 		// Step 1: Get next batch of unprocessed users (25%)
 		w.bar.SetStepMessage("Getting next batch", 25)
-		userIDs, err := w.d1Client.GetNextBatch(context.Background(), w.batchSize)
+		userBatch, err := w.d1Client.GetNextBatch(context.Background(), w.batchSize)
 		if err != nil {
 			w.logger.Error("Failed to get next batch", zap.Error(err))
 			time.Sleep(5 * time.Second)
 			continue
 		}
 
-		if len(userIDs) == 0 {
+		if len(userBatch.UserIDs) == 0 {
 			w.bar.SetStepMessage("No items to process", 0)
-			time.Sleep(60 * time.Second)
+			time.Sleep(10 * time.Second)
 			continue
 		}
 
@@ -95,7 +105,7 @@ func (w *Worker) Start() {
 
 		// Get existing users from database
 		existingUsers, err := w.app.DB.Model().User().GetUsersByIDs(
-			context.Background(), userIDs, types.UserFieldBasic,
+			context.Background(), userBatch.UserIDs, types.UserFieldBasic,
 		)
 		if err != nil {
 			w.logger.Error("Failed to check existing users", zap.Error(err))
@@ -106,8 +116,9 @@ func (w *Worker) Start() {
 		// Separate users into different processing groups
 		processIDs := make([]uint64, 0)
 		skipAndFlagIDs := make([]uint64, 0)
+		processInappropriateOutfitFlags := make(map[uint64]bool)
 
-		for _, id := range userIDs {
+		for _, id := range userBatch.UserIDs {
 			// If user exists in database, mark as processed and flagged
 			if _, exists := existingUsers[id]; exists {
 				skipAndFlagIDs = append(skipAndFlagIDs, id)
@@ -118,6 +129,7 @@ func (w *Worker) Start() {
 
 			// Otherwise, this user needs processing
 			processIDs = append(processIDs, id)
+			processInappropriateOutfitFlags[id] = userBatch.InappropriateOutfitFlags[id]
 		}
 
 		// Mark users that should be processed and flagged
@@ -143,7 +155,7 @@ func (w *Worker) Start() {
 
 		// Step 3: Process users with checker (75%)
 		w.bar.SetStepMessage("Processing users", 75)
-		flaggedStatus := w.userChecker.ProcessUsers(userInfos)
+		flaggedStatus := w.userChecker.ProcessUsers(userInfos, processInappropriateOutfitFlags)
 
 		// Step 4: Mark users as processed (100%)
 		w.bar.SetStepMessage("Marking as processed", 100)
@@ -160,7 +172,7 @@ func (w *Worker) Start() {
 		}
 
 		w.logger.Info("Processed batch",
-			zap.Int("total", len(userIDs)),
+			zap.Int("total", len(userBatch.UserIDs)),
 			zap.Int("processed", len(processIDs)),
 			zap.Int("skippedAndFlagged", len(skipAndFlagIDs)))
 	}

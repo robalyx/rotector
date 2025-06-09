@@ -23,9 +23,16 @@ type Stats struct {
 
 // Status represents the current status of a queued user.
 type Status struct {
-	Processing bool
-	Processed  bool
-	Flagged    bool
+	Processing          bool
+	Processed           bool
+	Flagged             bool
+	InappropriateOutfit bool
+}
+
+// UserBatch represents a batch of users with their inappropriate outfit flags.
+type UserBatch struct {
+	UserIDs                  []uint64
+	InappropriateOutfitFlags map[uint64]bool
 }
 
 // D1Client handles Cloudflare D1 API requests.
@@ -50,10 +57,10 @@ func NewD1Client(app *setup.App, logger *zap.Logger) *D1Client {
 }
 
 // GetNextBatch retrieves the next batch of unprocessed and non-processing users.
-func (c *D1Client) GetNextBatch(ctx context.Context, batchSize int) ([]uint64, error) {
+func (c *D1Client) GetNextBatch(ctx context.Context, batchSize int) (*UserBatch, error) {
 	// First, get the batch of users
 	selectQuery := `
-		SELECT user_id 
+		SELECT user_id, inappropriate_outfit 
 		FROM queued_users 
 		WHERE processed = 0 AND processing = 0
 		ORDER BY queued_at ASC 
@@ -66,14 +73,22 @@ func (c *D1Client) GetNextBatch(ctx context.Context, batchSize int) ([]uint64, e
 	}
 
 	userIDs := make([]uint64, 0, len(result))
+	inappropriateOutfitFlags := make(map[uint64]bool, len(result))
+
 	for _, row := range result {
 		if userID, ok := row["user_id"].(float64); ok {
 			userIDs = append(userIDs, uint64(userID))
+
+			inappropriateOutfit := row["inappropriate_outfit"].(float64) == 1
+			inappropriateOutfitFlags[uint64(userID)] = inappropriateOutfit
 		}
 	}
 
 	if len(userIDs) == 0 {
-		return nil, nil
+		return &UserBatch{
+			UserIDs:                  []uint64{},
+			InappropriateOutfitFlags: make(map[uint64]bool),
+		}, nil
 	}
 
 	// Then, mark them as processing
@@ -92,7 +107,10 @@ func (c *D1Client) GetNextBatch(ctx context.Context, batchSize int) ([]uint64, e
 		return nil, fmt.Errorf("failed to mark users as processing: %w", err)
 	}
 
-	return userIDs, nil
+	return &UserBatch{
+		UserIDs:                  userIDs,
+		InappropriateOutfitFlags: inappropriateOutfitFlags,
+	}, nil
 }
 
 // MarkAsProcessed marks users as processed and not processing.
@@ -322,8 +340,8 @@ func (c *D1Client) RemoveFromQueue(ctx context.Context, userID uint64) error {
 		return ErrUserNotFound
 	}
 
-	processed, _ := result[0]["processed"].(float64)
-	processing, _ := result[0]["processing"].(float64)
+	processed := result[0]["processed"].(float64)
+	processing := result[0]["processing"].(float64)
 
 	if processed == 1 || processing == 1 {
 		return ErrUserProcessing
@@ -341,7 +359,7 @@ func (c *D1Client) RemoveFromQueue(ctx context.Context, userID uint64) error {
 // GetQueueStatus retrieves the current status of a queued user.
 func (c *D1Client) GetQueueStatus(ctx context.Context, userID uint64) (*Status, error) {
 	query := `
-		SELECT processing, processed, flagged 
+		SELECT processing, processed, flagged, inappropriate_outfit 
 		FROM queued_users 
 		WHERE user_id = ?
 	`
@@ -356,15 +374,10 @@ func (c *D1Client) GetQueueStatus(ctx context.Context, userID uint64) (*Status, 
 	}
 
 	var status Status
-	if processing, ok := result[0]["processing"].(float64); ok {
-		status.Processing = processing == 1
-	}
-	if processed, ok := result[0]["processed"].(float64); ok {
-		status.Processed = processed == 1
-	}
-	if flagged, ok := result[0]["flagged"].(float64); ok {
-		status.Flagged = flagged == 1
-	}
+	status.Processing = result[0]["processing"].(float64) == 1
+	status.Processed = result[0]["processed"].(float64) == 1
+	status.Flagged = result[0]["flagged"].(float64) == 1
+	status.InappropriateOutfit = result[0]["inappropriate_outfit"].(float64) == 1
 
 	return &status, nil
 }

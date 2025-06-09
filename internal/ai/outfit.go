@@ -109,19 +109,16 @@ func NewOutfitAnalyzer(app *setup.App, logger *zap.Logger) *OutfitAnalyzer {
 // ProcessOutfits analyzes outfit images for a batch of users.
 // Returns a map of user IDs to their flagged outfit names.
 func (a *OutfitAnalyzer) ProcessOutfits(
-	ctx context.Context, userInfos []*types.ReviewUser, reasonsMap map[uint64]types.Reasons[enum.UserReasonType],
+	ctx context.Context, userInfos []*types.ReviewUser,
+	reasonsMap map[uint64]types.Reasons[enum.UserReasonType],
+	inappropriateOutfitFlags map[uint64]bool,
 ) map[uint64]map[string]struct{} {
-	// Filter users to only those who already have reasons
-	var usersToProcess []*types.ReviewUser
-	for _, userInfo := range userInfos {
-		if reasons, hasFlaggedReasons := reasonsMap[userInfo.ID]; hasFlaggedReasons && len(reasons) > 0 {
-			usersToProcess = append(usersToProcess, userInfo)
-		}
-	}
+	// Filter users based on inappropriate outfit flags and existing reasons
+	usersToProcess := a.filterUsersForOutfitProcessing(userInfos, reasonsMap, inappropriateOutfitFlags)
 
 	// Skip if no users need outfit processing
 	if len(usersToProcess) == 0 {
-		a.logger.Info("No users with existing reasons to process outfits for")
+		a.logger.Info("No users to process outfits for")
 		return nil
 	}
 
@@ -179,6 +176,46 @@ func (a *OutfitAnalyzer) ProcessOutfits(
 	}
 
 	return flaggedOutfits
+}
+
+// filterUsersForOutfitProcessing determines which users should be processed through outfit analysis.
+func (a *OutfitAnalyzer) filterUsersForOutfitProcessing(
+	userInfos []*types.ReviewUser, reasonsMap map[uint64]types.Reasons[enum.UserReasonType], inappropriateOutfitFlags map[uint64]bool,
+) []*types.ReviewUser {
+	var usersToProcess []*types.ReviewUser
+
+	for _, userInfo := range userInfos {
+		var shouldProcess bool
+
+		// Check if user has existing violations
+		hasExistingViolations := func() bool {
+			reasons, exists := reasonsMap[userInfo.ID]
+			return exists && len(reasons) > 0
+		}()
+
+		// Use explicit filtering logic when outfit flags are provided
+		if inappropriateOutfitFlags != nil {
+			if flag, exists := inappropriateOutfitFlags[userInfo.ID]; exists && flag {
+				// User is explicitly marked for outfit analysis
+				shouldProcess = true
+			} else if !exists {
+				// User not in flags map, not processed
+				shouldProcess = false
+			} else {
+				// User explicitly not marked for outfit analysis, but process if they have violations
+				shouldProcess = hasExistingViolations
+			}
+		} else {
+			// Fallback to legacy behavior: only process users with existing violations
+			shouldProcess = hasExistingViolations
+		}
+
+		if shouldProcess {
+			usersToProcess = append(usersToProcess, userInfo)
+		}
+	}
+
+	return usersToProcess
 }
 
 // analyzeUserOutfits handles the theme analysis of a single user's outfits.
@@ -261,15 +298,25 @@ func (a *OutfitAnalyzer) analyzeUserOutfits(
 		}
 	}
 
-	// Only flag if there are more than 1 suspicious outfits and confidence is high enough
+	// Determine flagging criteria based on number of suspicious outfits
+	shouldFlag := false
+	finalConfidence := highestConfidence
+
 	if len(allSuspiciousThemes) > 1 && highestConfidence >= 0.5 {
+		shouldFlag = true
+	} else if len(allSuspiciousThemes) == 1 && highestConfidence >= 0.7 {
+		shouldFlag = true
+		finalConfidence = highestConfidence * 0.8 // Reduce confidence by 20% for single outfit cases
+	}
+
+	if shouldFlag {
 		mu.Lock()
 		if _, exists := reasonsMap[info.ID]; !exists {
 			reasonsMap[info.ID] = make(types.Reasons[enum.UserReasonType])
 		}
 		reasonsMap[info.ID].Add(enum.UserReasonTypeOutfit, &types.Reason{
 			Message:    "User has outfits with inappropriate themes.",
-			Confidence: highestConfidence,
+			Confidence: finalConfidence,
 			Evidence:   allSuspiciousThemes,
 		})
 		mu.Unlock()
@@ -277,7 +324,8 @@ func (a *OutfitAnalyzer) analyzeUserOutfits(
 		a.logger.Info("AI flagged user with outfit themes",
 			zap.Uint64("userID", info.ID),
 			zap.String("username", info.Name),
-			zap.Float64("confidence", highestConfidence),
+			zap.Float64("originalConfidence", highestConfidence),
+			zap.Float64("finalConfidence", finalConfidence),
 			zap.Int("numOutfits", len(allSuspiciousThemes)),
 			zap.Int("totalFlaggedOutfits", len(flaggedOutfits)),
 			zap.Strings("themes", allSuspiciousThemes))

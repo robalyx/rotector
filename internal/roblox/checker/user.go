@@ -61,7 +61,7 @@ func NewUserChecker(app *setup.App, userFetcher *fetcher.UserFetcher, logger *za
 
 // ProcessUsers runs users through multiple checking stages.
 // Returns a map of flagged user IDs.
-func (c *UserChecker) ProcessUsers(userInfos []*types.ReviewUser) map[uint64]struct{} {
+func (c *UserChecker) ProcessUsers(userInfos []*types.ReviewUser, inappropriateOutfitFlags map[uint64]bool) map[uint64]struct{} {
 	c.logger.Info("Processing users", zap.Int("userInfos", len(userInfos)))
 
 	// Initialize map to store reasons
@@ -90,7 +90,7 @@ func (c *UserChecker) ProcessUsers(userInfos []*types.ReviewUser) map[uint64]str
 	c.ivanAnalyzer.ProcessUsers(ctx, userInfos, reasonsMap)
 
 	// Process outfit analysis
-	flaggedOutfits := c.outfitAnalyzer.ProcessOutfits(ctx, userInfos, reasonsMap)
+	flaggedOutfits := c.outfitAnalyzer.ProcessOutfits(ctx, userInfos, reasonsMap, inappropriateOutfitFlags)
 
 	// Stop if no users were flagged
 	if len(reasonsMap) == 0 {

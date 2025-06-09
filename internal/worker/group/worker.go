@@ -131,7 +131,7 @@ func (w *Worker) Start() {
 		// Step 4: Process users (90%)
 		w.bar.SetStepMessage("Processing users", 90)
 		w.reporter.UpdateStatus("Processing users", 90)
-		w.userChecker.ProcessUsers(userInfos)
+		w.userChecker.ProcessUsers(userInfos, nil)
 
 		// Step 5: Prepare for next batch
 		w.pendingUserIDs = userIDs[w.batchSize:]
