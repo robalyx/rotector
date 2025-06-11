@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/robalyx/rotector/internal/database/dbretry"
 	"github.com/robalyx/rotector/internal/database/types"
@@ -151,7 +152,7 @@ func (r *ActivityModel) GetLogs(
 }
 
 // GetRecentlyReviewedIDs returns the IDs of users or groups that were recently reviewed by a specific reviewer.
-// Only returns IDs if there are enough items to review (more than 2x the limit).
+// Uses a time-based filter (30 minutes) with fallback to no filtering if no items are available.
 func (r *ActivityModel) GetRecentlyReviewedIDs(
 	ctx context.Context, reviewerID uint64, isGroup bool, limit int,
 ) ([]uint64, error) {
@@ -169,45 +170,48 @@ func (r *ActivityModel) GetRecentlyReviewedIDs(
 			activityType = enum.ActivityTypeUserViewed
 		}
 
-		// Check if we have enough items to apply the filter
-		var totalCount int
-		var err error
-
-		if isGroup {
-			totalCount, err = r.db.NewSelect().
-				Model((*types.Group)(nil)).
-				Where("status = ?", enum.GroupTypeFlagged).
-				Count(ctx)
-		} else {
-			totalCount, err = r.db.NewSelect().
-				Model((*types.User)(nil)).
-				Where("status = ?", enum.UserTypeFlagged).
-				Count(ctx)
-		}
-
-		if err != nil {
-			return nil, fmt.Errorf("failed to get total count: %w", err)
-		}
-
-		// If we don't have enough items (2x the limit + buffer), return empty slice
-		// This ensures we always have enough items to review even after filtering
-		if totalCount < limit*2+10 {
-			return []uint64{}, nil
-		}
-
-		// Get recently reviewed IDs since we have enough items
+		// Get IDs reviewed by this reviewer in the last 30 minutes
+		cutoffTime := time.Now().Add(-30 * time.Minute)
 		var ids []uint64
-		err = r.db.NewSelect().
+		err := r.db.NewSelect().
 			Model(&logs).
 			Column(itemType).
 			Where(itemType+" > 0").
 			Where("reviewer_id = ?", reviewerID).
 			Where("activity_type = ?", activityType).
+			Where("activity_timestamp >= ?", cutoffTime).
 			Order("activity_timestamp DESC").
 			Limit(limit).
 			Scan(ctx, &ids)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get recently reviewed IDs: %w", err)
+		}
+
+		// If we have reviewed items in the time window, check if filtering would leave enough items
+		if len(ids) > 0 {
+			var availableCount int
+			if isGroup {
+				availableCount, err = r.db.NewSelect().
+					Model((*types.Group)(nil)).
+					Where("status = ?", enum.GroupTypeFlagged).
+					Where("id NOT IN (?)", bun.In(ids)).
+					Count(ctx)
+			} else {
+				availableCount, err = r.db.NewSelect().
+					Model((*types.User)(nil)).
+					Where("status = ?", enum.UserTypeFlagged).
+					Where("id NOT IN (?)", bun.In(ids)).
+					Count(ctx)
+			}
+
+			if err != nil {
+				return nil, fmt.Errorf("failed to get available count: %w", err)
+			}
+
+			// If filtering would leave no items available, return empty slice (no filtering)
+			if availableCount == 0 {
+				return []uint64{}, nil
+			}
 		}
 
 		return ids, nil
