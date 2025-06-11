@@ -71,7 +71,6 @@ func main() {
 		{Name: "StatsUserCounts", Type: "*types.UserCounts", Doc: "StatsUserCounts stores user statistics", Persist: true},
 		{Name: "StatsGroupCounts", Type: "*types.GroupCounts", Doc: "StatsGroupCounts stores group statistics", Persist: true},
 		{Name: "StatsActiveUsers", Type: "[]uint64", Doc: "StatsActiveUsers stores the list of active reviewers", Persist: true},
-		{Name: "StatsVotes", Type: "*types.VoteAccuracy", Doc: "StatsVotes stores a user's voting statistics", Persist: true},
 
 		// Status related keys
 		{Name: "StatusWorkers", Type: "[]core.Status", Doc: "StatusWorkers stores worker status information", Persist: false},
@@ -186,15 +185,6 @@ func main() {
 		{Name: "AdminBanReason", Type: "enum.BanReason", Doc: "AdminBanReason stores the ban reason", Persist: true},
 		{Name: "AdminBanExpiry", Type: "*time.Time", Doc: "AdminBanExpiry stores the ban expiry time", Persist: true},
 		{Name: "AdminBanInfo", Type: "*types.DiscordBan", Doc: "AdminBanInfo stores ban information", Persist: true},
-
-		// Leaderboard stats related keys
-		{Name: "LeaderboardStats", Type: "[]*types.VoteAccuracy", Doc: "LeaderboardStats stores leaderboard statistics", Persist: true},
-		{Name: "LeaderboardUsernames", Type: "map[uint64]string", Doc: "LeaderboardUsernames stores usernames for the leaderboard", Persist: true},
-		{Name: "LeaderboardCursor", Type: "*types.LeaderboardCursor", Doc: "LeaderboardCursor stores the current leaderboard cursor", Persist: true},
-		{Name: "LeaderboardNextCursor", Type: "*types.LeaderboardCursor", Doc: "LeaderboardNextCursor stores the next leaderboard cursor", Persist: true},
-		{Name: "LeaderboardPrevCursors", Type: "[]*types.LeaderboardCursor", Doc: "LeaderboardPrevCursors stores previous leaderboard cursors", Persist: true},
-		{Name: "LeaderboardLastRefresh", Type: "time.Time", Doc: "LeaderboardLastRefresh stores the last refresh time", Persist: true},
-		{Name: "LeaderboardNextRefresh", Type: "time.Time", Doc: "LeaderboardNextRefresh stores the next refresh time", Persist: true},
 
 		// Reviewer stats related keys
 		{Name: "ReviewerStats", Type: "map[uint64]*types.ReviewerStats", Doc: "ReviewerStats stores reviewer statistics", Persist: true},

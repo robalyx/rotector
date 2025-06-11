@@ -50,8 +50,6 @@ var (
 	StatsGroupCounts = NewKey[*types.GroupCounts]("StatsGroupCounts", true)
 	// StatsActiveUsers stores the list of active reviewers
 	StatsActiveUsers = NewKey[[]uint64]("StatsActiveUsers", true)
-	// StatsVotes stores a user's voting statistics
-	StatsVotes = NewKey[*types.VoteAccuracy]("StatsVotes", true)
 	// StatusWorkers stores worker status information
 	StatusWorkers = NewKey[[]core.Status]("StatusWorkers", false)
 	// SettingName stores the name of the current setting
@@ -224,20 +222,6 @@ var (
 	AdminBanExpiry = NewKey[*time.Time]("AdminBanExpiry", true)
 	// AdminBanInfo stores ban information
 	AdminBanInfo = NewKey[*types.DiscordBan]("AdminBanInfo", true)
-	// LeaderboardStats stores leaderboard statistics
-	LeaderboardStats = NewKey[[]*types.VoteAccuracy]("LeaderboardStats", true)
-	// LeaderboardUsernames stores usernames for the leaderboard
-	LeaderboardUsernames = NewKey[map[uint64]string]("LeaderboardUsernames", true)
-	// LeaderboardCursor stores the current leaderboard cursor
-	LeaderboardCursor = NewKey[*types.LeaderboardCursor]("LeaderboardCursor", true)
-	// LeaderboardNextCursor stores the next leaderboard cursor
-	LeaderboardNextCursor = NewKey[*types.LeaderboardCursor]("LeaderboardNextCursor", true)
-	// LeaderboardPrevCursors stores previous leaderboard cursors
-	LeaderboardPrevCursors = NewKey[[]*types.LeaderboardCursor]("LeaderboardPrevCursors", true)
-	// LeaderboardLastRefresh stores the last refresh time
-	LeaderboardLastRefresh = NewKey[time.Time]("LeaderboardLastRefresh", true)
-	// LeaderboardNextRefresh stores the next refresh time
-	LeaderboardNextRefresh = NewKey[time.Time]("LeaderboardNextRefresh", true)
 	// ReviewerStats stores reviewer statistics
 	ReviewerStats = NewKey[map[uint64]*types.ReviewerStats]("ReviewerStats", true)
 	// ReviewerUsernames stores usernames for reviewers

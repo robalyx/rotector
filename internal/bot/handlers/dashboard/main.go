@@ -51,21 +51,6 @@ func (m *Menu) Show(ctx *interaction.Context, s *session.Session) {
 		m.layout.logger.Error("Failed to get counts", zap.Error(err))
 	}
 
-	// Only get vote statistics for non-reviewers
-	userID := uint64(ctx.Event().User().ID)
-	if !s.BotSettings().IsReviewer(userID) {
-		voteStats, err := m.layout.db.Service().Vote().GetUserVoteStats(
-			ctx.Context(),
-			userID,
-			enum.LeaderboardPeriodAllTime,
-		)
-		if err != nil {
-			m.layout.logger.Error("Failed to get vote statistics", zap.Error(err))
-			voteStats = &types.VoteAccuracy{DiscordUserID: userID} // Use empty stats on error
-		}
-		session.StatsVotes.Set(s, voteStats)
-	}
-
 	// Get list of currently active reviewers
 	activeUsers := m.layout.sessionManager.GetActiveUsers(ctx.Context())
 
@@ -124,8 +109,6 @@ func (m *Menu) handleSelectMenu(ctx *interaction.Context, s *session.Session, cu
 		ctx.Show(constants.UserSettingsPageName, "")
 	case constants.ActivityBrowserButtonCustomID:
 		ctx.Show(constants.LogPageName, "")
-	case constants.LeaderboardMenuButtonCustomID:
-		ctx.Show(constants.LeaderboardPageName, "")
 	case constants.ChatAssistantButtonCustomID:
 		ctx.Show(constants.ChatPageName, "")
 	case constants.WorkerStatusButtonCustomID:
@@ -273,7 +256,7 @@ func (m *Menu) handleLookupRobloxGroupModalSubmit(ctx *interaction.Context, s *s
 	}
 
 	// Get group from database
-	group, err := m.layout.db.Service().Group().GetGroupByID(ctx.Context(), groupIDStr, types.GroupFieldAll)
+	group, err := m.layout.db.Model().Group().GetGroupByID(ctx.Context(), groupIDStr, types.GroupFieldAll)
 	if err != nil {
 		switch {
 		case errors.Is(err, types.ErrGroupNotFound):
@@ -343,16 +326,24 @@ func (m *Menu) handleLookupDiscordUserModalSubmit(ctx *interaction.Context, s *s
 func (m *Menu) handleButton(ctx *interaction.Context, s *session.Session, customID string) {
 	userID := uint64(ctx.Event().User().ID)
 	isReviewer := s.BotSettings().IsReviewer(userID)
+	isAdmin := s.BotSettings().IsAdmin(userID)
 
 	switch customID {
 	case constants.RefreshButtonCustomID:
 		session.StatsIsRefreshed.Set(s, false)
 		ctx.Reload("Refreshed dashboard.")
 	case constants.StartUserReviewButtonCustomID:
-		ctx.Show(constants.UserReviewPageName, "")
-	case constants.StartGroupReviewButtonCustomID:
 		if !isReviewer {
 			m.layout.logger.Error("Non-reviewer attempted restricted action",
+				zap.Uint64("user_id", userID),
+				zap.String("action", customID))
+			ctx.Error("You do not have permission to perform this action.")
+			return
+		}
+		ctx.Show(constants.UserReviewPageName, "")
+	case constants.StartGroupReviewButtonCustomID:
+		if !isAdmin {
+			m.layout.logger.Error("Non-admin attempted restricted action",
 				zap.Uint64("user_id", userID),
 				zap.String("action", customID))
 			ctx.Error("You do not have permission to perform this action.")

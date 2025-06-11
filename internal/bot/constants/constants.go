@@ -55,7 +55,6 @@ const (
 	CaptchaPageName       = "CAPTCHA Verification"
 	TimeoutPageName       = "Timeout"
 	ChatPageName          = "AI Chat"
-	LeaderboardPageName   = "Leaderboard"
 	LogPageName           = "Activity Logs"
 	StatusPageName        = "Status"
 	ReviewerStatsPageName = "Reviewer Stats"
@@ -79,7 +78,6 @@ const (
 	StartGroupReviewButtonCustomID  = "start_group_review"
 	UserSettingsButtonCustomID      = "user_settings"
 	ActivityBrowserButtonCustomID   = "activity_browser"
-	LeaderboardMenuButtonCustomID   = "leaderboard_menu"
 	AdminMenuButtonCustomID         = "admin_menu"
 	AppealMenuButtonCustomID        = "appeal_menu"
 	QueueManagementButtonCustomID   = "queue_management"
@@ -154,12 +152,6 @@ By clicking Accept, you:
 
 // Common Review Menu.
 const (
-	// VoteConsensusThreshold is the threshold for a vote to be considered a consensus.
-	VoteConsensusThreshold = 0.75
-
-	// MinimumVotesRequired is the minimum number of votes required before a consensus is enforced.
-	MinimumVotesRequired = 10
-
 	// ReviewLogsLimit caps the number of review history entries shown.
 	ReviewLogsLimit = 5
 
@@ -422,12 +414,6 @@ const (
 	UnbanUserAction   = "unban_user"
 	DeleteUserAction  = "delete_user"
 	DeleteGroupAction = "delete_group"
-)
-
-// Leaderboard Stats Menu.
-const (
-	LeaderboardEntriesPerPage           = 10
-	LeaderboardPeriodSelectMenuCustomID = "leaderboard_period"
 )
 
 // Reviewer Stats Menu.

@@ -14,8 +14,6 @@ const (
 	ReviewSortByLastUpdated
 	// ReviewSortByRecentlyUpdated orders reviews by most recently updated.
 	ReviewSortByRecentlyUpdated
-	// ReviewSortByReputation orders reviews by reputation.
-	ReviewSortByReputation
 	// ReviewSortByLastViewed orders reviews by last viewed.
 	ReviewSortByLastViewed
 )

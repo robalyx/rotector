@@ -56,9 +56,8 @@ func (m *ReviewMenu) Show(ctx *interaction.Context, s *session.Session) {
 	// If no group is set in session, fetch a new one
 	group := session.GroupTarget.Get(s)
 	if group == nil {
-		var isBanned bool
 		var err error
-		group, isBanned, err = m.fetchNewTarget(ctx, s)
+		group, err = m.fetchNewTarget(ctx, s)
 		if err != nil {
 			if errors.Is(err, types.ErrNoGroupsToReview) {
 				ctx.Show(constants.DashboardPageName, "No groups to review. Please check back later.")
@@ -69,11 +68,6 @@ func (m *ReviewMenu) Show(ctx *interaction.Context, s *session.Session) {
 			}
 			m.layout.logger.Error("Failed to fetch a new group", zap.Error(err))
 			ctx.Error("Failed to fetch a new group. Please try again.")
-			return
-		}
-
-		if isBanned {
-			ctx.Show(constants.BanPageName, "You have been banned for suspicious voting patterns.")
 			return
 		}
 	}
@@ -320,7 +314,6 @@ Basic Info:
 
 Status Information:
 - Current Status: %s
-- Reputation: %d Reports, %d Safe Votes
 - Last Updated: %s
 
 Recent Shout:
@@ -337,8 +330,6 @@ Flagged Members (showing %d of %d total flagged):
 			strings.Join(group.Reasons.Messages(), "; "),
 			group.Confidence,
 			group.Status.String(),
-			group.Reputation.Downvotes,
-			group.Reputation.Upvotes,
 			group.LastUpdated.Format(time.RFC3339),
 			shoutInfo,
 			len(flaggedMembers), len(memberIDs),
@@ -419,7 +410,7 @@ func (m *ReviewMenu) handleNavigateGroup(ctx *interaction.Context, s *session.Se
 	// Fetch the group data
 	targetGroupID := history[index]
 	m.layout.logger.Info("Fetching group", zap.Uint64("group_id", targetGroupID))
-	group, err := m.layout.db.Service().Group().GetGroupByID(
+	group, err := m.layout.db.Model().Group().GetGroupByID(
 		ctx.Context(),
 		strconv.FormatUint(targetGroupID, 10),
 		types.GroupFieldAll,
@@ -480,158 +471,78 @@ func (m *ReviewMenu) handleNavigateGroup(ctx *interaction.Context, s *session.Se
 func (m *ReviewMenu) handleConfirmGroup(ctx *interaction.Context, s *session.Session) {
 	group := session.GroupTarget.Get(s)
 	reviewerID := uint64(ctx.Event().User().ID)
+
+	// Ensure user is an admin
 	isAdmin := s.BotSettings().IsAdmin(reviewerID)
-
-	var actionMsg string
-	if session.UserReviewMode.Get(s) == enum.ReviewModeTraining || !isAdmin {
-		// Training mode - increment downvotes
-		if err := m.layout.db.Service().Reputation().UpdateGroupVotes(ctx.Context(), group.ID, reviewerID, false); err != nil {
-			m.layout.logger.Error("Failed to update downvotes", zap.Error(err))
-			ctx.Error("Failed to update downvotes. Please try again.")
-			return
-		}
-		group.Reputation.Downvotes++
-		actionMsg = "downvoted"
-
-		// Log the training downvote action
-		go m.layout.db.Model().Activity().Log(ctx.Context(), &types.ActivityLog{
-			ActivityTarget: types.ActivityTarget{
-				GroupID: group.ID,
-			},
-			ReviewerID:        reviewerID,
-			ActivityType:      enum.ActivityTypeGroupTrainingDownvote,
-			ActivityTimestamp: time.Now(),
-			Details: map[string]any{
-				"upvotes":   group.Reputation.Upvotes,
-				"downvotes": group.Reputation.Downvotes,
-			},
-		})
-	} else {
-		// Standard mode - check permissions and confirm group
-		if !s.BotSettings().IsReviewer(reviewerID) {
-			m.layout.logger.Error("Non-reviewer attempted to confirm group",
-				zap.Uint64("user_id", reviewerID))
-			ctx.Error("You do not have permission to confirm groups.")
-			return
-		}
-
-		// Calculate vote percentages
-		totalVotes := float64(group.Reputation.Upvotes + group.Reputation.Downvotes)
-		if totalVotes >= constants.MinimumVotesRequired {
-			upvotePercentage := float64(group.Reputation.Upvotes) / totalVotes
-
-			// If there's a strong consensus for clearing, prevent confirmation
-			if upvotePercentage >= constants.VoteConsensusThreshold {
-				ctx.Cancel(fmt.Sprintf("Cannot confirm - %.0f%% of %d votes indicate this group is safe",
-					upvotePercentage*100, int(totalVotes)))
-				return
-			}
-		}
-
-		// Confirm the group
-		if err := m.layout.db.Service().Group().ConfirmGroup(ctx.Context(), group, reviewerID); err != nil {
-			m.layout.logger.Error("Failed to confirm group", zap.Error(err))
-			ctx.Error("Failed to confirm the group. Please try again.")
-			return
-		}
-		actionMsg = "confirmed"
-
-		// Log the confirm action
-		go m.layout.db.Model().Activity().Log(ctx.Context(), &types.ActivityLog{
-			ActivityTarget: types.ActivityTarget{
-				GroupID: group.ID,
-			},
-			ReviewerID:        reviewerID,
-			ActivityType:      enum.ActivityTypeGroupConfirmed,
-			ActivityTimestamp: time.Now(),
-			Details: map[string]any{
-				"reasons": group.Reasons.Messages(),
-			},
-		})
+	if !isAdmin {
+		m.layout.logger.Error("Non-admin attempted to confirm group",
+			zap.Uint64("user_id", reviewerID))
+		ctx.Error("You do not have permission to confirm groups.")
+		return
 	}
+
+	// Confirm the group
+	if err := m.layout.db.Service().Group().ConfirmGroup(ctx.Context(), group, reviewerID); err != nil {
+		m.layout.logger.Error("Failed to confirm group", zap.Error(err))
+		ctx.Error("Failed to confirm the group. Please try again.")
+		return
+	}
+
+	// Log the confirm action
+	go m.layout.db.Model().Activity().Log(ctx.Context(), &types.ActivityLog{
+		ActivityTarget: types.ActivityTarget{
+			GroupID: group.ID,
+		},
+		ReviewerID:        reviewerID,
+		ActivityType:      enum.ActivityTypeGroupConfirmed,
+		ActivityTimestamp: time.Now(),
+		Details: map[string]any{
+			"reasons": group.Reasons.Messages(),
+		},
+	})
 
 	// Clear current group and load next one
 	m.UpdateCounters(s)
 	session.GroupTarget.Delete(s)
-	ctx.Reload(fmt.Sprintf("Group %s.", actionMsg))
+	ctx.Reload("Group confirmed.")
 }
 
 // handleClearGroup removes a group from the flagged state and logs the action.
 func (m *ReviewMenu) handleClearGroup(ctx *interaction.Context, s *session.Session) {
 	group := session.GroupTarget.Get(s)
 	reviewerID := uint64(ctx.Event().User().ID)
+
+	// Ensure user is an admin
 	isAdmin := s.BotSettings().IsAdmin(reviewerID)
-
-	var actionMsg string
-	if session.UserReviewMode.Get(s) == enum.ReviewModeTraining || !isAdmin {
-		// Training mode - increment upvotes
-		if err := m.layout.db.Service().Reputation().UpdateGroupVotes(ctx.Context(), group.ID, reviewerID, true); err != nil {
-			m.layout.logger.Error("Failed to update upvotes", zap.Error(err))
-			ctx.Error("Failed to update upvotes. Please try again.")
-			return
-		}
-		group.Reputation.Upvotes++
-		actionMsg = "upvoted"
-
-		// Log the training upvote action
-		go m.layout.db.Model().Activity().Log(ctx.Context(), &types.ActivityLog{
-			ActivityTarget: types.ActivityTarget{
-				GroupID: group.ID,
-			},
-			ReviewerID:        reviewerID,
-			ActivityType:      enum.ActivityTypeGroupTrainingUpvote,
-			ActivityTimestamp: time.Now(),
-			Details: map[string]any{
-				"upvotes":   group.Reputation.Upvotes,
-				"downvotes": group.Reputation.Downvotes,
-			},
-		})
-	} else {
-		// Standard mode - check permissions and clear group
-		if !s.BotSettings().IsReviewer(reviewerID) {
-			m.layout.logger.Error("Non-reviewer attempted to clear group",
-				zap.Uint64("user_id", reviewerID))
-			ctx.Error("You do not have permission to clear groups.")
-			return
-		}
-
-		// Calculate vote percentages
-		totalVotes := float64(group.Reputation.Upvotes + group.Reputation.Downvotes)
-		if totalVotes >= constants.MinimumVotesRequired {
-			downvotePercentage := float64(group.Reputation.Downvotes) / totalVotes
-
-			// If there's a strong consensus for confirming, prevent clearing
-			if downvotePercentage >= constants.VoteConsensusThreshold {
-				ctx.Cancel(fmt.Sprintf("Cannot clear - %.0f%% of %d votes indicate this group is suspicious",
-					downvotePercentage*100, int(totalVotes)))
-				return
-			}
-		}
-
-		// Clear the group
-		if err := m.layout.db.Service().Group().ClearGroup(ctx.Context(), group, reviewerID); err != nil {
-			m.layout.logger.Error("Failed to clear group", zap.Error(err))
-			ctx.Error("Failed to clear the group. Please try again.")
-			return
-		}
-		actionMsg = "cleared"
-
-		// Log the clear action
-		go m.layout.db.Model().Activity().Log(ctx.Context(), &types.ActivityLog{
-			ActivityTarget: types.ActivityTarget{
-				GroupID: group.ID,
-			},
-			ReviewerID:        reviewerID,
-			ActivityType:      enum.ActivityTypeGroupCleared,
-			ActivityTimestamp: time.Now(),
-			Details:           map[string]any{},
-		})
+	if !isAdmin {
+		m.layout.logger.Error("Non-admin attempted to clear group",
+			zap.Uint64("user_id", reviewerID))
+		ctx.Error("You do not have permission to clear groups.")
+		return
 	}
+
+	// Clear the group
+	if err := m.layout.db.Service().Group().ClearGroup(ctx.Context(), group, reviewerID); err != nil {
+		m.layout.logger.Error("Failed to clear group", zap.Error(err))
+		ctx.Error("Failed to clear the group. Please try again.")
+		return
+	}
+
+	// Log the clear action
+	go m.layout.db.Model().Activity().Log(ctx.Context(), &types.ActivityLog{
+		ActivityTarget: types.ActivityTarget{
+			GroupID: group.ID,
+		},
+		ReviewerID:        reviewerID,
+		ActivityType:      enum.ActivityTypeGroupCleared,
+		ActivityTimestamp: time.Now(),
+		Details:           map[string]any{},
+	})
 
 	// Clear current group and load next one
 	m.UpdateCounters(s)
 	session.GroupTarget.Delete(s)
-	ctx.Reload(fmt.Sprintf("Group %s.", actionMsg))
+	ctx.Reload("Group cleared.")
 }
 
 // handleReasonSelection processes reason management dropdown selections.
@@ -684,18 +595,9 @@ func (m *ReviewMenu) handleReasonSelection(ctx *interaction.Context, s *session.
 }
 
 // fetchNewTarget gets a new group to review based on the current sort order.
-func (m *ReviewMenu) fetchNewTarget(ctx *interaction.Context, s *session.Session) (*types.ReviewGroup, bool, error) {
+func (m *ReviewMenu) fetchNewTarget(ctx *interaction.Context, s *session.Session) (*types.ReviewGroup, error) {
 	if m.CheckBreakRequired(ctx, s) {
-		return nil, false, ErrBreakRequired
-	}
-
-	// Check if user is banned for low accuracy
-	isBanned, err := m.layout.db.Service().Vote().CheckVoteAccuracy(ctx.Context(), uint64(ctx.Event().User().ID))
-	if err != nil {
-		m.layout.logger.Error("Failed to check vote accuracy",
-			zap.Error(err),
-			zap.Uint64("user_id", uint64(ctx.Event().User().ID)))
-		// Continue anyway - not a big requirement
+		return nil, ErrBreakRequired
 	}
 
 	// Get the next group to review
@@ -707,13 +609,13 @@ func (m *ReviewMenu) fetchNewTarget(ctx *interaction.Context, s *session.Session
 		ctx.Context(), defaultSort, reviewTargetMode, reviewerID,
 	)
 	if err != nil {
-		return nil, isBanned, err
+		return nil, err
 	}
 
 	// Get flagged users from tracking
 	flaggedCount, err := m.layout.db.Model().Tracking().GetFlaggedUsersCount(ctx.Context(), group.ID)
 	if err != nil {
-		return nil, isBanned, err
+		return nil, err
 	}
 
 	// Store info in session
@@ -736,5 +638,5 @@ func (m *ReviewMenu) fetchNewTarget(ctx *interaction.Context, s *session.Session
 		Details:           map[string]any{},
 	})
 
-	return group, isBanned, nil
+	return group, nil
 }

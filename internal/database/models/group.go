@@ -106,78 +106,71 @@ func (r *GroupModel) SaveGroups(ctx context.Context, tx bun.Tx, groups []*types.
 // Deprecated: Use Service().Group().ConfirmGroup() instead.
 func (r *GroupModel) ConfirmGroup(ctx context.Context, group *types.ReviewGroup) error {
 	return dbretry.Transaction(ctx, r.db, func(ctx context.Context, tx bun.Tx) error {
-		return r.ConfirmGroupWithTx(ctx, tx, group)
-	})
-}
-
-// ConfirmGroupWithTx moves a group to confirmed status and creates a verification record using the provided transaction.
-//
-// Deprecated: Use Service().Group().ConfirmGroupWithTx() instead.
-func (r *GroupModel) ConfirmGroupWithTx(ctx context.Context, tx bun.Tx, group *types.ReviewGroup) error {
-	// Delete any existing clearance record
-	_, err := tx.NewDelete().
-		Model((*types.GroupClearance)(nil)).
-		Where("group_id = ?", group.ID).
-		Exec(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to delete existing clearance record: %w", err)
-	}
-
-	// Update group status
-	_, err = tx.NewUpdate().
-		Model(group.Group).
-		Set("status = ?", enum.GroupTypeConfirmed).
-		Where("id = ?", group.ID).
-		Exec(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to update group status: %w", err)
-	}
-
-	// Create verification record
-	verification := &types.GroupVerification{
-		GroupID:    group.ID,
-		ReviewerID: group.ReviewerID,
-		VerifiedAt: time.Now(),
-	}
-	_, err = tx.NewInsert().
-		Model(verification).
-		On("CONFLICT (group_id) DO UPDATE").
-		Set("reviewer_id = EXCLUDED.reviewer_id").
-		Set("verified_at = EXCLUDED.verified_at").
-		Exec(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to create verification record: %w", err)
-	}
-
-	// Save reasons if any exist
-	if group.Reasons != nil {
-		var reasons []*types.GroupReason
-		for reasonType, reason := range group.Reasons {
-			reasons = append(reasons, &types.GroupReason{
-				GroupID:    group.ID,
-				ReasonType: reasonType,
-				Message:    reason.Message,
-				Confidence: reason.Confidence,
-				Evidence:   reason.Evidence,
-				CreatedAt:  time.Now(),
-			})
+		// Delete any existing clearance record
+		_, err := tx.NewDelete().
+			Model((*types.GroupClearance)(nil)).
+			Where("group_id = ?", group.ID).
+			Exec(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to delete existing clearance record: %w", err)
 		}
 
-		if len(reasons) > 0 {
-			_, err = tx.NewInsert().
-				Model(&reasons).
-				On("CONFLICT (group_id, reason_type) DO UPDATE").
-				Set("message = EXCLUDED.message").
-				Set("confidence = EXCLUDED.confidence").
-				Set("evidence = EXCLUDED.evidence").
-				Exec(ctx)
-			if err != nil {
-				return fmt.Errorf("failed to update group reasons: %w", err)
+		// Update group status
+		_, err = tx.NewUpdate().
+			Model(group.Group).
+			Set("status = ?", enum.GroupTypeConfirmed).
+			Where("id = ?", group.ID).
+			Exec(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to update group status: %w", err)
+		}
+
+		// Create verification record
+		verification := &types.GroupVerification{
+			GroupID:    group.ID,
+			ReviewerID: group.ReviewerID,
+			VerifiedAt: time.Now(),
+		}
+		_, err = tx.NewInsert().
+			Model(verification).
+			On("CONFLICT (group_id) DO UPDATE").
+			Set("reviewer_id = EXCLUDED.reviewer_id").
+			Set("verified_at = EXCLUDED.verified_at").
+			Exec(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to create verification record: %w", err)
+		}
+
+		// Save reasons if any exist
+		if group.Reasons != nil {
+			var reasons []*types.GroupReason
+			for reasonType, reason := range group.Reasons {
+				reasons = append(reasons, &types.GroupReason{
+					GroupID:    group.ID,
+					ReasonType: reasonType,
+					Message:    reason.Message,
+					Confidence: reason.Confidence,
+					Evidence:   reason.Evidence,
+					CreatedAt:  time.Now(),
+				})
+			}
+
+			if len(reasons) > 0 {
+				_, err = tx.NewInsert().
+					Model(&reasons).
+					On("CONFLICT (group_id, reason_type) DO UPDATE").
+					Set("message = EXCLUDED.message").
+					Set("confidence = EXCLUDED.confidence").
+					Set("evidence = EXCLUDED.evidence").
+					Exec(ctx)
+				if err != nil {
+					return fmt.Errorf("failed to update group reasons: %w", err)
+				}
 			}
 		}
-	}
 
-	return nil
+		return nil
+	})
 }
 
 // ClearGroup moves a group to cleared status and creates a clearance record.
@@ -185,83 +178,74 @@ func (r *GroupModel) ConfirmGroupWithTx(ctx context.Context, tx bun.Tx, group *t
 // Deprecated: Use Service().Group().ClearGroup() instead.
 func (r *GroupModel) ClearGroup(ctx context.Context, group *types.ReviewGroup) error {
 	return dbretry.Transaction(ctx, r.db, func(ctx context.Context, tx bun.Tx) error {
-		return r.ClearGroupWithTx(ctx, tx, group)
+		// Delete any existing verification record
+		_, err := tx.NewDelete().
+			Model((*types.GroupVerification)(nil)).
+			Where("group_id = ?", group.ID).
+			Exec(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to delete existing verification record: %w", err)
+		}
+
+		// Update group status
+		_, err = tx.NewUpdate().
+			Model(group.Group).
+			Set("status = ?", enum.GroupTypeCleared).
+			Where("id = ?", group.ID).
+			Exec(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to update group status: %w", err)
+		}
+
+		// Create clearance record
+		clearance := &types.GroupClearance{
+			GroupID:    group.ID,
+			ReviewerID: group.ReviewerID,
+			ClearedAt:  time.Now(),
+		}
+		_, err = tx.NewInsert().
+			Model(clearance).
+			On("CONFLICT (group_id) DO UPDATE").
+			Set("reviewer_id = EXCLUDED.reviewer_id").
+			Set("cleared_at = EXCLUDED.cleared_at").
+			Exec(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to create clearance record: %w", err)
+		}
+
+		// Save reasons if any exist
+		if group.Reasons != nil {
+			var reasons []*types.GroupReason
+			for reasonType, reason := range group.Reasons {
+				reasons = append(reasons, &types.GroupReason{
+					GroupID:    group.ID,
+					ReasonType: reasonType,
+					Message:    reason.Message,
+					Confidence: reason.Confidence,
+					Evidence:   reason.Evidence,
+					CreatedAt:  time.Now(),
+				})
+			}
+
+			if len(reasons) > 0 {
+				_, err = tx.NewInsert().
+					Model(&reasons).
+					On("CONFLICT (group_id, reason_type) DO UPDATE").
+					Set("message = EXCLUDED.message").
+					Set("confidence = EXCLUDED.confidence").
+					Set("evidence = EXCLUDED.evidence").
+					Exec(ctx)
+				if err != nil {
+					return fmt.Errorf("failed to update group reasons: %w", err)
+				}
+			}
+		}
+
+		return nil
 	})
 }
 
-// ClearGroupWithTx moves a group to cleared status and creates a clearance record using the provided transaction.
-//
-// Deprecated: Use Service().Group().ClearGroupWithTx() instead.
-func (r *GroupModel) ClearGroupWithTx(ctx context.Context, tx bun.Tx, group *types.ReviewGroup) error {
-	// Delete any existing verification record
-	_, err := tx.NewDelete().
-		Model((*types.GroupVerification)(nil)).
-		Where("group_id = ?", group.ID).
-		Exec(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to delete existing verification record: %w", err)
-	}
-
-	// Update group status
-	_, err = tx.NewUpdate().
-		Model(group.Group).
-		Set("status = ?", enum.GroupTypeCleared).
-		Where("id = ?", group.ID).
-		Exec(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to update group status: %w", err)
-	}
-
-	// Create clearance record
-	clearance := &types.GroupClearance{
-		GroupID:    group.ID,
-		ReviewerID: group.ReviewerID,
-		ClearedAt:  time.Now(),
-	}
-	_, err = tx.NewInsert().
-		Model(clearance).
-		On("CONFLICT (group_id) DO UPDATE").
-		Set("reviewer_id = EXCLUDED.reviewer_id").
-		Set("cleared_at = EXCLUDED.cleared_at").
-		Exec(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to create clearance record: %w", err)
-	}
-
-	// Save reasons if any exist
-	if group.Reasons != nil {
-		var reasons []*types.GroupReason
-		for reasonType, reason := range group.Reasons {
-			reasons = append(reasons, &types.GroupReason{
-				GroupID:    group.ID,
-				ReasonType: reasonType,
-				Message:    reason.Message,
-				Confidence: reason.Confidence,
-				Evidence:   reason.Evidence,
-				CreatedAt:  time.Now(),
-			})
-		}
-
-		if len(reasons) > 0 {
-			_, err = tx.NewInsert().
-				Model(&reasons).
-				On("CONFLICT (group_id, reason_type) DO UPDATE").
-				Set("message = EXCLUDED.message").
-				Set("confidence = EXCLUDED.confidence").
-				Set("evidence = EXCLUDED.evidence").
-				Exec(ctx)
-			if err != nil {
-				return fmt.Errorf("failed to update group reasons: %w", err)
-			}
-		}
-	}
-
-	return nil
-}
-
 // GetGroupByID retrieves a group by either their numeric ID or UUID.
-//
-// Deprecated: Use Service().Group().GetGroupByID() instead.
 func (r *GroupModel) GetGroupByID(
 	ctx context.Context, groupID string, fields types.GroupField,
 ) (*types.ReviewGroup, error) {
@@ -829,9 +813,6 @@ func (r *GroupModel) GetNextToReview(
 			query.OrderExpr("last_updated ASC, last_viewed ASC")
 		case enum.ReviewSortByRecentlyUpdated:
 			query.OrderExpr("last_updated DESC, last_viewed ASC")
-		case enum.ReviewSortByReputation:
-			query.Join("LEFT JOIN group_reputations ON group_reputations.id = groups.id").
-				OrderExpr("COALESCE(group_reputations.score, 0) ASC, last_viewed ASC")
 		case enum.ReviewSortByLastViewed:
 			query.Order("last_viewed ASC")
 		case enum.ReviewSortByRandom:

@@ -21,10 +21,10 @@ const (
 	ActivityTypeUserSkipped
 	// ActivityTypeUserQueued tracks when a moderator queues a user for review.
 	ActivityTypeUserQueued
-	// ActivityTypeUserTrainingUpvote tracks when a moderator upvotes a user in training mode.
-	ActivityTypeUserTrainingUpvote
-	// ActivityTypeUserTrainingDownvote tracks when a moderator downvotes a user in training mode.
-	ActivityTypeUserTrainingDownvote
+	// ActivityTypeRemoved1 is a deleted activity type.
+	ActivityTypeRemoved1
+	// ActivityTypeRemoved2 is a deleted activity type.
+	ActivityTypeRemoved2
 	// ActivityTypeUserDeleted tracks when an admin deletes a user from the database.
 	ActivityTypeUserDeleted
 
@@ -40,10 +40,10 @@ const (
 	ActivityTypeGroupCleared
 	// ActivityTypeGroupSkipped tracks when a moderator skips reviewing a group.
 	ActivityTypeGroupSkipped
-	// ActivityTypeGroupTrainingUpvote tracks when a moderator upvotes a group in training mode.
-	ActivityTypeGroupTrainingUpvote
-	// ActivityTypeGroupTrainingDownvote tracks when a moderator downvotes a group in training mode.
-	ActivityTypeGroupTrainingDownvote
+	// ActivityTypeRemoved3 is a deleted activity type.
+	ActivityTypeRemoved3
+	// ActivityTypeRemoved4 is a deleted activity type.
+	ActivityTypeRemoved4
 	// ActivityTypeGroupDeleted tracks when an admin deletes a group from the database.
 	ActivityTypeGroupDeleted
 

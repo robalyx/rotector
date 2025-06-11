@@ -316,7 +316,7 @@ func (m *Menu) handleManualGroupReviewModalSubmit(ctx *interaction.Context, s *s
 	}
 
 	// Check if group exists in database first
-	group, err := m.layout.db.Service().Group().GetGroupByID(ctx.Context(), groupIDStr, types.GroupFieldAll)
+	group, err := m.layout.db.Model().Group().GetGroupByID(ctx.Context(), groupIDStr, types.GroupFieldAll)
 	if err == nil {
 		// Store group in session and show review menu
 		session.AddToReviewHistory(s, session.GroupReviewHistoryType, group.ID)

@@ -62,9 +62,8 @@ func (m *ReviewMenu) Show(ctx *interaction.Context, s *session.Session) {
 	// If no user is set in session, fetch a new one
 	user := session.UserTarget.Get(s)
 	if user == nil {
-		var isBanned bool
 		var err error
-		user, isBanned, err = m.fetchNewTarget(ctx, s)
+		user, err = m.fetchNewTarget(ctx, s)
 		if err != nil {
 			if errors.Is(err, types.ErrNoUsersToReview) {
 				ctx.Show(constants.DashboardPageName, "No users to review. Please check back later.")
@@ -75,11 +74,6 @@ func (m *ReviewMenu) Show(ctx *interaction.Context, s *session.Session) {
 			}
 			m.layout.logger.Error("Failed to fetch a new user", zap.Error(err))
 			ctx.Error("Failed to fetch a new user. Please try again.")
-			return
-		}
-
-		if isBanned {
-			ctx.Show(constants.BanPageName, "You have been banned for suspicious voting patterns.")
 			return
 		}
 	}
@@ -413,74 +407,35 @@ func (m *ReviewMenu) handleConfirmUser(ctx *interaction.Context, s *session.Sess
 	user := session.UserTarget.Get(s)
 	reviewerID := uint64(ctx.Event().User().ID)
 
-	var actionMsg string
-	if session.UserReviewMode.Get(s) == enum.ReviewModeTraining {
-		// Training mode - increment downvotes
-		if err := m.layout.db.Service().Reputation().UpdateUserVotes(ctx.Context(), user.ID, reviewerID, false); err != nil {
-			m.layout.logger.Error("Failed to update downvotes", zap.Error(err))
-			ctx.Error("Failed to update downvotes. Please try again.")
-			return
-		}
-		user.Reputation.Downvotes++
-		actionMsg = "downvoted"
-
-		// Log the training downvote action
-		go m.layout.db.Model().Activity().Log(ctx.Context(), &types.ActivityLog{
-			ActivityTarget: types.ActivityTarget{
-				UserID: user.ID,
-			},
-			ReviewerID:        reviewerID,
-			ActivityType:      enum.ActivityTypeUserTrainingDownvote,
-			ActivityTimestamp: time.Now(),
-			Details: map[string]any{
-				"upvotes":   user.Reputation.Upvotes,
-				"downvotes": user.Reputation.Downvotes,
-			},
-		})
-	} else {
-		// Standard mode - check permissions and confirm user
-		if !s.BotSettings().IsReviewer(reviewerID) {
-			m.layout.logger.Error("Non-reviewer attempted to confirm user",
-				zap.Uint64("user_id", reviewerID))
-			ctx.Error("You do not have permission to confirm users.")
-			return
-		}
-
-		// Calculate vote percentages
-		totalVotes := float64(user.Reputation.Upvotes + user.Reputation.Downvotes)
-		if totalVotes >= constants.MinimumVotesRequired {
-			upvotePercentage := float64(user.Reputation.Upvotes) / totalVotes
-
-			// If there's a strong consensus for clearing, prevent confirmation
-			if upvotePercentage >= constants.VoteConsensusThreshold {
-				ctx.Cancel(fmt.Sprintf("Cannot confirm - %.0f%% of %d votes indicate this user is safe",
-					upvotePercentage*100, int(totalVotes)))
-				return
-			}
-		}
-
-		// Confirm the user
-		if err := m.layout.db.Service().User().ConfirmUser(ctx.Context(), user, reviewerID); err != nil {
-			m.layout.logger.Error("Failed to confirm user", zap.Error(err))
-			ctx.Error("Failed to confirm the user. Please try again.")
-			return
-		}
-		actionMsg = "confirmed"
-
-		// Log the confirm action
-		go m.layout.db.Model().Activity().Log(ctx.Context(), &types.ActivityLog{
-			ActivityTarget: types.ActivityTarget{
-				UserID: user.ID,
-			},
-			ReviewerID:        reviewerID,
-			ActivityType:      enum.ActivityTypeUserConfirmed,
-			ActivityTimestamp: time.Now(),
-			Details: map[string]any{
-				"reasons":    user.Reasons.Messages(),
-				"confidence": user.Confidence,
-			},
-		})
+	// Ensure user is a reviewer
+	isReviewer := s.BotSettings().IsReviewer(reviewerID)
+	if !isReviewer {
+		m.layout.logger.Error("Non-reviewer attempted to confirm user",
+			zap.Uint64("user_id", reviewerID))
+		ctx.Error("You do not have permission to confirm users.")
+		return
 	}
+
+	// Confirm the user
+	if err := m.layout.db.Service().User().ConfirmUser(ctx.Context(), user, reviewerID); err != nil {
+		m.layout.logger.Error("Failed to confirm user", zap.Error(err))
+		ctx.Error("Failed to confirm the user. Please try again.")
+		return
+	}
+
+	// Log the confirm action
+	go m.layout.db.Model().Activity().Log(ctx.Context(), &types.ActivityLog{
+		ActivityTarget: types.ActivityTarget{
+			UserID: user.ID,
+		},
+		ReviewerID:        reviewerID,
+		ActivityType:      enum.ActivityTypeUserConfirmed,
+		ActivityTimestamp: time.Now(),
+		Details: map[string]any{
+			"reasons":    user.Reasons.Messages(),
+			"confidence": user.Confidence,
+		},
+	})
 
 	// Get the number of flagged users left to review
 	flaggedCount, err := m.layout.db.Model().User().GetFlaggedUsersCount(ctx.Context())
@@ -491,7 +446,7 @@ func (m *ReviewMenu) handleConfirmUser(ctx *interaction.Context, s *session.Sess
 	// Clear current user and load next one
 	m.UpdateCounters(s)
 	session.UserTarget.Delete(s)
-	ctx.Reload(fmt.Sprintf("User %s. %d users left to review.", actionMsg, flaggedCount))
+	ctx.Reload(fmt.Sprintf("User confirmed. %d users left to review.", flaggedCount))
 }
 
 // handleClearUser removes a user from the flagged state and logs the action.
@@ -499,71 +454,32 @@ func (m *ReviewMenu) handleClearUser(ctx *interaction.Context, s *session.Sessio
 	user := session.UserTarget.Get(s)
 	reviewerID := uint64(ctx.Event().User().ID)
 
-	var actionMsg string
-	if session.UserReviewMode.Get(s) == enum.ReviewModeTraining {
-		// Training mode - increment upvotes
-		if err := m.layout.db.Service().Reputation().UpdateUserVotes(ctx.Context(), user.ID, reviewerID, true); err != nil {
-			m.layout.logger.Error("Failed to update upvotes", zap.Error(err))
-			ctx.Error("Failed to update upvotes. Please try again.")
-			return
-		}
-		user.Reputation.Upvotes++
-		actionMsg = "upvoted"
-
-		// Log the training upvote action
-		go m.layout.db.Model().Activity().Log(ctx.Context(), &types.ActivityLog{
-			ActivityTarget: types.ActivityTarget{
-				UserID: user.ID,
-			},
-			ReviewerID:        reviewerID,
-			ActivityType:      enum.ActivityTypeUserTrainingUpvote,
-			ActivityTimestamp: time.Now(),
-			Details: map[string]any{
-				"upvotes":   user.Reputation.Upvotes,
-				"downvotes": user.Reputation.Downvotes,
-			},
-		})
-	} else {
-		// Standard mode - check permissions and clear user
-		if !s.BotSettings().IsReviewer(reviewerID) {
-			m.layout.logger.Error("Non-reviewer attempted to clear user",
-				zap.Uint64("user_id", reviewerID))
-			ctx.Error("You do not have permission to clear users.")
-			return
-		}
-
-		// Calculate vote percentages
-		totalVotes := float64(user.Reputation.Upvotes + user.Reputation.Downvotes)
-		if totalVotes >= constants.MinimumVotesRequired {
-			downvotePercentage := float64(user.Reputation.Downvotes) / totalVotes
-
-			// If there's a strong consensus for confirming, prevent clearing
-			if downvotePercentage >= constants.VoteConsensusThreshold {
-				ctx.Cancel(fmt.Sprintf("Cannot clear - %.0f%% of %d votes indicate this user is suspicious",
-					downvotePercentage*100, int(totalVotes)))
-				return
-			}
-		}
-
-		// Clear the user
-		if err := m.layout.db.Service().User().ClearUser(ctx.Context(), user, reviewerID); err != nil {
-			m.layout.logger.Error("Failed to clear user", zap.Error(err))
-			ctx.Error("Failed to clear the user. Please try again.")
-			return
-		}
-		actionMsg = "cleared"
-
-		// Log the clear action
-		go m.layout.db.Model().Activity().Log(ctx.Context(), &types.ActivityLog{
-			ActivityTarget: types.ActivityTarget{
-				UserID: user.ID,
-			},
-			ReviewerID:        reviewerID,
-			ActivityType:      enum.ActivityTypeUserCleared,
-			ActivityTimestamp: time.Now(),
-			Details:           map[string]any{},
-		})
+	// Ensure user is a reviewer
+	isReviewer := s.BotSettings().IsReviewer(reviewerID)
+	if !isReviewer {
+		m.layout.logger.Error("Non-reviewer attempted to clear user",
+			zap.Uint64("user_id", reviewerID))
+		ctx.Error("You do not have permission to clear users.")
+		return
 	}
+
+	// Clear the user
+	if err := m.layout.db.Service().User().ClearUser(ctx.Context(), user, reviewerID); err != nil {
+		m.layout.logger.Error("Failed to clear user", zap.Error(err))
+		ctx.Error("Failed to clear the user. Please try again.")
+		return
+	}
+
+	// Log the clear action
+	go m.layout.db.Model().Activity().Log(ctx.Context(), &types.ActivityLog{
+		ActivityTarget: types.ActivityTarget{
+			UserID: user.ID,
+		},
+		ReviewerID:        reviewerID,
+		ActivityType:      enum.ActivityTypeUserCleared,
+		ActivityTimestamp: time.Now(),
+		Details:           map[string]any{},
+	})
 
 	// Get the number of flagged users left to review
 	flaggedCount, err := m.layout.db.Model().User().GetFlaggedUsersCount(ctx.Context())
@@ -574,7 +490,7 @@ func (m *ReviewMenu) handleClearUser(ctx *interaction.Context, s *session.Sessio
 	// Clear current user and load next one
 	m.UpdateCounters(s)
 	session.UserTarget.Delete(s)
-	ctx.Reload(fmt.Sprintf("User %s. %d users left to review.", actionMsg, flaggedCount))
+	ctx.Reload(fmt.Sprintf("User cleared. %d users left to review.", flaggedCount))
 }
 
 // handleOpenAIChat handles the button to open the AI chat for the current user.
@@ -662,7 +578,6 @@ Basic Info:
 
 Status Information:
 - Current Status: %s
-- Reputation: %d Reports, %d Safe Votes
 - Last Updated: %s
 
 Flagged Friends (showing %d of %d flagged, %d total):
@@ -684,8 +599,6 @@ Recent Games (showing %d of %d):
 			strings.Join(user.Reasons.Messages(), "; "),
 			user.Confidence,
 			user.Status.String(),
-			user.Reputation.Downvotes,
-			user.Reputation.Upvotes,
 			user.LastUpdated.Format(time.RFC3339),
 			shownFriends, flaggedFriendsCount, len(user.Friends),
 			strings.Join(friendsInfo, "\n"),
@@ -757,18 +670,9 @@ func (m *ReviewMenu) handleReasonSelection(ctx *interaction.Context, s *session.
 }
 
 // fetchNewTarget gets a new user to review based on the current sort order.
-func (m *ReviewMenu) fetchNewTarget(ctx *interaction.Context, s *session.Session) (*types.ReviewUser, bool, error) {
+func (m *ReviewMenu) fetchNewTarget(ctx *interaction.Context, s *session.Session) (*types.ReviewUser, error) {
 	if m.CheckBreakRequired(ctx, s) {
-		return nil, false, ErrBreakRequired
-	}
-
-	// Check if user is banned for low accuracy
-	isBanned, err := m.layout.db.Service().Vote().CheckVoteAccuracy(ctx.Context(), uint64(ctx.Event().User().ID))
-	if err != nil {
-		m.layout.logger.Error("Failed to check vote accuracy",
-			zap.Error(err),
-			zap.Uint64("user_id", uint64(ctx.Event().User().ID)))
-		// Continue anyway - not a big requirement
+		return nil, ErrBreakRequired
 	}
 
 	// Get the next user to review
@@ -780,7 +684,7 @@ func (m *ReviewMenu) fetchNewTarget(ctx *interaction.Context, s *session.Session
 		ctx.Context(), defaultSort, reviewTargetMode, reviewerID,
 	)
 	if err != nil {
-		return nil, isBanned, err
+		return nil, err
 	}
 
 	// Process friends and groups to update reasons
@@ -833,5 +737,5 @@ func (m *ReviewMenu) fetchNewTarget(ctx *interaction.Context, s *session.Session
 		Details:           map[string]any{},
 	})
 
-	return user, isBanned, nil
+	return user, nil
 }

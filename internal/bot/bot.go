@@ -28,7 +28,6 @@ import (
 	"github.com/robalyx/rotector/internal/bot/handlers/consent"
 	"github.com/robalyx/rotector/internal/bot/handlers/dashboard"
 	"github.com/robalyx/rotector/internal/bot/handlers/guild"
-	"github.com/robalyx/rotector/internal/bot/handlers/leaderboard"
 	"github.com/robalyx/rotector/internal/bot/handlers/log"
 	"github.com/robalyx/rotector/internal/bot/handlers/queue"
 	groupReview "github.com/robalyx/rotector/internal/bot/handlers/review/group"
@@ -138,7 +137,6 @@ func New(app *setup.App) (*Bot, error) {
 	groupReviewLayout := groupReview.New(app, interactionManager)
 	appealLayout := appeal.New(app)
 	adminLayout := admin.New(app)
-	leaderboardLayout := leaderboard.New(app, client)
 	statusLayout := status.New(app)
 	dashboardLayout := dashboard.New(app, sessionManager)
 	consentLayout := consent.New(app)
@@ -157,7 +155,6 @@ func New(app *setup.App) (*Bot, error) {
 	interactionManager.AddPages(groupReviewLayout.Pages())
 	interactionManager.AddPages(appealLayout.Pages())
 	interactionManager.AddPages(adminLayout.Pages())
-	interactionManager.AddPages(leaderboardLayout.Pages())
 	interactionManager.AddPages(statusLayout.Pages())
 	interactionManager.AddPages(dashboardLayout.Pages())
 	interactionManager.AddPages(consentLayout.Pages())

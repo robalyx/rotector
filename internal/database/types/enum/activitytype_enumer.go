@@ -7,11 +7,11 @@ import (
 	"strings"
 )
 
-const _ActivityTypeName = "AllUserViewedUserLookupUserConfirmedUserClearedUserSkippedUserQueuedUserTrainingUpvoteUserTrainingDownvoteUserDeletedGroupViewedGroupLookupGroupConfirmedGroupConfirmedCustomGroupClearedGroupSkippedGroupTrainingUpvoteGroupTrainingDownvoteGroupDeletedUserLookupDiscordAppealSubmittedAppealClaimedAppealAcceptedAppealRejectedAppealClosedAppealReopenedUserDataDeletedUserBlacklistedDiscordUserBannedDiscordUserUnbannedBotSettingUpdatedGuildBansGroupQueued"
+const _ActivityTypeName = "AllUserViewedUserLookupUserConfirmedUserClearedUserSkippedUserQueuedRemoved1Removed2UserDeletedGroupViewedGroupLookupGroupConfirmedGroupConfirmedCustomGroupClearedGroupSkippedRemoved3Removed4GroupDeletedUserLookupDiscordAppealSubmittedAppealClaimedAppealAcceptedAppealRejectedAppealClosedAppealReopenedUserDataDeletedUserBlacklistedDiscordUserBannedDiscordUserUnbannedBotSettingUpdatedGuildBansGroupQueued"
 
-var _ActivityTypeIndex = [...]uint16{0, 3, 13, 23, 36, 47, 58, 68, 86, 106, 117, 128, 139, 153, 173, 185, 197, 216, 237, 249, 266, 281, 294, 308, 322, 334, 348, 363, 378, 395, 414, 431, 440, 451}
+var _ActivityTypeIndex = [...]uint16{0, 3, 13, 23, 36, 47, 58, 68, 76, 84, 95, 106, 117, 131, 151, 163, 175, 183, 191, 203, 220, 235, 248, 262, 276, 288, 302, 317, 332, 349, 368, 385, 394, 405}
 
-const _ActivityTypeLowerName = "alluservieweduserlookupuserconfirmedusercleareduserskippeduserqueuedusertrainingupvoteusertrainingdownvoteuserdeletedgroupviewedgrouplookupgroupconfirmedgroupconfirmedcustomgroupclearedgroupskippedgrouptrainingupvotegrouptrainingdownvotegroupdeleteduserlookupdiscordappealsubmittedappealclaimedappealacceptedappealrejectedappealclosedappealreopeneduserdatadeleteduserblacklisteddiscorduserbanneddiscorduserunbannedbotsettingupdatedguildbansgroupqueued"
+const _ActivityTypeLowerName = "alluservieweduserlookupuserconfirmedusercleareduserskippeduserqueuedremoved1removed2userdeletedgroupviewedgrouplookupgroupconfirmedgroupconfirmedcustomgroupclearedgroupskippedremoved3removed4groupdeleteduserlookupdiscordappealsubmittedappealclaimedappealacceptedappealrejectedappealclosedappealreopeneduserdatadeleteduserblacklisteddiscorduserbanneddiscorduserunbannedbotsettingupdatedguildbansgroupqueued"
 
 func (i ActivityType) String() string {
 	if i < 0 || i >= ActivityType(len(_ActivityTypeIndex)-1) {
@@ -31,8 +31,8 @@ func _ActivityTypeNoOp() {
 	_ = x[ActivityTypeUserCleared-(4)]
 	_ = x[ActivityTypeUserSkipped-(5)]
 	_ = x[ActivityTypeUserQueued-(6)]
-	_ = x[ActivityTypeUserTrainingUpvote-(7)]
-	_ = x[ActivityTypeUserTrainingDownvote-(8)]
+	_ = x[ActivityTypeRemoved1-(7)]
+	_ = x[ActivityTypeRemoved2-(8)]
 	_ = x[ActivityTypeUserDeleted-(9)]
 	_ = x[ActivityTypeGroupViewed-(10)]
 	_ = x[ActivityTypeGroupLookup-(11)]
@@ -40,8 +40,8 @@ func _ActivityTypeNoOp() {
 	_ = x[ActivityTypeGroupConfirmedCustom-(13)]
 	_ = x[ActivityTypeGroupCleared-(14)]
 	_ = x[ActivityTypeGroupSkipped-(15)]
-	_ = x[ActivityTypeGroupTrainingUpvote-(16)]
-	_ = x[ActivityTypeGroupTrainingDownvote-(17)]
+	_ = x[ActivityTypeRemoved3-(16)]
+	_ = x[ActivityTypeRemoved4-(17)]
 	_ = x[ActivityTypeGroupDeleted-(18)]
 	_ = x[ActivityTypeUserLookupDiscord-(19)]
 	_ = x[ActivityTypeAppealSubmitted-(20)]
@@ -59,7 +59,7 @@ func _ActivityTypeNoOp() {
 	_ = x[ActivityTypeGroupQueued-(32)]
 }
 
-var _ActivityTypeValues = []ActivityType{ActivityTypeAll, ActivityTypeUserViewed, ActivityTypeUserLookup, ActivityTypeUserConfirmed, ActivityTypeUserCleared, ActivityTypeUserSkipped, ActivityTypeUserQueued, ActivityTypeUserTrainingUpvote, ActivityTypeUserTrainingDownvote, ActivityTypeUserDeleted, ActivityTypeGroupViewed, ActivityTypeGroupLookup, ActivityTypeGroupConfirmed, ActivityTypeGroupConfirmedCustom, ActivityTypeGroupCleared, ActivityTypeGroupSkipped, ActivityTypeGroupTrainingUpvote, ActivityTypeGroupTrainingDownvote, ActivityTypeGroupDeleted, ActivityTypeUserLookupDiscord, ActivityTypeAppealSubmitted, ActivityTypeAppealClaimed, ActivityTypeAppealAccepted, ActivityTypeAppealRejected, ActivityTypeAppealClosed, ActivityTypeAppealReopened, ActivityTypeUserDataDeleted, ActivityTypeUserBlacklisted, ActivityTypeDiscordUserBanned, ActivityTypeDiscordUserUnbanned, ActivityTypeBotSettingUpdated, ActivityTypeGuildBans, ActivityTypeGroupQueued}
+var _ActivityTypeValues = []ActivityType{ActivityTypeAll, ActivityTypeUserViewed, ActivityTypeUserLookup, ActivityTypeUserConfirmed, ActivityTypeUserCleared, ActivityTypeUserSkipped, ActivityTypeUserQueued, ActivityTypeRemoved1, ActivityTypeRemoved2, ActivityTypeUserDeleted, ActivityTypeGroupViewed, ActivityTypeGroupLookup, ActivityTypeGroupConfirmed, ActivityTypeGroupConfirmedCustom, ActivityTypeGroupCleared, ActivityTypeGroupSkipped, ActivityTypeRemoved3, ActivityTypeRemoved4, ActivityTypeGroupDeleted, ActivityTypeUserLookupDiscord, ActivityTypeAppealSubmitted, ActivityTypeAppealClaimed, ActivityTypeAppealAccepted, ActivityTypeAppealRejected, ActivityTypeAppealClosed, ActivityTypeAppealReopened, ActivityTypeUserDataDeleted, ActivityTypeUserBlacklisted, ActivityTypeDiscordUserBanned, ActivityTypeDiscordUserUnbanned, ActivityTypeBotSettingUpdated, ActivityTypeGuildBans, ActivityTypeGroupQueued}
 
 var _ActivityTypeNameToValueMap = map[string]ActivityType{
 	_ActivityTypeName[0:3]:          ActivityTypeAll,
@@ -76,58 +76,58 @@ var _ActivityTypeNameToValueMap = map[string]ActivityType{
 	_ActivityTypeLowerName[47:58]:   ActivityTypeUserSkipped,
 	_ActivityTypeName[58:68]:        ActivityTypeUserQueued,
 	_ActivityTypeLowerName[58:68]:   ActivityTypeUserQueued,
-	_ActivityTypeName[68:86]:        ActivityTypeUserTrainingUpvote,
-	_ActivityTypeLowerName[68:86]:   ActivityTypeUserTrainingUpvote,
-	_ActivityTypeName[86:106]:       ActivityTypeUserTrainingDownvote,
-	_ActivityTypeLowerName[86:106]:  ActivityTypeUserTrainingDownvote,
-	_ActivityTypeName[106:117]:      ActivityTypeUserDeleted,
-	_ActivityTypeLowerName[106:117]: ActivityTypeUserDeleted,
-	_ActivityTypeName[117:128]:      ActivityTypeGroupViewed,
-	_ActivityTypeLowerName[117:128]: ActivityTypeGroupViewed,
-	_ActivityTypeName[128:139]:      ActivityTypeGroupLookup,
-	_ActivityTypeLowerName[128:139]: ActivityTypeGroupLookup,
-	_ActivityTypeName[139:153]:      ActivityTypeGroupConfirmed,
-	_ActivityTypeLowerName[139:153]: ActivityTypeGroupConfirmed,
-	_ActivityTypeName[153:173]:      ActivityTypeGroupConfirmedCustom,
-	_ActivityTypeLowerName[153:173]: ActivityTypeGroupConfirmedCustom,
-	_ActivityTypeName[173:185]:      ActivityTypeGroupCleared,
-	_ActivityTypeLowerName[173:185]: ActivityTypeGroupCleared,
-	_ActivityTypeName[185:197]:      ActivityTypeGroupSkipped,
-	_ActivityTypeLowerName[185:197]: ActivityTypeGroupSkipped,
-	_ActivityTypeName[197:216]:      ActivityTypeGroupTrainingUpvote,
-	_ActivityTypeLowerName[197:216]: ActivityTypeGroupTrainingUpvote,
-	_ActivityTypeName[216:237]:      ActivityTypeGroupTrainingDownvote,
-	_ActivityTypeLowerName[216:237]: ActivityTypeGroupTrainingDownvote,
-	_ActivityTypeName[237:249]:      ActivityTypeGroupDeleted,
-	_ActivityTypeLowerName[237:249]: ActivityTypeGroupDeleted,
-	_ActivityTypeName[249:266]:      ActivityTypeUserLookupDiscord,
-	_ActivityTypeLowerName[249:266]: ActivityTypeUserLookupDiscord,
-	_ActivityTypeName[266:281]:      ActivityTypeAppealSubmitted,
-	_ActivityTypeLowerName[266:281]: ActivityTypeAppealSubmitted,
-	_ActivityTypeName[281:294]:      ActivityTypeAppealClaimed,
-	_ActivityTypeLowerName[281:294]: ActivityTypeAppealClaimed,
-	_ActivityTypeName[294:308]:      ActivityTypeAppealAccepted,
-	_ActivityTypeLowerName[294:308]: ActivityTypeAppealAccepted,
-	_ActivityTypeName[308:322]:      ActivityTypeAppealRejected,
-	_ActivityTypeLowerName[308:322]: ActivityTypeAppealRejected,
-	_ActivityTypeName[322:334]:      ActivityTypeAppealClosed,
-	_ActivityTypeLowerName[322:334]: ActivityTypeAppealClosed,
-	_ActivityTypeName[334:348]:      ActivityTypeAppealReopened,
-	_ActivityTypeLowerName[334:348]: ActivityTypeAppealReopened,
-	_ActivityTypeName[348:363]:      ActivityTypeUserDataDeleted,
-	_ActivityTypeLowerName[348:363]: ActivityTypeUserDataDeleted,
-	_ActivityTypeName[363:378]:      ActivityTypeUserBlacklisted,
-	_ActivityTypeLowerName[363:378]: ActivityTypeUserBlacklisted,
-	_ActivityTypeName[378:395]:      ActivityTypeDiscordUserBanned,
-	_ActivityTypeLowerName[378:395]: ActivityTypeDiscordUserBanned,
-	_ActivityTypeName[395:414]:      ActivityTypeDiscordUserUnbanned,
-	_ActivityTypeLowerName[395:414]: ActivityTypeDiscordUserUnbanned,
-	_ActivityTypeName[414:431]:      ActivityTypeBotSettingUpdated,
-	_ActivityTypeLowerName[414:431]: ActivityTypeBotSettingUpdated,
-	_ActivityTypeName[431:440]:      ActivityTypeGuildBans,
-	_ActivityTypeLowerName[431:440]: ActivityTypeGuildBans,
-	_ActivityTypeName[440:451]:      ActivityTypeGroupQueued,
-	_ActivityTypeLowerName[440:451]: ActivityTypeGroupQueued,
+	_ActivityTypeName[68:76]:        ActivityTypeRemoved1,
+	_ActivityTypeLowerName[68:76]:   ActivityTypeRemoved1,
+	_ActivityTypeName[76:84]:        ActivityTypeRemoved2,
+	_ActivityTypeLowerName[76:84]:   ActivityTypeRemoved2,
+	_ActivityTypeName[84:95]:        ActivityTypeUserDeleted,
+	_ActivityTypeLowerName[84:95]:   ActivityTypeUserDeleted,
+	_ActivityTypeName[95:106]:       ActivityTypeGroupViewed,
+	_ActivityTypeLowerName[95:106]:  ActivityTypeGroupViewed,
+	_ActivityTypeName[106:117]:      ActivityTypeGroupLookup,
+	_ActivityTypeLowerName[106:117]: ActivityTypeGroupLookup,
+	_ActivityTypeName[117:131]:      ActivityTypeGroupConfirmed,
+	_ActivityTypeLowerName[117:131]: ActivityTypeGroupConfirmed,
+	_ActivityTypeName[131:151]:      ActivityTypeGroupConfirmedCustom,
+	_ActivityTypeLowerName[131:151]: ActivityTypeGroupConfirmedCustom,
+	_ActivityTypeName[151:163]:      ActivityTypeGroupCleared,
+	_ActivityTypeLowerName[151:163]: ActivityTypeGroupCleared,
+	_ActivityTypeName[163:175]:      ActivityTypeGroupSkipped,
+	_ActivityTypeLowerName[163:175]: ActivityTypeGroupSkipped,
+	_ActivityTypeName[175:183]:      ActivityTypeRemoved3,
+	_ActivityTypeLowerName[175:183]: ActivityTypeRemoved3,
+	_ActivityTypeName[183:191]:      ActivityTypeRemoved4,
+	_ActivityTypeLowerName[183:191]: ActivityTypeRemoved4,
+	_ActivityTypeName[191:203]:      ActivityTypeGroupDeleted,
+	_ActivityTypeLowerName[191:203]: ActivityTypeGroupDeleted,
+	_ActivityTypeName[203:220]:      ActivityTypeUserLookupDiscord,
+	_ActivityTypeLowerName[203:220]: ActivityTypeUserLookupDiscord,
+	_ActivityTypeName[220:235]:      ActivityTypeAppealSubmitted,
+	_ActivityTypeLowerName[220:235]: ActivityTypeAppealSubmitted,
+	_ActivityTypeName[235:248]:      ActivityTypeAppealClaimed,
+	_ActivityTypeLowerName[235:248]: ActivityTypeAppealClaimed,
+	_ActivityTypeName[248:262]:      ActivityTypeAppealAccepted,
+	_ActivityTypeLowerName[248:262]: ActivityTypeAppealAccepted,
+	_ActivityTypeName[262:276]:      ActivityTypeAppealRejected,
+	_ActivityTypeLowerName[262:276]: ActivityTypeAppealRejected,
+	_ActivityTypeName[276:288]:      ActivityTypeAppealClosed,
+	_ActivityTypeLowerName[276:288]: ActivityTypeAppealClosed,
+	_ActivityTypeName[288:302]:      ActivityTypeAppealReopened,
+	_ActivityTypeLowerName[288:302]: ActivityTypeAppealReopened,
+	_ActivityTypeName[302:317]:      ActivityTypeUserDataDeleted,
+	_ActivityTypeLowerName[302:317]: ActivityTypeUserDataDeleted,
+	_ActivityTypeName[317:332]:      ActivityTypeUserBlacklisted,
+	_ActivityTypeLowerName[317:332]: ActivityTypeUserBlacklisted,
+	_ActivityTypeName[332:349]:      ActivityTypeDiscordUserBanned,
+	_ActivityTypeLowerName[332:349]: ActivityTypeDiscordUserBanned,
+	_ActivityTypeName[349:368]:      ActivityTypeDiscordUserUnbanned,
+	_ActivityTypeLowerName[349:368]: ActivityTypeDiscordUserUnbanned,
+	_ActivityTypeName[368:385]:      ActivityTypeBotSettingUpdated,
+	_ActivityTypeLowerName[368:385]: ActivityTypeBotSettingUpdated,
+	_ActivityTypeName[385:394]:      ActivityTypeGuildBans,
+	_ActivityTypeLowerName[385:394]: ActivityTypeGuildBans,
+	_ActivityTypeName[394:405]:      ActivityTypeGroupQueued,
+	_ActivityTypeLowerName[394:405]: ActivityTypeGroupQueued,
 }
 
 var _ActivityTypeNames = []string{
@@ -138,32 +138,32 @@ var _ActivityTypeNames = []string{
 	_ActivityTypeName[36:47],
 	_ActivityTypeName[47:58],
 	_ActivityTypeName[58:68],
-	_ActivityTypeName[68:86],
-	_ActivityTypeName[86:106],
+	_ActivityTypeName[68:76],
+	_ActivityTypeName[76:84],
+	_ActivityTypeName[84:95],
+	_ActivityTypeName[95:106],
 	_ActivityTypeName[106:117],
-	_ActivityTypeName[117:128],
-	_ActivityTypeName[128:139],
-	_ActivityTypeName[139:153],
-	_ActivityTypeName[153:173],
-	_ActivityTypeName[173:185],
-	_ActivityTypeName[185:197],
-	_ActivityTypeName[197:216],
-	_ActivityTypeName[216:237],
-	_ActivityTypeName[237:249],
-	_ActivityTypeName[249:266],
-	_ActivityTypeName[266:281],
-	_ActivityTypeName[281:294],
-	_ActivityTypeName[294:308],
-	_ActivityTypeName[308:322],
-	_ActivityTypeName[322:334],
-	_ActivityTypeName[334:348],
-	_ActivityTypeName[348:363],
-	_ActivityTypeName[363:378],
-	_ActivityTypeName[378:395],
-	_ActivityTypeName[395:414],
-	_ActivityTypeName[414:431],
-	_ActivityTypeName[431:440],
-	_ActivityTypeName[440:451],
+	_ActivityTypeName[117:131],
+	_ActivityTypeName[131:151],
+	_ActivityTypeName[151:163],
+	_ActivityTypeName[163:175],
+	_ActivityTypeName[175:183],
+	_ActivityTypeName[183:191],
+	_ActivityTypeName[191:203],
+	_ActivityTypeName[203:220],
+	_ActivityTypeName[220:235],
+	_ActivityTypeName[235:248],
+	_ActivityTypeName[248:262],
+	_ActivityTypeName[262:276],
+	_ActivityTypeName[276:288],
+	_ActivityTypeName[288:302],
+	_ActivityTypeName[302:317],
+	_ActivityTypeName[317:332],
+	_ActivityTypeName[332:349],
+	_ActivityTypeName[349:368],
+	_ActivityTypeName[368:385],
+	_ActivityTypeName[385:394],
+	_ActivityTypeName[394:405],
 }
 
 // ActivityTypeString retrieves an enum value from the enum constants string name.

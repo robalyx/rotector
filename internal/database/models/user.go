@@ -108,78 +108,71 @@ func (r *UserModel) SaveUsers(ctx context.Context, tx bun.Tx, users []*types.Rev
 // Deprecated: Use Service().User().ConfirmUser() instead.
 func (r *UserModel) ConfirmUser(ctx context.Context, user *types.ReviewUser) error {
 	return dbretry.Transaction(ctx, r.db, func(ctx context.Context, tx bun.Tx) error {
-		return r.ConfirmUserWithTx(ctx, tx, user)
-	})
-}
-
-// ConfirmUserWithTx moves a user to confirmed status and creates a verification record using the provided transaction.
-//
-// Deprecated: Use Service().User().ConfirmUserWithTx() instead.
-func (r *UserModel) ConfirmUserWithTx(ctx context.Context, tx bun.Tx, user *types.ReviewUser) error {
-	// Delete any existing clearance record
-	_, err := tx.NewDelete().
-		Model((*types.UserClearance)(nil)).
-		Where("user_id = ?", user.ID).
-		Exec(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to delete existing clearance record: %w", err)
-	}
-
-	// Update user status
-	_, err = tx.NewUpdate().
-		Model(user.User).
-		Set("status = ?", enum.UserTypeConfirmed).
-		Where("id = ?", user.ID).
-		Exec(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to update user status: %w", err)
-	}
-
-	// Create verification record
-	verification := &types.UserVerification{
-		UserID:     user.ID,
-		ReviewerID: user.ReviewerID,
-		VerifiedAt: time.Now(),
-	}
-	_, err = tx.NewInsert().
-		Model(verification).
-		On("CONFLICT (user_id) DO UPDATE").
-		Set("reviewer_id = EXCLUDED.reviewer_id").
-		Set("verified_at = EXCLUDED.verified_at").
-		Exec(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to create verification record: %w", err)
-	}
-
-	// Update user reasons if any exist
-	if user.Reasons != nil {
-		var reasons []*types.UserReason
-		for reasonType, reason := range user.Reasons {
-			reasons = append(reasons, &types.UserReason{
-				UserID:     user.ID,
-				ReasonType: reasonType,
-				Message:    reason.Message,
-				Confidence: reason.Confidence,
-				Evidence:   reason.Evidence,
-				CreatedAt:  time.Now(),
-			})
+		// Delete any existing clearance record
+		_, err := tx.NewDelete().
+			Model((*types.UserClearance)(nil)).
+			Where("user_id = ?", user.ID).
+			Exec(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to delete existing clearance record: %w", err)
 		}
 
-		if len(reasons) > 0 {
-			_, err = tx.NewInsert().
-				Model(&reasons).
-				On("CONFLICT (user_id, reason_type) DO UPDATE").
-				Set("message = EXCLUDED.message").
-				Set("confidence = EXCLUDED.confidence").
-				Set("evidence = EXCLUDED.evidence").
-				Exec(ctx)
-			if err != nil {
-				return fmt.Errorf("failed to update user reasons: %w", err)
+		// Update user status
+		_, err = tx.NewUpdate().
+			Model(user.User).
+			Set("status = ?", enum.UserTypeConfirmed).
+			Where("id = ?", user.ID).
+			Exec(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to update user status: %w", err)
+		}
+
+		// Create verification record
+		verification := &types.UserVerification{
+			UserID:     user.ID,
+			ReviewerID: user.ReviewerID,
+			VerifiedAt: time.Now(),
+		}
+		_, err = tx.NewInsert().
+			Model(verification).
+			On("CONFLICT (user_id) DO UPDATE").
+			Set("reviewer_id = EXCLUDED.reviewer_id").
+			Set("verified_at = EXCLUDED.verified_at").
+			Exec(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to create verification record: %w", err)
+		}
+
+		// Update user reasons if any exist
+		if user.Reasons != nil {
+			var reasons []*types.UserReason
+			for reasonType, reason := range user.Reasons {
+				reasons = append(reasons, &types.UserReason{
+					UserID:     user.ID,
+					ReasonType: reasonType,
+					Message:    reason.Message,
+					Confidence: reason.Confidence,
+					Evidence:   reason.Evidence,
+					CreatedAt:  time.Now(),
+				})
+			}
+
+			if len(reasons) > 0 {
+				_, err = tx.NewInsert().
+					Model(&reasons).
+					On("CONFLICT (user_id, reason_type) DO UPDATE").
+					Set("message = EXCLUDED.message").
+					Set("confidence = EXCLUDED.confidence").
+					Set("evidence = EXCLUDED.evidence").
+					Exec(ctx)
+				if err != nil {
+					return fmt.Errorf("failed to update user reasons: %w", err)
+				}
 			}
 		}
-	}
 
-	return nil
+		return nil
+	})
 }
 
 // ClearUser moves a user to cleared status and creates a clearance record.
@@ -1227,9 +1220,6 @@ func (r *UserModel) GetNextToReview(
 			query.OrderExpr("last_updated ASC, last_viewed ASC")
 		case enum.ReviewSortByRecentlyUpdated:
 			query.OrderExpr("last_updated DESC, last_viewed ASC")
-		case enum.ReviewSortByReputation:
-			query.Join("LEFT JOIN user_reputations ON user_reputations.id = users.id").
-				OrderExpr("COALESCE(user_reputations.score, 0) ASC, last_viewed ASC")
 		case enum.ReviewSortByLastViewed:
 			query.Order("last_viewed ASC")
 		case enum.ReviewSortByRandom:

@@ -55,7 +55,6 @@ func (r *SettingModel) GetUserSettings(ctx context.Context, userID snowflake.ID)
 				ReviewCount:     0,
 				WindowStartTime: time.Unix(0, 0),
 			},
-			LeaderboardPeriod:   enum.LeaderboardPeriodAllTime,
 			ReviewerStatsPeriod: enum.ReviewerStatsPeriodDaily,
 		}
 

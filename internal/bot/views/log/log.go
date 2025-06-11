@@ -219,10 +219,6 @@ func (b *Builder) buildActivityTypeOptions() []discord.StringSelectMenuOption {
 			WithDefault(b.activityTypeFilter == enum.ActivityTypeUserSkipped),
 		discord.NewStringSelectMenuOption("User Queued", strconv.Itoa(int(enum.ActivityTypeUserQueued))).
 			WithDefault(b.activityTypeFilter == enum.ActivityTypeUserQueued),
-		discord.NewStringSelectMenuOption("User Training Upvote", strconv.Itoa(int(enum.ActivityTypeUserTrainingUpvote))).
-			WithDefault(b.activityTypeFilter == enum.ActivityTypeUserTrainingUpvote),
-		discord.NewStringSelectMenuOption("User Training Downvote", strconv.Itoa(int(enum.ActivityTypeUserTrainingDownvote))).
-			WithDefault(b.activityTypeFilter == enum.ActivityTypeUserTrainingDownvote),
 		discord.NewStringSelectMenuOption("User Deleted", strconv.Itoa(int(enum.ActivityTypeUserDeleted))).
 			WithDefault(b.activityTypeFilter == enum.ActivityTypeUserDeleted),
 	}
@@ -240,10 +236,6 @@ func (b *Builder) buildActivityTypeOptions() []discord.StringSelectMenuOption {
 			WithDefault(b.activityTypeFilter == enum.ActivityTypeGroupCleared),
 		discord.NewStringSelectMenuOption("Group Skipped", strconv.Itoa(int(enum.ActivityTypeGroupSkipped))).
 			WithDefault(b.activityTypeFilter == enum.ActivityTypeGroupSkipped),
-		discord.NewStringSelectMenuOption("Group Training Upvote", strconv.Itoa(int(enum.ActivityTypeGroupTrainingUpvote))).
-			WithDefault(b.activityTypeFilter == enum.ActivityTypeGroupTrainingUpvote),
-		discord.NewStringSelectMenuOption("Group Training Downvote", strconv.Itoa(int(enum.ActivityTypeGroupTrainingDownvote))).
-			WithDefault(b.activityTypeFilter == enum.ActivityTypeGroupTrainingDownvote),
 		discord.NewStringSelectMenuOption("Group Deleted", strconv.Itoa(int(enum.ActivityTypeGroupDeleted))).
 			WithDefault(b.activityTypeFilter == enum.ActivityTypeGroupDeleted),
 	}

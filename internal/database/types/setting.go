@@ -39,7 +39,6 @@ type UserSetting struct {
 	ChatMessageUsage    ChatMessageUsage         `bun:",embed"`
 	CaptchaUsage        CaptchaUsage             `bun:",embed"`
 	ReviewBreak         ReviewBreak              `bun:",embed"`
-	LeaderboardPeriod   enum.LeaderboardPeriod   `bun:",notnull"`
 	ReviewerStatsPeriod enum.ReviewerStatsPeriod `bun:",notnull"`
 }
 

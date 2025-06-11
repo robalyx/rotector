@@ -47,7 +47,6 @@ func NewReviewBuilder(s *session.Session, db database.Client) *ReviewBuilder {
 			IsReviewer:     s.BotSettings().IsReviewer(userID),
 			IsAdmin:        s.BotSettings().IsAdmin(userID),
 			PrivacyMode:    session.UserStreamerMode.Get(s),
-			TrainingMode:   reviewMode == enum.ReviewModeTraining,
 		},
 		db:           db,
 		group:        session.GroupTarget.Get(s),
@@ -66,9 +65,7 @@ func (b *ReviewBuilder) Build() *discord.MessageUpdateBuilder {
 		b.buildGroupInfoSection(),
 		discord.NewLargeSeparator(),
 		discord.NewSection(
-			discord.NewTextDisplay(fmt.Sprintf("⚠️ Reports: %d • 🛡️ Safe Votes: %d\n-# UUID: %s\n-# Created: %s • Updated: %s",
-				b.group.Reputation.Downvotes,
-				b.group.Reputation.Upvotes,
+			discord.NewTextDisplay(fmt.Sprintf("-# UUID: %s\n-# Created: %s • Updated: %s",
 				b.group.UUID.String(),
 				fmt.Sprintf("<t:%d:R>", b.group.LastUpdated.Unix()),
 				fmt.Sprintf("<t:%d:R>", b.group.LastUpdated.Unix()),
@@ -103,7 +100,7 @@ func (b *ReviewBuilder) Build() *discord.MessageUpdateBuilder {
 	reviewInfoDisplays = append(reviewInfoDisplays, b.buildReasonDisplay())
 
 	// Add reason management dropdown for reviewers
-	if b.IsReviewer && b.ReviewMode != enum.ReviewModeTraining {
+	if b.IsReviewer {
 		reviewInfoDisplays = append(reviewInfoDisplays,
 			discord.NewActionRow(
 				discord.NewStringSelectMenu(constants.ReasonSelectMenuCustomID, "Manage Reasons", b.buildReasonOptions()...),
@@ -221,14 +218,8 @@ func (b *ReviewBuilder) buildReviewModeText() string {
 	var mode string
 	var description string
 
-	switch {
-	case b.ReviewMode == enum.ReviewModeTraining || !b.IsAdmin:
-		mode = "🗳️ Voting Mode"
-		description = "**You are an official reviewer.**\n" +
-			"While you can review and vote on groups, only administrators can make final decisions. " +
-			"Your votes are recorded but will not affect the group's status. Community members who are " +
-			"not official reviewers will not be able to see this group review menu."
-	case b.ReviewMode == enum.ReviewModeStandard:
+	switch b.ReviewMode {
+	case enum.ReviewModeStandard:
 		mode = "⚠️ Standard Mode"
 		description = "Your actions are recorded and affect the database. Please review carefully before taking action."
 	default:
@@ -338,8 +329,8 @@ func (b *ReviewBuilder) buildReasonDisplay() discord.ContainerSubComponent {
 func (b *ReviewBuilder) buildInteractiveComponents() []discord.ContainerSubComponent {
 	// Add navigation buttons
 	navButtons := b.BuildNavigationButtons()
-	confirmButton := discord.NewDangerButton(b.getConfirmButtonLabel(), constants.ConfirmButtonCustomID)
-	clearButton := discord.NewSuccessButton(b.getClearButtonLabel(), constants.ClearButtonCustomID)
+	confirmButton := discord.NewDangerButton("Confirm", constants.ConfirmButtonCustomID)
+	clearButton := discord.NewSuccessButton("Clear", constants.ClearButtonCustomID)
 
 	// Add all buttons to a single row
 	allButtons := make([]discord.InteractiveComponent, 0, len(navButtons)+2)
@@ -434,22 +425,6 @@ func (b *ReviewBuilder) getShout() string {
 	shout = utils.FormatString(shout)
 
 	return shout
-}
-
-// getConfirmButtonLabel returns the appropriate label for the confirm button based on review mode.
-func (b *ReviewBuilder) getConfirmButtonLabel() string {
-	if b.ReviewMode == enum.ReviewModeTraining || !b.IsAdmin {
-		return "Report"
-	}
-	return "Confirm"
-}
-
-// getClearButtonLabel returns the appropriate label for the clear button based on review mode.
-func (b *ReviewBuilder) getClearButtonLabel() string {
-	if b.ReviewMode == enum.ReviewModeTraining || !b.IsAdmin {
-		return "Safe"
-	}
-	return "Clear"
 }
 
 // getReasonEmoji returns the appropriate emoji for a reason type.

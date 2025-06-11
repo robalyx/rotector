@@ -8,49 +8,45 @@ import (
 
 // Repository provides access to all database models.
 type Repository struct {
-	user       *models.UserModel
-	group      *models.GroupModel
-	stats      *models.StatsModel
-	setting    *models.SettingModel
-	activity   *models.ActivityModel
-	guildBan   *models.GuildBanModel
-	tracking   *models.TrackingModel
-	appeal     *models.AppealModel
-	ban        *models.BanModel
-	reputation *models.ReputationModel
-	vote       *models.VoteModel
-	view       *models.MaterializedViewModel
-	consent    *models.ConsentModel
-	reviewer   *models.ReviewerModel
-	sync       *models.SyncModel
-	message    *models.MessageModel
-	condo      *models.CondoModel
-	comment    *models.CommentModel
-	ivan       *models.IvanModel
+	user     *models.UserModel
+	group    *models.GroupModel
+	stats    *models.StatsModel
+	setting  *models.SettingModel
+	activity *models.ActivityModel
+	guildBan *models.GuildBanModel
+	tracking *models.TrackingModel
+	appeal   *models.AppealModel
+	ban      *models.BanModel
+	view     *models.MaterializedViewModel
+	consent  *models.ConsentModel
+	reviewer *models.ReviewerModel
+	sync     *models.SyncModel
+	message  *models.MessageModel
+	condo    *models.CondoModel
+	comment  *models.CommentModel
+	ivan     *models.IvanModel
 }
 
 // NewRepository creates a new repository instance with all models.
 func NewRepository(db *bun.DB, logger *zap.Logger) *Repository {
 	return &Repository{
-		user:       models.NewUser(db, logger),
-		group:      models.NewGroup(db, logger),
-		stats:      models.NewStats(db, logger),
-		setting:    models.NewSetting(db, logger),
-		activity:   models.NewActivity(db, logger),
-		guildBan:   models.NewGuildBan(db, logger),
-		tracking:   models.NewTracking(db, logger),
-		appeal:     models.NewAppeal(db, logger),
-		ban:        models.NewBan(db, logger),
-		reputation: models.NewReputation(db, logger),
-		vote:       models.NewVote(db, logger),
-		view:       models.NewMaterializedView(db, logger),
-		consent:    models.NewConsent(db, logger),
-		reviewer:   models.NewReviewer(db, logger),
-		sync:       models.NewSync(db, logger),
-		message:    models.NewMessage(db, logger),
-		condo:      models.NewCondo(db, logger),
-		comment:    models.NewComment(db, logger),
-		ivan:       models.NewIvan(db, logger),
+		user:     models.NewUser(db, logger),
+		group:    models.NewGroup(db, logger),
+		stats:    models.NewStats(db, logger),
+		setting:  models.NewSetting(db, logger),
+		activity: models.NewActivity(db, logger),
+		guildBan: models.NewGuildBan(db, logger),
+		tracking: models.NewTracking(db, logger),
+		appeal:   models.NewAppeal(db, logger),
+		ban:      models.NewBan(db, logger),
+		view:     models.NewMaterializedView(db, logger),
+		consent:  models.NewConsent(db, logger),
+		reviewer: models.NewReviewer(db, logger),
+		sync:     models.NewSync(db, logger),
+		message:  models.NewMessage(db, logger),
+		condo:    models.NewCondo(db, logger),
+		comment:  models.NewComment(db, logger),
+		ivan:     models.NewIvan(db, logger),
 	}
 }
 
@@ -97,16 +93,6 @@ func (r *Repository) Appeal() *models.AppealModel {
 // Ban returns the ban model repository.
 func (r *Repository) Ban() *models.BanModel {
 	return r.ban
-}
-
-// Reputation returns the reputation model repository.
-func (r *Repository) Reputation() *models.ReputationModel {
-	return r.reputation
-}
-
-// Vote returns the vote model repository.
-func (r *Repository) Vote() *models.VoteModel {
-	return r.vote
 }
 
 // View returns the materialized view model repository.

@@ -9,19 +9,6 @@ import (
 )
 
 func init() { //nolint:funlen
-	periods := []struct {
-		name     string
-		interval string
-	}{
-		{enum.LeaderboardPeriodDaily.String(), "INTERVAL '1 day'"},
-		{enum.LeaderboardPeriodWeekly.String(), "INTERVAL '1 week'"},
-		{enum.LeaderboardPeriodBiWeekly.String(), "INTERVAL '2 weeks'"},
-		{enum.LeaderboardPeriodMonthly.String(), "INTERVAL '1 month'"},
-		{enum.LeaderboardPeriodBiAnnually.String(), "INTERVAL '6 months'"},
-		{enum.LeaderboardPeriodAnnually.String(), "INTERVAL '1 year'"},
-		{enum.LeaderboardPeriodAllTime.String(), "NULL"},
-	}
-
 	Migrations.MustRegister(func(ctx context.Context, db *bun.DB) error {
 		_, err := db.NewRaw(`
 			-- User activity logs indexes
@@ -153,10 +140,6 @@ func init() { //nolint:funlen
 			CREATE INDEX IF NOT EXISTS idx_groups_status_count
 			ON groups (status);
 
-			-- Group reputation sorting indexes
-			CREATE INDEX IF NOT EXISTS idx_group_reputations_score
-			ON group_reputations (score ASC);
-
 			-- Group clearance index
 			CREATE INDEX IF NOT EXISTS idx_group_clearances_cleared_at
 			ON group_clearances (cleared_at);
@@ -202,32 +185,9 @@ func init() { //nolint:funlen
 			CREATE INDEX IF NOT EXISTS idx_users_last_updated
 			ON users (last_updated ASC);
 
-			-- User reputation sorting indexes
-			CREATE INDEX IF NOT EXISTS idx_user_reputations_score
-			ON user_reputations (score ASC);
-
 			-- Statistics indexes
             CREATE INDEX IF NOT EXISTS idx_hourly_stats_timestamp
             ON hourly_stats (timestamp DESC);
-
-			-- Vote indexes
-			CREATE INDEX IF NOT EXISTS idx_user_votes_id_discord 
-			ON user_votes (id, discord_user_id);
-			
-			CREATE INDEX IF NOT EXISTS idx_user_votes_verify
-			ON user_votes (id, is_verified) 
-			WHERE is_verified = false;
-			
-			CREATE INDEX IF NOT EXISTS idx_group_votes_id_discord 
-			ON group_votes (id, discord_user_id);
-			
-			CREATE INDEX IF NOT EXISTS idx_group_votes_verify
-			ON group_votes (id, is_verified)
-			WHERE is_verified = false;
-
-			-- Vote statistics index
-			CREATE INDEX IF NOT EXISTS idx_vote_stats_voted_at 
-			ON vote_stats (voted_at DESC);
 
 			-- Discord server member indexes
 			CREATE INDEX IF NOT EXISTS idx_server_members_user_joined
@@ -376,44 +336,6 @@ func init() { //nolint:funlen
 			return fmt.Errorf("failed to create indexes: %w", err)
 		}
 
-		// Vote leaderboard indexes
-		for _, period := range periods {
-			viewName := "vote_leaderboard_stats_" + period.name
-
-			// Unique index for concurrent operations
-			_, err = db.NewRaw(fmt.Sprintf(`
-				CREATE UNIQUE INDEX IF NOT EXISTS idx_vote_leaderboard_%s_unique
-				ON %s (discord_user_id);
-			`, period.name, viewName)).Exec(ctx)
-			if err != nil {
-				return fmt.Errorf("failed to create unique index for %s: %w", period.name, err)
-			}
-
-			// Index for sorting and pagination
-			_, err = db.NewRaw(fmt.Sprintf(`
-				CREATE INDEX IF NOT EXISTS idx_vote_leaderboard_%s_sort
-				ON %s (
-					correct_votes DESC,
-					accuracy DESC, 
-					voted_at DESC,
-					discord_user_id
-				) INCLUDE (total_votes);
-			`, period.name, viewName)).Exec(ctx)
-			if err != nil {
-				return fmt.Errorf("failed to create sort index for %s: %w", period.name, err)
-			}
-
-			// Index for user lookups
-			_, err = db.NewRaw(fmt.Sprintf(`
-				CREATE INDEX IF NOT EXISTS idx_vote_leaderboard_%s_user
-				ON %s (discord_user_id)
-				INCLUDE (correct_votes, total_votes, accuracy);
-			`, period.name, viewName)).Exec(ctx)
-			if err != nil {
-				return fmt.Errorf("failed to create user index for %s: %w", period.name, err)
-			}
-		}
-
 		return nil
 	}, func(ctx context.Context, db *bun.DB) error {
 		_, err := db.NewRaw(`
@@ -491,23 +413,8 @@ func init() { //nolint:funlen
 			-- User last_updated index for delete-after-time command
 			DROP INDEX IF EXISTS idx_users_last_updated;
 
-			-- User reputation sorting indexes
-			DROP INDEX IF EXISTS idx_user_reputations_score;
-
-			-- Group reputation sorting indexes
-			DROP INDEX IF EXISTS idx_group_reputations_score;
-
 			-- Statistics indexes
             DROP INDEX IF EXISTS idx_hourly_stats_timestamp;
-
-			-- Vote indexes
-			DROP INDEX IF EXISTS idx_user_votes_id_discord;
-			DROP INDEX IF EXISTS idx_user_votes_verify;
-			DROP INDEX IF EXISTS idx_group_votes_id_discord;
-			DROP INDEX IF EXISTS idx_group_votes_verify;
-
-			-- Vote statistics index
-			DROP INDEX IF EXISTS idx_vote_stats_voted_at;
 
 			-- Discord server member indexes
 			DROP INDEX IF EXISTS idx_server_members_user_joined;
@@ -585,18 +492,6 @@ func init() { //nolint:funlen
 		`).Exec(ctx)
 		if err != nil {
 			return fmt.Errorf("failed to drop indexes: %w", err)
-		}
-
-		// Drop vote leaderboard indexes
-		for _, period := range periods {
-			_, err = db.NewRaw(fmt.Sprintf(`
-				DROP INDEX IF EXISTS idx_vote_leaderboard_%s_unique;
-				DROP INDEX IF EXISTS idx_vote_leaderboard_%s_sort;
-				DROP INDEX IF EXISTS idx_vote_leaderboard_%s_user;
-			`, period.name, period.name, period.name)).Exec(ctx)
-			if err != nil {
-				return fmt.Errorf("failed to drop indexes for %s: %w", period.name, err)
-			}
 		}
 
 		return nil

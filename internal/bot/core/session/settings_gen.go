@@ -76,7 +76,6 @@ func main() {
 		{Name: "ChatModel", Type: "enum.ChatModel", Doc: "ChatModel sets the AI chat model"},
 		{Name: "ReviewMode", Type: "enum.ReviewMode", Doc: "ReviewMode sets the review mode"},
 		{Name: "ReviewTargetMode", Type: "enum.ReviewTargetMode", Doc: "ReviewTargetMode sets the review target mode"},
-		{Name: "LeaderboardPeriod", Type: "enum.LeaderboardPeriod", Doc: "LeaderboardPeriod sets the leaderboard time period"},
 		{Name: "ReviewerStatsPeriod", Type: "enum.ReviewerStatsPeriod", Doc: "ReviewerStatsPeriod sets the reviewer stats time period"},
 
 		// Appeal related settings

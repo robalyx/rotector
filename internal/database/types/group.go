@@ -66,7 +66,6 @@ type ReviewGroup struct {
 	ReviewerID uint64                        `json:"reviewerId,omitempty"`
 	VerifiedAt time.Time                     `json:"verifiedAt"`
 	ClearedAt  time.Time                     `json:"clearedAt"`
-	Reputation Reputation                    `json:"reputation"`
 }
 
 // GroupField represents available fields as bit flags.
@@ -86,8 +85,6 @@ const (
 	GroupFieldThumbnail                          // ThumbnailURL
 
 	GroupFieldConfidence // AI confidence score
-
-	GroupFieldReputation // Reputation fields (upvotes, downvotes, score)
 
 	GroupFieldLastScanned         // Last scan time
 	GroupFieldLastUpdated         // Last update time
@@ -118,7 +115,6 @@ const (
 		GroupFieldReasons |
 		GroupFieldThumbnail |
 		GroupFieldConfidence |
-		GroupFieldReputation |
 		GroupFieldTimestamps |
 		GroupFieldIsLocked |
 		GroupFieldIsDeleted
@@ -142,11 +138,6 @@ var groupFieldToColumns = map[GroupField][]string{
 	GroupFieldIsLocked:            {"is_locked"},
 	GroupFieldIsDeleted:           {"is_deleted"},
 	GroupFieldLastThumbnailUpdate: {"last_thumbnail_update"},
-}
-
-// HasReputation returns true if the reputation fields should be included.
-func (f GroupField) HasReputation() bool {
-	return f&GroupFieldReputation != 0
 }
 
 // Columns returns the list of database columns to fetch based on the selected fields.

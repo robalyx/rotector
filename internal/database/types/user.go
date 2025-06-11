@@ -206,7 +206,6 @@ type ReviewUser struct {
 	ReviewerID    uint64                         `json:"reviewerId,omitempty"`
 	VerifiedAt    time.Time                      `json:"verifiedAt"`
 	ClearedAt     time.Time                      `json:"clearedAt"`
-	Reputation    Reputation                     `json:"reputation"`
 	Groups        []*apiTypes.UserGroupRoles     `json:"groups,omitempty"`
 	Outfits       []*apiTypes.Outfit             `json:"outfits,omitempty"`
 	OutfitAssets  map[uint64][]*apiTypes.AssetV2 `json:"outfitAssets,omitempty"`
@@ -238,8 +237,6 @@ const (
 	UserFieldRelationships // All relationships (groups, outfits, friends, games, inventory, etc.)
 
 	UserFieldConfidence // AI confidence score
-
-	UserFieldReputation // Reputation fields (upvotes, downvotes, score)
 
 	UserFieldLastScanned         // Last scan time
 	UserFieldLastUpdated         // Last update time
@@ -280,7 +277,6 @@ const (
 		UserFieldReasons |
 		UserFieldRelationships |
 		UserFieldStats |
-		UserFieldReputation |
 		UserFieldTimestamps
 )
 
@@ -302,11 +298,6 @@ var userFieldToColumns = map[UserField][]string{
 	UserFieldIsBanned:            {"is_banned"},
 	UserFieldIsDeleted:           {"is_deleted"},
 	UserFieldLastThumbnailUpdate: {"last_thumbnail_update"},
-}
-
-// HasReputation returns true if the reputation fields should be included.
-func (f UserField) HasReputation() bool {
-	return f&UserFieldReputation != 0
 }
 
 // Columns returns the list of database columns to fetch based on the selected fields.

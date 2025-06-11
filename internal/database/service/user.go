@@ -20,13 +20,11 @@ import (
 
 // UserService handles user-related business logic.
 type UserService struct {
-	db         *bun.DB
-	model      *models.UserModel
-	activity   *models.ActivityModel
-	reputation *models.ReputationModel
-	votes      *models.VoteModel
-	tracking   *models.TrackingModel
-	logger     *zap.Logger
+	db       *bun.DB
+	model    *models.UserModel
+	activity *models.ActivityModel
+	tracking *models.TrackingModel
+	logger   *zap.Logger
 }
 
 // NewUser creates a new user service.
@@ -34,43 +32,26 @@ func NewUser(
 	db *bun.DB,
 	model *models.UserModel,
 	activity *models.ActivityModel,
-	reputation *models.ReputationModel,
-	votes *models.VoteModel,
 	tracking *models.TrackingModel,
 	logger *zap.Logger,
 ) *UserService {
 	return &UserService{
-		db:         db,
-		model:      model,
-		activity:   activity,
-		reputation: reputation,
-		votes:      votes,
-		tracking:   tracking,
-		logger:     logger.Named("user_service"),
+		db:       db,
+		model:    model,
+		activity: activity,
+		tracking: tracking,
+		logger:   logger.Named("user_service"),
 	}
 }
 
 // ConfirmUser moves a user to confirmed status and creates a verification record.
 func (s *UserService) ConfirmUser(ctx context.Context, user *types.ReviewUser, reviewerID uint64) error {
-	return dbretry.Transaction(ctx, s.db, func(ctx context.Context, tx bun.Tx) error {
-		return s.ConfirmUserWithTx(ctx, tx, user, reviewerID)
-	})
-}
-
-// ConfirmUserWithTx moves a user to confirmed status and creates a verification record using the provided transaction.
-func (s *UserService) ConfirmUserWithTx(ctx context.Context, tx bun.Tx, user *types.ReviewUser, reviewerID uint64) error {
 	// Set reviewer ID
 	user.ReviewerID = reviewerID
 	user.Status = enum.UserTypeConfirmed
 
 	// Update user status and create verification record
-	if err := s.model.ConfirmUserWithTx(ctx, tx, user); err != nil {
-		return err
-	}
-
-	// Verify votes for the user
-	if err := s.votes.VerifyVotesWithTx(ctx, tx, user.ID, true, enum.VoteTypeUser); err != nil {
-		s.logger.Error("Failed to verify votes", zap.Error(err))
+	if err := s.model.ConfirmUser(ctx, user); err != nil {
 		return err
 	}
 
@@ -113,16 +94,10 @@ func (s *UserService) ClearUserWithTx(ctx context.Context, tx bun.Tx, user *type
 		return err
 	}
 
-	// Verify votes for the user
-	if err := s.votes.VerifyVotesWithTx(ctx, tx, user.ID, false, enum.VoteTypeUser); err != nil {
-		s.logger.Error("Failed to verify votes", zap.Error(err))
-		return err
-	}
-
 	return nil
 }
 
-// GetUserByID retrieves a user by ID with reputation information.
+// GetUserByID retrieves a user by either their numeric ID or UUID.
 func (s *UserService) GetUserByID(
 	ctx context.Context, userID string, fields types.UserField,
 ) (*types.ReviewUser, error) {
@@ -130,15 +105,6 @@ func (s *UserService) GetUserByID(
 	user, err := s.model.GetUserByID(ctx, userID, fields)
 	if err != nil {
 		return nil, err
-	}
-
-	// Get reputation if requested
-	if fields.HasReputation() {
-		reputation, err := s.reputation.GetUserReputation(ctx, user.ID)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get user reputation: %w", err)
-		}
-		user.Reputation = reputation
 	}
 
 	// Get relationships if requested
@@ -172,19 +138,6 @@ func (s *UserService) GetUsersByIDs(
 	users, err := s.model.GetUsersByIDs(ctx, userIDs, fields)
 	if err != nil {
 		return nil, err
-	}
-
-	// Get reputation if requested
-	if fields.HasReputation() {
-		reputations, err := s.reputation.GetUsersReputations(ctx, userIDs)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get users reputations: %w", err)
-		}
-		for userID, user := range users {
-			if reputation, exists := reputations[userID]; exists {
-				user.Reputation = reputation
-			}
-		}
 	}
 
 	// Get relationships if requested
@@ -262,13 +215,6 @@ func (s *UserService) GetUserToReview(
 			return nil, err
 		}
 	}
-
-	// Get reputation
-	reputation, err := s.reputation.GetUserReputation(ctx, result.ID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get user reputation: %w", err)
-	}
-	result.Reputation = reputation
 
 	// Get relationships
 	relationships, err := s.GetUserRelationships(ctx, result.ID)

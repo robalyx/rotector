@@ -16,12 +16,10 @@ import (
 
 // GroupService handles group-related business logic.
 type GroupService struct {
-	db         *bun.DB
-	model      *models.GroupModel
-	activity   *models.ActivityModel
-	reputation *models.ReputationModel
-	votes      *models.VoteModel
-	logger     *zap.Logger
+	db       *bun.DB
+	model    *models.GroupModel
+	activity *models.ActivityModel
+	logger   *zap.Logger
 }
 
 // NewGroup creates a new group service.
@@ -29,41 +27,24 @@ func NewGroup(
 	db *bun.DB,
 	model *models.GroupModel,
 	activity *models.ActivityModel,
-	reputation *models.ReputationModel,
-	votes *models.VoteModel,
 	logger *zap.Logger,
 ) *GroupService {
 	return &GroupService{
-		db:         db,
-		model:      model,
-		activity:   activity,
-		reputation: reputation,
-		votes:      votes,
-		logger:     logger.Named("group_service"),
+		db:       db,
+		model:    model,
+		activity: activity,
+		logger:   logger.Named("group_service"),
 	}
 }
 
 // ConfirmGroup moves a group to confirmed status and creates a verification record.
 func (s *GroupService) ConfirmGroup(ctx context.Context, group *types.ReviewGroup, reviewerID uint64) error {
-	return dbretry.Transaction(ctx, s.db, func(ctx context.Context, tx bun.Tx) error {
-		return s.ConfirmGroupWithTx(ctx, tx, group, reviewerID)
-	})
-}
-
-// ConfirmGroupWithTx moves a group to confirmed status and creates a verification record using the provided transaction.
-func (s *GroupService) ConfirmGroupWithTx(ctx context.Context, tx bun.Tx, group *types.ReviewGroup, reviewerID uint64) error {
 	// Set reviewer ID
 	group.ReviewerID = reviewerID
 	group.Status = enum.GroupTypeConfirmed
 
 	// Update group status and create verification record
-	if err := s.model.ConfirmGroupWithTx(ctx, tx, group); err != nil {
-		return err
-	}
-
-	// Verify votes for the group
-	if err := s.votes.VerifyVotesWithTx(ctx, tx, group.ID, true, enum.VoteTypeGroup); err != nil {
-		s.logger.Error("Failed to verify votes", zap.Error(err))
+	if err := s.model.ConfirmGroup(ctx, group); err != nil {
 		return err
 	}
 
@@ -72,59 +53,21 @@ func (s *GroupService) ConfirmGroupWithTx(ctx context.Context, tx bun.Tx, group 
 
 // ClearGroup moves a group to cleared status and creates a clearance record.
 func (s *GroupService) ClearGroup(ctx context.Context, group *types.ReviewGroup, reviewerID uint64) error {
-	return dbretry.Transaction(ctx, s.db, func(ctx context.Context, tx bun.Tx) error {
-		return s.ClearGroupWithTx(ctx, tx, group, reviewerID)
-	})
-}
-
-// ClearGroupWithTx moves a group to cleared status and creates a clearance record using the provided transaction.
-func (s *GroupService) ClearGroupWithTx(ctx context.Context, tx bun.Tx, group *types.ReviewGroup, reviewerID uint64) error {
 	// Set reviewer ID
 	group.ReviewerID = reviewerID
 	group.Status = enum.GroupTypeCleared
 
 	// Update group status and create clearance record
-	if err := s.model.ClearGroupWithTx(ctx, tx, group); err != nil {
-		return err
-	}
-
-	// Verify votes for the group
-	if err := s.votes.VerifyVotesWithTx(ctx, tx, group.ID, false, enum.VoteTypeGroup); err != nil {
-		s.logger.Error("Failed to verify votes", zap.Error(err))
+	if err := s.model.ClearGroup(ctx, group); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-// GetGroupByID retrieves a group by ID with reputation information.
-func (s *GroupService) GetGroupByID(
-	ctx context.Context, groupID string, fields types.GroupField,
-) (*types.ReviewGroup, error) {
-	// Get the group from the model layer
-	group, err := s.model.GetGroupByID(ctx, groupID, fields)
-	if err != nil {
-		return nil, err
-	}
-
-	// Get reputation if requested
-	if fields.HasReputation() {
-		reputation, err := s.reputation.GetGroupReputation(ctx, group.ID)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get group reputation: %w", err)
-		}
-		group.Reputation = reputation
-	}
-
-	return group, nil
-}
-
 // GetGroupToReview finds a group to review based on the sort method and target mode.
 func (s *GroupService) GetGroupToReview(
-	ctx context.Context,
-	sortBy enum.ReviewSortBy,
-	targetMode enum.ReviewTargetMode,
-	reviewerID uint64,
+	ctx context.Context, sortBy enum.ReviewSortBy, targetMode enum.ReviewTargetMode, reviewerID uint64,
 ) (*types.ReviewGroup, error) {
 	// Get recently reviewed group IDs
 	recentIDs, err := s.activity.GetRecentlyReviewedIDs(ctx, reviewerID, true, 50)
@@ -176,13 +119,6 @@ func (s *GroupService) GetGroupToReview(
 			return nil, err
 		}
 	}
-
-	// Get reputation
-	reputation, err := s.reputation.GetGroupReputation(ctx, result.ID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get group reputation: %w", err)
-	}
-	result.Reputation = reputation
 
 	return result, nil
 }

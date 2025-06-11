@@ -27,7 +27,6 @@ type Builder struct {
 	userStatsBuffer     *bytes.Buffer
 	groupStatsBuffer    *bytes.Buffer
 	activeUsers         []uint64
-	voteStats           *types.VoteAccuracy
 	announcementType    enum.AnnouncementType
 	announcementMessage string
 	welcomeMessage      string
@@ -52,7 +51,6 @@ func NewBuilder(s *session.Session, redisClient rueidis.Client) *Builder {
 		userStatsBuffer:     userStatsBuffer,
 		groupStatsBuffer:    groupStatsBuffer,
 		activeUsers:         session.StatsActiveUsers.Get(s),
-		voteStats:           session.StatsVotes.Get(s),
 		announcementType:    announcementType,
 		announcementMessage: session.BotAnnouncementMessage.Get(s),
 		welcomeMessage:      session.BotWelcomeMessage.Get(s),
@@ -102,13 +100,6 @@ func (b *Builder) Build() *discord.MessageUpdateBuilder {
 
 	// Show all components if not in maintenance mode or if user is admin
 	if !b.showMaintenance {
-		// Only show vote stats for non-reviewers
-		if !b.isReviewer {
-			components = append(components,
-				b.buildVoteStatsContainer(),
-			)
-		}
-
 		// Add stats components
 		components = append(components,
 			b.buildUserGraphContainer(),
@@ -189,18 +180,20 @@ func (b *Builder) buildWelcomeContainer() discord.LayoutComponent {
 		displays = append(displays, discord.NewTextDisplay("**Active Reviewers**\n"+fieldValue))
 	}
 
-	// Add review sections
-	displays = append(displays,
-		discord.NewLargeSeparator(),
-		discord.NewSection(
-			discord.NewTextDisplay("📝 **Review Users**\nStart reviewing flagged users"),
-		).WithAccessory(
-			discord.NewPrimaryButton("Start Review", constants.StartUserReviewButtonCustomID),
-		),
-	)
-
-	// Add group review section only for reviewers
+	// Add user review section only for reviewers
 	if b.isReviewer {
+		displays = append(displays,
+			discord.NewLargeSeparator(),
+			discord.NewSection(
+				discord.NewTextDisplay("📝 **Review Users**\nStart reviewing flagged users"),
+			).WithAccessory(
+				discord.NewPrimaryButton("Start Review", constants.StartUserReviewButtonCustomID),
+			),
+		)
+	}
+
+	// Add group review section only for admins
+	if b.isAdmin {
 		displays = append(displays,
 			discord.NewSection(
 				discord.NewTextDisplay("📝 **Review Groups**\nStart reviewing flagged groups"),
@@ -248,9 +241,6 @@ func (b *Builder) buildActionMenuOptions() []discord.StringSelectMenuOption {
 		discord.NewStringSelectMenuOption("Lookup Discord User", constants.LookupDiscordUserButtonCustomID).
 			WithEmoji(discord.ComponentEmoji{Name: "🔍"}).
 			WithDescription("Look up Discord user and their flagged servers"),
-		discord.NewStringSelectMenuOption("View Leaderboard", constants.LeaderboardMenuButtonCustomID).
-			WithEmoji(discord.ComponentEmoji{Name: "🏆"}).
-			WithDescription("View voting leaderboard"),
 	)
 
 	// Add reviewer-only options
@@ -383,29 +373,4 @@ func (b *Builder) buildAnnouncementContainer() discord.LayoutComponent {
 		discord.NewTextDisplay("# "+title),
 		discord.NewTextDisplay(b.announcementMessage),
 	).WithAccentColor(color)
-}
-
-// buildVoteStatsContainer creates the vote statistics container.
-func (b *Builder) buildVoteStatsContainer() discord.LayoutComponent {
-	// Calculate accuracy
-	accuracyStr := "0%"
-	if b.voteStats.TotalVotes > 0 {
-		accuracyStr = fmt.Sprintf("%.1f%%", b.voteStats.Accuracy*100)
-	}
-
-	// Format rank
-	rankStr := "Unranked"
-	if b.voteStats.Rank > 0 {
-		rankStr = fmt.Sprintf("#%d", b.voteStats.Rank)
-	}
-
-	return discord.NewContainer(
-		discord.NewTextDisplay("# Your Vote Statistics"),
-		discord.NewTextDisplayf("**Correct Votes:** `%d`\n**Total Votes:** `%d`\n**Accuracy:** `%s`\n**Leaderboard Rank:** `%s`",
-			b.voteStats.CorrectVotes,
-			b.voteStats.TotalVotes,
-			accuracyStr,
-			rankStr,
-		),
-	).WithAccentColor(constants.DefaultContainerColor)
 }

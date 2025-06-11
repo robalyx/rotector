@@ -8,17 +8,15 @@ import (
 
 // Service provides access to all business logic services.
 type Service struct {
-	ban        *service.BanService
-	user       *service.UserService
-	group      *service.GroupService
-	vote       *service.VoteService
-	reputation *service.ReputationService
-	reviewer   *service.ReviewerService
-	stats      *service.StatsService
-	appeal     *service.AppealService
-	view       *service.ViewService
-	sync       *service.SyncService
-	comment    *service.CommentService
+	ban      *service.BanService
+	user     *service.UserService
+	group    *service.GroupService
+	reviewer *service.ReviewerService
+	stats    *service.StatsService
+	appeal   *service.AppealService
+	view     *service.ViewService
+	sync     *service.SyncService
+	comment  *service.CommentService
 }
 
 // NewService creates a new service instance with all services.
@@ -27,8 +25,6 @@ func NewService(db *bun.DB, repository *Repository, logger *zap.Logger) *Service
 	userModel := repository.User()
 	groupModel := repository.Group()
 	activityModel := repository.Activity()
-	reputationModel := repository.Reputation()
-	voteModel := repository.Vote()
 	viewModel := repository.View()
 	reviewerModel := repository.Reviewer()
 	statsModel := repository.Stats()
@@ -40,17 +36,15 @@ func NewService(db *bun.DB, repository *Repository, logger *zap.Logger) *Service
 	viewService := service.NewView(viewModel, logger)
 
 	return &Service{
-		ban:        service.NewBan(banModel, logger),
-		user:       service.NewUser(db, userModel, activityModel, reputationModel, voteModel, trackingModel, logger),
-		group:      service.NewGroup(db, groupModel, activityModel, reputationModel, voteModel, logger),
-		vote:       service.NewVote(voteModel, activityModel, viewService, banModel, logger),
-		reputation: service.NewReputation(reputationModel, voteModel, logger),
-		reviewer:   service.NewReviewer(reviewerModel, viewService, logger),
-		stats:      service.NewStats(statsModel, userModel, groupModel, logger),
-		appeal:     service.NewAppeal(appealModel, logger),
-		view:       viewService,
-		sync:       service.NewSync(syncModel, logger),
-		comment:    service.NewComment(commentModel, logger),
+		ban:      service.NewBan(banModel, logger),
+		user:     service.NewUser(db, userModel, activityModel, trackingModel, logger),
+		group:    service.NewGroup(db, groupModel, activityModel, logger),
+		reviewer: service.NewReviewer(reviewerModel, viewService, logger),
+		stats:    service.NewStats(statsModel, userModel, groupModel, logger),
+		appeal:   service.NewAppeal(appealModel, logger),
+		view:     viewService,
+		sync:     service.NewSync(syncModel, logger),
+		comment:  service.NewComment(commentModel, logger),
 	}
 }
 
@@ -67,16 +61,6 @@ func (s *Service) User() *service.UserService {
 // Group returns the group service.
 func (s *Service) Group() *service.GroupService {
 	return s.group
-}
-
-// Vote returns the vote service.
-func (s *Service) Vote() *service.VoteService {
-	return s.vote
-}
-
-// Reputation returns the reputation service.
-func (s *Service) Reputation() *service.ReputationService {
-	return s.reputation
 }
 
 // Reviewer returns the reviewer service.

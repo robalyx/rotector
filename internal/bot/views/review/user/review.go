@@ -72,9 +72,7 @@ func (b *ReviewBuilder) Build() *discord.MessageUpdateBuilder {
 		b.buildUserInfoSection(),
 		discord.NewLargeSeparator(),
 		discord.NewSection(
-			discord.NewTextDisplay(fmt.Sprintf("⚠️ Reports: %d • 🛡️ Safe Votes: %d\n-# UUID: %s\n-# Created: %s • Updated: %s",
-				b.user.Reputation.Downvotes,
-				b.user.Reputation.Upvotes,
+			discord.NewTextDisplay(fmt.Sprintf("-# UUID: %s\n-# Created: %s • Updated: %s",
 				b.user.UUID.String(),
 				fmt.Sprintf("<t:%d:R>", b.user.CreatedAt.Unix()),
 				fmt.Sprintf("<t:%d:R>", b.user.LastUpdated.Unix()),

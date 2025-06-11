@@ -57,14 +57,6 @@ var (
 		s.userSettingsUpdate = true
 	})
 
-	// LeaderboardPeriod sets the leaderboard time period
-	UserLeaderboardPeriod = NewUserSettingKey("LeaderboardPeriod", func(s *Session) enum.LeaderboardPeriod {
-		return s.userSettings.LeaderboardPeriod
-	}, func(s *Session, value enum.LeaderboardPeriod) {
-		s.userSettings.LeaderboardPeriod = value
-		s.userSettingsUpdate = true
-	})
-
 	// ReviewerStatsPeriod sets the reviewer stats time period
 	UserReviewerStatsPeriod = NewUserSettingKey("ReviewerStatsPeriod", func(s *Session) enum.ReviewerStatsPeriod {
 		return s.userSettings.ReviewerStatsPeriod
