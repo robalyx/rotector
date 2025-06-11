@@ -112,6 +112,9 @@ func (b *ReviewBuilder) Build() *discord.MessageUpdateBuilder {
 			discord.NewActionRow(
 				discord.NewStringSelectMenu(constants.ReasonSelectMenuCustomID, "Manage Reasons", b.buildReasonOptions()...),
 			),
+			discord.NewActionRow(
+				discord.NewStringSelectMenu(constants.AIReasonSelectMenuCustomID, "Generate AI Reasons", b.buildAIReasonOptions()...),
+			),
 		)
 	}
 
@@ -464,6 +467,19 @@ func (b *ReviewBuilder) buildReasonOptions() []discord.StringSelectMenuOption {
 		enum.UserReasonTypeBadges,
 	}
 	return shared.BuildReasonOptions(b.user.Reasons, reasonTypes, getReasonEmoji, b.ReasonsChanged)
+}
+
+// buildAIReasonOptions creates the AI reason generation options.
+func (b *ReviewBuilder) buildAIReasonOptions() []discord.StringSelectMenuOption {
+	options := []discord.StringSelectMenuOption{
+		discord.NewStringSelectMenuOption("Generate Friend Reason", constants.GenerateFriendReasonButtonCustomID).
+			WithEmoji(discord.ComponentEmoji{Name: "👥"}).
+			WithDescription("Use AI to generate a reason based on friend network"),
+		discord.NewStringSelectMenuOption("Generate Group Reason", constants.GenerateGroupReasonButtonCustomID).
+			WithEmoji(discord.ComponentEmoji{Name: "🌐"}).
+			WithDescription("Use AI to generate a reason based on group membership"),
+	}
+	return options
 }
 
 // getTotalVisits returns the total visits across all games.

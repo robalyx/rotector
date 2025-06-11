@@ -172,11 +172,15 @@ const (
 
 	SortOrderSelectMenuCustomID = "sort_order"
 	ReasonSelectMenuCustomID    = "reason_select"
+	AIReasonSelectMenuCustomID  = "ai_reason_select"
 
 	AddReasonModalCustomID           = "add_reason_modal"
 	AddReasonInputCustomID           = "add_reason"
 	AddReasonConfidenceInputCustomID = "add_reason_confidence"
 	AddReasonEvidenceInputCustomID   = "add_reason_evidence"
+
+	GenerateFriendReasonButtonCustomID = "generate_friend_reason"
+	GenerateGroupReasonButtonCustomID  = "generate_group_reason"
 
 	PrevReviewButtonCustomID = "prev_review"
 	NextReviewButtonCustomID = "next_review"

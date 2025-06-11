@@ -171,6 +171,8 @@ func (m *ReviewMenu) handleSelectMenu(ctx *interaction.Context, s *session.Sessi
 		m.handleActionSelection(ctx, s, option)
 	case constants.ReasonSelectMenuCustomID:
 		m.handleReasonSelection(ctx, s, option)
+	case constants.AIReasonSelectMenuCustomID:
+		m.handleAIReasonSelection(ctx, s, option)
 	}
 }
 
@@ -667,6 +669,178 @@ func (m *ReviewMenu) handleReasonSelection(ctx *interaction.Context, s *session.
 			session.UserTarget.Set(s, user)
 		},
 	)
+}
+
+// handleAIReasonSelection processes AI reason generation dropdown selections.
+func (m *ReviewMenu) handleAIReasonSelection(ctx *interaction.Context, s *session.Session, option string) {
+	// Check if user is a reviewer
+	if !s.BotSettings().IsReviewer(uint64(ctx.Event().User().ID)) {
+		m.layout.logger.Error("Non-reviewer attempted to generate AI reasons",
+			zap.Uint64("user_id", uint64(ctx.Event().User().ID)))
+		ctx.Error("You do not have permission to generate AI reasons.")
+		return
+	}
+
+	// Get current user
+	user := session.UserTarget.Get(s)
+	if user == nil {
+		ctx.Error("No user selected for AI reason generation.")
+		return
+	}
+
+	// Handle the specific AI reason generation option
+	switch option {
+	case constants.GenerateFriendReasonButtonCustomID:
+		m.handleGenerateFriendReason(ctx, s, user)
+	case constants.GenerateGroupReasonButtonCustomID:
+		m.handleGenerateGroupReason(ctx, s, user)
+	default:
+		ctx.Error("Unknown AI reason generation option: " + option)
+	}
+}
+
+// handleGenerateFriendReason generates an AI generated friend reason for the current user.
+func (m *ReviewMenu) handleGenerateFriendReason(ctx *interaction.Context, s *session.Session, user *types.ReviewUser) {
+	// Check if user has friends to analyze
+	if len(user.Friends) == 0 {
+		ctx.Cancel("This user has no friends to analyze for friend reason generation.")
+		return
+	}
+
+	// Get flagged friends data
+	flaggedFriends := session.UserFlaggedFriends.Get(s)
+	if len(flaggedFriends) == 0 {
+		ctx.Cancel("This user has no flagged friends to analyze for reason generation.")
+		return
+	}
+
+	// Show loading message
+	ctx.Clear("Generating friend reason using AI... This may take a few moments.")
+
+	// Prepare data for AI analysis
+	confirmedFriendsMap := make(map[uint64]map[uint64]*types.ReviewUser)
+	flaggedFriendsMap := make(map[uint64]map[uint64]*types.ReviewUser)
+
+	confirmedFriends := make(map[uint64]*types.ReviewUser)
+	flaggedFriendsForUser := make(map[uint64]*types.ReviewUser)
+
+	for _, friend := range flaggedFriends {
+		switch friend.Status {
+		case enum.UserTypeConfirmed:
+			confirmedFriends[friend.ID] = friend
+		case enum.UserTypeFlagged:
+			flaggedFriendsForUser[friend.ID] = friend
+		case enum.UserTypeCleared:
+		}
+	}
+
+	confirmedFriendsMap[user.ID] = confirmedFriends
+	flaggedFriendsMap[user.ID] = flaggedFriendsForUser
+
+	// Generate AI reason using the friend analyzer
+	reasons := m.layout.friendReasonAnalyzer.GenerateFriendReasons(
+		ctx.Context(), []*types.ReviewUser{user}, confirmedFriendsMap, flaggedFriendsMap,
+	)
+
+	// Get the generated reason
+	generatedReason, exists := reasons[user.ID]
+	if !exists || generatedReason == "" {
+		ctx.Error("Failed to generate friend reason. The AI could not analyze this user's friend network.")
+		return
+	}
+
+	// Initialize reasons map if nil
+	if user.Reasons == nil {
+		user.Reasons = make(types.Reasons[enum.UserReasonType])
+	}
+
+	// Add or replace the friend reason with a confidence of 0.8
+	user.Reasons[enum.UserReasonTypeFriend] = &types.Reason{
+		Message:    generatedReason,
+		Confidence: 1.0,
+		Evidence:   []string{},
+	}
+
+	// Recalculate overall confidence
+	user.Confidence = utils.CalculateConfidence(user.Reasons)
+
+	// Update session
+	session.UserTarget.Set(s, user)
+	session.ReasonsChanged.Set(s, true)
+
+	ctx.Reload("Friend reason generated and applied successfully!")
+}
+
+// handleGenerateGroupReason generates an AI generated group reason for the current user.
+func (m *ReviewMenu) handleGenerateGroupReason(ctx *interaction.Context, s *session.Session, user *types.ReviewUser) {
+	// Check if user has groups to analyze
+	if len(user.Groups) == 0 {
+		ctx.Cancel("This user has no groups to analyze for group reason generation.")
+		return
+	}
+
+	// Get flagged groups data
+	flaggedGroups := session.UserFlaggedGroups.Get(s)
+	if len(flaggedGroups) == 0 {
+		ctx.Cancel("This user has no flagged groups to analyze for reason generation.")
+		return
+	}
+
+	// Show loading message
+	ctx.Clear("Generating group reason using AI... This may take a few moments.")
+
+	// Prepare data for AI analysis
+	confirmedGroupsMap := make(map[uint64]map[uint64]*types.ReviewGroup)
+	flaggedGroupsMap := make(map[uint64]map[uint64]*types.ReviewGroup)
+
+	confirmedGroups := make(map[uint64]*types.ReviewGroup)
+	flaggedGroupsForUser := make(map[uint64]*types.ReviewGroup)
+
+	for _, group := range flaggedGroups {
+		switch group.Status {
+		case enum.GroupTypeConfirmed:
+			confirmedGroups[group.ID] = group
+		case enum.GroupTypeFlagged:
+			flaggedGroupsForUser[group.ID] = group
+		case enum.GroupTypeCleared:
+		}
+	}
+
+	confirmedGroupsMap[user.ID] = confirmedGroups
+	flaggedGroupsMap[user.ID] = flaggedGroupsForUser
+
+	// Generate AI reason using the group analyzer
+	reasons := m.layout.groupReasonAnalyzer.GenerateGroupReasons(
+		ctx.Context(), []*types.ReviewUser{user}, confirmedGroupsMap, flaggedGroupsMap,
+	)
+
+	// Get the generated reason
+	generatedReason, exists := reasons[user.ID]
+	if !exists || generatedReason == "" {
+		ctx.Error("Failed to generate group reason. The AI could not analyze this user's group memberships.")
+		return
+	}
+
+	// Initialize reasons map if nil
+	if user.Reasons == nil {
+		user.Reasons = make(types.Reasons[enum.UserReasonType])
+	}
+
+	// Add or replace the group reason with a confidence of 0.8
+	user.Reasons[enum.UserReasonTypeGroup] = &types.Reason{
+		Message:    generatedReason,
+		Confidence: 1.0,
+		Evidence:   []string{},
+	}
+
+	// Recalculate overall confidence
+	user.Confidence = utils.CalculateConfidence(user.Reasons)
+
+	// Update session
+	session.UserTarget.Set(s, user)
+	session.ReasonsChanged.Set(s, true)
+
+	ctx.Reload("Group reason generated and applied successfully!")
 }
 
 // fetchNewTarget gets a new user to review based on the current sort order.
