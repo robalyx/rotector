@@ -22,11 +22,12 @@ import (
 // ReviewBuilder creates the visual layout for reviewing a group.
 type ReviewBuilder struct {
 	shared.BaseReviewBuilder
-	db           database.Client
-	group        *types.ReviewGroup
-	groupInfo    *apiTypes.GroupResponse
-	flaggedCount int
-	defaultSort  enum.ReviewSortBy
+	db             database.Client
+	group          *types.ReviewGroup
+	groupInfo      *apiTypes.GroupResponse
+	unsavedReasons map[enum.GroupReasonType]struct{}
+	flaggedCount   int
+	defaultSort    enum.ReviewSortBy
 }
 
 // NewReviewBuilder creates a new review builder.
@@ -48,11 +49,12 @@ func NewReviewBuilder(s *session.Session, db database.Client) *ReviewBuilder {
 			IsAdmin:        s.BotSettings().IsAdmin(userID),
 			PrivacyMode:    session.UserStreamerMode.Get(s),
 		},
-		db:           db,
-		group:        session.GroupTarget.Get(s),
-		groupInfo:    session.GroupInfo.Get(s),
-		flaggedCount: session.GroupFlaggedMembersCount.Get(s),
-		defaultSort:  session.UserGroupDefaultSort.Get(s),
+		db:             db,
+		group:          session.GroupTarget.Get(s),
+		groupInfo:      session.GroupInfo.Get(s),
+		unsavedReasons: session.UnsavedGroupReasons.Get(s),
+		flaggedCount:   session.GroupFlaggedMembersCount.Get(s),
+		defaultSort:    session.UserGroupDefaultSort.Get(s),
 	}
 }
 
@@ -294,9 +296,15 @@ func (b *ReviewBuilder) buildReasonDisplay() discord.ContainerSubComponent {
 			message = utils.TruncateString(message, maxLength)
 			message = utils.FormatString(message)
 
+			// Check if this reason is unsaved and add indicator
+			reasonTitle := reasonType.String()
+			if _, isUnsaved := b.unsavedReasons[reasonType]; isUnsaved {
+				reasonTitle += "*"
+			}
+
 			content.WriteString(fmt.Sprintf("%s **%s** [%.0f%%]\n%s",
 				getReasonEmoji(reasonType),
-				reasonType.String(),
+				reasonTitle,
 				reason.Confidence*100,
 				message))
 

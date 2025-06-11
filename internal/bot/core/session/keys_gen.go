@@ -108,6 +108,8 @@ func main() {
 		{Name: "ReasonsChanged", Type: "bool", Doc: "ReasonsChanged indicates if reasons have been modified", Persist: true},
 		{Name: "OriginalUserReasons", Type: "types.Reasons[enum.UserReasonType]", Doc: "OriginalUserReasons stores the initial user reasons", Persist: true},
 		{Name: "OriginalGroupReasons", Type: "types.Reasons[enum.GroupReasonType]", Doc: "OriginalGroupReasons stores the initial group reasons", Persist: true},
+		{Name: "UnsavedUserReasons", Type: "map[enum.UserReasonType]struct{}", Doc: "UnsavedUserReasons tracks which user reason types have been modified but not saved", Persist: true},
+		{Name: "UnsavedGroupReasons", Type: "map[enum.GroupReasonType]struct{}", Doc: "UnsavedGroupReasons tracks which group reason types have been modified but not saved", Persist: true},
 		{Name: "SelectedReasonType", Type: "string", Doc: "SelectedReasonType stores the currently selected reason type for modal handling", Persist: true},
 		{Name: "ReviewLogs", Type: "[]*types.ActivityLog", Doc: "ReviewLogs stores the current review logs", Persist: true},
 		{Name: "ReviewLogsHasMore", Type: "bool", Doc: "ReviewLogsHasMore indicates if there are more logs available", Persist: true},

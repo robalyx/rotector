@@ -387,7 +387,8 @@ func (m *ReviewMenu) handleNavigateUser(ctx *interaction.Context, s *session.Ses
 	// Set as current user and reload
 	session.UserTarget.Set(s, user)
 	session.OriginalUserReasons.Set(s, user.Reasons)
-	session.ReasonsChanged.Set(s, false)
+	session.UnsavedUserReasons.Delete(s)
+	session.ReasonsChanged.Delete(s)
 
 	direction := map[bool]string{true: "next", false: "previous"}[isNext]
 	ctx.Reload(fmt.Sprintf("Navigated to %s user.", direction))
@@ -448,6 +449,8 @@ func (m *ReviewMenu) handleConfirmUser(ctx *interaction.Context, s *session.Sess
 	// Clear current user and load next one
 	m.UpdateCounters(s)
 	session.UserTarget.Delete(s)
+	session.UnsavedUserReasons.Delete(s)
+
 	ctx.Reload(fmt.Sprintf("User confirmed. %d users left to review.", flaggedCount))
 }
 
@@ -492,6 +495,8 @@ func (m *ReviewMenu) handleClearUser(ctx *interaction.Context, s *session.Sessio
 	// Clear current user and load next one
 	m.UpdateCounters(s)
 	session.UserTarget.Delete(s)
+	session.UnsavedUserReasons.Delete(s)
+
 	ctx.Reload(fmt.Sprintf("User cleared. %d users left to review.", flaggedCount))
 }
 
@@ -644,7 +649,8 @@ func (m *ReviewMenu) handleReasonSelection(ctx *interaction.Context, s *session.
 
 		// Update session
 		session.UserTarget.Set(s, user)
-		session.ReasonsChanged.Set(s, false)
+		session.UnsavedUserReasons.Delete(s)
+		session.ReasonsChanged.Delete(s)
 
 		ctx.Reload("Successfully restored original reasons")
 		return
@@ -768,6 +774,14 @@ func (m *ReviewMenu) handleGenerateFriendReason(ctx *interaction.Context, s *ses
 	session.UserTarget.Set(s, user)
 	session.ReasonsChanged.Set(s, true)
 
+	// Mark the friend reason as unsaved
+	unsavedReasons := session.UnsavedUserReasons.Get(s)
+	if unsavedReasons == nil {
+		unsavedReasons = make(map[enum.UserReasonType]struct{})
+	}
+	unsavedReasons[enum.UserReasonTypeFriend] = struct{}{}
+	session.UnsavedUserReasons.Set(s, unsavedReasons)
+
 	ctx.Reload("Friend reason generated and applied successfully!")
 }
 
@@ -840,6 +854,14 @@ func (m *ReviewMenu) handleGenerateGroupReason(ctx *interaction.Context, s *sess
 	session.UserTarget.Set(s, user)
 	session.ReasonsChanged.Set(s, true)
 
+	// Mark the group reason as unsaved
+	unsavedReasons := session.UnsavedUserReasons.Get(s)
+	if unsavedReasons == nil {
+		unsavedReasons = make(map[enum.UserReasonType]struct{})
+	}
+	unsavedReasons[enum.UserReasonTypeGroup] = struct{}{}
+	session.UnsavedUserReasons.Set(s, unsavedReasons)
+
 	ctx.Reload("Group reason generated and applied successfully!")
 }
 
@@ -899,6 +921,9 @@ func (m *ReviewMenu) fetchNewTarget(ctx *interaction.Context, s *session.Session
 	session.UserTarget.Set(s, user)
 	session.OriginalUserReasons.Set(s, user.Reasons)
 	session.ReasonsChanged.Set(s, false)
+
+	// Clear unsaved reasons tracking for new user
+	session.UnsavedUserReasons.Set(s, make(map[enum.UserReasonType]struct{}))
 
 	// Log the view action
 	go m.layout.db.Model().Activity().Log(ctx.Context(), &types.ActivityLog{

@@ -104,6 +104,10 @@ var (
 	OriginalUserReasons = NewKey[types.Reasons[enum.UserReasonType]]("OriginalUserReasons", true)
 	// OriginalGroupReasons stores the initial group reasons
 	OriginalGroupReasons = NewKey[types.Reasons[enum.GroupReasonType]]("OriginalGroupReasons", true)
+	// UnsavedUserReasons tracks which user reason types have been modified but not saved
+	UnsavedUserReasons = NewKey[map[enum.UserReasonType]struct{}]("UnsavedUserReasons", true)
+	// UnsavedGroupReasons tracks which group reason types have been modified but not saved
+	UnsavedGroupReasons = NewKey[map[enum.GroupReasonType]struct{}]("UnsavedGroupReasons", true)
 	// SelectedReasonType stores the currently selected reason type for modal handling
 	SelectedReasonType = NewKey[string]("SelectedReasonType", true)
 	// ReviewLogs stores the current review logs

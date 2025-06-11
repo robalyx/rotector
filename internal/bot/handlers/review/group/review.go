@@ -450,7 +450,8 @@ func (m *ReviewMenu) handleNavigateGroup(ctx *interaction.Context, s *session.Se
 	session.GroupTarget.Set(s, group)
 	session.GroupFlaggedMembersCount.Set(s, flaggedCount)
 	session.OriginalGroupReasons.Set(s, group.Reasons)
-	session.ReasonsChanged.Set(s, false)
+	session.UnsavedGroupReasons.Delete(s)
+	session.ReasonsChanged.Delete(s)
 
 	direction := map[bool]string{true: "next", false: "previous"}[isNext]
 	ctx.Reload(fmt.Sprintf("Navigated to %s group.", direction))
@@ -504,6 +505,8 @@ func (m *ReviewMenu) handleConfirmGroup(ctx *interaction.Context, s *session.Ses
 	// Clear current group and load next one
 	m.UpdateCounters(s)
 	session.GroupTarget.Delete(s)
+	session.UnsavedGroupReasons.Delete(s)
+
 	ctx.Reload("Group confirmed.")
 }
 
@@ -542,6 +545,8 @@ func (m *ReviewMenu) handleClearGroup(ctx *interaction.Context, s *session.Sessi
 	// Clear current group and load next one
 	m.UpdateCounters(s)
 	session.GroupTarget.Delete(s)
+	session.UnsavedGroupReasons.Delete(s)
+
 	ctx.Reload("Group cleared.")
 }
 
@@ -567,7 +572,8 @@ func (m *ReviewMenu) handleReasonSelection(ctx *interaction.Context, s *session.
 
 		// Update session
 		session.GroupTarget.Set(s, group)
-		session.ReasonsChanged.Set(s, false)
+		session.ReasonsChanged.Delete(s)
+		session.UnsavedGroupReasons.Delete(s)
 
 		ctx.Reload("Successfully restored original reasons")
 		return
@@ -622,7 +628,8 @@ func (m *ReviewMenu) fetchNewTarget(ctx *interaction.Context, s *session.Session
 	session.GroupTarget.Set(s, group)
 	session.GroupFlaggedMembersCount.Set(s, flaggedCount)
 	session.OriginalGroupReasons.Set(s, group.Reasons)
-	session.ReasonsChanged.Set(s, false)
+	session.UnsavedGroupReasons.Delete(s)
+	session.ReasonsChanged.Delete(s)
 
 	// Add current group to history and set index to point to it
 	session.AddToReviewHistory(s, session.GroupReviewHistoryType, group.ID)

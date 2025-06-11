@@ -225,6 +225,7 @@ func (m *Menu) handleLookupRobloxUserModalSubmit(ctx *interaction.Context, s *se
 	// Store user in session and show review menu
 	session.UserTarget.Set(s, user)
 	session.OriginalUserReasons.Set(s, user.Reasons)
+	session.UnsavedUserReasons.Set(s, make(map[enum.UserReasonType]struct{}))
 	session.ReasonsChanged.Set(s, false)
 	ctx.Show(constants.UserReviewPageName, "")
 

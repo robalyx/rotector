@@ -27,6 +27,7 @@ type ReviewBuilder struct {
 	user           *types.ReviewUser
 	flaggedFriends map[uint64]*types.ReviewUser
 	flaggedGroups  map[uint64]*types.ReviewGroup
+	unsavedReasons map[enum.UserReasonType]struct{}
 	translator     *translator.Translator
 	defaultSort    enum.ReviewSortBy
 	trainingMode   bool
@@ -57,6 +58,7 @@ func NewReviewBuilder(s *session.Session, translator *translator.Translator, db 
 		user:           session.UserTarget.Get(s),
 		flaggedFriends: session.UserFlaggedFriends.Get(s),
 		flaggedGroups:  session.UserFlaggedGroups.Get(s),
+		unsavedReasons: session.UnsavedUserReasons.Get(s),
 		translator:     translator,
 		defaultSort:    session.UserUserDefaultSort.Get(s),
 		trainingMode:   trainingMode,
@@ -350,9 +352,15 @@ func (b *ReviewBuilder) buildReasonDisplay() discord.ContainerSubComponent {
 			message = utils.TruncateString(message, maxLength)
 			message = utils.FormatString(message)
 
+			// Check if this reason is unsaved and add indicator
+			reasonTitle := reasonType.String()
+			if _, isUnsaved := b.unsavedReasons[reasonType]; isUnsaved {
+				reasonTitle += "*"
+			}
+
 			content.WriteString(fmt.Sprintf("%s **%s** [%.0f%%]\n%s",
 				getReasonEmoji(reasonType),
-				reasonType.String(),
+				reasonTitle,
 				reason.Confidence*100,
 				message))
 

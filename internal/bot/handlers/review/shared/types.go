@@ -15,6 +15,7 @@ import (
 	view "github.com/robalyx/rotector/internal/bot/views/review/shared"
 	"github.com/robalyx/rotector/internal/database"
 	"github.com/robalyx/rotector/internal/database/types"
+	"github.com/robalyx/rotector/internal/database/types/enum"
 	"github.com/robalyx/rotector/pkg/utils"
 	"go.uber.org/zap"
 )
@@ -279,7 +280,8 @@ func HandleReasonModalSubmit[T types.ReasonType](
 			updateConfidence(newConfidence)
 			updateReasons(reasons)
 
-			// Update session
+			// Mark reason as unsaved and update session
+			markReasonAsUnsaved(s, reasonType)
 			session.SelectedReasonType.Delete(s)
 			session.ReasonsChanged.Set(s, true)
 
@@ -352,7 +354,8 @@ func HandleReasonModalSubmit[T types.ReasonType](
 	updateConfidence(newConfidence)
 	updateReasons(reasons)
 
-	// Update session
+	// Mark reason as unsaved and update session
+	markReasonAsUnsaved(s, reasonType)
 	session.SelectedReasonType.Delete(s)
 	session.ReasonsChanged.Set(s, true)
 
@@ -430,4 +433,26 @@ func BuildReasonModal[T types.ReasonType](reasonType T, existingReason *types.Re
 	modal.AddActionRow(evidenceInput)
 
 	return modal
+}
+
+// markReasonAsUnsaved marks a reason type as unsaved based on its type.
+func markReasonAsUnsaved[T types.ReasonType](s *session.Session, reasonType T) {
+	switch any(reasonType).(type) {
+	case enum.UserReasonType:
+		userReasonType := any(reasonType).(enum.UserReasonType)
+		unsavedReasons := session.UnsavedUserReasons.Get(s)
+		if unsavedReasons == nil {
+			unsavedReasons = make(map[enum.UserReasonType]struct{})
+		}
+		unsavedReasons[userReasonType] = struct{}{}
+		session.UnsavedUserReasons.Set(s, unsavedReasons)
+	case enum.GroupReasonType:
+		groupReasonType := any(reasonType).(enum.GroupReasonType)
+		unsavedReasons := session.UnsavedGroupReasons.Get(s)
+		if unsavedReasons == nil {
+			unsavedReasons = make(map[enum.GroupReasonType]struct{})
+		}
+		unsavedReasons[groupReasonType] = struct{}{}
+		session.UnsavedGroupReasons.Set(s, unsavedReasons)
+	}
 }
