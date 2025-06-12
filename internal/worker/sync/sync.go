@@ -15,7 +15,7 @@ import (
 )
 
 // syncCycle attempts to sync all servers.
-func (w *Worker) syncCycle() error {
+func (w *Worker) syncCycle(ctx context.Context) error {
 	// Get all guilds
 	guilds, err := w.state.Guilds()
 	if err != nil {
@@ -27,9 +27,16 @@ func (w *Worker) syncCycle() error {
 	successfulGuilds := 0
 	failedGuilds := 0
 	now := time.Now()
-	ctx := context.Background()
 
 	for i, guild := range guilds {
+		// Check if context was cancelled
+		select {
+		case <-ctx.Done():
+			w.logger.Info("Context cancelled during guild sync")
+			return ctx.Err()
+		default:
+		}
+
 		// Print progress
 		progress := (i * 100) / len(guilds)
 		guildName := guild.Name
@@ -60,7 +67,7 @@ func (w *Worker) syncCycle() error {
 		}
 
 		// Request all members for this guild
-		members, err := w.syncServerMembers(guild.ID)
+		members, err := w.syncServerMembers(ctx, guild.ID)
 		if err != nil {
 			w.logger.Error("Failed to sync guild members",
 				zap.String("name", guild.Name),
@@ -129,7 +136,7 @@ func (w *Worker) syncCycle() error {
 }
 
 // syncServerMembers gets all members for a guild using the lazy member list approach.
-func (w *Worker) syncServerMembers(guildID discord.GuildID) ([]*types.DiscordServerMember, error) {
+func (w *Worker) syncServerMembers(ctx context.Context, guildID discord.GuildID) ([]*types.DiscordServerMember, error) {
 	now := time.Now()
 
 	// Keep track of attempted channels to avoid repeating
@@ -164,7 +171,7 @@ func (w *Worker) syncServerMembers(guildID discord.GuildID) ([]*types.DiscordSer
 		time.Sleep(1 * time.Second)
 
 		// Main sync loop - continue until we've synced all members or hit timeout
-		members, err := w.syncMemberChunks(guildID, targetChannel, now)
+		members, err := w.syncMemberChunks(ctx, guildID, targetChannel, now)
 
 		// If successful or not a retry error, return immediately
 		if err == nil || !errors.Is(err, ErrListNotFoundRetry) {
@@ -284,6 +291,7 @@ func (w *Worker) findTextChannel(
 
 // syncMemberChunks handles the main sync loop, retrieving member chunks and processing them.
 func (w *Worker) syncMemberChunks(
+	ctx context.Context,
 	guildID discord.GuildID,
 	channelID discord.ChannelID,
 	now time.Time,
@@ -308,6 +316,9 @@ func (w *Worker) syncMemberChunks(
 		select {
 		case <-timeout:
 			return allMembers, fmt.Errorf("timeout while syncing member list: %w", ErrTimeout)
+		case <-ctx.Done():
+			w.logger.Info("Context cancelled during member sync")
+			return allMembers, ctx.Err()
 		default:
 			// Get current member list state
 			list, err := w.state.MemberState.GetMemberList(guildID, channelID)
@@ -343,7 +354,7 @@ func (w *Worker) syncMemberChunks(
 			consecutiveListNotFound = 0
 
 			// Process any new members
-			newMembers := w.processMemberList(list, processed, guildID, now)
+			newMembers := w.processMemberList(ctx, list, processed, guildID, now)
 			allMembers = append(allMembers, newMembers...)
 			currentMaxChunk := list.MaxChunk()
 
@@ -393,6 +404,7 @@ func (w *Worker) syncMemberChunks(
 // processMemberList extracts members from the member list that haven't been processed yet.
 // Returns a slice of new members found.
 func (w *Worker) processMemberList(
+	ctx context.Context,
 	list *member.List,
 	processed map[uint64]struct{},
 	guildID discord.GuildID,
@@ -435,7 +447,7 @@ func (w *Worker) processMemberList(
 	// Check which users already exist in our database
 	existingUsers := make(map[uint64]bool)
 	if len(userIDsToCheck) > 0 {
-		existingMembersMap, err := w.db.Model().Sync().GetFlaggedServerMembers(context.Background(), userIDsToCheck)
+		existingMembersMap, err := w.db.Model().Sync().GetFlaggedServerMembers(ctx, userIDsToCheck)
 		if err != nil {
 			w.logger.Error("Failed to check existing members",
 				zap.Error(err),

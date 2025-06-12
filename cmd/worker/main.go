@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/signal"
 	stdSync "sync"
+	"syscall"
 	"time"
 
 	"github.com/robalyx/rotector/internal/progress"
@@ -17,6 +19,7 @@ import (
 	"github.com/robalyx/rotector/internal/worker/reason"
 	"github.com/robalyx/rotector/internal/worker/stats"
 	"github.com/robalyx/rotector/internal/worker/sync"
+	"github.com/robalyx/rotector/pkg/utils"
 	"github.com/urfave/cli/v3"
 	"go.uber.org/zap"
 )
@@ -118,9 +121,23 @@ func run() error {
 
 // runWorkers starts multiple instances of a worker type.
 func runWorkers(ctx context.Context, workerType string, count int) {
+	// Create context that can be cancelled on signals
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	// Set up signal handling
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+
+	go func() {
+		<-sigChan
+		cancel()
+	}()
+
 	app, err := setup.InitializeApp(ctx, setup.ServiceWorker, WorkerLogDir)
 	if err != nil {
-		log.Fatalf("Failed to initialize application: %v", err)
+		log.Printf("Failed to initialize application: %v", err)
+		return
 	}
 	defer app.Cleanup(ctx)
 
@@ -149,11 +166,8 @@ func runWorkers(ctx context.Context, workerType string, count int) {
 
 			// Add staggered startup delay
 			delay := time.Duration(workerID) * time.Duration(startupDelay) * time.Millisecond
-			select {
-			case <-time.After(delay):
-				// Proceed after delay
-			case <-ctx.Done():
-				return // Exit if context cancelled during delay
+			if utils.ContextSleep(ctx, delay) == utils.SleepCancelled {
+				return
 			}
 
 			workerLogger := app.LogManager.GetWorkerLogger(
@@ -163,7 +177,7 @@ func runWorkers(ctx context.Context, workerType string, count int) {
 			// Get progress bar for this worker
 			bar := bars[workerID]
 
-			var w interface{ Start() }
+			var w interface{ Start(context.Context) }
 			switch workerType {
 			case FriendWorker:
 				w = friend.New(app, bar, workerLogger)
@@ -190,15 +204,13 @@ func runWorkers(ctx context.Context, workerType string, count int) {
 	log.Printf("Started %d %s workers", count, workerType)
 	wg.Wait()
 	renderer.Stop()
-	log.Println("All workers have finished. Exiting.")
 }
 
 // runWorker runs a single worker in a loop with error recovery.
-func runWorker(ctx context.Context, w interface{ Start() }, logger *zap.Logger) {
+func runWorker(ctx context.Context, w interface{ Start(context.Context) }, logger *zap.Logger) {
 	for {
 		select {
 		case <-ctx.Done():
-			logger.Info("Context cancelled, stopping worker")
 			return
 		default:
 			func() {
@@ -209,18 +221,31 @@ func runWorker(ctx context.Context, w interface{ Start() }, logger *zap.Logger) 
 							zap.Any("panic", r),
 						)
 						logger.Info("Restarting worker in 5 seconds...")
-						time.Sleep(5 * time.Second)
+
+						// Respect context cancellation during sleep
+						if utils.ContextSleep(ctx, 5*time.Second) == utils.SleepCancelled {
+							return
+						}
 					}
 				}()
 
 				logger.Info("Starting worker")
-				w.Start()
+				w.Start(ctx)
 			}()
+
+			// Check if context was cancelled
+			if ctx.Err() != nil {
+				return
+			}
 
 			logger.Warn("Worker stopped unexpectedly",
 				zap.String("worker_type", fmt.Sprintf("%T", w)),
 			)
-			time.Sleep(5 * time.Second)
+
+			// Respect context cancellation during sleep
+			if utils.ContextSleep(ctx, 5*time.Second) == utils.SleepCancelled {
+				return
+			}
 		}
 	}
 }

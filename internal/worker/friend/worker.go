@@ -16,6 +16,7 @@ import (
 	"github.com/robalyx/rotector/internal/roblox/fetcher"
 	"github.com/robalyx/rotector/internal/setup"
 	"github.com/robalyx/rotector/internal/worker/core"
+	"github.com/robalyx/rotector/pkg/utils"
 	"go.uber.org/zap"
 )
 
@@ -65,23 +66,33 @@ func New(app *setup.App, bar *progress.Bar, logger *zap.Logger) *Worker {
 }
 
 // Start begins the friend worker's main loop.
-func (w *Worker) Start() {
+func (w *Worker) Start(ctx context.Context) {
 	w.logger.Info("Friend Worker started", zap.String("workerID", w.reporter.GetWorkerID()))
-	w.reporter.Start()
+	w.reporter.Start(ctx)
 	defer w.reporter.Stop()
 
 	w.bar.SetTotal(100)
 
 	for {
+		// Check if context was cancelled
+		if utils.ContextGuardWithLog(ctx, w.logger, "Context cancelled, stopping friend worker") {
+			w.bar.SetStepMessage("Shutting down", 100)
+			w.reporter.UpdateStatus("Shutting down", 100)
+			return
+		}
+
 		w.bar.Reset()
 		w.reporter.SetHealthy(true)
 
 		// Check flagged users count
-		flaggedCount, err := w.db.Model().User().GetFlaggedUsersCount(context.Background())
+		flaggedCount, err := w.db.Model().User().GetFlaggedUsersCount(ctx)
 		if err != nil {
 			w.logger.Error("Error getting flagged users count", zap.Error(err))
 			w.reporter.SetHealthy(false)
-			time.Sleep(5 * time.Minute)
+
+			if !utils.ErrorSleep(ctx, 5*time.Minute, w.logger, "friend worker") {
+				return
+			}
 			continue
 		}
 
@@ -98,24 +109,30 @@ func (w *Worker) Start() {
 			w.logger.Info("Pausing worker - flagged users threshold exceeded",
 				zap.Int("flaggedCount", flaggedCount),
 				zap.Int("threshold", w.flaggedThreshold))
-			time.Sleep(5 * time.Minute)
+
+			if !utils.ThresholdSleep(ctx, 5*time.Minute, w.logger, "friend worker") {
+				return
+			}
 			continue
 		}
 
 		// Step 1: Process friends batch (40%)
 		w.bar.SetStepMessage("Processing friends batch", 40)
 		w.reporter.UpdateStatus("Processing friends batch", 40)
-		userInfos, err := w.processFriendsBatch()
+		userInfos, err := w.processFriendsBatch(ctx)
 		if err != nil {
 			w.reporter.SetHealthy(false)
-			time.Sleep(5 * time.Minute)
+
+			if !utils.ErrorSleep(ctx, 5*time.Minute, w.logger, "friend worker") {
+				return
+			}
 			continue
 		}
 
 		// Step 2: Process users (60%)
 		w.bar.SetStepMessage("Processing users", 60)
 		w.reporter.UpdateStatus("Processing users", 60)
-		w.userChecker.ProcessUsers(userInfos[:w.batchSize], nil)
+		w.userChecker.ProcessUsers(ctx, userInfos[:w.batchSize], nil)
 
 		// Step 3: Prepare for next batch
 		w.pendingFriends = userInfos[w.batchSize:]
@@ -125,17 +142,19 @@ func (w *Worker) Start() {
 		w.reporter.UpdateStatus("Completed", 100)
 
 		// Short pause before next iteration
-		time.Sleep(1 * time.Second)
+		if !utils.IntervalSleep(ctx, 1*time.Second, w.logger, "friend worker") {
+			return
+		}
 	}
 }
 
 // processFriendsBatch builds a list of validated friends to check.
-func (w *Worker) processFriendsBatch() ([]*types.ReviewUser, error) {
+func (w *Worker) processFriendsBatch(ctx context.Context) ([]*types.ReviewUser, error) {
 	validFriends := w.pendingFriends
 
 	for len(validFriends) < w.batchSize {
 		// Get the next confirmed user
-		user, err := w.db.Model().User().GetUserToScan(context.Background())
+		user, err := w.db.Model().User().GetUserToScan(ctx)
 		if err != nil {
 			if !errors.Is(err, sql.ErrNoRows) {
 				w.logger.Error("Error getting user to scan", zap.Error(err))
@@ -146,7 +165,7 @@ func (w *Worker) processFriendsBatch() ([]*types.ReviewUser, error) {
 		}
 
 		// Fetch friends for the user
-		userFriendIDs, err := w.friendFetcher.GetFriendIDs(context.Background(), user.ID)
+		userFriendIDs, err := w.friendFetcher.GetFriendIDs(ctx, user.ID)
 		if err != nil {
 			w.logger.Error("Error fetching friends", zap.Error(err), zap.Uint64("userID", user.ID))
 			continue
@@ -158,7 +177,7 @@ func (w *Worker) processFriendsBatch() ([]*types.ReviewUser, error) {
 		}
 
 		// Get all users that exist in our system
-		existingUsers, err := w.db.Model().User().GetUsersByIDs(context.Background(), userFriendIDs, types.UserFieldID)
+		existingUsers, err := w.db.Model().User().GetUsersByIDs(ctx, userFriendIDs, types.UserFieldID)
 		if err != nil {
 			w.logger.Error("Error checking existing users", zap.Error(err))
 			continue
@@ -200,7 +219,7 @@ func (w *Worker) processFriendsBatch() ([]*types.ReviewUser, error) {
 
 		// Fetch user info and validate friends
 		if len(friendIDs) > 0 {
-			userInfos := w.userFetcher.FetchInfos(context.Background(), friendIDs)
+			userInfos := w.userFetcher.FetchInfos(ctx, friendIDs)
 			validFriends = append(validFriends, userInfos...)
 
 			w.logger.Debug("Added friends for processing",

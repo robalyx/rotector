@@ -7,23 +7,37 @@ import (
 
 	"github.com/jaxron/roapi.go/pkg/api/resources/games"
 	"github.com/robalyx/rotector/internal/database/types"
+	"github.com/robalyx/rotector/pkg/utils"
 	"github.com/sourcegraph/conc/pool"
 	"go.uber.org/zap"
 )
 
 // runMutualScanner continuously runs full scans for users.
-func (w *Worker) runMutualScanner() {
+func (w *Worker) runMutualScanner(ctx context.Context) {
 	for {
-		ctx := context.Background()
+		// Check if context was cancelled
+		if utils.ContextGuardWithLog(ctx, w.logger, "Context cancelled, stopping mutual scanner") {
+			return
+		}
+
 		before := time.Now().Add(-1 * time.Hour) // Scan users not checked in the last hour
 		userIDs, err := w.db.Model().Sync().GetUsersForFullScan(ctx, before, 100)
 		if err != nil {
 			w.logger.Error("Failed to get users for full scan", zap.Error(err))
-			time.Sleep(5 * time.Second)
+
+			if utils.ContextSleep(ctx, 5*time.Second) == utils.SleepCancelled {
+				w.logger.Info("Context cancelled during error wait, stopping mutual scanner")
+				return
+			}
 			continue
 		}
 
 		for _, userID := range userIDs {
+			// Check if context was cancelled
+			if utils.ContextGuardWithLog(ctx, w.logger, "Context cancelled during user scan, stopping mutual scanner") {
+				return
+			}
+
 			if !w.scanner.ShouldScan(ctx, userID) {
 				continue
 			}
@@ -36,29 +50,42 @@ func (w *Worker) runMutualScanner() {
 			}
 
 			// Sleep to respect rate limits
-			time.Sleep(1 * time.Second)
+			if utils.ContextSleep(ctx, 1*time.Second) == utils.SleepCancelled {
+				w.logger.Info("Context cancelled during rate limit wait, stopping mutual scanner")
+				return
+			}
 		}
 
 		// Sleep before next batch
-		time.Sleep(5 * time.Second)
+		if utils.ContextSleep(ctx, 5*time.Second) == utils.SleepCancelled {
+			w.logger.Info("Context cancelled during batch wait, stopping mutual scanner")
+			return
+		}
 	}
 }
 
 // runGameScanner periodically scans games for active players.
-func (w *Worker) runGameScanner() {
+func (w *Worker) runGameScanner(ctx context.Context) {
 	for {
-		if err := w.processPendingGames(); err != nil {
+		// Check if context was cancelled
+		if utils.ContextGuardWithLog(ctx, w.logger, "Context cancelled, stopping game scanner") {
+			return
+		}
+
+		if err := w.processPendingGames(ctx); err != nil {
 			w.logger.Error("Failed to process pending games", zap.Error(err))
-			time.Sleep(5 * time.Second)
+
+			if utils.ContextSleep(ctx, 5*time.Second) == utils.SleepCancelled {
+				w.logger.Info("Context cancelled during error wait, stopping game scanner")
+				return
+			}
 			continue
 		}
 	}
 }
 
 // processPendingGames handles scanning of pending games.
-func (w *Worker) processPendingGames() error {
-	ctx := context.Background()
-
+func (w *Worker) processPendingGames(ctx context.Context) error {
 	// Get oldest non-deleted games
 	pendingGames, err := w.db.Model().Condo().GetAndUpdatePendingGames(ctx, 50)
 	if err != nil {
@@ -67,7 +94,9 @@ func (w *Worker) processPendingGames() error {
 
 	if len(pendingGames) == 0 {
 		// No games to process, wait before checking again
-		time.Sleep(1 * time.Second)
+		if utils.ContextSleep(ctx, 1*time.Second) == utils.SleepCancelled {
+			return ctx.Err()
+		}
 		return nil
 	}
 

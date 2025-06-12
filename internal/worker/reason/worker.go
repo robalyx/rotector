@@ -11,6 +11,7 @@ import (
 	"github.com/robalyx/rotector/internal/database/types/enum"
 	"github.com/robalyx/rotector/internal/progress"
 	"github.com/robalyx/rotector/internal/setup"
+	"github.com/robalyx/rotector/pkg/utils"
 	"go.uber.org/zap"
 )
 
@@ -92,7 +93,7 @@ func New(app *setup.App, bar *progress.Bar, logger *zap.Logger) *Worker {
 }
 
 // Start begins the reason worker's operation.
-func (w *Worker) Start() {
+func (w *Worker) Start(ctx context.Context) {
 	w.logger.Info("Reason Worker started")
 
 	w.bar.SetTotal(100)
@@ -102,10 +103,16 @@ func (w *Worker) Start() {
 	stepSize := 100 / len(w.processors)
 
 	for i, processor := range w.processors {
+		// Check if context was cancelled
+		if utils.ContextGuardWithLog(ctx, w.logger, "Context cancelled, stopping reason worker") {
+			w.bar.SetStepMessage("Cancelled", 100)
+			return
+		}
+
 		progress := int64((i + 1) * stepSize)
 		w.bar.SetStepMessage(processor.stepMessage, progress)
 
-		count, err := w.updateReasons(context.Background(), processor)
+		count, err := w.updateReasons(ctx, processor)
 		if err != nil {
 			w.logger.Error("Failed to update reasons",
 				zap.String("type", processor.reasonType.String()),
@@ -124,10 +131,11 @@ func (w *Worker) Start() {
 		zap.Int("groupUpdates", totalCounts[1]),
 		zap.Int("outfitUpdates", totalCounts[2]))
 
-	// Pause indefinitely after completing the operation
-	w.logger.Info("Reason worker finished processing, pausing indefinitely until shutdown")
-	w.bar.SetStepMessage("Paused - waiting for shutdown", 100)
-	select {}
+	// Wait for shutdown signal instead of blocking indefinitely
+	w.logger.Info("Reason worker finished processing, waiting for shutdown signal")
+	w.bar.SetStepMessage("Waiting for shutdown", 100)
+	<-ctx.Done()
+	w.logger.Info("Reason worker shutting down gracefully")
 }
 
 // updateReasons updates users with the specified placeholder messages using the provided processor.
@@ -188,7 +196,7 @@ func (w *Worker) processReasons(ctx context.Context, users []*types.ReviewUser, 
 
 		// Add delay between batches
 		if i+w.batchSize < len(users) {
-			time.Sleep(w.batchDelay)
+			utils.ContextSleep(ctx, w.batchDelay)
 		}
 	}
 

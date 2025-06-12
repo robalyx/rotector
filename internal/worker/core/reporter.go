@@ -39,7 +39,7 @@ func NewStatusReporter(client rueidis.Client, workerType string, logger *zap.Log
 }
 
 // Start begins periodic status reporting.
-func (r *StatusReporter) Start() {
+func (r *StatusReporter) Start(ctx context.Context) {
 	r.mu.Lock()
 	if r.stopped {
 		r.mu.Unlock()
@@ -52,16 +52,18 @@ func (r *StatusReporter) Start() {
 		defer ticker.Stop()
 
 		// Report initial status
-		if err := r.monitor.ReportStatus(context.Background(), r.status); err != nil {
+		if err := r.monitor.ReportStatus(ctx, r.status); err != nil {
 			r.logger.Error("Failed to report initial status", zap.Error(err))
 		}
 
 		for {
 			select {
 			case <-ticker.C:
-				if err := r.monitor.ReportStatus(context.Background(), r.status); err != nil {
+				if err := r.monitor.ReportStatus(ctx, r.status); err != nil {
 					r.logger.Error("Failed to report status", zap.Error(err))
 				}
+			case <-ctx.Done():
+				return
 			case <-r.stopChan:
 				return
 			}

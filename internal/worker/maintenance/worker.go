@@ -16,6 +16,7 @@ import (
 	"github.com/robalyx/rotector/internal/roblox/fetcher"
 	"github.com/robalyx/rotector/internal/setup"
 	"github.com/robalyx/rotector/internal/worker/core"
+	"github.com/robalyx/rotector/pkg/utils"
 	"go.uber.org/zap"
 )
 
@@ -87,60 +88,69 @@ func New(app *setup.App, bar *progress.Bar, logger *zap.Logger) *Worker {
 }
 
 // Start begins the maintenance worker's main loop.
-func (w *Worker) Start() {
+func (w *Worker) Start(ctx context.Context) {
 	w.logger.Info("Maintenance Worker started", zap.String("workerID", w.reporter.GetWorkerID()))
-	w.reporter.Start()
+	w.reporter.Start(ctx)
 	defer w.reporter.Stop()
 
 	w.bar.SetTotal(100)
 
 	for {
+		// Check if context was cancelled
+		if utils.ContextGuardWithLog(ctx, w.logger, "Context cancelled, stopping maintenance worker") {
+			w.bar.SetStepMessage("Shutting down", 100)
+			w.reporter.UpdateStatus("Shutting down", 100)
+			return
+		}
+
 		w.bar.Reset()
 		w.reporter.SetHealthy(true)
 
 		// Step 1: Process banned users (10%)
-		w.processBannedUsers()
+		w.processBannedUsers(ctx)
 
 		// Step 2: Process locked groups (20%)
-		w.processLockedGroups()
+		w.processLockedGroups(ctx)
 
 		// Step 3: Process cleared users (30%)
-		w.processClearedUsers()
+		w.processClearedUsers(ctx)
 
 		// Step 4: Process cleared groups (40%)
-		w.processClearedGroups()
+		w.processClearedGroups(ctx)
 
 		// Step 5: Process group tracking (50%)
-		w.processGroupTracking()
+		w.processGroupTracking(ctx)
 
 		// Step 6: Process user thumbnails (60%)
-		w.processUserThumbnails()
+		w.processUserThumbnails(ctx)
 
 		// Step 7: Process group thumbnails (70%)
-		w.processGroupThumbnails()
+		w.processGroupThumbnails(ctx)
 
 		// Step 8: Process old Discord server members (80%)
-		w.processOldServerMembers()
+		w.processOldServerMembers(ctx)
 
 		// Step 9: Process reviewer info (90%)
-		w.processReviewerInfo()
+		w.processReviewerInfo(ctx)
 
 		// Step 10: Completed (100%)
 		w.bar.SetStepMessage("Completed", 100)
 		w.reporter.UpdateStatus("Completed", 100)
 
 		// Short pause before next iteration
-		time.Sleep(10 * time.Second)
+		if !utils.IntervalSleep(ctx, 10*time.Second, w.logger, "maintenance worker") {
+			return
+		}
 	}
 }
 
 // processBannedUsers checks for and marks banned users.
-func (w *Worker) processBannedUsers() {
+func (w *Worker) processBannedUsers(ctx context.Context) {
 	w.bar.SetStepMessage("Processing banned users", 10)
 	w.reporter.UpdateStatus("Processing banned users", 10)
 
 	// Get users to check
-	users, currentlyBanned, err := w.db.Model().User().GetUsersToCheck(context.Background(), w.userBatchSize)
+	users, currentlyBanned, err := w.db.Model().User().GetUsersToCheck(ctx, w.userBatchSize)
 	if err != nil {
 		w.logger.Error("Error getting users to check", zap.Error(err))
 		w.reporter.SetHealthy(false)
@@ -153,7 +163,7 @@ func (w *Worker) processBannedUsers() {
 	}
 
 	// Check for banned users
-	bannedUserIDs, err := w.userFetcher.FetchBannedUsers(context.Background(), users)
+	bannedUserIDs, err := w.userFetcher.FetchBannedUsers(ctx, users)
 	if err != nil {
 		w.logger.Error("Error fetching banned users", zap.Error(err))
 		w.reporter.SetHealthy(false)
@@ -176,7 +186,7 @@ func (w *Worker) processBannedUsers() {
 
 	// Mark banned users
 	if len(bannedUserIDs) > 0 {
-		err = w.db.Model().User().MarkUsersBanStatus(context.Background(), bannedUserIDs, true)
+		err = w.db.Model().User().MarkUsersBanStatus(ctx, bannedUserIDs, true)
 		if err != nil {
 			w.logger.Error("Error marking banned users", zap.Error(err))
 			w.reporter.SetHealthy(false)
@@ -187,7 +197,7 @@ func (w *Worker) processBannedUsers() {
 
 	// Unmark users that are no longer banned
 	if len(unbannedUserIDs) > 0 {
-		err = w.db.Model().User().MarkUsersBanStatus(context.Background(), unbannedUserIDs, false)
+		err = w.db.Model().User().MarkUsersBanStatus(ctx, unbannedUserIDs, false)
 		if err != nil {
 			w.logger.Error("Error unmarking banned users", zap.Error(err))
 			w.reporter.SetHealthy(false)
@@ -198,12 +208,12 @@ func (w *Worker) processBannedUsers() {
 }
 
 // processLockedGroups checks for and marks locked groups.
-func (w *Worker) processLockedGroups() {
+func (w *Worker) processLockedGroups(ctx context.Context) {
 	w.bar.SetStepMessage("Processing locked groups", 20)
 	w.reporter.UpdateStatus("Processing locked groups", 20)
 
 	// Get groups to check
-	groups, currentlyLocked, err := w.db.Model().Group().GetGroupsToCheck(context.Background(), w.groupBatchSize)
+	groups, currentlyLocked, err := w.db.Model().Group().GetGroupsToCheck(ctx, w.groupBatchSize)
 	if err != nil {
 		w.logger.Error("Error getting groups to check", zap.Error(err))
 		w.reporter.SetHealthy(false)
@@ -216,7 +226,7 @@ func (w *Worker) processLockedGroups() {
 	}
 
 	// Check for locked groups
-	lockedGroupIDs, err := w.groupFetcher.FetchLockedGroups(context.Background(), groups)
+	lockedGroupIDs, err := w.groupFetcher.FetchLockedGroups(ctx, groups)
 	if err != nil {
 		w.logger.Error("Error fetching locked groups", zap.Error(err))
 		w.reporter.SetHealthy(false)
@@ -239,7 +249,7 @@ func (w *Worker) processLockedGroups() {
 
 	// Mark locked groups
 	if len(lockedGroupIDs) > 0 {
-		err = w.db.Model().Group().MarkGroupsLockStatus(context.Background(), lockedGroupIDs, true)
+		err = w.db.Model().Group().MarkGroupsLockStatus(ctx, lockedGroupIDs, true)
 		if err != nil {
 			w.logger.Error("Error marking locked groups", zap.Error(err))
 			w.reporter.SetHealthy(false)
@@ -250,7 +260,7 @@ func (w *Worker) processLockedGroups() {
 
 	// Unmark groups that are no longer locked
 	if len(unlockedGroupIDs) > 0 {
-		err = w.db.Model().Group().MarkGroupsLockStatus(context.Background(), unlockedGroupIDs, false)
+		err = w.db.Model().Group().MarkGroupsLockStatus(ctx, unlockedGroupIDs, false)
 		if err != nil {
 			w.logger.Error("Error unmarking locked groups", zap.Error(err))
 			w.reporter.SetHealthy(false)
@@ -261,12 +271,12 @@ func (w *Worker) processLockedGroups() {
 }
 
 // processClearedUsers removes old cleared users.
-func (w *Worker) processClearedUsers() {
+func (w *Worker) processClearedUsers(ctx context.Context) {
 	w.bar.SetStepMessage("Processing cleared users", 30)
 	w.reporter.UpdateStatus("Processing cleared users", 30)
 
 	cutOffDate := time.Now().AddDate(-1, 0, 0)
-	affected, err := w.db.Service().User().PurgeOldClearedUsers(context.Background(), cutOffDate)
+	affected, err := w.db.Service().User().PurgeOldClearedUsers(ctx, cutOffDate)
 	if err != nil {
 		w.logger.Error("Error purging old cleared users", zap.Error(err))
 		w.reporter.SetHealthy(false)
@@ -281,12 +291,12 @@ func (w *Worker) processClearedUsers() {
 }
 
 // processClearedGroups removes old cleared groups.
-func (w *Worker) processClearedGroups() {
+func (w *Worker) processClearedGroups(ctx context.Context) {
 	w.bar.SetStepMessage("Processing cleared groups", 40)
 	w.reporter.UpdateStatus("Processing cleared groups", 40)
 
 	cutOffDate := time.Now().AddDate(0, 0, -30)
-	affected, err := w.db.Model().Group().PurgeOldClearedGroups(context.Background(), cutOffDate)
+	affected, err := w.db.Model().Group().PurgeOldClearedGroups(ctx, cutOffDate)
 	if err != nil {
 		w.logger.Error("Error purging old cleared groups", zap.Error(err))
 		w.reporter.SetHealthy(false)
@@ -301,13 +311,13 @@ func (w *Worker) processClearedGroups() {
 }
 
 // processGroupTracking manages group tracking data.
-func (w *Worker) processGroupTracking() {
+func (w *Worker) processGroupTracking(ctx context.Context) {
 	w.bar.SetStepMessage("Processing group tracking", 50)
 	w.reporter.UpdateStatus("Processing group tracking", 50)
 
 	// Get groups to check
 	groupsWithUsers, err := w.db.Model().Tracking().GetGroupTrackingsToCheck(
-		context.Background(),
+		ctx,
 		w.trackBatchSize,
 		w.minGroupFlaggedUsers,
 		w.minFlaggedOverride,
@@ -332,7 +342,7 @@ func (w *Worker) processGroupTracking() {
 
 	// Get existing groups from database
 	existingGroups, err := w.db.Model().Group().GetGroupsByIDs(
-		context.Background(),
+		ctx,
 		groupIDs,
 		types.GroupFieldID,
 	)
@@ -354,14 +364,14 @@ func (w *Worker) processGroupTracking() {
 	}
 
 	// Process new groups
-	newlyFlaggedIDs := w.processNewGroups(context.Background(), newGroupIDs, groupsWithUsers)
+	newlyFlaggedIDs := w.processNewGroups(ctx, newGroupIDs, groupsWithUsers)
 	if len(newlyFlaggedIDs) > 0 {
 		existingGroupIDs = append(existingGroupIDs, newlyFlaggedIDs...)
 	}
 
 	// Update tracking entries to mark them as flagged for all groups
 	if len(existingGroupIDs) > 0 {
-		if err := w.db.Model().Tracking().UpdateFlaggedGroups(context.Background(), existingGroupIDs); err != nil {
+		if err := w.db.Model().Tracking().UpdateFlaggedGroups(ctx, existingGroupIDs); err != nil {
 			w.logger.Error("Failed to update tracking entries", zap.Error(err))
 			return
 		}
@@ -410,12 +420,12 @@ func (w *Worker) processNewGroups(ctx context.Context, newGroupIDs []uint64, gro
 }
 
 // processUserThumbnails updates user thumbnails.
-func (w *Worker) processUserThumbnails() {
+func (w *Worker) processUserThumbnails(ctx context.Context) {
 	w.bar.SetStepMessage("Processing user thumbnails", 60)
 	w.reporter.UpdateStatus("Processing user thumbnails", 60)
 
 	// Get users that need thumbnail updates
-	users, err := w.db.Model().User().GetUsersForThumbnailUpdate(context.Background(), w.thumbnailUserBatchSize)
+	users, err := w.db.Model().User().GetUsersForThumbnailUpdate(ctx, w.thumbnailUserBatchSize)
 	if err != nil {
 		w.logger.Error("Error getting users for thumbnail update", zap.Error(err))
 		w.reporter.SetHealthy(false)
@@ -428,7 +438,7 @@ func (w *Worker) processUserThumbnails() {
 	}
 
 	// Update thumbnails
-	thumbnailMap := w.thumbnailFetcher.GetImageURLs(context.Background(), users)
+	thumbnailMap := w.thumbnailFetcher.GetImageURLs(ctx, users)
 
 	// Convert users to review users
 	now := time.Now()
@@ -444,7 +454,7 @@ func (w *Worker) processUserThumbnails() {
 	}
 
 	// Save updated users
-	if err := w.db.Service().User().SaveUsers(context.Background(), reviewUsers); err != nil {
+	if err := w.db.Service().User().SaveUsers(ctx, reviewUsers); err != nil {
 		w.logger.Error("Error saving updated user thumbnails", zap.Error(err))
 		w.reporter.SetHealthy(false)
 		return
@@ -456,12 +466,12 @@ func (w *Worker) processUserThumbnails() {
 }
 
 // processGroupThumbnails updates group thumbnails.
-func (w *Worker) processGroupThumbnails() {
+func (w *Worker) processGroupThumbnails(ctx context.Context) {
 	w.bar.SetStepMessage("Processing group thumbnails", 70)
 	w.reporter.UpdateStatus("Processing group thumbnails", 70)
 
 	// Get groups that need thumbnail updates
-	groups, err := w.db.Model().Group().GetGroupsForThumbnailUpdate(context.Background(), w.thumbnailGroupBatchSize)
+	groups, err := w.db.Model().Group().GetGroupsForThumbnailUpdate(ctx, w.thumbnailGroupBatchSize)
 	if err != nil {
 		w.logger.Error("Error getting groups for thumbnail update", zap.Error(err))
 		w.reporter.SetHealthy(false)
@@ -474,10 +484,10 @@ func (w *Worker) processGroupThumbnails() {
 	}
 
 	// Update thumbnails
-	updatedGroups := w.thumbnailFetcher.AddGroupImageURLs(context.Background(), groups)
+	updatedGroups := w.thumbnailFetcher.AddGroupImageURLs(ctx, groups)
 
 	// Save updated groups
-	if err := w.db.Service().Group().SaveGroups(context.Background(), groups); err != nil {
+	if err := w.db.Service().Group().SaveGroups(ctx, groups); err != nil {
 		w.logger.Error("Error saving updated group thumbnails", zap.Error(err))
 		w.reporter.SetHealthy(false)
 		return
@@ -489,12 +499,12 @@ func (w *Worker) processGroupThumbnails() {
 }
 
 // processOldServerMembers removes Discord server member records older than 7 days.
-func (w *Worker) processOldServerMembers() {
+func (w *Worker) processOldServerMembers(ctx context.Context) {
 	w.bar.SetStepMessage("Processing old Discord server members", 80)
 	w.reporter.UpdateStatus("Processing old Discord server members", 80)
 
 	cutoffDate := time.Now().AddDate(0, 0, -7) // 7 days ago
-	affected, err := w.db.Model().Sync().PurgeOldServerMembers(context.Background(), cutoffDate)
+	affected, err := w.db.Model().Sync().PurgeOldServerMembers(ctx, cutoffDate)
 	if err != nil {
 		w.logger.Error("Error purging old Discord server members", zap.Error(err))
 		w.reporter.SetHealthy(false)
@@ -509,12 +519,12 @@ func (w *Worker) processOldServerMembers() {
 }
 
 // processReviewerInfo updates cached Discord user information for reviewers.
-func (w *Worker) processReviewerInfo() {
+func (w *Worker) processReviewerInfo(ctx context.Context) {
 	w.bar.SetStepMessage("Processing reviewer info", 90)
 	w.reporter.UpdateStatus("Processing reviewer info", 90)
 
 	// Get bot settings to get reviewer IDs
-	settings, err := w.db.Model().Setting().GetBotSettings(context.Background())
+	settings, err := w.db.Model().Setting().GetBotSettings(ctx)
 	if err != nil {
 		w.logger.Error("Failed to get bot settings", zap.Error(err))
 		w.reporter.SetHealthy(false)
@@ -522,7 +532,7 @@ func (w *Worker) processReviewerInfo() {
 	}
 
 	// Get existing reviewer info that needs updating
-	reviewerInfos, err := w.db.Model().Reviewer().GetReviewerInfosForUpdate(context.Background(), w.reviewerInfoMaxAge)
+	reviewerInfos, err := w.db.Model().Reviewer().GetReviewerInfosForUpdate(ctx, w.reviewerInfoMaxAge)
 	if err != nil {
 		w.logger.Error("Failed to get reviewer infos", zap.Error(err))
 		w.reporter.SetHealthy(false)
@@ -565,7 +575,7 @@ func (w *Worker) processReviewerInfo() {
 
 	// Save updated reviewer info
 	if len(updatedReviewers) > 0 {
-		err = w.db.Model().Reviewer().SaveReviewerInfos(context.Background(), updatedReviewers)
+		err = w.db.Model().Reviewer().SaveReviewerInfos(ctx, updatedReviewers)
 		if err != nil {
 			w.logger.Error("Failed to save reviewer infos", zap.Error(err))
 			w.reporter.SetHealthy(false)

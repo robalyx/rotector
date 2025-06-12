@@ -14,6 +14,7 @@ import (
 	"github.com/robalyx/rotector/internal/redis"
 	"github.com/robalyx/rotector/internal/setup"
 	"github.com/robalyx/rotector/internal/worker/core"
+	"github.com/robalyx/rotector/pkg/utils"
 	"go.uber.org/zap"
 )
 
@@ -52,18 +53,24 @@ func New(app *setup.App, bar *progress.Bar, logger *zap.Logger) *Worker {
 }
 
 // Start begins the statistics worker's main loop.
-func (w *Worker) Start() {
+func (w *Worker) Start(ctx context.Context) {
 	w.logger.Info("Statistics Worker started", zap.String("workerID", w.reporter.GetWorkerID()))
-	w.reporter.Start()
+	w.reporter.Start(ctx)
 	defer w.reporter.Stop()
 
 	w.bar.SetTotal(100)
 
 	for {
+		// Check if context was cancelled
+		if utils.ContextGuardWithLog(ctx, w.logger, "Context cancelled, stopping stats worker") {
+			w.bar.SetStepMessage("Shutting down", 100)
+			w.reporter.UpdateStatus("Shutting down", 100)
+			return
+		}
+
 		w.bar.Reset()
 		w.reporter.SetHealthy(true)
 
-		ctx := context.Background()
 		currentHour := time.Now().UTC().Truncate(time.Hour)
 
 		// Step 1: Check if stats exist for current hour (0%)
@@ -74,7 +81,10 @@ func (w *Worker) Start() {
 		if err != nil {
 			w.logger.Error("Failed to check current hour stats", zap.Error(err))
 			w.reporter.SetHealthy(false)
-			time.Sleep(30 * time.Second)
+
+			if !utils.ErrorSleep(ctx, 30*time.Second, w.logger, "stats worker") {
+				return
+			}
 			continue
 		}
 
@@ -85,7 +95,10 @@ func (w *Worker) Start() {
 			if err := w.db.Service().Stats().SaveHourlyStats(ctx); err != nil {
 				w.logger.Error("Failed to save hourly stats", zap.Error(err))
 				w.reporter.SetHealthy(false)
-				time.Sleep(30 * time.Second)
+
+				if !utils.ErrorSleep(ctx, 30*time.Second, w.logger, "stats worker") {
+					return
+				}
 				continue
 			}
 		}
@@ -95,7 +108,10 @@ func (w *Worker) Start() {
 		if err != nil {
 			w.logger.Error("Failed to get hourly stats", zap.Error(err))
 			w.reporter.SetHealthy(false)
-			time.Sleep(30 * time.Second)
+
+			if !utils.ErrorSleep(ctx, 30*time.Second, w.logger, "stats worker") {
+				return
+			}
 			continue
 		}
 
@@ -105,7 +121,10 @@ func (w *Worker) Start() {
 		if err := w.generateAndCacheCharts(ctx, hourlyStats); err != nil {
 			w.logger.Error("Failed to generate and cache charts", zap.Error(err))
 			w.reporter.SetHealthy(false)
-			time.Sleep(30 * time.Second)
+
+			if !utils.ErrorSleep(ctx, 30*time.Second, w.logger, "stats worker") {
+				return
+			}
 			continue
 		}
 
@@ -115,7 +134,10 @@ func (w *Worker) Start() {
 		if err := w.updateWelcomeMessage(ctx, hourlyStats); err != nil {
 			w.logger.Error("Failed to update welcome message", zap.Error(err))
 			w.reporter.SetHealthy(false)
-			time.Sleep(30 * time.Second)
+
+			if !utils.ErrorSleep(ctx, 30*time.Second, w.logger, "stats worker") {
+				return
+			}
 			continue
 		}
 
@@ -126,7 +148,10 @@ func (w *Worker) Start() {
 		if err := w.db.Model().Stats().PurgeOldStats(ctx, cutoffDate); err != nil {
 			w.logger.Error("Failed to purge old stats", zap.Error(err))
 			w.reporter.SetHealthy(false)
-			time.Sleep(30 * time.Second)
+
+			if !utils.ErrorSleep(ctx, 30*time.Second, w.logger, "stats worker") {
+				return
+			}
 			continue
 		}
 
@@ -134,7 +159,13 @@ func (w *Worker) Start() {
 		w.bar.SetStepMessage("Waiting for next hour", 100)
 		w.reporter.UpdateStatus("Waiting for next hour", 100)
 		nextHour := currentHour.Add(time.Hour)
-		time.Sleep(time.Until(nextHour))
+
+		// Wait for next hour
+		if utils.ContextSleepUntilWithLog(
+			ctx, nextHour, w.logger, "Context cancelled during wait for next hour, stopping stats worker",
+		) == utils.SleepCancelled {
+			return
+		}
 
 		w.logger.Info("Hourly statistics processing completed")
 	}

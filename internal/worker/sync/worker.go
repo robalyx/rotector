@@ -20,6 +20,7 @@ import (
 	"github.com/robalyx/rotector/internal/setup/config"
 	"github.com/robalyx/rotector/internal/worker/core"
 	"github.com/robalyx/rotector/internal/worker/sync/events"
+	"github.com/robalyx/rotector/pkg/utils"
 	"go.uber.org/zap"
 )
 
@@ -95,38 +96,51 @@ func New(app *setup.App, bar *progress.Bar, logger *zap.Logger) *Worker {
 }
 
 // Start begins the sync worker's main loop.
-func (w *Worker) Start() {
+func (w *Worker) Start(ctx context.Context) {
 	w.logger.Info("Sync Worker started", zap.String("workerID", w.reporter.GetWorkerID()))
-	w.reporter.Start()
+	w.reporter.Start(ctx)
 	defer w.reporter.Stop()
 
 	// Open Discord gateway connection
-	if err := w.state.Open(context.Background()); err != nil {
+	if err := w.state.Open(ctx); err != nil {
 		w.logger.Fatal("Failed to open gateway", zap.Error(err))
 	}
 	defer w.state.Close()
 
 	// Start game scanner in a separate goroutine
-	go w.runGameScanner()
+	go w.runGameScanner(ctx)
 
 	// Start full user scanner in a separate goroutine
-	go w.runMutualScanner()
+	go w.runMutualScanner(ctx)
 
 	for {
+		// Check if context was cancelled
+		if utils.ContextGuardWithLog(ctx, w.logger, "Context cancelled, stopping sync worker") {
+			w.bar.SetStepMessage("Shutting down", 100)
+			w.reporter.UpdateStatus("Shutting down", 100)
+			return
+		}
+
 		w.bar.Reset()
 		w.reporter.SetHealthy(true)
 
 		// Run sync cycle
-		if err := w.syncCycle(); err != nil {
+		if err := w.syncCycle(ctx); err != nil {
 			w.logger.Error("Failed to sync servers", zap.Error(err))
 			w.reporter.SetHealthy(false)
-			time.Sleep(1 * time.Minute)
+
+			if !utils.ErrorSleep(ctx, 1*time.Minute, w.logger, "sync worker") {
+				return
+			}
 			continue
 		}
 
 		// Short pause between cycles
 		w.bar.SetStepMessage("Waiting for next cycle", 100)
 		w.reporter.UpdateStatus("Waiting for next cycle", 100)
-		time.Sleep(15 * time.Minute)
+
+		if !utils.IntervalSleep(ctx, 15*time.Minute, w.logger, "sync worker") {
+			return
+		}
 	}
 }

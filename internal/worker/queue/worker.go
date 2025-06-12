@@ -12,6 +12,7 @@ import (
 	"github.com/robalyx/rotector/internal/roblox/checker"
 	"github.com/robalyx/rotector/internal/roblox/fetcher"
 	"github.com/robalyx/rotector/internal/setup"
+	"github.com/robalyx/rotector/pkg/utils"
 	"go.uber.org/zap"
 )
 
@@ -60,7 +61,7 @@ func New(app *setup.App, bar *progress.Bar, logger *zap.Logger) *Worker {
 }
 
 // Start begins the queue worker's main processing loop.
-func (w *Worker) Start() {
+func (w *Worker) Start(ctx context.Context) {
 	w.logger.Info("Queue Worker started")
 	w.bar.SetTotal(100)
 
@@ -69,7 +70,7 @@ func (w *Worker) Start() {
 
 	// Cleanup queue on startup
 	if err := w.d1Client.CleanupQueue(
-		context.Background(),
+		ctx,
 		1*time.Hour,    // Reset items stuck processing for 1 hour
 		7*24*time.Hour, // Remove processed items older than 7 days
 	); err != nil {
@@ -78,36 +79,54 @@ func (w *Worker) Start() {
 
 	// Cleanup IP tracking records on startup
 	if err := w.d1Client.CleanupIPTracking(
-		context.Background(),
+		ctx,
 		30*24*time.Hour, // Remove IP tracking records older than 30 days
 	); err != nil {
 		w.logger.Error("Failed to cleanup IP tracking", zap.Error(err))
 	}
 
 	for {
+		// Check if context was cancelled
+		if utils.ContextGuardWithLog(ctx, w.logger, "Context cancelled, stopping queue worker") {
+			w.bar.SetStepMessage("Shutting down", 100)
+			return
+		}
+
 		w.bar.Reset()
 
 		// Check if we should process based on batching conditions
-		shouldProcess, sleepDuration := w.shouldProcessBatch()
+		shouldProcess, sleepDuration := w.shouldProcessBatch(ctx)
 		if !shouldProcess {
 			w.bar.SetStepMessage("Waiting for batch conditions", 0)
 			w.logger.Debug("Waiting for batch conditions",
 				zap.Duration("sleep_duration", sleepDuration))
-			time.Sleep(sleepDuration)
+
+			if utils.ContextSleep(ctx, sleepDuration) == utils.SleepCancelled {
+				w.logger.Info("Context cancelled during wait, stopping queue worker")
+				return
+			}
 			continue
 		}
 
 		// Step 1: Get next batch of unprocessed users (25%)
 		w.bar.SetStepMessage("Getting next batch", 25)
-		batchData, err := w.getBatchForProcessing(context.Background())
+		batchData, err := w.getBatchForProcessing(ctx)
 		if err != nil {
 			if errors.Is(err, ErrNoUsersToProcess) {
 				w.bar.SetStepMessage("No items to process", 0)
-				time.Sleep(10 * time.Second)
+
+				if utils.ContextSleep(ctx, 10*time.Second) == utils.SleepCancelled {
+					w.logger.Info("Context cancelled during no items wait, stopping queue worker")
+					return
+				}
 				continue
 			}
 			w.logger.Error("Failed to get batch for processing", zap.Error(err))
-			time.Sleep(5 * time.Second)
+
+			if utils.ContextSleep(ctx, 5*time.Second) == utils.SleepCancelled {
+				w.logger.Info("Context cancelled during error wait, stopping queue worker")
+				return
+			}
 			continue
 		}
 
@@ -121,22 +140,22 @@ func (w *Worker) Start() {
 
 		// Step 2: Fetch user info (40%)
 		w.bar.SetStepMessage("Fetching user info", 40)
-		userInfos := w.userFetcher.FetchInfos(context.Background(), batchData.ProcessIDs)
+		userInfos := w.userFetcher.FetchInfos(ctx, batchData.ProcessIDs)
 
 		// Step 3: Process users with checker (60%)
 		w.bar.SetStepMessage("Processing users", 60)
-		processResult := w.userChecker.ProcessUsers(userInfos, batchData.OutfitFlags)
+		processResult := w.userChecker.ProcessUsers(ctx, userInfos, batchData.OutfitFlags)
 
 		// Step 4: Mark users as processed (75%)
 		w.bar.SetStepMessage("Marking as processed", 75)
-		if err := w.d1Client.MarkAsProcessed(context.Background(), batchData.ProcessIDs, processResult.FlaggedStatus); err != nil {
+		if err := w.d1Client.MarkAsProcessed(ctx, batchData.ProcessIDs, processResult.FlaggedStatus); err != nil {
 			w.logger.Error("Failed to mark users as processed", zap.Error(err))
 		}
 
 		// Step 5: Add flagged users to D1 database (85%)
 		w.bar.SetStepMessage("Adding flagged users to D1", 85)
 		if len(processResult.FlaggedUsers) > 0 {
-			if err := w.d1Client.AddFlaggedUsers(context.Background(), processResult.FlaggedUsers); err != nil {
+			if err := w.d1Client.AddFlaggedUsers(ctx, processResult.FlaggedUsers); err != nil {
 				w.logger.Error("Failed to add flagged users to D1", zap.Error(err))
 			}
 		}
@@ -144,7 +163,7 @@ func (w *Worker) Start() {
 		// Step 6: Update IP tracking (100%)
 		w.bar.SetStepMessage("Updating IP tracking", 100)
 		if err := w.updateIPTrackingFlaggedStatus(
-			context.Background(), batchData.ProcessIDs, processResult.FlaggedStatus, batchData.SkipAndFlagIDs,
+			ctx, batchData.ProcessIDs, processResult.FlaggedStatus, batchData.SkipAndFlagIDs,
 		); err != nil {
 			w.logger.Error("Failed to update IP tracking flagged status", zap.Error(err))
 		}
@@ -157,7 +176,7 @@ func (w *Worker) Start() {
 }
 
 // shouldProcessBatch determines if we should process a batch based on queue size and timing conditions.
-func (w *Worker) shouldProcessBatch() (bool, time.Duration) {
+func (w *Worker) shouldProcessBatch(ctx context.Context) (bool, time.Duration) {
 	// Check how much time has passed since last processing
 	timeSinceLastProcess := time.Since(w.lastProcessTime)
 	if timeSinceLastProcess >= MaxWaitTime {
@@ -167,7 +186,7 @@ func (w *Worker) shouldProcessBatch() (bool, time.Duration) {
 	}
 
 	// Check queue stats to see how many items are available
-	stats, err := w.d1Client.GetQueueStats(context.Background())
+	stats, err := w.d1Client.GetQueueStats(ctx)
 	if err != nil {
 		w.logger.Error("Failed to get queue stats, proceeding with processing", zap.Error(err))
 		return true, 0

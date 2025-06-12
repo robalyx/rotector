@@ -67,36 +67,38 @@ type ProcessResult struct {
 
 // ProcessUsers runs users through multiple checking stages.
 // Returns processing results containing flagged user IDs and their full data.
-func (c *UserChecker) ProcessUsers(userInfos []*types.ReviewUser, inappropriateOutfitFlags map[uint64]bool) *ProcessResult {
+func (c *UserChecker) ProcessUsers(
+	ctx context.Context, userInfos []*types.ReviewUser, inappropriateOutfitFlags map[uint64]bool,
+) *ProcessResult {
 	c.logger.Info("Processing users", zap.Int("userInfos", len(userInfos)))
 
 	// Initialize map to store reasons
 	reasonsMap := make(map[uint64]types.Reasons[enum.UserReasonType])
 
 	// Create context with timeout
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	ctxWithTimeout, cancel := context.WithTimeout(ctx, 10*time.Minute)
 	defer cancel()
 
 	// Prepare user info maps with translations
-	translatedInfos, originalInfos := c.prepareUserInfoMaps(ctx, userInfos)
+	translatedInfos, originalInfos := c.prepareUserInfoMaps(ctxWithTimeout, userInfos)
 
 	// Process group checker
-	c.groupChecker.ProcessUsers(ctx, userInfos, reasonsMap)
+	c.groupChecker.ProcessUsers(ctxWithTimeout, userInfos, reasonsMap)
 
 	// Process friend checker
-	c.friendChecker.ProcessUsers(ctx, userInfos, reasonsMap)
+	confirmedFriendsMap, flaggedFriendsMap := c.friendChecker.ProcessUsers(ctxWithTimeout, userInfos, reasonsMap)
 
 	// Process user analysis
-	c.userAnalyzer.ProcessUsers(ctx, userInfos, translatedInfos, originalInfos, reasonsMap)
+	c.userAnalyzer.ProcessUsers(ctxWithTimeout, userInfos, translatedInfos, originalInfos, reasonsMap, confirmedFriendsMap, flaggedFriendsMap)
 
 	// Process condo checker
-	c.condoChecker.ProcessUsers(ctx, userInfos, reasonsMap)
+	c.condoChecker.ProcessUsers(ctxWithTimeout, userInfos, reasonsMap)
 
 	// Process ivan messages
-	c.ivanAnalyzer.ProcessUsers(ctx, userInfos, reasonsMap)
+	c.ivanAnalyzer.ProcessUsers(ctxWithTimeout, userInfos, reasonsMap)
 
 	// Process outfit analysis
-	flaggedOutfits := c.outfitAnalyzer.ProcessOutfits(ctx, userInfos, reasonsMap, inappropriateOutfitFlags)
+	flaggedOutfits := c.outfitAnalyzer.ProcessOutfits(ctxWithTimeout, userInfos, reasonsMap, inappropriateOutfitFlags)
 
 	// Stop if no users were flagged
 	if len(reasonsMap) == 0 {
@@ -121,18 +123,18 @@ func (c *UserChecker) ProcessUsers(userInfos []*types.ReviewUser, inappropriateO
 	}
 
 	// Save flagged users to database
-	if err := c.db.Service().User().SaveUsers(context.Background(), flaggedUsers); err != nil {
+	if err := c.db.Service().User().SaveUsers(ctx, flaggedUsers); err != nil {
 		c.logger.Error("Failed to save users", zap.Error(err))
 	}
 
 	// Track flagged users' group memberships
-	go c.trackFlaggedUsersGroups(flaggedUsers)
+	go c.trackFlaggedUsersGroups(ctx, flaggedUsers)
 
 	// Track flagged users' outfit assets
-	go c.trackOutfitAssets(flaggedUsers, flaggedOutfits)
+	go c.trackOutfitAssets(ctx, flaggedUsers, flaggedOutfits)
 
 	// Track flagged users' favorite games
-	go c.trackFavoriteGames(flaggedUsers)
+	go c.trackFavoriteGames(ctx, flaggedUsers)
 
 	c.logger.Info("Finished processing users",
 		zap.Int("totalProcessed", len(userInfos)),
@@ -213,7 +215,7 @@ func (c *UserChecker) prepareUserInfoMaps(
 }
 
 // trackFlaggedUsersGroups adds flagged users' group memberships to tracking.
-func (c *UserChecker) trackFlaggedUsersGroups(flaggedUsers map[uint64]*types.ReviewUser) {
+func (c *UserChecker) trackFlaggedUsersGroups(ctx context.Context, flaggedUsers map[uint64]*types.ReviewUser) {
 	groupUsersTracking := make(map[uint64][]uint64)
 
 	// Collect group memberships for flagged users
@@ -228,16 +230,17 @@ func (c *UserChecker) trackFlaggedUsersGroups(flaggedUsers map[uint64]*types.Rev
 
 	// Add to tracking if we have any data
 	if len(groupUsersTracking) > 0 {
-		if err := c.db.Model().Tracking().AddUsersToGroupsTracking(context.Background(), groupUsersTracking); err != nil {
+		if err := c.db.Model().Tracking().AddUsersToGroupsTracking(ctx, groupUsersTracking); err != nil {
 			c.logger.Error("Failed to add flagged users to groups tracking", zap.Error(err))
 		}
 	}
 }
 
 // trackOutfitAssets adds outfit assets to tracking.
-func (c *UserChecker) trackOutfitAssets(flaggedUsers map[uint64]*types.ReviewUser, flaggedOutfits map[uint64]map[string]struct{}) {
+func (c *UserChecker) trackOutfitAssets(
+	ctx context.Context, flaggedUsers map[uint64]*types.ReviewUser, flaggedOutfits map[uint64]map[string]struct{},
+) {
 	assetOutfitsTracking := make(map[uint64][]types.TrackedID)
-	ctx := context.Background()
 
 	// Collect outfit assets only for flagged outfits
 	for userID, user := range flaggedUsers {
@@ -302,19 +305,19 @@ func (c *UserChecker) trackOutfitAssets(flaggedUsers map[uint64]*types.ReviewUse
 
 	// Add to tracking if we have any data
 	if len(assetOutfitsTracking) > 0 {
-		if err := c.db.Model().Tracking().AddOutfitAssetsToTracking(context.Background(), assetOutfitsTracking); err != nil {
+		if err := c.db.Model().Tracking().AddOutfitAssetsToTracking(ctx, assetOutfitsTracking); err != nil {
 			c.logger.Error("Failed to add outfit assets to tracking", zap.Error(err))
 		}
 	}
 }
 
 // trackFavoriteGames adds flagged users' favorite games to tracking.
-func (c *UserChecker) trackFavoriteGames(flaggedUsers map[uint64]*types.ReviewUser) {
+func (c *UserChecker) trackFavoriteGames(ctx context.Context, flaggedUsers map[uint64]*types.ReviewUser) {
 	gameUsersTracking := make(map[uint64][]uint64)
 
 	// Fetch favorite games for each flagged user
 	for userID := range flaggedUsers {
-		favorites, err := c.gameFetcher.FetchFavoriteGames(context.Background(), userID)
+		favorites, err := c.gameFetcher.FetchFavoriteGames(ctx, userID)
 		if err != nil {
 			c.logger.Error("Failed to fetch favorite games for user",
 				zap.Uint64("userID", userID),
@@ -334,7 +337,7 @@ func (c *UserChecker) trackFavoriteGames(flaggedUsers map[uint64]*types.ReviewUs
 
 	// Add to tracking if we have any data
 	if len(gameUsersTracking) > 0 {
-		if err := c.db.Model().Tracking().AddGamesToTracking(context.Background(), gameUsersTracking); err != nil {
+		if err := c.db.Model().Tracking().AddGamesToTracking(ctx, gameUsersTracking); err != nil {
 			c.logger.Error("Failed to add flagged users to games tracking", zap.Error(err))
 		}
 	}

@@ -16,6 +16,7 @@ import (
 	"github.com/robalyx/rotector/internal/roblox/fetcher"
 	"github.com/robalyx/rotector/internal/setup"
 	"github.com/robalyx/rotector/internal/worker/core"
+	"github.com/robalyx/rotector/pkg/utils"
 	"go.uber.org/zap"
 )
 
@@ -57,23 +58,33 @@ func New(app *setup.App, bar *progress.Bar, logger *zap.Logger) *Worker {
 }
 
 // Start begins the group worker's main loop.
-func (w *Worker) Start() {
+func (w *Worker) Start(ctx context.Context) {
 	w.logger.Info("Group Worker started", zap.String("workerID", w.reporter.GetWorkerID()))
-	w.reporter.Start()
+	w.reporter.Start(ctx)
 	defer w.reporter.Stop()
 
 	w.bar.SetTotal(100)
 
 	for {
+		// Check if context was cancelled
+		if utils.ContextGuardWithLog(ctx, w.logger, "Context cancelled, stopping group worker") {
+			w.bar.SetStepMessage("Shutting down", 100)
+			w.reporter.UpdateStatus("Shutting down", 100)
+			return
+		}
+
 		w.bar.Reset()
 		w.reporter.SetHealthy(true)
 
 		// Check flagged users count
-		flaggedCount, err := w.db.Model().User().GetFlaggedUsersCount(context.Background())
+		flaggedCount, err := w.db.Model().User().GetFlaggedUsersCount(ctx)
 		if err != nil {
 			w.logger.Error("Error getting flagged users count", zap.Error(err))
 			w.reporter.SetHealthy(false)
-			time.Sleep(5 * time.Minute)
+
+			if !utils.ErrorSleep(ctx, 5*time.Minute, w.logger, "group worker") {
+				return
+			}
 			continue
 		}
 
@@ -90,7 +101,10 @@ func (w *Worker) Start() {
 			w.logger.Info("Pausing worker - flagged users threshold exceeded",
 				zap.Int("flaggedCount", flaggedCount),
 				zap.Int("threshold", w.flaggedThreshold))
-			time.Sleep(5 * time.Minute)
+
+			if !utils.ThresholdSleep(ctx, 5*time.Minute, w.logger, "group worker") {
+				return
+			}
 			continue
 		}
 
@@ -99,7 +113,7 @@ func (w *Worker) Start() {
 		w.reporter.UpdateStatus("Fetching next group to process", 10)
 
 		if w.currentGroupID == 0 {
-			group, err := w.db.Model().Group().GetGroupToScan(context.Background())
+			group, err := w.db.Model().Group().GetGroupToScan(ctx)
 			if err != nil {
 				if !errors.Is(err, sql.ErrNoRows) {
 					w.logger.Error("Error getting group to scan", zap.Error(err))
@@ -107,7 +121,10 @@ func (w *Worker) Start() {
 				} else {
 					w.logger.Warn("No more groups to scan", zap.Error(err))
 				}
-				time.Sleep(5 * time.Minute)
+
+				if !utils.ErrorSleep(ctx, 5*time.Minute, w.logger, "group worker") {
+					return
+				}
 				continue
 			}
 			w.currentGroupID = group.ID
@@ -116,17 +133,20 @@ func (w *Worker) Start() {
 		// Step 2: Get group users (70%)
 		w.bar.SetStepMessage("Processing group users", 70)
 		w.reporter.UpdateStatus("Processing group users", 70)
-		userInfos, err := w.processGroup()
+		userInfos, err := w.processGroup(ctx)
 		if err != nil {
 			w.reporter.SetHealthy(false)
-			time.Sleep(5 * time.Minute)
+
+			if !utils.ErrorSleep(ctx, 5*time.Minute, w.logger, "group worker") {
+				return
+			}
 			continue
 		}
 
 		// Step 3: Process users (90%)
 		w.bar.SetStepMessage("Processing users", 90)
 		w.reporter.UpdateStatus("Processing users", 90)
-		w.userChecker.ProcessUsers(userInfos[:w.batchSize], nil)
+		w.userChecker.ProcessUsers(ctx, userInfos[:w.batchSize], nil)
 
 		// Step 4: Prepare for next batch
 		w.pendingUsers = userInfos[w.batchSize:]
@@ -136,17 +156,19 @@ func (w *Worker) Start() {
 		w.reporter.UpdateStatus("Completed", 100)
 
 		// Short pause before next iteration
-		time.Sleep(1 * time.Second)
+		if !utils.IntervalSleep(ctx, 1*time.Second, w.logger, "group worker") {
+			return
+		}
 	}
 }
 
 // processGroup builds a list of validated users to check.
-func (w *Worker) processGroup() ([]*types.ReviewUser, error) {
+func (w *Worker) processGroup(ctx context.Context) ([]*types.ReviewUser, error) {
 	validUsers := w.pendingUsers
 
 	for len(validUsers) < w.batchSize {
 		// Collect user IDs from current group
-		userIDs, shouldContinue, err := w.collectUserIDsFromGroup()
+		userIDs, shouldContinue, err := w.collectUserIDsFromGroup(ctx)
 		if err != nil {
 			return nil, err
 		}
@@ -156,7 +178,7 @@ func (w *Worker) processGroup() ([]*types.ReviewUser, error) {
 
 		// Fetch user info and validate
 		if len(userIDs) > 0 {
-			userInfos := w.userFetcher.FetchInfos(context.Background(), userIDs)
+			userInfos := w.userFetcher.FetchInfos(ctx, userIDs)
 			validUsers = append(validUsers, userInfos...)
 
 			w.logger.Info("Processed group users",
@@ -172,10 +194,10 @@ func (w *Worker) processGroup() ([]*types.ReviewUser, error) {
 }
 
 // collectUserIDsFromGroup collects user IDs from the current group that don't exist in our system.
-func (w *Worker) collectUserIDsFromGroup() ([]uint64, bool, error) {
+func (w *Worker) collectUserIDsFromGroup(ctx context.Context) ([]uint64, bool, error) {
 	// Fetch group users with cursor pagination
 	builder := groups.NewGroupUsersBuilder(w.currentGroupID).WithLimit(100).WithCursor(w.currentCursor)
-	groupUsers, err := w.roAPI.Groups().GetGroupUsers(context.Background(), builder.Build())
+	groupUsers, err := w.roAPI.Groups().GetGroupUsers(ctx, builder.Build())
 	if err != nil {
 		w.logger.Error("Error fetching group members", zap.Error(err))
 		return nil, false, err
@@ -188,7 +210,7 @@ func (w *Worker) collectUserIDsFromGroup() ([]uint64, bool, error) {
 		w.currentCursor = ""
 
 		// Get next group
-		nextGroup, err := w.db.Model().Group().GetGroupToScan(context.Background())
+		nextGroup, err := w.db.Model().Group().GetGroupToScan(ctx)
 		if err != nil {
 			if !errors.Is(err, sql.ErrNoRows) {
 				w.logger.Error("Error getting next group to scan", zap.Error(err))
@@ -208,7 +230,7 @@ func (w *Worker) collectUserIDsFromGroup() ([]uint64, bool, error) {
 	}
 
 	// Check which users exist in our system
-	existingUsers, err := w.db.Model().User().GetUsersByIDs(context.Background(), newUserIDs, types.UserFieldID)
+	existingUsers, err := w.db.Model().User().GetUsersByIDs(ctx, newUserIDs, types.UserFieldID)
 	if err != nil {
 		w.logger.Error("Error checking existing users", zap.Error(err))
 		return nil, true, nil // Continue despite error
