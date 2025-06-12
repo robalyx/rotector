@@ -283,6 +283,12 @@ func (m *OverviewMenu) handleCreateAppealModalSubmit(ctx *interaction.Context, s
 		return
 	}
 
+	// Validate appeal reason text
+	if !utils.ValidateCommentText(reason) {
+		ctx.Cancel("Appeal reason contains invalid characters. Please use only letters, numbers, spaces, and basic punctuation.")
+		return
+	}
+
 	// Route to appropriate handler based on appeal type
 	appealType := session.AppealType.Get(s)
 	switch appealType {

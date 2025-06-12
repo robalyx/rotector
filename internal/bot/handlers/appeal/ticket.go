@@ -16,6 +16,7 @@ import (
 	view "github.com/robalyx/rotector/internal/bot/views/appeal"
 	"github.com/robalyx/rotector/internal/database/types"
 	"github.com/robalyx/rotector/internal/database/types/enum"
+	"github.com/robalyx/rotector/pkg/utils"
 	"go.uber.org/zap"
 )
 
@@ -602,6 +603,12 @@ func (m *TicketMenu) handleRespondModalSubmit(ctx *interaction.Context, s *sessi
 		return
 	}
 
+	// Validate response text
+	if !utils.ValidateCommentText(content) {
+		ctx.Cancel("Response contains invalid characters. Please use only letters, numbers, spaces, and basic punctuation.")
+		return
+	}
+
 	// Get user role and check rate limit
 	userID := uint64(ctx.Event().User().ID)
 	role := enum.MessageRoleUser
@@ -656,6 +663,12 @@ func (m *TicketMenu) handleAcceptModalSubmit(ctx *interaction.Context, s *sessio
 	reason := ctx.Event().ModalData().Text(constants.AppealReasonInputCustomID)
 	if reason == "" {
 		ctx.Cancel("Accept reason cannot be empty.")
+		return
+	}
+
+	// Validate accept reason text
+	if !utils.ValidateCommentText(reason) {
+		ctx.Cancel("Accept reason contains invalid characters. Please use only letters, numbers, spaces, and basic punctuation.")
 		return
 	}
 
@@ -799,6 +812,12 @@ func (m *TicketMenu) handleRejectModalSubmit(ctx *interaction.Context, s *sessio
 		return
 	}
 
+	// Validate reject reason text
+	if !utils.ValidateCommentText(reason) {
+		ctx.Cancel("Reject reason contains invalid characters. Please use only letters, numbers, spaces, and basic punctuation.")
+		return
+	}
+
 	// Handle appeal based on type
 	if appeal.Type == enum.AppealTypeDiscord {
 		// Create a ban record for the Discord user
@@ -870,6 +889,12 @@ func (m *TicketMenu) handleDeleteUserDataModalSubmit(ctx *interaction.Context, s
 		return
 	}
 
+	// Validate deletion reason text
+	if !utils.ValidateCommentText(reason) {
+		ctx.Cancel("Deletion reason contains invalid characters. Please use only letters, numbers, spaces, and basic punctuation.")
+		return
+	}
+
 	var redactErr error
 	switch appeal.Type {
 	case enum.AppealTypeRoblox:
@@ -929,6 +954,12 @@ func (m *TicketMenu) handleBlacklistUserModalSubmit(ctx *interaction.Context, s 
 	reason := ctx.Event().ModalData().Text(constants.BlacklistUserReasonInputCustomID)
 	if reason == "" {
 		ctx.Cancel("Blacklist reason cannot be empty.")
+		return
+	}
+
+	// Validate blacklist reason text
+	if !utils.ValidateCommentText(reason) {
+		ctx.Cancel("Blacklist reason contains invalid characters. Please use only letters, numbers, spaces, and basic punctuation.")
 		return
 	}
 
