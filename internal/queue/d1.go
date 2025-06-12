@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/robalyx/rotector/internal/database/types"
@@ -493,7 +494,7 @@ func (c *D1Client) AddFlaggedUsers(ctx context.Context, flaggedUsers map[uint64]
 			// Convert reasons map to the proper format
 			reasonsData := make(map[string]map[string]any)
 			for reasonType, reason := range user.Reasons {
-				reasonsData[reasonType.String()] = map[string]any{
+				reasonsData[strconv.Itoa(int(reasonType))] = map[string]any{
 					"message":    reason.Message,
 					"confidence": reason.Confidence,
 					"evidence":   reason.Evidence,
