@@ -248,10 +248,13 @@ func (w *Worker) getBatchForProcessing(ctx context.Context) (*BatchData, error) 
 		OutfitFlags:    make(map[uint64]bool),
 	}
 
+	existingFlaggedUsers := make(map[uint64]*types.ReviewUser)
+
 	for _, id := range userBatch.UserIDs {
 		// If user exists in database, mark as processed and flagged
-		if _, exists := existingUsers[id]; exists {
+		if existingUser, exists := existingUsers[id]; exists {
 			batchData.SkipAndFlagIDs = append(batchData.SkipAndFlagIDs, id)
+			existingFlaggedUsers[id] = existingUser
 			w.logger.Debug("Skipping user - already in database (will flag)",
 				zap.Uint64("userID", id))
 			continue
@@ -262,15 +265,23 @@ func (w *Worker) getBatchForProcessing(ctx context.Context) (*BatchData, error) 
 		batchData.OutfitFlags[id] = userBatch.InappropriateOutfitFlags[id]
 	}
 
-	// Mark users that should be processed and flagged
+	// Mark and save users that should be flagged
 	if len(batchData.SkipAndFlagIDs) > 0 {
 		flaggedMap := make(map[uint64]struct{})
 		for _, id := range batchData.SkipAndFlagIDs {
 			flaggedMap[id] = struct{}{}
 		}
 
+		// Mark users as processed and flagged
 		if err := w.d1Client.MarkAsProcessed(ctx, batchData.SkipAndFlagIDs, flaggedMap); err != nil {
 			w.logger.Error("Failed to mark users as processed and flagged", zap.Error(err))
+		}
+
+		// Add existing flagged users to D1 database
+		if len(existingFlaggedUsers) > 0 {
+			if err := w.d1Client.AddFlaggedUsers(ctx, existingFlaggedUsers); err != nil {
+				w.logger.Error("Failed to add existing flagged users to D1", zap.Error(err))
+			}
 		}
 	}
 
