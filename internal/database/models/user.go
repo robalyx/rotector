@@ -702,25 +702,31 @@ func (r *UserModel) GetUsersForThumbnailUpdate(ctx context.Context, limit int) (
 	return users, nil
 }
 
-// GetFlaggedUsersWithOnlyReason returns users that are flagged and have only the specified reason type.
-func (r *UserModel) GetFlaggedUsersWithOnlyReason(ctx context.Context, reasonType enum.UserReasonType) ([]*types.User, error) {
+// GetFlaggedUsersWithOnlyReason returns users that are flagged, have only the specified reason type,
+// and have confidence below the specified threshold.
+func (r *UserModel) GetFlaggedUsersWithOnlyReason(
+	ctx context.Context, reasonType enum.UserReasonType, confidenceThreshold float64,
+) ([]*types.User, error) {
 	var users []*types.User
 
 	err := dbretry.NoResult(ctx, func(ctx context.Context) error {
 		return r.db.NewSelect().
 			Model(&users).
 			Where("status = ?", enum.UserTypeFlagged).
+			Where("confidence < ?", confidenceThreshold).
 			Where("id IN (SELECT user_id FROM user_reasons WHERE reason_type = ? AND "+
 				"user_id NOT IN (SELECT user_id FROM user_reasons WHERE reason_type != ?))", reasonType, reasonType).
 			Order("id ASC").
 			Scan(ctx)
 	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to get users with only reason %s: %w", reasonType, err)
+		return nil, fmt.Errorf("failed to get users with only reason %s and confidence < %.2f: %w",
+			reasonType, confidenceThreshold, err)
 	}
 
-	r.logger.Debug("Found users with only reason",
+	r.logger.Debug("Found users with only reason and below confidence threshold",
 		zap.String("reason", reasonType.String()),
+		zap.Float64("confidenceThreshold", confidenceThreshold),
 		zap.Int("count", len(users)))
 
 	return users, nil
@@ -2180,16 +2186,25 @@ func (r *UserModel) SaveUserInventory(ctx context.Context, tx bun.Tx, userInvent
 }
 
 // GetUsersUpdatedAfter returns users that have been updated after the specified time.
-func (r *UserModel) GetUsersUpdatedAfter(ctx context.Context, cutoffTime time.Time) ([]*types.User, error) {
+// If reasonType is provided, it will filter for users with only that specific reason type.
+func (r *UserModel) GetUsersUpdatedAfter(
+	ctx context.Context, cutoffTime time.Time, reasonType *enum.UserReasonType,
+) ([]*types.User, error) {
 	var users []*types.User
 
 	err := dbretry.NoResult(ctx, func(ctx context.Context) error {
-		return r.db.NewSelect().
+		query := r.db.NewSelect().
 			Model(&users).
 			Where("status = ?", enum.UserTypeFlagged).
-			Where("last_updated > ?", cutoffTime).
-			Order("last_updated ASC").
-			Scan(ctx)
+			Where("last_updated > ?", cutoffTime)
+
+		// Add reason filtering if specified
+		if reasonType != nil {
+			query = query.Where("id IN (SELECT user_id FROM user_reasons WHERE reason_type = ? AND "+
+				"user_id NOT IN (SELECT user_id FROM user_reasons WHERE reason_type != ?))", *reasonType, *reasonType)
+		}
+
+		return query.Order("last_updated ASC").Scan(ctx)
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to get flagged users updated after %s: %w", cutoffTime.Format(time.RFC3339), err)

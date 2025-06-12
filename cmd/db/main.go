@@ -79,14 +79,29 @@ func run() error {
 			},
 			{
 				Name:      "clear-reason",
-				Usage:     "Clear flagged users with only a specific reason type",
+				Usage:     "Clear flagged users with only a specific reason type and/or confidence threshold",
 				ArgsUsage: "REASON",
+				Description: `Clear flagged users based on specified criteria:
+  - REASON: The reason type to filter by (required)
+  - --confidence: Optional confidence threshold (users with confidence below this value will be deleted)
+  - --batch-size: Number of users to process in each batch
+
+Examples:
+  db clear-reason OUTFIT                    # Clear users with only OUTFIT reason
+  db clear-reason OUTFIT --confidence 0.85  # Clear users with only OUTFIT reason and confidence < 0.85
+  db clear-reason OUTFIT -c 0.85 -b 1000   # Same as above with batch size of 1000`,
 				Flags: []cli.Flag{
 					&cli.IntFlag{
 						Name:    "batch-size",
 						Usage:   "Number of users to process in each batch",
 						Value:   5000,
 						Aliases: []string{"b"},
+					},
+					&cli.Float64Flag{
+						Name:    "confidence",
+						Usage:   "Delete users with confidence below this threshold",
+						Value:   1.0,
+						Aliases: []string{"c"},
 					},
 				},
 				Action: handleClearReason(deps),
@@ -110,6 +125,8 @@ Examples:
   db delete-after-time "2024-01-01 12:00:00"
   db delete-after-time "2024-01-01T12:00:00Z"
   db delete-after-time "2024-01-01T12:00:00+08:00"
+  db delete-after-time "2024-01-01" --reason OUTFIT    # Only users with OUTFIT reason
+  db delete-after-time "2024-01-01" -r FRIEND          # Only users with FRIEND reason
 
 Note: When using timezone names with spaces (like "Asia/Singapore"), you may need 
 to escape quotes depending on your shell:
@@ -122,6 +139,11 @@ For reliable cross-platform usage, prefer RFC3339 format with timezone offsets.`
 						Usage:   "Number of users to process in each batch",
 						Value:   5000,
 						Aliases: []string{"b"},
+					},
+					&cli.StringFlag{
+						Name:    "reason",
+						Usage:   "Filter by users with only this specific reason type (PROFILE, FRIEND, OUTFIT, GROUP, CONDO, CHAT, FAVORITES, BADGES)",
+						Aliases: []string{"r"},
 					},
 				},
 				Action: handleDeleteAfterTime(deps),
@@ -263,8 +285,9 @@ func handleClearReason(deps *cliDependencies) cli.ActionFunc {
 			return ErrReasonRequired
 		}
 
-		// Get batch size from flag
+		// Get batch size and confidence threshold from flags
 		batchSize := max(c.Int("batch-size"), 5000)
+		confidenceThreshold := c.Float64("confidence")
 
 		// Get reason type from argument
 		reasonStr := strings.ToUpper(c.Args().First())
@@ -273,25 +296,27 @@ func handleClearReason(deps *cliDependencies) cli.ActionFunc {
 			return fmt.Errorf("invalid reason type %q: %w", reasonStr, err)
 		}
 
-		// Get users with only this reason
-		users, err := deps.db.Model().User().GetFlaggedUsersWithOnlyReason(ctx, reasonType)
+		// Get users with only this reason and below confidence threshold
+		users, err := deps.db.Model().User().GetFlaggedUsersWithOnlyReason(ctx, reasonType, confidenceThreshold)
 		if err != nil {
 			return fmt.Errorf("failed to get users: %w", err)
 		}
 
 		if len(users) == 0 {
-			deps.logger.Info("No users found with only the specified reason",
-				zap.String("reason", reasonType.String()))
+			deps.logger.Info("No users found matching the criteria",
+				zap.String("reason", reasonType.String()),
+				zap.Float64("confidenceThreshold", confidenceThreshold))
 			return nil
 		}
 
 		// Ask for confirmation
 		deps.logger.Info("Found users to clear",
 			zap.Int("count", len(users)),
-			zap.String("reason", reasonType.String()))
+			zap.String("reason", reasonType.String()),
+			zap.Float64("confidenceThreshold", confidenceThreshold))
 
-		log.Printf("Are you sure you want to delete these %d users in batches of %d? (y/N)",
-			len(users), batchSize)
+		log.Printf("Are you sure you want to delete these %d users (with confidence < %.2f) in batches of %d? (y/N)",
+			len(users), confidenceThreshold, batchSize)
 		var response string
 		_, _ = fmt.Scanln(&response)
 
@@ -371,8 +396,24 @@ func handleDeleteAfterTime(deps *cliDependencies) cli.ActionFunc {
 			zap.Time("cutoffTime", cutoffTime),
 			zap.String("timezone", cutoffTime.Location().String()))
 
+		// Check if reason filtering is requested
+		reasonStr := c.String("reason")
+		var reasonType *enum.UserReasonType
+
+		if reasonStr != "" {
+			// Parse reason type
+			rt, err := enum.UserReasonTypeString(strings.ToUpper(reasonStr))
+			if err != nil {
+				return fmt.Errorf("invalid reason type %q: %w", reasonStr, err)
+			}
+			reasonType = &rt
+
+			deps.logger.Info("Filtering by reason type",
+				zap.String("reason", reasonType.String()))
+		}
+
 		// Get users updated after the cutoff time
-		users, err := deps.db.Model().User().GetUsersUpdatedAfter(ctx, cutoffTime)
+		users, err := deps.db.Model().User().GetUsersUpdatedAfter(ctx, cutoffTime, reasonType)
 		if err != nil {
 			return fmt.Errorf("failed to get users: %w", err)
 		}
@@ -384,13 +425,25 @@ func handleDeleteAfterTime(deps *cliDependencies) cli.ActionFunc {
 		}
 
 		// Ask for confirmation
-		deps.logger.Info("Found flagged users to delete",
-			zap.Int("count", len(users)),
-			zap.Time("cutoffTime", cutoffTime),
-			zap.String("timezone", cutoffTime.Location().String()))
+		if reasonStr != "" {
+			deps.logger.Info("Found flagged users with only the specified reason to delete",
+				zap.Int("count", len(users)),
+				zap.Time("cutoffTime", cutoffTime),
+				zap.String("timezone", cutoffTime.Location().String()),
+				zap.String("reason", strings.ToUpper(reasonStr)))
 
-		log.Printf("Are you sure you want to delete these %d flagged users updated after %s in batches of %d? (y/N)",
-			len(users), cutoffTime.Format("2006-01-02 15:04:05 MST"), batchSize)
+			log.Printf("Are you sure you want to delete these %d flagged users (with only %s reason) updated after %s in batches of %d? (y/N)",
+				len(users), strings.ToUpper(reasonStr), cutoffTime.Format("2006-01-02 15:04:05 MST"), batchSize)
+		} else {
+			deps.logger.Info("Found flagged users to delete",
+				zap.Int("count", len(users)),
+				zap.Time("cutoffTime", cutoffTime),
+				zap.String("timezone", cutoffTime.Location().String()))
+
+			log.Printf("Are you sure you want to delete these %d flagged users updated after %s in batches of %d? (y/N)",
+				len(users), cutoffTime.Format("2006-01-02 15:04:05 MST"), batchSize)
+		}
+
 		var response string
 		_, _ = fmt.Scanln(&response)
 
