@@ -171,8 +171,6 @@ type OpenAI struct {
 	MaxConcurrent int64 `koanf:"max_concurrent"`
 	// Model name mappings
 	ModelMappings map[string]string `koanf:"model_mappings"`
-	// Fallback model mappings
-	FallbackMappings map[string]string `koanf:"fallback_mappings"`
 	// Model to use for user analysis
 	UserModel string `koanf:"user_model"`
 	// Model to use for user reason analysis

@@ -135,11 +135,6 @@ chat_model = "gemini-2.5-flash"
 "o4-mini-high" = "openai/o4-mini-high"
 "grok-3-mini" = "x-ai/grok-3-mini-beta"
 
-# Fallback model mappings for when primary models fail
-[common.openai.fallback_mappings]
-"gemini-2.5-flash" = "gemini-2.0-flash"
-"gemini-2.5-flash-thinking" = "gemini-2.0-flash"
-
 [common.discord]
 # Self-bot token for server scanning
 sync_token = ""

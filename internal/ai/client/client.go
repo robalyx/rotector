@@ -44,13 +44,12 @@ func WithReasoning(params openai.ChatCompletionNewParams, opts ReasoningOptions)
 
 // AIClient implements the Client interface.
 type AIClient struct {
-	client           *openai.Client
-	breaker          *gobreaker.CircuitBreaker
-	semaphore        *semaphore.Weighted
-	modelMappings    map[string]string
-	fallbackMappings map[string]string
-	logger           *zap.Logger
-	blockChan        chan struct{}
+	client        *openai.Client
+	breaker       *gobreaker.CircuitBreaker
+	semaphore     *semaphore.Weighted
+	modelMappings map[string]string
+	logger        *zap.Logger
+	blockChan     chan struct{}
 }
 
 // NewClient creates a new AIClient.
@@ -80,13 +79,12 @@ func NewClient(cfg *config.OpenAI, logger *zap.Logger) (*AIClient, error) {
 	}
 
 	return &AIClient{
-		client:           &client,
-		breaker:          gobreaker.NewCircuitBreaker(settings),
-		semaphore:        semaphore.NewWeighted(cfg.MaxConcurrent),
-		modelMappings:    cfg.ModelMappings,
-		fallbackMappings: cfg.FallbackMappings,
-		logger:           logger.Named("ai_client"),
-		blockChan:        make(chan struct{}),
+		client:        &client,
+		breaker:       gobreaker.NewCircuitBreaker(settings),
+		semaphore:     semaphore.NewWeighted(cfg.MaxConcurrent),
+		modelMappings: cfg.ModelMappings,
+		logger:        logger.Named("ai_client"),
+		blockChan:     make(chan struct{}),
 	}, nil
 }
 
@@ -151,7 +149,7 @@ func (c *chatCompletions) New(ctx context.Context, params openai.ChatCompletionN
 	return result.(*openai.ChatCompletion), nil
 }
 
-// NewWithRetry makes a chat completion request with retry and fallback logic.
+// NewWithRetry makes a chat completion request with retry logic.
 func (c *chatCompletions) NewWithRetry(
 	ctx context.Context, params openai.ChatCompletionNewParams, callback RetryCallback,
 ) error {
@@ -188,21 +186,6 @@ func (c *chatCompletions) NewWithRetry(
 		}
 
 		attempt++
-
-		// On last attempt, try fallback model if available
-		if attempt == options.MaxRetries {
-			if fallbackModel, ok := c.client.fallbackMappings[originalModel]; ok {
-				if mappedModel, ok := c.client.modelMappings[fallbackModel]; ok {
-					params.Model = mappedModel
-					c.client.logger.Info("Trying fallback model on last attempt",
-						zap.String("originalModel", originalModel),
-						zap.String("fallbackModel", fallbackModel),
-						zap.String("mappedModel", mappedModel))
-				} else {
-					return backoff.Permanent(fmt.Errorf("%w: %s", ErrNoProvidersAvailable, fallbackModel))
-				}
-			}
-		}
 
 		// Execute request with circuit breaker
 		result, err := c.client.breaker.Execute(func() (any, error) {

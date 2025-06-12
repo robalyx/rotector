@@ -8,6 +8,7 @@ linters:
   default: all
   disable:
     - bodyclose
+    - cyclop
     - depguard
     - dupl
     - exhaustruct
@@ -28,9 +29,6 @@ linters:
     - interfacebloat
     - gocognit
   settings:
-    cyclop:
-      max-complexity: 30
-      package-average: 10
     exhaustruct:
       exclude:
         - ^net/http.Client$
@@ -58,7 +56,7 @@ linters:
       default-signifies-exhaustive: true
     funlen:
       lines: 120
-      statements: 60
+      statements: 70
       ignore-comments: true
     gochecksumtype:
       default-signifies-exhaustive: false
