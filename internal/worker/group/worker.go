@@ -33,7 +33,7 @@ type Worker struct {
 	flaggedThreshold int
 	currentGroupID   uint64
 	currentCursor    string
-	pendingUserIDs   []uint64
+	pendingUsers     []*types.ReviewUser
 }
 
 // New creates a new group worker.
@@ -52,7 +52,7 @@ func New(app *setup.App, bar *progress.Bar, logger *zap.Logger) *Worker {
 		logger:           logger.Named("group_worker"),
 		batchSize:        app.Config.Worker.BatchSizes.GroupUsers,
 		flaggedThreshold: app.Config.Worker.ThresholdLimits.FlaggedUsers,
-		pendingUserIDs:   make([]uint64, 0),
+		pendingUsers:     make([]*types.ReviewUser, 0),
 	}
 }
 
@@ -113,28 +113,23 @@ func (w *Worker) Start() {
 			w.currentGroupID = group.ID
 		}
 
-		// Step 2: Get group users (40%)
-		w.bar.SetStepMessage("Processing group users", 40)
-		w.reporter.UpdateStatus("Processing group users", 40)
-		userIDs, err := w.processGroup()
+		// Step 2: Get group users (70%)
+		w.bar.SetStepMessage("Processing group users", 70)
+		w.reporter.UpdateStatus("Processing group users", 70)
+		userInfos, err := w.processGroup()
 		if err != nil {
 			w.reporter.SetHealthy(false)
 			time.Sleep(5 * time.Minute)
 			continue
 		}
 
-		// Step 3: Fetch user info (70%)
-		w.bar.SetStepMessage("Fetching user info", 70)
-		w.reporter.UpdateStatus("Fetching user info", 70)
-		userInfos := w.userFetcher.FetchInfos(context.Background(), userIDs[:w.batchSize])
-
-		// Step 4: Process users (90%)
+		// Step 3: Process users (90%)
 		w.bar.SetStepMessage("Processing users", 90)
 		w.reporter.UpdateStatus("Processing users", 90)
-		w.userChecker.ProcessUsers(userInfos, nil)
+		w.userChecker.ProcessUsers(userInfos[:w.batchSize], nil)
 
-		// Step 5: Prepare for next batch
-		w.pendingUserIDs = userIDs[w.batchSize:]
+		// Step 4: Prepare for next batch
+		w.pendingUsers = userInfos[w.batchSize:]
 
 		// Step 6: Completed (100%)
 		w.bar.SetStepMessage("Completed", 100)
@@ -145,96 +140,96 @@ func (w *Worker) Start() {
 	}
 }
 
-// processGroup builds a list of member IDs to check.
-func (w *Worker) processGroup() ([]uint64, error) {
-	userIDs := w.pendingUserIDs
+// processGroup builds a list of validated users to check.
+func (w *Worker) processGroup() ([]*types.ReviewUser, error) {
+	validUsers := w.pendingUsers
 
-	for {
-		// Fetch group users with cursor pagination
-		builder := groups.NewGroupUsersBuilder(w.currentGroupID).WithLimit(100).WithCursor(w.currentCursor)
-		groupUsers, err := w.roAPI.Groups().GetGroupUsers(context.Background(), builder.Build())
+	for len(validUsers) < w.batchSize {
+		// Collect user IDs from current group
+		userIDs, shouldContinue, err := w.collectUserIDsFromGroup()
 		if err != nil {
-			w.logger.Error("Error fetching group members", zap.Error(err))
-			w.pendingUserIDs = userIDs
 			return nil, err
 		}
-
-		// If the group has no users, get next group
-		if len(groupUsers.Data) == 0 {
-			// Reset state
-			w.currentGroupID = 0
-			w.currentCursor = ""
-
-			// Get next group
-			nextGroup, err := w.db.Model().Group().GetGroupToScan(context.Background())
-			if err != nil {
-				if !errors.Is(err, sql.ErrNoRows) {
-					w.logger.Error("Error getting next group to scan", zap.Error(err))
-				} else {
-					w.logger.Warn("No more groups to scan", zap.Error(err))
-				}
-				return nil, err
-			}
-			w.currentGroupID = nextGroup.ID
-			continue
+		if !shouldContinue {
+			break
 		}
 
-		// Extract user IDs from member list
-		newUserIDs := make([]uint64, len(groupUsers.Data))
-		for i, groupUser := range groupUsers.Data {
-			newUserIDs[i] = groupUser.User.UserID
+		// Fetch user info and validate
+		if len(userIDs) > 0 {
+			userInfos := w.userFetcher.FetchInfos(context.Background(), userIDs)
+			validUsers = append(validUsers, userInfos...)
+
+			w.logger.Info("Processed group users",
+				zap.Uint64("groupID", w.currentGroupID),
+				zap.String("cursor", w.currentCursor),
+				zap.Int("fetchedUsers", len(userIDs)),
+				zap.Int("validUsers", len(userInfos)),
+				zap.Int("totalValidUsers", len(validUsers)))
 		}
-
-		// Check which users exist in our system
-		existingUsers, err := w.db.Model().User().GetUsersByIDs(context.Background(), newUserIDs, types.UserFieldID)
-		if err != nil {
-			w.logger.Error("Error checking existing users", zap.Error(err))
-			continue
-		}
-
-		// Add users that do not exist in our system
-		for _, userID := range newUserIDs {
-			if _, exists := existingUsers[userID]; !exists {
-				userIDs = append(userIDs, userID)
-			}
-		}
-
-		w.logger.Info("Fetched group users",
-			zap.Uint64("groupID", w.currentGroupID),
-			zap.String("cursor", w.currentCursor),
-			zap.Int("totalUsers", len(groupUsers.Data)),
-			zap.Int("existingUsers", len(existingUsers)),
-			zap.Int("userIDs", len(userIDs)))
-
-		// Check if we've reached batch size
-		if len(userIDs) >= w.batchSize {
-			// Save state for next iteration if there are more pages
-			if groupUsers.NextPageCursor != nil {
-				w.currentCursor = *groupUsers.NextPageCursor
-			} else {
-				// Reset state if no more pages
-				w.currentGroupID = 0
-				w.currentCursor = ""
-			}
-			return userIDs, nil
-		}
-
-		// Move to next page if available
-		if groupUsers.NextPageCursor == nil {
-			nextGroup, err := w.db.Model().Group().GetGroupToScan(context.Background())
-			if err != nil {
-				if !errors.Is(err, sql.ErrNoRows) {
-					w.logger.Error("Error getting next group to scan", zap.Error(err))
-				} else {
-					w.logger.Warn("No more groups to scan", zap.Error(err))
-				}
-				return nil, err
-			}
-			w.currentGroupID = nextGroup.ID
-			w.currentCursor = ""
-			continue
-		}
-
-		w.currentCursor = *groupUsers.NextPageCursor
 	}
+
+	return validUsers, nil
+}
+
+// collectUserIDsFromGroup collects user IDs from the current group that don't exist in our system.
+func (w *Worker) collectUserIDsFromGroup() ([]uint64, bool, error) {
+	// Fetch group users with cursor pagination
+	builder := groups.NewGroupUsersBuilder(w.currentGroupID).WithLimit(100).WithCursor(w.currentCursor)
+	groupUsers, err := w.roAPI.Groups().GetGroupUsers(context.Background(), builder.Build())
+	if err != nil {
+		w.logger.Error("Error fetching group members", zap.Error(err))
+		return nil, false, err
+	}
+
+	// If the group has no users, get next group
+	if len(groupUsers.Data) == 0 {
+		// Reset state
+		w.currentGroupID = 0
+		w.currentCursor = ""
+
+		// Get next group
+		nextGroup, err := w.db.Model().Group().GetGroupToScan(context.Background())
+		if err != nil {
+			if !errors.Is(err, sql.ErrNoRows) {
+				w.logger.Error("Error getting next group to scan", zap.Error(err))
+			} else {
+				w.logger.Warn("No more groups to scan", zap.Error(err))
+			}
+			return nil, false, err
+		}
+		w.currentGroupID = nextGroup.ID
+		return nil, true, nil // Continue with next group
+	}
+
+	// Extract user IDs from member list
+	newUserIDs := make([]uint64, len(groupUsers.Data))
+	for i, groupUser := range groupUsers.Data {
+		newUserIDs[i] = groupUser.User.UserID
+	}
+
+	// Check which users exist in our system
+	existingUsers, err := w.db.Model().User().GetUsersByIDs(context.Background(), newUserIDs, types.UserFieldID)
+	if err != nil {
+		w.logger.Error("Error checking existing users", zap.Error(err))
+		return nil, true, nil // Continue despite error
+	}
+
+	// Collect users that do not exist in our system
+	var userIDs []uint64
+	for _, userID := range newUserIDs {
+		if _, exists := existingUsers[userID]; !exists {
+			userIDs = append(userIDs, userID)
+		}
+	}
+
+	// Update cursor for next iteration
+	if groupUsers.NextPageCursor != nil {
+		w.currentCursor = *groupUsers.NextPageCursor
+	} else {
+		// Reset state if no more pages - will get next group on next call
+		w.currentGroupID = 0
+		w.currentCursor = ""
+	}
+
+	return userIDs, true, nil
 }
