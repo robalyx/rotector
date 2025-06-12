@@ -96,7 +96,6 @@ func (r *SettingModel) SaveUserSettings(ctx context.Context, settings *types.Use
 			Set("next_review_time = EXCLUDED.next_review_time").
 			Set("review_count = EXCLUDED.review_count").
 			Set("window_start_time = EXCLUDED.window_start_time").
-			Set("leaderboard_period = EXCLUDED.leaderboard_period").
 			Set("reviewer_stats_period = EXCLUDED.reviewer_stats_period").
 			Exec(ctx)
 		if err != nil {
