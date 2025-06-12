@@ -225,12 +225,6 @@ func (a *UserReasonAnalyzer) processReasonBatch(ctx context.Context, batch []Use
 		TopP:        openai.Float(0.2),
 	}
 
-	params = client.WithReasoning(params, client.ReasoningOptions{
-		Effort:    openai.ReasoningEffortHigh,
-		MaxTokens: 8192,
-		Exclude:   false,
-	})
-
 	// Make API request
 	var result ReasonAnalysisResult
 	err = a.chat.NewWithRetry(ctx, params, func(resp *openai.ChatCompletion, err error) error {

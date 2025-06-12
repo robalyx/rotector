@@ -30,18 +30,6 @@ var defaultSafetySettings = map[string]any{
 	},
 }
 
-// WithReasoning adds reasoning fields to the chat completion parameters.
-func WithReasoning(params openai.ChatCompletionNewParams, opts ReasoningOptions) openai.ChatCompletionNewParams {
-	params.SetExtraFields(map[string]any{
-		"reasoning": map[string]any{
-			"effort":     string(opts.Effort),
-			"max_tokens": opts.MaxTokens,
-			"exclude":    opts.Exclude,
-		},
-	})
-	return params
-}
-
 // AIClient implements the Client interface.
 type AIClient struct {
 	client        *openai.Client
