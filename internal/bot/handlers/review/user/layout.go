@@ -33,6 +33,7 @@ type Layout struct {
 	groupChecker         *checker.GroupChecker
 	friendReasonAnalyzer *ai.FriendReasonAnalyzer
 	groupReasonAnalyzer  *ai.GroupReasonAnalyzer
+	userReasonAnalyzer   *ai.UserReasonAnalyzer
 	imageStreamer        *interaction.ImageStreamer
 	captcha              *captcha.Manager
 	logger               *zap.Logger
@@ -51,6 +52,7 @@ func New(app *setup.App, interactionManager *interaction.Manager) *Layout {
 		groupChecker:         checker.NewGroupChecker(app, app.Logger),
 		friendReasonAnalyzer: ai.NewFriendReasonAnalyzer(app, app.Logger),
 		groupReasonAnalyzer:  ai.NewGroupReasonAnalyzer(app, app.Logger),
+		userReasonAnalyzer:   ai.NewUserReasonAnalyzer(app, app.Logger),
 		imageStreamer:        interaction.NewImageStreamer(interactionManager, app.Logger, app.RoAPI.GetClient()),
 		captcha:              captcha.NewManager(app.DB, app.Logger),
 		logger:               app.Logger.Named("user_menu"),

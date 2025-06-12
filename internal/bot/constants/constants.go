@@ -179,8 +179,15 @@ const (
 	AddReasonConfidenceInputCustomID = "add_reason_confidence"
 	AddReasonEvidenceInputCustomID   = "add_reason_evidence"
 
-	GenerateFriendReasonButtonCustomID = "generate_friend_reason"
-	GenerateGroupReasonButtonCustomID  = "generate_group_reason"
+	GenerateFriendReasonButtonCustomID  = "generate_friend_reason"
+	GenerateGroupReasonButtonCustomID   = "generate_group_reason"
+	GenerateProfileReasonButtonCustomID = "generate_profile_reason" + ModalOpenSuffix
+
+	GenerateProfileReasonModalCustomID     = "generate_profile_reason_modal"
+	ProfileReasonHintInputCustomID         = "profile_reason_hint_input"
+	ProfileReasonViolationInputCustomID    = "profile_reason_violation_input"
+	ProfileReasonLanguageInputCustomID     = "profile_reason_language_input"
+	ProfileReasonLanguageUsedInputCustomID = "profile_reason_language_used_input"
 
 	PrevReviewButtonCustomID = "prev_review"
 	NextReviewButtonCustomID = "next_review"

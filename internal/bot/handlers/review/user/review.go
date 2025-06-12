@@ -290,6 +290,8 @@ func (m *ReviewMenu) handleModal(ctx *interaction.Context, s *session.Session) {
 		)
 	case constants.AddCommentModalCustomID:
 		m.HandleCommentModalSubmit(ctx, s, viewShared.TargetTypeUser)
+	case constants.GenerateProfileReasonModalCustomID:
+		m.handleGenerateProfileReasonModalSubmit(ctx, s)
 	}
 }
 
@@ -696,6 +698,8 @@ func (m *ReviewMenu) handleAIReasonSelection(ctx *interaction.Context, s *sessio
 
 	// Handle the specific AI reason generation option
 	switch option {
+	case constants.GenerateProfileReasonButtonCustomID:
+		m.handleGenerateProfileReason(ctx)
 	case constants.GenerateFriendReasonButtonCustomID:
 		m.handleGenerateFriendReason(ctx, s, user)
 	case constants.GenerateGroupReasonButtonCustomID:
@@ -937,4 +941,146 @@ func (m *ReviewMenu) fetchNewTarget(ctx *interaction.Context, s *session.Session
 	})
 
 	return user, nil
+}
+
+// handleGenerateProfileReason shows the modal for profile reason generation parameters.
+func (m *ReviewMenu) handleGenerateProfileReason(ctx *interaction.Context) {
+	// Create modal for profile reason generation parameters
+	modal := discord.NewModalCreateBuilder().
+		SetCustomID(constants.GenerateProfileReasonModalCustomID).
+		SetTitle("Generate Profile Reason").
+		AddActionRow(
+			discord.NewTextInput(constants.ProfileReasonHintInputCustomID, discord.TextInputStyleParagraph, "Hint").
+				WithRequired(true).
+				WithMinLength(1).
+				WithMaxLength(100).
+				WithPlaceholder("e.g., inappropriate username, sexual content in description"),
+		).
+		AddActionRow(
+			discord.NewTextInput(constants.ProfileReasonViolationInputCustomID, discord.TextInputStyleParagraph, "Violation Location").
+				WithRequired(false).
+				WithMaxLength(500).
+				WithPlaceholder("username\ndisplayName\ndescription"),
+		).
+		AddActionRow(
+			discord.NewTextInput(constants.ProfileReasonLanguageInputCustomID, discord.TextInputStyleParagraph, "Language Pattern").
+				WithRequired(false).
+				WithMaxLength(500).
+				WithPlaceholder("imperative\neuphemistic\ncoded\ndirect-address\noffer-pattern"),
+		).
+		AddActionRow(
+			discord.NewTextInput(constants.ProfileReasonLanguageUsedInputCustomID, discord.TextInputStyleParagraph, "Language Used").
+				WithRequired(false).
+				WithMaxLength(100).
+				WithPlaceholder("english\nrot13\ncaesar\nleetspeak"),
+		)
+
+	ctx.Modal(modal)
+}
+
+// handleGenerateProfileReasonModalSubmit processes the profile reason generation modal submission.
+func (m *ReviewMenu) handleGenerateProfileReasonModalSubmit(ctx *interaction.Context, s *session.Session) {
+	// Get the current user
+	user := session.UserTarget.Get(s)
+	if user == nil {
+		ctx.Error("No user selected for profile reason generation.")
+		return
+	}
+
+	// Get modal data
+	data := ctx.Event().ModalData()
+	hint := data.Text(constants.ProfileReasonHintInputCustomID)
+	violationLocationText := data.Text(constants.ProfileReasonViolationInputCustomID)
+	languagePatternText := data.Text(constants.ProfileReasonLanguageInputCustomID)
+	languageUsedText := data.Text(constants.ProfileReasonLanguageUsedInputCustomID)
+
+	// Validate required fields
+	if hint == "" {
+		ctx.Cancel("Hint is required for profile reason generation.")
+		return
+	}
+
+	// Parse input fields
+	violationLocation := utils.ParseDelimitedInput(violationLocationText, "\n")
+	languagePattern := utils.ParseDelimitedInput(languagePatternText, "\n")
+	languageUsed := utils.ParseDelimitedInput(languageUsedText, "\n")
+
+	// Show loading message
+	ctx.Clear("Generating profile reason using AI... This may take a few moments.")
+
+	// Create user summary for analysis
+	userSummary := &ai.UserSummary{
+		Name: user.Name,
+	}
+
+	// Only include display name if it's different from the username
+	if user.DisplayName != user.Name {
+		userSummary.DisplayName = user.DisplayName
+	}
+
+	// Replace empty descriptions with placeholder
+	description := user.Description
+	if description == "" {
+		description = "No description"
+	}
+	userSummary.Description = description
+
+	// Create user reason request
+	userReasonRequest := map[uint64]ai.UserReasonRequest{
+		user.ID: {
+			User:              userSummary,
+			Confidence:        1.0,
+			Hint:              hint,
+			ViolationLocation: violationLocation,
+			LanguagePattern:   languagePattern,
+			LanguageUsed:      languageUsed,
+			UserID:            user.ID,
+		},
+	}
+
+	// Create translated and original info maps
+	translatedInfos := map[string]*types.ReviewUser{user.Name: user}
+	originalInfos := map[string]*types.ReviewUser{user.Name: user}
+	reasonsMap := make(map[uint64]types.Reasons[enum.UserReasonType])
+	if len(user.Reasons) > 0 {
+		reasonsMap[user.ID] = user.Reasons
+	}
+
+	// Generate detailed reason using the user reason analyzer
+	m.layout.userReasonAnalyzer.ProcessFlaggedUsers(
+		ctx.Context(), userReasonRequest, translatedInfos, originalInfos, reasonsMap,
+	)
+
+	// Check if a reason was generated
+	if updatedReasons, exists := reasonsMap[user.ID]; exists {
+		if profileReason, hasProfileReason := updatedReasons[enum.UserReasonTypeProfile]; hasProfileReason {
+			// Initialize reasons map if nil
+			if user.Reasons == nil {
+				user.Reasons = make(types.Reasons[enum.UserReasonType])
+			}
+
+			// Add or replace the profile reason
+			user.Reasons[enum.UserReasonTypeProfile] = profileReason
+
+			// Recalculate overall confidence
+			user.Confidence = utils.CalculateConfidence(user.Reasons)
+
+			// Update session
+			session.UserTarget.Set(s, user)
+			session.ReasonsChanged.Set(s, true)
+
+			// Mark the profile reason as unsaved
+			unsavedReasons := session.UnsavedUserReasons.Get(s)
+			if unsavedReasons == nil {
+				unsavedReasons = make(map[enum.UserReasonType]struct{})
+			}
+			unsavedReasons[enum.UserReasonTypeProfile] = struct{}{}
+			session.UnsavedUserReasons.Set(s, unsavedReasons)
+
+			ctx.Reload("Profile reason generated and applied successfully!")
+			return
+		}
+	}
+
+	ctx.Error("Failed to generate profile reason. The AI could not analyze this user's profile content with the provided parameters.")
 }

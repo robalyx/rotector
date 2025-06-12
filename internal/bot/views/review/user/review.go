@@ -480,6 +480,9 @@ func (b *ReviewBuilder) buildReasonOptions() []discord.StringSelectMenuOption {
 // buildAIReasonOptions creates the AI reason generation options.
 func (b *ReviewBuilder) buildAIReasonOptions() []discord.StringSelectMenuOption {
 	options := []discord.StringSelectMenuOption{
+		discord.NewStringSelectMenuOption("Generate Profile Reason", constants.GenerateProfileReasonButtonCustomID).
+			WithEmoji(discord.ComponentEmoji{Name: "📝"}).
+			WithDescription("Use AI to generate a reason based on profile content"),
 		discord.NewStringSelectMenuOption("Generate Friend Reason", constants.GenerateFriendReasonButtonCustomID).
 			WithEmoji(discord.ComponentEmoji{Name: "👥"}).
 			WithDescription("Use AI to generate a reason based on friend network"),

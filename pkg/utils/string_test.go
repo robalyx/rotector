@@ -167,6 +167,79 @@ func TestSplitLines(t *testing.T) {
 	}
 }
 
+func TestParseDelimitedInput(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name      string
+		input     string
+		delimiter string
+		want      []string
+	}{
+		{
+			name:      "empty input",
+			input:     "",
+			delimiter: ",",
+			want:      nil,
+		},
+		{
+			name:      "single item",
+			input:     "item1",
+			delimiter: ",",
+			want:      []string{"item1"},
+		},
+		{
+			name:      "multiple items with comma",
+			input:     "item1,item2,item3",
+			delimiter: ",",
+			want:      []string{"item1", "item2", "item3"},
+		},
+		{
+			name:      "items with spaces",
+			input:     " item1 , item2 , item3 ",
+			delimiter: ",",
+			want:      []string{"item1", "item2", "item3"},
+		},
+		{
+			name:      "empty items filtered out",
+			input:     "item1,,item2,   ,item3",
+			delimiter: ",",
+			want:      []string{"item1", "item2", "item3"},
+		},
+		{
+			name:      "newline delimiter",
+			input:     "line1\nline2\nline3",
+			delimiter: "\n",
+			want:      []string{"line1", "line2", "line3"},
+		},
+		{
+			name:      "newlines with spaces",
+			input:     " line1 \n line2 \n line3 ",
+			delimiter: "\n",
+			want:      []string{"line1", "line2", "line3"},
+		},
+		{
+			name:      "custom delimiter",
+			input:     "item1|item2|item3",
+			delimiter: "|",
+			want:      []string{"item1", "item2", "item3"},
+		},
+		{
+			name:      "only whitespace",
+			input:     "   ,   ,   ",
+			delimiter: ",",
+			want:      nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			got := utils.ParseDelimitedInput(tt.input, tt.delimiter)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
 func TestValidateCommentText(t *testing.T) {
 	t.Parallel()
 	tests := []struct {

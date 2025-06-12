@@ -62,6 +62,21 @@ func SplitLines(content []string) []string {
 	return result
 }
 
+// ParseDelimitedInput takes a text input and splits it by the given delimiter.
+func ParseDelimitedInput(input, delimiter string) []string {
+	if input == "" {
+		return nil
+	}
+
+	var result []string
+	for item := range strings.SplitSeq(input, delimiter) {
+		if trimmed := strings.TrimSpace(item); trimmed != "" {
+			result = append(result, trimmed)
+		}
+	}
+	return result
+}
+
 // ValidateCommentText checks if the text contains only allowed characters for community notes.
 // Returns true if the text is valid, false otherwise.
 func ValidateCommentText(text string) bool {
