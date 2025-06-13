@@ -20,6 +20,8 @@ import (
 	"go.uber.org/zap"
 )
 
+const MaxGroupsPerBatch = 10
+
 // Worker processes group member lists by checking each member's
 // status and analyzing their profiles for inappropriate content.
 type Worker struct {
@@ -113,21 +115,13 @@ func (w *Worker) Start(ctx context.Context) {
 		w.reporter.UpdateStatus("Fetching next group to process", 10)
 
 		if w.currentGroupID == 0 {
-			group, err := w.db.Model().Group().GetGroupToScan(ctx)
-			if err != nil {
-				if !errors.Is(err, sql.ErrNoRows) {
-					w.logger.Error("Error getting group to scan", zap.Error(err))
-					w.reporter.SetHealthy(false)
-				} else {
-					w.logger.Warn("No more groups to scan", zap.Error(err))
-				}
-
+			if err := w.moveToNextGroup(ctx); err != nil {
+				w.reporter.SetHealthy(false)
 				if !utils.ErrorSleep(ctx, 5*time.Minute, w.logger, "group worker") {
 					return
 				}
 				continue
 			}
-			w.currentGroupID = group.ID
 		}
 
 		// Step 2: Get group users (70%)
@@ -136,7 +130,7 @@ func (w *Worker) Start(ctx context.Context) {
 		userInfos, err := w.processGroup(ctx)
 		if err != nil {
 			w.reporter.SetHealthy(false)
-
+			w.logger.Error("Error processing group users", zap.Error(err))
 			if !utils.ErrorSleep(ctx, 5*time.Minute, w.logger, "group worker") {
 				return
 			}
@@ -146,10 +140,20 @@ func (w *Worker) Start(ctx context.Context) {
 		// Step 3: Process users (90%)
 		w.bar.SetStepMessage("Processing users", 90)
 		w.reporter.UpdateStatus("Processing users", 90)
-		w.userChecker.ProcessUsers(ctx, userInfos[:w.batchSize], nil)
+
+		// Process users up to batch size or all available users if less than batch size
+		usersToProcess := userInfos
+		if len(userInfos) > w.batchSize {
+			usersToProcess = userInfos[:w.batchSize]
+		}
+		w.userChecker.ProcessUsers(ctx, usersToProcess, nil)
 
 		// Step 4: Prepare for next batch
-		w.pendingUsers = userInfos[w.batchSize:]
+		if len(userInfos) > w.batchSize {
+			w.pendingUsers = userInfos[w.batchSize:]
+		} else {
+			w.pendingUsers = nil
+		}
 
 		// Step 6: Completed (100%)
 		w.bar.SetStepMessage("Completed", 100)
@@ -165,8 +169,9 @@ func (w *Worker) Start(ctx context.Context) {
 // processGroup builds a list of validated users to check.
 func (w *Worker) processGroup(ctx context.Context) ([]*types.ReviewUser, error) {
 	validUsers := w.pendingUsers
+	groupsAttempted := 0
 
-	for len(validUsers) < w.batchSize {
+	for len(validUsers) < w.batchSize && groupsAttempted < MaxGroupsPerBatch {
 		// Collect user IDs from current group
 		userIDs, shouldContinue, err := w.collectUserIDsFromGroup(ctx)
 		if err != nil {
@@ -175,6 +180,8 @@ func (w *Worker) processGroup(ctx context.Context) ([]*types.ReviewUser, error) 
 		if !shouldContinue {
 			break
 		}
+
+		groupsAttempted++
 
 		// Fetch user info and validate
 		if len(userIDs) > 0 {
@@ -186,11 +193,39 @@ func (w *Worker) processGroup(ctx context.Context) ([]*types.ReviewUser, error) 
 				zap.String("cursor", w.currentCursor),
 				zap.Int("fetchedUsers", len(userIDs)),
 				zap.Int("validUsers", len(userInfos)),
-				zap.Int("totalValidUsers", len(validUsers)))
+				zap.Int("totalValidUsers", len(validUsers)),
+				zap.Int("groupsAttempted", groupsAttempted))
 		}
 	}
 
+	if groupsAttempted >= MaxGroupsPerBatch && len(validUsers) < w.batchSize {
+		w.logger.Warn("Reached maximum groups per batch without filling batch size",
+			zap.Int("validUsers", len(validUsers)),
+			zap.Int("batchSize", w.batchSize),
+			zap.Int("groupsAttempted", groupsAttempted))
+	}
+
 	return validUsers, nil
+}
+
+// moveToNextGroup resets the current group state and gets the next group to scan.
+func (w *Worker) moveToNextGroup(ctx context.Context) error {
+	// Reset state
+	w.currentGroupID = 0
+	w.currentCursor = ""
+
+	// Get next group
+	nextGroup, err := w.db.Model().Group().GetGroupToScan(ctx)
+	if err != nil {
+		if !errors.Is(err, sql.ErrNoRows) {
+			w.logger.Error("Error getting next group to scan", zap.Error(err))
+		} else {
+			w.logger.Warn("No more groups to scan", zap.Error(err))
+		}
+		return err
+	}
+	w.currentGroupID = nextGroup.ID
+	return nil
 }
 
 // collectUserIDsFromGroup collects user IDs from the current group that don't exist in our system.
@@ -199,27 +234,22 @@ func (w *Worker) collectUserIDsFromGroup(ctx context.Context) ([]uint64, bool, e
 	builder := groups.NewGroupUsersBuilder(w.currentGroupID).WithLimit(100).WithCursor(w.currentCursor)
 	groupUsers, err := w.roAPI.Groups().GetGroupUsers(ctx, builder.Build())
 	if err != nil {
-		w.logger.Error("Error fetching group members", zap.Error(err))
-		return nil, false, err
+		w.logger.Error("Error fetching group members, moving to next group",
+			zap.Uint64("groupID", w.currentGroupID),
+			zap.Error(err))
+
+		// Reset state and try next group
+		if err := w.moveToNextGroup(ctx); err != nil {
+			return nil, false, err
+		}
+		return nil, true, nil // Continue with next group
 	}
 
 	// If the group has no users, get next group
 	if len(groupUsers.Data) == 0 {
-		// Reset state
-		w.currentGroupID = 0
-		w.currentCursor = ""
-
-		// Get next group
-		nextGroup, err := w.db.Model().Group().GetGroupToScan(ctx)
-		if err != nil {
-			if !errors.Is(err, sql.ErrNoRows) {
-				w.logger.Error("Error getting next group to scan", zap.Error(err))
-			} else {
-				w.logger.Warn("No more groups to scan", zap.Error(err))
-			}
+		if err := w.moveToNextGroup(ctx); err != nil {
 			return nil, false, err
 		}
-		w.currentGroupID = nextGroup.ID
 		return nil, true, nil // Continue with next group
 	}
 
