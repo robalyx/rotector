@@ -755,6 +755,7 @@ func (r *GroupModel) GetGroupToScan(ctx context.Context) (*types.Group, error) {
 			Model(&group).
 			Where("last_scanned < NOW() - INTERVAL '1 day'").
 			Where("status IN (?)", bun.In([]enum.GroupType{enum.GroupTypeFlagged, enum.GroupTypeConfirmed})).
+			Where("is_locked = false").
 			Where("NOT EXISTS (SELECT 1 FROM group_reasons gr WHERE gr.group_id = \"group\".id AND reason_type = ?) OR "+
 				"EXISTS (SELECT 1 FROM group_reasons gr2 WHERE gr2.group_id = \"group\".id AND reason_type != ?)",
 				enum.GroupReasonTypeMember, enum.GroupReasonTypeMember).

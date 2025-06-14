@@ -1129,6 +1129,7 @@ func (r *UserModel) GetUserToScan(ctx context.Context) (*types.User, error) {
 		// First try confirmed users
 		err := tx.NewSelect().Model(&user).
 			Where("status = ?", enum.UserTypeConfirmed).
+			Where("is_banned = false").
 			Where("last_scanned < NOW() - INTERVAL '1 day'").
 			Where("NOT EXISTS (SELECT 1 FROM user_reasons ur WHERE ur.user_id = \"user\".id AND reason_type = ?) OR "+
 				"EXISTS (SELECT 1 FROM user_reasons ur2 WHERE ur2.user_id = \"user\".id AND reason_type != ?)",
@@ -1160,6 +1161,7 @@ func (r *UserModel) GetUserToScan(ctx context.Context) (*types.User, error) {
 		// If no confirmed users, try flagged users
 		err = tx.NewSelect().Model(&user).
 			Where("status = ?", enum.UserTypeFlagged).
+			Where("is_banned = false").
 			Where("last_scanned < NOW() - INTERVAL '1 day'").
 			Where("confidence >= 0.9").
 			Where("NOT EXISTS (SELECT 1 FROM user_reasons ur WHERE ur.user_id = \"user\".id AND reason_type = ?) OR "+

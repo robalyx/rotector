@@ -121,7 +121,7 @@ func init() { //nolint:funlen
 			ON groups (status, last_viewed ASC);
 
 			CREATE INDEX IF NOT EXISTS idx_groups_scan_time 
-			ON groups (status, last_scanned ASC, confidence DESC);
+			ON groups (status, is_locked, last_scanned ASC, confidence DESC);
 
 			CREATE INDEX IF NOT EXISTS idx_groups_lock_check 
 			ON groups (status, last_lock_check ASC);
@@ -162,7 +162,7 @@ func init() { //nolint:funlen
 			ON users (status, last_viewed ASC);
 
 			CREATE INDEX IF NOT EXISTS idx_users_scan_time 
-			ON users (status, last_scanned ASC, confidence DESC);
+			ON users (status, is_banned, last_scanned ASC, confidence DESC);
 
 			CREATE INDEX IF NOT EXISTS idx_users_ban_check 
 			ON users (status, last_ban_check ASC);
