@@ -96,8 +96,10 @@ func (m *ConfirmMenu) handleBanUser(ctx *interaction.Context, s *session.Session
 		return
 	}
 
+	ctx.NavigateBack(fmt.Sprintf("Successfully banned user %d.", id))
+
 	// Log the ban action
-	go m.layout.db.Model().Activity().Log(ctx.Context(), &types.ActivityLog{
+	m.layout.db.Model().Activity().Log(ctx.Context(), &types.ActivityLog{
 		ActivityTarget: types.ActivityTarget{
 			DiscordID: id,
 		},
@@ -110,8 +112,6 @@ func (m *ConfirmMenu) handleBanUser(ctx *interaction.Context, s *session.Session
 			"expires_at": expiresAt,
 		},
 	})
-
-	ctx.NavigateBack(fmt.Sprintf("Successfully banned user %d.", id))
 }
 
 // handleUnbanUser processes the user unban action.
@@ -141,8 +141,10 @@ func (m *ConfirmMenu) handleUnbanUser(ctx *interaction.Context, userID string, n
 		return
 	}
 
+	ctx.NavigateBack(fmt.Sprintf("Successfully unbanned user %d.", id))
+
 	// Log the unban action
-	go m.layout.db.Model().Activity().Log(ctx.Context(), &types.ActivityLog{
+	m.layout.db.Model().Activity().Log(ctx.Context(), &types.ActivityLog{
 		ActivityTarget: types.ActivityTarget{
 			DiscordID: id,
 		},
@@ -153,8 +155,6 @@ func (m *ConfirmMenu) handleUnbanUser(ctx *interaction.Context, userID string, n
 			"notes": notes,
 		},
 	})
-
-	ctx.NavigateBack(fmt.Sprintf("Successfully unbanned user %d.", id))
 }
 
 // handleDeleteUser processes the user deletion action.
@@ -182,8 +182,10 @@ func (m *ConfirmMenu) handleDeleteUser(ctx *interaction.Context, idStr string, r
 		return
 	}
 
+	ctx.NavigateBack(fmt.Sprintf("Successfully deleted user %d.", id))
+
 	// Log the deletion
-	go m.layout.db.Model().Activity().Log(ctx.Context(), &types.ActivityLog{
+	m.layout.db.Model().Activity().Log(ctx.Context(), &types.ActivityLog{
 		ActivityTarget: types.ActivityTarget{
 			UserID: id,
 		},
@@ -194,8 +196,6 @@ func (m *ConfirmMenu) handleDeleteUser(ctx *interaction.Context, idStr string, r
 			"reason": reason,
 		},
 	})
-
-	ctx.NavigateBack(fmt.Sprintf("Successfully deleted user %d.", id))
 }
 
 // handleDeleteGroup processes the group deletion action.
@@ -223,8 +223,10 @@ func (m *ConfirmMenu) handleDeleteGroup(ctx *interaction.Context, idStr string, 
 		return
 	}
 
+	ctx.NavigateBack(fmt.Sprintf("Successfully deleted group %d.", id))
+
 	// Log the deletion
-	go m.layout.db.Model().Activity().Log(ctx.Context(), &types.ActivityLog{
+	m.layout.db.Model().Activity().Log(ctx.Context(), &types.ActivityLog{
 		ActivityTarget: types.ActivityTarget{
 			GroupID: id,
 		},
@@ -235,6 +237,4 @@ func (m *ConfirmMenu) handleDeleteGroup(ctx *interaction.Context, idStr string, 
 			"reason": reason,
 		},
 	})
-
-	ctx.NavigateBack(fmt.Sprintf("Successfully deleted group %d.", id))
 }

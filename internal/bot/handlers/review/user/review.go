@@ -396,7 +396,7 @@ func (m *ReviewMenu) handleNavigateUser(ctx *interaction.Context, s *session.Ses
 	ctx.Reload(fmt.Sprintf("Navigated to %s user.", direction))
 
 	// Log the view action
-	go m.layout.db.Model().Activity().Log(ctx.Context(), &types.ActivityLog{
+	m.layout.db.Model().Activity().Log(ctx.Context(), &types.ActivityLog{
 		ActivityTarget: types.ActivityTarget{
 			UserID: user.ID,
 		},
@@ -428,20 +428,6 @@ func (m *ReviewMenu) handleConfirmUser(ctx *interaction.Context, s *session.Sess
 		return
 	}
 
-	// Log the confirm action
-	go m.layout.db.Model().Activity().Log(ctx.Context(), &types.ActivityLog{
-		ActivityTarget: types.ActivityTarget{
-			UserID: user.ID,
-		},
-		ReviewerID:        reviewerID,
-		ActivityType:      enum.ActivityTypeUserConfirmed,
-		ActivityTimestamp: time.Now(),
-		Details: map[string]any{
-			"reasons":    user.Reasons.Messages(),
-			"confidence": user.Confidence,
-		},
-	})
-
 	// Get the number of flagged users left to review
 	flaggedCount, err := m.layout.db.Model().User().GetFlaggedUsersCount(ctx.Context())
 	if err != nil {
@@ -454,6 +440,27 @@ func (m *ReviewMenu) handleConfirmUser(ctx *interaction.Context, s *session.Sess
 	session.UnsavedUserReasons.Delete(s)
 
 	ctx.Reload(fmt.Sprintf("User confirmed. %d users left to review.", flaggedCount))
+
+	// Add or update the user in the D1 database
+	if err := m.layout.d1Client.AddConfirmedUser(ctx.Context(), user); err != nil {
+		m.layout.logger.Error("Failed to add confirmed user to D1 database",
+			zap.Error(err),
+			zap.Uint64("user_id", user.ID))
+	}
+
+	// Log the confirm action
+	m.layout.db.Model().Activity().Log(ctx.Context(), &types.ActivityLog{
+		ActivityTarget: types.ActivityTarget{
+			UserID: user.ID,
+		},
+		ReviewerID:        reviewerID,
+		ActivityType:      enum.ActivityTypeUserConfirmed,
+		ActivityTimestamp: time.Now(),
+		Details: map[string]any{
+			"reasons":    user.Reasons.Messages(),
+			"confidence": user.Confidence,
+		},
+	})
 }
 
 // handleClearUser removes a user from the flagged state and logs the action.
@@ -477,17 +484,6 @@ func (m *ReviewMenu) handleClearUser(ctx *interaction.Context, s *session.Sessio
 		return
 	}
 
-	// Log the clear action
-	go m.layout.db.Model().Activity().Log(ctx.Context(), &types.ActivityLog{
-		ActivityTarget: types.ActivityTarget{
-			UserID: user.ID,
-		},
-		ReviewerID:        reviewerID,
-		ActivityType:      enum.ActivityTypeUserCleared,
-		ActivityTimestamp: time.Now(),
-		Details:           map[string]any{},
-	})
-
 	// Get the number of flagged users left to review
 	flaggedCount, err := m.layout.db.Model().User().GetFlaggedUsersCount(ctx.Context())
 	if err != nil {
@@ -500,6 +496,24 @@ func (m *ReviewMenu) handleClearUser(ctx *interaction.Context, s *session.Sessio
 	session.UnsavedUserReasons.Delete(s)
 
 	ctx.Reload(fmt.Sprintf("User cleared. %d users left to review.", flaggedCount))
+
+	// Remove the user from the D1 database
+	if err := m.layout.d1Client.RemoveUser(ctx.Context(), user.ID); err != nil {
+		m.layout.logger.Error("Failed to remove cleared user from D1 database",
+			zap.Error(err),
+			zap.Uint64("user_id", user.ID))
+	}
+
+	// Log the clear action
+	m.layout.db.Model().Activity().Log(ctx.Context(), &types.ActivityLog{
+		ActivityTarget: types.ActivityTarget{
+			UserID: user.ID,
+		},
+		ReviewerID:        reviewerID,
+		ActivityType:      enum.ActivityTypeUserCleared,
+		ActivityTimestamp: time.Now(),
+		Details:           map[string]any{},
+	})
 }
 
 // handleOpenAIChat handles the button to open the AI chat for the current user.
@@ -897,13 +911,20 @@ func (m *ReviewMenu) fetchNewTarget(ctx *interaction.Context, s *session.Session
 	userSlice := []*types.ReviewUser{user}
 
 	// Process friends if friend reason doesn't exist
+	var confirmedFriendsMap, flaggedFriendsMap map[uint64]map[uint64]*types.ReviewUser
 	if _, hasFriendReason := user.Reasons[enum.UserReasonTypeFriend]; !hasFriendReason {
-		m.layout.friendChecker.ProcessUsers(ctx.Context(), userSlice, reasonsMap)
+		confirmedFriendsMap, flaggedFriendsMap = m.layout.friendChecker.ProcessUsers(ctx.Context(), userSlice, reasonsMap)
+	} else {
+		// Initialize empty maps if friend processing is skipped
+		confirmedFriendsMap = make(map[uint64]map[uint64]*types.ReviewUser)
+		flaggedFriendsMap = make(map[uint64]map[uint64]*types.ReviewUser)
 	}
 
 	// Process groups if group reason doesn't exist
 	if _, hasGroupReason := user.Reasons[enum.UserReasonTypeGroup]; !hasGroupReason {
-		m.layout.groupChecker.ProcessUsers(ctx.Context(), userSlice, reasonsMap)
+		m.layout.groupChecker.ProcessUsers(
+			ctx.Context(), userSlice, reasonsMap, confirmedFriendsMap, flaggedFriendsMap,
+		)
 	}
 
 	// Update user with any new reasons from friend/group checking
@@ -1048,7 +1069,7 @@ func (m *ReviewMenu) handleGenerateProfileReasonModalSubmit(ctx *interaction.Con
 
 	// Generate detailed reason using the user reason analyzer
 	m.layout.userReasonAnalyzer.ProcessFlaggedUsers(
-		ctx.Context(), userReasonRequest, translatedInfos, originalInfos, reasonsMap,
+		ctx.Context(), userReasonRequest, translatedInfos, originalInfos, reasonsMap, 0,
 	)
 
 	// Check if a reason was generated

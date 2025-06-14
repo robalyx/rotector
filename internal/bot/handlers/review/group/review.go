@@ -489,8 +489,15 @@ func (m *ReviewMenu) handleConfirmGroup(ctx *interaction.Context, s *session.Ses
 		return
 	}
 
+	// Clear current group and load next one
+	m.UpdateCounters(s)
+	session.GroupTarget.Delete(s)
+	session.UnsavedGroupReasons.Delete(s)
+
+	ctx.Reload("Group confirmed.")
+
 	// Log the confirm action
-	go m.layout.db.Model().Activity().Log(ctx.Context(), &types.ActivityLog{
+	m.layout.db.Model().Activity().Log(ctx.Context(), &types.ActivityLog{
 		ActivityTarget: types.ActivityTarget{
 			GroupID: group.ID,
 		},
@@ -501,13 +508,6 @@ func (m *ReviewMenu) handleConfirmGroup(ctx *interaction.Context, s *session.Ses
 			"reasons": group.Reasons.Messages(),
 		},
 	})
-
-	// Clear current group and load next one
-	m.UpdateCounters(s)
-	session.GroupTarget.Delete(s)
-	session.UnsavedGroupReasons.Delete(s)
-
-	ctx.Reload("Group confirmed.")
 }
 
 // handleClearGroup removes a group from the flagged state and logs the action.
@@ -531,8 +531,15 @@ func (m *ReviewMenu) handleClearGroup(ctx *interaction.Context, s *session.Sessi
 		return
 	}
 
+	// Clear current group and load next one
+	m.UpdateCounters(s)
+	session.GroupTarget.Delete(s)
+	session.UnsavedGroupReasons.Delete(s)
+
+	ctx.Reload("Group cleared.")
+
 	// Log the clear action
-	go m.layout.db.Model().Activity().Log(ctx.Context(), &types.ActivityLog{
+	m.layout.db.Model().Activity().Log(ctx.Context(), &types.ActivityLog{
 		ActivityTarget: types.ActivityTarget{
 			GroupID: group.ID,
 		},
@@ -541,13 +548,6 @@ func (m *ReviewMenu) handleClearGroup(ctx *interaction.Context, s *session.Sessi
 		ActivityTimestamp: time.Now(),
 		Details:           map[string]any{},
 	})
-
-	// Clear current group and load next one
-	m.UpdateCounters(s)
-	session.GroupTarget.Delete(s)
-	session.UnsavedGroupReasons.Delete(s)
-
-	ctx.Reload("Group cleared.")
 }
 
 // handleReasonSelection processes reason management dropdown selections.

@@ -236,8 +236,8 @@ const (
 
 // User Review Menu - Groups Viewer.
 const (
-	GroupsPerPage     = 8
-	GroupsGridColumns = 4
+	GroupsPerPage     = 6
+	GroupsGridColumns = 3
 	GroupsGridRows    = 2
 )
 
