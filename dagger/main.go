@@ -18,6 +18,7 @@ func (m *Rotector) BuildContainer(
 	ctx context.Context,
 	// Source code directory
 	// +required
+	// +ignore=["assets/gif", "logs", "exports", ".git", ".history", ".rotector"]
 	src *dagger.Directory,
 	// Platform to build for
 	// +optional
@@ -100,6 +101,7 @@ func (m *Rotector) Publish(
 	ctx context.Context,
 	// Source code directory
 	// +required
+	// +ignore=["assets/gif", "logs", "exports", ".git", ".history", ".rotector"]
 	src *dagger.Directory,
 	// Docker image name (e.g. "username/repo:tag")
 	// +required
@@ -149,6 +151,7 @@ func (m *Rotector) Run(
 	ctx context.Context,
 	// Source code directory
 	// +required
+	// +ignore=["assets/gif", "logs", "exports", ".git", ".history", ".rotector"]
 	src *dagger.Directory,
 	// Config directory path
 	// +required
