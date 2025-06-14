@@ -8,7 +8,6 @@ import (
 
 	"github.com/robalyx/rotector/internal/database/types"
 	"github.com/robalyx/rotector/internal/progress"
-	"github.com/robalyx/rotector/internal/queue"
 	"github.com/robalyx/rotector/internal/roblox/checker"
 	"github.com/robalyx/rotector/internal/roblox/fetcher"
 	"github.com/robalyx/rotector/internal/setup"
@@ -38,7 +37,6 @@ type Worker struct {
 	bar             *progress.Bar
 	userFetcher     *fetcher.UserFetcher
 	userChecker     *checker.UserChecker
-	d1Client        *queue.D1Client
 	logger          *zap.Logger
 	batchSize       int
 	lastProcessTime time.Time
@@ -54,7 +52,6 @@ func New(app *setup.App, bar *progress.Bar, logger *zap.Logger) *Worker {
 		bar:         bar,
 		userFetcher: userFetcher,
 		userChecker: userChecker,
-		d1Client:    queue.NewD1Client(app, logger),
 		logger:      logger.Named("queue_worker"),
 		batchSize:   app.Config.Worker.BatchSizes.QueueItems,
 	}
@@ -69,7 +66,7 @@ func (w *Worker) Start(ctx context.Context) {
 	w.lastProcessTime = time.Now()
 
 	// Cleanup queue on startup
-	if err := w.d1Client.CleanupQueue(
+	if err := w.app.D1Client.CleanupQueue(
 		ctx,
 		1*time.Hour,    // Reset items stuck processing for 1 hour
 		7*24*time.Hour, // Remove processed items older than 7 days
@@ -78,7 +75,7 @@ func (w *Worker) Start(ctx context.Context) {
 	}
 
 	// Cleanup IP tracking records on startup
-	if err := w.d1Client.CleanupIPTracking(
+	if err := w.app.D1Client.CleanupIPTracking(
 		ctx,
 		30*24*time.Hour, // Remove IP tracking records older than 30 days
 	); err != nil {
@@ -148,14 +145,14 @@ func (w *Worker) Start(ctx context.Context) {
 
 		// Step 4: Mark users as processed (75%)
 		w.bar.SetStepMessage("Marking as processed", 75)
-		if err := w.d1Client.MarkAsProcessed(ctx, batchData.ProcessIDs, processResult.FlaggedStatus); err != nil {
+		if err := w.app.D1Client.MarkAsProcessed(ctx, batchData.ProcessIDs, processResult.FlaggedStatus); err != nil {
 			w.logger.Error("Failed to mark users as processed", zap.Error(err))
 		}
 
 		// Step 5: Add flagged users to D1 database (85%)
 		w.bar.SetStepMessage("Adding flagged users to D1", 85)
 		if len(processResult.FlaggedUsers) > 0 {
-			if err := w.d1Client.AddFlaggedUsers(ctx, processResult.FlaggedUsers); err != nil {
+			if err := w.app.D1Client.AddFlaggedUsers(ctx, processResult.FlaggedUsers); err != nil {
 				w.logger.Error("Failed to add flagged users to D1", zap.Error(err))
 			}
 		}
@@ -186,7 +183,7 @@ func (w *Worker) shouldProcessBatch(ctx context.Context) (bool, time.Duration) {
 	}
 
 	// Check queue stats to see how many items are available
-	stats, err := w.d1Client.GetQueueStats(ctx)
+	stats, err := w.app.D1Client.GetQueueStats(ctx)
 	if err != nil {
 		w.logger.Error("Failed to get queue stats, proceeding with processing", zap.Error(err))
 		return true, 0
@@ -234,7 +231,7 @@ func (w *Worker) updateIPTrackingFlaggedStatus(
 
 	// Update IP tracking table if we have any users to update
 	if len(allUserFlaggedStatus) > 0 {
-		return w.d1Client.UpdateIPTrackingUserFlagged(ctx, allUserFlaggedStatus)
+		return w.app.D1Client.UpdateIPTrackingUserFlagged(ctx, allUserFlaggedStatus)
 	}
 
 	return nil
@@ -243,7 +240,7 @@ func (w *Worker) updateIPTrackingFlaggedStatus(
 // getBatchForProcessing handles getting and preparing a batch of users for processing.
 func (w *Worker) getBatchForProcessing(ctx context.Context) (*BatchData, error) {
 	// Get next batch of unprocessed users
-	userBatch, err := w.d1Client.GetNextBatch(ctx, w.batchSize)
+	userBatch, err := w.app.D1Client.GetNextBatch(ctx, w.batchSize)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get next batch: %w", err)
 	}
@@ -254,7 +251,7 @@ func (w *Worker) getBatchForProcessing(ctx context.Context) (*BatchData, error) 
 
 	// Get existing users from database
 	existingUsers, err := w.app.DB.Model().User().GetUsersByIDs(
-		ctx, userBatch.UserIDs, types.UserFieldBasic,
+		ctx, userBatch.UserIDs, types.UserFieldAll,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to check existing users: %w", err)
@@ -292,13 +289,13 @@ func (w *Worker) getBatchForProcessing(ctx context.Context) (*BatchData, error) 
 		}
 
 		// Mark users as processed and flagged
-		if err := w.d1Client.MarkAsProcessed(ctx, batchData.SkipAndFlagIDs, flaggedMap); err != nil {
+		if err := w.app.D1Client.MarkAsProcessed(ctx, batchData.SkipAndFlagIDs, flaggedMap); err != nil {
 			w.logger.Error("Failed to mark users as processed and flagged", zap.Error(err))
 		}
 
 		// Add existing flagged users to D1 database
 		if len(existingFlaggedUsers) > 0 {
-			if err := w.d1Client.AddFlaggedUsers(ctx, existingFlaggedUsers); err != nil {
+			if err := w.app.D1Client.AddFlaggedUsers(ctx, existingFlaggedUsers); err != nil {
 				w.logger.Error("Failed to add existing flagged users to D1", zap.Error(err))
 			}
 		}

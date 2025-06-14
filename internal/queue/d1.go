@@ -46,12 +46,12 @@ type D1Client struct {
 }
 
 // NewD1Client creates a new D1 client.
-func NewD1Client(app *setup.App, logger *zap.Logger) *D1Client {
+func NewD1Client(cfg *config.Config, logger *zap.Logger) *D1Client {
 	api := NewCloudflareAPI(
-		app.Config.Worker.Cloudflare.AccountID,
-		app.Config.Worker.Cloudflare.DatabaseID,
-		app.Config.Worker.Cloudflare.APIToken,
-		app.Config.Worker.Cloudflare.APIEndpoint,
+		cfg.Worker.Cloudflare.AccountID,
+		cfg.Worker.Cloudflare.DatabaseID,
+		cfg.Worker.Cloudflare.APIToken,
+		cfg.Worker.Cloudflare.APIEndpoint,
 	)
 
 	return &D1Client{

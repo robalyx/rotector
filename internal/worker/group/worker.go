@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"fmt"
 	"time"
 
 	"github.com/jaxron/roapi.go/pkg/api"
@@ -12,6 +11,7 @@ import (
 	"github.com/robalyx/rotector/internal/database"
 	"github.com/robalyx/rotector/internal/database/types"
 	"github.com/robalyx/rotector/internal/progress"
+	"github.com/robalyx/rotector/internal/queue"
 	"github.com/robalyx/rotector/internal/roblox/checker"
 	"github.com/robalyx/rotector/internal/roblox/fetcher"
 	"github.com/robalyx/rotector/internal/setup"
@@ -25,18 +25,20 @@ const MaxGroupsPerBatch = 10
 // Worker processes group member lists by checking each member's
 // status and analyzing their profiles for inappropriate content.
 type Worker struct {
-	db               database.Client
-	roAPI            *api.API
-	bar              *progress.Bar
-	userFetcher      *fetcher.UserFetcher
-	userChecker      *checker.UserChecker
-	reporter         *core.StatusReporter
-	logger           *zap.Logger
-	batchSize        int
-	flaggedThreshold int
-	currentGroupID   uint64
-	currentCursor    string
-	pendingUsers     []*types.ReviewUser
+	db                        database.Client
+	roAPI                     *api.API
+	d1Client                  *queue.D1Client
+	bar                       *progress.Bar
+	userFetcher               *fetcher.UserFetcher
+	userChecker               *checker.UserChecker
+	reporter                  *core.StatusReporter
+	thresholdChecker          *core.ThresholdChecker
+	pendingUsers              []*types.ReviewUser
+	logger                    *zap.Logger
+	batchSize                 int
+	currentGroupID            uint64
+	currentCursor             string
+	batchAttemptsWithoutFlags int
 }
 
 // New creates a new group worker.
@@ -44,18 +46,27 @@ func New(app *setup.App, bar *progress.Bar, logger *zap.Logger) *Worker {
 	userFetcher := fetcher.NewUserFetcher(app, logger)
 	userChecker := checker.NewUserChecker(app, userFetcher, logger)
 	reporter := core.NewStatusReporter(app.StatusClient, "group", logger)
+	thresholdChecker := core.NewThresholdChecker(
+		app.DB,
+		app.Config.Worker.ThresholdLimits.FlaggedUsers,
+		bar,
+		reporter,
+		logger.Named("group_worker"),
+		"group worker",
+	)
 
 	return &Worker{
 		db:               app.DB,
 		roAPI:            app.RoAPI,
+		d1Client:         app.D1Client,
 		bar:              bar,
 		userFetcher:      userFetcher,
 		userChecker:      userChecker,
 		reporter:         reporter,
+		thresholdChecker: thresholdChecker,
+		pendingUsers:     make([]*types.ReviewUser, 0),
 		logger:           logger.Named("group_worker"),
 		batchSize:        app.Config.Worker.BatchSizes.GroupUsers,
-		flaggedThreshold: app.Config.Worker.ThresholdLimits.FlaggedUsers,
-		pendingUsers:     make([]*types.ReviewUser, 0),
 	}
 }
 
@@ -78,35 +89,15 @@ func (w *Worker) Start(ctx context.Context) {
 		w.bar.Reset()
 		w.reporter.SetHealthy(true)
 
-		// Check flagged users count
-		flaggedCount, err := w.db.Model().User().GetFlaggedUsersCount(ctx)
+		// Check flagged users threshold
+		thresholdExceeded, err := w.thresholdChecker.CheckThreshold(ctx)
 		if err != nil {
-			w.logger.Error("Error getting flagged users count", zap.Error(err))
-			w.reporter.SetHealthy(false)
-
 			if !utils.ErrorSleep(ctx, 5*time.Minute, w.logger, "group worker") {
 				return
 			}
 			continue
 		}
-
-		// If above threshold, pause processing
-		if flaggedCount >= w.flaggedThreshold {
-			w.bar.SetStepMessage(fmt.Sprintf(
-				"Paused - %d flagged users exceeds threshold of %d",
-				flaggedCount, w.flaggedThreshold,
-			), 0)
-			w.reporter.UpdateStatus(fmt.Sprintf(
-				"Paused - %d flagged users exceeds threshold",
-				flaggedCount,
-			), 0)
-			w.logger.Info("Pausing worker - flagged users threshold exceeded",
-				zap.Int("flaggedCount", flaggedCount),
-				zap.Int("threshold", w.flaggedThreshold))
-
-			if !utils.ThresholdSleep(ctx, 5*time.Minute, w.logger, "group worker") {
-				return
-			}
+		if thresholdExceeded {
 			continue
 		}
 
@@ -146,9 +137,45 @@ func (w *Worker) Start(ctx context.Context) {
 		if len(userInfos) > w.batchSize {
 			usersToProcess = userInfos[:w.batchSize]
 		}
-		w.userChecker.ProcessUsers(ctx, usersToProcess, nil)
+		processResult := w.userChecker.ProcessUsers(ctx, usersToProcess, nil)
 
-		// Step 4: Prepare for next batch
+		// Step 4: Add flagged users to D1 database (95%)
+		w.bar.SetStepMessage("Adding flagged users to D1", 95)
+		w.reporter.UpdateStatus("Adding flagged users to D1", 95)
+		if len(processResult.FlaggedUsers) > 0 {
+			if err := w.d1Client.AddFlaggedUsers(ctx, processResult.FlaggedUsers); err != nil {
+				w.logger.Error("Failed to add flagged users to D1", zap.Error(err))
+			}
+			// Reset counter when we find flagged users
+			w.batchAttemptsWithoutFlags = 0
+		} else {
+			// Increment counter when no users are flagged
+			w.batchAttemptsWithoutFlags++
+			w.logger.Info("No users flagged in this batch",
+				zap.Uint64("groupID", w.currentGroupID),
+				zap.Int("batchAttemptsWithoutFlags", w.batchAttemptsWithoutFlags),
+				zap.Int("processedUsers", len(usersToProcess)))
+
+			// If we've had 1 batch without flags, move to next group
+			if w.batchAttemptsWithoutFlags >= 1 {
+				w.logger.Info("Moving to next group after 1 batch without flagged users",
+					zap.Uint64("currentGroupID", w.currentGroupID),
+					zap.Int("batchAttemptsWithoutFlags", w.batchAttemptsWithoutFlags))
+
+				if err := w.moveToNextGroup(ctx); err != nil {
+					w.reporter.SetHealthy(false)
+					if !utils.ErrorSleep(ctx, 5*time.Minute, w.logger, "group worker") {
+						return
+					}
+					continue
+				}
+				// Clear pending users since we're moving to a new group
+				w.pendingUsers = nil
+				continue
+			}
+		}
+
+		// Step 5: Prepare for next batch
 		if len(userInfos) > w.batchSize {
 			w.pendingUsers = userInfos[w.batchSize:]
 		} else {
@@ -213,6 +240,7 @@ func (w *Worker) moveToNextGroup(ctx context.Context) error {
 	// Reset state
 	w.currentGroupID = 0
 	w.currentCursor = ""
+	w.batchAttemptsWithoutFlags = 0
 
 	// Get next group
 	nextGroup, err := w.db.Model().Group().GetGroupToScan(ctx)
@@ -278,9 +306,10 @@ func (w *Worker) collectUserIDsFromGroup(ctx context.Context) ([]uint64, bool, e
 	if groupUsers.NextPageCursor != nil {
 		w.currentCursor = *groupUsers.NextPageCursor
 	} else {
-		// Reset state if no more pages - will get next group on next call
-		w.currentGroupID = 0
-		w.currentCursor = ""
+		// No more pages for this group, move to next group
+		if err := w.moveToNextGroup(ctx); err != nil {
+			return nil, false, err
+		}
 	}
 
 	return userIDs, true, nil

@@ -24,7 +24,7 @@ type Layout struct {
 func New(app *setup.App) *Layout {
 	l := &Layout{
 		db:               app.DB,
-		d1Client:         queue.NewD1Client(app, app.Logger),
+		d1Client:         app.D1Client,
 		userFetcher:      fetcher.NewUserFetcher(app, app.Logger),
 		groupFetcher:     fetcher.NewGroupFetcher(app.RoAPI, app.Logger),
 		thumbnailFetcher: fetcher.NewThumbnailFetcher(app.RoAPI, app.Logger),

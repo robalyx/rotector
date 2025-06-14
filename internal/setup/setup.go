@@ -13,6 +13,7 @@ import (
 	aiClient "github.com/robalyx/rotector/internal/ai/client"
 	"github.com/robalyx/rotector/internal/database"
 	"github.com/robalyx/rotector/internal/database/migrations"
+	"github.com/robalyx/rotector/internal/queue"
 	"github.com/robalyx/rotector/internal/redis"
 	"github.com/robalyx/rotector/internal/setup/client"
 	"github.com/robalyx/rotector/internal/setup/config"
@@ -58,6 +59,7 @@ type App struct {
 	RoAPI        *api.API            // RoAPI HTTP client
 	RedisManager *redis.Manager      // Redis connection manager
 	StatusClient rueidis.Client      // Redis client for worker status reporting
+	D1Client     *queue.D1Client     // Cloudflare D1 client for queue operations
 	LogManager   *telemetry.Manager  // Log management system
 	pprofServer  *pprofServer        // Debug HTTP server for pprof
 	middlewares  *client.Middlewares // HTTP client middleware instances
@@ -129,6 +131,9 @@ func InitializeApp(ctx context.Context, serviceType ServiceType, logDir string) 
 		return nil, err
 	}
 
+	// Initialize D1 client for queue operations
+	d1Client := queue.NewD1Client(cfg, logger)
+
 	// Start pprof server if enabled
 	var pprofSrv *pprofServer
 	if cfg.Common.Debug.EnablePprof {
@@ -151,6 +156,7 @@ func InitializeApp(ctx context.Context, serviceType ServiceType, logDir string) 
 		RoAPI:        roAPI,
 		RedisManager: redisManager,
 		StatusClient: statusClient,
+		D1Client:     d1Client,
 		LogManager:   logManager,
 		pprofServer:  pprofSrv,
 		middlewares:  middlewares,
