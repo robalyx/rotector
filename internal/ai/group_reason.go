@@ -25,6 +25,8 @@ import (
 const (
 	// MaxGroups is the maximum number of groups to include in analysis.
 	MaxGroups = 6
+	// GroupReasonMaxRetries is the maximum number of retry attempts for group reason analysis.
+	GroupReasonMaxRetries = 3
 )
 
 // GroupSummary contains a summary of a group's data.
@@ -146,16 +148,25 @@ func (a *GroupReasonAnalyzer) GenerateGroupReasons(
 
 	// Process group requests
 	results := make(map[uint64]string)
-	a.ProcessGroupRequests(ctx, groupRequests, results)
+	a.ProcessGroupRequests(ctx, groupRequests, results, 0)
 
 	return results
 }
 
 // ProcessGroupRequests processes group analysis requests with retry logic for invalid users.
 func (a *GroupReasonAnalyzer) ProcessGroupRequests(
-	ctx context.Context, groupRequests map[uint64]UserGroupRequest, results map[uint64]string,
+	ctx context.Context, groupRequests map[uint64]UserGroupRequest, results map[uint64]string, retryCount int,
 ) {
 	if len(groupRequests) == 0 {
+		return
+	}
+
+	// Prevent infinite retries
+	if retryCount >= GroupReasonMaxRetries {
+		a.logger.Warn("Maximum retries reached for group analysis, skipping remaining users",
+			zap.Int("retryCount", retryCount),
+			zap.Int("maxRetries", GroupReasonMaxRetries),
+			zap.Int("remainingUsers", len(groupRequests)))
 		return
 	}
 
@@ -239,14 +250,16 @@ func (a *GroupReasonAnalyzer) ProcessGroupRequests(
 	// Process invalid requests if any
 	if len(invalidRequests) > 0 {
 		a.logger.Info("Retrying analysis for invalid results",
-			zap.Int("invalidUsers", len(invalidRequests)))
+			zap.Int("invalidUsers", len(invalidRequests)),
+			zap.Int("retryCount", retryCount))
 
-		a.ProcessGroupRequests(ctx, invalidRequests, results)
+		a.ProcessGroupRequests(ctx, invalidRequests, results, retryCount+1)
 	}
 
 	a.logger.Info("Finished processing group requests",
 		zap.Int("totalRequests", len(groupRequests)),
-		zap.Int("retriedUsers", len(invalidRequests)))
+		zap.Int("retriedUsers", len(invalidRequests)),
+		zap.Int("retryCount", retryCount))
 }
 
 // processGroupBatch handles the AI analysis for a batch of group data.

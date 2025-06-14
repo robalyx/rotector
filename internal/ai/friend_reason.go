@@ -25,6 +25,8 @@ import (
 const (
 	// MaxFriends is the maximum number of friends to include in analysis.
 	MaxFriends = 10
+	// FriendReasonMaxRetries is the maximum number of retry attempts for friend reason analysis.
+	FriendReasonMaxRetries = 3
 )
 
 // FriendSummary contains a summary of a friend's data.
@@ -146,16 +148,25 @@ func (a *FriendReasonAnalyzer) GenerateFriendReasons(
 
 	// Process friend requests
 	results := make(map[uint64]string)
-	a.ProcessFriendRequests(ctx, friendRequests, results)
+	a.ProcessFriendRequests(ctx, friendRequests, results, 0)
 
 	return results
 }
 
 // ProcessFriendRequests processes friend analysis requests with retry logic for invalid users.
 func (a *FriendReasonAnalyzer) ProcessFriendRequests(
-	ctx context.Context, friendRequests map[uint64]UserFriendRequest, results map[uint64]string,
+	ctx context.Context, friendRequests map[uint64]UserFriendRequest, results map[uint64]string, retryCount int,
 ) {
 	if len(friendRequests) == 0 {
+		return
+	}
+
+	// Prevent infinite retries
+	if retryCount >= FriendReasonMaxRetries {
+		a.logger.Warn("Maximum retries reached for friend analysis, skipping remaining users",
+			zap.Int("retryCount", retryCount),
+			zap.Int("maxRetries", FriendReasonMaxRetries),
+			zap.Int("remainingUsers", len(friendRequests)))
 		return
 	}
 
@@ -239,14 +250,16 @@ func (a *FriendReasonAnalyzer) ProcessFriendRequests(
 	// Process invalid requests if any
 	if len(invalidRequests) > 0 {
 		a.logger.Info("Retrying analysis for invalid results",
-			zap.Int("invalidUsers", len(invalidRequests)))
+			zap.Int("invalidUsers", len(invalidRequests)),
+			zap.Int("retryCount", retryCount))
 
-		a.ProcessFriendRequests(ctx, invalidRequests, results)
+		a.ProcessFriendRequests(ctx, invalidRequests, results, retryCount+1)
 	}
 
 	a.logger.Info("Finished processing friend requests",
 		zap.Int("totalRequests", len(friendRequests)),
-		zap.Int("retriedUsers", len(invalidRequests)))
+		zap.Int("retriedUsers", len(invalidRequests)),
+		zap.Int("retryCount", retryCount))
 }
 
 // processFriendBatch handles the AI analysis for a batch of friend data.

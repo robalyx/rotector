@@ -23,6 +23,11 @@ import (
 	"golang.org/x/sync/semaphore"
 )
 
+const (
+	// UserReasonMaxRetries is the maximum number of retry attempts for user reason analysis.
+	UserReasonMaxRetries = 2
+)
+
 // UserReasonRequest contains the flagged user data and the hinting needed.
 type UserReasonRequest struct {
 	User              *UserSummary `json:"user"`                        // User summary data
@@ -90,8 +95,18 @@ func NewUserReasonAnalyzer(app *setup.App, logger *zap.Logger) *UserReasonAnalyz
 func (a *UserReasonAnalyzer) ProcessFlaggedUsers(
 	ctx context.Context, userReasonRequests map[uint64]UserReasonRequest, translatedInfos map[string]*types.ReviewUser,
 	originalInfos map[string]*types.ReviewUser, reasonsMap map[uint64]types.Reasons[enum.UserReasonType],
+	retryCount int,
 ) {
 	if len(userReasonRequests) == 0 {
+		return
+	}
+
+	// Prevent infinite retries
+	if retryCount >= UserReasonMaxRetries {
+		a.logger.Warn("Maximum retries reached for user reason analysis, skipping remaining users",
+			zap.Int("retryCount", retryCount),
+			zap.Int("maxRetries", UserReasonMaxRetries),
+			zap.Int("remainingUsers", len(userReasonRequests)))
 		return
 	}
 
@@ -176,15 +191,15 @@ func (a *UserReasonAnalyzer) ProcessFlaggedUsers(
 	// Process invalid requests if any
 	if len(invalidRequests) > 0 {
 		a.logger.Info("Retrying analysis for invalid results",
-			zap.Int("invalidUsers", len(invalidRequests)))
+			zap.Int("invalidUsers", len(invalidRequests)),
+			zap.Int("retryCount", retryCount))
 
-		a.ProcessFlaggedUsers(ctx, invalidRequests, translatedInfos, originalInfos, reasonsMap)
-		return
+		a.ProcessFlaggedUsers(ctx, invalidRequests, translatedInfos, originalInfos, reasonsMap, retryCount+1)
 	}
 
 	a.logger.Info("Finished processing flagged users for detailed reasons",
 		zap.Int("flaggedUsers", len(userReasonRequests)),
-		zap.Int("retriedUsers", len(invalidRequests)))
+		zap.Int("retryAttempt", retryCount))
 }
 
 // processReasonBatch handles the AI analysis for a batch of flagged users.

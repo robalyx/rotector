@@ -27,6 +27,8 @@ import (
 const (
 	// MaxOutfitThemes is the maximum number of outfit themes to include in analysis.
 	MaxOutfitThemes = 10
+	// OutfitReasonMaxRetries is the maximum number of retry attempts for outfit reason analysis.
+	OutfitReasonMaxRetries = 3
 )
 
 // OutfitThemeSummary contains a summary of a detected outfit theme.
@@ -179,16 +181,25 @@ func (a *OutfitReasonAnalyzer) GenerateOutfitReasons(
 
 	// Process outfit requests
 	results := make(map[uint64]string)
-	a.ProcessOutfitRequests(ctx, outfitRequests, results)
+	a.ProcessOutfitRequests(ctx, outfitRequests, results, 0)
 
 	return results
 }
 
 // ProcessOutfitRequests processes outfit analysis requests with retry logic for invalid users.
 func (a *OutfitReasonAnalyzer) ProcessOutfitRequests(
-	ctx context.Context, outfitRequests map[uint64]UserOutfitRequest, results map[uint64]string,
+	ctx context.Context, outfitRequests map[uint64]UserOutfitRequest, results map[uint64]string, retryCount int,
 ) {
 	if len(outfitRequests) == 0 {
+		return
+	}
+
+	// Prevent infinite retries
+	if retryCount >= OutfitReasonMaxRetries {
+		a.logger.Warn("Maximum retries reached for outfit analysis, skipping remaining users",
+			zap.Int("retryCount", retryCount),
+			zap.Int("maxRetries", OutfitReasonMaxRetries),
+			zap.Int("remainingUsers", len(outfitRequests)))
 		return
 	}
 
@@ -272,14 +283,16 @@ func (a *OutfitReasonAnalyzer) ProcessOutfitRequests(
 	// Process invalid requests if any
 	if len(invalidRequests) > 0 {
 		a.logger.Info("Retrying analysis for invalid results",
-			zap.Int("invalidUsers", len(invalidRequests)))
+			zap.Int("invalidUsers", len(invalidRequests)),
+			zap.Int("retryCount", retryCount))
 
-		a.ProcessOutfitRequests(ctx, invalidRequests, results)
+		a.ProcessOutfitRequests(ctx, invalidRequests, results, retryCount+1)
 	}
 
 	a.logger.Info("Finished processing outfit requests",
 		zap.Int("totalRequests", len(outfitRequests)),
-		zap.Int("retriedUsers", len(invalidRequests)))
+		zap.Int("retriedUsers", len(invalidRequests)),
+		zap.Int("retryCount", retryCount))
 }
 
 // processOutfitBatch handles the AI analysis for a batch of outfit data.
