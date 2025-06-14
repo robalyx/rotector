@@ -9,13 +9,15 @@ import (
 
 	"github.com/robalyx/rotector/internal/database/types"
 	"github.com/robalyx/rotector/internal/database/types/enum"
-	"github.com/robalyx/rotector/internal/setup"
+	"github.com/robalyx/rotector/internal/setup/config"
 	"go.uber.org/zap"
 )
 
 const (
 	// MaxQueueBatchSize is the maximum number of users that can be queued in a single batch.
-	MaxQueueBatchSize = 100
+	MaxQueueBatchSize = 50
+	// MaxFlaggedUsersBatchSize is the maximum number of flagged users that can be inserted in a single batch.
+	MaxFlaggedUsersBatchSize = 20
 )
 
 // Stats represents queue statistics.
@@ -463,64 +465,147 @@ func (c *D1Client) AddFlaggedUsers(ctx context.Context, flaggedUsers map[uint64]
 		return nil
 	}
 
-	// Build batch insert query
+	// Convert map to slice
+	userIDs := make([]uint64, 0, len(flaggedUsers))
+	for userID := range flaggedUsers {
+		userIDs = append(userIDs, userID)
+	}
+
+	totalProcessed := 0
+
+	// Process users in batches
+	for i := 0; i < len(userIDs); i += MaxFlaggedUsersBatchSize {
+		end := min(i+MaxFlaggedUsersBatchSize, len(userIDs))
+		batchUserIDs := userIDs[i:end]
+
+		// Build batch insert query for this batch
+		sqlStmt := `
+			INSERT OR REPLACE INTO user_flags (
+				user_id, 
+				flag_type, 
+				confidence, 
+				reasons
+			) VALUES
+		`
+
+		params := make([]any, 0, len(batchUserIDs)*4)
+
+		for j, userID := range batchUserIDs {
+			user := flaggedUsers[userID]
+
+			if j > 0 {
+				sqlStmt += ","
+			}
+			sqlStmt += "(?, ?, ?, ?)"
+
+			// Convert reasons to JSON string
+			reasonsJSON := "{}"
+			if len(user.Reasons) > 0 {
+				// Convert reasons map to the proper format
+				reasonsData := make(map[string]map[string]any)
+				for reasonType, reason := range user.Reasons {
+					reasonsData[strconv.Itoa(int(reasonType))] = map[string]any{
+						"message":    reason.Message,
+						"confidence": reason.Confidence,
+						"evidence":   reason.Evidence,
+					}
+				}
+
+				if jsonBytes, err := json.Marshal(reasonsData); err == nil {
+					reasonsJSON = string(jsonBytes)
+				}
+			}
+
+			params = append(params,
+				userID,
+				enum.UserTypeFlagged,
+				user.Confidence,
+				reasonsJSON,
+			)
+		}
+
+		// Execute the batch
+		_, err := c.api.ExecuteSQL(ctx, sqlStmt, params)
+		if err != nil {
+			return fmt.Errorf("failed to insert flagged users batch %d-%d: %w", i, end-1, err)
+		}
+
+		totalProcessed += len(batchUserIDs)
+
+		c.logger.Debug("Inserted flagged users batch",
+			zap.Int("batch_start", i),
+			zap.Int("batch_end", end-1),
+			zap.Int("batch_count", len(batchUserIDs)))
+	}
+
+	c.logger.Debug("Finished inserting flagged users into user_flags table",
+		zap.Int("total_count", totalProcessed))
+
+	return nil
+}
+
+// AddConfirmedUser inserts or updates a confirmed user in the user_flags table.
+func (c *D1Client) AddConfirmedUser(ctx context.Context, user *types.ReviewUser) error {
+	if user == nil {
+		return nil
+	}
+
+	// Convert reasons to JSON string
+	reasonsJSON := "{}"
+	if len(user.Reasons) > 0 {
+		// Convert reasons map to the proper format
+		reasonsData := make(map[string]map[string]any)
+		for reasonType, reason := range user.Reasons {
+			reasonsData[strconv.Itoa(int(reasonType))] = map[string]any{
+				"message":    reason.Message,
+				"confidence": reason.Confidence,
+				"evidence":   reason.Evidence,
+			}
+		}
+
+		if jsonBytes, err := json.Marshal(reasonsData); err == nil {
+			reasonsJSON = string(jsonBytes)
+		}
+	}
+
+	// Insert or replace the user in the user_flags table
 	sqlStmt := `
 		INSERT OR REPLACE INTO user_flags (
 			user_id, 
 			flag_type, 
 			confidence, 
 			reasons
-		) VALUES
+		) VALUES (?, ?, ?, ?)
 	`
 
-	params := make([]any, 0, len(flaggedUsers)*4)
-	userIDs := make([]uint64, 0, len(flaggedUsers))
-
-	for userID := range flaggedUsers {
-		userIDs = append(userIDs, userID)
-	}
-
-	for i, userID := range userIDs {
-		user := flaggedUsers[userID]
-
-		if i > 0 {
-			sqlStmt += ","
-		}
-		sqlStmt += "(?, ?, ?, ?)"
-
-		// Convert reasons to JSON string
-		reasonsJSON := "{}"
-		if len(user.Reasons) > 0 {
-			// Convert reasons map to the proper format
-			reasonsData := make(map[string]map[string]any)
-			for reasonType, reason := range user.Reasons {
-				reasonsData[strconv.Itoa(int(reasonType))] = map[string]any{
-					"message":    reason.Message,
-					"confidence": reason.Confidence,
-					"evidence":   reason.Evidence,
-				}
-			}
-
-			if jsonBytes, err := json.Marshal(reasonsData); err == nil {
-				reasonsJSON = string(jsonBytes)
-			}
-		}
-
-		params = append(params,
-			userID,
-			enum.UserTypeFlagged,
-			user.Confidence,
-			reasonsJSON,
-		)
-	}
-
-	_, err := c.api.ExecuteSQL(ctx, sqlStmt, params)
+	_, err := c.api.ExecuteSQL(ctx, sqlStmt, []any{
+		user.ID,
+		enum.UserTypeConfirmed,
+		user.Confidence,
+		reasonsJSON,
+	})
 	if err != nil {
-		return fmt.Errorf("failed to insert flagged users: %w", err)
+		return fmt.Errorf("failed to insert confirmed user: %w", err)
 	}
 
-	c.logger.Debug("Inserted flagged users into user_flags table",
-		zap.Int("count", len(flaggedUsers)))
+	c.logger.Debug("Added confirmed user to user_flags table",
+		zap.Uint64("user_id", user.ID),
+		zap.Float64("confidence", user.Confidence))
+
+	return nil
+}
+
+// RemoveUser removes a user from the user_flags table.
+func (c *D1Client) RemoveUser(ctx context.Context, userID uint64) error {
+	sqlStmt := "DELETE FROM user_flags WHERE user_id = ?"
+
+	_, err := c.api.ExecuteSQL(ctx, sqlStmt, []any{userID})
+	if err != nil {
+		return fmt.Errorf("failed to remove user from user_flags: %w", err)
+	}
+
+	c.logger.Debug("Removed user from user_flags table",
+		zap.Uint64("user_id", userID))
 
 	return nil
 }
