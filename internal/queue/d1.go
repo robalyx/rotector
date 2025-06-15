@@ -17,7 +17,7 @@ const (
 	// MaxQueueBatchSize is the maximum number of users that can be queued in a single batch.
 	MaxQueueBatchSize = 50
 	// MaxFlaggedUsersBatchSize is the maximum number of flagged users that can be inserted in a single batch.
-	MaxFlaggedUsersBatchSize = 20
+	MaxFlaggedUsersBatchSize = 10
 )
 
 // Stats represents queue statistics.
