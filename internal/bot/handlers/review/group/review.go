@@ -3,7 +3,6 @@ package group
 import (
 	"errors"
 	"fmt"
-	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -368,12 +367,7 @@ func (m *ReviewMenu) handleNavigateGroup(ctx *interaction.Context, s *session.Se
 
 	// If navigating next and we're at the end of history, treat it as a skip
 	if isNext && (index >= len(history)-1 || len(history) == 0) {
-		// Clear current group and load next one
-		m.UpdateCounters(s)
-		session.GroupTarget.Delete(s)
-		ctx.Reload("Skipped group.")
-
-		// Log the skip action
+		// Log the skip action before clearing the group
 		group := session.GroupTarget.Get(s)
 		if group != nil {
 			m.layout.db.Model().Activity().Log(ctx.Context(), &types.ActivityLog{
@@ -386,6 +380,10 @@ func (m *ReviewMenu) handleNavigateGroup(ctx *interaction.Context, s *session.Se
 				Details:           map[string]any{},
 			})
 		}
+
+		// Navigate to next group or fetch new one
+		m.UpdateCounters(s)
+		m.navigateAfterAction(ctx, s, "Skipped group.")
 		return
 	}
 
@@ -418,14 +416,7 @@ func (m *ReviewMenu) handleNavigateGroup(ctx *interaction.Context, s *session.Se
 	if err != nil {
 		if errors.Is(err, types.ErrGroupNotFound) {
 			// Remove the missing group from history
-			history = slices.Delete(history, index, index+1)
-			session.GroupReviewHistory.Set(s, history)
-
-			// Adjust index if needed
-			if index >= len(history) {
-				index = len(history) - 1
-			}
-			session.GroupReviewHistoryIndex.Set(s, index)
+			session.RemoveFromReviewHistory(s, session.GroupReviewHistoryType, index)
 
 			// Try again with updated history
 			m.handleNavigateGroup(ctx, s, isNext)
@@ -489,12 +480,9 @@ func (m *ReviewMenu) handleConfirmGroup(ctx *interaction.Context, s *session.Ses
 		return
 	}
 
-	// Clear current group and load next one
+	// Navigate to next group in history or fetch new one
 	m.UpdateCounters(s)
-	session.GroupTarget.Delete(s)
-	session.UnsavedGroupReasons.Delete(s)
-
-	ctx.Reload("Group confirmed.")
+	m.navigateAfterAction(ctx, s, "Group confirmed.")
 
 	// Log the confirm action
 	m.layout.db.Model().Activity().Log(ctx.Context(), &types.ActivityLog{
@@ -531,12 +519,9 @@ func (m *ReviewMenu) handleClearGroup(ctx *interaction.Context, s *session.Sessi
 		return
 	}
 
-	// Clear current group and load next one
+	// Navigate to next group in history or fetch new one
 	m.UpdateCounters(s)
-	session.GroupTarget.Delete(s)
-	session.UnsavedGroupReasons.Delete(s)
-
-	ctx.Reload("Group cleared.")
+	m.navigateAfterAction(ctx, s, "Group cleared.")
 
 	// Log the clear action
 	m.layout.db.Model().Activity().Log(ctx.Context(), &types.ActivityLog{
@@ -548,6 +533,79 @@ func (m *ReviewMenu) handleClearGroup(ctx *interaction.Context, s *session.Sessi
 		ActivityTimestamp: time.Now(),
 		Details:           map[string]any{},
 	})
+}
+
+// navigateAfterAction handles navigation after confirming or clearing a group.
+// It tries to navigate to the next group in history, or fetches a new group if at the end.
+func (m *ReviewMenu) navigateAfterAction(ctx *interaction.Context, s *session.Session, message string) {
+	// Get the review history and current index
+	history := session.GroupReviewHistory.Get(s)
+	index := session.GroupReviewHistoryIndex.Get(s)
+
+	// Clear current group data
+	session.GroupTarget.Delete(s)
+	session.UnsavedGroupReasons.Delete(s)
+
+	// Check if there's a next group in history
+	if index < len(history)-1 {
+		// Navigate to next group in history
+		index++
+		session.GroupReviewHistoryIndex.Set(s, index)
+
+		// Fetch the group data
+		targetGroupID := history[index]
+		group, err := m.layout.db.Model().Group().GetGroupByID(
+			ctx.Context(),
+			strconv.FormatUint(targetGroupID, 10),
+			types.GroupFieldAll,
+		)
+		if err != nil {
+			if errors.Is(err, types.ErrGroupNotFound) {
+				// Remove the missing group from history and try again
+				session.RemoveFromReviewHistory(s, session.GroupReviewHistoryType, index)
+
+				// Try navigating again
+				m.navigateAfterAction(ctx, s, message)
+				return
+			}
+
+			m.layout.logger.Error("Failed to fetch next group from history", zap.Error(err))
+			ctx.Error("Failed to load next group. Please try again.")
+			return
+		}
+
+		// Get flagged users from tracking
+		flaggedCount, err := m.layout.db.Model().Tracking().GetFlaggedUsersCount(ctx.Context(), group.ID)
+		if err != nil {
+			m.layout.logger.Error("Failed to fetch flagged users", zap.Error(err))
+			ctx.Error("Failed to load flagged users. Please try again.")
+			return
+		}
+
+		// Set as current group and reload
+		session.GroupTarget.Set(s, group)
+		session.GroupFlaggedMembersCount.Set(s, flaggedCount)
+		session.OriginalGroupReasons.Set(s, group.Reasons)
+		session.UnsavedGroupReasons.Delete(s)
+		session.ReasonsChanged.Delete(s)
+
+		ctx.Reload(message)
+
+		// Log the view action
+		m.layout.db.Model().Activity().Log(ctx.Context(), &types.ActivityLog{
+			ActivityTarget: types.ActivityTarget{
+				GroupID: group.ID,
+			},
+			ReviewerID:        uint64(ctx.Event().User().ID),
+			ActivityType:      enum.ActivityTypeGroupViewed,
+			ActivityTimestamp: time.Now(),
+			Details:           map[string]any{},
+		})
+		return
+	}
+
+	// No next group in history, reload to fetch a new one
+	ctx.Reload(message)
 }
 
 // handleReasonSelection processes reason management dropdown selections.

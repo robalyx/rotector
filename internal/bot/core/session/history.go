@@ -1,6 +1,10 @@
 package session
 
-import "github.com/robalyx/rotector/internal/bot/constants"
+import (
+	"slices"
+
+	"github.com/robalyx/rotector/internal/bot/constants"
+)
 
 // ReviewHistoryType represents the type of review history being managed.
 type ReviewHistoryType int
@@ -35,4 +39,37 @@ func AddToReviewHistory(s *Session, historyType ReviewHistoryType, id uint64) {
 
 	historyKey.Set(s, history)
 	indexKey.Set(s, len(history)-1)
+}
+
+// RemoveFromReviewHistory removes an item at the specified index from the review history
+// and adjusts the index accordingly.
+func RemoveFromReviewHistory(s *Session, historyType ReviewHistoryType, index int) {
+	var historyKey Key[[]uint64]
+	var indexKey Key[int]
+
+	switch historyType {
+	case UserReviewHistoryType:
+		historyKey = UserReviewHistory
+		indexKey = UserReviewHistoryIndex
+	case GroupReviewHistoryType:
+		historyKey = GroupReviewHistory
+		indexKey = GroupReviewHistoryIndex
+	}
+
+	history := historyKey.Get(s)
+	currentIndex := indexKey.Get(s)
+
+	// Remove the item at the specified index
+	if index >= 0 && index < len(history) {
+		history = slices.Delete(history, index, index+1)
+		historyKey.Set(s, history)
+
+		// Adjust the current index if needed
+		if currentIndex >= len(history) && len(history) > 0 {
+			currentIndex = len(history) - 1
+		} else if len(history) == 0 {
+			currentIndex = 0
+		}
+		indexKey.Set(s, currentIndex)
+	}
 }

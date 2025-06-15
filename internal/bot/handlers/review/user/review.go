@@ -3,7 +3,6 @@ package user
 import (
 	"errors"
 	"fmt"
-	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -42,7 +41,7 @@ func NewReviewMenu(layout *Layout) *ReviewMenu {
 	m.page = &interaction.Page{
 		Name: constants.UserReviewPageName,
 		Message: func(s *session.Session) *discord.MessageUpdateBuilder {
-			return view.NewReviewBuilder(s, layout.translator, layout.db).Build()
+			return view.NewReviewBuilder(s, layout.db).Build()
 		},
 		ShowHandlerFunc:   m.Show,
 		SelectHandlerFunc: m.handleSelectMenu,
@@ -317,12 +316,7 @@ func (m *ReviewMenu) handleNavigateUser(ctx *interaction.Context, s *session.Ses
 
 	// If navigating next and we're at the end of history, treat it as a skip
 	if isNext && (index >= len(history)-1 || len(history) == 0) {
-		// Clear current user and load next one
-		m.UpdateCounters(s)
-		session.UserTarget.Delete(s)
-		ctx.Reload("Skipped user.")
-
-		// Log the skip action
+		// Log the skip action before clearing the user
 		user := session.UserTarget.Get(s)
 		if user != nil {
 			m.layout.db.Model().Activity().Log(ctx.Context(), &types.ActivityLog{
@@ -335,6 +329,10 @@ func (m *ReviewMenu) handleNavigateUser(ctx *interaction.Context, s *session.Ses
 				Details:           map[string]any{},
 			})
 		}
+
+		// Navigate to next user or fetch new one
+		m.UpdateCounters(s)
+		m.navigateAfterAction(ctx, s, "Skipped user.")
 		return
 	}
 
@@ -366,14 +364,7 @@ func (m *ReviewMenu) handleNavigateUser(ctx *interaction.Context, s *session.Ses
 	if err != nil {
 		if errors.Is(err, types.ErrUserNotFound) {
 			// Remove the missing user from history
-			history = slices.Delete(history, index, index+1)
-			session.UserReviewHistory.Set(s, history)
-
-			// Adjust index if needed
-			if index >= len(history) {
-				index = len(history) - 1
-			}
-			session.UserReviewHistoryIndex.Set(s, index)
+			session.RemoveFromReviewHistory(s, session.UserReviewHistoryType, index)
 
 			// Try again with updated history
 			m.handleNavigateUser(ctx, s, isNext)
@@ -434,12 +425,9 @@ func (m *ReviewMenu) handleConfirmUser(ctx *interaction.Context, s *session.Sess
 		m.layout.logger.Error("Failed to get flagged users count", zap.Error(err))
 	}
 
-	// Clear current user and load next one
+	// Navigate to next user in history or fetch new one
 	m.UpdateCounters(s)
-	session.UserTarget.Delete(s)
-	session.UnsavedUserReasons.Delete(s)
-
-	ctx.Reload(fmt.Sprintf("User confirmed. %d users left to review.", flaggedCount))
+	m.navigateAfterAction(ctx, s, fmt.Sprintf("User confirmed. %d users left to review.", flaggedCount))
 
 	// Add or update the user in the D1 database
 	if err := m.layout.d1Client.AddConfirmedUser(ctx.Context(), user); err != nil {
@@ -490,12 +478,9 @@ func (m *ReviewMenu) handleClearUser(ctx *interaction.Context, s *session.Sessio
 		m.layout.logger.Error("Failed to get flagged users count", zap.Error(err))
 	}
 
-	// Clear current user and load next one
+	// Navigate to next user in history or fetch new one
 	m.UpdateCounters(s)
-	session.UserTarget.Delete(s)
-	session.UnsavedUserReasons.Delete(s)
-
-	ctx.Reload(fmt.Sprintf("User cleared. %d users left to review.", flaggedCount))
+	m.navigateAfterAction(ctx, s, fmt.Sprintf("User cleared. %d users left to review.", flaggedCount))
 
 	// Remove the user from the D1 database
 	if err := m.layout.d1Client.RemoveUser(ctx.Context(), user.ID); err != nil {
@@ -516,6 +501,70 @@ func (m *ReviewMenu) handleClearUser(ctx *interaction.Context, s *session.Sessio
 	})
 }
 
+// navigateAfterAction handles navigation after confirming or clearing a user.
+// It tries to navigate to the next user in history, or fetches a new user if at the end.
+func (m *ReviewMenu) navigateAfterAction(ctx *interaction.Context, s *session.Session, message string) {
+	// Get the review history and current index
+	history := session.UserReviewHistory.Get(s)
+	index := session.UserReviewHistoryIndex.Get(s)
+
+	// Clear current user data
+	session.UserTarget.Delete(s)
+	session.UnsavedUserReasons.Delete(s)
+
+	// Check if there's a next user in history
+	if index < len(history)-1 {
+		// Navigate to next user in history
+		index++
+		session.UserReviewHistoryIndex.Set(s, index)
+
+		// Fetch the user data
+		targetUserID := history[index]
+		user, err := m.layout.db.Service().User().GetUserByID(
+			ctx.Context(),
+			strconv.FormatUint(targetUserID, 10),
+			types.UserFieldAll,
+		)
+		if err != nil {
+			if errors.Is(err, types.ErrUserNotFound) {
+				// Remove the missing user from history and try again
+				session.RemoveFromReviewHistory(s, session.UserReviewHistoryType, index)
+
+				// Try navigating again
+				m.navigateAfterAction(ctx, s, message)
+				return
+			}
+
+			m.layout.logger.Error("Failed to fetch next user from history", zap.Error(err))
+			ctx.Error("Failed to load next user. Please try again.")
+			return
+		}
+
+		// Set as current user and reload
+		session.UserTarget.Set(s, user)
+		session.OriginalUserReasons.Set(s, user.Reasons)
+		session.UnsavedUserReasons.Delete(s)
+		session.ReasonsChanged.Delete(s)
+
+		ctx.Reload(message)
+
+		// Log the view action
+		m.layout.db.Model().Activity().Log(ctx.Context(), &types.ActivityLog{
+			ActivityTarget: types.ActivityTarget{
+				UserID: user.ID,
+			},
+			ReviewerID:        uint64(ctx.Event().User().ID),
+			ActivityType:      enum.ActivityTypeUserViewed,
+			ActivityTimestamp: time.Now(),
+			Details:           map[string]any{},
+		})
+		return
+	}
+
+	// No next user in history, reload to fetch a new one
+	ctx.Reload(message)
+}
+
 // handleOpenAIChat handles the button to open the AI chat for the current user.
 func (m *ReviewMenu) handleOpenAIChat(ctx *interaction.Context, s *session.Session) {
 	user := session.UserTarget.Get(s)
@@ -523,16 +572,6 @@ func (m *ReviewMenu) handleOpenAIChat(ctx *interaction.Context, s *session.Sessi
 	flaggedGroups := session.UserFlaggedGroups.Get(s)
 
 	limit := 20
-
-	// Get translated description
-	description := user.Description
-	var translatedDescription string
-	if description != "" {
-		translated, err := m.layout.translator.Translate(ctx.Context(), description, "auto", "en")
-		if err == nil && translated != description {
-			translatedDescription = translated
-		}
-	}
 
 	// Build flagged friends information
 	friendsInfo := make([]string, 0)
@@ -594,7 +633,7 @@ func (m *ReviewMenu) handleOpenAIChat(ctx *interaction.Context, s *session.Sessi
 Basic Info:
 - Username: %s
 - Display Name: %s
-- Description: %s%s
+- Description: %s
 - Account Created: %s
 - Reasons: %s
 - Confidence: %.2f
@@ -616,8 +655,7 @@ Recent Games (showing %d of %d):
 %s`,
 			user.Name,
 			user.DisplayName,
-			description,
-			map[bool]string{true: "\n- Translated Description: " + translatedDescription, false: ""}[translatedDescription != ""],
+			user.Description,
 			user.CreatedAt.Format(time.RFC3339),
 			strings.Join(user.Reasons.Messages(), "; "),
 			user.Confidence,
@@ -974,25 +1012,25 @@ func (m *ReviewMenu) handleGenerateProfileReason(ctx *interaction.Context) {
 			discord.NewTextInput(constants.ProfileReasonHintInputCustomID, discord.TextInputStyleParagraph, "Hint").
 				WithRequired(true).
 				WithMinLength(1).
-				WithMaxLength(100).
+				WithMaxLength(256).
 				WithPlaceholder("e.g., inappropriate username, sexual content in description"),
 		).
 		AddActionRow(
 			discord.NewTextInput(constants.ProfileReasonViolationInputCustomID, discord.TextInputStyleParagraph, "Violation Location").
 				WithRequired(false).
-				WithMaxLength(500).
+				WithMaxLength(512).
 				WithPlaceholder("username\ndisplayName\ndescription"),
 		).
 		AddActionRow(
 			discord.NewTextInput(constants.ProfileReasonLanguageInputCustomID, discord.TextInputStyleParagraph, "Language Pattern").
 				WithRequired(false).
-				WithMaxLength(500).
+				WithMaxLength(512).
 				WithPlaceholder("imperative\neuphemistic\ncoded\ndirect-address\noffer-pattern"),
 		).
 		AddActionRow(
 			discord.NewTextInput(constants.ProfileReasonLanguageUsedInputCustomID, discord.TextInputStyleParagraph, "Language Used").
 				WithRequired(false).
-				WithMaxLength(100).
+				WithMaxLength(256).
 				WithPlaceholder("english\nrot13\ncaesar\nleetspeak"),
 		)
 

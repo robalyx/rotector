@@ -2,7 +2,6 @@ package user
 
 import (
 	"bytes"
-	"context"
 	"fmt"
 	"strconv"
 	"strings"
@@ -17,7 +16,6 @@ import (
 	"github.com/robalyx/rotector/internal/database/types"
 	"github.com/robalyx/rotector/internal/database/types/enum"
 	"github.com/robalyx/rotector/internal/roblox/fetcher"
-	"github.com/robalyx/rotector/internal/translator"
 )
 
 // ReviewBuilder creates the visual layout for reviewing a user.
@@ -28,13 +26,12 @@ type ReviewBuilder struct {
 	flaggedFriends map[uint64]*types.ReviewUser
 	flaggedGroups  map[uint64]*types.ReviewGroup
 	unsavedReasons map[enum.UserReasonType]struct{}
-	translator     *translator.Translator
 	defaultSort    enum.ReviewSortBy
 	trainingMode   bool
 }
 
 // NewReviewBuilder creates a new review builder.
-func NewReviewBuilder(s *session.Session, translator *translator.Translator, db database.Client) *ReviewBuilder {
+func NewReviewBuilder(s *session.Session, db database.Client) *ReviewBuilder {
 	reviewMode := session.UserReviewMode.Get(s)
 	trainingMode := reviewMode == enum.ReviewModeTraining
 	userID := session.UserID.Get(s)
@@ -59,7 +56,6 @@ func NewReviewBuilder(s *session.Session, translator *translator.Translator, db 
 		flaggedFriends: session.UserFlaggedFriends.Get(s),
 		flaggedGroups:  session.UserFlaggedGroups.Get(s),
 		unsavedReasons: session.UnsavedUserReasons.Get(s),
-		translator:     translator,
 		defaultSort:    session.UserUserDefaultSort.Get(s),
 		trainingMode:   trainingMode,
 	}
@@ -525,14 +521,9 @@ func (b *ReviewBuilder) getDescription() string {
 		b.user.DisplayName,
 	)
 	description = utils.TruncateString(description, 400)
+	description = utils.FormatString(description)
 
-	// Translate the description
-	translatedDescription, err := b.translator.Translate(context.Background(), description, "auto", "en")
-	if err == nil && translatedDescription != description {
-		return "-# (translated)\n" + utils.FormatString(translatedDescription)
-	}
-
-	return utils.FormatString(description)
+	return description
 }
 
 // getFriends returns the friends field.
