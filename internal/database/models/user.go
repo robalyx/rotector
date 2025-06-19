@@ -56,6 +56,7 @@ func (r *UserModel) SaveUsers(ctx context.Context, tx bun.Tx, users []*types.Rev
 		Set("created_at = EXCLUDED.created_at").
 		Set("status = EXCLUDED.status").
 		Set("confidence = EXCLUDED.confidence").
+		Set("engine_version = EXCLUDED.engine_version").
 		Set("has_socials = EXCLUDED.has_socials").
 		Set("last_scanned = EXCLUDED.last_scanned").
 		Set("last_updated = EXCLUDED.last_updated").
@@ -703,7 +704,7 @@ func (r *UserModel) GetUsersForThumbnailUpdate(ctx context.Context, limit int) (
 }
 
 // GetFlaggedUsersWithOnlyReason returns users that are flagged, have only the specified reason type,
-// and have confidence below the specified threshold.
+// and have confidence below the specified threshold for that specific reason.
 func (r *UserModel) GetFlaggedUsersWithOnlyReason(
 	ctx context.Context, reasonType enum.UserReasonType, confidenceThreshold float64,
 ) ([]*types.User, error) {
@@ -713,18 +714,17 @@ func (r *UserModel) GetFlaggedUsersWithOnlyReason(
 		return r.db.NewSelect().
 			Model(&users).
 			Where("status = ?", enum.UserTypeFlagged).
-			Where("confidence < ?", confidenceThreshold).
-			Where("id IN (SELECT user_id FROM user_reasons WHERE reason_type = ? AND "+
-				"user_id NOT IN (SELECT user_id FROM user_reasons WHERE reason_type != ?))", reasonType, reasonType).
+			Where("id IN (SELECT user_id FROM user_reasons WHERE reason_type = ? AND confidence < ? AND "+
+				"user_id NOT IN (SELECT user_id FROM user_reasons WHERE reason_type != ?))", reasonType, confidenceThreshold, reasonType).
 			Order("id ASC").
 			Scan(ctx)
 	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to get users with only reason %s and confidence < %.2f: %w",
+		return nil, fmt.Errorf("failed to get users with only reason %s and reason confidence < %.2f: %w",
 			reasonType, confidenceThreshold, err)
 	}
 
-	r.logger.Debug("Found users with only reason and below confidence threshold",
+	r.logger.Debug("Found users with only reason and below reason confidence threshold",
 		zap.String("reason", reasonType.String()),
 		zap.Float64("confidenceThreshold", confidenceThreshold),
 		zap.Int("count", len(users)))
@@ -1122,18 +1122,20 @@ func (r *UserModel) DeleteUserInventory(ctx context.Context, tx bun.Tx, userIDs 
 	return totalAffected, nil
 }
 
-// GetUserToScan finds the next user to scan.
+// GetUserToScan finds the next confirmed or flagged user to scan.
 func (r *UserModel) GetUserToScan(ctx context.Context) (*types.User, error) {
 	var user types.User
 	err := dbretry.Transaction(ctx, r.db, func(ctx context.Context, tx bun.Tx) error {
-		// First try confirmed users
+		// Try confirmed users with friend reason with at least one other reason OR profile reason without outfit reason
 		err := tx.NewSelect().Model(&user).
 			Where("status = ?", enum.UserTypeConfirmed).
 			Where("is_banned = false").
 			Where("last_scanned < NOW() - INTERVAL '1 day'").
-			Where("NOT EXISTS (SELECT 1 FROM user_reasons ur WHERE ur.user_id = \"user\".id AND reason_type = ?) OR "+
-				"EXISTS (SELECT 1 FROM user_reasons ur2 WHERE ur2.user_id = \"user\".id AND reason_type != ?)",
-				enum.UserReasonTypeOutfit, enum.UserReasonTypeOutfit).
+			Where("(EXISTS (SELECT 1 FROM user_reasons ur1 WHERE ur1.user_id = \"user\".id AND reason_type = ?) AND "+
+				"EXISTS (SELECT 1 FROM user_reasons ur2 WHERE ur2.user_id = \"user\".id AND reason_type != ?)) OR "+
+				"(EXISTS (SELECT 1 FROM user_reasons ur3 WHERE ur3.user_id = \"user\".id AND reason_type = ?) AND "+
+				"NOT EXISTS (SELECT 1 FROM user_reasons ur4 WHERE ur4.user_id = \"user\".id AND reason_type = ?))",
+				enum.UserReasonTypeFriend, enum.UserReasonTypeFriend, enum.UserReasonTypeProfile, enum.UserReasonTypeOutfit).
 			OrderExpr("last_scanned ASC, confidence DESC").
 			Limit(1).
 			For("UPDATE SKIP LOCKED").
@@ -1158,15 +1160,18 @@ func (r *UserModel) GetUserToScan(ctx context.Context) (*types.User, error) {
 			return fmt.Errorf("failed to query confirmed users: %w", err)
 		}
 
-		// If no confirmed users, try flagged users
+		// If no confirmed users, try flagged users with profile reason and either friend or group reason excluding those with outfit reasons
 		err = tx.NewSelect().Model(&user).
 			Where("status = ?", enum.UserTypeFlagged).
 			Where("is_banned = false").
 			Where("last_scanned < NOW() - INTERVAL '1 day'").
 			Where("confidence >= 0.9").
-			Where("NOT EXISTS (SELECT 1 FROM user_reasons ur WHERE ur.user_id = \"user\".id AND reason_type = ?) OR "+
-				"EXISTS (SELECT 1 FROM user_reasons ur2 WHERE ur2.user_id = \"user\".id AND reason_type != ?)",
-				enum.UserReasonTypeOutfit, enum.UserReasonTypeOutfit).
+			Where("EXISTS (SELECT 1 FROM user_reasons ur WHERE ur.user_id = \"user\".id AND reason_type = ?)",
+				enum.UserReasonTypeProfile).
+			Where("EXISTS (SELECT 1 FROM user_reasons ur2 WHERE ur2.user_id = \"user\".id AND reason_type IN (?, ?))",
+				enum.UserReasonTypeFriend, enum.UserReasonTypeGroup).
+			Where("NOT EXISTS (SELECT 1 FROM user_reasons ur3 WHERE ur3.user_id = \"user\".id AND reason_type = ?)",
+				enum.UserReasonTypeOutfit).
 			OrderExpr("last_scanned ASC, confidence DESC").
 			Limit(1).
 			For("UPDATE SKIP LOCKED").
@@ -2188,9 +2193,9 @@ func (r *UserModel) SaveUserInventory(ctx context.Context, tx bun.Tx, userInvent
 }
 
 // GetUsersUpdatedAfter returns users that have been updated after the specified time.
-// If reasonType is provided, it will filter for users with only that specific reason type.
+// If reasonTypes is provided, it will filter for users with only those specific reason types.
 func (r *UserModel) GetUsersUpdatedAfter(
-	ctx context.Context, cutoffTime time.Time, reasonType *enum.UserReasonType,
+	ctx context.Context, cutoffTime time.Time, reasonTypes []enum.UserReasonType,
 ) ([]*types.User, error) {
 	var users []*types.User
 
@@ -2201,9 +2206,14 @@ func (r *UserModel) GetUsersUpdatedAfter(
 			Where("last_updated > ?", cutoffTime)
 
 		// Add reason filtering if specified
-		if reasonType != nil {
-			query = query.Where("id IN (SELECT user_id FROM user_reasons WHERE reason_type = ? AND "+
-				"user_id NOT IN (SELECT user_id FROM user_reasons WHERE reason_type != ?))", *reasonType, *reasonType)
+		if len(reasonTypes) > 0 {
+			// Find users that have all the specified reason types
+			for _, reasonType := range reasonTypes {
+				query = query.Where("id IN (SELECT user_id FROM user_reasons WHERE reason_type = ?)", reasonType)
+			}
+
+			// Count of reasons for each user should equal the number of specified reason types
+			query = query.Where("id IN (SELECT user_id FROM user_reasons GROUP BY user_id HAVING COUNT(*) = ?)", len(reasonTypes))
 		}
 
 		return query.Order("last_updated ASC").Scan(ctx)
@@ -2217,40 +2227,6 @@ func (r *UserModel) GetUsersUpdatedAfter(
 		zap.Int("count", len(users)))
 
 	return users, nil
-}
-
-// GetUsersWithReasonMessage gets users with a specific reason message.
-func (r *UserModel) GetUsersWithReasonMessage(
-	ctx context.Context, reasonType enum.UserReasonType, message string,
-) ([]*types.ReviewUser, error) {
-	var users []types.User
-
-	err := dbretry.NoResult(ctx, func(ctx context.Context) error {
-		return r.db.NewSelect().
-			Model(&users).
-			Column("id", "status").
-			Where("status IN (?, ?)", enum.UserTypeFlagged, enum.UserTypeConfirmed).
-			Where("id IN (SELECT user_id FROM user_reasons WHERE reason_type = ? AND message = ?)", reasonType, message).
-			Scan(ctx)
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to get users with reason message: %w", err)
-	}
-
-	// Convert to review users with minimal data
-	result := make([]*types.ReviewUser, len(users))
-	for i, user := range users {
-		result[i] = &types.ReviewUser{
-			User: &user,
-		}
-	}
-
-	r.logger.Debug("Found users with reason message",
-		zap.String("reasonType", reasonType.String()),
-		zap.String("message", message),
-		zap.Int("count", len(result)))
-
-	return result, nil
 }
 
 // UpdateUserReason updates a specific reason for a user.
@@ -2273,4 +2249,46 @@ func (r *UserModel) UpdateUserReason(ctx context.Context, userID uint64, reasonT
 		zap.String("newMessage", newMessage))
 
 	return nil
+}
+
+// GetUsersWithoutReason gets users that don't have a specific reason type.
+func (r *UserModel) GetUsersWithoutReason(
+	ctx context.Context, reasonType enum.UserReasonType, limit int, cursorID uint64,
+) ([]*types.ReviewUser, error) {
+	var users []types.User
+
+	err := dbretry.NoResult(ctx, func(ctx context.Context) error {
+		query := r.db.NewSelect().
+			Model(&users).
+			Column("id", "status").
+			Where("status IN (?, ?)", enum.UserTypeFlagged, enum.UserTypeConfirmed).
+			Where("id NOT IN (SELECT user_id FROM user_reasons WHERE reason_type = ?)", reasonType).
+			Order("id ASC").
+			Limit(limit)
+
+		if cursorID > 0 {
+			query.Where("id > ?", cursorID)
+		}
+
+		return query.Scan(ctx)
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get users without reason type %s: %w", reasonType.String(), err)
+	}
+
+	// Convert to review users with minimal data
+	result := make([]*types.ReviewUser, len(users))
+	for i, user := range users {
+		result[i] = &types.ReviewUser{
+			User: &user,
+		}
+	}
+
+	r.logger.Debug("Found users without reason type",
+		zap.String("reasonType", reasonType.String()),
+		zap.Int("count", len(result)),
+		zap.Int("limit", limit),
+		zap.Uint64("cursorID", cursorID))
+
+	return result, nil
 }

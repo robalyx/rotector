@@ -423,7 +423,7 @@ func BuildReasonModal[T types.ReasonType](reasonType T, existingReason *types.Re
 		}
 
 		evidenceInput = evidenceInput.WithRequired(false).
-			WithValue(strings.Join(escapedEvidence, "\n")).
+			WithValue(strings.Join(escapedEvidence, "\n\n")).
 			WithPlaceholder("Enter new evidence items, one per line")
 	} else {
 		evidenceInput = evidenceInput.WithRequired(false).

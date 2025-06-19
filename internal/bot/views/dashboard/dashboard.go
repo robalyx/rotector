@@ -227,8 +227,8 @@ func (b *Builder) buildActionMenuOptions() []discord.StringSelectMenuOption {
 			WithDescription("Look up specific Roblox user by ID or UUID"),
 	}
 
-	// Add Roblox group lookup option only for reviewers
-	if b.isReviewer {
+	// Add Roblox group lookup option only for admins
+	if b.isAdmin {
 		options = append(options,
 			discord.NewStringSelectMenuOption("Lookup Roblox Group", constants.LookupRobloxGroupButtonCustomID).
 				WithEmoji(discord.ComponentEmoji{Name: "🔍"}).

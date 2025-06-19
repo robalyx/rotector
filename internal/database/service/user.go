@@ -107,20 +107,37 @@ func (s *UserService) GetUserByID(
 		return nil, err
 	}
 
-	// Get relationships if requested
-	if fields.Has(types.UserFieldRelationships) {
-		relationships, err := s.GetUserRelationships(ctx, user.ID)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get user relationships: %w", err)
+	// Get specific relationships if requested
+	relationshipFields := fields & types.UserFieldRelationships
+	if relationshipFields != 0 {
+		relationships := s.GetUsersRelationships(ctx, []uint64{user.ID}, relationshipFields)
+		if rel, exists := relationships[user.ID]; exists {
+			if fields.Has(types.UserFieldGroups) {
+				user.Groups = rel.Groups
+			}
+			if fields.Has(types.UserFieldOutfits) {
+				user.Outfits = rel.Outfits
+				user.OutfitAssets = rel.OutfitAssets
+			}
+			if fields.Has(types.UserFieldCurrentAssets) {
+				user.CurrentAssets = rel.CurrentAssets
+			}
+			if fields.Has(types.UserFieldFriends) {
+				user.Friends = rel.Friends
+			}
+			if fields.Has(types.UserFieldFavorites) {
+				user.Favorites = rel.Favorites
+			}
+			if fields.Has(types.UserFieldGames) {
+				user.Games = rel.Games
+			}
+			if fields.Has(types.UserFieldInventory) {
+				user.Inventory = rel.Inventory
+			}
+			if fields.Has(types.UserFieldBadges) {
+				user.Badges = rel.Badges
+			}
 		}
-
-		user.Groups = relationships.Groups
-		user.Outfits = relationships.Outfits
-		user.Friends = relationships.Friends
-		user.Favorites = relationships.Favorites
-		user.Games = relationships.Games
-		user.Inventory = relationships.Inventory
-		user.Badges = relationships.Badges
 	}
 
 	return user, nil
@@ -140,20 +157,37 @@ func (s *UserService) GetUsersByIDs(
 		return nil, err
 	}
 
-	// Get relationships if requested
-	if fields.Has(types.UserFieldRelationships) {
-		relationships := s.GetUsersRelationships(ctx, userIDs)
+	// Get specific relationships if requested
+	relationshipFields := fields & types.UserFieldRelationships
+	if relationshipFields != 0 {
+		relationships := s.GetUsersRelationships(ctx, userIDs, relationshipFields)
 		for userID, user := range users {
 			if rel, exists := relationships[userID]; exists {
-				user.Groups = rel.Groups
-				user.Outfits = rel.Outfits
-				user.OutfitAssets = rel.OutfitAssets
-				user.CurrentAssets = rel.CurrentAssets
-				user.Friends = rel.Friends
-				user.Favorites = rel.Favorites
-				user.Games = rel.Games
-				user.Inventory = rel.Inventory
-				user.Badges = rel.Badges
+				if fields.Has(types.UserFieldGroups) {
+					user.Groups = rel.Groups
+				}
+				if fields.Has(types.UserFieldOutfits) {
+					user.Outfits = rel.Outfits
+					user.OutfitAssets = rel.OutfitAssets
+				}
+				if fields.Has(types.UserFieldCurrentAssets) {
+					user.CurrentAssets = rel.CurrentAssets
+				}
+				if fields.Has(types.UserFieldFriends) {
+					user.Friends = rel.Friends
+				}
+				if fields.Has(types.UserFieldFavorites) {
+					user.Favorites = rel.Favorites
+				}
+				if fields.Has(types.UserFieldGames) {
+					user.Games = rel.Games
+				}
+				if fields.Has(types.UserFieldInventory) {
+					user.Inventory = rel.Inventory
+				}
+				if fields.Has(types.UserFieldBadges) {
+					user.Badges = rel.Badges
+				}
 			}
 		}
 	}
@@ -236,15 +270,17 @@ func (s *UserService) GetUserToReview(
 
 // GetUserRelationships fetches all relationships for a user.
 func (s *UserService) GetUserRelationships(ctx context.Context, userID uint64) (*types.ReviewUser, error) {
-	results := s.GetUsersRelationships(ctx, []uint64{userID})
+	results := s.GetUsersRelationships(ctx, []uint64{userID}, types.UserFieldRelationships)
 	if result, exists := results[userID]; exists {
 		return result, nil
 	}
 	return &types.ReviewUser{}, nil
 }
 
-// GetUsersRelationships fetches all relationships for multiple users efficiently.
-func (s *UserService) GetUsersRelationships(ctx context.Context, userIDs []uint64) map[uint64]*types.ReviewUser {
+// GetUsersRelationships fetches only the requested relationships for multiple users.
+func (s *UserService) GetUsersRelationships(
+	ctx context.Context, userIDs []uint64, relationshipFields types.UserField,
+) map[uint64]*types.ReviewUser {
 	if len(userIDs) == 0 {
 		return make(map[uint64]*types.ReviewUser)
 	}
@@ -257,90 +293,120 @@ func (s *UserService) GetUsersRelationships(ctx context.Context, userIDs []uint6
 	var mu sync.Mutex
 	p := pool.New().WithContext(ctx).WithCancelOnError()
 
-	// Fetch groups in parallel
-	p.Go(func(ctx context.Context) error {
-		groups, err := s.model.GetUsersGroups(ctx, userIDs)
-		if err != nil {
-			return fmt.Errorf("failed to get users groups: %w", err)
-		}
-		mu.Lock()
-		for userID, userGroups := range groups {
-			result[userID].Groups = userGroups
-		}
-		mu.Unlock()
-		return nil
-	})
+	// Fetch groups in parallel if requested
+	if relationshipFields.Has(types.UserFieldGroups) {
+		p.Go(func(ctx context.Context) error {
+			groups, err := s.model.GetUsersGroups(ctx, userIDs)
+			if err != nil {
+				return fmt.Errorf("failed to get users groups: %w", err)
+			}
+			mu.Lock()
+			for userID, userGroups := range groups {
+				result[userID].Groups = userGroups
+			}
+			mu.Unlock()
+			return nil
+		})
+	}
 
-	// Fetch outfits in parallel
-	p.Go(func(ctx context.Context) error {
-		outfits, err := s.model.GetUsersOutfits(ctx, userIDs)
-		if err != nil {
-			return fmt.Errorf("failed to get users outfits: %w", err)
-		}
-		mu.Lock()
-		for userID, userOutfits := range outfits {
-			result[userID].Outfits = userOutfits.Outfits
-			result[userID].OutfitAssets = userOutfits.OutfitAssets
-		}
-		mu.Unlock()
-		return nil
-	})
+	// Fetch outfits in parallel if requested
+	if relationshipFields.Has(types.UserFieldOutfits) {
+		p.Go(func(ctx context.Context) error {
+			outfits, err := s.model.GetUsersOutfits(ctx, userIDs)
+			if err != nil {
+				return fmt.Errorf("failed to get users outfits: %w", err)
+			}
+			mu.Lock()
+			for userID, userOutfits := range outfits {
+				result[userID].Outfits = userOutfits.Outfits
+				result[userID].OutfitAssets = userOutfits.OutfitAssets
+			}
+			mu.Unlock()
+			return nil
+		})
+	}
 
-	// Fetch friends in parallel
-	p.Go(func(ctx context.Context) error {
-		friends, err := s.model.GetUsersFriends(ctx, userIDs)
-		if err != nil {
-			return fmt.Errorf("failed to get users friends: %w", err)
-		}
-		mu.Lock()
-		for userID, userFriends := range friends {
-			result[userID].Friends = userFriends
-		}
-		mu.Unlock()
-		return nil
-	})
+	// Fetch friends in parallel if requested
+	if relationshipFields.Has(types.UserFieldFriends) {
+		p.Go(func(ctx context.Context) error {
+			friends, err := s.model.GetUsersFriends(ctx, userIDs)
+			if err != nil {
+				return fmt.Errorf("failed to get users friends: %w", err)
+			}
+			mu.Lock()
+			for userID, userFriends := range friends {
+				result[userID].Friends = userFriends
+			}
+			mu.Unlock()
+			return nil
+		})
+	}
 
-	// Fetch favorites in parallel
-	p.Go(func(ctx context.Context) error {
-		favorites, err := s.model.GetUsersFavorites(ctx, userIDs)
-		if err != nil {
-			return fmt.Errorf("failed to get users favorites: %w", err)
-		}
-		mu.Lock()
-		for userID, userFavorites := range favorites {
-			result[userID].Favorites = userFavorites
-		}
-		mu.Unlock()
-		return nil
-	})
+	// Fetch favorites in parallel if requested
+	if relationshipFields.Has(types.UserFieldFavorites) {
+		p.Go(func(ctx context.Context) error {
+			favorites, err := s.model.GetUsersFavorites(ctx, userIDs)
+			if err != nil {
+				return fmt.Errorf("failed to get users favorites: %w", err)
+			}
+			mu.Lock()
+			for userID, userFavorites := range favorites {
+				result[userID].Favorites = userFavorites
+			}
+			mu.Unlock()
+			return nil
+		})
+	}
 
-	// Fetch games in parallel
-	p.Go(func(ctx context.Context) error {
-		games, err := s.model.GetUsersGames(ctx, userIDs)
-		if err != nil {
-			return fmt.Errorf("failed to get users games: %w", err)
-		}
-		mu.Lock()
-		for userID, userGames := range games {
-			result[userID].Games = userGames
-		}
-		mu.Unlock()
-		return nil
-	})
+	// Fetch games in parallel if requested
+	if relationshipFields.Has(types.UserFieldGames) {
+		p.Go(func(ctx context.Context) error {
+			games, err := s.model.GetUsersGames(ctx, userIDs)
+			if err != nil {
+				return fmt.Errorf("failed to get users games: %w", err)
+			}
+			mu.Lock()
+			for userID, userGames := range games {
+				result[userID].Games = userGames
+			}
+			mu.Unlock()
+			return nil
+		})
+	}
 
-	// Fetch inventory in parallel
-	p.Go(func(ctx context.Context) error {
-		inventory, err := s.model.GetUsersInventory(ctx, userIDs)
-		if err != nil {
-			return fmt.Errorf("failed to get users inventory: %w", err)
-		}
-		mu.Lock()
-		for userID, userInventory := range inventory {
-			result[userID].Inventory = userInventory
-		}
-		mu.Unlock()
-		return nil
-	})
+	// Fetch inventory in parallel if requested
+	if relationshipFields.Has(types.UserFieldInventory) {
+		p.Go(func(ctx context.Context) error {
+			inventory, err := s.model.GetUsersInventory(ctx, userIDs)
+			if err != nil {
+				return fmt.Errorf("failed to get users inventory: %w", err)
+			}
+			mu.Lock()
+			for userID, userInventory := range inventory {
+				result[userID].Inventory = userInventory
+			}
+			mu.Unlock()
+			return nil
+		})
+	}
+
+	// Fetch current assets in parallel if requested
+	if relationshipFields.Has(types.UserFieldCurrentAssets) {
+		p.Go(func(ctx context.Context) error {
+			assets, err := s.model.GetUsersAssets(ctx, userIDs)
+			if err != nil {
+				return fmt.Errorf("failed to get users assets: %w", err)
+			}
+			mu.Lock()
+			for userID, userAssets := range assets {
+				result[userID].CurrentAssets = userAssets
+			}
+			mu.Unlock()
+			return nil
+		})
+	}
+
+	// Note: UserFieldBadges is not implemented in the model layer yet
 
 	// Wait for all goroutines
 	if err := p.Wait(); err != nil {
@@ -375,6 +441,11 @@ func (s *UserService) SaveUsers(ctx context.Context, users map[uint64]*types.Rev
 		// Generate UUID for new users
 		if user.UUID == uuid.Nil {
 			user.UUID = uuid.New()
+		}
+
+		// Set engine version for new users
+		if user.EngineVersion == "" {
+			user.EngineVersion = "2.4"
 		}
 
 		// Handle reasons merging and determine status

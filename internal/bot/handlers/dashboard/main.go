@@ -73,8 +73,7 @@ func (m *Menu) handleSelectMenu(ctx *interaction.Context, s *session.Session, cu
 
 	// Check reviewer-only options
 	switch option {
-	case constants.LookupRobloxGroupButtonCustomID,
-		constants.ActivityBrowserButtonCustomID,
+	case constants.ActivityBrowserButtonCustomID,
 		constants.ChatAssistantButtonCustomID,
 		constants.WorkerStatusButtonCustomID,
 		constants.ReviewerStatsButtonCustomID,
@@ -86,7 +85,8 @@ func (m *Menu) handleSelectMenu(ctx *interaction.Context, s *session.Session, cu
 			ctx.Error("You do not have permission to perform this action.")
 			return
 		}
-	case constants.AdminMenuButtonCustomID,
+	case constants.LookupRobloxGroupButtonCustomID,
+		constants.AdminMenuButtonCustomID,
 		constants.GuildOwnerMenuButtonCustomID:
 		if !isAdmin {
 			m.layout.logger.Error("Non-admin attempted restricted action",

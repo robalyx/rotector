@@ -132,7 +132,7 @@ func InitializeApp(ctx context.Context, serviceType ServiceType, logDir string) 
 	}
 
 	// Initialize D1 client for queue operations
-	d1Client := queue.NewD1Client(cfg, logger)
+	d1Client := queue.NewD1Client(cfg, db, logger)
 
 	// Start pprof server if enabled
 	var pprofSrv *pprofServer

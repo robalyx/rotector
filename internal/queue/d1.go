@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/robalyx/rotector/internal/database"
 	"github.com/robalyx/rotector/internal/database/types"
 	"github.com/robalyx/rotector/internal/database/types/enum"
 	"github.com/robalyx/rotector/internal/setup/config"
@@ -44,11 +45,12 @@ type UserBatch struct {
 // D1Client handles Cloudflare D1 API requests.
 type D1Client struct {
 	api    *CloudflareAPI
+	db     database.Client
 	logger *zap.Logger
 }
 
 // NewD1Client creates a new D1 client.
-func NewD1Client(cfg *config.Config, logger *zap.Logger) *D1Client {
+func NewD1Client(cfg *config.Config, db database.Client, logger *zap.Logger) *D1Client {
 	api := NewCloudflareAPI(
 		cfg.Worker.Cloudflare.AccountID,
 		cfg.Worker.Cloudflare.DatabaseID,
@@ -58,6 +60,7 @@ func NewD1Client(cfg *config.Config, logger *zap.Logger) *D1Client {
 
 	return &D1Client{
 		api:    api,
+		db:     db,
 		logger: logger.Named("d1_client"),
 	}
 }
@@ -484,11 +487,12 @@ func (c *D1Client) AddFlaggedUsers(ctx context.Context, flaggedUsers map[uint64]
 				user_id, 
 				flag_type, 
 				confidence, 
-				reasons
+				reasons,
+				engine_version
 			) VALUES
 		`
 
-		params := make([]any, 0, len(batchUserIDs)*4)
+		params := make([]any, 0, len(batchUserIDs)*5)
 
 		for j, userID := range batchUserIDs {
 			user := flaggedUsers[userID]
@@ -496,7 +500,7 @@ func (c *D1Client) AddFlaggedUsers(ctx context.Context, flaggedUsers map[uint64]
 			if j > 0 {
 				sqlStmt += ","
 			}
-			sqlStmt += "(?, ?, ?, ?)"
+			sqlStmt += "(?, ?, ?, ?, ?)"
 
 			// Convert reasons to JSON string
 			reasonsJSON := "{}"
@@ -521,6 +525,7 @@ func (c *D1Client) AddFlaggedUsers(ctx context.Context, flaggedUsers map[uint64]
 				enum.UserTypeFlagged,
 				user.Confidence,
 				reasonsJSON,
+				user.EngineVersion,
 			)
 		}
 
@@ -545,9 +550,21 @@ func (c *D1Client) AddFlaggedUsers(ctx context.Context, flaggedUsers map[uint64]
 }
 
 // AddConfirmedUser inserts or updates a confirmed user in the user_flags table.
-func (c *D1Client) AddConfirmedUser(ctx context.Context, user *types.ReviewUser) error {
+func (c *D1Client) AddConfirmedUser(ctx context.Context, user *types.ReviewUser, reviewerID uint64) error {
 	if user == nil {
 		return nil
+	}
+
+	// Fetch reviewer information from the database
+	reviewerUsername := "Unknown"
+	reviewerDisplayName := "Unknown"
+	if reviewerInfos, err := c.db.Model().Reviewer().GetReviewerInfos(ctx, []uint64{reviewerID}); err != nil {
+		c.logger.Warn("Failed to get reviewer info, using fallback values",
+			zap.Error(err),
+			zap.Uint64("reviewer_id", reviewerID))
+	} else if reviewerInfo, exists := reviewerInfos[reviewerID]; exists {
+		reviewerUsername = reviewerInfo.Username
+		reviewerDisplayName = reviewerInfo.DisplayName
 	}
 
 	// Convert reasons to JSON string
@@ -574,8 +591,12 @@ func (c *D1Client) AddConfirmedUser(ctx context.Context, user *types.ReviewUser)
 			user_id, 
 			flag_type, 
 			confidence, 
-			reasons
-		) VALUES (?, ?, ?, ?)
+			reasons,
+			reviewer_id,
+			reviewer_username,
+			reviewer_display_name,
+			engine_version
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 	`
 
 	_, err := c.api.ExecuteSQL(ctx, sqlStmt, []any{
@@ -583,6 +604,10 @@ func (c *D1Client) AddConfirmedUser(ctx context.Context, user *types.ReviewUser)
 		enum.UserTypeConfirmed,
 		user.Confidence,
 		reasonsJSON,
+		reviewerID,
+		reviewerUsername,
+		reviewerDisplayName,
+		user.EngineVersion,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to insert confirmed user: %w", err)
@@ -590,7 +615,9 @@ func (c *D1Client) AddConfirmedUser(ctx context.Context, user *types.ReviewUser)
 
 	c.logger.Debug("Added confirmed user to user_flags table",
 		zap.Uint64("user_id", user.ID),
-		zap.Float64("confidence", user.Confidence))
+		zap.Float64("confidence", user.Confidence),
+		zap.Uint64("reviewer_id", reviewerID),
+		zap.String("reviewer_username", reviewerUsername))
 
 	return nil
 }

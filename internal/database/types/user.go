@@ -26,6 +26,7 @@ type User struct {
 	CreatedAt           time.Time     `bun:",notnull"               json:"createdAt"`
 	Status              enum.UserType `bun:",notnull"               json:"status"`
 	Confidence          float64       `bun:",notnull"               json:"confidence"`
+	EngineVersion       string        `bun:",notnull"               json:"engineVersion"`
 	HasSocials          bool          `bun:",notnull,default:false" json:"hasSocials"`
 	LastScanned         time.Time     `bun:",notnull"               json:"lastScanned"`
 	LastUpdated         time.Time     `bun:",notnull"               json:"lastUpdated"`
@@ -234,9 +235,17 @@ const (
 	UserFieldThumbnail                         // ThumbnailURL
 	UserFieldHasSocials                        // Has social media links
 
-	UserFieldRelationships // All relationships (groups, outfits, friends, games, inventory, etc.)
+	UserFieldGroups        // User groups
+	UserFieldOutfits       // User outfits
+	UserFieldFriends       // User friends
+	UserFieldGames         // User games
+	UserFieldInventory     // User inventory
+	UserFieldFavorites     // User favorites
+	UserFieldBadges        // User badges
+	UserFieldCurrentAssets // User current assets
 
-	UserFieldConfidence // AI confidence score
+	UserFieldConfidence    // AI confidence score
+	UserFieldEngineVersion // AI engine version
 
 	UserFieldLastScanned         // Last scan time
 	UserFieldLastUpdated         // Last update time
@@ -262,7 +271,8 @@ const (
 		UserFieldIsDeleted
 
 	// UserFieldStats includes all statistical fields.
-	UserFieldStats = UserFieldConfidence
+	UserFieldStats = UserFieldConfidence |
+		UserFieldEngineVersion
 
 	// UserFieldTimestamps includes all timestamp-related fields.
 	UserFieldTimestamps = UserFieldLastScanned |
@@ -270,6 +280,16 @@ const (
 		UserFieldLastViewed |
 		UserFieldLastBanCheck |
 		UserFieldLastThumbnailUpdate
+
+	// UserFieldRelationships includes all relationship fields.
+	UserFieldRelationships = UserFieldGroups |
+		UserFieldOutfits |
+		UserFieldFriends |
+		UserFieldGames |
+		UserFieldInventory |
+		UserFieldFavorites |
+		UserFieldBadges |
+		UserFieldCurrentAssets
 
 	// UserFieldAll includes all available fields.
 	UserFieldAll = UserFieldBasic |
@@ -291,6 +311,7 @@ var userFieldToColumns = map[UserField][]string{
 	UserFieldStatus:              {"status"},
 	UserFieldThumbnail:           {"thumbnail_url"},
 	UserFieldConfidence:          {"confidence"},
+	UserFieldEngineVersion:       {"engine_version"},
 	UserFieldLastScanned:         {"last_scanned"},
 	UserFieldLastUpdated:         {"last_updated"},
 	UserFieldLastViewed:          {"last_viewed"},

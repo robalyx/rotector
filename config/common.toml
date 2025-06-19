@@ -126,7 +126,6 @@ chat_model = "gemini-2.5-flash"
 # Model mappings for the provider
 [common.openai.model_mappings]
 "gemini-2.5-flash" = "google/gemini-2.5-flash-preview-05-20"
-"gemini-2.5-flash-thinking" = "google/gemini-2.5-flash-preview-05-20:thinking"
 "gemini-2.0-flash" = "google/gemini-2.0-flash-001"
 "qwen-3-235b-a22b" = "qwen/qwen3-235b-a22b"
 "deepseek-v3-0324" = "deepseek/deepseek-chat-v3-0324"

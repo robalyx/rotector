@@ -79,17 +79,24 @@ func (c *UserChecker) ProcessUsers(
 	ctxWithTimeout, cancel := context.WithTimeout(ctx, 10*time.Minute)
 	defer cancel()
 
+	// Process friend checker
+	confirmedFriendsMap, flaggedFriendsMap := c.friendChecker.ProcessUsers(
+		ctxWithTimeout, userInfos, reasonsMap,
+	)
+
+	// Process group checker
+	confirmedGroupsMap, flaggedGroupsMap := c.groupChecker.ProcessUsers(
+		ctxWithTimeout, userInfos, reasonsMap, confirmedFriendsMap, flaggedFriendsMap,
+	)
+
 	// Prepare user info maps with translations
 	translatedInfos, originalInfos := c.prepareUserInfoMaps(ctxWithTimeout, userInfos)
 
-	// Process group checker
-	c.groupChecker.ProcessUsers(ctxWithTimeout, userInfos, reasonsMap)
-
-	// Process friend checker
-	confirmedFriendsMap, flaggedFriendsMap := c.friendChecker.ProcessUsers(ctxWithTimeout, userInfos, reasonsMap)
-
 	// Process user analysis
-	c.userAnalyzer.ProcessUsers(ctxWithTimeout, userInfos, translatedInfos, originalInfos, reasonsMap, confirmedFriendsMap, flaggedFriendsMap)
+	c.userAnalyzer.ProcessUsers(
+		ctxWithTimeout, userInfos, translatedInfos, originalInfos, reasonsMap,
+		confirmedFriendsMap, flaggedFriendsMap, confirmedGroupsMap, flaggedGroupsMap,
+	)
 
 	// Process condo checker
 	c.condoChecker.ProcessUsers(ctxWithTimeout, userInfos, reasonsMap)

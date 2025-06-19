@@ -44,73 +44,32 @@ func NewFriendChecker(app *setup.App, logger *zap.Logger) *FriendChecker {
 }
 
 // ProcessUsers checks multiple users' friends concurrently and updates reasonsMap.
+// Returns maps of confirmed and flagged friends for reuse by other checkers.
 func (c *FriendChecker) ProcessUsers(
 	ctx context.Context, userInfos []*types.ReviewUser, reasonsMap map[uint64]types.Reasons[enum.UserReasonType],
-) {
-	// Track counts before processing
+) (map[uint64]map[uint64]*types.ReviewUser, map[uint64]map[uint64]*types.ReviewUser) {
 	existingFlags := len(reasonsMap)
 
-	// Collect all unique friend IDs across all users
-	uniqueFriendIDs := make(map[uint64]struct{})
-	for _, userInfo := range userInfos {
-		for _, friend := range userInfo.Friends {
-			uniqueFriendIDs[friend.ID] = struct{}{}
-		}
-	}
-
-	// Convert unique IDs to slice
-	friendIDs := make([]uint64, 0, len(uniqueFriendIDs))
-	for friendID := range uniqueFriendIDs {
-		friendIDs = append(friendIDs, friendID)
-	}
-
-	// Fetch all existing friends
-	existingFriends, err := c.db.Model().User().GetUsersByIDs(
-		ctx, friendIDs, types.UserFieldBasic|types.UserFieldReasons,
-	)
-	if err != nil {
-		c.logger.Error("Failed to fetch existing friends", zap.Error(err))
-		return
-	}
-
-	// Prepare maps for confirmed and flagged friends per user
-	confirmedFriendsMap := make(map[uint64]map[uint64]*types.ReviewUser)
-	flaggedFriendsMap := make(map[uint64]map[uint64]*types.ReviewUser)
-
-	for _, userInfo := range userInfos {
-		confirmedFriends := make(map[uint64]*types.ReviewUser)
-		flaggedFriends := make(map[uint64]*types.ReviewUser)
-
-		for _, friend := range userInfo.Friends {
-			if reviewUser, exists := existingFriends[friend.ID]; exists {
-				switch reviewUser.Status {
-				case enum.UserTypeConfirmed:
-					confirmedFriends[friend.ID] = reviewUser
-				case enum.UserTypeFlagged:
-					flaggedFriends[friend.ID] = reviewUser
-				default:
-					continue
-				}
-			}
-		}
-
-		confirmedFriendsMap[userInfo.ID] = confirmedFriends
-		flaggedFriendsMap[userInfo.ID] = flaggedFriends
-	}
+	// Prepare friend maps
+	confirmedFriendsMap, flaggedFriendsMap := c.PrepareFriendMaps(ctx, userInfos)
 
 	// Track users that exceed confidence threshold
 	var usersToAnalyze []*types.ReviewUser
+	userConfidenceMap := make(map[uint64]float64)
+	userFlaggedCountMap := make(map[uint64]int)
 
 	// Process results
 	for _, userInfo := range userInfos {
 		confirmedCount := len(confirmedFriendsMap[userInfo.ID])
-		flaggedCount := len(flaggedFriendsMap[userInfo.ID])
+		flaggedCount := c.countValidFlaggedFriends(flaggedFriendsMap[userInfo.ID])
+		userFlaggedCountMap[userInfo.ID] = flaggedCount
 
 		// Calculate confidence score
 		confidence := c.calculateConfidence(confirmedCount, flaggedCount, len(userInfo.Friends))
+		userConfidenceMap[userInfo.ID] = confidence
 
-		// Only process users that exceed threshold
-		if confidence >= 0.50 {
+		// Only process users that exceed threshold and have friends
+		if confidence >= 0.50 && len(userInfo.Friends) > 0 {
 			usersToAnalyze = append(usersToAnalyze, userInfo)
 		}
 	}
@@ -123,8 +82,8 @@ func (c *FriendChecker) ProcessUsers(
 		// Process results and update reasonsMap
 		for _, userInfo := range usersToAnalyze {
 			confirmedCount := len(confirmedFriendsMap[userInfo.ID])
-			flaggedCount := len(flaggedFriendsMap[userInfo.ID])
-			confidence := c.calculateConfidence(confirmedCount, flaggedCount, len(userInfo.Friends))
+			flaggedCount := userFlaggedCountMap[userInfo.ID]
+			confidence := userConfidenceMap[userInfo.ID]
 
 			reason := reasons[userInfo.ID]
 			if reason == "" {
@@ -155,67 +114,152 @@ func (c *FriendChecker) ProcessUsers(
 		zap.Int("totalUsers", len(userInfos)),
 		zap.Int("analyzedUsers", len(usersToAnalyze)),
 		zap.Int("newFlags", len(reasonsMap)-existingFlags))
+
+	return confirmedFriendsMap, flaggedFriendsMap
+}
+
+// PrepareFriendMaps creates friend maps for reuse by checkers.
+// This method extracts the friend map preparation logic for reusability.
+func (c *FriendChecker) PrepareFriendMaps(
+	ctx context.Context, userInfos []*types.ReviewUser,
+) (map[uint64]map[uint64]*types.ReviewUser, map[uint64]map[uint64]*types.ReviewUser) {
+	confirmedFriendsMap := make(map[uint64]map[uint64]*types.ReviewUser)
+	flaggedFriendsMap := make(map[uint64]map[uint64]*types.ReviewUser)
+
+	// Collect all unique friend IDs across all users
+	uniqueFriendIDs := make(map[uint64]struct{})
+	for _, userInfo := range userInfos {
+		for _, friend := range userInfo.Friends {
+			uniqueFriendIDs[friend.ID] = struct{}{}
+		}
+	}
+
+	// Convert unique IDs to slice
+	friendIDs := make([]uint64, 0, len(uniqueFriendIDs))
+	for friendID := range uniqueFriendIDs {
+		friendIDs = append(friendIDs, friendID)
+	}
+
+	// If no friends, return empty maps
+	if len(friendIDs) == 0 {
+		for _, userInfo := range userInfos {
+			confirmedFriendsMap[userInfo.ID] = make(map[uint64]*types.ReviewUser)
+			flaggedFriendsMap[userInfo.ID] = make(map[uint64]*types.ReviewUser)
+		}
+		return confirmedFriendsMap, flaggedFriendsMap
+	}
+
+	// Fetch all existing friends
+	existingFriends, err := c.db.Model().User().GetUsersByIDs(
+		ctx, friendIDs, types.UserFieldBasic|types.UserFieldReasons,
+	)
+	if err != nil {
+		c.logger.Error("Failed to fetch existing friends", zap.Error(err))
+		// Return empty maps on error
+		for _, userInfo := range userInfos {
+			confirmedFriendsMap[userInfo.ID] = make(map[uint64]*types.ReviewUser)
+			flaggedFriendsMap[userInfo.ID] = make(map[uint64]*types.ReviewUser)
+		}
+		return confirmedFriendsMap, flaggedFriendsMap
+	}
+
+	// Prepare maps for confirmed and flagged friends per user
+	for _, userInfo := range userInfos {
+		confirmedFriends := make(map[uint64]*types.ReviewUser)
+		flaggedFriends := make(map[uint64]*types.ReviewUser)
+
+		for _, friend := range userInfo.Friends {
+			if reviewUser, exists := existingFriends[friend.ID]; exists {
+				switch reviewUser.Status {
+				case enum.UserTypeConfirmed:
+					confirmedFriends[friend.ID] = reviewUser
+				case enum.UserTypeFlagged:
+					flaggedFriends[friend.ID] = reviewUser
+				default:
+					continue
+				}
+			}
+		}
+
+		confirmedFriendsMap[userInfo.ID] = confirmedFriends
+		flaggedFriendsMap[userInfo.ID] = flaggedFriends
+	}
+
+	return confirmedFriendsMap, flaggedFriendsMap
 }
 
 // calculateConfidence computes a weighted confidence score based on friend relationships.
 func (c *FriendChecker) calculateConfidence(confirmedCount, flaggedCount, totalFriends int) float64 {
-	var confidence float64
+	totalWeight := float64(confirmedCount) + (float64(flaggedCount) * 0.8)
 
-	// Factor 1: Ratio of inappropriate friends
-	if totalFriends > 0 {
-		totalInappropriate := float64(confirmedCount) + (float64(flaggedCount) * 0.5)
-		effectiveTotalFriends := math.Min(float64(totalFriends), float64(200))
-		ratioFactor := math.Min(totalInappropriate/effectiveTotalFriends, 1.0)
-		confidence += ratioFactor * 0.50
+	// Hard thresholds for serious cases
+	if confirmedCount >= 10 || totalWeight >= 20 {
+		return 1.0
 	}
 
-	// Factor 2: Absolute number of inappropriate friends
-	inappropriateWeight := c.calculateInappropriateWeight(confirmedCount, flaggedCount, totalFriends)
-	confidence += inappropriateWeight * 0.50
+	// Absolute count bonuses to prevent gaming large networks
+	var absoluteBonus float64
+	switch {
+	case confirmedCount >= 20:
+		absoluteBonus = 0.3
+	case confirmedCount >= 12:
+		absoluteBonus = 0.15
+	case confirmedCount >= 8:
+		absoluteBonus = 0.05
+	}
 
-	return confidence
+	// Calculate thresholds based on network size
+	var adjustedThreshold float64
+	switch {
+	case totalFriends >= 500:
+		adjustedThreshold = math.Max(22.0, 0.035*float64(totalFriends))
+	case totalFriends >= 200:
+		adjustedThreshold = math.Max(16.0, 0.06*float64(totalFriends))
+	case totalFriends >= 50:
+		adjustedThreshold = math.Max(5.0, 0.085*float64(totalFriends))
+	case totalFriends >= 25:
+		adjustedThreshold = math.Max(3.0, 0.11*float64(totalFriends))
+	default:
+		adjustedThreshold = math.Max(2.0, 0.14*float64(totalFriends))
+	}
+
+	weightedThreshold := adjustedThreshold * 1.2
+	confirmedRatio := float64(confirmedCount) / adjustedThreshold
+	weightedRatio := totalWeight / weightedThreshold
+	maxRatio := math.Max(confirmedRatio, weightedRatio)
+
+	var baseConfidence float64
+	switch {
+	case maxRatio >= 2.0:
+		baseConfidence = 1.0
+	case maxRatio >= 1.5:
+		baseConfidence = 0.8
+	case maxRatio >= 1.0:
+		baseConfidence = 0.6
+	case maxRatio >= 0.7:
+		baseConfidence = 0.4
+	case maxRatio >= 0.5:
+		baseConfidence = 0.3
+	case maxRatio >= 0.3:
+		baseConfidence = 0.2
+	default:
+		baseConfidence = 0.0
+	}
+
+	return math.Min(baseConfidence+absoluteBonus, 1.0)
 }
 
-// calculateInappropriateWeight returns a weight based on the total number of inappropriate friends.
-func (c *FriendChecker) calculateInappropriateWeight(confirmedCount, flaggedCount, totalFriends int) float64 {
-	totalWeight := float64(confirmedCount) + (float64(flaggedCount) * 0.5)
-
-	// Calculate percentage thresholds based on friend count
-	var baseThreshold float64
-	switch {
-	case totalFriends >= 500: // Large networks
-		baseThreshold = 0.02 // 2% base threshold
-	case totalFriends >= 200: // Medium networks
-		baseThreshold = 0.03 // 3% base threshold
-	default: // Small networks
-		baseThreshold = 0.04 // 4% base threshol
+// countValidFlaggedFriends counts flagged friends, excluding those who only have
+// friend reason as their only reason to avoid false positives from circular flagging.
+func (c *FriendChecker) countValidFlaggedFriends(flaggedFriends map[uint64]*types.ReviewUser) int {
+	count := 0
+	for _, flaggedFriend := range flaggedFriends {
+		if len(flaggedFriend.Reasons) == 1 {
+			if _, hasOnlyFriendReason := flaggedFriend.Reasons[enum.UserReasonTypeFriend]; hasOnlyFriendReason {
+				continue
+			}
+		}
+		count++
 	}
-
-	// Calculate actual thresholds
-	minConfirmed := 3
-	minWeighted := 5
-
-	thresholdConfirmed := math.Max(float64(minConfirmed), baseThreshold*float64(totalFriends))
-	thresholdWeighted := math.Max(float64(minWeighted), (baseThreshold*1.5)*float64(totalFriends))
-
-	// Hard threshold for serious cases
-	if confirmedCount >= 15 || totalWeight >= 25 {
-		return 1.0
-	}
-
-	// Determine confidence based on percentage thresholds
-	switch {
-	case float64(confirmedCount) >= thresholdConfirmed*1.5 || totalWeight >= thresholdWeighted*1.5:
-		return 1.0
-	case float64(confirmedCount) >= thresholdConfirmed*1.2 || totalWeight >= thresholdWeighted*1.2:
-		return 0.8
-	case float64(confirmedCount) >= thresholdConfirmed || totalWeight >= thresholdWeighted:
-		return 0.6
-	case float64(confirmedCount) >= thresholdConfirmed*0.7 || totalWeight >= thresholdWeighted*0.7:
-		return 0.4
-	case float64(confirmedCount) >= thresholdConfirmed*0.4 || totalWeight >= thresholdWeighted*0.4:
-		return 0.2
-	default:
-		return 0.0
-	}
+	return count
 }

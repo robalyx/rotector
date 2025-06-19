@@ -82,11 +82,19 @@ func (c *AIClient) Chat() ChatCompletions {
 }
 
 // blockIndefinitely blocks the program indefinitely when the circuit breaker opens.
-func (c *AIClient) blockIndefinitely(model string, err error) {
+func (c *AIClient) blockIndefinitely(ctx context.Context, model string, err error) {
 	c.logger.Error("Circuit breaker is open - system requires immediate attention. Pausing indefinitely.",
 		zap.String("model", model),
 		zap.Error(err))
-	<-c.blockChan // This will block forever since no one sends to this channel
+
+	select {
+	case <-c.blockChan: // This will block forever since no one sends to this channel
+		c.logger.Info("Circuit breaker block released")
+	case <-ctx.Done():
+		c.logger.Info("Graceful shutdown requested while circuit breaker was open",
+			zap.String("model", model),
+			zap.Error(ctx.Err()))
+	}
 }
 
 // chatCompletions implements the ChatCompletions interface.
@@ -124,7 +132,7 @@ func (c *chatCompletions) New(ctx context.Context, params openai.ChatCompletionN
 	if err != nil {
 		switch {
 		case errors.Is(err, gobreaker.ErrOpenState):
-			c.client.blockIndefinitely(params.Model, err)
+			c.client.blockIndefinitely(ctx, params.Model, err)
 			return nil, fmt.Errorf("system failure - circuit breaker is open: %w", err)
 		case errors.Is(err, utils.ErrContentBlocked):
 			return nil, err
@@ -188,7 +196,7 @@ func (c *chatCompletions) NewWithRetry(
 			lastErr = err
 			switch {
 			case errors.Is(err, gobreaker.ErrOpenState):
-				c.client.blockIndefinitely(params.Model, err)
+				c.client.blockIndefinitely(ctx, params.Model, err)
 				return backoff.Permanent(fmt.Errorf("system failure - circuit breaker is open: %w", err))
 			case errors.Is(err, utils.ErrContentBlocked):
 				return backoff.Permanent(err)
@@ -273,7 +281,7 @@ func (c *chatCompletions) NewStreaming(
 	if err != nil {
 		c.client.semaphore.Release(1)
 		if errors.Is(err, gobreaker.ErrOpenState) {
-			c.client.blockIndefinitely(params.Model, err)
+			c.client.blockIndefinitely(ctx, params.Model, err)
 			return ssestream.NewStream[openai.ChatCompletionChunk](
 				nil, fmt.Errorf("system failure - circuit breaker is open: %w", err))
 		}

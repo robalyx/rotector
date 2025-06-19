@@ -235,6 +235,7 @@ func (a *OutfitAnalyzer) analyzeUserOutfits(
 	// Process outfits in batches
 	var allSuspiciousThemes []string
 	var highestConfidence float64
+	var uniqueFlaggedCount int
 	flaggedOutfits := make(map[string]struct{})
 
 	for i := 0; i < len(downloads); i += a.batchSize {
@@ -270,15 +271,17 @@ func (a *OutfitAnalyzer) analyzeUserOutfits(
 				fmt.Sprintf("%s|%s|%.2f", theme.OutfitName, theme.Theme, theme.Confidence))
 
 			flaggedOutfits[theme.OutfitName] = struct{}{}
+			uniqueFlaggedCount++
 
 			// Also flag similar outfits that were deduplicated
 			for _, download := range batch {
 				if download.name == theme.OutfitName && len(download.similarOutfits) > 0 {
 					for _, similarOutfit := range download.similarOutfits {
-						flaggedOutfits[similarOutfit] = struct{}{}
 						similarConfidence := theme.Confidence * 0.9 // Reduce confidence by 10% for similar outfits
 						allSuspiciousThemes = append(allSuspiciousThemes,
 							fmt.Sprintf("%s|%s (similar to %s)|%.2f", similarOutfit, theme.Theme, theme.OutfitName, similarConfidence))
+
+						flaggedOutfits[similarOutfit] = struct{}{}
 
 						a.logger.Debug("Flagged similar outfit",
 							zap.String("originalOutfit", theme.OutfitName),
@@ -302,9 +305,9 @@ func (a *OutfitAnalyzer) analyzeUserOutfits(
 	shouldFlag := false
 	finalConfidence := highestConfidence
 
-	if len(allSuspiciousThemes) > 1 && highestConfidence >= 0.5 {
+	if uniqueFlaggedCount > 1 && highestConfidence >= 0.5 {
 		shouldFlag = true
-	} else if len(allSuspiciousThemes) == 1 && highestConfidence >= 0.7 {
+	} else if uniqueFlaggedCount == 1 && highestConfidence >= 0.8 {
 		shouldFlag = true
 		finalConfidence = highestConfidence * 0.8 // Reduce confidence by 20% for single outfit cases
 	}
@@ -324,10 +327,10 @@ func (a *OutfitAnalyzer) analyzeUserOutfits(
 		a.logger.Info("AI flagged user with outfit themes",
 			zap.Uint64("userID", info.ID),
 			zap.String("username", info.Name),
-			zap.Float64("originalConfidence", highestConfidence),
 			zap.Float64("finalConfidence", finalConfidence),
-			zap.Int("numOutfits", len(allSuspiciousThemes)),
+			zap.Int("uniqueFlaggedOutfits", uniqueFlaggedCount),
 			zap.Int("totalFlaggedOutfits", len(flaggedOutfits)),
+			zap.Int("numThemes", len(allSuspiciousThemes)),
 			zap.Strings("themes", allSuspiciousThemes))
 	}
 

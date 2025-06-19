@@ -55,7 +55,7 @@ linters:
     exhaustive:
       default-signifies-exhaustive: true
     funlen:
-      lines: 120
+      lines: 130
       statements: 70
       ignore-comments: true
     gochecksumtype:

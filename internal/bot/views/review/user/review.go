@@ -70,10 +70,11 @@ func (b *ReviewBuilder) Build() *discord.MessageUpdateBuilder {
 		b.buildUserInfoSection(),
 		discord.NewLargeSeparator(),
 		discord.NewSection(
-			discord.NewTextDisplay(fmt.Sprintf("-# UUID: %s\n-# Created: %s • Updated: %s",
+			discord.NewTextDisplay(fmt.Sprintf("-# UUID: %s\n-# Created: %s • Updated: %s\n-# Engine Version: %s",
 				b.user.UUID.String(),
 				fmt.Sprintf("<t:%d:R>", b.user.CreatedAt.Unix()),
 				fmt.Sprintf("<t:%d:R>", b.user.LastUpdated.Unix()),
+				b.user.EngineVersion,
 			)),
 		).WithAccessory(
 			discord.NewLinkButton("View Profile", fmt.Sprintf("https://www.roblox.com/users/%d/profile", b.user.ID)).

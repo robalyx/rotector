@@ -430,10 +430,11 @@ func (m *ReviewMenu) handleConfirmUser(ctx *interaction.Context, s *session.Sess
 	m.navigateAfterAction(ctx, s, fmt.Sprintf("User confirmed. %d users left to review.", flaggedCount))
 
 	// Add or update the user in the D1 database
-	if err := m.layout.d1Client.AddConfirmedUser(ctx.Context(), user); err != nil {
+	if err := m.layout.d1Client.AddConfirmedUser(ctx.Context(), user, reviewerID); err != nil {
 		m.layout.logger.Error("Failed to add confirmed user to D1 database",
 			zap.Error(err),
-			zap.Uint64("user_id", user.ID))
+			zap.Uint64("user_id", user.ID),
+			zap.Uint64("reviewer_id", reviewerID))
 	}
 
 	// Log the confirm action

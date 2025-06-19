@@ -143,9 +143,14 @@ func (c *GroupChecker) CheckGroupPercentages(
 }
 
 // ProcessUsers checks multiple users' groups concurrently and updates reasonsMap.
+// Returns maps of confirmed and flagged groups for reuse by other checkers.
 func (c *GroupChecker) ProcessUsers(
 	ctx context.Context, userInfos []*types.ReviewUser, reasonsMap map[uint64]types.Reasons[enum.UserReasonType],
-) {
+	confirmedFriendsMap, flaggedFriendsMap map[uint64]map[uint64]*types.ReviewUser,
+) (map[uint64]map[uint64]*types.ReviewGroup, map[uint64]map[uint64]*types.ReviewGroup) {
+	confirmedGroupsMap := make(map[uint64]map[uint64]*types.ReviewGroup)
+	flaggedGroupsMap := make(map[uint64]map[uint64]*types.ReviewGroup)
+
 	// Track counts before processing
 	existingFlags := len(reasonsMap)
 
@@ -169,13 +174,10 @@ func (c *GroupChecker) ProcessUsers(
 	)
 	if err != nil {
 		c.logger.Error("Failed to fetch existing groups", zap.Error(err))
-		return
+		return confirmedGroupsMap, flaggedGroupsMap
 	}
 
 	// Prepare maps for confirmed and flagged groups per user
-	confirmedGroupsMap := make(map[uint64]map[uint64]*types.ReviewGroup)
-	flaggedGroupsMap := make(map[uint64]map[uint64]*types.ReviewGroup)
-
 	for _, userInfo := range userInfos {
 		confirmedGroups := make(map[uint64]*types.ReviewGroup)
 		flaggedGroups := make(map[uint64]*types.ReviewGroup)
@@ -199,17 +201,37 @@ func (c *GroupChecker) ProcessUsers(
 
 	// Track users that exceed confidence threshold
 	var usersToAnalyze []*types.ReviewUser
+	userConfidenceMap := make(map[uint64]float64)
 
 	// Process results
 	for _, userInfo := range userInfos {
 		confirmedCount := len(confirmedGroupsMap[userInfo.ID])
 		flaggedCount := len(flaggedGroupsMap[userInfo.ID])
+		totalInappropriate := confirmedCount + flaggedCount
+
+		// Get total count of inappropriate friends
+		totalInappropriateFriends, confirmedFriendCount := c.getInappropriateFriendCount(userInfo.ID, confirmedFriendsMap, flaggedFriendsMap)
+
+		// Skip users with only 1 inappropriate group unless they have inappropriate friends
+		hasInappropriateFriendEvidence := totalInappropriateFriends > 5 ||
+			(len(userInfo.Friends) > 0 && confirmedFriendCount > 0 && totalInappropriateFriends == confirmedFriendCount)
+
+		if totalInappropriate == 1 && !hasInappropriateFriendEvidence {
+			continue
+		}
 
 		// Calculate confidence score
 		confidence := c.calculateConfidence(confirmedCount, flaggedCount, len(userInfo.Groups))
+		userConfidenceMap[userInfo.ID] = confidence
 
-		// Only process users that exceed threshold
-		if confidence >= 0.5 {
+		// Check if user meets group threshold
+		meetsGroupThreshold := confidence >= 0.5
+
+		// Check friend requirement for users with insufficient group evidence
+		meetsFriendRequirement := c.evaluateFriendRequirement(userInfo, confirmedCount, flaggedCount, totalInappropriateFriends)
+
+		// Only process users that meet both group threshold AND friend requirement
+		if meetsGroupThreshold && meetsFriendRequirement {
 			usersToAnalyze = append(usersToAnalyze, userInfo)
 		}
 	}
@@ -223,7 +245,7 @@ func (c *GroupChecker) ProcessUsers(
 		for _, userInfo := range usersToAnalyze {
 			confirmedCount := len(confirmedGroupsMap[userInfo.ID])
 			flaggedCount := len(flaggedGroupsMap[userInfo.ID])
-			confidence := c.calculateConfidence(confirmedCount, flaggedCount, len(userInfo.Groups))
+			confidence := userConfidenceMap[userInfo.ID]
 
 			reason := reasons[userInfo.ID]
 			if reason == "" {
@@ -253,6 +275,8 @@ func (c *GroupChecker) ProcessUsers(
 		zap.Int("totalUsers", len(userInfos)),
 		zap.Int("analyzedUsers", len(usersToAnalyze)),
 		zap.Int("newFlags", len(reasonsMap)-existingFlags))
+
+	return confirmedGroupsMap, flaggedGroupsMap
 }
 
 // calculateGroupConfidence computes the confidence score for a group based on its flagged users.
@@ -289,38 +313,111 @@ func (c *GroupChecker) calculateGroupConfidence(flaggedUsers []uint64, users map
 
 // calculateConfidence computes a weighted confidence score based on group memberships.
 func (c *GroupChecker) calculateConfidence(confirmedCount, flaggedCount, totalGroups int) float64 {
-	var confidence float64
+	totalWeight := float64(confirmedCount) + (float64(flaggedCount) * 0.4)
 
-	// Factor 1: Absolute number of inappropriate groups - 50% weight
-	inappropriateWeight := c.calculateInappropriateWeight(confirmedCount, flaggedCount)
-	confidence += inappropriateWeight * 0.50
-
-	// Factor 2: Ratio of inappropriate groups - 50% weight
-	if totalGroups > 0 {
-		totalInappropriate := float64(confirmedCount) + (float64(flaggedCount) * 0.5)
-		ratioWeight := math.Min(totalInappropriate/float64(totalGroups), 1.0)
-		confidence += ratioWeight * 0.50
+	// Hard thresholds for serious cases
+	if confirmedCount >= 8 || totalWeight >= 10 {
+		return 1.0
 	}
 
-	return confidence
+	// Absolute count bonuses to prevent gaming large networks
+	var absoluteBonus float64
+	switch {
+	case confirmedCount >= 5:
+		absoluteBonus = 0.4
+	case confirmedCount >= 3:
+		absoluteBonus = 0.2
+	case confirmedCount >= 2:
+		absoluteBonus = 0.1
+	}
+
+	// Calculate thresholds based on network size
+	var adjustedThreshold float64
+	switch {
+	case totalGroups >= 50:
+		adjustedThreshold = math.Max(4.0, 0.08*float64(totalGroups))
+	case totalGroups >= 20:
+		adjustedThreshold = math.Max(3.0, 0.12*float64(totalGroups))
+	case totalGroups >= 10:
+		adjustedThreshold = math.Max(2.0, 0.15*float64(totalGroups))
+	default:
+		adjustedThreshold = 0.25 * float64(totalGroups)
+	}
+
+	weightedThreshold := adjustedThreshold * 1.3
+	confirmedRatio := float64(confirmedCount) / adjustedThreshold
+	weightedRatio := totalWeight / weightedThreshold
+	maxRatio := math.Max(confirmedRatio, weightedRatio)
+
+	var baseConfidence float64
+	switch {
+	case maxRatio >= 1.5:
+		baseConfidence = 1.0
+	case maxRatio >= 1.2:
+		baseConfidence = 0.8
+	case maxRatio >= 1.0:
+		baseConfidence = 0.6
+	case maxRatio >= 0.7:
+		baseConfidence = 0.4
+	case maxRatio >= 0.4:
+		baseConfidence = 0.2
+	default:
+		baseConfidence = 0.0
+	}
+
+	return math.Min(baseConfidence+absoluteBonus, 1.0)
 }
 
-// calculateInappropriateWeight returns a weight based on the total number of inappropriate groups.
-func (c *GroupChecker) calculateInappropriateWeight(confirmedCount, flaggedCount int) float64 {
-	totalWeight := float64(confirmedCount) + (float64(flaggedCount) * 0.5)
+// evaluateFriendRequirement checks if a user meets the friend requirement based on group evidence.
+// Returns true if the user meets the friend requirement or if friend requirement doesn't apply.
+func (c *GroupChecker) evaluateFriendRequirement(
+	userInfo *types.ReviewUser, confirmedCount, flaggedCount, totalInappropriateFriends int,
+) bool {
+	totalInappropriate := confirmedCount + flaggedCount
+	totalWeight := float64(confirmedCount) + (float64(flaggedCount) * 0.8)
 
+	// Apply friend requirement if:
+	// 1. User has < 3 total weight
+	// 2. Unless all their groups are inappropriate
+	shouldApplyFriendRequirement := totalWeight < 3.0 && totalInappropriate != len(userInfo.Groups)
+	if !shouldApplyFriendRequirement {
+		return true
+	}
+
+	requiredFlaggedFriends := c.getRequiredFlaggedFriends(len(userInfo.Friends))
+	meetsFriendRequirement := totalInappropriateFriends >= requiredFlaggedFriends
+
+	return meetsFriendRequirement
+}
+
+// getInappropriateFriendCount returns the total count of inappropriate and confirmed friends count for a user.
+func (c *GroupChecker) getInappropriateFriendCount(
+	userID uint64, confirmedFriendsMap, flaggedFriendsMap map[uint64]map[uint64]*types.ReviewUser,
+) (confirmedFriendCount int, flaggedFriendCount int) {
+	if confirmedFriends, exists := confirmedFriendsMap[userID]; exists {
+		confirmedFriendCount = len(confirmedFriends)
+	}
+	if flaggedFriends, exists := flaggedFriendsMap[userID]; exists {
+		flaggedFriendCount = len(flaggedFriends)
+	}
+
+	return confirmedFriendCount + flaggedFriendCount, confirmedFriendCount
+}
+
+// getRequiredFlaggedFriends returns the minimum number of flagged friends required based on total friend count.
+func (c *GroupChecker) getRequiredFlaggedFriends(totalFriends int) int {
 	switch {
-	case confirmedCount >= 5 || totalWeight >= 7:
-		return 1.0
-	case confirmedCount >= 4 || totalWeight >= 5:
-		return 0.8
-	case confirmedCount >= 3 || totalWeight >= 4:
-		return 0.6
-	case confirmedCount >= 2 || totalWeight >= 3:
-		return 0.4
-	case totalWeight >= 1:
-		return 0.2
+	case totalFriends < 10:
+		return 1
+	case totalFriends < 25:
+		return 3
+	case totalFriends < 50:
+		return 5
+	case totalFriends < 100:
+		return 8
+	case totalFriends < 200:
+		return 10
 	default:
-		return 0.0
+		return 12
 	}
 }
