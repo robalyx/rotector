@@ -130,7 +130,8 @@ func (b *Builder) Build() *discord.MessageUpdateBuilder {
 			for key, value := range log.Details {
 				newKey := strings.ToUpper(key[:1]) + key[1:]
 				newValue := utils.NormalizeString(fmt.Sprintf("%v", value))
-				logsContent.WriteString(fmt.Sprintf("%s: `%v`\n", newKey, newValue))
+				truncatedValue := utils.TruncateString(newValue, 200)
+				logsContent.WriteString(fmt.Sprintf("%s: `%s`\n", newKey, truncatedValue))
 			}
 		}
 
