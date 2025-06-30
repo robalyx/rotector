@@ -334,14 +334,24 @@ func (c *GroupChecker) calculateConfidence(confirmedCount, flaggedCount, totalGr
 	// Calculate thresholds based on network size
 	var adjustedThreshold float64
 	switch {
+	case totalGroups >= 100:
+		adjustedThreshold = math.Max(6.0, 0.065*float64(totalGroups))
+	case totalGroups >= 75:
+		adjustedThreshold = math.Max(5.0, 0.07*float64(totalGroups))
 	case totalGroups >= 50:
-		adjustedThreshold = math.Max(4.0, 0.08*float64(totalGroups))
+		adjustedThreshold = math.Max(4.5, 0.08*float64(totalGroups))
+	case totalGroups >= 35:
+		adjustedThreshold = math.Max(4.0, 0.10*float64(totalGroups))
 	case totalGroups >= 20:
-		adjustedThreshold = math.Max(3.0, 0.12*float64(totalGroups))
+		adjustedThreshold = math.Max(3.5, 0.12*float64(totalGroups))
+	case totalGroups >= 15:
+		adjustedThreshold = math.Max(3.0, 0.14*float64(totalGroups))
 	case totalGroups >= 10:
-		adjustedThreshold = math.Max(2.0, 0.15*float64(totalGroups))
+		adjustedThreshold = math.Max(2.5, 0.15*float64(totalGroups))
+	case totalGroups >= 5:
+		adjustedThreshold = math.Max(2.0, 0.20*float64(totalGroups))
 	default:
-		adjustedThreshold = 0.25 * float64(totalGroups)
+		adjustedThreshold = math.Max(1.5, 0.25*float64(totalGroups))
 	}
 
 	weightedThreshold := adjustedThreshold * 1.3
@@ -376,9 +386,15 @@ func (c *GroupChecker) evaluateFriendRequirement(
 	totalInappropriate := confirmedCount + flaggedCount
 	totalWeight := float64(confirmedCount) + (float64(flaggedCount) * 0.8)
 
-	// Apply friend requirement if:
-	// 1. User has < 3 total weight
-	// 2. Unless all their groups are inappropriate
+	// Special case for possible false positives
+	if confirmedCount < 5 && len(userInfo.Groups) > 15 {
+		if len(userInfo.Friends) > 5 {
+			return totalInappropriateFriends >= 4
+		}
+		return totalInappropriateFriends >= 2
+	}
+
+	// Apply friend requirement if user has < 3 total weight unless all their groups are inappropriate
 	shouldApplyFriendRequirement := totalWeight < 3.0 && totalInappropriate != len(userInfo.Groups)
 	if !shouldApplyFriendRequirement {
 		return true

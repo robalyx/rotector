@@ -211,19 +211,37 @@ func (c *FriendChecker) calculateConfidence(confirmedCount, flaggedCount, totalF
 	// Calculate thresholds based on network size
 	var adjustedThreshold float64
 	switch {
+	case totalFriends >= 800:
+		adjustedThreshold = math.Max(25.0, 0.03*float64(totalFriends))
+	case totalFriends >= 600:
+		adjustedThreshold = math.Max(20.0, 0.032*float64(totalFriends))
 	case totalFriends >= 500:
-		adjustedThreshold = math.Max(22.0, 0.035*float64(totalFriends))
+		adjustedThreshold = math.Max(18.0, 0.035*float64(totalFriends))
+	case totalFriends >= 400:
+		adjustedThreshold = math.Max(16.0, 0.04*float64(totalFriends))
+	case totalFriends >= 300:
+		adjustedThreshold = math.Max(14.0, 0.045*float64(totalFriends))
 	case totalFriends >= 200:
-		adjustedThreshold = math.Max(16.0, 0.06*float64(totalFriends))
+		adjustedThreshold = math.Max(12.0, 0.055*float64(totalFriends))
+	case totalFriends >= 150:
+		adjustedThreshold = math.Max(9.0, 0.065*float64(totalFriends))
+	case totalFriends >= 100:
+		adjustedThreshold = math.Max(7.0, 0.075*float64(totalFriends))
+	case totalFriends >= 75:
+		adjustedThreshold = math.Max(6.0, 0.08*float64(totalFriends))
 	case totalFriends >= 50:
+		adjustedThreshold = math.Max(5.5, 0.08*float64(totalFriends))
+	case totalFriends >= 35:
 		adjustedThreshold = math.Max(5.0, 0.085*float64(totalFriends))
 	case totalFriends >= 25:
-		adjustedThreshold = math.Max(3.0, 0.11*float64(totalFriends))
+		adjustedThreshold = math.Max(4.5, 0.09*float64(totalFriends))
+	case totalFriends >= 15:
+		adjustedThreshold = math.Max(4.0, 0.10*float64(totalFriends))
 	default:
-		adjustedThreshold = math.Max(2.0, 0.14*float64(totalFriends))
+		adjustedThreshold = math.Max(2.5, 0.13*float64(totalFriends))
 	}
 
-	weightedThreshold := adjustedThreshold * 1.2
+	weightedThreshold := adjustedThreshold * 1.3
 	confirmedRatio := float64(confirmedCount) / adjustedThreshold
 	weightedRatio := totalWeight / weightedThreshold
 	maxRatio := math.Max(confirmedRatio, weightedRatio)
@@ -250,15 +268,26 @@ func (c *FriendChecker) calculateConfidence(confirmedCount, flaggedCount, totalF
 }
 
 // countValidFlaggedFriends counts flagged friends, excluding those who only have
-// friend reason as their only reason to avoid false positives from circular flagging.
+// friend reason or only friend + outfit reasons to avoid false positives from circular flagging.
 func (c *FriendChecker) countValidFlaggedFriends(flaggedFriends map[uint64]*types.ReviewUser) int {
 	count := 0
 	for _, flaggedFriend := range flaggedFriends {
+		// Skip users with only friend reason
 		if len(flaggedFriend.Reasons) == 1 {
 			if _, hasOnlyFriendReason := flaggedFriend.Reasons[enum.UserReasonTypeFriend]; hasOnlyFriendReason {
 				continue
 			}
 		}
+
+		// Skip users with only friend and outfit reasons
+		if len(flaggedFriend.Reasons) == 2 {
+			_, hasFriendReason := flaggedFriend.Reasons[enum.UserReasonTypeFriend]
+			_, hasOutfitReason := flaggedFriend.Reasons[enum.UserReasonTypeOutfit]
+			if hasFriendReason && hasOutfitReason {
+				continue
+			}
+		}
+
 		count++
 	}
 	return count

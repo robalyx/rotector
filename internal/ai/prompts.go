@@ -43,11 +43,14 @@ Key instructions:
 9. If one outfit is flagged, examine other outfits carefully for similar inappropriate elements or themes
 10. If there is no consistent inappropriate theme pattern across the user's outfits, reconsider whether the flagged violation is accurate
 
+CRITICAL: Pay special attention to textures, patterns, and visual effects that may simulate nudity. ANY texture applied directly to a bare avatar body (wood, stone, brick, etc.) represents nudity and should be flagged, regardless of whether the texture appears "stylized" or "non-human" - these are attempts to circumvent nudity detection
+
 Instruction: FLAG outfits that are sexual or adult-themed:
 - Maid outfits with revealing or sexualized elements (extremely low-cut tops, suggestive poses, or fetish-style accessories)
 - Latex or similar material catsuits or highly form-fitting bodysuits styled provocatively (e.g., dominatrix-style, very revealing)
 - Fetishwear (bondage elements, suggestive accessories clearly indicative of fetish themes rather than mainstream fashion items like chokers)
 - Actual nudity with realistic body features (detailed abs, body hair, tattoos)
+- Simulated nudity through textures or patterns that mimic anatomical features, exposed flesh, or undergarments (e.g., wood-grain/brick textures on bare avatar bodies representing nudity, realistic skin textures, shading effects that create illusion of nudity)
 - String thongs/tongs or other clothing creating a triangular effect to emphasize the buttocks
 - Provocative leotards with cutouts that create a revealing triangular design exposing the upper legs and hip areas
 - Inappropriate swimsuits (garments identifiable as swimwear that are extremely revealing due to minimal fabric, e.g., microkinis, thong-style bottoms)
@@ -91,7 +94,8 @@ DO NOT flag these legitimate themes and elements:
 - Aesthetic-based outfits (cottagecore, dark academia, etc.)
 - Dance or performance outfits standard for specific genres, unless explicitly sexualized beyond the norm
 - Short skirts, mini-skirts, or skirts of any length unless part of a clearly sexualized outfit context
-- Default placeholder outfits without added sexual details or exaggerations
+- Default placeholder outfits that are genuinely basic geometric shapes or simple solid colors without any textures, patterns, or visual elements
+- Wood-themed costumes or characters where wood textures are applied to actual clothing items or accessories (NOT when textures are applied directly to bare avatar bodies)
 - Meme character outfits
 - Standard crop tops that show midriff without revealing cutouts or extreme brevity (including when paired with shorts, pants, or skirts)
 - V-neck tops, dresses, or necklines that show cleavage without additional revealing elements
@@ -103,8 +107,7 @@ DO NOT flag these legitimate themes and elements:
 - Punk or edgy fashion elements without sexual themes
 - Default Roblox avatar bodies (basic geometric shapes without additional sexualized modifications)
 - Tiny avatars or small avatar proportions (avatar size alone is not inappropriate)
-- Shorts of any length (including very short shorts) unless part of a clearly sexualized outfit context
-- Muscular or athletic body builds (including exaggerated muscles, abs, or athletic proportions)`
+- Shorts of any length (including very short shorts) unless part of a clearly sexualized outfit context`
 
 	// OutfitRequestPrompt provides a reminder to focus on theme identification.
 	OutfitRequestPrompt = `Identify specific themes in these outfits.

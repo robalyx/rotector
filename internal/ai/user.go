@@ -24,6 +24,18 @@ import (
 	"golang.org/x/sync/semaphore"
 )
 
+// ProcessUsersParams contains all the parameters needed for user analysis processing.
+type ProcessUsersParams struct {
+	Users               []*types.ReviewUser                           `json:"users"`
+	TranslatedInfos     map[string]*types.ReviewUser                  `json:"translatedInfos"`
+	OriginalInfos       map[string]*types.ReviewUser                  `json:"originalInfos"`
+	ReasonsMap          map[uint64]types.Reasons[enum.UserReasonType] `json:"reasonsMap"`
+	ConfirmedFriendsMap map[uint64]map[uint64]*types.ReviewUser       `json:"confirmedFriendsMap"`
+	FlaggedFriendsMap   map[uint64]map[uint64]*types.ReviewUser       `json:"flaggedFriendsMap"`
+	ConfirmedGroupsMap  map[uint64]map[uint64]*types.ReviewGroup      `json:"confirmedGroupsMap"`
+	FlaggedGroupsMap    map[uint64]map[uint64]*types.ReviewGroup      `json:"flaggedGroupsMap"`
+}
+
 // UserSummary is a struct for user summaries for AI analysis.
 type UserSummary struct {
 	Name        string `json:"name"`
@@ -92,15 +104,9 @@ func NewUserAnalyzer(app *setup.App, translator *translator.Translator, logger *
 }
 
 // ProcessUsers analyzes user content for a batch of users.
-func (a *UserAnalyzer) ProcessUsers(
-	ctx context.Context, users []*types.ReviewUser,
-	translatedInfos map[string]*types.ReviewUser, originalInfos map[string]*types.ReviewUser,
-	reasonsMap map[uint64]types.Reasons[enum.UserReasonType],
-	confirmedFriendsMap, flaggedFriendsMap map[uint64]map[uint64]*types.ReviewUser,
-	confirmedGroupsMap, flaggedGroupsMap map[uint64]map[uint64]*types.ReviewGroup,
-) {
+func (a *UserAnalyzer) ProcessUsers(ctx context.Context, params *ProcessUsersParams) {
 	userReasonRequests := make(map[uint64]UserReasonRequest)
-	numBatches := (len(users) + a.batchSize - 1) / a.batchSize
+	numBatches := (len(params.Users) + a.batchSize - 1) / a.batchSize
 
 	// Process batches concurrently
 	var (
@@ -110,9 +116,9 @@ func (a *UserAnalyzer) ProcessUsers(
 
 	for i := range numBatches {
 		start := i * a.batchSize
-		end := min(start+a.batchSize, len(users))
+		end := min(start+a.batchSize, len(params.Users))
 
-		infoBatch := users[start:end]
+		infoBatch := params.Users[start:end]
 		p.Go(func(ctx context.Context) error {
 			// Acquire semaphore
 			if err := a.analysisSem.Acquire(ctx, 1); err != nil {
@@ -122,8 +128,7 @@ func (a *UserAnalyzer) ProcessUsers(
 
 			// Process batch
 			if err := a.processBatch(
-				ctx, infoBatch, translatedInfos, originalInfos, userReasonRequests, &mu, reasonsMap,
-				confirmedFriendsMap, flaggedFriendsMap, confirmedGroupsMap, flaggedGroupsMap,
+				ctx, infoBatch, params, userReasonRequests, &mu,
 			); err != nil {
 				a.logger.Error("Failed to process batch",
 					zap.Error(err),
@@ -141,13 +146,13 @@ func (a *UserAnalyzer) ProcessUsers(
 	}
 
 	a.logger.Info("Completed initial user analysis",
-		zap.Int("totalUsers", len(users)),
+		zap.Int("totalUsers", len(params.Users)),
 		zap.Int("flaggedUsers", len(userReasonRequests)))
 
 	// Generate detailed reasons for flagged users
 	if len(userReasonRequests) > 0 {
 		a.userReasonAnalyzer.ProcessFlaggedUsers(
-			ctx, userReasonRequests, translatedInfos, originalInfos, reasonsMap, 0,
+			ctx, userReasonRequests, params.TranslatedInfos, params.OriginalInfos, params.ReasonsMap, 0,
 		)
 	}
 }
@@ -224,17 +229,14 @@ func (a *UserAnalyzer) processUserBatch(ctx context.Context, batch []UserSummary
 
 // processBatch handles the AI analysis for a batch of user summaries.
 func (a *UserAnalyzer) processBatch(
-	ctx context.Context, userInfos []*types.ReviewUser, translatedInfos map[string]*types.ReviewUser,
-	originalInfos map[string]*types.ReviewUser, userReasonRequests map[uint64]UserReasonRequest, mu *sync.Mutex,
-	reasonsMap map[uint64]types.Reasons[enum.UserReasonType],
-	confirmedFriendsMap, flaggedFriendsMap map[uint64]map[uint64]*types.ReviewUser,
-	confirmedGroupsMap, flaggedGroupsMap map[uint64]map[uint64]*types.ReviewGroup,
+	ctx context.Context, userInfos []*types.ReviewUser, params *ProcessUsersParams,
+	userReasonRequests map[uint64]UserReasonRequest, mu *sync.Mutex,
 ) error {
 	// Convert map to slice for AI request
 	userInfosWithoutID := make([]UserSummary, 0, len(userInfos))
 	for _, userInfo := range userInfos {
 		// Get the translated info
-		translatedInfo, exists := translatedInfos[userInfo.Name]
+		translatedInfo, exists := params.TranslatedInfos[userInfo.Name]
 		if !exists {
 			a.logger.Warn("Translated info not found for user",
 				zap.String("username", userInfo.Name))
@@ -313,31 +315,106 @@ func (a *UserAnalyzer) processBatch(
 
 	// Process AI responses and create reason requests
 	a.processAndCreateRequests(
-		result, originalInfos, translatedInfos, userReasonRequests, mu, reasonsMap,
-		confirmedFriendsMap, flaggedFriendsMap, confirmedGroupsMap, flaggedGroupsMap,
+		result, params, userReasonRequests, mu,
 	)
 
 	return nil
 }
 
+// shouldSkipFlaggedUser determines if a flagged user should be skipped based on various conditions.
+func (a *UserAnalyzer) shouldSkipFlaggedUser(
+	flaggedUser FlaggedUser, originalInfo *types.ReviewUser, params *ProcessUsersParams,
+) bool {
+	// Skip results with no violations
+	if flaggedUser.Hint == "" || flaggedUser.Hint == "NO_VIOLATIONS" {
+		return true
+	}
+
+	// Validate confidence level
+	if flaggedUser.Confidence < 0.1 || flaggedUser.Confidence > 1.0 {
+		a.logger.Debug("AI flagged user with invalid confidence",
+			zap.String("username", flaggedUser.Name),
+			zap.Float64("confidence", flaggedUser.Confidence))
+		return true
+	}
+
+	// Special case for users with less than 1.0 confidence and more than 15 friends
+	if flaggedUser.Confidence < 1.0 {
+		totalFriends := len(originalInfo.Friends)
+		if totalFriends > 15 {
+			confirmedFriends := params.ConfirmedFriendsMap[originalInfo.ID]
+			flaggedFriends := params.FlaggedFriendsMap[originalInfo.ID]
+			totalInappropriateFriends := len(confirmedFriends) + len(flaggedFriends)
+
+			if totalInappropriateFriends < 1 {
+				a.logger.Info("Skipping user with >15 friends, confidence <1.0, but no inappropriate friends",
+					zap.String("username", flaggedUser.Name),
+					zap.Float64("confidence", flaggedUser.Confidence),
+					zap.Int("totalFriendsCount", totalFriends),
+					zap.Int("inappropriateFriendsCount", totalInappropriateFriends))
+				return true
+			}
+		}
+	}
+
+	// Skip users with specific conditions when they have no existing reasons
+	if len(params.ReasonsMap[originalInfo.ID]) == 0 {
+		if flaggedUser.Confidence < 0.8 {
+			a.logger.Info("Skipping user with low confidence and no existing reasons",
+				zap.String("username", flaggedUser.Name),
+				zap.Float64("confidence", flaggedUser.Confidence))
+			return true
+		}
+
+		if flaggedUser.Confidence < 0.9 {
+			// Check friends
+			confirmedFriends := params.ConfirmedFriendsMap[originalInfo.ID]
+			flaggedFriends := params.FlaggedFriendsMap[originalInfo.ID]
+			totalInappropriateFriends := len(confirmedFriends) + len(flaggedFriends)
+			totalFriends := len(originalInfo.Friends)
+			hasSufficientInappropriateFriends := totalInappropriateFriends >= 5 ||
+				(totalFriends > 0 && float64(totalInappropriateFriends)/float64(totalFriends) >= 0.6)
+
+			// Check groups
+			confirmedGroups := params.ConfirmedGroupsMap[originalInfo.ID]
+			flaggedGroups := params.FlaggedGroupsMap[originalInfo.ID]
+			totalInappropriateGroups := len(confirmedGroups) + len(flaggedGroups)
+			totalGroups := len(originalInfo.Groups)
+			hasSufficientInappropriateGroups := (totalInappropriateGroups >= 3 ||
+				(totalGroups > 0 && float64(totalInappropriateGroups)/float64(totalGroups) >= 0.6)) &&
+				totalInappropriateFriends >= 1
+
+			// Skip if neither friends nor groups meet threshold
+			if !hasSufficientInappropriateFriends && !hasSufficientInappropriateGroups {
+				a.logger.Debug("Skipping low confidence user with insufficient inappropriate connections",
+					zap.String("username", flaggedUser.Name),
+					zap.Float64("confidence", flaggedUser.Confidence),
+					zap.Int("inappropriateFriendsCount", totalInappropriateFriends),
+					zap.Int("totalFriendsCount", totalFriends),
+					zap.Int("inappropriateGroupsCount", totalInappropriateGroups),
+					zap.Int("totalGroupsCount", totalGroups))
+				return true
+			}
+		}
+	}
+
+	return false
+}
+
 // processAndCreateRequests processes the AI responses and creates reason requests.
 func (a *UserAnalyzer) processAndCreateRequests(
-	result *FlaggedUsers, originalInfos map[string]*types.ReviewUser,
-	translatedInfos map[string]*types.ReviewUser,
+	result *FlaggedUsers, params *ProcessUsersParams,
 	userReasonRequests map[uint64]UserReasonRequest, mu *sync.Mutex,
-	reasonsMap map[uint64]types.Reasons[enum.UserReasonType],
-	confirmedFriendsMap, flaggedFriendsMap map[uint64]map[uint64]*types.ReviewUser,
-	confirmedGroupsMap, flaggedGroupsMap map[uint64]map[uint64]*types.ReviewGroup,
 ) {
 	for _, flaggedUser := range result.Users {
-		originalInfo, hasOriginal := originalInfos[flaggedUser.Name]
+		originalInfo, hasOriginal := params.OriginalInfos[flaggedUser.Name]
 		if !hasOriginal {
 			a.logger.Info("AI flagged non-existent user", zap.String("username", flaggedUser.Name))
 			continue
 		}
 
 		// Get the translated info
-		translatedInfo, hasTranslated := translatedInfos[flaggedUser.Name]
+		translatedInfo, hasTranslated := params.TranslatedInfos[flaggedUser.Name]
 		if !hasTranslated {
 			a.logger.Warn("Translated info not found for flagged user, using original",
 				zap.String("username", flaggedUser.Name))
@@ -349,58 +426,9 @@ func (a *UserAnalyzer) processAndCreateRequests(
 		originalInfo.HasSocials = flaggedUser.HasSocials
 		mu.Unlock()
 
-		// Skip results with no violations
-		if flaggedUser.Hint == "" || flaggedUser.Hint == "NO_VIOLATIONS" {
+		// Check if this user should be skipped based on various conditions
+		if a.shouldSkipFlaggedUser(flaggedUser, originalInfo, params) {
 			continue
-		}
-
-		// Validate confidence level
-		if flaggedUser.Confidence < 0.1 || flaggedUser.Confidence > 1.0 {
-			a.logger.Debug("AI flagged user with invalid confidence",
-				zap.String("username", flaggedUser.Name),
-				zap.Float64("confidence", flaggedUser.Confidence))
-			continue
-		}
-
-		// Skip users with specific conditions
-		if len(reasonsMap[originalInfo.ID]) == 0 {
-			if flaggedUser.Confidence < 0.8 {
-				a.logger.Debug("Skipping user with low confidence and no existing reasons",
-					zap.String("username", flaggedUser.Name),
-					zap.Float64("confidence", flaggedUser.Confidence))
-				continue
-			}
-
-			if flaggedUser.Confidence < 0.9 {
-				// Check friends
-				confirmedFriends := confirmedFriendsMap[originalInfo.ID]
-				flaggedFriends := flaggedFriendsMap[originalInfo.ID]
-				totalInappropriateFriends := len(confirmedFriends) + len(flaggedFriends)
-				totalFriends := len(originalInfo.Friends)
-				hasSufficientInappropriateFriends := totalInappropriateFriends >= 3 ||
-					(totalFriends > 0 && float64(totalInappropriateFriends)/float64(totalFriends) >= 0.6)
-
-				// Check groups
-				confirmedGroups := confirmedGroupsMap[originalInfo.ID]
-				flaggedGroups := flaggedGroupsMap[originalInfo.ID]
-				totalInappropriateGroups := len(confirmedGroups) + len(flaggedGroups)
-				totalGroups := len(originalInfo.Groups)
-				hasSufficientInappropriateGroups := (totalInappropriateGroups >= 3 ||
-					(totalGroups > 0 && float64(totalInappropriateGroups)/float64(totalGroups) >= 0.6)) &&
-					totalInappropriateFriends >= 1
-
-				// Skip if neither friends nor groups meet threshold
-				if !hasSufficientInappropriateFriends && !hasSufficientInappropriateGroups {
-					a.logger.Debug("Skipping low confidence user with insufficient inappropriate connections",
-						zap.String("username", flaggedUser.Name),
-						zap.Float64("confidence", flaggedUser.Confidence),
-						zap.Int("inappropriateFriendsCount", totalInappropriateFriends),
-						zap.Int("totalFriendsCount", totalFriends),
-						zap.Int("inappropriateGroupsCount", totalInappropriateGroups),
-						zap.Int("totalGroupsCount", totalGroups))
-					continue
-				}
-			}
 		}
 
 		// Create a user summary for the reason request

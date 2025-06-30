@@ -305,11 +305,21 @@ func (a *OutfitAnalyzer) analyzeUserOutfits(
 	shouldFlag := false
 	finalConfidence := highestConfidence
 
-	if uniqueFlaggedCount > 1 && highestConfidence >= 0.5 {
+	switch {
+	case uniqueFlaggedCount > 1 && highestConfidence >= 0.5:
 		shouldFlag = true
-	} else if uniqueFlaggedCount == 1 && highestConfidence >= 0.8 {
+	case uniqueFlaggedCount == 1 && highestConfidence >= 0.7:
 		shouldFlag = true
 		finalConfidence = highestConfidence * 0.8 // Reduce confidence by 20% for single outfit cases
+	default:
+		a.logger.Info("AI did not flag user with outfit themes",
+			zap.Uint64("userID", info.ID),
+			zap.String("username", info.Name),
+			zap.Float64("highestConfidence", highestConfidence),
+			zap.Int("uniqueFlaggedCount", uniqueFlaggedCount),
+			zap.Int("totalFlaggedOutfits", len(flaggedOutfits)),
+			zap.Int("totalOutfits", len(downloads)),
+		)
 	}
 
 	if shouldFlag {

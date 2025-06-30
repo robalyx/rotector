@@ -93,10 +93,16 @@ func (c *UserChecker) ProcessUsers(
 	translatedInfos, originalInfos := c.prepareUserInfoMaps(ctxWithTimeout, userInfos)
 
 	// Process user analysis
-	c.userAnalyzer.ProcessUsers(
-		ctxWithTimeout, userInfos, translatedInfos, originalInfos, reasonsMap,
-		confirmedFriendsMap, flaggedFriendsMap, confirmedGroupsMap, flaggedGroupsMap,
-	)
+	c.userAnalyzer.ProcessUsers(ctxWithTimeout, &ai.ProcessUsersParams{
+		Users:               userInfos,
+		TranslatedInfos:     translatedInfos,
+		OriginalInfos:       originalInfos,
+		ReasonsMap:          reasonsMap,
+		ConfirmedFriendsMap: confirmedFriendsMap,
+		FlaggedFriendsMap:   flaggedFriendsMap,
+		ConfirmedGroupsMap:  confirmedGroupsMap,
+		FlaggedGroupsMap:    flaggedGroupsMap,
+	})
 
 	// Process condo checker
 	c.condoChecker.ProcessUsers(ctxWithTimeout, userInfos, reasonsMap)

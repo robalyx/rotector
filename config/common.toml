@@ -113,7 +113,7 @@ group_reason_model = "gemini-2.0-flash"
 # Model to use for outfit reason analysis
 outfit_reason_model = "gemini-2.0-flash"
 # Model to use for stats analysis
-stats_model = "gemini-2.5-flash"
+stats_model = "gpt-4.1-mini"
 # Model to use for outfit analysis
 outfit_model = "gemini-2.5-flash"
 # Model to use for message analysis

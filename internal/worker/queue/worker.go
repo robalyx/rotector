@@ -62,9 +62,6 @@ func (w *Worker) Start(ctx context.Context) {
 	w.logger.Info("Queue Worker started")
 	w.bar.SetTotal(100)
 
-	// Initialize last process time
-	w.lastProcessTime = time.Now()
-
 	// Cleanup queue on startup
 	if err := w.app.D1Client.CleanupQueue(
 		ctx,
