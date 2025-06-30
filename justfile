@@ -46,6 +46,10 @@ run-export description="Export" version="1.0.1":
         --i 16 \
         -m 32
 
+# Run queue command
+run-queue:
+    go run ./cmd/queue
+
 # Clean build artifacts
 clean:
     rm -rf bin/

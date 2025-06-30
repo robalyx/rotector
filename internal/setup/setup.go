@@ -29,6 +29,7 @@ const (
 	ServiceBot ServiceType = iota
 	ServiceWorker
 	ServiceExport
+	ServiceQueue
 )
 
 // GetRequestTimeout returns the request timeout for the given service type.
@@ -41,6 +42,8 @@ func (s ServiceType) GetRequestTimeout(cfg *config.Config) time.Duration {
 		timeout = cfg.Bot.RequestTimeout
 	case ServiceExport:
 		timeout = 30000
+	case ServiceQueue:
+		timeout = 10000
 	default:
 		timeout = 5000
 	}

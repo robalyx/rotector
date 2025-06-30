@@ -4,4 +4,5 @@
 exports/
 logs/bot_logs
 logs/export_logs
+logs/queue_logs
 logs/worker_logs
