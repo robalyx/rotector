@@ -81,8 +81,7 @@ func (m *Menu) handleQueueUser(ctx *interaction.Context) {
 		AddActionRow(
 			discord.NewTextInput(constants.QueueUserInputCustomID, discord.TextInputStyleParagraph, "User IDs").
 				WithRequired(true).
-				WithPlaceholder("Enter Roblox user IDs to queue (one per line)").
-				WithMaxLength(512),
+				WithPlaceholder("Enter Roblox user IDs to queue (one per line)"),
 		)
 
 	ctx.Modal(modal)
@@ -537,14 +536,37 @@ func (m *Menu) processUserIDInput(line string) (uint64, error) {
 
 // queueUserBatch queues a batch of users and returns the results.
 func (m *Menu) queueUserBatch(ctx *interaction.Context, batch []uint64) (int, uint64, []string, []*types.ActivityLog) {
-	queueErrors, err := m.layout.d1Client.QueueUsers(ctx.Context(), batch)
+	// Check which users already exist
+	existingUsers, err := m.layout.db.Service().User().GetUsersByIDs(ctx.Context(), batch, types.UserFieldBasic)
 	if err != nil {
-		m.layout.logger.Error("Failed to queue batch", zap.Error(err))
-		failedIDs := make([]string, len(batch))
-		for i, userID := range batch {
-			failedIDs[i] = fmt.Sprintf("%d (error)", userID)
+		m.layout.logger.Error("Failed to check existing users in database", zap.Error(err))
+	}
+
+	// Filter out users that already exist
+	existingUserSet := make(map[uint64]struct{})
+	usersToQueue := make([]uint64, 0, len(batch))
+
+	for _, userID := range batch {
+		if _, exists := existingUsers[userID]; exists {
+			existingUserSet[userID] = struct{}{}
+			continue
 		}
-		return 0, 0, failedIDs, nil
+		usersToQueue = append(usersToQueue, userID)
+	}
+
+	// Queue the remaining users in D1 if any
+	queueErrors := make(map[uint64]error)
+
+	if len(usersToQueue) > 0 {
+		queueErrors, err = m.layout.d1Client.QueueUsers(ctx.Context(), usersToQueue)
+		if err != nil {
+			m.layout.logger.Error("Failed to queue batch", zap.Error(err))
+			failedIDs := make([]string, len(batch))
+			for i, userID := range batch {
+				failedIDs[i] = fmt.Sprintf("%d (error)", userID)
+			}
+			return 0, 0, failedIDs, nil
+		}
 	}
 
 	// Process results and create activity logs
@@ -555,6 +577,12 @@ func (m *Menu) queueUserBatch(ctx *interaction.Context, batch []uint64) (int, ui
 	now := time.Now()
 
 	for _, userID := range batch {
+		// Skip if user exists in database
+		if _, existsInDB := existingUserSet[userID]; existsInDB {
+			continue
+		}
+
+		// Check if user had D1 queue errors
 		if queueErr, failed := queueErrors[userID]; failed {
 			if errors.Is(queueErr, queue.ErrUserRecentlyQueued) {
 				failedIDs = append(failedIDs, fmt.Sprintf("%d (recently queued)", userID))
@@ -563,6 +591,7 @@ func (m *Menu) queueUserBatch(ctx *interaction.Context, batch []uint64) (int, ui
 			}
 			continue
 		}
+
 		lastUserID = userID
 		queuedCount++
 
