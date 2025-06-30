@@ -97,7 +97,8 @@ func (r *TrackingModel) AddUsersToGroupsTracking(ctx context.Context, groupToUse
 }
 
 // GetGroupTrackingsToCheck finds groups that haven't been checked recently
-// with priority for groups with more flagged users.
+// and have at least minFlaggedUsers. Returns groups for both hard threshold
+// (minFlaggedOverride) and percentage-based checks.
 func (r *TrackingModel) GetGroupTrackingsToCheck(
 	ctx context.Context, batchSize int, minFlaggedUsers int, minFlaggedOverride int,
 ) (map[uint64][]uint64, error) {
@@ -123,9 +124,9 @@ func (r *TrackingModel) GetGroupTrackingsToCheck(
 			Where("is_flagged = FALSE").
 			Where("user_count >= ?", minFlaggedUsers).
 			Where("(last_checked < ? AND user_count >= ?) OR "+
-				"(last_checked < ? AND user_count >= ? / 2)",
+				"(last_checked < ? AND user_count >= ?)",
 				tenMinutesAgo, minFlaggedOverride,
-				oneMinuteAgo, minFlaggedOverride).
+				oneMinuteAgo, minFlaggedUsers).
 			OrderExpr("user_count DESC").
 			Order("last_checked ASC").
 			Limit(batchSize)
@@ -353,7 +354,8 @@ func (r *TrackingModel) AddOutfitAssetsToTracking(ctx context.Context, assetToOu
 }
 
 // GetOutfitAssetTrackingsToCheck finds assets that haven't been checked recently
-// with priority for assets appearing in more outfits or current outfits.
+// and appear in at least minOutfits. Returns assets for both hard threshold
+// (minOutfitsOverride) and percentage-based checks.
 func (r *TrackingModel) GetOutfitAssetTrackingsToCheck(
 	ctx context.Context, batchSize int, minOutfits int, minOutfitsOverride int,
 ) (map[uint64][]types.TrackedID, error) {
@@ -379,9 +381,9 @@ func (r *TrackingModel) GetOutfitAssetTrackingsToCheck(
 			Where("is_flagged = FALSE").
 			Where("outfit_count >= ?", minOutfits).
 			Where("(last_checked < ? AND outfit_count >= ?) OR "+
-				"(last_checked < ? AND outfit_count >= ? / 2)",
+				"(last_checked < ? AND outfit_count >= ?)",
 				tenMinutesAgo, minOutfitsOverride,
-				oneMinuteAgo, minOutfitsOverride).
+				oneMinuteAgo, minOutfits).
 			OrderExpr("outfit_count DESC").
 			Order("last_checked ASC").
 			Limit(batchSize)
@@ -555,7 +557,8 @@ func (r *TrackingModel) AddGamesToTracking(ctx context.Context, gameToUsers map[
 }
 
 // GetGameTrackingsToCheck finds games that haven't been checked recently
-// with priority for games with more flagged users.
+// and have at least minFlaggedUsers. Returns games for both hard threshold
+// (minFlaggedOverride) and percentage-based checks.
 func (r *TrackingModel) GetGameTrackingsToCheck(
 	ctx context.Context, batchSize int, minFlaggedUsers int, minFlaggedOverride int,
 ) (map[uint64][]uint64, error) {
@@ -581,9 +584,9 @@ func (r *TrackingModel) GetGameTrackingsToCheck(
 			Where("is_flagged = FALSE").
 			Where("user_count >= ?", minFlaggedUsers).
 			Where("(last_checked < ? AND user_count >= ?) OR "+
-				"(last_checked < ? AND user_count >= ? / 2)",
+				"(last_checked < ? AND user_count >= ?)",
 				tenMinutesAgo, minFlaggedOverride,
-				oneMinuteAgo, minFlaggedOverride).
+				oneMinuteAgo, minFlaggedUsers).
 			OrderExpr("user_count DESC").
 			Order("last_checked ASC").
 			Limit(batchSize)
