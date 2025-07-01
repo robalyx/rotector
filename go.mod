@@ -14,7 +14,7 @@ require (
 	github.com/diamondburned/ningen/v3 v3.0.1-0.20240808103805-f1a24c0da3d8
 	github.com/disgoorg/disgo v0.18.17-0.20250531222024-8ac2ef071ad5
 	github.com/disgoorg/snowflake/v2 v2.0.3
-	github.com/getsentry/sentry-go v0.33.0
+	github.com/getsentry/sentry-go v0.34.0
 	github.com/google/uuid v1.6.0
 	github.com/invopop/jsonschema v0.13.0
 	github.com/jaxron/axonet v0.0.0-20250316044721-2d660b2bcf59
@@ -26,8 +26,8 @@ require (
 	github.com/knadh/koanf/parsers/toml/v2 v2.2.0
 	github.com/knadh/koanf/providers/file v1.2.0
 	github.com/knadh/koanf/v2 v2.2.1
-	github.com/openai/openai-go v1.6.0
-	github.com/redis/rueidis v1.0.61
+	github.com/openai/openai-go v1.8.2
+	github.com/redis/rueidis v1.0.62
 	github.com/sony/gobreaker v1.0.0
 	github.com/sourcegraph/conc v0.3.0
 	github.com/stretchr/testify v1.10.0
