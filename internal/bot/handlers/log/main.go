@@ -34,6 +34,7 @@ func NewMenu(l *Layout) *Menu {
 		ButtonHandlerFunc: m.handleButton,
 		ModalHandlerFunc:  m.handleModal,
 	}
+
 	return m
 }
 
@@ -64,6 +65,7 @@ func (m *Menu) Show(ctx *interaction.Context, s *session.Session) {
 	if err != nil {
 		m.layout.logger.Error("Failed to get logs", zap.Error(err))
 		ctx.Error("Failed to retrieve log data. Please try again.")
+
 		return
 	}
 
@@ -105,6 +107,7 @@ func (m *Menu) handleSelectMenu(ctx *interaction.Context, s *session.Session, cu
 			constants.LogsOtherActivityCategoryOption:
 			session.LogFilterActivityCategory.Set(s, option)
 			ctx.Reload("")
+
 			return
 		}
 
@@ -113,6 +116,7 @@ func (m *Menu) handleSelectMenu(ctx *interaction.Context, s *session.Session, cu
 		if err != nil {
 			m.layout.logger.Error("Failed to convert activity type option to int", zap.Error(err))
 			ctx.Error("Invalid activity type option.")
+
 			return
 		}
 

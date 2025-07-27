@@ -233,6 +233,7 @@ func TestWithRetrySplitBatch(t *testing.T) {
 			ctx := t.Context()
 			calls := 0
 			blockedCalls := 0
+
 			var blockedBatches [][]int
 
 			wrappedOp := func(batch []int) error {
@@ -242,6 +243,7 @@ func TestWithRetrySplitBatch(t *testing.T) {
 
 			onBlocked := func(batch []int) {
 				blockedCalls++
+
 				blockedBatches = append(blockedBatches, batch)
 			}
 

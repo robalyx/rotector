@@ -64,6 +64,7 @@ func TestTextNormalizer(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			normalizer := utils.NewTextNormalizer()
 
 			// Test Normalize
@@ -175,6 +176,7 @@ func TestTextNormalizer_ValidateWords(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			normalizer := utils.NewTextNormalizer()
 			got := normalizer.ValidateWords(tt.flaggedWords, tt.targetTexts...)
 			assert.Equal(t, tt.want, got)

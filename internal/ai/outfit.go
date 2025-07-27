@@ -148,14 +148,18 @@ func (a *OutfitAnalyzer) ProcessOutfits(
 				a.logger.Error("Failed to analyze outfit themes",
 					zap.Error(err),
 					zap.Uint64("userID", userInfo.ID))
+
 				return err
 			}
 
 			if len(outfitNames) > 0 {
 				mu.Lock()
+
 				flaggedOutfits[userInfo.ID] = outfitNames
+
 				mu.Unlock()
 			}
+
 			return nil
 		})
 	}
@@ -229,13 +233,17 @@ func (a *OutfitAnalyzer) analyzeUserOutfits(
 		if errors.Is(err, ErrNoOutfits) {
 			return nil, ErrNoViolations
 		}
+
 		return nil, fmt.Errorf("failed to download outfit images: %w", err)
 	}
 
 	// Process outfits in batches
-	var allSuspiciousThemes []string
-	var highestConfidence float64
-	var uniqueFlaggedCount int
+	var (
+		allSuspiciousThemes []string
+		highestConfidence   float64
+		uniqueFlaggedCount  int
+	)
+
 	flaggedOutfits := make(map[string]struct{})
 
 	for i := 0; i < len(downloads); i += a.batchSize {
@@ -248,10 +256,12 @@ func (a *OutfitAnalyzer) analyzeUserOutfits(
 			if errors.Is(err, ErrNoOutfits) {
 				continue
 			}
+
 			a.logger.Warn("Failed to analyze outfit batch",
 				zap.Error(err),
 				zap.Int("batchIndex", i),
 				zap.Int("batchSize", a.batchSize))
+
 			continue
 		}
 
@@ -290,6 +300,7 @@ func (a *OutfitAnalyzer) analyzeUserOutfits(
 							zap.Float64("originalConfidence", theme.Confidence),
 							zap.Float64("similarConfidence", similarConfidence))
 					}
+
 					break
 				}
 			}
@@ -324,9 +335,11 @@ func (a *OutfitAnalyzer) analyzeUserOutfits(
 
 	if shouldFlag {
 		mu.Lock()
+
 		if _, exists := reasonsMap[info.ID]; !exists {
 			reasonsMap[info.ID] = make(types.Reasons[enum.UserReasonType])
 		}
+
 		reasonsMap[info.ID].Add(enum.UserReasonTypeOutfit, &types.Reason{
 			Message:    "User has outfits with inappropriate themes.",
 			Confidence: finalConfidence,
@@ -358,12 +371,14 @@ func (a *OutfitAnalyzer) processOutfitBatch(
 
 	outfitNames := make([]string, 0, len(batch))
 	validOutfits := make(map[string]struct{})
+
 	for _, result := range batch {
 		// Convert image to base64
 		buf := new(bytes.Buffer)
 		if err := nativewebp.Encode(buf, result.img, nil); err != nil {
 			continue
 		}
+
 		base64Image := base64.StdEncoding.EncodeToString(buf.Bytes())
 
 		// Add image as a user message
@@ -416,6 +431,7 @@ func (a *OutfitAnalyzer) processOutfitBatch(
 
 	// Make API request
 	var analysis OutfitThemeAnalysis
+
 	err := a.chat.NewWithRetry(ctx, params, func(resp *openai.ChatCompletion, err error) error {
 		// Handle API error
 		if err != nil {
@@ -442,15 +458,18 @@ func (a *OutfitAnalyzer) processOutfitBatch(
 
 		// Validate outfit names and filter out invalid ones
 		var validThemes []OutfitTheme
+
 		for _, theme := range analysis.Themes {
 			if _, ok := validOutfits[theme.OutfitName]; ok {
 				validThemes = append(validThemes, theme)
 				continue
 			}
+
 			a.logger.Info("AI flagged non-existent outfit",
 				zap.String("username", info.Name),
 				zap.String("outfitName", theme.OutfitName))
 		}
+
 		analysis.Themes = validThemes
 
 		return nil
@@ -473,11 +492,14 @@ func (a *OutfitAnalyzer) analyzeOutfitBatch(
 	minBatchSize := max(len(downloads)/4, 1)
 
 	var result *OutfitThemeAnalysis
+
 	err := utils.WithRetrySplitBatch(
 		ctx, downloads, len(downloads), minBatchSize, utils.GetAIRetryOptions(),
 		func(batch []DownloadResult) error {
 			var err error
+
 			result, err = a.processOutfitBatch(ctx, info, batch)
+
 			return err
 		},
 		func(items []DownloadResult) {
@@ -492,6 +514,7 @@ func (a *OutfitAnalyzer) analyzeOutfitBatch(
 					a.imageLogger.Error("Failed to encode blocked image",
 						zap.Error(err),
 						zap.String("outfitName", item.name))
+
 					continue
 				}
 
@@ -500,6 +523,7 @@ func (a *OutfitAnalyzer) analyzeOutfitBatch(
 						zap.Error(err),
 						zap.String("outfitName", item.name),
 						zap.String("path", filepath))
+
 					continue
 				}
 
@@ -549,11 +573,13 @@ func (a *OutfitAnalyzer) getOutfitThumbnails(
 	userThumbnails := make(map[uint64]map[uint64]string)
 	for userID, outfits := range userOutfits {
 		thumbnails := make(map[uint64]string)
+
 		for _, outfit := range outfits {
 			if url, ok := thumbnailMap[outfit.ID]; ok {
 				thumbnails[outfit.ID] = url
 			}
 		}
+
 		userThumbnails[userID] = thumbnails
 	}
 
@@ -584,8 +610,10 @@ func (a *OutfitAnalyzer) downloadOutfitImages(
 					name:            "Current Outfit",
 					isCurrentOutfit: true,
 				})
+
 				mu.Unlock()
 			}
+
 			return nil
 		})
 	}
@@ -605,12 +633,14 @@ func (a *OutfitAnalyzer) downloadOutfitImages(
 			}
 
 			mu.Lock()
+
 			downloads = append(downloads, DownloadResult{
 				img:             img,
 				hash:            hash,
 				name:            outfit.Name,
 				isCurrentOutfit: false,
 			})
+
 			mu.Unlock()
 
 			return nil
@@ -644,6 +674,7 @@ func (a *OutfitAnalyzer) downloadImage(ctx context.Context, url string) (image.I
 		a.logger.Warn("Failed to download outfit image",
 			zap.Error(err),
 			zap.String("url", url))
+
 		return nil, nil, false
 	}
 	defer resp.Body.Close()
@@ -690,6 +721,7 @@ func (a *OutfitAnalyzer) deduplicateImages(downloads []DownloadResult) []Downloa
 
 		// Check if this image is similar to any previously processed image
 		matchedIndex := -1
+
 		for i, existing := range deduplicated {
 			// Skip current outfit when checking similarity
 			if existing.isCurrentOutfit || existing.hash == nil {
@@ -701,16 +733,19 @@ func (a *OutfitAnalyzer) deduplicateImages(downloads []DownloadResult) []Downloa
 				a.logger.Warn("Failed to compute hash distance",
 					zap.Error(err),
 					zap.String("outfitName", download.name))
+
 				continue
 			}
 
 			// If images are similar, track this outfit as similar to the existing one
 			if distance <= a.similarityThreshold {
 				matchedIndex = i
+
 				a.logger.Debug("Found similar outfit image",
 					zap.String("outfitName", download.name),
 					zap.String("similarTo", existing.name),
 					zap.Int("distance", distance))
+
 				break
 			}
 		}
@@ -720,6 +755,7 @@ func (a *OutfitAnalyzer) deduplicateImages(downloads []DownloadResult) []Downloa
 			if deduplicated[matchedIndex].similarOutfits == nil {
 				deduplicated[matchedIndex].similarOutfits = make([]string, 0)
 			}
+
 			deduplicated[matchedIndex].similarOutfits = append(deduplicated[matchedIndex].similarOutfits, download.name)
 		} else {
 			// If not similar to any existing image, add it to the deduplicated list

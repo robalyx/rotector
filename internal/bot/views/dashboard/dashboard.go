@@ -44,6 +44,7 @@ func NewBuilder(s *session.Session, redisClient rueidis.Client) *Builder {
 	userID := session.UserID.Get(s)
 	announcementType := session.BotAnnouncementType.Get(s)
 	isAdmin := botSettings.IsAdmin(userID)
+
 	return &Builder{
 		userID:              userID,
 		userCounts:          session.StatsUserCounts.Get(s),
@@ -134,6 +135,7 @@ func (b *Builder) Build() *discord.MessageUpdateBuilder {
 	if b.userStatsBuffer != nil && !b.showMaintenance {
 		builder.AddFile("user_stats_chart.png", "", b.userStatsBuffer)
 	}
+
 	if b.groupStatsBuffer != nil && !b.showMaintenance {
 		builder.AddFile("group_stats_chart.png", "", b.groupStatsBuffer)
 	}
@@ -144,6 +146,7 @@ func (b *Builder) Build() *discord.MessageUpdateBuilder {
 // buildWelcomeContainer creates the main welcome container.
 func (b *Builder) buildWelcomeContainer() discord.LayoutComponent {
 	var displays []discord.ContainerSubComponent
+
 	displays = append(displays,
 		discord.NewTextDisplay("# Welcome to Rotector 👋"),
 		discord.NewMediaGallery(
@@ -165,6 +168,7 @@ func (b *Builder) buildWelcomeContainer() discord.LayoutComponent {
 	if len(b.activeUsers) > 0 {
 		// Collect reviewer IDs
 		displayIDs := make([]uint64, 0, 10)
+
 		for _, userID := range b.activeUsers {
 			if b.isReviewer {
 				displayIDs = append(displayIDs, userID)
@@ -347,8 +351,10 @@ func (b *Builder) buildGroupGraphContainer() discord.LayoutComponent {
 
 // buildAnnouncementContainer creates the announcement container.
 func (b *Builder) buildAnnouncementContainer() discord.LayoutComponent {
-	var color int
-	var title string
+	var (
+		color int
+		title string
+	)
 
 	switch b.announcementType {
 	case enum.AnnouncementTypeInfo:

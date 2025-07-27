@@ -45,6 +45,7 @@ func (s *AppealService) GetAppealsToReview(
 
 	// Process results to get cursors for pagination
 	results, firstCursor, nextCursor := s.processAppealResults(results, limit)
+
 	return results, firstCursor, nextCursor, nil
 }
 
@@ -68,6 +69,7 @@ func (s *AppealService) GetAppealsByRequester(
 
 	// Process results to get cursors for pagination
 	results, firstCursor, nextCursor := s.processAppealResults(results, limit)
+
 	return results, firstCursor, nextCursor, nil
 }
 
@@ -75,8 +77,10 @@ func (s *AppealService) GetAppealsByRequester(
 func (s *AppealService) processAppealResults(
 	results []*types.FullAppeal, limit int,
 ) ([]*types.FullAppeal, *types.AppealTimeline, *types.AppealTimeline) {
-	var nextCursor *types.AppealTimeline
-	var firstCursor *types.AppealTimeline
+	var (
+		nextCursor  *types.AppealTimeline
+		firstCursor *types.AppealTimeline
+	)
 
 	if len(results) > limit {
 		// Use the extra item as the next cursor for pagination

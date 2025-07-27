@@ -51,6 +51,7 @@ func (b *Builder) Build() *discord.MessageUpdateBuilder {
 	for workerType, workers := range workerGroups {
 		// Format worker statuses
 		var statusLines []string
+
 		for _, w := range workers {
 			shortID := w.WorkerID[:8]
 			emoji := b.getStatusEmoji(w)
@@ -60,11 +61,13 @@ func (b *Builder) Build() *discord.MessageUpdateBuilder {
 
 		// Add section for this worker type
 		content.WriteString(fmt.Sprintf("### %s\n", b.titleCaser.String(workerType)))
+
 		if len(statusLines) > 0 {
 			content.WriteString(strings.Join(statusLines, "\n"))
 		} else {
 			content.WriteString("No workers online")
 		}
+
 		content.WriteString("\n\n")
 	}
 
@@ -92,5 +95,6 @@ func (b *Builder) getStatusEmoji(status core.Status) string {
 	if !status.IsHealthy {
 		return unhealthyEmoji
 	}
+
 	return healthyEmoji
 }

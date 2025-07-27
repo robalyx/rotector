@@ -35,6 +35,7 @@ type GroupsBuilder struct {
 // NewGroupsBuilder creates a new groups builder.
 func NewGroupsBuilder(s *session.Session) *GroupsBuilder {
 	trainingMode := session.UserReviewMode.Get(s) == enum.ReviewModeTraining
+
 	return &GroupsBuilder{
 		user:          session.UserTarget.Get(s),
 		groups:        session.UserGroups.Get(s),
@@ -186,6 +187,7 @@ func (b *GroupsBuilder) getGroupFieldName(group *apiTypes.UserGroupRoles) string
 	if len(indicators) > 0 {
 		return fmt.Sprintf("### %s %s", name, strings.Join(indicators, " "))
 	}
+
 	return "### " + name
 }
 
@@ -202,7 +204,9 @@ func (b *GroupsBuilder) getGroupFieldValue(group *apiTypes.UserGroupRoles) strin
 	// Add owner info if available
 	if group.Group.Owner != nil {
 		username := utils.CensorString(group.Group.Owner.Username, b.privacyMode)
+
 		builder.WriteString(" • 👑 ")
+
 		if b.privacyMode {
 			builder.WriteString(username)
 		} else {
@@ -219,9 +223,11 @@ func (b *GroupsBuilder) getGroupFieldValue(group *apiTypes.UserGroupRoles) strin
 	if group.Group.IsLocked != nil && *group.Group.IsLocked {
 		status = append(status, "🔒 Locked")
 	}
+
 	if !group.Group.PublicEntryAllowed {
 		status = append(status, "🚫 Private")
 	}
+
 	if len(status) > 0 {
 		info = append(info, strings.Join(status, " • "))
 	}
@@ -231,6 +237,7 @@ func (b *GroupsBuilder) getGroupFieldValue(group *apiTypes.UserGroupRoles) strin
 		if flaggedGroup.Confidence > 0 {
 			info = append(info, fmt.Sprintf("🔮 `%.2f`", flaggedGroup.Confidence))
 		}
+
 		if len(flaggedGroup.Reasons) > 0 {
 			for reasonType, reason := range flaggedGroup.Reasons {
 				info = append(info, fmt.Sprintf("`[%s] %s`", reasonType, reason.Message))

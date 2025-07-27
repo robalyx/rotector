@@ -31,6 +31,7 @@ func NewConfirmMenu(layout *Layout) *ConfirmMenu {
 		},
 		ButtonHandlerFunc: m.handleButton,
 	}
+
 	return m
 }
 
@@ -93,6 +94,7 @@ func (m *ConfirmMenu) handleBanUser(ctx *interaction.Context, s *session.Session
 			zap.Uint64("admin_id", uint64(ctx.Event().User().ID)),
 		)
 		ctx.Error("Failed to ban user. Please try again.")
+
 		return
 	}
 
@@ -132,6 +134,7 @@ func (m *ConfirmMenu) handleUnbanUser(ctx *interaction.Context, userID string, n
 			zap.Uint64("admin_id", uint64(ctx.Event().User().ID)),
 		)
 		ctx.Error("Failed to unban user. Please try again.")
+
 		return
 	}
 
@@ -173,6 +176,7 @@ func (m *ConfirmMenu) handleDeleteUser(ctx *interaction.Context, idStr string, r
 			zap.Error(err),
 			zap.Uint64("id", id))
 		ctx.Error("Failed to delete user. Please try again.")
+
 		return
 	}
 
@@ -214,6 +218,7 @@ func (m *ConfirmMenu) handleDeleteGroup(ctx *interaction.Context, idStr string, 
 			zap.Error(err),
 			zap.Uint64("id", id))
 		ctx.Error("Failed to delete group. Please try again.")
+
 		return
 	}
 

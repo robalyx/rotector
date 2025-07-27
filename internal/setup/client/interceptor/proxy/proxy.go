@@ -133,6 +133,7 @@ func (m *Middleware) Cleanup() {
 	for _, client := range m.proxyClients {
 		client.CloseIdleConnections()
 	}
+
 	m.proxyClients = make(map[string]*http.Client)
 }
 
@@ -196,6 +197,7 @@ func (m *Middleware) tryProxy(ctx context.Context, httpClient *http.Client, req 
 			m.markProxyUnhealthy(ctx, proxyIndex)
 			return m.tryProxy(ctx, httpClient, req)
 		}
+
 		return nil, err
 	}
 
@@ -225,6 +227,7 @@ func (m *Middleware) getCooldown(endpoint string) time.Duration {
 			return pattern.cooldown
 		}
 	}
+
 	return m.defaultCooldown
 }
 
@@ -290,12 +293,14 @@ func (m *Middleware) markProxyUnhealthy(ctx context.Context, proxyIndex int64) {
 	}
 
 	unhealthyKey := fmt.Sprintf("%s:%s:%d", UnhealthyKeyPrefix, m.proxyHash, proxyIndex)
+
 	err := m.client.Do(ctx, m.client.B().Set().Key(unhealthyKey).Value("1").
 		Px(m.unhealthyDuration).Build()).Error()
 	if err != nil {
 		m.logger.WithFields(
 			logger.String("error", err.Error()),
 		).Error("Failed to mark proxy as unhealthy")
+
 		return
 	}
 

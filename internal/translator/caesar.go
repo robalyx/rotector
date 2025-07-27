@@ -41,6 +41,7 @@ func IsCaesarFormat(text string) bool {
 	}
 
 	alphaCount := 0
+
 	for _, char := range text {
 		if (char >= 'A' && char <= 'Z') || (char >= 'a' && char <= 'z') {
 			alphaCount++

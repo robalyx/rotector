@@ -133,6 +133,7 @@ func (b *Builder) buildQueueStats() string {
 func (b *Builder) buildQueuedUserInfo() discord.ContainerSubComponent {
 	// Determine status and emoji based on user status
 	status := "Queued"
+
 	var statusEmoji string
 
 	switch {

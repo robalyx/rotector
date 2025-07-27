@@ -30,6 +30,7 @@ func (b *BotSettingsBuilder) Build() *discord.MessageUpdateBuilder {
 	for key := range b.registry.BotSettings {
 		keys = append(keys, key)
 	}
+
 	sort.Strings(keys)
 
 	// Create main info container

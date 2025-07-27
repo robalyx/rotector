@@ -69,11 +69,13 @@ func ParseDelimitedInput(input, delimiter string) []string {
 	}
 
 	var result []string
+
 	for item := range strings.SplitSeq(input, delimiter) {
 		if trimmed := strings.TrimSpace(item); trimmed != "" {
 			result = append(result, trimmed)
 		}
 	}
+
 	return result
 }
 

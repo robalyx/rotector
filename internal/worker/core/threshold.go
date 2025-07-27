@@ -48,6 +48,7 @@ func (tc *ThresholdChecker) CheckThreshold(ctx context.Context) (bool, error) {
 	if err != nil {
 		tc.logger.Error("Error getting flagged users count", zap.Error(err))
 		tc.reporter.SetHealthy(false)
+
 		return false, err
 	}
 
@@ -68,6 +69,7 @@ func (tc *ThresholdChecker) CheckThreshold(ctx context.Context) (bool, error) {
 		if !utils.ThresholdSleep(ctx, 5*time.Minute, tc.logger, tc.workerName) {
 			return false, ctx.Err()
 		}
+
 		return true, nil
 	}
 

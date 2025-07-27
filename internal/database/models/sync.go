@@ -36,6 +36,7 @@ func (m *SyncModel) UpsertServerMember(ctx context.Context, member *types.Discor
 		if err != nil {
 			return fmt.Errorf("failed to upsert member: %w", err)
 		}
+
 		return nil
 	})
 }
@@ -49,6 +50,7 @@ func (m *SyncModel) UpsertServerMembers(
 	}
 
 	now := time.Now()
+
 	return dbretry.Transaction(ctx, m.db, func(ctx context.Context, tx bun.Tx) error {
 		// Upsert server members
 		_, err := tx.NewInsert().
@@ -110,6 +112,7 @@ func (m *SyncModel) RemoveServerMember(ctx context.Context, serverID, userID uin
 		if err != nil {
 			return fmt.Errorf("failed to remove server member: %w", err)
 		}
+
 		return nil
 	})
 }
@@ -118,8 +121,11 @@ func (m *SyncModel) RemoveServerMember(ctx context.Context, serverID, userID uin
 func (m *SyncModel) GetDiscordUserGuildsByCursor(
 	ctx context.Context, discordUserID uint64, cursor *types.GuildCursor, limit int,
 ) ([]*types.UserGuildInfo, *types.GuildCursor, error) {
-	var members []*types.DiscordServerMember
-	var nextCursor *types.GuildCursor
+	var (
+		members    []*types.DiscordServerMember
+		nextCursor *types.GuildCursor
+	)
+
 	guilds := make([]*types.UserGuildInfo, len(members))
 
 	err := dbretry.NoResult(ctx, func(ctx context.Context) error {
@@ -186,6 +192,7 @@ func (m *SyncModel) UpsertServerInfo(ctx context.Context, server *types.DiscordS
 		if err != nil {
 			return fmt.Errorf("failed to upsert server info: %w", err)
 		}
+
 		return nil
 	})
 }
@@ -194,6 +201,7 @@ func (m *SyncModel) UpsertServerInfo(ctx context.Context, server *types.DiscordS
 func (m *SyncModel) GetServerInfo(ctx context.Context, serverIDs []uint64) ([]*types.DiscordServerInfo, error) {
 	return dbretry.Operation(ctx, func(ctx context.Context) ([]*types.DiscordServerInfo, error) {
 		var servers []*types.DiscordServerInfo
+
 		err := m.db.NewSelect().
 			Model(&servers).
 			Where("server_id IN (?)", bun.In(serverIDs)).
@@ -201,6 +209,7 @@ func (m *SyncModel) GetServerInfo(ctx context.Context, serverIDs []uint64) ([]*t
 		if err != nil {
 			return nil, fmt.Errorf("failed to get server info: %w", err)
 		}
+
 		return servers, nil
 	})
 }
@@ -221,6 +230,7 @@ func (m *SyncModel) GetFlaggedServerMembers(
 		if err != nil {
 			return fmt.Errorf("failed to get flagged members: %w", err)
 		}
+
 		return nil
 	})
 	if err != nil {
@@ -278,6 +288,7 @@ func (m *SyncModel) GetUniqueGuildCount(ctx context.Context) (int, error) {
 		if err != nil {
 			return 0, fmt.Errorf("failed to get unique guild count: %w", err)
 		}
+
 		return count, nil
 	})
 }
@@ -286,6 +297,7 @@ func (m *SyncModel) GetUniqueGuildCount(ctx context.Context) (int, error) {
 func (m *SyncModel) GetUniqueUserCount(ctx context.Context) (int, error) {
 	return dbretry.Operation(ctx, func(ctx context.Context) (int, error) {
 		var count int
+
 		_, err := m.db.NewRaw(`
 			SELECT COUNT(DISTINCT user_id) 
 			FROM discord_server_members
@@ -293,6 +305,7 @@ func (m *SyncModel) GetUniqueUserCount(ctx context.Context) (int, error) {
 		if err != nil {
 			return 0, fmt.Errorf("failed to get unique user count: %w", err)
 		}
+
 		return count, nil
 	})
 }
@@ -307,6 +320,7 @@ func (m *SyncModel) GetDiscordUserGuildCount(ctx context.Context, discordUserID 
 		if err != nil {
 			return 0, fmt.Errorf("failed to get Discord user guild count: %w", err)
 		}
+
 		return count, nil
 	})
 }
@@ -314,9 +328,11 @@ func (m *SyncModel) GetDiscordUserGuildCount(ctx context.Context, discordUserID 
 // PurgeOldServerMembers removes Discord server member records older than the specified cutoff date.
 func (m *SyncModel) PurgeOldServerMembers(ctx context.Context, cutoffDate time.Time) (int, error) {
 	var affected int64
+
 	err := dbretry.Transaction(ctx, m.db, func(ctx context.Context, tx bun.Tx) error {
 		// Get users to be purged
 		var usersToPurge []uint64
+
 		err := tx.NewSelect().
 			Model((*types.DiscordServerMember)(nil)).
 			Column("user_id").
@@ -402,6 +418,7 @@ func (m *SyncModel) IsUserDataRedacted(ctx context.Context, userID uint64) (bool
 		if err != nil {
 			return false, fmt.Errorf("failed to check if user data is redacted: %w", err)
 		}
+
 		return exists, nil
 	})
 }
@@ -410,6 +427,7 @@ func (m *SyncModel) IsUserDataRedacted(ctx context.Context, userID uint64) (bool
 func (m *SyncModel) GetUsersForFullScan(ctx context.Context, before time.Time, limit int) ([]uint64, error) {
 	return dbretry.Operation(ctx, func(ctx context.Context) ([]uint64, error) {
 		var scans []types.DiscordUserFullScan
+
 		err := m.db.NewSelect().
 			Model(&scans).
 			Where("last_scan < ?", before).
@@ -424,6 +442,7 @@ func (m *SyncModel) GetUsersForFullScan(ctx context.Context, before time.Time, l
 		for i, scan := range scans {
 			userIDs[i] = scan.UserID
 		}
+
 		return userIDs, nil
 	})
 }
@@ -461,6 +480,7 @@ func (m *SyncModel) IsUserWhitelisted(ctx context.Context, userID uint64) (bool,
 		if err != nil {
 			return false, fmt.Errorf("failed to check if user is whitelisted: %w", err)
 		}
+
 		return exists, nil
 	})
 }

@@ -34,6 +34,7 @@ func (m *MaterializedViewModel) RefreshIfStale(
 	return dbretry.Transaction(ctx, m.db, func(ctx context.Context, tx bun.Tx) error {
 		// Get last refresh time
 		var refresh types.MaterializedViewRefresh
+
 		err := tx.NewSelect().
 			Model(&refresh).
 			Where("view_name = ?", viewName).
@@ -73,6 +74,7 @@ func (m *MaterializedViewModel) GetRefreshInfo(
 ) (lastRefresh time.Time, err error) {
 	return dbretry.Operation(ctx, func(ctx context.Context) (time.Time, error) {
 		var refresh types.MaterializedViewRefresh
+
 		err = m.db.NewSelect().
 			Model(&refresh).
 			Where("view_name = ?", viewName).
@@ -81,6 +83,7 @@ func (m *MaterializedViewModel) GetRefreshInfo(
 			if errors.Is(err, sql.ErrNoRows) {
 				return time.Time{}, nil
 			}
+
 			return time.Time{}, fmt.Errorf("failed to get refresh info: %w", err)
 		}
 

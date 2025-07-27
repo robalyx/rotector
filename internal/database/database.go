@@ -100,6 +100,7 @@ func NewConnection(
 		if err != nil {
 			return nil, fmt.Errorf("failed to run migrations: %w", err)
 		}
+
 		if !group.IsZero() {
 			logger.Info("Automatically ran migrations", zap.String("group", group.String()))
 		}
@@ -117,6 +118,7 @@ func NewConnection(
 	}
 
 	logger.Info("Database connection established")
+
 	return client, nil
 }
 
@@ -127,7 +129,9 @@ func (c *clientImpl) Close() error {
 		c.logger.Error("Failed to close database connection", zap.Error(err))
 		return err
 	}
+
 	c.logger.Info("Database connection closed")
+
 	return nil
 }
 

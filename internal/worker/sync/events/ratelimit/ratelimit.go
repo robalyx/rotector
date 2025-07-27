@@ -52,6 +52,7 @@ type Limiter struct {
 // New creates a new rate limiter with the provided configuration.
 func New(config *Config, logger *zap.Logger) *Limiter {
 	now := time.Now()
+
 	return &Limiter{
 		config:        config,
 		logger:        logger.Named("ratelimit"),
@@ -98,6 +99,7 @@ func (l *Limiter) allowUser(userID, guildID uint64) bool {
 
 	// Increment the counter
 	l.userCounters.Set(key, count+1)
+
 	return true
 }
 
@@ -116,6 +118,7 @@ func (l *Limiter) allowGuild(guildID uint64) bool {
 
 	// Increment the counter
 	l.guildCounters.Set(guildID, count+1)
+
 	return true
 }
 
@@ -139,5 +142,6 @@ func (l *Limiter) allowGlobal() bool {
 
 	// Increment the counter
 	l.globalCounter++
+
 	return true
 }

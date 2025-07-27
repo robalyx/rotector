@@ -107,6 +107,7 @@ func (a *UserReasonAnalyzer) ProcessFlaggedUsers(
 			zap.Int("retryCount", retryCount),
 			zap.Int("maxRetries", UserReasonMaxRetries),
 			zap.Int("remainingUsers", len(userReasonRequests)))
+
 		return
 	}
 
@@ -122,6 +123,7 @@ func (a *UserReasonAnalyzer) ProcessFlaggedUsers(
 		invalidMu       sync.Mutex
 		invalidRequests = make(map[uint64]UserReasonRequest)
 	)
+
 	minBatchSize := max(len(requestSlice)/4, 1)
 
 	err := utils.WithRetrySplitBatch(
@@ -165,9 +167,11 @@ func (a *UserReasonAnalyzer) ProcessFlaggedUsers(
 			var buf bytes.Buffer
 			for _, req := range batch {
 				buf.WriteString(fmt.Sprintf("Username: %s\n", req.User.Name))
+
 				if req.User.DisplayName != "" && req.User.DisplayName != req.User.Name {
 					buf.WriteString(fmt.Sprintf("Display Name: %s\n", req.User.DisplayName))
 				}
+
 				buf.WriteString(fmt.Sprintf("Description: %s\n", req.User.Description))
 				buf.WriteString(fmt.Sprintf("Hint: %s\n", req.Hint))
 				buf.WriteString(fmt.Sprintf("Confidence: %.2f\n\n", req.Confidence))
@@ -177,6 +181,7 @@ func (a *UserReasonAnalyzer) ProcessFlaggedUsers(
 				a.textLogger.Error("Failed to save blocked user reason data",
 					zap.Error(err),
 					zap.String("path", filepath))
+
 				return
 			}
 
@@ -242,6 +247,7 @@ func (a *UserReasonAnalyzer) processReasonBatch(ctx context.Context, batch []Use
 
 	// Make API request
 	var result ReasonAnalysisResult
+
 	err = a.chat.NewWithRetry(ctx, params, func(resp *openai.ChatCompletion, err error) error {
 		// Handle API error
 		if err != nil {
@@ -280,6 +286,7 @@ func (a *UserReasonAnalyzer) processReasonBatch(ctx context.Context, batch []Use
 			if response.Reason == "" || len(response.FlaggedContent) == 0 {
 				a.logger.Debug("Skipping response with empty reason or flagged content",
 					zap.String("username", response.Name))
+
 				continue
 			}
 
@@ -287,6 +294,7 @@ func (a *UserReasonAnalyzer) processReasonBatch(ctx context.Context, batch []Use
 		}
 
 		result.Results = processedResults
+
 		return nil
 	})
 	if err != nil {
@@ -309,9 +317,11 @@ func (a *UserReasonAnalyzer) processResults(
 	// If no results returned, mark all users for retry
 	if results == nil || len(results.Results) == 0 {
 		a.logger.Warn("No results returned from reason analysis, retrying all users")
+
 		for _, req := range batch {
 			invalidRequests[req.UserID] = req
 		}
+
 		return invalidRequests
 	}
 
@@ -345,6 +355,7 @@ func (a *UserReasonAnalyzer) processResults(
 		if !exists {
 			a.logger.Error("Got result for user not in batch",
 				zap.String("username", result.Name))
+
 			continue
 		}
 
@@ -353,7 +364,9 @@ func (a *UserReasonAnalyzer) processResults(
 		if !exists {
 			a.logger.Warn("Original user info not found for result",
 				zap.String("username", result.Name))
+
 			invalidRequests[req.UserID] = req
+
 			continue
 		}
 
@@ -362,7 +375,9 @@ func (a *UserReasonAnalyzer) processResults(
 		if !exists {
 			a.logger.Warn("Translated user info not found",
 				zap.String("username", result.Name))
+
 			invalidRequests[req.UserID] = req
+
 			continue
 		}
 
@@ -370,7 +385,9 @@ func (a *UserReasonAnalyzer) processResults(
 		if result.Reason == "" || len(result.FlaggedContent) == 0 {
 			a.logger.Debug("Reason analysis returned empty results",
 				zap.String("username", result.Name))
+
 			invalidRequests[req.UserID] = req
+
 			continue
 		}
 
@@ -386,6 +403,7 @@ func (a *UserReasonAnalyzer) processResults(
 		// If the flagged content is valid, update the reasons map
 		if isValid {
 			mu.Lock()
+
 			if _, exists := reasonsMap[originalInfo.ID]; !exists {
 				reasonsMap[originalInfo.ID] = make(types.Reasons[enum.UserReasonType])
 			}
@@ -405,6 +423,7 @@ func (a *UserReasonAnalyzer) processResults(
 				zap.String("username", result.Name),
 				zap.String("description", translatedInfo.Description),
 				zap.Strings("flaggedContent", processedContent))
+
 			invalidRequests[req.UserID] = req
 		}
 	}

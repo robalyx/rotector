@@ -53,16 +53,20 @@ func (c *CondoChecker) ProcessUsers(
 				if errors.Is(err, ErrPlayerNotFound) || errors.Is(err, ErrPlayerBlacklisted) {
 					return nil
 				}
+
 				return err
 			}
 
 			// Add reason to reasons map
 			mu.Lock()
+
 			if _, exists := reasonsMap[userInfo.ID]; !exists {
 				reasonsMap[userInfo.ID] = make(types.Reasons[enum.UserReasonType])
 			}
+
 			reasonsMap[userInfo.ID].Add(enum.UserReasonTypeCondo, reason)
 			mu.Unlock()
+
 			return nil
 		})
 	}
@@ -86,9 +90,11 @@ func (c *CondoChecker) processUser(ctx context.Context, user *types.ReviewUser) 
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrPlayerNotFound
 		}
+
 		c.logger.Error("Failed to get player by thumbnail",
 			zap.Error(err),
 			zap.String("thumbnailURL", user.ThumbnailURL))
+
 		return nil, err
 	}
 
@@ -104,6 +110,7 @@ func (c *CondoChecker) processUser(ctx context.Context, user *types.ReviewUser) 
 			c.logger.Error("Failed to blacklist player",
 				zap.Error(err),
 				zap.String("thumbnailURL", player.ThumbnailURL))
+
 			return nil, err
 		}
 
@@ -119,6 +126,7 @@ func (c *CondoChecker) processUser(ctx context.Context, user *types.ReviewUser) 
 			c.logger.Error("Failed to get existing user",
 				zap.Error(err),
 				zap.Uint64("userID", *player.UserID))
+
 			return nil, err
 		}
 
@@ -128,6 +136,7 @@ func (c *CondoChecker) processUser(ctx context.Context, user *types.ReviewUser) 
 					c.logger.Error("Failed to delete existing user",
 						zap.Error(err),
 						zap.Uint64("userID", *player.UserID))
+
 					return nil, err
 				}
 			}
@@ -147,6 +156,7 @@ func (c *CondoChecker) processUser(ctx context.Context, user *types.ReviewUser) 
 				zap.Error(err),
 				zap.String("thumbnailURL", player.ThumbnailURL),
 				zap.Uint64("userID", user.ID))
+
 			return nil, err
 		}
 	}

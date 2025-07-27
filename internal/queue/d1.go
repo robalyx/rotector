@@ -102,14 +102,17 @@ func (c *D1Client) GetNextBatch(ctx context.Context, batchSize int) (*UserBatch,
 
 	// Then, mark them as processing
 	updateQuery := "UPDATE queued_users SET processing = 1 WHERE user_id IN ("
+
 	params := make([]any, len(userIDs))
 	for i, id := range userIDs {
 		if i > 0 {
 			updateQuery += ","
 		}
+
 		updateQuery += "?"
 		params[i] = id
 	}
+
 	updateQuery += ")"
 
 	if _, err := c.api.ExecuteSQL(ctx, updateQuery, params); err != nil {
@@ -135,6 +138,7 @@ func (c *D1Client) MarkAsProcessed(ctx context.Context, userIDs []uint64, flagge
 	// Add CASE statement for each user ID
 	for _, id := range userIDs {
 		query += "WHEN ? THEN ? "
+
 		params = append(params, id)
 		if flaggedUsers != nil {
 			if _, flagged := flaggedUsers[id]; flagged {
@@ -142,6 +146,7 @@ func (c *D1Client) MarkAsProcessed(ctx context.Context, userIDs []uint64, flagge
 				continue
 			}
 		}
+
 		params = append(params, 0)
 	}
 
@@ -152,9 +157,12 @@ func (c *D1Client) MarkAsProcessed(ctx context.Context, userIDs []uint64, flagge
 		if i > 0 {
 			query += ","
 		}
+
 		query += "?"
+
 		params = append(params, id)
 	}
+
 	query += ")"
 
 	_, err := c.api.ExecuteSQL(ctx, query, params)
@@ -221,9 +229,11 @@ func (c *D1Client) GetQueueStats(ctx context.Context) (*Stats, error) {
 	if total, ok := result[0]["total"].(float64); ok {
 		stats.TotalItems = int(total)
 	}
+
 	if processing, ok := result[0]["processing"].(float64); ok {
 		stats.Processing = int(processing)
 	}
+
 	if unprocessed, ok := result[0]["unprocessed"].(float64); ok {
 		stats.Unprocessed = int(unprocessed)
 	}
@@ -252,9 +262,11 @@ func (c *D1Client) QueueUsers(ctx context.Context, userIDs []uint64) (map[uint64
 		if i > 0 {
 			checkQuery += ","
 		}
+
 		checkQuery += "?"
 		params[i] = id
 	}
+
 	checkQuery += ")"
 
 	result, err := c.api.ExecuteSQL(ctx, checkQuery, params)
@@ -283,8 +295,11 @@ func (c *D1Client) QueueUsers(ctx context.Context, userIDs []uint64) (map[uint64
 		SET queued_at = ?, processed = 0, processing = 0 
 		WHERE user_id IN (`
 
-	var insertParams []any
-	var updateParams []any
+	var (
+		insertParams []any
+		updateParams []any
+	)
+
 	updateParams = append(updateParams, now) // First param is the new queued_at time
 
 	cutoffTime := time.Now().AddDate(0, 0, -7).Unix()
@@ -297,12 +312,15 @@ func (c *D1Client) QueueUsers(ctx context.Context, userIDs []uint64) (map[uint64
 				errors[userID] = ErrUserRecentlyQueued
 				continue
 			}
+
 			updateParams = append(updateParams, userID)
 		} else {
 			if len(insertParams) > 0 {
 				insertQuery += ","
 			}
+
 			insertQuery += "(?, ?, 0, 0)"
+
 			insertParams = append(insertParams, userID, now)
 		}
 	}
@@ -320,8 +338,10 @@ func (c *D1Client) QueueUsers(ctx context.Context, userIDs []uint64) (map[uint64
 			if i > 0 {
 				updateQuery += ","
 			}
+
 			updateQuery += "?"
 		}
+
 		updateQuery += ")"
 
 		if _, err := c.api.ExecuteSQL(ctx, updateQuery, updateParams); err != nil {
@@ -340,6 +360,7 @@ func (c *D1Client) RemoveFromQueue(ctx context.Context, userID uint64) error {
 		FROM queued_users 
 		WHERE user_id = ?
 	`
+
 	result, err := c.api.ExecuteSQL(ctx, query, []any{userID})
 	if err != nil {
 		return fmt.Errorf("failed to check queue status: %w", err)
@@ -383,6 +404,7 @@ func (c *D1Client) GetQueueStatus(ctx context.Context, userID uint64) (*Status, 
 	}
 
 	var status Status
+
 	status.Processing = result[0]["processing"].(float64) == 1
 	status.Processed = result[0]["processed"].(float64) == 1
 	status.Flagged = result[0]["flagged"].(float64) == 1
@@ -404,6 +426,7 @@ func (c *D1Client) UpdateIPTrackingUserFlagged(ctx context.Context, userFlaggedS
 	// Add CASE statement for each user ID
 	for userID, flagged := range userFlaggedStatus {
 		query += "WHEN ? THEN ? "
+
 		params = append(params, userID)
 		if flagged {
 			params = append(params, 1)
@@ -424,9 +447,12 @@ func (c *D1Client) UpdateIPTrackingUserFlagged(ctx context.Context, userFlaggedS
 		if i > 0 {
 			query += ","
 		}
+
 		query += "?"
+
 		params = append(params, userID)
 	}
+
 	query += ") AND user_flagged IS NULL" // Only update if not already set
 
 	result, err := c.api.ExecuteSQL(ctx, query, params)
@@ -450,6 +476,7 @@ func (c *D1Client) CleanupIPTracking(ctx context.Context, retentionPeriod time.D
 	`
 
 	retentionCutoff := time.Now().Add(-retentionPeriod).Unix()
+
 	result, err := c.api.ExecuteSQL(ctx, cleanupQuery, []any{retentionCutoff})
 	if err != nil {
 		return fmt.Errorf("failed to cleanup IP tracking records: %w", err)
@@ -500,10 +527,12 @@ func (c *D1Client) AddFlaggedUsers(ctx context.Context, flaggedUsers map[uint64]
 			if j > 0 {
 				sqlStmt += ","
 			}
+
 			sqlStmt += "(?, ?, ?, ?, ?)"
 
 			// Convert reasons to JSON string
 			reasonsJSON := "{}"
+
 			if len(user.Reasons) > 0 {
 				// Convert reasons map to the proper format
 				reasonsData := make(map[string]map[string]any)
@@ -558,6 +587,7 @@ func (c *D1Client) AddConfirmedUser(ctx context.Context, user *types.ReviewUser,
 	// Fetch reviewer information from the database
 	reviewerUsername := "Unknown"
 	reviewerDisplayName := "Unknown"
+
 	if reviewerInfos, err := c.db.Model().Reviewer().GetReviewerInfos(ctx, []uint64{reviewerID}); err != nil {
 		c.logger.Warn("Failed to get reviewer info, using fallback values",
 			zap.Error(err),
@@ -569,6 +599,7 @@ func (c *D1Client) AddConfirmedUser(ctx context.Context, user *types.ReviewUser,
 
 	// Convert reasons to JSON string
 	reasonsJSON := "{}"
+
 	if len(user.Reasons) > 0 {
 		// Convert reasons map to the proper format
 		reasonsData := make(map[string]map[string]any)

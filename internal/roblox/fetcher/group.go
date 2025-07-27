@@ -57,6 +57,7 @@ func (g *GroupFetcher) FetchGroupInfos(ctx context.Context, groupIDs []uint64) [
 				g.logger.Error("Error fetching group info",
 					zap.Uint64("groupID", id),
 					zap.Error(err))
+
 				return nil // Don't fail the whole batch for one error
 			}
 
@@ -69,17 +70,21 @@ func (g *GroupFetcher) FetchGroupInfos(ctx context.Context, groupIDs []uint64) [
 			normalizer := utils.NewTextNormalizer()
 
 			groupInfo.Name = normalizer.Normalize(groupInfo.Name)
+
 			groupInfo.Description = normalizer.Normalize(groupInfo.Description)
 			if groupInfo.Owner != nil {
 				groupInfo.Owner.DisplayName = normalizer.Normalize(groupInfo.Owner.DisplayName)
 			}
+
 			if groupInfo.Shout != nil {
 				groupInfo.Shout.Body = normalizer.Normalize(groupInfo.Shout.Body)
 				groupInfo.Shout.Poster.DisplayName = normalizer.Normalize(groupInfo.Shout.Poster.DisplayName)
 			}
 
 			mu.Lock()
+
 			validGroups = append(validGroups, groupInfo)
+
 			mu.Unlock()
 
 			return nil
@@ -116,14 +121,18 @@ func (g *GroupFetcher) FetchLockedGroups(ctx context.Context, groupIDs []uint64)
 				g.logger.Error("Error fetching group info",
 					zap.Uint64("groupID", id),
 					zap.Error(err))
+
 				return nil // Don't fail the whole batch for one error
 			}
 
 			if groupInfo.IsLocked != nil && *groupInfo.IsLocked {
 				mu.Lock()
+
 				results = append(results, groupInfo.ID)
+
 				mu.Unlock()
 			}
+
 			return nil
 		})
 	}

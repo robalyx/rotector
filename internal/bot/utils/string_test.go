@@ -9,6 +9,7 @@ import (
 
 func TestTruncateString(t *testing.T) {
 	t.Parallel()
+
 	tests := []struct {
 		name      string
 		input     string
@@ -38,6 +39,7 @@ func TestTruncateString(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			got := utils.TruncateString(tt.input, tt.maxLength)
 			assert.Equal(t, tt.want, got)
 		})
@@ -46,6 +48,7 @@ func TestTruncateString(t *testing.T) {
 
 func TestFormatString(t *testing.T) {
 	t.Parallel()
+
 	tests := []struct {
 		name  string
 		input string
@@ -71,6 +74,7 @@ func TestFormatString(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			got := utils.FormatString(tt.input)
 			assert.Equal(t, tt.want, got)
 		})
@@ -79,6 +83,7 @@ func TestFormatString(t *testing.T) {
 
 func TestCensorString(t *testing.T) {
 	t.Parallel()
+
 	tests := []struct {
 		name         string
 		input        string
@@ -108,6 +113,7 @@ func TestCensorString(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			got := utils.CensorString(tt.input, tt.streamerMode)
 			assert.Equal(t, tt.want, got)
 		})
@@ -116,6 +122,7 @@ func TestCensorString(t *testing.T) {
 
 func TestCensorStringsInText(t *testing.T) {
 	t.Parallel()
+
 	tests := []struct {
 		name         string
 		text         string
@@ -149,6 +156,7 @@ func TestCensorStringsInText(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			got := utils.CensorStringsInText(tt.text, tt.streamerMode, tt.targets...)
 			assert.Equal(t, tt.want, got)
 		})
@@ -157,6 +165,7 @@ func TestCensorStringsInText(t *testing.T) {
 
 func TestNormalizeString(t *testing.T) {
 	t.Parallel()
+
 	tests := []struct {
 		name  string
 		input string
@@ -187,6 +196,7 @@ func TestNormalizeString(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			got := utils.NormalizeString(tt.input)
 			assert.Equal(t, tt.want, got)
 		})
@@ -195,6 +205,7 @@ func TestNormalizeString(t *testing.T) {
 
 func TestCalculateDynamicTruncationLength(t *testing.T) {
 	t.Parallel()
+
 	tests := []struct {
 		name       string
 		numReasons int
@@ -245,6 +256,7 @@ func TestCalculateDynamicTruncationLength(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			got := utils.CalculateDynamicTruncationLength(tt.numReasons)
 			assert.Equal(t, tt.want, got)
 		})

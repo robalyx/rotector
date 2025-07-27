@@ -71,6 +71,7 @@ func (s *BotSetting) IsAdmin(userID uint64) bool {
 	}
 
 	_, exists := s.AdminMap[userID]
+
 	return exists
 }
 
@@ -84,6 +85,7 @@ func (s *BotSetting) IsReviewer(userID uint64) bool {
 	}
 
 	_, exists := s.ReviewerMap[userID]
+
 	return exists
 }
 

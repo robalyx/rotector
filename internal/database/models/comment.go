@@ -29,6 +29,7 @@ func NewComment(db *bun.DB, logger *zap.Logger) *CommentModel {
 func (r *CommentModel) GetUserComments(ctx context.Context, targetID uint64) ([]*types.Comment, error) {
 	return dbretry.Operation(ctx, func(ctx context.Context) ([]*types.Comment, error) {
 		var comments []*types.Comment
+
 		err := r.db.NewSelect().
 			TableExpr("user_comments").
 			ColumnExpr("target_id, commenter_id, message, created_at, updated_at").
@@ -38,6 +39,7 @@ func (r *CommentModel) GetUserComments(ctx context.Context, targetID uint64) ([]
 		if err != nil {
 			return nil, fmt.Errorf("failed to get comments: %w", err)
 		}
+
 		return comments, nil
 	})
 }
@@ -76,6 +78,7 @@ func (r *CommentModel) DeleteUserComment(ctx context.Context, targetID, commente
 		if err != nil {
 			return fmt.Errorf("failed to delete comment: %w", err)
 		}
+
 		return nil
 	})
 }
@@ -84,6 +87,7 @@ func (r *CommentModel) DeleteUserComment(ctx context.Context, targetID, commente
 func (r *CommentModel) GetGroupComments(ctx context.Context, targetID uint64) ([]*types.Comment, error) {
 	return dbretry.Operation(ctx, func(ctx context.Context) ([]*types.Comment, error) {
 		var comments []*types.Comment
+
 		err := r.db.NewSelect().
 			TableExpr("group_comments").
 			ColumnExpr("target_id, commenter_id, message, created_at, updated_at").
@@ -93,6 +97,7 @@ func (r *CommentModel) GetGroupComments(ctx context.Context, targetID uint64) ([
 		if err != nil {
 			return nil, fmt.Errorf("failed to get comments: %w", err)
 		}
+
 		return comments, nil
 	})
 }
@@ -131,6 +136,7 @@ func (r *CommentModel) DeleteGroupComment(ctx context.Context, targetID, comment
 		if err != nil {
 			return fmt.Errorf("failed to delete comment: %w", err)
 		}
+
 		return nil
 	})
 }

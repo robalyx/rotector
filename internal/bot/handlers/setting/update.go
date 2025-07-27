@@ -34,6 +34,7 @@ func NewUpdateMenu(l *Layout) *UpdateMenu {
 		ButtonHandlerFunc: m.handleSettingButton,
 		ModalHandlerFunc:  m.handleSettingModal,
 	}
+
 	return m
 }
 
@@ -106,6 +107,7 @@ func (m *UpdateMenu) handleSettingButton(ctx *interaction.Context, s *session.Se
 	case enum.SettingTypeBool, enum.SettingTypeEnum:
 		m.layout.logger.Error("Button change not supported for this setting type",
 			zap.String("type", setting.Type.String()))
+
 		return
 	}
 }
@@ -194,11 +196,13 @@ func (m *UpdateMenu) handleSettingModal(ctx *interaction.Context, s *session.Ses
 
 	// Get all inputs from the modal
 	var inputs []string
+
 	for i := 0; ; i++ {
 		input := ctx.Event().ModalData().Text(strconv.Itoa(i))
 		if input == "" {
 			break
 		}
+
 		inputs = append(inputs, input)
 	}
 
@@ -225,6 +229,7 @@ func (m *UpdateMenu) getSetting(settingType, settingKey string) *session.Setting
 	if strings.HasPrefix(settingType, constants.UserSettingPrefix) {
 		return m.layout.registry.UserSettings[settingKey]
 	}
+
 	return m.layout.registry.BotSettings[settingKey]
 }
 
@@ -235,6 +240,7 @@ func (m *UpdateMenu) validateSettingValue(s *session.Session, setting *session.S
 			return err
 		}
 	}
+
 	return nil
 }
 
@@ -256,6 +262,7 @@ func (m *UpdateMenu) calculatePagination(s *session.Session) bool {
 		default:
 			m.layout.logger.Error("Invalid setting type for pagination",
 				zap.String("type", setting.Type.String()))
+
 			return false
 		}
 
@@ -265,6 +272,7 @@ func (m *UpdateMenu) calculatePagination(s *session.Session) bool {
 		// Store pagination state in session
 		session.PaginationTotalItems.Set(s, totalItems)
 		session.PaginationTotalPages.Set(s, totalPages)
+
 		return true
 
 	case enum.SettingTypeBool, enum.SettingTypeEnum, enum.SettingTypeNumber, enum.SettingTypeText:

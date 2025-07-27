@@ -34,6 +34,7 @@ func (h *Hook) AfterQuery(_ context.Context, event *bun.QueryEvent) {
 				zap.String("operation", event.Query),
 				zap.Duration("duration", duration))
 		}
+
 		return
 	}
 

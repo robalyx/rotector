@@ -42,6 +42,7 @@ func (m *BanModel) BanUser(ctx context.Context, record *types.DiscordBan) error 
 		if err != nil {
 			return fmt.Errorf("failed to ban user: %w", err)
 		}
+
 		return nil
 	})
 }
@@ -66,6 +67,7 @@ func (m *BanModel) BulkBanUsers(ctx context.Context, records []*types.DiscordBan
 		if err != nil {
 			return fmt.Errorf("failed to bulk ban users: %w", err)
 		}
+
 		return nil
 	})
 }
@@ -101,6 +103,7 @@ func (m *BanModel) IsBanned(ctx context.Context, userID uint64) (bool, error) {
 		if err != nil && !errors.Is(err, sql.ErrNoRows) {
 			return false, fmt.Errorf("failed to check if user is banned: %w", err)
 		}
+
 		return exists, nil
 	})
 }
@@ -146,6 +149,7 @@ func (m *BanModel) BulkCheckBanned(ctx context.Context, userIDs []uint64) (map[u
 func (m *BanModel) GetBan(ctx context.Context, userID uint64) (*types.DiscordBan, error) {
 	return dbretry.Operation(ctx, func(ctx context.Context) (*types.DiscordBan, error) {
 		var ban types.DiscordBan
+
 		err := m.db.NewSelect().
 			Model(&ban).
 			Where("id = ?", userID).
@@ -153,6 +157,7 @@ func (m *BanModel) GetBan(ctx context.Context, userID uint64) (*types.DiscordBan
 		if err != nil {
 			return nil, fmt.Errorf("failed to get ban: %w", err)
 		}
+
 		return &ban, nil
 	})
 }

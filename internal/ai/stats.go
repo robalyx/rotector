@@ -76,6 +76,7 @@ func (a *StatsAnalyzer) GenerateWelcomeMessage(ctx context.Context, historicalSt
 
 	// Generate welcome message
 	var response string
+
 	err = a.chat.NewWithRetry(ctx, params, func(resp *openai.ChatCompletion, err error) error {
 		// Handle API error
 		if err != nil {
@@ -96,6 +97,7 @@ func (a *StatsAnalyzer) GenerateWelcomeMessage(ctx context.Context, historicalSt
 		}
 
 		response = utils.CompressAllWhitespace(message.Content)
+
 		return nil
 	})
 	if err != nil {

@@ -161,6 +161,7 @@ func runWorkers(ctx context.Context, workerType string, count int) {
 	var wg stdSync.WaitGroup
 	for i := range count {
 		wg.Add(1)
+
 		go func(workerID int) {
 			defer wg.Done()
 
@@ -178,6 +179,7 @@ func runWorkers(ctx context.Context, workerType string, count int) {
 			bar := bars[workerID]
 
 			var w interface{ Start(context.Context) }
+
 			switch workerType {
 			case FriendWorker:
 				w = friend.New(app, bar, workerLogger)

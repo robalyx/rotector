@@ -33,6 +33,7 @@ func NewMainMenu(layout *Layout) *MainMenu {
 		ButtonHandlerFunc: m.handleButton,
 		ModalHandlerFunc:  m.handleModal,
 	}
+
 	return m
 }
 
@@ -186,6 +187,7 @@ func (m *MainMenu) handleBanUserModalSubmit(ctx *interaction.Context, s *session
 	if err != nil && !errors.Is(err, utils.ErrPermanentBan) {
 		m.layout.logger.Debug("Failed to parse ban duration", zap.Error(err))
 		ctx.Cancel(fmt.Sprintf("Ban duration is invalid: %s", err))
+
 		return
 	}
 

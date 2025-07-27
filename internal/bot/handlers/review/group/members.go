@@ -39,6 +39,7 @@ func NewMembersMenu(layout *Layout) *MembersMenu {
 			session.ImageBuffer.Delete(s)
 		},
 	}
+
 	return m
 }
 
@@ -56,6 +57,7 @@ func (m *MembersMenu) Show(ctx *interaction.Context, s *session.Session) {
 	if err != nil {
 		m.layout.logger.Error("Failed to fetch flagged users", zap.Error(err))
 		ctx.Error("Failed to load flagged users. Please try again.")
+
 		return
 	}
 
@@ -82,6 +84,7 @@ func (m *MembersMenu) Show(ctx *interaction.Context, s *session.Session) {
 	if err != nil {
 		m.layout.logger.Error("Failed to get user data", zap.Error(err))
 		ctx.Error("Failed to fetch member data. Please try again.")
+
 		return
 	}
 
@@ -125,6 +128,7 @@ func (m *MembersMenu) handleButton(ctx *interaction.Context, s *session.Session,
 		session.ImageBuffer.Delete(s)
 		session.PaginationPage.Set(s, page)
 		ctx.Reload("")
+
 		return
 	}
 

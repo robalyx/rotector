@@ -20,10 +20,12 @@ func verifySQLiteFile(t *testing.T, filepath, tableName string, expectedRecords 
 	// Open database
 	conn, err := sqlite.OpenConn(filepath, sqlite.OpenReadOnly)
 	require.NoError(t, err)
+
 	defer conn.Close()
 
 	// Query all records
 	var records []*types.ExportRecord
+
 	err = sqlitex.ExecuteTransient(
 		conn,
 		fmt.Sprintf("SELECT hash, status, reason, confidence FROM %s ORDER BY hash", tableName),
@@ -224,10 +226,12 @@ func TestExporter_DatabaseSchema(t *testing.T) {
 	// Open the database
 	conn, err := sqlite.OpenConn(filepath.Join(tempDir, "users.db"), sqlite.OpenReadOnly)
 	require.NoError(t, err)
+
 	defer conn.Close()
 
 	// Query table schema
 	var columns []string
+
 	err = sqlitex.ExecuteTransient(conn, "PRAGMA table_info(users)", &sqlitex.ExecOptions{
 		ResultFunc: func(stmt *sqlite.Stmt) error {
 			columns = append(columns, stmt.ColumnText(1)) // Column name is at index 1
@@ -242,6 +246,7 @@ func TestExporter_DatabaseSchema(t *testing.T) {
 
 	// Verify primary key
 	var pkColumn string
+
 	err = sqlitex.ExecuteTransient(conn, "SELECT name FROM pragma_table_info('users') WHERE pk = 1", &sqlitex.ExecOptions{
 		ResultFunc: func(stmt *sqlite.Stmt) error {
 			pkColumn = stmt.ColumnText(0)

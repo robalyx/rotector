@@ -26,6 +26,7 @@ func TestGenerateSchema(t *testing.T) {
 
 	t.Run("simple struct schema", func(t *testing.T) {
 		t.Parallel()
+
 		schema := utils.GenerateSchema[SimpleStruct]()
 
 		// Convert to JSON for easier assertion
@@ -33,6 +34,7 @@ func TestGenerateSchema(t *testing.T) {
 		require.NoError(t, err)
 
 		var schemaMap map[string]any
+
 		err = json.Unmarshal(schemaBytes, &schemaMap)
 		require.NoError(t, err)
 
@@ -55,12 +57,14 @@ func TestGenerateSchema(t *testing.T) {
 
 	t.Run("nested struct schema", func(t *testing.T) {
 		t.Parallel()
+
 		schema := utils.GenerateSchema[NestedStruct]()
 
 		schemaBytes, err := json.Marshal(schema)
 		require.NoError(t, err)
 
 		var schemaMap map[string]any
+
 		err = json.Unmarshal(schemaBytes, &schemaMap)
 		require.NoError(t, err)
 
@@ -85,12 +89,14 @@ func TestGenerateSchema(t *testing.T) {
 
 	t.Run("primitive type schema", func(t *testing.T) {
 		t.Parallel()
+
 		schema := utils.GenerateSchema[string]()
 
 		schemaBytes, err := json.Marshal(schema)
 		require.NoError(t, err)
 
 		var schemaMap map[string]any
+
 		err = json.Unmarshal(schemaBytes, &schemaMap)
 		require.NoError(t, err)
 

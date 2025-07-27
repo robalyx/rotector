@@ -100,7 +100,9 @@ func (is *ImageStreamer) Stream(req StreamRequest) {
 					zap.Error(err),
 					zap.String("url", url))
 				failedDownloads.Add(1)
+
 				resultChan <- DownloadResult{index: index}
+
 				return
 			}
 
@@ -117,11 +119,14 @@ func (is *ImageStreamer) Stream(req StreamRequest) {
 			case result := <-resultChan:
 				if result.data != nil {
 					mu.Lock()
+
 					downloadedImages[result.index] = result.data
+
 					mu.Unlock()
 				}
 			}
 		}
+
 		close(doneChan)
 	}()
 
@@ -135,6 +140,7 @@ func (is *ImageStreamer) Stream(req StreamRequest) {
 			// Clean up streaming state before returning
 			is.createAndDisplayGrid(req, downloadedImages, &mu, "Image loading timed out")
 			session.PaginationIsStreaming.Set(req.Session, false)
+
 			return
 		case <-doneChan:
 			// Final update when all images are downloaded
@@ -145,6 +151,7 @@ func (is *ImageStreamer) Stream(req StreamRequest) {
 
 			is.createAndDisplayGrid(req, downloadedImages, &mu, message)
 			session.PaginationIsStreaming.Set(req.Session, false)
+
 			return
 		case <-ticker.C:
 			// Periodic update while images are still downloading
@@ -178,6 +185,7 @@ func (is *ImageStreamer) downloadImage(ctx context.Context, url string) ([]byte,
 				zap.Int("attempt", attempt),
 				zap.Error(err),
 				zap.String("url", url))
+
 			continue
 		}
 		defer resp.Body.Close()
@@ -189,6 +197,7 @@ func (is *ImageStreamer) downloadImage(ctx context.Context, url string) ([]byte,
 				zap.Int("attempt", attempt),
 				zap.Error(err),
 				zap.String("url", url))
+
 			continue
 		}
 

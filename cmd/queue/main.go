@@ -70,7 +70,7 @@ func run() error {
 			fmt.Println("Press Enter when you're done editing the file...")
 
 			// Try to open the file in the default editor
-			if err := openFileInEditor(tempFile); err != nil {
+			if err := openFileInEditor(ctx, tempFile); err != nil {
 				fmt.Printf("Warning: Could not open file in editor: %v\n", err)
 				fmt.Println("Please manually edit the file and press Enter when done.")
 			}
@@ -139,23 +139,24 @@ func createTempFileWithInstructions() (string, error) {
 }
 
 // openFileInEditor tries to open the file in the system's default text editor.
-func openFileInEditor(filename string) error {
+func openFileInEditor(ctx context.Context, filename string) error {
 	var cmd *exec.Cmd
 
 	switch runtime.GOOS {
 	case "windows":
-		cmd = exec.Command("notepad", filename)
+		cmd = exec.CommandContext(ctx, "notepad", filename)
 	case "darwin":
-		cmd = exec.Command("open", "-t", filename)
+		cmd = exec.CommandContext(ctx, "open", "-t", filename)
 	case "linux":
 		// Try common editors
 		editors := []string{"nano", "vim", "vi"}
 		for _, editor := range editors {
 			if _, err := exec.LookPath(editor); err == nil {
-				cmd = exec.Command(editor, filename)
+				cmd = exec.CommandContext(ctx, editor, filename)
 				break
 			}
 		}
+
 		if cmd == nil {
 			return ErrNoSuitableEditor
 		}
@@ -174,8 +175,11 @@ func readUserIDsFromFile(filename string) ([]uint64, error) {
 	}
 	defer file.Close()
 
-	var userIDs []uint64
-	var invalidInputs []string
+	var (
+		userIDs       []uint64
+		invalidInputs []string
+	)
+
 	processedLines := make(map[string]struct{})
 
 	scanner := bufio.NewScanner(file)
@@ -194,6 +198,7 @@ func readUserIDsFromFile(filename string) ([]uint64, error) {
 		if _, exists := processedLines[line]; exists {
 			continue
 		}
+
 		processedLines[line] = struct{}{}
 
 		userID, err := processUserIDInput(line)
@@ -211,9 +216,11 @@ func readUserIDsFromFile(filename string) ([]uint64, error) {
 
 	if len(invalidInputs) > 0 {
 		fmt.Printf("Warning: Found %d invalid entries:\n", len(invalidInputs))
+
 		for _, invalid := range invalidInputs {
 			fmt.Printf("  - %s\n", invalid)
 		}
+
 		fmt.Println()
 	}
 
@@ -229,6 +236,7 @@ func processUserIDInput(line string) (uint64, error) {
 
 	// Parse profile URL if provided
 	userIDStr := line
+
 	parsedURL, err := utils.ExtractUserIDFromURL(line)
 	if err == nil {
 		userIDStr = parsedURL
@@ -245,8 +253,10 @@ func processUserIDInput(line string) (uint64, error) {
 
 // queueUsers queues multiple users for processing, handling batching and error reporting.
 func queueUsers(ctx context.Context, app *setup.App, userIDs []uint64) (int, int, error) {
-	var totalQueued int
-	var totalFailed int
+	var (
+		totalQueued int
+		totalFailed int
+	)
 
 	logger := app.Logger.Named("queue_cli")
 
@@ -285,8 +295,10 @@ func queueUserBatch(ctx context.Context, app *setup.App, batch []uint64, logger 
 		if _, exists := existingUsers[userID]; exists {
 			existingUserSet[userID] = struct{}{}
 			logger.Debug("Skipping user - already exists in database", zap.Uint64("userID", userID))
+
 			continue
 		}
+
 		usersToQueue = append(usersToQueue, userID)
 	}
 
@@ -294,6 +306,7 @@ func queueUserBatch(ctx context.Context, app *setup.App, batch []uint64, logger 
 	queueErrors := make(map[uint64]error)
 	if len(usersToQueue) > 0 {
 		var err error
+
 		queueErrors, err = app.D1Client.QueueUsers(ctx, usersToQueue)
 		if err != nil {
 			logger.Error("Failed to queue batch", zap.Error(err))
@@ -302,8 +315,10 @@ func queueUserBatch(ctx context.Context, app *setup.App, batch []uint64, logger 
 	}
 
 	// Process results and create activity logs
-	var queuedCount int
-	var failedCount int
+	var (
+		queuedCount int
+		failedCount int
+	)
 
 	for _, userID := range batch {
 		// Skip if user exists in database
@@ -315,11 +330,13 @@ func queueUserBatch(ctx context.Context, app *setup.App, batch []uint64, logger 
 		// Check if user had D1 queue errors
 		if queueErr, failed := queueErrors[userID]; failed {
 			failedCount++
+
 			if errors.Is(queueErr, queue.ErrUserRecentlyQueued) {
 				logger.Warn("User recently queued", zap.Uint64("userID", userID))
 			} else {
 				logger.Error("Failed to queue user", zap.Uint64("userID", userID), zap.Error(queueErr))
 			}
+
 			continue
 		}
 

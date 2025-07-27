@@ -27,6 +27,7 @@ func NewMenu(layout *Layout) *Menu {
 		SelectHandlerFunc: m.handleSelectMenu,
 		ButtonHandlerFunc: m.handleButton,
 	}
+
 	return m
 }
 
@@ -36,6 +37,7 @@ func (m *Menu) Show(ctx *interaction.Context, s *session.Session) {
 	uniqueGuilds, err := m.layout.db.Model().Sync().GetUniqueGuildCount(ctx.Context())
 	if err != nil {
 		m.layout.logger.Error("Failed to get unique guild count", zap.Error(err))
+
 		uniqueGuilds = 0 // Default to 0 if there's an error
 	}
 
@@ -43,6 +45,7 @@ func (m *Menu) Show(ctx *interaction.Context, s *session.Session) {
 	uniqueUsers, err := m.layout.db.Model().Sync().GetUniqueUserCount(ctx.Context())
 	if err != nil {
 		m.layout.logger.Error("Failed to get unique user count", zap.Error(err))
+
 		uniqueUsers = 0 // Default to 0 if there's an error
 	}
 
@@ -50,6 +53,7 @@ func (m *Menu) Show(ctx *interaction.Context, s *session.Session) {
 	inappropriateUsers, err := m.layout.db.Model().Message().GetUniqueInappropriateUserCount(ctx.Context())
 	if err != nil {
 		m.layout.logger.Error("Failed to get inappropriate user count", zap.Error(err))
+
 		inappropriateUsers = 0 // Default to 0 if there's an error
 	}
 

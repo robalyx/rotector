@@ -33,6 +33,7 @@ func (b *Builder) Build() *discord.MessageUpdateBuilder {
 	// Add existing sessions
 	if len(b.sessions) > 0 {
 		sessionsContent.WriteString("### Existing Sessions\n")
+
 		for _, s := range b.sessions {
 			sessionsContent.WriteString(fmt.Sprintf("-# Session %d\n", s.MessageID))
 			sessionsContent.WriteString(fmt.Sprintf("-# Page: %s\n", s.PageName))

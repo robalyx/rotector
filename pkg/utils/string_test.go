@@ -9,6 +9,7 @@ import (
 
 func TestCompressAllWhitespace(t *testing.T) {
 	t.Parallel()
+
 	tests := []struct {
 		name  string
 		input string
@@ -49,6 +50,7 @@ func TestCompressAllWhitespace(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			got := utils.CompressAllWhitespace(tt.input)
 			assert.Equal(t, tt.want, got)
 		})
@@ -57,6 +59,7 @@ func TestCompressAllWhitespace(t *testing.T) {
 
 func TestCompressWhitespacePreserveNewlines(t *testing.T) {
 	t.Parallel()
+
 	tests := []struct {
 		name  string
 		input string
@@ -103,6 +106,7 @@ func TestCompressWhitespacePreserveNewlines(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			got := utils.CompressWhitespacePreserveNewlines(tt.input)
 			assert.Equal(t, tt.want, got)
 		})
@@ -111,6 +115,7 @@ func TestCompressWhitespacePreserveNewlines(t *testing.T) {
 
 func TestSplitLines(t *testing.T) {
 	t.Parallel()
+
 	tests := []struct {
 		name  string
 		input []string
@@ -161,6 +166,7 @@ func TestSplitLines(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			got := utils.SplitLines(tt.input)
 			assert.Equal(t, tt.want, got)
 		})
@@ -169,6 +175,7 @@ func TestSplitLines(t *testing.T) {
 
 func TestParseDelimitedInput(t *testing.T) {
 	t.Parallel()
+
 	tests := []struct {
 		name      string
 		input     string
@@ -234,6 +241,7 @@ func TestParseDelimitedInput(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			got := utils.ParseDelimitedInput(tt.input, tt.delimiter)
 			assert.Equal(t, tt.want, got)
 		})
@@ -242,6 +250,7 @@ func TestParseDelimitedInput(t *testing.T) {
 
 func TestValidateCommentText(t *testing.T) {
 	t.Parallel()
+
 	tests := []struct {
 		name     string
 		input    string
@@ -337,6 +346,7 @@ func TestValidateCommentText(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			result := utils.ValidateCommentText(tt.input)
 			if result != tt.expected {
 				t.Errorf("ValidateCommentText(%q) = %v, want %v", tt.input, result, tt.expected)

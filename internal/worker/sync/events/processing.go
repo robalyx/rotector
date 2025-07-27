@@ -43,6 +43,7 @@ func (h *Handler) addMessageToQueue(message *discord.Message) {
 			zap.String("message_id", messageID),
 			zap.Int("length", len(content)),
 			zap.String("sample", content[:min(len(content), 50)]))
+
 		return
 	}
 
@@ -52,12 +53,14 @@ func (h *Handler) addMessageToQueue(message *discord.Message) {
 		h.logger.Error("Failed to check user privacy status",
 			zap.Uint64("user_id", userID),
 			zap.Error(err))
+
 		return
 	}
 
 	if isRedacted || isWhitelisted {
 		h.logger.Debug("Skipping message from redacted/whitelisted user",
 			zap.Uint64("user_id", userID))
+
 		return
 	}
 
@@ -93,6 +96,7 @@ func (h *Handler) addMessageToQueue(message *discord.Message) {
 				zap.String("message_id", messageID),
 				zap.Float64("similarity", similarity),
 				zap.String("sample", content[:min(len(content), 50)]))
+
 			return
 		}
 	}
@@ -114,6 +118,7 @@ func (h *Handler) addMessageToQueue(message *discord.Message) {
 			zap.Uint64("channel_id", channelID),
 			zap.Uint64("user_id", userID),
 			zap.String("message_id", messageID))
+
 		return
 	}
 
@@ -167,17 +172,20 @@ func (h *Handler) processChannelMessages(serverID, channelID, channelKey uint64)
 		h.messageMu.Unlock()
 		return
 	}
+
 	delete(h.guildMessages, channelKey)
 	h.messageMu.Unlock()
 
 	// Get server info
 	ctx := context.Background()
+
 	serverInfo, err := h.getOrCreateServerInfo(ctx, serverID)
 	if err != nil {
 		h.logger.Error("Failed to get server info",
 			zap.Uint64("server_id", serverID),
 			zap.Uint64("channel_id", channelID),
 			zap.Error(err))
+
 		return
 	}
 
@@ -211,6 +219,7 @@ func (h *Handler) processChannelMessages(serverID, channelID, channelKey uint64)
 	for userID := range uniqueUsers {
 		userIDs = append(userIDs, userID)
 	}
+
 	h.db.Service().Ban().CreateCondoBans(ctx, userIDs)
 
 	// Process the messages with AI
@@ -220,6 +229,7 @@ func (h *Handler) processChannelMessages(serverID, channelID, channelKey uint64)
 			zap.Uint64("server_id", serverID),
 			zap.Uint64("channel_id", channelID),
 			zap.Error(err))
+
 		return
 	}
 
@@ -264,6 +274,7 @@ func (h *Handler) getOrCreateServerInfo(ctx context.Context, serverID uint64) (*
 
 		h.logger.Warn("Created server info with placeholder name",
 			zap.Uint64("server_id", serverID))
+
 		return serverInfo, nil
 	}
 
@@ -282,6 +293,7 @@ func (h *Handler) getOrCreateServerInfo(ctx context.Context, serverID uint64) (*
 	h.logger.Debug("Created server info",
 		zap.Uint64("server_id", serverID),
 		zap.String("name", guild.Name))
+
 	return serverInfo, nil
 }
 
@@ -290,6 +302,7 @@ func (h *Handler) storeInappropriateMessages(
 	ctx context.Context, serverID uint64, channelID uint64, flaggedUsers map[uint64]*ai.FlaggedMessageUser,
 ) error {
 	var messages []*types.InappropriateMessage
+
 	summaries := make([]*types.InappropriateUserSummary, 0, len(flaggedUsers))
 	now := time.Now()
 
@@ -335,5 +348,6 @@ func (h *Handler) storeInappropriateMessages(
 		zap.Uint64("server_id", serverID),
 		zap.Int("user_count", len(flaggedUsers)),
 		zap.Int("message_count", len(messages)))
+
 	return nil
 }

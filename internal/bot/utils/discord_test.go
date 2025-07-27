@@ -11,6 +11,7 @@ import (
 
 func TestGetMessageContainerColor(t *testing.T) {
 	t.Parallel()
+
 	tests := []struct {
 		name         string
 		streamerMode bool
@@ -31,6 +32,7 @@ func TestGetMessageContainerColor(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			got := utils.GetContainerColor(tt.streamerMode)
 			assert.Equal(t, tt.want, got)
 		})
@@ -39,6 +41,7 @@ func TestGetMessageContainerColor(t *testing.T) {
 
 func TestCreateTimestampedTextDisplay(t *testing.T) {
 	t.Parallel()
+
 	tests := []struct {
 		name    string
 		content string
@@ -56,6 +59,7 @@ func TestCreateTimestampedTextDisplay(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			component := utils.CreateTimestampedTextDisplay(tt.content)
 
 			// Assert component type

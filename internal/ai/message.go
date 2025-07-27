@@ -116,6 +116,7 @@ func (a *MessageAnalyzer) ProcessMessages(
 
 	for _, batch := range batches {
 		batchCopy := batch
+
 		p.Go(func(ctx context.Context) error {
 			// Analyze the batch
 			flaggedResults, err := a.processBatch(ctx, serverID, serverName, batchCopy)
@@ -146,6 +147,7 @@ func (a *MessageAnalyzer) ProcessMessages(
 					}
 				}
 			}
+
 			return nil
 		})
 	}
@@ -217,6 +219,7 @@ func (a *MessageAnalyzer) processMessageBatch(
 
 	// Make API request
 	var result FlaggedMessagesResponse
+
 	err = a.chat.NewWithRetry(ctx, params, func(resp *openai.ChatCompletion, err error) error {
 		// Handle API error
 		if err != nil {
@@ -261,11 +264,14 @@ func (a *MessageAnalyzer) processBatch(
 	minBatchSize := max(len(messages)/4, 1)
 
 	var result *FlaggedMessagesResponse
+
 	err := utils.WithRetrySplitBatch(
 		ctx, messages, len(messages), minBatchSize, utils.GetAIRetryOptions(),
 		func(batch []*MessageContent) error {
 			var err error
+
 			result, err = a.processMessageBatch(ctx, serverID, serverName, batch)
+
 			return err
 		},
 		func(batch []*MessageContent) {
@@ -290,6 +296,7 @@ func (a *MessageAnalyzer) processBatch(
 				a.textLogger.Error("Failed to save blocked messages",
 					zap.Error(err),
 					zap.String("path", filepath))
+
 				return
 			}
 

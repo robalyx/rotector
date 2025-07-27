@@ -83,6 +83,7 @@ func (t *ThumbnailFetcher) AddGroupImageURLs(
 
 	// Add thumbnail URLs to groups
 	now := time.Now()
+
 	updatedGroups := make(map[uint64]*types.ReviewGroup, len(groups))
 	for _, group := range groups {
 		if thumbnailURL, ok := results[group.ID]; ok {
@@ -127,6 +128,7 @@ func (t *ThumbnailFetcher) ProcessBatchThumbnails(
 			}
 
 			currentBatch := initialBatch.Build()
+
 			err := utils.WithRetry(ctx, func() error {
 				// Fetch batch thumbnails
 				resp, err := t.roAPI.Thumbnails().GetBatchThumbnails(ctx, currentBatch)
@@ -136,6 +138,7 @@ func (t *ThumbnailFetcher) ProcessBatchThumbnails(
 
 				// Process batch response
 				pendingRequests, results := t.processTargetBatchResponse(resp.Data, currentBatch.Requests)
+
 				mu.Lock()
 				maps.Copy(thumbnailURLs, results)
 				mu.Unlock()
@@ -203,6 +206,7 @@ func (t *ThumbnailFetcher) ProcessPlayerTokens(ctx context.Context, tokens []str
 					Format:    apiTypes.WEBP,
 				})
 			}
+
 			currentBatch := batchRequests.Build()
 
 			err := utils.WithRetry(ctx, func() error {
@@ -217,6 +221,7 @@ func (t *ThumbnailFetcher) ProcessPlayerTokens(ctx context.Context, tokens []str
 
 				// Extract URLs from successful responses
 				var batchURLs []string
+
 				for _, url := range results {
 					if url != ThumbnailPlaceholder {
 						batchURLs = append(batchURLs, url)
@@ -224,7 +229,9 @@ func (t *ThumbnailFetcher) ProcessPlayerTokens(ctx context.Context, tokens []str
 				}
 
 				mu.Lock()
+
 				urls = append(urls, batchURLs...)
+
 				mu.Unlock()
 
 				// If there are still pending requests, return error to trigger retry

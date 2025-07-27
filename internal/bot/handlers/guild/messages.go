@@ -27,6 +27,7 @@ func NewMessagesMenu(layout *Layout) *MessagesMenu {
 		ShowHandlerFunc:   m.Show,
 		ButtonHandlerFunc: m.handleButton,
 	}
+
 	return m
 }
 
@@ -51,6 +52,7 @@ func (m *MessagesMenu) Show(ctx *interaction.Context, s *session.Session) {
 			zap.Uint64("guild_id", guildID),
 			zap.Uint64("discord_user_id", discordUserID))
 		ctx.Error("Failed to retrieve message history. Please try again.")
+
 		return
 	}
 

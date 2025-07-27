@@ -74,9 +74,11 @@ func (e *Exporter) ExportAll(ctx context.Context) error {
 	fmt.Printf("  Hash Type: %s\n", e.config.HashType)
 	fmt.Printf("  Concurrency: %d workers\n", e.config.Concurrency)
 	fmt.Printf("  Iterations: %d\n", e.config.Iterations)
+
 	if e.config.HashType == string(HashTypeArgon2id) {
 		fmt.Printf("  Memory: %d MB\n", e.config.Memory)
 	}
+
 	fmt.Printf("  Output Directory: %s\n", e.outDir)
 	fmt.Printf("  Export Version: %s\n", e.config.ExportVersion)
 	fmt.Printf("  Engine Version: %s\n", EngineVersion)
@@ -84,44 +86,55 @@ func (e *Exporter) ExportAll(ctx context.Context) error {
 
 	// Get all flagged and confirmed users and groups
 	fmt.Printf("Fetching data from database...\n")
+
 	users, groups, err := e.getFlaggedData(ctx)
 	if err != nil {
 		return err
 	}
+
 	fmt.Printf("Found %d users and %d groups to export\n\n", len(users), len(groups))
 
 	// Convert to export records
 	fmt.Printf("Hashing user IDs...\n")
+
 	userRecords := e.hashRecords(users, e.config.Salt, HashType(e.config.HashType))
+
 	fmt.Printf("\nHashing group IDs...\n")
+
 	groupRecords := e.hashRecords(groups, e.config.Salt, HashType(e.config.HashType))
+
 	fmt.Printf("\nCompleted hashing all records\n\n")
 
 	// Save config file
 	fmt.Printf("Saving export configuration...\n")
+
 	configPath := filepath.Join(e.outDir, "export_config.json")
 
 	// Create config with engine version for JSON
 	jsonConfig := struct {
-		EngineVersion string `json:"engineVersion"`
 		*Config
+
+		EngineVersion string `json:"engineVersion"`
 	}{
-		EngineVersion: EngineVersion,
 		Config:        e.config,
+		EngineVersion: EngineVersion,
 	}
 
 	configData, err := json.MarshalIndent(jsonConfig, "", "    ")
 	if err != nil {
 		return fmt.Errorf("failed to marshal export config: %w", err)
 	}
+
 	if err := os.WriteFile(configPath, configData, 0o600); err != nil {
 		return fmt.Errorf("failed to write export config: %w", err)
 	}
 
 	// Export each format
 	fmt.Printf("Exporting data in %d formats...\n", len(e.formats))
+
 	for _, format := range e.formats {
 		fmt.Printf("  Writing %s format...\n", format)
+
 		if err := e.export(format, userRecords, groupRecords); err != nil {
 			return fmt.Errorf("failed to export %s format: %w", format, err)
 		}
@@ -129,22 +142,27 @@ func (e *Exporter) ExportAll(ctx context.Context) error {
 
 	fmt.Printf("\nExport completed successfully\n")
 	fmt.Printf("Files written to: %s\n", e.outDir)
+
 	return nil
 }
 
 // hashRecords converts items to export records with concurrent hashing.
 func (e *Exporter) hashRecords(items any, salt string, hashType HashType) []*types.ExportRecord {
-	var ids []uint64
-	var reasons []string
-	var statuses []string
-	var confidences []float64
+	var (
+		ids         []uint64
+		reasons     []string
+		statuses    []string
+		confidences []float64
+	)
 
 	// Extract data based on type
+
 	switch v := items.(type) {
 	case []*dbTypes.ReviewUser:
 		ids = make([]uint64, len(v))
 		reasons = make([]string, len(v))
 		statuses = make([]string, len(v))
+
 		confidences = make([]float64, len(v))
 		for i, user := range v {
 			ids[i] = user.ID
@@ -156,6 +174,7 @@ func (e *Exporter) hashRecords(items any, salt string, hashType HashType) []*typ
 		ids = make([]uint64, len(v))
 		reasons = make([]string, len(v))
 		statuses = make([]string, len(v))
+
 		confidences = make([]float64, len(v))
 		for i, group := range v {
 			ids[i] = group.ID

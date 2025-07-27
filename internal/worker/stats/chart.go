@@ -152,6 +152,7 @@ func (b *ChartBuilder) prepareUserDataSeries() ([]float64, []float64, []float64,
 
 	// Fill in data points for each hour
 	now := time.Now().UTC().Truncate(time.Hour)
+
 	for i := range hoursToShow {
 		xValues[i] = float64(i)
 		timestamp := now.Add(time.Duration(-i) * time.Hour)
@@ -185,6 +186,7 @@ func (b *ChartBuilder) prepareGroupDataSeries() ([]float64, []float64, []float64
 
 	// Fill in data points for each hour
 	now := time.Now().UTC().Truncate(time.Hour)
+
 	for i := range hoursToShow {
 		xValues[i] = float64(i)
 		timestamp := now.Add(time.Duration(-i) * time.Hour)
@@ -218,6 +220,7 @@ func (b *ChartBuilder) prepareGridLinesAndTicks() ([]chart.GridLine, []chart.Tic
 			Label: label,
 		}
 	}
+
 	return gridLines, ticks
 }
 

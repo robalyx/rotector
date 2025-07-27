@@ -57,6 +57,7 @@ func (s *Scanner) PerformFullScan(ctx context.Context, userID uint64) (string, e
 
 	// Fetch mutual guilds
 	var profile UserProfile
+
 	endpoint := fmt.Sprintf(
 		"https://discord.com/api/v9/users/%d/profile?with_mutual_guilds=true&with_mutual_friends=false",
 		userID,
@@ -106,7 +107,9 @@ func (s *Scanner) ShouldScan(ctx context.Context, userID uint64) bool {
 		s.logger.Error("Failed to check rate limit",
 			zap.Error(err),
 			zap.Uint64("user_id", userID))
+
 		return false
 	}
+
 	return exists == 0
 }

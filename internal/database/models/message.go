@@ -130,8 +130,10 @@ func (m *MessageModel) GetUserInappropriateMessageSummaries(
 func (m *MessageModel) GetUserMessagesByCursor(
 	ctx context.Context, serverID uint64, userID uint64, cursor *types.MessageCursor, limit int,
 ) ([]*types.InappropriateMessage, *types.MessageCursor, error) {
-	var messages []*types.InappropriateMessage
-	var nextCursor *types.MessageCursor
+	var (
+		messages   []*types.InappropriateMessage
+		nextCursor *types.MessageCursor
+	)
 
 	err := dbretry.NoResult(ctx, func(ctx context.Context) error {
 		// Build base query
@@ -181,6 +183,7 @@ func (m *MessageModel) GetUserMessagesByCursor(
 func (m *MessageModel) GetUserMessageGuilds(ctx context.Context, userID uint64) ([]uint64, error) {
 	return dbretry.Operation(ctx, func(ctx context.Context) ([]uint64, error) {
 		var guildIDs []uint64
+
 		err := m.db.NewSelect().
 			Model((*types.InappropriateMessage)(nil)).
 			ColumnExpr("DISTINCT server_id").
@@ -189,6 +192,7 @@ func (m *MessageModel) GetUserMessageGuilds(ctx context.Context, userID uint64) 
 		if err != nil {
 			return nil, fmt.Errorf("failed to get user message guilds: %w", err)
 		}
+
 		return guildIDs, nil
 	})
 }
@@ -247,6 +251,7 @@ func (m *MessageModel) GetUniqueInappropriateUserCount(ctx context.Context) (int
 		if err != nil {
 			return 0, fmt.Errorf("failed to get unique inappropriate user count: %w", err)
 		}
+
 		return count, nil
 	})
 }

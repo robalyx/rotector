@@ -105,6 +105,7 @@ func (a *FriendReasonAnalyzer) GenerateFriendReasons(
 ) map[uint64]string {
 	// Create friend requests map
 	friendRequests := make(map[uint64]UserFriendRequest)
+
 	for _, userInfo := range userInfos {
 		// Get confirmed and flagged friends for this user
 		confirmedFriends := confirmedFriendsMap[userInfo.ID]
@@ -118,6 +119,7 @@ func (a *FriendReasonAnalyzer) GenerateFriendReasons(
 			if len(friendSummaries) >= MaxFriends {
 				break
 			}
+
 			friendSummaries = append(friendSummaries, FriendSummary{
 				Name:    friend.Name,
 				Type:    "Confirmed",
@@ -130,6 +132,7 @@ func (a *FriendReasonAnalyzer) GenerateFriendReasons(
 			if len(friendSummaries) >= MaxFriends {
 				break
 			}
+
 			friendSummaries = append(friendSummaries, FriendSummary{
 				Name:    friend.Name,
 				Type:    "Flagged",
@@ -167,6 +170,7 @@ func (a *FriendReasonAnalyzer) ProcessFriendRequests(
 			zap.Int("retryCount", retryCount),
 			zap.Int("maxRetries", FriendReasonMaxRetries),
 			zap.Int("remainingUsers", len(friendRequests)))
+
 		return
 	}
 
@@ -182,6 +186,7 @@ func (a *FriendReasonAnalyzer) ProcessFriendRequests(
 		invalidMu       sync.Mutex
 		invalidRequests = make(map[uint64]UserFriendRequest)
 	)
+
 	minBatchSize := max(len(requestSlice)/4, 1)
 
 	err := utils.WithRetrySplitBatch(
@@ -225,10 +230,12 @@ func (a *FriendReasonAnalyzer) ProcessFriendRequests(
 			var buf bytes.Buffer
 			for _, req := range batch {
 				buf.WriteString(fmt.Sprintf("Username: %s\nFriends:\n", req.UserData.Username))
+
 				for _, friend := range req.UserData.Friends {
 					buf.WriteString(fmt.Sprintf("  - Name: %s\n    Type: %s\n    Reasons: %v\n",
 						friend.Name, friend.Type, friend.Reasons))
 				}
+
 				buf.WriteString("\n")
 			}
 
@@ -236,6 +243,7 @@ func (a *FriendReasonAnalyzer) ProcessFriendRequests(
 				a.textLogger.Error("Failed to save blocked friend data",
 					zap.Error(err),
 					zap.String("path", filepath))
+
 				return
 			}
 
@@ -308,6 +316,7 @@ func (a *FriendReasonAnalyzer) processFriendBatch(ctx context.Context, batch []U
 
 	// Make API request
 	var result BatchFriendAnalysis
+
 	err = a.chat.NewWithRetry(ctx, params, func(resp *openai.ChatCompletion, err error) error {
 		// Handle API error
 		if err != nil {
@@ -353,6 +362,7 @@ func (a *FriendReasonAnalyzer) processFriendBatch(ctx context.Context, batch []U
 			if response.Analysis == "" {
 				a.logger.Debug("Skipping response with empty analysis",
 					zap.String("username", response.Name))
+
 				continue
 			}
 
@@ -360,6 +370,7 @@ func (a *FriendReasonAnalyzer) processFriendBatch(ctx context.Context, batch []U
 		}
 
 		result.Results = processedResults
+
 		return nil
 	})
 
@@ -377,9 +388,11 @@ func (a *FriendReasonAnalyzer) processResults(
 	// If no results returned, mark all users for retry
 	if results == nil || len(results.Results) == 0 {
 		a.logger.Warn("No results returned from friend analysis, retrying all users")
+
 		for _, req := range batch {
 			invalidRequests[req.UserInfo.ID] = req
 		}
+
 		return invalidRequests
 	}
 
@@ -411,6 +424,7 @@ func (a *FriendReasonAnalyzer) processResults(
 		if !exists {
 			a.logger.Error("Got result for user not in batch",
 				zap.String("username", result.Name))
+
 			continue
 		}
 
@@ -418,13 +432,17 @@ func (a *FriendReasonAnalyzer) processResults(
 		if result.Analysis == "" {
 			a.logger.Debug("Friend analysis returned empty results",
 				zap.String("username", result.Name))
+
 			invalidRequests[req.UserInfo.ID] = req
+
 			continue
 		}
 
 		// Store valid result
 		mu.Lock()
+
 		finalResults[req.UserInfo.ID] = result.Analysis
+
 		mu.Unlock()
 
 		a.logger.Debug("Added friend analysis result",

@@ -28,6 +28,7 @@ type TicketBuilder struct {
 // NewTicketBuilder creates a new ticket builder.
 func NewTicketBuilder(s *session.Session) *TicketBuilder {
 	userID := session.UserID.Get(s)
+
 	return &TicketBuilder{
 		appeal:        session.AppealSelected.Get(s),
 		messages:      session.AppealMessages.Get(s),
@@ -84,6 +85,7 @@ func (b *TicketBuilder) buildHeaderContainer() discord.ContainerComponent {
 
 	// Format user info based on appeal type
 	var userInfo string
+
 	if b.appeal.Type == enum.AppealTypeRoblox {
 		userIDStr := strconv.FormatUint(b.appeal.UserID, 10)
 		userInfo = fmt.Sprintf("[%s](https://www.roblox.com/users/%d/profile)",
@@ -147,6 +149,7 @@ func (b *TicketBuilder) buildConversationContainer() discord.ContainerComponent 
 		for _, msg := range b.messages[start:end] {
 			// Format role
 			var roleName string
+
 			switch msg.Role {
 			case enum.MessageRoleModerator:
 				roleName = "Moderator"

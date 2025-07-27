@@ -54,6 +54,7 @@ func (r *StatsModel) SaveHourlyStats(ctx context.Context, stats *types.HourlySta
 func (r *StatsModel) GetHourlyStats(ctx context.Context) ([]*types.HourlyStats, error) {
 	return dbretry.Operation(ctx, func(ctx context.Context) ([]*types.HourlyStats, error) {
 		var stats []*types.HourlyStats
+
 		now := time.Now().UTC()
 		dayAgo := now.Add(-24 * time.Hour)
 
@@ -80,6 +81,7 @@ func (r *StatsModel) HasStatsForHour(ctx context.Context, hour time.Time) (bool,
 		if err != nil {
 			return false, fmt.Errorf("failed to check stats existence for hour %v: %w", hour, err)
 		}
+
 		return exists, nil
 	})
 }

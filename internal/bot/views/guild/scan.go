@@ -113,9 +113,11 @@ func (b *ScanBuilder) buildWarningDisplay() discord.LayoutComponent {
 
 // buildInfoDisplay creates the container showing active filters and requirements.
 func (b *ScanBuilder) buildInfoDisplay() discord.LayoutComponent {
-	var content strings.Builder
-	var totalUsers int
-	var filteredUsers int
+	var (
+		content       strings.Builder
+		totalUsers    int
+		filteredUsers int
+	)
 
 	if b.scanType == constants.GuildScanTypeMessages {
 		totalUsers = len(b.messageSummaries)
@@ -224,6 +226,7 @@ func (b *ScanBuilder) addPaginatedUserResults(content *strings.Builder) {
 		maxGuildsToShow := min(5, len(guilds))
 		for j := range maxGuildsToShow {
 			guild := guilds[j]
+
 			guildName := b.guildNames[guild.ServerID]
 			if guildName == "" {
 				guildName = constants.UnknownServer
@@ -327,6 +330,7 @@ func (b *ScanBuilder) buildInteractiveComponents(totalPages int) []discord.Layou
 					if b.scanType == constants.GuildScanTypeMessages {
 						return len(b.filteredSummaries) == 0
 					}
+
 					return len(b.filteredUsers) == 0
 				}()),
 		),

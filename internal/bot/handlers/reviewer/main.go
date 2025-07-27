@@ -29,6 +29,7 @@ func NewMenu(l *Layout) *Menu {
 		ButtonHandlerFunc: m.handleButton,
 		SelectHandlerFunc: m.handleSelectMenu,
 	}
+
 	return m
 }
 
@@ -45,6 +46,7 @@ func (m *Menu) Show(ctx *interaction.Context, s *session.Session) {
 	if err != nil {
 		m.layout.logger.Error("Failed to get refresh info", zap.Error(err))
 		ctx.Error("Failed to retrieve reviewer statistics. Please try again.")
+
 		return
 	}
 
@@ -58,6 +60,7 @@ func (m *Menu) Show(ctx *interaction.Context, s *session.Session) {
 	if err != nil {
 		m.layout.logger.Error("Failed to get reviewer stats", zap.Error(err))
 		ctx.Error("Failed to retrieve reviewer statistics. Please try again.")
+
 		return
 	}
 
@@ -72,11 +75,13 @@ func (m *Menu) Show(ctx *interaction.Context, s *session.Session) {
 	if err != nil {
 		m.layout.logger.Error("Failed to get reviewer infos", zap.Error(err))
 		ctx.Error("Failed to retrieve reviewer information. Please try again.")
+
 		return
 	}
 
 	// Map reviewer IDs to usernames
 	usernames := make(map[uint64]string)
+
 	for reviewerID := range stats {
 		if info, exists := reviewerInfos[reviewerID]; exists {
 			usernames[reviewerID] = info.Username
@@ -106,6 +111,7 @@ func (m *Menu) handleSelectMenu(ctx *interaction.Context, s *session.Session, cu
 	if err != nil {
 		m.layout.logger.Error("Failed to parse reviewer stats period", zap.Error(err))
 		ctx.Error("Failed to save time period preference. Please try again.")
+
 		return
 	}
 

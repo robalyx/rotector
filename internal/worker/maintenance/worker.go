@@ -90,6 +90,7 @@ func New(app *setup.App, bar *progress.Bar, logger *zap.Logger) *Worker {
 // Start begins the maintenance worker's main loop.
 func (w *Worker) Start(ctx context.Context) {
 	w.logger.Info("Maintenance Worker started", zap.String("workerID", w.reporter.GetWorkerID()))
+
 	w.reporter.Start(ctx)
 	defer w.reporter.Stop()
 
@@ -100,6 +101,7 @@ func (w *Worker) Start(ctx context.Context) {
 		if utils.ContextGuardWithLog(ctx, w.logger, "Context cancelled, stopping maintenance worker") {
 			w.bar.SetStepMessage("Shutting down", 100)
 			w.reporter.UpdateStatus("Shutting down", 100)
+
 			return
 		}
 
@@ -154,6 +156,7 @@ func (w *Worker) processBannedUsers(ctx context.Context) {
 	if err != nil {
 		w.logger.Error("Error getting users to check", zap.Error(err))
 		w.reporter.SetHealthy(false)
+
 		return
 	}
 
@@ -167,6 +170,7 @@ func (w *Worker) processBannedUsers(ctx context.Context) {
 	if err != nil {
 		w.logger.Error("Error fetching banned users", zap.Error(err))
 		w.reporter.SetHealthy(false)
+
 		return
 	}
 
@@ -178,6 +182,7 @@ func (w *Worker) processBannedUsers(ctx context.Context) {
 
 	// Find users that are no longer banned
 	var unbannedUserIDs []uint64
+
 	for _, id := range currentlyBanned {
 		if _, ok := bannedMap[id]; !ok {
 			unbannedUserIDs = append(unbannedUserIDs, id)
@@ -190,8 +195,10 @@ func (w *Worker) processBannedUsers(ctx context.Context) {
 		if err != nil {
 			w.logger.Error("Error marking banned users", zap.Error(err))
 			w.reporter.SetHealthy(false)
+
 			return
 		}
+
 		w.logger.Info("Marked banned users", zap.Int("count", len(bannedUserIDs)))
 	}
 
@@ -201,8 +208,10 @@ func (w *Worker) processBannedUsers(ctx context.Context) {
 		if err != nil {
 			w.logger.Error("Error unmarking banned users", zap.Error(err))
 			w.reporter.SetHealthy(false)
+
 			return
 		}
+
 		w.logger.Info("Unmarked banned users", zap.Int("count", len(unbannedUserIDs)))
 	}
 }
@@ -217,6 +226,7 @@ func (w *Worker) processLockedGroups(ctx context.Context) {
 	if err != nil {
 		w.logger.Error("Error getting groups to check", zap.Error(err))
 		w.reporter.SetHealthy(false)
+
 		return
 	}
 
@@ -230,6 +240,7 @@ func (w *Worker) processLockedGroups(ctx context.Context) {
 	if err != nil {
 		w.logger.Error("Error fetching locked groups", zap.Error(err))
 		w.reporter.SetHealthy(false)
+
 		return
 	}
 
@@ -241,6 +252,7 @@ func (w *Worker) processLockedGroups(ctx context.Context) {
 
 	// Find groups that are no longer locked
 	var unlockedGroupIDs []uint64
+
 	for _, id := range currentlyLocked {
 		if _, ok := lockedMap[id]; !ok {
 			unlockedGroupIDs = append(unlockedGroupIDs, id)
@@ -253,8 +265,10 @@ func (w *Worker) processLockedGroups(ctx context.Context) {
 		if err != nil {
 			w.logger.Error("Error marking locked groups", zap.Error(err))
 			w.reporter.SetHealthy(false)
+
 			return
 		}
+
 		w.logger.Info("Marked locked groups", zap.Int("count", len(lockedGroupIDs)))
 	}
 
@@ -264,8 +278,10 @@ func (w *Worker) processLockedGroups(ctx context.Context) {
 		if err != nil {
 			w.logger.Error("Error unmarking locked groups", zap.Error(err))
 			w.reporter.SetHealthy(false)
+
 			return
 		}
+
 		w.logger.Info("Unmarked locked groups", zap.Int("count", len(unlockedGroupIDs)))
 	}
 }
@@ -276,10 +292,12 @@ func (w *Worker) processClearedUsers(ctx context.Context) {
 	w.reporter.UpdateStatus("Processing cleared users", 30)
 
 	cutOffDate := time.Now().AddDate(-1, 0, 0)
+
 	affected, err := w.db.Service().User().PurgeOldClearedUsers(ctx, cutOffDate)
 	if err != nil {
 		w.logger.Error("Error purging old cleared users", zap.Error(err))
 		w.reporter.SetHealthy(false)
+
 		return
 	}
 
@@ -296,10 +314,12 @@ func (w *Worker) processClearedGroups(ctx context.Context) {
 	w.reporter.UpdateStatus("Processing cleared groups", 40)
 
 	cutOffDate := time.Now().AddDate(0, 0, -30)
+
 	affected, err := w.db.Model().Group().PurgeOldClearedGroups(ctx, cutOffDate)
 	if err != nil {
 		w.logger.Error("Error purging old cleared groups", zap.Error(err))
 		w.reporter.SetHealthy(false)
+
 		return
 	}
 
@@ -325,6 +345,7 @@ func (w *Worker) processGroupTracking(ctx context.Context) {
 	if err != nil {
 		w.logger.Error("Error checking group trackings", zap.Error(err))
 		w.reporter.SetHealthy(false)
+
 		return
 	}
 
@@ -349,12 +370,14 @@ func (w *Worker) processGroupTracking(ctx context.Context) {
 	if err != nil {
 		w.logger.Error("Failed to check existing groups", zap.Error(err))
 		w.reporter.SetHealthy(false)
+
 		return
 	}
 
 	// Separate new and existing groups
 	newGroupIDs := make([]uint64, 0)
 	existingGroupIDs := make([]uint64, 0)
+
 	for _, groupID := range groupIDs {
 		if _, exists := existingGroups[groupID]; exists {
 			existingGroupIDs = append(existingGroupIDs, groupID)
@@ -416,6 +439,7 @@ func (w *Worker) processNewGroups(ctx context.Context, newGroupIDs []uint64, gro
 	for groupID := range flaggedGroups {
 		newlyFlaggedIDs = append(newlyFlaggedIDs, groupID)
 	}
+
 	return newlyFlaggedIDs
 }
 
@@ -429,6 +453,7 @@ func (w *Worker) processUserThumbnails(ctx context.Context) {
 	if err != nil {
 		w.logger.Error("Error getting users for thumbnail update", zap.Error(err))
 		w.reporter.SetHealthy(false)
+
 		return
 	}
 
@@ -442,12 +467,14 @@ func (w *Worker) processUserThumbnails(ctx context.Context) {
 
 	// Convert users to review users
 	now := time.Now()
+
 	reviewUsers := make(map[uint64]*types.ReviewUser, len(users))
 	for id, user := range users {
 		if thumbnail, ok := thumbnailMap[id]; ok {
 			user.ThumbnailURL = thumbnail
 			user.LastThumbnailUpdate = now
 		}
+
 		reviewUsers[id] = &types.ReviewUser{
 			User: user,
 		}
@@ -457,6 +484,7 @@ func (w *Worker) processUserThumbnails(ctx context.Context) {
 	if err := w.db.Service().User().SaveUsers(ctx, reviewUsers); err != nil {
 		w.logger.Error("Error saving updated user thumbnails", zap.Error(err))
 		w.reporter.SetHealthy(false)
+
 		return
 	}
 
@@ -475,6 +503,7 @@ func (w *Worker) processGroupThumbnails(ctx context.Context) {
 	if err != nil {
 		w.logger.Error("Error getting groups for thumbnail update", zap.Error(err))
 		w.reporter.SetHealthy(false)
+
 		return
 	}
 
@@ -490,6 +519,7 @@ func (w *Worker) processGroupThumbnails(ctx context.Context) {
 	if err := w.db.Service().Group().SaveGroups(ctx, groups); err != nil {
 		w.logger.Error("Error saving updated group thumbnails", zap.Error(err))
 		w.reporter.SetHealthy(false)
+
 		return
 	}
 
@@ -504,10 +534,12 @@ func (w *Worker) processOldServerMembers(ctx context.Context) {
 	w.reporter.UpdateStatus("Processing old Discord server members", 80)
 
 	cutoffDate := time.Now().AddDate(0, 0, -7) // 7 days ago
+
 	affected, err := w.db.Model().Sync().PurgeOldServerMembers(ctx, cutoffDate)
 	if err != nil {
 		w.logger.Error("Error purging old Discord server members", zap.Error(err))
 		w.reporter.SetHealthy(false)
+
 		return
 	}
 
@@ -528,6 +560,7 @@ func (w *Worker) processReviewerInfo(ctx context.Context) {
 	if err != nil {
 		w.logger.Error("Failed to get bot settings", zap.Error(err))
 		w.reporter.SetHealthy(false)
+
 		return
 	}
 
@@ -536,6 +569,7 @@ func (w *Worker) processReviewerInfo(ctx context.Context) {
 	if err != nil {
 		w.logger.Error("Failed to get reviewer infos", zap.Error(err))
 		w.reporter.SetHealthy(false)
+
 		return
 	}
 
@@ -555,6 +589,7 @@ func (w *Worker) processReviewerInfo(ctx context.Context) {
 			w.logger.Error("Failed to get Discord user",
 				zap.Error(err),
 				zap.Uint64("reviewer_id", reviewerID))
+
 			continue
 		}
 
@@ -579,6 +614,7 @@ func (w *Worker) processReviewerInfo(ctx context.Context) {
 		if err != nil {
 			w.logger.Error("Failed to save reviewer infos", zap.Error(err))
 			w.reporter.SetHealthy(false)
+
 			return
 		}
 

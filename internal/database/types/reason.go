@@ -34,6 +34,7 @@ func (r Reasons[T]) Messages() []string {
 	for _, reason := range r {
 		messages = append(messages, reason.Message)
 	}
+
 	return messages
 }
 
@@ -43,6 +44,7 @@ func (r Reasons[T]) Types() []string {
 	for reasonType := range r {
 		types = append(types, reasonType.String())
 	}
+
 	return types
 }
 
@@ -56,6 +58,7 @@ func (r Reasons[T]) ReasonInfos() []ReasonInfo {
 			Message: reason.Message,
 		})
 	}
+
 	return infos
 }
 

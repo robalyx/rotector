@@ -33,6 +33,7 @@ func NewVerifyMenu(layout *Layout) *VerifyMenu {
 		ShowHandlerFunc:   m.Show,
 		ButtonHandlerFunc: m.handleButton,
 	}
+
 	return m
 }
 
@@ -67,6 +68,7 @@ func (m *VerifyMenu) verifyDescription(ctx *interaction.Context, s *session.Sess
 			zap.Error(err),
 			zap.Uint64("userID", userID))
 		ctx.Error("Failed to verify description. Please try again.")
+
 		return
 	}
 
@@ -88,6 +90,7 @@ func (m *VerifyMenu) verifyDescription(ctx *interaction.Context, s *session.Sess
 	if err := m.layout.db.Model().Appeal().CreateAppeal(ctx.Context(), appeal, reason); err != nil {
 		m.layout.logger.Error("Failed to create appeal", zap.Error(err))
 		ctx.Error("Failed to submit appeal. Please try again.")
+
 		return
 	}
 

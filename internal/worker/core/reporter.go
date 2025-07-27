@@ -41,10 +41,12 @@ func NewStatusReporter(client rueidis.Client, workerType string, logger *zap.Log
 // Start begins periodic status reporting.
 func (r *StatusReporter) Start(ctx context.Context) {
 	r.mu.Lock()
+
 	if r.stopped {
 		r.mu.Unlock()
 		return
 	}
+
 	r.mu.Unlock()
 
 	go func() {

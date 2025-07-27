@@ -21,10 +21,12 @@ func verifyBinaryFile(t *testing.T, filepath string, expectedRecords []*types.Ex
 	// Open file
 	file, err := os.Open(filepath)
 	require.NoError(t, err)
+
 	defer file.Close()
 
 	// Read record count
 	var count uint32
+
 	err = binary.Read(file, binary.LittleEndian, &count)
 	require.NoError(t, err)
 	assert.Equal(t, uint32(len(expectedRecords)), count)
@@ -39,8 +41,10 @@ func verifyBinaryFile(t *testing.T, filepath string, expectedRecords []*types.Ex
 
 		// Read status
 		var statusLen uint16
+
 		err = binary.Read(file, binary.LittleEndian, &statusLen)
 		require.NoError(t, err)
+
 		statusBytes := make([]byte, statusLen)
 		_, err = file.Read(statusBytes)
 		require.NoError(t, err)
@@ -48,8 +52,10 @@ func verifyBinaryFile(t *testing.T, filepath string, expectedRecords []*types.Ex
 
 		// Read reason
 		var reasonLen uint16
+
 		err = binary.Read(file, binary.LittleEndian, &reasonLen)
 		require.NoError(t, err)
+
 		reasonBytes := make([]byte, reasonLen)
 		_, err = file.Read(reasonBytes)
 		require.NoError(t, err)
@@ -57,6 +63,7 @@ func verifyBinaryFile(t *testing.T, filepath string, expectedRecords []*types.Ex
 
 		// Read confidence
 		var confidence float64
+
 		err = binary.Read(file, binary.LittleEndian, &confidence)
 		require.NoError(t, err)
 		assert.InEpsilon(t, expected.Confidence, confidence, 0.01)
@@ -131,9 +138,11 @@ func TestExporter_Export(t *testing.T) {
 
 			if tt.wantErr {
 				require.Error(t, err)
+
 				if tt.errMsg != "" {
 					assert.Contains(t, err.Error(), tt.errMsg)
 				}
+
 				return
 			}
 

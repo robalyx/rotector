@@ -153,6 +153,7 @@ func (c *Context) NavigateBack(content string) {
 	} else {
 		c.Cancel(content)
 	}
+
 	c.responded = true
 }
 
@@ -194,8 +195,10 @@ func (c *Context) Modal(modal *discord.ModalCreateBuilder) {
 			zap.String("custom_id", modal.CustomID),
 			zap.String("title", modal.Title),
 		)
+
 		return
 	}
+
 	c.session.Touch(context.Background())
 	c.responded = true
 

@@ -62,6 +62,7 @@ type GroupClearance struct {
 // ReviewGroup combines group data with verification/clearance info for review.
 type ReviewGroup struct {
 	*Group
+
 	Reasons    Reasons[enum.GroupReasonType] `json:"reasons"`
 	ReviewerID uint64                        `json:"reviewerId,omitempty"`
 	VerifiedAt time.Time                     `json:"verifiedAt"`
@@ -147,11 +148,13 @@ func (f GroupField) Columns() []string {
 	}
 
 	var columns []string
+
 	for field, cols := range groupFieldToColumns {
 		if f&field != 0 {
 			columns = append(columns, cols...)
 		}
 	}
+
 	return columns
 }
 

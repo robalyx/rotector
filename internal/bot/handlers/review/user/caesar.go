@@ -27,6 +27,7 @@ func NewCaesarMenu(layout *Layout) *CaesarMenu {
 		ShowHandlerFunc:   m.Show,
 		ButtonHandlerFunc: m.handleButton,
 	}
+
 	return m
 }
 
@@ -58,6 +59,7 @@ func (m *CaesarMenu) handleButton(ctx *interaction.Context, s *session.Session, 
 
 		session.PaginationPage.Set(s, page)
 		ctx.Reload("")
+
 		return
 	}
 

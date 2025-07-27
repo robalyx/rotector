@@ -1,4 +1,4 @@
-//nolint:funlen,lll
+//nolint:lll
 package main
 
 import (
@@ -215,6 +215,7 @@ func handleMigrate(deps *cliDependencies) cli.ActionFunc {
 		deps.logger.Info("Successfully migrated",
 			zap.String("group", group.String()),
 		)
+
 		return nil
 	}
 }
@@ -240,6 +241,7 @@ func handleRollback(deps *cliDependencies) cli.ActionFunc {
 		deps.logger.Info("Successfully rolled back",
 			zap.String("group", group.String()),
 		)
+
 		return nil
 	}
 }
@@ -257,6 +259,7 @@ func handleStatus(deps *cliDependencies) cli.ActionFunc {
 			zap.String("unapplied", ms.Unapplied().String()),
 			zap.String("last_group", ms.LastGroup().String()),
 		)
+
 		return nil
 	}
 }
@@ -277,6 +280,7 @@ func handleCreate(deps *cliDependencies) cli.ActionFunc {
 			zap.String("name", mf.Name),
 			zap.String("path", mf.Path),
 		)
+
 		return nil
 	}
 }
@@ -294,6 +298,7 @@ func handleClearReason(deps *cliDependencies) cli.ActionFunc {
 
 		// Get reason type from argument
 		reasonStr := strings.ToUpper(c.Args().First())
+
 		reasonType, err := enum.UserReasonTypeString(reasonStr)
 		if err != nil {
 			return fmt.Errorf("invalid reason type %q: %w", reasonStr, err)
@@ -309,6 +314,7 @@ func handleClearReason(deps *cliDependencies) cli.ActionFunc {
 			deps.logger.Info("No users found matching the criteria",
 				zap.String("reason", reasonType.String()),
 				zap.Float64("confidenceThreshold", confidenceThreshold))
+
 			return nil
 		}
 
@@ -320,7 +326,9 @@ func handleClearReason(deps *cliDependencies) cli.ActionFunc {
 
 		log.Printf("Are you sure you want to delete these %d users (with confidence < %.2f) in batches of %d? (y/N)",
 			len(users), confidenceThreshold, batchSize)
+
 		var response string
+
 		_, _ = fmt.Scanln(&response)
 
 		if response != "y" && response != "Y" {
@@ -335,8 +343,10 @@ func handleClearReason(deps *cliDependencies) cli.ActionFunc {
 		}
 
 		// Process in batches
-		var totalAffected int64
-		var totalProcessed int
+		var (
+			totalAffected  int64
+			totalProcessed int
+		)
 
 		for i := 0; i < len(userIDs); i += batchSize {
 			end := min(i+batchSize, len(userIDs))
@@ -389,6 +399,7 @@ func handleDeleteAfterTime(deps *cliDependencies) cli.ActionFunc {
 
 		// Parse the time string with timezone support
 		timeStr := c.Args().First()
+
 		cutoffTime, err := utils.ParseTimeWithTimezone(timeStr)
 		if err != nil {
 			return fmt.Errorf("failed to parse time %q: %w", timeStr, err)
@@ -401,6 +412,7 @@ func handleDeleteAfterTime(deps *cliDependencies) cli.ActionFunc {
 
 		// Check if reason filtering is requested
 		reasonStr := c.String("reason")
+
 		var reasonTypes []enum.UserReasonType
 
 		if reasonStr != "" {
@@ -410,10 +422,12 @@ func handleDeleteAfterTime(deps *cliDependencies) cli.ActionFunc {
 
 			for i, rs := range reasonStrs {
 				rs = strings.TrimSpace(strings.ToUpper(rs))
+
 				rt, err := enum.UserReasonTypeString(rs)
 				if err != nil {
 					return fmt.Errorf("invalid reason type %q: %w", rs, err)
 				}
+
 				reasonTypes[i] = rt
 			}
 
@@ -421,6 +435,7 @@ func handleDeleteAfterTime(deps *cliDependencies) cli.ActionFunc {
 			for i, rt := range reasonTypes {
 				reasonTypeStrs[i] = rt.String()
 			}
+
 			deps.logger.Info("Filtering by reason types",
 				zap.Strings("reasons", reasonTypeStrs))
 		}
@@ -434,6 +449,7 @@ func handleDeleteAfterTime(deps *cliDependencies) cli.ActionFunc {
 		if len(users) == 0 {
 			deps.logger.Info("No flagged users found updated after the specified time",
 				zap.Time("cutoffTime", cutoffTime))
+
 			return nil
 		}
 
@@ -443,6 +459,7 @@ func handleDeleteAfterTime(deps *cliDependencies) cli.ActionFunc {
 			for i, rt := range reasonTypes {
 				reasonTypeStrs[i] = rt.String()
 			}
+
 			reasonsDisplay := strings.Join(reasonTypeStrs, ", ")
 
 			deps.logger.Info("Found flagged users with only the specified reasons to delete",
@@ -464,6 +481,7 @@ func handleDeleteAfterTime(deps *cliDependencies) cli.ActionFunc {
 		}
 
 		var response string
+
 		_, _ = fmt.Scanln(&response)
 
 		if response != "y" && response != "Y" {
@@ -478,8 +496,10 @@ func handleDeleteAfterTime(deps *cliDependencies) cli.ActionFunc {
 		}
 
 		// Process in batches
-		var totalAffected int64
-		var totalProcessed int
+		var (
+			totalAffected  int64
+			totalProcessed int
+		)
 
 		for i := 0; i < len(userIDs); i += batchSize {
 			end := min(i+batchSize, len(userIDs))

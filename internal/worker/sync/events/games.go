@@ -24,6 +24,7 @@ func (h *Handler) handleGameURL(serverID uint64, content string) {
 		h.logger.Debug("Failed to extract game ID from URL",
 			zap.String("content", content),
 			zap.Error(err))
+
 		return
 	}
 
@@ -33,6 +34,7 @@ func (h *Handler) handleGameURL(serverID uint64, content string) {
 		h.logger.Error("Failed to parse game ID",
 			zap.String("game_id", gameID),
 			zap.Error(err))
+
 		return
 	}
 
@@ -51,6 +53,7 @@ func (h *Handler) processGame(serverID uint64, placeID uint64) {
 		h.logger.Error("Failed to get universe ID",
 			zap.Uint64("place_id", placeID),
 			zap.Error(err))
+
 		return
 	}
 
@@ -60,11 +63,13 @@ func (h *Handler) processGame(serverID uint64, placeID uint64) {
 		h.logger.Error("Failed to get game details",
 			zap.Uint64("universe_id", universeResp.UniverseID),
 			zap.Error(err))
+
 		return
 	}
 
 	// Process each game in the response
 	now := time.Now()
+
 	for _, gameDetail := range gamesResp.Data {
 		// Skip games with more than 50k visits or more than 40 players
 		if gameDetail.Visits > 50000 || gameDetail.Playing >= 40 {
@@ -73,6 +78,7 @@ func (h *Handler) processGame(serverID uint64, placeID uint64) {
 				zap.Uint64("game_id", gameDetail.RootPlaceID),
 				zap.String("name", gameDetail.Name),
 				zap.Uint64("visits", gameDetail.Visits))
+
 			continue
 		}
 
@@ -98,6 +104,7 @@ func (h *Handler) processGame(serverID uint64, placeID uint64) {
 			h.logger.Error("Failed to save game",
 				zap.Uint64("game_id", game.ID),
 				zap.Error(err))
+
 			continue
 		}
 

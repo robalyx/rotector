@@ -36,6 +36,7 @@ type MembersBuilder struct {
 // NewMembersBuilder creates a new members builder.
 func NewMembersBuilder(s *session.Session) *MembersBuilder {
 	trainingMode := session.UserReviewMode.Get(s) == enum.ReviewModeTraining
+
 	return &MembersBuilder{
 		group:        session.GroupTarget.Get(s),
 		presences:    session.UserPresences.Get(s),
@@ -195,6 +196,7 @@ func (b *MembersBuilder) getMemberFieldName(memberID uint64) string {
 	if len(indicators) > 0 {
 		return fmt.Sprintf("%s %s", name, strings.Join(indicators, " "))
 	}
+
 	return name
 }
 

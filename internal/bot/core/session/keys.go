@@ -22,6 +22,7 @@ func NewKey[T any](name string, persist bool) Key[T] {
 func (k Key[T]) Get(s *Session) T {
 	var value T
 	s.getInterface(k.name, &value)
+
 	return value
 }
 

@@ -36,6 +36,7 @@ type AppealTimeline struct {
 // FullAppeal combines the Appeal data with timeline information.
 type FullAppeal struct {
 	*Appeal
+
 	LastViewed   time.Time // When the appeal was last viewed
 	LastActivity time.Time // When the last message was sent
 }

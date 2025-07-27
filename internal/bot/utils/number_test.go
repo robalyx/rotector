@@ -9,6 +9,7 @@ import (
 
 func TestFormatNumber(t *testing.T) {
 	t.Parallel()
+
 	tests := []struct {
 		name string
 		n    uint64
@@ -49,6 +50,7 @@ func TestFormatNumber(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			got := utils.FormatNumber(tt.n)
 			assert.Equal(t, tt.want, got)
 		})

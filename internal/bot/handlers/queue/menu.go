@@ -45,6 +45,7 @@ func NewMenu(layout *Layout) *Menu {
 		ButtonHandlerFunc: m.handleButton,
 		ModalHandlerFunc:  m.handleModal,
 	}
+
 	return m
 }
 
@@ -148,6 +149,7 @@ func (m *Menu) handleQueueUserModalSubmit(ctx *interaction.Context, s *session.S
 		if _, exists := processedLines[line]; exists {
 			continue
 		}
+
 		processedLines[line] = struct{}{}
 
 		userID, err := m.processUserIDInput(line)
@@ -165,23 +167,28 @@ func (m *Menu) handleQueueUserModalSubmit(ctx *interaction.Context, s *session.S
 		} else {
 			ctx.Cancel("No valid user IDs provided.")
 		}
+
 		return
 	}
 
 	// Queue users in batches if needed
-	var totalQueuedCount int
-	var lastUserID uint64
-	var allFailedIDs []string
+	var (
+		totalQueuedCount int
+		lastUserID       uint64
+		allFailedIDs     []string
+	)
 
 	for i := 0; i < len(userIDs); i += queue.MaxQueueBatchSize {
 		end := min(i+queue.MaxQueueBatchSize, len(userIDs))
 		batch := userIDs[i:end]
 
 		queuedCount, batchLastUserID, failedIDs, activityLogs := m.queueUserBatch(ctx, batch)
+
 		totalQueuedCount += queuedCount
 		if queuedCount > 0 {
 			lastUserID = batchLastUserID
 		}
+
 		allFailedIDs = append(allFailedIDs, failedIDs...)
 
 		// Log activities in batch
@@ -213,9 +220,11 @@ func (m *Menu) handleQueueUserModalSubmit(ctx *interaction.Context, s *session.S
 	if totalQueuedCount > 0 {
 		msg.WriteString(fmt.Sprintf("Successfully queued %d user(s) for processing. ", totalQueuedCount))
 	}
+
 	if len(invalidInputs) > 0 {
 		msg.WriteString(fmt.Sprintf("Invalid entries: %s ", strings.Join(invalidInputs, ", ")))
 	}
+
 	if len(allFailedIDs) > 0 {
 		msg.WriteString(fmt.Sprintf("Failed to queue: %s ", strings.Join(allFailedIDs, ", ")))
 	}
@@ -251,6 +260,7 @@ func (m *Menu) handleManualUserReviewModalSubmit(ctx *interaction.Context, s *se
 		session.OriginalUserReasons.Set(s, user.Reasons)
 		session.ReasonsChanged.Set(s, false)
 		ctx.Show(constants.UserReviewPageName, "")
+
 		return
 	}
 
@@ -273,6 +283,7 @@ func (m *Menu) handleManualUserReviewModalSubmit(ctx *interaction.Context, s *se
 	}); err != nil {
 		m.layout.logger.Error("Failed to save new user", zap.Error(err))
 		ctx.Error("Failed to save user information. Please try again.")
+
 		return
 	}
 
@@ -324,6 +335,7 @@ func (m *Menu) handleManualGroupReviewModalSubmit(ctx *interaction.Context, s *s
 		session.OriginalGroupReasons.Set(s, group.Reasons)
 		session.ReasonsChanged.Set(s, false)
 		ctx.Show(constants.GroupReviewPageName, "")
+
 		return
 	}
 
@@ -366,6 +378,7 @@ func (m *Menu) handleManualGroupReviewModalSubmit(ctx *interaction.Context, s *s
 	}); err != nil {
 		m.layout.logger.Error("Failed to save new group", zap.Error(err))
 		ctx.Error("Failed to save group information. Please try again.")
+
 		return
 	}
 
@@ -374,6 +387,7 @@ func (m *Menu) handleManualGroupReviewModalSubmit(ctx *interaction.Context, s *s
 	if err != nil {
 		m.layout.logger.Error("Failed to fetch flagged users count", zap.Error(err))
 		ctx.Error("Failed to load flagged users count. Please try again.")
+
 		return
 	}
 
@@ -416,8 +430,10 @@ func (m *Menu) handleButton(ctx *interaction.Context, s *session.Session, custom
 				zap.Uint64("user_id", uint64(ctx.Event().User().ID)),
 				zap.String("action", customID))
 			ctx.Error("You do not have permission to perform this action.")
+
 			return
 		}
+
 		m.handleManualGroupReview(ctx)
 	case constants.ReviewQueuedUserButtonCustomID:
 		m.handleReviewQueuedUser(ctx, s)
@@ -433,8 +449,10 @@ func (m *Menu) handleRefresh(ctx *interaction.Context, s *session.Session) {
 	if err != nil {
 		m.layout.logger.Error("Failed to get queue stats", zap.Error(err))
 		ctx.Error("Failed to get queue statistics. Please try again.")
+
 		return
 	}
+
 	session.QueueStats.Set(s, stats)
 	ctx.Reload("Refreshed queue statistics.")
 }
@@ -456,16 +474,19 @@ func (m *Menu) handleAbort(ctx *interaction.Context, s *session.Session) {
 			session.QueuedUserID.Delete(s)
 			session.QueuedUserTimestamp.Delete(s)
 			ctx.Cancel("User is no longer in queue.")
+
 			return
 		case errors.Is(err, queue.ErrUserProcessing):
 			// Clear session data since we can't abort anymore
 			session.QueuedUserID.Delete(s)
 			session.QueuedUserTimestamp.Delete(s)
 			ctx.Cancel("Cannot abort - user is already being processed or has been processed.")
+
 			return
 		default:
 			m.layout.logger.Error("Failed to remove user from queue", zap.Error(err))
 			ctx.Error("Failed to remove user from queue. Please try again.")
+
 			return
 		}
 	}
@@ -499,6 +520,7 @@ func (m *Menu) handleReviewQueuedUser(ctx *interaction.Context, s *session.Sessi
 	if err != nil {
 		m.layout.logger.Error("Failed to get user", zap.Error(err))
 		ctx.Error("Failed to get user information. Please try again.")
+
 		return
 	}
 
@@ -520,6 +542,7 @@ func (m *Menu) processUserIDInput(line string) (uint64, error) {
 
 	// Parse profile URL if provided
 	userIDStr := line
+
 	parsedURL, err := utils.ExtractUserIDFromURL(line)
 	if err == nil {
 		userIDStr = parsedURL
@@ -551,6 +574,7 @@ func (m *Menu) queueUserBatch(ctx *interaction.Context, batch []uint64) (int, ui
 			existingUserSet[userID] = struct{}{}
 			continue
 		}
+
 		usersToQueue = append(usersToQueue, userID)
 	}
 
@@ -561,18 +585,23 @@ func (m *Menu) queueUserBatch(ctx *interaction.Context, batch []uint64) (int, ui
 		queueErrors, err = m.layout.d1Client.QueueUsers(ctx.Context(), usersToQueue)
 		if err != nil {
 			m.layout.logger.Error("Failed to queue batch", zap.Error(err))
+
 			failedIDs := make([]string, len(batch))
 			for i, userID := range batch {
 				failedIDs[i] = fmt.Sprintf("%d (error)", userID)
 			}
+
 			return 0, 0, failedIDs, nil
 		}
 	}
 
 	// Process results and create activity logs
-	var queuedCount int
-	var lastUserID uint64
-	var failedIDs []string
+	var (
+		queuedCount int
+		lastUserID  uint64
+		failedIDs   []string
+	)
+
 	activityLogs := make([]*types.ActivityLog, 0, len(batch))
 	now := time.Now()
 
@@ -589,6 +618,7 @@ func (m *Menu) queueUserBatch(ctx *interaction.Context, batch []uint64) (int, ui
 			} else {
 				failedIDs = append(failedIDs, fmt.Sprintf("%d (error)", userID))
 			}
+
 			continue
 		}
 

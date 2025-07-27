@@ -35,6 +35,7 @@ const (
 // GetRequestTimeout returns the request timeout for the given service type.
 func (s ServiceType) GetRequestTimeout(cfg *config.Config) time.Duration {
 	var timeout int
+
 	switch s {
 	case ServiceWorker:
 		timeout = cfg.Worker.RequestTimeout
@@ -93,6 +94,7 @@ func InitializeApp(ctx context.Context, serviceType ServiceType, logDir string) 
 
 	// Logging system is initialized next to capture setup issues
 	logManager := telemetry.NewManager(logDir, &cfg.Common.Debug)
+
 	logger, dbLogger, err := logManager.GetLoggers()
 	if err != nil {
 		return nil, err
@@ -115,6 +117,7 @@ func InitializeApp(ctx context.Context, serviceType ServiceType, logDir string) 
 
 	// RoAPI client is configured with middleware chain
 	requestTimeout := serviceType.GetRequestTimeout(cfg)
+
 	roAPI, middlewares, err := client.GetRoAPIClient(&cfg.Common, configDir, redisManager, logger, requestTimeout)
 	if err != nil {
 		return nil, err
@@ -124,6 +127,7 @@ func InitializeApp(ctx context.Context, serviceType ServiceType, logDir string) 
 	if len(middlewares.Proxy.GetProxies()) > 0 {
 		logger.Info("Initialized regular proxies", zap.Int("count", len(middlewares.Proxy.GetProxies())))
 	}
+
 	if len(middlewares.Roverse.GetProxies()) > 0 {
 		logger.Info("Initialized roverse proxies", zap.Int("count", len(middlewares.Roverse.GetProxies())))
 	}
@@ -139,12 +143,14 @@ func InitializeApp(ctx context.Context, serviceType ServiceType, logDir string) 
 
 	// Start pprof server if enabled
 	var pprofSrv *pprofServer
+
 	if cfg.Common.Debug.EnablePprof {
-		srv, err := startPprofServer(cfg.Common.Debug.PprofPort, logger)
+		srv, err := startPprofServer(ctx, cfg.Common.Debug.PprofPort, logger)
 		if err != nil {
 			logger.Error("Failed to start pprof server", zap.Error(err))
 		} else {
 			pprofSrv = srv
+
 			logger.Warn("pprof debugging endpoint enabled - this should not be used in production!")
 		}
 	}
@@ -181,6 +187,7 @@ func (s *App) Cleanup(ctx context.Context) {
 		if err := s.pprofServer.srv.Shutdown(ctx); err != nil {
 			s.Logger.Error("Failed to shutdown pprof server", zap.Error(err))
 		}
+
 		s.pprofServer.listener.Close()
 	}
 
@@ -188,6 +195,7 @@ func (s *App) Cleanup(ctx context.Context) {
 	if err := s.Logger.Sync(); err != nil {
 		log.Printf("Failed to sync logger: %v", err)
 	}
+
 	if err := s.DBLogger.Sync(); err != nil {
 		log.Printf("Failed to sync DB logger: %v", err)
 	}
@@ -213,6 +221,7 @@ func checkAndRunMigrations(ctx context.Context, cfg *config.PostgreSQL, dbLogger
 	}
 
 	migrator := migrate.NewMigrator(tempDB.DB(), migrations.Migrations)
+
 	ms, err := migrator.MigrationsWithStatus(ctx)
 	if err != nil {
 		tempDB.Close()
@@ -220,14 +229,18 @@ func checkAndRunMigrations(ctx context.Context, cfg *config.PostgreSQL, dbLogger
 	}
 
 	var db database.Client
+
 	unapplied := ms.Unapplied()
 	if len(unapplied) > 0 {
 		log.Println("Database migrations are pending. Would you like to run them now? (y/N)")
+
 		var response string
+
 		_, _ = fmt.Scanln(&response)
 
 		if response == "y" || response == "Y" {
 			tempDB.Close()
+
 			db, err = database.NewConnection(ctx, cfg, dbLogger, true)
 		} else {
 			log.Fatalf("Closing program due to incomplete migrations")

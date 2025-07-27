@@ -69,6 +69,7 @@ func WithRetrySplitBatch[T any](
 		if errors.Is(err, ErrContentBlocked) && onBlocked != nil {
 			onBlocked(items)
 		}
+
 		return err
 	}
 

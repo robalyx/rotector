@@ -11,6 +11,7 @@ import (
 
 func TestHashID(t *testing.T) {
 	t.Parallel()
+
 	tests := []struct {
 		name       string
 		id         uint64
@@ -79,6 +80,7 @@ func TestHashID(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			got := export.HashID(tt.id, tt.salt, tt.hashType, tt.iterations, tt.memory)
 
 			_, err := hex.DecodeString(got)
@@ -90,6 +92,7 @@ func TestHashID(t *testing.T) {
 
 func TestHashResult(t *testing.T) {
 	t.Parallel()
+
 	result := export.HashResult{
 		Index: 1,
 		Hash:  "abc123",

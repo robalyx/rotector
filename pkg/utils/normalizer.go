@@ -80,7 +80,9 @@ func (n *TextNormalizer) ValidateWords(flaggedContent []string, targetTexts ...s
 
 	// Filter and preprocess target texts once
 	normalizedTargets := make([]string, 0, len(targetTexts))
+
 	var maxTargetLength int
+
 	for _, text := range targetTexts {
 		if text = strings.TrimSpace(text); text == "" {
 			continue
@@ -103,6 +105,7 @@ func (n *TextNormalizer) ValidateWords(flaggedContent []string, targetTexts ...s
 		if content = strings.TrimSpace(content); content == "" {
 			continue
 		}
+
 		if norm := n.Normalize(content); norm != "" {
 			// Fail if any single piece of evidence is more than 2x the longest target
 			if len(norm) > maxTargetLength*2 {
@@ -122,6 +125,7 @@ func (n *TextNormalizer) ValidateWords(flaggedContent []string, targetTexts ...s
 		}
 
 		hasValidWords := false
+
 		for _, word := range strings.Fields(content) {
 			if len(word) < 3 {
 				continue
@@ -146,6 +150,7 @@ func (n *TextNormalizer) ValidateWords(flaggedContent []string, targetTexts ...s
 
 	// Check short content matches
 	hasShortMatch := false
+
 	if len(shortContent) > 0 {
 		// Combine all targets into one string for efficient searching
 		combinedTargets := strings.Join(normalizedTargets, " ")
@@ -175,6 +180,7 @@ func (n *TextNormalizer) ValidateWords(flaggedContent []string, targetTexts ...s
 
 	// Check matches across all word content
 	wordMatches := 0
+
 	for normalizedWord := range allWords {
 		// Check if word exists in any target
 		for _, target := range normalizedTargets {

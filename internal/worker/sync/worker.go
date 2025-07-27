@@ -98,6 +98,7 @@ func New(app *setup.App, bar *progress.Bar, logger *zap.Logger) *Worker {
 // Start begins the sync worker's main loop.
 func (w *Worker) Start(ctx context.Context) {
 	w.logger.Info("Sync Worker started", zap.String("workerID", w.reporter.GetWorkerID()))
+
 	w.reporter.Start(ctx)
 	defer w.reporter.Stop()
 
@@ -118,6 +119,7 @@ func (w *Worker) Start(ctx context.Context) {
 		if utils.ContextGuardWithLog(ctx, w.logger, "Context cancelled, stopping sync worker") {
 			w.bar.SetStepMessage("Shutting down", 100)
 			w.reporter.UpdateStatus("Shutting down", 100)
+
 			return
 		}
 
@@ -132,6 +134,7 @@ func (w *Worker) Start(ctx context.Context) {
 			if !utils.ErrorSleep(ctx, 1*time.Minute, w.logger, "sync worker") {
 				return
 			}
+
 			continue
 		}
 

@@ -38,6 +38,7 @@ func (b *BanService) CreateCondoBans(ctx context.Context, userIDs []uint64) {
 		b.logger.Error("Failed to check banned status of users",
 			zap.Int("user_count", len(userIDs)),
 			zap.Error(err))
+
 		return
 	}
 
@@ -73,6 +74,7 @@ func (b *BanService) CreateCondoBans(ctx context.Context, userIDs []uint64) {
 		b.logger.Error("Failed to create ban records",
 			zap.Int("ban_count", len(bansToCreate)),
 			zap.Error(err))
+
 		return
 	}
 

@@ -56,10 +56,12 @@ func (r *TrackingModel) AddUsersToGroupsTracking(ctx context.Context, groupToUse
 		for groupID := range groupToUsers {
 			groupIDs = append(groupIDs, groupID)
 		}
+
 		slices.Sort(groupIDs)
 
 		// Lock the rows we're going to update
 		var existing []types.GroupMemberTracking
+
 		err := tx.NewSelect().
 			Model(&existing).
 			Where("id IN (?)", bun.In(groupIDs)).
@@ -150,6 +152,7 @@ func (r *TrackingModel) GetGroupTrackingsToCheck(
 			}
 
 			var trackingUsers []types.GroupMemberTrackingUser
+
 			err = tx.NewSelect().
 				Model(&trackingUsers).
 				Where("group_id IN (?)", bun.In(groupIDs)).
@@ -177,6 +180,7 @@ func (r *TrackingModel) GetGroupTrackingsToCheck(
 func (r *TrackingModel) GetFlaggedUsers(ctx context.Context, groupID uint64) ([]uint64, error) {
 	return dbretry.Operation(ctx, func(ctx context.Context) ([]uint64, error) {
 		var trackingUsers []types.GroupMemberTrackingUser
+
 		err := r.db.NewSelect().
 			Model(&trackingUsers).
 			Column("user_id").
@@ -190,6 +194,7 @@ func (r *TrackingModel) GetFlaggedUsers(ctx context.Context, groupID uint64) ([]
 		for i, tu := range trackingUsers {
 			userIDs[i] = tu.UserID
 		}
+
 		return userIDs, nil
 	})
 }
@@ -204,6 +209,7 @@ func (r *TrackingModel) GetFlaggedUsersCount(ctx context.Context, groupID uint64
 		if err != nil {
 			return 0, fmt.Errorf("failed to get flagged users count for group: %w (groupID=%d)", err, groupID)
 		}
+
 		return count, nil
 	})
 }
@@ -218,6 +224,7 @@ func (r *TrackingModel) UpdateFlaggedGroups(ctx context.Context, groupIDs []uint
 		if err != nil {
 			return fmt.Errorf("failed to update flagged groups: %w (groupCount=%d)", err, len(groupIDs))
 		}
+
 		return nil
 	})
 }
@@ -249,6 +256,7 @@ func (r *TrackingModel) RemoveUsersFromAllGroupsWithTx(ctx context.Context, tx b
 
 	r.logger.Debug("Removed users from all group tracking",
 		zap.Int("userCount", len(userIDs)))
+
 	return nil
 }
 
@@ -312,10 +320,12 @@ func (r *TrackingModel) AddOutfitAssetsToTracking(ctx context.Context, assetToOu
 		for assetID := range assetToOutfits {
 			assetIDs = append(assetIDs, assetID)
 		}
+
 		slices.Sort(assetIDs)
 
 		// Lock the rows we're going to update
 		var existing []types.OutfitAssetTracking
+
 		err := tx.NewSelect().
 			Model(&existing).
 			Where("id IN (?)", bun.In(assetIDs)).
@@ -407,6 +417,7 @@ func (r *TrackingModel) GetOutfitAssetTrackingsToCheck(
 			}
 
 			var trackingOutfits []types.OutfitAssetTrackingOutfit
+
 			err = tx.NewSelect().
 				Model(&trackingOutfits).
 				Where("asset_id IN (?)", bun.In(assetIDs)).
@@ -462,6 +473,7 @@ func (r *TrackingModel) RemoveUsersFromAssetTrackingWithTx(ctx context.Context, 
 
 	// Get outfit IDs for these users
 	var outfitIDs []uint64
+
 	err = tx.NewSelect().
 		Model((*types.UserOutfit)(nil)).
 		Column("outfit_id").
@@ -484,6 +496,7 @@ func (r *TrackingModel) RemoveUsersFromAssetTrackingWithTx(ctx context.Context, 
 
 	r.logger.Debug("Removed users and their outfits from asset tracking",
 		zap.Int("userCount", len(userIDs)))
+
 	return nil
 }
 
@@ -516,10 +529,12 @@ func (r *TrackingModel) AddGamesToTracking(ctx context.Context, gameToUsers map[
 		for gameID := range gameToUsers {
 			gameIDs = append(gameIDs, gameID)
 		}
+
 		slices.Sort(gameIDs)
 
 		// Lock the rows we're going to update
 		var existing []types.GameTracking
+
 		err := tx.NewSelect().
 			Model(&existing).
 			Where("id IN (?)", bun.In(gameIDs)).
@@ -610,6 +625,7 @@ func (r *TrackingModel) GetGameTrackingsToCheck(
 			}
 
 			var trackingUsers []types.GameTrackingUser
+
 			err = tx.NewSelect().
 				Model(&trackingUsers).
 				Where("game_id IN (?)", bun.In(gameIDs)).
@@ -660,6 +676,7 @@ func (r *TrackingModel) RemoveUsersFromGameTrackingWithTx(ctx context.Context, t
 
 	r.logger.Debug("Removed users from game tracking",
 		zap.Int("userCount", len(userIDs)))
+
 	return nil
 }
 

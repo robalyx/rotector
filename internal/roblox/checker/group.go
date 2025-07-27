@@ -116,6 +116,7 @@ func (c *GroupChecker) CheckGroupPercentages(
 
 	// Collect all unique flagged user IDs
 	allFlaggedUserIDs := make([]uint64, 0)
+
 	for groupID := range flaggedGroups {
 		if flaggedUsers, ok := groupToFlaggedUsers[groupID]; ok {
 			allFlaggedUserIDs = append(allFlaggedUserIDs, flaggedUsers...)
@@ -142,20 +143,16 @@ func (c *GroupChecker) CheckGroupPercentages(
 	return flaggedGroups
 }
 
-// ProcessUsers checks multiple users' groups concurrently and updates reasonsMap.
-// Returns maps of confirmed and flagged groups for reuse by other checkers.
-func (c *GroupChecker) ProcessUsers(
-	ctx context.Context, userInfos []*types.ReviewUser, reasonsMap map[uint64]types.Reasons[enum.UserReasonType],
-	confirmedFriendsMap, flaggedFriendsMap map[uint64]map[uint64]*types.ReviewUser,
+// PrepareGroupMaps handles the preparation of confirmed and flagged group maps.
+func (c *GroupChecker) PrepareGroupMaps(
+	ctx context.Context, userInfos []*types.ReviewUser,
 ) (map[uint64]map[uint64]*types.ReviewGroup, map[uint64]map[uint64]*types.ReviewGroup) {
 	confirmedGroupsMap := make(map[uint64]map[uint64]*types.ReviewGroup)
 	flaggedGroupsMap := make(map[uint64]map[uint64]*types.ReviewGroup)
 
-	// Track counts before processing
-	existingFlags := len(reasonsMap)
-
 	// Collect all unique group IDs across all users
 	uniqueGroupIDs := make(map[uint64]struct{})
+
 	for _, userInfo := range userInfos {
 		for _, group := range userInfo.Groups {
 			uniqueGroupIDs[group.Group.ID] = struct{}{}
@@ -168,13 +165,22 @@ func (c *GroupChecker) ProcessUsers(
 		groupIDs = append(groupIDs, groupID)
 	}
 
-	// Fetch all existing groups
-	existingGroups, err := c.db.Model().Group().GetGroupsByIDs(
-		ctx, groupIDs, types.GroupFieldBasic|types.GroupFieldReasons,
-	)
-	if err != nil {
-		c.logger.Error("Failed to fetch existing groups", zap.Error(err))
-		return confirmedGroupsMap, flaggedGroupsMap
+	// Fetch all existing groups if we have any
+	var existingGroups map[uint64]*types.ReviewGroup
+
+	if len(groupIDs) > 0 {
+		var err error
+
+		existingGroups, err = c.db.Model().Group().GetGroupsByIDs(
+			ctx, groupIDs, types.GroupFieldBasic|types.GroupFieldReasons,
+		)
+		if err != nil {
+			c.logger.Error("Failed to fetch existing groups", zap.Error(err))
+
+			existingGroups = make(map[uint64]*types.ReviewGroup)
+		}
+	} else {
+		existingGroups = make(map[uint64]*types.ReviewGroup)
 	}
 
 	// Prepare maps for confirmed and flagged groups per user
@@ -199,8 +205,21 @@ func (c *GroupChecker) ProcessUsers(
 		flaggedGroupsMap[userInfo.ID] = flaggedGroups
 	}
 
+	return confirmedGroupsMap, flaggedGroupsMap
+}
+
+// ProcessUsers checks multiple users' groups concurrently and updates reasonsMap.
+func (c *GroupChecker) ProcessUsers(
+	ctx context.Context, userInfos []*types.ReviewUser, reasonsMap map[uint64]types.Reasons[enum.UserReasonType],
+	confirmedFriendsMap, flaggedFriendsMap map[uint64]map[uint64]*types.ReviewUser,
+	confirmedGroupsMap, flaggedGroupsMap map[uint64]map[uint64]*types.ReviewGroup,
+) {
+	// Track counts before processing
+	existingFlags := len(reasonsMap)
+
 	// Track users that exceed confidence threshold
 	var usersToAnalyze []*types.ReviewUser
+
 	userConfidenceMap := make(map[uint64]float64)
 
 	// Process results
@@ -257,6 +276,7 @@ func (c *GroupChecker) ProcessUsers(
 			if _, exists := reasonsMap[userInfo.ID]; !exists {
 				reasonsMap[userInfo.ID] = make(types.Reasons[enum.UserReasonType])
 			}
+
 			reasonsMap[userInfo.ID].Add(enum.UserReasonTypeGroup, &types.Reason{
 				Message:    reason,
 				Confidence: confidence,
@@ -275,14 +295,14 @@ func (c *GroupChecker) ProcessUsers(
 		zap.Int("totalUsers", len(userInfos)),
 		zap.Int("analyzedUsers", len(usersToAnalyze)),
 		zap.Int("newFlags", len(reasonsMap)-existingFlags))
-
-	return confirmedGroupsMap, flaggedGroupsMap
 }
 
 // calculateGroupConfidence computes the confidence score for a group based on its flagged users.
 func (c *GroupChecker) calculateGroupConfidence(flaggedUsers []uint64, users map[uint64]*types.ReviewUser) float64 {
-	var totalConfidence float64
-	var validUserCount int
+	var (
+		totalConfidence float64
+		validUserCount  int
+	)
 
 	for _, userID := range flaggedUsers {
 		if user, exists := users[userID]; exists {
@@ -322,6 +342,7 @@ func (c *GroupChecker) calculateConfidence(confirmedCount, flaggedCount, totalGr
 
 	// Absolute count bonuses to prevent gaming large networks
 	var absoluteBonus float64
+
 	switch {
 	case confirmedCount >= 5:
 		absoluteBonus = 0.4
@@ -333,6 +354,7 @@ func (c *GroupChecker) calculateConfidence(confirmedCount, flaggedCount, totalGr
 
 	// Calculate thresholds based on network size
 	var adjustedThreshold float64
+
 	switch {
 	case totalGroups >= 100:
 		adjustedThreshold = math.Max(6.0, 0.065*float64(totalGroups))
@@ -360,6 +382,7 @@ func (c *GroupChecker) calculateConfidence(confirmedCount, flaggedCount, totalGr
 	maxRatio := math.Max(confirmedRatio, weightedRatio)
 
 	var baseConfidence float64
+
 	switch {
 	case maxRatio >= 1.5:
 		baseConfidence = 1.0
@@ -391,6 +414,7 @@ func (c *GroupChecker) evaluateFriendRequirement(
 		if len(userInfo.Friends) > 5 {
 			return totalInappropriateFriends >= 4
 		}
+
 		return totalInappropriateFriends >= 2
 	}
 
@@ -413,6 +437,7 @@ func (c *GroupChecker) getInappropriateFriendCount(
 	if confirmedFriends, exists := confirmedFriendsMap[userID]; exists {
 		confirmedFriendCount = len(confirmedFriends)
 	}
+
 	if flaggedFriends, exists := flaggedFriendsMap[userID]; exists {
 		flaggedFriendCount = len(flaggedFriends)
 	}

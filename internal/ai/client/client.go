@@ -127,6 +127,7 @@ func (c *chatCompletions) New(ctx context.Context, params openai.ChatCompletionN
 		if bl := c.checkBlockReasons(resp, params.Model); bl != nil {
 			return resp, bl
 		}
+
 		return resp, err
 	})
 	if err != nil {
@@ -186,10 +187,12 @@ func (c *chatCompletions) NewWithRetry(
 		// Execute request with circuit breaker
 		result, err := c.client.breaker.Execute(func() (any, error) {
 			var execErr error
+
 			resp, execErr = c.client.client.Chat.Completions.New(ctx, params)
 			if bl := c.checkBlockReasons(resp, params.Model); bl != nil {
 				return resp, bl
 			}
+
 			return resp, execErr
 		})
 		if err != nil {
@@ -217,6 +220,7 @@ func (c *chatCompletions) NewWithRetry(
 				c.client.logger.Warn("Callback error, will retry",
 					zap.Error(cbErr),
 					zap.Uint64("attempt", attempt))
+
 				return cbErr
 			}
 
@@ -230,8 +234,10 @@ func (c *chatCompletions) NewWithRetry(
 			if errors.As(cbErr, &permanentError) {
 				return backoff.Permanent(fmt.Errorf("permanent callback error: %w", cbErr))
 			}
+
 			return cbErr
 		}
+
 		return nil
 	}
 
@@ -240,6 +246,7 @@ func (c *chatCompletions) NewWithRetry(
 		if lastErr != nil {
 			return fmt.Errorf("all retry attempts failed: %w (last error: %w)", err, lastErr)
 		}
+
 		return fmt.Errorf("all retry attempts failed: %w", err)
 	}
 
@@ -276,16 +283,21 @@ func (c *chatCompletions) NewStreaming(
 		if stream.Err() != nil {
 			return nil, stream.Err()
 		}
+
 		return stream, nil
 	})
 	if err != nil {
 		c.client.semaphore.Release(1)
+
 		if errors.Is(err, gobreaker.ErrOpenState) {
 			c.client.blockIndefinitely(ctx, params.Model, err)
+
 			return ssestream.NewStream[openai.ChatCompletionChunk](
 				nil, fmt.Errorf("system failure - circuit breaker is open: %w", err))
 		}
+
 		c.client.logger.Warn("Failed to create stream", zap.Error(err))
+
 		return ssestream.NewStream[openai.ChatCompletionChunk](nil, err)
 	}
 
@@ -332,6 +344,7 @@ func (c *chatCompletions) checkBlockReasons(resp *openai.ChatCompletion, model s
 		c.client.logger.Warn("Unknown finish reason",
 			zap.String("model", model),
 			zap.String("finishReason", finishReason))
+
 		err = utils.ErrContentBlocked
 	}
 
@@ -339,6 +352,7 @@ func (c *chatCompletions) checkBlockReasons(resp *openai.ChatCompletion, model s
 		c.client.logger.Warn("Content blocked",
 			zap.String("model", model),
 			zap.String("finishReason", finishReason))
+
 		return backoff.Permanent(err)
 	}
 

@@ -27,6 +27,7 @@ var ErrBreakRequired = errors.New("break required")
 // ReviewMenu handles the display and interaction logic for the review interface.
 type ReviewMenu struct {
 	shared.BaseReviewMenu
+
 	layout *Layout
 	page   *interaction.Page
 }
@@ -47,6 +48,7 @@ func NewReviewMenu(layout *Layout) *ReviewMenu {
 		ButtonHandlerFunc: m.handleButton,
 		ModalHandlerFunc:  m.handleModal,
 	}
+
 	return m
 }
 
@@ -56,17 +58,21 @@ func (m *ReviewMenu) Show(ctx *interaction.Context, s *session.Session) {
 	group := session.GroupTarget.Get(s)
 	if group == nil {
 		var err error
+
 		group, err = m.fetchNewTarget(ctx, s)
 		if err != nil {
 			if errors.Is(err, types.ErrNoGroupsToReview) {
 				ctx.Show(constants.DashboardPageName, "No groups to review. Please check back later.")
 				return
 			}
+
 			if errors.Is(err, ErrBreakRequired) {
 				return
 			}
+
 			m.layout.logger.Error("Failed to fetch a new group", zap.Error(err))
 			ctx.Error("Failed to fetch a new group. Please try again.")
+
 			return
 		}
 	}
@@ -78,6 +84,7 @@ func (m *ReviewMenu) Show(ctx *interaction.Context, s *session.Session) {
 			zap.Error(err),
 			zap.Uint64("groupID", group.ID))
 		ctx.Error("Failed to fetch latest group information. Please try again.")
+
 		return
 	}
 
@@ -99,6 +106,7 @@ func (m *ReviewMenu) Show(ctx *interaction.Context, s *session.Session) {
 	)
 	if err != nil {
 		m.layout.logger.Error("Failed to fetch review logs", zap.Error(err))
+
 		logs = []*types.ActivityLog{} // Continue without logs - not critical
 	}
 
@@ -110,8 +118,10 @@ func (m *ReviewMenu) Show(ctx *interaction.Context, s *session.Session) {
 	comments, err := m.layout.db.Model().Comment().GetGroupComments(ctx.Context(), group.ID)
 	if err != nil {
 		m.layout.logger.Error("Failed to fetch group comments", zap.Error(err))
+
 		comments = []*types.Comment{} // Continue without comments - not critical
 	}
+
 	session.ReviewComments.Set(s, comments)
 }
 
@@ -138,6 +148,7 @@ func (m *ReviewMenu) handleSortOrderSelection(ctx *interaction.Context, s *sessi
 	if err != nil {
 		m.layout.logger.Error("Failed to parse sort order", zap.Error(err))
 		ctx.Error("Failed to parse sort order. Please try again.")
+
 		return
 	}
 
@@ -162,6 +173,7 @@ func (m *ReviewMenu) handleActionSelection(ctx *interaction.Context, s *session.
 				zap.Uint64("user_id", userID),
 				zap.String("action", option))
 			ctx.Error("You do not have permission to perform this action.")
+
 			return
 		}
 	}
@@ -248,6 +260,7 @@ func (m *ReviewMenu) handleOpenAIChat(ctx *interaction.Context, s *session.Sessi
 	if err != nil {
 		m.layout.logger.Error("Failed to fetch flagged users", zap.Error(err))
 		ctx.Error("Failed to load flagged users. Please try again.")
+
 		return
 	}
 
@@ -255,6 +268,7 @@ func (m *ReviewMenu) handleOpenAIChat(ctx *interaction.Context, s *session.Sessi
 	limit := 15
 
 	var flaggedMembers map[uint64]*types.ReviewUser
+
 	if len(memberIDs) > 0 {
 		// Only fetch up to the limit
 		fetchIDs := memberIDs
@@ -263,6 +277,7 @@ func (m *ReviewMenu) handleOpenAIChat(ctx *interaction.Context, s *session.Sessi
 		}
 
 		var err error
+
 		flaggedMembers, err = m.layout.db.Model().User().GetUsersByIDs(
 			ctx.Context(),
 			fetchIDs,
@@ -287,6 +302,7 @@ func (m *ReviewMenu) handleOpenAIChat(ctx *interaction.Context, s *session.Sessi
 
 	// Format shout information (if recent)
 	shoutInfo := "No shout available"
+
 	if group.Shout != nil {
 		// Only include shout if it's less than 30 days old
 		if time.Since(group.Shout.Created) <= 30*24*time.Hour {
@@ -384,6 +400,7 @@ func (m *ReviewMenu) handleNavigateGroup(ctx *interaction.Context, s *session.Se
 		// Navigate to next group or fetch new one
 		m.UpdateCounters(s)
 		m.navigateAfterAction(ctx, s, "Skipped group.")
+
 		return
 	}
 
@@ -393,12 +410,14 @@ func (m *ReviewMenu) handleNavigateGroup(ctx *interaction.Context, s *session.Se
 			ctx.Cancel("No next group to navigate to.")
 			return
 		}
+
 		index++
 	} else {
 		if index <= 0 || len(history) == 0 {
 			ctx.Cancel("No previous group to navigate to.")
 			return
 		}
+
 		index--
 	}
 
@@ -408,6 +427,7 @@ func (m *ReviewMenu) handleNavigateGroup(ctx *interaction.Context, s *session.Se
 	// Fetch the group data
 	targetGroupID := history[index]
 	m.layout.logger.Info("Fetching group", zap.Uint64("group_id", targetGroupID))
+
 	group, err := m.layout.db.Model().Group().GetGroupByID(
 		ctx.Context(),
 		strconv.FormatUint(targetGroupID, 10),
@@ -420,12 +440,14 @@ func (m *ReviewMenu) handleNavigateGroup(ctx *interaction.Context, s *session.Se
 
 			// Try again with updated history
 			m.handleNavigateGroup(ctx, s, isNext)
+
 			return
 		}
 
 		direction := map[bool]string{true: "next", false: "previous"}[isNext]
 		m.layout.logger.Error(fmt.Sprintf("Failed to fetch %s group", direction), zap.Error(err))
 		ctx.Error(fmt.Sprintf("Failed to load %s group. Please try again.", direction))
+
 		return
 	}
 
@@ -434,6 +456,7 @@ func (m *ReviewMenu) handleNavigateGroup(ctx *interaction.Context, s *session.Se
 	if err != nil {
 		m.layout.logger.Error("Failed to fetch flagged users", zap.Error(err))
 		ctx.Error("Failed to load flagged users. Please try again.")
+
 		return
 	}
 
@@ -470,6 +493,7 @@ func (m *ReviewMenu) handleConfirmGroup(ctx *interaction.Context, s *session.Ses
 		m.layout.logger.Error("Non-admin attempted to confirm group",
 			zap.Uint64("user_id", reviewerID))
 		ctx.Error("You do not have permission to confirm groups.")
+
 		return
 	}
 
@@ -477,6 +501,7 @@ func (m *ReviewMenu) handleConfirmGroup(ctx *interaction.Context, s *session.Ses
 	if err := m.layout.db.Service().Group().ConfirmGroup(ctx.Context(), group, reviewerID); err != nil {
 		m.layout.logger.Error("Failed to confirm group", zap.Error(err))
 		ctx.Error("Failed to confirm the group. Please try again.")
+
 		return
 	}
 
@@ -509,6 +534,7 @@ func (m *ReviewMenu) handleClearGroup(ctx *interaction.Context, s *session.Sessi
 		m.layout.logger.Error("Non-admin attempted to clear group",
 			zap.Uint64("user_id", reviewerID))
 		ctx.Error("You do not have permission to clear groups.")
+
 		return
 	}
 
@@ -516,6 +542,7 @@ func (m *ReviewMenu) handleClearGroup(ctx *interaction.Context, s *session.Sessi
 	if err := m.layout.db.Service().Group().ClearGroup(ctx.Context(), group, reviewerID); err != nil {
 		m.layout.logger.Error("Failed to clear group", zap.Error(err))
 		ctx.Error("Failed to clear the group. Please try again.")
+
 		return
 	}
 
@@ -554,6 +581,7 @@ func (m *ReviewMenu) navigateAfterAction(ctx *interaction.Context, s *session.Se
 
 		// Fetch the group data
 		targetGroupID := history[index]
+
 		group, err := m.layout.db.Model().Group().GetGroupByID(
 			ctx.Context(),
 			strconv.FormatUint(targetGroupID, 10),
@@ -566,11 +594,13 @@ func (m *ReviewMenu) navigateAfterAction(ctx *interaction.Context, s *session.Se
 
 				// Try navigating again
 				m.navigateAfterAction(ctx, s, message)
+
 				return
 			}
 
 			m.layout.logger.Error("Failed to fetch next group from history", zap.Error(err))
 			ctx.Error("Failed to load next group. Please try again.")
+
 			return
 		}
 
@@ -579,6 +609,7 @@ func (m *ReviewMenu) navigateAfterAction(ctx *interaction.Context, s *session.Se
 		if err != nil {
 			m.layout.logger.Error("Failed to fetch flagged users", zap.Error(err))
 			ctx.Error("Failed to load flagged users. Please try again.")
+
 			return
 		}
 
@@ -601,6 +632,7 @@ func (m *ReviewMenu) navigateAfterAction(ctx *interaction.Context, s *session.Se
 			ActivityTimestamp: time.Now(),
 			Details:           map[string]any{},
 		})
+
 		return
 	}
 
@@ -615,6 +647,7 @@ func (m *ReviewMenu) handleReasonSelection(ctx *interaction.Context, s *session.
 		m.layout.logger.Error("Non-reviewer attempted to manage reasons",
 			zap.Uint64("user_id", uint64(ctx.Event().User().ID)))
 		ctx.Error("You do not have permission to manage reasons.")
+
 		return
 	}
 
@@ -634,11 +667,13 @@ func (m *ReviewMenu) handleReasonSelection(ctx *interaction.Context, s *session.
 		session.UnsavedGroupReasons.Delete(s)
 
 		ctx.Reload("Successfully restored original reasons")
+
 		return
 	}
 
 	// Parse reason type
 	option = strings.TrimSuffix(option, constants.ModalOpenSuffix)
+
 	reasonType, err := enum.GroupReasonTypeString(option)
 	if err != nil {
 		ctx.Error("Invalid reason type: " + option)

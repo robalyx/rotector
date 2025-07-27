@@ -115,25 +115,32 @@ func (s *UserService) GetUserByID(
 			if fields.Has(types.UserFieldGroups) {
 				user.Groups = rel.Groups
 			}
+
 			if fields.Has(types.UserFieldOutfits) {
 				user.Outfits = rel.Outfits
 				user.OutfitAssets = rel.OutfitAssets
 			}
+
 			if fields.Has(types.UserFieldCurrentAssets) {
 				user.CurrentAssets = rel.CurrentAssets
 			}
+
 			if fields.Has(types.UserFieldFriends) {
 				user.Friends = rel.Friends
 			}
+
 			if fields.Has(types.UserFieldFavorites) {
 				user.Favorites = rel.Favorites
 			}
+
 			if fields.Has(types.UserFieldGames) {
 				user.Games = rel.Games
 			}
+
 			if fields.Has(types.UserFieldInventory) {
 				user.Inventory = rel.Inventory
 			}
+
 			if fields.Has(types.UserFieldBadges) {
 				user.Badges = rel.Badges
 			}
@@ -166,25 +173,32 @@ func (s *UserService) GetUsersByIDs(
 				if fields.Has(types.UserFieldGroups) {
 					user.Groups = rel.Groups
 				}
+
 				if fields.Has(types.UserFieldOutfits) {
 					user.Outfits = rel.Outfits
 					user.OutfitAssets = rel.OutfitAssets
 				}
+
 				if fields.Has(types.UserFieldCurrentAssets) {
 					user.CurrentAssets = rel.CurrentAssets
 				}
+
 				if fields.Has(types.UserFieldFriends) {
 					user.Friends = rel.Friends
 				}
+
 				if fields.Has(types.UserFieldFavorites) {
 					user.Favorites = rel.Favorites
 				}
+
 				if fields.Has(types.UserFieldGames) {
 					user.Games = rel.Games
 				}
+
 				if fields.Has(types.UserFieldInventory) {
 					user.Inventory = rel.Inventory
 				}
+
 				if fields.Has(types.UserFieldBadges) {
 					user.Badges = rel.Badges
 				}
@@ -203,6 +217,7 @@ func (s *UserService) GetUserToReview(
 	recentIDs, err := s.activity.GetRecentlyReviewedIDs(ctx, reviewerID, false, 50)
 	if err != nil {
 		s.logger.Error("Failed to get recently reviewed user IDs", zap.Error(err))
+
 		recentIDs = []uint64{} // Continue without filtering if there's an error
 	}
 
@@ -237,6 +252,7 @@ func (s *UserService) GetUserToReview(
 				if err == nil {
 					break
 				}
+
 				if !errors.Is(err, types.ErrNoUsersToReview) {
 					return nil, err
 				}
@@ -274,6 +290,7 @@ func (s *UserService) GetUserRelationships(ctx context.Context, userID uint64) (
 	if result, exists := results[userID]; exists {
 		return result, nil
 	}
+
 	return &types.ReviewUser{}, nil
 }
 
@@ -291,6 +308,7 @@ func (s *UserService) GetUsersRelationships(
 	}
 
 	var mu sync.Mutex
+
 	p := pool.New().WithContext(ctx).WithCancelOnError()
 
 	// Fetch groups in parallel if requested
@@ -300,11 +318,15 @@ func (s *UserService) GetUsersRelationships(
 			if err != nil {
 				return fmt.Errorf("failed to get users groups: %w", err)
 			}
+
 			mu.Lock()
+
 			for userID, userGroups := range groups {
 				result[userID].Groups = userGroups
 			}
+
 			mu.Unlock()
+
 			return nil
 		})
 	}
@@ -316,12 +338,16 @@ func (s *UserService) GetUsersRelationships(
 			if err != nil {
 				return fmt.Errorf("failed to get users outfits: %w", err)
 			}
+
 			mu.Lock()
+
 			for userID, userOutfits := range outfits {
 				result[userID].Outfits = userOutfits.Outfits
 				result[userID].OutfitAssets = userOutfits.OutfitAssets
 			}
+
 			mu.Unlock()
+
 			return nil
 		})
 	}
@@ -333,11 +359,15 @@ func (s *UserService) GetUsersRelationships(
 			if err != nil {
 				return fmt.Errorf("failed to get users friends: %w", err)
 			}
+
 			mu.Lock()
+
 			for userID, userFriends := range friends {
 				result[userID].Friends = userFriends
 			}
+
 			mu.Unlock()
+
 			return nil
 		})
 	}
@@ -349,11 +379,15 @@ func (s *UserService) GetUsersRelationships(
 			if err != nil {
 				return fmt.Errorf("failed to get users favorites: %w", err)
 			}
+
 			mu.Lock()
+
 			for userID, userFavorites := range favorites {
 				result[userID].Favorites = userFavorites
 			}
+
 			mu.Unlock()
+
 			return nil
 		})
 	}
@@ -365,11 +399,15 @@ func (s *UserService) GetUsersRelationships(
 			if err != nil {
 				return fmt.Errorf("failed to get users games: %w", err)
 			}
+
 			mu.Lock()
+
 			for userID, userGames := range games {
 				result[userID].Games = userGames
 			}
+
 			mu.Unlock()
+
 			return nil
 		})
 	}
@@ -381,11 +419,15 @@ func (s *UserService) GetUsersRelationships(
 			if err != nil {
 				return fmt.Errorf("failed to get users inventory: %w", err)
 			}
+
 			mu.Lock()
+
 			for userID, userInventory := range inventory {
 				result[userID].Inventory = userInventory
 			}
+
 			mu.Unlock()
+
 			return nil
 		})
 	}
@@ -397,11 +439,15 @@ func (s *UserService) GetUsersRelationships(
 			if err != nil {
 				return fmt.Errorf("failed to get users assets: %w", err)
 			}
+
 			mu.Lock()
+
 			for userID, userAssets := range assets {
 				result[userID].CurrentAssets = userAssets
 			}
+
 			mu.Unlock()
+
 			return nil
 		})
 	}
@@ -445,7 +491,7 @@ func (s *UserService) SaveUsers(ctx context.Context, users map[uint64]*types.Rev
 
 		// Set engine version for new users
 		if user.EngineVersion == "" {
-			user.EngineVersion = "2.8"
+			user.EngineVersion = "2.11"
 		}
 
 		// Handle reasons merging and determine status
@@ -493,24 +539,30 @@ func (s *UserService) SaveUsers(ctx context.Context, users map[uint64]*types.Rev
 			if len(user.Groups) > 0 {
 				userGroups[user.ID] = user.Groups
 			}
+
 			if len(user.Outfits) > 0 {
 				userOutfits[user.ID] = user.Outfits
 				if len(user.OutfitAssets) > 0 {
 					userOutfitAssets[user.ID] = user.OutfitAssets
 				}
 			}
+
 			if len(user.CurrentAssets) > 0 {
 				userAssets[user.ID] = user.CurrentAssets
 			}
+
 			if len(user.Friends) > 0 {
 				userFriends[user.ID] = user.Friends
 			}
+
 			if len(user.Favorites) > 0 {
 				userFavorites[user.ID] = user.Favorites
 			}
+
 			if len(user.Games) > 0 {
 				userGames[user.ID] = user.Games
 			}
+
 			if len(user.Inventory) > 0 {
 				userInventory[user.ID] = user.Inventory
 			}
@@ -563,9 +615,12 @@ func (s *UserService) DeleteUsers(ctx context.Context, userIDs []uint64) (int64,
 	}
 
 	var totalAffected int64
+
 	err := dbretry.Transaction(ctx, s.db, func(ctx context.Context, tx bun.Tx) error {
 		var err error
+
 		totalAffected, err = s.DeleteUsersWithTx(ctx, tx, userIDs)
+
 		return err
 	})
 	if err != nil {
@@ -604,6 +659,7 @@ func (s *UserService) DeleteUsersWithTx(ctx context.Context, tx bun.Tx, userIDs 
 	if err != nil {
 		return 0, fmt.Errorf("failed to delete users core data: %w", err)
 	}
+
 	totalAffected += affected
 
 	// Delete all relationships and their unreferenced info
@@ -611,36 +667,42 @@ func (s *UserService) DeleteUsersWithTx(ctx context.Context, tx bun.Tx, userIDs 
 	if err != nil {
 		return 0, fmt.Errorf("failed to delete user groups: %w", err)
 	}
+
 	totalAffected += affected
 
 	affected, err = s.model.DeleteUserOutfits(ctx, tx, userIDs)
 	if err != nil {
 		return 0, fmt.Errorf("failed to delete user outfits: %w", err)
 	}
+
 	totalAffected += affected
 
 	affected, err = s.model.DeleteUserFriends(ctx, tx, userIDs)
 	if err != nil {
 		return 0, fmt.Errorf("failed to delete user friends: %w", err)
 	}
+
 	totalAffected += affected
 
 	affected, err = s.model.DeleteUserFavorites(ctx, tx, userIDs)
 	if err != nil {
 		return 0, fmt.Errorf("failed to delete user favorites: %w", err)
 	}
+
 	totalAffected += affected
 
 	affected, err = s.model.DeleteUserGames(ctx, tx, userIDs)
 	if err != nil {
 		return 0, fmt.Errorf("failed to delete user games: %w", err)
 	}
+
 	totalAffected += affected
 
 	affected, err = s.model.DeleteUserInventory(ctx, tx, userIDs)
 	if err != nil {
 		return 0, fmt.Errorf("failed to delete user inventory: %w", err)
 	}
+
 	totalAffected += affected
 
 	s.logger.Debug("Deleted users and all associated data",
@@ -656,6 +718,7 @@ func (s *UserService) DeleteUser(ctx context.Context, userID uint64) (bool, erro
 	if err != nil {
 		return false, err
 	}
+
 	return affected > 0, nil
 }
 

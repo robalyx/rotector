@@ -1,6 +1,7 @@
 package setup
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net"
@@ -19,7 +20,7 @@ type pprofServer struct {
 }
 
 // startPprofServer initializes and starts the pprof HTTP server.
-func startPprofServer(port int, logger *zap.Logger) (*pprofServer, error) {
+func startPprofServer(ctx context.Context, port int, logger *zap.Logger) (*pprofServer, error) {
 	pprofAddr := fmt.Sprintf("localhost:%d", port)
 
 	// Create secure server with timeouts
@@ -33,7 +34,9 @@ func startPprofServer(port int, logger *zap.Logger) (*pprofServer, error) {
 	}
 
 	// Only listen on localhost
-	listener, err := net.Listen("tcp", pprofAddr)
+	lc := &net.ListenConfig{}
+
+	listener, err := lc.Listen(ctx, "tcp", pprofAddr)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create listener: %w", err)
 	}
@@ -41,6 +44,7 @@ func startPprofServer(port int, logger *zap.Logger) (*pprofServer, error) {
 	// Start server in background
 	go func() {
 		logger.Info("Starting pprof server", zap.String("address", pprofAddr))
+
 		if err := srv.Serve(listener); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			logger.Error("Pprof server failed", zap.Error(err))
 		}

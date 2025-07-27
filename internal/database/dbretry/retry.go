@@ -89,8 +89,10 @@ func IsRetryableError(err error) bool {
 
 // Operation wraps a database operation with retry logic.
 func Operation[T any](ctx context.Context, operation func(context.Context) (T, error)) (T, error) {
-	var result T
-	var lastErr error
+	var (
+		result  T
+		lastErr error
+	)
 
 	b := backoff.WithMaxRetries(backoff.NewExponentialBackOff(
 		backoff.WithMaxElapsedTime(maxElapsedTime),
@@ -100,15 +102,19 @@ func Operation[T any](ctx context.Context, operation func(context.Context) (T, e
 
 	err := backoff.Retry(func() error {
 		var err error
+
 		result, err = operation(ctx)
 		if err != nil {
 			if !IsRetryableError(err) {
 				// If error is not retryable, return it wrapped to stop retrying
 				return backoff.Permanent(fmt.Errorf("non-retryable error: %w", err))
 			}
+
 			lastErr = err
+
 			return err
 		}
+
 		return nil
 	}, backoff.WithContext(b, ctx))
 	if err != nil {
@@ -116,6 +122,7 @@ func Operation[T any](ctx context.Context, operation func(context.Context) (T, e
 			// Return the last actual database error instead of retry error
 			return result, fmt.Errorf("database operation failed after retries: %w", lastErr)
 		}
+
 		return result, fmt.Errorf("database operation failed: %w", err)
 	}
 
@@ -139,9 +146,12 @@ func NoResult(ctx context.Context, operation func(context.Context) error) error 
 				// If error is not retryable, return it wrapped to stop retrying
 				return backoff.Permanent(fmt.Errorf("non-retryable error: %w", err))
 			}
+
 			lastErr = err
+
 			return err
 		}
+
 		return nil
 	}, backoff.WithContext(b, ctx))
 	if err != nil {
@@ -149,6 +159,7 @@ func NoResult(ctx context.Context, operation func(context.Context) error) error 
 			// Return the last actual database error instead of retry error
 			return fmt.Errorf("database operation failed after retries: %w", lastErr)
 		}
+
 		return fmt.Errorf("database operation failed: %w", err)
 	}
 

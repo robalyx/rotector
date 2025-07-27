@@ -7,6 +7,7 @@ func calculateStringSimilarity(s1, s2 string) float64 {
 	if s1 == s2 {
 		return 1.0
 	}
+
 	if len(s1) == 0 || len(s2) == 0 {
 		return 0.0
 	}
@@ -31,11 +32,13 @@ func levenshteinDistance(s1, s2 string) int {
 
 	// Create distance matrix
 	rows, cols := len(runes1)+1, len(runes2)+1
+
 	dist := make([][]int, rows)
 	for i := range dist {
 		dist[i] = make([]int, cols)
 		dist[i][0] = i
 	}
+
 	for j := 1; j < cols; j++ {
 		dist[0][j] = j
 	}
@@ -47,6 +50,7 @@ func levenshteinDistance(s1, s2 string) int {
 			if runes1[i-1] == runes2[j-1] {
 				cost = 0
 			}
+
 			dist[i][j] = min(
 				dist[i-1][j]+1,      // deletion
 				dist[i][j-1]+1,      // insertion

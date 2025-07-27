@@ -17,6 +17,7 @@ func TruncateString(s string, maxLength int) string {
 	if len(s) > maxLength {
 		return s[:maxLength-3] + "..."
 	}
+
 	return s
 }
 
@@ -25,6 +26,7 @@ func FormatString(s string) string {
 	s = multipleNewlinesRegex.ReplaceAllString(s, "\n")
 	s = strings.TrimSpace(s)
 	s = strings.ReplaceAll(s, "`", "")
+
 	return fmt.Sprintf("```\n%s\n```", s)
 }
 
@@ -38,6 +40,7 @@ func FormatIDs(ids []uint64) string {
 	for i, id := range ids {
 		mentions[i] = fmt.Sprintf("<@%d>", id)
 	}
+
 	return strings.Join(mentions, ", ")
 }
 
@@ -54,6 +57,7 @@ func GetTimestampedSubtext(message string) string {
 	if message != "" {
 		return fmt.Sprintf("-# `%s` <t:%d:R>", message, time.Now().Unix())
 	}
+
 	return ""
 }
 
@@ -118,6 +122,7 @@ func CensorStringsInText(text string, streamerMode bool, targets ...string) stri
 
 	// Replace each target with its censored version using regex
 	result := text
+
 	for pattern, censored := range censoredMap {
 		re := regexp.MustCompile(pattern)
 		result = re.ReplaceAllString(result, censored)
@@ -147,5 +152,6 @@ func CalculateDynamicTruncationLength(numReasons int) int {
 	if baseLength < minLength {
 		return minLength
 	}
+
 	return baseLength
 }

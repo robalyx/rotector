@@ -59,6 +59,7 @@ func (b *LookupBuilder) Build() *discord.MessageUpdateBuilder {
 
 	// Build user info container
 	var userContent strings.Builder
+
 	username := b.username
 	if username == "" {
 		username = fmt.Sprintf("Unknown User (%d)", b.userID)
@@ -100,6 +101,7 @@ func (b *LookupBuilder) buildGuildsDisplay() discord.LayoutComponent {
 
 	if len(b.userGuilds) == 0 {
 		content.WriteString("This user is not a member of any flagged servers in our database.")
+
 		return discord.NewContainer(
 			discord.NewTextDisplay(content.String()),
 		).WithAccentColor(constants.DefaultContainerColor)
@@ -121,6 +123,7 @@ func (b *LookupBuilder) buildGuildsDisplay() discord.LayoutComponent {
 		if !guild.JoinedAt.IsZero() {
 			joinedInfo = fmt.Sprintf("<t:%d:R>", guild.JoinedAt.Unix())
 		}
+
 		guildContent.WriteString("Joined: " + joinedInfo)
 
 		// Create section for guilds with messages, text display for others

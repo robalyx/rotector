@@ -26,6 +26,7 @@ func NewMenu(layout *Layout) *Menu {
 		ShowHandlerFunc:   m.Show,
 		ButtonHandlerFunc: m.handleButton,
 	}
+
 	return m
 }
 

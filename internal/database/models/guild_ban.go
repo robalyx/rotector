@@ -31,6 +31,7 @@ func (m *GuildBanModel) LogBanOperation(ctx context.Context, log *types.GuildBan
 		if err != nil {
 			return fmt.Errorf("failed to log guild ban operation: %w", err)
 		}
+
 		return nil
 	})
 	if err != nil {
@@ -50,8 +51,10 @@ func (m *GuildBanModel) LogBanOperation(ctx context.Context, log *types.GuildBan
 func (m *GuildBanModel) GetGuildBanLogs(
 	ctx context.Context, guildID uint64, cursor *types.LogCursor, limit int,
 ) ([]*types.GuildBanLog, *types.LogCursor, error) {
-	var logs []*types.GuildBanLog
-	var nextCursor *types.LogCursor
+	var (
+		logs       []*types.GuildBanLog
+		nextCursor *types.LogCursor
+	)
 
 	err := dbretry.NoResult(ctx, func(ctx context.Context) error {
 		// Build base query

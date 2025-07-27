@@ -38,6 +38,7 @@ func (r *ActivityModel) Log(ctx context.Context, log *types.ActivityLog) {
 		if err != nil {
 			return fmt.Errorf("failed to log activity: %w", err)
 		}
+
 		return nil
 	})
 	if err != nil {
@@ -49,6 +50,7 @@ func (r *ActivityModel) Log(ctx context.Context, log *types.ActivityLog) {
 			zap.Uint64("groupID", log.ActivityTarget.GroupID),
 			zap.Uint64("reviewerID", log.ReviewerID),
 			zap.String("activityType", log.ActivityType.String()))
+
 		return
 	}
 
@@ -72,12 +74,14 @@ func (r *ActivityModel) LogBatch(ctx context.Context, logs []*types.ActivityLog)
 		if err != nil {
 			return fmt.Errorf("failed to log batch activities: %w", err)
 		}
+
 		return nil
 	})
 	if err != nil {
 		r.logger.Error("Failed to log batch activities",
 			zap.Error(err),
 			zap.Int("count", len(logs)))
+
 		return
 	}
 
@@ -89,8 +93,10 @@ func (r *ActivityModel) LogBatch(ctx context.Context, logs []*types.ActivityLog)
 func (r *ActivityModel) GetLogs(
 	ctx context.Context, filter types.ActivityFilter, cursor *types.LogCursor, limit int,
 ) ([]*types.ActivityLog, *types.LogCursor, error) {
-	var logs []*types.ActivityLog
-	var nextCursor *types.LogCursor
+	var (
+		logs       []*types.ActivityLog
+		nextCursor *types.LogCursor
+	)
 
 	err := dbretry.NoResult(ctx, func(ctx context.Context) error {
 		// Build base query conditions
@@ -99,21 +105,27 @@ func (r *ActivityModel) GetLogs(
 		if filter.GuildID != 0 {
 			query = query.Where("guild_id = ?", filter.GuildID)
 		}
+
 		if filter.DiscordID != 0 {
 			query = query.Where("discord_id = ?", filter.DiscordID)
 		}
+
 		if filter.UserID != 0 {
 			query = query.Where("user_id = ?", filter.UserID)
 		}
+
 		if filter.GroupID != 0 {
 			query = query.Where("group_id = ?", filter.GroupID)
 		}
+
 		if filter.ReviewerID != 0 {
 			query = query.Where("reviewer_id = ?", filter.ReviewerID)
 		}
+
 		if filter.ActivityType != enum.ActivityTypeAll {
 			query = query.Where("activity_type = ?", filter.ActivityType)
 		}
+
 		if !filter.StartDate.IsZero() && !filter.EndDate.IsZero() {
 			query = query.Where("activity_timestamp BETWEEN ? AND ?", filter.StartDate, filter.EndDate)
 		}
@@ -160,8 +172,11 @@ func (r *ActivityModel) GetRecentlyReviewedIDs(
 		var logs []*types.ActivityLog
 
 		// Build query to get recently reviewed IDs
-		var itemType string
-		var activityType enum.ActivityType
+		var (
+			itemType     string
+			activityType enum.ActivityType
+		)
+
 		if isGroup {
 			itemType = "group_id"
 			activityType = enum.ActivityTypeGroupViewed
@@ -172,7 +187,9 @@ func (r *ActivityModel) GetRecentlyReviewedIDs(
 
 		// Get IDs reviewed by this reviewer in the last 30 minutes
 		cutoffTime := time.Now().Add(-30 * time.Minute)
+
 		var ids []uint64
+
 		err := r.db.NewSelect().
 			Model(&logs).
 			Column(itemType).

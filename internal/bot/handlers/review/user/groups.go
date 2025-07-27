@@ -40,6 +40,7 @@ func NewGroupsMenu(layout *Layout) *GroupsMenu {
 			session.ImageBuffer.Delete(s)
 		},
 	}
+
 	return m
 }
 
@@ -97,6 +98,7 @@ func (m *GroupsMenu) sortGroupsByStatus(
 ) []*apiTypes.UserGroupRoles {
 	// Group groups by their status
 	groupedGroups := make(map[enum.GroupType][]*apiTypes.UserGroupRoles)
+
 	var unflaggedGroups []*apiTypes.UserGroupRoles
 
 	// Separate flagged and unflagged groups
@@ -138,6 +140,7 @@ func (m *GroupsMenu) handleButton(ctx *interaction.Context, s *session.Session, 
 		session.ImageBuffer.Delete(s)
 		session.PaginationPage.Set(s, page)
 		ctx.Reload("")
+
 		return
 	}
 

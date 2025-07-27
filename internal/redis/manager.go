@@ -18,6 +18,10 @@ const (
 	// to allow independent management of statistics data.
 	StatsDBIndex = 1
 
+	// ProcessingDBIndex uses database 2 for user processing deduplication
+	// to track processed user IDs and prevent duplicate checker processing.
+	ProcessingDBIndex = 2
+
 	// SessionDBIndex uses database 3 for user session storage
 	// to prevent session data from interfering with other operations.
 	SessionDBIndex = 3
@@ -76,6 +80,7 @@ func (m *Manager) GetClient(dbIndex int) (rueidis.Client, error) {
 
 	m.clients[dbIndex] = client
 	m.logger.Info("Created new Redis client", zap.Int("dbIndex", dbIndex))
+
 	return client, nil
 }
 

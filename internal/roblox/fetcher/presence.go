@@ -50,18 +50,22 @@ func (p *PresenceFetcher) FetchPresences(ctx context.Context, userIDs []uint64) 
 
 			// Fetch presences for the batch
 			params := presence.NewUserPresencesBuilder(userIDs[i:end]...).Build()
+
 			presences, err := p.roAPI.Presence().GetUserPresences(ctx, params)
 			if err != nil {
 				p.logger.Error("Error fetching user presences",
 					zap.Error(err),
 					zap.Int("batchStart", i))
+
 				return nil // Don't fail the whole batch for one error
 			}
 
 			mu.Lock()
+
 			for _, presence := range presences.UserPresences {
 				allPresences = append(allPresences, &presence)
 			}
+
 			mu.Unlock()
 
 			return nil
@@ -88,11 +92,14 @@ func (p *PresenceFetcher) FetchPresencesConcurrently(
 
 	go func() {
 		presences := p.FetchPresences(ctx, userIDs)
+
 		presenceMap := make(map[uint64]*types.UserPresenceResponse)
 		for _, presence := range presences {
 			presenceMap[presence.UserID] = presence
 		}
+
 		resultChan <- presenceMap
+
 		close(resultChan)
 	}()
 

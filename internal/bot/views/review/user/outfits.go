@@ -36,6 +36,7 @@ type OutfitsBuilder struct {
 // NewOutfitsBuilder creates a new outfits builder.
 func NewOutfitsBuilder(s *session.Session) *OutfitsBuilder {
 	trainingMode := session.UserReviewMode.Get(s) == enum.ReviewModeTraining
+
 	return &OutfitsBuilder{
 		user:                 session.UserTarget.Get(s),
 		outfits:              session.UserOutfits.Get(s),
@@ -75,6 +76,7 @@ func (b *OutfitsBuilder) Build() *discord.MessageUpdateBuilder {
 
 		// Check if outfit is flagged and add appropriate indicator
 		indicator := ""
+
 		if _, ok := b.flaggedOutfits[outfit.Name]; ok {
 			if _, isDuplicate := b.duplicateOutfitNames[outfit.Name]; isDuplicate {
 				indicator = " ❓" // Question mark for flagged outfits with duplicate names

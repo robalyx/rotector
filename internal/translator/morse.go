@@ -23,6 +23,7 @@ func (t *Translator) TranslateMorse(morse string) string {
 			if letter == "" {
 				continue
 			}
+
 			if text, ok := t.morseToText[letter]; ok {
 				result.WriteString(text)
 			}

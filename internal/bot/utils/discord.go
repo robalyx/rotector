@@ -11,6 +11,7 @@ func GetContainerColor(streamerMode bool) int {
 	if streamerMode {
 		return constants.StreamerModeContainerColor
 	}
+
 	return constants.DefaultContainerColor
 }
 

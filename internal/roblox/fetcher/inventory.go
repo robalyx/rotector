@@ -67,6 +67,7 @@ func (i *InventoryFetcher) GetInventory(ctx context.Context, userID uint64) ([]*
 		if response.NextPageCursor == nil || *response.NextPageCursor == "" {
 			break
 		}
+
 		cursor = *response.NextPageCursor
 	}
 

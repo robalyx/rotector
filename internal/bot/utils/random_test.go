@@ -10,6 +10,7 @@ import (
 
 func TestGenerateRandomWords(t *testing.T) {
 	t.Parallel()
+
 	tests := []struct {
 		name  string
 		count int
@@ -31,6 +32,7 @@ func TestGenerateRandomWords(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			got := utils.GenerateRandomWords(tt.count)
 			words := strings.Split(got, " ")
 

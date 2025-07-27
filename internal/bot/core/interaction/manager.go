@@ -130,6 +130,7 @@ func (m *Manager) Show(event CommonEvent, s *session.Session, pageName, content 
 
 	// Handle the page show event
 	responded := false
+
 	if page.ShowHandlerFunc != nil {
 		ctx := New(context.Background(), event, s, m)
 		page.ShowHandlerFunc(ctx, s)
@@ -200,6 +201,7 @@ func (m *Manager) UpdatePage(s *session.Session, newPage *Page) {
 				previousPages = previousPages[:i]
 				session.PreviousPages.Set(s, previousPages)
 				session.CurrentPage.Set(s, newPage.Name)
+
 				return
 			}
 		}

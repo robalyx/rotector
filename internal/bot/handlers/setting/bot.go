@@ -25,6 +25,7 @@ func NewBotMenu(l *Layout) *BotMenu {
 		SelectHandlerFunc: m.handleBotSettingSelection,
 		ButtonHandlerFunc: m.handleBotSettingButton,
 	}
+
 	return m
 }
 

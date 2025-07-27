@@ -86,6 +86,7 @@ func ParseBanDuration(durationStr string) (*time.Time, error) {
 
 	// Calculate expiration time
 	expiresAt := time.Now().Add(duration)
+
 	return &expiresAt, nil
 }
 
@@ -110,15 +111,18 @@ func ParseCombinedDuration(s string) (time.Duration, error) {
 	// Simple case: just days
 	if strings.HasSuffix(s, "d") && !strings.Contains(s[:len(s)-1], "d") {
 		daysStr := s[:len(s)-1]
+
 		days, err := parseFloat(daysStr)
 		if err != nil {
 			return 0, fmt.Errorf("invalid days value: %w", err)
 		}
+
 		return time.Duration(days * 24 * float64(time.Hour)), nil
 	}
 
 	// For combined durations with days, use token-based parsing
 	var totalDuration time.Duration
+
 	currentNumber := ""
 
 	for i := 0; i < len(s); i++ {
@@ -147,6 +151,7 @@ func ParseCombinedDuration(s string) (time.Duration, error) {
 		if err != nil {
 			return 0, fmt.Errorf("invalid duration value: %w", err)
 		}
+
 		currentNumber = ""
 
 		// Add to total duration based on unit
@@ -189,10 +194,13 @@ func parseFloat(s string) (float64, error) {
 		return 0, ErrInvalidNumberFormat
 	}
 
-	var result float64
-	var isNegative bool
+	var (
+		result     float64
+		isNegative bool
+	)
 
 	// Handle negative numbers
+
 	if s[0] == '-' {
 		isNegative = true
 		s = s[1:]
@@ -208,6 +216,7 @@ func parseFloat(s string) (float64, error) {
 	// Handle decimal point
 	if i < len(s) && s[i] == '.' {
 		i++
+
 		divisor := 10.0
 		for i < len(s) && isDigit(s[i]) {
 			result += float64(s[i]-'0') / divisor
@@ -235,6 +244,7 @@ func FormatTimeAgo(t time.Time) string {
 	}
 
 	duration := time.Since(t)
+
 	return FormatDuration(duration) + " ago"
 }
 
@@ -245,6 +255,7 @@ func FormatTimeUntil(t time.Time) string {
 	}
 
 	duration := time.Until(t)
+
 	return "in " + FormatDuration(duration)
 }
 
@@ -261,6 +272,7 @@ func FormatDuration(d time.Duration) string {
 		if minutes == 1 {
 			return "1 minute"
 		}
+
 		return fmt.Sprintf("%d minutes", minutes)
 	}
 
@@ -269,6 +281,7 @@ func FormatDuration(d time.Duration) string {
 		if hours == 1 {
 			return "1 hour"
 		}
+
 		return fmt.Sprintf("%d hours", hours)
 	}
 
@@ -276,6 +289,7 @@ func FormatDuration(d time.Duration) string {
 	if days == 1 {
 		return "1 day"
 	}
+
 	return fmt.Sprintf("%d days", days)
 }
 
@@ -342,6 +356,7 @@ func ParseTimeWithTimezone(timeStr string) (time.Time, error) {
 		if err != nil {
 			return time.Time{}, fmt.Errorf("%w: %w", ErrInvalidTimeFormat, err)
 		}
+
 		return t.UTC(), nil
 	}
 

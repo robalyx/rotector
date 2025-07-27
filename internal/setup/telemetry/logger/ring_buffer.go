@@ -20,10 +20,12 @@ func NewRingBuffer(capacity int) *RingBuffer {
 // add adds a line to the ring buffer.
 func (rb *RingBuffer) add(line string) {
 	rb.lines[rb.head] = line
+
 	rb.head = (rb.head + 1) % rb.capacity
 	if rb.size < rb.capacity {
 		rb.size++
 	}
+
 	rb.totalSeen++
 }
 

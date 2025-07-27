@@ -112,11 +112,13 @@ func (f GameField) Columns() []string {
 	}
 
 	var columns []string
+
 	for field, cols := range gameFieldToColumns {
 		if f&field != 0 {
 			columns = append(columns, cols...)
 		}
 	}
+
 	return columns
 }
 

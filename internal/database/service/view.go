@@ -28,6 +28,7 @@ func NewView(model *models.MaterializedViewModel, logger *zap.Logger) *ViewServi
 func (s *ViewService) RefreshReviewerStatsView(ctx context.Context, period enum.ReviewerStatsPeriod) error {
 	viewName := fmt.Sprintf("reviewer_stats_%s", period)
 	staleDuration := 30 * time.Minute
+
 	return s.model.RefreshIfStale(ctx, viewName, staleDuration)
 }
 

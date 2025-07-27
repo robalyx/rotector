@@ -87,10 +87,12 @@ func (s *Session) Close() {
 // If serialization fails, the error is logged but the session continues.
 func (s *Session) Touch(ctx context.Context) {
 	s.mu.RLock()
+
 	if s.isClosed {
 		s.mu.RUnlock()
 		return
 	}
+
 	s.mu.RUnlock()
 
 	// Update last used time
@@ -98,13 +100,16 @@ func (s *Session) Touch(ctx context.Context) {
 
 	// Create a map of only persistent data
 	persistentData := make(map[string]any)
+
 	s.mu.RLock()
+
 	for key, value := range s.data {
 		isPersistent, ok := s.dataModified[key]
 		if !ok || (ok && isPersistent) {
 			persistentData[key] = s.valueProcessor.ProcessValue(value)
 		}
 	}
+
 	s.mu.RUnlock()
 
 	// Serialize only persistent data to JSON
@@ -134,6 +139,7 @@ func (s *Session) Touch(ctx context.Context) {
 			s.logger.Error("Failed to save user settings", zap.Error(err))
 			return
 		}
+
 		s.userSettingsUpdate = false
 	}
 
@@ -143,6 +149,7 @@ func (s *Session) Touch(ctx context.Context) {
 			s.logger.Error("Failed to save bot settings", zap.Error(err))
 			return
 		}
+
 		s.botSettingsUpdate = false
 	}
 }
@@ -164,6 +171,7 @@ func (s *Session) GetData() map[string]any {
 
 	dataCopy := make(map[string]any, len(s.data))
 	maps.Copy(dataCopy, s.data)
+
 	return dataCopy
 }
 
@@ -195,7 +203,9 @@ func (s *Session) get(key string) any {
 	if value, ok := s.data[key]; ok {
 		return value
 	}
+
 	s.logger.Debug("Session key not found", zap.String("key", key))
+
 	return nil
 }
 
@@ -217,6 +227,7 @@ func (s *Session) getInterface(key string, v any) {
 				*typedPtr = parsedValue
 				return
 			}
+
 			s.logger.Error("Failed to parse uint64 from string",
 				zap.Error(err),
 				zap.String("key", key),
@@ -229,6 +240,7 @@ func (s *Session) getInterface(key string, v any) {
 				*typedPtr = parsedTime
 				return
 			}
+
 			s.logger.Error("Failed to parse time.Time from string",
 				zap.Error(err),
 				zap.String("key", key),
@@ -265,17 +277,21 @@ func (s *Session) getInterface(key string, v any) {
 			zap.Error(err),
 			zap.String("key", key),
 			zap.Any("value", value))
+
 		return
 	}
 
 	// First unmarshal with number precision preservation
 	var rawData any
+
 	decoder := sonic.ConfigStd.NewDecoder(bytes.NewReader(jsonBytes))
 	decoder.UseNumber() // This ensures numbers are decoded as json.Number to preserve precision
+
 	if err := decoder.Decode(&rawData); err != nil {
 		s.logger.Error("Failed to unmarshal to raw data",
 			zap.Error(err),
 			zap.String("key", key))
+
 		return
 	}
 
@@ -288,6 +304,7 @@ func (s *Session) getInterface(key string, v any) {
 		s.logger.Error("Failed to marshal processed data",
 			zap.Error(err),
 			zap.String("key", key))
+
 		return
 	}
 
@@ -298,6 +315,7 @@ func (s *Session) getInterface(key string, v any) {
 			zap.String("key", key),
 			zap.String("json", string(processedBytes)),
 			zap.String("type", fmt.Sprintf("%T", v)))
+
 		return
 	}
 }
@@ -320,6 +338,7 @@ func (s *Session) getBuffer(key string) *bytes.Buffer {
 		s.logger.Error("Failed to decode base64 buffer",
 			zap.Error(err),
 			zap.String("key", key))
+
 		return nil
 	}
 

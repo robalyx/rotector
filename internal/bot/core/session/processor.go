@@ -64,6 +64,7 @@ func (p *ValueProcessor) ProcessValue(value any) any {
 					TypeMetadataPrefix + "0": NumericTypeMeta,
 				}
 			}
+
 			return result
 		}
 		// Process each element in the slice
@@ -71,6 +72,7 @@ func (p *ValueProcessor) ProcessValue(value any) any {
 		for i := range refValue.Len() {
 			result[i] = p.ProcessValue(refValue.Index(i).Interface())
 		}
+
 		return result
 
 	case reflect.Map:
@@ -100,6 +102,7 @@ func (p *ValueProcessor) ProcessValue(value any) any {
 			// Process map values
 			result[keyStr] = p.ProcessValue(refValue.MapIndex(key).Interface())
 		}
+
 		return result
 
 	case reflect.Struct:
@@ -130,12 +133,14 @@ func (p *ValueProcessor) ProcessValue(value any) any {
 				p.handleNonEmbeddedField(field, fieldValue, result)
 			}
 		}
+
 		return result
 
 	case reflect.Ptr:
 		if !refValue.IsNil() {
 			return p.ProcessValue(refValue.Elem().Interface())
 		}
+
 		return nil
 
 	default:
@@ -162,6 +167,7 @@ func (p *ValueProcessor) handleEmbeddedField(
 		// Extract the name part from the json tag (before any comma)
 		tagName := strings.SplitN(jsonTag, ",", 2)[0]
 		result[tagName] = processed
+
 		return
 	}
 
@@ -186,6 +192,7 @@ func (p *ValueProcessor) handleNonEmbeddedField(
 
 	// Determine field name from JSON tag or struct field name
 	fieldName := field.Name
+
 	if jsonTag != "" {
 		// Extract the name part from the json tag (before any comma)
 		parts := strings.SplitN(jsonTag, ",", 2)

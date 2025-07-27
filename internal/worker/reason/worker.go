@@ -52,6 +52,7 @@ func (w *Worker) Start(ctx context.Context) {
 
 	// Process friend reasons
 	w.bar.SetStepMessage("Processing users missing friend reasons", 25)
+
 	friendCount, err := w.processUsersWithoutReason(ctx, enum.UserReasonTypeFriend)
 	if err != nil {
 		w.logger.Error("Failed to process users without friend reasons", zap.Error(err))
@@ -67,6 +68,7 @@ func (w *Worker) Start(ctx context.Context) {
 
 	// Process group reasons
 	w.bar.SetStepMessage("Processing users missing group reasons", 75)
+
 	groupCount, err := w.processUsersWithoutReason(ctx, enum.UserReasonTypeGroup)
 	if err != nil {
 		w.logger.Error("Failed to process users without group reasons", zap.Error(err))
@@ -109,6 +111,7 @@ func (w *Worker) processUsersWithoutReason(ctx context.Context, reasonType enum.
 			w.logger.Error("Failed to get users with relationships for batch",
 				zap.String("reasonType", reasonType.String()),
 				zap.Error(err))
+
 			continue
 		}
 
@@ -148,14 +151,17 @@ func (w *Worker) processBatch(
 	// Create reasons map to track newly flagged users
 	reasonsMap := make(map[uint64]types.Reasons[enum.UserReasonType])
 
+	// Prepare maps for processing
+	confirmedFriendsMap, flaggedFriendsMap := w.friendChecker.PrepareFriendMaps(ctx, users)
+	confirmedGroupsMap, flaggedGroupsMap := w.groupChecker.PrepareGroupMaps(ctx, users)
+
 	switch reasonType {
 	case enum.UserReasonTypeFriend:
 		// Process through friend checker
-		w.friendChecker.ProcessUsers(ctx, users, reasonsMap)
+		w.friendChecker.ProcessUsers(ctx, users, reasonsMap, confirmedFriendsMap, flaggedFriendsMap, confirmedGroupsMap, flaggedGroupsMap)
 	case enum.UserReasonTypeGroup:
 		// Process through group checker
-		confirmedFriendsMap, flaggedFriendsMap := w.friendChecker.PrepareFriendMaps(ctx, users)
-		w.groupChecker.ProcessUsers(ctx, users, reasonsMap, confirmedFriendsMap, flaggedFriendsMap)
+		w.groupChecker.ProcessUsers(ctx, users, reasonsMap, confirmedFriendsMap, flaggedFriendsMap, confirmedGroupsMap, flaggedGroupsMap)
 	default:
 		return 0, fmt.Errorf("%w: %s", ErrUnsupportedReason, reasonType.String())
 	}
@@ -163,6 +169,7 @@ func (w *Worker) processBatch(
 	// Save newly flagged users
 	if len(reasonsMap) > 0 {
 		flaggedUsers := make(map[uint64]*types.ReviewUser)
+
 		for _, user := range users {
 			if reasons, ok := reasonsMap[user.ID]; ok {
 				user.Reasons = reasons
@@ -203,6 +210,7 @@ func (w *Worker) getUsersWithRelationships(ctx context.Context, batch []*types.R
 
 	// Convert map to slice maintaining order
 	usersWithRelationships := make([]*types.ReviewUser, 0, len(batch))
+
 	for _, userID := range userIDs {
 		if user, exists := usersMap[userID]; exists {
 			usersWithRelationships = append(usersWithRelationships, user)

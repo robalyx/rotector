@@ -72,6 +72,7 @@ func panicModal(_ *discord.ModalCreate) error {
 // ApplicationCommandEvent wraps ApplicationCommandInteractionCreate.
 type ApplicationCommandEvent struct {
 	*events.ApplicationCommandInteractionCreate
+
 	message *discord.Message
 }
 
@@ -99,12 +100,14 @@ func (e *ApplicationCommandEvent) Message() *discord.Message {
 	if e.message != nil {
 		return e.message
 	}
+
 	return nil
 }
 
 // ComponentEvent wraps ComponentInteractionCreate.
 type ComponentEvent struct {
 	*events.ComponentInteractionCreate
+
 	message *discord.Message
 }
 
@@ -132,12 +135,14 @@ func (e *ComponentEvent) Message() *discord.Message {
 	if e.message != nil {
 		return e.message
 	}
+
 	return nil
 }
 
 // ModalSubmitEvent wraps ModalSubmitInteractionCreate.
 type ModalSubmitEvent struct {
 	*events.ModalSubmitInteractionCreate
+
 	message *discord.Message
 }
 
@@ -165,6 +170,7 @@ func (e *ModalSubmitEvent) Message() *discord.Message {
 	if e.message != nil {
 		return e.message
 	}
+
 	return nil
 }
 

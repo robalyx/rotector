@@ -118,6 +118,7 @@ func TestCalculateConfidence(t *testing.T) {
 		// capture range variable
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			got := utils.CalculateConfidence(tt.reasons)
 			if tt.want == 0 {
 				assert.InDelta(t, tt.want, got, 1e-10, "expected zero confidence")

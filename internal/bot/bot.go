@@ -63,6 +63,7 @@ func New(app *setup.App) (*Bot, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to create session manager: %w", err)
 	}
+
 	interactionManager := interaction.NewManager(sessionManager, logger)
 	guildEventHandler := eventHandler.NewGuildEventHandler(logger)
 
@@ -92,12 +93,15 @@ func New(app *setup.App) (*Bot, error) {
 	// Parse shard IDs if specified
 	if app.Config.Bot.Discord.Sharding.ShardIDs != "" {
 		shardIDStrs := strings.SplitSeq(app.Config.Bot.Discord.Sharding.ShardIDs, ",")
+
 		var shardIDs []int
+
 		for idStr := range shardIDStrs {
 			if id, err := strconv.Atoi(strings.TrimSpace(idStr)); err == nil {
 				shardIDs = append(shardIDs, id)
 			}
 		}
+
 		if len(shardIDs) > 0 {
 			shardManagerOpts = append(shardManagerOpts, sharding.WithShardIDs(shardIDs...))
 		}
@@ -124,6 +128,7 @@ func New(app *setup.App) (*Bot, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	b.client = client
 
 	// Initialize layouts
@@ -188,6 +193,7 @@ func (b *Bot) Start() error {
 	}
 
 	b.logger.Info("Started bot")
+
 	return nil
 }
 
@@ -203,6 +209,7 @@ func (b *Bot) handleApplicationCommandInteraction(event *disgoEvents.Application
 	go func() {
 		start := time.Now()
 		wrappedEvent := interaction.WrapEvent(event, nil)
+
 		defer func() {
 			if r := recover(); r != nil {
 				b.logger.Error("Application command interaction failed",
@@ -212,6 +219,7 @@ func (b *Bot) handleApplicationCommandInteraction(event *disgoEvents.Application
 				)
 				b.interactionManager.RespondWithError(wrappedEvent, "Internal error. Please report this to an administrator.")
 			}
+
 			duration := time.Since(start)
 			b.logger.Debug("Application command interaction handled",
 				zap.String("command", event.SlashCommandInteractionData().CommandName()),
@@ -235,8 +243,10 @@ func (b *Bot) handleApplicationCommandInteraction(event *disgoEvents.Application
 		if err != nil {
 			b.logger.Error("Failed to get interaction response", zap.Error(err))
 			b.interactionManager.RespondWithError(wrappedEvent, "Failed to initialize session. Please try again.")
+
 			return
 		}
+
 		wrappedEvent.SetMessage(message)
 
 		// Initialize session
@@ -249,6 +259,7 @@ func (b *Bot) handleApplicationCommandInteraction(event *disgoEvents.Application
 		if showSelector {
 			b.interactionManager.Show(wrappedEvent, s, constants.SessionSelectorPageName, "")
 			s.Touch(context.Background())
+
 			return
 		}
 
@@ -269,6 +280,7 @@ func (b *Bot) handleComponentInteraction(event *disgoEvents.ComponentInteraction
 	go func() {
 		start := time.Now()
 		wrappedEvent := interaction.WrapEvent(event, &event.Message)
+
 		defer func() {
 			if r := recover(); r != nil {
 				b.logger.Error("Component interaction failed",
@@ -279,6 +291,7 @@ func (b *Bot) handleComponentInteraction(event *disgoEvents.ComponentInteraction
 				)
 				b.interactionManager.RespondWithError(wrappedEvent, "Internal error. Please report this to an administrator.")
 			}
+
 			duration := time.Since(start)
 			b.logger.Debug("Component interaction handled",
 				zap.String("custom_id", event.Data.CustomID()),
@@ -326,6 +339,7 @@ func (b *Bot) handleComponentInteraction(event *disgoEvents.ComponentInteraction
 		if showSelector {
 			b.interactionManager.Show(wrappedEvent, s, constants.SessionSelectorPageName, "")
 			s.Touch(context.Background())
+
 			return
 		}
 
@@ -344,6 +358,7 @@ func (b *Bot) handleModalSubmit(event *disgoEvents.ModalSubmitInteractionCreate)
 	go func() {
 		start := time.Now()
 		wrappedEvent := interaction.WrapEvent(event, nil)
+
 		defer func() {
 			if r := recover(); r != nil {
 				formData := make(map[int]string)
@@ -359,6 +374,7 @@ func (b *Bot) handleModalSubmit(event *disgoEvents.ModalSubmitInteractionCreate)
 				)
 				b.interactionManager.RespondWithError(wrappedEvent, "Internal error. Please report this to an administrator.")
 			}
+
 			duration := time.Since(start)
 			b.logger.Debug("Modal submit interaction handled",
 				zap.String("custom_id", event.Data.CustomID),
@@ -380,8 +396,10 @@ func (b *Bot) handleModalSubmit(event *disgoEvents.ModalSubmitInteractionCreate)
 		if err != nil {
 			b.logger.Error("Failed to get interaction response", zap.Error(err))
 			b.interactionManager.RespondWithError(wrappedEvent, "Failed to initialize session. Please try again.")
+
 			return
 		}
+
 		wrappedEvent.SetMessage(message)
 
 		// Initialize session
@@ -394,6 +412,7 @@ func (b *Bot) handleModalSubmit(event *disgoEvents.ModalSubmitInteractionCreate)
 		if showSelector {
 			b.interactionManager.Show(wrappedEvent, s, constants.SessionSelectorPageName, "")
 			s.Touch(context.Background())
+
 			return
 		}
 
@@ -434,6 +453,7 @@ func (b *Bot) initializeSession(
 	if err != nil {
 		b.logger.Error("Failed to check existing sessions", zap.Error(err))
 		updateMessage("Failed to check existing sessions. Please try again.")
+
 		return nil, false, false, err
 	}
 
@@ -452,6 +472,7 @@ func (b *Bot) initializeSession(
 		default:
 			updateMessage("Failed to create session. Please try again.")
 		}
+
 		return nil, false, false, err
 	}
 
@@ -495,6 +516,7 @@ func (b *Bot) validateInteraction(
 		// If no valid page exists, reset to dashboard
 		b.interactionManager.Show(event, s, constants.DashboardPageName, "New session created.")
 		s.Touch(context.Background())
+
 		return false
 	}
 
@@ -513,6 +535,7 @@ func (b *Bot) checkBanStatus(event interaction.CommonEvent, s *session.Session, 
 			zap.Error(err),
 			zap.Uint64("user_id", userID))
 		b.interactionManager.RespondWithError(event, "Failed to verify access status. Please try again later.")
+
 		return true
 	}
 
@@ -533,6 +556,7 @@ func (b *Bot) checkBanStatus(event interaction.CommonEvent, s *session.Session, 
 	// User is banned, show ban menu
 	b.interactionManager.Show(event, s, constants.BanPageName, "")
 	s.Touch(context.Background())
+
 	return true
 }
 
@@ -549,6 +573,7 @@ func (b *Bot) checkConsentStatus(event interaction.CommonEvent, s *session.Sessi
 		// Show consent menu first
 		b.interactionManager.Show(event, s, constants.ConsentPageName, "")
 		s.Touch(context.Background())
+
 		return true
 	}
 

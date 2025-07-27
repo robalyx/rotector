@@ -105,6 +105,7 @@ func (a *GroupReasonAnalyzer) GenerateGroupReasons(
 ) map[uint64]string {
 	// Create group requests map
 	groupRequests := make(map[uint64]UserGroupRequest)
+
 	for _, userInfo := range userInfos {
 		// Get confirmed and flagged groups for this user
 		confirmedGroups := confirmedGroupsMap[userInfo.ID]
@@ -118,6 +119,7 @@ func (a *GroupReasonAnalyzer) GenerateGroupReasons(
 			if len(groupSummaries) >= MaxGroups {
 				break
 			}
+
 			groupSummaries = append(groupSummaries, GroupSummary{
 				Name:    group.Name,
 				Type:    "Confirmed",
@@ -130,6 +132,7 @@ func (a *GroupReasonAnalyzer) GenerateGroupReasons(
 			if len(groupSummaries) >= MaxGroups {
 				break
 			}
+
 			groupSummaries = append(groupSummaries, GroupSummary{
 				Name:    group.Name,
 				Type:    "Flagged",
@@ -167,6 +170,7 @@ func (a *GroupReasonAnalyzer) ProcessGroupRequests(
 			zap.Int("retryCount", retryCount),
 			zap.Int("maxRetries", GroupReasonMaxRetries),
 			zap.Int("remainingUsers", len(groupRequests)))
+
 		return
 	}
 
@@ -182,6 +186,7 @@ func (a *GroupReasonAnalyzer) ProcessGroupRequests(
 		invalidMu       sync.Mutex
 		invalidRequests = make(map[uint64]UserGroupRequest)
 	)
+
 	minBatchSize := max(len(requestSlice)/4, 1)
 
 	err := utils.WithRetrySplitBatch(
@@ -225,10 +230,12 @@ func (a *GroupReasonAnalyzer) ProcessGroupRequests(
 			var buf bytes.Buffer
 			for _, req := range batch {
 				buf.WriteString(fmt.Sprintf("Username: %s\nGroups:\n", req.UserData.Username))
+
 				for _, group := range req.UserData.Groups {
 					buf.WriteString(fmt.Sprintf("  - Name: %s\n    Type: %s\n    Reasons: %v\n",
 						group.Name, group.Type, group.Reasons))
 				}
+
 				buf.WriteString("\n")
 			}
 
@@ -236,6 +243,7 @@ func (a *GroupReasonAnalyzer) ProcessGroupRequests(
 				a.textLogger.Error("Failed to save blocked group data",
 					zap.Error(err),
 					zap.String("path", filepath))
+
 				return
 			}
 
@@ -308,6 +316,7 @@ func (a *GroupReasonAnalyzer) processGroupBatch(ctx context.Context, batch []Use
 
 	// Make API request
 	var result BatchGroupAnalysis
+
 	err = a.chat.NewWithRetry(ctx, params, func(resp *openai.ChatCompletion, err error) error {
 		// Handle API error
 		if err != nil {
@@ -353,6 +362,7 @@ func (a *GroupReasonAnalyzer) processGroupBatch(ctx context.Context, batch []Use
 			if response.Analysis == "" {
 				a.logger.Debug("Skipping response with empty analysis",
 					zap.String("username", response.Name))
+
 				continue
 			}
 
@@ -360,6 +370,7 @@ func (a *GroupReasonAnalyzer) processGroupBatch(ctx context.Context, batch []Use
 		}
 
 		result.Results = processedResults
+
 		return nil
 	})
 
@@ -377,9 +388,11 @@ func (a *GroupReasonAnalyzer) processResults(
 	// If no results returned, mark all users for retry
 	if results == nil || len(results.Results) == 0 {
 		a.logger.Warn("No results returned from group analysis, retrying all users")
+
 		for _, req := range batch {
 			invalidRequests[req.UserInfo.ID] = req
 		}
+
 		return invalidRequests
 	}
 
@@ -411,6 +424,7 @@ func (a *GroupReasonAnalyzer) processResults(
 		if !exists {
 			a.logger.Error("Got result for user not in batch",
 				zap.String("username", result.Name))
+
 			continue
 		}
 
@@ -418,13 +432,17 @@ func (a *GroupReasonAnalyzer) processResults(
 		if result.Analysis == "" {
 			a.logger.Debug("Group analysis returned empty results",
 				zap.String("username", result.Name))
+
 			invalidRequests[req.UserInfo.ID] = req
+
 			continue
 		}
 
 		// Store valid result
 		mu.Lock()
+
 		finalResults[req.UserInfo.ID] = result.Analysis
+
 		mu.Unlock()
 
 		a.logger.Debug("Added group analysis result",

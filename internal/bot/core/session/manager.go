@@ -103,6 +103,7 @@ func (m *Manager) GetUserSessions(ctx context.Context, userID uint64, cleanupSel
 				m.logger.Debug("Failed to parse message ID",
 					zap.String("key", key),
 					zap.Error(err))
+
 				continue
 			}
 
@@ -112,6 +113,7 @@ func (m *Manager) GetUserSessions(ctx context.Context, userID uint64, cleanupSel
 				m.logger.Debug("Failed to get session data",
 					zap.String("key", key),
 					zap.Error(data.Error()))
+
 				continue
 			}
 
@@ -120,6 +122,7 @@ func (m *Manager) GetUserSessions(ctx context.Context, userID uint64, cleanupSel
 				m.logger.Debug("Failed to get bytes",
 					zap.String("key", key),
 					zap.Error(err))
+
 				continue
 			}
 
@@ -129,6 +132,7 @@ func (m *Manager) GetUserSessions(ctx context.Context, userID uint64, cleanupSel
 				m.logger.Debug("Failed to unmarshal session data",
 					zap.String("key", key),
 					zap.Error(err))
+
 				continue
 			}
 
@@ -143,9 +147,11 @@ func (m *Manager) GetUserSessions(ctx context.Context, userID uint64, cleanupSel
 						zap.Error(err),
 						zap.String("key", key))
 				}
+
 				m.logger.Debug("Removed session in selector page",
 					zap.Uint64("user_id", userID),
 					zap.Uint64("message_id", messageID))
+
 				continue
 			}
 
@@ -159,6 +165,7 @@ func (m *Manager) GetUserSessions(ctx context.Context, userID uint64, cleanupSel
 		if keys.Cursor == 0 {
 			break
 		}
+
 		cursor = keys.Cursor
 	}
 
@@ -207,6 +214,7 @@ func (m *Manager) GetOrCreateSession(
 				m.logger.Debug("Global session limit reached",
 					zap.Uint64("active_count", activeCount),
 					zap.Uint64("limit", botSettings.SessionLimit))
+
 				return nil, false, ErrSessionLimitReached
 			}
 		}
@@ -220,6 +228,7 @@ func (m *Manager) GetOrCreateSession(
 
 			// Remove the oldest session
 			oldestSession := sessions[0]
+
 			oldestKey := fmt.Sprintf("%s%d:%d", SessionPrefix, userID, oldestSession.MessageID)
 			if err := m.redis.Do(ctx, m.redis.B().Del().Key(oldestKey).Build()).Error(); err != nil {
 				m.logger.Error("Failed to delete oldest session",
@@ -256,6 +265,7 @@ func (m *Manager) GetOrCreateSession(
 		UserID.Set(session, uint64(userID))
 		MessageID.Set(session, messageID)
 		IsGuildOwner.Set(session, isGuildOwner)
+
 		return session, false, nil
 	}
 
@@ -264,6 +274,7 @@ func (m *Manager) GetOrCreateSession(
 	UserID.Set(session, uint64(userID))
 	MessageID.Set(session, messageID)
 	IsGuildOwner.Set(session, isGuildOwner)
+
 	return session, true, nil
 }
 
@@ -286,7 +297,9 @@ func (m *Manager) CloseSession(ctx context.Context, session *Session, userID uin
 // Uses cursor-based scanning to handle large numbers of sessions.
 func (m *Manager) GetActiveUsers(ctx context.Context) []uint64 {
 	pattern := SessionPrefix + "*"
+
 	var activeUsers []uint64
+
 	cursor := uint64(0)
 
 	for {
@@ -314,6 +327,7 @@ func (m *Manager) GetActiveUsers(ctx context.Context) []uint64 {
 		if keys.Cursor == 0 {
 			break
 		}
+
 		cursor = keys.Cursor
 	}
 
@@ -343,6 +357,7 @@ func (m *Manager) GetActiveSessionCount(ctx context.Context) (uint64, error) {
 		if keys.Cursor == 0 {
 			break
 		}
+
 		cursor = keys.Cursor
 	}
 

@@ -46,6 +46,7 @@ func NewLookupMenu(layout *Layout) *LookupMenu {
 		CleanupHandlerFunc: m.Cleanup,
 		ButtonHandlerFunc:  m.handleButton,
 	}
+
 	return m
 }
 
@@ -74,6 +75,7 @@ func (m *LookupMenu) Show(ctx *interaction.Context, s *session.Session) {
 			zap.Error(err),
 			zap.Uint64("discord_user_id", discordUserID))
 		ctx.Error("Failed to retrieve guild membership data. Please try again.")
+
 		return
 	}
 
@@ -119,8 +121,10 @@ func (m *LookupMenu) fetchUserData(ctx *interaction.Context, s *session.Session,
 		m.layout.logger.Error("Failed to check user privacy status",
 			zap.Error(err),
 			zap.Uint64("discord_user_id", discordUserID))
+
 		isRedacted = false // Default to false if there's an error
 	}
+
 	session.DiscordUserDataRedacted.Set(s, isRedacted)
 
 	var username string
@@ -143,6 +147,7 @@ func (m *LookupMenu) fetchUserData(ctx *interaction.Context, s *session.Session,
 			username = "Unknown"
 		}
 	}
+
 	session.DiscordUserLookupName.Set(s, username)
 
 	// Get total guild count
@@ -151,8 +156,10 @@ func (m *LookupMenu) fetchUserData(ctx *interaction.Context, s *session.Session,
 		m.layout.logger.Error("Failed to get Discord user guild count",
 			zap.Error(err),
 			zap.Uint64("discord_user_id", discordUserID))
+
 		totalGuilds = 0 // Default to 0 if there's an error
 	}
+
 	session.DiscordUserTotalGuilds.Set(s, totalGuilds)
 
 	// Get guilds where the user has inappropriate messages
@@ -161,6 +168,7 @@ func (m *LookupMenu) fetchUserData(ctx *interaction.Context, s *session.Session,
 		m.layout.logger.Error("Failed to get user message guilds",
 			zap.Error(err),
 			zap.Uint64("discord_user_id", discordUserID))
+
 		messageGuildIDs = []uint64{} // Default to empty if there's an error
 	}
 
@@ -169,6 +177,7 @@ func (m *LookupMenu) fetchUserData(ctx *interaction.Context, s *session.Session,
 	for _, guildID := range messageGuildIDs {
 		messageGuilds[guildID] = struct{}{}
 	}
+
 	session.DiscordUserMessageGuilds.Set(s, messageGuilds)
 
 	return isRedacted
@@ -179,6 +188,7 @@ func (m *LookupMenu) fetchGuildDetailsAndSummary(
 	ctx context.Context, discordUserID uint64, userGuilds []*types.UserGuildInfo, isRedacted bool,
 ) (map[uint64]string, *types.InappropriateUserSummary) {
 	guildNames := make(map[uint64]string)
+
 	var messageSummary *types.InappropriateUserSummary
 
 	if len(userGuilds) > 0 {

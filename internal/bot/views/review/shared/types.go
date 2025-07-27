@@ -42,6 +42,7 @@ func (b *BaseReviewBuilder) BuildCommentsText() string {
 	if b.IsReviewer && !b.TrainingMode {
 		return b.BuildReviewerCommentsText()
 	}
+
 	return b.BuildNonReviewerCommentsText()
 }
 
@@ -60,6 +61,7 @@ func (b *BaseReviewBuilder) BuildReviewerCommentsText() string {
 
 	// Determine user role
 	var roleTitle string
+
 	switch {
 	case b.BotSettings.IsAdmin(comment.CommenterID):
 		roleTitle = "Administrator Note"
@@ -94,6 +96,7 @@ func (b *BaseReviewBuilder) BuildNonReviewerCommentsText() string {
 
 	// Find user's comment
 	var userComment *types.Comment
+
 	for _, comment := range b.Comments {
 		if comment.CommenterID == b.UserID {
 			userComment = comment
@@ -151,6 +154,7 @@ func (b *BaseReviewBuilder) BuildNavigationButtons() []discord.InteractiveCompon
 	} else {
 		nextButtonLabel = "Next ➡️"
 	}
+
 	nextButton := discord.NewSecondaryButton(nextButtonLabel, constants.NextReviewButtonCustomID)
 
 	return []discord.InteractiveComponent{
@@ -174,6 +178,7 @@ func (b *BaseReviewBuilder) BuildCommentOptions() []discord.StringSelectMenuOpti
 	} else {
 		// Check if user has an existing comment
 		var hasComment bool
+
 		for _, comment := range b.Comments {
 			if comment.CommenterID == b.UserID {
 				hasComment = true
@@ -244,6 +249,7 @@ func (b *BaseReviewBuilder) BuildDeletionDisplay(targetType string) discord.Cont
 func (b *BaseReviewBuilder) BuildReviewWarningDisplay(targetType string, activityType enum.ActivityType) discord.ContainerSubComponent {
 	// Check for recent views in the logs
 	fiveMinutesAgo := time.Now().Add(-5 * time.Minute)
+
 	var recentReviewers []uint64
 
 	for _, log := range b.Logs {
@@ -288,6 +294,7 @@ func (b *BaseReviewBuilder) BuildFooterText(status, uuid string) string {
 			b.HistoryIndex+1,
 			len(b.ReviewHistory))
 	}
+
 	return fmt.Sprintf("%s • UUID: %s", status, uuid)
 }
 
@@ -295,6 +302,7 @@ func (b *BaseReviewBuilder) BuildFooterText(status, uuid string) string {
 func (b *BaseReviewBuilder) BuildReviewWarningText(targetType string, activityType enum.ActivityType) string {
 	// Check for recent views in the logs
 	fiveMinutesAgo := time.Now().Add(-5 * time.Minute)
+
 	var recentReviewers []uint64
 
 	for _, log := range b.Logs {
@@ -342,16 +350,20 @@ func BuildSingleReasonDisplay[T types.ReasonType](
 	// Add evidence if any exists
 	if len(reason.Evidence) > 0 {
 		content.WriteString("\n**Evidence:**")
+
 		for i, evidence := range reason.Evidence {
 			if i >= 5 {
 				content.WriteString("\n... and more evidence")
 				break
 			}
+
 			evidence = utils.TruncateString(evidence, 100)
+
 			evidence = utils.NormalizeString(evidence)
 			if privacyMode {
 				evidence = utils.CensorStringsInText(evidence, true, sensitiveInfo...)
 			}
+
 			content.WriteString(fmt.Sprintf("\n- `%s`", evidence))
 		}
 	}
@@ -379,7 +391,9 @@ func BuildReasonOptions[T types.ReasonType](
 		_, exists := reasons[reasonType]
 
 		var action string
+
 		optionValue := reasonType.String()
+
 		if exists {
 			action = "Edit"
 			optionValue += constants.ModalOpenSuffix

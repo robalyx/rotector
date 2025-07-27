@@ -31,6 +31,7 @@ func NewLogsMenu(layout *Layout) *LogsMenu {
 		ShowHandlerFunc:   m.Show,
 		ButtonHandlerFunc: m.handleButton,
 	}
+
 	return m
 }
 
@@ -53,6 +54,7 @@ func (m *LogsMenu) Show(ctx *interaction.Context, s *session.Session) {
 	if err != nil {
 		m.layout.logger.Error("Failed to get guild ban logs", zap.Error(err))
 		ctx.Error("Failed to retrieve ban log data. Please try again.")
+
 		return
 	}
 
@@ -92,6 +94,7 @@ func (m *LogsMenu) handleButton(ctx *interaction.Context, s *session.Session, cu
 		if err != nil {
 			return
 		}
+
 		m.handleCSVReport(ctx, s, logID)
 	}
 }
@@ -107,6 +110,7 @@ func (m *LogsMenu) handleCSVReport(ctx *interaction.Context, s *session.Session,
 
 	// Find the selected log
 	var selectedLog *types.GuildBanLog
+
 	for _, log := range logs {
 		if log.ID == logID {
 			selectedLog = log
@@ -129,11 +133,13 @@ func (m *LogsMenu) handleCSVReport(ctx *interaction.Context, s *session.Session,
 			zap.Error(err),
 			zap.Int64("log_id", logID))
 		ctx.Error("Failed to generate report. Please try again.")
+
 		return
 	}
 
 	// Get unique server IDs
 	serverIDSet := make(map[uint64]struct{})
+
 	for _, guilds := range userGuilds {
 		for _, guild := range guilds {
 			serverIDSet[guild.ServerID] = struct{}{}
@@ -152,6 +158,7 @@ func (m *LogsMenu) handleCSVReport(ctx *interaction.Context, s *session.Session,
 			zap.Error(err),
 			zap.Int64("log_id", logID))
 		ctx.Error("Failed to generate report. Please try again.")
+
 		return
 	}
 
@@ -167,6 +174,7 @@ func (m *LogsMenu) handleCSVReport(ctx *interaction.Context, s *session.Session,
 
 	for userID, guilds := range userGuilds {
 		var serverList []string
+
 		for _, guild := range guilds {
 			serverName := serverNames[guild.ServerID]
 			if serverName == "" {

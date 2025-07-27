@@ -119,6 +119,7 @@ func (a *UserAnalyzer) ProcessUsers(ctx context.Context, params *ProcessUsersPar
 		end := min(start+a.batchSize, len(params.Users))
 
 		infoBatch := params.Users[start:end]
+
 		p.Go(func(ctx context.Context) error {
 			// Acquire semaphore
 			if err := a.analysisSem.Acquire(ctx, 1); err != nil {
@@ -134,8 +135,10 @@ func (a *UserAnalyzer) ProcessUsers(ctx context.Context, params *ProcessUsersPar
 					zap.Error(err),
 					zap.Int("batchStart", start),
 					zap.Int("batchEnd", end))
+
 				return err
 			}
+
 			return nil
 		})
 	}
@@ -194,9 +197,15 @@ func (a *UserAnalyzer) processUserBatch(ctx context.Context, batch []UserSummary
 		Temperature: openai.Float(0.0),
 		TopP:        openai.Float(0.2),
 	}
+	params.SetExtraFields(map[string]any{
+		"reasoning": map[string]any{
+			"max_tokens": 0,
+		},
+	})
 
 	// Make API request
 	var result FlaggedUsers
+
 	err = a.chat.NewWithRetry(ctx, params, func(resp *openai.ChatCompletion, err error) error {
 		// Handle API error
 		if err != nil {
@@ -257,6 +266,7 @@ func (a *UserAnalyzer) processBatch(
 		if description == "" {
 			description = "No description"
 		}
+
 		summary.Description = description
 
 		userInfosWithoutID = append(userInfosWithoutID, summary)
@@ -266,11 +276,14 @@ func (a *UserAnalyzer) processBatch(
 	minBatchSize := max(len(userInfosWithoutID)/4, 1)
 
 	var result *FlaggedUsers
+
 	err := utils.WithRetrySplitBatch(
 		ctx, userInfosWithoutID, len(userInfosWithoutID), minBatchSize, utils.GetAIRetryOptions(),
 		func(batch []UserSummary) error {
 			var err error
+
 			result, err = a.processUserBatch(ctx, batch)
+
 			return err
 		},
 		func(batch []UserSummary) {
@@ -292,9 +305,11 @@ func (a *UserAnalyzer) processBatch(
 			var buf bytes.Buffer
 			for _, user := range batch {
 				buf.WriteString(fmt.Sprintf("Username: %s\n", user.Name))
+
 				if user.DisplayName != "" && user.DisplayName != user.Name {
 					buf.WriteString(fmt.Sprintf("Display Name: %s\n", user.DisplayName))
 				}
+
 				buf.WriteString(fmt.Sprintf("Description: %s\n\n", user.Description))
 			}
 
@@ -302,6 +317,7 @@ func (a *UserAnalyzer) processBatch(
 				a.textLogger.Error("Failed to save blocked user data",
 					zap.Error(err),
 					zap.String("path", filepath))
+
 				return
 			}
 
@@ -335,6 +351,7 @@ func (a *UserAnalyzer) shouldSkipFlaggedUser(
 		a.logger.Debug("AI flagged user with invalid confidence",
 			zap.String("username", flaggedUser.Name),
 			zap.Float64("confidence", flaggedUser.Confidence))
+
 		return true
 	}
 
@@ -352,6 +369,7 @@ func (a *UserAnalyzer) shouldSkipFlaggedUser(
 					zap.Float64("confidence", flaggedUser.Confidence),
 					zap.Int("totalFriendsCount", totalFriends),
 					zap.Int("inappropriateFriendsCount", totalInappropriateFriends))
+
 				return true
 			}
 		}
@@ -363,6 +381,7 @@ func (a *UserAnalyzer) shouldSkipFlaggedUser(
 			a.logger.Info("Skipping user with low confidence and no existing reasons",
 				zap.String("username", flaggedUser.Name),
 				zap.Float64("confidence", flaggedUser.Confidence))
+
 			return true
 		}
 
@@ -393,6 +412,7 @@ func (a *UserAnalyzer) shouldSkipFlaggedUser(
 					zap.Int("totalFriendsCount", totalFriends),
 					zap.Int("inappropriateGroupsCount", totalInappropriateGroups),
 					zap.Int("totalGroupsCount", totalGroups))
+
 				return true
 			}
 		}
@@ -418,12 +438,15 @@ func (a *UserAnalyzer) processAndCreateRequests(
 		if !hasTranslated {
 			a.logger.Warn("Translated info not found for flagged user, using original",
 				zap.String("username", flaggedUser.Name))
+
 			translatedInfo = originalInfo
 		}
 
 		// Set the HasSocials field
 		mu.Lock()
+
 		originalInfo.HasSocials = flaggedUser.HasSocials
+
 		mu.Unlock()
 
 		// Check if this user should be skipped based on various conditions
@@ -446,10 +469,12 @@ func (a *UserAnalyzer) processAndCreateRequests(
 		if description == "" {
 			description = "No description"
 		}
+
 		summary.Description = description
 
 		// Create and store the reason request
 		mu.Lock()
+
 		userReasonRequests[originalInfo.ID] = UserReasonRequest{
 			User:              summary,
 			Confidence:        flaggedUser.Confidence,
@@ -459,6 +484,7 @@ func (a *UserAnalyzer) processAndCreateRequests(
 			LanguageUsed:      flaggedUser.LanguageUsed,
 			UserID:            originalInfo.ID,
 		}
+
 		mu.Unlock()
 
 		a.logger.Debug("Created reason request for user",

@@ -36,6 +36,7 @@ func NewStats(
 // GetCurrentStats retrieves the current statistics by counting directly from relevant tables.
 func (s *StatsService) GetCurrentStats(ctx context.Context) (*types.HourlyStats, error) {
 	var stats types.HourlyStats
+
 	stats.Timestamp = time.Now().UTC().Truncate(time.Hour)
 
 	// Get user counts
@@ -43,6 +44,7 @@ func (s *StatsService) GetCurrentStats(ctx context.Context) (*types.HourlyStats,
 	if err != nil {
 		return nil, fmt.Errorf("failed to get user counts: %w", err)
 	}
+
 	stats.UsersConfirmed = int64(userCounts.Confirmed)
 	stats.UsersFlagged = int64(userCounts.Flagged)
 	stats.UsersCleared = int64(userCounts.Cleared)
@@ -53,6 +55,7 @@ func (s *StatsService) GetCurrentStats(ctx context.Context) (*types.HourlyStats,
 	if err != nil {
 		return nil, fmt.Errorf("failed to get group counts: %w", err)
 	}
+
 	stats.GroupsConfirmed = int64(groupCounts.Confirmed)
 	stats.GroupsFlagged = int64(groupCounts.Flagged)
 	stats.GroupsCleared = int64(groupCounts.Cleared)

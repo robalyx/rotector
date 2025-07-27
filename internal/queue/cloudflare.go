@@ -62,6 +62,7 @@ func (c *CloudflareAPI) ExecuteSQL(ctx context.Context, sql string, params []any
 	// Execute the request with retries
 	err := utils.WithRetry(ctx, func() error {
 		var execErr error
+
 		result, execErr = c.executeRequest(ctx, sql, params)
 
 		// Don't retry on validation errors or permanent failures

@@ -28,6 +28,7 @@ var ErrBreakRequired = errors.New("break required")
 // ReviewMenu handles the display and interaction logic for the review interface.
 type ReviewMenu struct {
 	shared.BaseReviewMenu
+
 	layout *Layout
 	page   *interaction.Page
 }
@@ -48,6 +49,7 @@ func NewReviewMenu(layout *Layout) *ReviewMenu {
 		ButtonHandlerFunc: m.handleButton,
 		ModalHandlerFunc:  m.handleModal,
 	}
+
 	return m
 }
 
@@ -62,17 +64,21 @@ func (m *ReviewMenu) Show(ctx *interaction.Context, s *session.Session) {
 	user := session.UserTarget.Get(s)
 	if user == nil {
 		var err error
+
 		user, err = m.fetchNewTarget(ctx, s)
 		if err != nil {
 			if errors.Is(err, types.ErrNoUsersToReview) {
 				ctx.Show(constants.DashboardPageName, "No users to review. Please check back later.")
 				return
 			}
+
 			if errors.Is(err, ErrBreakRequired) {
 				return
 			}
+
 			m.layout.logger.Error("Failed to fetch a new user", zap.Error(err))
 			ctx.Error("Failed to fetch a new user. Please try again.")
+
 			return
 		}
 	}
@@ -93,6 +99,7 @@ func (m *ReviewMenu) Show(ctx *interaction.Context, s *session.Session) {
 	)
 	if err != nil {
 		m.layout.logger.Error("Failed to fetch review logs", zap.Error(err))
+
 		logs = []*types.ActivityLog{} // Continue without logs - not critical
 	}
 
@@ -111,6 +118,7 @@ func (m *ReviewMenu) Show(ctx *interaction.Context, s *session.Session) {
 
 		// Get full user data and types for friends that exist in the database
 		var err error
+
 		flaggedFriends, err = m.layout.db.Model().User().GetUsersByIDs(
 			ctx.Context(),
 			friendIDs,
@@ -133,6 +141,7 @@ func (m *ReviewMenu) Show(ctx *interaction.Context, s *session.Session) {
 
 		// Get full group data and types
 		var err error
+
 		flaggedGroups, err = m.layout.db.Model().Group().GetGroupsByIDs(
 			ctx.Context(),
 			groupIDs,
@@ -152,8 +161,10 @@ func (m *ReviewMenu) Show(ctx *interaction.Context, s *session.Session) {
 	comments, err := m.layout.db.Model().Comment().GetUserComments(ctx.Context(), user.ID)
 	if err != nil {
 		m.layout.logger.Error("Failed to fetch user comments", zap.Error(err))
+
 		comments = []*types.Comment{} // Continue without comments - not critical
 	}
+
 	session.ReviewComments.Set(s, comments)
 }
 
@@ -182,6 +193,7 @@ func (m *ReviewMenu) handleSortOrderSelection(ctx *interaction.Context, s *sessi
 	if err != nil {
 		m.layout.logger.Error("Failed to parse sort order", zap.Error(err))
 		ctx.Error("Failed to parse sort order. Please try again.")
+
 		return
 	}
 
@@ -207,6 +219,7 @@ func (m *ReviewMenu) handleActionSelection(ctx *interaction.Context, s *session.
 				zap.Uint64("user_id", userID),
 				zap.String("action", option))
 			ctx.Error("You do not have permission to perform this action.")
+
 			return
 		}
 	}
@@ -333,6 +346,7 @@ func (m *ReviewMenu) handleNavigateUser(ctx *interaction.Context, s *session.Ses
 		// Navigate to next user or fetch new one
 		m.UpdateCounters(s)
 		m.navigateAfterAction(ctx, s, "Skipped user.")
+
 		return
 	}
 
@@ -342,12 +356,14 @@ func (m *ReviewMenu) handleNavigateUser(ctx *interaction.Context, s *session.Ses
 			ctx.Cancel("No next user to navigate to.")
 			return
 		}
+
 		index++
 	} else {
 		if index <= 0 || len(history) == 0 {
 			ctx.Cancel("No previous user to navigate to.")
 			return
 		}
+
 		index--
 	}
 
@@ -356,6 +372,7 @@ func (m *ReviewMenu) handleNavigateUser(ctx *interaction.Context, s *session.Ses
 
 	// Fetch the user data
 	targetUserID := history[index]
+
 	user, err := m.layout.db.Service().User().GetUserByID(
 		ctx.Context(),
 		strconv.FormatUint(targetUserID, 10),
@@ -368,12 +385,14 @@ func (m *ReviewMenu) handleNavigateUser(ctx *interaction.Context, s *session.Ses
 
 			// Try again with updated history
 			m.handleNavigateUser(ctx, s, isNext)
+
 			return
 		}
 
 		direction := map[bool]string{true: "next", false: "previous"}[isNext]
 		m.layout.logger.Error(fmt.Sprintf("Failed to fetch %s user", direction), zap.Error(err))
 		ctx.Error(fmt.Sprintf("Failed to load %s user. Please try again.", direction))
+
 		return
 	}
 
@@ -409,6 +428,7 @@ func (m *ReviewMenu) handleConfirmUser(ctx *interaction.Context, s *session.Sess
 		m.layout.logger.Error("Non-reviewer attempted to confirm user",
 			zap.Uint64("user_id", reviewerID))
 		ctx.Error("You do not have permission to confirm users.")
+
 		return
 	}
 
@@ -416,6 +436,7 @@ func (m *ReviewMenu) handleConfirmUser(ctx *interaction.Context, s *session.Sess
 	if err := m.layout.db.Service().User().ConfirmUser(ctx.Context(), user, reviewerID); err != nil {
 		m.layout.logger.Error("Failed to confirm user", zap.Error(err))
 		ctx.Error("Failed to confirm the user. Please try again.")
+
 		return
 	}
 
@@ -463,6 +484,7 @@ func (m *ReviewMenu) handleClearUser(ctx *interaction.Context, s *session.Sessio
 		m.layout.logger.Error("Non-reviewer attempted to clear user",
 			zap.Uint64("user_id", reviewerID))
 		ctx.Error("You do not have permission to clear users.")
+
 		return
 	}
 
@@ -470,6 +492,7 @@ func (m *ReviewMenu) handleClearUser(ctx *interaction.Context, s *session.Sessio
 	if err := m.layout.db.Service().User().ClearUser(ctx.Context(), user, reviewerID); err != nil {
 		m.layout.logger.Error("Failed to clear user", zap.Error(err))
 		ctx.Error("Failed to clear the user. Please try again.")
+
 		return
 	}
 
@@ -521,6 +544,7 @@ func (m *ReviewMenu) navigateAfterAction(ctx *interaction.Context, s *session.Se
 
 		// Fetch the user data
 		targetUserID := history[index]
+
 		user, err := m.layout.db.Service().User().GetUserByID(
 			ctx.Context(),
 			strconv.FormatUint(targetUserID, 10),
@@ -533,11 +557,13 @@ func (m *ReviewMenu) navigateAfterAction(ctx *interaction.Context, s *session.Se
 
 				// Try navigating again
 				m.navigateAfterAction(ctx, s, message)
+
 				return
 			}
 
 			m.layout.logger.Error("Failed to fetch next user from history", zap.Error(err))
 			ctx.Error("Failed to load next user. Please try again.")
+
 			return
 		}
 
@@ -559,6 +585,7 @@ func (m *ReviewMenu) navigateAfterAction(ctx *interaction.Context, s *session.Se
 			ActivityTimestamp: time.Now(),
 			Details:           map[string]any{},
 		})
+
 		return
 	}
 
@@ -584,6 +611,7 @@ func (m *ReviewMenu) handleOpenAIChat(ctx *interaction.Context, s *session.Sessi
 			if shownFriends >= limit {
 				break
 			}
+
 			messages := flagged.Reasons.Messages()
 			friendsInfo = append(friendsInfo, fmt.Sprintf("- %s (ID: %d) | Status: %s | Reasons: %s | Confidence: %.2f",
 				friend.Name, friend.ID, flagged.Status.String(), strings.Join(messages, "; "), flagged.Confidence))
@@ -601,6 +629,7 @@ func (m *ReviewMenu) handleOpenAIChat(ctx *interaction.Context, s *session.Sessi
 			if shownGroups >= limit {
 				break
 			}
+
 			messages := flagged.Reasons.Messages()
 			groupsInfo = append(groupsInfo, fmt.Sprintf("- %s (ID: %d) | Role: %s | Status: %s | Reasons: %s | Confidence: %.2f",
 				group.Group.Name, group.Group.ID, group.Role.Name, flagged.Status.String(), strings.Join(messages, "; "), flagged.Confidence))
@@ -610,19 +639,23 @@ func (m *ReviewMenu) handleOpenAIChat(ctx *interaction.Context, s *session.Sessi
 
 	// Build outfits information
 	outfitsInfo := make([]string, 0)
+
 	for i, outfit := range user.Outfits {
 		if i >= limit {
 			break
 		}
+
 		outfitsInfo = append(outfitsInfo, fmt.Sprintf("- %s (ID: %d)", outfit.Name, outfit.ID))
 	}
 
 	// Build games information
 	gamesInfo := make([]string, 0)
+
 	for i, game := range user.Games {
 		if i >= limit {
 			break
 		}
+
 		gamesInfo = append(gamesInfo, fmt.Sprintf("- %s (ID: %d) | Visits: %d",
 			game.Name, game.ID, game.PlaceVisits))
 	}
@@ -689,6 +722,7 @@ func (m *ReviewMenu) handleReasonSelection(ctx *interaction.Context, s *session.
 		m.layout.logger.Error("Non-reviewer attempted to manage reasons",
 			zap.Uint64("user_id", uint64(ctx.Event().User().ID)))
 		ctx.Error("You do not have permission to manage reasons.")
+
 		return
 	}
 
@@ -708,11 +742,13 @@ func (m *ReviewMenu) handleReasonSelection(ctx *interaction.Context, s *session.
 		session.ReasonsChanged.Delete(s)
 
 		ctx.Reload("Successfully restored original reasons")
+
 		return
 	}
 
 	// Parse reason type
 	option = strings.TrimSuffix(option, constants.ModalOpenSuffix)
+
 	reasonType, err := enum.UserReasonTypeString(option)
 	if err != nil {
 		ctx.Error("Invalid reason type: " + option)
@@ -739,6 +775,7 @@ func (m *ReviewMenu) handleAIReasonSelection(ctx *interaction.Context, s *sessio
 		m.layout.logger.Error("Non-reviewer attempted to generate AI reasons",
 			zap.Uint64("user_id", uint64(ctx.Event().User().ID)))
 		ctx.Error("You do not have permission to generate AI reasons.")
+
 		return
 	}
 
@@ -836,6 +873,7 @@ func (m *ReviewMenu) handleGenerateFriendReason(ctx *interaction.Context, s *ses
 	if unsavedReasons == nil {
 		unsavedReasons = make(map[enum.UserReasonType]struct{})
 	}
+
 	unsavedReasons[enum.UserReasonTypeFriend] = struct{}{}
 	session.UnsavedUserReasons.Set(s, unsavedReasons)
 
@@ -916,6 +954,7 @@ func (m *ReviewMenu) handleGenerateGroupReason(ctx *interaction.Context, s *sess
 	if unsavedReasons == nil {
 		unsavedReasons = make(map[enum.UserReasonType]struct{})
 	}
+
 	unsavedReasons[enum.UserReasonTypeGroup] = struct{}{}
 	session.UnsavedUserReasons.Set(s, unsavedReasons)
 
@@ -949,20 +988,21 @@ func (m *ReviewMenu) fetchNewTarget(ctx *interaction.Context, s *session.Session
 	// Create a slice with just this user for processing
 	userSlice := []*types.ReviewUser{user}
 
+	// Prepare maps for processing
+	confirmedFriendsMap, flaggedFriendsMap := m.layout.friendChecker.PrepareFriendMaps(ctx.Context(), userSlice)
+	confirmedGroupsMap, flaggedGroupsMap := m.layout.groupChecker.PrepareGroupMaps(ctx.Context(), userSlice)
+
 	// Process friends if friend reason doesn't exist
-	var confirmedFriendsMap, flaggedFriendsMap map[uint64]map[uint64]*types.ReviewUser
 	if _, hasFriendReason := user.Reasons[enum.UserReasonTypeFriend]; !hasFriendReason {
-		confirmedFriendsMap, flaggedFriendsMap = m.layout.friendChecker.ProcessUsers(ctx.Context(), userSlice, reasonsMap)
-	} else {
-		// Initialize empty maps if friend processing is skipped
-		confirmedFriendsMap = make(map[uint64]map[uint64]*types.ReviewUser)
-		flaggedFriendsMap = make(map[uint64]map[uint64]*types.ReviewUser)
+		m.layout.friendChecker.ProcessUsers(
+			ctx.Context(), userSlice, reasonsMap, confirmedFriendsMap, flaggedFriendsMap, confirmedGroupsMap, flaggedGroupsMap,
+		)
 	}
 
 	// Process groups if group reason doesn't exist
 	if _, hasGroupReason := user.Reasons[enum.UserReasonTypeGroup]; !hasGroupReason {
 		m.layout.groupChecker.ProcessUsers(
-			ctx.Context(), userSlice, reasonsMap, confirmedFriendsMap, flaggedFriendsMap,
+			ctx.Context(), userSlice, reasonsMap, confirmedFriendsMap, flaggedFriendsMap, confirmedGroupsMap, flaggedGroupsMap,
 		)
 	}
 
@@ -1083,6 +1123,7 @@ func (m *ReviewMenu) handleGenerateProfileReasonModalSubmit(ctx *interaction.Con
 	if description == "" {
 		description = "No description"
 	}
+
 	userSummary.Description = description
 
 	// Create user reason request
@@ -1101,6 +1142,7 @@ func (m *ReviewMenu) handleGenerateProfileReasonModalSubmit(ctx *interaction.Con
 	// Create translated and original info maps
 	translatedInfos := map[string]*types.ReviewUser{user.Name: user}
 	originalInfos := map[string]*types.ReviewUser{user.Name: user}
+
 	reasonsMap := make(map[uint64]types.Reasons[enum.UserReasonType])
 	if len(user.Reasons) > 0 {
 		reasonsMap[user.ID] = user.Reasons
@@ -1134,10 +1176,12 @@ func (m *ReviewMenu) handleGenerateProfileReasonModalSubmit(ctx *interaction.Con
 			if unsavedReasons == nil {
 				unsavedReasons = make(map[enum.UserReasonType]struct{})
 			}
+
 			unsavedReasons[enum.UserReasonTypeProfile] = struct{}{}
 			session.UnsavedUserReasons.Set(s, unsavedReasons)
 
 			ctx.Reload("Profile reason generated and applied successfully!")
+
 			return
 		}
 	}

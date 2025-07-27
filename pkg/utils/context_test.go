@@ -11,6 +11,7 @@ import (
 
 func TestContextSleep(t *testing.T) {
 	t.Parallel()
+
 	tests := []struct {
 		name           string
 		duration       time.Duration
@@ -40,6 +41,7 @@ func TestContextSleep(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			ctx, cancel := context.WithCancel(t.Context())
 			defer cancel()
 
@@ -60,6 +62,7 @@ func TestContextSleep(t *testing.T) {
 
 func TestContextSleepWithLog(t *testing.T) {
 	t.Parallel()
+
 	tests := []struct {
 		name           string
 		duration       time.Duration
@@ -93,6 +96,7 @@ func TestContextSleepWithLog(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			ctx, cancel := context.WithCancel(t.Context())
 			defer cancel()
 
@@ -115,6 +119,7 @@ func TestContextSleepWithLog(t *testing.T) {
 
 func TestContextSleepUntil(t *testing.T) {
 	t.Parallel()
+
 	tests := []struct {
 		name           string
 		targetOffset   time.Duration
@@ -144,6 +149,7 @@ func TestContextSleepUntil(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			ctx, cancel := context.WithCancel(t.Context())
 			defer cancel()
 
@@ -166,6 +172,7 @@ func TestContextSleepUntil(t *testing.T) {
 
 func TestContextSleepUntilWithLog(t *testing.T) {
 	t.Parallel()
+
 	tests := []struct {
 		name           string
 		targetOffset   time.Duration
@@ -192,6 +199,7 @@ func TestContextSleepUntilWithLog(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			ctx, cancel := context.WithCancel(t.Context())
 			defer cancel()
 
@@ -215,6 +223,7 @@ func TestContextSleepUntilWithLog(t *testing.T) {
 
 func TestContextGuard(t *testing.T) {
 	t.Parallel()
+
 	tests := []struct {
 		name           string
 		cancelContext  bool
@@ -235,6 +244,7 @@ func TestContextGuard(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			ctx, cancel := context.WithCancel(t.Context())
 			defer cancel()
 
@@ -252,6 +262,7 @@ func TestContextGuard(t *testing.T) {
 
 func TestContextGuardWithLog(t *testing.T) {
 	t.Parallel()
+
 	tests := []struct {
 		name           string
 		cancelContext  bool
@@ -281,6 +292,7 @@ func TestContextGuardWithLog(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			ctx, cancel := context.WithCancel(t.Context())
 			defer cancel()
 
@@ -300,6 +312,7 @@ func TestContextGuardWithLog(t *testing.T) {
 
 func TestErrorSleep(t *testing.T) {
 	t.Parallel()
+
 	tests := []struct {
 		name           string
 		duration       time.Duration
@@ -326,6 +339,7 @@ func TestErrorSleep(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			ctx, cancel := context.WithCancel(t.Context())
 			defer cancel()
 
@@ -348,6 +362,7 @@ func TestErrorSleep(t *testing.T) {
 
 func TestThresholdSleep(t *testing.T) {
 	t.Parallel()
+
 	tests := []struct {
 		name           string
 		duration       time.Duration
@@ -374,6 +389,7 @@ func TestThresholdSleep(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			ctx, cancel := context.WithCancel(t.Context())
 			defer cancel()
 
@@ -396,6 +412,7 @@ func TestThresholdSleep(t *testing.T) {
 
 func TestIntervalSleep(t *testing.T) {
 	t.Parallel()
+
 	tests := []struct {
 		name           string
 		duration       time.Duration
@@ -422,6 +439,7 @@ func TestIntervalSleep(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			ctx, cancel := context.WithCancel(t.Context())
 			defer cancel()
 

@@ -96,6 +96,7 @@ func (a *IvanAnalyzer) ProcessUsers(
 	// Extract user IDs
 	userIDs := make([]uint64, len(users))
 	userMap := make(map[uint64]*types.ReviewUser)
+
 	for i, user := range users {
 		userIDs[i] = user.ID
 		userMap[user.ID] = user
@@ -107,6 +108,7 @@ func (a *IvanAnalyzer) ProcessUsers(
 		a.logger.Error("Failed to get ivan messages",
 			zap.Error(err),
 			zap.Int("userCount", len(users)))
+
 		return
 	}
 
@@ -114,6 +116,7 @@ func (a *IvanAnalyzer) ProcessUsers(
 	existingFlags := len(reasonsMap)
 
 	var mu sync.Mutex
+
 	for userID, userMsgs := range messages {
 		user := userMap[userID]
 		if err := a.processMessages(ctx, user.ID, user.Name, userMsgs, reasonsMap, &mu); err != nil {
@@ -160,6 +163,7 @@ func (a *IvanAnalyzer) processUserMessages(messages []*types.IvanMessage) []Mess
 
 		// Add to unique messages
 		seen[normalized] = struct{}{}
+
 		uniqueMessages = append(uniqueMessages, MessageForAI{
 			DateTime: msg.DateTime,
 			Message:  msg.Message,
@@ -206,6 +210,7 @@ func (a *IvanAnalyzer) processIvanBatch(ctx context.Context, batchRequest IvanRe
 
 	// Make API request
 	var result IvanAnalysisResponse
+
 	err = a.chat.NewWithRetry(ctx, params, func(resp *openai.ChatCompletion, err error) error {
 		// Handle API error
 		if err != nil {
@@ -262,15 +267,18 @@ func (a *IvanAnalyzer) processMessages(
 	minBatchSize := max(len(uniqueMessages)/4, 1)
 
 	var result *IvanAnalysisResponse
+
 	err := utils.WithRetrySplitBatch(
 		ctx, uniqueMessages, len(uniqueMessages), minBatchSize, utils.GetAIRetryOptions(),
 		func(batch []MessageForAI) error {
 			var err error
+
 			result, err = a.processIvanBatch(ctx, IvanRequest{
 				UserID:   userID,
 				Username: username,
 				Messages: batch,
 			})
+
 			return err
 		},
 		func(batch []MessageForAI) {
@@ -295,6 +303,7 @@ func (a *IvanAnalyzer) processMessages(
 				a.textLogger.Error("Failed to save blocked messages",
 					zap.Error(err),
 					zap.String("path", filepath))
+
 				return
 			}
 
@@ -319,6 +328,7 @@ func (a *IvanAnalyzer) processMessages(
 
 	// Validate evidence
 	normalizer := utils.NewTextNormalizer()
+
 	allMessages := make([]string, len(messages))
 	for i, msg := range messages {
 		allMessages[i] = msg.Message
@@ -330,14 +340,17 @@ func (a *IvanAnalyzer) processMessages(
 			zap.Uint64("userID", userID),
 			zap.String("username", username),
 			zap.Strings("evidence", evidence))
+
 		return nil
 	}
 
 	// Update the reasons map
 	mu.Lock()
+
 	if _, exists := reasonsMap[userID]; !exists {
 		reasonsMap[userID] = make(types.Reasons[enum.UserReasonType])
 	}
+
 	reasonsMap[userID].Add(enum.UserReasonTypeChat, &types.Reason{
 		Message:    "Flagged in WAL (thx ivannetta) - " + result.Reason,
 		Confidence: result.Confidence,

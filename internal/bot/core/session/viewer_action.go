@@ -24,6 +24,7 @@ func (h ViewerAction) ParsePageAction(s *Session, maxPage int) int {
 	switch h {
 	case ViewerFirstPage:
 		PaginationPage.Set(s, 0)
+
 		page = 0
 	case ViewerPrevPage:
 		page = max(PaginationPage.Get(s)-1, 0)

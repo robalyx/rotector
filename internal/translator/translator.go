@@ -43,6 +43,7 @@ func (t *Translator) Translate(ctx context.Context, input, sourceLang, targetLan
 
 	// Split input into lines
 	lines := strings.Split(strings.TrimSpace(input), "\n")
+
 	var result strings.Builder
 
 	// First pass: translate morse, binary, and caesar cipher segments
@@ -88,6 +89,7 @@ func (t *Translator) Translate(ctx context.Context, input, sourceLang, targetLan
 		if err != nil {
 			return "", err
 		}
+
 		return translated, nil
 	}
 
@@ -97,8 +99,11 @@ func (t *Translator) Translate(ctx context.Context, input, sourceLang, targetLan
 // splitIntoSegments splits a line into segments based on format boundaries.
 // Spaces between segments are preserved in the output.
 func splitIntoSegments(line string) []string {
-	var segments []string
-	var currentSegment strings.Builder
+	var (
+		segments       []string
+		currentSegment strings.Builder
+	)
+
 	words := strings.Fields(line)
 
 	for i, word := range words {
@@ -118,6 +123,7 @@ func splitIntoSegments(line string) []string {
 		if currentSegment.Len() > 0 {
 			currentSegment.WriteString(" ")
 		}
+
 		currentSegment.WriteString(word)
 	}
 
@@ -145,12 +151,14 @@ func shouldSkipTranslation(text string) bool {
 	if len(text) > 0 {
 		firstChar := text[0]
 		allSame := true
+
 		for i := 1; i < len(text); i++ {
 			if text[i] != firstChar {
 				allSame = false
 				break
 			}
 		}
+
 		if allSame {
 			return true
 		}

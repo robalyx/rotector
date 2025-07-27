@@ -72,6 +72,7 @@ func (u *UserFetcher) FetchInfos(ctx context.Context, userIDs []uint64) []*types
 				u.logger.Error("Error fetching user info",
 					zap.Uint64("userID", id),
 					zap.Error(err))
+
 				return nil // Don't fail the whole batch for one error
 			}
 
@@ -85,7 +86,9 @@ func (u *UserFetcher) FetchInfos(ctx context.Context, userIDs []uint64) []*types
 
 			// Add user to map for thumbnail fetching
 			mu.Lock()
+
 			userMap[id] = &types.User{ID: id}
+
 			mu.Unlock()
 
 			// Add the user info to valid users
@@ -113,7 +116,9 @@ func (u *UserFetcher) FetchInfos(ctx context.Context, userIDs []uint64) []*types
 			}
 
 			mu.Lock()
+
 			validUsers = append(validUsers, user)
+
 			mu.Unlock()
 
 			return nil
@@ -165,14 +170,18 @@ func (u *UserFetcher) FetchBannedUsers(ctx context.Context, userIDs []uint64) ([
 				u.logger.Error("Error fetching user info",
 					zap.Uint64("userID", id),
 					zap.Error(err))
+
 				return nil // Don't fail the whole batch for one error
 			}
 
 			if userInfo.IsBanned {
 				mu.Lock()
+
 				results = append(results, userInfo.ID)
+
 				mu.Unlock()
 			}
+
 			return nil
 		})
 	}
@@ -200,36 +209,42 @@ func (u *UserFetcher) fetchUserData(ctx context.Context, userID uint64) *UserFet
 	// Fetch user's groups
 	p.Go(func(ctx context.Context) error {
 		var err error
+
 		result.Groups, err = u.groupFetcher.GetUserGroups(ctx, userID)
 		if err != nil {
 			u.logger.Warn("Failed to fetch user groups",
 				zap.Error(err),
 				zap.Uint64("userID", userID))
 		}
+
 		return nil
 	})
 
 	// Fetch user's friends
 	p.Go(func(ctx context.Context) error {
 		var err error
+
 		result.Friends, err = u.friendFetcher.GetFriends(ctx, userID)
 		if err != nil {
 			u.logger.Warn("Failed to fetch user friends",
 				zap.Error(err),
 				zap.Uint64("userID", userID))
 		}
+
 		return nil
 	})
 
 	// Fetch user's games
 	p.Go(func(ctx context.Context) error {
 		var err error
+
 		result.Games, err = u.gameFetcher.FetchGamesForUser(ctx, userID)
 		if err != nil {
 			u.logger.Warn("Failed to fetch user games",
 				zap.Error(err),
 				zap.Uint64("userID", userID))
 		}
+
 		return nil
 	})
 
@@ -240,11 +255,13 @@ func (u *UserFetcher) fetchUserData(ctx context.Context, userID uint64) *UserFet
 			u.logger.Warn("Failed to fetch user outfits",
 				zap.Error(err),
 				zap.Uint64("userID", userID))
+
 			return nil
 		}
 
 		result.Outfits = outfits
 		result.CurrentAssets = currentAssets
+
 		return nil
 	})
 

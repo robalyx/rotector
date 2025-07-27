@@ -55,6 +55,7 @@ func IsRobloxGameURL(input string) bool {
 // ExtractUserIDFromURL extracts the user ID from a Roblox profile URL or message.
 func ExtractUserIDFromURL(url string) (string, error) {
 	input := strings.TrimSpace(url)
+
 	matches := userURLPattern.FindStringSubmatch(input)
 	if len(matches) == 0 {
 		return "", ErrInvalidProfileURL
@@ -71,12 +72,14 @@ func ExtractUserIDFromURL(url string) (string, error) {
 			return matches[i], nil
 		}
 	}
+
 	return "", ErrInvalidProfileURL
 }
 
 // ExtractGroupIDFromURL extracts the group ID from a Roblox group URL or message.
 func ExtractGroupIDFromURL(url string) (string, error) {
 	input := strings.TrimSpace(url)
+
 	matches := groupURLPattern.FindStringSubmatch(input)
 	if len(matches) == 0 {
 		return "", ErrInvalidGroupURL
@@ -93,12 +96,14 @@ func ExtractGroupIDFromURL(url string) (string, error) {
 			return matches[i], nil
 		}
 	}
+
 	return "", ErrInvalidGroupURL
 }
 
 // ExtractGameIDFromURL extracts the game ID from a Roblox game URL or message.
 func ExtractGameIDFromURL(url string) (string, error) {
 	input := strings.TrimSpace(url)
+
 	matches := gameURLPattern.FindStringSubmatch(input)
 	if len(matches) == 0 {
 		return "", ErrInvalidGameURL
@@ -115,5 +120,6 @@ func ExtractGameIDFromURL(url string) (string, error) {
 			return matches[i], nil
 		}
 	}
+
 	return "", ErrInvalidGameURL
 }

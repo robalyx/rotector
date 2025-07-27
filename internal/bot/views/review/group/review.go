@@ -22,6 +22,7 @@ import (
 // ReviewBuilder creates the visual layout for reviewing a group.
 type ReviewBuilder struct {
 	shared.BaseReviewBuilder
+
 	db             database.Client
 	group          *types.ReviewGroup
 	groupInfo      *apiTypes.GroupResponse
@@ -34,6 +35,7 @@ type ReviewBuilder struct {
 func NewReviewBuilder(s *session.Session, db database.Client) *ReviewBuilder {
 	reviewMode := session.UserReviewMode.Get(s)
 	userID := session.UserID.Get(s)
+
 	return &ReviewBuilder{
 		BaseReviewBuilder: shared.BaseReviewBuilder{
 			BotSettings:    s.BotSettings(),
@@ -84,9 +86,11 @@ func (b *ReviewBuilder) Build() *discord.MessageUpdateBuilder {
 		if !b.group.VerifiedAt.IsZero() {
 			timestamps = append(timestamps, "Verified: "+fmt.Sprintf("<t:%d:R>", b.group.VerifiedAt.Unix()))
 		}
+
 		if !b.group.ClearedAt.IsZero() {
 			timestamps = append(timestamps, "Cleared: "+fmt.Sprintf("<t:%d:R>", b.group.ClearedAt.Unix()))
 		}
+
 		mainInfoDisplays = append(mainInfoDisplays,
 			discord.NewTextDisplay("-# "+strings.Join(timestamps, " • ")),
 		)
@@ -137,9 +141,11 @@ func (b *ReviewBuilder) Build() *discord.MessageUpdateBuilder {
 
 	// Add containers to builder
 	builder.AddComponents(mainContainer)
+
 	if len(reviewInfoDisplays) > 0 {
 		builder.AddComponents(reviewContainer)
 	}
+
 	builder.AddComponents(modeContainer)
 
 	// Handle thumbnail
@@ -187,9 +193,11 @@ func (b *ReviewBuilder) buildStatusDisplay() []discord.ContainerSubComponent {
 
 // buildStatusText formats the status section with description.
 func (b *ReviewBuilder) buildStatusText() string {
-	var statusIcon string
-	var statusName string
-	var statusDesc string
+	var (
+		statusIcon string
+		statusName string
+		statusDesc string
+	)
 
 	switch b.group.Status {
 	case enum.GroupTypeConfirmed:
@@ -217,8 +225,10 @@ func (b *ReviewBuilder) buildStatusText() string {
 // buildReviewModeText formats the review mode section with description.
 func (b *ReviewBuilder) buildReviewModeText() string {
 	// Format review mode
-	var mode string
-	var description string
+	var (
+		mode        string
+		description string
+	)
 
 	switch b.ReviewMode {
 	case enum.ReviewModeStandard:
@@ -311,21 +321,26 @@ func (b *ReviewBuilder) buildReasonDisplay() discord.ContainerSubComponent {
 			// Add evidence if any
 			if len(reason.Evidence) > 0 {
 				content.WriteString("\n")
+
 				for i, evidence := range reason.Evidence {
 					if i >= 3 {
 						content.WriteString("... and more\n")
 						break
 					}
+
 					evidence = utils.TruncateString(evidence, 100)
+
 					evidence = utils.NormalizeString(evidence)
 					if b.PrivacyMode {
 						evidence = utils.CensorStringsInText(evidence, true,
 							strconv.FormatUint(b.group.ID, 10),
 							b.group.Name)
 					}
+
 					content.WriteString(fmt.Sprintf("- `%s`\n", evidence))
 				}
 			}
+
 			content.WriteString("\n")
 		}
 	}
@@ -395,6 +410,7 @@ func (b *ReviewBuilder) buildReasonOptions() []discord.StringSelectMenuOption {
 		enum.GroupReasonTypeDescription,
 		enum.GroupReasonTypeShout,
 	}
+
 	return shared.BuildReasonOptions(b.group.Reasons, reasonTypes, getReasonEmoji, b.ReasonsChanged)
 }
 

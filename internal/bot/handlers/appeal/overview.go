@@ -36,6 +36,7 @@ func NewOverviewMenu(layout *Layout) *OverviewMenu {
 		ButtonHandlerFunc: m.handleButton,
 		ModalHandlerFunc:  m.handleModal,
 	}
+
 	return m
 }
 
@@ -51,9 +52,11 @@ func (m *OverviewMenu) Show(ctx *interaction.Context, s *session.Session) {
 	cursor := session.AppealCursor.Get(s)
 
 	// Get appeals based on user role and sort preference
-	var appeals []*types.FullAppeal
-	var firstCursor, nextCursor *types.AppealTimeline
-	var err error
+	var (
+		appeals                 []*types.FullAppeal
+		firstCursor, nextCursor *types.AppealTimeline
+		err                     error
+	)
 
 	userID := uint64(ctx.Event().User().ID)
 	if s.BotSettings().IsReviewer(userID) {
@@ -76,9 +79,11 @@ func (m *OverviewMenu) Show(ctx *interaction.Context, s *session.Session) {
 			constants.AppealsPerPage,
 		)
 	}
+
 	if err != nil {
 		m.layout.logger.Error("Failed to get appeals", zap.Error(err))
 		ctx.Error("Failed to get appeals. Please try again.")
+
 		return
 	}
 
@@ -102,6 +107,7 @@ func (m *OverviewMenu) handleSelectMenu(ctx *interaction.Context, s *session.Ses
 		if err != nil {
 			m.layout.logger.Error("Failed to parse status", zap.Error(err))
 			ctx.Error("Failed to parse sort order. Please try again.")
+
 			return
 		}
 
@@ -116,6 +122,7 @@ func (m *OverviewMenu) handleSelectMenu(ctx *interaction.Context, s *session.Ses
 		if err != nil {
 			m.layout.logger.Error("Failed to parse sort order", zap.Error(err))
 			ctx.Error("Failed to parse sort order. Please try again.")
+
 			return
 		}
 
@@ -168,7 +175,9 @@ func (m *OverviewMenu) handleButton(ctx *interaction.Context, s *session.Session
 
 		// Find the appeal in the session data
 		appeals := session.AppealList.Get(s)
+
 		var appeal *types.FullAppeal
+
 		for _, a := range appeals {
 			if a.ID == appealID {
 				appeal = a
@@ -322,8 +331,10 @@ func (m *OverviewMenu) handleRobloxAppealSubmit(ctx *interaction.Context, s *ses
 	if err != nil {
 		m.layout.logger.Error("Failed to check pending appeals for user", zap.Error(err))
 		ctx.Error("Failed to check pending appeals. Please try again.")
+
 		return
 	}
+
 	if exists {
 		ctx.Cancel("This user ID already has a pending appeal. Please wait for it to be reviewed.")
 		return
@@ -334,8 +345,10 @@ func (m *OverviewMenu) handleRobloxAppealSubmit(ctx *interaction.Context, s *ses
 	if err != nil {
 		m.layout.logger.Error("Failed to check user blacklist status", zap.Error(err))
 		ctx.Error("Failed to verify user status. Please try again.")
+
 		return
 	}
+
 	if blacklisted {
 		ctx.Cancel("This user has been blacklisted from submitting appeals.")
 		return
@@ -348,8 +361,10 @@ func (m *OverviewMenu) handleRobloxAppealSubmit(ctx *interaction.Context, s *ses
 	if err != nil {
 		m.layout.logger.Error("Failed to check pending appeals", zap.Error(err))
 		ctx.Error("Failed to check pending appeals. Please try again.")
+
 		return
 	}
+
 	if exists {
 		ctx.Cancel("You already have a pending appeal. Please wait for it to be reviewed.")
 		return
@@ -360,8 +375,10 @@ func (m *OverviewMenu) handleRobloxAppealSubmit(ctx *interaction.Context, s *ses
 	if err != nil {
 		m.layout.logger.Error("Failed to check previous rejections", zap.Error(err))
 		ctx.Error("Failed to check appeal history. Please try again.")
+
 		return
 	}
+
 	if hasRejection {
 		ctx.Cancel("This user ID has a rejected appeal recently. Please wait at least 3 days.")
 		return
@@ -374,8 +391,10 @@ func (m *OverviewMenu) handleRobloxAppealSubmit(ctx *interaction.Context, s *ses
 			ctx.Cancel("Cannot submit appeal - user is not in our database.")
 			return
 		}
+
 		m.layout.logger.Error("Failed to verify user status", zap.Error(err))
 		ctx.Error("Failed to verify user status. Please try again.")
+
 		return
 	}
 
@@ -400,6 +419,7 @@ func (m *OverviewMenu) handleDiscordAppealSubmit(ctx *interaction.Context, s *se
 	if err != nil {
 		m.layout.logger.Error("Failed to get Discord user guild count", zap.Error(err))
 		ctx.Error("Failed to verify Discord user status. Please try again.")
+
 		return
 	}
 
@@ -407,6 +427,7 @@ func (m *OverviewMenu) handleDiscordAppealSubmit(ctx *interaction.Context, s *se
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		m.layout.logger.Error("Failed to get message summary", zap.Error(err))
 		ctx.Error("Failed to verify Discord user status. Please try again.")
+
 		return
 	}
 
@@ -421,8 +442,10 @@ func (m *OverviewMenu) handleDiscordAppealSubmit(ctx *interaction.Context, s *se
 	if err != nil {
 		m.layout.logger.Error("Failed to check user blacklist status", zap.Error(err))
 		ctx.Error("Failed to verify user status. Please try again.")
+
 		return
 	}
+
 	if blacklisted {
 		ctx.Cancel("Your account has been blacklisted from submitting appeals.")
 		return
@@ -433,8 +456,10 @@ func (m *OverviewMenu) handleDiscordAppealSubmit(ctx *interaction.Context, s *se
 	if err != nil {
 		m.layout.logger.Error("Failed to check pending appeals", zap.Error(err))
 		ctx.Error("Failed to check pending appeals. Please try again.")
+
 		return
 	}
+
 	if exists {
 		ctx.Cancel("You already have a pending appeal. Please wait for it to be reviewed.")
 		return
@@ -445,8 +470,10 @@ func (m *OverviewMenu) handleDiscordAppealSubmit(ctx *interaction.Context, s *se
 	if err != nil {
 		m.layout.logger.Error("Failed to check previous rejections", zap.Error(err))
 		ctx.Error("Failed to check appeal history. Please try again.")
+
 		return
 	}
+
 	if hasRejection {
 		ctx.Cancel("You have a rejected appeal recently. Please wait at least 3 days.")
 		return
@@ -465,6 +492,7 @@ func (m *OverviewMenu) handleDiscordAppealSubmit(ctx *interaction.Context, s *se
 	if err := m.layout.db.Model().Appeal().CreateAppeal(ctx.Context(), appeal, reason); err != nil {
 		m.layout.logger.Error("Failed to create appeal", zap.Error(err))
 		ctx.Error("Failed to submit appeal. Please try again.")
+
 		return
 	}
 
@@ -497,6 +525,7 @@ func (m *OverviewMenu) handleSearchAppealModalSubmit(ctx *interaction.Context, s
 
 	// Get appeal ID input
 	appealIDStr := ctx.Event().ModalData().Text(constants.AppealIDInputCustomID)
+
 	appealID, err := strconv.ParseInt(appealIDStr, 10, 64)
 	if err != nil {
 		ctx.Cancel("Invalid appeal ID format. Please enter a valid number.")
@@ -510,8 +539,10 @@ func (m *OverviewMenu) handleSearchAppealModalSubmit(ctx *interaction.Context, s
 			ctx.Cancel("Appeal not found.")
 			return
 		}
+
 		m.layout.logger.Error("Failed to get appeal", zap.Error(err))
 		ctx.Error("Failed to get appeal. Please try again.")
+
 		return
 	}
 

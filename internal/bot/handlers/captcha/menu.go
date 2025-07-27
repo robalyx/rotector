@@ -32,6 +32,7 @@ func NewMenu(layout *Layout) *Menu {
 		ButtonHandlerFunc:  m.handleButton,
 		ModalHandlerFunc:   m.handleModal,
 	}
+
 	return m
 }
 
@@ -42,6 +43,7 @@ func (m *Menu) Show(ctx *interaction.Context, s *session.Session) {
 	if err != nil {
 		m.layout.logger.Error("Failed to generate CAPTCHA image", zap.Error(err))
 		ctx.Error("Failed to generate CAPTCHA. Please try again.")
+
 		return
 	}
 
@@ -82,11 +84,13 @@ func (m *Menu) handleModal(ctx *interaction.Context, s *session.Session) {
 	}
 
 	userDigits := make([]byte, 6)
+
 	for i, rn := range answer {
 		if rn < '0' || rn > '9' {
 			ctx.Cancel("❌ Invalid answer. Please enter only digits.")
 			return
 		}
+
 		userDigits[i] = byte(rn - '0')
 	}
 

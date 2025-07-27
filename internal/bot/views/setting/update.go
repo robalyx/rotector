@@ -59,6 +59,7 @@ func (b *UpdateBuilder) Build() *discord.MessageUpdateBuilder {
 
 	// Build interactive components
 	var components []discord.ContainerSubComponent
+
 	components = append(components, discord.NewTextDisplay(content.String()))
 	components = append(components, discord.NewLargeSeparator())
 
@@ -92,6 +93,7 @@ func (b *UpdateBuilder) buildIDContent() string {
 
 	// Get the appropriate ID list based on setting key
 	var ids []uint64
+
 	switch b.setting.Key {
 	case constants.ReviewerIDsOption:
 		ids = session.BotReviewerIDs.Get(b.session)
@@ -136,6 +138,7 @@ func (b *UpdateBuilder) buildEnumComponents() discord.ContainerSubComponent {
 		if opt.Emoji != "" {
 			option = option.WithEmoji(discord.ComponentEmoji{Name: opt.Emoji})
 		}
+
 		options = append(options, option)
 	}
 
@@ -150,6 +153,7 @@ func (b *UpdateBuilder) buildModalComponents() []discord.ContainerSubComponent {
 
 	// Add modal button
 	var buttonText string
+
 	switch b.setting.Type {
 	case enum.SettingTypeID:
 		buttonText = "Add/Remove ID"

@@ -39,6 +39,7 @@ func (h *ChatHandler) StreamResponse(
 		defer func() {
 			if err := recover(); err != nil {
 				h.logger.Error("Panic in chat stream", zap.Any("error", err))
+
 				select {
 				case responseChan <- "An unexpected error occurred. Please try again later.":
 				case <-ctx.Done():
@@ -52,6 +53,7 @@ func (h *ChatHandler) StreamResponse(
 			historyPrompt.WriteString(formatted)
 			historyPrompt.WriteString("\n\n")
 		}
+
 		historyPrompt.WriteString("Current message:\n")
 		historyPrompt.WriteString(fmt.Sprintf("<user>%s</user>", message))
 
@@ -69,10 +71,12 @@ func (h *ChatHandler) StreamResponse(
 		// Check for initial stream error
 		if err := stream.Err(); err != nil {
 			h.logger.Error("Error starting chat stream", zap.Error(err))
+
 			select {
 			case responseChan <- fmt.Sprintf("Error: %v", err):
 			case <-ctx.Done():
 			}
+
 			return
 		}
 
@@ -97,6 +101,7 @@ func (h *ChatHandler) StreamResponse(
 		// Check for stream errors
 		if err := stream.Err(); err != nil {
 			h.logger.Error("Error streaming chat response", zap.Error(err))
+
 			select {
 			case responseChan <- fmt.Sprintf("Error: %v", err):
 			case <-ctx.Done():

@@ -29,6 +29,7 @@ func NewMenu(layout *Layout) *Menu {
 		ShowHandlerFunc:   m.Show,
 		ButtonHandlerFunc: m.handleButton,
 	}
+
 	return m
 }
 
@@ -48,6 +49,7 @@ func (m *Menu) Show(ctx *interaction.Context, s *session.Session) {
 			zap.Error(err),
 			zap.Uint64("user_id", userID))
 		ctx.Error("Failed to retrieve ban information. Please try again later.")
+
 		return
 	}
 
@@ -58,8 +60,10 @@ func (m *Menu) Show(ctx *interaction.Context, s *session.Session) {
 				zap.Error(err),
 				zap.Uint64("user_id", userID))
 		}
+
 		ctx.Show(constants.ConsentPageName,
 			"Your ban has expired. You may use the bot again after agreeing to the new terms of service.")
+
 		return
 	}
 

@@ -73,6 +73,7 @@ func (r *UserModel) SaveUsers(ctx context.Context, tx bun.Tx, users []*types.Rev
 
 	// Save user reasons
 	var reasons []*types.UserReason
+
 	for _, user := range users {
 		if user.Reasons != nil {
 			for reasonType, reason := range user.Reasons {
@@ -134,6 +135,7 @@ func (r *UserModel) ConfirmUser(ctx context.Context, user *types.ReviewUser) err
 			ReviewerID: user.ReviewerID,
 			VerifiedAt: time.Now(),
 		}
+
 		_, err = tx.NewInsert().
 			Model(verification).
 			On("CONFLICT (user_id) DO UPDATE").
@@ -214,6 +216,7 @@ func (r *UserModel) ClearUserWithTx(ctx context.Context, tx bun.Tx, user *types.
 		ReviewerID: user.ReviewerID,
 		ClearedAt:  time.Now(),
 	}
+
 	_, err = tx.NewInsert().
 		Model(clearance).
 		On("CONFLICT (user_id) DO UPDATE").
@@ -266,6 +269,7 @@ func (r *UserModel) GetConfirmedUsersCount(ctx context.Context) (int, error) {
 	if err != nil {
 		return 0, fmt.Errorf("failed to get confirmed users count: %w", err)
 	}
+
 	return count, nil
 }
 
@@ -280,6 +284,7 @@ func (r *UserModel) GetFlaggedUsersCount(ctx context.Context) (int, error) {
 	if err != nil {
 		return 0, fmt.Errorf("failed to get flagged users count: %w", err)
 	}
+
 	return count, nil
 }
 
@@ -289,8 +294,10 @@ func (r *UserModel) GetFlaggedUsersCount(ctx context.Context) (int, error) {
 func (r *UserModel) GetUserByID(
 	ctx context.Context, userID string, fields types.UserField,
 ) (*types.ReviewUser, error) {
-	var user types.User
-	var result types.ReviewUser
+	var (
+		user   types.User
+		result types.ReviewUser
+	)
 
 	err := dbretry.Transaction(ctx, r.db, func(ctx context.Context, tx bun.Tx) error {
 		// Build query
@@ -308,6 +315,7 @@ func (r *UserModel) GetUserByID(
 			if err != nil {
 				return types.ErrInvalidUserID
 			}
+
 			query.Where("uuid = ?", uid)
 		}
 
@@ -317,11 +325,13 @@ func (r *UserModel) GetUserByID(
 			if errors.Is(err, sql.ErrNoRows) {
 				return types.ErrUserNotFound
 			}
+
 			return fmt.Errorf("failed to get user: %w", err)
 		}
 
 		// Get user reasons
 		var reasons []*types.UserReason
+
 		err = tx.NewSelect().
 			Model(&reasons).
 			Where("user_id = ?", user.ID).
@@ -346,6 +356,7 @@ func (r *UserModel) GetUserByID(
 		switch user.Status {
 		case enum.UserTypeConfirmed:
 			var verification types.UserVerification
+
 			err = tx.NewSelect().
 				Model(&verification).
 				Where("user_id = ?", user.ID).
@@ -356,6 +367,7 @@ func (r *UserModel) GetUserByID(
 			}
 		case enum.UserTypeCleared:
 			var clearance types.UserClearance
+
 			err = tx.NewSelect().
 				Model(&clearance).
 				Where("user_id = ?", user.ID).
@@ -393,6 +405,7 @@ func (r *UserModel) GetUsersByIDs(
 	err := dbretry.Transaction(ctx, r.db, func(ctx context.Context, tx bun.Tx) error {
 		// Query all users
 		var baseUsers []types.User
+
 		err := tx.NewSelect().
 			Model(&baseUsers).
 			Column(fields.Columns()...).
@@ -404,6 +417,7 @@ func (r *UserModel) GetUsersByIDs(
 
 		// Get verifications and clearances
 		var verifications []types.UserVerification
+
 		err = tx.NewSelect().
 			Model(&verifications).
 			Where("user_id IN (?)", bun.In(userIDs)).
@@ -413,6 +427,7 @@ func (r *UserModel) GetUsersByIDs(
 		}
 
 		var clearances []types.UserClearance
+
 		err = tx.NewSelect().
 			Model(&clearances).
 			Where("user_id IN (?)", bun.In(userIDs)).
@@ -450,6 +465,7 @@ func (r *UserModel) GetUsersByIDs(
 			if _, ok := reasonMap[reason.UserID]; !ok {
 				reasonMap[reason.UserID] = make(types.Reasons[enum.UserReasonType])
 			}
+
 			reasonMap[reason.UserID][reason.ReasonType] = &types.Reason{
 				Message:    reason.Message,
 				Confidence: reason.Confidence,
@@ -487,6 +503,7 @@ func (r *UserModel) GetUsersByIDs(
 func (r *UserModel) GetFlaggedAndConfirmedUsers(ctx context.Context) ([]*types.ReviewUser, error) {
 	// Get users
 	var users []types.User
+
 	err := dbretry.Transaction(ctx, r.db, func(ctx context.Context, tx bun.Tx) error {
 		err := tx.NewSelect().
 			Model(&users).
@@ -519,6 +536,7 @@ func (r *UserModel) GetUsersToCheck(
 	ctx context.Context, limit int,
 ) (userIDs []uint64, bannedIDs []uint64, err error) {
 	var users []types.User
+
 	err = dbretry.Transaction(ctx, r.db, func(ctx context.Context, tx bun.Tx) error {
 		// Get users that need checking
 		err := tx.NewSelect().
@@ -572,6 +590,7 @@ func (r *UserModel) MarkUsersBanStatus(ctx context.Context, userIDs []uint64, is
 			Where("id IN (?)", bun.In(userIDs)).
 			Where("status IN (?, ?)", enum.UserTypeConfirmed, enum.UserTypeFlagged).
 			Exec(ctx)
+
 		return err
 	})
 	if err != nil {
@@ -581,6 +600,7 @@ func (r *UserModel) MarkUsersBanStatus(ctx context.Context, userIDs []uint64, is
 	r.logger.Debug("Marked users ban status",
 		zap.Int("count", len(userIDs)),
 		zap.Bool("isBanned", isBanned))
+
 	return nil
 }
 
@@ -596,18 +616,21 @@ func (r *UserModel) GetBannedCount(ctx context.Context) (int, error) {
 	if err != nil {
 		return 0, err
 	}
+
 	return count, nil
 }
 
 // GetUserCounts returns counts for all user statuses.
 func (r *UserModel) GetUserCounts(ctx context.Context) (*types.UserCounts, error) {
 	var counts types.UserCounts
+
 	err := dbretry.Transaction(ctx, r.db, func(ctx context.Context, tx bun.Tx) error {
 		// Get counts by status
 		var statusCounts []struct {
 			Status enum.UserType
 			Count  int
 		}
+
 		err := tx.NewSelect().
 			Model((*types.User)(nil)).
 			Column("status").
@@ -635,6 +658,7 @@ func (r *UserModel) GetUserCounts(ctx context.Context) (*types.UserCounts, error
 		if err != nil {
 			return err
 		}
+
 		counts.Banned = bannedCount
 
 		return nil
@@ -679,6 +703,7 @@ func (r *UserModel) GetUsersForThumbnailUpdate(ctx context.Context, limit int) (
 
 	err := dbretry.Transaction(ctx, r.db, func(ctx context.Context, tx bun.Tx) error {
 		var baseUsers []types.User
+
 		err := tx.NewSelect().
 			Model(&baseUsers).
 			Where("last_thumbnail_update < NOW() - INTERVAL '7 days'").
@@ -739,9 +764,12 @@ func (r *UserModel) DeleteUsers(ctx context.Context, userIDs []uint64) (int64, e
 	}
 
 	var totalAffected int64
+
 	err := dbretry.Transaction(ctx, r.db, func(ctx context.Context, tx bun.Tx) error {
 		var err error
+
 		totalAffected, err = r.DeleteUsersWithTx(ctx, tx, userIDs)
+
 		return err
 	})
 	if err != nil {
@@ -767,6 +795,7 @@ func (r *UserModel) DeleteUsersWithTx(ctx context.Context, tx bun.Tx, userIDs []
 	if err != nil {
 		return 0, fmt.Errorf("failed to delete user reasons: %w", err)
 	}
+
 	affected, _ := result.RowsAffected()
 	totalAffected += affected
 
@@ -778,6 +807,7 @@ func (r *UserModel) DeleteUsersWithTx(ctx context.Context, tx bun.Tx, userIDs []
 	if err != nil {
 		return 0, fmt.Errorf("failed to delete users: %w", err)
 	}
+
 	affected, _ = result.RowsAffected()
 	totalAffected += affected
 
@@ -789,6 +819,7 @@ func (r *UserModel) DeleteUsersWithTx(ctx context.Context, tx bun.Tx, userIDs []
 	if err != nil {
 		return 0, fmt.Errorf("failed to delete verifications: %w", err)
 	}
+
 	affected, _ = result.RowsAffected()
 	totalAffected += affected
 
@@ -800,6 +831,7 @@ func (r *UserModel) DeleteUsersWithTx(ctx context.Context, tx bun.Tx, userIDs []
 	if err != nil {
 		return 0, fmt.Errorf("failed to delete clearances: %w", err)
 	}
+
 	affected, _ = result.RowsAffected()
 	totalAffected += affected
 
@@ -820,6 +852,7 @@ func (r *UserModel) DeleteUserGroups(ctx context.Context, tx bun.Tx, userIDs []u
 
 	// Find group IDs belonging to these users
 	var groupIDs []uint64
+
 	err := tx.NewSelect().
 		Model((*types.UserGroup)(nil)).
 		Column("group_id").
@@ -838,6 +871,7 @@ func (r *UserModel) DeleteUserGroups(ctx context.Context, tx bun.Tx, userIDs []u
 	if err != nil {
 		return 0, fmt.Errorf("failed to delete user groups: %w", err)
 	}
+
 	affected, _ := result.RowsAffected()
 	totalAffected += affected
 
@@ -854,6 +888,7 @@ func (r *UserModel) DeleteUserGroups(ctx context.Context, tx bun.Tx, userIDs []u
 		if err != nil {
 			return totalAffected, fmt.Errorf("failed to delete unreferenced group info: %w", err)
 		}
+
 		affected, _ = result.RowsAffected()
 		totalAffected += affected
 	}
@@ -871,6 +906,7 @@ func (r *UserModel) DeleteUserOutfits(ctx context.Context, tx bun.Tx, userIDs []
 
 	// Find outfit IDs belonging to these users
 	var outfitIDs []uint64
+
 	err := tx.NewSelect().
 		Model((*types.UserOutfit)(nil)).
 		Column("outfit_id").
@@ -889,6 +925,7 @@ func (r *UserModel) DeleteUserOutfits(ctx context.Context, tx bun.Tx, userIDs []
 	if err != nil {
 		return 0, fmt.Errorf("failed to delete user outfits: %w", err)
 	}
+
 	affected, _ := result.RowsAffected()
 	totalAffected += affected
 
@@ -905,6 +942,7 @@ func (r *UserModel) DeleteUserOutfits(ctx context.Context, tx bun.Tx, userIDs []
 		if err != nil {
 			return totalAffected, fmt.Errorf("failed to delete unreferenced outfits: %w", err)
 		}
+
 		affected, _ = result.RowsAffected()
 		totalAffected += affected
 	}
@@ -922,6 +960,7 @@ func (r *UserModel) DeleteUserFriends(ctx context.Context, tx bun.Tx, userIDs []
 
 	// Find friend IDs belonging to these users
 	var friendIDs []uint64
+
 	err := tx.NewSelect().
 		Model((*types.UserFriend)(nil)).
 		Column("friend_id").
@@ -940,6 +979,7 @@ func (r *UserModel) DeleteUserFriends(ctx context.Context, tx bun.Tx, userIDs []
 	if err != nil {
 		return 0, fmt.Errorf("failed to delete user friends: %w", err)
 	}
+
 	affected, _ := result.RowsAffected()
 	totalAffected += affected
 
@@ -956,6 +996,7 @@ func (r *UserModel) DeleteUserFriends(ctx context.Context, tx bun.Tx, userIDs []
 		if err != nil {
 			return totalAffected, fmt.Errorf("failed to delete unreferenced friend info: %w", err)
 		}
+
 		affected, _ = result.RowsAffected()
 		totalAffected += affected
 	}
@@ -973,6 +1014,7 @@ func (r *UserModel) DeleteUserFavorites(ctx context.Context, tx bun.Tx, userIDs 
 
 	// Find favorite game IDs belonging to these users
 	var favGameIDs []uint64
+
 	err := tx.NewSelect().
 		Model((*types.UserFavorite)(nil)).
 		Column("game_id").
@@ -991,6 +1033,7 @@ func (r *UserModel) DeleteUserFavorites(ctx context.Context, tx bun.Tx, userIDs 
 	if err != nil {
 		return 0, fmt.Errorf("failed to delete user favorites: %w", err)
 	}
+
 	affected, _ := result.RowsAffected()
 	totalAffected += affected
 
@@ -1010,6 +1053,7 @@ func (r *UserModel) DeleteUserFavorites(ctx context.Context, tx bun.Tx, userIDs 
 		if err != nil {
 			return totalAffected, fmt.Errorf("failed to delete orphaned game info: %w", err)
 		}
+
 		affected, _ = result.RowsAffected()
 		totalAffected += affected
 	}
@@ -1027,6 +1071,7 @@ func (r *UserModel) DeleteUserGames(ctx context.Context, tx bun.Tx, userIDs []ui
 
 	// Find game IDs belonging to these users
 	var gameIDs []uint64
+
 	err := tx.NewSelect().
 		Model((*types.UserGame)(nil)).
 		Column("game_id").
@@ -1045,6 +1090,7 @@ func (r *UserModel) DeleteUserGames(ctx context.Context, tx bun.Tx, userIDs []ui
 	if err != nil {
 		return 0, fmt.Errorf("failed to delete user games: %w", err)
 	}
+
 	affected, _ := result.RowsAffected()
 	totalAffected += affected
 
@@ -1064,6 +1110,7 @@ func (r *UserModel) DeleteUserGames(ctx context.Context, tx bun.Tx, userIDs []ui
 		if err != nil {
 			return totalAffected, fmt.Errorf("failed to delete orphaned game info: %w", err)
 		}
+
 		affected, _ = result.RowsAffected()
 		totalAffected += affected
 	}
@@ -1081,6 +1128,7 @@ func (r *UserModel) DeleteUserInventory(ctx context.Context, tx bun.Tx, userIDs 
 
 	// Find inventory IDs belonging to these users
 	var invIDs []uint64
+
 	err := tx.NewSelect().
 		Model((*types.UserInventory)(nil)).
 		Column("inventory_id").
@@ -1099,6 +1147,7 @@ func (r *UserModel) DeleteUserInventory(ctx context.Context, tx bun.Tx, userIDs 
 	if err != nil {
 		return 0, fmt.Errorf("failed to delete user inventories: %w", err)
 	}
+
 	affected, _ := result.RowsAffected()
 	totalAffected += affected
 
@@ -1115,6 +1164,7 @@ func (r *UserModel) DeleteUserInventory(ctx context.Context, tx bun.Tx, userIDs 
 		if err != nil {
 			return totalAffected, fmt.Errorf("failed to delete unreferenced inventory items: %w", err)
 		}
+
 		affected, _ = result.RowsAffected()
 		totalAffected += affected
 	}
@@ -1125,6 +1175,7 @@ func (r *UserModel) DeleteUserInventory(ctx context.Context, tx bun.Tx, userIDs 
 // GetUserToScan finds the next confirmed or flagged user to scan.
 func (r *UserModel) GetUserToScan(ctx context.Context) (*types.User, error) {
 	var user types.User
+
 	err := dbretry.Transaction(ctx, r.db, func(ctx context.Context, tx bun.Tx) error {
 		// Try confirmed users with friend reason with at least one other reason OR profile reason without outfit reason
 		err := tx.NewSelect().Model(&user).
@@ -1140,7 +1191,6 @@ func (r *UserModel) GetUserToScan(ctx context.Context) (*types.User, error) {
 			Limit(1).
 			For("UPDATE SKIP LOCKED").
 			Scan(ctx)
-
 		if err == nil {
 			// Update last_scanned
 			_, err = tx.NewUpdate().Model(&user).
@@ -1153,6 +1203,7 @@ func (r *UserModel) GetUserToScan(ctx context.Context) (*types.User, error) {
 					err, user.ID,
 				)
 			}
+
 			return nil
 		}
 
@@ -1176,7 +1227,6 @@ func (r *UserModel) GetUserToScan(ctx context.Context) (*types.User, error) {
 			Limit(1).
 			For("UPDATE SKIP LOCKED").
 			Scan(ctx)
-
 		if err == nil {
 			// Update last_scanned
 			_, err = tx.NewUpdate().Model(&user).
@@ -1189,6 +1239,7 @@ func (r *UserModel) GetUserToScan(ctx context.Context) (*types.User, error) {
 					err, user.ID,
 				)
 			}
+
 			return nil
 		}
 
@@ -1211,8 +1262,10 @@ func (r *UserModel) GetUserToScan(ctx context.Context) (*types.User, error) {
 func (r *UserModel) GetNextToReview(
 	ctx context.Context, targetStatus enum.UserType, sortBy enum.ReviewSortBy, recentIDs []uint64,
 ) (*types.ReviewUser, error) {
-	var user types.User
-	var result types.ReviewUser
+	var (
+		user   types.User
+		result types.ReviewUser
+	)
 
 	err := dbretry.Transaction(ctx, r.db, func(ctx context.Context, tx bun.Tx) error {
 		// Build query
@@ -1247,6 +1300,7 @@ func (r *UserModel) GetNextToReview(
 			if errors.Is(err, sql.ErrNoRows) {
 				return types.ErrNoUsersToReview
 			}
+
 			return err
 		}
 
@@ -1254,6 +1308,7 @@ func (r *UserModel) GetNextToReview(
 
 		// Get user reasons
 		var reasons []*types.UserReason
+
 		err = tx.NewSelect().
 			Model(&reasons).
 			Where("user_id = ?", user.ID).
@@ -1276,6 +1331,7 @@ func (r *UserModel) GetNextToReview(
 		switch user.Status {
 		case enum.UserTypeConfirmed:
 			var verification types.UserVerification
+
 			err = tx.NewSelect().
 				Model(&verification).
 				Where("user_id = ?", user.ID).
@@ -1286,6 +1342,7 @@ func (r *UserModel) GetNextToReview(
 			}
 		case enum.UserTypeCleared:
 			var clearance types.UserClearance
+
 			err = tx.NewSelect().
 				Model(&clearance).
 				Where("user_id = ?", user.ID).
@@ -1337,6 +1394,7 @@ func (r *UserModel) GetUsersGroups(ctx context.Context, userIDs []uint64) (map[u
 
 	// Group by user ID
 	result := make(map[uint64][]*apiTypes.UserGroupRoles)
+
 	for _, userGroup := range userGroups {
 		if userGroup.Group == nil {
 			continue
@@ -1395,6 +1453,7 @@ func (r *UserModel) GetUsersOutfits(ctx context.Context, userIDs []uint64) (map[
 
 	// Group by user ID
 	result := make(map[uint64]*types.UserOutfitsResult)
+
 	for _, userOutfit := range userOutfits {
 		if userOutfit.Outfit == nil {
 			continue
@@ -1421,6 +1480,7 @@ func (r *UserModel) GetUsersOutfits(ctx context.Context, userIDs []uint64) (map[
 
 		// Process outfit assets if any
 		var outfitAssets []*apiTypes.AssetV2
+
 		for _, outfitAsset := range userOutfit.Outfit.OutfitAssets {
 			if outfitAsset.Asset == nil {
 				continue
@@ -1465,6 +1525,7 @@ func (r *UserModel) GetUsersAssets(ctx context.Context, userIDs []uint64) (map[u
 
 	// Group by user ID
 	result := make(map[uint64][]*apiTypes.AssetV2)
+
 	for _, userAsset := range userAssets {
 		if userAsset.Asset == nil {
 			continue
@@ -1507,6 +1568,7 @@ func (r *UserModel) GetUsersFriends(ctx context.Context, userIDs []uint64) (map[
 
 	// Group by user ID
 	result := make(map[uint64][]*apiTypes.ExtendedFriend)
+
 	for _, userFriend := range userFriends {
 		if userFriend.Friend == nil {
 			continue
@@ -1636,6 +1698,7 @@ func (r *UserModel) GetUsersInventory(ctx context.Context, userIDs []uint64) (ma
 
 	// Group by user ID
 	result := make(map[uint64][]*apiTypes.InventoryAsset)
+
 	for _, userInventory := range userInventories {
 		if userInventory.Inventory == nil {
 			continue
@@ -1663,6 +1726,7 @@ func (r *UserModel) GetFriendInfos(ctx context.Context, friendIDs []uint64) (map
 	}
 
 	var friendInfos []*types.FriendInfo
+
 	err := dbretry.NoResult(ctx, func(ctx context.Context) error {
 		return r.db.NewSelect().
 			Model(&friendInfos).
@@ -1698,6 +1762,7 @@ func (r *UserModel) GetRecentFriendInfos(
 	}
 
 	var friendInfos []*types.FriendInfo
+
 	err := dbretry.NoResult(ctx, func(ctx context.Context) error {
 		return r.db.NewSelect().
 			Model(&friendInfos).
@@ -2040,6 +2105,7 @@ func (r *UserModel) SaveUserFavorites(ctx context.Context, tx bun.Tx, userFavori
 				GameID: game.ID,
 			}
 			_, gameInfo := types.FromAPIGame(userID, game)
+
 			allUserFavorites = append(allUserFavorites, *userFavorite)
 			gameInfoMap[game.ID] = gameInfo
 		}
@@ -2237,6 +2303,7 @@ func (r *UserModel) UpdateUserReason(ctx context.Context, userID uint64, reasonT
 			Set("message = ?", newMessage).
 			Where("user_id = ? AND reason_type = ?", userID, reasonType).
 			Exec(ctx)
+
 		return err
 	})
 	if err != nil {

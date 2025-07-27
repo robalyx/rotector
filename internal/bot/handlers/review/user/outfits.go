@@ -41,6 +41,7 @@ func NewOutfitsMenu(layout *Layout) *OutfitsMenu {
 			session.ImageBuffer.Delete(s)
 		},
 	}
+
 	return m
 }
 
@@ -80,6 +81,7 @@ func (m *OutfitsMenu) Show(ctx *interaction.Context, s *session.Session) {
 			}
 		}
 	}
+
 	session.UserFlaggedOutfits.Set(s, flaggedOutfits)
 
 	// Detect duplicate outfit names
@@ -89,12 +91,14 @@ func (m *OutfitsMenu) Show(ctx *interaction.Context, s *session.Session) {
 		for _, outfit := range user.Outfits {
 			outfitNameCounts[outfit.Name]++
 		}
+
 		for flaggedName := range flaggedOutfits {
 			if outfitNameCounts[flaggedName] > 1 {
 				duplicateFlaggedOutfitNames[flaggedName] = struct{}{}
 			}
 		}
 	}
+
 	session.UserDuplicateOutfitNames.Set(s, duplicateFlaggedOutfitNames)
 
 	// Calculate page boundaries
@@ -137,6 +141,7 @@ func (m *OutfitsMenu) handleButton(ctx *interaction.Context, s *session.Session,
 		session.ImageBuffer.Delete(s)
 		session.PaginationPage.Set(s, page)
 		ctx.Reload("")
+
 		return
 	}
 

@@ -73,6 +73,7 @@ func (w *LogRotator) rotate() error {
 	if err != nil {
 		return err
 	}
+
 	tempPath := temp.Name()
 
 	// Write all lines in one operation
@@ -80,14 +81,17 @@ func (w *LogRotator) rotate() error {
 	if _, err := temp.WriteString(content); err != nil {
 		temp.Close()
 		os.Remove(tempPath)
+
 		return err
 	}
 
 	if err := temp.Sync(); err != nil {
 		temp.Close()
 		os.Remove(tempPath)
+
 		return err
 	}
+
 	temp.Close()
 
 	// Close the original writer if it implements io.Closer

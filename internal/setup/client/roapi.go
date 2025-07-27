@@ -52,6 +52,7 @@ func GetRoAPIClient(
 
 	// Load regular proxies
 	proxiesPath := configDir + "/credentials/regular_proxies"
+
 	proxies, err := readProxiesFromFile(proxiesPath)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to read proxies: %w", err)
@@ -59,6 +60,7 @@ func GetRoAPIClient(
 
 	// Load Roverse-specific proxies if the file exists
 	roverseProxiesPath := configDir + "/credentials/roverse_proxies"
+
 	roverseProxies, err := readProxiesFromFile(roverseProxiesPath)
 	if err != nil && !errors.Is(err, os.ErrNotExist) && !errors.Is(err, ErrNoProxies) {
 		return nil, nil, fmt.Errorf("failed to read roverse proxies: %w", err)
@@ -74,6 +76,7 @@ func GetRoAPIClient(
 
 		// Add roverse proxies that don't already exist in the regular proxies list
 		added := 0
+
 		for _, roverseProxy := range roverseProxies {
 			if _, exists := proxyMap[roverseProxy.String()]; !exists {
 				proxies = append(proxies, roverseProxy)
@@ -193,6 +196,7 @@ func readCookies(configDir string) ([]string, error) {
 
 	// Load cookie file
 	cookiesFile := configDir + "/credentials/cookies"
+
 	file, err := os.Open(cookiesFile)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open cookie file: %w", err)

@@ -63,26 +63,31 @@ func (e *Exporter) writeFile(filename string, records []*types.ExportRecord) err
 		if err != nil {
 			return fmt.Errorf("failed to decode hash: %w", err)
 		}
+
 		if _, err := file.Write(hashBytes); err != nil {
 			return fmt.Errorf("failed to write hash: %w", err)
 		}
 
 		// Write status length and string
 		statusBytes := []byte(record.Status)
+
 		statusLen := uint16(len(statusBytes)) //nolint:gosec // unlikely to overflow
 		if err := binary.Write(file, binary.LittleEndian, statusLen); err != nil {
 			return fmt.Errorf("failed to write status length: %w", err)
 		}
+
 		if _, err := file.Write(statusBytes); err != nil {
 			return fmt.Errorf("failed to write status: %w", err)
 		}
 
 		// Write reason length and string
 		reasonBytes := []byte(record.Reason)
+
 		reasonLen := uint16(len(reasonBytes)) //nolint:gosec // unlikely to overflow
 		if err := binary.Write(file, binary.LittleEndian, reasonLen); err != nil {
 			return fmt.Errorf("failed to write reason length: %w", err)
 		}
+
 		if _, err := file.Write(reasonBytes); err != nil {
 			return fmt.Errorf("failed to write reason: %w", err)
 		}

@@ -34,6 +34,7 @@ func HashID(id uint64, salt string, hashType HashType, iterations uint32, memory
 	binary.LittleEndian.PutUint64(idBytes, id)
 
 	var hash []byte
+
 	switch hashType {
 	case HashTypeArgon2id:
 		// Use Argon2id with specified parameters
@@ -41,6 +42,7 @@ func HashID(id uint64, salt string, hashType HashType, iterations uint32, memory
 	case HashTypeSHA256:
 		// Iterative SHA256 hashing with salt
 		hash = []byte(salt)
+
 		h := sha256.New()
 		for range iterations {
 			h.Reset()
@@ -78,11 +80,14 @@ func hashIDs(ids []uint64, salt string, hashType HashType, concurrency int64, it
 	var wg sync.WaitGroup
 	for range concurrency {
 		wg.Add(1)
+
 		go func() {
 			defer wg.Done()
+
 			for idx := range work {
 				hash := HashID(ids[idx], salt, hashType, iterations, memory)
 				results <- HashResult{idx, hash}
+
 				progress <- struct{}{}
 			}
 		}()
@@ -93,6 +98,7 @@ func hashIDs(ids []uint64, salt string, hashType HashType, concurrency int64, it
 		for i := range ids {
 			work <- i
 		}
+
 		close(work)
 	}()
 
@@ -101,6 +107,7 @@ func hashIDs(ids []uint64, salt string, hashType HashType, concurrency int64, it
 		processed := 0
 		total := len(ids)
 		start := time.Now()
+
 		fmt.Printf("  0/%d (0%%) ETA: calculating...", total)
 
 		for range progress {
@@ -111,6 +118,7 @@ func hashIDs(ids []uint64, salt string, hashType HashType, concurrency int64, it
 			elapsed := time.Since(start)
 			if processed > 0 {
 				avgTimePerHash := elapsed / time.Duration(processed)
+
 				remaining := time.Duration(total-processed) * avgTimePerHash
 				if remaining < time.Second {
 					fmt.Printf("\r  %d/%d (%d%%) ETA: <1s        ", processed, total, percent)
@@ -153,8 +161,10 @@ func formatDuration(d time.Duration) string {
 	if hours > 0 {
 		return fmt.Sprintf("%dh%dm%ds", hours, minutes, seconds)
 	}
+
 	if minutes > 0 {
 		return fmt.Sprintf("%dm%ds", minutes, seconds)
 	}
+
 	return fmt.Sprintf("%ds", seconds)
 }

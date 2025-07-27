@@ -9,6 +9,7 @@ import (
 
 func TestIsRobloxProfileURL(t *testing.T) {
 	t.Parallel()
+
 	tests := []struct {
 		name  string
 		input string
@@ -84,6 +85,7 @@ func TestIsRobloxProfileURL(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			got := utils.IsRobloxProfileURL(tt.input)
 			assert.Equal(t, tt.want, got)
 		})
@@ -92,6 +94,7 @@ func TestIsRobloxProfileURL(t *testing.T) {
 
 func TestIsRobloxGroupURL(t *testing.T) {
 	t.Parallel()
+
 	tests := []struct {
 		name  string
 		input string
@@ -182,6 +185,7 @@ func TestIsRobloxGroupURL(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			got := utils.IsRobloxGroupURL(tt.input)
 			assert.Equal(t, tt.want, got)
 		})
@@ -190,6 +194,7 @@ func TestIsRobloxGroupURL(t *testing.T) {
 
 func TestIsRobloxGameURL(t *testing.T) {
 	t.Parallel()
+
 	tests := []struct {
 		name  string
 		input string
@@ -265,6 +270,7 @@ func TestIsRobloxGameURL(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			got := utils.IsRobloxGameURL(tt.input)
 			assert.Equal(t, tt.want, got)
 		})
@@ -273,6 +279,7 @@ func TestIsRobloxGameURL(t *testing.T) {
 
 func TestExtractUserIDFromURL(t *testing.T) {
 	t.Parallel()
+
 	tests := []struct {
 		name    string
 		input   string
@@ -350,6 +357,7 @@ func TestExtractUserIDFromURL(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			got, err := utils.ExtractUserIDFromURL(tt.input)
 			assert.Equal(t, tt.want, got)
 			assert.ErrorIs(t, err, tt.wantErr)
@@ -359,6 +367,7 @@ func TestExtractUserIDFromURL(t *testing.T) {
 
 func TestExtractGroupIDFromURL(t *testing.T) {
 	t.Parallel()
+
 	tests := []struct {
 		name    string
 		input   string
@@ -454,6 +463,7 @@ func TestExtractGroupIDFromURL(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			got, err := utils.ExtractGroupIDFromURL(tt.input)
 			assert.Equal(t, tt.want, got)
 			assert.ErrorIs(t, err, tt.wantErr)
@@ -463,6 +473,7 @@ func TestExtractGroupIDFromURL(t *testing.T) {
 
 func TestExtractGameIDFromURL(t *testing.T) {
 	t.Parallel()
+
 	tests := []struct {
 		name    string
 		input   string
@@ -540,6 +551,7 @@ func TestExtractGameIDFromURL(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			got, err := utils.ExtractGameIDFromURL(tt.input)
 			assert.Equal(t, tt.want, got)
 			assert.ErrorIs(t, err, tt.wantErr)

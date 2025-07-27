@@ -49,6 +49,7 @@ func (r *CondoModel) SaveGame(ctx context.Context, game *types.CondoGame) error 
 		if err != nil {
 			return fmt.Errorf("failed to save game: %w", err)
 		}
+
 		return nil
 	})
 }
@@ -71,6 +72,7 @@ func (r *CondoModel) GetGameByID(ctx context.Context, gameID string, fields type
 			if err != nil {
 				return nil, types.ErrInvalidGameID
 			}
+
 			query.Where("uuid = ?", uid)
 		}
 
@@ -79,6 +81,7 @@ func (r *CondoModel) GetGameByID(ctx context.Context, gameID string, fields type
 			if errors.Is(err, sql.ErrNoRows) {
 				return nil, types.ErrGameNotFound
 			}
+
 			return nil, fmt.Errorf("failed to get game by ID: %w", err)
 		}
 
@@ -115,6 +118,7 @@ func (r *CondoModel) GetGamesByIDs(
 // GetAndUpdatePendingGames retrieves the oldest non-deleted games and updates their last_scanned time.
 func (r *CondoModel) GetAndUpdatePendingGames(ctx context.Context, limit int) ([]*types.CondoGame, error) {
 	var games []*types.CondoGame
+
 	now := time.Now()
 
 	err := dbretry.Transaction(ctx, r.db, func(ctx context.Context, tx bun.Tx) error {
@@ -167,6 +171,7 @@ func (r *CondoModel) MarkGameDeleted(ctx context.Context, gameID uint64) error {
 		if err != nil {
 			return fmt.Errorf("failed to mark game as deleted: %w", err)
 		}
+
 		return nil
 	})
 }
@@ -184,6 +189,7 @@ func (r *CondoModel) SaveCondoPlayers(ctx context.Context, players []*types.Cond
 		if err != nil {
 			return fmt.Errorf("failed to save condo players: %w", err)
 		}
+
 		return nil
 	})
 }
@@ -192,6 +198,7 @@ func (r *CondoModel) SaveCondoPlayers(ctx context.Context, players []*types.Cond
 func (r *CondoModel) GetPlayerByThumbnail(ctx context.Context, thumbnailURL string) (*types.CondoPlayer, error) {
 	return dbretry.Operation(ctx, func(ctx context.Context) (*types.CondoPlayer, error) {
 		var player types.CondoPlayer
+
 		err := r.db.NewSelect().
 			Model(&player).
 			Where("thumbnail_url = ?", thumbnailURL).
@@ -199,6 +206,7 @@ func (r *CondoModel) GetPlayerByThumbnail(ctx context.Context, thumbnailURL stri
 		if err != nil {
 			return nil, fmt.Errorf("failed to get player by thumbnail: %w", err)
 		}
+
 		return &player, nil
 	})
 }
@@ -214,6 +222,7 @@ func (r *CondoModel) BlacklistPlayer(ctx context.Context, thumbnailURL string) e
 		if err != nil {
 			return fmt.Errorf("failed to blacklist player: %w", err)
 		}
+
 		return nil
 	})
 }
@@ -229,6 +238,7 @@ func (r *CondoModel) SetPlayerUserID(ctx context.Context, thumbnailURL string, u
 		if err != nil {
 			return fmt.Errorf("failed to set player user ID: %w", err)
 		}
+
 		return nil
 	})
 }

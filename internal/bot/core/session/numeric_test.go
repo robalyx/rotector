@@ -12,6 +12,7 @@ import (
 
 func TestPreserveNumericPrecision(t *testing.T) {
 	t.Parallel()
+
 	processor := session.NewNumericProcessor()
 
 	tests := []struct {
@@ -177,6 +178,7 @@ func TestPreserveNumericPrecision(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			result := processor.PreserveNumericPrecision(tt.input)
 			assert.Equal(t, tt.expected, result,
 				"processor.PreserveNumericPrecision(%v) = %v, want %v (types: %T vs %T)",
@@ -201,6 +203,7 @@ func TestPreserveNumericPrecision(t *testing.T) {
 
 func TestAnalyzeNumeric(t *testing.T) {
 	t.Parallel()
+
 	processor := session.NewNumericProcessor()
 
 	tests := []struct {
@@ -222,6 +225,7 @@ func TestAnalyzeNumeric(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.input, func(t *testing.T) {
 			t.Parallel()
+
 			meta := processor.AnalyzeNumeric(tt.input)
 			assert.Equal(t, tt.isNumeric, meta.IsNumeric, "IsNumeric")
 			assert.Equal(t, tt.isUint64, meta.IsUint64, "IsUint64")
@@ -233,11 +237,13 @@ func TestAnalyzeNumeric(t *testing.T) {
 
 func TestTypeMetadata(t *testing.T) {
 	t.Parallel()
+
 	processor := session.NewNumericProcessor()
 	valueProcessor := session.NewValueProcessor()
 
 	t.Run("ValueProcessor adds metadata for uint64", func(t *testing.T) {
 		t.Parallel()
+
 		original := uint64(12345)
 		processed := valueProcessor.ProcessValue(original)
 
@@ -300,6 +306,7 @@ func TestTypeMetadata(t *testing.T) {
 		require.NoError(t, err, "Failed to marshal processed value")
 
 		var rawData any
+
 		decoder := json.NewDecoder(bytes.NewReader(jsonBytes))
 		decoder.UseNumber()
 		err = decoder.Decode(&rawData)
@@ -329,10 +336,12 @@ func TestTypeMetadata(t *testing.T) {
 
 func TestEnumMapConversion(t *testing.T) {
 	t.Parallel()
+
 	processor := session.NewNumericProcessor()
 	valueProcessor := session.NewValueProcessor()
 
 	type ReasonType int
+
 	const (
 		reasonTypeUser ReasonType = iota
 		reasonTypeFriend
@@ -372,6 +381,7 @@ func TestEnumMapConversion(t *testing.T) {
 
 	// Decode with json.Number preservation
 	var rawData any
+
 	decoder := json.NewDecoder(bytes.NewReader(jsonBytes))
 	decoder.UseNumber()
 	err = decoder.Decode(&rawData)
@@ -439,6 +449,7 @@ func BenchmarkNumericProcessor(b *testing.B) {
 	for _, bm := range benchmarks {
 		b.Run("struct_"+bm.name, func(b *testing.B) {
 			b.ResetTimer()
+
 			for b.Loop() {
 				_ = processor.PreserveNumericPrecision(bm.input)
 			}
@@ -480,11 +491,13 @@ func BenchmarkDoubleMarshaling(b *testing.B) {
 	for _, bm := range benchmarks {
 		b.Run(bm.name, func(b *testing.B) {
 			b.ResetTimer()
+
 			for b.Loop() {
 				// Simulate the double marshaling process from getInterface
 				jsonBytes, _ := json.Marshal(bm.input)
 
 				var rawData any
+
 				decoder := json.NewDecoder(bytes.NewReader(jsonBytes))
 				decoder.UseNumber()
 				_ = decoder.Decode(&rawData)
@@ -494,6 +507,7 @@ func BenchmarkDoubleMarshaling(b *testing.B) {
 				processedBytes, _ := json.Marshal(processedData)
 
 				var result map[string]any
+
 				_ = json.Unmarshal(processedBytes, &result)
 			}
 		})

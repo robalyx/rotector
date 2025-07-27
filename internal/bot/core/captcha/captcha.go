@@ -37,6 +37,7 @@ func (m *Manager) GenerateImage() ([]byte, *bytes.Buffer, error) {
 	if _, err := rand.Read(captchaIDBytes); err != nil {
 		return nil, nil, fmt.Errorf("failed to generate random ID: %w", err)
 	}
+
 	captchaID := hex.EncodeToString(captchaIDBytes)
 
 	// Create image from digits
@@ -60,6 +61,7 @@ func (m *Manager) IncrementReviewCounter(s *session.Session) error {
 		reviewCount := session.UserCaptchaUsageCaptchaReviewCount.Get(s)
 		session.UserCaptchaUsageCaptchaReviewCount.Set(s, reviewCount+1)
 	}
+
 	return nil
 }
 

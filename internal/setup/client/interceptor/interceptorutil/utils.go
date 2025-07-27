@@ -20,11 +20,13 @@ func GenerateProxyHash(proxies []*url.URL) string {
 	for i, proxy := range proxies {
 		proxyStrings[i] = proxy.String()
 	}
+
 	sort.Strings(proxyStrings)
 
 	// Create a hash of the sorted proxy strings
 	hasher := sha256.New()
 	hasher.Write([]byte(strings.Join(proxyStrings, ",")))
+
 	return hex.EncodeToString(hasher.Sum(nil))
 }
 
@@ -36,6 +38,7 @@ func IsTimeoutError(err error) bool {
 	}
 
 	msg := err.Error()
+
 	return strings.Contains(msg, "timeout") ||
 		strings.Contains(msg, "deadline exceeded") ||
 		strings.Contains(msg, "connection refused") ||

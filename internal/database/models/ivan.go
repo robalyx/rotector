@@ -28,6 +28,7 @@ func NewIvan(db *bun.DB, logger *zap.Logger) *IvanModel {
 func (r *IvanModel) GetUserMessages(ctx context.Context, userID uint64) ([]*types.IvanMessage, error) {
 	return dbretry.Operation(ctx, func(ctx context.Context) ([]*types.IvanMessage, error) {
 		var messages []*types.IvanMessage
+
 		err := r.db.NewSelect().
 			Model(&messages).
 			Where("user_id = ?", userID).
@@ -36,6 +37,7 @@ func (r *IvanModel) GetUserMessages(ctx context.Context, userID uint64) ([]*type
 		if err != nil {
 			return nil, fmt.Errorf("failed to get user messages: %w", err)
 		}
+
 		return messages, nil
 	})
 }
@@ -45,6 +47,7 @@ func (r *IvanModel) GetUserMessages(ctx context.Context, userID uint64) ([]*type
 func (r *IvanModel) GetUsersMessages(ctx context.Context, userIDs []uint64) (map[uint64][]*types.IvanMessage, error) {
 	return dbretry.Operation(ctx, func(ctx context.Context) (map[uint64][]*types.IvanMessage, error) {
 		var messages []*types.IvanMessage
+
 		err := r.db.NewSelect().
 			Model(&messages).
 			Where("user_id IN (?)", bun.In(userIDs)).
@@ -68,6 +71,7 @@ func (r *IvanModel) GetUsersMessages(ctx context.Context, userIDs []uint64) (map
 // Returns a map of user ID to their messages.
 func (r *IvanModel) GetAndMarkUsersMessages(ctx context.Context, userIDs []uint64) (map[uint64][]*types.IvanMessage, error) {
 	var messages []*types.IvanMessage
+
 	err := dbretry.Transaction(ctx, r.db, func(ctx context.Context, tx bun.Tx) error {
 		// Get messages
 		err := tx.NewSelect().

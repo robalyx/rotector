@@ -99,11 +99,13 @@ func (w *Worker) Start(ctx context.Context) {
 				w.logger.Info("Context cancelled during wait, stopping queue worker")
 				return
 			}
+
 			continue
 		}
 
 		// Step 1: Get next batch of unprocessed users (25%)
 		w.bar.SetStepMessage("Getting next batch", 25)
+
 		batchData, err := w.getBatchForProcessing(ctx)
 		if err != nil {
 			if errors.Is(err, ErrNoUsersToProcess) {
@@ -113,14 +115,17 @@ func (w *Worker) Start(ctx context.Context) {
 					w.logger.Info("Context cancelled during no items wait, stopping queue worker")
 					return
 				}
+
 				continue
 			}
+
 			w.logger.Error("Failed to get batch for processing", zap.Error(err))
 
 			if utils.ContextSleep(ctx, 5*time.Second) == utils.SleepCancelled {
 				w.logger.Info("Context cancelled during error wait, stopping queue worker")
 				return
 			}
+
 			continue
 		}
 
@@ -142,12 +147,14 @@ func (w *Worker) Start(ctx context.Context) {
 
 		// Step 4: Mark users as processed (75%)
 		w.bar.SetStepMessage("Marking as processed", 75)
+
 		if err := w.app.D1Client.MarkAsProcessed(ctx, batchData.ProcessIDs, processResult.FlaggedStatus); err != nil {
 			w.logger.Error("Failed to mark users as processed", zap.Error(err))
 		}
 
 		// Step 5: Add flagged users to D1 database (85%)
 		w.bar.SetStepMessage("Adding flagged users to D1", 85)
+
 		if len(processResult.FlaggedUsers) > 0 {
 			if err := w.app.D1Client.AddFlaggedUsers(ctx, processResult.FlaggedUsers); err != nil {
 				w.logger.Error("Failed to add flagged users to D1", zap.Error(err))
@@ -156,6 +163,7 @@ func (w *Worker) Start(ctx context.Context) {
 
 		// Step 6: Update IP tracking (100%)
 		w.bar.SetStepMessage("Updating IP tracking", 100)
+
 		if err := w.updateIPTrackingFlaggedStatus(
 			ctx, batchData.ProcessIDs, processResult.FlaggedStatus, batchData.SkipAndFlagIDs,
 		); err != nil {
@@ -176,6 +184,7 @@ func (w *Worker) shouldProcessBatch(ctx context.Context) (bool, time.Duration) {
 	if timeSinceLastProcess >= MaxWaitTime {
 		w.logger.Debug("Processing due to time threshold",
 			zap.Duration("time_since_last_process", timeSinceLastProcess))
+
 		return true, 0
 	}
 
@@ -191,6 +200,7 @@ func (w *Worker) shouldProcessBatch(ctx context.Context) (bool, time.Duration) {
 		w.logger.Debug("Processing due to queue size threshold",
 			zap.Int("unprocessed", stats.Unprocessed),
 			zap.Int("min_batch_size", minBatchSize))
+
 		return true, 0
 	}
 
@@ -270,6 +280,7 @@ func (w *Worker) getBatchForProcessing(ctx context.Context) (*BatchData, error) 
 			existingFlaggedUsers[id] = existingUser
 			w.logger.Debug("Skipping user - already in database (will flag)",
 				zap.Uint64("userID", id))
+
 			continue
 		}
 

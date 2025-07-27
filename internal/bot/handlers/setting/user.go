@@ -27,6 +27,7 @@ func NewUserMenu(l *Layout) *UserMenu {
 		SelectHandlerFunc: m.handleUserSettingSelection,
 		ButtonHandlerFunc: m.handleUserSettingButton,
 	}
+
 	return m
 }
 

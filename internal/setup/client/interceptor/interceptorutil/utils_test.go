@@ -10,6 +10,7 @@ import (
 
 func TestGenerateProxyHash(t *testing.T) {
 	t.Parallel()
+
 	tests := []struct {
 		name     string
 		proxies  []*url.URL
@@ -48,6 +49,7 @@ func TestGenerateProxyHash(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			if tt.name == "Multiple proxies - order independent" {
 				// Test both orders to ensure hash is consistent
 				result1 := interceptorutil.GenerateProxyHash(tt.proxies)
@@ -56,6 +58,7 @@ func TestGenerateProxyHash(t *testing.T) {
 				for i, j := 0, len(tt.proxies)-1; i < j; i, j = i+1, j-1 {
 					tt.proxies[i], tt.proxies[j] = tt.proxies[j], tt.proxies[i]
 				}
+
 				result2 := interceptorutil.GenerateProxyHash(tt.proxies)
 
 				assert.Equal(t, result1, result2, "Hash should be consistent regardless of proxy order")
@@ -73,6 +76,7 @@ func TestGenerateProxyHash(t *testing.T) {
 
 func TestIsTimeoutError(t *testing.T) {
 	t.Parallel()
+
 	tests := []struct {
 		name     string
 		err      error
@@ -113,6 +117,7 @@ func TestIsTimeoutError(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			result := interceptorutil.IsTimeoutError(tt.err)
 			assert.Equal(t, tt.expected, result)
 		})
@@ -137,5 +142,6 @@ func mustParseURL(rawURL string) *url.URL {
 	if err != nil {
 		panic(err)
 	}
+
 	return u
 }

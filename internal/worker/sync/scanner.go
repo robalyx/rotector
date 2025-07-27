@@ -21,6 +21,7 @@ func (w *Worker) runMutualScanner(ctx context.Context) {
 		}
 
 		before := time.Now().Add(-1 * time.Hour) // Scan users not checked in the last hour
+
 		userIDs, err := w.db.Model().Sync().GetUsersForFullScan(ctx, before, 100)
 		if err != nil {
 			w.logger.Error("Failed to get users for full scan", zap.Error(err))
@@ -29,6 +30,7 @@ func (w *Worker) runMutualScanner(ctx context.Context) {
 				w.logger.Info("Context cancelled during error wait, stopping mutual scanner")
 				return
 			}
+
 			continue
 		}
 
@@ -79,6 +81,7 @@ func (w *Worker) runGameScanner(ctx context.Context) {
 				w.logger.Info("Context cancelled during error wait, stopping game scanner")
 				return
 			}
+
 			continue
 		}
 	}
@@ -97,6 +100,7 @@ func (w *Worker) processPendingGames(ctx context.Context) error {
 		if utils.ContextSleep(ctx, 1*time.Second) == utils.SleepCancelled {
 			return ctx.Err()
 		}
+
 		return nil
 	}
 
@@ -124,6 +128,7 @@ func (w *Worker) processPendingGames(ctx context.Context) error {
 				w.logger.Debug("Marked game as deleted",
 					zap.Uint64("game_id", detail.PlaceID),
 					zap.String("reason", detail.ReasonProhibited))
+
 				return nil
 			}
 
@@ -164,6 +169,7 @@ func (w *Worker) processPendingGames(ctx context.Context) error {
 
 			// Store player thumbnails
 			players := make([]*types.CondoPlayer, 0, len(urls))
+
 			uniqueURLs := make(map[string]struct{}, len(urls))
 			for _, url := range urls {
 				if _, ok := uniqueURLs[url]; ok {
@@ -196,5 +202,6 @@ func (w *Worker) processPendingGames(ctx context.Context) error {
 	}
 
 	w.logger.Info("Processed pending games", zap.Int("count", len(pendingGames)))
+
 	return nil
 }

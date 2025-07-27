@@ -37,6 +37,7 @@ func NewMenu(layout *Layout) *Menu {
 		ButtonHandlerFunc: m.handleButton,
 		ModalHandlerFunc:  m.handleModal,
 	}
+
 	return m
 }
 
@@ -44,6 +45,7 @@ func NewMenu(layout *Layout) *Menu {
 func (m *Menu) Show(_ *interaction.Context, s *session.Session) {
 	// Check if credits should be reset
 	now := time.Now()
+
 	firstMessageTime := session.UserChatMessageUsageFirstMessageTime.Get(s)
 	if !firstMessageTime.IsZero() && now.Sub(firstMessageTime) > constants.ChatMessageResetLimit {
 		session.UserChatMessageUsageFirstMessageTime.Set(s, time.Unix(0, 0))
@@ -66,6 +68,7 @@ func (m *Menu) handleButton(ctx *interaction.Context, s *session.Session, custom
 
 		session.PaginationPage.Set(s, page)
 		ctx.Reload("")
+
 		return
 	}
 
@@ -91,6 +94,7 @@ func (m *Menu) handleButton(ctx *interaction.Context, s *session.Session, custom
 
 		// Find the last chat message's position in the full context
 		lastMessageIndex := -1
+
 		if len(chatMessages) > 0 {
 			lastMessage := chatMessages[len(chatMessages)-1]
 			for i, ctx := range chatContext {
@@ -121,6 +125,7 @@ func (m *Menu) handleSelectMenu(ctx *interaction.Context, s *session.Session, cu
 		if err != nil {
 			m.layout.logger.Error("Failed to parse chat model", zap.Error(err))
 			ctx.Error("Failed to parse chat model. Please try again.")
+
 			return
 		}
 
@@ -167,6 +172,7 @@ func (m *Menu) handleModal(ctx *interaction.Context, s *session.Session) {
 			chatContext = chatContext[:len(chatContext)-1] // Remove the user message
 			session.ChatContext.Set(s, chatContext)
 			ctx.Error(fmt.Sprintf("Failed to get response: %v", err))
+
 			return
 		}
 
@@ -191,8 +197,11 @@ func (m *Menu) streamResponse(ctx *interaction.Context, s *session.Session, mess
 	)
 
 	// Buffer for collecting response chunks
-	var aiResponse strings.Builder
-	var streamBuffer strings.Builder
+	var (
+		aiResponse   strings.Builder
+		streamBuffer strings.Builder
+	)
+
 	lastUpdate := time.Now()
 
 	// Stream and buffer the response
@@ -209,8 +218,10 @@ func (m *Menu) streamResponse(ctx *interaction.Context, s *session.Session, mess
 				session.ChatContext.Set(s, chatContext)
 				session.ChatStreamingMessage.Set(s, "")
 				session.PaginationIsStreaming.Set(s, false)
+
 				return nil
 			}
+
 			aiResponse.WriteString(response)
 
 			// Process and append new chunk to stream buffer
@@ -225,6 +236,7 @@ func (m *Menu) streamResponse(ctx *interaction.Context, s *session.Session, mess
 					if newlineIdx := strings.Index(content[truncatePoint:], "\n"); newlineIdx != -1 {
 						truncatePoint += newlineIdx + 1
 					}
+
 					content = content[truncatePoint:]
 
 					// Set truncated content with indicator
@@ -237,6 +249,7 @@ func (m *Menu) streamResponse(ctx *interaction.Context, s *session.Session, mess
 			// Update UI if enough time has passed
 			if time.Since(lastUpdate) > time.Second {
 				ctx.Reload("")
+
 				lastUpdate = time.Now()
 			}
 
@@ -244,6 +257,7 @@ func (m *Menu) streamResponse(ctx *interaction.Context, s *session.Session, mess
 			// Clean up streaming state on error
 			session.PaginationIsStreaming.Set(s, false)
 			session.ChatStreamingMessage.Set(s, "")
+
 			return ErrResponseTimedOut
 		}
 	}
@@ -279,6 +293,7 @@ func (m *Menu) checkMessageLimits(s *session.Session) (bool, string) {
 		// Within time limit - check and increment message count
 		if messageCount >= constants.MaxChatMessagesPerDay {
 			timeLeft := firstMessageTime.Add(constants.ChatMessageResetLimit).Sub(now)
+
 			return false, fmt.Sprintf("You have reached the limit of %d messages per day. Please try again in %s.",
 				constants.MaxChatMessagesPerDay,
 				timeLeft.String())

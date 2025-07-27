@@ -41,6 +41,7 @@ func (p *NumericProcessor) AnalyzeNumeric(s string) NumericMetadata {
 			// Small values might be enums, so we'll mark them for conversion
 			meta.IsInt64 = true
 		}
+
 		return meta
 	}
 
@@ -48,6 +49,7 @@ func (p *NumericProcessor) AnalyzeNumeric(s string) NumericMetadata {
 	if _, err := strconv.ParseInt(s, 10, 64); err == nil {
 		meta.IsNumeric = true
 		meta.IsInt64 = true
+
 		return meta
 	}
 
@@ -148,6 +150,7 @@ func (p *NumericProcessor) processFloat64(v float64) any {
 	if v == float64(uint64(v)) && v >= 0 {
 		return uint64(v)
 	}
+
 	return v
 }
 
@@ -172,6 +175,7 @@ func (p *NumericProcessor) processSlice(v []any) any {
 		// Standard processing for items without metadata
 		result[i] = p.PreserveNumericPrecision(item)
 	}
+
 	return result
 }
 
@@ -189,6 +193,7 @@ func (p *NumericProcessor) processMap(v map[string]any) any {
 
 	// Extract type metadata for keys
 	keyTypeMap := make(map[string]bool)
+
 	for k, v := range v {
 		if strings.HasPrefix(k, TypeMetadataPrefix) && v == NumericTypeMeta {
 			// Record that this key has numeric type metadata
@@ -198,6 +203,7 @@ func (p *NumericProcessor) processMap(v map[string]any) any {
 
 	// Process all values in the map
 	result := make(map[string]any)
+
 	for k, val := range v {
 		// Skip type metadata entries
 		if strings.HasPrefix(k, TypeMetadataPrefix) {

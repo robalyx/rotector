@@ -203,6 +203,7 @@ type UserAsset struct {
 // ReviewUser combines user data with verification/clearance info for review.
 type ReviewUser struct {
 	*User
+
 	Reasons       Reasons[enum.UserReasonType]   `json:"reasons"`
 	ReviewerID    uint64                         `json:"reviewerId,omitempty"`
 	VerifiedAt    time.Time                      `json:"verifiedAt"`
@@ -328,11 +329,13 @@ func (f UserField) Columns() []string {
 	}
 
 	var columns []string
+
 	for field, cols := range userFieldToColumns {
 		if f&field != 0 {
 			columns = append(columns, cols...)
 		}
 	}
+
 	return columns
 }
 
@@ -354,6 +357,7 @@ func (f UserField) Has(fields UserField) bool {
 // UserGroupQueryResult combines user group and group info for database queries.
 type UserGroupQueryResult struct {
 	UserGroup
+
 	Name               string               `bun:"name"                  json:"name"`
 	Description        string               `bun:"description"           json:"description"`
 	Owner              *apiTypes.GroupUser  `bun:"owner"                 json:"owner"`
@@ -391,6 +395,7 @@ func (r *UserGroupQueryResult) ToAPIType() *apiTypes.UserGroupRoles {
 // UserOutfitQueryResult combines user outfit and outfit info for database queries.
 type UserOutfitQueryResult struct {
 	UserOutfit
+
 	Name       string `bun:"name"        json:"name"`
 	IsEditable bool   `bun:"is_editable" json:"isEditable"`
 	OutfitType string `bun:"outfit_type" json:"outfitType"`
@@ -409,6 +414,7 @@ func (r *UserOutfitQueryResult) ToAPIType() *apiTypes.Outfit {
 // UserFriendQueryResult combines user friend and friend info for database queries.
 type UserFriendQueryResult struct {
 	UserFriend
+
 	Name        string `bun:"name"         json:"name"`
 	DisplayName string `bun:"display_name" json:"displayName"`
 }
@@ -427,6 +433,7 @@ func (r *UserFriendQueryResult) ToAPIType() *apiTypes.ExtendedFriend {
 // UserGameQueryResult combines user game and game info for database queries.
 type UserGameQueryResult struct {
 	UserGame
+
 	Name        string    `bun:"name"         json:"name"`
 	Description string    `bun:"description"  json:"description"`
 	PlaceVisits uint64    `bun:"place_visits" json:"placeVisits"`
@@ -449,6 +456,7 @@ func (r *UserGameQueryResult) ToAPIType() *apiTypes.Game {
 // UserInventoryQueryResult combines user inventory and inventory info for database queries.
 type UserInventoryQueryResult struct {
 	UserInventory
+
 	Name      string    `bun:"name"       json:"name"`
 	AssetType string    `bun:"asset_type" json:"assetType"`
 	Created   time.Time `bun:"created"    json:"created"`
@@ -467,6 +475,7 @@ func (r *UserInventoryQueryResult) ToAPIType() *apiTypes.InventoryAsset {
 // UserAssetQueryResult combines user asset and asset info for database queries.
 type UserAssetQueryResult struct {
 	UserAsset
+
 	Name      string                 `bun:"name"       json:"name"`
 	AssetType apiTypes.ItemAssetType `bun:"asset_type" json:"assetType"`
 }
@@ -486,6 +495,7 @@ func (r *UserAssetQueryResult) ToAPIType() *apiTypes.AssetV2 {
 // UserFavoriteQueryResult combines user favorite and game info for database queries.
 type UserFavoriteQueryResult struct {
 	UserFavorite
+
 	Name        string    `bun:"name"         json:"name"`
 	Description string    `bun:"description"  json:"description"`
 	PlaceVisits uint64    `bun:"place_visits" json:"placeVisits"`

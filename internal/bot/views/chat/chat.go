@@ -28,6 +28,7 @@ type Builder struct {
 // NewBuilder creates a new chat builder.
 func NewBuilder(s *session.Session) *Builder {
 	chatContext := session.ChatContext.Get(s)
+
 	return &Builder{
 		model:            session.UserChatModel.Get(s),
 		chatContext:      chatContext,
@@ -114,10 +115,13 @@ func (b *Builder) buildChatContainer() discord.ContainerComponent {
 
 // buildStreamingPreview adds streaming preview components to the chat container.
 func (b *Builder) buildStreamingPreview() []discord.ContainerSubComponent {
-	var components []discord.ContainerSubComponent
-	var previewContent strings.Builder
+	var (
+		components     []discord.ContainerSubComponent
+		previewContent strings.Builder
+	)
 
 	// Add active context if any
+
 	if contextInfo := b.getActiveContextInfo(); contextInfo != "" {
 		previewContent.WriteString("### Context\n")
 		previewContent.WriteString(utils.FormatString(contextInfo))
@@ -126,6 +130,7 @@ func (b *Builder) buildStreamingPreview() []discord.ContainerSubComponent {
 
 	// Find the last human message from context
 	var lastHumanMessage string
+
 	for i := len(b.chatContext) - 1; i >= 0; i-- {
 		if b.chatContext[i].Type == ai.ContextTypeHuman {
 			lastHumanMessage = b.chatContext[i].Content
@@ -245,6 +250,7 @@ func (b *Builder) buildMessagePair(chatMessages []ai.Context, i int) string {
 	if modelName == "" {
 		modelName = "Unknown Model"
 	}
+
 	messageContent.WriteString(fmt.Sprintf("### %s\n%s",
 		modelName, b.formatAIMessage(chatMessages[i+1].Content)))
 
@@ -280,6 +286,7 @@ func (b *Builder) getContextInfo(messageIndex int) string {
 	// Find the user message's position in the full context
 	userMsg := b.getChatMessages()[messageIndex]
 	userMsgIndex := -1
+
 	for i, ctx := range b.chatContext {
 		if ctx == userMsg {
 			userMsgIndex = i
@@ -308,12 +315,15 @@ func (b *Builder) getContextInfo(messageIndex int) string {
 			if count := counts[ai.ContextTypeUser]; count > 0 {
 				sb.WriteString(fmt.Sprintf("👤 User context (%d items)", count))
 			}
+
 			if count := counts[ai.ContextTypeGroup]; count > 0 {
 				if sb.Len() > 0 {
 					sb.WriteString("\n")
 				}
+
 				sb.WriteString(fmt.Sprintf("👥 Group context (%d items)", count))
 			}
+
 			return sb.String()
 		}
 	}
@@ -329,6 +339,7 @@ func (b *Builder) getActiveContextInfo() string {
 
 	// Find the index of the last AI message by iterating backward
 	lastMessageIndex := -1
+
 	for i := len(b.chatContext) - 1; i >= 0; i-- {
 		if b.chatContext[i].Type == ai.ContextTypeAI {
 			lastMessageIndex = i
@@ -360,10 +371,12 @@ func (b *Builder) getActiveContextInfo() string {
 	if count := counts[ai.ContextTypeUser]; count > 0 {
 		sb.WriteString(fmt.Sprintf("👤 User context (%d items)", count))
 	}
+
 	if count := counts[ai.ContextTypeGroup]; count > 0 {
 		if sb.Len() > 0 {
 			sb.WriteString("\n")
 		}
+
 		sb.WriteString(fmt.Sprintf("👥 Group context (%d items)", count))
 	}
 
@@ -381,8 +394,11 @@ func (b *Builder) formatAIMessage(content string) string {
 		content = "<think>" + content[:idx] + "</think>" + content[idx+8:]
 	}
 
-	var finalContent strings.Builder
-	var lastThinkingBlock bool
+	var (
+		finalContent      strings.Builder
+		lastThinkingBlock bool
+	)
+
 	const limit = 1000
 
 	// Helper function to process and format content blocks
@@ -391,6 +407,7 @@ func (b *Builder) formatAIMessage(content string) string {
 		if text == "" {
 			return ""
 		}
+
 		text = strings.ReplaceAll(text, "`", "")
 		if len(text) > limit {
 			lastNewline := strings.LastIndex(text[:limit], "\n")
@@ -400,6 +417,7 @@ func (b *Builder) formatAIMessage(content string) string {
 				text = text[:limit] + " ..."
 			}
 		}
+
 		return utils.FormatString(text)
 	}
 
@@ -411,8 +429,10 @@ func (b *Builder) formatAIMessage(content string) string {
 				if lastThinkingBlock {
 					finalContent.WriteString("\n")
 				}
+
 				finalContent.WriteString(formatted)
 			}
+
 			break
 		}
 
@@ -421,6 +441,7 @@ func (b *Builder) formatAIMessage(content string) string {
 			if lastThinkingBlock {
 				finalContent.WriteString("\n")
 			}
+
 			finalContent.WriteString(preContent)
 		}
 
@@ -429,13 +450,16 @@ func (b *Builder) formatAIMessage(content string) string {
 		if end == -1 {
 			break
 		}
+
 		end += start
 
 		// Add thinking indicator
 		if finalContent.Len() > 0 {
 			finalContent.WriteString("\n")
 		}
+
 		finalContent.WriteString("```💭 *thinking...*```")
+
 		lastThinkingBlock = true
 
 		// Continue with remaining content
@@ -448,6 +472,7 @@ func (b *Builder) formatAIMessage(content string) string {
 // getChatMessages returns only the human and AI messages from the context, ensuring alternation.
 func (b *Builder) getChatMessages() []ai.Context {
 	messages := make([]ai.Context, 0, len(b.chatContext))
+
 	var lastType ai.ContextType
 
 	// Collect messages in order, ensuring proper human-AI alternation

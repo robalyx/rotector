@@ -52,6 +52,7 @@ func (f *FriendFetcher) GetFriendIDs(ctx context.Context, userID uint64) ([]uint
 		for _, friend := range friends {
 			friendIDs = append(friendIDs, friend.ID)
 		}
+
 		return friendIDs, nil
 	}
 
@@ -85,6 +86,7 @@ func (f *FriendFetcher) GetFriendIDs(ctx context.Context, userID uint64) ([]uint
 		if response.NextCursor == nil {
 			break
 		}
+
 		cursor = *response.NextCursor
 	}
 
@@ -116,11 +118,13 @@ func (f *FriendFetcher) GetFriends(ctx context.Context, userID uint64) ([]*apiTy
 		f.logger.Error("Failed to get existing friend info from database",
 			zap.Error(err),
 			zap.Uint64("userID", userID))
+
 		existingFriends = make(map[uint64]*apiTypes.ExtendedFriend)
 	}
 
 	// Identify which friends need API lookup
 	var missingIDs []uint64
+
 	for _, id := range friendIDs {
 		if _, exists := existingFriends[id]; !exists {
 			missingIDs = append(missingIDs, id)
@@ -143,16 +147,19 @@ func (f *FriendFetcher) GetFriends(ctx context.Context, userID uint64) ([]*apiTy
 
 			p.Go(func(ctx context.Context) error {
 				builder := users.NewUsersByIDsBuilder(batchIDs...)
+
 				userDetails, err := f.roAPI.Users().GetUsersByIDs(ctx, builder.Build())
 				if err != nil {
 					f.logger.Error("Failed to fetch user details",
 						zap.Error(err),
 						zap.Int("batchStart", i),
 						zap.Int("batchEnd", end))
+
 					return nil // Don't fail the whole batch for one error
 				}
 
 				batchFriends := make([]*apiTypes.ExtendedFriend, 0, len(userDetails.Data))
+
 				normalizer := utils.NewTextNormalizer()
 				for _, user := range userDetails.Data {
 					batchFriends = append(batchFriends, &apiTypes.ExtendedFriend{
@@ -165,7 +172,9 @@ func (f *FriendFetcher) GetFriends(ctx context.Context, userID uint64) ([]*apiTy
 				}
 
 				mu.Lock()
+
 				allFriends = append(allFriends, batchFriends...)
+
 				mu.Unlock()
 
 				return nil

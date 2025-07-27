@@ -29,6 +29,7 @@ type CaesarBuilder struct {
 // NewCaesarBuilder creates a new Caesar cipher builder.
 func NewCaesarBuilder(s *session.Session, translator *translator.Translator) *CaesarBuilder {
 	trainingMode := session.UserReviewMode.Get(s) == enum.ReviewModeTraining
+
 	return &CaesarBuilder{
 		user:         session.UserTarget.Get(s),
 		translator:   translator,

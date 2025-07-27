@@ -21,6 +21,7 @@ func New(app *setup.App) *Layout {
 		logger: app.Logger.Named("consent_menu"),
 	}
 	l.menu = NewMenu(l)
+
 	return l
 }
 

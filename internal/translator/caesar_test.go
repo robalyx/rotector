@@ -9,6 +9,7 @@ import (
 
 func TestTranslateCaesar(t *testing.T) {
 	t.Parallel()
+
 	trans := &translator.Translator{}
 
 	tests := []struct {
@@ -88,6 +89,7 @@ func TestTranslateCaesar(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			result := trans.TranslateCaesar(tt.input, tt.shift)
 			assert.Equal(t, tt.expected, result)
 		})
@@ -152,6 +154,7 @@ func TestIsCaesarFormat(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			result := translator.IsCaesarFormat(tt.input)
 			assert.Equal(t, tt.expected, result)
 		})

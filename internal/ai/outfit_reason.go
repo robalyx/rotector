@@ -106,6 +106,7 @@ func (a *OutfitReasonAnalyzer) ProcessFlaggedUsers(
 ) {
 	// Filter users to only those flagged for outfit violations and populate their Reasons
 	var outfitFlaggedUsers []*types.ReviewUser
+
 	for _, userInfo := range userInfos {
 		if reasons, ok := reasonsMap[userInfo.ID]; ok {
 			if reasons[enum.UserReasonTypeOutfit] != nil {
@@ -141,6 +142,7 @@ func (a *OutfitReasonAnalyzer) GenerateOutfitReasons(
 ) map[uint64]string {
 	// Create outfit requests map for users with outfit violations
 	outfitRequests := make(map[uint64]UserOutfitRequest)
+
 	for _, userInfo := range userInfos {
 		// Get outfit reason from user's populated Reasons field
 		outfitReason := userInfo.Reasons[enum.UserReasonTypeOutfit]
@@ -150,6 +152,7 @@ func (a *OutfitReasonAnalyzer) GenerateOutfitReasons(
 
 		// Parse outfit evidence: format is "{outfitName}|{theme}|{confidence}"
 		var outfitThemes []OutfitThemeSummary
+
 		for _, evidence := range outfitReason.Evidence {
 			parts := strings.Split(evidence, "|")
 			if len(parts) == 3 {
@@ -200,6 +203,7 @@ func (a *OutfitReasonAnalyzer) ProcessOutfitRequests(
 			zap.Int("retryCount", retryCount),
 			zap.Int("maxRetries", OutfitReasonMaxRetries),
 			zap.Int("remainingUsers", len(outfitRequests)))
+
 		return
 	}
 
@@ -215,6 +219,7 @@ func (a *OutfitReasonAnalyzer) ProcessOutfitRequests(
 		invalidMu       sync.Mutex
 		invalidRequests = make(map[uint64]UserOutfitRequest)
 	)
+
 	minBatchSize := max(len(requestSlice)/4, 1)
 
 	err := utils.WithRetrySplitBatch(
@@ -258,10 +263,12 @@ func (a *OutfitReasonAnalyzer) ProcessOutfitRequests(
 			var buf bytes.Buffer
 			for _, req := range batch {
 				buf.WriteString(fmt.Sprintf("Username: %s\nOutfit Themes:\n", req.UserData.Username))
+
 				for _, theme := range req.UserData.Themes {
 					buf.WriteString(fmt.Sprintf("  - Outfit: %s\n    Theme: %s\n",
 						theme.OutfitName, theme.Theme))
 				}
+
 				buf.WriteString("\n")
 			}
 
@@ -269,6 +276,7 @@ func (a *OutfitReasonAnalyzer) ProcessOutfitRequests(
 				a.textLogger.Error("Failed to save blocked outfit data",
 					zap.Error(err),
 					zap.String("path", filepath))
+
 				return
 			}
 
@@ -341,6 +349,7 @@ func (a *OutfitReasonAnalyzer) processOutfitBatch(ctx context.Context, batch []U
 
 	// Make API request
 	var result BatchOutfitAnalysis
+
 	err = a.chat.NewWithRetry(ctx, params, func(resp *openai.ChatCompletion, err error) error {
 		// Handle API error
 		if err != nil {
@@ -386,6 +395,7 @@ func (a *OutfitReasonAnalyzer) processOutfitBatch(ctx context.Context, batch []U
 			if response.Analysis == "" {
 				a.logger.Debug("Skipping response with empty analysis",
 					zap.String("username", response.Name))
+
 				continue
 			}
 
@@ -393,6 +403,7 @@ func (a *OutfitReasonAnalyzer) processOutfitBatch(ctx context.Context, batch []U
 		}
 
 		result.Results = processedResults
+
 		return nil
 	})
 
@@ -410,9 +421,11 @@ func (a *OutfitReasonAnalyzer) processResults(
 	// If no results returned, mark all users for retry
 	if results == nil || len(results.Results) == 0 {
 		a.logger.Warn("No results returned from outfit analysis, retrying all users")
+
 		for _, req := range batch {
 			invalidRequests[req.UserInfo.ID] = req
 		}
+
 		return invalidRequests
 	}
 
@@ -444,6 +457,7 @@ func (a *OutfitReasonAnalyzer) processResults(
 		if !exists {
 			a.logger.Error("Got result for user not in batch",
 				zap.String("username", result.Name))
+
 			continue
 		}
 
@@ -451,13 +465,17 @@ func (a *OutfitReasonAnalyzer) processResults(
 		if result.Analysis == "" {
 			a.logger.Debug("Outfit analysis returned empty results",
 				zap.String("username", result.Name))
+
 			invalidRequests[req.UserInfo.ID] = req
+
 			continue
 		}
 
 		// Store valid result
 		mu.Lock()
+
 		finalResults[req.UserInfo.ID] = result.Analysis
+
 		mu.Unlock()
 
 		a.logger.Debug("Added outfit analysis result",

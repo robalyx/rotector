@@ -11,7 +11,10 @@ func GenerateSchema[T any]() any {
 		AllowAdditionalProperties: false,
 		DoNotReference:            true,
 	}
+
 	var v T
+
 	schema := reflector.Reflect(v)
+
 	return schema
 }

@@ -39,6 +39,7 @@ func NewFriendsMenu(layout *Layout) *FriendsMenu {
 			session.ImageBuffer.Delete(s)
 		},
 	}
+
 	return m
 }
 
@@ -74,6 +75,7 @@ func (m *FriendsMenu) Show(ctx *interaction.Context, s *session.Session) {
 	for i, friend := range pageFriends {
 		friendIDs[i] = friend.ID
 	}
+
 	presenceChan := m.layout.presenceFetcher.FetchPresencesConcurrently(ctx.Context(), friendIDs)
 
 	// Store initial data in session
@@ -112,6 +114,7 @@ func (m *FriendsMenu) handleButton(ctx *interaction.Context, s *session.Session,
 		session.ImageBuffer.Delete(s)
 		session.PaginationPage.Set(s, page)
 		ctx.Reload("")
+
 		return
 	}
 
@@ -155,6 +158,7 @@ func (m *FriendsMenu) sortFriendsByStatus(
 ) []*apiTypes.ExtendedFriend {
 	// Group friends by their status
 	groupedFriends := make(map[enum.UserType][]*apiTypes.ExtendedFriend)
+
 	var unflaggedFriends []*apiTypes.ExtendedFriend
 
 	// Separate flagged and unflagged friends

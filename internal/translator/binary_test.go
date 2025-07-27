@@ -10,6 +10,7 @@ import (
 
 func TestTranslateBinary(t *testing.T) {
 	t.Parallel()
+
 	translator := &translator.Translator{}
 
 	tests := []struct {
@@ -53,6 +54,7 @@ func TestTranslateBinary(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			result, err := translator.TranslateBinary(tt.input)
 			if tt.expectError {
 				require.Error(t, err)
@@ -66,6 +68,7 @@ func TestTranslateBinary(t *testing.T) {
 
 func TestIsBinaryFormat(t *testing.T) {
 	t.Parallel()
+
 	tests := []struct {
 		name     string
 		input    string
@@ -106,6 +109,7 @@ func TestIsBinaryFormat(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			result := translator.IsBinaryFormat(tt.input)
 			assert.Equal(t, tt.expected, result)
 		})

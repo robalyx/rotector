@@ -47,12 +47,15 @@ func (m *BaseReviewMenu) HandleAddComment(ctx *interaction.Context, s *session.S
 		ctx.Cancel(
 			fmt.Sprintf("Cannot add more notes - global limit of %d notes has been reached.", constants.CommentLimit),
 		)
+
 		return
 	}
 
 	// Find user's existing comment
 	userID := uint64(ctx.Event().User().ID)
+
 	var existingComment *types.Comment
+
 	for _, comment := range comments {
 		if comment.CommenterID == userID {
 			existingComment = comment
@@ -102,6 +105,7 @@ func (m *BaseReviewMenu) HandleDeleteComment(ctx *interaction.Context, s *sessio
 	if err != nil {
 		m.logger.Error("Failed to delete comment", zap.Error(err))
 		ctx.Error("Failed to delete note. Please try again.")
+
 		return
 	}
 
@@ -142,6 +146,7 @@ func (m *BaseReviewMenu) HandleCommentModalSubmit(ctx *interaction.Context, s *s
 	if err != nil {
 		m.logger.Error("Failed to add comment", zap.Error(err))
 		ctx.Error("Failed to add note. Please try again.")
+
 		return
 	}
 
@@ -157,6 +162,7 @@ func (m *BaseReviewMenu) CheckBreakRequired(ctx *interaction.Context, s *session
 		// Show timeout menu if break time hasn't passed
 		ctx.UpdatePage(constants.DashboardPageName)
 		ctx.Show(constants.TimeoutPageName, "")
+
 		return true
 	}
 
@@ -181,6 +187,7 @@ func (m *BaseReviewMenu) CheckBreakRequired(ctx *interaction.Context, s *session
 
 		ctx.UpdatePage(constants.DashboardPageName)
 		ctx.Show(constants.TimeoutPageName, "")
+
 		return true
 	}
 
@@ -196,6 +203,7 @@ func (m *BaseReviewMenu) CheckCaptchaRequired(ctx *interaction.Context, s *sessi
 		ctx.Show(constants.CaptchaPageName, "Please complete CAPTCHA verification to continue.")
 		return true
 	}
+
 	return false
 }
 
@@ -216,6 +224,7 @@ func HandleEditReason[T types.ReasonType](
 		logger.Error("Non-reviewer attempted to manage reasons",
 			zap.Uint64("user_id", uint64(ctx.Event().User().ID)))
 		ctx.Error("You do not have permission to manage reasons.")
+
 		return
 	}
 
@@ -246,6 +255,7 @@ func HandleReasonModalSubmit[T types.ReasonType](
 ) {
 	// Get the reason type from session
 	reasonTypeStr := session.SelectedReasonType.Get(s)
+
 	reasonType, err := parseReasonType(reasonTypeStr)
 	if err != nil {
 		ctx.Error("Invalid reason type: " + reasonTypeStr)
@@ -272,6 +282,7 @@ func HandleReasonModalSubmit[T types.ReasonType](
 
 	// Create or update reason
 	var reason types.Reason
+
 	if existingReason != nil {
 		// Check if reasons field is empty
 		if reasonMessage == "" {
@@ -286,6 +297,7 @@ func HandleReasonModalSubmit[T types.ReasonType](
 			session.ReasonsChanged.Set(s, true)
 
 			ctx.Reload(fmt.Sprintf("Successfully removed %s reason", reasonType.String()))
+
 			return
 		}
 
@@ -304,6 +316,7 @@ func HandleReasonModalSubmit[T types.ReasonType](
 
 		// Parse evidence items
 		var evidence []string
+
 		for line := range strings.SplitSeq(evidenceText, "\n") {
 			if trimmed := strings.TrimSpace(line); trimmed != "" {
 				evidence = append(evidence, trimmed)
@@ -331,6 +344,7 @@ func HandleReasonModalSubmit[T types.ReasonType](
 
 		// Parse evidence items
 		var evidence []string
+
 		if evidenceText != "" {
 			for line := range strings.SplitSeq(evidenceText, "\n") {
 				if trimmed := strings.TrimSpace(line); trimmed != "" {
@@ -363,6 +377,7 @@ func HandleReasonModalSubmit[T types.ReasonType](
 	if existingReason != nil {
 		action = "updated"
 	}
+
 	ctx.Reload(fmt.Sprintf("Successfully %s %s reason", action, reasonType.String()))
 }
 
@@ -392,6 +407,7 @@ func BuildReasonModal[T types.ReasonType](reasonType T, existingReason *types.Re
 			WithMaxLength(256).
 			WithPlaceholder("Enter the reason for flagging")
 	}
+
 	modal.AddActionRow(reasonInput)
 
 	// Add confidence input field
@@ -409,12 +425,14 @@ func BuildReasonModal[T types.ReasonType](reasonType T, existingReason *types.Re
 			WithValue("1.00").
 			WithPlaceholder("Enter confidence value (0.01-1.00)")
 	}
+
 	modal.AddActionRow(confidenceInput)
 
 	// Add evidence input field
 	evidenceInput := discord.NewTextInput(
 		constants.AddReasonEvidenceInputCustomID, discord.TextInputStyleParagraph, "Evidence",
 	)
+
 	if existingReason != nil {
 		// Replace newlines within each evidence item before joining
 		escapedEvidence := make([]string, len(existingReason.Evidence))
@@ -430,6 +448,7 @@ func BuildReasonModal[T types.ReasonType](reasonType T, existingReason *types.Re
 			WithMaxLength(1000).
 			WithPlaceholder("Enter evidence items, one per line")
 	}
+
 	modal.AddActionRow(evidenceInput)
 
 	return modal
@@ -440,18 +459,22 @@ func markReasonAsUnsaved[T types.ReasonType](s *session.Session, reasonType T) {
 	switch any(reasonType).(type) {
 	case enum.UserReasonType:
 		userReasonType := any(reasonType).(enum.UserReasonType)
+
 		unsavedReasons := session.UnsavedUserReasons.Get(s)
 		if unsavedReasons == nil {
 			unsavedReasons = make(map[enum.UserReasonType]struct{})
 		}
+
 		unsavedReasons[userReasonType] = struct{}{}
 		session.UnsavedUserReasons.Set(s, unsavedReasons)
 	case enum.GroupReasonType:
 		groupReasonType := any(reasonType).(enum.GroupReasonType)
+
 		unsavedReasons := session.UnsavedGroupReasons.Get(s)
 		if unsavedReasons == nil {
 			unsavedReasons = make(map[enum.GroupReasonType]struct{})
 		}
+
 		unsavedReasons[groupReasonType] = struct{}{}
 		session.UnsavedGroupReasons.Set(s, unsavedReasons)
 	}

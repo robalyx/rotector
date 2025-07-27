@@ -77,9 +77,11 @@ func New(
 	}
 
 	// Setup roverse configuration
-	var domain string
-	var secretKey string
-	var requestSem *semaphore.Weighted
+	var (
+		domain     string
+		secretKey  string
+		requestSem *semaphore.Weighted
+	)
 
 	if cfg.Roverse.Domain != "" {
 		if cfg.Roverse.SecretKey == "" {
@@ -118,6 +120,7 @@ func (m *Middleware) Cleanup() {
 	for _, client := range m.proxyClients {
 		client.CloseIdleConnections()
 	}
+
 	m.proxyClients = make(map[string]*http.Client)
 }
 
@@ -201,6 +204,7 @@ func (m *Middleware) routeRequest(
 		if err != nil {
 			return nil, fmt.Errorf("%w: failed to select proxy", axonetErrors.ErrTemporary)
 		}
+
 		client = m.applyProxyToClient(httpClient, roverseProxy)
 		proxyIndex = index
 		proxyHost = roverseProxy.Host
@@ -213,6 +217,7 @@ func (m *Middleware) routeRequest(
 		if interceptorutil.IsTimeoutError(err) && proxyIndex >= 0 {
 			m.markProxyUnhealthy(ctx, proxyIndex)
 		}
+
 		return nil, err
 	}
 
@@ -282,12 +287,14 @@ func (m *Middleware) markProxyUnhealthy(ctx context.Context, proxyIndex int64) {
 	}
 
 	unhealthyKey := fmt.Sprintf("%s:%s:%d", UnhealthyKeyPrefix, m.proxyHash, proxyIndex)
+
 	err := m.client.Do(ctx, m.client.B().Set().Key(unhealthyKey).Value("1").
 		Px(m.unhealthyDuration).Build()).Error()
 	if err != nil {
 		m.logger.WithFields(
 			logger.String("error", err.Error()),
 		).Error("Failed to mark proxy as unhealthy")
+
 		return
 	}
 

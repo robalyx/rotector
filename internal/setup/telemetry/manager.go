@@ -194,6 +194,7 @@ func (lm *Manager) getOrCreateSessionDir() string {
 	if err := os.MkdirAll(sessionDir, os.ModePerm); err != nil {
 		return lm.logDir // Fallback to base log directory
 	}
+
 	return sessionDir
 }
 
@@ -260,6 +261,7 @@ func (lm *Manager) rotateLogSessions() error {
 	sort.Slice(sessions, func(i, j int) bool {
 		iInfo, _ := os.Stat(sessions[i])
 		jInfo, _ := os.Stat(sessions[j])
+
 		return iInfo.ModTime().Before(jInfo.ModTime())
 	})
 

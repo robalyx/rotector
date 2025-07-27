@@ -32,5 +32,6 @@ func (l *Logger) WithFields(fields ...logger.Field) logger.Logger {
 	for i, f := range fields {
 		zapFields[i] = zap.Any(f.Key, f.Value)
 	}
+
 	return &Logger{zap: l.zap.With(zapFields...)}
 }

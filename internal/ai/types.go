@@ -54,13 +54,16 @@ func (cc ChatContext) FormatForAI() string {
 				if startIdx == -1 {
 					break
 				}
+
 				endIdx := strings.Index(content[startIdx:], "</think>")
 				if endIdx == -1 {
 					break
 				}
+
 				endIdx += startIdx + 8 // Add length of "</think>"
 				content = content[:startIdx] + content[endIdx:]
 			}
+
 			content = strings.TrimSpace(content)
 		}
 
@@ -85,5 +88,6 @@ func (cc ChatContext) GroupByType() ContextMap {
 	for _, ctx := range cc {
 		grouped[ctx.Type] = append(grouped[ctx.Type], ctx)
 	}
+
 	return grouped
 }

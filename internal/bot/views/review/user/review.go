@@ -21,6 +21,7 @@ import (
 // ReviewBuilder creates the visual layout for reviewing a user.
 type ReviewBuilder struct {
 	shared.BaseReviewBuilder
+
 	db             database.Client
 	user           *types.ReviewUser
 	flaggedFriends map[uint64]*types.ReviewUser
@@ -35,6 +36,7 @@ func NewReviewBuilder(s *session.Session, db database.Client) *ReviewBuilder {
 	reviewMode := session.UserReviewMode.Get(s)
 	trainingMode := reviewMode == enum.ReviewModeTraining
 	userID := session.UserID.Get(s)
+
 	return &ReviewBuilder{
 		BaseReviewBuilder: shared.BaseReviewBuilder{
 			BotSettings:    s.BotSettings(),
@@ -88,9 +90,11 @@ func (b *ReviewBuilder) Build() *discord.MessageUpdateBuilder {
 		if !b.user.VerifiedAt.IsZero() {
 			timestamps = append(timestamps, "Verified: "+fmt.Sprintf("<t:%d:R>", b.user.VerifiedAt.Unix()))
 		}
+
 		if !b.user.ClearedAt.IsZero() {
 			timestamps = append(timestamps, "Cleared: "+fmt.Sprintf("<t:%d:R>", b.user.ClearedAt.Unix()))
 		}
+
 		mainInfoDisplays = append(mainInfoDisplays,
 			discord.NewTextDisplay("-# "+strings.Join(timestamps, " • ")),
 		)
@@ -144,9 +148,11 @@ func (b *ReviewBuilder) Build() *discord.MessageUpdateBuilder {
 
 	// Add containers to builder
 	builder.AddComponents(mainContainer)
+
 	if len(reviewInfoDisplays) > 0 {
 		builder.AddComponents(reviewContainer)
 	}
+
 	builder.AddComponents(modeContainer)
 
 	// Handle thumbnail
@@ -199,9 +205,11 @@ func (b *ReviewBuilder) buildStatusDisplay() []discord.ContainerSubComponent {
 
 // buildStatusText formats the status section with description.
 func (b *ReviewBuilder) buildStatusText() string {
-	var statusIcon string
-	var statusName string
-	var statusDesc string
+	var (
+		statusIcon string
+		statusName string
+		statusDesc string
+	)
 
 	switch b.user.Status {
 	case enum.UserTypeConfirmed:
@@ -229,8 +237,10 @@ func (b *ReviewBuilder) buildStatusText() string {
 // buildReviewModeText formats the review mode section with description.
 func (b *ReviewBuilder) buildReviewModeText() string {
 	// Format review mode
-	var mode string
-	var description string
+	var (
+		mode        string
+		description string
+	)
 
 	switch b.ReviewMode {
 	case enum.ReviewModeTraining:
@@ -364,12 +374,15 @@ func (b *ReviewBuilder) buildReasonDisplay() discord.ContainerSubComponent {
 			// Add evidence if any
 			if len(reason.Evidence) > 0 {
 				content.WriteString("\n")
+
 				for i, evidence := range reason.Evidence {
 					if i >= 3 {
 						content.WriteString("... and more\n")
 						break
 					}
+
 					evidence = utils.TruncateString(evidence, 100)
+
 					evidence = utils.NormalizeString(evidence)
 					if b.PrivacyMode {
 						evidence = utils.CensorStringsInText(evidence, true,
@@ -377,9 +390,11 @@ func (b *ReviewBuilder) buildReasonDisplay() discord.ContainerSubComponent {
 							b.user.Name,
 							b.user.DisplayName)
 					}
+
 					content.WriteString(fmt.Sprintf("- `%s`\n", evidence))
 				}
 			}
+
 			content.WriteString("\n")
 		}
 	}
@@ -471,6 +486,7 @@ func (b *ReviewBuilder) buildReasonOptions() []discord.StringSelectMenuOption {
 		enum.UserReasonTypeFavorites,
 		enum.UserReasonTypeBadges,
 	}
+
 	return shared.BuildReasonOptions(b.user.Reasons, reasonTypes, getReasonEmoji, b.ReasonsChanged)
 }
 
@@ -487,6 +503,7 @@ func (b *ReviewBuilder) buildAIReasonOptions() []discord.StringSelectMenuOption 
 			WithEmoji(discord.ComponentEmoji{Name: "🌐"}).
 			WithDescription("Use AI to generate a reason based on group membership"),
 	}
+
 	return options
 }
 
@@ -638,6 +655,7 @@ func (b *ReviewBuilder) getOutfits() string {
 		if i >= constants.ReviewOutfitsLimit {
 			break
 		}
+
 		outfits = append(outfits, outfit.Name)
 	}
 
@@ -670,9 +688,11 @@ func (b *ReviewBuilder) getFriendsField() string {
 	if c := counts[enum.UserTypeConfirmed]; c > 0 {
 		parts = append(parts, fmt.Sprintf("%d ⚠️", c))
 	}
+
 	if c := counts[enum.UserTypeFlagged]; c > 0 {
 		parts = append(parts, fmt.Sprintf("%d ⏳", c))
 	}
+
 	if c := counts[enum.UserTypeCleared]; c > 0 {
 		parts = append(parts, fmt.Sprintf("%d ✅", c))
 	}
@@ -680,6 +700,7 @@ func (b *ReviewBuilder) getFriendsField() string {
 	if len(parts) > 0 {
 		return "Friends (" + strings.Join(parts, ", ") + ")"
 	}
+
 	return "Friends"
 }
 
@@ -700,9 +721,11 @@ func (b *ReviewBuilder) getGroupsField() string {
 	if c := counts[enum.GroupTypeConfirmed]; c > 0 {
 		parts = append(parts, fmt.Sprintf("%d ⚠️", c))
 	}
+
 	if c := counts[enum.GroupTypeFlagged]; c > 0 {
 		parts = append(parts, fmt.Sprintf("%d ⏳", c))
 	}
+
 	if c := counts[enum.GroupTypeCleared]; c > 0 {
 		parts = append(parts, fmt.Sprintf("%d ✅", c))
 	}
@@ -710,6 +733,7 @@ func (b *ReviewBuilder) getGroupsField() string {
 	if len(parts) > 0 {
 		return "Groups (" + strings.Join(parts, ", ") + ")"
 	}
+
 	return "Groups"
 }
 
@@ -718,6 +742,7 @@ func (b *ReviewBuilder) getConfirmButtonLabel() string {
 	if b.ReviewMode == enum.ReviewModeTraining || !b.IsReviewer {
 		return "Report"
 	}
+
 	return "Confirm"
 }
 
@@ -726,6 +751,7 @@ func (b *ReviewBuilder) getClearButtonLabel() string {
 	if b.ReviewMode == enum.ReviewModeTraining || !b.IsReviewer {
 		return "Safe"
 	}
+
 	return "Clear"
 }
 

@@ -28,6 +28,7 @@ func NewMenu(layout *Layout) *Menu {
 		},
 		ButtonHandlerFunc: m.handleButton,
 	}
+
 	return m
 }
 
@@ -57,6 +58,7 @@ func (m *Menu) handleAccept(ctx *interaction.Context) {
 	if err != nil {
 		m.layout.logger.Error("Failed to save consent", zap.Error(err))
 		ctx.Error("Failed to save consent. Please try again.")
+
 		return
 	}
 

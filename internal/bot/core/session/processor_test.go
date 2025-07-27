@@ -12,6 +12,7 @@ import (
 
 func TestValueProcessor_ProcessValue(t *testing.T) {
 	t.Parallel()
+
 	processor := session.NewValueProcessor()
 
 	// Current time for testing time values
@@ -134,6 +135,7 @@ func TestValueProcessor_ProcessValue(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			result := processor.ProcessValue(tt.input)
 			assert.Equal(t, tt.expected, result)
 		})
@@ -141,6 +143,7 @@ func TestValueProcessor_ProcessValue(t *testing.T) {
 
 	t.Run("struct with fields", func(t *testing.T) {
 		t.Parallel()
+
 		type TestStruct struct {
 			ID        uint64
 			Name      string
@@ -160,6 +163,7 @@ func TestValueProcessor_ProcessValue(t *testing.T) {
 		// Check ID with metadata
 		idValue, hasID := resultMap["ID"]
 		require.True(t, hasID, "Expected to find ID field")
+
 		idMap, isMap := idValue.(map[string]any)
 		require.True(t, isMap, "Expected ID to be a map with metadata")
 		assert.Equal(t, "18446744073709551615", idMap["value"])
@@ -172,6 +176,7 @@ func TestValueProcessor_ProcessValue(t *testing.T) {
 
 	t.Run("struct with zero-valued fields", func(t *testing.T) {
 		t.Parallel()
+
 		type ZeroTestStruct struct {
 			ID        uint64
 			Name      string
@@ -210,6 +215,7 @@ func TestValueProcessor_ProcessValue(t *testing.T) {
 
 	t.Run("nested struct with zero values", func(t *testing.T) {
 		t.Parallel()
+
 		type Address struct {
 			Street  string
 			City    string
@@ -227,6 +233,7 @@ func TestValueProcessor_ProcessValue(t *testing.T) {
 		// Case 1: Some fields populated, others zero
 		t.Run("mixed values", func(t *testing.T) {
 			t.Parallel()
+
 			input := Person{
 				Name: "Test Person",
 				Age:  30,
@@ -260,6 +267,7 @@ func TestValueProcessor_ProcessValue(t *testing.T) {
 		// Case 2: All fields populated
 		t.Run("all fields populated", func(t *testing.T) {
 			t.Parallel()
+
 			contactInfo := &Address{
 				Street:  "456 Work St",
 				City:    "Work City",
@@ -309,6 +317,7 @@ func TestValueProcessor_ProcessValue(t *testing.T) {
 
 	t.Run("pointer to uint64", func(t *testing.T) {
 		t.Parallel()
+
 		val := uint64(18446744073709551615)
 		ptr := &val
 		result := processor.ProcessValue(ptr)
@@ -322,6 +331,7 @@ func TestValueProcessor_ProcessValue(t *testing.T) {
 
 	t.Run("mock User structure", func(t *testing.T) {
 		t.Parallel()
+
 		type MockUser struct {
 			ID             uint64
 			Name           string
@@ -393,6 +403,7 @@ func TestValueProcessor_ProcessValue(t *testing.T) {
 
 func TestValueProcessor_EmbeddedStructHandling(t *testing.T) {
 	t.Parallel()
+
 	processor := session.NewValueProcessor()
 
 	type Friend struct {
@@ -401,6 +412,7 @@ func TestValueProcessor_EmbeddedStructHandling(t *testing.T) {
 
 	type ExtendedFriend struct {
 		Friend
+
 		Name        string `json:"name"`
 		DisplayName string `json:"displayName"`
 	}
@@ -430,6 +442,7 @@ func TestValueProcessor_EmbeddedStructHandling(t *testing.T) {
 
 		// Compare the resulting structure
 		var result []map[string]any
+
 		err = json.Unmarshal(jsonBytes, &result)
 		require.NoError(t, err, "Expected to unmarshal JSON")
 
@@ -448,6 +461,7 @@ func TestValueProcessor_EmbeddedStructHandling(t *testing.T) {
 
 	t.Run("embedded struct with zero values", func(t *testing.T) {
 		t.Parallel()
+
 		type BaseInfo struct {
 			ID      uint64    `json:"id"`
 			Created time.Time `json:"created"`
@@ -456,6 +470,7 @@ func TestValueProcessor_EmbeddedStructHandling(t *testing.T) {
 
 		type User struct {
 			BaseInfo
+
 			Username string `json:"username"`
 			Email    string `json:"email"` // Will be zero
 		}
@@ -486,13 +501,15 @@ func TestValueProcessor_EmbeddedStructHandling(t *testing.T) {
 
 	t.Run("explicit JSON tag on embedded struct", func(t *testing.T) {
 		t.Parallel()
+
 		type Base struct {
 			ID uint64 `json:"id"`
 		}
 
 		type Tagged struct {
 			Base `json:"base"` // Explicit JSON tag
-			Name string        `json:"name"`
+
+			Name string `json:"name"`
 		}
 
 		input := Tagged{
@@ -523,9 +540,11 @@ func TestValueProcessor_EmbeddedStructHandling(t *testing.T) {
 
 func TestValueProcessor_EnumMapHandling(t *testing.T) {
 	t.Parallel()
+
 	processor := session.NewValueProcessor()
 
 	type ReasonType int
+
 	const (
 		reasonTypeUser ReasonType = iota
 		reasonTypeFriend
@@ -547,6 +566,7 @@ func TestValueProcessor_EnumMapHandling(t *testing.T) {
 
 	type ExtendedFriend struct {
 		Friend
+
 		Name        string `json:"name"`
 		DisplayName string `json:"displayName"`
 	}
@@ -678,10 +698,12 @@ func TestValueProcessor_EnumMapHandling(t *testing.T) {
 
 func TestValueProcessor_JSONTagHandling(t *testing.T) {
 	t.Parallel()
+
 	processor := session.NewValueProcessor()
 
 	t.Run("json tag name", func(t *testing.T) {
 		t.Parallel()
+
 		type TestStruct struct {
 			RegularField string `json:"regularField"`
 			RenamedField string `json:"renamed"`
@@ -709,6 +731,7 @@ func TestValueProcessor_JSONTagHandling(t *testing.T) {
 
 	t.Run("json tag options", func(t *testing.T) {
 		t.Parallel()
+
 		type TestStruct struct {
 			RequiredField       string `json:"requiredField"`
 			OmitemptyField      string `json:"omitemptyField,omitempty"`
@@ -788,6 +811,7 @@ func BenchmarkValueProcessor_ProcessValue(b *testing.B) {
 	for _, bm := range benchmarks {
 		b.Run(bm.name, func(b *testing.B) {
 			b.ResetTimer()
+
 			for b.Loop() {
 				_ = processor.ProcessValue(bm.input)
 			}

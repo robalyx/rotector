@@ -35,11 +35,13 @@ func (r *ReviewerModel) GetReviewerStats(
 ) (map[uint64]*types.ReviewerStats, *types.ReviewerStatsCursor, error) {
 	// Initialize result map
 	results := make(map[uint64]*types.ReviewerStats)
+
 	var nextCursor *types.ReviewerStatsCursor
 
 	err := dbretry.Transaction(ctx, r.db, func(ctx context.Context, tx bun.Tx) error {
 		// Get bot settings to filter for valid reviewer IDs
 		var settings types.BotSetting
+
 		err := tx.NewSelect().
 			Model(&settings).
 			Where("id = 1").
@@ -66,6 +68,7 @@ func (r *ReviewerModel) GetReviewerStats(
 		}
 
 		var stats []*types.ReviewerStats
+
 		err = query.Scan(ctx, &stats)
 		if err != nil {
 			return fmt.Errorf("failed to scan reviewer stats: %w", err)
@@ -124,6 +127,7 @@ func (r *ReviewerModel) GetReviewerInfosForUpdate(
 ) (map[uint64]*types.ReviewerInfo, error) {
 	return dbretry.Operation(ctx, func(ctx context.Context) (map[uint64]*types.ReviewerInfo, error) {
 		var reviewers []*types.ReviewerInfo
+
 		cutoff := time.Now().Add(-maxAge)
 
 		err := r.db.NewSelect().

@@ -48,13 +48,17 @@ func (s *CommentService) AddGroupComment(ctx context.Context, comment *types.Gro
 // addComment handles the common logic for adding comments to users or groups.
 func (s *CommentService) addComment(ctx context.Context, targetID, commenterID uint64, message string, isUserComment bool) error {
 	// Get existing comments for this target
-	var existingComments []*types.Comment
-	var err error
+	var (
+		existingComments []*types.Comment
+		err              error
+	)
+
 	if isUserComment {
 		existingComments, err = s.model.GetUserComments(ctx, targetID)
 	} else {
 		existingComments, err = s.model.GetGroupComments(ctx, targetID)
 	}
+
 	if err != nil {
 		return fmt.Errorf("failed to get existing comments: %w", err)
 	}
@@ -101,6 +105,7 @@ func (s *CommentService) addComment(ctx context.Context, targetID, commenterID u
 	} else {
 		err = s.model.UpsertGroupComment(ctx, &types.GroupComment{Comment: comment})
 	}
+
 	if err != nil {
 		return fmt.Errorf("failed to save comment: %w", err)
 	}

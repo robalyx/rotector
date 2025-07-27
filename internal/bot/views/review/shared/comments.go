@@ -29,10 +29,13 @@ type CommentsBuilder struct {
 
 // NewCommentsBuilder creates a new comments builder.
 func NewCommentsBuilder(s *session.Session, targetType TargetType) *CommentsBuilder {
-	var targetName string
-	var targetID uint64
+	var (
+		targetName string
+		targetID   uint64
+	)
 
 	// Get target info based on type
+
 	if targetType == TargetTypeUser {
 		user := session.UserTarget.Get(s)
 		targetName = user.Name
@@ -90,6 +93,7 @@ func (b *CommentsBuilder) buildComponents() []discord.LayoutComponent {
 
 		// Add comments for this page
 		var commentsContent strings.Builder
+
 		for _, comment := range b.comments[b.offset:end] {
 			timestamp := fmt.Sprintf("<t:%d:R>", comment.CreatedAt.Unix())
 			if !comment.UpdatedAt.Equal(comment.CreatedAt) {
@@ -98,6 +102,7 @@ func (b *CommentsBuilder) buildComponents() []discord.LayoutComponent {
 
 			// Determine user role
 			var roleTitle string
+
 			switch {
 			case b.botSettings.IsAdmin(comment.CommenterID):
 				roleTitle = "Administrator Note"
@@ -142,6 +147,7 @@ func (b *CommentsBuilder) buildComponents() []discord.LayoutComponent {
 		discord.NewSecondaryButton("◀️ Back", constants.BackButtonCustomID),
 	}
 	hasExistingComment := false
+
 	for _, comment := range b.comments {
 		if comment.CommenterID == b.commenterID {
 			hasExistingComment = true

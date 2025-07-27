@@ -36,6 +36,7 @@ type FriendsBuilder struct {
 // NewFriendsBuilder creates a new friends builder.
 func NewFriendsBuilder(s *session.Session) *FriendsBuilder {
 	trainingMode := session.UserReviewMode.Get(s) == enum.ReviewModeTraining
+
 	return &FriendsBuilder{
 		user:           session.UserTarget.Get(s),
 		friends:        session.UserFriends.Get(s),
@@ -197,6 +198,7 @@ func (b *FriendsBuilder) getFriendFieldName(friend *apiTypes.ExtendedFriend) str
 	if len(indicators) > 0 {
 		return fmt.Sprintf("%s %s", name, strings.Join(indicators, " "))
 	}
+
 	return name
 }
 

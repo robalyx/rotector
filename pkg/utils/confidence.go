@@ -13,10 +13,13 @@ func CalculateConfidence[T types.ReasonType](reasons types.Reasons[T]) float64 {
 		return 0
 	}
 
-	var totalConfidence float64
-	var maxConfidence float64
+	var (
+		totalConfidence float64
+		maxConfidence   float64
+	)
 
 	// Sum up confidence from all reasons and track highest individual confidence
+
 	for _, reason := range reasons {
 		totalConfidence += reason.Confidence
 		if reason.Confidence > maxConfidence {
@@ -31,5 +34,6 @@ func CalculateConfidence[T types.ReasonType](reasons types.Reasons[T]) float64 {
 
 	// Round to 2 decimal places and ensure it's between 0 and 1
 	finalConfidence = math.Round(finalConfidence*100) / 100
+
 	return math.Max(0, math.Min(1, finalConfidence))
 }

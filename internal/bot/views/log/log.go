@@ -63,24 +63,30 @@ func (b *Builder) Build() *discord.MessageUpdateBuilder {
 		mainContent.WriteString(fmt.Sprintf("Guild ID: `%s`\n",
 			utils.CensorString(strconv.FormatUint(b.guildID, 10), b.privacyMode)))
 	}
+
 	if b.discordID != 0 {
 		mainContent.WriteString(fmt.Sprintf("Discord ID: `%s`\n",
 			utils.CensorString(strconv.FormatUint(b.discordID, 10), b.privacyMode)))
 	}
+
 	if b.userID != 0 {
 		mainContent.WriteString(fmt.Sprintf("User ID: `%s`\n",
 			utils.CensorString(strconv.FormatUint(b.userID, 10), b.privacyMode)))
 	}
+
 	if b.groupID != 0 {
 		mainContent.WriteString(fmt.Sprintf("Group ID: `%s`\n",
 			utils.CensorString(strconv.FormatUint(b.groupID, 10), b.privacyMode)))
 	}
+
 	if b.reviewerID != 0 {
 		mainContent.WriteString(fmt.Sprintf("Reviewer ID: `%d`\n", b.reviewerID))
 	}
+
 	if b.activityTypeFilter != enum.ActivityTypeAll {
 		mainContent.WriteString(fmt.Sprintf("Activity Type: `%s`\n", b.activityTypeFilter))
 	}
+
 	if !b.startDate.IsZero() && !b.endDate.IsZero() {
 		mainContent.WriteString(fmt.Sprintf("Date Range: `%s` to `%s`\n",
 			b.startDate.Format("2006-01-02"), b.endDate.Format("2006-01-02")))
@@ -111,14 +117,17 @@ func (b *Builder) Build() *discord.MessageUpdateBuilder {
 			if log.ActivityTarget.GuildID != 0 {
 				logsContent.WriteString(fmt.Sprintf("Guild: %d\n", log.ActivityTarget.GuildID))
 			}
+
 			if log.ActivityTarget.DiscordID != 0 {
 				logsContent.WriteString(fmt.Sprintf("Discord: <@%d>\n", log.ActivityTarget.DiscordID))
 			}
+
 			if log.ActivityTarget.UserID != 0 {
 				logsContent.WriteString(fmt.Sprintf("User: [%s](https://www.roblox.com/users/%d/profile)\n",
 					utils.CensorString(strconv.FormatUint(log.ActivityTarget.UserID, 10), b.privacyMode),
 					log.ActivityTarget.UserID))
 			}
+
 			if log.ActivityTarget.GroupID != 0 {
 				logsContent.WriteString(fmt.Sprintf("Group: [%s](https://www.roblox.com/communities/%d)\n",
 					utils.CensorString(strconv.FormatUint(log.ActivityTarget.GroupID, 10), b.privacyMode),
@@ -127,6 +136,7 @@ func (b *Builder) Build() *discord.MessageUpdateBuilder {
 
 			// Add reviewer and details
 			logsContent.WriteString(fmt.Sprintf("Reviewer: <@%d>\n", log.ReviewerID))
+
 			for key, value := range log.Details {
 				newKey := strings.ToUpper(key[:1]) + key[1:]
 				newValue := utils.NormalizeString(fmt.Sprintf("%v", value))

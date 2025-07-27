@@ -28,6 +28,7 @@ linters:
     - wsl
     - interfacebloat
     - gocognit
+    - noinlineerr
   settings:
     exhaustruct:
       exclude:
@@ -55,7 +56,7 @@ linters:
     exhaustive:
       default-signifies-exhaustive: true
     funlen:
-      lines: 130
+      lines: 160
       statements: 70
       ignore-comments: true
     gochecksumtype:
@@ -140,6 +141,9 @@ linters:
           - staticcheck
         path: internal/database/service
         text: 'SA1019: .* is deprecated: Use Service\(\)\..*\(\) instead\.'
+      - linters:
+          - revive
+        text: 'var-naming: avoid meaningless package names'
     paths:
       - third_party$
       - builtin$

@@ -11,6 +11,7 @@ import (
 
 func TestParseDateRange(t *testing.T) {
 	t.Parallel()
+
 	tests := []struct {
 		name      string
 		dateRange string
@@ -40,6 +41,7 @@ func TestParseDateRange(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			start, end, err := utils.ParseDateRange(tt.dateRange)
 			if tt.wantErr != nil {
 				assert.ErrorIs(t, err, tt.wantErr)
@@ -55,6 +57,7 @@ func TestParseDateRange(t *testing.T) {
 
 func TestParseBanDuration(t *testing.T) {
 	t.Parallel()
+
 	tests := []struct {
 		name       string
 		duration   string
@@ -83,6 +86,7 @@ func TestParseBanDuration(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			expiry, err := utils.ParseBanDuration(tt.duration)
 			if tt.wantErr != nil {
 				assert.ErrorIs(t, err, tt.wantErr)
@@ -101,6 +105,7 @@ func TestParseBanDuration(t *testing.T) {
 
 func TestParseCombinedDuration(t *testing.T) {
 	t.Parallel()
+
 	tests := []struct {
 		name     string
 		input    string
@@ -172,6 +177,7 @@ func TestParseCombinedDuration(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			duration, err := utils.ParseCombinedDuration(tt.input)
 
 			if tt.wantErr {
@@ -187,6 +193,7 @@ func TestParseCombinedDuration(t *testing.T) {
 
 func TestFormatTimeAgo(t *testing.T) {
 	t.Parallel()
+
 	now := time.Now()
 	tests := []struct {
 		name string
@@ -213,6 +220,7 @@ func TestFormatTimeAgo(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			got := utils.FormatTimeAgo(tt.time)
 			assert.Equal(t, tt.want, got)
 		})
@@ -221,6 +229,7 @@ func TestFormatTimeAgo(t *testing.T) {
 
 func TestParseTimeWithTimezone(t *testing.T) {
 	t.Parallel()
+
 	tests := []struct {
 		name      string
 		input     string
@@ -277,6 +286,7 @@ func TestParseTimeWithTimezone(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			result, err := utils.ParseTimeWithTimezone(tt.input)
 
 			if tt.wantError {

@@ -38,6 +38,7 @@ func NewScanMenu(layout *Layout) *ScanMenu {
 		SelectHandlerFunc: m.handleSelectMenu,
 		ModalHandlerFunc:  m.handleModal,
 	}
+
 	return m
 }
 
@@ -61,8 +62,10 @@ func (m *ScanMenu) Show(ctx *interaction.Context, s *session.Session) {
 	scanType := session.GuildScanType.Get(s)
 
 	// Get all guild members using Discord API
-	var members []discord.Member
-	var after snowflake.ID
+	var (
+		members []discord.Member
+		after   snowflake.ID
+	)
 
 	for {
 		chunk, err := ctx.Event().Client().Rest.GetMembers(snowflake.ID(guildID), 1000, after)
@@ -71,6 +74,7 @@ func (m *ScanMenu) Show(ctx *interaction.Context, s *session.Session) {
 				zap.Error(err),
 				zap.Uint64("guild_id", guildID))
 			ctx.Error("Failed to get guild members. Please try again.")
+
 			return
 		}
 
@@ -125,6 +129,7 @@ func (m *ScanMenu) handleCondoScan(ctx context.Context, s *session.Session, memb
 
 	// Get server names for all flagged servers
 	var serverIDs []uint64
+
 	for _, guilds := range flaggedMembers {
 		for _, guild := range guilds {
 			serverIDs = append(serverIDs, guild.ServerID)
@@ -150,6 +155,7 @@ func (m *ScanMenu) handleCondoScan(ctx context.Context, s *session.Session, memb
 
 	// Apply filters
 	m.applyFilters(s)
+
 	return nil
 }
 
@@ -167,6 +173,7 @@ func (m *ScanMenu) handleMessageScan(ctx context.Context, s *session.Session, me
 
 	// Apply filters
 	m.applyFilters(s)
+
 	return nil
 }
 
@@ -200,6 +207,7 @@ func (m *ScanMenu) applyFilters(s *session.Session) {
 		// Update session with filtered results
 		session.GuildScanFilteredSummaries.Set(s, filteredSummaries)
 		session.PaginationTotalItems.Set(s, len(filteredSummaries))
+
 		return
 	}
 
@@ -248,6 +256,7 @@ func (m *ScanMenu) handleButton(ctx *interaction.Context, s *session.Session, cu
 		action := session.ViewerAction(customID)
 		action.ParsePageAction(s, maxPage)
 		ctx.Reload("")
+
 		return
 	}
 
@@ -328,6 +337,7 @@ func (m *ScanMenu) handleModal(ctx *interaction.Context, s *session.Session) {
 	case constants.GuildScanMinGuildsModalCustomID:
 		// Process minimum guilds filter modal
 		minGuildsStr := ctx.Event().ModalData().Text(constants.GuildScanMinGuildsInputCustomID)
+
 		minGuilds, err := strconv.Atoi(minGuildsStr)
 		if err != nil {
 			ctx.Cancel("Please enter a valid number greater than 0.")
@@ -350,6 +360,7 @@ func (m *ScanMenu) handleModal(ctx *interaction.Context, s *session.Session) {
 			session.PaginationPage.Set(s, 0) // Reset to first page when filter changes
 			m.applyFilters(s)
 			ctx.Reload("Cleared minimum join duration filter.")
+
 			return
 		}
 
@@ -358,6 +369,7 @@ func (m *ScanMenu) handleModal(ctx *interaction.Context, s *session.Session) {
 		if err != nil || duration <= 0 {
 			ctx.Cancel("Invalid duration format. Please use formats like '30m' for 30 minutes, " +
 				"'24h' for 24 hours, '7d' for 7 days, or combined formats like '1d12h'.")
+
 			return
 		}
 
@@ -512,6 +524,7 @@ func (m *ScanMenu) executeBans(
 				zap.Uint64("guild_id", guildID),
 				zap.Int("batch_start", i),
 				zap.Int("batch_end", end))
+
 			continue
 		}
 
@@ -531,6 +544,7 @@ func (m *ScanMenu) executeBans(
 				m.layout.logger.Error("Failed to create DM channel",
 					zap.Error(err),
 					zap.Uint64("user_id", uint64(userID)))
+
 				continue
 			}
 
@@ -540,6 +554,7 @@ func (m *ScanMenu) executeBans(
 				m.layout.logger.Error("Failed to get guild information",
 					zap.Error(err),
 					zap.Uint64("guild_id", guildID))
+
 				continue
 			}
 

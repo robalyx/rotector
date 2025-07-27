@@ -346,16 +346,20 @@ func LoadConfig() (*Config, string, error) {
 	configFiles := []string{"common", "bot", "worker"}
 	for _, configName := range configFiles {
 		configLoaded := false
+
 		for _, path := range configPaths {
 			configPath := fmt.Sprintf("%s/%s.toml", path, configName)
 			if err := k.Load(file.Provider(configPath), toml.Parser()); err == nil {
 				configLoaded = true
+
 				if usedConfigPath == "" {
 					usedConfigPath = path
 				}
+
 				break
 			}
 		}
+
 		if !configLoaded {
 			return nil, "", fmt.Errorf("%w: %s.toml", ErrConfigFileNotFound, configName)
 		}
@@ -370,9 +374,11 @@ func LoadConfig() (*Config, string, error) {
 	if err := checkConfigVersion("common", config.Common.Version, CurrentCommonVersion); err != nil {
 		return nil, "", err
 	}
+
 	if err := checkConfigVersion("bot", config.Bot.Version, CurrentBotVersion); err != nil {
 		return nil, "", err
 	}
+
 	if err := checkConfigVersion("worker", config.Worker.Version, CurrentWorkerVersion); err != nil {
 		return nil, "", err
 	}
@@ -385,6 +391,7 @@ func checkConfigVersion(name string, current, expected int) error {
 	if current == 0 {
 		return fmt.Errorf("%w: %s.toml", ErrConfigVersionMissing, name)
 	}
+
 	if current != expected {
 		return fmt.Errorf(
 			"%w: %s.toml (got: %d, expected: %d)\n"+
@@ -397,5 +404,6 @@ func checkConfigVersion(name string, current, expected int) error {
 			name,
 		)
 	}
+
 	return nil
 }

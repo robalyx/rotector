@@ -72,6 +72,7 @@ func (m *TTLMap[K, V]) cleanup() {
 
 	for range ticker.C {
 		m.mu.Lock()
+
 		now := time.Now()
 		for key, expires := range m.expires {
 			if now.After(expires) {
@@ -79,6 +80,7 @@ func (m *TTLMap[K, V]) cleanup() {
 				delete(m.expires, key)
 			}
 		}
+
 		m.mu.Unlock()
 	}
 }

@@ -21,6 +21,7 @@ func New(app *setup.App, sessionManager *session.Manager) *Layout {
 		logger:         app.Logger.Named("selector_menu"),
 	}
 	l.menu = NewMenu(l)
+
 	return l
 }
 

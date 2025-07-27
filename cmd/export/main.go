@@ -208,6 +208,7 @@ func getExportConfig(c *cli.Command) (*export.Config, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to read iterations: %w", err)
 		}
+
 		config.Iterations = iter
 	}
 
@@ -217,6 +218,7 @@ func getExportConfig(c *cli.Command) (*export.Config, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to read memory: %w", err)
 		}
+
 		config.Memory = mem
 	}
 
@@ -226,10 +228,12 @@ func getExportConfig(c *cli.Command) (*export.Config, error) {
 // promptString prompts for a string value.
 func promptString(reader *bufio.Reader, prompt string) (string, error) {
 	fmt.Print(prompt + ": ")
+
 	input, err := reader.ReadString('\n')
 	if err != nil {
 		return "", err
 	}
+
 	return strings.TrimSpace(input), nil
 }
 

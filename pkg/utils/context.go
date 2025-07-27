@@ -38,6 +38,7 @@ func ContextSleepWithLog(ctx context.Context, duration time.Duration, logger *za
 		if logger != nil && cancelMessage != "" {
 			logger.Info(cancelMessage)
 		}
+
 		return SleepCancelled
 	}
 }
@@ -49,6 +50,7 @@ func ContextSleepUntil(ctx context.Context, target time.Time) SleepResult {
 	if duration <= 0 {
 		return SleepCompleted
 	}
+
 	return ContextSleep(ctx, duration)
 }
 
@@ -59,6 +61,7 @@ func ContextSleepUntilWithLog(ctx context.Context, target time.Time, logger *zap
 	if duration <= 0 {
 		return SleepCompleted
 	}
+
 	return ContextSleepWithLog(ctx, duration, logger, cancelMessage)
 }
 
@@ -81,6 +84,7 @@ func ContextGuardWithLog(ctx context.Context, logger *zap.Logger, cancelMessage 
 		if logger != nil && cancelMessage != "" {
 			logger.Info(cancelMessage)
 		}
+
 		return true
 	default:
 		return false
@@ -93,6 +97,7 @@ func ContextGuardWithLog(ctx context.Context, logger *zap.Logger, cancelMessage 
 func ErrorSleep(ctx context.Context, duration time.Duration, logger *zap.Logger, workerName string) bool {
 	result := ContextSleepWithLog(ctx, duration, logger,
 		"Context cancelled during error wait, stopping "+workerName)
+
 	return result == SleepCompleted
 }
 
@@ -102,6 +107,7 @@ func ErrorSleep(ctx context.Context, duration time.Duration, logger *zap.Logger,
 func ThresholdSleep(ctx context.Context, duration time.Duration, logger *zap.Logger, workerName string) bool {
 	result := ContextSleepWithLog(ctx, duration, logger,
 		"Context cancelled during threshold pause, stopping "+workerName)
+
 	return result == SleepCompleted
 }
 
@@ -111,5 +117,6 @@ func ThresholdSleep(ctx context.Context, duration time.Duration, logger *zap.Log
 func IntervalSleep(ctx context.Context, duration time.Duration, logger *zap.Logger, workerName string) bool {
 	result := ContextSleepWithLog(ctx, duration, logger,
 		"Context cancelled during pause, stopping "+workerName)
+
 	return result == SleepCompleted
 }

@@ -79,14 +79,18 @@ func (c *UserChecker) ProcessUsers(
 	ctxWithTimeout, cancel := context.WithTimeout(ctx, 10*time.Minute)
 	defer cancel()
 
-	// Process friend checker
-	confirmedFriendsMap, flaggedFriendsMap := c.friendChecker.ProcessUsers(
-		ctxWithTimeout, userInfos, reasonsMap,
+	// Prepare friend and group maps
+	confirmedFriendsMap, flaggedFriendsMap := c.friendChecker.PrepareFriendMaps(ctxWithTimeout, userInfos)
+	confirmedGroupsMap, flaggedGroupsMap := c.groupChecker.PrepareGroupMaps(ctxWithTimeout, userInfos)
+
+	// Process friend checker with pre-prepared maps
+	c.friendChecker.ProcessUsers(
+		ctxWithTimeout, userInfos, reasonsMap, confirmedFriendsMap, flaggedFriendsMap, confirmedGroupsMap, flaggedGroupsMap,
 	)
 
-	// Process group checker
-	confirmedGroupsMap, flaggedGroupsMap := c.groupChecker.ProcessUsers(
-		ctxWithTimeout, userInfos, reasonsMap, confirmedFriendsMap, flaggedFriendsMap,
+	// Process group checker with pre-prepared maps
+	c.groupChecker.ProcessUsers(
+		ctxWithTimeout, userInfos, reasonsMap, confirmedFriendsMap, flaggedFriendsMap, confirmedGroupsMap, flaggedGroupsMap,
 	)
 
 	// Prepare user info maps with translations
@@ -107,8 +111,8 @@ func (c *UserChecker) ProcessUsers(
 	// Process condo checker
 	c.condoChecker.ProcessUsers(ctxWithTimeout, userInfos, reasonsMap)
 
-	// Process ivan messages
-	c.ivanAnalyzer.ProcessUsers(ctxWithTimeout, userInfos, reasonsMap)
+	// // Process ivan messages
+	// c.ivanAnalyzer.ProcessUsers(ctxWithTimeout, userInfos, reasonsMap)
 
 	// Process outfit analysis
 	flaggedOutfits := c.outfitAnalyzer.ProcessOutfits(ctxWithTimeout, userInfos, reasonsMap, inappropriateOutfitFlags)
@@ -116,6 +120,7 @@ func (c *UserChecker) ProcessUsers(
 	// Stop if no users were flagged
 	if len(reasonsMap) == 0 {
 		c.logger.Info("No flagged users found", zap.Int("userInfos", len(userInfos)))
+
 		return &ProcessResult{
 			FlaggedStatus: make(map[uint64]struct{}),
 			FlaggedUsers:  make(map[uint64]*types.ReviewUser),
@@ -178,31 +183,40 @@ func (c *UserChecker) prepareUserInfoMaps(
 			// Skip empty descriptions
 			if info.Description == "" {
 				mu.Lock()
+
 				translatedInfos[info.Name] = info
+
 				mu.Unlock()
+
 				return nil
 			}
 
 			// Translate the description with retry
 			var translated string
+
 			err := utils.WithRetry(ctx, func() error {
 				var err error
+
 				translated, err = c.translator.Translate(
 					ctx,
 					info.Description,
 					"auto", // Auto-detect source language
 					"en",   // Translate to English
 				)
+
 				return err
 			}, utils.GetAIRetryOptions())
 			if err != nil {
 				// Use original userInfo if translation fails
 				mu.Lock()
+
 				translatedInfos[info.Name] = info
+
 				mu.Unlock()
 				c.logger.Error("Translation failed, using original description",
 					zap.String("username", info.Name),
 					zap.Error(err))
+
 				return nil
 			}
 
@@ -210,11 +224,16 @@ func (c *UserChecker) prepareUserInfoMaps(
 			translatedInfo := *info
 			if translatedInfo.Description != translated {
 				translatedInfo.Description = translated
+
 				c.logger.Debug("Translated description", zap.String("username", info.Name))
 			}
+
 			mu.Lock()
+
 			translatedInfos[info.Name] = &translatedInfo
+
 			mu.Unlock()
+
 			return nil
 		})
 	}
@@ -290,6 +309,7 @@ func (c *UserChecker) trackOutfitAssets(
 				c.logger.Error("Failed to fetch outfit details",
 					zap.Error(err),
 					zap.Uint64("userID", user.ID))
+
 				continue
 			}
 
@@ -335,6 +355,7 @@ func (c *UserChecker) trackFavoriteGames(ctx context.Context, flaggedUsers map[u
 			c.logger.Error("Failed to fetch favorite games for user",
 				zap.Uint64("userID", userID),
 				zap.Error(err))
+
 			continue
 		}
 

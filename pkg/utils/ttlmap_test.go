@@ -28,6 +28,7 @@ func TestTTLMap(t *testing.T) {
 		t.Parallel()
 		m.Set("test2", 456)
 		time.Sleep(ttl + 50*time.Millisecond) // Wait for expiration
+
 		_, exists := m.Get("test2")
 		assert.False(t, exists)
 	})
@@ -44,6 +45,7 @@ func TestTTLMap(t *testing.T) {
 	// Test non-existent key
 	t.Run("non-existent key", func(t *testing.T) {
 		t.Parallel()
+
 		_, exists := m.Get("nonexistent")
 		assert.False(t, exists)
 	})
@@ -61,6 +63,7 @@ func TestTTLMap(t *testing.T) {
 	// Test multiple types
 	t.Run("different types", func(t *testing.T) {
 		t.Parallel()
+
 		stringMap := utils.NewTTLMap[string, string](ttl)
 		stringMap.Set("hello", "world")
 		value, exists := stringMap.Get("hello")
@@ -74,14 +77,17 @@ func TestTTLMapConcurrent(t *testing.T) {
 
 	t.Run("concurrent access", func(t *testing.T) {
 		t.Parallel()
+
 		ttl := 100 * time.Millisecond
 		m := utils.NewTTLMap[string, int](ttl)
 
 		done := make(chan bool)
+
 		go func() {
 			for i := range 100 {
 				m.Set("key", i)
 			}
+
 			done <- true
 		}()
 
@@ -89,6 +95,7 @@ func TestTTLMapConcurrent(t *testing.T) {
 			for range 100 {
 				m.Get("key")
 			}
+
 			done <- true
 		}()
 

@@ -35,6 +35,7 @@ func NewMenu(layout *Layout) *Menu {
 		ButtonHandlerFunc: m.handleButton,
 		ModalHandlerFunc:  m.handleModal,
 	}
+
 	return m
 }
 
@@ -83,6 +84,7 @@ func (m *Menu) handleSelectMenu(ctx *interaction.Context, s *session.Session, cu
 				zap.Uint64("user_id", userID),
 				zap.String("action", option))
 			ctx.Error("You do not have permission to perform this action.")
+
 			return
 		}
 	case constants.LookupRobloxGroupButtonCustomID,
@@ -93,6 +95,7 @@ func (m *Menu) handleSelectMenu(ctx *interaction.Context, s *session.Session, cu
 				zap.Uint64("user_id", userID),
 				zap.String("action", option))
 			ctx.Error("You do not have permission to perform this action.")
+
 			return
 		}
 	}
@@ -216,6 +219,7 @@ func (m *Menu) handleLookupRobloxUserModalSubmit(ctx *interaction.Context, s *se
 			m.layout.logger.Error("Failed to fetch user", zap.Error(err))
 			ctx.Error("Failed to fetch user for review. Please try again.")
 		}
+
 		return
 	}
 
@@ -249,6 +253,7 @@ func (m *Menu) handleLookupRobloxGroupModalSubmit(ctx *interaction.Context, s *s
 	// Parse group URL if provided
 	if utils.IsRobloxGroupURL(groupIDStr) {
 		var err error
+
 		groupIDStr, err = utils.ExtractGroupIDFromURL(groupIDStr)
 		if err != nil {
 			ctx.Cancel("Invalid Roblox group URL. Please provide a valid URL or ID.")
@@ -268,6 +273,7 @@ func (m *Menu) handleLookupRobloxGroupModalSubmit(ctx *interaction.Context, s *s
 			m.layout.logger.Error("Failed to fetch group", zap.Error(err))
 			ctx.Error("Failed to fetch group for review. Please try again.")
 		}
+
 		return
 	}
 
@@ -339,8 +345,10 @@ func (m *Menu) handleButton(ctx *interaction.Context, s *session.Session, custom
 				zap.Uint64("user_id", userID),
 				zap.String("action", customID))
 			ctx.Error("You do not have permission to perform this action.")
+
 			return
 		}
+
 		ctx.Show(constants.UserReviewPageName, "")
 	case constants.StartGroupReviewButtonCustomID:
 		if !isAdmin {
@@ -348,8 +356,10 @@ func (m *Menu) handleButton(ctx *interaction.Context, s *session.Session, custom
 				zap.Uint64("user_id", userID),
 				zap.String("action", customID))
 			ctx.Error("You do not have permission to perform this action.")
+
 			return
 		}
+
 		ctx.Show(constants.GroupReviewPageName, "")
 	}
 }

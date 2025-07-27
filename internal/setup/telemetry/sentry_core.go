@@ -29,6 +29,7 @@ func (c *SentryCore) Check(ent zapcore.Entry, ce *zapcore.CheckedEntry) *zapcore
 	if c.Enabled(ent.Level) {
 		return ce.AddCore(ent, c)
 	}
+
 	return ce
 }
 
@@ -39,6 +40,7 @@ func (c *SentryCore) Write(ent zapcore.Entry, fields []zapcore.Field) error {
 		sentry.WithScope(func(scope *sentry.Scope) {
 			// Convert zap fields to Sentry extras
 			enc := zapcore.NewMapObjectEncoder()
+
 			var errorValues []string
 
 			for i := range fields {
@@ -49,6 +51,7 @@ func (c *SentryCore) Write(ent zapcore.Entry, fields []zapcore.Field) error {
 						errorValues = append(errorValues, err.Error())
 					}
 				}
+
 				fields[i].AddTo(enc)
 			}
 
@@ -71,15 +74,18 @@ func (c *SentryCore) Write(ent zapcore.Entry, fields []zapcore.Field) error {
 			default:
 				level = sentry.LevelInfo
 			}
+
 			scope.SetLevel(level)
 
 			// Extract package path and function name from caller
 			var packagePath, funcName string
+
 			if ent.Caller.Function != "" {
 				lastSlash := strings.LastIndexByte(ent.Caller.Function, '/')
 				if lastSlash > -1 {
 					packagePath = ent.Caller.Function[:lastSlash]
 				}
+
 				lastDot := strings.LastIndexByte(ent.Caller.Function, '.')
 				if lastDot > -1 {
 					funcName = ent.Caller.Function[lastDot+1:]
@@ -95,6 +101,7 @@ func (c *SentryCore) Write(ent zapcore.Entry, fields []zapcore.Field) error {
 
 			// If we have error values, include them in the exception
 			exceptionValue := ent.Message
+
 			if len(errorValues) > 0 {
 				errStr := strings.Join(errorValues, "; ")
 				exceptionValue = fmt.Sprintf("%s: %s", ent.Message, errStr)

@@ -52,6 +52,7 @@ func (r *AppealModel) CreateAppeal(ctx context.Context, appeal *types.Appeal, re
 			LastViewed:   now,
 			LastActivity: now,
 		}
+
 		_, err = tx.NewInsert().Model(timeline).Exec(ctx)
 		if err != nil {
 			return fmt.Errorf("failed to create appeal timeline: %w (appealID=%d)", err, appeal.ID)
@@ -65,6 +66,7 @@ func (r *AppealModel) CreateAppeal(ctx context.Context, appeal *types.Appeal, re
 			Content:   reason,
 			CreatedAt: now,
 		}
+
 		_, err = tx.NewInsert().Model(message).Exec(ctx)
 		if err != nil {
 			return fmt.Errorf("failed to create initial appeal message: %w (appealID=%d)", err, appeal.ID)
@@ -83,6 +85,7 @@ func (r *AppealModel) CreateAppeal(ctx context.Context, appeal *types.Appeal, re
 // AcceptAppeal marks an appeal as accepted and updates its status.
 func (r *AppealModel) AcceptAppeal(ctx context.Context, appealID int64, timestamp time.Time, reason string) error {
 	now := time.Now()
+
 	return dbretry.Transaction(ctx, r.db, func(ctx context.Context, tx bun.Tx) error {
 		// Update appeal status
 		_, err := tx.NewUpdate().
@@ -109,6 +112,7 @@ func (r *AppealModel) AcceptAppeal(ctx context.Context, appealID int64, timestam
 
 		r.logger.Debug("Accepted appeal",
 			zap.Int64("appealID", appealID))
+
 		return nil
 	})
 }
@@ -116,6 +120,7 @@ func (r *AppealModel) AcceptAppeal(ctx context.Context, appealID int64, timestam
 // RejectAppeal marks an appeal as rejected and updates its status.
 func (r *AppealModel) RejectAppeal(ctx context.Context, appealID int64, timestamp time.Time, reason string) error {
 	now := time.Now()
+
 	return dbretry.Transaction(ctx, r.db, func(ctx context.Context, tx bun.Tx) error {
 		// Update appeal status
 		_, err := tx.NewUpdate().
@@ -142,6 +147,7 @@ func (r *AppealModel) RejectAppeal(ctx context.Context, appealID int64, timestam
 
 		r.logger.Debug("Rejected appeal",
 			zap.Int64("appealID", appealID))
+
 		return nil
 	})
 }
@@ -160,6 +166,7 @@ func (r *AppealModel) HasPendingAppealByRequester(
 		if err != nil {
 			return false, fmt.Errorf("failed to check pending appeals: %w (requesterID=%d)", err, requesterID)
 		}
+
 		return exists, nil
 	})
 }
@@ -168,6 +175,7 @@ func (r *AppealModel) HasPendingAppealByRequester(
 func (r *AppealModel) GetAppealByID(ctx context.Context, appealID int64) (*types.FullAppeal, error) {
 	return dbretry.Operation(ctx, func(ctx context.Context) (*types.FullAppeal, error) {
 		var fullAppeal types.FullAppeal
+
 		fullAppeal.Appeal = new(types.Appeal)
 
 		// Query both appeal and its timeline
@@ -182,9 +190,12 @@ func (r *AppealModel) GetAppealByID(ctx context.Context, appealID int64) (*types
 			if errors.Is(err, sql.ErrNoRows) {
 				return nil, types.ErrNoAppealsFound
 			}
+
 			r.logger.Error("Failed to get appeal", zap.Error(err))
+
 			return nil, fmt.Errorf("failed to get appeal: %w", err)
 		}
+
 		return &fullAppeal, nil
 	})
 }
@@ -221,6 +232,7 @@ func (r *AppealModel) HasPendingAppealByUserID(
 		if err != nil {
 			return false, fmt.Errorf("failed to check pending appeals: %w (userID=%d)", err, userID)
 		}
+
 		return exists, nil
 	})
 }
@@ -248,17 +260,20 @@ func (r *AppealModel) GetAppealsToReview(
 			if cursor != nil {
 				query = query.Where("(appeal.timestamp, appeal.id) >= (?, ?)", cursor.Timestamp, cursor.ID)
 			}
+
 			query = query.Order("appeal.timestamp ASC", "appeal.id ASC")
 		case enum.AppealSortByClaimed:
 			query = query.Where("claimed_by = ?", reviewerID)
 			if cursor != nil {
 				query = query.Where("(t.last_activity, appeal.id) <= (?, ?)", cursor.LastActivity, cursor.ID)
 			}
+
 			query = query.Order("t.last_activity DESC", "appeal.id DESC")
 		case enum.AppealSortByNewest:
 			if cursor != nil {
 				query = query.Where("(appeal.timestamp, appeal.id) <= (?, ?)", cursor.Timestamp, cursor.ID)
 			}
+
 			query = query.Order("appeal.timestamp DESC", "appeal.id DESC")
 		}
 
@@ -266,6 +281,7 @@ func (r *AppealModel) GetAppealsToReview(
 		query = query.Limit(limit + 1)
 
 		var results []*types.FullAppeal
+
 		err := query.Scan(ctx, &results)
 		if err != nil {
 			return nil, fmt.Errorf(
@@ -303,6 +319,7 @@ func (r *AppealModel) GetAppealsByRequester(
 			Limit(limit + 1) // Get one extra to determine if there are more results
 
 		var results []*types.FullAppeal
+
 		err := query.Scan(ctx, &results)
 		if err != nil {
 			return nil, fmt.Errorf(
@@ -326,6 +343,7 @@ func (r *AppealModel) GetRejectedAppealsCount(ctx context.Context, userID uint64
 		if err != nil {
 			return 0, fmt.Errorf("failed to count rejected appeals: %w (userID=%d)", err, userID)
 		}
+
 		return count, nil
 	})
 }
@@ -341,6 +359,7 @@ func (r *AppealModel) IsUserBlacklisted(ctx context.Context, userID uint64, appe
 		if err != nil {
 			return false, fmt.Errorf("failed to check appeal blacklist: %w (userID=%d, type=%s)", err, userID, appealType)
 		}
+
 		return exists, nil
 	})
 }
@@ -360,6 +379,7 @@ func (r *AppealModel) BlacklistUser(ctx context.Context, blacklist *types.Appeal
 			zap.String("type", blacklist.Type.String()),
 			zap.Uint64("reviewerID", blacklist.ReviewerID),
 			zap.Int64("appealID", blacklist.AppealID))
+
 		return nil
 	})
 }
@@ -368,6 +388,7 @@ func (r *AppealModel) BlacklistUser(ctx context.Context, blacklist *types.Appeal
 func (r *AppealModel) GetAppealMessages(ctx context.Context, appealID int64) ([]*types.AppealMessage, error) {
 	return dbretry.Operation(ctx, func(ctx context.Context) ([]*types.AppealMessage, error) {
 		var messages []*types.AppealMessage
+
 		err := r.db.NewSelect().
 			Model(&messages).
 			Where("appeal_id = ?", appealID).
@@ -411,6 +432,7 @@ func (r *AppealModel) AddAppealMessage(
 // ClaimAppeal claims an appeal by setting the reviewer ID and timestamp.
 func (r *AppealModel) ClaimAppeal(ctx context.Context, appealID int64, timestamp time.Time, reviewerID uint64) error {
 	now := time.Now()
+
 	return dbretry.Transaction(ctx, r.db, func(ctx context.Context, tx bun.Tx) error {
 		// Update the appeal to set claimed by and claimed at
 		_, err := tx.NewUpdate().
@@ -442,6 +464,7 @@ func (r *AppealModel) ClaimAppeal(ctx context.Context, appealID int64, timestamp
 // ReopenAppeal changes a rejected or accepted appeal back to pending status and claims it for the reviewer.
 func (r *AppealModel) ReopenAppeal(ctx context.Context, appealID int64, timestamp time.Time, reviewerID uint64) error {
 	now := time.Now()
+
 	return dbretry.Transaction(ctx, r.db, func(ctx context.Context, tx bun.Tx) error {
 		// Update appeal status
 		_, err := tx.NewUpdate().
@@ -471,6 +494,7 @@ func (r *AppealModel) ReopenAppeal(ctx context.Context, appealID int64, timestam
 
 		r.logger.Debug("Reopened appeal",
 			zap.Int64("appealID", appealID))
+
 		return nil
 	})
 }

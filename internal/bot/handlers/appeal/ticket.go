@@ -40,6 +40,7 @@ func NewTicketMenu(layout *Layout) *TicketMenu {
 		SelectHandlerFunc:  m.handleSelectMenu,
 		ModalHandlerFunc:   m.handleModal,
 	}
+
 	return m
 }
 
@@ -65,6 +66,7 @@ func (m *TicketMenu) Show(ctx *interaction.Context, s *session.Session) {
 	if err != nil {
 		m.layout.logger.Error("Failed to get appeal messages", zap.Error(err))
 		ctx.Error("Failed to load appeal messages. Please try again.")
+
 		return
 	}
 
@@ -73,6 +75,7 @@ func (m *TicketMenu) Show(ctx *interaction.Context, s *session.Session) {
 	if err != nil {
 		m.layout.logger.Error("Failed to get rejected appeals count", zap.Error(err))
 	}
+
 	session.AppealRejectedCount.Set(s, rejectedCount)
 
 	// Calculate total pages
@@ -110,11 +113,13 @@ func (m *TicketMenu) handlePendingAppeal(ctx *interaction.Context, s *session.Se
 
 				ResetAppealData(s)
 				ctx.Reload("Appeal automatically closed: Roblox user no longer exists in database.")
+
 				return false
 			}
 
 			m.layout.logger.Error("Failed to verify Roblox user status", zap.Error(err))
 			ctx.Error("Failed to verify user status. Please try again.")
+
 			return false
 		}
 
@@ -129,6 +134,7 @@ func (m *TicketMenu) handlePendingAppeal(ctx *interaction.Context, s *session.Se
 
 			ResetAppealData(s)
 			ctx.Reload("Appeal automatically closed: Roblox user status changed to " + user.Status.String())
+
 			return false
 		}
 
@@ -138,6 +144,7 @@ func (m *TicketMenu) handlePendingAppeal(ctx *interaction.Context, s *session.Se
 		if err != nil {
 			m.layout.logger.Error("Failed to get Discord user guild count", zap.Error(err))
 			ctx.Error("Failed to verify Discord user status. Please try again.")
+
 			return false
 		}
 
@@ -147,6 +154,7 @@ func (m *TicketMenu) handlePendingAppeal(ctx *interaction.Context, s *session.Se
 		if err != nil && !errors.Is(err, sql.ErrNoRows) {
 			m.layout.logger.Error("Failed to get message summary", zap.Error(err))
 			ctx.Error("Failed to verify Discord user status. Please try again.")
+
 			return false
 		}
 
@@ -162,6 +170,7 @@ func (m *TicketMenu) handlePendingAppeal(ctx *interaction.Context, s *session.Se
 
 			ResetAppealData(s)
 			ctx.Reload("Appeal automatically accepted: Discord user is no longer flagged.")
+
 			return false
 		}
 	}
@@ -179,6 +188,7 @@ func (m *TicketMenu) handleButton(ctx *interaction.Context, s *session.Session, 
 
 		session.PaginationPage.Set(s, page)
 		ctx.Cancel("")
+
 		return
 	}
 
@@ -274,8 +284,10 @@ func (m *TicketMenu) handleLookupUser(ctx *interaction.Context, s *session.Sessi
 				ctx.Cancel("Failed to find Roblox user. They may not be in our database.")
 				return
 			}
+
 			m.layout.logger.Error("Failed to fetch Roblox user for review", zap.Error(err))
 			ctx.Error("Failed to fetch user for review. Please try again.")
+
 			return
 		}
 
@@ -343,6 +355,7 @@ func (m *TicketMenu) handleClaimAppeal(ctx *interaction.Context, s *session.Sess
 	if err := m.layout.db.Model().Appeal().ClaimAppeal(ctx.Context(), appeal.ID, appeal.Timestamp, userID); err != nil {
 		m.layout.logger.Error("Failed to claim appeal", zap.Error(err))
 		ctx.Error("Failed to claim appeal. Please try again.")
+
 		return
 	}
 
@@ -440,6 +453,7 @@ func (m *TicketMenu) handleCloseAppeal(ctx *interaction.Context, s *session.Sess
 			zap.Error(err),
 			zap.Int64("appealID", appeal.ID))
 		ctx.Error("Failed to close appeal. Please try again.")
+
 		return
 	}
 
@@ -482,6 +496,7 @@ func (m *TicketMenu) handleReopenAppeal(ctx *interaction.Context, s *session.Ses
 			zap.Error(err),
 			zap.Int64("appealID", appeal.ID))
 		ctx.Error("Failed to reopen appeal. Please try again.")
+
 		return
 	}
 
@@ -638,6 +653,7 @@ func (m *TicketMenu) handleRespondModalSubmit(ctx *interaction.Context, s *sessi
 	if err != nil {
 		m.layout.logger.Error("Failed to add appeal message", zap.Error(err))
 		ctx.Error("Failed to save response. Please try again.")
+
 		return
 	}
 
@@ -674,6 +690,7 @@ func (m *TicketMenu) handleAcceptModalSubmit(ctx *interaction.Context, s *sessio
 
 	// Handle appeal based on type
 	var err error
+
 	switch appeal.Type {
 	case enum.AppealTypeRoblox:
 		err = m.handleAcceptRobloxAppeal(ctx.Context(), appeal, reviewerID, reason)
@@ -684,6 +701,7 @@ func (m *TicketMenu) handleAcceptModalSubmit(ctx *interaction.Context, s *sessio
 	if err != nil {
 		m.layout.logger.Error("Failed to process appeal acceptance", zap.Error(err))
 		ctx.Error("Failed to process appeal. Please try again.")
+
 		return
 	}
 
@@ -692,6 +710,7 @@ func (m *TicketMenu) handleAcceptModalSubmit(ctx *interaction.Context, s *sessio
 	if err != nil {
 		m.layout.logger.Error("Failed to accept appeal", zap.Error(err))
 		ctx.Error("Failed to accept appeal. Please try again.")
+
 		return
 	}
 
@@ -836,6 +855,7 @@ func (m *TicketMenu) handleRejectModalSubmit(ctx *interaction.Context, s *sessio
 		if err := m.layout.db.Model().Ban().BanUser(ctx.Context(), ban); err != nil {
 			m.layout.logger.Error("Failed to create ban record", zap.Error(err))
 			ctx.Error("Failed to create ban record. Please try again.")
+
 			return
 		}
 	}
@@ -845,6 +865,7 @@ func (m *TicketMenu) handleRejectModalSubmit(ctx *interaction.Context, s *sessio
 	if err != nil {
 		m.layout.logger.Error("Failed to reject appeal", zap.Error(err))
 		ctx.Error("Failed to reject appeal. Please try again.")
+
 		return
 	}
 
@@ -896,6 +917,7 @@ func (m *TicketMenu) handleDeleteUserDataModalSubmit(ctx *interaction.Context, s
 	}
 
 	var redactErr error
+
 	switch appeal.Type {
 	case enum.AppealTypeRoblox:
 		// Get Roblox user from database
@@ -907,8 +929,10 @@ func (m *TicketMenu) handleDeleteUserDataModalSubmit(ctx *interaction.Context, s
 				ctx.Error("Failed to find Roblox user. They may no longer exist in our database.")
 				return
 			}
+
 			m.layout.logger.Error("Failed to get Roblox user for deletion", zap.Error(err))
 			ctx.Error("Failed to get user information. Please try again.")
+
 			return
 		}
 
@@ -923,6 +947,7 @@ func (m *TicketMenu) handleDeleteUserDataModalSubmit(ctx *interaction.Context, s
 	if redactErr != nil {
 		m.layout.logger.Error("Failed to redact user data", zap.Error(redactErr))
 		ctx.Error("Failed to process user data. Please try again.")
+
 		return
 	}
 
@@ -933,6 +958,7 @@ func (m *TicketMenu) handleDeleteUserDataModalSubmit(ctx *interaction.Context, s
 	); err != nil {
 		m.layout.logger.Error("Failed to accept appeal after data deletion", zap.Error(err))
 		ctx.Error("Failed to update appeal status. Please try again.")
+
 		return
 	}
 
@@ -978,6 +1004,7 @@ func (m *TicketMenu) handleBlacklistUserModalSubmit(ctx *interaction.Context, s 
 	if err := m.layout.db.Model().Appeal().BlacklistUser(ctx.Context(), blacklist); err != nil {
 		m.layout.logger.Error("Failed to blacklist user", zap.Error(err))
 		ctx.Error("Failed to blacklist user. Please try again.")
+
 		return
 	}
 
@@ -997,6 +1024,7 @@ func (m *TicketMenu) handleBlacklistUserModalSubmit(ctx *interaction.Context, s 
 		if err := m.layout.db.Model().Ban().BanUser(ctx.Context(), ban); err != nil {
 			m.layout.logger.Error("Failed to create ban record", zap.Error(err))
 			ctx.Error("Failed to create ban record. Please try again.")
+
 			return
 		}
 	}
@@ -1008,6 +1036,7 @@ func (m *TicketMenu) handleBlacklistUserModalSubmit(ctx *interaction.Context, s 
 	); err != nil {
 		m.layout.logger.Error("Failed to reject appeal after blacklisting", zap.Error(err))
 		ctx.Error("Failed to update appeal status. Please try again.")
+
 		return
 	}
 
@@ -1118,6 +1147,7 @@ func (m *TicketMenu) redactDiscordUserData(
 func (m *TicketMenu) isMessageAllowed(messages []*types.AppealMessage, userID uint64) (bool, string) {
 	// Check if the last 3 messages were from this user
 	consecutiveUserMessages := 0
+
 	for i := len(messages) - 1; i >= 0 && i > len(messages)-4; i-- {
 		if messages[i].UserID == userID && messages[i].Role == enum.MessageRoleUser {
 			consecutiveUserMessages++
@@ -1146,11 +1176,13 @@ func (m *TicketMenu) isMessageAllowed(messages []*types.AppealMessage, userID ui
 // useFreshAppeal gets a fresh appeal from the database instead of using the cached version.
 func (m *TicketMenu) useFreshAppeal(ctx context.Context, s *session.Session) (*types.FullAppeal, error) {
 	appeal := session.AppealSelected.Get(s)
+
 	freshAppeal, err := m.layout.db.Model().Appeal().GetAppealByID(ctx, appeal.ID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get fresh appeal data: %w", err)
 	}
 
 	session.AppealSelected.Set(s, freshAppeal)
+
 	return freshAppeal, nil
 }

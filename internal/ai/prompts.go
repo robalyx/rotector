@@ -43,7 +43,7 @@ Key instructions:
 9. If one outfit is flagged, examine other outfits carefully for similar inappropriate elements or themes
 10. If there is no consistent inappropriate theme pattern across the user's outfits, reconsider whether the flagged violation is accurate
 
-CRITICAL: Pay special attention to textures, patterns, and visual effects that may simulate nudity. ANY texture applied directly to a bare avatar body (wood, stone, brick, etc.) represents nudity and should be flagged, regardless of whether the texture appears "stylized" or "non-human" - these are attempts to circumvent nudity detection
+CRITICAL: Pay special attention to textures, patterns, and visual effects that may simulate nudity. ANY texture applied directly to a bare avatar body (wood, stone, brick, etc.) represents nudity and should be flagged, regardless of whether the texture appears "stylized" or "non-human"
 
 Instruction: FLAG outfits that are sexual or adult-themed:
 - Maid outfits with revealing or sexualized elements (extremely low-cut tops, suggestive poses, or fetish-style accessories)
@@ -95,7 +95,7 @@ DO NOT flag these legitimate themes and elements:
 - Dance or performance outfits standard for specific genres, unless explicitly sexualized beyond the norm
 - Short skirts, mini-skirts, or skirts of any length unless part of a clearly sexualized outfit context
 - Default placeholder outfits that are genuinely basic geometric shapes or simple solid colors without any textures, patterns, or visual elements
-- Wood-themed costumes or characters where wood textures are applied to actual clothing items or accessories (NOT when textures are applied directly to bare avatar bodies)
+- Wood-themed costumes or characters where wood textures are applied to actual clothing items or accessories (flagging only applies when wood textures are used on skin color/flesh tones with no shirt or pants clothing)
 - Meme character outfits
 - Standard crop tops that show midriff without revealing cutouts or extreme brevity (including when paired with shorts, pants, or skirts)
 - V-neck tops, dresses, or necklines that show cleavage without additional revealing elements

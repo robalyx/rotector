@@ -39,16 +39,19 @@ func (o *OutfitFetcher) GetOutfits(
 		o.logger.Error("Failed to fetch user avatar",
 			zap.Error(err),
 			zap.Uint64("userID", userID))
+
 		return nil, nil, err
 	}
 
 	// Get user's outfits
 	builder := avatar.NewUserOutfitsBuilder(userID).WithItemsPerPage(100).WithIsEditable(true)
+
 	outfits, err := o.roAPI.Avatar().GetUserOutfits(ctx, builder.Build())
 	if err != nil {
 		o.logger.Error("Failed to fetch user outfits",
 			zap.Error(err),
 			zap.Uint64("userID", userID))
+
 		return nil, nil, err
 	}
 
@@ -79,18 +82,23 @@ func (o *OutfitFetcher) GetOutfitDetails(
 
 	for _, outfit := range outfits {
 		outfitID := outfit.ID
+
 		p.Go(func(ctx context.Context) error {
 			details, err := o.roAPI.Avatar().GetOutfitDetails(ctx, outfitID)
 			if err != nil {
 				o.logger.Warn("Failed to fetch outfit details",
 					zap.Error(err),
 					zap.Uint64("outfitID", outfitID))
+
 				return nil
 			}
 
 			mu.Lock()
+
 			outfitAssets[outfitID] = details.Assets
+
 			mu.Unlock()
+
 			return nil
 		})
 	}

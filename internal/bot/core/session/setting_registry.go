@@ -86,6 +86,7 @@ func validateEnum(validOptions []string) Validator {
 		if _, valid := optionMap[value]; !valid {
 			return fmt.Errorf("%w: must be one of %v", ErrInvalidOption, validOptions)
 		}
+
 		return nil
 	}
 }
@@ -95,6 +96,7 @@ func validateBool(value string, _ uint64) error {
 	if value != "true" && value != "false" {
 		return ErrInvalidBoolValue
 	}
+
 	return nil
 }
 
@@ -104,9 +106,11 @@ func validateNumber(value string, _ uint64) error {
 	if err != nil {
 		return fmt.Errorf("%w: %w", ErrInvalidNumber, err)
 	}
+
 	if num < 0 {
 		return fmt.Errorf("%w: %d", ErrInvalidNumber, num)
 	}
+
 	return nil
 }
 

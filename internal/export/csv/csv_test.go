@@ -20,6 +20,7 @@ func verifyCSVFile(t *testing.T, filepath string, expectedRecords []*types.Expor
 	// Open file
 	file, err := os.Open(filepath)
 	require.NoError(t, err)
+
 	defer file.Close()
 
 	// Create CSV reader

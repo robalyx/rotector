@@ -92,6 +92,7 @@ func (h *Handler) handleMessageURLs(e *gateway.MessageCreateEvent) {
 			if field.Value != "" {
 				h.handleGameURL(serverID, field.Value)
 			}
+
 			if field.Name != "" {
 				h.handleGameURL(serverID, field.Name)
 			}

@@ -14,6 +14,7 @@ import (
 // CommentsMenu handles the display and interaction logic for viewing comments.
 type CommentsMenu struct {
 	BaseReviewMenu
+
 	targetType view.TargetType
 	page       *interaction.Page
 }
@@ -33,6 +34,7 @@ func NewCommentsMenu(logger *zap.Logger, db database.Client, targetType view.Tar
 		ButtonHandlerFunc: m.handleButton,
 		ModalHandlerFunc:  m.handleModal,
 	}
+
 	return m
 }
 
@@ -51,8 +53,11 @@ func (m *CommentsMenu) Show(ctx *interaction.Context, s *session.Session) {
 	}
 
 	// Fetch updated comments
-	var comments []*types.Comment
-	var err error
+	var (
+		comments []*types.Comment
+		err      error
+	)
+
 	if m.targetType == view.TargetTypeUser {
 		comments, err = m.db.Model().Comment().GetUserComments(ctx.Context(), targetID)
 	} else {
@@ -61,8 +66,10 @@ func (m *CommentsMenu) Show(ctx *interaction.Context, s *session.Session) {
 
 	if err != nil {
 		m.logger.Error("Failed to fetch comments", zap.Error(err))
+
 		comments = []*types.Comment{} // Continue without comments - not critical
 	}
+
 	session.ReviewComments.Set(s, comments)
 
 	// Store pagination info in session
@@ -86,6 +93,7 @@ func (m *CommentsMenu) handleButton(ctx *interaction.Context, s *session.Session
 		session.PaginationPage.Set(s, page)
 		session.PaginationOffset.Set(s, page*constants.CommentsPerPage)
 		ctx.Reload("")
+
 		return
 	}
 

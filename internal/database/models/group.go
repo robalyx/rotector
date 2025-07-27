@@ -70,6 +70,7 @@ func (r *GroupModel) SaveGroups(ctx context.Context, tx bun.Tx, groups []*types.
 
 	// Save group reasons
 	var reasons []*types.GroupReason
+
 	for _, group := range groups {
 		if group.Reasons != nil {
 			for reasonType, reason := range group.Reasons {
@@ -131,6 +132,7 @@ func (r *GroupModel) ConfirmGroup(ctx context.Context, group *types.ReviewGroup)
 			ReviewerID: group.ReviewerID,
 			VerifiedAt: time.Now(),
 		}
+
 		_, err = tx.NewInsert().
 			Model(verification).
 			On("CONFLICT (group_id) DO UPDATE").
@@ -203,6 +205,7 @@ func (r *GroupModel) ClearGroup(ctx context.Context, group *types.ReviewGroup) e
 			ReviewerID: group.ReviewerID,
 			ClearedAt:  time.Now(),
 		}
+
 		_, err = tx.NewInsert().
 			Model(clearance).
 			On("CONFLICT (group_id) DO UPDATE").
@@ -249,8 +252,10 @@ func (r *GroupModel) ClearGroup(ctx context.Context, group *types.ReviewGroup) e
 func (r *GroupModel) GetGroupByID(
 	ctx context.Context, groupID string, fields types.GroupField,
 ) (*types.ReviewGroup, error) {
-	var group types.Group
-	var result types.ReviewGroup
+	var (
+		group  types.Group
+		result types.ReviewGroup
+	)
 
 	err := dbretry.Transaction(ctx, r.db, func(ctx context.Context, tx bun.Tx) error {
 		// Build query
@@ -268,6 +273,7 @@ func (r *GroupModel) GetGroupByID(
 			if err != nil {
 				return types.ErrInvalidGroupID
 			}
+
 			query.Where("uuid = ?", uid)
 		}
 
@@ -277,6 +283,7 @@ func (r *GroupModel) GetGroupByID(
 			if errors.Is(err, sql.ErrNoRows) {
 				return types.ErrGroupNotFound
 			}
+
 			return fmt.Errorf("failed to get group: %w", err)
 		}
 
@@ -285,6 +292,7 @@ func (r *GroupModel) GetGroupByID(
 
 		// Get group reasons
 		var reasons []*types.GroupReason
+
 		err = tx.NewSelect().
 			Model(&reasons).
 			Where("group_id = ?", group.ID).
@@ -307,6 +315,7 @@ func (r *GroupModel) GetGroupByID(
 		switch group.Status {
 		case enum.GroupTypeConfirmed:
 			var verification types.GroupVerification
+
 			err = tx.NewSelect().
 				Model(&verification).
 				Where("group_id = ?", group.ID).
@@ -314,12 +323,14 @@ func (r *GroupModel) GetGroupByID(
 			if err != nil && !errors.Is(err, sql.ErrNoRows) {
 				return fmt.Errorf("failed to get verification data: %w", err)
 			}
+
 			if err == nil {
 				result.ReviewerID = verification.ReviewerID
 				result.VerifiedAt = verification.VerifiedAt
 			}
 		case enum.GroupTypeCleared:
 			var clearance types.GroupClearance
+
 			err = tx.NewSelect().
 				Model(&clearance).
 				Where("group_id = ?", group.ID).
@@ -327,6 +338,7 @@ func (r *GroupModel) GetGroupByID(
 			if err != nil && !errors.Is(err, sql.ErrNoRows) {
 				return fmt.Errorf("failed to get clearance data: %w", err)
 			}
+
 			if err == nil {
 				result.ReviewerID = clearance.ReviewerID
 				result.ClearedAt = clearance.ClearedAt
@@ -361,6 +373,7 @@ func (r *GroupModel) GetGroupsByIDs(
 	err := dbretry.Transaction(ctx, r.db, func(ctx context.Context, tx bun.Tx) error {
 		// Query all groups
 		var baseGroups []types.Group
+
 		err := tx.NewSelect().
 			Model(&baseGroups).
 			Column(fields.Columns()...).
@@ -372,6 +385,7 @@ func (r *GroupModel) GetGroupsByIDs(
 
 		// Get verifications and clearances
 		var verifications []types.GroupVerification
+
 		err = tx.NewSelect().
 			Model(&verifications).
 			Where("group_id IN (?)", bun.In(groupIDs)).
@@ -381,6 +395,7 @@ func (r *GroupModel) GetGroupsByIDs(
 		}
 
 		var clearances []types.GroupClearance
+
 		err = tx.NewSelect().
 			Model(&clearances).
 			Where("group_id IN (?)", bun.In(groupIDs)).
@@ -391,6 +406,7 @@ func (r *GroupModel) GetGroupsByIDs(
 
 		// Get group reasons
 		var reasons []*types.GroupReason
+
 		err = tx.NewSelect().
 			Model(&reasons).
 			Where("group_id IN (?)", bun.In(groupIDs)).
@@ -416,6 +432,7 @@ func (r *GroupModel) GetGroupsByIDs(
 			if _, ok := reasonMap[reason.GroupID]; !ok {
 				reasonMap[reason.GroupID] = make(types.Reasons[enum.GroupReasonType])
 			}
+
 			reasonMap[reason.GroupID][reason.ReasonType] = &types.Reason{
 				Message:    reason.Message,
 				Confidence: reason.Confidence,
@@ -453,6 +470,7 @@ func (r *GroupModel) GetGroupsByIDs(
 func (r *GroupModel) GetFlaggedAndConfirmedGroups(ctx context.Context) ([]*types.ReviewGroup, error) {
 	// Get groups
 	var groups []types.Group
+
 	err := dbretry.Transaction(ctx, r.db, func(ctx context.Context, tx bun.Tx) error {
 		err := tx.NewSelect().
 			Model(&groups).
@@ -485,6 +503,7 @@ func (r *GroupModel) GetGroupsToCheck(
 	ctx context.Context, limit int,
 ) (groupIDs []uint64, lockedIDs []uint64, err error) {
 	var groups []types.Group
+
 	err = dbretry.Transaction(ctx, r.db, func(ctx context.Context, tx bun.Tx) error {
 		// Get groups that need checking
 		err := tx.NewSelect().
@@ -558,18 +577,21 @@ func (r *GroupModel) GetLockedCount(ctx context.Context) (int, error) {
 	if err != nil {
 		return 0, fmt.Errorf("failed to get locked groups count: %w", err)
 	}
+
 	return count, nil
 }
 
 // GetGroupCounts returns counts for all group statuses.
 func (r *GroupModel) GetGroupCounts(ctx context.Context) (*types.GroupCounts, error) {
 	var counts types.GroupCounts
+
 	err := dbretry.Transaction(ctx, r.db, func(ctx context.Context, tx bun.Tx) error {
 		// Get counts by status
 		var statusCounts []struct {
 			Status enum.GroupType `bun:"status"`
 			Count  int            `bun:"count"`
 		}
+
 		err := tx.NewSelect().
 			Model((*types.Group)(nil)).
 			Column("status").
@@ -597,6 +619,7 @@ func (r *GroupModel) GetGroupCounts(ctx context.Context) (*types.GroupCounts, er
 		if err != nil {
 			return err
 		}
+
 		counts.Locked = lockedCount
 
 		return nil
@@ -611,6 +634,7 @@ func (r *GroupModel) GetGroupCounts(ctx context.Context) (*types.GroupCounts, er
 // PurgeOldClearedGroups removes cleared groups older than the cutoff date.
 func (r *GroupModel) PurgeOldClearedGroups(ctx context.Context, cutoffDate time.Time) (int, error) {
 	var clearances []types.GroupClearance
+
 	err := dbretry.Transaction(ctx, r.db, func(ctx context.Context, tx bun.Tx) error {
 		// Get groups to delete
 		err := tx.NewSelect().
@@ -664,8 +688,10 @@ func (r *GroupModel) PurgeOldClearedGroups(ctx context.Context, cutoffDate time.
 // GetGroupsForThumbnailUpdate retrieves groups that need thumbnail updates.
 func (r *GroupModel) GetGroupsForThumbnailUpdate(ctx context.Context, limit int) (map[uint64]*types.ReviewGroup, error) {
 	groups := make(map[uint64]*types.ReviewGroup)
+
 	err := dbretry.Transaction(ctx, r.db, func(ctx context.Context, tx bun.Tx) error {
 		var baseGroups []types.Group
+
 		err := tx.NewSelect().
 			Model(&baseGroups).
 			Where("last_thumbnail_update < NOW() - INTERVAL '7 days'").
@@ -695,6 +721,7 @@ func (r *GroupModel) GetGroupsForThumbnailUpdate(ctx context.Context, limit int)
 // DeleteGroup removes a group and all associated data from the database.
 func (r *GroupModel) DeleteGroup(ctx context.Context, groupID uint64) (bool, error) {
 	var totalAffected int64
+
 	err := dbretry.Transaction(ctx, r.db, func(ctx context.Context, tx bun.Tx) error {
 		// Delete group reasons
 		result, err := tx.NewDelete().
@@ -704,6 +731,7 @@ func (r *GroupModel) DeleteGroup(ctx context.Context, groupID uint64) (bool, err
 		if err != nil {
 			return fmt.Errorf("failed to delete group reasons: %w", err)
 		}
+
 		affected, _ := result.RowsAffected()
 		totalAffected += affected
 
@@ -715,6 +743,7 @@ func (r *GroupModel) DeleteGroup(ctx context.Context, groupID uint64) (bool, err
 		if err != nil {
 			return fmt.Errorf("failed to delete group: %w", err)
 		}
+
 		affected, _ = result.RowsAffected()
 		totalAffected += affected
 
@@ -726,6 +755,7 @@ func (r *GroupModel) DeleteGroup(ctx context.Context, groupID uint64) (bool, err
 		if err != nil {
 			return fmt.Errorf("failed to delete verification record: %w", err)
 		}
+
 		affected, _ = result.RowsAffected()
 		totalAffected += affected
 
@@ -737,6 +767,7 @@ func (r *GroupModel) DeleteGroup(ctx context.Context, groupID uint64) (bool, err
 		if err != nil {
 			return fmt.Errorf("failed to delete clearance record: %w", err)
 		}
+
 		affected, _ = result.RowsAffected()
 		totalAffected += affected
 
@@ -749,11 +780,12 @@ func (r *GroupModel) DeleteGroup(ctx context.Context, groupID uint64) (bool, err
 // GetGroupToScan finds the next group to scan.
 func (r *GroupModel) GetGroupToScan(ctx context.Context) (*types.Group, error) {
 	var group types.Group
+
 	err := dbretry.Transaction(ctx, r.db, func(ctx context.Context, tx bun.Tx) error {
 		// Try confirmed and flagged groups
 		err := tx.NewSelect().
 			Model(&group).
-			Where("last_scanned < NOW() - INTERVAL '12 hours'").
+			Where("last_scanned < NOW() - INTERVAL '6 hours'").
 			Where("status IN (?)", bun.In([]enum.GroupType{enum.GroupTypeConfirmed})).
 			Where("is_locked = false").
 			OrderExpr("last_scanned ASC, confidence DESC").
@@ -789,8 +821,10 @@ func (r *GroupModel) GetGroupToScan(ctx context.Context) (*types.Group, error) {
 func (r *GroupModel) GetNextToReview(
 	ctx context.Context, targetStatus enum.GroupType, sortBy enum.ReviewSortBy, recentIDs []uint64,
 ) (*types.ReviewGroup, error) {
-	var group types.Group
-	var result types.ReviewGroup
+	var (
+		group  types.Group
+		result types.ReviewGroup
+	)
 
 	err := dbretry.Transaction(ctx, r.db, func(ctx context.Context, tx bun.Tx) error {
 		// Build query
@@ -825,6 +859,7 @@ func (r *GroupModel) GetNextToReview(
 			if errors.Is(err, sql.ErrNoRows) {
 				return types.ErrNoGroupsToReview
 			}
+
 			return err
 		}
 
@@ -832,6 +867,7 @@ func (r *GroupModel) GetNextToReview(
 
 		// Get group reasons
 		var reasons []*types.GroupReason
+
 		err = tx.NewSelect().
 			Model(&reasons).
 			Where("group_id = ?", group.ID).
@@ -854,6 +890,7 @@ func (r *GroupModel) GetNextToReview(
 		switch group.Status {
 		case enum.GroupTypeConfirmed:
 			var verification types.GroupVerification
+
 			err = tx.NewSelect().
 				Model(&verification).
 				Where("group_id = ?", group.ID).
@@ -864,6 +901,7 @@ func (r *GroupModel) GetNextToReview(
 			}
 		case enum.GroupTypeCleared:
 			var clearance types.GroupClearance
+
 			err = tx.NewSelect().
 				Model(&clearance).
 				Where("group_id = ?", group.ID).

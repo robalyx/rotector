@@ -95,6 +95,7 @@ func (b *Bar) String() string {
 	if time.Since(b.lastUpdate) < 100*time.Millisecond {
 		return ""
 	}
+
 	b.lastUpdate = time.Now()
 
 	// Calculate progress percentage and bar fill
@@ -148,5 +149,6 @@ func (b *Bar) calculateETA() string {
 	}
 
 	eta := totalDuration / time.Duration(len(b.overallDurations))
+
 	return eta.Round(time.Second).String()
 }
