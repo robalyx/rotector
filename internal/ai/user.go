@@ -26,14 +26,17 @@ import (
 
 // ProcessUsersParams contains all the parameters needed for user analysis processing.
 type ProcessUsersParams struct {
-	Users               []*types.ReviewUser                           `json:"users"`
-	TranslatedInfos     map[string]*types.ReviewUser                  `json:"translatedInfos"`
-	OriginalInfos       map[string]*types.ReviewUser                  `json:"originalInfos"`
-	ReasonsMap          map[uint64]types.Reasons[enum.UserReasonType] `json:"reasonsMap"`
-	ConfirmedFriendsMap map[uint64]map[uint64]*types.ReviewUser       `json:"confirmedFriendsMap"`
-	FlaggedFriendsMap   map[uint64]map[uint64]*types.ReviewUser       `json:"flaggedFriendsMap"`
-	ConfirmedGroupsMap  map[uint64]map[uint64]*types.ReviewGroup      `json:"confirmedGroupsMap"`
-	FlaggedGroupsMap    map[uint64]map[uint64]*types.ReviewGroup      `json:"flaggedGroupsMap"`
+	Users                     []*types.ReviewUser                           `json:"users"`
+	TranslatedInfos           map[string]*types.ReviewUser                  `json:"translatedInfos"`
+	OriginalInfos             map[string]*types.ReviewUser                  `json:"originalInfos"`
+	ReasonsMap                map[uint64]types.Reasons[enum.UserReasonType] `json:"reasonsMap"`
+	ConfirmedFriendsMap       map[uint64]map[uint64]*types.ReviewUser       `json:"confirmedFriendsMap"`
+	FlaggedFriendsMap         map[uint64]map[uint64]*types.ReviewUser       `json:"flaggedFriendsMap"`
+	ConfirmedGroupsMap        map[uint64]map[uint64]*types.ReviewGroup      `json:"confirmedGroupsMap"`
+	FlaggedGroupsMap          map[uint64]map[uint64]*types.ReviewGroup      `json:"flaggedGroupsMap"`
+	InappropriateProfileFlags map[uint64]struct{}                           `json:"inappropriateProfileFlags"`
+	InappropriateFriendsFlags map[uint64]struct{}                           `json:"inappropriateFriendsFlags"`
+	InappropriateGroupsFlags  map[uint64]struct{}                           `json:"inappropriateGroupsFlags"`
 }
 
 // UserSummary is a struct for user summaries for AI analysis.
@@ -353,6 +356,11 @@ func (a *UserAnalyzer) shouldSkipFlaggedUser(
 			zap.Float64("confidence", flaggedUser.Confidence))
 
 		return true
+	}
+
+	// Skip extra checks if user is flagged with inappropriate profile
+	if _, exists := params.InappropriateProfileFlags[originalInfo.ID]; exists {
+		return false
 	}
 
 	// Special case for users with less than 1.0 confidence and more than 15 friends

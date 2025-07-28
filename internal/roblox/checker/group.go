@@ -14,6 +14,17 @@ import (
 	"go.uber.org/zap"
 )
 
+// GroupCheckerParams contains all the parameters needed for group checker processing.
+type GroupCheckerParams struct {
+	Users                     []*types.ReviewUser                           `json:"users"`
+	ReasonsMap                map[uint64]types.Reasons[enum.UserReasonType] `json:"reasonsMap"`
+	ConfirmedFriendsMap       map[uint64]map[uint64]*types.ReviewUser       `json:"confirmedFriendsMap"`
+	FlaggedFriendsMap         map[uint64]map[uint64]*types.ReviewUser       `json:"flaggedFriendsMap"`
+	ConfirmedGroupsMap        map[uint64]map[uint64]*types.ReviewGroup      `json:"confirmedGroupsMap"`
+	FlaggedGroupsMap          map[uint64]map[uint64]*types.ReviewGroup      `json:"flaggedGroupsMap"`
+	InappropriateGroupsFlags  map[uint64]struct{}                           `json:"inappropriateGroupsFlags"`
+}
+
 // GroupCheckResult contains the result of checking a user's groups.
 type GroupCheckResult struct {
 	UserID      uint64
@@ -209,13 +220,9 @@ func (c *GroupChecker) PrepareGroupMaps(
 }
 
 // ProcessUsers checks multiple users' groups concurrently and updates reasonsMap.
-func (c *GroupChecker) ProcessUsers(
-	ctx context.Context, userInfos []*types.ReviewUser, reasonsMap map[uint64]types.Reasons[enum.UserReasonType],
-	confirmedFriendsMap, flaggedFriendsMap map[uint64]map[uint64]*types.ReviewUser,
-	confirmedGroupsMap, flaggedGroupsMap map[uint64]map[uint64]*types.ReviewGroup,
-) {
+func (c *GroupChecker) ProcessUsers(ctx context.Context, params *GroupCheckerParams) {
 	// Track counts before processing
-	existingFlags := len(reasonsMap)
+	existingFlags := len(params.ReasonsMap)
 
 	// Track users that exceed confidence threshold
 	var usersToAnalyze []*types.ReviewUser
@@ -223,13 +230,13 @@ func (c *GroupChecker) ProcessUsers(
 	userConfidenceMap := make(map[uint64]float64)
 
 	// Process results
-	for _, userInfo := range userInfos {
-		confirmedCount := len(confirmedGroupsMap[userInfo.ID])
-		flaggedCount := len(flaggedGroupsMap[userInfo.ID])
+	for _, userInfo := range params.Users {
+		confirmedCount := len(params.ConfirmedGroupsMap[userInfo.ID])
+		flaggedCount := len(params.FlaggedGroupsMap[userInfo.ID])
 		totalInappropriate := confirmedCount + flaggedCount
 
 		// Get total count of inappropriate friends
-		totalInappropriateFriends, confirmedFriendCount := c.getInappropriateFriendCount(userInfo.ID, confirmedFriendsMap, flaggedFriendsMap)
+		totalInappropriateFriends, confirmedFriendCount := c.getInappropriateFriendCount(userInfo.ID, params.ConfirmedFriendsMap, params.FlaggedFriendsMap)
 
 		// Skip users with only 1 inappropriate group unless they have inappropriate friends
 		hasInappropriateFriendEvidence := totalInappropriateFriends > 5 ||
@@ -240,11 +247,18 @@ func (c *GroupChecker) ProcessUsers(
 		}
 
 		// Calculate confidence score
-		confidence := c.calculateConfidence(confirmedCount, flaggedCount, len(userInfo.Groups))
+		_, isInappropriateGroups := params.InappropriateGroupsFlags[userInfo.ID]
+		confidence := c.calculateConfidence(confirmedCount, flaggedCount, len(userInfo.Groups), isInappropriateGroups)
+
 		userConfidenceMap[userInfo.ID] = confidence
 
 		// Check if user meets group threshold
-		meetsGroupThreshold := confidence >= 0.5
+		threshold := 0.5
+		if _, isInappropriateGroups := params.InappropriateGroupsFlags[userInfo.ID]; isInappropriateGroups {
+			threshold = 0.4
+		}
+
+		meetsGroupThreshold := confidence >= threshold
 
 		// Check friend requirement for users with insufficient group evidence
 		meetsFriendRequirement := c.evaluateFriendRequirement(userInfo, confirmedCount, flaggedCount, totalInappropriateFriends)
@@ -258,12 +272,12 @@ func (c *GroupChecker) ProcessUsers(
 	// Generate AI reasons if we have users to analyze
 	if len(usersToAnalyze) > 0 {
 		// Generate reasons for flagged users
-		reasons := c.groupReasonAnalyzer.GenerateGroupReasons(ctx, usersToAnalyze, confirmedGroupsMap, flaggedGroupsMap)
+		reasons := c.groupReasonAnalyzer.GenerateGroupReasons(ctx, usersToAnalyze, params.ConfirmedGroupsMap, params.FlaggedGroupsMap)
 
 		// Process results and update reasonsMap
 		for _, userInfo := range usersToAnalyze {
-			confirmedCount := len(confirmedGroupsMap[userInfo.ID])
-			flaggedCount := len(flaggedGroupsMap[userInfo.ID])
+			confirmedCount := len(params.ConfirmedGroupsMap[userInfo.ID])
+			flaggedCount := len(params.FlaggedGroupsMap[userInfo.ID])
 			confidence := userConfidenceMap[userInfo.ID]
 
 			reason := reasons[userInfo.ID]
@@ -273,11 +287,11 @@ func (c *GroupChecker) ProcessUsers(
 			}
 
 			// Add new reason to reasons map
-			if _, exists := reasonsMap[userInfo.ID]; !exists {
-				reasonsMap[userInfo.ID] = make(types.Reasons[enum.UserReasonType])
+			if _, exists := params.ReasonsMap[userInfo.ID]; !exists {
+				params.ReasonsMap[userInfo.ID] = make(types.Reasons[enum.UserReasonType])
 			}
 
-			reasonsMap[userInfo.ID].Add(enum.UserReasonTypeGroup, &types.Reason{
+			params.ReasonsMap[userInfo.ID].Add(enum.UserReasonTypeGroup, &types.Reason{
 				Message:    reason,
 				Confidence: confidence,
 			})
@@ -292,9 +306,9 @@ func (c *GroupChecker) ProcessUsers(
 	}
 
 	c.logger.Info("Finished processing groups",
-		zap.Int("totalUsers", len(userInfos)),
+		zap.Int("totalUsers", len(params.Users)),
 		zap.Int("analyzedUsers", len(usersToAnalyze)),
-		zap.Int("newFlags", len(reasonsMap)-existingFlags))
+		zap.Int("newFlags", len(params.ReasonsMap)-existingFlags))
 }
 
 // calculateGroupConfidence computes the confidence score for a group based on its flagged users.
@@ -332,7 +346,7 @@ func (c *GroupChecker) calculateGroupConfidence(flaggedUsers []uint64, users map
 }
 
 // calculateConfidence computes a weighted confidence score based on group memberships.
-func (c *GroupChecker) calculateConfidence(confirmedCount, flaggedCount, totalGroups int) float64 {
+func (c *GroupChecker) calculateConfidence(confirmedCount, flaggedCount, totalGroups int, enhanced bool) float64 {
 	totalWeight := float64(confirmedCount) + (float64(flaggedCount) * 0.4)
 
 	// Hard thresholds for serious cases
@@ -398,7 +412,13 @@ func (c *GroupChecker) calculateConfidence(confirmedCount, flaggedCount, totalGr
 		baseConfidence = 0.0
 	}
 
-	return math.Min(baseConfidence+absoluteBonus, 1.0)
+	finalConfidence := math.Min(baseConfidence+absoluteBonus, 1.0)
+
+	if enhanced {
+		finalConfidence = math.Min(finalConfidence*1.2, 1.0)
+	}
+
+	return finalConfidence
 }
 
 // evaluateFriendRequirement checks if a user meets the friend requirement based on group evidence.

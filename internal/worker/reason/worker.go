@@ -158,10 +158,26 @@ func (w *Worker) processBatch(
 	switch reasonType {
 	case enum.UserReasonTypeFriend:
 		// Process through friend checker
-		w.friendChecker.ProcessUsers(ctx, users, reasonsMap, confirmedFriendsMap, flaggedFriendsMap, confirmedGroupsMap, flaggedGroupsMap)
+		w.friendChecker.ProcessUsers(ctx, &checker.FriendCheckerParams{
+			Users:                     users,
+			ReasonsMap:                reasonsMap,
+			ConfirmedFriendsMap:       confirmedFriendsMap,
+			FlaggedFriendsMap:         flaggedFriendsMap,
+			ConfirmedGroupsMap:        confirmedGroupsMap,
+			FlaggedGroupsMap:          flaggedGroupsMap,
+			InappropriateFriendsFlags: nil,
+		})
 	case enum.UserReasonTypeGroup:
 		// Process through group checker
-		w.groupChecker.ProcessUsers(ctx, users, reasonsMap, confirmedFriendsMap, flaggedFriendsMap, confirmedGroupsMap, flaggedGroupsMap)
+		w.groupChecker.ProcessUsers(ctx, &checker.GroupCheckerParams{
+			Users:                     users,
+			ReasonsMap:                reasonsMap,
+			ConfirmedFriendsMap:       confirmedFriendsMap,
+			FlaggedFriendsMap:         flaggedFriendsMap,
+			ConfirmedGroupsMap:        confirmedGroupsMap,
+			FlaggedGroupsMap:          flaggedGroupsMap,
+			InappropriateGroupsFlags:  nil,
+		})
 	default:
 		return 0, fmt.Errorf("%w: %s", ErrUnsupportedReason, reasonType.String())
 	}

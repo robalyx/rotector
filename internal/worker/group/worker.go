@@ -150,7 +150,13 @@ func (w *Worker) Start(ctx context.Context) {
 			usersToProcess = userInfos[:w.batchSize]
 		}
 
-		processResult := w.userChecker.ProcessUsers(ctx, usersToProcess, nil)
+		processResult := w.userChecker.ProcessUsers(ctx, &checker.UserCheckerParams{
+			Users:                     usersToProcess,
+			InappropriateOutfitFlags:  nil,
+			InappropriateProfileFlags: nil,
+			InappropriateFriendsFlags: nil,
+			InappropriateGroupsFlags:  nil,
+		})
 
 		// Mark processed users in cache to prevent reprocessing
 		var processedUserIDs []uint64

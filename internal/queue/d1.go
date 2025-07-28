@@ -36,10 +36,13 @@ type Status struct {
 	InappropriateOutfit bool
 }
 
-// UserBatch represents a batch of users with their inappropriate outfit flags.
+// UserBatch represents a batch of users with their inappropriate flags.
 type UserBatch struct {
-	UserIDs                  []uint64
-	InappropriateOutfitFlags map[uint64]bool
+	UserIDs                   []uint64
+	InappropriateOutfitFlags  map[uint64]struct{}
+	InappropriateProfileFlags map[uint64]struct{}
+	InappropriateFriendsFlags map[uint64]struct{}
+	InappropriateGroupsFlags  map[uint64]struct{}
 }
 
 // D1Client handles Cloudflare D1 API requests.
@@ -69,7 +72,7 @@ func NewD1Client(cfg *config.Config, db database.Client, logger *zap.Logger) *D1
 func (c *D1Client) GetNextBatch(ctx context.Context, batchSize int) (*UserBatch, error) {
 	// First, get the batch of users
 	selectQuery := `
-		SELECT user_id, inappropriate_outfit 
+		SELECT user_id, inappropriate_outfit, inappropriate_profile, inappropriate_friends, inappropriate_groups 
 		FROM queued_users 
 		WHERE processed = 0 AND processing = 0
 		ORDER BY queued_at ASC 
@@ -82,21 +85,40 @@ func (c *D1Client) GetNextBatch(ctx context.Context, batchSize int) (*UserBatch,
 	}
 
 	userIDs := make([]uint64, 0, len(result))
-	inappropriateOutfitFlags := make(map[uint64]bool, len(result))
+	inappropriateOutfitFlags := make(map[uint64]struct{}, len(result))
+	inappropriateProfileFlags := make(map[uint64]struct{}, len(result))
+	inappropriateFriendsFlags := make(map[uint64]struct{}, len(result))
+	inappropriateGroupsFlags := make(map[uint64]struct{}, len(result))
 
 	for _, row := range result {
 		if userID, ok := row["user_id"].(float64); ok {
 			userIDs = append(userIDs, uint64(userID))
 
-			inappropriateOutfit := row["inappropriate_outfit"].(float64) == 1
-			inappropriateOutfitFlags[uint64(userID)] = inappropriateOutfit
+			if row["inappropriate_outfit"].(float64) == 1 {
+				inappropriateOutfitFlags[uint64(userID)] = struct{}{}
+			}
+
+			if row["inappropriate_profile"].(float64) == 1 {
+				inappropriateProfileFlags[uint64(userID)] = struct{}{}
+			}
+
+			if row["inappropriate_friends"].(float64) == 1 {
+				inappropriateFriendsFlags[uint64(userID)] = struct{}{}
+			}
+
+			if row["inappropriate_groups"].(float64) == 1 {
+				inappropriateGroupsFlags[uint64(userID)] = struct{}{}
+			}
 		}
 	}
 
 	if len(userIDs) == 0 {
 		return &UserBatch{
-			UserIDs:                  []uint64{},
-			InappropriateOutfitFlags: make(map[uint64]bool),
+			UserIDs:                   []uint64{},
+			InappropriateOutfitFlags:  make(map[uint64]struct{}),
+			InappropriateProfileFlags: make(map[uint64]struct{}),
+			InappropriateFriendsFlags: make(map[uint64]struct{}),
+			InappropriateGroupsFlags:  make(map[uint64]struct{}),
 		}, nil
 	}
 
@@ -120,8 +142,11 @@ func (c *D1Client) GetNextBatch(ctx context.Context, batchSize int) (*UserBatch,
 	}
 
 	return &UserBatch{
-		UserIDs:                  userIDs,
-		InappropriateOutfitFlags: inappropriateOutfitFlags,
+		UserIDs:                   userIDs,
+		InappropriateOutfitFlags:  inappropriateOutfitFlags,
+		InappropriateProfileFlags: inappropriateProfileFlags,
+		InappropriateFriendsFlags: inappropriateFriendsFlags,
+		InappropriateGroupsFlags:  inappropriateGroupsFlags,
 	}, nil
 }
 

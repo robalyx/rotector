@@ -14,6 +14,12 @@ import (
 	"go.uber.org/zap"
 )
 
+// CondoCheckerParams contains all the parameters needed for condo checker processing.
+type CondoCheckerParams struct {
+	Users      []*types.ReviewUser                           `json:"users"`
+	ReasonsMap map[uint64]types.Reasons[enum.UserReasonType] `json:"reasonsMap"`
+}
+
 var (
 	ErrPlayerNotFound    = errors.New("player not found")
 	ErrPlayerBlacklisted = errors.New("player is blacklisted")
@@ -34,10 +40,8 @@ func NewCondoChecker(db database.Client, logger *zap.Logger) *CondoChecker {
 }
 
 // ProcessUsers checks multiple users' thumbnails concurrently and updates reasonsMap.
-func (c *CondoChecker) ProcessUsers(
-	ctx context.Context, userInfos []*types.ReviewUser, reasonsMap map[uint64]types.Reasons[enum.UserReasonType],
-) {
-	existingFlags := len(reasonsMap)
+func (c *CondoChecker) ProcessUsers(ctx context.Context, params *CondoCheckerParams) {
+	existingFlags := len(params.ReasonsMap)
 
 	var (
 		p  = pool.New().WithContext(ctx)
@@ -45,7 +49,7 @@ func (c *CondoChecker) ProcessUsers(
 	)
 
 	// Process each user concurrently
-	for _, userInfo := range userInfos {
+	for _, userInfo := range params.Users {
 		p.Go(func(_ context.Context) error {
 			// Process user
 			reason, err := c.processUser(ctx, userInfo)
@@ -60,11 +64,11 @@ func (c *CondoChecker) ProcessUsers(
 			// Add reason to reasons map
 			mu.Lock()
 
-			if _, exists := reasonsMap[userInfo.ID]; !exists {
-				reasonsMap[userInfo.ID] = make(types.Reasons[enum.UserReasonType])
+			if _, exists := params.ReasonsMap[userInfo.ID]; !exists {
+				params.ReasonsMap[userInfo.ID] = make(types.Reasons[enum.UserReasonType])
 			}
 
-			reasonsMap[userInfo.ID].Add(enum.UserReasonTypeCondo, reason)
+			params.ReasonsMap[userInfo.ID].Add(enum.UserReasonTypeCondo, reason)
 			mu.Unlock()
 
 			return nil
@@ -77,8 +81,8 @@ func (c *CondoChecker) ProcessUsers(
 	}
 
 	c.logger.Info("Finished processing condo checks",
-		zap.Int("totalUsers", len(userInfos)),
-		zap.Int("newFlags", len(reasonsMap)-existingFlags))
+		zap.Int("totalUsers", len(params.Users)),
+		zap.Int("newFlags", len(params.ReasonsMap)-existingFlags))
 }
 
 // processUser handles the logic for checking a single user against condo players.

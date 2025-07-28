@@ -131,7 +131,13 @@ func (w *Worker) Start(ctx context.Context) {
 		// Step 2: Process users (60%)
 		w.bar.SetStepMessage("Processing users", 60)
 		w.reporter.UpdateStatus("Processing users", 60)
-		processResult := w.userChecker.ProcessUsers(ctx, userInfos[:w.batchSize], nil)
+		processResult := w.userChecker.ProcessUsers(ctx, &checker.UserCheckerParams{
+			Users:                     userInfos[:w.batchSize],
+			InappropriateOutfitFlags:  nil,
+			InappropriateProfileFlags: nil,
+			InappropriateFriendsFlags: nil,
+			InappropriateGroupsFlags:  nil,
+		})
 
 		// Mark processed users in cache to prevent reprocessing
 		var processedUserIDs []uint64

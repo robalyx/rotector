@@ -28,7 +28,10 @@ var ErrNoUsersToProcess = errors.New("no users available for processing")
 type BatchData struct {
 	ProcessIDs     []uint64
 	SkipAndFlagIDs []uint64
-	OutfitFlags    map[uint64]bool
+	OutfitFlags    map[uint64]struct{}
+	ProfileFlags   map[uint64]struct{}
+	FriendsFlags   map[uint64]struct{}
+	GroupsFlags    map[uint64]struct{}
 }
 
 // Worker processes queued users from Cloudflare D1.
@@ -143,7 +146,13 @@ func (w *Worker) Start(ctx context.Context) {
 
 		// Step 3: Process users with checker (60%)
 		w.bar.SetStepMessage("Processing users", 60)
-		processResult := w.userChecker.ProcessUsers(ctx, userInfos, batchData.OutfitFlags)
+		processResult := w.userChecker.ProcessUsers(ctx, &checker.UserCheckerParams{
+			Users:                     userInfos,
+			InappropriateOutfitFlags:  batchData.OutfitFlags,
+			InappropriateProfileFlags: batchData.ProfileFlags,
+			InappropriateFriendsFlags: batchData.FriendsFlags,
+			InappropriateGroupsFlags:  batchData.GroupsFlags,
+		})
 
 		// Step 4: Mark users as processed (75%)
 		w.bar.SetStepMessage("Marking as processed", 75)
@@ -268,7 +277,10 @@ func (w *Worker) getBatchForProcessing(ctx context.Context) (*BatchData, error) 
 	batchData := &BatchData{
 		ProcessIDs:     make([]uint64, 0),
 		SkipAndFlagIDs: make([]uint64, 0),
-		OutfitFlags:    make(map[uint64]bool),
+		OutfitFlags:    make(map[uint64]struct{}),
+		ProfileFlags:   make(map[uint64]struct{}),
+		FriendsFlags:   make(map[uint64]struct{}),
+		GroupsFlags:    make(map[uint64]struct{}),
 	}
 
 	existingFlaggedUsers := make(map[uint64]*types.ReviewUser)
@@ -286,7 +298,21 @@ func (w *Worker) getBatchForProcessing(ctx context.Context) (*BatchData, error) 
 
 		// Otherwise, this user needs processing
 		batchData.ProcessIDs = append(batchData.ProcessIDs, id)
-		batchData.OutfitFlags[id] = userBatch.InappropriateOutfitFlags[id]
+		if _, exists := userBatch.InappropriateOutfitFlags[id]; exists {
+			batchData.OutfitFlags[id] = struct{}{}
+		}
+
+		if _, exists := userBatch.InappropriateProfileFlags[id]; exists {
+			batchData.ProfileFlags[id] = struct{}{}
+		}
+
+		if _, exists := userBatch.InappropriateFriendsFlags[id]; exists {
+			batchData.FriendsFlags[id] = struct{}{}
+		}
+
+		if _, exists := userBatch.InappropriateGroupsFlags[id]; exists {
+			batchData.GroupsFlags[id] = struct{}{}
+		}
 	}
 
 	// Mark and save users that should be flagged

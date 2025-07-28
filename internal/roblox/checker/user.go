@@ -18,6 +18,15 @@ import (
 	"go.uber.org/zap"
 )
 
+// UserCheckerParams contains all the parameters needed for user checker processing.
+type UserCheckerParams struct {
+	Users                     []*types.ReviewUser `json:"users"`
+	InappropriateOutfitFlags  map[uint64]struct{} `json:"inappropriateOutfitFlags"`
+	InappropriateProfileFlags map[uint64]struct{} `json:"inappropriateProfileFlags"`
+	InappropriateFriendsFlags map[uint64]struct{} `json:"inappropriateFriendsFlags"`
+	InappropriateGroupsFlags  map[uint64]struct{} `json:"inappropriateGroupsFlags"`
+}
+
 // UserChecker coordinates the checking process by combining results from
 // multiple checking methods (AI, groups, friends) and managing the progress bar.
 type UserChecker struct {
@@ -67,10 +76,8 @@ type ProcessResult struct {
 
 // ProcessUsers runs users through multiple checking stages.
 // Returns processing results containing flagged user IDs and their full data.
-func (c *UserChecker) ProcessUsers(
-	ctx context.Context, userInfos []*types.ReviewUser, inappropriateOutfitFlags map[uint64]bool,
-) *ProcessResult {
-	c.logger.Info("Processing users", zap.Int("userInfos", len(userInfos)))
+func (c *UserChecker) ProcessUsers(ctx context.Context, params *UserCheckerParams) *ProcessResult {
+	c.logger.Info("Processing users", zap.Int("userInfos", len(params.Users)))
 
 	// Initialize map to store reasons
 	reasonsMap := make(map[uint64]types.Reasons[enum.UserReasonType])
@@ -80,46 +87,65 @@ func (c *UserChecker) ProcessUsers(
 	defer cancel()
 
 	// Prepare friend and group maps
-	confirmedFriendsMap, flaggedFriendsMap := c.friendChecker.PrepareFriendMaps(ctxWithTimeout, userInfos)
-	confirmedGroupsMap, flaggedGroupsMap := c.groupChecker.PrepareGroupMaps(ctxWithTimeout, userInfos)
+	confirmedFriendsMap, flaggedFriendsMap := c.friendChecker.PrepareFriendMaps(ctxWithTimeout, params.Users)
+	confirmedGroupsMap, flaggedGroupsMap := c.groupChecker.PrepareGroupMaps(ctxWithTimeout, params.Users)
 
 	// Process friend checker with pre-prepared maps
-	c.friendChecker.ProcessUsers(
-		ctxWithTimeout, userInfos, reasonsMap, confirmedFriendsMap, flaggedFriendsMap, confirmedGroupsMap, flaggedGroupsMap,
-	)
+	c.friendChecker.ProcessUsers(ctxWithTimeout, &FriendCheckerParams{
+		Users:                     params.Users,
+		ReasonsMap:                reasonsMap,
+		ConfirmedFriendsMap:       confirmedFriendsMap,
+		FlaggedFriendsMap:         flaggedFriendsMap,
+		ConfirmedGroupsMap:        confirmedGroupsMap,
+		FlaggedGroupsMap:          flaggedGroupsMap,
+		InappropriateFriendsFlags: params.InappropriateFriendsFlags,
+	})
 
 	// Process group checker with pre-prepared maps
-	c.groupChecker.ProcessUsers(
-		ctxWithTimeout, userInfos, reasonsMap, confirmedFriendsMap, flaggedFriendsMap, confirmedGroupsMap, flaggedGroupsMap,
-	)
+	c.groupChecker.ProcessUsers(ctxWithTimeout, &GroupCheckerParams{
+		Users:                     params.Users,
+		ReasonsMap:                reasonsMap,
+		ConfirmedFriendsMap:       confirmedFriendsMap,
+		FlaggedFriendsMap:         flaggedFriendsMap,
+		ConfirmedGroupsMap:        confirmedGroupsMap,
+		FlaggedGroupsMap:          flaggedGroupsMap,
+		InappropriateGroupsFlags:  params.InappropriateGroupsFlags,
+	})
 
 	// Prepare user info maps with translations
-	translatedInfos, originalInfos := c.prepareUserInfoMaps(ctxWithTimeout, userInfos)
+	translatedInfos, originalInfos := c.prepareUserInfoMaps(ctxWithTimeout, params.Users)
 
 	// Process user analysis
 	c.userAnalyzer.ProcessUsers(ctxWithTimeout, &ai.ProcessUsersParams{
-		Users:               userInfos,
-		TranslatedInfos:     translatedInfos,
-		OriginalInfos:       originalInfos,
-		ReasonsMap:          reasonsMap,
-		ConfirmedFriendsMap: confirmedFriendsMap,
-		FlaggedFriendsMap:   flaggedFriendsMap,
-		ConfirmedGroupsMap:  confirmedGroupsMap,
-		FlaggedGroupsMap:    flaggedGroupsMap,
+		Users:                     params.Users,
+		TranslatedInfos:           translatedInfos,
+		OriginalInfos:             originalInfos,
+		ReasonsMap:                reasonsMap,
+		ConfirmedFriendsMap:       confirmedFriendsMap,
+		FlaggedFriendsMap:         flaggedFriendsMap,
+		ConfirmedGroupsMap:        confirmedGroupsMap,
+		FlaggedGroupsMap:          flaggedGroupsMap,
+		InappropriateProfileFlags: params.InappropriateProfileFlags,
+		InappropriateFriendsFlags: params.InappropriateFriendsFlags,
+		InappropriateGroupsFlags:  params.InappropriateGroupsFlags,
 	})
 
 	// Process condo checker
-	c.condoChecker.ProcessUsers(ctxWithTimeout, userInfos, reasonsMap)
-
-	// // Process ivan messages
-	// c.ivanAnalyzer.ProcessUsers(ctxWithTimeout, userInfos, reasonsMap)
+	c.condoChecker.ProcessUsers(ctxWithTimeout, &CondoCheckerParams{
+		Users:      params.Users,
+		ReasonsMap: reasonsMap,
+	})
 
 	// Process outfit analysis
-	flaggedOutfits := c.outfitAnalyzer.ProcessOutfits(ctxWithTimeout, userInfos, reasonsMap, inappropriateOutfitFlags)
+	flaggedOutfits := c.outfitAnalyzer.ProcessUsers(ctxWithTimeout, &ai.OutfitAnalyzerParams{
+		Users:                    params.Users,
+		ReasonsMap:               reasonsMap,
+		InappropriateOutfitFlags: params.InappropriateOutfitFlags,
+	})
 
 	// Stop if no users were flagged
 	if len(reasonsMap) == 0 {
-		c.logger.Info("No flagged users found", zap.Int("userInfos", len(userInfos)))
+		c.logger.Info("No flagged users found", zap.Int("userInfos", len(params.Users)))
 
 		return &ProcessResult{
 			FlaggedStatus: make(map[uint64]struct{}),
@@ -131,7 +157,7 @@ func (c *UserChecker) ProcessUsers(
 	flaggedUsers := make(map[uint64]*types.ReviewUser, len(reasonsMap))
 	flaggedStatus := make(map[uint64]struct{}, len(reasonsMap))
 
-	for _, user := range userInfos {
+	for _, user := range params.Users {
 		if reasons, ok := reasonsMap[user.ID]; ok {
 			user.Reasons = reasons
 			user.Confidence = utils.CalculateConfidence(reasons)
@@ -155,7 +181,7 @@ func (c *UserChecker) ProcessUsers(
 	go c.trackFavoriteGames(ctx, flaggedUsers)
 
 	c.logger.Info("Finished processing users",
-		zap.Int("totalProcessed", len(userInfos)),
+		zap.Int("totalProcessed", len(params.Users)),
 		zap.Int("flaggedUsers", len(flaggedUsers)))
 
 	return &ProcessResult{

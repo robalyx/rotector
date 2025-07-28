@@ -13,6 +13,17 @@ import (
 	"go.uber.org/zap"
 )
 
+// FriendCheckerParams contains all the parameters needed for friend checker processing.
+type FriendCheckerParams struct {
+	Users                     []*types.ReviewUser                           `json:"users"`
+	ReasonsMap                map[uint64]types.Reasons[enum.UserReasonType] `json:"reasonsMap"`
+	ConfirmedFriendsMap       map[uint64]map[uint64]*types.ReviewUser       `json:"confirmedFriendsMap"`
+	FlaggedFriendsMap         map[uint64]map[uint64]*types.ReviewUser       `json:"flaggedFriendsMap"`
+	ConfirmedGroupsMap        map[uint64]map[uint64]*types.ReviewGroup      `json:"confirmedGroupsMap"`
+	FlaggedGroupsMap          map[uint64]map[uint64]*types.ReviewGroup      `json:"flaggedGroupsMap"`
+	InappropriateFriendsFlags map[uint64]struct{}                           `json:"inappropriateFriendsFlags"`
+}
+
 // FriendAnalysis contains the result of analyzing a user's friend network.
 type FriendAnalysis struct {
 	Name     string `json:"name"`
@@ -44,12 +55,8 @@ func NewFriendChecker(app *setup.App, logger *zap.Logger) *FriendChecker {
 }
 
 // ProcessUsers checks multiple users' friends concurrently and updates reasonsMap.
-func (c *FriendChecker) ProcessUsers(
-	ctx context.Context, userInfos []*types.ReviewUser, reasonsMap map[uint64]types.Reasons[enum.UserReasonType],
-	confirmedFriendsMap, flaggedFriendsMap map[uint64]map[uint64]*types.ReviewUser,
-	confirmedGroupsMap, flaggedGroupsMap map[uint64]map[uint64]*types.ReviewGroup,
-) {
-	existingFlags := len(reasonsMap)
+func (c *FriendChecker) ProcessUsers(ctx context.Context, params *FriendCheckerParams) {
+	existingFlags := len(params.ReasonsMap)
 
 	// Track users that exceed confidence threshold
 	var usersToAnalyze []*types.ReviewUser
@@ -58,21 +65,23 @@ func (c *FriendChecker) ProcessUsers(
 	userFlaggedCountMap := make(map[uint64]int)
 
 	// Process results
-	for _, userInfo := range userInfos {
-		confirmedCount := len(confirmedFriendsMap[userInfo.ID])
-		flaggedCount := len(flaggedFriendsMap[userInfo.ID])
-		validFlaggedCount := c.countValidFlaggedFriends(flaggedFriendsMap[userInfo.ID])
+	for _, userInfo := range params.Users {
+		confirmedCount := len(params.ConfirmedFriendsMap[userInfo.ID])
+		flaggedCount := len(params.FlaggedFriendsMap[userInfo.ID])
+		validFlaggedCount := c.countValidFlaggedFriends(params.FlaggedFriendsMap[userInfo.ID])
 		userFlaggedCountMap[userInfo.ID] = validFlaggedCount
 
 		// Calculate confidence score
-		confidence := c.calculateConfidence(confirmedCount, validFlaggedCount, len(userInfo.Friends))
+		_, isInappropriateFriends := params.InappropriateFriendsFlags[userInfo.ID]
+		confidence := c.calculateConfidence(confirmedCount, validFlaggedCount, len(userInfo.Friends), isInappropriateFriends)
+
 		userConfidenceMap[userInfo.ID] = confidence
 
 		// Auto-flag users where all friends are inappropriate and they meet criteria
 		totalFriends := len(userInfo.Friends)
 		hasDescription := userInfo.Description != ""
-		hasInappropriateGroups := c.hasInappropriateGroupActivity(userInfo, confirmedGroupsMap[userInfo.ID], flaggedGroupsMap[userInfo.ID])
-		hasExistingReasons := len(reasonsMap[userInfo.ID]) > 0
+		hasInappropriateGroups := c.hasInappropriateGroupActivity(userInfo, params.ConfirmedGroupsMap[userInfo.ID], params.FlaggedGroupsMap[userInfo.ID])
+		hasExistingReasons := len(params.ReasonsMap[userInfo.ID]) > 0
 
 		if confirmedCount+flaggedCount == totalFriends && totalFriends >= 2 &&
 			(hasDescription || hasInappropriateGroups || hasExistingReasons) {
@@ -80,20 +89,28 @@ func (c *FriendChecker) ProcessUsers(
 			confidence = 1.0
 			userConfidenceMap[userInfo.ID] = confidence
 			usersToAnalyze = append(usersToAnalyze, userInfo)
-		} else if confidence >= 0.50 && len(userInfo.Friends) > 0 {
+		} else {
+			// Determine threshold based on whether user is in inappropriate friends map
+			threshold := 0.50
+			if _, isInappropriateFriends := params.InappropriateFriendsFlags[userInfo.ID]; isInappropriateFriends {
+				threshold = 0.40
+			}
+
 			// Only process users that exceed threshold and have friends
-			usersToAnalyze = append(usersToAnalyze, userInfo)
+			if confidence >= threshold && len(userInfo.Friends) > 0 {
+				usersToAnalyze = append(usersToAnalyze, userInfo)
+			}
 		}
 	}
 
 	// Generate AI reasons if we have users to analyze
 	if len(usersToAnalyze) > 0 {
 		// Generate reasons for flagged users
-		reasons := c.friendAnalyzer.GenerateFriendReasons(ctx, usersToAnalyze, confirmedFriendsMap, flaggedFriendsMap)
+		reasons := c.friendAnalyzer.GenerateFriendReasons(ctx, usersToAnalyze, params.ConfirmedFriendsMap, params.FlaggedFriendsMap)
 
 		// Process results and update reasonsMap
 		for _, userInfo := range usersToAnalyze {
-			confirmedCount := len(confirmedFriendsMap[userInfo.ID])
+			confirmedCount := len(params.ConfirmedFriendsMap[userInfo.ID])
 			flaggedCount := userFlaggedCountMap[userInfo.ID]
 			confidence := userConfidenceMap[userInfo.ID]
 
@@ -104,11 +121,11 @@ func (c *FriendChecker) ProcessUsers(
 			}
 
 			// Add new reason to reasons map
-			if _, exists := reasonsMap[userInfo.ID]; !exists {
-				reasonsMap[userInfo.ID] = make(types.Reasons[enum.UserReasonType])
+			if _, exists := params.ReasonsMap[userInfo.ID]; !exists {
+				params.ReasonsMap[userInfo.ID] = make(types.Reasons[enum.UserReasonType])
 			}
 
-			reasonsMap[userInfo.ID].Add(enum.UserReasonTypeFriend, &types.Reason{
+			params.ReasonsMap[userInfo.ID].Add(enum.UserReasonTypeFriend, &types.Reason{
 				Message:    reason,
 				Confidence: confidence,
 			})
@@ -124,9 +141,9 @@ func (c *FriendChecker) ProcessUsers(
 	}
 
 	c.logger.Info("Finished processing friends",
-		zap.Int("totalUsers", len(userInfos)),
+		zap.Int("totalUsers", len(params.Users)),
 		zap.Int("analyzedUsers", len(usersToAnalyze)),
-		zap.Int("newFlags", len(reasonsMap)-existingFlags))
+		zap.Int("newFlags", len(params.ReasonsMap)-existingFlags))
 }
 
 // PrepareFriendMaps creates friend maps for reuse by checkers.
@@ -203,7 +220,7 @@ func (c *FriendChecker) PrepareFriendMaps(
 }
 
 // calculateConfidence computes a weighted confidence score based on friend relationships.
-func (c *FriendChecker) calculateConfidence(confirmedCount, flaggedCount, totalFriends int) float64 {
+func (c *FriendChecker) calculateConfidence(confirmedCount, flaggedCount, totalFriends int, enhanced bool) float64 {
 	totalWeight := float64(confirmedCount) + (float64(flaggedCount) * 0.8)
 
 	// Hard thresholds for serious cases
@@ -281,7 +298,13 @@ func (c *FriendChecker) calculateConfidence(confirmedCount, flaggedCount, totalF
 		baseConfidence = 0.0
 	}
 
-	return math.Min(baseConfidence+absoluteBonus, 1.0)
+	finalConfidence := math.Min(baseConfidence+absoluteBonus, 1.0)
+
+	if enhanced {
+		finalConfidence = math.Min(finalConfidence*1.2, 1.0)
+	}
+
+	return finalConfidence
 }
 
 // hasInappropriateGroupActivity checks if at least half of the user's groups are flagged/confirmed.

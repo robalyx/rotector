@@ -31,6 +31,13 @@ import (
 	"golang.org/x/sync/semaphore"
 )
 
+// OutfitAnalyzerParams contains all the parameters needed for outfit analyzer processing.
+type OutfitAnalyzerParams struct {
+	Users                     []*types.ReviewUser                           `json:"users"`
+	ReasonsMap                map[uint64]types.Reasons[enum.UserReasonType] `json:"reasonsMap"`
+	InappropriateOutfitFlags  map[uint64]struct{}                           `json:"inappropriateOutfitFlags"`
+}
+
 const (
 	MaxOutfits = 100
 )
@@ -106,15 +113,11 @@ func NewOutfitAnalyzer(app *setup.App, logger *zap.Logger) *OutfitAnalyzer {
 	}
 }
 
-// ProcessOutfits analyzes outfit images for a batch of users.
+// ProcessUsers analyzes outfit images for a batch of users.
 // Returns a map of user IDs to their flagged outfit names.
-func (a *OutfitAnalyzer) ProcessOutfits(
-	ctx context.Context, userInfos []*types.ReviewUser,
-	reasonsMap map[uint64]types.Reasons[enum.UserReasonType],
-	inappropriateOutfitFlags map[uint64]bool,
-) map[uint64]map[string]struct{} {
+func (a *OutfitAnalyzer) ProcessUsers(ctx context.Context, params *OutfitAnalyzerParams) map[uint64]map[string]struct{} {
 	// Filter users based on inappropriate outfit flags and existing reasons
-	usersToProcess := a.filterUsersForOutfitProcessing(userInfos, reasonsMap, inappropriateOutfitFlags)
+	usersToProcess := a.filterUsersForOutfitProcessing(params.Users, params.ReasonsMap, params.InappropriateOutfitFlags)
 
 	// Skip if no users need outfit processing
 	if len(usersToProcess) == 0 {
@@ -143,7 +146,7 @@ func (a *OutfitAnalyzer) ProcessOutfits(
 
 		p.Go(func(ctx context.Context) error {
 			// Analyze user's outfits for themes
-			outfitNames, err := a.analyzeUserOutfits(ctx, userInfo, &mu, reasonsMap, outfits, thumbnails)
+			outfitNames, err := a.analyzeUserOutfits(ctx, userInfo, &mu, params.ReasonsMap, outfits, thumbnails)
 			if err != nil && !errors.Is(err, ErrNoViolations) {
 				a.logger.Error("Failed to analyze outfit themes",
 					zap.Error(err),
@@ -176,7 +179,7 @@ func (a *OutfitAnalyzer) ProcessOutfits(
 
 	// Generate detailed outfit reasons for flagged users
 	if len(flaggedOutfits) > 0 {
-		a.outfitReasonAnalyzer.ProcessFlaggedUsers(ctx, userInfos, reasonsMap)
+		a.outfitReasonAnalyzer.ProcessFlaggedUsers(ctx, params.Users, params.ReasonsMap)
 	}
 
 	return flaggedOutfits
@@ -184,37 +187,21 @@ func (a *OutfitAnalyzer) ProcessOutfits(
 
 // filterUsersForOutfitProcessing determines which users should be processed through outfit analysis.
 func (a *OutfitAnalyzer) filterUsersForOutfitProcessing(
-	userInfos []*types.ReviewUser, reasonsMap map[uint64]types.Reasons[enum.UserReasonType], inappropriateOutfitFlags map[uint64]bool,
+	userInfos []*types.ReviewUser, reasonsMap map[uint64]types.Reasons[enum.UserReasonType], inappropriateOutfitFlags map[uint64]struct{},
 ) []*types.ReviewUser {
 	var usersToProcess []*types.ReviewUser
 
 	for _, userInfo := range userInfos {
-		var shouldProcess bool
-
 		// Check if user has existing violations
-		hasExistingViolations := func() bool {
-			reasons, exists := reasonsMap[userInfo.ID]
-			return exists && len(reasons) > 0
-		}()
+		reasons, hasExistingViolations := reasonsMap[userInfo.ID]
+		hasExistingViolations = hasExistingViolations && len(reasons) > 0
 
-		// Use explicit filtering logic when outfit flags are provided
-		if inappropriateOutfitFlags != nil {
-			if flag, exists := inappropriateOutfitFlags[userInfo.ID]; exists && flag {
-				// User is explicitly marked for outfit analysis
-				shouldProcess = true
-			} else if !exists {
-				// User not in flags map, not processed
-				shouldProcess = false
-			} else {
-				// User explicitly not marked for outfit analysis, but process if they have violations
-				shouldProcess = hasExistingViolations
+		// If outfit flags are provided, use them; otherwise fall back to existing violations
+		if len(inappropriateOutfitFlags) > 0 {
+			if _, exists := inappropriateOutfitFlags[userInfo.ID]; exists {
+				usersToProcess = append(usersToProcess, userInfo)
 			}
-		} else {
-			// Fallback to legacy behavior: only process users with existing violations
-			shouldProcess = hasExistingViolations
-		}
-
-		if shouldProcess {
+		} else if hasExistingViolations {
 			usersToProcess = append(usersToProcess, userInfo)
 		}
 	}

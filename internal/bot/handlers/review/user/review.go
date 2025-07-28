@@ -17,6 +17,7 @@ import (
 	view "github.com/robalyx/rotector/internal/bot/views/review/user"
 	"github.com/robalyx/rotector/internal/database/types"
 	"github.com/robalyx/rotector/internal/database/types/enum"
+	"github.com/robalyx/rotector/internal/roblox/checker"
 	"github.com/robalyx/rotector/pkg/utils"
 	"go.uber.org/zap"
 
@@ -994,16 +995,28 @@ func (m *ReviewMenu) fetchNewTarget(ctx *interaction.Context, s *session.Session
 
 	// Process friends if friend reason doesn't exist
 	if _, hasFriendReason := user.Reasons[enum.UserReasonTypeFriend]; !hasFriendReason {
-		m.layout.friendChecker.ProcessUsers(
-			ctx.Context(), userSlice, reasonsMap, confirmedFriendsMap, flaggedFriendsMap, confirmedGroupsMap, flaggedGroupsMap,
-		)
+		m.layout.friendChecker.ProcessUsers(ctx.Context(), &checker.FriendCheckerParams{
+			Users:                     userSlice,
+			ReasonsMap:                reasonsMap,
+			ConfirmedFriendsMap:       confirmedFriendsMap,
+			FlaggedFriendsMap:         flaggedFriendsMap,
+			ConfirmedGroupsMap:        confirmedGroupsMap,
+			FlaggedGroupsMap:          flaggedGroupsMap,
+			InappropriateFriendsFlags: nil,
+		})
 	}
 
 	// Process groups if group reason doesn't exist
 	if _, hasGroupReason := user.Reasons[enum.UserReasonTypeGroup]; !hasGroupReason {
-		m.layout.groupChecker.ProcessUsers(
-			ctx.Context(), userSlice, reasonsMap, confirmedFriendsMap, flaggedFriendsMap, confirmedGroupsMap, flaggedGroupsMap,
-		)
+		m.layout.groupChecker.ProcessUsers(ctx.Context(), &checker.GroupCheckerParams{
+			Users:                     userSlice,
+			ReasonsMap:                reasonsMap,
+			ConfirmedFriendsMap:       confirmedFriendsMap,
+			FlaggedFriendsMap:         flaggedFriendsMap,
+			ConfirmedGroupsMap:        confirmedGroupsMap,
+			FlaggedGroupsMap:          flaggedGroupsMap,
+			InappropriateGroupsFlags:  nil,
+		})
 	}
 
 	// Update user with any new reasons from friend/group checking
