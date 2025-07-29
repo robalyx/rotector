@@ -1009,13 +1009,13 @@ func (m *ReviewMenu) fetchNewTarget(ctx *interaction.Context, s *session.Session
 	// Process groups if group reason doesn't exist
 	if _, hasGroupReason := user.Reasons[enum.UserReasonTypeGroup]; !hasGroupReason {
 		m.layout.groupChecker.ProcessUsers(ctx.Context(), &checker.GroupCheckerParams{
-			Users:                     userSlice,
-			ReasonsMap:                reasonsMap,
-			ConfirmedFriendsMap:       confirmedFriendsMap,
-			FlaggedFriendsMap:         flaggedFriendsMap,
-			ConfirmedGroupsMap:        confirmedGroupsMap,
-			FlaggedGroupsMap:          flaggedGroupsMap,
-			InappropriateGroupsFlags:  nil,
+			Users:                    userSlice,
+			ReasonsMap:               reasonsMap,
+			ConfirmedFriendsMap:      confirmedFriendsMap,
+			FlaggedFriendsMap:        flaggedFriendsMap,
+			ConfirmedGroupsMap:       confirmedGroupsMap,
+			FlaggedGroupsMap:         flaggedGroupsMap,
+			InappropriateGroupsFlags: nil,
 		})
 	}
 

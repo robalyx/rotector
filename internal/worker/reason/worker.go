@@ -170,13 +170,13 @@ func (w *Worker) processBatch(
 	case enum.UserReasonTypeGroup:
 		// Process through group checker
 		w.groupChecker.ProcessUsers(ctx, &checker.GroupCheckerParams{
-			Users:                     users,
-			ReasonsMap:                reasonsMap,
-			ConfirmedFriendsMap:       confirmedFriendsMap,
-			FlaggedFriendsMap:         flaggedFriendsMap,
-			ConfirmedGroupsMap:        confirmedGroupsMap,
-			FlaggedGroupsMap:          flaggedGroupsMap,
-			InappropriateGroupsFlags:  nil,
+			Users:                    users,
+			ReasonsMap:               reasonsMap,
+			ConfirmedFriendsMap:      confirmedFriendsMap,
+			FlaggedFriendsMap:        flaggedFriendsMap,
+			ConfirmedGroupsMap:       confirmedGroupsMap,
+			FlaggedGroupsMap:         flaggedGroupsMap,
+			InappropriateGroupsFlags: nil,
 		})
 	default:
 		return 0, fmt.Errorf("%w: %s", ErrUnsupportedReason, reasonType.String())

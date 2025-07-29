@@ -80,7 +80,9 @@ func (c *FriendChecker) ProcessUsers(ctx context.Context, params *FriendCheckerP
 		// Auto-flag users where all friends are inappropriate and they meet criteria
 		totalFriends := len(userInfo.Friends)
 		hasDescription := userInfo.Description != ""
-		hasInappropriateGroups := c.hasInappropriateGroupActivity(userInfo, params.ConfirmedGroupsMap[userInfo.ID], params.FlaggedGroupsMap[userInfo.ID])
+		hasInappropriateGroups := c.hasInappropriateGroupActivity(
+			userInfo, params.ConfirmedGroupsMap[userInfo.ID], params.FlaggedGroupsMap[userInfo.ID],
+		)
 		hasExistingReasons := len(params.ReasonsMap[userInfo.ID]) > 0
 
 		if confirmedCount+flaggedCount == totalFriends && totalFriends >= 2 &&

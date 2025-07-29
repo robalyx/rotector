@@ -16,13 +16,13 @@ import (
 
 // GroupCheckerParams contains all the parameters needed for group checker processing.
 type GroupCheckerParams struct {
-	Users                     []*types.ReviewUser                           `json:"users"`
-	ReasonsMap                map[uint64]types.Reasons[enum.UserReasonType] `json:"reasonsMap"`
-	ConfirmedFriendsMap       map[uint64]map[uint64]*types.ReviewUser       `json:"confirmedFriendsMap"`
-	FlaggedFriendsMap         map[uint64]map[uint64]*types.ReviewUser       `json:"flaggedFriendsMap"`
-	ConfirmedGroupsMap        map[uint64]map[uint64]*types.ReviewGroup      `json:"confirmedGroupsMap"`
-	FlaggedGroupsMap          map[uint64]map[uint64]*types.ReviewGroup      `json:"flaggedGroupsMap"`
-	InappropriateGroupsFlags  map[uint64]struct{}                           `json:"inappropriateGroupsFlags"`
+	Users                    []*types.ReviewUser                           `json:"users"`
+	ReasonsMap               map[uint64]types.Reasons[enum.UserReasonType] `json:"reasonsMap"`
+	ConfirmedFriendsMap      map[uint64]map[uint64]*types.ReviewUser       `json:"confirmedFriendsMap"`
+	FlaggedFriendsMap        map[uint64]map[uint64]*types.ReviewUser       `json:"flaggedFriendsMap"`
+	ConfirmedGroupsMap       map[uint64]map[uint64]*types.ReviewGroup      `json:"confirmedGroupsMap"`
+	FlaggedGroupsMap         map[uint64]map[uint64]*types.ReviewGroup      `json:"flaggedGroupsMap"`
+	InappropriateGroupsFlags map[uint64]struct{}                           `json:"inappropriateGroupsFlags"`
 }
 
 // GroupCheckResult contains the result of checking a user's groups.
@@ -236,7 +236,9 @@ func (c *GroupChecker) ProcessUsers(ctx context.Context, params *GroupCheckerPar
 		totalInappropriate := confirmedCount + flaggedCount
 
 		// Get total count of inappropriate friends
-		totalInappropriateFriends, confirmedFriendCount := c.getInappropriateFriendCount(userInfo.ID, params.ConfirmedFriendsMap, params.FlaggedFriendsMap)
+		totalInappropriateFriends, confirmedFriendCount := c.getInappropriateFriendCount(
+			userInfo.ID, params.ConfirmedFriendsMap, params.FlaggedFriendsMap,
+		)
 
 		// Skip users with only 1 inappropriate group unless they have inappropriate friends
 		hasInappropriateFriendEvidence := totalInappropriateFriends > 5 ||

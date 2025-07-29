@@ -74,6 +74,7 @@ Instruction: FLAG outfits that are BDSM/kink/fetish parodies:
 - Slave-themed outfits (with chains, torn clothing)
 - Leather harnesses/latex corsets in fetish context
 - "Cow girl" outfits with sexualized elements (cow print combined with revealing clothing, suggestive poses, or fetish accessories, NOT innocent farm/animal costumes)
+- "Bull" stereotype outfits representing racial fetish content (dark brown/black skin tone avatars, often shirtless or minimal torso coverage, with pants or shorts - this specific combination represents inappropriate racial stereotyping in fetish contexts)
 - Pet-play themed outfits (collars, leashes, ears combined with sexualized elements)
 - Animal-themed outfits with inappropriate sexualized elements (revealing clothing, suggestive poses, or fetish accessories)
 - Suggestive schoolgirl outfits
@@ -107,7 +108,8 @@ DO NOT flag these legitimate themes and elements:
 - Punk or edgy fashion elements without sexual themes
 - Default Roblox avatar bodies (basic geometric shapes without additional sexualized modifications)
 - Tiny avatars or small avatar proportions (avatar size alone is not inappropriate)
-- Shorts of any length (including very short shorts) unless part of a clearly sexualized outfit context`
+- Shorts of any length (including very short shorts) unless part of a clearly sexualized outfit context
+- Dark skin tones used for legitimate character representation without fetish context`
 
 	// OutfitRequestPrompt provides a reminder to focus on theme identification.
 	OutfitRequestPrompt = `Identify specific themes in these outfits.

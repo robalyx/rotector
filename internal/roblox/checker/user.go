@@ -103,13 +103,13 @@ func (c *UserChecker) ProcessUsers(ctx context.Context, params *UserCheckerParam
 
 	// Process group checker with pre-prepared maps
 	c.groupChecker.ProcessUsers(ctxWithTimeout, &GroupCheckerParams{
-		Users:                     params.Users,
-		ReasonsMap:                reasonsMap,
-		ConfirmedFriendsMap:       confirmedFriendsMap,
-		FlaggedFriendsMap:         flaggedFriendsMap,
-		ConfirmedGroupsMap:        confirmedGroupsMap,
-		FlaggedGroupsMap:          flaggedGroupsMap,
-		InappropriateGroupsFlags:  params.InappropriateGroupsFlags,
+		Users:                    params.Users,
+		ReasonsMap:               reasonsMap,
+		ConfirmedFriendsMap:      confirmedFriendsMap,
+		FlaggedFriendsMap:        flaggedFriendsMap,
+		ConfirmedGroupsMap:       confirmedGroupsMap,
+		FlaggedGroupsMap:         flaggedGroupsMap,
+		InappropriateGroupsFlags: params.InappropriateGroupsFlags,
 	})
 
 	// Prepare user info maps with translations

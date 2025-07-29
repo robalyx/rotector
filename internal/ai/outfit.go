@@ -33,9 +33,9 @@ import (
 
 // OutfitAnalyzerParams contains all the parameters needed for outfit analyzer processing.
 type OutfitAnalyzerParams struct {
-	Users                     []*types.ReviewUser                           `json:"users"`
-	ReasonsMap                map[uint64]types.Reasons[enum.UserReasonType] `json:"reasonsMap"`
-	InappropriateOutfitFlags  map[uint64]struct{}                           `json:"inappropriateOutfitFlags"`
+	Users                    []*types.ReviewUser                           `json:"users"`
+	ReasonsMap               map[uint64]types.Reasons[enum.UserReasonType] `json:"reasonsMap"`
+	InappropriateOutfitFlags map[uint64]struct{}                           `json:"inappropriateOutfitFlags"`
 }
 
 const (
