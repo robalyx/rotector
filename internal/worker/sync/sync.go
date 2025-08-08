@@ -111,8 +111,8 @@ func (w *Worker) syncCycle(ctx context.Context) error {
 
 		// Process bans for this guild's members
 		userIDs := make([]uint64, 0, len(members))
-		for _, member := range members {
-			userIDs = append(userIDs, member.UserID)
+		for _, memberInfo := range members {
+			userIDs = append(userIDs, memberInfo.UserID)
 		}
 
 		w.db.Service().Ban().CreateCondoBans(ctx, userIDs)

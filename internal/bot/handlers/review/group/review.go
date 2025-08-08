@@ -32,7 +32,7 @@ type ReviewMenu struct {
 	page   *interaction.Page
 }
 
-// NewMenu creates a new review menu.
+// NewReviewMenu creates a new review menu.
 func NewReviewMenu(layout *Layout) *ReviewMenu {
 	m := &ReviewMenu{
 		BaseReviewMenu: *shared.NewBaseReviewMenu(layout.logger, layout.captcha, layout.db),

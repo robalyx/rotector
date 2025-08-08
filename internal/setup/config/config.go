@@ -16,7 +16,7 @@ var (
 	ErrConfigVersionMismatch = errors.New("config file version mismatch")
 )
 
-// Repository version tag for config file references.
+// RepositoryVersion is the repository version tag for config file references.
 const RepositoryVersion = "v1.0.0-beta.1"
 
 // Current version of the config file.

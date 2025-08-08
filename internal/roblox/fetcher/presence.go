@@ -38,14 +38,14 @@ func (p *PresenceFetcher) FetchPresences(ctx context.Context, userIDs []uint64) 
 
 	var (
 		allPresences = make([]*types.UserPresenceResponse, 0, len(userIDs))
-		pool         = pool.New().WithContext(ctx)
+		workerPool   = pool.New().WithContext(ctx)
 		mu           sync.Mutex
 		batchSize    = 50
 	)
 
 	// Process batches concurrently
 	for i := 0; i < len(userIDs); i += batchSize {
-		pool.Go(func(ctx context.Context) error {
+		workerPool.Go(func(ctx context.Context) error {
 			end := min(i+batchSize, len(userIDs))
 
 			// Fetch presences for the batch
@@ -62,8 +62,8 @@ func (p *PresenceFetcher) FetchPresences(ctx context.Context, userIDs []uint64) 
 
 			mu.Lock()
 
-			for _, presence := range presences.UserPresences {
-				allPresences = append(allPresences, &presence)
+			for _, userPresence := range presences.UserPresences {
+				allPresences = append(allPresences, &userPresence)
 			}
 
 			mu.Unlock()
@@ -73,7 +73,7 @@ func (p *PresenceFetcher) FetchPresences(ctx context.Context, userIDs []uint64) 
 	}
 
 	// Wait for all goroutines to complete
-	if err := pool.Wait(); err != nil {
+	if err := workerPool.Wait(); err != nil {
 		p.logger.Error("Error during presence fetch", zap.Error(err))
 	}
 
@@ -94,8 +94,8 @@ func (p *PresenceFetcher) FetchPresencesConcurrently(
 		presences := p.FetchPresences(ctx, userIDs)
 
 		presenceMap := make(map[uint64]*types.UserPresenceResponse)
-		for _, presence := range presences {
-			presenceMap[presence.UserID] = presence
+		for _, presenceData := range presences {
+			presenceMap[presenceData.UserID] = presenceData
 		}
 
 		resultChan <- presenceMap

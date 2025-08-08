@@ -43,13 +43,13 @@ func (f *FriendFetcher) GetFriendIDs(ctx context.Context, userID uint64) ([]uint
 
 	// For users with ≤200 friends, use the legacy endpoint and extract IDs
 	if friendCount <= 200 {
-		friends, err := f.getFriendsLegacy(ctx, userID)
+		friendsData, err := f.getFriendsLegacy(ctx, userID)
 		if err != nil {
 			return nil, err
 		}
 
-		friendIDs := make([]uint64, 0, len(friends))
-		for _, friend := range friends {
+		friendIDs := make([]uint64, 0, len(friendsData))
+		for _, friend := range friendsData {
 			friendIDs = append(friendIDs, friend.ID)
 		}
 
@@ -217,10 +217,10 @@ func (f *FriendFetcher) getFriendsLegacy(ctx context.Context, userID uint64) ([]
 	}
 
 	normalizer := utils.NewTextNormalizer()
-	friends := make([]*apiTypes.ExtendedFriend, 0, len(response.Data))
+	friendsData := make([]*apiTypes.ExtendedFriend, 0, len(response.Data))
 
 	for _, friend := range response.Data {
-		friends = append(friends, &apiTypes.ExtendedFriend{
+		friendsData = append(friendsData, &apiTypes.ExtendedFriend{
 			Friend: apiTypes.Friend{
 				ID: friend.ID,
 			},
@@ -231,7 +231,7 @@ func (f *FriendFetcher) getFriendsLegacy(ctx context.Context, userID uint64) ([]
 
 	f.logger.Debug("Finished fetching friends using legacy endpoint",
 		zap.Uint64("userID", userID),
-		zap.Int("totalFriends", len(friends)))
+		zap.Int("totalFriends", len(friendsData)))
 
-	return friends, nil
+	return friendsData, nil
 }

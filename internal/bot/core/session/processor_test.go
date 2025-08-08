@@ -549,9 +549,6 @@ func TestValueProcessor_EnumMapHandling(t *testing.T) {
 		reasonTypeUser ReasonType = iota
 		reasonTypeFriend
 		reasonTypeOutfit
-		reasonTypeGroup
-		reasonTypeMember
-		reasonTypeCustom
 	)
 
 	type Reason struct {

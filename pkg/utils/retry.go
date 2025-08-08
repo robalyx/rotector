@@ -86,10 +86,10 @@ func WithRetrySplitBatch[T any](
 	newBatchSize := batchSize / 2
 
 	// Process first half
-	firstErr := WithRetrySplitBatch(ctx, items[:mid], newBatchSize, minBatchSize, opts, operation, onBlocked)
+	firstErr := WithRetrySplitBatch[T](ctx, items[:mid], newBatchSize, minBatchSize, opts, operation, onBlocked)
 
 	// Process second half
-	secondErr := WithRetrySplitBatch(ctx, items[mid:], newBatchSize, minBatchSize, opts, operation, onBlocked)
+	secondErr := WithRetrySplitBatch[T](ctx, items[mid:], newBatchSize, minBatchSize, opts, operation, onBlocked)
 
 	// If both halves failed with content block, propagate the error
 	if errors.Is(firstErr, ErrContentBlocked) && errors.Is(secondErr, ErrContentBlocked) {

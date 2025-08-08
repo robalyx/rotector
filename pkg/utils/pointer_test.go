@@ -30,10 +30,16 @@ func TestPtr(t *testing.T) {
 	t.Run("boolean pointer", func(t *testing.T) {
 		t.Parallel()
 
-		b := true
-		ptr := utils.Ptr(b)
-		assert.NotNil(t, ptr)
-		assert.Equal(t, b, *ptr)
+		testCases := []bool{true, false}
+		for _, b := range testCases {
+			t.Run("value", func(t *testing.T) {
+				t.Parallel()
+
+				ptr := utils.Ptr(b)
+				assert.NotNil(t, ptr)
+				assert.Equal(t, b, *ptr)
+			})
+		}
 	})
 
 	t.Run("struct pointer", func(t *testing.T) {

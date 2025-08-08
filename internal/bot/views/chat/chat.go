@@ -266,18 +266,18 @@ func (b *Builder) buildModelOptions() []discord.StringSelectMenuOption {
 		discord.NewStringSelectMenuOption("o4 Mini", enum.ChatModelo4Mini.String()).
 			WithDescription("Most capable model - Best overall performance").
 			WithDefault(b.model == enum.ChatModelo4Mini),
-		discord.NewStringSelectMenuOption("Qwen 3 235B A22B", enum.ChatModelQwen3_235bA22b.String()).
+		discord.NewStringSelectMenuOption("Qwen 3 235B A22B", enum.ChatModelQwen3235bA22b.String()).
 			WithDescription("High performance model - Excellent reasoning and language abilities").
-			WithDefault(b.model == enum.ChatModelQwen3_235bA22b),
-		discord.NewStringSelectMenuOption("Gemini 2.5 Flash", enum.ChatModelGemini2_5Flash.String()).
+			WithDefault(b.model == enum.ChatModelQwen3235bA22b),
+		discord.NewStringSelectMenuOption("Gemini 2.5 Flash", enum.ChatModelGemini25Flash.String()).
 			WithDescription("High performance model - Good balance of speed and capabilities").
-			WithDefault(b.model == enum.ChatModelGemini2_5Flash),
-		discord.NewStringSelectMenuOption("DeepSeek V3", enum.ChatModelDeepseekV3_0324.String()).
+			WithDefault(b.model == enum.ChatModelGemini25Flash),
+		discord.NewStringSelectMenuOption("DeepSeek V3", enum.ChatModelDeepseekV30324.String()).
 			WithDescription("Mid-tier model - Good language understanding").
-			WithDefault(b.model == enum.ChatModelDeepseekV3_0324),
-		discord.NewStringSelectMenuOption("GPT-4.1 Mini", enum.ChatModelGPT4_1Mini.String()).
+			WithDefault(b.model == enum.ChatModelDeepseekV30324),
+		discord.NewStringSelectMenuOption("GPT-4.1 Mini", enum.ChatModelGPT41Mini.String()).
 			WithDescription("Mid-tier model - Basic capabilities").
-			WithDefault(b.model == enum.ChatModelGPT4_1Mini),
+			WithDefault(b.model == enum.ChatModelGPT41Mini),
 	}
 }
 

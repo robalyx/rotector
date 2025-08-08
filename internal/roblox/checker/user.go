@@ -47,8 +47,8 @@ type UserChecker struct {
 
 // NewUserChecker creates a UserChecker with all required dependencies.
 func NewUserChecker(app *setup.App, userFetcher *fetcher.UserFetcher, logger *zap.Logger) *UserChecker {
-	translator := translator.New(app.RoAPI.GetClient())
-	userAnalyzer := ai.NewUserAnalyzer(app, translator, logger)
+	trans := translator.New(app.RoAPI.GetClient())
+	userAnalyzer := ai.NewUserAnalyzer(app, trans, logger)
 	outfitAnalyzer := ai.NewOutfitAnalyzer(app, logger)
 
 	return &UserChecker{
@@ -57,7 +57,7 @@ func NewUserChecker(app *setup.App, userFetcher *fetcher.UserFetcher, logger *za
 		userFetcher:    userFetcher,
 		gameFetcher:    fetcher.NewGameFetcher(app.RoAPI, logger),
 		outfitFetcher:  fetcher.NewOutfitFetcher(app.RoAPI, logger),
-		translator:     translator,
+		translator:     trans,
 		userAnalyzer:   userAnalyzer,
 		outfitAnalyzer: outfitAnalyzer,
 		ivanAnalyzer:   ai.NewIvanAnalyzer(app, logger),

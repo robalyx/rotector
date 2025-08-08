@@ -303,7 +303,7 @@ func (a *UserAnalyzer) processBatch(
 
 			// Save blocked user data to file
 			filename := fmt.Sprintf("users_%s.txt", time.Now().Format("20060102_150405"))
-			filepath := filepath.Join(a.textDir, filename)
+			filePath := filepath.Join(a.textDir, filename)
 
 			var buf bytes.Buffer
 			for _, user := range batch {
@@ -316,16 +316,16 @@ func (a *UserAnalyzer) processBatch(
 				buf.WriteString(fmt.Sprintf("Description: %s\n\n", user.Description))
 			}
 
-			if err := os.WriteFile(filepath, buf.Bytes(), 0o600); err != nil {
+			if err := os.WriteFile(filePath, buf.Bytes(), 0o600); err != nil {
 				a.textLogger.Error("Failed to save blocked user data",
 					zap.Error(err),
-					zap.String("path", filepath))
+					zap.String("path", filePath))
 
 				return
 			}
 
 			a.textLogger.Info("Saved blocked user data",
-				zap.String("path", filepath))
+				zap.String("path", filePath))
 		},
 	)
 	if err != nil {

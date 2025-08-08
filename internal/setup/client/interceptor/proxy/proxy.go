@@ -23,8 +23,6 @@ import (
 const (
 	// RotationKeyPrefix is the prefix for proxy rotation keys in Redis.
 	RotationKeyPrefix = "proxy_rotation"
-	// EndpointKeyPrefix is the prefix for endpoint tracking keys in Redis.
-	EndpointKeyPrefix = "proxy_endpoints"
 	// LastSuccessKeyPrefix is the prefix for storing last successful proxy index per endpoint.
 	LastSuccessKeyPrefix = "proxy_last_success"
 	// UnhealthyKeyPrefix is the prefix for storing unhealthy proxy status.

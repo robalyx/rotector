@@ -2,7 +2,6 @@ package fetcher
 
 import (
 	"context"
-	"errors"
 	"sync"
 	"time"
 
@@ -14,9 +13,6 @@ import (
 	"github.com/sourcegraph/conc/pool"
 	"go.uber.org/zap"
 )
-
-// ErrUserBanned indicates that the user is banned from Roblox.
-var ErrUserBanned = errors.New("user is banned")
 
 // UserFetchResult contains all the data fetched for a user.
 type UserFetchResult struct {

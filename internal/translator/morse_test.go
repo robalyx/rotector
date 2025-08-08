@@ -10,7 +10,7 @@ import (
 func TestTranslateMorse(t *testing.T) {
 	t.Parallel()
 
-	translator := translator.New(nil)
+	tr := translator.New(nil)
 
 	tests := []struct {
 		name     string
@@ -58,7 +58,7 @@ func TestTranslateMorse(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			result := translator.TranslateMorse(tt.input)
+			result := tr.TranslateMorse(tt.input)
 			assert.Equal(t, tt.expected, result)
 		})
 	}

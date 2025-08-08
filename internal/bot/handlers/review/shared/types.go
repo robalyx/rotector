@@ -1,7 +1,6 @@
 package shared
 
 import (
-	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -19,8 +18,6 @@ import (
 	"github.com/robalyx/rotector/pkg/utils"
 	"go.uber.org/zap"
 )
-
-var ErrBreakRequired = errors.New("break required")
 
 // BaseReviewMenu contains common fields and methods for review menus.
 type BaseReviewMenu struct {

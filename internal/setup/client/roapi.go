@@ -70,8 +70,8 @@ func GetRoAPIClient(
 	if len(roverseProxies) > 0 {
 		// Create a map for quick lookup of regular proxy URLs
 		proxyMap := make(map[string]struct{}, len(proxies))
-		for _, proxy := range proxies {
-			proxyMap[proxy.String()] = struct{}{}
+		for _, proxyURL := range proxies {
+			proxyMap[proxyURL.String()] = struct{}{}
 		}
 
 		// Add roverse proxies that don't already exist in the regular proxies list

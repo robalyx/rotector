@@ -14,8 +14,6 @@ import (
 
 var (
 	ErrInvalidComment    = errors.New("invalid comment message")
-	ErrSpamDetected      = errors.New("similar comment already exists")
-	ErrInvalidLinks      = errors.New("only roblox links are allowed")
 	ErrCommentTooSimilar = errors.New("comment too similar to existing ones")
 )
 

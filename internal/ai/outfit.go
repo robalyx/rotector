@@ -43,10 +43,8 @@ const (
 )
 
 var (
-	ErrNoViolations        = errors.New("no violations found in outfits")
-	ErrNoOutfits           = errors.New("no outfit images downloaded successfully")
-	ErrInvalidThumbnailURL = errors.New("invalid thumbnail URL")
-	ErrUnsupportedSchema   = errors.New("unsupported schema type")
+	ErrNoViolations = errors.New("no violations found in outfits")
+	ErrNoOutfits    = errors.New("no outfit images downloaded successfully")
 )
 
 // OutfitThemeAnalysis contains the AI's theme detection results for a user's outfits.
@@ -142,11 +140,11 @@ func (a *OutfitAnalyzer) ProcessUsers(ctx context.Context, params *OutfitAnalyze
 			continue
 		}
 
-		thumbnails := userThumbnails[userInfo.ID]
+		userThumbs := userThumbnails[userInfo.ID]
 
 		p.Go(func(ctx context.Context) error {
 			// Analyze user's outfits for themes
-			outfitNames, err := a.analyzeUserOutfits(ctx, userInfo, &mu, params.ReasonsMap, outfits, thumbnails)
+			outfitNames, err := a.analyzeUserOutfits(ctx, userInfo, &mu, params.ReasonsMap, outfits, userThumbs)
 			if err != nil && !errors.Is(err, ErrNoViolations) {
 				a.logger.Error("Failed to analyze outfit themes",
 					zap.Error(err),
@@ -493,7 +491,7 @@ func (a *OutfitAnalyzer) analyzeOutfitBatch(
 			for i, item := range items {
 				// Generate unique filename using outfit name
 				filename := fmt.Sprintf("%d_%s.webp", i+1, strings.ReplaceAll(item.name, " ", "_"))
-				filepath := filepath.Join(a.imageDir, filename)
+				filePath := filepath.Join(a.imageDir, filename)
 
 				// Save image
 				buf := new(bytes.Buffer)
@@ -505,18 +503,18 @@ func (a *OutfitAnalyzer) analyzeOutfitBatch(
 					continue
 				}
 
-				if err := os.WriteFile(filepath, buf.Bytes(), 0o600); err != nil {
+				if err := os.WriteFile(filePath, buf.Bytes(), 0o600); err != nil {
 					a.imageLogger.Error("Failed to save blocked image",
 						zap.Error(err),
 						zap.String("outfitName", item.name),
-						zap.String("path", filepath))
+						zap.String("path", filePath))
 
 					continue
 				}
 
 				a.imageLogger.Info("Saved blocked image",
 					zap.String("outfitName", item.name),
-					zap.String("path", filepath))
+					zap.String("path", filePath))
 			}
 		},
 	)
@@ -559,15 +557,15 @@ func (a *OutfitAnalyzer) getOutfitThumbnails(
 	// Create user thumbnail map
 	userThumbnails := make(map[uint64]map[uint64]string)
 	for userID, outfits := range userOutfits {
-		thumbnails := make(map[uint64]string)
+		userThumbs := make(map[uint64]string)
 
 		for _, outfit := range outfits {
 			if url, ok := thumbnailMap[outfit.ID]; ok {
-				thumbnails[outfit.ID] = url
+				userThumbs[outfit.ID] = url
 			}
 		}
 
-		userThumbnails[userID] = thumbnails
+		userThumbnails[userID] = userThumbs
 	}
 
 	return userOutfits, userThumbnails

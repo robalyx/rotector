@@ -19,9 +19,9 @@ import (
 )
 
 const (
-	// SessionPrefix is prepended to all session keys in Redis to namespace them
+	// Prefix is prepended to all session keys in Redis to namespace them
 	// and avoid conflicts with other data stored in the same Redis instance.
-	SessionPrefix = "session:"
+	Prefix = "session:"
 
 	// ScanBatchSize controls how many Redis keys are retrieved in each SCAN operation
 	// when listing active sessions. This helps balance memory usage and performance.
@@ -34,7 +34,6 @@ const (
 var (
 	ErrSessionLimitReached  = errors.New("session limit reached")
 	ErrSessionNotFound      = errors.New("session not found")
-	ErrFailedToGetCount     = errors.New("failed to get active session count")
 	ErrFailedToLoadSettings = errors.New("failed to load settings")
 	ErrFailedToGetSession   = errors.New("failed to get session data")
 	ErrFailedToParseSession = errors.New("failed to parse session data")
@@ -73,7 +72,7 @@ func NewManager(db database.Client, redisManager *redis.Manager, logger *zap.Log
 // GetUserSessions retrieves all active sessions for a given user.
 // If cleanupSelector is true, it will remove sessions stuck in the selector page.
 func (m *Manager) GetUserSessions(ctx context.Context, userID uint64, cleanupSelector bool) ([]Info, error) {
-	pattern := fmt.Sprintf("%s%d:*", SessionPrefix, userID)
+	pattern := fmt.Sprintf("%s%d:*", Prefix, userID)
 	sessions := make([]Info, 0)
 	cursor := uint64(0)
 
@@ -183,7 +182,7 @@ func (m *Manager) GetOrCreateSession(
 	}
 
 	// Generate session key
-	key := fmt.Sprintf("%s%d:%d", SessionPrefix, userID, messageID)
+	key := fmt.Sprintf("%s%d:%d", Prefix, userID, messageID)
 
 	// Try loading existing session first
 	result := m.redis.Do(ctx, m.redis.B().Get().Key(key).Build())
@@ -229,7 +228,7 @@ func (m *Manager) GetOrCreateSession(
 			// Remove the oldest session
 			oldestSession := sessions[0]
 
-			oldestKey := fmt.Sprintf("%s%d:%d", SessionPrefix, userID, oldestSession.MessageID)
+			oldestKey := fmt.Sprintf("%s%d:%d", Prefix, userID, oldestSession.MessageID)
 			if err := m.redis.Do(ctx, m.redis.B().Del().Key(oldestKey).Build()).Error(); err != nil {
 				m.logger.Error("Failed to delete oldest session",
 					zap.Error(err),
@@ -281,7 +280,7 @@ func (m *Manager) GetOrCreateSession(
 // CloseSession removes a user's session from Redis immediately rather than
 // waiting for expiration.
 func (m *Manager) CloseSession(ctx context.Context, session *Session, userID uint64, messageID uint64) {
-	key := fmt.Sprintf("%s%d:%d", SessionPrefix, userID, messageID)
+	key := fmt.Sprintf("%s%d:%d", Prefix, userID, messageID)
 	if err := m.redis.Do(ctx, m.redis.B().Del().Key(key).Build()).Error(); err != nil {
 		m.logger.Error("Failed to delete session",
 			zap.Error(err),
@@ -296,7 +295,7 @@ func (m *Manager) CloseSession(ctx context.Context, session *Session, userID uin
 // GetActiveUsers scans Redis for all session keys and extracts the user IDs.
 // Uses cursor-based scanning to handle large numbers of sessions.
 func (m *Manager) GetActiveUsers(ctx context.Context) []uint64 {
-	pattern := SessionPrefix + "*"
+	pattern := Prefix + "*"
 
 	var activeUsers []uint64
 
@@ -318,7 +317,7 @@ func (m *Manager) GetActiveUsers(ctx context.Context) []uint64 {
 
 		// Extract user IDs from key names
 		for _, key := range keys.Elements {
-			userIDStr := key[len(SessionPrefix):]
+			userIDStr := key[len(Prefix):]
 			if userID, err := strconv.ParseUint(userIDStr, 10, 64); err == nil {
 				activeUsers = append(activeUsers, userID)
 			}
@@ -336,7 +335,7 @@ func (m *Manager) GetActiveUsers(ctx context.Context) []uint64 {
 
 // GetActiveSessionCount returns the number of active sessions.
 func (m *Manager) GetActiveSessionCount(ctx context.Context) (uint64, error) {
-	pattern := SessionPrefix + "*"
+	pattern := Prefix + "*"
 	count := uint64(0)
 	cursor := uint64(0)
 

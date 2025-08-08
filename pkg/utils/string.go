@@ -8,9 +8,6 @@ import (
 // MultipleSpaces matches any sequence of whitespace (including newlines).
 var MultipleSpaces = regexp.MustCompile(`\s+`)
 
-// ThinkPatternRegex matches thought process content enclosed in <think> tags.
-var ThinkPatternRegex = regexp.MustCompile(`<think>(.*?)</think>`)
-
 // ValidCommentCharsRegex matches only allowed characters in community notes.
 var ValidCommentCharsRegex = regexp.MustCompile(`^[a-zA-Z0-9\s.,''\-\n]+$`)
 

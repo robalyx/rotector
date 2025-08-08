@@ -1,6 +1,6 @@
 .git
 .rotector
-.history
+.idea/
 exports/
 logs/bot_logs
 logs/export_logs

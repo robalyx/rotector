@@ -10,10 +10,9 @@ import (
 )
 
 var (
-	ErrUserNotFound     = errors.New("user not found")
-	ErrInvalidUserID    = errors.New("invalid user ID")
-	ErrNoUsersToReview  = errors.New("no users available to review")
-	ErrUnsupportedModel = errors.New("unsupported model type")
+	ErrUserNotFound    = errors.New("user not found")
+	ErrInvalidUserID   = errors.New("invalid user ID")
+	ErrNoUsersToReview = errors.New("no users available to review")
 )
 
 // User represents a user in any state (flagged, confirmed, or cleared).

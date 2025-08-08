@@ -210,7 +210,7 @@ func (b *BaseReviewBuilder) BuildBaseComponents(
 	reasonOptions []discord.StringSelectMenuOption,
 	actionOptions []discord.StringSelectMenuOption,
 ) []discord.LayoutComponent {
-	components := []discord.LayoutComponent{}
+	var components []discord.LayoutComponent
 
 	// Add sorting options
 	components = append(components,

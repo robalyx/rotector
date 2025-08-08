@@ -3,8 +3,6 @@ package interceptorutil
 import "errors"
 
 var (
-	// ErrTooManyRequests is returned when the request is rate limited.
-	ErrTooManyRequests = errors.New("too many requests")
 	// ErrMissingSecretKey is returned when the secret key is not configured.
 	ErrMissingSecretKey = errors.New("roverse secret key is not configured")
 	// ErrNoProxiesAvailable is returned when no proxies are available.

@@ -8,8 +8,6 @@ import (
 const (
 	// ApplicationJSON is the MIME type for JSON content.
 	ApplicationJSON = "application/json"
-	// TextPlain is the MIME type for plain text content.
-	TextPlain = "text/plain"
 )
 
 // ContextType represents the type of message context.

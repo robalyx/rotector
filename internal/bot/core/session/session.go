@@ -21,13 +21,13 @@ import (
 )
 
 const (
-	// SessionTimeout defines how long a session remains valid before expiring.
+	// Timeout defines how long a session remains valid before expiring.
 	// After this duration, Redis will automatically delete the session data.
-	SessionTimeout = 10 * time.Minute
+	Timeout = 10 * time.Minute
 
-	// ReviewerSessionTimeout defines how long a reviewer's session remains valid.
+	// ReviewerTimeout defines how long a reviewer's session remains valid.
 	// Reviewers get a longer timeout due to their trusted status.
-	ReviewerSessionTimeout = 6 * time.Hour
+	ReviewerTimeout = 6 * time.Hour
 )
 
 // Session maintains user state through a Redis-backed key-value store where values are
@@ -105,7 +105,7 @@ func (s *Session) Touch(ctx context.Context) {
 
 	for key, value := range s.data {
 		isPersistent, ok := s.dataModified[key]
-		if !ok || (ok && isPersistent) {
+		if !ok || isPersistent {
 			persistentData[key] = s.valueProcessor.ProcessValue(value)
 		}
 	}
@@ -120,9 +120,9 @@ func (s *Session) Touch(ctx context.Context) {
 	}
 
 	// Determine the appropriate timeout based on reviewer status
-	timeout := SessionTimeout
+	timeout := Timeout
 	if s.botSettings.IsReviewer(UserID.Get(s)) {
-		timeout = ReviewerSessionTimeout
+		timeout = ReviewerTimeout
 	}
 
 	// Update Redis with new data and expiration
@@ -184,7 +184,7 @@ func (s *Session) UpdateData(newData map[string]any, newMessageID uint64) {
 	defer s.mu.Unlock()
 
 	// Update the session key with new message ID
-	s.key = fmt.Sprintf("%s%d:%d", SessionPrefix, userID, newMessageID)
+	s.key = fmt.Sprintf("%s%d:%d", Prefix, userID, newMessageID)
 
 	// Clear existing data
 	s.data = make(map[string]any)

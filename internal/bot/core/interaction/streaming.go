@@ -176,11 +176,11 @@ func (is *ImageStreamer) downloadImage(ctx context.Context, url string) ([]byte,
 	for attempt := 1; attempt <= 3; attempt++ {
 		// Create timeout context for this attempt
 		downloadCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
-		defer cancel()
 
 		// Attempt download
 		resp, err := is.client.NewRequest().URL(url).Do(downloadCtx)
 		if err != nil {
+			cancel()
 			is.logger.Debug("Download attempt failed",
 				zap.Int("attempt", attempt),
 				zap.Error(err),
@@ -188,11 +188,12 @@ func (is *ImageStreamer) downloadImage(ctx context.Context, url string) ([]byte,
 
 			continue
 		}
-		defer resp.Body.Close()
 
 		// Read image data
 		buf := new(bytes.Buffer)
 		if _, err := buf.ReadFrom(resp.Body); err != nil {
+			resp.Body.Close()
+			cancel()
 			is.logger.Debug("Failed to read image data",
 				zap.Int("attempt", attempt),
 				zap.Error(err),
@@ -200,6 +201,9 @@ func (is *ImageStreamer) downloadImage(ctx context.Context, url string) ([]byte,
 
 			continue
 		}
+
+		resp.Body.Close()
+		cancel()
 
 		return buf.Bytes(), nil
 	}

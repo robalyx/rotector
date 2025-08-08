@@ -23,7 +23,6 @@ var (
 	ErrInvalidBoolValue      = errors.New("value must be true or false")
 	ErrWelcomeMessageTooLong = errors.New("welcome message cannot exceed 512 characters")
 	ErrAnnouncementTooLong   = errors.New("announcement message cannot exceed 512 characters")
-	ErrDescriptionTooLong    = errors.New("description cannot exceed 512 characters")
 	ErrNotReviewer           = errors.New("you are not an official reviewer")
 	ErrMissingInput          = errors.New("missing input")
 )
@@ -35,7 +34,7 @@ type Validator func(value string, userID uint64) error
 // ValueGetter is a function that retrieves the value of a setting.
 type ValueGetter func(s *Session) string
 
-// customID is provided to identify which action is being performed.
+// ValueUpdater is a function type where customID is provided to identify which action is being performed.
 type ValueUpdater func(customID string, inputs []string, s *Session) error
 
 // Setting defines the structure and behavior of a single setting.

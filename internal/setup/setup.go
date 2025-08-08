@@ -110,7 +110,7 @@ func InitializeApp(ctx context.Context, serviceType ServiceType, logDir string) 
 	}
 
 	// Initialize AI client
-	aiClient, err := aiClient.NewClient(&cfg.Common.OpenAI, logger)
+	aiCli, err := aiClient.NewClient(&cfg.Common.OpenAI, logger)
 	if err != nil {
 		return nil, err
 	}
@@ -161,7 +161,7 @@ func InitializeApp(ctx context.Context, serviceType ServiceType, logDir string) 
 		Logger:       logger,
 		DBLogger:     dbLogger.Named("database"),
 		DB:           db,
-		AIClient:     aiClient,
+		AIClient:     aiCli,
 		RoAPI:        roAPI,
 		RedisManager: redisManager,
 		StatusClient: statusClient,

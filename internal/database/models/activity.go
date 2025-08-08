@@ -2,7 +2,6 @@ package models
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"time"
 
@@ -12,9 +11,6 @@ import (
 	"github.com/uptrace/bun"
 	"go.uber.org/zap"
 )
-
-// Add at the top with other constants/types.
-var ErrNoLogsFound = errors.New("no logs found")
 
 // ActivityModel handles database operations for moderator action logs.
 type ActivityModel struct {

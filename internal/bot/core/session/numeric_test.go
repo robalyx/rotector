@@ -72,8 +72,8 @@ func TestPreserveNumericPrecision(t *testing.T) {
 		},
 		{
 			name:     "float64 with decimal",
-			input:    float64(42.5),
-			expected: float64(42.5),
+			input:    42.5,
+			expected: 42.5,
 		},
 		{
 			name: "map with string values",
@@ -346,9 +346,6 @@ func TestEnumMapConversion(t *testing.T) {
 		reasonTypeUser ReasonType = iota
 		reasonTypeFriend
 		reasonTypeOutfit
-		reasonTypeGroup
-		reasonTypeMember
-		reasonTypeCustom
 	)
 
 	type Reason struct {

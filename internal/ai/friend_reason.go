@@ -225,7 +225,7 @@ func (a *FriendReasonAnalyzer) ProcessFriendRequests(
 
 			// Save blocked friend data to file
 			filename := fmt.Sprintf("friends_%s.txt", time.Now().Format("20060102_150405"))
-			filepath := filepath.Join(a.textDir, filename)
+			filePath := filepath.Join(a.textDir, filename)
 
 			var buf bytes.Buffer
 			for _, req := range batch {
@@ -239,16 +239,16 @@ func (a *FriendReasonAnalyzer) ProcessFriendRequests(
 				buf.WriteString("\n")
 			}
 
-			if err := os.WriteFile(filepath, buf.Bytes(), 0o600); err != nil {
+			if err := os.WriteFile(filePath, buf.Bytes(), 0o600); err != nil {
 				a.textLogger.Error("Failed to save blocked friend data",
 					zap.Error(err),
-					zap.String("path", filepath))
+					zap.String("path", filePath))
 
 				return
 			}
 
 			a.textLogger.Info("Saved blocked friend data",
-				zap.String("path", filepath))
+				zap.String("path", filePath))
 		},
 	)
 	if err != nil {

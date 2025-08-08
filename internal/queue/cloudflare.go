@@ -16,7 +16,7 @@ import (
 
 var (
 	ErrUnexpectedStatusCode = errors.New("unexpected status code")
-	ErrD1APIUnsuccessful    = errors.New("D1 API returned unsuccessful response")
+	ErrD1APIUnsuccessful    = errors.New("d1 API returned unsuccessful response")
 )
 
 // Response is the response from the D1 API.

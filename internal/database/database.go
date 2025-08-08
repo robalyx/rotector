@@ -18,9 +18,6 @@ import (
 	"go.uber.org/zap"
 )
 
-// PartitionCount is the number of partitions for user and group tables.
-const PartitionCount = 8
-
 // sonicProvider is a JSON provider that uses Sonic for encoding and decoding.
 type sonicProvider struct{}
 
@@ -44,7 +41,7 @@ func (sonicProvider) NewDecoder(r io.Reader) bunjson.Decoder {
 type Client interface {
 	// Model returns the repository containing all model operations.
 	Model() *Repository
-	// Services returns the service containing all service operations.
+	// Service returns the service containing all service operations.
 	Service() *Service
 	// Close gracefully shuts down the database connection.
 	Close() error

@@ -2,7 +2,6 @@ package fetcher
 
 import (
 	"context"
-	"errors"
 	"sync"
 
 	"github.com/jaxron/roapi.go/pkg/api"
@@ -13,9 +12,6 @@ import (
 	"github.com/sourcegraph/conc/pool"
 	"go.uber.org/zap"
 )
-
-// ErrGroupLocked indicates that the group is locked.
-var ErrGroupLocked = errors.New("group is locked")
 
 // GroupFetcher handles concurrent retrieval of group information from the Roblox API.
 type GroupFetcher struct {
@@ -160,14 +156,14 @@ func (g *GroupFetcher) GetUserGroups(ctx context.Context, userID uint64) ([]*api
 		return nil, err
 	}
 
-	groups := make([]*apiTypes.UserGroupRoles, 0, len(fetchedGroups.Data))
+	groupsData := make([]*apiTypes.UserGroupRoles, 0, len(fetchedGroups.Data))
 	for _, group := range fetchedGroups.Data {
-		groups = append(groups, &group)
+		groupsData = append(groupsData, &group)
 	}
 
 	g.logger.Debug("Finished fetching user groups",
 		zap.Uint64("userID", userID),
-		zap.Int("totalGroups", len(groups)))
+		zap.Int("totalGroups", len(groupsData)))
 
-	return groups, nil
+	return groupsData, nil
 }

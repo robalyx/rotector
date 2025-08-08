@@ -24,25 +24,25 @@ func (i ChatModel) String() string {
 // Re-run the stringer command to generate them again.
 func _ChatModelNoOp() {
 	var x [1]struct{}
-	_ = x[ChatModelGemini2_5Flash-(0)]
-	_ = x[ChatModelQwen3_235bA22b-(1)]
-	_ = x[ChatModelDeepseekV3_0324-(2)]
-	_ = x[ChatModelGPT4_1Mini-(3)]
+	_ = x[ChatModelGemini25Flash-(0)]
+	_ = x[ChatModelQwen3235bA22b-(1)]
+	_ = x[ChatModelDeepseekV30324-(2)]
+	_ = x[ChatModelGPT41Mini-(3)]
 	_ = x[ChatModelo4Mini-(4)]
 	_ = x[ChatModelo4MiniHigh-(5)]
 }
 
-var _ChatModelValues = []ChatModel{ChatModelGemini2_5Flash, ChatModelQwen3_235bA22b, ChatModelDeepseekV3_0324, ChatModelGPT4_1Mini, ChatModelo4Mini, ChatModelo4MiniHigh}
+var _ChatModelValues = []ChatModel{ChatModelGemini25Flash, ChatModelQwen3235bA22b, ChatModelDeepseekV30324, ChatModelGPT41Mini, ChatModelo4Mini, ChatModelo4MiniHigh}
 
 var _ChatModelNameToValueMap = map[string]ChatModel{
-	_ChatModelName[0:16]:       ChatModelGemini2_5Flash,
-	_ChatModelLowerName[0:16]:  ChatModelGemini2_5Flash,
-	_ChatModelName[16:32]:      ChatModelQwen3_235bA22b,
-	_ChatModelLowerName[16:32]: ChatModelQwen3_235bA22b,
-	_ChatModelName[32:48]:      ChatModelDeepseekV3_0324,
-	_ChatModelLowerName[32:48]: ChatModelDeepseekV3_0324,
-	_ChatModelName[48:60]:      ChatModelGPT4_1Mini,
-	_ChatModelLowerName[48:60]: ChatModelGPT4_1Mini,
+	_ChatModelName[0:16]:       ChatModelGemini25Flash,
+	_ChatModelLowerName[0:16]:  ChatModelGemini25Flash,
+	_ChatModelName[16:32]:      ChatModelQwen3235bA22b,
+	_ChatModelLowerName[16:32]: ChatModelQwen3235bA22b,
+	_ChatModelName[32:48]:      ChatModelDeepseekV30324,
+	_ChatModelLowerName[32:48]: ChatModelDeepseekV30324,
+	_ChatModelName[48:60]:      ChatModelGPT41Mini,
+	_ChatModelLowerName[48:60]: ChatModelGPT41Mini,
 	_ChatModelName[60:67]:      ChatModelo4Mini,
 	_ChatModelLowerName[60:67]: ChatModelo4Mini,
 	_ChatModelName[67:79]:      ChatModelo4MiniHigh,

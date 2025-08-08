@@ -11,7 +11,7 @@ import (
 func TestTranslateBinary(t *testing.T) {
 	t.Parallel()
 
-	translator := &translator.Translator{}
+	tr := &translator.Translator{}
 
 	tests := []struct {
 		name        string
@@ -55,7 +55,7 @@ func TestTranslateBinary(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			result, err := translator.TranslateBinary(tt.input)
+			result, err := tr.TranslateBinary(tt.input)
 			if tt.expectError {
 				require.Error(t, err)
 			} else {

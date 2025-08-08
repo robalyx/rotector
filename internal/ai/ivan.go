@@ -291,7 +291,7 @@ func (a *IvanAnalyzer) processMessages(
 
 			// Save blocked messages to file
 			filename := fmt.Sprintf("%d_%s_%s.txt", userID, username, time.Now().Format("20060102_150405"))
-			filepath := filepath.Join(a.textDir, filename)
+			filePath := filepath.Join(a.textDir, filename)
 
 			var buf bytes.Buffer
 			for _, msg := range batch {
@@ -299,16 +299,16 @@ func (a *IvanAnalyzer) processMessages(
 					msg.DateTime.Format(time.RFC3339), msg.Message))
 			}
 
-			if err := os.WriteFile(filepath, buf.Bytes(), 0o600); err != nil {
+			if err := os.WriteFile(filePath, buf.Bytes(), 0o600); err != nil {
 				a.textLogger.Error("Failed to save blocked messages",
 					zap.Error(err),
-					zap.String("path", filepath))
+					zap.String("path", filePath))
 
 				return
 			}
 
 			a.textLogger.Info("Saved blocked messages",
-				zap.String("path", filepath))
+				zap.String("path", filePath))
 		},
 	)
 	if err != nil {

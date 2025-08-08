@@ -2,7 +2,7 @@ package constants
 
 import "time"
 
-// Commands.
+// RotectorCommandName is the main command name for the rotector bot.
 const (
 	RotectorCommandName = "rotector"
 )
@@ -289,20 +289,15 @@ const (
 	ChatClearHistoryButtonID = "chat_clear_history"
 	ChatClearContextButtonID = "chat_clear_context"
 	ChatModelSelectID        = "chat_model_select"
-	ChatAnalyzeUserID        = "chat_analyze_user"
 )
 
 // User Settings.
 const (
-	UserSettingPrefix        = "user"
-	UserSettingSelectID      = "user_setting_select"
-	StreamerModeOption       = "streamer_mode"
-	UserDefaultSortOption    = "user_default_sort"
-	GroupDefaultSortOption   = "group_default_sort"
-	AppealDefaultSortOption  = "appeal_default_sort"
-	AppealStatusFilterOption = "appeal_status_filter"
-	ReviewModeOption         = "review_mode"
-	ReviewTargetModeOption   = "review_target_mode"
+	UserSettingPrefix      = "user"
+	UserSettingSelectID    = "user_setting_select"
+	StreamerModeOption     = "streamer_mode"
+	ReviewModeOption       = "review_mode"
+	ReviewTargetModeOption = "review_target_mode"
 )
 
 // Bot Settings.
@@ -371,7 +366,6 @@ const (
 
 	AppealsPerPage              = 5
 	AppealMessagesPerPage       = 5
-	AppealSelectID              = "appeal_select"
 	AppealStatusSelectID        = "appeal_status"
 	AppealSortSelectID          = "appeal_sort"
 	AppealActionSelectID        = "appeal_action"
@@ -383,8 +377,6 @@ const (
 
 // CAPTCHA Menu.
 const (
-	CaptchaTimeout = 5 * time.Minute
-
 	CaptchaAnswerButtonCustomID  = "captcha_answer" + ModalOpenSuffix
 	CaptchaRefreshButtonCustomID = "captcha_refresh"
 	CaptchaAnswerModalCustomID   = "captcha_answer_modal"
@@ -459,7 +451,4 @@ const (
 	GuildScanJoinDurationOption        = "guild_scan_join_duration" + ModalOpenSuffix
 	GuildScanJoinDurationModalCustomID = "guild_scan_join_duration_modal"
 	GuildScanJoinDurationInputCustomID = "guild_scan_join_duration_input"
-
-	GuildMessageSelectMenuCustomID      = "guild_message_select"
-	GuildBanLogReportSelectMenuCustomID = "guild_ban_log_report"
 )

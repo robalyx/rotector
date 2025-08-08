@@ -88,10 +88,10 @@ func (n *TextNormalizer) ValidateWords(flaggedContent []string, targetTexts ...s
 			continue
 		}
 
-		if norm := n.Normalize(text); norm != "" {
-			normalizedTargets = append(normalizedTargets, norm)
-			if len(norm) > maxTargetLength {
-				maxTargetLength = len(norm)
+		if normalized := n.Normalize(text); normalized != "" {
+			normalizedTargets = append(normalizedTargets, normalized)
+			if len(normalized) > maxTargetLength {
+				maxTargetLength = len(normalized)
 			}
 		}
 	}
@@ -106,9 +106,9 @@ func (n *TextNormalizer) ValidateWords(flaggedContent []string, targetTexts ...s
 			continue
 		}
 
-		if norm := n.Normalize(content); norm != "" {
+		if normalized := n.Normalize(content); normalized != "" {
 			// Fail if any single piece of evidence is more than 2x the longest target
-			if len(norm) > maxTargetLength*2 {
+			if len(normalized) > maxTargetLength*2 {
 				return false
 			}
 		}

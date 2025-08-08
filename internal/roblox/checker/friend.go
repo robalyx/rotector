@@ -234,12 +234,10 @@ func (c *FriendChecker) calculateConfidence(confirmedCount, flaggedCount, totalF
 	var absoluteBonus float64
 
 	switch {
-	case confirmedCount >= 20:
-		absoluteBonus = 0.3
-	case confirmedCount >= 12:
-		absoluteBonus = 0.15
 	case confirmedCount >= 8:
 		absoluteBonus = 0.05
+	case confirmedCount >= 6:
+		absoluteBonus = 0.03
 	}
 
 	// Calculate thresholds based on network size

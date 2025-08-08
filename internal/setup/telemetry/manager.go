@@ -73,14 +73,14 @@ func (lm *Manager) GetWorkerLogger(name string) *zap.Logger {
 	sessionDir := lm.getOrCreateSessionDir()
 
 	// Configure the logger
-	config := zap.NewDevelopmentConfig()
-	config.OutputPaths = []string{
+	zapConfig := zap.NewDevelopmentConfig()
+	zapConfig.OutputPaths = []string{
 		filepath.Join(sessionDir, name+".log"),
 	}
-	config.Level = zap.NewAtomicLevelAt(zapLevel)
+	zapConfig.Level = zap.NewAtomicLevelAt(zapLevel)
 
 	// Create the logger
-	logger, err := config.Build()
+	zapLogger, err := zapConfig.Build()
 	if err != nil {
 		return zap.NewNop()
 	}
@@ -90,12 +90,12 @@ func (lm *Manager) GetWorkerLogger(name string) *zap.Logger {
 		sentryLevel := zap.LevelEnablerFunc(func(lvl zapcore.Level) bool {
 			return lvl >= zapcore.ErrorLevel
 		})
-		logger = logger.WithOptions(zap.WrapCore(func(core zapcore.Core) zapcore.Core {
+		zapLogger = zapLogger.WithOptions(zap.WrapCore(func(core zapcore.Core) zapcore.Core {
 			return zapcore.NewTee(core, NewSentryCore(sentryLevel))
 		}))
 	}
 
-	return logger
+	return zapLogger
 }
 
 // GetImageLogger creates a logger specifically for handling image logging.
@@ -115,18 +115,18 @@ func (lm *Manager) GetImageLogger(name string) (*zap.Logger, string, error) {
 		return nil, "", err
 	}
 
-	config := zap.NewDevelopmentConfig()
-	config.OutputPaths = []string{
+	zapConfig := zap.NewDevelopmentConfig()
+	zapConfig.OutputPaths = []string{
 		filepath.Join(imageDir, name+".log"),
 	}
-	config.Level = zap.NewAtomicLevelAt(zapLevel)
+	zapConfig.Level = zap.NewAtomicLevelAt(zapLevel)
 
-	logger, err := config.Build()
+	zapLogger, err := zapConfig.Build()
 	if err != nil {
 		return nil, "", err
 	}
 
-	return logger, imageDir, nil
+	return zapLogger, imageDir, nil
 }
 
 // GetTextLogger creates a logger specifically for handling blocked text content.
@@ -146,18 +146,18 @@ func (lm *Manager) GetTextLogger(name string) (*zap.Logger, string, error) {
 		return nil, "", err
 	}
 
-	config := zap.NewDevelopmentConfig()
-	config.OutputPaths = []string{
+	zapConfig := zap.NewDevelopmentConfig()
+	zapConfig.OutputPaths = []string{
 		filepath.Join(textDir, name+".log"),
 	}
-	config.Level = zap.NewAtomicLevelAt(zapLevel)
+	zapConfig.Level = zap.NewAtomicLevelAt(zapLevel)
 
-	logger, err := config.Build()
+	zapLogger, err := zapConfig.Build()
 	if err != nil {
 		return nil, "", err
 	}
 
-	return logger, textDir, nil
+	return zapLogger, textDir, nil
 }
 
 // setupLogDirectories creates and manages the log directory structure.

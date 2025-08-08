@@ -40,7 +40,7 @@ func (r *SettingModel) GetUserSettings(ctx context.Context, userID snowflake.ID)
 			GroupDefaultSort:   enum.ReviewSortByRandom,
 			AppealDefaultSort:  enum.AppealSortByNewest,
 			AppealStatusFilter: enum.AppealStatusPending,
-			ChatModel:          enum.ChatModelGemini2_5Flash,
+			ChatModel:          enum.ChatModelGemini25Flash,
 			ReviewMode:         enum.ReviewModeStandard,
 			ReviewTargetMode:   enum.ReviewTargetModeFlagged,
 			ChatMessageUsage: types.ChatMessageUsage{

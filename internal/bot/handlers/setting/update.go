@@ -20,7 +20,7 @@ type UpdateMenu struct {
 	page   *interaction.Page
 }
 
-// NewMenu creates a Menu and sets up its page with message builders and
+// NewUpdateMenu creates a Menu and sets up its page with message builders and
 // interaction handlers for changing settings.
 func NewUpdateMenu(l *Layout) *UpdateMenu {
 	m := &UpdateMenu{layout: l}
