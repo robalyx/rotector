@@ -140,7 +140,7 @@ func (m *Menu) handleQueueUserModalSubmit(ctx *interaction.Context, s *session.S
 	}
 
 	// Process and validate all lines first
-	userIDs := make([]uint64, 0, len(lines))
+	userIDs := make([]int64, 0, len(lines))
 	invalidInputs := make([]string, 0)
 	processedLines := make(map[string]struct{})
 
@@ -174,7 +174,7 @@ func (m *Menu) handleQueueUserModalSubmit(ctx *interaction.Context, s *session.S
 	// Queue users in batches if needed
 	var (
 		totalQueuedCount int
-		lastUserID       uint64
+		lastUserID       int64
 		allFailedIDs     []string
 	)
 
@@ -244,8 +244,13 @@ func (m *Menu) handleManualUserReviewModalSubmit(ctx *interaction.Context, s *se
 	}
 
 	// Parse user ID
-	userID, err := strconv.ParseUint(userIDStr, 10, 64)
+	userID, err := strconv.ParseInt(userIDStr, 10, 64)
 	if err != nil {
+		ctx.Cancel("Please provide a valid user ID.")
+		return
+	}
+
+	if userID <= 0 {
 		ctx.Cancel("Please provide a valid user ID.")
 		return
 	}
@@ -265,7 +270,7 @@ func (m *Menu) handleManualUserReviewModalSubmit(ctx *interaction.Context, s *se
 	}
 
 	// Fetch user info from Roblox API
-	users := m.layout.userFetcher.FetchInfos(ctx.Context(), []uint64{userID})
+	users := m.layout.userFetcher.FetchInfos(ctx.Context(), []int64{userID})
 	if len(users) == 0 {
 		ctx.Cancel("Failed to fetch user information. The user may be banned or not exist.")
 		return
@@ -278,7 +283,7 @@ func (m *Menu) handleManualUserReviewModalSubmit(ctx *interaction.Context, s *se
 	user.Reasons = make(types.Reasons[enum.UserReasonType])
 
 	// Save the new user to the database
-	if err := m.layout.db.Service().User().SaveUsers(ctx.Context(), map[uint64]*types.ReviewUser{
+	if err := m.layout.db.Service().User().SaveUsers(ctx.Context(), map[int64]*types.ReviewUser{
 		user.ID: user,
 	}); err != nil {
 		m.layout.logger.Error("Failed to save new user", zap.Error(err))
@@ -319,8 +324,13 @@ func (m *Menu) handleManualGroupReviewModalSubmit(ctx *interaction.Context, s *s
 	}
 
 	// Parse group ID
-	groupID, err := strconv.ParseUint(groupIDStr, 10, 64)
+	groupID, err := strconv.ParseInt(groupIDStr, 10, 64)
 	if err != nil {
+		ctx.Cancel("Please provide a valid group ID.")
+		return
+	}
+
+	if groupID <= 0 {
 		ctx.Cancel("Please provide a valid group ID.")
 		return
 	}
@@ -340,7 +350,7 @@ func (m *Menu) handleManualGroupReviewModalSubmit(ctx *interaction.Context, s *s
 	}
 
 	// Fetch group info from Roblox API
-	groups := m.layout.groupFetcher.FetchGroupInfos(ctx.Context(), []uint64{groupID})
+	groups := m.layout.groupFetcher.FetchGroupInfos(ctx.Context(), []int64{groupID})
 	if len(groups) == 0 {
 		ctx.Cancel("Failed to fetch group information. The group may be locked or not exist.")
 		return
@@ -365,7 +375,7 @@ func (m *Menu) handleManualGroupReviewModalSubmit(ctx *interaction.Context, s *s
 	}
 
 	// Add thumbnail URL to the group
-	groupWithThumbnail := m.layout.thumbnailFetcher.AddGroupImageURLs(ctx.Context(), map[uint64]*types.ReviewGroup{
+	groupWithThumbnail := m.layout.thumbnailFetcher.AddGroupImageURLs(ctx.Context(), map[int64]*types.ReviewGroup{
 		group.ID: group,
 	})
 	if len(groupWithThumbnail) > 0 {
@@ -373,7 +383,7 @@ func (m *Menu) handleManualGroupReviewModalSubmit(ctx *interaction.Context, s *s
 	}
 
 	// Save the new group to the database
-	if err := m.layout.db.Service().Group().SaveGroups(ctx.Context(), map[uint64]*types.ReviewGroup{
+	if err := m.layout.db.Service().Group().SaveGroups(ctx.Context(), map[int64]*types.ReviewGroup{
 		group.ID: group,
 	}); err != nil {
 		m.layout.logger.Error("Failed to save new group", zap.Error(err))
@@ -427,7 +437,7 @@ func (m *Menu) handleButton(ctx *interaction.Context, s *session.Session, custom
 	case constants.ManualGroupReviewButtonCustomID:
 		if !s.BotSettings().IsAdmin(uint64(ctx.Event().User().ID)) {
 			m.layout.logger.Error("Non-admin attempted restricted action",
-				zap.Uint64("user_id", uint64(ctx.Event().User().ID)),
+				zap.Uint64("userID", uint64(ctx.Event().User().ID)),
 				zap.String("action", customID))
 			ctx.Error("You do not have permission to perform this action.")
 
@@ -516,7 +526,7 @@ func (m *Menu) handleReviewQueuedUser(ctx *interaction.Context, s *session.Sessi
 	}
 
 	// Check if user exists in database
-	user, err := m.layout.db.Service().User().GetUserByID(ctx.Context(), strconv.FormatUint(userID, 10), types.UserFieldAll)
+	user, err := m.layout.db.Service().User().GetUserByID(ctx.Context(), strconv.FormatInt(userID, 10), types.UserFieldAll)
 	if err != nil {
 		m.layout.logger.Error("Failed to get user", zap.Error(err))
 		ctx.Error("Failed to get user information. Please try again.")
@@ -534,7 +544,7 @@ func (m *Menu) handleReviewQueuedUser(ctx *interaction.Context, s *session.Sessi
 }
 
 // processUserIDInput processes a single line of input and returns the parsed user ID if valid.
-func (m *Menu) processUserIDInput(line string) (uint64, error) {
+func (m *Menu) processUserIDInput(line string) (int64, error) {
 	line = strings.TrimSpace(line)
 	if line == "" {
 		return 0, ErrEmptyLine
@@ -549,8 +559,12 @@ func (m *Menu) processUserIDInput(line string) (uint64, error) {
 	}
 
 	// Parse user ID
-	userID, err := strconv.ParseUint(userIDStr, 10, 64)
+	userID, err := strconv.ParseInt(userIDStr, 10, 64)
 	if err != nil {
+		return 0, fmt.Errorf("%w: %s", ErrInvalidUserID, line)
+	}
+
+	if userID <= 0 {
 		return 0, fmt.Errorf("%w: %s", ErrInvalidUserID, line)
 	}
 
@@ -558,7 +572,7 @@ func (m *Menu) processUserIDInput(line string) (uint64, error) {
 }
 
 // queueUserBatch queues a batch of users and returns the results.
-func (m *Menu) queueUserBatch(ctx *interaction.Context, batch []uint64) (int, uint64, []string, []*types.ActivityLog) {
+func (m *Menu) queueUserBatch(ctx *interaction.Context, batch []int64) (int, int64, []string, []*types.ActivityLog) {
 	// Check which users already exist
 	existingUsers, err := m.layout.db.Service().User().GetUsersByIDs(ctx.Context(), batch, types.UserFieldBasic)
 	if err != nil {
@@ -566,8 +580,8 @@ func (m *Menu) queueUserBatch(ctx *interaction.Context, batch []uint64) (int, ui
 	}
 
 	// Filter out users that already exist
-	existingUserSet := make(map[uint64]struct{})
-	usersToQueue := make([]uint64, 0, len(batch))
+	existingUserSet := make(map[int64]struct{})
+	usersToQueue := make([]int64, 0, len(batch))
 
 	for _, userID := range batch {
 		if _, exists := existingUsers[userID]; exists {
@@ -579,7 +593,7 @@ func (m *Menu) queueUserBatch(ctx *interaction.Context, batch []uint64) (int, ui
 	}
 
 	// Queue the remaining users in D1 if any
-	queueErrors := make(map[uint64]error)
+	queueErrors := make(map[int64]error)
 
 	if len(usersToQueue) > 0 {
 		queueErrors, err = m.layout.d1Client.QueueUsers(ctx.Context(), usersToQueue)
@@ -598,7 +612,7 @@ func (m *Menu) queueUserBatch(ctx *interaction.Context, batch []uint64) (int, ui
 	// Process results and create activity logs
 	var (
 		queuedCount int
-		lastUserID  uint64
+		lastUserID  int64
 		failedIDs   []string
 	)
 

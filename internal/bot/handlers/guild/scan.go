@@ -72,7 +72,7 @@ func (m *ScanMenu) Show(ctx *interaction.Context, s *session.Session) {
 		if err != nil {
 			m.layout.logger.Error("Failed to get guild members",
 				zap.Error(err),
-				zap.Uint64("guild_id", guildID))
+				zap.Uint64("guildID", guildID))
 			ctx.Error("Failed to get guild members. Please try again.")
 
 			return
@@ -101,7 +101,7 @@ func (m *ScanMenu) Show(ctx *interaction.Context, s *session.Session) {
 		if err := m.handleCondoScan(ctx.Context(), s, memberIDs); err != nil {
 			m.layout.logger.Error("Failed to handle condo scan",
 				zap.Error(err),
-				zap.Uint64("guild_id", guildID))
+				zap.Uint64("guildID", guildID))
 			ctx.Error("Failed to scan guild members. Please try again.")
 		}
 
@@ -110,7 +110,7 @@ func (m *ScanMenu) Show(ctx *interaction.Context, s *session.Session) {
 		if err := m.handleMessageScan(ctx.Context(), s, memberIDs); err != nil {
 			m.layout.logger.Error("Failed to handle message scan",
 				zap.Error(err),
-				zap.Uint64("guild_id", guildID))
+				zap.Uint64("guildID", guildID))
 			ctx.Error("Failed to scan messages. Please try again.")
 		}
 
@@ -468,7 +468,7 @@ func (m *ScanMenu) handleBanConfirmModal(ctx *interaction.Context, s *session.Se
 	if err != nil {
 		m.layout.logger.Error("Failed to log guild ban operation",
 			zap.Error(err),
-			zap.Uint64("guild_id", guildID))
+			zap.Uint64("guildID", guildID))
 	}
 
 	// Format response message
@@ -521,7 +521,7 @@ func (m *ScanMenu) executeBans(
 		if err != nil {
 			m.layout.logger.Error("Failed to execute bulk ban batch",
 				zap.Error(err),
-				zap.Uint64("guild_id", guildID),
+				zap.Uint64("guildID", guildID),
 				zap.Int("batch_start", i),
 				zap.Int("batch_end", end))
 
@@ -543,7 +543,7 @@ func (m *ScanMenu) executeBans(
 			if err != nil {
 				m.layout.logger.Error("Failed to create DM channel",
 					zap.Error(err),
-					zap.Uint64("user_id", uint64(userID)))
+					zap.Uint64("userID", uint64(userID)))
 
 				continue
 			}
@@ -553,7 +553,7 @@ func (m *ScanMenu) executeBans(
 			if err != nil {
 				m.layout.logger.Error("Failed to get guild information",
 					zap.Error(err),
-					zap.Uint64("guild_id", guildID))
+					zap.Uint64("guildID", guildID))
 
 				continue
 			}
@@ -590,7 +590,7 @@ func (m *ScanMenu) executeBans(
 			if err != nil {
 				m.layout.logger.Error("Failed to send ban notification",
 					zap.Error(err),
-					zap.Uint64("user_id", uint64(userID)))
+					zap.Uint64("userID", uint64(userID)))
 			}
 		}
 	}

@@ -94,7 +94,7 @@ func (m *GroupsMenu) Show(ctx *interaction.Context, s *session.Session) {
 
 // sortGroupsByStatus sorts groups into categories based on their status.
 func (m *GroupsMenu) sortGroupsByStatus(
-	groups []*apiTypes.UserGroupRoles, flaggedGroups map[uint64]*types.ReviewGroup,
+	groups []*apiTypes.UserGroupRoles, flaggedGroups map[int64]*types.ReviewGroup,
 ) []*apiTypes.UserGroupRoles {
 	// Group groups by their status
 	groupedGroups := make(map[enum.GroupType][]*apiTypes.UserGroupRoles)
@@ -189,7 +189,7 @@ func (m *GroupsMenu) fetchGroupThumbnails(ctx context.Context, groups []*apiType
 		requests.AddRequest(apiTypes.ThumbnailRequest{
 			Type:      apiTypes.GroupIconType,
 			TargetID:  group.Group.ID,
-			RequestID: strconv.FormatUint(group.Group.ID, 10),
+			RequestID: strconv.FormatInt(group.Group.ID, 10),
 			Size:      apiTypes.Size150x150,
 			Format:    apiTypes.WEBP,
 		})

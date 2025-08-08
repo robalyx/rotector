@@ -83,7 +83,7 @@ func (m *BaseReviewMenu) HandleAddComment(ctx *interaction.Context, s *session.S
 
 // HandleDeleteComment deletes the user's comment.
 func (m *BaseReviewMenu) HandleDeleteComment(ctx *interaction.Context, s *session.Session, targetType view.TargetType) {
-	var targetID uint64
+	var targetID int64
 	if targetType == view.TargetTypeUser {
 		targetID = session.UserTarget.Get(s).ID
 	} else {
@@ -119,7 +119,7 @@ func (m *BaseReviewMenu) HandleCommentModalSubmit(ctx *interaction.Context, s *s
 		return
 	}
 
-	var targetID uint64
+	var targetID int64
 	if targetType == view.TargetTypeUser {
 		targetID = session.UserTarget.Get(s).ID
 	} else {
@@ -219,7 +219,7 @@ func HandleEditReason[T types.ReasonType](
 	// Check if user is a reviewer
 	if !s.BotSettings().IsReviewer(uint64(ctx.Event().User().ID)) {
 		logger.Error("Non-reviewer attempted to manage reasons",
-			zap.Uint64("user_id", uint64(ctx.Event().User().ID)))
+			zap.Uint64("userID", uint64(ctx.Event().User().ID)))
 		ctx.Error("You do not have permission to manage reasons.")
 
 		return

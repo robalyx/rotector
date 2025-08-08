@@ -11,16 +11,16 @@ import (
 type ActivityTarget struct {
 	GuildID   uint64 `bun:",nullzero"`
 	DiscordID uint64 `bun:",nullzero"`
-	UserID    uint64 `bun:",nullzero"`
-	GroupID   uint64 `bun:",nullzero"`
+	UserID    int64  `bun:",nullzero"`
+	GroupID   int64  `bun:",nullzero"`
 }
 
 // ActivityFilter is used to provide a filter criteria for retrieving activity logs.
 type ActivityFilter struct {
 	GuildID      uint64
 	DiscordID    uint64
-	UserID       uint64
-	GroupID      uint64
+	UserID       int64
+	GroupID      int64
 	ReviewerID   uint64
 	ActivityType enum.ActivityType
 	StartDate    time.Time

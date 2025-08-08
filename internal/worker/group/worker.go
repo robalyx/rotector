@@ -37,7 +37,7 @@ type Worker struct {
 	pendingUsers              []*types.ReviewUser
 	logger                    *zap.Logger
 	batchSize                 int
-	currentGroupID            uint64
+	currentGroupID            int64
 	currentCursor             string
 	batchAttemptsWithoutFlags int
 }
@@ -159,7 +159,7 @@ func (w *Worker) Start(ctx context.Context) {
 		})
 
 		// Mark processed users in cache to prevent reprocessing
-		var processedUserIDs []uint64
+		var processedUserIDs []int64
 		for _, user := range usersToProcess {
 			processedUserIDs = append(processedUserIDs, user.ID)
 		}
@@ -182,14 +182,14 @@ func (w *Worker) Start(ctx context.Context) {
 			// Increment counter when no users are flagged
 			w.batchAttemptsWithoutFlags++
 			w.logger.Info("No users flagged in this batch",
-				zap.Uint64("groupID", w.currentGroupID),
+				zap.Int64("groupID", w.currentGroupID),
 				zap.Int("batchAttemptsWithoutFlags", w.batchAttemptsWithoutFlags),
 				zap.Int("processedUsers", len(usersToProcess)))
 
 			// If we've had 1 batch without flags, move to next group
 			if w.batchAttemptsWithoutFlags >= 1 {
 				w.logger.Info("Moving to next group after 1 batch without flagged users",
-					zap.Uint64("currentGroupID", w.currentGroupID),
+					zap.Int64("currentGroupID", w.currentGroupID),
 					zap.Int("batchAttemptsWithoutFlags", w.batchAttemptsWithoutFlags))
 
 				if err := w.moveToNextGroup(ctx); err != nil {
@@ -248,7 +248,9 @@ func (w *Worker) processGroup(ctx context.Context) ([]*types.ReviewUser, error) 
 		if len(userIDs) > 0 {
 			unprocessedUserIDs, err := w.processingCache.FilterProcessedUsers(ctx, userIDs)
 			if err != nil {
-				w.logger.Error("Error filtering processed users", zap.Error(err), zap.Uint64("groupID", w.currentGroupID))
+				w.logger.Error("Error filtering processed users",
+					zap.Error(err),
+					zap.Int64("groupID", w.currentGroupID))
 
 				unprocessedUserIDs = userIDs
 			}
@@ -259,7 +261,7 @@ func (w *Worker) processGroup(ctx context.Context) ([]*types.ReviewUser, error) 
 				validUsers = append(validUsers, userInfos...)
 
 				w.logger.Info("Processed group users",
-					zap.Uint64("groupID", w.currentGroupID),
+					zap.Int64("groupID", w.currentGroupID),
 					zap.String("cursor", w.currentCursor),
 					zap.Int("fetchedUsers", len(userIDs)),
 					zap.Int("unprocessedUsers", len(unprocessedUserIDs)),
@@ -305,14 +307,14 @@ func (w *Worker) moveToNextGroup(ctx context.Context) error {
 }
 
 // collectUserIDsFromGroup collects user IDs from the current group that don't exist in our system.
-func (w *Worker) collectUserIDsFromGroup(ctx context.Context) ([]uint64, bool, error) {
+func (w *Worker) collectUserIDsFromGroup(ctx context.Context) ([]int64, bool, error) {
 	// Fetch group users with cursor pagination
 	builder := groups.NewGroupUsersBuilder(w.currentGroupID).WithLimit(100).WithCursor(w.currentCursor)
 
 	groupUsers, err := w.roAPI.Groups().GetGroupUsers(ctx, builder.Build())
 	if err != nil {
 		w.logger.Error("Error fetching group members, moving to next group",
-			zap.Uint64("groupID", w.currentGroupID),
+			zap.Int64("groupID", w.currentGroupID),
 			zap.Error(err))
 
 		// Reset state and try next group
@@ -333,7 +335,7 @@ func (w *Worker) collectUserIDsFromGroup(ctx context.Context) ([]uint64, bool, e
 	}
 
 	// Extract user IDs from member list
-	newUserIDs := make([]uint64, len(groupUsers.Data))
+	newUserIDs := make([]int64, len(groupUsers.Data))
 	for i, groupUser := range groupUsers.Data {
 		newUserIDs[i] = groupUser.User.UserID
 	}
@@ -346,7 +348,7 @@ func (w *Worker) collectUserIDsFromGroup(ctx context.Context) ([]uint64, bool, e
 	}
 
 	// Collect users that do not exist in our system
-	var userIDs []uint64
+	var userIDs []int64
 
 	for _, userID := range newUserIDs {
 		if _, exists := existingUsers[userID]; !exists {

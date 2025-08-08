@@ -37,10 +37,10 @@ func (h *Handler) addMessageToQueue(message *discord.Message) {
 	// Skip messages that are too long (likely spam)
 	if len(content) > maxMessageLength {
 		h.logger.Debug("Skipping long message (likely spam)",
-			zap.Uint64("server_id", serverID),
-			zap.Uint64("channel_id", channelID),
-			zap.Uint64("user_id", userID),
-			zap.String("message_id", messageID),
+			zap.Uint64("serverID", serverID),
+			zap.Uint64("channelID", channelID),
+			zap.Uint64("userID", userID),
+			zap.String("messageID", messageID),
 			zap.Int("length", len(content)),
 			zap.String("sample", content[:min(len(content), 50)]))
 
@@ -51,7 +51,7 @@ func (h *Handler) addMessageToQueue(message *discord.Message) {
 	isRedacted, isWhitelisted, err := h.db.Service().Sync().ShouldSkipUser(context.Background(), userID)
 	if err != nil {
 		h.logger.Error("Failed to check user privacy status",
-			zap.Uint64("user_id", userID),
+			zap.Uint64("userID", userID),
 			zap.Error(err))
 
 		return
@@ -59,7 +59,7 @@ func (h *Handler) addMessageToQueue(message *discord.Message) {
 
 	if isRedacted || isWhitelisted {
 		h.logger.Debug("Skipping message from redacted/whitelisted user",
-			zap.Uint64("user_id", userID))
+			zap.Uint64("userID", userID))
 
 		return
 	}
@@ -90,10 +90,10 @@ func (h *Handler) addMessageToQueue(message *discord.Message) {
 		similarity := calculateStringSimilarity(msg.Content, content)
 		if similarity > similarityThreshold {
 			h.logger.Debug("Skipping similar message",
-				zap.Uint64("server_id", serverID),
-				zap.Uint64("channel_id", channelID),
-				zap.Uint64("user_id", userID),
-				zap.String("message_id", messageID),
+				zap.Uint64("serverID", serverID),
+				zap.Uint64("channelID", channelID),
+				zap.Uint64("userID", userID),
+				zap.String("messageID", messageID),
 				zap.Float64("similarity", similarity),
 				zap.String("sample", content[:min(len(content), 50)]))
 
@@ -108,16 +108,16 @@ func (h *Handler) addMessageToQueue(message *discord.Message) {
 	hasSimilarMessage, err := h.checkRecentSimilarMessages(ctx, serverID, userID, content)
 	if err != nil {
 		h.logger.Error("Failed to check for similar messages",
-			zap.Uint64("server_id", serverID),
-			zap.Uint64("channel_id", channelID),
-			zap.Uint64("user_id", userID),
+			zap.Uint64("serverID", serverID),
+			zap.Uint64("channelID", channelID),
+			zap.Uint64("userID", userID),
 			zap.Error(err))
 	} else if hasSimilarMessage {
 		h.logger.Debug("Skipping message with similar content already in database",
-			zap.Uint64("server_id", serverID),
-			zap.Uint64("channel_id", channelID),
-			zap.Uint64("user_id", userID),
-			zap.String("message_id", messageID))
+			zap.Uint64("serverID", serverID),
+			zap.Uint64("channelID", channelID),
+			zap.Uint64("userID", userID),
+			zap.String("messageID", messageID))
 
 		return
 	}
@@ -131,10 +131,10 @@ func (h *Handler) addMessageToQueue(message *discord.Message) {
 
 	// Log queued message
 	h.logger.Debug("Added message to queue",
-		zap.Uint64("server_id", serverID),
-		zap.Uint64("channel_id", channelID),
-		zap.Uint64("user_id", userID),
-		zap.String("message_id", messageID),
+		zap.Uint64("serverID", serverID),
+		zap.Uint64("channelID", channelID),
+		zap.Uint64("userID", userID),
+		zap.String("messageID", messageID),
 		zap.String("sample", content[:min(len(content), 50)]))
 
 	// Process messages if we've reached the batch limit for this channel
@@ -182,8 +182,8 @@ func (h *Handler) processChannelMessages(serverID, channelID, channelKey uint64)
 	serverInfo, err := h.getOrCreateServerInfo(ctx, serverID)
 	if err != nil {
 		h.logger.Error("Failed to get server info",
-			zap.Uint64("server_id", serverID),
-			zap.Uint64("channel_id", channelID),
+			zap.Uint64("serverID", serverID),
+			zap.Uint64("channelID", channelID),
 			zap.Error(err))
 
 		return
@@ -210,7 +210,7 @@ func (h *Handler) processChannelMessages(serverID, channelID, channelKey uint64)
 	// Batch upsert server members
 	if err := h.db.Model().Sync().UpsertServerMembers(ctx, members, false); err != nil {
 		h.logger.Error("Failed to upsert server members",
-			zap.Uint64("server_id", serverID),
+			zap.Uint64("serverID", serverID),
 			zap.Error(err))
 	}
 
@@ -226,8 +226,8 @@ func (h *Handler) processChannelMessages(serverID, channelID, channelKey uint64)
 	flaggedUsers, err := h.messageAnalyzer.ProcessMessages(ctx, serverID, channelID, serverInfo.Name, messages)
 	if err != nil {
 		h.logger.Error("Failed to process messages with AI",
-			zap.Uint64("server_id", serverID),
-			zap.Uint64("channel_id", channelID),
+			zap.Uint64("serverID", serverID),
+			zap.Uint64("channelID", channelID),
 			zap.Error(err))
 
 		return
@@ -237,8 +237,8 @@ func (h *Handler) processChannelMessages(serverID, channelID, channelKey uint64)
 	if len(flaggedUsers) > 0 {
 		if err := h.storeInappropriateMessages(ctx, serverID, channelID, flaggedUsers); err != nil {
 			h.logger.Error("Failed to store inappropriate messages",
-				zap.Uint64("server_id", serverID),
-				zap.Uint64("channel_id", channelID),
+				zap.Uint64("serverID", serverID),
+				zap.Uint64("channelID", channelID),
 				zap.Error(err))
 		}
 	}
@@ -273,7 +273,7 @@ func (h *Handler) getOrCreateServerInfo(ctx context.Context, serverID uint64) (*
 		}
 
 		h.logger.Warn("Created server info with placeholder name",
-			zap.Uint64("server_id", serverID))
+			zap.Uint64("serverID", serverID))
 
 		return serverInfo, nil
 	}
@@ -291,7 +291,7 @@ func (h *Handler) getOrCreateServerInfo(ctx context.Context, serverID uint64) (*
 	}
 
 	h.logger.Debug("Created server info",
-		zap.Uint64("server_id", serverID),
+		zap.Uint64("serverID", serverID),
 		zap.String("name", guild.Name))
 
 	return serverInfo, nil
@@ -345,7 +345,7 @@ func (h *Handler) storeInappropriateMessages(
 	}
 
 	h.logger.Info("Stored inappropriate messages",
-		zap.Uint64("server_id", serverID),
+		zap.Uint64("serverID", serverID),
 		zap.Int("user_count", len(flaggedUsers)),
 		zap.Int("message_count", len(messages)))
 

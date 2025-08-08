@@ -94,7 +94,7 @@ func (s *Scanner) PerformFullScan(ctx context.Context, userID uint64) (string, e
 	s.db.Service().Ban().CreateCondoBans(ctx, []uint64{userID})
 
 	s.logger.Info("Full scan complete",
-		zap.Uint64("user_id", userID),
+		zap.Uint64("userID", userID),
 		zap.Int("guild_count", len(profile.MutualGuilds)))
 
 	return profile.User.Username, nil
@@ -106,7 +106,7 @@ func (s *Scanner) ShouldScan(ctx context.Context, userID uint64) bool {
 	if err != nil {
 		s.logger.Error("Failed to check rate limit",
 			zap.Error(err),
-			zap.Uint64("user_id", userID))
+			zap.Uint64("userID", userID))
 
 		return false
 	}

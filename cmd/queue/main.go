@@ -168,7 +168,7 @@ func openFileInEditor(ctx context.Context, filename string) error {
 }
 
 // readUserIDsFromFile reads and parses user IDs from the temporary file.
-func readUserIDsFromFile(filename string) ([]uint64, error) {
+func readUserIDsFromFile(filename string) ([]int64, error) {
 	file, err := os.Open(filename)
 	if err != nil {
 		return nil, err
@@ -176,7 +176,7 @@ func readUserIDsFromFile(filename string) ([]uint64, error) {
 	defer file.Close()
 
 	var (
-		userIDs       []uint64
+		userIDs       []int64
 		invalidInputs []string
 	)
 
@@ -228,7 +228,7 @@ func readUserIDsFromFile(filename string) ([]uint64, error) {
 }
 
 // processUserIDInput processes a single line of input and returns the parsed user ID if valid.
-func processUserIDInput(line string) (uint64, error) {
+func processUserIDInput(line string) (int64, error) {
 	line = strings.TrimSpace(line)
 	if line == "" {
 		return 0, ErrEmptyLine
@@ -243,8 +243,12 @@ func processUserIDInput(line string) (uint64, error) {
 	}
 
 	// Parse user ID
-	userID, err := strconv.ParseUint(userIDStr, 10, 64)
+	userID, err := strconv.ParseInt(userIDStr, 10, 64)
 	if err != nil {
+		return 0, fmt.Errorf("%w: %s", ErrInvalidUserID, line)
+	}
+
+	if userID <= 0 {
 		return 0, fmt.Errorf("%w: %s", ErrInvalidUserID, line)
 	}
 
@@ -252,7 +256,7 @@ func processUserIDInput(line string) (uint64, error) {
 }
 
 // queueUsers queues multiple users for processing, handling batching and error reporting.
-func queueUsers(ctx context.Context, app *setup.App, userIDs []uint64) (int, int, error) {
+func queueUsers(ctx context.Context, app *setup.App, userIDs []int64) (int, int, error) {
 	var (
 		totalQueued int
 		totalFailed int
@@ -279,7 +283,7 @@ func queueUsers(ctx context.Context, app *setup.App, userIDs []uint64) (int, int
 }
 
 // queueUserBatch queues a batch of users and returns the results.
-func queueUserBatch(ctx context.Context, app *setup.App, batch []uint64, logger *zap.Logger) (int, int, error) {
+func queueUserBatch(ctx context.Context, app *setup.App, batch []int64, logger *zap.Logger) (int, int, error) {
 	// Check which users already exist in database
 	existingUsers, err := app.DB.Service().User().GetUsersByIDs(ctx, batch, types.UserFieldBasic)
 	if err != nil {
@@ -288,13 +292,13 @@ func queueUserBatch(ctx context.Context, app *setup.App, batch []uint64, logger 
 	}
 
 	// Filter out users that already exist
-	existingUserSet := make(map[uint64]struct{})
-	usersToQueue := make([]uint64, 0, len(batch))
+	existingUserSet := make(map[int64]struct{})
+	usersToQueue := make([]int64, 0, len(batch))
 
 	for _, userID := range batch {
 		if _, exists := existingUsers[userID]; exists {
 			existingUserSet[userID] = struct{}{}
-			logger.Debug("Skipping user - already exists in database", zap.Uint64("userID", userID))
+			logger.Debug("Skipping user - already exists in database", zap.Int64("userID", userID))
 
 			continue
 		}
@@ -303,7 +307,7 @@ func queueUserBatch(ctx context.Context, app *setup.App, batch []uint64, logger 
 	}
 
 	// Queue the remaining users in D1 if any
-	queueErrors := make(map[uint64]error)
+	queueErrors := make(map[int64]error)
 	if len(usersToQueue) > 0 {
 		var err error
 
@@ -332,9 +336,9 @@ func queueUserBatch(ctx context.Context, app *setup.App, batch []uint64, logger 
 			failedCount++
 
 			if errors.Is(queueErr, queue.ErrUserRecentlyQueued) {
-				logger.Warn("User recently queued", zap.Uint64("userID", userID))
+				logger.Warn("User recently queued", zap.Int64("userID", userID))
 			} else {
-				logger.Error("Failed to queue user", zap.Uint64("userID", userID), zap.Error(queueErr))
+				logger.Error("Failed to queue user", zap.Int64("userID", userID), zap.Error(queueErr))
 			}
 
 			continue

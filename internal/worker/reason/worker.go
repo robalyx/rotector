@@ -91,7 +91,7 @@ func (w *Worker) Start(ctx context.Context) {
 // processUsersWithoutReason processes all users that don't have a specific reason type.
 func (w *Worker) processUsersWithoutReason(ctx context.Context, reasonType enum.UserReasonType) (int, error) {
 	totalProcessed := 0
-	cursorID := uint64(0)
+	cursorID := int64(0)
 
 	for !utils.ContextGuardWithLog(ctx, w.logger, "Context cancelled during batch processing") {
 		// Get batch of users without this reason type
@@ -149,7 +149,7 @@ func (w *Worker) processBatch(
 	}
 
 	// Create reasons map to track newly flagged users
-	reasonsMap := make(map[uint64]types.Reasons[enum.UserReasonType])
+	reasonsMap := make(map[int64]types.Reasons[enum.UserReasonType])
 
 	// Prepare maps for processing
 	confirmedFriendsMap, flaggedFriendsMap := w.friendChecker.PrepareFriendMaps(ctx, users)
@@ -184,7 +184,7 @@ func (w *Worker) processBatch(
 
 	// Save newly flagged users
 	if len(reasonsMap) > 0 {
-		flaggedUsers := make(map[uint64]*types.ReviewUser)
+		flaggedUsers := make(map[int64]*types.ReviewUser)
 
 		for _, user := range users {
 			if reasons, ok := reasonsMap[user.ID]; ok {
@@ -211,7 +211,7 @@ func (w *Worker) getUsersWithRelationships(ctx context.Context, batch []*types.R
 	}
 
 	// Get user IDs for the batch
-	userIDs := make([]uint64, len(batch))
+	userIDs := make([]int64, len(batch))
 	for i, user := range batch {
 		userIDs[i] = user.ID
 	}

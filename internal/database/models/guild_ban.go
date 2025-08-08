@@ -39,8 +39,8 @@ func (m *GuildBanModel) LogBanOperation(ctx context.Context, log *types.GuildBan
 	}
 
 	m.logger.Debug("Logged guild ban operation",
-		zap.Uint64("guild_id", log.GuildID),
-		zap.Uint64("reviewer_id", log.ReviewerID),
+		zap.Uint64("guildID", log.GuildID),
+		zap.Uint64("reviewerID", log.ReviewerID),
 		zap.Int("banned_count", log.BannedCount),
 		zap.Int("failed_count", log.FailedCount))
 

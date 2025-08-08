@@ -29,7 +29,7 @@ func NewOutfitFetcher(roAPI *api.API, logger *zap.Logger) *OutfitFetcher {
 
 // GetOutfits fetches basic outfit information and current avatar assets for a user.
 func (o *OutfitFetcher) GetOutfits(
-	ctx context.Context, userID uint64,
+	ctx context.Context, userID int64,
 ) ([]*apiTypes.Outfit, []*apiTypes.AssetV2, error) {
 	ctx = context.WithValue(ctx, auth.KeyAddCookie, true)
 
@@ -38,7 +38,7 @@ func (o *OutfitFetcher) GetOutfits(
 	if err != nil {
 		o.logger.Error("Failed to fetch user avatar",
 			zap.Error(err),
-			zap.Uint64("userID", userID))
+			zap.Int64("userID", userID))
 
 		return nil, nil, err
 	}
@@ -50,7 +50,7 @@ func (o *OutfitFetcher) GetOutfits(
 	if err != nil {
 		o.logger.Error("Failed to fetch user outfits",
 			zap.Error(err),
-			zap.Uint64("userID", userID))
+			zap.Int64("userID", userID))
 
 		return nil, nil, err
 	}
@@ -62,7 +62,7 @@ func (o *OutfitFetcher) GetOutfits(
 	}
 
 	o.logger.Debug("Successfully fetched user outfits",
-		zap.Uint64("userID", userID),
+		zap.Int64("userID", userID),
 		zap.Int("outfitCount", len(outfits.Data)))
 
 	return outfits.Data, avatarDetails.Assets, nil
@@ -71,11 +71,11 @@ func (o *OutfitFetcher) GetOutfits(
 // GetOutfitDetails fetches detailed asset information for specific outfits.
 func (o *OutfitFetcher) GetOutfitDetails(
 	ctx context.Context, outfits []*apiTypes.Outfit,
-) (map[uint64][]*apiTypes.AssetV2, error) {
+) (map[int64][]*apiTypes.AssetV2, error) {
 	ctx = context.WithValue(ctx, auth.KeyAddCookie, true)
 
 	var (
-		outfitAssets = make(map[uint64][]*apiTypes.AssetV2)
+		outfitAssets = make(map[int64][]*apiTypes.AssetV2)
 		p            = pool.New().WithContext(ctx).WithMaxGoroutines(5)
 		mu           sync.Mutex
 	)
@@ -88,7 +88,7 @@ func (o *OutfitFetcher) GetOutfitDetails(
 			if err != nil {
 				o.logger.Warn("Failed to fetch outfit details",
 					zap.Error(err),
-					zap.Uint64("outfitID", outfitID))
+					zap.Int64("outfitID", outfitID))
 
 				return nil
 			}

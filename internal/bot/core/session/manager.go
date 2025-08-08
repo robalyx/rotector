@@ -148,8 +148,8 @@ func (m *Manager) GetUserSessions(ctx context.Context, userID uint64, cleanupSel
 				}
 
 				m.logger.Debug("Removed session in selector page",
-					zap.Uint64("user_id", userID),
-					zap.Uint64("message_id", messageID))
+					zap.Uint64("userID", userID),
+					zap.Uint64("messageID", messageID))
 
 				continue
 			}
@@ -236,8 +236,8 @@ func (m *Manager) GetOrCreateSession(
 			}
 
 			m.logger.Debug("Removed oldest session",
-				zap.Uint64("user_id", uint64(userID)),
-				zap.Uint64("message_id", oldestSession.MessageID),
+				zap.Uint64("userID", uint64(userID)),
+				zap.Uint64("messageID", oldestSession.MessageID),
 				zap.Time("last_used", oldestSession.LastUsed))
 		}
 	}

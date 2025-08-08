@@ -46,7 +46,7 @@ func (m *Menu) Show(ctx *interaction.Context, s *session.Session) {
 
 		m.layout.logger.Error("Failed to get ban information",
 			zap.Error(err),
-			zap.Uint64("user_id", userID))
+			zap.Uint64("userID", userID))
 		ctx.Error("Failed to retrieve ban information. Please try again later.")
 
 		return
@@ -57,7 +57,7 @@ func (m *Menu) Show(ctx *interaction.Context, s *session.Session) {
 		if _, err := m.layout.db.Model().Ban().UnbanUser(ctx.Context(), userID); err != nil {
 			m.layout.logger.Error("Failed to remove expired ban",
 				zap.Error(err),
-				zap.Uint64("user_id", userID))
+				zap.Uint64("userID", userID))
 		}
 
 		ctx.Show(constants.ConsentPageName,

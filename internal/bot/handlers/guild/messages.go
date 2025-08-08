@@ -49,8 +49,8 @@ func (m *MessagesMenu) Show(ctx *interaction.Context, s *session.Session) {
 	if err != nil {
 		m.layout.logger.Error("Failed to get user messages",
 			zap.Error(err),
-			zap.Uint64("guild_id", guildID),
-			zap.Uint64("discord_user_id", discordUserID))
+			zap.Uint64("guildID", guildID),
+			zap.Uint64("discord_userID", discordUserID))
 		ctx.Error("Failed to retrieve message history. Please try again.")
 
 		return

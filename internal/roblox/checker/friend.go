@@ -15,13 +15,13 @@ import (
 
 // FriendCheckerParams contains all the parameters needed for friend checker processing.
 type FriendCheckerParams struct {
-	Users                     []*types.ReviewUser                           `json:"users"`
-	ReasonsMap                map[uint64]types.Reasons[enum.UserReasonType] `json:"reasonsMap"`
-	ConfirmedFriendsMap       map[uint64]map[uint64]*types.ReviewUser       `json:"confirmedFriendsMap"`
-	FlaggedFriendsMap         map[uint64]map[uint64]*types.ReviewUser       `json:"flaggedFriendsMap"`
-	ConfirmedGroupsMap        map[uint64]map[uint64]*types.ReviewGroup      `json:"confirmedGroupsMap"`
-	FlaggedGroupsMap          map[uint64]map[uint64]*types.ReviewGroup      `json:"flaggedGroupsMap"`
-	InappropriateFriendsFlags map[uint64]struct{}                           `json:"inappropriateFriendsFlags"`
+	Users                     []*types.ReviewUser                          `json:"users"`
+	ReasonsMap                map[int64]types.Reasons[enum.UserReasonType] `json:"reasonsMap"`
+	ConfirmedFriendsMap       map[int64]map[int64]*types.ReviewUser        `json:"confirmedFriendsMap"`
+	FlaggedFriendsMap         map[int64]map[int64]*types.ReviewUser        `json:"flaggedFriendsMap"`
+	ConfirmedGroupsMap        map[int64]map[int64]*types.ReviewGroup       `json:"confirmedGroupsMap"`
+	FlaggedGroupsMap          map[int64]map[int64]*types.ReviewGroup       `json:"flaggedGroupsMap"`
+	InappropriateFriendsFlags map[int64]struct{}                           `json:"inappropriateFriendsFlags"`
 }
 
 // FriendAnalysis contains the result of analyzing a user's friend network.
@@ -32,7 +32,7 @@ type FriendAnalysis struct {
 
 // FriendCheckResult contains the result of checking a user's friends.
 type FriendCheckResult struct {
-	UserID      uint64
+	UserID      int64
 	User        *types.User
 	AutoFlagged bool
 }
@@ -61,8 +61,8 @@ func (c *FriendChecker) ProcessUsers(ctx context.Context, params *FriendCheckerP
 	// Track users that exceed confidence threshold
 	var usersToAnalyze []*types.ReviewUser
 
-	userConfidenceMap := make(map[uint64]float64)
-	userFlaggedCountMap := make(map[uint64]int)
+	userConfidenceMap := make(map[int64]float64)
+	userFlaggedCountMap := make(map[int64]int)
 
 	// Process results
 	for _, userInfo := range params.Users {
@@ -133,7 +133,7 @@ func (c *FriendChecker) ProcessUsers(ctx context.Context, params *FriendCheckerP
 			})
 
 			c.logger.Debug("User flagged for friend network",
-				zap.Uint64("userID", userInfo.ID),
+				zap.Int64("userID", userInfo.ID),
 				zap.Int("confirmedFriends", confirmedCount),
 				zap.Int("flaggedFriends", flaggedCount),
 				zap.Float64("confidence", confidence),
@@ -152,12 +152,12 @@ func (c *FriendChecker) ProcessUsers(ctx context.Context, params *FriendCheckerP
 // This method extracts the friend map preparation logic for reusability.
 func (c *FriendChecker) PrepareFriendMaps(
 	ctx context.Context, userInfos []*types.ReviewUser,
-) (map[uint64]map[uint64]*types.ReviewUser, map[uint64]map[uint64]*types.ReviewUser) {
-	confirmedFriendsMap := make(map[uint64]map[uint64]*types.ReviewUser)
-	flaggedFriendsMap := make(map[uint64]map[uint64]*types.ReviewUser)
+) (map[int64]map[int64]*types.ReviewUser, map[int64]map[int64]*types.ReviewUser) {
+	confirmedFriendsMap := make(map[int64]map[int64]*types.ReviewUser)
+	flaggedFriendsMap := make(map[int64]map[int64]*types.ReviewUser)
 
 	// Collect all unique friend IDs across all users
-	uniqueFriendIDs := make(map[uint64]struct{})
+	uniqueFriendIDs := make(map[int64]struct{})
 
 	for _, userInfo := range userInfos {
 		for _, friend := range userInfo.Friends {
@@ -166,7 +166,7 @@ func (c *FriendChecker) PrepareFriendMaps(
 	}
 
 	// Convert unique IDs to slice
-	friendIDs := make([]uint64, 0, len(uniqueFriendIDs))
+	friendIDs := make([]int64, 0, len(uniqueFriendIDs))
 	for friendID := range uniqueFriendIDs {
 		friendIDs = append(friendIDs, friendID)
 	}
@@ -174,8 +174,8 @@ func (c *FriendChecker) PrepareFriendMaps(
 	// If no friends, return empty maps
 	if len(friendIDs) == 0 {
 		for _, userInfo := range userInfos {
-			confirmedFriendsMap[userInfo.ID] = make(map[uint64]*types.ReviewUser)
-			flaggedFriendsMap[userInfo.ID] = make(map[uint64]*types.ReviewUser)
+			confirmedFriendsMap[userInfo.ID] = make(map[int64]*types.ReviewUser)
+			flaggedFriendsMap[userInfo.ID] = make(map[int64]*types.ReviewUser)
 		}
 
 		return confirmedFriendsMap, flaggedFriendsMap
@@ -189,8 +189,8 @@ func (c *FriendChecker) PrepareFriendMaps(
 		c.logger.Error("Failed to fetch existing friends", zap.Error(err))
 		// Return empty maps on error
 		for _, userInfo := range userInfos {
-			confirmedFriendsMap[userInfo.ID] = make(map[uint64]*types.ReviewUser)
-			flaggedFriendsMap[userInfo.ID] = make(map[uint64]*types.ReviewUser)
+			confirmedFriendsMap[userInfo.ID] = make(map[int64]*types.ReviewUser)
+			flaggedFriendsMap[userInfo.ID] = make(map[int64]*types.ReviewUser)
 		}
 
 		return confirmedFriendsMap, flaggedFriendsMap
@@ -198,8 +198,8 @@ func (c *FriendChecker) PrepareFriendMaps(
 
 	// Prepare maps for confirmed and flagged friends per user
 	for _, userInfo := range userInfos {
-		confirmedFriends := make(map[uint64]*types.ReviewUser)
-		flaggedFriends := make(map[uint64]*types.ReviewUser)
+		confirmedFriends := make(map[int64]*types.ReviewUser)
+		flaggedFriends := make(map[int64]*types.ReviewUser)
 
 		for _, friend := range userInfo.Friends {
 			if reviewUser, exists := existingFriends[friend.ID]; exists {
@@ -309,7 +309,7 @@ func (c *FriendChecker) calculateConfidence(confirmedCount, flaggedCount, totalF
 
 // hasInappropriateGroupActivity checks if at least half of the user's groups are flagged/confirmed.
 func (c *FriendChecker) hasInappropriateGroupActivity(
-	userInfo *types.ReviewUser, confirmedGroups, flaggedGroups map[uint64]*types.ReviewGroup,
+	userInfo *types.ReviewUser, confirmedGroups, flaggedGroups map[int64]*types.ReviewGroup,
 ) bool {
 	totalGroups := len(userInfo.Groups)
 	if totalGroups == 0 {
@@ -324,7 +324,7 @@ func (c *FriendChecker) hasInappropriateGroupActivity(
 
 // countValidFlaggedFriends counts flagged friends, excluding those who only have
 // friend reason or only friend + outfit reasons to avoid false positives from circular flagging.
-func (c *FriendChecker) countValidFlaggedFriends(flaggedFriends map[uint64]*types.ReviewUser) int {
+func (c *FriendChecker) countValidFlaggedFriends(flaggedFriends map[int64]*types.ReviewUser) int {
 	count := 0
 
 	for _, flaggedFriend := range flaggedFriends {

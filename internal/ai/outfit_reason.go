@@ -102,7 +102,7 @@ func NewOutfitReasonAnalyzer(app *setup.App, logger *zap.Logger) *OutfitReasonAn
 
 // ProcessFlaggedUsers processes users flagged by outfit analysis and generates detailed reasons.
 func (a *OutfitReasonAnalyzer) ProcessFlaggedUsers(
-	ctx context.Context, userInfos []*types.ReviewUser, reasonsMap map[uint64]types.Reasons[enum.UserReasonType],
+	ctx context.Context, userInfos []*types.ReviewUser, reasonsMap map[int64]types.Reasons[enum.UserReasonType],
 ) {
 	// Filter users to only those flagged for outfit violations and populate their Reasons
 	var outfitFlaggedUsers []*types.ReviewUser
@@ -139,9 +139,9 @@ func (a *OutfitReasonAnalyzer) ProcessFlaggedUsers(
 // GenerateOutfitReasons generates outfit violation analysis reasons for multiple users using the OpenAI model.
 func (a *OutfitReasonAnalyzer) GenerateOutfitReasons(
 	ctx context.Context, userInfos []*types.ReviewUser,
-) map[uint64]string {
+) map[int64]string {
 	// Create outfit requests map for users with outfit violations
-	outfitRequests := make(map[uint64]UserOutfitRequest)
+	outfitRequests := make(map[int64]UserOutfitRequest)
 
 	for _, userInfo := range userInfos {
 		// Get outfit reason from user's populated Reasons field
@@ -183,7 +183,7 @@ func (a *OutfitReasonAnalyzer) GenerateOutfitReasons(
 	}
 
 	// Process outfit requests
-	results := make(map[uint64]string)
+	results := make(map[int64]string)
 	a.ProcessOutfitRequests(ctx, outfitRequests, results, 0)
 
 	return results
@@ -191,7 +191,7 @@ func (a *OutfitReasonAnalyzer) GenerateOutfitReasons(
 
 // ProcessOutfitRequests processes outfit analysis requests with retry logic for invalid users.
 func (a *OutfitReasonAnalyzer) ProcessOutfitRequests(
-	ctx context.Context, outfitRequests map[uint64]UserOutfitRequest, results map[uint64]string, retryCount int,
+	ctx context.Context, outfitRequests map[int64]UserOutfitRequest, results map[int64]string, retryCount int,
 ) {
 	if len(outfitRequests) == 0 {
 		return
@@ -217,7 +217,7 @@ func (a *OutfitReasonAnalyzer) ProcessOutfitRequests(
 	var (
 		mu              sync.Mutex
 		invalidMu       sync.Mutex
-		invalidRequests = make(map[uint64]UserOutfitRequest)
+		invalidRequests = make(map[int64]UserOutfitRequest)
 	)
 
 	minBatchSize := max(len(requestSlice)/4, 1)
@@ -375,7 +375,7 @@ func (a *OutfitReasonAnalyzer) processOutfitBatch(ctx context.Context, batch []U
 		}
 
 		// Create a map of usernames to user IDs for efficient lookup
-		userIDMap := make(map[string]uint64, len(batch))
+		userIDMap := make(map[string]int64, len(batch))
 		for _, req := range batch {
 			userIDMap[req.UserData.Username] = req.UserInfo.ID
 		}
@@ -413,10 +413,10 @@ func (a *OutfitReasonAnalyzer) processOutfitBatch(ctx context.Context, batch []U
 // processResults validates and stores the analysis results.
 // Returns a map of user IDs that had invalid results and need retry.
 func (a *OutfitReasonAnalyzer) processResults(
-	results *BatchOutfitAnalysis, batch []UserOutfitRequest, finalResults map[uint64]string, mu *sync.Mutex,
-) map[uint64]UserOutfitRequest {
+	results *BatchOutfitAnalysis, batch []UserOutfitRequest, finalResults map[int64]string, mu *sync.Mutex,
+) map[int64]UserOutfitRequest {
 	// Create map for retry requests
-	invalidRequests := make(map[uint64]UserOutfitRequest)
+	invalidRequests := make(map[int64]UserOutfitRequest)
 
 	// If no results returned, mark all users for retry
 	if results == nil || len(results.Results) == 0 {

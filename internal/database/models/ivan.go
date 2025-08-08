@@ -25,7 +25,7 @@ func NewIvan(db *bun.DB, logger *zap.Logger) *IvanModel {
 }
 
 // GetUserMessages retrieves messages for a user, ordered by date.
-func (r *IvanModel) GetUserMessages(ctx context.Context, userID uint64) ([]*types.IvanMessage, error) {
+func (r *IvanModel) GetUserMessages(ctx context.Context, userID int64) ([]*types.IvanMessage, error) {
 	return dbretry.Operation(ctx, func(ctx context.Context) ([]*types.IvanMessage, error) {
 		var messages []*types.IvanMessage
 
@@ -44,8 +44,8 @@ func (r *IvanModel) GetUserMessages(ctx context.Context, userID uint64) ([]*type
 
 // GetUsersMessages retrieves messages for multiple users in a single query.
 // Returns a map of user ID to their messages.
-func (r *IvanModel) GetUsersMessages(ctx context.Context, userIDs []uint64) (map[uint64][]*types.IvanMessage, error) {
-	return dbretry.Operation(ctx, func(ctx context.Context) (map[uint64][]*types.IvanMessage, error) {
+func (r *IvanModel) GetUsersMessages(ctx context.Context, userIDs []int64) (map[int64][]*types.IvanMessage, error) {
+	return dbretry.Operation(ctx, func(ctx context.Context) (map[int64][]*types.IvanMessage, error) {
 		var messages []*types.IvanMessage
 
 		err := r.db.NewSelect().
@@ -58,7 +58,7 @@ func (r *IvanModel) GetUsersMessages(ctx context.Context, userIDs []uint64) (map
 		}
 
 		// Group messages by user ID
-		result := make(map[uint64][]*types.IvanMessage)
+		result := make(map[int64][]*types.IvanMessage)
 		for _, msg := range messages {
 			result[msg.UserID] = append(result[msg.UserID], msg)
 		}
@@ -69,7 +69,7 @@ func (r *IvanModel) GetUsersMessages(ctx context.Context, userIDs []uint64) (map
 
 // GetAndMarkUsersMessages retrieves messages for multiple users and marks them as checked.
 // Returns a map of user ID to their messages.
-func (r *IvanModel) GetAndMarkUsersMessages(ctx context.Context, userIDs []uint64) (map[uint64][]*types.IvanMessage, error) {
+func (r *IvanModel) GetAndMarkUsersMessages(ctx context.Context, userIDs []int64) (map[int64][]*types.IvanMessage, error) {
 	var messages []*types.IvanMessage
 
 	err := dbretry.Transaction(ctx, r.db, func(ctx context.Context, tx bun.Tx) error {
@@ -101,7 +101,7 @@ func (r *IvanModel) GetAndMarkUsersMessages(ctx context.Context, userIDs []uint6
 	}
 
 	// Group messages by user ID
-	result := make(map[uint64][]*types.IvanMessage)
+	result := make(map[int64][]*types.IvanMessage)
 	for _, msg := range messages {
 		result[msg.UserID] = append(result[msg.UserID], msg)
 	}

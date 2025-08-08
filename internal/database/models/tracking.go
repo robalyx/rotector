@@ -28,7 +28,7 @@ func NewTracking(db *bun.DB, logger *zap.Logger) *TrackingModel {
 }
 
 // AddUsersToGroupsTracking adds multiple users to multiple groups' tracking lists.
-func (r *TrackingModel) AddUsersToGroupsTracking(ctx context.Context, groupToUsers map[uint64][]uint64) error {
+func (r *TrackingModel) AddUsersToGroupsTracking(ctx context.Context, groupToUsers map[int64][]int64) error {
 	// Create tracking entries for bulk insert
 	trackings := make([]types.GroupMemberTracking, 0, len(groupToUsers))
 	trackingUsers := make([]types.GroupMemberTrackingUser, 0)
@@ -52,7 +52,7 @@ func (r *TrackingModel) AddUsersToGroupsTracking(ctx context.Context, groupToUse
 
 	return dbretry.Transaction(ctx, r.db, func(ctx context.Context, tx bun.Tx) error {
 		// Lock the groups in a consistent order to prevent deadlocks
-		groupIDs := make([]uint64, 0, len(groupToUsers))
+		groupIDs := make([]int64, 0, len(groupToUsers))
 		for groupID := range groupToUsers {
 			groupIDs = append(groupIDs, groupID)
 		}
@@ -103,8 +103,8 @@ func (r *TrackingModel) AddUsersToGroupsTracking(ctx context.Context, groupToUse
 // (minFlaggedOverride) and percentage-based checks.
 func (r *TrackingModel) GetGroupTrackingsToCheck(
 	ctx context.Context, batchSize int, minFlaggedUsers int, minFlaggedOverride int,
-) (map[uint64][]uint64, error) {
-	result := make(map[uint64][]uint64)
+) (map[int64][]int64, error) {
+	result := make(map[int64][]int64)
 
 	now := time.Now()
 	tenMinutesAgo := now.Add(-10 * time.Minute)
@@ -146,7 +146,7 @@ func (r *TrackingModel) GetGroupTrackingsToCheck(
 
 		// Get flagged users for each group
 		if len(trackings) > 0 {
-			groupIDs := make([]uint64, len(trackings))
+			groupIDs := make([]int64, len(trackings))
 			for i, tracking := range trackings {
 				groupIDs[i] = tracking.ID
 			}
@@ -177,8 +177,8 @@ func (r *TrackingModel) GetGroupTrackingsToCheck(
 }
 
 // GetFlaggedUsers retrieves the list of flagged users for a specific group.
-func (r *TrackingModel) GetFlaggedUsers(ctx context.Context, groupID uint64) ([]uint64, error) {
-	return dbretry.Operation(ctx, func(ctx context.Context) ([]uint64, error) {
+func (r *TrackingModel) GetFlaggedUsers(ctx context.Context, groupID int64) ([]int64, error) {
+	return dbretry.Operation(ctx, func(ctx context.Context) ([]int64, error) {
 		var trackingUsers []types.GroupMemberTrackingUser
 
 		err := r.db.NewSelect().
@@ -190,7 +190,7 @@ func (r *TrackingModel) GetFlaggedUsers(ctx context.Context, groupID uint64) ([]
 			return nil, fmt.Errorf("failed to get flagged users for group: %w (groupID=%d)", err, groupID)
 		}
 
-		userIDs := make([]uint64, len(trackingUsers))
+		userIDs := make([]int64, len(trackingUsers))
 		for i, tu := range trackingUsers {
 			userIDs[i] = tu.UserID
 		}
@@ -200,7 +200,7 @@ func (r *TrackingModel) GetFlaggedUsers(ctx context.Context, groupID uint64) ([]
 }
 
 // GetFlaggedUsersCount retrieves the count of flagged users for a specific group.
-func (r *TrackingModel) GetFlaggedUsersCount(ctx context.Context, groupID uint64) (int, error) {
+func (r *TrackingModel) GetFlaggedUsersCount(ctx context.Context, groupID int64) (int, error) {
 	return dbretry.Operation(ctx, func(ctx context.Context) (int, error) {
 		count, err := r.db.NewSelect().
 			Model((*types.GroupMemberTrackingUser)(nil)).
@@ -215,7 +215,7 @@ func (r *TrackingModel) GetFlaggedUsersCount(ctx context.Context, groupID uint64
 }
 
 // UpdateFlaggedGroups marks the specified groups as flagged in the tracking table.
-func (r *TrackingModel) UpdateFlaggedGroups(ctx context.Context, groupIDs []uint64) error {
+func (r *TrackingModel) UpdateFlaggedGroups(ctx context.Context, groupIDs []int64) error {
 	return dbretry.NoResult(ctx, func(ctx context.Context) error {
 		_, err := r.db.NewUpdate().Model((*types.GroupMemberTracking)(nil)).
 			Set("is_flagged = true").
@@ -230,7 +230,7 @@ func (r *TrackingModel) UpdateFlaggedGroups(ctx context.Context, groupIDs []uint
 }
 
 // RemoveUsersFromAllGroups removes multiple users from all group tracking records.
-func (r *TrackingModel) RemoveUsersFromAllGroups(ctx context.Context, userIDs []uint64) error {
+func (r *TrackingModel) RemoveUsersFromAllGroups(ctx context.Context, userIDs []int64) error {
 	if len(userIDs) == 0 {
 		return nil
 	}
@@ -241,7 +241,7 @@ func (r *TrackingModel) RemoveUsersFromAllGroups(ctx context.Context, userIDs []
 }
 
 // RemoveUsersFromAllGroupsWithTx removes multiple users from all group tracking records using the provided transaction.
-func (r *TrackingModel) RemoveUsersFromAllGroupsWithTx(ctx context.Context, tx bun.IDB, userIDs []uint64) error {
+func (r *TrackingModel) RemoveUsersFromAllGroupsWithTx(ctx context.Context, tx bun.IDB, userIDs []int64) error {
 	if len(userIDs) == 0 {
 		return nil
 	}
@@ -261,7 +261,7 @@ func (r *TrackingModel) RemoveUsersFromAllGroupsWithTx(ctx context.Context, tx b
 }
 
 // RemoveGroupsFromTracking removes multiple groups and their users from tracking.
-func (r *TrackingModel) RemoveGroupsFromTracking(ctx context.Context, groupIDs []uint64) error {
+func (r *TrackingModel) RemoveGroupsFromTracking(ctx context.Context, groupIDs []int64) error {
 	if len(groupIDs) == 0 {
 		return nil
 	}
@@ -291,7 +291,7 @@ func (r *TrackingModel) RemoveGroupsFromTracking(ctx context.Context, groupIDs [
 
 // AddOutfitAssetsToTracking adds multiple outfits to multiple assets' tracking lists.
 // The map values can contain either outfit IDs or user IDs (for current outfit).
-func (r *TrackingModel) AddOutfitAssetsToTracking(ctx context.Context, assetToOutfits map[uint64][]types.TrackedID) error {
+func (r *TrackingModel) AddOutfitAssetsToTracking(ctx context.Context, assetToOutfits map[int64][]types.TrackedID) error {
 	// Create tracking entries for bulk insert
 	trackings := make([]types.OutfitAssetTracking, 0, len(assetToOutfits))
 	trackingOutfits := make([]types.OutfitAssetTrackingOutfit, 0)
@@ -316,7 +316,7 @@ func (r *TrackingModel) AddOutfitAssetsToTracking(ctx context.Context, assetToOu
 
 	return dbretry.Transaction(ctx, r.db, func(ctx context.Context, tx bun.Tx) error {
 		// Lock the assets in a consistent order to prevent deadlocks
-		assetIDs := make([]uint64, 0, len(assetToOutfits))
+		assetIDs := make([]int64, 0, len(assetToOutfits))
 		for assetID := range assetToOutfits {
 			assetIDs = append(assetIDs, assetID)
 		}
@@ -368,8 +368,8 @@ func (r *TrackingModel) AddOutfitAssetsToTracking(ctx context.Context, assetToOu
 // (minOutfitsOverride) and percentage-based checks.
 func (r *TrackingModel) GetOutfitAssetTrackingsToCheck(
 	ctx context.Context, batchSize int, minOutfits int, minOutfitsOverride int,
-) (map[uint64][]types.TrackedID, error) {
-	result := make(map[uint64][]types.TrackedID)
+) (map[int64][]types.TrackedID, error) {
+	result := make(map[int64][]types.TrackedID)
 
 	now := time.Now()
 	tenMinutesAgo := now.Add(-10 * time.Minute)
@@ -411,7 +411,7 @@ func (r *TrackingModel) GetOutfitAssetTrackingsToCheck(
 
 		// Get outfits for each asset
 		if len(trackings) > 0 {
-			assetIDs := make([]uint64, len(trackings))
+			assetIDs := make([]int64, len(trackings))
 			for i, tracking := range trackings {
 				assetIDs[i] = tracking.ID
 			}
@@ -446,7 +446,7 @@ func (r *TrackingModel) GetOutfitAssetTrackingsToCheck(
 }
 
 // RemoveUsersFromAssetTracking removes multiple users and their outfits from asset tracking.
-func (r *TrackingModel) RemoveUsersFromAssetTracking(ctx context.Context, userIDs []uint64) error {
+func (r *TrackingModel) RemoveUsersFromAssetTracking(ctx context.Context, userIDs []int64) error {
 	if len(userIDs) == 0 {
 		return nil
 	}
@@ -457,7 +457,7 @@ func (r *TrackingModel) RemoveUsersFromAssetTracking(ctx context.Context, userID
 }
 
 // RemoveUsersFromAssetTrackingWithTx removes multiple users and their outfits from asset tracking using the provided transaction.
-func (r *TrackingModel) RemoveUsersFromAssetTrackingWithTx(ctx context.Context, tx bun.Tx, userIDs []uint64) error {
+func (r *TrackingModel) RemoveUsersFromAssetTrackingWithTx(ctx context.Context, tx bun.Tx, userIDs []int64) error {
 	if len(userIDs) == 0 {
 		return nil
 	}
@@ -472,7 +472,7 @@ func (r *TrackingModel) RemoveUsersFromAssetTrackingWithTx(ctx context.Context, 
 	}
 
 	// Get outfit IDs for these users
-	var outfitIDs []uint64
+	var outfitIDs []int64
 
 	err = tx.NewSelect().
 		Model((*types.UserOutfit)(nil)).
@@ -501,7 +501,7 @@ func (r *TrackingModel) RemoveUsersFromAssetTrackingWithTx(ctx context.Context, 
 }
 
 // AddGamesToTracking adds multiple users to multiple games' tracking lists.
-func (r *TrackingModel) AddGamesToTracking(ctx context.Context, gameToUsers map[uint64][]uint64) error {
+func (r *TrackingModel) AddGamesToTracking(ctx context.Context, gameToUsers map[int64][]int64) error {
 	// Create tracking entries for bulk insert
 	trackings := make([]types.GameTracking, 0, len(gameToUsers))
 	trackingUsers := make([]types.GameTrackingUser, 0)
@@ -525,7 +525,7 @@ func (r *TrackingModel) AddGamesToTracking(ctx context.Context, gameToUsers map[
 
 	return dbretry.Transaction(ctx, r.db, func(ctx context.Context, tx bun.Tx) error {
 		// Lock the games in a consistent order to prevent deadlocks
-		gameIDs := make([]uint64, 0, len(gameToUsers))
+		gameIDs := make([]int64, 0, len(gameToUsers))
 		for gameID := range gameToUsers {
 			gameIDs = append(gameIDs, gameID)
 		}
@@ -576,8 +576,8 @@ func (r *TrackingModel) AddGamesToTracking(ctx context.Context, gameToUsers map[
 // (minFlaggedOverride) and percentage-based checks.
 func (r *TrackingModel) GetGameTrackingsToCheck(
 	ctx context.Context, batchSize int, minFlaggedUsers int, minFlaggedOverride int,
-) (map[uint64][]uint64, error) {
-	result := make(map[uint64][]uint64)
+) (map[int64][]int64, error) {
+	result := make(map[int64][]int64)
 
 	now := time.Now()
 	tenMinutesAgo := now.Add(-10 * time.Minute)
@@ -619,7 +619,7 @@ func (r *TrackingModel) GetGameTrackingsToCheck(
 
 		// Get flagged users for each game
 		if len(trackings) > 0 {
-			gameIDs := make([]uint64, len(trackings))
+			gameIDs := make([]int64, len(trackings))
 			for i, tracking := range trackings {
 				gameIDs[i] = tracking.ID
 			}
@@ -650,7 +650,7 @@ func (r *TrackingModel) GetGameTrackingsToCheck(
 }
 
 // RemoveUsersFromGameTracking removes multiple users from game tracking.
-func (r *TrackingModel) RemoveUsersFromGameTracking(ctx context.Context, userIDs []uint64) error {
+func (r *TrackingModel) RemoveUsersFromGameTracking(ctx context.Context, userIDs []int64) error {
 	if len(userIDs) == 0 {
 		return nil
 	}
@@ -661,7 +661,7 @@ func (r *TrackingModel) RemoveUsersFromGameTracking(ctx context.Context, userIDs
 }
 
 // RemoveUsersFromGameTrackingWithTx removes multiple users from game tracking using the provided transaction.
-func (r *TrackingModel) RemoveUsersFromGameTrackingWithTx(ctx context.Context, tx bun.IDB, userIDs []uint64) error {
+func (r *TrackingModel) RemoveUsersFromGameTrackingWithTx(ctx context.Context, tx bun.IDB, userIDs []int64) error {
 	if len(userIDs) == 0 {
 		return nil
 	}
@@ -681,7 +681,7 @@ func (r *TrackingModel) RemoveUsersFromGameTrackingWithTx(ctx context.Context, t
 }
 
 // RemoveGamesFromTracking removes multiple games and their users from tracking.
-func (r *TrackingModel) RemoveGamesFromTracking(ctx context.Context, gameIDs []uint64) error {
+func (r *TrackingModel) RemoveGamesFromTracking(ctx context.Context, gameIDs []int64) error {
 	if len(gameIDs) == 0 {
 		return nil
 	}

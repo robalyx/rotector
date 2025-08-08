@@ -15,7 +15,7 @@ import (
 // Builder creates the visual layout for the queue interface.
 type Builder struct {
 	stats           *queue.Stats
-	queuedUserID    uint64
+	queuedUserID    int64
 	queuedTimestamp time.Time
 	isProcessing    bool
 	isProcessed     bool
@@ -151,7 +151,7 @@ func (b *Builder) buildQueuedUserInfo() discord.ContainerSubComponent {
 	}
 
 	// Format user ID based on privacy mode
-	userIDText := utils.CensorString(strconv.FormatUint(b.queuedUserID, 10), b.privacyMode)
+	userIDText := utils.CensorString(strconv.FormatInt(b.queuedUserID, 10), b.privacyMode)
 
 	// Build content string
 	content := fmt.Sprintf(

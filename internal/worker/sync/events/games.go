@@ -29,10 +29,10 @@ func (h *Handler) handleGameURL(serverID uint64, content string) {
 	}
 
 	// Convert game ID to uint64
-	placeID, err := strconv.ParseUint(gameID, 10, 64)
+	placeID, err := strconv.ParseInt(gameID, 10, 64)
 	if err != nil {
 		h.logger.Error("Failed to parse game ID",
-			zap.String("game_id", gameID),
+			zap.String("gameID", gameID),
 			zap.Error(err))
 
 		return
@@ -43,7 +43,7 @@ func (h *Handler) handleGameURL(serverID uint64, content string) {
 }
 
 // processGame fetches and stores game information.
-func (h *Handler) processGame(serverID uint64, placeID uint64) {
+func (h *Handler) processGame(serverID uint64, placeID int64) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
@@ -51,17 +51,17 @@ func (h *Handler) processGame(serverID uint64, placeID uint64) {
 	universeResp, err := h.roAPI.Games().GetUniverseIDFromPlace(ctx, placeID)
 	if err != nil {
 		h.logger.Error("Failed to get universe ID",
-			zap.Uint64("place_id", placeID),
+			zap.Int64("placeID", placeID),
 			zap.Error(err))
 
 		return
 	}
 
 	// Get game details using universe ID
-	gamesResp, err := h.roAPI.Games().GetGamesByUniverseIDs(ctx, []uint64{universeResp.UniverseID})
+	gamesResp, err := h.roAPI.Games().GetGamesByUniverseIDs(ctx, []int64{universeResp.UniverseID})
 	if err != nil {
 		h.logger.Error("Failed to get game details",
-			zap.Uint64("universe_id", universeResp.UniverseID),
+			zap.Int64("universeID", universeResp.UniverseID),
 			zap.Error(err))
 
 		return
@@ -74,10 +74,10 @@ func (h *Handler) processGame(serverID uint64, placeID uint64) {
 		// Skip games with more than 50k visits or more than 40 players
 		if gameDetail.Visits > 50000 || gameDetail.Playing >= 40 {
 			h.logger.Debug("Skipping high-traffic game",
-				zap.Uint64("server_id", serverID),
-				zap.Uint64("game_id", gameDetail.RootPlaceID),
+				zap.Uint64("serverID", serverID),
+				zap.Int64("gameID", gameDetail.RootPlaceID),
 				zap.String("name", gameDetail.Name),
-				zap.Uint64("visits", gameDetail.Visits))
+				zap.Int64("visits", gameDetail.Visits))
 
 			continue
 		}
@@ -102,17 +102,17 @@ func (h *Handler) processGame(serverID uint64, placeID uint64) {
 		// Store the game in the database
 		if err := h.db.Model().Condo().SaveGame(ctx, game); err != nil {
 			h.logger.Error("Failed to save game",
-				zap.Uint64("game_id", game.ID),
+				zap.Int64("gameID", game.ID),
 				zap.Error(err))
 
 			continue
 		}
 
 		h.logger.Debug("Successfully processed and stored game",
-			zap.Uint64("server_id", serverID),
-			zap.Uint64("game_id", game.ID),
-			zap.Uint64("universe_id", game.UniverseID),
+			zap.Uint64("serverID", serverID),
+			zap.Int64("gameID", game.ID),
+			zap.Int64("universeID", game.UniverseID),
 			zap.String("name", game.Name),
-			zap.Uint64("visits", game.Visits))
+			zap.Int64("visits", game.Visits))
 	}
 }

@@ -170,14 +170,14 @@ func (m *MembersMenu) handleModal(ctx *interaction.Context, s *session.Session) 
 }
 
 // fetchMemberThumbnails fetches thumbnails for a slice of member IDs.
-func (m *MembersMenu) fetchMemberThumbnails(ctx context.Context, members []uint64) []string {
+func (m *MembersMenu) fetchMemberThumbnails(ctx context.Context, members []int64) []string {
 	// Create batch request for member avatars
 	requests := thumbnails.NewBatchThumbnailsBuilder()
 	for _, memberID := range members {
 		requests.AddRequest(apiTypes.ThumbnailRequest{
 			Type:      apiTypes.AvatarHeadShotType,
 			TargetID:  memberID,
-			RequestID: strconv.FormatUint(memberID, 10),
+			RequestID: strconv.FormatInt(memberID, 10),
 			Size:      apiTypes.Size150x150,
 			Format:    apiTypes.WEBP,
 		})

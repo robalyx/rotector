@@ -399,9 +399,9 @@ func (r *UserModel) GetUserByID(
 // GetUsersByIDs retrieves specified user information for a list of user IDs.
 // Returns a map of user IDs to review users.
 func (r *UserModel) GetUsersByIDs(
-	ctx context.Context, userIDs []uint64, fields types.UserField,
-) (map[uint64]*types.ReviewUser, error) {
-	users := make(map[uint64]*types.ReviewUser)
+	ctx context.Context, userIDs []int64, fields types.UserField,
+) (map[int64]*types.ReviewUser, error) {
+	users := make(map[int64]*types.ReviewUser)
 	err := dbretry.Transaction(ctx, r.db, func(ctx context.Context, tx bun.Tx) error {
 		// Query all users
 		var baseUsers []types.User
@@ -449,18 +449,18 @@ func (r *UserModel) GetUsersByIDs(
 		}
 
 		// Map verifications and clearances by user ID
-		verificationMap := make(map[uint64]types.UserVerification)
+		verificationMap := make(map[int64]types.UserVerification)
 		for _, v := range verifications {
 			verificationMap[v.UserID] = v
 		}
 
-		clearanceMap := make(map[uint64]types.UserClearance)
+		clearanceMap := make(map[int64]types.UserClearance)
 		for _, c := range clearances {
 			clearanceMap[c.UserID] = c
 		}
 
 		// Map reasons by user ID
-		reasonMap := make(map[uint64]types.Reasons[enum.UserReasonType])
+		reasonMap := make(map[int64]types.Reasons[enum.UserReasonType])
 		for _, reason := range reasons {
 			if _, ok := reasonMap[reason.UserID]; !ok {
 				reasonMap[reason.UserID] = make(types.Reasons[enum.UserReasonType])
@@ -534,7 +534,7 @@ func (r *UserModel) GetFlaggedAndConfirmedUsers(ctx context.Context) ([]*types.R
 // GetUsersToCheck finds users that haven't been checked for banned status recently.
 func (r *UserModel) GetUsersToCheck(
 	ctx context.Context, limit int,
-) (userIDs []uint64, bannedIDs []uint64, err error) {
+) (userIDs []int64, bannedIDs []int64, err error) {
 	var users []types.User
 
 	err = dbretry.Transaction(ctx, r.db, func(ctx context.Context, tx bun.Tx) error {
@@ -553,7 +553,7 @@ func (r *UserModel) GetUsersToCheck(
 		}
 
 		if len(users) > 0 {
-			userIDs = make([]uint64, 0, len(users))
+			userIDs = make([]int64, 0, len(users))
 			for _, user := range users {
 				userIDs = append(userIDs, user.ID)
 				if user.IsBanned {
@@ -582,7 +582,7 @@ func (r *UserModel) GetUsersToCheck(
 }
 
 // MarkUsersBanStatus updates the banned status of users in their respective tables.
-func (r *UserModel) MarkUsersBanStatus(ctx context.Context, userIDs []uint64, isBanned bool) error {
+func (r *UserModel) MarkUsersBanStatus(ctx context.Context, userIDs []int64, isBanned bool) error {
 	err := dbretry.NoResult(ctx, func(ctx context.Context) error {
 		_, err := r.db.NewUpdate().
 			Model((*types.User)(nil)).
@@ -671,7 +671,7 @@ func (r *UserModel) GetUserCounts(ctx context.Context) (*types.UserCounts, error
 }
 
 // GetOldClearedUsers returns users that were cleared before the cutoff date.
-func (r *UserModel) GetOldClearedUsers(ctx context.Context, cutoffDate time.Time) ([]uint64, error) {
+func (r *UserModel) GetOldClearedUsers(ctx context.Context, cutoffDate time.Time) ([]int64, error) {
 	var clearances []types.UserClearance
 
 	err := dbretry.NoResult(ctx, func(ctx context.Context) error {
@@ -685,7 +685,7 @@ func (r *UserModel) GetOldClearedUsers(ctx context.Context, cutoffDate time.Time
 		return nil, fmt.Errorf("failed to get old cleared users: %w", err)
 	}
 
-	userIDs := make([]uint64, len(clearances))
+	userIDs := make([]int64, len(clearances))
 	for i, c := range clearances {
 		userIDs[i] = c.UserID
 	}
@@ -698,8 +698,8 @@ func (r *UserModel) GetOldClearedUsers(ctx context.Context, cutoffDate time.Time
 }
 
 // GetUsersForThumbnailUpdate retrieves users that need thumbnail updates.
-func (r *UserModel) GetUsersForThumbnailUpdate(ctx context.Context, limit int) (map[uint64]*types.User, error) {
-	users := make(map[uint64]*types.User)
+func (r *UserModel) GetUsersForThumbnailUpdate(ctx context.Context, limit int) (map[int64]*types.User, error) {
+	users := make(map[int64]*types.User)
 
 	err := dbretry.Transaction(ctx, r.db, func(ctx context.Context, tx bun.Tx) error {
 		var baseUsers []types.User
@@ -758,7 +758,7 @@ func (r *UserModel) GetFlaggedUsersWithOnlyReason(
 }
 
 // DeleteUsers removes users and their verification/clearance records from the database.
-func (r *UserModel) DeleteUsers(ctx context.Context, userIDs []uint64) (int64, error) {
+func (r *UserModel) DeleteUsers(ctx context.Context, userIDs []int64) (int64, error) {
 	if len(userIDs) == 0 {
 		return 0, nil
 	}
@@ -780,7 +780,7 @@ func (r *UserModel) DeleteUsers(ctx context.Context, userIDs []uint64) (int64, e
 }
 
 // DeleteUsersWithTx removes users and their verification/clearance records from the database using the provided transaction.
-func (r *UserModel) DeleteUsersWithTx(ctx context.Context, tx bun.Tx, userIDs []uint64) (int64, error) {
+func (r *UserModel) DeleteUsersWithTx(ctx context.Context, tx bun.Tx, userIDs []int64) (int64, error) {
 	if len(userIDs) == 0 {
 		return 0, nil
 	}
@@ -843,7 +843,7 @@ func (r *UserModel) DeleteUsersWithTx(ctx context.Context, tx bun.Tx, userIDs []
 }
 
 // DeleteUserGroups removes user group relationships and unreferenced group info.
-func (r *UserModel) DeleteUserGroups(ctx context.Context, tx bun.Tx, userIDs []uint64) (int64, error) {
+func (r *UserModel) DeleteUserGroups(ctx context.Context, tx bun.Tx, userIDs []int64) (int64, error) {
 	if len(userIDs) == 0 {
 		return 0, nil
 	}
@@ -851,7 +851,7 @@ func (r *UserModel) DeleteUserGroups(ctx context.Context, tx bun.Tx, userIDs []u
 	var totalAffected int64
 
 	// Find group IDs belonging to these users
-	var groupIDs []uint64
+	var groupIDs []int64
 
 	err := tx.NewSelect().
 		Model((*types.UserGroup)(nil)).
@@ -897,7 +897,7 @@ func (r *UserModel) DeleteUserGroups(ctx context.Context, tx bun.Tx, userIDs []u
 }
 
 // DeleteUserOutfits removes user outfit relationships and unreferenced outfits.
-func (r *UserModel) DeleteUserOutfits(ctx context.Context, tx bun.Tx, userIDs []uint64) (int64, error) {
+func (r *UserModel) DeleteUserOutfits(ctx context.Context, tx bun.Tx, userIDs []int64) (int64, error) {
 	if len(userIDs) == 0 {
 		return 0, nil
 	}
@@ -905,7 +905,7 @@ func (r *UserModel) DeleteUserOutfits(ctx context.Context, tx bun.Tx, userIDs []
 	var totalAffected int64
 
 	// Find outfit IDs belonging to these users
-	var outfitIDs []uint64
+	var outfitIDs []int64
 
 	err := tx.NewSelect().
 		Model((*types.UserOutfit)(nil)).
@@ -951,7 +951,7 @@ func (r *UserModel) DeleteUserOutfits(ctx context.Context, tx bun.Tx, userIDs []
 }
 
 // DeleteUserFriends removes user friend relationships and unreferenced friend info.
-func (r *UserModel) DeleteUserFriends(ctx context.Context, tx bun.Tx, userIDs []uint64) (int64, error) {
+func (r *UserModel) DeleteUserFriends(ctx context.Context, tx bun.Tx, userIDs []int64) (int64, error) {
 	if len(userIDs) == 0 {
 		return 0, nil
 	}
@@ -959,7 +959,7 @@ func (r *UserModel) DeleteUserFriends(ctx context.Context, tx bun.Tx, userIDs []
 	var totalAffected int64
 
 	// Find friend IDs belonging to these users
-	var friendIDs []uint64
+	var friendIDs []int64
 
 	err := tx.NewSelect().
 		Model((*types.UserFriend)(nil)).
@@ -1005,7 +1005,7 @@ func (r *UserModel) DeleteUserFriends(ctx context.Context, tx bun.Tx, userIDs []
 }
 
 // DeleteUserFavorites removes favorite games for the specified users and their associated info.
-func (r *UserModel) DeleteUserFavorites(ctx context.Context, tx bun.Tx, userIDs []uint64) (int64, error) {
+func (r *UserModel) DeleteUserFavorites(ctx context.Context, tx bun.Tx, userIDs []int64) (int64, error) {
 	if len(userIDs) == 0 {
 		return 0, nil
 	}
@@ -1013,7 +1013,7 @@ func (r *UserModel) DeleteUserFavorites(ctx context.Context, tx bun.Tx, userIDs 
 	var totalAffected int64
 
 	// Find favorite game IDs belonging to these users
-	var favGameIDs []uint64
+	var favGameIDs []int64
 
 	err := tx.NewSelect().
 		Model((*types.UserFavorite)(nil)).
@@ -1062,7 +1062,7 @@ func (r *UserModel) DeleteUserFavorites(ctx context.Context, tx bun.Tx, userIDs 
 }
 
 // DeleteUserGames removes user game relationships and unreferenced game info.
-func (r *UserModel) DeleteUserGames(ctx context.Context, tx bun.Tx, userIDs []uint64) (int64, error) {
+func (r *UserModel) DeleteUserGames(ctx context.Context, tx bun.Tx, userIDs []int64) (int64, error) {
 	if len(userIDs) == 0 {
 		return 0, nil
 	}
@@ -1070,7 +1070,7 @@ func (r *UserModel) DeleteUserGames(ctx context.Context, tx bun.Tx, userIDs []ui
 	var totalAffected int64
 
 	// Find game IDs belonging to these users
-	var gameIDs []uint64
+	var gameIDs []int64
 
 	err := tx.NewSelect().
 		Model((*types.UserGame)(nil)).
@@ -1119,7 +1119,7 @@ func (r *UserModel) DeleteUserGames(ctx context.Context, tx bun.Tx, userIDs []ui
 }
 
 // DeleteUserInventory removes user inventory relationships and unreferenced inventory info.
-func (r *UserModel) DeleteUserInventory(ctx context.Context, tx bun.Tx, userIDs []uint64) (int64, error) {
+func (r *UserModel) DeleteUserInventory(ctx context.Context, tx bun.Tx, userIDs []int64) (int64, error) {
 	if len(userIDs) == 0 {
 		return 0, nil
 	}
@@ -1127,7 +1127,7 @@ func (r *UserModel) DeleteUserInventory(ctx context.Context, tx bun.Tx, userIDs 
 	var totalAffected int64
 
 	// Find inventory IDs belonging to these users
-	var invIDs []uint64
+	var invIDs []int64
 
 	err := tx.NewSelect().
 		Model((*types.UserInventory)(nil)).
@@ -1260,7 +1260,7 @@ func (r *UserModel) GetUserToScan(ctx context.Context) (*types.User, error) {
 //
 // Deprecated: Use Service().User().GetUserToReview() instead.
 func (r *UserModel) GetNextToReview(
-	ctx context.Context, targetStatus enum.UserType, sortBy enum.ReviewSortBy, recentIDs []uint64,
+	ctx context.Context, targetStatus enum.UserType, sortBy enum.ReviewSortBy, recentIDs []int64,
 ) (*types.ReviewUser, error) {
 	var (
 		user   types.User
@@ -1372,9 +1372,9 @@ func (r *UserModel) GetNextToReview(
 }
 
 // GetUsersGroups fetches groups for multiple users.
-func (r *UserModel) GetUsersGroups(ctx context.Context, userIDs []uint64) (map[uint64][]*apiTypes.UserGroupRoles, error) {
+func (r *UserModel) GetUsersGroups(ctx context.Context, userIDs []int64) (map[int64][]*apiTypes.UserGroupRoles, error) {
 	if len(userIDs) == 0 {
-		return make(map[uint64][]*apiTypes.UserGroupRoles), nil
+		return make(map[int64][]*apiTypes.UserGroupRoles), nil
 	}
 
 	var userGroups []*types.UserGroup
@@ -1393,7 +1393,7 @@ func (r *UserModel) GetUsersGroups(ctx context.Context, userIDs []uint64) (map[u
 	}
 
 	// Group by user ID
-	result := make(map[uint64][]*apiTypes.UserGroupRoles)
+	result := make(map[int64][]*apiTypes.UserGroupRoles)
 
 	for _, userGroup := range userGroups {
 		if userGroup.Group == nil {
@@ -1430,9 +1430,9 @@ func (r *UserModel) GetUsersGroups(ctx context.Context, userIDs []uint64) (map[u
 }
 
 // GetUsersOutfits fetches outfits for multiple users.
-func (r *UserModel) GetUsersOutfits(ctx context.Context, userIDs []uint64) (map[uint64]*types.UserOutfitsResult, error) {
+func (r *UserModel) GetUsersOutfits(ctx context.Context, userIDs []int64) (map[int64]*types.UserOutfitsResult, error) {
 	if len(userIDs) == 0 {
-		return make(map[uint64]*types.UserOutfitsResult), nil
+		return make(map[int64]*types.UserOutfitsResult), nil
 	}
 
 	var userOutfits []*types.UserOutfit
@@ -1452,7 +1452,7 @@ func (r *UserModel) GetUsersOutfits(ctx context.Context, userIDs []uint64) (map[
 	}
 
 	// Group by user ID
-	result := make(map[uint64]*types.UserOutfitsResult)
+	result := make(map[int64]*types.UserOutfitsResult)
 
 	for _, userOutfit := range userOutfits {
 		if userOutfit.Outfit == nil {
@@ -1463,7 +1463,7 @@ func (r *UserModel) GetUsersOutfits(ctx context.Context, userIDs []uint64) (map[
 		if _, exists := result[userOutfit.UserID]; !exists {
 			result[userOutfit.UserID] = &types.UserOutfitsResult{
 				Outfits:      make([]*apiTypes.Outfit, 0),
-				OutfitAssets: make(map[uint64][]*apiTypes.AssetV2),
+				OutfitAssets: make(map[int64][]*apiTypes.AssetV2),
 			}
 		}
 
@@ -1505,9 +1505,9 @@ func (r *UserModel) GetUsersOutfits(ctx context.Context, userIDs []uint64) (map[
 }
 
 // GetUsersAssets fetches the current assets for multiple users.
-func (r *UserModel) GetUsersAssets(ctx context.Context, userIDs []uint64) (map[uint64][]*apiTypes.AssetV2, error) {
+func (r *UserModel) GetUsersAssets(ctx context.Context, userIDs []int64) (map[int64][]*apiTypes.AssetV2, error) {
 	if len(userIDs) == 0 {
-		return make(map[uint64][]*apiTypes.AssetV2), nil
+		return make(map[int64][]*apiTypes.AssetV2), nil
 	}
 
 	var userAssets []*types.UserAsset
@@ -1524,7 +1524,7 @@ func (r *UserModel) GetUsersAssets(ctx context.Context, userIDs []uint64) (map[u
 	}
 
 	// Group by user ID
-	result := make(map[uint64][]*apiTypes.AssetV2)
+	result := make(map[int64][]*apiTypes.AssetV2)
 
 	for _, userAsset := range userAssets {
 		if userAsset.Asset == nil {
@@ -1547,9 +1547,9 @@ func (r *UserModel) GetUsersAssets(ctx context.Context, userIDs []uint64) (map[u
 }
 
 // GetUsersFriends fetches friends for multiple users.
-func (r *UserModel) GetUsersFriends(ctx context.Context, userIDs []uint64) (map[uint64][]*apiTypes.ExtendedFriend, error) {
+func (r *UserModel) GetUsersFriends(ctx context.Context, userIDs []int64) (map[int64][]*apiTypes.ExtendedFriend, error) {
 	if len(userIDs) == 0 {
-		return make(map[uint64][]*apiTypes.ExtendedFriend), nil
+		return make(map[int64][]*apiTypes.ExtendedFriend), nil
 	}
 
 	var userFriends []*types.UserFriend
@@ -1567,7 +1567,7 @@ func (r *UserModel) GetUsersFriends(ctx context.Context, userIDs []uint64) (map[
 	}
 
 	// Group by user ID
-	result := make(map[uint64][]*apiTypes.ExtendedFriend)
+	result := make(map[int64][]*apiTypes.ExtendedFriend)
 
 	for _, userFriend := range userFriends {
 		if userFriend.Friend == nil {
@@ -1589,9 +1589,9 @@ func (r *UserModel) GetUsersFriends(ctx context.Context, userIDs []uint64) (map[
 }
 
 // GetUsersFavorites fetches favorite games for multiple users.
-func (r *UserModel) GetUsersFavorites(ctx context.Context, userIDs []uint64) (map[uint64][]*apiTypes.Game, error) {
+func (r *UserModel) GetUsersFavorites(ctx context.Context, userIDs []int64) (map[int64][]*apiTypes.Game, error) {
 	if len(userIDs) == 0 {
-		return make(map[uint64][]*apiTypes.Game), nil
+		return make(map[int64][]*apiTypes.Game), nil
 	}
 
 	var userFavorites []*types.UserFavorite
@@ -1610,7 +1610,7 @@ func (r *UserModel) GetUsersFavorites(ctx context.Context, userIDs []uint64) (ma
 	}
 
 	// Group by user ID
-	result := make(map[uint64][]*apiTypes.Game)
+	result := make(map[int64][]*apiTypes.Game)
 	for _, userFavorite := range userFavorites {
 		if userFavorite.Game == nil {
 			continue
@@ -1633,9 +1633,9 @@ func (r *UserModel) GetUsersFavorites(ctx context.Context, userIDs []uint64) (ma
 }
 
 // GetUsersGames fetches games for multiple users.
-func (r *UserModel) GetUsersGames(ctx context.Context, userIDs []uint64) (map[uint64][]*apiTypes.Game, error) {
+func (r *UserModel) GetUsersGames(ctx context.Context, userIDs []int64) (map[int64][]*apiTypes.Game, error) {
 	if len(userIDs) == 0 {
-		return make(map[uint64][]*apiTypes.Game), nil
+		return make(map[int64][]*apiTypes.Game), nil
 	}
 
 	var userGames []*types.UserGame
@@ -1654,7 +1654,7 @@ func (r *UserModel) GetUsersGames(ctx context.Context, userIDs []uint64) (map[ui
 	}
 
 	// Group by user ID
-	result := make(map[uint64][]*apiTypes.Game)
+	result := make(map[int64][]*apiTypes.Game)
 	for _, userGame := range userGames {
 		if userGame.Game == nil {
 			continue
@@ -1677,9 +1677,9 @@ func (r *UserModel) GetUsersGames(ctx context.Context, userIDs []uint64) (map[ui
 }
 
 // GetUsersInventory fetches inventory for multiple users.
-func (r *UserModel) GetUsersInventory(ctx context.Context, userIDs []uint64) (map[uint64][]*apiTypes.InventoryAsset, error) {
+func (r *UserModel) GetUsersInventory(ctx context.Context, userIDs []int64) (map[int64][]*apiTypes.InventoryAsset, error) {
 	if len(userIDs) == 0 {
-		return make(map[uint64][]*apiTypes.InventoryAsset), nil
+		return make(map[int64][]*apiTypes.InventoryAsset), nil
 	}
 
 	var userInventories []*types.UserInventory
@@ -1697,7 +1697,7 @@ func (r *UserModel) GetUsersInventory(ctx context.Context, userIDs []uint64) (ma
 	}
 
 	// Group by user ID
-	result := make(map[uint64][]*apiTypes.InventoryAsset)
+	result := make(map[int64][]*apiTypes.InventoryAsset)
 
 	for _, userInventory := range userInventories {
 		if userInventory.Inventory == nil {
@@ -1720,9 +1720,9 @@ func (r *UserModel) GetUsersInventory(ctx context.Context, userIDs []uint64) (ma
 
 // GetFriendInfos retrieves friend information for a list of friend IDs.
 // Returns a map of friend IDs to extended friend objects.
-func (r *UserModel) GetFriendInfos(ctx context.Context, friendIDs []uint64) (map[uint64]*apiTypes.ExtendedFriend, error) {
+func (r *UserModel) GetFriendInfos(ctx context.Context, friendIDs []int64) (map[int64]*apiTypes.ExtendedFriend, error) {
 	if len(friendIDs) == 0 {
-		return make(map[uint64]*apiTypes.ExtendedFriend), nil
+		return make(map[int64]*apiTypes.ExtendedFriend), nil
 	}
 
 	var friendInfos []*types.FriendInfo
@@ -1738,7 +1738,7 @@ func (r *UserModel) GetFriendInfos(ctx context.Context, friendIDs []uint64) (map
 	}
 
 	// Convert to map of extended friends
-	friendMap := make(map[uint64]*apiTypes.ExtendedFriend, len(friendInfos))
+	friendMap := make(map[int64]*apiTypes.ExtendedFriend, len(friendInfos))
 	for _, friend := range friendInfos {
 		friendMap[friend.ID] = &apiTypes.ExtendedFriend{
 			Friend: apiTypes.Friend{
@@ -1755,10 +1755,10 @@ func (r *UserModel) GetFriendInfos(ctx context.Context, friendIDs []uint64) (map
 // GetRecentFriendInfos retrieves friend information for a list of friend IDs,
 // but only if they were updated within the cutoff time.
 func (r *UserModel) GetRecentFriendInfos(
-	ctx context.Context, friendIDs []uint64, cutoffTime time.Time,
-) (map[uint64]*apiTypes.ExtendedFriend, error) {
+	ctx context.Context, friendIDs []int64, cutoffTime time.Time,
+) (map[int64]*apiTypes.ExtendedFriend, error) {
 	if len(friendIDs) == 0 {
-		return make(map[uint64]*apiTypes.ExtendedFriend), nil
+		return make(map[int64]*apiTypes.ExtendedFriend), nil
 	}
 
 	var friendInfos []*types.FriendInfo
@@ -1775,7 +1775,7 @@ func (r *UserModel) GetRecentFriendInfos(
 	}
 
 	// Convert to map of extended friends
-	friendMap := make(map[uint64]*apiTypes.ExtendedFriend, len(friendInfos))
+	friendMap := make(map[int64]*apiTypes.ExtendedFriend, len(friendInfos))
 	for _, friend := range friendInfos {
 		friendMap[friend.ID] = &apiTypes.ExtendedFriend{
 			Friend: apiTypes.Friend{
@@ -1790,7 +1790,7 @@ func (r *UserModel) GetRecentFriendInfos(
 }
 
 // SaveUserGroups saves groups for multiple users.
-func (r *UserModel) SaveUserGroups(ctx context.Context, tx bun.Tx, userGroups map[uint64][]*apiTypes.UserGroupRoles) error {
+func (r *UserModel) SaveUserGroups(ctx context.Context, tx bun.Tx, userGroups map[int64][]*apiTypes.UserGroupRoles) error {
 	if len(userGroups) == 0 {
 		return nil
 	}
@@ -1803,7 +1803,7 @@ func (r *UserModel) SaveUserGroups(ctx context.Context, tx bun.Tx, userGroups ma
 
 	// Pre-allocate slices
 	allUserGroups := make([]types.UserGroup, 0, totalGroups)
-	groupInfoMap := make(map[uint64]*types.GroupInfo)
+	groupInfoMap := make(map[int64]*types.GroupInfo)
 
 	// Build user groups and group info
 	for userID, groups := range userGroups {
@@ -1856,8 +1856,8 @@ func (r *UserModel) SaveUserGroups(ctx context.Context, tx bun.Tx, userGroups ma
 
 // SaveUserOutfits saves outfits and their assets for multiple users.
 func (r *UserModel) SaveUserOutfits(
-	ctx context.Context, tx bun.Tx, userOutfits map[uint64][]*apiTypes.Outfit,
-	userOutfitAssets map[uint64]map[uint64][]*apiTypes.AssetV2,
+	ctx context.Context, tx bun.Tx, userOutfits map[int64][]*apiTypes.Outfit,
+	userOutfitAssets map[int64]map[int64][]*apiTypes.AssetV2,
 ) error {
 	if len(userOutfits) == 0 {
 		return nil
@@ -1871,7 +1871,7 @@ func (r *UserModel) SaveUserOutfits(
 
 	// Pre-allocate slices
 	allUserOutfits := make([]types.UserOutfit, 0, totalOutfits)
-	outfitInfoMap := make(map[uint64]*types.OutfitInfo)
+	outfitInfoMap := make(map[int64]*types.OutfitInfo)
 
 	// Build user outfits and outfit info
 	for userID, outfits := range userOutfits {
@@ -1916,7 +1916,7 @@ func (r *UserModel) SaveUserOutfits(
 	if len(userOutfitAssets) > 0 {
 		var (
 			assets   []types.OutfitAsset
-			assetMap = make(map[uint64]types.AssetInfo)
+			assetMap = make(map[int64]types.AssetInfo)
 		)
 
 		// Prepare asset data
@@ -1971,7 +1971,7 @@ func (r *UserModel) SaveUserOutfits(
 }
 
 // SaveUserAssets saves the current assets for multiple users.
-func (r *UserModel) SaveUserAssets(ctx context.Context, tx bun.Tx, userAssets map[uint64][]*apiTypes.AssetV2) error {
+func (r *UserModel) SaveUserAssets(ctx context.Context, tx bun.Tx, userAssets map[int64][]*apiTypes.AssetV2) error {
 	if len(userAssets) == 0 {
 		return nil
 	}
@@ -1984,7 +1984,7 @@ func (r *UserModel) SaveUserAssets(ctx context.Context, tx bun.Tx, userAssets ma
 
 	// Pre-allocate slices
 	allUserAssets := make([]types.UserAsset, 0, totalAssets)
-	assetInfoMap := make(map[uint64]*types.AssetInfo)
+	assetInfoMap := make(map[int64]*types.AssetInfo)
 
 	// Build user assets and asset info
 	for userID, assets := range userAssets {
@@ -2027,7 +2027,7 @@ func (r *UserModel) SaveUserAssets(ctx context.Context, tx bun.Tx, userAssets ma
 }
 
 // SaveUserFriends saves friends for multiple users.
-func (r *UserModel) SaveUserFriends(ctx context.Context, tx bun.Tx, userFriends map[uint64][]*apiTypes.ExtendedFriend) error {
+func (r *UserModel) SaveUserFriends(ctx context.Context, tx bun.Tx, userFriends map[int64][]*apiTypes.ExtendedFriend) error {
 	if len(userFriends) == 0 {
 		return nil
 	}
@@ -2040,7 +2040,7 @@ func (r *UserModel) SaveUserFriends(ctx context.Context, tx bun.Tx, userFriends 
 
 	// Pre-allocate slices
 	allUserFriends := make([]types.UserFriend, 0, totalFriends)
-	friendInfoMap := make(map[uint64]*types.FriendInfo)
+	friendInfoMap := make(map[int64]*types.FriendInfo)
 
 	// Build user friends and friend info
 	for userID, friends := range userFriends {
@@ -2082,7 +2082,7 @@ func (r *UserModel) SaveUserFriends(ctx context.Context, tx bun.Tx, userFriends 
 }
 
 // SaveUserFavorites saves favorite games for multiple users.
-func (r *UserModel) SaveUserFavorites(ctx context.Context, tx bun.Tx, userFavorites map[uint64][]*apiTypes.Game) error {
+func (r *UserModel) SaveUserFavorites(ctx context.Context, tx bun.Tx, userFavorites map[int64][]*apiTypes.Game) error {
 	if len(userFavorites) == 0 {
 		return nil
 	}
@@ -2095,7 +2095,7 @@ func (r *UserModel) SaveUserFavorites(ctx context.Context, tx bun.Tx, userFavori
 
 	// Pre-allocate slices
 	allUserFavorites := make([]types.UserFavorite, 0, totalFavorites)
-	gameInfoMap := make(map[uint64]*types.GameInfo)
+	gameInfoMap := make(map[int64]*types.GameInfo)
 
 	// Build user favorites and game info
 	for userID, favorites := range userFavorites {
@@ -2145,7 +2145,7 @@ func (r *UserModel) SaveUserFavorites(ctx context.Context, tx bun.Tx, userFavori
 }
 
 // SaveUserGames saves games for multiple users.
-func (r *UserModel) SaveUserGames(ctx context.Context, tx bun.Tx, userGames map[uint64][]*apiTypes.Game) error {
+func (r *UserModel) SaveUserGames(ctx context.Context, tx bun.Tx, userGames map[int64][]*apiTypes.Game) error {
 	if len(userGames) == 0 {
 		return nil
 	}
@@ -2158,7 +2158,7 @@ func (r *UserModel) SaveUserGames(ctx context.Context, tx bun.Tx, userGames map[
 
 	// Pre-allocate slices
 	allUserGames := make([]types.UserGame, 0, totalGames)
-	gameInfoMap := make(map[uint64]*types.GameInfo)
+	gameInfoMap := make(map[int64]*types.GameInfo)
 
 	// Build user games and game info
 	for userID, games := range userGames {
@@ -2203,7 +2203,7 @@ func (r *UserModel) SaveUserGames(ctx context.Context, tx bun.Tx, userGames map[
 }
 
 // SaveUserInventory saves inventory for multiple users.
-func (r *UserModel) SaveUserInventory(ctx context.Context, tx bun.Tx, userInventory map[uint64][]*apiTypes.InventoryAsset) error {
+func (r *UserModel) SaveUserInventory(ctx context.Context, tx bun.Tx, userInventory map[int64][]*apiTypes.InventoryAsset) error {
 	if len(userInventory) == 0 {
 		return nil
 	}
@@ -2216,7 +2216,7 @@ func (r *UserModel) SaveUserInventory(ctx context.Context, tx bun.Tx, userInvent
 
 	// Pre-allocate slices
 	allUserInventory := make([]types.UserInventory, 0, totalInventory)
-	inventoryInfoMap := make(map[uint64]*types.InventoryInfo)
+	inventoryInfoMap := make(map[int64]*types.InventoryInfo)
 
 	// Build user inventory and inventory info
 	for userID, inventory := range userInventory {
@@ -2296,7 +2296,7 @@ func (r *UserModel) GetUsersUpdatedAfter(
 }
 
 // UpdateUserReason updates a specific reason for a user.
-func (r *UserModel) UpdateUserReason(ctx context.Context, userID uint64, reasonType enum.UserReasonType, newMessage string) error {
+func (r *UserModel) UpdateUserReason(ctx context.Context, userID int64, reasonType enum.UserReasonType, newMessage string) error {
 	err := dbretry.NoResult(ctx, func(ctx context.Context) error {
 		_, err := r.db.NewUpdate().
 			Model((*types.UserReason)(nil)).
@@ -2311,7 +2311,7 @@ func (r *UserModel) UpdateUserReason(ctx context.Context, userID uint64, reasonT
 	}
 
 	r.logger.Debug("Updated user reason",
-		zap.Uint64("userID", userID),
+		zap.Int64("userID", userID),
 		zap.String("reasonType", reasonType.String()),
 		zap.String("newMessage", newMessage))
 
@@ -2320,7 +2320,7 @@ func (r *UserModel) UpdateUserReason(ctx context.Context, userID uint64, reasonT
 
 // GetUsersWithoutReason gets users that don't have a specific reason type.
 func (r *UserModel) GetUsersWithoutReason(
-	ctx context.Context, reasonType enum.UserReasonType, limit int, cursorID uint64,
+	ctx context.Context, reasonType enum.UserReasonType, limit int, cursorID int64,
 ) ([]*types.ReviewUser, error) {
 	var users []types.User
 
@@ -2355,7 +2355,7 @@ func (r *UserModel) GetUsersWithoutReason(
 		zap.String("reasonType", reasonType.String()),
 		zap.Int("count", len(result)),
 		zap.Int("limit", limit),
-		zap.Uint64("cursorID", cursorID))
+		zap.Int64("cursorID", cursorID))
 
 	return result, nil
 }

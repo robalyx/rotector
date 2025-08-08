@@ -101,10 +101,10 @@ func NewGroupReasonAnalyzer(app *setup.App, logger *zap.Logger) *GroupReasonAnal
 
 // GenerateGroupReasons generates group membership analysis reasons for multiple users using the OpenAI model.
 func (a *GroupReasonAnalyzer) GenerateGroupReasons(
-	ctx context.Context, userInfos []*types.ReviewUser, confirmedGroupsMap, flaggedGroupsMap map[uint64]map[uint64]*types.ReviewGroup,
-) map[uint64]string {
+	ctx context.Context, userInfos []*types.ReviewUser, confirmedGroupsMap, flaggedGroupsMap map[int64]map[int64]*types.ReviewGroup,
+) map[int64]string {
 	// Create group requests map
-	groupRequests := make(map[uint64]UserGroupRequest)
+	groupRequests := make(map[int64]UserGroupRequest)
 
 	for _, userInfo := range userInfos {
 		// Get confirmed and flagged groups for this user
@@ -150,7 +150,7 @@ func (a *GroupReasonAnalyzer) GenerateGroupReasons(
 	}
 
 	// Process group requests
-	results := make(map[uint64]string)
+	results := make(map[int64]string)
 	a.ProcessGroupRequests(ctx, groupRequests, results, 0)
 
 	return results
@@ -158,7 +158,7 @@ func (a *GroupReasonAnalyzer) GenerateGroupReasons(
 
 // ProcessGroupRequests processes group analysis requests with retry logic for invalid users.
 func (a *GroupReasonAnalyzer) ProcessGroupRequests(
-	ctx context.Context, groupRequests map[uint64]UserGroupRequest, results map[uint64]string, retryCount int,
+	ctx context.Context, groupRequests map[int64]UserGroupRequest, results map[int64]string, retryCount int,
 ) {
 	if len(groupRequests) == 0 {
 		return
@@ -184,7 +184,7 @@ func (a *GroupReasonAnalyzer) ProcessGroupRequests(
 	var (
 		mu              sync.Mutex
 		invalidMu       sync.Mutex
-		invalidRequests = make(map[uint64]UserGroupRequest)
+		invalidRequests = make(map[int64]UserGroupRequest)
 	)
 
 	minBatchSize := max(len(requestSlice)/4, 1)
@@ -342,7 +342,7 @@ func (a *GroupReasonAnalyzer) processGroupBatch(ctx context.Context, batch []Use
 		}
 
 		// Create a map of usernames to user IDs for efficient lookup
-		userIDMap := make(map[string]uint64, len(batch))
+		userIDMap := make(map[string]int64, len(batch))
 		for _, req := range batch {
 			userIDMap[req.UserData.Username] = req.UserInfo.ID
 		}
@@ -380,10 +380,10 @@ func (a *GroupReasonAnalyzer) processGroupBatch(ctx context.Context, batch []Use
 // processResults validates and stores the analysis results.
 // Returns a map of user IDs that had invalid results and need retry.
 func (a *GroupReasonAnalyzer) processResults(
-	results *BatchGroupAnalysis, batch []UserGroupRequest, finalResults map[uint64]string, mu *sync.Mutex,
-) map[uint64]UserGroupRequest {
+	results *BatchGroupAnalysis, batch []UserGroupRequest, finalResults map[int64]string, mu *sync.Mutex,
+) map[int64]UserGroupRequest {
 	// Create map for retry requests
-	invalidRequests := make(map[uint64]UserGroupRequest)
+	invalidRequests := make(map[int64]UserGroupRequest)
 
 	// If no results returned, mark all users for retry
 	if results == nil || len(results.Results) == 0 {

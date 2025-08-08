@@ -26,12 +26,12 @@ var ErrNoUsersToProcess = errors.New("no users available for processing")
 
 // BatchData represents the data needed for processing a batch of users.
 type BatchData struct {
-	ProcessIDs     []uint64
-	SkipAndFlagIDs []uint64
-	OutfitFlags    map[uint64]struct{}
-	ProfileFlags   map[uint64]struct{}
-	FriendsFlags   map[uint64]struct{}
-	GroupsFlags    map[uint64]struct{}
+	ProcessIDs     []int64
+	SkipAndFlagIDs []int64
+	OutfitFlags    map[int64]struct{}
+	ProfileFlags   map[int64]struct{}
+	FriendsFlags   map[int64]struct{}
+	GroupsFlags    map[int64]struct{}
 }
 
 // Worker processes queued users from Cloudflare D1.
@@ -229,10 +229,10 @@ func (w *Worker) shouldProcessBatch(ctx context.Context) (bool, time.Duration) {
 
 // updateIPTrackingFlaggedStatus updates the  queue_ip_tracking table for processed and skipped users.
 func (w *Worker) updateIPTrackingFlaggedStatus(
-	ctx context.Context, processIDs []uint64, flaggedStatus map[uint64]struct{}, skipAndFlagIDs []uint64,
+	ctx context.Context, processIDs []int64, flaggedStatus map[int64]struct{}, skipAndFlagIDs []int64,
 ) error {
 	// Combine all user IDs and their flagged status
-	allUserFlaggedStatus := make(map[uint64]bool)
+	allUserFlaggedStatus := make(map[int64]bool)
 
 	// Add processed users with their actual flagged status
 	for _, userID := range processIDs {
@@ -275,15 +275,15 @@ func (w *Worker) getBatchForProcessing(ctx context.Context) (*BatchData, error) 
 
 	// Separate users into different processing groups
 	batchData := &BatchData{
-		ProcessIDs:     make([]uint64, 0),
-		SkipAndFlagIDs: make([]uint64, 0),
-		OutfitFlags:    make(map[uint64]struct{}),
-		ProfileFlags:   make(map[uint64]struct{}),
-		FriendsFlags:   make(map[uint64]struct{}),
-		GroupsFlags:    make(map[uint64]struct{}),
+		ProcessIDs:     make([]int64, 0),
+		SkipAndFlagIDs: make([]int64, 0),
+		OutfitFlags:    make(map[int64]struct{}),
+		ProfileFlags:   make(map[int64]struct{}),
+		FriendsFlags:   make(map[int64]struct{}),
+		GroupsFlags:    make(map[int64]struct{}),
 	}
 
-	existingFlaggedUsers := make(map[uint64]*types.ReviewUser)
+	existingFlaggedUsers := make(map[int64]*types.ReviewUser)
 
 	for _, id := range userBatch.UserIDs {
 		// If user exists in database, mark as processed and flagged
@@ -291,7 +291,7 @@ func (w *Worker) getBatchForProcessing(ctx context.Context) (*BatchData, error) 
 			batchData.SkipAndFlagIDs = append(batchData.SkipAndFlagIDs, id)
 			existingFlaggedUsers[id] = existingUser
 			w.logger.Debug("Skipping user - already in database (will flag)",
-				zap.Uint64("userID", id))
+				zap.Int64("userID", id))
 
 			continue
 		}
@@ -317,7 +317,7 @@ func (w *Worker) getBatchForProcessing(ctx context.Context) (*BatchData, error) 
 
 	// Mark and save users that should be flagged
 	if len(batchData.SkipAndFlagIDs) > 0 {
-		flaggedMap := make(map[uint64]struct{})
+		flaggedMap := make(map[int64]struct{})
 		for _, id := range batchData.SkipAndFlagIDs {
 			flaggedMap[id] = struct{}{}
 		}

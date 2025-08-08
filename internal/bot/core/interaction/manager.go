@@ -184,7 +184,7 @@ func (m *Manager) Display(
 
 	m.logger.Debug("Updated message",
 		zap.String("page", page.Name),
-		zap.Uint64("message_id", uint64(message.ID)))
+		zap.Uint64("messageID", uint64(message.ID)))
 }
 
 // UpdatePage updates the session with a new page.

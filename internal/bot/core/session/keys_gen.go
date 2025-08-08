@@ -84,24 +84,24 @@ func main() {
 
 		// User related keys
 		{Name: "UserTarget", Type: "*types.ReviewUser", Doc: "UserTarget stores the currently selected user", Persist: true},
-		{Name: "UserFlaggedFriends", Type: "map[uint64]*types.ReviewUser", Doc: "UserFlaggedFriends stores flagged friends", Persist: true},
-		{Name: "UserFlaggedGroups", Type: "map[uint64]*types.ReviewGroup", Doc: "UserFlaggedGroups stores flagged groups", Persist: true},
+		{Name: "UserFlaggedFriends", Type: "map[int64]*types.ReviewUser", Doc: "UserFlaggedFriends stores flagged friends", Persist: true},
+		{Name: "UserFlaggedGroups", Type: "map[int64]*types.ReviewGroup", Doc: "UserFlaggedGroups stores flagged groups", Persist: true},
 		{Name: "UserFriends", Type: "[]*apiTypes.ExtendedFriend", Doc: "UserFriends stores the user's friend list", Persist: true},
-		{Name: "UserPresences", Type: "map[uint64]*apiTypes.UserPresenceResponse", Doc: "UserPresences stores friend presence information", Persist: true},
+		{Name: "UserPresences", Type: "map[int64]*apiTypes.UserPresenceResponse", Doc: "UserPresences stores friend presence information", Persist: true},
 		{Name: "UserGroups", Type: "[]*apiTypes.UserGroupRoles", Doc: "UserGroups stores the list of groups", Persist: true},
 		{Name: "UserOutfits", Type: "[]*apiTypes.Outfit", Doc: "UserOutfits stores user outfits", Persist: true},
 		{Name: "UserFlaggedOutfits", Type: "map[string]struct{}", Doc: "UserFlaggedOutfits stores outfit names that appear in reason evidence", Persist: true},
 		{Name: "UserDuplicateOutfitNames", Type: "map[string]struct{}", Doc: "UserDuplicateOutfitNames stores outfit names that have multiple instances", Persist: true},
-		{Name: "UserReviewHistory", Type: "[]uint64", Doc: "UserReviewHistory stores IDs of previously reviewed users", Persist: true},
+		{Name: "UserReviewHistory", Type: "[]int64", Doc: "UserReviewHistory stores IDs of previously reviewed users", Persist: true},
 		{Name: "UserReviewHistoryIndex", Type: "int", Doc: "UserReviewHistoryIndex stores the current position in the review history", Persist: true},
 
 		// Group related keys
 		{Name: "GroupTarget", Type: "*types.ReviewGroup", Doc: "GroupTarget stores the currently selected group", Persist: true},
 		{Name: "GroupInfo", Type: "*apiTypes.GroupResponse", Doc: "GroupInfo stores additional group information", Persist: true},
 		{Name: "GroupFlaggedMembersCount", Type: "int", Doc: "GroupFlaggedMembersCount stores the total number of flagged members in the current group", Persist: true},
-		{Name: "GroupPageFlaggedMembers", Type: "map[uint64]*types.ReviewUser", Doc: "GroupPageFlaggedMembers stores flagged member details for the current page", Persist: true},
-		{Name: "GroupPageFlaggedMemberIDs", Type: "[]uint64", Doc: "GroupPageFlaggedMemberIDs stores flagged member IDs for the current page", Persist: true},
-		{Name: "GroupReviewHistory", Type: "[]uint64", Doc: "GroupReviewHistory stores IDs of previously reviewed groups", Persist: true},
+		{Name: "GroupPageFlaggedMembers", Type: "map[int64]*types.ReviewUser", Doc: "GroupPageFlaggedMembers stores flagged member details for the current page", Persist: true},
+		{Name: "GroupPageFlaggedMemberIDs", Type: "[]int64", Doc: "GroupPageFlaggedMemberIDs stores flagged member IDs for the current page", Persist: true},
+		{Name: "GroupReviewHistory", Type: "[]int64", Doc: "GroupReviewHistory stores IDs of previously reviewed groups", Persist: true},
 		{Name: "GroupReviewHistoryIndex", Type: "int", Doc: "GroupReviewHistoryIndex stores the current position in the review history", Persist: true},
 
 		// Review related keys
@@ -117,7 +117,7 @@ func main() {
 
 		// Queue related keys
 		{Name: "QueueStats", Type: "*queue.Stats", Doc: "QueueStats stores queue statistics", Persist: true},
-		{Name: "QueuedUserID", Type: "uint64", Doc: "QueuedUserID stores the ID of the currently queued user", Persist: true},
+		{Name: "QueuedUserID", Type: "int64", Doc: "QueuedUserID stores the ID of the currently queued user", Persist: true},
 		{Name: "QueuedUserTimestamp", Type: "time.Time", Doc: "QueuedUserTimestamp stores when the user was queued", Persist: true},
 		{Name: "QueuedUserProcessing", Type: "bool", Doc: "QueuedUserProcessing indicates if the user is being processed", Persist: true},
 		{Name: "QueuedUserProcessed", Type: "bool", Doc: "QueuedUserProcessed indicates if the user has been processed", Persist: true},
@@ -154,8 +154,8 @@ func main() {
 		{Name: "LogPrevCursors", Type: "[]*types.LogCursor", Doc: "LogPrevCursors stores previous log cursors", Persist: true},
 		{Name: "LogFilterGuildID", Type: "uint64", Doc: "LogFilterGuildID stores guild ID filter", Persist: true},
 		{Name: "LogFilterDiscordID", Type: "uint64", Doc: "LogFilterDiscordID stores Discord ID filter", Persist: true},
-		{Name: "LogFilterUserID", Type: "uint64", Doc: "LogFilterUserID stores user ID filter", Persist: true},
-		{Name: "LogFilterGroupID", Type: "uint64", Doc: "LogFilterGroupID stores group ID filter", Persist: true},
+		{Name: "LogFilterUserID", Type: "int64", Doc: "LogFilterUserID stores user ID filter", Persist: true},
+		{Name: "LogFilterGroupID", Type: "int64", Doc: "LogFilterGroupID stores group ID filter", Persist: true},
 		{Name: "LogFilterReviewerID", Type: "uint64", Doc: "LogFilterReviewerID stores reviewer ID filter", Persist: true},
 		{Name: "LogFilterActivityType", Type: "enum.ActivityType", Doc: "LogFilterActivityType stores activity type filter", Persist: true},
 		{Name: "LogFilterActivityCategory", Type: "string", Doc: "LogFilterActivityCategory stores the currently selected activity category", Persist: true},

@@ -14,17 +14,17 @@ var (
 
 // CondoGame represents information about a Roblox condo game.
 type CondoGame struct {
-	ID             uint64    `bun:",pk"                    json:"id"`
+	ID             int64     `bun:",pk"                    json:"id"`
 	UUID           uuid.UUID `bun:",notnull"               json:"uuid"`
-	UniverseID     uint64    `bun:",notnull"               json:"universeId"`
+	UniverseID     int64     `bun:",notnull"               json:"universeId"`
 	Name           string    `bun:",notnull"               json:"name"`
 	Description    string    `bun:",notnull"               json:"description"`
-	CreatorID      uint64    `bun:",notnull"               json:"creatorId"`
+	CreatorID      int64     `bun:",notnull"               json:"creatorId"`
 	CreatorName    string    `bun:",notnull"               json:"creatorName"`
-	Visits         uint64    `bun:",notnull,default:0"     json:"visits"`
+	Visits         int64     `bun:",notnull,default:0"     json:"visits"`
 	Created        time.Time `bun:",notnull"               json:"created"`
 	Updated        time.Time `bun:",notnull"               json:"updated"`
-	FavoritedCount uint64    `bun:",notnull,default:0"     json:"favoritedCount"`
+	FavoritedCount int64     `bun:",notnull,default:0"     json:"favoritedCount"`
 	MentionCount   uint64    `bun:",notnull,default:0"     json:"mentionCount"`
 	LastScanned    time.Time `bun:",notnull"               json:"lastScanned"`
 	LastUpdated    time.Time `bun:",notnull"               json:"lastUpdated"`
@@ -34,8 +34,8 @@ type CondoGame struct {
 // CondoPlayer represents a player found in condo games.
 type CondoPlayer struct {
 	ThumbnailURL  string    `bun:",pk"            json:"thumbnailUrl"`
-	UserID        *uint64   `bun:",nullzero"      json:"userId"`
-	GameIDs       []uint64  `bun:"game_ids,array" json:"gameIds"`
+	UserID        *int64    `bun:",nullzero"      json:"userId"`
+	GameIDs       []int64   `bun:"game_ids,array" json:"gameIds"`
 	IsBlacklisted bool      `bun:",notnull"       json:"isBlacklisted"`
 	LastUpdated   time.Time `bun:",notnull"       json:"lastUpdated"`
 }

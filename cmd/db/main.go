@@ -337,7 +337,7 @@ func handleClearReason(deps *cliDependencies) cli.ActionFunc {
 		}
 
 		// Create user ID slices
-		userIDs := make([]uint64, len(users))
+		userIDs := make([]int64, len(users))
 		for i, user := range users {
 			userIDs[i] = user.ID
 		}
@@ -490,7 +490,7 @@ func handleDeleteAfterTime(deps *cliDependencies) cli.ActionFunc {
 		}
 
 		// Create user ID slices
-		userIDs := make([]uint64, len(users))
+		userIDs := make([]int64, len(users))
 		for i, user := range users {
 			userIDs[i] = user.ID
 		}

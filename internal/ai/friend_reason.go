@@ -101,10 +101,10 @@ func NewFriendReasonAnalyzer(app *setup.App, logger *zap.Logger) *FriendReasonAn
 
 // GenerateFriendReasons generates friend network analysis reasons for multiple users using the OpenAI model.
 func (a *FriendReasonAnalyzer) GenerateFriendReasons(
-	ctx context.Context, userInfos []*types.ReviewUser, confirmedFriendsMap, flaggedFriendsMap map[uint64]map[uint64]*types.ReviewUser,
-) map[uint64]string {
+	ctx context.Context, userInfos []*types.ReviewUser, confirmedFriendsMap, flaggedFriendsMap map[int64]map[int64]*types.ReviewUser,
+) map[int64]string {
 	// Create friend requests map
-	friendRequests := make(map[uint64]UserFriendRequest)
+	friendRequests := make(map[int64]UserFriendRequest)
 
 	for _, userInfo := range userInfos {
 		// Get confirmed and flagged friends for this user
@@ -150,7 +150,7 @@ func (a *FriendReasonAnalyzer) GenerateFriendReasons(
 	}
 
 	// Process friend requests
-	results := make(map[uint64]string)
+	results := make(map[int64]string)
 	a.ProcessFriendRequests(ctx, friendRequests, results, 0)
 
 	return results
@@ -158,7 +158,7 @@ func (a *FriendReasonAnalyzer) GenerateFriendReasons(
 
 // ProcessFriendRequests processes friend analysis requests with retry logic for invalid users.
 func (a *FriendReasonAnalyzer) ProcessFriendRequests(
-	ctx context.Context, friendRequests map[uint64]UserFriendRequest, results map[uint64]string, retryCount int,
+	ctx context.Context, friendRequests map[int64]UserFriendRequest, results map[int64]string, retryCount int,
 ) {
 	if len(friendRequests) == 0 {
 		return
@@ -184,7 +184,7 @@ func (a *FriendReasonAnalyzer) ProcessFriendRequests(
 	var (
 		mu              sync.Mutex
 		invalidMu       sync.Mutex
-		invalidRequests = make(map[uint64]UserFriendRequest)
+		invalidRequests = make(map[int64]UserFriendRequest)
 	)
 
 	minBatchSize := max(len(requestSlice)/4, 1)
@@ -342,7 +342,7 @@ func (a *FriendReasonAnalyzer) processFriendBatch(ctx context.Context, batch []U
 		}
 
 		// Create a map of usernames to user IDs for efficient lookup
-		userIDMap := make(map[string]uint64, len(batch))
+		userIDMap := make(map[string]int64, len(batch))
 		for _, req := range batch {
 			userIDMap[req.UserData.Username] = req.UserInfo.ID
 		}
@@ -380,10 +380,10 @@ func (a *FriendReasonAnalyzer) processFriendBatch(ctx context.Context, batch []U
 // processResults validates and stores the analysis results.
 // Returns a map of user IDs that had invalid results and need retry.
 func (a *FriendReasonAnalyzer) processResults(
-	results *BatchFriendAnalysis, batch []UserFriendRequest, finalResults map[uint64]string, mu *sync.Mutex,
-) map[uint64]UserFriendRequest {
+	results *BatchFriendAnalysis, batch []UserFriendRequest, finalResults map[int64]string, mu *sync.Mutex,
+) map[int64]UserFriendRequest {
 	// Create map for retry requests
-	invalidRequests := make(map[uint64]UserFriendRequest)
+	invalidRequests := make(map[int64]UserFriendRequest)
 
 	// If no results returned, mark all users for retry
 	if results == nil || len(results.Results) == 0 {

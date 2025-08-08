@@ -20,7 +20,7 @@ import (
 type GroupsBuilder struct {
 	user          *types.ReviewUser
 	groups        []*apiTypes.UserGroupRoles
-	flaggedGroups map[uint64]*types.ReviewGroup
+	flaggedGroups map[int64]*types.ReviewGroup
 	start         int
 	page          int
 	totalItems    int
@@ -62,7 +62,7 @@ func (b *GroupsBuilder) Build() *discord.MessageUpdateBuilder {
 	content.WriteString("## User Groups\n")
 	content.WriteString(fmt.Sprintf("```%s (%s)```",
 		utils.CensorString(b.user.Name, b.privacyMode),
-		utils.CensorString(strconv.FormatUint(b.user.ID, 10), b.privacyMode),
+		utils.CensorString(strconv.FormatInt(b.user.ID, 10), b.privacyMode),
 	))
 
 	// Add groups list
@@ -103,7 +103,7 @@ func (b *GroupsBuilder) Build() *discord.MessageUpdateBuilder {
 			enum.UserReasonTypeGroup,
 			reason,
 			200,
-			strconv.FormatUint(b.user.ID, 10),
+			strconv.FormatInt(b.user.ID, 10),
 			b.user.Name,
 			b.user.DisplayName))
 

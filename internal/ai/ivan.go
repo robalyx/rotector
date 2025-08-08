@@ -31,7 +31,7 @@ type MessageForAI struct {
 
 // IvanRequest represents the request data for the AI.
 type IvanRequest struct {
-	UserID   uint64         `json:"userId"   jsonschema_description:"User ID of the account being analyzed"`
+	UserID   int64          `json:"userId"   jsonschema_description:"User ID of the account being analyzed"`
 	Username string         `json:"username" jsonschema_description:"Username of the account being analyzed"`
 	Messages []MessageForAI `json:"messages" jsonschema_description:"List of messages to analyze"`
 }
@@ -87,15 +87,15 @@ func NewIvanAnalyzer(app *setup.App, logger *zap.Logger) *IvanAnalyzer {
 
 // ProcessUsers analyzes multiple users' chat messages for inappropriate content.
 func (a *IvanAnalyzer) ProcessUsers(
-	ctx context.Context, users []*types.ReviewUser, reasonsMap map[uint64]types.Reasons[enum.UserReasonType],
+	ctx context.Context, users []*types.ReviewUser, reasonsMap map[int64]types.Reasons[enum.UserReasonType],
 ) {
 	if len(users) == 0 {
 		return
 	}
 
 	// Extract user IDs
-	userIDs := make([]uint64, len(users))
-	userMap := make(map[uint64]*types.ReviewUser)
+	userIDs := make([]int64, len(users))
+	userMap := make(map[int64]*types.ReviewUser)
 
 	for i, user := range users {
 		userIDs[i] = user.ID
@@ -122,7 +122,7 @@ func (a *IvanAnalyzer) ProcessUsers(
 		if err := a.processMessages(ctx, user.ID, user.Name, userMsgs, reasonsMap, &mu); err != nil {
 			a.logger.Error("Failed to process ivan messages",
 				zap.Error(err),
-				zap.Uint64("userID", user.ID))
+				zap.Int64("userID", user.ID))
 		}
 	}
 
@@ -243,8 +243,8 @@ func (a *IvanAnalyzer) processIvanBatch(ctx context.Context, batchRequest IvanRe
 
 // processMessages analyzes a user's chat messages for inappropriate content.
 func (a *IvanAnalyzer) processMessages(
-	ctx context.Context, userID uint64, username string, messages []*types.IvanMessage,
-	reasonsMap map[uint64]types.Reasons[enum.UserReasonType], mu *sync.Mutex,
+	ctx context.Context, userID int64, username string, messages []*types.IvanMessage,
+	reasonsMap map[int64]types.Reasons[enum.UserReasonType], mu *sync.Mutex,
 ) error {
 	// Skip if no messages
 	if len(messages) == 0 {
@@ -284,7 +284,7 @@ func (a *IvanAnalyzer) processMessages(
 		func(batch []MessageForAI) {
 			// Log detailed content to text logger
 			a.textLogger.Warn("Content blocked in ivan analysis batch",
-				zap.Uint64("user_id", userID),
+				zap.Int64("userID", userID),
 				zap.String("username", username),
 				zap.Int("batch_size", len(batch)),
 				zap.Any("messages", batch))
@@ -337,7 +337,7 @@ func (a *IvanAnalyzer) processMessages(
 	isValid := normalizer.ValidateWords(evidence, allMessages...)
 	if !isValid {
 		a.logger.Warn("AI flagged content did not pass validation",
-			zap.Uint64("userID", userID),
+			zap.Int64("userID", userID),
 			zap.String("username", username),
 			zap.Strings("evidence", evidence))
 

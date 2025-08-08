@@ -190,7 +190,7 @@ func (m *OutfitsMenu) fetchOutfitThumbnails(ctx context.Context, outfits []*apiT
 		requests.AddRequest(apiTypes.ThumbnailRequest{
 			Type:      apiTypes.OutfitType,
 			TargetID:  outfit.ID,
-			RequestID: strconv.FormatUint(outfit.ID, 10),
+			RequestID: strconv.FormatInt(outfit.ID, 10),
 			Size:      apiTypes.Size150x150,
 			Format:    apiTypes.WEBP,
 		})

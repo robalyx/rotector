@@ -17,7 +17,7 @@ var (
 
 // User represents a user in any state (flagged, confirmed, or cleared).
 type User struct {
-	ID                  uint64        `bun:",pk"                    json:"id"`
+	ID                  int64         `bun:",pk"                    json:"id"`
 	UUID                uuid.UUID     `bun:",notnull"               json:"uuid"`
 	Name                string        `bun:",notnull"               json:"name"`
 	DisplayName         string        `bun:",notnull"               json:"displayName"`
@@ -39,7 +39,7 @@ type User struct {
 
 // UserReason represents a reason for flagging a user.
 type UserReason struct {
-	UserID     uint64              `bun:",pk"      json:"userId"`
+	UserID     int64               `bun:",pk"      json:"userId"`
 	ReasonType enum.UserReasonType `bun:",pk"      json:"reasonType"`
 	Message    string              `bun:",notnull" json:"message"`
 	Confidence float64             `bun:",notnull" json:"confidence"`
@@ -49,23 +49,23 @@ type UserReason struct {
 
 // UserGroup represents a user's group membership.
 type UserGroup struct {
-	UserID   uint64 `bun:",pk"      json:"userId"`
-	GroupID  uint64 `bun:",pk"      json:"groupId"`
-	RoleID   uint64 `bun:",notnull" json:"roleId"`
+	UserID   int64  `bun:",pk"      json:"userId"`
+	GroupID  int64  `bun:",pk"      json:"groupId"`
+	RoleID   int64  `bun:",notnull" json:"roleId"`
 	RoleName string `bun:",notnull" json:"roleName"`
-	RoleRank uint64 `bun:",notnull" json:"roleRank"`
+	RoleRank int64  `bun:",notnull" json:"roleRank"`
 
 	Group *GroupInfo `bun:"rel:belongs-to,join:group_id=id" json:"-"`
 }
 
 // GroupInfo stores the shared group information.
 type GroupInfo struct {
-	ID                 uint64               `bun:",pk"       json:"id"`
+	ID                 int64                `bun:",pk"       json:"id"`
 	Name               string               `bun:",notnull"  json:"name"`
 	Description        string               `bun:",notnull"  json:"description"`
 	Owner              *apiTypes.GroupUser  `bun:",nullzero" json:"owner"`
 	Shout              *apiTypes.GroupShout `bun:",nullzero" json:"shout"`
-	MemberCount        uint64               `bun:",notnull"  json:"memberCount"`
+	MemberCount        int64                `bun:",notnull"  json:"memberCount"`
 	HasVerifiedBadge   bool                 `bun:",notnull"  json:"hasVerifiedBadge"`
 	IsBuildersClubOnly bool                 `bun:",notnull"  json:"isBuildersClubOnly"`
 	PublicEntryAllowed bool                 `bun:",notnull"  json:"publicEntryAllowed"`
@@ -75,15 +75,15 @@ type GroupInfo struct {
 
 // UserOutfit represents a user's outfit.
 type UserOutfit struct {
-	UserID   uint64 `bun:",pk" json:"userId"`
-	OutfitID uint64 `bun:",pk" json:"outfitId"`
+	UserID   int64 `bun:",pk" json:"userId"`
+	OutfitID int64 `bun:",pk" json:"outfitId"`
 
 	Outfit *OutfitInfo `bun:"rel:belongs-to,join:outfit_id=id" json:"-"`
 }
 
 // OutfitInfo stores the shared outfit information.
 type OutfitInfo struct {
-	ID          uint64    `bun:",pk"      json:"id"`
+	ID          int64     `bun:",pk"      json:"id"`
 	Name        string    `bun:",notnull" json:"name"`
 	IsEditable  bool      `bun:",notnull" json:"isEditable"`
 	OutfitType  string    `bun:",notnull" json:"outfitType"`
@@ -94,16 +94,16 @@ type OutfitInfo struct {
 
 // OutfitAsset represents an outfit's asset.
 type OutfitAsset struct {
-	OutfitID         uint64 `bun:",pk"      json:"outfitId"`
-	AssetID          uint64 `bun:",pk"      json:"assetId"`
-	CurrentVersionID uint64 `bun:",notnull" json:"currentVersionId"`
+	OutfitID         int64 `bun:",pk"      json:"outfitId"`
+	AssetID          int64 `bun:",pk"      json:"assetId"`
+	CurrentVersionID int64 `bun:",notnull" json:"currentVersionId"`
 
 	Asset *AssetInfo `bun:"rel:belongs-to,join:asset_id=id" json:"-"`
 }
 
 // AssetInfo stores the shared asset information.
 type AssetInfo struct {
-	ID          uint64                 `bun:",pk"      json:"id"`
+	ID          int64                  `bun:",pk"      json:"id"`
 	Name        string                 `bun:",notnull" json:"name"`
 	AssetType   apiTypes.ItemAssetType `bun:",notnull" json:"assetType"`
 	LastUpdated time.Time              `bun:",notnull" json:"lastUpdated"`
@@ -111,15 +111,15 @@ type AssetInfo struct {
 
 // UserFriend represents a user's friend.
 type UserFriend struct {
-	UserID   uint64 `bun:",pk" json:"userId"`
-	FriendID uint64 `bun:",pk" json:"friendId"`
+	UserID   int64 `bun:",pk" json:"userId"`
+	FriendID int64 `bun:",pk" json:"friendId"`
 
 	Friend *FriendInfo `bun:"rel:belongs-to,join:friend_id=id" json:"-"`
 }
 
 // FriendInfo stores the shared friend information.
 type FriendInfo struct {
-	ID          uint64    `bun:",pk"      json:"id"`
+	ID          int64     `bun:",pk"      json:"id"`
 	Name        string    `bun:",notnull" json:"name"`
 	DisplayName string    `bun:",notnull" json:"displayName"`
 	LastUpdated time.Time `bun:",notnull" json:"lastUpdated"`
@@ -127,18 +127,18 @@ type FriendInfo struct {
 
 // UserGame represents a user's game.
 type UserGame struct {
-	UserID uint64 `bun:",pk" json:"userId"`
-	GameID uint64 `bun:",pk" json:"gameId"`
+	UserID int64 `bun:",pk" json:"userId"`
+	GameID int64 `bun:",pk" json:"gameId"`
 
 	Game *GameInfo `bun:"rel:belongs-to,join:game_id=id" json:"-"`
 }
 
 // GameInfo stores the shared game information.
 type GameInfo struct {
-	ID          uint64    `bun:",pk"      json:"id"`
+	ID          int64     `bun:",pk"      json:"id"`
 	Name        string    `bun:",notnull" json:"name"`
 	Description string    `bun:",notnull" json:"description"`
-	PlaceVisits uint64    `bun:",notnull" json:"placeVisits"`
+	PlaceVisits int64     `bun:",notnull" json:"placeVisits"`
 	Created     time.Time `bun:",notnull" json:"created"`
 	Updated     time.Time `bun:",notnull" json:"updated"`
 	LastUpdated time.Time `bun:",notnull" json:"lastUpdated"`
@@ -146,15 +146,15 @@ type GameInfo struct {
 
 // UserInventory represents a user's inventory item.
 type UserInventory struct {
-	UserID      uint64 `bun:",pk" json:"userId"`
-	InventoryID uint64 `bun:",pk" json:"inventoryId"`
+	UserID      int64 `bun:",pk" json:"userId"`
+	InventoryID int64 `bun:",pk" json:"inventoryId"`
 
 	Inventory *InventoryInfo `bun:"rel:belongs-to,join:inventory_id=id" json:"-"`
 }
 
 // InventoryInfo stores the shared inventory item information.
 type InventoryInfo struct {
-	ID          uint64    `bun:",pk"      json:"id"`
+	ID          int64     `bun:",pk"      json:"id"`
 	Name        string    `bun:",notnull" json:"name"`
 	AssetType   string    `bun:",notnull" json:"assetType"`
 	Created     time.Time `bun:",notnull" json:"created"`
@@ -163,38 +163,38 @@ type InventoryInfo struct {
 
 // UserFavorite represents a user's favorite item.
 type UserFavorite struct {
-	UserID uint64 `bun:",pk" json:"userId"`
-	GameID uint64 `bun:",pk" json:"gameId"`
+	UserID int64 `bun:",pk" json:"userId"`
+	GameID int64 `bun:",pk" json:"gameId"`
 
 	Game *GameInfo `bun:"rel:belongs-to,join:game_id=id" json:"-"`
 }
 
 // UserBadge represents a user's badge.
 type UserBadge struct {
-	UserID  uint64 `bun:",pk"      json:"userId"`
-	BadgeID uint64 `bun:",notnull" json:"badgeId"`
-	Badge   any    `bun:",notnull" json:"badge"`
+	UserID  int64 `bun:",pk"      json:"userId"`
+	BadgeID int64 `bun:",notnull" json:"badgeId"`
+	Badge   any   `bun:",notnull" json:"badge"`
 }
 
 // UserVerification stores verification data for confirmed users.
 type UserVerification struct {
-	UserID     uint64    `bun:",pk"      json:"userId"`
+	UserID     int64     `bun:",pk"      json:"userId"`
 	ReviewerID uint64    `bun:",notnull" json:"reviewerId"`
 	VerifiedAt time.Time `bun:",notnull" json:"verifiedAt"`
 }
 
 // UserClearance stores clearance data for cleared users.
 type UserClearance struct {
-	UserID     uint64    `bun:",pk"      json:"userId"`
+	UserID     int64     `bun:",pk"      json:"userId"`
 	ReviewerID uint64    `bun:",notnull" json:"reviewerId"`
 	ClearedAt  time.Time `bun:",notnull" json:"clearedAt"`
 }
 
 // UserAsset represents a user's currently equipped asset.
 type UserAsset struct {
-	UserID           uint64 `bun:",pk"      json:"userId"`
-	AssetID          uint64 `bun:",pk"      json:"assetId"`
-	CurrentVersionID uint64 `bun:",notnull" json:"currentVersionId"`
+	UserID           int64 `bun:",pk"      json:"userId"`
+	AssetID          int64 `bun:",pk"      json:"assetId"`
+	CurrentVersionID int64 `bun:",notnull" json:"currentVersionId"`
 
 	Asset *AssetInfo `bun:"rel:belongs-to,join:asset_id=id" json:"-"`
 }
@@ -203,19 +203,19 @@ type UserAsset struct {
 type ReviewUser struct {
 	*User
 
-	Reasons       Reasons[enum.UserReasonType]   `json:"reasons"`
-	ReviewerID    uint64                         `json:"reviewerId,omitempty"`
-	VerifiedAt    time.Time                      `json:"verifiedAt"`
-	ClearedAt     time.Time                      `json:"clearedAt"`
-	Groups        []*apiTypes.UserGroupRoles     `json:"groups,omitempty"`
-	Outfits       []*apiTypes.Outfit             `json:"outfits,omitempty"`
-	OutfitAssets  map[uint64][]*apiTypes.AssetV2 `json:"outfitAssets,omitempty"`
-	CurrentAssets []*apiTypes.AssetV2            `json:"currentAssets,omitempty"`
-	Friends       []*apiTypes.ExtendedFriend     `json:"friends,omitempty"`
-	Games         []*apiTypes.Game               `json:"games,omitempty"`
-	Inventory     []*apiTypes.InventoryAsset     `json:"inventory,omitempty"`
-	Favorites     []*apiTypes.Game               `json:"favorites,omitempty"`
-	Badges        []any                          `json:"badges,omitempty"`
+	Reasons       Reasons[enum.UserReasonType]  `json:"reasons"`
+	ReviewerID    uint64                        `json:"reviewerId,omitempty"`
+	VerifiedAt    time.Time                     `json:"verifiedAt"`
+	ClearedAt     time.Time                     `json:"clearedAt"`
+	Groups        []*apiTypes.UserGroupRoles    `json:"groups,omitempty"`
+	Outfits       []*apiTypes.Outfit            `json:"outfits,omitempty"`
+	OutfitAssets  map[int64][]*apiTypes.AssetV2 `json:"outfitAssets,omitempty"`
+	CurrentAssets []*apiTypes.AssetV2           `json:"currentAssets,omitempty"`
+	Friends       []*apiTypes.ExtendedFriend    `json:"friends,omitempty"`
+	Games         []*apiTypes.Game              `json:"games,omitempty"`
+	Inventory     []*apiTypes.InventoryAsset    `json:"inventory,omitempty"`
+	Favorites     []*apiTypes.Game              `json:"favorites,omitempty"`
+	Badges        []any                         `json:"badges,omitempty"`
 }
 
 // UserField represents available fields as bit flags.
@@ -361,7 +361,7 @@ type UserGroupQueryResult struct {
 	Description        string               `bun:"description"           json:"description"`
 	Owner              *apiTypes.GroupUser  `bun:"owner"                 json:"owner"`
 	Shout              *apiTypes.GroupShout `bun:"shout"                 json:"shout"`
-	MemberCount        uint64               `bun:"member_count"          json:"memberCount"`
+	MemberCount        int64                `bun:"member_count"          json:"memberCount"`
 	HasVerifiedBadge   bool                 `bun:"has_verified_badge"    json:"hasVerifiedBadge"`
 	IsBuildersClubOnly bool                 `bun:"is_builders_club_only" json:"isBuildersClubOnly"`
 	PublicEntryAllowed bool                 `bun:"public_entry_allowed"  json:"publicEntryAllowed"`
@@ -435,7 +435,7 @@ type UserGameQueryResult struct {
 
 	Name        string    `bun:"name"         json:"name"`
 	Description string    `bun:"description"  json:"description"`
-	PlaceVisits uint64    `bun:"place_visits" json:"placeVisits"`
+	PlaceVisits int64     `bun:"place_visits" json:"placeVisits"`
 	Created     time.Time `bun:"created"      json:"created"`
 	Updated     time.Time `bun:"updated"      json:"updated"`
 }
@@ -497,7 +497,7 @@ type UserFavoriteQueryResult struct {
 
 	Name        string    `bun:"name"         json:"name"`
 	Description string    `bun:"description"  json:"description"`
-	PlaceVisits uint64    `bun:"place_visits" json:"placeVisits"`
+	PlaceVisits int64     `bun:"place_visits" json:"placeVisits"`
 	Created     time.Time `bun:"created"      json:"created"`
 	Updated     time.Time `bun:"updated"      json:"updated"`
 }
@@ -515,7 +515,7 @@ func (r *UserFavoriteQueryResult) ToAPIType() *apiTypes.Game {
 }
 
 // FromAPIGroupRoles creates database types from an API UserGroupRoles type.
-func FromAPIGroupRoles(userID uint64, group *apiTypes.UserGroupRoles) (*UserGroup, *GroupInfo) {
+func FromAPIGroupRoles(userID int64, group *apiTypes.UserGroupRoles) (*UserGroup, *GroupInfo) {
 	return &UserGroup{
 			UserID:   userID,
 			GroupID:  group.Group.ID,
@@ -538,7 +538,7 @@ func FromAPIGroupRoles(userID uint64, group *apiTypes.UserGroupRoles) (*UserGrou
 }
 
 // FromAPIOutfit creates database types from an API Outfit type.
-func FromAPIOutfit(userID uint64, outfit *apiTypes.Outfit) (*UserOutfit, *OutfitInfo) {
+func FromAPIOutfit(userID int64, outfit *apiTypes.Outfit) (*UserOutfit, *OutfitInfo) {
 	return &UserOutfit{
 			UserID:   userID,
 			OutfitID: outfit.ID,
@@ -552,7 +552,7 @@ func FromAPIOutfit(userID uint64, outfit *apiTypes.Outfit) (*UserOutfit, *Outfit
 }
 
 // FromAPIFriend creates database types from an API ExtendedFriend type.
-func FromAPIFriend(userID uint64, friend *apiTypes.ExtendedFriend) (*UserFriend, *FriendInfo) {
+func FromAPIFriend(userID int64, friend *apiTypes.ExtendedFriend) (*UserFriend, *FriendInfo) {
 	return &UserFriend{
 			UserID:   userID,
 			FriendID: friend.ID,
@@ -565,7 +565,7 @@ func FromAPIFriend(userID uint64, friend *apiTypes.ExtendedFriend) (*UserFriend,
 }
 
 // FromAPIGame creates database types from an API Game type.
-func FromAPIGame(userID uint64, game *apiTypes.Game) (*UserGame, *GameInfo) {
+func FromAPIGame(userID int64, game *apiTypes.Game) (*UserGame, *GameInfo) {
 	return &UserGame{
 			UserID: userID,
 			GameID: game.ID,
@@ -581,7 +581,7 @@ func FromAPIGame(userID uint64, game *apiTypes.Game) (*UserGame, *GameInfo) {
 }
 
 // FromAPIInventoryAsset creates database types from an API InventoryAsset type.
-func FromAPIInventoryAsset(userID uint64, asset *apiTypes.InventoryAsset) (*UserInventory, *InventoryInfo) {
+func FromAPIInventoryAsset(userID int64, asset *apiTypes.InventoryAsset) (*UserInventory, *InventoryInfo) {
 	return &UserInventory{
 			UserID:      userID,
 			InventoryID: asset.AssetID,
@@ -595,7 +595,7 @@ func FromAPIInventoryAsset(userID uint64, asset *apiTypes.InventoryAsset) (*User
 }
 
 // FromAPIAsset creates database types from an API AssetV2 type.
-func FromAPIAsset(userID uint64, asset *apiTypes.AssetV2) (*UserAsset, *AssetInfo) {
+func FromAPIAsset(userID int64, asset *apiTypes.AssetV2) (*UserAsset, *AssetInfo) {
 	return &UserAsset{
 			UserID:           userID,
 			AssetID:          asset.ID,
@@ -610,6 +610,6 @@ func FromAPIAsset(userID uint64, asset *apiTypes.AssetV2) (*UserAsset, *AssetInf
 
 // UserOutfitsResult represents outfits and their assets for a single user.
 type UserOutfitsResult struct {
-	Outfits      []*apiTypes.Outfit             `json:"outfits"`
-	OutfitAssets map[uint64][]*apiTypes.AssetV2 `json:"outfitAssets"`
+	Outfits      []*apiTypes.Outfit            `json:"outfits"`
+	OutfitAssets map[int64][]*apiTypes.AssetV2 `json:"outfitAssets"`
 }

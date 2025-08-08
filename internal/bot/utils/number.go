@@ -6,9 +6,9 @@ import (
 )
 
 // FormatNumber formats a number with K/M/B suffixes.
-func FormatNumber(n uint64) string {
+func FormatNumber(n int64) string {
 	if n < 1000 {
-		return strconv.FormatUint(n, 10)
+		return strconv.FormatInt(n, 10)
 	}
 
 	if n < 1000000 {

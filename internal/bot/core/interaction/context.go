@@ -86,7 +86,7 @@ func (c *Context) Error(content string) {
 	c.responded = true
 
 	c.manager.logger.Debug("Fatal error",
-		zap.Uint64("user_id", uint64(c.event.User().ID)),
+		zap.Uint64("userID", uint64(c.event.User().ID)),
 		zap.String("content", content),
 	)
 }
@@ -192,7 +192,7 @@ func (c *Context) Modal(modal *discord.ModalCreateBuilder) {
 	if err := c.event.Modal(modal.Build()); err != nil {
 		c.manager.logger.Error("Failed to create modal",
 			zap.Error(err),
-			zap.String("custom_id", modal.CustomID),
+			zap.String("customID", modal.CustomID),
 			zap.String("title", modal.Title),
 		)
 

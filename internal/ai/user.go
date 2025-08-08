@@ -26,17 +26,17 @@ import (
 
 // ProcessUsersParams contains all the parameters needed for user analysis processing.
 type ProcessUsersParams struct {
-	Users                     []*types.ReviewUser                           `json:"users"`
-	TranslatedInfos           map[string]*types.ReviewUser                  `json:"translatedInfos"`
-	OriginalInfos             map[string]*types.ReviewUser                  `json:"originalInfos"`
-	ReasonsMap                map[uint64]types.Reasons[enum.UserReasonType] `json:"reasonsMap"`
-	ConfirmedFriendsMap       map[uint64]map[uint64]*types.ReviewUser       `json:"confirmedFriendsMap"`
-	FlaggedFriendsMap         map[uint64]map[uint64]*types.ReviewUser       `json:"flaggedFriendsMap"`
-	ConfirmedGroupsMap        map[uint64]map[uint64]*types.ReviewGroup      `json:"confirmedGroupsMap"`
-	FlaggedGroupsMap          map[uint64]map[uint64]*types.ReviewGroup      `json:"flaggedGroupsMap"`
-	InappropriateProfileFlags map[uint64]struct{}                           `json:"inappropriateProfileFlags"`
-	InappropriateFriendsFlags map[uint64]struct{}                           `json:"inappropriateFriendsFlags"`
-	InappropriateGroupsFlags  map[uint64]struct{}                           `json:"inappropriateGroupsFlags"`
+	Users                     []*types.ReviewUser                          `json:"users"`
+	TranslatedInfos           map[string]*types.ReviewUser                 `json:"translatedInfos"`
+	OriginalInfos             map[string]*types.ReviewUser                 `json:"originalInfos"`
+	ReasonsMap                map[int64]types.Reasons[enum.UserReasonType] `json:"reasonsMap"`
+	ConfirmedFriendsMap       map[int64]map[int64]*types.ReviewUser        `json:"confirmedFriendsMap"`
+	FlaggedFriendsMap         map[int64]map[int64]*types.ReviewUser        `json:"flaggedFriendsMap"`
+	ConfirmedGroupsMap        map[int64]map[int64]*types.ReviewGroup       `json:"confirmedGroupsMap"`
+	FlaggedGroupsMap          map[int64]map[int64]*types.ReviewGroup       `json:"flaggedGroupsMap"`
+	InappropriateProfileFlags map[int64]struct{}                           `json:"inappropriateProfileFlags"`
+	InappropriateFriendsFlags map[int64]struct{}                           `json:"inappropriateFriendsFlags"`
+	InappropriateGroupsFlags  map[int64]struct{}                           `json:"inappropriateGroupsFlags"`
 }
 
 // UserSummary is a struct for user summaries for AI analysis.
@@ -108,7 +108,7 @@ func NewUserAnalyzer(app *setup.App, translator *translator.Translator, logger *
 
 // ProcessUsers analyzes user content for a batch of users.
 func (a *UserAnalyzer) ProcessUsers(ctx context.Context, params *ProcessUsersParams) {
-	userReasonRequests := make(map[uint64]UserReasonRequest)
+	userReasonRequests := make(map[int64]UserReasonRequest)
 	numBatches := (len(params.Users) + a.batchSize - 1) / a.batchSize
 
 	// Process batches concurrently
@@ -242,7 +242,7 @@ func (a *UserAnalyzer) processUserBatch(ctx context.Context, batch []UserSummary
 // processBatch handles the AI analysis for a batch of user summaries.
 func (a *UserAnalyzer) processBatch(
 	ctx context.Context, userInfos []*types.ReviewUser, params *ProcessUsersParams,
-	userReasonRequests map[uint64]UserReasonRequest, mu *sync.Mutex,
+	userReasonRequests map[int64]UserReasonRequest, mu *sync.Mutex,
 ) error {
 	// Convert map to slice for AI request
 	userInfosWithoutID := make([]UserSummary, 0, len(userInfos))
@@ -432,7 +432,7 @@ func (a *UserAnalyzer) shouldSkipFlaggedUser(
 // processAndCreateRequests processes the AI responses and creates reason requests.
 func (a *UserAnalyzer) processAndCreateRequests(
 	result *FlaggedUsers, params *ProcessUsersParams,
-	userReasonRequests map[uint64]UserReasonRequest, mu *sync.Mutex,
+	userReasonRequests map[int64]UserReasonRequest, mu *sync.Mutex,
 ) {
 	for _, flaggedUser := range result.Users {
 		originalInfo, hasOriginal := params.OriginalInfos[flaggedUser.Name]

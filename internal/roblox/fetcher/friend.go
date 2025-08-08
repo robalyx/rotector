@@ -34,7 +34,7 @@ func NewFriendFetcher(app *setup.App, logger *zap.Logger) *FriendFetcher {
 }
 
 // GetFriendIDs returns the friend IDs for a user.
-func (f *FriendFetcher) GetFriendIDs(ctx context.Context, userID uint64) ([]uint64, error) {
+func (f *FriendFetcher) GetFriendIDs(ctx context.Context, userID int64) ([]int64, error) {
 	// Get the friend count to determine which endpoint to use
 	friendCount, err := f.roAPI.Friends().GetFriendCount(ctx, userID)
 	if err != nil {
@@ -48,7 +48,7 @@ func (f *FriendFetcher) GetFriendIDs(ctx context.Context, userID uint64) ([]uint
 			return nil, err
 		}
 
-		friendIDs := make([]uint64, 0, len(friendsData))
+		friendIDs := make([]int64, 0, len(friendsData))
 		for _, friend := range friendsData {
 			friendIDs = append(friendIDs, friend.ID)
 		}
@@ -58,7 +58,7 @@ func (f *FriendFetcher) GetFriendIDs(ctx context.Context, userID uint64) ([]uint
 
 	// For users with >200 friends, use pagination to collect IDs
 	var (
-		friendIDs []uint64
+		friendIDs []int64
 		cursor    string
 	)
 
@@ -79,7 +79,9 @@ func (f *FriendFetcher) GetFriendIDs(ctx context.Context, userID uint64) ([]uint
 
 		// Add friend IDs to slice
 		for _, friend := range response.PageItems {
-			friendIDs = append(friendIDs, friend.ID)
+			if friend.ID != -1 {
+				friendIDs = append(friendIDs, friend.ID)
+			}
 		}
 
 		// Check if there are more pages
@@ -94,7 +96,7 @@ func (f *FriendFetcher) GetFriendIDs(ctx context.Context, userID uint64) ([]uint
 }
 
 // GetFriends returns a user's friends with full details using the best method.
-func (f *FriendFetcher) GetFriends(ctx context.Context, userID uint64) ([]*apiTypes.ExtendedFriend, error) {
+func (f *FriendFetcher) GetFriends(ctx context.Context, userID int64) ([]*apiTypes.ExtendedFriend, error) {
 	// Get the friend count to determine which endpoint to use
 	friendCount, err := f.roAPI.Friends().GetFriendCount(ctx, userID)
 	if err != nil {
@@ -117,13 +119,13 @@ func (f *FriendFetcher) GetFriends(ctx context.Context, userID uint64) ([]*apiTy
 	if err != nil {
 		f.logger.Error("Failed to get existing friend info from database",
 			zap.Error(err),
-			zap.Uint64("userID", userID))
+			zap.Int64("userID", userID))
 
-		existingFriends = make(map[uint64]*apiTypes.ExtendedFriend)
+		existingFriends = make(map[int64]*apiTypes.ExtendedFriend)
 	}
 
 	// Identify which friends need API lookup
-	var missingIDs []uint64
+	var missingIDs []int64
 
 	for _, id := range friendIDs {
 		if _, exists := existingFriends[id]; !exists {
@@ -202,7 +204,7 @@ func (f *FriendFetcher) GetFriends(ctx context.Context, userID uint64) ([]*apiTy
 	}
 
 	f.logger.Debug("Finished fetching friends using pagination",
-		zap.Uint64("userID", userID),
+		zap.Int64("userID", userID),
 		zap.Int("totalFriends", len(friendIDs)),
 		zap.Int("successfulFetches", len(result)))
 
@@ -210,7 +212,7 @@ func (f *FriendFetcher) GetFriends(ctx context.Context, userID uint64) ([]*apiTy
 }
 
 // getFriendsLegacy returns a user's friends with full details using the legacy endpoint.
-func (f *FriendFetcher) getFriendsLegacy(ctx context.Context, userID uint64) ([]*apiTypes.ExtendedFriend, error) {
+func (f *FriendFetcher) getFriendsLegacy(ctx context.Context, userID int64) ([]*apiTypes.ExtendedFriend, error) {
 	response, err := f.roAPI.Friends().GetFriends(ctx, userID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get friends: %w", err)
@@ -220,17 +222,19 @@ func (f *FriendFetcher) getFriendsLegacy(ctx context.Context, userID uint64) ([]
 	friendsData := make([]*apiTypes.ExtendedFriend, 0, len(response.Data))
 
 	for _, friend := range response.Data {
-		friendsData = append(friendsData, &apiTypes.ExtendedFriend{
-			Friend: apiTypes.Friend{
-				ID: friend.ID,
-			},
-			Name:        normalizer.Normalize(friend.Name),
-			DisplayName: normalizer.Normalize(friend.DisplayName),
-		})
+		if friend.ID != -1 {
+			friendsData = append(friendsData, &apiTypes.ExtendedFriend{
+				Friend: apiTypes.Friend{
+					ID: friend.ID,
+				},
+				Name:        normalizer.Normalize(friend.Name),
+				DisplayName: normalizer.Normalize(friend.DisplayName),
+			})
+		}
 	}
 
 	f.logger.Debug("Finished fetching friends using legacy endpoint",
-		zap.Uint64("userID", userID),
+		zap.Int64("userID", userID),
 		zap.Int("totalFriends", len(friendsData)))
 
 	return friendsData, nil

@@ -178,24 +178,57 @@ func (m *Menu) showQueryModal(ctx *interaction.Context, option, title, label, pl
 func (m *Menu) handleIDModalSubmit(ctx *interaction.Context, s *session.Session, queryType string) {
 	idStr := ctx.Event().ModalData().Text(constants.LogsQueryInputCustomID)
 
-	// Parse ID from string
-	id, err := strconv.ParseUint(idStr, 10, 64)
-	if err != nil {
-		ctx.Cancel("Invalid ID provided. Please enter a valid numeric ID.")
-		return
-	}
-
 	// Store ID in appropriate session key based on query type
 	switch queryType {
 	case constants.LogsQueryGuildIDOption:
+		id, err := strconv.ParseUint(idStr, 10, 64)
+		if err != nil {
+			ctx.Cancel("Invalid ID provided. Please enter a valid numeric ID.")
+			return
+		}
+
 		session.LogFilterGuildID.Set(s, id)
 	case constants.LogsQueryDiscordIDOption:
+		id, err := strconv.ParseUint(idStr, 10, 64)
+		if err != nil {
+			ctx.Cancel("Invalid ID provided. Please enter a valid numeric ID.")
+			return
+		}
+
 		session.LogFilterDiscordID.Set(s, id)
 	case constants.LogsQueryUserIDOption:
+		id, err := strconv.ParseInt(idStr, 10, 64)
+		if err != nil {
+			ctx.Cancel("Invalid ID provided. Please enter a valid numeric ID.")
+			return
+		}
+
+		if id <= 0 {
+			ctx.Cancel("Invalid ID provided. Please enter a valid numeric ID.")
+			return
+		}
+
 		session.LogFilterUserID.Set(s, id)
 	case constants.LogsQueryGroupIDOption:
+		id, err := strconv.ParseInt(idStr, 10, 64)
+		if err != nil {
+			ctx.Cancel("Invalid ID provided. Please enter a valid numeric ID.")
+			return
+		}
+
+		if id <= 0 {
+			ctx.Cancel("Invalid ID provided. Please enter a valid numeric ID.")
+			return
+		}
+
 		session.LogFilterGroupID.Set(s, id)
 	case constants.LogsQueryReviewerIDOption:
+		id, err := strconv.ParseUint(idStr, 10, 64)
+		if err != nil {
+			ctx.Cancel("Invalid ID provided. Please enter a valid numeric ID.")
+			return
+		}
+
 		session.LogFilterReviewerID.Set(s, id)
 	}
 

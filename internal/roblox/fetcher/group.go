@@ -29,13 +29,13 @@ func NewGroupFetcher(roAPI *api.API, logger *zap.Logger) *GroupFetcher {
 
 // GroupFetchResult contains the result of fetching a group's information.
 type GroupFetchResult struct {
-	ID    uint64
+	ID    int64
 	Info  *apiTypes.GroupResponse
 	Error error
 }
 
 // FetchGroupInfos retrieves complete group information for a batch of group IDs.
-func (g *GroupFetcher) FetchGroupInfos(ctx context.Context, groupIDs []uint64) []*apiTypes.GroupResponse {
+func (g *GroupFetcher) FetchGroupInfos(ctx context.Context, groupIDs []int64) []*apiTypes.GroupResponse {
 	ctx = context.WithValue(ctx, auth.KeyAddCookie, true)
 
 	var (
@@ -51,7 +51,7 @@ func (g *GroupFetcher) FetchGroupInfos(ctx context.Context, groupIDs []uint64) [
 			groupInfo, err := g.roAPI.Groups().GetGroupInfo(ctx, id)
 			if err != nil {
 				g.logger.Error("Error fetching group info",
-					zap.Uint64("groupID", id),
+					zap.Int64("groupID", id),
 					zap.Error(err))
 
 				return nil // Don't fail the whole batch for one error
@@ -101,11 +101,11 @@ func (g *GroupFetcher) FetchGroupInfos(ctx context.Context, groupIDs []uint64) [
 
 // FetchLockedGroups checks which groups from a batch of IDs are currently locked.
 // Returns a slice of locked group IDs.
-func (g *GroupFetcher) FetchLockedGroups(ctx context.Context, groupIDs []uint64) ([]uint64, error) {
+func (g *GroupFetcher) FetchLockedGroups(ctx context.Context, groupIDs []int64) ([]int64, error) {
 	ctx = context.WithValue(ctx, auth.KeyAddCookie, true)
 
 	var (
-		results = make([]uint64, 0, len(groupIDs))
+		results = make([]int64, 0, len(groupIDs))
 		p       = pool.New().WithContext(ctx)
 		mu      sync.Mutex
 	)
@@ -115,7 +115,7 @@ func (g *GroupFetcher) FetchLockedGroups(ctx context.Context, groupIDs []uint64)
 			groupInfo, err := g.roAPI.Groups().GetGroupInfo(ctx, id)
 			if err != nil {
 				g.logger.Error("Error fetching group info",
-					zap.Uint64("groupID", id),
+					zap.Int64("groupID", id),
 					zap.Error(err))
 
 				return nil // Don't fail the whole batch for one error
@@ -147,7 +147,7 @@ func (g *GroupFetcher) FetchLockedGroups(ctx context.Context, groupIDs []uint64)
 }
 
 // GetUserGroups retrieves all groups for a user.
-func (g *GroupFetcher) GetUserGroups(ctx context.Context, userID uint64) ([]*apiTypes.UserGroupRoles, error) {
+func (g *GroupFetcher) GetUserGroups(ctx context.Context, userID int64) ([]*apiTypes.UserGroupRoles, error) {
 	ctx = context.WithValue(ctx, auth.KeyAddCookie, true)
 	builder := groups.NewUserGroupRolesBuilder(userID)
 
@@ -162,7 +162,7 @@ func (g *GroupFetcher) GetUserGroups(ctx context.Context, userID uint64) ([]*api
 	}
 
 	g.logger.Debug("Finished fetching user groups",
-		zap.Uint64("userID", userID),
+		zap.Int64("userID", userID),
 		zap.Int("totalGroups", len(groupsData)))
 
 	return groupsData, nil

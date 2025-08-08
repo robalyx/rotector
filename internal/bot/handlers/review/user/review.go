@@ -109,10 +109,10 @@ func (m *ReviewMenu) Show(ctx *interaction.Context, s *session.Session) {
 	session.ReviewLogsHasMore.Set(s, nextCursor != nil)
 
 	// Check friend status and get friend data by looking up each friend in the database
-	var flaggedFriends map[uint64]*types.ReviewUser
+	var flaggedFriends map[int64]*types.ReviewUser
 	if len(user.Friends) > 0 {
 		// Extract friend IDs for batch lookup
-		friendIDs := make([]uint64, len(user.Friends))
+		friendIDs := make([]int64, len(user.Friends))
 		for i, friend := range user.Friends {
 			friendIDs[i] = friend.ID
 		}
@@ -132,10 +132,10 @@ func (m *ReviewMenu) Show(ctx *interaction.Context, s *session.Session) {
 	}
 
 	// Check group status
-	var flaggedGroups map[uint64]*types.ReviewGroup
+	var flaggedGroups map[int64]*types.ReviewGroup
 	if len(user.Groups) > 0 {
 		// Extract group IDs for batch lookup
-		groupIDs := make([]uint64, len(user.Groups))
+		groupIDs := make([]int64, len(user.Groups))
 		for i, group := range user.Groups {
 			groupIDs[i] = group.Group.ID
 		}
@@ -217,7 +217,7 @@ func (m *ReviewMenu) handleActionSelection(ctx *interaction.Context, s *session.
 		constants.ViewCommentsButtonCustomID:
 		if !isReviewer {
 			m.layout.logger.Error("Non-reviewer attempted restricted action",
-				zap.Uint64("user_id", userID),
+				zap.Uint64("userID", userID),
 				zap.String("action", option))
 			ctx.Error("You do not have permission to perform this action.")
 
@@ -376,7 +376,7 @@ func (m *ReviewMenu) handleNavigateUser(ctx *interaction.Context, s *session.Ses
 
 	user, err := m.layout.db.Service().User().GetUserByID(
 		ctx.Context(),
-		strconv.FormatUint(targetUserID, 10),
+		strconv.FormatInt(targetUserID, 10),
 		types.UserFieldAll,
 	)
 	if err != nil {
@@ -427,7 +427,7 @@ func (m *ReviewMenu) handleConfirmUser(ctx *interaction.Context, s *session.Sess
 	isReviewer := s.BotSettings().IsReviewer(reviewerID)
 	if !isReviewer {
 		m.layout.logger.Error("Non-reviewer attempted to confirm user",
-			zap.Uint64("user_id", reviewerID))
+			zap.Uint64("userID", reviewerID))
 		ctx.Error("You do not have permission to confirm users.")
 
 		return
@@ -455,8 +455,8 @@ func (m *ReviewMenu) handleConfirmUser(ctx *interaction.Context, s *session.Sess
 	if err := m.layout.d1Client.AddConfirmedUser(ctx.Context(), user, reviewerID); err != nil {
 		m.layout.logger.Error("Failed to add confirmed user to D1 database",
 			zap.Error(err),
-			zap.Uint64("user_id", user.ID),
-			zap.Uint64("reviewer_id", reviewerID))
+			zap.Int64("userID", user.ID),
+			zap.Uint64("reviewerID", reviewerID))
 	}
 
 	// Log the confirm action
@@ -483,7 +483,7 @@ func (m *ReviewMenu) handleClearUser(ctx *interaction.Context, s *session.Sessio
 	isReviewer := s.BotSettings().IsReviewer(reviewerID)
 	if !isReviewer {
 		m.layout.logger.Error("Non-reviewer attempted to clear user",
-			zap.Uint64("user_id", reviewerID))
+			zap.Uint64("userID", reviewerID))
 		ctx.Error("You do not have permission to clear users.")
 
 		return
@@ -511,7 +511,7 @@ func (m *ReviewMenu) handleClearUser(ctx *interaction.Context, s *session.Sessio
 	if err := m.layout.d1Client.RemoveUser(ctx.Context(), user.ID); err != nil {
 		m.layout.logger.Error("Failed to remove cleared user from D1 database",
 			zap.Error(err),
-			zap.Uint64("user_id", user.ID))
+			zap.Int64("userID", user.ID))
 	}
 
 	// Log the clear action
@@ -548,7 +548,7 @@ func (m *ReviewMenu) navigateAfterAction(ctx *interaction.Context, s *session.Se
 
 		user, err := m.layout.db.Service().User().GetUserByID(
 			ctx.Context(),
-			strconv.FormatUint(targetUserID, 10),
+			strconv.FormatInt(targetUserID, 10),
 			types.UserFieldAll,
 		)
 		if err != nil {
@@ -721,7 +721,7 @@ func (m *ReviewMenu) handleReasonSelection(ctx *interaction.Context, s *session.
 	// Check if user is a reviewer
 	if !s.BotSettings().IsReviewer(uint64(ctx.Event().User().ID)) {
 		m.layout.logger.Error("Non-reviewer attempted to manage reasons",
-			zap.Uint64("user_id", uint64(ctx.Event().User().ID)))
+			zap.Uint64("userID", uint64(ctx.Event().User().ID)))
 		ctx.Error("You do not have permission to manage reasons.")
 
 		return
@@ -774,7 +774,7 @@ func (m *ReviewMenu) handleAIReasonSelection(ctx *interaction.Context, s *sessio
 	// Check if user is a reviewer
 	if !s.BotSettings().IsReviewer(uint64(ctx.Event().User().ID)) {
 		m.layout.logger.Error("Non-reviewer attempted to generate AI reasons",
-			zap.Uint64("user_id", uint64(ctx.Event().User().ID)))
+			zap.Uint64("userID", uint64(ctx.Event().User().ID)))
 		ctx.Error("You do not have permission to generate AI reasons.")
 
 		return
@@ -819,11 +819,11 @@ func (m *ReviewMenu) handleGenerateFriendReason(ctx *interaction.Context, s *ses
 	ctx.Clear("Generating friend reason using AI... This may take a few moments.")
 
 	// Prepare data for AI analysis
-	confirmedFriendsMap := make(map[uint64]map[uint64]*types.ReviewUser)
-	flaggedFriendsMap := make(map[uint64]map[uint64]*types.ReviewUser)
+	confirmedFriendsMap := make(map[int64]map[int64]*types.ReviewUser)
+	flaggedFriendsMap := make(map[int64]map[int64]*types.ReviewUser)
 
-	confirmedFriends := make(map[uint64]*types.ReviewUser)
-	flaggedFriendsForUser := make(map[uint64]*types.ReviewUser)
+	confirmedFriends := make(map[int64]*types.ReviewUser)
+	flaggedFriendsForUser := make(map[int64]*types.ReviewUser)
 
 	for _, friend := range flaggedFriends {
 		switch friend.Status {
@@ -900,11 +900,11 @@ func (m *ReviewMenu) handleGenerateGroupReason(ctx *interaction.Context, s *sess
 	ctx.Clear("Generating group reason using AI... This may take a few moments.")
 
 	// Prepare data for AI analysis
-	confirmedGroupsMap := make(map[uint64]map[uint64]*types.ReviewGroup)
-	flaggedGroupsMap := make(map[uint64]map[uint64]*types.ReviewGroup)
+	confirmedGroupsMap := make(map[int64]map[int64]*types.ReviewGroup)
+	flaggedGroupsMap := make(map[int64]map[int64]*types.ReviewGroup)
 
-	confirmedGroups := make(map[uint64]*types.ReviewGroup)
-	flaggedGroupsForUser := make(map[uint64]*types.ReviewGroup)
+	confirmedGroups := make(map[int64]*types.ReviewGroup)
+	flaggedGroupsForUser := make(map[int64]*types.ReviewGroup)
 
 	for _, group := range flaggedGroups {
 		switch group.Status {
@@ -981,7 +981,7 @@ func (m *ReviewMenu) fetchNewTarget(ctx *interaction.Context, s *session.Session
 	}
 
 	// Process friends and groups to update reasons
-	reasonsMap := make(map[uint64]types.Reasons[enum.UserReasonType])
+	reasonsMap := make(map[int64]types.Reasons[enum.UserReasonType])
 	if len(user.Reasons) > 0 {
 		reasonsMap[user.ID] = user.Reasons
 	}
@@ -1025,7 +1025,7 @@ func (m *ReviewMenu) fetchNewTarget(ctx *interaction.Context, s *session.Session
 		user.Confidence = utils.CalculateConfidence(reasons)
 
 		// Save updated user to database
-		flaggedUsers := map[uint64]*types.ReviewUser{user.ID: user}
+		flaggedUsers := map[int64]*types.ReviewUser{user.ID: user}
 		if err := m.layout.db.Service().User().SaveUsers(ctx.Context(), flaggedUsers); err != nil {
 			m.layout.logger.Error("Failed to save updated user reasons", zap.Error(err))
 		}
@@ -1140,7 +1140,7 @@ func (m *ReviewMenu) handleGenerateProfileReasonModalSubmit(ctx *interaction.Con
 	userSummary.Description = description
 
 	// Create user reason request
-	userReasonRequest := map[uint64]ai.UserReasonRequest{
+	userReasonRequest := map[int64]ai.UserReasonRequest{
 		user.ID: {
 			User:              userSummary,
 			Confidence:        1.0,
@@ -1156,7 +1156,7 @@ func (m *ReviewMenu) handleGenerateProfileReasonModalSubmit(ctx *interaction.Con
 	translatedInfos := map[string]*types.ReviewUser{user.Name: user}
 	originalInfos := map[string]*types.ReviewUser{user.Name: user}
 
-	reasonsMap := make(map[uint64]types.Reasons[enum.UserReasonType])
+	reasonsMap := make(map[int64]types.Reasons[enum.UserReasonType])
 	if len(user.Reasons) > 0 {
 		reasonsMap[user.ID] = user.Reasons
 	}

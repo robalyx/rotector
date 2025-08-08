@@ -48,7 +48,7 @@ func (w *Worker) runMutualScanner(ctx context.Context) {
 			if err != nil {
 				w.logger.Error("Failed to perform full scan",
 					zap.Error(err),
-					zap.Uint64("user_id", userID))
+					zap.Uint64("userID", userID))
 			}
 
 			// Sleep to respect rate limits
@@ -105,7 +105,7 @@ func (w *Worker) processPendingGames(ctx context.Context) error {
 	}
 
 	// Get place details
-	placeIDs := make([]uint64, len(pendingGames))
+	placeIDs := make([]int64, len(pendingGames))
 	for i, game := range pendingGames {
 		placeIDs[i] = game.ID
 	}
@@ -126,7 +126,7 @@ func (w *Worker) processPendingGames(ctx context.Context) error {
 				}
 
 				w.logger.Debug("Marked game as deleted",
-					zap.Uint64("game_id", detail.PlaceID),
+					zap.Int64("gameID", detail.PlaceID),
 					zap.String("reason", detail.ReasonProhibited))
 
 				return nil
@@ -157,7 +157,7 @@ func (w *Worker) processPendingGames(ctx context.Context) error {
 			}
 
 			w.logger.Debug("Got game players",
-				zap.Uint64("game_id", detail.PlaceID),
+				zap.Int64("gameID", detail.PlaceID),
 				zap.Int("server_count", len(servers.Data)),
 				zap.Int("token_count", len(tokens)))
 
@@ -178,7 +178,7 @@ func (w *Worker) processPendingGames(ctx context.Context) error {
 
 				players = append(players, &types.CondoPlayer{
 					ThumbnailURL: url,
-					GameIDs:      []uint64{detail.PlaceID},
+					GameIDs:      []int64{detail.PlaceID},
 					LastUpdated:  time.Now(),
 				})
 				uniqueURLs[url] = struct{}{}
@@ -189,7 +189,7 @@ func (w *Worker) processPendingGames(ctx context.Context) error {
 			}
 
 			w.logger.Info("Saved condo players for game",
-				zap.Uint64("game_id", detail.PlaceID),
+				zap.Int64("gameID", detail.PlaceID),
 				zap.Int("players", len(players)))
 
 			return nil

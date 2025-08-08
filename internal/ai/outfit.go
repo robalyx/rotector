@@ -33,9 +33,9 @@ import (
 
 // OutfitAnalyzerParams contains all the parameters needed for outfit analyzer processing.
 type OutfitAnalyzerParams struct {
-	Users                    []*types.ReviewUser                           `json:"users"`
-	ReasonsMap               map[uint64]types.Reasons[enum.UserReasonType] `json:"reasonsMap"`
-	InappropriateOutfitFlags map[uint64]struct{}                           `json:"inappropriateOutfitFlags"`
+	Users                    []*types.ReviewUser                          `json:"users"`
+	ReasonsMap               map[int64]types.Reasons[enum.UserReasonType] `json:"reasonsMap"`
+	InappropriateOutfitFlags map[int64]struct{}                           `json:"inappropriateOutfitFlags"`
 }
 
 const (
@@ -113,7 +113,7 @@ func NewOutfitAnalyzer(app *setup.App, logger *zap.Logger) *OutfitAnalyzer {
 
 // ProcessUsers analyzes outfit images for a batch of users.
 // Returns a map of user IDs to their flagged outfit names.
-func (a *OutfitAnalyzer) ProcessUsers(ctx context.Context, params *OutfitAnalyzerParams) map[uint64]map[string]struct{} {
+func (a *OutfitAnalyzer) ProcessUsers(ctx context.Context, params *OutfitAnalyzerParams) map[int64]map[string]struct{} {
 	// Filter users based on inappropriate outfit flags and existing reasons
 	usersToProcess := a.filterUsersForOutfitProcessing(params.Users, params.ReasonsMap, params.InappropriateOutfitFlags)
 
@@ -130,7 +130,7 @@ func (a *OutfitAnalyzer) ProcessUsers(ctx context.Context, params *OutfitAnalyze
 	var (
 		p              = pool.New().WithContext(ctx)
 		mu             sync.Mutex
-		flaggedOutfits = make(map[uint64]map[string]struct{})
+		flaggedOutfits = make(map[int64]map[string]struct{})
 	)
 
 	for _, userInfo := range usersToProcess {
@@ -148,7 +148,7 @@ func (a *OutfitAnalyzer) ProcessUsers(ctx context.Context, params *OutfitAnalyze
 			if err != nil && !errors.Is(err, ErrNoViolations) {
 				a.logger.Error("Failed to analyze outfit themes",
 					zap.Error(err),
-					zap.Uint64("userID", userInfo.ID))
+					zap.Int64("userID", userInfo.ID))
 
 				return err
 			}
@@ -185,7 +185,7 @@ func (a *OutfitAnalyzer) ProcessUsers(ctx context.Context, params *OutfitAnalyze
 
 // filterUsersForOutfitProcessing determines which users should be processed through outfit analysis.
 func (a *OutfitAnalyzer) filterUsersForOutfitProcessing(
-	userInfos []*types.ReviewUser, reasonsMap map[uint64]types.Reasons[enum.UserReasonType], inappropriateOutfitFlags map[uint64]struct{},
+	userInfos []*types.ReviewUser, reasonsMap map[int64]types.Reasons[enum.UserReasonType], inappropriateOutfitFlags map[int64]struct{},
 ) []*types.ReviewUser {
 	var usersToProcess []*types.ReviewUser
 
@@ -209,8 +209,8 @@ func (a *OutfitAnalyzer) filterUsersForOutfitProcessing(
 
 // analyzeUserOutfits handles the theme analysis of a single user's outfits.
 func (a *OutfitAnalyzer) analyzeUserOutfits(
-	ctx context.Context, info *types.ReviewUser, mu *sync.Mutex, reasonsMap map[uint64]types.Reasons[enum.UserReasonType],
-	outfits []*apiTypes.Outfit, thumbnailMap map[uint64]string,
+	ctx context.Context, info *types.ReviewUser, mu *sync.Mutex, reasonsMap map[int64]types.Reasons[enum.UserReasonType],
+	outfits []*apiTypes.Outfit, thumbnailMap map[int64]string,
 ) (map[string]struct{}, error) {
 	// Download all outfit images
 	downloads, err := a.downloadOutfitImages(ctx, info, outfits, thumbnailMap)
@@ -309,7 +309,7 @@ func (a *OutfitAnalyzer) analyzeUserOutfits(
 		finalConfidence = highestConfidence * 0.8 // Reduce confidence by 20% for single outfit cases
 	default:
 		a.logger.Info("AI did not flag user with outfit themes",
-			zap.Uint64("userID", info.ID),
+			zap.Int64("userID", info.ID),
 			zap.String("username", info.Name),
 			zap.Float64("highestConfidence", highestConfidence),
 			zap.Int("uniqueFlaggedCount", uniqueFlaggedCount),
@@ -333,7 +333,7 @@ func (a *OutfitAnalyzer) analyzeUserOutfits(
 		mu.Unlock()
 
 		a.logger.Info("AI flagged user with outfit themes",
-			zap.Uint64("userID", info.ID),
+			zap.Int64("userID", info.ID),
 			zap.String("username", info.Name),
 			zap.Float64("finalConfidence", finalConfidence),
 			zap.Int("uniqueFlaggedOutfits", uniqueFlaggedCount),
@@ -525,8 +525,8 @@ func (a *OutfitAnalyzer) analyzeOutfitBatch(
 // getOutfitThumbnails fetches thumbnail URLs for outfits and organizes them by user.
 func (a *OutfitAnalyzer) getOutfitThumbnails(
 	ctx context.Context, userInfos []*types.ReviewUser,
-) (map[uint64][]*apiTypes.Outfit, map[uint64]map[uint64]string) {
-	userOutfits := make(map[uint64][]*apiTypes.Outfit)
+) (map[int64][]*apiTypes.Outfit, map[int64]map[int64]string) {
+	userOutfits := make(map[int64][]*apiTypes.Outfit)
 	requests := thumbnails.NewBatchThumbnailsBuilder()
 
 	// Organize outfits by user and build thumbnail requests
@@ -544,7 +544,7 @@ func (a *OutfitAnalyzer) getOutfitThumbnails(
 			requests.AddRequest(apiTypes.ThumbnailRequest{
 				Type:      apiTypes.OutfitType,
 				TargetID:  outfit.ID,
-				RequestID: strconv.FormatUint(outfit.ID, 10),
+				RequestID: strconv.FormatInt(outfit.ID, 10),
 				Size:      apiTypes.Size150x150,
 				Format:    apiTypes.WEBP,
 			})
@@ -555,9 +555,9 @@ func (a *OutfitAnalyzer) getOutfitThumbnails(
 	thumbnailMap := a.thumbnailFetcher.ProcessBatchThumbnails(ctx, requests)
 
 	// Create user thumbnail map
-	userThumbnails := make(map[uint64]map[uint64]string)
+	userThumbnails := make(map[int64]map[int64]string)
 	for userID, outfits := range userOutfits {
-		userThumbs := make(map[uint64]string)
+		userThumbs := make(map[int64]string)
 
 		for _, outfit := range outfits {
 			if url, ok := thumbnailMap[outfit.ID]; ok {
@@ -573,7 +573,7 @@ func (a *OutfitAnalyzer) getOutfitThumbnails(
 
 // downloadOutfitImages concurrently downloads outfit images until we have enough.
 func (a *OutfitAnalyzer) downloadOutfitImages(
-	ctx context.Context, userInfo *types.ReviewUser, outfits []*apiTypes.Outfit, thumbnailMap map[uint64]string,
+	ctx context.Context, userInfo *types.ReviewUser, outfits []*apiTypes.Outfit, thumbnailMap map[int64]string,
 ) ([]DownloadResult, error) {
 	var (
 		p         = pool.New().WithContext(ctx)

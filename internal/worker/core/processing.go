@@ -45,7 +45,7 @@ func NewUserProcessingCache(redisManager *redis.Manager, logger *zap.Logger) *Us
 
 // FilterProcessedUsers filters out user IDs that have already been processed
 // within the TTL window, returning only unprocessed user IDs.
-func (u *UserProcessingCache) FilterProcessedUsers(ctx context.Context, userIDs []uint64) ([]uint64, error) {
+func (u *UserProcessingCache) FilterProcessedUsers(ctx context.Context, userIDs []int64) ([]int64, error) {
 	if len(userIDs) == 0 {
 		return userIDs, nil
 	}
@@ -53,18 +53,18 @@ func (u *UserProcessingCache) FilterProcessedUsers(ctx context.Context, userIDs 
 	u.logger.Debug("Filtering processed users", zap.Int("totalUsers", len(userIDs)))
 
 	// Check each user ID individually
-	var unprocessedUsers []uint64
+	var unprocessedUsers []int64
 
 	cacheHits := 0
 
 	for _, userID := range userIDs {
-		key := ProcessingKeyPrefix + strconv.FormatUint(userID, 10)
+		key := ProcessingKeyPrefix + strconv.FormatInt(userID, 10)
 
 		// Check if key exists in Redis
 		exists, err := u.client.Do(ctx, u.client.B().Exists().Key(key).Build()).AsBool()
 		if err != nil {
 			u.logger.Warn("Failed to check if user processed in Redis",
-				zap.Uint64("userID", userID),
+				zap.Int64("userID", userID),
 				zap.Error(err))
 			unprocessedUsers = append(unprocessedUsers, userID)
 
@@ -91,7 +91,7 @@ func (u *UserProcessingCache) FilterProcessedUsers(ctx context.Context, userIDs 
 
 // MarkUsersProcessed marks the given user IDs as processed in Redis
 // with the configured TTL to prevent reprocessing within 24 hours.
-func (u *UserProcessingCache) MarkUsersProcessed(ctx context.Context, userIDs []uint64) error {
+func (u *UserProcessingCache) MarkUsersProcessed(ctx context.Context, userIDs []int64) error {
 	if len(userIDs) == 0 {
 		return nil
 	}
@@ -103,13 +103,13 @@ func (u *UserProcessingCache) MarkUsersProcessed(ctx context.Context, userIDs []
 
 	// Set each user ID individually
 	for _, userID := range userIDs {
-		key := ProcessingKeyPrefix + strconv.FormatUint(userID, 10)
+		key := ProcessingKeyPrefix + strconv.FormatInt(userID, 10)
 
 		// Set the key with TTL
 		err := u.client.Do(ctx, u.client.B().Set().Key(key).Value(currentTime).Ex(ProcessingTTL).Build()).Error()
 		if err != nil {
 			u.logger.Warn("Failed to set processed status for user",
-				zap.Uint64("userID", userID),
+				zap.Int64("userID", userID),
 				zap.Error(err))
 
 			failedCount++

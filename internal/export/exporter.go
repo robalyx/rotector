@@ -149,7 +149,7 @@ func (e *Exporter) ExportAll(ctx context.Context) error {
 // hashRecords converts items to export records with concurrent hashing.
 func (e *Exporter) hashRecords(items any, salt string, hashType HashType) []*types.ExportRecord {
 	var (
-		ids         []uint64
+		ids         []int64
 		reasons     []string
 		statuses    []string
 		confidences []float64
@@ -159,7 +159,7 @@ func (e *Exporter) hashRecords(items any, salt string, hashType HashType) []*typ
 
 	switch v := items.(type) {
 	case []*dbTypes.ReviewUser:
-		ids = make([]uint64, len(v))
+		ids = make([]int64, len(v))
 		reasons = make([]string, len(v))
 		statuses = make([]string, len(v))
 
@@ -171,7 +171,7 @@ func (e *Exporter) hashRecords(items any, salt string, hashType HashType) []*typ
 			confidences[i] = user.Confidence
 		}
 	case []*dbTypes.ReviewGroup:
-		ids = make([]uint64, len(v))
+		ids = make([]int64, len(v))
 		reasons = make([]string, len(v))
 		statuses = make([]string, len(v))
 

@@ -16,9 +16,9 @@ const (
 
 // AddToReviewHistory adds an ID to the specified review history and updates the index in the session.
 // It trims the history if it exceeds the maximum size.
-func AddToReviewHistory(s *Session, historyType ReviewHistoryType, id uint64) {
+func AddToReviewHistory(s *Session, historyType ReviewHistoryType, id int64) {
 	var (
-		historyKey Key[[]uint64]
+		historyKey Key[[]int64]
 		indexKey   Key[int]
 	)
 
@@ -47,7 +47,7 @@ func AddToReviewHistory(s *Session, historyType ReviewHistoryType, id uint64) {
 // and adjusts the index accordingly.
 func RemoveFromReviewHistory(s *Session, historyType ReviewHistoryType, index int) {
 	var (
-		historyKey Key[[]uint64]
+		historyKey Key[[]int64]
 		indexKey   Key[int]
 	)
 

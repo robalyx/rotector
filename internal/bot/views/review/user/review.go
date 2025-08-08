@@ -24,8 +24,8 @@ type ReviewBuilder struct {
 
 	db             database.Client
 	user           *types.ReviewUser
-	flaggedFriends map[uint64]*types.ReviewUser
-	flaggedGroups  map[uint64]*types.ReviewGroup
+	flaggedFriends map[int64]*types.ReviewUser
+	flaggedGroups  map[int64]*types.ReviewGroup
 	unsavedReasons map[enum.UserReasonType]struct{}
 	defaultSort    enum.ReviewSortBy
 	trainingMode   bool
@@ -353,7 +353,7 @@ func (b *ReviewBuilder) buildReasonDisplay() discord.ContainerSubComponent {
 		if reason, ok := b.user.Reasons[reasonType]; ok {
 			// Add reason header and message
 			message := utils.CensorStringsInText(reason.Message, b.PrivacyMode,
-				strconv.FormatUint(b.user.ID, 10),
+				strconv.FormatInt(b.user.ID, 10),
 				b.user.Name,
 				b.user.DisplayName)
 			message = utils.TruncateString(message, maxLength)
@@ -386,7 +386,7 @@ func (b *ReviewBuilder) buildReasonDisplay() discord.ContainerSubComponent {
 					evidence = utils.NormalizeString(evidence)
 					if b.PrivacyMode {
 						evidence = utils.CensorStringsInText(evidence, true,
-							strconv.FormatUint(b.user.ID, 10),
+							strconv.FormatInt(b.user.ID, 10),
 							b.user.Name,
 							b.user.DisplayName)
 					}
@@ -513,7 +513,7 @@ func (b *ReviewBuilder) getTotalVisits() string {
 		return constants.NotApplicable
 	}
 
-	var totalVisits uint64
+	var totalVisits int64
 	for _, game := range b.user.Games {
 		totalVisits += game.PlaceVisits
 	}
@@ -534,7 +534,7 @@ func (b *ReviewBuilder) getDescription() string {
 	description = utils.CensorStringsInText(
 		description,
 		b.PrivacyMode,
-		strconv.FormatUint(b.user.ID, 10),
+		strconv.FormatInt(b.user.ID, 10),
 		b.user.Name,
 		b.user.DisplayName,
 	)

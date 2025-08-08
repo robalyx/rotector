@@ -82,7 +82,7 @@ func (m *ReviewMenu) Show(ctx *interaction.Context, s *session.Session) {
 	if err != nil {
 		m.layout.logger.Error("Failed to fetch group info",
 			zap.Error(err),
-			zap.Uint64("groupID", group.ID))
+			zap.Int64("groupID", group.ID))
 		ctx.Error("Failed to fetch latest group information. Please try again.")
 
 		return
@@ -170,7 +170,7 @@ func (m *ReviewMenu) handleActionSelection(ctx *interaction.Context, s *session.
 		constants.ReviewModeOption:
 		if !isReviewer {
 			m.layout.logger.Error("Non-reviewer attempted restricted action",
-				zap.Uint64("user_id", userID),
+				zap.Uint64("userID", userID),
 				zap.String("action", option))
 			ctx.Error("You do not have permission to perform this action.")
 
@@ -267,7 +267,7 @@ func (m *ReviewMenu) handleOpenAIChat(ctx *interaction.Context, s *session.Sessi
 	// Get flagged members details with a limit of 15
 	limit := 15
 
-	var flaggedMembers map[uint64]*types.ReviewUser
+	var flaggedMembers map[int64]*types.ReviewUser
 
 	if len(memberIDs) > 0 {
 		// Only fetch up to the limit
@@ -426,11 +426,11 @@ func (m *ReviewMenu) handleNavigateGroup(ctx *interaction.Context, s *session.Se
 
 	// Fetch the group data
 	targetGroupID := history[index]
-	m.layout.logger.Info("Fetching group", zap.Uint64("group_id", targetGroupID))
+	m.layout.logger.Info("Fetching group", zap.Int64("groupID", targetGroupID))
 
 	group, err := m.layout.db.Model().Group().GetGroupByID(
 		ctx.Context(),
-		strconv.FormatUint(targetGroupID, 10),
+		strconv.FormatInt(targetGroupID, 10),
 		types.GroupFieldAll,
 	)
 	if err != nil {
@@ -491,7 +491,7 @@ func (m *ReviewMenu) handleConfirmGroup(ctx *interaction.Context, s *session.Ses
 	isAdmin := s.BotSettings().IsAdmin(reviewerID)
 	if !isAdmin {
 		m.layout.logger.Error("Non-admin attempted to confirm group",
-			zap.Uint64("user_id", reviewerID))
+			zap.Uint64("userID", reviewerID))
 		ctx.Error("You do not have permission to confirm groups.")
 
 		return
@@ -532,7 +532,7 @@ func (m *ReviewMenu) handleClearGroup(ctx *interaction.Context, s *session.Sessi
 	isAdmin := s.BotSettings().IsAdmin(reviewerID)
 	if !isAdmin {
 		m.layout.logger.Error("Non-admin attempted to clear group",
-			zap.Uint64("user_id", reviewerID))
+			zap.Uint64("userID", reviewerID))
 		ctx.Error("You do not have permission to clear groups.")
 
 		return
@@ -584,7 +584,7 @@ func (m *ReviewMenu) navigateAfterAction(ctx *interaction.Context, s *session.Se
 
 		group, err := m.layout.db.Model().Group().GetGroupByID(
 			ctx.Context(),
-			strconv.FormatUint(targetGroupID, 10),
+			strconv.FormatInt(targetGroupID, 10),
 			types.GroupFieldAll,
 		)
 		if err != nil {
@@ -645,7 +645,7 @@ func (m *ReviewMenu) handleReasonSelection(ctx *interaction.Context, s *session.
 	// Check if user is a reviewer
 	if !s.BotSettings().IsReviewer(uint64(ctx.Event().User().ID)) {
 		m.layout.logger.Error("Non-reviewer attempted to manage reasons",
-			zap.Uint64("user_id", uint64(ctx.Event().User().ID)))
+			zap.Uint64("userID", uint64(ctx.Event().User().ID)))
 		ctx.Error("You do not have permission to manage reasons.")
 
 		return

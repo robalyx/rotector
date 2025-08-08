@@ -21,10 +21,10 @@ import (
 // UserCheckerParams contains all the parameters needed for user checker processing.
 type UserCheckerParams struct {
 	Users                     []*types.ReviewUser `json:"users"`
-	InappropriateOutfitFlags  map[uint64]struct{} `json:"inappropriateOutfitFlags"`
-	InappropriateProfileFlags map[uint64]struct{} `json:"inappropriateProfileFlags"`
-	InappropriateFriendsFlags map[uint64]struct{} `json:"inappropriateFriendsFlags"`
-	InappropriateGroupsFlags  map[uint64]struct{} `json:"inappropriateGroupsFlags"`
+	InappropriateOutfitFlags  map[int64]struct{}  `json:"inappropriateOutfitFlags"`
+	InappropriateProfileFlags map[int64]struct{}  `json:"inappropriateProfileFlags"`
+	InappropriateFriendsFlags map[int64]struct{}  `json:"inappropriateFriendsFlags"`
+	InappropriateGroupsFlags  map[int64]struct{}  `json:"inappropriateGroupsFlags"`
 }
 
 // UserChecker coordinates the checking process by combining results from
@@ -70,8 +70,8 @@ func NewUserChecker(app *setup.App, userFetcher *fetcher.UserFetcher, logger *za
 
 // ProcessResult contains the results of processing users.
 type ProcessResult struct {
-	FlaggedStatus map[uint64]struct{}          // User IDs that were flagged
-	FlaggedUsers  map[uint64]*types.ReviewUser // Full user data for flagged users
+	FlaggedStatus map[int64]struct{}          // User IDs that were flagged
+	FlaggedUsers  map[int64]*types.ReviewUser // Full user data for flagged users
 }
 
 // ProcessUsers runs users through multiple checking stages.
@@ -80,7 +80,7 @@ func (c *UserChecker) ProcessUsers(ctx context.Context, params *UserCheckerParam
 	c.logger.Info("Processing users", zap.Int("userInfos", len(params.Users)))
 
 	// Initialize map to store reasons
-	reasonsMap := make(map[uint64]types.Reasons[enum.UserReasonType])
+	reasonsMap := make(map[int64]types.Reasons[enum.UserReasonType])
 
 	// Create context with timeout
 	ctxWithTimeout, cancel := context.WithTimeout(ctx, 10*time.Minute)
@@ -148,14 +148,14 @@ func (c *UserChecker) ProcessUsers(ctx context.Context, params *UserCheckerParam
 		c.logger.Info("No flagged users found", zap.Int("userInfos", len(params.Users)))
 
 		return &ProcessResult{
-			FlaggedStatus: make(map[uint64]struct{}),
-			FlaggedUsers:  make(map[uint64]*types.ReviewUser),
+			FlaggedStatus: make(map[int64]struct{}),
+			FlaggedUsers:  make(map[int64]*types.ReviewUser),
 		}
 	}
 
 	// Create final flagged users map
-	flaggedUsers := make(map[uint64]*types.ReviewUser, len(reasonsMap))
-	flaggedStatus := make(map[uint64]struct{}, len(reasonsMap))
+	flaggedUsers := make(map[int64]*types.ReviewUser, len(reasonsMap))
+	flaggedStatus := make(map[int64]struct{}, len(reasonsMap))
 
 	for _, user := range params.Users {
 		if reasons, ok := reasonsMap[user.ID]; ok {
@@ -273,8 +273,8 @@ func (c *UserChecker) prepareUserInfoMaps(
 }
 
 // trackFlaggedUsersGroups adds flagged users' group memberships to tracking.
-func (c *UserChecker) trackFlaggedUsersGroups(ctx context.Context, flaggedUsers map[uint64]*types.ReviewUser) {
-	groupUsersTracking := make(map[uint64][]uint64)
+func (c *UserChecker) trackFlaggedUsersGroups(ctx context.Context, flaggedUsers map[int64]*types.ReviewUser) {
+	groupUsersTracking := make(map[int64][]int64)
 
 	// Collect group memberships for flagged users
 	for userID, user := range flaggedUsers {
@@ -296,9 +296,9 @@ func (c *UserChecker) trackFlaggedUsersGroups(ctx context.Context, flaggedUsers 
 
 // trackOutfitAssets adds outfit assets to tracking.
 func (c *UserChecker) trackOutfitAssets(
-	ctx context.Context, flaggedUsers map[uint64]*types.ReviewUser, flaggedOutfits map[uint64]map[string]struct{},
+	ctx context.Context, flaggedUsers map[int64]*types.ReviewUser, flaggedOutfits map[int64]map[string]struct{},
 ) {
-	assetOutfitsTracking := make(map[uint64][]types.TrackedID)
+	assetOutfitsTracking := make(map[int64][]types.TrackedID)
 
 	// Collect outfit assets only for flagged outfits
 	for userID, user := range flaggedUsers {
@@ -323,7 +323,7 @@ func (c *UserChecker) trackOutfitAssets(
 		}
 
 		// Create map of outfit IDs to names for O(1) lookup
-		outfitNames := make(map[uint64]string, len(user.Outfits))
+		outfitNames := make(map[int64]string, len(user.Outfits))
 		for _, outfit := range user.Outfits {
 			outfitNames[outfit.ID] = outfit.Name
 		}
@@ -334,7 +334,7 @@ func (c *UserChecker) trackOutfitAssets(
 			if err != nil {
 				c.logger.Error("Failed to fetch outfit details",
 					zap.Error(err),
-					zap.Uint64("userID", user.ID))
+					zap.Int64("userID", user.ID))
 
 				continue
 			}
@@ -371,15 +371,15 @@ func (c *UserChecker) trackOutfitAssets(
 }
 
 // trackFavoriteGames adds flagged users' favorite games to tracking.
-func (c *UserChecker) trackFavoriteGames(ctx context.Context, flaggedUsers map[uint64]*types.ReviewUser) {
-	gameUsersTracking := make(map[uint64][]uint64)
+func (c *UserChecker) trackFavoriteGames(ctx context.Context, flaggedUsers map[int64]*types.ReviewUser) {
+	gameUsersTracking := make(map[int64][]int64)
 
 	// Fetch favorite games for each flagged user
 	for userID := range flaggedUsers {
 		favorites, err := c.gameFetcher.FetchFavoriteGames(ctx, userID)
 		if err != nil {
 			c.logger.Error("Failed to fetch favorite games for user",
-				zap.Uint64("userID", userID),
+				zap.Int64("userID", userID),
 				zap.Error(err))
 
 			continue

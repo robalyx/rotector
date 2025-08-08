@@ -17,7 +17,7 @@ type CommentsBuilder struct {
 	botSettings *types.BotSetting
 	targetType  TargetType
 	targetName  string
-	targetID    uint64
+	targetID    int64
 	commenterID uint64
 	comments    []*types.Comment
 	page        int
@@ -31,7 +31,7 @@ type CommentsBuilder struct {
 func NewCommentsBuilder(s *session.Session, targetType TargetType) *CommentsBuilder {
 	var (
 		targetName string
-		targetID   uint64
+		targetID   int64
 	)
 
 	// Get target info based on type
@@ -76,7 +76,7 @@ func (b *CommentsBuilder) buildComponents() []discord.LayoutComponent {
 	content.WriteString("## Community Notes\n")
 	content.WriteString(fmt.Sprintf("```%s (%s)```",
 		utils.CensorString(b.targetName, b.privacyMode),
-		utils.CensorString(strconv.FormatUint(b.targetID, 10), b.privacyMode),
+		utils.CensorString(strconv.FormatInt(b.targetID, 10), b.privacyMode),
 	))
 
 	if len(b.comments) == 0 {

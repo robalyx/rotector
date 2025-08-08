@@ -42,8 +42,8 @@ func (r *ActivityModel) Log(ctx context.Context, log *types.ActivityLog) {
 			zap.Error(err),
 			zap.Uint64("guildID", log.ActivityTarget.GuildID),
 			zap.Uint64("discordID", log.ActivityTarget.DiscordID),
-			zap.Uint64("userID", log.ActivityTarget.UserID),
-			zap.Uint64("groupID", log.ActivityTarget.GroupID),
+			zap.Int64("userID", log.ActivityTarget.UserID),
+			zap.Int64("groupID", log.ActivityTarget.GroupID),
 			zap.Uint64("reviewerID", log.ReviewerID),
 			zap.String("activityType", log.ActivityType.String()))
 
@@ -53,8 +53,8 @@ func (r *ActivityModel) Log(ctx context.Context, log *types.ActivityLog) {
 	r.logger.Debug("Logged activity",
 		zap.Uint64("guildID", log.ActivityTarget.GuildID),
 		zap.Uint64("discordID", log.ActivityTarget.DiscordID),
-		zap.Uint64("userID", log.ActivityTarget.UserID),
-		zap.Uint64("groupID", log.ActivityTarget.GroupID),
+		zap.Int64("userID", log.ActivityTarget.UserID),
+		zap.Int64("groupID", log.ActivityTarget.GroupID),
 		zap.Uint64("reviewerID", log.ReviewerID),
 		zap.String("activityType", log.ActivityType.String()))
 }
@@ -163,8 +163,8 @@ func (r *ActivityModel) GetLogs(
 // Uses a time-based filter (30 minutes) with fallback to no filtering if no items are available.
 func (r *ActivityModel) GetRecentlyReviewedIDs(
 	ctx context.Context, reviewerID uint64, isGroup bool, limit int,
-) ([]uint64, error) {
-	return dbretry.Operation(ctx, func(ctx context.Context) ([]uint64, error) {
+) ([]int64, error) {
+	return dbretry.Operation(ctx, func(ctx context.Context) ([]int64, error) {
 		var logs []*types.ActivityLog
 
 		// Build query to get recently reviewed IDs
@@ -184,7 +184,7 @@ func (r *ActivityModel) GetRecentlyReviewedIDs(
 		// Get IDs reviewed by this reviewer in the last 30 minutes
 		cutoffTime := time.Now().Add(-30 * time.Minute)
 
-		var ids []uint64
+		var ids []int64
 
 		err := r.db.NewSelect().
 			Model(&logs).
@@ -223,7 +223,7 @@ func (r *ActivityModel) GetRecentlyReviewedIDs(
 
 			// If filtering would leave no items available, return empty slice (no filtering)
 			if availableCount == 0 {
-				return []uint64{}, nil
+				return []int64{}, nil
 			}
 		}
 

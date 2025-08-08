@@ -71,7 +71,7 @@ func (m *FriendsMenu) Show(ctx *interaction.Context, s *session.Session) {
 	pageFriends := sortedFriends[start:end]
 
 	// Start fetching presences for visible friends in background
-	friendIDs := make([]uint64, len(pageFriends))
+	friendIDs := make([]int64, len(pageFriends))
 	for i, friend := range pageFriends {
 		friendIDs[i] = friend.ID
 	}
@@ -154,7 +154,7 @@ func (m *FriendsMenu) handleModal(ctx *interaction.Context, s *session.Session) 
 
 // sortFriendsByStatus sorts friends into categories based on their status.
 func (m *FriendsMenu) sortFriendsByStatus(
-	friends []*apiTypes.ExtendedFriend, flaggedFriends map[uint64]*types.ReviewUser,
+	friends []*apiTypes.ExtendedFriend, flaggedFriends map[int64]*types.ReviewUser,
 ) []*apiTypes.ExtendedFriend {
 	// Group friends by their status
 	groupedFriends := make(map[enum.UserType][]*apiTypes.ExtendedFriend)
@@ -197,7 +197,7 @@ func (m *FriendsMenu) fetchFriendThumbnails(ctx context.Context, friends []*apiT
 		requests.AddRequest(apiTypes.ThumbnailRequest{
 			Type:      apiTypes.AvatarType,
 			TargetID:  friend.ID,
-			RequestID: strconv.FormatUint(friend.ID, 10),
+			RequestID: strconv.FormatInt(friend.ID, 10),
 			Size:      apiTypes.Size150x150,
 			Format:    apiTypes.WEBP,
 		})

@@ -12,7 +12,7 @@ func TestFormatNumber(t *testing.T) {
 
 	tests := []struct {
 		name string
-		n    uint64
+		n    int64
 		want string
 	}{
 		{

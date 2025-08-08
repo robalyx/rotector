@@ -38,11 +38,11 @@ type Status struct {
 
 // UserBatch represents a batch of users with their inappropriate flags.
 type UserBatch struct {
-	UserIDs                   []uint64
-	InappropriateOutfitFlags  map[uint64]struct{}
-	InappropriateProfileFlags map[uint64]struct{}
-	InappropriateFriendsFlags map[uint64]struct{}
-	InappropriateGroupsFlags  map[uint64]struct{}
+	UserIDs                   []int64
+	InappropriateOutfitFlags  map[int64]struct{}
+	InappropriateProfileFlags map[int64]struct{}
+	InappropriateFriendsFlags map[int64]struct{}
+	InappropriateGroupsFlags  map[int64]struct{}
 }
 
 // D1Client handles Cloudflare D1 API requests.
@@ -84,41 +84,41 @@ func (c *D1Client) GetNextBatch(ctx context.Context, batchSize int) (*UserBatch,
 		return nil, fmt.Errorf("failed to query queue: %w", err)
 	}
 
-	userIDs := make([]uint64, 0, len(result))
-	inappropriateOutfitFlags := make(map[uint64]struct{}, len(result))
-	inappropriateProfileFlags := make(map[uint64]struct{}, len(result))
-	inappropriateFriendsFlags := make(map[uint64]struct{}, len(result))
-	inappropriateGroupsFlags := make(map[uint64]struct{}, len(result))
+	userIDs := make([]int64, 0, len(result))
+	inappropriateOutfitFlags := make(map[int64]struct{}, len(result))
+	inappropriateProfileFlags := make(map[int64]struct{}, len(result))
+	inappropriateFriendsFlags := make(map[int64]struct{}, len(result))
+	inappropriateGroupsFlags := make(map[int64]struct{}, len(result))
 
 	for _, row := range result {
 		if userID, ok := row["user_id"].(float64); ok {
-			userIDs = append(userIDs, uint64(userID))
+			userIDs = append(userIDs, int64(userID))
 
 			if row["inappropriate_outfit"].(float64) == 1 {
-				inappropriateOutfitFlags[uint64(userID)] = struct{}{}
+				inappropriateOutfitFlags[int64(userID)] = struct{}{}
 			}
 
 			if row["inappropriate_profile"].(float64) == 1 {
-				inappropriateProfileFlags[uint64(userID)] = struct{}{}
+				inappropriateProfileFlags[int64(userID)] = struct{}{}
 			}
 
 			if row["inappropriate_friends"].(float64) == 1 {
-				inappropriateFriendsFlags[uint64(userID)] = struct{}{}
+				inappropriateFriendsFlags[int64(userID)] = struct{}{}
 			}
 
 			if row["inappropriate_groups"].(float64) == 1 {
-				inappropriateGroupsFlags[uint64(userID)] = struct{}{}
+				inappropriateGroupsFlags[int64(userID)] = struct{}{}
 			}
 		}
 	}
 
 	if len(userIDs) == 0 {
 		return &UserBatch{
-			UserIDs:                   []uint64{},
-			InappropriateOutfitFlags:  make(map[uint64]struct{}),
-			InappropriateProfileFlags: make(map[uint64]struct{}),
-			InappropriateFriendsFlags: make(map[uint64]struct{}),
-			InappropriateGroupsFlags:  make(map[uint64]struct{}),
+			UserIDs:                   []int64{},
+			InappropriateOutfitFlags:  make(map[int64]struct{}),
+			InappropriateProfileFlags: make(map[int64]struct{}),
+			InappropriateFriendsFlags: make(map[int64]struct{}),
+			InappropriateGroupsFlags:  make(map[int64]struct{}),
 		}, nil
 	}
 
@@ -151,7 +151,7 @@ func (c *D1Client) GetNextBatch(ctx context.Context, batchSize int) (*UserBatch,
 }
 
 // MarkAsProcessed marks users as processed and not processing.
-func (c *D1Client) MarkAsProcessed(ctx context.Context, userIDs []uint64, flaggedUsers map[uint64]struct{}) error {
+func (c *D1Client) MarkAsProcessed(ctx context.Context, userIDs []int64, flaggedUsers map[int64]struct{}) error {
 	if len(userIDs) == 0 {
 		return nil
 	}
@@ -267,7 +267,7 @@ func (c *D1Client) GetQueueStats(ctx context.Context) (*Stats, error) {
 }
 
 // QueueUsers adds multiple users to the processing queue.
-func (c *D1Client) QueueUsers(ctx context.Context, userIDs []uint64) (map[uint64]error, error) {
+func (c *D1Client) QueueUsers(ctx context.Context, userIDs []int64) (map[int64]error, error) {
 	if len(userIDs) == 0 {
 		return nil, ErrEmptyBatch
 	}
@@ -300,11 +300,11 @@ func (c *D1Client) QueueUsers(ctx context.Context, userIDs []uint64) (map[uint64
 	}
 
 	// Track which users need to be inserted vs updated
-	existingUsers := make(map[uint64]float64) // user_id -> queued_at
+	existingUsers := make(map[int64]float64) // user_id -> queued_at
 	for _, row := range result {
 		if userID, ok := row["user_id"].(float64); ok {
 			if queuedAt, ok := row["queued_at"].(float64); ok {
-				existingUsers[uint64(userID)] = queuedAt
+				existingUsers[int64(userID)] = queuedAt
 			}
 		}
 	}
@@ -328,7 +328,7 @@ func (c *D1Client) QueueUsers(ctx context.Context, userIDs []uint64) (map[uint64
 	updateParams = append(updateParams, now) // First param is the new queued_at time
 
 	cutoffTime := time.Now().AddDate(0, 0, -7).Unix()
-	errors := make(map[uint64]error)
+	errors := make(map[int64]error)
 
 	for _, userID := range userIDs {
 		if queuedAt, exists := existingUsers[userID]; exists {
@@ -378,7 +378,7 @@ func (c *D1Client) QueueUsers(ctx context.Context, userIDs []uint64) (map[uint64
 }
 
 // RemoveFromQueue removes an unprocessed user from the processing queue.
-func (c *D1Client) RemoveFromQueue(ctx context.Context, userID uint64) error {
+func (c *D1Client) RemoveFromQueue(ctx context.Context, userID int64) error {
 	// First check if the user is in an unprocessed state
 	query := `
 		SELECT processed, processing 
@@ -412,7 +412,7 @@ func (c *D1Client) RemoveFromQueue(ctx context.Context, userID uint64) error {
 }
 
 // GetQueueStatus retrieves the current status of a queued user.
-func (c *D1Client) GetQueueStatus(ctx context.Context, userID uint64) (*Status, error) {
+func (c *D1Client) GetQueueStatus(ctx context.Context, userID int64) (*Status, error) {
 	query := `
 		SELECT processing, processed, flagged, inappropriate_outfit 
 		FROM queued_users 
@@ -439,7 +439,7 @@ func (c *D1Client) GetQueueStatus(ctx context.Context, userID uint64) (*Status, 
 }
 
 // UpdateIPTrackingUserFlagged updates the queue_ip_tracking table for the specified users based on flagged status.
-func (c *D1Client) UpdateIPTrackingUserFlagged(ctx context.Context, userFlaggedStatus map[uint64]bool) error {
+func (c *D1Client) UpdateIPTrackingUserFlagged(ctx context.Context, userFlaggedStatus map[int64]bool) error {
 	if len(userFlaggedStatus) == 0 {
 		return nil
 	}
@@ -463,7 +463,7 @@ func (c *D1Client) UpdateIPTrackingUserFlagged(ctx context.Context, userFlaggedS
 	query += "END WHERE user_id IN ("
 
 	// Add placeholders for WHERE clause
-	userIDs := make([]uint64, 0, len(userFlaggedStatus))
+	userIDs := make([]int64, 0, len(userFlaggedStatus))
 	for userID := range userFlaggedStatus {
 		userIDs = append(userIDs, userID)
 	}
@@ -515,13 +515,13 @@ func (c *D1Client) CleanupIPTracking(ctx context.Context, retentionPeriod time.D
 }
 
 // AddFlaggedUsers inserts flagged users into the user_flags table.
-func (c *D1Client) AddFlaggedUsers(ctx context.Context, flaggedUsers map[uint64]*types.ReviewUser) error {
+func (c *D1Client) AddFlaggedUsers(ctx context.Context, flaggedUsers map[int64]*types.ReviewUser) error {
 	if len(flaggedUsers) == 0 {
 		return nil
 	}
 
 	// Convert map to slice
-	userIDs := make([]uint64, 0, len(flaggedUsers))
+	userIDs := make([]int64, 0, len(flaggedUsers))
 	for userID := range flaggedUsers {
 		userIDs = append(userIDs, userID)
 	}
@@ -616,7 +616,7 @@ func (c *D1Client) AddConfirmedUser(ctx context.Context, user *types.ReviewUser,
 	if reviewerInfos, err := c.db.Model().Reviewer().GetReviewerInfos(ctx, []uint64{reviewerID}); err != nil {
 		c.logger.Warn("Failed to get reviewer info, using fallback values",
 			zap.Error(err),
-			zap.Uint64("reviewer_id", reviewerID))
+			zap.Uint64("reviewerID", reviewerID))
 	} else if reviewerInfo, exists := reviewerInfos[reviewerID]; exists {
 		reviewerUsername = reviewerInfo.Username
 		reviewerDisplayName = reviewerInfo.DisplayName
@@ -670,16 +670,16 @@ func (c *D1Client) AddConfirmedUser(ctx context.Context, user *types.ReviewUser,
 	}
 
 	c.logger.Debug("Added confirmed user to user_flags table",
-		zap.Uint64("user_id", user.ID),
+		zap.Int64("userID", user.ID),
 		zap.Float64("confidence", user.Confidence),
-		zap.Uint64("reviewer_id", reviewerID),
+		zap.Uint64("reviewerID", reviewerID),
 		zap.String("reviewer_username", reviewerUsername))
 
 	return nil
 }
 
 // RemoveUser removes a user from the user_flags table.
-func (c *D1Client) RemoveUser(ctx context.Context, userID uint64) error {
+func (c *D1Client) RemoveUser(ctx context.Context, userID int64) error {
 	sqlStmt := "DELETE FROM user_flags WHERE user_id = ?"
 
 	_, err := c.api.ExecuteSQL(ctx, sqlStmt, []any{userID})
@@ -688,7 +688,7 @@ func (c *D1Client) RemoveUser(ctx context.Context, userID uint64) error {
 	}
 
 	c.logger.Debug("Removed user from user_flags table",
-		zap.Uint64("user_id", userID))
+		zap.Int64("userID", userID))
 
 	return nil
 }

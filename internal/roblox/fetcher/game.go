@@ -31,7 +31,7 @@ func NewGameFetcher(roAPI *api.API, logger *zap.Logger) *GameFetcher {
 }
 
 // FetchGamesForUser retrieves all games for a single user.
-func (g *GameFetcher) FetchGamesForUser(ctx context.Context, userID uint64) ([]*types.Game, error) {
+func (g *GameFetcher) FetchGamesForUser(ctx context.Context, userID int64) ([]*types.Game, error) {
 	ctx = context.WithValue(ctx, auth.KeyAddCookie, true)
 
 	var (
@@ -74,14 +74,14 @@ func (g *GameFetcher) FetchGamesForUser(ctx context.Context, userID uint64) ([]*
 	}
 
 	g.logger.Debug("Finished fetching games",
-		zap.Uint64("userID", userID),
+		zap.Int64("userID", userID),
 		zap.Int("totalGames", len(allGames)))
 
 	return allGames, nil
 }
 
 // FetchFavoriteGames retrieves all favorite games for a single user.
-func (g *GameFetcher) FetchFavoriteGames(ctx context.Context, userID uint64) ([]*types.Game, error) {
+func (g *GameFetcher) FetchFavoriteGames(ctx context.Context, userID int64) ([]*types.Game, error) {
 	ctx = context.WithValue(ctx, auth.KeyAddCookie, true)
 
 	var (
@@ -123,7 +123,7 @@ func (g *GameFetcher) FetchFavoriteGames(ctx context.Context, userID uint64) ([]
 	}
 
 	g.logger.Debug("Finished fetching favorite games",
-		zap.Uint64("userID", userID),
+		zap.Int64("userID", userID),
 		zap.Int("totalFavorites", len(allGames)))
 
 	return allGames, nil

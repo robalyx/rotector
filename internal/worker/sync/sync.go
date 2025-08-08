@@ -87,20 +87,20 @@ func (w *Worker) syncCycle(ctx context.Context) error {
 			// Log that we're still adding partial results
 			w.logger.Info("Adding partial member results despite sync error",
 				zap.String("guild_name", guild.Name),
-				zap.Uint64("guild_id", uint64(guild.ID)),
+				zap.Uint64("guildID", uint64(guild.ID)),
 				zap.Int("partial_member_count", len(members)))
 		}
 
 		w.logger.Debug("Adding members to database",
 			zap.String("guild_name", guild.Name),
-			zap.Uint64("guild_id", uint64(guild.ID)),
+			zap.Uint64("guildID", uint64(guild.ID)),
 			zap.Int("member_count", len(members)))
 
 		// Batch update members for this guild
 		if err := w.db.Model().Sync().UpsertServerMembers(ctx, members, false); err != nil {
 			w.logger.Error("Failed to batch update members",
 				zap.String("guild_name", guild.Name),
-				zap.Uint64("guild_id", uint64(guild.ID)),
+				zap.Uint64("guildID", uint64(guild.ID)),
 				zap.Int("member_count", len(members)),
 				zap.Error(err))
 
@@ -167,8 +167,8 @@ func (w *Worker) syncServerMembers(ctx context.Context, guildID discord.GuildID)
 		attemptedChannels[targetChannel] = struct{}{}
 
 		w.logger.Debug("Trying member sync with channel",
-			zap.String("guild_id", guildID.String()),
-			zap.String("channel_id", targetChannel.String()),
+			zap.String("guildID", guildID.String()),
+			zap.String("channelID", targetChannel.String()),
 			zap.Int("attempt", attempt+1),
 			zap.Int("max_attempts", maxRetries))
 
@@ -192,7 +192,7 @@ func (w *Worker) syncServerMembers(ctx context.Context, guildID discord.GuildID)
 		allMembers = append(allMembers, members...)
 
 		w.logger.Info("Retrying member sync with different channel",
-			zap.String("guild_id", guildID.String()),
+			zap.String("guildID", guildID.String()),
 			zap.String("previous_channel", targetChannel.String()),
 			zap.Int("members_so_far", len(allMembers)),
 			zap.Int("attempt", attempt+1))
@@ -246,8 +246,8 @@ func (w *Worker) findTextChannel(
 		for _, priorityName := range priorityNames {
 			if strings.Contains(channelName, priorityName) {
 				w.logger.Debug("Selected priority channel for member list",
-					zap.String("guild_id", guildID.String()),
-					zap.String("channel_id", channel.ID.String()),
+					zap.String("guildID", guildID.String()),
+					zap.String("channelID", channel.ID.String()),
 					zap.String("channel_name", channel.Name))
 
 				return channel.ID, nil
@@ -277,9 +277,9 @@ func (w *Worker) findTextChannel(
 	// If we found a suitable channel
 	if mostSuitableChannel != 0 {
 		w.logger.Debug("Selected active channel for member list",
-			zap.String("guild_id", guildID.String()),
-			zap.String("channel_id", mostSuitableChannel.String()),
-			zap.String("message_id", highestMessageID.String()))
+			zap.String("guildID", guildID.String()),
+			zap.String("channelID", mostSuitableChannel.String()),
+			zap.String("messageID", highestMessageID.String()))
 
 		return mostSuitableChannel, nil
 	}
@@ -293,8 +293,8 @@ func (w *Worker) findTextChannel(
 	for _, channel := range channels {
 		if _, attempted := attemptedChannels[channel.ID]; !attempted {
 			w.logger.Warn("Falling back to first available channel for member list",
-				zap.String("guild_id", guildID.String()),
-				zap.String("channel_id", channel.ID.String()))
+				zap.String("guildID", guildID.String()),
+				zap.String("channelID", channel.ID.String()))
 
 			return channel.ID, nil
 		}
@@ -324,8 +324,8 @@ func (w *Worker) syncMemberChunks(
 	maxConsecutiveListNotFound := 5 // Max retries before giving up
 
 	w.logger.Debug("Starting member chunk sync",
-		zap.String("guild_id", guildID.String()),
-		zap.String("channel_id", channelID.String()))
+		zap.String("guildID", guildID.String()),
+		zap.String("channelID", channelID.String()))
 
 	for {
 		select {
@@ -341,14 +341,14 @@ func (w *Worker) syncMemberChunks(
 				if errors.Is(err, member.ErrListNotFound) {
 					consecutiveListNotFound++
 					w.logger.Debug("Member list not found, will retry",
-						zap.String("guild_id", guildID.String()),
+						zap.String("guildID", guildID.String()),
 						zap.Int("attempt", consecutiveListNotFound),
 						zap.Int("max_attempts", maxConsecutiveListNotFound))
 
 					// Break out after too many consecutive failures
 					if consecutiveListNotFound >= maxConsecutiveListNotFound {
 						w.logger.Debug("Too many consecutive list not found errors, will try a different channel",
-							zap.String("guild_id", guildID.String()),
+							zap.String("guildID", guildID.String()),
 							zap.Int("max_attempts", maxConsecutiveListNotFound))
 
 						return allMembers, ErrListNotFoundRetry
@@ -362,7 +362,7 @@ func (w *Worker) syncMemberChunks(
 				}
 
 				w.logger.Error("Failed to get member list",
-					zap.String("guild_id", guildID.String()),
+					zap.String("guildID", guildID.String()),
 					zap.Error(err))
 
 				return allMembers, fmt.Errorf("failed to get member list: %w", err)
@@ -489,8 +489,8 @@ func (w *Worker) processMemberList(
 		// If user doesn't already exist in our database, apply grace period
 		if !existingUsers[userID] && joinedAt.After(twelveHoursAgo) {
 			w.logger.Debug("Skipping recently joined member (grace period)",
-				zap.Uint64("server_id", uint64(guildID)),
-				zap.Uint64("user_id", userID),
+				zap.Uint64("serverID", uint64(guildID)),
+				zap.Uint64("userID", userID),
 				zap.Time("joined_at", joinedAt))
 
 			continue

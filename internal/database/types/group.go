@@ -17,7 +17,7 @@ var (
 
 // Group represents a group in any state (flagged, confirmed, or cleared).
 type Group struct {
-	ID                  uint64            `bun:",pk"                    json:"id"`
+	ID                  int64             `bun:",pk"                    json:"id"`
 	UUID                uuid.UUID         `bun:",notnull"               json:"uuid"`
 	Name                string            `bun:",notnull"               json:"name"`
 	Description         string            `bun:",notnull"               json:"description"`
@@ -37,7 +37,7 @@ type Group struct {
 
 // GroupReason represents a reason for flagging a group.
 type GroupReason struct {
-	GroupID    uint64               `bun:",pk"      json:"groupId"`
+	GroupID    int64                `bun:",pk"      json:"groupId"`
 	ReasonType enum.GroupReasonType `bun:",pk"      json:"reasonType"`
 	Message    string               `bun:",notnull" json:"message"`
 	Confidence float64              `bun:",notnull" json:"confidence"`
@@ -47,14 +47,14 @@ type GroupReason struct {
 
 // GroupVerification stores verification data for confirmed groups.
 type GroupVerification struct {
-	GroupID    uint64    `bun:",pk"      json:"groupId"`
+	GroupID    int64     `bun:",pk"      json:"groupId"`
 	ReviewerID uint64    `bun:",notnull" json:"reviewerId"`
 	VerifiedAt time.Time `bun:",notnull" json:"verifiedAt"`
 }
 
 // GroupClearance stores clearance data for cleared groups.
 type GroupClearance struct {
-	GroupID    uint64    `bun:",pk"      json:"groupId"`
+	GroupID    int64     `bun:",pk"      json:"groupId"`
 	ReviewerID uint64    `bun:",notnull" json:"reviewerId"`
 	ClearedAt  time.Time `bun:",notnull" json:"clearedAt"`
 }

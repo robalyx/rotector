@@ -16,7 +16,7 @@ type GroupComment struct {
 
 // Comment represents a community note/comment on a user or group.
 type Comment struct {
-	TargetID    uint64    `bun:",pk,notnull" json:"targetId"`    // User or Group ID
+	TargetID    int64     `bun:",pk,notnull" json:"targetId"`    // User or Group ID
 	CommenterID uint64    `bun:",pk,notnull" json:"commenterId"` // Discord user ID who wrote the comment
 	Message     string    `bun:",notnull"    json:"message"`
 	CreatedAt   time.Time `bun:",notnull"    json:"createdAt"`

@@ -252,10 +252,10 @@ func (b *ReviewBuilder) buildGroupInfoSection() discord.ContainerSubComponent {
 		utils.CensorString(b.group.Name, b.PrivacyMode)))
 
 	// Add owner info
-	ownerID := strconv.FormatUint(b.group.Owner.UserID, 10)
+	ownerID := strconv.FormatInt(b.group.Owner.UserID, 10)
 	content.WriteString(fmt.Sprintf("-# Owner: [%s](https://www.roblox.com/users/%d/profile)\n",
 		utils.CensorString(ownerID, b.PrivacyMode), b.group.Owner.UserID))
-	content.WriteString(fmt.Sprintf("-# Members: %s\n", strconv.FormatUint(b.groupInfo.MemberCount, 10)))
+	content.WriteString(fmt.Sprintf("-# Members: %s\n", strconv.FormatInt(b.groupInfo.MemberCount, 10)))
 	content.WriteString("-# Flagged Members: " + strconv.Itoa(b.flaggedCount))
 
 	// Add description
@@ -301,7 +301,7 @@ func (b *ReviewBuilder) buildReasonDisplay() discord.ContainerSubComponent {
 		if reason, ok := b.group.Reasons[reasonType]; ok {
 			// Add reason header and message
 			message := utils.CensorStringsInText(reason.Message, b.PrivacyMode,
-				strconv.FormatUint(b.group.ID, 10),
+				strconv.FormatInt(b.group.ID, 10),
 				b.group.Name)
 			message = utils.TruncateString(message, maxLength)
 			message = utils.FormatString(message)
@@ -333,7 +333,7 @@ func (b *ReviewBuilder) buildReasonDisplay() discord.ContainerSubComponent {
 					evidence = utils.NormalizeString(evidence)
 					if b.PrivacyMode {
 						evidence = utils.CensorStringsInText(evidence, true,
-							strconv.FormatUint(b.group.ID, 10),
+							strconv.FormatInt(b.group.ID, 10),
 							b.group.Name)
 					}
 
@@ -427,9 +427,9 @@ func (b *ReviewBuilder) getDescription() string {
 	description = utils.CensorStringsInText(
 		description,
 		b.PrivacyMode,
-		strconv.FormatUint(b.group.ID, 10),
+		strconv.FormatInt(b.group.ID, 10),
 		b.group.Name,
-		strconv.FormatUint(b.group.Owner.UserID, 10),
+		strconv.FormatInt(b.group.Owner.UserID, 10),
 	)
 	description = utils.TruncateString(description, 400)
 	description = utils.FormatString(description)

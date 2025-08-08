@@ -45,7 +45,7 @@ func (m *CommentsMenu) Page() *interaction.Page {
 
 // Show prepares and displays the comments interface.
 func (m *CommentsMenu) Show(ctx *interaction.Context, s *session.Session) {
-	var targetID uint64
+	var targetID int64
 	if m.targetType == view.TargetTypeUser {
 		targetID = session.UserTarget.Get(s).ID
 	} else {

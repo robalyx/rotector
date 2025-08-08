@@ -74,7 +74,7 @@ func (s *GroupService) GetGroupToReview(
 	if err != nil {
 		s.logger.Error("Failed to get recently reviewed group IDs", zap.Error(err))
 
-		recentIDs = []uint64{} // Continue without filtering if there's an error
+		recentIDs = []int64{} // Continue without filtering if there's an error
 	}
 
 	// Determine target status based on mode
@@ -126,9 +126,9 @@ func (s *GroupService) GetGroupToReview(
 }
 
 // SaveGroups handles the business logic for saving groups.
-func (s *GroupService) SaveGroups(ctx context.Context, groups map[uint64]*types.ReviewGroup) error {
+func (s *GroupService) SaveGroups(ctx context.Context, groups map[int64]*types.ReviewGroup) error {
 	// Get list of group IDs to check
-	groupIDs := make([]uint64, 0, len(groups))
+	groupIDs := make([]int64, 0, len(groups))
 	for id := range groups {
 		groupIDs = append(groupIDs, id)
 	}

@@ -14,7 +14,7 @@ func TestHashID(t *testing.T) {
 
 	tests := []struct {
 		name       string
-		id         uint64
+		id         int64
 		salt       string
 		hashType   export.HashType
 		iterations uint32

@@ -16,8 +16,8 @@ import (
 
 // CondoCheckerParams contains all the parameters needed for condo checker processing.
 type CondoCheckerParams struct {
-	Users      []*types.ReviewUser                           `json:"users"`
-	ReasonsMap map[uint64]types.Reasons[enum.UserReasonType] `json:"reasonsMap"`
+	Users      []*types.ReviewUser                          `json:"users"`
+	ReasonsMap map[int64]types.Reasons[enum.UserReasonType] `json:"reasonsMap"`
 }
 
 var (
@@ -120,7 +120,7 @@ func (c *CondoChecker) processUser(ctx context.Context, user *types.ReviewUser) 
 
 		// Delete the existing user if they were only flagged for condo
 		existingUser, err := c.db.Service().User().GetUserByID(
-			ctx, strconv.FormatUint(*player.UserID, 10), types.UserFieldReasons,
+			ctx, strconv.FormatInt(*player.UserID, 10), types.UserFieldReasons,
 		)
 		if err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
@@ -129,7 +129,7 @@ func (c *CondoChecker) processUser(ctx context.Context, user *types.ReviewUser) 
 
 			c.logger.Error("Failed to get existing user",
 				zap.Error(err),
-				zap.Uint64("userID", *player.UserID))
+				zap.Int64("userID", *player.UserID))
 
 			return nil, err
 		}
@@ -139,7 +139,7 @@ func (c *CondoChecker) processUser(ctx context.Context, user *types.ReviewUser) 
 				if _, err := c.db.Service().User().DeleteUser(ctx, *player.UserID); err != nil {
 					c.logger.Error("Failed to delete existing user",
 						zap.Error(err),
-						zap.Uint64("userID", *player.UserID))
+						zap.Int64("userID", *player.UserID))
 
 					return nil, err
 				}
@@ -148,7 +148,7 @@ func (c *CondoChecker) processUser(ctx context.Context, user *types.ReviewUser) 
 
 		c.logger.Info("Player blacklisted",
 			zap.String("thumbnailURL", player.ThumbnailURL),
-			zap.Uint64("userID", *player.UserID))
+			zap.Int64("userID", *player.UserID))
 
 		return nil, ErrPlayerBlacklisted
 	}
@@ -159,7 +159,7 @@ func (c *CondoChecker) processUser(ctx context.Context, user *types.ReviewUser) 
 			c.logger.Error("Failed to update condo player user ID",
 				zap.Error(err),
 				zap.String("thumbnailURL", player.ThumbnailURL),
-				zap.Uint64("userID", user.ID))
+				zap.Int64("userID", user.ID))
 
 			return nil, err
 		}

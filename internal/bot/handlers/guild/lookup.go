@@ -73,7 +73,7 @@ func (m *LookupMenu) Show(ctx *interaction.Context, s *session.Session) {
 	if err != nil {
 		m.layout.logger.Error("Failed to get Discord user guilds",
 			zap.Error(err),
-			zap.Uint64("discord_user_id", discordUserID))
+			zap.Uint64("discord_userID", discordUserID))
 		ctx.Error("Failed to retrieve guild membership data. Please try again.")
 
 		return
@@ -120,7 +120,7 @@ func (m *LookupMenu) fetchUserData(ctx *interaction.Context, s *session.Session,
 	if err != nil {
 		m.layout.logger.Error("Failed to check user privacy status",
 			zap.Error(err),
-			zap.Uint64("discord_user_id", discordUserID))
+			zap.Uint64("discord_userID", discordUserID))
 
 		isRedacted = false // Default to false if there's an error
 	}
@@ -135,7 +135,7 @@ func (m *LookupMenu) fetchUserData(ctx *interaction.Context, s *session.Session,
 		if err != nil {
 			m.layout.logger.Error("Failed to perform full scan",
 				zap.Error(err),
-				zap.Uint64("discord_user_id", discordUserID))
+				zap.Uint64("discord_userID", discordUserID))
 		}
 	}
 
@@ -155,7 +155,7 @@ func (m *LookupMenu) fetchUserData(ctx *interaction.Context, s *session.Session,
 	if err != nil {
 		m.layout.logger.Error("Failed to get Discord user guild count",
 			zap.Error(err),
-			zap.Uint64("discord_user_id", discordUserID))
+			zap.Uint64("discord_userID", discordUserID))
 
 		totalGuilds = 0 // Default to 0 if there's an error
 	}
@@ -167,7 +167,7 @@ func (m *LookupMenu) fetchUserData(ctx *interaction.Context, s *session.Session,
 	if err != nil {
 		m.layout.logger.Error("Failed to get user message guilds",
 			zap.Error(err),
-			zap.Uint64("discord_user_id", discordUserID))
+			zap.Uint64("discord_userID", discordUserID))
 
 		messageGuildIDs = []uint64{} // Default to empty if there's an error
 	}
@@ -216,7 +216,7 @@ func (m *LookupMenu) fetchGuildDetailsAndSummary(
 			if err != nil && !errors.Is(err, sql.ErrNoRows) {
 				m.layout.logger.Error("Failed to get message summary",
 					zap.Error(err),
-					zap.Uint64("discord_user_id", discordUserID))
+					zap.Uint64("discord_userID", discordUserID))
 			}
 		}
 	}

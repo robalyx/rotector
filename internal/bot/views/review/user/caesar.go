@@ -58,7 +58,7 @@ func (b *CaesarBuilder) Build() *discord.MessageUpdateBuilder {
 	content.WriteString(fmt.Sprintf("## %s\n", constants.UserCaesarPageName))
 	content.WriteString(fmt.Sprintf("Analyzing description for %s (%s)\n",
 		utils.CensorString(b.user.Name, b.privacyMode),
-		utils.CensorString(strconv.FormatUint(b.user.ID, 10), b.privacyMode)))
+		utils.CensorString(strconv.FormatInt(b.user.ID, 10), b.privacyMode)))
 	content.WriteString("### Original Text\n")
 	content.WriteString(formattedDescription)
 

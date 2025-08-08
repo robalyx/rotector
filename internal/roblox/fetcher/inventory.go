@@ -25,7 +25,7 @@ func NewInventoryFetcher(roAPI *api.API, logger *zap.Logger) *InventoryFetcher {
 }
 
 // GetInventory retrieves a user's inventory items of specified types.
-func (i *InventoryFetcher) GetInventory(ctx context.Context, userID uint64) ([]*types.InventoryAsset, error) {
+func (i *InventoryFetcher) GetInventory(ctx context.Context, userID int64) ([]*types.InventoryAsset, error) {
 	// Define the asset types we want to fetch
 	assetTypes := []types.ItemAssetType{
 		types.ItemAssetTypeTShirt,
@@ -72,7 +72,7 @@ func (i *InventoryFetcher) GetInventory(ctx context.Context, userID uint64) ([]*
 	}
 
 	i.logger.Debug("Successfully fetched user inventory",
-		zap.Uint64("userID", userID),
+		zap.Int64("userID", userID),
 		zap.Int("totalAssets", len(allAssets)))
 
 	return allAssets, nil

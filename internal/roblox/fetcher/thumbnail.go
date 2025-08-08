@@ -39,14 +39,14 @@ func NewThumbnailFetcher(roAPI *api.API, logger *zap.Logger) *ThumbnailFetcher {
 }
 
 // GetImageURLs fetches thumbnails for a batch of users and returns a map of results.
-func (t *ThumbnailFetcher) GetImageURLs(ctx context.Context, users map[uint64]*types.User) map[uint64]string {
+func (t *ThumbnailFetcher) GetImageURLs(ctx context.Context, users map[int64]*types.User) map[int64]string {
 	// Create batch request for headshots
 	requests := thumbnails.NewBatchThumbnailsBuilder()
 	for _, user := range users {
 		requests.AddRequest(apiTypes.ThumbnailRequest{
 			Type:      apiTypes.AvatarType,
 			TargetID:  user.ID,
-			RequestID: strconv.FormatUint(user.ID, 10),
+			RequestID: strconv.FormatInt(user.ID, 10),
 			Size:      apiTypes.Size420x420,
 			Format:    apiTypes.WEBP,
 		})
@@ -64,15 +64,15 @@ func (t *ThumbnailFetcher) GetImageURLs(ctx context.Context, users map[uint64]*t
 
 // AddGroupImageURLs fetches thumbnails for groups and adds them to the group records.
 func (t *ThumbnailFetcher) AddGroupImageURLs(
-	ctx context.Context, groups map[uint64]*types.ReviewGroup,
-) map[uint64]*types.ReviewGroup {
+	ctx context.Context, groups map[int64]*types.ReviewGroup,
+) map[int64]*types.ReviewGroup {
 	// Create batch request for group icons
 	requests := thumbnails.NewBatchThumbnailsBuilder()
 	for _, group := range groups {
 		requests.AddRequest(apiTypes.ThumbnailRequest{
 			Type:      apiTypes.GroupIconType,
 			TargetID:  group.ID,
-			RequestID: strconv.FormatUint(group.ID, 10),
+			RequestID: strconv.FormatInt(group.ID, 10),
 			Size:      apiTypes.Size420x420,
 			Format:    apiTypes.WEBP,
 		})
@@ -84,7 +84,7 @@ func (t *ThumbnailFetcher) AddGroupImageURLs(
 	// Add thumbnail URLs to groups
 	now := time.Now()
 
-	updatedGroups := make(map[uint64]*types.ReviewGroup, len(groups))
+	updatedGroups := make(map[int64]*types.ReviewGroup, len(groups))
 	for _, group := range groups {
 		if thumbnailURL, ok := results[group.ID]; ok {
 			group.ThumbnailURL = thumbnailURL
@@ -104,12 +104,12 @@ func (t *ThumbnailFetcher) AddGroupImageURLs(
 // It returns a map of target IDs to their thumbnail URLs.
 func (t *ThumbnailFetcher) ProcessBatchThumbnails(
 	ctx context.Context, requests *thumbnails.BatchThumbnailsBuilder,
-) map[uint64]string {
+) map[int64]string {
 	ctx = context.WithValue(ctx, auth.KeyAddCookie, true)
 
 	var (
 		requestList   = requests.Build()
-		thumbnailURLs = make(map[uint64]string)
+		thumbnailURLs = make(map[int64]string)
 		p             = pool.New().WithContext(ctx)
 		mu            sync.Mutex
 		batchSize     = 100
@@ -267,12 +267,12 @@ func (t *ThumbnailFetcher) ProcessPlayerTokens(ctx context.Context, tokens []str
 // processTargetBatchResponse processes thumbnail responses for target IDs and returns pending requests and results.
 func (t *ThumbnailFetcher) processTargetBatchResponse(
 	responses []apiTypes.ThumbnailData, requests []apiTypes.ThumbnailRequest,
-) (*thumbnails.BatchThumbnailsBuilder, map[uint64]string) {
+) (*thumbnails.BatchThumbnailsBuilder, map[int64]string) {
 	pendingRequests := thumbnails.NewBatchThumbnailsBuilder()
-	results := make(map[uint64]string)
+	results := make(map[int64]string)
 
 	// Create map of targetID to request for O(1) lookup
-	requestMap := make(map[uint64]apiTypes.ThumbnailRequest, len(requests))
+	requestMap := make(map[int64]apiTypes.ThumbnailRequest, len(requests))
 	for _, req := range requests {
 		requestMap[req.TargetID] = req
 	}

@@ -175,13 +175,13 @@ func (w *Worker) processBannedUsers(ctx context.Context) {
 	}
 
 	// Create map of newly banned users for O(1) lookup
-	bannedMap := make(map[uint64]struct{}, len(bannedUserIDs))
+	bannedMap := make(map[int64]struct{}, len(bannedUserIDs))
 	for _, id := range bannedUserIDs {
 		bannedMap[id] = struct{}{}
 	}
 
 	// Find users that are no longer banned
-	var unbannedUserIDs []uint64
+	var unbannedUserIDs []int64
 
 	for _, id := range currentlyBanned {
 		if _, ok := bannedMap[id]; !ok {
@@ -245,13 +245,13 @@ func (w *Worker) processLockedGroups(ctx context.Context) {
 	}
 
 	// Create map of newly locked groups for O(1) lookup
-	lockedMap := make(map[uint64]struct{}, len(lockedGroupIDs))
+	lockedMap := make(map[int64]struct{}, len(lockedGroupIDs))
 	for _, id := range lockedGroupIDs {
 		lockedMap[id] = struct{}{}
 	}
 
 	// Find groups that are no longer locked
-	var unlockedGroupIDs []uint64
+	var unlockedGroupIDs []int64
 
 	for _, id := range currentlyLocked {
 		if _, ok := lockedMap[id]; !ok {
@@ -356,7 +356,7 @@ func (w *Worker) processGroupTracking(ctx context.Context) {
 	}
 
 	// Extract group IDs for batch lookup
-	groupIDs := make([]uint64, 0, len(groupsWithUsers))
+	groupIDs := make([]int64, 0, len(groupsWithUsers))
 	for groupID := range groupsWithUsers {
 		groupIDs = append(groupIDs, groupID)
 	}
@@ -375,8 +375,8 @@ func (w *Worker) processGroupTracking(ctx context.Context) {
 	}
 
 	// Separate new and existing groups
-	newGroupIDs := make([]uint64, 0)
-	existingGroupIDs := make([]uint64, 0)
+	newGroupIDs := make([]int64, 0)
+	existingGroupIDs := make([]int64, 0)
 
 	for _, groupID := range groupIDs {
 		if _, exists := existingGroups[groupID]; exists {
@@ -408,7 +408,7 @@ func (w *Worker) processGroupTracking(ctx context.Context) {
 
 // processNewGroups handles fetching and processing of new groups.
 // Returns the IDs of newly flagged groups.
-func (w *Worker) processNewGroups(ctx context.Context, newGroupIDs []uint64, groupsWithUsers map[uint64][]uint64) []uint64 {
+func (w *Worker) processNewGroups(ctx context.Context, newGroupIDs []int64, groupsWithUsers map[int64][]int64) []int64 {
 	if len(newGroupIDs) == 0 {
 		return nil
 	}
@@ -435,7 +435,7 @@ func (w *Worker) processNewGroups(ctx context.Context, newGroupIDs []uint64, gro
 	}
 
 	// Extract and return the IDs of newly flagged groups
-	newlyFlaggedIDs := make([]uint64, 0, len(flaggedGroups))
+	newlyFlaggedIDs := make([]int64, 0, len(flaggedGroups))
 	for groupID := range flaggedGroups {
 		newlyFlaggedIDs = append(newlyFlaggedIDs, groupID)
 	}
@@ -468,7 +468,7 @@ func (w *Worker) processUserThumbnails(ctx context.Context) {
 	// Convert users to review users
 	now := time.Now()
 
-	reviewUsers := make(map[uint64]*types.ReviewUser, len(users))
+	reviewUsers := make(map[int64]*types.ReviewUser, len(users))
 	for id, user := range users {
 		if thumbnail, ok := thumbnailMap[id]; ok {
 			user.ThumbnailURL = thumbnail
@@ -588,7 +588,7 @@ func (w *Worker) processReviewerInfo(ctx context.Context) {
 		if err != nil {
 			w.logger.Error("Failed to get Discord user",
 				zap.Error(err),
-				zap.Uint64("reviewer_id", reviewerID))
+				zap.Uint64("reviewerID", reviewerID))
 
 			continue
 		}

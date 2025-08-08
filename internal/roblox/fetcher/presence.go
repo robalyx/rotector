@@ -33,7 +33,7 @@ func NewPresenceFetcher(roAPI *api.API, logger *zap.Logger) *PresenceFetcher {
 }
 
 // FetchPresences retrieves presence information for a batch of user IDs.
-func (p *PresenceFetcher) FetchPresences(ctx context.Context, userIDs []uint64) []*types.UserPresenceResponse {
+func (p *PresenceFetcher) FetchPresences(ctx context.Context, userIDs []int64) []*types.UserPresenceResponse {
 	ctx = context.WithValue(ctx, auth.KeyAddCookie, true)
 
 	var (
@@ -86,14 +86,14 @@ func (p *PresenceFetcher) FetchPresences(ctx context.Context, userIDs []uint64) 
 
 // FetchPresencesConcurrently fetches presences in the background and returns a channel with the results.
 func (p *PresenceFetcher) FetchPresencesConcurrently(
-	ctx context.Context, userIDs []uint64,
-) <-chan map[uint64]*types.UserPresenceResponse {
-	resultChan := make(chan map[uint64]*types.UserPresenceResponse, 1)
+	ctx context.Context, userIDs []int64,
+) <-chan map[int64]*types.UserPresenceResponse {
+	resultChan := make(chan map[int64]*types.UserPresenceResponse, 1)
 
 	go func() {
 		presences := p.FetchPresences(ctx, userIDs)
 
-		presenceMap := make(map[uint64]*types.UserPresenceResponse)
+		presenceMap := make(map[int64]*types.UserPresenceResponse)
 		for _, presenceData := range presences {
 			presenceMap[presenceData.UserID] = presenceData
 		}

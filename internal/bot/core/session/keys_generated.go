@@ -65,13 +65,13 @@ var (
 	// UserTarget stores the currently selected user
 	UserTarget = NewKey[*types.ReviewUser]("UserTarget", true)
 	// UserFlaggedFriends stores flagged friends
-	UserFlaggedFriends = NewKey[map[uint64]*types.ReviewUser]("UserFlaggedFriends", true)
+	UserFlaggedFriends = NewKey[map[int64]*types.ReviewUser]("UserFlaggedFriends", true)
 	// UserFlaggedGroups stores flagged groups
-	UserFlaggedGroups = NewKey[map[uint64]*types.ReviewGroup]("UserFlaggedGroups", true)
+	UserFlaggedGroups = NewKey[map[int64]*types.ReviewGroup]("UserFlaggedGroups", true)
 	// UserFriends stores the user's friend list
 	UserFriends = NewKey[[]*apiTypes.ExtendedFriend]("UserFriends", true)
 	// UserPresences stores friend presence information
-	UserPresences = NewKey[map[uint64]*apiTypes.UserPresenceResponse]("UserPresences", true)
+	UserPresences = NewKey[map[int64]*apiTypes.UserPresenceResponse]("UserPresences", true)
 	// UserGroups stores the list of groups
 	UserGroups = NewKey[[]*apiTypes.UserGroupRoles]("UserGroups", true)
 	// UserOutfits stores user outfits
@@ -81,7 +81,7 @@ var (
 	// UserDuplicateOutfitNames stores outfit names that have multiple instances
 	UserDuplicateOutfitNames = NewKey[map[string]struct{}]("UserDuplicateOutfitNames", true)
 	// UserReviewHistory stores IDs of previously reviewed users
-	UserReviewHistory = NewKey[[]uint64]("UserReviewHistory", true)
+	UserReviewHistory = NewKey[[]int64]("UserReviewHistory", true)
 	// UserReviewHistoryIndex stores the current position in the review history
 	UserReviewHistoryIndex = NewKey[int]("UserReviewHistoryIndex", true)
 	// GroupTarget stores the currently selected group
@@ -91,11 +91,11 @@ var (
 	// GroupFlaggedMembersCount stores the total number of flagged members in the current group
 	GroupFlaggedMembersCount = NewKey[int]("GroupFlaggedMembersCount", true)
 	// GroupPageFlaggedMembers stores flagged member details for the current page
-	GroupPageFlaggedMembers = NewKey[map[uint64]*types.ReviewUser]("GroupPageFlaggedMembers", true)
+	GroupPageFlaggedMembers = NewKey[map[int64]*types.ReviewUser]("GroupPageFlaggedMembers", true)
 	// GroupPageFlaggedMemberIDs stores flagged member IDs for the current page
-	GroupPageFlaggedMemberIDs = NewKey[[]uint64]("GroupPageFlaggedMemberIDs", true)
+	GroupPageFlaggedMemberIDs = NewKey[[]int64]("GroupPageFlaggedMemberIDs", true)
 	// GroupReviewHistory stores IDs of previously reviewed groups
-	GroupReviewHistory = NewKey[[]uint64]("GroupReviewHistory", true)
+	GroupReviewHistory = NewKey[[]int64]("GroupReviewHistory", true)
 	// GroupReviewHistoryIndex stores the current position in the review history
 	GroupReviewHistoryIndex = NewKey[int]("GroupReviewHistoryIndex", true)
 	// ReasonsChanged indicates if reasons have been modified
@@ -119,7 +119,7 @@ var (
 	// QueueStats stores queue statistics
 	QueueStats = NewKey[*queue.Stats]("QueueStats", true)
 	// QueuedUserID stores the ID of the currently queued user
-	QueuedUserID = NewKey[uint64]("QueuedUserID", true)
+	QueuedUserID = NewKey[int64]("QueuedUserID", true)
 	// QueuedUserTimestamp stores when the user was queued
 	QueuedUserTimestamp = NewKey[time.Time]("QueuedUserTimestamp", true)
 	// QueuedUserProcessing indicates if the user is being processed
@@ -177,9 +177,9 @@ var (
 	// LogFilterDiscordID stores Discord ID filter
 	LogFilterDiscordID = NewKey[uint64]("LogFilterDiscordID", true)
 	// LogFilterUserID stores user ID filter
-	LogFilterUserID = NewKey[uint64]("LogFilterUserID", true)
+	LogFilterUserID = NewKey[int64]("LogFilterUserID", true)
 	// LogFilterGroupID stores group ID filter
-	LogFilterGroupID = NewKey[uint64]("LogFilterGroupID", true)
+	LogFilterGroupID = NewKey[int64]("LogFilterGroupID", true)
 	// LogFilterReviewerID stores reviewer ID filter
 	LogFilterReviewerID = NewKey[uint64]("LogFilterReviewerID", true)
 	// LogFilterActivityType stores activity type filter

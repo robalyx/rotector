@@ -91,9 +91,9 @@ func (r *CondoModel) GetGameByID(ctx context.Context, gameID string, fields type
 
 // GetGamesByIDs retrieves specified game information for a list of game IDs.
 func (r *CondoModel) GetGamesByIDs(
-	ctx context.Context, gameIDs []uint64, fields types.GameField,
-) (map[uint64]*types.CondoGame, error) {
-	return dbretry.Operation(ctx, func(ctx context.Context) (map[uint64]*types.CondoGame, error) {
+	ctx context.Context, gameIDs []int64, fields types.GameField,
+) (map[int64]*types.CondoGame, error) {
+	return dbretry.Operation(ctx, func(ctx context.Context) (map[int64]*types.CondoGame, error) {
 		var games []types.CondoGame
 
 		err := r.db.NewSelect().
@@ -106,7 +106,7 @@ func (r *CondoModel) GetGamesByIDs(
 		}
 
 		// Convert slice to map
-		result := make(map[uint64]*types.CondoGame, len(games))
+		result := make(map[int64]*types.CondoGame, len(games))
 		for i := range games {
 			result[games[i].ID] = &games[i]
 		}
@@ -139,7 +139,7 @@ func (r *CondoModel) GetAndUpdatePendingGames(ctx context.Context, limit int) ([
 		}
 
 		// Get the IDs of selected games
-		gameIDs := make([]uint64, len(games))
+		gameIDs := make([]int64, len(games))
 		for i, game := range games {
 			gameIDs[i] = game.ID
 		}
@@ -161,7 +161,7 @@ func (r *CondoModel) GetAndUpdatePendingGames(ctx context.Context, limit int) ([
 }
 
 // MarkGameDeleted marks a game as deleted.
-func (r *CondoModel) MarkGameDeleted(ctx context.Context, gameID uint64) error {
+func (r *CondoModel) MarkGameDeleted(ctx context.Context, gameID int64) error {
 	return dbretry.NoResult(ctx, func(ctx context.Context) error {
 		_, err := r.db.NewUpdate().
 			Model((*types.CondoGame)(nil)).
@@ -228,7 +228,7 @@ func (r *CondoModel) BlacklistPlayer(ctx context.Context, thumbnailURL string) e
 }
 
 // SetPlayerUserID updates a condo player's user ID.
-func (r *CondoModel) SetPlayerUserID(ctx context.Context, thumbnailURL string, userID uint64) error {
+func (r *CondoModel) SetPlayerUserID(ctx context.Context, thumbnailURL string, userID int64) error {
 	return dbretry.NoResult(ctx, func(ctx context.Context) error {
 		_, err := r.db.NewUpdate().
 			Model((*types.CondoPlayer)(nil)).

@@ -64,7 +64,7 @@ func (b *OutfitsBuilder) Build() *discord.MessageUpdateBuilder {
 	content.WriteString("## User Outfits\n")
 	content.WriteString(fmt.Sprintf("```%s (%s)```",
 		utils.CensorString(b.user.Name, b.privacyMode),
-		utils.CensorString(strconv.FormatUint(b.user.ID, 10), b.privacyMode),
+		utils.CensorString(strconv.FormatInt(b.user.ID, 10), b.privacyMode),
 	))
 
 	// Add outfits list
@@ -110,7 +110,7 @@ func (b *OutfitsBuilder) Build() *discord.MessageUpdateBuilder {
 			enum.UserReasonTypeOutfit,
 			reason,
 			200,
-			strconv.FormatUint(b.user.ID, 10),
+			strconv.FormatInt(b.user.ID, 10),
 			b.user.Name,
 			b.user.DisplayName))
 

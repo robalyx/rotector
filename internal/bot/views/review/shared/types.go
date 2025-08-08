@@ -26,7 +26,7 @@ type BaseReviewBuilder struct {
 	Logs           []*types.ActivityLog
 	Comments       []*types.Comment
 	ReviewMode     enum.ReviewMode
-	ReviewHistory  []uint64
+	ReviewHistory  []int64
 	UserID         uint64
 	HistoryIndex   int
 	LogsHasMore    bool

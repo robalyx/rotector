@@ -131,7 +131,7 @@ func (m *LogsMenu) handleCSVReport(ctx *interaction.Context, s *session.Session,
 	if err != nil {
 		m.layout.logger.Error("Failed to get banned user guild memberships",
 			zap.Error(err),
-			zap.Int64("log_id", logID))
+			zap.Int64("logID", logID))
 		ctx.Error("Failed to generate report. Please try again.")
 
 		return
@@ -156,7 +156,7 @@ func (m *LogsMenu) handleCSVReport(ctx *interaction.Context, s *session.Session,
 	if err != nil {
 		m.layout.logger.Error("Failed to get server names",
 			zap.Error(err),
-			zap.Int64("log_id", logID))
+			zap.Int64("logID", logID))
 		ctx.Error("Failed to generate report. Please try again.")
 
 		return

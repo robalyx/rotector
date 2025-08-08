@@ -140,7 +140,7 @@ func (w *Worker) Start(ctx context.Context) {
 		})
 
 		// Mark processed users in cache to prevent reprocessing
-		var processedUserIDs []uint64
+		var processedUserIDs []int64
 		for _, user := range userInfos[:w.batchSize] {
 			processedUserIDs = append(processedUserIDs, user.ID)
 		}
@@ -193,7 +193,7 @@ func (w *Worker) processFriendsBatch(ctx context.Context) ([]*types.ReviewUser, 
 		// Fetch friends for the user
 		userFriendIDs, err := w.friendFetcher.GetFriendIDs(ctx, user.ID)
 		if err != nil {
-			w.logger.Error("Error fetching friends", zap.Error(err), zap.Uint64("userID", user.ID))
+			w.logger.Error("Error fetching friends", zap.Error(err), zap.Int64("userID", user.ID))
 			continue
 		}
 
@@ -216,7 +216,7 @@ func (w *Worker) processFriendsBatch(ctx context.Context) ([]*types.ReviewUser, 
 
 			if existingCount < MinFriendsInSystem || friendPercentage < MinFriendPercentage {
 				w.logger.Debug("Flagged user does not meet friend criteria",
-					zap.Uint64("userID", user.ID),
+					zap.Int64("userID", user.ID),
 					zap.Int("totalFriends", len(userFriendIDs)),
 					zap.Int("existingFriends", existingCount),
 					zap.Float64("friendPercentage", friendPercentage))
@@ -228,16 +228,16 @@ func (w *Worker) processFriendsBatch(ctx context.Context) ([]*types.ReviewUser, 
 				zap.Int("userFriends", len(userFriendIDs)),
 				zap.Int("existingFriends", existingCount),
 				zap.Float64("friendPercentage", friendPercentage),
-				zap.Uint64("userID", user.ID))
+				zap.Int64("userID", user.ID))
 		} else {
 			w.logger.Info("Processing confirmed user",
 				zap.Int("userFriends", len(userFriendIDs)),
 				zap.Int("existingFriends", len(existingUsers)),
-				zap.Uint64("userID", user.ID))
+				zap.Int64("userID", user.ID))
 		}
 
 		// Collect users that do not exist in our system
-		var friendIDs []uint64
+		var friendIDs []int64
 
 		for _, userID := range userFriendIDs {
 			if _, exists := existingUsers[userID]; !exists {
@@ -249,7 +249,7 @@ func (w *Worker) processFriendsBatch(ctx context.Context) ([]*types.ReviewUser, 
 		if len(friendIDs) > 0 {
 			unprocessedFriendIDs, err := w.processingCache.FilterProcessedUsers(ctx, friendIDs)
 			if err != nil {
-				w.logger.Error("Error filtering processed users", zap.Error(err), zap.Uint64("userID", user.ID))
+				w.logger.Error("Error filtering processed users", zap.Error(err), zap.Int64("userID", user.ID))
 
 				unprocessedFriendIDs = friendIDs
 			}
@@ -260,7 +260,7 @@ func (w *Worker) processFriendsBatch(ctx context.Context) ([]*types.ReviewUser, 
 				validFriends = append(validFriends, userInfos...)
 
 				w.logger.Debug("Added friends for processing",
-					zap.Uint64("userID", user.ID),
+					zap.Int64("userID", user.ID),
 					zap.Int("totalFriends", len(userFriendIDs)),
 					zap.Int("existingFriends", len(existingUsers)),
 					zap.Int("fetchedFriends", len(friendIDs)),

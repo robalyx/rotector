@@ -26,7 +26,7 @@ func NewComment(db *bun.DB, logger *zap.Logger) *CommentModel {
 }
 
 // GetUserComments retrieves comments for a target user ID.
-func (r *CommentModel) GetUserComments(ctx context.Context, targetID uint64) ([]*types.Comment, error) {
+func (r *CommentModel) GetUserComments(ctx context.Context, targetID int64) ([]*types.Comment, error) {
 	return dbretry.Operation(ctx, func(ctx context.Context) ([]*types.Comment, error) {
 		var comments []*types.Comment
 
@@ -68,7 +68,7 @@ func (r *CommentModel) UpsertUserComment(ctx context.Context, comment *types.Use
 }
 
 // DeleteUserComment deletes a comment by the commenter.
-func (r *CommentModel) DeleteUserComment(ctx context.Context, targetID, commenterID uint64) error {
+func (r *CommentModel) DeleteUserComment(ctx context.Context, targetID int64, commenterID uint64) error {
 	return dbretry.NoResult(ctx, func(ctx context.Context) error {
 		_, err := r.db.NewDelete().
 			Model((*types.UserComment)(nil)).
@@ -84,7 +84,7 @@ func (r *CommentModel) DeleteUserComment(ctx context.Context, targetID, commente
 }
 
 // GetGroupComments retrieves comments for a target group ID.
-func (r *CommentModel) GetGroupComments(ctx context.Context, targetID uint64) ([]*types.Comment, error) {
+func (r *CommentModel) GetGroupComments(ctx context.Context, targetID int64) ([]*types.Comment, error) {
 	return dbretry.Operation(ctx, func(ctx context.Context) ([]*types.Comment, error) {
 		var comments []*types.Comment
 
@@ -126,7 +126,7 @@ func (r *CommentModel) UpsertGroupComment(ctx context.Context, comment *types.Gr
 }
 
 // DeleteGroupComment deletes a comment by the commenter.
-func (r *CommentModel) DeleteGroupComment(ctx context.Context, targetID, commenterID uint64) error {
+func (r *CommentModel) DeleteGroupComment(ctx context.Context, targetID int64, commenterID uint64) error {
 	return dbretry.NoResult(ctx, func(ctx context.Context) error {
 		_, err := r.db.NewDelete().
 			Model((*types.GroupComment)(nil)).

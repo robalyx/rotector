@@ -28,10 +28,10 @@ type HashResult struct {
 }
 
 // HashID converts a single ID to a hash using the specified algorithm with the provided salt.
-func HashID(id uint64, salt string, hashType HashType, iterations uint32, memory uint32) string {
+func HashID(id int64, salt string, hashType HashType, iterations uint32, memory uint32) string {
 	// Convert ID to bytes in little-endian format
 	idBytes := make([]byte, 8)
-	binary.LittleEndian.PutUint64(idBytes, id)
+	binary.LittleEndian.PutUint64(idBytes, uint64(id)) //nolint:gosec // unlikely to overflow
 
 	var hash []byte
 
@@ -56,7 +56,7 @@ func HashID(id uint64, salt string, hashType HashType, iterations uint32, memory
 }
 
 // hashIDs concurrently hashes multiple IDs.
-func hashIDs(ids []uint64, salt string, hashType HashType, concurrency int64, iterations, memory uint32) []string {
+func hashIDs(ids []int64, salt string, hashType HashType, concurrency int64, iterations, memory uint32) []string {
 	if len(ids) == 0 {
 		return nil
 	}

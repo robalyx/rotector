@@ -95,8 +95,8 @@ func (a *MessageAnalyzer) ProcessMessages(
 	ctx context.Context, serverID uint64, channelID uint64, serverName string, messages []*MessageContent,
 ) (map[uint64]*FlaggedMessageUser, error) {
 	a.logger.Info("Starting message analysis",
-		zap.Uint64("server_id", serverID),
-		zap.Uint64("channel_id", channelID),
+		zap.Uint64("serverID", serverID),
+		zap.Uint64("channelID", channelID),
 		zap.String("server_name", serverName),
 		zap.Int("message_count", len(messages)))
 
@@ -157,8 +157,8 @@ func (a *MessageAnalyzer) ProcessMessages(
 	}
 
 	a.logger.Info("Message analysis completed",
-		zap.Uint64("server_id", serverID),
-		zap.Uint64("channel_id", channelID),
+		zap.Uint64("serverID", serverID),
+		zap.Uint64("channelID", channelID),
 		zap.Int("flagged_users", len(flaggedUsers)))
 
 	return flaggedUsers, nil
@@ -277,7 +277,7 @@ func (a *MessageAnalyzer) processBatch(
 		func(batch []*MessageContent) {
 			// Log detailed content to text logger
 			a.textLogger.Warn("Content blocked in message batch",
-				zap.Uint64("server_id", serverID),
+				zap.Uint64("serverID", serverID),
 				zap.String("server_name", serverName),
 				zap.Int("batch_size", len(batch)),
 				zap.Any("messages", batch))

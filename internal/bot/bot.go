@@ -211,7 +211,7 @@ func (b *Bot) handleApplicationCommandInteraction(event *disgoEvents.Application
 			if r := recover(); r != nil {
 				b.logger.Error("Application command interaction failed",
 					zap.String("command", event.SlashCommandInteractionData().CommandName()),
-					zap.String("user_id", wrappedEvent.User().ID.String()),
+					zap.String("userID", wrappedEvent.User().ID.String()),
 					zap.Any("panic", r),
 				)
 				b.interactionManager.RespondWithError(wrappedEvent, "Internal error. Please report this to an administrator.")
@@ -281,9 +281,9 @@ func (b *Bot) handleComponentInteraction(event *disgoEvents.ComponentInteraction
 		defer func() {
 			if r := recover(); r != nil {
 				b.logger.Error("Component interaction failed",
-					zap.String("component_id", event.Data.CustomID()),
+					zap.String("componentID", event.Data.CustomID()),
 					zap.String("component_type", fmt.Sprintf("%T", event.Data)),
-					zap.String("user_id", wrappedEvent.User().ID.String()),
+					zap.String("userID", wrappedEvent.User().ID.String()),
 					zap.Any("panic", r),
 				)
 				b.interactionManager.RespondWithError(wrappedEvent, "Internal error. Please report this to an administrator.")
@@ -291,7 +291,7 @@ func (b *Bot) handleComponentInteraction(event *disgoEvents.ComponentInteraction
 
 			duration := time.Since(start)
 			b.logger.Debug("Component interaction handled",
-				zap.String("custom_id", event.Data.CustomID()),
+				zap.String("customID", event.Data.CustomID()),
 				zap.Duration("duration", duration))
 		}()
 
@@ -364,8 +364,8 @@ func (b *Bot) handleModalSubmit(event *disgoEvents.ModalSubmitInteractionCreate)
 				}
 
 				b.logger.Error("Modal submission failed",
-					zap.String("modal_id", event.Data.CustomID),
-					zap.String("user_id", wrappedEvent.User().ID.String()),
+					zap.String("modalID", event.Data.CustomID),
+					zap.String("userID", wrappedEvent.User().ID.String()),
 					zap.Any("form_data", formData),
 					zap.Any("panic", r),
 				)
@@ -374,7 +374,7 @@ func (b *Bot) handleModalSubmit(event *disgoEvents.ModalSubmitInteractionCreate)
 
 			duration := time.Since(start)
 			b.logger.Debug("Modal submit interaction handled",
-				zap.String("custom_id", event.Data.CustomID),
+				zap.String("customID", event.Data.CustomID),
 				zap.Duration("duration", duration))
 		}()
 
@@ -530,7 +530,7 @@ func (b *Bot) checkBanStatus(event interaction.CommonEvent, s *session.Session, 
 	if err != nil {
 		b.logger.Error("Failed to check ban status",
 			zap.Error(err),
-			zap.Uint64("user_id", userID))
+			zap.Uint64("userID", userID))
 		b.interactionManager.RespondWithError(event, "Failed to verify access status. Please try again later.")
 
 		return true

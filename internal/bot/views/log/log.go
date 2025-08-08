@@ -19,8 +19,8 @@ type Builder struct {
 	logs               []*types.ActivityLog
 	guildID            uint64
 	discordID          uint64
-	userID             uint64
-	groupID            uint64
+	userID             int64
+	groupID            int64
 	reviewerID         uint64
 	activityTypeFilter enum.ActivityType
 	categoryFilter     string
@@ -71,12 +71,12 @@ func (b *Builder) Build() *discord.MessageUpdateBuilder {
 
 	if b.userID != 0 {
 		mainContent.WriteString(fmt.Sprintf("User ID: `%s`\n",
-			utils.CensorString(strconv.FormatUint(b.userID, 10), b.privacyMode)))
+			utils.CensorString(strconv.FormatInt(b.userID, 10), b.privacyMode)))
 	}
 
 	if b.groupID != 0 {
 		mainContent.WriteString(fmt.Sprintf("Group ID: `%s`\n",
-			utils.CensorString(strconv.FormatUint(b.groupID, 10), b.privacyMode)))
+			utils.CensorString(strconv.FormatInt(b.groupID, 10), b.privacyMode)))
 	}
 
 	if b.reviewerID != 0 {
@@ -124,13 +124,13 @@ func (b *Builder) Build() *discord.MessageUpdateBuilder {
 
 			if log.ActivityTarget.UserID != 0 {
 				logsContent.WriteString(fmt.Sprintf("User: [%s](https://www.roblox.com/users/%d/profile)\n",
-					utils.CensorString(strconv.FormatUint(log.ActivityTarget.UserID, 10), b.privacyMode),
+					utils.CensorString(strconv.FormatInt(log.ActivityTarget.UserID, 10), b.privacyMode),
 					log.ActivityTarget.UserID))
 			}
 
 			if log.ActivityTarget.GroupID != 0 {
 				logsContent.WriteString(fmt.Sprintf("Group: [%s](https://www.roblox.com/communities/%d)\n",
-					utils.CensorString(strconv.FormatUint(log.ActivityTarget.GroupID, 10), b.privacyMode),
+					utils.CensorString(strconv.FormatInt(log.ActivityTarget.GroupID, 10), b.privacyMode),
 					log.ActivityTarget.GroupID))
 			}
 
@@ -179,9 +179,9 @@ func (b *Builder) buildInteractiveComponents() []discord.ContainerSubComponent {
 				discord.NewStringSelectMenuOption("Filter by Discord ID", constants.LogsQueryDiscordIDOption).
 					WithDescription(utils.CensorString(strconv.FormatUint(b.discordID, 10), b.privacyMode)),
 				discord.NewStringSelectMenuOption("Filter by User ID", constants.LogsQueryUserIDOption).
-					WithDescription(utils.CensorString(strconv.FormatUint(b.userID, 10), b.privacyMode)),
+					WithDescription(utils.CensorString(strconv.FormatInt(b.userID, 10), b.privacyMode)),
 				discord.NewStringSelectMenuOption("Filter by Group ID", constants.LogsQueryGroupIDOption).
-					WithDescription(utils.CensorString(strconv.FormatUint(b.groupID, 10), b.privacyMode)),
+					WithDescription(utils.CensorString(strconv.FormatInt(b.groupID, 10), b.privacyMode)),
 				discord.NewStringSelectMenuOption("Filter by Reviewer ID", constants.LogsQueryReviewerIDOption).
 					WithDescription(strconv.FormatUint(b.reviewerID, 10)),
 				discord.NewStringSelectMenuOption("Filter by Date Range", constants.LogsQueryDateRangeOption).

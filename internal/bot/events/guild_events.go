@@ -24,14 +24,14 @@ func NewGuildEventHandler(logger *zap.Logger) *GuildEventHandler {
 // OnGuildJoin handles the event when the bot joins a new guild.
 func (h *GuildEventHandler) OnGuildJoin(event *events.GuildJoin) {
 	h.logger.Info("Bot joined a new guild",
-		zap.String("guild_id", event.Guild.ID.String()),
+		zap.String("guildID", event.Guild.ID.String()),
 		zap.String("guild_name", event.Guild.Name))
 
 	// Register commands for this specific guild
 	err := h.registerGuildCommands(event)
 	if err != nil {
 		h.logger.Error("Failed to register guild commands",
-			zap.String("guild_id", event.Guild.ID.String()),
+			zap.String("guildID", event.Guild.ID.String()),
 			zap.Error(err))
 	}
 }
@@ -51,7 +51,7 @@ func (h *GuildEventHandler) registerGuildCommands(event *events.GuildJoin) error
 	}
 
 	h.logger.Debug("Successfully registered guild commands",
-		zap.String("guild_id", event.Guild.ID.String()))
+		zap.String("guildID", event.Guild.ID.String()))
 
 	return nil
 }

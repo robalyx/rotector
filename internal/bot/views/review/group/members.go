@@ -19,9 +19,9 @@ import (
 // MembersBuilder creates the visual layout for viewing a group's flagged members.
 type MembersBuilder struct {
 	group        *types.ReviewGroup
-	presences    map[uint64]*apiTypes.UserPresenceResponse
-	members      map[uint64]*types.ReviewUser
-	memberIDs    []uint64
+	presences    map[int64]*apiTypes.UserPresenceResponse
+	members      map[int64]*types.ReviewUser
+	memberIDs    []int64
 	start        int
 	page         int
 	totalItems   int
@@ -64,7 +64,7 @@ func (b *MembersBuilder) Build() *discord.MessageUpdateBuilder {
 	content.WriteString("## Group Members\n")
 	content.WriteString(fmt.Sprintf("```%s (%s)```\n",
 		utils.CensorString(b.group.Name, b.privacyMode),
-		utils.CensorString(strconv.FormatUint(b.group.ID, 10), b.privacyMode),
+		utils.CensorString(strconv.FormatInt(b.group.ID, 10), b.privacyMode),
 	))
 
 	// Add members list
@@ -100,7 +100,7 @@ func (b *MembersBuilder) Build() *discord.MessageUpdateBuilder {
 			enum.GroupReasonTypeMember,
 			reason,
 			200,
-			strconv.FormatUint(b.group.ID, 10),
+			strconv.FormatInt(b.group.ID, 10),
 			b.group.Name))
 
 		container = container.AddComponents(
@@ -149,7 +149,7 @@ func (b *MembersBuilder) Build() *discord.MessageUpdateBuilder {
 }
 
 // getMemberFieldName creates the field name for a member entry.
-func (b *MembersBuilder) getMemberFieldName(memberID uint64) string {
+func (b *MembersBuilder) getMemberFieldName(memberID int64) string {
 	var indicators []string
 
 	// Add presence indicator
@@ -201,7 +201,7 @@ func (b *MembersBuilder) getMemberFieldName(memberID uint64) string {
 }
 
 // getMemberFieldValue creates the field value for a member entry.
-func (b *MembersBuilder) getMemberFieldValue(memberID uint64) string {
+func (b *MembersBuilder) getMemberFieldValue(memberID int64) string {
 	var info []string
 
 	// Add presence details if available

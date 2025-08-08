@@ -273,7 +273,7 @@ func (m *SyncModel) DeleteUserGuildMemberships(ctx context.Context, userID uint6
 		}
 
 		m.logger.Debug("Deleted user data",
-			zap.Uint64("user_id", userID))
+			zap.Uint64("userID", userID))
 
 		return nil
 	})
@@ -402,7 +402,7 @@ func (m *SyncModel) MarkUserDataRedacted(ctx context.Context, userID uint64) err
 		}
 
 		m.logger.Debug("Marked user data as redacted",
-			zap.Uint64("user_id", userID))
+			zap.Uint64("userID", userID))
 
 		return nil
 	})
@@ -463,7 +463,7 @@ func (m *SyncModel) WhitelistDiscordUser(ctx context.Context, whitelist *types.D
 		}
 
 		m.logger.Debug("Added Discord user to whitelist",
-			zap.Uint64("user_id", whitelist.UserID))
+			zap.Uint64("userID", whitelist.UserID))
 
 		return nil
 	})

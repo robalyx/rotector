@@ -81,7 +81,7 @@ func (m *Menu) handleSelectMenu(ctx *interaction.Context, s *session.Session, cu
 		constants.QueueManagementButtonCustomID:
 		if !isReviewer {
 			m.layout.logger.Error("Non-reviewer attempted restricted action",
-				zap.Uint64("user_id", userID),
+				zap.Uint64("userID", userID),
 				zap.String("action", option))
 			ctx.Error("You do not have permission to perform this action.")
 
@@ -92,7 +92,7 @@ func (m *Menu) handleSelectMenu(ctx *interaction.Context, s *session.Session, cu
 		constants.GuildOwnerMenuButtonCustomID:
 		if !isAdmin {
 			m.layout.logger.Error("Non-admin attempted restricted action",
-				zap.Uint64("user_id", userID),
+				zap.Uint64("userID", userID),
 				zap.String("action", option))
 			ctx.Error("You do not have permission to perform this action.")
 
@@ -317,7 +317,7 @@ func (m *Menu) handleLookupDiscordUserModalSubmit(ctx *interaction.Context, s *s
 	// Log the lookup action
 	m.layout.db.Model().Activity().Log(ctx.Context(), &types.ActivityLog{
 		ActivityTarget: types.ActivityTarget{
-			UserID: discordUserID,
+			DiscordID: discordUserID,
 		},
 		ReviewerID:        uint64(ctx.Event().User().ID),
 		ActivityType:      enum.ActivityTypeUserLookupDiscord,
@@ -340,7 +340,7 @@ func (m *Menu) handleButton(ctx *interaction.Context, s *session.Session, custom
 	case constants.StartUserReviewButtonCustomID:
 		if !isReviewer {
 			m.layout.logger.Error("Non-reviewer attempted restricted action",
-				zap.Uint64("user_id", userID),
+				zap.Uint64("userID", userID),
 				zap.String("action", customID))
 			ctx.Error("You do not have permission to perform this action.")
 
@@ -351,7 +351,7 @@ func (m *Menu) handleButton(ctx *interaction.Context, s *session.Session, custom
 	case constants.StartGroupReviewButtonCustomID:
 		if !isAdmin {
 			m.layout.logger.Error("Non-admin attempted restricted action",
-				zap.Uint64("user_id", userID),
+				zap.Uint64("userID", userID),
 				zap.String("action", customID))
 			ctx.Error("You do not have permission to perform this action.")
 

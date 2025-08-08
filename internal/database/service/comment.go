@@ -44,7 +44,7 @@ func (s *CommentService) AddGroupComment(ctx context.Context, comment *types.Gro
 }
 
 // addComment handles the common logic for adding comments to users or groups.
-func (s *CommentService) addComment(ctx context.Context, targetID, commenterID uint64, message string, isUserComment bool) error {
+func (s *CommentService) addComment(ctx context.Context, targetID int64, commenterID uint64, message string, isUserComment bool) error {
 	// Get existing comments for this target
 	var (
 		existingComments []*types.Comment

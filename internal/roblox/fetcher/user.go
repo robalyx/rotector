@@ -20,7 +20,7 @@ type UserFetchResult struct {
 	Friends       []*apiTypes.ExtendedFriend
 	Games         []*apiTypes.Game
 	Outfits       []*apiTypes.Outfit
-	OutfitAssets  map[uint64][]*apiTypes.AssetV2
+	OutfitAssets  map[int64][]*apiTypes.AssetV2
 	CurrentAssets []*apiTypes.AssetV2
 }
 
@@ -51,10 +51,10 @@ func NewUserFetcher(app *setup.App, logger *zap.Logger) *UserFetcher {
 }
 
 // FetchInfos retrieves complete user information for a batch of user IDs.
-func (u *UserFetcher) FetchInfos(ctx context.Context, userIDs []uint64) []*types.ReviewUser {
+func (u *UserFetcher) FetchInfos(ctx context.Context, userIDs []int64) []*types.ReviewUser {
 	var (
 		validUsers = make([]*types.ReviewUser, 0, len(userIDs))
-		userMap    = make(map[uint64]*types.User)
+		userMap    = make(map[int64]*types.User)
 		p          = pool.New().WithContext(ctx)
 		mu         sync.Mutex
 	)
@@ -66,7 +66,7 @@ func (u *UserFetcher) FetchInfos(ctx context.Context, userIDs []uint64) []*types
 			userInfo, err := u.roAPI.Users().GetUserByID(ctx, id)
 			if err != nil {
 				u.logger.Error("Error fetching user info",
-					zap.Uint64("userID", id),
+					zap.Int64("userID", id),
 					zap.Error(err))
 
 				return nil // Don't fail the whole batch for one error
@@ -151,9 +151,9 @@ func (u *UserFetcher) FetchInfos(ctx context.Context, userIDs []uint64) []*types
 
 // FetchBannedUsers checks which users from a batch of IDs are currently banned.
 // Returns a slice of banned user IDs.
-func (u *UserFetcher) FetchBannedUsers(ctx context.Context, userIDs []uint64) ([]uint64, error) {
+func (u *UserFetcher) FetchBannedUsers(ctx context.Context, userIDs []int64) ([]int64, error) {
 	var (
-		results = make([]uint64, 0, len(userIDs))
+		results = make([]int64, 0, len(userIDs))
 		p       = pool.New().WithContext(ctx)
 		mu      sync.Mutex
 	)
@@ -164,7 +164,7 @@ func (u *UserFetcher) FetchBannedUsers(ctx context.Context, userIDs []uint64) ([
 			userInfo, err := u.roAPI.Users().GetUserByID(ctx, id)
 			if err != nil {
 				u.logger.Error("Error fetching user info",
-					zap.Uint64("userID", id),
+					zap.Int64("userID", id),
 					zap.Error(err))
 
 				return nil // Don't fail the whole batch for one error
@@ -196,9 +196,9 @@ func (u *UserFetcher) FetchBannedUsers(ctx context.Context, userIDs []uint64) ([
 }
 
 // fetchUserData retrieves a user's group memberships, friend list, and games concurrently.
-func (u *UserFetcher) fetchUserData(ctx context.Context, userID uint64) *UserFetchResult {
+func (u *UserFetcher) fetchUserData(ctx context.Context, userID int64) *UserFetchResult {
 	result := &UserFetchResult{
-		OutfitAssets: make(map[uint64][]*apiTypes.AssetV2),
+		OutfitAssets: make(map[int64][]*apiTypes.AssetV2),
 	}
 	p := pool.New().WithContext(ctx)
 
@@ -210,7 +210,7 @@ func (u *UserFetcher) fetchUserData(ctx context.Context, userID uint64) *UserFet
 		if err != nil {
 			u.logger.Warn("Failed to fetch user groups",
 				zap.Error(err),
-				zap.Uint64("userID", userID))
+				zap.Int64("userID", userID))
 		}
 
 		return nil
@@ -224,7 +224,7 @@ func (u *UserFetcher) fetchUserData(ctx context.Context, userID uint64) *UserFet
 		if err != nil {
 			u.logger.Warn("Failed to fetch user friends",
 				zap.Error(err),
-				zap.Uint64("userID", userID))
+				zap.Int64("userID", userID))
 		}
 
 		return nil
@@ -238,7 +238,7 @@ func (u *UserFetcher) fetchUserData(ctx context.Context, userID uint64) *UserFet
 		if err != nil {
 			u.logger.Warn("Failed to fetch user games",
 				zap.Error(err),
-				zap.Uint64("userID", userID))
+				zap.Int64("userID", userID))
 		}
 
 		return nil
@@ -250,7 +250,7 @@ func (u *UserFetcher) fetchUserData(ctx context.Context, userID uint64) *UserFet
 		if err != nil {
 			u.logger.Warn("Failed to fetch user outfits",
 				zap.Error(err),
-				zap.Uint64("userID", userID))
+				zap.Int64("userID", userID))
 
 			return nil
 		}
@@ -271,7 +271,7 @@ func (u *UserFetcher) fetchUserData(ctx context.Context, userID uint64) *UserFet
 	// 		}
 	// 		u.logger.Warn("Failed to fetch user inventory",
 	// 			zap.Error(err),
-	// 			zap.Uint64("userID", userID))
+	// 			zap.Int64("userID", userID))
 	// 	}
 	// 	return nil
 	// })

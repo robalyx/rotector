@@ -90,8 +90,8 @@ func (m *ConfirmMenu) handleBanUser(ctx *interaction.Context, s *session.Session
 	}); err != nil {
 		m.layout.logger.Error("Failed to ban user",
 			zap.Error(err),
-			zap.Uint64("user_id", id),
-			zap.Uint64("admin_id", uint64(ctx.Event().User().ID)),
+			zap.Uint64("userID", id),
+			zap.Uint64("adminID", uint64(ctx.Event().User().ID)),
 		)
 		ctx.Error("Failed to ban user. Please try again.")
 
@@ -130,8 +130,8 @@ func (m *ConfirmMenu) handleUnbanUser(ctx *interaction.Context, userID string, n
 	if err != nil {
 		m.layout.logger.Error("Failed to unban user",
 			zap.Error(err),
-			zap.Uint64("user_id", id),
-			zap.Uint64("admin_id", uint64(ctx.Event().User().ID)),
+			zap.Uint64("userID", id),
+			zap.Uint64("adminID", uint64(ctx.Event().User().ID)),
 		)
 		ctx.Error("Failed to unban user. Please try again.")
 
@@ -163,8 +163,13 @@ func (m *ConfirmMenu) handleUnbanUser(ctx *interaction.Context, userID string, n
 // handleDeleteUser processes the user deletion action.
 func (m *ConfirmMenu) handleDeleteUser(ctx *interaction.Context, idStr string, reason string) {
 	// Parse ID from modal
-	id, err := strconv.ParseUint(idStr, 10, 64)
+	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
+		ctx.Cancel("Invalid ID format.")
+		return
+	}
+
+	if id <= 0 {
 		ctx.Cancel("Invalid ID format.")
 		return
 	}
@@ -174,7 +179,7 @@ func (m *ConfirmMenu) handleDeleteUser(ctx *interaction.Context, idStr string, r
 	if err != nil {
 		m.layout.logger.Error("Failed to delete user",
 			zap.Error(err),
-			zap.Uint64("id", id))
+			zap.Int64("id", id))
 		ctx.Error("Failed to delete user. Please try again.")
 
 		return
@@ -205,8 +210,13 @@ func (m *ConfirmMenu) handleDeleteUser(ctx *interaction.Context, idStr string, r
 // handleDeleteGroup processes the group deletion action.
 func (m *ConfirmMenu) handleDeleteGroup(ctx *interaction.Context, idStr string, reason string) {
 	// Parse ID from modal
-	id, err := strconv.ParseUint(idStr, 10, 64)
+	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
+		ctx.Cancel("Invalid ID format.")
+		return
+	}
+
+	if id <= 0 {
 		ctx.Cancel("Invalid ID format.")
 		return
 	}
@@ -216,7 +226,7 @@ func (m *ConfirmMenu) handleDeleteGroup(ctx *interaction.Context, idStr string, 
 	if err != nil {
 		m.layout.logger.Error("Failed to delete group",
 			zap.Error(err),
-			zap.Uint64("id", id))
+			zap.Int64("id", id))
 		ctx.Error("Failed to delete group. Please try again.")
 
 		return

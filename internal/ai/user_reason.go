@@ -36,7 +36,7 @@ type UserReasonRequest struct {
 	ViolationLocation []string     `json:"violationLocation,omitempty"` // Locations of violations
 	LanguagePattern   []string     `json:"languagePattern,omitempty"`   // Linguistic patterns detected
 	LanguageUsed      []string     `json:"languageUsed,omitempty"`      // Languages or encodings detected in content
-	UserID            uint64       `json:"-"`                           // User ID stored for internal reference, not sent to AI
+	UserID            int64        `json:"-"`                           // User ID stored for internal reference, not sent to AI
 }
 
 // UserReasonResponse contains the detailed reason analysis with evidence.
@@ -93,8 +93,8 @@ func NewUserReasonAnalyzer(app *setup.App, logger *zap.Logger) *UserReasonAnalyz
 
 // ProcessFlaggedUsers generates detailed reasons and evidence for users flagged.
 func (a *UserReasonAnalyzer) ProcessFlaggedUsers(
-	ctx context.Context, userReasonRequests map[uint64]UserReasonRequest, translatedInfos map[string]*types.ReviewUser,
-	originalInfos map[string]*types.ReviewUser, reasonsMap map[uint64]types.Reasons[enum.UserReasonType],
+	ctx context.Context, userReasonRequests map[int64]UserReasonRequest, translatedInfos map[string]*types.ReviewUser,
+	originalInfos map[string]*types.ReviewUser, reasonsMap map[int64]types.Reasons[enum.UserReasonType],
 	retryCount int,
 ) {
 	if len(userReasonRequests) == 0 {
@@ -121,7 +121,7 @@ func (a *UserReasonAnalyzer) ProcessFlaggedUsers(
 	var (
 		mu              sync.Mutex
 		invalidMu       sync.Mutex
-		invalidRequests = make(map[uint64]UserReasonRequest)
+		invalidRequests = make(map[int64]UserReasonRequest)
 	)
 
 	minBatchSize := max(len(requestSlice)/4, 1)
@@ -308,11 +308,11 @@ func (a *UserReasonAnalyzer) processReasonBatch(ctx context.Context, batch []Use
 // Returns a map of usernames that had invalid results and need retry.
 func (a *UserReasonAnalyzer) processResults(
 	results *ReasonAnalysisResult, batch []UserReasonRequest, translatedInfos map[string]*types.ReviewUser,
-	originalInfos map[string]*types.ReviewUser, reasonsMap map[uint64]types.Reasons[enum.UserReasonType],
+	originalInfos map[string]*types.ReviewUser, reasonsMap map[int64]types.Reasons[enum.UserReasonType],
 	mu *sync.Mutex,
-) map[uint64]UserReasonRequest {
+) map[int64]UserReasonRequest {
 	// Create map for retry requests
-	invalidRequests := make(map[uint64]UserReasonRequest)
+	invalidRequests := make(map[int64]UserReasonRequest)
 
 	// If no results returned, mark all users for retry
 	if results == nil || len(results.Results) == 0 {

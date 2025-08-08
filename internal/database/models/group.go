@@ -366,9 +366,9 @@ func (r *GroupModel) GetGroupByID(
 // GetGroupsByIDs retrieves specified group information for a list of group IDs.
 // Returns a map of group IDs to review groups.
 func (r *GroupModel) GetGroupsByIDs(
-	ctx context.Context, groupIDs []uint64, fields types.GroupField,
-) (map[uint64]*types.ReviewGroup, error) {
-	groups := make(map[uint64]*types.ReviewGroup)
+	ctx context.Context, groupIDs []int64, fields types.GroupField,
+) (map[int64]*types.ReviewGroup, error) {
+	groups := make(map[int64]*types.ReviewGroup)
 
 	err := dbretry.Transaction(ctx, r.db, func(ctx context.Context, tx bun.Tx) error {
 		// Query all groups
@@ -416,18 +416,18 @@ func (r *GroupModel) GetGroupsByIDs(
 		}
 
 		// Map verifications and clearances by group ID
-		verificationMap := make(map[uint64]types.GroupVerification)
+		verificationMap := make(map[int64]types.GroupVerification)
 		for _, v := range verifications {
 			verificationMap[v.GroupID] = v
 		}
 
-		clearanceMap := make(map[uint64]types.GroupClearance)
+		clearanceMap := make(map[int64]types.GroupClearance)
 		for _, c := range clearances {
 			clearanceMap[c.GroupID] = c
 		}
 
 		// Map reasons by group ID
-		reasonMap := make(map[uint64]types.Reasons[enum.GroupReasonType])
+		reasonMap := make(map[int64]types.Reasons[enum.GroupReasonType])
 		for _, reason := range reasons {
 			if _, ok := reasonMap[reason.GroupID]; !ok {
 				reasonMap[reason.GroupID] = make(types.Reasons[enum.GroupReasonType])
@@ -501,7 +501,7 @@ func (r *GroupModel) GetFlaggedAndConfirmedGroups(ctx context.Context) ([]*types
 // GetGroupsToCheck finds groups that haven't been checked for locked status recently.
 func (r *GroupModel) GetGroupsToCheck(
 	ctx context.Context, limit int,
-) (groupIDs []uint64, lockedIDs []uint64, err error) {
+) (groupIDs []int64, lockedIDs []int64, err error) {
 	var groups []types.Group
 
 	err = dbretry.Transaction(ctx, r.db, func(ctx context.Context, tx bun.Tx) error {
@@ -520,7 +520,7 @@ func (r *GroupModel) GetGroupsToCheck(
 		}
 
 		if len(groups) > 0 {
-			groupIDs = make([]uint64, 0, len(groups))
+			groupIDs = make([]int64, 0, len(groups))
 			for _, group := range groups {
 				groupIDs = append(groupIDs, group.ID)
 				if group.IsLocked {
@@ -546,7 +546,7 @@ func (r *GroupModel) GetGroupsToCheck(
 }
 
 // MarkGroupsLockStatus updates the locked status of groups.
-func (r *GroupModel) MarkGroupsLockStatus(ctx context.Context, groupIDs []uint64, isLocked bool) error {
+func (r *GroupModel) MarkGroupsLockStatus(ctx context.Context, groupIDs []int64, isLocked bool) error {
 	return dbretry.NoResult(ctx, func(ctx context.Context) error {
 		_, err := r.db.NewUpdate().
 			Model((*types.Group)(nil)).
@@ -647,7 +647,7 @@ func (r *GroupModel) PurgeOldClearedGroups(ctx context.Context, cutoffDate time.
 		}
 
 		if len(clearances) > 0 {
-			groupIDs := make([]uint64, len(clearances))
+			groupIDs := make([]int64, len(clearances))
 			for i, c := range clearances {
 				groupIDs[i] = c.GroupID
 			}
@@ -686,8 +686,8 @@ func (r *GroupModel) PurgeOldClearedGroups(ctx context.Context, cutoffDate time.
 }
 
 // GetGroupsForThumbnailUpdate retrieves groups that need thumbnail updates.
-func (r *GroupModel) GetGroupsForThumbnailUpdate(ctx context.Context, limit int) (map[uint64]*types.ReviewGroup, error) {
-	groups := make(map[uint64]*types.ReviewGroup)
+func (r *GroupModel) GetGroupsForThumbnailUpdate(ctx context.Context, limit int) (map[int64]*types.ReviewGroup, error) {
+	groups := make(map[int64]*types.ReviewGroup)
 
 	err := dbretry.Transaction(ctx, r.db, func(ctx context.Context, tx bun.Tx) error {
 		var baseGroups []types.Group
@@ -719,7 +719,7 @@ func (r *GroupModel) GetGroupsForThumbnailUpdate(ctx context.Context, limit int)
 }
 
 // DeleteGroup removes a group and all associated data from the database.
-func (r *GroupModel) DeleteGroup(ctx context.Context, groupID uint64) (bool, error) {
+func (r *GroupModel) DeleteGroup(ctx context.Context, groupID int64) (bool, error) {
 	var totalAffected int64
 
 	err := dbretry.Transaction(ctx, r.db, func(ctx context.Context, tx bun.Tx) error {
@@ -819,7 +819,7 @@ func (r *GroupModel) GetGroupToScan(ctx context.Context) (*types.Group, error) {
 //
 // Deprecated: Use Service().Group().GetGroupToReview() instead.
 func (r *GroupModel) GetNextToReview(
-	ctx context.Context, targetStatus enum.GroupType, sortBy enum.ReviewSortBy, recentIDs []uint64,
+	ctx context.Context, targetStatus enum.GroupType, sortBy enum.ReviewSortBy, recentIDs []int64,
 ) (*types.ReviewGroup, error) {
 	var (
 		group  types.Group

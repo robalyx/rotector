@@ -77,19 +77,19 @@ func (s *UserService) ClearUserWithTx(ctx context.Context, tx bun.Tx, user *type
 	}
 
 	// Remove user from all group tracking
-	if err := s.tracking.RemoveUsersFromAllGroupsWithTx(ctx, tx, []uint64{user.ID}); err != nil {
+	if err := s.tracking.RemoveUsersFromAllGroupsWithTx(ctx, tx, []int64{user.ID}); err != nil {
 		s.logger.Error("Failed to remove user from group tracking", zap.Error(err))
 		return err
 	}
 
 	// Remove user and their outfits from asset tracking
-	if err := s.tracking.RemoveUsersFromAssetTrackingWithTx(ctx, tx, []uint64{user.ID}); err != nil {
+	if err := s.tracking.RemoveUsersFromAssetTrackingWithTx(ctx, tx, []int64{user.ID}); err != nil {
 		s.logger.Error("Failed to remove user from outfit asset tracking", zap.Error(err))
 		return err
 	}
 
 	// Remove user from game tracking
-	if err := s.tracking.RemoveUsersFromGameTrackingWithTx(ctx, tx, []uint64{user.ID}); err != nil {
+	if err := s.tracking.RemoveUsersFromGameTrackingWithTx(ctx, tx, []int64{user.ID}); err != nil {
 		s.logger.Error("Failed to remove user from game tracking", zap.Error(err))
 		return err
 	}
@@ -110,7 +110,7 @@ func (s *UserService) GetUserByID(
 	// Get specific relationships if requested
 	relationshipFields := fields & types.UserFieldRelationships
 	if relationshipFields != 0 {
-		relationships := s.GetUsersRelationships(ctx, []uint64{user.ID}, relationshipFields)
+		relationships := s.GetUsersRelationships(ctx, []int64{user.ID}, relationshipFields)
 		if rel, exists := relationships[user.ID]; exists {
 			if fields.Has(types.UserFieldGroups) {
 				user.Groups = rel.Groups
@@ -152,10 +152,10 @@ func (s *UserService) GetUserByID(
 
 // GetUsersByIDs retrieves multiple users by their IDs with specified fields.
 func (s *UserService) GetUsersByIDs(
-	ctx context.Context, userIDs []uint64, fields types.UserField,
-) (map[uint64]*types.ReviewUser, error) {
+	ctx context.Context, userIDs []int64, fields types.UserField,
+) (map[int64]*types.ReviewUser, error) {
 	if len(userIDs) == 0 {
-		return make(map[uint64]*types.ReviewUser), nil
+		return make(map[int64]*types.ReviewUser), nil
 	}
 
 	// Get users from the model layer
@@ -218,7 +218,7 @@ func (s *UserService) GetUserToReview(
 	if err != nil {
 		s.logger.Error("Failed to get recently reviewed user IDs", zap.Error(err))
 
-		recentIDs = []uint64{} // Continue without filtering if there's an error
+		recentIDs = []int64{} // Continue without filtering if there's an error
 	}
 
 	// Determine target status based on mode
@@ -285,8 +285,8 @@ func (s *UserService) GetUserToReview(
 }
 
 // GetUserRelationships fetches all relationships for a user.
-func (s *UserService) GetUserRelationships(ctx context.Context, userID uint64) (*types.ReviewUser, error) {
-	results := s.GetUsersRelationships(ctx, []uint64{userID}, types.UserFieldRelationships)
+func (s *UserService) GetUserRelationships(ctx context.Context, userID int64) (*types.ReviewUser, error) {
+	results := s.GetUsersRelationships(ctx, []int64{userID}, types.UserFieldRelationships)
 	if result, exists := results[userID]; exists {
 		return result, nil
 	}
@@ -296,13 +296,13 @@ func (s *UserService) GetUserRelationships(ctx context.Context, userID uint64) (
 
 // GetUsersRelationships fetches only the requested relationships for multiple users.
 func (s *UserService) GetUsersRelationships(
-	ctx context.Context, userIDs []uint64, relationshipFields types.UserField,
-) map[uint64]*types.ReviewUser {
+	ctx context.Context, userIDs []int64, relationshipFields types.UserField,
+) map[int64]*types.ReviewUser {
 	if len(userIDs) == 0 {
-		return make(map[uint64]*types.ReviewUser)
+		return make(map[int64]*types.ReviewUser)
 	}
 
-	result := make(map[uint64]*types.ReviewUser)
+	result := make(map[int64]*types.ReviewUser)
 	for _, userID := range userIDs {
 		result[userID] = &types.ReviewUser{}
 	}
@@ -457,16 +457,16 @@ func (s *UserService) GetUsersRelationships(
 	// Wait for all goroutines
 	if err := p.Wait(); err != nil {
 		s.logger.Error("Failed to get users relationships", zap.Error(err))
-		return make(map[uint64]*types.ReviewUser)
+		return make(map[int64]*types.ReviewUser)
 	}
 
 	return result
 }
 
 // SaveUsers handles the business logic for saving users.
-func (s *UserService) SaveUsers(ctx context.Context, users map[uint64]*types.ReviewUser) error {
+func (s *UserService) SaveUsers(ctx context.Context, users map[int64]*types.ReviewUser) error {
 	// Get list of user IDs to check
-	userIDs := make([]uint64, 0, len(users))
+	userIDs := make([]int64, 0, len(users))
 	for id := range users {
 		userIDs = append(userIDs, id)
 	}
@@ -525,14 +525,14 @@ func (s *UserService) SaveUsers(ctx context.Context, users map[uint64]*types.Rev
 		}
 
 		// Prepare batch data structures
-		userGroups := make(map[uint64][]*apiTypes.UserGroupRoles)
-		userOutfits := make(map[uint64][]*apiTypes.Outfit)
-		userOutfitAssets := make(map[uint64]map[uint64][]*apiTypes.AssetV2)
-		userAssets := make(map[uint64][]*apiTypes.AssetV2)
-		userFriends := make(map[uint64][]*apiTypes.ExtendedFriend)
-		userFavorites := make(map[uint64][]*apiTypes.Game)
-		userGames := make(map[uint64][]*apiTypes.Game)
-		userInventory := make(map[uint64][]*apiTypes.InventoryAsset)
+		userGroups := make(map[int64][]*apiTypes.UserGroupRoles)
+		userOutfits := make(map[int64][]*apiTypes.Outfit)
+		userOutfitAssets := make(map[int64]map[int64][]*apiTypes.AssetV2)
+		userAssets := make(map[int64][]*apiTypes.AssetV2)
+		userFriends := make(map[int64][]*apiTypes.ExtendedFriend)
+		userFavorites := make(map[int64][]*apiTypes.Game)
+		userGames := make(map[int64][]*apiTypes.Game)
+		userInventory := make(map[int64][]*apiTypes.InventoryAsset)
 
 		// Collect all relationships
 		for _, user := range usersToSave {
@@ -609,7 +609,7 @@ func (s *UserService) SaveUsers(ctx context.Context, users map[uint64]*types.Rev
 }
 
 // DeleteUsers removes multiple users and all their associated data from the database.
-func (s *UserService) DeleteUsers(ctx context.Context, userIDs []uint64) (int64, error) {
+func (s *UserService) DeleteUsers(ctx context.Context, userIDs []int64) (int64, error) {
 	if len(userIDs) == 0 {
 		return 0, nil
 	}
@@ -631,7 +631,7 @@ func (s *UserService) DeleteUsers(ctx context.Context, userIDs []uint64) (int64,
 }
 
 // DeleteUsersWithTx removes multiple users and all their associated data from the database using the provided transaction.
-func (s *UserService) DeleteUsersWithTx(ctx context.Context, tx bun.Tx, userIDs []uint64) (int64, error) {
+func (s *UserService) DeleteUsersWithTx(ctx context.Context, tx bun.Tx, userIDs []int64) (int64, error) {
 	if len(userIDs) == 0 {
 		return 0, nil
 	}
@@ -713,8 +713,8 @@ func (s *UserService) DeleteUsersWithTx(ctx context.Context, tx bun.Tx, userIDs 
 }
 
 // DeleteUser removes a single user and all associated data from the database.
-func (s *UserService) DeleteUser(ctx context.Context, userID uint64) (bool, error) {
-	affected, err := s.DeleteUsers(ctx, []uint64{userID})
+func (s *UserService) DeleteUser(ctx context.Context, userID int64) (bool, error) {
+	affected, err := s.DeleteUsers(ctx, []int64{userID})
 	if err != nil {
 		return false, err
 	}

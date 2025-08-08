@@ -16,18 +16,18 @@ import (
 
 // GroupCheckerParams contains all the parameters needed for group checker processing.
 type GroupCheckerParams struct {
-	Users                    []*types.ReviewUser                           `json:"users"`
-	ReasonsMap               map[uint64]types.Reasons[enum.UserReasonType] `json:"reasonsMap"`
-	ConfirmedFriendsMap      map[uint64]map[uint64]*types.ReviewUser       `json:"confirmedFriendsMap"`
-	FlaggedFriendsMap        map[uint64]map[uint64]*types.ReviewUser       `json:"flaggedFriendsMap"`
-	ConfirmedGroupsMap       map[uint64]map[uint64]*types.ReviewGroup      `json:"confirmedGroupsMap"`
-	FlaggedGroupsMap         map[uint64]map[uint64]*types.ReviewGroup      `json:"flaggedGroupsMap"`
-	InappropriateGroupsFlags map[uint64]struct{}                           `json:"inappropriateGroupsFlags"`
+	Users                    []*types.ReviewUser                          `json:"users"`
+	ReasonsMap               map[int64]types.Reasons[enum.UserReasonType] `json:"reasonsMap"`
+	ConfirmedFriendsMap      map[int64]map[int64]*types.ReviewUser        `json:"confirmedFriendsMap"`
+	FlaggedFriendsMap        map[int64]map[int64]*types.ReviewUser        `json:"flaggedFriendsMap"`
+	ConfirmedGroupsMap       map[int64]map[int64]*types.ReviewGroup       `json:"confirmedGroupsMap"`
+	FlaggedGroupsMap         map[int64]map[int64]*types.ReviewGroup       `json:"flaggedGroupsMap"`
+	InappropriateGroupsFlags map[int64]struct{}                           `json:"inappropriateGroupsFlags"`
 }
 
 // GroupCheckResult contains the result of checking a user's groups.
 type GroupCheckResult struct {
-	UserID      uint64
+	UserID      int64
 	User        *types.User
 	AutoFlagged bool
 }
@@ -38,7 +38,7 @@ type GroupChecker struct {
 	db                   database.Client
 	groupReasonAnalyzer  *ai.GroupReasonAnalyzer
 	logger               *zap.Logger
-	maxGroupMembersTrack uint64
+	maxGroupMembersTrack int64
 	minFlaggedOverride   int
 	minFlaggedPercentage float64
 }
@@ -58,10 +58,10 @@ func NewGroupChecker(app *setup.App, logger *zap.Logger) *GroupChecker {
 
 // CheckGroupPercentages analyzes groups to find those exceeding the flagged user threshold.
 func (c *GroupChecker) CheckGroupPercentages(
-	ctx context.Context, groupInfos []*apiTypes.GroupResponse, groupToFlaggedUsers map[uint64][]uint64,
-) map[uint64]*types.ReviewGroup {
-	flaggedGroups := make(map[uint64]*types.ReviewGroup)
-	largeGroupIDs := make([]uint64, 0)
+	ctx context.Context, groupInfos []*apiTypes.GroupResponse, groupToFlaggedUsers map[int64][]int64,
+) map[int64]*types.ReviewGroup {
+	flaggedGroups := make(map[int64]*types.ReviewGroup)
+	largeGroupIDs := make([]int64, 0)
 
 	// Identify groups that exceed thresholds
 	for _, groupInfo := range groupInfos {
@@ -113,7 +113,7 @@ func (c *GroupChecker) CheckGroupPercentages(
 		if err := c.db.Model().Tracking().RemoveGroupsFromTracking(ctx, largeGroupIDs); err != nil {
 			c.logger.Error("Failed to remove large groups from tracking",
 				zap.Error(err),
-				zap.Uint64s("groupIDs", largeGroupIDs))
+				zap.Int64s("groupIDs", largeGroupIDs))
 		} else {
 			c.logger.Info("Removed large groups from tracking",
 				zap.Int("count", len(largeGroupIDs)))
@@ -126,7 +126,7 @@ func (c *GroupChecker) CheckGroupPercentages(
 	}
 
 	// Collect all unique flagged user IDs
-	allFlaggedUserIDs := make([]uint64, 0)
+	allFlaggedUserIDs := make([]int64, 0)
 
 	for groupID := range flaggedGroups {
 		if flaggedUsers, ok := groupToFlaggedUsers[groupID]; ok {
@@ -157,12 +157,12 @@ func (c *GroupChecker) CheckGroupPercentages(
 // PrepareGroupMaps handles the preparation of confirmed and flagged group maps.
 func (c *GroupChecker) PrepareGroupMaps(
 	ctx context.Context, userInfos []*types.ReviewUser,
-) (map[uint64]map[uint64]*types.ReviewGroup, map[uint64]map[uint64]*types.ReviewGroup) {
-	confirmedGroupsMap := make(map[uint64]map[uint64]*types.ReviewGroup)
-	flaggedGroupsMap := make(map[uint64]map[uint64]*types.ReviewGroup)
+) (map[int64]map[int64]*types.ReviewGroup, map[int64]map[int64]*types.ReviewGroup) {
+	confirmedGroupsMap := make(map[int64]map[int64]*types.ReviewGroup)
+	flaggedGroupsMap := make(map[int64]map[int64]*types.ReviewGroup)
 
 	// Collect all unique group IDs across all users
-	uniqueGroupIDs := make(map[uint64]struct{})
+	uniqueGroupIDs := make(map[int64]struct{})
 
 	for _, userInfo := range userInfos {
 		for _, group := range userInfo.Groups {
@@ -171,13 +171,13 @@ func (c *GroupChecker) PrepareGroupMaps(
 	}
 
 	// Convert unique IDs to slice
-	groupIDs := make([]uint64, 0, len(uniqueGroupIDs))
+	groupIDs := make([]int64, 0, len(uniqueGroupIDs))
 	for groupID := range uniqueGroupIDs {
 		groupIDs = append(groupIDs, groupID)
 	}
 
 	// Fetch all existing groups if we have any
-	var existingGroups map[uint64]*types.ReviewGroup
+	var existingGroups map[int64]*types.ReviewGroup
 
 	if len(groupIDs) > 0 {
 		var err error
@@ -188,16 +188,16 @@ func (c *GroupChecker) PrepareGroupMaps(
 		if err != nil {
 			c.logger.Error("Failed to fetch existing groups", zap.Error(err))
 
-			existingGroups = make(map[uint64]*types.ReviewGroup)
+			existingGroups = make(map[int64]*types.ReviewGroup)
 		}
 	} else {
-		existingGroups = make(map[uint64]*types.ReviewGroup)
+		existingGroups = make(map[int64]*types.ReviewGroup)
 	}
 
 	// Prepare maps for confirmed and flagged groups per user
 	for _, userInfo := range userInfos {
-		confirmedGroups := make(map[uint64]*types.ReviewGroup)
-		flaggedGroups := make(map[uint64]*types.ReviewGroup)
+		confirmedGroups := make(map[int64]*types.ReviewGroup)
+		flaggedGroups := make(map[int64]*types.ReviewGroup)
 
 		for _, group := range userInfo.Groups {
 			if reviewGroup, exists := existingGroups[group.Group.ID]; exists {
@@ -227,7 +227,7 @@ func (c *GroupChecker) ProcessUsers(ctx context.Context, params *GroupCheckerPar
 	// Track users that exceed confidence threshold
 	var usersToAnalyze []*types.ReviewUser
 
-	userConfidenceMap := make(map[uint64]float64)
+	userConfidenceMap := make(map[int64]float64)
 
 	// Process results
 	for _, userInfo := range params.Users {
@@ -299,7 +299,7 @@ func (c *GroupChecker) ProcessUsers(ctx context.Context, params *GroupCheckerPar
 			})
 
 			c.logger.Debug("User flagged for group membership",
-				zap.Uint64("userID", userInfo.ID),
+				zap.Int64("userID", userInfo.ID),
 				zap.Int("confirmedGroups", confirmedCount),
 				zap.Int("flaggedGroups", flaggedCount),
 				zap.Float64("confidence", confidence),
@@ -314,7 +314,7 @@ func (c *GroupChecker) ProcessUsers(ctx context.Context, params *GroupCheckerPar
 }
 
 // calculateGroupConfidence computes the confidence score for a group based on its flagged users.
-func (c *GroupChecker) calculateGroupConfidence(flaggedUsers []uint64, users map[uint64]*types.ReviewUser) float64 {
+func (c *GroupChecker) calculateGroupConfidence(flaggedUsers []int64, users map[int64]*types.ReviewUser) float64 {
 	var (
 		totalConfidence float64
 		validUserCount  int
@@ -454,7 +454,7 @@ func (c *GroupChecker) evaluateFriendRequirement(
 
 // getInappropriateFriendCount returns the total count of inappropriate and confirmed friends count for a user.
 func (c *GroupChecker) getInappropriateFriendCount(
-	userID uint64, confirmedFriendsMap, flaggedFriendsMap map[uint64]map[uint64]*types.ReviewUser,
+	userID int64, confirmedFriendsMap, flaggedFriendsMap map[int64]map[int64]*types.ReviewUser,
 ) (confirmedFriendCount int, flaggedFriendCount int) {
 	if confirmedFriends, exists := confirmedFriendsMap[userID]; exists {
 		confirmedFriendCount = len(confirmedFriends)

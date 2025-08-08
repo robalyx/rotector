@@ -20,8 +20,8 @@ import (
 type FriendsBuilder struct {
 	user           *types.ReviewUser
 	friends        []*apiTypes.ExtendedFriend
-	presences      map[uint64]*apiTypes.UserPresenceResponse
-	flaggedFriends map[uint64]*types.ReviewUser
+	presences      map[int64]*apiTypes.UserPresenceResponse
+	flaggedFriends map[int64]*types.ReviewUser
 	start          int
 	page           int
 	totalItems     int
@@ -64,7 +64,7 @@ func (b *FriendsBuilder) Build() *discord.MessageUpdateBuilder {
 	content.WriteString("## User Friends\n")
 	content.WriteString(fmt.Sprintf("```%s (%s)```",
 		utils.CensorString(b.user.Name, b.privacyMode),
-		utils.CensorString(strconv.FormatUint(b.user.ID, 10), b.privacyMode),
+		utils.CensorString(strconv.FormatInt(b.user.ID, 10), b.privacyMode),
 	))
 
 	// Add friends list
@@ -105,7 +105,7 @@ func (b *FriendsBuilder) Build() *discord.MessageUpdateBuilder {
 			enum.UserReasonTypeFriend,
 			reason,
 			200,
-			strconv.FormatUint(b.user.ID, 10),
+			strconv.FormatInt(b.user.ID, 10),
 			b.user.Name,
 			b.user.DisplayName))
 
