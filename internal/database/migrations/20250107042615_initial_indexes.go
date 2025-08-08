@@ -36,38 +36,6 @@ func init() { //nolint:funlen
 			
 			CREATE INDEX IF NOT EXISTS idx_activity_logs_type_time 
 			ON activity_logs (activity_type, activity_timestamp DESC, sequence DESC);
-
-			-- Appeal indexes
-			CREATE INDEX IF NOT EXISTS idx_appeals_user_pending_type
-			ON appeals (user_id, type) WHERE status = 0;
-			CREATE INDEX IF NOT EXISTS idx_appeals_requester_pending_type
-			ON appeals (requester_id, type) WHERE status = 0;
-			CREATE INDEX IF NOT EXISTS idx_appeals_user_rejected_type
-			ON appeals (user_id, type, claimed_at DESC) WHERE status = 2;
-			CREATE INDEX IF NOT EXISTS idx_appeals_user_rejected_count
-			ON appeals (user_id, status) WHERE status = 2;
-			CREATE INDEX IF NOT EXISTS idx_appeals_claimed_by
-			ON appeals (claimed_by) WHERE claimed_by > 0;
-			CREATE INDEX IF NOT EXISTS idx_appeals_timestamp
-			ON appeals (timestamp DESC);
-			CREATE INDEX IF NOT EXISTS idx_appeals_status_timestamp
-			ON appeals (status, timestamp DESC);
-			CREATE INDEX IF NOT EXISTS idx_appeals_id_status
-			ON appeals (id, status);
-
-			-- Appeal timeline indexes
-			CREATE INDEX IF NOT EXISTS idx_appeal_timelines_timestamp_asc 
-			ON appeal_timelines (timestamp ASC, id ASC);
-
-			CREATE INDEX IF NOT EXISTS idx_appeal_timelines_timestamp_desc 
-			ON appeal_timelines (timestamp DESC, id DESC);
-
-			CREATE INDEX IF NOT EXISTS idx_appeal_timelines_activity_desc
-			ON appeal_timelines (last_activity DESC, id DESC);
-
-			-- Appeal messages index
-			CREATE INDEX IF NOT EXISTS idx_appeal_messages_appeal_created
-			ON appeal_messages (appeal_id, created_at ASC);
 			
 			-- Group tracking indexes
 			CREATE INDEX IF NOT EXISTS idx_group_member_trackings_check 
@@ -347,24 +315,6 @@ func init() { //nolint:funlen
 			DROP INDEX IF EXISTS idx_activity_logs_group_viewed;
 			DROP INDEX IF EXISTS idx_activity_logs_reviewer_time;
 			DROP INDEX IF EXISTS idx_activity_logs_type_time;
-
-			-- Appeal indexes
-			DROP INDEX IF EXISTS idx_appeals_user_pending_type;
-			DROP INDEX IF EXISTS idx_appeals_requester_pending_type;
-			DROP INDEX IF EXISTS idx_appeals_user_rejected_type;
-			DROP INDEX IF EXISTS idx_appeals_user_rejected_count;
-			DROP INDEX IF EXISTS idx_appeals_claimed_by;
-			DROP INDEX IF EXISTS idx_appeals_timestamp;
-			DROP INDEX IF EXISTS idx_appeals_status_timestamp;
-			DROP INDEX IF EXISTS idx_appeals_id_status;
-
-			-- Appeal timeline indexes
-			DROP INDEX IF EXISTS idx_appeal_timelines_timestamp_asc;
-			DROP INDEX IF EXISTS idx_appeal_timelines_timestamp_desc;
-			DROP INDEX IF EXISTS idx_appeal_timelines_activity_desc;
-
-			-- Appeal messages index
-			DROP INDEX IF EXISTS idx_appeal_messages_appeal_created;
 
 			-- Group tracking indexes
 			DROP INDEX IF EXISTS idx_group_member_trackings_check;

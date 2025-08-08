@@ -21,7 +21,6 @@ import (
 	"github.com/robalyx/rotector/internal/bot/core/session"
 	eventHandler "github.com/robalyx/rotector/internal/bot/events"
 	"github.com/robalyx/rotector/internal/bot/handlers/admin"
-	"github.com/robalyx/rotector/internal/bot/handlers/appeal"
 	"github.com/robalyx/rotector/internal/bot/handlers/ban"
 	"github.com/robalyx/rotector/internal/bot/handlers/captcha"
 	"github.com/robalyx/rotector/internal/bot/handlers/chat"
@@ -140,7 +139,6 @@ func New(app *setup.App) (*Bot, error) {
 	timeoutLayout := timeout.New(app)
 	userReviewLayout := userReview.New(app, interactionManager)
 	groupReviewLayout := groupReview.New(app, interactionManager)
-	appealLayout := appeal.New(app)
 	adminLayout := admin.New(app)
 	statusLayout := status.New(app)
 	dashboardLayout := dashboard.New(app, sessionManager)
@@ -158,7 +156,6 @@ func New(app *setup.App) (*Bot, error) {
 	interactionManager.AddPages(timeoutLayout.Pages())
 	interactionManager.AddPages(userReviewLayout.Pages())
 	interactionManager.AddPages(groupReviewLayout.Pages())
-	interactionManager.AddPages(appealLayout.Pages())
 	interactionManager.AddPages(adminLayout.Pages())
 	interactionManager.AddPages(statusLayout.Pages())
 	interactionManager.AddPages(dashboardLayout.Pages())
@@ -545,10 +542,7 @@ func (b *Bot) checkBanStatus(event interaction.CommonEvent, s *session.Session, 
 	}
 
 	// Handle banned user interactions
-	if !isCommandEvent && (pageName == constants.BanPageName ||
-		pageName == constants.AppealOverviewPageName ||
-		pageName == constants.AppealTicketPageName ||
-		pageName == constants.AppealVerifyPageName) {
+	if !isCommandEvent && pageName == constants.BanPageName {
 		b.interactionManager.HandleInteraction(event, s)
 		return true
 	}

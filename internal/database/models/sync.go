@@ -463,8 +463,7 @@ func (m *SyncModel) WhitelistDiscordUser(ctx context.Context, whitelist *types.D
 		}
 
 		m.logger.Debug("Added Discord user to whitelist",
-			zap.Uint64("user_id", whitelist.UserID),
-			zap.Int64("appeal_id", whitelist.AppealID))
+			zap.Uint64("user_id", whitelist.UserID))
 
 		return nil
 	})

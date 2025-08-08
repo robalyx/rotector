@@ -111,9 +111,7 @@ Our recommended method which uses an AI system actively analyzes messages sent i
 
 We take privacy laws and data protection regulations very seriously, setting us apart from other similar initiatives. While we keep historical data of user profiles even after updates for tracking behavior patterns, we have a way to comply with various privacy regulations including GDPR (European Union) and CCPA (California).
 
-Our appeal system serves multiple purposes. Not only can users appeal their flagged account(s), they can also request data deletion, access their stored information, or request an update of their records.
-
-When a data deletion request is received through the appeal system, we carefully validate the request and process it according to the applicable privacy law requirements. However, we may retain certain minimal information if required by law or legitimate interest, such as maintaining records of dangerous offenders.
+We provide mechanisms for users to request data deletion, access their stored information, or request an update of their records in accordance with privacy law requirements. However, we may retain certain minimal information if required by law or legitimate interest, such as maintaining records of dangerous offenders.
 
 </details>
 
@@ -160,7 +158,7 @@ Discord already has everything we need for reviewing accounts like buttons, drop
 
 No, confirmed and flagged users remain in the database permanently, even if they're banned or claim to have changed. This data retention helps track patterns of behavior and can be valuable for law enforcement investigations or identifying repeat offenders.
 
-We have a system in place to manage privacy laws. While users can request their data to be deleted through our appeal system in accordance with privacy regulations like GDPR and CCPA, their flag status will remain in our database regardless.
+We have a system in place to manage privacy laws. While users can request their data to be deleted in accordance with privacy regulations like GDPR and CCPA, their flag status will remain in our database regardless.
 
 </details>
 

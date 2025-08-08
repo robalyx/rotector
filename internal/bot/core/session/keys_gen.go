@@ -162,16 +162,6 @@ func main() {
 		{Name: "LogFilterDateRangeStart", Type: "time.Time", Doc: "LogFilterDateRangeStart stores start date filter", Persist: true},
 		{Name: "LogFilterDateRangeEnd", Type: "time.Time", Doc: "LogFilterDateRangeEnd stores end date filter", Persist: true},
 
-		// Appeal related keys
-		{Name: "AppealList", Type: "[]*types.FullAppeal", Doc: "AppealList stores the current page of appeals", Persist: true},
-		{Name: "AppealSelected", Type: "*types.FullAppeal", Doc: "AppealSelected stores the currently selected appeal", Persist: true},
-		{Name: "AppealMessages", Type: "[]*types.AppealMessage", Doc: "AppealMessages stores messages for the current appeal", Persist: true},
-		{Name: "AppealCursor", Type: "*types.AppealTimeline", Doc: "AppealCursor stores the current cursor position", Persist: true},
-		{Name: "AppealNextCursor", Type: "*types.AppealTimeline", Doc: "AppealNextCursor stores the next cursor position", Persist: true},
-		{Name: "AppealPrevCursors", Type: "[]*types.AppealTimeline", Doc: "AppealPrevCursors stores previous cursor positions", Persist: true},
-		{Name: "AppealType", Type: "enum.AppealType", Doc: "AppealType stores the type of appeal being created", Persist: true},
-		{Name: "AppealRejectedCount", Type: "int", Doc: "AppealRejectedCount stores the total number of rejected appeals for the user", Persist: true},
-
 		// Verify related keys
 		{Name: "VerifyUserID", Type: "uint64", Doc: "VerifyUserID stores the user ID being verified", Persist: true},
 		{Name: "VerifyReason", Type: "string", Doc: "VerifyReason stores the verification reason", Persist: true},

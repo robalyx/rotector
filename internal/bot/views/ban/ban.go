@@ -67,24 +67,11 @@ func (b *Builder) Build() *discord.MessageUpdateBuilder {
 		)
 	}
 
-	// Add appeal instructions
+	// Add contact instructions
 	mainDisplays = append(mainDisplays,
 		discord.NewLargeSeparator(),
-		discord.NewTextDisplay("### Appeals\nBoth Discord and Roblox bans can be appealed using the button below. "+
-			"However, as a precautionary measure, access to other parts of the Discord bot will remain "+
-			"restricted for users with a history of violations.\n\n"+
-			"If you believe this restriction was caused by a system error, please contact a staff member."),
+		discord.NewTextDisplay("### Contact\nIf you believe this restriction was caused by a system error, please contact a staff member."),
 	)
-
-	// Add appeals button if not in maintenance mode
-	if !b.maintenance {
-		mainDisplays = append(mainDisplays,
-			discord.NewLargeSeparator(),
-			discord.NewActionRow(
-				discord.NewPrimaryButton("View Appeals", constants.AppealMenuButtonCustomID),
-			),
-		)
-	}
 
 	mainContainer := discord.NewContainer(mainDisplays...).
 		WithAccentColor(constants.ErrorContainerColor)

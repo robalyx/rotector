@@ -27,7 +27,6 @@ func (b *Builder) Build() *discord.MessageUpdateBuilder {
 		discord.NewActionRow(
 			discord.NewSuccessButton("Accept", constants.ConsentAcceptButtonCustomID),
 			discord.NewDangerButton("Reject", constants.ConsentRejectButtonCustomID),
-			discord.NewSecondaryButton("Appeals", constants.AppealMenuButtonCustomID),
 		),
 	).WithAccentColor(constants.DefaultContainerColor)
 

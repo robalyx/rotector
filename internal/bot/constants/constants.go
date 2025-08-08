@@ -43,10 +43,6 @@ const (
 	AdminPageName              = "Admin Menu"
 	AdminActionConfirmPageName = "Action Confirmation"
 
-	AppealOverviewPageName = "Appeal Overview"
-	AppealTicketPageName   = "Appeal Ticket"
-	AppealVerifyPageName   = "Appeal Verification"
-
 	BotSettingsPageName   = "Bot Settings"
 	UserSettingsPageName  = "User Settings"
 	SettingUpdatePageName = "Setting Update"
@@ -79,7 +75,6 @@ const (
 	UserSettingsButtonCustomID      = "user_settings"
 	ActivityBrowserButtonCustomID   = "activity_browser"
 	AdminMenuButtonCustomID         = "admin_menu"
-	AppealMenuButtonCustomID        = "appeal_menu"
 	QueueManagementButtonCustomID   = "queue_management"
 	ChatAssistantButtonCustomID     = "chat_assistant"
 	WorkerStatusButtonCustomID      = "worker_status"
@@ -330,49 +325,6 @@ const (
 	LogsUserActivityCategoryOption  = "category_user"
 	LogsGroupActivityCategoryOption = "category_group"
 	LogsOtherActivityCategoryOption = "category_other"
-)
-
-// Appeal Menu.
-const (
-	AppealModalCustomID       = "appeal_modal"
-	AppealUserInputCustomID   = "appeal_user_input"
-	AppealReasonInputCustomID = "appeal_reason_input"
-
-	AppealCreateSelectID              = "appeal_create_select"
-	AppealCreateRobloxButtonCustomID  = "appeal_create_roblox" + ModalOpenSuffix
-	AppealCreateDiscordButtonCustomID = "appeal_create_discord" + ModalOpenSuffix
-
-	AppealLookupUserButtonCustomID = "appeal_lookup_user"
-	AcceptAppealButtonCustomID     = "accept_appeal" + ModalOpenSuffix
-	RejectAppealButtonCustomID     = "reject_appeal" + ModalOpenSuffix
-	ReopenAppealButtonCustomID     = "reopen_appeal"
-	AppealClaimButtonCustomID      = "appeal_claim"
-	AppealCloseButtonCustomID      = "appeal_close"
-
-	AcceptAppealModalCustomID  = "accept_appeal_modal"
-	RejectAppealModalCustomID  = "reject_appeal_modal"
-	AppealRespondModalCustomID = "appeal_respond_modal"
-
-	AppealSearchModalCustomID = "appeal_search_modal"
-	AppealIDInputCustomID     = "appeal_id_input"
-
-	DeleteUserDataButtonCustomID      = "delete_user_data" + ModalOpenSuffix
-	DeleteUserDataModalCustomID       = "delete_user_data_modal"
-	DeleteUserDataReasonInputCustomID = "delete_user_data_reason_input"
-
-	BlacklistUserButtonCustomID      = "blacklist_user" + ModalOpenSuffix
-	BlacklistUserModalCustomID       = "blacklist_user_modal"
-	BlacklistUserReasonInputCustomID = "blacklist_user_reason_input"
-
-	AppealsPerPage              = 5
-	AppealMessagesPerPage       = 5
-	AppealStatusSelectID        = "appeal_status"
-	AppealSortSelectID          = "appeal_sort"
-	AppealActionSelectID        = "appeal_action"
-	AppealRespondButtonCustomID = "appeal_respond" + ModalOpenSuffix
-	AppealSearchCustomID        = "appeal_search" + ModalOpenSuffix
-
-	VerifyDescriptionButtonID = "verify_description"
 )
 
 // CAPTCHA Menu.

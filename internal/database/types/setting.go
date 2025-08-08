@@ -31,8 +31,6 @@ type UserSetting struct {
 	StreamerMode        bool                     `bun:",notnull"`
 	UserDefaultSort     enum.ReviewSortBy        `bun:",notnull"`
 	GroupDefaultSort    enum.ReviewSortBy        `bun:",notnull"`
-	AppealDefaultSort   enum.AppealSortBy        `bun:",notnull"`
-	AppealStatusFilter  enum.AppealStatus        `bun:",notnull"`
 	ChatModel           enum.ChatModel           `bun:",notnull"`
 	ReviewMode          enum.ReviewMode          `bun:",notnull"`
 	ReviewTargetMode    enum.ReviewTargetMode    `bun:",notnull"`

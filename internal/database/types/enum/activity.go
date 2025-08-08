@@ -50,18 +50,13 @@ const (
 	// ActivityTypeUserLookupDiscord tracks when a moderator looks up a Discord user's profile.
 	ActivityTypeUserLookupDiscord
 
-	// ActivityTypeAppealSubmitted tracks when a moderator submits an appeal.
-	ActivityTypeAppealSubmitted
-	// ActivityTypeAppealClaimed tracks when a moderator claims an appeal.
-	ActivityTypeAppealClaimed
-	// ActivityTypeAppealAccepted tracks when a moderator accepts an appeal.
-	ActivityTypeAppealAccepted
-	// ActivityTypeAppealRejected tracks when a moderator rejects an appeal.
-	ActivityTypeAppealRejected
-	// ActivityTypeAppealClosed tracks when a user closes an appeal.
-	ActivityTypeAppealClosed
-	// ActivityTypeAppealReopened tracks when a user reopens an appeal.
-	ActivityTypeAppealReopened
+	ActivityTypeAppealSubmitted // Deprecated: kept for backwards compatibility
+	ActivityTypeAppealClaimed   // Deprecated: kept for backwards compatibility
+	ActivityTypeAppealAccepted  // Deprecated: kept for backwards compatibility
+	ActivityTypeAppealRejected  // Deprecated: kept for backwards compatibility
+	ActivityTypeAppealClosed    // Deprecated: kept for backwards compatibility
+	ActivityTypeAppealReopened  // Deprecated: kept for backwards compatibility
+
 	// ActivityTypeUserDataDeleted tracks when user data is deleted.
 	ActivityTypeUserDataDeleted
 	// ActivityTypeUserBlacklisted tracks when a user is blacklisted from submitting appeals.

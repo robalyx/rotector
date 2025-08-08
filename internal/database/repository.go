@@ -15,7 +15,6 @@ type Repository struct {
 	activity *models.ActivityModel
 	guildBan *models.GuildBanModel
 	tracking *models.TrackingModel
-	appeal   *models.AppealModel
 	ban      *models.BanModel
 	view     *models.MaterializedViewModel
 	consent  *models.ConsentModel
@@ -37,7 +36,6 @@ func NewRepository(db *bun.DB, logger *zap.Logger) *Repository {
 		activity: models.NewActivity(db, logger),
 		guildBan: models.NewGuildBan(db, logger),
 		tracking: models.NewTracking(db, logger),
-		appeal:   models.NewAppeal(db, logger),
 		ban:      models.NewBan(db, logger),
 		view:     models.NewMaterializedView(db, logger),
 		consent:  models.NewConsent(db, logger),
@@ -83,11 +81,6 @@ func (r *Repository) GuildBan() *models.GuildBanModel {
 // Tracking returns the tracking model repository.
 func (r *Repository) Tracking() *models.TrackingModel {
 	return r.tracking
-}
-
-// Appeal returns the appeal model repository.
-func (r *Repository) Appeal() *models.AppealModel {
-	return r.appeal
 }
 
 // Ban returns the ban model repository.

@@ -34,15 +34,13 @@ func NewSetting(db *bun.DB, logger *zap.Logger) *SettingModel {
 func (r *SettingModel) GetUserSettings(ctx context.Context, userID snowflake.ID) (*types.UserSetting, error) {
 	return dbretry.Operation(ctx, func(ctx context.Context) (*types.UserSetting, error) {
 		settings := &types.UserSetting{
-			UserID:             userID,
-			StreamerMode:       false,
-			UserDefaultSort:    enum.ReviewSortByRandom,
-			GroupDefaultSort:   enum.ReviewSortByRandom,
-			AppealDefaultSort:  enum.AppealSortByNewest,
-			AppealStatusFilter: enum.AppealStatusPending,
-			ChatModel:          enum.ChatModelGemini25Flash,
-			ReviewMode:         enum.ReviewModeStandard,
-			ReviewTargetMode:   enum.ReviewTargetModeFlagged,
+			UserID:           userID,
+			StreamerMode:     false,
+			UserDefaultSort:  enum.ReviewSortByRandom,
+			GroupDefaultSort: enum.ReviewSortByRandom,
+			ChatModel:        enum.ChatModelGemini25Flash,
+			ReviewMode:       enum.ReviewModeStandard,
+			ReviewTargetMode: enum.ReviewTargetModeFlagged,
 			ChatMessageUsage: types.ChatMessageUsage{
 				FirstMessageTime: time.Unix(0, 0),
 				MessageCount:     0,

@@ -252,16 +252,6 @@ func (b *Builder) buildActivityTypeOptions() []discord.StringSelectMenuOption {
 	}
 
 	otherOptions := []discord.StringSelectMenuOption{
-		discord.NewStringSelectMenuOption("Appeal Submitted", strconv.Itoa(int(enum.ActivityTypeAppealSubmitted))).
-			WithDefault(b.activityTypeFilter == enum.ActivityTypeAppealSubmitted),
-		discord.NewStringSelectMenuOption("Appeal Claimed", strconv.Itoa(int(enum.ActivityTypeAppealClaimed))).
-			WithDefault(b.activityTypeFilter == enum.ActivityTypeAppealClaimed),
-		discord.NewStringSelectMenuOption("Appeal Accepted", strconv.Itoa(int(enum.ActivityTypeAppealAccepted))).
-			WithDefault(b.activityTypeFilter == enum.ActivityTypeAppealAccepted),
-		discord.NewStringSelectMenuOption("Appeal Rejected", strconv.Itoa(int(enum.ActivityTypeAppealRejected))).
-			WithDefault(b.activityTypeFilter == enum.ActivityTypeAppealRejected),
-		discord.NewStringSelectMenuOption("Appeal Closed", strconv.Itoa(int(enum.ActivityTypeAppealClosed))).
-			WithDefault(b.activityTypeFilter == enum.ActivityTypeAppealClosed),
 		discord.NewStringSelectMenuOption("Discord User Banned", strconv.Itoa(int(enum.ActivityTypeDiscordUserBanned))).
 			WithDefault(b.activityTypeFilter == enum.ActivityTypeDiscordUserBanned),
 		discord.NewStringSelectMenuOption("Discord User Unbanned", strconv.Itoa(int(enum.ActivityTypeDiscordUserUnbanned))).

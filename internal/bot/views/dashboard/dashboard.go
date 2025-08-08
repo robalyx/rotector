@@ -270,9 +270,6 @@ func (b *Builder) buildActionMenuOptions() []discord.StringSelectMenuOption {
 
 	// Add last default options
 	options = append(options,
-		discord.NewStringSelectMenuOption("View Appeals", constants.AppealMenuButtonCustomID).
-			WithEmoji(discord.ComponentEmoji{Name: "⚖️"}).
-			WithDescription("View appeals and data deletion requests"),
 		discord.NewStringSelectMenuOption("User Settings", constants.UserSettingsButtonCustomID).
 			WithEmoji(discord.ComponentEmoji{Name: "👤"}).
 			WithDescription("Configure your personal settings"),

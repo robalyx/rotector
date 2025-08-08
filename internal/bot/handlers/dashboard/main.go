@@ -116,8 +116,6 @@ func (m *Menu) handleSelectMenu(ctx *interaction.Context, s *session.Session, cu
 		ctx.Show(constants.ChatPageName, "")
 	case constants.WorkerStatusButtonCustomID:
 		ctx.Show(constants.StatusPageName, "")
-	case constants.AppealMenuButtonCustomID:
-		ctx.Show(constants.AppealOverviewPageName, "")
 	case constants.AdminMenuButtonCustomID:
 		ctx.Show(constants.AdminPageName, "")
 	case constants.ReviewerStatsButtonCustomID:

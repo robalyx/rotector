@@ -78,10 +78,6 @@ func main() {
 		{Name: "ReviewTargetMode", Type: "enum.ReviewTargetMode", Doc: "ReviewTargetMode sets the review target mode"},
 		{Name: "ReviewerStatsPeriod", Type: "enum.ReviewerStatsPeriod", Doc: "ReviewerStatsPeriod sets the reviewer stats time period"},
 
-		// Appeal related settings
-		{Name: "AppealDefaultSort", Type: "enum.AppealSortBy", Doc: "AppealDefaultSort sets default appeal sorting"},
-		{Name: "AppealStatusFilter", Type: "enum.AppealStatus", Doc: "AppealStatusFilter sets appeal status filtering"},
-
 		// Chat message usage settings
 		{Name: "ChatMessageUsage.FirstMessageTime", Type: "time.Time", Doc: "ChatMessageUsageFirstMessageTime tracks first message time in 24h period"},
 		{Name: "ChatMessageUsage.MessageCount", Type: "int", Doc: "ChatMessageUsageMessageCount tracks message count in 24h period"},

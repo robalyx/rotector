@@ -190,22 +190,6 @@ var (
 	LogFilterDateRangeStart = NewKey[time.Time]("LogFilterDateRangeStart", true)
 	// LogFilterDateRangeEnd stores end date filter
 	LogFilterDateRangeEnd = NewKey[time.Time]("LogFilterDateRangeEnd", true)
-	// AppealList stores the current page of appeals
-	AppealList = NewKey[[]*types.FullAppeal]("AppealList", true)
-	// AppealSelected stores the currently selected appeal
-	AppealSelected = NewKey[*types.FullAppeal]("AppealSelected", true)
-	// AppealMessages stores messages for the current appeal
-	AppealMessages = NewKey[[]*types.AppealMessage]("AppealMessages", true)
-	// AppealCursor stores the current cursor position
-	AppealCursor = NewKey[*types.AppealTimeline]("AppealCursor", true)
-	// AppealNextCursor stores the next cursor position
-	AppealNextCursor = NewKey[*types.AppealTimeline]("AppealNextCursor", true)
-	// AppealPrevCursors stores previous cursor positions
-	AppealPrevCursors = NewKey[[]*types.AppealTimeline]("AppealPrevCursors", true)
-	// AppealType stores the type of appeal being created
-	AppealType = NewKey[enum.AppealType]("AppealType", true)
-	// AppealRejectedCount stores the total number of rejected appeals for the user
-	AppealRejectedCount = NewKey[int]("AppealRejectedCount", true)
 	// VerifyUserID stores the user ID being verified
 	VerifyUserID = NewKey[uint64]("VerifyUserID", true)
 	// VerifyReason stores the verification reason

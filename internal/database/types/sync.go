@@ -57,5 +57,4 @@ type DiscordUserWhitelist struct {
 	WhitelistedAt time.Time `bun:",notnull" json:"whitelistedAt"` // When the user was whitelisted
 	Reason        string    `bun:",notnull" json:"reason"`        // Why the user was whitelisted
 	ReviewerID    uint64    `bun:",notnull" json:"reviewerId"`    // Who whitelisted the user
-	AppealID      int64     `bun:",notnull" json:"appealId"`      // Related appeal ID
 }

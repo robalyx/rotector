@@ -26,8 +26,7 @@ func NewMenu(layout *Layout) *Menu {
 		Message: func(s *session.Session) *discord.MessageUpdateBuilder {
 			return view.NewBuilder(s).Build()
 		},
-		ShowHandlerFunc:   m.Show,
-		ButtonHandlerFunc: m.handleButton,
+		ShowHandlerFunc: m.Show,
 	}
 
 	return m
@@ -69,12 +68,4 @@ func (m *Menu) Show(ctx *interaction.Context, s *session.Session) {
 
 	// Store ban in session and show the menu
 	session.AdminBanInfo.Set(s, ban)
-}
-
-// handleButton processes button interactions.
-func (m *Menu) handleButton(ctx *interaction.Context, _ *session.Session, customID string) {
-	switch customID {
-	case constants.AppealMenuButtonCustomID:
-		ctx.Show(constants.AppealOverviewPageName, "")
-	}
 }

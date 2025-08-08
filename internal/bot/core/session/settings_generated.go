@@ -65,22 +65,6 @@ var (
 		s.userSettingsUpdate = true
 	})
 
-	// AppealDefaultSort sets default appeal sorting
-	UserAppealDefaultSort = NewUserSettingKey("AppealDefaultSort", func(s *Session) enum.AppealSortBy {
-		return s.userSettings.AppealDefaultSort
-	}, func(s *Session, value enum.AppealSortBy) {
-		s.userSettings.AppealDefaultSort = value
-		s.userSettingsUpdate = true
-	})
-
-	// AppealStatusFilter sets appeal status filtering
-	UserAppealStatusFilter = NewUserSettingKey("AppealStatusFilter", func(s *Session) enum.AppealStatus {
-		return s.userSettings.AppealStatusFilter
-	}, func(s *Session, value enum.AppealStatus) {
-		s.userSettings.AppealStatusFilter = value
-		s.userSettingsUpdate = true
-	})
-
 	// ChatMessageUsageFirstMessageTime tracks first message time in 24h period
 	UserChatMessageUsageFirstMessageTime = NewUserSettingKey("ChatMessageUsage.FirstMessageTime", func(s *Session) time.Time {
 		return s.userSettings.ChatMessageUsage.FirstMessageTime

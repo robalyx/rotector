@@ -13,7 +13,6 @@ type Service struct {
 	group    *service.GroupService
 	reviewer *service.ReviewerService
 	stats    *service.StatsService
-	appeal   *service.AppealService
 	view     *service.ViewService
 	sync     *service.SyncService
 	comment  *service.CommentService
@@ -28,7 +27,6 @@ func NewService(db *bun.DB, repository *Repository, logger *zap.Logger) *Service
 	viewModel := repository.View()
 	reviewerModel := repository.Reviewer()
 	statsModel := repository.Stats()
-	appealModel := repository.Appeal()
 	syncModel := repository.Sync()
 	commentModel := repository.Comment()
 	trackingModel := repository.Tracking()
@@ -41,7 +39,6 @@ func NewService(db *bun.DB, repository *Repository, logger *zap.Logger) *Service
 		group:    service.NewGroup(db, groupModel, activityModel, logger),
 		reviewer: service.NewReviewer(reviewerModel, viewService, logger),
 		stats:    service.NewStats(statsModel, userModel, groupModel, logger),
-		appeal:   service.NewAppeal(appealModel, logger),
 		view:     viewService,
 		sync:     service.NewSync(syncModel, logger),
 		comment:  service.NewComment(commentModel, logger),
@@ -71,11 +68,6 @@ func (s *Service) Reviewer() *service.ReviewerService {
 // Stats returns the stats service.
 func (s *Service) Stats() *service.StatsService {
 	return s.stats
-}
-
-// Appeal returns the appeal service.
-func (s *Service) Appeal() *service.AppealService {
-	return s.appeal
 }
 
 // View returns the view service.
