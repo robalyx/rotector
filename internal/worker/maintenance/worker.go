@@ -11,10 +11,10 @@ import (
 	"github.com/jaxron/roapi.go/pkg/api"
 	"github.com/robalyx/rotector/internal/database"
 	"github.com/robalyx/rotector/internal/database/types"
-	"github.com/robalyx/rotector/internal/progress"
 	"github.com/robalyx/rotector/internal/roblox/checker"
 	"github.com/robalyx/rotector/internal/roblox/fetcher"
 	"github.com/robalyx/rotector/internal/setup"
+	"github.com/robalyx/rotector/internal/tui/components"
 	"github.com/robalyx/rotector/internal/worker/core"
 	"github.com/robalyx/rotector/pkg/utils"
 	"go.uber.org/zap"
@@ -25,7 +25,7 @@ type Worker struct {
 	db                      database.Client
 	bot                     *bot.Client
 	roAPI                   *api.API
-	bar                     *progress.Bar
+	bar                     *components.ProgressBar
 	userFetcher             *fetcher.UserFetcher
 	groupFetcher            *fetcher.GroupFetcher
 	thumbnailFetcher        *fetcher.ThumbnailFetcher
@@ -44,7 +44,7 @@ type Worker struct {
 }
 
 // New creates a new maintenance worker.
-func New(app *setup.App, bar *progress.Bar, logger *zap.Logger) *Worker {
+func New(app *setup.App, bar *components.ProgressBar, logger *zap.Logger) *Worker {
 	userFetcher := fetcher.NewUserFetcher(app, logger)
 	groupFetcher := fetcher.NewGroupFetcher(app.RoAPI, logger)
 	thumbnailFetcher := fetcher.NewThumbnailFetcher(app.RoAPI, logger)

@@ -9,9 +9,9 @@ import (
 	"github.com/robalyx/rotector/internal/database"
 	"github.com/robalyx/rotector/internal/database/types"
 	"github.com/robalyx/rotector/internal/database/types/enum"
-	"github.com/robalyx/rotector/internal/progress"
 	"github.com/robalyx/rotector/internal/roblox/checker"
 	"github.com/robalyx/rotector/internal/setup"
+	"github.com/robalyx/rotector/internal/tui/components"
 	"github.com/robalyx/rotector/pkg/utils"
 	"go.uber.org/zap"
 )
@@ -22,7 +22,7 @@ var ErrUnsupportedReason = errors.New("unsupported reason type")
 // checkers for users that don't have the respective reasons.
 type Worker struct {
 	db            database.Client
-	bar           *progress.Bar
+	bar           *components.ProgressBar
 	friendChecker *checker.FriendChecker
 	groupChecker  *checker.GroupChecker
 	logger        *zap.Logger
@@ -31,7 +31,7 @@ type Worker struct {
 }
 
 // New creates a new reason worker.
-func New(app *setup.App, bar *progress.Bar, logger *zap.Logger) *Worker {
+func New(app *setup.App, bar *components.ProgressBar, logger *zap.Logger) *Worker {
 	return &Worker{
 		db:            app.DB,
 		bar:           bar,

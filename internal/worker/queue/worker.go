@@ -7,10 +7,10 @@ import (
 	"time"
 
 	"github.com/robalyx/rotector/internal/database/types"
-	"github.com/robalyx/rotector/internal/progress"
 	"github.com/robalyx/rotector/internal/roblox/checker"
 	"github.com/robalyx/rotector/internal/roblox/fetcher"
 	"github.com/robalyx/rotector/internal/setup"
+	"github.com/robalyx/rotector/internal/tui/components"
 	"github.com/robalyx/rotector/pkg/utils"
 	"go.uber.org/zap"
 )
@@ -37,7 +37,7 @@ type BatchData struct {
 // Worker processes queued users from Cloudflare D1.
 type Worker struct {
 	app             *setup.App
-	bar             *progress.Bar
+	bar             *components.ProgressBar
 	userFetcher     *fetcher.UserFetcher
 	userChecker     *checker.UserChecker
 	logger          *zap.Logger
@@ -46,7 +46,7 @@ type Worker struct {
 }
 
 // New creates a new queue worker.
-func New(app *setup.App, bar *progress.Bar, logger *zap.Logger) *Worker {
+func New(app *setup.App, bar *components.ProgressBar, logger *zap.Logger) *Worker {
 	userFetcher := fetcher.NewUserFetcher(app, logger)
 	userChecker := checker.NewUserChecker(app, userFetcher, logger)
 

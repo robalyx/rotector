@@ -144,6 +144,9 @@ linters:
       - linters:
           - revive
         text: 'var-naming: avoid meaningless package names'
+      - linters:
+          - containedctx
+        path: internal/tui/
     paths:
       - third_party$
       - builtin$

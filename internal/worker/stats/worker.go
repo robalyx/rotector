@@ -10,9 +10,9 @@ import (
 	"github.com/robalyx/rotector/internal/ai"
 	"github.com/robalyx/rotector/internal/database"
 	"github.com/robalyx/rotector/internal/database/types"
-	"github.com/robalyx/rotector/internal/progress"
 	"github.com/robalyx/rotector/internal/redis"
 	"github.com/robalyx/rotector/internal/setup"
+	"github.com/robalyx/rotector/internal/tui/components"
 	"github.com/robalyx/rotector/internal/worker/core"
 	"github.com/robalyx/rotector/pkg/utils"
 	"go.uber.org/zap"
@@ -27,7 +27,7 @@ const (
 // Worker handles hourly statistics snapshots.
 type Worker struct {
 	db          database.Client
-	bar         *progress.Bar
+	bar         *components.ProgressBar
 	reporter    *core.StatusReporter
 	analyzer    *ai.StatsAnalyzer
 	redisClient rueidis.Client
@@ -35,7 +35,7 @@ type Worker struct {
 }
 
 // New creates a new stats worker.
-func New(app *setup.App, bar *progress.Bar, logger *zap.Logger) *Worker {
+func New(app *setup.App, bar *components.ProgressBar, logger *zap.Logger) *Worker {
 	// Get Redis client for stats
 	statsClient, err := app.RedisManager.GetClient(redis.StatsDBIndex)
 	if err != nil {

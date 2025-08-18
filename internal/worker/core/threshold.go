@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/robalyx/rotector/internal/database"
-	"github.com/robalyx/rotector/internal/progress"
+	"github.com/robalyx/rotector/internal/tui/components"
 	"github.com/robalyx/rotector/pkg/utils"
 	"go.uber.org/zap"
 )
@@ -15,7 +15,7 @@ import (
 type ThresholdChecker struct {
 	db         database.Client
 	threshold  int
-	bar        *progress.Bar
+	bar        *components.ProgressBar
 	reporter   *StatusReporter
 	logger     *zap.Logger
 	workerName string
@@ -25,7 +25,7 @@ type ThresholdChecker struct {
 func NewThresholdChecker(
 	db database.Client,
 	threshold int,
-	bar *progress.Bar,
+	bar *components.ProgressBar,
 	reporter *StatusReporter,
 	logger *zap.Logger,
 	workerName string,

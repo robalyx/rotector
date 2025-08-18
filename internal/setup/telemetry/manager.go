@@ -98,6 +98,12 @@ func (lm *Manager) GetWorkerLogger(name string) *zap.Logger {
 	return zapLogger
 }
 
+// GetCurrentSessionDir returns the current session directory.
+// This is useful for external components that need to access logs in the same session.
+func (lm *Manager) GetCurrentSessionDir() string {
+	return lm.getOrCreateSessionDir()
+}
+
 // GetImageLogger creates a logger specifically for handling image logging.
 // It creates a dedicated image directory within the current session directory.
 func (lm *Manager) GetImageLogger(name string) (*zap.Logger, string, error) {

@@ -13,11 +13,11 @@ import (
 	"github.com/robalyx/rotector/internal/ai"
 	"github.com/robalyx/rotector/internal/database"
 	"github.com/robalyx/rotector/internal/discord"
-	"github.com/robalyx/rotector/internal/progress"
 	"github.com/robalyx/rotector/internal/redis"
 	"github.com/robalyx/rotector/internal/roblox/fetcher"
 	"github.com/robalyx/rotector/internal/setup"
 	"github.com/robalyx/rotector/internal/setup/config"
+	"github.com/robalyx/rotector/internal/tui/components"
 	"github.com/robalyx/rotector/internal/worker/core"
 	"github.com/robalyx/rotector/internal/worker/sync/events"
 	"github.com/robalyx/rotector/pkg/utils"
@@ -36,7 +36,7 @@ type Worker struct {
 	db               database.Client
 	roAPI            *api.API
 	state            *ningen.State
-	bar              *progress.Bar
+	bar              *components.ProgressBar
 	reporter         *core.StatusReporter
 	logger           *zap.Logger
 	config           *config.Config
@@ -48,7 +48,7 @@ type Worker struct {
 }
 
 // New creates a new sync worker.
-func New(app *setup.App, bar *progress.Bar, logger *zap.Logger) *Worker {
+func New(app *setup.App, bar *components.ProgressBar, logger *zap.Logger) *Worker {
 	// Create Discord state with sync token and required intents
 	s := state.NewWithIntents(app.Config.Common.Discord.SyncToken,
 		gateway.IntentGuilds|gateway.IntentGuildMembers|

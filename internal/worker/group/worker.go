@@ -10,11 +10,11 @@ import (
 	"github.com/jaxron/roapi.go/pkg/api/resources/groups"
 	"github.com/robalyx/rotector/internal/database"
 	"github.com/robalyx/rotector/internal/database/types"
-	"github.com/robalyx/rotector/internal/progress"
 	"github.com/robalyx/rotector/internal/queue"
 	"github.com/robalyx/rotector/internal/roblox/checker"
 	"github.com/robalyx/rotector/internal/roblox/fetcher"
 	"github.com/robalyx/rotector/internal/setup"
+	"github.com/robalyx/rotector/internal/tui/components"
 	"github.com/robalyx/rotector/internal/worker/core"
 	"github.com/robalyx/rotector/pkg/utils"
 	"go.uber.org/zap"
@@ -28,7 +28,7 @@ type Worker struct {
 	db                        database.Client
 	roAPI                     *api.API
 	d1Client                  *queue.D1Client
-	bar                       *progress.Bar
+	bar                       *components.ProgressBar
 	userFetcher               *fetcher.UserFetcher
 	userChecker               *checker.UserChecker
 	reporter                  *core.StatusReporter
@@ -43,7 +43,7 @@ type Worker struct {
 }
 
 // New creates a new group worker.
-func New(app *setup.App, bar *progress.Bar, logger *zap.Logger) *Worker {
+func New(app *setup.App, bar *components.ProgressBar, logger *zap.Logger) *Worker {
 	userFetcher := fetcher.NewUserFetcher(app, logger)
 	userChecker := checker.NewUserChecker(app, userFetcher, logger)
 	reporter := core.NewStatusReporter(app.StatusClient, "group", logger)

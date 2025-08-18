@@ -6,12 +6,14 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"path/filepath"
 	stdSync "sync"
 	"syscall"
 	"time"
 
-	"github.com/robalyx/rotector/internal/progress"
 	"github.com/robalyx/rotector/internal/setup"
+	"github.com/robalyx/rotector/internal/tui"
+	"github.com/robalyx/rotector/internal/tui/components"
 	"github.com/robalyx/rotector/internal/worker/friend"
 	"github.com/robalyx/rotector/internal/worker/group"
 	"github.com/robalyx/rotector/internal/worker/maintenance"
@@ -141,15 +143,24 @@ func runWorkers(ctx context.Context, workerType string, count int) {
 	}
 	defer app.Cleanup(ctx)
 
-	// Initialize progress bars
-	bars := make([]*progress.Bar, count)
-	for i := range count {
-		bars[i] = progress.NewBar(100, 25, fmt.Sprintf("Worker %d", i))
-	}
+	// Initialize TUI manager
+	sessionLogDir := app.LogManager.GetCurrentSessionDir()
 
-	// Create and start the renderer
-	renderer := progress.NewRenderer(bars)
-	go renderer.Render()
+	tuiManager := tui.NewManager(ctx, sessionLogDir, app.Logger)
+	if err := tuiManager.Start(); err != nil {
+		log.Printf("Failed to start TUI: %v", err)
+		return
+	}
+	defer tuiManager.Stop()
+
+	// Initialize progress bars for workers
+	bars := make([]*components.ProgressBar, count)
+	for i := range count {
+		workerName := fmt.Sprintf("%s Worker %d", workerType, i)
+		loggerName := fmt.Sprintf("%s_worker_%d", workerType, i)
+		logPath := filepath.Join(sessionLogDir, loggerName+".log")
+		bars[i] = tuiManager.AddWorker(i, workerType, workerName, logPath)
+	}
 
 	// Get startup delay from config
 	startupDelay := app.Config.Worker.StartupDelay
@@ -205,7 +216,6 @@ func runWorkers(ctx context.Context, workerType string, count int) {
 
 	log.Printf("Started %d %s workers", count, workerType)
 	wg.Wait()
-	renderer.Stop()
 }
 
 // runWorker runs a single worker in a loop with error recovery.

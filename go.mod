@@ -8,12 +8,16 @@ require (
 	github.com/HugoSmits86/nativewebp v1.2.0
 	github.com/bytedance/sonic v1.14.0
 	github.com/cenkalti/backoff/v4 v4.3.0
+	github.com/charmbracelet/bubbles v0.21.0
+	github.com/charmbracelet/bubbletea v1.3.6
+	github.com/charmbracelet/lipgloss v1.1.0
 	github.com/corona10/goimagehash v1.1.0
 	github.com/dchest/captcha v1.1.0
 	github.com/diamondburned/arikawa/v3 v3.5.0
 	github.com/diamondburned/ningen/v3 v3.0.1-0.20240808103805-f1a24c0da3d8
 	github.com/disgoorg/disgo v0.19.0-rc.1
 	github.com/disgoorg/snowflake/v2 v2.0.3
+	github.com/fsnotify/fsnotify v1.9.0
 	github.com/getsentry/sentry-go v0.35.0
 	github.com/google/uuid v1.6.0
 	github.com/invopop/jsonschema v0.13.0
@@ -31,6 +35,7 @@ require (
 	github.com/sony/gobreaker v1.0.0
 	github.com/sourcegraph/conc v0.3.0
 	github.com/stretchr/testify v1.10.0
+	github.com/tailscale/hujson v0.0.0-20250605163823-992244df8c5a
 	github.com/tdewolff/minify/v2 v2.23.11
 	github.com/uptrace/bun v1.2.15
 	github.com/uptrace/bun/dialect/pgdialect v1.2.15
@@ -46,17 +51,22 @@ require (
 )
 
 require (
+	github.com/aymanbagabas/go-osc52/v2 v2.0.1 // indirect
 	github.com/bahlo/generic-list-go v0.2.0 // indirect
 	github.com/buger/jsonparser v1.1.1 // indirect
 	github.com/bytedance/sonic/loader v0.3.0 // indirect
 	github.com/cespare/xxhash v1.1.0 // indirect
+	github.com/charmbracelet/colorprofile v0.2.3-0.20250311203215-f60798e515dc // indirect
+	github.com/charmbracelet/x/ansi v0.9.3 // indirect
+	github.com/charmbracelet/x/cellbuf v0.0.13-0.20250311204145-2c3ea96c31dd // indirect
+	github.com/charmbracelet/x/term v0.2.1 // indirect
 	github.com/cloudwego/base64x v0.1.6 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/disgoorg/json/v2 v2.0.0 // indirect
 	github.com/disgoorg/omit v1.0.0 // indirect
 	github.com/dmarkham/enumer v1.5.11 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
-	github.com/fsnotify/fsnotify v1.9.0 // indirect
+	github.com/erikgeiser/coninput v0.0.0-20211004153227-1c3628e74d0f // indirect
 	github.com/gabriel-vasile/mimetype v1.4.9 // indirect
 	github.com/go-playground/locales v0.14.1 // indirect
 	github.com/go-playground/universal-translator v0.18.1 // indirect
@@ -70,10 +80,16 @@ require (
 	github.com/knadh/koanf/maps v0.1.2 // indirect
 	github.com/kr/pretty v0.3.1 // indirect
 	github.com/leodido/go-urn v1.4.0 // indirect
+	github.com/lucasb-eyer/go-colorful v1.2.0 // indirect
 	github.com/mailru/easyjson v0.9.0 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
+	github.com/mattn/go-localereader v0.0.1 // indirect
+	github.com/mattn/go-runewidth v0.0.16 // indirect
 	github.com/mitchellh/copystructure v1.2.0 // indirect
 	github.com/mitchellh/reflectwalk v1.0.2 // indirect
+	github.com/muesli/ansi v0.0.0-20230316100256-276c6243b2f6 // indirect
+	github.com/muesli/cancelreader v0.2.2 // indirect
+	github.com/muesli/termenv v0.16.0 // indirect
 	github.com/ncruces/go-strftime v0.1.9 // indirect
 	github.com/nfnt/resize v0.0.0-20180221191011-83c6a9932646 // indirect
 	github.com/pascaldekloe/name v1.0.0 // indirect
@@ -82,6 +98,7 @@ require (
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/puzpuzpuz/xsync/v3 v3.5.1 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
+	github.com/rivo/uniseg v0.4.7 // indirect
 	github.com/rogpeppe/go-internal v1.13.1 // indirect
 	github.com/sasha-s/go-csync v0.0.0-20240107134140-fcbab37b09ad // indirect
 	github.com/tdewolff/parse/v2 v2.8.2-0.20250806174018-50048bb39781 // indirect
@@ -95,6 +112,7 @@ require (
 	github.com/vmihailenco/msgpack/v5 v5.4.1 // indirect
 	github.com/vmihailenco/tagparser/v2 v2.0.0 // indirect
 	github.com/wk8/go-ordered-map/v2 v2.1.8 // indirect
+	github.com/xo/terminfo v0.0.0-20220910002029-abceb7e1c41e // indirect
 	go.opentelemetry.io/otel v1.37.0 // indirect
 	go.opentelemetry.io/otel/trace v1.37.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
