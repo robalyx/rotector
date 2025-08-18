@@ -31,13 +31,6 @@ import (
 	"golang.org/x/sync/semaphore"
 )
 
-// OutfitAnalyzerParams contains all the parameters needed for outfit analyzer processing.
-type OutfitAnalyzerParams struct {
-	Users                    []*types.ReviewUser                          `json:"users"`
-	ReasonsMap               map[int64]types.Reasons[enum.UserReasonType] `json:"reasonsMap"`
-	InappropriateOutfitFlags map[int64]struct{}                           `json:"inappropriateOutfitFlags"`
-}
-
 const (
 	MaxOutfits = 100
 )
@@ -46,6 +39,13 @@ var (
 	ErrNoViolations = errors.New("no violations found in outfits")
 	ErrNoOutfits    = errors.New("no outfit images downloaded successfully")
 )
+
+// OutfitAnalyzerParams contains all the parameters needed for outfit analyzer processing.
+type OutfitAnalyzerParams struct {
+	Users                    []*types.ReviewUser                          `json:"users"`
+	ReasonsMap               map[int64]types.Reasons[enum.UserReasonType] `json:"reasonsMap"`
+	InappropriateOutfitFlags map[int64]struct{}                           `json:"inappropriateOutfitFlags"`
+}
 
 // OutfitThemeAnalysis contains the AI's theme detection results for a user's outfits.
 type OutfitThemeAnalysis struct {
@@ -134,13 +134,15 @@ func (a *OutfitAnalyzer) ProcessUsers(ctx context.Context, params *OutfitAnalyze
 	)
 
 	for _, userInfo := range usersToProcess {
-		// Skip if user has no outfits
+		// Get user's outfits and thumbnails
 		outfits, hasOutfits := userOutfits[userInfo.ID]
-		if !hasOutfits || len(outfits) == 0 {
+		userThumbs := userThumbnails[userInfo.ID]
+
+		// Skip if user has no outfits and no user thumbnail
+		hasUserThumbnail := userInfo.ThumbnailURL != "" && userInfo.ThumbnailURL != fetcher.ThumbnailPlaceholder
+		if (!hasOutfits || len(outfits) == 0) && !hasUserThumbnail {
 			continue
 		}
-
-		userThumbs := userThumbnails[userInfo.ID]
 
 		p.Go(func(ctx context.Context) error {
 			// Analyze user's outfits for themes
@@ -194,11 +196,9 @@ func (a *OutfitAnalyzer) filterUsersForOutfitProcessing(
 		reasons, hasExistingViolations := reasonsMap[userInfo.ID]
 		hasExistingViolations = hasExistingViolations && len(reasons) > 0
 
-		// If outfit flags are provided, use them; otherwise fall back to existing violations
-		if len(inappropriateOutfitFlags) > 0 {
-			if _, exists := inappropriateOutfitFlags[userInfo.ID]; exists {
-				usersToProcess = append(usersToProcess, userInfo)
-			}
+		// Check if user exists in inappropriate outfit flags, otherwise fall back to existing violations
+		if _, exists := inappropriateOutfitFlags[userInfo.ID]; exists {
+			usersToProcess = append(usersToProcess, userInfo)
 		} else if hasExistingViolations {
 			usersToProcess = append(usersToProcess, userInfo)
 		}

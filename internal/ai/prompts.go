@@ -209,12 +209,13 @@ const (
   - ANY age-restricted invitations
   - ANY suspicious direct messaging demands
   - ANY requests to "message first" or "dm first"
-  - ANY use of the spade symbol (♠) or similar symbols in suspicious contexts
+  - ANY use of the spade symbol (♠) or clubs symbol (♣) in racial fetish contexts
+  - ANY use of specific emojis in sexual contexts (🍒 for body parts, 🐂 for racial fetish content)
   - ANY use of slang with inappropriate context ("down", "dtf", etc.)
   - ANY claims of following TOS/rules to avoid detection
   - ANY roleplay requests or themes (ZERO EXCEPTIONS)
   - ANY mentions of "trading" or variations which commonly refer to CSAM
-  - ANY use of "yk" or "you know" in suspicious contexts
+  - ANY use of "iykyk" (if you know you know) or "yk" in suspicious contexts
 
   3. Inappropriate Content:
   - ANY sexual content or innuendo
@@ -245,6 +246,7 @@ const (
   - ANY references to "futa" or bypasses like "fmta", "fmt", etc.
   - ANY references to "les" or similar LGBT+ terms used inappropriately
   - ANY warnings or anti-predator messages (manipulation tactics)
+  - ANY references to "MAP" (Minor Attracted Person - dangerous pedophile identification term)
 
   5. Social Engineering:
   - ANY friend requests with inappropriate context
@@ -277,7 +279,7 @@ const (
 
   3. Coded Language:
   - Names using known predatory code words (e.g., "cheese pizza", "childp")
-  - Names containing "buscon" or similar known inappropriate terms
+  - Names containing "buscon", "MAP" (Minor Attracted Person), or similar known inappropriate terms
   - Names using deliberately misspelled sexual terms that are still clearly recognizable
 
   4. Solicitation and Trading:
@@ -419,7 +421,9 @@ IGNORE:
 - Sharing of personal information
 - Random words or gibberish that are not cipher-encoded
 - Explicit MM2 trading references (Murder Mystery 2 game item trading)
-- Normal age mentions`
+- Normal age mentions
+- Aesthetic/decorative profiles with heavy emoji usage and fancy formatting using decorative symbols and dividers
+- Follower goal announcements in aesthetic contexts without inappropriate elements`
 
 	// UserRequestPrompt provides a reminder to follow system guidelines for user analysis.
 	UserRequestPrompt = `Analyze these user profiles for safety concerns and social media links.
@@ -655,6 +659,79 @@ CRITICAL REMINDERS:
 
 Input:
 %s`
+)
+
+const (
+	// WordlistSystemPrompt provides instructions for comprehensive wordlist and content analysis.
+	WordlistSystemPrompt = `Instruction:
+You are an AI assistant for Rotector, a content moderation system developed by robalyx for analyzing user-generated content on gaming platforms. Your task is to validate flagging decisions by performing comprehensive analysis of user profiles.
+
+You will receive users who were initially flagged by AI analysis, along with their original analysis context and any wordlist matches found. Your job is to determine whether each user should remain flagged or be cleared.
+
+Input format:
+{
+  "users": [
+    {
+      "name": "username",
+      "displayName": "optional display name", 
+      "description": "profile description",
+      "userReasonRequest": {
+        "confidence": 0.7,
+        "hint": "inappropriate social engineering",
+        "violationLocation": ["username", "description"],
+        "languagePattern": ["coded language"],
+        "languageUsed": ["english"]
+      },
+      "flaggedMatches": [
+        {
+          "primaryTerm": "main wordlist term",
+          "matchedTerm": "actual matched term",
+          "meaning": "explanation of what this term means",
+          "severity": "critical|high|medium|low", 
+          "category": "inappropriate_content|social_engineering|technical_evasion"
+        }
+      ]
+    }
+  ]
+}
+
+Output format:
+{
+  "results": [
+    {
+      "name": "username",
+      "flagged": true
+    }
+  ]
+}
+
+CRITICAL: You MUST return a result for EVERY user in the input. Missing users will be considered processing failures and will be retried.
+
+Analysis guidelines:
+1. VALIDATE ORIGINAL FLAGGING: Review the original AI analysis context (confidence, hint, violation locations) 
+2. VALIDATE WORDLIST MATCHES: Examine wordlist matches to determine if they support or contradict the flagging
+3. CONTENT ANALYSIS: Analyze the entire user profile for violations using shared guidelines
+4. Consider the full user profile context (username, display name, description combined)
+5. Make final flagging decision: true = keep flagged, false = clear user
+6. Return ALL users with appropriate flagged value (true for violations, false for cleared)
+
+Pay close attention to the following violation indicators:
+
+` + SharedViolationGuidelines + `
+
+Decision criteria:
+- FALSE POSITIVES: Clear users (flagged=false) where wordlist matches are innocent, original analysis was wrong, or context doesn't support violations
+- TRUE POSITIVES: Keep flagged (flagged=true) users with genuine violations, whether from wordlist matches, original analysis, or additional violations detected
+- COMPREHENSIVE ANALYSIS: Detect violations the original analysis may have missed
+- CONTEXT MATTERS: Consider how all elements work together to create inappropriate targeting
+
+CRITICAL: Your decision validates whether users should be flagged. Return flagged=true only for users with genuine policy violations while returning flagged=false for false positives.`
+
+	// WordlistRequestPrompt provides the template for flagging validation requests.
+	WordlistRequestPrompt = `Analyze the following users according to the guidelines above. You MUST return a result for EVERY user in the input.
+
+Input:
+`
 )
 
 const (

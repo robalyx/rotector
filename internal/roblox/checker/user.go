@@ -30,41 +30,43 @@ type UserCheckerParams struct {
 // UserChecker coordinates the checking process by combining results from
 // multiple checking methods (AI, groups, friends) and managing the progress bar.
 type UserChecker struct {
-	app            *setup.App
-	db             database.Client
-	userFetcher    *fetcher.UserFetcher
-	gameFetcher    *fetcher.GameFetcher
-	outfitFetcher  *fetcher.OutfitFetcher
-	translator     *translator.Translator
-	userAnalyzer   *ai.UserAnalyzer
-	outfitAnalyzer *ai.OutfitAnalyzer
-	ivanAnalyzer   *ai.IvanAnalyzer
-	groupChecker   *GroupChecker
-	friendChecker  *FriendChecker
-	condoChecker   *CondoChecker
-	logger         *zap.Logger
+	app                *setup.App
+	db                 database.Client
+	userFetcher        *fetcher.UserFetcher
+	gameFetcher        *fetcher.GameFetcher
+	outfitFetcher      *fetcher.OutfitFetcher
+	translator         *translator.Translator
+	userAnalyzer       *ai.UserAnalyzer
+	userReasonAnalyzer *ai.UserReasonAnalyzer
+	outfitAnalyzer     *ai.OutfitAnalyzer
+	ivanAnalyzer       *ai.IvanAnalyzer
+	wordlistChecker    *WordlistChecker
+	groupChecker       *GroupChecker
+	friendChecker      *FriendChecker
+	condoChecker       *CondoChecker
+	logger             *zap.Logger
 }
 
 // NewUserChecker creates a UserChecker with all required dependencies.
 func NewUserChecker(app *setup.App, userFetcher *fetcher.UserFetcher, logger *zap.Logger) *UserChecker {
 	trans := translator.New(app.RoAPI.GetClient())
-	userAnalyzer := ai.NewUserAnalyzer(app, trans, logger)
-	outfitAnalyzer := ai.NewOutfitAnalyzer(app, logger)
 
 	return &UserChecker{
-		app:            app,
-		db:             app.DB,
-		userFetcher:    userFetcher,
-		gameFetcher:    fetcher.NewGameFetcher(app.RoAPI, logger),
-		outfitFetcher:  fetcher.NewOutfitFetcher(app.RoAPI, logger),
-		translator:     trans,
-		userAnalyzer:   userAnalyzer,
-		outfitAnalyzer: outfitAnalyzer,
-		ivanAnalyzer:   ai.NewIvanAnalyzer(app, logger),
-		groupChecker:   NewGroupChecker(app, logger),
-		friendChecker:  NewFriendChecker(app, logger),
-		condoChecker:   NewCondoChecker(app.DB, logger),
-		logger:         logger.Named("user_checker"),
+		app:                app,
+		db:                 app.DB,
+		userFetcher:        userFetcher,
+		gameFetcher:        fetcher.NewGameFetcher(app.RoAPI, logger),
+		outfitFetcher:      fetcher.NewOutfitFetcher(app.RoAPI, logger),
+		translator:         trans,
+		userAnalyzer:       ai.NewUserAnalyzer(app, trans, logger),
+		userReasonAnalyzer: ai.NewUserReasonAnalyzer(app, logger),
+		outfitAnalyzer:     ai.NewOutfitAnalyzer(app, logger),
+		ivanAnalyzer:       ai.NewIvanAnalyzer(app, logger),
+		wordlistChecker:    NewWordlistChecker(app, app.Wordlist, logger),
+		groupChecker:       NewGroupChecker(app, logger),
+		friendChecker:      NewFriendChecker(app, logger),
+		condoChecker:       NewCondoChecker(app.DB, logger),
+		logger:             logger.Named("user_checker"),
 	}
 }
 
@@ -90,7 +92,7 @@ func (c *UserChecker) ProcessUsers(ctx context.Context, params *UserCheckerParam
 	confirmedFriendsMap, flaggedFriendsMap := c.friendChecker.PrepareFriendMaps(ctxWithTimeout, params.Users)
 	confirmedGroupsMap, flaggedGroupsMap := c.groupChecker.PrepareGroupMaps(ctxWithTimeout, params.Users)
 
-	// Process friend checker with pre-prepared maps
+	// Process friend checker
 	c.friendChecker.ProcessUsers(ctxWithTimeout, &FriendCheckerParams{
 		Users:                     params.Users,
 		ReasonsMap:                reasonsMap,
@@ -101,7 +103,7 @@ func (c *UserChecker) ProcessUsers(ctx context.Context, params *UserCheckerParam
 		InappropriateFriendsFlags: params.InappropriateFriendsFlags,
 	})
 
-	// Process group checker with pre-prepared maps
+	// Process group checker
 	c.groupChecker.ProcessUsers(ctxWithTimeout, &GroupCheckerParams{
 		Users:                    params.Users,
 		ReasonsMap:               reasonsMap,
@@ -112,11 +114,11 @@ func (c *UserChecker) ProcessUsers(ctx context.Context, params *UserCheckerParam
 		InappropriateGroupsFlags: params.InappropriateGroupsFlags,
 	})
 
-	// Prepare user info maps with translations
+	// Prepare user info maps
 	translatedInfos, originalInfos := c.prepareUserInfoMaps(ctxWithTimeout, params.Users)
 
-	// Process user analysis
-	c.userAnalyzer.ProcessUsers(ctxWithTimeout, &ai.ProcessUsersParams{
+	// Process users through AI analysis
+	aiResult := c.userAnalyzer.ProcessUsers(ctxWithTimeout, &ai.ProcessUsersParams{
 		Users:                     params.Users,
 		TranslatedInfos:           translatedInfos,
 		OriginalInfos:             originalInfos,
@@ -129,6 +131,16 @@ func (c *UserChecker) ProcessUsers(ctx context.Context, params *UserCheckerParam
 		InappropriateFriendsFlags: params.InappropriateFriendsFlags,
 		InappropriateGroupsFlags:  params.InappropriateGroupsFlags,
 	})
+
+	// Process rejected users through wordlist checking
+	c.processRejectedUsersWithWordlist(ctxWithTimeout, params.Users, aiResult, translatedInfos)
+
+	// Generate detailed reasons for all accepted users
+	if len(aiResult.AcceptedUsers) > 0 {
+		c.userReasonAnalyzer.ProcessFlaggedUsers(
+			ctxWithTimeout, aiResult.AcceptedUsers, translatedInfos, originalInfos, reasonsMap, 0,
+		)
+	}
 
 	// Process condo checker
 	c.condoChecker.ProcessUsers(ctxWithTimeout, &CondoCheckerParams{
@@ -270,6 +282,40 @@ func (c *UserChecker) prepareUserInfoMaps(
 	}
 
 	return translatedInfos, originalInfos
+}
+
+// processRejectedUsersWithWordlist processes AI-rejected users through wordlist checking.
+func (c *UserChecker) processRejectedUsersWithWordlist(
+	ctx context.Context, allUsers []*types.ReviewUser, aiResult *ai.ProcessUsersResult,
+	translatedInfos map[string]*types.ReviewUser,
+) {
+	if len(aiResult.RejectedUsers) == 0 {
+		return
+	}
+
+	c.logger.Info("Processing AI-rejected users through wordlist checking",
+		zap.Int("rejectedCount", len(aiResult.RejectedUsers)))
+
+	// Create slice of rejected users for wordlist checking
+	rejectedUserSlice := make([]*types.ReviewUser, 0, len(aiResult.RejectedUsers))
+	for _, user := range allUsers {
+		if _, isRejected := aiResult.RejectedUsers[user.ID]; isRejected {
+			rejectedUserSlice = append(rejectedUserSlice, user)
+		}
+	}
+
+	// Check rejected users with wordlist checker
+	wordlistAcceptedUsers := c.wordlistChecker.ProcessUsers(
+		ctx, rejectedUserSlice, aiResult.RejectedUsers, translatedInfos,
+	)
+
+	// Add wordlist-accepted users to the accepted users map
+	for userID, userReasonRequest := range wordlistAcceptedUsers {
+		aiResult.AcceptedUsers[userID] = userReasonRequest
+	}
+
+	c.logger.Info("Completed wordlist checking of rejected users",
+		zap.Int("wordlistAccepted", len(wordlistAcceptedUsers)))
 }
 
 // trackFlaggedUsersGroups adds flagged users' group memberships to tracking.

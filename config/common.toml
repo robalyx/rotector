@@ -122,6 +122,8 @@ message_model = "gemini-2.5-flash"
 ivan_model = "gemini-2.5-flash"
 # Model to use for general chat completions
 chat_model = "gemini-2.5-flash"
+# Model to use for wordlist validation analysis
+wordlist_model = "gemini-2.5-flash"
 
 # Model mappings for the provider
 [common.openai.model_mappings]

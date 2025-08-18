@@ -192,12 +192,12 @@ func (p *NumericProcessor) processMap(v map[string]any) any {
 	}
 
 	// Extract type metadata for keys
-	keyTypeMap := make(map[string]bool)
+	keyTypeMap := make(map[string]struct{})
 
 	for k, v := range v {
 		if strings.HasPrefix(k, TypeMetadataPrefix) && v == NumericTypeMeta {
 			// Record that this key has numeric type metadata
-			keyTypeMap[strings.TrimPrefix(k, TypeMetadataPrefix)] = true
+			keyTypeMap[strings.TrimPrefix(k, TypeMetadataPrefix)] = struct{}{}
 		}
 	}
 

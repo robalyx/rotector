@@ -415,11 +415,19 @@ func (a *UserReasonAnalyzer) processResults(
 			})
 			mu.Unlock()
 
+			truncatedReason := result.Reason
+			if len(result.Reason) > 100 {
+				truncatedReason = result.Reason[:100] + "..."
+			}
+
 			a.logger.Debug("Added user reason",
+				zap.Int64("userID", originalInfo.ID),
 				zap.String("username", result.Name),
-				zap.Float64("confidence", req.Confidence))
+				zap.Float64("confidence", req.Confidence),
+				zap.String("reason_snippet", truncatedReason))
 		} else {
 			a.logger.Warn("Reason analysis flagged content did not pass validation",
+				zap.Int64("userID", originalInfo.ID),
 				zap.String("username", result.Name),
 				zap.String("description", translatedInfo.Description),
 				zap.Strings("flaggedContent", processedContent))

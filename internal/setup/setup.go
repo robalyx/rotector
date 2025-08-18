@@ -56,6 +56,7 @@ func (s ServiceType) GetRequestTimeout(cfg *config.Config) time.Duration {
 // Each field represents a major subsystem that needs initialization and cleanup.
 type App struct {
 	Config       *config.Config      // Application configuration
+	Wordlist     *config.Wordlist    // Wordlist configuration for content checking
 	Logger       *zap.Logger         // Main application logger
 	DBLogger     *zap.Logger         // Database-specific logger
 	DB           database.Client     // Database connection pool
@@ -72,10 +73,16 @@ type App struct {
 // InitializeApp bootstraps all application dependencies in the correct order,
 // ensuring each component has its required dependencies available.
 func InitializeApp(ctx context.Context, serviceType ServiceType, logDir string) (*App, error) {
-	// Configuration must be loaded first as other components depend on it
+	// Load app configuration
 	cfg, configDir, err := config.LoadConfig()
 	if err != nil {
 		return nil, err
+	}
+
+	// Load wordlist configuration
+	wordlist, err := config.LoadWordlist(configDir)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load wordlist: %w", err)
 	}
 
 	// Initialize Sentry if DSN is provided
@@ -158,6 +165,7 @@ func InitializeApp(ctx context.Context, serviceType ServiceType, logDir string) 
 	// Bundle all initialized components
 	return &App{
 		Config:       cfg,
+		Wordlist:     wordlist,
 		Logger:       logger,
 		DBLogger:     dbLogger.Named("database"),
 		DB:           db,

@@ -44,6 +44,8 @@ outfit_reason_analysis = 10
 message_analysis = 5
 # Maximum concurrent AI requests for ivan message analysis
 ivan_message_analysis = 5
+# Maximum concurrent AI requests for wordlist validation
+wordlist_analysis = 10
 
 # Number of outfits to analyze in one AI request
 outfit_analysis_batch = 16
@@ -61,6 +63,8 @@ outfit_reason_analysis_batch = 20
 message_analysis_batch = 25
 # Number of ivan messages to analyze in one AI request
 ivan_message_analysis_batch = 100
+# Number of wordlist validation requests to process in one AI request
+wordlist_analysis_batch = 20
 
 [worker.threshold_limits]
 # Maximum number of flagged users before stopping worker

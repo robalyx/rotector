@@ -39,6 +39,12 @@ type ProcessUsersParams struct {
 	InappropriateGroupsFlags  map[int64]struct{}                           `json:"inappropriateGroupsFlags"`
 }
 
+// ProcessUsersResult contains the results from AI user analysis.
+type ProcessUsersResult struct {
+	AcceptedUsers map[int64]UserReasonRequest `json:"acceptedUsers"` // Users that met all requirements
+	RejectedUsers map[int64]RejectedUser      `json:"rejectedUsers"` // Users flagged but didn't meet requirements
+}
+
 // UserSummary is a struct for user summaries for AI analysis.
 type UserSummary struct {
 	Name        string `json:"name"`
@@ -62,18 +68,23 @@ type FlaggedUser struct {
 	LanguageUsed      []string `json:"languageUsed,omitempty"      jsonschema_description:"Languages or encodings detected in content"`
 }
 
+// RejectedUser contains both the AI flagged user data and the prepared reason request.
+type RejectedUser struct {
+	FlaggedUser       FlaggedUser       `json:"flaggedUser"`
+	UserReasonRequest UserReasonRequest `json:"userReasonRequest"`
+}
+
 // UserAnalyzer handles AI-based content analysis using OpenAI models.
 type UserAnalyzer struct {
-	chat               client.ChatCompletions
-	minify             *minify.M
-	translator         *translator.Translator
-	userReasonAnalyzer *UserReasonAnalyzer
-	analysisSem        *semaphore.Weighted
-	logger             *zap.Logger
-	textLogger         *zap.Logger
-	textDir            string
-	model              string
-	batchSize          int
+	chat        client.ChatCompletions
+	minify      *minify.M
+	translator  *translator.Translator
+	analysisSem *semaphore.Weighted
+	logger      *zap.Logger
+	textLogger  *zap.Logger
+	textDir     string
+	model       string
+	batchSize   int
 }
 
 // UserAnalysisSchema is the JSON schema for the user analysis response.
@@ -93,22 +104,22 @@ func NewUserAnalyzer(app *setup.App, translator *translator.Translator, logger *
 	}
 
 	return &UserAnalyzer{
-		chat:               app.AIClient.Chat(),
-		minify:             m,
-		translator:         translator,
-		userReasonAnalyzer: NewUserReasonAnalyzer(app, logger),
-		analysisSem:        semaphore.NewWeighted(int64(app.Config.Worker.BatchSizes.UserAnalysis)),
-		logger:             logger.Named("ai_user"),
-		textLogger:         textLogger,
-		textDir:            textDir,
-		model:              app.Config.Common.OpenAI.UserModel,
-		batchSize:          app.Config.Worker.BatchSizes.UserAnalysisBatch,
+		chat:        app.AIClient.Chat(),
+		minify:      m,
+		translator:  translator,
+		analysisSem: semaphore.NewWeighted(int64(app.Config.Worker.BatchSizes.UserAnalysis)),
+		logger:      logger.Named("ai_user"),
+		textLogger:  textLogger,
+		textDir:     textDir,
+		model:       app.Config.Common.OpenAI.UserModel,
+		batchSize:   app.Config.Worker.BatchSizes.UserAnalysisBatch,
 	}
 }
 
 // ProcessUsers analyzes user content for a batch of users.
-func (a *UserAnalyzer) ProcessUsers(ctx context.Context, params *ProcessUsersParams) {
+func (a *UserAnalyzer) ProcessUsers(ctx context.Context, params *ProcessUsersParams) *ProcessUsersResult {
 	userReasonRequests := make(map[int64]UserReasonRequest)
+	rejectedUsers := make(map[int64]RejectedUser)
 	numBatches := (len(params.Users) + a.batchSize - 1) / a.batchSize
 
 	// Process batches concurrently
@@ -132,7 +143,7 @@ func (a *UserAnalyzer) ProcessUsers(ctx context.Context, params *ProcessUsersPar
 
 			// Process batch
 			if err := a.processBatch(
-				ctx, infoBatch, params, userReasonRequests, &mu,
+				ctx, infoBatch, params, userReasonRequests, rejectedUsers, &mu,
 			); err != nil {
 				a.logger.Error("Failed to process batch",
 					zap.Error(err),
@@ -148,18 +159,20 @@ func (a *UserAnalyzer) ProcessUsers(ctx context.Context, params *ProcessUsersPar
 
 	// Wait for all batches to complete
 	if err := p.Wait(); err != nil {
-		return
+		return &ProcessUsersResult{
+			AcceptedUsers: make(map[int64]UserReasonRequest),
+			RejectedUsers: make(map[int64]RejectedUser),
+		}
 	}
 
-	a.logger.Info("Completed initial user analysis",
+	a.logger.Info("Completed user analysis",
 		zap.Int("totalUsers", len(params.Users)),
-		zap.Int("flaggedUsers", len(userReasonRequests)))
+		zap.Int("acceptedUsers", len(userReasonRequests)),
+		zap.Int("rejectedUsers", len(rejectedUsers)))
 
-	// Generate detailed reasons for flagged users
-	if len(userReasonRequests) > 0 {
-		a.userReasonAnalyzer.ProcessFlaggedUsers(
-			ctx, userReasonRequests, params.TranslatedInfos, params.OriginalInfos, params.ReasonsMap, 0,
-		)
+	return &ProcessUsersResult{
+		AcceptedUsers: userReasonRequests,
+		RejectedUsers: rejectedUsers,
 	}
 }
 
@@ -242,7 +255,7 @@ func (a *UserAnalyzer) processUserBatch(ctx context.Context, batch []UserSummary
 // processBatch handles the AI analysis for a batch of user summaries.
 func (a *UserAnalyzer) processBatch(
 	ctx context.Context, userInfos []*types.ReviewUser, params *ProcessUsersParams,
-	userReasonRequests map[int64]UserReasonRequest, mu *sync.Mutex,
+	userReasonRequests map[int64]UserReasonRequest, rejectedUsers map[int64]RejectedUser, mu *sync.Mutex,
 ) error {
 	// Convert map to slice for AI request
 	userInfosWithoutID := make([]UserSummary, 0, len(userInfos))
@@ -334,7 +347,7 @@ func (a *UserAnalyzer) processBatch(
 
 	// Process AI responses and create reason requests
 	a.processAndCreateRequests(
-		result, params, userReasonRequests, mu,
+		result, params, userReasonRequests, rejectedUsers, mu,
 	)
 
 	return nil
@@ -373,6 +386,7 @@ func (a *UserAnalyzer) shouldSkipFlaggedUser(
 
 			if totalInappropriateFriends < 1 {
 				a.logger.Info("Skipping user with >15 friends, confidence <1.0, but no inappropriate friends",
+					zap.Int64("userID", originalInfo.ID),
 					zap.String("username", flaggedUser.Name),
 					zap.Float64("confidence", flaggedUser.Confidence),
 					zap.Int("totalFriendsCount", totalFriends),
@@ -387,6 +401,7 @@ func (a *UserAnalyzer) shouldSkipFlaggedUser(
 	if len(params.ReasonsMap[originalInfo.ID]) == 0 {
 		if flaggedUser.Confidence < 0.8 {
 			a.logger.Info("Skipping user with low confidence and no existing reasons",
+				zap.Int64("userID", originalInfo.ID),
 				zap.String("username", flaggedUser.Name),
 				zap.Float64("confidence", flaggedUser.Confidence))
 
@@ -432,7 +447,7 @@ func (a *UserAnalyzer) shouldSkipFlaggedUser(
 // processAndCreateRequests processes the AI responses and creates reason requests.
 func (a *UserAnalyzer) processAndCreateRequests(
 	result *FlaggedUsers, params *ProcessUsersParams,
-	userReasonRequests map[int64]UserReasonRequest, mu *sync.Mutex,
+	userReasonRequests map[int64]UserReasonRequest, rejectedUsers map[int64]RejectedUser, mu *sync.Mutex,
 ) {
 	for _, flaggedUser := range result.Users {
 		originalInfo, hasOriginal := params.OriginalInfos[flaggedUser.Name]
@@ -457,11 +472,6 @@ func (a *UserAnalyzer) processAndCreateRequests(
 
 		mu.Unlock()
 
-		// Check if this user should be skipped based on various conditions
-		if a.shouldSkipFlaggedUser(flaggedUser, originalInfo, params) {
-			continue
-		}
-
 		// Create a user summary for the reason request
 		summary := &UserSummary{
 			Name: translatedInfo.Name,
@@ -480,10 +490,8 @@ func (a *UserAnalyzer) processAndCreateRequests(
 
 		summary.Description = description
 
-		// Create and store the reason request
-		mu.Lock()
-
-		userReasonRequests[originalInfo.ID] = UserReasonRequest{
+		// Create the user reason request
+		userReasonRequest := UserReasonRequest{
 			User:              summary,
 			Confidence:        flaggedUser.Confidence,
 			Hint:              flaggedUser.Hint,
@@ -492,6 +500,33 @@ func (a *UserAnalyzer) processAndCreateRequests(
 			LanguageUsed:      flaggedUser.LanguageUsed,
 			UserID:            originalInfo.ID,
 		}
+
+		// Check if this user should be skipped based on various conditions
+		if a.shouldSkipFlaggedUser(flaggedUser, originalInfo, params) {
+			if userReasonRequest.Confidence < 0.7 {
+				a.logger.Debug("Skipping user with insufficient confidence for wordlist recovery",
+					zap.String("username", flaggedUser.Name),
+					zap.Float64("confidence", userReasonRequest.Confidence))
+
+				continue
+			}
+
+			mu.Lock()
+
+			rejectedUsers[originalInfo.ID] = RejectedUser{
+				FlaggedUser:       flaggedUser,
+				UserReasonRequest: userReasonRequest,
+			}
+
+			mu.Unlock()
+
+			continue
+		}
+
+		// Store the accepted user reason request
+		mu.Lock()
+
+		userReasonRequests[originalInfo.ID] = userReasonRequest
 
 		mu.Unlock()
 
