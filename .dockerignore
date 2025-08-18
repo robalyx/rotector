@@ -1,0 +1,9 @@
+bin/
+logs/
+exports/
+.git/
+.idea/
+.rotector/
+assets/gif/
+*_test.go
+*.md

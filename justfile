@@ -10,6 +10,7 @@ build:
     go build -o bin/worker ./cmd/worker
     go build -o bin/export ./cmd/export
     go build -o bin/db ./cmd/db
+    go build -o bin/wordlist ./cmd/wordlist
 
 # Run tests with coverage
 test:
@@ -50,6 +51,10 @@ run-export description="Export" version="1.0.1":
 run-queue:
     go run ./cmd/queue
 
+# Check wordlist for errors and quality issues
+wordlist-check:
+    go run ./cmd/wordlist check
+
 # Clean build artifacts
 clean:
     rm -rf bin/
@@ -65,18 +70,50 @@ generate:
     go generate ./...
 
 # Build container image
-build-container *args:
-    dagger call build {{args}}
+build-container tag="rotector:latest" upx="true":
+    depot build \
+        --build-arg ENABLE_UPX={{upx}} \
+        -t {{tag}} \
+        .
 
-# Publish container image
-# Usage: just publish-container [image-name] [platform] [upx]
-publish-container image-name platform="linux/amd64" upx="true":
-    dagger call publish \
-        --src . \
-        --image-name "{{image-name}}" \
-        --platforms "{{platform}}" \
-        --enable-upx "{{upx}}"
+# Build multi-arch container image
+build-container-multiarch tag="rotector:latest" platforms="linux/amd64,linux/arm64" upx="true":
+    depot build \
+        --platform {{platforms}} \
+        --build-arg ENABLE_UPX={{upx}} \
+        -t {{tag}} \
+        --load \
+        .
+
+# Publish container image to Depot Registry
+# Usage: just publish-container [tag] [platform] [upx]
+publish-container tag platform="linux/amd64" upx="true":
+    depot build \
+        --platform {{platform}} \
+        --build-arg ENABLE_UPX={{upx}} \
+        --save \
+        --save-tag {{tag}} \
+        --metadata-file build.json \
+        .
+
+# Publish multi-arch container image
+publish-container-multiarch image-name platforms="linux/amd64,linux/arm64" upx="true":
+    depot build \
+        --platform {{platforms}} \
+        --build-arg ENABLE_UPX={{upx}} \
+        -t {{image-name}} \
+        --push \
+        .
 
 # Build container image without UPX compression
-build-container-no-upx *args:
-    dagger call build --enable-upx "false" {{args}}
+build-container-no-upx tag="rotector:latest":
+    just build-container {{tag}} "false"
+
+# Run container locally
+run-container tag="rotector:latest" run_type="bot" worker_type="friend" workers="1":
+    docker run --rm -it \
+        -e RUN_TYPE={{run_type}} \
+        -e WORKER_TYPE={{worker_type}} \
+        -e WORKERS_COUNT={{workers}} \
+        -v $(pwd)/config:/etc/rotector:ro \
+        {{tag}}
