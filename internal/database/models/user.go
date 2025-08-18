@@ -757,6 +757,44 @@ func (r *UserModel) GetFlaggedUsersWithOnlyReason(
 	return users, nil
 }
 
+// GetFlaggedUsersWithProfileReasons returns user IDs of flagged users that have profile reasons
+// with confidence above the specified threshold.
+//
+// Deprecated: Use Service().User().GetFlaggedUsersWithProfileReasons() instead.
+func (r *UserModel) GetFlaggedUsersWithProfileReasons(
+	ctx context.Context, confidenceThreshold float64, limit int,
+) ([]int64, error) {
+	var userIDs []int64
+
+	err := dbretry.NoResult(ctx, func(ctx context.Context) error {
+		query := r.db.NewSelect().
+			Distinct().
+			Column("user_id").
+			Table("user_reasons").
+			Where("reason_type = ?", enum.UserReasonTypeProfile).
+			Where("confidence >= ?", confidenceThreshold).
+			Where("user_id IN (SELECT id FROM users WHERE status = ?)", enum.UserTypeFlagged).
+			Order("user_id ASC")
+
+		if limit > 0 {
+			query = query.Limit(limit)
+		}
+
+		return query.Scan(ctx, &userIDs)
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get user IDs with profile reasons (confidence >= %.2f): %w",
+			confidenceThreshold, err)
+	}
+
+	r.logger.Debug("Found user IDs with profile reasons",
+		zap.Float64("confidenceThreshold", confidenceThreshold),
+		zap.Int("limit", limit),
+		zap.Int("count", len(userIDs)))
+
+	return userIDs, nil
+}
+
 // DeleteUsers removes users and their verification/clearance records from the database.
 func (r *UserModel) DeleteUsers(ctx context.Context, userIDs []int64) (int64, error) {
 	if len(userIDs) == 0 {

@@ -747,3 +747,44 @@ func (s *UserService) PurgeOldClearedUsers(ctx context.Context, cutoffDate time.
 
 	return len(userIDs), nil
 }
+
+// GetFlaggedUsersWithProfileReasons returns flagged users that have profile reasons with
+// confidence above the specified threshold, including all their reason data.
+func (s *UserService) GetFlaggedUsersWithProfileReasons(
+	ctx context.Context, confidenceThreshold float64, limit int,
+) ([]*types.ReviewUser, error) {
+	// Get user IDs from model layer
+	userIDs, err := s.model.GetFlaggedUsersWithProfileReasons(ctx, confidenceThreshold, limit)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get user IDs with profile reasons: %w", err)
+	}
+
+	if len(userIDs) == 0 {
+		s.logger.Debug("No flagged users with profile reasons found",
+			zap.Float64("confidenceThreshold", confidenceThreshold))
+
+		return []*types.ReviewUser{}, nil
+	}
+
+	// Get full user data with reasons using existing service method
+	userMap, err := s.GetUsersByIDs(ctx, userIDs, types.UserFieldBasic|types.UserFieldReasons)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get users by IDs: %w", err)
+	}
+
+	// Convert map to slice, preserving order
+	users := make([]*types.ReviewUser, 0, len(userIDs))
+	for _, userID := range userIDs {
+		if user, exists := userMap[userID]; exists {
+			users = append(users, user)
+		}
+	}
+
+	s.logger.Debug("Retrieved flagged users with profile reasons",
+		zap.Float64("confidenceThreshold", confidenceThreshold),
+		zap.Int("limit", limit),
+		zap.Int("requestedCount", len(userIDs)),
+		zap.Int("returnedCount", len(users)))
+
+	return users, nil
+}
