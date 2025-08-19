@@ -1,4 +1,4 @@
-package queue
+package api
 
 import (
 	"bytes"
@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/bytedance/sonic"
 	"github.com/cenkalti/backoff/v4"
 	"github.com/robalyx/rotector/pkg/utils"
 )
@@ -27,8 +28,8 @@ type Response struct {
 	} `json:"result"`
 }
 
-// CloudflareAPI handles D1 API requests.
-type CloudflareAPI struct {
+// Cloudflare handles D1 API requests.
+type Cloudflare struct {
 	accountID string
 	dbID      string
 	token     string
@@ -36,9 +37,9 @@ type CloudflareAPI struct {
 	client    *http.Client
 }
 
-// NewCloudflareAPI creates a new Cloudflare API client.
-func NewCloudflareAPI(accountID, dbID, token, endpoint string) *CloudflareAPI {
-	return &CloudflareAPI{
+// NewCloudflare creates a new Cloudflare API client.
+func NewCloudflare(accountID, dbID, token, endpoint string) *Cloudflare {
+	return &Cloudflare{
 		accountID: accountID,
 		dbID:      dbID,
 		token:     token,
@@ -48,7 +49,7 @@ func NewCloudflareAPI(accountID, dbID, token, endpoint string) *CloudflareAPI {
 }
 
 // ExecuteSQL executes a SQL statement on D1 and returns the results with retries.
-func (c *CloudflareAPI) ExecuteSQL(ctx context.Context, sql string, params []any) ([]map[string]any, error) {
+func (c *Cloudflare) ExecuteSQL(ctx context.Context, sql string, params []any) ([]map[string]any, error) {
 	var result []map[string]any
 
 	// Define retry options
@@ -80,7 +81,7 @@ func (c *CloudflareAPI) ExecuteSQL(ctx context.Context, sql string, params []any
 }
 
 // executeRequest executes a single SQL request.
-func (c *CloudflareAPI) executeRequest(ctx context.Context, sql string, params []any) ([]map[string]any, error) {
+func (c *Cloudflare) executeRequest(ctx context.Context, sql string, params []any) ([]map[string]any, error) {
 	url := fmt.Sprintf("%s/accounts/%s/d1/database/%s/query", c.endpoint, c.accountID, c.dbID)
 
 	// Prepare request body
@@ -89,7 +90,7 @@ func (c *CloudflareAPI) executeRequest(ctx context.Context, sql string, params [
 		"params": params,
 	}
 
-	jsonBody, err := json.Marshal(body)
+	jsonBody, err := sonic.Marshal(body)
 	if err != nil {
 		return nil, fmt.Errorf("error marshaling request: %w", err)
 	}

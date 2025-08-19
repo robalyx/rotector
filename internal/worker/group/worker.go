@@ -8,9 +8,9 @@ import (
 
 	"github.com/jaxron/roapi.go/pkg/api"
 	"github.com/jaxron/roapi.go/pkg/api/resources/groups"
+	"github.com/robalyx/rotector/internal/cloudflare"
 	"github.com/robalyx/rotector/internal/database"
 	"github.com/robalyx/rotector/internal/database/types"
-	"github.com/robalyx/rotector/internal/queue"
 	"github.com/robalyx/rotector/internal/roblox/checker"
 	"github.com/robalyx/rotector/internal/roblox/fetcher"
 	"github.com/robalyx/rotector/internal/setup"
@@ -27,7 +27,7 @@ const MaxGroupsPerBatch = 10
 type Worker struct {
 	db                        database.Client
 	roAPI                     *api.API
-	d1Client                  *queue.D1Client
+	d1Client                  *cloudflare.Client
 	bar                       *components.ProgressBar
 	userFetcher               *fetcher.UserFetcher
 	userChecker               *checker.UserChecker
@@ -173,7 +173,7 @@ func (w *Worker) Start(ctx context.Context) {
 		w.reporter.UpdateStatus("Adding flagged users to D1", 95)
 
 		if len(processResult.FlaggedUsers) > 0 {
-			if err := w.d1Client.AddFlaggedUsers(ctx, processResult.FlaggedUsers); err != nil {
+			if err := w.d1Client.UserFlags.AddFlagged(ctx, processResult.FlaggedUsers); err != nil {
 				w.logger.Error("Failed to add flagged users to D1", zap.Error(err))
 			}
 			// Reset counter when we find flagged users

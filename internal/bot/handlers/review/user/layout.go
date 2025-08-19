@@ -8,8 +8,8 @@ import (
 	"github.com/robalyx/rotector/internal/bot/core/interaction"
 	"github.com/robalyx/rotector/internal/bot/handlers/review/shared"
 	sharedView "github.com/robalyx/rotector/internal/bot/views/review/shared"
+	"github.com/robalyx/rotector/internal/cloudflare"
 	"github.com/robalyx/rotector/internal/database"
-	"github.com/robalyx/rotector/internal/queue"
 	"github.com/robalyx/rotector/internal/roblox/checker"
 	"github.com/robalyx/rotector/internal/roblox/fetcher"
 	"github.com/robalyx/rotector/internal/setup"
@@ -21,7 +21,7 @@ import (
 type Layout struct {
 	db                   database.Client
 	roAPI                *api.API
-	d1Client             *queue.D1Client
+	d1Client             *cloudflare.Client
 	translator           *translator.Translator
 	reviewMenu           *ReviewMenu
 	outfitsMenu          *OutfitsMenu

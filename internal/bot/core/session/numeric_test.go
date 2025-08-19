@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/bytedance/sonic"
 	"github.com/robalyx/rotector/internal/bot/core/session"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -302,7 +303,7 @@ func TestTypeMetadata(t *testing.T) {
 		processed := valueProcessor.ProcessValue(original)
 
 		// Convert to JSON and back (simulate the double marshal/unmarshal in Session.getInterface)
-		jsonBytes, err := json.Marshal(processed)
+		jsonBytes, err := sonic.Marshal(processed)
 		require.NoError(t, err, "Failed to marshal processed value")
 
 		var rawData any
@@ -373,7 +374,7 @@ func TestEnumMapConversion(t *testing.T) {
 	processed := valueProcessor.ProcessValue(original)
 
 	// Convert to JSON
-	jsonBytes, err := json.Marshal(processed)
+	jsonBytes, err := sonic.Marshal(processed)
 	require.NoError(t, err, "Failed to marshal original data")
 
 	// Decode with json.Number preservation
@@ -491,7 +492,7 @@ func BenchmarkDoubleMarshaling(b *testing.B) {
 
 			for b.Loop() {
 				// Simulate the double marshaling process from getInterface
-				jsonBytes, _ := json.Marshal(bm.input)
+				jsonBytes, _ := sonic.Marshal(bm.input)
 
 				var rawData any
 
@@ -501,11 +502,11 @@ func BenchmarkDoubleMarshaling(b *testing.B) {
 
 				processedData := processor.PreserveNumericPrecision(rawData)
 
-				processedBytes, _ := json.Marshal(processedData)
+				processedBytes, _ := sonic.Marshal(processedData)
 
 				var result map[string]any
 
-				_ = json.Unmarshal(processedBytes, &result)
+				_ = sonic.Unmarshal(processedBytes, &result)
 			}
 		})
 	}

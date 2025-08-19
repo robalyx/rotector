@@ -1,10 +1,10 @@
 package session_test
 
 import (
-	"encoding/json"
 	"testing"
 	"time"
 
+	"github.com/bytedance/sonic"
 	"github.com/robalyx/rotector/internal/bot/core/session"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -437,13 +437,13 @@ func TestValueProcessor_EmbeddedStructHandling(t *testing.T) {
 		processedFriends := processor.ProcessValue(friends)
 
 		// Convert back to JSON for verification
-		jsonBytes, err := json.Marshal(processedFriends)
+		jsonBytes, err := sonic.Marshal(processedFriends)
 		require.NoError(t, err, "Expected to marshal processed friends to JSON")
 
 		// Compare the resulting structure
 		var result []map[string]any
 
-		err = json.Unmarshal(jsonBytes, &result)
+		err = sonic.Unmarshal(jsonBytes, &result)
 		require.NoError(t, err, "Expected to unmarshal JSON")
 
 		// Verify that the ID field is flattened

@@ -1,10 +1,10 @@
 package config
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 
+	"github.com/bytedance/sonic"
 	"github.com/tailscale/hujson"
 )
 
@@ -86,7 +86,7 @@ func loadWordlistFromPath(wordlistPath string) (*Wordlist, error) {
 
 	// Parse wordlist
 	var wordlist Wordlist
-	if err := json.Unmarshal(standardJSON, &wordlist); err != nil {
+	if err := sonic.Unmarshal(standardJSON, &wordlist); err != nil {
 		return nil, fmt.Errorf("failed to parse wordlist JSON: %w", err)
 	}
 

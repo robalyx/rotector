@@ -1,9 +1,9 @@
 package utils_test
 
 import (
-	"encoding/json"
 	"testing"
 
+	"github.com/bytedance/sonic"
 	"github.com/robalyx/rotector/pkg/utils"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -30,12 +30,12 @@ func TestGenerateSchema(t *testing.T) {
 		schema := utils.GenerateSchema[SimpleStruct]()
 
 		// Convert to JSON for easier assertion
-		schemaBytes, err := json.Marshal(schema)
+		schemaBytes, err := sonic.Marshal(schema)
 		require.NoError(t, err)
 
 		var schemaMap map[string]any
 
-		err = json.Unmarshal(schemaBytes, &schemaMap)
+		err = sonic.Unmarshal(schemaBytes, &schemaMap)
 		require.NoError(t, err)
 
 		// Check schema structure
@@ -60,12 +60,12 @@ func TestGenerateSchema(t *testing.T) {
 
 		schema := utils.GenerateSchema[NestedStruct]()
 
-		schemaBytes, err := json.Marshal(schema)
+		schemaBytes, err := sonic.Marshal(schema)
 		require.NoError(t, err)
 
 		var schemaMap map[string]any
 
-		err = json.Unmarshal(schemaBytes, &schemaMap)
+		err = sonic.Unmarshal(schemaBytes, &schemaMap)
 		require.NoError(t, err)
 
 		// Check top-level structure
@@ -92,12 +92,12 @@ func TestGenerateSchema(t *testing.T) {
 
 		schema := utils.GenerateSchema[string]()
 
-		schemaBytes, err := json.Marshal(schema)
+		schemaBytes, err := sonic.Marshal(schema)
 		require.NoError(t, err)
 
 		var schemaMap map[string]any
 
-		err = json.Unmarshal(schemaBytes, &schemaMap)
+		err = sonic.Unmarshal(schemaBytes, &schemaMap)
 		require.NoError(t, err)
 
 		assert.Equal(t, "string", schemaMap["type"])

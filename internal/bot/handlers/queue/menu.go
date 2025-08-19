@@ -13,9 +13,9 @@ import (
 	"github.com/robalyx/rotector/internal/bot/core/interaction"
 	"github.com/robalyx/rotector/internal/bot/core/session"
 	view "github.com/robalyx/rotector/internal/bot/views/queue"
+	"github.com/robalyx/rotector/internal/cloudflare/manager"
 	"github.com/robalyx/rotector/internal/database/types"
 	"github.com/robalyx/rotector/internal/database/types/enum"
-	"github.com/robalyx/rotector/internal/queue"
 	"github.com/robalyx/rotector/pkg/utils"
 	"go.uber.org/zap"
 )
@@ -52,7 +52,7 @@ func NewMenu(layout *Layout) *Menu {
 // Show prepares and displays the queue interface.
 func (m *Menu) Show(ctx *interaction.Context, s *session.Session) {
 	// Get queue stats
-	stats, err := m.layout.d1Client.GetQueueStats(ctx.Context())
+	stats, err := m.layout.d1Client.Queue.GetStats(ctx.Context())
 	if err != nil {
 		m.layout.logger.Error("Failed to get queue stats", zap.Error(err))
 	} else {
@@ -61,7 +61,7 @@ func (m *Menu) Show(ctx *interaction.Context, s *session.Session) {
 
 	// Get queued user status if one exists
 	if userID := session.QueuedUserID.Get(s); userID > 0 {
-		status, err := m.layout.d1Client.GetQueueStatus(ctx.Context(), userID)
+		status, err := m.layout.d1Client.Queue.GetStatus(ctx.Context(), userID)
 		if err != nil {
 			m.layout.logger.Error("Failed to get queue status", zap.Error(err))
 			return
@@ -178,8 +178,8 @@ func (m *Menu) handleQueueUserModalSubmit(ctx *interaction.Context, s *session.S
 		allFailedIDs     []string
 	)
 
-	for i := 0; i < len(userIDs); i += queue.MaxQueueBatchSize {
-		end := min(i+queue.MaxQueueBatchSize, len(userIDs))
+	for i := 0; i < len(userIDs); i += manager.MaxQueueBatchSize {
+		end := min(i+manager.MaxQueueBatchSize, len(userIDs))
 		batch := userIDs[i:end]
 
 		queuedCount, batchLastUserID, failedIDs, activityLogs := m.queueUserBatch(ctx, batch)
@@ -208,7 +208,7 @@ func (m *Menu) handleQueueUserModalSubmit(ctx *interaction.Context, s *session.S
 	}
 
 	// Get updated queue stats
-	stats, err := m.layout.d1Client.GetQueueStats(ctx.Context())
+	stats, err := m.layout.d1Client.Queue.GetStats(ctx.Context())
 	if err != nil {
 		m.layout.logger.Error("Failed to get queue stats", zap.Error(err))
 	} else {
@@ -455,7 +455,7 @@ func (m *Menu) handleButton(ctx *interaction.Context, s *session.Session, custom
 // handleRefresh updates the queue statistics.
 func (m *Menu) handleRefresh(ctx *interaction.Context, s *session.Session) {
 	// Get updated queue stats
-	stats, err := m.layout.d1Client.GetQueueStats(ctx.Context())
+	stats, err := m.layout.d1Client.Queue.GetStats(ctx.Context())
 	if err != nil {
 		m.layout.logger.Error("Failed to get queue stats", zap.Error(err))
 		ctx.Error("Failed to get queue statistics. Please try again.")
@@ -477,16 +477,16 @@ func (m *Menu) handleAbort(ctx *interaction.Context, s *session.Session) {
 	}
 
 	// Remove user from queue
-	if err := m.layout.d1Client.RemoveFromQueue(ctx.Context(), userID); err != nil {
+	if err := m.layout.d1Client.Queue.Remove(ctx.Context(), userID); err != nil {
 		switch {
-		case errors.Is(err, queue.ErrUserNotFound):
+		case errors.Is(err, manager.ErrUserNotFound):
 			// Clear session data since user is no longer in queue
 			session.QueuedUserID.Delete(s)
 			session.QueuedUserTimestamp.Delete(s)
 			ctx.Cancel("User is no longer in queue.")
 
 			return
-		case errors.Is(err, queue.ErrUserProcessing):
+		case errors.Is(err, manager.ErrUserProcessing):
 			// Clear session data since we can't abort anymore
 			session.QueuedUserID.Delete(s)
 			session.QueuedUserTimestamp.Delete(s)
@@ -506,7 +506,7 @@ func (m *Menu) handleAbort(ctx *interaction.Context, s *session.Session) {
 	session.QueuedUserTimestamp.Delete(s)
 
 	// Get updated queue stats
-	stats, err := m.layout.d1Client.GetQueueStats(ctx.Context())
+	stats, err := m.layout.d1Client.Queue.GetStats(ctx.Context())
 	if err != nil {
 		m.layout.logger.Error("Failed to get queue stats", zap.Error(err))
 	} else {
@@ -596,7 +596,7 @@ func (m *Menu) queueUserBatch(ctx *interaction.Context, batch []int64) (int, int
 	queueErrors := make(map[int64]error)
 
 	if len(usersToQueue) > 0 {
-		queueErrors, err = m.layout.d1Client.QueueUsers(ctx.Context(), usersToQueue)
+		queueErrors, err = m.layout.d1Client.Queue.AddUsers(ctx.Context(), usersToQueue)
 		if err != nil {
 			m.layout.logger.Error("Failed to queue batch", zap.Error(err))
 
@@ -627,7 +627,7 @@ func (m *Menu) queueUserBatch(ctx *interaction.Context, batch []int64) (int, int
 
 		// Check if user had D1 queue errors
 		if queueErr, failed := queueErrors[userID]; failed {
-			if errors.Is(queueErr, queue.ErrUserRecentlyQueued) {
+			if errors.Is(queueErr, manager.ErrUserRecentlyQueued) {
 				failedIDs = append(failedIDs, fmt.Sprintf("%d (recently queued)", userID))
 			} else {
 				failedIDs = append(failedIDs, fmt.Sprintf("%d (error)", userID))

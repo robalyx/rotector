@@ -2,13 +2,13 @@ package export
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 
+	"github.com/bytedance/sonic"
 	dbTypes "github.com/robalyx/rotector/internal/database/types"
 	"github.com/robalyx/rotector/internal/export/binary"
 	"github.com/robalyx/rotector/internal/export/csv"
@@ -120,7 +120,7 @@ func (e *Exporter) ExportAll(ctx context.Context) error {
 		EngineVersion: EngineVersion,
 	}
 
-	configData, err := json.MarshalIndent(jsonConfig, "", "    ")
+	configData, err := sonic.MarshalIndent(jsonConfig, "", "    ")
 	if err != nil {
 		return fmt.Errorf("failed to marshal export config: %w", err)
 	}

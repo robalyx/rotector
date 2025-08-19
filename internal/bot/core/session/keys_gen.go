@@ -27,7 +27,7 @@ import (
     "github.com/robalyx/rotector/internal/database/types/enum"
     "github.com/robalyx/rotector/internal/ai"
 	"github.com/robalyx/rotector/internal/worker/core"
-	"github.com/robalyx/rotector/internal/queue"
+	cloudflare "github.com/robalyx/rotector/internal/cloudflare/manager"
 	apiTypes "github.com/jaxron/roapi.go/pkg/api/types"
 )
 
@@ -116,7 +116,7 @@ func main() {
 		{Name: "ReviewComments", Type: "[]*types.Comment", Doc: "ReviewComments stores comments for the current user or group", Persist: true},
 
 		// Queue related keys
-		{Name: "QueueStats", Type: "*queue.Stats", Doc: "QueueStats stores queue statistics", Persist: true},
+		{Name: "QueueStats", Type: "*cloudflare.Stats", Doc: "QueueStats stores queue statistics", Persist: true},
 		{Name: "QueuedUserID", Type: "int64", Doc: "QueuedUserID stores the ID of the currently queued user", Persist: true},
 		{Name: "QueuedUserTimestamp", Type: "time.Time", Doc: "QueuedUserTimestamp stores when the user was queued", Persist: true},
 		{Name: "QueuedUserProcessing", Type: "bool", Doc: "QueuedUserProcessing indicates if the user is being processed", Persist: true},

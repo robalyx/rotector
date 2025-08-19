@@ -9,12 +9,12 @@ import (
 	"github.com/robalyx/rotector/internal/bot/constants"
 	"github.com/robalyx/rotector/internal/bot/core/session"
 	"github.com/robalyx/rotector/internal/bot/utils"
-	"github.com/robalyx/rotector/internal/queue"
+	"github.com/robalyx/rotector/internal/cloudflare/manager"
 )
 
 // Builder creates the visual layout for the queue interface.
 type Builder struct {
-	stats           *queue.Stats
+	stats           *manager.Stats
 	queuedUserID    int64
 	queuedTimestamp time.Time
 	isProcessing    bool

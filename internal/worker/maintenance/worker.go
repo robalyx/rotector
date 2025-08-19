@@ -9,6 +9,7 @@ import (
 	"github.com/disgoorg/disgo/gateway"
 	"github.com/disgoorg/snowflake/v2"
 	"github.com/jaxron/roapi.go/pkg/api"
+	"github.com/robalyx/rotector/internal/cloudflare"
 	"github.com/robalyx/rotector/internal/database"
 	"github.com/robalyx/rotector/internal/database/types"
 	"github.com/robalyx/rotector/internal/roblox/checker"
@@ -23,6 +24,7 @@ import (
 // Worker handles all maintenance operations.
 type Worker struct {
 	db                      database.Client
+	d1Client                *cloudflare.Client
 	bot                     *bot.Client
 	roAPI                   *api.API
 	bar                     *components.ProgressBar
@@ -66,6 +68,7 @@ func New(app *setup.App, bar *components.ProgressBar, logger *zap.Logger) *Worke
 
 	return &Worker{
 		db:                      app.DB,
+		d1Client:                app.D1Client,
 		bot:                     client,
 		roAPI:                   app.RoAPI,
 		bar:                     bar,
@@ -199,6 +202,14 @@ func (w *Worker) processBannedUsers(ctx context.Context) {
 			return
 		}
 
+		// Update D1 database ban status
+		if err := w.d1Client.UserFlags.UpdateBanStatus(ctx, bannedUserIDs, true); err != nil {
+			w.logger.Error("Error updating banned users in D1", zap.Error(err))
+			w.reporter.SetHealthy(false)
+
+			return
+		}
+
 		w.logger.Info("Marked banned users", zap.Int("count", len(bannedUserIDs)))
 	}
 
@@ -207,6 +218,14 @@ func (w *Worker) processBannedUsers(ctx context.Context) {
 		err = w.db.Model().User().MarkUsersBanStatus(ctx, unbannedUserIDs, false)
 		if err != nil {
 			w.logger.Error("Error unmarking banned users", zap.Error(err))
+			w.reporter.SetHealthy(false)
+
+			return
+		}
+
+		// Update D1 database ban status
+		if err := w.d1Client.UserFlags.UpdateBanStatus(ctx, unbannedUserIDs, false); err != nil {
+			w.logger.Error("Error updating unbanned users in D1", zap.Error(err))
 			w.reporter.SetHealthy(false)
 
 			return

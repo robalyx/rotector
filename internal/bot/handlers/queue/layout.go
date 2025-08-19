@@ -2,8 +2,8 @@ package queue
 
 import (
 	"github.com/robalyx/rotector/internal/bot/core/interaction"
+	"github.com/robalyx/rotector/internal/cloudflare"
 	"github.com/robalyx/rotector/internal/database"
-	"github.com/robalyx/rotector/internal/queue"
 	"github.com/robalyx/rotector/internal/roblox/fetcher"
 	"github.com/robalyx/rotector/internal/setup"
 	"go.uber.org/zap"
@@ -12,7 +12,7 @@ import (
 // Layout handles the display and interaction logic for the queue menu.
 type Layout struct {
 	db               database.Client
-	d1Client         *queue.D1Client
+	d1Client         *cloudflare.Client
 	userFetcher      *fetcher.UserFetcher
 	groupFetcher     *fetcher.GroupFetcher
 	thumbnailFetcher *fetcher.ThumbnailFetcher

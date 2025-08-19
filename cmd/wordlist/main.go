@@ -2,11 +2,11 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log"
 	"os"
 
+	"github.com/bytedance/sonic"
 	"github.com/robalyx/rotector/internal/setup/config"
 	"github.com/robalyx/rotector/internal/wordlist"
 	"github.com/tailscale/hujson"
@@ -106,7 +106,7 @@ func setupDependencies() (*cliDependencies, error) {
 
 	// Parse wordlist
 	var wordlist config.Wordlist
-	if err := json.Unmarshal(standardJSON, &wordlist); err != nil {
+	if err := sonic.Unmarshal(standardJSON, &wordlist); err != nil {
 		return nil, fmt.Errorf("failed to parse wordlist JSON: %w", err)
 	}
 

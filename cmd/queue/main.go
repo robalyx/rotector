@@ -14,8 +14,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/robalyx/rotector/internal/cloudflare/manager"
 	"github.com/robalyx/rotector/internal/database/types"
-	"github.com/robalyx/rotector/internal/queue"
 	"github.com/robalyx/rotector/internal/setup"
 	"github.com/robalyx/rotector/pkg/utils"
 	"github.com/urfave/cli/v3"
@@ -264,8 +264,8 @@ func queueUsers(ctx context.Context, app *setup.App, userIDs []int64) (int, int,
 
 	logger := app.Logger.Named("queue_cli")
 
-	for i := 0; i < len(userIDs); i += queue.MaxQueueBatchSize {
-		end := min(i+queue.MaxQueueBatchSize, len(userIDs))
+	for i := 0; i < len(userIDs); i += manager.MaxQueueBatchSize {
+		end := min(i+manager.MaxQueueBatchSize, len(userIDs))
 		batch := userIDs[i:end]
 
 		queuedCount, failedCount, err := queueUserBatch(ctx, app, batch, logger)
@@ -311,7 +311,7 @@ func queueUserBatch(ctx context.Context, app *setup.App, batch []int64, logger *
 	if len(usersToQueue) > 0 {
 		var err error
 
-		queueErrors, err = app.D1Client.QueueUsers(ctx, usersToQueue)
+		queueErrors, err = app.D1Client.Queue.AddUsers(ctx, usersToQueue)
 		if err != nil {
 			logger.Error("Failed to queue batch", zap.Error(err))
 			return 0, len(batch), err
@@ -335,7 +335,7 @@ func queueUserBatch(ctx context.Context, app *setup.App, batch []int64, logger *
 		if queueErr, failed := queueErrors[userID]; failed {
 			failedCount++
 
-			if errors.Is(queueErr, queue.ErrUserRecentlyQueued) {
+			if errors.Is(queueErr, manager.ErrUserRecentlyQueued) {
 				logger.Warn("User recently queued", zap.Int64("userID", userID))
 			} else {
 				logger.Error("Failed to queue user", zap.Int64("userID", userID), zap.Error(queueErr))

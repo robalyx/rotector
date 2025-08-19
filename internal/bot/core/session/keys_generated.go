@@ -6,9 +6,9 @@ import (
 
 	apiTypes "github.com/jaxron/roapi.go/pkg/api/types"
 	"github.com/robalyx/rotector/internal/ai"
+	cloudflare "github.com/robalyx/rotector/internal/cloudflare/manager"
 	"github.com/robalyx/rotector/internal/database/types"
 	"github.com/robalyx/rotector/internal/database/types/enum"
-	"github.com/robalyx/rotector/internal/queue"
 	"github.com/robalyx/rotector/internal/worker/core"
 )
 
@@ -117,7 +117,7 @@ var (
 	// ReviewComments stores comments for the current user or group
 	ReviewComments = NewKey[[]*types.Comment]("ReviewComments", true)
 	// QueueStats stores queue statistics
-	QueueStats = NewKey[*queue.Stats]("QueueStats", true)
+	QueueStats = NewKey[*cloudflare.Stats]("QueueStats", true)
 	// QueuedUserID stores the ID of the currently queued user
 	QueuedUserID = NewKey[int64]("QueuedUserID", true)
 	// QueuedUserTimestamp stores when the user was queued
