@@ -39,7 +39,7 @@ func (r *StatsModel) SaveHourlyStats(ctx context.Context, stats *types.HourlySta
 			Set("users_banned = EXCLUDED.users_banned").
 			Set("groups_confirmed = EXCLUDED.groups_confirmed").
 			Set("groups_flagged = EXCLUDED.groups_flagged").
-			Set("groups_cleared = EXCLUDED.groups_cleared").
+			Set("groups_mixed = EXCLUDED.groups_mixed").
 			Set("groups_locked = EXCLUDED.groups_locked").
 			Exec(ctx)
 		if err != nil {

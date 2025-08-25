@@ -912,7 +912,7 @@ func (m *ReviewMenu) handleGenerateGroupReason(ctx *interaction.Context, s *sess
 			confirmedGroups[group.ID] = group
 		case enum.GroupTypeFlagged:
 			flaggedGroupsForUser[group.ID] = group
-		case enum.GroupTypeCleared:
+		case enum.GroupTypeMixed:
 		}
 	}
 

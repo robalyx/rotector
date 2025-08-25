@@ -11,7 +11,7 @@ type HourlyStats struct {
 	UsersBanned     int64     `bun:",notnull" json:"usersBanned"`
 	GroupsConfirmed int64     `bun:",notnull" json:"groupsConfirmed"`
 	GroupsFlagged   int64     `bun:",notnull" json:"groupsFlagged"`
-	GroupsCleared   int64     `bun:",notnull" json:"groupsCleared"`
+	GroupsMixed     int64     `bun:",notnull" json:"groupsMixed"`
 	GroupsLocked    int64     `bun:",notnull" json:"groupsLocked"`
 }
 
@@ -27,6 +27,6 @@ type UserCounts struct {
 type GroupCounts struct {
 	Confirmed int
 	Flagged   int
-	Cleared   int
+	Mixed     int
 	Locked    int
 }

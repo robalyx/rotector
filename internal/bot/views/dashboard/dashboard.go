@@ -325,10 +325,10 @@ func (b *Builder) buildUserGraphContainer() discord.LayoutComponent {
 func (b *Builder) buildGroupGraphContainer() discord.LayoutComponent {
 	displays := []discord.ContainerSubComponent{
 		discord.NewTextDisplay("# Group Statistics"),
-		discord.NewTextDisplayf("**Confirmed Groups:** `%d`\n**Flagged Groups:** `%d`\n**Cleared Groups:** `%d`\n**Locked Groups:** `%d`",
+		discord.NewTextDisplayf("**Confirmed Groups:** `%d`\n**Flagged Groups:** `%d`\n**Mixed Groups:** `%d`\n**Locked Groups:** `%d`",
 			b.groupCounts.Confirmed,
 			b.groupCounts.Flagged,
-			b.groupCounts.Cleared,
+			b.groupCounts.Mixed,
 			b.groupCounts.Locked,
 		),
 	}

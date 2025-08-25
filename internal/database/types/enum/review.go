@@ -40,6 +40,6 @@ const (
 	ReviewTargetModeFlagged ReviewTargetMode = iota
 	// ReviewTargetModeConfirmed indicates re-reviewing previously confirmed items.
 	ReviewTargetModeConfirmed
-	// ReviewTargetModeCleared indicates re-reviewing previously cleared items.
-	ReviewTargetModeCleared
+	// ReviewTargetModeMixed indicates re-reviewing previously mixed items.
+	ReviewTargetModeMixed
 )

@@ -15,6 +15,7 @@ type Client struct {
 	api        *api.Cloudflare
 	Queue      *manager.Queue
 	UserFlags  *manager.UserFlags
+	GroupFlags *manager.GroupFlags
 	IPTracking *manager.IPTracking
 }
 
@@ -31,6 +32,7 @@ func NewClient(cfg *config.Config, db database.Client, logger *zap.Logger) *Clie
 		api:        cloudflareAPI,
 		Queue:      manager.NewQueue(cloudflareAPI, logger.Named("cloudflare")),
 		UserFlags:  manager.NewUserFlags(cloudflareAPI, db, logger.Named("user_flags")),
+		GroupFlags: manager.NewGroupFlags(cloudflareAPI, logger.Named("group_flags")),
 		IPTracking: manager.NewIPTracking(cloudflareAPI, logger.Named("ip_tracking")),
 	}
 }

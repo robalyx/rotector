@@ -58,7 +58,7 @@ func (s *StatsService) GetCurrentStats(ctx context.Context) (*types.HourlyStats,
 
 	stats.GroupsConfirmed = int64(groupCounts.Confirmed)
 	stats.GroupsFlagged = int64(groupCounts.Flagged)
-	stats.GroupsCleared = int64(groupCounts.Cleared)
+	stats.GroupsMixed = int64(groupCounts.Mixed)
 	stats.GroupsLocked = int64(groupCounts.Locked)
 
 	return &stats, nil

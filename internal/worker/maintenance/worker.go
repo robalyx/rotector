@@ -120,25 +120,22 @@ func (w *Worker) Start(ctx context.Context) {
 		// Step 3: Process cleared users (30%)
 		w.processClearedUsers(ctx)
 
-		// Step 4: Process cleared groups (40%)
-		w.processClearedGroups(ctx)
-
-		// Step 5: Process group tracking (50%)
+		// Step 4: Process group tracking (40%)
 		w.processGroupTracking(ctx)
 
-		// Step 6: Process user thumbnails (60%)
+		// Step 5: Process user thumbnails (50%)
 		w.processUserThumbnails(ctx)
 
-		// Step 7: Process group thumbnails (70%)
+		// Step 6: Process group thumbnails (60%)
 		w.processGroupThumbnails(ctx)
 
-		// Step 8: Process old Discord server members (80%)
+		// Step 7: Process old Discord server members (70%)
 		w.processOldServerMembers(ctx)
 
-		// Step 9: Process reviewer info (90%)
+		// Step 8: Process reviewer info (80%)
 		w.processReviewerInfo(ctx)
 
-		// Step 10: Completed (100%)
+		// Step 9: Completed (100%)
 		w.bar.SetStepMessage("Completed", 100)
 		w.reporter.UpdateStatus("Completed", 100)
 
@@ -327,32 +324,10 @@ func (w *Worker) processClearedUsers(ctx context.Context) {
 	}
 }
 
-// processClearedGroups removes old cleared groups.
-func (w *Worker) processClearedGroups(ctx context.Context) {
-	w.bar.SetStepMessage("Processing cleared groups", 40)
-	w.reporter.UpdateStatus("Processing cleared groups", 40)
-
-	cutOffDate := time.Now().AddDate(0, 0, -30)
-
-	affected, err := w.db.Model().Group().PurgeOldClearedGroups(ctx, cutOffDate)
-	if err != nil {
-		w.logger.Error("Error purging old cleared groups", zap.Error(err))
-		w.reporter.SetHealthy(false)
-
-		return
-	}
-
-	if affected > 0 {
-		w.logger.Info("Purged old cleared groups",
-			zap.Int("affected", affected),
-			zap.Time("cutOffDate", cutOffDate))
-	}
-}
-
 // processGroupTracking manages group tracking data.
 func (w *Worker) processGroupTracking(ctx context.Context) {
-	w.bar.SetStepMessage("Processing group tracking", 50)
-	w.reporter.UpdateStatus("Processing group tracking", 50)
+	w.bar.SetStepMessage("Processing group tracking", 40)
+	w.reporter.UpdateStatus("Processing group tracking", 40)
 
 	// Get groups to check
 	groupsWithUsers, err := w.db.Model().Tracking().GetGroupTrackingsToCheck(
@@ -453,6 +428,11 @@ func (w *Worker) processNewGroups(ctx context.Context, newGroupIDs []int64, grou
 		return nil
 	}
 
+	// Add flagged groups to D1 database
+	if err := w.d1Client.GroupFlags.AddFlagged(ctx, flaggedGroups); err != nil {
+		w.logger.Error("Failed to add flagged groups to D1 database", zap.Error(err))
+	}
+
 	// Extract and return the IDs of newly flagged groups
 	newlyFlaggedIDs := make([]int64, 0, len(flaggedGroups))
 	for groupID := range flaggedGroups {
@@ -464,8 +444,8 @@ func (w *Worker) processNewGroups(ctx context.Context, newGroupIDs []int64, grou
 
 // processUserThumbnails updates user thumbnails.
 func (w *Worker) processUserThumbnails(ctx context.Context) {
-	w.bar.SetStepMessage("Processing user thumbnails", 60)
-	w.reporter.UpdateStatus("Processing user thumbnails", 60)
+	w.bar.SetStepMessage("Processing user thumbnails", 50)
+	w.reporter.UpdateStatus("Processing user thumbnails", 50)
 
 	// Get users that need thumbnail updates
 	users, err := w.db.Model().User().GetUsersForThumbnailUpdate(ctx, w.thumbnailUserBatchSize)
@@ -514,8 +494,8 @@ func (w *Worker) processUserThumbnails(ctx context.Context) {
 
 // processGroupThumbnails updates group thumbnails.
 func (w *Worker) processGroupThumbnails(ctx context.Context) {
-	w.bar.SetStepMessage("Processing group thumbnails", 70)
-	w.reporter.UpdateStatus("Processing group thumbnails", 70)
+	w.bar.SetStepMessage("Processing group thumbnails", 60)
+	w.reporter.UpdateStatus("Processing group thumbnails", 60)
 
 	// Get groups that need thumbnail updates
 	groups, err := w.db.Model().Group().GetGroupsForThumbnailUpdate(ctx, w.thumbnailGroupBatchSize)
@@ -549,8 +529,8 @@ func (w *Worker) processGroupThumbnails(ctx context.Context) {
 
 // processOldServerMembers removes Discord server member records older than 7 days.
 func (w *Worker) processOldServerMembers(ctx context.Context) {
-	w.bar.SetStepMessage("Processing old Discord server members", 80)
-	w.reporter.UpdateStatus("Processing old Discord server members", 80)
+	w.bar.SetStepMessage("Processing old Discord server members", 70)
+	w.reporter.UpdateStatus("Processing old Discord server members", 70)
 
 	cutoffDate := time.Now().AddDate(0, 0, -7) // 7 days ago
 
@@ -571,8 +551,8 @@ func (w *Worker) processOldServerMembers(ctx context.Context) {
 
 // processReviewerInfo updates cached Discord user information for reviewers.
 func (w *Worker) processReviewerInfo(ctx context.Context) {
-	w.bar.SetStepMessage("Processing reviewer info", 90)
-	w.reporter.UpdateStatus("Processing reviewer info", 90)
+	w.bar.SetStepMessage("Processing reviewer info", 80)
+	w.reporter.UpdateStatus("Processing reviewer info", 80)
 
 	// Get bot settings to get reviewer IDs
 	settings, err := w.db.Model().Setting().GetBotSettings(ctx)

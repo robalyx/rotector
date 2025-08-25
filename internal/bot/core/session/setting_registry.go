@@ -239,9 +239,9 @@ func (r *SettingRegistry) createReviewTargetModeSetting() *Setting {
 				Emoji:       "⚠️",
 			},
 			{
-				Value:       enum.ReviewTargetModeCleared.String(),
-				Label:       "Cleared Items",
-				Description: "Re-review cleared items",
+				Value:       enum.ReviewTargetModeMixed.String(),
+				Label:       "Cleared/Mixed Items",
+				Description: "Re-review cleared/mixed items",
 				Emoji:       "✅",
 			},
 		},
@@ -249,7 +249,7 @@ func (r *SettingRegistry) createReviewTargetModeSetting() *Setting {
 			validateEnum([]string{
 				enum.ReviewTargetModeFlagged.String(),
 				enum.ReviewTargetModeConfirmed.String(),
-				enum.ReviewTargetModeCleared.String(),
+				enum.ReviewTargetModeMixed.String(),
 			}),
 		},
 		ValueGetter: func(s *Session) string {

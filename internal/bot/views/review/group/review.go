@@ -81,14 +81,14 @@ func (b *ReviewBuilder) Build() *discord.MessageUpdateBuilder {
 	}
 
 	// Add status-specific timestamps if they exist
-	if !b.group.VerifiedAt.IsZero() || !b.group.ClearedAt.IsZero() {
+	if !b.group.VerifiedAt.IsZero() || !b.group.MixedAt.IsZero() {
 		var timestamps []string
 		if !b.group.VerifiedAt.IsZero() {
 			timestamps = append(timestamps, "Verified: "+fmt.Sprintf("<t:%d:R>", b.group.VerifiedAt.Unix()))
 		}
 
-		if !b.group.ClearedAt.IsZero() {
-			timestamps = append(timestamps, "Cleared: "+fmt.Sprintf("<t:%d:R>", b.group.ClearedAt.Unix()))
+		if !b.group.MixedAt.IsZero() {
+			timestamps = append(timestamps, "Mixed: "+fmt.Sprintf("<t:%d:R>", b.group.MixedAt.Unix()))
 		}
 
 		mainInfoDisplays = append(mainInfoDisplays,
@@ -208,10 +208,10 @@ func (b *ReviewBuilder) buildStatusText() string {
 		statusIcon = "⏳"
 		statusName = "Flagged"
 		statusDesc = "This group has been flagged for review but no final decision has been made"
-	case enum.GroupTypeCleared:
-		statusIcon = "✅"
-		statusName = "Cleared"
-		statusDesc = "This group has been reviewed and cleared of any violations"
+	case enum.GroupTypeMixed:
+		statusIcon = "⚠️"
+		statusName = "Mixed"
+		statusDesc = "This group has inappropriate content but also many innocent users"
 	}
 
 	if b.group.IsLocked {
@@ -353,7 +353,7 @@ func (b *ReviewBuilder) buildInteractiveComponents() []discord.ContainerSubCompo
 	// Add navigation buttons
 	navButtons := b.BuildNavigationButtons()
 	confirmButton := discord.NewDangerButton("Confirm", constants.ConfirmButtonCustomID)
-	clearButton := discord.NewSuccessButton("Clear", constants.ClearButtonCustomID)
+	clearButton := discord.NewSuccessButton("Mixed", constants.ClearButtonCustomID)
 
 	// Add all buttons to a single row
 	allButtons := make([]discord.InteractiveComponent, 0, len(navButtons)+2)

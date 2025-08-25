@@ -7,6 +7,7 @@ import (
 	"github.com/robalyx/rotector/internal/bot/core/interaction"
 	"github.com/robalyx/rotector/internal/bot/handlers/review/shared"
 	sharedView "github.com/robalyx/rotector/internal/bot/views/review/shared"
+	"github.com/robalyx/rotector/internal/cloudflare"
 	"github.com/robalyx/rotector/internal/database"
 	"github.com/robalyx/rotector/internal/roblox/fetcher"
 	"github.com/robalyx/rotector/internal/setup"
@@ -17,6 +18,7 @@ import (
 type Layout struct {
 	db               database.Client
 	roAPI            *api.API
+	d1Client         *cloudflare.Client
 	reviewMenu       *ReviewMenu
 	membersMenu      *MembersMenu
 	commentsMenu     *shared.CommentsMenu
@@ -33,6 +35,7 @@ func New(app *setup.App, interactionManager *interaction.Manager) *Layout {
 	l := &Layout{
 		db:               app.DB,
 		roAPI:            app.RoAPI,
+		d1Client:         app.D1Client,
 		thumbnailFetcher: fetcher.NewThumbnailFetcher(app.RoAPI, app.Logger),
 		presenceFetcher:  fetcher.NewPresenceFetcher(app.RoAPI, app.Logger),
 		imageStreamer:    interaction.NewImageStreamer(interactionManager, app.Logger, app.RoAPI.GetClient()),

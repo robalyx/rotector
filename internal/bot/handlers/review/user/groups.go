@@ -114,7 +114,7 @@ func (m *GroupsMenu) sortGroupsByStatus(
 	statusOrder := []enum.GroupType{
 		enum.GroupTypeConfirmed,
 		enum.GroupTypeFlagged,
-		enum.GroupTypeCleared,
+		enum.GroupTypeMixed,
 	}
 
 	// Combine groups in priority order

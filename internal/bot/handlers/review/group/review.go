@@ -221,7 +221,7 @@ func (m *ReviewMenu) handleButton(ctx *interaction.Context, s *session.Session, 
 	case constants.ConfirmButtonCustomID:
 		m.handleConfirmGroup(ctx, s)
 	case constants.ClearButtonCustomID:
-		m.handleClearGroup(ctx, s)
+		m.handleMixGroup(ctx, s)
 	}
 }
 
@@ -509,6 +509,13 @@ func (m *ReviewMenu) handleConfirmGroup(ctx *interaction.Context, s *session.Ses
 	m.UpdateCounters(s)
 	m.navigateAfterAction(ctx, s, "Group confirmed.")
 
+	// Add the confirmed group to the D1 database
+	if err := m.layout.d1Client.GroupFlags.AddConfirmed(ctx.Context(), group); err != nil {
+		m.layout.logger.Error("Failed to add confirmed group to D1 database",
+			zap.Error(err),
+			zap.Int64("groupID", group.ID))
+	}
+
 	// Log the confirm action
 	m.layout.db.Model().Activity().Log(ctx.Context(), &types.ActivityLog{
 		ActivityTarget: types.ActivityTarget{
@@ -523,40 +530,47 @@ func (m *ReviewMenu) handleConfirmGroup(ctx *interaction.Context, s *session.Ses
 	})
 }
 
-// handleClearGroup removes a group from the flagged state and logs the action.
-func (m *ReviewMenu) handleClearGroup(ctx *interaction.Context, s *session.Session) {
+// handleMixGroup marks a group as mixed and logs the action.
+func (m *ReviewMenu) handleMixGroup(ctx *interaction.Context, s *session.Session) {
 	group := session.GroupTarget.Get(s)
 	reviewerID := uint64(ctx.Event().User().ID)
 
 	// Ensure user is an admin
 	isAdmin := s.BotSettings().IsAdmin(reviewerID)
 	if !isAdmin {
-		m.layout.logger.Error("Non-admin attempted to clear group",
+		m.layout.logger.Error("Non-admin attempted to mark group as mixed",
 			zap.Uint64("userID", reviewerID))
-		ctx.Error("You do not have permission to clear groups.")
+		ctx.Error("You do not have permission to mark groups as mixed.")
 
 		return
 	}
 
-	// Clear the group
-	if err := m.layout.db.Service().Group().ClearGroup(ctx.Context(), group, reviewerID); err != nil {
-		m.layout.logger.Error("Failed to clear group", zap.Error(err))
-		ctx.Error("Failed to clear the group. Please try again.")
+	// Mark the group as mixed
+	if err := m.layout.db.Service().Group().MixGroup(ctx.Context(), group, reviewerID); err != nil {
+		m.layout.logger.Error("Failed to mark group as mixed", zap.Error(err))
+		ctx.Error("Failed to mark the group as mixed. Please try again.")
 
 		return
 	}
 
 	// Navigate to next group in history or fetch new one
 	m.UpdateCounters(s)
-	m.navigateAfterAction(ctx, s, "Group cleared.")
+	m.navigateAfterAction(ctx, s, "Group marked as mixed.")
 
-	// Log the clear action
+	// Add the mixed group to the D1 database
+	if err := m.layout.d1Client.GroupFlags.AddMixed(ctx.Context(), group); err != nil {
+		m.layout.logger.Error("Failed to add mixed group to D1 database",
+			zap.Error(err),
+			zap.Int64("groupID", group.ID))
+	}
+
+	// Log the mix action
 	m.layout.db.Model().Activity().Log(ctx.Context(), &types.ActivityLog{
 		ActivityTarget: types.ActivityTarget{
 			GroupID: group.ID,
 		},
 		ReviewerID:        reviewerID,
-		ActivityType:      enum.ActivityTypeGroupCleared,
+		ActivityType:      enum.ActivityTypeGroupMixed,
 		ActivityTimestamp: time.Now(),
 		Details:           map[string]any{},
 	})

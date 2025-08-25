@@ -228,7 +228,7 @@ func (s *UserService) GetUserToReview(
 		targetStatus = enum.UserTypeFlagged
 	case enum.ReviewTargetModeConfirmed:
 		targetStatus = enum.UserTypeConfirmed
-	case enum.ReviewTargetModeCleared:
+	case enum.ReviewTargetModeMixed:
 		targetStatus = enum.UserTypeCleared
 	}
 
@@ -243,7 +243,7 @@ func (s *UserService) GetUserToReview(
 				fallbackStatuses = []enum.UserType{enum.UserTypeConfirmed, enum.UserTypeCleared}
 			case enum.ReviewTargetModeConfirmed:
 				fallbackStatuses = []enum.UserType{enum.UserTypeFlagged, enum.UserTypeCleared}
-			case enum.ReviewTargetModeCleared:
+			case enum.ReviewTargetModeMixed:
 				fallbackStatuses = []enum.UserType{enum.UserTypeFlagged, enum.UserTypeConfirmed}
 			}
 

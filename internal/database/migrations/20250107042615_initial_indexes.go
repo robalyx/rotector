@@ -108,9 +108,9 @@ func init() { //nolint:funlen
 			CREATE INDEX IF NOT EXISTS idx_groups_status_count
 			ON groups (status);
 
-			-- Group clearance index
-			CREATE INDEX IF NOT EXISTS idx_group_clearances_cleared_at
-			ON group_clearances (cleared_at);
+			-- Group mixed classification index
+			CREATE INDEX IF NOT EXISTS idx_group_mixed_classifications_mixed_at
+			ON group_mixed_classifications (mixed_at);
 
 			-- Group verification index
 			CREATE INDEX IF NOT EXISTS idx_group_verifications_verified_at
@@ -345,7 +345,7 @@ func init() { //nolint:funlen
 			DROP INDEX IF EXISTS idx_groups_locked_status;
 			DROP INDEX IF EXISTS idx_groups_uuid;
 			DROP INDEX IF EXISTS idx_groups_status_count;
-			DROP INDEX IF EXISTS idx_group_clearances_cleared_at;
+			DROP INDEX IF EXISTS idx_group_mixed_classifications_mixed_at;
 			DROP INDEX IF EXISTS idx_group_verifications_verified_at;
 
 			-- User review sorting indexes

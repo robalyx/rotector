@@ -6,8 +6,8 @@ package enum
 type GroupType int
 
 const (
-	// GroupTypeCleared indicates a group was reviewed and found to be appropriate.
-	GroupTypeCleared GroupType = iota
+	// GroupTypeMixed indicates a group has inappropriate content but also many innocent users.
+	GroupTypeMixed GroupType = iota
 	// GroupTypeFlagged indicates a group needs review for potential violations.
 	GroupTypeFlagged
 	// GroupTypeConfirmed indicates a group has been reviewed and confirmed as inappropriate.

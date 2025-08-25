@@ -163,8 +163,8 @@ func (b *GroupsBuilder) getGroupFieldName(group *apiTypes.UserGroupRoles) string
 			indicators = append(indicators, "⚠️")
 		case enum.GroupTypeFlagged:
 			indicators = append(indicators, "⏳")
-		case enum.GroupTypeCleared:
-			indicators = append(indicators, "✅")
+		case enum.GroupTypeMixed:
+			indicators = append(indicators, "⚠️")
 		}
 
 		// Add locked status if applicable

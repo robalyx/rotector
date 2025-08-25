@@ -195,7 +195,7 @@ func (b *ChartBuilder) prepareGroupDataSeries() ([]float64, []float64, []float64
 			idx := hoursToShow - 1 - i
 			confirmedSeries[idx] = float64(stat.GroupsConfirmed)
 			flaggedSeries[idx] = float64(stat.GroupsFlagged)
-			clearedSeries[idx] = float64(stat.GroupsCleared)
+			clearedSeries[idx] = float64(stat.GroupsMixed)
 			lockedSeries[idx] = float64(stat.GroupsLocked)
 		}
 	}

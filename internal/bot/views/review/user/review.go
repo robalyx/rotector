@@ -726,8 +726,8 @@ func (b *ReviewBuilder) getGroupsField() string {
 		parts = append(parts, fmt.Sprintf("%d ⏳", c))
 	}
 
-	if c := counts[enum.GroupTypeCleared]; c > 0 {
-		parts = append(parts, fmt.Sprintf("%d ✅", c))
+	if c := counts[enum.GroupTypeMixed]; c > 0 {
+		parts = append(parts, fmt.Sprintf("%d ⚠️", c))
 	}
 
 	if len(parts) > 0 {

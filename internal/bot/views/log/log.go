@@ -243,8 +243,8 @@ func (b *Builder) buildActivityTypeOptions() []discord.StringSelectMenuOption {
 			WithDefault(b.activityTypeFilter == enum.ActivityTypeGroupConfirmed),
 		discord.NewStringSelectMenuOption("Group Confirmed (Custom)", strconv.Itoa(int(enum.ActivityTypeGroupConfirmedCustom))).
 			WithDefault(b.activityTypeFilter == enum.ActivityTypeGroupConfirmedCustom),
-		discord.NewStringSelectMenuOption("Group Cleared", strconv.Itoa(int(enum.ActivityTypeGroupCleared))).
-			WithDefault(b.activityTypeFilter == enum.ActivityTypeGroupCleared),
+		discord.NewStringSelectMenuOption("Group Mixed", strconv.Itoa(int(enum.ActivityTypeGroupMixed))).
+			WithDefault(b.activityTypeFilter == enum.ActivityTypeGroupMixed),
 		discord.NewStringSelectMenuOption("Group Skipped", strconv.Itoa(int(enum.ActivityTypeGroupSkipped))).
 			WithDefault(b.activityTypeFilter == enum.ActivityTypeGroupSkipped),
 		discord.NewStringSelectMenuOption("Group Deleted", strconv.Itoa(int(enum.ActivityTypeGroupDeleted))).

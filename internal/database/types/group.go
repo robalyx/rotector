@@ -52,11 +52,11 @@ type GroupVerification struct {
 	VerifiedAt time.Time `bun:",notnull" json:"verifiedAt"`
 }
 
-// GroupClearance stores clearance data for cleared groups.
-type GroupClearance struct {
+// GroupMixedClassification stores classification data for mixed groups.
+type GroupMixedClassification struct {
 	GroupID    int64     `bun:",pk"      json:"groupId"`
 	ReviewerID uint64    `bun:",notnull" json:"reviewerId"`
-	ClearedAt  time.Time `bun:",notnull" json:"clearedAt"`
+	MixedAt    time.Time `bun:",notnull" json:"mixedAt"`
 }
 
 // ReviewGroup combines group data with verification/clearance info for review.
@@ -66,7 +66,7 @@ type ReviewGroup struct {
 	Reasons    Reasons[enum.GroupReasonType] `json:"reasons"`
 	ReviewerID uint64                        `json:"reviewerId,omitempty"`
 	VerifiedAt time.Time                     `json:"verifiedAt"`
-	ClearedAt  time.Time                     `json:"clearedAt"`
+	MixedAt    time.Time                     `json:"mixedAt"`
 }
 
 // GroupField represents available fields as bit flags.

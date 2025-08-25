@@ -36,8 +36,8 @@ const (
 	ActivityTypeGroupConfirmed
 	// ActivityTypeGroupConfirmedCustom tracks bans with custom moderator-provided reasons.
 	ActivityTypeGroupConfirmedCustom
-	// ActivityTypeGroupCleared tracks when a moderator marks a group as appropriate.
-	ActivityTypeGroupCleared
+	// ActivityTypeGroupMixed tracks when a moderator marks a group as mixed (inappropriate content but many innocent users).
+	ActivityTypeGroupMixed
 	// ActivityTypeGroupSkipped tracks when a moderator skips reviewing a group.
 	ActivityTypeGroupSkipped
 	// ActivityTypeRemoved3 is a deleted activity type.

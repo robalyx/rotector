@@ -107,13 +107,13 @@ func (r *GroupModel) SaveGroups(ctx context.Context, tx bun.Tx, groups []*types.
 // Deprecated: Use Service().Group().ConfirmGroup() instead.
 func (r *GroupModel) ConfirmGroup(ctx context.Context, group *types.ReviewGroup) error {
 	return dbretry.Transaction(ctx, r.db, func(ctx context.Context, tx bun.Tx) error {
-		// Delete any existing clearance record
+		// Delete any existing mixed classification record
 		_, err := tx.NewDelete().
-			Model((*types.GroupClearance)(nil)).
+			Model((*types.GroupMixedClassification)(nil)).
 			Where("group_id = ?", group.ID).
 			Exec(ctx)
 		if err != nil {
-			return fmt.Errorf("failed to delete existing clearance record: %w", err)
+			return fmt.Errorf("failed to delete existing mixed classification record: %w", err)
 		}
 
 		// Update group status
@@ -177,8 +177,8 @@ func (r *GroupModel) ConfirmGroup(ctx context.Context, group *types.ReviewGroup)
 
 // ClearGroup moves a group to cleared status and creates a clearance record.
 //
-// Deprecated: Use Service().Group().ClearGroup() instead.
-func (r *GroupModel) ClearGroup(ctx context.Context, group *types.ReviewGroup) error {
+// Deprecated: Use Service().Group().MixGroup() instead.
+func (r *GroupModel) MixGroup(ctx context.Context, group *types.ReviewGroup) error {
 	return dbretry.Transaction(ctx, r.db, func(ctx context.Context, tx bun.Tx) error {
 		// Delete any existing verification record
 		_, err := tx.NewDelete().
@@ -192,28 +192,28 @@ func (r *GroupModel) ClearGroup(ctx context.Context, group *types.ReviewGroup) e
 		// Update group status
 		_, err = tx.NewUpdate().
 			Model(group.Group).
-			Set("status = ?", enum.GroupTypeCleared).
+			Set("status = ?", enum.GroupTypeMixed).
 			Where("id = ?", group.ID).
 			Exec(ctx)
 		if err != nil {
 			return fmt.Errorf("failed to update group status: %w", err)
 		}
 
-		// Create clearance record
-		clearance := &types.GroupClearance{
+		// Create mixed classification record
+		mixed := &types.GroupMixedClassification{
 			GroupID:    group.ID,
 			ReviewerID: group.ReviewerID,
-			ClearedAt:  time.Now(),
+			MixedAt:    time.Now(),
 		}
 
 		_, err = tx.NewInsert().
-			Model(clearance).
+			Model(mixed).
 			On("CONFLICT (group_id) DO UPDATE").
 			Set("reviewer_id = EXCLUDED.reviewer_id").
-			Set("cleared_at = EXCLUDED.cleared_at").
+			Set("mixed_at = EXCLUDED.mixed_at").
 			Exec(ctx)
 		if err != nil {
-			return fmt.Errorf("failed to create clearance record: %w", err)
+			return fmt.Errorf("failed to create mixed classification record: %w", err)
 		}
 
 		// Save reasons if any exist
@@ -328,20 +328,20 @@ func (r *GroupModel) GetGroupByID(
 				result.ReviewerID = verification.ReviewerID
 				result.VerifiedAt = verification.VerifiedAt
 			}
-		case enum.GroupTypeCleared:
-			var clearance types.GroupClearance
+		case enum.GroupTypeMixed:
+			var mixed types.GroupMixedClassification
 
 			err = tx.NewSelect().
-				Model(&clearance).
+				Model(&mixed).
 				Where("group_id = ?", group.ID).
 				Scan(ctx)
 			if err != nil && !errors.Is(err, sql.ErrNoRows) {
-				return fmt.Errorf("failed to get clearance data: %w", err)
+				return fmt.Errorf("failed to get mixed classification data: %w", err)
 			}
 
 			if err == nil {
-				result.ReviewerID = clearance.ReviewerID
-				result.ClearedAt = clearance.ClearedAt
+				result.ReviewerID = mixed.ReviewerID
+				result.MixedAt = mixed.MixedAt
 			}
 		case enum.GroupTypeFlagged:
 			// Nothing to do here
@@ -394,14 +394,14 @@ func (r *GroupModel) GetGroupsByIDs(
 			return fmt.Errorf("failed to get verifications: %w", err)
 		}
 
-		var clearances []types.GroupClearance
+		var mixedClassifications []types.GroupMixedClassification
 
 		err = tx.NewSelect().
-			Model(&clearances).
+			Model(&mixedClassifications).
 			Where("group_id IN (?)", bun.In(groupIDs)).
 			Scan(ctx)
 		if err != nil && !errors.Is(err, sql.ErrNoRows) {
-			return fmt.Errorf("failed to get clearances: %w", err)
+			return fmt.Errorf("failed to get mixed classifications: %w", err)
 		}
 
 		// Get group reasons
@@ -421,9 +421,9 @@ func (r *GroupModel) GetGroupsByIDs(
 			verificationMap[v.GroupID] = v
 		}
 
-		clearanceMap := make(map[int64]types.GroupClearance)
-		for _, c := range clearances {
-			clearanceMap[c.GroupID] = c
+		mixedMap := make(map[int64]types.GroupMixedClassification)
+		for _, c := range mixedClassifications {
+			mixedMap[c.GroupID] = c
 		}
 
 		// Map reasons by group ID
@@ -452,9 +452,9 @@ func (r *GroupModel) GetGroupsByIDs(
 				reviewGroup.VerifiedAt = v.VerifiedAt
 			}
 
-			if c, ok := clearanceMap[group.ID]; ok {
+			if c, ok := mixedMap[group.ID]; ok {
 				reviewGroup.ReviewerID = c.ReviewerID
-				reviewGroup.ClearedAt = c.ClearedAt
+				reviewGroup.MixedAt = c.MixedAt
 			}
 
 			groups[group.ID] = reviewGroup
@@ -609,8 +609,8 @@ func (r *GroupModel) GetGroupCounts(ctx context.Context) (*types.GroupCounts, er
 				counts.Confirmed = sc.Count
 			case enum.GroupTypeFlagged:
 				counts.Flagged = sc.Count
-			case enum.GroupTypeCleared:
-				counts.Cleared = sc.Count
+			case enum.GroupTypeMixed:
+				counts.Mixed = sc.Count
 			}
 		}
 
@@ -629,60 +629,6 @@ func (r *GroupModel) GetGroupCounts(ctx context.Context) (*types.GroupCounts, er
 	}
 
 	return &counts, nil
-}
-
-// PurgeOldClearedGroups removes cleared groups older than the cutoff date.
-func (r *GroupModel) PurgeOldClearedGroups(ctx context.Context, cutoffDate time.Time) (int, error) {
-	var clearances []types.GroupClearance
-
-	err := dbretry.Transaction(ctx, r.db, func(ctx context.Context, tx bun.Tx) error {
-		// Get groups to delete
-		err := tx.NewSelect().
-			Model(&clearances).
-			Column("group_id").
-			Where("cleared_at < ?", cutoffDate).
-			Scan(ctx)
-		if err != nil {
-			return fmt.Errorf("failed to get groups to delete: %w", err)
-		}
-
-		if len(clearances) > 0 {
-			groupIDs := make([]int64, len(clearances))
-			for i, c := range clearances {
-				groupIDs[i] = c.GroupID
-			}
-
-			// Delete groups
-			_, err = tx.NewDelete().
-				Model((*types.Group)(nil)).
-				Where("id IN (?)", bun.In(groupIDs)).
-				Where("status = ?", enum.GroupTypeCleared).
-				Exec(ctx)
-			if err != nil {
-				return fmt.Errorf("failed to delete groups: %w", err)
-			}
-
-			// Delete clearance records
-			_, err = tx.NewDelete().
-				Model(&clearances).
-				Where("group_id IN (?)", bun.In(groupIDs)).
-				Exec(ctx)
-			if err != nil {
-				return fmt.Errorf("failed to delete clearance records: %w", err)
-			}
-		}
-
-		return nil
-	})
-	if err != nil {
-		return 0, err
-	}
-
-	r.logger.Debug("Purged old cleared groups",
-		zap.Int("count", len(clearances)),
-		zap.Time("cutoffDate", cutoffDate))
-
-	return len(clearances), nil
 }
 
 // GetGroupsForThumbnailUpdate retrieves groups that need thumbnail updates.
@@ -759,13 +705,13 @@ func (r *GroupModel) DeleteGroup(ctx context.Context, groupID int64) (bool, erro
 		affected, _ = result.RowsAffected()
 		totalAffected += affected
 
-		// Delete clearance if exists
+		// Delete mixed classification if exists
 		result, err = tx.NewDelete().
-			Model((*types.GroupClearance)(nil)).
+			Model((*types.GroupMixedClassification)(nil)).
 			Where("group_id = ?", groupID).
 			Exec(ctx)
 		if err != nil {
-			return fmt.Errorf("failed to delete clearance record: %w", err)
+			return fmt.Errorf("failed to delete mixed classification record: %w", err)
 		}
 
 		affected, _ = result.RowsAffected()
@@ -899,16 +845,16 @@ func (r *GroupModel) GetNextToReview(
 				result.ReviewerID = verification.ReviewerID
 				result.VerifiedAt = verification.VerifiedAt
 			}
-		case enum.GroupTypeCleared:
-			var clearance types.GroupClearance
+		case enum.GroupTypeMixed:
+			var mixed types.GroupMixedClassification
 
 			err = tx.NewSelect().
-				Model(&clearance).
+				Model(&mixed).
 				Where("group_id = ?", group.ID).
 				Scan(ctx)
 			if err == nil {
-				result.ReviewerID = clearance.ReviewerID
-				result.ClearedAt = clearance.ClearedAt
+				result.ReviewerID = mixed.ReviewerID
+				result.MixedAt = mixed.MixedAt
 			}
 		case enum.GroupTypeFlagged:
 			// Nothing to do here

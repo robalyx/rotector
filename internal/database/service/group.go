@@ -51,14 +51,14 @@ func (s *GroupService) ConfirmGroup(ctx context.Context, group *types.ReviewGrou
 	return nil
 }
 
-// ClearGroup moves a group to cleared status and creates a clearance record.
-func (s *GroupService) ClearGroup(ctx context.Context, group *types.ReviewGroup, reviewerID uint64) error {
+// MixGroup moves a group to mixed status and creates a mixed classification record.
+func (s *GroupService) MixGroup(ctx context.Context, group *types.ReviewGroup, reviewerID uint64) error {
 	// Set reviewer ID
 	group.ReviewerID = reviewerID
-	group.Status = enum.GroupTypeCleared
+	group.Status = enum.GroupTypeMixed
 
-	// Update group status and create clearance record
-	if err := s.model.ClearGroup(ctx, group); err != nil {
+	// Update group status and create mixed classification record
+	if err := s.model.MixGroup(ctx, group); err != nil {
 		return err
 	}
 
@@ -84,8 +84,8 @@ func (s *GroupService) GetGroupToReview(
 		targetStatus = enum.GroupTypeFlagged
 	case enum.ReviewTargetModeConfirmed:
 		targetStatus = enum.GroupTypeConfirmed
-	case enum.ReviewTargetModeCleared:
-		targetStatus = enum.GroupTypeCleared
+	case enum.ReviewTargetModeMixed:
+		targetStatus = enum.GroupTypeMixed
 	}
 
 	// Get next group to review
@@ -96,10 +96,10 @@ func (s *GroupService) GetGroupToReview(
 			var fallbackStatuses []enum.GroupType
 			switch targetMode {
 			case enum.ReviewTargetModeFlagged:
-				fallbackStatuses = []enum.GroupType{enum.GroupTypeConfirmed, enum.GroupTypeCleared}
+				fallbackStatuses = []enum.GroupType{enum.GroupTypeConfirmed, enum.GroupTypeMixed}
 			case enum.ReviewTargetModeConfirmed:
-				fallbackStatuses = []enum.GroupType{enum.GroupTypeFlagged, enum.GroupTypeCleared}
-			case enum.ReviewTargetModeCleared:
+				fallbackStatuses = []enum.GroupType{enum.GroupTypeFlagged, enum.GroupTypeMixed}
+			case enum.ReviewTargetModeMixed:
 				fallbackStatuses = []enum.GroupType{enum.GroupTypeFlagged, enum.GroupTypeConfirmed}
 			}
 
