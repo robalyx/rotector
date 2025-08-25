@@ -21,6 +21,7 @@ import (
 	"github.com/robalyx/rotector/internal/worker/reason"
 	"github.com/robalyx/rotector/internal/worker/stats"
 	"github.com/robalyx/rotector/internal/worker/sync"
+	"github.com/robalyx/rotector/internal/worker/upload"
 	"github.com/robalyx/rotector/pkg/utils"
 	"github.com/urfave/cli/v3"
 	"go.uber.org/zap"
@@ -37,6 +38,7 @@ const (
 	QueueWorker       = "queue"
 	SyncWorker        = "sync"
 	ReasonWorker      = "reason"
+	UploadWorker      = "upload"
 )
 
 func main() {
@@ -112,6 +114,14 @@ func run() error {
 				Usage: "Start reason update worker",
 				Action: func(ctx context.Context, _ *cli.Command) error {
 					runWorkers(ctx, ReasonWorker, 1)
+					return nil
+				},
+			},
+			{
+				Name:  UploadWorker,
+				Usage: "Start upload processing worker",
+				Action: func(ctx context.Context, c *cli.Command) error {
+					runWorkers(ctx, UploadWorker, c.Int("workers"))
 					return nil
 				},
 			},
@@ -206,6 +216,8 @@ func runWorkers(ctx context.Context, workerType string, count int) {
 				w = sync.New(app, bar, workerLogger)
 			case ReasonWorker:
 				w = reason.New(app, bar, workerLogger)
+			case UploadWorker:
+				w = upload.New(app, bar, workerLogger)
 			default:
 				log.Fatalf("Invalid worker type: %s", workerType)
 			}

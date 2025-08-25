@@ -2,6 +2,7 @@ package manager
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strconv"
 
@@ -12,6 +13,34 @@ import (
 	"github.com/robalyx/rotector/internal/database/types/enum"
 	"go.uber.org/zap"
 )
+
+const (
+	// IntegrationFlagType is the flag type used for integration sources (like BloxDB, custom uploads).
+	IntegrationFlagType = 4
+)
+
+const (
+	// MaxFlaggedUsersBatchSize is the maximum number of flagged users that can be inserted in a single batch.
+	MaxFlaggedUsersBatchSize = 10
+	// MaxDeleteBatchSize is the maximum number of user IDs that can be deleted in a single batch.
+	MaxDeleteBatchSize = 50
+	// MaxUpdateBatchSize is the maximum number of records that can be updated in a single batch.
+	MaxUpdateBatchSize = 20
+)
+
+var (
+	ErrNoUploadSourceFound = errors.New("no upload source found for integration type")
+	ErrInvalidTotalUploads = errors.New("invalid total_uploads value for integration type")
+	ErrInvalidFlagType     = errors.New("invalid flag_type for user")
+)
+
+// IntegrationUser represents user data for integration sources.
+type IntegrationUser struct {
+	ID         int64
+	Confidence float64
+	Message    string
+	Evidence   []string
+}
 
 // UserFlags handles user flagging operations.
 type UserFlags struct {
@@ -99,6 +128,588 @@ func (u *UserFlags) UpdateBanStatus(ctx context.Context, userIDs []int64, isBann
 		zap.Int("users_processed", len(userIDs)),
 		zap.Bool("is_banned", isBanned),
 		zap.Int("rows_affected", len(result)))
+
+	return nil
+}
+
+// AddIntegration processes integration data from upload sources with cleanup and conflict resolution.
+func (u *UserFlags) AddIntegration(ctx context.Context, users map[int64]*IntegrationUser, integrationType string) error {
+	if len(users) == 0 {
+		return nil
+	}
+
+	// Step 1: Cleanup existing integration data for this source
+	if err := u.cleanupIntegrationData(ctx, integrationType); err != nil {
+		return fmt.Errorf("failed to cleanup existing integration data for %s: %w", integrationType, err)
+	}
+
+	// Step 2: Get version from upload_sources table
+	version, err := u.getIntegrationVersion(ctx, integrationType)
+	if err != nil {
+		return fmt.Errorf("failed to get integration version for %s: %w", integrationType, err)
+	}
+
+	// Step 3: Process new integration data
+	return u.processIntegrationUsers(ctx, users, integrationType, version)
+}
+
+// cleanupIntegrationData removes the specified integration source from existing records.
+func (u *UserFlags) cleanupIntegrationData(ctx context.Context, integrationType string) error {
+	// Find all records containing this integration source
+	query := `
+		SELECT user_id, flag_type, reasons, integration_sources 
+		FROM user_flags 
+		WHERE integration_sources LIKE ?
+	`
+
+	likePattern := fmt.Sprintf("%%\"%s\"%%", integrationType)
+
+	result, err := u.api.ExecuteSQL(ctx, query, []any{likePattern})
+	if err != nil {
+		return fmt.Errorf("failed to query existing integration records: %w", err)
+	}
+
+	if len(result) == 0 {
+		return nil
+	}
+
+	var (
+		recordsToUpdate = make([]map[string]any, 0, len(result))
+		recordsToDelete = make([]int64, 0, len(result))
+	)
+
+	for _, record := range result {
+		userID, ok := record["user_id"].(float64)
+		if !ok {
+			continue
+		}
+
+		flagType, ok := record["flag_type"].(float64)
+		if !ok {
+			continue
+		}
+
+		integrationSources, _ := record["integration_sources"].(string)
+		reasons, _ := record["reasons"].(string)
+
+		// Clean integration_sources
+		cleanedSources, isEmpty, err := u.parseAndRemoveJSONKey(integrationSources, integrationType)
+		if err != nil {
+			return fmt.Errorf("failed to parse integration_sources JSON for user %d: %w", int64(userID), err)
+		}
+
+		// Clean reasons to remove integration entries
+		cleanedReasons, _, err := u.parseAndRemoveJSONKey(reasons, integrationType)
+		if err != nil {
+			return fmt.Errorf("failed to parse reasons JSON for user %d: %w", int64(userID), err)
+		}
+
+		// Delete integration records that have no remaining sources
+		if int(flagType) == IntegrationFlagType && isEmpty {
+			recordsToDelete = append(recordsToDelete, int64(userID))
+			continue
+		}
+
+		// Mark for update
+		recordsToUpdate = append(recordsToUpdate, map[string]any{
+			"user_id":             int64(userID),
+			"integration_sources": cleanedSources,
+			"reasons":             cleanedReasons,
+		})
+	}
+
+	// Delete orphaned integration records
+	if len(recordsToDelete) > 0 {
+		if err := u.deleteRecords(ctx, recordsToDelete); err != nil {
+			return fmt.Errorf("failed to delete orphaned records: %w", err)
+		}
+	}
+
+	// Update cleaned records
+	if len(recordsToUpdate) > 0 {
+		if err := u.updateCleanedRecords(ctx, recordsToUpdate); err != nil {
+			return fmt.Errorf("failed to update cleaned records: %w", err)
+		}
+	}
+
+	u.logger.Debug("Cleaned up integration data",
+		zap.String("integrationType", integrationType),
+		zap.Int("recordsUpdated", len(recordsToUpdate)),
+		zap.Int("recordsDeleted", len(recordsToDelete)))
+
+	return nil
+}
+
+// getIntegrationVersion retrieves the version string for an integration type.
+func (u *UserFlags) getIntegrationVersion(ctx context.Context, integrationType string) (string, error) {
+	query := "SELECT total_uploads FROM upload_sources WHERE source_name = ?"
+
+	result, err := u.api.ExecuteSQL(ctx, query, []any{integrationType})
+	if err != nil {
+		return "", fmt.Errorf("failed to query upload_sources: %w", err)
+	}
+
+	if len(result) == 0 {
+		return "", fmt.Errorf("%w: %s", ErrNoUploadSourceFound, integrationType)
+	}
+
+	totalUploads, ok := result[0]["total_uploads"].(float64)
+	if !ok {
+		return "", fmt.Errorf("%w: %s", ErrInvalidTotalUploads, integrationType)
+	}
+
+	return fmt.Sprintf("v%d", int(totalUploads)), nil
+}
+
+// parseAndRemoveJSONKey parses JSON string and removes a key, returns if the result is empty.
+func (u *UserFlags) parseAndRemoveJSONKey(jsonStr, key string) (*string, bool, error) {
+	if jsonStr == "" {
+		jsonStr = "{}"
+	}
+
+	var data map[string]any
+	if err := sonic.Unmarshal([]byte(jsonStr), &data); err != nil {
+		return nil, false, fmt.Errorf("failed to parse JSON: %w", err)
+	}
+
+	// Remove the key
+	delete(data, key)
+
+	// Check if empty
+	isEmpty := len(data) == 0
+
+	// Return nil for empty JSON objects
+	if isEmpty {
+		return nil, isEmpty, nil
+	}
+
+	// Marshal back to JSON
+	result, err := sonic.Marshal(data)
+	if err != nil {
+		return nil, false, fmt.Errorf("failed to marshal cleaned JSON: %w", err)
+	}
+
+	resultStr := string(result)
+
+	return &resultStr, isEmpty, nil
+}
+
+// processIntegrationUsers processes new integration data with conflict resolution.
+func (u *UserFlags) processIntegrationUsers(ctx context.Context, users map[int64]*IntegrationUser, integrationType, version string) error {
+	// Convert map to slice for batch processing
+	userIDs := make([]int64, 0, len(users))
+	for userID := range users {
+		userIDs = append(userIDs, userID)
+	}
+
+	totalProcessed := 0
+
+	// Process users in batches
+	for i := 0; i < len(userIDs); i += MaxFlaggedUsersBatchSize {
+		end := min(i+MaxFlaggedUsersBatchSize, len(userIDs))
+		batchUserIDs := userIDs[i:end]
+
+		// Check for existing records in this batch
+		existingRecords, err := u.getExistingRecords(ctx, batchUserIDs)
+		if err != nil {
+			return fmt.Errorf("failed to check existing records: %w", err)
+		}
+
+		// Process each user in the batch
+		for _, userID := range batchUserIDs {
+			user := users[userID]
+			existingRecord := existingRecords[userID]
+
+			if err := u.processIntegrationUser(ctx, user, existingRecord, integrationType, version); err != nil {
+				u.logger.Error("Failed to process integration user",
+					zap.Error(err),
+					zap.Int64("userID", userID),
+					zap.String("integrationType", integrationType))
+
+				continue
+			}
+		}
+
+		totalProcessed += len(batchUserIDs)
+
+		u.logger.Debug("Processed integration users batch",
+			zap.Int("batchStart", i),
+			zap.Int("batchEnd", end-1),
+			zap.Int("batchCount", len(batchUserIDs)),
+			zap.String("integrationType", integrationType))
+	}
+
+	u.logger.Info("Finished processing integration users",
+		zap.Int("totalCount", totalProcessed),
+		zap.String("integrationType", integrationType),
+		zap.String("version", version))
+
+	return nil
+}
+
+// getExistingRecords retrieves existing records for the given user IDs.
+func (u *UserFlags) getExistingRecords(ctx context.Context, userIDs []int64) (map[int64]map[string]any, error) {
+	if len(userIDs) == 0 {
+		return make(map[int64]map[string]any), nil
+	}
+
+	query := `
+		SELECT user_id, flag_type, confidence, reasons, integration_sources
+		FROM user_flags 
+		WHERE user_id IN (`
+
+	params := make([]any, len(userIDs))
+	for j, userID := range userIDs {
+		if j > 0 {
+			query += ","
+		}
+
+		query += "?"
+		params[j] = userID
+	}
+
+	query += ")"
+
+	result, err := u.api.ExecuteSQL(ctx, query, params)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query existing records: %w", err)
+	}
+
+	existingRecords := make(map[int64]map[string]any)
+
+	for _, record := range result {
+		if userID, ok := record["user_id"].(float64); ok {
+			existingRecords[int64(userID)] = record
+		}
+	}
+
+	return existingRecords, nil
+}
+
+// processIntegrationUser processes a single user with conflict resolution.
+func (u *UserFlags) processIntegrationUser(
+	ctx context.Context, user *IntegrationUser, existingRecord map[string]any, integrationType, version string,
+) error {
+	// Use the message and evidence directly from the integration user
+	message := user.Message
+	if message == "" {
+		message = "Integration flag"
+	}
+
+	evidence := user.Evidence
+
+	newReason := map[string]any{
+		"message":    message,
+		"confidence": user.Confidence,
+	}
+
+	if len(evidence) > 0 {
+		newReason["evidence"] = evidence
+	}
+
+	// Convert to JSON string for the integration type
+	newReasonData := map[string]map[string]any{
+		integrationType: newReason,
+	}
+
+	newReasonJSON, err := sonic.Marshal(newReasonData)
+	if err != nil {
+		return fmt.Errorf("failed to marshal new reason: %w", err)
+	}
+
+	// Prepare integration sources
+	newSourceData := map[string]string{
+		integrationType: version,
+	}
+
+	newSourceJSON, err := sonic.Marshal(newSourceData)
+	if err != nil {
+		return fmt.Errorf("failed to marshal integration sources: %w", err)
+	}
+
+	// New user to create integration record
+	if existingRecord == nil {
+		return u.createIntegrationRecord(ctx, user.ID, user.Confidence, string(newReasonJSON), string(newSourceJSON))
+	}
+
+	// Existing user to apply conflict resolution
+	flagType, ok := existingRecord["flag_type"].(float64)
+	if !ok {
+		return fmt.Errorf("%w %d", ErrInvalidFlagType, user.ID)
+	}
+
+	// Flagged/confirmed user to preserve PostgreSQL authority, merge data
+	if int(flagType) == 1 || int(flagType) == 2 {
+		return u.mergeWithAuthorityRecord(ctx, user.ID, existingRecord, string(newReasonJSON), string(newSourceJSON))
+	}
+
+	// Integration record to update with new data
+	return u.updateIntegrationRecord(
+		ctx, user.ID, user.Confidence, string(newReasonJSON), string(newSourceJSON), existingRecord,
+	)
+}
+
+// createIntegrationRecord creates a new integration record for integration data.
+func (u *UserFlags) createIntegrationRecord(ctx context.Context, userID int64, confidence float64, reasonsJSON, sourcesJSON string) error {
+	query := `
+		INSERT OR REPLACE INTO user_flags (
+			user_id, 
+			flag_type, 
+			confidence, 
+			reasons,
+			integration_sources
+		) VALUES (?, ?, ?, ?, ?)`
+
+	_, err := u.api.ExecuteSQL(ctx, query, []any{userID, IntegrationFlagType, confidence, reasonsJSON, sourcesJSON})
+	if err != nil {
+		return fmt.Errorf("failed to create integration record for user %d: %w", userID, err)
+	}
+
+	return nil
+}
+
+// mergeWithAuthorityRecord merges integration data with existing flagged/confirmed records.
+func (u *UserFlags) mergeWithAuthorityRecord(
+	ctx context.Context, userID int64, existingRecord map[string]any, newReasonJSON, newSourceJSON string,
+) error {
+	// Merge reasons
+	existingReasons := "{}"
+
+	if reasons := existingRecord["reasons"]; reasons != nil {
+		if reasonsStr, ok := reasons.(string); ok && reasonsStr != "" {
+			existingReasons = reasonsStr
+		}
+	}
+
+	mergedReasons, err := u.mergeReasons(existingReasons, newReasonJSON)
+	if err != nil {
+		return fmt.Errorf("failed to merge reasons: %w", err)
+	}
+
+	// Merge integration sources
+	existingSources := "{}"
+
+	if sources := existingRecord["integration_sources"]; sources != nil {
+		if sourcesStr, ok := sources.(string); ok && sourcesStr != "" {
+			existingSources = sourcesStr
+		}
+	}
+
+	mergedSources, err := u.mergeIntegrationSources(existingSources, newSourceJSON)
+	if err != nil {
+		return fmt.Errorf("failed to merge integration sources: %w", err)
+	}
+
+	query := `
+		UPDATE user_flags 
+		SET reasons = ?, integration_sources = ?
+		WHERE user_id = ?`
+
+	_, err = u.api.ExecuteSQL(ctx, query, []any{mergedReasons, mergedSources, userID})
+	if err != nil {
+		return fmt.Errorf("failed to update authority record for user %d: %w", userID, err)
+	}
+
+	return nil
+}
+
+// updateIntegrationRecord updates existing integration records with new data.
+func (u *UserFlags) updateIntegrationRecord(
+	ctx context.Context, userID int64, confidence float64, newReasonJSON, newSourceJSON string, existingRecord map[string]any,
+) error {
+	// For integration records, merge with existing data
+	existingReasons := "{}"
+
+	if reasons := existingRecord["reasons"]; reasons != nil {
+		if reasonsStr, ok := reasons.(string); ok && reasonsStr != "" {
+			existingReasons = reasonsStr
+		}
+	}
+
+	existingSources := "{}"
+
+	if sources := existingRecord["integration_sources"]; sources != nil {
+		if sourcesStr, ok := sources.(string); ok && sourcesStr != "" {
+			existingSources = sourcesStr
+		}
+	}
+
+	// Merge reasons and sources
+	mergedReasons, err := u.mergeReasons(existingReasons, newReasonJSON)
+	if err != nil {
+		return fmt.Errorf("failed to merge integration reasons: %w", err)
+	}
+
+	mergedSources, err := u.mergeIntegrationSources(existingSources, newSourceJSON)
+	if err != nil {
+		return fmt.Errorf("failed to merge integration sources: %w", err)
+	}
+
+	query := `
+		UPDATE user_flags 
+		SET confidence = ?, reasons = ?, integration_sources = ?
+		WHERE user_id = ?`
+
+	_, err = u.api.ExecuteSQL(ctx, query, []any{confidence, mergedReasons, mergedSources, userID})
+	if err != nil {
+		return fmt.Errorf("failed to update integration record for user %d: %w", userID, err)
+	}
+
+	return nil
+}
+
+// mergeIntegrationSources merges integration sources JSON objects.
+func (u *UserFlags) mergeIntegrationSources(existingJSON, newJSON string) (string, error) {
+	var existing map[string]string
+	if err := sonic.Unmarshal([]byte(existingJSON), &existing); err != nil {
+		return "", fmt.Errorf("failed to parse existing integration sources: %w", err)
+	}
+
+	var newSources map[string]string
+	if err := sonic.Unmarshal([]byte(newJSON), &newSources); err != nil {
+		return "", fmt.Errorf("failed to parse new integration sources: %w", err)
+	}
+
+	// Merge where new sources take precedence
+	for key, value := range newSources {
+		existing[key] = value
+	}
+
+	result, err := sonic.Marshal(existing)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal merged integration sources: %w", err)
+	}
+
+	return string(result), nil
+}
+
+// deleteRecords deletes records by user IDs in batches to avoid SQLite variable limits.
+func (u *UserFlags) deleteRecords(ctx context.Context, userIDs []int64) error {
+	if len(userIDs) == 0 {
+		return nil
+	}
+
+	// Process deletions in batches to avoid SQLite variable limits
+	for i := 0; i < len(userIDs); i += MaxDeleteBatchSize {
+		end := min(i+MaxDeleteBatchSize, len(userIDs))
+		batchUserIDs := userIDs[i:end]
+
+		query := "DELETE FROM user_flags WHERE user_id IN ("
+		params := make([]any, len(batchUserIDs))
+
+		for j, userID := range batchUserIDs {
+			if j > 0 {
+				query += ","
+			}
+
+			query += "?"
+			params[j] = userID
+		}
+
+		query += ")"
+
+		_, err := u.api.ExecuteSQL(ctx, query, params)
+		if err != nil {
+			return fmt.Errorf("failed to delete records batch %d-%d: %w", i, end-1, err)
+		}
+	}
+
+	return nil
+}
+
+// updateCleanedRecords updates records with cleaned JSON data.
+func (u *UserFlags) updateCleanedRecords(ctx context.Context, records []map[string]any) error {
+	if len(records) == 0 {
+		return nil
+	}
+
+	// Process records in batches to avoid query size limits
+	for i := 0; i < len(records); i += MaxUpdateBatchSize {
+		end := min(i+MaxUpdateBatchSize, len(records))
+		batch := records[i:end]
+
+		if err := u.updateBatch(ctx, batch); err != nil {
+			return fmt.Errorf("failed to update batch %d-%d: %w", i, end-1, err)
+		}
+	}
+
+	return nil
+}
+
+// updateBatch performs a single batch update using CASE statements.
+func (u *UserFlags) updateBatch(ctx context.Context, records []map[string]any) error {
+	if len(records) == 0 {
+		return nil
+	}
+
+	const whenThen = `WHEN ? THEN ? `
+
+	// Build the batch UPDATE query with CASE statements
+	query := `UPDATE user_flags SET `
+
+	// Build integration_sources CASE statement
+	query += `integration_sources = CASE user_id `
+	params := make([]any, 0, len(records)*4)
+	userIDs := make([]int64, 0, len(records))
+
+	for _, record := range records {
+		userID := record["user_id"].(int64)
+		integrationSources := record["integration_sources"].(*string)
+
+		query += whenThen
+
+		params = append(params, userID)
+
+		if integrationSources == nil {
+			params = append(params, nil)
+		} else {
+			params = append(params, *integrationSources)
+		}
+
+		userIDs = append(userIDs, userID)
+	}
+
+	query += `END, `
+
+	// Build reasons CASE statement
+	query += `reasons = CASE user_id `
+
+	for _, record := range records {
+		userID := record["user_id"].(int64)
+		reasons := record["reasons"].(*string)
+
+		query += whenThen
+
+		params = append(params, userID)
+
+		if reasons == nil {
+			params = append(params, nil)
+		} else {
+			params = append(params, *reasons)
+		}
+	}
+
+	query += `END `
+
+	// Add WHERE clause to limit updates to only the records we're changing
+	query += `WHERE user_id IN (`
+
+	for i, userID := range userIDs {
+		if i > 0 {
+			query += `, `
+		}
+
+		query += `?`
+
+		params = append(params, userID)
+	}
+
+	query += `)`
+
+	_, err := u.api.ExecuteSQL(ctx, query, params)
+	if err != nil {
+		return fmt.Errorf("failed to execute batch update: %w", err)
+	}
 
 	return nil
 }
@@ -258,7 +869,7 @@ func (u *UserFlags) checkExistingIntegrationRecords(ctx context.Context, userIDs
 	}
 
 	checkQuery += ") AND flag_type = ?"
-	checkParams[len(userIDs)] = 4 // Integration flag type
+	checkParams[len(userIDs)] = IntegrationFlagType
 
 	existingRecords, err := u.api.ExecuteSQL(ctx, checkQuery, checkParams)
 	if err != nil {
@@ -308,9 +919,12 @@ func (u *UserFlags) prepareUserRecord(user *types.ReviewUser, existingRecord map
 	// Check if this user has an existing integration record
 	if existingRecord != nil {
 		// Merge reasons
-		existingReasonsJSON, _ := existingRecord["reasons"].(string)
-		if existingReasonsJSON == "" {
-			existingReasonsJSON = "{}"
+		existingReasonsJSON := "{}"
+
+		if reasons := existingRecord["reasons"]; reasons != nil {
+			if reasonsStr, ok := reasons.(string); ok && reasonsStr != "" {
+				existingReasonsJSON = reasonsStr
+			}
 		}
 
 		var err error

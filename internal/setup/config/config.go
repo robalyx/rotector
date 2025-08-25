@@ -92,6 +92,10 @@ type CloudflareConfig struct {
 	APIToken string `koanf:"api_token"`
 	// API endpoint for D1 queries
 	APIEndpoint string `koanf:"api_endpoint"`
+	// Upload API base URL
+	UploadAPIBase string `koanf:"upload_api_base"`
+	// Upload admin API token (different from D1 API token)
+	UploadAdminToken string `koanf:"upload_admin_token"`
 }
 
 // Debug contains debug-related configuration.

@@ -18,7 +18,7 @@ test:
 
 # Run linter
 lint:
-    golangci-lint run --fix --timeout 300s
+    golangci-lint run --fix --timeout 900s
 
 # Run the bot service
 run-bot:

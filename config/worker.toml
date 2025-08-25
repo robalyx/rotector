@@ -98,3 +98,7 @@ database_id = ""
 api_token = ""
 # API endpoint for D1 queries
 api_endpoint = "https://api.cloudflare.com/client/v4"
+# Upload API base URL
+upload_api_base = "https://api.roscoe.com"
+# Upload admin API token (different from D1 API token)
+upload_admin_token = ""
