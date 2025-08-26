@@ -14,7 +14,6 @@ var (
 	ErrConfigFileNotFound    = errors.New("could not find config file in any config path")
 	ErrConfigVersionMissing  = errors.New("config file is missing version field")
 	ErrConfigVersionMismatch = errors.New("config file version mismatch")
-	ErrWordlistNotFound      = errors.New("could not find wordlist.jsonc in any config path")
 )
 
 // RepositoryVersion is the repository version tag for config file references.
@@ -196,8 +195,6 @@ type OpenAI struct {
 	IvanModel string `koanf:"ivan_model"`
 	// Model to use for general chat completions
 	ChatModel string `koanf:"chat_model"`
-	// Model to use for wordlist validation analysis
-	WordlistModel string `koanf:"wordlist_model"`
 }
 
 // Discord contains Discord bot configuration.
@@ -254,8 +251,6 @@ type BatchSizes struct {
 	MessageAnalysis int `koanf:"message_analysis"`
 	// Maximum concurrent AI requests for ivan message analysis.
 	IvanMessageAnalysis int `koanf:"ivan_message_analysis"`
-	// Maximum concurrent AI requests for wordlist validation analysis.
-	WordlistAnalysis int `koanf:"wordlist_analysis"`
 	// Number of outfits to analyze in one AI request.
 	OutfitAnalysisBatch int `koanf:"outfit_analysis_batch"`
 	// Number of users to analyze in one AI request.
@@ -272,8 +267,6 @@ type BatchSizes struct {
 	MessageAnalysisBatch int `koanf:"message_analysis_batch"`
 	// Number of ivan messages to analyze in one AI request.
 	IvanMessageAnalysisBatch int `koanf:"ivan_message_analysis_batch"`
-	// Number of wordlist validation requests to process in one AI request.
-	WordlistAnalysisBatch int `koanf:"wordlist_analysis_batch"`
 }
 
 // ThresholdLimits configures various thresholds for worker operations.

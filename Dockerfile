@@ -19,11 +19,10 @@ RUN go build -ldflags="-s -w" -o bin/bot ./cmd/bot && \
     go build -ldflags="-s -w" -o bin/worker ./cmd/worker && \
     go build -ldflags="-s -w" -o bin/entrypoint ./cmd/entrypoint && \
     go build -ldflags="-s -w" -o bin/export ./cmd/export && \
-    go build -ldflags="-s -w" -o bin/db ./cmd/db && \
-    go build -ldflags="-s -w" -o bin/wordlist ./cmd/wordlist
+    go build -ldflags="-s -w" -o bin/db ./cmd/db
 
 RUN if [ "$ENABLE_UPX" = "true" ]; then \
-        upx --best --lzma bin/bot bin/worker bin/entrypoint bin/export bin/db bin/wordlist; \
+        upx --best --lzma bin/bot bin/worker bin/entrypoint bin/export bin/db; \
     fi
 
 RUN mkdir -p logs

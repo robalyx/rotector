@@ -10,7 +10,6 @@ build:
     go build -o bin/worker ./cmd/worker
     go build -o bin/export ./cmd/export
     go build -o bin/db ./cmd/db
-    go build -o bin/wordlist ./cmd/wordlist
 
 # Run tests with coverage
 test:
@@ -51,10 +50,6 @@ run-export description="Export" version="1.0.1":
 run-queue:
     go run ./cmd/queue
 
-# Check wordlist for errors and quality issues
-wordlist-check:
-    go run ./cmd/wordlist check
-
 # Clean build artifacts
 clean:
     rm -rf bin/
@@ -71,34 +66,37 @@ generate:
 
 # Build container image
 build-container tag="rotector:latest" upx="true":
-    depot build \
+    docker buildx build \
+        --builder cloud-jaxron-rotector \
         --build-arg ENABLE_UPX={{upx}} \
         -t {{tag}} \
         .
 
 # Build multi-arch container image
 build-container-multiarch tag="rotector:latest" platforms="linux/amd64,linux/arm64" upx="true":
-    depot build \
+    docker buildx build \
+        --builder cloud-jaxron-rotector \
         --platform {{platforms}} \
         --build-arg ENABLE_UPX={{upx}} \
         -t {{tag}} \
         --load \
         .
 
-# Publish container image to Depot Registry
+# Publish container image
 # Usage: just publish-container [tag] [platform] [upx]
 publish-container tag platform="linux/amd64" upx="true":
-    depot build \
+    docker buildx build \
+        --builder cloud-jaxron-rotector \
         --platform {{platform}} \
         --build-arg ENABLE_UPX={{upx}} \
-        --save \
-        --save-tag {{tag}} \
-        --metadata-file build.json \
+        -t {{tag}} \
+        --push \
         .
 
 # Publish multi-arch container image
 publish-container-multiarch image-name platforms="linux/amd64,linux/arm64" upx="true":
-    depot build \
+    docker buildx build \
+        --builder cloud-jaxron-rotector \
         --platform {{platforms}} \
         --build-arg ENABLE_UPX={{upx}} \
         -t {{image-name}} \
