@@ -161,16 +161,7 @@ func (w *Worker) Start(ctx context.Context) {
 			w.logger.Error("Failed to mark users as processed", zap.Error(err))
 		}
 
-		// Step 5: Add flagged users to D1 database (85%)
-		w.bar.SetStepMessage("Adding flagged users to D1", 85)
-
-		if len(processResult.FlaggedUsers) > 0 {
-			if err := w.app.D1Client.UserFlags.AddFlagged(ctx, processResult.FlaggedUsers); err != nil {
-				w.logger.Error("Failed to add flagged users to D1", zap.Error(err))
-			}
-		}
-
-		// Step 6: Update IP tracking (100%)
+		// Step 5: Update IP tracking (100%)
 		w.bar.SetStepMessage("Updating IP tracking", 100)
 
 		if err := w.updateIPTrackingFlaggedStatus(
@@ -325,13 +316,6 @@ func (w *Worker) getBatchForProcessing(ctx context.Context) (*BatchData, error) 
 		// Mark users as processed and flagged
 		if err := w.app.D1Client.Queue.MarkAsProcessed(ctx, batchData.SkipAndFlagIDs, flaggedMap); err != nil {
 			w.logger.Error("Failed to mark users as processed and flagged", zap.Error(err))
-		}
-
-		// Add existing flagged users to D1 database
-		if len(existingFlaggedUsers) > 0 {
-			if err := w.app.D1Client.UserFlags.AddFlagged(ctx, existingFlaggedUsers); err != nil {
-				w.logger.Error("Failed to add existing flagged users to D1", zap.Error(err))
-			}
 		}
 	}
 

@@ -7,6 +7,7 @@ import (
 
 	apiTypes "github.com/jaxron/roapi.go/pkg/api/types"
 	"github.com/robalyx/rotector/internal/ai"
+	"github.com/robalyx/rotector/internal/cloudflare"
 	"github.com/robalyx/rotector/internal/database"
 	"github.com/robalyx/rotector/internal/database/types"
 	"github.com/robalyx/rotector/internal/database/types/enum"
@@ -32,6 +33,7 @@ type UserCheckerParams struct {
 type UserChecker struct {
 	app                *setup.App
 	db                 database.Client
+	d1Client           *cloudflare.Client
 	userFetcher        *fetcher.UserFetcher
 	gameFetcher        *fetcher.GameFetcher
 	outfitFetcher      *fetcher.OutfitFetcher
@@ -53,6 +55,7 @@ func NewUserChecker(app *setup.App, userFetcher *fetcher.UserFetcher, logger *za
 	return &UserChecker{
 		app:                app,
 		db:                 app.DB,
+		d1Client:           app.D1Client,
 		userFetcher:        userFetcher,
 		gameFetcher:        fetcher.NewGameFetcher(app.RoAPI, logger),
 		outfitFetcher:      fetcher.NewOutfitFetcher(app.RoAPI, logger),
@@ -70,8 +73,9 @@ func NewUserChecker(app *setup.App, userFetcher *fetcher.UserFetcher, logger *za
 
 // ProcessResult contains the results of processing users.
 type ProcessResult struct {
-	FlaggedStatus map[int64]struct{}          // User IDs that were flagged
-	FlaggedUsers  map[int64]*types.ReviewUser // Full user data for flagged users
+	FlaggedStatus  map[int64]struct{}          // User IDs that were flagged
+	FlaggedUsers   map[int64]*types.ReviewUser // Full user data for flagged users (< 90% confidence)
+	ConfirmedUsers map[int64]*types.ReviewUser // Full user data for auto-confirmed users (>= 90% confidence)
 }
 
 // ProcessUsers runs users through multiple checking stages.
@@ -155,13 +159,15 @@ func (c *UserChecker) ProcessUsers(ctx context.Context, params *UserCheckerParam
 		c.logger.Info("No flagged users found", zap.Int("userInfos", len(params.Users)))
 
 		return &ProcessResult{
-			FlaggedStatus: make(map[int64]struct{}),
-			FlaggedUsers:  make(map[int64]*types.ReviewUser),
+			FlaggedStatus:  make(map[int64]struct{}),
+			FlaggedUsers:   make(map[int64]*types.ReviewUser),
+			ConfirmedUsers: make(map[int64]*types.ReviewUser),
 		}
 	}
 
-	// Create final flagged users map
+	// Create final flagged users maps
 	flaggedUsers := make(map[int64]*types.ReviewUser, len(reasonsMap))
+	confirmedUsers := make(map[int64]*types.ReviewUser)
 	flaggedStatus := make(map[int64]struct{}, len(reasonsMap))
 
 	for _, user := range params.Users {
@@ -178,6 +184,46 @@ func (c *UserChecker) ProcessUsers(ctx context.Context, params *UserCheckerParam
 		c.logger.Error("Failed to save users", zap.Error(err))
 	}
 
+	// Identify users with high confidence scores for automatic confirmation
+	var usersToConfirm []*types.ReviewUser
+
+	for _, user := range flaggedUsers {
+		if c.meetsAutoConfirmationCriteria(user) {
+			usersToConfirm = append(usersToConfirm, user)
+			confirmedUsers[user.ID] = user
+			delete(flaggedUsers, user.ID)
+		}
+	}
+
+	// Automatically confirm users with confidence scores above 90% threshold
+	if len(usersToConfirm) > 0 {
+		if err := c.db.Service().User().ConfirmUsers(ctx, usersToConfirm, 0); err != nil {
+			c.logger.Error("Failed to auto-confirm high-confidence users",
+				zap.Int("count", len(usersToConfirm)),
+				zap.Error(err))
+		} else {
+			c.logger.Info("Auto-confirmed high-confidence users",
+				zap.Int("count", len(usersToConfirm)))
+		}
+	}
+
+	// Synchronize user status to external D1 database for API access
+	if len(flaggedUsers) > 0 {
+		if err := c.d1Client.UserFlags.AddFlagged(ctx, flaggedUsers); err != nil {
+			c.logger.Error("Failed to add flagged users to D1", zap.Error(err))
+		}
+	}
+
+	if len(confirmedUsers) > 0 {
+		for _, user := range confirmedUsers {
+			if err := c.d1Client.UserFlags.AddConfirmed(ctx, user, 0); err != nil {
+				c.logger.Error("Failed to add auto-confirmed user to D1",
+					zap.Error(err),
+					zap.Int64("userID", user.ID))
+			}
+		}
+	}
+
 	// Track flagged users' group memberships
 	go c.trackFlaggedUsersGroups(ctx, flaggedUsers)
 
@@ -189,11 +235,13 @@ func (c *UserChecker) ProcessUsers(ctx context.Context, params *UserCheckerParam
 
 	c.logger.Info("Finished processing users",
 		zap.Int("totalProcessed", len(params.Users)),
-		zap.Int("flaggedUsers", len(flaggedUsers)))
+		zap.Int("flaggedUsers", len(flaggedUsers)),
+		zap.Int("confirmedUsers", len(confirmedUsers)))
 
 	return &ProcessResult{
-		FlaggedStatus: flaggedStatus,
-		FlaggedUsers:  flaggedUsers,
+		FlaggedStatus:  flaggedStatus,
+		FlaggedUsers:   flaggedUsers,
+		ConfirmedUsers: confirmedUsers,
 	}
 }
 
@@ -408,6 +456,37 @@ func (c *UserChecker) trackFavoriteGames(ctx context.Context, flaggedUsers map[i
 			c.logger.Error("Failed to add flagged users to games tracking", zap.Error(err))
 		}
 	}
+}
+
+// meetsAutoConfirmationCriteria validates eligibility for automatic user confirmation.
+func (c *UserChecker) meetsAutoConfirmationCriteria(user *types.ReviewUser) bool {
+	if user.Confidence < 0.90 || user.Reasons == nil || len(user.Reasons) < 2 {
+		return false
+	}
+
+	hasProfileReason := user.Reasons[enum.UserReasonTypeProfile] != nil
+	hasFriendReason := user.Reasons[enum.UserReasonTypeFriend] != nil
+	hasGroupReason := user.Reasons[enum.UserReasonTypeGroup] != nil
+	hasOutfitReason := user.Reasons[enum.UserReasonTypeOutfit] != nil
+
+	// Users with many different reason types have strong evidence
+	if len(user.Reasons) > 3 {
+		return true
+	}
+
+	// Check if user meets profile+group criteria
+	hasProfileAndGroup := hasProfileReason && hasGroupReason && !hasOutfitReason
+	if hasProfileAndGroup {
+		profileReason := user.Reasons[enum.UserReasonTypeProfile]
+		if profileReason.Confidence < 0.70 {
+			return false
+		}
+	}
+
+	// Check if user meets friend+group criteria
+	hasFriendAndGroup := hasFriendReason && hasGroupReason
+
+	return hasProfileAndGroup || hasFriendAndGroup
 }
 
 // isTrackableAssetType checks if an asset type is one we want to track.

@@ -105,72 +105,87 @@ func (r *UserModel) SaveUsers(ctx context.Context, tx bun.Tx, users []*types.Rev
 	return nil
 }
 
-// ConfirmUser moves a user to confirmed status and creates a verification record.
-//
-// Deprecated: Use Service().User().ConfirmUser() instead.
-func (r *UserModel) ConfirmUser(ctx context.Context, user *types.ReviewUser) error {
+// ConfirmUsers moves multiple users to confirmed status and creates verification records.
+func (r *UserModel) ConfirmUsers(ctx context.Context, users []*types.ReviewUser) error {
+	if len(users) == 0 {
+		return nil
+	}
+
 	return dbretry.Transaction(ctx, r.db, func(ctx context.Context, tx bun.Tx) error {
-		// Delete any existing clearance record
+		// Extract user IDs
+		userIDs := make([]int64, len(users))
+		for i, user := range users {
+			userIDs[i] = user.ID
+		}
+
+		// Batch delete existing clearance records
 		_, err := tx.NewDelete().
 			Model((*types.UserClearance)(nil)).
-			Where("user_id = ?", user.ID).
+			Where("user_id IN (?)", bun.In(userIDs)).
 			Exec(ctx)
 		if err != nil {
-			return fmt.Errorf("failed to delete existing clearance record: %w", err)
+			return fmt.Errorf("failed to delete existing clearance records: %w", err)
 		}
 
-		// Update user status
+		// Batch update user statuses
 		_, err = tx.NewUpdate().
-			Model(user.User).
+			Model((*types.User)(nil)).
 			Set("status = ?", enum.UserTypeConfirmed).
-			Where("id = ?", user.ID).
+			Where("id IN (?)", bun.In(userIDs)).
 			Exec(ctx)
 		if err != nil {
-			return fmt.Errorf("failed to update user status: %w", err)
+			return fmt.Errorf("failed to update user statuses: %w", err)
 		}
 
-		// Create verification record
-		verification := &types.UserVerification{
-			UserID:     user.ID,
-			ReviewerID: user.ReviewerID,
-			VerifiedAt: time.Now(),
+		// Prepare verification records
+		verifications := make([]*types.UserVerification, len(users))
+		for i, user := range users {
+			verifications[i] = &types.UserVerification{
+				UserID:     user.ID,
+				ReviewerID: user.ReviewerID,
+				VerifiedAt: time.Now(),
+			}
 		}
 
+		// Batch insert verification records
 		_, err = tx.NewInsert().
-			Model(verification).
+			Model(&verifications).
 			On("CONFLICT (user_id) DO UPDATE").
 			Set("reviewer_id = EXCLUDED.reviewer_id").
 			Set("verified_at = EXCLUDED.verified_at").
 			Exec(ctx)
 		if err != nil {
-			return fmt.Errorf("failed to create verification record: %w", err)
+			return fmt.Errorf("failed to create verification records: %w", err)
 		}
 
-		// Update user reasons if any exist
-		if user.Reasons != nil {
-			var reasons []*types.UserReason
-			for reasonType, reason := range user.Reasons {
-				reasons = append(reasons, &types.UserReason{
-					UserID:     user.ID,
-					ReasonType: reasonType,
-					Message:    reason.Message,
-					Confidence: reason.Confidence,
-					Evidence:   reason.Evidence,
-					CreatedAt:  time.Now(),
-				})
-			}
+		// Batch update user reasons
+		var allReasons []*types.UserReason
 
-			if len(reasons) > 0 {
-				_, err = tx.NewInsert().
-					Model(&reasons).
-					On("CONFLICT (user_id, reason_type) DO UPDATE").
-					Set("message = EXCLUDED.message").
-					Set("confidence = EXCLUDED.confidence").
-					Set("evidence = EXCLUDED.evidence").
-					Exec(ctx)
-				if err != nil {
-					return fmt.Errorf("failed to update user reasons: %w", err)
+		for _, user := range users {
+			if user.Reasons != nil {
+				for reasonType, reason := range user.Reasons {
+					allReasons = append(allReasons, &types.UserReason{
+						UserID:     user.ID,
+						ReasonType: reasonType,
+						Message:    reason.Message,
+						Confidence: reason.Confidence,
+						Evidence:   reason.Evidence,
+						CreatedAt:  time.Now(),
+					})
 				}
+			}
+		}
+
+		if len(allReasons) > 0 {
+			_, err = tx.NewInsert().
+				Model(&allReasons).
+				On("CONFLICT (user_id, reason_type) DO UPDATE").
+				Set("message = EXCLUDED.message").
+				Set("confidence = EXCLUDED.confidence").
+				Set("evidence = EXCLUDED.evidence").
+				Exec(ctx)
+			if err != nil {
+				return fmt.Errorf("failed to update user reasons: %w", err)
 			}
 		}
 

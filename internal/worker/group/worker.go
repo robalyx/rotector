@@ -168,15 +168,13 @@ func (w *Worker) Start(ctx context.Context) {
 			w.logger.Error("Failed to mark users as processed in cache", zap.Error(err))
 		}
 
-		// Step 4: Add flagged users to D1 database (95%)
-		w.bar.SetStepMessage("Adding flagged users to D1", 95)
-		w.reporter.UpdateStatus("Adding flagged users to D1", 95)
+		// Step 4: Processing completed (95%)
+		w.bar.SetStepMessage("Processing completed", 95)
+		w.reporter.UpdateStatus("Processing completed", 95)
 
-		if len(processResult.FlaggedUsers) > 0 {
-			if err := w.d1Client.UserFlags.AddFlagged(ctx, processResult.FlaggedUsers); err != nil {
-				w.logger.Error("Failed to add flagged users to D1", zap.Error(err))
-			}
-			// Reset counter when we find flagged users
+		totalProblematicUsers := len(processResult.FlaggedUsers) + len(processResult.ConfirmedUsers)
+		if totalProblematicUsers > 0 {
+			// Reset counter when we find flagged or confirmed users
 			w.batchAttemptsWithoutFlags = 0
 		} else {
 			// Increment counter when no users are flagged

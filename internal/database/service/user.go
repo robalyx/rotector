@@ -46,12 +46,23 @@ func NewUser(
 
 // ConfirmUser moves a user to confirmed status and creates a verification record.
 func (s *UserService) ConfirmUser(ctx context.Context, user *types.ReviewUser, reviewerID uint64) error {
-	// Set reviewer ID
-	user.ReviewerID = reviewerID
-	user.Status = enum.UserTypeConfirmed
+	return s.ConfirmUsers(ctx, []*types.ReviewUser{user}, reviewerID)
+}
 
-	// Update user status and create verification record
-	if err := s.model.ConfirmUser(ctx, user); err != nil {
+// ConfirmUsers moves multiple users to confirmed status and creates verification records.
+func (s *UserService) ConfirmUsers(ctx context.Context, users []*types.ReviewUser, reviewerID uint64) error {
+	if len(users) == 0 {
+		return nil
+	}
+
+	// Set reviewer ID and status for all users
+	for _, user := range users {
+		user.ReviewerID = reviewerID
+		user.Status = enum.UserTypeConfirmed
+	}
+
+	// Update user statuses and create verification records
+	if err := s.model.ConfirmUsers(ctx, users); err != nil {
 		return err
 	}
 

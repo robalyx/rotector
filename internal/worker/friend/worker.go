@@ -131,7 +131,7 @@ func (w *Worker) Start(ctx context.Context) {
 		// Step 2: Process users (60%)
 		w.bar.SetStepMessage("Processing users", 60)
 		w.reporter.UpdateStatus("Processing users", 60)
-		processResult := w.userChecker.ProcessUsers(ctx, &checker.UserCheckerParams{
+		w.userChecker.ProcessUsers(ctx, &checker.UserCheckerParams{
 			Users:                     userInfos[:w.batchSize],
 			InappropriateOutfitFlags:  nil,
 			InappropriateProfileFlags: nil,
@@ -149,15 +149,9 @@ func (w *Worker) Start(ctx context.Context) {
 			w.logger.Error("Failed to mark users as processed in cache", zap.Error(err))
 		}
 
-		// Step 3: Add flagged users to D1 database (80%)
-		w.bar.SetStepMessage("Adding flagged users to D1", 80)
-		w.reporter.UpdateStatus("Adding flagged users to D1", 80)
-
-		if len(processResult.FlaggedUsers) > 0 {
-			if err := w.d1Client.UserFlags.AddFlagged(ctx, processResult.FlaggedUsers); err != nil {
-				w.logger.Error("Failed to add flagged users to D1", zap.Error(err))
-			}
-		}
+		// Step 3: Processing completed (80%)
+		w.bar.SetStepMessage("Processing completed", 80)
+		w.reporter.UpdateStatus("Processing completed", 80)
 
 		// Step 4: Prepare for next batch
 		w.pendingFriends = userInfos[w.batchSize:]

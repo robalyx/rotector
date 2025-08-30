@@ -308,7 +308,7 @@ func (a *OutfitAnalyzer) analyzeUserOutfits(
 		shouldFlag = true
 		finalConfidence = highestConfidence * 0.8 // Reduce confidence by 20% for single outfit cases
 	default:
-		a.logger.Info("AI did not flag user with outfit themes",
+		a.logger.Debug("AI did not flag user with outfit themes",
 			zap.Int64("userID", info.ID),
 			zap.String("username", info.Name),
 			zap.Float64("highestConfidence", highestConfidence),
