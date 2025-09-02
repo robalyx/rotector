@@ -15,10 +15,10 @@ require (
 	github.com/dchest/captcha v1.1.0
 	github.com/diamondburned/arikawa/v3 v3.5.0
 	github.com/diamondburned/ningen/v3 v3.0.1-0.20240808103805-f1a24c0da3d8
-	github.com/disgoorg/disgo v0.19.0-rc.1
+	github.com/disgoorg/disgo v0.19.0-rc.2
 	github.com/disgoorg/snowflake/v2 v2.0.3
 	github.com/fsnotify/fsnotify v1.9.0
-	github.com/getsentry/sentry-go v0.35.0
+	github.com/getsentry/sentry-go v0.35.1
 	github.com/google/uuid v1.6.0
 	github.com/invopop/jsonschema v0.13.0
 	github.com/jaxron/axonet v0.0.0-20250316044721-2d660b2bcf59
@@ -34,13 +34,13 @@ require (
 	github.com/redis/rueidis v1.0.64
 	github.com/sony/gobreaker v1.0.0
 	github.com/sourcegraph/conc v0.3.0
-	github.com/stretchr/testify v1.10.0
+	github.com/stretchr/testify v1.11.1
 	github.com/tailscale/hujson v0.0.0-20250605163823-992244df8c5a
-	github.com/tdewolff/minify/v2 v2.23.11
+	github.com/tdewolff/minify/v2 v2.24.2
 	github.com/uptrace/bun v1.2.15
 	github.com/uptrace/bun/dialect/pgdialect v1.2.15
 	github.com/uptrace/bun/driver/pgdriver v1.2.15
-	github.com/urfave/cli/v3 v3.3.8
+	github.com/urfave/cli/v3 v3.4.1
 	github.com/wcharczuk/go-chart/v2 v2.1.2
 	go.uber.org/zap v1.27.0
 	golang.org/x/crypto v0.41.0
@@ -101,7 +101,7 @@ require (
 	github.com/rivo/uniseg v0.4.7 // indirect
 	github.com/rogpeppe/go-internal v1.13.1 // indirect
 	github.com/sasha-s/go-csync v0.0.0-20240107134140-fcbab37b09ad // indirect
-	github.com/tdewolff/parse/v2 v2.8.2-0.20250806174018-50048bb39781 // indirect
+	github.com/tdewolff/parse/v2 v2.8.3 // indirect
 	github.com/tidwall/gjson v1.18.0 // indirect
 	github.com/tidwall/match v1.1.1 // indirect
 	github.com/tidwall/pretty v1.2.1 // indirect
