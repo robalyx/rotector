@@ -50,7 +50,6 @@ const (
 	BanPageName           = "Ban Information"
 	CaptchaPageName       = "CAPTCHA Verification"
 	TimeoutPageName       = "Timeout"
-	ChatPageName          = "AI Chat"
 	LogPageName           = "Activity Logs"
 	StatusPageName        = "Status"
 	ReviewerStatsPageName = "Reviewer Stats"
@@ -76,7 +75,6 @@ const (
 	ActivityBrowserButtonCustomID   = "activity_browser"
 	AdminMenuButtonCustomID         = "admin_menu"
 	QueueManagementButtonCustomID   = "queue_management"
-	ChatAssistantButtonCustomID     = "chat_assistant"
 	WorkerStatusButtonCustomID      = "worker_status"
 	LookupRobloxUserButtonCustomID  = "lookup_roblox_user" + ModalOpenSuffix
 	LookupRobloxGroupButtonCustomID = "lookup_roblox_group" + ModalOpenSuffix
@@ -206,7 +204,6 @@ const (
 const (
 	CaesarCipherButtonCustomID    = "caesar_cipher"
 	ViewCommentsButtonCustomID    = "view_comments"
-	OpenAIChatButtonCustomID      = "open_ai_chat"
 	ViewUserLogsButtonCustomID    = "view_user_logs"
 	OpenOutfitsMenuButtonCustomID = "open_outfits_menu"
 	OpenFriendsMenuButtonCustomID = "open_friends_menu"
@@ -270,20 +267,6 @@ const (
 	ManualGroupReviewInputCustomID  = "manual_group_review_input"
 
 	ReviewQueuedUserButtonCustomID = "review_queued_user"
-)
-
-// Chat Menu.
-const (
-	MaxChatMessagesPerDay = 50
-	ChatMessageResetLimit = 24 * time.Hour
-
-	ChatMessagesPerPage      = 1
-	ChatSendButtonID         = "chat_send" + ModalOpenSuffix
-	ChatInputModalID         = "chat_input_modal"
-	ChatInputCustomID        = "chat_input"
-	ChatClearHistoryButtonID = "chat_clear_history"
-	ChatClearContextButtonID = "chat_clear_context"
-	ChatModelSelectID        = "chat_model_select"
 )
 
 // User Settings.

@@ -120,8 +120,6 @@ outfit_model = "gemini-2.5-flash"
 message_model = "gemini-2.5-flash"
 # Model to use for ivan message analysis
 ivan_model = "gemini-2.5-flash"
-# Model to use for general chat completions
-chat_model = "gemini-2.5-flash"
 
 # Model mappings for the provider
 [common.openai.model_mappings]

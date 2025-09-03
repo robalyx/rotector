@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/disgoorg/disgo/discord"
-	"github.com/robalyx/rotector/internal/ai"
 	"github.com/robalyx/rotector/internal/bot/constants"
 	"github.com/robalyx/rotector/internal/bot/core/interaction"
 	"github.com/robalyx/rotector/internal/bot/core/session"
@@ -165,8 +164,7 @@ func (m *ReviewMenu) handleActionSelection(ctx *interaction.Context, s *session.
 
 	// Check reviewer-only options
 	switch option {
-	case constants.OpenAIChatButtonCustomID,
-		constants.GroupViewLogsButtonCustomID,
+	case constants.GroupViewLogsButtonCustomID,
 		constants.ReviewModeOption:
 		if !isReviewer {
 			m.layout.logger.Error("Non-reviewer attempted restricted action",
@@ -190,8 +188,6 @@ func (m *ReviewMenu) handleActionSelection(ctx *interaction.Context, s *session.
 		m.HandleAddComment(ctx, s)
 	case constants.DeleteCommentButtonCustomID:
 		m.HandleDeleteComment(ctx, s, viewShared.TargetTypeGroup)
-	case constants.OpenAIChatButtonCustomID:
-		m.handleOpenAIChat(ctx, s)
 	case constants.GroupViewLogsButtonCustomID:
 		m.handleViewGroupLogs(ctx, s)
 	case constants.ReviewModeOption:
@@ -248,117 +244,6 @@ func (m *ReviewMenu) handleModal(ctx *interaction.Context, s *session.Session) {
 	case constants.AddCommentModalCustomID:
 		m.HandleCommentModalSubmit(ctx, s, viewShared.TargetTypeGroup)
 	}
-}
-
-// handleOpenAIChat handles the button to open the AI chat for the current group.
-func (m *ReviewMenu) handleOpenAIChat(ctx *interaction.Context, s *session.Session) {
-	group := session.GroupTarget.Get(s)
-	groupInfo := session.GroupInfo.Get(s)
-
-	// Get flagged users from tracking
-	memberIDs, err := m.layout.db.Model().Tracking().GetFlaggedUsers(ctx.Context(), group.ID)
-	if err != nil {
-		m.layout.logger.Error("Failed to fetch flagged users", zap.Error(err))
-		ctx.Error("Failed to load flagged users. Please try again.")
-
-		return
-	}
-
-	// Get flagged members details with a limit of 15
-	limit := 15
-
-	var flaggedMembers map[int64]*types.ReviewUser
-
-	if len(memberIDs) > 0 {
-		// Only fetch up to the limit
-		fetchIDs := memberIDs
-		if len(fetchIDs) > limit {
-			fetchIDs = fetchIDs[:limit]
-		}
-
-		var err error
-
-		flaggedMembers, err = m.layout.db.Model().User().GetUsersByIDs(
-			ctx.Context(),
-			fetchIDs,
-			types.UserFieldBasic|types.UserFieldReasons|types.UserFieldConfidence,
-		)
-		if err != nil {
-			m.layout.logger.Error("Failed to get flagged members data", zap.Error(err))
-		}
-	}
-
-	// Build flagged members information
-	membersInfo := make([]string, 0, len(flaggedMembers))
-	for _, member := range flaggedMembers {
-		messages := member.Reasons.Messages()
-		membersInfo = append(membersInfo, fmt.Sprintf("- %s (ID: %d) | Status: %s | Reasons: %s | Confidence: %.2f",
-			member.Name,
-			member.ID,
-			member.Status.String(),
-			strings.Join(messages, "; "),
-			member.Confidence))
-	}
-
-	// Format shout information (if recent)
-	shoutInfo := "No shout available"
-
-	if group.Shout != nil {
-		// Only include shout if it's less than 30 days old
-		if time.Since(group.Shout.Created) <= 30*24*time.Hour {
-			shoutInfo = fmt.Sprintf("Posted by: %s\nContent: %s\nPosted at: %s",
-				group.Shout.Poster.Username,
-				group.Shout.Body,
-				group.Shout.Created.Format(time.RFC3339))
-		}
-	}
-
-	// Create group context
-	groupContext := ai.Context{
-		Type: ai.ContextTypeGroup,
-		Content: fmt.Sprintf(`Group Information:
-
-Basic Info:
-- Name: %s
-- ID: %d
-- Description: %s
-- Owner: %s (ID: %d)
-- Total Members: %d
-- Reasons: %s
-- Confidence: %.2f
-
-Status Information:
-- Current Status: %s
-- Last Updated: %s
-
-Recent Shout:
-%s
-
-Flagged Members (showing %d of %d total flagged):
-%s`,
-			group.Name,
-			group.ID,
-			group.Description,
-			group.Owner.Username,
-			group.Owner.UserID,
-			groupInfo.MemberCount,
-			strings.Join(group.Reasons.Messages(), "; "),
-			group.Confidence,
-			group.Status.String(),
-			group.LastUpdated.Format(time.RFC3339),
-			shoutInfo,
-			len(flaggedMembers), len(memberIDs),
-			strings.Join(membersInfo, "\n")),
-	}
-
-	// Append to existing chat context
-	chatContext := session.ChatContext.Get(s)
-	chatContext = append(chatContext, groupContext)
-	session.ChatContext.Set(s, chatContext)
-
-	// Navigate to chat
-	session.PaginationPage.Set(s, 0)
-	ctx.Show(constants.ChatPageName, "")
 }
 
 // handleViewGroupLogs handles the shortcut to view group logs.

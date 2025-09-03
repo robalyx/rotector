@@ -253,9 +253,6 @@ func (b *Builder) buildActionMenuOptions() []discord.StringSelectMenuOption {
 			discord.NewStringSelectMenuOption("Queue Management", constants.QueueManagementButtonCustomID).
 				WithEmoji(discord.ComponentEmoji{Name: "📥"}).
 				WithDescription("Add users to the processing queue"),
-			discord.NewStringSelectMenuOption("AI Chat Assistant", constants.ChatAssistantButtonCustomID).
-				WithEmoji(discord.ComponentEmoji{Name: "🤖"}).
-				WithDescription("Chat with AI about moderation topics"),
 			discord.NewStringSelectMenuOption("Activity Log Browser", constants.ActivityBrowserButtonCustomID).
 				WithEmoji(discord.ComponentEmoji{Name: "📜"}).
 				WithDescription("Search and filter activity logs"),

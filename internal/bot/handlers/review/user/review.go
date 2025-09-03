@@ -211,8 +211,7 @@ func (m *ReviewMenu) handleActionSelection(ctx *interaction.Context, s *session.
 
 	// Check reviewer-only options
 	switch option {
-	case constants.OpenAIChatButtonCustomID,
-		constants.ViewUserLogsButtonCustomID,
+	case constants.ViewUserLogsButtonCustomID,
 		constants.ReviewModeOption,
 		constants.ViewCommentsButtonCustomID:
 		if !isReviewer {
@@ -246,8 +245,6 @@ func (m *ReviewMenu) handleActionSelection(ctx *interaction.Context, s *session.
 		m.HandleAddComment(ctx, s)
 	case constants.DeleteCommentButtonCustomID:
 		m.HandleDeleteComment(ctx, s, viewShared.TargetTypeUser)
-	case constants.OpenAIChatButtonCustomID:
-		m.handleOpenAIChat(ctx, s)
 	case constants.ViewUserLogsButtonCustomID:
 		m.handleViewUserLogs(ctx, s)
 	case constants.ReviewModeOption:
@@ -592,128 +589,6 @@ func (m *ReviewMenu) navigateAfterAction(ctx *interaction.Context, s *session.Se
 
 	// No next user in history, reload to fetch a new one
 	ctx.Reload(message)
-}
-
-// handleOpenAIChat handles the button to open the AI chat for the current user.
-func (m *ReviewMenu) handleOpenAIChat(ctx *interaction.Context, s *session.Session) {
-	user := session.UserTarget.Get(s)
-	flaggedFriends := session.UserFlaggedFriends.Get(s)
-	flaggedGroups := session.UserFlaggedGroups.Get(s)
-
-	limit := 20
-
-	// Build flagged friends information
-	friendsInfo := make([]string, 0)
-	flaggedFriendsCount := len(flaggedFriends)
-	shownFriends := 0
-
-	for _, friend := range user.Friends {
-		if flagged := flaggedFriends[friend.ID]; flagged != nil {
-			if shownFriends >= limit {
-				break
-			}
-
-			messages := flagged.Reasons.Messages()
-			friendsInfo = append(friendsInfo, fmt.Sprintf("- %s (ID: %d) | Status: %s | Reasons: %s | Confidence: %.2f",
-				friend.Name, friend.ID, flagged.Status.String(), strings.Join(messages, "; "), flagged.Confidence))
-			shownFriends++
-		}
-	}
-
-	// Build flagged groups information
-	groupsInfo := make([]string, 0)
-	flaggedGroupsCount := len(flaggedGroups)
-	shownGroups := 0
-
-	for _, group := range user.Groups {
-		if flagged := flaggedGroups[group.Group.ID]; flagged != nil {
-			if shownGroups >= limit {
-				break
-			}
-
-			messages := flagged.Reasons.Messages()
-			groupsInfo = append(groupsInfo, fmt.Sprintf("- %s (ID: %d) | Role: %s | Status: %s | Reasons: %s | Confidence: %.2f",
-				group.Group.Name, group.Group.ID, group.Role.Name, flagged.Status.String(), strings.Join(messages, "; "), flagged.Confidence))
-			shownGroups++
-		}
-	}
-
-	// Build outfits information
-	outfitsInfo := make([]string, 0)
-
-	for i, outfit := range user.Outfits {
-		if i >= limit {
-			break
-		}
-
-		outfitsInfo = append(outfitsInfo, fmt.Sprintf("- %s (ID: %d)", outfit.Name, outfit.ID))
-	}
-
-	// Build games information
-	gamesInfo := make([]string, 0)
-
-	for i, game := range user.Games {
-		if i >= limit {
-			break
-		}
-
-		gamesInfo = append(gamesInfo, fmt.Sprintf("- %s (ID: %d) | Visits: %d",
-			game.Name, game.ID, game.PlaceVisits))
-	}
-
-	userContext := ai.Context{
-		Type: ai.ContextTypeUser,
-		Content: fmt.Sprintf(`User Information:
-
-Basic Info:
-- Username: %s
-- Display Name: %s
-- Description: %s
-- Account Created: %s
-- Reasons: %s
-- Confidence: %.2f
-
-Status Information:
-- Current Status: %s
-- Last Updated: %s
-
-Flagged Friends (showing %d of %d flagged, %d total):
-%s
-
-Flagged Groups (showing %d of %d flagged, %d total):
-%s
-
-Recent Outfits (showing %d of %d):
-%s
-
-Recent Games (showing %d of %d):
-%s`,
-			user.Name,
-			user.DisplayName,
-			user.Description,
-			user.CreatedAt.Format(time.RFC3339),
-			strings.Join(user.Reasons.Messages(), "; "),
-			user.Confidence,
-			user.Status.String(),
-			user.LastUpdated.Format(time.RFC3339),
-			shownFriends, flaggedFriendsCount, len(user.Friends),
-			strings.Join(friendsInfo, "\n"),
-			shownGroups, flaggedGroupsCount, len(user.Groups),
-			strings.Join(groupsInfo, "\n"),
-			len(outfitsInfo), len(user.Outfits),
-			strings.Join(outfitsInfo, "\n"),
-			len(gamesInfo), len(user.Games),
-			strings.Join(gamesInfo, "\n")),
-	}
-
-	// Append to existing chat context
-	chatContext := session.ChatContext.Get(s)
-	chatContext = append(chatContext, userContext)
-	session.ChatContext.Set(s, chatContext)
-
-	// Navigate to chat
-	session.PaginationPage.Set(s, 0)
-	ctx.Show(constants.ChatPageName, "")
 }
 
 // handleReasonSelection processes reason management dropdown selections.

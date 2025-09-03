@@ -193,8 +193,6 @@ type OpenAI struct {
 	MessageModel string `koanf:"message_model"`
 	// Model to use for ivan message analysis
 	IvanModel string `koanf:"ivan_model"`
-	// Model to use for general chat completions
-	ChatModel string `koanf:"chat_model"`
 }
 
 // Discord contains Discord bot configuration.

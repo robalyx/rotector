@@ -451,9 +451,6 @@ func (b *ReviewBuilder) buildActionOptions() []discord.StringSelectMenuOption {
 	// Add reviewer-only options
 	if b.IsReviewer {
 		reviewerOptions := []discord.StringSelectMenuOption{
-			discord.NewStringSelectMenuOption("Ask AI about user", constants.OpenAIChatButtonCustomID).
-				WithEmoji(discord.ComponentEmoji{Name: "🤖"}).
-				WithDescription("Ask the AI questions about this user"),
 			discord.NewStringSelectMenuOption("View user logs", constants.ViewUserLogsButtonCustomID).
 				WithEmoji(discord.ComponentEmoji{Name: "📋"}).
 				WithDescription("View activity logs for this user"),

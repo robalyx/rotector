@@ -23,7 +23,6 @@ import (
 	"github.com/robalyx/rotector/internal/bot/handlers/admin"
 	"github.com/robalyx/rotector/internal/bot/handlers/ban"
 	"github.com/robalyx/rotector/internal/bot/handlers/captcha"
-	"github.com/robalyx/rotector/internal/bot/handlers/chat"
 	"github.com/robalyx/rotector/internal/bot/handlers/consent"
 	"github.com/robalyx/rotector/internal/bot/handlers/dashboard"
 	"github.com/robalyx/rotector/internal/bot/handlers/guild"
@@ -134,7 +133,6 @@ func New(app *setup.App) (*Bot, error) {
 	selectorLayout := selector.New(app, sessionManager)
 	settingLayout := setting.New(app)
 	logLayout := log.New(app)
-	chatLayout := chat.New(app)
 	captchaLayout := captcha.New(app)
 	timeoutLayout := timeout.New(app)
 	userReviewLayout := userReview.New(app, interactionManager)
@@ -151,7 +149,6 @@ func New(app *setup.App) (*Bot, error) {
 	interactionManager.AddPages(selectorLayout.Pages())
 	interactionManager.AddPages(settingLayout.Pages())
 	interactionManager.AddPages(logLayout.Pages())
-	interactionManager.AddPages(chatLayout.Pages())
 	interactionManager.AddPages(captchaLayout.Pages())
 	interactionManager.AddPages(timeoutLayout.Pages())
 	interactionManager.AddPages(userReviewLayout.Pages())

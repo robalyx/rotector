@@ -75,7 +75,6 @@ func (m *Menu) handleSelectMenu(ctx *interaction.Context, s *session.Session, cu
 	// Check reviewer-only options
 	switch option {
 	case constants.ActivityBrowserButtonCustomID,
-		constants.ChatAssistantButtonCustomID,
 		constants.WorkerStatusButtonCustomID,
 		constants.ReviewerStatsButtonCustomID,
 		constants.QueueManagementButtonCustomID:
@@ -112,8 +111,6 @@ func (m *Menu) handleSelectMenu(ctx *interaction.Context, s *session.Session, cu
 		ctx.Show(constants.UserSettingsPageName, "")
 	case constants.ActivityBrowserButtonCustomID:
 		ctx.Show(constants.LogPageName, "")
-	case constants.ChatAssistantButtonCustomID:
-		ctx.Show(constants.ChatPageName, "")
 	case constants.WorkerStatusButtonCustomID:
 		ctx.Show(constants.StatusPageName, "")
 	case constants.AdminMenuButtonCustomID:
