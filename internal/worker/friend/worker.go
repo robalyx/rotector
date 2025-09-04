@@ -40,6 +40,7 @@ type Worker struct {
 	reporter         *core.StatusReporter
 	thresholdChecker *core.ThresholdChecker
 	processingCache  *core.UserProcessingCache
+	friendCountCache *core.FriendCountCache
 	pendingFriends   []*types.ReviewUser
 	logger           *zap.Logger
 	batchSize        int
@@ -60,6 +61,7 @@ func New(app *setup.App, bar *components.ProgressBar, logger *zap.Logger) *Worke
 		"friend worker",
 	)
 	processingCache := core.NewUserProcessingCache(app.RedisManager, logger)
+	friendCountCache := core.NewFriendCountCache(app.RedisManager, logger)
 
 	return &Worker{
 		db:               app.DB,
@@ -72,6 +74,7 @@ func New(app *setup.App, bar *components.ProgressBar, logger *zap.Logger) *Worke
 		reporter:         reporter,
 		thresholdChecker: thresholdChecker,
 		processingCache:  processingCache,
+		friendCountCache: friendCountCache,
 		pendingFriends:   make([]*types.ReviewUser, 0),
 		logger:           logger.Named("friend_worker"),
 		batchSize:        app.Config.Worker.BatchSizes.FriendUsers,
@@ -171,6 +174,10 @@ func (w *Worker) Start(ctx context.Context) {
 func (w *Worker) processFriendsBatch(ctx context.Context) ([]*types.ReviewUser, error) {
 	validFriends := w.pendingFriends
 
+	// Track processing metrics
+	usersProcessed := 0
+	usersSkipped := 0
+
 	for len(validFriends) < w.batchSize {
 		// Get the next confirmed user
 		user, err := w.db.Model().User().GetUserToScan(ctx)
@@ -184,16 +191,42 @@ func (w *Worker) processFriendsBatch(ctx context.Context) ([]*types.ReviewUser, 
 			return validFriends, err
 		}
 
-		// Fetch friends for the user
+		// Check if we should process this user's friends based on count changes
 		userFriendIDs, err := w.friendFetcher.GetFriendIDs(ctx, user.ID)
 		if err != nil {
 			w.logger.Error("Error fetching friends", zap.Error(err), zap.Int64("userID", user.ID))
 			continue
 		}
 
-		// If the user has no friends, skip them
-		if len(userFriendIDs) == 0 {
+		currentFriendCount := len(userFriendIDs)
+
+		// Compare current friend count with cached value
+		friendCountChanged, err := w.friendCountCache.HasFriendCountChanged(ctx, user.ID, currentFriendCount)
+		if err != nil {
+			w.logger.Warn("Error checking friend count cache, proceeding with processing",
+				zap.Int64("userID", user.ID),
+				zap.Error(err))
+		} else if !friendCountChanged {
+			usersSkipped++
+
+			w.logger.Debug("User friend count unchanged, skipping",
+				zap.Int64("userID", user.ID),
+				zap.Int("friendCount", currentFriendCount))
+
 			continue
+		}
+
+		// If the user has no friends, skip them
+		if currentFriendCount == 0 {
+			continue
+		}
+
+		// Cache the current friend count
+		if err := w.friendCountCache.SetFriendCount(ctx, user.ID, currentFriendCount); err != nil {
+			w.logger.Warn("Failed to cache friend count",
+				zap.Int64("userID", user.ID),
+				zap.Int("friendCount", currentFriendCount),
+				zap.Error(err))
 		}
 
 		// Get all users that exist in our system
@@ -230,6 +263,8 @@ func (w *Worker) processFriendsBatch(ctx context.Context) ([]*types.ReviewUser, 
 				zap.Int64("userID", user.ID))
 		}
 
+		usersProcessed++
+
 		// Collect users that do not exist in our system
 		var friendIDs []int64
 
@@ -263,6 +298,19 @@ func (w *Worker) processFriendsBatch(ctx context.Context) ([]*types.ReviewUser, 
 					zap.Int("totalValidFriends", len(validFriends)))
 			}
 		}
+	}
+
+	// Log processing summary
+	if usersProcessed > 0 || usersSkipped > 0 {
+		totalUsers := usersProcessed + usersSkipped
+		skipRate := float64(usersSkipped) / float64(totalUsers) * 100
+
+		w.logger.Info("Friend count optimization summary",
+			zap.Int("usersProcessed", usersProcessed),
+			zap.Int("usersSkipped", usersSkipped),
+			zap.Int("totalUsers", totalUsers),
+			zap.Float64("skipRate", skipRate),
+			zap.Int("validFriendsFound", len(validFriends)))
 	}
 
 	return validFriends, nil

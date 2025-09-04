@@ -502,7 +502,7 @@ func (s *UserService) SaveUsers(ctx context.Context, users map[int64]*types.Revi
 
 		// Set engine version for new users
 		if user.EngineVersion == "" {
-			user.EngineVersion = "2.13"
+			user.EngineVersion = "2.14"
 		}
 
 		// Handle reasons merging and determine status
