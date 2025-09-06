@@ -35,7 +35,7 @@ type Worker struct {
 }
 
 // New creates a new stats worker.
-func New(app *setup.App, bar *components.ProgressBar, logger *zap.Logger) *Worker {
+func New(app *setup.App, bar *components.ProgressBar, logger *zap.Logger, instanceID string) *Worker {
 	// Get Redis client for stats
 	statsClient, err := app.RedisManager.GetClient(redis.StatsDBIndex)
 	if err != nil {
@@ -45,7 +45,7 @@ func New(app *setup.App, bar *components.ProgressBar, logger *zap.Logger) *Worke
 	return &Worker{
 		db:          app.DB,
 		bar:         bar,
-		reporter:    core.NewStatusReporter(app.StatusClient, "stats", logger),
+		reporter:    core.NewStatusReporter(app.StatusClient, "stats", instanceID, logger),
 		analyzer:    ai.NewStatsAnalyzer(app, logger),
 		redisClient: statsClient,
 		logger:      logger.Named("stats_worker"),

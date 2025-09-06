@@ -66,16 +66,14 @@ generate:
 
 # Build container image
 build-container tag="rotector:latest" upx="true":
-    docker buildx build \
-        --builder cloud-jaxron-rotector \
+    docker build \
         --build-arg ENABLE_UPX={{upx}} \
         -t {{tag}} \
         .
 
 # Build multi-arch container image
 build-container-multiarch tag="rotector:latest" platforms="linux/amd64,linux/arm64" upx="true":
-    docker buildx build \
-        --builder cloud-jaxron-rotector \
+    docker build \
         --platform {{platforms}} \
         --build-arg ENABLE_UPX={{upx}} \
         -t {{tag}} \
@@ -85,8 +83,7 @@ build-container-multiarch tag="rotector:latest" platforms="linux/amd64,linux/arm
 # Publish container image
 # Usage: just publish-container [tag] [platform] [upx]
 publish-container tag platform="linux/amd64" upx="true":
-    docker buildx build \
-        --builder cloud-jaxron-rotector \
+    docker build \
         --platform {{platform}} \
         --build-arg ENABLE_UPX={{upx}} \
         -t {{tag}} \
@@ -95,8 +92,7 @@ publish-container tag platform="linux/amd64" upx="true":
 
 # Publish multi-arch container image
 publish-container-multiarch image-name platforms="linux/amd64,linux/arm64" upx="true":
-    docker buildx build \
-        --builder cloud-jaxron-rotector \
+    docker build \
         --platform {{platforms}} \
         --build-arg ENABLE_UPX={{upx}} \
         -t {{image-name}} \

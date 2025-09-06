@@ -7,11 +7,13 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strconv"
 	stdSync "sync"
 	"syscall"
 	"time"
 
 	"github.com/robalyx/rotector/internal/setup"
+	"github.com/robalyx/rotector/internal/setup/telemetry"
 	"github.com/robalyx/rotector/internal/tui"
 	"github.com/robalyx/rotector/internal/tui/components"
 	"github.com/robalyx/rotector/internal/worker/friend"
@@ -146,17 +148,18 @@ func runWorkers(ctx context.Context, workerType string, count int) {
 		cancel()
 	}()
 
-	app, err := setup.InitializeApp(ctx, setup.ServiceWorker, WorkerLogDir)
+	// Initialize shared app for TUI and common resources
+	sharedApp, err := setup.InitializeApp(ctx, telemetry.ServiceWorker, WorkerLogDir)
 	if err != nil {
 		log.Printf("Failed to initialize application: %v", err)
 		return
 	}
-	defer app.Cleanup(ctx)
+	defer sharedApp.Cleanup(ctx)
 
 	// Initialize TUI manager
-	sessionLogDir := app.LogManager.GetCurrentSessionDir()
+	sessionLogDir := sharedApp.LogManager.GetCurrentSessionDir()
 
-	tuiManager := tui.NewManager(ctx, sessionLogDir, app.Logger)
+	tuiManager := tui.NewManager(ctx, sessionLogDir, sharedApp.Logger)
 	if err := tuiManager.Start(); err != nil {
 		log.Printf("Failed to start TUI: %v", err)
 		return
@@ -173,7 +176,7 @@ func runWorkers(ctx context.Context, workerType string, count int) {
 	}
 
 	// Get startup delay from config
-	startupDelay := app.Config.Worker.StartupDelay
+	startupDelay := sharedApp.Config.Worker.StartupDelay
 	if startupDelay <= 0 {
 		startupDelay = 2000 // Default to 2000ms if not configured
 	}
@@ -192,9 +195,20 @@ func runWorkers(ctx context.Context, workerType string, count int) {
 				return
 			}
 
-			workerLogger := app.LogManager.GetWorkerLogger(
+			// Create individual app instance for this worker
+			workerApp, err := setup.InitializeApp(ctx, telemetry.ServiceWorker, WorkerLogDir, workerType, strconv.Itoa(workerID))
+			if err != nil {
+				log.Printf("Failed to initialize worker app: %v", err)
+				return
+			}
+			defer workerApp.Cleanup(ctx)
+
+			workerLogger := workerApp.LogManager.GetWorkerLogger(
 				fmt.Sprintf("%s_worker_%d", workerType, workerID),
 			)
+
+			// Get instance ID for correlation between logs and status
+			instanceID := workerApp.LogManager.GetInstanceID()
 
 			// Get progress bar for this worker
 			bar := bars[workerID]
@@ -203,21 +217,21 @@ func runWorkers(ctx context.Context, workerType string, count int) {
 
 			switch workerType {
 			case FriendWorker:
-				w = friend.New(app, bar, workerLogger)
+				w = friend.New(workerApp, bar, workerLogger, instanceID)
 			case GroupWorker:
-				w = group.New(app, bar, workerLogger)
+				w = group.New(workerApp, bar, workerLogger, instanceID)
 			case MaintenanceWorker:
-				w = maintenance.New(app, bar, workerLogger)
+				w = maintenance.New(workerApp, bar, workerLogger, instanceID)
 			case StatsWorker:
-				w = stats.New(app, bar, workerLogger)
+				w = stats.New(workerApp, bar, workerLogger, instanceID)
 			case QueueWorker:
-				w = queue.New(app, bar, workerLogger)
+				w = queue.New(workerApp, bar, workerLogger, instanceID)
 			case SyncWorker:
-				w = sync.New(app, bar, workerLogger)
+				w = sync.New(workerApp, bar, workerLogger, instanceID)
 			case ReasonWorker:
-				w = reason.New(app, bar, workerLogger)
+				w = reason.New(workerApp, bar, workerLogger, instanceID)
 			case UploadWorker:
-				w = upload.New(app, bar, workerLogger)
+				w = upload.New(workerApp, bar, workerLogger, instanceID)
 			default:
 				log.Fatalf("Invalid worker type: %s", workerType)
 			}

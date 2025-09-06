@@ -5,7 +5,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/redis/rueidis"
 	"go.uber.org/zap"
 )
@@ -21,14 +20,11 @@ type StatusReporter struct {
 }
 
 // NewStatusReporter creates a new status reporter for a worker.
-func NewStatusReporter(client rueidis.Client, workerType string, logger *zap.Logger) *StatusReporter {
-	// Generate a UUID4 for the worker ID
-	workerID := uuid.New().String()
-
+func NewStatusReporter(client rueidis.Client, workerType, instanceID string, logger *zap.Logger) *StatusReporter {
 	return &StatusReporter{
 		monitor: NewMonitor(client, logger),
 		status: Status{
-			WorkerID:   workerID,
+			WorkerID:   instanceID,
 			WorkerType: workerType,
 			IsHealthy:  true,
 		},

@@ -48,7 +48,7 @@ type Worker struct {
 }
 
 // New creates a new sync worker.
-func New(app *setup.App, bar *components.ProgressBar, logger *zap.Logger) *Worker {
+func New(app *setup.App, bar *components.ProgressBar, logger *zap.Logger, instanceID string) *Worker {
 	// Create Discord state with sync token and required intents
 	s := state.NewWithIntents(app.Config.Common.Discord.SyncToken,
 		gateway.IntentGuilds|gateway.IntentGuildMembers|
@@ -64,7 +64,7 @@ func New(app *setup.App, bar *components.ProgressBar, logger *zap.Logger) *Worke
 	}
 
 	// Create status reporter
-	reporter := core.NewStatusReporter(app.StatusClient, "sync", logger)
+	reporter := core.NewStatusReporter(app.StatusClient, "sync", instanceID, logger)
 
 	// Create message analyzer
 	messageAnalyzer := ai.NewMessageAnalyzer(app, logger)

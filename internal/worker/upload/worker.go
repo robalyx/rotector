@@ -96,8 +96,8 @@ type Worker struct {
 }
 
 // New creates a new upload worker.
-func New(app *setup.App, bar *components.ProgressBar, logger *zap.Logger) *Worker {
-	reporter := core.NewStatusReporter(app.StatusClient, "upload", logger)
+func New(app *setup.App, bar *components.ProgressBar, logger *zap.Logger, instanceID string) *Worker {
+	reporter := core.NewStatusReporter(app.StatusClient, "upload", instanceID, logger)
 
 	httpClient := &http.Client{
 		Timeout: DownloadTimeout,

@@ -4,10 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"runtime"
-	"time"
 
-	"github.com/getsentry/sentry-go"
 	"github.com/jaxron/roapi.go/pkg/api"
 	"github.com/redis/rueidis"
 	aiClient "github.com/robalyx/rotector/internal/ai/client"
@@ -21,36 +18,6 @@ import (
 	"github.com/uptrace/bun/migrate"
 	"go.uber.org/zap"
 )
-
-// ServiceType identifies which service is being initialized.
-type ServiceType int
-
-const (
-	ServiceBot ServiceType = iota
-	ServiceWorker
-	ServiceExport
-	ServiceQueue
-)
-
-// GetRequestTimeout returns the request timeout for the given service type.
-func (s ServiceType) GetRequestTimeout(cfg *config.Config) time.Duration {
-	var timeout int
-
-	switch s {
-	case ServiceWorker:
-		timeout = cfg.Worker.RequestTimeout
-	case ServiceBot:
-		timeout = cfg.Bot.RequestTimeout
-	case ServiceExport:
-		timeout = 30000
-	case ServiceQueue:
-		timeout = 10000
-	default:
-		timeout = 5000
-	}
-
-	return time.Duration(timeout) * time.Millisecond
-}
 
 // App bundles all core dependencies and services needed by the application.
 // Each field represents a major subsystem that needs initialization and cleanup.
@@ -71,29 +38,25 @@ type App struct {
 
 // InitializeApp bootstraps all application dependencies in the correct order,
 // ensuring each component has its required dependencies available.
-func InitializeApp(ctx context.Context, serviceType ServiceType, logDir string) (*App, error) {
+// Workers can provide type and ID information for service identification.
+func InitializeApp(ctx context.Context, serviceType telemetry.ServiceType, logDir string, workerInfo ...string) (*App, error) {
 	// Load app configuration
 	cfg, configDir, err := config.LoadConfig()
 	if err != nil {
 		return nil, err
 	}
 
-	// Initialize Sentry if DSN is provided
-	if cfg.Common.Sentry.DSN != "" {
-		err := sentry.Init(sentry.ClientOptions{
-			Dsn: cfg.Common.Sentry.DSN,
-			BeforeSend: func(event *sentry.Event, _ *sentry.EventHint) *sentry.Event {
-				event.Tags["go_version"] = runtime.Version()
-				return event
-			},
-		})
-		if err != nil {
-			return nil, fmt.Errorf("failed to initialize Sentry: %w", err)
-		}
+	// Extract worker information if provided
+	var workerType, workerID string
+	if len(workerInfo) >= 2 {
+		workerType = workerInfo[0]
+		workerID = workerInfo[1]
 	}
 
 	// Logging system is initialized next to capture setup issues
-	logManager := telemetry.NewManager(logDir, &cfg.Common.Debug)
+	logManager := telemetry.NewManager(
+		ctx, serviceType, logDir, &cfg.Common.Debug, &cfg.Common.Loki, workerType, workerID,
+	)
 
 	logger, dbLogger, err := logManager.GetLoggers()
 	if err != nil {
@@ -175,13 +138,6 @@ func InitializeApp(ctx context.Context, serviceType ServiceType, logDir string) 
 // Cleanup ensures graceful shutdown of all components in reverse initialization order.
 // Logs but does not fail on cleanup errors to ensure all components get cleanup attempts.
 func (s *App) Cleanup(ctx context.Context) {
-	// Ensure Sentry events are sent before shutdown
-	if s.Config.Common.Sentry.DSN != "" {
-		if ok := sentry.Flush(2 * time.Second); !ok {
-			s.Logger.Error("Failed to flush Sentry events")
-		}
-	}
-
 	// Shutdown pprof server if running
 	if s.pprofServer != nil {
 		if err := s.pprofServer.srv.Shutdown(ctx); err != nil {
@@ -199,6 +155,9 @@ func (s *App) Cleanup(ctx context.Context) {
 	if err := s.DBLogger.Sync(); err != nil {
 		log.Printf("Failed to sync DB logger: %v", err)
 	}
+
+	// Stop telemetry manager to flush Loki logs
+	s.LogManager.Stop()
 
 	// Close database connections
 	if err := s.DB.Close(); err != nil {

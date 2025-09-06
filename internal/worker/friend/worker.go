@@ -47,11 +47,11 @@ type Worker struct {
 }
 
 // New creates a new friend worker.
-func New(app *setup.App, bar *components.ProgressBar, logger *zap.Logger) *Worker {
+func New(app *setup.App, bar *components.ProgressBar, logger *zap.Logger, instanceID string) *Worker {
 	userFetcher := fetcher.NewUserFetcher(app, logger)
 	userChecker := checker.NewUserChecker(app, userFetcher, logger)
 	friendFetcher := fetcher.NewFriendFetcher(app, logger)
-	reporter := core.NewStatusReporter(app.StatusClient, "friend", logger)
+	reporter := core.NewStatusReporter(app.StatusClient, "friend", instanceID, logger)
 	thresholdChecker := core.NewThresholdChecker(
 		app.DB,
 		app.Config.Worker.ThresholdLimits.FlaggedUsers,

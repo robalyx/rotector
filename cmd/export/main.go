@@ -14,6 +14,7 @@ import (
 
 	"github.com/robalyx/rotector/internal/export"
 	"github.com/robalyx/rotector/internal/setup"
+	"github.com/robalyx/rotector/internal/setup/telemetry"
 	"github.com/urfave/cli/v3"
 )
 
@@ -81,7 +82,7 @@ func run() error {
 		},
 		Action: func(ctx context.Context, c *cli.Command) error {
 			// Initialize application with required dependencies
-			app, err := setup.InitializeApp(ctx, setup.ServiceExport, ExportLogDir)
+			app, err := setup.InitializeApp(ctx, telemetry.ServiceExport, ExportLogDir)
 			if err != nil {
 				return fmt.Errorf("failed to initialize application: %w", err)
 			}

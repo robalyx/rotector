@@ -46,11 +46,11 @@ type Worker struct {
 }
 
 // New creates a new maintenance worker.
-func New(app *setup.App, bar *components.ProgressBar, logger *zap.Logger) *Worker {
+func New(app *setup.App, bar *components.ProgressBar, logger *zap.Logger, instanceID string) *Worker {
 	userFetcher := fetcher.NewUserFetcher(app, logger)
 	groupFetcher := fetcher.NewGroupFetcher(app.RoAPI, logger)
 	thumbnailFetcher := fetcher.NewThumbnailFetcher(app.RoAPI, logger)
-	reporter := core.NewStatusReporter(app.StatusClient, "maintenance", logger)
+	reporter := core.NewStatusReporter(app.StatusClient, "maintenance", instanceID, logger)
 	groupChecker := checker.NewGroupChecker(app, logger)
 
 	// Create Discord client
@@ -161,7 +161,7 @@ func (w *Worker) processBannedUsers(ctx context.Context) {
 	}
 
 	if len(users) == 0 {
-		w.logger.Info("No users to check for bans")
+		w.logger.Debug("No users to check for bans")
 		return
 	}
 
@@ -247,7 +247,7 @@ func (w *Worker) processLockedGroups(ctx context.Context) {
 	}
 
 	if len(groups) == 0 {
-		w.logger.Info("No groups to check for locks")
+		w.logger.Debug("No groups to check for locks")
 		return
 	}
 
@@ -345,7 +345,7 @@ func (w *Worker) processGroupTracking(ctx context.Context) {
 
 	// Check if there are any groups to check
 	if len(groupsWithUsers) == 0 {
-		w.logger.Info("No groups to check for tracking")
+		w.logger.Debug("No groups to check for tracking")
 		return
 	}
 
@@ -457,7 +457,7 @@ func (w *Worker) processUserThumbnails(ctx context.Context) {
 	}
 
 	if len(users) == 0 {
-		w.logger.Info("No users need thumbnail updates")
+		w.logger.Debug("No users need thumbnail updates")
 		return
 	}
 
@@ -507,7 +507,7 @@ func (w *Worker) processGroupThumbnails(ctx context.Context) {
 	}
 
 	if len(groups) == 0 {
-		w.logger.Info("No groups need thumbnail updates")
+		w.logger.Debug("No groups need thumbnail updates")
 		return
 	}
 

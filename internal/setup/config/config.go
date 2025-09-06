@@ -45,7 +45,7 @@ type CommonConfig struct {
 	OpenAI         OpenAI         `koanf:"openai"`
 	Proxy          Proxy          `koanf:"proxy"`
 	Roverse        Roverse        `koanf:"roverse"`
-	Sentry         Sentry         `koanf:"sentry"`
+	Loki           Loki           `koanf:"loki"`
 	Discord        DiscordConfig  `koanf:"discord"`
 }
 
@@ -315,10 +315,22 @@ type Roverse struct {
 	MaxConcurrent int64 `koanf:"max_concurrent"`
 }
 
-// Sentry contains Sentry error tracking configuration.
-type Sentry struct {
-	// Sentry DSN for error reporting (leave empty to disable)
-	DSN string `koanf:"dsn"`
+// Loki contains Grafana Loki logging configuration.
+type Loki struct {
+	// Enable Loki integration
+	Enabled bool `koanf:"enabled"`
+	// Loki server URL (without /loki/api/v1/push suffix)
+	URL string `koanf:"url"`
+	// Maximum number of log entries per batch
+	BatchMaxSize int `koanf:"batch_max_size"`
+	// Maximum time to wait before sending a batch (in milliseconds)
+	BatchMaxWaitMS int `koanf:"batch_max_wait_ms"`
+	// Labels added to all log streams
+	Labels map[string]string `koanf:"labels"`
+	// Basic authentication username (optional)
+	Username string `koanf:"username"`
+	// Basic authentication password (optional)
+	Password string `koanf:"password"`
 }
 
 // LoadConfig loads the configuration from the specified file.

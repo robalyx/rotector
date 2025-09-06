@@ -17,6 +17,7 @@ import (
 	"github.com/robalyx/rotector/internal/cloudflare/manager"
 	"github.com/robalyx/rotector/internal/database/types"
 	"github.com/robalyx/rotector/internal/setup"
+	"github.com/robalyx/rotector/internal/setup/telemetry"
 	"github.com/robalyx/rotector/pkg/utils"
 	"github.com/urfave/cli/v3"
 	"go.uber.org/zap"
@@ -51,7 +52,7 @@ func run() error {
 		Usage: "Queue Roblox users for processing",
 		Action: func(ctx context.Context, _ *cli.Command) error {
 			// Initialize application with required dependencies
-			app, err := setup.InitializeApp(ctx, setup.ServiceQueue, QueueLogDir)
+			app, err := setup.InitializeApp(ctx, telemetry.ServiceQueue, QueueLogDir)
 			if err != nil {
 				return fmt.Errorf("failed to initialize application: %w", err)
 			}

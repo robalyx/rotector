@@ -1,59 +1,151 @@
 package telemetry
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
 	"time"
 
-	"github.com/getsentry/sentry-go"
+	"github.com/google/uuid"
 	"github.com/robalyx/rotector/internal/setup/config"
 	"github.com/robalyx/rotector/internal/setup/telemetry/logger"
+	"github.com/robalyx/rotector/internal/setup/telemetry/loki"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
 
+// ServiceType represents the type of service being initialized.
+type ServiceType int
+
+const (
+	ServiceBot ServiceType = iota
+	ServiceWorker
+	ServiceExport
+	ServiceQueue
+)
+
+// GetRequestTimeout returns the request timeout for the given service type.
+func (s ServiceType) GetRequestTimeout(cfg *config.Config) time.Duration {
+	var timeout int
+
+	switch s {
+	case ServiceWorker:
+		timeout = cfg.Worker.RequestTimeout
+	case ServiceBot:
+		timeout = cfg.Bot.RequestTimeout
+	case ServiceExport:
+		timeout = 30000
+	case ServiceQueue:
+		timeout = 10000
+	default:
+		timeout = 5000
+	}
+
+	return time.Duration(timeout) * time.Millisecond
+}
+
 // Manager handles the creation and management of log files and directories.
 // It maintains both timestamped session logs and a "latest" symlink for easy access.
 type Manager struct {
-	currentSessionDir string // Path to the current session's log directory
-	logDir            string // Base directory for all logs
-	level             string // Logging level (debug, info, warn, error)
-	maxLogsToKeep     int    // Maximum number of log sessions to retain
-	maxLogLines       int    // Maximum number of lines to keep in each log file
+	lokiPusher        *loki.Pusher // Loki pusher for cloud logging
+	instanceID        string       // Unique identifier for this program instance
+	componentName     string       // Component identifier for this instance
+	currentSessionDir string       // Path to the current session's log directory
+	logDir            string       // Base directory for all logs
+	level             string       // Logging level (debug, info, warn, error)
+	maxLogsToKeep     int          // Maximum number of log sessions to retain
+	maxLogLines       int          // Maximum number of lines to keep in each log file
 }
 
 // NewManager creates a new Manager instance.
-func NewManager(logDir string, cfg *config.Debug) *Manager {
-	return &Manager{
+func NewManager(
+	ctx context.Context, serviceType ServiceType, logDir string,
+	debugCfg *config.Debug, lokiCfg *config.Loki, workerType string, workerID string,
+) *Manager {
+	instanceID := uuid.New().String()
+
+	// Determine component name based on service type
+	var componentName string
+
+	switch serviceType {
+	case ServiceBot:
+		componentName = "bot"
+	case ServiceWorker:
+		if workerType != "" && workerID != "" {
+			componentName = fmt.Sprintf("%s_worker_%s", workerType, workerID)
+		} else {
+			componentName = "worker"
+		}
+	case ServiceExport:
+		componentName = "export"
+	case ServiceQueue:
+		componentName = "queue"
+	default:
+		componentName = "unknown"
+	}
+
+	manager := &Manager{
+		instanceID:    instanceID,
+		componentName: componentName,
 		logDir:        logDir,
-		level:         cfg.LogLevel,
-		maxLogsToKeep: cfg.MaxLogsToKeep,
-		maxLogLines:   cfg.MaxLogLines,
+		level:         debugCfg.LogLevel,
+		maxLogsToKeep: debugCfg.MaxLogsToKeep,
+		maxLogLines:   debugCfg.MaxLogLines,
+	}
+
+	// Initialize Loki pusher if enabled
+	if lokiCfg.Enabled && lokiCfg.URL != "" {
+		// Build complete label set
+		baseLabels := make(map[string]string)
+		for k, v := range lokiCfg.Labels {
+			baseLabels[k] = v
+		}
+
+		baseLabels["component"] = componentName
+		baseLabels["instance_id"] = instanceID
+
+		// Initialize Loki pusher
+		lokiConfigWithLabels := *lokiCfg
+		lokiConfigWithLabels.Labels = baseLabels
+		manager.lokiPusher = loki.NewPusher(ctx, lokiConfigWithLabels)
+	}
+
+	return manager
+}
+
+// Stop gracefully shuts down the telemetry manager.
+// This should be called on application shutdown to ensure logs are flushed.
+func (lm *Manager) Stop() {
+	if lm.lokiPusher != nil {
+		lm.lokiPusher.Stop()
 	}
 }
 
 // GetLoggers initializes the main and database loggers.
 // Returns separate loggers for main application and database logging.
-// Both loggers write to their respective files in the session directory.
 func (lm *Manager) GetLoggers() (*zap.Logger, *zap.Logger, error) {
 	if err := lm.setupLogDirectories(); err != nil {
 		return nil, nil, err
 	}
 
 	// Initialize main application logger
+	warnLevel := zapcore.WarnLevel
+
 	mainLogger, err := lm.initLogger([]string{
 		filepath.Join(lm.currentSessionDir, "main.log"),
-	})
+	}, &warnLevel)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to initialize main logger: %w", err)
 	}
 
 	// Initialize database logger
+	warnLevel = zapcore.WarnLevel
+
 	dbLogger, err := lm.initLogger([]string{
 		filepath.Join(lm.currentSessionDir, "database.log"),
-	})
+	}, &warnLevel)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to initialize database logger: %w", err)
 	}
@@ -63,45 +155,29 @@ func (lm *Manager) GetLoggers() (*zap.Logger, *zap.Logger, error) {
 
 // GetWorkerLogger creates a logger for background workers.
 // Each worker gets its own log file in the session directory.
-// Returns a no-op logger if initialization fails.
 func (lm *Manager) GetWorkerLogger(name string) *zap.Logger {
-	zapLevel, err := zapcore.ParseLevel(lm.level)
-	if err != nil {
-		return zap.NewNop()
-	}
-
 	sessionDir := lm.getOrCreateSessionDir()
 
-	// Configure the logger
-	zapConfig := zap.NewDevelopmentConfig()
-	zapConfig.OutputPaths = []string{
+	logger, err := lm.initLogger([]string{
 		filepath.Join(sessionDir, name+".log"),
-	}
-	zapConfig.Level = zap.NewAtomicLevelAt(zapLevel)
-
-	// Create the logger
-	zapLogger, err := zapConfig.Build()
+	}, nil)
 	if err != nil {
 		return zap.NewNop()
 	}
 
-	// Add Sentry core if Sentry client is initialized
-	if sentry.CurrentHub().Client() != nil {
-		sentryLevel := zap.LevelEnablerFunc(func(lvl zapcore.Level) bool {
-			return lvl >= zapcore.ErrorLevel
-		})
-		zapLogger = zapLogger.WithOptions(zap.WrapCore(func(core zapcore.Core) zapcore.Core {
-			return zapcore.NewTee(core, NewSentryCore(sentryLevel))
-		}))
-	}
-
-	return zapLogger
+	return logger
 }
 
 // GetCurrentSessionDir returns the current session directory.
 // This is useful for external components that need to access logs in the same session.
 func (lm *Manager) GetCurrentSessionDir() string {
 	return lm.getOrCreateSessionDir()
+}
+
+// GetInstanceID returns the unique instance identifier for this program run.
+// This ID is used for both logging and worker status correlation.
+func (lm *Manager) GetInstanceID() string {
+	return lm.instanceID
 }
 
 // GetImageLogger creates a logger specifically for handling image logging.
@@ -115,24 +191,14 @@ func (lm *Manager) GetImageLogger(name string) (*zap.Logger, string, error) {
 		return nil, "", fmt.Errorf("failed to create image directory: %w", err)
 	}
 
-	// Create logger for image operations
-	zapLevel, err := zapcore.ParseLevel(lm.level)
-	if err != nil {
-		return nil, "", err
-	}
-
-	zapConfig := zap.NewDevelopmentConfig()
-	zapConfig.OutputPaths = []string{
+	logger, err := lm.initLogger([]string{
 		filepath.Join(imageDir, name+".log"),
-	}
-	zapConfig.Level = zap.NewAtomicLevelAt(zapLevel)
-
-	zapLogger, err := zapConfig.Build()
+	}, nil)
 	if err != nil {
 		return nil, "", err
 	}
 
-	return zapLogger, imageDir, nil
+	return logger, imageDir, nil
 }
 
 // GetTextLogger creates a logger specifically for handling blocked text content.
@@ -146,24 +212,14 @@ func (lm *Manager) GetTextLogger(name string) (*zap.Logger, string, error) {
 		return nil, "", fmt.Errorf("failed to create text directory: %w", err)
 	}
 
-	// Create logger for text operations
-	zapLevel, err := zapcore.ParseLevel(lm.level)
-	if err != nil {
-		return nil, "", err
-	}
-
-	zapConfig := zap.NewDevelopmentConfig()
-	zapConfig.OutputPaths = []string{
+	logger, err := lm.initLogger([]string{
 		filepath.Join(textDir, name+".log"),
-	}
-	zapConfig.Level = zap.NewAtomicLevelAt(zapLevel)
-
-	zapLogger, err := zapConfig.Build()
+	}, nil)
 	if err != nil {
 		return nil, "", err
 	}
 
-	return zapLogger, textDir, nil
+	return logger, textDir, nil
 }
 
 // setupLogDirectories creates and manages the log directory structure.
@@ -204,8 +260,8 @@ func (lm *Manager) getOrCreateSessionDir() string {
 	return sessionDir
 }
 
-// initLogger creates a new zap logger instance with the specified paths and level.
-func (lm *Manager) initLogger(logPaths []string) (*zap.Logger, error) {
+// initLogger creates a new zap logger with file output and optional Loki integration.
+func (lm *Manager) initLogger(logPaths []string, lokiMinLevel *zapcore.Level) (*zap.Logger, error) {
 	zapLevel, err := zapcore.ParseLevel(lm.level)
 	if err != nil {
 		return nil, fmt.Errorf("invalid log level: %w", err)
@@ -234,12 +290,22 @@ func (lm *Manager) initLogger(logPaths []string) (*zap.Logger, error) {
 		cores = append(cores, core)
 	}
 
-	// Add Sentry core if Sentry client is initialized
-	if sentry.CurrentHub().Client() != nil {
-		sentryLevel := zap.LevelEnablerFunc(func(lvl zapcore.Level) bool {
-			return lvl >= zapcore.ErrorLevel
-		})
-		cores = append(cores, NewSentryCore(sentryLevel))
+	// Add Loki core if Loki pusher is available
+	if lm.lokiPusher != nil {
+		var lokiLevel zapcore.LevelEnabler
+		if lokiMinLevel != nil {
+			// Use custom level for Loki
+			lokiLevel = zap.LevelEnablerFunc(func(lvl zapcore.Level) bool {
+				return lvl >= *lokiMinLevel
+			})
+		} else {
+			// Use configured level for Loki
+			lokiLevel = zap.LevelEnablerFunc(func(lvl zapcore.Level) bool {
+				return lvl >= zapLevel
+			})
+		}
+
+		cores = append(cores, loki.NewCore(lokiLevel, lm.lokiPusher))
 	}
 
 	// Create logger with all cores and development options
@@ -272,7 +338,8 @@ func (lm *Manager) rotateLogSessions() error {
 	})
 
 	// Remove oldest sessions to maintain maxLogsToKeep
-	for i := range len(sessions) - lm.maxLogsToKeep {
+	toDelete := len(sessions) - lm.maxLogsToKeep
+	for i := range toDelete {
 		if err := os.RemoveAll(sessions[i]); err != nil {
 			return err
 		}

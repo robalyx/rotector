@@ -11,6 +11,7 @@ import (
 	"github.com/robalyx/rotector/internal/roblox/fetcher"
 	"github.com/robalyx/rotector/internal/setup"
 	"github.com/robalyx/rotector/internal/tui/components"
+	"github.com/robalyx/rotector/internal/worker/core"
 	"github.com/robalyx/rotector/pkg/utils"
 	"go.uber.org/zap"
 )
@@ -40,21 +41,24 @@ type Worker struct {
 	bar             *components.ProgressBar
 	userFetcher     *fetcher.UserFetcher
 	userChecker     *checker.UserChecker
+	reporter        *core.StatusReporter
 	logger          *zap.Logger
 	batchSize       int
 	lastProcessTime time.Time
 }
 
 // New creates a new queue worker.
-func New(app *setup.App, bar *components.ProgressBar, logger *zap.Logger) *Worker {
+func New(app *setup.App, bar *components.ProgressBar, logger *zap.Logger, instanceID string) *Worker {
 	userFetcher := fetcher.NewUserFetcher(app, logger)
 	userChecker := checker.NewUserChecker(app, userFetcher, logger)
+	reporter := core.NewStatusReporter(app.StatusClient, "queue", instanceID, logger)
 
 	return &Worker{
 		app:         app,
 		bar:         bar,
 		userFetcher: userFetcher,
 		userChecker: userChecker,
+		reporter:    reporter,
 		logger:      logger.Named("queue_worker"),
 		batchSize:   app.Config.Worker.BatchSizes.QueueItems,
 	}
@@ -64,6 +68,10 @@ func New(app *setup.App, bar *components.ProgressBar, logger *zap.Logger) *Worke
 func (w *Worker) Start(ctx context.Context) {
 	w.logger.Info("Queue Worker started")
 	w.bar.SetTotal(100)
+
+	// Start status reporting
+	w.reporter.Start(ctx)
+	defer w.reporter.Stop()
 
 	// Cleanup queue on startup
 	if err := w.app.D1Client.Queue.Cleanup(

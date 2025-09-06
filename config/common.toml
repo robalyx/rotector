@@ -15,9 +15,22 @@ enable_pprof = false
 # Port for pprof HTTP server if enabled
 pprof_port = 6060
 
-[common.sentry]
-# Sentry DSN for error tracking (leave empty to disable)
-dsn = ""
+[common.loki]
+# Enable Grafana Loki integration
+enabled = false
+# Loki server URL (without /loki/api/v1/push suffix)
+url = "http://localhost:3100"
+# Maximum number of log entries per batch
+batch_max_size = 100
+# Maximum time to wait before sending a batch (in milliseconds)
+batch_max_wait_ms = 1000
+# Basic authentication (optional)
+username = ""
+password = ""
+
+[common.loki.labels]
+service = "rotector"
+environment = "development"
 
 [common.proxy]
 # Default cooldown period in milliseconds for unspecified endpoints

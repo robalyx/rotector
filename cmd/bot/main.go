@@ -9,6 +9,7 @@ import (
 
 	"github.com/robalyx/rotector/internal/bot"
 	"github.com/robalyx/rotector/internal/setup"
+	"github.com/robalyx/rotector/internal/setup/telemetry"
 )
 
 const (
@@ -18,7 +19,7 @@ const (
 
 func main() {
 	// Initialize application with required dependencies
-	app, err := setup.InitializeApp(context.Background(), setup.ServiceBot, BotLogDir)
+	app, err := setup.InitializeApp(context.Background(), telemetry.ServiceBot, BotLogDir)
 	if err != nil {
 		log.Fatalf("Failed to initialize application: %v", err)
 	}

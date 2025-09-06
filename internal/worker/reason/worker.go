@@ -12,6 +12,7 @@ import (
 	"github.com/robalyx/rotector/internal/roblox/checker"
 	"github.com/robalyx/rotector/internal/setup"
 	"github.com/robalyx/rotector/internal/tui/components"
+	"github.com/robalyx/rotector/internal/worker/core"
 	"github.com/robalyx/rotector/pkg/utils"
 	"go.uber.org/zap"
 )
@@ -25,18 +26,22 @@ type Worker struct {
 	bar           *components.ProgressBar
 	friendChecker *checker.FriendChecker
 	groupChecker  *checker.GroupChecker
+	reporter      *core.StatusReporter
 	logger        *zap.Logger
 	batchSize     int
 	batchDelay    time.Duration
 }
 
 // New creates a new reason worker.
-func New(app *setup.App, bar *components.ProgressBar, logger *zap.Logger) *Worker {
+func New(app *setup.App, bar *components.ProgressBar, logger *zap.Logger, instanceID string) *Worker {
+	reporter := core.NewStatusReporter(app.StatusClient, "reason", instanceID, logger)
+
 	return &Worker{
 		db:            app.DB,
 		bar:           bar,
 		friendChecker: checker.NewFriendChecker(app, logger),
 		groupChecker:  checker.NewGroupChecker(app, logger),
+		reporter:      reporter,
 		logger:        logger.Named("reason_worker"),
 		batchSize:     200,
 		batchDelay:    1 * time.Second,
@@ -46,6 +51,10 @@ func New(app *setup.App, bar *components.ProgressBar, logger *zap.Logger) *Worke
 // Start begins the reason worker's operation.
 func (w *Worker) Start(ctx context.Context) {
 	w.logger.Info("Reason Worker started")
+
+	// Start status reporting
+	w.reporter.Start(ctx)
+	defer w.reporter.Stop()
 
 	w.bar.SetTotal(100)
 	w.bar.SetStepMessage("Starting reason check process", 0)

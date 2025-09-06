@@ -43,10 +43,10 @@ type Worker struct {
 }
 
 // New creates a new group worker.
-func New(app *setup.App, bar *components.ProgressBar, logger *zap.Logger) *Worker {
+func New(app *setup.App, bar *components.ProgressBar, logger *zap.Logger, instanceID string) *Worker {
 	userFetcher := fetcher.NewUserFetcher(app, logger)
 	userChecker := checker.NewUserChecker(app, userFetcher, logger)
-	reporter := core.NewStatusReporter(app.StatusClient, "group", logger)
+	reporter := core.NewStatusReporter(app.StatusClient, "group", instanceID, logger)
 	thresholdChecker := core.NewThresholdChecker(
 		app.DB,
 		app.Config.Worker.ThresholdLimits.FlaggedUsers,
