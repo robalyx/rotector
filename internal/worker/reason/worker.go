@@ -60,7 +60,7 @@ func (w *Worker) Start(ctx context.Context) {
 	w.bar.SetStepMessage("Starting reason check process", 0)
 
 	// Process friend reasons
-	w.bar.SetStepMessage("Processing users missing friend reasons", 25)
+	w.bar.SetStepMessage("Processing users missing friend reasons", 20)
 
 	friendCount, err := w.processUsersWithoutReason(ctx, enum.UserReasonTypeFriend)
 	if err != nil {
@@ -69,14 +69,8 @@ func (w *Worker) Start(ctx context.Context) {
 		w.logger.Info("Processed users without friend reasons", zap.Int("count", friendCount))
 	}
 
-	// Check if context was cancelled
-	if utils.ContextGuardWithLog(ctx, w.logger, "Context cancelled, stopping reason worker") {
-		w.bar.SetStepMessage("Cancelled", 100)
-		return
-	}
-
 	// Process group reasons
-	w.bar.SetStepMessage("Processing users missing group reasons", 75)
+	w.bar.SetStepMessage("Processing users missing group reasons", 40)
 
 	groupCount, err := w.processUsersWithoutReason(ctx, enum.UserReasonTypeGroup)
 	if err != nil {
@@ -85,10 +79,32 @@ func (w *Worker) Start(ctx context.Context) {
 		w.logger.Info("Processed users without group reasons", zap.Int("count", groupCount))
 	}
 
+	// Recalculate friend reason confidences
+	w.bar.SetStepMessage("Recalculating friend reason confidences", 60)
+
+	friendRecalcCount, err := w.processUsersWithReason(ctx, enum.UserReasonTypeFriend)
+	if err != nil {
+		w.logger.Error("Failed to recalculate friend reason confidences", zap.Error(err))
+	} else {
+		w.logger.Info("Recalculated friend reason confidences", zap.Int("updatedCount", friendRecalcCount))
+	}
+
+	// Recalculate group reason confidences
+	w.bar.SetStepMessage("Recalculating group reason confidences", 80)
+
+	groupRecalcCount, err := w.processUsersWithReason(ctx, enum.UserReasonTypeGroup)
+	if err != nil {
+		w.logger.Error("Failed to recalculate group reason confidences", zap.Error(err))
+	} else {
+		w.logger.Info("Recalculated group reason confidences", zap.Int("updatedCount", groupRecalcCount))
+	}
+
 	w.bar.SetStepMessage("Completed", 100)
 	w.logger.Info("Reason Worker completed",
 		zap.Int("friendChecks", friendCount),
-		zap.Int("groupChecks", groupCount))
+		zap.Int("groupChecks", groupCount),
+		zap.Int("friendRecalculations", friendRecalcCount),
+		zap.Int("groupRecalculations", groupRecalcCount))
 
 	// Wait for shutdown signal
 	w.logger.Info("Reason worker finished processing, waiting for shutdown signal")
@@ -132,7 +148,60 @@ func (w *Worker) processUsersWithoutReason(ctx context.Context, reasonType enum.
 				zap.Error(err))
 		} else {
 			totalProcessed += processed
-			w.logger.Debug("Processed batch",
+			w.logger.Info("Processed batch",
+				zap.String("reasonType", reasonType.String()),
+				zap.Int("batchSize", len(users)),
+				zap.Int("processed", processed),
+				zap.Int("totalProcessed", totalProcessed))
+		}
+
+		// Move to next batch
+		cursorID = users[len(users)-1].ID
+
+		// Add delay between batches
+		utils.ContextSleep(ctx, w.batchDelay)
+	}
+
+	return totalProcessed, nil
+}
+
+// processUsersWithReason processes all users that have a specific reason type and
+// recalculates their confidence, updating if the new confidence is higher.
+func (w *Worker) processUsersWithReason(ctx context.Context, reasonType enum.UserReasonType) (int, error) {
+	totalProcessed := 0
+	cursorID := int64(0)
+
+	for !utils.ContextGuardWithLog(ctx, w.logger, "Context cancelled during recalculation batch processing") {
+		// Get batch of users with this reason type
+		users, err := w.db.Model().User().GetUsersWithReason(ctx, reasonType, w.batchSize, cursorID)
+		if err != nil {
+			return totalProcessed, fmt.Errorf("failed to get users with %s reason: %w", reasonType.String(), err)
+		}
+
+		// If no more users, we're done
+		if len(users) == 0 {
+			break
+		}
+
+		// Get users with relationships for this batch
+		usersWithRelationships, err := w.getUsersWithRelationships(ctx, users)
+		if err != nil {
+			w.logger.Error("Failed to get users with relationships for recalculation batch",
+				zap.String("reasonType", reasonType.String()),
+				zap.Error(err))
+
+			continue
+		}
+
+		// Process the batch in recalculation mode
+		processed, err := w.processBatchRecalculate(ctx, usersWithRelationships, reasonType)
+		if err != nil {
+			w.logger.Error("Failed to process recalculation batch",
+				zap.String("reasonType", reasonType.String()),
+				zap.Error(err))
+		} else {
+			totalProcessed += processed
+			w.logger.Info("Processed recalculation batch",
 				zap.String("reasonType", reasonType.String()),
 				zap.Int("batchSize", len(users)),
 				zap.Int("processed", processed),
@@ -162,7 +231,7 @@ func (w *Worker) processBatch(
 
 	// Prepare maps for processing
 	confirmedFriendsMap, flaggedFriendsMap := w.friendChecker.PrepareFriendMaps(ctx, users)
-	confirmedGroupsMap, flaggedGroupsMap := w.groupChecker.PrepareGroupMaps(ctx, users)
+	confirmedGroupsMap, flaggedGroupsMap, mixedGroupsMap := w.groupChecker.PrepareGroupMaps(ctx, users)
 
 	switch reasonType {
 	case enum.UserReasonTypeFriend:
@@ -185,6 +254,7 @@ func (w *Worker) processBatch(
 			FlaggedFriendsMap:        flaggedFriendsMap,
 			ConfirmedGroupsMap:       confirmedGroupsMap,
 			FlaggedGroupsMap:         flaggedGroupsMap,
+			MixedGroupsMap:           mixedGroupsMap,
 			InappropriateGroupsFlags: nil,
 		})
 	default:
@@ -208,6 +278,106 @@ func (w *Worker) processBatch(
 		}
 
 		return len(flaggedUsers), nil
+	}
+
+	return 0, nil
+}
+
+// processBatchRecalculate processes a batch of users to recalculate confidences,
+// updating users only if the new confidence is higher than the existing one.
+func (w *Worker) processBatchRecalculate(
+	ctx context.Context, users []*types.ReviewUser, reasonType enum.UserReasonType,
+) (int, error) {
+	if len(users) == 0 {
+		return 0, nil
+	}
+
+	// Create reasons map to track potential updates
+	reasonsMap := make(map[int64]types.Reasons[enum.UserReasonType])
+
+	// Initialize reasons map with existing user reasons
+	for _, user := range users {
+		if user.Reasons != nil {
+			reasonsMap[user.ID] = user.Reasons
+		}
+	}
+
+	// Prepare maps for processing
+	confirmedFriendsMap, flaggedFriendsMap := w.friendChecker.PrepareFriendMaps(ctx, users)
+	confirmedGroupsMap, flaggedGroupsMap, mixedGroupsMap := w.groupChecker.PrepareGroupMaps(ctx, users)
+
+	// Store original confidences for comparison
+	originalConfidences := make(map[int64]float64)
+
+	for _, user := range users {
+		if existingReason, exists := user.Reasons[reasonType]; exists {
+			originalConfidences[user.ID] = existingReason.Confidence
+		}
+	}
+
+	switch reasonType {
+	case enum.UserReasonTypeFriend:
+		// Process through friend checker
+		w.friendChecker.ProcessUsers(ctx, &checker.FriendCheckerParams{
+			Users:                     users,
+			ReasonsMap:                reasonsMap,
+			ConfirmedFriendsMap:       confirmedFriendsMap,
+			FlaggedFriendsMap:         flaggedFriendsMap,
+			ConfirmedGroupsMap:        confirmedGroupsMap,
+			FlaggedGroupsMap:          flaggedGroupsMap,
+			InappropriateFriendsFlags: nil,
+			SkipReasonGeneration:      true,
+		})
+	case enum.UserReasonTypeGroup:
+		// Process through group checker
+		w.groupChecker.ProcessUsers(ctx, &checker.GroupCheckerParams{
+			Users:                    users,
+			ReasonsMap:               reasonsMap,
+			ConfirmedFriendsMap:      confirmedFriendsMap,
+			FlaggedFriendsMap:        flaggedFriendsMap,
+			ConfirmedGroupsMap:       confirmedGroupsMap,
+			FlaggedGroupsMap:         flaggedGroupsMap,
+			MixedGroupsMap:           mixedGroupsMap,
+			InappropriateGroupsFlags: nil,
+			SkipReasonGeneration:     true,
+		})
+	default:
+		return 0, fmt.Errorf("%w: %s", ErrUnsupportedReason, reasonType.String())
+	}
+
+	// Check for improved confidences and update users accordingly
+	updatedUsers := make(map[int64]*types.ReviewUser)
+
+	for _, user := range users {
+		if newReasons, ok := reasonsMap[user.ID]; ok {
+			if newReason, hasNewReason := newReasons[reasonType]; hasNewReason {
+				originalConfidence := originalConfidences[user.ID]
+				newConfidence := newReason.Confidence
+
+				// Only update if new confidence is higher
+				if newConfidence > originalConfidence {
+					user.Reasons = newReasons
+					user.Confidence = utils.CalculateConfidence(newReasons)
+					updatedUsers[user.ID] = user
+
+					w.logger.Debug("Updated user confidence",
+						zap.Int64("userID", user.ID),
+						zap.String("reasonType", reasonType.String()),
+						zap.Float64("oldConfidence", originalConfidence),
+						zap.Float64("newConfidence", newConfidence),
+						zap.Float64("overallConfidence", user.Confidence))
+				}
+			}
+		}
+	}
+
+	// Save updated users
+	if len(updatedUsers) > 0 {
+		if err := w.db.Service().User().SaveUsers(ctx, updatedUsers); err != nil {
+			return 0, fmt.Errorf("failed to save updated users: %w", err)
+		}
+
+		return len(updatedUsers), nil
 	}
 
 	return 0, nil

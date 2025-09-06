@@ -22,6 +22,7 @@ type FriendCheckerParams struct {
 	ConfirmedGroupsMap        map[int64]map[int64]*types.ReviewGroup       `json:"confirmedGroupsMap"`
 	FlaggedGroupsMap          map[int64]map[int64]*types.ReviewGroup       `json:"flaggedGroupsMap"`
 	InappropriateFriendsFlags map[int64]struct{}                           `json:"inappropriateFriendsFlags"`
+	SkipReasonGeneration      bool                                         `json:"skipReasonGeneration"`
 }
 
 // FriendAnalysis contains the result of analyzing a user's friend network.
@@ -107,8 +108,13 @@ func (c *FriendChecker) ProcessUsers(ctx context.Context, params *FriendCheckerP
 
 	// Generate AI reasons if we have users to analyze
 	if len(usersToAnalyze) > 0 {
-		// Generate reasons for flagged users
-		reasons := c.friendAnalyzer.GenerateFriendReasons(ctx, usersToAnalyze, params.ConfirmedFriendsMap, params.FlaggedFriendsMap)
+		var reasons map[int64]string
+
+		// Skip AI reason generation if flag is set
+		if !params.SkipReasonGeneration {
+			// Generate reasons for flagged users
+			reasons = c.friendAnalyzer.GenerateFriendReasons(ctx, usersToAnalyze, params.ConfirmedFriendsMap, params.FlaggedFriendsMap)
+		}
 
 		// Process results and update reasonsMap
 		for _, userInfo := range usersToAnalyze {
@@ -116,11 +122,12 @@ func (c *FriendChecker) ProcessUsers(ctx context.Context, params *FriendCheckerP
 			flaggedCount := userFlaggedCountMap[userInfo.ID]
 			confidence := userConfidenceMap[userInfo.ID]
 
-			reason := reasons[userInfo.ID]
-			if reason == "" {
-				// Fallback to default reason format if AI generation failed
-				reason = "User has flagged friends in their friend network."
+			var existingReason *types.Reason
+			if existingReasons, exists := params.ReasonsMap[userInfo.ID]; exists {
+				existingReason = existingReasons[enum.UserReasonTypeFriend]
 			}
+
+			reason := c.getReasonMessage(params.SkipReasonGeneration, userInfo.ID, reasons, existingReason)
 
 			// Add new reason to reasons map
 			if _, exists := params.ReasonsMap[userInfo.ID]; !exists {
@@ -305,6 +312,27 @@ func (c *FriendChecker) calculateConfidence(confirmedCount, flaggedCount, totalF
 	}
 
 	return finalConfidence
+}
+
+// getReasonMessage handles reason message logic based on whether AI generation should be skipped.
+func (c *FriendChecker) getReasonMessage(
+	skipGeneration bool, userID int64,
+	aiReasons map[int64]string, existingReason *types.Reason,
+) string {
+	if !skipGeneration {
+		// Use AI-generated reason if available
+		if reason := aiReasons[userID]; reason != "" {
+			return reason
+		}
+	}
+
+	// When skipping generation or AI generation failed, preserve existing reason if available
+	if existingReason != nil {
+		return existingReason.Message
+	}
+
+	// Fallback to default friend reason
+	return "User has flagged friends in their friend network."
 }
 
 // hasInappropriateGroupActivity checks if at least half of the user's groups are flagged/confirmed.

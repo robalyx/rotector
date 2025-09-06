@@ -23,6 +23,7 @@ type GroupCheckerParams struct {
 	ConfirmedGroupsMap       map[int64]map[int64]*types.ReviewGroup       `json:"confirmedGroupsMap"`
 	FlaggedGroupsMap         map[int64]map[int64]*types.ReviewGroup       `json:"flaggedGroupsMap"`
 	InappropriateGroupsFlags map[int64]struct{}                           `json:"inappropriateGroupsFlags"`
+	SkipReasonGeneration     bool                                         `json:"skipReasonGeneration"`
 }
 
 // GroupCheckResult contains the result of checking a user's groups.
@@ -273,8 +274,13 @@ func (c *GroupChecker) ProcessUsers(ctx context.Context, params *GroupCheckerPar
 
 	// Generate AI reasons if we have users to analyze
 	if len(usersToAnalyze) > 0 {
-		// Generate reasons for flagged users
-		reasons := c.groupReasonAnalyzer.GenerateGroupReasons(ctx, usersToAnalyze, params.ConfirmedGroupsMap, params.FlaggedGroupsMap)
+		var reasons map[int64]string
+
+		// Only generate AI reasons if flag is not set
+		if !params.SkipReasonGeneration {
+			// Generate reasons for flagged users
+			reasons = c.groupReasonAnalyzer.GenerateGroupReasons(ctx, usersToAnalyze, params.ConfirmedGroupsMap, params.FlaggedGroupsMap)
+		}
 
 		// Process results and update reasonsMap
 		for _, userInfo := range usersToAnalyze {
@@ -282,11 +288,12 @@ func (c *GroupChecker) ProcessUsers(ctx context.Context, params *GroupCheckerPar
 			flaggedCount := len(params.FlaggedGroupsMap[userInfo.ID])
 			confidence := userConfidenceMap[userInfo.ID]
 
-			reason := reasons[userInfo.ID]
-			if reason == "" {
-				// Fallback to default reason format if AI generation failed
-				reason = "Member of multiple inappropriate groups."
+			var existingReason *types.Reason
+			if existingReasons, exists := params.ReasonsMap[userInfo.ID]; exists {
+				existingReason = existingReasons[enum.UserReasonTypeGroup]
 			}
+
+			reason := c.getReasonMessage(params.SkipReasonGeneration, userInfo.ID, reasons, existingReason)
 
 			// Add new reason to reasons map
 			if _, exists := params.ReasonsMap[userInfo.ID]; !exists {
@@ -347,9 +354,30 @@ func (c *GroupChecker) calculateGroupConfidence(flaggedUsers []int64, users map[
 	return math.Round(avgConfidence*100) / 100
 }
 
+// getReasonMessage handles reason message logic based on whether AI generation should be skipped.
+func (c *GroupChecker) getReasonMessage(
+	skipGeneration bool, userID int64,
+	aiReasons map[int64]string, existingReason *types.Reason,
+) string {
+	if !skipGeneration {
+		// Use AI-generated reason if available
+		if reason := aiReasons[userID]; reason != "" {
+			return reason
+		}
+	}
+
+	// When skipping generation or AI generation failed, preserve existing reason if available
+	if existingReason != nil {
+		return existingReason.Message
+	}
+
+	// Fallback to default group reason
+	return "Member of multiple inappropriate groups."
+}
+
 // calculateConfidence computes a weighted confidence score based on group memberships.
-func (c *GroupChecker) calculateConfidence(confirmedCount, flaggedCount, totalGroups int, enhanced bool) float64 {
-	totalWeight := float64(confirmedCount) + (float64(flaggedCount) * 0.4)
+func (c *GroupChecker) calculateConfidence(confirmedCount, flaggedCount, mixedCount, totalGroups int, enhanced bool) float64 {
+	totalWeight := float64(confirmedCount) + (float64(flaggedCount) * 0.1) + (float64(mixedCount) * 0.4)
 
 	// Hard thresholds for serious cases
 	if confirmedCount >= 8 || totalWeight >= 10 {

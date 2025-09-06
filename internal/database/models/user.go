@@ -2412,3 +2412,45 @@ func (r *UserModel) GetUsersWithoutReason(
 
 	return result, nil
 }
+
+// GetUsersWithReason gets users that have a specific reason type.
+func (r *UserModel) GetUsersWithReason(
+	ctx context.Context, reasonType enum.UserReasonType, limit int, cursorID int64,
+) ([]*types.ReviewUser, error) {
+	var users []types.User
+
+	err := dbretry.NoResult(ctx, func(ctx context.Context) error {
+		query := r.db.NewSelect().
+			Model(&users).
+			Column("id", "status").
+			Where("status IN (?, ?)", enum.UserTypeFlagged, enum.UserTypeConfirmed).
+			Where("id IN (SELECT user_id FROM user_reasons WHERE reason_type = ?)", reasonType).
+			Order("id ASC").
+			Limit(limit)
+
+		if cursorID > 0 {
+			query.Where("id > ?", cursorID)
+		}
+
+		return query.Scan(ctx)
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get users with reason type %s: %w", reasonType.String(), err)
+	}
+
+	// Convert to review users
+	result := make([]*types.ReviewUser, len(users))
+	for i, user := range users {
+		result[i] = &types.ReviewUser{
+			User: &user,
+		}
+	}
+
+	r.logger.Debug("Found users with reason type",
+		zap.String("reasonType", reasonType.String()),
+		zap.Int("count", len(result)),
+		zap.Int("limit", limit),
+		zap.Int64("cursorID", cursorID))
+
+	return result, nil
+}
