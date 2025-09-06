@@ -207,7 +207,34 @@ func (w *Worker) processBannedUsers(ctx context.Context) {
 			return
 		}
 
-		w.logger.Info("Marked banned users", zap.Int("count", len(bannedUserIDs)))
+		// Auto-confirm banned users since Roblox ban is definitive evidence
+		bannedUsers := make([]*types.ReviewUser, 0, len(bannedUserIDs))
+		for _, userID := range bannedUserIDs {
+			bannedUsers = append(bannedUsers, &types.ReviewUser{
+				User: &types.User{
+					ID: userID,
+				},
+			})
+		}
+
+		// Confirm banned users with system reviewer ID
+		if err := w.db.Service().User().ConfirmUsers(ctx, bannedUsers, 0); err != nil {
+			w.logger.Error("Error confirming banned users", zap.Error(err))
+			w.reporter.SetHealthy(false)
+
+			return
+		}
+
+		// Add confirmed users to D1 database
+		for _, user := range bannedUsers {
+			if err := w.d1Client.UserFlags.AddConfirmed(ctx, user, 0); err != nil {
+				w.logger.Error("Error adding confirmed banned user to D1",
+					zap.Error(err),
+					zap.Int64("userID", user.ID))
+			}
+		}
+
+		w.logger.Info("Marked and confirmed banned users", zap.Int("count", len(bannedUserIDs)))
 	}
 
 	// Unmark users that are no longer banned
