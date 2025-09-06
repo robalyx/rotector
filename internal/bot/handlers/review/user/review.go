@@ -937,27 +937,31 @@ func (m *ReviewMenu) handleGenerateProfileReason(ctx *interaction.Context) {
 	modal := discord.NewModalCreateBuilder().
 		SetCustomID(constants.GenerateProfileReasonModalCustomID).
 		SetTitle("Generate Profile Reason").
-		AddActionRow(
-			discord.NewTextInput(constants.ProfileReasonHintInputCustomID, discord.TextInputStyleParagraph, "Hint").
+		AddLabel(
+			"Hint",
+			discord.NewTextInput(constants.ProfileReasonHintInputCustomID, discord.TextInputStyleParagraph).
 				WithRequired(true).
 				WithMinLength(1).
 				WithMaxLength(256).
 				WithPlaceholder("e.g., inappropriate username, sexual content in description"),
 		).
-		AddActionRow(
-			discord.NewTextInput(constants.ProfileReasonViolationInputCustomID, discord.TextInputStyleParagraph, "Violation Location").
+		AddLabel(
+			"Violation Location",
+			discord.NewTextInput(constants.ProfileReasonViolationInputCustomID, discord.TextInputStyleParagraph).
 				WithRequired(false).
 				WithMaxLength(512).
 				WithPlaceholder("username\ndisplayName\ndescription"),
 		).
-		AddActionRow(
-			discord.NewTextInput(constants.ProfileReasonLanguageInputCustomID, discord.TextInputStyleParagraph, "Language Pattern").
+		AddLabel(
+			"Language Pattern",
+			discord.NewTextInput(constants.ProfileReasonLanguageInputCustomID, discord.TextInputStyleParagraph).
 				WithRequired(false).
 				WithMaxLength(512).
 				WithPlaceholder("imperative\neuphemistic\ncoded\ndirect-address\noffer-pattern"),
 		).
-		AddActionRow(
-			discord.NewTextInput(constants.ProfileReasonLanguageUsedInputCustomID, discord.TextInputStyleParagraph, "Language Used").
+		AddLabel(
+			"Language Used",
+			discord.NewTextInput(constants.ProfileReasonLanguageUsedInputCustomID, discord.TextInputStyleParagraph).
 				WithRequired(false).
 				WithMaxLength(256).
 				WithPlaceholder("english\nrot13\ncaesar\nleetspeak"),

@@ -67,7 +67,6 @@ func (m *BaseReviewMenu) HandleAddComment(ctx *interaction.Context, s *session.S
 	input := discord.NewTextInput(
 		constants.CommentMessageInputCustomID,
 		discord.TextInputStyleParagraph,
-		"Note",
 	).WithRequired(true).
 		WithMinLength(10).
 		WithMaxLength(512).
@@ -77,7 +76,7 @@ func (m *BaseReviewMenu) HandleAddComment(ctx *interaction.Context, s *session.S
 		input = input.WithValue(existingComment.Message)
 	}
 
-	modal.AddActionRow(input)
+	modal.AddLabel("Note", input)
 	ctx.Modal(modal)
 }
 
@@ -392,7 +391,7 @@ func BuildReasonModal[T types.ReasonType](reasonType T, existingReason *types.Re
 
 	// Add reason input field
 	reasonInput := discord.NewTextInput(
-		constants.AddReasonInputCustomID, discord.TextInputStyleParagraph, "Reason (leave empty to remove)",
+		constants.AddReasonInputCustomID, discord.TextInputStyleParagraph,
 	)
 	if existingReason != nil {
 		reasonInput = reasonInput.WithRequired(false).
@@ -405,11 +404,11 @@ func BuildReasonModal[T types.ReasonType](reasonType T, existingReason *types.Re
 			WithPlaceholder("Enter the reason for flagging")
 	}
 
-	modal.AddActionRow(reasonInput)
+	modal.AddLabel("Reason (leave empty to remove)", reasonInput)
 
 	// Add confidence input field
 	confidenceInput := discord.NewTextInput(
-		constants.AddReasonConfidenceInputCustomID, discord.TextInputStyleShort, "Confidence",
+		constants.AddReasonConfidenceInputCustomID, discord.TextInputStyleShort,
 	)
 	if existingReason != nil {
 		confidenceInput = confidenceInput.WithRequired(false).
@@ -423,11 +422,11 @@ func BuildReasonModal[T types.ReasonType](reasonType T, existingReason *types.Re
 			WithPlaceholder("Enter confidence value (0.01-1.00)")
 	}
 
-	modal.AddActionRow(confidenceInput)
+	modal.AddLabel("Confidence", confidenceInput)
 
 	// Add evidence input field
 	evidenceInput := discord.NewTextInput(
-		constants.AddReasonEvidenceInputCustomID, discord.TextInputStyleParagraph, "Evidence",
+		constants.AddReasonEvidenceInputCustomID, discord.TextInputStyleParagraph,
 	)
 
 	if existingReason != nil {
@@ -446,7 +445,7 @@ func BuildReasonModal[T types.ReasonType](reasonType T, existingReason *types.Re
 			WithPlaceholder("Enter evidence items, one per line")
 	}
 
-	modal.AddActionRow(evidenceInput)
+	modal.AddLabel("Evidence", evidenceInput)
 
 	return modal
 }

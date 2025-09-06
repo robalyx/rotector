@@ -183,12 +183,8 @@ func runWorkers(ctx context.Context, workerType string, count int) {
 
 	// Start workers
 	var wg stdSync.WaitGroup
-	for i := range count {
-		wg.Add(1)
-
-		go func(workerID int) {
-			defer wg.Done()
-
+	for workerID := range count {
+		wg.Go(func() {
 			// Add staggered startup delay
 			delay := time.Duration(workerID) * time.Duration(startupDelay) * time.Millisecond
 			if utils.ContextSleep(ctx, delay) == utils.SleepCancelled {
@@ -237,7 +233,7 @@ func runWorkers(ctx context.Context, workerType string, count int) {
 			}
 
 			runWorker(ctx, w, workerLogger)
-		}(i)
+		})
 	}
 
 	log.Printf("Started %d %s workers", count, workerType)

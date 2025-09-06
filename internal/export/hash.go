@@ -79,18 +79,14 @@ func hashIDs(ids []int64, salt string, hashType HashType, concurrency int64, ite
 	// Start worker pool
 	var wg sync.WaitGroup
 	for range concurrency {
-		wg.Add(1)
-
-		go func() {
-			defer wg.Done()
-
+		wg.Go(func() {
 			for idx := range work {
 				hash := HashID(ids[idx], salt, hashType, iterations, memory)
 				results <- HashResult{idx, hash}
 
 				progress <- struct{}{}
 			}
-		}()
+		})
 	}
 
 	// Send work to workers

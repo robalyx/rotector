@@ -79,8 +79,9 @@ func (m *Menu) handleQueueUser(ctx *interaction.Context) {
 	modal := discord.NewModalCreateBuilder().
 		SetCustomID(constants.QueueUserModalCustomID).
 		SetTitle("Queue Roblox Users").
-		AddActionRow(
-			discord.NewTextInput(constants.QueueUserInputCustomID, discord.TextInputStyleParagraph, "User IDs").
+		AddLabel(
+			"User IDs",
+			discord.NewTextInput(constants.QueueUserInputCustomID, discord.TextInputStyleParagraph).
 				WithRequired(true).
 				WithPlaceholder("Enter Roblox user IDs to queue (one per line)"),
 		)
@@ -93,8 +94,9 @@ func (m *Menu) handleManualUserReview(ctx *interaction.Context) {
 	modal := discord.NewModalCreateBuilder().
 		SetCustomID(constants.ManualUserReviewModalCustomID).
 		SetTitle("Manual User Review").
-		AddActionRow(
-			discord.NewTextInput(constants.ManualUserReviewInputCustomID, discord.TextInputStyleShort, "User ID").
+		AddLabel(
+			"User ID",
+			discord.NewTextInput(constants.ManualUserReviewInputCustomID, discord.TextInputStyleShort).
 				WithRequired(true).
 				WithPlaceholder("Enter the Roblox user ID to review..."),
 		)
@@ -107,8 +109,9 @@ func (m *Menu) handleManualGroupReview(ctx *interaction.Context) {
 	modal := discord.NewModalCreateBuilder().
 		SetCustomID(constants.ManualGroupReviewModalCustomID).
 		SetTitle("Manual Group Review").
-		AddActionRow(
-			discord.NewTextInput(constants.ManualGroupReviewInputCustomID, discord.TextInputStyleShort, "Group ID").
+		AddLabel(
+			"Group ID",
+			discord.NewTextInput(constants.ManualGroupReviewInputCustomID, discord.TextInputStyleShort).
 				WithRequired(true).
 				WithPlaceholder("Enter the Roblox group ID to review..."),
 		)

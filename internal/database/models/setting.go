@@ -83,8 +83,6 @@ func (r *SettingModel) SaveUserSettings(ctx context.Context, settings *types.Use
 			Set("streamer_mode = EXCLUDED.streamer_mode").
 			Set("user_default_sort = EXCLUDED.user_default_sort").
 			Set("group_default_sort = EXCLUDED.group_default_sort").
-			Set("appeal_status_filter = EXCLUDED.appeal_status_filter").
-			Set("appeal_default_sort = EXCLUDED.appeal_default_sort").
 			Set("chat_model = EXCLUDED.chat_model").
 			Set("review_mode = EXCLUDED.review_mode").
 			Set("review_target_mode = EXCLUDED.review_target_mode").

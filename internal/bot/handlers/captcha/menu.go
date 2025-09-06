@@ -116,8 +116,9 @@ func (m *Menu) handleCaptchaAnswer(ctx *interaction.Context) {
 	modal := discord.NewModalCreateBuilder().
 		SetCustomID(constants.CaptchaAnswerModalCustomID).
 		SetTitle("Enter CAPTCHA Answer").
-		AddActionRow(
-			discord.NewTextInput(constants.CaptchaAnswerInputCustomID, discord.TextInputStyleShort, "Answer").
+		AddLabel(
+			"Answer",
+			discord.NewTextInput(constants.CaptchaAnswerInputCustomID, discord.TextInputStyleShort).
 				WithRequired(true).
 				WithPlaceholder("Enter the 6 digits you see..."),
 		)

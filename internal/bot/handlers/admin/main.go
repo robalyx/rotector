@@ -58,25 +58,29 @@ func (m *MainMenu) handleBanUserModal(ctx *interaction.Context) {
 	modal := discord.NewModalCreateBuilder().
 		SetCustomID(constants.BanUserModalCustomID).
 		SetTitle("Ban User").
-		AddActionRow(
-			discord.NewTextInput(constants.BanUserInputCustomID, discord.TextInputStyleShort, "User ID").
+		AddLabel(
+			"User ID",
+			discord.NewTextInput(constants.BanUserInputCustomID, discord.TextInputStyleShort).
 				WithRequired(true).
 				WithPlaceholder("Enter the user ID to ban..."),
 		).
-		AddActionRow(
-			discord.NewTextInput(constants.BanTypeInputCustomID, discord.TextInputStyleShort, "Ban Type").
+		AddLabel(
+			"Ban Type",
+			discord.NewTextInput(constants.BanTypeInputCustomID, discord.TextInputStyleShort).
 				WithRequired(true).
 				WithPlaceholder("abuse, inappropriate, or other").
 				WithMaxLength(20),
 		).
-		AddActionRow(
-			discord.NewTextInput(constants.BanDurationInputCustomID, discord.TextInputStyleShort, "Duration").
+		AddLabel(
+			"Duration",
+			discord.NewTextInput(constants.BanDurationInputCustomID, discord.TextInputStyleShort).
 				WithRequired(false).
 				WithPlaceholder("e.g. 2h45m, 2h, 5m, 1s or leave empty for permanent").
 				WithMaxLength(10),
 		).
-		AddActionRow(
-			discord.NewTextInput(constants.AdminReasonInputCustomID, discord.TextInputStyleParagraph, "Ban Notes").
+		AddLabel(
+			"Ban Notes",
+			discord.NewTextInput(constants.AdminReasonInputCustomID, discord.TextInputStyleParagraph).
 				WithRequired(true).
 				WithPlaceholder("Enter notes about this ban...").
 				WithMaxLength(512),
@@ -90,13 +94,15 @@ func (m *MainMenu) handleUnbanUserModal(ctx *interaction.Context) {
 	modal := discord.NewModalCreateBuilder().
 		SetCustomID(constants.UnbanUserModalCustomID).
 		SetTitle("Unban User").
-		AddActionRow(
-			discord.NewTextInput(constants.UnbanUserInputCustomID, discord.TextInputStyleShort, "User ID").
+		AddLabel(
+			"User ID",
+			discord.NewTextInput(constants.UnbanUserInputCustomID, discord.TextInputStyleShort).
 				WithRequired(true).
 				WithPlaceholder("Enter the user ID to unban..."),
 		).
-		AddActionRow(
-			discord.NewTextInput(constants.AdminReasonInputCustomID, discord.TextInputStyleParagraph, "Unban Notes").
+		AddLabel(
+			"Unban Notes",
+			discord.NewTextInput(constants.AdminReasonInputCustomID, discord.TextInputStyleParagraph).
 				WithRequired(true).
 				WithPlaceholder("Enter notes about this unban...").
 				WithMaxLength(512),
@@ -110,13 +116,15 @@ func (m *MainMenu) handleDeleteUserModal(ctx *interaction.Context) {
 	modal := discord.NewModalCreateBuilder().
 		SetCustomID(constants.DeleteUserModalCustomID).
 		SetTitle("Delete User").
-		AddActionRow(
-			discord.NewTextInput(constants.DeleteUserInputCustomID, discord.TextInputStyleShort, "User ID").
+		AddLabel(
+			"User ID",
+			discord.NewTextInput(constants.DeleteUserInputCustomID, discord.TextInputStyleShort).
 				WithRequired(true).
 				WithPlaceholder("Enter the user ID to delete..."),
 		).
-		AddActionRow(
-			discord.NewTextInput(constants.AdminReasonInputCustomID, discord.TextInputStyleParagraph, "Reason").
+		AddLabel(
+			"Reason",
+			discord.NewTextInput(constants.AdminReasonInputCustomID, discord.TextInputStyleParagraph).
 				WithRequired(true).
 				WithPlaceholder("Enter the reason for deletion...").
 				WithMaxLength(512),
@@ -130,13 +138,15 @@ func (m *MainMenu) handleDeleteGroupModal(ctx *interaction.Context) {
 	modal := discord.NewModalCreateBuilder().
 		SetCustomID(constants.DeleteGroupModalCustomID).
 		SetTitle("Delete Group").
-		AddActionRow(
-			discord.NewTextInput(constants.DeleteGroupInputCustomID, discord.TextInputStyleShort, "Group ID").
+		AddLabel(
+			"Group ID",
+			discord.NewTextInput(constants.DeleteGroupInputCustomID, discord.TextInputStyleShort).
 				WithRequired(true).
 				WithPlaceholder("Enter the group ID to delete..."),
 		).
-		AddActionRow(
-			discord.NewTextInput(constants.AdminReasonInputCustomID, discord.TextInputStyleParagraph, "Reason").
+		AddLabel(
+			"Reason",
+			discord.NewTextInput(constants.AdminReasonInputCustomID, discord.TextInputStyleParagraph).
 				WithRequired(true).
 				WithPlaceholder("Enter the reason for deletion...").
 				WithMaxLength(512),

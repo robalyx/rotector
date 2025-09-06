@@ -142,8 +142,9 @@ func (m *Menu) handleLookupRobloxUser(ctx *interaction.Context) {
 	modal := discord.NewModalCreateBuilder().
 		SetCustomID(constants.LookupRobloxUserModalCustomID).
 		SetTitle("Lookup Roblox User").
-		AddActionRow(
-			discord.NewTextInput(constants.LookupRobloxUserInputCustomID, discord.TextInputStyleShort, "User ID or UUID").
+		AddLabel(
+			"User ID or UUID",
+			discord.NewTextInput(constants.LookupRobloxUserInputCustomID, discord.TextInputStyleShort).
 				WithRequired(true).
 				WithPlaceholder("Enter the user ID or UUID to lookup..."),
 		)
@@ -156,8 +157,9 @@ func (m *Menu) handleLookupRobloxGroup(ctx *interaction.Context) {
 	modal := discord.NewModalCreateBuilder().
 		SetCustomID(constants.LookupRobloxGroupModalCustomID).
 		SetTitle("Lookup Roblox Group").
-		AddActionRow(
-			discord.NewTextInput(constants.LookupRobloxGroupInputCustomID, discord.TextInputStyleShort, "Group ID or UUID").
+		AddLabel(
+			"Group ID or UUID",
+			discord.NewTextInput(constants.LookupRobloxGroupInputCustomID, discord.TextInputStyleShort).
 				WithRequired(true).
 				WithPlaceholder("Enter the group ID or UUID to lookup..."),
 		)
@@ -170,8 +172,9 @@ func (m *Menu) handleLookupDiscordUser(ctx *interaction.Context) {
 	modal := discord.NewModalCreateBuilder().
 		SetCustomID(constants.LookupDiscordUserModalCustomID).
 		SetTitle("Lookup Discord User").
-		AddActionRow(
-			discord.NewTextInput(constants.LookupDiscordUserInputCustomID, discord.TextInputStyleShort, "Discord User ID").
+		AddLabel(
+			"Discord User ID",
+			discord.NewTextInput(constants.LookupDiscordUserInputCustomID, discord.TextInputStyleShort).
 				WithRequired(true).
 				WithPlaceholder("Enter the Discord user ID to lookup..."),
 		)

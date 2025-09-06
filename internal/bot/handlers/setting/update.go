@@ -116,9 +116,10 @@ func (m *UpdateMenu) handleSettingButton(ctx *interaction.Context, s *session.Se
 func (m *UpdateMenu) handleIDModal(ctx *interaction.Context, setting *session.Setting) {
 	modal := discord.NewModalCreateBuilder().
 		SetCustomID(setting.Key).
-		SetTitle("Toggle " + setting.Name).
-		AddActionRow(
-			discord.NewTextInput("0", discord.TextInputStyleParagraph, setting.Name).
+		SetTitle("Toggle "+setting.Name).
+		AddLabel(
+			setting.Name,
+			discord.NewTextInput("0", discord.TextInputStyleParagraph).
 				WithRequired(true).
 				WithPlaceholder("Enter the user ID to toggle...").
 				WithMaxLength(128),
@@ -131,9 +132,10 @@ func (m *UpdateMenu) handleIDModal(ctx *interaction.Context, setting *session.Se
 func (m *UpdateMenu) handleNumberModal(ctx *interaction.Context, s *session.Session, setting *session.Setting) {
 	modal := discord.NewModalCreateBuilder().
 		SetCustomID(setting.Key).
-		SetTitle("Set " + setting.Name).
-		AddActionRow(
-			discord.NewTextInput("0", discord.TextInputStyleParagraph, setting.Name).
+		SetTitle("Set "+setting.Name).
+		AddLabel(
+			setting.Name,
+			discord.NewTextInput("0", discord.TextInputStyleParagraph).
 				WithRequired(true).
 				WithPlaceholder("Enter a number...").
 				WithMaxLength(128).
@@ -147,9 +149,10 @@ func (m *UpdateMenu) handleNumberModal(ctx *interaction.Context, s *session.Sess
 func (m *UpdateMenu) handleTextModal(ctx *interaction.Context, s *session.Session, setting *session.Setting) {
 	modal := discord.NewModalCreateBuilder().
 		SetCustomID(setting.Key).
-		SetTitle("Set " + setting.Name).
-		AddActionRow(
-			discord.NewTextInput("0", discord.TextInputStyleParagraph, setting.Name).
+		SetTitle("Set "+setting.Name).
+		AddLabel(
+			setting.Name,
+			discord.NewTextInput("0", discord.TextInputStyleParagraph).
 				WithRequired(true).
 				WithPlaceholder("Enter your description...").
 				WithMaxLength(512).

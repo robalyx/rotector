@@ -165,8 +165,9 @@ func (m *Menu) showQueryModal(ctx *interaction.Context, option, title, label, pl
 	modal := discord.NewModalCreateBuilder().
 		SetCustomID(option).
 		SetTitle(title).
-		AddActionRow(
-			discord.NewTextInput(constants.LogsQueryInputCustomID, discord.TextInputStyleShort, label).
+		AddLabel(
+			label,
+			discord.NewTextInput(constants.LogsQueryInputCustomID, discord.TextInputStyleShort).
 				WithPlaceholder(placeholder).
 				WithRequired(true),
 		)

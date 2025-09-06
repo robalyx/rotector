@@ -464,6 +464,7 @@ func (b *Bot) initializeSession(
 		case errors.Is(err, session.ErrSessionNotFound):
 			updateMessage("This session has expired. Please start a new session by using the /rotector command.")
 		default:
+			b.logger.Error("Failed to create session", zap.Error(err))
 			updateMessage("Failed to create session. Please try again.")
 		}
 

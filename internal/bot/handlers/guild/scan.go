@@ -293,8 +293,9 @@ func (m *ScanMenu) showMinGuildsModal(ctx *interaction.Context) {
 	modal := discord.NewModalCreateBuilder().
 		SetCustomID(constants.GuildScanMinGuildsModalCustomID).
 		SetTitle("Set Minimum Guilds Filter").
-		AddActionRow(
-			discord.NewTextInput(constants.GuildScanMinGuildsInputCustomID, discord.TextInputStyleShort, "Minimum Guilds").
+		AddLabel(
+			"Minimum Guilds",
+			discord.NewTextInput(constants.GuildScanMinGuildsInputCustomID, discord.TextInputStyleShort).
 				WithPlaceholder("Enter minimum number of flagged guilds required").
 				WithRequired(true).
 				WithValue("1"),
@@ -318,14 +319,11 @@ func (m *ScanMenu) showJoinDurationModal(ctx *interaction.Context, s *session.Se
 	modal := discord.NewModalCreateBuilder().
 		SetCustomID(constants.GuildScanJoinDurationModalCustomID).
 		SetTitle("Set Minimum Join Duration").
-		AddActionRow(
-			discord.TextInputComponent{
-				CustomID:    constants.GuildScanJoinDurationInputCustomID,
-				Style:       discord.TextInputStyleShort,
-				Label:       "Duration (30m, 24h, 7d, etc.)",
-				Placeholder: placeholder,
-				Required:    false,
-			},
+		AddLabel(
+			"Duration (30m, 24h, 7d, etc.)",
+			discord.NewTextInput(constants.GuildScanJoinDurationInputCustomID, discord.TextInputStyleShort).
+				WithPlaceholder(placeholder).
+				WithRequired(true),
 		)
 
 	ctx.Modal(modal)
@@ -405,8 +403,9 @@ func (m *ScanMenu) handleConfirmBans(ctx *interaction.Context, s *session.Sessio
 	modal := discord.NewModalCreateBuilder().
 		SetCustomID(constants.GuildBanConfirmModalCustomID).
 		SetTitle("Confirm Mass Ban").
-		AddActionRow(
-			discord.NewTextInput(constants.GuildBanReasonInputCustomID, discord.TextInputStyleParagraph, "Ban Reason").
+		AddLabel(
+			"Ban Reason",
+			discord.NewTextInput(constants.GuildBanReasonInputCustomID, discord.TextInputStyleParagraph).
 				WithRequired(true).
 				WithPlaceholder("Enter the reason for banning these users...").
 				WithValue("Rotector: Banned for being in inappropriate guilds"),
