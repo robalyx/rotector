@@ -34,6 +34,7 @@ type ProcessUsersParams struct {
 	FlaggedFriendsMap         map[int64]map[int64]*types.ReviewUser        `json:"flaggedFriendsMap"`
 	ConfirmedGroupsMap        map[int64]map[int64]*types.ReviewGroup       `json:"confirmedGroupsMap"`
 	FlaggedGroupsMap          map[int64]map[int64]*types.ReviewGroup       `json:"flaggedGroupsMap"`
+	MixedGroupsMap            map[int64]map[int64]*types.ReviewGroup       `json:"mixedGroupsMap"`
 	InappropriateProfileFlags map[int64]struct{}                           `json:"inappropriateProfileFlags"`
 	InappropriateFriendsFlags map[int64]struct{}                           `json:"inappropriateFriendsFlags"`
 	InappropriateGroupsFlags  map[int64]struct{}                           `json:"inappropriateGroupsFlags"`
@@ -400,7 +401,8 @@ func (a *UserAnalyzer) shouldSkipFlaggedUser(
 			// Check groups
 			confirmedGroups := params.ConfirmedGroupsMap[originalInfo.ID]
 			flaggedGroups := params.FlaggedGroupsMap[originalInfo.ID]
-			totalInappropriateGroups := len(confirmedGroups) + len(flaggedGroups)
+			mixedGroups := params.MixedGroupsMap[originalInfo.ID]
+			totalInappropriateGroups := len(confirmedGroups) + len(flaggedGroups) + len(mixedGroups)
 			totalGroups := len(originalInfo.Groups)
 			hasSufficientInappropriateGroups := (totalInappropriateGroups >= 3 ||
 				(totalGroups > 0 && float64(totalInappropriateGroups)/float64(totalGroups) >= 0.6)) &&

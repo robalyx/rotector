@@ -22,6 +22,7 @@ type GroupCheckerParams struct {
 	FlaggedFriendsMap        map[int64]map[int64]*types.ReviewUser        `json:"flaggedFriendsMap"`
 	ConfirmedGroupsMap       map[int64]map[int64]*types.ReviewGroup       `json:"confirmedGroupsMap"`
 	FlaggedGroupsMap         map[int64]map[int64]*types.ReviewGroup       `json:"flaggedGroupsMap"`
+	MixedGroupsMap           map[int64]map[int64]*types.ReviewGroup       `json:"mixedGroupsMap"`
 	InappropriateGroupsFlags map[int64]struct{}                           `json:"inappropriateGroupsFlags"`
 	SkipReasonGeneration     bool                                         `json:"skipReasonGeneration"`
 }
@@ -155,12 +156,13 @@ func (c *GroupChecker) CheckGroupPercentages(
 	return flaggedGroups
 }
 
-// PrepareGroupMaps handles the preparation of confirmed and flagged group maps.
+// PrepareGroupMaps handles the preparation of confirmed, flagged, and mixed group maps.
 func (c *GroupChecker) PrepareGroupMaps(
 	ctx context.Context, userInfos []*types.ReviewUser,
-) (map[int64]map[int64]*types.ReviewGroup, map[int64]map[int64]*types.ReviewGroup) {
+) (map[int64]map[int64]*types.ReviewGroup, map[int64]map[int64]*types.ReviewGroup, map[int64]map[int64]*types.ReviewGroup) {
 	confirmedGroupsMap := make(map[int64]map[int64]*types.ReviewGroup)
 	flaggedGroupsMap := make(map[int64]map[int64]*types.ReviewGroup)
+	mixedGroupsMap := make(map[int64]map[int64]*types.ReviewGroup)
 
 	// Collect all unique group IDs across all users
 	uniqueGroupIDs := make(map[int64]struct{})
@@ -195,10 +197,11 @@ func (c *GroupChecker) PrepareGroupMaps(
 		existingGroups = make(map[int64]*types.ReviewGroup)
 	}
 
-	// Prepare maps for confirmed and flagged groups per user
+	// Prepare maps for confirmed, flagged, and mixed groups per user
 	for _, userInfo := range userInfos {
 		confirmedGroups := make(map[int64]*types.ReviewGroup)
 		flaggedGroups := make(map[int64]*types.ReviewGroup)
+		mixedGroups := make(map[int64]*types.ReviewGroup)
 
 		for _, group := range userInfo.Groups {
 			if reviewGroup, exists := existingGroups[group.Group.ID]; exists {
@@ -207,6 +210,8 @@ func (c *GroupChecker) PrepareGroupMaps(
 					confirmedGroups[group.Group.ID] = reviewGroup
 				case enum.GroupTypeFlagged:
 					flaggedGroups[group.Group.ID] = reviewGroup
+				case enum.GroupTypeMixed:
+					mixedGroups[group.Group.ID] = reviewGroup
 				default:
 					continue
 				}
@@ -215,9 +220,10 @@ func (c *GroupChecker) PrepareGroupMaps(
 
 		confirmedGroupsMap[userInfo.ID] = confirmedGroups
 		flaggedGroupsMap[userInfo.ID] = flaggedGroups
+		mixedGroupsMap[userInfo.ID] = mixedGroups
 	}
 
-	return confirmedGroupsMap, flaggedGroupsMap
+	return confirmedGroupsMap, flaggedGroupsMap, mixedGroupsMap
 }
 
 // ProcessUsers checks multiple users' groups concurrently and updates reasonsMap.
@@ -234,7 +240,8 @@ func (c *GroupChecker) ProcessUsers(ctx context.Context, params *GroupCheckerPar
 	for _, userInfo := range params.Users {
 		confirmedCount := len(params.ConfirmedGroupsMap[userInfo.ID])
 		flaggedCount := len(params.FlaggedGroupsMap[userInfo.ID])
-		totalInappropriate := confirmedCount + flaggedCount
+		mixedCount := len(params.MixedGroupsMap[userInfo.ID])
+		totalInappropriate := confirmedCount + flaggedCount + mixedCount
 
 		// Get total count of inappropriate friends
 		totalInappropriateFriends, confirmedFriendCount := c.getInappropriateFriendCount(
@@ -251,7 +258,7 @@ func (c *GroupChecker) ProcessUsers(ctx context.Context, params *GroupCheckerPar
 
 		// Calculate confidence score
 		_, isInappropriateGroups := params.InappropriateGroupsFlags[userInfo.ID]
-		confidence := c.calculateConfidence(confirmedCount, flaggedCount, len(userInfo.Groups), isInappropriateGroups)
+		confidence := c.calculateConfidence(confirmedCount, flaggedCount, mixedCount, len(userInfo.Groups), isInappropriateGroups)
 
 		userConfidenceMap[userInfo.ID] = confidence
 
@@ -264,7 +271,7 @@ func (c *GroupChecker) ProcessUsers(ctx context.Context, params *GroupCheckerPar
 		meetsGroupThreshold := confidence >= threshold
 
 		// Check friend requirement for users with insufficient group evidence
-		meetsFriendRequirement := c.evaluateFriendRequirement(userInfo, confirmedCount, flaggedCount, totalInappropriateFriends)
+		meetsFriendRequirement := c.evaluateFriendRequirement(userInfo, confirmedCount, flaggedCount, mixedCount, totalInappropriateFriends)
 
 		// Only process users that meet both group threshold AND friend requirement
 		if meetsGroupThreshold && meetsFriendRequirement {
@@ -279,7 +286,8 @@ func (c *GroupChecker) ProcessUsers(ctx context.Context, params *GroupCheckerPar
 		// Only generate AI reasons if flag is not set
 		if !params.SkipReasonGeneration {
 			// Generate reasons for flagged users
-			reasons = c.groupReasonAnalyzer.GenerateGroupReasons(ctx, usersToAnalyze, params.ConfirmedGroupsMap, params.FlaggedGroupsMap)
+			reasons = c.groupReasonAnalyzer.GenerateGroupReasons(ctx, usersToAnalyze,
+				params.ConfirmedGroupsMap, params.FlaggedGroupsMap, params.MixedGroupsMap)
 		}
 
 		// Process results and update reasonsMap
@@ -454,10 +462,10 @@ func (c *GroupChecker) calculateConfidence(confirmedCount, flaggedCount, mixedCo
 // evaluateFriendRequirement checks if a user meets the friend requirement based on group evidence.
 // Returns true if the user meets the friend requirement or if friend requirement doesn't apply.
 func (c *GroupChecker) evaluateFriendRequirement(
-	userInfo *types.ReviewUser, confirmedCount, flaggedCount, totalInappropriateFriends int,
+	userInfo *types.ReviewUser, confirmedCount, flaggedCount, mixedCount, totalInappropriateFriends int,
 ) bool {
-	totalInappropriate := confirmedCount + flaggedCount
-	totalWeight := float64(confirmedCount) + (float64(flaggedCount) * 0.8)
+	totalInappropriate := confirmedCount + flaggedCount + mixedCount
+	totalWeight := float64(confirmedCount) + (float64(flaggedCount) * 0.2) + (float64(mixedCount) * 0.8)
 
 	// Special case for possible false positives
 	if confirmedCount < 5 && len(userInfo.Groups) > 15 {

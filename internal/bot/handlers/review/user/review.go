@@ -777,9 +777,11 @@ func (m *ReviewMenu) handleGenerateGroupReason(ctx *interaction.Context, s *sess
 	// Prepare data for AI analysis
 	confirmedGroupsMap := make(map[int64]map[int64]*types.ReviewGroup)
 	flaggedGroupsMap := make(map[int64]map[int64]*types.ReviewGroup)
+	mixedGroupsMap := make(map[int64]map[int64]*types.ReviewGroup)
 
 	confirmedGroups := make(map[int64]*types.ReviewGroup)
 	flaggedGroupsForUser := make(map[int64]*types.ReviewGroup)
+	mixedGroupsForUser := make(map[int64]*types.ReviewGroup)
 
 	for _, group := range flaggedGroups {
 		switch group.Status {
@@ -788,15 +790,17 @@ func (m *ReviewMenu) handleGenerateGroupReason(ctx *interaction.Context, s *sess
 		case enum.GroupTypeFlagged:
 			flaggedGroupsForUser[group.ID] = group
 		case enum.GroupTypeMixed:
+			mixedGroupsForUser[group.ID] = group
 		}
 	}
 
 	confirmedGroupsMap[user.ID] = confirmedGroups
 	flaggedGroupsMap[user.ID] = flaggedGroupsForUser
+	mixedGroupsMap[user.ID] = mixedGroupsForUser
 
 	// Generate AI reason using the group analyzer
 	reasons := m.layout.groupReasonAnalyzer.GenerateGroupReasons(
-		ctx.Context(), []*types.ReviewUser{user}, confirmedGroupsMap, flaggedGroupsMap,
+		ctx.Context(), []*types.ReviewUser{user}, confirmedGroupsMap, flaggedGroupsMap, mixedGroupsMap,
 	)
 
 	// Get the generated reason
@@ -866,7 +870,7 @@ func (m *ReviewMenu) fetchNewTarget(ctx *interaction.Context, s *session.Session
 
 	// Prepare maps for processing
 	confirmedFriendsMap, flaggedFriendsMap := m.layout.friendChecker.PrepareFriendMaps(ctx.Context(), userSlice)
-	confirmedGroupsMap, flaggedGroupsMap := m.layout.groupChecker.PrepareGroupMaps(ctx.Context(), userSlice)
+	confirmedGroupsMap, flaggedGroupsMap, mixedGroupsMap := m.layout.groupChecker.PrepareGroupMaps(ctx.Context(), userSlice)
 
 	// Process friends if friend reason doesn't exist
 	if _, hasFriendReason := user.Reasons[enum.UserReasonTypeFriend]; !hasFriendReason {
@@ -890,6 +894,7 @@ func (m *ReviewMenu) fetchNewTarget(ctx *interaction.Context, s *session.Session
 			FlaggedFriendsMap:        flaggedFriendsMap,
 			ConfirmedGroupsMap:       confirmedGroupsMap,
 			FlaggedGroupsMap:         flaggedGroupsMap,
+			MixedGroupsMap:           mixedGroupsMap,
 			InappropriateGroupsFlags: nil,
 		})
 	}

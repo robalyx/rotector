@@ -101,20 +101,22 @@ func NewGroupReasonAnalyzer(app *setup.App, logger *zap.Logger) *GroupReasonAnal
 
 // GenerateGroupReasons generates group membership analysis reasons for multiple users using the OpenAI model.
 func (a *GroupReasonAnalyzer) GenerateGroupReasons(
-	ctx context.Context, userInfos []*types.ReviewUser, confirmedGroupsMap, flaggedGroupsMap map[int64]map[int64]*types.ReviewGroup,
+	ctx context.Context, userInfos []*types.ReviewUser,
+	confirmedGroupsMap, flaggedGroupsMap, mixedGroupsMap map[int64]map[int64]*types.ReviewGroup,
 ) map[int64]string {
 	// Create group requests map
 	groupRequests := make(map[int64]UserGroupRequest)
 
 	for _, userInfo := range userInfos {
-		// Get confirmed and flagged groups for this user
+		// Get all group types for this user
 		confirmedGroups := confirmedGroupsMap[userInfo.ID]
 		flaggedGroups := flaggedGroupsMap[userInfo.ID]
+		mixedGroups := mixedGroupsMap[userInfo.ID]
 
 		// Collect group summaries
 		groupSummaries := make([]GroupSummary, 0, MaxGroups)
 
-		// Add confirmed groups first
+		// Process confirmed groups first
 		for _, group := range confirmedGroups {
 			if len(groupSummaries) >= MaxGroups {
 				break
@@ -127,7 +129,20 @@ func (a *GroupReasonAnalyzer) GenerateGroupReasons(
 			})
 		}
 
-		// Add flagged groups with remaining space
+		// Process mixed groups
+		for _, group := range mixedGroups {
+			if len(groupSummaries) >= MaxGroups {
+				break
+			}
+
+			groupSummaries = append(groupSummaries, GroupSummary{
+				Name:    group.Name,
+				Type:    "Mixed",
+				Reasons: group.Reasons.ReasonInfos(),
+			})
+		}
+
+		// Process flagged groups
 		for _, group := range flaggedGroups {
 			if len(groupSummaries) >= MaxGroups {
 				break

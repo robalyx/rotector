@@ -92,7 +92,7 @@ func (c *UserChecker) ProcessUsers(ctx context.Context, params *UserCheckerParam
 
 	// Prepare friend and group maps
 	confirmedFriendsMap, flaggedFriendsMap := c.friendChecker.PrepareFriendMaps(ctxWithTimeout, params.Users)
-	confirmedGroupsMap, flaggedGroupsMap := c.groupChecker.PrepareGroupMaps(ctxWithTimeout, params.Users)
+	confirmedGroupsMap, flaggedGroupsMap, mixedGroupsMap := c.groupChecker.PrepareGroupMaps(ctxWithTimeout, params.Users)
 
 	// Process friend checker
 	c.friendChecker.ProcessUsers(ctxWithTimeout, &FriendCheckerParams{
@@ -113,6 +113,7 @@ func (c *UserChecker) ProcessUsers(ctx context.Context, params *UserCheckerParam
 		FlaggedFriendsMap:        flaggedFriendsMap,
 		ConfirmedGroupsMap:       confirmedGroupsMap,
 		FlaggedGroupsMap:         flaggedGroupsMap,
+		MixedGroupsMap:           mixedGroupsMap,
 		InappropriateGroupsFlags: params.InappropriateGroupsFlags,
 	})
 
@@ -129,6 +130,7 @@ func (c *UserChecker) ProcessUsers(ctx context.Context, params *UserCheckerParam
 		FlaggedFriendsMap:         flaggedFriendsMap,
 		ConfirmedGroupsMap:        confirmedGroupsMap,
 		FlaggedGroupsMap:          flaggedGroupsMap,
+		MixedGroupsMap:            mixedGroupsMap,
 		InappropriateProfileFlags: params.InappropriateProfileFlags,
 		InappropriateFriendsFlags: params.InappropriateFriendsFlags,
 		InappropriateGroupsFlags:  params.InappropriateGroupsFlags,
