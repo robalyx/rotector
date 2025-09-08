@@ -2,6 +2,7 @@ package admin
 
 import (
 	"github.com/robalyx/rotector/internal/bot/core/interaction"
+	"github.com/robalyx/rotector/internal/cloudflare"
 	"github.com/robalyx/rotector/internal/database"
 	"github.com/robalyx/rotector/internal/setup"
 	"go.uber.org/zap"
@@ -10,6 +11,7 @@ import (
 // Layout handles the admin menu and its submenus.
 type Layout struct {
 	db          database.Client
+	d1Client    *cloudflare.Client
 	logger      *zap.Logger
 	mainMenu    *MainMenu
 	confirmMenu *ConfirmMenu
@@ -20,8 +22,9 @@ type Layout struct {
 func New(app *setup.App) *Layout {
 	// Initialize layout
 	l := &Layout{
-		db:     app.DB,
-		logger: app.Logger.Named("admin_menu"),
+		db:       app.DB,
+		d1Client: app.D1Client,
+		logger:   app.Logger.Named("admin_menu"),
 	}
 
 	// Initialize menus with reference to this layout
