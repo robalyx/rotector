@@ -43,6 +43,7 @@ func run() error {
 	allCommands = append(allCommands, commands.MigrationCommands(cmdDeps)...)
 	allCommands = append(allCommands, commands.CleanupCommands(cmdDeps)...)
 	allCommands = append(allCommands, commands.AnalysisCommands(cmdDeps)...)
+	allCommands = append(allCommands, commands.FriendCleanupCommands(cmdDeps)...)
 
 	app := &cli.Command{
 		Name:     "db",

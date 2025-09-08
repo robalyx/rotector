@@ -89,6 +89,43 @@ func (u *UserFlags) Remove(ctx context.Context, userID int64) error {
 	return nil
 }
 
+// RemoveBatch removes multiple users from the user_flags table in batches.
+func (u *UserFlags) RemoveBatch(ctx context.Context, userIDs []int64) error {
+	if len(userIDs) == 0 {
+		return nil
+	}
+
+	// Process deletions in batches to avoid SQLite variable limits
+	for i := 0; i < len(userIDs); i += MaxDeleteBatchSize {
+		end := min(i+MaxDeleteBatchSize, len(userIDs))
+		batchUserIDs := userIDs[i:end]
+
+		query := "DELETE FROM user_flags WHERE user_id IN ("
+		params := make([]any, len(batchUserIDs))
+
+		for j, userID := range batchUserIDs {
+			if j > 0 {
+				query += ","
+			}
+
+			query += "?"
+			params[j] = userID
+		}
+
+		query += ")"
+
+		_, err := u.api.ExecuteSQL(ctx, query, params)
+		if err != nil {
+			return fmt.Errorf("failed to remove users batch %d-%d: %w", i, end-1, err)
+		}
+	}
+
+	u.logger.Debug("Removed users batch from user_flags table",
+		zap.Int("count", len(userIDs)))
+
+	return nil
+}
+
 // UpdateBanStatus updates the is_banned field for users in the user_flags table.
 func (u *UserFlags) UpdateBanStatus(ctx context.Context, userIDs []int64, isBanned bool) error {
 	if len(userIDs) == 0 {
