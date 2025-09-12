@@ -352,8 +352,8 @@ func (a *UserAnalyzer) shouldSkipFlaggedUser(
 		return true
 	}
 
-	// Skip extra checks if user is flagged with inappropriate profile
-	if _, exists := params.InappropriateProfileFlags[originalInfo.ID]; exists {
+	// Skip extra checks if user is flagged with inappropriate profile and confidence is high enough
+	if _, exists := params.InappropriateProfileFlags[originalInfo.ID]; exists && flaggedUser.Confidence > 0.7 {
 		return false
 	}
 
