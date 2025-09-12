@@ -41,13 +41,11 @@ func NewClient(cfg *config.Config, db database.Client, logger *zap.Logger) *Clie
 		logger.Fatal("Failed to create R2 client", zap.Error(err))
 	}
 
-	warManager := manager.NewWarManager(d1API, logger.Named("war_manager"))
-
 	return &Client{
 		d1Client:   d1API,
 		r2Client:   r2API,
 		Queue:      manager.NewQueue(d1API, logger.Named("cloudflare")),
-		UserFlags:  manager.NewUserFlags(d1API, db, warManager, logger.Named("user_flags")),
+		UserFlags:  manager.NewUserFlags(d1API, db, logger.Named("user_flags")),
 		GroupFlags: manager.NewGroupFlags(d1API, logger.Named("group_flags")),
 		IPTracking: manager.NewIPTracking(d1API, logger.Named("ip_tracking")),
 	}

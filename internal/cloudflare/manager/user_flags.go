@@ -44,19 +44,17 @@ type IntegrationUser struct {
 
 // UserFlags handles user flagging operations.
 type UserFlags struct {
-	d1         *api.D1Client
-	db         database.Client
-	warManager *WarManager
-	logger     *zap.Logger
+	d1     *api.D1Client
+	db     database.Client
+	logger *zap.Logger
 }
 
 // NewUserFlags creates a new user flags manager.
-func NewUserFlags(d1Client *api.D1Client, db database.Client, warManager *WarManager, logger *zap.Logger) *UserFlags {
+func NewUserFlags(d1Client *api.D1Client, db database.Client, logger *zap.Logger) *UserFlags {
 	return &UserFlags{
-		d1:         d1Client,
-		db:         db,
-		warManager: warManager,
-		logger:     logger,
+		d1:     d1Client,
+		db:     db,
+		logger: logger,
 	}
 }
 
@@ -505,11 +503,6 @@ func (u *UserFlags) createIntegrationRecord(ctx context.Context, userID int64, c
 		return fmt.Errorf("failed to create integration record for user %d: %w", userID, err)
 	}
 
-	// Assign user to war zone
-	if err := u.warManager.AssignUserToZone(ctx, userID); err != nil {
-		return fmt.Errorf("failed to assign integration user %d to zone: %w", userID, err)
-	}
-
 	return nil
 }
 
@@ -861,11 +854,6 @@ func (u *UserFlags) addUsersWithMerge(
 			_, err = u.d1.ExecuteSQL(ctx, sqlStmt, params)
 			if err != nil {
 				return fmt.Errorf("failed to insert user %d: %w", userID, err)
-			}
-
-			// Assign user to war zone
-			if err := u.warManager.AssignUserToZone(ctx, userID); err != nil {
-				return fmt.Errorf("failed to assign user %d to zone: %w", userID, err)
 			}
 		}
 
