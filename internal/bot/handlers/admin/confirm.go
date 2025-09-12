@@ -192,7 +192,7 @@ func (m *ConfirmMenu) handleDeleteUser(ctx *interaction.Context, idStr string, r
 	}
 
 	// Remove from D1 database
-	if err := m.layout.d1Client.UserFlags.Remove(ctx.Context(), id); err != nil {
+	if err := m.layout.cfClient.UserFlags.Remove(ctx.Context(), id); err != nil {
 		m.layout.logger.Warn("Failed to remove user from D1 database",
 			zap.Error(err),
 			zap.Int64("userID", id))
@@ -246,7 +246,7 @@ func (m *ConfirmMenu) handleDeleteGroup(ctx *interaction.Context, idStr string, 
 	}
 
 	// Remove from D1 database
-	if err := m.layout.d1Client.GroupFlags.Remove(ctx.Context(), id); err != nil {
+	if err := m.layout.cfClient.GroupFlags.Remove(ctx.Context(), id); err != nil {
 		m.layout.logger.Warn("Failed to remove group from D1 database",
 			zap.Error(err),
 			zap.Int64("groupID", id))

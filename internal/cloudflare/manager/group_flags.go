@@ -3,6 +3,7 @@ package manager
 import (
 	"context"
 	"fmt"
+	"strconv"
 
 	"github.com/bytedance/sonic"
 	"github.com/robalyx/rotector/internal/cloudflare/api"
@@ -18,14 +19,14 @@ const (
 
 // GroupFlags handles group flagging operations for D1 database.
 type GroupFlags struct {
-	api    *api.Cloudflare
+	d1     *api.D1Client
 	logger *zap.Logger
 }
 
 // NewGroupFlags creates a new group flags manager.
-func NewGroupFlags(cloudflareAPI *api.Cloudflare, logger *zap.Logger) *GroupFlags {
+func NewGroupFlags(d1Client *api.D1Client, logger *zap.Logger) *GroupFlags {
 	return &GroupFlags{
-		api:    cloudflareAPI,
+		d1:     d1Client,
 		logger: logger,
 	}
 }
@@ -66,7 +67,7 @@ func (g *GroupFlags) AddFlagged(ctx context.Context, flaggedGroups map[int64]*ty
 func (g *GroupFlags) Remove(ctx context.Context, groupID int64) error {
 	sqlStmt := "DELETE FROM group_flags WHERE group_id = ?"
 
-	_, err := g.api.ExecuteSQL(ctx, sqlStmt, []any{groupID})
+	_, err := g.d1.ExecuteSQL(ctx, sqlStmt, []any{groupID})
 	if err != nil {
 		return fmt.Errorf("failed to remove group from group_flags: %w", err)
 	}
@@ -85,7 +86,7 @@ func (g *GroupFlags) addGroup(ctx context.Context, group *types.ReviewGroup, fla
 	if len(group.Reasons) > 0 {
 		reasonsData := make(map[string]map[string]any)
 		for reasonType, reason := range group.Reasons {
-			reasonsData[reasonType.String()] = map[string]any{
+			reasonsData[strconv.Itoa(int(reasonType))] = map[string]any{
 				"message":    reason.Message,
 				"confidence": reason.Confidence,
 				"evidence":   reason.Evidence,
@@ -115,7 +116,7 @@ func (g *GroupFlags) addGroup(ctx context.Context, group *types.ReviewGroup, fla
 		reasonsJSON,
 	}
 
-	_, err := g.api.ExecuteSQL(ctx, sqlStmt, params)
+	_, err := g.d1.ExecuteSQL(ctx, sqlStmt, params)
 	if err != nil {
 		return fmt.Errorf("failed to insert/update group %d in group_flags: %w", group.ID, err)
 	}

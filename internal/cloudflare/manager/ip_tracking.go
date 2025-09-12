@@ -11,14 +11,14 @@ import (
 
 // IPTracking handles IP tracking operations.
 type IPTracking struct {
-	api    *api.Cloudflare
+	d1     *api.D1Client
 	logger *zap.Logger
 }
 
 // NewIPTracking creates a new IP tracking manager.
-func NewIPTracking(cloudflareAPI *api.Cloudflare, logger *zap.Logger) *IPTracking {
+func NewIPTracking(d1Client *api.D1Client, logger *zap.Logger) *IPTracking {
 	return &IPTracking{
-		api:    cloudflareAPI,
+		d1:     d1Client,
 		logger: logger,
 	}
 }
@@ -65,7 +65,7 @@ func (i *IPTracking) UpdateUserFlagged(ctx context.Context, userFlaggedStatus ma
 
 	query += ") AND user_flagged IS NULL" // Only update if not already set
 
-	result, err := i.api.ExecuteSQL(ctx, query, params)
+	result, err := i.d1.ExecuteSQL(ctx, query, params)
 	if err != nil {
 		return fmt.Errorf("failed to update IP tracking user flagged status: %w", err)
 	}
@@ -87,7 +87,7 @@ func (i *IPTracking) Cleanup(ctx context.Context, retentionPeriod time.Duration)
 
 	retentionCutoff := time.Now().Add(-retentionPeriod).Unix()
 
-	result, err := i.api.ExecuteSQL(ctx, cleanupQuery, []any{retentionCutoff})
+	result, err := i.d1.ExecuteSQL(ctx, cleanupQuery, []any{retentionCutoff})
 	if err != nil {
 		return fmt.Errorf("failed to cleanup IP tracking records: %w", err)
 	}

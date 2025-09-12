@@ -74,7 +74,7 @@ func (w *Worker) Start(ctx context.Context) {
 	defer w.reporter.Stop()
 
 	// Cleanup queue on startup
-	if err := w.app.D1Client.Queue.Cleanup(
+	if err := w.app.CFClient.Queue.Cleanup(
 		ctx,
 		1*time.Hour,    // Reset items stuck processing for 1 hour
 		7*24*time.Hour, // Remove processed items older than 7 days
@@ -83,7 +83,7 @@ func (w *Worker) Start(ctx context.Context) {
 	}
 
 	// Cleanup IP tracking records on startup
-	if err := w.app.D1Client.IPTracking.Cleanup(
+	if err := w.app.CFClient.IPTracking.Cleanup(
 		ctx,
 		30*24*time.Hour, // Remove IP tracking records older than 30 days
 	); err != nil {
@@ -165,7 +165,7 @@ func (w *Worker) Start(ctx context.Context) {
 		// Step 4: Mark users as processed (75%)
 		w.bar.SetStepMessage("Marking as processed", 75)
 
-		if err := w.app.D1Client.Queue.MarkAsProcessed(ctx, batchData.ProcessIDs, processResult.FlaggedStatus); err != nil {
+		if err := w.app.CFClient.Queue.MarkAsProcessed(ctx, batchData.ProcessIDs, processResult.FlaggedStatus); err != nil {
 			w.logger.Error("Failed to mark users as processed", zap.Error(err))
 		}
 
@@ -197,7 +197,7 @@ func (w *Worker) shouldProcessBatch(ctx context.Context) (bool, time.Duration) {
 	}
 
 	// Check queue stats to see how many items are available
-	stats, err := w.app.D1Client.Queue.GetStats(ctx)
+	stats, err := w.app.CFClient.Queue.GetStats(ctx)
 	if err != nil {
 		w.logger.Error("Failed to get queue stats, proceeding with processing", zap.Error(err))
 		return true, 0
@@ -246,7 +246,7 @@ func (w *Worker) updateIPTrackingFlaggedStatus(
 
 	// Update IP tracking table if we have any users to update
 	if len(allUserFlaggedStatus) > 0 {
-		return w.app.D1Client.IPTracking.UpdateUserFlagged(ctx, allUserFlaggedStatus)
+		return w.app.CFClient.IPTracking.UpdateUserFlagged(ctx, allUserFlaggedStatus)
 	}
 
 	return nil
@@ -255,7 +255,7 @@ func (w *Worker) updateIPTrackingFlaggedStatus(
 // getBatchForProcessing handles getting and preparing a batch of users for processing.
 func (w *Worker) getBatchForProcessing(ctx context.Context) (*BatchData, error) {
 	// Get next batch of unprocessed users
-	userBatch, err := w.app.D1Client.Queue.GetNextBatch(ctx, w.batchSize)
+	userBatch, err := w.app.CFClient.Queue.GetNextBatch(ctx, w.batchSize)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get next batch: %w", err)
 	}
@@ -322,7 +322,7 @@ func (w *Worker) getBatchForProcessing(ctx context.Context) (*BatchData, error) 
 		}
 
 		// Mark users as processed and flagged
-		if err := w.app.D1Client.Queue.MarkAsProcessed(ctx, batchData.SkipAndFlagIDs, flaggedMap); err != nil {
+		if err := w.app.CFClient.Queue.MarkAsProcessed(ctx, batchData.SkipAndFlagIDs, flaggedMap); err != nil {
 			w.logger.Error("Failed to mark users as processed and flagged", zap.Error(err))
 		}
 	}

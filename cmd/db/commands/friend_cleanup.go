@@ -163,7 +163,7 @@ func handleCleanFlaggedFriends(deps *CLIDependencies) cli.ActionFunc {
 			totalProcessed += batchCount
 
 			// Remove from Cloudflare D1 in batch
-			if err := app.D1Client.UserFlags.RemoveBatch(ctx, batchIDs); err != nil {
+			if err := app.CFClient.UserFlags.RemoveBatch(ctx, batchIDs); err != nil {
 				app.Logger.Warn("Failed to remove users from Cloudflare D1",
 					zap.Error(err),
 					zap.Int64s("batchIDs", batchIDs))

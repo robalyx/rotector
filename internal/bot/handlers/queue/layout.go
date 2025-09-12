@@ -12,7 +12,7 @@ import (
 // Layout handles the display and interaction logic for the queue menu.
 type Layout struct {
 	db               database.Client
-	d1Client         *cloudflare.Client
+	cfClient         *cloudflare.Client
 	userFetcher      *fetcher.UserFetcher
 	groupFetcher     *fetcher.GroupFetcher
 	thumbnailFetcher *fetcher.ThumbnailFetcher
@@ -24,7 +24,7 @@ type Layout struct {
 func New(app *setup.App) *Layout {
 	l := &Layout{
 		db:               app.DB,
-		d1Client:         app.D1Client,
+		cfClient:         app.CFClient,
 		userFetcher:      fetcher.NewUserFetcher(app, app.Logger),
 		groupFetcher:     fetcher.NewGroupFetcher(app.RoAPI, app.Logger),
 		thumbnailFetcher: fetcher.NewThumbnailFetcher(app.RoAPI, app.Logger),

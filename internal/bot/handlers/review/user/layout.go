@@ -21,7 +21,7 @@ import (
 type Layout struct {
 	db                   database.Client
 	roAPI                *api.API
-	d1Client             *cloudflare.Client
+	cfClient             *cloudflare.Client
 	translator           *translator.Translator
 	reviewMenu           *ReviewMenu
 	outfitsMenu          *OutfitsMenu
@@ -47,7 +47,7 @@ func New(app *setup.App, interactionManager *interaction.Manager) *Layout {
 	l := &Layout{
 		db:                   app.DB,
 		roAPI:                app.RoAPI,
-		d1Client:             app.D1Client,
+		cfClient:             app.CFClient,
 		translator:           translator.New(app.RoAPI.GetClient()),
 		thumbnailFetcher:     fetcher.NewThumbnailFetcher(app.RoAPI, app.Logger),
 		presenceFetcher:      fetcher.NewPresenceFetcher(app.RoAPI, app.Logger),

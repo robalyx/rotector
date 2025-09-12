@@ -32,7 +32,7 @@ const (
 type Worker struct {
 	db               database.Client
 	roAPI            *api.API
-	d1Client         *cloudflare.Client
+	cfClient         *cloudflare.Client
 	bar              *components.ProgressBar
 	userFetcher      *fetcher.UserFetcher
 	userChecker      *checker.UserChecker
@@ -66,7 +66,7 @@ func New(app *setup.App, bar *components.ProgressBar, logger *zap.Logger, instan
 	return &Worker{
 		db:               app.DB,
 		roAPI:            app.RoAPI,
-		d1Client:         app.D1Client,
+		cfClient:         app.CFClient,
 		bar:              bar,
 		userFetcher:      userFetcher,
 		userChecker:      userChecker,

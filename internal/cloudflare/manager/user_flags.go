@@ -44,17 +44,19 @@ type IntegrationUser struct {
 
 // UserFlags handles user flagging operations.
 type UserFlags struct {
-	api    *api.Cloudflare
-	db     database.Client
-	logger *zap.Logger
+	d1         *api.D1Client
+	db         database.Client
+	warManager *WarManager
+	logger     *zap.Logger
 }
 
 // NewUserFlags creates a new user flags manager.
-func NewUserFlags(cloudflareAPI *api.Cloudflare, db database.Client, logger *zap.Logger) *UserFlags {
+func NewUserFlags(d1Client *api.D1Client, db database.Client, warManager *WarManager, logger *zap.Logger) *UserFlags {
 	return &UserFlags{
-		api:    cloudflareAPI,
-		db:     db,
-		logger: logger,
+		d1:         d1Client,
+		db:         db,
+		warManager: warManager,
+		logger:     logger,
 	}
 }
 
@@ -78,7 +80,7 @@ func (u *UserFlags) AddConfirmed(ctx context.Context, user *types.ReviewUser, re
 func (u *UserFlags) Remove(ctx context.Context, userID int64) error {
 	sqlStmt := "DELETE FROM user_flags WHERE user_id = ?"
 
-	_, err := u.api.ExecuteSQL(ctx, sqlStmt, []any{userID})
+	_, err := u.d1.ExecuteSQL(ctx, sqlStmt, []any{userID})
 	if err != nil {
 		return fmt.Errorf("failed to remove user from user_flags: %w", err)
 	}
@@ -114,7 +116,7 @@ func (u *UserFlags) RemoveBatch(ctx context.Context, userIDs []int64) error {
 
 		query += ")"
 
-		_, err := u.api.ExecuteSQL(ctx, query, params)
+		_, err := u.d1.ExecuteSQL(ctx, query, params)
 		if err != nil {
 			return fmt.Errorf("failed to remove users batch %d-%d: %w", i, end-1, err)
 		}
@@ -156,7 +158,7 @@ func (u *UserFlags) UpdateBanStatus(ctx context.Context, userIDs []int64, isBann
 
 	query += ")"
 
-	result, err := u.api.ExecuteSQL(ctx, query, params)
+	result, err := u.d1.ExecuteSQL(ctx, query, params)
 	if err != nil {
 		return fmt.Errorf("failed to update user ban status: %w", err)
 	}
@@ -201,7 +203,7 @@ func (u *UserFlags) cleanupIntegrationData(ctx context.Context, integrationType 
 
 	likePattern := fmt.Sprintf("%%\"%s\"%%", integrationType)
 
-	result, err := u.api.ExecuteSQL(ctx, query, []any{likePattern})
+	result, err := u.d1.ExecuteSQL(ctx, query, []any{likePattern})
 	if err != nil {
 		return fmt.Errorf("failed to query existing integration records: %w", err)
 	}
@@ -281,7 +283,7 @@ func (u *UserFlags) cleanupIntegrationData(ctx context.Context, integrationType 
 func (u *UserFlags) getIntegrationVersion(ctx context.Context, integrationType string) (string, error) {
 	query := "SELECT total_uploads FROM upload_sources WHERE source_name = ?"
 
-	result, err := u.api.ExecuteSQL(ctx, query, []any{integrationType})
+	result, err := u.d1.ExecuteSQL(ctx, query, []any{integrationType})
 	if err != nil {
 		return "", fmt.Errorf("failed to query upload_sources: %w", err)
 	}
@@ -407,7 +409,7 @@ func (u *UserFlags) getExistingRecords(ctx context.Context, userIDs []int64) (ma
 
 	query += ")"
 
-	result, err := u.api.ExecuteSQL(ctx, query, params)
+	result, err := u.d1.ExecuteSQL(ctx, query, params)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query existing records: %w", err)
 	}
@@ -494,12 +496,18 @@ func (u *UserFlags) createIntegrationRecord(ctx context.Context, userID int64, c
 			flag_type, 
 			confidence, 
 			reasons,
-			integration_sources
-		) VALUES (?, ?, ?, ?, ?)`
+			integration_sources,
+			is_banned
+		) VALUES (?, ?, ?, ?, ?, COALESCE((SELECT is_banned FROM user_flags WHERE user_id = ?), 0))`
 
-	_, err := u.api.ExecuteSQL(ctx, query, []any{userID, IntegrationFlagType, confidence, reasonsJSON, sourcesJSON})
+	_, err := u.d1.ExecuteSQL(ctx, query, []any{userID, IntegrationFlagType, confidence, reasonsJSON, sourcesJSON, userID})
 	if err != nil {
 		return fmt.Errorf("failed to create integration record for user %d: %w", userID, err)
+	}
+
+	// Assign user to war zone
+	if err := u.warManager.AssignUserToZone(ctx, userID); err != nil {
+		return fmt.Errorf("failed to assign integration user %d to zone: %w", userID, err)
 	}
 
 	return nil
@@ -542,7 +550,7 @@ func (u *UserFlags) mergeWithAuthorityRecord(
 		SET reasons = ?, integration_sources = ?
 		WHERE user_id = ?`
 
-	_, err = u.api.ExecuteSQL(ctx, query, []any{mergedReasons, mergedSources, userID})
+	_, err = u.d1.ExecuteSQL(ctx, query, []any{mergedReasons, mergedSources, userID})
 	if err != nil {
 		return fmt.Errorf("failed to update authority record for user %d: %w", userID, err)
 	}
@@ -587,7 +595,7 @@ func (u *UserFlags) updateIntegrationRecord(
 		SET confidence = ?, reasons = ?, integration_sources = ?
 		WHERE user_id = ?`
 
-	_, err = u.api.ExecuteSQL(ctx, query, []any{confidence, mergedReasons, mergedSources, userID})
+	_, err = u.d1.ExecuteSQL(ctx, query, []any{confidence, mergedReasons, mergedSources, userID})
 	if err != nil {
 		return fmt.Errorf("failed to update integration record for user %d: %w", userID, err)
 	}
@@ -645,7 +653,7 @@ func (u *UserFlags) deleteRecords(ctx context.Context, userIDs []int64) error {
 
 		query += ")"
 
-		_, err := u.api.ExecuteSQL(ctx, query, params)
+		_, err := u.d1.ExecuteSQL(ctx, query, params)
 		if err != nil {
 			return fmt.Errorf("failed to delete records batch %d-%d: %w", i, end-1, err)
 		}
@@ -743,7 +751,7 @@ func (u *UserFlags) updateBatch(ctx context.Context, records []map[string]any) e
 
 	query += `)`
 
-	_, err := u.api.ExecuteSQL(ctx, query, params)
+	_, err := u.d1.ExecuteSQL(ctx, query, params)
 	if err != nil {
 		return fmt.Errorf("failed to execute batch update: %w", err)
 	}
@@ -817,8 +825,9 @@ func (u *UserFlags) addUsersWithMerge(
 					reviewer_username,
 					reviewer_display_name,
 					engine_version,
-					integration_sources
-				) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+					integration_sources,
+					is_banned
+				) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
 			var params []any
 			if reviewerID != nil {
@@ -832,6 +841,7 @@ func (u *UserFlags) addUsersWithMerge(
 					reviewerDisplayName,
 					user.EngineVersion,
 					integrationSources,
+					user.IsBanned,
 				}
 			} else {
 				params = []any{
@@ -844,12 +854,18 @@ func (u *UserFlags) addUsersWithMerge(
 					nil,
 					user.EngineVersion,
 					integrationSources,
+					user.IsBanned,
 				}
 			}
 
-			_, err = u.api.ExecuteSQL(ctx, sqlStmt, params)
+			_, err = u.d1.ExecuteSQL(ctx, sqlStmt, params)
 			if err != nil {
 				return fmt.Errorf("failed to insert user %d: %w", userID, err)
+			}
+
+			// Assign user to war zone
+			if err := u.warManager.AssignUserToZone(ctx, userID); err != nil {
+				return fmt.Errorf("failed to assign user %d to zone: %w", userID, err)
 			}
 		}
 
@@ -908,7 +924,7 @@ func (u *UserFlags) checkExistingIntegrationRecords(ctx context.Context, userIDs
 	checkQuery += ") AND flag_type = ?"
 	checkParams[len(userIDs)] = IntegrationFlagType
 
-	existingRecords, err := u.api.ExecuteSQL(ctx, checkQuery, checkParams)
+	existingRecords, err := u.d1.ExecuteSQL(ctx, checkQuery, checkParams)
 	if err != nil {
 		return nil, fmt.Errorf("failed to check existing integration records: %w", err)
 	}

@@ -449,7 +449,7 @@ func (m *ReviewMenu) handleConfirmUser(ctx *interaction.Context, s *session.Sess
 	m.navigateAfterAction(ctx, s, fmt.Sprintf("User confirmed. %d users left to review.", flaggedCount))
 
 	// Add or update the user in the D1 database
-	if err := m.layout.d1Client.UserFlags.AddConfirmed(ctx.Context(), user, reviewerID); err != nil {
+	if err := m.layout.cfClient.UserFlags.AddConfirmed(ctx.Context(), user, reviewerID); err != nil {
 		m.layout.logger.Error("Failed to add confirmed user to D1 database",
 			zap.Error(err),
 			zap.Int64("userID", user.ID),
@@ -505,7 +505,7 @@ func (m *ReviewMenu) handleClearUser(ctx *interaction.Context, s *session.Sessio
 	m.navigateAfterAction(ctx, s, fmt.Sprintf("User cleared. %d users left to review.", flaggedCount))
 
 	// Remove the user from the D1 database
-	if err := m.layout.d1Client.UserFlags.Remove(ctx.Context(), user.ID); err != nil {
+	if err := m.layout.cfClient.UserFlags.Remove(ctx.Context(), user.ID); err != nil {
 		m.layout.logger.Error("Failed to remove cleared user from D1 database",
 			zap.Error(err),
 			zap.Int64("userID", user.ID))

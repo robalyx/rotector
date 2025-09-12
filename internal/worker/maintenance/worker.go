@@ -24,7 +24,7 @@ import (
 // Worker handles all maintenance operations.
 type Worker struct {
 	db                      database.Client
-	d1Client                *cloudflare.Client
+	cfClient                *cloudflare.Client
 	bot                     *bot.Client
 	roAPI                   *api.API
 	bar                     *components.ProgressBar
@@ -68,7 +68,7 @@ func New(app *setup.App, bar *components.ProgressBar, logger *zap.Logger, instan
 
 	return &Worker{
 		db:                      app.DB,
-		d1Client:                app.D1Client,
+		cfClient:                app.CFClient,
 		bot:                     client,
 		roAPI:                   app.RoAPI,
 		bar:                     bar,
@@ -200,21 +200,26 @@ func (w *Worker) processBannedUsers(ctx context.Context) {
 		}
 
 		// Update D1 database ban status
-		if err := w.d1Client.UserFlags.UpdateBanStatus(ctx, bannedUserIDs, true); err != nil {
+		if err := w.cfClient.UserFlags.UpdateBanStatus(ctx, bannedUserIDs, true); err != nil {
 			w.logger.Error("Error updating banned users in D1", zap.Error(err))
 			w.reporter.SetHealthy(false)
 
 			return
 		}
 
-		// Auto-confirm banned users since Roblox ban is definitive evidence
-		bannedUsers := make([]*types.ReviewUser, 0, len(bannedUserIDs))
-		for _, userID := range bannedUserIDs {
-			bannedUsers = append(bannedUsers, &types.ReviewUser{
-				User: &types.User{
-					ID: userID,
-				},
-			})
+		// Fetch complete user data from database
+		bannedUsersMap, err := w.db.Model().User().GetUsersByIDs(ctx, bannedUserIDs, types.UserFieldID|types.UserFieldIsBanned)
+		if err != nil {
+			w.logger.Error("Error fetching banned user data", zap.Error(err))
+			w.reporter.SetHealthy(false)
+
+			return
+		}
+
+		// Convert map to slice for batch processing
+		bannedUsers := make([]*types.ReviewUser, 0, len(bannedUsersMap))
+		for _, user := range bannedUsersMap {
+			bannedUsers = append(bannedUsers, user)
 		}
 
 		// Confirm banned users with system reviewer ID
@@ -227,7 +232,7 @@ func (w *Worker) processBannedUsers(ctx context.Context) {
 
 		// Add confirmed users to D1 database
 		for _, user := range bannedUsers {
-			if err := w.d1Client.UserFlags.AddConfirmed(ctx, user, 0); err != nil {
+			if err := w.cfClient.UserFlags.AddConfirmed(ctx, user, 0); err != nil {
 				w.logger.Error("Error adding confirmed banned user to D1",
 					zap.Error(err),
 					zap.Int64("userID", user.ID))
@@ -456,7 +461,7 @@ func (w *Worker) processNewGroups(ctx context.Context, newGroupIDs []int64, grou
 	}
 
 	// Add flagged groups to D1 database
-	if err := w.d1Client.GroupFlags.AddFlagged(ctx, flaggedGroups); err != nil {
+	if err := w.cfClient.GroupFlags.AddFlagged(ctx, flaggedGroups); err != nil {
 		w.logger.Error("Failed to add flagged groups to D1 database", zap.Error(err))
 	}
 

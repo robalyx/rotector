@@ -81,19 +81,31 @@ type WorkerConfig struct {
 	Cloudflare CloudflareConfig `koanf:"cloudflare"`
 }
 
-// CloudflareConfig contains Cloudflare D1 configuration.
+// CloudflareConfig contains Cloudflare D1 and R2 configuration.
 type CloudflareConfig struct {
-	// Cloudflare account ID
+	// Cloudflare account ID (shared by D1 and R2)
 	AccountID string `koanf:"account_id"`
 	// D1 database ID
 	DatabaseID string `koanf:"database_id"`
 	// API token with D1 access
 	APIToken string `koanf:"api_token"`
-	// API endpoint for D1 queries
+	// API endpoint for Cloudflare APIs
 	APIEndpoint string `koanf:"api_endpoint"`
+	// R2 S3-compatible endpoint (https://account-id.r2.cloudflarestorage.com)
+	R2Endpoint string `koanf:"r2_endpoint"`
+	// R2 access key ID for S3 authentication
+	R2AccessKeyID string `koanf:"r2_access_key_id"`
+	// R2 secret access key for S3 authentication
+	R2SecretAccessKey string `koanf:"r2_secret_access_key"`
+	// R2 bucket name for object storage
+	R2BucketName string `koanf:"r2_bucket_name"`
+	// R2 region (usually "auto" for Cloudflare R2)
+	R2Region string `koanf:"r2_region"`
+	// R2 use SSL for connections
+	R2UseSSL bool `koanf:"r2_use_ssl"`
 	// Upload API base URL
 	UploadAPIBase string `koanf:"upload_api_base"`
-	// Upload admin API token (different from D1 API token)
+	// Upload admin API token (different from D1/R2 API token)
 	UploadAdminToken string `koanf:"upload_admin_token"`
 }
 

@@ -30,7 +30,7 @@ type App struct {
 	RoAPI        *api.API            // RoAPI HTTP client
 	RedisManager *redis.Manager      // Redis connection manager
 	StatusClient rueidis.Client      // Redis client for worker status reporting
-	D1Client     *cloudflare.Client  // Cloudflare D1 client for cloudflare operations
+	CFClient     *cloudflare.Client  // Cloudflare D1 client for cloudflare operations
 	LogManager   *telemetry.Manager  // Log management system
 	pprofServer  *pprofServer        // Debug HTTP server for pprof
 	middlewares  *client.Middlewares // HTTP client middleware instances
@@ -102,7 +102,7 @@ func InitializeApp(ctx context.Context, serviceType telemetry.ServiceType, logDi
 	}
 
 	// Initialize D1 client for cloudflare operations
-	d1Client := cloudflare.NewClient(cfg, db, logger)
+	cfClient := cloudflare.NewClient(cfg, db, logger)
 
 	// Start pprof server if enabled
 	var pprofSrv *pprofServer
@@ -128,7 +128,7 @@ func InitializeApp(ctx context.Context, serviceType telemetry.ServiceType, logDi
 		RoAPI:        roAPI,
 		RedisManager: redisManager,
 		StatusClient: statusClient,
-		D1Client:     d1Client,
+		CFClient:     cfClient,
 		LogManager:   logManager,
 		pprofServer:  pprofSrv,
 		middlewares:  middlewares,

@@ -201,7 +201,7 @@ func (w *Worker) getPendingJobs(ctx context.Context) ([]Job, error) {
 		LIMIT ?
 	`
 
-	result, err := w.app.D1Client.ExecuteSQL(ctx, query, []any{w.batchSize})
+	result, err := w.app.CFClient.ExecuteSQL(ctx, query, []any{w.batchSize})
 	if err != nil {
 		return nil, fmt.Errorf("failed to query pending jobs: %w", err)
 	}
@@ -277,7 +277,7 @@ func (w *Worker) processJob(ctx context.Context, job Job) error {
 	}
 
 	// Add integration with extracted data
-	if err := w.app.D1Client.UserFlags.AddIntegration(ctx, integrationUsers, job.SourceName); err != nil {
+	if err := w.app.CFClient.UserFlags.AddIntegration(ctx, integrationUsers, job.SourceName); err != nil {
 		if updateErr := w.updateJobStatus(ctx, job.JobID, ProcessingStatusFailed,
 			fmt.Sprintf("Failed to integrate data: %v", err), 0, totalRecords); updateErr != nil {
 			w.logger.Error("Failed to update job status", zap.Error(updateErr))
@@ -609,7 +609,7 @@ func (w *Worker) updateJobStatus(
 		return fmt.Errorf("%w: %s", ErrUnknownProcessingStatus, processingStatus)
 	}
 
-	_, err := w.app.D1Client.ExecuteSQL(ctx, query, params)
+	_, err := w.app.CFClient.ExecuteSQL(ctx, query, params)
 	if err != nil {
 		return fmt.Errorf("failed to update job status: %w", err)
 	}

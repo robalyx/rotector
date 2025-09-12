@@ -312,7 +312,7 @@ func queueUserBatch(ctx context.Context, app *setup.App, batch []int64, logger *
 	if len(usersToQueue) > 0 {
 		var err error
 
-		queueErrors, err = app.D1Client.Queue.AddUsers(ctx, usersToQueue)
+		queueErrors, err = app.CFClient.Queue.AddUsers(ctx, usersToQueue)
 		if err != nil {
 			logger.Error("Failed to queue batch", zap.Error(err))
 			return 0, len(batch), err

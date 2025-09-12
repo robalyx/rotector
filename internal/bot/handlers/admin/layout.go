@@ -11,7 +11,7 @@ import (
 // Layout handles the admin menu and its submenus.
 type Layout struct {
 	db          database.Client
-	d1Client    *cloudflare.Client
+	cfClient    *cloudflare.Client
 	logger      *zap.Logger
 	mainMenu    *MainMenu
 	confirmMenu *ConfirmMenu
@@ -23,7 +23,7 @@ func New(app *setup.App) *Layout {
 	// Initialize layout
 	l := &Layout{
 		db:       app.DB,
-		d1Client: app.D1Client,
+		cfClient: app.CFClient,
 		logger:   app.Logger.Named("admin_menu"),
 	}
 

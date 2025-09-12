@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"time"
 
 	"github.com/bytedance/sonic"
 	"github.com/cenkalti/backoff/v4"
@@ -20,45 +19,32 @@ var (
 	ErrD1APIUnsuccessful    = errors.New("d1 API returned unsuccessful response")
 )
 
-// Response is the response from the D1 API.
-type Response struct {
+// D1Response is the response from the D1 API.
+type D1Response struct {
 	Success bool `json:"success"`
 	Result  []struct {
 		Results []map[string]any `json:"results"`
 	} `json:"result"`
 }
 
-// Cloudflare handles D1 API requests.
-type Cloudflare struct {
-	accountID string
-	dbID      string
-	token     string
-	endpoint  string
-	client    *http.Client
+// D1Client handles D1 database API requests.
+type D1Client struct {
+	*BaseClient
+
+	dbID string
 }
 
-// NewCloudflare creates a new Cloudflare API client.
-func NewCloudflare(accountID, dbID, token, endpoint string) *Cloudflare {
-	return &Cloudflare{
-		accountID: accountID,
-		dbID:      dbID,
-		token:     token,
-		endpoint:  endpoint,
-		client:    &http.Client{},
+// NewD1Client creates a new D1 API client.
+func NewD1Client(accountID, dbID, token, endpoint string) *D1Client {
+	return &D1Client{
+		BaseClient: NewBaseClient(accountID, token, endpoint),
+		dbID:       dbID,
 	}
 }
 
 // ExecuteSQL executes a SQL statement on D1 and returns the results with retries.
-func (c *Cloudflare) ExecuteSQL(ctx context.Context, sql string, params []any) ([]map[string]any, error) {
+func (c *D1Client) ExecuteSQL(ctx context.Context, sql string, params []any) ([]map[string]any, error) {
 	var result []map[string]any
-
-	// Define retry options
-	opts := utils.RetryOptions{
-		MaxElapsedTime:  30 * time.Second,
-		InitialInterval: 1 * time.Second,
-		MaxInterval:     5 * time.Second,
-		MaxRetries:      3,
-	}
 
 	// Execute the request with retries
 	err := utils.WithRetry(ctx, func() error {
@@ -72,7 +58,7 @@ func (c *Cloudflare) ExecuteSQL(ctx context.Context, sql string, params []any) (
 		}
 
 		return execErr
-	}, opts)
+	}, DefaultRetryOptions())
 	if err != nil {
 		return nil, err
 	}
@@ -81,8 +67,8 @@ func (c *Cloudflare) ExecuteSQL(ctx context.Context, sql string, params []any) (
 }
 
 // executeRequest executes a single SQL request.
-func (c *Cloudflare) executeRequest(ctx context.Context, sql string, params []any) ([]map[string]any, error) {
-	url := fmt.Sprintf("%s/accounts/%s/d1/database/%s/query", c.endpoint, c.accountID, c.dbID)
+func (c *D1Client) executeRequest(ctx context.Context, sql string, params []any) ([]map[string]any, error) {
+	url := fmt.Sprintf("%s/accounts/%s/d1/database/%s/query", c.GetEndpoint(), c.GetAccountID(), c.dbID)
 
 	// Prepare request body
 	body := map[string]any{
@@ -101,11 +87,11 @@ func (c *Cloudflare) executeRequest(ctx context.Context, sql string, params []an
 		return nil, fmt.Errorf("error creating request: %w", err)
 	}
 
-	req.Header.Set("Authorization", "Bearer "+c.token)
+	req.Header.Set("Authorization", "Bearer "+c.GetToken())
 	req.Header.Set("Content-Type", "application/json")
 
 	// Execute request
-	resp, err := c.client.Do(req)
+	resp, err := c.GetHTTPClient().Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("error executing request: %w", err)
 	}
@@ -118,7 +104,7 @@ func (c *Cloudflare) executeRequest(ctx context.Context, sql string, params []an
 	}
 
 	// Parse response
-	var d1Resp Response
+	var d1Resp D1Response
 	if err := json.NewDecoder(resp.Body).Decode(&d1Resp); err != nil {
 		return nil, fmt.Errorf("error decoding response: %w", err)
 	}

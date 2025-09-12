@@ -86,15 +86,27 @@ image_similarity_threshold = 2
 channel_process_threshold = 25
 
 [worker.cloudflare]
-# Cloudflare account ID
+# Cloudflare account ID (shared by D1 and R2)
 account_id = ""
 # D1 database ID
 database_id = ""
 # API token with D1 access
 api_token = ""
-# API endpoint for D1 queries
+# API endpoint for Cloudflare APIs
 api_endpoint = "https://api.cloudflare.com/client/v4"
+# R2 S3-compatible endpoint (format: https://account-id.r2.cloudflarestorage.com)
+r2_endpoint = ""
+# R2 access key ID for S3 authentication
+r2_access_key_id = ""
+# R2 secret access key for S3 authentication
+r2_secret_access_key = ""
+# R2 bucket name for object storage
+r2_bucket_name = ""
+# R2 region (usually "auto" for Cloudflare R2)
+r2_region = "auto"
+# R2 use SSL for connections
+r2_use_ssl = true
 # Upload API base URL
 upload_api_base = "https://api.roscoe.com"
-# Upload admin API token (different from D1 API token)
+# Upload admin API token (different from D1/R2 API token)
 upload_admin_token = ""

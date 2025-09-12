@@ -54,14 +54,14 @@ type UserBatch struct {
 
 // Queue handles core cloudflare operations.
 type Queue struct {
-	api    *api.Cloudflare
+	d1     *api.D1Client
 	logger *zap.Logger
 }
 
 // NewQueue creates a new cloudflare manager.
-func NewQueue(cloudflareAPI *api.Cloudflare, logger *zap.Logger) *Queue {
+func NewQueue(d1Client *api.D1Client, logger *zap.Logger) *Queue {
 	return &Queue{
-		api:    cloudflareAPI,
+		d1:     d1Client,
 		logger: logger,
 	}
 }
@@ -77,7 +77,7 @@ func (q *Queue) GetNextBatch(ctx context.Context, batchSize int) (*UserBatch, er
 		LIMIT ?
 	`
 
-	result, err := q.api.ExecuteSQL(ctx, selectQuery, []any{batchSize})
+	result, err := q.d1.ExecuteSQL(ctx, selectQuery, []any{batchSize})
 	if err != nil {
 		return nil, fmt.Errorf("failed to query cloudflare: %w", err)
 	}
@@ -135,7 +135,7 @@ func (q *Queue) GetNextBatch(ctx context.Context, batchSize int) (*UserBatch, er
 
 	updateQuery += ")"
 
-	if _, err := q.api.ExecuteSQL(ctx, updateQuery, params); err != nil {
+	if _, err := q.d1.ExecuteSQL(ctx, updateQuery, params); err != nil {
 		return nil, fmt.Errorf("failed to mark users as processing: %w", err)
 	}
 
@@ -188,7 +188,7 @@ func (q *Queue) MarkAsProcessed(ctx context.Context, userIDs []int64, flaggedUse
 
 	query += ")"
 
-	_, err := q.api.ExecuteSQL(ctx, query, params)
+	_, err := q.d1.ExecuteSQL(ctx, query, params)
 	if err != nil {
 		return fmt.Errorf("failed to mark users as processed: %w", err)
 	}
@@ -208,7 +208,7 @@ func (q *Queue) Cleanup(ctx context.Context, stuckTimeout, retentionPeriod time.
 	`
 
 	stuckCutoff := time.Now().Add(-stuckTimeout).Unix()
-	if _, err := q.api.ExecuteSQL(ctx, resetQuery, []any{stuckCutoff}); err != nil {
+	if _, err := q.d1.ExecuteSQL(ctx, resetQuery, []any{stuckCutoff}); err != nil {
 		return fmt.Errorf("failed to reset stuck processing: %w", err)
 	}
 
@@ -220,7 +220,7 @@ func (q *Queue) Cleanup(ctx context.Context, stuckTimeout, retentionPeriod time.
 	`
 
 	retentionCutoff := time.Now().Add(-retentionPeriod).Unix()
-	if _, err := q.api.ExecuteSQL(ctx, cleanupQuery, []any{retentionCutoff}); err != nil {
+	if _, err := q.d1.ExecuteSQL(ctx, cleanupQuery, []any{retentionCutoff}); err != nil {
 		return fmt.Errorf("failed to remove outdated records: %w", err)
 	}
 
@@ -239,7 +239,7 @@ func (q *Queue) GetStats(ctx context.Context) (*Stats, error) {
 		WHERE processed = 0
 	`
 
-	result, err := q.api.ExecuteSQL(ctx, query, nil)
+	result, err := q.d1.ExecuteSQL(ctx, query, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get cloudflare stats: %w", err)
 	}
@@ -292,7 +292,7 @@ func (q *Queue) AddUsers(ctx context.Context, userIDs []int64) (map[int64]error,
 
 	checkQuery += ")"
 
-	result, err := q.api.ExecuteSQL(ctx, checkQuery, params)
+	result, err := q.d1.ExecuteSQL(ctx, checkQuery, params)
 	if err != nil {
 		return nil, fmt.Errorf("failed to check cloudflare status: %w", err)
 	}
@@ -350,7 +350,7 @@ func (q *Queue) AddUsers(ctx context.Context, userIDs []int64) (map[int64]error,
 
 	// Execute insert for new users if any
 	if len(insertParams) > 0 {
-		if _, err := q.api.ExecuteSQL(ctx, insertQuery, insertParams); err != nil {
+		if _, err := q.d1.ExecuteSQL(ctx, insertQuery, insertParams); err != nil {
 			return errors, fmt.Errorf("failed to insert cloudflare entries: %w", err)
 		}
 	}
@@ -367,7 +367,7 @@ func (q *Queue) AddUsers(ctx context.Context, userIDs []int64) (map[int64]error,
 
 		updateQuery += ")"
 
-		if _, err := q.api.ExecuteSQL(ctx, updateQuery, updateParams); err != nil {
+		if _, err := q.d1.ExecuteSQL(ctx, updateQuery, updateParams); err != nil {
 			return errors, fmt.Errorf("failed to update cloudflare entries: %w", err)
 		}
 	}
@@ -384,7 +384,7 @@ func (q *Queue) Remove(ctx context.Context, userID int64) error {
 		WHERE user_id = ?
 	`
 
-	result, err := q.api.ExecuteSQL(ctx, query, []any{userID})
+	result, err := q.d1.ExecuteSQL(ctx, query, []any{userID})
 	if err != nil {
 		return fmt.Errorf("failed to check cloudflare status: %w", err)
 	}
@@ -402,7 +402,7 @@ func (q *Queue) Remove(ctx context.Context, userID int64) error {
 
 	// Remove the unprocessed entry
 	deleteQuery := "DELETE FROM queued_users WHERE user_id = ? AND processed = 0 AND processing = 0"
-	if _, err := q.api.ExecuteSQL(ctx, deleteQuery, []any{userID}); err != nil {
+	if _, err := q.d1.ExecuteSQL(ctx, deleteQuery, []any{userID}); err != nil {
 		return fmt.Errorf("failed to remove cloudflare entry: %w", err)
 	}
 
@@ -417,7 +417,7 @@ func (q *Queue) GetStatus(ctx context.Context, userID int64) (*Status, error) {
 		WHERE user_id = ?
 	`
 
-	result, err := q.api.ExecuteSQL(ctx, query, []any{userID})
+	result, err := q.d1.ExecuteSQL(ctx, query, []any{userID})
 	if err != nil {
 		return nil, fmt.Errorf("failed to get cloudflare status: %w", err)
 	}

@@ -395,7 +395,7 @@ func (m *ReviewMenu) handleConfirmGroup(ctx *interaction.Context, s *session.Ses
 	m.navigateAfterAction(ctx, s, "Group confirmed.")
 
 	// Add the confirmed group to the D1 database
-	if err := m.layout.d1Client.GroupFlags.AddConfirmed(ctx.Context(), group); err != nil {
+	if err := m.layout.cfClient.GroupFlags.AddConfirmed(ctx.Context(), group); err != nil {
 		m.layout.logger.Error("Failed to add confirmed group to D1 database",
 			zap.Error(err),
 			zap.Int64("groupID", group.ID))
@@ -443,7 +443,7 @@ func (m *ReviewMenu) handleMixGroup(ctx *interaction.Context, s *session.Session
 	m.navigateAfterAction(ctx, s, "Group marked as mixed.")
 
 	// Add the mixed group to the D1 database
-	if err := m.layout.d1Client.GroupFlags.AddMixed(ctx.Context(), group); err != nil {
+	if err := m.layout.cfClient.GroupFlags.AddMixed(ctx.Context(), group); err != nil {
 		m.layout.logger.Error("Failed to add mixed group to D1 database",
 			zap.Error(err),
 			zap.Int64("groupID", group.ID))

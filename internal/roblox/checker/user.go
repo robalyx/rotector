@@ -33,7 +33,7 @@ type UserCheckerParams struct {
 type UserChecker struct {
 	app                *setup.App
 	db                 database.Client
-	d1Client           *cloudflare.Client
+	cfClient           *cloudflare.Client
 	userFetcher        *fetcher.UserFetcher
 	gameFetcher        *fetcher.GameFetcher
 	outfitFetcher      *fetcher.OutfitFetcher
@@ -55,7 +55,7 @@ func NewUserChecker(app *setup.App, userFetcher *fetcher.UserFetcher, logger *za
 	return &UserChecker{
 		app:                app,
 		db:                 app.DB,
-		d1Client:           app.D1Client,
+		cfClient:           app.CFClient,
 		userFetcher:        userFetcher,
 		gameFetcher:        fetcher.NewGameFetcher(app.RoAPI, logger),
 		outfitFetcher:      fetcher.NewOutfitFetcher(app.RoAPI, logger),
@@ -211,14 +211,14 @@ func (c *UserChecker) ProcessUsers(ctx context.Context, params *UserCheckerParam
 
 	// Synchronize user status to external D1 database for API access
 	if len(flaggedUsers) > 0 {
-		if err := c.d1Client.UserFlags.AddFlagged(ctx, flaggedUsers); err != nil {
+		if err := c.cfClient.UserFlags.AddFlagged(ctx, flaggedUsers); err != nil {
 			c.logger.Error("Failed to add flagged users to D1", zap.Error(err))
 		}
 	}
 
 	if len(confirmedUsers) > 0 {
 		for _, user := range confirmedUsers {
-			if err := c.d1Client.UserFlags.AddConfirmed(ctx, user, 0); err != nil {
+			if err := c.cfClient.UserFlags.AddConfirmed(ctx, user, 0); err != nil {
 				c.logger.Error("Failed to add auto-confirmed user to D1",
 					zap.Error(err),
 					zap.Int64("userID", user.ID))
