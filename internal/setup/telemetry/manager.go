@@ -73,8 +73,12 @@ func NewManager(
 	case ServiceBot:
 		componentName = "bot"
 	case ServiceWorker:
-		if workerType != "" && workerID != "" {
-			componentName = fmt.Sprintf("%s_worker_%s", workerType, workerID)
+		if workerType != "" {
+			if workerID != "" {
+				componentName = fmt.Sprintf("%s_worker_%s", workerType, workerID)
+			} else {
+				componentName = workerType + "_worker"
+			}
 		} else {
 			componentName = "worker"
 		}
