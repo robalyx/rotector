@@ -151,8 +151,8 @@ func (w *Worker) processBannedUsers(ctx context.Context) {
 	w.bar.SetStepMessage("Processing banned users", 10)
 	w.reporter.UpdateStatus("Processing banned users", 10)
 
-	// Get users to check
-	users, currentlyBanned, err := w.db.Model().User().GetUsersToCheck(ctx, w.userBatchSize)
+	// Get users to check for banned status
+	userIDs, err := w.db.Model().User().GetUsersToCheck(ctx, w.userBatchSize)
 	if err != nil {
 		w.logger.Error("Error getting users to check", zap.Error(err))
 		w.reporter.SetHealthy(false)
@@ -160,13 +160,13 @@ func (w *Worker) processBannedUsers(ctx context.Context) {
 		return
 	}
 
-	if len(users) == 0 {
+	if len(userIDs) == 0 {
 		w.logger.Debug("No users to check for bans")
 		return
 	}
 
 	// Check for banned users
-	bannedUserIDs, err := w.userFetcher.FetchBannedUsers(ctx, users)
+	bannedUserIDs, err := w.userFetcher.FetchBannedUsers(ctx, userIDs)
 	if err != nil {
 		w.logger.Error("Error fetching banned users", zap.Error(err))
 		w.reporter.SetHealthy(false)
@@ -174,23 +174,9 @@ func (w *Worker) processBannedUsers(ctx context.Context) {
 		return
 	}
 
-	// Create map of newly banned users for O(1) lookup
-	bannedMap := make(map[int64]struct{}, len(bannedUserIDs))
-	for _, id := range bannedUserIDs {
-		bannedMap[id] = struct{}{}
-	}
-
-	// Find users that are no longer banned
-	var unbannedUserIDs []int64
-
-	for _, id := range currentlyBanned {
-		if _, ok := bannedMap[id]; !ok {
-			unbannedUserIDs = append(unbannedUserIDs, id)
-		}
-	}
-
-	// Mark banned users
+	// Handle users that were found to be banned
 	if len(bannedUserIDs) > 0 {
+		// Mark users as banned in database
 		err = w.db.Model().User().MarkUsersBanStatus(ctx, bannedUserIDs, true)
 		if err != nil {
 			w.logger.Error("Error marking banned users", zap.Error(err))
@@ -240,27 +226,6 @@ func (w *Worker) processBannedUsers(ctx context.Context) {
 		}
 
 		w.logger.Info("Marked and confirmed banned users", zap.Int("count", len(bannedUserIDs)))
-	}
-
-	// Unmark users that are no longer banned
-	if len(unbannedUserIDs) > 0 {
-		err = w.db.Model().User().MarkUsersBanStatus(ctx, unbannedUserIDs, false)
-		if err != nil {
-			w.logger.Error("Error unmarking banned users", zap.Error(err))
-			w.reporter.SetHealthy(false)
-
-			return
-		}
-
-		// Update D1 database ban status
-		if err := w.d1Client.UserFlags.UpdateBanStatus(ctx, unbannedUserIDs, false); err != nil {
-			w.logger.Error("Error updating unbanned users in D1", zap.Error(err))
-			w.reporter.SetHealthy(false)
-
-			return
-		}
-
-		w.logger.Info("Unmarked banned users", zap.Int("count", len(unbannedUserIDs)))
 	}
 }
 

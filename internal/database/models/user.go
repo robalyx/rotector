@@ -546,39 +546,32 @@ func (r *UserModel) GetFlaggedAndConfirmedUsers(ctx context.Context) ([]*types.R
 	return result, nil
 }
 
-// GetUsersToCheck finds users that haven't been checked for banned status recently.
+// GetUsersToCheck finds unbanned users that haven't been checked for banned status recently.
 func (r *UserModel) GetUsersToCheck(
 	ctx context.Context, limit int,
-) (userIDs []int64, bannedIDs []int64, err error) {
-	var users []types.User
+) ([]int64, error) {
+	var userIDs []int64
 
-	err = dbretry.Transaction(ctx, r.db, func(ctx context.Context, tx bun.Tx) error {
-		// Get users that need checking
+	err := dbretry.Transaction(ctx, r.db, func(ctx context.Context, tx bun.Tx) error {
+		// Get users that need ban status checking
 		err := tx.NewSelect().
-			Model(&users).
-			Column("id", "is_banned").
+			Model((*types.User)(nil)).
+			Column("id").
 			Where("status IN (?, ?)", enum.UserTypeConfirmed, enum.UserTypeFlagged).
+			Where("is_banned = false").
 			Where("last_ban_check < NOW() - INTERVAL '1 day'").
 			OrderExpr("last_ban_check ASC").
 			Limit(limit).
 			For("UPDATE SKIP LOCKED").
-			Scan(ctx)
+			Scan(ctx, &userIDs)
 		if err != nil {
 			return fmt.Errorf("failed to get users: %w", err)
 		}
 
-		if len(users) > 0 {
-			userIDs = make([]int64, 0, len(users))
-			for _, user := range users {
-				userIDs = append(userIDs, user.ID)
-				if user.IsBanned {
-					bannedIDs = append(bannedIDs, user.ID)
-				}
-			}
-
+		if len(userIDs) > 0 {
 			// Update last_ban_check
 			_, err = tx.NewUpdate().
-				Model(&users).
+				Model((*types.User)(nil)).
 				Set("last_ban_check = NOW()").
 				Where("id IN (?)", bun.In(userIDs)).
 				Exec(ctx)
@@ -590,10 +583,10 @@ func (r *UserModel) GetUsersToCheck(
 		return nil
 	})
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
-	return userIDs, bannedIDs, nil
+	return userIDs, nil
 }
 
 // MarkUsersBanStatus updates the banned status of users in their respective tables.
