@@ -170,7 +170,7 @@ func (m *Manager) Display(
 		event.ApplicationID(), event.Token(), messageUpdate.Build(),
 	)
 	if err != nil {
-		var restError rest.Error
+		var restError *rest.Error
 		errors.As(err, &restError)
 
 		m.logger.Error("Failed to update interaction response",

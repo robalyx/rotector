@@ -234,7 +234,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	err = os.WriteFile("keys_generated.go", formatted, 0644)
+	err = os.WriteFile("keys_generated.go", formatted, 0o644)
 	if err != nil {
 		log.Fatal(err)
 	}

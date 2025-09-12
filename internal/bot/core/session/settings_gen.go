@@ -131,7 +131,7 @@ func main() {
 	}
 
 	// Write to settings_generated.go
-	err = os.WriteFile("settings_generated.go", formatted, 0644)
+	err = os.WriteFile("settings_generated.go", formatted, 0o644)
 	if err != nil {
 		log.Fatal(err)
 	}
