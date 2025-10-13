@@ -93,6 +93,7 @@ func init() { //nolint:funlen
 			(*types.CondoPlayer)(nil),
 			(*types.IvanMessage)(nil),
 			(*types.ReviewerInfo)(nil),
+			(*types.GroupTrackingExclusion)(nil),
 		}
 
 		for _, model := range models {
@@ -109,6 +110,7 @@ func init() { //nolint:funlen
 	}, func(ctx context.Context, db *bun.DB) error {
 		// Down migration - drop all tables
 		models := []any{
+			(*types.GroupTrackingExclusion)(nil),
 			(*types.ReviewerInfo)(nil),
 			(*types.IvanMessage)(nil),
 			(*types.CondoPlayer)(nil),

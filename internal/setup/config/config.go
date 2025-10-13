@@ -197,6 +197,8 @@ type OpenAI struct {
 	GroupReasonModel string `koanf:"group_reason_model"`
 	// Model to use for outfit reason analysis
 	OutfitReasonModel string `koanf:"outfit_reason_model"`
+	// Model to use for category analysis
+	CategoryModel string `koanf:"category_model"`
 	// Model to use for stats analysis
 	StatsModel string `koanf:"stats_model"`
 	// Model to use for outfit analysis
@@ -239,6 +241,8 @@ type BatchSizes struct {
 	PurgeGroups int `koanf:"purge_groups"`
 	// Number of group trackings to process in one batch.
 	TrackGroups int `koanf:"track_groups"`
+	// Number of users to check for new groups in one batch.
+	TrackUserGroups int `koanf:"track_user_groups"`
 	// Number of queue items to process in one batch.
 	QueueItems int `koanf:"queue_items"`
 	// Number of users to update thumbnails in one batch.
@@ -257,6 +261,8 @@ type BatchSizes struct {
 	GroupReasonAnalysis int `koanf:"group_reason_analysis"`
 	// Maximum concurrent AI requests for outfit reason analysis.
 	OutfitReasonAnalysis int `koanf:"outfit_reason_analysis"`
+	// Maximum concurrent AI requests for category analysis.
+	CategoryAnalysis int `koanf:"category_analysis"`
 	// Maximum concurrent AI requests for message analysis.
 	MessageAnalysis int `koanf:"message_analysis"`
 	// Maximum concurrent AI requests for ivan message analysis.
@@ -273,6 +279,8 @@ type BatchSizes struct {
 	GroupReasonAnalysisBatch int `koanf:"group_reason_analysis_batch"`
 	// Number of users to analyze in one outfit reason AI request.
 	OutfitReasonAnalysisBatch int `koanf:"outfit_reason_analysis_batch"`
+	// Number of users to analyze in one category AI request.
+	CategoryAnalysisBatch int `koanf:"category_analysis_batch"`
 	// Number of messages to analyze in one AI request.
 	MessageAnalysisBatch int `koanf:"message_analysis_batch"`
 	// Number of ivan messages to analyze in one AI request.

@@ -108,6 +108,38 @@ func (s *UserService) ClearUserWithTx(ctx context.Context, tx bun.Tx, user *type
 	return nil
 }
 
+// UpdateToPastOffender updates users to past offender status when they become clean.
+func (s *UserService) UpdateToPastOffender(ctx context.Context, userIDs []int64) error {
+	if len(userIDs) == 0 {
+		return nil
+	}
+
+	return dbretry.Transaction(ctx, s.db, func(ctx context.Context, tx bun.Tx) error {
+		// Update users to past offender status
+		if err := s.model.UpdateUsersToPastOffender(ctx, tx, userIDs); err != nil {
+			return err
+		}
+
+		// Remove users from all tracking
+		if err := s.tracking.RemoveUsersFromAllGroupsWithTx(ctx, tx, userIDs); err != nil {
+			s.logger.Error("Failed to remove users from group tracking", zap.Error(err))
+			return err
+		}
+
+		if err := s.tracking.RemoveUsersFromAssetTrackingWithTx(ctx, tx, userIDs); err != nil {
+			s.logger.Error("Failed to remove users from asset tracking", zap.Error(err))
+			return err
+		}
+
+		if err := s.tracking.RemoveUsersFromGameTrackingWithTx(ctx, tx, userIDs); err != nil {
+			s.logger.Error("Failed to remove users from game tracking", zap.Error(err))
+			return err
+		}
+
+		return nil
+	})
+}
+
 // GetUserByID retrieves a user by either their numeric ID or UUID.
 func (s *UserService) GetUserByID(
 	ctx context.Context, userID string, fields types.UserField,
@@ -500,29 +532,26 @@ func (s *UserService) SaveUsers(ctx context.Context, users map[int64]*types.Revi
 			user.UUID = uuid.New()
 		}
 
-		// Set engine version for new users
-		if user.EngineVersion == "" {
-			user.EngineVersion = "2.14"
-		}
+		// Set engine version for user processing
+		user.EngineVersion = types.CurrentEngineVersion
 
-		// Handle reasons merging and determine status
-		existingUser, ok := existingUsers[id]
-		if ok {
-			user.Status = existingUser.Status
-
-			// Create new reasons map if it doesn't exist
-			if user.Reasons == nil {
-				user.Reasons = make(types.Reasons[enum.UserReasonType])
-			}
-
-			// Copy over existing reasons, only adding new ones
-			for reasonType, reason := range existingUser.Reasons {
-				if _, exists := user.Reasons[reasonType]; !exists {
-					user.Reasons[reasonType] = reason
-				}
+		// Determine status based on whether user exists and has reasons
+		if existingUser, ok := existingUsers[id]; ok {
+			// Past offenders who get flagged again should return to flagged status
+			if existingUser.Status == enum.UserTypePastOffender && len(user.Reasons) > 0 {
+				user.Status = enum.UserTypeFlagged
+			} else {
+				// Keep existing status for already flagged/confirmed users
+				user.Status = existingUser.Status
 			}
 		} else {
+			// New users start as flagged
 			user.Status = enum.UserTypeFlagged
+		}
+
+		// Create empty reasons map if nil (reasons will be completely replaced)
+		if user.Reasons == nil {
+			user.Reasons = make(types.Reasons[enum.UserReasonType])
 		}
 
 		usersToSave = append(usersToSave, user)

@@ -132,8 +132,12 @@ func init() { //nolint:funlen
 			CREATE INDEX IF NOT EXISTS idx_users_scan_time 
 			ON users (status, is_banned, last_scanned ASC, confidence DESC);
 
-			CREATE INDEX IF NOT EXISTS idx_users_ban_check 
+			CREATE INDEX IF NOT EXISTS idx_users_ban_check
 			ON users (status, last_ban_check ASC);
+
+			CREATE INDEX IF NOT EXISTS idx_users_group_check
+			ON users (status, last_group_check ASC)
+			WHERE is_banned = false;
 
 			CREATE INDEX IF NOT EXISTS idx_users_thumbnail_update 
 			ON users (status, is_deleted, last_thumbnail_update ASC)
@@ -148,6 +152,10 @@ func init() { //nolint:funlen
 
 			CREATE INDEX IF NOT EXISTS idx_users_status_count
 			ON users (status);
+
+			CREATE INDEX IF NOT EXISTS idx_users_category
+			ON users (category)
+			WHERE category IS NOT NULL;
 
 			-- User last_updated index for delete-after-time command
 			CREATE INDEX IF NOT EXISTS idx_users_last_updated
@@ -355,10 +363,12 @@ func init() { //nolint:funlen
 			DROP INDEX IF EXISTS idx_users_viewed;
 			DROP INDEX IF EXISTS idx_users_scan_time;
 			DROP INDEX IF EXISTS idx_users_ban_check;
+			DROP INDEX IF EXISTS idx_users_group_check;
 			DROP INDEX IF EXISTS idx_users_thumbnail_update;
 			DROP INDEX IF EXISTS idx_users_banned_status;
 			DROP INDEX IF EXISTS idx_users_uuid;
 			DROP INDEX IF EXISTS idx_users_status_count;
+			DROP INDEX IF EXISTS idx_users_category;
 
 			-- User last_updated index for delete-after-time command
 			DROP INDEX IF EXISTS idx_users_last_updated;

@@ -430,6 +430,31 @@ func (m *ReviewMenu) handleConfirmUser(ctx *interaction.Context, s *session.Sess
 		return
 	}
 
+	// Re-classify category if reasons have been modified
+	if session.ReasonsChanged.Get(s) {
+		// Prepare user map for classification
+		usersToClassify := map[int64]*types.ReviewUser{user.ID: user}
+
+		// Call category analyzer
+		categoryResults := m.layout.categoryAnalyzer.ClassifyUsers(ctx.Context(), usersToClassify, 0)
+
+		// Update user category if classification was successful
+		if category, exists := categoryResults[user.ID]; exists {
+			oldCategory := user.Category
+			user.Category = category
+
+			m.layout.logger.Info("Re-classified user category",
+				zap.Int64("userID", user.ID),
+				zap.String("username", user.Name),
+				zap.String("oldCategory", oldCategory.String()),
+				zap.String("newCategory", category.String()))
+		} else {
+			m.layout.logger.Warn("Failed to re-classify user category, keeping existing category",
+				zap.Int64("userID", user.ID),
+				zap.String("username", user.Name))
+		}
+	}
+
 	// Confirm the user
 	if err := m.layout.db.Service().User().ConfirmUser(ctx.Context(), user, reviewerID); err != nil {
 		m.layout.logger.Error("Failed to confirm user", zap.Error(err))
@@ -707,6 +732,9 @@ func (m *ReviewMenu) handleGenerateFriendReason(ctx *interaction.Context, s *ses
 		case enum.UserTypeFlagged:
 			flaggedFriendsForUser[friend.ID] = friend
 		case enum.UserTypeCleared:
+			// Cleared users are not included in friend analysis
+		case enum.UserTypeQueued, enum.UserTypeBloxDB, enum.UserTypeMixed, enum.UserTypePastOffender:
+			// These statuses are not relevant for friend analysis
 		}
 	}
 

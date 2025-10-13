@@ -243,6 +243,7 @@ const (
 const (
 	GroupViewMembersButtonCustomID = "group_view_members"
 	GroupViewLogsButtonCustomID    = "group_view_logs"
+	GroupDeleteButtonCustomID      = "group_delete"
 )
 
 // Group Review Menu - Members Viewer.

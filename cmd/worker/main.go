@@ -15,6 +15,7 @@ import (
 	"github.com/robalyx/rotector/internal/setup/telemetry"
 	"github.com/robalyx/rotector/internal/tui"
 	"github.com/robalyx/rotector/internal/tui/components"
+	"github.com/robalyx/rotector/internal/worker/category"
 	"github.com/robalyx/rotector/internal/worker/friend"
 	"github.com/robalyx/rotector/internal/worker/group"
 	"github.com/robalyx/rotector/internal/worker/maintenance"
@@ -23,6 +24,7 @@ import (
 	"github.com/robalyx/rotector/internal/worker/stats"
 	"github.com/robalyx/rotector/internal/worker/sync"
 	"github.com/robalyx/rotector/internal/worker/upload"
+	"github.com/robalyx/rotector/internal/worker/war"
 	"github.com/robalyx/rotector/pkg/utils"
 	"github.com/urfave/cli/v3"
 	"go.uber.org/zap"
@@ -32,6 +34,7 @@ const (
 	// WorkerLogDir specifies where worker log files are stored.
 	WorkerLogDir = "logs/worker_logs"
 
+	CategoryWorker    = "category"
 	FriendWorker      = "friend"
 	GroupWorker       = "group"
 	MaintenanceWorker = "maintenance"
@@ -63,6 +66,14 @@ func run() error {
 			},
 		},
 		Commands: []*cli.Command{
+			{
+				Name:  CategoryWorker,
+				Usage: "Start category classification worker",
+				Action: func(ctx context.Context, _ *cli.Command) error {
+					runWorkers(ctx, CategoryWorker, 1)
+					return nil
+				},
+			},
 			{
 				Name:  FriendWorker,
 				Usage: "Start friend network workers",
@@ -124,6 +135,14 @@ func run() error {
 				Usage: "Start upload processing worker",
 				Action: func(ctx context.Context, c *cli.Command) error {
 					runWorkers(ctx, UploadWorker, c.Int("workers"))
+					return nil
+				},
+			},
+			{
+				Name:  WarWorker,
+				Usage: "Start war zone processing worker",
+				Action: func(ctx context.Context, c *cli.Command) error {
+					runWorkers(ctx, WarWorker, c.Int("workers"))
 					return nil
 				},
 			},
@@ -205,6 +224,8 @@ func runWorkers(ctx context.Context, workerType string, count int) {
 			var w interface{ Start(context.Context) }
 
 			switch workerType {
+			case CategoryWorker:
+				w = category.New(app, bar, workerLogger, instanceID)
 			case FriendWorker:
 				w = friend.New(app, bar, workerLogger, instanceID)
 			case GroupWorker:
@@ -221,6 +242,8 @@ func runWorkers(ctx context.Context, workerType string, count int) {
 				w = reason.New(app, bar, workerLogger, instanceID)
 			case UploadWorker:
 				w = upload.New(app, bar, workerLogger, instanceID)
+			case WarWorker:
+				w = war.New(app, bar, workerLogger, instanceID)
 			default:
 				log.Fatalf("Invalid worker type: %s", workerType)
 			}

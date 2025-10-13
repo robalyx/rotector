@@ -15,26 +15,33 @@ var (
 	ErrNoUsersToReview = errors.New("no users available to review")
 )
 
+const (
+	// CurrentEngineVersion represents the current AI engine version for user processing.
+	CurrentEngineVersion = "2.20"
+)
+
 // User represents a user in any state (flagged, confirmed, or cleared).
 type User struct {
-	ID                  int64         `bun:",pk"                    json:"id"`
-	UUID                uuid.UUID     `bun:",notnull"               json:"uuid"`
-	Name                string        `bun:",notnull"               json:"name"`
-	DisplayName         string        `bun:",notnull"               json:"displayName"`
-	Description         string        `bun:",notnull"               json:"description"`
-	CreatedAt           time.Time     `bun:",notnull"               json:"createdAt"`
-	Status              enum.UserType `bun:",notnull"               json:"status"`
-	Confidence          float64       `bun:",notnull"               json:"confidence"`
-	EngineVersion       string        `bun:",notnull"               json:"engineVersion"`
-	HasSocials          bool          `bun:",notnull,default:false" json:"hasSocials"`
-	LastScanned         time.Time     `bun:",notnull"               json:"lastScanned"`
-	LastUpdated         time.Time     `bun:",notnull"               json:"lastUpdated"`
-	LastViewed          time.Time     `bun:",notnull"               json:"lastViewed"`
-	LastBanCheck        time.Time     `bun:",notnull"               json:"lastBanCheck"`
-	IsBanned            bool          `bun:",notnull,default:false" json:"isBanned"`
-	IsDeleted           bool          `bun:",notnull,default:false" json:"isDeleted"`
-	ThumbnailURL        string        `bun:",notnull"               json:"thumbnailUrl"`
-	LastThumbnailUpdate time.Time     `bun:",notnull"               json:"lastThumbnailUpdate"`
+	ID                  int64                 `bun:",pk"                    json:"id"`
+	UUID                uuid.UUID             `bun:",notnull"               json:"uuid"`
+	Name                string                `bun:",notnull"               json:"name"`
+	DisplayName         string                `bun:",notnull"               json:"displayName"`
+	Description         string                `bun:",notnull"               json:"description"`
+	CreatedAt           time.Time             `bun:",notnull"               json:"createdAt"`
+	Status              enum.UserType         `bun:",notnull"               json:"status"`
+	Confidence          float64               `bun:",notnull"               json:"confidence"`
+	EngineVersion       string                `bun:",notnull"               json:"engineVersion"`
+	Category            enum.UserCategoryType `bun:",nullzero"              json:"category"`
+	HasSocials          bool                  `bun:",notnull,default:false" json:"hasSocials"`
+	LastScanned         time.Time             `bun:",notnull"               json:"lastScanned"`
+	LastUpdated         time.Time             `bun:",notnull"               json:"lastUpdated"`
+	LastViewed          time.Time             `bun:",notnull"               json:"lastViewed"`
+	LastBanCheck        time.Time             `bun:",notnull"               json:"lastBanCheck"`
+	LastGroupCheck      time.Time             `bun:",notnull"               json:"lastGroupCheck"`
+	IsBanned            bool                  `bun:",notnull,default:false" json:"isBanned"`
+	IsDeleted           bool                  `bun:",notnull,default:false" json:"isDeleted"`
+	ThumbnailURL        string                `bun:",notnull"               json:"thumbnailUrl"`
+	LastThumbnailUpdate time.Time             `bun:",notnull"               json:"lastThumbnailUpdate"`
 }
 
 // UserReason represents a reason for flagging a user.
@@ -218,6 +225,15 @@ type ReviewUser struct {
 	Badges        []any                         `json:"badges,omitempty"`
 }
 
+// GlobalTargetCandidate represents a candidate for global target selection in the war system.
+type GlobalTargetCandidate struct {
+	UserID     int64                 `bun:"id"`
+	Name       string                `bun:"name"`
+	Status     enum.UserType         `bun:"status"`
+	Confidence float64               `bun:"confidence"`
+	Category   enum.UserCategoryType `bun:"category"`
+}
+
 // UserField represents available fields as bit flags.
 type UserField uint32
 
@@ -246,6 +262,7 @@ const (
 
 	UserFieldConfidence    // AI confidence score
 	UserFieldEngineVersion // AI engine version
+	UserFieldCategory      // Violation category
 
 	UserFieldLastScanned         // Last scan time
 	UserFieldLastUpdated         // Last update time
@@ -272,7 +289,8 @@ const (
 
 	// UserFieldStats includes all statistical fields.
 	UserFieldStats = UserFieldConfidence |
-		UserFieldEngineVersion
+		UserFieldEngineVersion |
+		UserFieldCategory
 
 	// UserFieldTimestamps includes all timestamp-related fields.
 	UserFieldTimestamps = UserFieldLastScanned |
@@ -312,6 +330,7 @@ var userFieldToColumns = map[UserField][]string{
 	UserFieldThumbnail:           {"thumbnail_url"},
 	UserFieldConfidence:          {"confidence"},
 	UserFieldEngineVersion:       {"engine_version"},
+	UserFieldCategory:            {"category"},
 	UserFieldLastScanned:         {"last_scanned"},
 	UserFieldLastUpdated:         {"last_updated"},
 	UserFieldLastViewed:          {"last_viewed"},

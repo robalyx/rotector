@@ -104,7 +104,7 @@ func (b *ChartBuilder) buildUserChart() (*bytes.Buffer, error) {
 // buildGroupChart creates a chart showing group-related statistics.
 func (b *ChartBuilder) buildGroupChart() (*bytes.Buffer, error) {
 	// Extract data points for group series
-	xValues, confirmedSeries, flaggedSeries, clearedSeries, lockedSeries := b.prepareGroupDataSeries()
+	xValues, confirmedSeries, flaggedSeries, mixedSeries, lockedSeries := b.prepareGroupDataSeries()
 
 	// Configure and create the chart
 	graph := &chart.Chart{
@@ -116,7 +116,7 @@ func (b *ChartBuilder) buildGroupChart() (*bytes.Buffer, error) {
 		Series: []chart.Series{
 			b.createSeries("Confirmed", xValues, confirmedSeries, chart.ColorRed),
 			b.createSeries("Flagged", xValues, flaggedSeries, chart.ColorOrange),
-			b.createSeries("Cleared", xValues, clearedSeries, chart.ColorGreen),
+			b.createSeries("Mixed", xValues, mixedSeries, chart.ColorGreen),
 			b.createSeries("Locked", xValues, lockedSeries, chart.ColorBlue),
 		},
 	}
@@ -174,7 +174,7 @@ func (b *ChartBuilder) prepareGroupDataSeries() ([]float64, []float64, []float64
 	xValues := make([]float64, hoursToShow)
 	confirmedSeries := make([]float64, hoursToShow)
 	flaggedSeries := make([]float64, hoursToShow)
-	clearedSeries := make([]float64, hoursToShow)
+	mixedSeries := make([]float64, hoursToShow)
 	lockedSeries := make([]float64, hoursToShow)
 
 	// Create a map of truncated timestamps to stats for lookup
@@ -195,12 +195,12 @@ func (b *ChartBuilder) prepareGroupDataSeries() ([]float64, []float64, []float64
 			idx := hoursToShow - 1 - i
 			confirmedSeries[idx] = float64(stat.GroupsConfirmed)
 			flaggedSeries[idx] = float64(stat.GroupsFlagged)
-			clearedSeries[idx] = float64(stat.GroupsMixed)
+			mixedSeries[idx] = float64(stat.GroupsMixed)
 			lockedSeries[idx] = float64(stat.GroupsLocked)
 		}
 	}
 
-	return xValues, confirmedSeries, flaggedSeries, clearedSeries, lockedSeries
+	return xValues, confirmedSeries, flaggedSeries, mixedSeries, lockedSeries
 }
 
 // prepareGridLinesAndTicks creates grid lines and x-axis labels.

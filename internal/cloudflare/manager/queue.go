@@ -196,37 +196,6 @@ func (q *Queue) MarkAsProcessed(ctx context.Context, userIDs []int64, flaggedUse
 	return nil
 }
 
-// Cleanup performs maintenance on the cloudflare.
-func (q *Queue) Cleanup(ctx context.Context, stuckTimeout, retentionPeriod time.Duration) error {
-	// Reset stuck processing items
-	resetQuery := `
-		UPDATE queued_users 
-		SET processing = 0 
-		WHERE processing = 1 
-		AND processed = 0 
-		AND queued_at < ?
-	`
-
-	stuckCutoff := time.Now().Add(-stuckTimeout).Unix()
-	if _, err := q.d1.ExecuteSQL(ctx, resetQuery, []any{stuckCutoff}); err != nil {
-		return fmt.Errorf("failed to reset stuck processing: %w", err)
-	}
-
-	// Remove outdated processed records
-	cleanupQuery := `
-		DELETE FROM queued_users 
-		WHERE processed = 1 
-		AND queued_at < ?
-	`
-
-	retentionCutoff := time.Now().Add(-retentionPeriod).Unix()
-	if _, err := q.d1.ExecuteSQL(ctx, cleanupQuery, []any{retentionCutoff}); err != nil {
-		return fmt.Errorf("failed to remove outdated records: %w", err)
-	}
-
-	return nil
-}
-
 // GetStats retrieves current cloudflare statistics.
 func (q *Queue) GetStats(ctx context.Context) (*Stats, error) {
 	// Get total items and processing count

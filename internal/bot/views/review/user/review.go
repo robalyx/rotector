@@ -224,6 +224,10 @@ func (b *ReviewBuilder) buildStatusText() string {
 		statusIcon = "✅"
 		statusName = "Cleared"
 		statusDesc = "This user has been reviewed and cleared of any violations"
+	case enum.UserTypeQueued, enum.UserTypeBloxDB, enum.UserTypeMixed, enum.UserTypePastOffender:
+		statusIcon = "ℹ️"
+		statusName = "System"
+		statusDesc = "This user is in a system status that should not appear in review"
 	}
 
 	if b.user.IsBanned {

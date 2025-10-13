@@ -8,25 +8,23 @@ request_timeout = 15000
 
 [worker.batch_sizes]
 # Number of friends to process in one batch
-friend_users = 200
+friend_users = 100
 # Number of group members to process in one batch
-group_users = 200
-
+group_users = 60
 # Number of users to check for bans in one batch
-purge_users = 200
+purge_users = 100
 # Number of groups to check for bans in one batch
-purge_groups = 100
-
+purge_groups = 25
 # Number of group trackings to process in one batch
-track_groups = 100
-
+track_groups = 25
+# Number of users to check for new groups in one batch
+track_user_groups = 25
 # Number of queue items to process in one batch
 queue_items = 10
-
 # Number of users to update thumbnails in one batch
-thumbnail_users = 100
+thumbnail_users = 25
 # Number of groups to update thumbnails in one batch 
-thumbnail_groups = 100
+thumbnail_groups = 25
 
 # Maximum concurrent AI requests for outfit analysis
 outfit_analysis = 10
@@ -40,6 +38,8 @@ friend_reason_analysis = 10
 group_reason_analysis = 10
 # Maximum concurrent AI requests for outfit reason analysis
 outfit_reason_analysis = 10
+# Maximum concurrent AI requests for category analysis
+category_analysis = 5
 # Maximum concurrent AI requests for message analysis
 message_analysis = 5
 # Maximum concurrent AI requests for ivan message analysis
@@ -57,6 +57,8 @@ friend_reason_analysis_batch = 20
 group_reason_analysis_batch = 20
 # Number of users to analyze in one outfit reason AI request
 outfit_reason_analysis_batch = 20
+# Number of users to analyze in one category AI request
+category_analysis_batch = 15
 # Number of messages to analyze in one AI request
 message_analysis_batch = 25
 # Number of ivan messages to analyze in one AI request

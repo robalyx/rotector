@@ -49,8 +49,9 @@ type OutfitAnalyzerParams struct {
 
 // OutfitThemeAnalysis contains the AI's theme detection results for a user's outfits.
 type OutfitThemeAnalysis struct {
-	Username string        `json:"username" jsonschema_description:"Username of the account being analyzed"`
-	Themes   []OutfitTheme `json:"themes"   jsonschema_description:"List of themes detected in the outfits"`
+	Username      string        `json:"username"      jsonschema_description:"Username of the account being analyzed"`
+	Themes        []OutfitTheme `json:"themes"        jsonschema_description:"List of themes detected in the outfits"`
+	HasFurryTheme bool          `json:"hasFurryTheme" jsonschema_description:"Whether any outfit has furry themes"`
 }
 
 // OutfitTheme represents a detected theme for a single outfit.
@@ -112,15 +113,17 @@ func NewOutfitAnalyzer(app *setup.App, logger *zap.Logger) *OutfitAnalyzer {
 }
 
 // ProcessUsers analyzes outfit images for a batch of users.
-// Returns a map of user IDs to their flagged outfit names.
-func (a *OutfitAnalyzer) ProcessUsers(ctx context.Context, params *OutfitAnalyzerParams) map[int64]map[string]struct{} {
+// Returns a map of user IDs to their flagged outfit names and a map of user IDs who have furry themes.
+func (a *OutfitAnalyzer) ProcessUsers(
+	ctx context.Context, params *OutfitAnalyzerParams,
+) (map[int64]map[string]struct{}, map[int64]struct{}) {
 	// Filter users based on inappropriate outfit flags and existing reasons
 	usersToProcess := a.filterUsersForOutfitProcessing(params.Users, params.ReasonsMap, params.InappropriateOutfitFlags)
 
 	// Skip if no users need outfit processing
 	if len(usersToProcess) == 0 {
 		a.logger.Info("No users to process outfits for")
-		return nil
+		return nil, nil
 	}
 
 	// Get all outfit thumbnails organized by user
@@ -131,6 +134,7 @@ func (a *OutfitAnalyzer) ProcessUsers(ctx context.Context, params *OutfitAnalyze
 		p              = pool.New().WithContext(ctx)
 		mu             sync.Mutex
 		flaggedOutfits = make(map[int64]map[string]struct{})
+		furryUsers     = make(map[int64]struct{})
 	)
 
 	for _, userInfo := range usersToProcess {
@@ -146,7 +150,7 @@ func (a *OutfitAnalyzer) ProcessUsers(ctx context.Context, params *OutfitAnalyze
 
 		p.Go(func(ctx context.Context) error {
 			// Analyze user's outfits for themes
-			outfitNames, err := a.analyzeUserOutfits(ctx, userInfo, &mu, params.ReasonsMap, outfits, userThumbs)
+			outfitNames, hasFurry, err := a.analyzeUserOutfits(ctx, userInfo, &mu, params.ReasonsMap, outfits, userThumbs)
 			if err != nil && !errors.Is(err, ErrNoViolations) {
 				a.logger.Error("Failed to analyze outfit themes",
 					zap.Error(err),
@@ -163,6 +167,14 @@ func (a *OutfitAnalyzer) ProcessUsers(ctx context.Context, params *OutfitAnalyze
 				mu.Unlock()
 			}
 
+			if hasFurry {
+				mu.Lock()
+
+				furryUsers[userInfo.ID] = struct{}{}
+
+				mu.Unlock()
+			}
+
 			return nil
 		})
 	}
@@ -170,19 +182,20 @@ func (a *OutfitAnalyzer) ProcessUsers(ctx context.Context, params *OutfitAnalyze
 	// Wait for all goroutines to complete
 	if err := p.Wait(); err != nil {
 		a.logger.Error("Error during outfit theme analysis", zap.Error(err))
-		return flaggedOutfits
+		return flaggedOutfits, furryUsers
 	}
 
 	a.logger.Info("Received AI outfit theme analysis",
 		zap.Int("processedUsers", len(usersToProcess)),
-		zap.Int("flaggedUsers", len(flaggedOutfits)))
+		zap.Int("flaggedUsers", len(flaggedOutfits)),
+		zap.Int("furryUsers", len(furryUsers)))
 
 	// Generate detailed outfit reasons for flagged users
 	if len(flaggedOutfits) > 0 {
 		a.outfitReasonAnalyzer.ProcessFlaggedUsers(ctx, params.Users, params.ReasonsMap)
 	}
 
-	return flaggedOutfits
+	return flaggedOutfits, furryUsers
 }
 
 // filterUsersForOutfitProcessing determines which users should be processed through outfit analysis.
@@ -211,15 +224,15 @@ func (a *OutfitAnalyzer) filterUsersForOutfitProcessing(
 func (a *OutfitAnalyzer) analyzeUserOutfits(
 	ctx context.Context, info *types.ReviewUser, mu *sync.Mutex, reasonsMap map[int64]types.Reasons[enum.UserReasonType],
 	outfits []*apiTypes.Outfit, thumbnailMap map[int64]string,
-) (map[string]struct{}, error) {
+) (map[string]struct{}, bool, error) {
 	// Download all outfit images
 	downloads, err := a.downloadOutfitImages(ctx, info, outfits, thumbnailMap)
 	if err != nil {
 		if errors.Is(err, ErrNoOutfits) {
-			return nil, ErrNoViolations
+			return nil, false, ErrNoViolations
 		}
 
-		return nil, fmt.Errorf("failed to download outfit images: %w", err)
+		return nil, false, fmt.Errorf("failed to download outfit images: %w", err)
 	}
 
 	// Process outfits in batches
@@ -227,6 +240,7 @@ func (a *OutfitAnalyzer) analyzeUserOutfits(
 		allSuspiciousThemes []string
 		highestConfidence   float64
 		uniqueFlaggedCount  int
+		hasFurryTheme       bool
 	)
 
 	flaggedOutfits := make(map[string]struct{})
@@ -253,6 +267,11 @@ func (a *OutfitAnalyzer) analyzeUserOutfits(
 		// Skip if no analysis or themes
 		if analysis == nil || len(analysis.Themes) == 0 {
 			continue
+		}
+
+		// Track furry theme detection
+		if analysis.HasFurryTheme {
+			hasFurryTheme = true
 		}
 
 		// Process themes from this batch
@@ -340,9 +359,14 @@ func (a *OutfitAnalyzer) analyzeUserOutfits(
 			zap.Int("totalFlaggedOutfits", len(flaggedOutfits)),
 			zap.Int("numThemes", len(allSuspiciousThemes)),
 			zap.Strings("themes", allSuspiciousThemes))
+
+		// Don't mark as furry user if they have 2+ inappropriate outfit violations
+		if uniqueFlaggedCount >= 2 {
+			hasFurryTheme = false
+		}
 	}
 
-	return flaggedOutfits, nil
+	return flaggedOutfits, hasFurryTheme, nil
 }
 
 // processOutfitBatch handles the AI analysis for a batch of outfit images.

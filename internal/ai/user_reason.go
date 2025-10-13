@@ -244,6 +244,11 @@ func (a *UserReasonAnalyzer) processReasonBatch(ctx context.Context, batch []Use
 		Temperature: openai.Float(0.0),
 		TopP:        openai.Float(0.2),
 	}
+	params.SetExtraFields(map[string]any{
+		"reasoning": map[string]any{
+			"max_tokens": 0,
+		},
+	})
 
 	// Make API request
 	var result ReasonAnalysisResult

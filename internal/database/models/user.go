@@ -71,6 +71,22 @@ func (r *UserModel) SaveUsers(ctx context.Context, tx bun.Tx, users []*types.Rev
 		return fmt.Errorf("failed to upsert users: %w", err)
 	}
 
+	// Delete existing reasons for these users to ensure complete replacement
+	if len(users) > 0 {
+		userIDs := make([]int64, len(users))
+		for i, user := range users {
+			userIDs[i] = user.ID
+		}
+
+		_, err = tx.NewDelete().
+			Model((*types.UserReason)(nil)).
+			Where("user_id IN (?)", bun.In(userIDs)).
+			Exec(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to delete old user reasons: %w", err)
+		}
+	}
+
 	// Save user reasons
 	var reasons []*types.UserReason
 
@@ -92,13 +108,9 @@ func (r *UserModel) SaveUsers(ctx context.Context, tx bun.Tx, users []*types.Rev
 	if len(reasons) > 0 {
 		_, err = tx.NewInsert().
 			Model(&reasons).
-			On("CONFLICT (user_id, reason_type) DO UPDATE").
-			Set("message = EXCLUDED.message").
-			Set("confidence = EXCLUDED.confidence").
-			Set("evidence = EXCLUDED.evidence").
 			Exec(ctx)
 		if err != nil {
-			return fmt.Errorf("failed to upsert user reasons: %w", err)
+			return fmt.Errorf("failed to insert user reasons: %w", err)
 		}
 	}
 
@@ -127,14 +139,17 @@ func (r *UserModel) ConfirmUsers(ctx context.Context, users []*types.ReviewUser)
 			return fmt.Errorf("failed to delete existing clearance records: %w", err)
 		}
 
-		// Batch update user statuses
-		_, err = tx.NewUpdate().
-			Model((*types.User)(nil)).
-			Set("status = ?", enum.UserTypeConfirmed).
-			Where("id IN (?)", bun.In(userIDs)).
-			Exec(ctx)
-		if err != nil {
-			return fmt.Errorf("failed to update user statuses: %w", err)
+		// Update user statuses and categories
+		for _, user := range users {
+			_, err = tx.NewUpdate().
+				Model((*types.User)(nil)).
+				Set("status = ?", enum.UserTypeConfirmed).
+				Set("category = ?", user.Category).
+				Where("id = ?", user.ID).
+				Exec(ctx)
+			if err != nil {
+				return fmt.Errorf("failed to update user status and category: %w", err)
+			}
 		}
 
 		// Prepare verification records
@@ -273,6 +288,39 @@ func (r *UserModel) ClearUserWithTx(ctx context.Context, tx bun.Tx, user *types.
 	return nil
 }
 
+// UpdateUsersToPastOffender updates users to past offender status and deletes their reasons.
+func (r *UserModel) UpdateUsersToPastOffender(ctx context.Context, tx bun.Tx, userIDs []int64) error {
+	if len(userIDs) == 0 {
+		return nil
+	}
+
+	// Delete user reasons
+	_, err := tx.NewDelete().
+		Model((*types.UserReason)(nil)).
+		Where("user_id IN (?)", bun.In(userIDs)).
+		Exec(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to delete user reasons: %w", err)
+	}
+
+	// Update user status to past offender
+	_, err = tx.NewUpdate().
+		Model((*types.User)(nil)).
+		Set("status = ?", enum.UserTypePastOffender).
+		Set("confidence = 0").
+		Set("last_updated = ?", time.Now()).
+		Where("id IN (?)", bun.In(userIDs)).
+		Exec(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to update users to past offender status: %w", err)
+	}
+
+	r.logger.Debug("Updated users to past offender status",
+		zap.Int("count", len(userIDs)))
+
+	return nil
+}
+
 // GetConfirmedUsersCount returns the total number of users in confirmed_users.
 func (r *UserModel) GetConfirmedUsersCount(ctx context.Context) (int, error) {
 	count, err := dbretry.Operation(ctx, func(ctx context.Context) (int, error) {
@@ -392,7 +440,9 @@ func (r *UserModel) GetUserByID(
 				result.ClearedAt = clearance.ClearedAt
 			}
 		case enum.UserTypeFlagged:
-			// Nothing to do here
+			// No additional data to load for flagged users
+		case enum.UserTypeQueued, enum.UserTypeBloxDB, enum.UserTypeMixed, enum.UserTypePastOffender:
+			// No verification/clearance data for these statuses
 		}
 
 		// Update last_viewed
@@ -589,6 +639,49 @@ func (r *UserModel) GetUsersToCheck(
 	return userIDs, nil
 }
 
+// GetUsersForGroupCheck finds flagged/confirmed users that haven't had their groups checked recently.
+func (r *UserModel) GetUsersForGroupCheck(
+	ctx context.Context, limit int,
+) ([]int64, error) {
+	var userIDs []int64
+
+	err := dbretry.Transaction(ctx, r.db, func(ctx context.Context, tx bun.Tx) error {
+		// Get users that need group checking
+		err := tx.NewSelect().
+			Model((*types.User)(nil)).
+			Column("id").
+			Where("status IN (?, ?)", enum.UserTypeConfirmed, enum.UserTypeFlagged).
+			Where("is_banned = false").
+			Where("last_group_check < NOW() - INTERVAL '3 days'").
+			OrderExpr("last_group_check ASC").
+			Limit(limit).
+			For("UPDATE SKIP LOCKED").
+			Scan(ctx, &userIDs)
+		if err != nil {
+			return fmt.Errorf("failed to get users: %w", err)
+		}
+
+		if len(userIDs) > 0 {
+			// Update last_group_check
+			_, err = tx.NewUpdate().
+				Model((*types.User)(nil)).
+				Set("last_group_check = NOW()").
+				Where("id IN (?)", bun.In(userIDs)).
+				Exec(ctx)
+			if err != nil {
+				return fmt.Errorf("failed to update users: %w", err)
+			}
+		}
+
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return userIDs, nil
+}
+
 // MarkUsersBanStatus updates the banned status of users in their respective tables.
 func (r *UserModel) MarkUsersBanStatus(ctx context.Context, userIDs []int64, isBanned bool) error {
 	err := dbretry.NoResult(ctx, func(ctx context.Context) error {
@@ -658,6 +751,8 @@ func (r *UserModel) GetUserCounts(ctx context.Context) (*types.UserCounts, error
 				counts.Flagged = sc.Count
 			case enum.UserTypeCleared:
 				counts.Cleared = sc.Count
+			case enum.UserTypeQueued, enum.UserTypeBloxDB, enum.UserTypeMixed, enum.UserTypePastOffender:
+				// These statuses are not tracked in the counts struct
 			}
 		}
 
@@ -1398,7 +1493,9 @@ func (r *UserModel) GetNextToReview(
 				result.ClearedAt = clearance.ClearedAt
 			}
 		case enum.UserTypeFlagged:
-			// Nothing to do here
+			// No additional data to load for flagged users
+		case enum.UserTypeQueued, enum.UserTypeBloxDB, enum.UserTypeMixed, enum.UserTypePastOffender:
+			// No verification/clearance data for these statuses
 		}
 
 		// Update last_viewed
@@ -2446,4 +2543,135 @@ func (r *UserModel) GetUsersWithReason(
 		zap.Int64("cursorID", cursorID))
 
 	return result, nil
+}
+
+// GetUsersWithoutCategory gets users that don't have a category assigned.
+func (r *UserModel) GetUsersWithoutCategory(
+	ctx context.Context, limit int, cursorID int64,
+) ([]*types.ReviewUser, error) {
+	var users []types.User
+
+	err := dbretry.NoResult(ctx, func(ctx context.Context) error {
+		query := r.db.NewSelect().
+			Model(&users).
+			Column("id", "status").
+			Where("status IN (?, ?)", enum.UserTypeFlagged, enum.UserTypeConfirmed).
+			Where("category IS NULL").
+			Order("id ASC").
+			Limit(limit)
+
+		if cursorID > 0 {
+			query.Where("id > ?", cursorID)
+		}
+
+		return query.Scan(ctx)
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get users without category: %w", err)
+	}
+
+	// Convert to review users with minimal data
+	result := make([]*types.ReviewUser, len(users))
+	for i, user := range users {
+		result[i] = &types.ReviewUser{
+			User: &user,
+		}
+	}
+
+	r.logger.Debug("Found users without category",
+		zap.Int("count", len(result)),
+		zap.Int("limit", limit),
+		zap.Int64("cursorID", cursorID))
+
+	return result, nil
+}
+
+// GetUserIDsByCategory returns all user IDs for a specific category.
+// Only returns users with flagged or confirmed status (excludes cleared users).
+func (r *UserModel) GetUserIDsByCategory(
+	ctx context.Context, category enum.UserCategoryType,
+) ([]int64, error) {
+	var userIDs []int64
+
+	err := dbretry.NoResult(ctx, func(ctx context.Context) error {
+		return r.db.NewSelect().
+			Model((*types.User)(nil)).
+			Column("id").
+			Where("status IN (?, ?)", enum.UserTypeFlagged, enum.UserTypeConfirmed).
+			Where("category = ?", category).
+			Order("id ASC").
+			Scan(ctx, &userIDs)
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get user IDs by category: %w", err)
+	}
+
+	r.logger.Debug("Found users by category",
+		zap.Int("count", len(userIDs)),
+		zap.Int("category", int(category)))
+
+	return userIDs, nil
+}
+
+// UpdateUserCategories updates the category field for multiple users.
+func (r *UserModel) UpdateUserCategories(
+	ctx context.Context, categories map[int64]enum.UserCategoryType,
+) error {
+	if len(categories) == 0 {
+		return nil
+	}
+
+	// Update each user's category
+	for userID, category := range categories {
+		_, err := r.db.NewUpdate().
+			Model((*types.User)(nil)).
+			Set("category = ?", category).
+			Where("id = ?", userID).
+			Exec(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to update category for user %d: %w", userID, err)
+		}
+	}
+
+	r.logger.Debug("Updated user categories",
+		zap.Int("count", len(categories)))
+
+	return nil
+}
+
+// GetGlobalTargetCandidates returns candidate users for global targeting in the war system.
+func (r *UserModel) GetGlobalTargetCandidates(
+	ctx context.Context, limit int, excludeUserIDs []int64,
+) ([]*types.GlobalTargetCandidate, error) {
+	var candidates []*types.GlobalTargetCandidate
+
+	query := r.db.NewSelect().
+		Model((*types.User)(nil)).
+		Column("id", "name", "status", "confidence", "category").
+		Where("status IN (?, ?)", enum.UserTypeFlagged, enum.UserTypeConfirmed).
+		Where("is_banned = ?", false).
+		Where(`EXISTS (SELECT 1 FROM user_reasons WHERE user_id = users.id AND reason_type = ?)`, enum.UserReasonTypeProfile).
+		Where(`EXISTS (SELECT 1 FROM user_reasons WHERE user_id = users.id AND reason_type = ?)`, enum.UserReasonTypeFriend).
+		Where(`EXISTS (SELECT 1 FROM user_reasons WHERE user_id = users.id AND reason_type = ?)`, enum.UserReasonTypeGroup).
+		Order("status DESC", "confidence DESC").
+		Limit(limit)
+
+	// Exclude recent targets if provided
+	if len(excludeUserIDs) > 0 {
+		query = query.Where("id NOT IN (?)", bun.In(excludeUserIDs))
+	}
+
+	err := dbretry.NoResult(ctx, func(ctx context.Context) error {
+		return query.Scan(ctx, &candidates)
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get global target candidates: %w", err)
+	}
+
+	r.logger.Debug("Retrieved global target candidates",
+		zap.Int("count", len(candidates)),
+		zap.Int("limit", limit),
+		zap.Int("excludeCount", len(excludeUserIDs)))
+
+	return candidates, nil
 }

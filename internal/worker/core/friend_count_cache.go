@@ -13,7 +13,7 @@ import (
 
 const (
 	// FriendCountTTL defines how long friend counts remain cached.
-	FriendCountTTL = 7 * 24 * time.Hour
+	FriendCountTTL = 14 * 24 * time.Hour
 
 	// FriendCountKeyPrefix identifies friend count entries in Redis.
 	FriendCountKeyPrefix = "friend_count:"

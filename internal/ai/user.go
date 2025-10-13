@@ -380,7 +380,7 @@ func (a *UserAnalyzer) shouldSkipFlaggedUser(
 
 	// Skip users with specific conditions when they have no existing reasons
 	if len(params.ReasonsMap[originalInfo.ID]) == 0 {
-		if flaggedUser.Confidence < 0.8 {
+		if flaggedUser.Confidence < 0.7 {
 			a.logger.Info("Skipping user with low confidence and no existing reasons",
 				zap.Int64("userID", originalInfo.ID),
 				zap.String("username", flaggedUser.Name),

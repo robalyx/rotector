@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"time"
 
 	"github.com/bytedance/sonic"
 	"github.com/robalyx/rotector/internal/cloudflare/api"
@@ -12,11 +13,6 @@ import (
 	"github.com/robalyx/rotector/internal/database/types"
 	"github.com/robalyx/rotector/internal/database/types/enum"
 	"go.uber.org/zap"
-)
-
-const (
-	// IntegrationFlagType is the flag type used for integration sources (like BloxDB, custom uploads).
-	IntegrationFlagType = 4
 )
 
 const (
@@ -44,17 +40,19 @@ type IntegrationUser struct {
 
 // UserFlags handles user flagging operations.
 type UserFlags struct {
-	d1     *api.D1Client
-	db     database.Client
-	logger *zap.Logger
+	d1         *api.D1Client
+	db         database.Client
+	warManager *WarManager
+	logger     *zap.Logger
 }
 
 // NewUserFlags creates a new user flags manager.
-func NewUserFlags(d1Client *api.D1Client, db database.Client, logger *zap.Logger) *UserFlags {
+func NewUserFlags(d1Client *api.D1Client, db database.Client, warManager *WarManager, logger *zap.Logger) *UserFlags {
 	return &UserFlags{
-		d1:     d1Client,
-		db:     db,
-		logger: logger,
+		d1:         d1Client,
+		db:         db,
+		warManager: warManager,
+		logger:     logger,
 	}
 }
 
@@ -76,6 +74,12 @@ func (u *UserFlags) AddConfirmed(ctx context.Context, user *types.ReviewUser, re
 
 // Remove removes a user from the user_flags table.
 func (u *UserFlags) Remove(ctx context.Context, userID int64) error {
+	// Remove from war system
+	if err := u.warManager.RemoveUserFromWarSystem(ctx, userID); err != nil {
+		return fmt.Errorf("failed to remove user from war system: %w", err)
+	}
+
+	// Remove from user_flags table
 	sqlStmt := "DELETE FROM user_flags WHERE user_id = ?"
 
 	_, err := u.d1.ExecuteSQL(ctx, sqlStmt, []any{userID})
@@ -93,6 +97,11 @@ func (u *UserFlags) Remove(ctx context.Context, userID int64) error {
 func (u *UserFlags) RemoveBatch(ctx context.Context, userIDs []int64) error {
 	if len(userIDs) == 0 {
 		return nil
+	}
+
+	// Remove from war system
+	if err := u.warManager.RemoveUsersFromWarSystem(ctx, userIDs); err != nil {
+		return fmt.Errorf("failed to remove users from war system: %w", err)
 	}
 
 	// Process deletions in batches to avoid SQLite variable limits
@@ -132,16 +141,18 @@ func (u *UserFlags) UpdateBanStatus(ctx context.Context, userIDs []int64, isBann
 		return nil
 	}
 
-	// Build query with CASE statement to update is_banned based on user_id
-	query := "UPDATE user_flags SET is_banned = ? WHERE user_id IN ("
-	params := make([]any, 0, len(userIDs)+1)
+	// Build query to update is_banned and last_updated
+	query := "UPDATE user_flags SET is_banned = ?, last_updated = ? WHERE user_id IN ("
+	params := make([]any, 0, len(userIDs)+2)
 
-	// Add the banned status as first parameter
+	// Add the banned status and timestamp as first parameters
 	if isBanned {
 		params = append(params, 1)
 	} else {
 		params = append(params, 0)
 	}
+
+	params = append(params, time.Now().Unix())
 
 	// Add placeholders for WHERE clause
 	for i, userID := range userIDs {
@@ -165,6 +176,55 @@ func (u *UserFlags) UpdateBanStatus(ctx context.Context, userIDs []int64, isBann
 		zap.Int("users_processed", len(userIDs)),
 		zap.Bool("is_banned", isBanned),
 		zap.Int("rows_affected", len(result)))
+
+	return nil
+}
+
+// UpdateToPastOffender updates users to past offender status in D1 when they become clean.
+func (u *UserFlags) UpdateToPastOffender(ctx context.Context, userIDs []int64) error {
+	if len(userIDs) == 0 {
+		return nil
+	}
+
+	// Process updates in batches to avoid SQLite variable limits
+	for i := 0; i < len(userIDs); i += MaxUpdateBatchSize {
+		end := min(i+MaxUpdateBatchSize, len(userIDs))
+		batchUserIDs := userIDs[i:end]
+
+		query := `UPDATE user_flags
+			SET flag_type = ?,
+			    confidence = 0,
+			    reasons = NULL,
+			    reviewer_id = NULL,
+			    reviewer_username = NULL,
+			    reviewer_display_name = NULL,
+			    integration_sources = NULL,
+			    last_updated = ?
+			WHERE user_id IN (`
+
+		params := make([]any, 0, len(batchUserIDs)+2)
+		params = append(params, enum.UserTypePastOffender, time.Now().Unix())
+
+		for j, userID := range batchUserIDs {
+			if j > 0 {
+				query += ","
+			}
+
+			query += "?"
+
+			params = append(params, userID)
+		}
+
+		query += ")"
+
+		_, err := u.d1.ExecuteSQL(ctx, query, params)
+		if err != nil {
+			return fmt.Errorf("failed to update users to past offender status (batch %d-%d): %w", i, end-1, err)
+		}
+	}
+
+	u.logger.Debug("Updated users to past offender status in D1",
+		zap.Int("count", len(userIDs)))
 
 	return nil
 }
@@ -194,8 +254,8 @@ func (u *UserFlags) AddIntegration(ctx context.Context, users map[int64]*Integra
 func (u *UserFlags) cleanupIntegrationData(ctx context.Context, integrationType string) error {
 	// Find all records containing this integration source
 	query := `
-		SELECT user_id, flag_type, reasons, integration_sources 
-		FROM user_flags 
+		SELECT user_id, flag_type, reasons, integration_sources, category
+		FROM user_flags
 		WHERE integration_sources LIKE ?
 	`
 
@@ -242,7 +302,7 @@ func (u *UserFlags) cleanupIntegrationData(ctx context.Context, integrationType 
 		}
 
 		// Delete integration records that have no remaining sources
-		if int(flagType) == IntegrationFlagType && isEmpty {
+		if int(flagType) == int(enum.UserTypeBloxDB) && isEmpty {
 			recordsToDelete = append(recordsToDelete, int64(userID))
 			continue
 		}
@@ -391,8 +451,8 @@ func (u *UserFlags) getExistingRecords(ctx context.Context, userIDs []int64) (ma
 	}
 
 	query := `
-		SELECT user_id, flag_type, confidence, reasons, integration_sources
-		FROM user_flags 
+		SELECT user_id, flag_type, confidence, reasons, integration_sources, category
+		FROM user_flags
 		WHERE user_id IN (`
 
 	params := make([]any, len(userIDs))
@@ -476,7 +536,7 @@ func (u *UserFlags) processIntegrationUser(
 	}
 
 	// Flagged/confirmed user to preserve PostgreSQL authority, merge data
-	if int(flagType) == 1 || int(flagType) == 2 {
+	if int(flagType) == int(enum.UserTypeFlagged) || int(flagType) == int(enum.UserTypeConfirmed) {
 		return u.mergeWithAuthorityRecord(ctx, user.ID, existingRecord, string(newReasonJSON), string(newSourceJSON))
 	}
 
@@ -490,15 +550,17 @@ func (u *UserFlags) processIntegrationUser(
 func (u *UserFlags) createIntegrationRecord(ctx context.Context, userID int64, confidence float64, reasonsJSON, sourcesJSON string) error {
 	query := `
 		INSERT OR REPLACE INTO user_flags (
-			user_id, 
-			flag_type, 
-			confidence, 
+			user_id,
+			flag_type,
+			confidence,
 			reasons,
 			integration_sources,
-			is_banned
-		) VALUES (?, ?, ?, ?, ?, COALESCE((SELECT is_banned FROM user_flags WHERE user_id = ?), 0))`
+			is_banned,
+			category,
+			last_updated
+		) VALUES (?, ?, ?, ?, ?, COALESCE((SELECT is_banned FROM user_flags WHERE user_id = ?), 0), NULL, ?)`
 
-	_, err := u.d1.ExecuteSQL(ctx, query, []any{userID, IntegrationFlagType, confidence, reasonsJSON, sourcesJSON, userID})
+	_, err := u.d1.ExecuteSQL(ctx, query, []any{userID, enum.UserTypeBloxDB, confidence, reasonsJSON, sourcesJSON, userID, time.Now().Unix()})
 	if err != nil {
 		return fmt.Errorf("failed to create integration record for user %d: %w", userID, err)
 	}
@@ -539,11 +601,11 @@ func (u *UserFlags) mergeWithAuthorityRecord(
 	}
 
 	query := `
-		UPDATE user_flags 
-		SET reasons = ?, integration_sources = ?
+		UPDATE user_flags
+		SET reasons = ?, integration_sources = ?, last_updated = ?
 		WHERE user_id = ?`
 
-	_, err = u.d1.ExecuteSQL(ctx, query, []any{mergedReasons, mergedSources, userID})
+	_, err = u.d1.ExecuteSQL(ctx, query, []any{mergedReasons, mergedSources, time.Now().Unix(), userID})
 	if err != nil {
 		return fmt.Errorf("failed to update authority record for user %d: %w", userID, err)
 	}
@@ -584,11 +646,11 @@ func (u *UserFlags) updateIntegrationRecord(
 	}
 
 	query := `
-		UPDATE user_flags 
-		SET confidence = ?, reasons = ?, integration_sources = ?
+		UPDATE user_flags
+		SET confidence = ?, reasons = ?, integration_sources = ?, last_updated = ?
 		WHERE user_id = ?`
 
-	_, err = u.d1.ExecuteSQL(ctx, query, []any{confidence, mergedReasons, mergedSources, userID})
+	_, err = u.d1.ExecuteSQL(ctx, query, []any{confidence, mergedReasons, mergedSources, time.Now().Unix(), userID})
 	if err != nil {
 		return fmt.Errorf("failed to update integration record for user %d: %w", userID, err)
 	}
@@ -727,7 +789,12 @@ func (u *UserFlags) updateBatch(ctx context.Context, records []map[string]any) e
 		}
 	}
 
-	query += `END `
+	query += `END, `
+
+	// Add last_updated field
+	query += `last_updated = ? `
+
+	params = append(params, time.Now().Unix())
 
 	// Add WHERE clause to limit updates to only the records we're changing
 	query += `WHERE user_id IN (`
@@ -810,17 +877,19 @@ func (u *UserFlags) addUsersWithMerge(
 			// Insert the user record
 			sqlStmt := `
 				INSERT OR REPLACE INTO user_flags (
-					user_id, 
-					flag_type, 
-					confidence, 
+					user_id,
+					flag_type,
+					confidence,
 					reasons,
 					reviewer_id,
 					reviewer_username,
 					reviewer_display_name,
 					engine_version,
 					integration_sources,
-					is_banned
-				) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+					is_banned,
+					category,
+					last_updated
+				) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
 			var params []any
 			if reviewerID != nil {
@@ -835,6 +904,8 @@ func (u *UserFlags) addUsersWithMerge(
 					user.EngineVersion,
 					integrationSources,
 					user.IsBanned,
+					int(user.Category),
+					time.Now().Unix(),
 				}
 			} else {
 				params = []any{
@@ -848,6 +919,8 @@ func (u *UserFlags) addUsersWithMerge(
 					user.EngineVersion,
 					integrationSources,
 					user.IsBanned,
+					int(user.Category),
+					time.Now().Unix(),
 				}
 			}
 
@@ -895,8 +968,8 @@ func (u *UserFlags) checkExistingIntegrationRecords(ctx context.Context, userIDs
 
 	// Query for existing integration records
 	checkQuery := `
-		SELECT user_id, reasons, integration_sources 
-		FROM user_flags 
+		SELECT user_id, reasons, integration_sources, category
+		FROM user_flags
 		WHERE user_id IN (`
 
 	checkParams := make([]any, len(userIDs)+1)
@@ -910,7 +983,7 @@ func (u *UserFlags) checkExistingIntegrationRecords(ctx context.Context, userIDs
 	}
 
 	checkQuery += ") AND flag_type = ?"
-	checkParams[len(userIDs)] = IntegrationFlagType
+	checkParams[len(userIDs)] = enum.UserTypeBloxDB
 
 	existingRecords, err := u.d1.ExecuteSQL(ctx, checkQuery, checkParams)
 	if err != nil {
