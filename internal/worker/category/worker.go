@@ -106,6 +106,11 @@ func (w *Worker) processUsersWithoutCategory(ctx context.Context) (int, error) {
 			w.logger.Error("Failed to get users with reasons for batch",
 				zap.Error(err))
 
+			// Advance cursor and back off to avoid hot loop
+			cursorID = users[len(users)-1].ID
+
+			utils.ContextSleep(ctx, batchDelay)
+
 			continue
 		}
 

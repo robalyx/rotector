@@ -276,40 +276,32 @@ func (u *UserFlags) cleanupIntegrationData(ctx context.Context, integrationType 
 	)
 
 	for _, record := range result {
-		userID, ok := record["user_id"].(float64)
-		if !ok {
-			continue
-		}
-
-		flagType, ok := record["flag_type"].(float64)
-		if !ok {
-			continue
-		}
-
-		integrationSources, _ := record["integration_sources"].(string)
-		reasons, _ := record["reasons"].(string)
+		userID := int64(record["user_id"].(float64))
+		flagType := int64(record["flag_type"].(float64))
+		integrationSources := record["integration_sources"].(string)
+		reasons := record["reasons"].(string)
 
 		// Clean integration_sources
 		cleanedSources, isEmpty, err := u.parseAndRemoveJSONKey(integrationSources, integrationType)
 		if err != nil {
-			return fmt.Errorf("failed to parse integration_sources JSON for user %d: %w", int64(userID), err)
+			return fmt.Errorf("failed to parse integration_sources JSON for user %d: %w", userID, err)
 		}
 
 		// Clean reasons to remove integration entries
 		cleanedReasons, _, err := u.parseAndRemoveJSONKey(reasons, integrationType)
 		if err != nil {
-			return fmt.Errorf("failed to parse reasons JSON for user %d: %w", int64(userID), err)
+			return fmt.Errorf("failed to parse reasons JSON for user %d: %w", userID, err)
 		}
 
 		// Delete integration records that have no remaining sources
-		if int(flagType) == int(enum.UserTypeBloxDB) && isEmpty {
-			recordsToDelete = append(recordsToDelete, int64(userID))
+		if flagType == int64(enum.UserTypeBloxDB) && isEmpty {
+			recordsToDelete = append(recordsToDelete, userID)
 			continue
 		}
 
 		// Mark for update
 		recordsToUpdate = append(recordsToUpdate, map[string]any{
-			"user_id":             int64(userID),
+			"user_id":             userID,
 			"integration_sources": cleanedSources,
 			"reasons":             cleanedReasons,
 		})

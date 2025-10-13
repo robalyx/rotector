@@ -13,7 +13,6 @@ import (
 // LeaderboardEntry represents a single user's leaderboard position.
 type LeaderboardEntry struct {
 	Rank         int     `json:"rank"`
-	UUID         string  `json:"uuid"`
 	DisplayName  string  `json:"displayName"`
 	TotalPoints  int     `json:"totalPoints"`
 	TotalReports int     `json:"totalReports"`
@@ -48,7 +47,6 @@ func NewLeaderboardManager(d1Client *api.D1Client, r2Client *api.R2Client, logge
 func (l *LeaderboardManager) GetLeaderboardData(ctx context.Context) ([]map[string]any, error) {
 	sql := `
 		SELECT
-		  eu.uuid,
 		  eu.discord_username,
 		  eu.is_anonymous,
 		  eu.total_points,
@@ -84,7 +82,6 @@ func (l *LeaderboardManager) GetLeaderboardData(ctx context.Context) ([]map[stri
 func (l *LeaderboardManager) GetPublicLeaderboardData(ctx context.Context) ([]map[string]any, error) {
 	sql := `
 		SELECT
-		  eu.uuid,
 		  eu.discord_username,
 		  eu.is_anonymous,
 		  eu.total_points,
@@ -175,7 +172,6 @@ func (l *LeaderboardManager) buildLeaderboardData(results []map[string]any) *Lea
 	entries := make([]LeaderboardEntry, 0, len(results))
 
 	for _, row := range results {
-		uuid := row["uuid"].(string)
 		rank := int(row["rank"].(float64))
 		isAnonymous := row["is_anonymous"].(float64) == 1
 
@@ -189,7 +185,6 @@ func (l *LeaderboardManager) buildLeaderboardData(results []map[string]any) *Lea
 
 		entry := LeaderboardEntry{
 			Rank:         rank,
-			UUID:         uuid,
 			DisplayName:  displayName,
 			TotalPoints:  int(row["total_points"].(float64)),
 			TotalReports: int(row["total_reports"].(float64)),

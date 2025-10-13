@@ -74,7 +74,7 @@ func (w *WarManager) AddActiveTarget(
 	`
 
 	_, err := w.d1.ExecuteSQL(ctx, sql, []any{
-		userID, zoneID, userName, userStatus, confidence, expiresAt.Format(time.RFC3339),
+		userID, zoneID, userName, userStatus, confidence, expiresAt.Format("2006-01-02 15:04:05"),
 	})
 	if err != nil {
 		return fmt.Errorf("failed to add active target: %w", err)
