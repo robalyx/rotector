@@ -254,7 +254,7 @@ func (u *UserFlags) AddIntegration(ctx context.Context, users map[int64]*Integra
 func (u *UserFlags) cleanupIntegrationData(ctx context.Context, integrationType string) error {
 	// Find all records containing this integration source
 	query := `
-		SELECT user_id, flag_type, reasons, integration_sources, category
+		SELECT user_id, flag_type, COALESCE(reasons, '{}') as reasons, COALESCE(integration_sources, '{}') as integration_sources, category
 		FROM user_flags
 		WHERE integration_sources LIKE ?
 	`

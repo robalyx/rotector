@@ -174,9 +174,6 @@ func main() {
 		{Name: "AdminAction", Type: "string", Doc: "AdminAction stores the current admin action", Persist: true},
 		{Name: "AdminActionID", Type: "string", Doc: "AdminActionID stores the admin action ID", Persist: true},
 		{Name: "AdminReason", Type: "string", Doc: "AdminReason stores the admin action reason", Persist: true},
-		{Name: "AdminBanReason", Type: "enum.BanReason", Doc: "AdminBanReason stores the ban reason", Persist: true},
-		{Name: "AdminBanExpiry", Type: "*time.Time", Doc: "AdminBanExpiry stores the ban expiry time", Persist: true},
-		{Name: "AdminBanInfo", Type: "*types.DiscordBan", Doc: "AdminBanInfo stores ban information", Persist: true},
 
 		// Reviewer stats related keys
 		{Name: "ReviewerStats", Type: "map[uint64]*types.ReviewerStats", Doc: "ReviewerStats stores reviewer statistics", Persist: true},

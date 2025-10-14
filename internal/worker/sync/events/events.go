@@ -67,50 +67,5 @@ func (h *Handler) handleMessageCreate(e *gateway.MessageCreateEvent) {
 	}
 
 	// Queue the message for content analysis
-	h.handleMessageURLs(e)
 	h.addMessageToQueue(&e.Message)
-}
-
-// handleMessageURLs processes all potential Roblox game URLs from a message create event.
-func (h *Handler) handleMessageURLs(e *gateway.MessageCreateEvent) {
-	serverID := uint64(e.GuildID)
-
-	// Check message content
-	if e.Content != "" {
-		h.handleGameURL(serverID, e.Content)
-	}
-
-	// Check embeds
-	for _, embed := range e.Embeds {
-		// Check embed description
-		if embed.Description != "" {
-			h.handleGameURL(serverID, embed.Description)
-		}
-
-		// Check embed fields
-		for _, field := range embed.Fields {
-			if field.Value != "" {
-				h.handleGameURL(serverID, field.Value)
-			}
-
-			if field.Name != "" {
-				h.handleGameURL(serverID, field.Name)
-			}
-		}
-
-		// Check embed title
-		if embed.Title != "" {
-			h.handleGameURL(serverID, embed.Title)
-		}
-
-		// Check embed author name if present
-		if embed.Author != nil && embed.Author.Name != "" {
-			h.handleGameURL(serverID, embed.Author.Name)
-		}
-
-		// Check embed footer text if present
-		if embed.Footer != nil && embed.Footer.Text != "" {
-			h.handleGameURL(serverID, embed.Footer.Text)
-		}
-	}
 }

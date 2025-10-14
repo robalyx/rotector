@@ -47,7 +47,6 @@ const (
 	UserSettingsPageName  = "User Settings"
 	SettingUpdatePageName = "Setting Update"
 
-	BanPageName           = "Ban Information"
 	CaptchaPageName       = "CAPTCHA Verification"
 	TimeoutPageName       = "Timeout"
 	LogPageName           = "Activity Logs"
@@ -329,28 +328,18 @@ const (
 // Admin Menu.
 const (
 	BotSettingsButtonCustomID = "bot_settings"
-	BanUserButtonCustomID     = "ban_user" + ModalOpenSuffix
-	UnbanUserButtonCustomID   = "unban_user" + ModalOpenSuffix
 	DeleteUserButtonCustomID  = "delete_user" + ModalOpenSuffix
 	DeleteGroupButtonCustomID = "delete_group" + ModalOpenSuffix
 
-	BanUserModalCustomID     = "ban_user_modal"
-	UnbanUserModalCustomID   = "unban_user_modal"
 	DeleteUserModalCustomID  = "delete_user_modal"
 	DeleteGroupModalCustomID = "delete_group_modal"
 
-	BanUserInputCustomID     = "ban_user_input"
-	BanTypeInputCustomID     = "ban_type_input"
-	BanDurationInputCustomID = "ban_duration_input"
-	UnbanUserInputCustomID   = "unban_user_input"
 	DeleteUserInputCustomID  = "delete_user_input"
 	DeleteGroupInputCustomID = "delete_group_input"
 	AdminReasonInputCustomID = "admin_reason_input"
 
 	ActionButtonCustomID = "delete_confirm"
 
-	BanUserAction     = "ban_user"
-	UnbanUserAction   = "unban_user"
 	DeleteUserAction  = "delete_user"
 	DeleteGroupAction = "delete_group"
 )

@@ -90,9 +90,6 @@ func (s *Scanner) PerformFullScan(ctx context.Context, userID uint64) (string, e
 		return "", fmt.Errorf("failed to upsert server members: %w", err)
 	}
 
-	// Ban user from system
-	s.db.Service().Ban().CreateCondoBans(ctx, []uint64{userID})
-
 	s.logger.Info("Full scan complete",
 		zap.Uint64("userID", userID),
 		zap.Int("guild_count", len(profile.MutualGuilds)))

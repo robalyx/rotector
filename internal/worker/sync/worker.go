@@ -14,7 +14,6 @@ import (
 	"github.com/robalyx/rotector/internal/database"
 	"github.com/robalyx/rotector/internal/discord"
 	"github.com/robalyx/rotector/internal/redis"
-	"github.com/robalyx/rotector/internal/roblox/fetcher"
 	"github.com/robalyx/rotector/internal/setup"
 	"github.com/robalyx/rotector/internal/setup/config"
 	"github.com/robalyx/rotector/internal/tui/components"
@@ -33,18 +32,17 @@ var (
 
 // Worker handles syncing Discord server members.
 type Worker struct {
-	db               database.Client
-	roAPI            *api.API
-	state            *ningen.State
-	bar              *components.ProgressBar
-	reporter         *core.StatusReporter
-	logger           *zap.Logger
-	config           *config.Config
-	messageAnalyzer  *ai.MessageAnalyzer
-	eventHandler     *events.Handler
-	ratelimit        rueidis.Client
-	thumbnailFetcher *fetcher.ThumbnailFetcher
-	scanner          *discord.Scanner
+	db              database.Client
+	roAPI           *api.API
+	state           *ningen.State
+	bar             *components.ProgressBar
+	reporter        *core.StatusReporter
+	logger          *zap.Logger
+	config          *config.Config
+	messageAnalyzer *ai.MessageAnalyzer
+	eventHandler    *events.Handler
+	ratelimit       rueidis.Client
+	scanner         *discord.Scanner
 }
 
 // New creates a new sync worker.
@@ -80,18 +78,17 @@ func New(app *setup.App, bar *components.ProgressBar, logger *zap.Logger, instan
 	}
 
 	return &Worker{
-		db:               app.DB,
-		roAPI:            app.RoAPI,
-		state:            n,
-		bar:              bar,
-		reporter:         reporter,
-		logger:           logger.Named("sync_worker"),
-		config:           app.Config,
-		messageAnalyzer:  messageAnalyzer,
-		eventHandler:     eventHandler,
-		ratelimit:        ratelimit,
-		thumbnailFetcher: fetcher.NewThumbnailFetcher(app.RoAPI, logger),
-		scanner:          discord.NewScanner(app.DB, ratelimit, n.Session, logger),
+		db:              app.DB,
+		roAPI:           app.RoAPI,
+		state:           n,
+		bar:             bar,
+		reporter:        reporter,
+		logger:          logger.Named("sync_worker"),
+		config:          app.Config,
+		messageAnalyzer: messageAnalyzer,
+		eventHandler:    eventHandler,
+		ratelimit:       ratelimit,
+		scanner:         discord.NewScanner(app.DB, ratelimit, n.Session, logger),
 	}
 }
 
@@ -107,9 +104,6 @@ func (w *Worker) Start(ctx context.Context) {
 		w.logger.Fatal("Failed to open gateway", zap.Error(err))
 	}
 	defer w.state.Close()
-
-	// Start game scanner in a separate goroutine
-	go w.runGameScanner(ctx)
 
 	// Start full user scanner in a separate goroutine
 	go w.runMutualScanner(ctx)

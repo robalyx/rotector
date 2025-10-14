@@ -45,7 +45,6 @@ type UserChecker struct {
 	ivanAnalyzer       *ai.IvanAnalyzer
 	groupChecker       *GroupChecker
 	friendChecker      *FriendChecker
-	condoChecker       *CondoChecker
 	logger             *zap.Logger
 }
 
@@ -68,7 +67,6 @@ func NewUserChecker(app *setup.App, userFetcher *fetcher.UserFetcher, logger *za
 		ivanAnalyzer:       ai.NewIvanAnalyzer(app, logger),
 		groupChecker:       NewGroupChecker(app, logger),
 		friendChecker:      NewFriendChecker(app, logger),
-		condoChecker:       NewCondoChecker(app.DB, logger),
 		logger:             logger.Named("user_checker"),
 	}
 }
@@ -144,12 +142,6 @@ func (c *UserChecker) ProcessUsers(ctx context.Context, params *UserCheckerParam
 			ctxWithTimeout, acceptedUsers, translatedInfos, originalInfos, reasonsMap, 0,
 		)
 	}
-
-	// Process condo checker
-	c.condoChecker.ProcessUsers(ctxWithTimeout, &CondoCheckerParams{
-		Users:      params.Users,
-		ReasonsMap: reasonsMap,
-	})
 
 	// Process outfit analysis
 	flaggedOutfits, furryUsers := c.outfitAnalyzer.ProcessUsers(ctxWithTimeout, &ai.OutfitAnalyzerParams{

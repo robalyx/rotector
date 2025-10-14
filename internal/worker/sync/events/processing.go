@@ -214,14 +214,6 @@ func (h *Handler) processChannelMessages(serverID, channelID, channelKey uint64)
 			zap.Error(err))
 	}
 
-	// Create condo bans for all users
-	userIDs := make([]uint64, 0, len(uniqueUsers))
-	for userID := range uniqueUsers {
-		userIDs = append(userIDs, userID)
-	}
-
-	h.db.Service().Ban().CreateCondoBans(ctx, userIDs)
-
 	// Process the messages with AI
 	flaggedUsers, err := h.messageAnalyzer.ProcessMessages(ctx, serverID, channelID, serverInfo.Name, messages)
 	if err != nil {
