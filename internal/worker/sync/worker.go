@@ -88,7 +88,7 @@ func New(app *setup.App, bar *components.ProgressBar, logger *zap.Logger, instan
 		messageAnalyzer: messageAnalyzer,
 		eventHandler:    eventHandler,
 		ratelimit:       ratelimit,
-		scanner:         discord.NewScanner(app.DB, ratelimit, n.Session, logger),
+		scanner:         discord.NewScanner(app.DB, app.CFClient, ratelimit, n.Session, messageAnalyzer, logger),
 	}
 }
 

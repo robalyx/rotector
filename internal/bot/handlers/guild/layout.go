@@ -3,6 +3,7 @@ package guild
 import (
 	"github.com/diamondburned/arikawa/v3/state"
 	"github.com/redis/rueidis"
+	"github.com/robalyx/rotector/internal/ai"
 	"github.com/robalyx/rotector/internal/bot/core/interaction"
 	"github.com/robalyx/rotector/internal/database"
 	"github.com/robalyx/rotector/internal/discord"
@@ -32,11 +33,13 @@ func New(app *setup.App, client *state.State) *Layout {
 		app.Logger.Fatal("Failed to get Redis client for rate limiting", zap.Error(err))
 	}
 
+	messageAnalyzer := ai.NewMessageAnalyzer(app, app.Logger)
+
 	l := &Layout{
 		db:        app.DB,
 		client:    client,
 		ratelimit: ratelimit,
-		scanner:   discord.NewScanner(app.DB, ratelimit, client.Session, app.Logger),
+		scanner:   discord.NewScanner(app.DB, app.CFClient, ratelimit, client.Session, messageAnalyzer, app.Logger),
 		logger:    app.Logger.Named("guild_menu"),
 	}
 

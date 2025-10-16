@@ -16,8 +16,7 @@ func (w *Worker) runMutualScanner(ctx context.Context) {
 			return
 		}
 
-		before := time.Now().Add(-1 * time.Hour) // Scan users not checked in the last hour
-
+		before := time.Now().Add(-12 * time.Hour)
 		userIDs, err := w.db.Model().Sync().GetUsersForFullScan(ctx, before, 100)
 		if err != nil {
 			w.logger.Error("Failed to get users for full scan", zap.Error(err))

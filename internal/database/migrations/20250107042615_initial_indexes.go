@@ -176,11 +176,11 @@ func init() { //nolint:funlen
 			ON discord_server_members (user_id);
 
 			-- Inappropriate messages indexes
-			CREATE INDEX IF NOT EXISTS idx_inappropriate_messages_detected 
-			ON inappropriate_messages (server_id, channel_id, detected_at DESC);
-			
+			CREATE INDEX IF NOT EXISTS idx_inappropriate_messages_detected
+			ON inappropriate_messages (server_id, detected_at DESC);
+
 			CREATE INDEX IF NOT EXISTS idx_inappropriate_messages_user_detected
-			ON inappropriate_messages (server_id, channel_id, user_id, detected_at DESC);
+			ON inappropriate_messages (server_id, user_id, detected_at DESC);
 
 			CREATE INDEX IF NOT EXISTS idx_inappropriate_messages_user_id
 			ON inappropriate_messages (user_id);
@@ -199,16 +199,6 @@ func init() { //nolint:funlen
 			CREATE INDEX IF NOT EXISTS idx_guild_ban_logs_time_id
 			ON guild_ban_logs (timestamp DESC, id DESC);
 
-			-- Condo player indexes
-			CREATE INDEX IF NOT EXISTS idx_condo_players_blacklisted_url
-			ON condo_players (thumbnail_url)
-			WHERE is_blacklisted = false;
-
-			-- Condo game indexes
-			CREATE INDEX IF NOT EXISTS idx_condo_games_scan_time
-			ON condo_games (is_deleted, last_scanned ASC)
-			WHERE is_deleted = false;
-
 			-- Discord user full scan indexes
 			CREATE INDEX IF NOT EXISTS idx_discord_user_full_scans_last_scan
 			ON discord_user_full_scans (last_scan ASC);
@@ -221,22 +211,11 @@ func init() { //nolint:funlen
 			ON user_comments (target_id, commenter_id);
 
 			-- Group comments indexes
-			CREATE INDEX IF NOT EXISTS idx_group_comments_target_created 
+			CREATE INDEX IF NOT EXISTS idx_group_comments_target_created
 			ON group_comments (target_id, created_at DESC);
 
-			CREATE INDEX IF NOT EXISTS idx_group_comments_target_commenter 
+			CREATE INDEX IF NOT EXISTS idx_group_comments_target_commenter
 			ON group_comments (target_id, commenter_id);
-
-			-- Ivan message indexes
-			CREATE INDEX IF NOT EXISTS idx_ivan_messages_user_time
-			ON ivan_messages (user_id, date_time ASC);
-
-			CREATE INDEX IF NOT EXISTS idx_ivan_messages_multi_user
-			ON ivan_messages (user_id ASC, date_time ASC);
-
-			CREATE INDEX IF NOT EXISTS idx_ivan_messages_unchecked
-			ON ivan_messages (user_id) 
-			WHERE was_checked = false;
 
 			-- Reviewer info indexes
 			CREATE INDEX IF NOT EXISTS idx_reviewer_infos_updated_at
@@ -394,12 +373,6 @@ func init() { //nolint:funlen
 			-- Guild ban logs indexes
 			DROP INDEX IF EXISTS idx_guild_ban_logs_time_id;
 
-			-- Condo player indexes
-			DROP INDEX IF EXISTS idx_condo_players_blacklisted_url;
-
-			-- Condo game indexes
-			DROP INDEX IF EXISTS idx_condo_games_scan_time;
-
 			-- Discord user full scan indexes
 			DROP INDEX IF EXISTS idx_discord_user_full_scans_last_scan;
 
@@ -410,11 +383,6 @@ func init() { //nolint:funlen
 			-- Group comments indexes
 			DROP INDEX IF EXISTS idx_group_comments_target_created;
 			DROP INDEX IF EXISTS idx_group_comments_target_commenter;
-
-			-- Ivan message indexes
-			DROP INDEX IF EXISTS idx_ivan_messages_user_time;
-			DROP INDEX IF EXISTS idx_ivan_messages_multi_user;
-			DROP INDEX IF EXISTS idx_ivan_messages_unchecked;
 
 			-- Reviewer info indexes
 			DROP INDEX IF EXISTS idx_reviewer_infos_updated_at;

@@ -24,6 +24,17 @@ const (
 	UserReasonTypeBadges
 )
 
+// IsAutoAnalyzedReason returns true if the reason type is automatically analyzed by the system.
+// Auto-analyzed reasons include: Profile, Friend, Outfit, Group.
+func IsAutoAnalyzedReason(reasonType UserReasonType) bool {
+	switch reasonType {
+	case UserReasonTypeProfile, UserReasonTypeFriend, UserReasonTypeOutfit, UserReasonTypeGroup:
+		return true
+	default:
+		return false
+	}
+}
+
 // GroupReasonType represents the source of a flagging reason.
 //
 //go:generate go tool enumer -type=GroupReasonType -trimprefix=GroupReasonType

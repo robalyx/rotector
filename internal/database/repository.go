@@ -21,7 +21,6 @@ type Repository struct {
 	sync     *models.SyncModel
 	message  *models.MessageModel
 	comment  *models.CommentModel
-	ivan     *models.IvanModel
 }
 
 // NewRepository creates a new repository instance with all models.
@@ -40,7 +39,6 @@ func NewRepository(db *bun.DB, logger *zap.Logger) *Repository {
 		sync:     models.NewSync(db, logger),
 		message:  models.NewMessage(db, logger),
 		comment:  models.NewComment(db, logger),
-		ivan:     models.NewIvan(db, logger),
 	}
 }
 
@@ -107,9 +105,4 @@ func (r *Repository) Message() *models.MessageModel {
 // Comment returns the comment model repository.
 func (r *Repository) Comment() *models.CommentModel {
 	return r.comment
-}
-
-// Ivan returns the ivan model repository.
-func (r *Repository) Ivan() *models.IvanModel {
-	return r.ivan
 }

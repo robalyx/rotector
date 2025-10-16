@@ -52,6 +52,7 @@ func init() { //nolint:funlen
 			{(*types.InappropriateUserSummary)(nil), "inappropriate_user_summaries", "user_id"},
 			{(*types.DiscordUserFullScan)(nil), "discord_user_full_scans", "user_id"},
 			{(*types.DiscordUserWhitelist)(nil), "discord_user_whitelists", "user_id"},
+			{(*types.DiscordRobloxConnection)(nil), "discord_roblox_connections", "discord_user_id"},
 			{(*types.UserComment)(nil), "user_comments", "target_id"},
 			{(*types.GroupComment)(nil), "group_comments", "target_id"},
 		}
@@ -88,7 +89,6 @@ func init() { //nolint:funlen
 			(*types.UserConsent)(nil),
 			(*types.DiscordServerInfo)(nil),
 			(*types.GuildBanLog)(nil),
-			(*types.IvanMessage)(nil),
 			(*types.ReviewerInfo)(nil),
 			(*types.GroupTrackingExclusion)(nil),
 		}
@@ -109,7 +109,6 @@ func init() { //nolint:funlen
 		models := []any{
 			(*types.GroupTrackingExclusion)(nil),
 			(*types.ReviewerInfo)(nil),
-			(*types.IvanMessage)(nil),
 			(*types.GuildBanLog)(nil),
 			(*types.DiscordServerInfo)(nil),
 			(*types.UserConsent)(nil),
@@ -137,6 +136,8 @@ func init() { //nolint:funlen
 			"group_comments",
 			"user_comments",
 			"discord_user_full_scans",
+			"discord_user_whitelists",
+			"discord_roblox_connections",
 			"inappropriate_user_summaries",
 			"inappropriate_messages",
 			"discord_user_redactions",

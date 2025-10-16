@@ -15,6 +15,12 @@ import (
 	"go.uber.org/zap"
 )
 
+// Design Note: integration_sources and reasons are stored as JSON columns in the user_flags table
+// rather than normalized into separate tables. This is a deliberate trade-off to minimize the number
+// of rows read per query, as Cloudflare D1 charges based on rows read. While this sacrifices some
+// code quality and normalization principles, it significantly reduces costs by keeping all user flag
+// data in a single row per user.
+
 const (
 	// MaxFlaggedUsersBatchSize is the maximum number of flagged users that can be inserted in a single batch.
 	MaxFlaggedUsersBatchSize = 10
@@ -199,6 +205,7 @@ func (u *UserFlags) UpdateToPastOffender(ctx context.Context, userIDs []int64) e
 			    reviewer_username = NULL,
 			    reviewer_display_name = NULL,
 			    integration_sources = NULL,
+			    is_reportable = 0,
 			    last_updated = ?
 			WHERE user_id IN (`
 
@@ -548,11 +555,22 @@ func (u *UserFlags) createIntegrationRecord(ctx context.Context, userID int64, c
 			reasons,
 			integration_sources,
 			is_banned,
+			is_reportable,
 			category,
 			last_updated
-		) VALUES (?, ?, ?, ?, ?, COALESCE((SELECT is_banned FROM user_flags WHERE user_id = ?), 0), NULL, ?)`
+		) VALUES (
+			?, ?, ?, ?, ?,
+			COALESCE((SELECT is_banned FROM user_flags WHERE user_id = ?), 0),
+			0,
+			NULL, ?
+		)`
 
-	_, err := u.d1.ExecuteSQL(ctx, query, []any{userID, enum.UserTypeBloxDB, confidence, reasonsJSON, sourcesJSON, userID, time.Now().Unix()})
+	currentTime := time.Now().Unix()
+
+	_, err := u.d1.ExecuteSQL(ctx, query, []any{
+		userID, enum.UserTypeBloxDB, confidence, reasonsJSON, sourcesJSON,
+		userID, currentTime,
+	})
 	if err != nil {
 		return fmt.Errorf("failed to create integration record for user %d: %w", userID, err)
 	}
@@ -879,11 +897,20 @@ func (u *UserFlags) addUsersWithMerge(
 					engine_version,
 					integration_sources,
 					is_banned,
+					is_reportable,
 					category,
 					last_updated
-				) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+				) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
 			var params []any
+
+			currentTime := time.Now().Unix()
+
+			isReportable := 0
+			if user.Reasons[enum.UserReasonTypeProfile] != nil {
+				isReportable = 1
+			}
+
 			if reviewerID != nil {
 				params = []any{
 					userID,
@@ -896,8 +923,9 @@ func (u *UserFlags) addUsersWithMerge(
 					user.EngineVersion,
 					integrationSources,
 					user.IsBanned,
+					isReportable,
 					int(user.Category),
-					time.Now().Unix(),
+					currentTime,
 				}
 			} else {
 				params = []any{
@@ -911,8 +939,9 @@ func (u *UserFlags) addUsersWithMerge(
 					user.EngineVersion,
 					integrationSources,
 					user.IsBanned,
+					isReportable,
 					int(user.Category),
-					time.Now().Unix(),
+					currentTime,
 				}
 			}
 

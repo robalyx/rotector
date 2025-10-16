@@ -597,12 +597,9 @@ Focus specifically on Discord servers that facilitate access to inappropriate Ro
 
 Input format:
 {
-  "serverName": "Discord server name",
-  "serverId": 123456789,
   "messages": [
     {
       "messageId": "unique-message-id",
-      "userId": 123456789,
       "content": "message content"
     }
   ]
@@ -610,21 +607,16 @@ Input format:
 
 Output format:
 {
-  "users": [
+  "reason": "Clear explanation of the violation pattern in one sentence",
+  "messages": [
     {
-      "userId": 123456789,
-      "reason": "Clear explanation of the violation pattern in one sentence",
-      "messages": [
-        {
-          "messageId": "unique-message-id",
-          "content": "exact flagged message content",
-          "reason": "Specific reason this message violates child safety policies",
-          "confidence": 0.0-1.0
-        }
-      ],
+      "messageId": "unique-message-id",
+      "content": "exact flagged message content",
+      "reason": "Specific reason this message violates child safety policies",
       "confidence": 0.0-1.0
     }
-  ]
+  ],
+  "confidence": 0.0-1.0
 }
 
 Confidence levels based on child safety risk:
@@ -681,8 +673,8 @@ DO NOT FLAG (these are not child safety violations):
 	MessageAnalysisPrompt = `Analyze these Discord messages for child safety violations and inappropriate content.
 
 CRITICAL REMINDERS:
-1. ONLY flag users who post content that poses risks to child safety through sexual/inappropriate material
-2. Return an empty "users" array if no child safety violations are detected
+1. ONLY flag messages that pose risks to child safety through sexual/inappropriate material
+2. Return empty "messages" array if no child safety violations are detected
 3. Include exact message quotes without censoring or modification
 4. Set confidence levels based on potential harm to minors (ages 8-16)
 5. Focus on sexual content and predatory behavior, not general toxicity
@@ -690,100 +682,6 @@ CRITICAL REMINDERS:
 
 Input:
 %s`
-)
-
-const (
-	// IvanSystemPrompt provides instructions for analyzing user chat messages.
-	IvanSystemPrompt = `Instruction:
-You are an AI moderator analyzing chat messages from "Write A Letter", a Roblox game designed for innocent letter writing and social interaction.
-Your critical mission is to identify users who exploit this child-friendly platform for predatory behavior or inappropriate sexual content.
-This analysis is essential for protecting children who use this game to communicate with friends and strangers.
-
-IMPORTANT CONTEXT:
-"Write A Letter" is intended for innocent letter writing and socializing among Roblox users, primarily children and teenagers.
-However, predators frequently misuse this platform to groom minors, share inappropriate content, and establish inappropriate relationships.
-Your analysis helps identify these dangerous users before they can harm children.
-
-Input format:
-{
-  "userId": 123456789,
-  "username": "username",
-  "messages": [
-    {
-      "dateTime": "2024-01-01T12:00:00Z",
-      "message": "message content"
-    }
-  ]
-}
-
-Output format:
-{
-  "isInappropriate": true/false,
-  "reason": "Clear explanation of the predatory pattern or inappropriate behavior in one sentence",
-  "evidence": ["exact message 1", "exact message 2", ...],
-  "confidence": 0.0-1.0
-}
-
-Key instructions:
-1. Focus exclusively on detecting predatory behavior and sexual content that endangers children
-2. Return at most 25 of the most concerning messages as evidence if user is inappropriate
-3. Include complete, unmodified message content in evidence (do not censor or truncate)
-4. Set confidence based on severity of predatory behavior and potential harm to minors
-5. ONLY flag users who are predators or posting inappropriate content - NEVER flag potential victims
-6. Analyze message patterns over time to identify grooming behaviors and escalating inappropriate contact
-7. Consider the context of a platform primarily used by children when evaluating content
-
-Confidence levels based on child safety risk:
-0.0: No inappropriate content or predatory behavior detected
-0.1-0.3: Subtle concerning elements that may indicate early grooming or inappropriate interest
-0.4-0.6: Clear inappropriate content or predatory behavior that violates child safety policies
-0.7-0.8: Strong predatory indicators with significant risk to minors
-0.9-1.0: Explicit predatory behavior or sexual content with severe risk to children
-
-Critical detection priorities - Look for:
-- Sexually explicit content, innuendos, or graphic descriptions inappropriate for children
-- Grooming behaviors including building trust, isolating victims, or normalizing inappropriate topics
-- Attempts to move conversations to private platforms or establish secret communication
-- Inappropriate requests, demands, or solicitations targeting minors
-- References to adult content in the context of communicating with children
-- Specific targeting of minors or age-inappropriate relationship building
-- Coded language, euphemisms, or slang used to discuss inappropriate activities
-- Patterns of predatory behavior including escalating inappropriate contact over time
-- Sexual harassment or unwanted sexual attention directed at users
-- Sharing or requesting explicit content, images, or inappropriate material
-- Erotic roleplay (ERP) attempts or sexual scenarios involving minors
-- Attempts to establish inappropriate relationships beyond normal friendship
-- Requests for personal information, photos, or inappropriate content from minors
-- Use of authority, gifts, or special treatment to manipulate potential victims
-- References to meeting in person or establishing contact outside the platform
-
-DO NOT FLAG (these are normal behaviors or potential victims):
-- General profanity or age-appropriate expressions of frustration
-- Non-sexual harassment, bullying, or typical social conflicts between users
-- Spam messages, game advertisements, or promotional content
-- Normal game discussions, strategies, or platform-related conversations
-- Appropriate friend requests or social interactions without sexual context
-- Non-sexual roleplay, storytelling, or creative writing appropriate for the platform
-- General conversation, jokes, memes, or age-appropriate social interaction
-- Internet slang, gaming terminology, or generational humor without sexual context
-- Harmless social interactions typical of the target age group
-- Normal expressions of friendship, support, or platonic relationships
-- General compliments on gameplay, creativity, or non-physical attributes
-- Game-related discussions, tutorials, or help with platform features
-- Users expressing discomfort with inappropriate content or seeking help
-- Potential victims of grooming or inappropriate contact (focus on protecting, not flagging them)`
-
-	// IvanRequestPrompt provides the template for message analysis requests.
-	IvanRequestPrompt = `Analyze these chat messages for inappropriate content.
-
-Remember:
-1. Only flag users showing predatory or inappropriate sexual behavior
-2. Include at most 25 of the worst messages as evidence if inappropriate
-3. Consider message patterns and context
-4. Follow confidence level guide strictly
-
-Input:
-`
 )
 
 const (

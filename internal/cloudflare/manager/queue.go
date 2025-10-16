@@ -155,8 +155,9 @@ func (q *Queue) MarkAsProcessed(ctx context.Context, userIDs []int64, flaggedUse
 	}
 
 	// Build query with placeholders for all user IDs and their flagged status
-	query := "UPDATE queued_users SET processed = 1, processing = 0, flagged = CASE user_id "
-	params := make([]any, 0, len(userIDs))
+	query := "UPDATE queued_users SET processed = 1, processing = 0, processed_at = ?, flagged = CASE user_id "
+	params := make([]any, 0, len(userIDs)+1)
+	params = append(params, time.Now().Unix())
 
 	// Add CASE statement for each user ID
 	for _, id := range userIDs {

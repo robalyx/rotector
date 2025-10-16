@@ -132,7 +132,7 @@ stats_model = "grok-4-fast"
 # Model to use for outfit analysis
 outfit_model = "gemini-2.5-flash"
 # Model to use for message analysis
-message_model = "gemini-2.5-flash"
+message_model = "grok-4-fast"
 # Model to use for ivan message analysis
 ivan_model = "gemini-2.5-flash"
 

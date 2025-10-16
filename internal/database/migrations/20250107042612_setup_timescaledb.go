@@ -17,7 +17,7 @@ func init() {
 
 		// Create hypertables
 		_, err = db.NewRaw(`
-			SELECT create_hypertable('activity_logs', 'activity_timestamp', 
+			SELECT create_hypertable('activity_logs', 'activity_timestamp',
 				chunk_time_interval => INTERVAL '1 day',
 				if_not_exists => TRUE
 			);

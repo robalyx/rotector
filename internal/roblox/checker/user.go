@@ -21,11 +21,12 @@ import (
 
 // UserCheckerParams contains all the parameters needed for user checker processing.
 type UserCheckerParams struct {
-	Users                     []*types.ReviewUser `json:"users"`
-	InappropriateOutfitFlags  map[int64]struct{}  `json:"inappropriateOutfitFlags"`
-	InappropriateProfileFlags map[int64]struct{}  `json:"inappropriateProfileFlags"`
-	InappropriateFriendsFlags map[int64]struct{}  `json:"inappropriateFriendsFlags"`
-	InappropriateGroupsFlags  map[int64]struct{}  `json:"inappropriateGroupsFlags"`
+	Users                     []*types.ReviewUser         `json:"users"`
+	ExistingUsers             map[int64]*types.ReviewUser `json:"existingUsers"`
+	InappropriateOutfitFlags  map[int64]struct{}          `json:"inappropriateOutfitFlags"`
+	InappropriateProfileFlags map[int64]struct{}          `json:"inappropriateProfileFlags"`
+	InappropriateFriendsFlags map[int64]struct{}          `json:"inappropriateFriendsFlags"`
+	InappropriateGroupsFlags  map[int64]struct{}          `json:"inappropriateGroupsFlags"`
 }
 
 // UserChecker coordinates the checking process by combining results from
@@ -42,7 +43,6 @@ type UserChecker struct {
 	userReasonAnalyzer *ai.UserReasonAnalyzer
 	categoryAnalyzer   *ai.CategoryAnalyzer
 	outfitAnalyzer     *ai.OutfitAnalyzer
-	ivanAnalyzer       *ai.IvanAnalyzer
 	groupChecker       *GroupChecker
 	friendChecker      *FriendChecker
 	logger             *zap.Logger
@@ -64,7 +64,6 @@ func NewUserChecker(app *setup.App, userFetcher *fetcher.UserFetcher, logger *za
 		userReasonAnalyzer: ai.NewUserReasonAnalyzer(app, logger),
 		categoryAnalyzer:   ai.NewCategoryAnalyzer(app, logger),
 		outfitAnalyzer:     ai.NewOutfitAnalyzer(app, logger),
-		ivanAnalyzer:       ai.NewIvanAnalyzer(app, logger),
 		groupChecker:       NewGroupChecker(app, logger),
 		friendChecker:      NewFriendChecker(app, logger),
 		logger:             logger.Named("user_checker"),
@@ -85,6 +84,26 @@ func (c *UserChecker) ProcessUsers(ctx context.Context, params *UserCheckerParam
 
 	// Initialize map to store reasons
 	reasonsMap := make(map[int64]types.Reasons[enum.UserReasonType])
+
+	// Preserve manually-added reasons from existing users before analysis
+	// This ensures moderator-added reasons (Condo, Chat, Favorites, Badges) are not lost during reprocessing
+	if params.ExistingUsers != nil {
+		for userID, existingUser := range params.ExistingUsers {
+			if existingUser.Reasons == nil {
+				continue
+			}
+
+			for reasonType, reason := range existingUser.Reasons {
+				if !enum.IsAutoAnalyzedReason(reasonType) {
+					if reasonsMap[userID] == nil {
+						reasonsMap[userID] = make(types.Reasons[enum.UserReasonType])
+					}
+
+					reasonsMap[userID][reasonType] = reason
+				}
+			}
+		}
+	}
 
 	// Create context with timeout
 	ctxWithTimeout, cancel := context.WithTimeout(ctx, 10*time.Minute)

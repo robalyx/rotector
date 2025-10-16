@@ -147,6 +147,7 @@ func (w *Worker) Start(ctx context.Context) {
 		w.bar.SetStepMessage("Processing users", 60)
 		processResult := w.userChecker.ProcessUsers(ctx, &checker.UserCheckerParams{
 			Users:                     userInfos,
+			ExistingUsers:             batchData.ExistingUsers,
 			InappropriateOutfitFlags:  batchData.OutfitFlags,
 			InappropriateProfileFlags: batchData.ProfileFlags,
 			InappropriateFriendsFlags: batchData.FriendsFlags,

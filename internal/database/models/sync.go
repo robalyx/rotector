@@ -483,3 +483,43 @@ func (m *SyncModel) IsUserWhitelisted(ctx context.Context, userID uint64) (bool,
 		return exists, nil
 	})
 }
+
+// UpsertDiscordRobloxConnection creates or updates a Discord-Roblox account connection.
+func (m *SyncModel) UpsertDiscordRobloxConnection(ctx context.Context, connection *types.DiscordRobloxConnection) error {
+	return dbretry.NoResult(ctx, func(ctx context.Context) error {
+		_, err := m.db.NewInsert().
+			Model(connection).
+			On("CONFLICT (discord_user_id) DO UPDATE").
+			Set("roblox_user_id = EXCLUDED.roblox_user_id").
+			Set("roblox_username = EXCLUDED.roblox_username").
+			Set("verified = EXCLUDED.verified").
+			Set("updated_at = EXCLUDED.updated_at").
+			Exec(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to upsert Discord-Roblox connection: %w", err)
+		}
+
+		m.logger.Debug("Upserted Discord-Roblox connection",
+			zap.Uint64("discordUserID", connection.DiscordUserID),
+			zap.Int64("robloxUserID", connection.RobloxUserID))
+
+		return nil
+	})
+}
+
+// GetDiscordRobloxConnection retrieves a Discord-Roblox connection by Discord user ID.
+func (m *SyncModel) GetDiscordRobloxConnection(ctx context.Context, discordUserID uint64) (*types.DiscordRobloxConnection, error) {
+	return dbretry.Operation(ctx, func(ctx context.Context) (*types.DiscordRobloxConnection, error) {
+		var connection types.DiscordRobloxConnection
+
+		err := m.db.NewSelect().
+			Model(&connection).
+			Where("discord_user_id = ?", discordUserID).
+			Scan(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get Discord-Roblox connection: %w", err)
+		}
+
+		return &connection, nil
+	})
+}
