@@ -397,12 +397,14 @@ func (s *Scanner) AnalyzeAndFlagUser(
 			}
 
 			// Calculate user's confidence
-			guildConfidence := calculateCondoConfidence(guildCount)
-			messageConfidence := calculateMessageConfidence(flaggedUser.Messages)
+			confidence := calculateMessageConfidence(flaggedUser.Messages)
 
-			confidence := guildConfidence
-			if messageConfidence > confidence {
-				confidence = messageConfidence
+			// Only consider guild confidence if guild count meets threshold
+			if meetsGuildThreshold {
+				guildConfidence := calculateCondoConfidence(guildCount)
+				if guildConfidence > confidence {
+					confidence = guildConfidence
+				}
 			}
 
 			// Flag based on message content
@@ -520,8 +522,10 @@ func calculateCondoConfidence(guildCount int) float64 {
 		return 0.95
 	case guildCount == 4:
 		return 0.90
-	default: // 3 guilds (minimum threshold)
+	case guildCount == 3:
 		return 0.85
+	default: // Below minimum threshold
+		return 0.0
 	}
 }
 
