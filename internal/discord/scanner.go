@@ -399,14 +399,6 @@ func (s *Scanner) AnalyzeAndFlagUser(
 			// Calculate user's confidence
 			confidence := calculateMessageConfidence(flaggedUser.Messages)
 
-			// Only consider guild confidence if guild count meets threshold
-			if meetsGuildThreshold {
-				guildConfidence := calculateCondoConfidence(guildCount)
-				if guildConfidence > confidence {
-					confidence = guildConfidence
-				}
-			}
-
 			// Flag based on message content
 			if err := s.flagRobloxAccount(ctx, userID, robloxUserID, guildCount, true, confidence, existingUser); err != nil {
 				return fmt.Errorf("failed to flag roblox account: %w", err)
