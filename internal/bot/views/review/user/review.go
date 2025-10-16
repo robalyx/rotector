@@ -184,11 +184,6 @@ func (b *ReviewBuilder) buildStatusDisplay() []discord.ContainerSubComponent {
 		content.WriteString("\n\n## ⚠️ Active Review Warning\n" + warningDisplay)
 	}
 
-	// Add condo warning if applicable
-	if condoWarningDisplay := b.buildCondoWarningDisplay(); condoWarningDisplay != "" {
-		content.WriteString("\n\n" + condoWarningDisplay)
-	}
-
 	// Add comments if any exist
 	if len(b.Comments) > 0 {
 		content.WriteString("\n\n" + b.BuildCommentsText())
@@ -313,12 +308,6 @@ func (b *ReviewBuilder) buildInteractiveComponents() []discord.ContainerSubCompo
 	confirmButton := discord.NewDangerButton(b.getConfirmButtonLabel(), constants.ConfirmButtonCustomID)
 	clearButton := discord.NewSuccessButton(b.getClearButtonLabel(), constants.ClearButtonCustomID)
 
-	// Disable buttons if only condo reason
-	if len(b.user.Reasons) == 1 && b.user.Reasons[enum.UserReasonTypeCondo] != nil {
-		confirmButton = confirmButton.WithDisabled(true)
-		clearButton = clearButton.WithDisabled(true)
-	}
-
 	// Add all buttons to a single row
 	allButtons := make([]discord.InteractiveComponent, 0, len(navButtons)+2)
 	allButtons = append(allButtons, navButtons...)
@@ -404,32 +393,6 @@ func (b *ReviewBuilder) buildReasonDisplay() discord.ContainerSubComponent {
 	}
 
 	return discord.NewTextDisplay(content.String())
-}
-
-// buildCondoWarningDisplay creates the condo warning display.
-func (b *ReviewBuilder) buildCondoWarningDisplay() string {
-	// Check if the user has only one reason
-	if len(b.user.Reasons) != 1 {
-		return ""
-	}
-
-	// Check if the only reason is a condo reason
-	if _, hasCondoReason := b.user.Reasons[enum.UserReasonTypeCondo]; !hasCondoReason {
-		return ""
-	}
-
-	var content strings.Builder
-	content.WriteString("## ⚠️ Condo Visit Notice\n")
-	content.WriteString("This user has been flagged **only** for joining known condo games. ")
-	content.WriteString("Our detection method for condo visits is not always reliable and may incorrectly flag users, ")
-	content.WriteString("especially those with default avatars.\n\n")
-	content.WriteString("**Review Guidelines:**\n")
-	content.WriteString("- You cannot accept or reject users based solely on condo visits\n")
-	content.WriteString("- If this is a default avatar user, please **skip** this review - our system will handle these false positives\n")
-	content.WriteString("- For established accounts, please check their profiles thoroughly as AI could have missed something\n")
-	content.WriteString("- Additional evidence types (description, outfits, groups, etc.) are required to take action")
-
-	return content.String()
 }
 
 // buildActionOptions creates the action menu options.
