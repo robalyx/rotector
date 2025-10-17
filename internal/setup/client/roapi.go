@@ -4,7 +4,9 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
+	"io"
 	"net"
+	"net/http"
 	"net/url"
 	"os"
 	"strings"
@@ -30,6 +32,7 @@ var (
 	ErrInvalidProxyFormat = errors.New("invalid proxy format")
 	ErrNoProxies          = errors.New("no valid proxies found in proxy file")
 	ErrNoCookies          = errors.New("no valid cookies found in cookie file")
+	ErrAPIFetchFailed     = errors.New("failed to fetch proxies from API")
 )
 
 // Middlewares contains the middleware instances used in the client.
@@ -50,12 +53,10 @@ func GetRoAPIClient(
 		return nil, nil, fmt.Errorf("failed to read cookies: %w", err)
 	}
 
-	// Load regular proxies
-	proxiesPath := configDir + "/credentials/regular_proxies"
-
-	proxies, err := readProxiesFromFile(proxiesPath)
+	// Load regular proxies from API
+	proxies, err := fetchProxiesFromAPI(cfg.Proxy.ProxyAPIURL, cfg.Proxy.ProxyAPIKey, zapLogger)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to read proxies: %w", err)
+		return nil, nil, fmt.Errorf("failed to fetch proxies from API: %w", err)
 	}
 
 	// Load Roverse-specific proxies if the file exists
@@ -134,6 +135,83 @@ func GetRoAPIClient(
 		client.WithTimeout(requestTimeout),
 		client.WithMiddleware(middlewares...),
 	), middlewareWrapper, nil
+}
+
+// fetchProxiesFromAPI fetches proxy list from configured API endpoint.
+// Returns proxies in IP:Port format without authentication credentials.
+func fetchProxiesFromAPI(baseURL, apiKey string, zapLogger *zap.Logger) ([]*url.URL, error) {
+	// Build URL with query parameters
+	params := url.Values{}
+	params.Add("auth", apiKey)
+	params.Add("type", "displayproxies")
+	params.Add("country[]", "all")
+	params.Add("protocol", "http")
+	params.Add("format", "normal")
+	params.Add("status", "all")
+
+	fullURL := baseURL + "?" + params.Encode()
+
+	zapLogger.Debug("Fetching proxies from API", zap.String("url", baseURL))
+
+	// Make HTTP GET request
+	resp, err := http.Get(fullURL)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrAPIFetchFailed, err)
+	}
+	defer resp.Body.Close()
+
+	// Check status code
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("%w: HTTP %d: %s", ErrAPIFetchFailed, resp.StatusCode, string(body))
+	}
+
+	// Read and parse response body
+	var proxies []*url.URL
+
+	scanner := bufio.NewScanner(resp.Body)
+	lineNum := 0
+
+	for scanner.Scan() {
+		lineNum++
+		line := strings.TrimSpace(scanner.Text())
+
+		// Skip empty lines
+		if line == "" {
+			continue
+		}
+
+		// Parse IP:Port format
+		parts := strings.Split(line, ":")
+		if len(parts) != 2 {
+			return nil, fmt.Errorf("invalid proxy format at line %d: %s (expected IP:Port)", lineNum, line)
+		}
+
+		ip, port := parts[0], parts[1]
+
+		// Build proxy URL without authentication
+		proxyURL := fmt.Sprintf("http://%s", net.JoinHostPort(ip, port))
+
+		// Parse the proxy URL
+		parsedURL, err := url.Parse(proxyURL)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse proxy URL at line %d: %w", lineNum, err)
+		}
+
+		proxies = append(proxies, parsedURL)
+	}
+
+	if err := scanner.Err(); err != nil {
+		return nil, fmt.Errorf("%w: error reading response: %v", ErrAPIFetchFailed, err)
+	}
+
+	if len(proxies) == 0 {
+		return nil, fmt.Errorf("%w: no proxies returned from API", ErrAPIFetchFailed)
+	}
+
+	zapLogger.Info("Successfully fetched proxies from API", zap.Int("count", len(proxies)))
+
+	return proxies, nil
 }
 
 // readProxiesFromFile loads proxy configuration from a file in IP:Port:Username:Password format.

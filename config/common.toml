@@ -38,6 +38,11 @@ default_cooldown = 5000
 # Duration in milliseconds to mark a proxy as unhealthy after a timeout error
 unhealthy_duration = 30000
 
+# Proxy API endpoint URL
+proxy_api_url = "https://example.com"
+# Proxy API authentication key
+proxy_api_key = ""
+
 # Endpoint-specific cooldown periods in milliseconds
 [common.proxy.endpoints]
 get_friend_count = { pattern = "friends.roblox.com/v1/users/{id}/friends/count", cooldown = 5000 }

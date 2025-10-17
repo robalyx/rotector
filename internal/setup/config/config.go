@@ -305,6 +305,10 @@ type Proxy struct {
 	DefaultCooldown int `koanf:"default_cooldown"`
 	// Duration to mark proxy as unhealthy in milliseconds.
 	UnhealthyDuration int `koanf:"unhealthy_duration"`
+	// Proxy API endpoint URL.
+	ProxyAPIURL string `koanf:"proxy_api_url"`
+	// Proxy API authentication key.
+	ProxyAPIKey string `koanf:"proxy_api_key"`
 	// Endpoint-specific cooldowns.
 	Endpoints map[string]EndpointLimit `koanf:"endpoints"`
 }
