@@ -249,10 +249,11 @@ func (c *GroupChecker) ProcessUsers(ctx context.Context, params *GroupCheckerPar
 		)
 
 		// Skip users with only 1 inappropriate group unless they have inappropriate friends
+		// New accounts are not skipped as joining inappropriate groups immediately is suspicious
 		hasInappropriateFriendEvidence := totalInappropriateFriends > 5 ||
 			(len(userInfo.Friends) > 0 && confirmedFriendCount > 0 && totalInappropriateFriends == confirmedFriendCount)
 
-		if totalInappropriate == 1 && !hasInappropriateFriendEvidence {
+		if totalInappropriate == 1 && !hasInappropriateFriendEvidence && !userInfo.IsNewAccount() {
 			continue
 		}
 
@@ -464,6 +465,12 @@ func (c *GroupChecker) calculateConfidence(confirmedCount, flaggedCount, mixedCo
 func (c *GroupChecker) evaluateFriendRequirement(
 	userInfo *types.ReviewUser, confirmedCount, flaggedCount, mixedCount, totalInappropriateFriends int,
 ) bool {
+	// New accounts joining inappropriate groups immediately is suspicious enough
+	// So no need to verify friend connections for brand new accounts (likely alts)
+	if userInfo.IsNewAccount() {
+		return true
+	}
+
 	totalInappropriate := confirmedCount + flaggedCount + mixedCount
 	totalWeight := float64(confirmedCount) + (float64(flaggedCount) * 0.2) + (float64(mixedCount) * 0.8)
 

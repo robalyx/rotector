@@ -220,6 +220,7 @@ const (
 - ANY use of "spade" as a racial code word [DANGER LEVEL 5]
 - ANY use of specific emojis in sexual contexts (🍒 for body parts, 🐂 for racial fetish content) [DANGER LEVEL 4]
 - ANY suggestive emojis including winky faces ;) in isolation [DANGER LEVEL 5]
+- Use of lolicon-related coded language ("uoh", "😭 💢" emoji combination) [DANGER LEVEL 4]
 - ANY use of slang with inappropriate context ("down", "dtf", etc.) [DANGER LEVEL 3]
 - ANY claims of following TOS/rules to avoid detection [DANGER LEVEL 4]
 - ANY roleplay requests or themes including scenario-setting language (ZERO EXCEPTIONS) [DANGER LEVEL 4]

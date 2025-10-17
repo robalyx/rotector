@@ -17,7 +17,7 @@ var (
 
 const (
 	// CurrentEngineVersion represents the current AI engine version for user processing.
-	CurrentEngineVersion = "2.20"
+	CurrentEngineVersion = "2.21"
 )
 
 // User represents a user in any state (flagged, confirmed, or cleared).
@@ -42,6 +42,11 @@ type User struct {
 	IsDeleted           bool                  `bun:",notnull,default:false" json:"isDeleted"`
 	ThumbnailURL        string                `bun:",notnull"               json:"thumbnailUrl"`
 	LastThumbnailUpdate time.Time             `bun:",notnull"               json:"lastThumbnailUpdate"`
+}
+
+// IsNewAccount determines if the account is 7 days old or younger.
+func (u *User) IsNewAccount() bool {
+	return time.Since(u.CreatedAt) <= 7*24*time.Hour
 }
 
 // UserReason represents a reason for flagging a user.

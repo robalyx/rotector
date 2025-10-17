@@ -69,12 +69,21 @@ func (c *FriendChecker) ProcessUsers(ctx context.Context, params *FriendCheckerP
 	for _, userInfo := range params.Users {
 		confirmedCount := len(params.ConfirmedFriendsMap[userInfo.ID])
 		flaggedCount := len(params.FlaggedFriendsMap[userInfo.ID])
-		validFlaggedCount := c.countValidFlaggedFriends(params.FlaggedFriendsMap[userInfo.ID])
-		userFlaggedCountMap[userInfo.ID] = validFlaggedCount
+
+		// For new accounts, count all flagged friends
+		// For older accounts, filter out circular flagging cases
+		var effectiveFlaggedCount int
+		if userInfo.IsNewAccount() {
+			effectiveFlaggedCount = flaggedCount
+		} else {
+			effectiveFlaggedCount = c.countValidFlaggedFriends(params.FlaggedFriendsMap[userInfo.ID])
+		}
+
+		userFlaggedCountMap[userInfo.ID] = effectiveFlaggedCount
 
 		// Calculate confidence score
 		_, isInappropriateFriends := params.InappropriateFriendsFlags[userInfo.ID]
-		confidence := c.calculateConfidence(confirmedCount, validFlaggedCount, len(userInfo.Friends), isInappropriateFriends)
+		confidence := c.calculateConfidence(confirmedCount, effectiveFlaggedCount, len(userInfo.Friends), isInappropriateFriends)
 
 		userConfidenceMap[userInfo.ID] = confidence
 
@@ -86,8 +95,13 @@ func (c *FriendChecker) ProcessUsers(ctx context.Context, params *FriendCheckerP
 		)
 		hasExistingReasons := len(params.ReasonsMap[userInfo.ID]) > 0
 
-		if confirmedCount+flaggedCount == totalFriends && totalFriends >= 2 &&
-			(hasDescription || hasInappropriateGroups || hasExistingReasons) {
+		// For new accounts, all friends being inappropriate is immediately suspicious
+		// For older accounts, require additional supporting evidence
+		allFriendsInappropriate := confirmedCount+flaggedCount == totalFriends && totalFriends >= 2
+		newAccountException := userInfo.IsNewAccount()
+		hasSupport := hasDescription || hasInappropriateGroups || hasExistingReasons
+
+		if allFriendsInappropriate && (newAccountException || hasSupport) {
 			// Auto-flag with maximum confidence
 			confidence = 1.0
 			userConfidenceMap[userInfo.ID] = confidence
