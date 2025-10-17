@@ -67,6 +67,11 @@ secret_key = ""
 # Maximum concurrent requests to roverse
 max_concurrent = 100
 
+# Proxy API endpoint URL
+proxy_api_url = "https://example.com/"
+# Proxy API authentication key
+proxy_api_key = ""
+
 [common.circuit_breaker]
 # Maximum number of requests allowed to pass through when the circuit is half-open
 max_requests = 1

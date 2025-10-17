@@ -329,6 +329,10 @@ type Roverse struct {
 	SecretKey string `koanf:"secret_key"`
 	// Maximum concurrent requests.
 	MaxConcurrent int64 `koanf:"max_concurrent"`
+	// Proxy API endpoint URL.
+	ProxyAPIURL string `koanf:"proxy_api_url"`
+	// Proxy API authentication key.
+	ProxyAPIKey string `koanf:"proxy_api_key"`
 }
 
 // Loki contains Grafana Loki logging configuration.

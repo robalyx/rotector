@@ -81,7 +81,7 @@ func InitializeApp(ctx context.Context, serviceType telemetry.ServiceType, logDi
 	// RoAPI client is configured with middleware chain
 	requestTimeout := serviceType.GetRequestTimeout(cfg)
 
-	roAPI, middlewares, err := client.GetRoAPIClient(&cfg.Common, configDir, redisManager, logger, requestTimeout)
+	roAPI, middlewares, err := client.GetRoAPIClient(ctx, &cfg.Common, configDir, redisManager, logger, requestTimeout)
 	if err != nil {
 		return nil, err
 	}
