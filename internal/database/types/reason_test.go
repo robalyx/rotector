@@ -1,16 +1,19 @@
-package types
+package types_test
 
 import (
 	"strings"
 	"testing"
 
+	"github.com/robalyx/rotector/internal/database/types"
 	"github.com/robalyx/rotector/internal/database/types/enum"
 )
 
 func TestAddWithSource_NewReason(t *testing.T) {
-	reasons := make(Reasons[enum.UserReasonType])
+	t.Parallel()
 
-	reason := &Reason{
+	reasons := make(types.Reasons[enum.UserReasonType])
+
+	reason := &types.Reason{
 		Message:    "Inappropriate profile content detected",
 		Confidence: 0.9,
 		Evidence:   []string{"evidence1"},
@@ -31,10 +34,12 @@ func TestAddWithSource_NewReason(t *testing.T) {
 }
 
 func TestAddWithSource_UpdateExistingSource(t *testing.T) {
-	reasons := make(Reasons[enum.UserReasonType])
+	t.Parallel()
+
+	reasons := make(types.Reasons[enum.UserReasonType])
 
 	// Add initial reason
-	reason1 := &Reason{
+	reason1 := &types.Reason{
 		Message:    "First detection",
 		Confidence: 0.7,
 		Evidence:   []string{"evidence1"},
@@ -42,7 +47,7 @@ func TestAddWithSource_UpdateExistingSource(t *testing.T) {
 	reasons.AddWithSource(enum.UserReasonTypeProfile, reason1, "ProfileChecker")
 
 	// Update with same source
-	reason2 := &Reason{
+	reason2 := &types.Reason{
 		Message:    "Updated detection with more details",
 		Confidence: 0.95,
 		Evidence:   []string{"evidence2"},
@@ -68,10 +73,12 @@ func TestAddWithSource_UpdateExistingSource(t *testing.T) {
 }
 
 func TestAddWithSource_MultipleSources(t *testing.T) {
-	reasons := make(Reasons[enum.UserReasonType])
+	t.Parallel()
+
+	reasons := make(types.Reasons[enum.UserReasonType])
 
 	// Add from ProfileChecker
-	reason1 := &Reason{
+	reason1 := &types.Reason{
 		Message:    "Inappropriate username",
 		Confidence: 0.8,
 		Evidence:   []string{"username"},
@@ -79,7 +86,7 @@ func TestAddWithSource_MultipleSources(t *testing.T) {
 	reasons.AddWithSource(enum.UserReasonTypeProfile, reason1, "ProfileChecker")
 
 	// Add from AIAnalyzer
-	reason2 := &Reason{
+	reason2 := &types.Reason{
 		Message:    "Suspicious display name",
 		Confidence: 0.9,
 		Evidence:   []string{"displayname"},
@@ -87,7 +94,7 @@ func TestAddWithSource_MultipleSources(t *testing.T) {
 	reasons.AddWithSource(enum.UserReasonTypeProfile, reason2, "AIAnalyzer")
 
 	// Add from CondoChecker
-	reason3 := &Reason{
+	reason3 := &types.Reason{
 		Message:    "Description contains coded language",
 		Confidence: 0.85,
 		Evidence:   []string{"description"},
@@ -100,9 +107,11 @@ func TestAddWithSource_MultipleSources(t *testing.T) {
 	if !strings.Contains(result.Message, "[ProfileChecker] Inappropriate username") {
 		t.Error("Missing ProfileChecker message")
 	}
+
 	if !strings.Contains(result.Message, "[AIAnalyzer] Suspicious display name") {
 		t.Error("Missing AIAnalyzer message")
 	}
+
 	if !strings.Contains(result.Message, "[CondoChecker] Description contains coded language") {
 		t.Error("Missing CondoChecker message")
 	}
@@ -119,15 +128,17 @@ func TestAddWithSource_MultipleSources(t *testing.T) {
 }
 
 func TestAddWithSource_UpdateMiddleSource(t *testing.T) {
-	reasons := make(Reasons[enum.UserReasonType])
+	t.Parallel()
+
+	reasons := make(types.Reasons[enum.UserReasonType])
 
 	// Add three sources
-	reasons.AddWithSource(enum.UserReasonTypeProfile, &Reason{Message: "First", Confidence: 0.7}, "Source1")
-	reasons.AddWithSource(enum.UserReasonTypeProfile, &Reason{Message: "Second", Confidence: 0.8}, "Source2")
-	reasons.AddWithSource(enum.UserReasonTypeProfile, &Reason{Message: "Third", Confidence: 0.9}, "Source3")
+	reasons.AddWithSource(enum.UserReasonTypeProfile, &types.Reason{Message: "First", Confidence: 0.7}, "Source1")
+	reasons.AddWithSource(enum.UserReasonTypeProfile, &types.Reason{Message: "Second", Confidence: 0.8}, "Source2")
+	reasons.AddWithSource(enum.UserReasonTypeProfile, &types.Reason{Message: "Third", Confidence: 0.9}, "Source3")
 
 	// Update middle source
-	reasons.AddWithSource(enum.UserReasonTypeProfile, &Reason{Message: "Updated Second", Confidence: 0.95}, "Source2")
+	reasons.AddWithSource(enum.UserReasonTypeProfile, &types.Reason{Message: "Updated Second", Confidence: 0.95}, "Source2")
 
 	result := reasons[enum.UserReasonTypeProfile]
 
@@ -140,25 +151,29 @@ func TestAddWithSource_UpdateMiddleSource(t *testing.T) {
 	if !strings.Contains(lines[0], "[Source1] First") {
 		t.Errorf("First line incorrect: %q", lines[0])
 	}
+
 	if !strings.Contains(lines[1], "[Source2] Updated Second") {
 		t.Errorf("Second line incorrect: %q", lines[1])
 	}
+
 	if !strings.Contains(lines[2], "[Source3] Third") {
 		t.Errorf("Third line incorrect: %q", lines[2])
 	}
 }
 
 func TestAddWithSource_MalformedBrackets(t *testing.T) {
-	reasons := make(Reasons[enum.UserReasonType])
+	t.Parallel()
+
+	reasons := make(types.Reasons[enum.UserReasonType])
 
 	// Create a reason with malformed bracket in existing message
-	reasons[enum.UserReasonTypeProfile] = &Reason{
+	reasons[enum.UserReasonTypeProfile] = &types.Reason{
 		Message:    "[ValidSource] Valid message\n[BrokenSource malformed line without closing bracket\n[AnotherValid] Another valid line",
 		Confidence: 0.8,
 	}
 
 	// Add new source
-	reason := &Reason{
+	reason := &types.Reason{
 		Message:    "New detection",
 		Confidence: 0.9,
 	}
@@ -175,19 +190,23 @@ func TestAddWithSource_MalformedBrackets(t *testing.T) {
 	if !strings.Contains(result.Message, "[ValidSource] Valid message") {
 		t.Error("ValidSource message lost")
 	}
+
 	if !strings.Contains(result.Message, "[AnotherValid] Another valid line") {
 		t.Error("AnotherValid message lost")
 	}
+
 	if !strings.Contains(result.Message, "[NewSource] New detection") {
 		t.Error("NewSource message not added")
 	}
 }
 
 func TestAddWithSource_MultilineMessage(t *testing.T) {
-	reasons := make(Reasons[enum.UserReasonType])
+	t.Parallel()
+
+	reasons := make(types.Reasons[enum.UserReasonType])
 
 	// Add reason with newlines in message
-	reason := &Reason{
+	reason := &types.Reason{
 		Message:    "Line 1\nLine 2\nLine 3",
 		Confidence: 0.8,
 	}
@@ -207,10 +226,12 @@ func TestAddWithSource_MultilineMessage(t *testing.T) {
 }
 
 func TestAddWithSource_MultilineMessageWithCarriageReturns(t *testing.T) {
-	reasons := make(Reasons[enum.UserReasonType])
+	t.Parallel()
+
+	reasons := make(types.Reasons[enum.UserReasonType])
 
 	// Add reason with various newline formats
-	reason := &Reason{
+	reason := &types.Reason{
 		Message:    "Line 1\r\nLine 2\rLine 3\nLine 4",
 		Confidence: 0.8,
 	}
@@ -225,14 +246,16 @@ func TestAddWithSource_MultilineMessageWithCarriageReturns(t *testing.T) {
 }
 
 func TestAddWithSource_MultilineMessageUpdate(t *testing.T) {
-	reasons := make(Reasons[enum.UserReasonType])
+	t.Parallel()
+
+	reasons := make(types.Reasons[enum.UserReasonType])
 
 	// Add initial single-line reason
-	reasons.AddWithSource(enum.UserReasonTypeProfile, &Reason{Message: "Initial", Confidence: 0.7}, "Source1")
-	reasons.AddWithSource(enum.UserReasonTypeProfile, &Reason{Message: "Second", Confidence: 0.8}, "Source2")
+	reasons.AddWithSource(enum.UserReasonTypeProfile, &types.Reason{Message: "Initial", Confidence: 0.7}, "Source1")
+	reasons.AddWithSource(enum.UserReasonTypeProfile, &types.Reason{Message: "Second", Confidence: 0.8}, "Source2")
 
 	// Update Source1 with multi-line message
-	multilineReason := &Reason{
+	multilineReason := &types.Reason{
 		Message:    "Updated\nwith\nmultiple\nlines",
 		Confidence: 0.9,
 	}
@@ -253,16 +276,18 @@ func TestAddWithSource_MultilineMessageUpdate(t *testing.T) {
 }
 
 func TestAddWithSource_LegacyUnprefixedLines(t *testing.T) {
-	reasons := make(Reasons[enum.UserReasonType])
+	t.Parallel()
+
+	reasons := make(types.Reasons[enum.UserReasonType])
 
 	// Simulate existing data with unprefixed lines
-	reasons[enum.UserReasonTypeProfile] = &Reason{
+	reasons[enum.UserReasonTypeProfile] = &types.Reason{
 		Message:    "[NewSource] Prefixed line\nOld unprefixed line from legacy data\nAnother unprefixed line",
 		Confidence: 0.8,
 	}
 
 	// Add new source
-	reason := &Reason{
+	reason := &types.Reason{
 		Message:    "New detection",
 		Confidence: 0.9,
 	}
@@ -274,6 +299,7 @@ func TestAddWithSource_LegacyUnprefixedLines(t *testing.T) {
 	if !strings.Contains(result.Message, "[Legacy] Old unprefixed line from legacy data") {
 		t.Errorf("First legacy line not preserved. Got: %q", result.Message)
 	}
+
 	if !strings.Contains(result.Message, "[Legacy] Another unprefixed line") {
 		t.Errorf("Second legacy line not preserved. Got: %q", result.Message)
 	}
@@ -290,16 +316,18 @@ func TestAddWithSource_LegacyUnprefixedLines(t *testing.T) {
 }
 
 func TestAddWithSource_EmptyLines(t *testing.T) {
-	reasons := make(Reasons[enum.UserReasonType])
+	t.Parallel()
+
+	reasons := make(types.Reasons[enum.UserReasonType])
 
 	// Create reason with empty lines
-	reasons[enum.UserReasonTypeProfile] = &Reason{
+	reasons[enum.UserReasonTypeProfile] = &types.Reason{
 		Message:    "[Source1] First\n\n\n[Source2] Second\n  \n[Source3] Third",
 		Confidence: 0.8,
 	}
 
 	// Add new source
-	reasons.AddWithSource(enum.UserReasonTypeProfile, &Reason{Message: "Fourth", Confidence: 0.9}, "Source4")
+	reasons.AddWithSource(enum.UserReasonTypeProfile, &types.Reason{Message: "Fourth", Confidence: 0.9}, "Source4")
 
 	result := reasons[enum.UserReasonTypeProfile]
 
@@ -311,10 +339,12 @@ func TestAddWithSource_EmptyLines(t *testing.T) {
 }
 
 func TestAddWithSource_EvidenceMerging(t *testing.T) {
-	reasons := make(Reasons[enum.UserReasonType])
+	t.Parallel()
+
+	reasons := make(types.Reasons[enum.UserReasonType])
 
 	// Add first source with evidence
-	reason1 := &Reason{
+	reason1 := &types.Reason{
 		Message:    "First detection",
 		Confidence: 0.8,
 		Evidence:   []string{"evidence1", "evidence2"},
@@ -322,7 +352,7 @@ func TestAddWithSource_EvidenceMerging(t *testing.T) {
 	reasons.AddWithSource(enum.UserReasonTypeProfile, reason1, "Source1")
 
 	// Add second source with overlapping evidence
-	reason2 := &Reason{
+	reason2 := &types.Reason{
 		Message:    "Second detection",
 		Confidence: 0.9,
 		Evidence:   []string{"evidence2", "evidence3"},
@@ -348,13 +378,15 @@ func TestAddWithSource_EvidenceMerging(t *testing.T) {
 }
 
 func TestAddWithSource_ConfidenceMaximum(t *testing.T) {
-	reasons := make(Reasons[enum.UserReasonType])
+	t.Parallel()
+
+	reasons := make(types.Reasons[enum.UserReasonType])
 
 	// Add with confidence 0.9
-	reasons.AddWithSource(enum.UserReasonTypeProfile, &Reason{Message: "First", Confidence: 0.9}, "Source1")
+	reasons.AddWithSource(enum.UserReasonTypeProfile, &types.Reason{Message: "First", Confidence: 0.9}, "Source1")
 
 	// Add with lower confidence 0.7
-	reasons.AddWithSource(enum.UserReasonTypeProfile, &Reason{Message: "Second", Confidence: 0.7}, "Source2")
+	reasons.AddWithSource(enum.UserReasonTypeProfile, &types.Reason{Message: "Second", Confidence: 0.7}, "Source2")
 
 	result := reasons[enum.UserReasonTypeProfile]
 
@@ -364,7 +396,7 @@ func TestAddWithSource_ConfidenceMaximum(t *testing.T) {
 	}
 
 	// Add with higher confidence 0.95
-	reasons.AddWithSource(enum.UserReasonTypeProfile, &Reason{Message: "Third", Confidence: 0.95}, "Source3")
+	reasons.AddWithSource(enum.UserReasonTypeProfile, &types.Reason{Message: "Third", Confidence: 0.95}, "Source3")
 
 	result = reasons[enum.UserReasonTypeProfile]
 
@@ -375,6 +407,8 @@ func TestAddWithSource_ConfidenceMaximum(t *testing.T) {
 }
 
 func TestNormalizeMessage(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name     string
 		input    string
@@ -429,7 +463,9 @@ func TestNormalizeMessage(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := normalizeMessage(tt.input)
+			t.Parallel()
+
+			result := types.NormalizeMessage(tt.input)
 			if result != tt.expected {
 				t.Errorf("normalizeMessage() = %q, want %q", result, tt.expected)
 			}

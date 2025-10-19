@@ -1,11 +1,14 @@
 package checker
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
+	"github.com/robalyx/rotector/internal/database"
 	"github.com/robalyx/rotector/internal/database/types"
 	"github.com/robalyx/rotector/internal/database/types/enum"
+	"github.com/robalyx/rotector/internal/setup"
 	"go.uber.org/zap"
 )
 
@@ -16,41 +19,70 @@ type CondoCheckerParams struct {
 	ConfirmedGroupsMap map[int64]map[int64]*types.ReviewGroup       `json:"confirmedGroupsMap"`
 }
 
-// CondoChecker detects users involved in condo group activity based on confirmed
-// group purpose reasons containing "condo" references.
+// CondoChecker detects users involved in condo activity.
 type CondoChecker struct {
+	db     database.Client
 	logger *zap.Logger
 }
 
 // NewCondoChecker creates a CondoChecker.
-func NewCondoChecker(logger *zap.Logger) *CondoChecker {
+func NewCondoChecker(app *setup.App, logger *zap.Logger) *CondoChecker {
 	return &CondoChecker{
+		db:     app.DB,
 		logger: logger.Named("condo_checker"),
 	}
 }
 
-// ProcessUsers checks multiple users for condo group activity and updates reasonsMap.
-func (c *CondoChecker) ProcessUsers(params *CondoCheckerParams) {
+// ProcessUsers checks multiple users for condo activity.
+func (c *CondoChecker) ProcessUsers(ctx context.Context, params *CondoCheckerParams) {
 	existingFlags := len(params.ReasonsMap)
 
-	// Track users flagged for condo activity
-	flaggedCount := 0
+	// Track users flagged by each method
+	discordFlaggedCount := 0
+	groupsFlaggedCount := 0
 
-	// Process each user
+	// Step 1: Check for Discord server membership
 	for _, userInfo := range params.Users {
-		// Check for condo group activity
-		shouldFlag, condoCount, details := c.detectCondoActivity(userInfo, params.ConfirmedGroupsMap[userInfo.ID])
+		shouldFlag, serverCount, confidence := c.detectDiscordActivity(ctx, userInfo.ID)
 		if !shouldFlag {
 			continue
 		}
 
 		// Build reason message
-		reasonMessage := fmt.Sprintf("Member of %d confirmed condo groups.", condoCount)
+		reasonMessage := fmt.Sprintf("Discord user with linked Roblox account detected in %d+ condo servers", serverCount)
+
+		// Add condo reason with Discord source
+		if _, exists := params.ReasonsMap[userInfo.ID]; !exists {
+			params.ReasonsMap[userInfo.ID] = make(types.Reasons[enum.UserReasonType])
+		}
+
+		params.ReasonsMap[userInfo.ID].AddWithSource(enum.UserReasonTypeCondo, &types.Reason{
+			Message:    reasonMessage,
+			Confidence: confidence,
+		}, "Discord")
+
+		discordFlaggedCount++
+
+		c.logger.Debug("User flagged for Discord condo server activity",
+			zap.Int64("userID", userInfo.ID),
+			zap.Int("serverCount", serverCount),
+			zap.Float64("confidence", confidence))
+	}
+
+	// Step 2: Check for condo group membership
+	for _, userInfo := range params.Users {
+		shouldFlag, condoCount, details := c.detectGroupActivity(userInfo, params.ConfirmedGroupsMap[userInfo.ID])
+		if !shouldFlag {
+			continue
+		}
+
+		// Build reason message
+		reasonMessage := fmt.Sprintf("Member of %d confirmed condo groups", condoCount)
 
 		// Calculate confidence based on number of condo groups
-		confidence := c.calculateConfidence(condoCount)
+		confidence := c.calculateGroupConfidence(condoCount)
 
-		// Add condo reason to reasons map
+		// Add condo reason with Groups source
 		if _, exists := params.ReasonsMap[userInfo.ID]; !exists {
 			params.ReasonsMap[userInfo.ID] = make(types.Reasons[enum.UserReasonType])
 		}
@@ -60,7 +92,7 @@ func (c *CondoChecker) ProcessUsers(params *CondoCheckerParams) {
 			Confidence: confidence,
 		}, "Groups")
 
-		flaggedCount++
+		groupsFlaggedCount++
 
 		c.logger.Debug("User flagged for condo group activity",
 			zap.Int64("userID", userInfo.ID),
@@ -69,15 +101,41 @@ func (c *CondoChecker) ProcessUsers(params *CondoCheckerParams) {
 			zap.String("details", details))
 	}
 
-	c.logger.Info("Finished processing condo groups",
+	c.logger.Info("Finished processing condo detection",
 		zap.Int("totalUsers", len(params.Users)),
-		zap.Int("flaggedUsers", flaggedCount),
+		zap.Int("discordFlags", discordFlaggedCount),
+		zap.Int("groupFlags", groupsFlaggedCount),
 		zap.Int("newFlags", len(params.ReasonsMap)-existingFlags))
 }
 
-// detectCondoActivity checks if a user should be flagged for condo group activity.
+// detectDiscordActivity checks if a user should be flagged based on Discord server membership.
+// Returns true if user meets criteria (3+ servers), along with count and confidence.
+func (c *CondoChecker) detectDiscordActivity(
+	ctx context.Context, robloxUserID int64,
+) (shouldFlag bool, serverCount int, confidence float64) {
+	// Get Discord server count for this Roblox user
+	count, err := c.db.Model().Sync().GetDiscordServerCountByRobloxID(ctx, robloxUserID)
+	if err != nil {
+		c.logger.Error("Failed to get Discord server count",
+			zap.Int64("robloxUserID", robloxUserID),
+			zap.Error(err))
+
+		return false, 0, 0.0
+	}
+
+	// Check if user meets threshold (3+ servers)
+	if count >= 3 {
+		confidence = c.calculateDiscordConfidence(count)
+
+		return true, count, confidence
+	}
+
+	return false, count, 0.0
+}
+
+// detectGroupActivity checks if a user should be flagged for condo group activity.
 // Returns true if user meets criteria, along with count and details for logging.
-func (c *CondoChecker) detectCondoActivity(
+func (c *CondoChecker) detectGroupActivity(
 	userInfo *types.ReviewUser,
 	confirmedGroups map[int64]*types.ReviewGroup,
 ) (shouldFlag bool, condoCount int, details string) {
@@ -127,8 +185,22 @@ func (c *CondoChecker) detectCondoActivity(
 	return shouldFlag, condoCount, details
 }
 
-// calculateConfidence computes a confidence score based on the number of condo groups.
-func (c *CondoChecker) calculateConfidence(condoCount int) float64 {
+// calculateDiscordConfidence computes a confidence score based on Discord server count.
+func (c *CondoChecker) calculateDiscordConfidence(serverCount int) float64 {
+	switch {
+	case serverCount >= 5:
+		return 0.95
+	case serverCount == 4:
+		return 0.90
+	case serverCount == 3:
+		return 0.85
+	default:
+		return 0.0
+	}
+}
+
+// calculateGroupConfidence computes a confidence score based on the number of condo groups.
+func (c *CondoChecker) calculateGroupConfidence(condoCount int) float64 {
 	switch {
 	case condoCount >= 5:
 		return 0.95

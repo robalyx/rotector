@@ -67,7 +67,7 @@ func NewUserChecker(app *setup.App, userFetcher *fetcher.UserFetcher, logger *za
 		outfitAnalyzer:     ai.NewOutfitAnalyzer(app, logger),
 		groupChecker:       NewGroupChecker(app, logger),
 		friendChecker:      NewFriendChecker(app, logger),
-		condoChecker:       NewCondoChecker(logger),
+		condoChecker:       NewCondoChecker(app, logger),
 		logger:             logger.Named("user_checker"),
 	}
 }
@@ -139,7 +139,7 @@ func (c *UserChecker) ProcessUsers(ctx context.Context, params *UserCheckerParam
 	})
 
 	// Process condo checker
-	c.condoChecker.ProcessUsers(&CondoCheckerParams{
+	c.condoChecker.ProcessUsers(ctxWithTimeout, &CondoCheckerParams{
 		Users:              params.Users,
 		ReasonsMap:         reasonsMap,
 		ConfirmedGroupsMap: confirmedGroupsMap,
@@ -181,6 +181,27 @@ func (c *UserChecker) ProcessUsers(ctx context.Context, params *UserCheckerParam
 	// Remove friend-only flags for furry users to prevent false positive cascade
 	c.removeFurryUserFriendOnlyFlags(reasonsMap, furryUsers)
 
+	// Detect past offenders - users who were previously flagged/confirmed but now have no violations
+	pastOffenderIDs := make([]int64, 0)
+
+	for _, user := range params.Users {
+		if _, hasReasons := reasonsMap[user.ID]; !hasReasons {
+			if existingUser, exists := params.ExistingUsers[user.ID]; exists {
+				if existingUser.Status == enum.UserTypeFlagged || existingUser.Status == enum.UserTypeConfirmed {
+					// User has no reasons after processing
+					// They were previously flagged/confirmed, they became clean (past offender)
+					pastOffenderIDs = append(pastOffenderIDs, user.ID)
+					c.logger.Info("User became clean, will update to past offender",
+						zap.Int64("userID", user.ID),
+						zap.String("previousStatus", existingUser.Status.String()))
+				}
+			}
+		}
+	}
+
+	// Update past offenders
+	c.handlePastOffenders(ctx, pastOffenderIDs)
+
 	// Stop if no users were flagged
 	if len(reasonsMap) == 0 {
 		c.logger.Info("No flagged users found", zap.Int("userInfos", len(params.Users)))
@@ -192,11 +213,10 @@ func (c *UserChecker) ProcessUsers(ctx context.Context, params *UserCheckerParam
 		}
 	}
 
-	// Create final flagged users maps and detect past offenders
+	// Create final flagged users maps
 	flaggedUsers := make(map[int64]*types.ReviewUser, len(reasonsMap))
 	confirmedUsers := make(map[int64]*types.ReviewUser)
 	flaggedStatus := make(map[int64]struct{}, len(reasonsMap))
-	pastOffenderIDs := make([]int64, 0)
 
 	for _, user := range params.Users {
 		if reasons, ok := reasonsMap[user.ID]; ok {
@@ -205,13 +225,6 @@ func (c *UserChecker) ProcessUsers(ctx context.Context, params *UserCheckerParam
 			user.Confidence = utils.CalculateConfidence(reasons)
 			flaggedUsers[user.ID] = user
 			flaggedStatus[user.ID] = struct{}{}
-		} else if user.Status == enum.UserTypeFlagged || user.Status == enum.UserTypeConfirmed {
-			// User has no reasons after processing
-			// They were previously flagged/confirmed, they became clean (past offender)
-			pastOffenderIDs = append(pastOffenderIDs, user.ID)
-			c.logger.Info("User became clean, will update to past offender",
-				zap.Int64("userID", user.ID),
-				zap.String("previousStatus", user.Status.String()))
 		}
 	}
 
@@ -222,9 +235,6 @@ func (c *UserChecker) ProcessUsers(ctx context.Context, params *UserCheckerParam
 	if err := c.db.Service().User().SaveUsers(ctx, flaggedUsers); err != nil {
 		c.logger.Error("Failed to save users", zap.Error(err))
 	}
-
-	// Update past offenders
-	c.handlePastOffenders(ctx, pastOffenderIDs)
 
 	// Automatically confirm users with high confidence scores
 	c.autoConfirmHighConfidenceUsers(ctx, flaggedUsers, confirmedUsers)

@@ -342,6 +342,8 @@ func (b *ReviewBuilder) buildReasonDisplay() discord.ContainerSubComponent {
 		enum.UserReasonTypeChat,
 		enum.UserReasonTypeFavorites,
 		enum.UserReasonTypeBadges,
+		enum.UserReasonTypeCreations,
+		enum.UserReasonTypeOthers,
 	} {
 		if reason, ok := b.user.Reasons[reasonType]; ok {
 			// Add reason header and message
@@ -449,6 +451,8 @@ func (b *ReviewBuilder) buildReasonOptions() []discord.StringSelectMenuOption {
 		enum.UserReasonTypeChat,
 		enum.UserReasonTypeFavorites,
 		enum.UserReasonTypeBadges,
+		enum.UserReasonTypeCreations,
+		enum.UserReasonTypeOthers,
 	}
 
 	return shared.BuildReasonOptions(b.user.Reasons, reasonTypes, getReasonEmoji, b.ReasonsChanged)
@@ -738,6 +742,10 @@ func getReasonEmoji(reasonType enum.UserReasonType) string {
 		return "🌟"
 	case enum.UserReasonTypeBadges:
 		return "🏆"
+	case enum.UserReasonTypeCreations:
+		return "🎨"
+	case enum.UserReasonTypeOthers:
+		return "📋"
 	default:
 		return "❓"
 	}

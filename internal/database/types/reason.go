@@ -49,7 +49,7 @@ func (r Reasons[T]) AddWithSource(reasonType T, reason *Reason, sourcePrefix str
 
 	if !exists {
 		// First time so just add with prefix
-		reason.Message = fmt.Sprintf("[%s] %s", sourcePrefix, normalizeMessage(reason.Message))
+		reason.Message = fmt.Sprintf("[%s] %s", sourcePrefix, NormalizeMessage(reason.Message))
 		r[reasonType] = reason
 
 		return
@@ -82,7 +82,7 @@ func (r Reasons[T]) AddWithSource(reasonType T, reason *Reason, sourcePrefix str
 
 				if prefix == sourcePrefix {
 					// Replace this line
-					prefixedLines = append(prefixedLines, prefixedLine{sourcePrefix, normalizeMessage(reason.Message)})
+					prefixedLines = append(prefixedLines, prefixedLine{sourcePrefix, NormalizeMessage(reason.Message)})
 					foundPrefix = true
 				} else {
 					prefixedLines = append(prefixedLines, prefixedLine{prefix, message})
@@ -99,7 +99,7 @@ func (r Reasons[T]) AddWithSource(reasonType T, reason *Reason, sourcePrefix str
 
 	// If we didn't find this prefix, append it
 	if !foundPrefix {
-		prefixedLines = append(prefixedLines, prefixedLine{sourcePrefix, normalizeMessage(reason.Message)})
+		prefixedLines = append(prefixedLines, prefixedLine{sourcePrefix, NormalizeMessage(reason.Message)})
 	}
 
 	// Rebuild message
@@ -171,10 +171,10 @@ type ReasonInfo struct {
 	Message string `json:"message"` // The detailed reason message explaining why this was flagged
 }
 
-// normalizeMessage converts a multi-line message to a single line.
+// NormalizeMessage converts a multi-line message to a single line.
 // Replaces newlines and carriage returns with spaces, collapses repeated
 // whitespace, and trims leading/trailing spaces.
-func normalizeMessage(msg string) string {
+func NormalizeMessage(msg string) string {
 	// Replace newlines and carriage returns with spaces
 	msg = strings.ReplaceAll(msg, "\n", " ")
 	msg = strings.ReplaceAll(msg, "\r", " ")

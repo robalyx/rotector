@@ -299,7 +299,7 @@ func (m *SyncModel) GetUniqueUserCount(ctx context.Context) (int, error) {
 		var count int
 
 		_, err := m.db.NewRaw(`
-			SELECT COUNT(DISTINCT user_id) 
+			SELECT COUNT(DISTINCT user_id)
 			FROM discord_server_members
 		`).Exec(ctx, &count)
 		if err != nil {
@@ -521,5 +521,22 @@ func (m *SyncModel) GetDiscordRobloxConnection(ctx context.Context, discordUserI
 		}
 
 		return &connection, nil
+	})
+}
+
+// GetDiscordServerCountByRobloxID returns the Discord server count for a Roblox user ID.
+// Returns 0 if no Discord connection exists for this Roblox user.
+func (m *SyncModel) GetDiscordServerCountByRobloxID(ctx context.Context, robloxUserID int64) (int, error) {
+	return dbretry.Operation(ctx, func(ctx context.Context) (int, error) {
+		count, err := m.db.NewSelect().
+			Model((*types.DiscordServerMember)(nil)).
+			Join("JOIN discord_roblox_connections AS drc ON drc.discord_user_id = discord_server_member.user_id").
+			Where("drc.roblox_user_id = ?", robloxUserID).
+			Count(ctx)
+		if err != nil {
+			return 0, fmt.Errorf("failed to count Discord servers for Roblox user %d: %w", robloxUserID, err)
+		}
+
+		return count, nil
 	})
 }
