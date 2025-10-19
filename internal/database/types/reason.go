@@ -49,7 +49,7 @@ func (r Reasons[T]) AddWithSource(reasonType T, reason *Reason, sourcePrefix str
 
 	if !exists {
 		// First time so just add with prefix
-		reason.Message = fmt.Sprintf("[%s] %s", sourcePrefix, reason.Message)
+		reason.Message = fmt.Sprintf("[%s] %s", sourcePrefix, normalizeMessage(reason.Message))
 		r[reasonType] = reason
 
 		return
@@ -82,11 +82,14 @@ func (r Reasons[T]) AddWithSource(reasonType T, reason *Reason, sourcePrefix str
 
 				if prefix == sourcePrefix {
 					// Replace this line
-					prefixedLines = append(prefixedLines, prefixedLine{sourcePrefix, reason.Message})
+					prefixedLines = append(prefixedLines, prefixedLine{sourcePrefix, normalizeMessage(reason.Message)})
 					foundPrefix = true
 				} else {
 					prefixedLines = append(prefixedLines, prefixedLine{prefix, message})
 				}
+			} else {
+				// Malformed bracket - treat as legacy
+				prefixedLines = append(prefixedLines, prefixedLine{"Legacy", line})
 			}
 		} else {
 			// Handle unprefixed lines from old data
@@ -96,7 +99,7 @@ func (r Reasons[T]) AddWithSource(reasonType T, reason *Reason, sourcePrefix str
 
 	// If we didn't find this prefix, append it
 	if !foundPrefix {
-		prefixedLines = append(prefixedLines, prefixedLine{sourcePrefix, reason.Message})
+		prefixedLines = append(prefixedLines, prefixedLine{sourcePrefix, normalizeMessage(reason.Message)})
 	}
 
 	// Rebuild message
@@ -166,4 +169,16 @@ func (r Reasons[T]) ReasonInfos() []ReasonInfo {
 type ReasonInfo struct {
 	Type    string `json:"type"`    // The type of reason (e.g., Profile, Friend, Group, etc.)
 	Message string `json:"message"` // The detailed reason message explaining why this was flagged
+}
+
+// normalizeMessage converts a multi-line message to a single line.
+// Replaces newlines and carriage returns with spaces, collapses repeated
+// whitespace, and trims leading/trailing spaces.
+func normalizeMessage(msg string) string {
+	// Replace newlines and carriage returns with spaces
+	msg = strings.ReplaceAll(msg, "\n", " ")
+	msg = strings.ReplaceAll(msg, "\r", " ")
+
+	// Collapse repeated whitespace and trim
+	return strings.Join(strings.Fields(msg), " ")
 }
