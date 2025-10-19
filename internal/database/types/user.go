@@ -273,6 +273,7 @@ const (
 	UserFieldLastUpdated         // Last update time
 	UserFieldLastViewed          // Last view time
 	UserFieldLastBanCheck        // Last ban check time
+	UserFieldLastGroupCheck      // Last group check time
 	UserFieldIsBanned            // Ban status
 	UserFieldIsDeleted           // Deletion status
 	UserFieldLastThumbnailUpdate // Last thumbnail update
@@ -302,6 +303,7 @@ const (
 		UserFieldLastUpdated |
 		UserFieldLastViewed |
 		UserFieldLastBanCheck |
+		UserFieldLastGroupCheck |
 		UserFieldLastThumbnailUpdate
 
 	// UserFieldRelationships includes all relationship fields.
@@ -340,6 +342,7 @@ var userFieldToColumns = map[UserField][]string{
 	UserFieldLastUpdated:         {"last_updated"},
 	UserFieldLastViewed:          {"last_viewed"},
 	UserFieldLastBanCheck:        {"last_ban_check"},
+	UserFieldLastGroupCheck:      {"last_group_check"},
 	UserFieldIsBanned:            {"is_banned"},
 	UserFieldIsDeleted:           {"is_deleted"},
 	UserFieldLastThumbnailUpdate: {"last_thumbnail_update"},

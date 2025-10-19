@@ -2,6 +2,7 @@ package types
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/robalyx/rotector/internal/database/types/enum"
 )
@@ -26,6 +27,105 @@ type Reasons[T ReasonType] map[T]*Reason
 // If the reason type already exists, it updates the existing entry.
 func (r Reasons[T]) Add(reasonType T, reason *Reason) {
 	r[reasonType] = reason
+}
+
+// AddWithSource adds or updates a reason with a source prefix.
+// When the same reason type exists, it parses the message by [prefix] format,
+// replaces the line with matching prefix, or appends if new.
+// This allows multiple detectors to contribute to the same reason type without overwriting.
+//
+// Developer Note: We use prefix-based parsing instead of adding a separate Sources field
+// to the Reason struct because:
+// 1. Avoids complex database migration for existing reasons in production
+// 2. Keeps the Reason struct simple and backward compatible
+// 3. Message field already serves as both storage and display format
+// 4. Parsing overhead is negligible compared to database/network operations
+//
+// The [prefix] format allows multiple detectors (e.g., CondoChecker and Discord Scanner)
+// to flag the same reason type without overwriting each other's findings. When reprocessed,
+// each detector updates only its own line while preserving other detectors' contributions.
+func (r Reasons[T]) AddWithSource(reasonType T, reason *Reason, sourcePrefix string) {
+	existing, exists := r[reasonType]
+
+	if !exists {
+		// First time so just add with prefix
+		reason.Message = fmt.Sprintf("[%s] %s", sourcePrefix, reason.Message)
+		r[reasonType] = reason
+
+		return
+	}
+
+	// Parse existing lines preserving order
+	type prefixedLine struct {
+		prefix  string
+		message string
+	}
+
+	lines := strings.Split(existing.Message, "\n")
+
+	var prefixedLines []prefixedLine
+
+	foundPrefix := false
+
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+
+		// Extract prefix
+		if strings.HasPrefix(line, "[") {
+			endBracket := strings.Index(line, "]")
+			if endBracket > 0 {
+				prefix := line[1:endBracket]
+				message := strings.TrimSpace(line[endBracket+1:])
+
+				if prefix == sourcePrefix {
+					// Replace this line
+					prefixedLines = append(prefixedLines, prefixedLine{sourcePrefix, reason.Message})
+					foundPrefix = true
+				} else {
+					prefixedLines = append(prefixedLines, prefixedLine{prefix, message})
+				}
+			}
+		} else {
+			// Handle unprefixed lines from old data
+			prefixedLines = append(prefixedLines, prefixedLine{"Legacy", line})
+		}
+	}
+
+	// If we didn't find this prefix, append it
+	if !foundPrefix {
+		prefixedLines = append(prefixedLines, prefixedLine{sourcePrefix, reason.Message})
+	}
+
+	// Rebuild message
+	newLines := make([]string, 0, len(prefixedLines))
+	for _, pl := range prefixedLines {
+		newLines = append(newLines, fmt.Sprintf("[%s] %s", pl.prefix, pl.message))
+	}
+
+	existing.Message = strings.Join(newLines, "\n")
+
+	// Update confidence to max
+	existing.Confidence = max(existing.Confidence, reason.Confidence)
+
+	// Merge evidence and deduplicate
+	evidenceSet := make(map[string]struct{})
+
+	for _, e := range existing.Evidence {
+		evidenceSet[e] = struct{}{}
+	}
+
+	for _, e := range reason.Evidence {
+		evidenceSet[e] = struct{}{}
+	}
+
+	// Convert back to slice
+	existing.Evidence = make([]string, 0, len(evidenceSet))
+	for e := range evidenceSet {
+		existing.Evidence = append(existing.Evidence, e)
+	}
 }
 
 // Messages returns an array of all reason messages.

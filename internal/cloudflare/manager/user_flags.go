@@ -217,40 +217,6 @@ func (u *UserFlags) UpdateToPastOffender(ctx context.Context, userIDs []int64) e
 	return nil
 }
 
-// deleteRecords deletes records by user IDs in batches to avoid SQLite variable limits.
-func (u *UserFlags) deleteRecords(ctx context.Context, userIDs []int64) error {
-	if len(userIDs) == 0 {
-		return nil
-	}
-
-	// Process deletions in batches to avoid SQLite variable limits
-	for i := 0; i < len(userIDs); i += MaxDeleteBatchSize {
-		end := min(i+MaxDeleteBatchSize, len(userIDs))
-		batchUserIDs := userIDs[i:end]
-
-		query := "DELETE FROM user_flags WHERE user_id IN ("
-		params := make([]any, len(batchUserIDs))
-
-		for j, userID := range batchUserIDs {
-			if j > 0 {
-				query += ","
-			}
-
-			query += "?"
-			params[j] = userID
-		}
-
-		query += ")"
-
-		_, err := u.d1.ExecuteSQL(ctx, query, params)
-		if err != nil {
-			return fmt.Errorf("failed to delete records batch %d-%d: %w", i, end-1, err)
-		}
-	}
-
-	return nil
-}
-
 // addUsers is the unified method for adding users.
 func (u *UserFlags) addUsers(
 	ctx context.Context, users map[int64]*types.ReviewUser, flagType enum.UserType, reviewerID *uint64,

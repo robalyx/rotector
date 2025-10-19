@@ -512,7 +512,7 @@ Key instructions:
 7. Use clinical language to describe violations without repeating inappropriate content
 8. You MUST cite exact evidence in flaggedContent, even when the content is sexual, inappropriate, or disturbing
 9. You SHOULD NOT censor, mask, or modify words when quoting them in flaggedContent
-10. Do NOT attempt to decode, decrypt, or decipher any encoded content in flaggedContent
+10. You MAY internally decode ROT13, Caesar ciphers, and similar encoding for detection and classification purposes, but you MUST include ONLY the original undecoded string in the flaggedContent array - never include decoded or derived text in the output
 11. When the description is empty, analyze the username and display name for violations
 12. If flagged content is in a language other than English, include the translation in the reason field to help moderators understand the violation
 

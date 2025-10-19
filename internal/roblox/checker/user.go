@@ -45,6 +45,7 @@ type UserChecker struct {
 	outfitAnalyzer     *ai.OutfitAnalyzer
 	groupChecker       *GroupChecker
 	friendChecker      *FriendChecker
+	condoChecker       *CondoChecker
 	logger             *zap.Logger
 }
 
@@ -66,6 +67,7 @@ func NewUserChecker(app *setup.App, userFetcher *fetcher.UserFetcher, logger *za
 		outfitAnalyzer:     ai.NewOutfitAnalyzer(app, logger),
 		groupChecker:       NewGroupChecker(app, logger),
 		friendChecker:      NewFriendChecker(app, logger),
+		condoChecker:       NewCondoChecker(logger),
 		logger:             logger.Named("user_checker"),
 	}
 }
@@ -134,6 +136,13 @@ func (c *UserChecker) ProcessUsers(ctx context.Context, params *UserCheckerParam
 		FlaggedGroupsMap:         flaggedGroupsMap,
 		MixedGroupsMap:           mixedGroupsMap,
 		InappropriateGroupsFlags: params.InappropriateGroupsFlags,
+	})
+
+	// Process condo checker
+	c.condoChecker.ProcessUsers(&CondoCheckerParams{
+		Users:              params.Users,
+		ReasonsMap:         reasonsMap,
+		ConfirmedGroupsMap: confirmedGroupsMap,
 	})
 
 	// Prepare user info maps

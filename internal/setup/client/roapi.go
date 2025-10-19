@@ -35,7 +35,13 @@ var (
 	ErrNoCookies            = errors.New("no valid cookies found in cookie file")
 	ErrAPIFetchFailed       = errors.New("failed to fetch proxies from API")
 	ErrInvalidProxyResponse = errors.New("invalid proxy response format")
+	ErrMissingProxyConfig   = errors.New("missing proxy API configuration")
 )
+
+// HTTP client with timeout for proxy API calls.
+var proxyAPIClient = &http.Client{
+	Timeout: 30 * time.Second,
+}
 
 // Middlewares contains the middleware instances used in the client.
 type Middlewares struct {
@@ -52,6 +58,11 @@ func GetRoAPIClient(
 	cookies, err := readCookies(configDir)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to read cookies: %w", err)
+	}
+
+	// Validate proxy API configuration
+	if cfg.Proxy.ProxyAPIURL == "" || cfg.Proxy.ProxyAPIKey == "" {
+		return nil, nil, fmt.Errorf("%w: ProxyAPIURL and ProxyAPIKey must be set", ErrMissingProxyConfig)
 	}
 
 	// Load regular proxies from API
@@ -167,7 +178,7 @@ func fetchRoverseProxiesFromAPI(ctx context.Context, baseURL, apiKey string, zap
 		req.Header.Set("Authorization", "Token "+apiKey)
 
 		// Make HTTP GET request
-		resp, err := http.DefaultClient.Do(req)
+		resp, err := proxyAPIClient.Do(req)
 		if err != nil {
 			return nil, fmt.Errorf("%w: %w", ErrAPIFetchFailed, err)
 		}
@@ -263,7 +274,7 @@ func fetchRegularProxiesFromAPI(ctx context.Context, baseURL, apiKey string, zap
 	}
 
 	// Make HTTP GET request
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := proxyAPIClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrAPIFetchFailed, err)
 	}

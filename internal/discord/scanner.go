@@ -455,7 +455,7 @@ func (s *Scanner) flagRobloxAccount(
 			reviewUser.Reasons = make(types.Reasons[enum.UserReasonType])
 		}
 
-		reviewUser.Reasons[enum.UserReasonTypeCondo] = condoReason
+		reviewUser.Reasons.AddWithSource(enum.UserReasonTypeCondo, condoReason, "Discord")
 	} else {
 		// Create new user with only condo reason
 		reviewUser = &types.ReviewUser{
@@ -470,10 +470,10 @@ func (s *Scanner) flagRobloxAccount(
 				LastViewed:    now,
 				LastBanCheck:  now,
 			},
-			Reasons: types.Reasons[enum.UserReasonType]{
-				enum.UserReasonTypeCondo: condoReason,
-			},
+			Reasons: make(types.Reasons[enum.UserReasonType]),
 		}
+
+		reviewUser.Reasons.AddWithSource(enum.UserReasonTypeCondo, condoReason, "Discord")
 	}
 
 	// Save the flagged user
