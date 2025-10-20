@@ -11,7 +11,6 @@ import (
 // runMutualScanner continuously runs full scans for users.
 func (w *Worker) runMutualScanner(ctx context.Context) {
 	for {
-		// Check if context was cancelled
 		if utils.ContextGuardWithLog(ctx, w.logger, "Context cancelled, stopping mutual scanner") {
 			return
 		}
@@ -31,7 +30,6 @@ func (w *Worker) runMutualScanner(ctx context.Context) {
 		}
 
 		for _, userID := range userIDs {
-			// Check if context was cancelled
 			if utils.ContextGuardWithLog(ctx, w.logger, "Context cancelled during user scan, stopping mutual scanner") {
 				return
 			}
@@ -40,21 +38,16 @@ func (w *Worker) runMutualScanner(ctx context.Context) {
 				continue
 			}
 
+			w.discordRateLimiter.waitForNextSlot()
+
 			_, err := w.scanner.PerformFullScan(ctx, userID)
 			if err != nil {
 				w.logger.Error("Failed to perform full scan",
 					zap.Error(err),
 					zap.Uint64("userID", userID))
 			}
-
-			// Sleep to respect rate limits
-			if utils.ContextSleep(ctx, 1*time.Second) == utils.SleepCancelled {
-				w.logger.Info("Context cancelled during rate limit wait, stopping mutual scanner")
-				return
-			}
 		}
 
-		// Sleep before next batch
 		if utils.ContextSleep(ctx, 5*time.Second) == utils.SleepCancelled {
 			w.logger.Info("Context cancelled during batch wait, stopping mutual scanner")
 			return

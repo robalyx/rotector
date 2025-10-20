@@ -32,17 +32,18 @@ var (
 
 // Worker handles syncing Discord server members.
 type Worker struct {
-	db              database.Client
-	roAPI           *api.API
-	state           *ningen.State
-	bar             *components.ProgressBar
-	reporter        *core.StatusReporter
-	logger          *zap.Logger
-	config          *config.Config
-	messageAnalyzer *ai.MessageAnalyzer
-	eventHandler    *events.Handler
-	ratelimit       rueidis.Client
-	scanner         *discord.Scanner
+	db                 database.Client
+	roAPI              *api.API
+	state              *ningen.State
+	bar                *components.ProgressBar
+	reporter           *core.StatusReporter
+	logger             *zap.Logger
+	config             *config.Config
+	messageAnalyzer    *ai.MessageAnalyzer
+	eventHandler       *events.Handler
+	ratelimit          rueidis.Client
+	scanner            *discord.Scanner
+	discordRateLimiter *requestRateLimiter
 }
 
 // New creates a new sync worker.
@@ -78,17 +79,18 @@ func New(app *setup.App, bar *components.ProgressBar, logger *zap.Logger, instan
 	}
 
 	return &Worker{
-		db:              app.DB,
-		roAPI:           app.RoAPI,
-		state:           n,
-		bar:             bar,
-		reporter:        reporter,
-		logger:          logger.Named("sync_worker"),
-		config:          app.Config,
-		messageAnalyzer: messageAnalyzer,
-		eventHandler:    eventHandler,
-		ratelimit:       ratelimit,
-		scanner:         discord.NewScanner(app.DB, app.CFClient, ratelimit, n.Session, messageAnalyzer, logger),
+		db:                 app.DB,
+		roAPI:              app.RoAPI,
+		state:              n,
+		bar:                bar,
+		reporter:           reporter,
+		logger:             logger.Named("sync_worker"),
+		config:             app.Config,
+		messageAnalyzer:    messageAnalyzer,
+		eventHandler:       eventHandler,
+		ratelimit:          ratelimit,
+		scanner:            discord.NewScanner(app.DB, app.CFClient, ratelimit, n.Session, messageAnalyzer, logger),
+		discordRateLimiter: newRequestRateLimiter(1*time.Second, 200*time.Millisecond),
 	}
 }
 
