@@ -19,7 +19,7 @@ import (
 
 var ErrNoProvidersAvailable = errors.New("no providers available")
 
-// defaultSafetySettings defines the default safety thresholds for content filtering.
+// defaultSafetySettings defines the default safety thresholds for content filtering and reasoning disablement.
 var defaultSafetySettings = map[string]any{
 	"safety_settings": []map[string]any{
 		{"category": "HARM_CATEGORY_HARASSMENT", "threshold": "OFF"},
@@ -27,6 +27,9 @@ var defaultSafetySettings = map[string]any{
 		{"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "OFF"},
 		{"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "OFF"},
 		{"category": "HARM_CATEGORY_CIVIC_INTEGRITY", "threshold": "OFF"},
+	},
+	"reasoning": map[string]any{
+		"max_tokens": 0,
 	},
 }
 
@@ -251,6 +254,43 @@ func (c *chatCompletions) NewWithRetry(
 	}
 
 	return nil
+}
+
+// NewWithRetryAndFallback makes a chat completion request with retry logic and fallback model support.
+func (c *chatCompletions) NewWithRetryAndFallback(
+	ctx context.Context, params openai.ChatCompletionNewParams, fallbackModel string, callback RetryCallback,
+) error {
+	originalModel := params.Model
+
+	// Try primary model first
+	err := c.NewWithRetry(ctx, params, callback)
+
+	// If content blocked and fallback configured, try fallback
+	if errors.Is(err, utils.ErrContentBlocked) && fallbackModel != "" {
+		c.client.logger.Warn("Content blocked, attempting fallback model",
+			zap.String("original_model", originalModel),
+			zap.String("fallback_model", fallbackModel))
+
+		// Update params with fallback model
+		params.Model = fallbackModel
+
+		// Retry with fallback model
+		if fallbackErr := c.NewWithRetry(ctx, params, callback); fallbackErr != nil {
+			c.client.logger.Error("Fallback model also failed",
+				zap.String("fallback_model", fallbackModel),
+				zap.Error(fallbackErr))
+
+			return fmt.Errorf("both primary and fallback failed: primary=%w, fallback=%w", err, fallbackErr)
+		}
+
+		c.client.logger.Info("Fallback model succeeded",
+			zap.String("original_model", originalModel),
+			zap.String("fallback_model", fallbackModel))
+
+		return nil
+	}
+
+	return err
 }
 
 // NewStreaming creates a streaming chat completion request.

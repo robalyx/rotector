@@ -75,6 +75,7 @@ type OutfitAnalyzer struct {
 	imageLogger          *zap.Logger
 	imageDir             string
 	model                string
+	fallbackModel        string
 	batchSize            int
 	similarityThreshold  int
 }
@@ -107,6 +108,7 @@ func NewOutfitAnalyzer(app *setup.App, logger *zap.Logger) *OutfitAnalyzer {
 		imageLogger:          imageLogger,
 		imageDir:             imageDir,
 		model:                app.Config.Common.OpenAI.OutfitModel,
+		fallbackModel:        app.Config.Common.OpenAI.OutfitFallbackModel,
 		batchSize:            app.Config.Worker.BatchSizes.OutfitAnalysisBatch,
 		similarityThreshold:  app.Config.Worker.ThresholdLimits.ImageSimilarityThreshold,
 	}
@@ -441,7 +443,7 @@ func (a *OutfitAnalyzer) processOutfitBatch(
 	// Make API request
 	var analysis OutfitThemeAnalysis
 
-	err := a.chat.NewWithRetry(ctx, params, func(resp *openai.ChatCompletion, err error) error {
+	err := a.chat.NewWithRetryAndFallback(ctx, params, a.fallbackModel, func(resp *openai.ChatCompletion, err error) error {
 		// Handle API error
 		if err != nil {
 			return fmt.Errorf("openai API error: %w", err)

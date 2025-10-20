@@ -205,6 +205,24 @@ type OpenAI struct {
 	OutfitModel string `koanf:"outfit_model"`
 	// Model to use for message analysis
 	MessageModel string `koanf:"message_model"`
+	// Fallback model to use for user analysis when content is blocked
+	UserFallbackModel string `koanf:"user_fallback_model"`
+	// Fallback model to use for user reason analysis when content is blocked
+	UserReasonFallbackModel string `koanf:"user_reason_fallback_model"`
+	// Fallback model to use for friend reason analysis when content is blocked
+	FriendReasonFallbackModel string `koanf:"friend_reason_fallback_model"`
+	// Fallback model to use for group reason analysis when content is blocked
+	GroupReasonFallbackModel string `koanf:"group_reason_fallback_model"`
+	// Fallback model to use for outfit reason analysis when content is blocked
+	OutfitReasonFallbackModel string `koanf:"outfit_reason_fallback_model"`
+	// Fallback model to use for category analysis when content is blocked
+	CategoryFallbackModel string `koanf:"category_fallback_model"`
+	// Fallback model to use for stats analysis when content is blocked
+	StatsFallbackModel string `koanf:"stats_fallback_model"`
+	// Fallback model to use for outfit analysis when content is blocked
+	OutfitFallbackModel string `koanf:"outfit_fallback_model"`
+	// Fallback model to use for message analysis when content is blocked
+	MessageFallbackModel string `koanf:"message_fallback_model"`
 }
 
 // Discord contains Discord bot configuration.

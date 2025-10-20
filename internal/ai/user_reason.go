@@ -53,14 +53,15 @@ type ReasonAnalysisResult struct {
 
 // UserReasonAnalyzer generates detailed reasons and evidence for flagged users.
 type UserReasonAnalyzer struct {
-	chat        client.ChatCompletions
-	minify      *minify.M
-	analysisSem *semaphore.Weighted
-	logger      *zap.Logger
-	textLogger  *zap.Logger
-	textDir     string
-	model       string
-	batchSize   int
+	chat          client.ChatCompletions
+	minify        *minify.M
+	analysisSem   *semaphore.Weighted
+	logger        *zap.Logger
+	textLogger    *zap.Logger
+	textDir       string
+	model         string
+	fallbackModel string
+	batchSize     int
 }
 
 // UserReasonAnalysisSchema is the JSON schema for the reason analysis response.
@@ -80,14 +81,15 @@ func NewUserReasonAnalyzer(app *setup.App, logger *zap.Logger) *UserReasonAnalyz
 	}
 
 	return &UserReasonAnalyzer{
-		chat:        app.AIClient.Chat(),
-		minify:      m,
-		analysisSem: semaphore.NewWeighted(int64(app.Config.Worker.BatchSizes.UserReasonAnalysis)),
-		logger:      logger.Named("ai_user_reason"),
-		textLogger:  textLogger,
-		textDir:     textDir,
-		model:       app.Config.Common.OpenAI.UserReasonModel,
-		batchSize:   app.Config.Worker.BatchSizes.UserReasonAnalysisBatch,
+		chat:          app.AIClient.Chat(),
+		minify:        m,
+		analysisSem:   semaphore.NewWeighted(int64(app.Config.Worker.BatchSizes.UserReasonAnalysis)),
+		logger:        logger.Named("ai_user_reason"),
+		textLogger:    textLogger,
+		textDir:       textDir,
+		model:         app.Config.Common.OpenAI.UserReasonModel,
+		fallbackModel: app.Config.Common.OpenAI.UserReasonFallbackModel,
+		batchSize:     app.Config.Worker.BatchSizes.UserReasonAnalysisBatch,
 	}
 }
 
@@ -244,16 +246,11 @@ func (a *UserReasonAnalyzer) processReasonBatch(ctx context.Context, batch []Use
 		Temperature: openai.Float(0.0),
 		TopP:        openai.Float(0.2),
 	}
-	params.SetExtraFields(map[string]any{
-		"reasoning": map[string]any{
-			"max_tokens": 0,
-		},
-	})
 
 	// Make API request
 	var result ReasonAnalysisResult
 
-	err = a.chat.NewWithRetry(ctx, params, func(resp *openai.ChatCompletion, err error) error {
+	err = a.chat.NewWithRetryAndFallback(ctx, params, a.fallbackModel, func(resp *openai.ChatCompletion, err error) error {
 		// Handle API error
 		if err != nil {
 			return fmt.Errorf("openai API error: %w", err)

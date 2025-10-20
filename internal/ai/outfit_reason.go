@@ -62,14 +62,15 @@ type BatchOutfitAnalysis struct {
 
 // OutfitReasonAnalyzer handles AI-based analysis of outfit violations using OpenAI models.
 type OutfitReasonAnalyzer struct {
-	chat        client.ChatCompletions
-	minify      *minify.M
-	analysisSem *semaphore.Weighted
-	logger      *zap.Logger
-	textLogger  *zap.Logger
-	textDir     string
-	model       string
-	batchSize   int
+	chat          client.ChatCompletions
+	minify        *minify.M
+	analysisSem   *semaphore.Weighted
+	logger        *zap.Logger
+	textLogger    *zap.Logger
+	textDir       string
+	model         string
+	fallbackModel string
+	batchSize     int
 }
 
 // OutfitReasonAnalysisSchema is the JSON schema for the outfit analysis response.
@@ -89,14 +90,15 @@ func NewOutfitReasonAnalyzer(app *setup.App, logger *zap.Logger) *OutfitReasonAn
 	}
 
 	return &OutfitReasonAnalyzer{
-		chat:        app.AIClient.Chat(),
-		minify:      m,
-		analysisSem: semaphore.NewWeighted(int64(app.Config.Worker.BatchSizes.OutfitReasonAnalysis)),
-		logger:      logger.Named("ai_outfit_reason"),
-		textLogger:  textLogger,
-		textDir:     textDir,
-		model:       app.Config.Common.OpenAI.OutfitReasonModel,
-		batchSize:   app.Config.Worker.BatchSizes.OutfitReasonAnalysisBatch,
+		chat:          app.AIClient.Chat(),
+		minify:        m,
+		analysisSem:   semaphore.NewWeighted(int64(app.Config.Worker.BatchSizes.OutfitReasonAnalysis)),
+		logger:        logger.Named("ai_outfit_reason"),
+		textLogger:    textLogger,
+		textDir:       textDir,
+		model:         app.Config.Common.OpenAI.OutfitReasonModel,
+		fallbackModel: app.Config.Common.OpenAI.OutfitReasonFallbackModel,
+		batchSize:     app.Config.Worker.BatchSizes.OutfitReasonAnalysisBatch,
 	}
 }
 
@@ -350,7 +352,7 @@ func (a *OutfitReasonAnalyzer) processOutfitBatch(ctx context.Context, batch []U
 	// Make API request
 	var result BatchOutfitAnalysis
 
-	err = a.chat.NewWithRetry(ctx, params, func(resp *openai.ChatCompletion, err error) error {
+	err = a.chat.NewWithRetryAndFallback(ctx, params, a.fallbackModel, func(resp *openai.ChatCompletion, err error) error {
 		// Handle API error
 		if err != nil {
 			return fmt.Errorf("openai API error: %w", err)

@@ -507,7 +507,8 @@ func (s *UserService) GetUsersRelationships(
 }
 
 // SaveUsers handles the business logic for saving users.
-//nolint:gocyclo
+//
+//nolint:gocyclo // not important
 func (s *UserService) SaveUsers(ctx context.Context, users map[int64]*types.ReviewUser) error {
 	// Get list of user IDs to check
 	userIDs := make([]int64, 0, len(users))

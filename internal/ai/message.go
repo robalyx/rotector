@@ -43,13 +43,14 @@ type FlaggedMessageUser struct {
 
 // MessageAnalyzer processes Discord messages to detect inappropriate content.
 type MessageAnalyzer struct {
-	chat        client.ChatCompletions
-	minify      *minify.M
-	analysisSem *semaphore.Weighted
-	logger      *zap.Logger
-	textLogger  *zap.Logger
-	textDir     string
-	model       string
+	chat          client.ChatCompletions
+	minify        *minify.M
+	analysisSem   *semaphore.Weighted
+	logger        *zap.Logger
+	textLogger    *zap.Logger
+	textDir       string
+	model         string
+	fallbackModel string
 }
 
 // MessageAnalysisSchema is the JSON schema for the message analysis response.
@@ -68,13 +69,14 @@ func NewMessageAnalyzer(app *setup.App, logger *zap.Logger) *MessageAnalyzer {
 	}
 
 	return &MessageAnalyzer{
-		chat:        app.AIClient.Chat(),
-		minify:      m,
-		analysisSem: semaphore.NewWeighted(int64(app.Config.Worker.BatchSizes.MessageAnalysis)),
-		logger:      logger.Named("ai_message"),
-		textLogger:  textLogger,
-		textDir:     textDir,
-		model:       app.Config.Common.OpenAI.MessageModel,
+		chat:          app.AIClient.Chat(),
+		minify:        m,
+		analysisSem:   semaphore.NewWeighted(int64(app.Config.Worker.BatchSizes.MessageAnalysis)),
+		logger:        logger.Named("ai_message"),
+		textLogger:    textLogger,
+		textDir:       textDir,
+		model:         app.Config.Common.OpenAI.MessageModel,
+		fallbackModel: app.Config.Common.OpenAI.MessageFallbackModel,
 	}
 }
 
@@ -207,7 +209,7 @@ func (a *MessageAnalyzer) processMessageBatch(
 	// Make API request
 	var result FlaggedMessageUser
 
-	err = a.chat.NewWithRetry(ctx, params, func(resp *openai.ChatCompletion, err error) error {
+	err = a.chat.NewWithRetryAndFallback(ctx, params, a.fallbackModel, func(resp *openai.ChatCompletion, err error) error {
 		// Handle API error
 		if err != nil {
 			return fmt.Errorf("openai API error: %w", err)

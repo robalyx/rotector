@@ -143,20 +143,32 @@ stats_model = "grok-4-fast"
 outfit_model = "gemini-2.5-flash"
 # Model to use for message analysis
 message_model = "grok-4-fast"
-# Model to use for ivan message analysis
-ivan_model = "gemini-2.5-flash"
+
+# Fallback model to use for user analysis when content is blocked
+user_fallback_model = "grok-4-fast"
+# Fallback model to use for user reason analysis when content is blocked
+user_reason_fallback_model = "gpt-5-mini"
+# Fallback model to use for friend reason analysis when content is blocked
+friend_reason_fallback_model = "grok-4-fast"
+# Fallback model to use for group reason analysis when content is blocked
+group_reason_fallback_model = "grok-4-fast"
+# Fallback model to use for outfit reason analysis when content is blocked
+outfit_reason_fallback_model = "grok-4-fast"
+# Fallback model to use for category analysis when content is blocked
+category_fallback_model = "gpt-5-mini"
+# Fallback model to use for stats analysis when content is blocked
+stats_fallback_model = "gpt-5-mini"
+# Fallback model to use for outfit analysis when content is blocked
+outfit_fallback_model = ""
+# Fallback model to use for message analysis when content is blocked
+message_fallback_model = "gpt-5-mini"
 
 # Model mappings for the provider
 [common.openai.model_mappings]
 "gemini-2.5-flash" = "google/gemini-2.5-flash-preview-05-20"
 "gemini-2.0-flash" = "google/gemini-2.0-flash-001"
-"qwen-3-235b-a22b" = "qwen/qwen3-235b-a22b"
-"deepseek-v3-0324" = "deepseek/deepseek-chat-v3-0324"
-"gpt-4.1-mini" = "openai/gpt-4.1-mini"
-"o4-mini" = "openai/o4-mini"
-"o4-mini-high" = "openai/o4-mini-high"
-"grok-3-mini" = "x-ai/grok-3-mini-beta"
 "grok-4-fast" = "x-ai/grok-4-fast"
+"gpt-5-mini" = "openai/gpt-5-mini"
 
 [common.discord]
 # Self-bot token for server scanning

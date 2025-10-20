@@ -45,12 +45,13 @@ type CategoryAnalysisResult struct {
 
 // CategoryAnalyzer classifies flagged users into violation categories.
 type CategoryAnalyzer struct {
-	chat        client.ChatCompletions
-	minify      *minify.M
-	analysisSem *semaphore.Weighted
-	logger      *zap.Logger
-	model       string
-	batchSize   int
+	chat          client.ChatCompletions
+	minify        *minify.M
+	analysisSem   *semaphore.Weighted
+	logger        *zap.Logger
+	model         string
+	fallbackModel string
+	batchSize     int
 }
 
 // CategoryAnalysisSchema is the JSON schema for the category analysis response.
@@ -63,12 +64,13 @@ func NewCategoryAnalyzer(app *setup.App, logger *zap.Logger) *CategoryAnalyzer {
 	m.AddFunc(ApplicationJSON, json.Minify)
 
 	return &CategoryAnalyzer{
-		chat:        app.AIClient.Chat(),
-		minify:      m,
-		analysisSem: semaphore.NewWeighted(int64(app.Config.Worker.BatchSizes.CategoryAnalysis)),
-		logger:      logger.Named("ai_category"),
-		model:       app.Config.Common.OpenAI.CategoryModel,
-		batchSize:   app.Config.Worker.BatchSizes.CategoryAnalysisBatch,
+		chat:          app.AIClient.Chat(),
+		minify:        m,
+		analysisSem:   semaphore.NewWeighted(int64(app.Config.Worker.BatchSizes.CategoryAnalysis)),
+		logger:        logger.Named("ai_category"),
+		model:         app.Config.Common.OpenAI.CategoryModel,
+		fallbackModel: app.Config.Common.OpenAI.CategoryFallbackModel,
+		batchSize:     app.Config.Worker.BatchSizes.CategoryAnalysisBatch,
 	}
 }
 
@@ -243,16 +245,11 @@ func (a *CategoryAnalyzer) processCategoryBatch(ctx context.Context, batch []Cat
 		Temperature: openai.Float(0.0),
 		TopP:        openai.Float(0.2),
 	}
-	params.SetExtraFields(map[string]any{
-		"reasoning": map[string]any{
-			"max_tokens": 0,
-		},
-	})
 
 	// Make API request
 	var result CategoryAnalysisResult
 
-	err = a.chat.NewWithRetry(ctx, params, func(resp *openai.ChatCompletion, err error) error {
+	err = a.chat.NewWithRetryAndFallback(ctx, params, a.fallbackModel, func(resp *openai.ChatCompletion, err error) error {
 		// Handle API error
 		if err != nil {
 			return fmt.Errorf("openai API error: %w", err)

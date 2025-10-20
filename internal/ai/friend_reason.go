@@ -61,14 +61,15 @@ type BatchFriendAnalysis struct {
 
 // FriendReasonAnalyzer handles AI-based analysis of friend networks using OpenAI models.
 type FriendReasonAnalyzer struct {
-	chat        client.ChatCompletions
-	minify      *minify.M
-	analysisSem *semaphore.Weighted
-	logger      *zap.Logger
-	textLogger  *zap.Logger
-	textDir     string
-	model       string
-	batchSize   int
+	chat          client.ChatCompletions
+	minify        *minify.M
+	analysisSem   *semaphore.Weighted
+	logger        *zap.Logger
+	textLogger    *zap.Logger
+	textDir       string
+	model         string
+	fallbackModel string
+	batchSize     int
 }
 
 // FriendAnalysisSchema is the JSON schema for the friend analysis response.
@@ -88,14 +89,15 @@ func NewFriendReasonAnalyzer(app *setup.App, logger *zap.Logger) *FriendReasonAn
 	}
 
 	return &FriendReasonAnalyzer{
-		chat:        app.AIClient.Chat(),
-		minify:      m,
-		analysisSem: semaphore.NewWeighted(int64(app.Config.Worker.BatchSizes.FriendReasonAnalysis)),
-		logger:      logger.Named("ai_friend_reason"),
-		textLogger:  textLogger,
-		textDir:     textDir,
-		model:       app.Config.Common.OpenAI.FriendReasonModel,
-		batchSize:   app.Config.Worker.BatchSizes.FriendReasonAnalysisBatch,
+		chat:          app.AIClient.Chat(),
+		minify:        m,
+		analysisSem:   semaphore.NewWeighted(int64(app.Config.Worker.BatchSizes.FriendReasonAnalysis)),
+		logger:        logger.Named("ai_friend_reason"),
+		textLogger:    textLogger,
+		textDir:       textDir,
+		model:         app.Config.Common.OpenAI.FriendReasonModel,
+		fallbackModel: app.Config.Common.OpenAI.FriendReasonFallbackModel,
+		batchSize:     app.Config.Worker.BatchSizes.FriendReasonAnalysisBatch,
 	}
 }
 
@@ -317,7 +319,7 @@ func (a *FriendReasonAnalyzer) processFriendBatch(ctx context.Context, batch []U
 	// Make API request
 	var result BatchFriendAnalysis
 
-	err = a.chat.NewWithRetry(ctx, params, func(resp *openai.ChatCompletion, err error) error {
+	err = a.chat.NewWithRetryAndFallback(ctx, params, a.fallbackModel, func(resp *openai.ChatCompletion, err error) error {
 		// Handle API error
 		if err != nil {
 			return fmt.Errorf("openai API error: %w", err)
