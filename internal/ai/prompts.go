@@ -75,8 +75,8 @@ Instruction: FLAG outfits that are body/figure-focused:
 - Bodies with sexualized scars or markings
 
 Instruction: FLAG outfits that are BDSM/kink/fetish parodies:
-- Bondage sets (chains, gags, collars)
-- Slave-themed outfits (with chains, torn clothing)
+- Bondage sets with sexual elements (chains combined with revealing clothing, gags, collars in fetish context)
+- Slave-themed outfits (with chains, torn clothing in sexual context)
 - Leather harnesses/latex corsets in fetish context
 - "Cow girl" outfits with sexualized elements (cow print combined with revealing clothing, suggestive poses, or fetish accessories, NOT innocent farm/animal costumes)
 - "Bull" stereotype outfits representing racial fetish content (dark brown/black skin tone avatars, often shirtless or minimal torso coverage, with pants or shorts - this specific combination represents inappropriate racial stereotyping in fetish contexts)
@@ -93,6 +93,7 @@ DO NOT flag these legitimate themes and elements:
 - Animal or creature costumes that are clearly innocent (e.g., full fursuits, non-revealing animal onesies, children's animal costumes) without sexualized elements
 - Common costumes (e.g., witch, pirate, vampire, angel, devil), unless overtly sexualized
 - Military or combat themes
+- Chains, collars, or metal accessories in non-sexual contexts (video game characters, pirates, prisoners, ghosts, military gear)
 - Professional or occupation-based outfits, unless overtly sexualized
 - Cartoon or anime character costumes that are faithful to known, non-sexualized source designs
 - Horror or spooky themes (including non-sexualized gore elements)
@@ -369,6 +370,8 @@ CRITICAL HINT RESTRICTIONS:
 
 CRITICAL: Only flag content that violates platform safety policies regarding sexually inappropriate or predatory behavior. Do not flag content that is merely offensive, racist, or discriminatory as these fall under different moderation categories.
 
+CRITICAL: Dark humor, violence, or disturbing themes (even if involving minors) are NOT sexual violations unless combined with explicit sexual or predatory elements.
+
 ViolationLocation options:
 - "username" - Issue in the username itself
 - "displayName" - Issue in the display name
@@ -426,6 +429,7 @@ DO NOT flag names that:
 - Use common internet slang without clear inappropriate intent
 - Include general relationship terms without sexual context
 - Contain potentially suggestive terms that are also common in gaming/internet culture
+- Reference horror, scary, or edgy content without sexual or predatory elements
 - Are foreign language words without clear inappropriate context in the source language
 - Use abbreviations that could reasonably be initials or innocent acronyms
 - Contain misspelled terms without additional inappropriate elements

@@ -353,7 +353,7 @@ func (a *UserAnalyzer) shouldSkipFlaggedUser(
 	}
 
 	// Skip extra checks if user is flagged with inappropriate profile and confidence is high enough
-	if _, exists := params.InappropriateProfileFlags[originalInfo.ID]; exists && flaggedUser.Confidence > 0.7 {
+	if _, exists := params.InappropriateProfileFlags[originalInfo.ID]; exists && flaggedUser.Confidence >= 0.5 {
 		return false
 	}
 
@@ -396,6 +396,25 @@ func (a *UserAnalyzer) shouldSkipFlaggedUser(
 
 		// For older accounts, use stricter validation
 		if flaggedUser.Confidence < 0.7 {
+			// Exception: Don't skip if ALL friends are inappropriate and confidence >= 0.5
+			if flaggedUser.Confidence >= 0.5 {
+				confirmedFriends := params.ConfirmedFriendsMap[originalInfo.ID]
+				flaggedFriends := params.FlaggedFriendsMap[originalInfo.ID]
+				totalInappropriateFriends := len(confirmedFriends) + len(flaggedFriends)
+				totalFriends := len(originalInfo.Friends)
+
+				// All friends being inappropriate is a strong signal
+				if totalFriends >= 1 && totalInappropriateFriends == totalFriends {
+					a.logger.Info("Accepting user despite low confidence - all friends are inappropriate",
+						zap.Int64("userID", originalInfo.ID),
+						zap.String("username", flaggedUser.Name),
+						zap.Float64("confidence", flaggedUser.Confidence),
+						zap.Int("totalFriends", totalFriends))
+
+					return false
+				}
+			}
+
 			a.logger.Info("Skipping user with low confidence and no existing reasons",
 				zap.Int64("userID", originalInfo.ID),
 				zap.String("username", flaggedUser.Name),

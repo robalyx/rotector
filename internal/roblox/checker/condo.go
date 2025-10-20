@@ -34,39 +34,99 @@ func NewCondoChecker(app *setup.App, logger *zap.Logger) *CondoChecker {
 }
 
 // ProcessUsers checks multiple users for condo activity.
-func (c *CondoChecker) ProcessUsers(ctx context.Context, params *CondoCheckerParams) {
+func (c *CondoChecker) ProcessUsers(ctx context.Context, params *CondoCheckerParams) error {
 	existingFlags := len(params.ReasonsMap)
 
 	// Track users flagged by each method
 	discordFlaggedCount := 0
 	groupsFlaggedCount := 0
 
-	// Step 1: Check for Discord server membership
+	// Batch query Discord user IDs for all Roblox users
+	robloxUserIDs := make([]int64, 0, len(params.Users))
 	for _, userInfo := range params.Users {
+		robloxUserIDs = append(robloxUserIDs, userInfo.ID)
+	}
+
+	robloxToDiscordMap, err := c.db.Model().Sync().GetDiscordUserIDsByRobloxIDs(ctx, robloxUserIDs)
+	if err != nil {
+		return fmt.Errorf("failed to get Discord user IDs for Roblox users: %w", err)
+	}
+
+	// Step 1: Check for Discord activity
+	for _, userInfo := range params.Users {
+		// Get Discord user ID for evidence
+		discordUserID, hasDiscordConnection := robloxToDiscordMap[userInfo.ID]
+
+		// Check Discord server count
 		shouldFlag, serverCount, confidence := c.detectDiscordActivity(ctx, userInfo.ID)
-		if !shouldFlag {
+		if shouldFlag {
+			// User meets server threshold (3+), skip message analysis
+			reasonMessage := fmt.Sprintf("Discord user with linked Roblox account detected in %d+ condo servers", serverCount)
+
+			if _, exists := params.ReasonsMap[userInfo.ID]; !exists {
+				params.ReasonsMap[userInfo.ID] = make(types.Reasons[enum.UserReasonType])
+			}
+
+			condoReason := &types.Reason{
+				Message:    reasonMessage,
+				Confidence: confidence,
+			}
+
+			// Add Discord User ID as evidence if available
+			if hasDiscordConnection {
+				condoReason.Evidence = []string{
+					fmt.Sprintf("Discord User ID: %d", discordUserID),
+				}
+			}
+
+			params.ReasonsMap[userInfo.ID].AddWithSource(enum.UserReasonTypeCondo, condoReason, "Discord")
+
+			discordFlaggedCount++
+
+			c.logger.Debug("User flagged for Discord condo server activity",
+				zap.Int64("userID", userInfo.ID),
+				zap.Int("serverCount", serverCount),
+				zap.Float64("confidence", confidence))
+
 			continue
 		}
 
-		// Build reason message
-		reasonMessage := fmt.Sprintf("Discord user with linked Roblox account detected in %d+ condo servers", serverCount)
+		// Server count below threshold, check for inappropriate messages
+		shouldFlag, messageCount, confidence, reason := c.detectMessageActivity(ctx, userInfo.ID, robloxToDiscordMap)
+		if shouldFlag {
+			// Build reason message with server count
+			reasonMessage := fmt.Sprintf(
+				"Discord user with linked Roblox account detected in %d condo server(s) with inappropriate messages",
+				serverCount,
+			)
 
-		// Add condo reason with Discord source
-		if _, exists := params.ReasonsMap[userInfo.ID]; !exists {
-			params.ReasonsMap[userInfo.ID] = make(types.Reasons[enum.UserReasonType])
+			if _, exists := params.ReasonsMap[userInfo.ID]; !exists {
+				params.ReasonsMap[userInfo.ID] = make(types.Reasons[enum.UserReasonType])
+			}
+
+			condoReason := &types.Reason{
+				Message:    reasonMessage,
+				Confidence: confidence,
+			}
+
+			// Add Discord User ID as evidence if available
+			if hasDiscordConnection {
+				condoReason.Evidence = []string{
+					fmt.Sprintf("Discord User ID: %d", discordUserID),
+				}
+			}
+
+			params.ReasonsMap[userInfo.ID].AddWithSource(enum.UserReasonTypeCondo, condoReason, "Discord")
+
+			discordFlaggedCount++
+
+			c.logger.Debug("User flagged for inappropriate Discord messages",
+				zap.Int64("userID", userInfo.ID),
+				zap.Int("serverCount", serverCount),
+				zap.Int("messageCount", messageCount),
+				zap.Float64("confidence", confidence),
+				zap.String("reason", reason))
 		}
-
-		params.ReasonsMap[userInfo.ID].AddWithSource(enum.UserReasonTypeCondo, &types.Reason{
-			Message:    reasonMessage,
-			Confidence: confidence,
-		}, "Discord")
-
-		discordFlaggedCount++
-
-		c.logger.Debug("User flagged for Discord condo server activity",
-			zap.Int64("userID", userInfo.ID),
-			zap.Int("serverCount", serverCount),
-			zap.Float64("confidence", confidence))
 	}
 
 	// Step 2: Check for condo group membership
@@ -106,6 +166,8 @@ func (c *CondoChecker) ProcessUsers(ctx context.Context, params *CondoCheckerPar
 		zap.Int("discordFlags", discordFlaggedCount),
 		zap.Int("groupFlags", groupsFlaggedCount),
 		zap.Int("newFlags", len(params.ReasonsMap)-existingFlags))
+
+	return nil
 }
 
 // detectDiscordActivity checks if a user should be flagged based on Discord server membership.
@@ -183,6 +245,42 @@ func (c *CondoChecker) detectGroupActivity(
 	}
 
 	return shouldFlag, condoCount, details
+}
+
+// detectMessageActivity checks if a user should be flagged based on inappropriate Discord messages.
+// Returns true if user has inappropriate messages, along with count, confidence, and reason.
+func (c *CondoChecker) detectMessageActivity(
+	ctx context.Context, robloxUserID int64, robloxToDiscordMap map[int64]uint64,
+) (shouldFlag bool, messageCount int, confidence float64, reason string) {
+	// Get Discord user ID for this Roblox user
+	discordUserID, hasDiscordConnection := robloxToDiscordMap[robloxUserID]
+	if !hasDiscordConnection {
+		return false, 0, 0.0, ""
+	}
+
+	// Query message summary for this Discord user
+	messageSummaries, err := c.db.Model().Message().GetUserInappropriateMessageSummaries(
+		ctx, []uint64{discordUserID},
+	)
+	if err != nil {
+		c.logger.Error("Failed to get message summaries",
+			zap.Int64("robloxUserID", robloxUserID),
+			zap.Uint64("discordUserID", discordUserID),
+			zap.Error(err))
+
+		return false, 0, 0.0, ""
+	}
+
+	// Check if this user has inappropriate messages
+	summary, hasMessages := messageSummaries[discordUserID]
+	if !hasMessages || summary.MessageCount == 0 {
+		return false, 0, 0.0, ""
+	}
+
+	// Use fixed high confidence for AI-flagged messages
+	confidence = 0.90
+
+	return true, summary.MessageCount, confidence, summary.Reason
 }
 
 // calculateDiscordConfidence computes a confidence score based on Discord server count.

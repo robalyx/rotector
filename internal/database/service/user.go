@@ -507,6 +507,7 @@ func (s *UserService) GetUsersRelationships(
 }
 
 // SaveUsers handles the business logic for saving users.
+//nolint:gocyclo
 func (s *UserService) SaveUsers(ctx context.Context, users map[int64]*types.ReviewUser) error {
 	// Get list of user IDs to check
 	userIDs := make([]int64, 0, len(users))
@@ -532,11 +533,13 @@ func (s *UserService) SaveUsers(ctx context.Context, users map[int64]*types.Revi
 			user.UUID = uuid.New()
 		}
 
-		// Set engine version for user processing
-		user.EngineVersion = types.CurrentEngineVersion
-
 		// Determine status based on whether user exists and has reasons
 		if existingUser, ok := existingUsers[id]; ok {
+			// Preserve existing engine version if not explicitly set by caller
+			if user.EngineVersion == "" {
+				user.EngineVersion = existingUser.EngineVersion
+			}
+
 			// Past offenders who get flagged again should return to flagged status
 			if existingUser.Status == enum.UserTypePastOffender && len(user.Reasons) > 0 {
 				user.Status = enum.UserTypeFlagged
@@ -545,13 +548,20 @@ func (s *UserService) SaveUsers(ctx context.Context, users map[int64]*types.Revi
 				user.Status = existingUser.Status
 			}
 		} else {
-			// New users start as flagged
+			// New users start as flagged and current engine version
 			user.Status = enum.UserTypeFlagged
+			if user.EngineVersion == "" {
+				user.EngineVersion = types.CurrentEngineVersion
+			}
 		}
 
-		// Create empty reasons map if nil (reasons will be completely replaced)
+		// Preserve existing reasons if nil is passed for existing users
 		if user.Reasons == nil {
-			user.Reasons = make(types.Reasons[enum.UserReasonType])
+			if existingUser, ok := existingUsers[id]; ok && existingUser.Reasons != nil {
+				user.Reasons = existingUser.Reasons
+			} else {
+				user.Reasons = make(types.Reasons[enum.UserReasonType])
+			}
 		}
 
 		usersToSave = append(usersToSave, user)

@@ -540,3 +540,28 @@ func (m *SyncModel) GetDiscordServerCountByRobloxID(ctx context.Context, robloxU
 		return count, nil
 	})
 }
+
+// GetDiscordUserIDsByRobloxIDs retrieves Discord user IDs for multiple Roblox user IDs.
+func (m *SyncModel) GetDiscordUserIDsByRobloxIDs(
+	ctx context.Context, robloxUserIDs []int64,
+) (map[int64]uint64, error) {
+	return dbretry.Operation(ctx, func(ctx context.Context) (map[int64]uint64, error) {
+		var connections []*types.DiscordRobloxConnection
+
+		err := m.db.NewSelect().
+			Model(&connections).
+			Where("roblox_user_id IN (?)", bun.In(robloxUserIDs)).
+			Scan(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get Discord user IDs by Roblox IDs: %w", err)
+		}
+
+		// Convert slice to map for easier lookup
+		connectionMap := make(map[int64]uint64)
+		for _, connection := range connections {
+			connectionMap[connection.RobloxUserID] = connection.DiscordUserID
+		}
+
+		return connectionMap, nil
+	})
+}

@@ -290,11 +290,13 @@ func (w *Worker) processBatch(
 		})
 	case enum.UserReasonTypeCondo:
 		// Process through condo checker
-		w.condoChecker.ProcessUsers(ctx, &checker.CondoCheckerParams{
+		if err := w.condoChecker.ProcessUsers(ctx, &checker.CondoCheckerParams{
 			Users:              users,
 			ReasonsMap:         reasonsMap,
 			ConfirmedGroupsMap: confirmedGroupsMap,
-		})
+		}); err != nil {
+			return 0, fmt.Errorf("failed to process condo checker: %w", err)
+		}
 	default:
 		return 0, fmt.Errorf("%w: %s", ErrUnsupportedReason, reasonType.String())
 	}
@@ -381,11 +383,13 @@ func (w *Worker) processBatchRecalculate(
 		})
 	case enum.UserReasonTypeCondo:
 		// Process through condo checker
-		w.condoChecker.ProcessUsers(ctx, &checker.CondoCheckerParams{
+		if err := w.condoChecker.ProcessUsers(ctx, &checker.CondoCheckerParams{
 			Users:              users,
 			ReasonsMap:         reasonsMap,
 			ConfirmedGroupsMap: confirmedGroupsMap,
-		})
+		}); err != nil {
+			return 0, fmt.Errorf("failed to process condo checker: %w", err)
+		}
 	default:
 		return 0, fmt.Errorf("%w: %s", ErrUnsupportedReason, reasonType.String())
 	}

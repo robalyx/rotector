@@ -97,7 +97,7 @@ func (c *FriendChecker) ProcessUsers(ctx context.Context, params *FriendCheckerP
 
 		// For new accounts, all friends being inappropriate is immediately suspicious
 		// For older accounts, require additional supporting evidence
-		allFriendsInappropriate := confirmedCount+flaggedCount == totalFriends && totalFriends >= 2
+		allFriendsInappropriate := confirmedCount+flaggedCount == totalFriends && totalFriends >= 1
 		newAccountException := userInfo.IsNewAccount()
 		hasSupport := hasDescription || hasInappropriateGroups || hasExistingReasons
 

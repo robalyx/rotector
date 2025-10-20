@@ -139,11 +139,13 @@ func (c *UserChecker) ProcessUsers(ctx context.Context, params *UserCheckerParam
 	})
 
 	// Process condo checker
-	c.condoChecker.ProcessUsers(ctxWithTimeout, &CondoCheckerParams{
+	if err := c.condoChecker.ProcessUsers(ctxWithTimeout, &CondoCheckerParams{
 		Users:              params.Users,
 		ReasonsMap:         reasonsMap,
 		ConfirmedGroupsMap: confirmedGroupsMap,
-	})
+	}); err != nil {
+		c.logger.Error("Failed to process condo checker", zap.Error(err))
+	}
 
 	// Prepare user info maps
 	translatedInfos, originalInfos := c.prepareUserInfoMaps(ctxWithTimeout, params.Users)
