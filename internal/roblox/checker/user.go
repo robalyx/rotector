@@ -88,7 +88,7 @@ func (c *UserChecker) ProcessUsers(ctx context.Context, params *UserCheckerParam
 	reasonsMap := make(map[int64]types.Reasons[enum.UserReasonType])
 
 	// Preserve manually-added reasons from existing users before analysis
-	// This ensures moderator-added reasons (Condo, Chat, Favorites, Badges) are not lost during reprocessing
+	// This ensures moderator-added reasons (Chat, Favorites, Badges) are not lost during reprocessing
 	if params.ExistingUsers != nil {
 		for userID, existingUser := range params.ExistingUsers {
 			if existingUser.Reasons == nil {

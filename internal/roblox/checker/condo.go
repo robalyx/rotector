@@ -3,7 +3,7 @@ package checker
 import (
 	"context"
 	"fmt"
-	"strings"
+	"regexp"
 
 	"github.com/robalyx/rotector/internal/database"
 	"github.com/robalyx/rotector/internal/database/types"
@@ -11,6 +11,8 @@ import (
 	"github.com/robalyx/rotector/internal/setup"
 	"go.uber.org/zap"
 )
+
+var condoPattern = regexp.MustCompile(`(?i)\bcondo\b`)
 
 // CondoCheckerParams contains all the parameters needed for condo checker processing.
 type CondoCheckerParams struct {
@@ -219,8 +221,8 @@ func (c *CondoChecker) detectGroupActivity(
 			continue
 		}
 
-		// Check if "condo" appears in the purpose reason (case-insensitive)
-		if strings.Contains(strings.ToLower(purposeReason.Message), "condo") {
+		// Check if "condo" appears in the purpose reason
+		if condoPattern.MatchString(purposeReason.Message) {
 			condoGroupIDs = append(condoGroupIDs, groupID)
 
 			// Check if this is a small group (< 600 members)

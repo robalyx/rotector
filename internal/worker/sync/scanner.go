@@ -38,7 +38,10 @@ func (w *Worker) runMutualScanner(ctx context.Context) {
 				continue
 			}
 
-			w.discordRateLimiter.waitForNextSlot()
+			if err := w.discordRateLimiter.waitForNextSlot(ctx); err != nil {
+				w.logger.Info("Context cancelled during rate limit wait, stopping mutual scanner")
+				return
+			}
 
 			_, err := w.scanner.PerformFullScan(ctx, userID)
 			if err != nil {

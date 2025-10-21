@@ -318,6 +318,8 @@ func (w *Worker) findTextChannel(
 }
 
 // syncMemberChunks handles the main sync loop, retrieving member chunks and processing them.
+//
+//nolint:funlen // State machine logic requires sequential flow for clarity
 func (w *Worker) syncMemberChunks(
 	ctx context.Context,
 	guildID discord.GuildID,
@@ -394,7 +396,12 @@ func (w *Worker) syncMemberChunks(
 					}
 
 					// Wait for rate limit before making request
-					w.discordRateLimiter.waitForNextSlot()
+					if err := w.discordRateLimiter.waitForNextSlot(ctx); err != nil {
+						w.logger.Debug("Context cancelled during rate limit wait",
+							zap.String("guildID", guildID.String()))
+
+						return allMembers, ctx.Err()
+					}
 
 					// Try again with a new request
 					w.state.MemberState.RequestMemberList(guildID, channelID, 0)
@@ -476,7 +483,12 @@ func (w *Worker) syncMemberChunks(
 				nextChunk := currentMaxChunk + 1
 
 				// Wait for rate limit before making request
-				w.discordRateLimiter.waitForNextSlot()
+				if err := w.discordRateLimiter.waitForNextSlot(ctx); err != nil {
+					w.logger.Debug("Context cancelled during rate limit wait",
+						zap.String("guildID", guildID.String()))
+
+					return allMembers, ctx.Err()
+				}
 
 				w.state.MemberState.RequestMemberList(guildID, channelID, nextChunk)
 			} else {
