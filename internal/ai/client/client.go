@@ -17,7 +17,10 @@ import (
 	"golang.org/x/sync/semaphore"
 )
 
-var ErrNoProvidersAvailable = errors.New("no providers available")
+var (
+	ErrNoProvidersAvailable = errors.New("no providers available")
+	ErrInvalidResponse      = errors.New("invalid response from API")
+)
 
 // defaultSafetySettings defines the default safety thresholds for content filtering and reasoning disablement.
 var defaultSafetySettings = map[string]any{
@@ -48,7 +51,7 @@ func NewClient(cfg *config.OpenAI, logger *zap.Logger) (*AIClient, error) {
 	client := openai.NewClient(
 		option.WithAPIKey(cfg.APIKey),
 		option.WithBaseURL(cfg.BaseURL),
-		option.WithRequestTimeout(90*time.Second),
+		option.WithRequestTimeout(150*time.Second),
 		option.WithMaxRetries(0),
 	)
 
@@ -365,20 +368,20 @@ func (c *chatCompletions) checkBlockReasons(resp *openai.ChatCompletion, model s
 	// Check if response is provided
 	if resp == nil {
 		c.client.logger.Warn("Received nil response", zap.String("model", model))
-		return fmt.Errorf("%w: received nil response", utils.ErrContentBlocked)
+		return fmt.Errorf("%w: received nil response", ErrInvalidResponse)
 	}
 
 	// Check if choices are provided
 	if len(resp.Choices) == 0 {
 		c.client.logger.Warn("Received empty choices", zap.String("model", model))
-		return fmt.Errorf("%w: received empty choices", utils.ErrContentBlocked)
+		return fmt.Errorf("%w: received empty choices", ErrInvalidResponse)
 	}
 
 	// Check if finish reason is provided
 	finishReason := resp.Choices[0].FinishReason
 	if finishReason == "" {
 		c.client.logger.Warn("No finish reason provided", zap.String("model", model))
-		return fmt.Errorf("%w: no finish reason provided", utils.ErrContentBlocked)
+		return fmt.Errorf("%w: no finish reason provided", ErrInvalidResponse)
 	}
 
 	// Map of finish reasons to their error handling
@@ -393,7 +396,7 @@ func (c *chatCompletions) checkBlockReasons(resp *openai.ChatCompletion, model s
 			zap.String("model", model),
 			zap.String("finishReason", finishReason))
 
-		err = utils.ErrContentBlocked
+		return fmt.Errorf("%w: unknown finish reason: %s", ErrInvalidResponse, finishReason)
 	}
 
 	if err != nil {
