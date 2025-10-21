@@ -375,14 +375,13 @@ func (a *OutfitAnalyzer) analyzeUserOutfits(
 func (a *OutfitAnalyzer) processOutfitBatch(
 	ctx context.Context, info *types.ReviewUser, batch []DownloadResult,
 ) (*OutfitThemeAnalysis, error) {
-	// Process each downloaded image and add as user message parts
-	messages := []openai.ChatCompletionMessageParamUnion{
-		openai.SystemMessage(OutfitSystemPrompt),
-	}
-
+	// Build content parts for a user message
+	userContentParts := make([]openai.ChatCompletionContentPartUnionParam, 0, len(batch)+1)
 	outfitNames := make([]string, 0, len(batch))
 	validOutfits := make(map[string]struct{})
 
+	// Build the outfit list and prepare images
+	imageParts := make([]openai.ChatCompletionContentPartUnionParam, 0, len(batch))
 	for _, result := range batch {
 		// Convert image to base64
 		buf := new(bytes.Buffer)
@@ -392,11 +391,11 @@ func (a *OutfitAnalyzer) processOutfitBatch(
 
 		base64Image := base64.StdEncoding.EncodeToString(buf.Bytes())
 
-		// Add image as a user message
+		// Create image content part
 		imagePart := openai.ImageContentPart(openai.ChatCompletionContentPartImageImageURLParam{
 			URL: "data:image/webp;base64," + base64Image,
 		})
-		messages = append(messages, openai.UserMessage([]openai.ChatCompletionContentPartUnionParam{imagePart}))
+		imageParts = append(imageParts, imagePart)
 
 		// Store outfit name
 		outfitNames = append(outfitNames, result.name)
@@ -408,19 +407,30 @@ func (a *OutfitAnalyzer) processOutfitBatch(
 		return nil, ErrNoOutfits
 	}
 
-	// Add final user message with numbered outfit names
+	// Build outfit mapping list
 	outfitList := make([]string, 0, len(outfitNames))
 	for i, name := range outfitNames {
 		outfitList = append(outfitList, fmt.Sprintf("Image %d: %s", i+1, name))
 	}
 
+	// Create text prompt
 	prompt := fmt.Sprintf(
 		"%s\n\nIdentify themes for user %q.\n\nOutfit mapping:\n%s\n\nAnalyze each image in order and use the EXACT outfit names listed above.",
 		OutfitRequestPrompt,
 		info.Name,
 		strings.Join(outfitList, "\n"),
 	)
-	messages = append(messages, openai.UserMessage(prompt))
+	textPart := openai.TextContentPart(prompt)
+
+	// Assemble content parts
+	userContentParts = append(userContentParts, textPart)
+	userContentParts = append(userContentParts, imageParts...)
+
+	// Create messages
+	messages := []openai.ChatCompletionMessageParamUnion{
+		openai.SystemMessage(OutfitSystemPrompt),
+		openai.UserMessage(userContentParts),
+	}
 
 	// Prepare chat completion parameters
 	params := openai.ChatCompletionNewParams{

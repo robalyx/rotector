@@ -127,11 +127,15 @@ func (c *chatCompletions) New(ctx context.Context, params openai.ChatCompletionN
 	// Execute request
 	result, err := c.client.breaker.Execute(func() (any, error) {
 		resp, err := c.client.client.Chat.Completions.New(ctx, params)
+		if err != nil {
+			return resp, err
+		}
+
 		if bl := c.checkBlockReasons(resp, params.Model); bl != nil {
 			return resp, bl
 		}
 
-		return resp, err
+		return resp, nil
 	})
 	if err != nil {
 		switch {
@@ -192,11 +196,15 @@ func (c *chatCompletions) NewWithRetry(
 			var execErr error
 
 			resp, execErr = c.client.client.Chat.Completions.New(ctx, params)
+			if execErr != nil {
+				return resp, execErr
+			}
+
 			if bl := c.checkBlockReasons(resp, params.Model); bl != nil {
 				return resp, bl
 			}
 
-			return resp, execErr
+			return resp, nil
 		})
 		if err != nil {
 			lastErr = err

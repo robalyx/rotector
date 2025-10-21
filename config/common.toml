@@ -165,7 +165,7 @@ message_fallback_model = "gpt-5-mini"
 
 # Model mappings for the provider
 [common.openai.model_mappings]
-"gemini-2.5-flash" = "google/gemini-2.5-flash-preview-05-20"
+"gemini-2.5-flash" = "google/gemini-2.5-flash-preview-09-2025"
 "gemini-2.0-flash" = "google/gemini-2.0-flash-001"
 "grok-4-fast" = "x-ai/grok-4-fast"
 "gpt-5-mini" = "openai/gpt-5-mini"
