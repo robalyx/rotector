@@ -305,13 +305,8 @@ func (w *Worker) findTextChannel(
 }
 
 // syncMemberChunks handles the main sync loop, retrieving member chunks and processing them.
-//
-//nolint:funlen // State machine logic requires sequential flow for clarity
 func (w *Worker) syncMemberChunks(
-	ctx context.Context,
-	guildID discord.GuildID,
-	channelID discord.ChannelID,
-	now time.Time,
+	ctx context.Context, guildID discord.GuildID, channelID discord.ChannelID, now time.Time,
 ) ([]*types.DiscordServerMember, error) {
 	var (
 		allMembers   []*types.DiscordServerMember
@@ -329,28 +324,11 @@ func (w *Worker) syncMemberChunks(
 	consecutiveListNotFound := 0
 	maxConsecutiveListNotFound := w.getRandomRetryCount()
 
-	resultsChan := make(chan []*types.DiscordServerMember, 10)
-	errorsChan := make(chan error, 10)
-
-	go func() {
-		for members := range resultsChan {
-			membersMutex.Lock()
-
-			allMembers = append(allMembers, members...)
-
-			membersMutex.Unlock()
-		}
-	}()
-
 	w.logger.Debug("Starting member chunk sync",
 		zap.String("guildID", guildID.String()),
 		zap.String("channelID", channelID.String()))
 
-	defer func() {
-		wg.Wait()
-		close(resultsChan)
-		close(errorsChan)
-	}()
+	defer wg.Wait()
 
 	for {
 		select {
@@ -359,9 +337,6 @@ func (w *Worker) syncMemberChunks(
 		case <-ctx.Done():
 			w.logger.Info("Context cancelled during member sync")
 			return allMembers, ctx.Err()
-		case err := <-errorsChan:
-			w.logger.Error("Critical error during member processing", zap.Error(err))
-			return allMembers, fmt.Errorf("member processing failed: %w", err)
 		default:
 			// Get current member list state
 			list, err := w.state.MemberState.GetMemberList(guildID, channelID)
@@ -411,6 +386,8 @@ func (w *Worker) syncMemberChunks(
 			if currentMaxChunk != lastMaxChunk {
 				wg.Add(1)
 
+				// Process chunk asynchronously to avoid blocking the main loop.
+				// Note: processedMutex ensures serial processing for safe deduplication.
 				go func(memberList *member.List) {
 					defer wg.Done()
 
@@ -421,7 +398,11 @@ func (w *Worker) syncMemberChunks(
 					processedMutex.Unlock()
 
 					if len(newMembers) > 0 {
-						resultsChan <- newMembers
+						membersMutex.Lock()
+
+						allMembers = append(allMembers, newMembers...)
+
+						membersMutex.Unlock()
 					}
 				}(list)
 
@@ -489,11 +470,7 @@ func (w *Worker) syncMemberChunks(
 // processMemberList extracts members from the member list that haven't been processed yet.
 // Returns a slice of new members found.
 func (w *Worker) processMemberList(
-	ctx context.Context,
-	list *member.List,
-	processed map[uint64]struct{},
-	guildID discord.GuildID,
-	now time.Time,
+	ctx context.Context, list *member.List, processed map[uint64]struct{}, guildID discord.GuildID, now time.Time,
 ) []*types.DiscordServerMember {
 	// Collect users to check which ones are already in our database
 	potentialMembers := make(map[uint64]time.Time)
