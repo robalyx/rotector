@@ -91,6 +91,7 @@ func run() error {
 			// Create timestamped output directory
 			baseDir := c.String("output")
 			timestamp := time.Now().UTC().Format("2006-01-02_150405")
+
 			outDir := filepath.Join(baseDir, timestamp)
 			if err := os.MkdirAll(outDir, 0o755); err != nil {
 				return fmt.Errorf("failed to create output directory: %w", err)
@@ -166,6 +167,7 @@ func getExportConfig(c *cli.Command) (*export.Config, error) {
 				if v != string(export.HashTypeArgon2id) && v != string(export.HashTypeSHA256) {
 					return fmt.Errorf("%w: %s", ErrInvalidHashType, v)
 				}
+
 				return nil
 			},
 		},

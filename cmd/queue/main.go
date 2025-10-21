@@ -99,6 +99,7 @@ func run() error {
 			}
 
 			fmt.Printf("Successfully queued %d users.\n", totalQueued)
+
 			if totalFailed > 0 {
 				fmt.Printf("Failed to queue %d users (see logs for details).\n", totalFailed)
 			}
