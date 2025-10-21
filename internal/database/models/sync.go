@@ -530,7 +530,7 @@ func (m *SyncModel) GetDiscordServerCountByRobloxID(ctx context.Context, robloxU
 	return dbretry.Operation(ctx, func(ctx context.Context) (int, error) {
 		count, err := m.db.NewSelect().
 			Model((*types.DiscordServerMember)(nil)).
-			Join("JOIN discord_roblox_connections AS drc ON drc.discord_user_id = discord_server_members.user_id").
+			Join("JOIN discord_roblox_connections AS drc ON drc.discord_user_id = discord_server_member.user_id").
 			Where("drc.roblox_user_id = ?", robloxUserID).
 			Count(ctx)
 		if err != nil {
