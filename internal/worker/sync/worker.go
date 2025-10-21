@@ -3,6 +3,7 @@ package sync
 import (
 	"context"
 	"errors"
+	"math/rand"
 	"time"
 
 	"github.com/diamondburned/arikawa/v3/gateway"
@@ -44,6 +45,7 @@ type Worker struct {
 	ratelimit          rueidis.Client
 	scanner            *discord.Scanner
 	discordRateLimiter *requestRateLimiter
+	rng                *rand.Rand
 }
 
 // New creates a new sync worker.
@@ -91,6 +93,7 @@ func New(app *setup.App, bar *components.ProgressBar, logger *zap.Logger, instan
 		ratelimit:          ratelimit,
 		scanner:            discord.NewScanner(app.DB, app.CFClient, ratelimit, n.Session, messageAnalyzer, logger),
 		discordRateLimiter: newRequestRateLimiter(1*time.Second, 200*time.Millisecond),
+		rng:                rand.New(rand.NewSource(time.Now().UnixNano())),
 	}
 }
 

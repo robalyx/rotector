@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math/rand"
 	"strings"
 	"sync"
 	"time"
@@ -21,18 +20,6 @@ const (
 	maxConsecutiveNoProgressIter = 3
 	syncTimeout                  = 5 * time.Minute
 )
-
-// getRandomRetryCount returns a random retry count between 2 and 4.
-// Mimics human behavior by varying retry attempts instead of using a fixed count.
-func getRandomRetryCount() int {
-	return rand.Intn(3) + 2
-}
-
-// getRandomDelay returns a random delay between minDelay and maxDelay duration.
-func getRandomDelay(minDelay, maxDelay time.Duration) time.Duration {
-	delta := maxDelay - minDelay
-	return minDelay + time.Duration(rand.Int63n(int64(delta)))
-}
 
 // syncCycle attempts to sync all servers.
 func (w *Worker) syncCycle(ctx context.Context) error {
@@ -179,7 +166,7 @@ func (w *Worker) syncServerMembers(ctx context.Context, guildID discord.GuildID)
 			zap.Int("max_attempts", maxChannelAttempts))
 
 		if attempt > 0 {
-			thinkingDelay := getRandomDelay(2*time.Second, 5*time.Second)
+			thinkingDelay := w.getRandomDelay(2*time.Second, 5*time.Second)
 			w.logger.Debug("Waiting before trying new channel",
 				zap.Duration("delay", thinkingDelay))
 			time.Sleep(thinkingDelay)
@@ -206,7 +193,7 @@ func (w *Worker) syncServerMembers(ctx context.Context, guildID discord.GuildID)
 			zap.Int("attempt", attempt+1))
 
 		if attempt < maxChannelAttempts-1 {
-			channelSwitchDelay := getRandomDelay(5*time.Second, 10*time.Second)
+			channelSwitchDelay := w.getRandomDelay(5*time.Second, 10*time.Second)
 			w.logger.Debug("Waiting before trying next channel",
 				zap.Duration("delay", channelSwitchDelay))
 			time.Sleep(channelSwitchDelay)
@@ -340,7 +327,7 @@ func (w *Worker) syncMemberChunks(
 	consecutiveNoProgress := 0
 
 	consecutiveListNotFound := 0
-	maxConsecutiveListNotFound := getRandomRetryCount()
+	maxConsecutiveListNotFound := w.getRandomRetryCount()
 
 	resultsChan := make(chan []*types.DiscordServerMember, 10)
 	errorsChan := make(chan error, 10)
@@ -584,4 +571,20 @@ func (w *Worker) processMemberList(
 	}
 
 	return newMembers
+}
+
+// getRandomRetryCount returns a random retry count between 2 and 4.
+func (w *Worker) getRandomRetryCount() int {
+	return w.rng.Intn(3) + 2
+}
+
+// getRandomDelay returns a random delay between minDelay and maxDelay duration.
+func (w *Worker) getRandomDelay(minDelay, maxDelay time.Duration) time.Duration {
+	if maxDelay <= minDelay {
+		return minDelay
+	}
+
+	delta := maxDelay - minDelay
+
+	return minDelay + time.Duration(w.rng.Int63n(int64(delta)))
 }
