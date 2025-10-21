@@ -93,16 +93,37 @@ func (a *MessageAnalyzer) ProcessMessages(
 	// Handle content blocking
 	minBatchSize := max(len(messages)/4, 1)
 
-	var flaggedUser *FlaggedMessageUser
+	var cumulativeFlaggedUser *FlaggedMessageUser
 
 	err := utils.WithRetrySplitBatch(
 		ctx, messages, len(messages), minBatchSize, utils.GetAIRetryOptions(),
 		func(batch []*MessageContent) error {
-			var err error
+			batchResult, err := a.processMessageBatch(ctx, batch)
+			if err != nil {
+				return err
+			}
 
-			flaggedUser, err = a.processMessageBatch(ctx, batch)
+			// Skip if batch had no flagged content
+			if batchResult == nil {
+				return nil
+			}
 
-			return err
+			// First batch result
+			if cumulativeFlaggedUser == nil {
+				cumulativeFlaggedUser = batchResult
+				return nil
+			}
+
+			// Merge subsequent batch results
+			cumulativeFlaggedUser.Messages = append(cumulativeFlaggedUser.Messages, batchResult.Messages...)
+
+			// Keep the reason with the highest confidence
+			if batchResult.Confidence > cumulativeFlaggedUser.Confidence {
+				cumulativeFlaggedUser.Confidence = batchResult.Confidence
+				cumulativeFlaggedUser.Reason = batchResult.Reason
+			}
+
+			return nil
 		},
 		func(batch []*MessageContent) {
 			// Log detailed content to text logger
@@ -140,21 +161,21 @@ func (a *MessageAnalyzer) ProcessMessages(
 	}
 
 	// Validate message IDs
-	if flaggedUser != nil {
-		a.validateMessageOwnership(messages, flaggedUser)
+	if cumulativeFlaggedUser != nil {
+		a.validateMessageOwnership(messages, cumulativeFlaggedUser)
 
 		// If no valid messages remain after validation, return nil
-		if len(flaggedUser.Messages) == 0 {
-			flaggedUser = nil
+		if len(cumulativeFlaggedUser.Messages) == 0 {
+			cumulativeFlaggedUser = nil
 		}
 	}
 
 	a.logger.Info("Message analysis completed",
 		zap.Uint64("serverID", serverID),
 		zap.Uint64("channelID", channelID),
-		zap.Bool("user_flagged", flaggedUser != nil))
+		zap.Bool("user_flagged", cumulativeFlaggedUser != nil))
 
-	return flaggedUser, nil
+	return cumulativeFlaggedUser, nil
 }
 
 // processMessageBatch handles the AI analysis for a batch of messages.

@@ -46,6 +46,10 @@ type User struct {
 
 // IsNewAccount determines if the account is 7 days old or younger.
 func (u *User) IsNewAccount() bool {
+	if u.CreatedAt.IsZero() || u.CreatedAt.After(time.Now()) {
+		return false
+	}
+
 	return time.Since(u.CreatedAt) <= 7*24*time.Hour
 }
 

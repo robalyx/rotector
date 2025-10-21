@@ -273,9 +273,9 @@ func (c *chatCompletions) NewWithRetryAndFallback(
 	// Try primary model first
 	err := c.NewWithRetry(ctx, params, callback)
 
-	// If content blocked and fallback configured, try fallback
-	if errors.Is(err, utils.ErrContentBlocked) && fallbackModel != "" {
-		c.client.logger.Warn("Content blocked, attempting fallback model",
+	// If content blocked or no provider mapping and fallback configured, try fallback
+	if (errors.Is(err, utils.ErrContentBlocked) || errors.Is(err, ErrNoProvidersAvailable)) && fallbackModel != "" {
+		c.client.logger.Warn("Content blocked or no provider available, attempting fallback model",
 			zap.String("original_model", originalModel),
 			zap.String("fallback_model", fallbackModel))
 

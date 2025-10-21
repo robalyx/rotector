@@ -306,7 +306,13 @@ func (c *CondoChecker) calculateGroupConfidence(condoCount int) float64 {
 		return 0.90
 	case condoCount >= 3:
 		return 0.85
-	default:
+	case condoCount >= 2:
 		return 0.75
+	default:
+		// This should not be reached for valid flagged users
+		c.logger.Warn("Unexpected condo group count for confidence calculation",
+			zap.Int("condoCount", condoCount))
+
+		return 0.0
 	}
 }
