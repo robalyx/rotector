@@ -438,10 +438,7 @@ func (w *WarManager) RemoveUsersFromWarSystem(ctx context.Context, userIDs []int
 
 	// Process deletions in batches
 	for i := 0; i < len(userIDs); i += maxBatchSize {
-		end := i + maxBatchSize
-		if end > len(userIDs) {
-			end = len(userIDs)
-		}
+		end := min(i+maxBatchSize, len(userIDs))
 
 		batchUserIDs := userIDs[i:end]
 

@@ -8,12 +8,12 @@ import (
 
 	"github.com/diamondburned/arikawa/v3/gateway"
 	"github.com/diamondburned/arikawa/v3/state"
-	"github.com/diamondburned/ningen/v3"
 	"github.com/jaxron/roapi.go/pkg/api"
 	"github.com/redis/rueidis"
 	"github.com/robalyx/rotector/internal/ai"
 	"github.com/robalyx/rotector/internal/database"
 	"github.com/robalyx/rotector/internal/discord"
+	"github.com/robalyx/rotector/internal/discord/memberstate"
 	"github.com/robalyx/rotector/internal/redis"
 	"github.com/robalyx/rotector/internal/setup"
 	"github.com/robalyx/rotector/internal/setup/config"
@@ -35,7 +35,8 @@ var (
 type Worker struct {
 	db                 database.Client
 	roAPI              *api.API
-	state              *ningen.State
+	state              *state.State
+	memberState        *memberstate.State
 	bar                *components.ProgressBar
 	reporter           *core.StatusReporter
 	logger             *zap.Logger
@@ -58,9 +59,9 @@ func New(app *setup.App, bar *components.ProgressBar, logger *zap.Logger, instan
 	// Disguise user agent
 	s.UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:136.0) Gecko/20100101 Firefox/136.0"
 
-	// Create ningen state from discord state
-	n := ningen.FromState(s)
-	n.MemberState.OnError = func(err error) {
+	// Create member state with error handling
+	ms := memberstate.NewState(s, s)
+	ms.OnError = func(err error) {
 		logger.Warn("Member state error", zap.Error(err))
 	}
 
@@ -71,7 +72,7 @@ func New(app *setup.App, bar *components.ProgressBar, logger *zap.Logger, instan
 	messageAnalyzer := ai.NewMessageAnalyzer(app, logger)
 
 	// Create event handler
-	eventHandler := events.New(app, n, messageAnalyzer, logger)
+	eventHandler := events.New(app, s, ms, messageAnalyzer, logger)
 	eventHandler.Setup()
 
 	// Create rate limit client
@@ -83,7 +84,8 @@ func New(app *setup.App, bar *components.ProgressBar, logger *zap.Logger, instan
 	return &Worker{
 		db:                 app.DB,
 		roAPI:              app.RoAPI,
-		state:              n,
+		state:              s,
+		memberState:        ms,
 		bar:                bar,
 		reporter:           reporter,
 		logger:             logger.Named("sync_worker"),
@@ -91,7 +93,7 @@ func New(app *setup.App, bar *components.ProgressBar, logger *zap.Logger, instan
 		messageAnalyzer:    messageAnalyzer,
 		eventHandler:       eventHandler,
 		ratelimit:          ratelimit,
-		scanner:            discord.NewScanner(app.DB, app.CFClient, ratelimit, n.Session, messageAnalyzer, logger),
+		scanner:            discord.NewScanner(app.DB, app.CFClient, ratelimit, s.Session, messageAnalyzer, logger),
 		discordRateLimiter: newRequestRateLimiter(1*time.Second, 200*time.Millisecond),
 		rng:                rand.New(rand.NewSource(time.Now().UnixNano())),
 	}

@@ -2,6 +2,7 @@ package session
 
 import (
 	"fmt"
+	"maps"
 	"reflect"
 	"strconv"
 	"strings"
@@ -173,9 +174,7 @@ func (p *ValueProcessor) handleEmbeddedField(
 
 	// For embedded structs without JSON tags, flatten their fields into parent
 	if embeddedMap, ok := processed.(map[string]any); ok {
-		for k, v := range embeddedMap {
-			result[k] = v
-		}
+		maps.Copy(result, embeddedMap)
 	}
 }
 

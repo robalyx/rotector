@@ -126,7 +126,7 @@ func (n *TextNormalizer) ValidateWords(flaggedContent []string, targetTexts ...s
 
 		hasValidWords := false
 
-		for _, word := range strings.Fields(content) {
+		for word := range strings.FieldsSeq(content) {
 			if len(word) < 3 {
 				continue
 			}

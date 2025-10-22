@@ -16,11 +16,11 @@ type streamValue []string
 
 // logEntry represents a structured log entry from Zap.
 type logEntry struct {
-	Level     string                 `json:"level"`
-	Timestamp float64                `json:"ts"`
-	Message   string                 `json:"msg"`
-	Caller    string                 `json:"caller"`
-	Stack     string                 `json:"stacktrace,omitempty"`
-	Fields    map[string]interface{} `json:",inline"`
-	raw       string                 // Original JSON string
+	Level     string         `json:"level"`
+	Timestamp float64        `json:"ts"`
+	Message   string         `json:"msg"`
+	Caller    string         `json:"caller"`
+	Stack     string         `json:"stacktrace,omitempty"`
+	Fields    map[string]any `json:",inline"`
+	raw       string         // Original JSON string
 }

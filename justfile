@@ -19,6 +19,10 @@ test:
 lint:
     golangci-lint run --fix --timeout 900s
 
+# Modernize code to use latest Go idioms
+modernize:
+    go run golang.org/x/tools/gopls/internal/analysis/modernize/cmd/modernize@latest -fix -test ./...
+
 # Run the bot service
 run-bot:
     go run ./cmd/bot

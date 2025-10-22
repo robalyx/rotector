@@ -42,10 +42,7 @@ func (w *WarStats) RecordStatisticsBatch(ctx context.Context, records []Statisti
 	}
 
 	for i := 0; i < len(records); i += maxStatsBatchSize {
-		end := i + maxStatsBatchSize
-		if end > len(records) {
-			end = len(records)
-		}
+		end := min(i+maxStatsBatchSize, len(records))
 
 		chunk := records[i:end]
 

@@ -197,6 +197,14 @@ func (a *FriendReasonAnalyzer) ProcessFriendRequests(
 			// Process the batch
 			batchResults, err := a.processFriendBatch(ctx, batch)
 			if err != nil {
+				invalidMu.Lock()
+
+				for _, req := range batch {
+					invalidRequests[req.UserInfo.ID] = req
+				}
+
+				invalidMu.Unlock()
+
 				return err
 			}
 

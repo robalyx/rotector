@@ -230,6 +230,14 @@ func (a *OutfitReasonAnalyzer) ProcessOutfitRequests(
 			// Process the batch
 			batchResults, err := a.processOutfitBatch(ctx, batch)
 			if err != nil {
+				invalidMu.Lock()
+
+				for _, req := range batch {
+					invalidRequests[req.UserInfo.ID] = req
+				}
+
+				invalidMu.Unlock()
+
 				return err
 			}
 

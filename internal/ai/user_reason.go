@@ -134,6 +134,14 @@ func (a *UserReasonAnalyzer) ProcessFlaggedUsers(
 			// Process the batch
 			results, err := a.processReasonBatch(ctx, batch)
 			if err != nil {
+				invalidMu.Lock()
+
+				for _, req := range batch {
+					invalidRequests[req.UserID] = req
+				}
+
+				invalidMu.Unlock()
+
 				return err
 			}
 

@@ -5,11 +5,12 @@ import (
 	"time"
 
 	"github.com/diamondburned/arikawa/v3/gateway"
-	"github.com/diamondburned/ningen/v3"
+	"github.com/diamondburned/arikawa/v3/state"
 	"github.com/jaxron/roapi.go/pkg/api"
 	"github.com/robalyx/rotector/internal/ai"
 	"github.com/robalyx/rotector/internal/database"
 	"github.com/robalyx/rotector/internal/database/types"
+	"github.com/robalyx/rotector/internal/discord/memberstate"
 	"github.com/robalyx/rotector/internal/setup"
 	"github.com/robalyx/rotector/internal/worker/sync/events/ratelimit"
 	"go.uber.org/zap"
@@ -19,14 +20,15 @@ import (
 type Handler struct {
 	db              database.Client
 	roAPI           *api.API
-	state           *ningen.State
+	state           *state.State
+	memberState     *memberstate.State
 	logger          *zap.Logger
 	rateLimiter     *ratelimit.Limiter
 	messageAnalyzer *ai.MessageAnalyzer
 }
 
 // New creates a new event handler.
-func New(app *setup.App, state *ningen.State, messageAnalyzer *ai.MessageAnalyzer, logger *zap.Logger) *Handler {
+func New(app *setup.App, s *state.State, ms *memberstate.State, messageAnalyzer *ai.MessageAnalyzer, logger *zap.Logger) *Handler {
 	// Create a new rate limiter with default configuration
 	rateLimiter := ratelimit.New(ratelimit.DefaultConfig(), logger)
 
@@ -34,7 +36,8 @@ func New(app *setup.App, state *ningen.State, messageAnalyzer *ai.MessageAnalyze
 	return &Handler{
 		db:              app.DB,
 		roAPI:           app.RoAPI,
-		state:           state,
+		state:           s,
+		memberState:     ms,
 		logger:          logger.Named("sync_events"),
 		rateLimiter:     rateLimiter,
 		messageAnalyzer: messageAnalyzer,

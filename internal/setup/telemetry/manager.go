@@ -3,6 +3,7 @@ package telemetry
 import (
 	"context"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"sort"
@@ -103,9 +104,7 @@ func NewManager(
 	if lokiCfg.Enabled && lokiCfg.URL != "" {
 		// Build complete label set
 		baseLabels := make(map[string]string)
-		for k, v := range lokiCfg.Labels {
-			baseLabels[k] = v
-		}
+		maps.Copy(baseLabels, lokiCfg.Labels)
 
 		baseLabels["component"] = componentName
 		baseLabels["instance_id"] = instanceID

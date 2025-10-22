@@ -108,7 +108,7 @@ func (c *UserChecker) ProcessUsers(ctx context.Context, params *UserCheckerParam
 	}
 
 	// Create context with timeout
-	ctxWithTimeout, cancel := context.WithTimeout(ctx, 10*time.Minute)
+	ctxWithTimeout, cancel := context.WithTimeout(ctx, 15*time.Minute)
 	defer cancel()
 
 	// Prepare friend and group maps

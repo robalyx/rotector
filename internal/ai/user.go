@@ -24,6 +24,11 @@ import (
 	"golang.org/x/sync/semaphore"
 )
 
+const (
+	// UserAnalysisMaxRetries is the maximum number of retry attempts for user analysis.
+	UserAnalysisMaxRetries = 2
+)
+
 // ProcessUsersParams contains all the parameters needed for user analysis processing.
 type ProcessUsersParams struct {
 	Users                     []*types.ReviewUser                          `json:"users"`
@@ -110,19 +115,45 @@ func NewUserAnalyzer(app *setup.App, translator *translator.Translator, logger *
 // ProcessUsers analyzes user content for a batch of users.
 func (a *UserAnalyzer) ProcessUsers(ctx context.Context, params *ProcessUsersParams) map[int64]UserReasonRequest {
 	userReasonRequests := make(map[int64]UserReasonRequest)
-	numBatches := (len(params.Users) + a.batchSize - 1) / a.batchSize
+	a.processUsersWithRetry(ctx, params.Users, params, userReasonRequests, 0)
+
+	return userReasonRequests
+}
+
+// processUsersWithRetry processes users with retry logic for failed batches.
+func (a *UserAnalyzer) processUsersWithRetry(
+	ctx context.Context, users []*types.ReviewUser, params *ProcessUsersParams,
+	userReasonRequests map[int64]UserReasonRequest, retryCount int,
+) {
+	if len(users) == 0 {
+		return
+	}
+
+	// Prevent infinite retries
+	if retryCount >= UserAnalysisMaxRetries {
+		a.logger.Warn("Maximum retries reached for user analysis, skipping remaining users",
+			zap.Int("retryCount", retryCount),
+			zap.Int("maxRetries", UserAnalysisMaxRetries),
+			zap.Int("remainingUsers", len(users)))
+
+		return
+	}
+
+	numBatches := (len(users) + a.batchSize - 1) / a.batchSize
 
 	// Process batches concurrently
 	var (
-		p  = pool.New().WithContext(ctx)
-		mu sync.Mutex
+		p           = pool.New().WithContext(ctx)
+		mu          sync.Mutex
+		failedMu    sync.Mutex
+		failedUsers = make(map[int64]*types.ReviewUser)
 	)
 
 	for i := range numBatches {
 		start := i * a.batchSize
-		end := min(start+a.batchSize, len(params.Users))
+		end := min(start+a.batchSize, len(users))
 
-		infoBatch := params.Users[start:end]
+		infoBatch := users[start:end]
 
 		p.Go(func(ctx context.Context) error {
 			// Acquire semaphore
@@ -135,10 +166,19 @@ func (a *UserAnalyzer) ProcessUsers(ctx context.Context, params *ProcessUsersPar
 			if err := a.processBatch(
 				ctx, infoBatch, params, userReasonRequests, &mu,
 			); err != nil {
-				a.logger.Error("Failed to process batch",
+				failedMu.Lock()
+
+				for _, user := range infoBatch {
+					failedUsers[user.ID] = user
+				}
+
+				failedMu.Unlock()
+
+				a.logger.Warn("Failed to process batch, will retry",
 					zap.Error(err),
 					zap.Int("batchStart", start),
-					zap.Int("batchEnd", end))
+					zap.Int("batchEnd", end),
+					zap.Int("batchSize", len(infoBatch)))
 
 				return err
 			}
@@ -149,14 +189,28 @@ func (a *UserAnalyzer) ProcessUsers(ctx context.Context, params *ProcessUsersPar
 
 	// Wait for all batches to complete
 	if err := p.Wait(); err != nil {
-		return make(map[int64]UserReasonRequest)
+		a.logger.Error("Error during user analysis", zap.Error(err))
 	}
 
-	a.logger.Info("Completed user analysis",
-		zap.Int("totalUsers", len(params.Users)),
-		zap.Int("acceptedUsers", len(userReasonRequests)))
+	// Retry failed users if any
+	if len(failedUsers) > 0 {
+		a.logger.Info("Retrying analysis for failed users",
+			zap.Int("failedUsers", len(failedUsers)),
+			zap.Int("retryCount", retryCount))
 
-	return userReasonRequests
+		// Convert map to slice
+		retryUsers := make([]*types.ReviewUser, 0, len(failedUsers))
+		for _, user := range failedUsers {
+			retryUsers = append(retryUsers, user)
+		}
+
+		a.processUsersWithRetry(ctx, retryUsers, params, userReasonRequests, retryCount+1)
+	}
+
+	a.logger.Info("Finished processing users",
+		zap.Int("totalUsers", len(users)),
+		zap.Int("acceptedUsers", len(userReasonRequests)),
+		zap.Int("retryCount", retryCount))
 }
 
 // processUserBatch handles the AI analysis for a batch of user summaries.

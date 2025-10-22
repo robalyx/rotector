@@ -51,7 +51,7 @@ func NewClient(cfg *config.OpenAI, logger *zap.Logger) (*AIClient, error) {
 	client := openai.NewClient(
 		option.WithAPIKey(cfg.APIKey),
 		option.WithBaseURL(cfg.BaseURL),
-		option.WithRequestTimeout(150*time.Second),
+		option.WithRequestTimeout(120*time.Second),
 		option.WithMaxRetries(0),
 	)
 
