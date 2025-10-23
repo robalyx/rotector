@@ -381,10 +381,7 @@ func (m *Model) renderHeader() string {
 	}
 
 	// Calculate spacing
-	spacePadding := maxLineWidth - len(titleText) - len(shortcutsText)
-	if spacePadding < 1 {
-		spacePadding = 1
-	}
+	spacePadding := max(maxLineWidth-len(titleText)-len(shortcutsText), 1)
 
 	title := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("86")).Render(titleText)
 	shortcuts := lipgloss.NewStyle().Foreground(lipgloss.Color("241")).Render(shortcutsText)

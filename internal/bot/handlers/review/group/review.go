@@ -174,6 +174,14 @@ func (m *ReviewMenu) handleActionSelection(ctx *interaction.Context, s *session.
 
 			return
 		}
+	case constants.GroupDeleteButtonCustomID:
+		if !s.BotSettings().IsAdmin(userID) {
+			m.layout.logger.Error("Non-admin attempted to delete group",
+				zap.Uint64("userID", userID))
+			ctx.Error("You do not have permission to delete groups.")
+
+			return
+		}
 	}
 
 	// Process selected option
@@ -190,6 +198,8 @@ func (m *ReviewMenu) handleActionSelection(ctx *interaction.Context, s *session.
 		m.HandleDeleteComment(ctx, s, viewShared.TargetTypeGroup)
 	case constants.GroupViewLogsButtonCustomID:
 		m.handleViewGroupLogs(ctx, s)
+	case constants.GroupDeleteButtonCustomID:
+		m.handleDeleteGroup(ctx, s)
 	case constants.ReviewModeOption:
 		session.SettingType.Set(s, constants.UserSettingPrefix)
 		session.SettingCustomID.Set(s, constants.ReviewModeOption)
@@ -456,6 +466,62 @@ func (m *ReviewMenu) handleMixGroup(ctx *interaction.Context, s *session.Session
 		},
 		ReviewerID:        reviewerID,
 		ActivityType:      enum.ActivityTypeGroupMixed,
+		ActivityTimestamp: time.Now(),
+		Details:           map[string]any{},
+	})
+}
+
+// handleDeleteGroup deletes a group and removes it from tracking permanently.
+func (m *ReviewMenu) handleDeleteGroup(ctx *interaction.Context, s *session.Session) {
+	group := session.GroupTarget.Get(s)
+	reviewerID := uint64(ctx.Event().User().ID)
+
+	// Delete group from database
+	found, err := m.layout.db.Model().Group().DeleteGroup(ctx.Context(), group.ID)
+	if err != nil {
+		m.layout.logger.Error("Failed to delete group", zap.Error(err))
+		ctx.Error("Failed to delete the group. Please try again.")
+
+		return
+	}
+
+	if !found {
+		ctx.Error("Group not found in database.")
+		return
+	}
+
+	// Remove from tracking
+	if err := m.layout.db.Model().Tracking().RemoveGroupsFromTracking(ctx.Context(), []int64{group.ID}); err != nil {
+		m.layout.logger.Error("Failed to remove group from tracking",
+			zap.Error(err),
+			zap.Int64("groupID", group.ID))
+	}
+
+	// Add to exclusion list to prevent future tracking
+	if err := m.layout.db.Model().Tracking().AddGroupToExclusions(ctx.Context(), group.ID); err != nil {
+		m.layout.logger.Error("Failed to add group to exclusions",
+			zap.Error(err),
+			zap.Int64("groupID", group.ID))
+	}
+
+	// Remove from D1 database
+	if err := m.layout.cfClient.GroupFlags.Remove(ctx.Context(), group.ID); err != nil {
+		m.layout.logger.Error("Failed to remove group from D1 database",
+			zap.Error(err),
+			zap.Int64("groupID", group.ID))
+	}
+
+	// Navigate to next group in history or fetch new one
+	m.UpdateCounters(s)
+	m.navigateAfterAction(ctx, s, "Group deleted.")
+
+	// Log the deletion action
+	m.layout.db.Model().Activity().Log(ctx.Context(), &types.ActivityLog{
+		ActivityTarget: types.ActivityTarget{
+			GroupID: group.ID,
+		},
+		ReviewerID:        reviewerID,
+		ActivityType:      enum.ActivityTypeGroupDeleted,
 		ActivityTimestamp: time.Now(),
 		Details:           map[string]any{},
 	})

@@ -108,6 +108,38 @@ func (s *UserService) ClearUserWithTx(ctx context.Context, tx bun.Tx, user *type
 	return nil
 }
 
+// UpdateToPastOffender updates users to past offender status when they become clean.
+func (s *UserService) UpdateToPastOffender(ctx context.Context, userIDs []int64) error {
+	if len(userIDs) == 0 {
+		return nil
+	}
+
+	return dbretry.Transaction(ctx, s.db, func(ctx context.Context, tx bun.Tx) error {
+		// Update users to past offender status
+		if err := s.model.UpdateUsersToPastOffender(ctx, tx, userIDs); err != nil {
+			return err
+		}
+
+		// Remove users from all tracking
+		if err := s.tracking.RemoveUsersFromAllGroupsWithTx(ctx, tx, userIDs); err != nil {
+			s.logger.Error("Failed to remove users from group tracking", zap.Error(err))
+			return err
+		}
+
+		if err := s.tracking.RemoveUsersFromAssetTrackingWithTx(ctx, tx, userIDs); err != nil {
+			s.logger.Error("Failed to remove users from asset tracking", zap.Error(err))
+			return err
+		}
+
+		if err := s.tracking.RemoveUsersFromGameTrackingWithTx(ctx, tx, userIDs); err != nil {
+			s.logger.Error("Failed to remove users from game tracking", zap.Error(err))
+			return err
+		}
+
+		return nil
+	})
+}
+
 // GetUserByID retrieves a user by either their numeric ID or UUID.
 func (s *UserService) GetUserByID(
 	ctx context.Context, userID string, fields types.UserField,
@@ -475,6 +507,8 @@ func (s *UserService) GetUsersRelationships(
 }
 
 // SaveUsers handles the business logic for saving users.
+//
+//nolint:gocyclo // not important
 func (s *UserService) SaveUsers(ctx context.Context, users map[int64]*types.ReviewUser) error {
 	// Get list of user IDs to check
 	userIDs := make([]int64, 0, len(users))
@@ -500,29 +534,35 @@ func (s *UserService) SaveUsers(ctx context.Context, users map[int64]*types.Revi
 			user.UUID = uuid.New()
 		}
 
-		// Set engine version for new users
-		if user.EngineVersion == "" {
-			user.EngineVersion = "2.14"
-		}
-
-		// Handle reasons merging and determine status
-		existingUser, ok := existingUsers[id]
-		if ok {
-			user.Status = existingUser.Status
-
-			// Create new reasons map if it doesn't exist
-			if user.Reasons == nil {
-				user.Reasons = make(types.Reasons[enum.UserReasonType])
+		// Determine status based on whether user exists and has reasons
+		if existingUser, ok := existingUsers[id]; ok {
+			// Preserve existing engine version if not explicitly set by caller
+			if user.EngineVersion == "" {
+				user.EngineVersion = existingUser.EngineVersion
 			}
 
-			// Copy over existing reasons, only adding new ones
-			for reasonType, reason := range existingUser.Reasons {
-				if _, exists := user.Reasons[reasonType]; !exists {
-					user.Reasons[reasonType] = reason
-				}
+			// Past offenders who get flagged again should return to flagged status
+			if existingUser.Status == enum.UserTypePastOffender && len(user.Reasons) > 0 {
+				user.Status = enum.UserTypeFlagged
+			} else {
+				// Keep existing status for already flagged/confirmed users
+				user.Status = existingUser.Status
 			}
 		} else {
+			// New users start as flagged and current engine version
 			user.Status = enum.UserTypeFlagged
+			if user.EngineVersion == "" {
+				user.EngineVersion = types.CurrentEngineVersion
+			}
+		}
+
+		// Preserve existing reasons if nil is passed for existing users
+		if user.Reasons == nil {
+			if existingUser, ok := existingUsers[id]; ok && existingUser.Reasons != nil {
+				user.Reasons = existingUser.Reasons
+			} else {
+				user.Reasons = make(types.Reasons[enum.UserReasonType])
+			}
 		}
 
 		usersToSave = append(usersToSave, user)

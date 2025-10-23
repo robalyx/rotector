@@ -117,10 +117,7 @@ func (pb *ProgressBar) View() string {
 func (pb *ProgressBar) render() string {
 	percent := pb.GetPercentage()
 
-	filled := int(percent / 100.0 * float64(pb.width))
-	if filled > pb.width {
-		filled = pb.width
-	}
+	filled := min(int(percent/100.0*float64(pb.width)), pb.width)
 
 	var bar strings.Builder
 	for i := range pb.width {

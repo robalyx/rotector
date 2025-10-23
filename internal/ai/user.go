@@ -24,6 +24,11 @@ import (
 	"golang.org/x/sync/semaphore"
 )
 
+const (
+	// UserAnalysisMaxRetries is the maximum number of retry attempts for user analysis.
+	UserAnalysisMaxRetries = 2
+)
+
 // ProcessUsersParams contains all the parameters needed for user analysis processing.
 type ProcessUsersParams struct {
 	Users                     []*types.ReviewUser                          `json:"users"`
@@ -49,31 +54,32 @@ type UserSummary struct {
 
 // FlaggedUsers holds a list of users that the AI has identified as inappropriate.
 type FlaggedUsers struct {
-	Users []FlaggedUser `json:"users" jsonschema_description:"List of users that have been flagged for inappropriate content"`
+	Users []FlaggedUser `json:"users" jsonschema:"maxItems=100,description=List of users that have been flagged for inappropriate content"`
 }
 
 // FlaggedUser contains the AI's analysis results for a single user.
 type FlaggedUser struct {
-	Name              string   `json:"name"                        jsonschema_description:"Username of the flagged account"`
-	Hint              string   `json:"hint"                        jsonschema_description:"Brief clinical description using safe terminology"`
-	Confidence        float64  `json:"confidence"                  jsonschema_description:"Overall confidence score for the violations"`
-	HasSocials        bool     `json:"hasSocials"                  jsonschema_description:"Whether the user's description has social media"`
-	ViolationLocation []string `json:"violationLocation,omitempty" jsonschema_description:"Locations of violations"`
-	LanguagePattern   []string `json:"languagePattern,omitempty"   jsonschema_description:"Linguistic patterns detected"`
-	LanguageUsed      []string `json:"languageUsed,omitempty"      jsonschema_description:"Languages or encodings detected in content"`
+	Name            string   `json:"name"                      jsonschema:"required,minLength=1,description=Username of the flagged account"`
+	Hint            string   `json:"hint"                      jsonschema:"required,minLength=1,description=Brief clinical description using safe terminology"`
+	Confidence      float64  `json:"confidence"                jsonschema:"required,minimum=0,maximum=1,description=Overall confidence score for the violations"`
+	HasSocials      bool     `json:"hasSocials"                jsonschema:"required,description=Whether the user's description has social media"`
+	FlaggedFields   []string `json:"flaggedFields,omitempty"   jsonschema:"maxItems=3,enum=displayName,enum=description,enum=username,description=Profile fields containing violations"`
+	LanguagePattern []string `json:"languagePattern,omitempty" jsonschema:"maxItems=10,description=Linguistic patterns detected"`
+	LanguageUsed    []string `json:"languageUsed,omitempty"    jsonschema:"maxItems=5,description=Languages or encodings detected in content"`
 }
 
 // UserAnalyzer handles AI-based content analysis using OpenAI models.
 type UserAnalyzer struct {
-	chat        client.ChatCompletions
-	minify      *minify.M
-	translator  *translator.Translator
-	analysisSem *semaphore.Weighted
-	logger      *zap.Logger
-	textLogger  *zap.Logger
-	textDir     string
-	model       string
-	batchSize   int
+	chat          client.ChatCompletions
+	minify        *minify.M
+	translator    *translator.Translator
+	analysisSem   *semaphore.Weighted
+	logger        *zap.Logger
+	textLogger    *zap.Logger
+	textDir       string
+	model         string
+	fallbackModel string
+	batchSize     int
 }
 
 // UserAnalysisSchema is the JSON schema for the user analysis response.
@@ -93,34 +99,61 @@ func NewUserAnalyzer(app *setup.App, translator *translator.Translator, logger *
 	}
 
 	return &UserAnalyzer{
-		chat:        app.AIClient.Chat(),
-		minify:      m,
-		translator:  translator,
-		analysisSem: semaphore.NewWeighted(int64(app.Config.Worker.BatchSizes.UserAnalysis)),
-		logger:      logger.Named("ai_user"),
-		textLogger:  textLogger,
-		textDir:     textDir,
-		model:       app.Config.Common.OpenAI.UserModel,
-		batchSize:   app.Config.Worker.BatchSizes.UserAnalysisBatch,
+		chat:          app.AIClient.Chat(),
+		minify:        m,
+		translator:    translator,
+		analysisSem:   semaphore.NewWeighted(int64(app.Config.Worker.BatchSizes.UserAnalysis)),
+		logger:        logger.Named("ai_user"),
+		textLogger:    textLogger,
+		textDir:       textDir,
+		model:         app.Config.Common.OpenAI.UserModel,
+		fallbackModel: app.Config.Common.OpenAI.UserFallbackModel,
+		batchSize:     app.Config.Worker.BatchSizes.UserAnalysisBatch,
 	}
 }
 
 // ProcessUsers analyzes user content for a batch of users.
 func (a *UserAnalyzer) ProcessUsers(ctx context.Context, params *ProcessUsersParams) map[int64]UserReasonRequest {
 	userReasonRequests := make(map[int64]UserReasonRequest)
-	numBatches := (len(params.Users) + a.batchSize - 1) / a.batchSize
+	a.processUsersWithRetry(ctx, params.Users, params, userReasonRequests, 0)
+
+	return userReasonRequests
+}
+
+// processUsersWithRetry processes users with retry logic for failed batches.
+func (a *UserAnalyzer) processUsersWithRetry(
+	ctx context.Context, users []*types.ReviewUser, params *ProcessUsersParams,
+	userReasonRequests map[int64]UserReasonRequest, retryCount int,
+) {
+	if len(users) == 0 {
+		return
+	}
+
+	// Prevent infinite retries
+	if retryCount > UserAnalysisMaxRetries {
+		a.logger.Warn("Maximum retries reached for user analysis, skipping remaining users",
+			zap.Int("retryCount", retryCount),
+			zap.Int("maxRetries", UserAnalysisMaxRetries),
+			zap.Int("remainingUsers", len(users)))
+
+		return
+	}
+
+	numBatches := (len(users) + a.batchSize - 1) / a.batchSize
 
 	// Process batches concurrently
 	var (
-		p  = pool.New().WithContext(ctx)
-		mu sync.Mutex
+		p           = pool.New().WithContext(ctx)
+		mu          sync.Mutex
+		failedMu    sync.Mutex
+		failedUsers = make(map[int64]*types.ReviewUser)
 	)
 
 	for i := range numBatches {
 		start := i * a.batchSize
-		end := min(start+a.batchSize, len(params.Users))
+		end := min(start+a.batchSize, len(users))
 
-		infoBatch := params.Users[start:end]
+		infoBatch := users[start:end]
 
 		p.Go(func(ctx context.Context) error {
 			// Acquire semaphore
@@ -133,10 +166,19 @@ func (a *UserAnalyzer) ProcessUsers(ctx context.Context, params *ProcessUsersPar
 			if err := a.processBatch(
 				ctx, infoBatch, params, userReasonRequests, &mu,
 			); err != nil {
-				a.logger.Error("Failed to process batch",
+				failedMu.Lock()
+
+				for _, user := range infoBatch {
+					failedUsers[user.ID] = user
+				}
+
+				failedMu.Unlock()
+
+				a.logger.Warn("Failed to process batch, will retry",
 					zap.Error(err),
 					zap.Int("batchStart", start),
-					zap.Int("batchEnd", end))
+					zap.Int("batchEnd", end),
+					zap.Int("batchSize", len(infoBatch)))
 
 				return err
 			}
@@ -147,14 +189,28 @@ func (a *UserAnalyzer) ProcessUsers(ctx context.Context, params *ProcessUsersPar
 
 	// Wait for all batches to complete
 	if err := p.Wait(); err != nil {
-		return make(map[int64]UserReasonRequest)
+		a.logger.Error("Error during user analysis", zap.Error(err))
 	}
 
-	a.logger.Info("Completed user analysis",
-		zap.Int("totalUsers", len(params.Users)),
-		zap.Int("acceptedUsers", len(userReasonRequests)))
+	// Retry failed users if any
+	if len(failedUsers) > 0 {
+		a.logger.Info("Retrying analysis for failed users",
+			zap.Int("failedUsers", len(failedUsers)),
+			zap.Int("retryCount", retryCount))
 
-	return userReasonRequests
+		// Convert map to slice
+		retryUsers := make([]*types.ReviewUser, 0, len(failedUsers))
+		for _, user := range failedUsers {
+			retryUsers = append(retryUsers, user)
+		}
+
+		a.processUsersWithRetry(ctx, retryUsers, params, userReasonRequests, retryCount+1)
+	}
+
+	a.logger.Info("Finished processing users",
+		zap.Int("totalUsers", len(users)),
+		zap.Int("acceptedUsers", len(userReasonRequests)),
+		zap.Int("retryCount", retryCount))
 }
 
 // processUserBatch handles the AI analysis for a batch of user summaries.
@@ -194,16 +250,11 @@ func (a *UserAnalyzer) processUserBatch(ctx context.Context, batch []UserSummary
 		Temperature: openai.Float(0.0),
 		TopP:        openai.Float(0.2),
 	}
-	params.SetExtraFields(map[string]any{
-		"reasoning": map[string]any{
-			"max_tokens": 0,
-		},
-	})
 
 	// Make API request
 	var result FlaggedUsers
 
-	err = a.chat.NewWithRetry(ctx, params, func(resp *openai.ChatCompletion, err error) error {
+	err = a.chat.NewWithRetryAndFallback(ctx, params, a.fallbackModel, func(resp *openai.ChatCompletion, err error) error {
 		// Handle API error
 		if err != nil {
 			return fmt.Errorf("openai API error: %w", err)
@@ -353,7 +404,7 @@ func (a *UserAnalyzer) shouldSkipFlaggedUser(
 	}
 
 	// Skip extra checks if user is flagged with inappropriate profile and confidence is high enough
-	if _, exists := params.InappropriateProfileFlags[originalInfo.ID]; exists && flaggedUser.Confidence > 0.7 {
+	if _, exists := params.InappropriateProfileFlags[originalInfo.ID]; exists && flaggedUser.Confidence >= 0.5 {
 		return false
 	}
 
@@ -380,7 +431,41 @@ func (a *UserAnalyzer) shouldSkipFlaggedUser(
 
 	// Skip users with specific conditions when they have no existing reasons
 	if len(params.ReasonsMap[originalInfo.ID]) == 0 {
-		if flaggedUser.Confidence < 0.8 {
+		// For new accounts, use simple threshold
+		if originalInfo.IsNewAccount() {
+			if flaggedUser.Confidence < 0.4 {
+				a.logger.Info("Skipping new account with low confidence and no existing reasons",
+					zap.Int64("userID", originalInfo.ID),
+					zap.String("username", flaggedUser.Name),
+					zap.Float64("confidence", flaggedUser.Confidence))
+
+				return true
+			}
+
+			return false
+		}
+
+		// For older accounts, use stricter validation
+		if flaggedUser.Confidence < 0.7 {
+			// Exception: Don't skip if ALL friends are inappropriate and confidence >= 0.5
+			if flaggedUser.Confidence >= 0.5 {
+				confirmedFriends := params.ConfirmedFriendsMap[originalInfo.ID]
+				flaggedFriends := params.FlaggedFriendsMap[originalInfo.ID]
+				totalInappropriateFriends := len(confirmedFriends) + len(flaggedFriends)
+				totalFriends := len(originalInfo.Friends)
+
+				// All friends being inappropriate is a strong signal
+				if totalFriends >= 1 && totalInappropriateFriends == totalFriends {
+					a.logger.Info("Accepting user despite low confidence - all friends are inappropriate",
+						zap.Int64("userID", originalInfo.ID),
+						zap.String("username", flaggedUser.Name),
+						zap.Float64("confidence", flaggedUser.Confidence),
+						zap.Int("totalFriends", totalFriends))
+
+					return false
+				}
+			}
+
 			a.logger.Info("Skipping user with low confidence and no existing reasons",
 				zap.Int64("userID", originalInfo.ID),
 				zap.String("username", flaggedUser.Name),
@@ -474,13 +559,13 @@ func (a *UserAnalyzer) processAndCreateRequests(
 
 		// Create the user reason request
 		userReasonRequest := UserReasonRequest{
-			User:              summary,
-			Confidence:        flaggedUser.Confidence,
-			Hint:              flaggedUser.Hint,
-			ViolationLocation: flaggedUser.ViolationLocation,
-			LanguagePattern:   flaggedUser.LanguagePattern,
-			LanguageUsed:      flaggedUser.LanguageUsed,
-			UserID:            originalInfo.ID,
+			User:            summary,
+			Confidence:      flaggedUser.Confidence,
+			Hint:            flaggedUser.Hint,
+			FlaggedFields:   flaggedUser.FlaggedFields,
+			LanguagePattern: flaggedUser.LanguagePattern,
+			LanguageUsed:    flaggedUser.LanguageUsed,
+			UserID:          originalInfo.ID,
 		}
 
 		// Check if this user should be skipped based on various conditions
@@ -503,7 +588,7 @@ func (a *UserAnalyzer) processAndCreateRequests(
 			zap.String("username", flaggedUser.Name),
 			zap.Float64("confidence", flaggedUser.Confidence),
 			zap.String("hint", flaggedUser.Hint),
-			zap.Strings("violationLocation", flaggedUser.ViolationLocation),
+			zap.Strings("flaggedFields", flaggedUser.FlaggedFields),
 			zap.Strings("languagePattern", flaggedUser.LanguagePattern),
 			zap.Strings("languageUsed", flaggedUser.LanguageUsed))
 	}

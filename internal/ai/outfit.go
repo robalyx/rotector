@@ -49,15 +49,16 @@ type OutfitAnalyzerParams struct {
 
 // OutfitThemeAnalysis contains the AI's theme detection results for a user's outfits.
 type OutfitThemeAnalysis struct {
-	Username string        `json:"username" jsonschema_description:"Username of the account being analyzed"`
-	Themes   []OutfitTheme `json:"themes"   jsonschema_description:"List of themes detected in the outfits"`
+	Username      string        `json:"username"      jsonschema:"required,minLength=1,description=Username of the account being analyzed"`
+	Themes        []OutfitTheme `json:"themes"        jsonschema:"required,maxItems=20,description=List of themes detected in the outfits"`
+	HasFurryTheme bool          `json:"hasFurryTheme" jsonschema:"required,description=Whether any outfit has furry themes"`
 }
 
 // OutfitTheme represents a detected theme for a single outfit.
 type OutfitTheme struct {
-	OutfitName string  `json:"outfitName" jsonschema_description:"Name of the outfit with a detected theme"`
-	Theme      string  `json:"theme"      jsonschema_description:"Description of the specific theme detected"`
-	Confidence float64 `json:"confidence" jsonschema_description:"Confidence score for this theme detection (0.0-1.0)"`
+	OutfitName string  `json:"outfitName" jsonschema:"required,minLength=1,description=Name of the outfit with a detected theme"`
+	Theme      string  `json:"theme"      jsonschema:"required,minLength=1,description=Description of the specific theme detected"`
+	Confidence float64 `json:"confidence" jsonschema:"required,minimum=0,maximum=1,description=Confidence score for this theme detection (0.0-1.0)"`
 }
 
 // OutfitAnalysisSchema is the JSON schema for the outfit theme analysis response.
@@ -74,6 +75,7 @@ type OutfitAnalyzer struct {
 	imageLogger          *zap.Logger
 	imageDir             string
 	model                string
+	fallbackModel        string
 	batchSize            int
 	similarityThreshold  int
 }
@@ -106,21 +108,24 @@ func NewOutfitAnalyzer(app *setup.App, logger *zap.Logger) *OutfitAnalyzer {
 		imageLogger:          imageLogger,
 		imageDir:             imageDir,
 		model:                app.Config.Common.OpenAI.OutfitModel,
+		fallbackModel:        app.Config.Common.OpenAI.OutfitFallbackModel,
 		batchSize:            app.Config.Worker.BatchSizes.OutfitAnalysisBatch,
 		similarityThreshold:  app.Config.Worker.ThresholdLimits.ImageSimilarityThreshold,
 	}
 }
 
 // ProcessUsers analyzes outfit images for a batch of users.
-// Returns a map of user IDs to their flagged outfit names.
-func (a *OutfitAnalyzer) ProcessUsers(ctx context.Context, params *OutfitAnalyzerParams) map[int64]map[string]struct{} {
+// Returns a map of user IDs to their flagged outfit names and a map of user IDs who have furry themes.
+func (a *OutfitAnalyzer) ProcessUsers(
+	ctx context.Context, params *OutfitAnalyzerParams,
+) (map[int64]map[string]struct{}, map[int64]struct{}) {
 	// Filter users based on inappropriate outfit flags and existing reasons
 	usersToProcess := a.filterUsersForOutfitProcessing(params.Users, params.ReasonsMap, params.InappropriateOutfitFlags)
 
 	// Skip if no users need outfit processing
 	if len(usersToProcess) == 0 {
 		a.logger.Info("No users to process outfits for")
-		return nil
+		return nil, nil
 	}
 
 	// Get all outfit thumbnails organized by user
@@ -131,6 +136,7 @@ func (a *OutfitAnalyzer) ProcessUsers(ctx context.Context, params *OutfitAnalyze
 		p              = pool.New().WithContext(ctx)
 		mu             sync.Mutex
 		flaggedOutfits = make(map[int64]map[string]struct{})
+		furryUsers     = make(map[int64]struct{})
 	)
 
 	for _, userInfo := range usersToProcess {
@@ -146,7 +152,7 @@ func (a *OutfitAnalyzer) ProcessUsers(ctx context.Context, params *OutfitAnalyze
 
 		p.Go(func(ctx context.Context) error {
 			// Analyze user's outfits for themes
-			outfitNames, err := a.analyzeUserOutfits(ctx, userInfo, &mu, params.ReasonsMap, outfits, userThumbs)
+			outfitNames, hasFurry, err := a.analyzeUserOutfits(ctx, userInfo, &mu, params.ReasonsMap, outfits, userThumbs)
 			if err != nil && !errors.Is(err, ErrNoViolations) {
 				a.logger.Error("Failed to analyze outfit themes",
 					zap.Error(err),
@@ -163,6 +169,14 @@ func (a *OutfitAnalyzer) ProcessUsers(ctx context.Context, params *OutfitAnalyze
 				mu.Unlock()
 			}
 
+			if hasFurry {
+				mu.Lock()
+
+				furryUsers[userInfo.ID] = struct{}{}
+
+				mu.Unlock()
+			}
+
 			return nil
 		})
 	}
@@ -170,19 +184,20 @@ func (a *OutfitAnalyzer) ProcessUsers(ctx context.Context, params *OutfitAnalyze
 	// Wait for all goroutines to complete
 	if err := p.Wait(); err != nil {
 		a.logger.Error("Error during outfit theme analysis", zap.Error(err))
-		return flaggedOutfits
+		return flaggedOutfits, furryUsers
 	}
 
 	a.logger.Info("Received AI outfit theme analysis",
 		zap.Int("processedUsers", len(usersToProcess)),
-		zap.Int("flaggedUsers", len(flaggedOutfits)))
+		zap.Int("flaggedUsers", len(flaggedOutfits)),
+		zap.Int("furryUsers", len(furryUsers)))
 
 	// Generate detailed outfit reasons for flagged users
 	if len(flaggedOutfits) > 0 {
 		a.outfitReasonAnalyzer.ProcessFlaggedUsers(ctx, params.Users, params.ReasonsMap)
 	}
 
-	return flaggedOutfits
+	return flaggedOutfits, furryUsers
 }
 
 // filterUsersForOutfitProcessing determines which users should be processed through outfit analysis.
@@ -211,15 +226,15 @@ func (a *OutfitAnalyzer) filterUsersForOutfitProcessing(
 func (a *OutfitAnalyzer) analyzeUserOutfits(
 	ctx context.Context, info *types.ReviewUser, mu *sync.Mutex, reasonsMap map[int64]types.Reasons[enum.UserReasonType],
 	outfits []*apiTypes.Outfit, thumbnailMap map[int64]string,
-) (map[string]struct{}, error) {
+) (map[string]struct{}, bool, error) {
 	// Download all outfit images
 	downloads, err := a.downloadOutfitImages(ctx, info, outfits, thumbnailMap)
 	if err != nil {
 		if errors.Is(err, ErrNoOutfits) {
-			return nil, ErrNoViolations
+			return nil, false, ErrNoViolations
 		}
 
-		return nil, fmt.Errorf("failed to download outfit images: %w", err)
+		return nil, false, fmt.Errorf("failed to download outfit images: %w", err)
 	}
 
 	// Process outfits in batches
@@ -227,6 +242,7 @@ func (a *OutfitAnalyzer) analyzeUserOutfits(
 		allSuspiciousThemes []string
 		highestConfidence   float64
 		uniqueFlaggedCount  int
+		hasFurryTheme       bool
 	)
 
 	flaggedOutfits := make(map[string]struct{})
@@ -253,6 +269,11 @@ func (a *OutfitAnalyzer) analyzeUserOutfits(
 		// Skip if no analysis or themes
 		if analysis == nil || len(analysis.Themes) == 0 {
 			continue
+		}
+
+		// Track furry theme detection
+		if analysis.HasFurryTheme {
+			hasFurryTheme = true
 		}
 
 		// Process themes from this batch
@@ -340,23 +361,27 @@ func (a *OutfitAnalyzer) analyzeUserOutfits(
 			zap.Int("totalFlaggedOutfits", len(flaggedOutfits)),
 			zap.Int("numThemes", len(allSuspiciousThemes)),
 			zap.Strings("themes", allSuspiciousThemes))
+
+		// Don't mark as furry user if they have 2+ inappropriate outfit violations
+		if uniqueFlaggedCount >= 2 {
+			hasFurryTheme = false
+		}
 	}
 
-	return flaggedOutfits, nil
+	return flaggedOutfits, hasFurryTheme, nil
 }
 
 // processOutfitBatch handles the AI analysis for a batch of outfit images.
 func (a *OutfitAnalyzer) processOutfitBatch(
 	ctx context.Context, info *types.ReviewUser, batch []DownloadResult,
 ) (*OutfitThemeAnalysis, error) {
-	// Process each downloaded image and add as user message parts
-	messages := []openai.ChatCompletionMessageParamUnion{
-		openai.SystemMessage(OutfitSystemPrompt),
-	}
-
+	// Build content parts for a user message
+	userContentParts := make([]openai.ChatCompletionContentPartUnionParam, 0, len(batch)+1)
 	outfitNames := make([]string, 0, len(batch))
 	validOutfits := make(map[string]struct{})
 
+	// Build the outfit list and prepare images
+	imageParts := make([]openai.ChatCompletionContentPartUnionParam, 0, len(batch))
 	for _, result := range batch {
 		// Convert image to base64
 		buf := new(bytes.Buffer)
@@ -366,11 +391,11 @@ func (a *OutfitAnalyzer) processOutfitBatch(
 
 		base64Image := base64.StdEncoding.EncodeToString(buf.Bytes())
 
-		// Add image as a user message
+		// Create image content part
 		imagePart := openai.ImageContentPart(openai.ChatCompletionContentPartImageImageURLParam{
 			URL: "data:image/webp;base64," + base64Image,
 		})
-		messages = append(messages, openai.UserMessage([]openai.ChatCompletionContentPartUnionParam{imagePart}))
+		imageParts = append(imageParts, imagePart)
 
 		// Store outfit name
 		outfitNames = append(outfitNames, result.name)
@@ -382,19 +407,30 @@ func (a *OutfitAnalyzer) processOutfitBatch(
 		return nil, ErrNoOutfits
 	}
 
-	// Add final user message with numbered outfit names
+	// Build outfit mapping list
 	outfitList := make([]string, 0, len(outfitNames))
 	for i, name := range outfitNames {
 		outfitList = append(outfitList, fmt.Sprintf("Image %d: %s", i+1, name))
 	}
 
+	// Create text prompt
 	prompt := fmt.Sprintf(
 		"%s\n\nIdentify themes for user %q.\n\nOutfit mapping:\n%s\n\nAnalyze each image in order and use the EXACT outfit names listed above.",
 		OutfitRequestPrompt,
 		info.Name,
 		strings.Join(outfitList, "\n"),
 	)
-	messages = append(messages, openai.UserMessage(prompt))
+	textPart := openai.TextContentPart(prompt)
+
+	// Assemble content parts
+	userContentParts = append(userContentParts, textPart)
+	userContentParts = append(userContentParts, imageParts...)
+
+	// Create messages
+	messages := []openai.ChatCompletionMessageParamUnion{
+		openai.SystemMessage(OutfitSystemPrompt),
+		openai.UserMessage(userContentParts),
+	}
 
 	// Prepare chat completion parameters
 	params := openai.ChatCompletionNewParams{
@@ -417,7 +453,7 @@ func (a *OutfitAnalyzer) processOutfitBatch(
 	// Make API request
 	var analysis OutfitThemeAnalysis
 
-	err := a.chat.NewWithRetry(ctx, params, func(resp *openai.ChatCompletion, err error) error {
+	err := a.chat.NewWithRetryAndFallback(ctx, params, a.fallbackModel, func(resp *openai.ChatCompletion, err error) error {
 		// Handle API error
 		if err != nil {
 			return fmt.Errorf("openai API error: %w", err)

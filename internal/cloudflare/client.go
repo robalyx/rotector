@@ -12,12 +12,16 @@ import (
 
 // Client provides access to all cloudflare-related operations.
 type Client struct {
-	d1Client   *api.D1Client
-	r2Client   *api.R2Client
-	Queue      *manager.Queue
-	UserFlags  *manager.UserFlags
-	GroupFlags *manager.GroupFlags
-	IPTracking *manager.IPTracking
+	d1Client    *api.D1Client
+	r2Client    *api.R2Client
+	Queue       *manager.Queue
+	UserFlags   *manager.UserFlags
+	GroupFlags  *manager.GroupFlags
+	IPTracking  *manager.IPTracking
+	WarData     *manager.WarData
+	WarManager  *manager.WarManager
+	Leaderboard *manager.LeaderboardManager
+	AIUsage     *manager.AIUsage
 }
 
 // NewClient creates a new cloudflare client with all managers.
@@ -41,13 +45,19 @@ func NewClient(cfg *config.Config, db database.Client, logger *zap.Logger) *Clie
 		logger.Fatal("Failed to create R2 client", zap.Error(err))
 	}
 
+	warManager := manager.NewWarManager(d1API, logger.Named("war_manager"))
+
 	return &Client{
-		d1Client:   d1API,
-		r2Client:   r2API,
-		Queue:      manager.NewQueue(d1API, logger.Named("cloudflare")),
-		UserFlags:  manager.NewUserFlags(d1API, db, logger.Named("user_flags")),
-		GroupFlags: manager.NewGroupFlags(d1API, logger.Named("group_flags")),
-		IPTracking: manager.NewIPTracking(d1API, logger.Named("ip_tracking")),
+		d1Client:    d1API,
+		r2Client:    r2API,
+		Queue:       manager.NewQueue(d1API, logger.Named("cloudflare")),
+		UserFlags:   manager.NewUserFlags(d1API, db, warManager, logger.Named("user_flags")),
+		GroupFlags:  manager.NewGroupFlags(d1API, logger.Named("group_flags")),
+		IPTracking:  manager.NewIPTracking(d1API, logger.Named("ip_tracking")),
+		WarData:     manager.NewWarData(d1API, r2API, logger.Named("war_data")),
+		WarManager:  warManager,
+		Leaderboard: manager.NewLeaderboardManager(d1API, r2API, logger.Named("leaderboard")),
+		AIUsage:     manager.NewAIUsage(d1API, logger.Named("ai_usage")),
 	}
 }
 

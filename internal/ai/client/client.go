@@ -4,12 +4,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
+	"strings"
 	"time"
 
 	"github.com/cenkalti/backoff/v4"
 	"github.com/openai/openai-go"
 	"github.com/openai/openai-go/option"
 	"github.com/openai/openai-go/packages/ssestream"
+	"github.com/robalyx/rotector/internal/cloudflare/manager"
 	"github.com/robalyx/rotector/internal/setup/config"
 	"github.com/robalyx/rotector/pkg/utils"
 	"github.com/sony/gobreaker"
@@ -17,17 +20,26 @@ import (
 	"golang.org/x/sync/semaphore"
 )
 
-var ErrNoProvidersAvailable = errors.New("no providers available")
+var (
+	ErrNoProvidersAvailable = errors.New("no providers available")
+	ErrInvalidResponse      = errors.New("invalid response from API")
+)
 
-// defaultSafetySettings defines the default safety thresholds for content filtering.
-var defaultSafetySettings = map[string]any{
-	"safety_settings": []map[string]any{
-		{"category": "HARM_CATEGORY_HARASSMENT", "threshold": "OFF"},
-		{"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "OFF"},
-		{"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "OFF"},
-		{"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "OFF"},
-		{"category": "HARM_CATEGORY_CIVIC_INTEGRITY", "threshold": "OFF"},
+// defaultSettings contains default configuration for all AI requests.
+var defaultSettings = map[string]any{
+	"max_tokens": 8192,
+	"reasoning": map[string]any{
+		"enabled": false,
 	},
+}
+
+// geminiSafetySettings defines safety thresholds for Gemini models.
+var geminiSafetySettings = []map[string]any{
+	{"category": "HARM_CATEGORY_HARASSMENT", "threshold": "OFF"},
+	{"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "OFF"},
+	{"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "OFF"},
+	{"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "OFF"},
+	{"category": "HARM_CATEGORY_CIVIC_INTEGRITY", "threshold": "OFF"},
 }
 
 // AIClient implements the Client interface.
@@ -36,16 +48,18 @@ type AIClient struct {
 	breaker       *gobreaker.CircuitBreaker
 	semaphore     *semaphore.Weighted
 	modelMappings map[string]string
+	modelPricing  map[string]config.ModelPricing
+	usageTracker  *manager.AIUsage
 	logger        *zap.Logger
 	blockChan     chan struct{}
 }
 
 // NewClient creates a new AIClient.
-func NewClient(cfg *config.OpenAI, logger *zap.Logger) (*AIClient, error) {
+func NewClient(cfg *config.OpenAI, usageTracker *manager.AIUsage, logger *zap.Logger) (*AIClient, error) {
 	client := openai.NewClient(
 		option.WithAPIKey(cfg.APIKey),
 		option.WithBaseURL(cfg.BaseURL),
-		option.WithRequestTimeout(90*time.Second),
+		option.WithRequestTimeout(60*time.Second),
 		option.WithMaxRetries(0),
 	)
 
@@ -71,9 +85,31 @@ func NewClient(cfg *config.OpenAI, logger *zap.Logger) (*AIClient, error) {
 		breaker:       gobreaker.NewCircuitBreaker(settings),
 		semaphore:     semaphore.NewWeighted(cfg.MaxConcurrent),
 		modelMappings: cfg.ModelMappings,
+		modelPricing:  cfg.ModelPricing,
+		usageTracker:  usageTracker,
 		logger:        logger.Named("ai_client"),
 		blockChan:     make(chan struct{}),
 	}, nil
+}
+
+// buildExtraFields constructs the extra fields map for API requests based on model type.
+func buildExtraFields(modelName string) map[string]any {
+	extraFields := make(map[string]any)
+
+	// Apply default settings to all models
+	maps.Copy(extraFields, defaultSettings)
+
+	// Apply settings for Gemini models
+	if strings.Contains(strings.ToLower(modelName), "gemini") {
+		extraFields["safety_settings"] = geminiSafetySettings
+		extraFields["providerOptions"] = map[string]any{
+			"gateway": map[string]any{
+				"only": []string{"vertex"},
+			},
+		}
+	}
+
+	return extraFields
 }
 
 // Chat returns a ChatCompletions implementation.
@@ -97,6 +133,39 @@ func (c *AIClient) blockIndefinitely(ctx context.Context, model string, err erro
 	}
 }
 
+// trackUsage records AI usage statistics to the D1 database.
+func (c *AIClient) trackUsage(ctx context.Context, modelName string, usage openai.CompletionUsage) {
+	// Look up pricing for this model
+	pricing, ok := c.modelPricing[modelName]
+	if !ok {
+		c.logger.Warn("No pricing configured for model, skipping usage tracking",
+			zap.String("model", modelName))
+
+		return
+	}
+
+	// Extract token counts
+	promptTokens := usage.PromptTokens
+	completionTokens := usage.CompletionTokens
+	reasoningTokens := usage.CompletionTokensDetails.ReasoningTokens
+
+	// Calculate cost (pricing is per million tokens)
+	cost := (float64(promptTokens)*pricing.Input +
+		float64(completionTokens)*pricing.Completion +
+		float64(reasoningTokens)*pricing.Reasoning) / 1_000_000
+
+	// Get today's date in UTC formatted as YYYY-MM-DD
+	date := time.Now().UTC().Format("2006-01-02")
+
+	// Update daily usage in D1
+	if err := c.usageTracker.UpdateDailyUsage(ctx, date, promptTokens, completionTokens, reasoningTokens, cost); err != nil {
+		c.logger.Warn("Failed to update AI usage tracking",
+			zap.Error(err),
+			zap.String("model", modelName),
+			zap.String("date", date))
+	}
+}
+
 // chatCompletions implements the ChatCompletions interface.
 type chatCompletions struct {
 	client *AIClient
@@ -112,8 +181,8 @@ func (c *chatCompletions) New(ctx context.Context, params openai.ChatCompletionN
 		return nil, fmt.Errorf("%w: %s", ErrNoProvidersAvailable, originalModel)
 	}
 
-	// Add safety settings
-	params.SetExtraFields(defaultSafetySettings)
+	// Add extra fields based on model type
+	params.SetExtraFields(buildExtraFields(params.Model))
 
 	// Try to acquire semaphore
 	if err := c.client.semaphore.Acquire(ctx, 1); err != nil {
@@ -124,11 +193,15 @@ func (c *chatCompletions) New(ctx context.Context, params openai.ChatCompletionN
 	// Execute request
 	result, err := c.client.breaker.Execute(func() (any, error) {
 		resp, err := c.client.client.Chat.Completions.New(ctx, params)
+		if err != nil {
+			return resp, err
+		}
+
 		if bl := c.checkBlockReasons(resp, params.Model); bl != nil {
 			return resp, bl
 		}
 
-		return resp, err
+		return resp, nil
 	})
 	if err != nil {
 		switch {
@@ -143,7 +216,11 @@ func (c *chatCompletions) New(ctx context.Context, params openai.ChatCompletionN
 		}
 	}
 
-	return result.(*openai.ChatCompletion), nil
+	resp := result.(*openai.ChatCompletion)
+
+	c.client.trackUsage(ctx, originalModel, resp.Usage)
+
+	return resp, nil
 }
 
 // NewWithRetry makes a chat completion request with retry logic.
@@ -158,8 +235,8 @@ func (c *chatCompletions) NewWithRetry(
 		return fmt.Errorf("%w: %s", ErrNoProvidersAvailable, originalModel)
 	}
 
-	// Add safety settings
-	params.SetExtraFields(defaultSafetySettings)
+	// Add extra fields based on model type
+	params.SetExtraFields(buildExtraFields(params.Model))
 
 	// Try to acquire semaphore
 	if err := c.client.semaphore.Acquire(ctx, 1); err != nil {
@@ -189,11 +266,15 @@ func (c *chatCompletions) NewWithRetry(
 			var execErr error
 
 			resp, execErr = c.client.client.Chat.Completions.New(ctx, params)
+			if execErr != nil {
+				return resp, execErr
+			}
+
 			if bl := c.checkBlockReasons(resp, params.Model); bl != nil {
 				return resp, bl
 			}
 
-			return resp, execErr
+			return resp, nil
 		})
 		if err != nil {
 			lastErr = err
@@ -238,6 +319,8 @@ func (c *chatCompletions) NewWithRetry(
 			return cbErr
 		}
 
+		c.client.trackUsage(ctx, originalModel, resp.Usage)
+
 		return nil
 	}
 
@@ -251,6 +334,43 @@ func (c *chatCompletions) NewWithRetry(
 	}
 
 	return nil
+}
+
+// NewWithRetryAndFallback makes a chat completion request with retry logic and fallback model support.
+func (c *chatCompletions) NewWithRetryAndFallback(
+	ctx context.Context, params openai.ChatCompletionNewParams, fallbackModel string, callback RetryCallback,
+) error {
+	originalModel := params.Model
+
+	// Try primary model first
+	err := c.NewWithRetry(ctx, params, callback)
+
+	// If content blocked or no provider mapping and fallback configured, try fallback
+	if (errors.Is(err, utils.ErrContentBlocked) || errors.Is(err, ErrNoProvidersAvailable)) && fallbackModel != "" {
+		c.client.logger.Warn("Content blocked or no provider available, attempting fallback model",
+			zap.String("original_model", originalModel),
+			zap.String("fallback_model", fallbackModel))
+
+		// Update params with fallback model
+		params.Model = fallbackModel
+
+		// Retry with fallback model
+		if fallbackErr := c.NewWithRetry(ctx, params, callback); fallbackErr != nil {
+			c.client.logger.Error("Fallback model also failed",
+				zap.String("fallback_model", fallbackModel),
+				zap.Error(fallbackErr))
+
+			return fmt.Errorf("both primary and fallback failed: primary=%w, fallback=%w", err, fallbackErr)
+		}
+
+		c.client.logger.Info("Fallback model succeeded",
+			zap.String("original_model", originalModel),
+			zap.String("fallback_model", fallbackModel))
+
+		return nil
+	}
+
+	return err
 }
 
 // NewStreaming creates a streaming chat completion request.
@@ -267,8 +387,8 @@ func (c *chatCompletions) NewStreaming(
 		)
 	}
 
-	// Add safety settings
-	params.SetExtraFields(defaultSafetySettings)
+	// Add extra fields based on model type
+	params.SetExtraFields(buildExtraFields(params.Model))
 
 	// Try to acquire semaphore
 	if err := c.client.semaphore.Acquire(ctx, 1); err != nil {
@@ -303,7 +423,7 @@ func (c *chatCompletions) NewStreaming(
 
 	stream := result.(*ssestream.Stream[openai.ChatCompletionChunk])
 
-	// Set up cleanup when context is done
+	// Release semaphore when context is done
 	go func() {
 		<-ctx.Done()
 		c.client.semaphore.Release(1)
@@ -317,26 +437,27 @@ func (c *chatCompletions) checkBlockReasons(resp *openai.ChatCompletion, model s
 	// Check if response is provided
 	if resp == nil {
 		c.client.logger.Warn("Received nil response", zap.String("model", model))
-		return fmt.Errorf("%w: received nil response", utils.ErrContentBlocked)
+		return fmt.Errorf("%w: received nil response", ErrInvalidResponse)
 	}
 
 	// Check if choices are provided
 	if len(resp.Choices) == 0 {
 		c.client.logger.Warn("Received empty choices", zap.String("model", model))
-		return fmt.Errorf("%w: received empty choices", utils.ErrContentBlocked)
+		return fmt.Errorf("%w: received empty choices", ErrInvalidResponse)
 	}
 
 	// Check if finish reason is provided
 	finishReason := resp.Choices[0].FinishReason
 	if finishReason == "" {
 		c.client.logger.Warn("No finish reason provided", zap.String("model", model))
-		return fmt.Errorf("%w: no finish reason provided", utils.ErrContentBlocked)
+		return fmt.Errorf("%w: no finish reason provided", ErrInvalidResponse)
 	}
 
 	// Map of finish reasons to their error handling
 	finishReasonHandlers := map[string]error{
 		"content_filter": utils.ErrContentBlocked,
 		"stop":           nil,
+		"length":         nil,
 	}
 
 	err, known := finishReasonHandlers[finishReason]
@@ -345,7 +466,13 @@ func (c *chatCompletions) checkBlockReasons(resp *openai.ChatCompletion, model s
 			zap.String("model", model),
 			zap.String("finishReason", finishReason))
 
-		err = utils.ErrContentBlocked
+		return fmt.Errorf("%w: unknown finish reason: %s", ErrInvalidResponse, finishReason)
+	}
+
+	// Log warning if response was truncated due to length limit
+	if finishReason == "length" {
+		c.client.logger.Warn("Response truncated at max_tokens limit",
+			zap.String("model", model))
 	}
 
 	if err != nil {

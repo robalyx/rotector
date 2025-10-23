@@ -155,8 +155,9 @@ func (q *Queue) MarkAsProcessed(ctx context.Context, userIDs []int64, flaggedUse
 	}
 
 	// Build query with placeholders for all user IDs and their flagged status
-	query := "UPDATE queued_users SET processed = 1, processing = 0, flagged = CASE user_id "
-	params := make([]any, 0, len(userIDs))
+	query := "UPDATE queued_users SET processed = 1, processing = 0, processed_at = ?, flagged = CASE user_id "
+	params := make([]any, 0, len(userIDs)+1)
+	params = append(params, time.Now().Unix())
 
 	// Add CASE statement for each user ID
 	for _, id := range userIDs {
@@ -191,37 +192,6 @@ func (q *Queue) MarkAsProcessed(ctx context.Context, userIDs []int64, flaggedUse
 	_, err := q.d1.ExecuteSQL(ctx, query, params)
 	if err != nil {
 		return fmt.Errorf("failed to mark users as processed: %w", err)
-	}
-
-	return nil
-}
-
-// Cleanup performs maintenance on the cloudflare.
-func (q *Queue) Cleanup(ctx context.Context, stuckTimeout, retentionPeriod time.Duration) error {
-	// Reset stuck processing items
-	resetQuery := `
-		UPDATE queued_users 
-		SET processing = 0 
-		WHERE processing = 1 
-		AND processed = 0 
-		AND queued_at < ?
-	`
-
-	stuckCutoff := time.Now().Add(-stuckTimeout).Unix()
-	if _, err := q.d1.ExecuteSQL(ctx, resetQuery, []any{stuckCutoff}); err != nil {
-		return fmt.Errorf("failed to reset stuck processing: %w", err)
-	}
-
-	// Remove outdated processed records
-	cleanupQuery := `
-		DELETE FROM queued_users 
-		WHERE processed = 1 
-		AND queued_at < ?
-	`
-
-	retentionCutoff := time.Now().Add(-retentionPeriod).Unix()
-	if _, err := q.d1.ExecuteSQL(ctx, cleanupQuery, []any{retentionCutoff}); err != nil {
-		return fmt.Errorf("failed to remove outdated records: %w", err)
 	}
 
 	return nil

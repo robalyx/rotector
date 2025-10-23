@@ -22,7 +22,21 @@ const (
 	UserReasonTypeFavorites
 	// UserReasonTypeBadges indicates analysis of a user's badges.
 	UserReasonTypeBadges
+	// UserReasonTypeCreations indicates analysis of a user's created content.
+	UserReasonTypeCreations
+	// UserReasonTypeOthers indicates other miscellaneous reasons.
+	UserReasonTypeOthers
 )
+
+// IsAutoAnalyzedReason returns true if the reason type is automatically analyzed by the system.
+func IsAutoAnalyzedReason(reasonType UserReasonType) bool {
+	switch reasonType {
+	case UserReasonTypeProfile, UserReasonTypeFriend, UserReasonTypeOutfit, UserReasonTypeGroup, UserReasonTypeCondo:
+		return true
+	default:
+		return false
+	}
+}
 
 // GroupReasonType represents the source of a flagging reason.
 //

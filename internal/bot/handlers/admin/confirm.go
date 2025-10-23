@@ -52,112 +52,11 @@ func (m *ConfirmMenu) handleConfirm(ctx *interaction.Context, s *session.Session
 	reason := session.AdminReason.Get(s)
 
 	switch action {
-	case constants.BanUserAction:
-		m.handleBanUser(ctx, s, id, reason)
-	case constants.UnbanUserAction:
-		m.handleUnbanUser(ctx, id, reason)
 	case constants.DeleteUserAction:
 		m.handleDeleteUser(ctx, id, reason)
 	case constants.DeleteGroupAction:
 		m.handleDeleteGroup(ctx, id, reason)
 	}
-}
-
-// handleBanUser processes the user ban action.
-func (m *ConfirmMenu) handleBanUser(ctx *interaction.Context, s *session.Session, userID string, notes string) {
-	// Parse user ID
-	id, err := strconv.ParseUint(userID, 10, 64)
-	if err != nil {
-		ctx.Cancel("Invalid user ID format.")
-		return
-	}
-
-	// Get ban reason and expiry
-	banReason := session.AdminBanReason.Get(s)
-	expiresAt := session.AdminBanExpiry.Get(s)
-
-	// Ban the user
-	now := time.Now()
-	if err := m.layout.db.Model().Ban().BanUser(ctx.Context(), &types.DiscordBan{
-		ID:        id,
-		Reason:    banReason,
-		Source:    enum.BanSourceAdmin,
-		Notes:     notes,
-		BannedBy:  uint64(ctx.Event().User().ID),
-		BannedAt:  now,
-		ExpiresAt: expiresAt,
-		UpdatedAt: now,
-	}); err != nil {
-		m.layout.logger.Error("Failed to ban user",
-			zap.Error(err),
-			zap.Uint64("userID", id),
-			zap.Uint64("adminID", uint64(ctx.Event().User().ID)),
-		)
-		ctx.Error("Failed to ban user. Please try again.")
-
-		return
-	}
-
-	ctx.NavigateBack(fmt.Sprintf("Successfully banned user %d.", id))
-
-	// Log the ban action
-	m.layout.db.Model().Activity().Log(ctx.Context(), &types.ActivityLog{
-		ActivityTarget: types.ActivityTarget{
-			DiscordID: id,
-		},
-		ReviewerID:        uint64(ctx.Event().User().ID),
-		ActivityType:      enum.ActivityTypeDiscordUserBanned,
-		ActivityTimestamp: time.Now(),
-		Details: map[string]any{
-			"notes":      notes,
-			"ban_reason": banReason.String(),
-			"expires_at": expiresAt,
-		},
-	})
-}
-
-// handleUnbanUser processes the user unban action.
-func (m *ConfirmMenu) handleUnbanUser(ctx *interaction.Context, userID string, notes string) {
-	// Parse user ID
-	id, err := strconv.ParseUint(userID, 10, 64)
-	if err != nil {
-		ctx.Cancel("Invalid user ID format.")
-		return
-	}
-
-	// Unban the user
-	unbanned, err := m.layout.db.Model().Ban().UnbanUser(ctx.Context(), id)
-	if err != nil {
-		m.layout.logger.Error("Failed to unban user",
-			zap.Error(err),
-			zap.Uint64("userID", id),
-			zap.Uint64("adminID", uint64(ctx.Event().User().ID)),
-		)
-		ctx.Error("Failed to unban user. Please try again.")
-
-		return
-	}
-
-	// Check if the user was actually banned
-	if !unbanned {
-		ctx.NavigateBack("User is not currently banned.")
-		return
-	}
-
-	ctx.NavigateBack(fmt.Sprintf("Successfully unbanned user %d.", id))
-
-	// Log the unban action
-	m.layout.db.Model().Activity().Log(ctx.Context(), &types.ActivityLog{
-		ActivityTarget: types.ActivityTarget{
-			DiscordID: id,
-		},
-		ReviewerID:        uint64(ctx.Event().User().ID),
-		ActivityType:      enum.ActivityTypeDiscordUserUnbanned,
-		ActivityTimestamp: time.Now(),
-		Details: map[string]any{
-			"notes": notes,
-		},
-	})
 }
 
 // handleDeleteUser processes the user deletion action.

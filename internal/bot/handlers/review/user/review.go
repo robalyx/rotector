@@ -430,6 +430,31 @@ func (m *ReviewMenu) handleConfirmUser(ctx *interaction.Context, s *session.Sess
 		return
 	}
 
+	// Re-classify category if reasons have been modified
+	if session.ReasonsChanged.Get(s) {
+		// Prepare user map for classification
+		usersToClassify := map[int64]*types.ReviewUser{user.ID: user}
+
+		// Call category analyzer
+		categoryResults := m.layout.categoryAnalyzer.ClassifyUsers(ctx.Context(), usersToClassify, 0)
+
+		// Update user category if classification was successful
+		if category, exists := categoryResults[user.ID]; exists {
+			oldCategory := user.Category
+			user.Category = category
+
+			m.layout.logger.Info("Re-classified user category",
+				zap.Int64("userID", user.ID),
+				zap.String("username", user.Name),
+				zap.String("oldCategory", oldCategory.String()),
+				zap.String("newCategory", category.String()))
+		} else {
+			m.layout.logger.Warn("Failed to re-classify user category, keeping existing category",
+				zap.Int64("userID", user.ID),
+				zap.String("username", user.Name))
+		}
+	}
+
 	// Confirm the user
 	if err := m.layout.db.Service().User().ConfirmUser(ctx.Context(), user, reviewerID); err != nil {
 		m.layout.logger.Error("Failed to confirm user", zap.Error(err))
@@ -707,6 +732,9 @@ func (m *ReviewMenu) handleGenerateFriendReason(ctx *interaction.Context, s *ses
 		case enum.UserTypeFlagged:
 			flaggedFriendsForUser[friend.ID] = friend
 		case enum.UserTypeCleared:
+			// Cleared users are not included in friend analysis
+		case enum.UserTypeQueued, enum.UserTypeBloxDB, enum.UserTypeMixed, enum.UserTypePastOffender:
+			// These statuses are not relevant for friend analysis
 		}
 	}
 
@@ -951,10 +979,10 @@ func (m *ReviewMenu) handleGenerateProfileReason(ctx *interaction.Context) {
 				WithPlaceholder("e.g., inappropriate username, sexual content in description"),
 		).
 		AddLabel(
-			"Violation Location",
-			discord.NewTextInput(constants.ProfileReasonViolationInputCustomID, discord.TextInputStyleParagraph).
+			"Flagged Fields",
+			discord.NewTextInput(constants.ProfileReasonFlaggedFieldsInputCustomID, discord.TextInputStyleParagraph).
 				WithRequired(false).
-				WithMaxLength(512).
+				WithMaxLength(256).
 				WithPlaceholder("username\ndisplayName\ndescription"),
 		).
 		AddLabel(
@@ -987,7 +1015,7 @@ func (m *ReviewMenu) handleGenerateProfileReasonModalSubmit(ctx *interaction.Con
 	// Get modal data
 	data := ctx.Event().ModalData()
 	hint := data.Text(constants.ProfileReasonHintInputCustomID)
-	violationLocationText := data.Text(constants.ProfileReasonViolationInputCustomID)
+	flaggedFieldsText := data.Text(constants.ProfileReasonFlaggedFieldsInputCustomID)
 	languagePatternText := data.Text(constants.ProfileReasonLanguageInputCustomID)
 	languageUsedText := data.Text(constants.ProfileReasonLanguageUsedInputCustomID)
 
@@ -998,7 +1026,7 @@ func (m *ReviewMenu) handleGenerateProfileReasonModalSubmit(ctx *interaction.Con
 	}
 
 	// Parse input fields
-	violationLocation := utils.ParseDelimitedInput(violationLocationText, "\n")
+	flaggedFields := utils.ParseDelimitedInput(flaggedFieldsText, "\n")
 	languagePattern := utils.ParseDelimitedInput(languagePatternText, "\n")
 	languageUsed := utils.ParseDelimitedInput(languageUsedText, "\n")
 
@@ -1026,13 +1054,13 @@ func (m *ReviewMenu) handleGenerateProfileReasonModalSubmit(ctx *interaction.Con
 	// Create user reason request
 	userReasonRequest := map[int64]ai.UserReasonRequest{
 		user.ID: {
-			User:              userSummary,
-			Confidence:        1.0,
-			Hint:              hint,
-			ViolationLocation: violationLocation,
-			LanguagePattern:   languagePattern,
-			LanguageUsed:      languageUsed,
-			UserID:            user.ID,
+			User:            userSummary,
+			Confidence:      1.0,
+			Hint:            hint,
+			FlaggedFields:   flaggedFields,
+			LanguagePattern: languagePattern,
+			LanguageUsed:    languageUsed,
+			UserID:          user.ID,
 		},
 	}
 

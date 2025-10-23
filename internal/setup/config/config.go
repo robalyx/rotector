@@ -177,6 +177,16 @@ type Redis struct {
 	Password string `koanf:"password"`
 }
 
+// ModelPricing defines cost per million tokens for a model.
+type ModelPricing struct {
+	// Cost per million input tokens in USD
+	Input float64 `koanf:"input"`
+	// Cost per million completion tokens in USD
+	Completion float64 `koanf:"completion"`
+	// Cost per million reasoning tokens in USD
+	Reasoning float64 `koanf:"reasoning"`
+}
+
 // OpenAI contains OpenAI API configuration.
 type OpenAI struct {
 	// Base URL for the API
@@ -187,6 +197,8 @@ type OpenAI struct {
 	MaxConcurrent int64 `koanf:"max_concurrent"`
 	// Model name mappings
 	ModelMappings map[string]string `koanf:"model_mappings"`
+	// Per-model token pricing
+	ModelPricing map[string]ModelPricing `koanf:"model_pricing"`
 	// Model to use for user analysis
 	UserModel string `koanf:"user_model"`
 	// Model to use for user reason analysis
@@ -197,14 +209,32 @@ type OpenAI struct {
 	GroupReasonModel string `koanf:"group_reason_model"`
 	// Model to use for outfit reason analysis
 	OutfitReasonModel string `koanf:"outfit_reason_model"`
+	// Model to use for category analysis
+	CategoryModel string `koanf:"category_model"`
 	// Model to use for stats analysis
 	StatsModel string `koanf:"stats_model"`
 	// Model to use for outfit analysis
 	OutfitModel string `koanf:"outfit_model"`
 	// Model to use for message analysis
 	MessageModel string `koanf:"message_model"`
-	// Model to use for ivan message analysis
-	IvanModel string `koanf:"ivan_model"`
+	// Fallback model to use for user analysis when content is blocked
+	UserFallbackModel string `koanf:"user_fallback_model"`
+	// Fallback model to use for user reason analysis when content is blocked
+	UserReasonFallbackModel string `koanf:"user_reason_fallback_model"`
+	// Fallback model to use for friend reason analysis when content is blocked
+	FriendReasonFallbackModel string `koanf:"friend_reason_fallback_model"`
+	// Fallback model to use for group reason analysis when content is blocked
+	GroupReasonFallbackModel string `koanf:"group_reason_fallback_model"`
+	// Fallback model to use for outfit reason analysis when content is blocked
+	OutfitReasonFallbackModel string `koanf:"outfit_reason_fallback_model"`
+	// Fallback model to use for category analysis when content is blocked
+	CategoryFallbackModel string `koanf:"category_fallback_model"`
+	// Fallback model to use for stats analysis when content is blocked
+	StatsFallbackModel string `koanf:"stats_fallback_model"`
+	// Fallback model to use for outfit analysis when content is blocked
+	OutfitFallbackModel string `koanf:"outfit_fallback_model"`
+	// Fallback model to use for message analysis when content is blocked
+	MessageFallbackModel string `koanf:"message_fallback_model"`
 }
 
 // Discord contains Discord bot configuration.
@@ -239,6 +269,8 @@ type BatchSizes struct {
 	PurgeGroups int `koanf:"purge_groups"`
 	// Number of group trackings to process in one batch.
 	TrackGroups int `koanf:"track_groups"`
+	// Number of users to check for new groups in one batch.
+	TrackUserGroups int `koanf:"track_user_groups"`
 	// Number of queue items to process in one batch.
 	QueueItems int `koanf:"queue_items"`
 	// Number of users to update thumbnails in one batch.
@@ -257,10 +289,10 @@ type BatchSizes struct {
 	GroupReasonAnalysis int `koanf:"group_reason_analysis"`
 	// Maximum concurrent AI requests for outfit reason analysis.
 	OutfitReasonAnalysis int `koanf:"outfit_reason_analysis"`
+	// Maximum concurrent AI requests for category analysis.
+	CategoryAnalysis int `koanf:"category_analysis"`
 	// Maximum concurrent AI requests for message analysis.
 	MessageAnalysis int `koanf:"message_analysis"`
-	// Maximum concurrent AI requests for ivan message analysis.
-	IvanMessageAnalysis int `koanf:"ivan_message_analysis"`
 	// Number of outfits to analyze in one AI request.
 	OutfitAnalysisBatch int `koanf:"outfit_analysis_batch"`
 	// Number of users to analyze in one AI request.
@@ -273,10 +305,8 @@ type BatchSizes struct {
 	GroupReasonAnalysisBatch int `koanf:"group_reason_analysis_batch"`
 	// Number of users to analyze in one outfit reason AI request.
 	OutfitReasonAnalysisBatch int `koanf:"outfit_reason_analysis_batch"`
-	// Number of messages to analyze in one AI request.
-	MessageAnalysisBatch int `koanf:"message_analysis_batch"`
-	// Number of ivan messages to analyze in one AI request.
-	IvanMessageAnalysisBatch int `koanf:"ivan_message_analysis_batch"`
+	// Number of users to analyze in one category AI request.
+	CategoryAnalysisBatch int `koanf:"category_analysis_batch"`
 }
 
 // ThresholdLimits configures various thresholds for worker operations.
@@ -305,6 +335,10 @@ type Proxy struct {
 	DefaultCooldown int `koanf:"default_cooldown"`
 	// Duration to mark proxy as unhealthy in milliseconds.
 	UnhealthyDuration int `koanf:"unhealthy_duration"`
+	// Proxy API endpoint URL.
+	ProxyAPIURL string `koanf:"proxy_api_url"`
+	// Proxy API authentication key.
+	ProxyAPIKey string `koanf:"proxy_api_key"`
 	// Endpoint-specific cooldowns.
 	Endpoints map[string]EndpointLimit `koanf:"endpoints"`
 }
@@ -325,6 +359,10 @@ type Roverse struct {
 	SecretKey string `koanf:"secret_key"`
 	// Maximum concurrent requests.
 	MaxConcurrent int64 `koanf:"max_concurrent"`
+	// Proxy API endpoint URL.
+	ProxyAPIURL string `koanf:"proxy_api_url"`
+	// Proxy API authentication key.
+	ProxyAPIKey string `koanf:"proxy_api_key"`
 }
 
 // Loki contains Grafana Loki logging configuration.

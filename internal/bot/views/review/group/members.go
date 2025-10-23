@@ -180,6 +180,8 @@ func (b *MembersBuilder) getMemberFieldName(memberID int64) string {
 		indicators = append(indicators, "⏳")
 	case enum.UserTypeCleared:
 		indicators = append(indicators, "✅")
+	case enum.UserTypeQueued, enum.UserTypeBloxDB, enum.UserTypeMixed, enum.UserTypePastOffender:
+		// No status indicator for these types
 	}
 
 	// Add banned status if applicable

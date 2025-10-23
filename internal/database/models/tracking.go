@@ -129,8 +129,8 @@ func (r *TrackingModel) GetGroupTrackingsToCheck(
 				"(last_checked < ? AND user_count >= ?)",
 				tenMinutesAgo, minFlaggedOverride,
 				oneMinuteAgo, minFlaggedUsers).
-			OrderExpr("user_count DESC").
 			Order("last_checked ASC").
+			OrderExpr("user_count DESC").
 			Limit(batchSize)
 
 		// Update the selected groups and return their data
@@ -394,8 +394,8 @@ func (r *TrackingModel) GetOutfitAssetTrackingsToCheck(
 				"(last_checked < ? AND outfit_count >= ?)",
 				tenMinutesAgo, minOutfitsOverride,
 				oneMinuteAgo, minOutfits).
-			OrderExpr("outfit_count DESC").
 			Order("last_checked ASC").
+			OrderExpr("outfit_count DESC").
 			Limit(batchSize)
 
 		// Update the selected assets and return their data
@@ -602,8 +602,8 @@ func (r *TrackingModel) GetGameTrackingsToCheck(
 				"(last_checked < ? AND user_count >= ?)",
 				tenMinutesAgo, minFlaggedOverride,
 				oneMinuteAgo, minFlaggedUsers).
-			OrderExpr("user_count DESC").
 			Order("last_checked ASC").
+			OrderExpr("user_count DESC").
 			Limit(batchSize)
 
 		// Update the selected games and return their data
@@ -706,5 +706,49 @@ func (r *TrackingModel) RemoveGamesFromTracking(ctx context.Context, gameIDs []i
 		}
 
 		return nil
+	})
+}
+
+// AddGroupToExclusions adds a group to the exclusion list to prevent future tracking.
+func (r *TrackingModel) AddGroupToExclusions(ctx context.Context, groupID int64) error {
+	return dbretry.NoResult(ctx, func(ctx context.Context) error {
+		_, err := r.db.NewInsert().
+			Model(&types.GroupTrackingExclusion{GroupID: groupID}).
+			On("CONFLICT DO NOTHING").
+			Exec(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to add group to exclusions: %w (groupID=%d)", err, groupID)
+		}
+
+		r.logger.Debug("Added group to tracking exclusions",
+			zap.Int64("groupID", groupID))
+
+		return nil
+	})
+}
+
+// GetExcludedGroupIDs returns a set of excluded group IDs from the provided list.
+func (r *TrackingModel) GetExcludedGroupIDs(ctx context.Context, groupIDs []int64) (map[int64]struct{}, error) {
+	if len(groupIDs) == 0 {
+		return make(map[int64]struct{}), nil
+	}
+
+	return dbretry.Operation(ctx, func(ctx context.Context) (map[int64]struct{}, error) {
+		var exclusions []types.GroupTrackingExclusion
+
+		err := r.db.NewSelect().
+			Model(&exclusions).
+			Where("group_id IN (?)", bun.In(groupIDs)).
+			Scan(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get excluded groups: %w", err)
+		}
+
+		excludedMap := make(map[int64]struct{}, len(exclusions))
+		for _, exclusion := range exclusions {
+			excludedMap[exclusion.GroupID] = struct{}{}
+		}
+
+		return excludedMap, nil
 	})
 }

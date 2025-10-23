@@ -31,15 +31,15 @@ const (
 
 // GroupSummary contains a summary of a group's data.
 type GroupSummary struct {
-	Name    string             `json:"name"    jsonschema_description:"Name of the group"`
-	Type    string             `json:"type"    jsonschema_description:"Type of group (Confirmed or Flagged)"`
-	Reasons []types.ReasonInfo `json:"reasons" jsonschema_description:"List of reasons with types and messages why this group was flagged"`
+	Name    string             `json:"name"    jsonschema:"required,minLength=1,description=Name of the group"`
+	Type    string             `json:"type"    jsonschema:"required,enum=Confirmed,enum=Flagged,enum=Mixed,description=Type of group (Confirmed or Flagged or Mixed)"`
+	Reasons []types.ReasonInfo `json:"reasons" jsonschema:"required,maxItems=20,description=List of reasons with types and messages why this group was flagged"`
 }
 
 // UserGroupData represents the data for a user's group memberships.
 type UserGroupData struct {
-	Username string         `json:"username" jsonschema_description:"Username of the account being analyzed"`
-	Groups   []GroupSummary `json:"groups"   jsonschema_description:"List of groups and their violation data"`
+	Username string         `json:"username" jsonschema:"required,minLength=1,description=Username of the account being analyzed"`
+	Groups   []GroupSummary `json:"groups"   jsonschema:"required,maxItems=100,description=List of groups and their violation data"`
 }
 
 // UserGroupRequest contains the user data and group memberships for analysis.
@@ -50,25 +50,26 @@ type UserGroupRequest struct {
 
 // GroupAnalysis contains the result of analyzing a user's group memberships.
 type GroupAnalysis struct {
-	Name     string `json:"name"     jsonschema_description:"Username of the account being analyzed"`
-	Analysis string `json:"analysis" jsonschema_description:"Analysis of group membership patterns for this user"`
+	Name     string `json:"name"     jsonschema:"required,minLength=1,description=Username of the account being analyzed"`
+	Analysis string `json:"analysis" jsonschema:"required,minLength=1,description=Analysis of group membership patterns for this user"`
 }
 
 // BatchGroupAnalysis contains results for multiple users' group memberships.
 type BatchGroupAnalysis struct {
-	Results []GroupAnalysis `json:"results" jsonschema_description:"Array of group membership analyses for each user"`
+	Results []GroupAnalysis `json:"results" jsonschema:"required,maxItems=50,description=Array of group membership analyses for each user"`
 }
 
 // GroupReasonAnalyzer handles AI-based analysis of group memberships using OpenAI models.
 type GroupReasonAnalyzer struct {
-	chat        client.ChatCompletions
-	minify      *minify.M
-	analysisSem *semaphore.Weighted
-	logger      *zap.Logger
-	textLogger  *zap.Logger
-	textDir     string
-	model       string
-	batchSize   int
+	chat          client.ChatCompletions
+	minify        *minify.M
+	analysisSem   *semaphore.Weighted
+	logger        *zap.Logger
+	textLogger    *zap.Logger
+	textDir       string
+	model         string
+	fallbackModel string
+	batchSize     int
 }
 
 // GroupAnalysisSchema is the JSON schema for the group analysis response.
@@ -88,14 +89,15 @@ func NewGroupReasonAnalyzer(app *setup.App, logger *zap.Logger) *GroupReasonAnal
 	}
 
 	return &GroupReasonAnalyzer{
-		chat:        app.AIClient.Chat(),
-		minify:      m,
-		analysisSem: semaphore.NewWeighted(int64(app.Config.Worker.BatchSizes.GroupReasonAnalysis)),
-		logger:      logger.Named("ai_group_reason"),
-		textLogger:  textLogger,
-		textDir:     textDir,
-		model:       app.Config.Common.OpenAI.GroupReasonModel,
-		batchSize:   app.Config.Worker.BatchSizes.GroupReasonAnalysisBatch,
+		chat:          app.AIClient.Chat(),
+		minify:        m,
+		analysisSem:   semaphore.NewWeighted(int64(app.Config.Worker.BatchSizes.GroupReasonAnalysis)),
+		logger:        logger.Named("ai_group_reason"),
+		textLogger:    textLogger,
+		textDir:       textDir,
+		model:         app.Config.Common.OpenAI.GroupReasonModel,
+		fallbackModel: app.Config.Common.OpenAI.GroupReasonFallbackModel,
+		batchSize:     app.Config.Worker.BatchSizes.GroupReasonAnalysisBatch,
 	}
 }
 
@@ -180,7 +182,7 @@ func (a *GroupReasonAnalyzer) ProcessGroupRequests(
 	}
 
 	// Prevent infinite retries
-	if retryCount >= GroupReasonMaxRetries {
+	if retryCount > GroupReasonMaxRetries {
 		a.logger.Warn("Maximum retries reached for group analysis, skipping remaining users",
 			zap.Int("retryCount", retryCount),
 			zap.Int("maxRetries", GroupReasonMaxRetries),
@@ -210,6 +212,14 @@ func (a *GroupReasonAnalyzer) ProcessGroupRequests(
 			// Process the batch
 			batchResults, err := a.processGroupBatch(ctx, batch)
 			if err != nil {
+				invalidMu.Lock()
+
+				for _, req := range batch {
+					invalidRequests[req.UserInfo.ID] = req
+				}
+
+				invalidMu.Unlock()
+
 				return err
 			}
 
@@ -332,7 +342,7 @@ func (a *GroupReasonAnalyzer) processGroupBatch(ctx context.Context, batch []Use
 	// Make API request
 	var result BatchGroupAnalysis
 
-	err = a.chat.NewWithRetry(ctx, params, func(resp *openai.ChatCompletion, err error) error {
+	err = a.chat.NewWithRetryAndFallback(ctx, params, a.fallbackModel, func(resp *openai.ChatCompletion, err error) error {
 		// Handle API error
 		if err != nil {
 			return fmt.Errorf("openai API error: %w", err)

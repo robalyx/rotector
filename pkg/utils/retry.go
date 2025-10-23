@@ -28,7 +28,7 @@ type RetryOptions struct {
 // GetAIRetryOptions returns retry options optimized for AI operations.
 func GetAIRetryOptions() RetryOptions {
 	return RetryOptions{
-		MaxElapsedTime:  40 * time.Second,
+		MaxElapsedTime:  210 * time.Second,
 		InitialInterval: 5 * time.Second,
 		MaxInterval:     10 * time.Second,
 		MaxRetries:      3,
@@ -120,7 +120,7 @@ func withRetrySplitBatchInternal[T any](
 		}
 	}
 
-	// Try processing the full batch first
+	// Process the full batch
 	err := operation(items)
 	if err == nil || !errors.Is(err, ErrContentBlocked) {
 		return err

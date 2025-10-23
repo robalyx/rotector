@@ -30,37 +30,38 @@ const (
 
 // UserReasonRequest contains the flagged user data and the hinting needed.
 type UserReasonRequest struct {
-	User              *UserSummary `json:"user"`                        // User summary data
-	Confidence        float64      `json:"confidence"`                  // Original confidence from first-pass analysis
-	Hint              string       `json:"hint"`                        // Clean hint about the violation type
-	ViolationLocation []string     `json:"violationLocation,omitempty"` // Locations of violations
-	LanguagePattern   []string     `json:"languagePattern,omitempty"`   // Linguistic patterns detected
-	LanguageUsed      []string     `json:"languageUsed,omitempty"`      // Languages or encodings detected in content
-	UserID            int64        `json:"-"`                           // User ID stored for internal reference, not sent to AI
+	User            *UserSummary `json:"user"`                      // User summary data
+	Confidence      float64      `json:"confidence"`                // Original confidence from first-pass analysis
+	Hint            string       `json:"hint"`                      // Clean hint about the violation type
+	FlaggedFields   []string     `json:"flaggedFields,omitempty"`   // Profile fields containing violations
+	LanguagePattern []string     `json:"languagePattern,omitempty"` // Linguistic patterns detected
+	LanguageUsed    []string     `json:"languageUsed,omitempty"`    // Languages or encodings detected in content
+	UserID          int64        `json:"-"`                         // User ID stored for internal reference, not sent to AI
 }
 
 // UserReasonResponse contains the detailed reason analysis with evidence.
 type UserReasonResponse struct {
-	Name           string   `json:"name"           jsonschema_description:"Username of the flagged user"`
-	Reason         string   `json:"reason"         jsonschema_description:"Detailed explanation of the violation"`
-	FlaggedContent []string `json:"flaggedContent" jsonschema_description:"Specific content that violates policies"`
+	Name           string   `json:"name"           jsonschema:"required,minLength=1,description=Username of the flagged user"`
+	Reason         string   `json:"reason"         jsonschema:"required,minLength=1,description=Detailed explanation of the violation"`
+	FlaggedContent []string `json:"flaggedContent" jsonschema:"required,maxItems=10,description=Specific content that violates policies"`
 }
 
 // ReasonAnalysisResult contains the analysis results for a batch of users.
 type ReasonAnalysisResult struct {
-	Results []UserReasonResponse `json:"results" jsonschema_description:"List of detailed user analysis results"`
+	Results []UserReasonResponse `json:"results" jsonschema:"required,maxItems=50,description=List of detailed user analysis results"`
 }
 
 // UserReasonAnalyzer generates detailed reasons and evidence for flagged users.
 type UserReasonAnalyzer struct {
-	chat        client.ChatCompletions
-	minify      *minify.M
-	analysisSem *semaphore.Weighted
-	logger      *zap.Logger
-	textLogger  *zap.Logger
-	textDir     string
-	model       string
-	batchSize   int
+	chat          client.ChatCompletions
+	minify        *minify.M
+	analysisSem   *semaphore.Weighted
+	logger        *zap.Logger
+	textLogger    *zap.Logger
+	textDir       string
+	model         string
+	fallbackModel string
+	batchSize     int
 }
 
 // UserReasonAnalysisSchema is the JSON schema for the reason analysis response.
@@ -80,14 +81,15 @@ func NewUserReasonAnalyzer(app *setup.App, logger *zap.Logger) *UserReasonAnalyz
 	}
 
 	return &UserReasonAnalyzer{
-		chat:        app.AIClient.Chat(),
-		minify:      m,
-		analysisSem: semaphore.NewWeighted(int64(app.Config.Worker.BatchSizes.UserReasonAnalysis)),
-		logger:      logger.Named("ai_user_reason"),
-		textLogger:  textLogger,
-		textDir:     textDir,
-		model:       app.Config.Common.OpenAI.UserReasonModel,
-		batchSize:   app.Config.Worker.BatchSizes.UserReasonAnalysisBatch,
+		chat:          app.AIClient.Chat(),
+		minify:        m,
+		analysisSem:   semaphore.NewWeighted(int64(app.Config.Worker.BatchSizes.UserReasonAnalysis)),
+		logger:        logger.Named("ai_user_reason"),
+		textLogger:    textLogger,
+		textDir:       textDir,
+		model:         app.Config.Common.OpenAI.UserReasonModel,
+		fallbackModel: app.Config.Common.OpenAI.UserReasonFallbackModel,
+		batchSize:     app.Config.Worker.BatchSizes.UserReasonAnalysisBatch,
 	}
 }
 
@@ -102,7 +104,7 @@ func (a *UserReasonAnalyzer) ProcessFlaggedUsers(
 	}
 
 	// Prevent infinite retries
-	if retryCount >= UserReasonMaxRetries {
+	if retryCount > UserReasonMaxRetries {
 		a.logger.Warn("Maximum retries reached for user reason analysis, skipping remaining users",
 			zap.Int("retryCount", retryCount),
 			zap.Int("maxRetries", UserReasonMaxRetries),
@@ -132,6 +134,14 @@ func (a *UserReasonAnalyzer) ProcessFlaggedUsers(
 			// Process the batch
 			results, err := a.processReasonBatch(ctx, batch)
 			if err != nil {
+				invalidMu.Lock()
+
+				for _, req := range batch {
+					invalidRequests[req.UserID] = req
+				}
+
+				invalidMu.Unlock()
+
 				return err
 			}
 
@@ -248,7 +258,7 @@ func (a *UserReasonAnalyzer) processReasonBatch(ctx context.Context, batch []Use
 	// Make API request
 	var result ReasonAnalysisResult
 
-	err = a.chat.NewWithRetry(ctx, params, func(resp *openai.ChatCompletion, err error) error {
+	err = a.chat.NewWithRetryAndFallback(ctx, params, a.fallbackModel, func(resp *openai.ChatCompletion, err error) error {
 		// Handle API error
 		if err != nil {
 			return fmt.Errorf("openai API error: %w", err)

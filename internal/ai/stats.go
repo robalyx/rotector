@@ -22,10 +22,11 @@ type StatsData struct {
 
 // StatsAnalyzer analyzes statistics and generates welcome messages.
 type StatsAnalyzer struct {
-	chat   client.ChatCompletions
-	minify *minify.M
-	logger *zap.Logger
-	model  string
+	chat          client.ChatCompletions
+	minify        *minify.M
+	logger        *zap.Logger
+	model         string
+	fallbackModel string
 }
 
 // NewStatsAnalyzer creates a new stats analyzer instance.
@@ -34,10 +35,11 @@ func NewStatsAnalyzer(app *setup.App, logger *zap.Logger) *StatsAnalyzer {
 	m.AddFunc(ApplicationJSON, json.Minify)
 
 	return &StatsAnalyzer{
-		chat:   app.AIClient.Chat(),
-		minify: m,
-		logger: logger.Named("ai_stats"),
-		model:  app.Config.Common.OpenAI.StatsModel,
+		chat:          app.AIClient.Chat(),
+		minify:        m,
+		logger:        logger.Named("ai_stats"),
+		model:         app.Config.Common.OpenAI.StatsModel,
+		fallbackModel: app.Config.Common.OpenAI.StatsFallbackModel,
 	}
 }
 
@@ -77,7 +79,7 @@ func (a *StatsAnalyzer) GenerateWelcomeMessage(ctx context.Context, historicalSt
 	// Generate welcome message
 	var response string
 
-	err = a.chat.NewWithRetry(ctx, params, func(resp *openai.ChatCompletion, err error) error {
+	err = a.chat.NewWithRetryAndFallback(ctx, params, a.fallbackModel, func(resp *openai.ChatCompletion, err error) error {
 		// Handle API error
 		if err != nil {
 			return fmt.Errorf("openai API error: %w", err)

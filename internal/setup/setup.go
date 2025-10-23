@@ -72,16 +72,10 @@ func InitializeApp(ctx context.Context, serviceType telemetry.ServiceType, logDi
 		return nil, err
 	}
 
-	// Initialize AI client
-	aiCli, err := aiClient.NewClient(&cfg.Common.OpenAI, logger)
-	if err != nil {
-		return nil, err
-	}
-
 	// RoAPI client is configured with middleware chain
 	requestTimeout := serviceType.GetRequestTimeout(cfg)
 
-	roAPI, middlewares, err := client.GetRoAPIClient(&cfg.Common, configDir, redisManager, logger, requestTimeout)
+	roAPI, middlewares, err := client.GetRoAPIClient(ctx, &cfg.Common, configDir, redisManager, logger, requestTimeout)
 	if err != nil {
 		return nil, err
 	}
@@ -103,6 +97,12 @@ func InitializeApp(ctx context.Context, serviceType telemetry.ServiceType, logDi
 
 	// Initialize D1 client for cloudflare operations
 	cfClient := cloudflare.NewClient(cfg, db, logger)
+
+	// Initialize AI client
+	aiCli, err := aiClient.NewClient(&cfg.Common.OpenAI, cfClient.AIUsage, logger)
+	if err != nil {
+		return nil, err
+	}
 
 	// Start pprof server if enabled
 	var pprofSrv *pprofServer

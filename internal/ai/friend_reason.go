@@ -31,15 +31,15 @@ const (
 
 // FriendSummary contains a summary of a friend's data.
 type FriendSummary struct {
-	Name    string             `json:"name"    jsonschema_description:"Username of the friend"`
-	Type    string             `json:"type"    jsonschema_description:"Type of friend (Confirmed or Flagged)"`
-	Reasons []types.ReasonInfo `json:"reasons" jsonschema_description:"List of reasons with types and messages why this friend was flagged"`
+	Name    string             `json:"name"    jsonschema:"required,minLength=1,description=Username of the friend"`
+	Type    string             `json:"type"    jsonschema:"required,enum=Confirmed,enum=Flagged,description=Type of friend (Confirmed or Flagged)"`
+	Reasons []types.ReasonInfo `json:"reasons" jsonschema:"required,maxItems=20,description=List of reasons with types and messages why this friend was flagged"`
 }
 
 // UserFriendData represents the data for a user's friend network.
 type UserFriendData struct {
-	Username string          `json:"username" jsonschema_description:"Username of the account being analyzed"`
-	Friends  []FriendSummary `json:"friends"  jsonschema_description:"List of friends and their violation data"`
+	Username string          `json:"username" jsonschema:"required,minLength=1,description=Username of the account being analyzed"`
+	Friends  []FriendSummary `json:"friends"  jsonschema:"required,maxItems=100,description=List of friends and their violation data"`
 }
 
 // UserFriendRequest contains the user data and friend network for analysis.
@@ -50,25 +50,26 @@ type UserFriendRequest struct {
 
 // FriendAnalysis contains the result of analyzing a user's friend network.
 type FriendAnalysis struct {
-	Name     string `json:"name"     jsonschema_description:"Username of the account being analyzed"`
-	Analysis string `json:"analysis" jsonschema_description:"Analysis of friend network patterns for this user"`
+	Name     string `json:"name"     jsonschema:"required,minLength=1,description=Username of the account being analyzed"`
+	Analysis string `json:"analysis" jsonschema:"required,minLength=1,description=Analysis of friend network patterns for this user"`
 }
 
 // BatchFriendAnalysis contains results for multiple users' friend networks.
 type BatchFriendAnalysis struct {
-	Results []FriendAnalysis `json:"results" jsonschema_description:"Array of friend network analyses for each user"`
+	Results []FriendAnalysis `json:"results" jsonschema:"required,maxItems=50,description=Array of friend network analyses for each user"`
 }
 
 // FriendReasonAnalyzer handles AI-based analysis of friend networks using OpenAI models.
 type FriendReasonAnalyzer struct {
-	chat        client.ChatCompletions
-	minify      *minify.M
-	analysisSem *semaphore.Weighted
-	logger      *zap.Logger
-	textLogger  *zap.Logger
-	textDir     string
-	model       string
-	batchSize   int
+	chat          client.ChatCompletions
+	minify        *minify.M
+	analysisSem   *semaphore.Weighted
+	logger        *zap.Logger
+	textLogger    *zap.Logger
+	textDir       string
+	model         string
+	fallbackModel string
+	batchSize     int
 }
 
 // FriendAnalysisSchema is the JSON schema for the friend analysis response.
@@ -88,14 +89,15 @@ func NewFriendReasonAnalyzer(app *setup.App, logger *zap.Logger) *FriendReasonAn
 	}
 
 	return &FriendReasonAnalyzer{
-		chat:        app.AIClient.Chat(),
-		minify:      m,
-		analysisSem: semaphore.NewWeighted(int64(app.Config.Worker.BatchSizes.FriendReasonAnalysis)),
-		logger:      logger.Named("ai_friend_reason"),
-		textLogger:  textLogger,
-		textDir:     textDir,
-		model:       app.Config.Common.OpenAI.FriendReasonModel,
-		batchSize:   app.Config.Worker.BatchSizes.FriendReasonAnalysisBatch,
+		chat:          app.AIClient.Chat(),
+		minify:        m,
+		analysisSem:   semaphore.NewWeighted(int64(app.Config.Worker.BatchSizes.FriendReasonAnalysis)),
+		logger:        logger.Named("ai_friend_reason"),
+		textLogger:    textLogger,
+		textDir:       textDir,
+		model:         app.Config.Common.OpenAI.FriendReasonModel,
+		fallbackModel: app.Config.Common.OpenAI.FriendReasonFallbackModel,
+		batchSize:     app.Config.Worker.BatchSizes.FriendReasonAnalysisBatch,
 	}
 }
 
@@ -165,7 +167,7 @@ func (a *FriendReasonAnalyzer) ProcessFriendRequests(
 	}
 
 	// Prevent infinite retries
-	if retryCount >= FriendReasonMaxRetries {
+	if retryCount > FriendReasonMaxRetries {
 		a.logger.Warn("Maximum retries reached for friend analysis, skipping remaining users",
 			zap.Int("retryCount", retryCount),
 			zap.Int("maxRetries", FriendReasonMaxRetries),
@@ -195,6 +197,14 @@ func (a *FriendReasonAnalyzer) ProcessFriendRequests(
 			// Process the batch
 			batchResults, err := a.processFriendBatch(ctx, batch)
 			if err != nil {
+				invalidMu.Lock()
+
+				for _, req := range batch {
+					invalidRequests[req.UserInfo.ID] = req
+				}
+
+				invalidMu.Unlock()
+
 				return err
 			}
 
@@ -317,7 +327,7 @@ func (a *FriendReasonAnalyzer) processFriendBatch(ctx context.Context, batch []U
 	// Make API request
 	var result BatchFriendAnalysis
 
-	err = a.chat.NewWithRetry(ctx, params, func(resp *openai.ChatCompletion, err error) error {
+	err = a.chat.NewWithRetryAndFallback(ctx, params, a.fallbackModel, func(resp *openai.ChatCompletion, err error) error {
 		// Handle API error
 		if err != nil {
 			return fmt.Errorf("openai API error: %w", err)

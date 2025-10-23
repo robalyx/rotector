@@ -2,6 +2,7 @@ package loki
 
 import (
 	"encoding/json"
+	"maps"
 
 	"go.uber.org/zap/zapcore"
 )
@@ -46,7 +47,7 @@ func (c *Core) Write(ent zapcore.Entry, fields []zapcore.Field) error {
 		Timestamp: float64(ent.Time.UnixMilli()),
 		Message:   ent.Message,
 		Caller:    ent.Caller.TrimmedPath(),
-		Fields:    make(map[string]interface{}),
+		Fields:    make(map[string]any),
 	}
 
 	// Add stack trace for errors
@@ -61,9 +62,7 @@ func (c *Core) Write(ent zapcore.Entry, fields []zapcore.Field) error {
 	}
 
 	// Merge fields into entry
-	for k, v := range enc.Fields {
-		entry.Fields[k] = v
-	}
+	maps.Copy(entry.Fields, enc.Fields)
 
 	// Marshal to JSON to get the raw string
 	raw, err := json.Marshal(entry)
