@@ -16,9 +16,6 @@ import (
 const (
 	// FriendCountTTL defines how long friend counts remain valid.
 	FriendCountTTL = 7 * 24 * time.Hour
-
-	// ProcessingTTL defines how long processed user entries remain valid.
-	ProcessingTTL = 24 * time.Hour
 )
 
 // CacheModel handles database operations for caching user data to optimize worker performance.
@@ -120,63 +117,33 @@ func (r *CacheModel) HasFriendCountChanged(ctx context.Context, userID int64, cu
 	return changed, nil
 }
 
-// FilterProcessedUsers filters out user IDs that have been processed
-// within the TTL window, returning only unprocessed user IDs.
-func (r *CacheModel) FilterProcessedUsers(ctx context.Context, userIDs []int64) ([]int64, error) {
+// GetProcessingLogs retrieves processing log entries for the given user IDs.
+func (r *CacheModel) GetProcessingLogs(ctx context.Context, userIDs []int64) ([]types.UserProcessingLog, error) {
 	if len(userIDs) == 0 {
-		return userIDs, nil
+		return nil, nil
 	}
 
-	unprocessedUsers, err := dbretry.Operation(ctx, func(ctx context.Context) ([]int64, error) {
-		// Get recently processed user IDs
-		var processedEntries []types.UserProcessingLog
+	var processedEntries []types.UserProcessingLog
 
-		err := r.db.NewSelect().
+	err := dbretry.NoResult(ctx, func(ctx context.Context) error {
+		return r.db.NewSelect().
 			Model(&processedEntries).
-			Column("user_id").
+			Column("user_id", "last_processed").
 			Where("user_id IN (?)", bun.In(userIDs)).
-			Where("last_processed > ?", time.Now().Add(-ProcessingTTL)).
 			Scan(ctx)
-		if err != nil {
-			r.logger.Warn("Failed to query processed users, returning all as unprocessed",
-				zap.Error(err))
-
-			return userIDs, nil
-		}
-
-		// Build a map of processed user IDs
-		processedMap := make(map[int64]bool, len(processedEntries))
-		for _, entry := range processedEntries {
-			processedMap[entry.UserID] = true
-		}
-
-		// Filter out processed users
-		unprocessed := make([]int64, 0, len(userIDs))
-		for _, userID := range userIDs {
-			if !processedMap[userID] {
-				unprocessed = append(unprocessed, userID)
-			}
-		}
-
-		return unprocessed, nil
 	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to filter processed users: %w", err)
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
+
+		return nil, fmt.Errorf("failed to query processing logs: %w", err)
 	}
 
-	cacheHits := len(userIDs) - len(unprocessedUsers)
-
-	r.logger.Info("Filtered processed users",
-		zap.Int("totalUsers", len(userIDs)),
-		zap.Int("unprocessedUsers", len(unprocessedUsers)),
-		zap.Int("cacheHits", cacheHits),
-		zap.Float64("cacheHitRate", float64(cacheHits)/float64(len(userIDs))*100))
-
-	return unprocessedUsers, nil
+	return processedEntries, nil
 }
 
-// MarkUsersProcessed marks the given user IDs as processed with the current timestamp
-// to prevent reprocessing within the TTL window.
+// MarkUsersProcessed marks the given user IDs as processed with the current timestamp.
 func (r *CacheModel) MarkUsersProcessed(ctx context.Context, userIDs []int64) error {
 	if len(userIDs) == 0 {
 		return nil

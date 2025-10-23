@@ -239,28 +239,30 @@ func (w *Worker) processGroup(ctx context.Context) ([]*types.ReviewUser, error) 
 
 		groupsAttempted++
 
-		// Filter out already processed users to prevent duplicate processing
 		if len(userIDs) > 0 {
-			unprocessedUserIDs, err := w.db.Model().Cache().FilterProcessedUsers(ctx, userIDs)
+			// Fetch all user infos
+			allUserInfos := w.userFetcher.FetchInfos(ctx, userIDs)
+
+			// Filter out users within their processing cooldown period
+			unprocessedUserInfos, err := w.db.Service().Cache().FilterProcessedUsers(ctx, allUserInfos)
 			if err != nil {
 				w.logger.Error("Error filtering processed users",
 					zap.Error(err),
 					zap.Int64("groupID", w.currentGroupID))
 
-				unprocessedUserIDs = userIDs
+				continue
 			}
 
-			// Fetch user info and validate
-			if len(unprocessedUserIDs) > 0 {
-				userInfos := w.userFetcher.FetchInfos(ctx, unprocessedUserIDs)
-				validUsers = append(validUsers, userInfos...)
+			// Add unprocessed users to the validation list
+			if len(unprocessedUserInfos) > 0 {
+				validUsers = append(validUsers, unprocessedUserInfos...)
 
 				w.logger.Info("Processed group users",
 					zap.Int64("groupID", w.currentGroupID),
 					zap.String("cursor", w.currentCursor),
 					zap.Int("fetchedUsers", len(userIDs)),
-					zap.Int("unprocessedUsers", len(unprocessedUserIDs)),
-					zap.Int("validUsers", len(userInfos)),
+					zap.Int("allUserInfos", len(allUserInfos)),
+					zap.Int("unprocessedUsers", len(unprocessedUserInfos)),
 					zap.Int("totalValidUsers", len(validUsers)),
 					zap.Int("groupsAttempted", groupsAttempted))
 			}

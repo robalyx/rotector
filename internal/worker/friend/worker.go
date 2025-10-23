@@ -268,27 +268,31 @@ func (w *Worker) processFriendsBatch(ctx context.Context) ([]*types.ReviewUser, 
 			}
 		}
 
-		// Filter out already processed users to prevent duplicate processing
 		if len(friendIDs) > 0 {
-			unprocessedFriendIDs, err := w.db.Model().Cache().FilterProcessedUsers(ctx, friendIDs)
-			if err != nil {
-				w.logger.Error("Error filtering processed users", zap.Error(err), zap.Int64("userID", user.ID))
+			// Fetch all friend user infos
+			allUserInfos := w.userFetcher.FetchInfos(ctx, friendIDs)
 
-				unprocessedFriendIDs = friendIDs
+			// Filter out users within their processing cooldown period
+			unprocessedUserInfos, err := w.db.Service().Cache().FilterProcessedUsers(ctx, allUserInfos)
+			if err != nil {
+				w.logger.Error("Error filtering processed users",
+					zap.Error(err),
+					zap.Int64("userID", user.ID))
+
+				continue
 			}
 
-			// Fetch user info and validate friends
-			if len(unprocessedFriendIDs) > 0 {
-				userInfos := w.userFetcher.FetchInfos(ctx, unprocessedFriendIDs)
-				validFriends = append(validFriends, userInfos...)
+			// Add unprocessed users to the validation list
+			if len(unprocessedUserInfos) > 0 {
+				validFriends = append(validFriends, unprocessedUserInfos...)
 
 				w.logger.Debug("Added friends for processing",
 					zap.Int64("userID", user.ID),
 					zap.Int("totalFriends", len(userFriendIDs)),
 					zap.Int("existingFriends", len(existingUsers)),
 					zap.Int("fetchedFriends", len(friendIDs)),
-					zap.Int("unprocessedFriends", len(unprocessedFriendIDs)),
-					zap.Int("validFriends", len(userInfos)),
+					zap.Int("allUserInfos", len(allUserInfos)),
+					zap.Int("unprocessedFriends", len(unprocessedUserInfos)),
 					zap.Int("totalValidFriends", len(validFriends)))
 			}
 		}
