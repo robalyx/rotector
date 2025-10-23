@@ -34,13 +34,13 @@ type CategoryRequest struct {
 
 // CategoryResponse contains the category classification result.
 type CategoryResponse struct {
-	Username string `json:"username" jsonschema_description:"Username of the classified user"`
-	Category string `json:"category" jsonschema_description:"Violation category type"`
+	Username string `json:"username" jsonschema:"required,minLength=1,description=Username of the classified user"`
+	Category string `json:"category" jsonschema:"required,minLength=1,description=Violation category type"`
 }
 
 // CategoryAnalysisResult contains the analysis results for a batch of users.
 type CategoryAnalysisResult struct {
-	Results []CategoryResponse `json:"results" jsonschema_description:"List of user category classifications"`
+	Results []CategoryResponse `json:"results" jsonschema:"required,maxItems=50,description=List of user category classifications"`
 }
 
 // CategoryAnalyzer classifies flagged users into violation categories.
