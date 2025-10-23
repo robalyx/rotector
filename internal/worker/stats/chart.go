@@ -276,6 +276,7 @@ func (b *ChartBuilder) getYAxis() chart.YAxis {
 			if f, ok := v.(float64); ok {
 				return fmt.Sprintf("%.0f", f)
 			}
+
 			return ""
 		},
 	}

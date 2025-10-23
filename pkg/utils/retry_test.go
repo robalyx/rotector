@@ -38,11 +38,13 @@ func TestWithRetry(t *testing.T) {
 			name: "succeeds after retries",
 			operation: func() func() error {
 				count := 0
+
 				return func() error {
 					count++
 					if count < 3 {
 						return errTemporary
 					}
+
 					return nil
 				}
 			}(),
@@ -160,8 +162,10 @@ func TestWithRetrySplitBatch(t *testing.T) {
 			minBatchSize: 1,
 			operation: func() func([]int) error {
 				calls := 0
+
 				return func(batch []int) error {
 					calls++
+
 					switch {
 					case len(batch) == 4:
 						// Full batch fails with content block
@@ -192,8 +196,10 @@ func TestWithRetrySplitBatch(t *testing.T) {
 			minBatchSize: 2,
 			operation: func() func([]int) error {
 				calls := 0
+
 				return func(batch []int) error {
 					calls++
+
 					switch {
 					case len(batch) == 4:
 						// Full batch fails with content block
@@ -231,8 +237,10 @@ func TestWithRetrySplitBatch(t *testing.T) {
 			minBatchSize: 2,
 			operation: func() func([]int) error {
 				calls := 0
+
 				return func(batch []int) error {
 					calls++
+
 					switch {
 					case len(batch) == 4:
 						// Full batch fails with content block
@@ -261,8 +269,10 @@ func TestWithRetrySplitBatch(t *testing.T) {
 			minBatchSize: 2,
 			operation: func() func([]int) error {
 				calls := 0
+
 				return func(batch []int) error {
 					calls++
+
 					switch {
 					case len(batch) > 2:
 						// Any batch larger than minBatchSize gets blocked to force splitting
@@ -272,6 +282,7 @@ func TestWithRetrySplitBatch(t *testing.T) {
 						if batch[0]%2 == 1 {
 							return utils.ErrContentBlocked
 						}
+
 						return nil
 					default:
 						// Min batch size still blocked to force individual processing
@@ -291,8 +302,10 @@ func TestWithRetrySplitBatch(t *testing.T) {
 			minBatchSize: 2,
 			operation: func() func([]int) error {
 				calls := 0
+
 				return func(batch []int) error {
 					calls++
+
 					switch {
 					case len(batch) == 2:
 						// Batch fails, force individual processing

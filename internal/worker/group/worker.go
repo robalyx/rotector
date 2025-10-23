@@ -33,7 +33,6 @@ type Worker struct {
 	userChecker               *checker.UserChecker
 	reporter                  *core.StatusReporter
 	thresholdChecker          *core.ThresholdChecker
-	processingCache           *core.UserProcessingCache
 	pendingUsers              []*types.ReviewUser
 	logger                    *zap.Logger
 	batchSize                 int
@@ -55,7 +54,6 @@ func New(app *setup.App, bar *components.ProgressBar, logger *zap.Logger, instan
 		logger.Named("group_worker"),
 		"group worker",
 	)
-	processingCache := core.NewUserProcessingCache(app.RedisManager, logger)
 
 	return &Worker{
 		db:               app.DB,
@@ -66,7 +64,6 @@ func New(app *setup.App, bar *components.ProgressBar, logger *zap.Logger, instan
 		userChecker:      userChecker,
 		reporter:         reporter,
 		thresholdChecker: thresholdChecker,
-		processingCache:  processingCache,
 		pendingUsers:     make([]*types.ReviewUser, 0),
 		logger:           logger.Named("group_worker"),
 		batchSize:        app.Config.Worker.BatchSizes.GroupUsers,
@@ -164,7 +161,7 @@ func (w *Worker) Start(ctx context.Context) {
 			processedUserIDs = append(processedUserIDs, user.ID)
 		}
 
-		if err := w.processingCache.MarkUsersProcessed(ctx, processedUserIDs); err != nil {
+		if err := w.db.Model().Cache().MarkUsersProcessed(ctx, processedUserIDs); err != nil {
 			w.logger.Error("Failed to mark users as processed in cache", zap.Error(err))
 		}
 
@@ -244,7 +241,7 @@ func (w *Worker) processGroup(ctx context.Context) ([]*types.ReviewUser, error) 
 
 		// Filter out already processed users to prevent duplicate processing
 		if len(userIDs) > 0 {
-			unprocessedUserIDs, err := w.processingCache.FilterProcessedUsers(ctx, userIDs)
+			unprocessedUserIDs, err := w.db.Model().Cache().FilterProcessedUsers(ctx, userIDs)
 			if err != nil {
 				w.logger.Error("Error filtering processed users",
 					zap.Error(err),

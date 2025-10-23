@@ -24,6 +24,7 @@ type Repository struct {
 	condo    *models.CondoModel
 	comment  *models.CommentModel
 	ivan     *models.IvanModel
+	cache    *models.CacheModel
 }
 
 // NewRepository creates a new repository instance with all models.
@@ -45,6 +46,7 @@ func NewRepository(db *bun.DB, logger *zap.Logger) *Repository {
 		condo:    models.NewCondo(db, logger),
 		comment:  models.NewComment(db, logger),
 		ivan:     models.NewIvan(db, logger),
+		cache:    models.NewCache(db, logger),
 	}
 }
 
@@ -126,4 +128,9 @@ func (r *Repository) Comment() *models.CommentModel {
 // Ivan returns the ivan model repository.
 func (r *Repository) Ivan() *models.IvanModel {
 	return r.ivan
+}
+
+// Cache returns the cache model repository.
+func (r *Repository) Cache() *models.CacheModel {
+	return r.cache
 }
