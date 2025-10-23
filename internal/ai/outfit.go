@@ -49,16 +49,16 @@ type OutfitAnalyzerParams struct {
 
 // OutfitThemeAnalysis contains the AI's theme detection results for a user's outfits.
 type OutfitThemeAnalysis struct {
-	Username      string        `json:"username"      jsonschema_description:"Username of the account being analyzed"`
-	Themes        []OutfitTheme `json:"themes"        jsonschema_description:"List of themes detected in the outfits"`
-	HasFurryTheme bool          `json:"hasFurryTheme" jsonschema_description:"Whether any outfit has furry themes"`
+	Username      string        `json:"username"      jsonschema:"required,minLength=1,description=Username of the account being analyzed"`
+	Themes        []OutfitTheme `json:"themes"        jsonschema:"required,maxItems=20,description=List of themes detected in the outfits"`
+	HasFurryTheme bool          `json:"hasFurryTheme" jsonschema:"required,description=Whether any outfit has furry themes"`
 }
 
 // OutfitTheme represents a detected theme for a single outfit.
 type OutfitTheme struct {
-	OutfitName string  `json:"outfitName" jsonschema_description:"Name of the outfit with a detected theme"`
-	Theme      string  `json:"theme"      jsonschema_description:"Description of the specific theme detected"`
-	Confidence float64 `json:"confidence" jsonschema_description:"Confidence score for this theme detection (0.0-1.0)"`
+	OutfitName string  `json:"outfitName" jsonschema:"required,minLength=1,description=Name of the outfit with a detected theme"`
+	Theme      string  `json:"theme"      jsonschema:"required,minLength=1,description=Description of the specific theme detected"`
+	Confidence float64 `json:"confidence" jsonschema:"required,minimum=0,maximum=1,description=Confidence score for this theme detection (0.0-1.0)"`
 }
 
 // OutfitAnalysisSchema is the JSON schema for the outfit theme analysis response.

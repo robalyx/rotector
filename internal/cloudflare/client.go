@@ -21,6 +21,7 @@ type Client struct {
 	WarData     *manager.WarData
 	WarManager  *manager.WarManager
 	Leaderboard *manager.LeaderboardManager
+	AIUsage     *manager.AIUsage
 }
 
 // NewClient creates a new cloudflare client with all managers.
@@ -56,6 +57,7 @@ func NewClient(cfg *config.Config, db database.Client, logger *zap.Logger) *Clie
 		WarData:     manager.NewWarData(d1API, r2API, logger.Named("war_data")),
 		WarManager:  warManager,
 		Leaderboard: manager.NewLeaderboardManager(d1API, r2API, logger.Named("leaderboard")),
+		AIUsage:     manager.NewAIUsage(d1API, logger.Named("ai_usage")),
 	}
 }
 

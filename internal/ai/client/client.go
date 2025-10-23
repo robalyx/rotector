@@ -4,12 +4,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
+	"strings"
 	"time"
 
 	"github.com/cenkalti/backoff/v4"
 	"github.com/openai/openai-go"
 	"github.com/openai/openai-go/option"
 	"github.com/openai/openai-go/packages/ssestream"
+	"github.com/robalyx/rotector/internal/cloudflare/manager"
 	"github.com/robalyx/rotector/internal/setup/config"
 	"github.com/robalyx/rotector/pkg/utils"
 	"github.com/sony/gobreaker"
@@ -22,18 +25,21 @@ var (
 	ErrInvalidResponse      = errors.New("invalid response from API")
 )
 
-// defaultSafetySettings defines the default safety thresholds for content filtering and reasoning disablement.
-var defaultSafetySettings = map[string]any{
-	"safety_settings": []map[string]any{
-		{"category": "HARM_CATEGORY_HARASSMENT", "threshold": "OFF"},
-		{"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "OFF"},
-		{"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "OFF"},
-		{"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "OFF"},
-		{"category": "HARM_CATEGORY_CIVIC_INTEGRITY", "threshold": "OFF"},
-	},
+// defaultSettings contains default configuration for all AI requests.
+var defaultSettings = map[string]any{
+	"max_tokens": 8192,
 	"reasoning": map[string]any{
-		"max_tokens": 0,
+		"enabled": false,
 	},
+}
+
+// geminiSafetySettings defines safety thresholds for Gemini models.
+var geminiSafetySettings = []map[string]any{
+	{"category": "HARM_CATEGORY_HARASSMENT", "threshold": "OFF"},
+	{"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "OFF"},
+	{"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "OFF"},
+	{"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "OFF"},
+	{"category": "HARM_CATEGORY_CIVIC_INTEGRITY", "threshold": "OFF"},
 }
 
 // AIClient implements the Client interface.
@@ -42,16 +48,18 @@ type AIClient struct {
 	breaker       *gobreaker.CircuitBreaker
 	semaphore     *semaphore.Weighted
 	modelMappings map[string]string
+	modelPricing  map[string]config.ModelPricing
+	usageTracker  *manager.AIUsage
 	logger        *zap.Logger
 	blockChan     chan struct{}
 }
 
 // NewClient creates a new AIClient.
-func NewClient(cfg *config.OpenAI, logger *zap.Logger) (*AIClient, error) {
+func NewClient(cfg *config.OpenAI, usageTracker *manager.AIUsage, logger *zap.Logger) (*AIClient, error) {
 	client := openai.NewClient(
 		option.WithAPIKey(cfg.APIKey),
 		option.WithBaseURL(cfg.BaseURL),
-		option.WithRequestTimeout(120*time.Second),
+		option.WithRequestTimeout(60*time.Second),
 		option.WithMaxRetries(0),
 	)
 
@@ -77,9 +85,31 @@ func NewClient(cfg *config.OpenAI, logger *zap.Logger) (*AIClient, error) {
 		breaker:       gobreaker.NewCircuitBreaker(settings),
 		semaphore:     semaphore.NewWeighted(cfg.MaxConcurrent),
 		modelMappings: cfg.ModelMappings,
+		modelPricing:  cfg.ModelPricing,
+		usageTracker:  usageTracker,
 		logger:        logger.Named("ai_client"),
 		blockChan:     make(chan struct{}),
 	}, nil
+}
+
+// buildExtraFields constructs the extra fields map for API requests based on model type.
+func buildExtraFields(modelName string) map[string]any {
+	extraFields := make(map[string]any)
+
+	// Apply default settings to all models
+	maps.Copy(extraFields, defaultSettings)
+
+	// Apply settings for Gemini models
+	if strings.Contains(strings.ToLower(modelName), "gemini") {
+		extraFields["safety_settings"] = geminiSafetySettings
+		extraFields["providerOptions"] = map[string]any{
+			"gateway": map[string]any{
+				"only": []string{"vertex"},
+			},
+		}
+	}
+
+	return extraFields
 }
 
 // Chat returns a ChatCompletions implementation.
@@ -103,6 +133,39 @@ func (c *AIClient) blockIndefinitely(ctx context.Context, model string, err erro
 	}
 }
 
+// trackUsage records AI usage statistics to the D1 database.
+func (c *AIClient) trackUsage(ctx context.Context, modelName string, usage openai.CompletionUsage) {
+	// Look up pricing for this model
+	pricing, ok := c.modelPricing[modelName]
+	if !ok {
+		c.logger.Warn("No pricing configured for model, skipping usage tracking",
+			zap.String("model", modelName))
+
+		return
+	}
+
+	// Extract token counts
+	promptTokens := usage.PromptTokens
+	completionTokens := usage.CompletionTokens
+	reasoningTokens := usage.CompletionTokensDetails.ReasoningTokens
+
+	// Calculate cost (pricing is per million tokens)
+	cost := (float64(promptTokens)*pricing.Input +
+		float64(completionTokens)*pricing.Completion +
+		float64(reasoningTokens)*pricing.Reasoning) / 1_000_000
+
+	// Get today's date in UTC formatted as YYYY-MM-DD
+	date := time.Now().UTC().Format("2006-01-02")
+
+	// Update daily usage in D1
+	if err := c.usageTracker.UpdateDailyUsage(ctx, date, promptTokens, completionTokens, reasoningTokens, cost); err != nil {
+		c.logger.Warn("Failed to update AI usage tracking",
+			zap.Error(err),
+			zap.String("model", modelName),
+			zap.String("date", date))
+	}
+}
+
 // chatCompletions implements the ChatCompletions interface.
 type chatCompletions struct {
 	client *AIClient
@@ -118,8 +181,8 @@ func (c *chatCompletions) New(ctx context.Context, params openai.ChatCompletionN
 		return nil, fmt.Errorf("%w: %s", ErrNoProvidersAvailable, originalModel)
 	}
 
-	// Add safety settings
-	params.SetExtraFields(defaultSafetySettings)
+	// Add extra fields based on model type
+	params.SetExtraFields(buildExtraFields(params.Model))
 
 	// Try to acquire semaphore
 	if err := c.client.semaphore.Acquire(ctx, 1); err != nil {
@@ -153,7 +216,11 @@ func (c *chatCompletions) New(ctx context.Context, params openai.ChatCompletionN
 		}
 	}
 
-	return result.(*openai.ChatCompletion), nil
+	resp := result.(*openai.ChatCompletion)
+
+	c.client.trackUsage(ctx, originalModel, resp.Usage)
+
+	return resp, nil
 }
 
 // NewWithRetry makes a chat completion request with retry logic.
@@ -168,8 +235,8 @@ func (c *chatCompletions) NewWithRetry(
 		return fmt.Errorf("%w: %s", ErrNoProvidersAvailable, originalModel)
 	}
 
-	// Add safety settings
-	params.SetExtraFields(defaultSafetySettings)
+	// Add extra fields based on model type
+	params.SetExtraFields(buildExtraFields(params.Model))
 
 	// Try to acquire semaphore
 	if err := c.client.semaphore.Acquire(ctx, 1); err != nil {
@@ -252,6 +319,8 @@ func (c *chatCompletions) NewWithRetry(
 			return cbErr
 		}
 
+		c.client.trackUsage(ctx, originalModel, resp.Usage)
+
 		return nil
 	}
 
@@ -318,8 +387,8 @@ func (c *chatCompletions) NewStreaming(
 		)
 	}
 
-	// Add safety settings
-	params.SetExtraFields(defaultSafetySettings)
+	// Add extra fields based on model type
+	params.SetExtraFields(buildExtraFields(params.Model))
 
 	// Try to acquire semaphore
 	if err := c.client.semaphore.Acquire(ctx, 1); err != nil {
@@ -354,6 +423,9 @@ func (c *chatCompletions) NewStreaming(
 
 	stream := result.(*ssestream.Stream[openai.ChatCompletionChunk])
 
+	// Track usage by monitoring stream in background
+	go c.trackStreamingUsage(ctx, stream, originalModel)
+
 	// Set up cleanup when context is done
 	go func() {
 		<-ctx.Done()
@@ -361,6 +433,35 @@ func (c *chatCompletions) NewStreaming(
 	}()
 
 	return stream
+}
+
+// trackStreamingUsage monitors a stream and tracks usage from the final chunk.
+// This runs in a background goroutine and captures usage when the stream completes.
+func (c *chatCompletions) trackStreamingUsage(
+	ctx context.Context, stream *ssestream.Stream[openai.ChatCompletionChunk], originalModel string,
+) {
+	var lastUsage openai.CompletionUsage
+
+	// Consume stream to find usage information
+	for stream.Next() {
+		chunk := stream.Current()
+		// Usage typically appears in the final chunk
+		if chunk.Usage.PromptTokens > 0 || chunk.Usage.CompletionTokens > 0 {
+			lastUsage = chunk.Usage
+		}
+	}
+
+	// Track usage if we found it
+	if lastUsage.PromptTokens > 0 || lastUsage.CompletionTokens > 0 {
+		c.client.trackUsage(ctx, originalModel, lastUsage)
+	}
+
+	// Log stream errors if any
+	if err := stream.Err(); err != nil {
+		c.client.logger.Warn("Stream ended with error",
+			zap.Error(err),
+			zap.String("model", originalModel))
+	}
 }
 
 // checkBlockReasons checks if the response was blocked by content filtering.
@@ -388,6 +489,7 @@ func (c *chatCompletions) checkBlockReasons(resp *openai.ChatCompletion, model s
 	finishReasonHandlers := map[string]error{
 		"content_filter": utils.ErrContentBlocked,
 		"stop":           nil,
+		"length":         nil,
 	}
 
 	err, known := finishReasonHandlers[finishReason]
@@ -397,6 +499,12 @@ func (c *chatCompletions) checkBlockReasons(resp *openai.ChatCompletion, model s
 			zap.String("finishReason", finishReason))
 
 		return fmt.Errorf("%w: unknown finish reason: %s", ErrInvalidResponse, finishReason)
+	}
+
+	// Log warning if response was truncated due to length limit
+	if finishReason == "length" {
+		c.client.logger.Warn("Response truncated at max_tokens limit",
+			zap.String("model", model))
 	}
 
 	if err != nil {

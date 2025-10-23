@@ -175,11 +175,11 @@ const (
 	GenerateGroupReasonButtonCustomID   = "generate_group_reason"
 	GenerateProfileReasonButtonCustomID = "generate_profile_reason" + ModalOpenSuffix
 
-	GenerateProfileReasonModalCustomID     = "generate_profile_reason_modal"
-	ProfileReasonHintInputCustomID         = "profile_reason_hint_input"
-	ProfileReasonViolationInputCustomID    = "profile_reason_violation_input"
-	ProfileReasonLanguageInputCustomID     = "profile_reason_language_input"
-	ProfileReasonLanguageUsedInputCustomID = "profile_reason_language_used_input"
+	GenerateProfileReasonModalCustomID      = "generate_profile_reason_modal"
+	ProfileReasonHintInputCustomID          = "profile_reason_hint_input"
+	ProfileReasonFlaggedFieldsInputCustomID = "profile_reason_flagged_fields_input"
+	ProfileReasonLanguageInputCustomID      = "profile_reason_language_input"
+	ProfileReasonLanguageUsedInputCustomID  = "profile_reason_language_used_input"
 
 	PrevReviewButtonCustomID = "prev_review"
 	NextReviewButtonCustomID = "next_review"

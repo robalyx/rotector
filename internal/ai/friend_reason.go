@@ -31,15 +31,15 @@ const (
 
 // FriendSummary contains a summary of a friend's data.
 type FriendSummary struct {
-	Name    string             `json:"name"    jsonschema_description:"Username of the friend"`
-	Type    string             `json:"type"    jsonschema_description:"Type of friend (Confirmed or Flagged)"`
-	Reasons []types.ReasonInfo `json:"reasons" jsonschema_description:"List of reasons with types and messages why this friend was flagged"`
+	Name    string             `json:"name"    jsonschema:"required,minLength=1,description=Username of the friend"`
+	Type    string             `json:"type"    jsonschema:"required,enum=Confirmed,enum=Flagged,description=Type of friend (Confirmed or Flagged)"`
+	Reasons []types.ReasonInfo `json:"reasons" jsonschema:"required,maxItems=20,description=List of reasons with types and messages why this friend was flagged"`
 }
 
 // UserFriendData represents the data for a user's friend network.
 type UserFriendData struct {
-	Username string          `json:"username" jsonschema_description:"Username of the account being analyzed"`
-	Friends  []FriendSummary `json:"friends"  jsonschema_description:"List of friends and their violation data"`
+	Username string          `json:"username" jsonschema:"required,minLength=1,description=Username of the account being analyzed"`
+	Friends  []FriendSummary `json:"friends"  jsonschema:"required,maxItems=100,description=List of friends and their violation data"`
 }
 
 // UserFriendRequest contains the user data and friend network for analysis.
@@ -50,13 +50,13 @@ type UserFriendRequest struct {
 
 // FriendAnalysis contains the result of analyzing a user's friend network.
 type FriendAnalysis struct {
-	Name     string `json:"name"     jsonschema_description:"Username of the account being analyzed"`
-	Analysis string `json:"analysis" jsonschema_description:"Analysis of friend network patterns for this user"`
+	Name     string `json:"name"     jsonschema:"required,minLength=1,description=Username of the account being analyzed"`
+	Analysis string `json:"analysis" jsonschema:"required,minLength=1,description=Analysis of friend network patterns for this user"`
 }
 
 // BatchFriendAnalysis contains results for multiple users' friend networks.
 type BatchFriendAnalysis struct {
-	Results []FriendAnalysis `json:"results" jsonschema_description:"Array of friend network analyses for each user"`
+	Results []FriendAnalysis `json:"results" jsonschema:"required,maxItems=50,description=Array of friend network analyses for each user"`
 }
 
 // FriendReasonAnalyzer handles AI-based analysis of friend networks using OpenAI models.

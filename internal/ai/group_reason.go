@@ -31,15 +31,15 @@ const (
 
 // GroupSummary contains a summary of a group's data.
 type GroupSummary struct {
-	Name    string             `json:"name"    jsonschema_description:"Name of the group"`
-	Type    string             `json:"type"    jsonschema_description:"Type of group (Confirmed or Flagged)"`
-	Reasons []types.ReasonInfo `json:"reasons" jsonschema_description:"List of reasons with types and messages why this group was flagged"`
+	Name    string             `json:"name"    jsonschema:"required,minLength=1,description=Name of the group"`
+	Type    string             `json:"type"    jsonschema:"required,enum=Confirmed,enum=Flagged,enum=Mixed,description=Type of group (Confirmed or Flagged or Mixed)"`
+	Reasons []types.ReasonInfo `json:"reasons" jsonschema:"required,maxItems=20,description=List of reasons with types and messages why this group was flagged"`
 }
 
 // UserGroupData represents the data for a user's group memberships.
 type UserGroupData struct {
-	Username string         `json:"username" jsonschema_description:"Username of the account being analyzed"`
-	Groups   []GroupSummary `json:"groups"   jsonschema_description:"List of groups and their violation data"`
+	Username string         `json:"username" jsonschema:"required,minLength=1,description=Username of the account being analyzed"`
+	Groups   []GroupSummary `json:"groups"   jsonschema:"required,maxItems=100,description=List of groups and their violation data"`
 }
 
 // UserGroupRequest contains the user data and group memberships for analysis.
@@ -50,13 +50,13 @@ type UserGroupRequest struct {
 
 // GroupAnalysis contains the result of analyzing a user's group memberships.
 type GroupAnalysis struct {
-	Name     string `json:"name"     jsonschema_description:"Username of the account being analyzed"`
-	Analysis string `json:"analysis" jsonschema_description:"Analysis of group membership patterns for this user"`
+	Name     string `json:"name"     jsonschema:"required,minLength=1,description=Username of the account being analyzed"`
+	Analysis string `json:"analysis" jsonschema:"required,minLength=1,description=Analysis of group membership patterns for this user"`
 }
 
 // BatchGroupAnalysis contains results for multiple users' group memberships.
 type BatchGroupAnalysis struct {
-	Results []GroupAnalysis `json:"results" jsonschema_description:"Array of group membership analyses for each user"`
+	Results []GroupAnalysis `json:"results" jsonschema:"required,maxItems=50,description=Array of group membership analyses for each user"`
 }
 
 // GroupReasonAnalyzer handles AI-based analysis of group memberships using OpenAI models.

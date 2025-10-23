@@ -28,17 +28,17 @@ type MessageContent struct {
 
 // FlaggedMessage contains information about an inappropriate message.
 type FlaggedMessage struct {
-	MessageID  string  `json:"messageId"`
-	Content    string  `json:"content"`
-	Reason     string  `json:"reason"`
-	Confidence float64 `json:"confidence"`
+	MessageID  string  `json:"messageId"  jsonschema:"required,minLength=1,description=Discord message ID"`
+	Content    string  `json:"content"    jsonschema:"required,minLength=1,description=Message content that violates policies"`
+	Reason     string  `json:"reason"     jsonschema:"required,minLength=1,description=Reason for flagging this message"`
+	Confidence float64 `json:"confidence" jsonschema:"required,minimum=0,maximum=1,description=Confidence score for this violation"`
 }
 
 // FlaggedMessageUser contains information about a user with inappropriate messages.
 type FlaggedMessageUser struct {
-	Reason     string           `json:"reason"`
-	Messages   []FlaggedMessage `json:"messages"`
-	Confidence float64          `json:"confidence"`
+	Reason     string           `json:"reason"     jsonschema:"required,minLength=1,description=Overall reason for flagging this user"`
+	Messages   []FlaggedMessage `json:"messages"   jsonschema:"required,maxItems=100,description=List of inappropriate messages from this user"`
+	Confidence float64          `json:"confidence" jsonschema:"required,minimum=0,maximum=1,description=Overall confidence score for user violations"`
 }
 
 // MessageAnalyzer processes Discord messages to detect inappropriate content.

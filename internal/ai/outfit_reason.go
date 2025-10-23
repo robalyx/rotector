@@ -33,14 +33,14 @@ const (
 
 // OutfitThemeSummary contains a summary of a detected outfit theme.
 type OutfitThemeSummary struct {
-	OutfitName string `json:"outfitName" jsonschema_description:"Name of the outfit with a detected theme"`
-	Theme      string `json:"theme"      jsonschema_description:"Description of the specific theme detected"`
+	OutfitName string `json:"outfitName" jsonschema:"required,minLength=1,description=Name of the outfit with a detected theme"`
+	Theme      string `json:"theme"      jsonschema:"required,minLength=1,description=Description of the specific theme detected"`
 }
 
 // UserOutfitData represents the data for a user's outfit violations.
 type UserOutfitData struct {
-	Username string               `json:"username" jsonschema_description:"Username of the account being analyzed"`
-	Themes   []OutfitThemeSummary `json:"themes"   jsonschema_description:"List of outfit themes detected for this user"`
+	Username string               `json:"username" jsonschema:"required,minLength=1,description=Username of the account being analyzed"`
+	Themes   []OutfitThemeSummary `json:"themes"   jsonschema:"required,maxItems=20,description=List of outfit themes detected for this user"`
 }
 
 // UserOutfitRequest contains the user data and outfit violations for analysis.
@@ -51,13 +51,13 @@ type UserOutfitRequest struct {
 
 // OutfitAnalysis contains the result of analyzing a user's outfit violations.
 type OutfitAnalysis struct {
-	Name     string `json:"name"     jsonschema_description:"Username of the account being analyzed"`
-	Analysis string `json:"analysis" jsonschema_description:"Analysis of outfit violation patterns for this user"`
+	Name     string `json:"name"     jsonschema:"required,minLength=1,description=Username of the account being analyzed"`
+	Analysis string `json:"analysis" jsonschema:"required,minLength=1,description=Analysis of outfit violation patterns for this user"`
 }
 
 // BatchOutfitAnalysis contains results for multiple users' outfit violations.
 type BatchOutfitAnalysis struct {
-	Results []OutfitAnalysis `json:"results" jsonschema_description:"Array of outfit violation analyses for each user"`
+	Results []OutfitAnalysis `json:"results" jsonschema:"required,maxItems=50,description=Array of outfit violation analyses for each user"`
 }
 
 // OutfitReasonAnalyzer handles AI-based analysis of outfit violations using OpenAI models.

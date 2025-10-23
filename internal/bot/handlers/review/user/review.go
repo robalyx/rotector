@@ -979,10 +979,10 @@ func (m *ReviewMenu) handleGenerateProfileReason(ctx *interaction.Context) {
 				WithPlaceholder("e.g., inappropriate username, sexual content in description"),
 		).
 		AddLabel(
-			"Violation Location",
-			discord.NewTextInput(constants.ProfileReasonViolationInputCustomID, discord.TextInputStyleParagraph).
+			"Flagged Fields",
+			discord.NewTextInput(constants.ProfileReasonFlaggedFieldsInputCustomID, discord.TextInputStyleParagraph).
 				WithRequired(false).
-				WithMaxLength(512).
+				WithMaxLength(256).
 				WithPlaceholder("username\ndisplayName\ndescription"),
 		).
 		AddLabel(
@@ -1015,7 +1015,7 @@ func (m *ReviewMenu) handleGenerateProfileReasonModalSubmit(ctx *interaction.Con
 	// Get modal data
 	data := ctx.Event().ModalData()
 	hint := data.Text(constants.ProfileReasonHintInputCustomID)
-	violationLocationText := data.Text(constants.ProfileReasonViolationInputCustomID)
+	flaggedFieldsText := data.Text(constants.ProfileReasonFlaggedFieldsInputCustomID)
 	languagePatternText := data.Text(constants.ProfileReasonLanguageInputCustomID)
 	languageUsedText := data.Text(constants.ProfileReasonLanguageUsedInputCustomID)
 
@@ -1026,7 +1026,7 @@ func (m *ReviewMenu) handleGenerateProfileReasonModalSubmit(ctx *interaction.Con
 	}
 
 	// Parse input fields
-	violationLocation := utils.ParseDelimitedInput(violationLocationText, "\n")
+	flaggedFields := utils.ParseDelimitedInput(flaggedFieldsText, "\n")
 	languagePattern := utils.ParseDelimitedInput(languagePatternText, "\n")
 	languageUsed := utils.ParseDelimitedInput(languageUsedText, "\n")
 
@@ -1054,13 +1054,13 @@ func (m *ReviewMenu) handleGenerateProfileReasonModalSubmit(ctx *interaction.Con
 	// Create user reason request
 	userReasonRequest := map[int64]ai.UserReasonRequest{
 		user.ID: {
-			User:              userSummary,
-			Confidence:        1.0,
-			Hint:              hint,
-			ViolationLocation: violationLocation,
-			LanguagePattern:   languagePattern,
-			LanguageUsed:      languageUsed,
-			UserID:            user.ID,
+			User:            userSummary,
+			Confidence:      1.0,
+			Hint:            hint,
+			FlaggedFields:   flaggedFields,
+			LanguagePattern: languagePattern,
+			LanguageUsed:    languageUsed,
+			UserID:          user.ID,
 		},
 	}
 

@@ -54,18 +54,18 @@ type UserSummary struct {
 
 // FlaggedUsers holds a list of users that the AI has identified as inappropriate.
 type FlaggedUsers struct {
-	Users []FlaggedUser `json:"users" jsonschema_description:"List of users that have been flagged for inappropriate content"`
+	Users []FlaggedUser `json:"users" jsonschema:"maxItems=100,description=List of users that have been flagged for inappropriate content"`
 }
 
 // FlaggedUser contains the AI's analysis results for a single user.
 type FlaggedUser struct {
-	Name              string   `json:"name"                        jsonschema_description:"Username of the flagged account"`
-	Hint              string   `json:"hint"                        jsonschema_description:"Brief clinical description using safe terminology"`
-	Confidence        float64  `json:"confidence"                  jsonschema_description:"Overall confidence score for the violations"`
-	HasSocials        bool     `json:"hasSocials"                  jsonschema_description:"Whether the user's description has social media"`
-	ViolationLocation []string `json:"violationLocation,omitempty" jsonschema_description:"Locations of violations"`
-	LanguagePattern   []string `json:"languagePattern,omitempty"   jsonschema_description:"Linguistic patterns detected"`
-	LanguageUsed      []string `json:"languageUsed,omitempty"      jsonschema_description:"Languages or encodings detected in content"`
+	Name            string   `json:"name"                      jsonschema:"required,minLength=1,description=Username of the flagged account"`
+	Hint            string   `json:"hint"                      jsonschema:"required,minLength=1,description=Brief clinical description using safe terminology"`
+	Confidence      float64  `json:"confidence"                jsonschema:"required,minimum=0,maximum=1,description=Overall confidence score for the violations"`
+	HasSocials      bool     `json:"hasSocials"                jsonschema:"required,description=Whether the user's description has social media"`
+	FlaggedFields   []string `json:"flaggedFields,omitempty"   jsonschema:"maxItems=3,enum=displayName,enum=description,enum=username,description=Profile fields containing violations"`
+	LanguagePattern []string `json:"languagePattern,omitempty" jsonschema:"maxItems=10,description=Linguistic patterns detected"`
+	LanguageUsed    []string `json:"languageUsed,omitempty"    jsonschema:"maxItems=5,description=Languages or encodings detected in content"`
 }
 
 // UserAnalyzer handles AI-based content analysis using OpenAI models.
@@ -559,13 +559,13 @@ func (a *UserAnalyzer) processAndCreateRequests(
 
 		// Create the user reason request
 		userReasonRequest := UserReasonRequest{
-			User:              summary,
-			Confidence:        flaggedUser.Confidence,
-			Hint:              flaggedUser.Hint,
-			ViolationLocation: flaggedUser.ViolationLocation,
-			LanguagePattern:   flaggedUser.LanguagePattern,
-			LanguageUsed:      flaggedUser.LanguageUsed,
-			UserID:            originalInfo.ID,
+			User:            summary,
+			Confidence:      flaggedUser.Confidence,
+			Hint:            flaggedUser.Hint,
+			FlaggedFields:   flaggedUser.FlaggedFields,
+			LanguagePattern: flaggedUser.LanguagePattern,
+			LanguageUsed:    flaggedUser.LanguageUsed,
+			UserID:          originalInfo.ID,
 		}
 
 		// Check if this user should be skipped based on various conditions
@@ -588,7 +588,7 @@ func (a *UserAnalyzer) processAndCreateRequests(
 			zap.String("username", flaggedUser.Name),
 			zap.Float64("confidence", flaggedUser.Confidence),
 			zap.String("hint", flaggedUser.Hint),
-			zap.Strings("violationLocation", flaggedUser.ViolationLocation),
+			zap.Strings("flaggedFields", flaggedUser.FlaggedFields),
 			zap.Strings("languagePattern", flaggedUser.LanguagePattern),
 			zap.Strings("languageUsed", flaggedUser.LanguageUsed))
 	}

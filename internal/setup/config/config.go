@@ -177,6 +177,16 @@ type Redis struct {
 	Password string `koanf:"password"`
 }
 
+// ModelPricing defines cost per million tokens for a model.
+type ModelPricing struct {
+	// Cost per million input tokens in USD
+	Input float64 `koanf:"input"`
+	// Cost per million completion tokens in USD
+	Completion float64 `koanf:"completion"`
+	// Cost per million reasoning tokens in USD
+	Reasoning float64 `koanf:"reasoning"`
+}
+
 // OpenAI contains OpenAI API configuration.
 type OpenAI struct {
 	// Base URL for the API
@@ -187,6 +197,8 @@ type OpenAI struct {
 	MaxConcurrent int64 `koanf:"max_concurrent"`
 	// Model name mappings
 	ModelMappings map[string]string `koanf:"model_mappings"`
+	// Per-model token pricing
+	ModelPricing map[string]ModelPricing `koanf:"model_pricing"`
 	// Model to use for user analysis
 	UserModel string `koanf:"user_model"`
 	// Model to use for user reason analysis

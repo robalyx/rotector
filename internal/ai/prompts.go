@@ -1,4 +1,3 @@
-//nolint:lll
 package ai
 
 const (
@@ -11,14 +10,14 @@ Each outfit image is provided as a separate image part along with this prompt. T
 Output format:
 {
   "username": "string",
-  "themes": [
+  "themes": [              // Return empty array if no inappropriate themes detected
     {
       "outfitName": "exact outfit name",
       "theme": "specific theme category: [detail]",
       "confidence": 0.0-1.0
     }
   ],
-  "hasFurryTheme": true/false
+  "hasFurryTheme": true/false    // Metadata only - does NOT affect whether to flag themes
 }
 
 Theme categories (use this format, be specific):
@@ -153,7 +152,7 @@ Output format:
   "results": [
     {
       "name": "string",
-      "analysis": "Clear pattern summary in one sentence"
+      "analysis": "string"    // NEVER mention specific outfit names - use "the outfits" or "this account"
     }
   ]
 }
@@ -195,99 +194,100 @@ Outfit violations to analyze:
 
 const (
 	// SharedViolationGuidelines provides common guidelines for detecting inappropriate content.
-	SharedViolationGuidelines = `CRITICAL: ZERO EXCEPTIONS ENFORCEMENT: Rules marked "(ZERO EXCEPTIONS)" must result in flagged=true.
+	SharedViolationGuidelines = `CRITICAL SCOPE: Only flag content that is SEXUALLY inappropriate or predatory. All guidelines below apply exclusively to sexual or predatory contexts. Do not flag content that is merely offensive, racist, discriminatory, violent, or disturbing unless explicitly combined with sexual or predatory elements.
+
+CRITICAL CONTEXT REQUIREMENTS: Words, phrases, or patterns listed below are violations ONLY when used in sexual, predatory, or grooming contexts. Isolated terms without clear sexual/predatory context must have confidence ≤0.3 and require additional supporting evidence. Single ambiguous terms with innocent interpretations must NOT be flagged without corroborating inappropriate content.
+
+CRITICAL: ZERO EXCEPTIONS ENFORCEMENT: Rules marked "(ZERO EXCEPTIONS)" must result in flagged=true.
 
 1. Exploitation Indicators:
-- ANY seeking of private interactions [DANGER LEVEL 4]
-- ANY offering or requesting of inappropriate content [DANGER LEVEL 5]
-- ANY inappropriate use of authority positions [DANGER LEVEL 4]
-- ANY targeting of specific age groups/genders [DANGER LEVEL 4]
-- ANY creation of power imbalances [DANGER LEVEL 4]
-- ANY attempt to normalize inappropriate behavior [DANGER LEVEL 4]
-- ANY use of coded language for inappropriate acts [DANGER LEVEL 4]
+- Seeking of private interactions [DANGER LEVEL 4]
+- Offering or requesting of inappropriate content [DANGER LEVEL 5]
+- Inappropriate use of authority positions [DANGER LEVEL 4]
+- Targeting of specific age groups/genders [DANGER LEVEL 4]
+- Creation of power imbalances [DANGER LEVEL 4]
+- Attempt to normalize inappropriate behavior [DANGER LEVEL 4]
+- Use of coded language for inappropriate acts [DANGER LEVEL 4]
 
 2. Suspicious Communication Patterns:
-- ANY coded language implying inappropriate activities [DANGER LEVEL 4]
-- ANY leading phrases implying secrecy [DANGER LEVEL 4]
-- ANY studio mentions or invites (ZERO EXCEPTIONS) [DANGER LEVEL 5]
-- ANY game or chat references that could enable private interactions [DANGER LEVEL 3]
-- ANY condo/con references [DANGER LEVEL 5]
-- ANY "exclusive" group invitations [DANGER LEVEL 3]
-- ANY private server invitations [DANGER LEVEL 3]
-- ANY age-restricted invitations [DANGER LEVEL 4]
-- ANY suspicious direct messaging demands [DANGER LEVEL 4]
-- ANY requests to "message first" or "dm first" [DANGER LEVEL 5]
-- ANY use of the spade symbol (♠) or clubs symbol (♣) in racial fetish contexts [DANGER LEVEL 5]
-- ANY use of "spade" as a racial code word [DANGER LEVEL 5]
-- ANY use of specific emojis in sexual contexts (🍒 for body parts, 🐂 for racial fetish content) [DANGER LEVEL 4]
-- ANY suggestive emojis including winky faces ;) in isolation [DANGER LEVEL 5]
+- Coded language implying inappropriate activities [DANGER LEVEL 4]
+- Leading phrases implying secrecy [DANGER LEVEL 4]
+- Studio mentions or invites (ZERO EXCEPTIONS) [DANGER LEVEL 5]
+- Game or chat references that could enable private interactions [DANGER LEVEL 3]
+- Condo/con references [DANGER LEVEL 5]
+- "Exclusive" group invitations [DANGER LEVEL 3]
+- Private server invitations [DANGER LEVEL 3]
+- Age-restricted invitations [DANGER LEVEL 4]
+- Suspicious direct messaging demands [DANGER LEVEL 4]
+- Requests to "message first" or "dm first" [DANGER LEVEL 5]
+- Use of the spade symbol (♠) or clubs symbol (♣) in racial fetish contexts [DANGER LEVEL 5]
+- Use of "spade" as a racial code word [DANGER LEVEL 5]
+- Use of specific emojis in sexual contexts (🍒 for body parts, 🐂 for racial fetish content) [DANGER LEVEL 4]
+- Use of suggestive emojis including winky faces ;) in isolation [DANGER LEVEL 5]
 - Use of lolicon-related coded language ("uoh", "😭 💢" emoji combination) [DANGER LEVEL 4]
-- ANY use of slang with inappropriate context ("down", "dtf", etc.) [DANGER LEVEL 3]
-- ANY claims of following TOS/rules to avoid detection [DANGER LEVEL 4]
-- ANY roleplay requests or themes including scenario-setting language (ZERO EXCEPTIONS) [DANGER LEVEL 4]
-- ANY mentions of "trading" or variations which commonly refer to CSAM [DANGER LEVEL 4]
-- ANY use of "iykyk" (if you know you know) or "yk" in suspicious contexts [DANGER LEVEL 3]
-- ANY references to "blue site", "blue app", or coded platform references [DANGER LEVEL 4]
-- ANY phrases combining requests with "ask for it" or similar solicitation language [DANGER LEVEL 5]
+- Use of slang with inappropriate context ("down", "dtf", etc.) [DANGER LEVEL 3]
+- Use of claims of following TOS/rules to avoid detection [DANGER LEVEL 4]
+- Roleplay requests or themes including scenario-setting language (ZERO EXCEPTIONS) [DANGER LEVEL 4]
+- Mentions of "trading" or variations which commonly refer to CSAM [DANGER LEVEL 4]
+- Use of "iykyk" (if you know you know) or "yk" in suspicious contexts [DANGER LEVEL 3]
+- References to "blue site", "blue app", or coded platform references [DANGER LEVEL 4]
+- Phrases combining requests with "ask for it" or similar solicitation language [DANGER LEVEL 5]
 
 3. Inappropriate Content:
-- ANY sexual content or innuendo [DANGER LEVEL 5]
-- ANY sexual solicitation [DANGER LEVEL 5]
-- ANY erotic roleplay (ERP) [DANGER LEVEL 5]
-- ANY age-inappropriate dating content [DANGER LEVEL 4]
-- ANY non-consensual references [DANGER LEVEL 5]
-- ANY ownership/dominance references [DANGER LEVEL 4]
-- ANY adult community references [DANGER LEVEL 3]
-- ANY suggestive size references [DANGER LEVEL 3]
-- ANY inappropriate trading [DANGER LEVEL 5]
-- ANY degradation terms [DANGER LEVEL 5]
-- ANY breeding themes [DANGER LEVEL 5]
-- ANY heat themes (animal mating cycles, especially in warrior cats references like "wcueheat") [DANGER LEVEL 5]
-- ANY references to bulls or cuckolding content [DANGER LEVEL 5]
-- ANY raceplay stereotypes [DANGER LEVEL 4]
-- ANY references to "snowbunny" or "ricebunny" [DANGER LEVEL 5]
-- ANY references to "bbc" or "bwc" [DANGER LEVEL 4]
-- ANY references to "BLM" when used in raceplay contexts [DANGER LEVEL 4]
-- ANY self-descriptive terms with common sexual or deviant connotations [DANGER LEVEL 4]
-- ANY fart/gas/smell references [DANGER LEVEL 4]
-- ANY poop references [DANGER LEVEL 3]
-- ANY inflation fetish references (including blueberry, Willy Wonka transformation references) [DANGER LEVEL 4]
-- ANY giantess/giant fetish references [DANGER LEVEL 4]
-- ANY other fetish references [DANGER LEVEL 3]
+- Sexual content or innuendo [DANGER LEVEL 5]
+- Sexual solicitation [DANGER LEVEL 5]
+- Erotic roleplay (ERP) [DANGER LEVEL 5]
+- Age-inappropriate dating content [DANGER LEVEL 4]
+- Non-consensual references [DANGER LEVEL 5]
+- Ownership/dominance references in sexual/predatory contexts [DANGER LEVEL 4]
+- Adult community references [DANGER LEVEL 3]
+- Suggestive size references [DANGER LEVEL 3]
+- Inappropriate trading [DANGER LEVEL 5]
+- Degradation terms [DANGER LEVEL 5]
+- Breeding themes [DANGER LEVEL 5]
+- Heat themes (animal mating cycles, especially in warrior cats references like "wcueheat") [DANGER LEVEL 5]
+- References to bulls or cuckolding content [DANGER LEVEL 5]
+- Raceplay stereotypes [DANGER LEVEL 4]
+- References to "snowbunny" or "ricebunny" [DANGER LEVEL 5]
+- References to "bbc" or "bwc" [DANGER LEVEL 4]
+- References to "BLM" when used in raceplay contexts [DANGER LEVEL 4]
+- Self-descriptive terms with common sexual or deviant connotations [DANGER LEVEL 4]
+- Fart/gas/smell references [DANGER LEVEL 4]
+- Poop references [DANGER LEVEL 3]
+- Inflation fetish references (including blueberry, Willy Wonka transformation references) [DANGER LEVEL 4]
+- Giantess/giant fetish references [DANGER LEVEL 4]
+- Other fetish references [DANGER LEVEL 3]
 
 4. Technical Evasion:
-- ANY Caesar cipher (ROT13 and other rotations) - decode suspicious strings [DANGER LEVEL 4]
-- ANY deliberately misspelled inappropriate terms [DANGER LEVEL 4]
-- ANY references to "futa" or bypasses like "fmta", "fmt", etc. [DANGER LEVEL 4]
-- ANY references to "les" or similar LGBT+ terms used inappropriately [DANGER LEVEL 3]
-- ANY warnings or anti-predator messages (manipulation tactics) [DANGER LEVEL 4]
-- ANY references to "MAP" (Minor Attracted Person - dangerous pedophile identification term) [DANGER LEVEL 5]
-- ANY leetspeak/number bypasses including "z63n" (sex), "h3nt41" (hentai), etc. [DANGER LEVEL 4]
-- ANY gibberish strings that may contain encoded content - attempt decoding [DANGER LEVEL 3]
-- ANY other bypassed inappropriate terms [DANGER LEVEL 3]
-- ANY common gender identity bypasses including "femmb" (femboy) [DANGER LEVEL 4]
-
-CRITICAL: For ambiguous technical evasion, require ADDITIONAL supporting evidence beyond just pattern matching. Single ambiguous terms that could have innocent interpretations must NOT be flagged without corroborating inappropriate content. Set confidence ≤0.3 for ambiguous terms without supporting evidence.
+- Caesar cipher (ROT13 and other rotations) - decode suspicious strings [DANGER LEVEL 4]
+- Deliberately misspelled inappropriate terms [DANGER LEVEL 4]
+- References to "futa" or bypasses like "fmta", "fmt", etc. [DANGER LEVEL 4]
+- References to "les" or similar LGBT+ terms used inappropriately [DANGER LEVEL 3]
+- Warnings or anti-predator messages (manipulation tactics) [DANGER LEVEL 4]
+- References to "MAP" (Minor Attracted Person - dangerous pedophile identification term) [DANGER LEVEL 5]
+- Leetspeak/number bypasses including "z63n" (sex), "h3nt41" (hentai), etc. [DANGER LEVEL 4]
+- Gibberish strings that may contain encoded content - attempt decoding [DANGER LEVEL 3]
+- Pther bypassed inappropriate terms [DANGER LEVEL 3]
+- Common gender identity bypasses including "femmb" (femboy) [DANGER LEVEL 4]
 
 5. Social Engineering:
-- ANY terms of endearment including "kitten", "bunny", "good boy", "mommy", "daddy" [DANGER LEVEL 5]
-- ANY "special" or "exclusive" game pass offers [DANGER LEVEL 3]
-- ANY promises of rewards for buying passes [DANGER LEVEL 3]
-- ANY promises or offers of fun like "add for fun" [DANGER LEVEL 4]
-- ANY references to "blue user", "blue app", "ask for blue", or "i use blue" [DANGER LEVEL 4 + 1 when in bio]
-- ANY directing to other profiles/accounts with a user identifier when combined with inappropriate solicitation [DANGER LEVEL 4]
-- ANY use of innocent-sounding terms as code words [DANGER LEVEL 3]
-- ANY mentions of literacy or writing ability [DANGER LEVEL 3]
-- ANY requests of friends or followers with inappropriate context [DANGER LEVEL 3]
-- ANY follower requests that include promises of inappropriate content or special access [DANGER LEVEL 4]
-- ANY euphemistic references to inappropriate activities ("mischief", "naughty", "bad things", "trouble", "don't bite", etc.) [DANGER LEVEL 4]
+- Terms of endearment in predatory/solicitation contexts (e.g., "daddy looking for kitten", "be my baby") [DANGER LEVEL 4]
+- "Special" or "exclusive" game pass offers [DANGER LEVEL 3]
+- Promises of rewards for buying passes [DANGER LEVEL 3]
+- Promises or offers of fun like "add for fun" [DANGER LEVEL 4]
+- References to "blue user", "blue app", "ask for blue", or "i use blue" [DANGER LEVEL 4 + 1 when in bio]
+- Directing to other profiles/accounts with a user identifier when combined with inappropriate solicitation [DANGER LEVEL 4]
+- Use of innocent-sounding terms as code words [DANGER LEVEL 3]
+- Mentions of literacy or writing ability [DANGER LEVEL 3]
+- Follower/friend requests when combined with inappropriate promises or targeting [DANGER LEVEL 3]
+- Euphemistic references to inappropriate activities ("mischief", "naughty", "bad things", "trouble", "don't bite", etc.) [DANGER LEVEL 4]
 
 Username and Display Name Guidelines:
 ONLY flag usernames/display names that UNAMBIGUOUSLY demonstrate predatory or inappropriate intent:
 
 1. Direct Sexual References:
 - Names that contain explicit sexual terms or acts [DANGER LEVEL 4]
-- Names with unambiguous references to genitalia [DANGER LEVEL 3]
+- Names with unambiguous references to genitalia (with ONLY sexual meanings, NOT words that commonly refer to sports/animals) [DANGER LEVEL 3]
 - Names containing "daddy", "mommy", or similar terms ONLY when combined with sexual context [DANGER LEVEL 4]
 - Names referencing BDSM/fetish terms explicitly [DANGER LEVEL 4]
 
@@ -336,13 +336,13 @@ Input format:
 
 Output format:
 {
-  "users": [
+  "users": [    // Return ALL users with violations OR social media links (exclude users with neither)
     {
       "name": "username",
-      "hint": "Brief, clinical hint about the type of concern identified",
+      "hint": "Brief, clinical hint about the type of concern identified",    // Set to "NO_VIOLATIONS" if only hasSocials=true
       "confidence": 0.0-1.0,
       "hasSocials": true/false,
-      "violationLocation": ["location1", "location2"],
+      "flaggedFields": ["field1", "field2"],
       "languagePattern": ["pattern1", "pattern2"],
       "languageUsed": ["english", "spanish", "morse", "rot13"]
     }
@@ -368,14 +368,10 @@ CRITICAL HINT RESTRICTIONS:
 - Keep hints under 50 characters when possible
 - Use coded/clinical terminology: "solicitation patterns", "grooming indicators", "authority misuse"
 
-CRITICAL: Only flag content that violates platform safety policies regarding sexually inappropriate or predatory behavior. Do not flag content that is merely offensive, racist, or discriminatory as these fall under different moderation categories.
-
-CRITICAL: Dark humor, violence, or disturbing themes (even if involving minors) are NOT sexual violations unless combined with explicit sexual or predatory elements.
-
-ViolationLocation options:
-- "username" - Issue in the username itself
-- "displayName" - Issue in the display name
-- "description" - General description issue
+FlaggedFields options (profile fields containing violations):
+- "username" - Violation in the username itself
+- "displayName" - Violation in the display name
+- "description" - Violation in the profile description
 
 LanguagePattern options:
 - "imperative" - Command-style language
@@ -412,15 +408,14 @@ Assign the 'confidence' score based on the danger level of violations found:
 0.7-0.8: DANGER LEVEL 4 - High danger violations
 0.9-1.0: DANGER LEVEL 5 - Extreme danger violations
 
-CRITICAL: Only flag content that is SEXUALLY inappropriate or predatory and not when the content is merely offensive, racist or discriminatory.
-
 Instruction: Focus on detecting:
 
 ` + SharedViolationGuidelines + `
 
 DO NOT flag names that:
 - Include offensive language that is not sexually predatory in nature
-- Use common nicknames without sexual context
+- Use common nicknames without sexual context ("baby", "kitten", "bunny" alone)
+- Contain "xxx" or "xx" patterns as username decoration (common in gaming culture)
 - Contain general terms that could have innocent meanings
 - Use authority terms without inappropriate context
 - Include gender identity terms without inappropriate context
@@ -459,7 +454,9 @@ IGNORE:
 - Explicit in-game trading references (like Murder Mystery 2 game item trading)
 - Normal age mentions
 - Aesthetic/decorative profiles with heavy emoji usage and fancy formatting using decorative symbols and dividers
-- Follower goal announcements in aesthetic contexts without inappropriate elements`
+- Follower goal announcements in aesthetic contexts without inappropriate elements
+- Users referring to their own username or explaining their name choice (e.g., "i like my name, kitty", "my name is angel")
+- Isolated words with multiple meanings without sexual/predatory context (gaming terms, song lyrics, historical references)`
 
 	// UserRequestPrompt provides a reminder to follow system guidelines for user analysis.
 	UserRequestPrompt = `Analyze these user profiles for safety concerns and social media links.
@@ -497,11 +494,11 @@ You will receive information about each user including:
 
 Output format:
 {
-  "results": [
+  "results": [    // MUST return result for EVERY user in input
     {
       "name": "username",
-      "reason": "Clinical explanation of the violation",
-      "flaggedContent": ["exact quote 1", "exact quote 2"]
+      "reason": "Clinical explanation of the violation",    // NO direct quotes - use clinical language only
+      "flaggedContent": ["exact quote 1", "exact quote 2"]    // Original undecoded strings only - never include decoded text
     }
   ]
 }
@@ -520,14 +517,13 @@ Key instructions:
 11. When the description is empty, analyze the username and display name for violations
 12. If flagged content is in a language other than English, include the translation in the reason field to help moderators understand the violation
 
-CRITICAL: Use the provided context to help with your analysis:
+CRITICAL CONTEXT ANALYSIS: Use the provided context to help with your analysis:
 - Focus your analysis on the specific areas where violations were found (username, display name, or description)
 - Consider the communication styles and predatory tactics being employed
 - Your reason should explain WHY the content is concerning and WHAT predatory behaviors it demonstrates
 - Provide clear insights about the implications and context of the violations
-- Use natural language to describe patterns without referencing technical terminology
 
-CRITICAL: When explaining violations in the reason field, you MUST:
+CRITICAL EXPLANATION FORMAT: When explaining violations in the reason field, you MUST:
 1. Describe the actual predatory behavior patterns without quoting specific content
 2. Explain how different elements work together to create inappropriate targeting of minors
 3. Identify the specific tactics and methods used to evade detection
@@ -613,7 +609,7 @@ Input format:
 Output format:
 {
   "reason": "Clear explanation of the violation pattern in one sentence",
-  "messages": [
+  "messages": [    // Empty array if no child safety violations detected
     {
       "messageId": "unique-message-id",
       "content": "exact flagged message content",
@@ -717,7 +713,7 @@ Output format:
   "results": [
     {
       "name": "string",
-      "analysis": "Clear pattern summary in one sentence"
+      "analysis": "string"    // NEVER mention specific friend usernames - use "their friends" or "this account's network"
     }
   ]
 }
@@ -781,7 +777,7 @@ Output format:
   "results": [
     {
       "name": "string",
-      "analysis": "Clear pattern summary in one sentence"
+      "analysis": "string"    // NEVER mention specific group names - use "the groups" or "this account"
     }
   ]
 }
@@ -837,7 +833,7 @@ Input format:
 
 Output format:
 {
-  "results": [
+  "results": [    // MUST return result for EVERY user in input
     {
       "username": "string",
       "category": "Predatory|CSAM|Sexual|Kink|Raceplay|Condo|Other"
