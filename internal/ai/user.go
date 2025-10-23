@@ -130,7 +130,7 @@ func (a *UserAnalyzer) processUsersWithRetry(
 	}
 
 	// Prevent infinite retries
-	if retryCount >= UserAnalysisMaxRetries {
+	if retryCount > UserAnalysisMaxRetries {
 		a.logger.Warn("Maximum retries reached for user analysis, skipping remaining users",
 			zap.Int("retryCount", retryCount),
 			zap.Int("maxRetries", UserAnalysisMaxRetries),

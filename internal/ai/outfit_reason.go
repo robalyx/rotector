@@ -200,7 +200,7 @@ func (a *OutfitReasonAnalyzer) ProcessOutfitRequests(
 	}
 
 	// Prevent infinite retries
-	if retryCount >= OutfitReasonMaxRetries {
+	if retryCount > OutfitReasonMaxRetries {
 		a.logger.Warn("Maximum retries reached for outfit analysis, skipping remaining users",
 			zap.Int("retryCount", retryCount),
 			zap.Int("maxRetries", OutfitReasonMaxRetries),

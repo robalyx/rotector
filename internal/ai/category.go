@@ -83,7 +83,7 @@ func (a *CategoryAnalyzer) ClassifyUsers(
 	}
 
 	// Prevent infinite retries
-	if retryCount >= CategoryMaxRetries {
+	if retryCount > CategoryMaxRetries {
 		a.logger.Warn("Maximum retries reached for category analysis, skipping remaining users",
 			zap.Int("retryCount", retryCount),
 			zap.Int("maxRetries", CategoryMaxRetries),

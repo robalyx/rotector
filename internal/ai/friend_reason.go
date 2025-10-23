@@ -167,7 +167,7 @@ func (a *FriendReasonAnalyzer) ProcessFriendRequests(
 	}
 
 	// Prevent infinite retries
-	if retryCount >= FriendReasonMaxRetries {
+	if retryCount > FriendReasonMaxRetries {
 		a.logger.Warn("Maximum retries reached for friend analysis, skipping remaining users",
 			zap.Int("retryCount", retryCount),
 			zap.Int("maxRetries", FriendReasonMaxRetries),

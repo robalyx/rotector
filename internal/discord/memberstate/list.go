@@ -77,17 +77,19 @@ func (l *List) GuildID() discord.GuildID {
 // callback must not call any other method except for ID and GuildID.
 func (l *List) ViewItems(fn func(items []gateway.GuildMemberListOpItem)) {
 	l.mu.Lock()
-	fn(l.items)
+	items := append([]gateway.GuildMemberListOpItem(nil), l.items...)
 	l.mu.Unlock()
+	fn(items)
 }
 
 // ViewGroups acquires the list's mutex and views the current groups. The
 // function must not mutate nor reference the slice nor any of its items. The
 // given callback must not call any other method except for ID and GuildID.
-func (l *List) ViewGroups(fn func(gruops []gateway.GuildMemberListGroup)) {
+func (l *List) ViewGroups(fn func(groups []gateway.GuildMemberListGroup)) {
 	l.mu.Lock()
-	fn(l.groups)
+	groups := append([]gateway.GuildMemberListGroup(nil), l.groups...)
 	l.mu.Unlock()
+	fn(groups)
 }
 
 // TotalVisible returns the total number of members visible.

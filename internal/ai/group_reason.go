@@ -182,7 +182,7 @@ func (a *GroupReasonAnalyzer) ProcessGroupRequests(
 	}
 
 	// Prevent infinite retries
-	if retryCount >= GroupReasonMaxRetries {
+	if retryCount > GroupReasonMaxRetries {
 		a.logger.Warn("Maximum retries reached for group analysis, skipping remaining users",
 			zap.Int("retryCount", retryCount),
 			zap.Int("maxRetries", GroupReasonMaxRetries),

@@ -423,45 +423,13 @@ func (c *chatCompletions) NewStreaming(
 
 	stream := result.(*ssestream.Stream[openai.ChatCompletionChunk])
 
-	// Track usage by monitoring stream in background
-	go c.trackStreamingUsage(ctx, stream, originalModel)
-
-	// Set up cleanup when context is done
+	// Release semaphore when context is done
 	go func() {
 		<-ctx.Done()
 		c.client.semaphore.Release(1)
 	}()
 
 	return stream
-}
-
-// trackStreamingUsage monitors a stream and tracks usage from the final chunk.
-// This runs in a background goroutine and captures usage when the stream completes.
-func (c *chatCompletions) trackStreamingUsage(
-	ctx context.Context, stream *ssestream.Stream[openai.ChatCompletionChunk], originalModel string,
-) {
-	var lastUsage openai.CompletionUsage
-
-	// Consume stream to find usage information
-	for stream.Next() {
-		chunk := stream.Current()
-		// Usage typically appears in the final chunk
-		if chunk.Usage.PromptTokens > 0 || chunk.Usage.CompletionTokens > 0 {
-			lastUsage = chunk.Usage
-		}
-	}
-
-	// Track usage if we found it
-	if lastUsage.PromptTokens > 0 || lastUsage.CompletionTokens > 0 {
-		c.client.trackUsage(ctx, originalModel, lastUsage)
-	}
-
-	// Log stream errors if any
-	if err := stream.Err(); err != nil {
-		c.client.logger.Warn("Stream ended with error",
-			zap.Error(err),
-			zap.String("model", originalModel))
-	}
 }
 
 // checkBlockReasons checks if the response was blocked by content filtering.

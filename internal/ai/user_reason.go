@@ -104,7 +104,7 @@ func (a *UserReasonAnalyzer) ProcessFlaggedUsers(
 	}
 
 	// Prevent infinite retries
-	if retryCount >= UserReasonMaxRetries {
+	if retryCount > UserReasonMaxRetries {
 		a.logger.Warn("Maximum retries reached for user reason analysis, skipping remaining users",
 			zap.Int("retryCount", retryCount),
 			zap.Int("maxRetries", UserReasonMaxRetries),

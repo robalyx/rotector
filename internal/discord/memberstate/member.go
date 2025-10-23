@@ -451,12 +451,21 @@ func (m *State) RequestMemberList(
 		guild.subChannels[channelID] = chunks
 
 		guild.subscribed = true
-		guild.subMutex.Unlock() // Do not block IO.
 
-		// Subscribe.
+		// Deep copy channels while holding the lock to prevent concurrent mutation
+		channels := make(map[discord.ChannelID][][2]int, len(guild.subChannels))
+		for k, v := range guild.subChannels {
+			cpy := make([][2]int, len(v))
+			copy(cpy, v)
+			channels[k] = cpy
+		}
+
+		guild.subMutex.Unlock() // Safe to unlock before IO.
+
+		// Subscribe with a safe copy.
 		err := m.state.SendGateway(ctx, &gateway.GuildSubscribeCommand{
 			GuildID:    guildID,
-			Channels:   guild.subChannels,
+			Channels:   channels,
 			Typing:     true,
 			Activities: true,
 		})
